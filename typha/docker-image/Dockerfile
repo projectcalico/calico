@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2020 Tigera, Inc. All rights reserved.
+# Copyright (c) 2018-2025 Tigera, Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+ARG CALICO_BASE
+
 FROM scratch AS source
 
 ARG TARGETARCH
@@ -21,7 +23,7 @@ COPY LICENSE /licenses/LICENSE
 COPY bin/calico-typha-${TARGETARCH} /usr/bin/calico-typha
 COPY typha.cfg /etc/calico/typha.cfg
 
-FROM calico/base
+FROM ${CALICO_BASE}
 
 ARG GIT_VERSION=unknown
 

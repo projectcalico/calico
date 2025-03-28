@@ -22,15 +22,17 @@ import (
 
 	"github.com/containernetworking/plugins/pkg/ip"
 	"github.com/containernetworking/plugins/pkg/ns"
-	"github.com/gogo/protobuf/proto"
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 	"google.golang.org/grpc"
+	"google.golang.org/protobuf/proto"
 
 	pb "github.com/projectcalico/calico/cni-plugin/pkg/dataplane/grpc/proto"
 )
 
 type TestServer struct {
+	pb.UnimplementedCniDataplaneServer
+
 	retval   bool
 	contMac  string
 	Received chan interface{}

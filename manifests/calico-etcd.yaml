@@ -110,10 +110,6 @@ data:
           "type": "portmap",
           "snat": true,
           "capabilities": {"portMappings": true}
-        },
-        {
-          "type": "bandwidth",
-          "capabilities": {"bandwidth": true}
         }
       ]
     }
@@ -215,6 +211,23 @@ rules:
     verbs:
       - get
 ---
+# Source: calico/templates/tier-getter.yaml
+# Implements the necessary permissions for the kube-controller-manager to interact with
+# Tiers and Tiered Policies for GC.
+#
+# https://github.com/tigera/operator/blob/v1.37.0/pkg/render/apiserver.go#L1505-L1545
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: calico-tier-getter
+rules:
+  - apiGroups:
+      - "projectcalico.org"
+    resources:
+      - "tiers"
+    verbs:
+      - "get"
+---
 # Source: calico/templates/calico-kube-controllers-rbac.yaml
 kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
@@ -256,6 +269,20 @@ subjects:
 - kind: ServiceAccount
   name: calico-cni-plugin
   namespace: kube-system
+---
+# Source: calico/templates/tier-getter.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: calico-tier-getter
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: calico-tier-getter
+subjects:
+- apiGroup: rbac.authorization.k8s.io
+  kind: User
+  name: system:kube-controller-manager
 ---
 # Source: calico/templates/calico-node.yaml
 # This manifest installs the calico-node container, as well
@@ -305,7 +332,7 @@ spec:
         # This container installs the CNI binaries
         # and CNI network config file on each node.
         - name: install-cni
-          image: docker.io/calico/cni:master
+          image: quay.io/calico/cni:master
           imagePullPolicy: IfNotPresent
           command: ["/opt/cni/bin/install"]
           envFrom:
@@ -351,7 +378,7 @@ spec:
         # i.e. bpf at /sys/fs/bpf and cgroup2 at /run/calico/cgroup. Calico-node initialisation is executed
         # in best effort fashion, i.e. no failure for errors, to not disrupt pod creation in iptable mode.
         - name: "mount-bpffs"
-          image: docker.io/calico/node:master
+          image: quay.io/calico/node:master
           imagePullPolicy: IfNotPresent
           command: ["calico-node", "-init", "-best-effort"]
           volumeMounts:
@@ -377,7 +404,7 @@ spec:
         # container programs network policy and routes on each
         # host.
         - name: calico-node
-          image: docker.io/calico/node:master
+          image: quay.io/calico/node:master
           imagePullPolicy: IfNotPresent
           envFrom:
           - configMapRef:
@@ -623,7 +650,7 @@ spec:
       hostNetwork: true
       containers:
         - name: calico-kube-controllers
-          image: docker.io/calico/kube-controllers:master
+          image: quay.io/calico/kube-controllers:master
           imagePullPolicy: IfNotPresent
           env:
             # The location of the etcd cluster.
@@ -652,7 +679,7 @@ spec:
                   key: etcd_cert
             # Choose which controllers to run.
             - name: ENABLED_CONTROLLERS
-              value: policy,namespace,serviceaccount,workloadendpoint,node
+              value: policy,namespace,serviceaccount,workloadendpoint,node,loadbalancer
           volumeMounts:
             # Mount in the etcd TLS secrets.
             - mountPath: /calico-secrets

@@ -250,7 +250,7 @@ func (c *resources) Watch(ctx context.Context, opts options.ListOptions, kind st
 
 	// Create the backend watcher.  We need to process the results to add revision data etc.
 	ctx, cancel := context.WithCancel(ctx)
-	backend, err := c.backend.Watch(ctx, list, opts.ResourceVersion)
+	backend, err := c.backend.Watch(ctx, list, bapi.WatchOptions{Revision: opts.ResourceVersion})
 	if err != nil {
 		cancel()
 		return nil, err

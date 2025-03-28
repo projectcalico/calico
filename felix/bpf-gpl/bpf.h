@@ -171,8 +171,8 @@ enum calico_skb_mark {
 	/* "BYPASS_FWD" is a special case of "BYPASS" used when a packet returns from one of our
 	 * VXLAN tunnels.  It tells the downstream program to forward the packet. */
 	CALI_SKB_MARK_BYPASS_FWD             = CALI_SKB_MARK_BYPASS  | 0x00300000,
-	/* Now unused mark */
-	CALI_SKB_MARK_free_to_use            = CALI_SKB_MARK_BYPASS  | 0x00500000,
+	/* Accepted by XDP untracked policy. */
+	CALI_SKB_MARK_BYPASS_XDP             = CALI_SKB_MARK_BYPASS  | 0x00500000,
 	CALI_SKB_MARK_BYPASS_MASK            = CALI_SKB_MARK_SEEN_MASK | 0x02700000,
 	/* The FALLTHROUGH bit is used by programs that are towards the host namespace to indicate
 	 * that the packet is not known in BPF conntrack. We have iptables rules to drop or allow
@@ -309,6 +309,7 @@ extern const volatile struct cali_tc_preamble_globals __globals;
 #define HOST_TUNNEL_IP	CALI_CONFIGURABLE_IP(host_tunnel_ip)
 #define WG_PORT		CALI_CONFIGURABLE(wg_port)
 #define NATIN_IFACE	CALI_CONFIGURABLE(natin_idx)
+#define PROFILING	CALI_CONFIGURABLE(profiling)
 
 #ifdef UNITTEST
 #define CALI_PATCH_DEFINE(name, pattern)							\

@@ -15,5 +15,6 @@
 package model
 
 const (
-	KindKubernetesAdminNetworkPolicy = "KubernetesAdminNetworkPolicy"
+	KindKubernetesAdminNetworkPolicy         = "KubernetesAdminNetworkPolicy"
+	KindKubernetesBaselineAdminNetworkPolicy = "KubernetesBaselineAdminNetworkPolicy"
 )

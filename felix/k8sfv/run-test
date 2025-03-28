@@ -272,6 +272,16 @@ elif ${JUST_A_MINUTE}; then
     if [ $cmdStatus -ne 0 ]; then
         echo "docker or k7sfv.test command failed with RC $cmdStatus"
         echo "Status 137 can be caused by the felix container (in which we run the test binary) dying."
+        echo "Dumping felix container logs..."
+        echo
+
+        docker logs ${prefix}-felix
+
+        echo
+        echo "Finished dumping felix container logs."
+        echo "docker or k7sfv.test command failed with RC $cmdStatus"
+        echo "Status 137 can be caused by the felix container (in which we run the test binary) dying."
+
         rm -f $tmp
         exit 1
     fi

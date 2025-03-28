@@ -38,11 +38,13 @@ import (
 	"github.com/projectcalico/calico/kube-controllers/pkg/config"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/controller"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/flannelmigration"
+	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/loadbalancer"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/namespace"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/networkpolicy"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/node"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/pod"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/serviceaccount"
+	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/utils"
 	"github.com/projectcalico/calico/kube-controllers/pkg/status"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
@@ -149,6 +151,8 @@ func main() {
 		informers:   make([]cache.SharedIndexInformer, 0),
 	}
 
+	dataFeed := utils.NewDataFeed(calicoClient)
+
 	var runCfg config.RunConfig
 	// flannelmigration doesn't use the datastore config API
 	v, ok := os.LookupEnv(config.EnvEnabledControllers)
@@ -182,7 +186,7 @@ func main() {
 
 		// any subsequent changes trigger a restart
 		controllerCtrl.restart = cCtrlr.ConfigChan()
-		controllerCtrl.InitControllers(ctx, runCfg, k8sClientset, calicoClient)
+		controllerCtrl.InitControllers(ctx, runCfg, k8sClientset, calicoClient, dataFeed)
 	}
 
 	if cfg.DatastoreType == "etcdv3" {
@@ -217,7 +221,7 @@ func main() {
 	}
 
 	// Run the controllers. This runs until a config change triggers a restart
-	controllerCtrl.RunControllers()
+	controllerCtrl.RunControllers(dataFeed, runCfg)
 
 	// Shut down compaction, healthChecks, and configController
 	cancel()
@@ -424,12 +428,13 @@ type controllerControl struct {
 	informers   []cache.SharedIndexInformer
 }
 
-func (cc *controllerControl) InitControllers(ctx context.Context, cfg config.RunConfig, k8sClientset *kubernetes.Clientset, calicoClient client.Interface) {
+func (cc *controllerControl) InitControllers(ctx context.Context, cfg config.RunConfig, k8sClientset *kubernetes.Clientset, calicoClient client.Interface, dataFeed *utils.DataFeed) {
 	// Create a shared informer factory to allow cache sharing between controllers monitoring the
 	// same resource.
 	factory := informers.NewSharedInformerFactory(k8sClientset, 0)
 	podInformer := factory.Core().V1().Pods().Informer()
 	nodeInformer := factory.Core().V1().Nodes().Informer()
+	serviceInformer := factory.Core().V1().Services().Informer()
 
 	if cfg.Controllers.WorkloadEndpoint != nil {
 		podController := pod.NewPodController(ctx, k8sClientset, calicoClient, *cfg.Controllers.WorkloadEndpoint, podInformer)
@@ -446,13 +451,19 @@ func (cc *controllerControl) InitControllers(ctx context.Context, cfg config.Run
 		cc.controllers["NetworkPolicy"] = policyController
 	}
 	if cfg.Controllers.Node != nil {
-		nodeController := node.NewNodeController(ctx, k8sClientset, calicoClient, *cfg.Controllers.Node, nodeInformer, podInformer)
+		nodeController := node.NewNodeController(ctx, k8sClientset, calicoClient, *cfg.Controllers.Node, nodeInformer, podInformer, dataFeed)
 		cc.controllers["Node"] = nodeController
 		cc.registerInformers(podInformer, nodeInformer)
 	}
 	if cfg.Controllers.ServiceAccount != nil {
 		serviceAccountController := serviceaccount.NewServiceAccountController(ctx, k8sClientset, calicoClient, *cfg.Controllers.ServiceAccount)
 		cc.controllers["ServiceAccount"] = serviceAccountController
+	}
+
+	if cfg.Controllers.LoadBalancer != nil {
+		loadBalancerController := loadbalancer.NewLoadBalancerController(k8sClientset, calicoClient, *cfg.Controllers.LoadBalancer, serviceInformer, dataFeed)
+		cc.controllers["LoadBalancer"] = loadBalancerController
+		cc.registerInformers(serviceInformer)
 	}
 }
 
@@ -474,7 +485,7 @@ func (cc *controllerControl) registerInformers(infs ...cache.SharedIndexInformer
 }
 
 // Runs all the controllers and blocks until we get a restart.
-func (cc *controllerControl) RunControllers() {
+func (cc *controllerControl) RunControllers(dataFeed *utils.DataFeed, cfg config.RunConfig) {
 	// Start any registered informers.
 	for _, inf := range cc.informers {
 		log.WithField("informer", inf).Info("Starting informer")
@@ -485,6 +496,11 @@ func (cc *controllerControl) RunControllers() {
 	for controllerType, c := range cc.controllers {
 		log.WithField("ControllerType", controllerType).Info("Starting controller")
 		go c.Run(cc.stop)
+	}
+
+	if cfg.Controllers.Node != nil || cfg.Controllers.LoadBalancer != nil {
+		// Start dataFeed for controllers that need it
+		dataFeed.Start()
 	}
 
 	// Block until we are cancelled, or get a new configuration and need to restart

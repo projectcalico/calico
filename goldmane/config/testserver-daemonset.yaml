@@ -1,0 +1,24 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: flow-log-generator
+  namespace: default
+spec:
+  selector:
+    matchLabels:
+      name: flow-log-generator
+  template:
+    metadata:
+      labels:
+        name: flow-log-generator
+    spec:
+      hostNetwork: true
+      tolerations:
+      - operator: Exists
+        effect: NoSchedule
+      containers:
+      - name: generator
+        image: caseydavenport/flowgen
+        env:
+          - name: SERVER
+            value: "goldmane.calico-system:443"

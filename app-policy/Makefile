@@ -75,7 +75,7 @@ build-all: $(VALIDARCHES)
 
 .PHONY: build
 ## Build the binary for the current architecture and platform
-build: 
+build:
 	$(MAKE) $(BINDIR)/dikastes-$(ARCH) ARCH=$(ARCH)
 	$(MAKE) $(BINDIR)/healthz-$(ARCH) ARCH=$(ARCH)
 
@@ -103,7 +103,7 @@ endif
 
 
 ###############################################################################
-# Protobufs, 
+# Protobufs,
 #
 # 1. defer to felix's makefile for felixbackend stuff
 # 2. build proto for healthz
@@ -112,24 +112,12 @@ endif
 ../felix/proto/felixbackend.pb.go: ../felix/proto/felixbackend.proto
 	$(MAKE) --directory ../felix protobuf
 
-# We use gogofast for protobuf compilation.  Regular gogo is incompatible with
-# gRPC, since gRPC uses golang/protobuf for marshalling/unmarshalling in that
-# case.  See https://github.com/gogo/protobuf/issues/386 for more details.
-# Note that we cannot seem to use gogofaster because of incompatibility with
-# Envoy's validation library.
-# When importing, we must use gogo versions of google/protobuf and
-# google/rpc (aka googleapis).
-PROTOC_IMPORTS =  -I proto\
-		  -I ./
-
 protobuf: $(GENERATED_FILES)
 
 proto/healthz.pb.go: proto/healthz.proto
-	$(DOCKER_RUN) -v $(CURDIR):/src:rw --user $(LOCAL_USER_ID):$(LOCAL_GROUP_ID) \
-		      $(PROTOC_CONTAINER) \
-		      $(PROTOC_IMPORTS) \
-		      proto/*.proto \
-		      --gogofast_out=plugins=grpc:proto
+	$(DOCKER_RUN) -v $(CURDIR)/proto:/proto:rw \
+		$(CALICO_BUILD) \
+			sh -c 'protoc --proto_path=/proto --go_out=/proto --go-grpc_out=. --go_opt=paths=source_relative healthz.proto'
 	$(MAKE) fix-changed
 
 
@@ -201,16 +189,6 @@ release-build: .release-$(VERSION).created
 	$(MAKE) FIPS=true retag-build-images-with-registries IMAGETAG=$(VERSION)-fips RELEASE=true LATEST_IMAGE_TAG=latest-fips
 	$(MAKE) FIPS=true retag-build-images-with-registries IMAGETAG=latest-fips RELEASE=true LATEST_IMAGE_TAG=latest-fips
 	touch $@
-
-## Verifies the release artifacts produces by `make release-build` are correct.
-release-verify: release-prereqs
-	# Check the reported version is correct for each release artifact.
-	if ! docker run $(DIKASTES_IMAGE):$(VERSION)-$(ARCH) /dikastes --version | grep '^$(VERSION)$$'; then \
-	  echo "Reported version:" `docker run $(DIKASTES_IMAGE):$(VERSION)-$(ARCH) /dikastes --version` "\nExpected version: $(VERSION)"; \
-	  false; \
-	else \
-	  echo "Version check passed\n"; \
-	fi
 
 ## Pushes a github release and release artifacts produced by `make release-build`.
 release-publish: release-prereqs .release-$(VERSION).published

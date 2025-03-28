@@ -1,4 +1,4 @@
-// Copyright (c) 2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2021-2024 Tigera, Inc. All rights reserved.
 
 /*
 Copyright 2016 The Kubernetes Authors.
@@ -21,37 +21,20 @@ package server
 import (
 	"flag"
 	"io"
-	"os"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
-	"k8s.io/klog/v2"
 	"k8s.io/kubernetes/pkg/util/interrupt"
 
 	"github.com/projectcalico/calico/apiserver/pkg/apiserver"
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 )
 
 const defaultEtcdPathPrefix = ""
 
-func logrusLevel() logrus.Level {
-	if env := os.Getenv("LOG_LEVEL"); env != "" {
-		return logutils.SafeParseLogLevel(env)
-	}
-
-	if klog.V(2).Enabled() {
-		return logrus.DebugLevel
-	}
-	if klog.V(1).Enabled() {
-		return logrus.InfoLevel
-	}
-	return logrus.ErrorLevel
-}
-
 // NewCommandStartMaster provides a CLI handler for 'start master' command
-func NewCommandStartCalicoServer(out io.Writer) (*cobra.Command, error) {
+func NewCommandStartCalicoServer(out io.Writer) (*cobra.Command, *CalicoServerOptions, error) {
 	//	o := NewCalicoServerOptions(out, errOut)
 
 	// Create the command that runs the API server
@@ -74,7 +57,7 @@ func NewCommandStartCalicoServer(out io.Writer) (*cobra.Command, error) {
 	opts.addFlags(flags)
 
 	cmd.Run = func(c *cobra.Command, args []string) {
-		logrus.SetLevel(logrusLevel())
+		configureLogging()
 
 		h := interrupt.New(nil, func() {
 			close(stopCh)
@@ -86,10 +69,10 @@ func NewCommandStartCalicoServer(out io.Writer) (*cobra.Command, error) {
 			}
 			return RunServer(opts, server)
 		}); err != nil {
-			klog.Fatalf("error running server (%s)", err)
+			logrus.Fatalf("error running server (%s)", err)
 			return
 		}
 	}
 
-	return cmd, nil
+	return cmd, opts, nil
 }

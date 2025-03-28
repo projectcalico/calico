@@ -2,9 +2,6 @@ include ../metadata.mk
 
 PACKAGE_NAME = github.com/projectcalico/calico/node
 
-RELEASE_BRANCH_PREFIX ?=release
-DEV_TAG_SUFFIX        ?=0.dev
-
 # Name of the images.
 # e.g., <registry>/<name>:<tag>
 NODE_IMAGE            ?=node
@@ -156,6 +153,7 @@ SRC_FILES=$(shell find ./pkg -name '*.go') \
 	  $(shell find ../felix -name '*.go') \
 	  $(shell find ../felix -name '*.[ch]') \
 	  $(shell find ../libcalico-go -name '*.go') \
+	  $(shell find ../goldmane -name '*.go') \
 	  $(shell find ../confd -name '*.go')
 
 ## Clean enough that a new release build will be clean
@@ -265,12 +263,12 @@ sub-image-fips-%:
 
 image $(NODE_IMAGE): register $(NODE_CONTAINER_MARKER)
 $(NODE_CONTAINER_CREATED): $(REMOTE_DEPS) ./Dockerfile.$(ARCH) $(NODE_CONTAINER_BINARY) $(INCLUDED_SOURCE) $(NODE_CONTAINER_FILES) $(TOOLS_MOUNTNS_BINARY)
-	$(DOCKER_BUILD) --build-arg BIN_DIR=$(NODE_CONTAINER_BIN_DIR) --build-arg BIRD_IMAGE=$(BIRD_IMAGE) --build-arg GIT_VERSION=$(GIT_VERSION) -t $(NODE_IMAGE):latest-$(ARCH) -f ./Dockerfile.$(ARCH) .
+	$(DOCKER_BUILD) --network=host --build-arg BIN_DIR=$(NODE_CONTAINER_BIN_DIR) --build-arg BIRD_IMAGE=$(BIRD_IMAGE) --build-arg GIT_VERSION=$(GIT_VERSION) -t $(NODE_IMAGE):latest-$(ARCH) -f ./Dockerfile.$(ARCH) .
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@
 
 $(NODE_CONTAINER_FIPS_CREATED): $(REMOTE_DEPS) ./Dockerfile.$(ARCH) $(NODE_CONTAINER_BINARY) $(INCLUDED_SOURCE) $(NODE_CONTAINER_FILES) $(TOOLS_MOUNTNS_BINARY)
-	$(DOCKER_BUILD) --build-arg BIN_DIR=$(NODE_CONTAINER_BIN_DIR) --build-arg BIRD_IMAGE=$(BIRD_IMAGE) --build-arg GIT_VERSION=$(GIT_VERSION) -t $(NODE_IMAGE):latest-fips-$(ARCH) -f ./Dockerfile.$(ARCH) .
+	$(DOCKER_BUILD) --network=host --build-arg BIN_DIR=$(NODE_CONTAINER_BIN_DIR) --build-arg BIRD_IMAGE=$(BIRD_IMAGE) --build-arg GIT_VERSION=$(GIT_VERSION) -t $(NODE_IMAGE):latest-fips-$(ARCH) -f ./Dockerfile.$(ARCH) .
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest-fips LATEST_IMAGE_TAG=latest-fips
 	touch $@
 
@@ -475,11 +473,6 @@ release-build: .release-$(VERSION).created
 release-windows-archive: release-prereqs
 	$(MAKE) build-windows-archive WINDOWS_ARCHIVE_TAG=$(VERSION)
 
-## Verifies the release artifacts produces by `make release-build` are correct.
-release-verify: release-prereqs
-	# Check the reported version is correct for each release artifact.
-	if ! docker run $(NODE_IMAGE):$(VERSION)-$(ARCH) versions | grep '^$(VERSION)$$'; then echo "Reported version:" `docker run $(NODE_IMAGE):$(VERSION)-$(ARCH) versions` "\nExpected version: $(VERSION)"; false; else echo "\nVersion check passed\n"; fi
-
 ## Pushes a github release and release artifacts produced by `make release-build`.
 release-publish: release-prereqs .release-$(VERSION).published
 .release-$(VERSION).published:
@@ -495,7 +488,7 @@ release-publish: release-prereqs .release-$(VERSION).published
 # WARNING: Only run this target if this release is the latest stable release. Do NOT
 # run this target for alpha / beta / release candidate builds, or patches to earlier Calico versions.
 ## Pushes `latest` release images. WARNING: Only run this for latest stable releases.
-release-publish-latest: release-verify
+release-publish-latest:
 	$(MAKE) push-images-to-registries push-manifests IMAGETAG=latest RELEASE=$(RELEASE) CONFIRM=$(CONFIRM)
 	# Push Windows images.
 	$(MAKE) release-windows IMAGETAG=latest CONFIRM=$(CONFIRM)

@@ -18,8 +18,6 @@ import (
 	"errors"
 	"sort"
 
-	"github.com/golang-collections/collections/stack"
-
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -45,7 +43,7 @@ func (i ByMaxIndex) Less(a, b int) bool { return i[a].Max < i[b].Max }
 func (i ByMaxIndex) Swap(a, b int) { i[a], i[b] = i[b], i[a] }
 
 type IndexAllocator struct {
-	indexStack *stack.Stack
+	indexStack *stack
 	exclusions []IndexRange
 }
 
@@ -58,7 +56,7 @@ func NewIndexAllocator(indexRanges []IndexRange, exclusions []IndexRange) *Index
 	}
 
 	r := &IndexAllocator{
-		indexStack: stack.New(),
+		indexStack: &stack{},
 		exclusions: exclusions,
 	}
 
@@ -91,10 +89,10 @@ func NewIndexAllocator(indexRanges []IndexRange, exclusions []IndexRange) *Index
 }
 
 func (r *IndexAllocator) GrabIndex() (int, error) {
-	if r.indexStack.Len() == 0 {
+	if r.indexStack.IsEmpty() {
 		return 0, errors.New("no more indices available")
 	}
-	return r.indexStack.Pop().(int), nil
+	return r.indexStack.Pop(), nil
 }
 
 func (r *IndexAllocator) ReleaseIndex(index int) {
@@ -112,4 +110,37 @@ func (r *IndexAllocator) GrabBlock(len int) (set.Set[int], error) {
 		indices.Add(idx)
 	}
 	return indices, nil
+}
+
+type (
+	// stack is an implementation of the stack data structure.
+	// Adapted from https://github.com/golang-collections/collections/blob/604e922904d35e97f98a774db7881f049cd8d970/stack/stack.go.
+	stack struct {
+		top *node
+	}
+	node struct {
+		value int
+		prev  *node
+	}
+)
+
+// IsEmpty returns true if the stack is empty.
+func (s *stack) IsEmpty() bool {
+	return s.top == nil
+}
+
+// Pop the top item of the stack and return it
+func (s *stack) Pop() int {
+	if s.IsEmpty() {
+		return 0
+	}
+
+	n := s.top
+	s.top = n.prev
+	return n.value
+}
+
+// Push a value onto the top of the stack
+func (s *stack) Push(value int) {
+	s.top = &node{value, s.top}
 }

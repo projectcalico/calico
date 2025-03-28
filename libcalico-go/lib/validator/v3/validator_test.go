@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2025 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -46,6 +46,7 @@ func init() {
 	var tierOrder = float64(100.0)
 	var defaultTierOrder = api.DefaultTierOrder
 	var anpTierOrder = api.AdminNetworkPolicyTierOrder
+	var banpTierOrder = api.BaselineAdminNetworkPolicyTierOrder
 	var defaultTierBadOrder = float64(10.0)
 
 	// We need pointers to bools, so define the values here.
@@ -125,6 +126,10 @@ func init() {
 	windowsManageFirewallRulesEnabled := api.WindowsManageFirewallRulesEnabled
 	windowsManageFirewallRulesDisabled := api.WindowsManageFirewallRulesDisabled
 	var windowsManageFirewallRulesBlah api.WindowsManageFirewallRulesMode = "blah"
+
+	// assignmentMode variables
+	assignmentModeAutomatic := api.Automatic
+	assignmentModeInvalid := new(api.AssignmentMode)
 
 	// Perform validation on error messages from validator
 	DescribeTable("Validator errors",
@@ -1042,6 +1047,17 @@ func init() {
 					},
 				},
 			}, true),
+		Entry("should reject IP pool with invalid allowed uses combination",
+			api.IPPool{
+				ObjectMeta: v1.ObjectMeta{Name: "pool.name"},
+				Spec: api.IPPoolSpec{
+					CIDR: netv4_4,
+					AllowedUses: []api.IPPoolAllowedUse{
+						api.IPPoolAllowedUseLoadBalancer,
+						api.IPPoolAllowedUseTunnel,
+					},
+				},
+			}, false),
 		Entry("should reject IP pool with invalid allowed uses",
 			api.IPPool{
 				ObjectMeta: v1.ObjectMeta{Name: "pool.name"},
@@ -1052,7 +1068,66 @@ func init() {
 					},
 				},
 			}, false),
-
+		Entry("should accept IP pool with valid AssignmentMode",
+			api.IPPool{
+				ObjectMeta: v1.ObjectMeta{Name: "pool.name"},
+				Spec: api.IPPoolSpec{
+					CIDR:           netv4_4,
+					AssignmentMode: &assignmentModeAutomatic,
+				},
+			}, true),
+		Entry("should reject IP pool with invalid assignment mode",
+			api.IPPool{
+				ObjectMeta: v1.ObjectMeta{Name: "pool.name"},
+				Spec: api.IPPoolSpec{
+					CIDR:           netv4_4,
+					AssignmentMode: assignmentModeInvalid,
+				},
+			}, false),
+		Entry("should reject IP pool with LoadBlancer and disableBGPExport true",
+			api.IPPool{
+				ObjectMeta: v1.ObjectMeta{Name: "pool.name"},
+				Spec: api.IPPoolSpec{
+					CIDR: netv4_4,
+					AllowedUses: []api.IPPoolAllowedUse{
+						api.IPPoolAllowedUseLoadBalancer,
+					},
+					DisableBGPExport: Vtrue,
+				},
+			}, false),
+		Entry("should reject IP pool with LoadBlancer and VXLAN mode enabled",
+			api.IPPool{
+				ObjectMeta: v1.ObjectMeta{Name: "pool.name"},
+				Spec: api.IPPoolSpec{
+					CIDR: netv4_4,
+					AllowedUses: []api.IPPoolAllowedUse{
+						api.IPPoolAllowedUseLoadBalancer,
+					},
+					VXLANMode: api.VXLANModeAlways,
+				},
+			}, false),
+		Entry("should reject IP pool with LoadBlancer and IPIP mode enabled",
+			api.IPPool{
+				ObjectMeta: v1.ObjectMeta{Name: "pool.name"},
+				Spec: api.IPPoolSpec{
+					CIDR: netv4_4,
+					AllowedUses: []api.IPPoolAllowedUse{
+						api.IPPoolAllowedUseLoadBalancer,
+					},
+					IPIPMode: api.IPIPModeAlways,
+				},
+			}, false),
+		Entry("should reject IP pool with LoadBlancer and nodeSelector other than all()",
+			api.IPPool{
+				ObjectMeta: v1.ObjectMeta{Name: "pool.name"},
+				Spec: api.IPPoolSpec{
+					CIDR: netv4_4,
+					AllowedUses: []api.IPPoolAllowedUse{
+						api.IPPoolAllowedUseLoadBalancer,
+					},
+					NodeSelector: "!all()",
+				},
+			}, false),
 		// (API) IPReservation
 		Entry("should accept IPReservation with an IP",
 			api.IPReservation{
@@ -1877,6 +1952,19 @@ func init() {
 			NodeSelector: "has(mylabel)",
 			PeerSelector: "has(mylabel)",
 		}, true),
+		Entry("should reject BGPPeerSpec with LocalWorkloadSelector and empty ASNumber", api.BGPPeerSpec{
+			LocalWorkloadSelector: "has(labelone)",
+		}, false),
+		Entry("should reject BGPPeerSpec with both LocalWorkloadSelector and PeerSelector", api.BGPPeerSpec{
+			LocalWorkloadSelector: "has(labelone)",
+			PeerSelector:          "has(labeltwo)",
+			ASNumber:              as61234,
+		}, false),
+		Entry("should reject BGPPeerSpec with both LocalWorkloadSelector and PeerIP", api.BGPPeerSpec{
+			LocalWorkloadSelector: "has(labelone)",
+			PeerIP:                ipv4_1,
+			ASNumber:              as61234,
+		}, false),
 		Entry("should reject BGPPeer with ReachableBy but without PeerIP", api.BGPPeerSpec{
 			ReachableBy: ipv4_2,
 		}, false),
@@ -2367,6 +2455,89 @@ func init() {
 			}, true,
 		),
 
+		// StagedGlobalNetworkPolicySpec Types field checks.
+		Entry("disallow name with invalid character", &api.StagedGlobalNetworkPolicy{
+			ObjectMeta: v1.ObjectMeta{Name: "t~!s.h.i.ng"},
+			Spec:       api.StagedGlobalNetworkPolicySpec{StagedAction: api.StagedActionSet, Selector: "foo == \"bar\""},
+		}, false),
+		Entry("disallow name with mixed case characters", &api.StagedGlobalNetworkPolicy{
+			ObjectMeta: v1.ObjectMeta{Name: "tHiNg"},
+			Spec:       api.StagedGlobalNetworkPolicySpec{StagedAction: api.StagedActionSet, Selector: "foo == \"bar\""},
+		}, false),
+		Entry("allow valid name", &api.StagedGlobalNetworkPolicy{
+			ObjectMeta: v1.ObjectMeta{Name: "thing"},
+			Spec:       api.StagedGlobalNetworkPolicySpec{StagedAction: api.StagedActionSet, Selector: "foo == \"bar\""},
+		}, true),
+		Entry("disallow k8s policy name", &api.StagedGlobalNetworkPolicy{
+			ObjectMeta: v1.ObjectMeta{Name: "knp.default.thing"},
+			Spec:       api.StagedGlobalNetworkPolicySpec{StagedAction: api.StagedActionSet, Selector: "foo == \"bar\""},
+		}, false),
+		Entry("disallow name with dot", &api.StagedGlobalNetworkPolicy{
+			ObjectMeta: v1.ObjectMeta{Name: "t.h.i.ng"},
+			Spec:       api.StagedGlobalNetworkPolicySpec{StagedAction: api.StagedActionSet, Selector: "foo == \"bar\""},
+		}, false),
+		Entry("should accept a valid StagedAction value 'Set'",
+			&api.StagedGlobalNetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "thing"},
+				Spec: api.StagedGlobalNetworkPolicySpec{
+					StagedAction: api.StagedActionSet,
+					Selector:     "foo == \"bar\"",
+				},
+			}, true,
+		),
+		Entry("should accept an unset StagedAction",
+			&api.StagedGlobalNetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "thing"},
+				Spec: api.StagedGlobalNetworkPolicySpec{
+					Selector: "foo == \"bar\"",
+				},
+			}, true,
+		),
+		Entry("should accept a valid StagedAction value 'Delete'",
+			&api.StagedGlobalNetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "eng.thing"},
+				Spec: api.StagedGlobalNetworkPolicySpec{
+					StagedAction: api.StagedActionDelete,
+					Tier:         "eng",
+				},
+			}, true,
+		),
+		Entry("should reject a valid StagedAction value 'Delete' if any other Spec field is set",
+			&api.StagedGlobalNetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "thing"},
+				Spec: api.StagedGlobalNetworkPolicySpec{
+					StagedAction: api.StagedActionDelete,
+					Selector:     "foo == \"bar\"",
+				},
+			}, false,
+		),
+		Entry("should reject a StagedAction value 'Warning'",
+			&api.StagedGlobalNetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "thing"},
+				Spec: api.StagedGlobalNetworkPolicySpec{
+					StagedAction: "Warning",
+					Selector:     "foo == \"bar\"",
+				},
+			}, false,
+		),
+		Entry("should accept an empty StagedAction value",
+			&api.StagedGlobalNetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "thing"},
+				Spec: api.StagedGlobalNetworkPolicySpec{
+					StagedAction: "",
+					Selector:     "foo == \"bar\"",
+				},
+			}, true,
+		),
+		Entry("should accept an empty selector value when StagedAction is Delete",
+			&api.StagedGlobalNetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "thing"},
+				Spec: api.StagedGlobalNetworkPolicySpec{
+					StagedAction: "Delete",
+				},
+			}, true,
+		),
+
 		// Tiers.
 		Entry("Tier: valid name", &api.Tier{
 			ObjectMeta: v1.ObjectMeta{Name: "foo"},
@@ -2417,6 +2588,16 @@ func init() {
 			ObjectMeta: v1.ObjectMeta{Name: names.AdminNetworkPolicyTierName},
 			Spec: api.TierSpec{
 				Order: &anpTierOrder,
+			}}, true),
+		Entry("Tier: disallow baselineadminnetworkpolicy tier with an invalid order", &api.Tier{
+			ObjectMeta: v1.ObjectMeta{Name: names.BaselineAdminNetworkPolicyTierName},
+			Spec: api.TierSpec{
+				Order: &defaultTierBadOrder,
+			}}, false),
+		Entry("Tier: allow baselineadminnetworkpolicy tier with the predefined order", &api.Tier{
+			ObjectMeta: v1.ObjectMeta{Name: names.BaselineAdminNetworkPolicyTierName},
+			Spec: api.TierSpec{
+				Order: &banpTierOrder,
 			}}, true),
 		Entry("Tier: allow a tier with a valid order", &api.Tier{
 			ObjectMeta: v1.ObjectMeta{Name: "platform"},
@@ -2485,6 +2666,111 @@ func init() {
 				},
 			}, false,
 		),
+
+		// StagedNetworkPolicySpec Types field checks.
+		Entry("allow valid name", &api.StagedNetworkPolicy{
+			ObjectMeta: v1.ObjectMeta{Name: "thing"},
+			Spec:       api.StagedNetworkPolicySpec{StagedAction: api.StagedActionDelete},
+		}, true),
+		Entry("disallow name with dot", &api.StagedNetworkPolicy{
+			ObjectMeta: v1.ObjectMeta{Name: "t.h.i.ng"},
+			Spec:       api.StagedNetworkPolicySpec{StagedAction: api.StagedActionDelete},
+		}, false),
+		Entry("disallow name with mixed case", &api.StagedNetworkPolicy{
+			ObjectMeta: v1.ObjectMeta{Name: "tHiNg"},
+			Spec:       api.StagedNetworkPolicySpec{StagedAction: api.StagedActionDelete},
+		}, false),
+		Entry("allow valid name of 253 chars", &api.StagedNetworkPolicy{
+			ObjectMeta: v1.ObjectMeta{Name: string(longValue[:maxNameLength])},
+			Spec:       api.StagedNetworkPolicySpec{StagedAction: api.StagedActionDelete},
+		}, true),
+		Entry("disallow a name of 254 chars", &api.StagedNetworkPolicy{
+			ObjectMeta: v1.ObjectMeta{Name: string(longValue[:maxNameLength+1])},
+			Spec:       api.StagedNetworkPolicySpec{StagedAction: api.StagedActionDelete},
+		}, false),
+		Entry("allow k8s policy name", &api.StagedNetworkPolicy{
+			ObjectMeta: v1.ObjectMeta{Name: "knp.default.thing"},
+			Spec:       api.StagedNetworkPolicySpec{StagedAction: api.StagedActionDelete},
+		}, true),
+		Entry("allow missing Types",
+			&api.StagedNetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "eng.thing"},
+				Spec: api.StagedNetworkPolicySpec{
+					StagedAction: api.StagedActionDelete,
+					Tier:         "eng",
+				},
+			}, true,
+		),
+		Entry("should accept a valid StagedAction value 'Set'",
+			&api.StagedNetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "thing"},
+				Spec: api.StagedNetworkPolicySpec{
+					StagedAction: api.StagedActionSet,
+					Selector:     "foo == \"bar\"",
+				},
+			}, true,
+		),
+		Entry("should accept a StagedAction not set",
+			&api.StagedNetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "thing"},
+				Spec: api.StagedNetworkPolicySpec{
+					Selector: "foo == \"bar\"",
+				},
+			}, true,
+		),
+		Entry("should accept a valid StagedAction value 'Delete'",
+			&api.StagedNetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "eng.thing"},
+				Spec: api.StagedNetworkPolicySpec{
+					StagedAction: api.StagedActionDelete,
+					Tier:         "eng",
+				},
+			}, true,
+		),
+		Entry("should reject a valid StagedAction value 'Delete' if any other Spec field is set",
+			&api.StagedNetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "thing"},
+				Spec: api.StagedNetworkPolicySpec{
+					StagedAction: api.StagedActionDelete,
+					Selector:     "foo == \"bar\"",
+				},
+			}, false,
+		),
+		Entry("should reject a StagedAction value 'Warning'",
+			&api.StagedNetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "thing"},
+				Spec: api.StagedNetworkPolicySpec{
+					StagedAction: "Warning",
+					Selector:     "foo == \"bar\"",
+				},
+			}, false,
+		),
+		Entry("should accept an empty StagedAction value",
+			&api.StagedNetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "thing"},
+				Spec: api.StagedNetworkPolicySpec{
+					StagedAction: "",
+					Selector:     "foo == \"bar\"",
+				},
+			}, true,
+		),
+		Entry("should accept an empty Selector when StagedAction is Delete",
+			&api.StagedNetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "eng.thing"},
+				Spec: api.StagedNetworkPolicySpec{
+					StagedAction: api.StagedActionDelete,
+					Tier:         "eng",
+				},
+			}, true,
+		),
+
+		// NetworkPolicy Object MetaData checks.
+		Entry("allow valid name", &api.NetworkPolicy{ObjectMeta: v1.ObjectMeta{Name: "thing"}}, true),
+		Entry("allow name with single dot - tier", &api.NetworkPolicy{ObjectMeta: v1.ObjectMeta{Name: "th.ing"}}, true),
+		Entry("disallow name with multiple dot", &api.NetworkPolicy{ObjectMeta: v1.ObjectMeta{Name: "t.h.i.ng"}}, false),
+		Entry("allow valid name of 253 chars", &api.NetworkPolicy{ObjectMeta: v1.ObjectMeta{Name: string(longValue[:maxNameLength])}}, true),
+		Entry("disallow a name of 254 chars", &api.NetworkPolicy{ObjectMeta: v1.ObjectMeta{Name: string(longValue[:maxNameLength+1])}}, false),
+		Entry("disallow name with invalid character", &api.GlobalNetworkPolicy{ObjectMeta: v1.ObjectMeta{Name: "t~!s.h.i.ng"}}, false),
 		// In the initial implementation, we validated against the following two cases but we found
 		// that prevented us from doing a smooth upgrade from type-less to typed policy since we
 		// couldn't write a policy that would work for back-level Felix instances while also
@@ -3124,6 +3410,7 @@ func init() {
 				WorkloadEndpoint: &api.WorkloadEndpointControllerConfig{},
 				ServiceAccount:   &api.ServiceAccountControllerConfig{},
 				Namespace:        &api.NamespaceControllerConfig{},
+				LoadBalancer:     &api.LoadBalancerControllerConfig{},
 			}}, true,
 		),
 		Entry("should accept valid reconciliation period on node",
@@ -3141,6 +3428,12 @@ func init() {
 		Entry("should accept valid host endpoint auto create",
 			api.NodeControllerConfig{HostEndpoint: &api.AutoHostEndpointConfig{AutoCreate: "Enabled"}}, true,
 		),
+		Entry("should not accept invalid host endpoint createDefaultAutoHostEndpoint",
+			api.NodeControllerConfig{HostEndpoint: &api.AutoHostEndpointConfig{CreateDefaultHostEndpoint: "Totally"}}, false,
+		),
+		Entry("should accept valid host endpoint createDefaultAutoHostEndpoint",
+			api.NodeControllerConfig{HostEndpoint: &api.AutoHostEndpointConfig{CreateDefaultHostEndpoint: "Enabled"}}, true,
+		),
 		Entry("should accept empty host endpoint auto create",
 			api.NodeControllerConfig{HostEndpoint: &api.AutoHostEndpointConfig{}}, true,
 		),
@@ -3155,6 +3448,50 @@ func init() {
 		),
 		Entry("should accept valid reconciliation period on namespace",
 			api.NamespaceControllerConfig{ReconcilerPeriod: &v1.Duration{Duration: time.Second * 330}}, true,
+		),
+		Entry("should accept valid assignIPs value for LoadBalancer config",
+			api.LoadBalancerControllerConfig{AssignIPs: api.AllServices}, true,
+		),
+		Entry("should accept valid assignIPs value for LoadBalancer config",
+			api.LoadBalancerControllerConfig{AssignIPs: api.RequestedServicesOnly}, true,
+		),
+		Entry("should not accept invalid assignIPs value for LoadBalancer config",
+			api.LoadBalancerControllerConfig{AssignIPs: "incorrect-value"}, false,
+		),
+		Entry("should not accept template with incorrect name",
+			api.Template{
+				GenerateName: "test$set",
+			}, false,
+		),
+		Entry("should accept template with valid name",
+			api.Template{
+				GenerateName: "validname",
+			}, true,
+		),
+		Entry("should allow a valid nodeSelector",
+			api.Template{
+				NodeSelector: `foo == "bar"`,
+			}, true,
+		),
+		Entry("should disallow a invalid nodeSelector",
+			api.Template{
+				NodeSelector: "this is not valid selector syntax",
+			}, false,
+		),
+		Entry("should allow a valid CIDR",
+			api.Template{
+				InterfaceCIDRs: []string{"10.0.1.0/24", "10.0.10.0/32"},
+			}, true,
+		),
+		Entry("should reject empty CIDR",
+			api.Template{
+				InterfaceCIDRs: []string{},
+			}, true,
+		),
+		Entry("should reject invalid CIDR",
+			api.Template{
+				InterfaceCIDRs: []string{"not a real cidr"},
+			}, false,
 		),
 
 		// BGP Communities validation in BGPConfigurationSpec
@@ -3227,6 +3564,16 @@ func init() {
 			Communities:          []api.Community{{Name: "community-test", Value: "101:5695"}},
 			PrefixAdvertisements: []api.PrefixAdvertisement{{CIDR: "2001:4860::/128", Communities: []string{"community-test", "8988:202"}}},
 		}, true),
+		Entry("should accept IPv4 and IPv6 in LocalWorkloadPeeringIPV4 and LocalWorkloadPeeringIPV6", api.BGPConfigurationSpec{
+			LocalWorkloadPeeringIPV4: ipv4_1,
+			LocalWorkloadPeeringIPV6: ipv6_1,
+		}, true),
+		Entry("should not accept an invalid IPv4 in LocalWorkloadPeeringIPV4", api.BGPConfigurationSpec{
+			LocalWorkloadPeeringIPV4: bad_ipv4_1,
+		}, false),
+		Entry("should not accept an invalid IPv6 in LocalWorkloadPeeringIPV6", api.BGPConfigurationSpec{
+			LocalWorkloadPeeringIPV6: bad_ipv6_1,
+		}, false),
 
 		// Block Affinities validation in BlockAffinitySpec
 		Entry("should accept non-deleted block affinities", libapiv3.BlockAffinitySpec{
@@ -3234,12 +3581,14 @@ func init() {
 			State:   "confirmed",
 			CIDR:    "10.0.0.0/24",
 			Node:    "node-1",
+			Type:    "host",
 		}, true),
 		Entry("should not accept deleted block affinities", libapiv3.BlockAffinitySpec{
 			Deleted: "true",
 			State:   "confirmed",
 			CIDR:    "10.0.0.0/24",
 			Node:    "node-1",
+			Type:    "host",
 		}, false),
 
 		Entry("should accept a valid BPFForceTrackPacketsFromIfaces value 'docker+'", api.FelixConfigurationSpec{BPFForceTrackPacketsFromIfaces: &[]string{"docker+"}}, true),

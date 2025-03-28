@@ -9,8 +9,6 @@ KUBE_MOCK_NODE_MANIFEST?=mock-node.yaml
 # e.g., <registry>/<name>:<tag>
 CALICOCTL_IMAGE       ?=ctl
 BUILD_IMAGES          ?=$(CALICOCTL_IMAGE)
-RELEASE_BRANCH_PREFIX ?= release
-DEV_TAG_SUFFIX        ?= 0.dev
 
 # Remove any excluded architectures since for calicoctl we want to build everything.
 EXCLUDEARCH?=
@@ -259,16 +257,6 @@ release-build: .release-$(VERSION).created
 	$(MAKE) retag-build-images-with-registries IMAGETAG=$(VERSION) RELEASE=true
 	$(MAKE) retag-build-images-with-registries IMAGETAG=latest RELEASE=true
 	touch $@
-
-## Verifies the release artifacts produces by `make release-build` are correct.
-release-verify: release-prereqs
-	# Check the reported version is correct for each release artifact.
-	if ! docker run $(CALICOCTL_IMAGE):$(VERSION)-$(ARCH) version | grep 'Version:\s*$(VERSION)$$'; then \
-	  echo "Reported version:" `docker run $(CALICOCTL_IMAGE):$(VERSION)-$(ARCH) version` "\nExpected version: $(VERSION)"; \
-	  false; \
-	else \
-	  echo "Version check passed\n"; \
-	fi
 
 ## Pushes a github release and release artifacts produced by `make release-build`.
 release-publish: release-prereqs .release-$(VERSION).published

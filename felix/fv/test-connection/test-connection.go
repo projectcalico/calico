@@ -47,7 +47,7 @@ import (
 const usage = `test-connection: test connection to some target, for Felix FV testing.
 
 Usage:
-  test-connection <namespace-path> <ip-address> <port> [--source-ip=<source_ip>] [--source-port=<source>] [--protocol=<protocol>] [--duration=<seconds>] [--loop-with-file=<file>] [--sendlen=<bytes>] [--recvlen=<bytes>] [--log-pongs] [--stdin] [--timeout=<seconds>]
+  test-connection <namespace-path> <ip-address> <port> [--source-ip=<source_ip>] [--source-port=<source>] [--protocol=<protocol>] [--duration=<seconds>] [--loop-with-file=<file>] [--sendlen=<bytes>] [--recvlen=<bytes>] [--log-pongs] [--stdin] [--timeout=<seconds>] [--sleep=<seconds>]
 
 Options:
   --source-ip=<source_ip>  Source IP to use for the connection [default: 0.0.0.0].
@@ -61,6 +61,7 @@ Options:
   --recvlen=<bytes>        Tell the other side to send this many additional bytes
   --stdin                  Read and send data from stdin
   --timeout=<seconds>      Exit after timeout if pong not received
+  --sleep=<seconds>        How long to sleep before seding another ping
 
 If connection is successful, test-connection exits successfully.
 
@@ -151,7 +152,7 @@ func main() {
 		log.WithError(err).Fatal("Invalid --stdin")
 	}
 
-	var timeout time.Duration
+	var timeout, sleep time.Duration
 
 	if toval := arguments["--timeout"]; toval != nil {
 		timeoutSecs, err := strconv.ParseFloat(toval.(string), 64)
@@ -160,6 +161,15 @@ func main() {
 			log.WithField("timeout", timeout).Fatal("Invalid --timeout argument")
 		}
 		timeout = time.Duration(timeoutSecs * float64(time.Second))
+	}
+
+	if toval := arguments["--sleep"]; toval != nil {
+		secs, err := strconv.ParseFloat(toval.(string), 64)
+		if err != nil {
+			// panic on error
+			log.WithField("sleep", sleep).Fatal("Invalid --sleep argument")
+		}
+		sleep = time.Duration(secs * float64(time.Second))
 	}
 
 	log.Infof("Test connection from namespace %v IP %v port %v to IP %v port %v proto %v "+
@@ -182,7 +192,7 @@ func main() {
 		// Test connection from wherever we are already running.
 		if err == nil {
 			err = tryConnect(ipAddress, port, sourceIpAddress, sourcePort, protocol,
-				seconds, loopFile, sendLen, recvLen, logPongs, stdin, timeout)
+				seconds, loopFile, sendLen, recvLen, logPongs, stdin, timeout, sleep)
 		}
 	} else {
 		// Get the specified network namespace (representing a workload).
@@ -201,7 +211,7 @@ func main() {
 				return e
 			}
 			return tryConnect(ipAddress, port, sourceIpAddress, sourcePort, protocol,
-				seconds, loopFile, sendLen, recvLen, logPongs, stdin, timeout)
+				seconds, loopFile, sendLen, recvLen, logPongs, stdin, timeout, sleep)
 		})
 	}
 
@@ -353,7 +363,7 @@ func NewTestConn(remoteIpAddr, remotePort, sourceIpAddr, sourcePort, protocol st
 }
 
 func tryConnect(remoteIPAddr, remotePort, sourceIPAddr, sourcePort, protocol string,
-	seconds int, loopFile string, sendLen, recvLen int, logPongs, stdin bool, timeout time.Duration) error {
+	seconds int, loopFile string, sendLen, recvLen int, logPongs, stdin bool, timeout, sleep time.Duration) error {
 
 	tc, err := NewTestConn(remoteIPAddr, remotePort, sourceIPAddr, sourcePort, protocol,
 		time.Duration(seconds)*time.Second, sendLen, recvLen, stdin)
@@ -408,7 +418,7 @@ func tryConnect(remoteIPAddr, remotePort, sourceIPAddr, sourcePort, protocol str
 	}
 
 	if loopFile != "" {
-		return tc.tryLoopFile(loopFile, logPongs, timeout)
+		return tc.tryLoopFile(loopFile, logPongs, timeout, sleep)
 	}
 
 	if tc.config.ConnType == connectivity.ConnectionTypePing {
@@ -426,7 +436,7 @@ func (tc *testConn) GetTestMessage(sequence int) connectivity.Request {
 	return req
 }
 
-func (tc *testConn) tryLoopFile(loopFile string, logPongs bool, timeout time.Duration) error {
+func (tc *testConn) tryLoopFile(loopFile string, logPongs bool, timeout, sleep time.Duration) error {
 	req := tc.GetTestMessage(0)
 	msg, err := json.Marshal(req)
 	if err != nil {
@@ -434,6 +444,7 @@ func (tc *testConn) tryLoopFile(loopFile string, logPongs bool, timeout time.Dur
 	}
 
 	ls := newLoopState(loopFile)
+	ls.sleep = sleep
 	var lastResponse connectivity.Response
 
 	var retryStart time.Time
@@ -756,6 +767,7 @@ func (tc *testConn) Close() error {
 type loopState struct {
 	sentInitial bool
 	loopFile    string
+	sleep       time.Duration
 }
 
 func newLoopState(loopFile string) *loopState {
@@ -797,7 +809,11 @@ func (l *loopState) Next() bool {
 		}
 		l.sentInitial = true
 	}
-	time.Sleep(500 * time.Millisecond)
+	if l.sleep != 0 {
+		time.Sleep(l.sleep)
+	} else {
+		time.Sleep(500 * time.Millisecond)
+	}
 	return true
 }
 

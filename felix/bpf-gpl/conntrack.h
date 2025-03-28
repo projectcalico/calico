@@ -1,5 +1,5 @@
 // Project Calico BPF dataplane programs.
-// Copyright (c) 2021-2022 Tigera, Inc. All rights reserved.
+// Copyright (c) 2021-2025 Tigera, Inc. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 
 #ifndef __CALI_CONNTRACK_H__
@@ -107,24 +107,27 @@ static CALI_BPF_INLINE int calico_ct_v4_create_tracking(struct cali_tc_ctx *ctx,
 			CALI_VERB("CT Packet marked as from workload but got a conntrack miss!");
 			goto create;
 		}
-		CALI_VERB("CT Found expected entry, updating...");
 		if (srcLTDest) {
-			CALI_VERB("CT-ALL update src_to_dst A->B");
+			CALI_DEBUG("CT-ALL update src_to_dst A->B");
 			ct_value->a_to_b.seqno = seq;
 			ct_value->a_to_b.syn_seen = syn;
 			if (CALI_F_TO_HOST) {
 				ct_value->a_to_b.approved = 1;
+				ct_value->a_to_b.workload = CALI_F_WEP ? 1 : 0;
 			} else {
 				ct_value->b_to_a.approved = 1;
+				ct_value->b_to_a.workload = CALI_F_WEP ? 1 : 0;
 			}
 		} else  {
-			CALI_VERB("CT-ALL update src_to_dst B->A");
+			CALI_DEBUG("CT-ALL update src_to_dst B->A");
 			ct_value->b_to_a.seqno = seq;
 			ct_value->b_to_a.syn_seen = syn;
 			if (CALI_F_TO_HOST) {
 				ct_value->b_to_a.approved = 1;
+				ct_value->b_to_a.workload = CALI_F_WEP ? 1 : 0;
 			} else {
 				ct_value->a_to_b.approved = 1;
+				ct_value->a_to_b.workload = CALI_F_WEP ? 1 : 0;
 			}
 		}
 
@@ -136,7 +139,6 @@ create:
 	CALI_DEBUG("CT-ALL Creating tracking entry type %d at %llu.", ct_ctx->type, now);
 
 	struct calico_ct_value ct_value = {
-		.created=now,
 		.last_seen=now,
 		.type = ct_ctx->type,
 		.orig_ip = ct_ctx->orig_dst,
@@ -186,6 +188,8 @@ create:
 	src_to_dst->seqno = seq;
 	src_to_dst->syn_seen = syn;
 	src_to_dst->opener = 1;
+	src_to_dst->packets = 1;
+	src_to_dst->bytes = ctx->skb->len;
 	if (CALI_F_TO_HOST) {
 		src_to_dst->ifindex = skb_ingress_ifindex(ctx->skb);
 	} else {
@@ -197,6 +201,7 @@ create:
 	if (CALI_F_FROM_WEP) {
 		/* src is the from the WEP, policy approved this side */
 		src_to_dst->approved = 1;
+		src_to_dst->workload = 1;
 	} else if (CALI_F_FROM_HEP) {
 		/* src is the from the HEP, policy approved this side */
 		src_to_dst->approved = 1;
@@ -233,6 +238,7 @@ create:
 		int i;
 
 		CALI_DEBUG("Source collision for " IP_FMT ":%d", debug_ip(ct_ctx->src), sport);
+		counter_inc(ctx, CALI_REASON_SOURCE_COLLISION);
 
 		ct_value.orig_sport = sport;
 
@@ -258,6 +264,7 @@ create:
 			CALI_INFO("Source collision unresolved " IP_FMT ":%d",
 					debug_ip(ct_ctx->src), ct_value.orig_sport);
 			err = -17; /* EEXIST */
+			counter_inc(ctx, CALI_REASON_SOURCE_COLLISION_FAILED);
 		}
 	}
 
@@ -292,7 +299,6 @@ static CALI_BPF_INLINE int calico_ct_create_nat_fwd(struct cali_tc_ctx *ctx,
 	struct calico_ct_value ct_value = {
 		.type = CALI_CT_TYPE_NAT_FWD,
 		.last_seen = now,
-		.created = now,
 	};
 
 	ct_value.nat_rev_key = *rk;
@@ -505,13 +511,6 @@ static CALI_BPF_INLINE void ct_tcp_entry_update(struct cali_tc_ctx *ctx,
 						struct calico_ct_leg *src_to_dst,
 						struct calico_ct_leg *dst_to_src)
 {
-	if (tcp_header->rst) {
-		CALI_CT_DEBUG("RST seen, marking CT entry.");
-		// TODO: We should only take account of RST packets that are in
-		// the right window.
-		// TODO if we trust the RST, could just drop the CT entries.
-		src_to_dst->rst_seen = 1;
-	}
 	if (tcp_header->fin) {
 		CALI_CT_VERB("FIN seen, marking CT entry.");
 		src_to_dst->fin_seen = 1;
@@ -546,6 +545,12 @@ static CALI_BPF_INLINE void ct_tcp_entry_update(struct cali_tc_ctx *ctx,
 		if (!dst_to_src->ack_seen) {
 			CALI_CT_VERB("Non-flagged packet but other side has never ACKed.");
 			/* XXX Have to let this through so source can reset? */
+		} else if (src_to_dst->rst_seen | dst_to_src->rst_seen) {
+			/* Remove the flag, we have seen traffic, but we still
+			 * have the RST timestamp in case this is some residual
+			 * traffic and the connection becomes silent.
+			 */
+			src_to_dst->rst_seen = dst_to_src->rst_seen = 0;
 		} else {
 			CALI_CT_VERB("Non-flagged packet and other side has ACKed.");
 		}
@@ -757,7 +762,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 		CALI_CT_DEBUG("fwd tun_ip:" IP_FMT "", debug_ip(tracking_v->tun_ip));
 		// flags are in the tracking entry
 		result.flags = ct_value_get_flags(tracking_v);
-		CALI_CT_DEBUG("result.flags " IP_FMT "", result.flags);
+		CALI_CT_DEBUG("result.flags 0x%x", result.flags);
 
 		if (ct_ctx->proto == IPPROTO_ICMP_46) {
 			result.rc =	CALI_CT_ESTABLISHED_DNAT;
@@ -861,7 +866,6 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 			cali_ct_delete_elem(&k);
 			goto out_lookup_fail;
 		}
-		CALI_CT_VERB("Created: %llu.", v->created);
 		if (tcp_header) {
 			CALI_CT_VERB("Last seen: %llu.", v->last_seen);
 			CALI_CT_VERB("A-to-B: seqno %u.", bpf_ntohl(v->a_to_b.seqno));
@@ -908,9 +912,12 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 				result.flags & CALI_CT_FLAG_NP_FWD;
 
 	if (related) {
-		if (proto_orig == IPPROTO_ICMP_46) {
+		if (proto_orig == IPPROTO_ICMP_46 && v->type != CALI_CT_TYPE_NAT_FWD) {
 			/* flip src/dst as ICMP related carries the original ip/l4 headers in
 			 * opposite direction - it is a reaction on the original packet.
+			 *
+			 * CALI_CT_TYPE_NAT_FWD matches in opposite direction so
+			 * all is ok already.
 			 */
 			struct calico_ct_leg *tmp;
 
@@ -924,7 +931,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 		CALI_DEBUG("Packet returned from tunnel " IP_FMT "", debug_ip(ctx->state->tun_ip));
 	} else if (CALI_F_TO_HOST || (skb_from_host(ctx->skb) && result.flags & CALI_CT_FLAG_HOST_PSNAT)) {
 		/* Source of the packet is the endpoint, so check the src approval flag. */
-		if (CALI_F_LO || src_to_dst->approved) {
+		if (CALI_F_LO || src_to_dst->approved || (related && dst_to_src->approved)) {
 			CALI_CT_VERB("Packet approved by this workload's policy.");
 		} else {
 			/* Only approved by the other side (so far)?  Unlike
@@ -937,7 +944,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 		}
 	} else if (CALI_F_FROM_HOST) {
 		/* Dest of the packet is the endpoint, so check the dest approval flag. */
-		if (CALI_F_LO || dst_to_src->approved) {
+		if (CALI_F_LO || dst_to_src->approved || (related && src_to_dst->approved)) {
 			// Packet was approved by the policy attached to this endpoint.
 			CALI_CT_VERB("Packet approved by this workload's policy.");
 		} else {
@@ -961,6 +968,20 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 
 			dst_to_src = src_to_dst;
 			src_to_dst = tmp;
+		}
+		if (tcp_header->rst) {
+			CALI_CT_DEBUG("RST seen, marking CT entry.");
+			src_to_dst->rst_seen = 1;
+			v->rst_seen = now;
+		} else if (v->rst_seen) {
+			if (now - v->rst_seen > 2 * 60 * 1000000000ull || now - v->rst_seen > (1ull << 63)) {
+				/* It's been a looong time (2m) since we saw the RST, we still see
+				 * traffic, we must have seen traffic between now and rst_seen,
+				 * otherwise the entry would have been GCed, the connection is
+				 * likely established and the RST was spurious.
+				 */
+				v->rst_seen = 0;
+			}
 		}
 		ct_tcp_entry_update(ctx, tcp_header, src_to_dst, dst_to_src);
 	}
@@ -1003,7 +1024,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 				ct_result_set_flag(result.rc, CT_RES_RPF_FAILED);
 				src_to_dst->ifindex = CT_INVALID_IFINDEX;
 				CALI_CT_DEBUG("CT RPF failed invalidating ifindex");
-			} else {
+			} else if (!related) {
 				CALI_CT_DEBUG("Updating ifindex from %d to %d",
 						src_to_dst->ifindex, ifindex);
 				src_to_dst->ifindex = ifindex;
@@ -1024,6 +1045,25 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 		 * packets in the opposite direction are coming from.
 		 */
 		result.ifindex_fwd = dst_to_src->ifindex;
+		if (dst_to_src->workload) {
+			ct_result_set_flag(result.rc, CT_RES_TO_WORKLOAD);
+		}
+	}
+
+    if ((CALI_F_INGRESS && CALI_F_TUNNEL) || !skb_seen(ctx->skb)) {
+		/* Account for the src->dst leg if we haven't seen the packet yet.
+		 * Since when the traffic is tunneled, BPF program on the host
+		 * iface sees it first and marks it as seen before another
+		 * program sees the packet as decaped. Only then we can account
+		 * for the bytes and packets. Unfortunately, we need to mark the
+		 * packets as seen otherwise they would get dropped as something
+		 * we missed.
+		 *
+		 * Needs to be done for tunnels that preserve the packet, like
+		 * IPIP and unlike wireguard.
+		 */
+		src_to_dst->packets++;
+		src_to_dst->bytes += ctx->skb->len;
 	}
 
 	if (syn) {

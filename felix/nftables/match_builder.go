@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@ package nftables
 
 import (
 	"fmt"
+	"log"
 	"math/bits"
 	"regexp"
 	"strings"
@@ -49,16 +50,61 @@ const (
 type NFTMatchCriteria interface {
 	generictables.MatchCriteria
 
+	// SetLayer sets the layer name for the match criteria. e.g., filter vs. raw.
+	// This is used to distinguish between objects with the same name in different table layers.
+	// For now, this is only needed for verdict maps.
+	SetLayer(s string) generictables.MatchCriteria
+
 	IPVersion(version uint8) generictables.MatchCriteria
 
 	ConntrackStatus(statusNames string) generictables.MatchCriteria
 	NotConntrackStatus(statusNames string) generictables.MatchCriteria
 }
 
+// Combine creates a copy of m1 and appends the values of m2 to the copy, creating a new MatchCritera with the values
+// of m1 and m2.
+func Combine(m1, m2 generictables.MatchCriteria) generictables.MatchCriteria {
+	m1p, ok := m1.(nftMatch)
+	if !ok {
+		log.Panicf("%T (m1) is not a matchCriteria", m1)
+	}
+	m2p, ok := m2.(nftMatch)
+	if !ok {
+		log.Panicf("%T (m2) is not a matchCriteria", m2)
+	}
+
+	if len(m1p.clauses) == 0 && len(m2p.clauses) == 0 {
+		// Return a nil matchCriteria instead of an empty one if both are empty to
+		// ensure equality with Match().
+		var m nftMatch
+		return m
+	}
+
+	if m1p.ipVersion != m2p.ipVersion {
+		logrus.Panicf("Probably bug: IP versions do not match: %d != %d", m1p.ipVersion, m2p.ipVersion)
+	}
+	if m1p.proto != "" && m2p.proto != "" && m1p.proto != m2p.proto {
+		logrus.Panicf("Probably bug: Protocols do not match: %s != %s", m1p.proto, m2p.proto)
+	} else if m1p.protoNum != 0 && m2p.protoNum != 0 && m1p.protoNum != m2p.protoNum {
+		logrus.Panicf("Probably bug: Protocols do not match: %d != %d", m1p.protoNum, m2p.protoNum)
+	}
+
+	cp := nftMatch{
+		clauses:   make([]string, len(m1p.clauses)),
+		ipVersion: m1p.ipVersion,
+		proto:     m1p.proto,
+		protoNum:  m1p.protoNum,
+	}
+	copy(cp.clauses, m1p.clauses)
+	cp.clauses = append(cp.clauses, m2p.clauses...)
+	return cp
+}
+
 // nftMatch implements the MatchCriteria interface for nftables.
 type nftMatch struct {
 	clauses []string
 
+	layerName string
 	ipVersion uint8
 
 	proto    string
@@ -119,9 +165,22 @@ func insertIPVersion(s string, ipVersion uint8) string {
 	return strings.ReplaceAll(s, "<IPV>", "ip")
 }
 
+// replaceLayer replaces generic layer placeholders with the actual layer name
+// to distinguish between objects with the same name in different
+// table layers (e.g., filter- vs. raw-).
+func replaceLayer(s, layer string) string {
+	return strings.ReplaceAll(s, "<LAYER>", layer)
+}
+
+func (m nftMatch) SetLayer(s string) generictables.MatchCriteria {
+	m.layerName = s
+	return m
+}
+
 func (m nftMatch) Render() string {
 	joined := strings.Join(m.clauses, " ")
 	joined = insertIPVersion(joined, m.ipVersion)
+	joined = replaceLayer(joined, m.layerName)
 	return joined
 }
 
@@ -472,6 +531,16 @@ func (m nftMatch) ICMPV6TypeAndCode(t, c uint8) generictables.MatchCriteria {
 
 func (m nftMatch) NotICMPV6TypeAndCode(t, c uint8) generictables.MatchCriteria {
 	m.clauses = append(m.clauses, fmt.Sprintf("icmpv6 type != %d code != %d", t, c))
+	return m
+}
+
+func (m nftMatch) InInterfaceVMAP(name string) generictables.MatchCriteria {
+	m.clauses = append(m.clauses, fmt.Sprintf("iifname vmap @<LAYER>-%s", LegalizeSetName(name)))
+	return m
+}
+
+func (m nftMatch) OutInterfaceVMAP(name string) generictables.MatchCriteria {
+	m.clauses = append(m.clauses, fmt.Sprintf("oifname vmap @<LAYER>-%s", LegalizeSetName(name)))
 	return m
 }
 

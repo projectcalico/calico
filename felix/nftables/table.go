@@ -163,10 +163,11 @@ func init() {
 	prometheus.MustRegister(gaugeNumRules)
 }
 
-// nftablesTable is an implementation of the generictables.Table interface that programs nftables. It represents a
+// NftablesTable is an implementation of the generictables.Table interface that programs nftables. It represents a
 // single nftables table.
-type nftablesTable struct {
+type NftablesTable struct {
 	dpsets.IPSetsDataplane
+	MapsDataplane
 
 	name      string
 	ipVersion uint8
@@ -277,7 +278,7 @@ func NewTable(
 	hashPrefix string,
 	featureDetector environment.FeatureDetectorIface,
 	options TableOptions,
-) generictables.Table {
+) *NftablesTable {
 	// Match the chain names that we program dynamically, which all start with "cali",
 	// as well as the base chains that we program which start with "nat", "filter", "mangle", "raw".
 	ourChainsRegexp := regexp.MustCompile("^(cali|nat|filter|mangle|raw)-.*")
@@ -335,7 +336,7 @@ func NewTable(
 	}
 	ipv := ipsets.NewIPVersionConfig(ipsetFamily, ipsets.IPSetNamePrefix, nil, nil)
 
-	table := &nftablesTable{
+	table := &NftablesTable{
 		IPSetsDataplane:        NewIPSets(ipv, nft, options.OpRecorder),
 		name:                   name,
 		nft:                    nft,
@@ -370,6 +371,13 @@ func NewTable(
 
 		contextTimeout: defaultTimeout,
 	}
+	table.MapsDataplane = NewMaps(
+		ipv,
+		nft,
+		table.increfChain,
+		table.decrefChain,
+		options.OpRecorder,
+	)
 
 	if options.OnStillAlive != nil {
 		table.onStillAlive = options.OnStillAlive
@@ -380,11 +388,11 @@ func NewTable(
 	return table
 }
 
-func (n *nftablesTable) Name() string {
+func (n *NftablesTable) Name() string {
 	return n.name
 }
 
-func (n *nftablesTable) IPVersion() uint8 {
+func (n *NftablesTable) IPVersion() uint8 {
 	return n.ipVersion
 }
 
@@ -392,7 +400,7 @@ func (n *nftablesTable) IPVersion() uint8 {
 // to the given base chain (depending on the chain insert mode).  See
 // also AppendRules, which can be used to record additional rules that are
 // always appended.
-func (t *nftablesTable) InsertOrAppendRules(chainName string, rules []generictables.Rule) {
+func (t *NftablesTable) InsertOrAppendRules(chainName string, rules []generictables.Rule) {
 	t.logCxt.WithField("chainName", chainName).Debug("Updating rule insertions")
 	oldRules := t.chainToInsertedRules[chainName]
 	t.chainToInsertedRules[chainName] = rules
@@ -415,7 +423,7 @@ func (t *nftablesTable) InsertOrAppendRules(chainName string, rules []generictab
 // These rules are always appended, even if chain insert mode is "insert".
 // If chain insert mode is "append", these rules are appended after any
 // rules added with InsertOrAppendRules.
-func (t *nftablesTable) AppendRules(chainName string, rules []generictables.Rule) {
+func (t *NftablesTable) AppendRules(chainName string, rules []generictables.Rule) {
 	t.logCxt.WithField("chainName", chainName).Debug("Updating rule appends")
 	oldRules := t.chainToAppendedRules[chainName]
 	t.chainToAppendedRules[chainName] = rules
@@ -429,13 +437,13 @@ func (t *nftablesTable) AppendRules(chainName string, rules []generictables.Rule
 	t.maybeDecrefReferredChains(chainName, oldRules)
 }
 
-func (t *nftablesTable) UpdateChains(chains []*generictables.Chain) {
+func (t *NftablesTable) UpdateChains(chains []*generictables.Chain) {
 	for _, chain := range chains {
 		t.UpdateChain(chain)
 	}
 }
 
-func (t *nftablesTable) UpdateChain(chain *generictables.Chain) {
+func (t *NftablesTable) UpdateChain(chain *generictables.Chain) {
 	t.logCxt.WithField("chainName", chain.Name).Debug("Adding chain to available set.")
 	oldNumRules := 0
 
@@ -454,13 +462,13 @@ func (t *nftablesTable) UpdateChain(chain *generictables.Chain) {
 	}
 }
 
-func (t *nftablesTable) RemoveChains(chains []*generictables.Chain) {
+func (t *NftablesTable) RemoveChains(chains []*generictables.Chain) {
 	for _, chain := range chains {
 		t.RemoveChainByName(chain.Name)
 	}
 }
 
-func (t *nftablesTable) RemoveChainByName(name string) {
+func (t *NftablesTable) RemoveChainByName(name string) {
 	t.logCxt.WithField("chainName", name).Debug("Removing chain from available set.")
 	if oldChain, known := t.chainNameToChain[name]; known {
 		t.gaugeNumRules.Sub(float64(len(oldChain.Rules)))
@@ -472,14 +480,14 @@ func (t *nftablesTable) RemoveChainByName(name string) {
 	}
 }
 
-func (t *nftablesTable) chainIsReferenced(name string) bool {
+func (t *NftablesTable) chainIsReferenced(name string) bool {
 	return t.chainRefCounts[name] > 0
 }
 
 // maybeIncrefReferredChains checks whether the named chain is referenced;
 // if so, it increfs all child chains.  If a child chain becomes newly
 // referenced, its children are increffed recursively.
-func (t *nftablesTable) maybeIncrefReferredChains(chainName string, rules []generictables.Rule) {
+func (t *NftablesTable) maybeIncrefReferredChains(chainName string, rules []generictables.Rule) {
 	if !t.chainIsReferenced(chainName) {
 		return
 	}
@@ -493,7 +501,7 @@ func (t *nftablesTable) maybeIncrefReferredChains(chainName string, rules []gene
 // maybeDecrefReferredChains checks whether the named chain is referenced;
 // if so, it decrefs all child chains.  If a child chain becomes newly
 // unreferenced, its children are decreffed recursively.
-func (t *nftablesTable) maybeDecrefReferredChains(chainName string, rules []generictables.Rule) {
+func (t *NftablesTable) maybeDecrefReferredChains(chainName string, rules []generictables.Rule) {
 	if !t.chainIsReferenced(chainName) {
 		return
 	}
@@ -506,7 +514,7 @@ func (t *nftablesTable) maybeDecrefReferredChains(chainName string, rules []gene
 
 // increfChain increments the refcount of the given chain; if the refcount transitions from 0,
 // marks the chain dirty so it will be programmed.
-func (t *nftablesTable) increfChain(chainName string) {
+func (t *NftablesTable) increfChain(chainName string) {
 	t.logCxt.WithField("chainName", chainName).Debug("Incref chain")
 	t.chainRefCounts[chainName] += 1
 	if t.chainRefCounts[chainName] == 1 {
@@ -523,7 +531,7 @@ func (t *nftablesTable) increfChain(chainName string) {
 
 // decrefChain decrements the refcount of the given chain; if the refcount transitions to 0,
 // marks the chain dirty so it will be cleaned up.
-func (t *nftablesTable) decrefChain(chainName string) {
+func (t *NftablesTable) decrefChain(chainName string) {
 	t.logCxt.WithField("chainName", chainName).Debug("Decref chain")
 	if t.chainRefCounts[chainName] == 1 {
 		t.updateRateLimitedLog.WithField("chainName", chainName).Info("Chain no longer referenced, marking it for removal")
@@ -542,7 +550,12 @@ func (t *nftablesTable) decrefChain(chainName string) {
 	t.chainRefCounts[chainName] -= 1
 }
 
-func (t *nftablesTable) loadDataplaneState() {
+func (t *NftablesTable) loadDataplaneState() {
+	// Sync maps.
+	if err := t.MapsDataplane.LoadDataplaneState(); err != nil {
+		t.logCxt.WithError(err).Warn("Failed to load maps state")
+	}
+
 	// Refresh the cache of feature data.
 	t.featureDetector.RefreshFeatures()
 
@@ -612,7 +625,7 @@ func (t *nftablesTable) loadDataplaneState() {
 // given our inserts and appends. Hashes for inserted rules are calculated first.
 // To avoid recalculation, it returns the inserted rule hashes as a second output and appended rule hashes
 // a third output.
-func (t *nftablesTable) expectedHashesForInsertAppendChain(chainName string) (allHashes, ourInsertedHashes, ourAppendedHashes []string) {
+func (t *NftablesTable) expectedHashesForInsertAppendChain(chainName string) (allHashes, ourInsertedHashes, ourAppendedHashes []string) {
 	insertedRules := t.chainToInsertedRules[chainName]
 	appendedRules := t.chainToAppendedRules[chainName]
 	allHashes = make([]string, len(insertedRules)+len(appendedRules))
@@ -643,7 +656,7 @@ func (t *nftablesTable) expectedHashesForInsertAppendChain(chainName string) (al
 // represented by an empty string. The 'rules' map contains an entry for each non-Calico chain in the table that
 // contains inserts. It is used to generate deletes using the full rule, rather than deletes by line number, to avoid
 // race conditions on chains we don't fully control.
-func (t *nftablesTable) getHashesAndRulesFromDataplane() (hashes map[string][]string, rules map[string][]*knftables.Rule) {
+func (t *NftablesTable) getHashesAndRulesFromDataplane() (hashes map[string][]string, rules map[string][]*knftables.Rule) {
 	retries := 3
 	retryDelay := 100 * time.Millisecond
 
@@ -674,7 +687,7 @@ func (t *nftablesTable) getHashesAndRulesFromDataplane() (hashes map[string][]st
 }
 
 // attemptToGetHashesAndRulesFromDataplane reads nftables state and loads it into memory.
-func (t *nftablesTable) attemptToGetHashesAndRulesFromDataplane() (hashes map[string][]string, rules map[string][]*knftables.Rule, err error) {
+func (t *NftablesTable) attemptToGetHashesAndRulesFromDataplane() (hashes map[string][]string, rules map[string][]*knftables.Rule, err error) {
 	startTime := t.timeNow()
 	defer func() {
 		saveDuration := t.timeNow().Sub(startTime)
@@ -736,7 +749,7 @@ func (t *nftablesTable) attemptToGetHashesAndRulesFromDataplane() (hashes map[st
 	return
 }
 
-func (t *nftablesTable) InvalidateDataplaneCache(reason string) {
+func (t *NftablesTable) InvalidateDataplaneCache(reason string) {
 	logCxt := t.logCxt.WithField("reason", reason)
 	if !t.inSyncWithDataPlane {
 		logCxt.Debug("Would invalidate dataplane cache but it was already invalid.")
@@ -747,7 +760,7 @@ func (t *nftablesTable) InvalidateDataplaneCache(reason string) {
 	t.reason = reason
 }
 
-func (t *nftablesTable) Apply() (rescheduleAfter time.Duration) {
+func (t *NftablesTable) Apply() (rescheduleAfter time.Duration) {
 	now := t.timeNow()
 	defer func() {
 		if time.Since(now) > time.Second {
@@ -838,16 +851,34 @@ func (t *nftablesTable) Apply() (rescheduleAfter time.Duration) {
 	return
 }
 
-func (t *nftablesTable) applyUpdates() error {
+func (t *NftablesTable) applyUpdates() error {
 	// If needed, detect the dataplane features.
 	features := t.featureDetector.GetFeatures()
 
 	// Start a new nftables transaction.
 	tx := t.nft.NewTransaction()
 
+	// Get the set of map updates we need to make. We'll interleave these with the chain updates.
+	// in the correct order. Namely:
+	// - Create any new maps.
+	// - Create any new chains / rules.
+	// - Add elements to maps.
+	mapUpdates := t.MapsDataplane.MapUpdates()
+
 	// If we don't see any chains, then we need to create it.
 	if len(t.chainToDataplaneHashes) == 0 {
 		tx.Add(&knftables.Table{})
+	}
+
+	// Add in any new maps we need to create.
+	for _, newMap := range mapUpdates.MapsToCreate {
+		tx.Add(newMap)
+	}
+
+	// Remove any map elements that should no longer exist. Do this before deleting chains
+	// in case the map elements reference them.
+	for _, mapElement := range mapUpdates.MembersToDel {
+		tx.Delete(mapElement)
 	}
 
 	// Also make sure our base chains exist.
@@ -1000,6 +1031,12 @@ func (t *nftablesTable) applyUpdates() error {
 		return nil // Delay clearing the set until we've programmed nftables.
 	})
 
+	// Now that chains + rules are added, we can add map elements. We do this afterwards in case
+	// they reference chains that we've just added.
+	for _, element := range mapUpdates.MembersToAdd {
+		tx.Add(element)
+	}
+
 	// Do deletions at the end.  This ensures that we don't try to delete any chains that
 	// are still referenced (because we'll have removed the references in the modify pass
 	// above).
@@ -1015,6 +1052,11 @@ func (t *nftablesTable) applyUpdates() error {
 		return nil // Delay clearing the set until we've programmed nftables.
 	})
 
+	// Delete any maps that may have been referenced by rules above.
+	for _, m := range mapUpdates.MapsToDelete {
+		tx.Delete(m)
+	}
+
 	if tx.NumOperations() == 0 {
 		t.logCxt.Debug("Update ended up being no-op, skipping call to nftables.")
 	} else {
@@ -1026,9 +1068,21 @@ func (t *nftablesTable) applyUpdates() error {
 		}
 
 		if err := t.runTransaction(tx); err != nil {
-			t.logCxt.WithField("tx", tx.String()).Error("Failed to run nft transaction")
+			// Let's just print out the entire ruleset for debugging purposes.
+			cmd := t.newCmd("nft", "list", "ruleset")
+			output, err2 := cmd.Output()
+			if err2 != nil {
+				t.logCxt.WithError(err2).Error("Failed to load nftables ruleset")
+			} else {
+				t.logCxt.WithField("ruleset", string(output)).Error("Current ruleset after error")
+			}
+
+			t.logCxt.WithError(err).WithField("tx", tx.String()).Error("Failed to run nft transaction")
 			return fmt.Errorf("error performing nft transaction: %s", err)
 		}
+
+		// Update Map implementation after successful nftables transaction.
+		t.MapsDataplane.FinishMapUpdates(mapUpdates)
 	}
 
 	// Now we've successfully updated nftables, clear the dirty sets.  We do this even if we
@@ -1054,7 +1108,7 @@ func (t *nftablesTable) applyUpdates() error {
 	return nil
 }
 
-func (t *nftablesTable) runTransaction(tx *knftables.Transaction) error {
+func (t *NftablesTable) runTransaction(tx *knftables.Transaction) error {
 	startTime := t.timeNow()
 	defer func() {
 		restoreDuration := t.timeNow().Sub(startTime)
@@ -1077,7 +1131,7 @@ func (t *nftablesTable) runTransaction(tx *knftables.Transaction) error {
 
 // CheckRulesPresent returns list of rules with the hashes that are already
 // programmed. Return value of nil means that none of the rules are present.
-func (t *nftablesTable) CheckRulesPresent(chain string, rules []generictables.Rule) []generictables.Rule {
+func (t *NftablesTable) CheckRulesPresent(chain string, rules []generictables.Rule) []generictables.Rule {
 	features := t.featureDetector.GetFeatures()
 	hashes := CalculateRuleHashes(chain, rules, features)
 
@@ -1100,7 +1154,7 @@ func (t *nftablesTable) CheckRulesPresent(chain string, rules []generictables.Ru
 // InsertRulesNow insets the given rules immediately without removing or syncing
 // other rules. This is primarily useful when bootstrapping and we cannot wait
 // until we have the full state.
-func (t *nftablesTable) InsertRulesNow(chain string, rules []generictables.Rule) error {
+func (t *NftablesTable) InsertRulesNow(chain string, rules []generictables.Rule) error {
 	features := t.featureDetector.GetFeatures()
 	hashes := CalculateRuleHashes(chain, rules, features)
 
@@ -1124,7 +1178,7 @@ func (t *nftablesTable) InsertRulesNow(chain string, rules []generictables.Rule)
 
 // desiredStateOfChain returns the given chain, if and only if it exists in the cache and it is referenced by some
 // other chain.  If the chain doesn't exist or it is not referenced, returns nil and false.
-func (t *nftablesTable) desiredStateOfChain(chainName string) (chain *generictables.Chain, present bool) {
+func (t *NftablesTable) desiredStateOfChain(chainName string) (chain *generictables.Chain, present bool) {
 	if !t.chainIsReferenced(chainName) {
 		return
 	}

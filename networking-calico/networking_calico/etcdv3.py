@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# Copyright (c) 2018-2019 Tigera, Inc. All rights reserved.
+# Copyright (c) 2018-2025 Tigera, Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,11 +14,12 @@
 # limitations under the License.
 
 import functools
+from importlib.metadata import version
+from packaging.version import Version
 
 from etcd3gw.client import Etcd3Client
 from etcd3gw.exceptions import Etcd3Exception
 from etcd3gw.lease import Lease
-
 from etcd3gw.utils import _encode
 from etcd3gw.utils import _increment_last_byte
 
@@ -488,14 +489,15 @@ class Etcd3AuthClient(Etcd3Client):
         self.session.headers['Authorization'] = response['token']
 
     def post(self, *args, **kwargs):
-        # Impose a maximum timeout, according to the [calico]
-        # etcd_timeout config parameter.  Imposing a timeout is
-        # generally a good idea, and specifically we want to protect
-        # this code from the apparent etcdserver hang bug at
-        # https://github.com/etcd-io/etcd/issues/11377.
-        if 'timeout' not in kwargs or \
-           kwargs['timeout'] > cfg.CONF.calico.etcd_timeout:
-            kwargs['timeout'] = cfg.CONF.calico.etcd_timeout
+        if Version(version("etcd3gw")) < Version("2.4.0"):
+            # Impose a maximum timeout, according to the [calico]
+            # etcd_timeout config parameter.  Imposing a timeout is
+            # generally a good idea, and specifically we want to protect
+            # this code from the apparent etcdserver hang bug at
+            # https://github.com/etcd-io/etcd/issues/11377.
+            if 'timeout' not in kwargs or \
+               kwargs['timeout'] > cfg.CONF.calico.etcd_timeout:
+                kwargs['timeout'] = cfg.CONF.calico.etcd_timeout
         try:
             # Try the post.  If no authentication is needed, or if an
             # Authorization token has been added to the session's
@@ -526,11 +528,20 @@ def _get_client():
             calico_cfg.etcd_cert_file,
             calico_cfg.etcd_ca_cert_file,
         ]
+        # Impose a maximum timeout, according to the [calico] etcd_timeout
+        # config parameter.  Imposing a timeout is generally a good idea, and
+        # specifically we want to protect this code from the apparent
+        # etcdserver hang bug at https://github.com/etcd-io/etcd/issues/11377.
+        # etcd3gw 1.0.1 and 2.4.0 both allow specifying a timeout on the
+        # following client constructors, but the timeout only actually works in
+        # 2.4.0 onwards.  For etcd3gw<=2.4.0 we work around that by also
+        # specifying the timeout as a kwarg on each post() call.
         if any(tls_config_params):
             LOG.info("TLS to etcd is enabled with key file %s; "
                      "cert file %s; CA cert file %s", *tls_config_params)
             _client = Etcd3AuthClient(host=calico_cfg.etcd_host,
                                       port=calico_cfg.etcd_port,
+                                      timeout=cfg.CONF.calico.etcd_timeout,
                                       protocol="https",
                                       ca_cert=calico_cfg.etcd_ca_cert_file,
                                       cert_key=calico_cfg.etcd_key_file,
@@ -541,6 +552,7 @@ def _get_client():
             LOG.info("TLS disabled, using HTTP to connect to etcd.")
             _client = Etcd3AuthClient(host=calico_cfg.etcd_host,
                                       port=calico_cfg.etcd_port,
+                                      timeout=cfg.CONF.calico.etcd_timeout,
                                       protocol="http",
                                       username=calico_cfg.etcd_username,
                                       password=calico_cfg.etcd_password)

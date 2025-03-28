@@ -1290,6 +1290,7 @@ var _ = Describe("RouteTable", func() {
 					mocknetlink.FailNextNewNetlink|
 					mocknetlink.FailNextLinkByName|
 					mocknetlink.FailNextLinkList|
+					mocknetlink.FailNextLinkListWrappedEINTR| // Normally would be retried by the RealNetlink shim.
 					mocknetlink.FailNextRouteReplace|
 					mocknetlink.FailNextRouteDel|
 					mocknetlink.FailNextNeighSet|
@@ -1380,6 +1381,7 @@ var _ = Describe("RouteTable", func() {
 			mocknetlink.FailNextRouteDel,
 			mocknetlink.FailNextRouteList,
 			mocknetlink.FailNextRouteListEINTR,
+			mocknetlink.FailNextRouteListWrappedEINTR,
 		} {
 			failure := failure
 			It(fmt.Sprintf("with a %v failure it should ignore Down updates", failure), func() {

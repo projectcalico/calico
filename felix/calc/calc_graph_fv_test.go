@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2025 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -28,11 +28,13 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
+	googleproto "google.golang.org/protobuf/proto"
 
 	. "github.com/projectcalico/calico/felix/calc"
 	"github.com/projectcalico/calico/felix/config"
 	"github.com/projectcalico/calico/felix/dataplane/mock"
 	"github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/felix/types"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/health"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
@@ -693,7 +695,8 @@ var _ = Describe("Async calculation graph state sequencing tests:", func() {
 					conf.RouteSource = test.RouteSource()
 					outputChan := make(chan interface{})
 					conf.Encapsulation = config.Encapsulation{VXLANEnabled: true, VXLANEnabledV6: true}
-					asyncGraph := NewAsyncCalcGraph(conf, []chan<- interface{}{outputChan}, nil)
+					lookupsCache := NewLookupsCache()
+					asyncGraph := NewAsyncCalcGraph(conf, []chan<- interface{}{outputChan}, nil, lookupsCache)
 					// And a validation filter, with a channel between it
 					// and the async graph.
 					validator := NewValidationFilter(asyncGraph, conf)
@@ -781,6 +784,11 @@ func expectCorrectDataplaneState(mockDataplane *mock.MockDataplane, state State)
 	Expect(mockDataplane.ActiveWireguardV6Endpoints()).To(Equal(state.ExpectedWireguardV6Endpoints),
 		"Active IPv6 Wireguard Endpoints were incorrect after moving to state: %v",
 		state.Name)
+	for key, protoHostMetadataV4V6 := range mockDataplane.ActiveHostMetadataV4V6() {
+		Expect(googleproto.Equal(protoHostMetadataV4V6, state.ExpectedHostMetadataV4V6[key])).To(BeTrue(),
+			"Active Host MetadataV4V6 were incorrect after moving to state: %v",
+			state.Name)
+	}
 	Expect(mockDataplane.ActiveHostMetadataV4V6()).To(Equal(state.ExpectedHostMetadataV4V6),
 		"Active Host MetadataV4V6 were incorrect after moving to state: %v",
 		state.Name)
@@ -803,14 +811,14 @@ func expectCorrectDataplaneState(mockDataplane *mock.MockDataplane, state State)
 	Expect(mockDataplane.ActivePreDNATPolicies()).To(Equal(state.ExpectedPreDNATPolicyIDs),
 		"PreDNAT policies incorrect after moving to state: %v",
 		state.Name)
-	Expect(mockDataplane.Encapsulation()).To(Equal(state.ExpectedEncapsulation),
+	Expect(googleproto.Equal(mockDataplane.Encapsulation(), state.ExpectedEncapsulation)).To(BeTrue(),
 		"Encapsulation incorrect after moving to state: %v",
 		state.Name)
 }
 
-func stringifyRoutes(routes set.Set[proto.RouteUpdate]) []string {
+func stringifyRoutes(routes set.Set[types.RouteUpdate]) []string {
 	out := make([]string, 0, routes.Len())
-	routes.Iter(func(item proto.RouteUpdate) error {
+	routes.Iter(func(item types.RouteUpdate) error {
 		out = append(out, fmt.Sprintf("%+v", item))
 		return nil
 	})
@@ -829,6 +837,7 @@ const (
 
 func doStateSequenceTest(expandedTest StateList, flushStrategy flushStrategy) {
 	var validationFilter *ValidationFilter
+	var lookupsCache *LookupsCache
 	var calcGraph *CalcGraph
 	var mockDataplane *mock.MockDataplane
 	var eventBuf *EventSequencer
@@ -844,10 +853,11 @@ func doStateSequenceTest(expandedTest StateList, flushStrategy flushStrategy) {
 		conf.SetUseNodeResourceUpdates(expandedTest.UsesNodeResources())
 		conf.RouteSource = expandedTest.RouteSource()
 		mockDataplane = mock.NewMockDataplane()
+		lookupsCache = NewLookupsCache()
 		eventBuf = NewEventSequencer(mockDataplane)
 		eventBuf.Callback = mockDataplane.OnEvent
 		conf.Encapsulation = config.Encapsulation{VXLANEnabled: true, VXLANEnabledV6: true}
-		calcGraph = NewCalculationGraph(eventBuf, conf, func() {})
+		calcGraph = NewCalculationGraph(eventBuf, lookupsCache, conf, func() {})
 		statsCollector := NewStatsCollector(func(stats StatsUpdate) error {
 			log.WithField("stats", stats).Info("Stats update")
 			lastStats = stats
@@ -942,8 +952,9 @@ var _ = Describe("calc graph with health state", func() {
 		conf.FelixHostname = localHostname
 		outputChan := make(chan interface{})
 		healthAggregator := health.NewHealthAggregator()
+		lookupsCache := NewLookupsCache()
 		conf.Encapsulation = config.Encapsulation{VXLANEnabled: true, VXLANEnabledV6: true}
-		asyncGraph := NewAsyncCalcGraph(conf, []chan<- interface{}{outputChan}, healthAggregator)
+		asyncGraph := NewAsyncCalcGraph(conf, []chan<- interface{}{outputChan}, healthAggregator, lookupsCache)
 		Expect(asyncGraph).NotTo(BeNil())
 	})
 })

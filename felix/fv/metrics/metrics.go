@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -44,7 +44,7 @@ func PortString() string {
 	return strconv.Itoa(Port)
 }
 
-func GetRawMetrics(ip string, port int, name, caFile, certFile, keyFile string) (out string, err error) {
+func GetRawMetrics(ip string, port int, caFile, certFile, keyFile string) (out string, err error) {
 	httpClient := http.Client{Timeout: time.Second}
 	defer httpClient.CloseIdleConnections()
 	method := "http"
@@ -126,7 +126,7 @@ func GetRawMetrics(ip string, port int, name, caFile, certFile, keyFile string) 
 }
 
 func GetMetric(ip string, port int, name, caFile, certFile, keyFile string) (metric string, err error) {
-	metrics, err := GetRawMetrics(ip, port, name, caFile, certFile, keyFile)
+	metrics, err := GetRawMetrics(ip, port, caFile, certFile, keyFile)
 	if err != nil {
 		return "", fmt.Errorf("failed to load metrics: %w", err)
 	}

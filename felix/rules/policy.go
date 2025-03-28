@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,48 +18,95 @@ import (
 	"fmt"
 	"strings"
 
-	log "github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus"
+	googleproto "google.golang.org/protobuf/proto"
 
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/hashutils"
 	"github.com/projectcalico/calico/felix/ipsets"
 	"github.com/projectcalico/calico/felix/iptables"
+	"github.com/projectcalico/calico/felix/nftables"
 	"github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/felix/types"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 )
 
 // ruleRenderer defined in rules_defs.go.
 
-func (r *DefaultRuleRenderer) PolicyToIptablesChains(policyID *proto.PolicyID, policy *proto.Policy, ipVersion uint8) []*generictables.Chain {
+func (r *DefaultRuleRenderer) PolicyToIptablesChains(policyID *types.PolicyID, policy *proto.Policy, ipVersion uint8) []*generictables.Chain {
+	if model.PolicyIsStaged(policyID.Name) {
+		logrus.Debugf("Skip programming staged policy %v", policyID.Name)
+		return nil
+	}
 	inbound := generictables.Chain{
-		Name: PolicyChainName(PolicyInboundPfx, policyID),
+		Name: PolicyChainName(PolicyInboundPfx, policyID, r.NFTables),
 		// Note that the policy name includes the tier, so it does not need to be separately specified.
-		Rules: r.ProtoRulesToIptablesRules(policy.InboundRules, ipVersion, fmt.Sprintf("Policy %s ingress", policyID.Name)),
+		Rules: r.ProtoRulesToIptablesRules(
+			policy.InboundRules,
+			ipVersion, RuleOwnerTypePolicy,
+			RuleDirIngress,
+			policyID.Name,
+			policy.Untracked,
+			fmt.Sprintf("Policy %s ingress", policyID.Name),
+		),
 	}
 	outbound := generictables.Chain{
-		Name: PolicyChainName(PolicyOutboundPfx, policyID),
+		Name: PolicyChainName(PolicyOutboundPfx, policyID, r.NFTables),
 		// Note that the policy name also includes the tier, so it does not need to be separately specified.
-		Rules: r.ProtoRulesToIptablesRules(policy.OutboundRules, ipVersion, fmt.Sprintf("Policy %s egress", policyID.Name)),
+		Rules: r.ProtoRulesToIptablesRules(
+			policy.OutboundRules,
+			ipVersion, RuleOwnerTypePolicy,
+			RuleDirEgress,
+			policyID.Name,
+			policy.Untracked,
+			fmt.Sprintf("Policy %s egress", policyID.Name),
+		),
 	}
 	return []*generictables.Chain{&inbound, &outbound}
 }
 
-func (r *DefaultRuleRenderer) ProfileToIptablesChains(profileID *proto.ProfileID, profile *proto.Profile, ipVersion uint8) (inbound, outbound *generictables.Chain) {
+func (r *DefaultRuleRenderer) ProfileToIptablesChains(profileID *types.ProfileID, profile *proto.Profile, ipVersion uint8) (inbound, outbound *generictables.Chain) {
 	inbound = &generictables.Chain{
-		Name:  ProfileChainName(ProfileInboundPfx, profileID),
-		Rules: r.ProtoRulesToIptablesRules(profile.InboundRules, ipVersion, fmt.Sprintf("Profile %s ingress", profileID.Name)),
+		Name: ProfileChainName(ProfileInboundPfx, profileID, r.NFTables),
+		Rules: r.ProtoRulesToIptablesRules(
+			profile.InboundRules,
+			ipVersion,
+			RuleOwnerTypeProfile,
+			RuleDirIngress,
+			profileID.Name,
+			false,
+			fmt.Sprintf("Profile %s ingress", profileID.Name),
+		),
 	}
 	outbound = &generictables.Chain{
-		Name:  ProfileChainName(ProfileOutboundPfx, profileID),
-		Rules: r.ProtoRulesToIptablesRules(profile.OutboundRules, ipVersion, fmt.Sprintf("Profile %s egress", profileID.Name)),
+		Name: ProfileChainName(ProfileOutboundPfx, profileID, r.NFTables),
+		Rules: r.ProtoRulesToIptablesRules(
+			profile.OutboundRules,
+			ipVersion, RuleOwnerTypeProfile,
+			RuleDirEgress,
+			profileID.Name,
+			false,
+			fmt.Sprintf("Profile %s egress", profileID.Name),
+		),
 	}
 	return
 }
 
-func (r *DefaultRuleRenderer) ProtoRulesToIptablesRules(protoRules []*proto.Rule, ipVersion uint8, chainComments ...string) []generictables.Rule {
+func (r *DefaultRuleRenderer) ProtoRulesToIptablesRules(
+	protoRules []*proto.Rule,
+	ipVersion uint8,
+	owner RuleOwnerType,
+	dir RuleDir,
+	name string,
+	untracked bool,
+	chainComments ...string,
+) []generictables.Rule {
 	var rules []generictables.Rule
-	for _, protoRule := range protoRules {
-		rules = append(rules, r.ProtoRuleToIptablesRules(protoRule, ipVersion)...)
+	for ii, protoRule := range protoRules {
+		// TODO (Matt): Need rule hash when that's cleaned up.
+		rules = append(rules, r.ProtoRuleToIptablesRules(protoRule, ipVersion, owner, dir, ii, name, untracked)...)
 	}
+
 	// Strip off any return rules at the end of the chain.  No matter their
 	// match criteria, they're effectively no-ops.
 	for len(rules) > 0 {
@@ -114,10 +161,10 @@ func FilterRuleToIPVersion(ipVersion uint8, pRule *proto.Rule) *proto.Rule {
 	// rules of the form "allow from 10.0.0.1,feed::beef to 10.0.0.2" will get filtered out,
 	// and only for IPv6, where there's no obvious meaning to the rule.
 
-	ruleCopy := *pRule
+	ruleCopy := googleproto.Clone(pRule).(*proto.Rule)
 	var filteredAll bool
 
-	logCxt := log.WithFields(log.Fields{
+	logCxt := logrus.WithFields(logrus.Fields{
 		"ipVersion": ipVersion,
 		"rule":      pRule,
 	})
@@ -143,10 +190,17 @@ func FilterRuleToIPVersion(ipVersion uint8, pRule *proto.Rule) *proto.Rule {
 	if filteredAll {
 		return nil
 	}
-	return &ruleCopy
+	return ruleCopy
 }
 
-func (r *DefaultRuleRenderer) ProtoRuleToIptablesRules(pRule *proto.Rule, ipVersion uint8) []generictables.Rule {
+func (r *DefaultRuleRenderer) ProtoRuleToIptablesRules(
+	pRule *proto.Rule,
+	ipVersion uint8,
+	owner RuleOwnerType,
+	dir RuleDir,
+	idx int, name string,
+	untracked bool,
+) []generictables.Rule {
 	ruleCopy := FilterRuleToIPVersion(ipVersion, pRule)
 	if ruleCopy == nil {
 		return nil
@@ -279,25 +333,10 @@ func (r *DefaultRuleRenderer) ProtoRuleToIptablesRules(pRule *proto.Rule, ipVers
 		// success.  Add a match on that bit to the calculated rule.
 		match = match.MarkSingleBitSet(matchBlockBuilder.markAllBlocksPass)
 	}
-	markBit, actions := r.CalculateActions(ruleCopy, ipVersion)
-	rs := matchBlockBuilder.Rules
-	if markBit != 0 {
-		// The rule needs to do more than one action. Render a rule that
-		// executes the match criteria and sets the given mark bit if it
-		// matches, then render the actions as separate rules below.
-		rs = append(rs, generictables.Rule{
-			Match:  match,
-			Action: r.SetMark(markBit),
-		})
-		match = r.NewMatch().MarkSingleBitSet(markBit)
-	}
-	for _, action := range actions {
-		rs = append(rs, generictables.Rule{
-			Match:  match,
-			Action: action,
-		})
-	}
 
+	rs := matchBlockBuilder.Rules
+	rules := r.CombineMatchAndActionsForProtoRule(ruleCopy, match, owner, dir, idx, name, untracked)
+	rs = append(rs, rules...)
 	// Render rule annotations as comments on each rule.
 	for i := range rs {
 		for k, v := range pRule.GetMetadata().GetAnnotations() {
@@ -333,7 +372,7 @@ func (r *matchBlockBuilder) AppendPortMatchBlock(
 	// Figure out which bit to set.  See comment in positiveBlockMarkToSet() for details.
 	markToSet := r.positiveBlockMarkToSet()
 
-	logCxt := log.WithFields(log.Fields{
+	logCxt := logrus.WithFields(logrus.Fields{
 		"protocol":     protocol,
 		"portSplits":   numericPortSplits,
 		"namedPortIDs": namedPortIPSetIDs,
@@ -467,7 +506,7 @@ func (sod srcOrDst) MatchNet(m generictables.MatchCriteria, cidr string) generic
 	case dst:
 		return m.DestNet(cidr)
 	}
-	log.WithField("srcOrDst", sod).Panic("Unknown source or dest type.")
+	logrus.WithField("srcOrDst", sod).Panic("Unknown source or dest type.")
 	return nil
 }
 
@@ -478,7 +517,7 @@ func (sod srcOrDst) AppendMatchPorts(m generictables.MatchCriteria, pr []*proto.
 	case dst:
 		return m.DestPortRanges(pr)
 	}
-	log.WithField("srcOrDst", sod).Panic("Unknown source or dest type.")
+	logrus.WithField("srcOrDst", sod).Panic("Unknown source or dest type.")
 	return nil
 }
 
@@ -489,7 +528,7 @@ func (sod srcOrDst) MatchIPPortIPSet(m generictables.MatchCriteria, setID string
 	case dst:
 		return m.DestIPPortSet(setID)
 	}
-	log.WithField("srcOrDst", sod).Panic("Unknown source or dest type.")
+	logrus.WithField("srcOrDst", sod).Panic("Unknown source or dest type.")
 	return nil
 }
 
@@ -525,33 +564,125 @@ func SplitPortList(ports []*proto.PortRange) (splits [][]*proto.PortRange) {
 	return
 }
 
-func (r *DefaultRuleRenderer) CalculateActions(pRule *proto.Rule, ipVersion uint8) (mark uint32, actions []generictables.Action) {
-	actions = []generictables.Action{}
+// CombineMatchAndActionsForProtoRule takes in the proto.Rule along with the match (and some other parameters) and
+// returns as set of rules. The actions that are needed are calculated from the proto.Rule and the parameters, then
+// the match given and actions calculated are combined into the returned set of rules.
+func (r *DefaultRuleRenderer) CombineMatchAndActionsForProtoRule(
+	pRule *proto.Rule,
+	match generictables.MatchCriteria,
+	owner RuleOwnerType,
+	dir RuleDir,
+	idx int,
+	name string,
+	untracked bool,
+) []generictables.Rule {
+	var rules []generictables.Rule
+	var mark uint32
+
+	if pRule.Action == "log" {
+		// This rule should log (and possibly do something else too).
+		logPrefix := r.LogPrefix
+		if logPrefix == "" {
+			logPrefix = "calico-packet"
+		}
+		rules = append(rules, generictables.Rule{
+			Match:  r.NewMatch(),
+			Action: r.Log(logPrefix),
+		})
+	}
+
+	nflogGroup := NFLOGOutboundGroup
+	if dir == RuleDirIngress {
+		nflogGroup = NFLOGInboundGroup
+	}
 
 	switch pRule.Action {
 	case "", "allow":
-		// Allow needs to set the accept mark, and then return to the calling chain for
-		// further processing.
+		// If this is not a staged policy then allow needs to set the accept mark.
 		mark = r.MarkAccept
-		actions = append(actions, r.Return())
+
+		// NFLOG the allow - we don't do this for untracked due to the performance hit.
+		if !untracked && r.FlowLogsEnabled {
+			rules = append(rules, generictables.Rule{
+				Match: r.NewMatch(),
+				Action: r.Nflog(
+					nflogGroup,
+					CalculateNFLOGPrefixStr(RuleActionAllow, owner, dir, idx, name),
+					0,
+				),
+			})
+		}
+
+		// Return to calling chain for end of policy.
+		rules = append(rules, generictables.Rule{Match: r.NewMatch(), Action: r.Return()})
 	case "next-tier", "pass":
-		// pass (called next-tier in the API for historical reasons) needs to set the pass
-		// mark, and then return to the calling chain for further processing.
+		// If this is not a staged policy then pass (called next-tier in the API for historical reasons) needs to set
+		// the pass mark.
 		mark = r.MarkPass
-		actions = append(actions, r.Return())
+
+		// NFLOG the pass - we don't do this for untracked due to the performance hit.
+		if !untracked && r.FlowLogsEnabled {
+			rules = append(rules, generictables.Rule{
+				Match: r.NewMatch(),
+				Action: r.Nflog(
+					nflogGroup,
+					CalculateNFLOGPrefixStr(RuleActionPass, owner, dir, idx, name),
+					0,
+				),
+			})
+		}
+
+		// Return to calling chain for end of policy.
+		rules = append(rules, generictables.Rule{Match: r.NewMatch(), Action: r.Return()})
 	case "deny":
-		// Deny maps to DROP/REJECT.
-		actions = append(actions, r.IptablesFilterDenyAction())
+		// If this is not a staged policy then deny maps to DROP.
+		mark = r.MarkDrop
+
+		// NFLOG the deny - we don't do this for untracked due to the performance hit.
+		if !untracked && r.FlowLogsEnabled {
+			rules = append(rules, generictables.Rule{
+				Match: r.NewMatch(),
+				Action: r.Nflog(
+					nflogGroup,
+					CalculateNFLOGPrefixStr(RuleActionDeny, owner, dir, idx, name),
+					0,
+				),
+			})
+		}
+
+		// We defer to DropActions() to allow for "sandbox" mode.
+		rules = append(rules, generictables.Rule{
+			Match:  r.NewMatch(),
+			Action: r.IptablesFilterDenyAction(),
+		})
 	case "log":
-		// This rule should log.
-		actions = append(actions, r.Log(r.LogPrefix))
+		// Handled above.
 	default:
-		log.WithField("action", pRule.Action).Panic("Unknown rule action")
+		logrus.WithField("action", pRule.Action).Panic("Unknown rule action")
 	}
-	return
+
+	finalRules := []generictables.Rule{}
+	// if the mark is not set then this is either a staged policy or the rule action is "log".
+	if mark != 0 {
+		// The rule needs to do more than one action. Render a rule that
+		// executes the match criteria and sets the given mark bit if it
+		// matches, then render the actions as separate rules below.
+		finalRules = append(finalRules, generictables.Rule{
+			Match:  match,
+			Action: r.SetMark(mark),
+		})
+		match = r.NewMatch().MarkSingleBitSet(mark)
+	}
+
+	for _, rule := range rules {
+		rule.Match = r.CombineMatches(rule.Match, match)
+		finalRules = append(finalRules, rule)
+	}
+
+	return finalRules
 }
 
-func appendProtocolMatch(match generictables.MatchCriteria, protocol *proto.Protocol, logCxt *log.Entry) generictables.MatchCriteria {
+func appendProtocolMatch(match generictables.MatchCriteria, protocol *proto.Protocol, logCxt *logrus.Entry) generictables.MatchCriteria {
 	if protocol == nil {
 		return match
 	}
@@ -571,7 +702,7 @@ func appendProtocolMatch(match generictables.MatchCriteria, protocol *proto.Prot
 func (r *DefaultRuleRenderer) CalculateRuleMatch(pRule *proto.Rule, ipVersion uint8) generictables.MatchCriteria {
 	match := r.NewMatch()
 
-	logCxt := log.WithFields(log.Fields{
+	logCxt := logrus.WithFields(logrus.Fields{
 		"ipVersion": ipVersion,
 		"rule":      pRule,
 	})
@@ -583,7 +714,7 @@ func (r *DefaultRuleRenderer) CalculateRuleMatch(pRule *proto.Rule, ipVersion ui
 		logCxt.WithField("cidr", pRule.SrcNet[0]).Debug("Adding src CIDR match")
 		match = match.SourceNet(pRule.SrcNet[0])
 	} else if len(pRule.SrcNet) > 1 {
-		log.WithField("rule", pRule).Panic(
+		logrus.WithField("rule", pRule).Panic(
 			"CalculateRuleMatch() passed more than one CIDR in SrcNet.")
 	}
 
@@ -597,7 +728,7 @@ func (r *DefaultRuleRenderer) CalculateRuleMatch(pRule *proto.Rule, ipVersion ui
 
 	for _, ipsetID := range pRule.SrcIpSetIds {
 		ipsetName := nameForIPSet(ipsetID)
-		logCxt.WithFields(log.Fields{
+		logCxt.WithFields(logrus.Fields{
 			"ipsetID":   ipsetID,
 			"ipSetName": ipsetName,
 		}).Debug("Adding src IP set match")
@@ -605,19 +736,19 @@ func (r *DefaultRuleRenderer) CalculateRuleMatch(pRule *proto.Rule, ipVersion ui
 	}
 
 	if len(pRule.SrcPorts) > 0 {
-		logCxt.WithFields(log.Fields{
+		logCxt.WithFields(logrus.Fields{
 			"ports": pRule.SrcPorts,
 		}).Debug("Adding src port match")
 		match = match.SourcePortRanges(pRule.SrcPorts)
 	}
 
 	if len(pRule.SrcNamedPortIpSetIds) > 1 {
-		log.WithField("rule", pRule).Panic(
+		logrus.WithField("rule", pRule).Panic(
 			"Bug: More than one source IP set ID left in rule.")
 	}
 	for _, np := range pRule.SrcNamedPortIpSetIds {
 		ipsetName := nameForIPSet(np)
-		logCxt.WithFields(log.Fields{
+		logCxt.WithFields(logrus.Fields{
 			"namedPort": np,
 			"ipsetName": ipsetName,
 		}).Debug("Adding source named port match")
@@ -628,14 +759,14 @@ func (r *DefaultRuleRenderer) CalculateRuleMatch(pRule *proto.Rule, ipVersion ui
 		logCxt.WithField("cidr", pRule.DstNet[0]).Debug("Adding dest CIDR match")
 		match = match.DestNet(pRule.DstNet[0])
 	} else if len(pRule.DstNet) > 1 {
-		log.WithField("rule", pRule).Panic(
+		logrus.WithField("rule", pRule).Panic(
 			"CalculateRuleMatch() passed more than one CIDR in DstNet.")
 	}
 
 	for _, ipsetID := range pRule.DstIpSetIds {
 		ipsetName := nameForIPSet(ipsetID)
 		match = match.DestIPSet(ipsetName)
-		logCxt.WithFields(log.Fields{
+		logCxt.WithFields(logrus.Fields{
 			"ipsetID":   ipsetID,
 			"ipSetName": ipsetName,
 		}).Debug("Adding dst IP set match")
@@ -644,26 +775,26 @@ func (r *DefaultRuleRenderer) CalculateRuleMatch(pRule *proto.Rule, ipVersion ui
 	for _, ipsetID := range pRule.DstIpPortSetIds {
 		ipsetName := nameForIPSet(ipsetID)
 		match = match.DestIPPortSet(ipsetName)
-		logCxt.WithFields(log.Fields{
+		logCxt.WithFields(logrus.Fields{
 			"ipsetID":   ipsetID,
 			"ipSetName": ipsetName,
 		}).Debug("Adding dst IP+port set match")
 	}
 
 	if len(pRule.DstPorts) > 0 {
-		logCxt.WithFields(log.Fields{
+		logCxt.WithFields(logrus.Fields{
 			"ports": pRule.SrcPorts,
 		}).Debug("Adding dst port match")
 		match = match.DestPortRanges(pRule.DstPorts)
 	}
 
 	if len(pRule.DstNamedPortIpSetIds) > 1 {
-		log.WithField("rule", pRule).Panic(
+		logrus.WithField("rule", pRule).Panic(
 			"Bug: More than one source IP set ID left in rule.")
 	}
 	for _, np := range pRule.DstNamedPortIpSetIds {
 		ipsetName := nameForIPSet(np)
-		logCxt.WithFields(log.Fields{
+		logCxt.WithFields(logrus.Fields{
 			"namedPort": np,
 			"ipsetName": ipsetName,
 		}).Debug("Adding dest named port match")
@@ -709,12 +840,12 @@ func (r *DefaultRuleRenderer) CalculateRuleMatch(pRule *proto.Rule, ipVersion ui
 		logCxt.WithField("cidr", pRule.NotSrcNet[0]).Debug("Adding !src CIDR match")
 		match = match.NotSourceNet(pRule.NotSrcNet[0])
 	} else if len(pRule.NotSrcNet) > 1 {
-		log.WithField("rule", pRule).Panic("CalculateRuleMatch() passed more than one CIDR in NotSrcNet.")
+		logrus.WithField("rule", pRule).Panic("CalculateRuleMatch() passed more than one CIDR in NotSrcNet.")
 	}
 
 	for _, ipsetID := range pRule.NotSrcIpSetIds {
 		ipsetName := nameForIPSet(ipsetID)
-		logCxt.WithFields(log.Fields{
+		logCxt.WithFields(logrus.Fields{
 			"ipsetID":   ipsetID,
 			"ipSetName": ipsetName,
 		}).Debug("Adding src IP set match")
@@ -722,7 +853,7 @@ func (r *DefaultRuleRenderer) CalculateRuleMatch(pRule *proto.Rule, ipVersion ui
 	}
 
 	if len(pRule.NotSrcPorts) > 0 {
-		logCxt.WithFields(log.Fields{
+		logCxt.WithFields(logrus.Fields{
 			"ports": pRule.NotSrcPorts,
 		}).Debug("Adding src port match")
 		for _, portSplit := range SplitPortList(pRule.NotSrcPorts) {
@@ -732,7 +863,7 @@ func (r *DefaultRuleRenderer) CalculateRuleMatch(pRule *proto.Rule, ipVersion ui
 
 	for _, np := range pRule.NotSrcNamedPortIpSetIds {
 		ipsetName := nameForIPSet(np)
-		logCxt.WithFields(log.Fields{
+		logCxt.WithFields(logrus.Fields{
 			"namedPort": np,
 			"ipsetName": ipsetName,
 		}).Debug("Adding negated source named port match")
@@ -743,20 +874,20 @@ func (r *DefaultRuleRenderer) CalculateRuleMatch(pRule *proto.Rule, ipVersion ui
 		logCxt.WithField("cidr", pRule.NotDstNet[0]).Debug("Adding !dst CIDR match")
 		match = match.NotDestNet(pRule.NotDstNet[0])
 	} else if len(pRule.NotDstNet) > 1 {
-		log.WithField("rule", pRule).Panic("CalculateRuleMatch() passed more than one CIDR in NotDstNet.")
+		logrus.WithField("rule", pRule).Panic("CalculateRuleMatch() passed more than one CIDR in NotDstNet.")
 	}
 
 	for _, ipsetID := range pRule.NotDstIpSetIds {
 		ipsetName := nameForIPSet(ipsetID)
 		match = match.NotDestIPSet(ipsetName)
-		logCxt.WithFields(log.Fields{
+		logCxt.WithFields(logrus.Fields{
 			"ipsetID":   ipsetID,
 			"ipSetName": ipsetName,
 		}).Debug("Adding dst IP set match")
 	}
 
 	if len(pRule.NotDstPorts) > 0 {
-		logCxt.WithFields(log.Fields{
+		logCxt.WithFields(logrus.Fields{
 			"ports": pRule.NotSrcPorts,
 		}).Debug("Adding dst port match")
 		for _, portSplit := range SplitPortList(pRule.NotDstPorts) {
@@ -766,7 +897,7 @@ func (r *DefaultRuleRenderer) CalculateRuleMatch(pRule *proto.Rule, ipVersion ui
 
 	for _, np := range pRule.NotDstNamedPortIpSetIds {
 		ipsetName := nameForIPSet(np)
-		logCxt.WithFields(log.Fields{
+		logCxt.WithFields(logrus.Fields{
 			"namedPort": np,
 			"ipsetName": ipsetName,
 		}).Debug("Adding negated dest named port match")
@@ -797,18 +928,26 @@ func (r *DefaultRuleRenderer) CalculateRuleMatch(pRule *proto.Rule, ipVersion ui
 	return match
 }
 
-func PolicyChainName(prefix PolicyChainNamePrefix, polID *proto.PolicyID) string {
+func PolicyChainName(prefix PolicyChainNamePrefix, polID *types.PolicyID, nft bool) string {
+	maxLen := iptables.MaxChainNameLength
+	if nft {
+		maxLen = nftables.MaxChainNameLength
+	}
 	return hashutils.GetLengthLimitedID(
 		string(prefix),
 		polID.Tier+"/"+polID.Name,
-		iptables.MaxChainNameLength,
+		maxLen,
 	)
 }
 
-func ProfileChainName(prefix ProfileChainNamePrefix, profID *proto.ProfileID) string {
+func ProfileChainName(prefix ProfileChainNamePrefix, profID *types.ProfileID, nft bool) string {
+	maxLen := iptables.MaxChainNameLength
+	if nft {
+		maxLen = nftables.MaxChainNameLength
+	}
 	return hashutils.GetLengthLimitedID(
 		string(prefix),
 		profID.Name,
-		iptables.MaxChainNameLength,
+		maxLen,
 	)
 }

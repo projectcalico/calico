@@ -28,7 +28,7 @@ const (
 	HostEndpointCRDName      = "hostendpoints.crd.projectcalico.org"
 )
 
-func NewHostEndpointClient(c *kubernetes.Clientset, r *rest.RESTClient) K8sResourceClient {
+func NewHostEndpointClient(c kubernetes.Interface, r rest.Interface) K8sResourceClient {
 	return &customK8sResourceClient{
 		clientSet:       c,
 		restClient:      r,

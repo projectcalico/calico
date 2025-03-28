@@ -38,7 +38,6 @@ import (
 var validate *validator.Validate
 
 var (
-	labelRegex          = regexp.MustCompile(`^` + tokenizer.LabelKeyMatcher + `$`)
 	labelValueRegex     = regexp.MustCompile("^[a-zA-Z0-9]?([a-zA-Z0-9_.-]{0,61}[a-zA-Z0-9])?$")
 	nameRegex           = regexp.MustCompile("^[a-zA-Z0-9_.-]{1,128}$")
 	namespacedNameRegex = regexp.MustCompile(`^[a-zA-Z0-9_./-]{1,128}$`)
@@ -205,7 +204,7 @@ func validateSelector(fl validator.FieldLevel) bool {
 	log.Debugf("Validate selector: %s", s)
 
 	// We use the selector parser to validate a selector string.
-	_, err := selector.Parse(s)
+	err := selector.Validate(s)
 	if err != nil {
 		log.Debugf("Selector %#v was invalid: %v", s, err)
 		return false
@@ -223,7 +222,7 @@ func validateLabels(fl validator.FieldLevel) bool {
 	l := fl.Field().Interface().(map[string]string)
 	log.Debugf("Validate labels: %s", l)
 	for k, v := range l {
-		if !labelRegex.MatchString(k) || !labelValueRegex.MatchString(v) {
+		if !tokenizer.ValidLabel(k) || !labelValueRegex.MatchString(v) {
 			return false
 		}
 	}

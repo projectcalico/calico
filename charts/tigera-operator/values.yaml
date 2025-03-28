@@ -15,7 +15,17 @@ installation:
   # Example: --set installation.imagePullSecrets[0].name=my-existing-secret
   imagePullSecrets: []
 
+# apiServer configures the Calico API server, needed for interacting with
+# the projectcalico.org/v3 suite of APIs.
 apiServer:
+  enabled: true
+
+# goldmane configures the Calico Goldmane flow aggregator.
+goldmane:
+  enabled: true
+
+# whisker configures the Calico Whisker observability UI.
+whisker:
   enabled: true
 
 defaultFelixConfiguration:
@@ -31,6 +41,10 @@ certs:
     cert:
     commonName:
     caBundle:
+
+# Whether or not the tigera/operator should manange CustomResourceDefinitions
+# needed to run itself and Calico. If disabled, you must manage these resources out-of-band.
+manageCRDs: true
 
 # Resource requests and limits for the tigera/operator pod.
 resources: {}
@@ -67,7 +81,7 @@ tigeraOperator:
   version: master
   registry: quay.io
 calicoctl:
-  image: docker.io/calico/ctl
+  image: quay.io/calico/ctl
   tag: master
 
 kubeletVolumePluginPath: /var/lib/kubelet

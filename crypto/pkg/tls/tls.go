@@ -16,6 +16,9 @@ package tls
 
 import (
 	"crypto/tls"
+	"crypto/x509"
+	"fmt"
+	"os"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -52,4 +55,30 @@ func NewTLSConfig() *tls.Config {
 		MaxVersion:   tls.VersionTLS13,
 		CipherSuites: append(tls12Ciphers, tls13Ciphers...),
 	}
+}
+
+// NewMutualTLSConfig generates a tls.Config configured to enable mTLS with clients using the provided cert, key, and CA file paths.
+// If any of the files cannot be read, an error is returned.
+func NewMutualTLSConfig(cert, key, ca string) (*tls.Config, error) {
+	// Configure use of mTLS.
+	tlsCfg := NewTLSConfig()
+	tlsCfg.ClientAuth = tls.RequireAndVerifyClientCert
+
+	// Load Server cert and key and add to the TLS config.
+	c, err := tls.LoadX509KeyPair(cert, key)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load x509 key pair: %s", err)
+	}
+	tlsCfg.Certificates = []tls.Certificate{c}
+
+	// Load the CA cert and add it to the cert pool for verifying client certs.
+	certPool := x509.NewCertPool()
+	caCert, err := os.ReadFile(ca)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open CA file %s: %s", ca, err)
+	}
+	certPool.AppendCertsFromPEM(caCert)
+	tlsCfg.ClientCAs = certPool
+
+	return tlsCfg, nil
 }

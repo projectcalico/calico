@@ -64,7 +64,7 @@ type K8sResourceClient interface {
 
 	// Watch returns a WatchInterface used for watching resources matching the
 	// input list options.
-	Watch(ctx context.Context, list model.ListInterface, revision string) (api.WatchInterface, error)
+	Watch(ctx context.Context, list model.ListInterface, options api.WatchOptions) (api.WatchInterface, error)
 
 	// EnsureInitialized ensures that the backend is initialized
 	// any ready to be used.

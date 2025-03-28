@@ -77,13 +77,18 @@ $(BINDIR)/csi-driver-s390x: ARCH=s390x
 $(BINDIR)/csi-driver-%: $(SRC_FILES)
 	$(call build_binary, csidriver/main.go, $@)
 
+protobuf proto/udsver.pb.go: proto/udsver.proto
+	$(DOCKER_RUN) -v $(CURDIR)/proto:/proto:rw \
+		$(CALICO_BUILD) sh -c 'protoc --proto_path=/proto --go_out=/proto --go-grpc_out=. --go_opt=paths=source_relative udsver.proto'
+	# Make sure the generated code won't cause a static-checks failure.
+	$(MAKE) fix-changed
+
 UPSTREAM_REGISTRAR_PROJECT ?= kubernetes-csi/$(REGISTRAR_IMAGE)
-UPSTREAM_REGISTRAR_TAG     ?= a498c31b88cd31f8ea7bafd0d715a75f9939fa1f
+UPSTREAM_REGISTRAR_TAG     ?= v2.13.0
 
 REGISTRAR_TIGERA_BUILD_CMD="cd /go/src/github.com/$(UPSTREAM_REGISTRAR_PROJECT) && \
 	go build -tags $(TAGS) -buildvcs=false -v -o $(BINDIR)/csi-node-driver-registrar cmd/csi-node-driver-registrar/*.go"
-REGISTRAR_UPSTREAM_BUILD_CMD="cd /go/src/github.com/$(UPSTREAM_REGISTRAR_PROJECT) && \
-	make build BUILD_PLATFORMS=$(BUILD_PLATFORMS)"
+REGISTRAR_UPSTREAM_BUILD_CMD="cd /go/src/github.com/$(UPSTREAM_REGISTRAR_PROJECT) && make build BUILD_PLATFORMS=$(BUILD_PLATFORMS)"
 
 ifeq ($(ARCH), $(filter $(ARCH),amd64))
 # We need CGO to leverage Boring SSL.  However, the cross-compile doesn't support CGO yet.
@@ -99,13 +104,16 @@ else ifeq ($(ARCH), $(filter $(ARCH),arm64))
 CGO_ENABLED=0
 REGISTRAR_BUILD_CMD=$(REGISTRAR_TIGERA_BUILD_CMD)
 else ifeq ($(ARCH), $(filter $(ARCH),ppc64le))
-BUILD_PLATFORMS="linux ppc64le ppc64le"
+# Note: We must use single quotes on BUILD_PLATFORMS since it is to be nested within another double-quoted string.
+BUILD_PLATFORMS='linux ppc64le ppc64le'
 REGISTRAR_BUILD_CMD=$(REGISTRAR_UPSTREAM_BUILD_CMD)
 else ifeq ($(ARCH), $(filter $(ARCH),s390x))
-BUILD_PLATFORMS="linux s390x s390x"
+# Note: We must use single quotes on BUILD_PLATFORMS since it is to be nested within another double-quoted string.
+BUILD_PLATFORMS='linux s390x s390x'
 REGISTRAR_BUILD_CMD=$(REGISTRAR_UPSTREAM_BUILD_CMD)
 else ifeq ($(ARCH), $(filter $(ARCH),win64))
-BUILD_PLATFORMS="windows amd64 amd64"
+# Note: We must use single quotes on BUILD_PLATFORMS since it is to be nested within another double-quoted string.
+BUILD_PLATFORMS='windows amd64 amd64'
 REGISTRAR_BUILD_CMD=$(REGISTRAR_UPSTREAM_BUILD_CMD)
 endif
 
@@ -115,15 +123,16 @@ $(BINDIR)/node-driver-registrar-%: clone-registrar-upstream
 			$(CALICO_BUILD) \
 			/bin/bash -c $(REGISTRAR_BUILD_CMD)
 			mv $(REGISTRAR_IMAGE)/$(BINDIR)/csi-node-driver-registrar $@
+
 clone-registrar-upstream:
 ifeq ("$(wildcard ./$(REGISTRAR_IMAGE))", "")
 	@echo "Directory does not exist."
-	git clone --depth 1 --single-branch https://github.com/$(UPSTREAM_REGISTRAR_PROJECT).git
+	git clone --depth 1 --branch $(UPSTREAM_REGISTRAR_TAG) --single-branch https://github.com/$(UPSTREAM_REGISTRAR_PROJECT).git
+	patch -d node-driver-registrar -p1 < patches/0001-Update-go.mod-to-patch-CVEs.patch
+	rm -rf node-driver-registrar/vendor
+else
+	@echo "Upstream repo already cloned."
 endif
-	cd $(REGISTRAR_IMAGE) && \
-	  git checkout $(UPSTREAM_REGISTRAR_TAG) || \
-	  git fetch --tags origin $(UPSTREAM_REGISTRAR_TAG) && \
-	  git checkout $(UPSTREAM_REGISTRAR_TAG)
 
 clean-registrar:
 	rm -rf node-driver-registrar
@@ -202,7 +211,7 @@ cd: image-all cd-common
 ###############################################################################
 # Release
 ###############################################################################
-release-build: .release-$(VERSION).created 
+release-build: .release-$(VERSION).created
 .release-$(VERSION).created:
 	$(MAKE) clean image-all RELEASE=true
 	$(MAKE) retag-build-images-with-registries IMAGETAG=$(VERSION) RELEASE=true

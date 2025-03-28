@@ -33,6 +33,7 @@ fi
 
 if [[ "${filename}" =~ test_.* ]]; then
   args+=("-DUNITTEST")
+  args+=("-DBPF_CORE_SUPPORTED")
 fi
 
 if [[ "${filename}" =~ .*_v6.ll ]]; then
@@ -87,9 +88,6 @@ elif [[ "${filename}" =~ .*lo.* ]]; then
   ((flags |= CALI_TC_HOST_EP))
   ((flags |= CALI_TC_LO))
   ep_type="lo"
-else
-  echo "Can't recognise endpoint type"
-  exit 2
 fi
 
 if [[ "${filename}" =~ to.* ]]; then

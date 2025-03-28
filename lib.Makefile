@@ -84,7 +84,7 @@ endif
 # This is only needed when running non-native binaries.
 register:
 ifneq ($(BUILDARCH),$(ARCH))
-	docker run --rm --privileged multiarch/qemu-user-static:register || true
+	docker run --privileged --rm tonistiigi/binfmt --install all || true
 endif
 
 # If this is a release, also tag and push additional images.
@@ -194,13 +194,18 @@ define build_windows_binary
 endef
 
 # Images used in build / test across multiple directories.
-PROTOC_CONTAINER=calico/protoc:$(PROTOC_VER)-$(BUILDARCH)
 ETCD_IMAGE ?= quay.io/coreos/etcd:$(ETCD_VERSION)-$(ARCH)
 ifeq ($(BUILDARCH),amd64)
 	# *-amd64 tagged images for etcd are not available until v3.5.0
 	ETCD_IMAGE = quay.io/coreos/etcd:$(ETCD_VERSION)
 endif
-UBI_IMAGE ?= registry.access.redhat.com/ubi8/ubi-minimal:$(UBI_VERSION)
+
+# calico/node continues to use UBI 8 as its base, and our toolchain is also built on RHEL/UBI 8.
+# Meanwhile other components (e.g. third_party/envoy-proxy) use UBI 9.  While it may be possible to
+# update calico/base to UBI 9, fully transitioning to UBI 9 would require dropping support for RHEL
+# 8.
+UBI_IMAGE ?= registry.access.redhat.com/ubi8/ubi-minimal:latest
+UBI9_IMAGE ?= registry.access.redhat.com/ubi9/ubi-minimal:latest
 
 ifeq ($(GIT_USE_SSH),true)
 	GIT_CONFIG_SSH ?= git config --global url."ssh://git@github.com/".insteadOf "https://github.com/";
@@ -262,15 +267,31 @@ GOARCH_FLAGS :=-e GOARCH=$(ARCH)
 REPO_ROOT := $(shell git rev-parse --show-toplevel)
 CERTS_PATH := $(REPO_ROOT)/hack/test/certs
 
-QEMU_IMAGE ?= calico/qemu-user-static:latest
+# The image to use for building calico/base-dependent modules (e.g. apiserver, typha).
+ifdef USE_UBI_AS_CALICO_BASE
+CALICO_BASE ?= $(UBI_IMAGE)
+else
+CALICO_BASE ?= calico/base:$(CALICO_BASE_VER)
+endif
+# TODO Remove once CALICO_BASE is updated to UBI9
+CALICO_BASE_UBI9 ?= calico/base:$(CALICO_BASE_UBI9_VER)
+
+ifndef NO_DOCKER_PULL
+DOCKER_PULL = --pull
+else
+DOCKER_PULL =
+endif
 
 # DOCKER_BUILD is the base build command used for building all images.
-DOCKER_BUILD=docker buildx build --load --platform=linux/$(ARCH) --pull \
-	     --build-arg QEMU_IMAGE=$(QEMU_IMAGE) \
-	     --build-arg UBI_IMAGE=$(UBI_IMAGE) \
-	     --build-arg GIT_VERSION=$(GIT_VERSION)
+DOCKER_BUILD=docker buildx build --load --platform=linux/$(ARCH) $(DOCKER_PULL)\
+	--build-arg UBI_IMAGE=$(UBI_IMAGE) \
+	--build-arg UBI9_IMAGE=$(UBI9_IMAGE) \
+	--build-arg GIT_VERSION=$(GIT_VERSION) \
+	--build-arg CALICO_BASE=$(CALICO_BASE) \
+	--build-arg CALICO_BASE_UBI9=$(CALICO_BASE_UBI9) \
+	--build-arg BPFTOOL_IMAGE=$(BPFTOOL_IMAGE)
 
-DOCKER_RUN := mkdir -p ../.go-pkg-cache bin $(GOMOD_CACHE) && \
+DOCKER_RUN := mkdir -p $(REPO_ROOT)/.go-pkg-cache bin $(GOMOD_CACHE) && \
 	docker run --rm \
 		--net=host \
 		--init \
@@ -338,6 +359,48 @@ define update_replace_pin
 		fi'
 endef
 
+# Get the latest release tag from projectcalico/go-build.
+GO_BUILD_REPO=https://github.com/projectcalico/go-build.git
+define get_go_build_version
+	$(shell git ls-remote --tags --refs --sort=-version:refname $(GO_BUILD_REPO) | head -n 1 | awk -F '/' '{print $$NF}')
+endef
+
+# update_go_build_pin updates the GO_BUILD_VER in metadata.mk or Makefile.
+# for annotated git tags, we need to remove the trailing `^{}`.
+# for the obsoleted vx.y go-build version, we need to remove the leading `v` for bash string comparison to work properly.
+define update_go_build_pin
+	$(eval new_ver := $(subst ^{},,$(call get_go_build_version)))
+	$(eval old_ver := $(shell grep -E "^GO_BUILD_VER" $(1) | cut -d'=' -f2 | xargs | sed 's/^v//'))
+
+	@echo "current GO_BUILD_VER=$(old_ver)"
+	@echo "latest GO_BUILD_VER=$(new_ver)"
+
+	bash -c '\
+		if [[ "$(new_ver)" > "$(old_ver)" ]]; then \
+			sed -i "s/^GO_BUILD_VER[[:space:]]*=.*/GO_BUILD_VER=$(new_ver)/" $(1); \
+			echo "GO_BUILD_VER is updated to $(new_ver)"; \
+		else \
+			echo "no need to update GO_BUILD_VER"; \
+		fi'
+endef
+
+# update_calico_base_pin updates the CALICO_BASE_VER in metadata.mk.
+define update_calico_base_pin
+	$(eval new_ver := $(shell curl -s "https://hub.docker.com/v2/repositories/calico/base/tags/?page_size=100" | jq -r '.results[].name' | grep -E "^ubi8-[0-9]+$$" | sort -r | head -n 1))
+	$(eval old_ver := $(shell grep -E "^CALICO_BASE_VER" $(1) | cut -d'=' -f2 | xargs))
+
+	@echo "current CALICO_BASE_VER=$(old_ver)"
+	@echo "latest CALICO_BASE_VER=$(new_ver)"
+
+	bash -c '\
+		if [[ "$(new_ver)" > "$(old_ver)" ]]; then \
+			sed -i "s/^CALICO_BASE_VER[[:space:]]*=.*/CALICO_BASE_VER=$(new_ver)/" $(1); \
+			echo "CALICO_BASE_VER is updated to $(new_ver)"; \
+		else \
+			echo "no need to update CALICO_BASE_VER"; \
+		fi'
+endef
+
 GIT_REMOTE?=origin
 API_BRANCH?=$(PIN_BRANCH)
 API_REPO?=github.com/projectcalico/calico/api
@@ -393,6 +456,12 @@ update-cni-plugin-pin:
 
 replace-cni-pin:
 	$(call update_replace_pin,github.com/projectcalico/calico/cni-plugin,$(CNI_REPO),$(CNI_BRANCH))
+
+update-go-build-pin:
+	$(call update_go_build_pin,$(GIT_GO_BUILD_UPDATE_COMMIT_FILE))
+
+update-calico-base-pin:
+	$(call update_calico_base_pin,$(GIT_GO_BUILD_UPDATE_COMMIT_FILE))
 
 git-status:
 	git status --porcelain
@@ -450,11 +519,12 @@ commit-and-push-pr:
 #   Helper macros and targets to help with communicating with the github API
 ###############################################################################
 GIT_COMMIT_MESSAGE?="Automatic Pin Updates"
+GIT_COMMIT_TITLE?="Semaphore Auto Pin Update"
 GIT_PR_BRANCH_BASE?=$(SEMAPHORE_GIT_BRANCH)
 PIN_UPDATE_BRANCH?=semaphore-auto-pin-updates-$(GIT_PR_BRANCH_BASE)
 GIT_PR_BRANCH_HEAD?=$(PIN_UPDATE_BRANCH)
-GIT_REPO_SLUG?=$(SEMAPHORE_GIT_REPO_SLUG)
 GIT_PIN_UPDATE_COMMIT_FILES?=go.mod go.sum
+GIT_GO_BUILD_UPDATE_COMMIT_FILE?=metadata.mk
 GIT_PIN_UPDATE_COMMIT_EXTRA_FILES?=$(GIT_COMMIT_EXTRA_FILES)
 GIT_COMMIT_FILES?=$(GIT_PIN_UPDATE_COMMIT_FILES) $(GIT_PIN_UPDATE_COMMIT_EXTRA_FILES)
 
@@ -526,7 +596,7 @@ endif
 	git checkout -b $(GIT_PR_BRANCH_HEAD)
 
 create-pin-update-pr:
-	$(call github_pr_create,$(GIT_REPO_SLUG),[$(GIT_PR_BRANCH_BASE)] Semaphore Auto Pin Update,$(GIT_PR_BRANCH_HEAD),$(GIT_PR_BRANCH_BASE))
+	$(call github_pr_create,$(GIT_REPO_SLUG),[$(GIT_PR_BRANCH_BASE)] $(GIT_COMMIT_TITLE),$(GIT_PR_BRANCH_HEAD),$(GIT_PR_BRANCH_BASE))
 	echo 'Created pin update pull request $(PR_NUMBER)'
 
 # Add the "/merge-when-ready" comment to enable the "merge when ready" functionality, i.e. when the pull request is passing
@@ -577,7 +647,7 @@ REPO_DIR=$(shell if [ -e hack/format-changed-files.sh ]; then echo '.'; else ech
 # Format changed files only.
 fix-changed go-fmt-changed goimports-changed:
 	$(DOCKER_RUN) -e release_prefix=$(RELEASE_BRANCH_PREFIX)-v \
-	              -e git_remote=$(GIT_REMOTE) $(CALICO_BUILD) $(REPO_DIR)/hack/format-changed-files.sh
+	              -e git_repo_slug=$(GIT_REPO_SLUG) $(CALICO_BUILD) $(REPO_DIR)/hack/format-changed-files.sh
 
 .PHONY: fix-all go-fmt-all goimports-all
 fix-all go-fmt-all goimports-all:
@@ -1447,9 +1517,9 @@ DOCKER_CREDENTIAL_OS="linux"
 DOCKER_CREDENTIAL_ARCH="amd64"
 $(WINDOWS_DIST)/bin/docker-credential-gcr:
 	-mkdir -p $(WINDOWS_DIST)/bin
-	curl -fsSL "https://github.com/GoogleCloudPlatform/docker-credential-gcr/releases/download/v$(DOCKER_CREDENTIAL_VERSION)/docker-credential-gcr_$(DOCKER_CREDENTIAL_OS)_$(DOCKER_CREDENTIAL_ARCH)-$(DOCKER_CREDENTIAL_VERSION).tar.gz" \
-	| tar xz --to-stdout docker-credential-gcr \
-	| tee $(WINDOWS_DIST)/bin/docker-credential-gcr > /dev/null && chmod +x $(WINDOWS_DIST)/bin/docker-credential-gcr
+	curl -fsSL  --retry 5 "https://github.com/GoogleCloudPlatform/docker-credential-gcr/releases/download/v$(DOCKER_CREDENTIAL_VERSION)/docker-credential-gcr_$(DOCKER_CREDENTIAL_OS)_$(DOCKER_CREDENTIAL_ARCH)-$(DOCKER_CREDENTIAL_VERSION).tar.gz" -o docker-credential-gcr.tar.gz
+	tar xzf docker-credential-gcr.tar.gz --to-stdout docker-credential-gcr | tee $@ > /dev/null && chmod +x $@
+	rm -f docker-credential-gcr.tar.gz
 
 .PHONY: docker-credential-gcr-binary
 docker-credential-gcr-binary: var-require-all-WINDOWS_DIST-DOCKER_CREDENTIAL_VERSION-DOCKER_CREDENTIAL_OS-DOCKER_CREDENTIAL_ARCH $(WINDOWS_DIST)/bin/docker-credential-gcr
@@ -1464,7 +1534,7 @@ windows-sub-image-%: var-require-all-GIT_VERSION-WINDOWS_IMAGE-WINDOWS_DIST-WIND
 	docker buildx build \
 		--platform windows/amd64 \
 		--output=type=docker,dest=$(CURDIR)/$(WINDOWS_DIST)/$(WINDOWS_IMAGE)-$(GIT_VERSION)-$*.tar \
-		--pull \
+		$(DOCKER_PULL) \
 		-t $(WINDOWS_IMAGE):latest \
 		--build-arg GIT_VERSION=$(GIT_VERSION) \
 		--build-arg=WINDOWS_VERSION=$* \

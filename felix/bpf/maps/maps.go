@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2023 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -131,6 +131,9 @@ type Map interface {
 	Update(k, v []byte) error
 	Get(k []byte) ([]byte, error)
 	Delete(k []byte) error
+
+	// Size returns the maximun number of entries the table can hold.
+	Size() int
 }
 
 type MapWithExistsCheck interface {
@@ -734,6 +737,10 @@ func (b *PinnedMap) EnsureExists() error {
 			Info("Loaded map file descriptor.")
 	}
 	return err
+}
+
+func (b *PinnedMap) Size() int {
+	return b.MapParameters.MaxEntries
 }
 
 type bpftoolMapMeta struct {

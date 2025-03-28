@@ -14,6 +14,14 @@
 
 package libbpf
 
+import (
+	"time"
+)
+
+type GlobalData interface {
+	Set(m *Map) error
+}
+
 type TcGlobalData struct {
 	IfaceName      string
 	HostIPv4       [16]byte
@@ -27,6 +35,7 @@ type TcGlobalData struct {
 	Flags          uint32
 	WgPort         uint16
 	Wg6Port        uint16
+	Profiling      uint16
 	NatIn          uint32
 	NatOut         uint32
 	LogFilterJmp   uint32
@@ -42,4 +51,20 @@ type XDPGlobalData struct {
 	IfaceName string
 	Jumps     [16]uint32
 	JumpsV6   [16]uint32
+}
+
+type CTCleanupGlobalData struct {
+	CreationGracePeriod time.Duration
+	TCPSynSent          time.Duration
+	TCPEstablished      time.Duration
+	TCPFinsSeen         time.Duration
+	TCPResetSeen        time.Duration
+	UDPTimeout          time.Duration
+	GenericTimeout      time.Duration
+	ICMPTimeout         time.Duration
+}
+
+type CTLBGlobalData struct {
+	UDPNotSeen time.Duration
+	ExcludeUDP bool
 }

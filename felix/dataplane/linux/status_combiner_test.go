@@ -20,6 +20,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/felix/types"
 )
 
 var (
@@ -31,6 +32,15 @@ var _ = Describe("StatusCombiner", func() {
 		fromDataplane  chan interface{}
 		statusCombiner *endpointStatusCombiner
 	)
+
+	endpoint := &proto.WorkloadEndpoint{
+		State:      "active",
+		Mac:        "01:02:03:04:05:06",
+		Name:       "cali12345-ab",
+		ProfileIds: []string{},
+		Ipv4Nets:   []string{"10.0.240.2/24"},
+		Ipv6Nets:   []string{"2001:db8:2::2/128"},
+	}
 
 	BeforeEach(func() {
 		fromDataplane = make(chan interface{})
@@ -48,10 +58,10 @@ var _ = Describe("StatusCombiner", func() {
 				done := make(chan bool)
 				go func() {
 					statusCombiner.OnEndpointStatusUpdate(
-						4, epID, v4Status,
+						4, types.ProtoToWorkloadEndpointID(&epID), v4Status, endpoint,
 					)
 					statusCombiner.OnEndpointStatusUpdate(
-						6, epID, v6Status,
+						6, types.ProtoToWorkloadEndpointID(&epID), v6Status, endpoint,
 					)
 					statusCombiner.Apply()
 					done <- true
@@ -62,6 +72,7 @@ var _ = Describe("StatusCombiner", func() {
 						Status: &proto.EndpointStatus{
 							Status: expected,
 						},
+						Endpoint: endpoint,
 					},
 				)))
 				// Need to wait for the first goroutine to finish because
@@ -71,10 +82,10 @@ var _ = Describe("StatusCombiner", func() {
 				// Then remove the status, should get cleaned up.
 				go func() {
 					statusCombiner.OnEndpointStatusUpdate(
-						4, epID, "",
+						4, types.ProtoToWorkloadEndpointID(&epID), "", nil,
 					)
 					statusCombiner.OnEndpointStatusUpdate(
-						6, epID, "",
+						6, types.ProtoToWorkloadEndpointID(&epID), "", nil,
 					)
 					statusCombiner.Apply()
 				}()
@@ -111,7 +122,7 @@ var _ = Describe("StatusCombiner", func() {
 				done := make(chan bool)
 				go func() {
 					statusCombiner.OnEndpointStatusUpdate(
-						4, epID, v4Status,
+						4, types.ProtoToWorkloadEndpointID(&epID), v4Status, endpoint,
 					)
 					statusCombiner.Apply()
 					done <- true
@@ -122,6 +133,7 @@ var _ = Describe("StatusCombiner", func() {
 						Status: &proto.EndpointStatus{
 							Status: v4Status,
 						},
+						Endpoint: endpoint,
 					},
 				)))
 				// Need to wait for the first goroutine to finish because
@@ -131,7 +143,7 @@ var _ = Describe("StatusCombiner", func() {
 				// Then remove the status, should get cleaned up.
 				go func() {
 					statusCombiner.OnEndpointStatusUpdate(
-						4, epID, "",
+						4, types.ProtoToWorkloadEndpointID(&epID), "", nil,
 					)
 					statusCombiner.Apply()
 				}()

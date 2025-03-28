@@ -32,10 +32,11 @@ metadata:
 EOF
 
 ${HELM} -n tigera-operator template \
-	--include-crds \
 	--no-hooks \
 	--set installation.enabled=false \
 	--set apiServer.enabled=false \
+	--set whisker.enabled=false \
+	--set goldmane.enabled=false \
 	--set tigeraOperator.version=$OPERATOR_VERSION \
 	--set calicoctl.tag=$CALICO_VERSION \
 	../charts/tigera-operator >> tigera-operator.yaml
@@ -96,7 +97,7 @@ done
 # OCP requires resources in their own yaml files, so output to a dir.
 # Then do a bit of cleanup to reduce the directory depth to 1.
 ##########################################################################
-${HELM} template --include-crds \
+${HELM} template \
 	-n tigera-operator \
 	../charts/tigera-operator/ \
 	--output-dir ocp \
@@ -104,6 +105,8 @@ ${HELM} template --include-crds \
 	--set installation.kubernetesProvider=OpenShift \
 	--set installation.enabled=false \
 	--set apiServer.enabled=false \
+	--set goldmane.enabled=false \
+	--set whisker.enabled=false \
 	--set tigeraOperator.version=$OPERATOR_VERSION \
 	--set calicoctl.tag=$CALICO_VERSION
 # The first two lines are a newline and a yaml separator - remove them.

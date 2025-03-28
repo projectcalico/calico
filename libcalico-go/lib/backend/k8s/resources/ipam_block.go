@@ -41,7 +41,7 @@ const (
 	IPAMBlockCRDName      = "ipamblocks.crd.projectcalico.org"
 )
 
-func NewIPAMBlockClient(c *kubernetes.Clientset, r *rest.RESTClient) K8sResourceClient {
+func NewIPAMBlockClient(c kubernetes.Interface, r rest.Interface) K8sResourceClient {
 	// Create a resource client which manages k8s CRDs.
 	rc := customK8sResourceClient{
 		clientSet:       c,
@@ -157,7 +157,10 @@ func (c *ipamBlockClient) List(ctx context.Context, list model.ListInterface, re
 		return nil, err
 	}
 
-	kvpl := &model.KVPairList{KVPairs: []*model.KVPair{}}
+	kvpl := &model.KVPairList{
+		KVPairs:  []*model.KVPair{},
+		Revision: v3list.Revision,
+	}
 	for _, i := range v3list.KVPairs {
 		v1kvp, err := IPAMBlockV3toV1(i)
 		if err != nil {
@@ -168,10 +171,11 @@ func (c *ipamBlockClient) List(ctx context.Context, list model.ListInterface, re
 	return kvpl, nil
 }
 
-func (c *ipamBlockClient) Watch(ctx context.Context, list model.ListInterface, revision string) (api.WatchInterface, error) {
+func (c *ipamBlockClient) Watch(ctx context.Context, list model.ListInterface, options api.WatchOptions) (api.WatchInterface, error) {
 	resl := model.ResourceListOptions{Kind: libapiv3.KindIPAMBlock}
 	k8sWatchClient := cache.NewListWatchFromClient(c.rc.restClient, c.rc.resource, "", fields.Everything())
-	k8sWatch, err := k8sWatchClient.WatchFunc(metav1.ListOptions{ResourceVersion: revision, AllowWatchBookmarks: false})
+	k8sOpts := watchOptionsToK8sListOptions(options)
+	k8sWatch, err := k8sWatchClient.WatchFunc(k8sOpts)
 	if err != nil {
 		return nil, K8sErrorToCalico(err, list)
 	}

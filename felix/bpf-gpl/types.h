@@ -1,5 +1,5 @@
 // Project Calico BPF dataplane programs.
-// Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2025 Tigera, Inc. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 
 #ifndef __CALI_BPF_TYPES_H__
@@ -22,6 +22,7 @@
 #include "arp.h"
 #include "conntrack_types.h"
 #include "nat_types.h"
+#include "perf_types.h"
 #include "reasons.h"
 
 #define IPV4_UDP_SIZE		(sizeof(struct iphdr) + sizeof(struct udphdr))
@@ -44,7 +45,9 @@
 // WARNING: must be kept in sync with
 // - the definitions in bpf/polprog/pol_prog_builder.go.
 // - the Go version of the struct in bpf/state/map.go
+// - the event handling logic in bpf/events/collector_policy_listener.go.
 struct cali_tc_state {
+	struct perf_event_header eventhdr;
 	/* Initial IP read from the packet, updated to host's IP when doing NAT encap/ICMP error.
 	 * updated when doing CALI_CT_ESTABLISHED_SNAT handling. Used for FIB lookup. */
 	DECLARE_IP_ADDR(ip_src);

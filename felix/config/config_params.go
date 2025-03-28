@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -68,6 +68,14 @@ const (
 	ConfigFile
 	EnvironmentVariable
 	InternalOverride
+)
+
+// Default stats collection const used globally
+const (
+	DefaultAgeTimeout               = time.Duration(10) * time.Second
+	DefaultInitialReportingDelay    = time.Duration(5) * time.Second
+	DefaultExportingInterval        = time.Duration(1) * time.Second
+	DefaultConntrackPollingInterval = time.Duration(5) * time.Second
 )
 
 var SourcesInDescendingOrder = []Source{InternalOverride, EnvironmentVariable, ConfigFile, DatastorePerHost, DatastoreGlobal}
@@ -180,6 +188,7 @@ type Config struct {
 	BPFLogLevel                        string            `config:"oneof(off,info,debug);off;non-zero"`
 	BPFConntrackLogLevel               string            `config:"oneof(off,debug);off;non-zero"`
 	BPFConntrackCleanupMode            string            `config:"oneof(Auto,Userspace,BPFProgram);Auto"`
+	BPFConntrackTimeouts               map[string]string `config:"keyvaluelist;CreationGracePeriod=10s,TCPPreEstablished=20s,TCPEstablished=1h,TCPFinsSeen=Auto,TCPResetSeen=40s,UDPLastSeen=60s,GenericIPLastSeen=10m,ICMPLastSeen=5s"`
 	BPFLogFilters                      map[string]string `config:"keyvaluelist;;"`
 	BPFCTLBLogFilter                   string            `config:"oneof(all);;"`
 	BPFDataIfacePattern                *regexp.Regexp    `config:"regexp;^((en|wl|ww|sl|ib)[Popsx].*|(eth|wlan|wwan|bond).*)"`
@@ -199,6 +208,8 @@ type Config struct {
 	BPFMapSizeNATAffinity              int               `config:"int;65536;non-zero"`
 	BPFMapSizeRoute                    int               `config:"int;262144;non-zero"`
 	BPFMapSizeConntrack                int               `config:"int;512000;non-zero"`
+	BPFMapSizePerCPUConntrack          int               `config:"int;0"`
+	BPFMapSizeConntrackScaling         string            `config:"oneof(Disabled,DoubleIfFull);DoubleIfFull;non-zero"`
 	BPFMapSizeConntrackCleanupQueue    int               `config:"int;100000;non-zero"`
 	BPFMapSizeIPSets                   int               `config:"int;1048576;non-zero"`
 	BPFMapSizeIfState                  int               `config:"int;1000;non-zero"`
@@ -209,6 +220,8 @@ type Config struct {
 	BPFDisableGROForIfaces             *regexp.Regexp    `config:"regexp;"`
 	BPFExcludeCIDRsFromNAT             []string          `config:"cidr-list;;"`
 	BPFRedirectToPeer                  string            `config:"oneof(Disabled,Enabled,L2Only);L2Only;non-zero"`
+	BPFExportBufferSizeMB              int               `config:"int;1;non-zero"`
+	BPFProfiling                       string            `config:"oneof(Disabled,Enabled);Disabled;non-zero"`
 
 	// DebugBPFCgroupV2 controls the cgroup v2 path that we apply the connect-time load balancer to.  Most distros
 	// are configured for cgroup v1, which prevents all but the root cgroup v2 from working so this is only useful
@@ -368,11 +381,11 @@ type Config struct {
 
 	// EndpointStatusPathPrefix is the path to the directory
 	// where endpoint status will be written. Endpoint status
-	// file reporting is disabled if field is left empty.
+	// file reporting is disabled if field is empty.
 	//
 	// Chosen directory should match the directory used by the CNI for PodStartupDelay.
-	// [Default: ""]
-	EndpointStatusPathPrefix string `config:"file;;"`
+	// [Default: "/var/run/calico"]
+	EndpointStatusPathPrefix string `config:"file;/var/run/calico"`
 
 	IptablesMarkMask uint32 `config:"mark-bitmask;0xffff0000;non-zero,die-on-fail"`
 
@@ -392,6 +405,11 @@ type Config struct {
 
 	FailsafeInboundHostPorts  []ProtoPort `config:"port-list;tcp:22,udp:68,tcp:179,tcp:2379,tcp:2380,tcp:5473,tcp:6443,tcp:6666,tcp:6667;die-on-fail"`
 	FailsafeOutboundHostPorts []ProtoPort `config:"port-list;udp:53,udp:67,tcp:179,tcp:2379,tcp:2380,tcp:5473,tcp:6443,tcp:6666,tcp:6667;die-on-fail"`
+
+	FlowLogsFlushInterval        time.Duration `config:"seconds;300"`
+	FlowLogsCollectorDebugTrace  bool          `config:"bool;false"`
+	FlowLogsGoldmaneServer       string        `config:"string;"`
+	FlowLogsPolicyEvaluationMode string        `config:"oneof(None,Continuous);Continuous"`
 
 	KubeNodePortRanges []numorstring.Port `config:"portrange-list;30000:32767"`
 	NATPortRange       numorstring.Port   `config:"portrange;"`
@@ -515,6 +533,10 @@ func (config *Config) TableRefreshInterval() time.Duration {
 		return config.NftablesRefreshInterval
 	}
 	return config.IptablesRefreshInterval
+}
+
+func (config *Config) FlowLogsEnabled() bool {
+	return config.FlowLogsGoldmaneServer != ""
 }
 
 // Copy makes a copy of the object.  Internal state is deep copied but config parameters are only shallow copied.

@@ -12,13 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-ARG QEMU_IMAGE
-
-FROM ${QEMU_IMAGE} AS qemu
+ARG CALICO_BASE
 
 FROM alpine:3 AS builder
-
-COPY --from=qemu /usr/bin/qemu-*-static /usr/bin/
 
 # Make sure the status file is owned by our user.
 RUN mkdir /status
@@ -37,7 +33,7 @@ COPY ${BIN_DIR}/kubectl-${TARGETARCH} /usr/bin/kubectl
 COPY ${BIN_DIR}/kube-controllers-linux-${TARGETARCH} /usr/bin/kube-controllers
 COPY ${BIN_DIR}/check-status-linux-${TARGETARCH} /usr/bin/check-status
 
-FROM calico/base
+FROM ${CALICO_BASE}
 
 ARG GIT_VERSION=unknown
 

@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -47,6 +47,10 @@ func New(client api.Client, cfg apiconfig.CalicoAPIConfigSpec, callbacks api.Syn
 				UpdateProcessor: updateprocessors.NewGlobalNetworkPolicyUpdateProcessor(),
 			},
 			{
+				ListInterface:   model.ResourceListOptions{Kind: apiv3.KindStagedGlobalNetworkPolicy},
+				UpdateProcessor: updateprocessors.NewStagedGlobalNetworkPolicyUpdateProcessor(),
+			},
+			{
 				ListInterface:   model.ResourceListOptions{Kind: apiv3.KindGlobalNetworkSet},
 				UpdateProcessor: updateprocessors.NewGlobalNetworkSetUpdateProcessor(),
 			},
@@ -71,6 +75,14 @@ func New(client api.Client, cfg apiconfig.CalicoAPIConfigSpec, callbacks api.Syn
 				UpdateProcessor: updateprocessors.NewNetworkPolicyUpdateProcessor(),
 			},
 			{
+				ListInterface:   model.ResourceListOptions{Kind: apiv3.KindStagedNetworkPolicy},
+				UpdateProcessor: updateprocessors.NewStagedNetworkPolicyUpdateProcessor(),
+			},
+			{
+				ListInterface:   model.ResourceListOptions{Kind: apiv3.KindStagedKubernetesNetworkPolicy},
+				UpdateProcessor: updateprocessors.NewStagedKubernetesNetworkPolicyUpdateProcessor(),
+			},
+			{
 				ListInterface:   model.ResourceListOptions{Kind: apiv3.KindNetworkSet},
 				UpdateProcessor: updateprocessors.NewNetworkSetUpdateProcessor(),
 			},
@@ -85,6 +97,9 @@ func New(client api.Client, cfg apiconfig.CalicoAPIConfigSpec, callbacks api.Syn
 			{
 				ListInterface: model.ResourceListOptions{Kind: apiv3.KindBGPConfiguration},
 			},
+			{
+				ListInterface: model.ResourceListOptions{Kind: apiv3.KindBGPPeer},
+			},
 		}
 
 		// If running in kdd mode, also watch Kubernetes network policies directly.
@@ -96,6 +111,10 @@ func New(client api.Client, cfg apiconfig.CalicoAPIConfigSpec, callbacks api.Syn
 			})
 			additionalTypes = append(additionalTypes, watchersyncer.ResourceType{
 				ListInterface:   model.ResourceListOptions{Kind: model.KindKubernetesAdminNetworkPolicy},
+				UpdateProcessor: updateprocessors.NewGlobalNetworkPolicyUpdateProcessor(),
+			})
+			additionalTypes = append(additionalTypes, watchersyncer.ResourceType{
+				ListInterface:   model.ResourceListOptions{Kind: model.KindKubernetesBaselineAdminNetworkPolicy},
 				UpdateProcessor: updateprocessors.NewGlobalNetworkPolicyUpdateProcessor(),
 			})
 			additionalTypes = append(additionalTypes, watchersyncer.ResourceType{

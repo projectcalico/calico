@@ -233,3 +233,85 @@ func (a *allocation) isTunnelAddress() bool {
 func (a *allocation) isWindowsReserved() bool {
 	return a.handle == ipam.WindowsReservedHandle
 }
+
+func newAllocationState() *allocationState {
+	return &allocationState{
+		allocationsByNode: map[string]map[string]*allocation{},
+		dirtyNodes:        map[string]struct{}{},
+	}
+}
+
+// allocationState is a helper struct to track in-memory representation of actual IPAM allocations.
+// It uses internal indexing of IPAM state to provide more efficient lookups than the raw IPAM data model.
+type allocationState struct {
+	// allocationsByNode maps a node name to a map of allocations keyed by a unique identifier.
+	allocationsByNode map[string]map[string]*allocation
+
+	// dirtyNodes tracks which nodes have had their IPAM data modified since the last sync.
+	dirtyNodes map[string]struct{}
+}
+
+// allocate marks an allocation as being allocated.
+func (t *allocationState) allocate(a *allocation) {
+	if _, ok := t.allocationsByNode[a.node()]; !ok {
+		t.allocationsByNode[a.node()] = map[string]*allocation{}
+	}
+	t.allocationsByNode[a.node()][a.id()] = a
+
+	// Mark the node as dirty.
+	t.markDirty(a.node(), "new allocation")
+}
+
+func (t *allocationState) iter(f func(string, map[string]*allocation)) {
+	for node, allocations := range t.allocationsByNode {
+		f(node, allocations)
+	}
+}
+
+func (t *allocationState) iterDirty(f func(string, map[string]*allocation)) {
+	for node := range t.dirtyNodes {
+		if allocations, ok := t.allocationsByNode[node]; ok {
+			f(node, allocations)
+		} else {
+			f(node, nil)
+		}
+	}
+}
+
+func (t *allocationState) markDirty(node string, reason string) {
+	if node == "" {
+		return
+	}
+	if _, ok := t.dirtyNodes[node]; !ok {
+		log.WithFields(log.Fields{
+			"node":   node,
+			"reason": reason,
+		}).Debug("Marking node as dirty")
+		t.dirtyNodes[node] = struct{}{}
+	}
+}
+
+func (t *allocationState) syncComplete() {
+	for node := range t.dirtyNodes {
+		log.WithField("node", node).Debug("Node is no longer dirty")
+		delete(t.dirtyNodes, node)
+	}
+}
+
+// release marks an allocation as not being allocated.
+func (t *allocationState) release(a *allocation) {
+	if _, ok := t.allocationsByNode[a.node()]; !ok {
+		return
+	}
+
+	// Delete the allocation.
+	delete(t.allocationsByNode[a.node()], a.id())
+
+	// Mark the node as dirty.
+	t.markDirty(a.node(), "allocation released")
+
+	// Check if the node is empty and clean it up if so.
+	if len(t.allocationsByNode[a.node()]) == 0 {
+		delete(t.allocationsByNode, a.node())
+	}
+}

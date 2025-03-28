@@ -26,7 +26,6 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/bpfdefs"
 	"github.com/projectcalico/calico/felix/bpf/hook"
 	"github.com/projectcalico/calico/felix/bpf/libbpf"
-	"github.com/projectcalico/calico/felix/bpf/maps"
 	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
 )
 
@@ -110,22 +109,31 @@ func (ap *AttachPoint) AlreadyAttached(object string) (int, bool) {
 	return -1, false
 }
 
-func ConfigureProgram(m *libbpf.Map, iface string, globalData *libbpf.XDPGlobalData) error {
-	in := []byte("---------------")
-	copy(in, iface)
-	globalData.IfaceName = string(in)
-
-	if err := libbpf.XDPSetGlobals(m, globalData); err != nil {
-		return fmt.Errorf("failed to configure xdp: %w", err)
-	}
-
-	return nil
-}
-
 type AttachResult int
 
 func (ar AttachResult) ProgID() int {
 	return int(ar)
+}
+
+func (ap *AttachPoint) Configuration() *libbpf.XDPGlobalData {
+	globalData := &libbpf.XDPGlobalData{}
+	if ap.HookLayoutV4 != nil {
+		for p, i := range ap.HookLayoutV4 {
+			globalData.Jumps[p] = uint32(i)
+		}
+		globalData.Jumps[tcdefs.ProgIndexPolicy] = uint32(ap.PolicyIdxV4)
+	}
+	if ap.HookLayoutV6 != nil {
+		for p, i := range ap.HookLayoutV6 {
+			globalData.JumpsV6[p] = uint32(i)
+		}
+		globalData.JumpsV6[tcdefs.ProgIndexPolicy] = uint32(ap.PolicyIdxV6)
+	}
+	in := []byte("---------------")
+	copy(in, ap.Iface)
+	globalData.IfaceName = string(in)
+
+	return globalData
 }
 
 func (ap *AttachPoint) AttachProgram() (bpf.AttachResult, error) {
@@ -134,52 +142,6 @@ func (ap *AttachPoint) AttachProgram() (bpf.AttachResult, error) {
 	// configuration further to the selected set of programs.
 
 	binaryToLoad := path.Join(bpfdefs.ObjectDir, "xdp_preamble.o")
-
-	obj, err := libbpf.OpenObject(binaryToLoad)
-	if err != nil {
-		return nil, err
-	}
-	defer obj.Close()
-
-	for m, err := obj.FirstMap(); m != nil && err == nil; m, err = m.NextMap() {
-		mapName := m.Name()
-		if m.IsMapInternal() {
-			if strings.HasPrefix(mapName, ".rodata") {
-				continue
-			}
-			var globals libbpf.XDPGlobalData
-
-			if ap.HookLayoutV4 != nil {
-				for p, i := range ap.HookLayoutV4 {
-					globals.Jumps[p] = uint32(i)
-				}
-				globals.Jumps[tcdefs.ProgIndexPolicy] = uint32(ap.PolicyIdxV4)
-			}
-			if ap.HookLayoutV6 != nil {
-				for p, i := range ap.HookLayoutV6 {
-					globals.JumpsV6[p] = uint32(i)
-				}
-				globals.JumpsV6[tcdefs.ProgIndexPolicy] = uint32(ap.PolicyIdxV6)
-			}
-
-			if err := ConfigureProgram(m, ap.Iface, &globals); err != nil {
-				return nil, err
-			}
-			continue
-		}
-
-		if size := maps.Size(mapName); size != 0 {
-			if err := m.SetSize(size); err != nil {
-				return nil, fmt.Errorf("error resizing map %s: %w", mapName, err)
-			}
-		}
-
-		pinDir := bpf.MapPinDir(m.Type(), mapName, ap.Iface, hook.XDP)
-		if err := m.SetPinPath(path.Join(pinDir, mapName)); err != nil {
-			return nil, fmt.Errorf("error pinning map %s: %w", mapName, err)
-		}
-	}
-
 	// Check if the bpf object is already attached, and we should skip re-attaching it
 	progID, isAttached := ap.AlreadyAttached(binaryToLoad)
 	if isAttached {
@@ -187,10 +149,9 @@ func (ap *AttachPoint) AttachProgram() (bpf.AttachResult, error) {
 		return AttachResult(progID), nil
 	}
 	ap.Log().Infof("Continue with attaching BPF program %s", binaryToLoad)
-
-	if err := obj.Load(); err != nil {
-		ap.Log().Warn("Failed to load program")
-		return nil, fmt.Errorf("error loading program: %w", err)
+	obj, err := bpf.LoadObject(binaryToLoad, ap.Configuration())
+	if err != nil {
+		return nil, fmt.Errorf("error loading %s:%w", binaryToLoad, err)
 	}
 
 	oldID, err := ap.ProgramID()

@@ -86,12 +86,20 @@ function start_cluster(){
   make -C $CAPZ_LOCATION install-calico RELEASE_STREAM=master HASH_RELEASE=true PRODUCT=calico || EXIT_CODE=$?
   if [[ $EXIT_CODE -ne 0 ]]; then
       echo "failed to install Calico"
+      echo "tigerastatus info:"
       ${KCAPZ} describe tigerastatus
       ${KCAPZ} get tigerastatus -o yaml
+      echo "calico-node-windows info:"
+      ${KCAPZ} describe pod -l k8s-app=calico-node-windows -n calico-system
+      ${KCAPZ} logs -l k8s-app=calico-node-windows -n calico-system --all-containers --ignore-errors
+      echo "kube-proxy-windows info:"
+      ${KCAPZ} describe pod -l k8s-app=kube-proxy-windows -n kube-system
+      ${KCAPZ} logs -l k8s-app=kube-proxy-windows -n kube-system --all-containers --ignore-errors
       exit $EXIT_CODE
   fi
 
-  # Enable felix debug logging
+  # Enable felix debug logging, wait for felixconfiguration to exist first
+  timeout --foreground 300 bash -c "while ! ${KCAPZ} wait felixconfiguration default --for=jsonpath='{.spec}' --timeout=30s; do sleep 5; done"
   ${KCAPZ} patch felixconfiguration default --type merge --patch='{"spec":{"logSeverityScreen":"Debug"}}'
 
   #Get Windows node ip
@@ -184,15 +192,15 @@ function start_test_infra(){
   $CALICO_HOME/process/testing/winfv-felix/infra/setup.sh $KUBECONFIG
 
   #Wait for porter pod to be running on windows node
-  for i in $(seq 1 30); do
+  for i in $(seq 1 60); do
     if [[ $(${KCAPZ} -n demo get pods porter --no-headers -o custom-columns=NAMESPACE:metadata.namespace,POD:metadata.name,PodIP:status.podIP,READY-true:status.containerStatuses[*].ready | awk -v OFS='\t\t' '{print $4}') = "true" ]] ; then
-      echo "Porter is ready"
+      echo "Porter is ready after $i tries"
       return
     fi
    echo "Waiting for porter to be ready"
    sleep 30
   done
-  echo "Porter windows did not start"
+  echo "Porter windows did not start after $i tries"
   exit 1
 }
 

@@ -206,17 +206,10 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ do-not-track policy tests; 
 			Expect(tc.Felixes[0].IPSetNames()).To(ContainElements(elems))
 		}
 
-		By("Having only failsafe connectivity after replacing host-0's egress rules with Deny")
+		By("Having only failsafe connectivity after removing host-0's egress rule")
 		// Since there's no conntrack, removing rules in one direction is enough to prevent
 		// connectivity in either direction.
-		host0Pol.Spec.Egress = []api.Rule{
-			{
-				Action: api.Deny,
-				Destination: api.EntityRule{
-					Selector: host0Selector,
-				},
-			},
-		}
+		host0Pol.Spec.Egress = []api.Rule{}
 		host0Pol, err := client.GlobalNetworkPolicies().Update(ctx, host0Pol, options.SetOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
@@ -378,6 +371,17 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ do-not-track policy tests; 
 
 				ensureRightIFStateFlags(felix, ifstate.FlgIPv4Ready|ifstate.FlgIPv6Ready, ifstate.FlgBondSlave, map[string]uint32{"bond0": ifstate.FlgIPv4Ready | ifstate.FlgIPv6Ready | ifstate.FlgBond})
 				createHostEndpoint(felix, "bond0", []string{felix.IP, felix.IPv6}, client, ctx)
+			}
+
+			for _, felix := range tc.Felixes {
+				Eventually(func() bool {
+					return bpfCheckIfPolicyProgrammed(felix, "bond0", "egress", "default.allow-egress", "allow", false)
+				}, "5s", "200ms").Should(BeTrue())
+
+				Eventually(func() bool {
+					return bpfCheckIfPolicyProgrammedV6(felix, "bond0", "egress", "default.allow-egress", "allow", false)
+				}, "5s", "200ms").Should(BeTrue())
+
 			}
 		})
 

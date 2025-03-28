@@ -18,7 +18,6 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"slices"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -76,8 +75,8 @@ type VXLANFDB struct {
 	family         int
 	ifaceName      string
 	ifIndex        int
-	arpEntries     *deltatracker.DeltaTracker[string, ipMACMapping]
-	fdbEntries     *deltatracker.DeltaTracker[string, ipMACMapping]
+	arpEntries     *deltatracker.DeltaTracker[ip.Addr, comparableHWAddr]
+	fdbEntries     *deltatracker.DeltaTracker[comparableHWAddr, ip.Addr]
 	logCxt         *log.Entry
 	resyncPending  bool
 	logNextSuccess bool
@@ -86,14 +85,23 @@ type VXLANFDB struct {
 	newNetlinkHandle func() (netlinkshim.Interface, error)
 }
 
-type ipMACMapping struct {
-	IP  ip.Addr
-	MAC net.HardwareAddr
+type comparableHWAddr string
+
+func makeComparableHWAddr(mac net.HardwareAddr) comparableHWAddr {
+	return comparableHWAddr(mac) // Store the raw bytes.
 }
 
-type VXLANFDBOption func(*VXLANFDB)
+func (h comparableHWAddr) HardwareAddr() net.HardwareAddr {
+	return net.HardwareAddr(h)
+}
 
-func WithNetlinkHandleShim(newNetlinkHandle func() (netlinkshim.Interface, error)) VXLANFDBOption {
+func (h comparableHWAddr) String() string {
+	return h.HardwareAddr().String()
+}
+
+type Option func(*VXLANFDB)
+
+func WithNetlinkHandleShim(newNetlinkHandle func() (netlinkshim.Interface, error)) Option {
 	return func(fdb *VXLANFDB) {
 		fdb.newNetlinkHandle = newNetlinkHandle
 	}
@@ -104,7 +112,7 @@ func New(
 	ifaceName string,
 	featureDetector environment.FeatureDetectorIface,
 	netlinkTimeout time.Duration,
-	opts ...VXLANFDBOption,
+	opts ...Option,
 ) *VXLANFDB {
 	switch family {
 	case unix.AF_INET, unix.AF_INET6:
@@ -114,12 +122,15 @@ func New(
 	f := VXLANFDB{
 		family:    family,
 		ifaceName: ifaceName,
-		arpEntries: deltatracker.New[string, ipMACMapping](
-			deltatracker.WithValuesEqualFn[string, ipMACMapping](func(a, b ipMACMapping) bool {
-				return a.IP == b.IP && slices.Equal(a.MAC, b.MAC)
+		arpEntries: deltatracker.New[ip.Addr, comparableHWAddr](
+			deltatracker.WithValuesEqualFn[ip.Addr, comparableHWAddr](func(a, b comparableHWAddr) bool {
+				return a == b
 			}),
 		),
-		fdbEntries: deltatracker.New[string, ipMACMapping](),
+		fdbEntries: deltatracker.New[comparableHWAddr, ip.Addr](
+			deltatracker.WithValuesEqualFn[comparableHWAddr, ip.Addr](func(a, b ip.Addr) bool {
+				return a == b
+			})),
 		logCxt: log.WithFields(log.Fields{
 			"iface":  ifaceName,
 			"family": family,
@@ -164,23 +175,17 @@ func (f *VXLANFDB) SetVTEPs(vteps []VTEP) {
 	f.arpEntries.Desired().DeleteAll()
 	f.fdbEntries.Desired().DeleteAll()
 	for _, t := range vteps {
-		macStr := t.TunnelMAC.String()
 		// Add an ARP entry, for the remote tunnel IP.  This allows the
 		// kernel to calculate the inner ethernet header without doing a
 		// broadcast ARP to all VXLAN peers.
-		f.arpEntries.Desired().Set(macStr, ipMACMapping{
-			IP:  t.TunnelIP,
-			MAC: t.TunnelMAC,
-		})
+		comparableMAC := makeComparableHWAddr(t.TunnelMAC)
+		f.arpEntries.Desired().Set(t.TunnelIP, comparableMAC)
 		// Add an FDB entry.  While this is also a MAC/IP tuple, it tells
 		// the kernel something very different!  The FDB entry tells the
 		// kernel that, if it needs to send traffic to the VTEP MAC, it
 		// should send the VXLAN packet to a particular host's real IP
 		// address.
-		f.fdbEntries.Desired().Set(macStr, ipMACMapping{
-			MAC: t.TunnelMAC,
-			IP:  t.HostIP,
-		})
+		f.fdbEntries.Desired().Set(comparableMAC, t.HostIP)
 	}
 }
 
@@ -206,28 +211,28 @@ func (f *VXLANFDB) Apply() error {
 		return ErrLinkDown
 	}
 
-	f.applyFamily(nl, "ARP/NDP", f.arpEntries,
-		func(mapping ipMACMapping) *netlink.Neigh {
+	applyFamily(f, nl, "ARP/NDP", f.arpEntries,
+		func(ipAddr ip.Addr, hwAddr comparableHWAddr) *netlink.Neigh {
 			return &netlink.Neigh{
 				Family:       f.family,
 				LinkIndex:    f.ifIndex,
 				State:        netlink.NUD_PERMANENT,
 				Type:         unix.RTN_UNICAST,
-				IP:           mapping.IP.AsNetIP(),
-				HardwareAddr: mapping.MAC,
+				IP:           ipAddr.AsNetIP(),
+				HardwareAddr: hwAddr.HardwareAddr(),
 			}
 		},
 	)
 
-	f.applyFamily(nl, "FDB", f.fdbEntries,
-		func(mapping ipMACMapping) *netlink.Neigh {
+	applyFamily(f, nl, "FDB", f.fdbEntries,
+		func(hwAddr comparableHWAddr, ipAddr ip.Addr) *netlink.Neigh {
 			return &netlink.Neigh{
 				Family:       unix.AF_BRIDGE,
 				LinkIndex:    f.ifIndex,
 				State:        netlink.NUD_PERMANENT,
 				Flags:        netlink.NTF_SELF,
-				IP:           mapping.IP.AsNetIP(),
-				HardwareAddr: mapping.MAC,
+				IP:           ipAddr.AsNetIP(),
+				HardwareAddr: hwAddr.HardwareAddr(),
 			}
 		},
 	)
@@ -243,24 +248,31 @@ func (f *VXLANFDB) Apply() error {
 	return nil
 }
 
-func (f *VXLANFDB) applyFamily(
+type comparableStringer interface {
+	comparable
+	String() string
+}
+
+func applyFamily[K, V comparableStringer](
+	f *VXLANFDB,
 	nl netlinkshim.Interface,
 	description string,
-	entries *deltatracker.DeltaTracker[string, ipMACMapping],
-	entryToNeigh func(mapping ipMACMapping) *netlink.Neigh,
+	entries *deltatracker.DeltaTracker[K, V],
+	entryToNeigh func(K, V) *netlink.Neigh,
 ) {
 	debug := log.IsLevelEnabled(log.DebugLevel)
-	errs := map[string]error{}
-	entries.PendingUpdates().Iter(func(macStr string, entry ipMACMapping) deltatracker.IterAction {
+	errs := map[K]error{}
+	entries.PendingUpdates().Iter(func(k K, v V) deltatracker.IterAction {
 		if debug {
-			log.WithField("entry", entry).Debugf("Adding %s entry.", description)
+			log.Debugf("Adding %s entry %s -> %s", description, k, v)
 		}
-		neigh := entryToNeigh(entry)
+		neigh := entryToNeigh(k, v)
 		if err := nl.NeighSet(neigh); err != nil {
 			if len(errs) == 0 {
-				log.WithError(err).WithField("entry", entry).Warnf("Failed to add %s entry, only logging first instance.", description)
+				log.WithError(err).Warnf(
+					"Failed to add %s entry %s -> %s, only logging first instance.", description, k, v)
 			}
-			errs[macStr] = err
+			errs[k] = err
 			return deltatracker.IterActionNoOp
 		}
 		return deltatracker.IterActionUpdateDataplane
@@ -272,17 +284,23 @@ func (f *VXLANFDB) applyFamily(
 		clear(errs)
 	}
 
-	entries.PendingDeletions().Iter(func(macStr string) deltatracker.IterAction {
-		entry, _ := entries.Dataplane().Get(macStr)
+	entries.PendingDeletions().Iter(func(k K) deltatracker.IterAction {
+		v, _ := entries.Dataplane().Get(k)
 		if debug {
-			log.WithField("entry", entry).Debug("Deleting ARP entry.")
+			log.WithFields(log.Fields{
+				"key":   k.String(),
+				"value": v.String(),
+			}).Debug("Deleting ARP entry.")
 		}
-		neigh := entryToNeigh(entry)
+		neigh := entryToNeigh(k, v)
 		if err := nl.NeighDel(neigh); err != nil && !errors.Is(err, unix.ENOENT) {
 			if len(errs) == 0 {
-				log.WithError(err).WithField("entry", entry).Warnf("Failed to delete %s entry, only logging first instance.", description)
+				log.WithError(err).WithFields(log.Fields{
+					"key":   k.String(),
+					"value": v.String(),
+				}).Warnf("Failed to delete %s entry, only logging first instance.", description)
 			}
-			errs[macStr] = err
+			errs[k] = err
 		}
 		return deltatracker.IterActionUpdateDataplane
 	})
@@ -310,11 +328,19 @@ func (f *VXLANFDB) resync(nl netlinkshim.Interface) error {
 	}
 	f.ifIndex = link.Attrs().Index
 
-	err = f.resyncFamily(nl, "ARP/NDP", f.family, f.arpEntries)
+	err = resyncFamily(f, nl, "ARP/NDP", f.family, f.arpEntries,
+		func(f func(k ip.Addr, v comparableHWAddr), hwAddr comparableHWAddr, ipAddr ip.Addr) {
+			f(ipAddr, hwAddr)
+		},
+	)
 	if err != nil {
 		return err
 	}
-	err = f.resyncFamily(nl, "FDB", unix.AF_BRIDGE, f.fdbEntries)
+	err = resyncFamily(f, nl, "FDB", unix.AF_BRIDGE, f.fdbEntries,
+		func(f func(k comparableHWAddr, v ip.Addr), hwAddr comparableHWAddr, ipAddr ip.Addr) {
+			f(hwAddr, ipAddr)
+		},
+	)
 	if err != nil {
 		return err
 	}
@@ -322,11 +348,13 @@ func (f *VXLANFDB) resync(nl netlinkshim.Interface) error {
 	return nil
 }
 
-func (f *VXLANFDB) resyncFamily(
+func resyncFamily[K, V comparableStringer](
+	f *VXLANFDB,
 	nl netlinkshim.Interface,
 	description string,
 	family int,
-	entries *deltatracker.DeltaTracker[string, ipMACMapping],
+	entries *deltatracker.DeltaTracker[K, V],
+	iterAdapter func(func(k K, v V), comparableHWAddr, ip.Addr),
 ) error {
 	// Refresh the neighbors.
 	existingNeigh, err := nl.NeighList(f.ifIndex, family)
@@ -336,7 +364,7 @@ func (f *VXLANFDB) resyncFamily(
 		return fmt.Errorf("failed to list neighbors: %w", err)
 	}
 
-	err = entries.Dataplane().ReplaceAllIter(func(f func(macStr string, v ipMACMapping)) error {
+	err = entries.Dataplane().ReplaceAllIter(func(f func(k K, v V)) error {
 		for _, n := range existingNeigh {
 			if len(n.HardwareAddr) == 0 {
 				// Kernel creates transient entries with no MAC, ignore
@@ -346,17 +374,15 @@ func (f *VXLANFDB) resyncFamily(
 				// We only manage static entries so ignore this one.
 				continue
 			}
-			hwAddrStr := n.HardwareAddr.String()
+			hwAddr := makeComparableHWAddr(n.HardwareAddr)
+			ipAddr := ip.FromNetIP(n.IP)
 			if log.IsLevelEnabled(log.DebugLevel) {
 				log.WithFields(log.Fields{
-					"mac": hwAddrStr,
-					"ip":  n.IP.String(),
+					"mac": hwAddr,
+					"ip":  ipAddr.String(),
 				}).Debugf("Loaded %s entry from kernel.", description)
 			}
-			f(hwAddrStr, ipMACMapping{
-				IP:  ip.FromNetIP(n.IP),
-				MAC: n.HardwareAddr,
-			})
+			iterAdapter(f, hwAddr, ipAddr)
 		}
 		return nil
 	})

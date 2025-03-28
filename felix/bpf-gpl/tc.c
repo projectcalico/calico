@@ -1,5 +1,5 @@
 // Project Calico BPF dataplane programs.
-// Copyright (c) 2020-2023 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2025 Tigera, Inc. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 
 #include <linux/types.h>
@@ -46,6 +46,7 @@
 #include "icmp.h"
 #include "arp.h"
 #include "sendrecv.h"
+#include "events.h"
 #include "fib.h"
 #include "rpf.h"
 #include "parsing.h"
@@ -128,7 +129,7 @@ int calico_tc_main(struct __sk_buff *skb)
 		if (xdp2tc_get_metadata(skb) & CALI_META_ACCEPTED_BY_XDP) {
 			CALI_LOG_IF(CALI_LOG_LEVEL_INFO,
 					"Final result=ALLOW (%d). Accepted by XDP.", CALI_REASON_ACCEPTED_BY_XDP);
-			skb->mark = CALI_SKB_MARK_BYPASS;
+			skb->mark = CALI_SKB_MARK_BYPASS_XDP;
 			return TC_ACT_UNSPEC;
 		}
 	}
@@ -152,7 +153,7 @@ int calico_tc_main(struct __sk_buff *skb)
 
 	counter_inc(ctx, COUNTER_TOTAL_PACKETS);
 
-	if (CALI_LOG_LEVEL >= CALI_LOG_LEVEL_INFO) {
+	if (CALI_LOG_LEVEL >= CALI_LOG_LEVEL_INFO || PROFILING) {
 		ctx->state->prog_start_time = bpf_ktime_get_ns();
 	}
 
@@ -806,6 +807,7 @@ static CALI_BPF_INLINE enum do_nat_res do_nat(struct cali_tc_ctx *ctx,
 			int err;
 			if ((err = conntrack_create(ctx, ct_ctx_nat))) {
 				CALI_DEBUG("Creating NAT conntrack failed with %d", err);
+				deny_reason(ctx, CALI_REASON_CT_CREATE_FAILED);
 				goto deny;
 			}
 			STATE->ct_result.nat_sip = ct_ctx_nat->src;
@@ -1173,7 +1175,7 @@ allow:
 		} else if (!r || cali_rt_flags_remote_workload(r->flags)) {
 			/* If there is no route, treat it as a remote NP BE */
 			if (CALI_F_LO || CALI_F_MAIN) {
-				state->ct_result.ifindex_fwd = NATIN_IFACE  ;
+				state->ct_result.ifindex_fwd = NATIN_IFACE;
 				CALI_DEBUG("NP remote WL " IP_FMT ":%d on LO or main HEP",
 						debug_ip(state->post_nat_ip_dst), state->post_nat_dport);
 				ctx->state->flags |= CALI_ST_CT_NP_LOOP;
@@ -1217,10 +1219,11 @@ int calico_tc_skb_accepted_entrypoint(struct __sk_buff *skb)
 		},
 	);
 	struct cali_tc_ctx *ctx = &_ctx;
+	bool policy_skipped = ctx->state->flags & CALI_ST_SKIP_POLICY;
 
 	CALI_DEBUG("Entering calico_tc_skb_accepted_entrypoint");
 
-	if (!(ctx->state->flags & CALI_ST_SKIP_POLICY)) {
+	if (!policy_skipped) {
 		counter_inc(ctx, CALI_REASON_ACCEPTED_BY_POLICY);
 		if (CALI_F_TO_WEP && ctx->skb->mark == CALI_SKB_MARK_MASQ) {
 			/* Restore state->ip_src */
@@ -1230,7 +1233,7 @@ int calico_tc_skb_accepted_entrypoint(struct __sk_buff *skb)
 	}
 
 	if (CALI_F_HEP) {
-		if (!(ctx->state->flags & CALI_ST_SKIP_POLICY) && (ctx->state->flags & CALI_ST_SUPPRESS_CT_STATE)) {
+		if (!policy_skipped && (ctx->state->flags & CALI_ST_SUPPRESS_CT_STATE)) {
 			// See comment above where CALI_ST_SUPPRESS_CT_STATE is set.
 			CALI_DEBUG("Egress HEP should drop packet with no CT state");
 			return TC_ACT_SHOT;
@@ -1243,8 +1246,14 @@ int calico_tc_skb_accepted_entrypoint(struct __sk_buff *skb)
 		goto deny;
 	}
 
-	update_rule_counters(ctx);
-	skb_log(ctx, true);
+	if (!policy_skipped) {
+		if (flow_logs_enabled(ctx)) {
+			event_flow_log(ctx);
+			CALI_DEBUG("Flow log event generated for ALLOW\n");
+		}
+		update_rule_counters(ctx);
+		skb_log(ctx, true);
+	}
 
 	ctx->fwd = calico_tc_skb_accepted(ctx);
 	return forward_or_drop(ctx);
@@ -1399,7 +1408,7 @@ int calico_tc_skb_new_flow_entrypoint(struct __sk_buff *skb)
 				CALI_DEBUG("Allowing local host traffic without CT");
 				goto allow;
 			}
-
+			deny_reason(ctx, CALI_REASON_CT_CREATE_FAILED);
 			goto deny;
 		}
 		goto allow;
@@ -2002,11 +2011,17 @@ int calico_tc_skb_drop(struct __sk_buff *skb)
 		}
 	}
 
+	if (flow_logs_enabled(ctx)) {
+		event_flow_log(ctx);
+		CALI_DEBUG("Flow log event generated for DENY/DROP\n");
+	}
 	goto deny;
 
 allow:
 	ctx->state->pol_rc = CALI_POL_ALLOW;
 	ctx->state->flags |= CALI_ST_SKIP_POLICY;
+	ctx->state->rules_hit = 0;
+
 	CALI_JUMP_TO(ctx, PROG_INDEX_ALLOWED);
 	/* should not reach here */
 	CALI_DEBUG("Failed to jump to allow program.");

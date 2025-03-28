@@ -1,4 +1,4 @@
-// Copyright (c) 2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2018-2025 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,13 +15,16 @@
 package policysync
 
 import (
+	"context"
 	"errors"
 	"sync"
 
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 
+	"github.com/projectcalico/calico/felix/collector"
 	"github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/felix/types"
 	"github.com/projectcalico/calico/pod2daemon/binder"
 )
 
@@ -36,13 +39,20 @@ const OutputQueueLen = 100
 // There is a single instance of the Server, it disambiguates connections from different clients by the
 // credentials present in the gRPC request.
 type Server struct {
+	proto.UnimplementedPolicySyncServer
 	JoinUpdates chan<- interface{}
+	stats       chan<- *proto.DataplaneStats
 	nextJoinUID func() uint64
 }
 
-func NewServer(joins chan<- interface{}, allocUID func() uint64) *Server {
+func NewServer(joins chan<- interface{}, collector collector.Collector, allocUID func() uint64) *Server {
+	var stats chan<- *proto.DataplaneStats
+	if collector != nil {
+		stats = collector.ReportingChannel()
+	}
 	return &Server{
 		JoinUpdates: joins,
+		stats:       stats,
 		nextJoinUID: allocUID,
 	}
 }
@@ -74,8 +84,8 @@ func (s *Server) Sync(_ *proto.SyncRequest, stream proto.PolicySync_SyncServer) 
 	logCxt.Info("New policy sync connection identified")
 
 	// Send a join request to the processor to ask it to start sending us updates.
-	updates := make(chan proto.ToDataplane, OutputQueueLen)
-	epID := proto.WorkloadEndpointID{
+	updates := make(chan *proto.ToDataplane, OutputQueueLen)
+	epID := types.WorkloadEndpointID{
 		OrchestratorId: OrchestratorId,
 		EndpointId:     EndpointId,
 		WorkloadId:     workloadID,
@@ -117,13 +127,25 @@ func (s *Server) Sync(_ *proto.SyncRequest, stream proto.PolicySync_SyncServer) 
 	}()
 
 	for update := range updates {
-		err := stream.Send(&update)
+		err := stream.Send(update)
 		if err != nil {
 			logCxt.WithError(err).Warn("Failed to send update to policy sync client")
 			return err
 		}
 	}
 	return nil
+}
+
+func (s *Server) Report(ctx context.Context, d *proto.DataplaneStats) (*proto.ReportResult, error) {
+	if s.stats == nil {
+		return &proto.ReportResult{Successful: false}, nil
+	}
+	select {
+	case s.stats <- d:
+		return &proto.ReportResult{Successful: true}, nil
+	case <-ctx.Done():
+		return &proto.ReportResult{Successful: false}, ctx.Err()
+	}
 }
 
 type UIDAllocator struct {

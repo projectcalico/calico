@@ -1,8 +1,9 @@
-// Copyright (c) 2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2024-2025 Tigera, Inc. All rights reserved.
 
 package calico
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"reflect"
@@ -13,7 +14,7 @@ import (
 	"time"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"golang.org/x/net/context"
+	"github.com/sirupsen/logrus"
 	apitesting "k8s.io/apimachinery/pkg/api/apitesting"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
@@ -25,7 +26,6 @@ import (
 	"k8s.io/apiserver/pkg/registry/generic"
 	"k8s.io/apiserver/pkg/storage"
 	"k8s.io/apiserver/pkg/storage/storagebackend"
-	"k8s.io/klog/v2"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
@@ -175,7 +175,7 @@ func TestTierUnconditionalDelete(t *testing.T) {
 
 	for i, tt := range tests {
 		out := &v3.Tier{} // reset
-		err := store.Delete(ctx, tt.key, out, nil, nil, nil)
+		err := store.Delete(ctx, tt.key, out, nil, nil, nil, storage.DeleteOptions{})
 		if tt.expectNotFoundErr {
 			if err == nil || !storage.IsNotFound(err) {
 				t.Errorf("#%d: expecting not found error, but get: %s", i, err)
@@ -210,7 +210,7 @@ func TestTierConditionalDelete(t *testing.T) {
 
 	for i, tt := range tests {
 		out := &v3.Tier{}
-		err := store.Delete(ctx, key, out, tt.precondition, nil, nil)
+		err := store.Delete(ctx, key, out, tt.precondition, nil, nil, storage.DeleteOptions{})
 		if tt.expectInvalidObjErr {
 			if err == nil || !storage.IsInvalidObj(err) {
 				t.Errorf("#%d: expecting invalid UID error, but get: %s", i, err)
@@ -348,7 +348,7 @@ func TestTierGuaranteedUpdate(t *testing.T) {
 	}}
 
 	for i, tt := range tests {
-		klog.Infof("Start to run test on tt: %+v", tt)
+		logrus.Infof("Start to run test on tt: %+v", tt)
 		out := &v3.Tier{}
 		selector := fmt.Sprintf("foo-%d", i)
 		if tt.expectNoUpdate {
@@ -534,6 +534,12 @@ func TestTierList(t *testing.T) {
 		t.Fatalf("Get failed: %v", err)
 	}
 
+	banpTier := makeTier(names.BaselineAdminNetworkPolicyTierName, "", v3.BaselineAdminNetworkPolicyTierOrder)
+	err = store.Get(ctx, "projectcalico.org/tiers/baselineadminnetworkpolicy", opts, banpTier)
+	if err != nil {
+		t.Fatalf("Get failed: %v", err)
+	}
+
 	tests := []struct {
 		prefix      string
 		pred        storage.SelectionPredicate
@@ -552,7 +558,8 @@ func TestTierList(t *testing.T) {
 				return nil, fields.Set{"metadata.name": tier.Name}, nil
 			},
 		},
-		expectedOut: []*v3.Tier{anpTier, preset[1].storedObj, defaultTier},
+		// Tiers are returned in name order.
+		expectedOut: []*v3.Tier{anpTier, preset[1].storedObj, banpTier, defaultTier},
 	}}
 
 	for i, tt := range tests {
@@ -566,6 +573,17 @@ func TestTierList(t *testing.T) {
 			t.Errorf("#%d: length of list want=%d, get=%d", i, len(tt.expectedOut), len(out.Items))
 			continue
 		}
+		var wantNames, gotNames []string
+		for _, wantTier := range tt.expectedOut {
+			wantNames = append(wantNames, wantTier.Name)
+		}
+		for _, getTier := range out.Items {
+			gotNames = append(gotNames, getTier.Name)
+		}
+		if !reflect.DeepEqual(wantNames, gotNames) {
+			t.Errorf("#%d: tier names want=%v, get=%v", i, wantNames, gotNames)
+		}
+
 		for j, wantTier := range tt.expectedOut {
 			getTier := &out.Items[j]
 			if !reflect.DeepEqual(wantTier, getTier) {
@@ -579,17 +597,17 @@ func testTierSetup(t *testing.T) (context.Context, *resourceStore) {
 	codec := apitesting.TestCodec(codecs, v3.SchemeGroupVersion)
 	cfg, err := apiconfig.LoadClientConfig("")
 	if err != nil {
-		klog.Errorf("Failed to load client config: %q", err)
+		logrus.Errorf("Failed to load client config: %q", err)
 		os.Exit(1)
 	}
 	cfg.Spec.DatastoreType = "etcdv3"
 	cfg.Spec.EtcdEndpoints = "http://localhost:2379"
 	c, err := clientv3.New(*cfg)
 	if err != nil {
-		klog.Errorf("Failed creating client: %q", err)
+		logrus.Errorf("Failed creating client: %q", err)
 		os.Exit(1)
 	}
-	klog.Infof("Client: %v", c)
+	logrus.Tracef("Client: %v", c)
 
 	opts := Options{
 		RESTOptions: generic.RESTOptions{

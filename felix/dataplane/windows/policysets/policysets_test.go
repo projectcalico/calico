@@ -22,6 +22,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/dataplane/windows/hns"
 	"github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/felix/types"
 )
 
 func TestRuleRenderingWithStaticRules(t *testing.T) {
@@ -646,7 +647,7 @@ func TestNegativeTestCases(t *testing.T) {
 	}), "unexpected rule with Negative match")
 
 	//Test with invalid argument to AddOrReplacePolicySet (Other than Profile/Policy)
-	ps.AddOrReplacePolicySet("invalid-arg", &proto.ProfileID{
+	ps.AddOrReplacePolicySet("invalid-arg", &types.ProfileID{
 		Name: "abc",
 	})
 

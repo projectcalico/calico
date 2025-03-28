@@ -81,6 +81,8 @@ type WorkloadEndpointSpec struct {
 	// AllowSpoofedSourcePrefixes is a list of CIDRs that the endpoint should be able to send traffic from,
 	// bypassing the RPF check.
 	AllowSpoofedSourcePrefixes []string `json:"allowSpoofedSourcePrefixes,omitempty" validate:"omitempty,dive,cidr"`
+
+	QoSControls *QoSControls `json:"qosControls,omitempty" validate:"omitempty"`
 }
 
 // WorkloadEndpointPort represents one endpoint's named or mapped port
@@ -108,6 +110,17 @@ type WorkloadEndpointList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata"`
 	Items           []WorkloadEndpoint `json:"items"`
+}
+
+type QoSControls struct {
+	IngressBandwidth      int64 `json:"ingressBandwidth,omitempty"`
+	EgressBandwidth       int64 `json:"egressBandwidth,omitempty"`
+	IngressBurst          int64 `json:"ingressBurst,omitempty"`
+	EgressBurst           int64 `json:"egressBurst,omitempty"`
+	IngressPacketRate     int64 `json:"ingressPacketRate,omitempty"`
+	EgressPacketRate      int64 `json:"egressPacketRate,omitempty"`
+	IngressMaxConnections int64 `json:"ingressMaxConnections,omitempty"`
+	EgressMaxConnections  int64 `json:"egressMaxConnections,omitempty"`
 }
 
 // NewWorkloadEndpoint creates a new (zeroed) WorkloadEndpoint struct with the TypeMetadata initialised to the current

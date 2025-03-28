@@ -52,7 +52,6 @@ func RunDatastoreTest(t *testing.T, testFn func(t *testing.T, kdd bool, client c
 		config := apiconfig.NewCalicoAPIConfig()
 		config.Spec.DatastoreType = apiconfig.Kubernetes
 		config.Spec.Kubeconfig = "/go/src/github.com/projectcalico/calico/calicoctl/test-data/kubeconfig.yaml"
-		config.Spec.K8sInsecureSkipTLSVerify = true
 		client, err := clientv3.New(*config)
 		Expect(err).NotTo(HaveOccurred())
 		defer func() {

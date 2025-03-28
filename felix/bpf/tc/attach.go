@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -30,8 +30,8 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/bpfdefs"
 	"github.com/projectcalico/calico/felix/bpf/hook"
 	"github.com/projectcalico/calico/felix/bpf/libbpf"
-	"github.com/projectcalico/calico/felix/bpf/maps"
 	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
+	"github.com/projectcalico/calico/felix/dataplane/linux/qos"
 )
 
 type AttachPoint struct {
@@ -65,6 +65,7 @@ type AttachPoint struct {
 	NATout               uint32
 	UDPOnly              bool
 	RedirectPeer         bool
+	FlowLogsEnabled      bool
 }
 
 var ErrDeviceNotFound = errors.New("device not found")
@@ -80,44 +81,10 @@ func (ap *AttachPoint) Log() *log.Entry {
 }
 
 func (ap *AttachPoint) loadObject(file string) (*libbpf.Obj, error) {
-	obj, err := libbpf.OpenObject(file)
+	obj, err := bpf.LoadObject(file, ap.Configure())
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error loading %s: %w", file, err)
 	}
-
-	for m, err := obj.FirstMap(); m != nil && err == nil; m, err = m.NextMap() {
-		// In case of global variables, libbpf creates an internal map <prog_name>.rodata
-		// The values are read only for the BPF programs, but can be set to a value from
-		// userspace before the program is loaded.
-		mapName := m.Name()
-		if m.IsMapInternal() {
-			if strings.HasPrefix(mapName, ".rodata") {
-				continue
-			}
-
-			if err := ap.ConfigureProgram(m); err != nil {
-				return nil, fmt.Errorf("failed to configure %s: %w", file, err)
-			}
-			continue
-		}
-
-		if size := maps.Size(mapName); size != 0 {
-			if err := m.SetSize(size); err != nil {
-				return nil, fmt.Errorf("error resizing map %s: %w", mapName, err)
-			}
-		}
-
-		log.Debugf("Pinning map %s k %d v %d", mapName, m.KeySize(), m.ValueSize())
-		pinDir := bpf.MapPinDir(m.Type(), mapName, ap.Iface, ap.Hook)
-		if err := m.SetPinPath(path.Join(pinDir, mapName)); err != nil {
-			return nil, fmt.Errorf("error pinning map %s k %d v %d: %w", mapName, m.KeySize(), m.ValueSize(), err)
-		}
-	}
-
-	if err := obj.Load(); err != nil {
-		return nil, fmt.Errorf("error loading program: %w", err)
-	}
-
 	return obj, nil
 }
 
@@ -352,7 +319,25 @@ func EnsureQdisc(ifaceName string) (bool, error) {
 		log.WithField("iface", ifaceName).Debug("Already have a clsact qdisc on this interface")
 		return true, nil
 	}
-	return false, libbpf.CreateQDisc(ifaceName)
+
+	// Clean up QoS config as it is currently not suppored by the BPF dataplane
+	// and should be removed when transitioning from iptables or nftables to BPF.
+	var errs []error
+	err = qos.RemoveIngressQdisc(ifaceName)
+	if err != nil {
+		errs = append(errs, fmt.Errorf("error removing QoS ingress qdisc from interface %s: %w", ifaceName, err))
+	}
+	err = qos.RemoveEgressQdisc(ifaceName)
+	if err != nil {
+		errs = append(errs, fmt.Errorf("error removing QoS egress qdisc from interface %s: %w", ifaceName, err))
+	}
+
+	err = libbpf.CreateQDisc(ifaceName)
+	if err != nil {
+		errs = append(errs, fmt.Errorf("error creating qdisc on interface %s: %w", ifaceName, err))
+	}
+
+	return false, errors.Join(errs...)
 }
 
 func HasQdisc(ifaceName string) (bool, error) {
@@ -406,8 +391,8 @@ func (ap *AttachPoint) Config() string {
 	return fmt.Sprintf("%+v", ap)
 }
 
-func (ap *AttachPoint) ConfigureProgram(m *libbpf.Map) error {
-	globalData := libbpf.TcGlobalData{
+func (ap *AttachPoint) Configure() *libbpf.TcGlobalData {
+	globalData := &libbpf.TcGlobalData{
 		ExtToSvcMark: ap.ExtToServiceConnmark,
 		VxlanPort:    ap.VXLANPort,
 		Tmtu:         ap.TunnelMTU,
@@ -418,6 +403,10 @@ func (ap *AttachPoint) ConfigureProgram(m *libbpf.Map) error {
 		NatIn:        ap.NATin,
 		NatOut:       ap.NATout,
 		LogFilterJmp: uint32(ap.LogFilterIdx),
+	}
+
+	if ap.Profiling == "Enabled" {
+		globalData.Profiling = 1
 	}
 
 	copy(globalData.HostIPv4[0:4], ap.HostIPv4.To4())
@@ -450,6 +439,10 @@ func (ap *AttachPoint) ConfigureProgram(m *libbpf.Map) error {
 		globalData.Flags |= libbpf.GlobalsRedirectPeer
 	}
 
+	if ap.FlowLogsEnabled {
+		globalData.Flags |= libbpf.GlobalsFlowLogsEnabled
+	}
+
 	globalData.HostTunnelIPv4 = globalData.HostIPv4
 	globalData.HostTunnelIPv6 = globalData.HostIPv6
 
@@ -462,7 +455,7 @@ func (ap *AttachPoint) ConfigureProgram(m *libbpf.Map) error {
 	}
 
 	if ap.HookLayoutV4 != nil {
-		log.WithField("HookLayout", ap.HookLayoutV4).Debugf("ConfigureProgram")
+		log.WithField("HookLayout", ap.HookLayoutV4).Debugf("Configure")
 		for p, i := range ap.HookLayoutV4 {
 			globalData.Jumps[p] = uint32(i)
 		}
@@ -470,20 +463,16 @@ func (ap *AttachPoint) ConfigureProgram(m *libbpf.Map) error {
 	}
 
 	if ap.HookLayoutV6 != nil {
-		log.WithField("HookLayout", ap.HookLayoutV6).Debugf("ConfigureProgram")
+		log.WithField("HookLayout", ap.HookLayoutV6).Debugf("Configure")
 		for p, i := range ap.HookLayoutV6 {
 			globalData.JumpsV6[p] = uint32(i)
 		}
 		globalData.JumpsV6[tcdefs.ProgIndexPolicy] = uint32(ap.PolicyIdxV6)
 	}
 
-	return ConfigureProgram(m, ap.Iface, &globalData)
-}
-
-func ConfigureProgram(m *libbpf.Map, iface string, globalData *libbpf.TcGlobalData) error {
 	in := []byte("---------------")
-	copy(in, iface)
+	copy(in, ap.Iface)
 	globalData.IfaceName = string(in)
 
-	return libbpf.TcSetGlobals(m, globalData)
+	return globalData
 }

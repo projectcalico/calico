@@ -19,10 +19,10 @@ import (
 	"time"
 
 	calicoclient "github.com/projectcalico/api/pkg/client/clientset_generated/clientset/typed/projectcalico/v3"
+	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/klog/v2"
 )
 
 // WaitForGlobalNetworkPoliciesToNotExist waits for the GlobalNetworkPolicy with the given name to no
@@ -30,7 +30,7 @@ import (
 func WaitForGlobalNetworkPoliciesToNotExist(client calicoclient.ProjectcalicoV3Interface, name string) error {
 	return wait.PollUntilContextTimeout(context.Background(), 500*time.Millisecond, wait.ForeverTestTimeout, true,
 		func(ctx context.Context) (bool, error) {
-			klog.V(5).Infof("Waiting for broker %v to not exist", name)
+			logrus.Tracef("Waiting for broker %v to not exist", name)
 			_, err := client.GlobalNetworkPolicies().Get(ctx, name, metav1.GetOptions{})
 			if nil == err {
 				return false, nil
@@ -50,7 +50,7 @@ func WaitForGlobalNetworkPoliciesToNotExist(client calicoclient.ProjectcalicoV3I
 func WaitForGlobalNetworkPoliciesToExist(client calicoclient.ProjectcalicoV3Interface, name string) error {
 	return wait.PollUntilContextTimeout(context.Background(), 500*time.Millisecond, wait.ForeverTestTimeout, true,
 		func(ctx context.Context) (bool, error) {
-			klog.V(5).Infof("Waiting for serviceClass %v to exist", name)
+			logrus.Tracef("Waiting for serviceClass %v to exist", name)
 			_, err := client.GlobalNetworkPolicies().Get(context.Background(), name, metav1.GetOptions{})
 			if nil == err {
 				return true, nil
@@ -66,7 +66,7 @@ func WaitForGlobalNetworkPoliciesToExist(client calicoclient.ProjectcalicoV3Inte
 func WaitForTierToNotExist(client calicoclient.ProjectcalicoV3Interface, name string) error {
 	return wait.PollUntilContextTimeout(context.Background(), 500*time.Millisecond, wait.ForeverTestTimeout, true,
 		func(ctx context.Context) (bool, error) {
-			klog.V(5).Infof("Waiting for serviceClass %v to not exist", name)
+			logrus.Tracef("Waiting for serviceClass %v to not exist", name)
 			_, err := client.Tiers().Get(ctx, name, metav1.GetOptions{})
 			if nil == err {
 				return false, nil
@@ -86,7 +86,7 @@ func WaitForTierToNotExist(client calicoclient.ProjectcalicoV3Interface, name st
 func WaitForTierToExist(client calicoclient.ProjectcalicoV3Interface, name string) error {
 	return wait.PollUntilContextTimeout(context.Background(), 500*time.Millisecond, wait.ForeverTestTimeout, true,
 		func(ctx context.Context) (bool, error) {
-			klog.V(5).Infof("Waiting for serviceClass %v to exist", name)
+			logrus.Tracef("Waiting for serviceClass %v to exist", name)
 			_, err := client.Tiers().Get(ctx, name, metav1.GetOptions{})
 			if nil == err {
 				return true, nil

@@ -21,13 +21,16 @@ import (
 	networkingv1 "k8s.io/api/networking/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	adminpolicy "sigs.k8s.io/network-policy-api/apis/v1alpha1"
 )
 
 // Error indicating a problem connecting to the backend.
 type ErrorDatastoreError struct {
 	Err        error
 	Identifier interface{}
+}
+
+func (e ErrorDatastoreError) Unwrap() error {
+	return e.Err
 }
 
 func (e ErrorDatastoreError) Error() string {
@@ -62,6 +65,10 @@ func (e ErrorResourceDoesNotExist) Error() string {
 	return fmt.Sprintf("resource does not exist: %v with error: %v", e.Identifier, e.Err)
 }
 
+func (e ErrorResourceDoesNotExist) Unwrap() error {
+	return e.Err
+}
+
 // Error indicating an operation is not supported.
 type ErrorOperationNotSupported struct {
 	Operation  string
@@ -84,6 +91,10 @@ type ErrorResourceAlreadyExists struct {
 	Identifier interface{}
 }
 
+func (e ErrorResourceAlreadyExists) Unwrap() error {
+	return e.Err
+}
+
 func (e ErrorResourceAlreadyExists) Error() string {
 	return fmt.Sprintf("resource already exists: %v", e.Identifier)
 }
@@ -91,6 +102,10 @@ func (e ErrorResourceAlreadyExists) Error() string {
 // Error indicating a problem connecting to the backend.
 type ErrorConnectionUnauthorized struct {
 	Err error
+}
+
+func (e ErrorConnectionUnauthorized) Unwrap() error {
+	return e.Err
 }
 
 func (e ErrorConnectionUnauthorized) Error() string {
@@ -150,6 +165,10 @@ func (e ErrorInsufficientIdentifiers) Error() string {
 type ErrorResourceUpdateConflict struct {
 	Err        error
 	Identifier interface{}
+}
+
+func (e ErrorResourceUpdateConflict) Unwrap() error {
+	return e.Err
 }
 
 func (e ErrorResourceUpdateConflict) Error() string {
@@ -234,24 +253,18 @@ type ErrorAdminPolicyConversion struct {
 	Rules      []ErrorAdminPolicyConversionRule
 }
 
-func (e *ErrorAdminPolicyConversion) BadEgressRule(rule *adminpolicy.AdminNetworkPolicyEgressRule, reason string) {
-	// Copy rule
-	badRule := *rule
-
+func (e *ErrorAdminPolicyConversion) BadEgressRule(rule any, reason string) {
 	e.Rules = append(e.Rules, ErrorAdminPolicyConversionRule{
-		EgressRule:  &badRule,
+		EgressRule:  rule,
 		IngressRule: nil,
 		Reason:      reason,
 	})
 }
 
-func (e *ErrorAdminPolicyConversion) BadIngressRule(rule *adminpolicy.AdminNetworkPolicyIngressRule, reason string) {
-	// Copy rule
-	badRule := *rule
-
+func (e *ErrorAdminPolicyConversion) BadIngressRule(rule any, reason string) {
 	e.Rules = append(e.Rules, ErrorAdminPolicyConversionRule{
 		EgressRule:  nil,
-		IngressRule: &badRule,
+		IngressRule: rule,
 		Reason:      reason,
 	})
 }
@@ -285,8 +298,8 @@ func (e ErrorAdminPolicyConversion) GetError() error {
 }
 
 type ErrorAdminPolicyConversionRule struct {
-	EgressRule  *adminpolicy.AdminNetworkPolicyEgressRule
-	IngressRule *adminpolicy.AdminNetworkPolicyIngressRule
+	EgressRule  any
+	IngressRule any
 	Reason      string
 }
 

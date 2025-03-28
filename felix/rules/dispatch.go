@@ -15,6 +15,7 @@
 package rules
 
 import (
+	"fmt"
 	"sort"
 
 	log "github.com/sirupsen/logrus"
@@ -22,10 +23,22 @@ import (
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/stringutils"
+	"github.com/projectcalico/calico/felix/types"
 )
 
+// DispatchMappings returns a map of interface name to interface chain.
+func (r *DefaultRuleRenderer) DispatchMappings(endpoints map[types.WorkloadEndpointID]*proto.WorkloadEndpoint) (map[string][]string, map[string][]string) {
+	fromMappings := map[string][]string{}
+	toMappings := map[string][]string{}
+	for _, endpoint := range endpoints {
+		fromMappings[endpoint.Name] = []string{fmt.Sprintf("goto %s", EndpointChainName(WorkloadFromEndpointPfx, endpoint.Name, r.maxNameLength))}
+		toMappings[endpoint.Name] = []string{fmt.Sprintf("goto %s", EndpointChainName(WorkloadToEndpointPfx, endpoint.Name, r.maxNameLength))}
+	}
+	return fromMappings, toMappings
+}
+
 func (r *DefaultRuleRenderer) WorkloadDispatchChains(
-	endpoints map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint,
+	endpoints map[types.WorkloadEndpointID]*proto.WorkloadEndpoint,
 ) []*generictables.Chain {
 	// Extract endpoint names.
 	log.WithField("numEndpoints", len(endpoints)).Debug("Rendering workload dispatch chains")
@@ -55,7 +68,7 @@ func (r *DefaultRuleRenderer) WorkloadDispatchChains(
 }
 
 func (r *DefaultRuleRenderer) WorkloadInterfaceAllowChains(
-	endpoints map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint,
+	endpoints map[types.WorkloadEndpointID]*proto.WorkloadEndpoint,
 ) []*generictables.Chain {
 	// Extract endpoint names.
 	log.WithField("numEndpoints", len(endpoints)).Debug("Rendering workload interface allow chain")
@@ -103,8 +116,8 @@ func (r *DefaultRuleRenderer) WorkloadInterfaceAllowChains(
 // a from-endpoint-mark chain to jump to a corresponding endpoint chain matching on its endpoint mark.
 func (r *DefaultRuleRenderer) EndpointMarkDispatchChains(
 	epMarkMapper EndpointMarkMapper,
-	wlEndpoints map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint,
-	hepEndpoints map[string]proto.HostEndpointID,
+	wlEndpoints map[types.WorkloadEndpointID]*proto.WorkloadEndpoint,
+	hepEndpoints map[string]types.HostEndpointID,
 ) []*generictables.Chain {
 	// Extract endpoint names.
 	logCxt := log.WithFields(log.Fields{
@@ -134,7 +147,7 @@ func (r *DefaultRuleRenderer) EndpointMarkDispatchChains(
 }
 
 func (r *DefaultRuleRenderer) HostDispatchChains(
-	endpoints map[string]proto.HostEndpointID,
+	endpoints map[string]types.HostEndpointID,
 	defaultIfaceName string,
 	applyOnForward bool,
 ) []*generictables.Chain {
@@ -143,7 +156,7 @@ func (r *DefaultRuleRenderer) HostDispatchChains(
 
 // For pre-DNAT policy, which only applies on ingress from a host endpoint.
 func (r *DefaultRuleRenderer) FromHostDispatchChains(
-	endpoints map[string]proto.HostEndpointID,
+	endpoints map[string]types.HostEndpointID,
 	defaultIfaceName string,
 ) []*generictables.Chain {
 	return r.hostDispatchChains(endpoints, defaultIfaceName, "from", false)
@@ -151,14 +164,14 @@ func (r *DefaultRuleRenderer) FromHostDispatchChains(
 
 // For applying normal host endpoint egress policy to traffic from the host which has been DNAT'd.
 func (r *DefaultRuleRenderer) ToHostDispatchChains(
-	endpoints map[string]proto.HostEndpointID,
+	endpoints map[string]types.HostEndpointID,
 	defaultIfaceName string,
 ) []*generictables.Chain {
 	return r.hostDispatchChains(endpoints, defaultIfaceName, "to", false)
 }
 
 func (r *DefaultRuleRenderer) hostDispatchChains(
-	endpoints map[string]proto.HostEndpointID,
+	endpoints map[string]types.HostEndpointID,
 	defaultIfaceName string,
 	directions string,
 	applyOnForward bool,
@@ -456,6 +469,38 @@ func (r *DefaultRuleRenderer) buildSingleDispatchChains(
 	getActionForEndpoint func(pfx, name string) generictables.Action,
 	endRules []generictables.Rule,
 ) ([]*generictables.Chain, *generictables.Chain, []generictables.Rule) {
+	if r.NFTables && (endpointPfx == WorkloadFromEndpointPfx || endpointPfx == WorkloadToEndpointPfx) {
+		// Currently only supported for nftables workload endpoint dispatch.
+		return r.buildSingleDispatchChainsVMAP(
+			chainName,
+			endpointPfx,
+			endRules,
+		)
+	}
+	return r.buildSingleDispatchChainTree(
+		chainName,
+		commonPrefix,
+		prefixes,
+		prefixToNames,
+		endpointPfx,
+		getMatchForEndpoint,
+		getActionForEndpoint,
+		endRules,
+	)
+}
+
+// Build a single dispatch chains for an endpoint based on prefixes.
+// Return child chains, root chain and root rules of root chain.
+func (r *DefaultRuleRenderer) buildSingleDispatchChainTree(
+	chainName string,
+	commonPrefix string,
+	prefixes []string,
+	prefixToNames map[string][]string,
+	endpointPfx string,
+	getMatchForEndpoint func(name string) generictables.MatchCriteria,
+	getActionForEndpoint func(pfx, name string) generictables.Action,
+	endRules []generictables.Rule,
+) ([]*generictables.Chain, *generictables.Chain, []generictables.Rule) {
 	childChains := make([]*generictables.Chain, 0)
 	rootRules := make([]generictables.Rule, 0)
 
@@ -513,8 +558,7 @@ func (r *DefaultRuleRenderer) buildSingleDispatchChains(
 			childChains = append(childChains, childEndpointChain)
 
 		} else {
-			// Only one name with this prefix, render rules directly into the root
-			// chains.
+			// Only one name with this prefix, render rules directly into the root chains.
 			ifaceName := ifaceNames[0]
 			logCxt.WithField("ifaceName", ifaceName).Debug("Adding rule to root chains")
 
@@ -534,6 +578,36 @@ func (r *DefaultRuleRenderer) buildSingleDispatchChains(
 	}
 
 	return childChains, rootChain, rootRules
+}
+
+func (r *DefaultRuleRenderer) buildSingleDispatchChainsVMAP(
+	chainName string,
+	endpointPfx string,
+	endRules []generictables.Rule,
+) ([]*generictables.Chain, *generictables.Chain, []generictables.Rule) {
+	// For nftables, we use a verdict map to dispatch, so the root chain needs only send the packet
+	// to the vmap.
+	var rootRules []generictables.Rule
+	switch endpointPfx {
+	case WorkloadFromEndpointPfx:
+		rootRules = []generictables.Rule{{
+			Match: r.NewMatch().InInterfaceVMAP(NftablesFromWorkloadDispatchMap),
+		}}
+	case WorkloadToEndpointPfx:
+		rootRules = []generictables.Rule{{
+			Match: r.NewMatch().OutInterfaceVMAP(NftablesToWorkloadDispatchMap),
+		}}
+	default:
+		log.Panicf("endpoint prefix does not yet use verdict maps: %v", endpointPfx)
+	}
+	log.Debug("Adding end rules at end of root chain")
+	rootRules = append(rootRules, endRules...)
+
+	rootChain := &generictables.Chain{
+		Name:  chainName,
+		Rules: rootRules,
+	}
+	return nil, rootChain, rootRules
 }
 
 // Divide endpoint names into shallow tree.

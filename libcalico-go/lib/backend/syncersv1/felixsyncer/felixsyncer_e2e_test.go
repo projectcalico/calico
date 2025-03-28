@@ -418,6 +418,11 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 					Key:   model.TierKey{Name: names.AdminNetworkPolicyTierName},
 					Value: &model.Tier{Order: &anpOrder, DefaultAction: apiv3.Pass},
 				})
+				banpOrder := apiv3.BaselineAdminNetworkPolicyTierOrder
+				syncTester.ExpectData(model.KVPair{
+					Key:   model.TierKey{Name: names.BaselineAdminNetworkPolicyTierName},
+					Value: &model.Tier{Order: &banpOrder, DefaultAction: apiv3.Pass},
+				})
 				syncTester.ExpectData(model.KVPair{
 					Key:   model.HostConfigKey{Hostname: "127.0.0.1", Name: "IpInIpTunnelAddr"},
 					Value: "192.168.0.1",
@@ -431,7 +436,7 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 					Value: &model.Wireguard{InterfaceIPv4Addr: &wip, PublicKey: "jlkVyQYooZYzI2wFfNhSZez5eWh44yfq1wKVjLvSXgY="},
 				})
 				// add one for the node resource
-				expectedCacheSize += 7
+				expectedCacheSize += 8
 			}
 
 			// The HostIP will be added for the IPv4 address
@@ -466,12 +471,13 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 			syncTester.ExpectData(model.KVPair{
 				Key: model.IPPoolKey{CIDR: net.MustParseCIDR("192.124.0.0/21")},
 				Value: &model.IPPool{
-					CIDR:          poolCIDRNet,
-					IPIPInterface: "tunl0",
-					IPIPMode:      encap.CrossSubnet,
-					Masquerade:    true,
-					IPAM:          true,
-					Disabled:      false,
+					CIDR:           poolCIDRNet,
+					IPIPInterface:  "tunl0",
+					IPIPMode:       encap.CrossSubnet,
+					Masquerade:     true,
+					IPAM:           true,
+					Disabled:       false,
+					AssignmentMode: apiv3.Automatic,
 				},
 				Revision: pool.ResourceVersion,
 			})

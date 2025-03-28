@@ -1,4 +1,4 @@
-// Copyright (c) 2017, 2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017 - 2024 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -120,10 +120,14 @@ var _ = Describe("Config", func() {
 
 				rc := runCfg.Controllers
 				Expect(rc.Node).To(Equal(&config.NodeControllerConfig{
-					SyncLabels:        true,
-					AutoHostEndpoints: false,
-					DeleteNodes:       true,
-					LeakGracePeriod:   &v1.Duration{Duration: 15 * time.Minute},
+					SyncLabels: true,
+					AutoHostEndpointConfig: &config.AutoHostEndpointConfig{
+						AutoCreate:                false,
+						CreateDefaultHostEndpoint: v3.DefaultHostEndpointsEnabled,
+						Templates:                 nil,
+					},
+					DeleteNodes:     true,
+					LeakGracePeriod: &v1.Duration{Duration: 15 * time.Minute},
 				}))
 				Expect(rc.Policy).To(Equal(&config.GenericControllerConfig{
 					ReconcilerPeriod: time.Minute * 5,
@@ -141,6 +145,9 @@ var _ = Describe("Config", func() {
 					ReconcilerPeriod: time.Minute * 5,
 					NumberOfWorkers:  1,
 				}))
+				Expect(rc.LoadBalancer).To(Equal(&config.LoadBalancerControllerConfig{
+					AssignIPs: v3.AllServices,
+				}))
 				close(done)
 			})
 
@@ -156,7 +163,7 @@ var _ = Describe("Config", func() {
 				Expect(c.Node).To(Equal(&v3.NodeControllerConfig{
 					ReconcilerPeriod: nil,
 					SyncLabels:       v3.Enabled,
-					HostEndpoint:     &v3.AutoHostEndpointConfig{AutoCreate: v3.Disabled},
+					HostEndpoint:     &v3.AutoHostEndpointConfig{AutoCreate: v3.Disabled, CreateDefaultHostEndpoint: v3.DefaultHostEndpointsEnabled},
 					LeakGracePeriod:  &v1.Duration{Duration: 15 * time.Minute},
 				}))
 				Expect(c.Policy).To(Equal(&v3.PolicyControllerConfig{
@@ -167,6 +174,9 @@ var _ = Describe("Config", func() {
 					ReconcilerPeriod: &v1.Duration{Duration: time.Minute * 5}}))
 				Expect(c.ServiceAccount).To(Equal(&v3.ServiceAccountControllerConfig{
 					ReconcilerPeriod: &v1.Duration{Duration: time.Minute * 5}}))
+				Expect(c.LoadBalancer).To(Equal(&v3.LoadBalancerControllerConfig{
+					AssignIPs: v3.AllServices,
+				}))
 				close(done)
 			})
 		})
@@ -188,7 +198,7 @@ var _ = Describe("Config", func() {
 						Node: &v3.NodeControllerConfig{
 							ReconcilerPeriod: nil,
 							SyncLabels:       v3.Disabled,
-							HostEndpoint:     &v3.AutoHostEndpointConfig{AutoCreate: v3.Enabled},
+							HostEndpoint:     &v3.AutoHostEndpointConfig{AutoCreate: v3.Enabled, CreateDefaultHostEndpoint: v3.DefaultHostEndpointsEnabled},
 							LeakGracePeriod:  &v1.Duration{Duration: 20 * time.Minute},
 						},
 						Policy: &v3.PolicyControllerConfig{
@@ -199,6 +209,9 @@ var _ = Describe("Config", func() {
 							ReconcilerPeriod: &v1.Duration{Duration: time.Second * 32}},
 						ServiceAccount: &v3.ServiceAccountControllerConfig{
 							ReconcilerPeriod: &v1.Duration{Duration: time.Second * 33}},
+						LoadBalancer: &v3.LoadBalancerControllerConfig{
+							AssignIPs: v3.RequestedServicesOnly,
+						},
 					},
 				}
 				m = &mockKCC{get: kcc}
@@ -218,10 +231,13 @@ var _ = Describe("Config", func() {
 
 				rc := runCfg.Controllers
 				Expect(rc.Node).To(Equal(&config.NodeControllerConfig{
-					SyncLabels:        false,
-					AutoHostEndpoints: true,
-					DeleteNodes:       true,
-					LeakGracePeriod:   &v1.Duration{Duration: 20 * time.Minute},
+					SyncLabels: false,
+					AutoHostEndpointConfig: &config.AutoHostEndpointConfig{
+						AutoCreate:                true,
+						CreateDefaultHostEndpoint: v3.DefaultHostEndpointsEnabled,
+					},
+					DeleteNodes:     true,
+					LeakGracePeriod: &v1.Duration{Duration: 20 * time.Minute},
 				}))
 				Expect(rc.Policy).To(Equal(&config.GenericControllerConfig{
 					ReconcilerPeriod: time.Second * 30,
@@ -238,6 +254,9 @@ var _ = Describe("Config", func() {
 				Expect(rc.ServiceAccount).To(Equal(&config.GenericControllerConfig{
 					ReconcilerPeriod: time.Second * 33,
 					NumberOfWorkers:  1,
+				}))
+				Expect(rc.LoadBalancer).To(Equal(&config.LoadBalancerControllerConfig{
+					AssignIPs: v3.RequestedServicesOnly,
 				}))
 				close(done)
 			})
@@ -441,10 +460,10 @@ var _ = Describe("Config", func() {
 
 				rc := runCfg.Controllers
 				Expect(rc.Node).To(Equal(&config.NodeControllerConfig{
-					SyncLabels:        false,
-					AutoHostEndpoints: true,
-					DeleteNodes:       true,
-					LeakGracePeriod:   &v1.Duration{Duration: 15 * time.Minute},
+					SyncLabels:             false,
+					AutoHostEndpointConfig: &config.AutoHostEndpointConfig{AutoCreate: true, CreateDefaultHostEndpoint: v3.DefaultHostEndpointsEnabled},
+					DeleteNodes:            true,
+					LeakGracePeriod:        &v1.Duration{Duration: 15 * time.Minute},
 				}))
 				Expect(rc.Policy).To(Equal(&config.GenericControllerConfig{
 					ReconcilerPeriod: time.Second * 105,
@@ -476,7 +495,7 @@ var _ = Describe("Config", func() {
 				Expect(c.Node).To(Equal(&v3.NodeControllerConfig{
 					ReconcilerPeriod: nil,
 					SyncLabels:       v3.Disabled,
-					HostEndpoint:     &v3.AutoHostEndpointConfig{AutoCreate: v3.Enabled},
+					HostEndpoint:     &v3.AutoHostEndpointConfig{AutoCreate: v3.Enabled, CreateDefaultHostEndpoint: v3.DefaultHostEndpointsEnabled},
 					LeakGracePeriod:  &v1.Duration{Duration: 15 * time.Minute},
 				}))
 				Expect(c.Policy).To(Equal(&v3.PolicyControllerConfig{
@@ -505,7 +524,10 @@ var _ = Describe("Config", func() {
 						Node: &v3.NodeControllerConfig{
 							ReconcilerPeriod: nil,
 							SyncLabels:       v3.Disabled,
-							HostEndpoint:     &v3.AutoHostEndpointConfig{AutoCreate: v3.Enabled},
+							HostEndpoint: &v3.AutoHostEndpointConfig{
+								AutoCreate:                v3.Enabled,
+								CreateDefaultHostEndpoint: v3.DefaultHostEndpointsDisabled,
+							},
 						},
 						Policy: &v3.PolicyControllerConfig{
 							ReconcilerPeriod: &v1.Duration{Duration: time.Second * 30}},
@@ -534,9 +556,12 @@ var _ = Describe("Config", func() {
 
 				rc := runCfg.Controllers
 				Expect(rc.Node).To(Equal(&config.NodeControllerConfig{
-					SyncLabels:        false,
-					AutoHostEndpoints: true,
-					DeleteNodes:       true,
+					SyncLabels: false,
+					AutoHostEndpointConfig: &config.AutoHostEndpointConfig{
+						AutoCreate:                true,
+						CreateDefaultHostEndpoint: v3.DefaultHostEndpointsEnabled,
+					},
+					DeleteNodes: true,
 				}))
 				Expect(rc.Policy).To(Equal(&config.GenericControllerConfig{
 					ReconcilerPeriod: time.Second * 105,
@@ -568,7 +593,7 @@ var _ = Describe("Config", func() {
 				Expect(c.Node).To(Equal(&v3.NodeControllerConfig{
 					ReconcilerPeriod: nil,
 					SyncLabels:       v3.Disabled,
-					HostEndpoint:     &v3.AutoHostEndpointConfig{AutoCreate: v3.Enabled},
+					HostEndpoint:     &v3.AutoHostEndpointConfig{AutoCreate: v3.Enabled, CreateDefaultHostEndpoint: v3.DefaultHostEndpointsEnabled},
 				}))
 				Expect(c.Policy).To(Equal(&v3.PolicyControllerConfig{
 					ReconcilerPeriod: &v1.Duration{Duration: time.Second * 105}}))

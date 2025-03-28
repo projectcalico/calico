@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -35,9 +35,9 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/watch"
 )
 
-func tieredNetworkPolicyName(ns, p, t string) string {
-	name, _ := names.BackendTieredPolicyName(p, t)
-	return ns + "/" + name
+func tieredNetworkPolicyName(ns, policyName, t string) string {
+	policyName, _ = names.BackendTieredPolicyName(policyName, t)
+	return ns + "/" + policyName
 }
 
 func tieredPolicyName(p, t string) string {
@@ -337,7 +337,7 @@ var _ = testutils.E2eDatastoreDescribe("NetworkPolicy tests", testutils.Datastor
 		Entry("Two fully populated PolicySpecs in the default tier",
 			"default",
 			namespace1, namespace2,
-			name1, name2,
+			"default."+name1, "default."+name2,
 			spec1, spec2,
 			ingressEgress, ingressEgress,
 		),
@@ -345,7 +345,7 @@ var _ = testutils.E2eDatastoreDescribe("NetworkPolicy tests", testutils.Datastor
 		Entry("Ingress-only and egress-only policies",
 			"default",
 			namespace1, namespace2,
-			name1, name2,
+			"default."+name1, "default."+name2,
 			ingressSpec1, egressSpec2,
 			ingress, egress,
 		),
@@ -353,7 +353,7 @@ var _ = testutils.E2eDatastoreDescribe("NetworkPolicy tests", testutils.Datastor
 		Entry("Policies with explicit ingress and egress Types",
 			"default",
 			namespace1, namespace2,
-			name1, name2,
+			"default."+name1, "default."+name2,
 			ingressTypesSpec1, egressTypesSpec2,
 			ingress, egress,
 		),
@@ -364,6 +364,67 @@ var _ = testutils.E2eDatastoreDescribe("NetworkPolicy tests", testutils.Datastor
 			spec1, spec2,
 			ingressEgress, ingressEgress,
 		),
+	)
+
+	DescribeTable("NetworkPolicy default tier name test",
+		func(policyName string, incorrectPrefixPolicyName string) {
+			namespace := "default"
+			By("Getting the policy before it was created")
+			_, err := c.NetworkPolicies().Get(ctx, namespace, policyName, options.GetOptions{})
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("resource does not exist: NetworkPolicy(" + namespace + "/" + policyName + ") with error:"))
+
+			By("Updating the policy before it was created")
+			_, err = c.NetworkPolicies().Update(ctx,
+				&apiv3.NetworkPolicy{
+					ObjectMeta: metav1.ObjectMeta{Name: policyName, Namespace: namespace, ResourceVersion: "1234", CreationTimestamp: metav1.Now(), UID: uid},
+				}, options.SetOptions{})
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("resource does not exist: NetworkPolicy(" + namespace + "/" + policyName + ") with error:"))
+
+			By("Creating the policy")
+			returnedPolicy, err := c.NetworkPolicies().Create(ctx,
+				&apiv3.NetworkPolicy{
+					ObjectMeta: metav1.ObjectMeta{Name: policyName, Namespace: namespace},
+				}, options.SetOptions{})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(returnedPolicy.Name).To(Equal(policyName))
+
+			By("Creating the policy with incorrect prefix name")
+			_, err = c.NetworkPolicies().Create(ctx,
+				&apiv3.NetworkPolicy{
+					ObjectMeta: metav1.ObjectMeta{Name: incorrectPrefixPolicyName, Namespace: namespace},
+				}, options.SetOptions{})
+			Expect(err).To(HaveOccurred())
+
+			By("Getting the policy")
+			returnedPolicy, err = c.NetworkPolicies().Get(ctx, namespace, policyName, options.GetOptions{})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(returnedPolicy.Name).To(Equal(policyName))
+
+			By("Updating the policy")
+			returnedPolicy, err = c.NetworkPolicies().Update(ctx, returnedPolicy, options.SetOptions{})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(returnedPolicy.Name).To(Equal(policyName))
+
+			By("Getting the policy with incorrect prefix")
+			_, err = c.NetworkPolicies().Get(ctx, namespace, incorrectPrefixPolicyName, options.GetOptions{})
+			Expect(err).To(HaveOccurred())
+
+			By("Updating the policy with incorrect prefix")
+			_, err = c.NetworkPolicies().Update(ctx, &apiv3.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: incorrectPrefixPolicyName, ResourceVersion: "1234", CreationTimestamp: metav1.Now(), UID: uid},
+				Spec:       spec1,
+			}, options.SetOptions{})
+			Expect(err).To(HaveOccurred())
+
+			By("Deleting policy")
+			returnedPolicy, err = c.NetworkPolicies().Delete(ctx, namespace, policyName, options.DeleteOptions{})
+			Expect(returnedPolicy.Name).To(Equal(policyName))
+			Expect(err).ToNot(HaveOccurred())
+		},
+		Entry("NetworkPolicy without default tier prefix", "netpol", "default.netpol"),
+		Entry("NetworkPolicy with default tier prefix", "default.netpol", "netpol"),
 	)
 
 	Describe("NetworkPolicy watch functionality", func() {

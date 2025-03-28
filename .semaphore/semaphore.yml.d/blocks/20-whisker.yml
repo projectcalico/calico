@@ -1,0 +1,24 @@
+- name: whisker
+  run:
+    when: "${FORCE_RUN} or change_in(['/*', '/whisker/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+  execution_time_limit:
+    minutes: 30
+  dependencies:
+    - Prerequisites
+  task:
+    prologue:
+      commands:
+        - cd whisker
+    jobs:
+      - name: make ci
+        commands:
+          - ../.semaphore/run-and-monitor make-ci.log make ci
+      - name: Build binary
+        matrix:
+          - env_var: ARCH
+            values:
+              - arm64
+              - ppc64le
+              - s390x
+        commands:
+          - ../.semaphore/run-and-monitor image-$ARCH.log make build ARCH=$ARCH

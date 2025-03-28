@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2025 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -63,8 +63,9 @@ var _ = Describe("IPAM migration handling", func() {
 
 		affinity1 = &model.KVPair{
 			Key: model.BlockAffinityKey{
-				CIDR: net.MustParseCIDR("192.168.201.0/26"),
-				Host: nodeName,
+				CIDR:         net.MustParseCIDR("192.168.201.0/26"),
+				Host:         nodeName,
+				AffinityType: string(ipam.AffinityTypeHost),
 			},
 			Value: &model.BlockAffinity{
 				State:   model.StateConfirmed,
@@ -112,8 +113,9 @@ var _ = Describe("IPAM migration handling", func() {
 
 		// Check that the block affinity attributes were changed correctly
 		newAffinityKey := model.BlockAffinityKey{
-			CIDR: net.MustParseCIDR("192.168.201.0/26"),
-			Host: newNodeName,
+			CIDR:         net.MustParseCIDR("192.168.201.0/26"),
+			Host:         newNodeName,
+			AffinityType: string(ipam.AffinityTypeHost),
 		}
 		newAffinityKeyPath, err := model.KeyToDefaultPath(newAffinityKey)
 		Expect(err).NotTo(HaveOccurred())
@@ -179,6 +181,18 @@ func NewMockIPAMClient(bc bapi.Client) client.Interface {
 	return &MockIPAMClient{
 		backend: bc,
 	}
+}
+
+func (c *MockIPAMClient) StagedGlobalNetworkPolicies() client.StagedGlobalNetworkPolicyInterface {
+	return nil
+}
+
+func (c *MockIPAMClient) StagedNetworkPolicies() client.StagedNetworkPolicyInterface {
+	return nil
+}
+
+func (c *MockIPAMClient) StagedKubernetesNetworkPolicies() client.StagedKubernetesNetworkPolicyInterface {
+	return nil
 }
 
 func (c *MockIPAMClient) Tiers() client.TierInterface {
@@ -353,7 +367,7 @@ func (bc *MockIPAMBackendClient) List(ctx context.Context, list model.ListInterf
 	return nil, nil
 }
 
-func (bc *MockIPAMBackendClient) Watch(ctx context.Context, list model.ListInterface, revision string) (bapi.WatchInterface, error) {
+func (bc *MockIPAMBackendClient) Watch(ctx context.Context, list model.ListInterface, options bapi.WatchOptions) (bapi.WatchInterface, error) {
 	// DO NOTHING
 	return bapi.NewFake(), nil
 }

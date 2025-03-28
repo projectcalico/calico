@@ -96,7 +96,12 @@ func (sw *secretWatcher) ensureWatchingSecret(name string) {
 		log.Debugf("Start a watch for secret '%v' (namespace %v)", name, sw.namespace)
 		// We're not watching this secret yet, so start a watch for it.
 		watcher := cache.NewListWatchFromClient(sw.k8sClientset.CoreV1().RESTClient(), "secrets", sw.namespace, fields.OneTermEqualSelector("metadata.name", name))
-		_, controller := cache.NewInformer(watcher, &v1.Secret{}, 0, sw)
+		_, controller := cache.NewInformerWithOptions(cache.InformerOptions{
+			ListerWatcher: watcher,
+			ObjectType:    &v1.Secret{},
+			ResyncPeriod:  0,
+			Handler:       sw,
+		})
 		sw.watches[name] = &secretWatchData{stopCh: make(chan struct{})}
 		go controller.Run(sw.watches[name].stopCh)
 		log.Debugf("Controller for secret '%v' is now running", name)

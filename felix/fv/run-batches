@@ -1,6 +1,6 @@
 #!/bin/bash -x
 
-# Copyright (c) 2018 Tigera, Inc. All rights reserved.
+# Copyright (c) 2018-2025 Tigera, Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -21,6 +21,9 @@
 : ${PRIVATE_KEY:=`pwd`/private.key}
 : ${GINKGO_ARGS:=}
 : ${GINKGO_FOCUS:=.*}
+
+mkdir -p cwlogs
+export FV_CWLOGDIR=`pwd`/cwlogs
 
 for batch in ${FV_BATCHES_TO_RUN}; do
   (

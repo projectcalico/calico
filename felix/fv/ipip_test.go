@@ -73,6 +73,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology before adding
 			if err != nil {
 				return err
 			}
+			defer nlHandle.Close()
 			links, err := netlinkutils.LinkListRetryEINTR(nlHandle)
 			if err != nil {
 				return err

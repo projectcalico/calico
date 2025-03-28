@@ -37,11 +37,16 @@ clean:
 	rm -rf ./bin
 
 ci-preflight-checks:
+	$(MAKE) check-go-mod
 	$(MAKE) check-dockerfiles
 	$(MAKE) check-language
+	$(MAKE) check-ocp-no-crds
 	$(MAKE) generate
 	$(MAKE) fix-all
 	$(MAKE) check-dirty
+
+check-go-mod:
+	$(DOCKER_GO_BUILD) ./hack/check-go-mod.sh
 
 check-dockerfiles:
 	./hack/check-dockerfiles.sh
@@ -49,14 +54,28 @@ check-dockerfiles:
 check-language:
 	./hack/check-language.sh
 
+CRD_FILES_IN_OCP_DIR=$(shell grep "^kind: CustomResourceDefinition" manifests/ocp/* -l)
+check-ocp-no-crds:
+	@echo "Checking for files in  manifests/ocp with CustomResourceDefinitions"
+	@if [ ! -z "$(CRD_FILES_IN_OCP_DIR)" ]; then echo "ERROR: manifests/ocp should not have any CustomResourceDefinitions, these files should be removed:"; echo "$(CRD_FILES_IN_OCP_DIR)"; exit 1; fi
+
+protobuf:
+	$(MAKE) -C app-policy protobuf
+	$(MAKE) -C cni-plugin protobuf
+	$(MAKE) -C felix protobuf
+	$(MAKE) -C pod2daemon protobuf
+	$(MAKE) -C goldmane protobuf
+
 generate:
 	$(MAKE) gen-semaphore-yaml
-	$(MAKE) get-operator-crds
+	$(MAKE) protobuf
+	$(MAKE) -C lib gen-files
 	$(MAKE) -C api gen-files
 	$(MAKE) -C libcalico-go gen-files
 	$(MAKE) -C felix gen-files
-	$(MAKE) -C app-policy protobuf
+	$(MAKE) -C goldmane gen-files
 	$(MAKE) gen-manifests
+	$(MAKE) fix-changed
 
 gen-manifests: bin/helm
 	cd ./manifests && \
@@ -71,8 +90,7 @@ get-operator-crds: var-require-all-OPERATOR_BRANCH
 	@echo ================================================================
 	cd ./charts/tigera-operator/crds/ && \
 	for file in operator.tigera.io_*.yaml; do echo "downloading $$file from operator repo" && curl -fsSL https://raw.githubusercontent.com/tigera/operator/$(OPERATOR_BRANCH)/pkg/crds/operator/$${file%_crd.yaml}.yaml -o $${file}; done
-	cd ./manifests/ocp/ && \
-	for file in operator.tigera.io_*.yaml; do echo "downloading $$file from operator repo" && curl -fsSL https://raw.githubusercontent.com/tigera/operator/$(OPERATOR_BRANCH)/pkg/crds/operator/$${file%_crd.yaml}.yaml -o $${file}; done
+	$(MAKE) fix-changed
 
 gen-semaphore-yaml:
 	cd .semaphore && ./generate-semaphore-yaml.sh
@@ -102,20 +120,30 @@ image:
 # using a local kind cluster.
 ###############################################################################
 E2E_FOCUS ?= "sig-network.*Conformance"
-ADMINPOLICY_SUPPORTED_FEATURES ?= "AdminNetworkPolicy"
-ADMINPOLICY_UNSUPPORTED_FEATURES ?= "BaselineAdminNetworkPolicy"
+ADMINPOLICY_SUPPORTED_FEATURES ?= "AdminNetworkPolicy,BaselineAdminNetworkPolicy"
+ADMINPOLICY_UNSUPPORTED_FEATURES ?= ""
 e2e-test:
 	$(MAKE) -C e2e build
 	$(MAKE) -C node kind-k8st-setup
 	KUBECONFIG=$(KIND_KUBECONFIG) ./e2e/bin/k8s/e2e.test -ginkgo.focus=$(E2E_FOCUS)
-	KUBECONFIG=$(KIND_KUBECONFIG) ./e2e/bin/adminpolicy/e2e.test -exempt-features=$(ADMINPOLICY_UNSUPPORTED_FEATURES) -supported-features=$(ADMINPOLICY_SUPPORTED_FEATURES)
+	KUBECONFIG=$(KIND_KUBECONFIG) ./e2e/bin/adminpolicy/e2e.test \
+	  -exempt-features=$(ADMINPOLICY_UNSUPPORTED_FEATURES) \
+	  -supported-features=$(ADMINPOLICY_SUPPORTED_FEATURES)
+
+e2e-test-adminpolicy:
+	$(MAKE) -C e2e build
+	$(MAKE) -C node kind-k8st-setup
+	KUBECONFIG=$(KIND_KUBECONFIG) ./e2e/bin/adminpolicy/e2e.test \
+	  -exempt-features=$(ADMINPOLICY_UNSUPPORTED_FEATURES) \
+	  -supported-features=$(ADMINPOLICY_SUPPORTED_FEATURES)
 
 ###############################################################################
 # Release logic below
 ###############################################################################
+.PHONY: release release-publish create-release-branch release-test build-openstack publish-openstack release-notes
 # Build the release tool.
 release/bin/release: $(shell find ./release -type f -name '*.go')
-	$(call build_binary, ./release/build, $@)
+	$(MAKE) -C release
 
 # Install ghr for publishing to github.
 bin/ghr:
@@ -170,14 +198,7 @@ helm-index:
 
 # Creates the tar file used for installing Calico on OpenShift.
 bin/ocp.tgz: manifests/ocp/ bin/yq
-	mkdir -p bin/tmp
-	cp -r manifests/ocp bin/tmp/
-	$(DOCKER_RUN) $(CALICO_BUILD) /bin/bash -c "                                        \
-		for file in bin/tmp/ocp/*crd* ;                                                 \
-        	do bin/yq -i 'del(.. | select(has(\"description\")).description)' \$$file ; \
-        done"
-	tar czvf $@ -C bin/tmp ocp
-	rm -rf bin/tmp
+	tar czvf $@ -C manifests/ ocp
 
 ## Generates release notes for the given version.
 .PHONY: release-notes
@@ -200,6 +221,8 @@ endif
 		-e GITHUB_TOKEN=$(GITHUB_TOKEN) \
 		python:3 \
 		bash -c '/usr/local/bin/python release/get-contributors.py >> /code/AUTHORS.md'
+
+update-pins: update-go-build-pin update-calico-base-pin
 
 ###############################################################################
 # Post-release validation

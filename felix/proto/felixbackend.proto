@@ -1,6 +1,6 @@
 syntax = "proto3";
 package felix;
-option go_package = "proto";
+option go_package = "./proto";
 
 service PolicySync {
   // On this API, only the following payloads will be sent:
@@ -23,6 +23,9 @@ service PolicySync {
   //  - VXLANTunnelEndpointUpdate
   //  - VXLANTunnelEndpointRemove
   rpc Sync(SyncRequest) returns (stream ToDataplane);
+
+  // Report dataplane statistics to Felix.
+  rpc Report(DataplaneStats) returns (ReportResult);
 }
 
 message SyncRequest {
@@ -90,7 +93,7 @@ message ToDataplane {
     // HostMetadataV4V6Update is sent when a host is added or updated.
     HostMetadataV4V6Update host_metadata_v4v6_update = 37;
     // HostIPRemove is sent when a host is removed.
-    HostMetadataV4V6Remove host_metadata_v4v6_remove = 38; 
+    HostMetadataV4V6Remove host_metadata_v4v6_remove = 38;
 
     // IPAMPoolUpdate is sent when an IPAM pool is added/updated.
     IPAMPoolUpdate ipam_pool_update = 16;
@@ -400,6 +403,23 @@ message WorkloadEndpoint {
   repeated NatInfo ipv6_nat = 9;
   repeated string allow_spoofed_source_prefixes = 10;
   map<string, string> annotations = 11;
+  QoSControls qos_controls = 12;
+  LocalBGPPeer local_bgp_peer = 13;
+}
+
+message QoSControls {
+  int64 IngressBandwidth      = 1;
+  int64 EgressBandwidth       = 2;
+  int64 IngressBurst          = 3;
+  int64 EgressBurst           = 4;
+  int64 IngressPacketRate     = 5;
+  int64 EgressPacketRate      = 6;
+  int64 IngressMaxConnections = 7;
+  int64 EgressMaxConnections  = 8;
+}
+
+message LocalBGPPeer {
+  string bgp_peer_name = 1;   
 }
 
 message WorkloadEndpointRemove {
@@ -466,6 +486,7 @@ message HostEndpointStatusRemove {
 message WorkloadEndpointStatusUpdate {
   WorkloadEndpointID id = 1;
   EndpointStatus status = 2;
+  WorkloadEndpoint endpoint = 3;
 }
 message WorkloadEndpointStatusRemove {
   WorkloadEndpointID id = 1;
@@ -564,16 +585,18 @@ message NamespaceID {
   string name = 1;
 }
 
+// RouteTYpe defines a type of route. Each is a power of 2, so that theye can be used as
+// unique bits within a bitmap.
 enum RouteType {
   // CIDR_INFO gives information about a CIDR without establishing a route.  For example,
   // it is emitted for IP pools with no blocks.
   CIDR_INFO = 0;
   REMOTE_WORKLOAD = 1;
   REMOTE_HOST = 2;
-  LOCAL_WORKLOAD = 3;
-  LOCAL_HOST = 4;
-  REMOTE_TUNNEL = 5;
-  LOCAL_TUNNEL = 6;
+  LOCAL_WORKLOAD = 4;
+  LOCAL_HOST = 8;
+  REMOTE_TUNNEL = 16;
+  LOCAL_TUNNEL = 32;
 }
 
 enum IPPoolType {
@@ -590,7 +613,13 @@ message TunnelType {
 }
 
 message RouteUpdate {
-  RouteType type = 1;
+  // The "type" field has been deprecated and removed in favor of "types".
+  reserved 1;
+  reserved "type";
+
+  // Types is a bitmap field indicating which route types apply to this route.
+  RouteType types = 12;
+
   IPPoolType ip_pool_type = 2;
   string dst = 3;
   // The name of the node holding this destination, if this route targets a calico node.
@@ -601,6 +630,7 @@ message RouteUpdate {
   bool nat_outgoing = 8;
   bool local_workload = 9;
   TunnelType tunnel_type = 10;
+  bool borrowed = 11;
 }
 
 message RouteRemove {
@@ -619,6 +649,101 @@ message VXLANTunnelEndpointUpdate {
 
 message VXLANTunnelEndpointRemove {
   string node = 1;
+}
+
+message ReportResult {
+  // Whether the data was reported successfully.
+  bool successful = 1;
+}
+
+// DataplaneStats reports statistics about a flow from the dataplane.
+message DataplaneStats {
+  // Identity of the flow.
+  // Right now, just 5-tuple
+  string src_ip = 1;
+  string dst_ip = 2;
+  int32 src_port = 3;
+  int32 dst_port = 4;
+  Protocol protocol = 5;
+
+  // Each message can report zero or more statistics about the flow.
+  repeated Statistic stats = 6;
+
+  // RuleTrace is the sequence of rules that matched the flow. The last rule
+  // allows or denies the flow, each rule prior "passed" to the next tier or
+  // to profiles.
+  repeated RuleTrace rules = 7;
+
+  // Whether the flow was allowed or denied
+  Action action = 8;
+}
+
+// Action represents an action taken by a policy or rule.
+enum Action {
+  ALLOWED = 0;
+  DENIED = 1;
+}
+
+// Statistic is a piece of summary information for a flow.
+message Statistic {
+
+  // Whether the statistic is for inbound or outbound data flow, relative to
+  // the dataplane reporting.
+  enum Direction {
+    IN = 0;
+    OUT = 1;
+  }
+  Direction direction = 1;
+
+  // Whether the data is relative. ABSOLUTE data gives the total for the flow
+  // since it started.  DELTA data gives the change since the last report
+  // for this flow.
+  enum Relativity {
+    ABSOLUTE = 0;
+    DELTA = 1;
+  }
+  Relativity relativity = 2;
+
+  // Kind indicates what this statistic is about.
+  enum Kind {
+    PACKETS = 0;
+    BYTES = 1;
+  }
+  Kind kind = 3;
+
+  // Action further qualifies the kind.  For example, an action of ALLOWED with
+  // a kind of PACKETS means this statistic is the number of allowed packets.
+  Action action = 4;
+
+  // The numerical value of the statistic.
+  int64 value = 5;
+}
+
+// RuleTrace indicates a rule that matched the flow as it was being evaluated.
+message RuleTrace {
+  oneof id {
+    // The rule is part of a policy identified in this field.
+    PolicyID policy = 1;
+
+    // The rule is part of a profile identified in this field.
+    ProfileID profile = 2;
+
+    // The flow was neither allowed nor denied by any policy or profile.  By
+    // default this means the flow is denied. If this is set the rule num should
+    // be ignored since no rule matched the flow.
+    bool none = 3;
+  }
+
+  // Whether the rule appears in INBOUND or OUTBOUND rules for the policy /
+  // profile.
+  enum Direction {
+    INBOUND = 0;
+    OUTBOUND = 1;
+  }
+  Direction direction = 4;
+
+  // The numerical index of the rule that matched.
+  int32 rule_num = 5;
 }
 
 message WireguardEndpointUpdate {
@@ -657,6 +782,8 @@ message GlobalBGPConfigUpdate {
   repeated string service_cluster_cidrs = 1;
   repeated string service_external_cidrs = 2;
   repeated string service_loadbalancer_cidrs = 3;
+  string local_workload_peering_ip_v4 = 4;
+  string local_workload_peering_ip_v6 = 5;
 }
 
 message ServicePort {

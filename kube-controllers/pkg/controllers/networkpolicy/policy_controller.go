@@ -91,45 +91,51 @@ func NewPolicyController(ctx context.Context, clientset *kubernetes.Clientset, c
 
 	// Bind the Calico cache to kubernetes cache with the help of an informer. This way we make sure that
 	// whenever the kubernetes cache is updated, changes get reflected in the Calico cache as well.
-	_, informer := cache.NewIndexerInformer(listWatcher, &networkingv1.NetworkPolicy{}, 0, cache.ResourceEventHandlerFuncs{
-		AddFunc: func(obj interface{}) {
-			log.Debugf("Got ADD event for network policy: %#v", obj)
-			policy, err := policyConverter.Convert(obj)
-			if err != nil {
-				log.WithError(err).Errorf("Error while converting %#v to calico network policy.", obj)
-				return
-			}
+	_, informer := cache.NewInformerWithOptions(cache.InformerOptions{
+		ListerWatcher: listWatcher,
+		ObjectType:    &networkingv1.NetworkPolicy{},
+		ResyncPeriod:  0,
+		Handler: cache.ResourceEventHandlerFuncs{
+			AddFunc: func(obj interface{}) {
+				log.Debugf("Got ADD event for network policy: %#v", obj)
+				policy, err := policyConverter.Convert(obj)
+				if err != nil {
+					log.WithError(err).Errorf("Error while converting %#v to calico network policy.", obj)
+					return
+				}
 
-			// Add to cache.
-			k := policyConverter.GetKey(policy)
-			ccache.Set(k, policy)
-		},
-		UpdateFunc: func(oldObj interface{}, newObj interface{}) {
-			log.Debugf("Got UPDATE event for NetworkPolicy.")
-			log.Debugf("Old object: \n%#v\n", oldObj)
-			log.Debugf("New object: \n%#v\n", newObj)
-			policy, err := policyConverter.Convert(newObj)
-			if err != nil {
-				log.WithError(err).Errorf("Error converting to Calico policy.")
-				return
-			}
+				// Add to cache.
+				k := policyConverter.GetKey(policy)
+				ccache.Set(k, policy)
+			},
+			UpdateFunc: func(oldObj interface{}, newObj interface{}) {
+				log.Debugf("Got UPDATE event for NetworkPolicy.")
+				log.Debugf("Old object: \n%#v\n", oldObj)
+				log.Debugf("New object: \n%#v\n", newObj)
+				policy, err := policyConverter.Convert(newObj)
+				if err != nil {
+					log.WithError(err).Errorf("Error converting to Calico policy.")
+					return
+				}
 
-			// Add to cache.
-			k := policyConverter.GetKey(policy)
-			ccache.Set(k, policy)
-		},
-		DeleteFunc: func(obj interface{}) {
-			log.Debugf("Got DELETE event for NetworkPolicy: %#v", obj)
-			policy, err := policyConverter.Convert(obj)
-			if err != nil {
-				log.WithError(err).Errorf("Error converting to Calico policy.")
-				return
-			}
+				// Add to cache.
+				k := policyConverter.GetKey(policy)
+				ccache.Set(k, policy)
+			},
+			DeleteFunc: func(obj interface{}) {
+				log.Debugf("Got DELETE event for NetworkPolicy: %#v", obj)
+				policy, err := policyConverter.Convert(obj)
+				if err != nil {
+					log.WithError(err).Errorf("Error converting to Calico policy.")
+					return
+				}
 
-			calicoKey := policyConverter.GetKey(policy)
-			ccache.Delete(calicoKey)
+				calicoKey := policyConverter.GetKey(policy)
+				ccache.Delete(calicoKey)
+			},
 		},
-	}, cache.Indexers{})
+		Indexers: cache.Indexers{},
+	})
 
 	return &policyController{informer, ccache, c, ctx, cfg}
 }

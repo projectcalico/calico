@@ -315,6 +315,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			// Assert if the host side route is programmed correctly.
 			nlHandle, err := netlink.NewHandle(syscall.NETLINK_ROUTE)
 			Expect(err).ShouldNot(HaveOccurred())
+			defer nlHandle.Close()
 			hostRoutes, err := netlinkutils.RouteListRetryEINTR(nlHandle, hostVeth, syscall.AF_INET)
 			Expect(err).ShouldNot(HaveOccurred())
 			Expect(hostRoutes[0]).Should(Equal(netlink.Route{
@@ -2576,6 +2577,15 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			// Otherwise, they should be the same.
 			resultSecondAdd.IPs = nil
 			result.IPs = nil
+
+			// The MAC address will be different, since we create a new veth.
+			Expect(len(resultSecondAdd.Interfaces)).Should(Equal(len(result.Interfaces)))
+			for i := range resultSecondAdd.Interfaces {
+				Expect(resultSecondAdd.Interfaces[i].Mac).ShouldNot(Equal(result.Interfaces[i].Mac))
+				resultSecondAdd.Interfaces[i].Mac = ""
+				result.Interfaces[i].Mac = ""
+			}
+
 			Expect(resultSecondAdd).Should(Equal(result))
 
 			// IPAM reservation should still be in place.

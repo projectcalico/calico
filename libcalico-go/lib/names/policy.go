@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2024-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,15 +18,29 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 )
 
 const (
-	DefaultTierName            = "default"
-	AdminNetworkPolicyTierName = "adminnetworkpolicy"
+	DefaultTierName                    = "default"
+	AdminNetworkPolicyTierName         = "adminnetworkpolicy"
+	BaselineAdminNetworkPolicyTierName = "baselineadminnetworkpolicy"
 
-	K8sNetworkPolicyNamePrefix      = "knp.default."
+	// K8sNetworkPolicyNamePrefix is the prefix used when translating a
+	// Kubernetes network policy into a Calico one.
+	K8sNetworkPolicyNamePrefix = "knp.default."
+	// K8sAdminNetworkPolicyNamePrefix is the prefix for a Kubernetes
+	// AdminNetworkPolicy resources, which are cluster-scoped and live in a
+	// tier ahead of the default tier.
 	K8sAdminNetworkPolicyNamePrefix = "kanp.adminnetworkpolicy."
-	OssNetworkPolicyNamePrefix      = "ossg."
+	// K8sBaselineAdminNetworkPolicyNamePrefix is the prefix for the singleton
+	// BaselineAdminNetworkPolicy resource, which is cluster-scoped and lives
+	// in a tier after the default tier.
+	K8sBaselineAdminNetworkPolicyNamePrefix = "kbanp.baselineadminnetworkpolicy."
+
+	// OpenStackNetworkPolicyNamePrefix is the prefix for OpenStack security groups.
+	OpenStackNetworkPolicyNamePrefix = "ossg."
 )
 
 // TierFromPolicyName extracts the tier from a tiered policy name.
@@ -45,6 +59,14 @@ func TierFromPolicyName(name string) (string, error) {
 	}
 	if strings.HasPrefix(name, K8sAdminNetworkPolicyNamePrefix) {
 		return AdminNetworkPolicyTierName, nil
+	}
+	if strings.HasPrefix(name, K8sBaselineAdminNetworkPolicyNamePrefix) {
+		return BaselineAdminNetworkPolicyTierName, nil
+	}
+	// Policy derived from OpenStack security groups is named as "ossg.default.<security group
+	// ID>", but should go into the default tier.
+	if strings.HasPrefix(name, OpenStackNetworkPolicyNamePrefix) {
+		return DefaultTierName, nil
 	}
 	parts := strings.SplitN(name, ".", 2)
 	if len(parts) < 2 {
@@ -119,9 +141,12 @@ func ClientTieredPolicyName(policy string) (string, error) {
 }
 
 func policyNameIsFormatted(policy string) bool {
-	// If it is a K8s (admin) network policy or OSSG, we expect the policy name to be formatted properly in the first place.
-	return strings.HasPrefix(policy, K8sNetworkPolicyNamePrefix) || strings.HasPrefix(policy, K8sAdminNetworkPolicyNamePrefix) ||
-		strings.HasPrefix(policy, OssNetworkPolicyNamePrefix)
+	// If it is a K8s (admin) network policy, or derived from an OpenStack security group, we
+	// expect the policy name to be formatted properly in the first place.
+	return strings.HasPrefix(policy, K8sNetworkPolicyNamePrefix) ||
+		strings.HasPrefix(policy, K8sAdminNetworkPolicyNamePrefix) ||
+		strings.HasPrefix(policy, K8sBaselineAdminNetworkPolicyNamePrefix) ||
+		strings.HasPrefix(policy, OpenStackNetworkPolicyNamePrefix)
 }
 
 // TierOrDefault returns the tier name, or the default if blank.
@@ -131,4 +156,69 @@ func TierOrDefault(tier string) string {
 	} else {
 		return tier
 	}
+}
+
+// deconstructPolicyName deconstructs the v1 policy name that is constructed by the SyncerUpdateProcessors in
+// libcalico-go and extracts the v3 fields: namespace, tier, name.
+//
+// The v1 policy name is of the format:
+// -  <namespace>/<tier>.<name> for a namespaced NetworkPolicies
+// -  <tier>.<name> for GlobalNetworkPolicies.
+// -  <namespace>/knp.default.<name> for a k8s NetworkPolicies
+// -  kanp.adminnetworkpolicy.<name> for a k8s AdminNetworkPolicies
+// -  kbanp.baselineadminnetworkpolicy.<name> for a k8s BaselineAdminNetworkPolicies
+// and for the staged counterparts, respectively:
+// -  <namespace>/staged:<tier>.<name>
+// -  staged:<tier>.<name>
+// -  <namespace>/staged:knp.default.<name>
+//
+// The namespace is returned blank for GlobalNetworkPolicies.
+// For k8s network policies, the tier is always "default" and the name will be returned including the
+// knp.default prefix.
+//
+// Staged policies will have the simplified name prefixed with "staged:", eg:
+// - <namespace>/staged:<tier>.<name>      => Name=staged:<name>, Namespace=<namespace>, Tier=<tier>
+// - staged:<tier>.<name>                  => Name=staged:<name>, Namespace=<namespace>, Tier=<tier>
+// - <namespace>/staged:knp.default.<name> => Name=staged:knp.default.<name>, Namespace=<name>, Tier=default
+func DeconstructPolicyName(name string) (string, string, string, error) {
+	var namespace string
+
+	// Split the name to extract the namespace.
+	parts := strings.Split(name, "/")
+	switch len(parts) {
+	case 1: // GlobalNetworkPolicy
+		name = parts[0]
+	case 2: // NetworkPolicy (Calico or Kubernetes)
+		namespace = parts[0]
+		name = parts[1]
+	default:
+		return "", "", "", fmt.Errorf("could not parse policy %s", name)
+	}
+
+	// Remove the staged prefix if present so we can extract the tier.
+	var stagedPrefix string
+	if model.PolicyIsStaged(name) {
+		stagedPrefix = model.PolicyNamePrefixStaged
+		name = name[len(model.PolicyNamePrefixStaged):]
+	}
+
+	// If policy name starts with "knp.default" then this is k8s network policy.
+	if strings.HasPrefix(name, K8sNetworkPolicyNamePrefix) {
+		return namespace, DefaultTierName, stagedPrefix + name, nil
+	}
+	// If policy name starts with "kanp.adminnetworkpolicy" then this is k8s admin network policy.
+	if strings.HasPrefix(name, K8sAdminNetworkPolicyNamePrefix) {
+		return namespace, AdminNetworkPolicyTierName, stagedPrefix + name, nil
+	}
+	// If policy name starts with "kbanp.baselineadminnetworkpolicy" then this is k8s baseline admin network policy.
+	if strings.HasPrefix(name, K8sBaselineAdminNetworkPolicyNamePrefix) {
+		return namespace, BaselineAdminNetworkPolicyTierName, stagedPrefix + name, nil
+	}
+
+	// This is a non-kubernetes policy, so extract the tier name from the policy name.
+	if parts = strings.SplitN(name, ".", 2); len(parts) == 2 {
+		return namespace, parts[0], stagedPrefix + parts[1], nil
+	}
+
+	return "", "", "", fmt.Errorf("could not parse policy %s", name)
 }

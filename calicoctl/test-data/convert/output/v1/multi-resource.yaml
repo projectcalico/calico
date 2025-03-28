@@ -35,6 +35,7 @@ items:
     allowedUses:
     - Workload
     - Tunnel
+    assignmentMode: Automatic
     blockSize: 26
     cidr: 192.168.0.0/16
     ipipMode: Always
@@ -49,6 +50,7 @@ items:
     allowedUses:
     - Workload
     - Tunnel
+    assignmentMode: Automatic
     blockSize: 122
     cidr: 2001::/120
     ipipMode: Never

@@ -7,6 +7,7 @@ spec:
   allowedUses:
   - Workload
   - Tunnel
+  assignmentMode: Automatic
   blockSize: 26
   cidr: 10.1.0.0/16
   ipipMode: CrossSubnet

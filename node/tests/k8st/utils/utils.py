@@ -41,6 +41,7 @@ class DiagsCollector(object):
         _log.info("===================================================")
         _log.info("============= COLLECTING DIAGS FOR TEST ===========")
         _log.info("===================================================")
+        kubectl("version")
         kubectl("get deployments,pods,svc,endpoints --all-namespaces -o wide")
         for resource in ["node", "bgpconfig", "bgppeer", "gnp", "felixconfig"]:
             _log.info("")
@@ -183,18 +184,20 @@ def function_name(f):
 def run(command, logerr=True, allow_fail=False, allow_codes=[], returnerr=False):
     out = ""
     _log.info("[%s] %s", datetime.datetime.now(), command)
-    try:
-        out = subprocess.check_output(command,
-                                      shell=True,
-                                      stderr=subprocess.STDOUT)
-        _log.info("Output:\n%s", out)
-    except subprocess.CalledProcessError as e:
+
+    process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    out, err = process.communicate()
+    _log.info("Out:\n%s", out)
+    _log.info("Err:\n%s", err)
+
+    retcode = process.poll()
+    if retcode:
         if logerr:
-            _log.exception("Failure output:\n%s", e.output)
+            _log.exception("Failure output:\n%s\nerr:\n%s", out, err)
         if not allow_fail:
-            raise
+            raise subprocess.CalledProcessError(retcode, command, output="stdout: " + out + " stderr: " + err)
         if returnerr:
-            return e.output
+            return err
     return out
 
 
@@ -267,6 +270,10 @@ def node_info():
         node_ip = kubectl("get node --selector='!node-role.kubernetes.io/control-plane' -o jsonpath='{.items[%d].status.addresses[0].address}'" % i)
         ips.append(node_ip)
     return nodes, ips, ip6s
+
+def calico_node_pod_name(nodename):
+    name = kubectl("get po -n kube-system -l k8s-app=calico-node --field-selector spec.nodeName=%s -o jsonpath='{.items[0].metadata.name}'" % nodename)
+    return name
 
 def update_ds_env(ds, ns, env_vars):
         config.load_kube_config(os.environ.get('KUBECONFIG'))

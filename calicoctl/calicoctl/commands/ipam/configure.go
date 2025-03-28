@@ -29,7 +29,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
 )
 
-func updateIPAMStrictAffinity(ctx context.Context, ipamClient ipam.Interface, enabled bool) error {
+func updateIPAMStrictAffinity(ctx context.Context, ipamClient ipam.Interface, enabled bool, maxBlocks *int) error {
 	ipamConfig, err := ipamClient.GetIPAMConfig(ctx)
 	if err != nil {
 		return fmt.Errorf("Error: %v", err)
@@ -39,12 +39,20 @@ func updateIPAMStrictAffinity(ctx context.Context, ipamClient ipam.Interface, en
 	// host with block affinity.
 	ipamConfig.StrictAffinity = enabled
 
+	// Set MaxBlocksPerHost if specified
+	if maxBlocks != nil {
+		ipamConfig.MaxBlocksPerHost = *maxBlocks
+	}
+
 	err = ipamClient.SetIPAMConfig(ctx, *ipamConfig)
 	if err != nil {
 		return fmt.Errorf("Error: %v", err)
 	}
 
 	fmt.Println("Successfully set StrictAffinity to:", enabled)
+	if maxBlocks != nil {
+		fmt.Println("Successfully set MaxBlocksPerHost to:", *maxBlocks)
+	}
 
 	return nil
 }
@@ -52,12 +60,13 @@ func updateIPAMStrictAffinity(ctx context.Context, ipamClient ipam.Interface, en
 // Configure IPAM.
 func Configure(args []string) error {
 	doc := constants.DatastoreIntro + `Usage:
-  <BINARY_NAME> ipam configure --strictaffinity=<true/false> [--config=<CONFIG>] [--allow-version-mismatch]
+  <BINARY_NAME> ipam configure --strictaffinity=<true/false> [--max-blocks-per-host=<number>] [--config=<CONFIG>] [--allow-version-mismatch]
 
 Options:
   -h --help                        Show this screen.
      --strictaffinity=<true/false> Set StrictAffinity to true/false. When StrictAffinity
                                    is true, borrowing IP addresses is not allowed.
+     --max-blocks-per-host=<number>       Set the maximum number of blocks that can be affine to a host.
   -c --config=<CONFIG>             Path to the file containing connection configuration in
                                    YAML or JSON format.
                                    [default: ` + constants.DefaultConfigPath + `]
@@ -99,5 +108,14 @@ Description:
 		return fmt.Errorf("Invalid value. Use true or false to set strictaffinity")
 	}
 
-	return updateIPAMStrictAffinity(ctx, ipamClient, enabled)
+	var maxBlocks *int
+	if maxBlockStr, ok := parsedArgs["--max-blocks-per-host"].(string); ok && maxBlockStr != "" {
+		maxBlocksVal, err := strconv.Atoi(maxBlockStr)
+		if err != nil {
+			return fmt.Errorf("Invalid value for maxblockhost. Use a valid number")
+		}
+		maxBlocks = &maxBlocksVal
+	}
+
+	return updateIPAMStrictAffinity(ctx, ipamClient, enabled, maxBlocks)
 }

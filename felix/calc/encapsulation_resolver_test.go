@@ -24,6 +24,7 @@ import (
 	"github.com/projectcalico/calico/felix/config"
 	"github.com/projectcalico/calico/felix/dispatcher"
 	"github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/felix/types"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/encap"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
@@ -493,7 +494,7 @@ func (e *encapResolverCallbackRecorder) OnServiceAccountUpdate(update *proto.Ser
 	Fail("ServiceAccountUpdate received")
 }
 
-func (e *encapResolverCallbackRecorder) OnServiceAccountRemove(id proto.ServiceAccountID) {
+func (e *encapResolverCallbackRecorder) OnServiceAccountRemove(id types.ServiceAccountID) {
 	Fail("ServiceAccountRemove received")
 }
 
@@ -501,7 +502,7 @@ func (e *encapResolverCallbackRecorder) OnNamespaceUpdate(update *proto.Namespac
 	Fail("NamespaceUpdate received")
 }
 
-func (e *encapResolverCallbackRecorder) OnNamespaceRemove(id proto.NamespaceID) {
+func (e *encapResolverCallbackRecorder) OnNamespaceRemove(id types.NamespaceID) {
 	Fail("NamespaceRemove received")
 }
 

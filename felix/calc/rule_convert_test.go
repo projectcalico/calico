@@ -22,6 +22,7 @@ import (
 	. "github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
+	googleproto "google.golang.org/protobuf/proto"
 
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
@@ -94,7 +95,7 @@ var fullyLoadedParsedRule = ParsedRule{
 	Metadata: &model.RuleMetadata{Annotations: map[string]string{"key": "value"}},
 }
 
-var fullyLoadedProtoRule = proto.Rule{
+var fullyLoadedProtoRule = &proto.Rule{
 	Action:    "allow",
 	IpVersion: proto.IPVersion_IPV4,
 
@@ -162,29 +163,29 @@ var fullyLoadedProtoRule = proto.Rule{
 }
 
 var _ = DescribeTable("ParsedRulesToProtoRules",
-	func(in ParsedRule, expected proto.Rule) {
+	func(in ParsedRule, expected *proto.Rule) {
 		out := parsedRulesToProtoRules(
 			[]*ParsedRule{&in},
 			"test",
 		)
-		rule := *out[0]
+		rule := out[0]
 		// Zero the rule ID so we can compare the other fields.
 		ruleID := rule.RuleId
 		rule.RuleId = ""
-		Expect(rule).To(Equal(expected))
-		Expect(len(ruleID)).To(Equal(16))
+		Expect(googleproto.Equal(rule, expected)).To(BeTrue(), "Expected:\n%v\nActual:\n%v", expected, rule)
+		Expect(ruleID).To(HaveLen(16))
 		Expect(ruleID).To(MatchRegexp("^[a-zA-Z0-9_-]+$"))
 	},
-	Entry("empty", ParsedRule{}, proto.Rule{}),
+	Entry("empty", ParsedRule{}, &proto.Rule{}),
 	Entry("IPv4",
 		ParsedRule{IPVersion: &ipv4},
-		proto.Rule{IpVersion: proto.IPVersion_IPV4}),
+		&proto.Rule{IpVersion: proto.IPVersion_IPV4}),
 	Entry("IPv6",
 		ParsedRule{IPVersion: &ipv6},
-		proto.Rule{IpVersion: proto.IPVersion_IPV6}),
+		&proto.Rule{IpVersion: proto.IPVersion_IPV6}),
 	Entry("IPv0",
 		ParsedRule{IPVersion: &ipv0},
-		proto.Rule{IpVersion: proto.IPVersion_ANY}),
+		&proto.Rule{IpVersion: proto.IPVersion_ANY}),
 	Entry("Multiple ports",
 		ParsedRule{SrcPorts: []numorstring.Port{
 			numorstring.SinglePort(10),
@@ -192,7 +193,7 @@ var _ = DescribeTable("ParsedRulesToProtoRules",
 			portFromRange(12, 13),
 			portFromString("123"),
 		}},
-		proto.Rule{SrcPorts: []*proto.PortRange{
+		&proto.Rule{SrcPorts: []*proto.PortRange{
 			{First: 10, Last: 10},
 			{First: 11, Last: 11},
 			{First: 12, Last: 13},
@@ -203,7 +204,7 @@ var _ = DescribeTable("ParsedRulesToProtoRules",
 			ICMPType:    &icmpType10,
 			NotICMPType: &icmpType11,
 		},
-		proto.Rule{
+		&proto.Rule{
 			Icmp: &proto.Rule_IcmpType{
 				IcmpType: 10,
 			},
@@ -215,7 +216,7 @@ var _ = DescribeTable("ParsedRulesToProtoRules",
 		ParsedRule{
 			DstIPPortSetIDs: []string{"ipPortSetID"},
 		},
-		proto.Rule{
+		&proto.Rule{
 			DstIpPortSetIds: []string{"ipPortSetID"},
 		}),
 	Entry("fully-loaded rule",
@@ -249,7 +250,7 @@ var _ = Describe("rule ID tests", func() {
 		)
 		out2 := parsedRulesToProtoRules(
 			[]*ParsedRule{
-				&ParsedRule{},
+				{},
 				&fullyLoadedParsedRule,
 			},
 			"test",

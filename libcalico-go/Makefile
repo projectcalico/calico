@@ -9,6 +9,7 @@ KIND_CONFIG = $(KIND_DIR)/kind-single.config
 NETPOL_TAG = v0.1.5
 NETPOL_CRD_URL = https://raw.githubusercontent.com/kubernetes-sigs/network-policy-api/refs/tags/$(NETPOL_TAG)/config/crd/experimental
 NETPOL_ANP_CRD = policy.networking.k8s.io_adminnetworkpolicies.yaml
+NETPOL_BANP_CRD = policy.networking.k8s.io_baselineadminnetworkpolicies.yaml
 
 ###############################################################################
 # Download and include ../lib.Makefile
@@ -39,7 +40,8 @@ clean:
 GENERATED_FILES:=./lib/apis/v3/zz_generated.deepcopy.go \
 	./lib/upgrade/migrator/clients/v1/k8s/custom/zz_generated.deepcopy.go \
 	./lib/apis/v3/generated.openapi.go \
-	./lib/apis/v1/generated.openapi.go
+	./lib/apis/v1/generated.openapi.go \
+	./lib/selector/tokenizer/kind_string.go
 
 .PHONY: gen-files
 ## Force rebuild generated go utilities (e.g. deepcopy-gen) and generated files
@@ -51,14 +53,17 @@ gen-files: gen-crds
 ## Force a rebuild of custom resource definition yamls
 gen-crds:
 	rm -rf config/crd
-	$(DOCKER_GO_BUILD) sh -c '$(GIT_CONFIG_SSH) controller-gen  crd:crdVersions=v1 paths=./lib/apis/... output:crd:dir=config/crd/'
-	@rm config/crd/_.yaml
+	$(DOCKER_GO_BUILD) sh -c '$(GIT_CONFIG_SSH) controller-gen  crd:allowDangerousTypes=true,crdVersions=v1,deprecatedV1beta1CompatibilityPreserveUnknownFields=false paths=./lib/apis/... output:crd:dir=config/crd/'
+	# Cleanup
+	rm -f config/crd/_.yaml
+	rm -f config/crd/_nodes.yaml
 	# Patch in manual tweaks to the generated CRDs.
-	patch -s -p0 < ./config.patch
-	# The first two lines are a newline and a yaml separator - remove them.
-	$(DOCKER_GO_BUILD) sh -c 'find ./config/crd -name "*.yaml" | xargs sed -i -e 1,2d'
+	patch -p2 < patches/0001-Add-nullable-to-IPAM-block-allocations-field.patch
+	# Remove the first yaml separator line.
+	$(DOCKER_GO_BUILD) sh -c 'find ./config/crd -name "*.yaml" | xargs sed -i 1d'
 	# Add K8S AdminNetworkPolicy CRD
-	curl $(NETPOL_CRD_URL)/$(NETPOL_ANP_CRD) -o ./config/crd/$(NETPOL_ANP_CRD)
+	curl -sSfL --retry 3 $(NETPOL_CRD_URL)/$(NETPOL_ANP_CRD) -o ./config/crd/$(NETPOL_ANP_CRD)
+	curl -sSfL --retry 3 $(NETPOL_CRD_URL)/$(NETPOL_BANP_CRD) -o ./config/crd/$(NETPOL_BANP_CRD)
 
 ./lib/upgrade/migrator/clients/v1/k8s/custom/zz_generated.deepcopy.go: $(UPGRADE_SRCS)
 	$(DOCKER_GO_BUILD) sh -c 'deepcopy-gen \
@@ -94,6 +99,9 @@ gen-crds:
 				--output-dir "./lib/apis/v1" \
                 --output-pkg "$(PACKAGE_NAME)/lib/apis/v1" \
                 "$(PACKAGE_NAME)/lib/apis/v1"'
+
+./lib/selector/tokenizer/kind_string.go: ./lib/selector/tokenizer/tokenizer.go
+	$(DOCKER_GO_BUILD) go generate ./lib/selector/tokenizer
 
 ###############################################################################
 # Static checks

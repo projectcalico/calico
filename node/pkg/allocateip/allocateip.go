@@ -20,7 +20,6 @@ import (
 	gnet "net"
 	"os"
 	"reflect"
-	"time"
 
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
@@ -89,7 +88,9 @@ func run(
 
 	if done == nil {
 		// Running in single shot mode, so assign addresses and exit.
-		reconcileTunnelAddrs(nodename, cfg, c, felixEnvConfig)
+		if err := reconcileTunnelAddrs(nodename, c, felixEnvConfig); err != nil {
+			log.WithError(err).Fatal("Failed to reconcile tunnel address")
+		}
 		return
 	}
 
@@ -148,7 +149,9 @@ func (r reconciler) run(done <-chan struct{}) {
 			// Received an update that requires reconciliation.  If the reconciliation fails it will cause the daemon
 			// to exit this is fine - it will be restarted, and the syncer will trigger a reconciliation when in-sync
 			// again.
-			reconcileTunnelAddrs(r.nodename, r.cfg, r.client, r.felixEnvConfig)
+			if err := reconcileTunnelAddrs(r.nodename, r.client, r.felixEnvConfig); err != nil {
+				log.WithError(err).Fatal("Failed to reconcile tunnel address")
+			}
 		case <-done:
 			return
 		}
@@ -219,8 +222,8 @@ func (r *reconciler) OnUpdates(updates []bapi.Update) {
 
 // reconcileTunnelAddrs performs a single shot update of the tunnel IP allocations.
 func reconcileTunnelAddrs(
-	nodename string, cfg *apiconfig.CalicoAPIConfig, c client.Interface, felixEnvConfig *felixconfig.Config,
-) {
+	nodename string, c client.Interface, felixEnvConfig *felixconfig.Config,
+) (retErr error) {
 	ctx := context.Background()
 	// Get node resource for given nodename.
 	node, err := c.Nodes().Get(ctx, nodename, options.GetOptions{})
@@ -234,56 +237,55 @@ func reconcileTunnelAddrs(
 		log.WithError(err).Fatal("Unable to query IP pool configuration")
 	}
 
-	// If IPv4 wireguard is enabled then allocate an IPv4 address for the wireguard device. We do this for all deployment types even
-	// when pod CIDRs are not managed by Calico.
-	if cidrs := determineEnabledPoolCIDRs(*node, *ipPoolList, felixEnvConfig, ipam.AttributeTypeWireguard); len(cidrs) > 0 {
-		ensureHostTunnelAddress(ctx, c, nodename, cidrs, ipam.AttributeTypeWireguard)
-	} else {
-		removeHostTunnelAddr(ctx, c, nodename, ipam.AttributeTypeWireguard)
+	originalNode := node.DeepCopy()
+	assignIP := make(map[string]string)
+
+	defer func() {
+		if retErr != nil {
+			for attrType, ip := range assignIP {
+				if ip != "" {
+					logCtx := getLogger(attrType)
+					handle, _ := generateHandleAndAttributes(nodename, attrType)
+					if err = c.IPAM().ReleaseByHandle(ctx, handle); err != nil {
+						logCtx.WithError(err).WithField("IP", ip).Error("Error releasing IP address on failure")
+					}
+				}
+			}
+		}
+	}()
+
+	for _, attrType := range []string{ipam.AttributeTypeWireguard, ipam.AttributeTypeWireguardV6, ipam.AttributeTypeIPIP, ipam.AttributeTypeVXLAN, ipam.AttributeTypeVXLANV6} {
+		// Query the enabled pools and either configure the tunnel address, or remove it.
+		if cidrs := determineEnabledPoolCIDRs(*node, *ipPoolList, felixEnvConfig, attrType); len(cidrs) > 0 {
+			ip, err := ensureHostTunnelAddress(ctx, c, node, cidrs, attrType)
+			if err != nil {
+				return err
+			}
+			if ip != "" {
+				assignIP[attrType] = ip
+			}
+		} else {
+			if err = removeHostTunnelAddr(ctx, c, node, attrType); err != nil {
+				return err
+			}
+		}
 	}
 
-	// If IPv6 wireguard is enabled then allocate an IPv6 address for the wireguard device. We do this for all deployment types even
-	// when pod CIDRs are not managed by Calico.
-	if cidrs := determineEnabledPoolCIDRs(*node, *ipPoolList, felixEnvConfig, ipam.AttributeTypeWireguardV6); len(cidrs) > 0 {
-		ensureHostTunnelAddress(ctx, c, nodename, cidrs, ipam.AttributeTypeWireguardV6)
-	} else {
-		removeHostTunnelAddr(ctx, c, nodename, ipam.AttributeTypeWireguardV6)
+	if !reflect.DeepEqual(originalNode, node) {
+		// Update the node object.
+		_, err = c.Nodes().Update(ctx, node, options.SetOptions{})
+		if err != nil {
+			log.WithError(err).WithField("node", node.Name).Error("Failed to update node")
+			return err
+		}
 	}
 
-	// Query the IPIP enabled pools and either configure the tunnel
-	// address, or remove it.
-	if cidrs := determineEnabledPoolCIDRs(*node, *ipPoolList, felixEnvConfig, ipam.AttributeTypeIPIP); len(cidrs) > 0 {
-		ensureHostTunnelAddress(ctx, c, nodename, cidrs, ipam.AttributeTypeIPIP)
-	} else {
-		removeHostTunnelAddr(ctx, c, nodename, ipam.AttributeTypeIPIP)
-	}
-
-	// Query the IPv4 VXLAN enabled pools and either configure the tunnel
-	// address, or remove it.
-	if cidrs := determineEnabledPoolCIDRs(*node, *ipPoolList, felixEnvConfig, ipam.AttributeTypeVXLAN); len(cidrs) > 0 {
-		ensureHostTunnelAddress(ctx, c, nodename, cidrs, ipam.AttributeTypeVXLAN)
-	} else {
-		removeHostTunnelAddr(ctx, c, nodename, ipam.AttributeTypeVXLAN)
-	}
-
-	// Query the IPv6 VXLAN enabled pools and either configure the tunnel
-	// address, or remove it.
-	if cidrs := determineEnabledPoolCIDRs(*node, *ipPoolList, felixEnvConfig, ipam.AttributeTypeVXLANV6); len(cidrs) > 0 {
-		ensureHostTunnelAddress(ctx, c, nodename, cidrs, ipam.AttributeTypeVXLANV6)
-	} else {
-		removeHostTunnelAddr(ctx, c, nodename, ipam.AttributeTypeVXLANV6)
-	}
+	return nil
 }
 
-func ensureHostTunnelAddress(ctx context.Context, c client.Interface, nodename string, cidrs []net.IPNet, attrType string) {
+func ensureHostTunnelAddress(ctx context.Context, c client.Interface, node *libapi.Node, cidrs []net.IPNet, attrType string) (string, error) {
 	logCtx := getLogger(attrType)
-	logCtx.WithField("node", nodename).Debug("Ensure tunnel address is set")
-
-	// Get the currently configured address.
-	node, err := c.Nodes().Get(ctx, nodename, options.GetOptions{})
-	if err != nil {
-		logCtx.WithError(err).Fatalf("Unable to retrieve tunnel address. Error getting node '%s'", nodename)
-	}
+	logCtx.WithField("node", node.Name).Debug("Ensure tunnel address is set")
 
 	// Get the address and ipam attribute string
 	var addr string
@@ -322,13 +324,14 @@ func ensureHostTunnelAddress(ctx context.Context, c client.Interface, nodename s
 		// Go ahead checking status of current address.
 		ipAddr := gnet.ParseIP(addr)
 		if ipAddr == nil {
-			logCtx.WithError(err).Fatalf("Failed to parse the CIDR '%s'", addr)
+			logCtx.Errorf("Failed to parse the CIDR '%s'", addr)
+			return "", fmt.Errorf("failed to parse the CIDR '%s'", addr)
 		}
 
 		// Check if we got correct assignment attributes.
 		attr, handle, err := c.IPAM().GetAssignmentAttributes(ctx, net.IP{IP: ipAddr})
 		if err == nil {
-			if attr[ipam.AttributeType] == attrType && attr[ipam.AttributeNode] == nodename {
+			if attr[ipam.AttributeType] == attrType && attr[ipam.AttributeNode] == node.Name {
 				// The tunnel address is still assigned to this node, but is it in the correct pool this time?
 				if !isIpInPool(addr, cidrs) {
 					// Wrong pool, release this address.
@@ -355,10 +358,11 @@ func ensureHostTunnelAddress(ctx context.Context, c client.Interface, nodename s
 					// reassign the same address, but now with metadata. It's possible that someone
 					// else takes the address while we do this, in which case we'll just
 					// need to assign a new address.
-					if err := correctAllocationWithHandle(ctx, c, addr, nodename, attrType); err != nil {
+					if err := correctAllocationWithHandle(ctx, c, addr, node.Name, attrType); err != nil {
 						if _, ok := err.(cerrors.ErrorResourceAlreadyExists); !ok {
 							// Unknown error attempting to allocate the address. Exit.
-							logCtx.WithError(err).Fatal("Error correcting tunnel IP allocation")
+							logCtx.WithError(err).Error("Error correcting tunnel IP allocation")
+							return "", err
 						}
 
 						// The address was taken by someone else. We need to assign a new one.
@@ -366,7 +370,7 @@ func ensureHostTunnelAddress(ctx context.Context, c client.Interface, nodename s
 					} else {
 						// We corrected the address, we can just return.
 						logCtx.Info("Updated tunnel address with allocation attributes")
-						return
+						return "", nil
 					}
 				}
 			} else {
@@ -389,19 +393,25 @@ func ensureHostTunnelAddress(ctx context.Context, c client.Interface, nodename s
 
 	if release {
 		logCtx.WithField("IP", addr).Info("Release any old tunnel addresses")
-		handle, _ := generateHandleAndAttributes(nodename, attrType)
+		handle, _ := generateHandleAndAttributes(node.Name, attrType)
 		if err := c.IPAM().ReleaseByHandle(ctx, handle); err != nil {
 			if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok {
-				logCtx.WithError(err).Fatal("Failed to release old addresses")
+				logCtx.WithError(err).Error("Failed to release old addresses")
+				return "", err
 			}
 			// No existing allocations for this node.
 		}
 	}
 
 	if assign {
-		logCtx.WithField("IP", addr).Info("Assign new tunnel address")
-		assignHostTunnelAddr(ctx, c, nodename, cidrs, attrType)
+		ip, err := assignHostTunnelAddr(ctx, c, node, cidrs, attrType)
+		if err == nil {
+			logCtx.WithField("IP", ip).Info("Assign new tunnel address")
+		}
+		return ip, err
 	}
+
+	return "", nil
 }
 
 func correctAllocationWithHandle(ctx context.Context, c client.Interface, addr, nodename string, attrType string) error {
@@ -414,8 +424,9 @@ func correctAllocationWithHandle(ctx context.Context, c client.Interface, addr, 
 	// Release the old allocation.
 	_, err := c.IPAM().ReleaseIPs(ctx, ipam.ReleaseOptions{Address: ipAddr.String()})
 	if err != nil {
-		// If we fail to release the old allocation, we shouldn't continue any further. Just exit.
-		log.WithField("IP", ipAddr.String()).WithError(err).Fatal("Error releasing address")
+		// If we fail to release the old allocation, return an error.
+		log.WithField("IP", ipAddr.String()).WithError(err).Error("Error releasing address")
+		return err
 	}
 
 	// Attempt to re-assign the same address, but with a handle this time.
@@ -454,19 +465,19 @@ func generateHandleAndAttributes(nodename string, attrType string) (string, map[
 // assignHostTunnelAddr claims an IP address from the first pool
 // with some space. Stores the result in the host's config as its tunnel
 // address. It will assign a VXLAN address if vxlan is true, otherwise an IPIP address.
-func assignHostTunnelAddr(ctx context.Context, c client.Interface, nodename string, cidrs []net.IPNet, attrType string) {
+func assignHostTunnelAddr(ctx context.Context, c client.Interface, node *libapi.Node, cidrs []net.IPNet, attrType string) (string, error) {
 	// Build attributes and handle for this allocation.
-	handle, attrs := generateHandleAndAttributes(nodename, attrType)
+	handle, attrs := generateHandleAndAttributes(node.Name, attrType)
 	logCtx := getLogger(attrType)
 
 	if len(cidrs) == 0 {
-		logCtx.Fatal("Unable to assign an address: no IP pools provided")
+		return "", fmt.Errorf("unable to assign an address: no IP pools provided")
 	}
 
 	args := ipam.AutoAssignArgs{
 		HandleID:    &handle,
 		Attrs:       attrs,
-		Hostname:    nodename,
+		Hostname:    node.Name,
 		IntendedUse: api.IPPoolAllowedUseTunnel,
 	}
 	switch cidrs[0].Version() {
@@ -477,226 +488,175 @@ func assignHostTunnelAddr(ctx context.Context, c client.Interface, nodename stri
 		args.Num6 = 1
 		args.IPv6Pools = cidrs
 	default:
-		logCtx.Panicf("Unable to assign an address: invalid IP version for IP pool %v", cidrs[0])
+		return "", fmt.Errorf("unable to assign an address: invalid IP version for IP pool %v", cidrs[0])
 	}
 
 	v4Assignments, v6Assignments, err := c.IPAM().AutoAssign(ctx, args)
 	if err != nil {
-		logCtx.WithError(err).Fatal("Unable to autoassign an address")
+		logCtx.WithError(err).Errorf("Unable to autoassign an address")
+		return "", err
 	}
 
 	ip := ""
 	if v4Assignments != nil {
-		if err := v4Assignments.PartialFulfillmentError(); err != nil {
-			logCtx.WithError(err).Fatal("Unable to autoassign an IPv4 address")
+		if err = v4Assignments.PartialFulfillmentError(); err != nil {
+			logCtx.WithError(err).Errorf("Unable to autoassign an IPv4 address")
+			return "", err
 		}
 		ip = v4Assignments.IPs[0].IP.String()
 	}
 	if v6Assignments != nil {
-		if err := v6Assignments.PartialFulfillmentError(); err != nil {
-			logCtx.WithError(err).Fatal("Unable to autoassign an IPv6 address")
+		if err = v6Assignments.PartialFulfillmentError(); err != nil {
+			logCtx.WithError(err).Errorf("Unable to autoassign an IPv6 address")
+			return "", err
 		}
 		ip = v6Assignments.IPs[0].IP.String()
 	}
 
 	// Update the node object with the assigned address.
-	if err = updateNodeWithAddress(ctx, c, nodename, ip, attrType); err != nil {
-		// We hit an error, so release the IP address before exiting.
-		err := c.IPAM().ReleaseByHandle(ctx, handle)
-		if err != nil {
-			logCtx.WithError(err).WithField("IP", ip).Errorf("Error releasing IP address on failure")
-		}
-
-		// Log the error and exit with exit code 1.
-		logCtx.WithError(err).WithField("IP", ip).Fatal("Unable to set tunnel address")
-	}
+	updateNodeWithAddress(node, ip, attrType)
 
 	logCtx.WithField("IP", ip).Info("Assigned tunnel address to node")
+	return ip, nil
 }
 
-func updateNodeWithAddress(ctx context.Context, c client.Interface, nodename string, addr string, attrType string) error {
-	// If the update fails with ResourceConflict error then retry 5 times with 1 second delay before failing.
-	for i := 0; i < 5; i++ {
-		node, err := c.Nodes().Get(ctx, nodename, options.GetOptions{})
-		if err != nil {
-			return err
+func updateNodeWithAddress(node *libapi.Node, addr string, attrType string) {
+	switch attrType {
+	case ipam.AttributeTypeVXLAN:
+		node.Spec.IPv4VXLANTunnelAddr = addr
+	case ipam.AttributeTypeVXLANV6:
+		node.Spec.IPv6VXLANTunnelAddr = addr
+	case ipam.AttributeTypeIPIP:
+		if node.Spec.BGP == nil {
+			node.Spec.BGP = &libapi.NodeBGPSpec{}
 		}
-
-		switch attrType {
-		case ipam.AttributeTypeVXLAN:
-			node.Spec.IPv4VXLANTunnelAddr = addr
-		case ipam.AttributeTypeVXLANV6:
-			node.Spec.IPv6VXLANTunnelAddr = addr
-		case ipam.AttributeTypeIPIP:
-			if node.Spec.BGP == nil {
-				node.Spec.BGP = &libapi.NodeBGPSpec{}
-			}
-			node.Spec.BGP.IPv4IPIPTunnelAddr = addr
-		case ipam.AttributeTypeWireguard:
-			if node.Spec.Wireguard == nil {
-				node.Spec.Wireguard = &libapi.NodeWireguardSpec{}
-			}
-			node.Spec.Wireguard.InterfaceIPv4Address = addr
-		case ipam.AttributeTypeWireguardV6:
-			if node.Spec.Wireguard == nil {
-				node.Spec.Wireguard = &libapi.NodeWireguardSpec{}
-			}
-			node.Spec.Wireguard.InterfaceIPv6Address = addr
+		node.Spec.BGP.IPv4IPIPTunnelAddr = addr
+	case ipam.AttributeTypeWireguard:
+		if node.Spec.Wireguard == nil {
+			node.Spec.Wireguard = &libapi.NodeWireguardSpec{}
 		}
-
-		_, err = c.Nodes().Update(ctx, node, options.SetOptions{})
-		if err != nil {
-			if _, ok := err.(cerrors.ErrorResourceUpdateConflict); ok {
-				// Wait for a second and try again if there was a conflict during the resource update.
-				log.WithField("node", node.Name).Info("Resource update conflict error updating node, retrying.")
-				time.Sleep(1 * time.Second)
-				continue
-			}
-
-			log.WithField("node", node.Name).WithError(err).Warning("Error updating node")
+		node.Spec.Wireguard.InterfaceIPv4Address = addr
+	case ipam.AttributeTypeWireguardV6:
+		if node.Spec.Wireguard == nil {
+			node.Spec.Wireguard = &libapi.NodeWireguardSpec{}
 		}
-
-		return err
+		node.Spec.Wireguard.InterfaceIPv6Address = addr
 	}
-	return fmt.Errorf("Too many retries attempting to update node with tunnel address")
 }
 
 // removeHostTunnelAddr removes any existing IP address for this host's
 // tunnel device and releases the IP from IPAM.  If no IP is assigned this function
 // is a no-op.
-func removeHostTunnelAddr(ctx context.Context, c client.Interface, nodename string, attrType string) {
-	var updateError error
+func removeHostTunnelAddr(ctx context.Context, c client.Interface, node *libapi.Node, attrType string) error {
 	logCtx := getLogger(attrType)
-	logCtx.WithField("node", nodename).Debug("Remove tunnel addresses")
+	logCtx.WithField("node", node.Name).Debug("Remove tunnel addresses")
 
-	// If the update fails with ResourceConflict error then retry 5 times with 1 second delay before failing.
-	for i := 0; i < 5; i++ {
-		node, err := c.Nodes().Get(ctx, nodename, options.GetOptions{})
-		if err != nil {
-			logCtx.WithError(err).Fatalf("Unable to retrieve tunnel address for cleanup. Error getting node '%s'", nodename)
-		}
+	// Find out the currently assigned address and remove it from the node.
+	var ipAddrStr string
+	var ipAddr *net.IP
+	switch attrType {
+	case ipam.AttributeTypeVXLAN:
+		ipAddrStr = node.Spec.IPv4VXLANTunnelAddr
+		node.Spec.IPv4VXLANTunnelAddr = ""
+	case ipam.AttributeTypeVXLANV6:
+		ipAddrStr = node.Spec.IPv6VXLANTunnelAddr
+		node.Spec.IPv6VXLANTunnelAddr = ""
+	case ipam.AttributeTypeIPIP:
+		if node.Spec.BGP != nil {
+			ipAddrStr = node.Spec.BGP.IPv4IPIPTunnelAddr
+			node.Spec.BGP.IPv4IPIPTunnelAddr = ""
 
-		// Find out the currently assigned address and remove it from the node.
-		var ipAddrStr string
-		var ipAddr *net.IP
-		switch attrType {
-		case ipam.AttributeTypeVXLAN:
-			ipAddrStr = node.Spec.IPv4VXLANTunnelAddr
-			node.Spec.IPv4VXLANTunnelAddr = ""
-		case ipam.AttributeTypeVXLANV6:
-			ipAddrStr = node.Spec.IPv6VXLANTunnelAddr
-			node.Spec.IPv6VXLANTunnelAddr = ""
-		case ipam.AttributeTypeIPIP:
-			if node.Spec.BGP != nil {
-				ipAddrStr = node.Spec.BGP.IPv4IPIPTunnelAddr
-				node.Spec.BGP.IPv4IPIPTunnelAddr = ""
-
-				// If removing the tunnel address causes the BGP spec to be empty, then nil it out.
-				// libcalico asserts that if a BGP spec is present, that it not be empty.
-				if reflect.DeepEqual(*node.Spec.BGP, libapi.NodeBGPSpec{}) {
-					logCtx.Debug("BGP spec is now empty, setting to nil")
-					node.Spec.BGP = nil
-				}
-			}
-		case ipam.AttributeTypeWireguard:
-			if node.Spec.Wireguard != nil {
-				ipAddrStr = node.Spec.Wireguard.InterfaceIPv4Address
-				node.Spec.Wireguard.InterfaceIPv4Address = ""
-
-				if reflect.DeepEqual(*node.Spec.Wireguard, libapi.NodeWireguardSpec{}) {
-					logCtx.Debug("Wireguard spec is now empty, setting to nil")
-					node.Spec.Wireguard = nil
-				}
-			}
-		case ipam.AttributeTypeWireguardV6:
-			if node.Spec.Wireguard != nil {
-				ipAddrStr = node.Spec.Wireguard.InterfaceIPv6Address
-				node.Spec.Wireguard.InterfaceIPv6Address = ""
-
-				if reflect.DeepEqual(*node.Spec.Wireguard, libapi.NodeWireguardSpec{}) {
-					logCtx.Debug("Wireguard spec is now empty, setting to nil")
-					node.Spec.Wireguard = nil
-				}
+			// If removing the tunnel address causes the BGP spec to be empty, then nil it out.
+			// libcalico asserts that if a BGP spec is present, that it not be empty.
+			if reflect.DeepEqual(*node.Spec.BGP, libapi.NodeBGPSpec{}) {
+				logCtx.Debug("BGP spec is now empty, setting to nil")
+				node.Spec.BGP = nil
 			}
 		}
+	case ipam.AttributeTypeWireguard:
+		if node.Spec.Wireguard != nil {
+			ipAddrStr = node.Spec.Wireguard.InterfaceIPv4Address
+			node.Spec.Wireguard.InterfaceIPv4Address = ""
 
-		if ipAddrStr != "" {
-			ipAddr = net.ParseIP(ipAddrStr)
-		}
-
-		// Release tunnel IP address(es) for the node.
-		handle, _ := generateHandleAndAttributes(nodename, attrType)
-		if err := c.IPAM().ReleaseByHandle(ctx, handle); err != nil {
-			if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok {
-				// Unknown error releasing the address.
-				logCtx.WithError(err).WithFields(log.Fields{
-					"IP":     ipAddrStr,
-					"Handle": handle,
-				}).Fatal("Error releasing address by handle")
-			}
-
-			// Resource does not exist. This can occur in a few scenarios:
-			//
-			// 1. The IP is genuinely not allocated, and there's nothing for us to do.
-			// 2. The IP pre-dates the use of handles in this code, and so the handle doesn't exist.
-			// 3. We have gotten into an invalid state where the handle has been deleted but the IP is still allocated.
-			//
-			// For scenario #1, there is no more work to do.
-			// We can determine if we're encountering scenario #2 or #3 by inspecting the allocation's attributes.
-			// For scenario #2, we expect no attributes and no handle to be stored with the allocation.
-			// For scenario #3, we expect a handle in the attributes and it should match the expected value.
-			if ipAddr != nil {
-				// There are no addresses with this handle. If there is an IP configured on the node, check to see if it
-				// belongs to us. If it has no handle and no attributes, then we can pretty confidently
-				// say that it belongs to us rather than a pod and should be cleaned up.
-				logCtx.WithField("handle", handle).Info("No IPs with handle, release exact IP")
-				attr, storedHandle, err := c.IPAM().GetAssignmentAttributes(ctx, *ipAddr)
-				if err != nil {
-					if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok {
-						logCtx.WithError(err).Fatal("Failed to query attributes")
-					}
-					// Scenario #1: The allocation actually doesn't exist, we don't have anything to do.
-				} else if len(attr) == 0 && storedHandle == nil {
-					// Scenario #2: The allocation exists, but has no handle whatsoever.
-					// This is an ancient allocation and can be released.
-					if _, err := c.IPAM().ReleaseIPs(ctx, ipam.ReleaseOptions{Address: ipAddr.String()}); err != nil {
-						logCtx.WithError(err).WithField("IP", ipAddr.String()).Fatal("Error releasing address from IPAM")
-					}
-				} else if storedHandle != nil && *storedHandle == handle {
-					// Scenario #3: The allocation exists, has a handle, and it matches the one we expect.
-					// This means the handle object itself was wrongfully deleted. We can clean it up
-					// by releasing the IP directly with both address and handle specified.
-					if _, err := c.IPAM().ReleaseIPs(ctx, ipam.ReleaseOptions{Address: ipAddr.String(), Handle: handle}); err != nil {
-						logCtx.WithError(err).WithField("IP", ipAddr.String()).Fatal("Error releasing address from IPAM")
-					}
-				} else {
-					// The final scenario: the IP on the node is allocated, but it is allocated to some other handle.
-					// It doesn't belong to us. We can't do anything here but it's worth logging.
-					fields := log.Fields{"attributes": attr, "IP": ipAddr.String()}
-					logCtx.WithFields(fields).Warnf("IP address has been reused by something else")
-				}
+			if reflect.DeepEqual(*node.Spec.Wireguard, libapi.NodeWireguardSpec{}) {
+				logCtx.Debug("Wireguard spec is now empty, setting to nil")
+				node.Spec.Wireguard = nil
 			}
 		}
+	case ipam.AttributeTypeWireguardV6:
+		if node.Spec.Wireguard != nil {
+			ipAddrStr = node.Spec.Wireguard.InterfaceIPv6Address
+			node.Spec.Wireguard.InterfaceIPv6Address = ""
 
-		// Update the node object.
-		_, updateError = c.Nodes().Update(ctx, node, options.SetOptions{})
-		if _, ok := updateError.(cerrors.ErrorResourceUpdateConflict); ok {
-			// Wait for a second and try again if there was a conflict during the resource update.
-			logCtx.WithError(err).Infof("Error updating node %s. Retrying.", node.Name)
-			time.Sleep(1 * time.Second)
-			continue
+			if reflect.DeepEqual(*node.Spec.Wireguard, libapi.NodeWireguardSpec{}) {
+				logCtx.Debug("Wireguard spec is now empty, setting to nil")
+				node.Spec.Wireguard = nil
+			}
 		}
-
-		break
 	}
 
-	// Check to see if there was still an error after the retry loop,
-	// and log and exit if there was an error.
-	if updateError != nil {
-		// We hit an error, so release the IP address before exiting.
-		// Log the error and exit with exit code 1.
-		logCtx.WithError(updateError).Fatal("Unable to remove tunnel address")
+	if ipAddrStr != "" {
+		ipAddr = net.ParseIP(ipAddrStr)
 	}
+
+	// Release tunnel IP address(es) for the node.
+	handle, _ := generateHandleAndAttributes(node.Name, attrType)
+	if err := c.IPAM().ReleaseByHandle(ctx, handle); err != nil {
+		if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok {
+			// Unknown error releasing the address.
+			logCtx.WithError(err).WithFields(log.Fields{
+				"IP":     ipAddrStr,
+				"Handle": handle,
+			}).Error("Error releasing address by handle")
+			return err
+		}
+
+		// Resource does not exist. This can occur in a few scenarios:
+		//
+		// 1. The IP is genuinely not allocated, and there's nothing for us to do.
+		// 2. The IP pre-dates the use of handles in this code, and so the handle doesn't exist.
+		// 3. We have gotten into an invalid state where the handle has been deleted but the IP is still allocated.
+		//
+		// For scenario #1, there is no more work to do.
+		// We can determine if we're encountering scenario #2 or #3 by inspecting the allocation's attributes.
+		// For scenario #2, we expect no attributes and no handle to be stored with the allocation.
+		// For scenario #3, we expect a handle in the attributes and it should match the expected value.
+		if ipAddr != nil {
+			// There are no addresses with this handle. If there is an IP configured on the node, check to see if it
+			// belongs to us. If it has no handle and no attributes, then we can pretty confidently
+			// say that it belongs to us rather than a pod and should be cleaned up.
+			logCtx.WithField("handle", handle).Info("No IPs with handle, release exact IP")
+			attr, storedHandle, err := c.IPAM().GetAssignmentAttributes(ctx, *ipAddr)
+			if err != nil {
+				if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok {
+					logCtx.WithError(err).Error("Failed to query attributes")
+					return err
+				}
+				// Scenario #1: The allocation actually doesn't exist, we don't have anything to do.
+			} else if len(attr) == 0 && storedHandle == nil {
+				// Scenario #2: The allocation exists, but has no handle whatsoever.
+				// This is an ancient allocation and can be released.
+				if _, err := c.IPAM().ReleaseIPs(ctx, ipam.ReleaseOptions{Address: ipAddr.String()}); err != nil {
+					logCtx.WithError(err).WithField("IP", ipAddr.String()).Error("Error releasing address from IPAM")
+					return err
+				}
+			} else if storedHandle != nil && *storedHandle == handle {
+				// Scenario #3: The allocation exists, has a handle, and it matches the one we expect.
+				// This means the handle object itself was wrongfully deleted. We can clean it up
+				// by releasing the IP directly with both address and handle specified.
+				if _, err := c.IPAM().ReleaseIPs(ctx, ipam.ReleaseOptions{Address: ipAddr.String(), Handle: handle}); err != nil {
+					logCtx.WithError(err).WithField("IP", ipAddr.String()).Error("Error releasing address from IPAM")
+					return err
+				}
+			} else {
+				// The final scenario: the IP on the node is allocated, but it is allocated to some other handle.
+				// It doesn't belong to us. We can't do anything here but it's worth logging.
+				fields := log.Fields{"attributes": attr, "IP": ipAddr.String()}
+				logCtx.WithFields(fields).Warnf("IP address has been reused by something else")
+			}
+		}
+	}
+	return nil
 }
 
 // determineEnabledPools returns all enabled pools. If vxlan is true, then it will only return VXLAN pools. Otherwise

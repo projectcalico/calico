@@ -189,14 +189,6 @@ release-build: .release-$(VERSION).created
 	$(MAKE) FIPS=true retag-build-images-with-registries RELEASE=true IMAGETAG=latest-fips LATEST_IMAGE_TAG=latest-fips
 	touch $@
 
-## Verifies the release artifacts produces by `make release-build` are correct.
-release-verify: release-prereqs
-	# Check the reported version is correct for each release artifact.
-	docker run --rm $(TYPHA_IMAGE):$(VERSION)-$(ARCH) calico-typha --version | grep $(VERSION) || ( echo "Reported version:" `docker run --rm $(TYPHA_IMAGE):$(VERSION)-$(ARCH) calico-typha --version` "\nExpected version: $(VERSION)" && exit 1 )
-	docker run --rm quay.io/$(TYPHA_IMAGE):$(VERSION)-$(ARCH) calico-typha --version | grep $(VERSION) || ( echo "Reported version:" `docker run --rm quay.io/$(TYPHA_IMAGE):$(VERSION)-$(ARCH) calico-typha --version | grep -x $(VERSION)` "\nExpected version: $(VERSION)" && exit 1 )
-
-	# TODO: Some sort of quick validation of the produced binaries.
-
 ## Pushes a github release and release artifacts produced by `make release-build`.
 release-publish: release-prereqs .release-$(VERSION).published
 .release-$(VERSION).published:

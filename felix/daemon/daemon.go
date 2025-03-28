@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -35,6 +35,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/buildinfo"
 	"github.com/projectcalico/calico/felix/calc"
+	"github.com/projectcalico/calico/felix/collector"
 	"github.com/projectcalico/calico/felix/config"
 	dp "github.com/projectcalico/calico/felix/dataplane"
 	"github.com/projectcalico/calico/felix/jitter"
@@ -390,6 +391,18 @@ configRetry:
 	// Enable or disable the health HTTP server according to coalesced config.
 	healthAggregator.ServeHTTP(configParams.HealthEnabled, configParams.HealthHost, configParams.HealthPort)
 
+	var lookupsCache *calc.LookupsCache
+	var dpStatsCollector collector.Collector
+
+	if configParams.FlowLogsEnabled() {
+		// Initialzed the lookup cache here and pass it along to both the calc_graph
+		// as well as dataplane driver, which actually uses this for lookups.
+		lookupsCache = calc.NewLookupsCache()
+
+		// Start the stats collector which also depends on the lookups cache.
+		dpStatsCollector = collector.New(configParams, lookupsCache, healthAggregator)
+	}
+
 	// Configure Windows firewall rules if appropriate
 	winutils.MaybeConfigureWindowsFirewallRules(configParams.WindowsManageFirewallRules, configParams.PrometheusMetricsEnabled, configParams.PrometheusMetricsPort)
 
@@ -428,9 +441,12 @@ configRetry:
 	dpDriver, dpDriverCmd = dp.StartDataplaneDriver(
 		configParams.Copy(), // Copy to avoid concurrent access.
 		healthAggregator,
+		dpStatsCollector,
 		configChangedRestartCallback,
 		fatalErrorCallback,
-		k8sClientSet)
+		k8sClientSet,
+		lookupsCache,
+	)
 
 	// Defer reporting ready until we've started the dataplane driver.  This
 	// ensures that our overall readiness waits for the dataplane driver to
@@ -468,11 +484,31 @@ configRetry:
 		policySyncProcessor = policysync.NewProcessor(toPolicySync)
 		policySyncServer = policysync.NewServer(
 			policySyncProcessor.JoinUpdates,
+			dpStatsCollector,
 			policySyncUIDAllocator.NextUID,
 		)
 		policySyncAPIBinder = binder.NewBinder(configParams.PolicySyncPathPrefix)
 		policySyncServer.RegisterGrpc(policySyncAPIBinder.Server())
 		calcGraphClientChannels = append(calcGraphClientChannels, toPolicySync)
+	}
+
+	if dpStatsCollector != nil {
+		if apiv3.FlowLogsPolicyEvaluationModeType(configParams.FlowLogsPolicyEvaluationMode) == apiv3.FlowLogsPolicyEvaluationModeContinuous {
+			// Fork the calculation graph for dataplane updates that will be sent to the Collector.
+			toCollectorDataplaneSync := make(chan interface{})
+			// The DataplaneInfoReader wraps and sends the dataplane updates to the Collector.
+			dpir := collector.NewDataplaneInfoReader(toCollectorDataplaneSync)
+			dpStatsCollector.SetDataplaneInfoReader(dpir)
+			log.Info("DataplaneInfoReader added to collector")
+
+			calcGraphClientChannels = append(calcGraphClientChannels, toCollectorDataplaneSync)
+		}
+
+		// Everybody who wanted to tweak the dpStatsCollector had a go, we can start it now!
+		if err := dpStatsCollector.Start(); err != nil {
+			// XXX we should panic once all dataplanes expect the collector to run.
+			log.WithError(err).Panic("Stats collector did not start.")
+		}
 	}
 
 	// Now create the calculation graph, which receives updates from the
@@ -577,7 +613,9 @@ configRetry:
 	asyncCalcGraph := calc.NewAsyncCalcGraph(
 		configParams.Copy(), // Copy to avoid concurrent access.
 		calcGraphClientChannels,
-		healthAggregator)
+		healthAggregator,
+		lookupsCache,
+	)
 
 	if configParams.UsageReportingEnabled {
 		// Usage reporting enabled, add stats collector to graph.  When it detects an update
@@ -658,7 +696,7 @@ configRetry:
 
 	if configParams.EndpointStatusPathPrefix != "" {
 		if runtime.GOOS == "windows" {
-			log.WithField("os", runtime.GOOS).Warn("EndpointStatusPathPrefix is currently unsupported on Windows. Ignoring config...")
+			log.WithField("os", runtime.GOOS).Info("EndpointStatusPathPrefix is currently unsupported on Windows. Ignoring config...")
 		} else {
 			fromDataplaneC := dpConnector.NewFromDataplaneConsumer()
 			statusFileReporter := statusrep.NewEndpointStatusFileReporter(fromDataplaneC, configParams.EndpointStatusPathPrefix, statusrep.WithHostname(configParams.FelixHostname))
@@ -885,7 +923,6 @@ var ErrNotReady = errors.New("datastore is not ready or has not been initialised
 func loadConfigFromDatastore(
 	ctx context.Context, client bapi.Client, cfg apiconfig.CalicoAPIConfig, hostname string,
 ) (globalConfig, hostConfig map[string]string, err error) {
-
 	// The configuration is split over 3 different resource types and 4 different resource
 	// instances in the v3 data model:
 	// -  ClusterInformation (global): name "default"
@@ -1112,7 +1149,7 @@ func (fc *DataplaneConnector) readMessagesFromDataplane() {
 }
 
 func (fc *DataplaneConnector) handleProcessStatusUpdate(ctx context.Context, msg *proto.ProcessStatusUpdate) {
-	log.Debugf("Status update from dataplane driver: %v", *msg)
+	log.Debugf("Status update from dataplane driver: %v", msg)
 	statusReport := model.StatusReport{
 		Timestamp:     msg.IsoTimestamp,
 		UptimeSeconds: msg.Uptime,
@@ -1356,7 +1393,6 @@ func (fc *DataplaneConnector) handleConfigUpdate(msg *proto.ConfigUpdate) {
 		newConfigCopy = fc.config.Copy()
 		return err
 	}()
-
 	if err != nil {
 		// This shouldn't happen since the config update was _generated_ by the Config object held
 		// by the calculation graph.

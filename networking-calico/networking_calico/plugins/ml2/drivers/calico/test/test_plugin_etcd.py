@@ -353,6 +353,8 @@ class TestPluginEtcdBase(_TestEtcdBase):
         lib.m_compat.cfg.CONF.calico.etcd_compaction_period_mins = 0
         lib.m_compat.cfg.CONF.calico.project_name_cache_max = 0
         lib.m_compat.cfg.CONF.calico.openstack_region = self.region
+        lib.m_compat.cfg.CONF.calico.max_ingress_connections_per_port = 0
+        lib.m_compat.cfg.CONF.calico.max_egress_connections_per_port = 0
         calico_config._reset_globals()
         datamodel_v2._reset_globals()
 
@@ -525,8 +527,7 @@ class TestPluginEtcdBase(_TestEtcdBase):
         # Delete lib.port1.
         context = self.make_context()
         context._port = lib.port1
-        context._plugin_context.session.query.return_value.filter_by.\
-            side_effect = self.db_query
+        context._plugin_context.session.query.side_effect = self.db_query
         self.driver.delete_port_postcommit(context)
         self.assertEtcdWrites({})
         self.assertEtcdDeletes(set([ep_deadbeef_key_v3]))
@@ -920,6 +921,68 @@ class TestPluginEtcdBase(_TestEtcdBase):
         }
         self.assertEtcdWrites(expected_writes)
         self.assertEtcdDeletes(set())
+
+        # Add a QoS policy.
+        context._port['qos_policy_id'] = '1'
+        self.osdb_ports[0]['qos_policy_id'] = '1'
+        self.driver.update_port_postcommit(context)
+
+        # Expected changes
+        ep_hello_value_v3['spec']['qosControls'] = {
+            'egressBandwidth': 10000000,
+        }
+        expected_writes = {
+            ep_hello_key_v3: ep_hello_value_v3,
+            sg_1_key_v3: sg_1_value_v3,
+        }
+        self.assertEtcdWrites(expected_writes)
+        self.assertEtcdDeletes(set())
+
+        # Add configuration for max connections.
+        lib.m_compat.cfg.CONF.calico.max_ingress_connections_per_port = 10
+        lib.m_compat.cfg.CONF.calico.max_egress_connections_per_port = 20
+        self.driver.update_port_postcommit(context)
+
+        # Expected changes
+        ep_hello_value_v3['spec']['qosControls'] = {
+            'egressBandwidth': 10000000,
+            'ingressMaxConnections': 10,
+            'egressMaxConnections': 20,
+        }
+        expected_writes = {
+            ep_hello_key_v3: ep_hello_value_v3,
+            sg_1_key_v3: sg_1_value_v3,
+        }
+        self.assertEtcdWrites(expected_writes)
+        self.assertEtcdDeletes(set())
+
+        # Change to a QoS policy that will set all possible settings.
+        context._port['qos_policy_id'] = '2'
+        self.osdb_ports[0]['qos_policy_id'] = '2'
+        self.driver.update_port_postcommit(context)
+
+        # Expected changes
+        ep_hello_value_v3['spec']['qosControls'] = {
+            'ingressBandwidth': 1000,
+            'egressBandwidth': 3000,
+            'ingressBurst': 2000,
+            'egressBurst': 4000,
+            'ingressPacketRate': 5000,
+            'egressPacketRate': 6000,
+            'ingressMaxConnections': 10,
+            'egressMaxConnections': 20,
+        }
+        expected_writes = {
+            ep_hello_key_v3: ep_hello_value_v3,
+            sg_1_key_v3: sg_1_value_v3,
+        }
+        self.assertEtcdWrites(expected_writes)
+        self.assertEtcdDeletes(set())
+
+        # Reset for future tests.
+        lib.m_compat.cfg.CONF.calico.max_ingress_connections_per_port = 0
+        lib.m_compat.cfg.CONF.calico.max_egress_connections_per_port = 0
+        del self.osdb_ports[0]['qos_policy_id']
 
         # Reset the state for safety.
         self.osdb_ports[0]['fixed_ips'] = old_ips

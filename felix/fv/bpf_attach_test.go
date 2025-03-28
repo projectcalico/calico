@@ -19,7 +19,6 @@ package fv_test
 import (
 	"encoding/json"
 	"os"
-	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -133,7 +132,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf reattach object",
 		tc.Felixes[0].Exec("ip", "link", "set", "eth10", "master", "bond0")
 		tc.Felixes[0].Exec("ip", "link", "set", "eth20", "master", "bond0")
 		tc.Felixes[0].Exec("ifconfig", "bond0", "up")
-		time.Sleep(0 * time.Second)
 		Eventually(getBPFNet, "15s", "1s").Should(ContainElement("bond0"))
 		Eventually(getBPFNet, "15s", "1s").ShouldNot(ContainElements("eth10", "eth20"))
 		ensureRightIFStateFlags(tc.Felixes[0], ifstate.FlgIPv4Ready, ifstate.FlgHEP, map[string]uint32{"bond0": ifstate.FlgIPv4Ready | ifstate.FlgBond})

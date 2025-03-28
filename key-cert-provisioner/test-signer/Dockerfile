@@ -1,4 +1,4 @@
-# Copyright (c) 2024 Tigera, Inc. All rights reserved.
+# Copyright (c) 2024-2025 Tigera, Inc. All rights reserved.
 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -11,13 +11,16 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
+ARG CALICO_BASE
+
 FROM scratch AS source
 
 ARG TARGETARCH
 
 COPY bin/test-signer-${TARGETARCH} /usr/bin/test-signer
 
-FROM calico/base
+FROM ${CALICO_BASE}
 
 COPY --from=source / /
 

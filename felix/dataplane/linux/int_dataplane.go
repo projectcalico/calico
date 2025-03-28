@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@ import (
 	"os"
 	"reflect"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -38,7 +39,9 @@ import (
 
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/bpfmap"
+	"github.com/projectcalico/calico/felix/bpf/conntrack"
 	bpfconntrack "github.com/projectcalico/calico/felix/bpf/conntrack"
+	"github.com/projectcalico/calico/felix/bpf/events"
 	"github.com/projectcalico/calico/felix/bpf/failsafes"
 	bpfifstate "github.com/projectcalico/calico/felix/bpf/ifstate"
 	bpfipsets "github.com/projectcalico/calico/felix/bpf/ipsets"
@@ -50,7 +53,10 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/tc"
 	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
 	bpfutils "github.com/projectcalico/calico/felix/bpf/utils"
+	"github.com/projectcalico/calico/felix/calc"
+	"github.com/projectcalico/calico/felix/collector"
 	"github.com/projectcalico/calico/felix/config"
+	felixconfig "github.com/projectcalico/calico/felix/config"
 	"github.com/projectcalico/calico/felix/dataplane/common"
 	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
 	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
@@ -63,6 +69,7 @@ import (
 	"github.com/projectcalico/calico/felix/iptables/cmdshim"
 	"github.com/projectcalico/calico/felix/jitter"
 	"github.com/projectcalico/calico/felix/labelindex"
+	"github.com/projectcalico/calico/felix/linkaddrs"
 	"github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/felix/netlinkshim"
 	"github.com/projectcalico/calico/felix/nftables"
@@ -217,6 +224,8 @@ type Config struct {
 	BPFPSNATPorts                      numorstring.Port
 	BPFMapSizeRoute                    int
 	BPFMapSizeConntrack                int
+	BPFMapSizePerCPUConntrack          int
+	BPFMapSizeConntrackScaling         string
 	BPFMapSizeConntrackCleanupQueue    int
 	BPFMapSizeNATFrontend              int
 	BPFMapSizeNATBackend               int
@@ -228,10 +237,20 @@ type Config struct {
 	BPFEnforceRPF                      string
 	BPFDisableGROForIfaces             *regexp.Regexp
 	BPFExcludeCIDRsFromNAT             []string
+	BPFExportBufferSizeMB              int
 	BPFRedirectToPeer                  string
-	KubeProxyMinSyncPeriod             time.Duration
-	SidecarAccelerationEnabled         bool
-	ServiceLoopPrevention              string
+
+	BPFProfiling               string
+	KubeProxyMinSyncPeriod     time.Duration
+	SidecarAccelerationEnabled bool
+
+	// Flow logs related fields.
+	NfNetlinkBufSize int
+	Collector        collector.Collector
+	LookupsCache     *calc.LookupsCache
+	FlowLogsEnabled  bool
+
+	ServiceLoopPrevention string
 
 	LookPathOverride func(file string) (string, error)
 
@@ -305,6 +324,8 @@ type InternalDataplane struct {
 	vxlanManagerV6 *vxlanManager
 	vxlanParentCV6 chan string
 	vxlanFDBs      []*vxlanfdb.VXLANFDB
+
+	linkAddrsManagers []*linkaddrs.LinkAddrsManager
 
 	wireguardManager   *wireguardManager
 	wireguardManagerV6 *wireguardManager
@@ -508,7 +529,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		}
 	}
 
-	var nftablesV4RootTable generictables.Table
+	var nftablesV4RootTable *nftables.NftablesTable
 	var mangleTableV4, natTableV4, rawTableV4, filterTableV4 generictables.Table
 	var ipSetsV4 dpsets.IPSetsDataplane
 
@@ -529,7 +550,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		filterTableV4 = nftables.NewTableLayer("filter", nftablesV4RootTable)
 
 		// We use the root table for IP sets as well.
-		ipSetsV4 = nftablesV4RootTable.(dpsets.IPSetsDataplane)
+		ipSetsV4 = nftablesV4RootTable
 	} else {
 		// iptables mode
 		mangleTableV4 = iptables.NewTable(
@@ -725,7 +746,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	ipsetsManagerV6 := dpsets.NewIPSetsManager("ipv6", nil, config.MaxIPSetSize)
 
 	var mangleTableV6, natTableV6, rawTableV6, filterTableV6 generictables.Table
-	var nftablesV6RootTable generictables.Table
+	var nftablesV6RootTable *nftables.NftablesTable
 
 	if config.RulesConfig.NFTables {
 		nftablesV6RootTable = nftables.NewTable(
@@ -758,7 +779,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			rules.IPSetIDThisHostIPs,
 			ipSetsV4,
 			config.MaxIPSetSize))
-		dp.RegisterManager(newPolicyManager(rawTableV4, mangleTableV4, filterTableV4, ruleRenderer, 4))
+		dp.RegisterManager(newPolicyManager(rawTableV4, mangleTableV4, filterTableV4, ruleRenderer, 4, config.RulesConfig.NFTables))
 
 		// Clean up any leftover BPF state.
 		err := bpfnat.RemoveConnectTimeLoadBalancer("")
@@ -769,7 +790,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		bpfutils.RemoveBPFSpecialDevices()
 	} else {
 		// In BPF mode we still use iptables for raw egress policy.
-		dp.RegisterManager(newRawEgressPolicyManager(rawTableV4, ruleRenderer, 4, ipSetsV4.SetFilter))
+		dp.RegisterManager(newRawEgressPolicyManager(rawTableV4, ruleRenderer, 4, ipSetsV4.SetFilter, config.RulesConfig.NFTables))
 	}
 
 	interfaceRegexes := make([]string, len(config.RulesConfig.WorkloadIfacePrefixes))
@@ -789,14 +810,46 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		bpfmaps.DisableRepin()
 	}
 
+	bpfMapSizeConntrack := config.BPFMapSizeConntrack
+	if config.BPFMapSizePerCPUConntrack > 0 {
+		bpfMapSizeConntrack = config.BPFMapSizePerCPUConntrack * bpfmaps.NumPossibleCPUs()
+	}
+
+	bpfMapSizeConntrackResizeSize, _ := conntrackMapSizeFromFile()
+	if bpfMapSizeConntrackResizeSize > bpfMapSizeConntrack {
+		log.Infof("Overriding bpfMapSizeConntrack (%d) with map size growth (%d)",
+			bpfMapSizeConntrack, bpfMapSizeConntrackResizeSize)
+		bpfMapSizeConntrack = bpfMapSizeConntrackResizeSize
+	}
+
 	bpfipsets.SetMapSize(config.BPFMapSizeIPSets)
 	bpfnat.SetMapSizes(config.BPFMapSizeNATFrontend, config.BPFMapSizeNATBackend, config.BPFMapSizeNATAffinity)
 	bpfroutes.SetMapSize(config.BPFMapSizeRoute)
-	bpfconntrack.SetMapSize(config.BPFMapSizeConntrack)
+	bpfconntrack.SetMapSize(bpfMapSizeConntrack)
 	bpfconntrack.SetCleanupMapSize(config.BPFMapSizeConntrackCleanupQueue)
 	bpfifstate.SetMapSize(config.BPFMapSizeIfState)
 
-	var bpfEndpointManager *bpfEndpointManager
+	var (
+		bpfEndpointManager *bpfEndpointManager
+		bpfEvnt            events.Events
+		bpfEventPoller     *bpfEventPoller
+
+		collectorPacketInfoReader    collector.PacketInfoReader
+		collectorConntrackInfoReader collector.ConntrackInfoReader
+	)
+
+	// Initialisation needed for bpf.
+	if config.BPFEnabled && config.FlowLogsEnabled {
+		var err error
+		// convert buffer size to bytes.
+		ringSize := config.BPFExportBufferSizeMB * 1024 * 1024
+		bpfEvnt, err = events.New(events.SourcePerfEvents, ringSize)
+		if err != nil {
+			log.WithError(err).Error("Failed to create perf event")
+		} else {
+			bpfEventPoller = newBpfEventPoller(bpfEvnt)
+		}
+	}
 
 	if config.BPFEnabled {
 		log.Info("BPF enabled, starting BPF endpoint manager and map manager.")
@@ -809,15 +862,16 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		// Register map managers first since they create the maps that will be used by the endpoint manager.
 		// Important that we create the maps before we load a BPF program with TC since we make sure the map
 		// metadata name is set whereas TC doesn't set that field.
+		var conntrackScannerV4, conntrackScannerV6 *bpfconntrack.Scanner
 		var ipSetIDAllocatorV4, ipSetIDAllocatorV6 *idalloc.IDAllocator
 		ipSetIDAllocatorV4 = idalloc.New()
 
 		// Start IPv4 BPF dataplane components
-		startBPFDataplaneComponents(proto.IPVersion_IPV4, bpfMaps.V4, ipSetIDAllocatorV4, config, ipsetsManager, dp)
+		conntrackScannerV4 = startBPFDataplaneComponents(proto.IPVersion_IPV4, bpfMaps.V4, ipSetIDAllocatorV4, config, ipsetsManager, dp)
 		if config.BPFIpv6Enabled {
 			// Start IPv6 BPF dataplane components
 			ipSetIDAllocatorV6 = idalloc.New()
-			startBPFDataplaneComponents(proto.IPVersion_IPV6, bpfMaps.V6, ipSetIDAllocatorV6, config, ipsetsManagerV6, dp)
+			conntrackScannerV6 = startBPFDataplaneComponents(proto.IPVersion_IPV6, bpfMaps.V6, ipSetIDAllocatorV6, config, ipsetsManagerV6, dp)
 		}
 
 		workloadIfaceRegex := regexp.MustCompile(strings.Join(interfaceRegexes, "|"))
@@ -828,10 +882,14 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 				"- BPFHostNetworkedNAT is disabled.")
 		}
 
+		if config.LookupsCache != nil {
+			config.LookupsCache.EnableID64()
+		}
+
 		// Forwarding into an IPIP tunnel fails silently because IPIP tunnels are L3 devices and support for
 		// L3 devices in BPF is not available yet.  Disable the FIB lookup in that case.
 		fibLookupEnabled := !config.RulesConfig.IPIPEnabled
-		bpfEndpointManager, err = newBPFEndpointManager(
+		bpfEndpointManager, err = NewBPFEndpointManager(
 			nil,
 			&config,
 			bpfMaps,
@@ -846,6 +904,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			dp.loopSummarizer,
 			routeTableV4,
 			routeTableV6,
+			config.LookupsCache,
 			config.HealthAggregator,
 			dataplaneFeatures,
 			podMTU,
@@ -890,7 +949,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 			// Activate the connect-time load balancer.
 			err = bpfnat.InstallConnectTimeLoadBalancer(true, config.BPFIpv6Enabled,
-				config.BPFCgroupV2, logLevel, config.BPFConntrackTimeouts.UDPLastSeen, excludeUDP)
+				config.BPFCgroupV2, logLevel, config.BPFConntrackTimeouts.UDPTimeout, excludeUDP)
 			if err != nil {
 				log.WithError(err).Panic("BPFConnTimeLBEnabled but failed to attach connect-time load balancer, bailing out.")
 			}
@@ -902,7 +961,61 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 				log.WithError(err).Warn("Failed to detach connect-time load balancer. Ignoring.")
 			}
 		}
+
+		if config.Collector != nil && bpfEventPoller != nil {
+			policyEventListener := events.NewCollectorPolicyListener(config.LookupsCache)
+			bpfEventPoller.Register(events.TypePolicyVerdict, policyEventListener.EventHandler)
+			if config.BPFIpv6Enabled {
+				bpfEventPoller.Register(events.TypePolicyVerdictV6, policyEventListener.EventHandler)
+			}
+			log.Info("BPF: Registered events sink for TypePolicyVerdict")
+
+			collectorPacketInfoReader = policyEventListener
+
+			collectorCtInfoReader := conntrack.NewCollectorCtInfoReader()
+			// We must add the collectorConntrackInfoReader before
+			// conntrack.LivenessScanner as we want to see expired connections and the
+			// liveness scanner would remove them for us.
+			if conntrackScannerV4 != nil {
+				conntrackInfoReaderV4 := conntrack.NewInfoReader(
+					config.BPFConntrackTimeouts,
+					config.BPFNodePortDSREnabled,
+					nil,
+					collectorCtInfoReader,
+				)
+				conntrackScannerV4.AddFirstUnlocked(conntrackInfoReaderV4)
+			}
+			if conntrackScannerV6 != nil {
+				conntrackInfoReaderV6 := conntrack.NewInfoReader(
+					config.BPFConntrackTimeouts,
+					config.BPFNodePortDSREnabled,
+					nil,
+					collectorCtInfoReader,
+				)
+				conntrackScannerV6.AddFirstUnlocked(conntrackInfoReaderV6)
+			}
+
+			log.Info("BPF: ConntrackInfoReader added to conntrackScanner")
+			collectorConntrackInfoReader = collectorCtInfoReader
+		}
+
+		if conntrackScannerV4 != nil {
+			conntrackScannerV4.Start()
+		}
+		if conntrackScannerV6 != nil {
+			conntrackScannerV6.Start()
+		}
+
+		log.Info("conntrackScanner started")
 	}
+
+	var filterMaps nftables.MapsDataplane
+	if config.RulesConfig.NFTables {
+		filterMaps = filterTableV4.(nftables.MapsDataplane)
+	}
+
+	linkAddrsManagerV4 := linkaddrs.New(4, config.RulesConfig.WorkloadIfacePrefixes, featureDetector, config.NetlinkTimeout)
+	dp.linkAddrsManagers = append(dp.linkAddrsManagers, linkAddrsManagerV4)
 
 	epManager := newEndpointManager(
 		rawTableV4,
@@ -916,11 +1029,13 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		config.RulesConfig.WorkloadIfacePrefixes,
 		dp.endpointStatusCombiner.OnEndpointStatusUpdate,
 		string(defaultRPFilter),
+		filterMaps,
 		config.BPFEnabled,
 		bpfEndpointManager,
 		callbacks,
 		config.FloatingIPsEnabled,
 		config.RulesConfig.NFTables,
+		linkAddrsManagerV4,
 	)
 	dp.RegisterManager(epManager)
 	dp.endpointsSourceV4 = epManager
@@ -968,7 +1083,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			natTableV6 = nftables.NewTableLayer("nat", nftablesV6RootTable)
 			rawTableV6 = nftables.NewTableLayer("raw", nftablesV6RootTable)
 
-			ipSetsV6 = nftablesV6RootTable.(dpsets.IPSetsDataplane)
+			ipSetsV6 = nftablesV6RootTable
 		} else {
 			mangleTableV6 = iptables.NewTable(
 				"mangle",
@@ -1032,10 +1147,18 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 				rules.IPSetIDThisHostIPs,
 				ipSetsV6,
 				config.MaxIPSetSize))
-			dp.RegisterManager(newPolicyManager(rawTableV6, mangleTableV6, filterTableV6, ruleRenderer, 6))
+			dp.RegisterManager(newPolicyManager(rawTableV6, mangleTableV6, filterTableV6, ruleRenderer, 6, config.RulesConfig.NFTables))
 		} else {
-			dp.RegisterManager(newRawEgressPolicyManager(rawTableV6, ruleRenderer, 6, ipSetsV6.SetFilter))
+			dp.RegisterManager(newRawEgressPolicyManager(rawTableV6, ruleRenderer, 6, ipSetsV6.SetFilter, config.RulesConfig.NFTables))
 		}
+
+		var filterMapsV6 nftables.MapsDataplane
+		if config.RulesConfig.NFTables {
+			filterMapsV6 = filterTableV6.(nftables.MapsDataplane)
+		}
+
+		linkAddrsManagerV6 := linkaddrs.New(6, config.RulesConfig.WorkloadIfacePrefixes, featureDetector, config.NetlinkTimeout)
+		dp.linkAddrsManagers = append(dp.linkAddrsManagers, linkAddrsManagerV6)
 
 		dp.RegisterManager(newEndpointManager(
 			rawTableV6,
@@ -1049,11 +1172,13 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			config.RulesConfig.WorkloadIfacePrefixes,
 			dp.endpointStatusCombiner.OnEndpointStatusUpdate,
 			"",
+			filterMapsV6,
 			config.BPFEnabled,
 			nil,
 			callbacks,
 			config.FloatingIPsEnabled,
 			config.RulesConfig.NFTables,
+			linkAddrsManagerV6,
 		))
 		dp.RegisterManager(newFloatingIPManager(natTableV6, ruleRenderer, 6, config.FloatingIPsEnabled))
 		dp.RegisterManager(newMasqManager(ipSetsV6, natTableV6, ruleRenderer, config.MaxIPSetSize, 6))
@@ -1111,6 +1236,32 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		dp.debugHangC = time.After(config.DebugSimulateDataplaneHangAfter)
 	}
 
+	// If required, subscribe to NFLog collection.
+	if config.Collector != nil {
+		if !config.BPFEnabled {
+			log.Debug("Stats collection is required, create nflog reader")
+			nflogrd := collector.NewNFLogReader(config.LookupsCache, 1, 2,
+				config.NfNetlinkBufSize, true)
+			collectorPacketInfoReader = nflogrd
+			log.Debug("Stats collection is required, create conntrack reader")
+			ctrd := collector.NewNetLinkConntrackReader(felixconfig.DefaultConntrackPollingInterval)
+			collectorConntrackInfoReader = ctrd
+		}
+
+		config.Collector.SetPacketInfoReader(collectorPacketInfoReader)
+		log.Info("PacketInfoReader added to collector")
+		config.Collector.SetConntrackInfoReader(collectorConntrackInfoReader)
+		log.Info("ConntrackInfoReader added to collector")
+	}
+
+	if bpfEventPoller != nil {
+		log.Info("Starting BPF event poller")
+		if err := bpfEventPoller.Start(); err != nil {
+			log.WithError(err).Info("Stopping bpf event poller")
+			bpfEvnt.Close()
+		}
+	}
+
 	return dp
 }
 
@@ -1124,6 +1275,7 @@ func findHostMTU(matchRegex *regexp.Regexp) (int, error) {
 		return 0, err
 	}
 
+	defer nlHandle.Delete()
 	links, err := nlHandle.LinkList()
 	if err != nil {
 		log.WithError(err).Error("Failed to list interfaces. Unable to auto-detect MTU.")
@@ -2043,7 +2195,9 @@ func (d *InternalDataplane) onDatastoreMessage(msg interface{}) {
 }
 
 func (d *InternalDataplane) processMsgFromCalcGraph(msg interface{}) {
-	log.WithField("msg", proto.MsgStringer{Msg: msg}).Infof("Received %T update from calculation graph", msg)
+	if log.IsLevelEnabled(log.InfoLevel) {
+		log.Infof("Received %T update from calculation graph. msg=%s", msg, proto.MsgStringer{Msg: msg}.String())
+	}
 	d.datastoreBatchSize++
 	d.dataplaneNeedsSync = true
 	d.recordMsgStat(msg)
@@ -2174,6 +2328,12 @@ func (d *InternalDataplane) configureKernel() {
 		}
 	} else {
 		log.Info("IPv4 forwarding disabled by config, leaving sysctls untouched.")
+	}
+
+	// Enable conntrack packet and byte accounting.
+	err = writeProcSys("/proc/sys/net/netfilter/nf_conntrack_acct", "1")
+	if err != nil {
+		log.Warnf("failed to set enable conntrack packet and byte accounting: %v\n", err)
 	}
 
 	if d.config.BPFEnabled && d.config.BPFDisableUnprivileged {
@@ -2309,6 +2469,15 @@ func (d *InternalDataplane) apply() {
 				log.WithError(err).Warn("Failed to synchronize VXLAN FDB entries, will retry...")
 				d.dataplaneNeedsSync = true
 			}
+		}
+	}
+
+	// Update any linkAddrs entries.
+	for _, la := range d.linkAddrsManagers {
+		err := la.Apply()
+		if err != nil {
+			log.WithError(err).Warn("Failed to synchronize link addr entries, will retry...")
+			d.dataplaneNeedsSync = true
 		}
 	}
 
@@ -2493,7 +2662,7 @@ func startBPFDataplaneComponents(
 	config Config,
 	ipSetsMgr *dpsets.IPSetsManager,
 	dp *InternalDataplane,
-) {
+) *bpfconntrack.Scanner {
 	ipSetConfig := config.RulesConfig.IPSetConfigV4
 	ipSetEntry := bpfipsets.IPSetEntryFromBytes
 	ipSetProtoEntry := bpfipsets.ProtoIPSetMemberToBPFEntry
@@ -2577,10 +2746,10 @@ func startBPFDataplaneComponents(
 		bpfRTMgr.setHostIPUpdatesCallBack(kp.OnHostIPsUpdate)
 		bpfRTMgr.setRoutesCallBacks(kp.OnRouteUpdate, kp.OnRouteDelete)
 		conntrackScanner.AddUnlocked(bpfconntrack.NewStaleNATScanner(kp))
-		conntrackScanner.Start()
 	} else {
 		log.Info("BPF enabled but no Kubernetes client available, unable to run kube-proxy module.")
 	}
+	return conntrackScanner
 }
 
 func createBPFConntrackLivenessScanner(ipFamily proto.IPVersion, config Config) (bpfconntrack.EntryScanner, error) {
@@ -2606,6 +2775,8 @@ func createBPFConntrackLivenessScanner(ipFamily proto.IPVersion, config Config) 
 			int(ipFamily),
 			config.BPFConntrackTimeouts,
 			ctLogLevel,
+			config.ConfigChangedRestartCallback,
+			config.BPFMapSizeConntrackScaling,
 		)
 		if err == nil {
 			log.WithField("ipVersion", ipFamily).Info("Using BPF program-based conntrack liveness scanner.")
@@ -2620,4 +2791,19 @@ func createBPFConntrackLivenessScanner(ipFamily proto.IPVersion, config Config) 
 	}
 
 	return nil, err
+}
+
+func conntrackMapSizeFromFile() (int, error) {
+	filename := "/var/lib/calico/bpf_ct_map_size"
+	data, err := os.ReadFile(filename)
+	if err != nil {
+		if os.IsNotExist(err) {
+			// File doesn't exist, return zero.
+			log.Infof("File %s does not exist", filename)
+			return 0, nil
+		}
+		log.WithError(err).Errorf("Failed to read %s", filename)
+		return 0, err
+	}
+	return strconv.Atoi(strings.TrimSpace(string(data)))
 }

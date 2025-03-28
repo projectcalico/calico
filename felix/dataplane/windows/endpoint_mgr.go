@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -30,6 +30,8 @@ import (
 	"github.com/projectcalico/calico/felix/dataplane/windows/hns"
 	"github.com/projectcalico/calico/felix/dataplane/windows/policysets"
 	"github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/felix/types"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
@@ -63,9 +65,9 @@ type endpointManager struct {
 	// the policysets dataplane to be used when looking up endpoint policies/profiles.
 	policysetsDataplane policysets.PolicySetsDataplane
 	// pendingWlEpUpdates stores any pending updates to be performed per endpoint.
-	pendingWlEpUpdates map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint
+	pendingWlEpUpdates map[types.WorkloadEndpointID]*proto.WorkloadEndpoint
 	// activeWlEndpoints stores the active/current state that was applied per endpoint
-	activeWlEndpoints map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint
+	activeWlEndpoints map[types.WorkloadEndpointID]*proto.WorkloadEndpoint
 	// addressToEndpointId serves as a hns endpoint id cache. It enables us to lookup the hns
 	// endpoint id for a given endpoint ip address.
 	addressToEndpointId map[string]string
@@ -118,8 +120,8 @@ func newEndpointManager(hns hnsInterface,
 		hnsNetworkRegexp:    networkNameRegexp,
 		policysetsDataplane: policysets,
 		addressToEndpointId: make(map[string]string),
-		activeWlEndpoints:   map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint{},
-		pendingWlEpUpdates:  map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint{},
+		activeWlEndpoints:   map[types.WorkloadEndpointID]*proto.WorkloadEndpoint{},
+		pendingWlEpUpdates:  map[types.WorkloadEndpointID]*proto.WorkloadEndpoint{},
 		pendingIPSetUpdate:  set.New[string](),
 		hostAddrs:           hostIPv4s,
 	}
@@ -139,11 +141,17 @@ func (m *endpointManager) OnUpdate(msg interface{}) {
 	switch msg := msg.(type) {
 	case *proto.WorkloadEndpointUpdate:
 		log.WithField("workloadEndpointId", msg.Id).Info("Processing WorkloadEndpointUpdate")
-		m.pendingWlEpUpdates[*msg.Id] = msg.Endpoint
+		id := types.ProtoToWorkloadEndpointID(msg.GetId())
+		m.pendingWlEpUpdates[id] = msg.Endpoint
 	case *proto.WorkloadEndpointRemove:
 		log.WithField("workloadEndpointId", msg.Id).Info("Processing WorkloadEndpointRemove")
-		m.pendingWlEpUpdates[*msg.Id] = nil
+		id := types.ProtoToWorkloadEndpointID(msg.GetId())
+		m.pendingWlEpUpdates[id] = nil
 	case *proto.ActivePolicyUpdate:
+		if model.PolicyIsStaged(msg.Id.Name) {
+			log.WithField("policyID", msg.Id).Debug("Skipping ActivePolicyUpdate with staged policy")
+			return
+		}
 		log.WithField("policyID", msg.Id).Info("Processing ActivePolicyUpdate")
 		m.ProcessPolicyProfileUpdate(policysets.PolicyNamePrefix + msg.Id.Name)
 	case *proto.ActiveProfileUpdate:
@@ -194,7 +202,10 @@ func (m *endpointManager) RefreshHnsEndpointCache(forceRefresh bool) error {
 		// Some CNI plugins do not clear endpoint properly when a pod has been torn down.
 		// In that case, it is possible Felix sees multiple endpoints with the same IP.
 		// We need to filter out inactive endpoints that do not attach to any container.
-		if len(endpoint.SharedContainers) == 0 {
+		// An endpoint is considered to be active if its state is Attached or AttachedSharing.
+		// Note: Endpoint.State attribute is dependent on HNS v1 api. If hcsshim upgrades to HNS v2
+		// api this will break. We then need to Reach out to Microsoft to facilate the change via HNS.
+		if endpoint.State.String() != "Attached" && endpoint.State.String() != "AttachedSharing" {
 			log.WithFields(log.Fields{
 				"id":   endpoint.Id,
 				"name": endpoint.Name,
@@ -483,7 +494,7 @@ func (m *endpointManager) markAllEndpointForRefresh() {
 
 // applyRules gathers all of the rules for the specified policies and sends them to hns
 // as an endpoint policy update (this actually applies the rules to the dataplane).
-func (m *endpointManager) applyRules(workloadId proto.WorkloadEndpointID, endpointId string, inboundRules, outboundRules []*hns.ACLPolicy) error {
+func (m *endpointManager) applyRules(workloadId types.WorkloadEndpointID, endpointId string, inboundRules, outboundRules []*hns.ACLPolicy) error {
 	logCxt := log.WithFields(log.Fields{"id": workloadId, "endpointId": endpointId})
 	logCxt.Info("Applying endpoint rules")
 

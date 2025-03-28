@@ -1,0 +1,230 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`JsonPrettier should render 1`] = `
+<DocumentFragment>
+  <div
+    class="containerStyles"
+  >
+    <div
+      class="_2bkNM"
+      role="list"
+    >
+      <span
+        aria-controls=":jsnvw:1:"
+        aria-expanded="true"
+        aria-label="collapse JSON"
+        class="_oLqym _f10Tu _1MFti _1LId0"
+        role="button"
+        tabindex="0"
+      />
+      <span
+        class="_3uHL6 _3eOF8"
+      >
+        {
+      </span>
+      <div
+        id=":jsnvw:1:"
+      >
+        <div
+          class="_2bkNM"
+          role="listitem"
+        >
+          <span
+            class="labelStyles"
+          >
+            a:
+          </span>
+          <span
+            class="stringStyles"
+          >
+            "one"
+          </span>
+          <span
+            class="_3uHL6 _3eOF8"
+          >
+            ,
+          </span>
+        </div>
+        <div
+          class="_2bkNM"
+          role="listitem"
+        >
+          <span
+            class="labelStyles"
+          >
+            b:
+          </span>
+          <span
+            class="valueStyles"
+          >
+            2
+          </span>
+          <span
+            class="_3uHL6 _3eOF8"
+          >
+            ,
+          </span>
+        </div>
+        <div
+          class="_2bkNM"
+          role="listitem"
+        >
+          <span
+            class="labelStyles"
+          >
+            c:
+          </span>
+          <span
+            class="valueStyles"
+          >
+            null
+          </span>
+          <span
+            class="_3uHL6 _3eOF8"
+          >
+            ,
+          </span>
+        </div>
+        <div
+          class="_2bkNM"
+          role="listitem"
+        >
+          <span
+            class="labelStyles"
+          >
+            d:
+          </span>
+          <span
+            class="valueStyles"
+          >
+            undefined
+          </span>
+          <span
+            class="_3uHL6 _3eOF8"
+          >
+            ,
+          </span>
+        </div>
+        <div
+          class="_2bkNM"
+          role="list"
+        >
+          <span
+            aria-controls=":jsnvw:2:"
+            aria-expanded="true"
+            aria-label="collapse JSON"
+            class="_oLqym _f10Tu _1MFti _1LId0"
+            role="button"
+            tabindex="0"
+          />
+          <span
+            class="labelStyles"
+          >
+            e:
+          </span>
+          <span
+            class="_3uHL6 _3eOF8"
+          >
+            {
+          </span>
+          <div
+            id=":jsnvw:2:"
+          >
+            <div
+              class="_2bkNM"
+              role="listitem"
+            >
+              <span
+                class="labelStyles"
+              >
+                f:
+              </span>
+              <span
+                class="stringStyles"
+              >
+                "g"
+              </span>
+            </div>
+          </div>
+          <span
+            class="_3uHL6 _3eOF8"
+          >
+            }
+          </span>
+          <span
+            class="_3uHL6 _3eOF8"
+          >
+            ,
+          </span>
+        </div>
+        <div
+          class="_2bkNM"
+          role="list"
+        >
+          <span
+            aria-controls=":jsnvw:3:"
+            aria-expanded="true"
+            aria-label="collapse JSON"
+            class="_oLqym _f10Tu _1MFti _1LId0"
+            role="button"
+            tabindex="0"
+          />
+          <span
+            class="labelStyles"
+          >
+            x:
+          </span>
+          <span
+            class="_3uHL6 _3eOF8"
+          >
+            [
+          </span>
+          <div
+            id=":jsnvw:3:"
+          >
+            <div
+              class="_2bkNM"
+              role="listitem"
+            >
+              <span
+                class="stringStyles"
+              >
+                "y"
+              </span>
+              <span
+                class="_3uHL6 _3eOF8"
+              >
+                ,
+              </span>
+            </div>
+            <div
+              class="_2bkNM"
+              role="listitem"
+            >
+              <span
+                class="stringStyles"
+              >
+                "z"
+              </span>
+            </div>
+          </div>
+          <span
+            class="_3uHL6 _3eOF8"
+          >
+            ]
+          </span>
+        </div>
+      </div>
+      <span
+        class="_3uHL6 _3eOF8"
+      >
+        }
+      </span>
+    </div>
+  </div>
+  <span
+    hidden=""
+    id="__chakra_env"
+  />
+</DocumentFragment>
+`;

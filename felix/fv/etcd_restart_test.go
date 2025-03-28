@@ -63,6 +63,7 @@ var _ = Context("etcd connection interruption", func() {
 			if err != nil {
 				return err
 			}
+			defer nlHandle.Close()
 			links, err := netlinkutils.LinkListRetryEINTR(nlHandle)
 			if err != nil {
 				return err

@@ -1,0 +1,143 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`<TableSkeleton/> it renders with defaults 1`] = `
+<DocumentFragment>
+  <div
+    class="css-0"
+  >
+    <div
+      class="chakra-stack css-fecztw"
+    >
+      <div
+        class="chakra-skeleton css-10nqbpc"
+      />
+    </div>
+    <div
+      class="chakra-stack css-f5ou36"
+    >
+      <div
+        class="chakra-skeleton css-1f4k6sh"
+      />
+      <div
+        class="chakra-skeleton css-1f4k6sh"
+      />
+      <div
+        class="chakra-skeleton css-1f4k6sh"
+      />
+      <div
+        class="chakra-skeleton css-1f4k6sh"
+      />
+      <div
+        class="chakra-skeleton css-1f4k6sh"
+      />
+      <div
+        class="chakra-skeleton css-1f4k6sh"
+      />
+      <div
+        class="chakra-skeleton css-1f4k6sh"
+      />
+      <div
+        class="chakra-skeleton css-1f4k6sh"
+      />
+      <div
+        class="chakra-skeleton css-1f4k6sh"
+      />
+      <div
+        class="chakra-skeleton css-1f4k6sh"
+      />
+    </div>
+  </div>
+  <span
+    hidden=""
+    id="__chakra_env"
+  />
+</DocumentFragment>
+`;
+
+exports[`<TableSkeleton/> it renders with values 1`] = `
+<DocumentFragment>
+  <div
+    class="css-0"
+  >
+    <div
+      class="chakra-stack css-fecztw"
+    >
+      <div
+        class="chakra-skeleton css-10nqbpc"
+      />
+    </div>
+    <div
+      class="chakra-stack css-f5ou36"
+    >
+      <div
+        class="chakra-skeleton css-1f4k6sh"
+      />
+      <div
+        class="chakra-skeleton css-1f4k6sh"
+      />
+      <div
+        class="chakra-skeleton css-1f4k6sh"
+      />
+      <div
+        class="chakra-skeleton css-1f4k6sh"
+      />
+      <div
+        class="chakra-skeleton css-1f4k6sh"
+      />
+      <div
+        class="chakra-skeleton css-1f4k6sh"
+      />
+      <div
+        class="chakra-skeleton css-1f4k6sh"
+      />
+      <div
+        class="chakra-skeleton css-1f4k6sh"
+      />
+      <div
+        class="chakra-skeleton css-1f4k6sh"
+      />
+      <div
+        class="chakra-skeleton css-1f4k6sh"
+      />
+    </div>
+    <div
+      class="chakra-stack css-f5ou36"
+    >
+      <div
+        class="chakra-skeleton css-1f4k6sh"
+      />
+      <div
+        class="chakra-skeleton css-1f4k6sh"
+      />
+      <div
+        class="chakra-skeleton css-1f4k6sh"
+      />
+      <div
+        class="chakra-skeleton css-1f4k6sh"
+      />
+      <div
+        class="chakra-skeleton css-1f4k6sh"
+      />
+      <div
+        class="chakra-skeleton css-1f4k6sh"
+      />
+      <div
+        class="chakra-skeleton css-1f4k6sh"
+      />
+      <div
+        class="chakra-skeleton css-1f4k6sh"
+      />
+      <div
+        class="chakra-skeleton css-1f4k6sh"
+      />
+      <div
+        class="chakra-skeleton css-1f4k6sh"
+      />
+    </div>
+  </div>
+  <span
+    hidden=""
+    id="__chakra_env"
+  />
+</DocumentFragment>
+`;

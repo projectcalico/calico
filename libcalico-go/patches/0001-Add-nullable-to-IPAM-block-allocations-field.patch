@@ -1,0 +1,26 @@
+From 5afef6cdba82f324aee302a0798db5bdecb093d8 Mon Sep 17 00:00:00 2001
+From: Jiawei Huang <jiawei@tigera.io>
+Date: Fri, 6 Dec 2024 14:29:37 -0800
+Subject: [PATCH] Add nullable to IPAM block allocations field
+
+---
+ libcalico-go/config/crd/crd.projectcalico.org_ipamblocks.yaml | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/libcalico-go/config/crd/crd.projectcalico.org_ipamblocks.yaml b/libcalico-go/config/crd/crd.projectcalico.org_ipamblocks.yaml
+index f46281ab8..28a29e428 100644
+--- a/libcalico-go/config/crd/crd.projectcalico.org_ipamblocks.yaml
++++ b/libcalico-go/config/crd/crd.projectcalico.org_ipamblocks.yaml
+@@ -52,6 +52,9 @@ spec:
+                   and the value is the index of the associated attributes in the Attributes array.
+                 items:
+                   type: integer
++                  # TODO: This nullable is manually added in. We should update controller-gen
++                  # to handle []*int properly itself.
++                  nullable: true
+                 type: array
+               attributes:
+                 description: |-
+-- 
+2.47.1
+

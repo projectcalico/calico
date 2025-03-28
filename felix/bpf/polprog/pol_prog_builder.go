@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2025 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -61,6 +61,7 @@ type Builder struct {
 	maxJumpsPerProgram int
 	numRulesInProgram  int
 	xdp                bool
+	flowLogsEnabled    bool
 }
 
 type ipSetIDProvider interface {
@@ -103,8 +104,7 @@ func nextOffset(size int, align int) int16 {
 }
 
 const (
-	// In Enterprise, there's an extra offset.
-	stateEventHdrSize int16 = 0
+	stateEventHdrSize int16 = 8
 )
 
 var (
@@ -177,6 +177,7 @@ type Policy struct {
 
 type Tier struct {
 	Name      string
+	EndRuleID RuleMatchID
 	EndAction TierEndAction
 	Policies  []Policy
 }
@@ -197,8 +198,9 @@ type Rules struct {
 	SuppressNormalHostPolicy bool
 
 	// Workload policy.
-	Tiers    []Tier
-	Profiles []Profile
+	Tiers            []Tier
+	Profiles         []Profile
+	NoProfileMatchID RuleMatchID
 
 	// Host endpoint policy.
 	HostPreDnatTiers []Tier
@@ -277,7 +279,7 @@ normalPolicy:
 			p.b.Jump("xdp_pass")
 		} else {
 			p.writeTiers(rules.HostNormalTiers, legDest, "allowed_by_host_policy")
-			p.writeProfiles(rules.HostProfiles, "allowed_by_host_policy")
+			p.writeProfiles(rules.HostProfiles, rules.NoProfileMatchID, "allowed_by_host_policy")
 		}
 	}
 
@@ -290,7 +292,7 @@ normalPolicy:
 	} else {
 		// Workload policy.
 		p.writeTiers(rules.Tiers, legDest, "allow")
-		p.writeProfiles(rules.Profiles, "allow")
+		p.writeProfiles(rules.Profiles, rules.NoProfileMatchID, "allow")
 	}
 
 	p.writeProgramFooter()
@@ -502,17 +504,18 @@ func (p *Builder) writeTiers(tiers []Tier, destLeg matchLeg, allowLabel string) 
 		if action == TierEndUndef {
 			action = TierEndDeny
 		}
-		p.b.AddCommentF("End of tier %s", tier.Name)
+		p.b.AddCommentF("End of tier %s: %s", tier.Name, tier.EndAction)
 		log.Debugf("End of tier %d %q: %s", p.tierID, tier.Name, action)
 		p.writeRule(Rule{
-			Rule: &proto.Rule{},
+			Rule:    &proto.Rule{},
+			MatchID: tier.EndRuleID,
 		}, actionLabels[string(action)], destLeg)
 		p.b.LabelNextInsn(endOfTierLabel)
 		p.tierID++
 	}
 }
 
-func (p *Builder) writeProfiles(profiles []Policy, allowLabel string) {
+func (p *Builder) writeProfiles(profiles []Policy, noProfileMatchID uint64, allowLabel string) {
 	log.Debugf("Start of profiles")
 	for idx, prof := range profiles {
 		p.writeProfile(prof, idx, allowLabel)
@@ -520,7 +523,8 @@ func (p *Builder) writeProfiles(profiles []Policy, allowLabel string) {
 
 	log.Debugf("End of profiles drop")
 	p.writeRule(Rule{
-		Rule: &proto.Rule{},
+		Rule:    &proto.Rule{},
+		MatchID: noProfileMatchID,
 	}, "deny", legDest)
 }
 
@@ -746,10 +750,9 @@ func (p *Builder) writeEndOfRule(rule Rule, actionLabel string) {
 		// If all the match criteria are met, we fall through to the end of the rule
 		// so all that's left to do is to jump to the relevant action.
 		// TODO log and log-and-xxx actions
-		if p.policyDebugEnabled {
+		if p.flowLogsEnabled || p.policyDebugEnabled {
 			p.writeRecordRuleHit(rule, actionLabel)
 		}
-
 		p.b.Jump(actionLabel)
 	}
 
@@ -1265,6 +1268,12 @@ func WithPolicyMapIndexAndStride(entryPointIdx, stride int) Option {
 func WithIPv6() Option {
 	return func(p *Builder) {
 		p.forIPv6 = true
+	}
+}
+
+func WithFlowLogs() Option {
+	return func(p *Builder) {
+		p.flowLogsEnabled = true
 	}
 }
 

@@ -17,7 +17,9 @@ package conntrack
 import (
 	"encoding/binary"
 	"fmt"
+	"os"
 	"path"
+	"strings"
 	"sync"
 	"unsafe"
 
@@ -72,9 +74,14 @@ func registerConntrackMetrics() {
 // Note: the tests for this object are largely in the bpf/ut package, since
 // we require a privileged environment to test the BPF program.
 type BPFProgLivenessScanner struct {
-	ipVersion int
-	timeouts  Timeouts
-	logLevel  BPFLogLevel
+	ipVersion                    int
+	timeouts                     Timeouts
+	logLevel                     BPFLogLevel
+	autoScale                    bool
+	configChangedRestartCallback func()
+	maxEntries                   int
+	liveEntries                  int
+	higherCount                  int
 
 	bpfExpiryProgram *libbpf.Obj
 }
@@ -83,6 +90,8 @@ func NewBPFProgLivenessScanner(
 	ipVersion int,
 	timeouts Timeouts,
 	bpfLogLevel BPFLogLevel,
+	configChangedRestartCallback func(),
+	autoScalingMode string,
 ) (*BPFProgLivenessScanner, error) {
 	if ipVersion != 4 && ipVersion != 6 {
 		return nil, fmt.Errorf("invalid IP version: %d", ipVersion)
@@ -90,11 +99,19 @@ func NewBPFProgLivenessScanner(
 	if bpfLogLevel != BPFLogLevelDebug && bpfLogLevel != BPFLogLevelNone {
 		return nil, fmt.Errorf("invalid BPF log level: %s", bpfLogLevel)
 	}
-	s := &BPFProgLivenessScanner{
-		ipVersion: ipVersion,
-		timeouts:  timeouts,
-		logLevel:  bpfLogLevel,
+	ctMapParams := MapParams
+	if ipVersion == 6 {
+		ctMapParams = MapParamsV6
 	}
+	s := &BPFProgLivenessScanner{
+		ipVersion:                    ipVersion,
+		timeouts:                     timeouts,
+		logLevel:                     bpfLogLevel,
+		autoScale:                    strings.ToLower(autoScalingMode) == "doubleiffull",
+		configChangedRestartCallback: configChangedRestartCallback,
+		maxEntries:                   maps.Size(ctMapParams.VersionedName()),
+	}
+	s.liveEntries = s.maxEntries
 	_, err := s.ensureBPFExpiryProgram()
 	if err != nil {
 		return nil, err
@@ -112,91 +129,25 @@ func (s *BPFProgLivenessScanner) ensureBPFExpiryProgram() (*libbpf.Obj, error) {
 	// needs a newer than co-re.
 	binaryToLoad := path.Join(bpfdefs.ObjectDir,
 		fmt.Sprintf("conntrack_cleanup_%s_co-re_v%d.o", s.logLevel, s.ipVersion))
-	obj, err := libbpf.OpenObject(binaryToLoad)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load conntrack cleanup BPF program: %w", err)
-	}
-
-	success := false
-	defer func() {
-		if !success {
-			err := obj.Close()
-			if err != nil {
-				log.WithError(err).Error("Error closing BPF object.")
-			}
-		}
-	}()
-
 	ctMapParams := MapParams
 	if s.ipVersion == 6 {
 		ctMapParams = MapParamsV6
 	}
-	configuredGlobals := false
-	pinnedCTMap := false
-	var internalMaps []string
-	for m, err := obj.FirstMap(); m != nil && err == nil; m, err = m.NextMap() {
-		// In case of global variables, libbpf creates an internal map <prog_name>.rodata
-		// The values are read only for the BPF programs, but can be set to a value from
-		// userspace before the program is loaded.
-		mapName := m.Name()
-		if m.IsMapInternal() {
-			internalMaps = append(internalMaps, mapName)
-			if mapName != "conntrac.rodata" {
-				continue
-			}
 
-			err := libbpf.CTCleanupSetGlobals(
-				m,
-				s.timeouts.CreationGracePeriod,
-				s.timeouts.TCPPreEstablished,
-				s.timeouts.TCPEstablished,
-				s.timeouts.TCPFinsSeen,
-				s.timeouts.TCPResetSeen,
-				s.timeouts.UDPLastSeen,
-				s.timeouts.GenericIPLastSeen,
-				s.timeouts.ICMPLastSeen,
-			)
-			if err != nil {
-				return nil, fmt.Errorf("error setting global variables for map %s: %w", mapName, err)
-			}
-			configuredGlobals = true
-			continue
-		}
+	ctCleanupData := &libbpf.CTCleanupGlobalData{
+		CreationGracePeriod: s.timeouts.CreationGracePeriod,
+		TCPSynSent:          s.timeouts.TCPSynSent,
+		TCPEstablished:      s.timeouts.TCPEstablished,
+		TCPFinsSeen:         s.timeouts.TCPFinsSeen,
+		TCPResetSeen:        s.timeouts.TCPResetSeen,
+		UDPTimeout:          s.timeouts.UDPTimeout,
+		GenericTimeout:      s.timeouts.GenericTimeout,
+		ICMPTimeout:         s.timeouts.ICMPTimeout}
 
-		if size := maps.Size(mapName); size != 0 {
-			log.WithField("mapName", mapName).Info("Resizing map")
-			if err := m.SetSize(size); err != nil {
-				return nil, fmt.Errorf("error resizing map %s: %w", mapName, err)
-			}
-		}
-
-		if mapName == ctMapParams.VersionedName() {
-			log.Debugf("Pinning map %s k %d v %d", mapName, m.KeySize(), m.ValueSize())
-			pinDir := bpf.MapPinDir(m.Type(), mapName, "", 0)
-			if err := m.SetPinPath(path.Join(pinDir, mapName)); err != nil {
-				return nil, fmt.Errorf("error pinning map %s k %d v %d: %w", mapName, m.KeySize(), m.ValueSize(), err)
-			}
-			pinnedCTMap = true
-		}
+	obj, err := bpf.LoadObject(binaryToLoad, ctCleanupData, ctMapParams.VersionedName())
+	if err != nil {
+		return nil, fmt.Errorf("error loading %s: %w", binaryToLoad, err)
 	}
-
-	if !configuredGlobals {
-		// Panic here because it indicates a coding error that we want to
-		// catch in testing.
-		log.WithField("maps", internalMaps).Panic("Bug: failed to find/set global variable map.")
-	}
-
-	if !pinnedCTMap {
-		// Panic here because it indicates a coding error that we want to
-		// catch in testing.
-		log.Panic("Bug: failed to find/pin conntrack map.")
-	}
-
-	if err := obj.Load(); err != nil {
-		return nil, fmt.Errorf("error loading conntrack expiry program: %w", err)
-	}
-
-	success = true
 	s.bpfExpiryProgram = obj
 	return s.bpfExpiryProgram, nil
 }
@@ -284,18 +235,63 @@ func (s *BPFProgLivenessScanner) RunBPFExpiryProgram(opts ...RunOpt) error {
 	// Record stats...
 	summaryCleanerExecTime.Observe(result.Duration.Seconds())
 
-	gaugeVecConntrackEntries.WithLabelValues("total").Set(float64(
-		cr.NumKVsSeenNormal + cr.NumKVsSeenNATForward + cr.NumKVsSeenNATReverse))
+	total := cr.NumKVsSeenNormal + cr.NumKVsSeenNATForward + cr.NumKVsSeenNATReverse
+
+	gaugeVecConntrackEntries.WithLabelValues("total").Set(float64(total))
 	gaugeVecConntrackEntries.WithLabelValues("normal").Set(float64(cr.NumKVsSeenNormal))
 	gaugeVecConntrackEntries.WithLabelValues("nat_forward").Set(float64(cr.NumKVsSeenNATForward))
 	gaugeVecConntrackEntries.WithLabelValues("nat_reverse").Set(float64(cr.NumKVsSeenNATReverse))
 
-	counterVecConntrackEntriesDeleted.WithLabelValues("total").Add(float64(
-		cr.NumKVsDeletedNormal + cr.NumKVsDeletedNATForward + cr.NumKVsDeletedNATReverse))
+	totalDeleted := cr.NumKVsDeletedNormal + cr.NumKVsDeletedNATForward + cr.NumKVsDeletedNATReverse
+
+	counterVecConntrackEntriesDeleted.WithLabelValues("total").Add(float64(totalDeleted))
 	counterVecConntrackEntriesDeleted.WithLabelValues("normal").Add(float64(cr.NumKVsDeletedNormal))
 	counterVecConntrackEntriesDeleted.WithLabelValues("nat_forward").Add(float64(cr.NumKVsDeletedNATForward))
 	counterVecConntrackEntriesDeleted.WithLabelValues("nat_reverse").Add(float64(cr.NumKVsDeletedNATReverse))
 
+	if !s.autoScale {
+		return nil
+	}
+
+	newLiveEntries := int(total - totalDeleted)
+	if s.liveEntries > newLiveEntries {
+		s.higherCount++
+	} else {
+		s.higherCount = 0
+	}
+	s.liveEntries = newLiveEntries
+
+	full := float64(newLiveEntries) / float64(s.maxEntries)
+	log.Debugf("full %f, total %d, totalDeleted %d", full, total, totalDeleted)
+	// If the ct map keeps filling up and gets over 90% full or if it hits 95%
+	// no matter what, resize the map.
+	if s.higherCount >= 3 && full > 0.90 || full > 0.95 {
+		if err := s.writeNewSizeFile(); err != nil {
+			log.WithError(err).Warn("Failed to start resizing conntrack map when running out of space")
+		} else {
+			log.Warnf("The eBPF conntrack table is becoming full. To prevent connections from failing, "+
+				"resizing from %d to %d entries. Restarting Felix to apply the new size.", s.maxEntries, 2*s.maxEntries)
+			s.configChangedRestartCallback()
+		}
+	}
+
+	return nil
+}
+
+func (s *BPFProgLivenessScanner) writeNewSizeFile() error {
+	// Make sure directory exists.
+	if err := os.MkdirAll("/var/lib/calico", os.ModePerm); err != nil {
+		return fmt.Errorf("failed to create directory /var/lib/calico: %s", err)
+	}
+
+	newSize := 2 * s.maxEntries
+
+	// Write the new map size to disk so that restarts will pick it up.
+	filename := "/var/lib/calico/bpf_ct_map_size"
+	log.Debugf("Writing %d to "+filename, newSize)
+	if err := os.WriteFile(filename, []byte(fmt.Sprintf("%d", newSize)), 0o644); err != nil {
+		return fmt.Errorf("unable to write to %s: %w", filename, err)
+	}
 	return nil
 }
 

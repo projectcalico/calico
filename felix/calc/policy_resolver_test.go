@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2024-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -79,7 +79,7 @@ type policyResolverRecorder struct {
 	updates []policyResolverUpdate
 }
 
-func (p *policyResolverRecorder) OnEndpointTierUpdate(endpointKey model.Key, endpoint interface{}, filteredTiers []TierInfo) {
+func (p *policyResolverRecorder) OnEndpointTierUpdate(endpointKey model.EndpointKey, endpoint model.Endpoint, peerData *EndpointBGPPeer, filteredTiers []TierInfo) {
 	p.updates = append(p.updates, policyResolverUpdate{
 		Key:      endpointKey,
 		Endpoint: endpoint,
@@ -99,7 +99,7 @@ func TestPolicyResolver_OnPolicyMatch(t *testing.T) {
 		Name: "test-policy",
 	}
 
-	pol := model.Policy{}
+	pol := ExtractPolicyMetadata(&model.Policy{})
 
 	endpointKey := model.WorkloadEndpointKey{
 		Hostname: "test-workload-ep",
@@ -109,7 +109,7 @@ func TestPolicyResolver_OnPolicyMatch(t *testing.T) {
 	}
 	pr.endpoints[endpointKey] = wep
 
-	pr.allPolicies[polKey] = &pol
+	pr.allPolicies[polKey] = pol
 
 	// Haven't sent any matches so should get nothing out.
 	pr.Flush()
@@ -166,7 +166,7 @@ func TestPolicyResolver_OnPolicyMatchStopped(t *testing.T) {
 		Name: "test-policy",
 	}
 
-	pol := model.Policy{}
+	pol := policyMetadata{}
 
 	endpointKey := model.WorkloadEndpointKey{
 		Hostname: "test-workload-ep",
