@@ -157,6 +157,7 @@ var _ = Describe("VXLANManager", func() {
 				ipVersion: 4,
 			},
 			4,
+			4444,
 		)
 
 		managerV6 = newVXLANManagerWithShims(
@@ -179,6 +180,7 @@ var _ = Describe("VXLANManager", func() {
 				ipVersion: 6,
 			},
 			6,
+			6666,
 		)
 	})
 
@@ -478,7 +480,11 @@ var _ = Describe("VXLANManager", func() {
 
 		// Expect a directly connected route to the borrowed IP.
 		Expect(rt.currentRoutes[dataplanedefs.VXLANIfaceNameV4]).To(HaveLen(1))
-		Expect(rt.currentRoutes[dataplanedefs.VXLANIfaceNameV4][0]).To(Equal(routetable.Target{CIDR: ip.MustParseCIDROrIP("10.0.1.1/32")}))
+		Expect(rt.currentRoutes[dataplanedefs.VXLANIfaceNameV4][0]).To(Equal(
+			routetable.Target{
+				CIDR: ip.MustParseCIDROrIP("10.0.1.1/32"),
+				MTU:  4444,
+			}))
 
 		// Delete the route.
 		manager.OnUpdate(&proto.RouteRemove{
@@ -508,7 +514,11 @@ var _ = Describe("VXLANManager", func() {
 
 		// Expect a directly connected route to the borrowed IP.
 		Expect(rt.currentRoutes[dataplanedefs.VXLANIfaceNameV6]).To(HaveLen(1))
-		Expect(rt.currentRoutes[dataplanedefs.VXLANIfaceNameV6][0]).To(Equal(routetable.Target{CIDR: ip.MustParseCIDROrIP("fc00:10:244::1/112")}))
+		Expect(rt.currentRoutes[dataplanedefs.VXLANIfaceNameV6][0]).To(Equal(
+			routetable.Target{
+				CIDR: ip.MustParseCIDROrIP("fc00:10:244::1/112"),
+				MTU:  6666,
+			}))
 
 		// Delete the route.
 		managerV6.OnUpdate(&proto.RouteRemove{
