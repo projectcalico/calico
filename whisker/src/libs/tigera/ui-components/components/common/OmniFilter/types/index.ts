@@ -1,6 +1,7 @@
 export type OmniInternalListComponentProps = {
     options: OmniFilterOption[];
     selectedOptions: OmniFilterOption[];
+    filteredSelectedOptions: OmniFilterOption[];
     emptyMessage: string;
     showMoreButton: boolean;
     showSelectedList?: boolean;
