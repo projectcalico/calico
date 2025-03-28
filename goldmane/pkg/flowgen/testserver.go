@@ -239,15 +239,41 @@ func (t *flowGenerator) randomFlows(s, e int64) ([]*proto.Flow, error) {
 	// Use some randomness to simulate different flows. For each flow, we generate both a record
 	// for both the Source and Destination reporter.
 	dstNs := randomFrommap(namespaces)
+	srcNs := randomFrommap(namespaces)
 	srcName := randomFrommap(srcNames)
 	dstName := randomFrommap(dstNames)
 	srcLabels := srcLabelsMap[srcName]
 	dstLabels := dstLabelsMap[dstName]
+	action := randomFrommap(actions)
+
+	enf := []*proto.PolicyHit{
+		{
+			Name:        "policy-1",
+			Namespace:   srcNs,
+			Kind:        proto.PolicyKind_NetworkPolicy,
+			Tier:        "mytier",
+			Action:      action,
+			PolicyIndex: 0,
+			RuleIndex:   1,
+		},
+	}
+	pen := []*proto.PolicyHit{
+		{
+			Name:        "pending-policy-0",
+			Namespace:   srcNs,
+			Kind:        proto.PolicyKind_GlobalNetworkPolicy,
+			Tier:        "pending-tier",
+			Action:      action,
+			PolicyIndex: 0,
+			RuleIndex:   1,
+		},
+	}
+
 	srcFlow := proto.Flow{
 		Key: &proto.FlowKey{
 			Proto:                randomFrommap(protos),
 			SourceName:           srcName,
-			SourceNamespace:      randomFrommap(namespaces),
+			SourceNamespace:      srcNs,
 			SourceType:           proto.EndpointType_WorkloadEndpoint,
 			DestName:             dstName,
 			DestNamespace:        dstNs,
@@ -257,7 +283,11 @@ func (t *flowGenerator) randomFlows(s, e int64) ([]*proto.Flow, error) {
 			DestServicePortName:  "https",
 			DestServiceNamespace: dstNs,
 			Reporter:             proto.Reporter_Src,
-			Action:               randomFrommap(actions),
+			Action:               action,
+			Policies: &proto.PolicyTrace{
+				EnforcedPolicies: enf,
+				PendingPolicies:  pen,
+			},
 		},
 		StartTime:               int64(s),
 		EndTime:                 int64(e),
