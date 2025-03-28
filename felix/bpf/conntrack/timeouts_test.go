@@ -1,9 +1,10 @@
 package conntrack
 
 import (
-	"github.com/projectcalico/calico/felix/config"
 	"reflect"
 	"testing"
+
+	"github.com/projectcalico/calico/felix/config"
 )
 
 func TestConfigNames(t *testing.T) {
