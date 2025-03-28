@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+// Copimright (c) 2025 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -30,23 +30,14 @@ type simpleLogAggregatorStub struct {
 	diachronics []*types.DiachronicFlow
 }
 
-func (l simpleLogAggregatorStub) flowSet(startGt, startLt int64) set.Set[types.FlowKey] {
-	s := set.New[types.FlowKey]()
+func (l simpleLogAggregatorStub) flowSet(startGt, startLt int64) set.Set[*types.DiachronicFlow] {
+	s := set.New[*types.DiachronicFlow]()
 	for _, d := range l.diachronics {
 		if d.Within(startGt, startLt) {
-			s.Add(d.Key)
+			s.Add(d)
 		}
 	}
 	return s
-}
-
-func (l simpleLogAggregatorStub) diachronicFlow(key types.FlowKey) *types.DiachronicFlow {
-	for _, d := range l.diachronics {
-		if d.Key == key {
-			return d
-		}
-	}
-	return nil
 }
 
 func setupTest(t *testing.T) func() {

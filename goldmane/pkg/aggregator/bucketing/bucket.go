@@ -36,8 +36,11 @@ type AggregationBucket struct {
 	// Pushed indicates whether this bucket has been pushed to the emitter.
 	Pushed bool
 
-	// FlowKeys contains an indication of the flows that are part of this bucket.
-	FlowKeys set.Set[types.FlowKey]
+	// LookupFlow is a function that can be used to look up a DiachronicFlow by its key.
+	lookupFlow lookupFn
+
+	// Flows contains an indication of the flows that are part of this bucket.
+	Flows set.Set[*types.DiachronicFlow]
 
 	// Tracker for statistics within this bucket.
 	stats *statisticsIndex
@@ -48,8 +51,22 @@ func (b *AggregationBucket) AddFlow(flow *types.Flow) {
 		logrus.WithField("flow", flow).Warn("Adding flow to already published bucket")
 	}
 
+	if flow == nil {
+		logrus.Fatal("BUG: Attempted to add nil flow to bucket")
+	}
+	if flow.Key == nil {
+		logrus.WithField("flow", flow).Fatal("BUG: Attempted to add flow with nil key to bucket")
+	}
+	if b.lookupFlow == nil {
+		logrus.WithField("flow", flow).Fatal("BUG: Attempted to add flow to bucket with no lookup function")
+	}
+	d := b.lookupFlow(*flow.Key)
+	if d == nil {
+		logrus.WithField("flow", flow).Fatal("BUG: Attempted to add flow with no corresponding DiachronicFlow")
+	}
+
 	// Mark this Flow as part of this bucket.
-	b.FlowKeys.Add(*flow.Key)
+	b.Flows.Add(d)
 
 	// Track policy stats.
 	b.stats.AddFlow(flow)
@@ -59,7 +76,7 @@ func NewAggregationBucket(start, end time.Time) *AggregationBucket {
 	return &AggregationBucket{
 		StartTime: start.Unix(),
 		EndTime:   end.Unix(),
-		FlowKeys:  set.New[types.FlowKey](),
+		Flows:     set.New[*types.DiachronicFlow](),
 		stats:     newStatisticsIndex(),
 	}
 }
@@ -68,7 +85,7 @@ func (b *AggregationBucket) Fields() logrus.Fields {
 	return logrus.Fields{
 		"start_time": b.StartTime,
 		"end_time":   b.EndTime,
-		"flows":      b.FlowKeys.Len(),
+		"flows":      b.Flows.Len(),
 		"index":      b.index,
 	}
 }
@@ -79,13 +96,13 @@ func (b *AggregationBucket) Reset(start, end int64) {
 	b.Pushed = false
 	b.stats = newStatisticsIndex()
 
-	if b.FlowKeys == nil {
-		// When resetting a nil bucket, we need to initialize the FlowKeys set.
-		b.FlowKeys = set.New[types.FlowKey]()
+	if b.Flows == nil {
+		// When resetting a nil bucket, we need to initialize the Flows set.
+		b.Flows = set.New[*types.DiachronicFlow]()
 	} else {
 		// Otherwise, use the existing set but clear it.
-		b.FlowKeys.Iter(func(item types.FlowKey) error {
-			b.FlowKeys.Discard(item)
+		b.Flows.Iter(func(item *types.DiachronicFlow) error {
+			b.Flows.Discard(item)
 			return nil
 		})
 	}
