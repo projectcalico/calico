@@ -22,11 +22,12 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sirupsen/logrus"
+	goproto "google.golang.org/protobuf/proto"
+
 	"github.com/projectcalico/calico/goldmane/pkg/client"
 	"github.com/projectcalico/calico/goldmane/pkg/types"
 	"github.com/projectcalico/calico/goldmane/proto"
-	"github.com/sirupsen/logrus"
-	goproto "google.golang.org/protobuf/proto"
 )
 
 const (
