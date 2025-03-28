@@ -39,9 +39,10 @@ import (
 // Global configuration for releases.
 var (
 	// Default defaultRegistries to which all release images are pushed.
+	// The first registry has priority. Currently, we prioritize quay.io/calico.
 	defaultRegistries = []string{
-		"docker.io/calico",
 		"quay.io/calico",
+		"docker.io/calico",
 		"gcr.io/projectcalico-org",
 		"eu.gcr.io/projectcalico-org",
 		"asia.gcr.io/projectcalico-org",
@@ -915,7 +916,7 @@ func (r *CalicoManager) generateManifests() error {
 }
 
 func (r *CalicoManager) resetManifests() {
-	if _, err := r.runner.RunInDir(r.repoRoot, "git", []string{"checkout", "manifests", "charts"}, nil); err != nil {
+	if _, err := r.runner.RunInDir(r.repoRoot, "git", []string{"checkout", "manifests"}, nil); err != nil {
 		logrus.WithError(err).Error("Failed to reset manifests")
 	}
 }

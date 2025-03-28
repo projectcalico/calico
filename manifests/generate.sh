@@ -6,33 +6,28 @@
 
 # Helm binary to use. Default to the one installed by the Makefile.
 HELM=${HELM:-../bin/helm}
+YQ=${YQ:-../bin/yq}
 
 # Get versions to install.
-defaultCalicoVersion=$(cat ../charts/calico/values.yaml | grep version: | cut -d" " -f2)
+defaultCalicoVersion=$($YQ .version <../charts/calico/values.yaml)
 CALICO_VERSION=${CALICO_VERSION:-$defaultCalicoVersion}
 
-defaultRegistry="calico"
+defaultRegistry=$($YQ .node.registry <../charts/calico/values.yaml)
 REGISTRY=${REGISTRY:-$defaultRegistry}
 
-defaultOperatorVersion=$(cat ../charts/tigera-operator/values.yaml | grep version: | cut -d" " -f4)
+defaultOperatorVersion=$($YQ .tigeraOperator.version <../charts/tigera-operator/values.yaml)
 OPERATOR_VERSION=${OPERATOR_VERSION:-$defaultOperatorVersion}
 
 defaultOperatorRegistry=$($YQ .tigeraOperator.registry <../charts/tigera-operator/values.yaml)
 OPERATOR_REGISTRY=${OPERATOR_REGISTRY:-$defaultOperatorRegistry}
 
-defaultOperatorImage="tigera/operator"
+defaultOperatorImage=$($YQ .tigeraOperator.image <../charts/tigera-operator/values.yaml)
 OPERATOR_IMAGE=${OPERATOR_IMAGE:-$defaultOperatorImage}
 
-NON_HELM_MANIFEST_IMAGES="calico/apiserver calico/windows calico/ctl calico/csi calico/node-driver-registrar calico/dikastes calico/flannel-migration-controller"
+NON_HELM_MANIFEST_IMAGES="apiserver windows ctl csi node-driver-registrar dikastes flannel-migration-controller"
 
 echo "Generating manifests for Calico=$CALICO_VERSION and tigera-operator=$OPERATOR_VERSION"
 
-##########################################################################
-# Update images in the values file
-##########################################################################
-if [[ $REGISTRY != $defaultRegistry ]]; then
-  sed -i "s|image: docker.io/calico|image: $REGISTRY|g" ../charts/calico/values.yaml
-fi
 ##########################################################################
 # Build the operator manifest.
 ##########################################################################
@@ -50,26 +45,36 @@ ${HELM} -n tigera-operator template \
   --no-hooks \
   --set installation.enabled=false \
   --set apiServer.enabled=false \
-	--set whisker.enabled=false \
-	--set goldmane.enabled=false \
-  --set tigeraOperator.image=$OPERATOR_IMAGE \
+  --set whisker.enabled=false \
+  --set goldmane.enabled=false \
   --set tigeraOperator.version=$OPERATOR_VERSION \
+  --set tigeraOperator.image=$OPERATOR_IMAGE \
   --set tigeraOperator.registry=$OPERATOR_REGISTRY \
   --set calicoctl.tag=$CALICO_VERSION \
-  ../charts/tigera-operator >> tigera-operator.yaml
+  --set calicoctl.registry=$REGISTRY \
+  ../charts/tigera-operator >>tigera-operator.yaml
 
 ##########################################################################
 # Build CRD manifest.
 #
 # This manifest is used in "Calico the hard way" documentation.
 ##########################################################################
-echo "# CustomResourceDefinitions for Calico the Hard Way" > crds.yaml
+echo "# CustomResourceDefinitions for Calico the Hard Way" >crds.yaml
 for FILE in $(ls ../charts/calico/crds); do
   ${HELM} template ../charts/calico \
     --include-crds \
     --show-only $FILE \
     --set version=$CALICO_VERSION \
-    -f ../charts/values/calico.yaml >> crds.yaml
+    --set node.registry=$REGISTRY \
+    --set calicoctl.registry=$REGISTRY \
+    --set typha.registry=$REGISTRY \
+    --set cni.registry=$REGISTRY \
+    --set kubeControllers.registry=$REGISTRY \
+    --set flannel.registry=$REGISTRY \
+    --set flannelMigration.registry=$REGISTRY \
+    --set dikastes.registry=$REGISTRY \
+    --set csi-driver.registry=$REGISTRY \
+    -f ../charts/values/calico.yaml >>crds.yaml
 done
 
 ##########################################################################
@@ -81,14 +86,14 @@ for FILE in $(ls ../charts/tigera-operator/crds/*.yaml | xargs -n1 basename); do
     --include-crds \
     --show-only $FILE \
     --set version=$CALICO_VERSION \
-    ../charts/tigera-operator >> operator-crds.yaml
+    ../charts/tigera-operator >>operator-crds.yaml
 done
 for FILE in $(ls ../charts/calico/crds); do
   ${HELM} template ../charts/calico \
     --include-crds \
     --show-only $FILE \
     --set version=$CALICO_VERSION \
-    -f ../charts/values/calico.yaml >> operator-crds.yaml
+    -f ../charts/values/calico.yaml >>operator-crds.yaml
 done
 
 ##########################################################################
@@ -104,7 +109,7 @@ for FILE in $VALUES_FILES; do
   ${HELM} -n kube-system template \
     ../charts/calico \
     --set version=$CALICO_VERSION \
-    -f ../charts/values/$FILE > $FILE
+    -f ../charts/values/$FILE >$FILE
 done
 
 ##########################################################################
@@ -121,8 +126,8 @@ ${HELM} template \
   --set installation.kubernetesProvider=OpenShift \
   --set installation.enabled=false \
   --set apiServer.enabled=false \
-	--set goldmane.enabled=false \
-	--set whisker.enabled=false \
+  --set goldmane.enabled=false \
+  --set whisker.enabled=false \
   --set tigeraOperator.image=$OPERATOR_IMAGE \
   --set tigeraOperator.version=$OPERATOR_VERSION \
   --set tigeraOperator.registry=$OPERATOR_REGISTRY \
@@ -139,7 +144,14 @@ mv $(find ocp/tigera-operator -name "*.yaml") ocp/ && rm -r ocp/tigera-operator
 echo "Generating manifest from charts/values/$FILE"
 ${HELM} -n kube-system template \
   ../charts/calico \
-  -f ../node/tests/k8st/infra/values.yaml > ../node/tests/k8st/infra/calico-kdd.yaml
+  --set calicoctl.registry=$REGISTRY \
+  --set typha.registry=$REGISTRY \
+  --set cni.registry=$REGISTRY \
+  --set kubeControllers.registry=$REGISTRY \
+  --set flannelMigration.registry=$REGISTRY \
+  --set dikastes.registry=$REGISTRY \
+  --set csi-driver.registry=$REGISTRY \
+  -f ../node/tests/k8st/infra/values.yaml >../node/tests/k8st/infra/calico-kdd.yaml
 
 ##########################################################################
 # Replace image versions for "static" Calico manifests.
@@ -147,7 +159,9 @@ ${HELM} -n kube-system template \
 if [[ $CALICO_VERSION != master ]]; then
   echo "Replacing image versions for static manifests"
   for img in $NON_HELM_MANIFEST_IMAGES; do
-    echo $img
-    find . -type f -exec sed -i "s|$img:[A-Xa-z0-9_.-]*|$REGISTRY${img#calico}:$CALICO_VERSION|g" {} \;
+    curr_img=${defaultRegistry}/${img}
+    new_img=${REGISTRY}/${img}
+    echo "$curr_img:$defaultCalicoVersion --> $new_img:$CALICO_VERSION"
+    find . -type f -exec sed -i "s|${curr_img}:[A-Za-z0-9_.-]*|${new_img}:$CALICO_VERSION|g" {} \;
   done
 fi
