@@ -209,7 +209,6 @@ func (c *FlowClient) PushWait(f *types.Flow) {
 }
 
 func (c *FlowClient) Push(f *types.Flow) {
-	// Make a copy of the flow to decouple the caller from the client.
 	logrus.Debug("Pushing flow to client")
 	select {
 	case c.inChan <- f:
