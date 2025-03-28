@@ -200,7 +200,7 @@ func NewLogAggregator(opts ...Option) *LogAggregator {
 	return a
 }
 
-func (a *LogAggregator) flowSet(startGt, startLt int64) set.Set[types.FlowKey] {
+func (a *LogAggregator) flowSet(startGt, startLt int64) set.Set[*types.DiachronicFlow] {
 	return a.buckets.FlowSet(startGt, startLt)
 }
 
@@ -372,7 +372,7 @@ func (a *LogAggregator) backfill(stream *Stream, request *proto.FlowStreamReques
 	// Right now, the stream endpoint only supports aggregation windows of a single bucket interval.
 	err := a.buckets.IterBucketsTime(request.StartTimeGte, a.nowFunc().Unix(), func(bucket *bucketing.AggregationBucket) {
 		// Iterate all of the keys in this bucket.
-		bucket.FlowKeys.Iter(func(d *types.DiachronicFlow) error {
+		bucket.Flows.Iter(func(d *types.DiachronicFlow) error {
 			builder := bucketing.NewCachedFlowBuilder(d, bucket.StartTime, bucket.EndTime)
 			if f, id := builder.Build(request.Filter); f != nil {
 				// The flow matches the filter and time range.
@@ -595,9 +595,7 @@ func (a *LogAggregator) rollover() time.Duration {
 
 	// Update DiachronicFlows. We need to remove any windows from the DiachronicFlows that have expired.
 	// Find the oldest bucket's start time and remove any data from the DiachronicFlows that is older than that.
-	keys.Iter(func(k types.FlowKey) error {
-		d := a.diachronics[k]
-
+	keys.Iter(func(d *types.DiachronicFlow) error {
 		// Rollover the DiachronicFlow. This will remove any expired data from it.
 		d.Rollover(a.buckets.BeginningOfHistory())
 
