@@ -150,8 +150,8 @@ func NewBucketRing(n, interval int, now int64, opts ...BucketRingOption) *Bucket
 
 // Rollover moves the head index to the next bucket, resetting to 0 if we've reached the end.
 // It also clears data from the bucket that is now the head. The start time of the newest bucket
-// is returned, as well as a set of FlowKeys that were in the now obsolete bucket.
-func (r *BucketRing) Rollover() (int64, set.Set[types.FlowKey]) {
+// is returned, as well as a set of DiachronicFlow objects that were in the now obsolete bucket.
+func (r *BucketRing) Rollover() (int64, set.Set[*types.DiachronicFlow]) {
 	// Capture the new bucket's start time - this is the end time of the previous bucket.
 	startTime := r.buckets[r.headIndex].EndTime
 	endTime := startTime + int64(r.interval)
@@ -162,12 +162,11 @@ func (r *BucketRing) Rollover() (int64, set.Set[types.FlowKey]) {
 	// Move the head index to the next bucket.
 	r.headIndex = r.nextBucketIndex(r.headIndex)
 
-	// Capture the FlowKeys from the bucket before we clear it.
-	flowKeys := set.New[types.FlowKey]()
-	if r.buckets[r.headIndex].FlowKeys != nil {
-		r.buckets[r.headIndex].FlowKeys.Iter(func(d *types.DiachronicFlow) error {
-			// TODO: This function should reeturn a set of DiachronicFlow.
-			flowKeys.Add(d.Key)
+	// Capture the flows from the bucket before we clear it.
+	flowKeys := set.New[*types.DiachronicFlow]()
+	if r.buckets[r.headIndex].Flows != nil {
+		r.buckets[r.headIndex].Flows.Iter(func(d *types.DiachronicFlow) error {
+			flowKeys.Add(d)
 			return nil
 		})
 	}
@@ -197,19 +196,17 @@ func (r *BucketRing) AddFlow(flow *types.Flow) {
 	bucket.AddFlow(flow)
 }
 
-// FlowSet returns the set of FlowKeys that exist across buckets within the given time range.
-func (r *BucketRing) FlowSet(startGt, startLt int64) set.Set[types.FlowKey] {
+// FlowSet returns the set of flows that exist across buckets within the given time range.
+func (r *BucketRing) FlowSet(startGt, startLt int64) set.Set[*types.DiachronicFlow] {
 	// TODO: Right now, this iterates all the buckets. We can make a minor optimization here
-	// by (1) calculating the buckets to iterate based on the time range, and (2) using pointers to
-	// the DiachronicFlow objects instead of using FlowKeys as an intermediary. This is likely a small improvement.
-	flowKeys := set.New[types.FlowKey]()
+	// by calculating the buckets to iterate based on the time range.
+	flowKeys := set.New[*types.DiachronicFlow]()
 	for _, b := range r.buckets {
 		if (startGt == 0 || b.StartTime >= startGt) &&
 			(startLt == 0 || b.StartTime <= startLt) {
 
-			b.FlowKeys.Iter(func(d *types.DiachronicFlow) error {
-				// TODO: This function should return a set of DiachronicFlow.
-				flowKeys.Add(d.Key)
+			b.Flows.Iter(func(d *types.DiachronicFlow) error {
+				flowKeys.Add(d)
 				return nil
 			})
 		}
@@ -382,8 +379,8 @@ func (r *BucketRing) maybeBuildFlowCollection(startIndex, endIndex int) *FlowCol
 	// Go through each bucket in the window and build the set of flows to emit.
 	keys := set.New[*types.DiachronicFlow]()
 	r.IterBuckets(startIndex, endIndex, func(i int) {
-		logrus.WithFields(r.buckets[i].Fields()).Debug("Gathering FlowKeys from bucket")
-		keys.AddAll(r.buckets[i].FlowKeys.Slice())
+		logrus.WithFields(r.buckets[i].Fields()).Debug("Gathering flows from bucket")
+		keys.AddAll(r.buckets[i].Flows.Slice())
 
 		// Add a pointer to the bucket to the FlowCollection. This allows us to mark the bucket as pushed
 		// once emitted.
@@ -516,8 +513,8 @@ func (r *BucketRing) flushToStreams() {
 }
 
 func (r *BucketRing) streamBucket(b *AggregationBucket, s StreamReceiver) {
-	if b.FlowKeys != nil {
-		b.FlowKeys.Iter(func(d *types.DiachronicFlow) error {
+	if b.Flows != nil {
+		b.Flows.Iter(func(d *types.DiachronicFlow) error {
 			s.Receive(NewCachedFlowBuilder(d, b.StartTime, b.EndTime))
 			return nil
 		})
