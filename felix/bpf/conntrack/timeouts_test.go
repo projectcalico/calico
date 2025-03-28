@@ -1,9 +1,10 @@
 package conntrack
 
 import (
-	"github.com/projectcalico/calico/felix/config"
 	"reflect"
 	"testing"
+
+	"github.com/projectcalico/calico/felix/config"
 )
 
 func TestConfigNames(t *testing.T) {
@@ -12,7 +13,7 @@ func TestConfigNames(t *testing.T) {
 	v := reflect.ValueOf(&to)
 	v = v.Elem()
 
-	for key, _ := range c.BPFConntrackTimeouts {
+	for key := range c.BPFConntrackTimeouts {
 		field := v.FieldByName(key)
 		if !field.IsValid() {
 			t.Errorf("Config contains invalid BPF conntrack timeout: %s", key)
