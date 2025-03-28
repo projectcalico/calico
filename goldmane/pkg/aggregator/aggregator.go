@@ -213,7 +213,7 @@ func (a *LogAggregator) Run(startTime int64) {
 	opts := []bucketing.BucketRingOption{
 		bucketing.WithBucketsToAggregate(a.bucketsToAggregate),
 		bucketing.WithPushAfter(a.pushIndex),
-		bucketing.WithLookup(func(k types.FlowKey) *types.DiachronicFlow { return a.diachronics[k] }),
+		bucketing.WithLookup(a.diachronicFlow),
 		bucketing.WithStreamReceiver(a.streams),
 	}
 	a.buckets = bucketing.NewBucketRing(
@@ -372,11 +372,13 @@ func (a *LogAggregator) backfill(stream *Stream, request *proto.FlowStreamReques
 	// Right now, the stream endpoint only supports aggregation windows of a single bucket interval.
 	err := a.buckets.IterBucketsTime(request.StartTimeGte, a.nowFunc().Unix(), func(bucket *bucketing.AggregationBucket) {
 		// Iterate all of the keys in this bucket.
-		bucket.FlowKeys.Iter(func(key types.FlowKey) error {
-			builder := bucketing.NewCachedFlowBuilder(a.diachronics[key], bucket.StartTime, bucket.EndTime)
+		bucket.FlowKeys.Iter(func(d *types.DiachronicFlow) error {
+			builder := bucketing.NewCachedFlowBuilder(d, bucket.StartTime, bucket.EndTime)
 			if f, id := builder.Build(request.Filter); f != nil {
 				// The flow matches the filter and time range.
-				logrus.WithField("flow", key).Debug("Sending backfilled flow to stream")
+				if logrus.IsLevelEnabled(logrus.DebugLevel) {
+					logrus.WithFields(f.Key.Fields()).Debug("Sending backfilled flow to stream")
+				}
 				stream.Receive(&proto.FlowResult{
 					Id:   id,
 					Flow: types.FlowToProto(f),
@@ -649,8 +651,10 @@ func (a *LogAggregator) handleFlowUpdate(flow *types.Flow) {
 	// that time windows are consistent across all DiachronicFlows.
 	start, end, err := a.buckets.Window(flow)
 	if err != nil {
-		logrus.WithFields(logrus.Fields{"start": start, "end": end}).
-			WithFields(flow.Key.Fields()).
+		logrus.WithFields(logrus.Fields{
+			"start": flow.StartTime,
+			"now":   a.nowFunc().Unix(),
+		}).WithFields(flow.Key.Fields()).
 			WithError(err).
 			Warn("Unable to sort flow into a bucket")
 		return

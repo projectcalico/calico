@@ -134,9 +134,10 @@ func NewBucketRing(n, interval int, now int64, opts ...BucketRingOption) *Bucket
 		ring.Rollover()
 	}
 
-	// Tell each bucket its absolute index.
+	// Tell each bucket its absolute index and initialize the lookup function.
 	for i := range ring.buckets {
 		ring.buckets[i].index = i
+		ring.buckets[i].lookupFlow = ring.lookupFlow
 	}
 
 	logrus.WithFields(logrus.Fields{
@@ -164,7 +165,11 @@ func (r *BucketRing) Rollover() (int64, set.Set[types.FlowKey]) {
 	// Capture the FlowKeys from the bucket before we clear it.
 	flowKeys := set.New[types.FlowKey]()
 	if r.buckets[r.headIndex].FlowKeys != nil {
-		flowKeys.AddAll(r.buckets[r.headIndex].FlowKeys.Slice())
+		r.buckets[r.headIndex].FlowKeys.Iter(func(d *types.DiachronicFlow) error {
+			// TODO: This function should reeturn a set of DiachronicFlow.
+			flowKeys.Add(d.Key)
+			return nil
+		})
 	}
 
 	// Clear data from the bucket that is now the head. The start time of the new bucket
@@ -179,8 +184,8 @@ func (r *BucketRing) AddFlow(flow *types.Flow) {
 	if bucket == nil {
 		logrus.WithFields(logrus.Fields{
 			"time":   flow.StartTime,
-			"oldest": r.buckets[r.headIndex-1].StartTime,
-			"newest": r.buckets[r.headIndex].EndTime,
+			"oldest": r.BeginningOfHistory(),
+			"newest": r.EndOfHistory(),
 		}).Warn("Failed to find bucket, unable to ingest flow")
 		return
 	}
@@ -201,7 +206,12 @@ func (r *BucketRing) FlowSet(startGt, startLt int64) set.Set[types.FlowKey] {
 	for _, b := range r.buckets {
 		if (startGt == 0 || b.StartTime >= startGt) &&
 			(startLt == 0 || b.StartTime <= startLt) {
-			flowKeys.AddAll(b.FlowKeys.Slice())
+
+			b.FlowKeys.Iter(func(d *types.DiachronicFlow) error {
+				// TODO: This function should return a set of DiachronicFlow.
+				flowKeys.Add(d.Key)
+				return nil
+			})
 		}
 	}
 	return flowKeys
@@ -213,6 +223,10 @@ func (r *BucketRing) BeginningOfHistory() int64 {
 	// the headIndex on rollover, the oldest bucket is the one right after it (i.e.,
 	// the next bucket to be rolled over).
 	return r.buckets[r.nextBucketIndex(r.headIndex)].StartTime
+}
+
+func (r *BucketRing) EndOfHistory() int64 {
+	return r.buckets[r.headIndex].EndTime
 }
 
 func (r *BucketRing) Window(flow *types.Flow) (int64, int64, error) {
@@ -264,7 +278,11 @@ func (r *BucketRing) findBucket(time int64) (int, *AggregationBucket) {
 			break
 		}
 	}
-	logrus.WithField("time", time).Warn("Failed to find bucket")
+	logrus.WithFields(logrus.Fields{
+		"time":   time,
+		"oldest": r.BeginningOfHistory(),
+		"newest": r.EndOfHistory(),
+	}).Warn("Failed to find bucket")
 	return -1, nil
 }
 
@@ -362,7 +380,7 @@ func (r *BucketRing) maybeBuildFlowCollection(startIndex, endIndex int) *FlowCol
 	flows := NewFlowCollection(startTime, endTime)
 
 	// Go through each bucket in the window and build the set of flows to emit.
-	keys := set.New[types.FlowKey]()
+	keys := set.New[*types.DiachronicFlow]()
 	r.IterBuckets(startIndex, endIndex, func(i int) {
 		logrus.WithFields(r.buckets[i].Fields()).Debug("Gathering FlowKeys from bucket")
 		keys.AddAll(r.buckets[i].FlowKeys.Slice())
@@ -373,13 +391,13 @@ func (r *BucketRing) maybeBuildFlowCollection(startIndex, endIndex int) *FlowCol
 	})
 
 	// Use the DiachronicFlow data to build the aggregated flows.
-	keys.Iter(func(key types.FlowKey) error {
-		logrus.WithFields(logrus.Fields{
-			"key":   key,
-			"start": startTime,
-			"end":   endTime,
-		}).Debug("Building aggregated flow for emission")
-		d := r.lookupFlow(key)
+	keys.Iter(func(d *types.DiachronicFlow) error {
+		if logrus.IsLevelEnabled(logrus.DebugLevel) {
+			logrus.WithFields(d.Key.Fields()).WithFields(logrus.Fields{
+				"start": startTime,
+				"end":   endTime,
+			}).Debug("Building aggregated flow for emission")
+		}
 		if f := d.Aggregate(startTime, endTime); f != nil {
 			flows.Flows = append(flows.Flows, *f)
 		}
@@ -499,8 +517,8 @@ func (r *BucketRing) flushToStreams() {
 
 func (r *BucketRing) streamBucket(b *AggregationBucket, s StreamReceiver) {
 	if b.FlowKeys != nil {
-		b.FlowKeys.Iter(func(key types.FlowKey) error {
-			s.Receive(NewCachedFlowBuilder(r.lookupFlow(key), b.StartTime, b.EndTime))
+		b.FlowKeys.Iter(func(d *types.DiachronicFlow) error {
+			s.Receive(NewCachedFlowBuilder(d, b.StartTime, b.EndTime))
 			return nil
 		})
 	}
