@@ -4873,6 +4873,92 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			})
 		})
 
+		Context("With host interface not managed by calico", func() {
+			BeforeEach(func() {
+				setupCluster()
+				poolName := infrastructure.DefaultIPPoolName
+				if testOpts.ipv6 {
+					poolName = infrastructure.DefaultIPv6PoolName
+				}
+				pool, err := calicoClient.IPPools().Get(context.TODO(), poolName, options2.GetOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				pool.Spec.NATOutgoing = false
+				pool, err = calicoClient.IPPools().Update(context.TODO(), pool, options2.SetOptions{})
+				Expect(err).NotTo(HaveOccurred())
+
+				pol := api.NewGlobalNetworkPolicy()
+				pol.Name = "allow-all"
+				pol.Spec.Ingress = []api.Rule{{Action: api.Allow}}
+				pol.Spec.Egress = []api.Rule{{Action: api.Allow}}
+				pol.Spec.Selector = "all()"
+
+				pol = createPolicy(pol)
+
+			})
+
+			if testOpts.protocol == "udp" || testOpts.tunnel == "ipip" || testOpts.ipv6 {
+				return
+			}
+			It("should allow traffic from workload to this host device", func() {
+
+				var (
+					test30            *workload.Workload
+					test30IP          string
+					test30ExtIP       string
+					test30Route, mask string
+				)
+				if testOpts.ipv6 {
+					test30IP = "fd00::3001"
+					test30ExtIP = "1000::0030"
+					test30Route = "fd00::3000/120"
+					mask = "128"
+				} else {
+					test30IP = "192.168.30.1"
+					test30ExtIP = "10.0.0.30"
+					test30Route = "192.168.30.0/24"
+					mask = "32"
+				}
+
+				test30 = &workload.Workload{
+					Name:          "test30",
+					C:             tc.Felixes[1].Container,
+					IP:            test30IP,
+					Ports:         "57005", // 0xdead
+					Protocol:      testOpts.protocol,
+					InterfaceName: "test30",
+					MTU:           1500, // Need to match host MTU or felix will restart.
+				}
+				err := test30.Start()
+				Expect(err).NotTo(HaveOccurred())
+				// assign address to test30 and add route to the .30 network
+				if testOpts.ipv6 {
+					tc.Felixes[1].Exec("ip", "-6", "route", "add", test30Route, "dev", "test30")
+					tc.Felixes[1].Exec("ip", "-6", "addr", "add", test30ExtIP+"/"+mask, "dev", "test30")
+					_, err = test30.RunCmd("ip", "-6", "route", "add", test30ExtIP+"/"+mask, "dev", "eth0")
+					Expect(err).NotTo(HaveOccurred())
+					// Add a route to the test workload to the fake external
+					// client emulated by the test-workload
+					_, err = test30.RunCmd("ip", "-6", "route", "add", w[1][1].IP+"/"+mask, "via", test30ExtIP)
+					Expect(err).NotTo(HaveOccurred())
+
+				} else {
+					tc.Felixes[1].Exec("ip", "route", "add", test30Route, "dev", "test30")
+					tc.Felixes[1].Exec("ip", "addr", "add", test30ExtIP+"/"+mask, "dev", "test30")
+					_, err = test30.RunCmd("ip", "route", "add", test30ExtIP+"/"+mask, "dev", "eth0")
+					Expect(err).NotTo(HaveOccurred())
+					// Add a route to the test workload to the fake external
+					// client emulated by the test-workload
+					_, err = test30.RunCmd("ip", "route", "add", w[1][1].IP+"/"+mask, "via", test30ExtIP)
+					Expect(err).NotTo(HaveOccurred())
+
+				}
+
+				cc.ResetExpectations()
+				cc.ExpectSome(w[1][1], TargetIP(test30.IP), 0xdead)
+				cc.CheckConnectivity()
+			})
+		})
+
 		Context("With BPFEnforceRPF=Strict", func() {
 			BeforeEach(func() {
 				options.ExtraEnvVars["FELIX_BPFEnforceRPF"] = "Strict"

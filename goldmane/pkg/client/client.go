@@ -23,6 +23,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 
 	"github.com/projectcalico/calico/goldmane/pkg/internal/flowcache"
+	"github.com/projectcalico/calico/goldmane/pkg/types"
 	"github.com/projectcalico/calico/goldmane/proto"
 )
 
@@ -56,7 +57,7 @@ func NewFlowClient(server, cert, key, caFile string) (*FlowClient, error) {
 	}
 
 	return &FlowClient{
-		inChan:      make(chan *proto.Flow, 5000),
+		inChan:      make(chan *types.Flow, 5000),
 		cache:       flowcache.NewExpiringFlowCache(FlowCacheExpiry),
 		grpcCliConn: grpcClient,
 	}, nil
@@ -64,7 +65,7 @@ func NewFlowClient(server, cert, key, caFile string) (*FlowClient, error) {
 
 // FlowClient pushes flow updates to the flow server.
 type FlowClient struct {
-	inChan      chan *proto.Flow
+	inChan      chan *types.Flow
 	cache       *flowcache.ExpiringFlowCache
 	grpcCliConn *grpc.ClientConn
 }
@@ -98,6 +99,7 @@ func (c *FlowClient) Connect(ctx context.Context) <-chan struct{} {
 
 		// Loop is to handle reconnecting when disruptions happen to the connection. When the inner loop fails and breaks
 		// reconnection happens before the out loop runs again.
+		upd := proto.FlowUpdate{Flow: proto.NewFlow()}
 		for {
 			// Send new Flows as they are received.
 			for flog := range c.inChan {
@@ -107,8 +109,11 @@ func (c *FlowClient) Connect(ctx context.Context) <-chan struct{} {
 				// to a particular node.
 				c.cache.Add(flog, "")
 
+				// Unpack the minified flow into a full flow and send it.
+				types.FlowIntoProto(flog, upd.Flow)
+
 				// Send the flow.
-				if err := rc.Send(&proto.FlowUpdate{Flow: flog}); err != nil {
+				if err := rc.Send(&upd); err != nil {
 					logrus.WithError(err).Warn("Failed to send flow")
 					break
 				}
@@ -158,23 +163,27 @@ func (c *FlowClient) connect(ctx context.Context) (grpc.BidiStreamingClient[prot
 		var err error
 		rc, err := cli.Connect(ctx)
 		if err != nil {
-			logrus.WithError(err).Warn("Failed to connect to flow server")
+			logrus.WithError(err).WithField("target", c.grpcCliConn.CanonicalTarget()).
+				Warn("Failed to connect to flow server")
 			b.Wait()
 			continue
 		}
 
-		logrus.Info("Connected to flow server")
+		logrus.WithField("target", c.grpcCliConn.CanonicalTarget()).Info("Connected to flow server")
 		b.Reset()
 
 		// On a new connection, send all of the flows that we have cached. We're assuming
 		// this indicates a restart of the flow server. The flow server will handle deuplication
 		// if we happen to send the same flow twice.
-		err = c.cache.Iter(func(f *proto.Flow) error {
-			// Send.
-			if err := rc.Send(&proto.FlowUpdate{Flow: f}); err != nil {
+		upd := proto.FlowUpdate{Flow: proto.NewFlow()}
+		err = c.cache.Iter(func(f *types.Flow) error {
+			// Unpack the minified flow into a full flow and send it.
+			types.FlowIntoProto(f, upd.Flow)
+			if err := rc.Send(&upd); err != nil {
 				logrus.WithError(err).Warn("Failed to send flow")
 				return err
 			}
+
 			// Get receipt.
 			if _, err := rc.Recv(); err != nil {
 				logrus.WithError(err).Warn("Failed to receive receipt")
@@ -190,7 +199,7 @@ func (c *FlowClient) connect(ctx context.Context) (grpc.BidiStreamingClient[prot
 	}
 }
 
-func (c *FlowClient) Push(f *proto.Flow) {
+func (c *FlowClient) Push(f *types.Flow) {
 	// Make a copy of the flow to decouple the caller from the client.
 	logrus.Debug("Pushing flow to client")
 	cp := f

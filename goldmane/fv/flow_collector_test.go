@@ -17,22 +17,23 @@ import (
 	"github.com/projectcalico/calico/goldmane/pkg/client"
 	"github.com/projectcalico/calico/goldmane/pkg/server"
 	"github.com/projectcalico/calico/goldmane/pkg/testutils"
+	"github.com/projectcalico/calico/goldmane/pkg/types"
 	"github.com/projectcalico/calico/goldmane/proto"
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 )
 
 type testSink struct {
-	updates []*proto.FlowUpdate
+	flows []*types.Flow
 }
 
-func (t *testSink) Receive(upd *proto.FlowUpdate) {
-	t.updates = append(t.updates, upd)
+func (t *testSink) Receive(f *types.Flow) {
+	t.flows = append(t.flows, f)
 }
 
 func (t *testSink) flowReceivedFn(flow *proto.Flow) func() bool {
 	return func() bool {
-		for _, upd := range t.updates {
-			if goproto.Equal(flow, upd.Flow) {
+		for _, f := range t.flows {
+			if goproto.Equal(flow, types.FlowToProto(f)) {
 				return true
 			}
 		}
@@ -133,7 +134,7 @@ func TestFlowCollection(t *testing.T) {
 
 	// Send a flow update to the server.
 	flow := testutils.NewRandomFlow(400)
-	cli.Push(flow)
+	cli.Push(types.ProtoToFlow(flow))
 
 	// Expect that it shows up in the Sink.
 	require.Eventually(t, sink.flowReceivedFn(flow), 1*time.Second, 100*time.Millisecond, "Flow did not show up in sink")
@@ -148,7 +149,7 @@ func TestResyncOnConnect(t *testing.T) {
 	for i := range 100 {
 		flow := testutils.NewRandomFlow(int64(i))
 		flows = append(flows, flow)
-		cli.Push(flow)
+		cli.Push(types.ProtoToFlow(flow))
 	}
 
 	// Connect to the server. The entire test should complete within 5 seconds.

@@ -23,11 +23,12 @@ import (
 
 	"github.com/projectcalico/calico/goldmane/pkg/client"
 	"github.com/projectcalico/calico/goldmane/pkg/internal/flowcache"
+	"github.com/projectcalico/calico/goldmane/pkg/types"
 	"github.com/projectcalico/calico/goldmane/proto"
 )
 
 type Sink interface {
-	Receive(*proto.FlowUpdate)
+	Receive(*types.Flow)
 }
 
 type FlowCollectorService interface {
@@ -93,20 +94,23 @@ func (p *flowCollectorService) handleClient(srv proto.FlowCollector_ConnectServe
 			return err
 		}
 
+		// Convert to minified types.Flow object.
+		flow := types.ProtoToFlow(upd.Flow)
+
 		// Skip flows that we have already received from this node. This is a simple deduplication
 		// mechanism to avoid processing the same flow if the connection is reset for some reason.
 		// Should this happen, the client will resend all its flows and we must ensure we don't process
 		// the same flow twice.
-		if !p.deduplicator.Has(upd.Flow, scope) {
+		if !p.deduplicator.Has(flow, scope) {
 
 			// Add it to the deduplicator, scoped to the client's address (i.e., per-node).
 			// The cache will automatically time out this flow in the background when it is no longer
 			// relevant.
-			p.deduplicator.Add(upd.Flow, scope)
+			p.deduplicator.Add(flow, scope)
 
 			// Send the flow to the configured Sink.
 			logCtx.Debug("Sending Flow to sink")
-			p.sink.Receive(upd)
+			p.sink.Receive(flow)
 		} else {
 			logCtx.Debug("Skipping already learned flow")
 		}
