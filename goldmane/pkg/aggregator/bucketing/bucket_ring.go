@@ -179,8 +179,8 @@ func (r *BucketRing) AddFlow(flow *types.Flow) {
 	if bucket == nil {
 		logrus.WithFields(logrus.Fields{
 			"time":   flow.StartTime,
-			"oldest": r.buckets[r.headIndex-1].StartTime,
-			"newest": r.buckets[r.headIndex].EndTime,
+			"oldest": r.BeginningOfHistory(),
+			"newest": r.EndOfHistory(),
 		}).Warn("Failed to find bucket, unable to ingest flow")
 		return
 	}
@@ -213,6 +213,10 @@ func (r *BucketRing) BeginningOfHistory() int64 {
 	// the headIndex on rollover, the oldest bucket is the one right after it (i.e.,
 	// the next bucket to be rolled over).
 	return r.buckets[r.nextBucketIndex(r.headIndex)].StartTime
+}
+
+func (r *BucketRing) EndOfHistory() int64 {
+	return r.buckets[r.headIndex].EndTime
 }
 
 func (r *BucketRing) Window(flow *types.Flow) (int64, int64, error) {
@@ -264,7 +268,11 @@ func (r *BucketRing) findBucket(time int64) (int, *AggregationBucket) {
 			break
 		}
 	}
-	logrus.WithField("time", time).Warn("Failed to find bucket")
+	logrus.WithFields(logrus.Fields{
+		"time":   time,
+		"oldest": r.BeginningOfHistory(),
+		"newest": r.EndOfHistory(),
+	}).Warn("Failed to find bucket")
 	return -1, nil
 }
 

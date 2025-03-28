@@ -649,8 +649,10 @@ func (a *LogAggregator) handleFlowUpdate(flow *types.Flow) {
 	// that time windows are consistent across all DiachronicFlows.
 	start, end, err := a.buckets.Window(flow)
 	if err != nil {
-		logrus.WithFields(logrus.Fields{"start": start, "end": end}).
-			WithFields(flow.Key.Fields()).
+		logrus.WithFields(logrus.Fields{
+			"start": flow.StartTime,
+			"now":   a.nowFunc().Unix(),
+		}).WithFields(flow.Key.Fields()).
 			WithError(err).
 			Warn("Unable to sort flow into a bucket")
 		return
