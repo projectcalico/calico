@@ -260,7 +260,7 @@ func (t *flowGenerator) randomFlows(s, e int64) ([]*proto.Flow, error) {
 	pen := []*proto.PolicyHit{
 		{
 			Name:        "pending-policy-0",
-			Namespace:   srcNs,
+			Namespace:   "",
 			Kind:        proto.PolicyKind_GlobalNetworkPolicy,
 			Tier:        "pending-tier",
 			Action:      action,
