@@ -31,7 +31,7 @@ import (
 
 const (
 	// number of flows to generate per 15s interval.
-	flowsPerInterval = 200
+	flowsPerInterval = 300
 
 	// configuration for random flow generation.
 	numClients    = 100
