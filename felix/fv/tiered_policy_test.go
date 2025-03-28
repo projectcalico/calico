@@ -33,8 +33,8 @@ import (
 	"github.com/projectcalico/calico/felix/collector/types/endpoint"
 	"github.com/projectcalico/calico/felix/collector/types/tuple"
 	"github.com/projectcalico/calico/felix/fv/connectivity"
+	"github.com/projectcalico/calico/felix/fv/flowlogs"
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
-	"github.com/projectcalico/calico/felix/fv/metrics"
 	"github.com/projectcalico/calico/felix/fv/utils"
 	"github.com/projectcalico/calico/felix/fv/workload"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
@@ -443,7 +443,7 @@ var _ = infrastructure.DatastoreDescribe("connectivity tests and flow logs with 
 
 			opts.ExtraEnvVars["FELIX_FLOWLOGSCOLLECTORDEBUGTRACE"] = "true"
 			opts.ExtraEnvVars["FELIX_FLOWLOGSFLUSHINTERVAL"] = "2"
-			opts.ExtraEnvVars["FELIX_FLOWLOGSGOLDMANESERVER"] = localGoldmaneServer
+			opts.ExtraEnvVars["FELIX_FLOWLOGSGOLDMANESERVER"] = flowlogs.LocalGoldmaneServer
 
 			testSetup()
 
@@ -458,7 +458,7 @@ var _ = infrastructure.DatastoreDescribe("connectivity tests and flow logs with 
 		})
 
 		checkFlowLogs := func() error {
-			aggrTuple := tuple.Make(flowlog.EmptyIP, flowlog.EmptyIP, 6, metrics.SourcePortIsNotIncluded, wepPort)
+			aggrTuple := tuple.Make(flowlog.EmptyIP, flowlog.EmptyIP, 6, flowlogs.SourcePortIsNotIncluded, wepPort)
 
 			host1_wl1_Meta := endpoint.Metadata{
 				Type:           "wep",
@@ -497,11 +497,13 @@ var _ = infrastructure.DatastoreDescribe("connectivity tests and flow logs with 
 				PortNum:   8066,
 			}
 
-			flowTester := metrics.NewFlowTester(metrics.FlowTesterOptions{
+			flowTester := flowlogs.NewFlowTester(flowlogs.FlowTesterOptions{
 				ExpectLabels:           true,
 				ExpectEnforcedPolicies: true,
 				MatchEnforcedPolicies:  true,
-				Includes:               []metrics.IncludeFilter{metrics.IncludeByDestPort(wepPort)},
+				ExpectPendingPolicies:  true,
+				MatchPendingPolicies:   true,
+				Includes:               []flowlogs.IncludeFilter{flowlogs.IncludeByDestPort(wepPort)},
 			})
 
 			err := flowTester.PopulateFromFlowLogs(tc.Felixes[0])
