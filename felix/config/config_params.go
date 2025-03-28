@@ -1267,11 +1267,10 @@ type Param interface {
 
 func FromConfigUpdate(msg *proto.ConfigUpdate) *Config {
 	p := New()
-	// It doesn't have very great meaning for this standalone
-	// config object, but we use DatastorePerHost here, as the
-	// source, because proto.ConfigUpdate is formed by merging
-	// global and per-host datastore configuration fields.
-	_, _ = p.UpdateFrom(msg.Config, DatastorePerHost)
+	_, err := p.UpdateFromConfigUpdate(msg)
+	if err != nil {
+		log.WithError(err).Panic("Failed to convert ConfigUpdate back to Config.")
+	}
 	return p
 }
 
