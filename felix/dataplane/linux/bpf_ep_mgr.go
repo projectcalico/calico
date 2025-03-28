@@ -989,6 +989,18 @@ func (m *bpfEndpointManager) getIfTypeFlags(name string, ifaceType IfaceType) ui
 	return flags
 }
 
+func (m *bpfEndpointManager) addIgnoredHostIfaceToIfState(name string, ifIndex int) {
+	k := ifstate.NewKey(uint32(ifIndex))
+	flags := ifstate.FlgNotManaged
+	v := ifstate.NewValue(flags, name, -1, -1, -1, -1, -1, -1, -1, -1)
+	m.ifStateMap.Desired().Set(k, v)
+}
+
+func (m *bpfEndpointManager) deleteIgnoredHostIfaceFromIfState(ifIndex int) {
+	k := ifstate.NewKey(uint32(ifIndex))
+	m.ifStateMap.Desired().Delete(k)
+}
+
 func (m *bpfEndpointManager) updateIfaceStateMap(name string, iface *bpfInterface) {
 	k := ifstate.NewKey(uint32(iface.info.ifIndex))
 	if iface.info.ifaceIsUp() {
@@ -1100,6 +1112,17 @@ func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceStateUpdate) {
 				}
 			}
 		}
+
+		// Add host interface not managed by calico to the ifstate map,
+		// so that packets from workload are not dropped.
+		if update.Name != dataplanedefs.BPFInDev && update.Name != dataplanedefs.BPFOutDev {
+			if update.State == ifacemonitor.StateNotPresent {
+				m.deleteIgnoredHostIfaceFromIfState(update.Index)
+			} else {
+				m.addIgnoredHostIfaceToIfState(update.Name, update.Index)
+			}
+		}
+
 		if m.initUnknownIfaces != nil {
 			m.initUnknownIfaces.Add(update.Name)
 		}

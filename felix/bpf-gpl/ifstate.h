@@ -23,11 +23,14 @@ CALI_MAP(cali_iface, 4,
 		__u32, struct ifstate_val,
 		1000, BPF_F_NO_PREALLOC)
 
-#define IFACE_STATE_WEP		0x1
-#define IFACE_STATE_V4_READY	0x2
-#define IFACE_STATE_V6_READY	0x4
+#define IFACE_STATE_WEP         0x1
+#define IFACE_STATE_V4_READY    0x2
+#define IFACE_STATE_V6_READY    0x4
+#define IFACE_STATE_HEP         0x8
+#define IFACE_STATE_NOT_MANAGED 0x400
 
 #define iface_is_workload(state)		((state) & IFACE_STATE_WEP)
+#define iface_is_not_managed(state)		((state) & IFACE_STATE_NOT_MANAGED)
 #ifdef IPVER6
 #define iface_is_ready(state)	((state) & IFACE_STATE_V6_READY)
 #else
