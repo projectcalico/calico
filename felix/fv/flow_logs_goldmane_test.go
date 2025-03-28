@@ -34,8 +34,8 @@ import (
 	"github.com/projectcalico/calico/felix/collector/types/endpoint"
 	"github.com/projectcalico/calico/felix/collector/types/tuple"
 	"github.com/projectcalico/calico/felix/fv/connectivity"
+	"github.com/projectcalico/calico/felix/fv/flowlogs"
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
-	"github.com/projectcalico/calico/felix/fv/metrics"
 	"github.com/projectcalico/calico/felix/fv/utils"
 	"github.com/projectcalico/calico/felix/fv/workload"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
@@ -78,10 +78,6 @@ import (
 //	wl-client-4
 //	      ns-IP
 
-const (
-	localGoldmaneServer = "unix:///var/log/calico/flowlogs/goldmane.sock"
-)
-
 // Flow logs have little to do with the backend, and these tests are relatively slow, so
 // better to run with one backend only.  etcdv3 is easier because we create a fresh
 // datastore for every test and so don't need to worry about cleaning resources up.
@@ -108,7 +104,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log tests", [
 
 		opts.ExtraEnvVars["FELIX_FLOWLOGSCOLLECTORDEBUGTRACE"] = "true"
 		opts.ExtraEnvVars["FELIX_FLOWLOGSFLUSHINTERVAL"] = "2"
-		opts.ExtraEnvVars["FELIX_FLOWLOGSGOLDMANESERVER"] = localGoldmaneServer
+		opts.ExtraEnvVars["FELIX_FLOWLOGSGOLDMANESERVER"] = flowlogs.LocalGoldmaneServer
 	})
 
 	JustBeforeEach(func() {
@@ -335,12 +331,12 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log tests", [
 		// flow logs.
 		Eventually(func() error {
 			wepPort := 8055
-			flowTester := metrics.NewFlowTester(metrics.FlowTesterOptions{
+			flowTester := flowlogs.NewFlowTester(flowlogs.FlowTesterOptions{
 				ExpectLabels:           true,
 				ExpectEnforcedPolicies: true,
 				MatchEnforcedPolicies:  true,
 				MatchLabels:            false,
-				Includes:               []metrics.IncludeFilter{metrics.IncludeByDestPort(wepPort)},
+				Includes:               []flowlogs.IncludeFilter{flowlogs.IncludeByDestPort(wepPort)},
 				CheckNumFlowsStarted:   true,
 			})
 
@@ -349,7 +345,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log tests", [
 				return fmt.Errorf("error populating flow logs from Felix[0]: %s", err)
 			}
 
-			aggrTuple := tuple.Make(flowlog.EmptyIP, flowlog.EmptyIP, 6, metrics.SourcePortIsNotIncluded, wepPort)
+			aggrTuple := tuple.Make(flowlog.EmptyIP, flowlog.EmptyIP, 6, flowlogs.SourcePortIsNotIncluded, wepPort)
 
 			host1_wl_Meta := endpoint.Metadata{
 				Type:           "wep",
@@ -393,6 +389,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log tests", [
 				AggregatedName: tc.Felixes[1].Hostname,
 			}
 
+			// This entry is different in Enterprise implemenatation due to differences of HEP flowlogs.
 			flowTester.CheckFlow(
 				flowlog.FlowLog{
 					FlowMeta: flowlog.FlowMeta{
@@ -469,6 +466,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log tests", [
 				AggregatedName: "ns-1",
 			}
 
+			// The following entries are not available in Enterprise implemenatation due to differences of HEP flowlogs.
 			flowTester.CheckFlow(
 				flowlog.FlowLog{
 					FlowMeta: flowlog.FlowMeta{
@@ -584,7 +582,7 @@ var _ = infrastructure.DatastoreDescribe("goldmane flow log ipv6 tests", []apico
 		opts.ExtraEnvVars["FELIX_FLOWLOGSFLUSHINTERVAL"] = "2"
 		opts.ExtraEnvVars["FELIX_IPV6SUPPORT"] = "true"
 		opts.ExtraEnvVars["FELIX_DefaultEndpointToHostAction"] = "RETURN"
-		opts.ExtraEnvVars["FELIX_FLOWLOGSGOLDMANESERVER"] = localGoldmaneServer
+		opts.ExtraEnvVars["FELIX_FLOWLOGSGOLDMANESERVER"] = flowlogs.LocalGoldmaneServer
 
 		tc, client = infrastructure.StartNNodeTopology(2, opts, infra)
 
