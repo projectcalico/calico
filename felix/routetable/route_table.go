@@ -749,6 +749,7 @@ func (r *RouteTable) recalculateDesiredKernelRoute(cidr ip.CIDR) {
 	} else {
 		kernRoute.GW = bestTarget.GW
 		kernRoute.Ifindex = bestIfaceIdx
+		kernRoute.MTU = bestTarget.MTU
 	}
 	if log.IsLevelEnabled(log.DebugLevel) && !reflect.DeepEqual(oldDesiredRoute, kernRoute) {
 		r.logCxt.WithFields(log.Fields{
@@ -1285,6 +1286,7 @@ func (r *RouteTable) netlinkRouteToKernelRoute(route *netlink.Route) (kernKey ke
 		Src:      ip.FromNetIP(route.Src),
 		OnLink:   route.Flags&unix.RTNH_F_ONLINK != 0,
 		Protocol: route.Protocol,
+		MTU:      route.MTU,
 	}
 
 	if len(route.MultiPath) > 0 {
@@ -1421,6 +1423,7 @@ func (r *RouteTable) applyUpdates(attempt int) error {
 			LinkIndex: kRoute.Ifindex,
 			Protocol:  kRoute.Protocol,
 			Flags:     flags,
+			MTU:       kRoute.MTU,
 		}
 		for _, nh := range kRoute.NextHops {
 			nlRoute.MultiPath = append(nlRoute.MultiPath, &netlink.NexthopInfo{
@@ -1754,6 +1757,7 @@ type kernelRoute struct {
 	// NextHops should be specified (for a multi-path route).
 	GW      ip.Addr
 	Ifindex int
+	MTU     int
 
 	NextHops []kernelNextHop
 }
@@ -1783,6 +1787,9 @@ func (r kernelRoute) Equals(b kernelRoute) bool {
 		return false
 	}
 	if r.Ifindex != b.Ifindex {
+		return false
+	}
+	if r.MTU != b.MTU {
 		return false
 	}
 	if len(r.NextHops) != len(b.NextHops) {
@@ -1833,8 +1840,16 @@ func (r kernelRoute) String() string {
 		nextHopPart = fmt.Sprintf("GW=%s, Ifindex=%d", gwStr, r.Ifindex)
 	}
 
-	return fmt.Sprintf("kernelRoute{Type=%d, Scope=%d, Src=%s, Protocol=%v, OnLink=%v, %s}",
+	str := fmt.Sprintf("kernelRoute{Type=%d, Scope=%d, Src=%s, Protocol=%v, OnLink=%v, %s",
 		r.Type, r.Scope, srcStr, r.Protocol, r.OnLink, nextHopPart)
+
+	if r.MTU != 0 {
+		str += fmt.Sprintf(", mtu %d", r.MTU)
+	}
+
+	str += "}"
+
+	return str
 }
 
 type kernelNextHop struct {
