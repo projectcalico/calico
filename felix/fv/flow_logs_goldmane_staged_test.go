@@ -1941,9 +1941,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 						Tuple:      aggrTuple,
 						SrcMeta:    ep1_1_Meta,
 						DstMeta:    ep2_1_Meta,
-						DstService: metrics.NoDestService,
+						DstService: flowlog.EmptyService,
 						Action:     "allow",
-						Reporter:   "dst",
+						Reporter:   "src",
 					},
 					FlowEnforcedPolicySet: flowlog.FlowPolicySet{
 						"0|tier1|default/tier1.np1-1|pass|0":            {},
@@ -2002,7 +2002,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 						Tuple:      aggrTuple,
 						SrcMeta:    ep1_1_Meta,
 						DstMeta:    ep2_1_Meta,
-						DstService: metrics.NoDestService,
+						DstService: flowlog.EmptyService,
 						Action:     "allow",
 						Reporter:   "dst",
 					},
@@ -2012,7 +2012,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 					},
 					FlowPendingPolicySet: flowlog.FlowPolicySet{
 						"0|tier1|default/tier1.np1-1|pass|0":         {},
-						"1|tier2|default/tier2.staged:np2-1|allow|2": {},
+						"1|tier2|default/tier2.staged:np2-1|allow|1": {},
 					},
 					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
 						FlowReportedStats: flowlog.FlowReportedStats{
