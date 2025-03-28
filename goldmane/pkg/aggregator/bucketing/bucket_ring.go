@@ -163,10 +163,10 @@ func (r *BucketRing) Rollover() (int64, set.Set[*types.DiachronicFlow]) {
 	r.headIndex = r.nextBucketIndex(r.headIndex)
 
 	// Capture the flows from the bucket before we clear it.
-	flowKeys := set.New[*types.DiachronicFlow]()
+	flows := set.New[*types.DiachronicFlow]()
 	if r.buckets[r.headIndex].Flows != nil {
 		r.buckets[r.headIndex].Flows.Iter(func(d *types.DiachronicFlow) error {
-			flowKeys.Add(d)
+			flows.Add(d)
 			return nil
 		})
 	}
@@ -174,7 +174,7 @@ func (r *BucketRing) Rollover() (int64, set.Set[*types.DiachronicFlow]) {
 	// Clear data from the bucket that is now the head. The start time of the new bucket
 	// is the end time of the previous bucket.
 	r.buckets[r.headIndex].Reset(startTime, endTime)
-	return startTime, flowKeys
+	return startTime, flows
 }
 
 func (r *BucketRing) AddFlow(flow *types.Flow) {
@@ -200,18 +200,18 @@ func (r *BucketRing) AddFlow(flow *types.Flow) {
 func (r *BucketRing) FlowSet(startGt, startLt int64) set.Set[*types.DiachronicFlow] {
 	// TODO: Right now, this iterates all the buckets. We can make a minor optimization here
 	// by calculating the buckets to iterate based on the time range.
-	flowKeys := set.New[*types.DiachronicFlow]()
+	flows := set.New[*types.DiachronicFlow]()
 	for _, b := range r.buckets {
 		if (startGt == 0 || b.StartTime >= startGt) &&
 			(startLt == 0 || b.StartTime <= startLt) {
 
 			b.Flows.Iter(func(d *types.DiachronicFlow) error {
-				flowKeys.Add(d)
+				flows.Add(d)
 				return nil
 			})
 		}
 	}
-	return flowKeys
+	return flows
 }
 
 // BeginningOfHistory returns the start time of the oldest bucket in the ring.
