@@ -24,6 +24,7 @@ import (
 	"github.com/projectcalico/calico/release/internal/outputs"
 	"github.com/projectcalico/calico/release/internal/version"
 	"github.com/projectcalico/calico/release/pkg/manager/calico"
+	"github.com/projectcalico/calico/release/pkg/manager/operator"
 )
 
 func releaseOutputDir(repoRootDir, version string) string {
@@ -143,6 +144,52 @@ func releaseSubCommands(cfg *Config) []*cli.Command {
 				r := calico.NewManager(opts...)
 				return r.PublishRelease()
 			},
+		},
+
+		// Publish a release to the public.
+		releasePublicSubCommands(cfg),
+	}
+}
+
+func releasePublicSubCommands(cfg *Config) *cli.Command {
+	return &cli.Command{
+		Name:  "public",
+		Usage: "Make a published release available to the public",
+		Flags: []cli.Flag{
+			orgFlag,
+			repoFlag,
+			repoRemoteFlag,
+			operatorOrgFlag,
+			operatorRepoFlag,
+			operatorRepoRemoteFlag,
+		},
+		Action: func(c *cli.Context) error {
+			configureLogging("release-public.log")
+			ver, operatorVer, err := version.VersionsFromManifests(cfg.RepoRootDir)
+			if err != nil {
+				return err
+			}
+			opts := []calico.Option{
+				calico.WithRepoRoot(cfg.RepoRootDir),
+				calico.WithVersion(ver.FormattedString()),
+				calico.WithOperatorVersion(operatorVer.FormattedString()),
+				calico.WithGithubOrg(c.String(orgFlag.Name)),
+				calico.WithRepoName(c.String(repoFlag.Name)),
+				calico.WithRepoRemote(repoRemoteFlag.Name),
+			}
+			m := calico.NewManager(opts...)
+			if err := m.ReleasePublic(); err != nil {
+				return err
+			}
+			opOpts := []operator.Option{
+				operator.WithVersion(operatorVer.FormattedString()),
+				operator.WithCalicoDirectory(cfg.RepoRootDir),
+				operator.WithGithubOrg(c.String(operatorOrgFlag.Name)),
+				operator.WithRepoName(c.String(operatorRepoFlag.Name)),
+				operator.WithRepoRemote(c.String(operatorRepoRemoteFlag.Name)),
+			}
+			o := operator.NewManager(opOpts...)
+			return o.ReleasePublic()
 		},
 	}
 }

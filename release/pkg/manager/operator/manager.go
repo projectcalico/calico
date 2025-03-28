@@ -281,6 +281,8 @@ func (o *OperatorManager) PrePublishValidation() error {
 	return nil
 }
 
+// ReleasePublic publishes the current draft release of the operator to make it publicly available.
+// It determines the latest release version, compares it with the current version, and marks the release as the latest if applicable.
 func (r *OperatorManager) ReleasePublic() error {
 	// Get the latest version
 	args := []string{

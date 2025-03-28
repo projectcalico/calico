@@ -32,9 +32,9 @@ import (
 	"github.com/projectcalico/calico/release/internal/imagescanner"
 	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/internal/utils"
+	"github.com/projectcalico/calico/release/internal/version"
 	errr "github.com/projectcalico/calico/release/pkg/errors"
 	"github.com/projectcalico/calico/release/pkg/manager/operator"
-	"github.com/projectcalico/calico/release/internal/version"
 )
 
 // Global configuration for releases.
@@ -599,7 +599,7 @@ func (r *CalicoManager) ReleasePublic() error {
 	}
 	_, err = r.runner.RunInDir(r.repoRoot, "./bin/gh", args, nil)
 	if err != nil {
-		return fmt.Errorf("failed to publish %s draft release: %s", err)
+		return fmt.Errorf("failed to publish %s draft release: %s", r.calicoVersion, err)
 	}
 	return nil
 }
