@@ -77,7 +77,7 @@ generate:
 	$(MAKE) gen-manifests
 	$(MAKE) fix-changed
 
-gen-manifests: bin/helm
+gen-manifests: bin/helm bin/yq
 	cd ./manifests && ./generate.sh
 
 # Get operator CRDs from the operator repo, OPERATOR_BRANCH must be set
