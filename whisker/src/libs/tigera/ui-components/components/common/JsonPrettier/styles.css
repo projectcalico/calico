@@ -6,13 +6,13 @@
 .stringStyles {
     font-weight: normal;
     color: #dd0a73; /* Darker shade of var(--chakra-colors-tigeraRose); */
-    padding-left: 4px;
+    padding-left: var(--chakra-space-1);
 }
 
 .valueStyles {
     font-weight: normal;
     color: var(--chakra-colors-tigeraBlueMedium);
-    padding-left: 4px;
+    padding-left: var(--chakra-space-1);
 }
 
 .containerStyles {
@@ -20,5 +20,25 @@
     background-color: var(--chakra-colors-tigeraGrey-50);
     border: 1px solid;
     border-color: var(--chakra-colors-tigeraGrey-300);
+    border-radius: 5px;
+}
+
+.labelStylesDark {
+    font-weight: var(--chakra-fontWeights-normal);
+    color: var(--chakra-colors-tigeraGrey-100);
+}
+
+.stringStylesDark {
+    color: var(--chakra-colors-tigeraCoast);
+    padding-left: var(--chakra-space-1);
+}
+
+.valueStylesDark {
+    color: var(--chakra-colors-tigeraPeach);
+    padding-left: var(--chakra-space-1);
+}
+
+.containerStylesDark {
+    background-color: var(--chakra-colors-tigeraGrey-1000);
     border-radius: 5px;
 }
