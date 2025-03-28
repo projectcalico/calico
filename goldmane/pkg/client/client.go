@@ -199,12 +199,19 @@ func (c *FlowClient) connect(ctx context.Context) (grpc.BidiStreamingClient[prot
 	}
 }
 
-func (c *FlowClient) Push(f *types.Flow) {
-	// Make a copy of the flow to decouple the caller from the client.
-	logrus.Debug("Pushing flow to client")
-	cp := f
+func (c *FlowClient) PushWait(f *types.Flow) {
 	select {
-	case c.inChan <- cp:
+	case c.inChan <- f:
+	default:
+		logrus.Warn("Flow client buffer full, waiting")
+		c.inChan <- f
+	}
+}
+
+func (c *FlowClient) Push(f *types.Flow) {
+	logrus.Debug("Pushing flow to client")
+	select {
+	case c.inChan <- f:
 	default:
 		logrus.Warn("Flow client buffer full, dropping flow")
 	}
