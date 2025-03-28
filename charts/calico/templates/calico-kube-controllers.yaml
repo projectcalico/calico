@@ -42,7 +42,7 @@ spec:
       hostNetwork: true
       containers:
         - name: calico-kube-controllers
-          image: {{.Values.kubeControllers.image}}:{{ .Values.version }}
+          image: {{.Values.kubeControllers.registry}}/{{.Values.kubeControllers.image}}:{{ .Values.version }}
           imagePullPolicy: {{.Values.imagePullPolicy}}
           env:
             # The location of the etcd cluster.
@@ -106,7 +106,7 @@ spec:
 {{- else }}
       containers:
         - name: calico-kube-controllers
-          image: {{.Values.kubeControllers.image}}:{{ .Values.version }}
+          image: {{.Values.kubeControllers.registry}}/{{.Values.kubeControllers.image}}:{{ .Values.version }}
           imagePullPolicy: {{.Values.imagePullPolicy}}
           env:
             # Choose which controllers to run.
