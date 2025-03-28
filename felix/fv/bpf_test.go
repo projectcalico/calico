@@ -683,6 +683,92 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				})
 			}
 
+			if testOpts.bpfLogLevel == "debug" && testOpts.protocol == "udp" && !testOpts.ipv6 {
+				It("udp should have connectivity after a service is recreated", func() {
+					clusterIP := "10.101.0.111"
+
+					tcpdump := w[0].AttachTCPDump()
+					tcpdump.SetLogEnabled(true)
+					tcpdump.AddMatcher("udp-be",
+						regexp.MustCompile(fmt.Sprintf("%s\\.12345 > %s\\.8055: \\[udp sum ok\\] UDP", w[1].IP, w[0].IP)))
+					tcpdump.Start("-vvv", "udp")
+					defer tcpdump.Stop()
+
+					// Just to create the wrong normal entry to the service
+					_, err := w[1].RunCmd("pktgen", w[1].IP, clusterIP, "udp",
+						"--port-src", "12345", "--port-dst", "80")
+					Expect(err).NotTo(HaveOccurred())
+
+					// Make sure we got normal conntrack to service
+					ct := dumpCTMapsAny(4, tc.Felixes[0])
+					k1 := conntrack.NewKey(17, net.ParseIP(w[1].IP), 12345, net.ParseIP(clusterIP), 80)
+					k2 := conntrack.NewKey(17, net.ParseIP(clusterIP), 80, net.ParseIP(w[1].IP), 12345)
+
+					if v, ok := ct[k1]; ok {
+						Expect(v.Type() == conntrack.TypeNormal)
+					} else if v, ok := ct[k2]; ok {
+						Expect(v.Type() == conntrack.TypeNormal)
+					} else {
+						Fail("No TypeNormal ct entry")
+					}
+
+					// Make sure the packet did not reach the backend (yet)
+					Consistently(func() int { return tcpdump.MatchCount("udp-be") }, "1s").
+						Should(BeNumerically("==", 0))
+
+					testSvc := k8sService("svc-no-backends", clusterIP, w[0], 80, 8055, 0, testOpts.protocol)
+					testSvcNamespace := testSvc.ObjectMeta.Namespace
+					k8sClient := infra.(*infrastructure.K8sDatastoreInfra).K8sClient
+					_, err = k8sClient.CoreV1().Services(testSvcNamespace).Create(context.Background(),
+						testSvc, metav1.CreateOptions{})
+					Expect(err).NotTo(HaveOccurred())
+
+					ip := testSvc.Spec.ClusterIP
+					port := uint16(testSvc.Spec.Ports[0].Port)
+					natK := nat.NewNATKey(net.ParseIP(ip), port, 17)
+
+					Eventually(func() bool {
+						natmaps, _ := dumpNATMapsAny(4, tc.Felixes[0])
+						if _, ok := natmaps[natK]; !ok {
+							return false
+						}
+						return true
+					}, "5s").Should(BeTrue(), "service NAT key didn't show up")
+
+					// Make sure that despite the wrong ct entry to start with,
+					// packets eventually go through.
+					Eventually(func() int {
+						_, err := w[1].RunCmd("pktgen", w[1].IP, clusterIP, "udp",
+							"--port-src", "12345", "--port-dst", "80")
+						Expect(err).NotTo(HaveOccurred())
+						return tcpdump.MatchCount("udp-be")
+					}, (conntrack.ScanPeriod + 5*time.Second).String(), "1s").
+						Should(BeNumerically(">=", 1)) // tcpdump may not get a packet and then get 2...
+
+					// Check that the service is properly NATted
+					ct = dumpCTMapsAny(4, tc.Felixes[0])
+
+					if v, ok := ct[k1]; ok {
+						Expect(v.Type() == conntrack.TypeNATForward)
+					} else if v, ok := ct[k2]; ok {
+						Expect(v.Type() == conntrack.TypeNATForward)
+					} else {
+						Fail("No TypeNATForward ct entry")
+					}
+
+					k1 = conntrack.NewKey(17, net.ParseIP(w[1].IP), 12345, net.ParseIP(w[0].IP), 8055)
+					k2 = conntrack.NewKey(17, net.ParseIP(w[0].IP), 8055, net.ParseIP(w[1].IP), 12345)
+
+					if v, ok := ct[k1]; ok {
+						Expect(v.Type() == conntrack.TypeNATReverse)
+					} else if v, ok := ct[k2]; ok {
+						Expect(v.Type() == conntrack.TypeNATReverse)
+					} else {
+						Fail("No TypeNATReverse ct entry")
+					}
+				})
+			}
+
 			Describe("with DefaultEndpointToHostAction=DROP", func() {
 				BeforeEach(func() {
 					options.ExtraEnvVars["FELIX_DefaultEndpointToHostAction"] = "DROP"
