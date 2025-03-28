@@ -31,13 +31,13 @@ import (
 
 const (
 	// number of flows to generate per 15s interval.
-	flowsPerInterval = 30
+	flowsPerInterval = 200
 
 	// configuration for random flow generation.
-	numClients    = 10
-	numServers    = 10
-	numNamespaces = 3
-	numLabels     = 4
+	numClients    = 100
+	numServers    = 100
+	numNamespaces = 4
+	numLabels     = 5
 )
 
 func Start() {
@@ -53,32 +53,40 @@ func Start() {
 	}
 	logrus.WithField("server", server).Info("Connecting to server")
 
-	flowClient, err := client.NewFlowClient(
-		server,
-		os.Getenv("CLIENT_CERT"),
-		os.Getenv("CLIENT_KEY"),
-		os.Getenv("CA_FILE"),
-	)
-	if err != nil {
-		logrus.WithError(err).Fatal("Failed to dial server")
-	}
-
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-
-	// Create a gRPC client conn.
-	<-flowClient.Connect(ctx)
 
 	// Create a new test gen.
 	gen := newFlowGenerator()
 
+	// Send new logs as they are generated across a fleet of virtual nodes.
+	numNodes := 10
+	for range numNodes {
+		// Create the flow client, and wait for it to connect.
+		c, err := client.NewFlowClient(
+			server,
+			os.Getenv("CLIENT_CERT"),
+			os.Getenv("CLIENT_KEY"),
+			os.Getenv("CA_FILE"),
+		)
+		if err != nil {
+			logrus.WithError(err).Fatal("Failed to dial server")
+		}
+		<-c.Connect(ctx)
+
+		// Start a goroutine to push logs to the server.
+		go func(flowClient *client.FlowClient) {
+			for flog := range gen.outChan {
+				flowClient.PushWait(types.ProtoToFlow(flog))
+			}
+		}(c)
+	}
+
 	// Start a goroutine to generate flows.
 	go gen.generateFlogs()
 
-	// Send new logs as they are generated.
-	for flog := range gen.outChan {
-		flowClient.PushWait(types.ProtoToFlow(flog))
-	}
+	// Wait for the context to be canceled.
+	<-ctx.Done()
 }
 
 func newFlowGenerator() *flowGenerator {
@@ -132,7 +140,7 @@ func (t *flowGenerator) generateFlogs() {
 				flog.StartTime = startTime.Unix()
 				flog.EndTime = endTime.Unix()
 				t.outChan <- flog
-				time.Sleep(25 * time.Millisecond)
+				time.Sleep(5 * time.Millisecond)
 			}
 		}
 
