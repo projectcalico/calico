@@ -64,7 +64,7 @@ var _ = Describe("LoadBalancer controller UTs", func() {
 
 		factory.Start(stopChan)
 		cache.WaitForCacheSync(stopChan, serviceInformer.HasSynced)
-		dataFeed := utils.NewDataFeed(cli)
+		dataFeed := utils.NewDataFeed(cli, "etcdv3")
 
 		// Create a new controller. We don't register with a data feed,
 		// as the tests themselves will drive the controller.

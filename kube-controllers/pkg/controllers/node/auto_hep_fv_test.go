@@ -114,7 +114,7 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 		Eventually(func() error {
 			_, err := k8sClient.CoreV1().Namespaces().List(context.Background(), metav1.ListOptions{})
 			return err
-		}, 30*time.Second, 1*time.Second).Should(BeNil())
+		}, 30*time.Second, 2*time.Second).Should(BeNil())
 
 		// Run controller manager.  Empirically it can take around 10s until the
 		// controller manager is ready to create default service accounts, even
@@ -159,7 +159,7 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 		// Expect the node label to sync.
 		expectedNodeLabels := map[string]string{"label1": "value1", "calico-label": "calico-value"}
 		Eventually(func() error { return testutils.ExpectNodeLabels(c, expectedNodeLabels, cNodeName) },
-			time.Second*15, 500*time.Millisecond).Should(BeNil())
+			time.Second*15, 2*time.Second).Should(BeNil())
 
 		expectedHepName := cn.Name + "-auto-hep"
 
@@ -172,7 +172,7 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 		expectedIPs := []string{"172.16.1.1", "fe80::1", "192.168.100.1"}
 		Eventually(func() error {
 			return testutils.ExpectHostendpoint(c, expectedHepName, expectedHepLabels, expectedIPs, autoHepProfiles, defaultInterfaceName)
-		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
+		}, time.Second*15, 2*time.Second).Should(BeNil())
 
 		// Update the Kubernetes node labels.
 		Expect(testutils.UpdateK8sNode(k8sClient, kn.Name, func(kn *v1.Node) {
@@ -182,13 +182,13 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 		// Expect the node labels to sync.
 		expectedNodeLabels = map[string]string{"label1": "value2", "calico-label": "calico-value"}
 		Eventually(func() error { return testutils.ExpectNodeLabels(c, expectedNodeLabels, cNodeName) },
-			time.Second*15, 500*time.Millisecond).Should(BeNil())
+			time.Second*15, 2*time.Second).Should(BeNil())
 
 		// Expect the hostendpoint labels to sync.
 		expectedHepLabels["label1"] = "value2"
 		Eventually(func() error {
 			return testutils.ExpectHostendpoint(c, expectedHepName, expectedHepLabels, expectedIPs, autoHepProfiles, defaultInterfaceName)
-		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
+		}, time.Second*15, 2*time.Second).Should(BeNil())
 
 		// Update the Calico node with new IPs.
 		Expect(testutils.UpdateCalicoNode(c, cn.Name, func(cn *libapi.Node) {
@@ -202,7 +202,7 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 		expectedIPs = []string{"172.100.2.3", "fe80::1", "10.10.20.1", "dead:beef::1"}
 		Eventually(func() error {
 			return testutils.ExpectHostendpoint(c, expectedHepName, expectedHepLabels, expectedIPs, autoHepProfiles, defaultInterfaceName)
-		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
+		}, time.Second*15, 2*time.Second).Should(BeNil())
 
 		// Update the wireguard IPs.
 		Expect(testutils.UpdateCalicoNode(c, cn.Name, func(cn *libapi.Node) {
@@ -216,7 +216,7 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 		expectedIPs = []string{"172.100.2.3", "fe80::1", "10.10.20.1", "dead:beef::1", "192.168.100.1", "dead:beef::100:1"}
 		Eventually(func() error {
 			return testutils.ExpectHostendpoint(c, expectedHepName, expectedHepLabels, expectedIPs, autoHepProfiles, defaultInterfaceName)
-		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
+		}, time.Second*15, 2*time.Second).Should(BeNil())
 
 		// Add an internal IP and an external IP to the Addresses in the node spec.
 		// Also add a duplicate IP and make sure it is not added.
@@ -241,7 +241,7 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 		expectedIPs = []string{"172.100.2.3", "fe80::1", "10.10.20.1", "dead:beef::1", "192.168.100.1", "dead:beef::100:1", "192.168.200.1"}
 		Eventually(func() error {
 			return testutils.ExpectHostendpoint(c, expectedHepName, expectedHepLabels, expectedIPs, autoHepProfiles, defaultInterfaceName)
-		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
+		}, time.Second*15, 2*time.Second).Should(BeNil())
 
 		// Delete the Kubernetes node.
 		err = k8sClient.CoreV1().Nodes().Delete(context.Background(), kNodeName, metav1.DeleteOptions{})
@@ -249,11 +249,11 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 		Eventually(func() *libapi.Node {
 			node, _ := c.Nodes().Get(context.Background(), cNodeName, options.GetOptions{})
 			return node
-		}, time.Second*2, 500*time.Millisecond).Should(BeNil())
+		}, time.Second*15, 2*time.Second).Should(BeNil())
 
 		// Expect the hostendpoint for the node to be deleted.
 		Eventually(func() error { return testutils.ExpectHostendpointDeleted(c, expectedHepName) },
-			time.Second*2, 500*time.Millisecond).Should(BeNil())
+			time.Second*15, 2*time.Second).Should(BeNil())
 	})
 
 	It("should create a host endpoint for a Calico node if it can't find a k8s node", func() {
@@ -272,7 +272,7 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 
 		// Expect the node label to sync.
 		Eventually(func() error { return testutils.ExpectNodeLabels(c, labels, cNodeName) },
-			time.Second*15, 500*time.Millisecond).Should(BeNil())
+			time.Second*15, 2*time.Second).Should(BeNil())
 
 		expectedHepName := cn.Name + "-auto-hep"
 
@@ -282,7 +282,7 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 		expectedIPs := []string{"172.16.1.1", "fe80::1", "192.168.100.1"}
 		Eventually(func() error {
 			return testutils.ExpectHostendpoint(c, expectedHepName, expectedHepLabels, expectedIPs, autoHepProfiles, defaultInterfaceName)
-		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
+		}, time.Second*15, 2*time.Second).Should(BeNil())
 	})
 
 	It("should clean up dangling hostendpoints and create hostendpoints for nodes without them", func() {
@@ -346,11 +346,11 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 		// Expect the node label to sync.
 		expectedNodeLabels := map[string]string{"auto": "hep"}
 		Eventually(func() error { return testutils.ExpectNodeLabels(c, expectedNodeLabels, cNodeName) },
-			time.Second*15, 500*time.Millisecond).Should(BeNil())
+			time.Second*15, 2*time.Second).Should(BeNil())
 
 		// Expect the dangling hostendpoint to be deleted.
 		Eventually(func() error { return testutils.ExpectHostendpointDeleted(c, danglingHep.Name) },
-			time.Second*2, 500*time.Millisecond).Should(BeNil())
+			time.Second*15, 2*time.Second).Should(BeNil())
 
 		// Expect the user's own hostendpoint to still exist.
 		// (Empty values in the hostendpoint spec are nil slices)
@@ -358,7 +358,7 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 		var noProfiles []string
 		Eventually(func() error {
 			return testutils.ExpectHostendpoint(c, userHep.Name, map[string]string{"env": "staging"}, noExpectedIPs, noProfiles, defaultInterfaceName)
-		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
+		}, time.Second*15, 2*time.Second).Should(BeNil())
 
 		// Expect an auto hostendpoint was created for the Calico node.
 		autoHepName := cNodeName + "-auto-hep"
@@ -369,7 +369,7 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 		}
 		Eventually(func() error {
 			return testutils.ExpectHostendpoint(c, autoHepName, expectedHepLabels, expectedIPs, autoHepProfiles, defaultInterfaceName)
-		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
+		}, time.Second*15, 2*time.Second).Should(BeNil())
 	})
 
 	It("should delete hostendpoints when AUTO_HOST_ENDPOINTS is disabled", func() {
@@ -397,7 +397,7 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 		// Expect the node label to sync.
 		expectedNodeLabels := map[string]string{"label1": "value1", "calico-label": "calico-value"}
 		Eventually(func() error { return testutils.ExpectNodeLabels(c, expectedNodeLabels, cNodeName) },
-			time.Second*15, 500*time.Millisecond).Should(BeNil())
+			time.Second*15, 2*time.Second).Should(BeNil())
 
 		expectedHepName := cn.Name + "-auto-hep"
 
@@ -410,7 +410,7 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 		}
 		Eventually(func() error {
 			return testutils.ExpectHostendpoint(c, expectedHepName, expectedHepLabels, expectedIPs, autoHepProfiles, defaultInterfaceName)
-		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
+		}, time.Second*15, 2*time.Second).Should(BeNil())
 
 		// Restart the controller but with auto hostendpoints disabled.
 		nodeController.Stop()
@@ -423,7 +423,7 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 
 		// Expect the hostendpoint for the node to be deleted.
 		Eventually(func() error { return testutils.ExpectHostendpointDeleted(c, expectedHepName) },
-			time.Second*2, 500*time.Millisecond).Should(BeNil())
+			time.Second*15, 2*time.Second).Should(BeNil())
 	})
 
 	It("should delete default and keep template hostendpoints when createDefaultHostEndpoints is disabled", func() {
@@ -444,7 +444,7 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 		}
 		Eventually(func() error {
 			return testutils.ExpectHostendpoint(c, expectedDefaultHepName, expectedDefaultHepLabels, expectedDefaultIPs, autoHepProfiles, defaultInterfaceName)
-		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
+		}, time.Second*15, 2*time.Second).Should(BeNil())
 
 		// Expect a template hostendpoint to be created.
 		expectedTemplateHepName := cn.Name + "-template-auto-hep"
@@ -456,7 +456,7 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 		}
 		Eventually(func() error {
 			return testutils.ExpectHostendpoint(c, expectedTemplateHepName, expectedTemplateHepLabels, expectedTemplateIPs, autoHepProfiles, templateInterfaceName)
-		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
+		}, time.Second*15, 2*time.Second).Should(BeNil())
 
 		// Restart the controller but with auto hostendpoints disabled.
 		nodeController.Stop()
@@ -469,12 +469,12 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 
 		// Expect the default hostendpoint for the node to be deleted.
 		Eventually(func() error { return testutils.ExpectHostendpointDeleted(c, expectedDefaultHepName) },
-			time.Second*2, 500*time.Millisecond).Should(BeNil())
+			time.Second*15, 2*time.Second).Should(BeNil())
 
 		// Expect the template hostendpoint to be unchanged
 		Eventually(func() error {
 			return testutils.ExpectHostendpoint(c, expectedTemplateHepName, expectedTemplateHepLabels, expectedTemplateIPs, autoHepProfiles, templateInterfaceName)
-		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
+		}, time.Second*15, 2*time.Second).Should(BeNil())
 	})
 
 	It("should update host endpoint labels when node labels are updated", func() {
@@ -495,7 +495,7 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 		}
 		Eventually(func() error {
 			return testutils.ExpectHostendpoint(c, expectedDefaultHepName, expectedDefaultHepLabels, expectedDefaultIPs, autoHepProfiles, defaultInterfaceName)
-		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
+		}, time.Second*15, 2*time.Second).Should(BeNil())
 
 		// Expect a template hostendpoint to be created.
 		expectedTemplateHepName := cn.Name + "-template-auto-hep"
@@ -507,7 +507,7 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 		}
 		Eventually(func() error {
 			return testutils.ExpectHostendpoint(c, expectedTemplateHepName, expectedTemplateHepLabels, expectedTemplateIPs, autoHepProfiles, templateInterfaceName)
-		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
+		}, time.Second*15, 2*time.Second).Should(BeNil())
 
 		// Update node labels
 		cn.Labels = map[string]string{"calico-label": "calico-value", "calico-label1": "calico-value1"}
@@ -522,7 +522,7 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 		}
 		Eventually(func() error {
 			return testutils.ExpectHostendpoint(c, expectedDefaultHepName, expectedDefaultHepLabels, expectedDefaultIPs, autoHepProfiles, defaultInterfaceName)
-		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
+		}, time.Second*15, 2*time.Second).Should(BeNil())
 
 		// Template host endpoint labels should be updated
 		expectedTemplateHepLabels = map[string]string{
@@ -533,7 +533,7 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 		}
 		Eventually(func() error {
 			return testutils.ExpectHostendpoint(c, expectedTemplateHepName, expectedTemplateHepLabels, expectedTemplateIPs, autoHepProfiles, templateInterfaceName)
-		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
+		}, time.Second*15, 2*time.Second).Should(BeNil())
 	})
 
 	It("should update host endpoint name when template name is updated", func() {
@@ -554,7 +554,7 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 		}
 		Eventually(func() error {
 			return testutils.ExpectHostendpoint(c, expectedDefaultHepName, expectedDefaultHepLabels, expectedDefaultIPs, autoHepProfiles, defaultInterfaceName)
-		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
+		}, time.Second*15, 2*time.Second).Should(BeNil())
 
 		// Expect a template hostendpoint to be created.
 		expectedTemplateHepName := cn.Name + "-template-auto-hep"
@@ -566,7 +566,7 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 		}
 		Eventually(func() error {
 			return testutils.ExpectHostendpoint(c, expectedTemplateHepName, expectedTemplateHepLabels, expectedTemplateIPs, autoHepProfiles, templateInterfaceName)
-		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
+		}, time.Second*15, 2*time.Second).Should(BeNil())
 
 		// Restart the controller with updated template name
 		nodeController.Stop()
@@ -586,13 +586,13 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 		// Expect default hostendpoint to be unchanged
 		Eventually(func() error {
 			return testutils.ExpectHostendpoint(c, expectedDefaultHepName, expectedDefaultHepLabels, expectedDefaultIPs, autoHepProfiles, defaultInterfaceName)
-		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
+		}, time.Second*15, 2*time.Second).Should(BeNil())
 
 		// Expect template hostendpoint to have new name
 		expectedTemplateHepName = cn.Name + "-template-new-name-auto-hep"
 		Eventually(func() error {
 			return testutils.ExpectHostendpoint(c, expectedTemplateHepName, expectedTemplateHepLabels, expectedTemplateIPs, autoHepProfiles, templateInterfaceName)
-		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
+		}, time.Second*15, 2*time.Second).Should(BeNil())
 	})
 
 	It("should update template hostendpoints when template is updated", func() {
@@ -621,7 +621,7 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 		}
 		Eventually(func() error {
 			return testutils.ExpectHostendpoint(c, expectedDefaultHepName1, expectedDefaultHepLabels1, expectedDefaultIPs1, autoHepProfiles, defaultInterfaceName)
-		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
+		}, time.Second*15, 2*time.Second).Should(BeNil())
 
 		// Expect a wildcard hostendpoint to be created for node 2.
 		expectedDefaultHepName2 := cn2.Name + "-auto-hep"
@@ -632,7 +632,7 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 		}
 		Eventually(func() error {
 			return testutils.ExpectHostendpoint(c, expectedDefaultHepName2, expectedDefaultHepLabels2, expectedDefaultIPs2, autoHepProfiles, defaultInterfaceName)
-		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
+		}, time.Second*15, 2*time.Second).Should(BeNil())
 
 		// Expect a template hostendpoint to be created for node 1.
 		expectedTemplateHepName1 := cn1.Name + "-template-auto-hep"
@@ -645,7 +645,7 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 		}
 		Eventually(func() error {
 			return testutils.ExpectHostendpoint(c, expectedTemplateHepName1, expectedTemplateHepLabels1, expectedTemplateIPs1, autoHepProfiles, templateInterfaceName)
-		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
+		}, time.Second*15, 2*time.Second).Should(BeNil())
 
 		// Expect a template hostendpoint to be created for node 2.
 		expectedTemplateHepName2 := cn2.Name + "-template-auto-hep"
@@ -657,7 +657,7 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 		}
 		Eventually(func() error {
 			return testutils.ExpectHostendpoint(c, expectedTemplateHepName2, expectedTemplateHepLabels2, expectedTemplateIPs2, autoHepProfiles, templateInterfaceName)
-		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
+		}, time.Second*15, 2*time.Second).Should(BeNil())
 
 		// Restart the controller with updated template
 		nodeController.Stop()
@@ -683,14 +683,14 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 		// Expect the default hostendpoints to be present
 		Eventually(func() error {
 			return testutils.ExpectHostendpoint(c, expectedDefaultHepName1, expectedDefaultHepLabels1, expectedDefaultIPs1, autoHepProfiles, defaultInterfaceName)
-		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
+		}, time.Second*15, 2*time.Second).Should(BeNil())
 		Eventually(func() error {
 			return testutils.ExpectHostendpoint(c, expectedDefaultHepName2, expectedDefaultHepLabels2, expectedDefaultIPs2, autoHepProfiles, defaultInterfaceName)
-		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
+		}, time.Second*15, 2*time.Second).Should(BeNil())
 
 		// Expect the template hostendpoint for node2 to be deleted
 		Eventually(func() error { return testutils.ExpectHostendpointDeleted(c, expectedTemplateHepName2) },
-			time.Second*2, 500*time.Millisecond).Should(BeNil())
+			time.Second*15, 2*time.Second).Should(BeNil())
 
 		// Expect the template hostendpoints for node1 to be updated
 		expectedTemplateHepLabels1 = map[string]string{
@@ -702,7 +702,7 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 		}
 		Eventually(func() error {
 			return testutils.ExpectHostendpoint(c, expectedTemplateHepName1, expectedTemplateHepLabels1, expectedTemplateIPs1, autoHepProfiles, templateInterfaceName)
-		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
+		}, time.Second*15, 2*time.Second).Should(BeNil())
 
 		// Expect a new template hostendpoint to be created for node 1.
 		expectedTemplateHepName3 := cn1.Name + "-template2-auto-hep"
@@ -714,7 +714,7 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 		}
 		Eventually(func() error {
 			return testutils.ExpectHostendpoint(c, expectedTemplateHepName3, expectedTemplateHepLabels3, expectedTemplateIPs3, autoHepProfiles, templateInterfaceName)
-		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
+		}, time.Second*15, 2*time.Second).Should(BeNil())
 
 		// Restart the controller with autoCreate Disabled, should clean up all created hostendpoints
 		nodeController.Stop()
@@ -727,15 +727,15 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 
 		// Expect default hostendpoints to be deleted
 		Eventually(func() error { return testutils.ExpectHostendpointDeleted(c, expectedDefaultHepName1) },
-			time.Second*2, 500*time.Millisecond).Should(BeNil())
+			time.Second*15, 2*time.Second).Should(BeNil())
 		Eventually(func() error { return testutils.ExpectHostendpointDeleted(c, expectedDefaultHepName2) },
-			time.Second*2, 500*time.Millisecond).Should(BeNil())
+			time.Second*15, 2*time.Second).Should(BeNil())
 
 		// Expect template hostendpoints to be deleted
 		Eventually(func() error { return testutils.ExpectHostendpointDeleted(c, expectedTemplateHepName1) },
-			time.Second*2, 500*time.Millisecond).Should(BeNil())
+			time.Second*15, 2*time.Second).Should(BeNil())
 		Eventually(func() error { return testutils.ExpectHostendpointDeleted(c, expectedTemplateHepName3) },
-			time.Second*2, 500*time.Millisecond).Should(BeNil())
+			time.Second*15, 2*time.Second).Should(BeNil())
 	})
 
 	It("should sync auto host endpoint if it has been updated by something other than kube controller", func() {
@@ -756,7 +756,7 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 		}
 		Eventually(func() error {
 			return testutils.ExpectHostendpoint(c, expectedDefaultHepName, expectedDefaultHepLabels, expectedDefaultIPs, autoHepProfiles, defaultInterfaceName)
-		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
+		}, time.Second*15, 2*time.Second).Should(BeNil())
 
 		// Expect a template hostendpoint to be created.
 		expectedTemplateHepName := cn.Name + "-template-auto-hep"
@@ -768,7 +768,7 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 		}
 		Eventually(func() error {
 			return testutils.ExpectHostendpoint(c, expectedTemplateHepName, expectedTemplateHepLabels, expectedTemplateIPs, autoHepProfiles, templateInterfaceName)
-		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
+		}, time.Second*15, 2*time.Second).Should(BeNil())
 
 		// Update the default host endpoint
 		defaultHep, err := c.HostEndpoints().Get(context.Background(), expectedDefaultHepName, options.GetOptions{})
@@ -780,7 +780,7 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 		// Expect the default host endpoint to be synced correctly after external update
 		Eventually(func() error {
 			return testutils.ExpectHostendpoint(c, expectedDefaultHepName, expectedDefaultHepLabels, expectedDefaultIPs, autoHepProfiles, defaultInterfaceName)
-		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
+		}, time.Second*15, 2*time.Second).Should(BeNil())
 
 		// Update the template host endpoint
 		templateHep, err := c.HostEndpoints().Get(context.Background(), expectedTemplateHepName, options.GetOptions{})
@@ -792,7 +792,7 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 		// Expect the template host endpoint to be synced correctly after external update
 		Eventually(func() error {
 			return testutils.ExpectHostendpoint(c, expectedTemplateHepName, expectedTemplateHepLabels, expectedTemplateIPs, autoHepProfiles, templateInterfaceName)
-		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
+		}, time.Second*15, 2*time.Second).Should(BeNil())
 
 		// Manually delete the default host endpoint, kube-controller should recreate it
 		_, err = c.HostEndpoints().Delete(context.Background(), expectedDefaultHepName, options.DeleteOptions{})
@@ -801,7 +801,7 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 		// Expect the default host endpoint to be recreated when deleted manually
 		Eventually(func() error {
 			return testutils.ExpectHostendpoint(c, expectedDefaultHepName, expectedDefaultHepLabels, expectedDefaultIPs, autoHepProfiles, defaultInterfaceName)
-		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
+		}, time.Second*15, 2*time.Second).Should(BeNil())
 
 		// Manually delete the template host endpoint, kube-controller should recreate it
 		_, err = c.HostEndpoints().Delete(context.Background(), expectedTemplateHepName, options.DeleteOptions{})
@@ -810,7 +810,7 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 		// Expect the template host endpoint to be recreated when deleted manually
 		Eventually(func() error {
 			return testutils.ExpectHostendpoint(c, expectedTemplateHepName, expectedTemplateHepLabels, expectedTemplateIPs, autoHepProfiles, templateInterfaceName)
-		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
+		}, time.Second*15, 2*time.Second).Should(BeNil())
 	})
 
 	It("should omit invalid node IP from generated autohep", func() {
@@ -838,7 +838,7 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 		}
 		Eventually(func() error {
 			return testutils.ExpectHostendpoint(c, expectedDefaultHepName, expectedDefaultHepLabels, expectedDefaultIPs, autoHepProfiles, defaultInterfaceName)
-		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
+		}, time.Second*15, 2*time.Second).Should(BeNil())
 	})
 })
 

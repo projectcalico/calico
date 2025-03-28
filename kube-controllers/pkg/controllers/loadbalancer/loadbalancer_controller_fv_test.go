@@ -179,7 +179,7 @@ var _ = Describe("Calico loadbalancer controller FV tests (etcd mode)", func() {
 		Eventually(func() error {
 			_, err := k8sClient.CoreV1().Services(testNamespace).List(context.Background(), metav1.ListOptions{})
 			return err
-		}, 30*time.Second, 1*time.Second).Should(BeNil())
+		}, 30*time.Second, 2*time.Second).Should(BeNil())
 
 		// Run controller manager.  Empirically it can take around 10s until the
 		// controller manager is ready to create default service accounts, even
@@ -225,7 +225,7 @@ var _ = Describe("Calico loadbalancer controller FV tests (etcd mode)", func() {
 			Eventually(func() []v1.LoadBalancerIngress {
 				service, _ := k8sClient.CoreV1().Services(testNamespace).Get(context.Background(), basicService.Name, metav1.GetOptions{})
 				return service.Status.LoadBalancer.Ingress
-			}, time.Second*15, 500*time.Millisecond).ShouldNot(BeEmpty())
+			}, time.Second*15, 2*time.Second).ShouldNot(BeEmpty())
 		})
 
 		It("Should remove previously assigned IP when all IPPools are deleted", func() {
@@ -235,7 +235,7 @@ var _ = Describe("Calico loadbalancer controller FV tests (etcd mode)", func() {
 			Eventually(func() []v1.LoadBalancerIngress {
 				service, _ := k8sClient.CoreV1().Services(testNamespace).Get(context.Background(), basicService.Name, metav1.GetOptions{})
 				return service.Status.LoadBalancer.Ingress
-			}, time.Second*15, 500*time.Millisecond).ShouldNot(BeEmpty())
+			}, time.Second*15, 2*time.Second).ShouldNot(BeEmpty())
 
 			_, err = calicoClient.IPPools().Delete(context.Background(), v4poolManual.Name, options.DeleteOptions{})
 			Expect(err).NotTo(HaveOccurred())
@@ -250,7 +250,7 @@ var _ = Describe("Calico loadbalancer controller FV tests (etcd mode)", func() {
 			Eventually(func() []v1.LoadBalancerIngress {
 				service, _ := k8sClient.CoreV1().Services(testNamespace).Get(context.Background(), basicService.Name, metav1.GetOptions{})
 				return service.Status.LoadBalancer.Ingress
-			}, time.Second*15, 500*time.Millisecond).Should(BeEmpty())
+			}, time.Second*15, 2*time.Second).Should(BeEmpty())
 		})
 
 		It("Should assign IP from specified IP pool", func() {
@@ -260,7 +260,7 @@ var _ = Describe("Calico loadbalancer controller FV tests (etcd mode)", func() {
 			Eventually(func() []v1.LoadBalancerIngress {
 				service, _ := k8sClient.CoreV1().Services(testNamespace).Get(context.Background(), serviceIpv4PoolSpecified.Name, metav1.GetOptions{})
 				return service.Status.LoadBalancer.Ingress
-			}, time.Second*15, 500*time.Millisecond).Should(Not(BeEmpty()))
+			}, time.Second*15, 2*time.Second).Should(Not(BeEmpty()))
 
 			service, err := k8sClient.CoreV1().Services(testNamespace).Get(context.Background(), serviceIpv4PoolSpecified.Name, metav1.GetOptions{})
 			Expect(err).NotTo(HaveOccurred())
@@ -274,7 +274,7 @@ var _ = Describe("Calico loadbalancer controller FV tests (etcd mode)", func() {
 			Eventually(func() []v1.LoadBalancerIngress {
 				service, _ := k8sClient.CoreV1().Services(testNamespace).Get(context.Background(), serviceIpAddressSpecified.Name, metav1.GetOptions{})
 				return service.Status.LoadBalancer.Ingress
-			}, time.Second*15, 500*time.Millisecond).Should(Not(BeEmpty()))
+			}, time.Second*15, 2*time.Second).Should(Not(BeEmpty()))
 
 			service, err := k8sClient.CoreV1().Services(testNamespace).Get(context.Background(), serviceIpAddressSpecified.Name, metav1.GetOptions{})
 			Expect(err).NotTo(HaveOccurred())
@@ -288,7 +288,7 @@ var _ = Describe("Calico loadbalancer controller FV tests (etcd mode)", func() {
 			Eventually(func() []v1.LoadBalancerIngress {
 				service, _ := k8sClient.CoreV1().Services(testNamespace).Get(context.Background(), basicService.Name, metav1.GetOptions{})
 				return service.Status.LoadBalancer.Ingress
-			}, time.Second*15, 500*time.Millisecond).Should(Not(BeEmpty()))
+			}, time.Second*15, 2*time.Second).Should(Not(BeEmpty()))
 
 			_, err = k8sClient.CoreV1().Services(testNamespace).Create(context.Background(), &serviceIpv4PoolSpecified, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
@@ -296,7 +296,7 @@ var _ = Describe("Calico loadbalancer controller FV tests (etcd mode)", func() {
 			Eventually(func() []v1.LoadBalancerIngress {
 				service, _ := k8sClient.CoreV1().Services(testNamespace).Get(context.Background(), serviceIpv4PoolSpecified.Name, metav1.GetOptions{})
 				return service.Status.LoadBalancer.Ingress
-			}, time.Second*15, 500*time.Millisecond).Should(Not(BeEmpty()))
+			}, time.Second*15, 2*time.Second).Should(Not(BeEmpty()))
 
 			serviceSpecific, err := k8sClient.CoreV1().Services(testNamespace).Get(context.Background(), serviceIpv4PoolSpecified.Name, metav1.GetOptions{})
 			Expect(err).NotTo(HaveOccurred())
@@ -328,7 +328,7 @@ var _ = Describe("Calico loadbalancer controller FV tests (etcd mode)", func() {
 			Eventually(func() string {
 				service, _ := k8sClient.CoreV1().Services(testNamespace).Get(context.Background(), basicService.Name, metav1.GetOptions{})
 				return service.Status.LoadBalancer.Ingress[0].IP
-			}, time.Second*15, 500*time.Millisecond).Should(Equal(v4poolManualSpecifcIP))
+			}, time.Second*15, 2*time.Second).Should(Equal(v4poolManualSpecifcIP))
 		})
 
 		It("Should not assign IP if there is no LoadBalancer IP pool", func() {
@@ -344,7 +344,7 @@ var _ = Describe("Calico loadbalancer controller FV tests (etcd mode)", func() {
 			Eventually(func() []v1.LoadBalancerIngress {
 				service, _ := k8sClient.CoreV1().Services(testNamespace).Get(context.Background(), basicService.Name, metav1.GetOptions{})
 				return service.Status.LoadBalancer.Ingress
-			}, time.Second*15, 500*time.Millisecond).Should(BeEmpty())
+			}, time.Second*15, 2*time.Second).Should(BeEmpty())
 		})
 
 		It("Should assign IP after LoadBalancer IP pool is created", func() {
@@ -360,7 +360,7 @@ var _ = Describe("Calico loadbalancer controller FV tests (etcd mode)", func() {
 			Eventually(func() []v1.LoadBalancerIngress {
 				service, _ := k8sClient.CoreV1().Services(testNamespace).Get(context.Background(), basicService.Name, metav1.GetOptions{})
 				return service.Status.LoadBalancer.Ingress
-			}, time.Second*15, 500*time.Millisecond).Should(BeEmpty())
+			}, time.Second*15, 2*time.Second).Should(BeEmpty())
 
 			_, err = calicoClient.IPPools().Create(context.Background(), &v4poolAutomatic, options.SetOptions{})
 			Expect(err).NotTo(HaveOccurred())
@@ -368,7 +368,7 @@ var _ = Describe("Calico loadbalancer controller FV tests (etcd mode)", func() {
 			Eventually(func() []v1.LoadBalancerIngress {
 				service, _ := k8sClient.CoreV1().Services(testNamespace).Get(context.Background(), basicService.Name, metav1.GetOptions{})
 				return service.Status.LoadBalancer.Ingress
-			}, time.Second*15, 500*time.Millisecond).ShouldNot(BeEmpty())
+			}, time.Second*15, 2*time.Second).ShouldNot(BeEmpty())
 		})
 
 		It("Should update service IP after pool annotation has been added", func() {
@@ -378,7 +378,7 @@ var _ = Describe("Calico loadbalancer controller FV tests (etcd mode)", func() {
 			Eventually(func() []v1.LoadBalancerIngress {
 				service, _ := k8sClient.CoreV1().Services(testNamespace).Get(context.Background(), basicService.Name, metav1.GetOptions{})
 				return service.Status.LoadBalancer.Ingress
-			}, time.Second*15, 500*time.Millisecond).Should(Not(BeEmpty()))
+			}, time.Second*15, 2*time.Second).Should(Not(BeEmpty()))
 
 			service, err := k8sClient.CoreV1().Services(testNamespace).Get(context.Background(), basicService.Name, metav1.GetOptions{})
 			Expect(err).NotTo(HaveOccurred())
@@ -393,7 +393,7 @@ var _ = Describe("Calico loadbalancer controller FV tests (etcd mode)", func() {
 			Eventually(func() string {
 				service, _ := k8sClient.CoreV1().Services(testNamespace).Get(context.Background(), basicService.Name, metav1.GetOptions{})
 				return service.Status.LoadBalancer.Ingress[0].IP
-			}, time.Second*15, 500*time.Millisecond).Should(Equal(v4poolManualIP))
+			}, time.Second*15, 2*time.Second).Should(Equal(v4poolManualIP))
 		})
 
 		It("Should update service IP after ip annotation has been added", func() {
@@ -403,7 +403,7 @@ var _ = Describe("Calico loadbalancer controller FV tests (etcd mode)", func() {
 			Eventually(func() []v1.LoadBalancerIngress {
 				service, _ := k8sClient.CoreV1().Services(testNamespace).Get(context.Background(), basicService.Name, metav1.GetOptions{})
 				return service.Status.LoadBalancer.Ingress
-			}, time.Second*15, 500*time.Millisecond).Should(Not(BeEmpty()))
+			}, time.Second*15, 2*time.Second).Should(Not(BeEmpty()))
 
 			service, err := k8sClient.CoreV1().Services(testNamespace).Get(context.Background(), basicService.Name, metav1.GetOptions{})
 			Expect(err).NotTo(HaveOccurred())
@@ -418,7 +418,7 @@ var _ = Describe("Calico loadbalancer controller FV tests (etcd mode)", func() {
 			Eventually(func() string {
 				service, _ := k8sClient.CoreV1().Services(testNamespace).Get(context.Background(), basicService.Name, metav1.GetOptions{})
 				return service.Status.LoadBalancer.Ingress[0].IP
-			}, time.Second*15, 500*time.Millisecond).Should(Equal(specificIpFromAutomaticPool))
+			}, time.Second*15, 2*time.Second).Should(Equal(specificIpFromAutomaticPool))
 		})
 
 		It("Should update service IP after the address has been released from another service", func() {
@@ -429,7 +429,7 @@ var _ = Describe("Calico loadbalancer controller FV tests (etcd mode)", func() {
 			Eventually(func() []v1.LoadBalancerIngress {
 				service, _ := k8sClient.CoreV1().Services(testNamespace).Get(context.Background(), serviceIpAddressSpecified.Name, metav1.GetOptions{})
 				return service.Status.LoadBalancer.Ingress
-			}, time.Second*15, 500*time.Millisecond).Should(Not(BeEmpty()))
+			}, time.Second*15, 2*time.Second).Should(Not(BeEmpty()))
 
 			// Check that the assigned IP is the one specified in the annotation
 			service, err := k8sClient.CoreV1().Services(testNamespace).Get(context.Background(), serviceIpAddressSpecified.Name, metav1.GetOptions{})
@@ -443,7 +443,7 @@ var _ = Describe("Calico loadbalancer controller FV tests (etcd mode)", func() {
 			Eventually(func() []v1.LoadBalancerIngress {
 				service, _ := k8sClient.CoreV1().Services(testNamespace).Get(context.Background(), serviceIpv4PoolSpecified.Name, metav1.GetOptions{})
 				return service.Status.LoadBalancer.Ingress
-			}, time.Second*15, 500*time.Millisecond).Should(Not(BeEmpty()))
+			}, time.Second*15, 2*time.Second).Should(Not(BeEmpty()))
 
 			service, err = k8sClient.CoreV1().Services(testNamespace).Get(context.Background(), serviceIpv4PoolSpecified.Name, metav1.GetOptions{})
 			Expect(err).NotTo(HaveOccurred())
@@ -460,7 +460,7 @@ var _ = Describe("Calico loadbalancer controller FV tests (etcd mode)", func() {
 			Eventually(func() []v1.LoadBalancerIngress {
 				service, _ := k8sClient.CoreV1().Services(testNamespace).Get(context.Background(), serviceIpv4PoolSpecified.Name, metav1.GetOptions{})
 				return service.Status.LoadBalancer.Ingress
-			}, time.Second*15, 500*time.Millisecond).Should(BeEmpty())
+			}, time.Second*15, 2*time.Second).Should(BeEmpty())
 
 			err = k8sClient.CoreV1().Services(testNamespace).Delete(context.Background(), serviceIpAddressSpecified.Name, metav1.DeleteOptions{})
 			Expect(err).NotTo(HaveOccurred())
@@ -469,7 +469,7 @@ var _ = Describe("Calico loadbalancer controller FV tests (etcd mode)", func() {
 			Eventually(func() []v1.LoadBalancerIngress {
 				service, _ := k8sClient.CoreV1().Services(testNamespace).Get(context.Background(), serviceIpv4PoolSpecified.Name, metav1.GetOptions{})
 				return service.Status.LoadBalancer.Ingress
-			}, time.Second*15, 500*time.Millisecond).Should(Not(BeEmpty()))
+			}, time.Second*15, 2*time.Second).Should(Not(BeEmpty()))
 
 			service, err = k8sClient.CoreV1().Services(testNamespace).Get(context.Background(), serviceIpv4PoolSpecified.Name, metav1.GetOptions{})
 			Expect(err).NotTo(HaveOccurred())
