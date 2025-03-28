@@ -53,6 +53,10 @@ static CALI_BPF_INLINE bool fib_approve(struct cali_tc_ctx *ctx, __u32 ifindex)
 					val->name, val->flags);
 			return false;
 		}
+		if (iface_is_not_managed(val->flags)) {
+			CALI_DEBUG("Allow packets to host interface not managed by calico (ifindex %d).", ifindex);
+			return true;
+		}
 	}
 
 	return true;
