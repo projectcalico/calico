@@ -1193,6 +1193,121 @@ var _ = Describe("Test Pod conversion", func() {
 
 		Expect(pod).To(Equal(makePod()), "Original pod should not be modified")
 	})
+
+	It("should parse valid QoSControl annotations", func() {
+		pod := kapiv1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "podA",
+				Namespace: "default",
+				Annotations: map[string]string{
+					"arbitrary":                                   "annotation",
+					"qos.projectcalico.org/ingressBandwidth":      "1M",
+					"qos.projectcalico.org/egressBandwidth":       "2M",
+					"qos.projectcalico.org/ingressBurst":          "3M",
+					"qos.projectcalico.org/egressBurst":           "4M",
+					"qos.projectcalico.org/ingressPacketRate":     "5M",
+					"qos.projectcalico.org/egressPacketRate":      "6M",
+					"qos.projectcalico.org/ingressMaxConnections": "7M",
+					"qos.projectcalico.org/egressMaxConnections":  "8M",
+				},
+				Labels: map[string]string{
+					"labelA": "valueA",
+					"labelB": "valueB",
+				},
+				ResourceVersion: "1234",
+			},
+			Spec: kapiv1.PodSpec{
+				NodeName:   "nodeA",
+				Containers: []kapiv1.Container{},
+			},
+		}
+
+		wep, err := podToWorkloadEndpoint(c, &pod)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(wep.Value.(*libapiv3.WorkloadEndpoint).Spec.QoSControls).ToNot(BeNil())
+		expectedQoSControls := &libapiv3.QoSControls{
+			IngressBandwidth:      1000000,
+			EgressBandwidth:       2000000,
+			IngressBurst:          3000000,
+			EgressBurst:           4000000,
+			IngressPacketRate:     5000000,
+			EgressPacketRate:      6000000,
+			IngressMaxConnections: 7000000,
+			EgressMaxConnections:  8000000,
+		}
+		Expect(wep.Value.(*libapiv3.WorkloadEndpoint).Spec.QoSControls).To(BeEquivalentTo(expectedQoSControls))
+	})
+
+	It("should cap invalid QoSControl annotations to min/max values", func() {
+		pod := kapiv1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "podA",
+				Namespace: "default",
+				Annotations: map[string]string{
+					"arbitrary":                                   "annotation",
+					"qos.projectcalico.org/ingressBandwidth":      "1",
+					"qos.projectcalico.org/egressBandwidth":       "20P",
+					"qos.projectcalico.org/ingressBurst":          "3",
+					"qos.projectcalico.org/egressBurst":           "40P",
+					"qos.projectcalico.org/ingressPacketRate":     "5",
+					"qos.projectcalico.org/egressPacketRate":      "60P",
+					"qos.projectcalico.org/ingressMaxConnections": "0",
+					"qos.projectcalico.org/egressMaxConnections":  "80P",
+				},
+				Labels: map[string]string{
+					"labelA": "valueA",
+					"labelB": "valueB",
+				},
+				ResourceVersion: "1234",
+			},
+			Spec: kapiv1.PodSpec{
+				NodeName:   "nodeA",
+				Containers: []kapiv1.Container{},
+			},
+		}
+
+		wep, err := podToWorkloadEndpoint(c, &pod)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(wep.Value.(*libapiv3.WorkloadEndpoint).Spec.QoSControls).ToNot(BeNil())
+		expectedQoSControls := &libapiv3.QoSControls{
+			IngressBandwidth:      1000,
+			EgressBandwidth:       1000000000000000,
+			IngressBurst:          1000,
+			EgressBurst:           4294967296,
+			IngressPacketRate:     10,
+			EgressPacketRate:      1000000000000,
+			IngressMaxConnections: 1,
+			EgressMaxConnections:  100000000000,
+		}
+		Expect(wep.Value.(*libapiv3.WorkloadEndpoint).Spec.QoSControls).To(BeEquivalentTo(expectedQoSControls))
+	})
+
+	It("should ignore burst QoSControl annotation if bandwidth is not present", func() {
+		pod := kapiv1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "podA",
+				Namespace: "default",
+				Annotations: map[string]string{
+					"arbitrary":                          "annotation",
+					"qos.projectcalico.org/ingressBurst": "3M",
+					"qos.projectcalico.org/egressBurst":  "4M",
+				},
+				Labels: map[string]string{
+					"labelA": "valueA",
+					"labelB": "valueB",
+				},
+				ResourceVersion: "1234",
+			},
+			Spec: kapiv1.PodSpec{
+				NodeName:   "nodeA",
+				Containers: []kapiv1.Container{},
+			},
+		}
+
+		wep, err := podToWorkloadEndpoint(c, &pod)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(wep.Value.(*libapiv3.WorkloadEndpoint).Spec.QoSControls).To(BeNil())
+	})
 })
 
 var _ = Describe("Test UID conversion", func() {

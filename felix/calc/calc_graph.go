@@ -54,8 +54,9 @@ type rulesUpdateCallbacks interface {
 }
 
 type endpointCallbacks interface {
-	OnEndpointTierUpdate(endpointKey model.Key,
-		endpoint interface{},
+	OnEndpointTierUpdate(endpointKey model.EndpointKey,
+		endpoint model.Endpoint,
+		peerData *EndpointBGPPeer,
 		filteredTiers []TierInfo)
 }
 
@@ -375,6 +376,11 @@ func NewCalculationGraph(
 	polResolver.RegisterCallback(callbacks)
 	cg.policyResolver = polResolver
 
+	// Create and hook up the active BGP peer calculator.
+	activeBGPPeerCalc := NewActiveBGPPeerCalculator(hostname)
+	activeBGPPeerCalc.RegisterWith(localEndpointDispatcher, allUpdDispatcher)
+	activeBGPPeerCalc.OnEndpointBGPPeerDataUpdate = polResolver.OnEndpointBGPPeerDataUpdate
+
 	// Register for host IP updates.
 	//
 	//        ...
@@ -502,7 +508,7 @@ func NewCalculationGraph(
 		// The lookup cache also caches networkset information for flow log reporting.
 		cache.nsCache.RegisterWith(allUpdDispatcher)
 	} else {
-		log.Debug("lookup cache is nil on windows platform")
+		log.Debug("lookup cache is disabled")
 	}
 
 	// Register for IP Pool updates. EncapsulationResolver will send a message to the

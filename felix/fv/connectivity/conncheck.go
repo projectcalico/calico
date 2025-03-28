@@ -122,14 +122,14 @@ func (c *Checker) ExpectNone(from ConnectionSource, to ConnectionTarget, explici
 // and ConnectionTarget with details configurable with ExpectationOption(s).
 // This is a super set of ExpectSome()
 func (c *Checker) Expect(expected Expected,
-	from ConnectionSource, to ConnectionTarget, opts ...ExpectationOption) {
-
+	from ConnectionSource, to ConnectionTarget, opts ...ExpectationOption,
+) {
 	c.expect(expected, from, to, opts...)
 }
 
 func (c *Checker) ExpectLoss(from ConnectionSource, to ConnectionTarget,
-	duration time.Duration, maxPacketLossPercent float64, maxPacketLossNumber int, explicitPort ...uint16) {
-
+	duration time.Duration, maxPacketLossPercent float64, maxPacketLossNumber int, explicitPort ...uint16,
+) {
 	// Packet loss measurements shouldn't be retried.
 	c.RetriesDisabled = true
 
@@ -140,8 +140,8 @@ func (c *Checker) ExpectLoss(from ConnectionSource, to ConnectionTarget,
 }
 
 func (c *Checker) expect(expected Expected, from ConnectionSource, to ConnectionTarget,
-	opts ...ExpectationOption) {
-
+	opts ...ExpectationOption,
+) {
 	UnactivatedCheckers.Add(c)
 	if c.ReverseDirection {
 		from, to = to.(ConnectionSource), from.(ConnectionTarget)
@@ -683,7 +683,6 @@ func (e Expectation) Matches(response *Result, checkSNAT bool) bool {
 				return false
 			}
 		}
-
 	}
 
 	return true
@@ -766,7 +765,8 @@ func (cmd *CheckCmd) run(cName string, logMsg string) *Result {
 	logCxt.Debugf("Entering connectivity.Check(%v,%v,%v,%v,%v)",
 		cmd.ip, cmd.port, cmd.protocol, cmd.sendLen, cmd.recvLen)
 
-	args := []string{"exec", cName,
+	args := []string{
+		"exec", cName,
 		"test-connection", "--protocol=" + cmd.protocol,
 		fmt.Sprintf("--duration=%d", int(cmd.duration.Seconds())),
 		fmt.Sprintf("--sendlen=%d", cmd.sendLen),
@@ -816,7 +816,8 @@ func (cmd *CheckCmd) run(cName string, logMsg string) *Result {
 	err = connectionCmd.Wait()
 	logCxt.WithFields(log.Fields{
 		"stdout": string(wOut),
-		"stderr": string(wErr)}).WithError(err).Info(logMsg)
+		"stderr": string(wErr),
+	}).WithError(err).Info(logMsg)
 
 	var resp Result
 	r := regexp.MustCompile(`RESULT=(.*)\n`)
@@ -878,7 +879,6 @@ func WithTimeout(t time.Duration) CheckOption {
 
 // Check executes the connectivity check
 func Check(cName, logMsg, ip, port, protocol string, opts ...CheckOption) *Result {
-
 	const defaultPingTimeout = 2 * time.Second
 	cmd := CheckCmd{
 		nsPath:   "-",
@@ -895,8 +895,10 @@ func Check(cName, logMsg, ip, port, protocol string, opts ...CheckOption) *Resul
 	return cmd.run(cName, logMsg)
 }
 
-const ConnectionTypeStream = "stream"
-const ConnectionTypePing = "ping"
+const (
+	ConnectionTypeStream = "stream"
+	ConnectionTypePing   = "ping"
+)
 
 type ConnConfig struct {
 	ConnType string
@@ -951,6 +953,7 @@ type PersistentConnection struct {
 	MonitorConnectivity bool
 	NamespacePath       string
 	Timeout             time.Duration
+	Sleep               time.Duration
 
 	loopFile string
 	runCmd   *exec.Cmd
@@ -960,6 +963,7 @@ type PersistentConnection struct {
 }
 
 func (pc *PersistentConnection) Stop() {
+	log.Infof("Stopping PersistentConnection %s, loopFile %s", pc.RuntimeName, pc.loopFile)
 	Expect(pc.stop()).NotTo(HaveOccurred())
 }
 
@@ -979,6 +983,7 @@ func (pc *PersistentConnection) stop() error {
 }
 
 func (pc *PersistentConnection) Start() error {
+	log.Infof("Starting PersistentConnection %s", pc.RuntimeName)
 	namespacePath := pc.NamespacePath
 	if namespacePath == "" {
 		namespacePath = "-"
@@ -1009,6 +1014,9 @@ func (pc *PersistentConnection) Start() error {
 	}
 	if pc.Timeout > 0 {
 		args = append(args, fmt.Sprintf("--timeout=%d", pc.Timeout/time.Second))
+	}
+	if pc.Sleep > 0 {
+		args = append(args, fmt.Sprintf("--sleep=%d", pc.Sleep/time.Second))
 	}
 	runCmd := utils.Command(
 		"docker",
@@ -1062,16 +1070,24 @@ func (pc *PersistentConnection) Start() error {
 	if err := runCmd.Start(); err != nil {
 		return fmt.Errorf("failed to start a permanent connection: %v", err)
 	}
-	Eventually(func() error {
-		return pc.Runtime.ExecMayFail("stat", loopFile)
-	}, 5*time.Second, time.Second).Should(
-		HaveOccurred(),
-		"Failed to wait for test-connection to be ready, the loop file did not disappear",
-	)
+
+	loopFileGone := false
+	for range 5 {
+		err = pc.Runtime.ExecMayFail("stat", loopFile)
+		if err != nil {
+			loopFileGone = true
+			break
+		}
+		time.Sleep(time.Second)
+	}
 
 	pc.loopFile = loopFile
 	pc.runCmd = runCmd
 	pc.Name = n
+
+	if !loopFileGone {
+		return fmt.Errorf("failed to wait for test-connection to be ready, the loop file did not disappear")
+	}
 
 	return nil
 }

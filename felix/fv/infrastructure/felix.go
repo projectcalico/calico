@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -40,6 +41,7 @@ import (
 	"github.com/projectcalico/calico/felix/fv/metrics"
 	"github.com/projectcalico/calico/felix/fv/tcpdump"
 	"github.com/projectcalico/calico/felix/fv/utils"
+	"github.com/projectcalico/calico/goldmane/pkg/types"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
@@ -161,6 +163,12 @@ func RunFelix(infra DatastoreInfra, id int, options TopologyOptions) *Felix {
 	fvBin := os.Getenv("FV_BINARY")
 	if fvBin == "" {
 		fvBin = fmt.Sprintf("bin/calico-felix-%s", arch)
+	}
+
+	if cwLogDir == "" {
+		wDir, err := os.Getwd()
+		Expect(err).NotTo(HaveOccurred())
+		cwLogDir = filepath.Join(wDir, "/cwlogs")
 	}
 	volumes := map[string]string{
 		path.Join(wd, "..", "bin"):        "/usr/local/bin",
@@ -415,7 +423,7 @@ func (f *Felix) FlowLogsFromGoldmane() ([]flowlog.FlowLog, error) {
 	}
 	var flogs []flowlog.FlowLog
 	for _, f := range flows {
-		flogs = append(flogs, goldmane.ConvertGoldmaneToFlowlog(f))
+		flogs = append(flogs, goldmane.ConvertGoldmaneToFlowlog(types.FlowToProto(f)))
 	}
 	return flogs, nil
 }
@@ -487,6 +495,9 @@ func (f *Felix) BPFIfState(family int) map[string]BPFIfState {
 
 		name := match[3]
 		flags := match[2]
+		if strings.Contains(flags, "notmanaged") {
+			continue
+		}
 		ifIndex, _ := strconv.Atoi(match[1])
 
 		inPolV4 := -1

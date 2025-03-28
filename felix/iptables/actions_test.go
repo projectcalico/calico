@@ -48,4 +48,6 @@ var _ = DescribeTable("Actions",
 	Entry("RestoreConnMarkAction", environment.Features{}, RestoreConnMarkAction{RestoreMask: 0x100}, "--jump CONNMARK --restore-mark --mask 0x100"),
 	Entry("SaveConnMarkAction", environment.Features{}, SaveConnMarkAction{}, "--jump CONNMARK --save-mark --mask 0xffffffff"),
 	Entry("RestoreConnMarkAction", environment.Features{}, RestoreConnMarkAction{}, "--jump CONNMARK --restore-mark --mask 0xffffffff"),
+	Entry("LimitPacketRateAction", environment.Features{}, LimitPacketRateAction{Rate: 1000, Mark: 0x200}, "-m limit --limit 1000/sec --jump MARK --set-mark 0x200/0x200"),
+	Entry("LimitNumConnectionsAction", environment.Features{}, LimitNumConnectionsAction{Num: 10, RejectWith: generictables.RejectWithTCPReset}, "-p tcp -m tcp --tcp-flags FIN,SYN,RST,ACK SYN -m connlimit --connlimit-above 10 --connlimit-mask 0 -j REJECT --reject-with tcp-reset"),
 )

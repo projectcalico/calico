@@ -21,7 +21,6 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/calico/felix/calc"
-	"github.com/projectcalico/calico/felix/collector/types/boundedset"
 	"github.com/projectcalico/calico/felix/collector/types/endpoint"
 	"github.com/projectcalico/calico/felix/collector/types/metric"
 	"github.com/projectcalico/calico/felix/collector/types/tuple"
@@ -49,7 +48,7 @@ var (
 	tuple4 = tuple.Make(localIp2, remoteIp1, proto_tcp, srcPort4, dstPort)
 	tuple5 = tuple.Make(localIp2, remoteIp1, proto_tcp, srcPort5, dstPort)
 	tuple6 = tuple.Make(localIp2, remoteIp1, proto_tcp, srcPort6, dstPort)
-	tuple7 = tuple.Make(emptyIP, emptyIP, proto_tcp, unsetIntField, dstPort)
+	tuple7 = tuple.Make(EmptyIP, EmptyIP, proto_tcp, unsetIntField, dstPort)
 )
 
 var (
@@ -113,23 +112,27 @@ var (
 	muNoConn1Rule1AllowUpdateWithEndpointMeta = metric.Update{
 		UpdateType: metric.UpdateTypeReport,
 		Tuple:      tuple1,
-		SrcEp: &calc.EndpointData{
-			Key: model.WorkloadEndpointKey{
-				Hostname:       "node-01",
-				OrchestratorID: "k8s",
-				WorkloadID:     "kube-system/iperf-4235-5623461",
-				EndpointID:     "4352",
-			},
-			Endpoint: &model.WorkloadEndpoint{GenerateName: "iperf-4235-", Labels: map[string]string{"test-app": "true"}},
+		SrcEp: &calc.RemoteEndpointData{
+			CommonEndpointData: calc.CalculateCommonEndpointData(
+				model.WorkloadEndpointKey{
+					Hostname:       "node-01",
+					OrchestratorID: "k8s",
+					WorkloadID:     "kube-system/iperf-4235-5623461",
+					EndpointID:     "4352",
+				},
+				&model.WorkloadEndpoint{GenerateName: "iperf-4235-", Labels: map[string]string{"test-app": "true"}},
+			),
 		},
-		DstEp: &calc.EndpointData{
-			Key: model.WorkloadEndpointKey{
-				Hostname:       "node-02",
-				OrchestratorID: "k8s",
-				WorkloadID:     "default/nginx-412354-5123451",
-				EndpointID:     "4352",
-			},
-			Endpoint: &model.WorkloadEndpoint{GenerateName: "nginx-412354-", Labels: map[string]string{"k8s-app": "true"}},
+		DstEp: &calc.RemoteEndpointData{
+			CommonEndpointData: calc.CalculateCommonEndpointData(
+				model.WorkloadEndpointKey{
+					Hostname:       "node-02",
+					OrchestratorID: "k8s",
+					WorkloadID:     "default/nginx-412354-5123451",
+					EndpointID:     "4352",
+				},
+				&model.WorkloadEndpoint{GenerateName: "nginx-412354-", Labels: map[string]string{"k8s-app": "true"}},
+			),
 		},
 		RuleIDs:      []*calc.RuleID{ingressRule1Allow},
 		HasDenyRule:  false,
@@ -216,19 +219,21 @@ func compareProcessReportedStats(actual, expected FlowProcessReportedStats) bool
 var _ = Describe("Flow log aggregator tests", func() {
 	// TODO(SS): Pull out the convenience functions for re-use.
 
-	expectFlowLog := func(fl FlowLog, t tuple.Tuple, nf, nfs, nfc int, a Action, fr ReporterType, pi, po, bi, bo int, sm, dm endpoint.Metadata, dsvc FlowService, sl, dl map[string]string, fp FlowPolicySet, fe FlowExtras) {
-		expectedFlow := newExpectedFlowLog(t, nf, nfs, nfc, a, fr, pi, po, bi, bo, sm, dm, dsvc, sl, dl, fp, fe)
+	expectFlowLog := func(fl FlowLog, t tuple.Tuple, nf, nfs, nfc int, a Action, fr ReporterType, pi, po, bi, bo int, sm, dm endpoint.Metadata, dsvc FlowService, sl, dl map[string]string, fep, fpp FlowPolicySet) {
+		expectedFlow := newExpectedFlowLog(t, nf, nfs, nfc, a, fr, pi, po, bi, bo, sm, dm, dsvc, sl, dl, fep, fpp)
 
 		// We don't include the start and end time in the comparison, so copy to a new log without these
 		var flNoTime FlowLog
 		flNoTime.FlowMeta = fl.FlowMeta
 		flNoTime.FlowLabels = fl.FlowLabels
-		flNoTime.FlowPolicySet = fl.FlowPolicySet
+		flNoTime.FlowEnforcedPolicySet = fl.FlowEnforcedPolicySet
+		flNoTime.FlowPendingPolicySet = fl.FlowPendingPolicySet
 
 		var expFlowNoProc FlowLog
 		expFlowNoProc.FlowMeta = expectedFlow.FlowMeta
 		expFlowNoProc.FlowLabels = expectedFlow.FlowLabels
-		expFlowNoProc.FlowPolicySet = expectedFlow.FlowPolicySet
+		expFlowNoProc.FlowEnforcedPolicySet = expectedFlow.FlowEnforcedPolicySet
+		expFlowNoProc.FlowPendingPolicySet = expectedFlow.FlowPendingPolicySet
 
 		Expect(flNoTime).Should(Equal(expFlowNoProc))
 	}
@@ -241,28 +246,6 @@ var _ = Describe("Flow log aggregator tests", func() {
 			ebo += mu.OutMetric.DeltaBytes
 		}
 		return
-	}
-
-	extractFlowExtras := func(mus ...metric.Update) FlowExtras {
-		var ipBs *boundedset.BoundedSet
-		for _, mu := range mus {
-			if mu.OrigSourceIPs == nil {
-				continue
-			}
-			if ipBs == nil {
-				ipBs = mu.OrigSourceIPs.Copy()
-			} else {
-				ipBs.Combine(mu.OrigSourceIPs)
-			}
-		}
-		if ipBs != nil {
-			return FlowExtras{
-				OriginalSourceIPs:    ipBs.ToIPSlice(),
-				NumOriginalSourceIPs: ipBs.TotalCount(),
-			}
-		} else {
-			return FlowExtras{}
-		}
 	}
 
 	Context("Flow log aggregator aggregation verification", func() {
@@ -289,24 +272,28 @@ var _ = Describe("Flow log aggregator tests", func() {
 			muNoConn1Rule1AllowUpdateWithEndpointMetaCopy.Tuple = tuple1Copy
 
 			// Updating the Workload IDs for src and dst.
-			muNoConn1Rule1AllowUpdateWithEndpointMetaCopy.SrcEp = &calc.EndpointData{
-				Key: model.WorkloadEndpointKey{
-					Hostname:       "node-01",
-					OrchestratorID: "k8s",
-					WorkloadID:     "kube-system/iperf-4235-5434134",
-					EndpointID:     "23456",
-				},
-				Endpoint: &model.WorkloadEndpoint{GenerateName: "iperf-4235-", Labels: map[string]string{"test-app": "true"}},
+			muNoConn1Rule1AllowUpdateWithEndpointMetaCopy.SrcEp = &calc.RemoteEndpointData{
+				CommonEndpointData: calc.CalculateCommonEndpointData(
+					model.WorkloadEndpointKey{
+						Hostname:       "node-01",
+						OrchestratorID: "k8s",
+						WorkloadID:     "kube-system/iperf-4235-5434134",
+						EndpointID:     "23456",
+					},
+					&model.WorkloadEndpoint{GenerateName: "iperf-4235-", Labels: map[string]string{"test-app": "true"}},
+				),
 			}
 
-			muNoConn1Rule1AllowUpdateWithEndpointMetaCopy.DstEp = &calc.EndpointData{
-				Key: model.WorkloadEndpointKey{
-					Hostname:       "node-02",
-					OrchestratorID: "k8s",
-					WorkloadID:     "default/nginx-412354-6543645",
-					EndpointID:     "256267",
-				},
-				Endpoint: &model.WorkloadEndpoint{GenerateName: "nginx-412354-", Labels: map[string]string{"k8s-app": "true"}},
+			muNoConn1Rule1AllowUpdateWithEndpointMetaCopy.DstEp = &calc.RemoteEndpointData{
+				CommonEndpointData: calc.CalculateCommonEndpointData(
+					model.WorkloadEndpointKey{
+						Hostname:       "node-02",
+						OrchestratorID: "k8s",
+						WorkloadID:     "default/nginx-412354-6543645",
+						EndpointID:     "256267",
+					},
+					&model.WorkloadEndpoint{GenerateName: "nginx-412354-", Labels: map[string]string{"k8s-app": "true"}},
+				),
 			}
 
 			Expect(ca.FeedUpdate(&muNoConn1Rule1AllowUpdateWithEndpointMetaCopy)).NotTo(HaveOccurred())
@@ -314,26 +301,30 @@ var _ = Describe("Flow log aggregator tests", func() {
 			// Two updates should still result in 1 flow
 			Expect(len(messages)).Should(Equal(1))
 			// Updating the Workload IDs and labels for src and dst.
-			muNoConn1Rule1AllowUpdateWithEndpointMetaCopy.SrcEp = &calc.EndpointData{
-				Key: model.WorkloadEndpointKey{
-					Hostname:       "node-01",
-					OrchestratorID: "k8s",
-					WorkloadID:     "kube-system/iperf-4235-5434134",
-					EndpointID:     "23456",
-				},
-				// this new MetricUpdates src endpointMeta has a different label than one currently being tracked.
-				Endpoint: &model.WorkloadEndpoint{GenerateName: "iperf-4235-", Labels: map[string]string{"prod-app": "true"}},
+			muNoConn1Rule1AllowUpdateWithEndpointMetaCopy.SrcEp = &calc.RemoteEndpointData{
+				CommonEndpointData: calc.CalculateCommonEndpointData(
+					model.WorkloadEndpointKey{
+						Hostname:       "node-01",
+						OrchestratorID: "k8s",
+						WorkloadID:     "kube-system/iperf-4235-5434134",
+						EndpointID:     "23456",
+					},
+					// this new MetricUpdates src endpointMeta has a different label than one currently being tracked.
+					&model.WorkloadEndpoint{GenerateName: "iperf-4235-", Labels: map[string]string{"prod-app": "true"}},
+				),
 			}
 
-			muNoConn1Rule1AllowUpdateWithEndpointMetaCopy.DstEp = &calc.EndpointData{
-				Key: model.WorkloadEndpointKey{
-					Hostname:       "node-02",
-					OrchestratorID: "k8s",
-					WorkloadID:     "default/nginx-412354-6543645",
-					EndpointID:     "256267",
-				},
-				// different label on the destination workload than one being tracked.
-				Endpoint: &model.WorkloadEndpoint{GenerateName: "nginx-412354-", Labels: map[string]string{"k8s-app": "false"}},
+			muNoConn1Rule1AllowUpdateWithEndpointMetaCopy.DstEp = &calc.RemoteEndpointData{
+				CommonEndpointData: calc.CalculateCommonEndpointData(
+					model.WorkloadEndpointKey{
+						Hostname:       "node-02",
+						OrchestratorID: "k8s",
+						WorkloadID:     "default/nginx-412354-6543645",
+						EndpointID:     "256267",
+					},
+					// different label on the destination workload than one being tracked.
+					&model.WorkloadEndpoint{GenerateName: "nginx-412354-", Labels: map[string]string{"k8s-app": "false"}},
+				),
 			}
 
 			Expect(ca.FeedUpdate(&muNoConn1Rule1AllowUpdateWithEndpointMetaCopy)).NotTo(HaveOccurred())
@@ -343,14 +334,17 @@ var _ = Describe("Flow log aggregator tests", func() {
 
 			By("by endpoint IP classification as the meta name when meta info is missing")
 			ca = NewAggregator()
-			endpointMeta := calc.EndpointData{
-				Key: model.WorkloadEndpointKey{
-					Hostname:       "node-01",
-					OrchestratorID: "k8s",
-					WorkloadID:     "kube-system/iperf-4235-5623461",
-					EndpointID:     "4352",
-				},
-				Endpoint: &model.WorkloadEndpoint{GenerateName: "iperf-4235-", Labels: map[string]string{"test-app": "true"}},
+			endpointMeta := calc.RemoteEndpointData{
+
+				CommonEndpointData: calc.CalculateCommonEndpointData(
+					model.WorkloadEndpointKey{
+						Hostname:       "node-01",
+						OrchestratorID: "k8s",
+						WorkloadID:     "kube-system/iperf-4235-5623461",
+						EndpointID:     "4352",
+					},
+					&model.WorkloadEndpoint{GenerateName: "iperf-4235-", Labels: map[string]string{"test-app": "true"}},
+				),
 			}
 
 			muWithoutDstEndpointMeta := metric.Update{
@@ -421,7 +415,7 @@ var _ = Describe("Flow log aggregator tests", func() {
 					Name:           "-",
 					AggregatedName: "pub",
 				},
-				DstService: noService,
+				DstService: EmptyService,
 				Action:     "allow",
 				Reporter:   "dst",
 			}
@@ -446,7 +440,7 @@ var _ = Describe("Flow log aggregator tests", func() {
 					Name:           "-",
 					AggregatedName: "iperf-4235-*",
 				},
-				DstService: noService,
+				DstService: EmptyService,
 				Action:     "allow",
 				Reporter:   "dst",
 			}
@@ -471,7 +465,7 @@ var _ = Describe("Flow log aggregator tests", func() {
 					Name:           "-",
 					AggregatedName: "pvt",
 				},
-				DstService: noService,
+				DstService: EmptyService,
 				Action:     "allow",
 				Reporter:   "dst",
 			}
@@ -492,30 +486,36 @@ var _ = Describe("Flow log aggregator tests", func() {
 			// Construct a similar update; but the endpoints have different labels
 			muNoConn1Rule1AllowUpdateWithEndpointMetaCopy := muNoConn1Rule1AllowUpdateWithEndpointMeta
 			// Updating the Workload IDs for src and dst.
-			muNoConn1Rule1AllowUpdateWithEndpointMetaCopy.SrcEp = &calc.EndpointData{
-				Key: model.WorkloadEndpointKey{
-					Hostname:       "node-01",
-					OrchestratorID: "k8s",
-					WorkloadID:     "kube-system/iperf-4235-5623461",
-					EndpointID:     "4352",
-				},
-				Endpoint: &model.WorkloadEndpoint{
-					GenerateName: "iperf-4235-",
-					Labels:       map[string]string{"test-app": "true", "new-label": "true"}, // "new-label" appended
-				},
+			muNoConn1Rule1AllowUpdateWithEndpointMetaCopy.SrcEp = &calc.RemoteEndpointData{
+
+				CommonEndpointData: calc.CalculateCommonEndpointData(
+					model.WorkloadEndpointKey{
+						Hostname:       "node-01",
+						OrchestratorID: "k8s",
+						WorkloadID:     "kube-system/iperf-4235-5623461",
+						EndpointID:     "4352",
+					},
+					&model.WorkloadEndpoint{
+						GenerateName: "iperf-4235-",
+						Labels:       map[string]string{"test-app": "true", "new-label": "true"}, // "new-label" appended
+					},
+				),
 			}
 
-			muNoConn1Rule1AllowUpdateWithEndpointMetaCopy.DstEp = &calc.EndpointData{
-				Key: model.WorkloadEndpointKey{
-					Hostname:       "node-02",
-					OrchestratorID: "k8s",
-					WorkloadID:     "default/nginx-412354-5123451",
-					EndpointID:     "4352",
-				},
-				Endpoint: &model.WorkloadEndpoint{
-					GenerateName: "nginx-412354-",
-					Labels:       map[string]string{"k8s-app": "false"}, // conflicting labels; originally "k8s-app": "true"
-				},
+			muNoConn1Rule1AllowUpdateWithEndpointMetaCopy.DstEp = &calc.RemoteEndpointData{
+
+				CommonEndpointData: calc.CalculateCommonEndpointData(
+					model.WorkloadEndpointKey{
+						Hostname:       "node-02",
+						OrchestratorID: "k8s",
+						WorkloadID:     "default/nginx-412354-5123451",
+						EndpointID:     "4352",
+					},
+					&model.WorkloadEndpoint{
+						GenerateName: "nginx-412354-",
+						Labels:       map[string]string{"k8s-app": "false"}, // conflicting labels; originally "k8s-app": "true"
+					},
+				),
 			}
 			Expect(ca.FeedUpdate(&muNoConn1Rule1AllowUpdateWithEndpointMetaCopy)).NotTo(HaveOccurred())
 			messages := ca.GetAndCalibrate()
@@ -540,9 +540,8 @@ var _ = Describe("Flow log aggregator tests", func() {
 			}
 			// The labels should have been intersected correctly.
 			expectedPacketsIn, expectedPacketsOut, expectedBytesIn, expectedBytesOut := calculatePacketStats(muNoConn1Rule1AllowUpdateWithEndpointMetaCopy)
-			expectedFlowExtras := extractFlowExtras(muNoConn1Rule1AllowUpdateWithEndpointMetaCopy)
 			expectFlowLog(message, tuple7, expectedNumFlows, expectedNumFlowsStarted, expectedNumFlowsCompleted, ActionAllow, ReporterDst,
-				expectedPacketsIn*2, expectedPacketsOut, expectedBytesIn*2, expectedBytesOut, srcMeta, dstMeta, noService, map[string]string{"test-app": "true"}, map[string]string{}, nil, expectedFlowExtras)
+				expectedPacketsIn*2, expectedPacketsOut, expectedBytesIn*2, expectedBytesOut, srcMeta, dstMeta, EmptyService, map[string]string{"test-app": "true"}, map[string]string{}, nil, nil)
 
 			By("not affecting flow logs when IncludeLabels is disabled")
 			ca = NewAggregator().IncludeLabels(false)
@@ -551,30 +550,34 @@ var _ = Describe("Flow log aggregator tests", func() {
 			// Construct a similar update; but the endpoints have different labels
 			muNoConn1Rule1AllowUpdateWithEndpointMetaCopy = muNoConn1Rule1AllowUpdateWithEndpointMeta
 			// Updating the Workload IDs for src and dst.
-			muNoConn1Rule1AllowUpdateWithEndpointMetaCopy.SrcEp = &calc.EndpointData{
-				Key: model.WorkloadEndpointKey{
-					Hostname:       "node-01",
-					OrchestratorID: "k8s",
-					WorkloadID:     "kube-system/iperf-4235-5623461",
-					EndpointID:     "4352",
-				},
-				Endpoint: &model.WorkloadEndpoint{
-					GenerateName: "iperf-4235-",
-					Labels:       map[string]string{"test-app": "true", "new-label": "true"}, // "new-label" appended
-				},
+			muNoConn1Rule1AllowUpdateWithEndpointMetaCopy.SrcEp = &calc.RemoteEndpointData{
+				CommonEndpointData: calc.CalculateCommonEndpointData(
+					model.WorkloadEndpointKey{
+						Hostname:       "node-01",
+						OrchestratorID: "k8s",
+						WorkloadID:     "kube-system/iperf-4235-5623461",
+						EndpointID:     "4352",
+					},
+					&model.WorkloadEndpoint{
+						GenerateName: "iperf-4235-",
+						Labels:       map[string]string{"test-app": "true", "new-label": "true"}, // "new-label" appended
+					},
+				),
 			}
 
-			muNoConn1Rule1AllowUpdateWithEndpointMetaCopy.DstEp = &calc.EndpointData{
-				Key: model.WorkloadEndpointKey{
-					Hostname:       "node-02",
-					OrchestratorID: "k8s",
-					WorkloadID:     "default/nginx-412354-5123451",
-					EndpointID:     "4352",
-				},
-				Endpoint: &model.WorkloadEndpoint{
-					GenerateName: "nginx-412354-",
-					Labels:       map[string]string{"k8s-app": "false"}, // conflicting labels; originally "k8s-app": "true"
-				},
+			muNoConn1Rule1AllowUpdateWithEndpointMetaCopy.DstEp = &calc.RemoteEndpointData{
+				CommonEndpointData: calc.CalculateCommonEndpointData(
+					model.WorkloadEndpointKey{
+						Hostname:       "node-02",
+						OrchestratorID: "k8s",
+						WorkloadID:     "default/nginx-412354-5123451",
+						EndpointID:     "4352",
+					},
+					&model.WorkloadEndpoint{
+						GenerateName: "nginx-412354-",
+						Labels:       map[string]string{"k8s-app": "false"}, // conflicting labels; originally "k8s-app": "true"
+					},
+				),
 			}
 			Expect(ca.FeedUpdate(&muNoConn1Rule1AllowUpdateWithEndpointMetaCopy)).NotTo(HaveOccurred())
 			messages = ca.GetAndCalibrate()
@@ -599,9 +602,8 @@ var _ = Describe("Flow log aggregator tests", func() {
 			}
 			// The labels should have been intersected right.
 			expectedPacketsIn, expectedPacketsOut, expectedBytesIn, expectedBytesOut = calculatePacketStats(muNoConn1Rule1AllowUpdateWithEndpointMetaCopy)
-			expectedFlowExtras = extractFlowExtras(muNoConn1Rule1AllowUpdateWithEndpointMetaCopy)
 			expectFlowLog(message, tuple7, expectedNumFlows, expectedNumFlowsStarted, expectedNumFlowsCompleted, ActionAllow, ReporterDst,
-				expectedPacketsIn*2, expectedPacketsOut, expectedBytesIn*2, expectedBytesOut, srcMeta, dstMeta, noService, nil, nil, nil, expectedFlowExtras) // nil & nil for Src and Dst Labels respectively.
+				expectedPacketsIn*2, expectedPacketsOut, expectedBytesIn*2, expectedBytesOut, srcMeta, dstMeta, EmptyService, nil, nil, nil, nil) // nil & nil for Src and Dst Labels respectively.
 		})
 
 		It("GetAndCalibrate does not cause a data race contention on the flowEntry after FeedUpdate adds it to the flowStore", func() {
@@ -641,9 +643,8 @@ var _ = Describe("Flow log aggregator tests", func() {
 			}
 
 			expectedPacketsIn, expectedPacketsOut, expectedBytesIn, expectedBytesOut := calculatePacketStats(muNoConn1Rule1AllowUpdateWithEndpointMeta)
-			expectedFlowExtras := extractFlowExtras(muNoConn1Rule1AllowUpdateWithEndpointMeta)
 			expectFlowLog(*message, tuple7, expectedNumFlows, expectedNumFlowsStarted, expectedNumFlowsCompleted, ActionAllow, ReporterDst,
-				expectedPacketsIn, expectedPacketsOut, expectedBytesIn, expectedBytesOut, srcMeta, dstMeta, noService, nil, nil, nil, expectedFlowExtras)
+				expectedPacketsIn, expectedPacketsOut, expectedBytesIn, expectedBytesOut, srcMeta, dstMeta, EmptyService, nil, nil, nil, nil)
 		})
 	})
 
@@ -661,7 +662,7 @@ var _ = Describe("Flow log aggregator tests", func() {
 			messages := caa.GetAndCalibrate()
 			Expect(len(messages)).Should(Equal(2))
 			services := []FlowService{messages[0].DstService, messages[1].DstService}
-			Expect(services).To(ConsistOf(noService, service))
+			Expect(services).To(ConsistOf(EmptyService, service))
 		})
 	})
 
@@ -723,24 +724,29 @@ var _ = Describe("Flow log aggregator tests", func() {
 			muNoConn1Rule1AllowUpdateWithEndpointMetaCopy.Tuple = tuple1Copy
 
 			// Updating the Workload IDs for src and dst.
-			muNoConn1Rule1AllowUpdateWithEndpointMetaCopy.SrcEp = &calc.EndpointData{
-				Key: model.WorkloadEndpointKey{
-					Hostname:       "node-01",
-					OrchestratorID: "k8s",
-					WorkloadID:     "kube-system/iperf-4235-5434134",
-					EndpointID:     "23456",
-				},
-				Endpoint: &model.WorkloadEndpoint{GenerateName: "iperf-4235-", Labels: map[string]string{"test-app": "true"}},
+			muNoConn1Rule1AllowUpdateWithEndpointMetaCopy.SrcEp = &calc.RemoteEndpointData{
+
+				CommonEndpointData: calc.CalculateCommonEndpointData(
+					model.WorkloadEndpointKey{
+						Hostname:       "node-01",
+						OrchestratorID: "k8s",
+						WorkloadID:     "kube-system/iperf-4235-5434134",
+						EndpointID:     "23456",
+					},
+					&model.WorkloadEndpoint{GenerateName: "iperf-4235-", Labels: map[string]string{"test-app": "true"}},
+				),
 			}
 
-			muNoConn1Rule1AllowUpdateWithEndpointMetaCopy.DstEp = &calc.EndpointData{
-				Key: model.WorkloadEndpointKey{
-					Hostname:       "node-02",
-					OrchestratorID: "k8s",
-					WorkloadID:     "default/nginx-412354-6543645",
-					EndpointID:     "256267",
-				},
-				Endpoint: &model.WorkloadEndpoint{GenerateName: "nginx-412354-", Labels: map[string]string{"k8s-app": "true"}},
+			muNoConn1Rule1AllowUpdateWithEndpointMetaCopy.DstEp = &calc.RemoteEndpointData{
+				CommonEndpointData: calc.CalculateCommonEndpointData(
+					model.WorkloadEndpointKey{
+						Hostname:       "node-02",
+						OrchestratorID: "k8s",
+						WorkloadID:     "default/nginx-412354-6543645",
+						EndpointID:     "256267",
+					},
+					&model.WorkloadEndpoint{GenerateName: "nginx-412354-", Labels: map[string]string{"k8s-app": "true"}},
+				),
 			}
 
 			Expect(ca.FeedUpdate(&muNoConn1Rule1AllowUpdateWithEndpointMetaCopy)).NotTo(HaveOccurred())
@@ -804,97 +810,6 @@ var _ = Describe("Flow log aggregator tests", func() {
 			Expect(flowLog.BytesIn).Should(Equal(22))
 			Expect(flowLog.PacketsOut).Should(Equal(3))
 			Expect(flowLog.BytesOut).Should(Equal(33))
-		})
-	})
-
-	Context("Flow log Aggregator post SNAT ports", func() {
-		It("doesn't overwrite the nat outgoing port with an empty value", func() {
-			muWithSNATPort1 := muWithSNATPort
-			muWithSNATPort2 := muWithSNATPort
-			muWithSNATPort2.NatOutgoingPort = 0
-
-			aggregator := NewAggregator().
-				ForAction(rules.RuleActionAllow).
-				IncludePolicies(true)
-
-			Expect(aggregator.FeedUpdate(&muWithSNATPort1)).ShouldNot(HaveOccurred())
-			Expect(aggregator.FeedUpdate(&muWithSNATPort2)).ShouldNot(HaveOccurred())
-
-			flows := aggregator.GetAndCalibrate()
-			Expect(len(flows)).ShouldNot(BeZero())
-			Expect(flows[0].NatOutgoingPorts).To(ConsistOf(muWithSNATPort1.NatOutgoingPort))
-		})
-
-		It("overwrites an empty nat outgoing port with a non empty value", func() {
-			muWithSNATPort1 := muWithSNATPort
-			muWithSNATPort1.NatOutgoingPort = 0
-			muWithSNATPort2 := muWithSNATPort
-
-			aggregator := NewAggregator().
-				ForAction(rules.RuleActionAllow).
-				IncludePolicies(true)
-
-			Expect(aggregator.FeedUpdate(&muWithSNATPort1)).ShouldNot(HaveOccurred())
-			Expect(aggregator.FeedUpdate(&muWithSNATPort2)).ShouldNot(HaveOccurred())
-
-			flows := aggregator.GetAndCalibrate()
-			Expect(len(flows)).ShouldNot(BeZero())
-			Expect(flows[0].NatOutgoingPorts).To(ConsistOf(muWithSNATPort2.NatOutgoingPort))
-		})
-
-		It("chooses SNAT'd ports for active connections over expired ones when the post SNAT port limit is too low", func() {
-			muWithSNATPort1 := muWithSNATPort
-			muWithSNATPort1.UpdateType = metric.UpdateTypeExpire
-			muWithSNATPort2 := muWithSNATPort
-			muWithSNATPort2.Tuple.L4Src = 54124
-			muWithSNATPort2.NatOutgoingPort = 6788
-			muWithSNATPort3 := muWithSNATPort
-			muWithSNATPort3.Tuple.L4Src = 54125
-			muWithSNATPort3.NatOutgoingPort = 6787
-			muWithSNATPort4 := muWithSNATPort
-			muWithSNATPort4.Tuple.L4Src = 54126
-			muWithSNATPort4.NatOutgoingPort = 6786
-
-			aggregator := NewAggregator().
-				ForAction(rules.RuleActionAllow).
-				IncludePolicies(true)
-
-			Expect(aggregator.FeedUpdate(&muWithSNATPort1)).ShouldNot(HaveOccurred())
-			Expect(aggregator.FeedUpdate(&muWithSNATPort2)).ShouldNot(HaveOccurred())
-			Expect(aggregator.FeedUpdate(&muWithSNATPort3)).ShouldNot(HaveOccurred())
-			Expect(aggregator.FeedUpdate(&muWithSNATPort4)).ShouldNot(HaveOccurred())
-
-			flows := aggregator.GetAndCalibrate()
-			Expect(len(flows)).ShouldNot(BeZero())
-			Expect(flows[0].NatOutgoingPorts).To(ConsistOf(6788, 6787, 6786))
-		})
-
-		It("includes expired connections if the post SNAT port limit is high enough", func() {
-			muWithSNATPort1 := muWithSNATPort
-			muWithSNATPort1.UpdateType = metric.UpdateTypeExpire
-			muWithSNATPort2 := muWithSNATPort
-			muWithSNATPort2.Tuple.L4Src = 54124
-			muWithSNATPort2.NatOutgoingPort = 6788
-			muWithSNATPort3 := muWithSNATPort
-			muWithSNATPort3.Tuple.L4Src = 54125
-			muWithSNATPort3.NatOutgoingPort = 6787
-			muWithSNATPort4 := muWithSNATPort
-			muWithSNATPort4.Tuple.L4Src = 54126
-			muWithSNATPort4.NatOutgoingPort = 6786
-
-			aggregator := NewAggregator().
-				ForAction(rules.RuleActionAllow).
-				IncludePolicies(true).
-				NatOutgoingPortLimit(4)
-
-			Expect(aggregator.FeedUpdate(&muWithSNATPort1)).ShouldNot(HaveOccurred())
-			Expect(aggregator.FeedUpdate(&muWithSNATPort2)).ShouldNot(HaveOccurred())
-			Expect(aggregator.FeedUpdate(&muWithSNATPort3)).ShouldNot(HaveOccurred())
-			Expect(aggregator.FeedUpdate(&muWithSNATPort4)).ShouldNot(HaveOccurred())
-
-			flows := aggregator.GetAndCalibrate()
-			Expect(len(flows)).ShouldNot(BeZero())
-			Expect(flows[0].NatOutgoingPorts).To(ConsistOf(6789, 6788, 6787, 6786))
 		})
 	})
 })

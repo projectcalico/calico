@@ -28,9 +28,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
-var (
-	ErrUpdatesFailed = errors.New("some VXLAN route updates failed")
-)
+var ErrUpdatesFailed = errors.New("some VXLAN route updates failed")
 
 type vxlanManager struct {
 	// Shim for the Windows HNS API.
@@ -72,7 +70,7 @@ func newVXLANManager(hcn hcnInterface, hostname string, networkName *regexp.Rege
 func (m *vxlanManager) OnUpdate(protoBufMsg interface{}) {
 	switch msg := protoBufMsg.(type) {
 	case *proto.RouteUpdate:
-		if msg.Type == proto.RouteType_REMOTE_WORKLOAD && msg.IpPoolType == proto.IPPoolType_VXLAN {
+		if msg.Types&proto.RouteType_REMOTE_WORKLOAD != 0 && msg.IpPoolType == proto.IPPoolType_VXLAN {
 			logrus.WithField("msg", msg).Debug("VXLAN data plane received route update")
 			m.routesByDest[msg.Dst] = msg
 			m.dirty = true

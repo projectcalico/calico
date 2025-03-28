@@ -5,10 +5,10 @@
 package v3
 
 import (
-	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/client-go/listers"
-	"k8s.io/client-go/tools/cache"
+	projectcalicov3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	labels "k8s.io/apimachinery/pkg/labels"
+	listers "k8s.io/client-go/listers"
+	cache "k8s.io/client-go/tools/cache"
 )
 
 // ClusterInformationLister helps list ClusterInformations.
@@ -16,19 +16,19 @@ import (
 type ClusterInformationLister interface {
 	// List lists all ClusterInformations in the indexer.
 	// Objects returned here must be treated as read-only.
-	List(selector labels.Selector) (ret []*v3.ClusterInformation, err error)
+	List(selector labels.Selector) (ret []*projectcalicov3.ClusterInformation, err error)
 	// Get retrieves the ClusterInformation from the index for a given name.
 	// Objects returned here must be treated as read-only.
-	Get(name string) (*v3.ClusterInformation, error)
+	Get(name string) (*projectcalicov3.ClusterInformation, error)
 	ClusterInformationListerExpansion
 }
 
 // clusterInformationLister implements the ClusterInformationLister interface.
 type clusterInformationLister struct {
-	listers.ResourceIndexer[*v3.ClusterInformation]
+	listers.ResourceIndexer[*projectcalicov3.ClusterInformation]
 }
 
 // NewClusterInformationLister returns a new ClusterInformationLister.
 func NewClusterInformationLister(indexer cache.Indexer) ClusterInformationLister {
-	return &clusterInformationLister{listers.New[*v3.ClusterInformation](indexer, v3.Resource("clusterinformation"))}
+	return &clusterInformationLister{listers.New[*projectcalicov3.ClusterInformation](indexer, projectcalicov3.Resource("clusterinformation"))}
 }

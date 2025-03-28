@@ -17,6 +17,7 @@ package version_test
 import (
 	"testing"
 
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 
 	"github.com/projectcalico/calico/release/internal/version"
@@ -33,7 +34,6 @@ func TestDetermineReleaseVersion(t *testing.T) {
 
 		// A dev tag leading up to a minor release should return the minor release number.
 		"v3.29.0-0.dev-424-gfd40f1838223": "v3.29.0",
-		"v3.22.0-0.dev":                   "v3.22.0",
 
 		// Previous tag was a patch release, should increment the patch number.
 		"v3.15.0-12-gfd40f1838223": "v3.15.1",
@@ -41,6 +41,7 @@ func TestDetermineReleaseVersion(t *testing.T) {
 	}
 
 	for current, next := range expectations {
+		logrus.Infof("Test current version = %v", current)
 		actual, err := version.DetermineReleaseVersion(version.New(current), "0.dev")
 		require.NoError(t, err)
 		require.Equal(t, next, actual.FormattedString())

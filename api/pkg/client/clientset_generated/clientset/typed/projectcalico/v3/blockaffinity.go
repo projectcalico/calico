@@ -5,9 +5,9 @@
 package v3
 
 import (
-	"context"
+	context "context"
 
-	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	projectcalicov3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	scheme "github.com/projectcalico/api/pkg/client/clientset_generated/clientset/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"
@@ -23,31 +23,32 @@ type BlockAffinitiesGetter interface {
 
 // BlockAffinityInterface has methods to work with BlockAffinity resources.
 type BlockAffinityInterface interface {
-	Create(ctx context.Context, blockAffinity *v3.BlockAffinity, opts v1.CreateOptions) (*v3.BlockAffinity, error)
-	Update(ctx context.Context, blockAffinity *v3.BlockAffinity, opts v1.UpdateOptions) (*v3.BlockAffinity, error)
+	Create(ctx context.Context, blockAffinity *projectcalicov3.BlockAffinity, opts v1.CreateOptions) (*projectcalicov3.BlockAffinity, error)
+	Update(ctx context.Context, blockAffinity *projectcalicov3.BlockAffinity, opts v1.UpdateOptions) (*projectcalicov3.BlockAffinity, error)
 	Delete(ctx context.Context, name string, opts v1.DeleteOptions) error
 	DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error
-	Get(ctx context.Context, name string, opts v1.GetOptions) (*v3.BlockAffinity, error)
-	List(ctx context.Context, opts v1.ListOptions) (*v3.BlockAffinityList, error)
+	Get(ctx context.Context, name string, opts v1.GetOptions) (*projectcalicov3.BlockAffinity, error)
+	List(ctx context.Context, opts v1.ListOptions) (*projectcalicov3.BlockAffinityList, error)
 	Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error)
-	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v3.BlockAffinity, err error)
+	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *projectcalicov3.BlockAffinity, err error)
 	BlockAffinityExpansion
 }
 
 // blockAffinities implements BlockAffinityInterface
 type blockAffinities struct {
-	*gentype.ClientWithList[*v3.BlockAffinity, *v3.BlockAffinityList]
+	*gentype.ClientWithList[*projectcalicov3.BlockAffinity, *projectcalicov3.BlockAffinityList]
 }
 
 // newBlockAffinities returns a BlockAffinities
 func newBlockAffinities(c *ProjectcalicoV3Client) *blockAffinities {
 	return &blockAffinities{
-		gentype.NewClientWithList[*v3.BlockAffinity, *v3.BlockAffinityList](
+		gentype.NewClientWithList[*projectcalicov3.BlockAffinity, *projectcalicov3.BlockAffinityList](
 			"blockaffinities",
 			c.RESTClient(),
 			scheme.ParameterCodec,
 			"",
-			func() *v3.BlockAffinity { return &v3.BlockAffinity{} },
-			func() *v3.BlockAffinityList { return &v3.BlockAffinityList{} }),
+			func() *projectcalicov3.BlockAffinity { return &projectcalicov3.BlockAffinity{} },
+			func() *projectcalicov3.BlockAffinityList { return &projectcalicov3.BlockAffinityList{} },
+		),
 	}
 }

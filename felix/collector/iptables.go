@@ -102,12 +102,12 @@ func subscribeToNflog(gn int, nlBufSiz int, nflogChan chan map[nfnetlink.NflogPa
 func (r *NFLogReader) subscribe() error {
 	err := subscribeToNflog(r.netlinkIngressGroup, r.bufSize, r.IngressC, r.nfIngressDoneC, r.servicesEnabled)
 	if err != nil {
-		return fmt.Errorf("Error when subscribing to NFLOG (ingress): %w", err)
+		return fmt.Errorf("error when subscribing to NFLOG (ingress): %w", err)
 	}
 
 	err = subscribeToNflog(r.netlinkEgressGroup, r.bufSize, r.EgressC, r.nfEgressDoneC, r.servicesEnabled)
 	if err != nil {
-		return fmt.Errorf("Error when subscribing to NFLOG (egress): %w", err)
+		return fmt.Errorf("error when subscribing to NFLOG (egress): %w", err)
 	}
 
 	return nil
@@ -176,7 +176,7 @@ func ConvertCtEntryToConntrackInfo(ctEntry nfnetlink.CtEntry) (ConntrackInfo, er
 	if ctEntry.IsDNAT() {
 		ctTuple, err = ctEntry.OriginalTuplePostDNAT()
 		if err != nil {
-			return ConntrackInfo{}, fmt.Errorf("Error when extracting tuple without DNAT: %w", err)
+			return ConntrackInfo{}, fmt.Errorf("error when extracting tuple without DNAT: %w", err)
 		}
 	}
 

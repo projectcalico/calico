@@ -37,11 +37,16 @@ clean:
 	rm -rf ./bin
 
 ci-preflight-checks:
+	$(MAKE) check-go-mod
 	$(MAKE) check-dockerfiles
 	$(MAKE) check-language
+	$(MAKE) check-ocp-no-crds
 	$(MAKE) generate
 	$(MAKE) fix-all
 	$(MAKE) check-dirty
+
+check-go-mod:
+	$(DOCKER_GO_BUILD) ./hack/check-go-mod.sh
 
 check-dockerfiles:
 	./hack/check-dockerfiles.sh
@@ -49,19 +54,28 @@ check-dockerfiles:
 check-language:
 	./hack/check-language.sh
 
+CRD_FILES_IN_OCP_DIR=$(shell grep "^kind: CustomResourceDefinition" manifests/ocp/* -l)
+check-ocp-no-crds:
+	@echo "Checking for files in  manifests/ocp with CustomResourceDefinitions"
+	@if [ ! -z "$(CRD_FILES_IN_OCP_DIR)" ]; then echo "ERROR: manifests/ocp should not have any CustomResourceDefinitions, these files should be removed:"; echo "$(CRD_FILES_IN_OCP_DIR)"; exit 1; fi
+
 protobuf:
 	$(MAKE) -C app-policy protobuf
 	$(MAKE) -C cni-plugin protobuf
 	$(MAKE) -C felix protobuf
 	$(MAKE) -C pod2daemon protobuf
+	$(MAKE) -C goldmane protobuf
 
 generate:
 	$(MAKE) gen-semaphore-yaml
 	$(MAKE) protobuf
+	$(MAKE) -C lib gen-files
 	$(MAKE) -C api gen-files
 	$(MAKE) -C libcalico-go gen-files
 	$(MAKE) -C felix gen-files
+	$(MAKE) -C goldmane gen-files
 	$(MAKE) gen-manifests
+	$(MAKE) fix-changed
 
 gen-manifests: bin/helm
 	cd ./manifests && ./generate.sh
@@ -73,6 +87,7 @@ get-operator-crds: var-require-all-OPERATOR_BRANCH
 	@echo ================================================================
 	cd ./charts/tigera-operator/crds/ && \
 	for file in operator.tigera.io_*.yaml; do echo "downloading $$file from operator repo" && curl -fsSL https://raw.githubusercontent.com/tigera/operator/$(OPERATOR_BRANCH)/pkg/crds/operator/$${file%_crd.yaml}.yaml -o $${file}; done
+	$(MAKE) fix-changed
 
 gen-semaphore-yaml:
 	cd .semaphore && ./generate-semaphore-yaml.sh
@@ -122,6 +137,7 @@ e2e-test-adminpolicy:
 ###############################################################################
 # Release logic below
 ###############################################################################
+.PHONY: release release-publish create-release-branch release-test build-openstack publish-openstack release-notes
 # Build the release tool.
 release/bin/release: $(shell find ./release -type f -name '*.go')
 	$(MAKE) -C release
@@ -193,7 +209,7 @@ endif
 		python:3 \
 		bash -c '/usr/local/bin/python release/get-contributors.py >> /code/AUTHORS.md'
 
-update-pins: update-go-build-pin
+update-pins: update-go-build-pin update-calico-base-pin
 
 ###############################################################################
 # Post-release validation

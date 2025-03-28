@@ -19,6 +19,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/calc"
 	"github.com/projectcalico/calico/felix/collector/types/tuple"
+	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/rules"
 )
 
@@ -85,3 +86,10 @@ type ConntrackInfoReader interface {
 
 // ConntrackInfoBatchSize is a recommended batch size to be used by InfoReaders
 const ConntrackInfoBatchSize = 1024
+
+// DataplaneInfoReader is an interface that provides information from the dataplane.
+type DataplaneInfoReader interface {
+	Start() error
+	Stop()
+	DataplaneInfoChan() <-chan *proto.ToDataplane
+}

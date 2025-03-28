@@ -228,6 +228,31 @@ var _ = Describe("Calico loadbalancer controller FV tests (etcd mode)", func() {
 			}, time.Second*15, 500*time.Millisecond).ShouldNot(BeEmpty())
 		})
 
+		It("Should remove previously assigned IP when all IPPools are deleted", func() {
+			_, err := k8sClient.CoreV1().Services(testNamespace).Create(context.Background(), &basicService, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			Eventually(func() []v1.LoadBalancerIngress {
+				service, _ := k8sClient.CoreV1().Services(testNamespace).Get(context.Background(), basicService.Name, metav1.GetOptions{})
+				return service.Status.LoadBalancer.Ingress
+			}, time.Second*15, 500*time.Millisecond).ShouldNot(BeEmpty())
+
+			_, err = calicoClient.IPPools().Delete(context.Background(), v4poolManual.Name, options.DeleteOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = calicoClient.IPPools().Delete(context.Background(), v4poolManualSpecific.Name, options.DeleteOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			// We delete the automatic pool last, ensuring that the service will not be reassigned IP before last pool is deleted
+			_, err = calicoClient.IPPools().Delete(context.Background(), v4poolAutomatic.Name, options.DeleteOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			Eventually(func() []v1.LoadBalancerIngress {
+				service, _ := k8sClient.CoreV1().Services(testNamespace).Get(context.Background(), basicService.Name, metav1.GetOptions{})
+				return service.Status.LoadBalancer.Ingress
+			}, time.Second*15, 500*time.Millisecond).Should(BeEmpty())
+		})
+
 		It("Should assign IP from specified IP pool", func() {
 			_, err := k8sClient.CoreV1().Services(testNamespace).Create(context.Background(), &serviceIpv4PoolSpecified, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())

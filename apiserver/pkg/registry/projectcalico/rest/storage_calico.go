@@ -1,4 +1,4 @@
-// Copyright (c) 2021-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2021-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -42,6 +42,9 @@ import (
 	caliconetworkset "github.com/projectcalico/calico/apiserver/pkg/registry/projectcalico/networkset"
 	calicoprofile "github.com/projectcalico/calico/apiserver/pkg/registry/projectcalico/profile"
 	"github.com/projectcalico/calico/apiserver/pkg/registry/projectcalico/server"
+	calicostagedgpolicy "github.com/projectcalico/calico/apiserver/pkg/registry/projectcalico/stagedglobalnetworkpolicy"
+	calicostagedk8spolicy "github.com/projectcalico/calico/apiserver/pkg/registry/projectcalico/stagedkubernetesnetworkpolicy"
+	calicostagedpolicy "github.com/projectcalico/calico/apiserver/pkg/registry/projectcalico/stagednetworkpolicy"
 	calicotier "github.com/projectcalico/calico/apiserver/pkg/registry/projectcalico/tier"
 	calicostorage "github.com/projectcalico/calico/apiserver/pkg/storage/calico"
 	"github.com/projectcalico/calico/apiserver/pkg/storage/etcd"
@@ -80,6 +83,50 @@ func (p RESTStorageProvider) NewV3Storage(
 		p.StorageType,
 		authorizer,
 		[]string{"cnp", "caliconetworkpolicy", "caliconetworkpolicies"},
+	)
+
+	stagedk8spolicyRESTOptions, err := restOptionsGetter.GetRESTOptions(calico.Resource("stagedkubernetesnetworkpolicies"), nil)
+	if err != nil {
+		return nil, err
+	}
+	stagedk8spolicyOpts := server.NewOptions(
+		etcd.Options{
+			RESTOptions:   stagedk8spolicyRESTOptions,
+			Capacity:      1000,
+			ObjectType:    calicostagedk8spolicy.EmptyObject(),
+			ScopeStrategy: calicostagedk8spolicy.NewStrategy(scheme),
+			NewListFunc:   calicostagedk8spolicy.NewList,
+			GetAttrsFunc:  calicostagedk8spolicy.GetAttrs,
+			Trigger:       nil,
+		},
+		calicostorage.Options{
+			RESTOptions: stagedk8spolicyRESTOptions,
+		},
+		p.StorageType,
+		authorizer,
+		[]string{},
+	)
+
+	stagedpolicyRESTOptions, err := restOptionsGetter.GetRESTOptions(calico.Resource("stagednetworkpolicies"), nil)
+	if err != nil {
+		return nil, err
+	}
+	stagedpolicyOpts := server.NewOptions(
+		etcd.Options{
+			RESTOptions:   stagedpolicyRESTOptions,
+			Capacity:      1000,
+			ObjectType:    calicostagedpolicy.EmptyObject(),
+			ScopeStrategy: calicostagedpolicy.NewStrategy(scheme),
+			NewListFunc:   calicostagedpolicy.NewList,
+			GetAttrsFunc:  calicostagedpolicy.GetAttrs,
+			Trigger:       nil,
+		},
+		calicostorage.Options{
+			RESTOptions: stagedpolicyRESTOptions,
+		},
+		p.StorageType,
+		authorizer,
+		[]string{},
 	)
 
 	networksetRESTOptions, err := restOptionsGetter.GetRESTOptions(calico.Resource("networksets"), nil)
@@ -146,6 +193,28 @@ func (p RESTStorageProvider) NewV3Storage(
 		p.StorageType,
 		authorizer,
 		[]string{"gnp", "cgnp", "calicoglobalnetworkpolicies"},
+	)
+
+	stagedgpolicyRESTOptions, err := restOptionsGetter.GetRESTOptions(calico.Resource("stagedglobalnetworkpolicies"), nil)
+	if err != nil {
+		return nil, err
+	}
+	stagedgpolicyOpts := server.NewOptions(
+		etcd.Options{
+			RESTOptions:   stagedgpolicyRESTOptions,
+			Capacity:      1000,
+			ObjectType:    calicostagedgpolicy.EmptyObject(),
+			ScopeStrategy: calicostagedgpolicy.NewStrategy(scheme),
+			NewListFunc:   calicostagedgpolicy.NewList,
+			GetAttrsFunc:  calicostagedgpolicy.GetAttrs,
+			Trigger:       nil,
+		},
+		calicostorage.Options{
+			RESTOptions: stagedgpolicyRESTOptions,
+		},
+		p.StorageType,
+		authorizer,
+		[]string{},
 	)
 
 	gNetworkSetRESTOptions, err := restOptionsGetter.GetRESTOptions(calico.Resource("globalnetworksets"), nil)
@@ -459,7 +528,10 @@ func (p RESTStorageProvider) NewV3Storage(
 	storage := map[string]rest.Storage{}
 	storage["tiers"] = rESTInPeace(calicotier.NewREST(scheme, *tierOpts))
 	storage["networkpolicies"] = rESTInPeace(calicopolicy.NewREST(scheme, *policyOpts, calicoLister))
+	storage["stagednetworkpolicies"] = rESTInPeace(calicostagedpolicy.NewREST(scheme, *stagedpolicyOpts, calicoLister))
+	storage["stagedkubernetesnetworkpolicies"] = rESTInPeace(calicostagedk8spolicy.NewREST(scheme, *stagedk8spolicyOpts))
 	storage["globalnetworkpolicies"] = rESTInPeace(calicogpolicy.NewREST(scheme, *gpolicyOpts, calicoLister))
+	storage["stagedglobalnetworkpolicies"] = rESTInPeace(calicostagedgpolicy.NewREST(scheme, *stagedgpolicyOpts, calicoLister))
 	storage["globalnetworksets"] = rESTInPeace(calicognetworkset.NewREST(scheme, *gNetworkSetOpts))
 	storage["networksets"] = rESTInPeace(caliconetworkset.NewREST(scheme, *networksetOpts))
 	storage["hostendpoints"] = rESTInPeace(calicohostendpoint.NewREST(scheme, *hostEndpointOpts))

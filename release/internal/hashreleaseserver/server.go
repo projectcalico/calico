@@ -90,7 +90,7 @@ func HasHashrelease(hash string, cfg *Config) (bool, error) {
 	if err != nil {
 		if strings.Contains(err.Error(), "exited with status 1") {
 			// Process exited with status 1 is from grep when no match is found
-			logrus.WithError(err).Error("Hashrelease not found")
+			logrus.WithError(err).Info("Hashrelease does not already exist on server")
 			return false, nil
 		} else {
 			logrus.WithError(err).Error("Failed to check hashrelease library")
@@ -101,9 +101,9 @@ func HasHashrelease(hash string, cfg *Config) (bool, error) {
 }
 
 // SetHashreleaseAsLatest sets the hashrelease as the latest for the stream
-func SetHashreleaseAsLatest(rel Hashrelease, cfg *Config) error {
+func SetHashreleaseAsLatest(rel Hashrelease, productCode string, cfg *Config) error {
 	logrus.Debugf("Updating latest hashrelease for %s stream to %s", rel.Stream, rel.Name)
-	if _, err := runSSHCommand(cfg, fmt.Sprintf(`echo "%s/" > %s/latest-os/%s.txt && echo %s >> %s`, rel.URL(), RemoteDocsPath(cfg.User), rel.Stream, rel.Name, remoteReleasesLibraryPath(cfg.User))); err != nil {
+	if _, err := runSSHCommand(cfg, fmt.Sprintf(`echo "%s/" > %s/latest-%s/%s.txt && echo %s >> %s`, rel.URL(), RemoteDocsPath(cfg.User), productCode, rel.Stream, rel.Name, remoteReleasesLibraryPath(cfg.User))); err != nil {
 		logrus.WithError(err).Error("Failed to update latest hashrelease and hashrelease library")
 		return err
 	}

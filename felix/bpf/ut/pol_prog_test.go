@@ -2485,7 +2485,7 @@ func TestPolicyProgramsExceedMatchIdSpace(t *testing.T) {
 
 	test.allowedPackets = []testFlowLogCase{pkt}
 
-	runTest(t, test)
+	runTest(t, test, polprog.WithFlowLogs())
 }
 
 func TestPolicyProgramsFlowLog(t *testing.T) {
@@ -2639,98 +2639,10 @@ func TestPolicyProgramsFlowLog(t *testing.T) {
 				},
 			},
 		},
-		/*
-			TODO (mazdak): enable this when staged policies are added
-			{
-				name: "staged policies recorded",
-				test: testFlowLog{
-					policy: polprog.Rules{
-						NoProfileMatchID: 666,
-						Tiers: []polprog.Tier{
-							{
-								Name: "pass",
-								Policies: []polprog.Policy{{
-									Name:  "pass rule",
-									Rules: []polprog.Rule{{Rule: &proto.Rule{Action: "Pass"}, MatchID: 1234}},
-								}},
-							},
-							{
-								Name:      "staged only",
-								EndRuleID: 0x7455,
-								EndAction: polprog.TierEndPass,
-								Policies: []polprog.Policy{
-									{
-										Name:   "staged deny",
-										Staged: true,
-										Rules:  []polprog.Rule{{Rule: &proto.Rule{Action: "Deny"}, MatchID: 0xdead}},
-									},
-									{
-										Name:   "staged allow",
-										Staged: true,
-										Rules:  []polprog.Rule{{Rule: &proto.Rule{Action: "Allow"}, MatchID: 0x600d}},
-									},
-								},
-							},
-							{
-								Name: "protocols",
-								Policies: []polprog.Policy{
-									{
-										Name:      "TCP allow - staged",
-										Staged:    true,
-										NoMatchID: 0x66,
-										Rules: []polprog.Rule{{
-											MatchID: 0x6,
-											Rule: &proto.Rule{
-												Action: "Allow",
-												Protocol: &proto.Protocol{
-													NumberOrName: &proto.Protocol_Name{Name: "tcp"},
-												},
-											},
-										}},
-									},
-									{
-										Name:      "UDP allow - staged",
-										Staged:    true,
-										NoMatchID: 0x1717,
-										Rules: []polprog.Rule{{
-											MatchID: 0x17,
-											Rule: &proto.Rule{
-												Action: "Allow",
-												Protocol: &proto.Protocol{
-													NumberOrName: &proto.Protocol_Name{Name: "udp"},
-												},
-											},
-										}},
-									},
-									{
-										Name:  "allow all",
-										Rules: []polprog.Rule{{Rule: &proto.Rule{Action: "Allow"}, MatchID: 1}},
-									},
-								},
-							},
-						},
-					},
-					allowedPackets: []testFlowLogCase{
-						{
-							packet:  udpPkt("10.0.0.1:31245", "10.0.0.2:80"),
-							matches: []uint64{1234, 0xdead, 0x600d, 0x7455, 0x66, 0x17, 1},
-						},
-						{
-							packet:  tcpPkt("10.0.0.2:80", "10.0.0.1:31245"),
-							matches: []uint64{1234, 0xdead, 0x600d, 0x7455, 0x6, 0x1717, 1},
-						},
-						{
-							packet:  icmpPkt("10.0.0.1", "10.0.0.2"),
-							matches: []uint64{1234, 0xdead, 0x600d, 0x7455, 0x66, 0x1717, 1},
-						},
-					},
-				},
-			},
-		*/
 	}
 
 	for _, test := range tests {
-		t.Run(fmt.Sprintf("name=%s", test.name), func(t *testing.T) { runTest(t, test.test) })
+		t.Run(fmt.Sprintf("name=%s", test.name), func(t *testing.T) { runTest(t, test.test, polprog.WithFlowLogs()) })
 	}
 }
 

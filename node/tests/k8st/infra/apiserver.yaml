@@ -162,7 +162,10 @@ rules:
   resources:
   - tiers
   - globalnetworkpolicies
+  - stagedglobalnetworkpolicies
   - networkpolicies
+  - stagednetworkpolicies
+  - stagedkubernetesnetworkpolicies
   - clusterinformations
   - hostendpoints
   - globalnetworksets

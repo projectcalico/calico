@@ -5,9 +5,9 @@
 package v3
 
 import (
-	"context"
+	context "context"
 
-	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	projectcalicov3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	scheme "github.com/projectcalico/api/pkg/client/clientset_generated/clientset/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"
@@ -23,31 +23,32 @@ type BGPFiltersGetter interface {
 
 // BGPFilterInterface has methods to work with BGPFilter resources.
 type BGPFilterInterface interface {
-	Create(ctx context.Context, bGPFilter *v3.BGPFilter, opts v1.CreateOptions) (*v3.BGPFilter, error)
-	Update(ctx context.Context, bGPFilter *v3.BGPFilter, opts v1.UpdateOptions) (*v3.BGPFilter, error)
+	Create(ctx context.Context, bGPFilter *projectcalicov3.BGPFilter, opts v1.CreateOptions) (*projectcalicov3.BGPFilter, error)
+	Update(ctx context.Context, bGPFilter *projectcalicov3.BGPFilter, opts v1.UpdateOptions) (*projectcalicov3.BGPFilter, error)
 	Delete(ctx context.Context, name string, opts v1.DeleteOptions) error
 	DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error
-	Get(ctx context.Context, name string, opts v1.GetOptions) (*v3.BGPFilter, error)
-	List(ctx context.Context, opts v1.ListOptions) (*v3.BGPFilterList, error)
+	Get(ctx context.Context, name string, opts v1.GetOptions) (*projectcalicov3.BGPFilter, error)
+	List(ctx context.Context, opts v1.ListOptions) (*projectcalicov3.BGPFilterList, error)
 	Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error)
-	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v3.BGPFilter, err error)
+	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *projectcalicov3.BGPFilter, err error)
 	BGPFilterExpansion
 }
 
 // bGPFilters implements BGPFilterInterface
 type bGPFilters struct {
-	*gentype.ClientWithList[*v3.BGPFilter, *v3.BGPFilterList]
+	*gentype.ClientWithList[*projectcalicov3.BGPFilter, *projectcalicov3.BGPFilterList]
 }
 
 // newBGPFilters returns a BGPFilters
 func newBGPFilters(c *ProjectcalicoV3Client) *bGPFilters {
 	return &bGPFilters{
-		gentype.NewClientWithList[*v3.BGPFilter, *v3.BGPFilterList](
+		gentype.NewClientWithList[*projectcalicov3.BGPFilter, *projectcalicov3.BGPFilterList](
 			"bgpfilters",
 			c.RESTClient(),
 			scheme.ParameterCodec,
 			"",
-			func() *v3.BGPFilter { return &v3.BGPFilter{} },
-			func() *v3.BGPFilterList { return &v3.BGPFilterList{} }),
+			func() *projectcalicov3.BGPFilter { return &projectcalicov3.BGPFilter{} },
+			func() *projectcalicov3.BGPFilterList { return &projectcalicov3.BGPFilterList{} },
+		),
 	}
 }

@@ -51,7 +51,7 @@ func TestToHostAllowedCTFull(t *testing.T) {
 	logrus.SetLevel(logrus.WarnLevel)
 	defer logrus.SetLevel(loglevel)
 
-	val := conntrack.NewValueNormal(0, 0, 0, conntrack.Leg{}, conntrack.Leg{})
+	val := conntrack.NewValueNormal(0, 0, conntrack.Leg{}, conntrack.Leg{})
 
 	var err error
 	var firstCTKey conntrack.Key

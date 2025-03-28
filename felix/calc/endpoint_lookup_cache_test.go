@@ -16,6 +16,7 @@ package calc_test
 
 import (
 	"net"
+	"regexp"
 	"time"
 
 	. "github.com/onsi/ginkgo"
@@ -23,7 +24,6 @@ import (
 	. "github.com/onsi/gomega"
 
 	. "github.com/projectcalico/calico/felix/calc"
-	"github.com/projectcalico/calico/felix/config"
 	"github.com/projectcalico/calico/felix/rules"
 	v3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
@@ -31,7 +31,7 @@ import (
 )
 
 const (
-	endpointDataTTLAfterMarkedAsRemoved = 2 * config.DefaultConntrackPollingInterval
+	testDeletionDelay = 100 * time.Millisecond
 )
 
 var (
@@ -40,7 +40,11 @@ var (
 )
 
 var _ = Describe("EndpointLookupsCache tests: endpoints", func() {
-	ec := NewEndpointLookupsCache()
+	var ec *EndpointLookupsCache
+
+	BeforeEach(func() {
+		ec = NewEndpointLookupsCache(WithDeletionDelay(testDeletionDelay))
+	})
 
 	DescribeTable(
 		"Check adding/deleting workload endpoint modifies the cache",
@@ -63,12 +67,12 @@ var _ = Describe("EndpointLookupsCache tests: endpoints", func() {
 			// test GetEndpointByIP retrieves the endpointData
 			ed, ok := ec.GetEndpoint(addrB)
 			Expect(ok).To(BeTrue(), c)
-			Expect(ed.Key).To(Equal(key))
+			Expect(ed.Key()).To(Equal(key))
 
 			// test GetEndpointKeys
 			keys := ec.GetEndpointKeys()
 			Expect(len(keys)).To(Equal(1))
-			Expect(keys).To(ConsistOf(ed.Key))
+			Expect(keys).To(ConsistOf(ed.Key()))
 
 			// test GetAllEndpointData also contains the one
 			// retrieved by the IP
@@ -86,10 +90,18 @@ var _ = Describe("EndpointLookupsCache tests: endpoints", func() {
 
 			// OnUpdate delays deletion with delay
 			ec.OnUpdate(update)
-			_, ok = ec.GetEndpoint(addrB)
+			ed, ok = ec.GetEndpoint(addrB)
 			Expect(ok).To(BeTrue(), c)
+			Expect(ed.IsLocal()).To(BeFalse())
+			Expect(ed.IngressMatchData()).To(BeNil())
+			Expect(ed.EgressMatchData()).To(BeNil())
 
-			time.Sleep(endpointDataTTLAfterMarkedAsRemoved + 1*time.Second)
+			epExists := func() bool {
+				_, ok = ec.GetEndpoint(addrB)
+				return ok
+			}
+			Consistently(epExists, testDeletionDelay*80/100, time.Millisecond).Should(BeTrue())
+			Eventually(epExists, testDeletionDelay*40/100, time.Millisecond).Should(BeFalse())
 
 			_, ok = ec.GetEndpoint(addrB)
 			Expect(ok).To(BeFalse(), c)
@@ -97,7 +109,7 @@ var _ = Describe("EndpointLookupsCache tests: endpoints", func() {
 			// test GetEndpointKeys are empty after deletion
 			keys = ec.GetEndpointKeys()
 			Expect(len(keys)).To(Equal(0))
-			Expect(keys).NotTo(ConsistOf(ed.Key))
+			Expect(keys).NotTo(ConsistOf(ed.Key()))
 
 			// test GetAllEndpointData are empty after deletion
 			endpoints = ec.GetAllEndpointData()
@@ -127,7 +139,12 @@ var _ = Describe("EndpointLookupsCache tests: endpoints", func() {
 			ec.OnUpdate(update)
 			ed, ok := ec.GetEndpoint(addrB)
 			Expect(ok).To(BeTrue(), c)
-			Expect(ed.Key).To(Equal(key))
+			Expect(ed.Key()).To(Equal(key))
+
+			// DumpEndpoint is only used for debug, just a basic sanity check.
+			Expect(ec.DumpEndpoints()).To(ContainSubstring(ipAddr.String() + ": " + c))
+			dumpIPsRegexp := MatchRegexp(regexp.QuoteMeta(c) + ":.*" + regexp.QuoteMeta(ipAddr.String()))
+			Expect(ec.DumpEndpoints()).To(dumpIPsRegexp)
 
 			// deletion process
 			update = api.Update{
@@ -140,6 +157,8 @@ var _ = Describe("EndpointLookupsCache tests: endpoints", func() {
 			ec.OnUpdate(update)
 			_, ok = ec.GetEndpoint(addrB)
 			Expect(ok).To(BeTrue(), c)
+			Expect(ec.DumpEndpoints()).To(ContainSubstring(ipAddr.String() + ": " + c))
+			Expect(ec.DumpEndpoints()).To(ContainSubstring(c + ": deleted"))
 
 			// re-add entry before the deletion is delegated
 			update = api.Update{
@@ -152,12 +171,16 @@ var _ = Describe("EndpointLookupsCache tests: endpoints", func() {
 			ec.OnUpdate(update)
 			ed, ok = ec.GetEndpoint(addrB)
 			Expect(ok).To(BeTrue(), c)
-			Expect(ed.Key).To(Equal(key))
+			Expect(ed.Key()).To(Equal(key))
 
-			// re-fetching the entry after expected time it was deleted
-			time.Sleep(endpointDataTTLAfterMarkedAsRemoved + 1*time.Second)
-			_, ok = ec.GetEndpoint(addrB)
-			Expect(ok).To(BeTrue(), c)
+			// Verify that the deletion is cancelled.
+			epExists := func() bool {
+				_, ok = ec.GetEndpoint(addrB)
+				return ok
+			}
+			Consistently(epExists, testDeletionDelay*120/100, time.Millisecond).Should(BeTrue())
+			Expect(ec.DumpEndpoints()).To(ContainSubstring(ipAddr.String() + ": " + c))
+			Expect(ec.DumpEndpoints()).To(dumpIPsRegexp)
 		},
 		Entry("Host Endpoint IPv4", hostEpWithNameKey, &hostEpWithName, hostEpWithName.ExpectedIPv4Addrs[0].IP),
 		Entry("Host Endpoint IPv6", hostEpWithNameKey, &hostEpWithName, hostEpWithName.ExpectedIPv6Addrs[0].IP),
@@ -205,41 +228,200 @@ var _ = Describe("EndpointLookupsCache tests: endpoints", func() {
 		ts := newTierInfoSlice()
 		ts = append(ts, *t1, *td)
 
-		ed := ec.CreateEndpointData(hostEpWithNameKey, &hostEpWithName, ts)
+		var ed EndpointData = ec.CreateLocalEndpointData(hostEpWithNameKey, &hostEpWithName, ts)
 
 		By("checking endpoint data")
-		Expect(ed.Key).To(Equal(hostEpWithNameKey))
-		Expect(ed.IsLocal).To(BeTrue())
-		Expect(ed.Endpoint).To(Equal(&hostEpWithName))
+		Expect(ed.Key()).To(Equal(hostEpWithNameKey))
+		Expect(ed.IsLocal()).To(BeTrue())
+		Expect(ed.IsHostEndpoint()).To(BeTrue())
+		Expect(ed.GenerateName()).To(Equal(""))
+		Expect(ed.Labels()).To(Equal(hostEpWithName.Labels))
+		Expect(ed.IsHostEndpoint()).To(BeTrue())
 
 		By("checking compiled ingress data")
-		Expect(ed.Ingress).ToNot(BeNil())
-		Expect(ed.Ingress.PolicyMatches).To(HaveLen(1))
-		Expect(ed.Ingress.PolicyMatches).To(HaveKey(p1id))
-		Expect(ed.Ingress.PolicyMatches[p1id]).To(Equal(0))
-		Expect(ed.Ingress.ProfileMatchIndex).To(Equal(1))
-		Expect(ed.Ingress.TierData).To(HaveLen(1))
-		Expect(ed.Ingress.TierData).To(HaveKey("tier1"))
-		Expect(ed.Ingress.TierData["tier1"]).ToNot(BeNil())
-		Expect(ed.Ingress.TierData["tier1"].ImplicitDropRuleID).To(Equal(
-			NewRuleID("tier1", "pol1", "", RuleIDIndexImplicitDrop, rules.RuleDirIngress, rules.RuleActionDeny)))
-		Expect(ed.Ingress.TierData["tier1"].EndOfTierMatchIndex).To(Equal(0))
+		Expect(ed.IngressMatchData()).ToNot(BeNil())
+		Expect(ed.IngressMatchData().PolicyMatches).To(HaveLen(1))
+		Expect(ed.IngressMatchData().PolicyMatches).To(HaveKey(p1id))
+		Expect(ed.IngressMatchData().PolicyMatches[p1id]).To(Equal(0))
+		Expect(ed.IngressMatchData().ProfileMatchIndex).To(Equal(1))
+		Expect(ed.IngressMatchData().TierData).To(HaveLen(1))
+		Expect(ed.IngressMatchData().TierData).To(HaveKey("tier1"))
+		Expect(ed.IngressMatchData().TierData["tier1"]).ToNot(BeNil())
+		Expect(ed.IngressMatchData().TierData["tier1"].TierDefaultActionRuleID).To(Equal(
+			NewRuleID("tier1", "pol1", "", RuleIndexTierDefaultAction, rules.RuleDirIngress, rules.RuleActionDeny)))
+		Expect(ed.IngressMatchData().TierData["tier1"].EndOfTierMatchIndex).To(Equal(0))
 
 		By("checking compiled egress data")
-		Expect(ed.Egress).ToNot(BeNil())
-		Expect(ed.Egress.PolicyMatches).To(HaveLen(2))
-		Expect(ed.Egress.PolicyMatches).To(HaveKey(p2id))
-		Expect(ed.Egress.PolicyMatches[p2id]).To(Equal(0))
-		Expect(ed.Egress.PolicyMatches).To(HaveKey(p3id))
-		Expect(ed.Egress.PolicyMatches[p3id]).To(Equal(0))
-		Expect(ed.Egress.ProfileMatchIndex).To(Equal(1))
-		Expect(ed.Egress.TierData).To(HaveLen(1))
-		Expect(ed.Egress.TierData).To(HaveKey("default"))
-		Expect(ed.Egress.TierData["default"]).ToNot(BeNil())
-		Expect(ed.Egress.TierData["default"].ImplicitDropRuleID).To(Equal(
-			NewRuleID("default", "pol3", "ns1", RuleIDIndexImplicitDrop, rules.RuleDirEgress, rules.RuleActionDeny)))
-		Expect(ed.Egress.TierData["default"].EndOfTierMatchIndex).To(Equal(0))
+		Expect(ed.EgressMatchData()).ToNot(BeNil())
+		Expect(ed.EgressMatchData().PolicyMatches).To(HaveLen(2))
+		Expect(ed.EgressMatchData().PolicyMatches).To(HaveKey(p2id))
+		Expect(ed.EgressMatchData().PolicyMatches[p2id]).To(Equal(0))
+		Expect(ed.EgressMatchData().PolicyMatches).To(HaveKey(p3id))
+		Expect(ed.EgressMatchData().PolicyMatches[p3id]).To(Equal(0))
+		Expect(ed.EgressMatchData().ProfileMatchIndex).To(Equal(1))
+		Expect(ed.EgressMatchData().TierData).To(HaveLen(1))
+		Expect(ed.EgressMatchData().TierData).To(HaveKey("default"))
+		Expect(ed.EgressMatchData().TierData["default"]).ToNot(BeNil())
+		Expect(ed.EgressMatchData().TierData["default"].TierDefaultActionRuleID).To(Equal(
+			NewRuleID("default", "pol3", "ns1", RuleIndexTierDefaultAction, rules.RuleDirEgress, rules.RuleActionDeny)))
+		Expect(ed.EgressMatchData().TierData["default"].EndOfTierMatchIndex).To(Equal(0))
 	})
+
+	DescribeTable(
+		"should process local endpoints correctly with staged policies and multiple tiers",
+		func(ingress bool) {
+			var dir string
+			if ingress {
+				dir = "ingress"
+			} else {
+				dir = "egress"
+			}
+
+			By("adding a workloadendpoint with mixed staged/non-staged policies in tier1")
+			sp1k := model.PolicyKey{Name: "staged:tier1.pol1"}
+			sp1 := &model.Policy{
+				Order: &float1_0,
+				Types: []string{dir},
+			}
+			sp1id := PolicyID{Name: "staged:pol1", Tier: "tier1"}
+			sp1Metadata := ExtractPolicyMetadata(sp1)
+
+			p1k := model.PolicyKey{Name: "tier1.pol1"}
+			p1 := &model.Policy{
+				Order: &float1_0,
+				Types: []string{dir},
+			}
+			p1id := PolicyID{Name: "pol1", Tier: "tier1"}
+			p1Metadata := ExtractPolicyMetadata(p1)
+
+			sp2k := model.PolicyKey{Name: "ns1/staged:tier1.pol2"}
+			sp2 := &model.Policy{
+				Namespace: "ns1",
+				Order:     &float2_0,
+				Types:     []string{dir},
+			}
+			sp2id := PolicyID{Name: "staged:pol2", Tier: "tier1", Namespace: "ns1"}
+			sp2Metadata := ExtractPolicyMetadata(sp2)
+
+			p2k := model.PolicyKey{Name: "ns1/tier1.pol2"}
+			p2 := &model.Policy{
+				Namespace: "ns1",
+				Order:     &float2_0,
+				Types:     []string{dir},
+			}
+			p2id := PolicyID{Name: "pol2", Tier: "tier1", Namespace: "ns1"}
+			p2Metadata := ExtractPolicyMetadata(p2)
+
+			t1 := NewTierInfo("tier1")
+			t1.Order = &float1_0
+			t1.Valid = true
+			t1.OrderedPolicies = []PolKV{
+				{Key: sp1k, Value: &sp1Metadata},
+				{Key: p1k, Value: &p1Metadata},
+				{Key: sp2k, Value: &sp2Metadata},
+				{Key: p2k, Value: &p2Metadata},
+			}
+
+			By("and adding staged policies in tier default")
+			sp3k := model.PolicyKey{Name: "ns2/staged:knp.default.pol3"}
+			sp3 := &model.Policy{
+				Order: &float1_0,
+				Types: []string{dir},
+			}
+			sp3id := PolicyID{Name: "staged:knp.default.pol3", Tier: "default", Namespace: "ns2"}
+			sp3Metadata := ExtractPolicyMetadata(sp3)
+
+			sp4k := model.PolicyKey{Name: "staged:default.pol4"}
+			sp4 := &model.Policy{
+				Order: &float2_0,
+				Types: []string{dir},
+			}
+			sp4id := PolicyID{Name: "staged:pol4", Tier: "default"}
+			sp4Metadata := ExtractPolicyMetadata(sp4)
+
+			td := NewTierInfo("default")
+			td.Valid = true
+			td.OrderedPolicies = []PolKV{
+				{Key: sp3k, Value: &sp3Metadata},
+				{Key: sp4k, Value: &sp4Metadata},
+			}
+
+			By("Creating the endpoint data")
+			ts := newTierInfoSlice()
+			ts = append(ts, *t1, *td)
+
+			var ed EndpointData = ec.CreateLocalEndpointData(localWlEpKey1, &localWlEp1, ts)
+
+			By("checking endpoint data")
+			Expect(ed.Key()).To(Equal(localWlEpKey1))
+			Expect(ed.IsLocal()).To(BeTrue())
+			Expect(ed.GenerateName()).To(Equal(localWlEp1.GenerateName))
+			Expect(ed.Labels()).To(Equal(localWlEp1.Labels))
+			Expect(ed.IsHostEndpoint()).To(BeFalse())
+
+			By("checking compiled data size for both tiers")
+			var data, other *MatchData
+			var ruleDir rules.RuleDir
+			if ingress {
+				data = ed.IngressMatchData()
+				other = ed.EgressMatchData()
+				ruleDir = rules.RuleDirIngress
+			} else {
+				data = ed.EgressMatchData()
+				other = ed.IngressMatchData()
+				ruleDir = rules.RuleDirEgress
+			}
+
+			Expect(data).ToNot(BeNil())
+			Expect(data.PolicyMatches).To(HaveLen(6))
+			Expect(other.PolicyMatches).To(HaveLen(0))
+			Expect(data.TierData).To(HaveLen(2))
+			Expect(other.TierData).To(HaveLen(0))
+			Expect(data.TierData["tier1"]).ToNot(BeNil())
+			Expect(data.TierData["default"]).ToNot(BeNil())
+
+			By("checking compiled match data for tier1")
+			// Staged policy increments the next index.
+			Expect(data.PolicyMatches).To(HaveKey(sp1id))
+			Expect(data.PolicyMatches[sp1id]).To(Equal(0))
+
+			// Enforced policy leaves next index unchanged.
+			Expect(data.PolicyMatches).To(HaveKey(p1id))
+			Expect(data.PolicyMatches[p1id]).To(Equal(1))
+
+			// Staged policy increments the next index.
+			Expect(data.PolicyMatches).To(HaveKey(sp2id))
+			Expect(data.PolicyMatches[sp2id]).To(Equal(1))
+
+			// Enforced policy leaves next index unchanged.
+			Expect(data.PolicyMatches).To(HaveKey(p2id))
+			Expect(data.PolicyMatches[p2id]).To(Equal(2))
+
+			// Tier contains enforced policy, so has a real implicit drop rule ID.
+			Expect(data.TierData["tier1"].EndOfTierMatchIndex).To(Equal(2))
+			Expect(data.TierData["tier1"].TierDefaultActionRuleID).To(Equal(
+				NewRuleID("tier1", "pol2", "ns1", RuleIndexTierDefaultAction, ruleDir, rules.RuleActionDeny)))
+
+			By("checking compiled match data for default tier")
+			// Staged policy increments the next index.
+			Expect(data.PolicyMatches).To(HaveKey(sp3id))
+			Expect(data.PolicyMatches[sp3id]).To(Equal(3))
+
+			// Staged policy increments the next index.
+			Expect(data.PolicyMatches).To(HaveKey(sp4id))
+			Expect(data.PolicyMatches[sp4id]).To(Equal(4))
+
+			// Tier contains only staged policy so does not contain an implicit drop rule ID.
+			Expect(data.TierData["default"].EndOfTierMatchIndex).To(Equal(5))
+			Expect(data.TierData["default"].TierDefaultActionRuleID).To(BeNil())
+
+			By("checking profile match index")
+			Expect(data.ProfileMatchIndex).To(Equal(6))
+			Expect(other.ProfileMatchIndex).To(Equal(0))
+		},
+		Entry("ingress", true),
+		Entry("egress", false),
+	)
 })
 
 var _ = Describe("EndpointLookupCache tests: Node lookup", func() {

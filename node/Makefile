@@ -2,9 +2,6 @@ include ../metadata.mk
 
 PACKAGE_NAME = github.com/projectcalico/calico/node
 
-RELEASE_BRANCH_PREFIX ?=release
-DEV_TAG_SUFFIX        ?=0.dev
-
 # Name of the images.
 # e.g., <registry>/<name>:<tag>
 NODE_IMAGE            ?=node
@@ -156,6 +153,7 @@ SRC_FILES=$(shell find ./pkg -name '*.go') \
 	  $(shell find ../felix -name '*.go') \
 	  $(shell find ../felix -name '*.[ch]') \
 	  $(shell find ../libcalico-go -name '*.go') \
+	  $(shell find ../goldmane -name '*.go') \
 	  $(shell find ../confd -name '*.go')
 
 ## Clean enough that a new release build will be clean

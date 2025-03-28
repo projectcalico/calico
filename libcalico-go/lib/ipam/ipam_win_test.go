@@ -44,7 +44,7 @@ type ipamClientWindows struct {
 
 // Returns the block CIDR for the given IP
 func (c ipamClientWindows) GetAssignmentBlockCIDR(ctx context.Context, addr cnet.IP) cnet.IPNet {
-	pool, err := c.blockReaderWriter.getPoolForIP(addr, nil)
+	pool, err := c.blockReaderWriter.getPoolForIP(ctx, addr, nil)
 	Expect(err).NotTo(HaveOccurred())
 	blockCIDR := getBlockCIDRForAddress(addr, pool)
 	return blockCIDR

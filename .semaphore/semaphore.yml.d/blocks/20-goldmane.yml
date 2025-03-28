@@ -8,6 +8,10 @@
   task:
     prologue:
       commands:
+        # The Makefile sometimes tries to rebuild the protobuf files on non-amd architectures
+        # even when they don't need to be. Touch the file to update the timestamp. We know
+        # they will be up-to-date due to preflight checks.
+        - touch goldmane/proto/api.pb.go
         - cd goldmane
     jobs:
       - name: make ci

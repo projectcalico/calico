@@ -50,6 +50,9 @@ var (
 
 	// Directories that publish images.
 	imageReleaseDirs = []string{
+		"third_party/envoy-gateway",
+		"third_party/envoy-proxy",
+		"third_party/envoy-ratelimit",
 		"apiserver",
 		"app-policy",
 		"calicoctl",
@@ -60,6 +63,9 @@ var (
 		"pod2daemon",
 		"typha",
 		"goldmane",
+		"whisker",
+		"whisker-backend",
+		"guardian",
 	}
 
 	// Directories for Windows.
@@ -78,6 +84,9 @@ var (
 		"csi",
 		"ctl",
 		"dikastes",
+		"envoy-gateway",
+		"envoy-proxy",
+		"envoy-ratelimit",
 		"key-cert-provisioner",
 		"kube-controllers",
 		"node",
@@ -101,6 +110,7 @@ func NewManager(opts ...Option) *CalicoManager {
 		runner:           &command.RealCommandRunner{},
 		productCode:      utils.CalicoProductCode,
 		validate:         true,
+		validateBranch:   true,
 		buildImages:      true,
 		publishImages:    true,
 		publishTag:       true,
@@ -238,7 +248,7 @@ func (r *CalicoManager) PreBuildValidation() error {
 	if r.isHashRelease {
 		return r.PreHashreleaseValidate()
 	}
-	return r.PreReleaseValidate(r.calicoVersion)
+	return r.PreReleaseValidate()
 }
 
 func (r *CalicoManager) Build() error {
@@ -386,17 +396,29 @@ func (r *CalicoManager) PreHashreleaseValidate() error {
 	if dirty {
 		errStack = errors.Join(errStack, fmt.Errorf("there are uncommitted changes in the repository, please commit or stash them before building the hashrelease"))
 	}
+	if err := r.checkCodeGeneration(); err != nil {
+		errStack = errors.Join(errStack, err)
+	}
 	return errStack
 }
 
-func (r *CalicoManager) PreReleaseValidate(ver string) error {
+func (r *CalicoManager) checkCodeGeneration() error {
+	if err := r.makeInDirectoryIgnoreOutput(r.repoRoot, "generate get-operator-crds check-dirty"); err != nil {
+		logrus.WithError(err).Error("Failed to check code generation")
+		return fmt.Errorf("code generation error, try 'make generate get-operator-crds' to fix")
+	}
+	return nil
+}
+
+func (r *CalicoManager) PreReleaseValidate() error {
 	// Cheeck that we are on a release branch
 	if r.validateBranch {
 		branch, err := utils.GitBranch(r.repoRoot)
 		if err != nil {
 			return fmt.Errorf("failed to determine branch: %s", err)
 		}
-		match := fmt.Sprintf(`^%s-v\d+\.\d+(?:-\d+)?$`, r.releaseBranchPrefix)
+		// releases can only be cut from a release branch (i.e release-vX.Y) or build version branch (i.e. build-vX.Y.Z)
+		match := fmt.Sprintf(`^(%s-v\d+\.\d+(?:-\d+)?|build-v\d+\.\d+\.\d+)$`, r.releaseBranchPrefix)
 		re := regexp.MustCompile(match)
 		if !re.MatchString(branch) {
 			return fmt.Errorf("current branch (%s) is not a release branch", branch)
@@ -420,26 +442,22 @@ func (r *CalicoManager) PreReleaseValidate(ver string) error {
 	}
 
 	// Check that code generation is up-to-date.
-	if err := r.makeInDirectoryIgnoreOutput(r.repoRoot, "generate get-operator-crds check-dirty"); err != nil {
-		return fmt.Errorf("code generation error (try 'make generate' and/or 'make get-operator-crds' ?): %s", err)
+	if err := r.checkCodeGeneration(); err != nil {
+		return err
 	}
 
 	// Assert that manifests are using the correct version.
-	err = r.assertManifestVersions(ver)
+	err = r.assertManifestVersions(r.calicoVersion)
 	if err != nil {
 		return err
 	}
 
-	err = r.assertReleaseNotesPresent(ver)
+	err = r.assertReleaseNotesPresent(r.calicoVersion)
 	if err != nil {
 		return err
 	}
 
-	// Check that the environment has the necessary prereqs.
-	if err := r.releasePrereqs(); err != nil {
-		return err
-	}
-	return nil
+	return r.releasePrereqs()
 }
 
 func (r *CalicoManager) DeleteTag(ver string) error {
@@ -523,7 +541,7 @@ func (r *CalicoManager) publishToHashreleaseServer() error {
 		return err
 	}
 	if r.hashrelease.Latest {
-		return hashreleaseserver.SetHashreleaseAsLatest(r.hashrelease, &r.hashreleaseConfig)
+		return hashreleaseserver.SetHashreleaseAsLatest(r.hashrelease, r.productCode, &r.hashreleaseConfig)
 	}
 	return nil
 }
@@ -573,7 +591,7 @@ func (r *CalicoManager) releasePrereqs() error {
 		}
 	}
 
-	return r.assertImageVersions()
+	return nil
 }
 
 type imageExistsResult struct {
@@ -764,6 +782,8 @@ func (r *CalicoManager) assertImageVersions() error {
 			}
 		case "goldmane":
 			// goldmane does not have version information in the image.
+		case "envoy-gateway", "envoy-proxy", "envoy-ratelimit":
+			// Envoy images do not have version information.
 		default:
 			return fmt.Errorf("unknown image: %s, update assertion to include validating image", img)
 		}
@@ -784,7 +804,10 @@ func (r *CalicoManager) publishPrereqs() error {
 		return r.hashreleasePrereqs()
 	}
 	// TODO: Verify all required artifacts are present.
-	return r.releasePrereqs()
+	if err := r.releasePrereqs(); err != nil {
+		return err
+	}
+	return r.assertImageVersions()
 }
 
 // We include the following GitHub artifacts on each release. This function assumes
@@ -1027,7 +1050,7 @@ func (r *CalicoManager) publishGithubRelease() error {
 	}
 
 	releaseNoteTemplate := `
-Release notes can be found [on GitHub](https://github.com/projectcalico/calico/blob/{version}/release-notes/{version}-release-notes.md)
+Release notes can be found [on GitHub](https://github.com/projectcalico/calico/blob/{branch}/release-notes/{version}-release-notes.md)
 
 Attached to this release are the following artifacts:
 
@@ -1197,10 +1220,13 @@ func (r *CalicoManager) git(args ...string) (string, error) {
 }
 
 func (r *CalicoManager) makeInDirectoryWithOutput(dir, target string, env ...string) (string, error) {
-	return r.runner.Run("make", []string{"-C", dir, target}, env)
+	targets := strings.Split(target, " ")
+	args := []string{"-C", dir}
+	args = append(args, targets...)
+	return r.runner.Run("make", args, env)
 }
 
 func (r *CalicoManager) makeInDirectoryIgnoreOutput(dir, target string, env ...string) error {
-	_, err := r.runner.Run("make", []string{"-C", dir, target}, env)
+	_, err := r.makeInDirectoryWithOutput(dir, target, env...)
 	return err
 }

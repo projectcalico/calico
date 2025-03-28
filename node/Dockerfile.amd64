@@ -18,8 +18,8 @@ ARG IPSET_VER=7.11-6
 ARG RUNIT_VER=2.1.2
 ARG BIRD_IMAGE=calico/bird:latest
 ARG UBI_IMAGE
-
-FROM calico/bpftool:v7.4.0 AS bpftool
+ARG BPFTOOL_IMAGE
+FROM ${BPFTOOL_IMAGE} AS bpftool
 FROM ${BIRD_IMAGE} AS bird
 
 # Use this build stage to build iptables rpm and runit binaries.

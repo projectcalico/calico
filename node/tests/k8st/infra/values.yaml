@@ -8,6 +8,7 @@ calicoctl:
   image: docker.io/calico/ctl
 typha:
   image: docker.io/calico/typha
+  enabled: true
 cni:
   image: docker.io/calico/cni
 kubeControllers:
@@ -29,8 +30,6 @@ includeCRDs: false
 datastore: kubernetes
 network: calico
 ipam: calico-ipam
-typha:
-  enabled: true
 mtu: "1440"
 imagePullPolicy: Never
 etcd:

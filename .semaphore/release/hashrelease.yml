@@ -5,7 +5,7 @@ agent:
     type: f1-standard-4
     os_image: ubuntu2204
 execution_time_limit:
-  hours: 4
+  hours: 6
 
 global_job_config:
   secrets:

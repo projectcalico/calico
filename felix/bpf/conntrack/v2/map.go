@@ -464,7 +464,7 @@ func (e Value) Upgrade() maps.Upgradable {
 	var val3 v3.Value
 
 	ctType := e.Type()
-	copy(val3[v3.VoCreated:v3.VoFlags2+1], e[voCreated:voFlags2+1])
+	copy(val3[v3.VoLastSeen:v3.VoFlags2+1], e[voLastSeen:voFlags2+1]) // Do not copy Created
 
 	switch ctType {
 	case TypeNormal, TypeNATReverse:

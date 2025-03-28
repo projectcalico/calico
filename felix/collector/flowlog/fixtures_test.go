@@ -15,13 +15,10 @@
 package flowlog
 
 import (
-	"net"
-
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/kubernetes/pkg/proxy"
 
 	"github.com/projectcalico/calico/felix/calc"
-	"github.com/projectcalico/calico/felix/collector/types/boundedset"
 	"github.com/projectcalico/calico/felix/collector/types/endpoint"
 	"github.com/projectcalico/calico/felix/collector/types/metric"
 	"github.com/projectcalico/calico/felix/collector/types/tuple"
@@ -30,8 +27,6 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	net2 "github.com/projectcalico/calico/libcalico-go/lib/net"
 )
-
-const testMaxBoundedSetSize = 5
 
 var (
 	sendCongestionWnd = 10
@@ -49,10 +44,9 @@ var (
 			"id": "loc-ep-1",
 		},
 	}
-	localHostEd1 = &calc.EndpointData{
-		Key:      localHostEpKey1,
-		Endpoint: localHostEp1,
-		IsLocal:  true,
+	localHostEd1 = &calc.LocalEndpointData{
+		CommonEndpointData: calc.CalculateCommonEndpointData(localHostEpKey1, localHostEp1),
+
 		Ingress: &calc.MatchData{
 			PolicyMatches: map[calc.PolicyID]int{
 				calc.PolicyID{Name: "policy1", Tier: "default"}: 0,
@@ -60,7 +54,7 @@ var (
 			},
 			TierData: map[string]*calc.TierData{
 				"default": {
-					ImplicitDropRuleID: calc.NewRuleID("default", "policy2", "", calc.RuleIDIndexImplicitDrop,
+					TierDefaultActionRuleID: calc.NewRuleID("default", "policy2", "", calc.RuleIndexTierDefaultAction,
 						rules.RuleDirIngress, rules.RuleActionDeny),
 					EndOfTierMatchIndex: 0,
 				},
@@ -74,7 +68,7 @@ var (
 			},
 			TierData: map[string]*calc.TierData{
 				"default": {
-					ImplicitDropRuleID: calc.NewRuleID("default", "policy2", "", calc.RuleIDIndexImplicitDrop,
+					TierDefaultActionRuleID: calc.NewRuleID("default", "policy2", "", calc.RuleIndexTierDefaultAction,
 						rules.RuleDirIngress, rules.RuleActionDeny),
 					EndOfTierMatchIndex: 0,
 				},
@@ -94,10 +88,8 @@ var (
 			"id": "rem-ep-1",
 		},
 	}
-	remoteHostEd1 = &calc.EndpointData{
-		Key:      remoteHostEpKey1,
-		Endpoint: remoteHostEp1,
-		IsLocal:  false,
+	remoteHostEd1 = &calc.RemoteEndpointData{
+		CommonEndpointData: calc.CalculateCommonEndpointData(remoteHostEpKey1, remoteHostEp1),
 	}
 
 	flowMetaDefault = FlowMeta{
@@ -120,7 +112,7 @@ var (
 			Name:           "nginx-412354-5123451",
 			AggregatedName: "nginx-412354-*",
 		},
-		DstService: noService,
+		DstService: EmptyService,
 		Action:     "allow",
 		Reporter:   "dst",
 	}
@@ -175,7 +167,7 @@ var (
 			Name:           "nginx-412354-5123451",
 			AggregatedName: "nginx-412354-*",
 		},
-		DstService: noService,
+		DstService: EmptyService,
 		Action:     "allow",
 		Reporter:   "dst",
 	}
@@ -200,7 +192,7 @@ var (
 			Name:           "-",
 			AggregatedName: "pub",
 		},
-		DstService: noService,
+		DstService: EmptyService,
 		Action:     "allow",
 		Reporter:   "dst",
 	}
@@ -225,7 +217,7 @@ var (
 			Name:           "nginx-412354-5123451",
 			AggregatedName: "nginx-412354-*",
 		},
-		DstService: noService,
+		DstService: EmptyService,
 		Action:     "allow",
 		Reporter:   "dst",
 	}
@@ -250,7 +242,7 @@ var (
 			Name:           "-",
 			AggregatedName: "nginx-412354-*",
 		},
-		DstService: noService,
+		DstService: EmptyService,
 		Action:     "allow",
 		Reporter:   "dst",
 	}
@@ -275,7 +267,7 @@ var (
 			Name:           "-",
 			AggregatedName: "nginx-412354-*",
 		},
-		DstService: noService,
+		DstService: EmptyService,
 		Action:     "allow",
 		Reporter:   "dst",
 	}
@@ -300,7 +292,7 @@ var (
 			Name:           "-",
 			AggregatedName: "pub",
 		},
-		DstService: noService,
+		DstService: EmptyService,
 		Action:     "allow",
 		Reporter:   "dst",
 	}
@@ -325,7 +317,7 @@ var (
 			Name:           "-",
 			AggregatedName: "manually-created-pod", // Keeping the Name. No Generatename.
 		},
-		DstService: noService,
+		DstService: EmptyService,
 		Action:     "allow",
 		Reporter:   "dst",
 	}
@@ -350,7 +342,7 @@ var (
 			Name:           "-",
 			AggregatedName: "nginx-412354-*",
 		},
-		DstService: noService,
+		DstService: EmptyService,
 		Action:     "allow",
 		Reporter:   "dst",
 	}
@@ -405,7 +397,7 @@ var (
 			Name:           "-",
 			AggregatedName: "pub",
 		},
-		DstService: noService,
+		DstService: EmptyService,
 		Action:     "allow",
 		Reporter:   "dst",
 	}
@@ -430,7 +422,7 @@ var (
 			Name:           "-",
 			AggregatedName: "nginx-412354-*",
 		},
-		DstService: noService,
+		DstService: EmptyService,
 		Action:     "allow",
 		Reporter:   "dst",
 	}
@@ -442,23 +434,27 @@ var (
 	muWithEndpointMeta = metric.Update{
 		UpdateType: metric.UpdateTypeReport,
 		Tuple:      tuple1,
-		SrcEp: &calc.EndpointData{
-			Key: model.WorkloadEndpointKey{
-				Hostname:       "node-01",
-				OrchestratorID: "k8s",
-				WorkloadID:     "kube-system/iperf-4235-5623461",
-				EndpointID:     "4352",
-			},
-			Endpoint: &model.WorkloadEndpoint{GenerateName: "iperf-4235-", Labels: map[string]string{"test-app": "true"}},
+		SrcEp: &calc.RemoteEndpointData{
+			CommonEndpointData: calc.CalculateCommonEndpointData(
+				model.WorkloadEndpointKey{
+					Hostname:       "node-01",
+					OrchestratorID: "k8s",
+					WorkloadID:     "kube-system/iperf-4235-5623461",
+					EndpointID:     "4352",
+				},
+				&model.WorkloadEndpoint{GenerateName: "iperf-4235-", Labels: map[string]string{"test-app": "true"}},
+			),
 		},
-		DstEp: &calc.EndpointData{
-			Key: model.WorkloadEndpointKey{
-				Hostname:       "node-02",
-				OrchestratorID: "k8s",
-				WorkloadID:     "default/nginx-412354-5123451",
-				EndpointID:     "4352",
-			},
-			Endpoint: &model.WorkloadEndpoint{GenerateName: "nginx-412354-", Labels: map[string]string{"k8s-app": "true"}},
+		DstEp: &calc.RemoteEndpointData{
+			CommonEndpointData: calc.CalculateCommonEndpointData(
+				model.WorkloadEndpointKey{
+					Hostname:       "node-02",
+					OrchestratorID: "k8s",
+					WorkloadID:     "default/nginx-412354-5123451",
+					EndpointID:     "4352",
+				},
+				&model.WorkloadEndpoint{GenerateName: "nginx-412354-", Labels: map[string]string{"k8s-app": "true"}},
+			),
 		},
 		RuleIDs:      []*calc.RuleID{ingressRule1Allow},
 		IsConnection: false,
@@ -471,23 +467,27 @@ var (
 	muWithEndpointMetaExpire = metric.Update{
 		UpdateType: metric.UpdateTypeExpire,
 		Tuple:      tuple1,
-		SrcEp: &calc.EndpointData{
-			Key: model.WorkloadEndpointKey{
-				Hostname:       "node-01",
-				OrchestratorID: "k8s",
-				WorkloadID:     "kube-system/iperf-4235-5623461",
-				EndpointID:     "4352",
-			},
-			Endpoint: &model.WorkloadEndpoint{GenerateName: "iperf-4235-", Labels: map[string]string{"test-app": "true"}},
+		SrcEp: &calc.RemoteEndpointData{
+			CommonEndpointData: calc.CalculateCommonEndpointData(
+				model.WorkloadEndpointKey{
+					Hostname:       "node-01",
+					OrchestratorID: "k8s",
+					WorkloadID:     "kube-system/iperf-4235-5623461",
+					EndpointID:     "4352",
+				},
+				&model.WorkloadEndpoint{GenerateName: "iperf-4235-", Labels: map[string]string{"test-app": "true"}},
+			),
 		},
-		DstEp: &calc.EndpointData{
-			Key: model.WorkloadEndpointKey{
-				Hostname:       "node-02",
-				OrchestratorID: "k8s",
-				WorkloadID:     "default/nginx-412354-5123451",
-				EndpointID:     "4352",
-			},
-			Endpoint: &model.WorkloadEndpoint{GenerateName: "nginx-412354-", Labels: map[string]string{"k8s-app": "true"}},
+		DstEp: &calc.RemoteEndpointData{
+			CommonEndpointData: calc.CalculateCommonEndpointData(
+				model.WorkloadEndpointKey{
+					Hostname:       "node-02",
+					OrchestratorID: "k8s",
+					WorkloadID:     "default/nginx-412354-5123451",
+					EndpointID:     "4352",
+				},
+				&model.WorkloadEndpoint{GenerateName: "nginx-412354-", Labels: map[string]string{"k8s-app": "true"}},
+			),
 		},
 		RuleIDs:      []*calc.RuleID{ingressRule1Allow},
 		IsConnection: false,
@@ -496,23 +496,27 @@ var (
 	muWithEndpointMetaWithService = metric.Update{
 		UpdateType: metric.UpdateTypeReport,
 		Tuple:      tuple1,
-		SrcEp: &calc.EndpointData{
-			Key: model.WorkloadEndpointKey{
-				Hostname:       "node-01",
-				OrchestratorID: "k8s",
-				WorkloadID:     "kube-system/iperf-4235-5623461",
-				EndpointID:     "4352",
-			},
-			Endpoint: &model.WorkloadEndpoint{GenerateName: "iperf-4235-", Labels: map[string]string{"test-app": "true"}},
+		SrcEp: &calc.RemoteEndpointData{
+			CommonEndpointData: calc.CalculateCommonEndpointData(
+				model.WorkloadEndpointKey{
+					Hostname:       "node-01",
+					OrchestratorID: "k8s",
+					WorkloadID:     "kube-system/iperf-4235-5623461",
+					EndpointID:     "4352",
+				},
+				&model.WorkloadEndpoint{GenerateName: "iperf-4235-", Labels: map[string]string{"test-app": "true"}},
+			),
 		},
-		DstEp: &calc.EndpointData{
-			Key: model.WorkloadEndpointKey{
-				Hostname:       "node-02",
-				OrchestratorID: "k8s",
-				WorkloadID:     "default/nginx-412354-5123451",
-				EndpointID:     "4352",
-			},
-			Endpoint: &model.WorkloadEndpoint{GenerateName: "nginx-412354-", Labels: map[string]string{"k8s-app": "true"}},
+		DstEp: &calc.RemoteEndpointData{
+			CommonEndpointData: calc.CalculateCommonEndpointData(
+				model.WorkloadEndpointKey{
+					Hostname:       "node-02",
+					OrchestratorID: "k8s",
+					WorkloadID:     "default/nginx-412354-5123451",
+					EndpointID:     "4352",
+				},
+				&model.WorkloadEndpoint{GenerateName: "nginx-412354-", Labels: map[string]string{"k8s-app": "true"}},
+			),
 		},
 		DstService: metric.ServiceInfo{
 			ServicePortName: proxy.ServicePortName{
@@ -535,23 +539,27 @@ var (
 	muWithEndpointMetaAndDifferentLabels = metric.Update{
 		UpdateType: metric.UpdateTypeReport,
 		Tuple:      tuple1,
-		SrcEp: &calc.EndpointData{
-			Key: model.WorkloadEndpointKey{
-				Hostname:       "node-01",
-				OrchestratorID: "k8s",
-				WorkloadID:     "kube-system/iperf-4235-5623461",
-				EndpointID:     "4352",
-			},
-			Endpoint: &model.WorkloadEndpoint{GenerateName: "iperf-4235-", Labels: map[string]string{"test-app": "true", "new-label": "true"}},
+		SrcEp: &calc.RemoteEndpointData{
+			CommonEndpointData: calc.CalculateCommonEndpointData(
+				model.WorkloadEndpointKey{
+					Hostname:       "node-01",
+					OrchestratorID: "k8s",
+					WorkloadID:     "kube-system/iperf-4235-5623461",
+					EndpointID:     "4352",
+				},
+				&model.WorkloadEndpoint{GenerateName: "iperf-4235-", Labels: map[string]string{"test-app": "true", "new-label": "true"}},
+			),
 		},
-		DstEp: &calc.EndpointData{
-			Key: model.WorkloadEndpointKey{
-				Hostname:       "node-02",
-				OrchestratorID: "k8s",
-				WorkloadID:     "default/nginx-412354-5123451",
-				EndpointID:     "4352",
-			},
-			Endpoint: &model.WorkloadEndpoint{GenerateName: "nginx-412354-", Labels: map[string]string{"k8s-app": "false"}},
+		DstEp: &calc.RemoteEndpointData{
+			CommonEndpointData: calc.CalculateCommonEndpointData(
+				model.WorkloadEndpointKey{
+					Hostname:       "node-02",
+					OrchestratorID: "k8s",
+					WorkloadID:     "default/nginx-412354-5123451",
+					EndpointID:     "4352",
+				},
+				&model.WorkloadEndpoint{GenerateName: "nginx-412354-", Labels: map[string]string{"k8s-app": "false"}},
+			),
 		},
 		RuleIDs:      []*calc.RuleID{ingressRule1Allow},
 		IsConnection: false,
@@ -565,14 +573,16 @@ var (
 		UpdateType: metric.UpdateTypeReport,
 		Tuple:      tuple1,
 		SrcEp:      nil,
-		DstEp: &calc.EndpointData{
-			Key: model.WorkloadEndpointKey{
-				Hostname:       "node-02",
-				OrchestratorID: "k8s",
-				WorkloadID:     "default/nginx-412354-5123451",
-				EndpointID:     "4352",
-			},
-			Endpoint: &model.WorkloadEndpoint{GenerateName: "nginx-412354-", Labels: map[string]string{"k8s-app": "true"}},
+		DstEp: &calc.RemoteEndpointData{
+			CommonEndpointData: calc.CalculateCommonEndpointData(
+				model.WorkloadEndpointKey{
+					Hostname:       "node-02",
+					OrchestratorID: "k8s",
+					WorkloadID:     "default/nginx-412354-5123451",
+					EndpointID:     "4352",
+				},
+				&model.WorkloadEndpoint{GenerateName: "nginx-412354-", Labels: map[string]string{"k8s-app": "true"}},
+			),
 		},
 		RuleIDs:      []*calc.RuleID{ingressRule1Allow},
 		IsConnection: false,
@@ -585,14 +595,16 @@ var (
 	muWithoutDstEndpointMeta = metric.Update{
 		UpdateType: metric.UpdateTypeReport,
 		Tuple:      tuple1,
-		SrcEp: &calc.EndpointData{
-			Key: model.WorkloadEndpointKey{
-				Hostname:       "node-01",
-				OrchestratorID: "k8s",
-				WorkloadID:     "kube-system/iperf-4235-5623461",
-				EndpointID:     "4352",
-			},
-			Endpoint: &model.WorkloadEndpoint{GenerateName: "iperf-4235-", Labels: map[string]string{"test-app": "true"}},
+		SrcEp: &calc.RemoteEndpointData{
+			CommonEndpointData: calc.CalculateCommonEndpointData(
+				model.WorkloadEndpointKey{
+					Hostname:       "node-01",
+					OrchestratorID: "k8s",
+					WorkloadID:     "kube-system/iperf-4235-5623461",
+					EndpointID:     "4352",
+				},
+				&model.WorkloadEndpoint{GenerateName: "iperf-4235-", Labels: map[string]string{"test-app": "true"}},
+			),
 		},
 		DstEp:        nil,
 		RuleIDs:      []*calc.RuleID{ingressRule1Allow},
@@ -607,18 +619,19 @@ var (
 		UpdateType: metric.UpdateTypeReport,
 		Tuple:      tuple1,
 		SrcEp:      nil,
-		DstEp: &calc.EndpointData{
-			Key: model.WorkloadEndpointKey{
-				Hostname:       "node-02",
-				OrchestratorID: "k8s",
-				WorkloadID:     "default/nginx-412354-5123451",
-				EndpointID:     "4352",
-			},
-			Endpoint: &model.WorkloadEndpoint{GenerateName: "nginx-412354-", Labels: map[string]string{"k8s-app": "true"}},
+		DstEp: &calc.RemoteEndpointData{
+			CommonEndpointData: calc.CalculateCommonEndpointData(
+				model.WorkloadEndpointKey{
+					Hostname:       "node-02",
+					OrchestratorID: "k8s",
+					WorkloadID:     "default/nginx-412354-5123451",
+					EndpointID:     "4352",
+				},
+				&model.WorkloadEndpoint{GenerateName: "nginx-412354-", Labels: map[string]string{"k8s-app": "true"}},
+			),
 		},
-		OrigSourceIPs: boundedset.NewFromSlice(testMaxBoundedSetSize, []net.IP{net.ParseIP(publicIP1Str)}),
-		RuleIDs:       []*calc.RuleID{ingressRule1Allow},
-		IsConnection:  false,
+		RuleIDs:      []*calc.RuleID{ingressRule1Allow},
+		IsConnection: false,
 		InMetric: metric.Value{
 			DeltaPackets: 1,
 			DeltaBytes:   20,
@@ -629,18 +642,19 @@ var (
 		UpdateType: metric.UpdateTypeExpire,
 		Tuple:      tuple1,
 		SrcEp:      nil,
-		DstEp: &calc.EndpointData{
-			Key: model.WorkloadEndpointKey{
-				Hostname:       "node-02",
-				OrchestratorID: "k8s",
-				WorkloadID:     "default/nginx-412354-5123451",
-				EndpointID:     "4352",
-			},
-			Endpoint: &model.WorkloadEndpoint{GenerateName: "nginx-412354-", Labels: map[string]string{"k8s-app": "true"}},
+		DstEp: &calc.RemoteEndpointData{
+			CommonEndpointData: calc.CalculateCommonEndpointData(
+				model.WorkloadEndpointKey{
+					Hostname:       "node-02",
+					OrchestratorID: "k8s",
+					WorkloadID:     "default/nginx-412354-5123451",
+					EndpointID:     "4352",
+				},
+				&model.WorkloadEndpoint{GenerateName: "nginx-412354-", Labels: map[string]string{"k8s-app": "true"}},
+			),
 		},
-		OrigSourceIPs: boundedset.NewFromSlice(testMaxBoundedSetSize, []net.IP{net.ParseIP(publicIP1Str)}),
-		RuleIDs:       []*calc.RuleID{ingressRule1Allow},
-		IsConnection:  false,
+		RuleIDs:      []*calc.RuleID{ingressRule1Allow},
+		IsConnection: false,
 		InMetric: metric.Value{
 			DeltaPackets: 0,
 			DeltaBytes:   0,
@@ -648,11 +662,10 @@ var (
 	}
 
 	muWithOrigSourceIPsUnknownRuleID = metric.Update{
-		UpdateType:    metric.UpdateTypeReport,
-		Tuple:         tuple1,
-		SrcEp:         nil,
-		DstEp:         nil,
-		OrigSourceIPs: boundedset.NewFromSlice(testMaxBoundedSetSize, []net.IP{net.ParseIP(publicIP1Str)}),
+		UpdateType: metric.UpdateTypeReport,
+		Tuple:      tuple1,
+		SrcEp:      nil,
+		DstEp:      nil,
 		UnknownRuleID: &calc.RuleID{
 			PolicyID: calc.PolicyID{
 				Tier:      "__UNKNOWN__",
@@ -671,18 +684,19 @@ var (
 		UpdateType: metric.UpdateTypeReport,
 		Tuple:      tuple1,
 		SrcEp:      nil,
-		DstEp: &calc.EndpointData{
-			Key: model.WorkloadEndpointKey{
-				Hostname:       "node-02",
-				OrchestratorID: "k8s",
-				WorkloadID:     "default/nginx-412354-5123451",
-				EndpointID:     "4352",
-			},
-			Endpoint: &model.WorkloadEndpoint{GenerateName: "nginx-412354-", Labels: map[string]string{"k8s-app": "true"}},
+		DstEp: &calc.RemoteEndpointData{
+			CommonEndpointData: calc.CalculateCommonEndpointData(
+				model.WorkloadEndpointKey{
+					Hostname:       "node-02",
+					OrchestratorID: "k8s",
+					WorkloadID:     "default/nginx-412354-5123451",
+					EndpointID:     "4352",
+				},
+				&model.WorkloadEndpoint{GenerateName: "nginx-412354-", Labels: map[string]string{"k8s-app": "true"}},
+			),
 		},
-		OrigSourceIPs: boundedset.NewFromSlice(testMaxBoundedSetSize, []net.IP{net.ParseIP(publicIP1Str), net.ParseIP(publicIP2Str)}),
-		RuleIDs:       []*calc.RuleID{ingressRule1Allow},
-		IsConnection:  false,
+		RuleIDs:      []*calc.RuleID{ingressRule1Allow},
+		IsConnection: false,
 		InMetric: metric.Value{
 			DeltaPackets: 1,
 			DeltaBytes:   20,
@@ -692,23 +706,27 @@ var (
 	muWithEndpointMetaWithoutGenerateName = metric.Update{
 		UpdateType: metric.UpdateTypeReport,
 		Tuple:      tuple1,
-		SrcEp: &calc.EndpointData{
-			Key: model.WorkloadEndpointKey{
-				Hostname:       "node-01",
-				OrchestratorID: "k8s",
-				WorkloadID:     "kube-system/iperf-4235-5623461",
-				EndpointID:     "4352",
-			},
-			Endpoint: &model.WorkloadEndpoint{GenerateName: "iperf-4235-", Labels: map[string]string{"test-app": "true"}},
+		SrcEp: &calc.RemoteEndpointData{
+			CommonEndpointData: calc.CalculateCommonEndpointData(
+				model.WorkloadEndpointKey{
+					Hostname:       "node-01",
+					OrchestratorID: "k8s",
+					WorkloadID:     "kube-system/iperf-4235-5623461",
+					EndpointID:     "4352",
+				},
+				&model.WorkloadEndpoint{GenerateName: "iperf-4235-", Labels: map[string]string{"test-app": "true"}},
+			),
 		},
-		DstEp: &calc.EndpointData{
-			Key: model.WorkloadEndpointKey{
-				Hostname:       "node-02",
-				OrchestratorID: "k8s",
-				WorkloadID:     "default/manually-created-pod",
-				EndpointID:     "4352",
-			},
-			Endpoint: &model.WorkloadEndpoint{GenerateName: "", Labels: map[string]string{"k8s-app": "true"}},
+		DstEp: &calc.RemoteEndpointData{
+			CommonEndpointData: calc.CalculateCommonEndpointData(
+				model.WorkloadEndpointKey{
+					Hostname:       "node-02",
+					OrchestratorID: "k8s",
+					WorkloadID:     "default/manually-created-pod",
+					EndpointID:     "4352",
+				},
+				&model.WorkloadEndpoint{GenerateName: "", Labels: map[string]string{"k8s-app": "true"}},
+			),
 		},
 		RuleIDs:      []*calc.RuleID{ingressRule1Allow},
 		IsConnection: false,
@@ -723,23 +741,27 @@ var (
 		UpdateType:      metric.UpdateTypeReport,
 		Tuple:           tuple1,
 		NatOutgoingPort: 6789,
-		SrcEp: &calc.EndpointData{
-			Key: model.WorkloadEndpointKey{
-				Hostname:       "node-01",
-				OrchestratorID: "k8s",
-				WorkloadID:     "kube-system/iperf-4235-5623461",
-				EndpointID:     "4352",
-			},
-			Endpoint: &model.WorkloadEndpoint{GenerateName: "iperf-4235-", Labels: map[string]string{"test-app": "true"}},
+		SrcEp: &calc.RemoteEndpointData{
+			CommonEndpointData: calc.CalculateCommonEndpointData(
+				model.WorkloadEndpointKey{
+					Hostname:       "node-01",
+					OrchestratorID: "k8s",
+					WorkloadID:     "kube-system/iperf-4235-5623461",
+					EndpointID:     "4352",
+				},
+				&model.WorkloadEndpoint{GenerateName: "iperf-4235-", Labels: map[string]string{"test-app": "true"}},
+			),
 		},
-		DstEp: &calc.EndpointData{
-			Key: model.WorkloadEndpointKey{
-				Hostname:       "node-02",
-				OrchestratorID: "k8s",
-				WorkloadID:     "default/nginx-412354-5123451",
-				EndpointID:     "4352",
-			},
-			Endpoint: &model.WorkloadEndpoint{GenerateName: "nginx-412354-", Labels: map[string]string{"k8s-app": "true"}},
+		DstEp: &calc.RemoteEndpointData{
+			CommonEndpointData: calc.CalculateCommonEndpointData(
+				model.WorkloadEndpointKey{
+					Hostname:       "node-02",
+					OrchestratorID: "k8s",
+					WorkloadID:     "default/nginx-412354-5123451",
+					EndpointID:     "4352",
+				},
+				&model.WorkloadEndpoint{GenerateName: "nginx-412354-", Labels: map[string]string{"k8s-app": "true"}},
+			),
 		},
 		RuleIDs:      []*calc.RuleID{ingressRule1Allow},
 		IsConnection: false,

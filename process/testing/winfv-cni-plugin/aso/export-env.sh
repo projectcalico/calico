@@ -1,4 +1,4 @@
-export SUFFIX="${SUFFIX:=${USER}}"
+export SUFFIX="${SUFFIX:=${USER}-${BACKEND}}"
 
 export AZURE_LOCATION="${AZURE_LOCATION:="eastus2"}"
 export AZURE_RESOURCE_GROUP="${AZURE_RESOURCE_GROUP:=rg-winfv-${SUFFIX}}"

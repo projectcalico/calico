@@ -48,6 +48,12 @@ SHARED_OPTS = [
                help="When in a multi-region OpenStack deployment, a unique "
                     "name for the region that this node (controller or "
                     "compute) belongs to."),
+    # Max connection options, in advance of max connection support being added
+    # properly to the Neutron API.
+    cfg.IntOpt('max_ingress_connections_per_port', default=0,
+               help="If non-zero, a maximum number of ingress connections to impose on each port."),
+    cfg.IntOpt('max_egress_connections_per_port', default=0,
+               help="If non-zero, a maximum number of egress connections to impose on each port."),
 ]
 
 

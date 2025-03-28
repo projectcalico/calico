@@ -84,7 +84,7 @@ protobuf proto/udsver.pb.go: proto/udsver.proto
 	$(MAKE) fix-changed
 
 UPSTREAM_REGISTRAR_PROJECT ?= kubernetes-csi/$(REGISTRAR_IMAGE)
-UPSTREAM_REGISTRAR_TAG     ?= a498c31b88cd31f8ea7bafd0d715a75f9939fa1f
+UPSTREAM_REGISTRAR_TAG     ?= v2.13.0
 
 REGISTRAR_TIGERA_BUILD_CMD="cd /go/src/github.com/$(UPSTREAM_REGISTRAR_PROJECT) && \
 	go build -tags $(TAGS) -buildvcs=false -v -o $(BINDIR)/csi-node-driver-registrar cmd/csi-node-driver-registrar/*.go"
@@ -127,12 +127,12 @@ $(BINDIR)/node-driver-registrar-%: clone-registrar-upstream
 clone-registrar-upstream:
 ifeq ("$(wildcard ./$(REGISTRAR_IMAGE))", "")
 	@echo "Directory does not exist."
-	git clone --depth 1 --single-branch https://github.com/$(UPSTREAM_REGISTRAR_PROJECT).git
+	git clone --depth 1 --branch $(UPSTREAM_REGISTRAR_TAG) --single-branch https://github.com/$(UPSTREAM_REGISTRAR_PROJECT).git
+	patch -d node-driver-registrar -p1 < patches/0001-Update-go.mod-to-patch-CVEs.patch
+	rm -rf node-driver-registrar/vendor
+else
+	@echo "Upstream repo already cloned."
 endif
-	cd $(REGISTRAR_IMAGE) && \
-	  git checkout $(UPSTREAM_REGISTRAR_TAG) || \
-	  git fetch --tags origin $(UPSTREAM_REGISTRAR_TAG) && \
-	  git checkout $(UPSTREAM_REGISTRAR_TAG)
 
 clean-registrar:
 	rm -rf node-driver-registrar

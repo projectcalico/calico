@@ -933,21 +933,6 @@ routes, rules, and other kernel objects.
 | `FelixConfiguration` schema | Duration string, for example <code>1m30s123ms</code> or <code>1h5m</code>. |
 | Default value (YAML) | `10s` |
 
-### `NfNetlinkBufSize` (config file) / `nfNetlinkBufSize` (YAML)
-
-Controls the size of NFLOG messages that the kernel will try to send to Felix. NFLOG messages
-are used to report flow verdicts from the kernel. Warning: currently increasing the value may cause errors
-due to a bug in the netlink library.
-
-| Detail |   |
-| --- | --- |
-| Environment variable | `FELIX_NfNetlinkBufSize` |
-| Encoding (env var/config file) | Integer |
-| Default value (above encoding) | `65536` |
-| `FelixConfiguration` field | `nfNetlinkBufSize` (YAML) `NfNetlinkBufSize` (Go API) |
-| `FelixConfiguration` schema | String. |
-| Default value (YAML) | `65536` |
-
 ### `PolicySyncPathPrefix` (config file) / `policySyncPathPrefix` (YAML)
 
 Used to by Felix to communicate policy changes to external services,
@@ -1834,6 +1819,23 @@ for cleanup. This should be big enough to hold all the NAT entries that expire w
 | Default value (YAML) | `100000` |
 | Notes | Required. | 
 
+### `BPFMapSizeConntrackScaling` (config file) / `bpfMapSizeConntrackScaling` (YAML)
+
+Controls whether and how we scale the conntrack map size depending
+on its usage. 'Disabled' make the size stay at the default or whatever is set by
+BPFMapSizeConntrack*. 'DoubleIfFull' doubles the size when the map is pretty much full even
+after cleanups.
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_BPFMapSizeConntrackScaling` |
+| Encoding (env var/config file) | One of: <code>Disabled</code>, <code>DoubleIfFull</code> (case insensitive) |
+| Default value (above encoding) | `DoubleIfFull` |
+| `FelixConfiguration` field | `bpfMapSizeConntrackScaling` (YAML) `BPFMapSizeConntrackScaling` (Go API) |
+| `FelixConfiguration` schema | One of: <code>Disabled</code>, <code>DoubleIfFull</code>. |
+| Default value (YAML) | `DoubleIfFull` |
+| Notes | Required. | 
+
 ### `BPFMapSizeIPSets` (config file) / `bpfMapSizeIPSets` (YAML)
 
 Sets the size for ipsets map. The IP sets map must be large enough to hold an entry
@@ -2486,18 +2488,21 @@ FlowLogGoldmaneServer is the flow server endpoint to which flow data should be p
 | `FelixConfiguration` schema | String. |
 | Default value (YAML) | none |
 
-### `FlowLogsMaxOriginalIPsIncluded` (config file) / `flowLogsMaxOriginalIPsIncluded` (YAML)
+### `FlowLogsPolicyEvaluationMode` (config file) / `flowLogsPolicyEvaluationMode` (YAML)
 
-Specifies the number of unique IP addresses (if relevant) that should be included in Flow logs.
+Continuous - Felix evaluates active flows on a regular basis to determine the rule
+traces in the flow logs. Any policy updates that impact a flow will be reflected in the
+pending_policies field, offering a near-real-time view of policy changes across flows.
+None - Felix stops evaluating pending traces.
 
 | Detail |   |
 | --- | --- |
-| Environment variable | `FELIX_FlowLogsMaxOriginalIPsIncluded` |
-| Encoding (env var/config file) | Integer |
-| Default value (above encoding) | `50` |
-| `FelixConfiguration` field | `flowLogsMaxOriginalIPsIncluded` (YAML) `FlowLogsMaxOriginalIPsIncluded` (Go API) |
-| `FelixConfiguration` schema | Integer |
-| Default value (YAML) | `50` |
+| Environment variable | `FELIX_FlowLogsPolicyEvaluationMode` |
+| Encoding (env var/config file) | One of: <code>Continuous</code>, <code>None</code> (case insensitive) |
+| Default value (above encoding) | `Continuous` |
+| `FelixConfiguration` field | `flowLogsPolicyEvaluationMode` (YAML) `FlowLogsPolicyEvaluationMode` (Go API) |
+| `FelixConfiguration` schema | One of: <code>"Continuous"</code>, <code>"None"</code>. |
+| Default value (YAML) | `Continuous` |
 
 ## <a id="aws-integration">AWS integration
 

@@ -80,6 +80,8 @@ from networking_calico.plugins.ml2.drivers.calico.endpoints import \
 from networking_calico.plugins.ml2.drivers.calico.endpoints import \
     WorkloadEndpointSyncer
 from networking_calico.plugins.ml2.drivers.calico.policy import PolicySyncer
+from networking_calico.plugins.ml2.drivers.calico.qos_driver import register \
+    as register_qos_driver
 from networking_calico.plugins.ml2.drivers.calico.status import StatusWatcher
 from networking_calico.plugins.ml2.drivers.calico.subnets import SubnetSyncer
 
@@ -195,6 +197,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             'tap',
             {'port_filter': True,
              'mac_address': '00:61:fe:ed:ca:fe'})
+        register_qos_driver()
         # Lock to prevent concurrent initialisation.
         self._init_lock = Semaphore()
         # Generally initialize attributes to nil values.  They get initialized

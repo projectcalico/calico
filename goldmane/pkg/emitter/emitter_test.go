@@ -23,17 +23,20 @@ import (
 	"net/http/httptest"
 	"testing"
 	"time"
+	"unique"
 
 	"github.com/stretchr/testify/require"
+	goproto "google.golang.org/protobuf/proto"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ktypes "k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	"github.com/projectcalico/calico/goldmane/pkg/aggregator"
+	"github.com/projectcalico/calico/goldmane/pkg/aggregator/bucketing"
 	"github.com/projectcalico/calico/goldmane/pkg/emitter"
-	"github.com/projectcalico/calico/goldmane/pkg/internal/types"
 	"github.com/projectcalico/calico/goldmane/pkg/internal/utils"
+	"github.com/projectcalico/calico/goldmane/pkg/types"
+	"github.com/projectcalico/calico/goldmane/proto"
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 )
 
@@ -47,12 +50,12 @@ func setupTest(t *testing.T, opts ...emitter.Option) func() {
 	logCancel := logutils.RedirectLogrusToTestingT(t)
 
 	// Run the emitter.
-	stopCh := make(chan struct{})
+	ctx, cancel := context.WithCancel(context.Background())
 	emt = emitter.NewEmitter(opts...)
-	go emt.Run(stopCh)
+	go emt.Run(ctx)
 
 	return func() {
-		close(stopCh)
+		cancel()
 		emt = nil
 		logCancel()
 	}
@@ -61,22 +64,57 @@ func setupTest(t *testing.T, opts ...emitter.Option) func() {
 func TestEmitterMainline(t *testing.T) {
 	// Create a flow to send.
 	flow := types.Flow{
-		Key: &types.FlowKey{
-			SourceName:      "test-src",
-			SourceNamespace: "test-ns",
-			DestName:        "test-dst",
-			DestNamespace:   "test-dst-ns",
-			Proto:           "tcp",
-		},
+		Key: types.NewFlowKey(
+			&types.FlowKeySource{
+				SourceName:      "test-src",
+				SourceNamespace: "test-ns",
+				SourceType:      proto.EndpointType_WorkloadEndpoint,
+			},
+			&types.FlowKeyDestination{
+				DestName:      "test-dst",
+				DestNamespace: "test-dst-ns",
+				DestType:      proto.EndpointType_WorkloadEndpoint,
+			},
+			&types.FlowKeyMeta{
+				Proto:  "tcp",
+				Action: proto.Action_Allow,
+			},
+			&proto.PolicyTrace{
+				EnforcedPolicies: []*proto.PolicyHit{
+					{
+						Kind:        proto.PolicyKind_NetworkPolicy,
+						Name:        "cluster-dns",
+						Namespace:   "kube-system",
+						Tier:        "test-tier",
+						Action:      proto.Action_Allow,
+						PolicyIndex: 0,
+						RuleIndex:   1,
+					},
+				},
+				PendingPolicies: []*proto.PolicyHit{
+					{
+						Kind:        proto.PolicyKind_NetworkPolicy,
+						Name:        "cluster-dns-staged",
+						Namespace:   "kube-system",
+						Tier:        "test-tier-staged",
+						Action:      proto.Action_Deny,
+						PolicyIndex: 0,
+						RuleIndex:   1,
+					},
+				},
+			},
+		),
 		StartTime:             18,
 		EndTime:               28,
+		SourceLabels:          unique.Make("src=label"),
+		DestLabels:            unique.Make("dst=label"),
 		BytesIn:               100,
 		BytesOut:              200,
 		PacketsIn:             10,
 		PacketsOut:            20,
 		NumConnectionsStarted: 1,
 	}
-	expectedBody, err := json.Marshal(flow)
+	expectedBody, err := json.Marshal(types.FlowToProto(&flow))
 	require.NoError(t, err)
 
 	// Creat a mock HTTP server to use as our sink.
@@ -93,6 +131,12 @@ func TestEmitterMainline(t *testing.T) {
 		require.Equal(t, buf.String(), string(expectedBody))
 		w.WriteHeader(http.StatusOK)
 
+		// Verify we can unpack into a proto struct.
+		rp := &proto.Flow{}
+		err = json.Unmarshal(buf.Bytes(), rp)
+		require.NoError(t, err)
+		require.True(t, goproto.Equal(rp, types.FlowToProto(&flow)), "Received flow didn't match")
+
 		numBucketsEmitted++
 	}))
 
@@ -108,7 +152,7 @@ func TestEmitterMainline(t *testing.T) {
 	defer setupTest(t, opts...)()
 
 	// Send a bucket with a single flow.
-	b := aggregator.NewFlowCollection(15, 30)
+	b := bucketing.NewFlowCollection(15, 30)
 	b.AddFlow(flow)
 	emt.Receive(b)
 
@@ -127,22 +171,54 @@ func TestEmitterMainline(t *testing.T) {
 func TestEmitterRetry(t *testing.T) {
 	// Create a flow to send.
 	flow := types.Flow{
-		Key: &types.FlowKey{
-			SourceName:      "test-src",
-			SourceNamespace: "test-ns",
-			DestName:        "test-dst",
-			DestNamespace:   "test-dst-ns",
-			Proto:           "tcp",
-		},
+		Key: types.NewFlowKey(
+			&types.FlowKeySource{
+				SourceName:      "test-src",
+				SourceNamespace: "test-ns",
+			},
+			&types.FlowKeyDestination{
+				DestName:      "test-dst",
+				DestNamespace: "test-dst-ns",
+			},
+			&types.FlowKeyMeta{
+				Proto: "tcp",
+			},
+			&proto.PolicyTrace{
+				EnforcedPolicies: []*proto.PolicyHit{
+					{
+						Kind:        proto.PolicyKind_NetworkPolicy,
+						Name:        "cluster-dns",
+						Namespace:   "kube-system",
+						Tier:        "test-tier",
+						Action:      proto.Action_Allow,
+						PolicyIndex: 0,
+						RuleIndex:   1,
+					},
+				},
+				PendingPolicies: []*proto.PolicyHit{
+					{
+						Kind:        proto.PolicyKind_NetworkPolicy,
+						Name:        "cluster-dns-staged",
+						Namespace:   "kube-system",
+						Tier:        "test-tier-staged",
+						Action:      proto.Action_Deny,
+						PolicyIndex: 0,
+						RuleIndex:   1,
+					},
+				},
+			},
+		),
 		StartTime:             18,
 		EndTime:               28,
+		SourceLabels:          unique.Make("src=label"),
+		DestLabels:            unique.Make("dst=label"),
 		BytesIn:               100,
 		BytesOut:              200,
 		PacketsIn:             10,
 		PacketsOut:            20,
 		NumConnectionsStarted: 1,
 	}
-	expectedBody, err := json.Marshal(flow)
+	expectedBody, err := json.Marshal(types.FlowToProto(&flow))
 	require.NoError(t, err)
 
 	// Creat a mock HTTP server to use as our sink.
@@ -183,7 +259,7 @@ func TestEmitterRetry(t *testing.T) {
 	defer setupTest(t, opts...)()
 
 	// Send a bucket with a single flow.
-	b := aggregator.NewFlowCollection(15, 30)
+	b := bucketing.NewFlowCollection(15, 30)
 	b.AddFlow(flow)
 	emt.Receive(b)
 
@@ -218,15 +294,24 @@ func TestStaleBuckets(t *testing.T) {
 
 	// Two flows to send - one before the latest timestamp, and one after.
 	flow := types.Flow{
-		Key: &types.FlowKey{
-			SourceName:      "test-src",
-			SourceNamespace: "test-ns",
-			DestName:        "test-dst",
-			DestNamespace:   "test-dst-ns",
-			Proto:           "tcp",
-		},
+		Key: types.NewFlowKey(
+			&types.FlowKeySource{
+				SourceName:      "test-src",
+				SourceNamespace: "test-ns",
+			},
+			&types.FlowKeyDestination{
+				DestName:      "test-dst",
+				DestNamespace: "test-dst-ns",
+			},
+			&types.FlowKeyMeta{
+				Proto: "tcp",
+			},
+			&proto.PolicyTrace{},
+		),
 		StartTime:             18,
 		EndTime:               28,
+		SourceLabels:          unique.Make("src=label"),
+		DestLabels:            unique.Make("dst=label"),
 		BytesIn:               100,
 		BytesOut:              200,
 		PacketsIn:             10,
@@ -234,24 +319,56 @@ func TestStaleBuckets(t *testing.T) {
 		NumConnectionsStarted: 1,
 	}
 	flowOK := types.Flow{
-		Key: &types.FlowKey{
-			SourceName:      "test-src",
-			SourceNamespace: "test-ns",
-			DestName:        "test-dst",
-			DestNamespace:   "test-dst-ns",
-			Proto:           "tcp",
-		},
+		Key: types.NewFlowKey(
+			&types.FlowKeySource{
+				SourceName:      "test-src",
+				SourceNamespace: "test-ns",
+			},
+			&types.FlowKeyDestination{
+				DestName:      "test-dst",
+				DestNamespace: "test-dst-ns",
+			},
+			&types.FlowKeyMeta{
+				Proto: "tcp",
+			},
+			&proto.PolicyTrace{
+				EnforcedPolicies: []*proto.PolicyHit{
+					{
+						Kind:        proto.PolicyKind_NetworkPolicy,
+						Name:        "cluster-dns",
+						Namespace:   "kube-system",
+						Tier:        "test-tier",
+						Action:      proto.Action_Allow,
+						PolicyIndex: 0,
+						RuleIndex:   1,
+					},
+				},
+				PendingPolicies: []*proto.PolicyHit{
+					{
+						Kind:        proto.PolicyKind_NetworkPolicy,
+						Name:        "cluster-dns-staged",
+						Namespace:   "kube-system",
+						Tier:        "test-tier-staged",
+						Action:      proto.Action_Deny,
+						PolicyIndex: 0,
+						RuleIndex:   1,
+					},
+				},
+			},
+		),
 		StartTime:             61,
 		EndTime:               65,
+		SourceLabels:          unique.Make("src=label"),
+		DestLabels:            unique.Make("dst=label"),
 		BytesIn:               100,
 		BytesOut:              200,
 		PacketsIn:             10,
 		PacketsOut:            20,
 		NumConnectionsStarted: 1,
 	}
-	unexpectedBody, err := json.Marshal(flow)
+	unexpectedBody, err := json.Marshal(types.FlowToProto(&flow))
 	require.NoError(t, err)
-	okBody, err := json.Marshal(flowOK)
+	okBody, err := json.Marshal(types.FlowToProto(&flowOK))
 	require.NoError(t, err)
 
 	// Creat a mock HTTP server to use as our sink. We don't expect any requests to be made.
@@ -281,7 +398,7 @@ func TestStaleBuckets(t *testing.T) {
 	defer setupTest(t, opts...)()
 
 	// Send a bucket with a single flow.
-	b := aggregator.NewFlowCollection(15, 30)
+	b := bucketing.NewFlowCollection(15, 30)
 	b.AddFlow(flow)
 	emt.Receive(b)
 
@@ -295,7 +412,7 @@ func TestStaleBuckets(t *testing.T) {
 	require.Equal(t, "45", cm.Data["latestTimestamp"])
 
 	// Send a new bucket that is after the latest timestamp. This one should be sent.
-	bOK := aggregator.NewFlowCollection(60, 70)
+	bOK := bucketing.NewFlowCollection(60, 70)
 	bOK.AddFlow(flowOK)
 	emt.Receive(bOK)
 

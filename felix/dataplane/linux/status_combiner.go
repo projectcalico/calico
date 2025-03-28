@@ -28,6 +28,7 @@ type endpointStatusCombiner struct {
 	ipVersionToStatuses map[uint8]map[interface{}]string
 	dirtyIDs            set.Set[any] /* FIXME HEP or WEP ID */
 	fromDataplane       chan interface{}
+	activeWlEndpoints   map[types.WorkloadEndpointID]*proto.WorkloadEndpoint
 }
 
 func newEndpointStatusCombiner(fromDataplane chan interface{}, ipv6Enabled bool) *endpointStatusCombiner {
@@ -35,6 +36,7 @@ func newEndpointStatusCombiner(fromDataplane chan interface{}, ipv6Enabled bool)
 		ipVersionToStatuses: map[uint8]map[interface{}]string{},
 		dirtyIDs:            set.New[any](),
 		fromDataplane:       fromDataplane,
+		activeWlEndpoints:   map[types.WorkloadEndpointID]*proto.WorkloadEndpoint{},
 	}
 
 	// IPv4 is always enabled.
@@ -51,6 +53,7 @@ func (e *endpointStatusCombiner) OnEndpointStatusUpdate(
 	ipVersion uint8,
 	id interface{}, // types.HostEndpointID or types.WorkloadEndpointID
 	status string,
+	extraInfo interface{}, // WorkloadEndpoint or nil
 ) {
 	log.WithFields(log.Fields{
 		"ipVersion": ipVersion,
@@ -60,7 +63,17 @@ func (e *endpointStatusCombiner) OnEndpointStatusUpdate(
 	e.dirtyIDs.Add(id)
 	if status == "" {
 		delete(e.ipVersionToStatuses[ipVersion], id)
+		if id, ok := id.(types.WorkloadEndpointID); ok {
+			delete(e.activeWlEndpoints, id)
+		}
 	} else {
+		if id, ok := id.(types.WorkloadEndpointID); ok {
+			if extraInfo == nil {
+				log.Error("Missing workload endpoint data on endpoint status update")
+				return
+			}
+			e.activeWlEndpoints[id] = extraInfo.(*proto.WorkloadEndpoint)
+		}
 		e.ipVersionToStatuses[ipVersion][id] = status
 	}
 }
@@ -107,6 +120,7 @@ func (e *endpointStatusCombiner) Apply() {
 					Status: &proto.EndpointStatus{
 						Status: statusToReport,
 					},
+					Endpoint: e.activeWlEndpoints[id],
 				}
 			case types.HostEndpointID:
 				protoID := types.HostEndpointIDToProto(id)

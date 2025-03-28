@@ -5,9 +5,9 @@
 package v3
 
 import (
-	"context"
+	context "context"
 
-	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	projectcalicov3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	scheme "github.com/projectcalico/api/pkg/client/clientset_generated/clientset/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"
@@ -23,31 +23,32 @@ type ProfilesGetter interface {
 
 // ProfileInterface has methods to work with Profile resources.
 type ProfileInterface interface {
-	Create(ctx context.Context, profile *v3.Profile, opts v1.CreateOptions) (*v3.Profile, error)
-	Update(ctx context.Context, profile *v3.Profile, opts v1.UpdateOptions) (*v3.Profile, error)
+	Create(ctx context.Context, profile *projectcalicov3.Profile, opts v1.CreateOptions) (*projectcalicov3.Profile, error)
+	Update(ctx context.Context, profile *projectcalicov3.Profile, opts v1.UpdateOptions) (*projectcalicov3.Profile, error)
 	Delete(ctx context.Context, name string, opts v1.DeleteOptions) error
 	DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error
-	Get(ctx context.Context, name string, opts v1.GetOptions) (*v3.Profile, error)
-	List(ctx context.Context, opts v1.ListOptions) (*v3.ProfileList, error)
+	Get(ctx context.Context, name string, opts v1.GetOptions) (*projectcalicov3.Profile, error)
+	List(ctx context.Context, opts v1.ListOptions) (*projectcalicov3.ProfileList, error)
 	Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error)
-	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v3.Profile, err error)
+	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *projectcalicov3.Profile, err error)
 	ProfileExpansion
 }
 
 // profiles implements ProfileInterface
 type profiles struct {
-	*gentype.ClientWithList[*v3.Profile, *v3.ProfileList]
+	*gentype.ClientWithList[*projectcalicov3.Profile, *projectcalicov3.ProfileList]
 }
 
 // newProfiles returns a Profiles
 func newProfiles(c *ProjectcalicoV3Client) *profiles {
 	return &profiles{
-		gentype.NewClientWithList[*v3.Profile, *v3.ProfileList](
+		gentype.NewClientWithList[*projectcalicov3.Profile, *projectcalicov3.ProfileList](
 			"profiles",
 			c.RESTClient(),
 			scheme.ParameterCodec,
 			"",
-			func() *v3.Profile { return &v3.Profile{} },
-			func() *v3.ProfileList { return &v3.ProfileList{} }),
+			func() *projectcalicov3.Profile { return &projectcalicov3.Profile{} },
+			func() *projectcalicov3.ProfileList { return &projectcalicov3.ProfileList{} },
+		),
 	}
 }

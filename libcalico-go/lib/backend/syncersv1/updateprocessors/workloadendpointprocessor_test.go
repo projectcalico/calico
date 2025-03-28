@@ -408,4 +408,66 @@ var _ = Describe("Test the WorkloadEndpoint update processor", func() {
 			Revision: "abcde",
 		}))
 	})
+
+	It("should convert a WEP with QoSControls configured", func() {
+		up := updateprocessors.NewWorkloadEndpointUpdateProcessor()
+
+		res := libapiv3.NewWorkloadEndpoint()
+		res.Namespace = ns1
+		res.Labels = map[string]string{
+			"projectcalico.org/namespace":    ns1,
+			"projectcalico.org/orchestrator": oid1,
+		}
+		res.Spec.Node = hn1
+		res.Spec.Orchestrator = oid1
+		res.Spec.Workload = wid1
+		res.Spec.Endpoint = eid1
+		res.Spec.InterfaceName = iface1
+		res.Spec.IPNetworks = []string{"10.100.10.1"}
+		res.Spec.QoSControls = &libapiv3.QoSControls{
+			IngressBandwidth:      1000000,
+			EgressBandwidth:       2000000,
+			IngressBurst:          3000000,
+			EgressBurst:           4000000,
+			IngressPacketRate:     5000000,
+			EgressPacketRate:      6000000,
+			IngressMaxConnections: 7000000,
+			EgressMaxConnections:  8000000,
+		}
+
+		kvps, err := up.Process(&model.KVPair{
+			Key:      v3WorkloadEndpointKey1,
+			Value:    res,
+			Revision: "abcde",
+		})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(kvps).To(HaveLen(1))
+		_, ipn, err := cnet.ParseCIDROrIP("10.100.10.1")
+		Expect(err).NotTo(HaveOccurred())
+		expectedIPv4Net := *(ipn.Network())
+		Expect(kvps[0]).To(Equal(&model.KVPair{
+			Key: v1WorkloadEndpointKey1,
+			Value: &model.WorkloadEndpoint{
+				State: "active",
+				Name:  iface1,
+				Ports: []model.EndpointPort{},
+				Labels: map[string]string{
+					"projectcalico.org/namespace":    ns1,
+					"projectcalico.org/orchestrator": oid1,
+				},
+				IPv4Nets: []cnet.IPNet{expectedIPv4Net},
+				QoSControls: &model.QoSControls{
+					IngressBandwidth:      1000000,
+					EgressBandwidth:       2000000,
+					IngressBurst:          3000000,
+					EgressBurst:           4000000,
+					IngressPacketRate:     5000000,
+					EgressPacketRate:      6000000,
+					IngressMaxConnections: 7000000,
+					EgressMaxConnections:  8000000,
+				},
+			},
+			Revision: "abcde",
+		}))
+	})
 })

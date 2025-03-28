@@ -36,7 +36,6 @@ var (
 	logStreamName = "test-stream"
 	flushInterval = 500 * time.Millisecond
 	includeLabels = false
-	noService     = FlowService{Namespace: "-", Name: "-", PortName: "-", PortNum: 0}
 )
 
 var (
@@ -288,7 +287,7 @@ func (m *mockTicker) Done() chan bool {
 	return m.stop
 }
 
-func newExpectedFlowLog(t tuple.Tuple, nf, nfs, nfc int, a Action, fr ReporterType, pi, po, bi, bo int, srcMeta, dstMeta endpoint.Metadata, dstService FlowService, srcLabels, dstLabels map[string]string, fp FlowPolicySet, fe FlowExtras) FlowLog {
+func newExpectedFlowLog(t tuple.Tuple, nf, nfs, nfc int, a Action, fr ReporterType, pi, po, bi, bo int, srcMeta, dstMeta endpoint.Metadata, dstService FlowService, srcLabels, dstLabels map[string]string, fep, fpp FlowPolicySet) FlowLog {
 	return FlowLog{
 		FlowMeta: FlowMeta{
 			Tuple:      t,
@@ -302,8 +301,8 @@ func newExpectedFlowLog(t tuple.Tuple, nf, nfs, nfc int, a Action, fr ReporterTy
 			SrcLabels: srcLabels,
 			DstLabels: dstLabels,
 		},
-		FlowPolicySet: fp,
-		FlowExtras:    fe,
+		FlowEnforcedPolicySet: fep,
+		FlowPendingPolicySet:  fpp,
 		FlowProcessReportedStats: FlowProcessReportedStats{
 			FlowReportedStats: FlowReportedStats{
 				NumFlows:          nf,

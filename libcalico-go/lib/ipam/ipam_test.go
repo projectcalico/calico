@@ -61,7 +61,7 @@ type pool struct {
 	assignmentMode v3.AssignmentMode
 }
 
-func (i *ipPoolAccessor) GetEnabledPools(ipVersion int) ([]v3.IPPool, error) {
+func (i *ipPoolAccessor) GetEnabledPools(ctx context.Context, ipVersion int) ([]v3.IPPool, error) {
 	sorted := make([]string, 0)
 	// Get a sorted list of enabled pool CIDR strings.
 	for p, e := range i.pools {
@@ -115,7 +115,7 @@ func (i *ipPoolAccessor) getPools(sorted []string, ipVersion int, caller string)
 	return pools
 }
 
-func (i *ipPoolAccessor) GetAllPools() ([]v3.IPPool, error) {
+func (i *ipPoolAccessor) GetAllPools(ctx context.Context) ([]v3.IPPool, error) {
 	sorted := make([]string, 0)
 	// Get a sorted list of pool CIDR strings.
 	for p := range i.pools {
@@ -1008,10 +1008,10 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 				deleteAllPools()
 				applyPool("20.0.0.0/24", true, "")
 
-				p, _ := ipPools.GetEnabledPools(4)
+				p, _ := ipPools.GetEnabledPools(context.Background(), 4)
 				Expect(len(p)).To(Equal(1))
 				Expect(p[0].Spec.CIDR).To(Equal(pool2.String()))
-				p, _ = ipPools.GetEnabledPools(6)
+				p, _ = ipPools.GetEnabledPools(context.Background(), 6)
 				Expect(len(p)).To(BeZero())
 
 				args := AutoAssignArgs{
@@ -2389,7 +2389,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			applyNode(bc, kc, host, nil)
 			// ippool with 4 ips
 			ipPools.pools[pool1.String()] = pool{enabled: true, nodeSelector: "", blockSize: 30}
-			pools, _ = ipPools.GetEnabledPools(4)
+			pools, _ = ipPools.GetEnabledPools(context.Background(), 4)
 			Expect(len(pools)).To(Equal(1))
 
 			ctx = context.Background()

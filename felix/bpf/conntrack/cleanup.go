@@ -22,6 +22,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 
+	v3 "github.com/projectcalico/calico/felix/bpf/conntrack/v3"
 	"github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/timeshim"
 )
@@ -109,12 +110,6 @@ func (l *LivenessScanner) Check(ctKey KeyInterface, ctVal ValueInterface, get En
 	}
 	now := l.cachedKTime
 
-	if now-ctVal.Created() < int64(l.timeouts.CreationGracePeriod) {
-		// Very new entry; make sure we don't delete it while dataplane is still
-		// setting it up.
-		return ScanVerdictOK
-	}
-
 	debug := log.GetLevel() >= log.DebugLevel
 
 	switch ctVal.Type() {
@@ -196,6 +191,7 @@ type NATChecker interface {
 	ConntrackScanStart()
 	ConntrackScanEnd()
 	ConntrackFrontendHasBackend(ip net.IP, port uint16, backendIP net.IP, backendPort uint16, proto uint8) bool
+	ConntrackDestIsService(ip net.IP, port uint16, proto uint8) bool
 }
 
 // StaleNATScanner removes any entries to frontend that do not have the backend anymore.
@@ -221,7 +217,36 @@ again:
 
 	switch v.Type() {
 	case TypeNormal:
-		// skip non-NAT entry
+		proto := k.Proto()
+		if proto != ProtoUDP {
+			// skip non-NAT entry
+			break
+		}
+
+		// Check if we have an entry to a service IP:port without it being
+		// NATed. Remove such entry as it was created when the service wasn't
+		// programmed yet and there was a NAT miss.
+		//
+		// When CTLB is used, we should not see service ip:port on the wire at
+		// all.
+
+		var (
+			ip   net.IP
+			port uint16
+		)
+
+		if v.Flags()&v3.FlagSrcDstBA != 0 {
+			ip = k.AddrA()
+			port = k.PortA()
+		} else {
+			ip = k.AddrB()
+			port = k.PortB()
+		}
+
+		if sns.natChecker.ConntrackDestIsService(ip, port, proto) {
+			log.WithField("key", k).Debugf("TypeNormal to UDP service IP is stale")
+			return ScanVerdictDelete
+		}
 
 	case TypeNATReverse:
 

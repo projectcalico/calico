@@ -5,9 +5,9 @@
 package v3
 
 import (
-	"context"
+	context "context"
 
-	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	projectcalicov3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	scheme "github.com/projectcalico/api/pkg/client/clientset_generated/clientset/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"
@@ -23,31 +23,32 @@ type TiersGetter interface {
 
 // TierInterface has methods to work with Tier resources.
 type TierInterface interface {
-	Create(ctx context.Context, tier *v3.Tier, opts v1.CreateOptions) (*v3.Tier, error)
-	Update(ctx context.Context, tier *v3.Tier, opts v1.UpdateOptions) (*v3.Tier, error)
+	Create(ctx context.Context, tier *projectcalicov3.Tier, opts v1.CreateOptions) (*projectcalicov3.Tier, error)
+	Update(ctx context.Context, tier *projectcalicov3.Tier, opts v1.UpdateOptions) (*projectcalicov3.Tier, error)
 	Delete(ctx context.Context, name string, opts v1.DeleteOptions) error
 	DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error
-	Get(ctx context.Context, name string, opts v1.GetOptions) (*v3.Tier, error)
-	List(ctx context.Context, opts v1.ListOptions) (*v3.TierList, error)
+	Get(ctx context.Context, name string, opts v1.GetOptions) (*projectcalicov3.Tier, error)
+	List(ctx context.Context, opts v1.ListOptions) (*projectcalicov3.TierList, error)
 	Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error)
-	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v3.Tier, err error)
+	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *projectcalicov3.Tier, err error)
 	TierExpansion
 }
 
 // tiers implements TierInterface
 type tiers struct {
-	*gentype.ClientWithList[*v3.Tier, *v3.TierList]
+	*gentype.ClientWithList[*projectcalicov3.Tier, *projectcalicov3.TierList]
 }
 
 // newTiers returns a Tiers
 func newTiers(c *ProjectcalicoV3Client) *tiers {
 	return &tiers{
-		gentype.NewClientWithList[*v3.Tier, *v3.TierList](
+		gentype.NewClientWithList[*projectcalicov3.Tier, *projectcalicov3.TierList](
 			"tiers",
 			c.RESTClient(),
 			scheme.ParameterCodec,
 			"",
-			func() *v3.Tier { return &v3.Tier{} },
-			func() *v3.TierList { return &v3.TierList{} }),
+			func() *projectcalicov3.Tier { return &projectcalicov3.Tier{} },
+			func() *projectcalicov3.TierList { return &projectcalicov3.TierList{} },
+		),
 	}
 }

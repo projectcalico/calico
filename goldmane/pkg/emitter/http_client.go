@@ -15,6 +15,7 @@
 package emitter
 
 import (
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
@@ -22,16 +23,21 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/sirupsen/logrus"
+
+	calicotls "github.com/projectcalico/calico/crypto/pkg/tls"
+	"github.com/projectcalico/calico/goldmane/pkg/internal/utils"
 )
 
 const ContentTypeMultilineJSON = "application/x-ndjson"
 
 func newHTTPClient(caCert, clientKey, clientCert, serverName string) (*http.Client, error) {
 	// Create a new HTTP client.
-	tlsConfig := &tls.Config{ServerName: serverName}
+	tlsConfig := calicotls.NewTLSConfig()
+	tlsConfig.ServerName = serverName
 	if caCert != "" {
 		caCertPool := x509.NewCertPool()
 		caCert, err := os.ReadFile(caCert)
@@ -71,19 +77,61 @@ func newHTTPClient(caCert, clientKey, clientCert, serverName string) (*http.Clie
 }
 
 func newEmitterClient(url, caCert, clientKey, clientCert, serverName string) (*emitterClient, error) {
+	// Create an initial HTTP client, and a function to help encapsualte the reload logic.
 	client, err := newHTTPClient(caCert, clientKey, clientCert, serverName)
 	if err != nil {
 		return nil, err
 	}
-	return &emitterClient{url: url, client: client}, nil
+	ec := &emitterClient{url: url, client: client}
+
+	if caCert != "" || clientKey != "" || clientCert != "" {
+		// If any of the client certificates are provided, we need to watch the files for changes.
+		// If any changes, we'll update the underlying HTTP client with the new certificates.
+		updChan := make(chan struct{}, 1)
+
+		// Start a goroutine to read from the channel and update the client.
+		go func() {
+			for range updChan {
+				logrus.Info("Reloading client after certificate change")
+				client, err = newHTTPClient(caCert, clientKey, clientCert, serverName)
+				if err != nil {
+					logrus.WithError(err).Error("Failed to reload client after certificate change")
+					continue
+				}
+				ec.setClient(client)
+			}
+		}()
+
+		// Start a goroutine to watch for changes to the CA cert file and feed
+		// them into the update channel.
+		monitorFn, err := utils.WatchFilesFn(updChan, 30*time.Second, caCert, clientCert, clientKey)
+		if err != nil {
+			return nil, fmt.Errorf("error setting up CA cert file watcher: %s", err)
+		}
+		go monitorFn(context.Background())
+	}
+
+	return ec, nil
 }
 
 type emitterClient struct {
-	url    string
+	// The mutex must be held when accessing the client.
+	sync.Mutex
 	client *http.Client
+
+	url string
+}
+
+func (e *emitterClient) setClient(client *http.Client) {
+	e.Lock()
+	defer e.Unlock()
+	e.client = client
 }
 
 func (e *emitterClient) Post(body io.Reader) error {
+	e.Lock()
+	defer e.Unlock()
+
 	resp, err := e.client.Post(e.url, ContentTypeMultilineJSON, body)
 	if err != nil {
 		return err

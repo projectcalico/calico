@@ -16,20 +16,19 @@ package flowlog
 
 import (
 	"fmt"
-	"net"
 	"reflect"
-	"strconv"
-	"strings"
 	"time"
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/felix/collector/types/boundedset"
+	"github.com/projectcalico/calico/felix/calc"
 	"github.com/projectcalico/calico/felix/collector/types/endpoint"
 	"github.com/projectcalico/calico/felix/collector/types/metric"
 	"github.com/projectcalico/calico/felix/collector/types/tuple"
 	"github.com/projectcalico/calico/felix/collector/utils"
 	logutil "github.com/projectcalico/calico/felix/logutils"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
+	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 )
 
 const (
@@ -41,8 +40,10 @@ type empty struct{}
 var emptyValue = empty{}
 
 var (
-	emptyService = FlowService{"-", "-", "-", 0}
-	emptyIP      = [16]byte{}
+	EmptyService = FlowService{"-", "-", "-", 0}
+	EmptyIP      = [16]byte{}
+
+	rlog1 = logutils.NewRateLimitedLogger()
 )
 
 type (
@@ -88,7 +89,7 @@ func newFlowMeta(mu metric.Update, includeService bool) (FlowMeta, error) {
 	if includeService {
 		f.DstService = getService(mu.DstService)
 	} else {
-		f.DstService = emptyService
+		f.DstService = EmptyService
 	}
 
 	lastRuleID := mu.GetLastRuleID()
@@ -108,9 +109,9 @@ func newFlowMetaWithPrefixNameAggregation(mu metric.Update, includeService bool)
 	if err != nil {
 		return FlowMeta{}, err
 	}
-	f.Tuple.Src = emptyIP
+	f.Tuple.Src = EmptyIP
 	f.Tuple.L4Src = unsetIntField
-	f.Tuple.Dst = emptyIP
+	f.Tuple.Dst = EmptyIP
 	f.SrcMeta.Name = FieldNotIncluded
 	f.DstMeta.Name = FieldNotIncluded
 	return f, nil
@@ -122,23 +123,23 @@ func NewFlowMeta(mu metric.Update, _ AggregationKind, includeService bool) (Flow
 
 type FlowSpec struct {
 	FlowStatsByProcess
-	flowExtrasRef
 	FlowLabels
-	FlowPolicySets
+	FlowEnforcedPolicySets
+	FlowPendingPolicySet
 
 	// Reset aggregated data on the next metric update to ensure we clear out obsolete labels, policies and Domains for
 	// connections that are not actively part of the flow during the export interval.
 	resetAggrData bool
 }
 
-func NewFlowSpec(mu *metric.Update, maxOriginalIPsSize int, displayDebugTraceLogs bool, natOutgoingPortLimit int) *FlowSpec {
+func NewFlowSpec(mu *metric.Update, displayDebugTraceLogs bool) *FlowSpec {
 	// NewFlowStatsByProcess potentially needs to update fields in mu *metric.Update hence passing it by pointer
 	// TODO: reconsider/refactor the inner functions called in NewFlowStatsByProcess to avoid above scenario
 	return &FlowSpec{
-		FlowLabels:         NewFlowLabels(*mu),
-		FlowPolicySets:     NewFlowPolicySets(*mu),
-		FlowStatsByProcess: NewFlowStatsByProcess(mu, displayDebugTraceLogs, natOutgoingPortLimit),
-		flowExtrasRef:      NewFlowExtrasRef(*mu, maxOriginalIPsSize),
+		FlowLabels:             NewFlowLabels(*mu),
+		FlowEnforcedPolicySets: NewFlowEnforcedPolicySets(*mu),
+		FlowPendingPolicySet:   NewFlowPendingPolicySet(*mu),
+		FlowStatsByProcess:     NewFlowStatsByProcess(mu, displayDebugTraceLogs),
 	}
 }
 
@@ -157,28 +158,29 @@ func (f *FlowSpec) ToFlowLogs(fm FlowMeta, startTime, endTime time.Time, include
 			EndTime:                  endTime,
 			FlowProcessReportedStats: stat,
 		}
-		if f.flowExtrasRef.originalSourceIPs != nil {
-			fe := FlowExtras{
-				OriginalSourceIPs:    f.flowExtrasRef.originalSourceIPs.ToIPSlice(),
-				NumOriginalSourceIPs: f.flowExtrasRef.originalSourceIPs.TotalCount(),
-			}
-			fl.FlowExtras = fe
-		}
 
 		if includeLabels {
 			fl.FlowLabels = f.FlowLabels
 		}
 
 		if !includePolicies {
-			fl.FlowPolicySet = nil
+			fl.FlowEnforcedPolicySet = nil
+			fl.FlowPendingPolicySet = nil
 			flogs = append(flogs, fl)
 		} else {
-			if len(f.FlowPolicySets) > 1 {
-				log.WithField("FlowLog", fl).Warning("Flow was split into multiple flow logs since multiple policy sets were observed for the same flow. Possible causes: policy updates during log aggregation or NFLOG buffer overruns.")
+			if len(f.FlowEnforcedPolicySets) > 1 {
+				rlog1.WithField("FlowLog", fl).Warning("Flow was split into multiple flow logs since multiple policy sets were observed for the same flow. Possible causes: policy updates during log aggregation or NFLOG buffer overruns.")
 			}
-			for _, fp := range f.FlowPolicySets {
+			// Create a flow log for each enforced_policies set, include the corresponding
+			// enforced and pending.
+			for _, ps := range f.FlowEnforcedPolicySets {
 				cpfl := *fl
-				cpfl.FlowPolicySet = fp
+				cpfl.FlowEnforcedPolicySet = ps
+
+				// The pending policy is calculated once per flush interval. The latest pending
+				// policy will replace the previous one. The same pending policy will be depicted
+				// across all flow logs.
+				cpfl.FlowPendingPolicySet = FlowPolicySet(f.FlowPendingPolicySet)
 				flogs = append(flogs, &cpfl)
 			}
 		}
@@ -190,15 +192,17 @@ func (f *FlowSpec) ToFlowLogs(fm FlowMeta, startTime, endTime time.Time, include
 func (f *FlowSpec) AggregateMetricUpdate(mu *metric.Update) {
 	if f.resetAggrData {
 		// Reset the aggregated data from this metric update.
-		f.FlowPolicySets = make(FlowPolicySets, 0)
+		f.FlowEnforcedPolicySets = nil
+		f.FlowPendingPolicySet = nil
 		f.FlowLabels.SrcLabels = nil
 		f.FlowLabels.DstLabels = nil
 		f.resetAggrData = false
 	}
 	f.aggregateFlowLabels(*mu)
-	f.aggregateFlowPolicySets(*mu)
-	f.aggregateFlowExtrasRef(*mu)
+	f.aggregateFlowEnforcedPolicySets(*mu)
 	f.aggregateFlowStatsByProcess(mu)
+
+	f.replaceFlowPendingPolicySet(*mu)
 }
 
 // MergeWith merges two flow specs. This means copying the flowRefsActive that contains a reference
@@ -226,7 +230,6 @@ func (f *FlowSpec) MergeWith(mu metric.Update, other *FlowSpec) {
 // flows.
 func (f *FlowSpec) Reset() {
 	f.FlowStatsByProcess.reset()
-	f.flowExtrasRef.reset()
 
 	// Set the reset flag. We'll reset the aggregated data on the next metric update - that way we don't completely
 	// zero out the labels and policies if there is no traffic for an export interval.
@@ -277,75 +280,68 @@ func (f *FlowLabels) aggregateFlowLabels(mu metric.Update) {
 
 type FlowPolicySet map[string]empty
 
-func newFlowPolicySet(mu metric.Update) FlowPolicySet {
+func newPolicySet(ruleIDs []*calc.RuleID, includeStaged bool) FlowPolicySet {
 	fp := make(FlowPolicySet)
-	if mu.RuleIDs == nil {
+	if ruleIDs == nil {
 		return fp
 	}
-	for idx, rid := range mu.RuleIDs {
+	pIdx, nsp := 0, 0
+	for idx, rid := range ruleIDs {
 		if rid == nil {
 			continue
 		}
-		fp[fmt.Sprintf("%d|%s|%s", idx, rid.GetFlowLogPolicyName(), rid.IndexStr)] = emptyValue
+		if !includeStaged {
+			if model.PolicyIsStaged(rid.Name) {
+				nsp++
+				continue
+			}
+			pIdx = idx - nsp
+		} else {
+			pIdx = idx
+		}
+
+		fp[fmt.Sprintf("%d|%s|%s", pIdx, rid.GetFlowLogPolicyName(), rid.IndexStr)] = emptyValue
 	}
 	return fp
 }
 
-// FlowPolicySets is used to keep track of multiple policy traces that are associated with a flow.
-// This is useful when a flow is associated with multiple policy sets.
 type FlowPolicySets []FlowPolicySet
 
-func NewFlowPolicySets(mu metric.Update) FlowPolicySets {
-	fp := newFlowPolicySet(mu)
-
-	fpl := FlowPolicySets{}
-	fpl = append(fpl, fp)
-
-	return fpl
+func NewFlowPolicySets(ruleIDs []*calc.RuleID, includeStaged bool) FlowPolicySets {
+	fp := newPolicySet(ruleIDs, includeStaged)
+	return FlowPolicySets{fp}
 }
 
-func (fpl *FlowPolicySets) aggregateFlowPolicySets(mu metric.Update) {
-	fp := newFlowPolicySet(mu)
-
-	for _, p := range *fpl {
-		if reflect.DeepEqual(p, fp) {
+func (fpl *FlowPolicySets) aggregateFlowPolicySets(ruleIDs []*calc.RuleID, includeStaged bool) {
+	fp := newPolicySet(ruleIDs, includeStaged)
+	for _, existing := range *fpl {
+		if reflect.DeepEqual(existing, fp) {
 			return
 		}
 	}
-
 	*fpl = append(*fpl, fp)
 }
 
-type flowExtrasRef struct {
-	originalSourceIPs *boundedset.BoundedSet
+// FlowEnforcedPolicySets keeps track of enforced policy traces associated with a flow.
+type FlowEnforcedPolicySets FlowPolicySets
+
+func NewFlowEnforcedPolicySets(mu metric.Update) FlowEnforcedPolicySets {
+	return FlowEnforcedPolicySets(NewFlowPolicySets(mu.RuleIDs, false))
 }
 
-func NewFlowExtrasRef(mu metric.Update, maxOriginalIPsSize int) flowExtrasRef {
-	var osip *boundedset.BoundedSet
-	if mu.OrigSourceIPs != nil {
-		osip = boundedset.NewFromSliceWithTotalCount(maxOriginalIPsSize, mu.OrigSourceIPs.ToIPSlice(), mu.OrigSourceIPs.TotalCount())
-	} else {
-		osip = boundedset.New(maxOriginalIPsSize)
-	}
-	return flowExtrasRef{originalSourceIPs: osip}
+func (fpl *FlowEnforcedPolicySets) aggregateFlowEnforcedPolicySets(mu metric.Update) {
+	(*FlowPolicySets)(fpl).aggregateFlowPolicySets(mu.RuleIDs, false)
 }
 
-func (fer *flowExtrasRef) aggregateFlowExtrasRef(mu metric.Update) {
-	if mu.OrigSourceIPs != nil {
-		fer.originalSourceIPs.Combine(mu.OrigSourceIPs)
-	}
+// FlowPendingPolicySet keeps track of pending policy traces associated with a flow.
+type FlowPendingPolicySet FlowPolicySet
+
+func NewFlowPendingPolicySet(mu metric.Update) FlowPendingPolicySet {
+	return FlowPendingPolicySet(newPolicySet(mu.PendingRuleIDs, true))
 }
 
-func (fer *flowExtrasRef) reset() {
-	if fer.originalSourceIPs != nil {
-		fer.originalSourceIPs.Reset()
-	}
-}
-
-// FlowExtras contains some additional useful information for flows.
-type FlowExtras struct {
-	OriginalSourceIPs    []net.IP `json:"originalSourceIPs"`
-	NumOriginalSourceIPs int      `json:"numOriginalSourceIPs"`
+func (fpl *FlowPendingPolicySet) replaceFlowPendingPolicySet(mu metric.Update) {
+	*fpl = NewFlowPendingPolicySet(mu)
 }
 
 // flowReferences are internal only stats used for computing numbers of flows
@@ -476,7 +472,6 @@ type FlowStatsByProcess struct {
 	// statsByProcessName stores aggregated flow statistics grouped by a process name.
 	statsByProcessName    map[string]*FlowStats
 	displayDebugTraceLogs bool
-	natOutgoingPortLimit  int
 	// TODO(doublek): Track the most significant stats and show them as part
 	// of the flows that are included in the process limit. Current processNames
 	// only tracks insertion order.
@@ -485,12 +480,10 @@ type FlowStatsByProcess struct {
 func NewFlowStatsByProcess(
 	mu *metric.Update,
 	displayDebugTraceLogs bool,
-	natOutgoingPortLimit int,
 ) FlowStatsByProcess {
 	f := FlowStatsByProcess{
 		displayDebugTraceLogs: displayDebugTraceLogs,
 		statsByProcessName:    make(map[string]*FlowStats),
-		natOutgoingPortLimit:  natOutgoingPortLimit,
 	}
 	f.aggregateFlowStatsByProcess(mu)
 	return f
@@ -558,7 +551,6 @@ func (f *FlowStatsByProcess) toFlowProcessReportedStats() []FlowProcessReportedS
 	if stats, ok := f.statsByProcessName[FieldNotIncluded]; ok {
 		s := FlowProcessReportedStats{
 			FlowReportedStats: stats.FlowReportedStats,
-			NatOutgoingPorts:  f.getNatOutGoingPortsFromStats(stats),
 		}
 		reportedStats = append(reportedStats, s)
 	} else {
@@ -567,38 +559,8 @@ func (f *FlowStatsByProcess) toFlowProcessReportedStats() []FlowProcessReportedS
 	return reportedStats
 }
 
-func (f *FlowStatsByProcess) getNatOutGoingPortsFromStats(stats *FlowStats) []int {
-	var natOutGoingPorts []int
-
-	numNatOutgoingPorts := 0
-	for _, value := range stats.flowsRefsActive {
-		if numNatOutgoingPorts >= f.natOutgoingPortLimit {
-			break
-		}
-
-		if value != 0 {
-			natOutGoingPorts = append(natOutGoingPorts, value)
-			numNatOutgoingPorts++
-		}
-	}
-
-	for _, value := range stats.flowsCompletedRefs {
-		if numNatOutgoingPorts >= f.natOutgoingPortLimit {
-			break
-		}
-
-		if value != 0 {
-			natOutGoingPorts = append(natOutGoingPorts, value)
-			numNatOutgoingPorts++
-		}
-	}
-
-	return natOutGoingPorts
-}
-
 // FlowProcessReportedStats contains FlowReportedStats along with process information.
 type FlowProcessReportedStats struct {
-	NatOutgoingPorts []int
 	FlowReportedStats
 }
 
@@ -608,147 +570,7 @@ type FlowLog struct {
 	StartTime, EndTime time.Time
 	FlowMeta
 	FlowLabels
-	FlowPolicySet
-	FlowExtras
 	FlowProcessReportedStats
-}
 
-func (f *FlowLog) Deserialize(fl string) error {
-	// Format is
-	// startTime endTime srcType srcNamespace srcName srcLabels dstType dstNamespace dstName dstLabels srcIP dstIP proto srcPort dstPort numFlows numFlowsStarted numFlowsCompleted flowReporter packetsIn packetsOut bytesIn bytesOut action policies originalSourceIPs numOriginalSourceIPs destServiceNamespace dstServiceName dstServicePort
-	// Sample entry with no aggregation and no labels.
-	// 1529529591 1529529892 wep policy-demo nginx-7d98456675-2mcs4 nginx-7d98456675-* - wep kube-system kube-dns-7cc87d595-pxvxb kube-dns-7cc87d595-* - 192.168.224.225 192.168.135.53 17 36486 53 1 1 1 in 1 1 73 119 allow ["0|tier|namespace/tier.policy|allow|0"] [1.0.0.1] 1 kube-system kube-dns dig 23033 0
-
-	var srcType, dstType endpoint.Type
-
-	parts := strings.Split(fl, " ")
-	if len(parts) < 32 {
-		return fmt.Errorf("log %v can't be processed", fl)
-	}
-
-	switch parts[2] {
-	case "wep":
-		srcType = endpoint.Wep
-	case "hep":
-		srcType = endpoint.Hep
-	case "ns":
-		srcType = endpoint.Ns
-	case "net":
-		srcType = endpoint.Net
-	}
-
-	f.SrcMeta = endpoint.Metadata{
-		Type:           srcType,
-		Namespace:      parts[3],
-		Name:           parts[4],
-		AggregatedName: parts[5],
-	}
-	f.SrcLabels = stringToLabels(parts[6])
-	if srcType == endpoint.Ns {
-		namespace, name := utils.ExtractNamespaceFromNetworkSet(f.SrcMeta.AggregatedName)
-		f.SrcMeta.Namespace = namespace
-		f.SrcMeta.AggregatedName = name
-	}
-
-	switch parts[7] {
-	case "wep":
-		dstType = endpoint.Wep
-	case "hep":
-		dstType = endpoint.Hep
-	case "ns":
-		dstType = endpoint.Ns
-	case "net":
-		dstType = endpoint.Net
-	}
-
-	f.DstMeta = endpoint.Metadata{
-		Type:           dstType,
-		Namespace:      parts[8],
-		Name:           parts[9],
-		AggregatedName: parts[10],
-	}
-	f.DstLabels = stringToLabels(parts[11])
-	if dstType == endpoint.Ns {
-		namespace, name := utils.ExtractNamespaceFromNetworkSet(f.DstMeta.AggregatedName)
-		f.DstMeta.Namespace = namespace
-		f.DstMeta.AggregatedName = name
-	}
-
-	var sip, dip [16]byte
-	if parts[12] != "-" {
-		sip = utils.IpStrTo16Byte(parts[12])
-	}
-	if parts[13] != "-" {
-		dip = utils.IpStrTo16Byte(parts[13])
-	}
-	p, _ := strconv.Atoi(parts[14])
-	sp, _ := strconv.Atoi(parts[15])
-	dp, _ := strconv.Atoi(parts[16])
-	f.Tuple = tuple.Make(sip, dip, p, sp, dp)
-
-	f.NumFlows, _ = strconv.Atoi(parts[17])
-	f.NumFlowsStarted, _ = strconv.Atoi(parts[18])
-	f.NumFlowsCompleted, _ = strconv.Atoi(parts[19])
-
-	switch parts[20] {
-	case "src":
-		f.Reporter = ReporterSrc
-	case "dst":
-		f.Reporter = ReporterDst
-	}
-
-	f.PacketsIn, _ = strconv.Atoi(parts[21])
-	f.PacketsOut, _ = strconv.Atoi(parts[22])
-	f.BytesIn, _ = strconv.Atoi(parts[23])
-	f.BytesOut, _ = strconv.Atoi(parts[24])
-
-	switch parts[25] {
-	case "allow":
-		f.Action = ActionAllow
-	case "deny":
-		f.Action = ActionDeny
-	}
-
-	// Parse policies, empty ones are just -
-	if parts[26] == "-" {
-		f.FlowPolicySet = make(FlowPolicySet)
-	} else if len(parts[26]) > 1 {
-		f.FlowPolicySet = make(FlowPolicySet)
-		polParts := strings.Split(parts[26][1:len(parts[26])-1], ",")
-		for _, p := range polParts {
-			f.FlowPolicySet[p] = emptyValue
-		}
-	}
-
-	// Parse original source IPs, empty ones are just -
-	if parts[27] == "-" {
-		f.FlowExtras = FlowExtras{}
-	} else if len(parts[27]) > 1 {
-		ips := []net.IP{}
-		exParts := strings.Split(parts[27][1:len(parts[27])-1], ",")
-		for _, ipStr := range exParts {
-			ip := net.ParseIP(ipStr)
-			if ip == nil {
-				continue
-			}
-			ips = append(ips, ip)
-		}
-		f.FlowExtras = FlowExtras{
-			OriginalSourceIPs: ips,
-		}
-		f.FlowExtras.NumOriginalSourceIPs, _ = strconv.Atoi(parts[28])
-	}
-
-	svcPortNum, err := strconv.Atoi(parts[32])
-	if err != nil {
-		svcPortNum = 0
-	}
-
-	f.DstService = FlowService{
-		Namespace: parts[29],
-		Name:      parts[30],
-		PortName:  parts[31],
-		PortNum:   svcPortNum,
-	}
-	return nil
+	FlowEnforcedPolicySet, FlowPendingPolicySet FlowPolicySet
 }

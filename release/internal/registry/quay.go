@@ -18,12 +18,29 @@ import (
 	"fmt"
 )
 
+const QuayRegistry = "quay.io"
+
 // Quay represents the Quay registry
 type Quay struct{}
 
 // URL returns the URL for the Quay registry
 func (q *Quay) URL() string {
-	return "quay.io"
+	return QuayRegistry
+}
+
+// Token returns the token to access the Docker registry for the image
+func (q *Quay) Token(img ImageRef) (string, error) {
+	var (
+		token string
+		err   error
+		scope = fmt.Sprintf("repository:%s:pull", img.Repository())
+	)
+	if img.RequiresAuth() {
+		token, err = getBearerTokenWithDefaultAuth(q, scope)
+	} else {
+		token, err = getBearerToken(q, scope)
+	}
+	return token, err
 }
 
 // TokenURL returns the token URL for the Quay registry

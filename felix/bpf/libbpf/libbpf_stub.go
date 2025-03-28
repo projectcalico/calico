@@ -1,4 +1,4 @@
-// Copyright (c) 2021-2022 Tigera, Inc. All rights reserved.
+// Copyright (c) 2021-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -136,6 +136,7 @@ const (
 	GlobalsNoDSRCidrs       uint32 = 12345
 	GlobalsLoUDPOnly        uint32 = 12345
 	GlobalsRedirectPeer     uint32 = 12345
+	GlobalsFlowLogsEnabled  uint32 = 12345
 )
 
 func (m *Map) SetSize(size int) error {

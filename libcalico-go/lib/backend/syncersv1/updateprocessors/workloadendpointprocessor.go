@@ -179,6 +179,7 @@ func convertWorkloadEndpointV2ToV1Value(val interface{}) (interface{}, error) {
 		GenerateName:               v3res.GenerateName,
 		AllowSpoofedSourcePrefixes: allowedSources,
 		Annotations:                v3res.GetObjectMeta().GetAnnotations(),
+		QoSControls:                v3res.Spec.QoSControls,
 	}
 
 	return v1value, nil

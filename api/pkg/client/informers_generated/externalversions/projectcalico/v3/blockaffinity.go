@@ -5,13 +5,13 @@
 package v3
 
 import (
-	"context"
+	context "context"
 	time "time"
 
-	projectcalicov3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	apisprojectcalicov3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	clientset "github.com/projectcalico/api/pkg/client/clientset_generated/clientset"
 	internalinterfaces "github.com/projectcalico/api/pkg/client/informers_generated/externalversions/internalinterfaces"
-	v3 "github.com/projectcalico/api/pkg/client/listers_generated/projectcalico/v3"
+	projectcalicov3 "github.com/projectcalico/api/pkg/client/listers_generated/projectcalico/v3"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	watch "k8s.io/apimachinery/pkg/watch"
@@ -22,7 +22,7 @@ import (
 // BlockAffinities.
 type BlockAffinityInformer interface {
 	Informer() cache.SharedIndexInformer
-	Lister() v3.BlockAffinityLister
+	Lister() projectcalicov3.BlockAffinityLister
 }
 
 type blockAffinityInformer struct {
@@ -56,7 +56,7 @@ func NewFilteredBlockAffinityInformer(client clientset.Interface, resyncPeriod t
 				return client.ProjectcalicoV3().BlockAffinities().Watch(context.TODO(), options)
 			},
 		},
-		&projectcalicov3.BlockAffinity{},
+		&apisprojectcalicov3.BlockAffinity{},
 		resyncPeriod,
 		indexers,
 	)
@@ -67,9 +67,9 @@ func (f *blockAffinityInformer) defaultInformer(client clientset.Interface, resy
 }
 
 func (f *blockAffinityInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&projectcalicov3.BlockAffinity{}, f.defaultInformer)
+	return f.factory.InformerFor(&apisprojectcalicov3.BlockAffinity{}, f.defaultInformer)
 }
 
-func (f *blockAffinityInformer) Lister() v3.BlockAffinityLister {
-	return v3.NewBlockAffinityLister(f.Informer().GetIndexer())
+func (f *blockAffinityInformer) Lister() projectcalicov3.BlockAffinityLister {
+	return projectcalicov3.NewBlockAffinityLister(f.Informer().GetIndexer())
 }

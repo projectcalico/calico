@@ -50,6 +50,8 @@ ${HELM} -n tigera-operator template \
   --no-hooks \
   --set installation.enabled=false \
   --set apiServer.enabled=false \
+	--set whisker.enabled=false \
+	--set goldmane.enabled=false \
   --set tigeraOperator.image=$OPERATOR_IMAGE \
   --set tigeraOperator.version=$OPERATOR_VERSION \
   --set tigeraOperator.registry=$OPERATOR_REGISTRY \
@@ -119,6 +121,8 @@ ${HELM} template \
   --set installation.kubernetesProvider=OpenShift \
   --set installation.enabled=false \
   --set apiServer.enabled=false \
+	--set goldmane.enabled=false \
+	--set whisker.enabled=false \
   --set tigeraOperator.image=$OPERATOR_IMAGE \
   --set tigeraOperator.version=$OPERATOR_VERSION \
   --set tigeraOperator.registry=$OPERATOR_REGISTRY \

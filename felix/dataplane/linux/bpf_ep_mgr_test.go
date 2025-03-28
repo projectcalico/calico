@@ -443,7 +443,6 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		}
 		ruleRenderer = rules.NewRenderer(rrConfigNormal)
 		filterTableV4 = newMockTable("filter")
-		lookupsCache = calc.NewLookupsCache()
 		filterTableV6 = newMockTable("filter")
 	})
 
@@ -453,7 +452,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 	newBpfEpMgr := func(ipv6Enabled bool) {
 		var err error
-		bpfEpMgr, err = newBPFEndpointManager(
+		bpfEpMgr, err = NewBPFEndpointManager(
 			mockDP,
 			&Config{
 				Hostname:              "uthost",
@@ -648,6 +647,16 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		Expect(bpfEpMgr).NotTo(BeNil())
 	})
 
+	Context("with lookup cache", func() {
+		BeforeEach(func() {
+			lookupsCache = calc.NewLookupsCache()
+		})
+
+		It("exists", func() {
+			Expect(bpfEpMgr).NotTo(BeNil())
+		})
+	})
+
 	It("does not have HEP in initial state", func() {
 		Expect(bpfEpMgr.hostIfaceToEpMap["eth0"]).NotTo(Equal(hostEp))
 	})
@@ -690,6 +699,11 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			genWLUpdate("cali12345")()
 			genIfaceUpdate("cali12345", ifacemonitor.StateUp, 15)()
 			genHEPUpdate(allInterfaces, hostEpNorm)()
+		})
+
+		It("should handle removing the HEP", func() {
+			genHEPUpdate()()
+			Expect(bpfEpMgr.hostIfaceToEpMap).To(BeEmpty())
 		})
 
 		It("should attach/detach programs when ifaces are added/deleted", func() {

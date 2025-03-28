@@ -14,8 +14,15 @@
 
 package main
 
-import "github.com/projectcalico/calico/goldmane/pkg/daemon"
+import (
+	"context"
+
+	"github.com/projectcalico/calico/goldmane/pkg/daemon"
+)
 
 func main() {
-	daemon.Run()
+	// TODO should hook into the the os.Signal to gracefully shutdown.
+	ctx := context.Background()
+
+	daemon.Run(ctx, daemon.ConfigFromEnv())
 }

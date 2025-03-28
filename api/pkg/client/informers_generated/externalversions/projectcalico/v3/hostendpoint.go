@@ -5,13 +5,13 @@
 package v3
 
 import (
-	"context"
+	context "context"
 	time "time"
 
-	projectcalicov3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	apisprojectcalicov3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	clientset "github.com/projectcalico/api/pkg/client/clientset_generated/clientset"
 	internalinterfaces "github.com/projectcalico/api/pkg/client/informers_generated/externalversions/internalinterfaces"
-	v3 "github.com/projectcalico/api/pkg/client/listers_generated/projectcalico/v3"
+	projectcalicov3 "github.com/projectcalico/api/pkg/client/listers_generated/projectcalico/v3"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	watch "k8s.io/apimachinery/pkg/watch"
@@ -22,7 +22,7 @@ import (
 // HostEndpoints.
 type HostEndpointInformer interface {
 	Informer() cache.SharedIndexInformer
-	Lister() v3.HostEndpointLister
+	Lister() projectcalicov3.HostEndpointLister
 }
 
 type hostEndpointInformer struct {
@@ -56,7 +56,7 @@ func NewFilteredHostEndpointInformer(client clientset.Interface, resyncPeriod ti
 				return client.ProjectcalicoV3().HostEndpoints().Watch(context.TODO(), options)
 			},
 		},
-		&projectcalicov3.HostEndpoint{},
+		&apisprojectcalicov3.HostEndpoint{},
 		resyncPeriod,
 		indexers,
 	)
@@ -67,9 +67,9 @@ func (f *hostEndpointInformer) defaultInformer(client clientset.Interface, resyn
 }
 
 func (f *hostEndpointInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&projectcalicov3.HostEndpoint{}, f.defaultInformer)
+	return f.factory.InformerFor(&apisprojectcalicov3.HostEndpoint{}, f.defaultInformer)
 }
 
-func (f *hostEndpointInformer) Lister() v3.HostEndpointLister {
-	return v3.NewHostEndpointLister(f.Informer().GetIndexer())
+func (f *hostEndpointInformer) Lister() projectcalicov3.HostEndpointLister {
+	return projectcalicov3.NewHostEndpointLister(f.Informer().GetIndexer())
 }

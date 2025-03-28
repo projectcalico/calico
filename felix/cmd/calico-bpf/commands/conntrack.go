@@ -201,8 +201,7 @@ func (cmd *conntrackDumpCmd) prettyDump(k conntrack.KeyInterface, v conntrack.Va
 	}
 
 	now := bpf.KTimeNanos()
-	cmd.Printf(" Age: %s Active ago %s Duration %s",
-		time.Duration(now-v.Created()), time.Duration(now-v.LastSeen()), time.Duration(v.LastSeen()-v.Created()))
+	cmd.Printf(" Active ago %s", time.Duration(now-v.LastSeen()))
 
 	if k.Proto() == 6 {
 		if (v.IsForwardDSR() && d.FINsSeenDSR()) || d.FINsSeen() {
@@ -222,8 +221,7 @@ func (cmd *conntrackDumpCmd) prettyDump(k conntrack.KeyInterface, v conntrack.Va
 func dumpExtrav2(k v2.Key, v v2.Value) {
 	now := bpf.KTimeNanos()
 
-	fmt.Printf(" Age: %s Active ago %s",
-		time.Duration(now-v.Created()), time.Duration(now-v.LastSeen()))
+	fmt.Printf(" Active ago %s", time.Duration(now-v.LastSeen()))
 
 	if k.Proto() != conntrack.ProtoTCP {
 		return
@@ -256,8 +254,7 @@ func dumpExtrav2(k v2.Key, v v2.Value) {
 func dumpExtra(k conntrack.KeyInterface, v conntrack.ValueInterface) {
 	now := bpf.KTimeNanos()
 
-	fmt.Printf(" Age: %s Active ago %s",
-		time.Duration(now-v.Created()), time.Duration(now-v.LastSeen()))
+	fmt.Printf(" Active ago %s", time.Duration(now-v.LastSeen()))
 
 	if k.Proto() != conntrack.ProtoTCP {
 		return

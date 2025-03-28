@@ -21,11 +21,14 @@ bin/release: $(shell find . -name "*.go")
 	@mkdir -p bin && \
 	$(call build_binary, ./cmd, bin/release)
 
+ut:
+	$(DOCKER_GO_BUILD) go test ./... -v -cover -count 1
+
 ###############################################################################
 # CI/CD
 ###############################################################################
 .PHONY: ci
-ci: static-checks
+ci: static-checks ut
 
 ###############################################################################
 # Hashrelease

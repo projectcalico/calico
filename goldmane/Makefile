@@ -13,9 +13,12 @@ include ../lib.Makefile
 # Configure variables used by ci/cd common targets from lib.Makefile.
 BUILD_IMAGES=goldmane
 
+# Full set of binaries to build.
+BINARIES=bin/goldmane-$(ARCH) bin/health-$(ARCH)
+
 .PHONY: image build
 image: $(IMAGE_BUILD_MARKER)
-build: bin/goldmane-$(ARCH)
+build: $(BINARIES)
 clean:
 	rm -rf bin
 	rm -f $(IMAGE_BUILD_MARKER)
@@ -25,14 +28,17 @@ sub-image-%:
 	$(MAKE) image ARCH=$*
 
 # Build goldmane image.
-calico/goldmane: $(IMAGE_BUILD_MARKER)
-$(IMAGE_BUILD_MARKER): bin/goldmane-$(ARCH)
+goldmane calico/goldmane: $(IMAGE_BUILD_MARKER)
+$(IMAGE_BUILD_MARKER): $(BINARIES)
 	$(DOCKER_BUILD) --build-arg TARGETARCH=$(ARCH) -t goldmane:latest-$(ARCH) -f docker/Dockerfile .
 	$(MAKE) retag-build-images-with-registries BUILD_IMAGES=$(BUILD_IMAGES) VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@
 
 bin/goldmane-$(ARCH): $(shell find . -name '*.go')
 	$(call build_binary, $(PACKAGE_NAME)/cmd/, $@)
+
+bin/health-$(ARCH): $(shell find . -name '*.go')
+	$(call build_binary, $(PACKAGE_NAME)/cmd/health, $@)
 
 # Build the testserver image.
 .PHONY: testserver
@@ -44,16 +50,24 @@ bin/flowgen: $(shell find . -name '*.go')
 
 # Update protobuf generation.
 protobuf proto/api.pb.go: proto/api.proto
-	$(DOCKER_RUN) -v $(CURDIR):/code \
-		$(CALICO_BUILD) sh -c 'protoc --proto_path=/code/proto --go_out=/code/proto --go-grpc_out=. --go_opt=paths=source_relative /code/proto/api.proto'
+	$(DOCKER_RUN) -v $(CURDIR):/code $(CALICO_BUILD) sh -c 'protoc --proto_path=/code/proto --go_out=/code/proto --go-grpc_out=. --go_opt=paths=source_relative /code/proto/api.proto'
 	$(MAKE) fix-changed
+
+###############################################################################
+# Generate files
+###############################################################################
+GENERATED_FILES=proto/api.pb.go
+gen-files: $(GENERATED_FILES) gen-mocks
 
 ###############################################################################
 # UTs
 ###############################################################################
 ci: static-checks ut
 ut:
-	$(DOCKER_GO_BUILD) go test ./... -cover -count 1
+	$(DOCKER_GO_BUILD) go test ./... -coverprofile coverage.profile -count 1
+
+gen-mocks:
+	$(DOCKER_RUN) $(CALICO_BUILD) sh -c 'mockery'
 
 ###############################################################################
 # Release
@@ -66,15 +80,9 @@ release-build: .release-$(VERSION).created
 	$(MAKE) clean image-all RELEASE=true
 	$(MAKE) retag-build-images-with-registries RELEASE=true IMAGETAG=$(VERSION)
 	$(MAKE) retag-build-images-with-registries RELEASE=true IMAGETAG=latest
+	touch $@
 
-release-verify: release-prereqs
-	@echo "Nothing to do"
-
-release-publish: release-prereqs release-verify .release-$(VERSION).published
+release-publish: release-prereqs .release-$(VERSION).published
 .release-$(VERSION).published:
 	$(MAKE) push-images-to-registries push-manifests IMAGETAG=$(VERSION) RELEASE=$(RELEASE) CONFIRM=$(CONFIRM)
-	$(MAKE) FIPS=true push-images-to-registries push-manifests IMAGETAG=$(VERSION)-fips RELEASE=$(RELEASE) CONFIRM=$(CONFIRM)
-
-	# Push Windows images.
-	$(MAKE) release-windows IMAGETAG=$(VERSION) CONFIRM=$(CONFIRM)
 	touch $@

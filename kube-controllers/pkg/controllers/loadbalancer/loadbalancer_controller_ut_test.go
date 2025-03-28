@@ -65,7 +65,6 @@ var _ = Describe("LoadBalancer controller UTs", func() {
 		factory.Start(stopChan)
 		cache.WaitForCacheSync(stopChan, serviceInformer.HasSynced)
 		dataFeed := utils.NewDataFeed(cli)
-		dataFeed.Start()
 
 		// Create a new controller. We don't register with a data feed,
 		// as the tests themselves will drive the controller.
@@ -73,6 +72,8 @@ var _ = Describe("LoadBalancer controller UTs", func() {
 	})
 
 	AfterEach(func() {
+		close(stopChan)
+
 		svc = v1.Service{
 			Spec: v1.ServiceSpec{
 				Type:           v1.ServiceTypeLoadBalancer,

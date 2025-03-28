@@ -5,13 +5,13 @@
 package v3
 
 import (
-	"context"
+	context "context"
 	time "time"
 
-	projectcalicov3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	apisprojectcalicov3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	clientset "github.com/projectcalico/api/pkg/client/clientset_generated/clientset"
 	internalinterfaces "github.com/projectcalico/api/pkg/client/informers_generated/externalversions/internalinterfaces"
-	v3 "github.com/projectcalico/api/pkg/client/listers_generated/projectcalico/v3"
+	projectcalicov3 "github.com/projectcalico/api/pkg/client/listers_generated/projectcalico/v3"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	watch "k8s.io/apimachinery/pkg/watch"
@@ -22,7 +22,7 @@ import (
 // ClusterInformations.
 type ClusterInformationInformer interface {
 	Informer() cache.SharedIndexInformer
-	Lister() v3.ClusterInformationLister
+	Lister() projectcalicov3.ClusterInformationLister
 }
 
 type clusterInformationInformer struct {
@@ -56,7 +56,7 @@ func NewFilteredClusterInformationInformer(client clientset.Interface, resyncPer
 				return client.ProjectcalicoV3().ClusterInformations().Watch(context.TODO(), options)
 			},
 		},
-		&projectcalicov3.ClusterInformation{},
+		&apisprojectcalicov3.ClusterInformation{},
 		resyncPeriod,
 		indexers,
 	)
@@ -67,9 +67,9 @@ func (f *clusterInformationInformer) defaultInformer(client clientset.Interface,
 }
 
 func (f *clusterInformationInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&projectcalicov3.ClusterInformation{}, f.defaultInformer)
+	return f.factory.InformerFor(&apisprojectcalicov3.ClusterInformation{}, f.defaultInformer)
 }
 
-func (f *clusterInformationInformer) Lister() v3.ClusterInformationLister {
-	return v3.NewClusterInformationLister(f.Informer().GetIndexer())
+func (f *clusterInformationInformer) Lister() projectcalicov3.ClusterInformationLister {
+	return projectcalicov3.NewClusterInformationLister(f.Informer().GetIndexer())
 }

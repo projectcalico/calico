@@ -16,12 +16,10 @@ package metric
 
 import (
 	"fmt"
-	"net"
 
 	"k8s.io/kubernetes/pkg/proxy"
 
 	"github.com/projectcalico/calico/felix/calc"
-	"github.com/projectcalico/calico/felix/collector/types/boundedset"
 	"github.com/projectcalico/calico/felix/collector/types/tuple"
 	"github.com/projectcalico/calico/felix/collector/utils"
 )
@@ -80,18 +78,18 @@ type Update struct {
 	// Tuple key
 	Tuple           tuple.Tuple
 	NatOutgoingPort int
-	OrigSourceIPs   *boundedset.BoundedSet
 
 	// Endpoint information.
-	SrcEp      *calc.EndpointData
-	DstEp      *calc.EndpointData
+	SrcEp      calc.EndpointData
+	DstEp      calc.EndpointData
 	DstService ServiceInfo
 
 	// isConnection is true if this update is from an active connection.
 	IsConnection bool
 
 	// Rules identification
-	RuleIDs []*calc.RuleID
+	RuleIDs        []*calc.RuleID
+	PendingRuleIDs []*calc.RuleID
 
 	// Whether the rules IDs contains a deny rule.
 	HasDenyRule bool
@@ -110,32 +108,23 @@ type Update struct {
 func (mu Update) String() string {
 	var (
 		srcName, dstName string
-		numOrigIPs       int
-		origIPs          []net.IP
 	)
 	if mu.SrcEp != nil {
-		srcName = utils.EndpointName(mu.SrcEp.Key)
+		srcName = utils.EndpointName(mu.SrcEp.Key())
 	} else {
 		srcName = utils.UnknownEndpoint
 	}
 	if mu.DstEp != nil {
-		dstName = utils.EndpointName(mu.DstEp.Key)
+		dstName = utils.EndpointName(mu.DstEp.Key())
 	} else {
 		dstName = utils.UnknownEndpoint
 	}
-	if mu.OrigSourceIPs != nil {
-		numOrigIPs = mu.OrigSourceIPs.TotalCount()
-		origIPs = mu.OrigSourceIPs.ToIPSlice()
-	} else {
-		numOrigIPs = 0
-		origIPs = []net.IP{}
-	}
 
-	format := "MetricUpdate: type=%s tuple={%v}, srcEp={%v} dstEp={%v} isConnection={%v}, ruleID={%v}, unknownRuleID={%v} inMetric={%s} outMetric={%s} origIPs={%v} numOrigIPs={%d}"
+	format := "MetricUpdate: type=%s tuple={%v}, srcEp={%v} dstEp={%v} isConnection={%v}, ruleID={%v}, unknownRuleID={%v} inMetric={%s} outMetric={%s}"
 
 	return fmt.Sprintf(format,
 		mu.UpdateType, &(mu.Tuple), srcName, dstName, mu.IsConnection, mu.RuleIDs, mu.UnknownRuleID,
-		mu.InMetric, mu.OutMetric, origIPs, numOrigIPs,
+		mu.InMetric, mu.OutMetric,
 	)
 }
 

@@ -99,7 +99,7 @@ func makeTuple(ipSrc, ipDst net.IP, portSrc, portDst uint16, proto uint8) tuple.
 }
 
 func (r *InfoReader) makeConntrackInfo(key KeyInterface, val ValueInterface, dnat bool) collector.ConntrackInfo {
-	_, expired := r.timeouts.EntryExpired(r.cachedKTime, key.Proto(), val)
+	_, expired := r.timeouts.EntryFinished(r.cachedKTime, key.Proto(), val)
 
 	proto := key.Proto()
 	ipSrc := key.AddrA()

@@ -91,9 +91,9 @@ EOF
 		    # support to the core DevStack repository.
 		    iniset $NEUTRON_CONF DEFAULT core_plugin calico
 
-		    # Reset service_plugins to be empty, as the Calico plugin
-		    # itself supports the 'router' extension.
-		    inidelete $NEUTRON_CONF DEFAULT service_plugins
+		    # Calico itself implements the 'router' extension, but we need a service plugin
+		    # for QoS.
+		    iniset $NEUTRON_CONF DEFAULT service_plugins qos
 
 		    # Propagate ENABLE_DEBUG_LOG_LEVEL to neutron.conf, so that
 		    # it applies to the Calico DHCP agent on each compute node.

@@ -129,7 +129,7 @@ int calico_tc_main(struct __sk_buff *skb)
 		if (xdp2tc_get_metadata(skb) & CALI_META_ACCEPTED_BY_XDP) {
 			CALI_LOG_IF(CALI_LOG_LEVEL_INFO,
 					"Final result=ALLOW (%d). Accepted by XDP.", CALI_REASON_ACCEPTED_BY_XDP);
-			skb->mark = CALI_SKB_MARK_BYPASS;
+			skb->mark = CALI_SKB_MARK_BYPASS_XDP;
 			return TC_ACT_UNSPEC;
 		}
 	}
@@ -1175,7 +1175,7 @@ allow:
 		} else if (!r || cali_rt_flags_remote_workload(r->flags)) {
 			/* If there is no route, treat it as a remote NP BE */
 			if (CALI_F_LO || CALI_F_MAIN) {
-				state->ct_result.ifindex_fwd = NATIN_IFACE  ;
+				state->ct_result.ifindex_fwd = NATIN_IFACE;
 				CALI_DEBUG("NP remote WL " IP_FMT ":%d on LO or main HEP",
 						debug_ip(state->post_nat_ip_dst), state->post_nat_dport);
 				ctx->state->flags |= CALI_ST_CT_NP_LOOP;
@@ -1247,8 +1247,10 @@ int calico_tc_skb_accepted_entrypoint(struct __sk_buff *skb)
 	}
 
 	if (!policy_skipped) {
-		event_flow_log(ctx);
-		CALI_DEBUG("Flow log event generated for ALLOW\n");
+		if (flow_logs_enabled(ctx)) {
+			event_flow_log(ctx);
+			CALI_DEBUG("Flow log event generated for ALLOW\n");
+		}
 		update_rule_counters(ctx);
 		skb_log(ctx, true);
 	}
@@ -2009,8 +2011,10 @@ int calico_tc_skb_drop(struct __sk_buff *skb)
 		}
 	}
 
-	event_flow_log(ctx);
-	CALI_DEBUG("Flow log event generated for DENY/DROP\n");
+	if (flow_logs_enabled(ctx)) {
+		event_flow_log(ctx);
+		CALI_DEBUG("Flow log event generated for DENY/DROP\n");
+	}
 	goto deny;
 
 allow:

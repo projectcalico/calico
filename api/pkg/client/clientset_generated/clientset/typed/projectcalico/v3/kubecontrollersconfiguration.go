@@ -5,9 +5,9 @@
 package v3
 
 import (
-	"context"
+	context "context"
 
-	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	projectcalicov3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	scheme "github.com/projectcalico/api/pkg/client/clientset_generated/clientset/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"
@@ -23,33 +23,38 @@ type KubeControllersConfigurationsGetter interface {
 
 // KubeControllersConfigurationInterface has methods to work with KubeControllersConfiguration resources.
 type KubeControllersConfigurationInterface interface {
-	Create(ctx context.Context, kubeControllersConfiguration *v3.KubeControllersConfiguration, opts v1.CreateOptions) (*v3.KubeControllersConfiguration, error)
-	Update(ctx context.Context, kubeControllersConfiguration *v3.KubeControllersConfiguration, opts v1.UpdateOptions) (*v3.KubeControllersConfiguration, error)
+	Create(ctx context.Context, kubeControllersConfiguration *projectcalicov3.KubeControllersConfiguration, opts v1.CreateOptions) (*projectcalicov3.KubeControllersConfiguration, error)
+	Update(ctx context.Context, kubeControllersConfiguration *projectcalicov3.KubeControllersConfiguration, opts v1.UpdateOptions) (*projectcalicov3.KubeControllersConfiguration, error)
 	// Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
-	UpdateStatus(ctx context.Context, kubeControllersConfiguration *v3.KubeControllersConfiguration, opts v1.UpdateOptions) (*v3.KubeControllersConfiguration, error)
+	UpdateStatus(ctx context.Context, kubeControllersConfiguration *projectcalicov3.KubeControllersConfiguration, opts v1.UpdateOptions) (*projectcalicov3.KubeControllersConfiguration, error)
 	Delete(ctx context.Context, name string, opts v1.DeleteOptions) error
 	DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error
-	Get(ctx context.Context, name string, opts v1.GetOptions) (*v3.KubeControllersConfiguration, error)
-	List(ctx context.Context, opts v1.ListOptions) (*v3.KubeControllersConfigurationList, error)
+	Get(ctx context.Context, name string, opts v1.GetOptions) (*projectcalicov3.KubeControllersConfiguration, error)
+	List(ctx context.Context, opts v1.ListOptions) (*projectcalicov3.KubeControllersConfigurationList, error)
 	Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error)
-	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v3.KubeControllersConfiguration, err error)
+	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *projectcalicov3.KubeControllersConfiguration, err error)
 	KubeControllersConfigurationExpansion
 }
 
 // kubeControllersConfigurations implements KubeControllersConfigurationInterface
 type kubeControllersConfigurations struct {
-	*gentype.ClientWithList[*v3.KubeControllersConfiguration, *v3.KubeControllersConfigurationList]
+	*gentype.ClientWithList[*projectcalicov3.KubeControllersConfiguration, *projectcalicov3.KubeControllersConfigurationList]
 }
 
 // newKubeControllersConfigurations returns a KubeControllersConfigurations
 func newKubeControllersConfigurations(c *ProjectcalicoV3Client) *kubeControllersConfigurations {
 	return &kubeControllersConfigurations{
-		gentype.NewClientWithList[*v3.KubeControllersConfiguration, *v3.KubeControllersConfigurationList](
+		gentype.NewClientWithList[*projectcalicov3.KubeControllersConfiguration, *projectcalicov3.KubeControllersConfigurationList](
 			"kubecontrollersconfigurations",
 			c.RESTClient(),
 			scheme.ParameterCodec,
 			"",
-			func() *v3.KubeControllersConfiguration { return &v3.KubeControllersConfiguration{} },
-			func() *v3.KubeControllersConfigurationList { return &v3.KubeControllersConfigurationList{} }),
+			func() *projectcalicov3.KubeControllersConfiguration {
+				return &projectcalicov3.KubeControllersConfiguration{}
+			},
+			func() *projectcalicov3.KubeControllersConfigurationList {
+				return &projectcalicov3.KubeControllersConfigurationList{}
+			},
+		),
 	}
 }

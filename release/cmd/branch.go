@@ -57,7 +57,7 @@ func branchSubCommands(cfg *Config) []*cli.Command {
 				m := branch.NewManager(
 					branch.WithRepoRoot(cfg.RepoRootDir),
 					branch.WithRepoRemote(c.String(repoRemoteFlag.Name)),
-					branch.WithMainBranch(c.String(mainBranchFlag.Name)),
+					branch.WithMainBranch(c.String(baseBranchFlag.Name)),
 					branch.WithDevTagIdentifier(c.String(devTagSuffixFlag.Name)),
 					branch.WithReleaseBranchPrefix(c.String(releaseBranchPrefixFlag.Name)),
 					branch.WithValidate(!c.Bool(skipValidationFlag.Name)),
