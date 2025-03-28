@@ -113,6 +113,17 @@ ${HELM} template \
 find ocp/tigera-operator -name "*.yaml" | xargs sed -i -e 1,2d
 mv $(find ocp/tigera-operator -name "*.yaml") ocp/ && rm -r ocp/tigera-operator
 
+# Generating the upgrade manifest for OCP.
+# It excludes the CRs (01-*) and the specific BPF files to maintain compatibility with iptables.
+VALUES_FILES=$(ls ocp | grep -v -e '^01-' -e 'cluster-network-operator.yaml' -e '02-configmap-calico-resources.yaml')
+rm -f tigera-operator-ocp-upgrade.yaml
+for FILE in $VALUES_FILES; do
+  cat "ocp/$FILE" >> tigera-operator-ocp-upgrade.yaml
+  echo -e "---" >> tigera-operator-ocp-upgrade.yaml  # Add divisor
+done
+# Remove the last separator (last line)
+sed -i -e '$ d' tigera-operator-ocp-upgrade.yaml
+
 ##########################################################################
 # Build Calico manifest used for in-repo testing. This is largely the same as the
 # one we ship, but with tweaked values.
