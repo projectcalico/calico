@@ -247,7 +247,6 @@ func TestGoldmaneIntegration_FilterHints(t *testing.T) {
 
 	query := req.URL.Query()
 	query.Set("type", "SourceName")
-	//query.Set("pageSize", "3")
 	query.Set("filters", jsontestutil.MustMarshal(t, whiskerv1.Filters{
 		SourceNamespaces: whiskerv1.FilterMatches[string]{{V: "test-namespace", Type: whiskerv1.MatchType(proto.MatchType_Fuzzy)}},
 	}))
