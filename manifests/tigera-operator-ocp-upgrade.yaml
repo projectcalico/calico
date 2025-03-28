@@ -250,6 +250,8 @@ rules:
       - whiskers
       - goldmanes
       - managementclusterconnections
+      - managementclusterconnections/finalizers
+      - managementclusterconnections/status
     verbs:
       - get
       - list
