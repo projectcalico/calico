@@ -39,9 +39,10 @@ import (
 // Global configuration for releases.
 var (
 	// Default defaultRegistries to which all release images are pushed.
+	// The first registry is what the manifests use. Currently it is quay.io/calico.
 	defaultRegistries = []string{
-		"docker.io/calico",
 		"quay.io/calico",
+		"docker.io/calico",
 		"gcr.io/projectcalico-org",
 		"eu.gcr.io/projectcalico-org",
 		"asia.gcr.io/projectcalico-org",
@@ -901,6 +902,9 @@ func (r *CalicoManager) generateManifests() error {
 	env := os.Environ()
 	env = append(env, fmt.Sprintf("CALICO_VERSION=%s", r.calicoVersion))
 	env = append(env, fmt.Sprintf("OPERATOR_VERSION=%s", r.operatorVersion))
+	env = append(env, fmt.Sprintf("REGISTRY=%s", r.imageRegistries[0]))
+	env = append(env, fmt.Sprintf("OPERATOR_REGISTRY=%s", r.operatorRegistry))
+	env = append(env, fmt.Sprintf("OPERATOR_IMAGE=%s", r.operatorImage))
 	if err := r.makeInDirectoryIgnoreOutput(r.repoRoot, "gen-manifests", env...); err != nil {
 		logrus.WithError(err).Error("Failed to make manifests")
 		return err
