@@ -15,7 +15,6 @@
 package policystore
 
 import (
-	"fmt"
 	"net"
 	"strconv"
 	"strings"
@@ -63,7 +62,7 @@ func NewIPSet(t syncapi.IPSetUpdate_IPSetType) IPSet {
 	case syncapi.IPSetUpdate_NET:
 		return ipNetSet{v4: &trieNode{}, v6: &trieNode{}}
 	}
-	log.Warn(fmt.Sprintf("Unrecognized IPSet type %T", t))
+	log.Warnf("Unrecognized IPSet type %v", t)
 	return nil
 }
 
