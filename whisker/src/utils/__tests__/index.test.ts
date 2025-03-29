@@ -27,6 +27,51 @@ describe('transformToFilterHintsQuery', () => {
             }),
         );
     });
+
+    it('should policy filters', () => {
+        const policy = 'policy-1';
+        expect(
+            transformToFlowsFilterQuery({
+                dest_name: [],
+                dest_namespace: [],
+                source_name: [],
+                source_namespace: [],
+                policy: [policy],
+                dest_port: [],
+                protocol: [],
+                action: [],
+            }),
+        ).toEqual(
+            JSON.stringify({
+                policies: [{ name: { type: 'Exact', value: policy } }],
+            }),
+        );
+    });
+
+    it('should policy search filter', () => {
+        const policy = 'policy-1';
+        const searchText = 'search';
+        expect(
+            transformToFlowsFilterQuery(
+                {
+                    dest_name: [],
+                    dest_namespace: [],
+                    source_name: [],
+                    source_namespace: [],
+                    policy: [policy],
+                    dest_port: [],
+                    protocol: [],
+                    action: [],
+                },
+                ListOmniFilterKeys.policy,
+                searchText,
+            ),
+        ).toEqual(
+            JSON.stringify({
+                policies: [{ name: { type: 'Fuzzy', value: searchText } }],
+            }),
+        );
+    });
 });
 
 Object.defineProperty(window, 'EventSource', {

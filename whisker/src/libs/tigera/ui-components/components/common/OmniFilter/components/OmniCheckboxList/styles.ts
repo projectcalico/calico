@@ -33,4 +33,7 @@ export const selectedOptionsHeadingStyles = {
     color: 'tigeraGrey.600',
     pl: 3,
     mt: 3,
+    _dark: {
+        color: 'tigeraGrey.400',
+    },
 };

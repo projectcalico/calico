@@ -14,6 +14,7 @@ import ReorderableCheckList, {
     ReorderableList,
 } from '@/libs/tigera/ui-components/components/common/ReorderableCheckList';
 import { useShouldAnimate } from '../../hooks';
+import { useLocalStorage } from '@/libs/tigera/ui-components/hooks';
 
 export type CustomColumn = Column & {
     disableReordering?: boolean;
@@ -30,7 +31,7 @@ type FlowLogsListProps = {
 //sum of height of table header, tablist, filters, banner and info
 const bannerHeight = 36;
 const headerHeight = 54;
-const containerPadding = 4;
+const containerPadding = 5;
 const omniFiltersHeight = 46;
 const tabsHeight = 34;
 const columnsHeight = 32;
@@ -41,6 +42,31 @@ const HEADER_HEIGHT =
     omniFiltersHeight +
     tabsHeight +
     columnsHeight;
+
+const defaultColumnNames = getTableColumns(() => undefined)
+    .filter((column) => !column.disableReordering)
+    .map((column) => column.Header as string);
+
+const expandoIndex = 0;
+
+const getVisibleColumns = (columns: CustomColumn[], storedColumns: string[]) =>
+    [
+        columns[expandoIndex],
+        ...columns
+            .slice(1, columns.length - 1)
+            .map((column) => ({
+                ...column,
+                checked:
+                    column.disableReordering ??
+                    storedColumns.includes(column.Header as string),
+            }))
+            .sort(
+                (a, b) =>
+                    storedColumns.indexOf(a.Header as string) -
+                    storedColumns.indexOf(b.Header as string),
+            ),
+        columns[columns.length - 1],
+    ] as ReorderableList<CustomColumn>[];
 
 const FlowLogsList: React.FC<FlowLogsListProps> = ({
     flowLogs,
@@ -58,8 +84,14 @@ const FlowLogsList: React.FC<FlowLogsListProps> = ({
         onColumnCustomizerOpen,
     ) as ReorderableList<CustomColumn>[];
 
-    const [columns, setColumns] =
-        React.useState<ReorderableList<CustomColumn>[]>(originalColumns);
+    const [storedColumns, setStoredColumns] = useLocalStorage(
+        'whisker-flow-logs-stream-columns',
+        defaultColumnNames,
+    );
+
+    const [columns, setColumns] = React.useState<
+        ReorderableList<CustomColumn>[]
+    >(getVisibleColumns(originalColumns, storedColumns));
     const [colCustomizerVisible, setColCustomizerVisible] =
         React.useState(false);
     const shouldAnimate = useShouldAnimate(maxStartTime, flowLogs);
@@ -84,7 +116,6 @@ const FlowLogsList: React.FC<FlowLogsListProps> = ({
     const height =
         Math.max(body.scrollHeight, body.offsetHeight) - HEADER_HEIGHT;
 
-    const expandoIndex = 0;
     const customizerIndex = originalColumns.findIndex(
         (col) => col.accessor === 'customizer_header',
     );
@@ -95,6 +126,10 @@ const FlowLogsList: React.FC<FlowLogsListProps> = ({
                 title='Customize Columns'
                 items={columns.filter((c) => !c.disableReordering)}
                 onSave={(list) => {
+                    const newStoredColumns = list
+                        .filter((column) => column.checked)
+                        .map((column) => column.Header as string);
+                    setStoredColumns(newStoredColumns);
                     setColumns([
                         originalColumns[expandoIndex],
                         ...list,
@@ -126,7 +161,7 @@ const FlowLogsList: React.FC<FlowLogsListProps> = ({
                 autoResetExpandedRow={true}
                 virtualisationProps={{
                     tableHeight: flowLogs?.length ? height : 0,
-                    subRowHeight: 700,
+                    subRowHeight: 820,
                     rowHeight: 35,
                     subRowStyles: subRowStyles,
                     shouldAnimate,
