@@ -629,10 +629,13 @@ func (r *CalicoManager) checkHashreleaseImagesPublished() ([]registry.Component,
 	for range r.imageComponents {
 		result := <-resultsCh
 		if result.err != nil {
-			resultsErr = errors.Join(resultsErr, fmt.Errorf("error checking %s exists: %s", result.image, result.err.Error()))
+			logrus.Error(fmt.Errorf("error checking %s exists: %s", result.image, result.err.Error()))
 		} else if !result.exists {
 			missingImages = append(missingImages, r.imageComponents[result.name])
 		}
+	}
+	if len(missingImages) > 0 {
+		resultsErr = fmt.Errorf("error validating %s images", len(missingImages))
 	}
 	return missingImages, resultsErr
 }
