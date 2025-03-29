@@ -650,6 +650,9 @@ func (*syncerConntrackAPIDummy) ConntrackFrontendHasBackend(ip net.IP, port uint
 	backendPort uint16, proto uint8) bool {
 	return false
 }
+func (*syncerConntrackAPIDummy) ConntrackDestIsService(ip net.IP, port uint16, proto uint8) bool {
+	return true
+}
 
 func (s *mockSyncer) checkState(f func(proxy.DPSyncerState)) {
 	tickC := time.After(10 * time.Second)

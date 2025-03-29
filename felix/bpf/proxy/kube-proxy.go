@@ -261,3 +261,13 @@ func (kp *KubeProxy) ConntrackFrontendHasBackend(ip net.IP, port uint16, backend
 	// We cannot say yet, so do not break anything
 	return true
 }
+
+// ConntrackDestIsService to satisfy conntrack.NATChecker - forwards to syncer.
+func (kp *KubeProxy) ConntrackDestIsService(ip net.IP, port uint16, proto uint8) bool {
+	if kp.syncer != nil {
+		return kp.syncer.ConntrackDestIsService(ip, port, proto)
+	}
+
+	// We cannot say yet, so do not break anything
+	return false
+}

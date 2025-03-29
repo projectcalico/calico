@@ -107,6 +107,10 @@ func (d dummyNATChecker) ConntrackFrontendHasBackend(
 	return d.check(fIP, fPort, bIP, bPort, proto)
 }
 
+func (dummyNATChecker) ConntrackDestIsService(ip net.IP, port uint16, proto uint8) bool {
+	return true
+}
+
 func (dummyNATChecker) ConntrackScanStart() {}
 func (dummyNATChecker) ConntrackScanEnd()   {}
 
