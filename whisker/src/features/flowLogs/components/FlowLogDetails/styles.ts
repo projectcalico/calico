@@ -3,3 +3,9 @@ export const tableStyles = {
     bg: 'tigera-color-surface',
     w: 'full',
 };
+
+export const jsonTabStyles = {
+    overflowY: 'auto',
+    maxHeight: '750px',
+    textWrap: 'wrap',
+};

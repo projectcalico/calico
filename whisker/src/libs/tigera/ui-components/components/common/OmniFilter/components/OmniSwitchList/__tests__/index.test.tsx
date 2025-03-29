@@ -9,6 +9,7 @@ const defaultProps = {
     emptyMessage: '',
     showMoreButton: false,
     isLoadingMore: false,
+    filteredSelectedOptions: [],
 };
 
 describe('OmniSwitchList Component', () => {

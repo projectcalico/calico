@@ -55,6 +55,7 @@ const OmniFilters: React.FC<OmniFiltersProps> = ({
         });
 
     const debounce = useDebouncedCallback();
+    const [isLoading, setIsLoading] = React.useState(false);
 
     return (
         <OmniFilterList
@@ -74,7 +75,7 @@ const OmniFilters: React.FC<OmniFiltersProps> = ({
                     onClear={() => handleClear(filterId)}
                     showOperatorSelect={false}
                     listType='checkbox'
-                    isLoading={omniFilterData[filterId].isLoading}
+                    isLoading={omniFilterData[filterId].isLoading || isLoading}
                     totalItems={omniFilterData[filterId].total}
                     onReady={() =>
                         onRequestFilterData({
@@ -88,9 +89,11 @@ const OmniFilters: React.FC<OmniFiltersProps> = ({
                                 filterParam: filterId as ListOmniFilterParam,
                                 searchOption,
                             });
+                            setIsLoading(false);
                         };
 
                         if (searchOption.length >= 1) {
+                            setIsLoading(true);
                             debounce(searchOption, requestData);
                         } else {
                             requestData();
@@ -99,10 +102,15 @@ const OmniFilters: React.FC<OmniFiltersProps> = ({
                     onRequestMore={(filterId) =>
                         onRequestNextPage(filterId as ListOmniFilterParam)
                     }
+                    showSelectedList
+                    isCreatable
+                    labelSelectedListHeader=''
+                    labelListHeader='Filters'
                 />
             ))}
 
             <PortOmniFilter
+                key='port-omni-filter'
                 port={selectedValues.dest_port?.[0] ?? ''}
                 protocol={selectedValues.protocol?.[0] ?? ''}
                 selectedFilters={[

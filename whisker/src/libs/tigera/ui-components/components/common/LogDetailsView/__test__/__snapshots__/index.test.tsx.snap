@@ -380,7 +380,7 @@ exports[`FlowLogDetails should render 1`] = `
           tabindex="0"
         >
           <div
-            class="containerStyles"
+            class="containerStylesDark"
           >
             <div
               class="_2bkNM"
@@ -390,12 +390,12 @@ exports[`FlowLogDetails should render 1`] = `
                 aria-controls=":jsnvw:1:"
                 aria-expanded="true"
                 aria-label="collapse JSON"
-                class="_oLqym _f10Tu _1MFti _1LId0"
+                class="_3QHg2 _f10Tu _1MFti _1LId0"
                 role="button"
                 tabindex="0"
               />
               <span
-                class="_3uHL6 _3eOF8"
+                class="_gsbQL _3eOF8"
               >
                 {
               </span>
@@ -407,17 +407,17 @@ exports[`FlowLogDetails should render 1`] = `
                   role="listitem"
                 >
                   <span
-                    class="labelStyles"
+                    class="labelStylesDark"
                   >
                     start_time:
                   </span>
                   <span
-                    class="valueStyles"
+                    class="valueStylesDark"
                   >
                     1698940029
                   </span>
                   <span
-                    class="_3uHL6 _3eOF8"
+                    class="_gsbQL _3eOF8"
                   >
                     ,
                   </span>
@@ -427,17 +427,17 @@ exports[`FlowLogDetails should render 1`] = `
                   role="listitem"
                 >
                   <span
-                    class="labelStyles"
+                    class="labelStylesDark"
                   >
                     end_time:
                   </span>
                   <span
-                    class="valueStyles"
+                    class="valueStylesDark"
                   >
                     1698940352
                   </span>
                   <span
-                    class="_3uHL6 _3eOF8"
+                    class="_gsbQL _3eOF8"
                   >
                     ,
                   </span>
@@ -447,17 +447,17 @@ exports[`FlowLogDetails should render 1`] = `
                   role="listitem"
                 >
                   <span
-                    class="labelStyles"
+                    class="labelStylesDark"
                   >
                     source_ip:
                   </span>
                   <span
-                    class="valueStyles"
+                    class="valueStylesDark"
                   >
                     null
                   </span>
                   <span
-                    class="_3uHL6 _3eOF8"
+                    class="_gsbQL _3eOF8"
                   >
                     ,
                   </span>
@@ -467,17 +467,17 @@ exports[`FlowLogDetails should render 1`] = `
                   role="listitem"
                 >
                   <span
-                    class="labelStyles"
+                    class="labelStylesDark"
                   >
                     source_namespace:
                   </span>
                   <span
-                    class="stringStyles"
+                    class="stringStylesDark"
                   >
                     "-"
                   </span>
                   <span
-                    class="_3uHL6 _3eOF8"
+                    class="_gsbQL _3eOF8"
                   >
                     ,
                   </span>
@@ -487,17 +487,17 @@ exports[`FlowLogDetails should render 1`] = `
                   role="listitem"
                 >
                   <span
-                    class="labelStyles"
+                    class="labelStylesDark"
                   >
                     source_name_aggr:
                   </span>
                   <span
-                    class="stringStyles"
+                    class="stringStylesDark"
                   >
                     "prometheus-calico-node-prometheus-*"
                   </span>
                   <span
-                    class="_3uHL6 _3eOF8"
+                    class="_gsbQL _3eOF8"
                   >
                     ,
                   </span>
@@ -507,17 +507,17 @@ exports[`FlowLogDetails should render 1`] = `
                   role="listitem"
                 >
                   <span
-                    class="labelStyles"
+                    class="labelStylesDark"
                   >
                     source_name:
                   </span>
                   <span
-                    class="stringStyles"
+                    class="stringStylesDark"
                   >
                     "tigera-prometheus"
                   </span>
                   <span
-                    class="_3uHL6 _3eOF8"
+                    class="_gsbQL _3eOF8"
                   >
                     ,
                   </span>
@@ -527,17 +527,17 @@ exports[`FlowLogDetails should render 1`] = `
                   role="listitem"
                 >
                   <span
-                    class="labelStyles"
+                    class="labelStylesDark"
                   >
                     nat_outgoing_ports:
                   </span>
                   <span
-                    class="valueStyles"
+                    class="valueStylesDark"
                   >
                     null
                   </span>
                   <span
-                    class="_3uHL6 _3eOF8"
+                    class="_gsbQL _3eOF8"
                   >
                     ,
                   </span>
@@ -547,17 +547,17 @@ exports[`FlowLogDetails should render 1`] = `
                   role="listitem"
                 >
                   <span
-                    class="labelStyles"
+                    class="labelStylesDark"
                   >
                     source_port:
                   </span>
                   <span
-                    class="valueStyles"
+                    class="valueStylesDark"
                   >
                     null
                   </span>
                   <span
-                    class="_3uHL6 _3eOF8"
+                    class="_gsbQL _3eOF8"
                   >
                     ,
                   </span>
@@ -567,17 +567,17 @@ exports[`FlowLogDetails should render 1`] = `
                   role="listitem"
                 >
                   <span
-                    class="labelStyles"
+                    class="labelStylesDark"
                   >
                     source_type:
                   </span>
                   <span
-                    class="stringStyles"
+                    class="stringStylesDark"
                   >
                     "wep"
                   </span>
                   <span
-                    class="_3uHL6 _3eOF8"
+                    class="_gsbQL _3eOF8"
                   >
                     ,
                   </span>
@@ -590,17 +590,17 @@ exports[`FlowLogDetails should render 1`] = `
                     aria-controls=":jsnvw:2:"
                     aria-expanded="true"
                     aria-label="collapse JSON"
-                    class="_oLqym _f10Tu _1MFti _1LId0"
+                    class="_3QHg2 _f10Tu _1MFti _1LId0"
                     role="button"
                     tabindex="0"
                   />
                   <span
-                    class="labelStyles"
+                    class="labelStylesDark"
                   >
                     source_labels:
                   </span>
                   <span
-                    class="_3uHL6 _3eOF8"
+                    class="_gsbQL _3eOF8"
                   >
                     {
                   </span>
@@ -615,17 +615,17 @@ exports[`FlowLogDetails should render 1`] = `
                         aria-controls=":jsnvw:3:"
                         aria-expanded="true"
                         aria-label="collapse JSON"
-                        class="_oLqym _f10Tu _1MFti _1LId0"
+                        class="_3QHg2 _f10Tu _1MFti _1LId0"
                         role="button"
                         tabindex="0"
                       />
                       <span
-                        class="labelStyles"
+                        class="labelStylesDark"
                       >
                         labels:
                       </span>
                       <span
-                        class="_3uHL6 _3eOF8"
+                        class="_gsbQL _3eOF8"
                       >
                         [
                       </span>
@@ -637,12 +637,12 @@ exports[`FlowLogDetails should render 1`] = `
                           role="listitem"
                         >
                           <span
-                            class="stringStyles"
+                            class="stringStylesDark"
                           >
                             "app.kubernetes.io/managed-by=prometheus-operator"
                           </span>
                           <span
-                            class="_3uHL6 _3eOF8"
+                            class="_gsbQL _3eOF8"
                           >
                             ,
                           </span>
@@ -652,12 +652,12 @@ exports[`FlowLogDetails should render 1`] = `
                           role="listitem"
                         >
                           <span
-                            class="stringStyles"
+                            class="stringStylesDark"
                           >
                             "app.kubernetes.io/version=2.45.0"
                           </span>
                           <span
-                            class="_3uHL6 _3eOF8"
+                            class="_gsbQL _3eOF8"
                           >
                             ,
                           </span>
@@ -667,12 +667,12 @@ exports[`FlowLogDetails should render 1`] = `
                           role="listitem"
                         >
                           <span
-                            class="stringStyles"
+                            class="stringStylesDark"
                           >
                             "app.kubernetes.io/instance=calico-node-prometheus"
                           </span>
                           <span
-                            class="_3uHL6 _3eOF8"
+                            class="_gsbQL _3eOF8"
                           >
                             ,
                           </span>
@@ -682,12 +682,12 @@ exports[`FlowLogDetails should render 1`] = `
                           role="listitem"
                         >
                           <span
-                            class="stringStyles"
+                            class="stringStylesDark"
                           >
                             "app.kubernetes.io/name=prometheus"
                           </span>
                           <span
-                            class="_3uHL6 _3eOF8"
+                            class="_gsbQL _3eOF8"
                           >
                             ,
                           </span>
@@ -697,12 +697,12 @@ exports[`FlowLogDetails should render 1`] = `
                           role="listitem"
                         >
                           <span
-                            class="stringStyles"
+                            class="stringStylesDark"
                           >
                             "statefulset.kubernetes.io/pod-name=prometheus-calico-node-prometheus-0"
                           </span>
                           <span
-                            class="_3uHL6 _3eOF8"
+                            class="_gsbQL _3eOF8"
                           >
                             ,
                           </span>
@@ -712,12 +712,12 @@ exports[`FlowLogDetails should render 1`] = `
                           role="listitem"
                         >
                           <span
-                            class="stringStyles"
+                            class="stringStylesDark"
                           >
                             "prometheus=calico-node-prometheus"
                           </span>
                           <span
-                            class="_3uHL6 _3eOF8"
+                            class="_gsbQL _3eOF8"
                           >
                             ,
                           </span>
@@ -727,12 +727,12 @@ exports[`FlowLogDetails should render 1`] = `
                           role="listitem"
                         >
                           <span
-                            class="stringStyles"
+                            class="stringStylesDark"
                           >
                             "controller-revision-hash=prometheus-calico-node-prometheus-858dcf7b65"
                           </span>
                           <span
-                            class="_3uHL6 _3eOF8"
+                            class="_gsbQL _3eOF8"
                           >
                             ,
                           </span>
@@ -742,12 +742,12 @@ exports[`FlowLogDetails should render 1`] = `
                           role="listitem"
                         >
                           <span
-                            class="stringStyles"
+                            class="stringStylesDark"
                           >
                             "operator.prometheus.io/shard=0"
                           </span>
                           <span
-                            class="_3uHL6 _3eOF8"
+                            class="_gsbQL _3eOF8"
                           >
                             ,
                           </span>
@@ -757,26 +757,26 @@ exports[`FlowLogDetails should render 1`] = `
                           role="listitem"
                         >
                           <span
-                            class="stringStyles"
+                            class="stringStylesDark"
                           >
                             "operator.prometheus.io/name=calico-node-prometheus"
                           </span>
                         </div>
                       </div>
                       <span
-                        class="_3uHL6 _3eOF8"
+                        class="_gsbQL _3eOF8"
                       >
                         ]
                       </span>
                     </div>
                   </div>
                   <span
-                    class="_3uHL6 _3eOF8"
+                    class="_gsbQL _3eOF8"
                   >
                     }
                   </span>
                   <span
-                    class="_3uHL6 _3eOF8"
+                    class="_gsbQL _3eOF8"
                   >
                     ,
                   </span>
@@ -786,17 +786,17 @@ exports[`FlowLogDetails should render 1`] = `
                   role="listitem"
                 >
                   <span
-                    class="labelStyles"
+                    class="labelStylesDark"
                   >
                     dest_ip:
                   </span>
                   <span
-                    class="valueStyles"
+                    class="valueStylesDark"
                   >
                     null
                   </span>
                   <span
-                    class="_3uHL6 _3eOF8"
+                    class="_gsbQL _3eOF8"
                   >
                     ,
                   </span>
@@ -806,17 +806,17 @@ exports[`FlowLogDetails should render 1`] = `
                   role="listitem"
                 >
                   <span
-                    class="labelStyles"
+                    class="labelStylesDark"
                   >
                     dest_namespace:
                   </span>
                   <span
-                    class="stringStyles"
+                    class="stringStylesDark"
                   >
                     "-"
                   </span>
                   <span
-                    class="_3uHL6 _3eOF8"
+                    class="_gsbQL _3eOF8"
                   >
                     ,
                   </span>
@@ -826,17 +826,17 @@ exports[`FlowLogDetails should render 1`] = `
                   role="listitem"
                 >
                   <span
-                    class="labelStyles"
+                    class="labelStylesDark"
                   >
                     dest_name_aggr:
                   </span>
                   <span
-                    class="stringStyles"
+                    class="stringStylesDark"
                   >
                     "fluentd-node-*"
                   </span>
                   <span
-                    class="_3uHL6 _3eOF8"
+                    class="_gsbQL _3eOF8"
                   >
                     ,
                   </span>
@@ -846,17 +846,17 @@ exports[`FlowLogDetails should render 1`] = `
                   role="listitem"
                 >
                   <span
-                    class="labelStyles"
+                    class="labelStylesDark"
                   >
                     dest_name:
                   </span>
                   <span
-                    class="stringStyles"
+                    class="stringStylesDark"
                   >
                     "tigera-fluentd"
                   </span>
                   <span
-                    class="_3uHL6 _3eOF8"
+                    class="_gsbQL _3eOF8"
                   >
                     ,
                   </span>
@@ -866,17 +866,17 @@ exports[`FlowLogDetails should render 1`] = `
                   role="listitem"
                 >
                   <span
-                    class="labelStyles"
+                    class="labelStylesDark"
                   >
                     dest_port:
                   </span>
                   <span
-                    class="valueStyles"
+                    class="valueStylesDark"
                   >
                     9081
                   </span>
                   <span
-                    class="_3uHL6 _3eOF8"
+                    class="_gsbQL _3eOF8"
                   >
                     ,
                   </span>
@@ -886,17 +886,17 @@ exports[`FlowLogDetails should render 1`] = `
                   role="listitem"
                 >
                   <span
-                    class="labelStyles"
+                    class="labelStylesDark"
                   >
                     dest_type:
                   </span>
                   <span
-                    class="stringStyles"
+                    class="stringStylesDark"
                   >
                     "wep"
                   </span>
                   <span
-                    class="_3uHL6 _3eOF8"
+                    class="_gsbQL _3eOF8"
                   >
                     ,
                   </span>
@@ -909,17 +909,17 @@ exports[`FlowLogDetails should render 1`] = `
                     aria-controls=":jsnvw:4:"
                     aria-expanded="true"
                     aria-label="collapse JSON"
-                    class="_oLqym _f10Tu _1MFti _1LId0"
+                    class="_3QHg2 _f10Tu _1MFti _1LId0"
                     role="button"
                     tabindex="0"
                   />
                   <span
-                    class="labelStyles"
+                    class="labelStylesDark"
                   >
                     dest_labels:
                   </span>
                   <span
-                    class="_3uHL6 _3eOF8"
+                    class="_gsbQL _3eOF8"
                   >
                     {
                   </span>
@@ -934,17 +934,17 @@ exports[`FlowLogDetails should render 1`] = `
                         aria-controls=":jsnvw:5:"
                         aria-expanded="true"
                         aria-label="collapse JSON"
-                        class="_oLqym _f10Tu _1MFti _1LId0"
+                        class="_3QHg2 _f10Tu _1MFti _1LId0"
                         role="button"
                         tabindex="0"
                       />
                       <span
-                        class="labelStyles"
+                        class="labelStylesDark"
                       >
                         labels:
                       </span>
                       <span
-                        class="_3uHL6 _3eOF8"
+                        class="_gsbQL _3eOF8"
                       >
                         [
                       </span>
@@ -956,12 +956,12 @@ exports[`FlowLogDetails should render 1`] = `
                           role="listitem"
                         >
                           <span
-                            class="stringStyles"
+                            class="stringStylesDark"
                           >
                             "app.kubernetes.io/name=fluentd-node"
                           </span>
                           <span
-                            class="_3uHL6 _3eOF8"
+                            class="_gsbQL _3eOF8"
                           >
                             ,
                           </span>
@@ -971,12 +971,12 @@ exports[`FlowLogDetails should render 1`] = `
                           role="listitem"
                         >
                           <span
-                            class="stringStyles"
+                            class="stringStylesDark"
                           >
                             "controller-revision-hash=7c887f95cb"
                           </span>
                           <span
-                            class="_3uHL6 _3eOF8"
+                            class="_gsbQL _3eOF8"
                           >
                             ,
                           </span>
@@ -986,12 +986,12 @@ exports[`FlowLogDetails should render 1`] = `
                           role="listitem"
                         >
                           <span
-                            class="stringStyles"
+                            class="stringStylesDark"
                           >
                             "k8s-app=fluentd-node"
                           </span>
                           <span
-                            class="_3uHL6 _3eOF8"
+                            class="_gsbQL _3eOF8"
                           >
                             ,
                           </span>
@@ -1001,26 +1001,26 @@ exports[`FlowLogDetails should render 1`] = `
                           role="listitem"
                         >
                           <span
-                            class="stringStyles"
+                            class="stringStylesDark"
                           >
                             "pod-template-generation=1"
                           </span>
                         </div>
                       </div>
                       <span
-                        class="_3uHL6 _3eOF8"
+                        class="_gsbQL _3eOF8"
                       >
                         ]
                       </span>
                     </div>
                   </div>
                   <span
-                    class="_3uHL6 _3eOF8"
+                    class="_gsbQL _3eOF8"
                   >
                     }
                   </span>
                   <span
-                    class="_3uHL6 _3eOF8"
+                    class="_gsbQL _3eOF8"
                   >
                     ,
                   </span>
@@ -1030,17 +1030,17 @@ exports[`FlowLogDetails should render 1`] = `
                   role="listitem"
                 >
                   <span
-                    class="labelStyles"
+                    class="labelStylesDark"
                   >
                     dest_service_namespace:
                   </span>
                   <span
-                    class="stringStyles"
+                    class="stringStylesDark"
                   >
                     "-"
                   </span>
                   <span
-                    class="_3uHL6 _3eOF8"
+                    class="_gsbQL _3eOF8"
                   >
                     ,
                   </span>
@@ -1050,17 +1050,17 @@ exports[`FlowLogDetails should render 1`] = `
                   role="listitem"
                 >
                   <span
-                    class="labelStyles"
+                    class="labelStylesDark"
                   >
                     dest_service_name:
                   </span>
                   <span
-                    class="stringStyles"
+                    class="stringStylesDark"
                   >
                     "-"
                   </span>
                   <span
-                    class="_3uHL6 _3eOF8"
+                    class="_gsbQL _3eOF8"
                   >
                     ,
                   </span>
@@ -1070,17 +1070,17 @@ exports[`FlowLogDetails should render 1`] = `
                   role="listitem"
                 >
                   <span
-                    class="labelStyles"
+                    class="labelStylesDark"
                   >
                     dest_service_port:
                   </span>
                   <span
-                    class="stringStyles"
+                    class="stringStylesDark"
                   >
                     "-"
                   </span>
                   <span
-                    class="_3uHL6 _3eOF8"
+                    class="_gsbQL _3eOF8"
                   >
                     ,
                   </span>
@@ -1090,17 +1090,17 @@ exports[`FlowLogDetails should render 1`] = `
                   role="listitem"
                 >
                   <span
-                    class="labelStyles"
+                    class="labelStylesDark"
                   >
                     dest_service_port_num:
                   </span>
                   <span
-                    class="valueStyles"
+                    class="valueStylesDark"
                   >
                     null
                   </span>
                   <span
-                    class="_3uHL6 _3eOF8"
+                    class="_gsbQL _3eOF8"
                   >
                     ,
                   </span>
@@ -1110,19 +1110,19 @@ exports[`FlowLogDetails should render 1`] = `
                   role="listitem"
                 >
                   <span
-                    class="labelStyles"
+                    class="labelStylesDark"
                   >
                     dest_domains:
                   </span>
                   <span
-                    class="valueStyles"
+                    class="valueStylesDark"
                   >
                     null
                   </span>
                 </div>
               </div>
               <span
-                class="_3uHL6 _3eOF8"
+                class="_gsbQL _3eOF8"
               >
                 }
               </span>
@@ -1519,7 +1519,7 @@ exports[`FlowLogDetails should render json 1`] = `
           tabindex="0"
         >
           <div
-            class="containerStyles"
+            class="containerStylesDark"
           >
             <div
               class="_2bkNM"
@@ -1529,12 +1529,12 @@ exports[`FlowLogDetails should render json 1`] = `
                 aria-controls=":jsnvw:6:"
                 aria-expanded="true"
                 aria-label="collapse JSON"
-                class="_oLqym _f10Tu _1MFti _1LId0"
+                class="_3QHg2 _f10Tu _1MFti _1LId0"
                 role="button"
                 tabindex="0"
               />
               <span
-                class="_3uHL6 _3eOF8"
+                class="_gsbQL _3eOF8"
               >
                 {
               </span>
@@ -1546,17 +1546,17 @@ exports[`FlowLogDetails should render json 1`] = `
                   role="listitem"
                 >
                   <span
-                    class="labelStyles"
+                    class="labelStylesDark"
                   >
                     start_time:
                   </span>
                   <span
-                    class="valueStyles"
+                    class="valueStylesDark"
                   >
                     1698940029
                   </span>
                   <span
-                    class="_3uHL6 _3eOF8"
+                    class="_gsbQL _3eOF8"
                   >
                     ,
                   </span>
@@ -1566,17 +1566,17 @@ exports[`FlowLogDetails should render json 1`] = `
                   role="listitem"
                 >
                   <span
-                    class="labelStyles"
+                    class="labelStylesDark"
                   >
                     end_time:
                   </span>
                   <span
-                    class="valueStyles"
+                    class="valueStylesDark"
                   >
                     1698940352
                   </span>
                   <span
-                    class="_3uHL6 _3eOF8"
+                    class="_gsbQL _3eOF8"
                   >
                     ,
                   </span>
@@ -1586,17 +1586,17 @@ exports[`FlowLogDetails should render json 1`] = `
                   role="listitem"
                 >
                   <span
-                    class="labelStyles"
+                    class="labelStylesDark"
                   >
                     source_ip:
                   </span>
                   <span
-                    class="valueStyles"
+                    class="valueStylesDark"
                   >
                     null
                   </span>
                   <span
-                    class="_3uHL6 _3eOF8"
+                    class="_gsbQL _3eOF8"
                   >
                     ,
                   </span>
@@ -1606,17 +1606,17 @@ exports[`FlowLogDetails should render json 1`] = `
                   role="listitem"
                 >
                   <span
-                    class="labelStyles"
+                    class="labelStylesDark"
                   >
                     source_namespace:
                   </span>
                   <span
-                    class="stringStyles"
+                    class="stringStylesDark"
                   >
                     "-"
                   </span>
                   <span
-                    class="_3uHL6 _3eOF8"
+                    class="_gsbQL _3eOF8"
                   >
                     ,
                   </span>
@@ -1626,17 +1626,17 @@ exports[`FlowLogDetails should render json 1`] = `
                   role="listitem"
                 >
                   <span
-                    class="labelStyles"
+                    class="labelStylesDark"
                   >
                     source_name_aggr:
                   </span>
                   <span
-                    class="stringStyles"
+                    class="stringStylesDark"
                   >
                     "prometheus-calico-node-prometheus-*"
                   </span>
                   <span
-                    class="_3uHL6 _3eOF8"
+                    class="_gsbQL _3eOF8"
                   >
                     ,
                   </span>
@@ -1646,17 +1646,17 @@ exports[`FlowLogDetails should render json 1`] = `
                   role="listitem"
                 >
                   <span
-                    class="labelStyles"
+                    class="labelStylesDark"
                   >
                     source_name:
                   </span>
                   <span
-                    class="stringStyles"
+                    class="stringStylesDark"
                   >
                     "tigera-prometheus"
                   </span>
                   <span
-                    class="_3uHL6 _3eOF8"
+                    class="_gsbQL _3eOF8"
                   >
                     ,
                   </span>
@@ -1666,17 +1666,17 @@ exports[`FlowLogDetails should render json 1`] = `
                   role="listitem"
                 >
                   <span
-                    class="labelStyles"
+                    class="labelStylesDark"
                   >
                     nat_outgoing_ports:
                   </span>
                   <span
-                    class="valueStyles"
+                    class="valueStylesDark"
                   >
                     null
                   </span>
                   <span
-                    class="_3uHL6 _3eOF8"
+                    class="_gsbQL _3eOF8"
                   >
                     ,
                   </span>
@@ -1686,17 +1686,17 @@ exports[`FlowLogDetails should render json 1`] = `
                   role="listitem"
                 >
                   <span
-                    class="labelStyles"
+                    class="labelStylesDark"
                   >
                     source_port:
                   </span>
                   <span
-                    class="valueStyles"
+                    class="valueStylesDark"
                   >
                     null
                   </span>
                   <span
-                    class="_3uHL6 _3eOF8"
+                    class="_gsbQL _3eOF8"
                   >
                     ,
                   </span>
@@ -1706,17 +1706,17 @@ exports[`FlowLogDetails should render json 1`] = `
                   role="listitem"
                 >
                   <span
-                    class="labelStyles"
+                    class="labelStylesDark"
                   >
                     source_type:
                   </span>
                   <span
-                    class="stringStyles"
+                    class="stringStylesDark"
                   >
                     "wep"
                   </span>
                   <span
-                    class="_3uHL6 _3eOF8"
+                    class="_gsbQL _3eOF8"
                   >
                     ,
                   </span>
@@ -1729,17 +1729,17 @@ exports[`FlowLogDetails should render json 1`] = `
                     aria-controls=":jsnvw:7:"
                     aria-expanded="true"
                     aria-label="collapse JSON"
-                    class="_oLqym _f10Tu _1MFti _1LId0"
+                    class="_3QHg2 _f10Tu _1MFti _1LId0"
                     role="button"
                     tabindex="0"
                   />
                   <span
-                    class="labelStyles"
+                    class="labelStylesDark"
                   >
                     source_labels:
                   </span>
                   <span
-                    class="_3uHL6 _3eOF8"
+                    class="_gsbQL _3eOF8"
                   >
                     {
                   </span>
@@ -1754,17 +1754,17 @@ exports[`FlowLogDetails should render json 1`] = `
                         aria-controls=":jsnvw:8:"
                         aria-expanded="true"
                         aria-label="collapse JSON"
-                        class="_oLqym _f10Tu _1MFti _1LId0"
+                        class="_3QHg2 _f10Tu _1MFti _1LId0"
                         role="button"
                         tabindex="0"
                       />
                       <span
-                        class="labelStyles"
+                        class="labelStylesDark"
                       >
                         labels:
                       </span>
                       <span
-                        class="_3uHL6 _3eOF8"
+                        class="_gsbQL _3eOF8"
                       >
                         [
                       </span>
@@ -1776,12 +1776,12 @@ exports[`FlowLogDetails should render json 1`] = `
                           role="listitem"
                         >
                           <span
-                            class="stringStyles"
+                            class="stringStylesDark"
                           >
                             "app.kubernetes.io/managed-by=prometheus-operator"
                           </span>
                           <span
-                            class="_3uHL6 _3eOF8"
+                            class="_gsbQL _3eOF8"
                           >
                             ,
                           </span>
@@ -1791,12 +1791,12 @@ exports[`FlowLogDetails should render json 1`] = `
                           role="listitem"
                         >
                           <span
-                            class="stringStyles"
+                            class="stringStylesDark"
                           >
                             "app.kubernetes.io/version=2.45.0"
                           </span>
                           <span
-                            class="_3uHL6 _3eOF8"
+                            class="_gsbQL _3eOF8"
                           >
                             ,
                           </span>
@@ -1806,12 +1806,12 @@ exports[`FlowLogDetails should render json 1`] = `
                           role="listitem"
                         >
                           <span
-                            class="stringStyles"
+                            class="stringStylesDark"
                           >
                             "app.kubernetes.io/instance=calico-node-prometheus"
                           </span>
                           <span
-                            class="_3uHL6 _3eOF8"
+                            class="_gsbQL _3eOF8"
                           >
                             ,
                           </span>
@@ -1821,12 +1821,12 @@ exports[`FlowLogDetails should render json 1`] = `
                           role="listitem"
                         >
                           <span
-                            class="stringStyles"
+                            class="stringStylesDark"
                           >
                             "app.kubernetes.io/name=prometheus"
                           </span>
                           <span
-                            class="_3uHL6 _3eOF8"
+                            class="_gsbQL _3eOF8"
                           >
                             ,
                           </span>
@@ -1836,12 +1836,12 @@ exports[`FlowLogDetails should render json 1`] = `
                           role="listitem"
                         >
                           <span
-                            class="stringStyles"
+                            class="stringStylesDark"
                           >
                             "statefulset.kubernetes.io/pod-name=prometheus-calico-node-prometheus-0"
                           </span>
                           <span
-                            class="_3uHL6 _3eOF8"
+                            class="_gsbQL _3eOF8"
                           >
                             ,
                           </span>
@@ -1851,12 +1851,12 @@ exports[`FlowLogDetails should render json 1`] = `
                           role="listitem"
                         >
                           <span
-                            class="stringStyles"
+                            class="stringStylesDark"
                           >
                             "prometheus=calico-node-prometheus"
                           </span>
                           <span
-                            class="_3uHL6 _3eOF8"
+                            class="_gsbQL _3eOF8"
                           >
                             ,
                           </span>
@@ -1866,12 +1866,12 @@ exports[`FlowLogDetails should render json 1`] = `
                           role="listitem"
                         >
                           <span
-                            class="stringStyles"
+                            class="stringStylesDark"
                           >
                             "controller-revision-hash=prometheus-calico-node-prometheus-858dcf7b65"
                           </span>
                           <span
-                            class="_3uHL6 _3eOF8"
+                            class="_gsbQL _3eOF8"
                           >
                             ,
                           </span>
@@ -1881,12 +1881,12 @@ exports[`FlowLogDetails should render json 1`] = `
                           role="listitem"
                         >
                           <span
-                            class="stringStyles"
+                            class="stringStylesDark"
                           >
                             "operator.prometheus.io/shard=0"
                           </span>
                           <span
-                            class="_3uHL6 _3eOF8"
+                            class="_gsbQL _3eOF8"
                           >
                             ,
                           </span>
@@ -1896,26 +1896,26 @@ exports[`FlowLogDetails should render json 1`] = `
                           role="listitem"
                         >
                           <span
-                            class="stringStyles"
+                            class="stringStylesDark"
                           >
                             "operator.prometheus.io/name=calico-node-prometheus"
                           </span>
                         </div>
                       </div>
                       <span
-                        class="_3uHL6 _3eOF8"
+                        class="_gsbQL _3eOF8"
                       >
                         ]
                       </span>
                     </div>
                   </div>
                   <span
-                    class="_3uHL6 _3eOF8"
+                    class="_gsbQL _3eOF8"
                   >
                     }
                   </span>
                   <span
-                    class="_3uHL6 _3eOF8"
+                    class="_gsbQL _3eOF8"
                   >
                     ,
                   </span>
@@ -1925,17 +1925,17 @@ exports[`FlowLogDetails should render json 1`] = `
                   role="listitem"
                 >
                   <span
-                    class="labelStyles"
+                    class="labelStylesDark"
                   >
                     dest_ip:
                   </span>
                   <span
-                    class="valueStyles"
+                    class="valueStylesDark"
                   >
                     null
                   </span>
                   <span
-                    class="_3uHL6 _3eOF8"
+                    class="_gsbQL _3eOF8"
                   >
                     ,
                   </span>
@@ -1945,17 +1945,17 @@ exports[`FlowLogDetails should render json 1`] = `
                   role="listitem"
                 >
                   <span
-                    class="labelStyles"
+                    class="labelStylesDark"
                   >
                     dest_namespace:
                   </span>
                   <span
-                    class="stringStyles"
+                    class="stringStylesDark"
                   >
                     "-"
                   </span>
                   <span
-                    class="_3uHL6 _3eOF8"
+                    class="_gsbQL _3eOF8"
                   >
                     ,
                   </span>
@@ -1965,17 +1965,17 @@ exports[`FlowLogDetails should render json 1`] = `
                   role="listitem"
                 >
                   <span
-                    class="labelStyles"
+                    class="labelStylesDark"
                   >
                     dest_name_aggr:
                   </span>
                   <span
-                    class="stringStyles"
+                    class="stringStylesDark"
                   >
                     "fluentd-node-*"
                   </span>
                   <span
-                    class="_3uHL6 _3eOF8"
+                    class="_gsbQL _3eOF8"
                   >
                     ,
                   </span>
@@ -1985,17 +1985,17 @@ exports[`FlowLogDetails should render json 1`] = `
                   role="listitem"
                 >
                   <span
-                    class="labelStyles"
+                    class="labelStylesDark"
                   >
                     dest_name:
                   </span>
                   <span
-                    class="stringStyles"
+                    class="stringStylesDark"
                   >
                     "tigera-fluentd"
                   </span>
                   <span
-                    class="_3uHL6 _3eOF8"
+                    class="_gsbQL _3eOF8"
                   >
                     ,
                   </span>
@@ -2005,17 +2005,17 @@ exports[`FlowLogDetails should render json 1`] = `
                   role="listitem"
                 >
                   <span
-                    class="labelStyles"
+                    class="labelStylesDark"
                   >
                     dest_port:
                   </span>
                   <span
-                    class="valueStyles"
+                    class="valueStylesDark"
                   >
                     9081
                   </span>
                   <span
-                    class="_3uHL6 _3eOF8"
+                    class="_gsbQL _3eOF8"
                   >
                     ,
                   </span>
@@ -2025,17 +2025,17 @@ exports[`FlowLogDetails should render json 1`] = `
                   role="listitem"
                 >
                   <span
-                    class="labelStyles"
+                    class="labelStylesDark"
                   >
                     dest_type:
                   </span>
                   <span
-                    class="stringStyles"
+                    class="stringStylesDark"
                   >
                     "wep"
                   </span>
                   <span
-                    class="_3uHL6 _3eOF8"
+                    class="_gsbQL _3eOF8"
                   >
                     ,
                   </span>
@@ -2048,17 +2048,17 @@ exports[`FlowLogDetails should render json 1`] = `
                     aria-controls=":jsnvw:9:"
                     aria-expanded="true"
                     aria-label="collapse JSON"
-                    class="_oLqym _f10Tu _1MFti _1LId0"
+                    class="_3QHg2 _f10Tu _1MFti _1LId0"
                     role="button"
                     tabindex="0"
                   />
                   <span
-                    class="labelStyles"
+                    class="labelStylesDark"
                   >
                     dest_labels:
                   </span>
                   <span
-                    class="_3uHL6 _3eOF8"
+                    class="_gsbQL _3eOF8"
                   >
                     {
                   </span>
@@ -2073,17 +2073,17 @@ exports[`FlowLogDetails should render json 1`] = `
                         aria-controls=":jsnvw:10:"
                         aria-expanded="true"
                         aria-label="collapse JSON"
-                        class="_oLqym _f10Tu _1MFti _1LId0"
+                        class="_3QHg2 _f10Tu _1MFti _1LId0"
                         role="button"
                         tabindex="0"
                       />
                       <span
-                        class="labelStyles"
+                        class="labelStylesDark"
                       >
                         labels:
                       </span>
                       <span
-                        class="_3uHL6 _3eOF8"
+                        class="_gsbQL _3eOF8"
                       >
                         [
                       </span>
@@ -2095,12 +2095,12 @@ exports[`FlowLogDetails should render json 1`] = `
                           role="listitem"
                         >
                           <span
-                            class="stringStyles"
+                            class="stringStylesDark"
                           >
                             "app.kubernetes.io/name=fluentd-node"
                           </span>
                           <span
-                            class="_3uHL6 _3eOF8"
+                            class="_gsbQL _3eOF8"
                           >
                             ,
                           </span>
@@ -2110,12 +2110,12 @@ exports[`FlowLogDetails should render json 1`] = `
                           role="listitem"
                         >
                           <span
-                            class="stringStyles"
+                            class="stringStylesDark"
                           >
                             "controller-revision-hash=7c887f95cb"
                           </span>
                           <span
-                            class="_3uHL6 _3eOF8"
+                            class="_gsbQL _3eOF8"
                           >
                             ,
                           </span>
@@ -2125,12 +2125,12 @@ exports[`FlowLogDetails should render json 1`] = `
                           role="listitem"
                         >
                           <span
-                            class="stringStyles"
+                            class="stringStylesDark"
                           >
                             "k8s-app=fluentd-node"
                           </span>
                           <span
-                            class="_3uHL6 _3eOF8"
+                            class="_gsbQL _3eOF8"
                           >
                             ,
                           </span>
@@ -2140,26 +2140,26 @@ exports[`FlowLogDetails should render json 1`] = `
                           role="listitem"
                         >
                           <span
-                            class="stringStyles"
+                            class="stringStylesDark"
                           >
                             "pod-template-generation=1"
                           </span>
                         </div>
                       </div>
                       <span
-                        class="_3uHL6 _3eOF8"
+                        class="_gsbQL _3eOF8"
                       >
                         ]
                       </span>
                     </div>
                   </div>
                   <span
-                    class="_3uHL6 _3eOF8"
+                    class="_gsbQL _3eOF8"
                   >
                     }
                   </span>
                   <span
-                    class="_3uHL6 _3eOF8"
+                    class="_gsbQL _3eOF8"
                   >
                     ,
                   </span>
@@ -2169,17 +2169,17 @@ exports[`FlowLogDetails should render json 1`] = `
                   role="listitem"
                 >
                   <span
-                    class="labelStyles"
+                    class="labelStylesDark"
                   >
                     dest_service_namespace:
                   </span>
                   <span
-                    class="stringStyles"
+                    class="stringStylesDark"
                   >
                     "-"
                   </span>
                   <span
-                    class="_3uHL6 _3eOF8"
+                    class="_gsbQL _3eOF8"
                   >
                     ,
                   </span>
@@ -2189,17 +2189,17 @@ exports[`FlowLogDetails should render json 1`] = `
                   role="listitem"
                 >
                   <span
-                    class="labelStyles"
+                    class="labelStylesDark"
                   >
                     dest_service_name:
                   </span>
                   <span
-                    class="stringStyles"
+                    class="stringStylesDark"
                   >
                     "-"
                   </span>
                   <span
-                    class="_3uHL6 _3eOF8"
+                    class="_gsbQL _3eOF8"
                   >
                     ,
                   </span>
@@ -2209,17 +2209,17 @@ exports[`FlowLogDetails should render json 1`] = `
                   role="listitem"
                 >
                   <span
-                    class="labelStyles"
+                    class="labelStylesDark"
                   >
                     dest_service_port:
                   </span>
                   <span
-                    class="stringStyles"
+                    class="stringStylesDark"
                   >
                     "-"
                   </span>
                   <span
-                    class="_3uHL6 _3eOF8"
+                    class="_gsbQL _3eOF8"
                   >
                     ,
                   </span>
@@ -2229,17 +2229,17 @@ exports[`FlowLogDetails should render json 1`] = `
                   role="listitem"
                 >
                   <span
-                    class="labelStyles"
+                    class="labelStylesDark"
                   >
                     dest_service_port_num:
                   </span>
                   <span
-                    class="valueStyles"
+                    class="valueStylesDark"
                   >
                     null
                   </span>
                   <span
-                    class="_3uHL6 _3eOF8"
+                    class="_gsbQL _3eOF8"
                   >
                     ,
                   </span>
@@ -2249,19 +2249,19 @@ exports[`FlowLogDetails should render json 1`] = `
                   role="listitem"
                 >
                   <span
-                    class="labelStyles"
+                    class="labelStylesDark"
                   >
                     dest_domains:
                   </span>
                   <span
-                    class="valueStyles"
+                    class="valueStylesDark"
                   >
                     null
                   </span>
                 </div>
               </div>
               <span
-                class="_3uHL6 _3eOF8"
+                class="_gsbQL _3eOF8"
               >
                 }
               </span>

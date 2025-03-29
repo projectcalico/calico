@@ -339,4 +339,65 @@ describe('OmniFilter', () => {
 
         expect(screen.getByText('mock selected list')).toBeInTheDocument();
     });
+
+    it('should add a custom filter option', () => {
+        const onChange = jest.fn();
+        const onRequestSearch = jest.fn();
+        const search = 'creatable';
+        render(
+            <OmniFilter
+                {...defaultProps}
+                onChange={onChange}
+                filters={[]}
+                showOperatorSelect={false}
+                isCreatable
+                onRequestSearch={onRequestSearch}
+            />,
+        );
+
+        openPopover();
+
+        fireEvent.change(screen.getByTestId(`${testId}-search-filter`), {
+            target: { value: search },
+        });
+
+        fireEvent.click(
+            screen.getByRole('button', { name: `Add "${search}"` }),
+        );
+
+        expect(onChange).toHaveBeenCalledWith({
+            filterId,
+            filterLabel,
+            filters: [{ value: search, label: search }],
+            operator: undefined,
+        });
+        expect(onRequestSearch).toHaveBeenCalledWith(filterId, '');
+    });
+
+    it('should render custom create button label', () => {
+        const onChange = jest.fn();
+        const onRequestSearch = jest.fn();
+        const search = 'foo';
+        render(
+            <OmniFilter
+                {...defaultProps}
+                onChange={onChange}
+                filters={[]}
+                showOperatorSelect={false}
+                isCreatable
+                onRequestSearch={onRequestSearch}
+                formatCreatableLabel={(text) => `Create ${text}`}
+            />,
+        );
+
+        openPopover();
+
+        fireEvent.change(screen.getByTestId(`${testId}-search-filter`), {
+            target: { value: search },
+        });
+
+        expect(
+            screen.getByRole('button', { name: `Create ${search}` }),
+        ).toBeInTheDocument();
+    });
 });

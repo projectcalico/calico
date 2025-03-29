@@ -119,6 +119,13 @@ describe('FlowLogsPage', () => {
             omniFilterData,
             jest.fn(),
         ]);
+        jest.mocked(useOmniFilterUrlState).mockReturnValue([
+            {},
+            {},
+            jest.fn(),
+            jest.fn(),
+            jest.fn(),
+        ] as any);
     });
 
     it.skip('should render denied tabs info', () => {
@@ -200,6 +207,7 @@ describe('FlowLogsPage', () => {
             {},
             jest.fn(),
             mockClearFilterParams,
+            jest.fn(),
         ] as any);
         renderWithRouter(<FlowLogsPage />);
 
@@ -216,6 +224,7 @@ describe('FlowLogsPage', () => {
             {},
             mockSetFilterParam,
             jest.fn(),
+            jest.fn(),
         ] as any);
         renderWithRouter(<FlowLogsPage />);
 
@@ -229,18 +238,6 @@ describe('FlowLogsPage', () => {
     });
 
     it('should request data for <OmniFilters />', () => {
-        jest.mocked(useOmniFilterUrlState).mockReturnValue([
-            {},
-            {},
-            jest.fn(),
-            jest.fn(),
-        ] as any);
-        jest.mocked(useOmniFilterUrlState).mockReturnValue([
-            {},
-            {},
-            jest.fn(),
-            jest.fn(),
-        ] as any);
         const fetchDataMock = jest.fn();
         jest.mocked(useOmniFilterData).mockReturnValue([
             omniFilterData,

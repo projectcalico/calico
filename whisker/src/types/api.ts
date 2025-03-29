@@ -93,8 +93,12 @@ export type FlowsFilterQuery = {
     type: 'Exact' | 'Fuzzy';
 };
 
+export type FlowsFilterValue =
+    | (FlowsFilterQuery[] & { name: FlowsFilterQuery }[])
+    | undefined;
+
 export type FlowsFilter = Partial<{
-    policies: FlowsFilterQuery[];
+    policies: { name: FlowsFilterQuery }[];
     source_names: FlowsFilterQuery[];
     dest_names: FlowsFilterQuery[];
     source_namespaces: FlowsFilterQuery[];
