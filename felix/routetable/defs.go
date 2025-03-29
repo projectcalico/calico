@@ -73,6 +73,7 @@ type Target struct {
 	DestMAC   net.HardwareAddr
 	Protocol  netlink.RouteProtocol
 	MultiPath []NextHop
+	MTU       int
 }
 
 func (t Target) Equal(t2 Target) bool {

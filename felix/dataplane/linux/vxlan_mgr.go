@@ -76,6 +76,7 @@ type vxlanManager struct {
 	vxlanID     int
 	vxlanPort   int
 	ipVersion   uint8
+	mtu         int
 
 	// Indicates if configuration has changed since the last apply.
 	routesDirty       bool
@@ -104,6 +105,7 @@ func newVXLANManager(
 	dpConfig Config,
 	opRecorder logutils.OpRecorder,
 	ipVersion uint8,
+	mtu int,
 ) *vxlanManager {
 	nlHandle, _ := netlinkshim.NewRealNetlink()
 	return newVXLANManagerWithShims(
@@ -115,6 +117,7 @@ func newVXLANManager(
 		opRecorder,
 		nlHandle,
 		ipVersion,
+		mtu,
 	)
 }
 
@@ -127,6 +130,7 @@ func newVXLANManagerWithShims(
 	opRecorder logutils.OpRecorder,
 	nlHandle netlinkHandle,
 	ipVersion uint8,
+	mtu int,
 ) *vxlanManager {
 	logCtx := logrus.WithField("ipVersion", ipVersion)
 	return &vxlanManager{
@@ -147,6 +151,7 @@ func newVXLANManagerWithShims(
 		vxlanID:           dpConfig.RulesConfig.VXLANVNI,
 		vxlanPort:         dpConfig.RulesConfig.VXLANPort,
 		ipVersion:         ipVersion,
+		mtu:               mtu,
 		externalNodeCIDRs: dpConfig.ExternalNodesCidrs,
 		routesDirty:       true,
 		vtepsDirty:        true,
@@ -531,7 +536,10 @@ func (m *vxlanManager) tunneledRoute(cidr ip.CIDR, r *proto.RouteUpdate) *routet
 	if isRemoteTunnelRoute(r) {
 		// We treat remote tunnel routes as directly connected. They don't have a gateway of
 		// the VTEP because they ARE the VTEP!
-		return &routetable.Target{CIDR: cidr}
+		return &routetable.Target{
+			CIDR: cidr,
+			MTU:  m.mtu,
+		}
 	}
 
 	// Extract the gateway addr for this route based on its remote VTEP.
@@ -548,6 +556,7 @@ func (m *vxlanManager) tunneledRoute(cidr ip.CIDR, r *proto.RouteUpdate) *routet
 		Type: routetable.TargetTypeVXLAN,
 		CIDR: cidr,
 		GW:   ip.FromString(vtepAddr),
+		MTU:  m.mtu,
 	}
 }
 
