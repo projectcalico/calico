@@ -17,13 +17,13 @@ spec:
       securityContext:
         fsGroup: 0
       containers:
-      - name: udsver-client
-        image: quay.io/saurabh/udsver:latest
-        imagePullPolicy: IfNotPresent
-        args: [ "-c", "-s", "/tmp/udsver/nodeagent/socket" ]
-        volumeMounts:
-        - mountPath: /tmp/udsver
-          name: test-volume
+        - name: udsver-client
+          image: quay.io/saurabh/udsver:latest
+          imagePullPolicy: IfNotPresent
+          args: ["-c", "-s", "/tmp/udsver/nodeagent/socket"]
+          volumeMounts:
+            - mountPath: /tmp/udsver
+              name: test-volume
       volumes:
         - name: test-volume
           flexVolume:

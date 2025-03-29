@@ -11,7 +11,6 @@ metadata:
 spec:
 
 ---
-
 # Policy to ensure the API server isn't cut off. Can be modified, but ensure
 # that the main API server is always able to reach the Calico API server.
 kind: NetworkPolicy
@@ -24,12 +23,11 @@ spec:
     matchLabels:
       apiserver: "true"
   ingress:
-  - ports:
-    - protocol: TCP
-      port: 5443
+    - ports:
+        - protocol: TCP
+          port: 5443
 
 ---
-
 apiVersion: v1
 kind: Service
 metadata:
@@ -37,16 +35,15 @@ metadata:
   namespace: calico-apiserver
 spec:
   ports:
-  - name: apiserver
-    port: 443
-    protocol: TCP
-    targetPort: 5443
+    - name: apiserver
+      port: 443
+      protocol: TCP
+      targetPort: 5443
   selector:
     apiserver: "true"
   type: ClusterIP
 
 ---
-
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -71,27 +68,27 @@ spec:
       namespace: calico-apiserver
     spec:
       containers:
-      - args:
-        - --secure-port=5443
-        - -v=5
-        env:
-        - name: DATASTORE_TYPE
-          value: kubernetes
-        image: calico/apiserver:master
-        name: calico-apiserver
-        readinessProbe:
-          httpGet:
-            path: /readyz
-            port: 5443
-            scheme: HTTPS
-          timeoutSeconds: 5
-          periodSeconds: 60
-        securityContext:
-          privileged: false
-          runAsUser: 0
-        volumeMounts:
-        - mountPath: /code/apiserver.local.config/certificates
-          name: calico-apiserver-certs
+        - args:
+            - --secure-port=5443
+            - -v=5
+          env:
+            - name: DATASTORE_TYPE
+              value: kubernetes
+          image: calico/apiserver:master
+          name: calico-apiserver
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 5443
+              scheme: HTTPS
+            timeoutSeconds: 5
+            periodSeconds: 60
+          securityContext:
+            privileged: false
+            runAsUser: 0
+          volumeMounts:
+            - mountPath: /code/apiserver.local.config/certificates
+              name: calico-apiserver-certs
       dnsPolicy: ClusterFirst
       nodeSelector:
         kubernetes.io/os: linux
@@ -99,17 +96,16 @@ spec:
       serviceAccount: calico-apiserver
       serviceAccountName: calico-apiserver
       tolerations:
-      - effect: NoSchedule
-        key: node-role.kubernetes.io/master
-      - effect: NoSchedule
-        key: node-role.kubernetes.io/control-plane
+        - effect: NoSchedule
+          key: node-role.kubernetes.io/master
+        - effect: NoSchedule
+          key: node-role.kubernetes.io/control-plane
       volumes:
-      - name: calico-apiserver-certs
-        secret:
-          secretName: calico-apiserver-certs
+        - name: calico-apiserver-certs
+          secret:
+            secretName: calico-apiserver-certs
 
 ---
-
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -117,7 +113,6 @@ metadata:
   namespace: calico-apiserver
 
 ---
-
 # Cluster-scoped resources below here.
 apiVersion: apiregistration.k8s.io/v1
 kind: APIService
@@ -134,120 +129,116 @@ spec:
   versionPriority: 200
 
 ---
-
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   name: calico-crds
 rules:
-- apiGroups:
-  - extensions
-  - networking.k8s.io
-  - ""
-  resources:
-  - networkpolicies
-  - nodes
-  - namespaces
-  - pods
-  - serviceaccounts
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - crd.projectcalico.org
-  resources:
-  - globalnetworkpolicies
-  - networkpolicies
-  - clusterinformations
-  - hostendpoints
-  - globalnetworksets
-  - networksets
-  - bgpconfigurations
-  - bgppeers
-  - bgpfilters
-  - felixconfigurations
-  - kubecontrollersconfigurations
-  - ippools
-  - ipreservations
-  - ipamblocks
-  - blockaffinities
-  - caliconodestatuses
-  - ipamconfigs
-  - tiers
-  verbs:
-  - get
-  - list
-  - watch
-  - create
-  - update
-  - delete
-- apiGroups:
-  - policy
-  resourceNames:
-  - calico-apiserver
-  resources:
-  - podsecuritypolicies
-  verbs:
-  - use
+  - apiGroups:
+      - extensions
+      - networking.k8s.io
+      - ""
+    resources:
+      - networkpolicies
+      - nodes
+      - namespaces
+      - pods
+      - serviceaccounts
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - crd.projectcalico.org
+    resources:
+      - globalnetworkpolicies
+      - networkpolicies
+      - clusterinformations
+      - hostendpoints
+      - globalnetworksets
+      - networksets
+      - bgpconfigurations
+      - bgppeers
+      - bgpfilters
+      - felixconfigurations
+      - kubecontrollersconfigurations
+      - ippools
+      - ipreservations
+      - ipamblocks
+      - blockaffinities
+      - caliconodestatuses
+      - ipamconfigs
+      - tiers
+    verbs:
+      - get
+      - list
+      - watch
+      - create
+      - update
+      - delete
+  - apiGroups:
+      - policy
+    resourceNames:
+      - calico-apiserver
+    resources:
+      - podsecuritypolicies
+    verbs:
+      - use
 
 ---
-
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   name: calico-extension-apiserver-auth-access
 rules:
-- apiGroups:
-  - ""
-  resourceNames:
-  - extension-apiserver-authentication
-  resources:
-  - configmaps
-  verbs:
-  - list
-  - watch
-  - get
-- apiGroups:
-  - rbac.authorization.k8s.io
-  resources:
-  - clusterroles
-  - clusterrolebindings
-  - roles
-  - rolebindings
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - admissionregistration.k8s.io
-  resources:
-  - validatingadmissionpolicies
-  - validatingadmissionpolicybindings
-  verbs:
-  - get
-  - list
-  - watch
+  - apiGroups:
+      - ""
+    resourceNames:
+      - extension-apiserver-authentication
+    resources:
+      - configmaps
+    verbs:
+      - list
+      - watch
+      - get
+  - apiGroups:
+      - rbac.authorization.k8s.io
+    resources:
+      - clusterroles
+      - clusterrolebindings
+      - roles
+      - rolebindings
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - admissionregistration.k8s.io
+    resources:
+      - validatingadmissionpolicies
+      - validatingadmissionpolicybindings
+    verbs:
+      - get
+      - list
+      - watch
 
 ---
-
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   name: calico-webhook-reader
 rules:
-- apiGroups:
-  - admissionregistration.k8s.io
-  resources:
-  - mutatingwebhookconfigurations
-  - validatingwebhookconfigurations
-  verbs:
-  - get
-  - list
-  - watch
+  - apiGroups:
+      - admissionregistration.k8s.io
+    resources:
+      - mutatingwebhookconfigurations
+      - validatingwebhookconfigurations
+    verbs:
+      - get
+      - list
+      - watch
 
 ---
-
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
@@ -257,12 +248,11 @@ roleRef:
   kind: ClusterRole
   name: calico-crds
 subjects:
-- kind: ServiceAccount
-  name: calico-apiserver
-  namespace: calico-apiserver
+  - kind: ServiceAccount
+    name: calico-apiserver
+    namespace: calico-apiserver
 
 ---
-
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
@@ -272,12 +262,11 @@ roleRef:
   kind: ClusterRole
   name: system:auth-delegator
 subjects:
-- kind: ServiceAccount
-  name: calico-apiserver
-  namespace: calico-apiserver
+  - kind: ServiceAccount
+    name: calico-apiserver
+    namespace: calico-apiserver
 
 ---
-
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
@@ -287,12 +276,11 @@ roleRef:
   kind: ClusterRole
   name: calico-webhook-reader
 subjects:
-- kind: ServiceAccount
-  name: calico-apiserver
-  namespace: calico-apiserver
+  - kind: ServiceAccount
+    name: calico-apiserver
+    namespace: calico-apiserver
 
 ---
-
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
@@ -302,6 +290,6 @@ roleRef:
   kind: ClusterRole
   name: calico-extension-apiserver-auth-access
 subjects:
-- kind: ServiceAccount
-  name: calico-apiserver
-  namespace: calico-apiserver
+  - kind: ServiceAccount
+    name: calico-apiserver
+    namespace: calico-apiserver

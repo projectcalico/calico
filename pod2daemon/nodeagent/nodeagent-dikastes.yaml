@@ -15,21 +15,21 @@ spec:
         version: v1
     spec:
       initContainers:
-      - name: flexvol-driver
-        image: quay.io/saurabh/flexvol:81f7a44
-        imagePullPolicy: Always
-        volumeMounts:
-        - name: flexvol-driver-host
-          mountPath: /host/driver
+        - name: flexvol-driver
+          image: quay.io/saurabh/flexvol:81f7a44
+          imagePullPolicy: Always
+          volumeMounts:
+            - name: flexvol-driver-host
+              mountPath: /host/driver
       containers:
-      - name: nodeagent
-        image: quay.io/saurabh/nodeagent:178c1fa
-        imagePullPolicy: Always
-        volumeMounts:
-        - name: test-mgmt
-          mountPath: /tmp/udsuspver
-        - name: test-workload
-          mountPath: /tmp/nodeagent
+        - name: nodeagent
+          image: quay.io/saurabh/nodeagent:178c1fa
+          imagePullPolicy: Always
+          volumeMounts:
+            - name: test-mgmt
+              mountPath: /tmp/udsuspver
+            - name: test-workload
+              mountPath: /tmp/nodeagent
       volumes:
         - name: test-mgmt
           hostPath:

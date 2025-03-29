@@ -26,7 +26,6 @@ spec:
     - action: Allow
 
 ---
-
 apiVersion: projectcalico.org/v3
 kind: GlobalNetworkPolicy
 metadata:

@@ -63,7 +63,7 @@ coreos:
         --tls-private-key-file=/etc/kubernetes/apiserver.key \
         --service-account-key-file=/etc/kubernetes/apiserver.crt \
         --audit-log-path=-
-        
+
         Restart=always
         RestartSec=10
 

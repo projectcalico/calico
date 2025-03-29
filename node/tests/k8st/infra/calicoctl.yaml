@@ -10,7 +10,6 @@ metadata:
   namespace: kube-system
 
 ---
-
 apiVersion: v1
 kind: Pod
 metadata:
@@ -18,9 +17,9 @@ metadata:
   namespace: kube-system
 spec:
   tolerations:
-  # Important: Tolerate the control plane node, where we will run calicoctl.
-  - operator: "Exists"
-    effect: "NoSchedule"
+    # Important: Tolerate the control plane node, where we will run calicoctl.
+    - operator: "Exists"
+      effect: "NoSchedule"
   nodeSelector:
     # Important: This makes sure that calicoctl is installed on the control plane node,
     # where it will not be subjected to potentially disruptive actions taken by our test code.
@@ -28,19 +27,18 @@ spec:
   hostNetwork: true
   serviceAccountName: calicoctl
   containers:
-  - name: calicoctl
-    image: quay.io/calico/ctl:master
-    command:
-      - calicoctl
-    args:
-      - version
-      - --poll=1m
-    env:
-    - name: DATASTORE_TYPE
-      value: kubernetes
+    - name: calicoctl
+      image: quay.io/calico/ctl:master
+      command:
+        - calicoctl
+      args:
+        - version
+        - --poll=1m
+      env:
+        - name: DATASTORE_TYPE
+          value: kubernetes
 
 ---
-
 kind: ClusterRole
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
@@ -102,7 +100,6 @@ rules:
       - list
 
 ---
-
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
@@ -112,6 +109,6 @@ roleRef:
   kind: ClusterRole
   name: calicoctl
 subjects:
-- kind: ServiceAccount
-  name: calicoctl
-  namespace: kube-system
+  - kind: ServiceAccount
+    name: calicoctl
+    namespace: kube-system

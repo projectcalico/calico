@@ -7,18 +7,17 @@ metadata:
   namespace: demo
 spec:
   containers:
-  - args:
-    - /bin/sh
-    - -c
-    - sleep 360000
-    image: busybox
-    imagePullPolicy: Always
-    name: client
+    - args:
+        - /bin/sh
+        - -c
+        - sleep 360000
+      image: busybox
+      imagePullPolicy: Always
+      name: client
   nodeSelector:
     kubernetes.io/os: linux
 
 ---
-
 apiVersion: v1
 kind: Pod
 metadata:
@@ -28,12 +27,12 @@ metadata:
   namespace: demo
 spec:
   containers:
-  - args:
-    - /bin/sh
-    - -c
-    - sleep 360000
-    image: busybox
-    imagePullPolicy: Always
-    name: client-b
+    - args:
+        - /bin/sh
+        - -c
+        - sleep 360000
+      image: busybox
+      imagePullPolicy: Always
+      name: client-b
   nodeSelector:
     kubernetes.io/os: linux

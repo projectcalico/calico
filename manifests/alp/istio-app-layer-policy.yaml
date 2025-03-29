@@ -5,15 +5,15 @@ metadata:
   namespace: istio-system
 spec:
   hosts:
-  - dikastes.calico.cluster.local
+    - dikastes.calico.cluster.local
   ports:
-  - name: grpc
-    protocol: grpc
-    number: 1
+    - name: grpc
+      protocol: grpc
+      number: 1
   resolution: STATIC
   location: MESH_EXTERNAL
   endpoints:
-  - address: unix:///var/run/dikastes/dikastes.sock
+    - address: unix:///var/run/dikastes/dikastes.sock
 ---
 apiVersion: networking.istio.io/v1alpha3
 kind: DestinationRule
@@ -33,27 +33,26 @@ metadata:
   namespace: istio-system
 spec:
   filters:
-  - insertPosition:
-      index: FIRST
-    listenerMatch:
-      listenerType: SIDECAR_INBOUND
-      listenerProtocol: HTTP
-    filterType: HTTP
-    filterName: "envoy.ext_authz"
-    filterConfig:
-      grpc_service:
-        envoy_grpc:
-          cluster_name: "outbound|1||dikastes.calico.cluster.local"
-  - insertPosition:
-      index: FIRST
-    listenerMatch:
-      listenerType: SIDECAR_INBOUND
-      listenerProtocol: TCP
-    filterType: NETWORK
-    filterName: "envoy.ext_authz"
-    filterConfig:
-      stat_prefix: "dikastes"
-      grpc_service:
-        envoy_grpc:
-          cluster_name: "outbound|1||dikastes.calico.cluster.local"
-
+    - insertPosition:
+        index: FIRST
+      listenerMatch:
+        listenerType: SIDECAR_INBOUND
+        listenerProtocol: HTTP
+      filterType: HTTP
+      filterName: "envoy.ext_authz"
+      filterConfig:
+        grpc_service:
+          envoy_grpc:
+            cluster_name: "outbound|1||dikastes.calico.cluster.local"
+    - insertPosition:
+        index: FIRST
+      listenerMatch:
+        listenerType: SIDECAR_INBOUND
+        listenerProtocol: TCP
+      filterType: NETWORK
+      filterName: "envoy.ext_authz"
+      filterConfig:
+        stat_prefix: "dikastes"
+        grpc_service:
+          envoy_grpc:
+            cluster_name: "outbound|1||dikastes.calico.cluster.local"

@@ -7,7 +7,6 @@ spec:
   nodeToNodeMeshEnabled: false
 
 ---
-
 # This BGPPeer peers the RR node (kube-master) with an explicit
 # external peer and maintain original next hop.
 kind: BGPPeer
@@ -20,7 +19,6 @@ spec:
   keepOriginalNextHop: true
 
 ---
-
 # This BGPPeer peers the RR node (kube-master) with an explicit
 # external v6 peer and maintain original next hop.
 kind: BGPPeer
@@ -33,7 +31,6 @@ spec:
   keepOriginalNextHop: true
 
 ---
-
 kind: IPPool
 apiVersion: projectcalico.org/v3
 metadata:
@@ -44,7 +41,6 @@ spec:
   natOutgoing: true
 
 ---
-
 kind: Node
 apiVersion: projectcalico.org/v3
 metadata:
@@ -58,7 +54,6 @@ spec:
     routeReflectorClusterID: 10.0.0.1
 
 ---
-
 kind: Node
 apiVersion: projectcalico.org/v3
 metadata:
@@ -68,7 +63,6 @@ spec:
     ipv4Address: 10.192.0.3/16
 
 ---
-
 kind: Node
 apiVersion: projectcalico.org/v3
 metadata:

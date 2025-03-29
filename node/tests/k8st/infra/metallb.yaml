@@ -13,36 +13,36 @@ metadata:
     app: metallb
   name: metallb-system:controller
 rules:
-- apiGroups:
-  - ''
-  resources:
-  - services
-  verbs:
-  - get
-  - list
-  - watch
-  - update
-- apiGroups:
-  - ''
-  resources:
-  - services/status
-  verbs:
-  - update
-- apiGroups:
-  - ''
-  resources:
-  - events
-  verbs:
-  - create
-  - patch
-- apiGroups:
-  - policy
-  resourceNames:
-  - controller
-  resources:
-  - podsecuritypolicies
-  verbs:
-  - use
+  - apiGroups:
+      - ""
+    resources:
+      - services
+    verbs:
+      - get
+      - list
+      - watch
+      - update
+  - apiGroups:
+      - ""
+    resources:
+      - services/status
+    verbs:
+      - update
+  - apiGroups:
+      - ""
+    resources:
+      - events
+    verbs:
+      - create
+      - patch
+  - apiGroups:
+      - policy
+    resourceNames:
+      - controller
+    resources:
+      - podsecuritypolicies
+    verbs:
+      - use
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
@@ -52,14 +52,14 @@ metadata:
   name: config-watcher
   namespace: metallb-system
 rules:
-- apiGroups:
-  - ''
-  resources:
-  - configmaps
-  verbs:
-  - get
-  - list
-  - watch
+  - apiGroups:
+      - ""
+    resources:
+      - configmaps
+    verbs:
+      - get
+      - list
+      - watch
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
@@ -69,12 +69,12 @@ metadata:
   name: pod-lister
   namespace: metallb-system
 rules:
-- apiGroups:
-  - ''
-  resources:
-  - pods
-  verbs:
-  - list
+  - apiGroups:
+      - ""
+    resources:
+      - pods
+    verbs:
+      - list
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -87,9 +87,9 @@ roleRef:
   kind: ClusterRole
   name: metallb-system:controller
 subjects:
-- kind: ServiceAccount
-  name: controller
-  namespace: metallb-system
+  - kind: ServiceAccount
+    name: controller
+    namespace: metallb-system
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
@@ -103,8 +103,8 @@ roleRef:
   kind: Role
   name: config-watcher
 subjects:
-- kind: ServiceAccount
-  name: controller
+  - kind: ServiceAccount
+    name: controller
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -123,32 +123,32 @@ spec:
   template:
     metadata:
       annotations:
-        prometheus.io/port: '7472'
-        prometheus.io/scrape: 'true'
+        prometheus.io/port: "7472"
+        prometheus.io/scrape: "true"
       labels:
         app: metallb
         component: controller
     spec:
       containers:
-      - args:
-        - --port=7472
-        - --config=config
-        image: quay.io/metallb/controller:v0.9.5
-        imagePullPolicy: Always
-        name: controller
-        ports:
-        - containerPort: 7472
-          name: monitoring
-        resources:
-          limits:
-            cpu: 100m
-            memory: 100Mi
-        securityContext:
-          allowPrivilegeEscalation: false
-          capabilities:
-            drop:
-            - all
-          readOnlyRootFilesystem: true
+        - args:
+            - --port=7472
+            - --config=config
+          image: quay.io/metallb/controller:v0.9.5
+          imagePullPolicy: Always
+          name: controller
+          ports:
+            - containerPort: 7472
+              name: monitoring
+          resources:
+            limits:
+              cpu: 100m
+              memory: 100Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - all
+            readOnlyRootFilesystem: true
       nodeSelector:
         kubernetes.io/os: linux
       securityContext:

@@ -9,20 +9,19 @@ spec:
       value: 100:6532
     - name: bgp-comm-large
       value: 100:555:107
-  prefixAdvertisements: 
+  prefixAdvertisements:
     - cidr: 192.168.0.0/16
       communities:
-      - bgp-comm-standard
-      - 5663:12  
-      - bgp-comm-large
+        - bgp-comm-standard
+        - 5663:12
+        - bgp-comm-large
     - cidr: fd00:96::/112
       communities:
-      - bgp-comm-large
-      - bgp-comm-large
+        - bgp-comm-large
+        - bgp-comm-large
   listenPort: 177
 
 ---
-
 kind: Node
 apiVersion: projectcalico.org/v3
 metadata:
@@ -32,7 +31,6 @@ spec:
     ipv4Address: 10.192.0.2/16
 
 ---
-
 kind: Node
 apiVersion: projectcalico.org/v3
 metadata:
@@ -42,7 +40,6 @@ spec:
     ipv4Address: 10.192.0.3/16
 
 ---
-
 kind: Node
 apiVersion: projectcalico.org/v3
 metadata:
@@ -52,7 +49,6 @@ spec:
     ipv4Address: 10.192.0.4/16
 
 ---
-
 kind: IPPool
 apiVersion: projectcalico.org/v3
 metadata:

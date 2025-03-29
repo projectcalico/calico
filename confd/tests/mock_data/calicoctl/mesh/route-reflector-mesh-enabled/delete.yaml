@@ -4,7 +4,6 @@ metadata:
   name: bgppeer-1
 
 ---
-
 kind: IPPool
 apiVersion: projectcalico.org/v3
 metadata:
@@ -15,14 +14,12 @@ spec:
   natOutgoing: true
 
 ---
-
 kind: BGPPeer
 apiVersion: projectcalico.org/v3
 metadata:
   name: bgppeer-v6
 
 ---
-
 kind: BGPPeer
 apiVersion: projectcalico.org/v3
 metadata:

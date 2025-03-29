@@ -10,14 +10,13 @@ rules:
   # The tests require that node has access to secrets for BGP peering.
   - apiGroups: [""]
     resources:
-    - secrets
+      - secrets
     verbs:
-    - get
-    - list
-    - watch
+      - get
+      - list
+      - watch
 
 ---
-
 kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
@@ -27,6 +26,6 @@ roleRef:
   kind: ClusterRole
   name: calico-node-secret-getter
 subjects:
-- kind: ServiceAccount
-  name: calico-node
-  namespace: kube-system
+  - kind: ServiceAccount
+    name: calico-node
+    namespace: kube-system

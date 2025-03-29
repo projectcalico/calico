@@ -8,15 +8,14 @@ spec:
   # Configures Calico networking.
   calicoNetwork:
     ipPools:
-    - name: default-ipv4-ippool
-      blockSize: 26
-      cidr: 192.168.0.0/16
-      encapsulation: VXLANCrossSubnet
-      natOutgoing: Enabled
-      nodeSelector: all()
+      - name: default-ipv4-ippool
+        blockSize: 26
+        cidr: 192.168.0.0/16
+        encapsulation: VXLANCrossSubnet
+        natOutgoing: Enabled
+        nodeSelector: all()
 
 ---
-
 # This section configures the Calico API server.
 # For more information, see: https://docs.tigera.io/calico/latest/reference/installation/api#operator.tigera.io/v1.APIServer
 apiVersion: operator.tigera.io/v1
@@ -26,7 +25,6 @@ metadata:
 spec: {}
 
 ---
-
 # Configures the Calico Goldmane flow aggregator.
 apiVersion: operator.tigera.io/v1
 kind: Goldmane
@@ -34,7 +32,6 @@ metadata:
   name: default
 
 ---
-
 # Configures the Calico Whisker observability UI.
 apiVersion: operator.tigera.io/v1
 kind: Whisker

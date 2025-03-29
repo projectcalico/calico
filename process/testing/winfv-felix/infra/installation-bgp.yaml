@@ -10,9 +10,8 @@ spec:
     # Note: The ipPools section cannot be modified post-install.
     bgp: Enabled
     ipPools:
-    - blockSize: 26
-      cidr: 192.168.0.0/16
-      encapsulation: None
-      natOutgoing: Enabled
-      nodeSelector: all()
-
+      - blockSize: 26
+        cidr: 192.168.0.0/16
+        encapsulation: None
+        natOutgoing: Enabled
+        nodeSelector: all()

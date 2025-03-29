@@ -15,15 +15,15 @@ spec:
         version: v1
     spec:
       containers:
-      - name: ubuntu
-        image: ubuntu
-        imagePullPolicy: IfNotPresent
-        command:
-         - sleep
-         - infinity
-        volumeMounts:
-        - mountPath: /tmp/udsver
-          name: test-volume
+        - name: ubuntu
+          image: ubuntu
+          imagePullPolicy: IfNotPresent
+          command:
+            - sleep
+            - infinity
+          volumeMounts:
+            - mountPath: /tmp/udsver
+              name: test-volume
       volumes:
         - name: test-volume
           flexVolume:

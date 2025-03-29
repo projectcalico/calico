@@ -4,17 +4,15 @@ metadata:
   name: default
 spec:
   serviceClusterIPs:
-  - cidr: 10.101.0.0/16
+    - cidr: 10.101.0.0/16
 
 ---
-
 kind: Node
 apiVersion: projectcalico.org/v3
 metadata:
   name: kube-master
 
 ---
-
 kind: IPPool
 apiVersion: projectcalico.org/v3
 metadata:

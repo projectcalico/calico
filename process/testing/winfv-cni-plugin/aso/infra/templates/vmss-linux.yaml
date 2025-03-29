@@ -4,44 +4,44 @@ metadata:
   name: vmss-linux
   namespace: winfv
 spec:
-  location: {{.Env.AZURE_LOCATION}}
+  location: { { .Env.AZURE_LOCATION } }
   owner:
-    name: {{.Env.AZURE_RESOURCE_GROUP}}
+    name: { { .Env.AZURE_RESOURCE_GROUP } }
   platformFaultDomainCount: 1
   singlePlacementGroup: false
   sku:
-    capacity: {{.Env.LINUX_NODE_COUNT}}
-    name: Standard_D4s_v3 
+    capacity: { { .Env.LINUX_NODE_COUNT } }
+    name: Standard_D4s_v3
   upgradePolicy:
     mode: Automatic
   virtualMachineProfile:
     extensionProfile:
       extensions:
-      - name: mycustomextension
-        publisher: Microsoft.Azure.Extensions
-        settings:
-          commandToExecute: /bin/bash -c "echo hello winfv"
-        type: CustomScript
-        typeHandlerVersion: "2.0"
-      - name: install-docker
-        publisher: 'Microsoft.Azure.Extensions'
-        type: 'DockerExtension'
-        typeHandlerVersion: '1.0'
-        autoUpgradeMinorVersion: true
+        - name: mycustomextension
+          publisher: Microsoft.Azure.Extensions
+          settings:
+            commandToExecute: /bin/bash -c "echo hello winfv"
+          type: CustomScript
+          typeHandlerVersion: "2.0"
+        - name: install-docker
+          publisher: "Microsoft.Azure.Extensions"
+          type: "DockerExtension"
+          typeHandlerVersion: "1.0"
+          autoUpgradeMinorVersion: true
     networkProfile:
       networkInterfaceConfigurations:
-      - ipConfigurations:
-        - name: myipconfiguration
-          subnet:
-            reference:
-              group: network.azure.com
-              kind: VirtualNetworksSubnet
-              name: subnet-winfv
-          publicIPAddressConfiguration:
-            idleTimeoutInMinutes: 30
-            name: winfv
-        name: mynicconfig
-        primary: true
+        - ipConfigurations:
+            - name: myipconfiguration
+              subnet:
+                reference:
+                  group: network.azure.com
+                  kind: VirtualNetworksSubnet
+                  name: subnet-winfv
+              publicIPAddressConfiguration:
+                idleTimeoutInMinutes: 30
+                name: winfv
+          name: mynicconfig
+          primary: true
     osProfile:
       computerNamePrefix: winfv
       adminUsername: winfv
@@ -52,7 +52,7 @@ spec:
         disablePasswordAuthentication: true
         ssh:
           publicKeys:
-            - keyData: {{.Env.PUBLIC_KEY}}
+            - keyData: { { .Env.PUBLIC_KEY } }
               path: /home/winfv/.ssh/authorized_keys
     storageProfile:
       imageReference:

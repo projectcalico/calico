@@ -16,8 +16,8 @@ spec:
         operator: prometheus
     spec:
       containers:
-       - name: prometheus-operator
-         image: quay.io/coreos/prometheus-operator:v0.6.0
+        - name: prometheus-operator
+          image: quay.io/coreos/prometheus-operator:v0.6.0
 ---
 apiVersion: v1
 kind: ReplicationController
@@ -36,10 +36,10 @@ spec:
         name: prom-gateway
     spec:
       containers:
-      - name: prom-gateway
-        image: prom/pushgateway
-        ports:
-          - containerPort: 9091
+        - name: prom-gateway
+          image: prom/pushgateway
+          ports:
+            - containerPort: 9091
 ---
 apiVersion: v1
 kind: Service
@@ -81,8 +81,8 @@ spec:
     matchLabels:
       tier: k8sfv
   endpoints:
-  - port: metrics
-    interval: 10s        # scrape the endpoint every 10 seconds
+    - port: metrics
+      interval: 10s # scrape the endpoint every 10 seconds
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -866,32 +866,32 @@ spec:
         app: grafana
     spec:
       containers:
-      - image: grafana/grafana:4.1.1
-        name: grafana
-        imagePullPolicy: Always
-        ports:
-        - containerPort: 3000
+        - image: grafana/grafana:4.1.1
           name: grafana
-          protocol: TCP
-        env:
-          - name: GF_AUTH_BASIC_ENABLED
-            value: "false"
-          - name: GF_AUTH_ANONYMOUS_ENABLED
-            value: "true"
-          - name: GF_AUTH_ANONYMOUS_ORG_ROLE
-            value: Admin
-        volumeMounts:
-        - name: grafana-config
-          mountPath: /etc/grafana
-        - name: grafana-dashboards
-          mountPath: /etc/grafana-dashboards
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 3000
+              name: grafana
+              protocol: TCP
+          env:
+            - name: GF_AUTH_BASIC_ENABLED
+              value: "false"
+            - name: GF_AUTH_ANONYMOUS_ENABLED
+              value: "true"
+            - name: GF_AUTH_ANONYMOUS_ORG_ROLE
+              value: Admin
+          volumeMounts:
+            - name: grafana-config
+              mountPath: /etc/grafana
+            - name: grafana-dashboards
+              mountPath: /etc/grafana-dashboards
       volumes:
-      - name: grafana-config
-        configMap:
-          name: grafana-config
-      - name: grafana-dashboards
-        configMap:
-          name: grafana-dashboards
+        - name: grafana-config
+          configMap:
+            name: grafana-config
+        - name: grafana-dashboards
+          configMap:
+            name: grafana-dashboards
 ---
 apiVersion: v1
 kind: Service

@@ -7,7 +7,6 @@ spec:
   ipipMode: Never
   natOutgoing: true
 ---
-
 kind: IPPool
 apiVersion: projectcalico.org/v3
 metadata:

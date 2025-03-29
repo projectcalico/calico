@@ -25,7 +25,7 @@ spec:
           imagePullPolicy: IfNotPresent
           name: uninstall-calico
         - command:
-          - $env:CONTAINER_SANDBOX_MOUNT_POINT/opt/cni/bin/install.exe
+            - $env:CONTAINER_SANDBOX_MOUNT_POINT/opt/cni/bin/install.exe
           env:
             - name: CNI_BIN_DIR
               value: /host/opt/cni/bin

@@ -9,7 +9,6 @@ spec:
   listenPort: 150
 
 ---
-
 kind: BGPPeer
 apiVersion: projectcalico.org/v3
 metadata:
@@ -20,7 +19,6 @@ spec:
   sourceAddress: None
 
 ---
-
 kind: BGPPeer
 apiVersion: projectcalico.org/v3
 metadata:
@@ -30,7 +28,6 @@ spec:
   asNumber: 64567
 
 ---
-
 kind: BGPPeer
 apiVersion: projectcalico.org/v3
 metadata:
@@ -41,7 +38,6 @@ spec:
   numAllowedLocalASNumbers: 1
 
 ---
-
 kind: Node
 apiVersion: projectcalico.org/v3
 metadata:
@@ -51,7 +47,6 @@ spec:
     ipv4Address: 10.192.0.2/16
 
 ---
-
 kind: Node
 apiVersion: projectcalico.org/v3
 metadata:
@@ -61,7 +56,6 @@ spec:
     ipv4Address: 10.192.0.3/16
 
 ---
-
 kind: Node
 apiVersion: projectcalico.org/v3
 metadata:
@@ -71,7 +65,6 @@ spec:
     ipv4Address: 10.192.0.1/16
 
 ---
-
 kind: IPPool
 apiVersion: projectcalico.org/v3
 metadata:

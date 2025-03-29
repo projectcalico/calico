@@ -9,12 +9,11 @@ spec:
   externalTrafficPolicy: Local
   clusterIP: 10.101.0.101
   ports:
-  - port: 80
-    protocol: TCP
-    targetPort: 80
+    - port: 80
+      protocol: TCP
+      targetPort: 80
 
 ---
-
 kind: Service
 apiVersion: v1
 metadata:
@@ -24,6 +23,6 @@ spec:
   externalTrafficPolicy: Local
   clusterIP: 10.101.0.102
   ports:
-  - port: 80
-    protocol: TCP
-    targetPort: 80
+    - port: 80
+      protocol: TCP
+      targetPort: 80

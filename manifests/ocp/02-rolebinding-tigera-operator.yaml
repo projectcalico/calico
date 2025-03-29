@@ -5,9 +5,9 @@ metadata:
   labels:
     k8s-app: tigera-operator
 subjects:
-- kind: ServiceAccount
-  name: tigera-operator
-  namespace: tigera-operator
+  - kind: ServiceAccount
+    name: tigera-operator
+    namespace: tigera-operator
 roleRef:
   kind: ClusterRole
   name: tigera-operator
