@@ -1571,7 +1571,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 		opts.IPIPEnabled = false
 		opts.FlowLogSource = infrastructure.FlowLogSourceGoldmane
 
-		opts.ExtraEnvVars["FELIX_FLOWLOGSFLUSHINTERVAL"] = "5"
+		opts.ExtraEnvVars["FELIX_FLOWLOGSFLUSHINTERVAL"] = "3"
 		opts.ExtraEnvVars["FELIX_FLOWLOGSCOLLECTORDEBUGTRACE"] = "true"
 		opts.ExtraEnvVars["FELIX_BPFCONNTRACKTIMEOUTS"] = "TCPFinsSeen=30s"
 		opts.ExtraEnvVars["FELIX_FLOWLOGSGOLDMANESERVER"] = flowlogs.LocalGoldmaneServer
@@ -1832,10 +1832,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 	}
 
 	It("get expected flow logs with pending policies", func() {
-		if bpfEnabled {
-			Skip("flaky, needs a fix")
-		}
-
 		// Describe the connectivity that we now expect.
 		// For ep1_1 -> ep2_1 we use the service cluster IP to test service info in the flow log
 		cc = &connectivity.Checker{}
@@ -1843,6 +1839,17 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 
 		// Do 1 rounds of connectivity checking.
 		cc.CheckConnectivity()
+
+		// Wait for conntrack to pick up so that flow is processed with the correct policy definition (this is a hack
+		// because changing the policy before the flow is processed can result in unmatch rule ID).
+		if bpfEnabled {
+			// Make sure that conntrack scanning ticks at least once
+			time.Sleep(3 * conntrack.ScanPeriod)
+		} else {
+			// Allow 6 seconds for the containers.Felix to poll conntrack.  (This is conntrack polling time plus 20%, which gives us
+			// 10% leeway over the polling jitter of 10%)
+			time.Sleep(6 * time.Second)
+		}
 
 		// Configured staged allow.
 		configureStagedAllow()
@@ -1918,11 +1925,37 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 					},
 					FlowPendingPolicySet: flowlog.FlowPolicySet{
 						"0|tier1|default/tier1.np1-1|pass|0":         {},
+						"1|tier2|default/tier2.staged:np2-1|deny|-1": {},
+					},
+					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
+						FlowReportedStats: flowlog.FlowReportedStats{
+							NumFlowsStarted: 1,
+						},
+					},
+				},
+			)
+
+			flowTester.CheckFlow(
+				flowlog.FlowLog{
+					FlowMeta: flowlog.FlowMeta{
+						Tuple:      aggrTuple,
+						SrcMeta:    ep1_1_Meta,
+						DstMeta:    ep2_1_Meta,
+						DstService: flowlog.EmptyService,
+						Action:     "allow",
+						Reporter:   "src",
+					},
+					FlowEnforcedPolicySet: flowlog.FlowPolicySet{
+						"0|tier1|default/tier1.np1-1|pass|0":            {},
+						"1|__PROFILE__|__PROFILE__.kns.default|allow|0": {},
+					},
+					FlowPendingPolicySet: flowlog.FlowPolicySet{
+						"0|tier1|default/tier1.np1-1|pass|0":         {},
 						"1|tier2|default/tier2.staged:np2-1|allow|2": {},
 					},
 					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
 						FlowReportedStats: flowlog.FlowReportedStats{
-							NumFlowsStarted: 2,
+							NumFlowsStarted: 1,
 						},
 					},
 				},
@@ -1953,11 +1986,37 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 					},
 					FlowPendingPolicySet: flowlog.FlowPolicySet{
 						"0|tier1|default/tier1.np1-1|pass|0":         {},
+						"1|tier2|default/tier2.staged:np2-1|deny|-1": {},
+					},
+					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
+						FlowReportedStats: flowlog.FlowReportedStats{
+							NumFlowsStarted: 1,
+						},
+					},
+				},
+			)
+
+			flowTester.CheckFlow(
+				flowlog.FlowLog{
+					FlowMeta: flowlog.FlowMeta{
+						Tuple:      aggrTuple,
+						SrcMeta:    ep1_1_Meta,
+						DstMeta:    ep2_1_Meta,
+						DstService: flowlog.EmptyService,
+						Action:     "allow",
+						Reporter:   "dst",
+					},
+					FlowEnforcedPolicySet: flowlog.FlowPolicySet{
+						"0|tier1|default/tier1.np1-1|pass|0":            {},
+						"1|__PROFILE__|__PROFILE__.kns.default|allow|0": {},
+					},
+					FlowPendingPolicySet: flowlog.FlowPolicySet{
+						"0|tier1|default/tier1.np1-1|pass|0":         {},
 						"1|tier2|default/tier2.staged:np2-1|allow|1": {},
 					},
 					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
 						FlowReportedStats: flowlog.FlowReportedStats{
-							NumFlowsStarted: 2,
+							NumFlowsStarted: 1,
 						},
 					},
 				},
@@ -1985,7 +2044,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 		if bpfEnabled {
 			// Make sure that conntrack scanning ticks at least once, and that the we wait for the
 			// flush interval to expire.
-			time.Sleep(6 * conntrack.ScanPeriod)
+			time.Sleep(3 * conntrack.ScanPeriod)
 		} else {
 			// Allow 6 seconds for the containers.Felix to poll conntrack.  (This is conntrack polling time plus 20%, which gives us
 			// 10% leeway over the polling jitter of 10%)
