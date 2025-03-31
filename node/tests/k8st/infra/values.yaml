@@ -3,25 +3,34 @@ version: latest-amd64
 
 # Configure the images to use when generating manifests.
 node:
-  image: docker.io/library/node
+  image: node
+  registry: docker.io/library
 calicoctl:
-  image: docker.io/calico/ctl
+  image: ctl
+  registry: docker.io/calico
 typha:
-  image: docker.io/calico/typha
+  image: typha
+  registry: docker.io/calico
   enabled: true
 cni:
-  image: docker.io/calico/cni
+  image: cni
+  registry: docker.io/calico
 kubeControllers:
-  image: docker.io/calico/kube-controllers
+  image: kube-controllers
+  registry: docker.io/calico
 flannel:
-  image: docker.io/flannelcni/flannel
+  image: flannel
+  registry: docker.io/flannelcni
   tag: v0.16.3
 flannelMigration:
-  image: docker.io/calico/flannel-migration
+  image: flannel-migration
+  registry: docker.io/calico
 dikastes:
-  image: docker.io/calico/dikastes
+  image: dikastes
+  registry: docker.io/calico
 csi-driver:
-  image: docker.io/calico/csi-driver
+  image: csi-driver
+  registry: docker.io/calico
 
 # CRDs are installed as part of cluster creation, so don't need them in
 # the test manifest.

@@ -81,7 +81,8 @@ tigeraOperator:
   version: master
   registry: quay.io
 calicoctl:
-  image: quay.io/calico/ctl
+  image: ctl
+  registry: quay.io/calico
   tag: master
 
 kubeletVolumePluginPath: /var/lib/kubelet

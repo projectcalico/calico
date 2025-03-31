@@ -104,7 +104,7 @@ spec:
                 optional: true
         # Install any v3 API resources provided in the calico-resources ConfigMap.
         - name: create-initial-resources
-          image: {{.Values.calicoctl.image}}:{{.Values.calicoctl.tag}}
+          image: {{.Values.calicoctl.registry}}/{{.Values.calicoctl.image}}:{{.Values.calicoctl.tag}}
           env:
             - name: DATASTORE_TYPE
               value: kubernetes
