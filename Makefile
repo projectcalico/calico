@@ -40,6 +40,7 @@ ci-preflight-checks:
 	$(MAKE) check-go-mod
 	$(MAKE) check-dockerfiles
 	$(MAKE) check-language
+	$(MAKE) check-ocp-no-crds
 	$(MAKE) generate
 	$(MAKE) fix-all
 	$(MAKE) check-dirty
@@ -52,6 +53,11 @@ check-dockerfiles:
 
 check-language:
 	./hack/check-language.sh
+
+CRD_FILES_IN_OCP_DIR=$(shell grep "^kind: CustomResourceDefinition" manifests/ocp/* -l)
+check-ocp-no-crds:
+	@echo "Checking for files in  manifests/ocp with CustomResourceDefinitions"
+	@if [ ! -z "$(CRD_FILES_IN_OCP_DIR)" ]; then echo "ERROR: manifests/ocp should not have any CustomResourceDefinitions, these files should be removed:"; echo "$(CRD_FILES_IN_OCP_DIR)"; exit 1; fi
 
 protobuf:
 	$(MAKE) -C app-policy protobuf
@@ -182,7 +188,7 @@ helm-index:
 
 # Creates the tar file used for installing Calico on OpenShift.
 bin/ocp.tgz: manifests/ocp/ bin/yq
-	tar czvf $@ -C manifests/ ocp
+	tar czvf $@ --exclude='.gitattributes' -C manifests/ ocp
 
 ## Generates release notes for the given version.
 .PHONY: release-notes
