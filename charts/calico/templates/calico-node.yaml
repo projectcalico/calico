@@ -683,9 +683,9 @@ roleRef:
   kind: ClusterRole
   name: canal
 subjects:
-- kind: ServiceAccount
-  name: canal-node
-  namespace: kube-system
+  - kind: ServiceAccount
+    name: canal-node
+    namespace: kube-system
 
 ---
 

@@ -4,9 +4,9 @@ metadata:
   name: winfv-sg
   namespace: winfv
 spec:
-  location: { { .Env.AZURE_LOCATION } }
+  location: {{ .Env.AZURE_LOCATION }}
   owner:
-    name: { { .Env.AZURE_RESOURCE_GROUP } }
+    name: {{ .Env.AZURE_RESOURCE_GROUP }}
 
 ---
 apiVersion: network.azure.com/v1api20201101
