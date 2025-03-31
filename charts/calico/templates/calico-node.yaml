@@ -498,11 +498,11 @@ spec:
 {{ toYaml .Values.flannel.env | indent 12 }}
 {{- end }}
           volumeMounts:
-          - mountPath: /run/xtables.lock
-            name: xtables-lock
-            readOnly: false
-          - name: flannel-cfg
-            mountPath: /etc/kube-flannel/
+            - mountPath: /run/xtables.lock
+              name: xtables-lock
+              readOnly: false
+            - name: flannel-cfg
+              mountPath: /etc/kube-flannel/
   {{- else if eq .Values.datastore "etcd" }}
         # Runs the flannel daemon to enable vxlan networking between
         # container hosts.
