@@ -17,7 +17,7 @@ on:  # yamllint disable-line rule:truthy
     paths:
       - '*.yml'
       - '*.yaml'
-      - '.yamllint'
+      - '.yamllint.yaml'
 
 jobs:
   lintSemaphoreYaml:
@@ -28,7 +28,7 @@ jobs:
         uses: ibiqlik/action-yamllint@v3
         with:
           file_or_dir: ./
-          config_file: .yamllint
+          config_file: .yamllint.yaml
       - uses: actions/upload-artifact@v4
         if: always()
         with:
