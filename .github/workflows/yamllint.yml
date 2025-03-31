@@ -20,7 +20,7 @@ on:  # yamllint disable-line rule:truthy
       - '.yamllint.yaml'
 
 jobs:
-  lintSemaphoreYaml:
+  lintYaml:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
