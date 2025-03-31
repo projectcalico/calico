@@ -313,7 +313,7 @@ rules:
       - get
       - list
       - watch
-   # Calico creates some tiers on startup.
+  # Calico creates some tiers on startup.
   - apiGroups: ["crd.projectcalico.org"]
     resources:
       - tiers
@@ -447,9 +447,9 @@ roleRef:
   kind: ClusterRole
   name: calico-kube-controllers
 subjects:
-- kind: ServiceAccount
-  name: calico-kube-controllers
-  namespace: kube-system
+  - kind: ServiceAccount
+    name: calico-kube-controllers
+    namespace: kube-system
 ---
 # Source: calico/templates/calico-node-rbac.yaml
 apiVersion: rbac.authorization.k8s.io/v1
@@ -461,9 +461,9 @@ roleRef:
   kind: ClusterRole
   name: calico-node
 subjects:
-- kind: ServiceAccount
-  name: calico-node
-  namespace: kube-system
+  - kind: ServiceAccount
+    name: calico-node
+    namespace: kube-system
 ---
 # Source: calico/templates/calico-node-rbac.yaml
 apiVersion: rbac.authorization.k8s.io/v1
@@ -475,9 +475,9 @@ roleRef:
   kind: ClusterRole
   name: calico-cni-plugin
 subjects:
-- kind: ServiceAccount
-  name: calico-cni-plugin
-  namespace: kube-system
+  - kind: ServiceAccount
+    name: calico-cni-plugin
+    namespace: kube-system
 ---
 # Source: calico/templates/tier-getter.yaml
 apiVersion: rbac.authorization.k8s.io/v1
@@ -489,9 +489,9 @@ roleRef:
   kind: ClusterRole
   name: calico-tier-getter
 subjects:
-- apiGroup: rbac.authorization.k8s.io
-  kind: User
-  name: system:kube-controller-manager
+  - apiGroup: rbac.authorization.k8s.io
+    kind: User
+    name: system:kube-controller-manager
 ---
 # Source: calico/templates/calico-typha.yaml
 # This manifest creates a Service, which will be backed by Calico's Typha daemon.
@@ -566,10 +566,10 @@ spec:
           imagePullPolicy: Never
           command: ["/opt/cni/bin/calico-ipam", "-upgrade"]
           envFrom:
-          - configMapRef:
-              # Allow KUBERNETES_SERVICE_HOST and KUBERNETES_SERVICE_PORT to be overridden for eBPF mode.
-              name: kubernetes-services-endpoint
-              optional: true
+            - configMapRef:
+                # Allow KUBERNETES_SERVICE_HOST and KUBERNETES_SERVICE_PORT to be overridden for eBPF mode.
+                name: kubernetes-services-endpoint
+                optional: true
           env:
             - name: KUBERNETES_NODE_NAME
               valueFrom:
@@ -594,10 +594,10 @@ spec:
           imagePullPolicy: Never
           command: ["/opt/cni/bin/install"]
           envFrom:
-          - configMapRef:
-              # Allow KUBERNETES_SERVICE_HOST and KUBERNETES_SERVICE_PORT to be overridden for eBPF mode.
-              name: kubernetes-services-endpoint
-              optional: true
+            - configMapRef:
+                # Allow KUBERNETES_SERVICE_HOST and KUBERNETES_SERVICE_PORT to be overridden for eBPF mode.
+                name: kubernetes-services-endpoint
+                optional: true
           env:
             # Name of the CNI config file to create.
             - name: CNI_CONF_NAME
@@ -662,10 +662,10 @@ spec:
           image: docker.io/library/node:latest-amd64
           imagePullPolicy: Never
           envFrom:
-          - configMapRef:
-              # Allow KUBERNETES_SERVICE_HOST and KUBERNETES_SERVICE_PORT to be overridden for eBPF mode.
-              name: kubernetes-services-endpoint
-              optional: true
+            - configMapRef:
+                # Allow KUBERNETES_SERVICE_HOST and KUBERNETES_SERVICE_PORT to be overridden for eBPF mode.
+                name: kubernetes-services-endpoint
+                optional: true
           env:
             # Use Kubernetes API as the backing datastore.
             - name: DATASTORE_TYPE
@@ -748,14 +748,14 @@ spec:
             preStop:
               exec:
                 command:
-                - /bin/calico-node
-                - -shutdown
+                  - /bin/calico-node
+                  - -shutdown
           livenessProbe:
             exec:
               command:
-              - /bin/calico-node
-              - -felix-live
-              - -bird-live
+                - /bin/calico-node
+                - -felix-live
+                - -bird-live
             periodSeconds: 10
             initialDelaySeconds: 10
             failureThreshold: 6
@@ -763,9 +763,9 @@ spec:
           readinessProbe:
             exec:
               command:
-              - /bin/calico-node
-              - -felix-ready
-              - -bird-ready
+                - /bin/calico-node
+                - -felix-ready
+                - -bird-ready
             periodSeconds: 10
             timeoutSeconds: 10
           volumeMounts:
@@ -899,8 +899,8 @@ spec:
           livenessProbe:
             exec:
               command:
-              - /usr/bin/check-status
-              - -l
+                - /usr/bin/check-status
+                - -l
             periodSeconds: 10
             initialDelaySeconds: 10
             failureThreshold: 6
@@ -908,8 +908,8 @@ spec:
           readinessProbe:
             exec:
               command:
-              - /usr/bin/check-status
-              - -r
+                - /usr/bin/check-status
+                - -r
             periodSeconds: 10
           securityContext:
             runAsNonRoot: true
@@ -966,11 +966,11 @@ spec:
         # Mark the pod as a critical add-on for rescheduling.
         - key: CriticalAddonsOnly
           operator: Exists
-        # Make sure Typha can get scheduled on any nodes. 
-        - effect: NoSchedule 
-          operator: Exists 
-        - effect: NoExecute 
-          operator: Exists           
+        # Make sure Typha can get scheduled on any nodes.
+        - effect: NoSchedule
+          operator: Exists
+        - effect: NoExecute
+          operator: Exists
       # Since Calico can't network a pod until Typha is up, we need to run Typha itself
       # as a host-networked pod.
       serviceAccountName: calico-node
@@ -981,60 +981,60 @@ spec:
         seccompProfile:
           type: RuntimeDefault
       containers:
-      - image: docker.io/calico/typha:latest-amd64
-        imagePullPolicy: Never
-        name: calico-typha
-        ports:
-        - containerPort: 5473
+        - image: docker.io/calico/typha:latest-amd64
+          imagePullPolicy: Never
           name: calico-typha
-          protocol: TCP
-        envFrom:
-        - configMapRef:
-            # Allow KUBERNETES_SERVICE_HOST and KUBERNETES_SERVICE_PORT to be overridden for eBPF mode.
-            name: kubernetes-services-endpoint
-            optional: true
-        env:
-          # Enable "info" logging by default. Can be set to "debug" to increase verbosity.
-          - name: TYPHA_LOGSEVERITYSCREEN
-            value: "info"
-          # Disable logging to file and syslog since those don't make sense in Kubernetes.
-          - name: TYPHA_LOGFILEPATH
-            value: "none"
-          - name: TYPHA_LOGSEVERITYSYS
-            value: "none"
-          # Monitor the Kubernetes API to find the number of running instances and rebalance
-          # connections.
-          - name: TYPHA_CONNECTIONREBALANCINGMODE
-            value: "kubernetes"
-          - name: TYPHA_DATASTORETYPE
-            value: "kubernetes"
-          - name: TYPHA_HEALTHENABLED
-            value: "true"
-          # Set this to the same value as terminationGracePeriodSeconds; it tells Typha how much time
-          # it has to shut down.
-          - name: TYPHA_SHUTDOWNTIMEOUTSECS
-            value: "300"
-          # Uncomment these lines to enable prometheus metrics. Since Typha is host-networked,
-          # this opens a port on the host, which may need to be secured.
-          #- name: TYPHA_PROMETHEUSMETRICSENABLED
-          #  value: "true"
-          #- name: TYPHA_PROMETHEUSMETRICSPORT
-          #  value: "9093"
-        livenessProbe:
-          httpGet:
-            path: /liveness
-            port: 9098
-            host: localhost
-          periodSeconds: 30
-          initialDelaySeconds: 30
-          timeoutSeconds: 10
-        securityContext:
-          runAsNonRoot: true
-          allowPrivilegeEscalation: false
-        readinessProbe:
-          httpGet:
-            path: /readiness
-            port: 9098
-            host: localhost
-          periodSeconds: 10
-          timeoutSeconds: 10
+          ports:
+            - containerPort: 5473
+              name: calico-typha
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                # Allow KUBERNETES_SERVICE_HOST and KUBERNETES_SERVICE_PORT to be overridden for eBPF mode.
+                name: kubernetes-services-endpoint
+                optional: true
+          env:
+            # Enable "info" logging by default. Can be set to "debug" to increase verbosity.
+            - name: TYPHA_LOGSEVERITYSCREEN
+              value: "info"
+            # Disable logging to file and syslog since those don't make sense in Kubernetes.
+            - name: TYPHA_LOGFILEPATH
+              value: "none"
+            - name: TYPHA_LOGSEVERITYSYS
+              value: "none"
+            # Monitor the Kubernetes API to find the number of running instances and rebalance
+            # connections.
+            - name: TYPHA_CONNECTIONREBALANCINGMODE
+              value: "kubernetes"
+            - name: TYPHA_DATASTORETYPE
+              value: "kubernetes"
+            - name: TYPHA_HEALTHENABLED
+              value: "true"
+            # Set this to the same value as terminationGracePeriodSeconds; it tells Typha how much time
+            # it has to shut down.
+            - name: TYPHA_SHUTDOWNTIMEOUTSECS
+              value: "300"
+            # Uncomment these lines to enable prometheus metrics. Since Typha is host-networked,
+            # this opens a port on the host, which may need to be secured.
+            #- name: TYPHA_PROMETHEUSMETRICSENABLED
+            #  value: "true"
+            #- name: TYPHA_PROMETHEUSMETRICSPORT
+            #  value: "9093"
+          livenessProbe:
+            httpGet:
+              path: /liveness
+              port: 9098
+              host: localhost
+            periodSeconds: 30
+            initialDelaySeconds: 30
+            timeoutSeconds: 10
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+          readinessProbe:
+            httpGet:
+              path: /readiness
+              port: 9098
+              host: localhost
+            periodSeconds: 10
+            timeoutSeconds: 10

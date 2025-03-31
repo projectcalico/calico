@@ -1328,7 +1328,7 @@ func schema_pkg_apis_projectcalico_v3_BPFConntrackTimeouts(ref common.ReferenceC
 				Properties: map[string]spec.Schema{
 					"creationGracePeriod": {
 						SchemaProps: spec.SchemaProps{
-							Description: "CreationGracePeriod gives a generic grace period to new connection\n before they are considered for cleanup [Default: 10s].",
+							Description: "CreationGracePeriod gives a generic grace period to new connections before they are considered for cleanup [Default: 10s].",
 							Type:        []string{"string"},
 							Format:      "",
 						},

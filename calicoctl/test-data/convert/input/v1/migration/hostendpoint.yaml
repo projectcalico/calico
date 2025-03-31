@@ -8,8 +8,8 @@ metadata:
 spec:
   interfaceName: eth0
   expectedIPs:
-  - 192.168.0.1
-  - 192.168.0.2
+    - 192.168.0.1
+    - 192.168.0.2
   profiles:
-  - profile1
-  - profile2
+    - profile1
+    - profile2

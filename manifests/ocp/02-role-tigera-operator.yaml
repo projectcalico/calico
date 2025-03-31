@@ -191,9 +191,9 @@ rules:
     verbs:
       - delete
   - apiGroups:
-    - networking.k8s.io
+      - networking.k8s.io
     resources:
-    - networkpolicies
+      - networkpolicies
     verbs:
       - create
       - update
@@ -202,45 +202,45 @@ rules:
       - list
       - watch
   - apiGroups:
-    - crd.projectcalico.org
+      - crd.projectcalico.org
     resources:
-    - felixconfigurations
-    - ippools
+      - felixconfigurations
+      - ippools
     verbs:
-    - create
-    - patch
-    - list
-    - get
-    - watch
+      - create
+      - patch
+      - list
+      - get
+      - watch
   - apiGroups:
-    - crd.projectcalico.org
+      - crd.projectcalico.org
     resources:
-    - kubecontrollersconfigurations
-    - bgpconfigurations
+      - kubecontrollersconfigurations
+      - bgpconfigurations
     verbs:
-    - get
-    - list
-    - watch
+      - get
+      - list
+      - watch
   - apiGroups:
-    - projectcalico.org
+      - projectcalico.org
     resources:
-    - ippools
+      - ippools
     verbs:
-    - create
-    - update
-    - delete
-    - patch
-    - get
-    - list
-    - watch
+      - create
+      - update
+      - delete
+      - patch
+      - get
+      - list
+      - watch
   - apiGroups:
-    - projectcalico.org
+      - projectcalico.org
     resources:
-    - ipamconfigurations
+      - ipamconfigurations
     verbs:
-    - get
-    - list
-    - watch
+      - get
+      - list
+      - watch
   - apiGroups:
       - scheduling.k8s.io
     resources:
@@ -369,7 +369,7 @@ rules:
     verbs:
       - create
   - apiGroups:
-     - crd.projectcalico.org
+      - crd.projectcalico.org
     resources:
       - ipamblocks
     verbs:

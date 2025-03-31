@@ -9,39 +9,39 @@ execution_time_limit:
   minutes: 10
 
 blocks:
-- name: Clean up GCE resources
-  dependencies: []
-  task:
-    prologue:
-      commands:
-      - checkout
-      - export GOOGLE_APPLICATION_CREDENTIALS=$HOME/secrets/secret.google-service-account-key.json
-      - export SHORT_WORKFLOW_ID=$(echo ${SEMAPHORE_WORKFLOW_ID} | sha256sum | cut -c -8)
-      - export ZONE=europe-west3-c
-      - export VM_PREFIX=sem-${SEMAPHORE_PROJECT_NAME}-${SHORT_WORKFLOW_ID}-
-      - echo VM_PREFIX=${VM_PREFIX}
-    jobs:
-    - name: Clean up GCE instances
-      commands:
-      - cd felix
-      - ./.semaphore/clean-up-vms ${VM_PREFIX}
-    secrets:
-    - name: google-service-account-for-gce
+  - name: Clean up GCE resources
+    dependencies: []
+    task:
+      prologue:
+        commands:
+          - checkout
+          - export GOOGLE_APPLICATION_CREDENTIALS=$HOME/secrets/secret.google-service-account-key.json
+          - export SHORT_WORKFLOW_ID=$(echo ${SEMAPHORE_WORKFLOW_ID} | sha256sum | cut -c -8)
+          - export ZONE=europe-west3-c
+          - export VM_PREFIX=sem-${SEMAPHORE_PROJECT_NAME}-${SHORT_WORKFLOW_ID}-
+          - echo VM_PREFIX=${VM_PREFIX}
+      jobs:
+        - name: Clean up GCE instances
+          commands:
+            - cd felix
+            - ./.semaphore/clean-up-vms ${VM_PREFIX}
+      secrets:
+        - name: google-service-account-for-gce
 
-- name: Clean up windows resources
-  dependencies: []
-  task:
-    prologue:
-      commands:
-        - checkout
-        - az login --service-principal -u "${AZ_SP_ID}" -p "${AZ_SP_PASSWORD}" --tenant "${AZ_TENANT_ID}" --output none
-        - cd process/testing/util
-    jobs:
-      - name: Clean up windows felix resources
+  - name: Clean up windows resources
+    dependencies: []
+    task:
+      prologue:
         commands:
-          - ./delete-az-rg.sh ${USER}-capz-win-felix-${SEMAPHORE_WORKFLOW_ID:0:8}-rg
-      - name: Clean up windows cni resources
-        commands:
-          - ./delete-az-rg.sh ${USER}-capz-win-cni-${SEMAPHORE_WORKFLOW_ID:0:8}-rg
-    secrets:
-    - name: banzai-secrets
+          - checkout
+          - az login --service-principal -u "${AZ_SP_ID}" -p "${AZ_SP_PASSWORD}" --tenant "${AZ_TENANT_ID}" --output none
+          - cd process/testing/util
+      jobs:
+        - name: Clean up windows felix resources
+          commands:
+            - ./delete-az-rg.sh ${USER}-capz-win-felix-${SEMAPHORE_WORKFLOW_ID:0:8}-rg
+        - name: Clean up windows cni resources
+          commands:
+            - ./delete-az-rg.sh ${USER}-capz-win-cni-${SEMAPHORE_WORKFLOW_ID:0:8}-rg
+      secrets:
+        - name: banzai-secrets

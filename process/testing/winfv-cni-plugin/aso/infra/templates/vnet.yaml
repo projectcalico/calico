@@ -6,7 +6,7 @@ metadata:
 spec:
   addressSpace:
     addressPrefixes:
-    - 10.0.0.0/16
+      - 10.0.0.0/16
   location: {{.Env.AZURE_LOCATION}}
   owner:
     name: {{.Env.AZURE_RESOURCE_GROUP}}
