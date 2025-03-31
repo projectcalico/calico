@@ -4,13 +4,13 @@ metadata:
   name: vmss-windows
   namespace: winfv
 spec:
-  location: {{ .Env.AZURE_LOCATION }}
+  location: {{.Env.AZURE_LOCATION}}
   owner:
-    name: {{ .Env.AZURE_RESOURCE_GROUP }}
+    name: {{.Env.AZURE_RESOURCE_GROUP}}
   platformFaultDomainCount: 1
   singlePlacementGroup: false
   sku:
-    capacity: {{ .Env.WINDOWS_NODE_COUNT }}
+    capacity: {{.Env.WINDOWS_NODE_COUNT}}
     name: Standard_D4s_v3
   upgradePolicy:
     mode: Automatic
@@ -51,5 +51,5 @@ spec:
       imageReference:
         publisher: MicrosoftWindowsServer
         offer: WindowsServer
-        sku: {{ .Env.AZURE_WINDOWS_IMAGE_SKU }}
-        version: {{ .Env.AZURE_WINDOWS_IMAGE_VERSION }}
+        sku: {{.Env.AZURE_WINDOWS_IMAGE_SKU}}
+        version: {{.Env.AZURE_WINDOWS_IMAGE_VERSION}}

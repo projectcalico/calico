@@ -1,12 +1,18 @@
 ---
 
-extends: relaxed
+extends: default
 
 rules:
   line-length: disable
+  document-start: disable
+  truthy: disable
   indentation:
     spaces: consistent
     indent-sequences: consistent
+  comments:
+    require-starting-space: false
+    min-spaces-from-content: 1
+  comments-indentation: disable
 
 ignore:
   # template files are not valid yaml

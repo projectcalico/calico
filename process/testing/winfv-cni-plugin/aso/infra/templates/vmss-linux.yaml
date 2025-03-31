@@ -4,13 +4,13 @@ metadata:
   name: vmss-linux
   namespace: winfv
 spec:
-  location: {{ .Env.AZURE_LOCATION }}
+  location: {{.Env.AZURE_LOCATION}}
   owner:
-    name: {{ .Env.AZURE_RESOURCE_GROUP }}
+    name: {{.Env.AZURE_RESOURCE_GROUP}}
   platformFaultDomainCount: 1
   singlePlacementGroup: false
   sku:
-    capacity: {{ .Env.LINUX_NODE_COUNT }}
+    capacity: {{.Env.LINUX_NODE_COUNT}}
     name: Standard_D4s_v3
   upgradePolicy:
     mode: Automatic
@@ -52,7 +52,7 @@ spec:
         disablePasswordAuthentication: true
         ssh:
           publicKeys:
-            - keyData: {{ .Env.PUBLIC_KEY }}
+            - keyData: {{.Env.PUBLIC_KEY}}
               path: /home/winfv/.ssh/authorized_keys
     storageProfile:
       imageReference:

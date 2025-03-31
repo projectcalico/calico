@@ -9942,7 +9942,7 @@ rules:
       - get
       - list
       - watch
-   # Calico creates some tiers on startup.
+  # Calico creates some tiers on startup.
   - apiGroups: ["crd.projectcalico.org"]
     resources:
       - tiers
