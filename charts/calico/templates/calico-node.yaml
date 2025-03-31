@@ -55,10 +55,10 @@ spec:
           imagePullPolicy: {{.Values.imagePullPolicy}}
           command: ["/opt/cni/bin/calico-ipam", "-upgrade"]
           envFrom:
-          - configMapRef:
-              # Allow KUBERNETES_SERVICE_HOST and KUBERNETES_SERVICE_PORT to be overridden for eBPF mode.
-              name: kubernetes-services-endpoint
-              optional: true
+            - configMapRef:
+                # Allow KUBERNETES_SERVICE_HOST and KUBERNETES_SERVICE_PORT to be overridden for eBPF mode.
+                name: kubernetes-services-endpoint
+                optional: true
           env:
 {{- if .Values.bpf }}
             # Overrides for kubernetes API server host/port. Needed in BPF mode.
@@ -97,10 +97,10 @@ spec:
           imagePullPolicy: {{.Values.imagePullPolicy}}
           command: ["/opt/cni/bin/install"]
           envFrom:
-          - configMapRef:
-              # Allow KUBERNETES_SERVICE_HOST and KUBERNETES_SERVICE_PORT to be overridden for eBPF mode.
-              name: kubernetes-services-endpoint
-              optional: true
+            - configMapRef:
+                # Allow KUBERNETES_SERVICE_HOST and KUBERNETES_SERVICE_PORT to be overridden for eBPF mode.
+                name: kubernetes-services-endpoint
+                optional: true
           env:
 {{- if eq .Values.network "flannel" }}
             # Set the serviceaccount name to use for the Calico CNI plugin.
@@ -224,10 +224,10 @@ spec:
           image: {{.Values.node.image}}:{{.Values.version}}
           imagePullPolicy: {{.Values.imagePullPolicy}}
           envFrom:
-          - configMapRef:
-              # Allow KUBERNETES_SERVICE_HOST and KUBERNETES_SERVICE_PORT to be overridden for eBPF mode.
-              name: kubernetes-services-endpoint
-              optional: true
+            - configMapRef:
+                # Allow KUBERNETES_SERVICE_HOST and KUBERNETES_SERVICE_PORT to be overridden for eBPF mode.
+                name: kubernetes-services-endpoint
+                optional: true
           env:
 {{- if .Values.bpf }}
             # Overrides for kubernetes API server host/port. Needed in BPF mode.
@@ -399,15 +399,15 @@ spec:
             preStop:
               exec:
                 command:
-                - /bin/calico-node
-                - -shutdown
+                  - /bin/calico-node
+                  - -shutdown
           livenessProbe:
             exec:
               command:
-              - /bin/calico-node
-              - -felix-live
+                - /bin/calico-node
+                - -felix-live
 {{- if and (eq .Values.network "calico") (not .Values.flannel_migration) (not .Values.vxlan) }}
-              - -bird-live
+                - -bird-live
 {{- end }}
             periodSeconds: 10
             initialDelaySeconds: 10
@@ -417,10 +417,10 @@ spec:
 {{- if eq .Values.network "calico" }}
             exec:
               command:
-              - /bin/calico-node
-              - -felix-ready
+                - /bin/calico-node
+                - -felix-ready
 {{- if and (not .Values.flannel_migration) (not .Values.vxlan) }}
-              - -bird-ready
+                - -bird-ready
 {{- end }}
 {{- else if eq .Values.network "flannel" }}
             httpGet:
@@ -430,8 +430,8 @@ spec:
 {{- else }}
             exec:
               command:
-              - /bin/calico-node
-              - -felix-ready
+                - /bin/calico-node
+                - -felix-ready
 {{- end }}
             periodSeconds: 10
             timeoutSeconds: 10

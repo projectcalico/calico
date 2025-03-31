@@ -67,9 +67,9 @@ data:
   etcd_endpoints: "http://<ETCD_IP>:<ETCD_PORT>"
   # If you're using TLS enabled etcd uncomment the following.
   # You must also populate the Secret below with these files.
-  etcd_ca: "" # "/calico-secrets/etcd-ca"
+  etcd_ca: ""   # "/calico-secrets/etcd-ca"
   etcd_cert: "" # "/calico-secrets/etcd-cert"
-  etcd_key: "" # "/calico-secrets/etcd-key"
+  etcd_key: ""  # "/calico-secrets/etcd-key"
   # Typha is disabled.
   typha_service_name: "none"
   # Configure the backend to use.

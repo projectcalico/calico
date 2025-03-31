@@ -313,7 +313,7 @@ rules:
       - get
       - list
       - watch
-    # Calico creates some tiers on startup.
+   # Calico creates some tiers on startup.
   - apiGroups: ["crd.projectcalico.org"]
     resources:
       - tiers
@@ -954,7 +954,7 @@ spec:
       labels:
         k8s-app: calico-typha
       annotations:
-        cluster-autoscaler.kubernetes.io/safe-to-evict: "true"
+        cluster-autoscaler.kubernetes.io/safe-to-evict: 'true'
     spec:
       nodeSelector:
         kubernetes.io/os: linux

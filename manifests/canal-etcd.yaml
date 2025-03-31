@@ -67,9 +67,9 @@ data:
   etcd_endpoints: "http://<ETCD_IP>:<ETCD_PORT>"
   # If you're using TLS enabled etcd uncomment the following.
   # You must also populate the Secret below with these files.
-  etcd_ca: "" # "/calico-secrets/etcd-ca"
+  etcd_ca: ""   # "/calico-secrets/etcd-ca"
   etcd_cert: "" # "/calico-secrets/etcd-cert"
-  etcd_key: "" # "/calico-secrets/etcd-key"
+  etcd_key: ""  # "/calico-secrets/etcd-key"
   # Typha is disabled.
   typha_service_name: "none"
 
@@ -350,9 +350,9 @@ roleRef:
   kind: ClusterRole
   name: canal
 subjects:
-  - kind: ServiceAccount
-    name: canal-node
-    namespace: kube-system
+- kind: ServiceAccount
+  name: canal-node
+  namespace: kube-system
 ---
 # Source: calico/templates/tier-getter.yaml
 apiVersion: rbac.authorization.k8s.io/v1
@@ -897,15 +897,15 @@ spec:
         - name: configure-flannel
           image: quay.io/coreos/etcd:v3.5.1
           command:
-            - "etcdctl"
-            # Uncomment the following lines if using TLS to etcd.
-            # - "--cert-file=/calico-secrets/etcd-cert"
-            # - "--key-file=/calico-secrets/etcd-key"
-            # - "--ca-file=/calico-secrets/etcd-ca"
-            - "--no-sync"
-            - "set"
-            - "/coreos.com/network/config"
-            - '{ "Network": "10.244.0.0/16", "Backend": {"Type": "vxlan"} }'
+          - "etcdctl"
+          # Uncomment the following lines if using TLS to etcd.
+          # - "--cert-file=/calico-secrets/etcd-cert"
+          # - "--key-file=/calico-secrets/etcd-key"
+          # - "--ca-file=/calico-secrets/etcd-ca"
+          - "--no-sync"
+          - "set"
+          - "/coreos.com/network/config"
+          - '{ "Network": "10.244.0.0/16", "Backend": {"Type": "vxlan"} }'
           env:
             # The location of the etcd cluster.
             - name: ETCDCTL_PEERS
