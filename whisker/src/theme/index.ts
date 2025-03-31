@@ -20,6 +20,7 @@ import {
     CheckboxLoadingSkeleton,
     CheckboxListLoadingSkeleton,
     ReorderableCheckList,
+    Tooltip,
 } from './components';
 
 const config: ThemeConfig = {
@@ -52,6 +53,7 @@ const theme = extendTheme({
         CheckboxLoadingSkeleton,
         CheckboxListLoadingSkeleton,
         ReorderableCheckList,
+        Tooltip,
     },
     fontSizes: {
         xxs: '0.625rem',

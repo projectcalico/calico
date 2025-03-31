@@ -248,7 +248,7 @@ export const transformToQueryPage = (
     page: number,
 ): QueryPage => ({
     items: items.map(({ value }) => ({ label: value, value })),
-    total,
+    total: total.totalResults,
     currentPage: page,
     nextPage: page + 1,
 });
