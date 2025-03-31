@@ -6,7 +6,7 @@ export const listItemStyles = {
         borderLeftColor: 'tigera-color-primary',
         _dark: {
             backgroundColor: 'tigeraGrey.800',
-            borderLeftColor: 'tigeraBlueMedium',
+            borderLeftColor: 'tigeraBlueMedium40',
         },
     },
     boxSizing: 'border-box',

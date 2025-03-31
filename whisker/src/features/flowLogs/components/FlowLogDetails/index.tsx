@@ -22,18 +22,6 @@ const FlowLogDetails: React.FC<FlowLogDetailsProps> = ({ flowLog }) => {
         ...rest
     } = flowLog;
 
-    const tableData = {
-        start_time: start_time.toLocaleTimeString(),
-        end_time: end_time.toLocaleTimeString(),
-        source_namespace,
-        source_name,
-        dest_namespace,
-        dest_name,
-        action: <FlowLogActionIndicator action={action} />,
-        policies: JSON.stringify(policies),
-        ...rest,
-    };
-
     const jsonData = {
         start_time: start_time.toLocaleTimeString(),
         end_time: end_time.toLocaleTimeString(),
@@ -44,6 +32,12 @@ const FlowLogDetails: React.FC<FlowLogDetailsProps> = ({ flowLog }) => {
         action,
         policies,
         ...rest,
+    };
+
+    const tableData = {
+        ...jsonData,
+        action: <FlowLogActionIndicator action={action} />,
+        policies: JSON.stringify(policies),
     };
 
     return (

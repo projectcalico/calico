@@ -64,7 +64,10 @@ export type FilterHint = {
 
 export type ApiFilterResponse = {
     items: FilterHint[];
-    total: number;
+    total: {
+        totalResults: number;
+        totalPages: number;
+    };
 };
 
 export type StartStreamOptions = {
