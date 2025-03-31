@@ -75,6 +75,7 @@ const OmniCheckboxList: React.FC<OmniCheckboxListProps> = forwardRef(
         {
             options = [],
             selectedOptions,
+            filteredSelectedOptions,
             emptyMessage,
             height,
             labelShowMore,
@@ -91,13 +92,6 @@ const OmniCheckboxList: React.FC<OmniCheckboxListProps> = forwardRef(
         },
         ref,
     ) => {
-        const listHeight = Math.min(
-            options.length * (listItemHeight ?? LIST_ITEM_HEIGHT),
-            height ??
-                (listItemHeight && listItemHeight * MAX_VISIBLE_ITEMS) ??
-                MAX_LIST_HEIGHT,
-        );
-
         const onCheck = (event: any, option: OmniFilterOption) =>
             onChange(
                 event.target.checked
@@ -115,33 +109,46 @@ const OmniCheckboxList: React.FC<OmniCheckboxListProps> = forwardRef(
             ? options.filter((option) => !isChecked(option))
             : options;
 
+        const listHeight = Math.min(
+            optionsForRender.length * (listItemHeight ?? LIST_ITEM_HEIGHT),
+            height ??
+                (listItemHeight && listItemHeight * MAX_VISIBLE_ITEMS) ??
+                MAX_LIST_HEIGHT,
+        );
+
         let selectedOptionsListComponent = null;
 
-        if (showSelectedList && selectedOptions.length) {
+        if (showSelectedList && filteredSelectedOptions.length) {
             selectedOptionsListComponent = (
                 <Box>
-                    <Text sx={selectedOptionsHeadingStyles}>
-                        {labelSelectedListHeader}
-                    </Text>
+                    {optionsForRender.length > 0 && (
+                        <Text sx={selectedOptionsHeadingStyles}>
+                            {labelSelectedListHeader}
+                        </Text>
+                    )}
                     <Box as='ul' sx={selectedOptionsListStyles}>
-                        {selectedOptions.map((selectedOption, index) => (
-                            <Box
-                                as='li'
-                                sx={listItemStyles}
-                                key={selectedOption.value}
-                            >
-                                <CheckBoxListItem
-                                    option={selectedOption}
-                                    index={index}
-                                    isChecked={isChecked(selectedOption)}
-                                    onCheck={(event) =>
-                                        onCheck(event, selectedOption)
-                                    }
-                                    DescriptionComponent={DescriptionComponent}
-                                    {...ref}
-                                />
-                            </Box>
-                        ))}
+                        {filteredSelectedOptions.map(
+                            (selectedOption, index) => (
+                                <Box
+                                    as='li'
+                                    sx={listItemStyles}
+                                    key={selectedOption.value}
+                                >
+                                    <CheckBoxListItem
+                                        option={selectedOption}
+                                        index={index}
+                                        isChecked={isChecked(selectedOption)}
+                                        onCheck={(event) =>
+                                            onCheck(event, selectedOption)
+                                        }
+                                        DescriptionComponent={
+                                            DescriptionComponent
+                                        }
+                                        {...ref}
+                                    />
+                                </Box>
+                            ),
+                        )}
                     </Box>
                 </Box>
             );
@@ -151,65 +158,78 @@ const OmniCheckboxList: React.FC<OmniCheckboxListProps> = forwardRef(
             <>
                 {selectedOptionsListComponent}
 
-                {selectedOptionsListComponent && (
-                    <Text sx={selectedOptionsHeadingStyles}>
-                        {labelListHeader}
-                    </Text>
-                )}
-
-                {optionsForRender.length ? (
-                    <List
-                        innerElementType='ul'
-                        height={listHeight}
-                        itemCount={optionsForRender.length}
-                        itemSize={listItemHeight ?? LIST_ITEM_HEIGHT}
-                        width={'100%'}
-                        {...rest}
-                    >
-                        {({ index, style }) => (
-                            <Box as='li' sx={listItemStyles} style={style}>
-                                <CheckBoxListItem
-                                    key={optionsForRender[index].value}
-                                    option={optionsForRender[index]}
-                                    index={index}
-                                    isChecked={isChecked(
-                                        optionsForRender[index],
-                                    )}
-                                    onCheck={(event) =>
-                                        onCheck(event, optionsForRender[index])
-                                    }
-                                    DescriptionComponent={DescriptionComponent}
-                                    {...ref}
-                                />
-
-                                {showMoreButton &&
-                                index === optionsForRender.length - 1 ? (
-                                    <Box>
-                                        <Button
-                                            mb={3}
-                                            mt={1}
-                                            variant='ghost'
-                                            fontWeight='semibold'
-                                            size='sm'
-                                            data-testid='show-more-button'
-                                            isLoading={isLoadingMore}
-                                            isDisabled={isLoadingMore}
-                                            onClick={onRequestMore}
-                                        >
-                                            {labelShowMore}
-                                        </Button>
-                                    </Box>
-                                ) : null}
-                            </Box>
+                {optionsForRender.length > 0 && (
+                    <>
+                        {selectedOptionsListComponent && (
+                            <Text sx={selectedOptionsHeadingStyles}>
+                                {labelListHeader}
+                            </Text>
                         )}
-                    </List>
-                ) : (
-                    <Flex height={`${LIST_ITEM_HEIGHT}px`} alignItems='center'>
-                        <Text color='tigeraGrey.600' px={3}>
-                            {emptyMessage}
-                        </Text>
-                    </Flex>
+
+                        <List
+                            innerElementType='ul'
+                            height={listHeight}
+                            itemCount={optionsForRender.length}
+                            itemSize={listItemHeight ?? LIST_ITEM_HEIGHT}
+                            width={'100%'}
+                            {...rest}
+                        >
+                            {({ index, style }) => (
+                                <Box as='li' sx={listItemStyles} style={style}>
+                                    <CheckBoxListItem
+                                        key={optionsForRender[index].value}
+                                        option={optionsForRender[index]}
+                                        index={index}
+                                        isChecked={isChecked(
+                                            optionsForRender[index],
+                                        )}
+                                        onCheck={(event) =>
+                                            onCheck(
+                                                event,
+                                                optionsForRender[index],
+                                            )
+                                        }
+                                        DescriptionComponent={
+                                            DescriptionComponent
+                                        }
+                                        {...ref}
+                                    />
+
+                                    {showMoreButton &&
+                                    index === optionsForRender.length - 1 ? (
+                                        <Box>
+                                            <Button
+                                                mb={3}
+                                                mt={1}
+                                                variant='ghost'
+                                                fontWeight='semibold'
+                                                size='sm'
+                                                data-testid='show-more-button'
+                                                isLoading={isLoadingMore}
+                                                isDisabled={isLoadingMore}
+                                                onClick={onRequestMore}
+                                            >
+                                                {labelShowMore}
+                                            </Button>
+                                        </Box>
+                                    ) : null}
+                                </Box>
+                            )}
+                        </List>
+                    </>
                 )}
+
+                {optionsForRender.length === 0 &&
+                    filteredSelectedOptions.length === 0 && (
+                        <Flex
+                            height={`${LIST_ITEM_HEIGHT}px`}
+                            alignItems='center'
+                        >
+                            <Text color='tigeraGrey.600' px={3}>
+                                {emptyMessage}
+                            </Text>
+                        </Flex>
+                    )}
             </>
         );
     },
