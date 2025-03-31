@@ -53,7 +53,7 @@ gen-files: gen-crds
 ## Force a rebuild of custom resource definition yamls
 gen-crds:
 	rm -rf config/crd
-	$(DOCKER_GO_BUILD) sh -c '$(GIT_CONFIG_SSH) controller-gen  crd:allowDangerousTypes=true,crdVersions=v1,deprecatedV1beta1CompatibilityPreserveUnknownFields=false paths=./lib/apis/... output:crd:dir=config/crd/'
+	$(DOCKER_GO_BUILD) sh -c '$(GIT_CONFIG_SSH) controller-gen  crd:allowDangerousTypes=true,crdVersions=v1,deprecatedV1beta1CompatibilityPreserveUnknownFields=false,maxDescLen=0 paths=./lib/apis/... output:crd:dir=config/crd/'
 	# Cleanup
 	rm -f config/crd/_.yaml
 	rm -f config/crd/_nodes.yaml
