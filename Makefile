@@ -192,7 +192,7 @@ helm-index:
 
 # Creates the tar file used for installing Calico on OpenShift.
 bin/ocp.tgz: manifests/ocp/ bin/yq
-	tar czvf $@ -C manifests/ ocp
+	tar czvf $@ --exclude='.gitattributes' -C manifests/ ocp
 
 ## Generates release notes for the given version.
 .PHONY: release-notes
