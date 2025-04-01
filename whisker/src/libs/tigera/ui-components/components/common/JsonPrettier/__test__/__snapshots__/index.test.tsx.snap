@@ -3,7 +3,7 @@
 exports[`JsonPrettier should render 1`] = `
 <DocumentFragment>
   <div
-    class="containerStyles"
+    class="containerStylesDark"
   >
     <div
       class="_2bkNM"
@@ -13,12 +13,12 @@ exports[`JsonPrettier should render 1`] = `
         aria-controls=":jsnvw:1:"
         aria-expanded="true"
         aria-label="collapse JSON"
-        class="_oLqym _f10Tu _1MFti _1LId0"
+        class="_3QHg2 _f10Tu _1MFti _1LId0"
         role="button"
         tabindex="0"
       />
       <span
-        class="_3uHL6 _3eOF8"
+        class="_gsbQL _3eOF8"
       >
         {
       </span>
@@ -30,17 +30,17 @@ exports[`JsonPrettier should render 1`] = `
           role="listitem"
         >
           <span
-            class="labelStyles"
+            class="labelStylesDark"
           >
             a:
           </span>
           <span
-            class="stringStyles"
+            class="stringStylesDark"
           >
             "one"
           </span>
           <span
-            class="_3uHL6 _3eOF8"
+            class="_gsbQL _3eOF8"
           >
             ,
           </span>
@@ -50,17 +50,17 @@ exports[`JsonPrettier should render 1`] = `
           role="listitem"
         >
           <span
-            class="labelStyles"
+            class="labelStylesDark"
           >
             b:
           </span>
           <span
-            class="valueStyles"
+            class="valueStylesDark"
           >
             2
           </span>
           <span
-            class="_3uHL6 _3eOF8"
+            class="_gsbQL _3eOF8"
           >
             ,
           </span>
@@ -70,17 +70,17 @@ exports[`JsonPrettier should render 1`] = `
           role="listitem"
         >
           <span
-            class="labelStyles"
+            class="labelStylesDark"
           >
             c:
           </span>
           <span
-            class="valueStyles"
+            class="valueStylesDark"
           >
             null
           </span>
           <span
-            class="_3uHL6 _3eOF8"
+            class="_gsbQL _3eOF8"
           >
             ,
           </span>
@@ -90,17 +90,17 @@ exports[`JsonPrettier should render 1`] = `
           role="listitem"
         >
           <span
-            class="labelStyles"
+            class="labelStylesDark"
           >
             d:
           </span>
           <span
-            class="valueStyles"
+            class="valueStylesDark"
           >
             undefined
           </span>
           <span
-            class="_3uHL6 _3eOF8"
+            class="_gsbQL _3eOF8"
           >
             ,
           </span>
@@ -113,17 +113,17 @@ exports[`JsonPrettier should render 1`] = `
             aria-controls=":jsnvw:2:"
             aria-expanded="true"
             aria-label="collapse JSON"
-            class="_oLqym _f10Tu _1MFti _1LId0"
+            class="_3QHg2 _f10Tu _1MFti _1LId0"
             role="button"
             tabindex="0"
           />
           <span
-            class="labelStyles"
+            class="labelStylesDark"
           >
             e:
           </span>
           <span
-            class="_3uHL6 _3eOF8"
+            class="_gsbQL _3eOF8"
           >
             {
           </span>
@@ -135,24 +135,24 @@ exports[`JsonPrettier should render 1`] = `
               role="listitem"
             >
               <span
-                class="labelStyles"
+                class="labelStylesDark"
               >
                 f:
               </span>
               <span
-                class="stringStyles"
+                class="stringStylesDark"
               >
                 "g"
               </span>
             </div>
           </div>
           <span
-            class="_3uHL6 _3eOF8"
+            class="_gsbQL _3eOF8"
           >
             }
           </span>
           <span
-            class="_3uHL6 _3eOF8"
+            class="_gsbQL _3eOF8"
           >
             ,
           </span>
@@ -165,17 +165,17 @@ exports[`JsonPrettier should render 1`] = `
             aria-controls=":jsnvw:3:"
             aria-expanded="true"
             aria-label="collapse JSON"
-            class="_oLqym _f10Tu _1MFti _1LId0"
+            class="_3QHg2 _f10Tu _1MFti _1LId0"
             role="button"
             tabindex="0"
           />
           <span
-            class="labelStyles"
+            class="labelStylesDark"
           >
             x:
           </span>
           <span
-            class="_3uHL6 _3eOF8"
+            class="_gsbQL _3eOF8"
           >
             [
           </span>
@@ -187,12 +187,12 @@ exports[`JsonPrettier should render 1`] = `
               role="listitem"
             >
               <span
-                class="stringStyles"
+                class="stringStylesDark"
               >
                 "y"
               </span>
               <span
-                class="_3uHL6 _3eOF8"
+                class="_gsbQL _3eOF8"
               >
                 ,
               </span>
@@ -202,21 +202,21 @@ exports[`JsonPrettier should render 1`] = `
               role="listitem"
             >
               <span
-                class="stringStyles"
+                class="stringStylesDark"
               >
                 "z"
               </span>
             </div>
           </div>
           <span
-            class="_3uHL6 _3eOF8"
+            class="_gsbQL _3eOF8"
           >
             ]
           </span>
         </div>
       </div>
       <span
-        class="_3uHL6 _3eOF8"
+        class="_gsbQL _3eOF8"
       >
         }
       </span>
