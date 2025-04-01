@@ -458,7 +458,7 @@ func (c *autoHostEndpointController) validateName(name string) (string, error) {
 
 	hash := base64.RawURLEncoding.EncodeToString(hasher.Sum(nil))
 	regex := regexp.MustCompile("([-_.])")
-	name = regex.ReplaceAllString(name, "")
+	hash = regex.ReplaceAllString(hash, "")
 	name = strings.ToLower(fmt.Sprintf("%s-%s", hash, hostEndpointNameSuffix))
 	if len(name) > validation.DNS1123SubdomainMaxLength {
 		name = name[:validation.DNS1123SubdomainMaxLength]
