@@ -91,7 +91,7 @@ func registerNetworkPolicyConformance(t *testing.T) {
 			})
 			cSuite.Setup(t)
 
-			test.Test(t, cSuite)
+			test.Run(t, cSuite)
 		})
 	}
 }
