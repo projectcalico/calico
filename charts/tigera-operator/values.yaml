@@ -75,6 +75,8 @@ podAnnotations: {}
 # Custom labels for the tigera/operator pod.
 podLabels: {}
 
+# Custom DNS configuration for the tigera/operator pod.
+dnsConfig: {}
 # Image and registry configuration for the tigera/operator pod.
 tigeraOperator:
   image: tigera/operator
