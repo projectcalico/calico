@@ -21,6 +21,7 @@ import (
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/validation"
 
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
@@ -73,6 +74,15 @@ func (r kubeControllersConfiguration) validateAndFillDefaults(res *apiv3.KubeCon
 						ErroredFields: []cerrors.ErroredField{{
 							Name:   "KubeControllersConfiguration.Node.HostEndpoint.Templates",
 							Reason: "Template name must be specified",
+						}},
+					}
+				}
+
+				if len(template.GenerateName) > validation.DNS1123SubdomainMaxLength {
+					return cerrors.ErrorValidation{
+						ErroredFields: []cerrors.ErroredField{{
+							Name:   "KubeControllersConfiguration.Node.HostEndpoint.Templates",
+							Reason: "Template name must be shorter than 253 characters",
 						}},
 					}
 				}

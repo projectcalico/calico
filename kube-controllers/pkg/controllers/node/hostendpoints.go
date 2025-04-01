@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"net"
 	"reflect"
+	"regexp"
+	"strings"
 	"time"
 
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
@@ -455,7 +457,9 @@ func (c *autoHostEndpointController) validateName(name string) (string, error) {
 	}
 
 	hash := base64.RawURLEncoding.EncodeToString(hasher.Sum(nil))
-	name = fmt.Sprintf("%s-%s", hash, hostEndpointNameSuffix)
+	regex := regexp.MustCompile("([-_.])")
+	hash = regex.ReplaceAllString(hash, "")
+	name = strings.ToLower(fmt.Sprintf("%s-%s", hash, hostEndpointNameSuffix))
 	if len(name) > validation.DNS1123SubdomainMaxLength {
 		name = name[:validation.DNS1123SubdomainMaxLength]
 	}
