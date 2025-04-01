@@ -151,14 +151,19 @@ skip_redir_ifindex:
 			struct bpf_tunnel_key key = {
 				.tunnel_id = OVERLAY_TUNNEL_ID,
 			};
+			__u64 flags = 0;
+			__u32 size = 0;
 #ifdef IPVER6
 			ipv6_addr_t_to_be32_4_ip(key.remote_ipv6, &dest_rt->next_hop);
+			flags |= BPF_F_TUNINFO_IPV6;
+			size = offsetof(struct bpf_tunnel_key, local_ipv6);
 #else
 			key.remote_ipv4 = bpf_htonl(dest_rt->next_hop);
+			flags |= BPF_F_ZERO_CSUM_TX;
+			size = offsetof(struct bpf_tunnel_key, local_ipv4);
 #endif
 
-			int err = bpf_skb_set_tunnel_key(
-					ctx->skb, &key, offsetof(struct bpf_tunnel_key, local_ipv4), BPF_F_ZERO_CSUM_TX);
+			int err = bpf_skb_set_tunnel_key(ctx->skb, &key, size, flags);
 			CALI_DEBUG("bpf_skb_set_tunnel_key %d nh " IP_FMT, err, &dest_rt->next_hop);
 
 			rc = bpf_redirect(state->ct_result.ifindex_fwd, 0);
@@ -184,15 +189,21 @@ skip_redir_ifindex:
 			struct bpf_tunnel_key key = {
 				.tunnel_id = OVERLAY_TUNNEL_ID,
 			};
+
+			__u64 flags = 0;
+			__u32 size = 0;
 #ifdef IPVER6
 			ipv6_addr_t_to_be32_4_ip(key.remote_ipv6, &dest_rt->next_hop);
+			flags |= BPF_F_TUNINFO_IPV6;
+			size = offsetof(struct bpf_tunnel_key, local_ipv6);
 #else
 			key.remote_ipv4 = bpf_htonl(dest_rt->next_hop);
+			flags |= BPF_F_ZERO_CSUM_TX;
+			size = offsetof(struct bpf_tunnel_key, local_ipv4);
 #endif
 
-			int err = bpf_skb_set_tunnel_key(
-					ctx->skb, &key, offsetof(struct bpf_tunnel_key, local_ipv4), BPF_F_ZERO_CSUM_TX);
-			CALI_DEBUG("bpf_skb_set_tunnel_key %d", err);
+			int err = bpf_skb_set_tunnel_key(ctx->skb, &key, size, flags);
+			CALI_DEBUG("bpf_skb_set_tunnel_key %d nh " IP_FMT, err, &dest_rt->next_hop);
 		}
 	}
 
