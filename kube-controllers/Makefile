@@ -96,7 +96,7 @@ $(KUBE_CONTROLLER_CONTAINER_CREATED): register Dockerfile docker-image/flannel-m
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@
 
-$(KUBE_CONTROLLER_CONTAINER_FIPS_CREATED): register Dockerfile docker-image/flannel-migration/Dockerfile $(BINDIR)/kube-controllers-linux-$(ARCH) $(BINDIR)/check-status-linux-$(ARCH) $(BINDIR)/kubectl-$(ARCH)
+$(KUBE_CONTROLLER_CONTAINER_FIPS_CREATED): register Dockerfile docker-image/flannel-migration/Dockerfile $(BINDIR)/kube-controllers-linux-$(ARCH) $(BINDIR)/check-status-linux-$(ARCH) $(BINDIR)/wrapper-$(ARCH) $(BINDIR)/kubectl-$(ARCH)
 	$(DOCKER_BUILD) --build-arg BIN_DIR=$(BINDIR) -t $(KUBE_CONTROLLERS_IMAGE):latest-fips-$(ARCH) -f Dockerfile .
 	$(DOCKER_BUILD) --build-arg BIN_DIR=$(BINDIR) -t $(FLANNEL_MIGRATION_IMAGE):latest-fips-$(ARCH) -f docker-image/flannel-migration/Dockerfile .
 	$(MAKE) FIPS=true retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest-fips LATEST_IMAGE_TAG=latest-fips
