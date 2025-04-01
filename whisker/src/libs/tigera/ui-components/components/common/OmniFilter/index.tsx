@@ -1,4 +1,4 @@
-import { BoxProps, Button, Flex, Text } from '@chakra-ui/react';
+import { Box, BoxProps, Button, Flex, Text } from '@chakra-ui/react';
 import React, { useEffect } from 'react';
 import OmniCheckboxList, {
     OmniCheckboxListProps,
@@ -24,6 +24,7 @@ import {
     OmniFilterHeader,
     OmniFilterTrigger,
 } from './parts';
+import { AddIcon } from '@chakra-ui/icons';
 
 // Handle calling onReady for lazy loaded content
 const LazyOnReady: React.FC<{ onReady?: () => void }> = ({ onReady }) => {
@@ -66,6 +67,7 @@ export type OmniFilterProps = {
     showButtonIcon?: boolean;
     showSelectedList?: boolean;
     showOperatorSelect?: boolean;
+    isCreatable?: boolean;
     showSearch?: boolean;
     showSelectedOnButton?: boolean;
     inMemorySearch?: boolean;
@@ -77,6 +79,7 @@ export type OmniFilterProps = {
     formatOperatorLabel?: (option: OmniFilterOption) => string;
     formatSelectedLabel?: (selectedFilters: OmniFilterOption[]) => string;
     formatListCountLabel?: (listCount: number, totalItems: number) => string;
+    formatCreatableLabel?: (searchInput: string) => string;
 } & Omit<BoxProps, 'onChange'> & { 'data-testid'?: string };
 
 type CheckboxOmniFilterProps = {
@@ -109,6 +112,8 @@ const OmniFilter: React.FC<OmniFilterProps | CheckboxOmniFilterProps> = ({
     showSelectedList = false,
     inMemorySearch = false,
     totalItems,
+    isCreatable = false,
+    formatCreatableLabel,
     onChange,
     onReady,
     onClear,
@@ -125,8 +130,10 @@ const OmniFilter: React.FC<OmniFilterProps | CheckboxOmniFilterProps> = ({
 
     const [filteredData, setFilterData] = React.useState(filters);
     const [searchInput, setSearchInput] = React.useState('');
-
-    const hasFilters = filters.length > 0;
+    const filteredSelectedOptions = selectedFilters.filter((filter) =>
+        filter.label.includes(searchInput),
+    );
+    const hasFilters = filters.length > 0 || filteredSelectedOptions.length > 0;
     const [firstSelectedFilter, ...remainingSelectedFilters] = selectedFilters;
     const InternalListComponent = internalListComponent;
     const popoverContentRef = React.useRef<HTMLElement>(null);
@@ -150,9 +157,10 @@ const OmniFilter: React.FC<OmniFilterProps | CheckboxOmniFilterProps> = ({
     const listComponentProps = {
         options: filteredData,
         selectedOptions: selectedFilters,
+        filteredSelectedOptions,
+        showSelectedList,
         emptyMessage: labelNoSearchResults,
         showMoreButton: totalItems && filteredData.length < totalItems,
-        showSelectedList,
         isLoadingMore,
         labelShowMore,
         height: 300,
@@ -179,7 +187,10 @@ const OmniFilter: React.FC<OmniFilterProps | CheckboxOmniFilterProps> = ({
     return (
         <>
             <OmniFilterContainer
-                onClose={() => setIsOpen(false)}
+                onClose={() => {
+                    setIsOpen(false);
+                    setSearchInput('');
+                }}
                 initialFocusRef={initialFocusRef}
             >
                 <OmniFilterTrigger
@@ -292,7 +303,7 @@ const OmniFilter: React.FC<OmniFilterProps | CheckboxOmniFilterProps> = ({
                     )}
 
                     <OmniFilterBody
-                        px={hasFilters ? 0 : 3}
+                        px={hasFilters && !isLoading ? 0 : 3}
                         pt={!showOperatorSelect && !showSearch ? 2 : 0}
                     >
                         {isLoading && !isLoadingMore ? (
@@ -314,6 +325,40 @@ const OmniFilter: React.FC<OmniFilterProps | CheckboxOmniFilterProps> = ({
                             ) : (
                                 <OmniRadioList {...listComponentProps} />
                             )
+                        ) : isCreatable ? (
+                            <Box py={2}>
+                                {!searchInput && filteredData.length === 0 && (
+                                    <Text>{labelNoData}</Text>
+                                )}
+
+                                {searchInput && filteredData.length === 0 && (
+                                    <Button
+                                        variant='ghost'
+                                        leftIcon={<AddIcon fontSize='xs' />}
+                                        pl={0}
+                                        onClick={() => {
+                                            setSearchInput('');
+                                            listComponentProps.onChange([
+                                                ...selectedFilters,
+                                                {
+                                                    label: searchInput,
+                                                    value: searchInput,
+                                                },
+                                            ]);
+                                            if (onRequestSearch) {
+                                                onRequestSearch(filterId, '');
+                                            }
+                                        }}
+                                        data-testid={`${testId}-create-filter-button`}
+                                    >
+                                        {formatCreatableLabel ? (
+                                            formatCreatableLabel(searchInput)
+                                        ) : (
+                                            <>Add "{searchInput}"</>
+                                        )}
+                                    </Button>
+                                )}
+                            </Box>
                         ) : (
                             <Text py={2}>{labelNoData}</Text>
                         )}

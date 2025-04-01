@@ -60,7 +60,9 @@ describe('useInfiniteFilterQuery', () => {
         ];
         jest.mocked(api.get).mockResolvedValue({
             items,
-            total: 1,
+            total: {
+                totalResults: 1,
+            },
         });
 
         const { result } = renderHookWithQueryClient(() =>
