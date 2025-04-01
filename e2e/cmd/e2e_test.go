@@ -26,6 +26,7 @@ import (
 	"k8s.io/kubernetes/test/e2e/framework"
 	"k8s.io/kubernetes/test/e2e/framework/config"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/network-policy-api/apis/v1alpha1"
 	"sigs.k8s.io/network-policy-api/conformance/tests"
 	"sigs.k8s.io/network-policy-api/conformance/utils/suite"
@@ -35,7 +36,9 @@ import (
 )
 
 func init() {
+	// Configure logging. Most tests use klog, some (e.g., controller-runtime) use logr.
 	klog.SetOutput(ginkgo.GinkgoWriter)
+	log.SetLogger(ginkgo.GinkgoLogr)
 
 	// Register flags.
 	config.CopyFlags(config.Flags, flag.CommandLine)
