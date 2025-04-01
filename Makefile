@@ -123,13 +123,16 @@ image:
 # Run local e2e smoke test against the checked-out code
 # using a local kind cluster.
 ###############################################################################
-SIG_NET_FOCUS ?= "sig-network.*Conformance"
-ANP_FOCUS ?= "AdminNetworkPolicy"
-E2E_FOCUS = "$(SIG_NET_FOCUS)\|$(ANP_FOCUS)"
+SIG_NET_FOCUS ?= sig-network.*Conformance
+ANP_FOCUS ?= AdminNetworkPolicy
+E2E_FOCUS = "$(SIG_NET_FOCUS)|$(ANP_FOCUS)"
 e2e-test:
 	$(MAKE) -C e2e build
 	$(MAKE) -C node kind-k8st-setup
-	KUBECONFIG=$(KIND_KUBECONFIG) ./e2e/bin/k8s/e2e.test -ginkgo.focus=$(E2E_FOCUS)
+	$(MAKE) run-e2e-test
+
+run-e2e-test:
+	KUBECONFIG=$(KIND_KUBECONFIG) ./e2e/bin/e2e.test -ginkgo.focus=$(E2E_FOCUS)
 
 ###############################################################################
 # Release logic below
