@@ -83,6 +83,7 @@ type VXLANFDB struct {
 	nl             *handlemgr.HandleManager
 
 	newNetlinkHandle func() (netlinkshim.Interface, error)
+	arpOnly          bool
 }
 
 type comparableHWAddr string
@@ -104,6 +105,12 @@ type Option func(*VXLANFDB)
 func WithNetlinkHandleShim(newNetlinkHandle func() (netlinkshim.Interface, error)) Option {
 	return func(fdb *VXLANFDB) {
 		fdb.newNetlinkHandle = newNetlinkHandle
+	}
+}
+
+func WithARPUpdatesOnly() Option {
+	return func(fdb *VXLANFDB) {
+		fdb.arpOnly = true
 	}
 }
 
@@ -173,19 +180,23 @@ func (f *VXLANFDB) QueueResync() {
 
 func (f *VXLANFDB) SetVTEPs(vteps []VTEP) {
 	f.arpEntries.Desired().DeleteAll()
-	f.fdbEntries.Desired().DeleteAll()
+	if !f.arpOnly {
+		f.fdbEntries.Desired().DeleteAll()
+	}
 	for _, t := range vteps {
 		// Add an ARP entry, for the remote tunnel IP.  This allows the
 		// kernel to calculate the inner ethernet header without doing a
 		// broadcast ARP to all VXLAN peers.
 		comparableMAC := makeComparableHWAddr(t.TunnelMAC)
 		f.arpEntries.Desired().Set(t.TunnelIP, comparableMAC)
-		// Add an FDB entry.  While this is also a MAC/IP tuple, it tells
-		// the kernel something very different!  The FDB entry tells the
-		// kernel that, if it needs to send traffic to the VTEP MAC, it
-		// should send the VXLAN packet to a particular host's real IP
-		// address.
-		f.fdbEntries.Desired().Set(comparableMAC, t.HostIP)
+		if !f.arpOnly {
+			// Add an FDB entry.  While this is also a MAC/IP tuple, it tells
+			// the kernel something very different!  The FDB entry tells the
+			// kernel that, if it needs to send traffic to the VTEP MAC, it
+			// should send the VXLAN packet to a particular host's real IP
+			// address.
+			f.fdbEntries.Desired().Set(comparableMAC, t.HostIP)
+		}
 	}
 }
 
@@ -224,18 +235,20 @@ func (f *VXLANFDB) Apply() error {
 		},
 	)
 
-	applyFamily(f, nl, "FDB", f.fdbEntries,
-		func(hwAddr comparableHWAddr, ipAddr ip.Addr) *netlink.Neigh {
-			return &netlink.Neigh{
-				Family:       unix.AF_BRIDGE,
-				LinkIndex:    f.ifIndex,
-				State:        netlink.NUD_PERMANENT,
-				Flags:        netlink.NTF_SELF,
-				IP:           ipAddr.AsNetIP(),
-				HardwareAddr: hwAddr.HardwareAddr(),
-			}
-		},
-	)
+	if !f.arpOnly {
+		applyFamily(f, nl, "FDB", f.fdbEntries,
+			func(hwAddr comparableHWAddr, ipAddr ip.Addr) *netlink.Neigh {
+				return &netlink.Neigh{
+					Family:       unix.AF_BRIDGE,
+					LinkIndex:    f.ifIndex,
+					State:        netlink.NUD_PERMANENT,
+					Flags:        netlink.NTF_SELF,
+					IP:           ipAddr.AsNetIP(),
+					HardwareAddr: hwAddr.HardwareAddr(),
+				}
+			},
+		)
+	}
 
 	if !f.resyncPending && f.logNextSuccess {
 		f.logCtx.Info("VXLAN FDB now in sync.")
@@ -336,13 +349,15 @@ func (f *VXLANFDB) resync(nl netlinkshim.Interface) error {
 	if err != nil {
 		return err
 	}
-	err = resyncFamily(f, nl, "FDB", unix.AF_BRIDGE, f.fdbEntries,
-		func(f func(k comparableHWAddr, v ip.Addr), hwAddr comparableHWAddr, ipAddr ip.Addr) {
-			f(hwAddr, ipAddr)
-		},
-	)
-	if err != nil {
-		return err
+	if !f.arpOnly {
+		err = resyncFamily(f, nl, "FDB", unix.AF_BRIDGE, f.fdbEntries,
+			func(f func(k comparableHWAddr, v ip.Addr), hwAddr comparableHWAddr, ipAddr ip.Addr) {
+				f(hwAddr, ipAddr)
+			},
+		)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
