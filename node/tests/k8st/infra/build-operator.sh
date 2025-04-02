@@ -7,6 +7,8 @@
 set -e
 REPO=${REPO:-tigera/operator}
 BRANCH=${BRANCH:-master}
+
+rm -rf operator/
 echo "Cloning https://github.com/${REPO} @ ${BRANCH}"
 git clone --depth=1 https://github.com/${REPO} -b ${BRANCH} operator
 
