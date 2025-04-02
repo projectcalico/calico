@@ -12,9 +12,9 @@ trap 'cleanup' SIGINT SIGHUP SIGTERM EXIT
 # test directory.
 TEST_DIR=./tests/k8st
 ARCH=${ARCH:-amd64}
-HELM=../calico/bin/helm3
 GIT_VERSION=${GIT_VERSION:-`git describe --tags --dirty --always --abbrev=12`}
-CHART=../calico/bin/tigera-operator-$GIT_VERSION.tgz
+HELM=../bin/helm
+CHART=../bin/tigera-operator-$GIT_VERSION.tgz
 
 # kubectl binary.
 : ${kubectl:=../hack/test/kind/kubectl}

@@ -344,7 +344,7 @@ test_image: .calico_test.created
 
 chart: ../calico/bin/tigera-operator-$(GIT_VERSION).tgz
 ../calico/bin/tigera-operator-$(GIT_VERSION).tgz:
-	make -C ../calico bin/tigera-operator-$(GIT_VERSION).tgz
+	make -C ../ bin/tigera-operator-$(GIT_VERSION).tgz
 
 calico-node.tar: $(NODE_CONTAINER_CREATED)
 	docker save --output $@ $(NODE_IMAGE):latest-$(ARCH)
