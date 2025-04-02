@@ -341,8 +341,8 @@ test_image: .calico_test.created
 	$(DOCKER_BUILD) --build-arg ETCD_VERSION=$(ETCD_VERSION) -f calico_test/Dockerfile -t $(TEST_CONTAINER_NAME) calico_test
 	touch $@
 
-chart: ../calico/bin/tigera-operator-$(GIT_VERSION).tgz
-../calico/bin/tigera-operator-$(GIT_VERSION).tgz:
+chart: ../bin/tigera-operator-$(GIT_VERSION).tgz
+../bin/tigera-operator-$(GIT_VERSION).tgz:
 	make -C ../ bin/tigera-operator-$(GIT_VERSION).tgz
 
 calico-node.tar: $(NODE_CONTAINER_CREATED)
