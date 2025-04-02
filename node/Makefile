@@ -356,8 +356,8 @@ calico-apiserver.tar: ../go.mod $(shell find ../apiserver -name '*.go') $(shell 
 	make -C ../apiserver image
 	docker save --output $@ calico/apiserver:latest-$(ARCH)
 
-operator.tar:
-	cd tests/k8st/infra/ && ./build-operator.sh
+operator.tar: $(K8ST_IMAGE_TARS) tests/k8st/infra/calico_versions.yml
+	cd tests/k8st/infra/ && BRANCH=$(OPERATOR_BRANCH) ./build-operator.sh
 	docker save --output $@ docker.io/tigera/operator:test-build
 
 calico-cni.tar: ../go.mod $(shell find ../cni-plugin -name '*.go') $(shell find ../libcalico-go -name '*.go')
