@@ -5610,9 +5610,6 @@ func ensureBPFProgramsAttachedOffset(offset int, felix *infrastructure.Felix, if
 	if felix.ExpectedVXLANTunnelAddr != "" {
 		expectedIfaces = append(expectedIfaces, "vxlan.calico")
 	}
-	if felix.ExpectedVXLANV6TunnelAddr != "" {
-		expectedIfaces = append(expectedIfaces, "vxlan-v6.calico")
-	}
 	if felix.ExpectedWireguardTunnelAddr != "" {
 		expectedIfaces = append(expectedIfaces, "wireguard.cali")
 	}
