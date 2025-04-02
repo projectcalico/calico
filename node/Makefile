@@ -292,7 +292,7 @@ $(FELIX_GPL_SOURCE): .felix-gpl-source.created
 ###############################################################################
 # FV Tests
 ###############################################################################
-K8ST_IMAGE_TARS=calico-node.tar calico-typha.tar calico-apiserver.tar calico-cni.tar pod2daemon.tar calicoctl.tar kube-controllers.tar operator.tar
+K8ST_IMAGE_TARS=calico-node.tar calico-typha.tar calico-apiserver.tar calico-cni.tar pod2daemon.tar csi.tar node-driver-registrar.tar calicoctl.tar kube-controllers.tar operator.tar
 
 ifeq ($(SEMAPHORE_GIT_REF_TYPE), pull-request)
 # Determine the tests to run using the test spider tool, which emits a list of impacted packages.
@@ -364,7 +364,15 @@ calico-cni.tar: ../go.mod $(shell find ../cni-plugin -name '*.go') $(shell find 
 	make -C ../cni-plugin image
 	docker save --output $@ calico/cni:latest-$(ARCH)
 
-pod2daemon.tar: ../go.mod $(shell find ../pod2daemon -name '*.go')
+csi.tar: ../go.mod $(shell find ../pod2daemon/ -name '*.go')
+	make -C ../pod2daemon image
+	docker save --output $@ calico/csi:latest-$(ARCH)
+
+node-driver-registrar.tar: ../go.mod $(shell find ../pod2daemon/ -name '*.go')
+	make -C ../pod2daemon image
+	docker save --output $@ calico/node-driver-registrar:latest-$(ARCH)
+
+pod2daemon.tar: ../go.mod $(shell find ../pod2daemon/ -name '*.go')
 	make -C ../pod2daemon image
 	docker save --output $@ calico/pod2daemon-flexvol:latest-$(ARCH)
 

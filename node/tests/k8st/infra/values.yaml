@@ -1,6 +1,8 @@
 installation:
   enabled: true
   kubernetesProvider: ""
+  registry: docker.io
+  controlPlaneReplicas: 1
   calicoNetwork:
     ipPools:
     - cidr: 192.168.0.0/16
@@ -8,6 +10,12 @@ installation:
 
 apiServer:
   enabled: true
+
+goldmane:
+  enabled: false
+
+whisker:
+  enabled: false
 
 # Configuration for the tigera operator
 tigeraOperator:
