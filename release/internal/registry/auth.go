@@ -28,13 +28,24 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+var defaultDockerConfigDir = filepath.Join(os.Getenv("HOME"), ".config/docker")
+
+// DockerConfig stores configuration data from a user's config.json
 type DockerConfig struct {
 	Auths map[string]registry.AuthConfig `json:"auths"`
 }
 
+func dockerConfigDir() string {
+	configDir := os.Getenv("DOCKER_CONFIG")
+	if configDir == "" {
+		configDir = defaultDockerConfigDir
+	}
+	return configDir
+}
+
 // readDockerConfig reads the docker config file.
 func readDockerConfig() (DockerConfig, error) {
-	dockerConfigPath := filepath.Join(os.Getenv("HOME"), ".docker", "config.json")
+	dockerConfigPath := filepath.Join(dockerConfigDir(), "config.json")
 	file, err := os.Open(dockerConfigPath)
 	if err != nil {
 		logrus.WithError(err).Error("failed to open docker config file")
@@ -77,9 +88,20 @@ func getAuthFromDockerConfig(registryURL string) (registry.AuthConfig, error) {
 	return registry.AuthConfig{}, fmt.Errorf("no auth found for %s", registryURL)
 }
 
-// getBearerToken retrieves a bearer token to use for the image.
+// getBearerToken retrieves a bearer token to use for the image. If we have
+// authentication information, use it; otherwise, try without.
 func getBearerToken(registry Registry, scope string) (string, error) {
-	return getBearerTokenWithAuth("", registry, scope)
+	// Try to authenticate by default
+	bearerToken, err := getBearerTokenWithDefaultAuth(registry, scope)
+	if err == nil {
+		return bearerToken, err
+	}
+	// We didn't have authentication information. Try without authenticating.
+	bearerToken, err = getBearerTokenWithAuth("", registry, scope)
+	if err != nil {
+		return "", fmt.Errorf("failed to authenticate to registry and failed to get a bearer token without")
+	}
+	return bearerToken, nil
 }
 
 // getBearerTokenWithDefaultAuth retrieves a bearer token to use for the image with default authentication.

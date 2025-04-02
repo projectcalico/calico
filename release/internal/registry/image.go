@@ -55,24 +55,18 @@ func (i ImageRef) Tag() string {
 	return reference.TagNameOnly(i.ref).(reference.NamedTagged).Tag()
 }
 
+// Registry returns the Registry option for the image's specified domain
 func (i ImageRef) Registry() Registry {
 	domain := reference.Domain(i.ref)
 	return GetRegistry(domain)
 }
 
-func (i ImageRef) RequiresAuth() bool {
-	for _, img := range privateImages {
-		if i.Repository() == img {
-			return true
-		}
-	}
-	return false
-}
-
+// String returns the image reference as a fully qualfied string
 func (i ImageRef) String() string {
 	return i.ref.String()
 }
 
+// ParseImage returns an ImageRef for the fully qualified name of the image
 func ParseImage(img string) ImageRef {
 	ref, err := reference.ParseNormalizedNamed(img)
 	if err != nil {
