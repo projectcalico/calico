@@ -64,7 +64,7 @@ func (r stagedGlobalNetworkPolicies) Create(ctx context.Context, res *apiv3.Stag
 		res.Spec.Types = []apiv3.PolicyType(nil)
 	}
 
-	err := names.ValidateBackendTieredPolicyName(res.Name, tier)
+	err := names.ValidateTieredPolicyName(res.Name, tier)
 	if err != nil {
 		return nil, err
 	}
@@ -105,7 +105,7 @@ func (r stagedGlobalNetworkPolicies) Update(ctx context.Context, res *apiv3.Stag
 		res.Spec.Types = []apiv3.PolicyType(nil)
 	}
 
-	err := names.ValidateBackendTieredPolicyName(res.Name, res.Spec.Tier)
+	err := names.ValidateTieredPolicyName(res.Name, res.Spec.Tier)
 	if err != nil {
 		return nil, err
 	}

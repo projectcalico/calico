@@ -83,10 +83,10 @@ func TierFromPolicyName(name string) (string, error) {
 // (Staged)NetworkPolicy or a (Staged)GlobalNetworkPolicy resource.
 func BackendTieredPolicyName(policy, tier string) (string, error) {
 	tieredPolicy := TieredPolicyName(policy)
-	return tieredPolicy, ValidateBackendTieredPolicyName(tieredPolicy, tier)
+	return tieredPolicy, validateBackendTieredPolicyName(tieredPolicy, tier)
 }
 
-func ValidateBackendTieredPolicyName(policy, tier string) error {
+func validateBackendTieredPolicyName(policy, tier string) error {
 	if policy == "" {
 		return errors.New("Policy name is empty")
 	}
@@ -96,10 +96,24 @@ func ValidateBackendTieredPolicyName(policy, tier string) error {
 
 	t := TierOrDefault(tier)
 	parts := strings.SplitN(policy, ".", 2)
-	if len(parts) == 1 && t == "default" {
+	if len(parts) != 2 || !strings.HasPrefix(policy, t+".") {
+		return fmt.Errorf("Incorrectly formatted policy name %s", policy)
+	}
+	return nil
+}
+
+// ValidateTieredPolicyName validates v3 policy name, policies in the default tier can be named without the default. prefix.
+// Policy names in non default tier have to be in a format of tier.name
+func ValidateTieredPolicyName(policy, tier string) error {
+	if policyNameIsFormatted(policy) {
 		return nil
 	}
-	if len(parts) != 2 || !strings.HasPrefix(policy, t+".") {
+
+	parts := strings.SplitN(policy, ".", 2)
+	if len(parts) == 1 && tier == "default" {
+		return nil
+	}
+	if len(parts) != 2 || !strings.HasPrefix(policy, tier+".") {
 		return fmt.Errorf("Incorrectly formatted policy name %s", policy)
 	}
 	return nil
