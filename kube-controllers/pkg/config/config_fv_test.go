@@ -17,6 +17,7 @@ package config_test
 import (
 	"context"
 	"os"
+	"regexp"
 	"time"
 
 	. "github.com/onsi/ginkgo"
@@ -126,6 +127,8 @@ var _ = Describe("KubeControllersConfiguration FV tests", func() {
 		})
 
 		It("should restart if config is changed", func() {
+			restartChan := uut.WatchStdoutFor(regexp.MustCompile("Received exit status [[:digit:]]*, restarting"))
+
 			var out *v3.KubeControllersConfiguration
 			Eventually(func() *v3.KubeControllersConfiguration {
 				out, _ = c.KubeControllersConfiguration().Get(context.Background(), "default", options.GetOptions{})
@@ -137,8 +140,9 @@ var _ = Describe("KubeControllersConfiguration FV tests", func() {
 			out, err := c.KubeControllersConfiguration().Update(context.Background(), out, options.SetOptions{})
 			Expect(err).ToNot(HaveOccurred())
 
-			// container stops
-			Eventually(uut.Stopped, time.Second*30, time.Second).Should(BeTrue())
+			// kube-controller restarts due to configuration change
+			// the cmdWrapper we use in the image will restart kube-controllers
+			Eventually(restartChan, time.Second*30, time.Second).Should(BeClosed())
 
 			// Clear the status, so we know when the new system comes up
 			out, err = c.KubeControllersConfiguration().Get(context.Background(), "default", options.GetOptions{})
@@ -146,9 +150,6 @@ var _ = Describe("KubeControllersConfiguration FV tests", func() {
 			out.Status = v3.KubeControllersConfigurationStatus{}
 			out, err = c.KubeControllersConfiguration().Update(context.Background(), out, options.SetOptions{})
 			Expect(err).ToNot(HaveOccurred())
-
-			// restart the container (in a real system, Kubernetes restarts it)
-			uut = testutils.RunKubeControllerWithEnv(apiconfig.EtcdV3, etcd.IP, kconfigFile.Name(), nil)
 
 			// Wait for status to get set again, by checking a field for non-empty value
 			Eventually(func() bool {
