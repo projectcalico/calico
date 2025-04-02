@@ -4,7 +4,11 @@
 # in the ST and e2e tests in this repo.
 
 # Clone the repository if needed.
-git clone --depth=1 https://github.com/tigera/operator -b ${BRANCH:-master}
+set -e
+REPO=${REPO:-tigera/operator}
+BRANCH=${BRANCH:-master}
+echo "Cloning https://github.com/${REPO} @ ${BRANCH}"
+git clone --depth=1 https://github.com/${REPO} -b ${BRANCH} operator
 
 # Modify the versions that are in-use to match our locally built images.
 pushd operator
@@ -21,3 +25,4 @@ docker tag tigera/operator:latest docker.io/tigera/operator:test-build
 # Clean up after ourselves.
 popd
 rm -rf operator/
+set +e
