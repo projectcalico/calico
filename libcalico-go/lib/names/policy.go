@@ -83,10 +83,10 @@ func TierFromPolicyName(name string) (string, error) {
 // (Staged)NetworkPolicy or a (Staged)GlobalNetworkPolicy resource.
 func BackendTieredPolicyName(policy, tier string) (string, error) {
 	tieredPolicy := TieredPolicyName(policy)
-	return tieredPolicy, validateBackendTieredPolicyName(tieredPolicy, tier)
+	return tieredPolicy, ValidateBackendTieredPolicyName(tieredPolicy, tier)
 }
 
-func validateBackendTieredPolicyName(policy, tier string) error {
+func ValidateBackendTieredPolicyName(policy, tier string) error {
 	if policy == "" {
 		return errors.New("Policy name is empty")
 	}
@@ -96,6 +96,9 @@ func validateBackendTieredPolicyName(policy, tier string) error {
 
 	t := TierOrDefault(tier)
 	parts := strings.SplitN(policy, ".", 2)
+	if len(parts) == 1 && t == "default" {
+		return nil
+	}
 	if len(parts) != 2 || !strings.HasPrefix(policy, t+".") {
 		return fmt.Errorf("Incorrectly formatted policy name %s", policy)
 	}
