@@ -16,6 +16,7 @@ package aggregator_test
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -1809,17 +1810,25 @@ func TestStatistics(t *testing.T) {
 	// Number of flows to create for each test.
 	numFlows := 10
 
+	mutateUniquePolicyName := func(fl *proto.Flow, i int) {
+		// Modify the first policy hit to have a unique policy name. This ensures that
+		// we don't get duplicate policy hits in the statistics.
+		fl.Key.Policies.EnforcedPolicies[0].Name = fmt.Sprintf("policy-%d", i)
+	}
+
 	// Helper function for the statistics tests to create a bunch of random flows.
-	createFlows := func(numFlows int) []*proto.Flow {
+	createFlows := func(numFlows int, mutators ...func(*proto.Flow, int)) []*proto.Flow {
 		flows := []*proto.Flow{}
 
 		// Create a bunch of flows across different buckets, one per bucket.
 		// Each Flow has a random policy hit as well as a well-known one.
 		for i := range numFlows {
 			fl := testutils.NewRandomFlow(roller.clock.Now().Unix())
-			// Modify the first policy hit to have a unique policy name. This ensures that
-			// we don't get duplicate policy hits in the statistics.
-			fl.Key.Policies.EnforcedPolicies[0].Name = fmt.Sprintf("policy-%d", i)
+
+			// If a mutator was given, apply it to the flow.
+			for _, mutator := range mutators {
+				mutator(fl, i)
+			}
 
 			// Store off the flows we created so the tests can refer to them.
 			flows = append(flows, fl)
@@ -1857,7 +1866,7 @@ func TestStatistics(t *testing.T) {
 			go agg.Run(c.Now().Unix())
 
 			// Create some flows.
-			flows := createFlows(numFlows)
+			flows := createFlows(numFlows, mutateUniquePolicyName)
 
 			// Query for packet statistics per-policy.
 			perPolicyStats, err := agg.Statistics(&proto.StatisticsRequest{
@@ -1989,7 +1998,7 @@ func TestStatistics(t *testing.T) {
 			go agg.Run(c.Now().Unix())
 
 			// Create some flows.
-			_ = createFlows(numFlows)
+			_ = createFlows(numFlows, mutateUniquePolicyName)
 
 			// Send a query for non-time-series data, which will aggregate
 			// all the flows into a single statistic.
@@ -2025,6 +2034,132 @@ func TestStatistics(t *testing.T) {
 			}
 		})
 
+		t.Run(fmt.Sprintf("EndOfTier per-policy statistics %s", statName), func(t *testing.T) {
+			// Create a clock and rollover controller.
+			c := newClock(initialNow)
+			roller = &rolloverController{
+				ch:                    make(chan time.Time),
+				aggregationWindowSecs: 1,
+				clock:                 c,
+			}
+			opts := []aggregator.Option{
+				aggregator.WithRolloverTime(1 * time.Second),
+				aggregator.WithRolloverFunc(roller.After),
+				aggregator.WithNowFunc(c.Now),
+			}
+			defer setupTest(t, opts...)()
+			go agg.Run(c.Now().Unix())
+
+			// Create some flows, mutating the first policy hit in each to be an EndOfTier hit.
+			mutateEndOftier := func(fl *proto.Flow, i int) {
+				trigger := googleproto.Clone(fl.Key.Policies.EnforcedPolicies[0]).(*proto.PolicyHit)
+				fl.Key.Policies.EnforcedPolicies = []*proto.PolicyHit{
+					{
+						// Turn this into a typical EndOfTier default-deny policy.
+						Kind:      proto.PolicyKind_EndOfTier,
+						Tier:      trigger.Tier,
+						RuleIndex: -1,
+						Trigger:   trigger,
+						Action:    proto.Action_Deny,
+					},
+				}
+				fl.Key.Policies.PendingPolicies = []*proto.PolicyHit{}
+			}
+			_ = createFlows(
+				numFlows,
+				mutateUniquePolicyName,
+				mutateEndOftier,
+			)
+
+			// Send a query for non-time-series data, aggregated by Policy.
+			// Collect aggreated statistics, by policy rule.
+			stats, err := agg.Statistics(&proto.StatisticsRequest{
+				Type:       statType,
+				GroupBy:    proto.StatisticsGroupBy_Policy,
+				TimeSeries: false,
+			})
+			require.NoError(t, err)
+			require.NotNil(t, stats)
+
+			// We should have a unique entry for each EOT policy hit.
+			require.Len(t, stats, numFlows)
+
+			for _, stat := range stats {
+				require.Equal(t, proto.PolicyKind_CalicoNetworkPolicy, stat.Policy.Kind)
+
+				// Statistics per-policy don't include an action, as they aggregate across all actions.
+				require.Equal(t, proto.Action_ActionUnspecified, stat.Policy.Action)
+				switch stat.Direction {
+				case proto.RuleDirection_Egress:
+					require.NotEqual(t, int64(0), stat.DeniedIn[0])
+				case proto.RuleDirection_Ingress:
+					require.NotEqual(t, int64(0), stat.DeniedOut[0])
+				}
+				require.Equal(t, int64(0), stat.AllowedIn[0])
+				require.Equal(t, int64(0), stat.AllowedOut[0])
+				require.Equal(t, int64(0), stat.PassedIn[0])
+				require.Equal(t, int64(0), stat.PassedOut[0])
+			}
+		})
+
+		t.Run(fmt.Sprintf("EndOfTier per-rule statistics %s", statName), func(t *testing.T) {
+			// Create a clock and rollover controller.
+			c := newClock(initialNow)
+			roller = &rolloverController{
+				ch:                    make(chan time.Time),
+				aggregationWindowSecs: 1,
+				clock:                 c,
+			}
+			opts := []aggregator.Option{
+				aggregator.WithRolloverTime(1 * time.Second),
+				aggregator.WithRolloverFunc(roller.After),
+				aggregator.WithNowFunc(c.Now),
+			}
+			defer setupTest(t, opts...)()
+			go agg.Run(c.Now().Unix())
+
+			// Create some flows, mutating the first policy hit in each to be an EndOfTier hit.
+			mutateEndOftier := func(fl *proto.Flow, i int) {
+				trigger := googleproto.Clone(fl.Key.Policies.EnforcedPolicies[0]).(*proto.PolicyHit)
+				fl.Key.Policies.EnforcedPolicies = []*proto.PolicyHit{
+					{
+						// Turn this into a typical EndOfTier default-deny policy.
+						Kind:      proto.PolicyKind_EndOfTier,
+						Tier:      trigger.Tier,
+						RuleIndex: -1,
+						Trigger:   trigger,
+						Action:    proto.Action_Deny,
+					},
+				}
+				fl.Key.Policies.PendingPolicies = []*proto.PolicyHit{}
+			}
+			_ = createFlows(
+				numFlows,
+				mutateUniquePolicyName,
+				mutateEndOftier,
+			)
+
+			// Send a query for non-time-series data, aggregated by Policy.
+			// Collect aggreated statistics, by policy rule.
+			stats, err := agg.Statistics(&proto.StatisticsRequest{
+				Type:       statType,
+				GroupBy:    proto.StatisticsGroupBy_PolicyRule,
+				TimeSeries: false,
+			})
+			require.NoError(t, err)
+			require.NotNil(t, stats)
+
+			// We should have a unique entry for each EOT policy hit.
+			require.Len(t, stats, numFlows)
+
+			for _, stat := range stats {
+				require.Equal(t, proto.PolicyKind_CalicoNetworkPolicy, stat.Policy.Kind)
+				require.True(t, strings.HasPrefix(stat.Policy.Name, "policy"), fmt.Sprintf("Unexpected policy name: %s", stat.Policy.Name))
+				require.True(t, strings.HasPrefix(stat.Policy.Namespace, "test-ns"), fmt.Sprintf("Unexpected policy namespace: %s", stat.Policy.Namespace))
+				require.NotEqual(t, proto.Action_ActionUnspecified, stat.Policy.Action)
+			}
+		})
+
 		t.Run(fmt.Sprintf("GroupBy_PolicyRule %s", statName), func(t *testing.T) {
 			// Create a clock and rollover controller.
 			c := newClock(initialNow)
@@ -2042,7 +2177,7 @@ func TestStatistics(t *testing.T) {
 			go agg.Run(c.Now().Unix())
 
 			// Create some flows.
-			_ = createFlows(numFlows)
+			_ = createFlows(numFlows, mutateUniquePolicyName)
 
 			// Collect aggreated statistics, by policy rule.
 			stats, err := agg.Statistics(&proto.StatisticsRequest{
