@@ -34,6 +34,9 @@ image: $(IMAGE_BUILD_MARKER)
 build:
 	$(DOCKER_RUN_RM) $(BUILD_IMAGE_NAME) yarn install -g
 	$(DOCKER_RUN_RM) -e NODE_OPTIONS=--max_old_space_size=8192 -e CNX_APP_VERSION=$(GIT_VERSION) $(BUILD_IMAGE_NAME) yarn build
+
+# For local development, after building, run make generate-env-vars-config to generate the config.js file within the dist/public directory.
+generate-env-vars-config:
 	./add-env-vars.sh
 
 image: $(IMAGE_BUILD_MARKER)
