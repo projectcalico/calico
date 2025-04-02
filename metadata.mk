@@ -19,8 +19,8 @@ COREDNS_VERSION=1.5.2
 ETCD_VERSION=v3.5.6
 GHR_VERSION=v0.17.0
 HELM_VERSION=v3.11.3
-KINDEST_NODE_VERSION=v1.31.6
-KIND_VERSION=v0.27.0
+KINDEST_NODE_VERSION=v1.31.4
+KIND_VERSION=v0.25.0
 
 # Configuration for Semaphore/Github integration.  This needs to be set
 # differently for a forked repo.
