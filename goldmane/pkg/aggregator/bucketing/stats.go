@@ -228,38 +228,45 @@ func (s *statisticsIndex) AddFlow(flow *types.Flow) {
 
 	// For each policy in the flow, add the stats to the policy. The PolicyStatistics object
 	// is responsible for tracking the stats for each rule in the policy.
-	rules := types.FlowLogPolicyToProto(flow.Key.Policies()).EnforcedPolicies
+	policyHits := types.FlowLogPolicyToProto(flow.Key.Policies()).EnforcedPolicies
 
 	// Add pending policies as well - these may contain duplicates of the enforced rules, but
 	// we deduplicate them in the loop below.
-	rules = append(rules, types.FlowLogPolicyToProto(flow.Key.Policies()).PendingPolicies...)
+	policyHits = append(policyHits, types.FlowLogPolicyToProto(flow.Key.Policies()).PendingPolicies...)
 
 	// Build a map of policies to rules within the policy hit by this Flow. We want to add this Flow's
 	// statistics contribution once to each Policy, and once to each Rule within the Policy.
 	polToRules := make(map[StatisticsKey]map[StatisticsKey]proto.Action)
-	for _, rule := range rules {
+	for _, hit := range policyHits {
 		// Build a key for the policy, excluding per-rule information.
+		meta := hit
+		if meta.Kind == proto.PolicyKind_EndOfTier {
+			// For EndOfTier policies, use the policy that triggered the end of tier action to come into effect.
+			// Note that the Action is still attached to the EndOfTier hit, not the trigger.
+			meta = hit.Trigger
+		}
+
 		sk := StatisticsKey{
-			Namespace: rule.Namespace,
-			Name:      rule.Name,
-			Kind:      rule.Kind,
-			Tier:      rule.Tier,
-			Action:    rule.Action,
-			RuleIndex: rule.PolicyIndex,
+			Namespace: meta.Namespace,
+			Name:      meta.Name,
+			Kind:      meta.Kind,
+			Tier:      meta.Tier,
+			Action:    hit.Action,
+			RuleIndex: meta.PolicyIndex,
 			Direction: direction(flow),
 		}
 		pk := sk.policyID()
 		if _, ok := polToRules[pk]; !ok {
 			polToRules[pk] = make(map[StatisticsKey]proto.Action)
 		}
-		if action, ok := polToRules[pk][sk]; ok && action != rule.Action {
+		if action, ok := polToRules[pk][sk]; ok && action != hit.Action {
 			logrus.WithFields(logrus.Fields{
 				"policy":      sk,
-				"conflicting": rule.Action,
+				"conflicting": hit.Action,
 				"selected":    action,
 			}).Warnf("Policy rule has conflicting actions, using the first action")
 		} else {
-			polToRules[pk][sk] = rule.Action
+			polToRules[pk][sk] = hit.Action
 		}
 	}
 
