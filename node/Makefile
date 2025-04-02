@@ -170,7 +170,6 @@ clean: clean-windows
 	rm -rf bin
 	# We build these as part of the node build, so clean them as part of the clean.
 	make -C ../felix clean
-	make -C ../calico clean
 	# Delete images that we built in this repo
 	-docker image rm -f $$(docker images $(NODE_IMAGE) -a -q)
 	-docker image rm -f $$(docker images $(NODE_IMAGE) -a -q)
