@@ -165,9 +165,10 @@ clean: clean-windows
 	rm -rf certs *.tar $(NODE_CONTAINER_BIN_DIR)
 	rm -rf $(REMOTE_DEPS)
 	rm -rf filesystem/included-source
+	rm -rf tests/k8st/infra/operator
 	rm -rf dist
 	rm -rf bin
-	# We build felix as part of the node build, so clean it as part of the clean.
+	# We build these as part of the node build, so clean them as part of the clean.
 	make -C ../felix clean
 	# Delete images that we built in this repo
 	-docker image rm -f $$(docker images $(NODE_IMAGE) -a -q)
@@ -291,7 +292,7 @@ $(FELIX_GPL_SOURCE): .felix-gpl-source.created
 ###############################################################################
 # FV Tests
 ###############################################################################
-K8ST_IMAGE_TARS=calico-node.tar calico-typha.tar calico-apiserver.tar calico-cni.tar pod2daemon.tar calicoctl.tar kube-controllers.tar
+K8ST_IMAGE_TARS=calico-node.tar calico-typha.tar calico-apiserver.tar calico-cni.tar pod2daemon.tar calicoctl.tar kube-controllers.tar operator.tar
 
 ifeq ($(SEMAPHORE_GIT_REF_TYPE), pull-request)
 # Determine the tests to run using the test spider tool, which emits a list of impacted packages.
@@ -340,6 +341,10 @@ test_image: .calico_test.created
 	$(DOCKER_BUILD) --build-arg ETCD_VERSION=$(ETCD_VERSION) -f calico_test/Dockerfile -t $(TEST_CONTAINER_NAME) calico_test
 	touch $@
 
+chart: ../calico/bin/tigera-operator-$(GIT_VERSION).tgz
+../calico/bin/tigera-operator-$(GIT_VERSION).tgz:
+	make -C ../ bin/tigera-operator-$(GIT_VERSION).tgz
+
 calico-node.tar: $(NODE_CONTAINER_CREATED)
 	docker save --output $@ $(NODE_IMAGE):latest-$(ARCH)
 
@@ -350,6 +355,10 @@ calico-typha.tar: ../go.mod $(shell find ../typha -name '*.go') $(shell find ../
 calico-apiserver.tar: ../go.mod $(shell find ../apiserver -name '*.go') $(shell find ../libcalico-go -name '*.go')
 	make -C ../apiserver image
 	docker save --output $@ calico/apiserver:latest-$(ARCH)
+
+operator.tar: $(K8ST_IMAGE_TARS) tests/k8st/infra/calico_versions.yml
+	cd tests/k8st/infra/ && BRANCH=$(OPERATOR_BRANCH) ./build-operator.sh
+	docker save --output $@ docker.io/tigera/operator:test-build
 
 calico-cni.tar: ../go.mod $(shell find ../cni-plugin -name '*.go') $(shell find ../libcalico-go -name '*.go')
 	make -C ../cni-plugin image
@@ -399,8 +408,8 @@ k8s-test:
 	$(MAKE) kind-k8st-cleanup
 
 .PHONY: kind-k8st-setup
-kind-k8st-setup: $(K8ST_IMAGE_TARS) kind-cluster-create
-	KUBECONFIG=$(KIND_KUBECONFIG) ARCH=$(ARCH) ./tests/k8st/deploy_resources_on_kind_cluster.sh
+kind-k8st-setup: $(K8ST_IMAGE_TARS) ../calico/bin/tigera-operator-$(GIT_VERSION).tgz kind-cluster-create
+	KUBECONFIG=$(KIND_KUBECONFIG) ARCH=$(ARCH) GIT_VERSION=$(GIT_VERSION) ./tests/k8st/deploy_resources_on_kind_cluster.sh
 
 .PHONY: kind-k8st-run-test
 kind-k8st-run-test: .calico_test.created $(KIND_KUBECONFIG)
