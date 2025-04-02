@@ -59,7 +59,7 @@ COPY docker-image/nginx-start.sh /usr/bin/nginx-start.sh
 COPY docker-image/default.conf /etc/nginx/conf.d/default.conf
 COPY docker-image/nginx.conf /etc/nginx/nginx.conf
 
-COPY dist /usr/share/nginx/html/
+COPY --chown=10001:10001 dist /usr/share/nginx/html/
 
 FROM ${CALICO_BASE}
 

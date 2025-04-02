@@ -34,6 +34,7 @@ image: $(IMAGE_BUILD_MARKER)
 build:
 	$(DOCKER_RUN_RM) $(BUILD_IMAGE_NAME) yarn install -g
 	$(DOCKER_RUN_RM) -e NODE_OPTIONS=--max_old_space_size=8192 -e CNX_APP_VERSION=$(GIT_VERSION) $(BUILD_IMAGE_NAME) yarn build
+	./add-env-vars.sh
 
 image: $(IMAGE_BUILD_MARKER)
 
