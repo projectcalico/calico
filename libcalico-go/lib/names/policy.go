@@ -109,6 +109,7 @@ func ValidateTieredPolicyName(policy, tier string) error {
 		return nil
 	}
 
+	tier = TierOrDefault(tier)
 	parts := strings.SplitN(policy, ".", 2)
 	if len(parts) == 1 && tier == "default" {
 		return nil
