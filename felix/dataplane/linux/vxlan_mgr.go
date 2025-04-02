@@ -91,6 +91,16 @@ type vxlanManager struct {
 	// Log context
 	logCtx     *logrus.Entry
 	opRecorder logutils.OpRecorder
+
+	maintainIPOnly bool
+}
+
+type vxlanMgrOption func(m *vxlanManager)
+
+func vxlanMgrWithDualStack() vxlanMgrOption {
+	return func(m *vxlanManager) {
+		m.maintainIPOnly = true
+	}
 }
 
 type VXLANFDB interface {
@@ -106,6 +116,7 @@ func newVXLANManager(
 	opRecorder logutils.OpRecorder,
 	ipVersion uint8,
 	mtu int,
+	opts ...vxlanMgrOption,
 ) *vxlanManager {
 	nlHandle, _ := netlinkshim.NewRealNetlink()
 	return newVXLANManagerWithShims(
@@ -118,6 +129,7 @@ func newVXLANManager(
 		nlHandle,
 		ipVersion,
 		mtu,
+		opts...,
 	)
 }
 
@@ -131,9 +143,10 @@ func newVXLANManagerWithShims(
 	nlHandle netlinkHandle,
 	ipVersion uint8,
 	mtu int,
+	opts ...vxlanMgrOption,
 ) *vxlanManager {
 	logCtx := logrus.WithField("ipVersion", ipVersion)
-	return &vxlanManager{
+	m := &vxlanManager{
 		ipsetsDataplane: ipsetsDataplane,
 		ipSetMetadata: ipsets.IPSetMetadata{
 			MaxSize: dpConfig.MaxIPSetSize,
@@ -161,6 +174,12 @@ func newVXLANManagerWithShims(
 		logCtx:            logCtx,
 		opRecorder:        opRecorder,
 	}
+
+	for _, o := range opts {
+		o(m)
+	}
+
+	return m
 }
 
 func calculateNonEncapRouteProtocol(dpConfig Config) netlink.RouteProtocol {
@@ -464,6 +483,7 @@ func (m *vxlanManager) updateNeighborsAndAllowedSources() {
 		})
 		allowedVXLANSources = append(allowedVXLANSources, parentDeviceIP)
 	}
+
 	m.logCtx.WithField("l2routes", l2routes).Debug("VXLAN manager sending L2 updates")
 	m.fdb.SetVTEPs(l2routes)
 	m.ipsetsDataplane.AddOrReplaceIPSet(m.ipSetMetadata, allowedVXLANSources)
@@ -730,6 +750,9 @@ func (m *vxlanManager) configureVXLANDevice(
 	link, err := m.nlHandle.LinkByName(m.vxlanDevice)
 	if err != nil {
 		m.logCtx.WithError(err).Info("Failed to get VXLAN tunnel device, assuming it isn't present")
+		if m.maintainIPOnly {
+			return err
+		}
 		if err := m.nlHandle.LinkAdd(vxlan); err == syscall.EEXIST {
 			// Device already exists - likely a race.
 			m.logCtx.Debug("VXLAN device already exists, likely created by someone else.")
@@ -743,6 +766,12 @@ func (m *vxlanManager) configureVXLANDevice(
 		if err != nil {
 			return fmt.Errorf("can't locate created vxlan device %v", m.vxlanDevice)
 		}
+	}
+	if m.maintainIPOnly {
+		if err := m.ensureAddressOnLink(localVTEP.Ipv6Addr, link); err != nil {
+			return fmt.Errorf("failed to ensure address of interface: %s", err)
+		}
+		return nil
 	}
 
 	// At this point, we have successfully queried the existing device, or made sure it exists if it didn't
@@ -768,7 +797,7 @@ func (m *vxlanManager) configureVXLANDevice(
 	// Make sure the MTU is set correctly.
 	attrs := link.Attrs()
 	oldMTU := attrs.MTU
-	if oldMTU != mtu {
+	if mtu != 0 && oldMTU != mtu {
 		logCtx.WithFields(logrus.Fields{"old": oldMTU, "new": mtu}).Info("VXLAN device MTU needs to be updated")
 		if err := m.nlHandle.LinkSetMTU(link, mtu); err != nil {
 			m.logCtx.WithError(err).Warn("Failed to set vxlan tunnel device MTU")
