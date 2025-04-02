@@ -21,6 +21,8 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc/credentials"
+
+	calicotls "github.com/projectcalico/calico/crypto/pkg/tls"
 )
 
 // ClientCredentials returns the transport credentials for a Goldmane gRPC client, configured to
@@ -55,8 +57,8 @@ func tlsConfig(cert, key, caFile string) (*tls.Config, error) {
 	caCertPool.AppendCertsFromPEM(caCert)
 
 	// Create TLS config.
-	return &tls.Config{
-		Certificates: []tls.Certificate{certificate},
-		RootCAs:      caCertPool,
-	}, nil
+	cfg := calicotls.NewTLSConfig()
+	cfg.Certificates = []tls.Certificate{certificate}
+	cfg.RootCAs = caCertPool
+	return cfg, nil
 }
