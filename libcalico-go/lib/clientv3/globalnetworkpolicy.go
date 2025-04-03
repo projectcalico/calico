@@ -64,6 +64,10 @@ func (r globalNetworkPolicies) Create(ctx context.Context, res *apiv3.GlobalNetw
 	if err := validator.Validate(res); err != nil {
 		return nil, err
 	}
+	err := names.ValidateTieredPolicyName(res.Name, tier)
+	if err != nil {
+		return nil, err
+	}
 
 	// Add tier labels to policy for lookup.
 	if tier != "default" {
@@ -95,6 +99,10 @@ func (r globalNetworkPolicies) Update(ctx context.Context, res *apiv3.GlobalNetw
 	defaultPolicyTypesField(res.Spec.Ingress, res.Spec.Egress, &res.Spec.Types)
 
 	if err := validator.Validate(res); err != nil {
+		return nil, err
+	}
+	err := names.ValidateTieredPolicyName(res.Name, res.Spec.Tier)
+	if err != nil {
 		return nil, err
 	}
 
