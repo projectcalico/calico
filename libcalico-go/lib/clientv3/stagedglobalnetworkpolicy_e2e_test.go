@@ -426,11 +426,11 @@ var _ = testutils.E2eDatastoreDescribe("StagedGlobalNetworkPolicy tests", testut
 				Expect(err).ToNot(HaveOccurred())
 			}
 		},
-		Entry("NetworkPolicy without default tier prefix", "netpol", "default", false),
-		Entry("NetworkPolicy with default tier prefix", "default.netpol", "default", false),
-		Entry("NetworkPolicy with default tier prefix", "tier1.netpol", "tier1", false),
-		Entry("NetworkPolicy with default tier prefix", "netpol", "tier1", true),
-		Entry("NetworkPolicy with default tier prefix", "tier1.netpol", "tier2", true),
+		Entry("StagedGlobalNetworkPolicy in default tier without prefix", "netpol", "default", false),
+		Entry("StagedGlobalNetworkPolicy in default tier with prefix", "default.netpol", "default", false),
+		Entry("StagedGlobalNetworkPolicy in custom tier with correct prefix", "tier1.netpol", "tier1", false),
+		Entry("StagedGlobalNetworkPolicy in custom tier without prefix", "netpol", "tier1", true),
+		Entry("StagedGlobalNetworkPolicy in custom tier with incorrect prefix", "tier1.netpol", "tier2", true),
 	)
 
 	Describe("StagedGlobalNetworkPolicy watch functionality", func() {
