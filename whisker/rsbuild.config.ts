@@ -14,6 +14,10 @@ export default defineConfig({
                             from: 'public/favicon.ico',
                             to: 'public/favicon.ico',
                         },
+                        {
+                            from: 'config/config.json',
+                            to: 'config/config.json',
+                        },
                     ],
                 }),
             ],
