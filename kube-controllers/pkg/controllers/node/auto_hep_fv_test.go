@@ -840,6 +840,49 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 			return testutils.ExpectHostendpoint(c, expectedDefaultHepName, expectedDefaultHepLabels, expectedDefaultIPs, autoHepProfiles, defaultInterfaceName)
 		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
 	})
+
+	It("should properly hash hostendpoint name", func() {
+		_, err := c.KubeControllersConfiguration().Create(context.Background(), autoHepTemplateKcc, options.SetOptions{})
+		Expect(err).ToNot(HaveOccurred())
+		nodeController = testutils.RunNodeController(apiconfig.EtcdV3, etcd.IP, kconfigFile.Name())
+
+		cn := calicoNode(cNodeName, "", map[string]string{"calico-label": "calico-value"})
+		_, err = c.Nodes().Create(context.Background(), cn, options.SetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		// Expect a template hostendpoint to be created.
+		expectedTemplateHepName := cn.Name + "-template-auto-hep"
+		expectedTemplateIPs := []string{"192.168.100.1"}
+		expectedTemplateHepLabels := map[string]string{
+			"calico-label":                 "calico-value",
+			"projectcalico.org/created-by": "calico-kube-controllers",
+			"template-label":               "template-value",
+		}
+		Eventually(func() error {
+			return testutils.ExpectHostendpoint(c, expectedTemplateHepName, expectedTemplateHepLabels, expectedTemplateIPs, autoHepProfiles, templateInterfaceName)
+		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
+
+		// Restart the controller with updated template name
+		nodeController.Stop()
+		kcc, err := c.KubeControllersConfiguration().Get(context.Background(), "default", options.GetOptions{})
+		Expect(err).ToNot(HaveOccurred())
+		kcc.Spec.Controllers.Node.HostEndpoint.Templates = []api.Template{
+			{
+				GenerateName:   "the-quick-brown-fox-jumps-over-the-lazy-dog-the-quick-brown-fox-jumps-over-the-lazy-dog-the-quick-brown-fox-jumps-over-the-lazy-dog-the-quick-brown-fox-jumps-over-the-lazy-dog-the-quick-brown-fox-jumps-over-the-lazy-dog-the-quick-brown-fox-jumps",
+				InterfaceCIDRs: []string{"192.168.100.1/32"},
+				Labels:         map[string]string{"template-label": "template-value"},
+			},
+		}
+		_, err = c.KubeControllersConfiguration().Update(context.Background(), kcc, options.SetOptions{})
+		Expect(err).ToNot(HaveOccurred())
+		nodeController = testutils.RunNodeController(apiconfig.EtcdV3, etcd.IP, kconfigFile.Name())
+
+		// Expect template hostendpoint to have new hashed name
+		expectedTemplateHepName = "2vhzifmgzoee1hgruafve8iewjr1cabezq3o51myej0-auto-hep"
+		Eventually(func() error {
+			return testutils.ExpectHostendpoint(c, expectedTemplateHepName, expectedTemplateHepLabels, expectedTemplateIPs, autoHepProfiles, templateInterfaceName)
+		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
+	})
 })
 
 func calicoNode(name string, k8sNodeName string, labels map[string]string) *libapi.Node {
