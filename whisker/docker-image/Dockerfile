@@ -31,6 +31,7 @@ COPY --from=ubi /usr/sbin/nginx /usr/sbin/nginx
 COPY --from=ubi /bin/sh /bin/sh
 COPY --from=ubi /usr/bin/cat /usr/bin/cat
 COPY --from=ubi /usr/bin/cd /usr/bin/cd
+COPY --from=ubi /usr/bin/mkdir /usr/bin/mkdir
 COPY --from=ubi /usr/bin/coreutils /usr/bin/coreutils
 COPY --from=ubi /usr/bin/sed /usr/bin/sed
 
@@ -60,8 +61,6 @@ COPY docker-image/default.conf /etc/nginx/conf.d/default.conf
 COPY docker-image/nginx.conf /etc/nginx/nginx.conf
 
 COPY dist /usr/share/nginx/html/
-
-COPY --chown=10001:10001 config/config.json /usr/share/nginx/html/config/
 
 FROM ${CALICO_BASE}
 

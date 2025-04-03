@@ -2,8 +2,8 @@
 
 # Updates the config options according to environment variables
 # received via the configMap.
-
-cat > /usr/share/nginx/html/config/config.json <<EOF
+mkdir -p /etc/config
+cat > /etc/config/config.json <<EOF
 {
   "config": {
     "cluster_id": "${CLUSTER_ID}",
