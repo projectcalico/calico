@@ -21,18 +21,37 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/docker/docker/api/types/registry"
 	"github.com/sirupsen/logrus"
 )
 
 var defaultDockerConfigDir = filepath.Join(os.Getenv("HOME"), ".config/docker")
+var dockerConfigOnce = sync.OnceValues(readDockerConfig)
 
 // DockerConfig stores configuration data from a user's config.json
 type DockerConfig struct {
-	Auths map[string]registry.AuthConfig `json:"auths"`
+	Auths       map[string]registry.AuthConfig `json:"auths"`
+	CredHelpers map[string]string              `json:"credHelpers"`
+	CredsStore  string                         `json:"credsStore"`
+}
+
+type credentialHelperData struct {
+	Username      string `json:"Username"`
+	Password      string `json:"Secret"`
+	ServerAddress string `json:"ServerURL"`
+}
+
+func (cd credentialHelperData) toAuthConfig() registry.AuthConfig {
+	return registry.AuthConfig{
+		Username:      cd.Username,
+		Password:      cd.Password,
+		ServerAddress: cd.ServerAddress,
+	}
 }
 
 func dockerConfigDir() string {
@@ -46,6 +65,7 @@ func dockerConfigDir() string {
 // readDockerConfig reads the docker config file.
 func readDockerConfig() (DockerConfig, error) {
 	dockerConfigPath := filepath.Join(dockerConfigDir(), "config.json")
+	logrus.WithField("configfile", dockerConfigPath).Debug("Reading docker config file")
 	file, err := os.Open(dockerConfigPath)
 	if err != nil {
 		logrus.WithError(err).Error("failed to open docker config file")
@@ -62,29 +82,113 @@ func readDockerConfig() (DockerConfig, error) {
 		logrus.WithError(err).Error("failed to unmarshal docker config")
 		return DockerConfig{}, err
 	}
+
+	for reg, auth := range dockerConfig.Auths {
+		logWithReg := logrus.WithField("registry", reg)
+		// If auth.Auth is not a string, it's base64 encoded credentials
+		if auth.Auth != "" {
+			decoded, err := base64.URLEncoding.DecodeString(auth.Auth)
+			if err != nil {
+				return DockerConfig{}, fmt.Errorf("failed to decode auth field for config %s: %w", reg, err)
+			}
+			parts := strings.Split(string(decoded), ":")
+			if len(parts) != 2 {
+				return DockerConfig{}, fmt.Errorf("decoded invalid auth for config %s: %w", reg, err)
+			}
+			dockerConfig.Auths[reg] = registry.AuthConfig{
+				Username:      parts[0],
+				Password:      parts[1],
+				Auth:          auth.Auth,
+				ServerAddress: reg,
+			}
+		} else {
+			// If the config has a defined CredHelper for this registry, try to use it
+			if helper, ok := dockerConfig.CredHelpers[reg]; ok {
+				logWithHelper := logWithReg.WithField("helper", helper)
+				logWithHelper.Debug("Getting credentials from credential helper")
+				credsData, err := getCredsFromCredentialHelper(helper, reg)
+				if err != nil {
+					logWithHelper.WithError(err).Error("Unable to get credentials from defined helper")
+				} else {
+					dockerConfig.Auths[reg] = credsData.toAuthConfig()
+				}
+				continue
+			}
+			// If we couldn't get credentials from the CredHelper, or if it wasn't defined,
+			// try the user's default credentials store
+			if dockerConfig.CredsStore != "" {
+				logWithCredsStore := logWithReg.WithField("credsStore", dockerConfig.CredsStore)
+				logWithCredsStore.Debug("getting credentials from default credential store")
+				credsData, err := getCredsFromCredentialHelper(dockerConfig.CredsStore, reg)
+				if err != nil {
+					logWithCredsStore.WithError(err).Error(fmt.Sprintf("Unable to get credentials from credential store"))
+				} else {
+					dockerConfig.Auths[reg] = credsData.toAuthConfig()
+				}
+			}
+		}
+	}
 	return dockerConfig, nil
+}
+
+func getCredsFromCredentialHelper(helperName string, domainName string) (credentialHelperData, error) {
+	credentialHelperName := fmt.Sprintf("docker-credential-%s", helperName)
+	credHelperLog := logrus.WithFields(logrus.Fields{
+		"CredsHelper": credentialHelperName,
+		"Registry":    domainName,
+	})
+	credHelperLog.Debug("Getting credential data")
+	cmd := exec.Command(credentialHelperName, "get")
+
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		return credentialHelperData{}, fmt.Errorf("unable to execute credential helper: %w", err)
+	}
+	defer stdin.Close()
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return credentialHelperData{}, fmt.Errorf("unable to execute credential helper: %v", err)
+	}
+	defer stdout.Close()
+
+	outputBuffer := fmt.Sprintf("%s\n", domainName)
+
+	if err = cmd.Start(); err != nil {
+		return credentialHelperData{}, fmt.Errorf("failed to execute credential helper %s: %w", credentialHelperName, err)
+	}
+
+	io.WriteString(stdin, outputBuffer)
+
+	err = stdin.Close()
+	if err != nil {
+		return credentialHelperData{}, fmt.Errorf("failed to close subprocess stdin: %w", err)
+	}
+
+	buf, err := io.ReadAll(stdout)
+	_ = cmd.Wait()
+
+	credsData := credentialHelperData{}
+	if err := json.Unmarshal(buf, &credsData); err != nil {
+		// always return an (empty) AuthConfig to increase compatibility with
+		// the existing API.
+		credHelperLog.Error("Couldn't unmarshal JSON data")
+		return credentialHelperData{}, err
+	}
+	return credsData, nil
 }
 
 // getAuthFromDockerConfig retrieves the auth from the docker config.
 func getAuthFromDockerConfig(registryURL string) (registry.AuthConfig, error) {
-	dockerConfig, err := readDockerConfig()
+	dockerConfig, err := dockerConfigOnce()
+
+	if authConfig, ok := dockerConfig.Auths[registryURL]; ok {
+		return authConfig, nil
+	}
+
 	if err != nil {
 		return registry.AuthConfig{}, err
 	}
-	for reg, auth := range dockerConfig.Auths {
-		if strings.Contains(reg, registryURL) {
-			decoded, err := base64.URLEncoding.DecodeString(auth.Auth)
-			if err != nil {
-				return registry.AuthConfig{}, fmt.Errorf("failed to decode auth: %w", err)
-			}
-			parts := strings.Split(string(decoded), ":")
-			return registry.AuthConfig{
-				Username:      parts[0],
-				Password:      parts[1],
-				ServerAddress: registryURL,
-			}, nil
-		}
-	}
+
 	return registry.AuthConfig{}, fmt.Errorf("no auth found for %s", registryURL)
 }
 
