@@ -110,6 +110,7 @@ func ImageExists(img ImageRef) (bool, error) {
 		return true, nil
 	} else if resp.StatusCode == http.StatusNotFound {
 		body, _ := io.ReadAll(resp.Body)
+		logrus.WithField("image", img.String()).Error("Failed to get manifest")
 		return false, fmt.Errorf("unable to find image: %s", body)
 	}
 	return false, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
