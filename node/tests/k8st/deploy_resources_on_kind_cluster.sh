@@ -131,4 +131,4 @@ test_connection 6
 # At the end of it all, scale down the operator so that it doesn't
 # make changes to the cluster. Some of our tests modify calico/node, etc.
 # We should remove this once we fix up those tests.
-kubectl scale deployment -n tigera-operator tigera-operator --replicas=0
+${kubectl} scale deployment -n tigera-operator tigera-operator --replicas=0
