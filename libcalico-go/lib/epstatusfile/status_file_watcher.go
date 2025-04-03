@@ -32,6 +32,7 @@ type Callbacks struct {
 	OnFileCreation func(fileName string)
 	OnFileUpdate   func(fileName string)
 	OnFileDeletion func(fileName string)
+	OnInSync       func(inSync bool)
 }
 
 type FileWatcher struct {
@@ -80,6 +81,14 @@ func (w *FileWatcher) Start() {
 }
 
 func (w *FileWatcher) newFsnotifyWatcher() error {
+	oldWatcher := w.fsWatcher
+	if oldWatcher != nil {
+		err := oldWatcher.Close()
+		if err != nil {
+			log.WithError(err).Info("Ignoring error during fs-watch close")
+		}
+	}
+
 	// reset w.fsWatcher
 	w.fsWatcher = nil
 
@@ -102,9 +111,6 @@ func (w *FileWatcher) newFsnotifyWatcher() error {
 
 func (w *FileWatcher) runFsnotifyWatcher(watcher *fsnotify.Watcher) error {
 	w.fsnotifyActive = true
-
-	// Get current state of the directory and emit initial events.
-	w.scanDirectory()
 
 	// Listen for events and loop until error occurs.
 	for {
@@ -138,7 +144,6 @@ func (w *FileWatcher) runFsnotifyWatcher(watcher *fsnotify.Watcher) error {
 					}
 				}
 			}
-
 		case err, ok := <-watcher.Errors:
 			if !ok {
 				// Stop if channel is closed.
@@ -167,6 +172,9 @@ func (w *FileWatcher) runWatcher() {
 			log.WithError(err).Info("Error initializing fsnotify. Falling back to polling.")
 		}
 
+		// Get current state of the directory and emit initial events.
+		w.scanDirectory()
+		w.callbacks.OnInSync(true)
 		if w.fsWatcher != nil {
 			// Run fsnotify watcher loop if possible.
 			err := w.runFsnotifyWatcher(w.fsWatcher)
@@ -182,7 +190,7 @@ func (w *FileWatcher) runWatcher() {
 
 		select {
 		case <-w.pollTicker.C:
-			w.scanDirectory()
+			continue
 		case <-w.stopChan:
 			return
 		}
