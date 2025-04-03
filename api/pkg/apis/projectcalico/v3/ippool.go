@@ -48,6 +48,7 @@ type IPPool struct {
 // IPPoolSpec contains the specification for an IPPool resource.
 type IPPoolSpec struct {
 	// The pool CIDR.
+	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="CIDR cannot be changed; follow IP pool migration guide to avoid corruption."
 	CIDR string `json:"cidr" validate:"net"`
 
 	// Contains configuration for VXLAN tunneling for this pool. If not specified,
@@ -69,6 +70,7 @@ type IPPoolSpec struct {
 	DisableBGPExport bool `json:"disableBGPExport,omitempty" validate:"omitempty"`
 
 	// The block size to use for IP address assignments from this pool. Defaults to 26 for IPv4 and 122 for IPv6.
+	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="Block size cannot be changed; follow IP pool migration guide to avoid corruption."
 	BlockSize int `json:"blockSize,omitempty"`
 
 	// Allows IPPool to allocate for a specific node by label selector.
