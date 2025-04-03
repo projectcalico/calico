@@ -31,6 +31,7 @@ COPY --from=ubi /usr/sbin/nginx /usr/sbin/nginx
 COPY --from=ubi /bin/sh /bin/sh
 COPY --from=ubi /usr/bin/cat /usr/bin/cat
 COPY --from=ubi /usr/bin/cd /usr/bin/cd
+COPY --from=ubi /usr/bin/mkdir /usr/bin/mkdir
 COPY --from=ubi /usr/bin/coreutils /usr/bin/coreutils
 COPY --from=ubi /usr/bin/sed /usr/bin/sed
 
