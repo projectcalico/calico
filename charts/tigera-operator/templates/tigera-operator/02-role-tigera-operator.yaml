@@ -217,6 +217,7 @@ rules:
     resources:
       - kubecontrollersconfigurations
       - bgpconfigurations
+      - clusterinformations
     verbs:
       - get
       - list
@@ -375,13 +376,6 @@ rules:
       - ipamblocks
     verbs:
       - list
-  # Need this permission for the calicoctl version mismatch checking
-  - apiGroups:
-      - crd.projectcalico.org
-    resources:
-      - clusterinformations
-    verbs:
-      - get
   # For AWS security group setup.
   - apiGroups:
       - batch

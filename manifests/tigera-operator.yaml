@@ -255,6 +255,7 @@ rules:
     resources:
       - kubecontrollersconfigurations
       - bgpconfigurations
+      - clusterinformations
     verbs:
       - get
       - list
