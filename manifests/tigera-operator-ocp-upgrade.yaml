@@ -1,23 +1,70 @@
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: tigera-operator
+  name: calico-apiserver
+  annotations:
+    openshift.io/node-selector: ""
   labels:
-    name: tigera-operator
-    pod-security.kubernetes.io/enforce: privileged
+    name: calico-apiserver
+    security.openshift.io/scc.podSecurityLabelSync: "false"
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/warn: restricted
 ---
-# Source: tigera-operator/templates/tigera-operator/02-serviceaccount-tigera-operator.yaml
 apiVersion: v1
-kind: ServiceAccount
+kind: Namespace
+metadata:
+  name: calico-system
+  annotations:
+    openshift.io/node-selector: ""
+  labels:
+    name: calico-system
+    security.openshift.io/scc.podSecurityLabelSync: "false"
+    pod-security.kubernetes.io/audit: privileged
+    pod-security.kubernetes.io/enforce: privileged
+    pod-security.kubernetes.io/warn: privileged
+---
+apiVersion: v1
+kind: Namespace
 metadata:
   name: tigera-operator
+  annotations:
+    openshift.io/node-selector: ""
+  labels:
+    name: tigera-operator
+    openshift.io/run-level: "0"
+---
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: tigera-operator-secrets
   namespace: tigera-operator
   labels:
     k8s-app: tigera-operator
-imagePullSecrets:
-  []
+subjects:
+  - kind: ServiceAccount
+    name: tigera-operator
+    namespace: tigera-operator
+roleRef:
+  kind: ClusterRole
+  name: tigera-operator-secrets
+  apiGroup: rbac.authorization.k8s.io
 ---
-# Source: tigera-operator/templates/tigera-operator/02-role-tigera-operator-secrets.yaml
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: tigera-operator
+  labels:
+    k8s-app: tigera-operator
+subjects:
+  - kind: ServiceAccount
+    name: tigera-operator
+    namespace: tigera-operator
+roleRef:
+  kind: ClusterRole
+  name: tigera-operator
+  apiGroup: rbac.authorization.k8s.io
+---
 # Permissions required to manipulate operator secrets for a Calico cluster.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -35,7 +82,6 @@ rules:
       - update
       - delete
 ---
-# Source: tigera-operator/templates/tigera-operator/02-role-tigera-operator.yaml
 # Permissions required when running the operator for a Calico cluster.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -229,9 +275,9 @@ rules:
     verbs:
       - delete
   - apiGroups:
-    - networking.k8s.io
+      - networking.k8s.io
     resources:
-    - networkpolicies
+      - networkpolicies
     verbs:
       - create
       - update
@@ -240,46 +286,46 @@ rules:
       - list
       - watch
   - apiGroups:
-    - crd.projectcalico.org
+      - crd.projectcalico.org
     resources:
-    - felixconfigurations
-    - ippools
+      - felixconfigurations
+      - ippools
     verbs:
-    - create
-    - patch
-    - list
-    - get
-    - watch
+      - create
+      - patch
+      - list
+      - get
+      - watch
   - apiGroups:
-    - crd.projectcalico.org
+      - crd.projectcalico.org
     resources:
-    - kubecontrollersconfigurations
-    - bgpconfigurations
-    - clusterinformations
+      - kubecontrollersconfigurations
+      - bgpconfigurations
+      - clusterinformations
     verbs:
-    - get
-    - list
-    - watch
+      - get
+      - list
+      - watch
   - apiGroups:
-    - projectcalico.org
+      - projectcalico.org
     resources:
-    - ippools
+      - ippools
     verbs:
-    - create
-    - update
-    - delete
-    - patch
-    - get
-    - list
-    - watch
+      - create
+      - update
+      - delete
+      - patch
+      - get
+      - list
+      - watch
   - apiGroups:
-    - projectcalico.org
+      - projectcalico.org
     resources:
-    - ipamconfigurations
+      - ipamconfigurations
     verbs:
-    - get
-    - list
-    - watch
+      - get
+      - list
+      - watch
   - apiGroups:
       - scheduling.k8s.io
     resources:
@@ -348,26 +394,82 @@ rules:
     verbs:
       - list
       - watch
-  # Add the appropriate pod security policy permissions
+  # When running in OpenShift, we need to update networking config.
   - apiGroups:
-      - policy
+      - config.openshift.io
     resources:
-      - podsecuritypolicies
-    resourceNames:
-      - tigera-operator
-    verbs:
-      - use
-  - apiGroups:
-      - policy
-    resources:
-      - podsecuritypolicies
+      - networks/status
     verbs:
       - get
       - list
+      - update
+  - apiGroups:
+      - config.openshift.io
+    resources:
+      - networks
+      - infrastructures
+    verbs:
+      - get
+      - list
+      - patch
       - watch
+  # On OpenShift, we need to modify SCCs.
+  - apiGroups:
+      - security.openshift.io
+    resources:
+      - securitycontextconstraints
+    verbs:
       - create
+      - get
+      - list
       - update
       - delete
+      - watch
+  # The following rule is only for operator certification purposes.
+  # The operator normally runs in a namespace with openshift.io/run-level=0 which bypasses SCC.
+  # However in certification tests, the operator is run in a normal namespace so this
+  # rule is needed for host networking and hostPath volume access.
+  - apiGroups:
+      - security.openshift.io
+    resources:
+      - securitycontextconstraints
+    resourceNames:
+      - hostaccess
+    verbs:
+      - use
+  # Need these permissions for the calicoctl init container.
+  - apiGroups:
+      - crd.projectcalico.org
+    resources:
+      - bgpconfigurations
+      - bgppeers
+      - felixconfigurations
+      - kubecontrollersconfigurations
+      - globalnetworkpolicies
+      - globalnetworksets
+      - hostendpoints
+      - ippools
+      - networkpolicies
+      - networksets
+    verbs:
+      - create
+  - apiGroups:
+      - crd.projectcalico.org
+    resources:
+      - ipamblocks
+    verbs:
+      - list
+  # For AWS security group setup.
+  - apiGroups:
+      - batch
+    resources:
+      - jobs
+      - cronjobs
+    verbs:
+      - create
+      - update
+      - list
+      - watch
   # For tiered network policy actions, tigera-apiserver requires that we authorize the operator for the tier.networkpolicies and tier.globalnetworkpolicies pseudo-kinds.
   - apiGroups:
       - projectcalico.org
@@ -472,40 +574,16 @@ rules:
     resourceNames:
       - tigera-gateway-api-gateway-helm-certgen
 ---
-# Source: tigera-operator/templates/tigera-operator/02-rolebinding-tigera-operator.yaml
-kind: ClusterRoleBinding
-apiVersion: rbac.authorization.k8s.io/v1
+apiVersion: v1
+kind: ServiceAccount
 metadata:
   name: tigera-operator
-  labels:
-    k8s-app: tigera-operator
-subjects:
-- kind: ServiceAccount
-  name: tigera-operator
-  namespace: tigera-operator
-roleRef:
-  kind: ClusterRole
-  name: tigera-operator
-  apiGroup: rbac.authorization.k8s.io
----
-# Source: tigera-operator/templates/tigera-operator/02-rolebinding-tigera-operator-secrets.yaml
-kind: RoleBinding
-apiVersion: rbac.authorization.k8s.io/v1
-metadata:
-  name: tigera-operator-secrets
   namespace: tigera-operator
   labels:
     k8s-app: tigera-operator
-subjects:
-  - kind: ServiceAccount
-    name: tigera-operator
-    namespace: tigera-operator
-roleRef:
-  kind: ClusterRole
-  name: tigera-operator-secrets
-  apiGroup: rbac.authorization.k8s.io
+imagePullSecrets:
+  []
 ---
-# Source: tigera-operator/templates/tigera-operator/02-tigera-operator.yaml
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -540,7 +618,7 @@ spec:
       dnsPolicy: ClusterFirstWithHostNet
       containers:
         - name: tigera-operator
-          image: quay.io/tigera/operator:v1.38.0
+          image: quay.io/tigera/operator:master
           imagePullPolicy: IfNotPresent
           command:
             - operator
@@ -561,7 +639,7 @@ spec:
             - name: OPERATOR_NAME
               value: "tigera-operator"
             - name: TIGERA_OPERATOR_INIT_IMAGE_VERSION
-              value: v1.38.0
+              value: master
           envFrom:
             - configMapRef:
                 name: kubernetes-services-endpoint
@@ -570,3 +648,41 @@ spec:
         - name: var-lib-calico
           hostPath:
             path: /var/lib/calico
+        - name: calico-resources
+          configMap:
+            defaultMode: 0400
+            name: calico-resources
+        - name: install-resources-script
+          configMap:
+            defaultMode: 0777
+            name: install-resources-script
+      initContainers:
+        # Install CRDs first, so that APIs exist for calicoctl to use.
+        - name: bootstrap-crds
+          image: quay.io/tigera/operator:master
+          command:
+            - operator
+          args:
+            - -bootstrap-crds
+          envFrom:
+            - configMapRef:
+                name: kubernetes-services-endpoint
+                optional: true
+        # Install any v3 API resources provided in the calico-resources ConfigMap.
+        - name: create-initial-resources
+          image: quay.io/calico/ctl:v3.30.0
+          env:
+            - name: DATASTORE_TYPE
+              value: kubernetes
+          command:
+            - calicoctl
+          args:
+            - --allow-version-mismatch
+            - create
+            - --skip-exists
+            - --skip-empty
+            - -f
+            - /calico-resources
+          volumeMounts:
+            - name: calico-resources
+              mountPath: /calico-resources
