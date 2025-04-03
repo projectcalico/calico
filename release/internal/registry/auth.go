@@ -62,6 +62,41 @@ func dockerConfigDir() string {
 	return configDir
 }
 
+// GetAuth gets authentication information for a given registry, caching it if necessary
+func (dc *DockerConfig) GetAuth(registryURL string) (registry.AuthConfig, error) {
+	logWithRegistry := logrus.WithField("registryURL", registryURL)
+	// If we have an auth config already, we can use that
+	if authConfig, ok := dc.Auths[registryURL]; ok {
+		logWithRegistry.Debug("Got cached authentication config from docker config")
+		return authConfig, nil
+	}
+
+	// If we don't have an auth config, let's see if we have a credentials config
+	if credsConfig, ok := dc.CredHelpers[registryURL]; ok {
+		dockerCreds, err := getCredsFromCredentialHelper(credsConfig, registryURL)
+		if err != nil {
+			logWithRegistry.Debug("Failed to get credentials from registry credential helper")
+		} else {
+			logWithRegistry.Debug("Got authentication information from registry credential helper")
+			dc.Auths[registryURL] = dockerCreds.toAuthConfig()
+			return dc.Auths[registryURL], nil
+		}
+	}
+	// We don't have a configured auth or a credsHelper. Let's at least try
+	// the secret store.
+	if dc.CredsStore != "" {
+		dockerCreds, err := getCredsFromCredentialHelper(dc.CredsStore, registryURL)
+		if err != nil {
+			logWithRegistry.Debug("Failed to get credentials from default credsStore")
+		} else {
+			logWithRegistry.Debug("Got authenticatino information from default credsStore")
+			dc.Auths[registryURL] = dockerCreds.toAuthConfig()
+			return dc.Auths[registryURL], nil
+		}
+	}
+	return registry.AuthConfig{}, fmt.Errorf("Unable to find any credentials for this registry")
+}
+
 // readDockerConfig reads the docker config file.
 func readDockerConfig() (DockerConfig, error) {
 	dockerConfigPath := filepath.Join(dockerConfigDir(), "config.json")
@@ -165,12 +200,22 @@ func getCredsFromCredentialHelper(helperName string, domainName string) (credent
 	}
 
 	buf, err := io.ReadAll(stdout)
-	_ = cmd.Wait()
+	if err != nil {
+		return credentialHelperData{}, err
+	}
+	err = cmd.Wait()
+	if err != nil {
+		// If we got an error and ExitCode is 1, then the credential helper didn't
+		// find anything (which isn't necessarily an error)
+		if cmd.ProcessState.ExitCode() == 1 {
+			return credentialHelperData{}, nil
+		}
+		return credentialHelperData{}, err
+	}
 
 	credsData := credentialHelperData{}
 	if err := json.Unmarshal(buf, &credsData); err != nil {
-		// always return an (empty) AuthConfig to increase compatibility with
-		// the existing API.
+
 		credHelperLog.Error("Couldn't unmarshal JSON data")
 		return credentialHelperData{}, err
 	}
@@ -181,15 +226,12 @@ func getCredsFromCredentialHelper(helperName string, domainName string) (credent
 func getAuthFromDockerConfig(registryURL string) (registry.AuthConfig, error) {
 	dockerConfig, err := dockerConfigOnce()
 
-	if authConfig, ok := dockerConfig.Auths[registryURL]; ok {
-		return authConfig, nil
-	}
-
+	authConfig, err := dockerConfig.GetAuth(registryURL)
 	if err != nil {
 		return registry.AuthConfig{}, err
 	}
 
-	return registry.AuthConfig{}, fmt.Errorf("no auth found for %s", registryURL)
+	return authConfig, nil
 }
 
 // getBearerToken retrieves a bearer token to use for the image. If we have
