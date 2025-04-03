@@ -75,11 +75,11 @@ func (r stagedNetworkPolicies) Create(ctx context.Context, res *apiv3.StagedNetw
 		}
 	}
 
-	err := names.ValidateTieredPolicyName(res.Name, tier)
-	if err != nil {
+	if err := validator.Validate(res); err != nil {
 		return nil, err
 	}
-	if err = validator.Validate(res); err != nil {
+	err := names.ValidateTieredPolicyName(res.Name, tier)
+	if err != nil {
 		return nil, err
 	}
 
@@ -126,11 +126,11 @@ func (r stagedNetworkPolicies) Update(ctx context.Context, res *apiv3.StagedNetw
 		}
 	}
 
-	err := names.ValidateTieredPolicyName(res.Name, res.Spec.Tier)
-	if err != nil {
+	if err := validator.Validate(res); err != nil {
 		return nil, err
 	}
-	if err = validator.Validate(res); err != nil {
+	err := names.ValidateTieredPolicyName(res.Name, res.Spec.Tier)
+	if err != nil {
 		return nil, err
 	}
 

@@ -60,11 +60,11 @@ func (r networkPolicies) Create(ctx context.Context, res *apiv3.NetworkPolicy, o
 	}
 	defaultPolicyTypesField(res.Spec.Ingress, res.Spec.Egress, &res.Spec.Types)
 
-	err := names.ValidateTieredPolicyName(res.Name, tier)
-	if err != nil {
+	if err := validator.Validate(res); err != nil {
 		return nil, err
 	}
-	if err = validator.Validate(res); err != nil {
+	err := names.ValidateTieredPolicyName(res.Name, tier)
+	if err != nil {
 		return nil, err
 	}
 
@@ -97,11 +97,11 @@ func (r networkPolicies) Update(ctx context.Context, res *apiv3.NetworkPolicy, o
 	}
 	defaultPolicyTypesField(res.Spec.Ingress, res.Spec.Egress, &res.Spec.Types)
 
-	err := names.ValidateTieredPolicyName(res.Name, res.Spec.Tier)
-	if err != nil {
+	if err := validator.Validate(res); err != nil {
 		return nil, err
 	}
-	if err = validator.Validate(res); err != nil {
+	err := names.ValidateTieredPolicyName(res.Name, res.Spec.Tier)
+	if err != nil {
 		return nil, err
 	}
 
