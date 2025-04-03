@@ -32,6 +32,7 @@ type Callbacks struct {
 	OnFileCreation func(fileName string)
 	OnFileUpdate   func(fileName string)
 	OnFileDeletion func(fileName string)
+	OnInSync       func(inSync bool)
 }
 
 type FileWatcher struct {
@@ -80,8 +81,8 @@ func (w *FileWatcher) Start() {
 }
 
 func (w *FileWatcher) newFsnotifyWatcher() error {
-	// reset w.fsWatcher
-	w.fsWatcher = nil
+
+	w.closeWatcher()
 
 	watcher, err := w.newFsnotifyWatcherFunc()
 	if err != nil {
@@ -102,9 +103,6 @@ func (w *FileWatcher) newFsnotifyWatcher() error {
 
 func (w *FileWatcher) runFsnotifyWatcher(watcher *fsnotify.Watcher) error {
 	w.fsnotifyActive = true
-
-	// Get current state of the directory and emit initial events.
-	w.scanDirectory()
 
 	// Listen for events and loop until error occurs.
 	for {
@@ -138,7 +136,6 @@ func (w *FileWatcher) runFsnotifyWatcher(watcher *fsnotify.Watcher) error {
 					}
 				}
 			}
-
 		case err, ok := <-watcher.Errors:
 			if !ok {
 				// Stop if channel is closed.
@@ -155,9 +152,7 @@ func (w *FileWatcher) runFsnotifyWatcher(watcher *fsnotify.Watcher) error {
 // Start begins watching the directory.
 func (w *FileWatcher) runWatcher() {
 	defer func() {
-		if w.fsWatcher != nil {
-			defer w.fsWatcher.Close()
-		}
+		w.closeWatcher()
 	}()
 
 	for {
@@ -167,6 +162,9 @@ func (w *FileWatcher) runWatcher() {
 			log.WithError(err).Info("Error initializing fsnotify. Falling back to polling.")
 		}
 
+		// Get current state of the directory and emit initial events.
+		w.scanDirectory()
+		w.callbacks.OnInSync(true)
 		if w.fsWatcher != nil {
 			// Run fsnotify watcher loop if possible.
 			err := w.runFsnotifyWatcher(w.fsWatcher)
@@ -182,7 +180,7 @@ func (w *FileWatcher) runWatcher() {
 
 		select {
 		case <-w.pollTicker.C:
-			w.scanDirectory()
+			continue
 		case <-w.stopChan:
 			return
 		}
@@ -244,4 +242,17 @@ func (w *FileWatcher) scanDirectory() {
 // Stop stops the watcher.
 func (w *FileWatcher) Stop() {
 	close(w.stopChan)
+}
+
+// closeWatcher ensures the fsnotify.Watcher cannot be double-closed.
+// Logs & continues if encounters close errors.
+func (w *FileWatcher) closeWatcher() {
+	if w.fsWatcher != nil {
+		err := w.fsWatcher.Close()
+		if err != nil {
+			log.WithError(err).Info("Ignoring error following close of fsWatcher")
+		}
+		// reset.
+		w.fsWatcher = nil
+	}
 }
