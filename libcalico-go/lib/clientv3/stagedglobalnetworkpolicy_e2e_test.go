@@ -398,6 +398,41 @@ var _ = testutils.E2eDatastoreDescribe("StagedGlobalNetworkPolicy tests", testut
 		Entry("StagedGlobalNetworkPolicy with default tier prefix", "default.netpol", "netpol"),
 	)
 
+	DescribeTable("StagedGlobalNetworkPolicy name validation tests",
+		func(policyName string, tier string, expectError bool) {
+			if tier != "default" {
+				// Create the tier if required before running other tiered policy tests.
+				tierSpec := apiv3.TierSpec{Order: &tierOrder}
+				By("Creating the tier")
+				_, resErr := c.Tiers().Create(ctx, &apiv3.Tier{
+					ObjectMeta: metav1.ObjectMeta{Name: tier},
+					Spec:       tierSpec,
+				}, options.SetOptions{})
+				Expect(resErr).NotTo(HaveOccurred())
+			}
+
+			_, err := c.StagedGlobalNetworkPolicies().Create(ctx,
+				&apiv3.StagedGlobalNetworkPolicy{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: policyName},
+					Spec: apiv3.StagedGlobalNetworkPolicySpec{
+						Tier: tier,
+					},
+				}, options.SetOptions{})
+
+			if expectError {
+				Expect(err).To(HaveOccurred())
+			} else {
+				Expect(err).ToNot(HaveOccurred())
+			}
+		},
+		Entry("StagedGlobalNetworkPolicy in default tier without prefix", "netpol", "default", false),
+		Entry("StagedGlobalNetworkPolicy in default tier with prefix", "default.netpol", "default", false),
+		Entry("StagedGlobalNetworkPolicy in custom tier with correct prefix", "tier1.netpol", "tier1", false),
+		Entry("StagedGlobalNetworkPolicy in custom tier without prefix", "netpol", "tier1", true),
+		Entry("StagedGlobalNetworkPolicy in custom tier with incorrect prefix", "tier1.netpol", "tier2", true),
+	)
+
 	Describe("StagedGlobalNetworkPolicy watch functionality", func() {
 		It("should handle watch events for different resource versions and event types", func() {
 			By("Listing StagedGlobalNetworkPolicies with the latest resource version and checking for two results with name1/spec2 and name2/spec2")
