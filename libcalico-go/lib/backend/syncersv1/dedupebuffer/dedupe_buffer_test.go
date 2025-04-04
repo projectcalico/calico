@@ -20,22 +20,17 @@ import (
 	"testing"
 
 	. "github.com/onsi/gomega"
-	"github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/lib/log/pkg/logrus"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 )
-
-func init() {
-	// Set up logging formatting.
-	logutils.ConfigureFormatter("test")
-	logrus.SetLevel(logrus.DebugLevel)
-}
 
 func TestDedupeBuffer_SyncNoDupes(t *testing.T) {
 	for _, onUpdatesVersion := range []string{"KeysKnown", "KeysNotKnown"} {
 		t.Run(onUpdatesVersion, func(t *testing.T) {
+			log.SetStandardLogger(logrus.NewTesting(t))
 			RegisterTestingT(t)
 			d := New()
 			onUpdates := wrapOnUpdates(d, onUpdatesVersion)

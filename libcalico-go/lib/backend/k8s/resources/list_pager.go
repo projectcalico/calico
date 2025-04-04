@@ -17,12 +17,12 @@ package resources
 import (
 	"context"
 
-	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/pager"
 
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 )
 
@@ -30,7 +30,7 @@ import (
 // information.
 func pagedList(
 	ctx context.Context,
-	log *logrus.Entry,
+	log log.Entry,
 	revision string,
 	list model.ListInterface,
 	toKVPs func(Resource) ([]*model.KVPair, error),

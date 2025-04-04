@@ -17,12 +17,12 @@ package app
 import (
 	"context"
 
-	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 
 	"github.com/projectcalico/calico/goldmane/pkg/client"
 	"github.com/projectcalico/calico/lib/httpmachinery/pkg/server"
 	gorillaadpt "github.com/projectcalico/calico/lib/httpmachinery/pkg/server/adaptors/gorilla"
+	logrus "github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/whisker-backend/pkg/config"
 	v1 "github.com/projectcalico/calico/whisker-backend/pkg/handlers/v1"
 )

@@ -22,7 +22,14 @@ import (
 	"testing"
 
 	. "github.com/onsi/gomega"
+
+	"github.com/projectcalico/calico/lib/log/pkg/logrus"
+	"github.com/projectcalico/calico/lib/std/log"
 )
+
+func init() {
+	log.SetStandardLogger(logrus.New())
+}
 
 func setup(t *testing.T) (context.Context, func()) {
 	RegisterTestingT(t)

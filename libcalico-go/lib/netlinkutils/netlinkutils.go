@@ -18,9 +18,10 @@ package netlinkutils
 import (
 	"errors"
 
-	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
+
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // AddrListRetryEINTR calls netlink's AddrList API and retries for 3 times if the API call

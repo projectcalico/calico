@@ -26,10 +26,10 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	gomegatypes "github.com/onsi/gomega/types"
-	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 
+	"github.com/projectcalico/calico/lib/std/log"
 	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"

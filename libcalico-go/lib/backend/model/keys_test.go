@@ -22,8 +22,8 @@ import (
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/lib/std/log"
 	. "github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
 )
@@ -578,8 +578,8 @@ func benchmarkKeyFromDefaultPathImpl(b *testing.B, keyFromDefaultPath func(path 
 		}
 		benchPaths = append(benchPaths, p)
 	}
-	defer logrus.SetLevel(logrus.GetLevel())
-	logrus.SetLevel(logrus.PanicLevel)
+	defer log.SetLevel(log.GetLevel())
+	log.SetLevel(log.PanicLevel)
 
 	b.ResetTimer()
 	var key any

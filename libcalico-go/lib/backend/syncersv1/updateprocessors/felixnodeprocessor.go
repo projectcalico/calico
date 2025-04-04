@@ -18,9 +18,9 @@ import (
 	"errors"
 	"fmt"
 
-	log "github.com/sirupsen/logrus"
 	wg "golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 
+	"github.com/projectcalico/calico/lib/std/log"
 	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/watchersyncer"

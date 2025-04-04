@@ -23,9 +23,9 @@ import (
 
 	"github.com/google/uuid"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	log "github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"

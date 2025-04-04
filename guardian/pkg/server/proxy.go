@@ -23,10 +23,9 @@ import (
 	"os"
 
 	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
-	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/crypto/pkg/tls"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // Proxy proxies HTTP based on the provided list of targets
@@ -99,7 +98,7 @@ func newTargetHandler(tgt Target) (func(http.ResponseWriter, *http.Request), err
 				return nil, fmt.Errorf("error load cert key pair for linseed client: %s", err)
 			}
 			tlsCfg.Certificates = append(tlsCfg.Certificates, clientCert)
-			logrus.Info("Using provided client certificates for mTLS")
+			log.Info("Using provided client certificates for mTLS")
 		}
 
 		p.Transport = &http.Transport{

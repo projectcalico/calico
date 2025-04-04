@@ -21,10 +21,10 @@ import (
 	"strings"
 
 	"github.com/projectcalico/api/pkg/lib/numorstring"
-	log "github.com/sirupsen/logrus"
 	"gopkg.in/go-playground/validator.v9"
 	k8svalidation "k8s.io/apimachinery/pkg/util/validation"
 
+	"github.com/projectcalico/calico/lib/std/log"
 	api "github.com/projectcalico/calico/libcalico-go/lib/apis/v1"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/errors"
