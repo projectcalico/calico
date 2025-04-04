@@ -37,7 +37,7 @@ type CommandExecutor[C any, R any] interface {
 type ExecutionController interface {
 	DrainAndBacklog() Signaler
 	Resume()
-	ShutdownSignaler() Signaler
+	WaitForShutdown() <-chan struct{}
 }
 
 type executorCoordinator []ExecutionController
@@ -65,17 +65,12 @@ func (coordinator executorCoordinator) Resume() {
 	}
 }
 
-func (coordinator executorCoordinator) ShutdownSignaler() Signaler {
-	var signalers []Signaler
-	for _, executor := range coordinator {
-		signalers = append(signalers, executor.ShutdownSignaler())
-	}
-
-	signal := NewSignaler()
+func (coordinator executorCoordinator) WaitForShutdown() <-chan struct{} {
+	signal := make(chan struct{})
 	go func() {
-		defer signal.Send()
-		for _, signaler := range signalers {
-			<-signaler.Receive()
+		defer close(signal)
+		for _, executor := range coordinator {
+			<-executor.WaitForShutdown()
 		}
 	}()
 
@@ -83,17 +78,18 @@ func (coordinator executorCoordinator) ShutdownSignaler() Signaler {
 }
 
 type commandExecutor[C any, R any] struct {
-	command             func(context.Context, C) (R, error)
-	drainAndBacklogSig  chan Signaler
-	resumeBackloggedSig Signaler
-	cmdChan             chan Command[C, R]
+	command func(context.Context, C) (R, error)
+	cmdChan chan Command[C, R]
 	// backlogChan contains all the commands that failed with EOF, waiting to be retried.
 	backlogChan chan Command[C, R]
 	// inflightCmds keeps track of the number of commands that are currently being executed.
-	inflightCmds        sync.WaitGroup
-	executeSig          Signaler
-	shutdownCompleteSig Signaler
-	errBuff             ErrorBuffer
+	inflightCmds sync.WaitGroup
+
+	resumeBackloggedSig Signaler
+	drainAndBacklogSig  chan Signaler
+	shutdownCompleteSig chan struct{}
+
+	errBuff ErrorBuffer
 
 	backLogCommands bool
 	backlog         []Command[C, R]
@@ -119,9 +115,7 @@ func NewCommandExecutor[C any, R any](ctx context.Context, errBuff ErrorBuffer, 
 		backlogChan:         make(chan Command[C, R], 100),
 		drainAndBacklogSig:  make(chan Signaler, 100),
 		resumeBackloggedSig: NewSignaler(),
-
-		executeSig:          NewSignaler(),
-		shutdownCompleteSig: NewSignaler(),
+		shutdownCompleteSig: make(chan struct{}),
 	}
 
 	go executor.loop(ctx)
@@ -135,7 +129,7 @@ func (executor *commandExecutor[C, R]) loop(shutdownCtx context.Context) {
 	// doesn't wait on the channel provided.
 	defer func() {
 		defer stopCommands()
-		defer executor.shutdownCompleteSig.Close()
+		defer close(executor.shutdownCompleteSig)
 
 		// close the cmdChan in case anything tries to write to it. This will ensure a panic occurs while trying to
 		// clean up any outstanding cmd.
@@ -150,13 +144,16 @@ func (executor *commandExecutor[C, R]) loop(shutdownCtx context.Context) {
 		executor.drainBacklogChannel()
 		executor.backlog = append(executor.backlog, ReadAll(executor.cmdChan)...)
 
-		logrus.Debug("Returning errors for outstanding requests due to shutdown.")
-		for _, cmd := range executor.backlog {
-			cmd.ReturnError(context.Canceled)
+		if len(executor.backlog) > 0 {
+			logrus.Debug("Returning errors for outstanding commands due to shutdown...")
+			for _, cmd := range executor.backlog {
+				cmd.ReturnError(context.Canceled)
+			}
+			logrus.Debug("Finished returning errors for outstanding commands.")
+		} else {
+			logrus.Debug("No outstanding commands, shutting down..")
 		}
-		logrus.Debug("Finished returning errors for outstanding requests due to shutdown.")
 
-		executor.executeSig.Close()
 		close(executor.drainAndBacklogSig)
 		executor.resumeBackloggedSig.Close()
 	}()
@@ -179,6 +176,9 @@ func (executor *commandExecutor[C, R]) loop(shutdownCtx context.Context) {
 			}
 		case cmd := <-executor.backlogChan:
 			logrus.Debugf("Received backlog command (current backlog size: %d).", len(executor.backlog))
+			if len(executor.backlog) > 50 {
+				logrus.Warningf("Backlog size exceeded has exceed 50.")
+			}
 			executor.backlog = append(executor.backlog, cmd)
 		case signal := <-executor.drainAndBacklogSig:
 			logrus.Debugf("Received requeue signal.")
@@ -250,6 +250,7 @@ func (executor *commandExecutor[C, R]) executeCommand(ctx context.Context, req C
 		defer executor.inflightCmds.Done()
 		result, err := executor.command(ctx, req.Get())
 		if err != nil {
+			logrus.Debugf("Error executing command: %v", err)
 			executor.errBuff.Write(err)
 			if errors.Is(err, io.EOF) || errors.Is(err, context.Canceled) {
 				executor.backlogChan <- req
@@ -287,6 +288,6 @@ func (executor *commandExecutor[Req, Resp]) Resume() {
 	executor.resumeBackloggedSig.Send()
 }
 
-func (executor *commandExecutor[C, R]) ShutdownSignaler() Signaler {
+func (executor *commandExecutor[C, R]) WaitForShutdown() <-chan struct{} {
 	return executor.shutdownCompleteSig
 }
