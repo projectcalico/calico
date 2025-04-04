@@ -78,6 +78,12 @@ rules:
   - apiGroups:
       - ""
     resources:
+      - configmaps/finalizers
+    verbs:
+      - update
+  - apiGroups:
+      - ""
+    resources:
       - resourcequotas
       - secrets
     verbs:

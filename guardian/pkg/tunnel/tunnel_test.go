@@ -22,6 +22,7 @@ import (
 	"time"
 
 	. "github.com/onsi/gomega"
+	"github.com/stretchr/testify/mock"
 
 	netmocks "github.com/projectcalico/calico/guardian/pkg/thirdpartymocks/net"
 	"github.com/projectcalico/calico/guardian/pkg/tunnel"
@@ -79,7 +80,7 @@ func TestTunnelOpenConnection(t *testing.T) {
 			mockDialer := new(tunmocks.SessionDialer)
 			mockSession := new(tunmocks.Session)
 
-			mockDialer.On("Dial").Return(mockSession, nil)
+			mockDialer.On("Dial", mock.Anything).Return(mockSession, nil)
 			tc.setSession(mockSession)
 
 			tun, err := tunnel.NewTunnel(mockDialer)
@@ -145,7 +146,7 @@ func TestTunnelAcceptConnection(t *testing.T) {
 			mockDialer := tunmocks.NewSessionDialer(t)
 			mockSession := tunmocks.NewSession(t)
 
-			mockDialer.On("Dial").Return(mockSession, nil)
+			mockDialer.On("Dial", mock.Anything).Return(mockSession, nil)
 			tc.setSession(mockSession)
 
 			tun, err := tunnel.NewTunnel(mockDialer)
@@ -172,4 +173,28 @@ func TestTunnelAcceptConnection(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestTunnel_DialRetry(t *testing.T) {
+	setupTest(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	mockDialer := tunmocks.NewSessionDialer(t)
+	mockSession := tunmocks.NewSession(t)
+
+	waitSig := make(chan time.Time)
+	mockDialer.On("Dial", mock.Anything).Return(mockSession, nil).Once()
+	mockDialer.On("Dial", mock.Anything).WaitUntil(waitSig).Return(mockSession, nil).Once()
+	tun, err := tunnel.NewTunnel(mockDialer)
+	Expect(err).NotTo(HaveOccurred())
+
+	Expect(tun.Connect(ctx)).ShouldNot(HaveOccurred())
+
+	mockSession.
+		On("Close").Return(nil).Once().
+		On("Open").Return(nil, io.EOF)
+
+	conn, err := tun.Open()
+	Expect(err).ShouldNot(HaveOccurred())
+	Expect(conn).ShouldNot(BeNil())
 }
