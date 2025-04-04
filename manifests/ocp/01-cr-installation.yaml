@@ -4,6 +4,11 @@ kind: Installation
 metadata:
   name: default
 spec:
+  # Configures Calico networking using the eBPF dataplane. If you want to change the dataplane
+  # to iptables, you should set the linuxDataplane parameter below to "Iptables" and set the
+  # deployKubeProxy parameter to true in the cluster-network-operator.yaml file.
+  calicoNetwork:
+    linuxDataplane: BPF
   variant: Calico
 
   # List of image pull secrets to use when installing images from a container registry.
