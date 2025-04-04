@@ -41,6 +41,18 @@ func Read[E any](ctx context.Context, ch <-chan E) (E, error) {
 	}
 }
 
+// ReadNonBlocking reads from the given channel in a non-blocking manner. It returns the value read off the channel and
+// true if the read was successful, and an empty value and false otherwise.
+func ReadNonBlocking[E any](ch <-chan E) (E, bool) {
+	select {
+	case v := <-ch:
+		return v, true
+	default:
+		var empty E
+		return empty, false
+	}
+}
+
 // ReadWithDeadline is similar to Read but adds the extra convenience of allowing a duration to be specified which defines
 // the deadline that the channel has to read data.
 //

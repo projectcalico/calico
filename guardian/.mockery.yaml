@@ -15,3 +15,11 @@ packages:
       dir: "pkg/thirdpartymocks/{{.PackagePath}}"
     interfaces:
       Conn:
+  github.com/projectcalico/calico/lib/std/timeutil:
+    config:
+      outpkg: "{{.PackageName}}"
+      dir: "pkg/thirdpartymocks/std/timeutil"
+    interfaces:
+      Interface:
+      Ticker:
+      Timer:
