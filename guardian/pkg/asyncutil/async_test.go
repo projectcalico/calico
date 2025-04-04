@@ -9,6 +9,8 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/lib/std/chanutil"
+
 	"github.com/projectcalico/calico/guardian/pkg/asyncutil"
 )
 
@@ -24,7 +26,7 @@ func TestRequestHandlerContextCancelledInHungRequest(t *testing.T) {
 	cmdExec := asyncutil.NewCommandExecutor(ctx, errBuff, func(ctx context.Context, req any) (any, error) {
 		hungChan := make(chan struct{})
 		defer close(hungChan)
-		_, err := asyncutil.ReadWithContext(ctx, hungChan)
+		_, err := chanutil.Read(ctx, hungChan)
 		return struct{}{}, err
 	})
 
@@ -32,7 +34,7 @@ func TestRequestHandlerContextCancelledInHungRequest(t *testing.T) {
 
 	cancel()
 
-	cmdExec.ShutdownSignaler().Receive()
+	<-cmdExec.WaitForShutdown()
 	_, err := (<-resultChan).Result()
 	Expect(err).Should(Equal(context.Canceled))
 }
@@ -57,7 +59,7 @@ func TestRequestHandlerStopAndRequeue(t *testing.T) {
 			ch := make(chan struct{})
 			defer close(ch)
 
-			_, err := asyncutil.ReadWithContext(ctx, ch)
+			_, err := chanutil.Read(ctx, ch)
 			return struct{}{}, err
 		}
 
@@ -90,6 +92,6 @@ func TestRequestHandlerStopAndRequeue(t *testing.T) {
 
 	cancel()
 	logrus.Debug("Waiting for shutdown...")
-	<-cmdExec.ShutdownSignaler().Receive()
+	<-cmdExec.WaitForShutdown()
 	logrus.Debug("Finished waiting for shutdown.")
 }

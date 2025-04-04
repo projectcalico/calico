@@ -14,6 +14,10 @@
 
 package asyncutil
 
+import (
+	"github.com/projectcalico/calico/lib/std/chanutil"
+)
+
 // Command represents a command to run asynchronously. It allows for providing paramters to be passed to whatever is
 // executing the command and has a channel to wait for the result on.
 type Command[P any, R any] struct {
@@ -56,34 +60,6 @@ func (c Command[C, R]) ReturnError(err error) {
 	}
 }
 
-// Signaler is an interface used for waiting for and sending simple signals.
-type Signaler interface {
-	Send()
-	Receive() <-chan struct{}
-	Close()
-}
-
-type signaler struct {
-	ch chan struct{}
-}
-
-func (s *signaler) Send() {
-	// If the channel is full we don't need to wait to send another signal, there's already an unprocessed signal.
-	WriteNoWait(s.ch, struct{}{})
-}
-
-func (s *signaler) Receive() <-chan struct{} {
-	return s.ch
-}
-
-func (s *signaler) Close() {
-	close(s.ch)
-}
-
-func NewSignaler() Signaler {
-	return &signaler{ch: make(chan struct{}, 1)}
-}
-
 // ErrorBuffer is an error buffer that can be used in multiple routines.
 type ErrorBuffer interface {
 	Write(err error)
@@ -102,7 +78,7 @@ func NewErrorBuffer() ErrorBuffer {
 
 // Write writes the error to the buffer. If the buffer is full the error is dropped.
 func (b *errorBuffer) Write(err error) {
-	WriteNoWait(b.errs, err)
+	chanutil.WriteNonBlocking(b.errs, err)
 }
 
 func (b *errorBuffer) Receive() <-chan error {
@@ -117,5 +93,5 @@ func (b *errorBuffer) Close() {
 // Not that writing to the error buffer should not be done while clearing, since if writing is happening as quick
 // as clearing is then the buffer will never be cleared.
 func (b *errorBuffer) Clear() {
-	Clear(b.errs)
+	chanutil.Clear(b.errs)
 }
