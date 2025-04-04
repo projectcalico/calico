@@ -56,34 +56,6 @@ func (c Command[C, R]) ReturnError(err error) {
 	}
 }
 
-// Signaler is an interface used for waiting for and sending simple signals.
-type Signaler interface {
-	Send()
-	Receive() <-chan struct{}
-	Close()
-}
-
-type signaler struct {
-	ch chan struct{}
-}
-
-func (s *signaler) Send() {
-	// If the channel is full we don't need to wait to send another signal, there's already an unprocessed signal.
-	WriteNoWait(s.ch, struct{}{})
-}
-
-func (s *signaler) Receive() <-chan struct{} {
-	return s.ch
-}
-
-func (s *signaler) Close() {
-	close(s.ch)
-}
-
-func NewSignaler() Signaler {
-	return &signaler{ch: make(chan struct{}, 1)}
-}
-
 // ErrorBuffer is an error buffer that can be used in multiple routines.
 type ErrorBuffer interface {
 	Write(err error)

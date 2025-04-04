@@ -54,14 +54,20 @@ type Config struct {
 	VoltronCAType string `default:"Tigera" split_words:"true"`
 	VoltronURL    string `required:"true" split_words:"true"`
 
+	// Configuration for health checking.
+	HealthEnabled bool `json:"health_enabled" envconfig:"HEALTH_ENABLED" default:"true"`
+	HealthPort    int  `json:"health_port" envconfig:"HEALTH_PORT" default:"8080"`
+
 	KeepAliveEnable   bool `default:"true" split_words:"true"`
 	KeepAliveInterval int  `default:"100" split_words:"true"`
 
 	K8sEndpoint string `default:"https://kubernetes.default" split_words:"true"`
 
-	TunnelDialRetryAttempts int           `default:"20" split_words:"true"`
+	// TunnelDialRetryAttempts is the number of times to the tunnel dialer should retry before failing.
+	// -1 means dial indefinitely.
+	TunnelDialRetryAttempts int           `default:"-1" split_words:"true"`
 	TunnelDialRetryInterval time.Duration `default:"5s" split_words:"true"`
-	TunnelDialTimeout       time.Duration `default:"60s" split_words:"true"`
+	TunnelDialTimeout       time.Duration `default:"10s" split_words:"true"`
 
 	TunnelDialRecreateOnTunnelClose bool          `default:"true" split_words:"true"`
 	ConnectionRetryAttempts         int           `default:"25" split_words:"true"`
