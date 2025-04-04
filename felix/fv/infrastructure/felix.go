@@ -37,7 +37,6 @@ import (
 	"github.com/projectcalico/calico/felix/collector/flowlog"
 	"github.com/projectcalico/calico/felix/collector/goldmane"
 	"github.com/projectcalico/calico/felix/fv/containers"
-	"github.com/projectcalico/calico/felix/fv/flowlogs"
 	"github.com/projectcalico/calico/felix/fv/metrics"
 	"github.com/projectcalico/calico/felix/fv/tcpdump"
 	"github.com/projectcalico/calico/felix/fv/utils"
@@ -87,7 +86,7 @@ type Felix struct {
 	TopologyOptions TopologyOptions
 
 	uniqueName     string
-	goldmaneServer *flowlogs.GoldmaneMock
+	goldmaneServer *goldmane.NodeServer
 }
 
 type workload interface {
@@ -206,10 +205,10 @@ func RunFelix(infra DatastoreInfra, id int, options TopologyOptions) *Felix {
 	Expect(os.MkdirAll(logDir, 0o777)).NotTo(HaveOccurred())
 	args = append(args, "-v", logDir+":/var/log/calico/flowlogs")
 
-	var goldmaneServer *flowlogs.GoldmaneMock
+	var goldmaneServer *goldmane.NodeServer
 	if options.FlowLogSource == FlowLogSourceGoldmane {
 		sockAddr := fmt.Sprintf("%v/goldmane.sock", logDir)
-		goldmaneServer = flowlogs.NewGoldmaneMock(sockAddr)
+		goldmaneServer = goldmane.NewNodeServer(sockAddr)
 		goldmaneServer.Run()
 	}
 

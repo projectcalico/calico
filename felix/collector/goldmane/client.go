@@ -17,9 +17,11 @@ package goldmane
 import (
 	"context"
 	"fmt"
+	"os"
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unique"
 
@@ -35,9 +37,12 @@ import (
 )
 
 type GoldmaneReporter struct {
-	address string
-	client  *client.FlowClient
-	once    sync.Once
+	address          string
+	client           *client.FlowClient
+	nodeClient       *client.FlowClient
+	nodeServerExists atomic.Bool
+
+	once sync.Once
 }
 
 func NewReporter(addr, cert, key, ca string) (*GoldmaneReporter, error) {
@@ -45,9 +50,14 @@ func NewReporter(addr, cert, key, ca string) (*GoldmaneReporter, error) {
 	if err != nil {
 		return nil, err
 	}
+	nodeCli, err := client.NewFlowClient(LocalGoldmaneServer, "", "", "")
+	if err != nil {
+		return nil, err
+	}
 	return &GoldmaneReporter{
-		address: addr,
-		client:  cli,
+		address:    addr,
+		client:     cli,
+		nodeClient: nodeCli,
 	}, nil
 }
 
@@ -57,7 +67,24 @@ func (g *GoldmaneReporter) Start() error {
 		// We don't wait for the initial connection to start so we don't block the caller.
 		g.client.Connect(context.Background())
 	})
+	go g.checkLocalServerExists()
+
 	return err
+}
+
+func (g *GoldmaneReporter) checkLocalServerExists() {
+	for {
+		_, err := os.Stat(LocalGoldmaneServer)
+		if err == nil {
+			g.nodeServerExists.Store(true)
+		} else {
+			if os.IsNotExist(err) {
+				g.nodeServerExists.Store(false)
+			}
+			g.nodeServerExists.Store(false)
+		}
+		time.Sleep(time.Second)
+	}
 }
 
 func (g *GoldmaneReporter) Report(logSlice any) error {
@@ -67,7 +94,12 @@ func (g *GoldmaneReporter) Report(logSlice any) error {
 			logrus.WithField("num", len(logs)).Debug("Dispatching flow logs to goldmane")
 		}
 		for _, l := range logs {
-			g.client.Push(convertFlowlogToGoldmane(l))
+			goldmaneLog := convertFlowlogToGoldmane(l)
+			g.client.Push(goldmaneLog)
+
+			if g.nodeServerExists.Load() {
+				g.nodeClient.Push(goldmaneLog)
+			}
 		}
 	default:
 		logrus.Panic("Unexpected kind of log dispatcher")
