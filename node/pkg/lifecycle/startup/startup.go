@@ -84,7 +84,7 @@ var (
 //   - Configuring the node resource with IP/AS information provided in the
 //     environment, or autodetected.
 //   - Creating default IP Pools for quick-start use
-func Run() {
+func Run(setNodeNetworkUnavailable bool) {
 	// Check $CALICO_STARTUP_LOGLEVEL to capture early log statements
 	ConfigureLogging()
 
@@ -222,10 +222,12 @@ func Run() {
 	// node condition will trigger node-controller updating node taints.
 	if os.Getenv("CALICO_NETWORKING_BACKEND") != "none" {
 		if clientset != nil {
-			err := utils.SetNodeNetworkUnavailableCondition(*clientset, k8sNodeName, false, 30*time.Second)
-			if err != nil {
-				log.WithError(err).Error("Unable to set NetworkUnavailable to False")
-				utils.Terminate()
+			if setNodeNetworkUnavailable {
+				err := utils.SetNodeNetworkUnavailableCondition(*clientset, k8sNodeName, false, 30*time.Second)
+				if err != nil {
+					log.WithError(err).Error("Unable to set NetworkUnavailable to False")
+					utils.Terminate()
+				}
 			}
 		}
 	}
