@@ -311,6 +311,8 @@ extern const volatile struct cali_tc_preamble_globals __globals;
 #define NATIN_IFACE	CALI_CONFIGURABLE(natin_idx)
 #define PROFILING	CALI_CONFIGURABLE(profiling)
 
+#define FLOWLOGS_ENABLED (GLOBAL_FLAGS & CALI_GLOBALS_FLOWLOGS_ENABLED)
+
 #ifdef UNITTEST
 #define CALI_PATCH_DEFINE(name, pattern)							\
 static CALI_BPF_INLINE __be32 cali_patch_##name()					\

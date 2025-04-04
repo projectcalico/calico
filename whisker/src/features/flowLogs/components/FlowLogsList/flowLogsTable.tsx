@@ -3,7 +3,7 @@ import { DataTable } from '@/libs/tigera/ui-components/components/common';
 import { FlowLog } from '@/types/render';
 import FlowLogActionIndicator from '@/components/common/FlowLogActionIndicator';
 import { AddIcon } from '@chakra-ui/icons';
-import { Button, Icon } from '@chakra-ui/react';
+import { Button, Icon, Tooltip } from '@chakra-ui/react';
 
 export const getTableColumns = (onColumnCustomizerOpen: () => void) => [
     { ...DataTable.expandoTableColumn, disableReordering: true, checked: true },
@@ -92,17 +92,19 @@ export const getTableColumns = (onColumnCustomizerOpen: () => void) => [
     },
     {
         Header: (
-            <Button
-                variant={'solid'}
-                borderRadius={0}
-                mr='0'
-                onClick={() => {
-                    onColumnCustomizerOpen();
-                }}
-                minHeight={8}
-            >
-                <Icon as={AddIcon} />
-            </Button>
+            <Tooltip label='Customize columns' hasArrow placement='top'>
+                <Button
+                    variant={'solid'}
+                    borderRadius={0}
+                    mr='0'
+                    onClick={() => {
+                        onColumnCustomizerOpen();
+                    }}
+                    minHeight={8}
+                >
+                    <Icon as={AddIcon} />
+                </Button>
+            </Tooltip>
         ),
         disableSortBy: true,
         maxWidth: 45,

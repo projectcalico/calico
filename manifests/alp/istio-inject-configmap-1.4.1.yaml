@@ -437,4 +437,3 @@ data:
           {{- end }}
       {{- end }}
     injectedAnnotations:
-

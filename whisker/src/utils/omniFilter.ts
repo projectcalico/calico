@@ -8,6 +8,7 @@ import {
     FlowsFilter,
     FlowsFilterQuery,
     QueryPage,
+    FlowsFilterValue,
 } from '@/types/api';
 
 export enum FilterKey {
@@ -68,6 +69,15 @@ const transformToListFilter = (
         })),
     );
 
+const transformToListFilterSearchRequest = (
+    search: string,
+): FlowsFilterQuery[] => [
+    {
+        type: 'Fuzzy',
+        value: search,
+    },
+];
+
 export const transformToFlowsFilterQuery = (
     omniFilterValues: Record<FilterKey, string[]>,
     listFilterId?: ListOmniFilterParam,
@@ -94,12 +104,8 @@ export const transformToFlowsFilterQuery = (
 
     if (listFilterId && searchInput) {
         const key = OmniFilterProperties[listFilterId].filterHintsKey;
-        filterHintsQuery[key] = [
-            {
-                type: 'Fuzzy',
-                value: searchInput,
-            },
-        ];
+        filterHintsQuery[key] = OmniFilterProperties[listFilterId]
+            .transformToFilterSearchRequest!(searchInput) as FlowsFilterValue;
     }
 
     return Object.keys(filterHintsQuery).length
@@ -133,6 +139,11 @@ export type OmniFilterPropertiesType = Record<
         transformToFilterHintRequest: (
             filters: string[],
         ) => FlowsFilterQuery[] | undefined;
+        transformToFilterSearchRequest?: (search: string) =>
+            | FlowsFilterQuery[]
+            | {
+                  name: FlowsFilterQuery;
+              }[];
     }
 >;
 
@@ -143,31 +154,48 @@ export const OmniFilterProperties: OmniFilterPropertiesType = {
         label: 'Policy',
         limit: requestPageSize,
         filterHintsKey: 'policies',
-        transformToFilterHintRequest: transformToListFilter,
+        transformToFilterHintRequest: (values: string[]) =>
+            handleEmptyFilters(
+                values.map((value) => ({
+                    name: { type: 'Exact', value },
+                })),
+            ),
+        transformToFilterSearchRequest: (search) => [
+            {
+                name: {
+                    type: 'Fuzzy',
+                    value: search,
+                },
+            },
+        ],
     },
     source_namespace: {
         label: 'Source Namespace',
         limit: requestPageSize,
         filterHintsKey: 'source_namespaces',
         transformToFilterHintRequest: transformToListFilter,
+        transformToFilterSearchRequest: transformToListFilterSearchRequest,
     },
     dest_namespace: {
         label: 'Dest Namespace',
         limit: requestPageSize,
         filterHintsKey: 'dest_namespaces',
         transformToFilterHintRequest: transformToListFilter,
+        transformToFilterSearchRequest: transformToListFilterSearchRequest,
     },
     source_name: {
         label: 'Source',
         limit: requestPageSize,
         filterHintsKey: 'source_names',
         transformToFilterHintRequest: transformToListFilter,
+        transformToFilterSearchRequest: transformToListFilterSearchRequest,
     },
     dest_name: {
         label: 'Destination',
         limit: requestPageSize,
         filterHintsKey: 'dest_names',
         transformToFilterHintRequest: transformToListFilter,
+        transformToFilterSearchRequest: transformToListFilterSearchRequest,
     },
     dest_port: {
         label: 'Port',
@@ -220,7 +248,7 @@ export const transformToQueryPage = (
     page: number,
 ): QueryPage => ({
     items: items.map(({ value }) => ({ label: value, value })),
-    total,
+    total: total.totalResults,
     currentPage: page,
     nextPage: page + 1,
 });

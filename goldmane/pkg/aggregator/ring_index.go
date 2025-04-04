@@ -15,12 +15,11 @@
 package aggregator
 
 import (
-	"fmt"
 	"sort"
 
 	"github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/goldmane/pkg/internal/types"
+	"github.com/projectcalico/calico/goldmane/pkg/types"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -28,8 +27,7 @@ import (
 // swapping out the implementation possible, which is particularly useful for unit testing (but in general is a useful
 // property).
 type logAggregator interface {
-	flowSet(startGt, startLt int64) set.Set[types.FlowKey]
-	diachronicFlow(key types.FlowKey) *types.DiachronicFlow
+	flowSet(startGt, startLt int64) set.Set[*types.DiachronicFlow]
 }
 
 func NewRingIndex(a logAggregator) *RingIndex {
@@ -55,26 +53,18 @@ func (a *RingIndex) List(opts IndexFindOpts) ([]*types.Flow, types.ListMeta) {
 
 	// Aggregate the relevant DiachronicFlows across the time range.
 	flowsByKey := map[types.FlowKey]*types.Flow{}
-	keys.Iter(func(key types.FlowKey) error {
-		d := a.agg.diachronicFlow(key)
-		if d == nil {
-			// This should never happen, as we should have a DiachronicFlow for every key.
-			// If we don't, it's a bug. Return an error, which will trigger a panic.
-			return fmt.Errorf("no DiachronicFlow for key %v", key)
+	keys.Iter(func(d *types.DiachronicFlow) error {
+		logCtx := logrus.WithField("id", d.ID)
+		if logrus.IsLevelEnabled(logrus.DebugLevel) {
+			// Unpacking the key is a bit expensive, so only do it in debug mode.
+			logCtx = logrus.WithFields(d.Key.Fields())
 		}
-		logrus.WithFields(logrus.Fields{
-			"key":    key,
-			"filter": opts.filter,
-		}).Debug("Checking if flow matches filter")
+		logCtx.WithFields(logrus.Fields{"filter": opts.filter}).Debug("Checking if flow matches filter")
 		if d.Matches(opts.filter, opts.startTimeGt, opts.startTimeLt) {
-			logrus.WithFields(logrus.Fields{
-				"key": key,
-			}).Debug("Flow matches filter")
+			logCtx.Debug("Flow matches filter")
 			flow := d.Aggregate(opts.startTimeGt, opts.startTimeLt)
 			if flow != nil {
-				logrus.WithFields(logrus.Fields{
-					"flow": flow,
-				}).Debug("Aggregated flow")
+				logCtx.Debug("Aggregated flow")
 				flowsByKey[*flow.Key] = flow
 			}
 		}
@@ -144,26 +134,19 @@ func (a *RingIndex) FilterValueSet(valueFunc func(*types.FlowKey) []string, opts
 	// Aggregate the relevant DiachronicFlows across the time range.
 	var values []string
 	seen := set.New[string]()
-	keys.Iter(func(key types.FlowKey) error {
-		d := a.agg.diachronicFlow(key)
-		if d == nil {
-			// This should never happen, as we should have a DiachronicFlow for every key.
-			// If we don't, it's a bug. Return an error, which will trigger a panic.
-			return fmt.Errorf("no DiachronicFlow for key %v", key)
+	keys.Iter(func(d *types.DiachronicFlow) error {
+		if logrus.IsLevelEnabled(logrus.DebugLevel) {
+			logrus.WithFields(d.Key.Fields()).
+				WithFields(logrus.Fields{"filter": opts.filter}).
+				Debug("Checking if flow matches filter")
 		}
-		logrus.WithFields(logrus.Fields{
-			"key":    key,
-			"filter": opts.filter,
-		}).Debug("Checking if flow matches filter")
 		if d.Matches(opts.filter, opts.startTimeGt, opts.startTimeLt) {
-			logrus.WithFields(logrus.Fields{
-				"key": key,
-			}).Debug("Flow matches filter")
+			logrus.Debug("Flow matches filter")
 			flow := d.Aggregate(opts.startTimeGt, opts.startTimeLt)
 			if flow != nil {
-				logrus.WithFields(logrus.Fields{
-					"flow": flow,
-				}).Debug("Aggregated flow")
+				if logrus.IsLevelEnabled(logrus.DebugLevel) {
+					logrus.WithFields(flow.Key.Fields()).Debug("Aggregated flow")
+				}
 				vals := valueFunc(flow.Key)
 				for _, val := range vals {
 					if !seen.Contains(val) {

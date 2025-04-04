@@ -1007,8 +1007,8 @@ type ProtoPort struct {
 type BPFConntrackTimeout string
 
 type BPFConntrackTimeouts struct {
-	//  CreationGracePeriod gives a generic grace period to new connection
-	//  before they are considered for cleanup [Default: 10s].
+	// CreationGracePeriod gives a generic grace period to new connections
+	// before they are considered for cleanup [Default: 10s].
 	// +optional
 	CreationGracePeriod *BPFConntrackTimeout `json:"creationGracePeriod,omitempty"`
 	// TCPSynSent controls how long it takes before considering this entry for

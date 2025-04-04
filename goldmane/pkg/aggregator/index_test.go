@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+// Copimright (c) 2025 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,8 +19,8 @@ import (
 
 	. "github.com/onsi/gomega"
 
-	"github.com/projectcalico/calico/goldmane/pkg/internal/types"
 	"github.com/projectcalico/calico/goldmane/pkg/internal/utils"
+	"github.com/projectcalico/calico/goldmane/pkg/types"
 	"github.com/projectcalico/calico/goldmane/proto"
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
@@ -30,23 +30,14 @@ type simpleLogAggregatorStub struct {
 	diachronics []*types.DiachronicFlow
 }
 
-func (l simpleLogAggregatorStub) flowSet(startGt, startLt int64) set.Set[types.FlowKey] {
-	s := set.New[types.FlowKey]()
+func (l simpleLogAggregatorStub) flowSet(startGt, startLt int64) set.Set[*types.DiachronicFlow] {
+	s := set.New[*types.DiachronicFlow]()
 	for _, d := range l.diachronics {
 		if d.Within(startGt, startLt) {
-			s.Add(d.Key)
+			s.Add(d)
 		}
 	}
 	return s
-}
-
-func (l simpleLogAggregatorStub) diachronicFlow(key types.FlowKey) *types.DiachronicFlow {
-	for _, d := range l.diachronics {
-		if d.Key == key {
-			return d
-		}
-	}
-	return nil
 }
 
 func setupTest(t *testing.T) func() {
@@ -66,7 +57,7 @@ func TestIndexAddRemove(t *testing.T) {
 
 	// Create an index, ordered by destination name.
 	idx := NewIndex(func(k *types.FlowKey) string {
-		return k.DestName
+		return k.DestName()
 	})
 
 	// Add some unique DiachronicFlows to the index.
@@ -74,31 +65,51 @@ func TestIndexAddRemove(t *testing.T) {
 	allFlows := []*types.DiachronicFlow{
 		{
 			ID: 0,
-			Key: types.FlowKey{
-				DestName:      "a",
-				DestNamespace: "ns1",
-			},
+			Key: *types.NewFlowKey(
+				&types.FlowKeySource{},
+				&types.FlowKeyDestination{
+					DestName:      "a",
+					DestNamespace: "ns1",
+				},
+				&types.FlowKeyMeta{},
+				&proto.PolicyTrace{},
+			),
 		},
 		{
 			ID: 1,
-			Key: types.FlowKey{
-				DestName:      "c",
-				DestNamespace: "ns1",
-			},
+			Key: *types.NewFlowKey(
+				&types.FlowKeySource{},
+				&types.FlowKeyDestination{
+					DestName:      "c",
+					DestNamespace: "ns1",
+				},
+				&types.FlowKeyMeta{},
+				&proto.PolicyTrace{},
+			),
 		},
 		{
 			ID: 2,
-			Key: types.FlowKey{
-				DestName:      "b",
-				DestNamespace: "ns1",
-			},
+			Key: *types.NewFlowKey(
+				&types.FlowKeySource{},
+				&types.FlowKeyDestination{
+					DestName:      "b",
+					DestNamespace: "ns1",
+				},
+				&types.FlowKeyMeta{},
+				&proto.PolicyTrace{},
+			),
 		},
 		{
 			ID: 3,
-			Key: types.FlowKey{
-				DestName:      "d",
-				DestNamespace: "ns1",
-			},
+			Key: *types.NewFlowKey(
+				&types.FlowKeySource{},
+				&types.FlowKeyDestination{
+					DestName:      "d",
+					DestNamespace: "ns1",
+				},
+				&types.FlowKeyMeta{},
+				&proto.PolicyTrace{},
+			),
 		},
 	}
 
@@ -121,35 +132,45 @@ func TestIndexAddRemove(t *testing.T) {
 	// Verify the DiachronicFlows are ordered correctly.
 	flows, _ := idx.List(IndexFindOpts{})
 	Expect(flows).To(HaveLen(4))
-	Expect(flows[0].Key.DestName).To(Equal("a"))
-	Expect(flows[1].Key.DestName).To(Equal("b"))
-	Expect(flows[2].Key.DestName).To(Equal("c"))
-	Expect(flows[3].Key.DestName).To(Equal("d"))
+	Expect(flows[0].Key.DestName()).To(Equal("a"))
+	Expect(flows[1].Key.DestName()).To(Equal("b"))
+	Expect(flows[2].Key.DestName()).To(Equal("c"))
+	Expect(flows[3].Key.DestName()).To(Equal("d"))
 
 	// Remove a DiachronicFlow from the index.
 	idx.Remove(&types.DiachronicFlow{
 		ID: 2,
-		Key: types.FlowKey{
-			DestName:      "b",
-			DestNamespace: "ns1",
-		},
+		Key: *types.NewFlowKey(
+			&types.FlowKeySource{},
+			&types.FlowKeyDestination{
+				DestName:      "b",
+				DestNamespace: "ns1",
+			},
+			&types.FlowKeyMeta{},
+			&proto.PolicyTrace{},
+		),
 	})
 
 	// Verify the DiachronicFlows are ordered correctly.
 	flows, _ = idx.List(IndexFindOpts{})
 	Expect(flows).To(HaveLen(3))
-	Expect(flows[0].Key.DestName).To(Equal("a"))
-	Expect(flows[1].Key.DestName).To(Equal("c"))
-	Expect(flows[2].Key.DestName).To(Equal("d"))
+	Expect(flows[0].Key.DestName()).To(Equal("a"))
+	Expect(flows[1].Key.DestName()).To(Equal("c"))
+	Expect(flows[2].Key.DestName()).To(Equal("d"))
 
 	// Add a DiachronicFlow to the index that sorts the same as an existing DiachronicFlow.
 	// In this case, we're sorting on DestName, and adding a DiachronicFlow with the same DestName as an existing DiachronicFlow.
 	trickyFlow := &types.DiachronicFlow{
 		ID: 3,
-		Key: types.FlowKey{
-			DestName:      "a",
-			DestNamespace: "ns2",
-		},
+		Key: *types.NewFlowKey(
+			&types.FlowKeySource{},
+			&types.FlowKeyDestination{
+				DestName:      "a",
+				DestNamespace: "ns2",
+			},
+			&types.FlowKeyMeta{},
+			&proto.PolicyTrace{},
+		),
 	}
 	trickyFlow.AddFlow(data, 0, 1)
 	idx.Add(trickyFlow)
@@ -158,12 +179,12 @@ func TestIndexAddRemove(t *testing.T) {
 	// sorted by their ID.
 	flows, _ = idx.List(IndexFindOpts{})
 	Expect(flows).To(HaveLen(4))
-	Expect(flows[0].Key.DestName).To(Equal("a"))
-	Expect(flows[0].Key.DestNamespace).To(Equal("ns1"))
-	Expect(flows[1].Key.DestName).To(Equal("a"))
-	Expect(flows[1].Key.DestNamespace).To(Equal("ns2"))
-	Expect(flows[2].Key.DestName).To(Equal("c"))
-	Expect(flows[3].Key.DestName).To(Equal("d"))
+	Expect(flows[0].Key.DestName()).To(Equal("a"))
+	Expect(flows[0].Key.DestNamespace()).To(Equal("ns1"))
+	Expect(flows[1].Key.DestName()).To(Equal("a"))
+	Expect(flows[1].Key.DestNamespace()).To(Equal("ns2"))
+	Expect(flows[2].Key.DestName()).To(Equal("c"))
+	Expect(flows[3].Key.DestName()).To(Equal("d"))
 
 	// Add the same tricky DiachronicFlow again, verify we don't add a duplicate.
 	idx.Add(trickyFlow)
@@ -171,12 +192,12 @@ func TestIndexAddRemove(t *testing.T) {
 	// We should have the same results.
 	flows, _ = idx.List(IndexFindOpts{})
 	Expect(flows).To(HaveLen(4))
-	Expect(flows[0].Key.DestName).To(Equal("a"))
-	Expect(flows[0].Key.DestNamespace).To(Equal("ns1"))
-	Expect(flows[1].Key.DestName).To(Equal("a"))
-	Expect(flows[1].Key.DestNamespace).To(Equal("ns2"))
-	Expect(flows[2].Key.DestName).To(Equal("c"))
-	Expect(flows[3].Key.DestName).To(Equal("d"))
+	Expect(flows[0].Key.DestName()).To(Equal("a"))
+	Expect(flows[0].Key.DestNamespace()).To(Equal("ns1"))
+	Expect(flows[1].Key.DestName()).To(Equal("a"))
+	Expect(flows[1].Key.DestNamespace()).To(Equal("ns2"))
+	Expect(flows[2].Key.DestName()).To(Equal("c"))
+	Expect(flows[3].Key.DestName()).To(Equal("d"))
 
 	// Remove all the original flows from the index, as well as the one we just added.
 	for _, flow := range allFlows {
@@ -197,40 +218,112 @@ func TestIndexAddRemove(t *testing.T) {
 func TestIndexPagination_General(t *testing.T) {
 	allFlows := []*types.DiachronicFlow{
 		{
-			ID:  0,
-			Key: types.FlowKey{DestName: "a", DestNamespace: "ns1"},
+			ID: 0,
+			Key: *types.NewFlowKey(
+				&types.FlowKeySource{},
+				&types.FlowKeyDestination{
+					DestName:      "a",
+					DestNamespace: "ns1",
+				},
+				&types.FlowKeyMeta{},
+				&proto.PolicyTrace{},
+			),
 		},
 		{
-			ID:  1,
-			Key: types.FlowKey{DestName: "c", DestNamespace: "ns1"},
+			ID: 1,
+			Key: *types.NewFlowKey(
+				&types.FlowKeySource{},
+				&types.FlowKeyDestination{
+					DestName:      "c",
+					DestNamespace: "ns1",
+				},
+				&types.FlowKeyMeta{},
+				&proto.PolicyTrace{},
+			),
 		},
 		{
-			ID:  2,
-			Key: types.FlowKey{DestName: "b", DestNamespace: "ns1"},
+			ID: 2,
+			Key: *types.NewFlowKey(
+				&types.FlowKeySource{},
+				&types.FlowKeyDestination{
+					DestName:      "b",
+					DestNamespace: "ns1",
+				},
+				&types.FlowKeyMeta{},
+				&proto.PolicyTrace{},
+			),
 		},
 		{
-			ID:  3,
-			Key: types.FlowKey{DestName: "d", DestNamespace: "ns1"},
+			ID: 3,
+			Key: *types.NewFlowKey(
+				&types.FlowKeySource{},
+				&types.FlowKeyDestination{
+					DestName:      "d",
+					DestNamespace: "ns1",
+				},
+				&types.FlowKeyMeta{},
+				&proto.PolicyTrace{},
+			),
 		},
 		{
-			ID:  4,
-			Key: types.FlowKey{DestName: "e", DestNamespace: "ns2"},
+			ID: 4,
+			Key: *types.NewFlowKey(
+				&types.FlowKeySource{},
+				&types.FlowKeyDestination{
+					DestName:      "e",
+					DestNamespace: "ns2",
+				},
+				&types.FlowKeyMeta{},
+				&proto.PolicyTrace{},
+			),
 		},
 		{
-			ID:  5,
-			Key: types.FlowKey{DestName: "f", DestNamespace: "ns2"},
+			ID: 5,
+			Key: *types.NewFlowKey(
+				&types.FlowKeySource{},
+				&types.FlowKeyDestination{
+					DestName:      "f",
+					DestNamespace: "ns2",
+				},
+				&types.FlowKeyMeta{},
+				&proto.PolicyTrace{},
+			),
 		},
 		{
-			ID:  6,
-			Key: types.FlowKey{DestName: "g", DestNamespace: "ns2"},
+			ID: 6,
+			Key: *types.NewFlowKey(
+				&types.FlowKeySource{},
+				&types.FlowKeyDestination{
+					DestName:      "g",
+					DestNamespace: "ns2",
+				},
+				&types.FlowKeyMeta{},
+				&proto.PolicyTrace{},
+			),
 		},
 		{
-			ID:  7,
-			Key: types.FlowKey{DestName: "h", DestNamespace: "ns2"},
+			ID: 7,
+			Key: *types.NewFlowKey(
+				&types.FlowKeySource{},
+				&types.FlowKeyDestination{
+					DestName:      "h",
+					DestNamespace: "ns2",
+				},
+				&types.FlowKeyMeta{},
+				&proto.PolicyTrace{},
+			),
 		},
 		{
-			ID:  8,
-			Key: types.FlowKey{DestName: "i", DestNamespace: "ns3"},
+			ID: 8,
+			Key: *types.NewFlowKey(
+				&types.FlowKeySource{},
+				&types.FlowKeyDestination{
+					DestName:      "i",
+					DestNamespace: "ns3",
+				},
+				&types.FlowKeyMeta{},
+				&proto.PolicyTrace{},
+			),
 		},
 	}
 
@@ -246,7 +339,7 @@ func TestIndexPagination_General(t *testing.T) {
 
 	// Create an index, ordered by destination name.
 	idx := NewIndex(func(k *types.FlowKey) string {
-		return k.DestName
+		return k.DestName()
 	})
 
 	for _, flow := range allFlows {
@@ -319,7 +412,15 @@ func TestIndexPagination_General(t *testing.T) {
 
 func TestIndexPagination_KeyOnly(t *testing.T) {
 	newFlowKey := func(name, ns string) types.FlowKey {
-		return types.FlowKey{DestName: name, DestNamespace: ns}
+		return *types.NewFlowKey(
+			&types.FlowKeySource{},
+			&types.FlowKeyDestination{
+				DestName:      name,
+				DestNamespace: ns,
+			},
+			&types.FlowKeyMeta{},
+			&proto.PolicyTrace{},
+		)
 	}
 
 	data := &types.Flow{
@@ -432,7 +533,7 @@ func TestIndexPagination_KeyOnly(t *testing.T) {
 			}
 
 			idx := NewIndex(func(k *types.FlowKey) string {
-				return k.DestName
+				return k.DestName()
 			})
 
 			for _, flow := range allFlows {
@@ -458,41 +559,113 @@ func TestIndexPagination_KeyOnly(t *testing.T) {
 func TestRingIndexPagination_General(t *testing.T) {
 	allFlows := []*types.DiachronicFlow{
 		{
-			ID:      0,
-			Key:     types.FlowKey{DestName: "a", DestNamespace: "ns1"},
+			ID: 0,
+			Key: *types.NewFlowKey(
+				&types.FlowKeySource{},
+				&types.FlowKeyDestination{
+					DestName:      "a",
+					DestNamespace: "ns1",
+				},
+				&types.FlowKeyMeta{},
+				&proto.PolicyTrace{},
+			),
 			Windows: []types.Window{},
 		},
 		{
-			ID:  1,
-			Key: types.FlowKey{DestName: "c", DestNamespace: "ns1"},
+			ID: 1,
+			Key: *types.NewFlowKey(
+				&types.FlowKeySource{},
+				&types.FlowKeyDestination{
+					DestName:      "c",
+					DestNamespace: "ns1",
+				},
+				&types.FlowKeyMeta{},
+				&proto.PolicyTrace{},
+			),
 		},
 		{
-			ID:  2,
-			Key: types.FlowKey{DestName: "b", DestNamespace: "ns1"},
+			ID: 2,
+			Key: *types.NewFlowKey(
+				&types.FlowKeySource{},
+				&types.FlowKeyDestination{
+					DestName:      "b",
+					DestNamespace: "ns1",
+				},
+				&types.FlowKeyMeta{},
+				&proto.PolicyTrace{},
+			),
 		},
 		{
-			ID:  3,
-			Key: types.FlowKey{DestName: "d", DestNamespace: "ns1"},
+			ID: 3,
+			Key: *types.NewFlowKey(
+				&types.FlowKeySource{},
+				&types.FlowKeyDestination{
+					DestName:      "d",
+					DestNamespace: "ns1",
+				},
+				&types.FlowKeyMeta{},
+				&proto.PolicyTrace{},
+			),
 		},
 		{
-			ID:  4,
-			Key: types.FlowKey{DestName: "e", DestNamespace: "ns2"},
+			ID: 4,
+			Key: *types.NewFlowKey(
+				&types.FlowKeySource{},
+				&types.FlowKeyDestination{
+					DestName:      "e",
+					DestNamespace: "ns2",
+				},
+				&types.FlowKeyMeta{},
+				&proto.PolicyTrace{},
+			),
 		},
 		{
-			ID:  5,
-			Key: types.FlowKey{DestName: "f", DestNamespace: "ns2"},
+			ID: 5,
+			Key: *types.NewFlowKey(
+				&types.FlowKeySource{},
+				&types.FlowKeyDestination{
+					DestName:      "f",
+					DestNamespace: "ns2",
+				},
+				&types.FlowKeyMeta{},
+				&proto.PolicyTrace{},
+			),
 		},
 		{
-			ID:  6,
-			Key: types.FlowKey{DestName: "g", DestNamespace: "ns2"},
+			ID: 6,
+			Key: *types.NewFlowKey(
+				&types.FlowKeySource{},
+				&types.FlowKeyDestination{
+					DestName:      "g",
+					DestNamespace: "ns2",
+				},
+				&types.FlowKeyMeta{},
+				&proto.PolicyTrace{},
+			),
 		},
 		{
-			ID:  7,
-			Key: types.FlowKey{DestName: "h", DestNamespace: "ns2"},
+			ID: 7,
+			Key: *types.NewFlowKey(
+				&types.FlowKeySource{},
+				&types.FlowKeyDestination{
+					DestName:      "h",
+					DestNamespace: "ns2",
+				},
+				&types.FlowKeyMeta{},
+				&proto.PolicyTrace{},
+			),
 		},
 		{
-			ID:  8,
-			Key: types.FlowKey{DestName: "i", DestNamespace: "ns3"},
+			ID: 8,
+			Key: *types.NewFlowKey(
+				&types.FlowKeySource{},
+				&types.FlowKeyDestination{
+					DestName:      "i",
+					DestNamespace: "ns3",
+				},
+				&types.FlowKeyMeta{},
+				&proto.PolicyTrace{},
+			),
 		},
 	}
 
@@ -506,14 +679,12 @@ func TestRingIndexPagination_General(t *testing.T) {
 		NumConnectionsCompleted: 1,
 	}
 
-	// Create an index, ordered by destination name.
-
+	// Create a ring index.
 	flowSet := set.New[types.FlowKey]()
 	for _, flow := range allFlows {
 		flow.AddFlow(data, 0, 1)
 		flowSet.Add(flow.Key)
 	}
-
 	agg := &simpleLogAggregatorStub{diachronics: allFlows}
 	idx := NewRingIndex(agg)
 

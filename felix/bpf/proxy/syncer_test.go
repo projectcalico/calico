@@ -207,7 +207,55 @@ var _ = Describe("BPF Syncer", func() {
 			Expect(eps.m).To(ContainElement(nat.NewNATBackendValue(net.IPv4(10, 2, 0, 1), 2222)))
 		}))
 
-		By("checking that a CT entry pair is cleaned up by connScan", makestep(func() {
+		By("creating UDP CT entry to somethng not a service", func() {
+			key := conntrack.NewKey(conntrack.ProtoUDP, net.IPv4(10, 66, 0, 1), 12345, net.IPv4(20, 0, 0, 111), 30666)
+			val := conntrack.NewValueNormal(0, 0, conntrack.Leg{}, conntrack.Leg{})
+			err := ct.Update(key.AsBytes(), val.AsBytes())
+			Expect(err).NotTo(HaveOccurred(), "Test failed to populate ct map")
+		})
+
+		By("checking that a CT entry pair is cleaned up by connScan, the UDP normal entry remains", makestep(func() {
+
+			connScan.Scan()
+
+			cnt := 0
+
+			err := ct.Iter(func(k, v []byte) maps.IteratorAction {
+				cnt++
+				key := conntrack.KeyFromBytes(k)
+				val := conntrack.ValueFromBytes(v)
+				log("key = %s\n", key)
+				log("val = %s\n", val)
+				return maps.IterNone
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(cnt).To(Equal(5))
+		}))
+
+		udpSvcKey := k8sp.ServicePortName{
+			NamespacedName: types.NamespacedName{
+				Namespace: "default",
+				Name:      "udp-service",
+			},
+		}
+
+		By("creating a UDP service", makestep(func() {
+			state.SvcMap[udpSvcKey] = proxy.NewK8sServicePort(
+				net.IPv4(20, 0, 0, 111),
+				30666,
+				v1.ProtocolUDP,
+			)
+			// Needs at least one endpoint to be considered and active service
+			state.EpsMap[udpSvcKey] = []k8sp.Endpoint{
+				proxy.NewEndpointInfo("10.6.0.0", 1666, proxy.EndpointInfoOptIsReady(true)),
+			}
+
+			err := s.Apply(state)
+			Expect(err).NotTo(HaveOccurred())
+		}))
+
+		By("checking that the UDP normal entry gets cleaned", makestep(func() {
 
 			connScan.Scan()
 
@@ -224,6 +272,13 @@ var _ = Describe("BPF Syncer", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(cnt).To(Equal(4))
+		}))
+
+		By("deleting the udp-service backend", makestep(func() {
+			delete(state.SvcMap, udpSvcKey)
+			delete(state.EpsMap, udpSvcKey)
+			err := s.Apply(state)
+			Expect(err).NotTo(HaveOccurred())
 		}))
 
 		By("deleting one second-service backend", makestep(func() {

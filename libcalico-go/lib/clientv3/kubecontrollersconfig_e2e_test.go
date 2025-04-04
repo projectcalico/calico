@@ -483,6 +483,17 @@ var _ = testutils.E2eDatastoreDescribe("KubeControllersConfiguration tests", tes
 				},
 			}
 
+			templateLongName := apiv3.AutoHostEndpointConfig{
+				AutoCreate:                "Enabled",
+				CreateDefaultHostEndpoint: "Enabled",
+				Templates: []apiv3.Template{
+					{
+						GenerateName:   "the-quick-brown-fox-jumps-over-the-lazy-dog-the-quick-brown-fox-jumps-over-the-lazy-dog-the-quick-brown-fox-jumps-over-the-lazy-dog-the-quick-brown-fox-jumps-over-the-lazy-dog-the-quick-brown-fox-jumps-over-the-lazy-dog-the-quick-brown-fox-jumps-over-the-lazy-dog",
+						InterfaceCIDRs: []string{"10.0.0.0/24"},
+					},
+				},
+			}
+
 			templateDuplicateName := apiv3.AutoHostEndpointConfig{
 				AutoCreate:                "Enabled",
 				CreateDefaultHostEndpoint: "Enabled",
@@ -522,6 +533,12 @@ var _ = testutils.E2eDatastoreDescribe("KubeControllersConfiguration tests", tes
 			_, outError = c.KubeControllersConfiguration().Create(ctx, kcc, options.SetOptions{})
 			Expect(outError).To(HaveOccurred())
 			Expect(outError.Error()).To(ContainSubstring("Template name must be specified"))
+
+			By("Creating kcc with long template name")
+			kcc.Spec.Controllers.Node.HostEndpoint = &templateLongName
+			_, outError = c.KubeControllersConfiguration().Create(ctx, kcc, options.SetOptions{})
+			Expect(outError).To(HaveOccurred())
+			Expect(outError.Error()).To(ContainSubstring("Template name must be shorter than 253 characters"))
 
 			By("Creating kcc with duplicate template name")
 			kcc.Spec.Controllers.Node.HostEndpoint = &templateDuplicateName

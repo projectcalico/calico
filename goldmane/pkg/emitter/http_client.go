@@ -28,6 +28,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	calicotls "github.com/projectcalico/calico/crypto/pkg/tls"
 	"github.com/projectcalico/calico/goldmane/pkg/internal/utils"
 )
 
@@ -35,7 +36,8 @@ const ContentTypeMultilineJSON = "application/x-ndjson"
 
 func newHTTPClient(caCert, clientKey, clientCert, serverName string) (*http.Client, error) {
 	// Create a new HTTP client.
-	tlsConfig := &tls.Config{ServerName: serverName}
+	tlsConfig := calicotls.NewTLSConfig()
+	tlsConfig.ServerName = serverName
 	if caCert != "" {
 		caCertPool := x509.NewCertPool()
 		caCert, err := os.ReadFile(caCert)

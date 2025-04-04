@@ -7,15 +7,14 @@ metadata:
     app: nginx
 spec:
   containers:
-  - name: nginx
-    image: nginx:1
-    ports:
-    - containerPort: 80
+    - name: nginx
+      image: nginx:1
+      ports:
+        - containerPort: 80
   nodeSelector:
     kubernetes.io/os: linux
 
 ---
-
 apiVersion: v1
 kind: Pod
 metadata:
@@ -25,15 +24,14 @@ metadata:
     app: nginx-b
 spec:
   containers:
-  - name: nginx
-    image: nginx:1
-    ports:
-    - containerPort: 80
+    - name: nginx
+      image: nginx:1
+      ports:
+        - containerPort: 80
   nodeSelector:
     kubernetes.io/os: linux
 
 ---
-
 apiVersion: v1
 kind: Service
 metadata:
@@ -44,13 +42,12 @@ metadata:
 spec:
   type: NodePort
   ports:
-  - port: 80
-    targetPort: 80
+    - port: 80
+      targetPort: 80
   selector:
     app: nginx
 
 ---
-
 apiVersion: v1
 kind: Service
 metadata:
@@ -61,7 +58,7 @@ metadata:
 spec:
   type: NodePort
   ports:
-  - port: 80
-    targetPort: 80
+    - port: 80
+      targetPort: 80
   selector:
     app: nginx-b

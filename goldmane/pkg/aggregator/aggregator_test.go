@@ -16,6 +16,7 @@ package aggregator_test
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -26,9 +27,9 @@ import (
 
 	"github.com/projectcalico/calico/goldmane/pkg/aggregator"
 	"github.com/projectcalico/calico/goldmane/pkg/aggregator/bucketing"
-	"github.com/projectcalico/calico/goldmane/pkg/internal/types"
 	"github.com/projectcalico/calico/goldmane/pkg/internal/utils"
 	"github.com/projectcalico/calico/goldmane/pkg/testutils"
+	"github.com/projectcalico/calico/goldmane/pkg/types"
 	"github.com/projectcalico/calico/goldmane/proto"
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 )
@@ -118,7 +119,7 @@ func TestList(t *testing.T) {
 		PacketsOut:            20,
 		NumConnectionsStarted: 1,
 	}
-	agg.Receive(&proto.FlowUpdate{Flow: fl})
+	agg.Receive(types.ProtoToFlow(fl))
 
 	// Expect the aggregator to have received it.
 	var flows []*proto.FlowResult
@@ -175,7 +176,7 @@ func TestList(t *testing.T) {
 	id := flows[0].Id
 
 	// Send another copy of the flow log.
-	agg.Receive(&proto.FlowUpdate{Flow: fl})
+	agg.Receive(types.ProtoToFlow(fl))
 
 	// Expect the aggregator to have received it. Aggregation of new flows
 	// happens asynchonously, so we may need to wait a few ms for it.
@@ -210,7 +211,7 @@ func TestList(t *testing.T) {
 	time.Sleep(1001 * time.Millisecond)
 
 	// Send another flow log.
-	agg.Receive(&proto.FlowUpdate{Flow: fl})
+	agg.Receive(types.ProtoToFlow(fl))
 
 	// Expect the aggregator to have received it. This should be added to a new bucket,
 	// but aggregated into the same flow on read.
@@ -291,7 +292,7 @@ func TestLabelMerge(t *testing.T) {
 		fl := googleproto.Clone(base).(*proto.Flow)
 		fl.SourceLabels = []string{"common=src", fmt.Sprintf("unique-src=%d", i)}
 		fl.DestLabels = []string{"common=dst", fmt.Sprintf("unique-dest=%d", i)}
-		agg.Receive(&proto.FlowUpdate{Flow: fl})
+		agg.Receive(types.ProtoToFlow(fl))
 	}
 
 	// Query for the flow, and expect that labels are properly aggregated. We should see
@@ -358,7 +359,7 @@ func TestRotation(t *testing.T) {
 		PacketsOut:            20,
 		NumConnectionsStarted: 1,
 	}
-	agg.Receive(&proto.FlowUpdate{Flow: fl})
+	agg.Receive(types.ProtoToFlow(fl))
 
 	// We should be able to read it back.
 	var flows []*proto.FlowResult
@@ -442,7 +443,7 @@ func TestManyFlows(t *testing.T) {
 		NumConnectionsStarted: 1,
 	}
 	for range 20000 {
-		agg.Receive(&proto.FlowUpdate{Flow: fl})
+		agg.Receive(types.ProtoToFlow(fl))
 	}
 
 	// Query for the flow.
@@ -496,7 +497,7 @@ func TestPagination(t *testing.T) {
 			PacketsOut:            20,
 			NumConnectionsStarted: 1,
 		}
-		agg.Receive(&proto.FlowUpdate{Flow: fl})
+		agg.Receive(types.ProtoToFlow(fl))
 	}
 
 	// Query without pagination.
@@ -576,7 +577,7 @@ func TestTimeRanges(t *testing.T) {
 		for i := range 60 {
 			startTime := now - int64(i) + 1
 			endTime := startTime + 1
-			flow := &proto.Flow{
+			fl := &proto.Flow{
 				// Start one rollover period into the future, since that is how the aggregator works.
 				Key: &proto.FlowKey{
 					SourceName:      "test-src",
@@ -595,7 +596,7 @@ func TestTimeRanges(t *testing.T) {
 				PacketsOut:            20,
 				NumConnectionsStarted: 1,
 			}
-			agg.Receive(&proto.FlowUpdate{Flow: flow})
+			agg.Receive(types.ProtoToFlow(fl))
 		}
 	}
 
@@ -762,8 +763,8 @@ func TestSink(t *testing.T) {
 
 		// Write some data into the aggregator in a way that will trigger an emission on the next rollover.
 		// Write a flow that will trigger an emission, since it's within the push index.
-		f := testutils.NewRandomFlow(now - int64(pushIndex))
-		agg.Receive(&proto.FlowUpdate{Flow: f})
+		fl := testutils.NewRandomFlow(now - int64(pushIndex))
+		agg.Receive(types.ProtoToFlow(fl))
 
 		// Wait for the flow to be received.
 		Eventually(func() error {
@@ -812,7 +813,7 @@ func TestSink(t *testing.T) {
 				PacketsOut:            20,
 				NumConnectionsStarted: 1,
 			}
-			agg.Receive(&proto.FlowUpdate{Flow: fl})
+			agg.Receive(types.ProtoToFlow(fl))
 		}
 
 		// Wait for all flows to be received.
@@ -896,8 +897,8 @@ func TestSink(t *testing.T) {
 		// Load up the aggregator with Flow data across a widge range of buckets, spanning
 		// multiple emission windows.
 		for i := range 100 {
-			f := testutils.NewRandomFlow(now - int64(pushIndex) - int64(i))
-			agg.Receive(&proto.FlowUpdate{Flow: f})
+			fl := testutils.NewRandomFlow(now - int64(pushIndex) - int64(i))
+			agg.Receive(types.ProtoToFlow(fl))
 		}
 
 		// Wait for the flows to be received.
@@ -959,8 +960,8 @@ func TestSink(t *testing.T) {
 		// Load up the aggregator with Flow data across a widge range of buckets, spanning
 		// multiple emission windows.
 		for i := range 100 {
-			f := testutils.NewRandomFlow(now - int64(pushIndex) - int64(i))
-			agg.Receive(&proto.FlowUpdate{Flow: f})
+			fl := testutils.NewRandomFlow(now - int64(pushIndex) - int64(i))
+			agg.Receive(types.ProtoToFlow(fl))
 		}
 
 		// Wait for the flows to be received.
@@ -1089,7 +1090,7 @@ func TestStreams(t *testing.T) {
 		// time range of now-10 to now-5.
 		for i := 5; i < 10; i++ {
 			fl := testutils.NewRandomFlow(c.Now().Unix() - int64(i))
-			agg.Receive(&proto.FlowUpdate{Flow: fl})
+			agg.Receive(types.ProtoToFlow(fl))
 		}
 
 		// Expect the flows to have been received.
@@ -1134,7 +1135,7 @@ func TestStreams(t *testing.T) {
 
 		// Ingest some new flow data.
 		fl := testutils.NewRandomFlow(c.Now().Unix() - 1)
-		agg.Receive(&proto.FlowUpdate{Flow: fl})
+		agg.Receive(types.ProtoToFlow(fl))
 
 		// Expect the flow to have been received for a total of 6 flows in the aggregator.
 		Eventually(func() error {
@@ -1198,7 +1199,7 @@ func TestStreams(t *testing.T) {
 			fl.StartTime = base.StartTime - int64(i)
 			fl.EndTime = base.EndTime - int64(i)
 			startTimes = append(startTimes, fl.StartTime)
-			agg.Receive(&proto.FlowUpdate{Flow: fl})
+			agg.Receive(types.ProtoToFlow(fl))
 		}
 
 		// Expect all 10 flows to have been received.
@@ -1280,7 +1281,7 @@ func TestSortOrder(t *testing.T) {
 			// Create a bunch of random flows.
 			for range 100 {
 				fl := testutils.NewRandomFlow(c.Now().Unix() - 1)
-				agg.Receive(&proto.FlowUpdate{Flow: fl})
+				agg.Receive(types.ProtoToFlow(fl))
 			}
 
 			// Query for Flows, sorted by the Index under test. Since we have created a bunch of random flows,
@@ -1580,7 +1581,7 @@ func TestFilter(t *testing.T) {
 				}
 
 				// Send it to the aggregator.
-				agg.Receive(&proto.FlowUpdate{Flow: fl})
+				agg.Receive(types.ProtoToFlow(fl))
 			}
 
 			// Query for flows using the query from the testcase.
@@ -1707,7 +1708,7 @@ func TestFilterHints(t *testing.T) {
 				}
 
 				// Send it to the aggregator.
-				agg.Receive(&proto.FlowUpdate{Flow: fl})
+				agg.Receive(types.ProtoToFlow(fl))
 			}
 
 			// Wait for all flows to be received.
@@ -1780,7 +1781,7 @@ func TestFilterHints(t *testing.T) {
 				}
 
 				// Send it to the aggregator.
-				agg.Receive(&proto.FlowUpdate{Flow: fl})
+				agg.Receive(types.ProtoToFlow(fl))
 			}
 
 			// Wait for all flows to be received.
@@ -1809,23 +1810,31 @@ func TestStatistics(t *testing.T) {
 	// Number of flows to create for each test.
 	numFlows := 10
 
+	mutateUniquePolicyName := func(fl *proto.Flow, i int) {
+		// Modify the first policy hit to have a unique policy name. This ensures that
+		// we don't get duplicate policy hits in the statistics.
+		fl.Key.Policies.EnforcedPolicies[0].Name = fmt.Sprintf("policy-%d", i)
+	}
+
 	// Helper function for the statistics tests to create a bunch of random flows.
-	createFlows := func(numFlows int) []*proto.Flow {
+	createFlows := func(numFlows int, mutators ...func(*proto.Flow, int)) []*proto.Flow {
 		flows := []*proto.Flow{}
 
 		// Create a bunch of flows across different buckets, one per bucket.
 		// Each Flow has a random policy hit as well as a well-known one.
 		for i := range numFlows {
 			fl := testutils.NewRandomFlow(roller.clock.Now().Unix())
-			// Modify the first policy hit to have a unique policy name. This ensures that
-			// we don't get duplicate policy hits in the statistics.
-			fl.Key.Policies.EnforcedPolicies[0].Name = fmt.Sprintf("policy-%d", i)
+
+			// If a mutator was given, apply it to the flow.
+			for _, mutator := range mutators {
+				mutator(fl, i)
+			}
 
 			// Store off the flows we created so the tests can refer to them.
 			flows = append(flows, fl)
 
 			// Send it to the aggregator.
-			agg.Receive(&proto.FlowUpdate{Flow: fl})
+			agg.Receive(types.ProtoToFlow(fl))
 			roller.rolloverAndAdvanceClock(1)
 		}
 
@@ -1857,7 +1866,7 @@ func TestStatistics(t *testing.T) {
 			go agg.Run(c.Now().Unix())
 
 			// Create some flows.
-			flows := createFlows(numFlows)
+			flows := createFlows(numFlows, mutateUniquePolicyName)
 
 			// Query for packet statistics per-policy.
 			perPolicyStats, err := agg.Statistics(&proto.StatisticsRequest{
@@ -1923,7 +1932,7 @@ func TestStatistics(t *testing.T) {
 
 			// Ingest the same flows again. This should double the statistics.
 			for _, fl := range flows {
-				agg.Receive(&proto.FlowUpdate{Flow: fl})
+				agg.Receive(types.ProtoToFlow(fl))
 			}
 
 			// Wait for all flows to be received.
@@ -1989,7 +1998,7 @@ func TestStatistics(t *testing.T) {
 			go agg.Run(c.Now().Unix())
 
 			// Create some flows.
-			_ = createFlows(numFlows)
+			_ = createFlows(numFlows, mutateUniquePolicyName)
 
 			// Send a query for non-time-series data, which will aggregate
 			// all the flows into a single statistic.
@@ -2025,6 +2034,132 @@ func TestStatistics(t *testing.T) {
 			}
 		})
 
+		t.Run(fmt.Sprintf("EndOfTier per-policy statistics %s", statName), func(t *testing.T) {
+			// Create a clock and rollover controller.
+			c := newClock(initialNow)
+			roller = &rolloverController{
+				ch:                    make(chan time.Time),
+				aggregationWindowSecs: 1,
+				clock:                 c,
+			}
+			opts := []aggregator.Option{
+				aggregator.WithRolloverTime(1 * time.Second),
+				aggregator.WithRolloverFunc(roller.After),
+				aggregator.WithNowFunc(c.Now),
+			}
+			defer setupTest(t, opts...)()
+			go agg.Run(c.Now().Unix())
+
+			// Create some flows, mutating the first policy hit in each to be an EndOfTier hit.
+			mutateEndOftier := func(fl *proto.Flow, i int) {
+				trigger := googleproto.Clone(fl.Key.Policies.EnforcedPolicies[0]).(*proto.PolicyHit)
+				fl.Key.Policies.EnforcedPolicies = []*proto.PolicyHit{
+					{
+						// Turn this into a typical EndOfTier default-deny policy.
+						Kind:      proto.PolicyKind_EndOfTier,
+						Tier:      trigger.Tier,
+						RuleIndex: -1,
+						Trigger:   trigger,
+						Action:    proto.Action_Deny,
+					},
+				}
+				fl.Key.Policies.PendingPolicies = []*proto.PolicyHit{}
+			}
+			_ = createFlows(
+				numFlows,
+				mutateUniquePolicyName,
+				mutateEndOftier,
+			)
+
+			// Send a query for non-time-series data, aggregated by Policy.
+			// Collect aggreated statistics, by policy rule.
+			stats, err := agg.Statistics(&proto.StatisticsRequest{
+				Type:       statType,
+				GroupBy:    proto.StatisticsGroupBy_Policy,
+				TimeSeries: false,
+			})
+			require.NoError(t, err)
+			require.NotNil(t, stats)
+
+			// We should have a unique entry for each EOT policy hit.
+			require.Len(t, stats, numFlows)
+
+			for _, stat := range stats {
+				require.Equal(t, proto.PolicyKind_CalicoNetworkPolicy, stat.Policy.Kind)
+
+				// Statistics per-policy don't include an action, as they aggregate across all actions.
+				require.Equal(t, proto.Action_ActionUnspecified, stat.Policy.Action)
+				switch stat.Direction {
+				case proto.RuleDirection_Egress:
+					require.NotEqual(t, int64(0), stat.DeniedIn[0])
+				case proto.RuleDirection_Ingress:
+					require.NotEqual(t, int64(0), stat.DeniedOut[0])
+				}
+				require.Equal(t, int64(0), stat.AllowedIn[0])
+				require.Equal(t, int64(0), stat.AllowedOut[0])
+				require.Equal(t, int64(0), stat.PassedIn[0])
+				require.Equal(t, int64(0), stat.PassedOut[0])
+			}
+		})
+
+		t.Run(fmt.Sprintf("EndOfTier per-rule statistics %s", statName), func(t *testing.T) {
+			// Create a clock and rollover controller.
+			c := newClock(initialNow)
+			roller = &rolloverController{
+				ch:                    make(chan time.Time),
+				aggregationWindowSecs: 1,
+				clock:                 c,
+			}
+			opts := []aggregator.Option{
+				aggregator.WithRolloverTime(1 * time.Second),
+				aggregator.WithRolloverFunc(roller.After),
+				aggregator.WithNowFunc(c.Now),
+			}
+			defer setupTest(t, opts...)()
+			go agg.Run(c.Now().Unix())
+
+			// Create some flows, mutating the first policy hit in each to be an EndOfTier hit.
+			mutateEndOftier := func(fl *proto.Flow, i int) {
+				trigger := googleproto.Clone(fl.Key.Policies.EnforcedPolicies[0]).(*proto.PolicyHit)
+				fl.Key.Policies.EnforcedPolicies = []*proto.PolicyHit{
+					{
+						// Turn this into a typical EndOfTier default-deny policy.
+						Kind:      proto.PolicyKind_EndOfTier,
+						Tier:      trigger.Tier,
+						RuleIndex: -1,
+						Trigger:   trigger,
+						Action:    proto.Action_Deny,
+					},
+				}
+				fl.Key.Policies.PendingPolicies = []*proto.PolicyHit{}
+			}
+			_ = createFlows(
+				numFlows,
+				mutateUniquePolicyName,
+				mutateEndOftier,
+			)
+
+			// Send a query for non-time-series data, aggregated by Policy.
+			// Collect aggreated statistics, by policy rule.
+			stats, err := agg.Statistics(&proto.StatisticsRequest{
+				Type:       statType,
+				GroupBy:    proto.StatisticsGroupBy_PolicyRule,
+				TimeSeries: false,
+			})
+			require.NoError(t, err)
+			require.NotNil(t, stats)
+
+			// We should have a unique entry for each EOT policy hit.
+			require.Len(t, stats, numFlows)
+
+			for _, stat := range stats {
+				require.Equal(t, proto.PolicyKind_CalicoNetworkPolicy, stat.Policy.Kind)
+				require.True(t, strings.HasPrefix(stat.Policy.Name, "policy"), fmt.Sprintf("Unexpected policy name: %s", stat.Policy.Name))
+				require.True(t, strings.HasPrefix(stat.Policy.Namespace, "test-ns"), fmt.Sprintf("Unexpected policy namespace: %s", stat.Policy.Namespace))
+				require.NotEqual(t, proto.Action_ActionUnspecified, stat.Policy.Action)
+			}
+		})
+
 		t.Run(fmt.Sprintf("GroupBy_PolicyRule %s", statName), func(t *testing.T) {
 			// Create a clock and rollover controller.
 			c := newClock(initialNow)
@@ -2042,7 +2177,7 @@ func TestStatistics(t *testing.T) {
 			go agg.Run(c.Now().Unix())
 
 			// Create some flows.
-			_ = createFlows(numFlows)
+			_ = createFlows(numFlows, mutateUniquePolicyName)
 
 			// Collect aggreated statistics, by policy rule.
 			stats, err := agg.Statistics(&proto.StatisticsRequest{

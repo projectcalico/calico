@@ -17,10 +17,44 @@ package types
 import (
 	"slices"
 	"strings"
-	"unique"
 
 	"github.com/projectcalico/calico/goldmane/proto"
 )
+
+const (
+	pub    = "pub"
+	pvt    = "pvt"
+	global = "Global"
+)
+
+// The UI displays some values differently than they are stored within Goldmane. As such,
+// users may sends filters for the UI displayed values, but we need to match against the
+// actual stored values. For example, the UI displays "PUBLIC NETWORK" but the stored value
+// is "pub".
+func names(valFn func() string) func() []string {
+	return func() []string {
+		n := valFn()
+		switch n {
+		case pub:
+			return []string{"PUBLIC NETWORK", pub}
+		case pvt:
+			return []string{"PRIVATE NETWORK", pvt}
+
+		}
+		return []string{n}
+	}
+}
+
+func namespaces(valFn func() string) func() []string {
+	return func() []string {
+		n := valFn()
+		switch n {
+		case global:
+			return []string{"-", global}
+		}
+		return []string{n}
+	}
+}
 
 // Matches returns true if the given flow Matches the given filter.
 func Matches(filter *proto.Filter, key *FlowKey) bool {
@@ -30,14 +64,14 @@ func Matches(filter *proto.Filter, key *FlowKey) bool {
 	}
 
 	comps := []matcher{
-		&stringComparison{filter: filter.SourceNames, val: key.SourceName},
-		&stringComparison{filter: filter.DestNames, val: key.DestName},
-		&stringComparison{filter: filter.SourceNamespaces, val: key.SourceNamespace},
-		&stringComparison{filter: filter.DestNamespaces, val: key.DestNamespace},
-		&stringComparison{filter: filter.Protocols, val: key.Proto},
-		&actionMatch{filter: filter.Actions, val: key.Action},
-		&portComparison{filter: filter.DestPorts, val: key.DestPort},
-		&policyComparison{filter: filter.Policies, val: key.Policies},
+		&stringComparison{filter: filter.SourceNames, genVals: names(key.SourceName)},
+		&stringComparison{filter: filter.DestNames, genVals: names(key.DestName)},
+		&stringComparison{filter: filter.SourceNamespaces, genVals: namespaces(key.SourceNamespace)},
+		&stringComparison{filter: filter.DestNamespaces, genVals: namespaces(key.DestNamespace)},
+		&stringComparison{filter: filter.Protocols, genVals: func() []string { return []string{key.Proto()} }},
+		&actionMatch{filter: filter.Actions, key: key},
+		&portComparison{filter: filter.DestPorts, key: key},
+		&policyComparison{filter: filter.Policies, key: key},
 	}
 	for _, c := range comps {
 		if !c.matches() {
@@ -55,7 +89,7 @@ type matcher interface {
 
 type actionMatch struct {
 	filter []proto.Action
-	val    proto.Action
+	key    *FlowKey
 }
 
 func (a *actionMatch) matches() bool {
@@ -63,12 +97,12 @@ func (a *actionMatch) matches() bool {
 		// No filter value specified, so this comparison matches.
 		return true
 	}
-	return slices.Contains(a.filter, a.val)
+	return slices.Contains(a.filter, a.key.Action())
 }
 
 type portComparison struct {
 	filter []*proto.PortMatch
-	val    int64
+	key    *FlowKey
 }
 
 func (p *portComparison) matches() bool {
@@ -76,8 +110,9 @@ func (p *portComparison) matches() bool {
 		// No filter value specified, so this comparison matches.
 		return true
 	}
+	val := p.key.DestPort()
 	for _, filter := range p.filter {
-		if filter.Port == p.val {
+		if filter.Port == val {
 			return true
 		}
 	}
@@ -86,7 +121,10 @@ func (p *portComparison) matches() bool {
 
 type stringComparison struct {
 	filter []*proto.StringMatch
-	val    string
+
+	// genVals returns a list of values on the underlying object to compare against the filter.
+	// If any of the values match, the comparison is considered a match.
+	genVals func() []string
 }
 
 func (c stringComparison) matches() bool {
@@ -99,17 +137,24 @@ func (c stringComparison) matches() bool {
 }
 
 func (c stringComparison) matchFilter(filter *proto.StringMatch) bool {
+	vals := c.genVals()
+
 	if filter.Type == proto.MatchType_Exact {
-		return c.val == filter.Value
+		return slices.Contains(vals, filter.Value)
 	}
 
 	// Match type is not exact, so we need to do a substring match.
-	return strings.Contains(c.val, filter.Value)
+	for _, val := range vals {
+		if strings.Contains(val, filter.Value) {
+			return true
+		}
+	}
+	return false
 }
 
 type policyComparison struct {
 	filter []*proto.PolicyMatch
-	val    unique.Handle[PolicyTrace]
+	key    *FlowKey
 }
 
 func (c policyComparison) matches() bool {
@@ -120,7 +165,7 @@ func (c policyComparison) matches() bool {
 
 	// We need to unfurl the policy trace to see if the filter matches.
 	// Return a match if any of the policy hits match.
-	flowVal := FlowLogPolicyToProto(c.val)
+	flowVal := FlowLogPolicyToProto(c.key.Policies())
 
 	// Check the enforced and pending policies.
 	if slices.ContainsFunc(flowVal.EnforcedPolicies, c.policyHitMatches) {

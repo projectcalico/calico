@@ -26,17 +26,18 @@ import (
 	"golang.org/x/time/rate"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/types"
+	apitypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/workqueue"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/projectcalico/calico/goldmane/pkg/aggregator/bucketing"
+	"github.com/projectcalico/calico/goldmane/pkg/types"
 	"github.com/projectcalico/calico/libcalico-go/lib/health"
 )
 
 var (
 	maxRetries   = 15
-	configMapKey = types.NamespacedName{Name: "flow-emitter-state", Namespace: "calico-system"}
+	configMapKey = apitypes.NamespacedName{Name: "flow-emitter-state", Namespace: "calico-system"}
 	healthName   = "emitter"
 )
 
@@ -232,7 +233,9 @@ func (e *Emitter) collectionToReader(bucket *bucketing.FlowCollection) (*bytes.R
 			body = append(body, []byte("\n")...)
 		}
 
-		flowJSON, err := json.Marshal(flow)
+		// Convert to public format.
+		f := types.FlowToProto(&flow)
+		flowJSON, err := json.Marshal(f)
 		if err != nil {
 			return nil, fmt.Errorf("Error marshalling flow: %v", err)
 		}

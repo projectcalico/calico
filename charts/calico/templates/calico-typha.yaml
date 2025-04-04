@@ -71,11 +71,11 @@ spec:
         # Mark the pod as a critical add-on for rescheduling.
         - key: CriticalAddonsOnly
           operator: Exists
-        # Make sure Typha can get scheduled on any nodes. 
-        - effect: NoSchedule 
-          operator: Exists 
-        - effect: NoExecute 
-          operator: Exists           
+        # Make sure Typha can get scheduled on any nodes.
+        - effect: NoSchedule
+          operator: Exists
+        - effect: NoExecute
+          operator: Exists
       # Since Calico can't network a pod until Typha is up, we need to run Typha itself
       # as a host-networked pod.
       serviceAccountName: calico-node
@@ -86,84 +86,84 @@ spec:
         seccompProfile:
           type: RuntimeDefault
       containers:
-      - image: {{ .Values.typha.image }}:{{.Values.version }}
-        imagePullPolicy: {{.Values.imagePullPolicy}}
-        name: calico-typha
-        ports:
-        - containerPort: 5473
+        - image: {{ .Values.typha.image }}:{{.Values.version }}
+          imagePullPolicy: {{.Values.imagePullPolicy}}
           name: calico-typha
-          protocol: TCP
-        envFrom:
-        - configMapRef:
-            # Allow KUBERNETES_SERVICE_HOST and KUBERNETES_SERVICE_PORT to be overridden for eBPF mode.
-            name: kubernetes-services-endpoint
-            optional: true
-        env:
+          ports:
+            - containerPort: 5473
+              name: calico-typha
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                # Allow KUBERNETES_SERVICE_HOST and KUBERNETES_SERVICE_PORT to be overridden for eBPF mode.
+                name: kubernetes-services-endpoint
+                optional: true
+          env:
 {{- if .Values.bpf }}
-          # Overrides for kubernetes API server host/port. Needed in BPF mode.
-          - name: KUBERNETES_SERVICE_HOST
-            valueFrom:
-              configMapKeyRef:
-                name: calico-config
-                key: kubernetes_service_host
-          - name: KUBERNETES_SERVICE_PORT
-            valueFrom:
-              configMapKeyRef:
-                name: calico-config
-                key: kubernetes_service_port
+            # Overrides for kubernetes API server host/port. Needed in BPF mode.
+            - name: KUBERNETES_SERVICE_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: calico-config
+                  key: kubernetes_service_host
+            - name: KUBERNETES_SERVICE_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: calico-config
+                  key: kubernetes_service_port
 {{- end }}
-          # Enable "info" logging by default. Can be set to "debug" to increase verbosity.
-          - name: TYPHA_LOGSEVERITYSCREEN
-            value: "info"
-          # Disable logging to file and syslog since those don't make sense in Kubernetes.
-          - name: TYPHA_LOGFILEPATH
-            value: "none"
-          - name: TYPHA_LOGSEVERITYSYS
-            value: "none"
-          # Monitor the Kubernetes API to find the number of running instances and rebalance
-          # connections.
-          - name: TYPHA_CONNECTIONREBALANCINGMODE
-            value: "kubernetes"
-          - name: TYPHA_DATASTORETYPE
-            value: "kubernetes"
-          - name: TYPHA_HEALTHENABLED
-            value: "true"
-          # Set this to the same value as terminationGracePeriodSeconds; it tells Typha how much time
-          # it has to shut down.
-          - name: TYPHA_SHUTDOWNTIMEOUTSECS
-            value: "300"
+            # Enable "info" logging by default. Can be set to "debug" to increase verbosity.
+            - name: TYPHA_LOGSEVERITYSCREEN
+              value: "info"
+            # Disable logging to file and syslog since those don't make sense in Kubernetes.
+            - name: TYPHA_LOGFILEPATH
+              value: "none"
+            - name: TYPHA_LOGSEVERITYSYS
+              value: "none"
+            # Monitor the Kubernetes API to find the number of running instances and rebalance
+            # connections.
+            - name: TYPHA_CONNECTIONREBALANCINGMODE
+              value: "kubernetes"
+            - name: TYPHA_DATASTORETYPE
+              value: "kubernetes"
+            - name: TYPHA_HEALTHENABLED
+              value: "true"
+            # Set this to the same value as terminationGracePeriodSeconds; it tells Typha how much time
+            # it has to shut down.
+            - name: TYPHA_SHUTDOWNTIMEOUTSECS
+              value: "300"
 {{- if eq .Values.ipam "host-local" }}
-          # Configure route aggregation based on pod CIDR.
-          - name: USE_POD_CIDR
-            value: "true"
+            # Configure route aggregation based on pod CIDR.
+            - name: USE_POD_CIDR
+              value: "true"
 {{- end }}
-          # Uncomment these lines to enable prometheus metrics. Since Typha is host-networked,
-          # this opens a port on the host, which may need to be secured.
-          #- name: TYPHA_PROMETHEUSMETRICSENABLED
-          #  value: "true"
-          #- name: TYPHA_PROMETHEUSMETRICSPORT
-          #  value: "9093"
+            # Uncomment these lines to enable prometheus metrics. Since Typha is host-networked,
+            # this opens a port on the host, which may need to be secured.
+            #- name: TYPHA_PROMETHEUSMETRICSENABLED
+            #  value: "true"
+            #- name: TYPHA_PROMETHEUSMETRICSPORT
+            #  value: "9093"
 {{- if .Values.typha.env }}
 {{ toYaml .Values.typha.env | indent 10 }}
 {{- end }}
-        livenessProbe:
-          httpGet:
-            path: /liveness
-            port: 9098
-            host: localhost
-          periodSeconds: 30
-          initialDelaySeconds: 30
-          timeoutSeconds: 10
-        securityContext:
-          runAsNonRoot: true
-          allowPrivilegeEscalation: false
-        readinessProbe:
-          httpGet:
-            path: /readiness
-            port: 9098
-            host: localhost
-          periodSeconds: 10
-          timeoutSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /liveness
+              port: 9098
+              host: localhost
+            periodSeconds: 30
+            initialDelaySeconds: 30
+            timeoutSeconds: 10
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+          readinessProbe:
+            httpGet:
+              path: /readiness
+              port: 9098
+              host: localhost
+            periodSeconds: 10
+            timeoutSeconds: 10
 
 ---
 
