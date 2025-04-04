@@ -5,6 +5,10 @@ jest.mock('@/pages', () => ({
     FlowLogsPage: () => 'Mock FlowLogsPage',
 }));
 
+jest.mock('@/hooks', () => ({
+    useClusterId: jest.fn().mockReturnValue('fake-cluster-id'),
+}));
+
 describe('<App />', () => {
     it('should render the App component', () => {
         render(<App />);
