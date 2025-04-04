@@ -18,6 +18,7 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/pem"
 	"fmt"
 	"math/big"
@@ -50,7 +51,9 @@ func GenerateSelfSignedCert(opts ...CertificateOptions) ([]byte, []byte, error) 
 	// Create certificate template
 	template := x509.Certificate{
 		SerialNumber: big.NewInt(1),
-
+		Issuer: pkix.Name{
+			CommonName: "not correct oh dear",
+		},
 		NotBefore:             time.Now(),
 		NotAfter:              time.Now().Add(24 * time.Hour), // Certificate valid for 24 hours
 		KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,

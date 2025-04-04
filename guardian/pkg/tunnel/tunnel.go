@@ -97,7 +97,10 @@ func newTunnel(dialer SessionDialer, opts ...Option) (*tunnel, error) {
 func (t *tunnel) Connect(ctx context.Context) error {
 	var err error
 	t.connectOnce.Do(func() {
-		t.session, err = t.dialer.Dial()
+		// Block until the initial connection can be created. If this fails then return an error.
+		// It is up to the dialer to decide whether dialing should be retried, and for how long. An error
+		// return signals a fatal error.
+		t.session, err = t.dialer.Dial(ctx)
 		if err != nil {
 			logrus.WithError(err).Error("Failed to open initial connection.")
 			return
@@ -121,8 +124,17 @@ func (t *tunnel) Connect(ctx context.Context) error {
 			})
 		t.acceptConnExecutor = asyncutil.NewCommandExecutor(coordinatorCtx, t.cmdErrBuff,
 			func(ctx context.Context, a any) (net.Conn, error) {
-				logrus.Debug("Accepting connection from the other side of the tunnel.")
-				return t.session.Accept()
+				logrus.Debug("Waiting for connection from other side of tunnel.")
+
+				conn, err := t.session.Accept()
+				if err != nil {
+					logrus.WithError(err).Error("Failed to accept connection.")
+					return nil, err
+				}
+
+				logrus.Debug("Finished waiting for connection from other side of tunnel.")
+
+				return conn, err
 			})
 		t.getAddrExecutor = asyncutil.NewCommandExecutor(coordinatorCtx, t.cmdErrBuff,
 			func(ctx context.Context, a any) (net.Addr, error) {
@@ -143,14 +155,17 @@ func (t *tunnel) startServiceLoop(ctx context.Context) {
 
 	defer func() {
 		defer close(t.closed)
-		defer t.stopExecutors()
 
+		logrus.Info("Shutting down.")
 		if t.session != nil {
 			logrus.Info("Closing session.")
 			if err := t.session.Close(); err != nil {
 				logrus.WithError(err).Error("Failed to close mux.")
 			}
 		}
+
+		t.stopExecutors()
+		<-cmdCoordinator.WaitForShutdown()
 	}()
 
 	var recreateSession <-chan struct{}
@@ -199,7 +214,7 @@ func (t *tunnel) startServiceLoop(ctx context.Context) {
 			}
 		case <-recreateSession:
 			recreateSession = nil
-			t.reCreateSession()
+			t.reCreateSession(ctx)
 		case obj := <-t.sessionChan:
 			if obj.Err != nil {
 				logrus.WithError(obj.Err).Error("Failed to handle request, closing tunnel permanently.")
@@ -217,11 +232,11 @@ func (t *tunnel) startServiceLoop(ctx context.Context) {
 	}
 }
 
-func (t *tunnel) reCreateSession() {
+func (t *tunnel) reCreateSession(ctx context.Context) {
 	if !t.dialing {
 		t.dialing = true
 		go func() {
-			mux, err := t.dialer.Dial()
+			mux, err := t.dialer.Dial(ctx)
 			t.sessionChan <- newObjectWithErr(mux, err)
 		}()
 	}
@@ -276,6 +291,9 @@ func newListener(tunnel *tunnel) *listener {
 // Accept waits for a connection to be opened from the other side of the connection and returns it.
 func (l *listener) Accept() (net.Conn, error) {
 	c, err := l.tunnel.accept()
+	if err != nil {
+		logrus.WithError(err).Error("Failed to accept connection.")
+	}
 	return c, err
 }
 

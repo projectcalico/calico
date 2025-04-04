@@ -15,8 +15,11 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/sirupsen/logrus"
 
@@ -44,5 +47,20 @@ func main() {
 	}
 
 	logrus.Infof("Starting Calico Guardian %s", cfg.String())
-	daemon.Run(cfg.Config, cfg.Targets())
+	daemon.Run(GetShutdownContext(), cfg.Config, cfg.Targets())
+}
+
+// GetShutdownContext creates a context that's done when either syscall.SIGINT or syscall.SIGTERM notified.
+func GetShutdownContext() context.Context {
+	signalChan := make(chan os.Signal, 1)
+	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		<-signalChan
+		logrus.Debug("Shutdown signal received, shutting down.")
+		cancel()
+	}()
+
+	return ctx
 }

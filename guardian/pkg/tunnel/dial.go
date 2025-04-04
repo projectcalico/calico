@@ -33,6 +33,7 @@ import (
 
 	calicoTLS "github.com/projectcalico/calico/crypto/pkg/tls"
 	"github.com/projectcalico/calico/guardian/pkg/cryptoutils"
+	"github.com/projectcalico/calico/lib/std/chanutil"
 )
 
 const (
@@ -45,7 +46,7 @@ const (
 )
 
 type SessionDialer interface {
-	Dial() (Session, error)
+	Dial(ctx context.Context) (Session, error)
 }
 
 type Session interface {
@@ -110,14 +111,14 @@ func NewTLSSessionDialer(addr string, tlsConfig *tls.Config, opts ...DialerOptio
 	return d, nil
 }
 
-func (d *sessionDialer) Dial() (Session, error) {
+func (d *sessionDialer) Dial(ctx context.Context) (Session, error) {
 	var dialFunc func() (net.Conn, error)
 	if d.tlsConfig == nil {
 		dialFunc = func() (net.Conn, error) { return net.Dial("tcp", d.addr) }
 	} else {
 		dialFunc = d.dialTLS
 	}
-	conn, err := dialRetry(dialFunc, d.retryAttempts, d.retryInterval, d.timeout)
+	conn, err := dialRetry(ctx, dialFunc, d.retryAttempts, d.retryInterval)
 	if err != nil {
 		return nil, err
 	}
@@ -225,13 +226,14 @@ func tlsDialViaHTTPProxy(d *net.Dialer, destination string, proxyTargetURL *url.
 	return mtlsC, nil
 }
 
-func dialRetry(f func() (net.Conn, error), retryAttempts int, retryInterval time.Duration, timeout time.Duration) (net.Conn, error) {
+func dialRetry(ctx context.Context, f func() (net.Conn, error), retryAttempts int, retryInterval time.Duration) (net.Conn, error) {
 	var err error
 	var conn net.Conn
 
 	done := make(chan struct{})
 	go func() {
-		for i := 0; i < retryAttempts; i++ {
+		var i int
+		for {
 			conn, err = f()
 			if err != nil {
 				var xerr x509.UnknownAuthorityError
@@ -240,9 +242,20 @@ func dialRetry(f func() (net.Conn, error), retryAttempts int, retryInterval time
 				} else {
 					logrus.WithError(err).Infof("TLS dial attempt %d failed, will retry in %s", i, retryInterval.String())
 				}
-				time.Sleep(retryInterval)
+
+				if retryAttempts > -1 && i >= retryAttempts {
+					break
+				}
+
+				if _, err := chanutil.Read(ctx, time.After(retryInterval)); err != nil {
+					if errors.Is(err, context.Canceled) {
+						return
+					}
+				}
+
 				continue
 			}
+
 			break
 		}
 		close(done)
@@ -250,8 +263,6 @@ func dialRetry(f func() (net.Conn, error), retryAttempts int, retryInterval time
 
 	select {
 	case <-done:
-	case <-time.After(timeout):
-		return nil, fmt.Errorf("dialer timed out after %s", timeout.String())
 	}
 
 	return conn, err
