@@ -1305,7 +1305,10 @@ $(REPO_ROOT)/.$(KIND_NAME).created: $(KUBECTL) $(KIND)
 	while ! KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) create -f $(REPO_ROOT)/libcalico-go/config/crd; do echo "Waiting for CRDs to be created"; sleep 2; done
 	touch $@
 
-kind-cluster-destroy: $(KIND) $(KUBECTL)
+kind-cluster-destroy: $(KIND) $(KUBECTL) bin/helm
+	# We need to drain the cluster gracefully when shutting down to avoid a netdev unregister error from the kernel.
+	# This requires we execute CNI del on pods with pod networking.
+	-$(KUBECTL) scale deployment -n tigera-operator tigera-operator --replicas=1
 	-$(KUBECTL) --kubeconfig=$(KIND_KUBECONFIG) drain kind-control-plane kind-worker kind-worker2 kind-worker3 --ignore-daemonsets --force
 	-$(KIND) delete cluster --name $(KIND_NAME)
 	rm -f $(KIND_KUBECONFIG)
