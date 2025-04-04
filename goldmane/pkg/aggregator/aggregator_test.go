@@ -26,7 +26,6 @@ import (
 	googleproto "google.golang.org/protobuf/proto"
 
 	"github.com/projectcalico/calico/goldmane/pkg/aggregator"
-	"github.com/projectcalico/calico/goldmane/pkg/aggregator/bucketing"
 	"github.com/projectcalico/calico/goldmane/pkg/internal/utils"
 	"github.com/projectcalico/calico/goldmane/pkg/testutils"
 	"github.com/projectcalico/calico/goldmane/pkg/types"
@@ -733,7 +732,7 @@ func TestSink(t *testing.T) {
 		now := c.Now().Unix()
 
 		// Configure the aggregator with a test sink.
-		sink := &testSink{buckets: []*bucketing.FlowCollection{}}
+		sink := &testSink{buckets: []*aggregator.FlowCollection{}}
 		roller := &rolloverController{
 			ch:                    make(chan time.Time),
 			aggregationWindowSecs: 1,
@@ -784,7 +783,7 @@ func TestSink(t *testing.T) {
 			return len(sink.buckets)
 		}, waitTimeout, retryTime).Should(Equal(1), "Expected 1 bucket to be pushed to the sink")
 		require.Len(t, sink.buckets[0].Flows, 1, "Expected 1 flow in the bucket")
-		sink.buckets = []*bucketing.FlowCollection{}
+		sink.buckets = []*aggregator.FlowCollection{}
 
 		// We've rolled over once. The next emission should happen after
 		// bucktsToCombine more rollovers, which is the point at which the first bucket
@@ -869,7 +868,7 @@ func TestSink(t *testing.T) {
 		now := c.Now().Unix()
 
 		// Configure the aggregator with a test sink.
-		sink := &testSink{buckets: []*bucketing.FlowCollection{}}
+		sink := &testSink{buckets: []*aggregator.FlowCollection{}}
 		roller := &rolloverController{
 			ch:                    make(chan time.Time),
 			aggregationWindowSecs: 1,
@@ -936,7 +935,7 @@ func TestSink(t *testing.T) {
 		now := c.Now().Unix()
 
 		// Configure the aggregator with a test sink.
-		sink := &testSink{buckets: []*bucketing.FlowCollection{}}
+		sink := &testSink{buckets: []*aggregator.FlowCollection{}}
 		roller := &rolloverController{
 			ch:                    make(chan time.Time),
 			aggregationWindowSecs: 1,

@@ -69,6 +69,11 @@ type FlowKey struct {
 	policies unique.Handle[string]
 }
 
+func (k *FlowKey) Compare(k2 *FlowKey) bool {
+	//TODO implement me
+	panic("implement me")
+}
+
 func (k *FlowKey) Fields() logrus.Fields {
 	return logrus.Fields{
 		"source":      k.source.Value(),
@@ -116,9 +121,10 @@ func (k *FlowKey) DestPort() int64 {
 
 // This struct should be an exact copy of the proto.Flow structure, but without the private fields.
 type Flow struct {
-	Key                     *FlowKey
-	StartTime               int64
-	EndTime                 int64
+	Key       *FlowKey
+	StartTime int64
+	EndTime   int64
+
 	SourceLabels            unique.Handle[string]
 	DestLabels              unique.Handle[string]
 	PacketsIn               int64
@@ -128,6 +134,41 @@ type Flow struct {
 	NumConnectionsStarted   int64
 	NumConnectionsCompleted int64
 	NumConnectionsLive      int64
+}
+
+func (f Flow) Merge(other Flow) Flow {
+	if f.StartTime > other.StartTime {
+		f.StartTime = other.StartTime
+	}
+	if f.EndTime < other.EndTime {
+		f.EndTime = other.EndTime
+	}
+
+	f.PacketsIn += other.PacketsIn
+	f.PacketsOut += other.PacketsOut
+	f.BytesIn += other.BytesIn
+	f.BytesOut += other.BytesOut
+	f.NumConnectionsStarted += other.NumConnectionsStarted
+	f.NumConnectionsCompleted += other.NumConnectionsCompleted
+	f.NumConnectionsLive += other.NumConnectionsLive
+	f.SourceLabels = intersection(f.SourceLabels, other.SourceLabels)
+	f.DestLabels = intersection(f.DestLabels, other.DestLabels)
+
+	return f
+}
+
+// intersection returns the intersection of two slices of strings. i.e., all the values that
+// exist in both input slices.
+func intersection(a unique.Handle[string], b unique.Handle[string]) unique.Handle[string] {
+	common := make([]string, 0)
+	av := strings.Split(a.Value(), ",")
+	bv := strings.Split(b.Value(), ",")
+	for _, v := range av {
+		if slices.Contains(bv, v) {
+			common = append(common, v)
+		}
+	}
+	return unique.Make(strings.Join(common, ","))
 }
 
 type PolicyTrace struct {

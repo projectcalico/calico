@@ -1,113 +1,57 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
-
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//	http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
 package bucketing
 
-import (
-	"time"
+import "github.com/sirupsen/logrus"
 
-	"github.com/sirupsen/logrus"
-
-	"github.com/projectcalico/calico/goldmane/pkg/types"
-	"github.com/projectcalico/calico/goldmane/proto"
-	"github.com/projectcalico/calico/libcalico-go/lib/set"
-)
-
-// An aggregation bucket represents a bucket of aggregated flows across a time range.
-type AggregationBucket struct {
-	// index is the index of the bucket in the ring.
-	index int
-
-	// The start and end time of the bucket.
-	StartTime int64
-	EndTime   int64
-
-	// Pushed indicates whether this bucket has been pushed to the emitter.
-	Pushed bool
-
-	// LookupFlow is a function that can be used to look up a DiachronicFlow by its key.
-	lookupFlow lookupFn
-
-	// Flows contains an indication of the flows that are part of this bucket.
-	Flows set.Set[*types.DiachronicFlow]
-
-	// Tracker for statistics within this bucket.
-	stats *statisticsIndex
+type Mergeable[E any] interface {
+	*E
+	Merge(E) E
 }
 
-func (b *AggregationBucket) AddFlow(flow *types.Flow) {
-	if b.Pushed {
-		logrus.WithField("flow", flow).Warn("Adding flow to already published bucket")
-	}
+type BucketMap[K comparable, V any, M Mergeable[V]] map[K]*V
 
-	if flow == nil {
-		logrus.Fatal("BUG: Attempted to add nil flow to bucket")
-	}
-	if flow.Key == nil {
-		logrus.WithField("flow", flow).Fatal("BUG: Attempted to add flow with nil key to bucket")
-	}
-	if b.lookupFlow == nil {
-		logrus.WithField("flow", flow).Fatal("BUG: Attempted to add flow to bucket with no lookup function")
-	}
-	d := b.lookupFlow(*flow.Key)
-	if d == nil {
-		logrus.WithField("flow", flow).Fatal("BUG: Attempted to add flow with no corresponding DiachronicFlow")
-	}
-
-	// Mark this Flow as part of this bucket.
-	b.Flows.Add(d)
-
-	// Track policy stats.
-	b.stats.AddFlow(flow)
+type BucketMeta[V any] interface {
+	Update(V)
 }
 
-func NewAggregationBucket(start, end time.Time) *AggregationBucket {
-	return &AggregationBucket{
-		StartTime: start.Unix(),
-		EndTime:   end.Unix(),
-		Flows:     set.New[*types.DiachronicFlow](),
-		stats:     newStatisticsIndex(),
-	}
+type Bucket[Meta BucketMeta[S], K Key[R], V Mergeable[S], R comparable, S any] struct {
+	Meta     Meta
+	index    int
+	timeRing *timeRing
+
+	// TODO Rename from windows.
+	Windows map[K]S
 }
 
-func (b *AggregationBucket) Fields() logrus.Fields {
+func (b *Bucket[Meta, K, V, R, S]) StartTime() int64 {
+	return b.timeRing.indexToTime(b.index)
+}
+
+func (b *Bucket[Meta, K, V, R, S]) MidTime() int64 {
+	return (b.StartTime() + b.EndTime()) / 2
+}
+
+func (b *Bucket[Meta, K, V, R, S]) EndTime() int64 {
+	return b.timeRing.indexToTime(b.timeRing.indexAdd(b.index, 1))
+}
+
+func (b *Bucket[Meta, K, V, R, S]) Fields() logrus.Fields {
 	return logrus.Fields{
-		"start_time": b.StartTime,
-		"end_time":   b.EndTime,
-		"flows":      b.Flows.Len(),
-		"index":      b.index,
+		"bucketLength": len(b.Windows),
 	}
 }
 
-func (b *AggregationBucket) Reset(start, end int64) {
-	b.StartTime = start
-	b.EndTime = end
-	b.Pushed = false
-	b.stats = newStatisticsIndex()
-
-	if b.Flows == nil {
-		// When resetting a nil bucket, we need to initialize the Flows set.
-		b.Flows = set.New[*types.DiachronicFlow]()
-	} else {
-		// Otherwise, use the existing set but clear it.
-		b.Flows.Iter(func(item *types.DiachronicFlow) error {
-			b.Flows.Discard(item)
-			return nil
-		})
-	}
+type ReadOnlyBucket[K comparable, V any, M Mergeable[V]] interface {
+	StartTime() int64
+	EndTime() int64
+	HasKey(key *K) bool
+	Value(key *K) V
 }
 
-func (b *AggregationBucket) QueryStatistics(q *proto.StatisticsRequest) map[StatisticsKey]*counts {
-	return b.stats.QueryStatistics(q)
+func (b *Bucket[Meta, K, V, R, S]) Value(key K) S {
+	return b.Windows[key]
+}
+
+func (b *Bucket[Meta, K, V, R, S]) HasKey(key K) bool {
+	_, ok := b.Windows[key]
+	return ok
 }

@@ -12,9 +12,29 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package bucketing
+package old
 
-// Sink is an interface that can receive aggregated flows.
-type Sink interface {
-	Receive(*FlowCollection)
+import (
+	"github.com/projectcalico/calico/goldmane/pkg/types"
+)
+
+// BucketRing is a ring buffer of aggregation buckets for efficient rollover.
+type BucketRing struct {
+	*FlowRing
+}
+
+func NewBucketRing(size, interval int, now int64, cleanupFunc func(*DiachronicFlow)) *BucketRing {
+	ring := &BucketRing{
+		FlowRing: NewRing[*FlowBucketMeta, *types.FlowKey, types.FlowMeta, *types.FlowMeta](
+			size, interval, now,
+			cleanupFunc,
+			func() *FlowBucketMeta {
+				return &FlowBucketMeta{
+					stats: newStatisticsIndex(),
+				}
+			},
+		),
+	}
+
+	return ring
 }
