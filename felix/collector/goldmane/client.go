@@ -50,7 +50,8 @@ func NewReporter(addr, cert, key, ca string) (*GoldmaneReporter, error) {
 	if err != nil {
 		return nil, err
 	}
-	nodeCli, err := client.NewFlowClient(LocalGoldmaneServer, "", "", "")
+	sockAddr := fmt.Sprintf("unix://%v", LocalGoldmaneServer)
+	nodeCli, err := client.NewFlowClient(sockAddr, "", "", "")
 	if err != nil {
 		return nil, err
 	}
@@ -66,23 +67,22 @@ func (g *GoldmaneReporter) Start() error {
 	g.once.Do(func() {
 		// We don't wait for the initial connection to start so we don't block the caller.
 		g.client.Connect(context.Background())
-	})
-	go g.checkLocalServerExists()
 
+		g.nodeClient.Connect(context.Background())
+		go g.checkLocalServerExists()
+	})
 	return err
 }
 
 func (g *GoldmaneReporter) checkLocalServerExists() {
-	for {
+	fileExists := func() bool {
 		_, err := os.Stat(LocalGoldmaneServer)
-		if err == nil {
-			g.nodeServerExists.Store(true)
-		} else {
-			if os.IsNotExist(err) {
-				g.nodeServerExists.Store(false)
-			}
-			g.nodeServerExists.Store(false)
-		}
+		// In case of any error, return false
+		return err == nil
+	}
+
+	for {
+		g.nodeServerExists.Store(fileExists())
 		time.Sleep(time.Second)
 	}
 }

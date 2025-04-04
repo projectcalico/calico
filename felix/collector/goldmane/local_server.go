@@ -71,7 +71,6 @@ type NodeServer struct {
 }
 
 func NewNodeServer(addr string) *NodeServer {
-	logrus.Infof("marmar %v", addr)
 	nodeServer := NodeServer{
 		sockAddr:   addr,
 		grpcServer: grpc.NewServer(),
