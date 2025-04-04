@@ -15,16 +15,22 @@
 package set_test
 
 import (
+	"fmt"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
-var _ = Describe("Typed set", func() {
+var _ = Describe("Set", func() {
+	describeSetTests(func() set.Set[int] { return set.New[int]() })
+})
+
+func describeSetTests(setFactory func() set.Set[int]) {
 	var s set.Set[int]
 	BeforeEach(func() {
-		s = set.New[int]()
+		s = setFactory()
 	})
 
 	It("should be empty", func() {
@@ -146,7 +152,8 @@ var _ = Describe("Typed set", func() {
 			c := s.Copy()
 			Expect(c.Len()).To(Equal(s.Len()))
 			Expect(c).NotTo(BeIdenticalTo(s)) // Check they're not the same object.
-			Expect(c).To(Equal(s))            // DeepEquals, will check the contents.
+			Expect(c.ContainsAll(s)).To(BeTrue())
+			Expect(s.ContainsAll(c)).To(BeTrue())
 		})
 		It("should correctly determine set equality", func() {
 			c := s.Copy()
@@ -160,7 +167,7 @@ var _ = Describe("Typed set", func() {
 			Expect(s.Equals(c)).To(BeFalse())
 			c.Add(2)
 			c.Discard(3)
-			Expect(c.Equals(s)).To(BeTrue())
+			Expect(c.Equals(s)).To(BeTrue(), fmt.Sprintf("%s != %s", c, s))
 			Expect(s.Equals(c)).To(BeTrue())
 		})
 
@@ -205,7 +212,7 @@ var _ = Describe("Typed set", func() {
 			})
 		})
 	})
-})
+}
 
 var _ = Describe("EmptySet", func() {
 	var empty set.Set[any]
