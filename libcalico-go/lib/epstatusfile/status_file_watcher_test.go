@@ -104,8 +104,23 @@ var _ = Describe("Workload endpoint status file watcher test", func() {
 		return w.fsnotifyActive
 	}
 
-	haveEvents := func(filePath string, events []string) bool {
-		return slices.Equal(r.fileNameToEvents[filePath], events)
+	haveEvents := func(filePath string, expected []string) bool {
+		// The kernel can fire many WRITE events for a single logical write, if the data is truncated.
+		// So, it's error-prone to check our sequence of logical events is directly-equivalent to the actual.
+		// Instead, we check that the logical sequence exists within the actual sequence, which should account for duplicates.
+		events, exist := r.fileNameToEvents[filePath]
+		if !exist {
+			return false
+		}
+
+		window := len(expected)
+		for i := 0; i < len(events)-(window-1); i++ {
+			log.Infof("searching file events window %v, matching %v", events[i:i+window], expected)
+			if slices.Equal(events[i:i+window], expected) {
+				return true
+			}
+		}
+		return false
 	}
 
 	lastInSync := func() bool {
