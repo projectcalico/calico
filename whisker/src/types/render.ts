@@ -7,3 +7,12 @@ export type FlowLog = Omit<ApiFlowLog, 'start_time' | 'end_time'> & {
     start_time: Date;
     end_time: Date;
 };
+
+export type AppConfig = {
+    config: {
+        cluster_id: string;
+        cluster_type: string;
+        calico_version: string;
+        notifications: string;
+    };
+};
