@@ -17,9 +17,11 @@ package goldmane
 import (
 	"context"
 	"fmt"
+	"os"
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unique"
 
@@ -35,9 +37,12 @@ import (
 )
 
 type GoldmaneReporter struct {
-	address string
-	client  *client.FlowClient
-	once    sync.Once
+	address          string
+	client           *client.FlowClient
+	nodeClient       *client.FlowClient
+	nodeServerExists atomic.Bool
+
+	once sync.Once
 }
 
 func NewReporter(addr, cert, key, ca string) (*GoldmaneReporter, error) {
@@ -45,9 +50,15 @@ func NewReporter(addr, cert, key, ca string) (*GoldmaneReporter, error) {
 	if err != nil {
 		return nil, err
 	}
+	sockAddr := fmt.Sprintf("unix://%v", LocalGoldmaneServer)
+	nodeCli, err := client.NewFlowClient(sockAddr, "", "", "")
+	if err != nil {
+		return nil, err
+	}
 	return &GoldmaneReporter{
-		address: addr,
-		client:  cli,
+		address:    addr,
+		client:     cli,
+		nodeClient: nodeCli,
 	}, nil
 }
 
@@ -56,8 +67,24 @@ func (g *GoldmaneReporter) Start() error {
 	g.once.Do(func() {
 		// We don't wait for the initial connection to start so we don't block the caller.
 		g.client.Connect(context.Background())
+
+		g.nodeClient.Connect(context.Background())
+		go g.checkLocalServerExists()
 	})
 	return err
+}
+
+func (g *GoldmaneReporter) checkLocalServerExists() {
+	fileExists := func() bool {
+		_, err := os.Stat(LocalGoldmaneServer)
+		// In case of any error, return false
+		return err == nil
+	}
+
+	for {
+		g.nodeServerExists.Store(fileExists())
+		time.Sleep(time.Second)
+	}
 }
 
 func (g *GoldmaneReporter) Report(logSlice any) error {
@@ -67,7 +94,12 @@ func (g *GoldmaneReporter) Report(logSlice any) error {
 			logrus.WithField("num", len(logs)).Debug("Dispatching flow logs to goldmane")
 		}
 		for _, l := range logs {
-			g.client.Push(convertFlowlogToGoldmane(l))
+			goldmaneLog := convertFlowlogToGoldmane(l)
+			g.client.Push(goldmaneLog)
+
+			if g.nodeServerExists.Load() {
+				g.nodeClient.Push(goldmaneLog)
+			}
 		}
 	default:
 		logrus.Panic("Unexpected kind of log dispatcher")
