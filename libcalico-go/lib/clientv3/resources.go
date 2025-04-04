@@ -250,7 +250,7 @@ func (c *resources) Watch(ctx context.Context, opts options.ListOptions, kind st
 
 	// Create the backend watcher.  We need to process the results to add revision data etc.
 	ctx, cancel := context.WithCancel(ctx)
-	backend, err := c.backend.Watch(ctx, list, bapi.WatchOptions{Revision: opts.ResourceVersion})
+	backend, err := c.backend.Watch(ctx, list, bapi.WatchOptions{Revision: opts.ResourceVersion, AllowWatchBookmarks: opts.AllowWatchBookmarks})
 	if err != nil {
 		cancel()
 		return nil, err
@@ -394,6 +394,8 @@ func (w *watcher) convertEvent(backendEvent bapi.WatchEvent) watch.Event {
 		apiEvent.Type = watch.Deleted
 	case bapi.WatchModified:
 		apiEvent.Type = watch.Modified
+	case bapi.WatchBookmark:
+		apiEvent.Type = watch.Bookmark
 	}
 
 	if backendEvent.Old != nil {
