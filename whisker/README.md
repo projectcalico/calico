@@ -12,7 +12,7 @@ Run `yarn`
 
 Run `yarn start`
 
-Go to `http://localhost:3000`
+Go to `http://localhost:3000` using chrome with disabled web security
 
 ## Build
 
