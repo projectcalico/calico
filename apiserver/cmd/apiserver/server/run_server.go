@@ -77,7 +77,7 @@ func RunServer(opts *CalicoServerOptions, server *apiserver.ProjectCalicoServer)
 			logrus.Error("Unable to watch the extension auth ConfigMap: ", err)
 		}
 		if changed {
-			logrus.Debug("Detected change in extension-apiserver-authentication ConfigMap, exiting so apiserver can be restarted")
+			logrus.Info("Detected change in extension-apiserver-authentication ConfigMap, exiting so apiserver can be restarted")
 			cancel()
 		}
 	}()
