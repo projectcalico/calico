@@ -36,4 +36,8 @@ type ListOptions struct {
 	// as a mechanism for enumerating endpoints within a Pod (since the name construction for a
 	// Workload endpoint is hierarchically constructed).
 	Prefix bool
+
+	// AllowWatchBookmarks indicates whether the watch should support bookmarks. Note that this field is
+	// only used when the watch is backed by the Kubernetes API server.
+	AllowWatchBookmarks bool
 }

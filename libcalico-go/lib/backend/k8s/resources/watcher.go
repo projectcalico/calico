@@ -170,20 +170,24 @@ func (crw *k8sWatcherConverter) convertEvent(kevent kwatch.Event) []*api.WatchEv
 		// For bookmarks we send an empty KVPair with the current resource
 		// version only.
 		k8sRes := kevent.Object.(Resource)
-		revision := k8sRes.GetObjectMeta().GetResourceVersion()
-		return []*api.WatchEvent{{
-			Type: api.WatchBookmark,
-			New: &model.KVPair{
-				Revision: revision,
-			},
-		}}
+		kvps, err = crw.converter(k8sRes)
+		if err != nil {
+			crw.logCxt.WithError(err).Warning("Error converting Kubernetes resource to Calico resource")
+			return []*api.WatchEvent{{
+				Type:  api.WatchError,
+				Error: err,
+			}}
+		}
+		if len(kvps) == 0 {
+			return nil
+		}
+		return crw.buildEventsFromKVPs(kvps, kevent.Type)
 	default:
 		return []*api.WatchEvent{{
 			Type:  api.WatchError,
 			Error: fmt.Errorf("unhandled Kubernetes watcher event type: %v", kevent.Type),
 		}}
 	}
-
 }
 
 func (crw *k8sWatcherConverter) buildEventsFromKVPs(kvps []*model.KVPair, t kwatch.EventType) []*api.WatchEvent {
@@ -201,6 +205,10 @@ func (crw *k8sWatcherConverter) buildEventsFromKVPs(kvps []*model.KVPair, t kwat
 		// In KDD we don't have access to the previous settings, so just set the current settings.
 		getEvent = func(kvp *model.KVPair) *api.WatchEvent {
 			return &api.WatchEvent{Type: api.WatchModified, New: kvp}
+		}
+	case kwatch.Bookmark:
+		getEvent = func(kvp *model.KVPair) *api.WatchEvent {
+			return &api.WatchEvent{Type: api.WatchBookmark, New: kvp}
 		}
 	default:
 		crw.logCxt.WithField("type", t).Error("unexpected event type when building events")
