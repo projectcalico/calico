@@ -9,31 +9,6 @@ function cleanup() {
 }
 trap 'cleanup' SIGINT SIGHUP SIGTERM EXIT
 
-# test directory.
-TEST_DIR=./tests/k8st
-ARCH=${ARCH:-amd64}
-GIT_VERSION=${GIT_VERSION:-`git describe --tags --dirty --always --abbrev=12`}
-HELM=../bin/helm
-CHART=../bin/tigera-operator-$GIT_VERSION.tgz
-
-# kubectl binary.
-: ${kubectl:=../hack/test/kind/kubectl}
-
-echo "Set ipv6 address on each node"
-docker exec kind-control-plane ip -6 addr replace 2001:20::8/64 dev eth0
-docker exec kind-worker ip -6 addr replace 2001:20::1/64 dev eth0
-docker exec kind-worker2 ip -6 addr replace 2001:20::2/64 dev eth0
-docker exec kind-worker3 ip -6 addr replace 2001:20::3/64 dev eth0
-
-echo
-
-echo "Load calico/node docker images onto each node"
-$TEST_DIR/load_images_on_kind_cluster.sh
-
-echo "Install additional permissions for BGP password"
-${kubectl} apply -f $TEST_DIR/infra/additional-rbac.yaml
-echo
-
 function wait_pod_ready() {
   args="$@"
 
@@ -69,6 +44,31 @@ function wait_pod_ready() {
   return $rc
 }
 
+# test directory.
+TEST_DIR=./tests/k8st
+ARCH=${ARCH:-amd64}
+GIT_VERSION=${GIT_VERSION:-`git describe --tags --dirty --always --abbrev=12`}
+HELM=../bin/helm
+CHART=../bin/tigera-operator-$GIT_VERSION.tgz
+
+# kubectl binary.
+: ${kubectl:=../hack/test/kind/kubectl}
+
+echo "Set ipv6 address on each node"
+docker exec kind-control-plane ip -6 addr replace 2001:20::8/64 dev eth0
+docker exec kind-worker ip -6 addr replace 2001:20::1/64 dev eth0
+docker exec kind-worker2 ip -6 addr replace 2001:20::2/64 dev eth0
+docker exec kind-worker3 ip -6 addr replace 2001:20::3/64 dev eth0
+
+echo
+
+echo "Load calico/node docker images onto each node"
+$TEST_DIR/load_images_on_kind_cluster.sh
+
+echo "Install additional permissions for BGP password"
+${kubectl} apply -f $TEST_DIR/infra/additional-rbac.yaml
+echo
+
 echo "Install Calico using the helm chart"
 $HELM install calico $CHART -f $TEST_DIR/infra/values.yaml -n tigera-operator --create-namespace
 
@@ -77,22 +77,10 @@ ${kubectl} apply -f $TEST_DIR/infra/calicoctl.yaml
 echo
 
 echo "Wait for Calico to be ready..."
-while ! time ${kubectl} wait pod -l k8s-app=calico-node --for=condition=Ready -n calico-system --timeout=300s; do
-    # This happens when no matching resources exist yet, i.e., after installing the operator but before it deploys resources.
-    sleep 5
-done
-
-while ! time ${kubectl} wait pod -l k8s-app=calico-kube-controllers --for=condition=Ready -n calico-system --timeout=300s; do
-    # This happens when no matching resources exist yet, i.e., after installing the operator but before it deploys resources.
-    sleep 5
-done
-
-while ! time ${kubectl} wait pod -l k8s-app=calico-apiserver --for=condition=Ready -n calico-apiserver --timeout=30s; do
-    # This happens when no matching resources exist yet, i.e., after installing the operator but before it deploys resources.
-    sleep 5
-done
-
-time ${kubectl} wait pod -l k8s-app=kube-dns --for=condition=Ready -n kube-system --timeout=300s
+wait_pod_ready -l k8s-app=calico-node -n calico-system
+wait_pod_ready -l k8s-app=calico-kube-controllers -n calico-system
+wait_pod_ready -l k8s-app=kube-dns -n kube-system
+wait_pod_ready calicoctl -n kube-system
 echo "Calico is running."
 echo
 
