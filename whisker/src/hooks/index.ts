@@ -1,5 +1,6 @@
 import React from 'react';
 import { useSelectedListOmniFilters } from './omniFilters';
+import { useAppConfig } from '@/context/AppConfig';
 
 const DEBOUNCE_TIME = 500;
 
@@ -26,5 +27,7 @@ export const useDebouncedCallback = () => {
         callback.current = debouncedFn;
     };
 };
+
+export const useClusterId = () => useAppConfig()?.config.cluster_id;
 
 export { useSelectedListOmniFilters };
