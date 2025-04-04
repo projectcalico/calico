@@ -21,7 +21,6 @@ import (
 	"sort"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 	"unique"
 
@@ -37,12 +36,13 @@ import (
 )
 
 type GoldmaneReporter struct {
-	address          string
-	client           *client.FlowClient
-	nodeClient       *client.FlowClient
-	nodeServerExists atomic.Bool
+	address string
+	client  *client.FlowClient
+	once    sync.Once
 
-	once sync.Once
+	// Fields related to goldmane unix socket
+	nodeClient     *client.FlowClient
+	nodeClientLock sync.RWMutex
 }
 
 func NewReporter(addr, cert, key, ca string) (*GoldmaneReporter, error) {
@@ -50,15 +50,9 @@ func NewReporter(addr, cert, key, ca string) (*GoldmaneReporter, error) {
 	if err != nil {
 		return nil, err
 	}
-	sockAddr := fmt.Sprintf("unix://%v", LocalGoldmaneServer)
-	nodeCli, err := client.NewFlowClient(sockAddr, "", "", "")
-	if err != nil {
-		return nil, err
-	}
 	return &GoldmaneReporter{
-		address:    addr,
-		client:     cli,
-		nodeClient: nodeCli,
+		address: addr,
+		client:  cli,
 	}, nil
 }
 
@@ -68,23 +62,60 @@ func (g *GoldmaneReporter) Start() error {
 		// We don't wait for the initial connection to start so we don't block the caller.
 		g.client.Connect(context.Background())
 
-		g.nodeClient.Connect(context.Background())
-		go g.checkLocalServerExists()
+		go g.nodeSocketReporter()
 	})
 	return err
 }
 
-func (g *GoldmaneReporter) checkLocalServerExists() {
-	fileExists := func() bool {
+func (g *GoldmaneReporter) nodeSocketReporter() {
+	nodeSocketExists := func() bool {
 		_, err := os.Stat(LocalGoldmaneServer)
 		// In case of any error, return false
 		return err == nil
 	}
-
 	for {
-		g.nodeServerExists.Store(fileExists())
-		time.Sleep(time.Second)
+		if nodeSocketExists() {
+			g.mayStartNodeSocketReporter()
+		} else {
+			g.mayStopNodeSocketReporter()
+		}
+		time.Sleep(time.Second * 10)
 	}
+}
+
+func (g *GoldmaneReporter) nodeClientIsNil() bool {
+	g.nodeClientLock.RLock()
+	defer g.nodeClientLock.RUnlock()
+	return g.nodeClient == nil
+}
+
+func (g *GoldmaneReporter) mayStartNodeSocketReporter() {
+	if !g.nodeClientIsNil() {
+		return
+	}
+
+	var err error
+	g.nodeClientLock.Lock()
+	defer g.nodeClientLock.Unlock()
+	sockAddr := fmt.Sprintf("unix://%v", LocalGoldmaneServer)
+	g.nodeClient, err = client.NewFlowClient(sockAddr, "", "", "")
+	if err != nil {
+		logrus.WithError(err).Warn("Failed to create goldmane unix client")
+		return
+	}
+	logrus.Info("Created goldmane unix client")
+	g.nodeClient.Connect(context.Background())
+}
+
+func (g *GoldmaneReporter) mayStopNodeSocketReporter() {
+	if g.nodeClientIsNil() {
+		return
+	}
+
+	g.nodeClientLock.Lock()
+	defer g.nodeClientLock.Unlock()
+	g.nodeClient = nil
+	logrus.Info("Destroyed goldmane unix client")
 }
 
 func (g *GoldmaneReporter) Report(logSlice any) error {
@@ -97,9 +128,12 @@ func (g *GoldmaneReporter) Report(logSlice any) error {
 			goldmaneLog := convertFlowlogToGoldmane(l)
 			g.client.Push(goldmaneLog)
 
-			if g.nodeServerExists.Load() {
+			// If goldmane local unix server exists, also send it flowlogs.
+			g.nodeClientLock.RLock()
+			if g.nodeClient != nil {
 				g.nodeClient.Push(goldmaneLog)
 			}
+			g.nodeClientLock.RUnlock()
 		}
 	default:
 		logrus.Panic("Unexpected kind of log dispatcher")
