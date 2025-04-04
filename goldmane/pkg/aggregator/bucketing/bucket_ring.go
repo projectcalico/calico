@@ -1,563 +1,411 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
-
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
 package bucketing
 
 import (
-	"fmt"
+	"github.com/projectcalico/calico/goldmane/pkg/types"
 	"sort"
 	"time"
 
 	"github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/goldmane/pkg/types"
-	"github.com/projectcalico/calico/goldmane/proto"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
-// StreamReceiver represents an object that can receive streams of flows.
-type StreamReceiver interface {
-	Receive(FlowBuilder)
+type Key[K comparable] interface {
+	*K
+	Fields() logrus.Fields
+	Compare(*K) bool
 }
 
-// FlowBuilder provides an interface for building Flows. It allows us to conserve memory by
-// only rendering Flow objects when they match the filter.
-type FlowBuilder interface {
-	// Build returns a Flow and its ID.
-	Build(*proto.Filter) (*types.Flow, int64)
+type ROBucketRing[K comparable, V Mergeable[R], R any] interface {
+	AggregateOverTime(key *K, startTime, endTime int64) Aggregate[R]
+	TimeRangeForKey(*K) (int64, int64)
 }
 
-func NewCachedFlowBuilder(d *types.DiachronicFlow, s, e int64) FlowBuilder {
-	return &cachedFlowBuilder{
-		d: d,
-		s: s,
-		e: e,
-	}
+type RingIndex[K comparable] interface {
+	List(opts FindOpts[K]) ([]K, types.ListMeta)
 }
 
-type cachedFlowBuilder struct {
-	d *types.DiachronicFlow
-	s int64
-	e int64
+type BucketRing[Meta BucketMeta[S], K Key[R], V Mergeable[S], R comparable, S any] struct {
+	timeRing *timeRing
 
-	// cache the result in case we get called multiple times so we can
-	// avoid re-aggregating the flow.
-	cachedFlow *types.Flow
+	buckets     []*Bucket[Meta, K, V, R, S]
+	diachronics map[R]*Diachronic[R, V, S]
+
+	newMeta func() Meta
+
+	stringIndices map[string]indexInf[K, R, string]
 }
 
-func (f *cachedFlowBuilder) Build(filter *proto.Filter) (*types.Flow, int64) {
-	if f.d.Matches(filter, f.s, f.e) {
-		if f.cachedFlow == nil {
-			logrus.WithFields(logrus.Fields{
-				"start":  f.s,
-				"end":    f.e,
-				"flowID": f.d.ID,
-			}).Debug("Building flow")
-			f.cachedFlow = f.d.Aggregate(f.s, f.e)
+func (r *BucketRing[Meta, K, V, R, S]) TimeRangeForKey(k *R) (int64, int64) {
+	startIdx := r.timeRing.indexAdd(r.timeRing.headIndex, 1)
+	var startTime, endTime int64
+
+	// Iterate the buckets from the oldest bucket to the newest, up until we get to the head bucket (which is one bucket
+	// into the future).
+	for i := startIdx; i != r.timeRing.headIndex; i = r.timeRing.indexAdd(i, 1) {
+		if r.buckets[i].HasKey(k) {
+			// startTime is set once since we're iterating the buckets in order from oldest to newest.
+			if startTime == 0 {
+				startTime = r.buckets[i].StartTime()
+			}
+			endTime = r.buckets[i].EndTime()
 		}
-		return f.cachedFlow, f.d.ID
 	}
-	return nil, 0
+
+	return startTime, endTime
 }
 
-type lookupFn func(key types.FlowKey) *types.DiachronicFlow
-
-// BucketRing is a ring buffer of aggregation buckets for efficient rollover.
-type BucketRing struct {
-	buckets   []AggregationBucket
-	headIndex int
-	interval  int
-
-	// lookupFlow is a function that can be used to look up a DiachronicFlow by its key.
-	lookupFlow lookupFn
-
-	// streams receives flows from the bucket ring on rollover in order to
-	// satisfy stream requests.
-	streams StreamReceiver
-
-	// pushAfter is the number of buckets from the head to wait before including
-	// a bucket in an aggregated flow for emission. We only push
-	// buckets after several rollovers have occurred, to ensure that we have
-	// a complete view of the flows in the bucket before emitting them.
-	//
-	// Increasing this value will increase the latency of the emitted flows. Decreasing it too much
-	// will cause the emitter to emit incomplete flows.
-	//
-	// Latency-to-emit is roughly (pushAfter * rolloverTime).
-	pushAfter int
-
-	// bucketsToAggregate is the number of internal buckets to aggregate when pushing flows to the sink.
-	// This can be used to reduce the number of distinct flows that are sent to the sink, at the expense of
-	// delaying the emission of flows.
-	// 20 buckets of 15s provides a 5 minute aggregation.
-	bucketsToAggregate int
-}
-
-func NewBucketRing(n, interval int, now int64, opts ...BucketRingOption) *BucketRing {
-	ring := &BucketRing{
-		buckets:   make([]AggregationBucket, n),
-		headIndex: 0,
-		interval:  interval,
-	}
-	for _, opt := range opts {
-		opt(ring)
+func NewRing[Meta BucketMeta[S], K Key[R], V Mergeable[S], R comparable, S any](
+	size, interval int,
+	now int64,
+	newMeta func() Meta,
+) *BucketRing[Meta, K, V, R, S] {
+	ring := &BucketRing[Meta, K, V, R, S]{
+		buckets:       make([]*Bucket[Meta, K, V, R, S], size),
+		diachronics:   make(map[R]*Diachronic[R, V, S]),
+		timeRing:      newTimeRing(size, interval, now),
+		newMeta:       newMeta,
+		stringIndices: make(map[string]indexInf[K, R, string]),
 	}
 
 	logrus.WithFields(logrus.Fields{
-		"num":        n,
+		"num":        size,
 		"bucketSize": time.Duration(interval) * time.Second,
 	}).Debug("Initializing aggregation buckets")
 
-	// Determine the latest bucket start time. To account for some amount of clock drift,
-	// we'll extend the ring one interval into the future. This helps ensure that we don't miss any
-	// flows that come from nodes with a clock that's slightly ahead of ours.
-	newestBucketStart := now + int64(interval)
-
-	// We need to seed the buckets with the correct state. To do this, we'll initialize the first bucket
-	// to be the oldest bucket and then roll over the buckets until we have populated the entire ring. This
-	// is an easy way to ensure that the buckets are in the correct state.
-	oldestBucketStart := time.Unix(newestBucketStart-int64(interval*n), 0)
-	oldestBucketEnd := time.Unix(oldestBucketStart.Unix()+int64(interval), 0)
-	ring.buckets[0] = *NewAggregationBucket(oldestBucketStart, oldestBucketEnd)
-	for range n {
-		ring.Rollover()
-	}
-
-	// Tell each bucket its absolute index and initialize the lookup function.
-	for i := range ring.buckets {
-		ring.buckets[i].index = i
-		ring.buckets[i].lookupFlow = ring.lookupFlow
+	for i := 0; i < size; i++ {
+		ring.buckets[i] = &Bucket[Meta, K, V, R, S]{
+			index:    i,
+			timeRing: ring.timeRing,
+			Windows:  make(map[K]S),
+			Meta:     ring.newMeta(),
+		}
 	}
 
 	logrus.WithFields(logrus.Fields{
-		"headIndex":    ring.headIndex,
-		"curBucket":    ring.buckets[ring.headIndex],
-		"oldestBucket": ring.buckets[(ring.headIndex+1)%n],
+		"headIndex":    ring.timeRing.headIndex,
+		"curBucket":    ring.buckets[ring.timeRing.headIndex],
+		"oldestBucket": ring.buckets[(ring.timeRing.headIndex+1)%size],
 	}).Debug("Initialized bucket ring")
+
 	return ring
+}
+
+func (r *BucketRing[Meta, Key, Value, KeyType, ValueType]) AddStringIndex(name string, idx indexInf[Key, KeyType, string]) {
+	r.stringIndices[name] = idx
+}
+
+func (r *BucketRing[Meta, Key, Value, KeyType, ValueType]) FindAndIterate(opts FindOpts[Key], f func(Value)) types.ListMeta {
+	var keys []Key
+	var listMeta types.ListMeta
+	var indexUsed bool
+	if opts.SortBy != "" {
+		if idx, ok := r.stringIndices[opts.SortBy]; ok {
+			indexUsed = true
+			keys, listMeta = idx.list(opts)
+		}
+	}
+
+	if !indexUsed {
+		for _, d := range r.DiachronicsForTimeRange(opts.StartTimeGt, opts.StartTimeLt) {
+			if opts.Filter != nil && opts.Filter(d.Key) {
+				continue
+			}
+			keys = append(keys, d.Key)
+		}
+
+		// TODO handle sort by for none indexed fields.
+
+		total := len(keys)
+		if opts.PageSize > 0 {
+			startIdx := (opts.Page) * opts.PageSize
+			endIdx := startIdx + opts.PageSize
+			if startIdx >= int64(len(keys)) {
+				return types.ListMeta{}
+			}
+			if endIdx >= int64(len(keys)) {
+				endIdx = int64(len(keys)) - 1
+			}
+			keys = keys[startIdx : endIdx+1]
+		}
+
+		listMeta = calculateListMeta(total, int(opts.PageSize))
+		for _, key := range keys {
+			f(r.diachronics[*key].Aggregate(opts.StartTimeGt, opts.StartTimeLt))
+		}
+	}
+
+	return listMeta
+}
+
+func (r *BucketRing[Meta, Key, Value, KeyType, ValueType]) FindIndexedStringValues(opts FindOpts[Key]) ([]string, types.ListMeta) {
+	var values []string
+	var listMeta types.ListMeta
+	if opts.SortBy == "" {
+		// TODO log an error
+	}
+
+	if idx, ok := r.stringIndices[opts.SortBy]; ok {
+		values, listMeta = idx.uniqueIndexKeys(opts)
+	} else {
+		// TODO log an error
+	}
+
+	return values, listMeta
+}
+
+func (r *BucketRing[Meta, Key, Value, KeyType, ValueType]) FindStringValues(opts FindOpts[Key], valueFunc func(Key) []string) ([]string, types.ListMeta) {
+	var values []string
+	var listMeta types.ListMeta
+
+	seen := set.New[string]()
+	for _, d := range r.DiachronicsForTimeRange(opts.StartTimeGt, opts.StartTimeLt) {
+		if opts.Filter != nil && opts.Filter(d.Key) {
+			continue
+		}
+		vals := valueFunc(d.Key)
+		for _, val := range vals {
+			if !seen.Contains(val) {
+				seen.Add(val)
+				values = append(values, val)
+			}
+		}
+	}
+
+	sort.Strings(values)
+
+	total := len(values)
+	if opts.PageSize > 0 {
+		startIdx := (opts.Page) * opts.PageSize
+		endIdx := startIdx + opts.PageSize
+		if startIdx >= int64(len(values)) {
+			return nil, types.ListMeta{}
+		}
+		if endIdx >= int64(len(values)) {
+			endIdx = int64(len(values)) - 1
+		}
+		values = values[startIdx : endIdx+1]
+	}
+
+	listMeta = calculateListMeta(total, int(opts.PageSize))
+
+	return values, listMeta
+}
+
+var nextID int64
+
+// DiachronicSet returns the set of flows that exist across buckets within the given time range.
+func (r *BucketRing[Meta, K, V, R, S]) DiachronicSet(startGt, startLt int64, filter func(*R) bool) set.Set[*Diachronic[R, V, S]] {
+	diachronics := set.New[*Diachronic[R, V, S]]()
+	for _, b := range r.BucketsForTimeRange(startGt, startLt) {
+		for k := range b.Windows {
+			if filter == nil || filter(k) {
+				diachronics.Add(r.diachronics[*k])
+			}
+		}
+	}
+
+	return diachronics
+}
+
+func (r *BucketRing[Meta, K, V, R, S]) AggregateOverTime(key *R, startTime, endTime int64) Aggregate[S] {
+	var toReturn S
+	var found bool
+	var aggregateStartTime, aggregateEndTime int64
+	for _, bucket := range r.BucketsForTimeRange(startTime, endTime) {
+		if s, ok := bucket.Windows[key]; ok {
+			if !found {
+				toReturn = s
+				found = true
+				aggregateStartTime = bucket.StartTime()
+				aggregateEndTime = bucket.EndTime()
+			} else {
+				V(&toReturn).Merge(s)
+				if aggregateStartTime > bucket.StartTime() {
+					aggregateStartTime = bucket.StartTime()
+				}
+				if aggregateEndTime < bucket.EndTime() {
+					aggregateEndTime = bucket.EndTime()
+				}
+			}
+		}
+	}
+
+	return newAggregate(aggregateStartTime, aggregateEndTime, toReturn)
+}
+
+// IterDiachronicsTime iterates over the diachronics in each bucket in the ring, from the starting time until the ending time.
+// If either time is not found, an error is returned.
+// If the start time is zero, it will start from the beginning of the ring.
+// If the end time is zero, it will iterate until the current time.
+func (r *BucketRing[Meta, K, V, R, S]) IterDiachronicsTime(start, end int64, f func(startTime, endTime int64, d *Diachronic[R, V, S])) {
+	buckets := r.BucketsForTimeRange(start, end)
+
+	for _, bucket := range buckets {
+		startTime := bucket.StartTime()
+		endTime := bucket.EndTime()
+		for k := range bucket.Windows {
+			f(startTime, endTime, r.diachronics[*k])
+		}
+
+	}
+	return
+}
+
+func (r *BucketRing[Meta, K, V, R, S]) Add(t int64, key *R, value S) {
+	if _, ok := r.diachronics[*key]; !ok {
+		nextID++
+		r.diachronics[*key] = &Diachronic[R, V, S]{
+			ID:   nextID,
+			Key:  key,
+			ring: r,
+		}
+	}
+
+	d := r.diachronics[*key]
+
+	bucket, err := r.BucketForTime(t)
+	if err != nil {
+		logrus.WithError(err).Warn("Couldn't find bucket for time.")
+		return
+	}
+
+	if existing, ok := bucket.Windows[key]; ok {
+		V(&existing).Merge(value)
+		bucket.Windows[key] = existing
+	} else {
+		bucket.Windows[key] = value
+		d.numBuckets++
+	}
+
+	for _, idx := range r.stringIndices {
+		idx.add(key)
+	}
+
+	bucket.Meta.Update(bucket.Windows[key])
+	return
+}
+
+func (r *BucketRing[Meta, K, V, R, S]) GetDiachronic(key K) *Diachronic[R, V, S] {
+	return r.diachronics[*key]
 }
 
 // Rollover moves the head index to the next bucket, resetting to 0 if we've reached the end.
 // It also clears data from the bucket that is now the head. The start time of the newest bucket
-// is returned, as well as a set of DiachronicFlow objects that were in the now obsolete bucket.
-func (r *BucketRing) Rollover() (int64, set.Set[*types.DiachronicFlow]) {
-	// Capture the new bucket's start time - this is the end time of the previous bucket.
-	startTime := r.buckets[r.headIndex].EndTime
-	endTime := startTime + int64(r.interval)
+// is returned.
+func (r *BucketRing[Meta, K, V, R, S]) Rollover() int64 {
+	r.timeRing.rollover()
 
-	// Send flows to the stream manager.
-	r.flushToStreams()
-
-	// Move the head index to the next bucket.
-	r.headIndex = r.nextBucketIndex(r.headIndex)
-
-	// Capture the flows from the bucket before we clear it.
-	flows := set.New[*types.DiachronicFlow]()
-	if r.buckets[r.headIndex].Flows != nil {
-		r.buckets[r.headIndex].Flows.Iter(func(d *types.DiachronicFlow) error {
-			flows.Add(d)
-			return nil
-		})
-	}
+	headBucket := r.buckets[r.timeRing.headIndex]
 
 	// Clear data from the bucket that is now the head. The start time of the new bucket
 	// is the end time of the previous bucket.
-	r.buckets[r.headIndex].Reset(startTime, endTime)
-	return startTime, flows
-}
-
-func (r *BucketRing) AddFlow(flow *types.Flow) {
-	// Sort this update into a bucket.
-	_, bucket := r.findBucket(flow.StartTime)
-	if bucket == nil {
-		logrus.WithFields(logrus.Fields{
-			"time":   flow.StartTime,
-			"oldest": r.BeginningOfHistory(),
-			"newest": r.EndOfHistory(),
-		}).Warn("Failed to find bucket, unable to ingest flow")
-		return
-	}
-
-	fields := bucket.Fields()
-	fields["flowStart"] = flow.StartTime
-	fields["head"] = r.headIndex
-	logrus.WithFields(fields).Debug("Adding flow to bucket")
-	bucket.AddFlow(flow)
-}
-
-// FlowSet returns the set of flows that exist across buckets within the given time range.
-func (r *BucketRing) FlowSet(startGt, startLt int64) set.Set[*types.DiachronicFlow] {
-	// TODO: Right now, this iterates all the buckets. We can make a minor optimization here
-	// by calculating the buckets to iterate based on the time range.
-	flows := set.New[*types.DiachronicFlow]()
-	for _, b := range r.buckets {
-		if (startGt == 0 || b.StartTime >= startGt) &&
-			(startLt == 0 || b.StartTime <= startLt) {
-
-			b.Flows.Iter(func(d *types.DiachronicFlow) error {
-				flows.Add(d)
-				return nil
-			})
-		}
-	}
-	return flows
-}
-
-// BeginningOfHistory returns the start time of the oldest bucket in the ring.
-func (r *BucketRing) BeginningOfHistory() int64 {
-	// Since the head index points to the newest bucket, and we increment
-	// the headIndex on rollover, the oldest bucket is the one right after it (i.e.,
-	// the next bucket to be rolled over).
-	return r.buckets[r.nextBucketIndex(r.headIndex)].StartTime
-}
-
-func (r *BucketRing) EndOfHistory() int64 {
-	return r.buckets[r.headIndex].EndTime
-}
-
-func (r *BucketRing) Window(flow *types.Flow) (int64, int64, error) {
-	// Find the bucket that contains the given time.
-	_, bucket := r.findBucket(flow.StartTime)
-	if bucket == nil {
-		return 0, 0, fmt.Errorf("failed to find bucket for flow")
-	}
-
-	// Return the start and end time of the bucket.
-	return bucket.StartTime, bucket.EndTime, nil
-}
-
-// nextBucketIndex returns the next bucket index, wrapping around if necessary.
-func (r *BucketRing) nextBucketIndex(idx int) int {
-	return r.indexAdd(idx, 1)
-}
-
-// indexSubtract subtracts n from idx, wrapping around if necessary.
-func (r *BucketRing) indexSubtract(idx, n int) int {
-	return (idx - n + len(r.buckets)) % len(r.buckets)
-}
-
-// indexAdd adds n to idx, wrapping around if necessary.
-func (r *BucketRing) indexAdd(idx, n int) int {
-	return (idx + n) % len(r.buckets)
-}
-
-func (r *BucketRing) findBucket(time int64) (int, *AggregationBucket) {
-	// Find the bucket that contains the given time.
-	// TODO: We can do this without iterating over all the buckets by simply calculating
-	// the index based on the time. It's a very small win though - there aren't that many buckets to iterate.
-	//
-	// We always start at the head index and iterate until we find the bucket that contains the time, since
-	// most of the time we'll be looking for a recent bucket.
-	i := r.headIndex
-	for {
-		b := &r.buckets[i]
-		if time >= b.StartTime && time < b.EndTime {
-			return i, b
-		}
-
-		// Check the next bucket. If we've wrapped around, we didn't find the bucket.
-		//
-		// Note: we want to loop through the ring starting with the most recent bucket (headIndex) going
-		// backwards in time, so we need to decrement the index.
-		i = r.indexSubtract(i, 1)
-		if i == r.headIndex {
-			break
-		}
-	}
-	logrus.WithFields(logrus.Fields{
-		"time":   time,
-		"oldest": r.BeginningOfHistory(),
-		"newest": r.EndOfHistory(),
-	}).Warn("Failed to find bucket")
-	return -1, nil
-}
-
-// nowIndex returns the index of the bucket that represents the current time.
-// This is different from the head index, which is actually one bucket into the future.
-func (r *BucketRing) nowIndex() int {
-	return r.indexSubtract(r.headIndex, 1)
-}
-
-func (r *BucketRing) indexBetween(start, end, target int) bool {
-	if start == end {
-		// No range to check.
-		return false
-	}
-
-	if start < end {
-		// The range is non-wrapping.
-		return target > start && target < end
-	}
-	// The range wraps around.
-	return target > start || target < end
-}
-
-func (r *BucketRing) EmitFlowCollections(sink Sink) {
-	if sink == nil {
-		logrus.Debug("No sink configured, skip flow emission")
-		return
-	}
-
-	// Determine the newest bucket in the aggregation - this is always pushAfter buckets back from "now".
-	endIndex := r.indexSubtract(r.nowIndex(), r.pushAfter)
-	startIndex := r.indexSubtract(endIndex, r.bucketsToAggregate)
-
-	// We need to go back through time until we find a flow collection that has already been published.
-	collections := []*FlowCollection{}
-	for {
-		c := r.maybeBuildFlowCollection(startIndex, endIndex)
-		if c == nil {
-			logrus.WithFields(logrus.Fields{
-				"startIndex": startIndex,
-				"endIndex":   endIndex,
-				"startTime":  r.buckets[startIndex].StartTime,
-				"endTime":    r.buckets[endIndex].StartTime,
-			}).Debug("Reached an already emitted bucket")
-			break
-		}
-		collections = append(collections, c)
-
-		// Update the start and end index for the next collection.
-		// Since we're going backwards in time, the end time of the next collection is the start time
-		// of the current collection and the start time is another bucketsToAggregate earlier.
-		endIndex = startIndex
-		startIndex = r.indexSubtract(startIndex, r.bucketsToAggregate)
-
-		// Terminate the loop if we've gone through all the buckets.
-		if r.indexBetween(startIndex, endIndex, r.headIndex) {
-			break
+	for key := range headBucket.Windows {
+		d := r.diachronics[*key]
+		d.numBuckets--
+		if d.numBuckets == 0 {
+			for _, index := range r.stringIndices {
+				index.remove(d.Key)
+			}
+			delete(r.diachronics, *d.Key)
 		}
 	}
 
-	// Emit the collections to the sink.
-	for i := len(collections) - 1; i >= 0; i-- {
-		c := collections[i]
-		if len(c.Flows) > 0 {
-			logrus.WithFields(logrus.Fields{
-				"start": c.StartTime,
-				"end":   c.EndTime,
-				"num":   len(c.Flows),
-			}).Debug("Emitting flow collection")
-			sink.Receive(c)
-			c.Complete()
-		}
-	}
+	headBucket.Meta = r.newMeta()
+	headBucket.Windows = make(map[K]S)
+
+	return r.timeRing.headIndexStartTime
 }
 
-// maybeBuildFlowCollection returns a collection of flows to emit, or nil if the flow collection has already been emitted.
-func (r *BucketRing) maybeBuildFlowCollection(startIndex, endIndex int) *FlowCollection {
-	logrus.WithFields(logrus.Fields{
-		"startIndex": startIndex,
-		"endIndex":   endIndex,
-		"startTime":  r.buckets[startIndex].StartTime,
-		"endTime":    r.buckets[endIndex].StartTime,
-	}).Debug("Checking if bucket range should be emitted")
+func (r *BucketRing[Meta, K, V, R, S]) BeginningOfHistory() int64 {
+	return r.timeRing.tailIndexStartTime
+}
 
-	// Check if we're ready to emit. Wait until the oldest bucket in the window has not yet
-	// been pushed, as any newer buckets will not have been pushed either.
-	if r.buckets[startIndex].Pushed {
-		logrus.WithFields(r.buckets[startIndex].Fields()).Debug("Bucket has already been published, waiting for next bucket")
+func (r *BucketRing[Meta, K, V, R, S]) NumBuckets() int {
+	return len(r.buckets)
+}
+
+func (r *BucketRing[Meta, K, V, R, S]) CurrentBucket() *Bucket[Meta, K, V, R, S] {
+	return r.buckets[r.timeRing.currentIndex()]
+}
+
+func (r *BucketRing[Meta, K, V, R, S]) OldestBucket() *Bucket[Meta, K, V, R, S] {
+	return r.buckets[r.timeRing.indexAdd(r.timeRing.headIndex, 1)]
+}
+
+func (r *BucketRing[Meta, K, V, R, S]) BucketsSince(time int64) []*Bucket[Meta, K, V, R, S] {
+	idx, err := r.timeRing.timeToIndex(time)
+	if err != nil {
+		logrus.WithError(err).Warn("Couldn't find bucket for time")
 		return nil
 	}
-	logrus.WithFields(r.buckets[startIndex].Fields()).Debug("Bucket is ready to emit")
-	startTime := r.buckets[startIndex].StartTime
-	endTime := r.buckets[endIndex].StartTime
-
-	flows := NewFlowCollection(startTime, endTime)
-
-	// Go through each bucket in the window and build the set of flows to emit.
-	keys := set.New[*types.DiachronicFlow]()
-	r.IterBuckets(startIndex, endIndex, func(i int) {
-		logrus.WithFields(r.buckets[i].Fields()).Debug("Gathering flows from bucket")
-		keys.AddAll(r.buckets[i].Flows.Slice())
-
-		// Add a pointer to the bucket to the FlowCollection. This allows us to mark the bucket as pushed
-		// once emitted.
-		flows.buckets = append(flows.buckets, &r.buckets[i])
-	})
-
-	// Use the DiachronicFlow data to build the aggregated flows.
-	keys.Iter(func(d *types.DiachronicFlow) error {
-		if logrus.IsLevelEnabled(logrus.DebugLevel) {
-			logrus.WithFields(d.Key.Fields()).WithFields(logrus.Fields{
-				"start": startTime,
-				"end":   endTime,
-			}).Debug("Building aggregated flow for emission")
-		}
-		if f := d.Aggregate(startTime, endTime); f != nil {
-			flows.Flows = append(flows.Flows, *f)
-		}
-		return nil
-	})
-
-	// The next bucket that will trigger an emission is the one after the end of the current window.
-	// Log this for debugging purposes.
-	nextBucket := r.buckets[r.nextBucketIndex(endIndex)]
-	logrus.WithFields(nextBucket.Fields()).Debug("Next bucket to emit")
-
-	if len(flows.Flows) == 0 {
-		logrus.WithFields(logrus.Fields{
-			"start": startTime,
-			"end":   endTime,
-		}).Debug("No flows to emit in window")
-	}
-	return flows
+	return r.bucketsBetween(idx, r.timeRing.currentIndex())
 }
 
-func (r *BucketRing) Statistics(req *proto.StatisticsRequest) ([]*proto.StatisticsResult, error) {
-	results := map[StatisticsKey]*proto.StatisticsResult{}
+func (r *BucketRing[Meta, K, V, R, S]) bucketsBetween(start, end int) []*Bucket[Meta, K, V, R, S] {
+	if start < len(r.buckets) {
+		return r.buckets[start : end+1]
+	}
 
-	err := r.IterBucketsTime(req.StartTimeGte, req.StartTimeLt, func(b *AggregationBucket) {
-		stats := b.QueryStatistics(req)
-		if len(stats) > 0 {
-			logrus.WithFields(b.Fields()).WithField("num", len(stats)).Debug("Bucket provided statistics")
-		}
+	buckets := r.buckets[start:len(r.buckets)]
+	// Do end+1 so that buckets[end] is included
+	buckets = append(buckets, r.buckets[0:end+1]...)
 
-		for k, v := range stats {
-			if _, ok := results[k]; !ok {
-				// Initialize a new result object for this hit.
-				results[k] = &proto.StatisticsResult{
-					Policy:    types.PolicyHitToProto(k.ToHit()),
-					Direction: k.RuleDirection(),
-					GroupBy:   req.GroupBy,
-					Type:      req.Type,
-				}
-			}
+	return buckets
+}
 
-			if req.TimeSeries {
-				// Add the statistics to the result object as a new entry.
-				results[k].AllowedIn = append(results[k].AllowedIn, v.AllowedIn)
-				results[k].DeniedIn = append(results[k].DeniedIn, v.DeniedIn)
-				results[k].AllowedOut = append(results[k].AllowedOut, v.AllowedOut)
-				results[k].DeniedOut = append(results[k].DeniedOut, v.DeniedOut)
-				results[k].PassedIn = append(results[k].PassedIn, v.PassedIn)
-				results[k].PassedOut = append(results[k].PassedOut, v.PassedOut)
+func (r *BucketRing[Meta, K, V, R, S]) Bucket(idx int) *Bucket[Meta, K, V, R, S] {
+	return r.buckets[idx]
+}
 
-				// X axis is the start time of the bucket that the statistics are for.
-				results[k].X = append(results[k].X, b.StartTime)
-			} else {
-				if len(results[k].AllowedIn) == 0 {
-					// Initialize the result object for this hit.
-					results[k].AllowedIn = append(results[k].AllowedIn, 0)
-					results[k].DeniedIn = append(results[k].DeniedIn, 0)
-					results[k].AllowedOut = append(results[k].AllowedOut, 0)
-					results[k].DeniedOut = append(results[k].DeniedOut, 0)
-					results[k].PassedIn = append(results[k].PassedIn, 0)
-					results[k].PassedOut = append(results[k].PassedOut, 0)
-				}
-
-				// Aggregate across the time range.
-				results[k].AllowedIn[0] += v.AllowedIn
-				results[k].DeniedIn[0] += v.DeniedIn
-				results[k].AllowedOut[0] += v.AllowedOut
-				results[k].DeniedOut[0] += v.DeniedOut
-				results[k].PassedIn[0] += v.PassedIn
-				results[k].PassedOut[0] += v.PassedOut
-			}
-		}
-	})
+func (r *BucketRing[Meta, K, V, R, S]) BucketForTime(time int64) (*Bucket[Meta, K, V, R, S], error) {
+	idx, err := r.timeRing.timeToIndex(time)
 	if err != nil {
 		return nil, err
 	}
 
-	// Convert the map to a list, and sort it for determinism.
-	var resultsList []*proto.StatisticsResult
-	for _, v := range results {
-		resultsList = append(resultsList, v)
+	return r.buckets[idx], nil
+}
+
+func (r *BucketRing[Meta, K, V, R, S]) BucketsForTimeRange(startGt, startLt int64) []*Bucket[Meta, K, V, R, S] {
+	startIdx, err := r.timeRing.timeToIndex(startGt)
+	if err != nil {
+		return nil
 	}
-	sort.Slice(resultsList, func(i, j int) bool {
-		// Sort policy hits by its key fields (via the string representation), and then by direction (which is
-		// a key field only on the Statistics API for rule grouping).
-		p1Str := resultsList[i].Policy.String()
-		p2Str := resultsList[j].Policy.String()
-		if p1Str == p2Str {
-			return resultsList[i].Direction < resultsList[j].Direction
+
+	endIdx, err := r.timeRing.timeToIndex(startLt)
+	if err != nil {
+		return nil
+	}
+
+	return r.bucketsBetween(startIdx, endIdx)
+}
+
+// TODO comment on this and mention how it's guaranteed sorted by time.
+func (r *BucketRing[Meta, K, V, R, S]) DiachronicsForTimeRange(startGt, startLt int64) []*Diachronic[R, V, S] {
+	startIdx, err := r.timeRing.timeToIndex(startGt)
+	if err != nil {
+		return nil
+	}
+
+	endIdx, err := r.timeRing.timeToIndex(startLt)
+	if err != nil {
+		return nil
+	}
+
+	seen := set.New[K]()
+
+	buckets := r.bucketsBetween(startIdx, endIdx)
+	diachronics := make([]*Diachronic[R, V, S], 0, len(buckets))
+	for _, b := range buckets {
+		for key := range b.Windows {
+			if seen.Contains(key) {
+				continue
+			}
+			seen.Add(key)
+			diachronics = append(diachronics, r.diachronics[*key])
 		}
-		s1, err := resultsList[i].Policy.ToString()
-		if err != nil {
-			logrus.WithError(err).Error("Invalid policy hit, statistics sorting may be off")
-			return false
-		}
-		s2, err := resultsList[j].Policy.ToString()
-		if err != nil {
-			logrus.WithError(err).Error("Invalid policy hit, statistics sorting may be off")
-			return false
-		}
-		return s1 < s2
-	})
-	return resultsList, nil
-}
-
-// flushToStreams sends the flows in the current streaming bucket to the stream receiver.
-func (r *BucketRing) flushToStreams() {
-	if r.streams == nil {
-		logrus.Warn("No stream receiver configured, not sending flows to streams")
-		return
 	}
 
-	// Collect the set of flows to emit to the stream manager. Each rollover, we emit
-	// a single bucket of flows to the stream manager.
-	bucket := r.streamingBucket()
-	r.streamBucket(bucket, r.streams)
-}
-
-func (r *BucketRing) streamBucket(b *AggregationBucket, s StreamReceiver) {
-	if b.Flows != nil {
-		b.Flows.Iter(func(d *types.DiachronicFlow) error {
-			s.Receive(NewCachedFlowBuilder(d, b.StartTime, b.EndTime))
-			return nil
-		})
-	}
-}
-
-// streamingBucket returns the bucket currently slated to be sent to the stream manager.
-func (r *BucketRing) streamingBucket() *AggregationBucket {
-	// The head index is always one bucket into the future, and the bucket before
-	// is the currently filling one. So start two back from the head.
-	idx := r.indexSubtract(r.headIndex, 2)
-	return &r.buckets[idx]
-}
-
-// IterBuckets iterates over the buckets in the ring, from the starting index until the ending index.
-// i.e., i := start; i < end; i++ (but handles wraparound)
-func (r *BucketRing) IterBuckets(start, end int, f func(i int)) {
-	idx := start
-	for idx != end {
-		f(idx)
-		idx = r.nextBucketIndex(idx)
-	}
-}
-
-// IterBucketsTime iterates over the buckets in the ring, from the starting time until the ending time.
-// If either time is not found, an error is returned.
-// If the start time is zero, it will start from the beginning of the ring.
-// If the end time is zero, it will iterate until the current time.
-func (r *BucketRing) IterBucketsTime(start, end int64, f func(b *AggregationBucket)) error {
-	// Find the buckets that contains the given times, if given.
-	startIdx := r.indexAdd(r.headIndex, 1)
-	if start != 0 {
-		startIdx, _ = r.findBucket(start)
-	}
-	endIdx := r.headIndex
-	if end != 0 {
-		endIdx, _ = r.findBucket(end)
-	}
-	if endIdx == -1 || startIdx == -1 {
-		return fmt.Errorf("failed to find bucket for time range %d:%d", start, end)
-	}
-	r.IterBuckets(startIdx, endIdx, func(i int) {
-		f(&r.buckets[i])
-	})
-	return nil
+	return diachronics
 }

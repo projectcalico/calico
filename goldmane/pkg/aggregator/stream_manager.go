@@ -6,7 +6,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/goldmane/pkg/aggregator/bucketing"
 	"github.com/projectcalico/calico/goldmane/pkg/types"
 	"github.com/projectcalico/calico/goldmane/proto"
 )
@@ -94,7 +93,7 @@ type streamManager struct {
 
 // Receive tells the stream manager about a new DiachronicFlow that has rolled over. The manager
 // informs all streams about the new flow, so they can decide to include it in their output.
-func (m *streamManager) Receive(b bucketing.FlowBuilder) {
+func (m *streamManager) Receive(b FlowBuilder) {
 	for _, s := range m.streams {
 		// Build the flow, checking if the flow matches the stream's filter.
 		if f, id := b.Build(s.req.req.Filter); f != nil {
