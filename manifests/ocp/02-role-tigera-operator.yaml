@@ -393,6 +393,7 @@ rules:
       - update
       - list
       - watch
+      - delete
   # For tiered network policy actions, tigera-apiserver requires that we authorize the operator for the tier.networkpolicies and tier.globalnetworkpolicies pseudo-kinds.
   - apiGroups:
       - projectcalico.org
