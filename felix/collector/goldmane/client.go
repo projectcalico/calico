@@ -17,6 +17,7 @@ package goldmane
 import (
 	"context"
 	"fmt"
+	"os"
 	"sort"
 	"strings"
 	"sync"
@@ -38,6 +39,10 @@ type GoldmaneReporter struct {
 	address string
 	client  *client.FlowClient
 	once    sync.Once
+
+	// Fields related to goldmane unix socket
+	nodeClient     *client.FlowClient
+	nodeClientLock sync.RWMutex
 }
 
 func NewReporter(addr, cert, key, ca string) (*GoldmaneReporter, error) {
@@ -56,8 +61,61 @@ func (g *GoldmaneReporter) Start() error {
 	g.once.Do(func() {
 		// We don't wait for the initial connection to start so we don't block the caller.
 		g.client.Connect(context.Background())
+
+		go g.nodeSocketReporter()
 	})
 	return err
+}
+
+func (g *GoldmaneReporter) nodeSocketReporter() {
+	nodeSocketExists := func() bool {
+		_, err := os.Stat(LocalGoldmaneServer)
+		// In case of any error, return false
+		return err == nil
+	}
+	for {
+		if nodeSocketExists() {
+			g.mayStartNodeSocketReporter()
+		} else {
+			g.mayStopNodeSocketReporter()
+		}
+		time.Sleep(time.Second * 10)
+	}
+}
+
+func (g *GoldmaneReporter) nodeClientIsNil() bool {
+	g.nodeClientLock.RLock()
+	defer g.nodeClientLock.RUnlock()
+	return g.nodeClient == nil
+}
+
+func (g *GoldmaneReporter) mayStartNodeSocketReporter() {
+	if !g.nodeClientIsNil() {
+		return
+	}
+
+	var err error
+	g.nodeClientLock.Lock()
+	defer g.nodeClientLock.Unlock()
+	sockAddr := fmt.Sprintf("unix://%v", LocalGoldmaneServer)
+	g.nodeClient, err = client.NewFlowClient(sockAddr, "", "", "")
+	if err != nil {
+		logrus.WithError(err).Warn("Failed to create goldmane unix client")
+		return
+	}
+	logrus.Info("Created goldmane unix client")
+	g.nodeClient.Connect(context.Background())
+}
+
+func (g *GoldmaneReporter) mayStopNodeSocketReporter() {
+	if g.nodeClientIsNil() {
+		return
+	}
+
+	g.nodeClientLock.Lock()
+	defer g.nodeClientLock.Unlock()
+	g.nodeClient = nil
+	logrus.Info("Destroyed goldmane unix client")
 }
 
 func (g *GoldmaneReporter) Report(logSlice any) error {
@@ -67,7 +125,15 @@ func (g *GoldmaneReporter) Report(logSlice any) error {
 			logrus.WithField("num", len(logs)).Debug("Dispatching flow logs to goldmane")
 		}
 		for _, l := range logs {
-			g.client.Push(convertFlowlogToGoldmane(l))
+			goldmaneLog := convertFlowlogToGoldmane(l)
+			g.client.Push(goldmaneLog)
+
+			// If goldmane local unix server exists, also send it flowlogs.
+			g.nodeClientLock.RLock()
+			if g.nodeClient != nil {
+				g.nodeClient.Push(goldmaneLog)
+			}
+			g.nodeClientLock.RUnlock()
 		}
 	default:
 		logrus.Panic("Unexpected kind of log dispatcher")
