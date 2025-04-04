@@ -387,6 +387,7 @@ rules:
       - update
       - list
       - watch
+      - delete
 {{- else }}
   # Add the appropriate pod security policy permissions
   - apiGroups:
