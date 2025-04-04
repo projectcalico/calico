@@ -840,7 +840,7 @@ var _ = Describe("Config copy tests", func() {
 		Expect(conf.RawValues()).To(Equal(conf.Copy().RawValues()))
 	})
 
-	It("should copy via protobuf correctly", func() {
+	It("should copy via protobuf correctly UpdateFromConfigUpdate", func() {
 		pb := conf.ToConfigUpdate()
 		confCp := config.New()
 		changedFields, err := confCp.UpdateFromConfigUpdate(pb)
@@ -852,6 +852,17 @@ var _ = Describe("Config copy tests", func() {
 		Expect(confCp.RawValues()).To(Equal(conf.RawValues()))
 
 		changedFields, err = confCp.UpdateFromConfigUpdate(pb)
+		Expect(err).To(Succeed())
+		Expect(changedFields).To(BeEmpty())
+		Expect(confCp.RawValues()).To(Equal(conf.RawValues()))
+	})
+
+	It("should copy via protobuf correctly FromConfigUpdate", func() {
+		pb := conf.ToConfigUpdate()
+		confCp := config.FromConfigUpdate(pb)
+		Expect(confCp.RawValues()).To(Equal(conf.RawValues()))
+
+		changedFields, err := confCp.UpdateFromConfigUpdate(pb)
 		Expect(err).To(Succeed())
 		Expect(changedFields).To(BeEmpty())
 		Expect(confCp.RawValues()).To(Equal(conf.RawValues()))

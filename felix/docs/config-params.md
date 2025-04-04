@@ -1492,7 +1492,7 @@ incorrect values.
 | --- | --- |
 | Environment variable | `FELIX_BPFConntrackTimeouts` |
 | Encoding (env var/config file) | Comma-delimited list of key=value pairs |
-| Default value (above encoding) | `CreationGracePeriod=10s,TCPPreEstablished=20s,TCPEstablished=1h,TCPFinsSeen=Auto,TCPResetSeen=40s,UDPLastSeen=60s,GenericIPLastSeen=10m,ICMPLastSeen=5s` |
+| Default value (above encoding) | `CreationGracePeriod=10s,TCPSynSent=20s,TCPEstablished=1h,TCPFinsSeen=Auto,TCPResetSeen=40s,UDPTimeout=60s,GenericTimeout=10m,ICMPTimeout=5s` |
 | `FelixConfiguration` field | `bpfConntrackTimeouts` (YAML) `BPFConntrackTimeouts` (Go API) |
 | `FelixConfiguration` schema | `object` |
 | Default value (YAML) | none |
