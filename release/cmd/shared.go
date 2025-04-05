@@ -15,12 +15,14 @@
 package main
 
 import (
-	"io"
-	"os"
+	"fmt"
+	"path"
+	"runtime"
+	"strings"
 
 	"github.com/sirupsen/logrus"
+	"github.com/snowzach/rotatefilehook"
 	cli "github.com/urfave/cli/v2"
-	"gopkg.in/natefinch/lumberjack.v2"
 
 	"github.com/projectcalico/calico/release/internal/slack"
 	"github.com/projectcalico/calico/release/internal/utils"
@@ -38,22 +40,41 @@ var (
 	releaseOutputPath = []string{utils.ReleaseFolderName, "_output"}
 )
 
+func logPrettifier(f *runtime.Frame) (string, string) {
+	filename := path.Base(f.File)
+	funcSegments := strings.Split(f.Function, "/")
+	return fmt.Sprintf("%s()", funcSegments[len(funcSegments)-1]), fmt.Sprintf("%s:%d", filename, f.Line)
+}
+
 // configureLogging sets up logging to both stdout and a file.
 func configureLogging(filename string) {
+
 	if debug {
 		logrus.SetLevel(logrus.DebugLevel)
-	} else {
-		logrus.SetLevel(logrus.InfoLevel)
 	}
 
-	writers := []io.Writer{os.Stdout, &lumberjack.Logger{
+	logrus.SetFormatter(&logrus.TextFormatter{
+		DisableLevelTruncation: true,
+		CallerPrettyfier:       logPrettifier,
+	})
+
+	rotateFileHook, err := rotatefilehook.NewRotateFileHook(rotatefilehook.RotateFileConfig{
 		Filename:   filename,
 		MaxSize:    100,
 		MaxAge:     30,
 		MaxBackups: 10,
-	}}
+		Level:      logrus.DebugLevel,
+		Formatter: &logrus.TextFormatter{
+			DisableColors:          true,
+			DisableLevelTruncation: true,
+			CallerPrettyfier:       logPrettifier,
+		},
+	})
+	if err != nil {
+		panic(err)
+	}
 
-	logrus.SetOutput(io.MultiWriter(writers...))
+	logrus.AddHook(rotateFileHook)
 }
 
 // slackConfig returns a config for slack based on the CLI context.

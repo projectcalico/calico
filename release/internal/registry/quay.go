@@ -18,6 +18,7 @@ import (
 	"fmt"
 )
 
+// QuayRegistry is the default hostname for fetching images from quay
 const QuayRegistry = "quay.io"
 
 // Quay represents the Quay registry
@@ -35,11 +36,7 @@ func (q *Quay) Token(img ImageRef) (string, error) {
 		err   error
 		scope = fmt.Sprintf("repository:%s:pull", img.Repository())
 	)
-	if img.RequiresAuth() {
-		token, err = getBearerTokenWithDefaultAuth(q, scope)
-	} else {
-		token, err = getBearerToken(q, scope)
-	}
+	token, err = getBearerToken(q, scope)
 	return token, err
 }
 
