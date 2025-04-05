@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package types_test
+package old_test
 
 import (
 	"testing"
@@ -21,6 +21,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/projectcalico/calico/goldmane/pkg/aggregator"
+	"github.com/projectcalico/calico/goldmane/pkg/aggregator/bucketing"
 	"github.com/projectcalico/calico/goldmane/pkg/internal/utils"
 	"github.com/projectcalico/calico/goldmane/pkg/types"
 	"github.com/projectcalico/calico/goldmane/proto"
@@ -46,7 +47,7 @@ func TestDiachronicFlow(t *testing.T) {
 		&types.FlowKeyMeta{},
 		&proto.PolicyTrace{},
 	)
-	df := types.NewDiachronicFlow(k)
+	df := bucketing.NewDiachronicFlow(k)
 
 	// Add flow data over a bunch of windows.
 	f := types.Flow{
@@ -60,9 +61,6 @@ func TestDiachronicFlow(t *testing.T) {
 		NumConnectionsCompleted: 7,
 		SourceLabels:            unique.Make("source"),
 		DestLabels:              unique.Make("dest"),
-	}
-	for i := range 400 {
-		df.AddFlow(&f, int64(i), int64(i+1))
 	}
 
 	// Check aggregation across full range.

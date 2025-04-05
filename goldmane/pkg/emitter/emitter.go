@@ -30,7 +30,6 @@ import (
 	"k8s.io/client-go/util/workqueue"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/projectcalico/calico/goldmane/pkg/aggregator/bucketing"
 	"github.com/projectcalico/calico/goldmane/pkg/types"
 	"github.com/projectcalico/calico/libcalico-go/lib/health"
 )
@@ -66,8 +65,8 @@ type Emitter struct {
 	latestTimestamp int64
 }
 
-// Make sure Emitter implements the Receiver interface to be able to receive aggregated Flows.
-var _ bucketing.Sink = &Emitter{}
+//// Make sure Emitter implements the Receiver interface to be able to receive aggregated Flows.
+//var _ bucketing.Sink = &Emitter{}
 
 func NewEmitter(opts ...Option) *Emitter {
 	e := &Emitter{
@@ -171,11 +170,11 @@ func (e *Emitter) reportHealth(report *health.HealthReport) {
 	}
 }
 
-func (e *Emitter) Receive(bucket *bucketing.FlowCollection) {
+func (e *Emitter) Receive(flows []*types.Flow) {
 	// Add the bucket to our internal map so we can retry it if needed.
 	// We'll remove it from the map once it's successfully emitted.
-	k := bucketKey{startTime: bucket.StartTime, endTime: bucket.EndTime}
-	e.buckets.add(k, bucket)
+	k := bucketKey{startTime: flows[0].StartTime, endTime: flows[len(flows)-1].EndTime}
+	e.buckets.add(k, flows)
 	e.q.Add(k)
 }
 
@@ -197,17 +196,17 @@ func (e *Emitter) forget(k bucketKey) {
 	e.q.Forget(k)
 }
 
-func (e *Emitter) emit(bucket *bucketing.FlowCollection) error {
+func (e *Emitter) emit(flows []*types.Flow) error {
 	// Check if we have already emitted this batch. If it pre-dates
 	// the latest timestamp we've emitted, skip it. This can happen, for example, on restart when
 	// we learn already emitted flows from the cache.
-	if bucket.EndTime <= e.latestTimestamp {
-		logrus.WithField("bucketEndTime", bucket.EndTime).Debug("Skipping already emitted flows.")
+	if flows[len(flows)-1].EndTime <= e.latestTimestamp {
+		logrus.WithField("bucketEndTime", flows[len(flows)-1].EndTime).Debug("Skipping already emitted flows.")
 		return nil
 	}
 
 	// Marshal the flows to JSON and send them to the emitter.
-	rdr, err := e.collectionToReader(bucket)
+	rdr, err := e.collectionToReader(flows)
 	if err != nil {
 		return err
 	}
@@ -216,7 +215,7 @@ func (e *Emitter) emit(bucket *bucketing.FlowCollection) error {
 	}
 
 	// Update the timestamp of the latest bucket emitted.
-	e.latestTimestamp = bucket.EndTime
+	e.latestTimestamp = flows[len(flows)-1].EndTime
 
 	// Update our configmap with the latest published timestamp.
 	if err = e.saveState(); err != nil {
@@ -225,16 +224,16 @@ func (e *Emitter) emit(bucket *bucketing.FlowCollection) error {
 	return nil
 }
 
-func (e *Emitter) collectionToReader(bucket *bucketing.FlowCollection) (*bytes.Reader, error) {
+func (e *Emitter) collectionToReader(flows []*types.Flow) (*bytes.Reader, error) {
 	body := []byte{}
-	for _, flow := range bucket.Flows {
+	for _, flow := range flows {
 		if len(body) != 0 {
 			// Include a separator between logs.
 			body = append(body, []byte("\n")...)
 		}
 
 		// Convert to public format.
-		f := types.FlowToProto(&flow)
+		f := types.FlowToProto(flow)
 		flowJSON, err := json.Marshal(f)
 		if err != nil {
 			return nil, fmt.Errorf("Error marshalling flow: %v", err)

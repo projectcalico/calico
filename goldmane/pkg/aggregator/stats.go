@@ -1,4 +1,4 @@
-package bucketing
+package aggregator
 
 import (
 	"github.com/sirupsen/logrus"
@@ -6,6 +6,19 @@ import (
 	"github.com/projectcalico/calico/goldmane/pkg/types"
 	"github.com/projectcalico/calico/goldmane/proto"
 )
+
+type FlowBucketMeta struct {
+	// Tracker for statistics within this bucket.
+	stats *statisticsIndex
+}
+
+func (meta *FlowBucketMeta) Update(flow types.Flow) {
+	meta.stats.AddFlow(&flow)
+}
+
+func (meta *FlowBucketMeta) QueryStatistics(q *proto.StatisticsRequest) map[StatisticsKey]*counts {
+	return meta.stats.QueryStatistics(q)
+}
 
 // StatisticsKey represents the key for a set of statistics.
 type StatisticsKey struct {

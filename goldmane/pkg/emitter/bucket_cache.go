@@ -15,12 +15,11 @@
 package emitter
 
 import (
+	"github.com/projectcalico/calico/goldmane/pkg/types"
 	"sync"
 	"time"
 
 	"github.com/sirupsen/logrus"
-
-	"github.com/projectcalico/calico/goldmane/pkg/aggregator/bucketing"
 )
 
 type bucketKey struct {
@@ -31,18 +30,18 @@ type bucketKey struct {
 // bucketCache is a thread-safe cache of aggregation buckets.
 type bucketCache struct {
 	sync.Mutex
-	buckets    map[bucketKey]*bucketing.FlowCollection
+	buckets    map[bucketKey][]*types.Flow
 	timestamps map[bucketKey]time.Time
 }
 
 func newBucketCache() *bucketCache {
 	return &bucketCache{
-		buckets:    map[bucketKey]*bucketing.FlowCollection{},
+		buckets:    map[bucketKey][]*types.Flow{},
 		timestamps: map[bucketKey]time.Time{},
 	}
 }
 
-func (b *bucketCache) add(k bucketKey, bucket *bucketing.FlowCollection) {
+func (b *bucketCache) add(k bucketKey, flows []*types.Flow) {
 	b.Lock()
 	defer b.Unlock()
 	if _, exists := b.buckets[k]; exists {
@@ -51,11 +50,11 @@ func (b *bucketCache) add(k bucketKey, bucket *bucketing.FlowCollection) {
 		logrus.WithField("bucket", k).Error("Duplicate bucket received.")
 		return
 	}
-	b.buckets[k] = bucket
+	b.buckets[k] = flows
 	b.timestamps[k] = time.Now()
 }
 
-func (b *bucketCache) get(k bucketKey) (*bucketing.FlowCollection, bool) {
+func (b *bucketCache) get(k bucketKey) ([]*types.Flow, bool) {
 	b.Lock()
 	defer b.Unlock()
 	bucket, exists := b.buckets[k]

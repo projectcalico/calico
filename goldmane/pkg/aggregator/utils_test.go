@@ -19,15 +19,15 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/goldmane/pkg/aggregator/bucketing"
+	"github.com/projectcalico/calico/goldmane/pkg/aggregator"
 )
 
 // testSink implements the Sink interface for testing.
 type testSink struct {
-	buckets []*bucketing.FlowCollection
+	buckets []*aggregator.FlowCollection
 }
 
-func (t *testSink) Receive(b *bucketing.FlowCollection) {
+func (t *testSink) Receive(b *aggregator.FlowCollection) {
 	t.buckets = append(t.buckets, b)
 }
 

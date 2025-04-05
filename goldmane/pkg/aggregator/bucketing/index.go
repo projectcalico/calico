@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package aggregator
+package bucketing
 
 import (
 	"math"
@@ -22,78 +22,76 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/goldmane/pkg/types"
-	"github.com/projectcalico/calico/goldmane/proto"
 )
 
 type Ordered interface {
 	~int | ~float64 | ~string | ~int64 // Include commonly used types
 }
 
-// Index provides efficient querying of Flow objects based on a given sorting function.
-type Index[E Ordered] interface {
-	List(opts IndexFindOpts) ([]*types.Flow, types.ListMeta)
-	SortValueSet(opts IndexFindOpts) ([]E, types.ListMeta)
-	Add(c *types.DiachronicFlow)
-	Remove(c *types.DiachronicFlow)
+type indexInf[K Key[T], T comparable, V Ordered] interface {
+	add(key K)
+	list(opts FindOpts[K]) ([]K, types.ListMeta)
+	uniqueIndexKeys(opts FindOpts[K]) ([]V, types.ListMeta)
+	remove(K)
 }
 
-func NewIndex[E Ordered](sortValueFunc func(*types.FlowKey) E) Index[E] {
-	return &index[E]{sortValueFunc: sortValueFunc}
+func NewStringIndex[K Key[T], T comparable](sortValueFunc func(K) string) indexInf[K, T, string] {
+	return &index[K, string, T]{sortValueFunc: sortValueFunc}
 }
 
 // index is an implementation of Index that uses a configurable key function with which to sort Flows.
 // It maintains a list of DiachronicFlows sorted based on the key function allowing for efficient querying.
-type index[E Ordered] struct {
-	sortValueFunc func(*types.FlowKey) E
-	diachronics   []*types.DiachronicFlow
+type index[K Key[T], E Ordered, T comparable] struct {
+	sortValueFunc func(K) E
+	keys          []K
 }
 
-type IndexFindOpts struct {
-	startTimeGt int64
-	startTimeLt int64
+type FindOpts[K any] struct {
+	StartTimeGt int64
+	StartTimeLt int64
 
 	// pageSize is the maximum number of results to return for this query.
-	pageSize int64
+	PageSize int64
 
 	// page is the page from which to start the search.
-	page int64
+	Page int64
 
 	// filter is an optional Filter for the query.
-	filter *proto.Filter
+	Filter func(K) bool
+	SortBy string
 }
 
 // List returns a list of flows and metadata about the list that's returned.
-func (idx *index[E]) List(opts IndexFindOpts) ([]*types.Flow, types.ListMeta) {
+func (idx *index[K, E, T]) list(opts FindOpts[K]) ([]K, types.ListMeta) {
 	logrus.WithFields(logrus.Fields{
 		"opts": opts,
 	}).Debug("Listing flows from index")
 
-	var matchedFlows []*types.Flow
+	var matchedKeys []K
 	var totalMatchedCount int
 
-	pageStart := int(opts.page * opts.pageSize)
+	pageStart := int(opts.Page * opts.PageSize)
 
 	// Iterate through the DiachronicFlows and evaluate each one until we reach the limit or the end of the list.
-	for _, diachronic := range idx.diachronics {
-		flow := idx.evaluate(diachronic, opts)
-		if flow != nil {
+	for _, key := range idx.keys {
+		if opts.Filter != nil && !opts.Filter(key) {
 			// increment the count regardless of whether we're including the key, as we need a total matching count.
 			totalMatchedCount++
 
 			// Include the value if:
 			// - We're not performing a paginated search.
 			// - We are performing a paginated search, and it falls within the page bounds.
-			if totalMatchedCount > pageStart && (opts.pageSize == 0 || int64(len(matchedFlows)) < opts.pageSize) {
-				matchedFlows = append(matchedFlows, flow)
+			if totalMatchedCount > pageStart && (opts.PageSize == 0 || int64(len(matchedKeys)) < opts.PageSize) {
+				matchedKeys = append(matchedKeys, key)
 			}
 		}
 	}
 
-	return matchedFlows, calculateListMeta(totalMatchedCount, int(opts.pageSize))
+	return matchedKeys, calculateListMeta(totalMatchedCount, int(opts.PageSize))
 }
 
 // SortValueSet retrieves the unique values that this index is sorted by, in their sorted order.
-func (idx *index[E]) SortValueSet(opts IndexFindOpts) ([]E, types.ListMeta) {
+func (idx *index[K, E, T]) uniqueIndexKeys(opts FindOpts[K]) ([]E, types.ListMeta) {
 	logrus.WithFields(logrus.Fields{
 		"opts": opts,
 	}).Debug("Listing keys from index")
@@ -101,14 +99,13 @@ func (idx *index[E]) SortValueSet(opts IndexFindOpts) ([]E, types.ListMeta) {
 	var matchedValues []E
 	var totalMatchedCount int
 
-	pageStart := int(opts.page * opts.pageSize)
+	pageStart := int(opts.Page * opts.PageSize)
 	var previousSortValue *E
 
 	// Iterate through the DiachronicFlows and evaluate each one until we reach the limit or the end of the list.
-	for _, diachronic := range idx.diachronics {
-		flow := idx.evaluate(diachronic, opts)
-		if flow != nil {
-			sortValue := idx.sortValueFunc(&diachronic.Key)
+	for _, key := range idx.keys {
+		if opts.Filter != nil && !opts.Filter(key) {
+			sortValue := idx.sortValueFunc(key)
 			// If the previous sortValue does not equal the current sortValue we know that we haven't seen this sortValue
 			// yet, as this is sorted list and all sortValues with the same value are together.
 			if previousSortValue != nil && sortValue == *previousSortValue {
@@ -123,13 +120,13 @@ func (idx *index[E]) SortValueSet(opts IndexFindOpts) ([]E, types.ListMeta) {
 			// Include the value if:
 			// - We're not performing a paginated search.
 			// - We are performing a paginated search, and it falls within the page bounds.
-			if totalMatchedCount > pageStart && (opts.pageSize == 0 || int64(len(matchedValues)) < opts.pageSize) {
+			if totalMatchedCount > pageStart && (opts.PageSize == 0 || int64(len(matchedValues)) < opts.PageSize) {
 				matchedValues = append(matchedValues, sortValue)
 			}
 		}
 	}
 
-	return matchedValues, calculateListMeta(totalMatchedCount, int(opts.pageSize))
+	return matchedValues, calculateListMeta(totalMatchedCount, int(opts.PageSize))
 }
 
 func calculateListMeta(total, pageSize int) types.ListMeta {
@@ -151,60 +148,60 @@ func calculateListMeta(total, pageSize int) types.ListMeta {
 	}
 }
 
-func (idx *index[E]) Add(d *types.DiachronicFlow) {
-	if len(idx.diachronics) == 0 {
+func (idx *index[K, E, T]) add(key K) {
+	if len(idx.keys) == 0 {
 		// This is the first flow in the index. No need to insert it carefully.
-		logrus.WithFields(d.Key.Fields()).Debug("Adding first DiachronicFlow to index")
-		idx.diachronics = append(idx.diachronics, d)
+		logrus.WithFields(key.Fields()).Debug("Adding first DiachronicFlow to index")
+		idx.keys = append(idx.keys, key)
 		return
 	}
 
 	// Find the index within the Index where the flow should be inserted.
-	index := idx.lookup(d)
+	index := idx.lookup(key)
 
-	if index == len(idx.diachronics) {
-		// The flow is the largest in the index. Append it.
+	if index == len(idx.keys) {
+		// The key is the largest in the index. Append it.
 		if logrus.IsLevelEnabled(logrus.DebugLevel) {
-			logrus.WithFields(d.Key.Fields()).Debug("Appending new DiachronicFlow to index")
+			logrus.WithFields(key.Fields()).Debug("Appending new DiachronicFlow to index")
 		}
-		idx.diachronics = append(idx.diachronics, d)
+		idx.keys = append(idx.keys, key)
 		return
 	}
 
-	if idx.diachronics[index].Key != d.Key {
+	if idx.keys[index] != key {
 		// The flow key is different from the DiachronicFlow key at this index. Insert a new DiachronicFlow.
 		if logrus.IsLevelEnabled(logrus.DebugLevel) {
-			logrus.WithFields(d.Key.Fields()).WithFields(logrus.Fields{"i": index}).Debug("Inserting new DiachronicFlow into index")
+			logrus.WithFields(key.Fields()).WithFields(logrus.Fields{"i": index}).Debug("Inserting new DiachronicFlow into index")
 		}
-		idx.diachronics = append(idx.diachronics[:index], append([]*types.DiachronicFlow{d}, idx.diachronics[index:]...)...)
+		idx.keys = append(idx.keys[:index], append([]K{key}, idx.keys[index:]...)...)
 	}
 	// The DiachronicFlow already exists in the index, so do nothing.
 }
 
-func (idx *index[E]) Remove(d *types.DiachronicFlow) {
+func (idx *index[K, E, T]) remove(key K) {
 	// Find the index of the DiachronicFlow to be removed.
-	index := idx.lookup(d)
+	index := idx.lookup(key)
 
-	if index == len(idx.diachronics) {
+	if index == len(idx.keys) {
 		// The DiachronicFlow doesn't exist in the index (and would have sorted to the end of the index).
 		// We can't remove a flow that doesn't exist, so log a warning and return.
-		logrus.WithFields(logrus.Fields{"flow": d}).Warn("Unable to remove flow - not found in index")
+		logrus.WithFields(logrus.Fields{"key": key}).Warn("Unable to remove flow - not found in index")
 		return
 	}
 
-	if idx.diachronics[index].Key == d.Key {
+	if idx.keys[index] == key {
 		// The DiachronicFlow at the returned index is the same as the DiachronicFlow to be removed.
 		// Remove it from the index.
 		if logrus.IsLevelEnabled(logrus.DebugLevel) {
-			logrus.WithFields(d.Key.Fields()).Debug("Removing flow from index")
+			logrus.WithFields(key.Fields()).Debug("Removing flow from index")
 		}
-		idx.diachronics = slices.Delete(idx.diachronics, index, index+1)
+		idx.keys = slices.Delete(idx.keys, index, index+1)
 		return
 	} else {
 		// The DiachronicFlow at the returned index is not the same as the DiachronicFlow to be removed.
 		// This means the DiachronicFlow to be removed doesn't exist in the index.
-		logrus.WithFields(d.Key.Fields()).
-			WithFields(logrus.Fields{"i": idx.diachronics[index]}).
+		logrus.WithFields(key.Fields()).
+			WithFields(logrus.Fields{"i": idx.keys[index]}).
 			Warn("Unable to remove flow - not found in index")
 	}
 }
@@ -212,16 +209,16 @@ func (idx *index[E]) Remove(d *types.DiachronicFlow) {
 // lookup returns the index within the list of DiachronicFlows where the given DiachronicFlow either already exists or should be inserted.
 // - If the DiachronicFlow already exists, the index of the existing DiachronicFlow is returned.
 // - If the DiachronicFlow does not exist, the index where it should be inserted is returned.
-func (idx *index[E]) lookup(d *types.DiachronicFlow) int {
-	return sort.Search(len(idx.diachronics), func(i int) bool {
+func (idx *index[K, E, T]) lookup(key K) int {
+	return sort.Search(len(idx.keys), func(i int) bool {
 		// Compare the new DiachronicFlow with the DiachronicFlow at index i.
 		// - If the new DiachronicFlow sorts before the current DiachronicFlow, return true.
 		// - If the new DiachronicFlow sorts after the current DiachronicFlow, return false.
 		// - If this flow sorts the same as the current DiachronicFlow based on the parameters of this Index,
 		//   we need to sort based on the entire flow key to find a deterministic order.
 		// on the entire flow key.
-		v1 := idx.sortValueFunc(&idx.diachronics[i].Key)
-		v2 := idx.sortValueFunc(&d.Key)
+		v1 := idx.sortValueFunc(idx.keys[i])
+		v2 := idx.sortValueFunc(key)
 		if v1 > v2 {
 			// The key of the DiachronicFlow at index i greater than the key of the flow.
 			return true
@@ -231,16 +228,8 @@ func (idx *index[E]) lookup(d *types.DiachronicFlow) int {
 			// Sort based on the key's ID to ensure a deterministic order.
 			// TODO: This will result in different ordering on restart. Should we sort by FlowKey fields instead
 			// to be truly deterministic?
-			return idx.diachronics[i].ID >= d.ID
+			return idx.keys[i].Compare(key)
 		}
 		return false
 	})
-}
-
-// evaluate evaluates the given DiachronicFlow and returns the Flow that matches the given options, or nil if no match is found.
-func (idx *index[E]) evaluate(c *types.DiachronicFlow, opts IndexFindOpts) *types.Flow {
-	if c.Matches(opts.filter, opts.startTimeGt, opts.startTimeLt) {
-		return c.Aggregate(opts.startTimeGt, opts.startTimeLt)
-	}
-	return nil
 }

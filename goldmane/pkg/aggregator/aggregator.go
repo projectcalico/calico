@@ -16,6 +16,7 @@ package aggregator
 
 import (
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -40,58 +41,16 @@ const (
 	healthName = "aggregator"
 )
 
-// listRequest is an internal helper used to synchronously request matching flows from the aggregator.
-type listRequest struct {
-	respCh chan *listResponse
-	req    *proto.FlowListRequest
-}
-
-type filterHintsRequest struct {
-	respCh chan *filterHintsResponse
-	req    *proto.FilterHintsRequest
-}
-
-type listResponse struct {
-	results *proto.FlowListResult
-	err     error
-}
-
-type filterHintsResponse struct {
-	results *proto.FilterHintsResult
-	err     error
-}
-
-type streamRequest struct {
-	respCh chan *Stream
-	req    *proto.FlowStreamRequest
-}
-
-type sinkRequest struct {
-	sink bucketing.Sink
-	done chan struct{}
-}
-
 type LogAggregator struct {
-	// indices allow for quick handling of flow queries sorted by various methods.
-	indices map[proto.SortBy]Index[string]
-
-	// defaultIndex is the default index to use when no sort order is specified.
-	defaultIndex *RingIndex
-
 	// streams is responsible for managing active streams being served by the aggregator.
 	streams *streamManager
-
-	// diachronics stores a quick lookup of flow identifer to the types.DiachronicFlow object which
-	// contains the bucketed statistics for that flow. This is the primary data structure
-	// for storing per-Flow statistics over time.
-	diachronics map[types.FlowKey]*types.DiachronicFlow
 
 	// buckets is the ring of discrete time interval buckets for sorting Flows. The ring serves
 	// these main purposes:
 	// - It defines the global aggregation windows consistently for all DiachronicFlows.
 	// - It allows us to quickly serve time-sorted queries.
 	// - It allows us to quickly generate FlowCollections for emission.
-	buckets *bucketing.BucketRing
+	buckets *FlowRing
 
 	// aggregationWindow is the size of each aggregation bucket.
 	aggregationWindow time.Duration
@@ -108,7 +67,7 @@ type LogAggregator struct {
 	streamRequests chan streamRequest
 
 	// sink is a sink to send aggregated flows to.
-	sink bucketing.Sink
+	sink Sink
 
 	// sinkChan allows setting the sink asynchronously.
 	sinkChan chan *sinkRequest
@@ -141,6 +100,9 @@ type LogAggregator struct {
 
 	// health is the health aggregator to use for health checks.
 	health *health.HealthAggregator
+
+	lastStreamFlush int64
+	lastEmission    int64
 }
 
 func NewLogAggregator(opts ...Option) *LogAggregator {
@@ -157,18 +119,8 @@ func NewLogAggregator(opts ...Option) *LogAggregator {
 		bucketsToAggregate:  20,
 		pushIndex:           30,
 		nowFunc:             time.Now,
-		diachronics:         map[types.FlowKey]*types.DiachronicFlow{},
-		indices: map[proto.SortBy]Index[string]{
-			proto.SortBy_DestName:        NewIndex(func(k *types.FlowKey) string { return k.DestName() }),
-			proto.SortBy_DestNamespace:   NewIndex(func(k *types.FlowKey) string { return k.DestNamespace() }),
-			proto.SortBy_SourceName:      NewIndex(func(k *types.FlowKey) string { return k.SourceName() }),
-			proto.SortBy_SourceNamespace: NewIndex(func(k *types.FlowKey) string { return k.SourceNamespace() }),
-		},
-		streams: NewStreamManager(),
+		streams:             NewStreamManager(),
 	}
-
-	// Use a time-based Ring index by default.
-	a.defaultIndex = NewRingIndex(a)
 
 	// Apply options.
 	for _, opt := range opts {
@@ -200,28 +152,25 @@ func NewLogAggregator(opts ...Option) *LogAggregator {
 	return a
 }
 
-func (a *LogAggregator) flowSet(startGt, startLt int64) set.Set[*types.DiachronicFlow] {
-	return a.buckets.FlowSet(startGt, startLt)
-}
-
-func (a *LogAggregator) diachronicFlow(key types.FlowKey) *types.DiachronicFlow {
-	return a.diachronics[key]
+func (a *LogAggregator) flowSet(startGt, startLt int64, filter func(*types.FlowKey) bool) set.Set[*DiachronicFlow] {
+	return a.buckets.DiachronicSet(startGt, startLt, filter)
 }
 
 func (a *LogAggregator) Run(startTime int64) {
 	// Initialize the buckets.
-	opts := []bucketing.BucketRingOption{
-		bucketing.WithBucketsToAggregate(a.bucketsToAggregate),
-		bucketing.WithPushAfter(a.pushIndex),
-		bucketing.WithLookup(a.diachronicFlow),
-		bucketing.WithStreamReceiver(a.streams),
-	}
-	a.buckets = bucketing.NewBucketRing(
+	a.buckets = bucketing.NewRing[*FlowBucketMeta, *types.FlowKey, *types.Flow, types.FlowKey, types.Flow](
 		numBuckets,
 		int(a.aggregationWindow.Seconds()),
 		startTime,
-		opts...,
+		func() *FlowBucketMeta {
+			return &FlowBucketMeta{stats: newStatisticsIndex()}
+		},
 	)
+
+	a.buckets.AddStringIndex(string(proto.SortBy_DestName), bucketing.NewStringIndex(func(k *types.FlowKey) string { return k.DestName() }))
+	a.buckets.AddStringIndex(string(proto.SortBy_DestNamespace), bucketing.NewStringIndex(func(k *types.FlowKey) string { return k.DestNamespace() }))
+	a.buckets.AddStringIndex(string(proto.SortBy_SourceName), bucketing.NewStringIndex(func(k *types.FlowKey) string { return k.SourceName() }))
+	a.buckets.AddStringIndex(string(proto.SortBy_SourceNamespace), bucketing.NewStringIndex(func(k *types.FlowKey) string { return k.SourceNamespace() }))
 
 	if a.health != nil {
 		// Register with the health aggregator.
@@ -243,7 +192,7 @@ func (a *LogAggregator) Run(startTime int64) {
 		case <-rolloverCh:
 			rolloverCh = a.rolloverFunc(a.rollover())
 
-			a.buckets.EmitFlowCollections(a.sink)
+			a.emitFlowCollections()
 			if a.health != nil {
 				a.health.Report(healthName, &health.HealthReport{Live: true, Ready: true})
 			}
@@ -260,7 +209,7 @@ func (a *LogAggregator) Run(startTime int64) {
 		case req := <-a.sinkChan:
 			logrus.WithField("sink", req.sink).Info("Setting aggregator sink")
 			a.sink = req.sink
-			a.buckets.EmitFlowCollections(a.sink)
+			a.emitFlowCollections()
 			close(req.done)
 		case <-a.done:
 			logrus.Warn("Aggregator shutting down")
@@ -271,7 +220,7 @@ func (a *LogAggregator) Run(startTime int64) {
 
 // SetSink sets the sink for the aggregator and returns a channel that can be used to wait for the sink to be set,
 // if desired by the caller.
-func (a *LogAggregator) SetSink(s bucketing.Sink) chan struct{} {
+func (a *LogAggregator) SetSink(s Sink) chan struct{} {
 	done := make(chan struct{})
 	a.sinkChan <- &sinkRequest{sink: s, done: done}
 	return done
@@ -348,17 +297,6 @@ func (a *LogAggregator) validateTimeRange(startTimeGt, startTimeLt int64) error 
 	return nil
 }
 
-func (a *LogAggregator) Statistics(req *proto.StatisticsRequest) ([]*proto.StatisticsResult, error) {
-	// Sanitize the time range, resolving any relative time values.
-	req.StartTimeGte, req.StartTimeLt = a.normalizeTimeRange(req.StartTimeGte, req.StartTimeLt)
-
-	if err := a.validateTimeRange(req.StartTimeGte, req.StartTimeLt); err != nil {
-		logrus.WithField("req", req).WithError(err).Debug("Invalid time range")
-		return nil, err
-	}
-	return a.buckets.Statistics(req)
-}
-
 // backfill fills a new Stream instance with historical Flow data based on the request.
 func (a *LogAggregator) backfill(stream *Stream, request *proto.FlowStreamRequest) {
 	if request.StartTimeGte == 0 {
@@ -370,10 +308,9 @@ func (a *LogAggregator) backfill(stream *Stream, request *proto.FlowStreamReques
 
 	// Go through the bucket ring, generating stream events for each flow that matches the request.
 	// Right now, the stream endpoint only supports aggregation windows of a single bucket interval.
-	err := a.buckets.IterBucketsTime(request.StartTimeGte, a.nowFunc().Unix(), func(bucket *bucketing.AggregationBucket) {
-		// Iterate all of the keys in this bucket.
-		bucket.Flows.Iter(func(d *types.DiachronicFlow) error {
-			builder := bucketing.NewCachedFlowBuilder(d, bucket.StartTime, bucket.EndTime)
+	a.buckets.IterDiachronicsTime(request.StartTimeGte, a.nowFunc().Unix(),
+		func(startTime, endTime int64, d *DiachronicFlow) {
+			builder := NewCachedFlowBuilder(d, startTime, endTime)
 			if f, id := builder.Build(request.Filter); f != nil {
 				// The flow matches the filter and time range.
 				if logrus.IsLevelEnabled(logrus.DebugLevel) {
@@ -384,16 +321,11 @@ func (a *LogAggregator) backfill(stream *Stream, request *proto.FlowStreamReques
 					Flow: types.FlowToProto(f),
 				})
 			}
-			return nil
 		})
-	})
-	if err != nil {
-		logrus.WithError(err).Error("Error backfilling stream")
-	}
 }
 
 // normalizeTimeRange normalizes the time range for a query, converting absent and relative time indicators
-// into absolute time values based on the current time. The API suports passing negative numbers to indicate
+// into absolute time values based on the current time. The API supports passing negative numbers to indicate
 // a time relative to the current time, and 0 to indicate the beginning or end of the server history. This function
 // santisizes the input values into absolute time values for use within the aggregator.
 func (a *LogAggregator) normalizeTimeRange(gt, lt int64) (int64, int64) {
@@ -427,42 +359,26 @@ func (a *LogAggregator) queryFlows(req *proto.FlowListRequest) *listResponse {
 		return &listResponse{nil, err}
 	}
 
-	var meta types.ListMeta
 	var flowsToReturn []*proto.FlowResult
 
-	// If a sort order was requested, use the corresponding index to find the matching flows.
-	if len(req.SortBy) > 0 && req.SortBy[0].SortBy != proto.SortBy_Time {
-		if idx, ok := a.indices[req.SortBy[0].SortBy]; ok {
-			// If a sort order was requested, use the corresponding index to find the matching flows.
-			// We need to convert the FlowKey to a string for the index lookup.
-			var flows []*types.Flow
-			flows, meta = idx.List(IndexFindOpts{
-				startTimeGt: req.StartTimeGte,
-				startTimeLt: req.StartTimeLt,
-				pageSize:    req.PageSize,
-				page:        req.Page,
-				filter:      req.Filter,
-			})
-
-			// Convert the flows to proto format.
-			flowsToReturn = a.flowsToResult(flows)
-		} else {
-			return &listResponse{nil, fmt.Errorf("unsupported sort order")}
-		}
-	} else {
-		// Default to time-sorted flow data.
-		var flows []*types.Flow
-		flows, meta = a.defaultIndex.List(IndexFindOpts{
-			startTimeGt: req.StartTimeGte,
-			startTimeLt: req.StartTimeLt,
-			pageSize:    req.PageSize,
-			page:        req.Page,
-			filter:      req.Filter,
-		})
-
-		// Convert the flows to proto format.
-		flowsToReturn = a.flowsToResult(flows)
+	opts := bucketing.FindOpts[*types.FlowKey]{
+		StartTimeGt: req.StartTimeGte,
+		StartTimeLt: req.StartTimeLt,
+		PageSize:    req.PageSize,
+		Page:        req.Page,
+		Filter:      func(key *types.FlowKey) bool { return types.Matches(req.Filter, key) },
 	}
+
+	if len(req.SortBy) > 0 && req.SortBy[0].SortBy != proto.SortBy_Time {
+		opts.SortBy = string(req.SortBy[0].SortBy)
+	}
+
+	var flows []*types.Flow
+	meta := a.buckets.FindAndIterate(opts, func(flow *types.Flow) {
+		flows = append(flows, flow)
+	})
+
+	flowsToReturn = a.flowsToResult(flows)
 
 	return &listResponse{&proto.FlowListResult{
 		Meta: &proto.ListMetadata{
@@ -511,27 +427,21 @@ func (a *LogAggregator) queryFilterHints(req *proto.FilterHintsRequest) *filterH
 		return &filterHintsResponse{nil, fmt.Errorf("unsupported filter type '%s'", req.Type.String())}
 	}
 
+	opts := bucketing.FindOpts[*types.FlowKey]{
+		StartTimeGt: req.StartTimeGte,
+		StartTimeLt: req.StartTimeLt,
+		PageSize:    req.PageSize,
+		Page:        req.Page,
+		Filter:      func(key *types.FlowKey) bool { return types.Matches(req.Filter, key) },
+		SortBy:      string(sortBy),
+	}
+
 	var values []string
 	var meta types.ListMeta
-	// If a sort order was requested, use the corresponding index to find the matching flows.
-	if idx, ok := a.indices[sortBy]; ok {
-		values, meta = idx.SortValueSet(IndexFindOpts{
-			startTimeGt: req.StartTimeGte,
-			startTimeLt: req.StartTimeLt,
-			pageSize:    req.PageSize,
-			page:        req.Page,
-			filter:      req.Filter,
-		})
-	} else if valueFunc != nil {
-		values, meta = a.defaultIndex.FilterValueSet(valueFunc, IndexFindOpts{
-			startTimeGt: req.StartTimeGte,
-			startTimeLt: req.StartTimeLt,
-			pageSize:    req.PageSize,
-			page:        req.Page,
-			filter:      req.Filter,
-		})
+	if sortBy != proto.SortBy_Time {
+		values, meta = a.buckets.FindIndexedStringValues(opts)
 	} else {
-		return &filterHintsResponse{nil, fmt.Errorf("unsupported sort order")}
+		values, meta = a.buckets.FindStringValues(opts, valueFunc)
 	}
 
 	var hints []*proto.FilterHint
@@ -577,7 +487,7 @@ func (a *LogAggregator) flowsToResult(flows []*types.Flow) []*proto.FlowResult {
 	for _, flow := range flows {
 		flowsToReturn = append(flowsToReturn, &proto.FlowResult{
 			Flow: types.FlowToProto(flow),
-			Id:   a.diachronics[*flow.Key].ID,
+			Id:   a.buckets.GetDiachronic(flow.Key).ID,
 		})
 	}
 	return flowsToReturn
@@ -588,30 +498,13 @@ func (a *LogAggregator) Stop() {
 }
 
 func (a *LogAggregator) rollover() time.Duration {
+	// Flush out the completely flows to all the streams before rolling over.
+	a.flushToStreams()
+
 	// Tell the bucket ring to rollover and capture the start time of the newest bucket.
 	// We'll use this below to determine when the next rollover should occur. The next bucket
 	// should always be one interval ahead of Now().
-	newBucketStart, keys := a.buckets.Rollover()
-
-	// Update DiachronicFlows. We need to remove any windows from the DiachronicFlows that have expired.
-	// Find the oldest bucket's start time and remove any data from the DiachronicFlows that is older than that.
-	keys.Iter(func(d *types.DiachronicFlow) error {
-		// Rollover the DiachronicFlow. This will remove any expired data from it.
-		d.Rollover(a.buckets.BeginningOfHistory())
-
-		if d.Empty() {
-			// If the DiachronicFlow is empty, we can remove it. This means it hasn't received any
-			// flow updates in a long time.
-			if logrus.IsLevelEnabled(logrus.DebugLevel) {
-				logrus.WithFields(d.Key.Fields()).Debug("Removing empty DiachronicFlow")
-			}
-			for _, idx := range a.indices {
-				idx.Remove(d)
-			}
-			delete(a.diachronics, d.Key)
-		}
-		return nil
-	})
+	newBucketStart := a.buckets.Rollover()
 
 	// Determine when we should next rollover. We don't just blindly use the rolloverTime, as this leave us
 	// susceptible to slowly drifting over time. Instead, we determine when the next bucket should start and
@@ -645,36 +538,166 @@ func (a *LogAggregator) rollover() time.Duration {
 func (a *LogAggregator) handleFlowUpdate(flow *types.Flow) {
 	logrus.WithField("flow", flow).Debug("Received Flow")
 
-	// Find the window for this Flow based on the global bucket ring. We use the ring to ensure
-	// that time windows are consistent across all DiachronicFlows.
-	start, end, err := a.buckets.Window(flow)
-	if err != nil {
-		logrus.WithFields(logrus.Fields{
-			"start": flow.StartTime,
-			"now":   a.nowFunc().Unix(),
-		}).WithFields(flow.Key.Fields()).
-			WithError(err).
-			Warn("Unable to sort flow into a bucket")
+	// Add the Flow to our bucket ring.
+	a.buckets.Add(flow.StartTime, flow.Key, *flow)
+}
+
+func (a *LogAggregator) flushToStreams() {
+	if a.streams == nil {
+		logrus.Warn("No stream receiver configured, not sending flows to streams")
 		return
 	}
 
-	// Check if we are tracking a DiachronicFlow for this FlowKey, and create one if not.
-	// Then, add this Flow to the DiachronicFlow.
-	if _, ok := a.diachronics[*flow.Key]; !ok {
-		if logrus.IsLevelEnabled(logrus.DebugLevel) {
-			// Unpacking the key is a bit expensive, so only do it in debug mode.
-			logrus.WithFields(flow.Key.Fields()).Debug("Creating new DiachronicFlow for flow")
-		}
-		d := types.NewDiachronicFlow(flow.Key)
-		a.diachronics[*flow.Key] = d
+	var flushSince int64
+	if a.lastStreamFlush == 0 {
+		// If we haven't flushed before, set the flushSince time to beginning of the rings history.
+		flushSince = a.buckets.BeginningOfHistory()
+	} else {
+		//
+		flushSince = a.lastStreamFlush + int64(a.aggregationWindow.Seconds())
+	}
 
-		// Add the DiachronicFlow to all indices.
-		for _, idx := range a.indices {
-			idx.Add(d)
+	buckets := a.buckets.BucketsSince(flushSince)
+	a.buckets.IterDiachronicsTime(flushSince, a.nowFunc().Unix(), func(startTime, endTime int64, d *DiachronicFlow) {
+		a.streams.Receive(NewCachedFlowBuilder(d, startTime, endTime))
+	})
+
+	// Set the last flush time to the middle of the last bucket (just to avoid any slight time drifts).
+	a.lastStreamFlush = buckets[len(buckets)-1].MidTime()
+}
+
+func (a *LogAggregator) emitFlowCollections() {
+	if a.sink == nil {
+		logrus.Debug("No sink configured, skip flow emission")
+		return
+	}
+
+	var aggregateStart int64
+	if a.lastEmission == 0 {
+		aggregateStart = a.buckets.OldestBucket().MidTime()
+	} else {
+		// Add the aggregation window to the last emission time to get when we should emit buckets.
+		aggregateStart = a.lastEmission + int64(a.aggregationWindow.Seconds())
+	}
+
+	// The number window in seconds to gather flows over.
+	aggregateOverSeconds := int64(a.bucketsToAggregate * int(a.aggregationWindow.Seconds()))
+
+	for {
+		aggregateEnd := aggregateStart + aggregateOverSeconds
+
+		diachronics := a.buckets.DiachronicsForTimeRange(aggregateStart, aggregateEnd)
+
+		var flows []*types.Flow
+		for _, diachronic := range diachronics {
+			flow := diachronic.Aggregate(aggregateStart, aggregateEnd)
+			flows = append(flows, flow)
+		}
+
+		if len(flows) > 0 {
+			logrus.WithFields(logrus.Fields{
+				"start": flows[0].StartTime,
+				"end":   flows[len(flows)-1].EndTime,
+				"num":   len(flows),
+			}).Debug("Emitting flow collection")
+			a.sink.Receive(flows)
+		}
+
+		lastFlow := flows[len(flows)-1]
+		a.lastEmission = (lastFlow.StartTime + lastFlow.EndTime) / 2
+
+		if a.lastEmission+aggregateOverSeconds > a.buckets.CurrentBucket().EndTime() {
+			break
 		}
 	}
-	a.diachronics[*flow.Key].AddFlow(flow, start, end)
+}
 
-	// Add the Flow to our bucket ring.
-	a.buckets.AddFlow(flow)
+func (a *LogAggregator) Statistics(req *proto.StatisticsRequest) ([]*proto.StatisticsResult, error) {
+	// Sanitize the time range, resolving any relative time values.
+	req.StartTimeGte, req.StartTimeLt = a.normalizeTimeRange(req.StartTimeGte, req.StartTimeLt)
+
+	if err := a.validateTimeRange(req.StartTimeGte, req.StartTimeLt); err != nil {
+		logrus.WithField("req", req).WithError(err).Debug("Invalid time range")
+		return nil, err
+	}
+
+	results := map[StatisticsKey]*proto.StatisticsResult{}
+
+	buckets := a.buckets.BucketsForTimeRange(req.StartTimeGte, req.StartTimeLt)
+	for _, b := range buckets {
+		stats := b.Meta.QueryStatistics(req)
+		if len(stats) > 0 {
+			logrus.WithFields(b.Fields()).WithField("num", len(stats)).Debug("Bucket provided statistics")
+		}
+
+		for k, v := range stats {
+			if _, ok := results[k]; !ok {
+				// Initialize a new result object for this hit.
+				results[k] = &proto.StatisticsResult{
+					Policy:    types.PolicyHitToProto(k.ToHit()),
+					Direction: k.RuleDirection(),
+					GroupBy:   req.GroupBy,
+					Type:      req.Type,
+				}
+			}
+
+			if req.TimeSeries {
+				// Add the statistics to the result object as a new entry.
+				results[k].AllowedIn = append(results[k].AllowedIn, v.AllowedIn)
+				results[k].DeniedIn = append(results[k].DeniedIn, v.DeniedIn)
+				results[k].AllowedOut = append(results[k].AllowedOut, v.AllowedOut)
+				results[k].DeniedOut = append(results[k].DeniedOut, v.DeniedOut)
+				results[k].PassedIn = append(results[k].PassedIn, v.PassedIn)
+				results[k].PassedOut = append(results[k].PassedOut, v.PassedOut)
+
+				// X axis is the start time of the bucket that the statistics are for.
+				results[k].X = append(results[k].X, b.StartTime())
+			} else {
+				if len(results[k].AllowedIn) == 0 {
+					// Initialize the result object for this hit.
+					results[k].AllowedIn = append(results[k].AllowedIn, 0)
+					results[k].DeniedIn = append(results[k].DeniedIn, 0)
+					results[k].AllowedOut = append(results[k].AllowedOut, 0)
+					results[k].DeniedOut = append(results[k].DeniedOut, 0)
+					results[k].PassedIn = append(results[k].PassedIn, 0)
+					results[k].PassedOut = append(results[k].PassedOut, 0)
+				}
+
+				// Aggregate across the time range.
+				results[k].AllowedIn[0] += v.AllowedIn
+				results[k].DeniedIn[0] += v.DeniedIn
+				results[k].AllowedOut[0] += v.AllowedOut
+				results[k].DeniedOut[0] += v.DeniedOut
+				results[k].PassedIn[0] += v.PassedIn
+				results[k].PassedOut[0] += v.PassedOut
+			}
+		}
+	}
+
+	// Convert the map to a list, and sort it for determinism.
+	var resultsList []*proto.StatisticsResult
+	for _, v := range results {
+		resultsList = append(resultsList, v)
+	}
+	sort.Slice(resultsList, func(i, j int) bool {
+		// Sort policy hits by its key fields (via the string representation), and then by direction (which is
+		// a key field only on the Statistics API for rule grouping).
+		p1Str := resultsList[i].Policy.String()
+		p2Str := resultsList[j].Policy.String()
+		if p1Str == p2Str {
+			return resultsList[i].Direction < resultsList[j].Direction
+		}
+		s1, err := resultsList[i].Policy.ToString()
+		if err != nil {
+			logrus.WithError(err).Error("Invalid policy hit, statistics sorting may be off")
+			return false
+		}
+		s2, err := resultsList[j].Policy.ToString()
+		if err != nil {
+			logrus.WithError(err).Error("Invalid policy hit, statistics sorting may be off")
+			return false
+		}
+		return s1 < s2
+	})
+	return resultsList, nil
 }
