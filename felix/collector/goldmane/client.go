@@ -41,8 +41,9 @@ type GoldmaneReporter struct {
 	once    sync.Once
 
 	// Fields related to goldmane unix socket
-	nodeClient     *client.FlowClient
-	nodeClientLock sync.RWMutex
+	maySendToNodeSocket bool
+	nodeClient          *client.FlowClient
+	nodeClientLock      sync.RWMutex
 }
 
 func NewReporter(addr, cert, key, ca string) (*GoldmaneReporter, error) {
@@ -53,6 +54,9 @@ func NewReporter(addr, cert, key, ca string) (*GoldmaneReporter, error) {
 	return &GoldmaneReporter{
 		address: addr,
 		client:  cli,
+
+		// Do not send flowlogs to node socket, if goldmane address set via FelixConfig is equal to node socket
+		maySendToNodeSocket: addr != LocalGoldmaneServer,
 	}, nil
 }
 
@@ -62,25 +66,28 @@ func (g *GoldmaneReporter) Start() error {
 		// We don't wait for the initial connection to start so we don't block the caller.
 		g.client.Connect(context.Background())
 
-		go g.nodeSocketReporter()
+		if g.maySendToNodeSocket {
+			go g.nodeSocketReporter()
+		}
 	})
 	return err
 }
 
 func (g *GoldmaneReporter) nodeSocketReporter() {
-	nodeSocketExists := func() bool {
-		_, err := os.Stat(LocalGoldmaneServer)
-		// In case of any error, return false
-		return err == nil
-	}
 	for {
-		if nodeSocketExists() {
+		if NodeSocketExists() {
 			g.mayStartNodeSocketReporter()
 		} else {
 			g.mayStopNodeSocketReporter()
 		}
 		time.Sleep(time.Second * 10)
 	}
+}
+
+func NodeSocketExists() bool {
+	_, err := os.Stat(LocalGoldmaneServer)
+	// In case of any error, return false
+	return err == nil
 }
 
 func (g *GoldmaneReporter) nodeClientIsNil() bool {
@@ -128,12 +135,14 @@ func (g *GoldmaneReporter) Report(logSlice any) error {
 			goldmaneLog := convertFlowlogToGoldmane(l)
 			g.client.Push(goldmaneLog)
 
-			// If goldmane local unix server exists, also send it flowlogs.
-			g.nodeClientLock.RLock()
-			if g.nodeClient != nil {
-				g.nodeClient.Push(goldmaneLog)
+			if g.maySendToNodeSocket {
+				// If goldmane local unix server exists, also send it flowlogs.
+				g.nodeClientLock.RLock()
+				if g.nodeClient != nil {
+					g.nodeClient.Push(goldmaneLog)
+				}
+				g.nodeClientLock.RUnlock()
 			}
-			g.nodeClientLock.RUnlock()
 		}
 	default:
 		logrus.Panic("Unexpected kind of log dispatcher")
