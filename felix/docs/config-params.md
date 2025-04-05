@@ -872,7 +872,7 @@ This should not match workload interfaces (usually named cali...).
 | --- | --- |
 | Environment variable | `FELIX_MTUIfacePattern` |
 | Encoding (env var/config file) | Regular expression |
-| Default value (above encoding) | `^((en\|wl\|ww\|sl\|ib)[Pcopsvx].*\|(eth\|wlan\|wwan).*)` |
+| Default value (above encoding) | `^((en\|wl\|ww\|sl\|ib)[PcopsvxX].*\|(eth\|wlan\|wwan).*)` |
 | `FelixConfiguration` field | `mtuIfacePattern` (YAML) `MTUIfacePattern` (Go API) |
 | `FelixConfiguration` schema | String. |
 | Default value (YAML) | `^((en\|wl\|ww\|sl\|ib)[Pcopsvx].*\|(eth\|wlan\|wwan).*)` |
@@ -1524,10 +1524,10 @@ by Calico itself (e.g., tunnels).
 | --- | --- |
 | Environment variable | `FELIX_BPFDataIfacePattern` |
 | Encoding (env var/config file) | Regular expression |
-| Default value (above encoding) | `^((en\|wl\|ww\|sl\|ib)[Popsx].*\|(eth\|wlan\|wwan\|bond).*)` |
+| Default value (above encoding) | `^((en\|wl\|ww\|sl\|ib)[PopsxX].*\|(eth\|wlan\|wwan\|bond).*)` |
 | `FelixConfiguration` field | `bpfDataIfacePattern` (YAML) `BPFDataIfacePattern` (Go API) |
 | `FelixConfiguration` schema | String. |
-| Default value (YAML) | `^((en\|wl\|ww\|sl\|ib)[Popsx].*\|(eth\|wlan\|wwan\|bond).*)` |
+| Default value (YAML) | `^((en\|wl\|ww\|sl\|ib)[PopsxX].*\|(eth\|wlan\|wwan\|bond).*)` |
 
 ### `BPFDisableGROForIfaces` (config file) / `bpfDisableGROForIfaces` (YAML)
 
