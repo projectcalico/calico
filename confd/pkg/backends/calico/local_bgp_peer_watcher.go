@@ -53,6 +53,7 @@ func NewLocalBGPPeerWatcher(client *client, prefix string, pollIntervalSeconds i
 		OnFileCreation: w.OnFileCreation,
 		OnFileUpdate:   w.OnFileUpdate,
 		OnFileDeletion: w.OnFileDeletion,
+		OnInSync:       w.OnInSync,
 	})
 
 	return w, nil
@@ -97,6 +98,12 @@ func (w *localBGPPeerWatcher) OnFileDeletion(fileName string) {
 
 	w.deleteEpStatus(fileName)
 	w.client.recheckPeerConfig()
+}
+
+func (w *localBGPPeerWatcher) OnInSync(inSync bool) {
+	log.WithField("newValue", inSync).Debug("Received new inSync msg from upstream")
+
+	w.client.OnSyncChange(SourceLocalBGPPeerWatcher, inSync)
 }
 
 func (w *localBGPPeerWatcher) updateEpStatus(fileName string, epStatus *epstatus.WorkloadEndpointStatus) {
