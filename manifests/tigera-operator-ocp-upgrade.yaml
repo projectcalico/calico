@@ -235,23 +235,30 @@ rules:
   - apiGroups:
       - operator.tigera.io
     resources:
+      # Note: any resources used by the operator within an OwnerReference for resources
+      # it creates requires permissions to <resource>/finalizers.
+      - apiservers
       - apiservers/finalizers
+      - apiservers/status
       - gatewayapis
       - gatewayapis/finalizers
-      - installations
-      - installations/status
-      - installations/finalizers
-      - tigerastatuses
-      - tigerastatuses/status
-      - tigerastatuses/finalizers
-      - apiservers
-      - apiservers/status
-      - imagesets
-      - whiskers
+      - gatewayapis/status
       - goldmanes
+      - goldmanes/finalizers
+      - goldmanes/status
+      - imagesets
+      - installations
+      - installations/finalizers
+      - installations/status
       - managementclusterconnections
       - managementclusterconnections/finalizers
       - managementclusterconnections/status
+      - tigerastatuses
+      - tigerastatuses/status
+      - tigerastatuses/finalizers
+      - whiskers
+      - whiskers/finalizers
+      - whiskers/status
     verbs:
       - get
       - list
@@ -470,6 +477,7 @@ rules:
       - update
       - list
       - watch
+      - delete
   # For tiered network policy actions, tigera-apiserver requires that we authorize the operator for the tier.networkpolicies and tier.globalnetworkpolicies pseudo-kinds.
   - apiGroups:
       - projectcalico.org

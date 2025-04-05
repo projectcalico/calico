@@ -5,7 +5,9 @@ import {
     UseStreamOptions,
     UseStreamResult,
 } from '@/types/api';
+import { AppConfig } from '@/types/render';
 import { createEventSource } from '@/utils';
+import { useQuery } from '@tanstack/react-query';
 import React from 'react';
 
 export const API_URL = process.env.APP_API_URL;
@@ -182,6 +184,15 @@ export const useStream = <S, R>({
         isFetching,
     };
 };
+
+export const useAppConfigQuery = () =>
+    useQuery<AppConfig>({
+        queryKey: ['config'],
+        queryFn: () =>
+            fetch(process.env.APP_CONFIG_PATH).then((response) =>
+                response.json(),
+            ),
+    });
 
 export default {
     get,
