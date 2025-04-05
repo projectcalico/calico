@@ -191,7 +191,7 @@ type Config struct {
 	BPFConntrackTimeouts               map[string]string `config:"keyvaluelist;CreationGracePeriod=10s,TCPPreEstablished=20s,TCPEstablished=1h,TCPFinsSeen=Auto,TCPResetSeen=40s,UDPLastSeen=60s,GenericIPLastSeen=10m,ICMPLastSeen=5s"`
 	BPFLogFilters                      map[string]string `config:"keyvaluelist;;"`
 	BPFCTLBLogFilter                   string            `config:"oneof(all);;"`
-	BPFDataIfacePattern                *regexp.Regexp    `config:"regexp;^((en|wl|ww|sl|ib)[Popsx].*|(eth|wlan|wwan|bond).*)"`
+	BPFDataIfacePattern                *regexp.Regexp    `config:"regexp;^((en|wl|ww|sl|ib)[PopsxX].*|(eth|wlan|wwan|bond).*)"`
 	BPFL3IfacePattern                  *regexp.Regexp    `config:"regexp;"`
 	BPFConnectTimeLoadBalancingEnabled bool              `config:"bool;;"`
 	BPFConnectTimeLoadBalancing        string            `config:"oneof(TCP,Enabled,Disabled);TCP;non-zero"`
@@ -466,7 +466,7 @@ type Config struct {
 	GoMaxProcs int `config:"int(-1);-1"`
 
 	// Configures MTU auto-detection.
-	MTUIfacePattern *regexp.Regexp `config:"regexp;^((en|wl|ww|sl|ib)[Pcopsvx].*|(eth|wlan|wwan).*)"`
+	MTUIfacePattern *regexp.Regexp `config:"regexp;^((en|wl|ww|sl|ib)[PcopsvxX].*|(eth|wlan|wwan).*)"`
 
 	// Encapsulation information calculated from IP Pools and FelixConfiguration (VXLANEnabled and IpInIpEnabled)
 	Encapsulation Encapsulation
