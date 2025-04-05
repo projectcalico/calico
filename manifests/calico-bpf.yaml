@@ -3691,9 +3691,19 @@ spec:
                     The block size to use for IP address assignments from
                     this pool. Defaults to 26 for IPv4 and 122 for IPv6.
                   type: integer
+                  x-kubernetes-validations:
+                    - message:
+                        Block size cannot be changed; follow IP pool migration
+                        guide to avoid corruption.
+                      rule: self == oldSelf
                 cidr:
                   description: The pool CIDR.
                   type: string
+                  x-kubernetes-validations:
+                    - message:
+                        CIDR cannot be changed; follow IP pool migration guide
+                        to avoid corruption.
+                      rule: self == oldSelf
                 disableBGPExport:
                   description:
                     "Disable exporting routes from this IP Pool's CIDR over
