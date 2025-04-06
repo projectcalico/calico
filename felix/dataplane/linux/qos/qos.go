@@ -48,6 +48,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"strings"
 	"syscall"
 
 	"github.com/containernetworking/plugins/pkg/ip"
@@ -227,7 +228,7 @@ func CreateIfb(ifbDeviceName string, mtu int) error {
 }
 
 func TeardownIfb(deviceName string) error {
-	_, err := ip.DelLinkByNameAddr(deviceName)
+	err := ip.DelLinkByName(deviceName)
 	if err != nil {
 		if err == ip.ErrLinkNotFound {
 			return nil
@@ -266,21 +267,24 @@ func CreateEgressQdisc(tbs *TokenBucketState, hostDeviceName string, ifbDeviceNa
 
 	// check if host device has a ingress qdisc
 	hasQdisc := false
+	var qdisc *netlink.Ingress
 	qdiscList, err := netlink.QdiscList(hostDevice)
 	if err != nil {
 		return fmt.Errorf("Failed to list qdiscs on dev %s: %w", hostDeviceName, err)
 	}
 
-	for _, qdisc := range qdiscList {
-		_, isIngress := qdisc.(*netlink.Ingress)
+	for _, qd := range qdiscList {
+		ingressQd, isIngress := qd.(*netlink.Ingress)
 		if isIngress {
+			qdisc = ingressQd
 			hasQdisc = true
+			break
 		}
 	}
 
 	// only add ingress qdisc on host device if it doesn't already exist
 	if !hasQdisc {
-		qdisc := &netlink.Ingress{
+		qdisc = &netlink.Ingress{
 			QdiscAttrs: netlink.QdiscAttrs{
 				LinkIndex: hostDevice.Attrs().Index,
 				Handle:    netlink.MakeHandle(0xffff, 0), // ffff:
@@ -290,7 +294,41 @@ func CreateEgressQdisc(tbs *TokenBucketState, hostDeviceName string, ifbDeviceNa
 
 		err = netlink.QdiscAdd(qdisc)
 		if err != nil {
-			return fmt.Errorf("create ingress qdisc %+v on dev %s: %s", qdisc, hostDeviceName, err)
+			return fmt.Errorf("create ingress qdisc %+v on dev %s: %w", qdisc, hostDeviceName, err)
+		}
+	}
+
+	// List filters on hostDevice to clean up filters and bandwidth plugin ifb devices (those have a "bwp" prefix), if present.
+	filters, err := netlink.FilterList(hostDevice, netlink.HANDLE_INGRESS)
+	if err != nil {
+		return fmt.Errorf("list filters on dev %s: %w", hostDeviceName, err)
+	}
+	log.Debugf("Cleaning up existing filters on dev %s: %+v", hostDeviceName, filters)
+	for _, filter := range filters {
+		u32Filter, ok := filter.(*netlink.U32)
+		if ok {
+			for _, action := range u32Filter.Actions {
+				mirredAction, ok := action.(*netlink.MirredAction)
+				if ok {
+					log.Debugf("Found U32 filter %+v with MirredAction: %+v", u32Filter, mirredAction)
+					filterLink, err := netlink.LinkByIndex(mirredAction.Ifindex)
+					if err != nil {
+						return fmt.Errorf("get link for ifindex %d on dev %s: %w", mirredAction.Ifindex, hostDeviceName, err)
+					}
+					if strings.HasPrefix(filterLink.Attrs().Name, "bwp") {
+						log.Debugf("Cleaning up bandwidth plugin link (bwpXXXX) name %s: %+v", filterLink.Attrs().Name, filterLink)
+						err := netlink.LinkDel(filterLink)
+						if err != nil {
+							return fmt.Errorf("remove 'bwp' ifb link %s: %w", filterLink.Attrs().Name, err)
+						}
+						break
+					}
+				}
+			}
+		}
+		err := netlink.FilterDel(filter)
+		if err != nil {
+			return fmt.Errorf("delete filter %+v on dev %s: %w", filter, hostDeviceName, err)
 		}
 	}
 
@@ -298,7 +336,7 @@ func CreateEgressQdisc(tbs *TokenBucketState, hostDeviceName string, ifbDeviceNa
 	filter := &netlink.U32{
 		FilterAttrs: netlink.FilterAttrs{
 			LinkIndex: hostDevice.Attrs().Index,
-			Parent:    netlink.MakeHandle(0xffff, 0), // ffff:, same as qdisc.Attrs().Handle
+			Parent:    qdisc.Attrs().Handle,
 			Priority:  1,
 			Protocol:  syscall.ETH_P_ALL,
 		},
@@ -307,7 +345,7 @@ func CreateEgressQdisc(tbs *TokenBucketState, hostDeviceName string, ifbDeviceNa
 			netlink.NewMirredAction(ifbDevice.Attrs().Index),
 		},
 	}
-	err = netlink.FilterReplace(filter)
+	err = netlink.FilterAdd(filter)
 	if err != nil {
 		return fmt.Errorf("add egress filter %+v: %s", filter, err)
 	}
