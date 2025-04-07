@@ -1,0 +1,49 @@
+package timeutil
+
+import "time"
+
+func NewStdTime() Interface {
+	return &stdTimeInf{}
+}
+
+type stdTimeInf struct{}
+
+func (std *stdTimeInf) Now() Time {
+	return time.Now()
+}
+
+func (std *stdTimeInf) Since(t Time) time.Duration {
+	return time.Since(t)
+}
+
+func (std *stdTimeInf) Until(t Time) time.Duration {
+	return time.Until(t)
+}
+
+func (std *stdTimeInf) After(t Duration) <-chan Time {
+	return time.After(t)
+}
+
+func (std *stdTimeInf) NewTimer(d Duration) Timer {
+	return &stdTimer{Timer: time.NewTimer(d)}
+}
+
+func (std *stdTimeInf) NewTicker(d Duration) Ticker {
+	return &stdTicker{Ticker: time.NewTicker(d)}
+}
+
+type stdTicker struct {
+	*time.Ticker
+}
+
+func (ticker *stdTicker) Chan() <-chan Time {
+	return ticker.C
+}
+
+type stdTimer struct {
+	*time.Timer
+}
+
+func (s stdTimer) Chan() <-chan Time {
+	return s.C
+}

@@ -19,9 +19,17 @@ import (
 
 	. "github.com/onsi/gomega"
 	"github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/calico/lib/std/timeutil"
+	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 )
 
 func setupTest(t *testing.T) {
 	logrus.SetLevel(logrus.DebugLevel)
+	logutils.RedirectLogrusToTestingT(t)
+	logutils.ConfigureFormatter("test")
 	RegisterTestingT(t)
+
+	// Ensure this is set back to the std time interface in case it's been changed.
+	timeutil.SetTimeInterface(timeutil.NewStdTime())
 }
