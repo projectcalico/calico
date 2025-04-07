@@ -80,6 +80,7 @@ static CALI_BPF_INLINE enum cali_rt_flags cali_rt_lookup_flags(ipv46_addr_t *add
 #define cali_rt_is_workload(rt)	((rt)->flags & CALI_RT_WORKLOAD)
 #define cali_rt_is_tunneled(rt)	((rt)->flags & CALI_RT_TUNNELED)
 #define cali_rt_is_vxlan(rt)	((rt)->flags & CALI_RT_VXLAN)
+#define cali_rt_is_same_subnet(rt) ((rt)->flags & CALI_RT_SAME_SUBNET)
 #define cali_rt_is_blackhole_drop(rt) ((rt)->flags & CALI_RT_BLACKHOLE_DROP)
 #define cali_rt_is_blackhole_reject(rt) ((rt)->flags & CALI_RT_BLACKHOLE_REJECT)
 
