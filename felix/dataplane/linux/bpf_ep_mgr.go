@@ -774,8 +774,14 @@ func (m *bpfEndpointManager) updateHostIP(ipAddr string, ipFamily int) {
 	}
 	if ip != nil {
 		if ipFamily == 4 {
+			if m.v4.hostIP.Equal(ip) {
+				return
+			}
 			m.v4.hostIP = ip
 		} else {
+			if m.v6.hostIP.Equal(ip) {
+				return
+			}
 			m.v6.hostIP = ip
 		}
 		// Should be safe without the lock since there shouldn't be any active background threads
