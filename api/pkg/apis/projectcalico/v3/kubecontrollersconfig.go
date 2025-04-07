@@ -126,6 +126,7 @@ const (
 
 type Template struct {
 	// GenerateName is appended to the end of the generated AutoHostEndpoint name
+	// +kubebuilder:validation:MaxLength=253
 	GenerateName string `json:"generateName,omitempty" validate:"omitempty,name"`
 
 	// InterfaceCIDRs contains a list of CIRDs used for matching nodeIPs to the AutoHostEndpoint
