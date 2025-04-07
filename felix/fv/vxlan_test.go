@@ -842,12 +842,15 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 				// Wait for the VXLAN device to be created.
 				mtuStr := "mtu 1450"
 				mtuStrV6 := "mtu 1430"
+				if BPFMode() {
+					mtuStr = "mtu 1500"
+				}
 				for _, felix := range felixes {
 					Eventually(func() string {
 						out, _ := felix.ExecOutput("ip", "-d", "link", "show", "vxlan.calico")
 						return out
 					}, "60s", "500ms").Should(ContainSubstring(mtuStr))
-					if enableIPv6 {
+					if !BPFMode() && enableIPv6 {
 						Eventually(func() string {
 							out, _ := felix.ExecOutput("ip", "-d", "link", "show", "vxlan-v6.calico")
 							return out
@@ -871,7 +874,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 					}, "60s", "500ms").ShouldNot(ContainSubstring(mtuStr))
 					// IPv6 ignores the VXLAN enabled flag and must be disabled at the pool level. As such the ipv6
 					// interfaces should still exist at this point
-					if enableIPv6 {
+					if !BPFMode() && enableIPv6 {
 						Eventually(func() string {
 							out, _ := felix.ExecOutput("ip", "-d", "link", "show", "vxlan-v6.calico")
 							return out
@@ -879,7 +882,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 					}
 				}
 
-				if enableIPv6 {
+				if !BPFMode() && enableIPv6 {
 					ip6pool, err := client.IPPools().Get(context.Background(), infrastructure.DefaultIPv6PoolName, options.GetOptions{})
 					Expect(err).NotTo(HaveOccurred())
 					ip6pool.Spec.VXLANMode = "Never"
@@ -1073,6 +1076,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 						if enableIPv6 {
 							felix.Exec("ip", "-6", "route")
 						}
+						felix.Exec("calico-bpf", "routes", "dump")
 					}
 				}
 
