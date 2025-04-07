@@ -164,10 +164,10 @@ func (w *FileWatcher) runWatcher() {
 			log.WithError(err).Info("Error initializing fsnotify. Falling back to polling.")
 		}
 
+		w.scanDirectory()
 		if w.fsWatcher != nil {
 			// Get current state of the directory and emit initial events.
 			w.fsnotifyActive = true
-			w.scanDirectory()
 			// Run fsnotify watcher loop if possible.
 			err := w.runFsnotifyWatcher(w.fsWatcher)
 			w.fsnotifyActive = false
