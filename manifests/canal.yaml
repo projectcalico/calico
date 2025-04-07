@@ -3916,6 +3916,7 @@ spec:
                                     description:
                                       GenerateName is appended to the end
                                       of the generated AutoHostEndpoint name
+                                    maxLength: 253
                                     type: string
                                   interfaceCIDRs:
                                     description:
@@ -4090,6 +4091,7 @@ spec:
                                         description:
                                           GenerateName is appended to the
                                           end of the generated AutoHostEndpoint name
+                                        maxLength: 253
                                         type: string
                                       interfaceCIDRs:
                                         description:
