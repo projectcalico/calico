@@ -92,6 +92,7 @@ var (
 	_ = describeBPFTests(withTunnel("wireguard"), withProto("tcp"), withConnTimeLoadBalancingEnabled())
 	_ = describeBPFTests(withTunnel("vxlan"), withProto("tcp"), withConntrackCleanupMode("BPFProgram"))
 	_ = describeBPFTests(withTunnel("vxlan"), withProto("tcp"), withConnTimeLoadBalancingEnabled())
+	_ = describeBPFTests(withTunnel("vxlan"), withProto("tcp"), withConnTimeLoadBalancingEnabled(), withIPFamily(6))
 )
 
 // Run a stripe of tests with BPF logging disabled since the compiler tends to optimise the code differently
