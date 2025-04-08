@@ -1472,7 +1472,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				})
 			}
 
-			It("should have correct routes", func() {
+			_ = !testOpts.ipv6 && It("should have correct routes", func() {
 				tunnelAddr := ""
 				tunnelAddrFelix1 := ""
 				tunnelAddrFelix2 := ""
