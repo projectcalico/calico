@@ -155,15 +155,8 @@ sed -i -e '$ d' tigera-operator-ocp-upgrade.yaml
 ##########################################################################
 echo "Generating manifest from charts/values/$FILE"
 ${HELM} -n kube-system template \
-	../charts/calico \
-	--set calicoctl.registry=$REGISTRY \
-	--set typha.registry=$REGISTRY \
-	--set cni.registry=$REGISTRY \
-	--set kubeControllers.registry=$REGISTRY \
-	--set flannelMigration.registry=$REGISTRY \
-	--set dikastes.registry=$REGISTRY \
-	--set csi-driver.registry=$REGISTRY \
-	-f ../node/tests/k8st/infra/values.yaml > ../node/tests/k8st/infra/calico-kdd.yaml
+  ../charts/calico \
+  -f ../node/tests/k8st/infra/values.yaml > ../node/tests/k8st/infra/calico-kdd.yaml
 
 ##########################################################################
 # Replace image versions for "static" Calico manifests.
