@@ -20,11 +20,11 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/projectcalico/api/pkg/client/clientset_generated/clientset/scheme"
-	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/client-go/rest/fake"
 
+	"github.com/projectcalico/calico/lib/std/log"
 	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 )
@@ -56,7 +56,7 @@ var _ = Describe("ipamBlockClient tests with fake REST client", func() {
 
 		// But we should be able to check the request...
 		url := fakeREST.Req.URL
-		logrus.Debug("URL: ", url)
+		log.Debug("URL: ", url)
 		Expect(url.Path).To(Equal("/apis/ipamblocks"))
 		Expect(url.Query()).NotTo(HaveKey("metadata.name"))
 	})
@@ -70,7 +70,7 @@ var _ = Describe("ipamBlockClient tests with fake REST client", func() {
 
 		// But we should be able to check the request...
 		url := fakeREST.Req.URL
-		logrus.Debug("URL: ", url)
+		log.Debug("URL: ", url)
 		Expect(url.Path).To(Equal("/apis/ipamblocks"))
 		Expect(url.Query()).NotTo(HaveKey("metadata.name"))
 	})

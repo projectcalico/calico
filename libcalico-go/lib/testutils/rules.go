@@ -17,7 +17,8 @@ package testutils
 import (
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
-	"github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 var InRule1, InRule2, EgressRule1, EgressRule2 apiv3.Rule
@@ -25,7 +26,7 @@ var InRule1, InRule2, EgressRule1, EgressRule2 apiv3.Rule
 func init() {
 	portRange, err := numorstring.PortFromRange(10, 20)
 	if err != nil {
-		logrus.WithError(err).Panic("Failed to create port range")
+		log.WithError(err).Panic("Failed to create port range")
 	}
 	singlePort := numorstring.SinglePort(1024)
 	namedPort := numorstring.NamedPort("named-port")

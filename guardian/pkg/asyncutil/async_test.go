@@ -7,9 +7,9 @@ import (
 	"testing"
 
 	. "github.com/onsi/gomega"
-	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/guardian/pkg/asyncutil"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 func TestRequestHandlerContextCancelledInHungRequest(t *testing.T) {
@@ -38,7 +38,7 @@ func TestRequestHandlerContextCancelledInHungRequest(t *testing.T) {
 }
 
 func TestRequestHandlerStopAndRequeue(t *testing.T) {
-	logrus.SetLevel(logrus.DebugLevel)
+	log.SetLevel(log.DebugLevel)
 	setupTest(t)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -68,7 +68,7 @@ func TestRequestHandlerStopAndRequeue(t *testing.T) {
 
 		}
 
-		logrus.Debug("Request handled")
+		log.Debug("Request handled")
 		return struct{}{}, nil
 	})
 
@@ -89,7 +89,7 @@ func TestRequestHandlerStopAndRequeue(t *testing.T) {
 	Expect(err).Should(BeNil())
 
 	cancel()
-	logrus.Debug("Waiting for shutdown...")
+	log.Debug("Waiting for shutdown...")
 	<-cmdExec.ShutdownSignaler().Receive()
-	logrus.Debug("Finished waiting for shutdown.")
+	log.Debug("Finished waiting for shutdown.")
 }

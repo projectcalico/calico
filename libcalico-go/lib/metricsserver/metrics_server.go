@@ -20,7 +20,8 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 func ServePrometheusMetricsForever(host string, port int) {
@@ -29,12 +30,12 @@ func ServePrometheusMetricsForever(host string, port int) {
 	addr := fmt.Sprintf("[%v]:%v", host, port)
 
 	for {
-		logrus.WithFields(logrus.Fields{
+		log.WithFields(log.Fields{
 			"host": host,
 			"port": port,
 		}).Info("Starting prometheus metrics endpoint")
 		err := http.ListenAndServe(addr, mux)
-		logrus.WithError(err).Error(
+		log.WithError(err).Error(
 			"Prometheus metrics endpoint failed, trying to restart it...")
 		time.Sleep(1 * time.Second)
 	}

@@ -17,16 +17,20 @@ package main
 import (
 	"context"
 
-	"github.com/sirupsen/logrus"
-
+	"github.com/projectcalico/calico/lib/log/pkg/logrus"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/whisker-backend/cmd/app"
 	"github.com/projectcalico/calico/whisker-backend/pkg/config"
 )
 
+func init() {
+	log.SetStandardLogger(logrus.New())
+}
+
 func main() {
 	cfg, err := config.NewConfig()
 	if err != nil {
-		logrus.WithError(err).Fatal("Failed to parse configuration.")
+		log.WithError(err).Fatal("Failed to parse configuration.")
 	}
 
 	app.Run(context.Background(), cfg)
