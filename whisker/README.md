@@ -30,6 +30,10 @@ Run `yarn format` or `yarn format:fix` to fix formatting issues
 
 Run `yarn lint` or `yarn lint:fix` to fix linting issues
 
+## Pre commit
+
+Run `yarn verify` to run all of the previous commands and avoid CI failures
+
 # VS Code settings
 
 ```settings.json
