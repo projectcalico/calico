@@ -1149,6 +1149,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 					vxlanMgrOps = append(vxlanMgrOps, vxlanMgrWithDualStack())
 				}
 				fdbOpts = append(fdbOpts, vxlanfdb.WithARPUpdatesOnly())
+				go cleanUpVXLANDevice(dataplanedefs.VXLANIfaceNameV6)
 			}
 			vxlanFDBV6 := vxlanfdb.New(netlink.FAMILY_V6, vxlanName, featureDetector, config.NetlinkTimeout, fdbOpts...)
 			dp.vxlanFDBs = append(dp.vxlanFDBs, vxlanFDBV6)
