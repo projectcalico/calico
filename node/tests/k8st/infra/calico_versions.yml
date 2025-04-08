@@ -1,4 +1,5 @@
-# Components defined here are required to be kept in sync with hack/gen-versions/calico.go.tpl
+# Components defined here are required to be kept in sync with hack/gen-versions/calico.go.tpl in the tigera/operator repository.
+# Ideally we can remove this file and the need to re-build the operator altogether if we change how images are loaded into the test cluster.
 title: latest
 components:
   libcalico-go:
