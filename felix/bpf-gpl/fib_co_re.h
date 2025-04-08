@@ -173,8 +173,11 @@ skip_redir_ifindex:
 			}
 		}
 	} else if (CALI_F_VXLAN && CALI_F_TO_HEP) {
-		if (!(ctx->skb->mark & CALI_SKB_MARK_SEEN)) {
-			/* packet to vxlan from the host, needs to set tunnel key */
+		if (!(ctx->skb->mark & CALI_SKB_MARK_SEEN) || (ctx->fwd.mark & CALI_SKB_MARK_FROM_NAT_IFACE_OUT)) {
+			/* packet to vxlan from the host, needs to set tunnel key. Either
+			 * it wasn't seen or it was routed via the bpfnat device because
+			 * its destination was a service and CTLB is disabled
+			 */
 			struct cali_rt *dest_rt = cali_rt_lookup(&ctx->state->ip_dst);
 			if (dest_rt == NULL) {
 				CALI_DEBUG("No route for " IP_FMT " at vxlan device", &ctx->state->ip_dst);
