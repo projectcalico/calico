@@ -508,10 +508,12 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							felix.Exec("iptables-save", "-c")
 						}
 						felix.Exec("ip", "link")
+						felix.Exec("ip", "-d", "link", "show", "vxlan.calico")
 						felix.Exec("ip", "addr")
 						felix.Exec("ip", "rule")
 						felix.Exec("ip", "route")
 						felix.Exec("ip", "neigh")
+						felix.Exec("bridge", "fdb", "show", "dev", "vxlan.calico")
 						felix.Exec("arp")
 						felix.Exec("calico-bpf", "ipsets", "dump")
 						felix.Exec("calico-bpf", "routes", "dump")
@@ -5604,9 +5606,6 @@ func ensureBPFProgramsAttachedOffset(offset int, felix *infrastructure.Felix, if
 	}
 	if felix.ExpectedVXLANTunnelAddr != "" {
 		expectedIfaces = append(expectedIfaces, "vxlan.calico")
-	}
-	if felix.ExpectedVXLANV6TunnelAddr != "" {
-		expectedIfaces = append(expectedIfaces, "vxlan-v6.calico")
 	}
 	if felix.ExpectedWireguardTunnelAddr != "" {
 		expectedIfaces = append(expectedIfaces, "wireguard.cali")
