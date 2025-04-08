@@ -3,6 +3,6 @@
         "cluster_id": "",
         "cluster_type": "",
         "calico_version": "",
-        "notifications": ""
+        "notifications": "Enabled"
     }
 }
