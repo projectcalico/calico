@@ -21,16 +21,23 @@ export const useLocalStorage = <T>(key: string, initialValue: T) => {
             return initialValue;
         }
     });
+
     const setValue = (value: T | ((val: T) => T)) => {
         try {
             const valueToStore =
                 value instanceof Function ? value(storedValue) : value;
 
-            window.localStorage.setItem(key, JSON.stringify(valueToStore));
+            if (valueToStore === undefined) {
+                window.localStorage.removeItem(key);
+            } else {
+                window.localStorage.setItem(key, JSON.stringify(valueToStore));
+            }
+
             setStoredValue(valueToStore);
         } catch (error) {
             console.error(error);
         }
     };
+
     return [storedValue, setValue] as const;
 };
