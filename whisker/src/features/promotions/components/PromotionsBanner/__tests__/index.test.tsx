@@ -1,11 +1,11 @@
 import { fireEvent, render, screen } from '@/test-utils/helper';
 import PromotionsBanner from '..';
-import { useNotificationsEnabled } from '@/features/promotions/hooks';
+import { useNotifications } from '@/features/promotions/hooks';
 import { usePromotionsContent } from '@/features/promotions/api';
 import { hasNewContent } from '@/features/promotions/utils';
 
 jest.mock('@/features/promotions/hooks', () => ({
-    useNotificationsEnabled: jest.fn(),
+    useNotifications: jest.fn(),
 }));
 
 jest.mock('@/features/promotions/api', () => ({
@@ -18,7 +18,10 @@ describe('<PromotionsBanner />', () => {
     const config = { bannerLink: 'banner-link', bannerText: 'banner-text' };
 
     beforeEach(() => {
-        jest.mocked(useNotificationsEnabled).mockReturnValue(true);
+        jest.mocked(useNotifications).mockReturnValue({
+            notificationsDisabled: false,
+            notificationsEnabled: true,
+        });
         jest.mocked(usePromotionsContent).mockReturnValue(config);
         jest.mocked(hasNewContent).mockReturnValue(false);
     });
@@ -29,7 +32,10 @@ describe('<PromotionsBanner />', () => {
     });
 
     it('should not show the banner if notifications are disabled', () => {
-        jest.mocked(useNotificationsEnabled).mockReturnValue(false);
+        jest.mocked(useNotifications).mockReturnValue({
+            notificationsDisabled: true,
+            notificationsEnabled: false,
+        });
 
         render(<PromotionsBanner />);
 

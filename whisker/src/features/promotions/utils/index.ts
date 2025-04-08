@@ -1,8 +1,8 @@
 import { BannerContent } from '@/types/api';
 
 export const hasNewContent = (
-    content: BannerContent | null,
-    cached: BannerContent | null,
+    content: BannerContent | undefined,
+    cached: BannerContent | undefined,
 ) =>
     !!content &&
     !!cached &&

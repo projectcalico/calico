@@ -1,5 +1,5 @@
 import { useAppConfig } from '@/context/AppConfig';
-import { useNotificationsEnabled } from '..';
+import { useNotifications } from '..';
 import { renderHook } from '@/test-utils/helper';
 import { AppConfig } from '@/types/render';
 
@@ -9,9 +9,12 @@ describe('useNotificationsEnabled', () => {
     it('should return false when app config is undefined', () => {
         jest.mocked(useAppConfig).mockReturnValue(undefined);
 
-        const { result } = renderHook(() => useNotificationsEnabled());
+        const { result } = renderHook(() => useNotifications());
 
-        expect(result.current).toEqual(false);
+        expect(result.current).toEqual({
+            notificationsEnabled: false,
+            notificationsDisabled: false,
+        });
     });
 
     it('should return false when app notifications = Disabled', () => {
@@ -21,9 +24,12 @@ describe('useNotificationsEnabled', () => {
             },
         } as AppConfig);
 
-        const { result } = renderHook(() => useNotificationsEnabled());
+        const { result } = renderHook(() => useNotifications());
 
-        expect(result.current).toEqual(false);
+        expect(result.current).toEqual({
+            notificationsEnabled: false,
+            notificationsDisabled: true,
+        });
     });
 
     it('should return true when app notifications = Enabled', () => {
@@ -33,8 +39,11 @@ describe('useNotificationsEnabled', () => {
             },
         } as AppConfig);
 
-        const { result } = renderHook(() => useNotificationsEnabled());
+        const { result } = renderHook(() => useNotifications());
 
-        expect(result.current).toEqual(true);
+        expect(result.current).toEqual({
+            notificationsEnabled: true,
+            notificationsDisabled: false,
+        });
     });
 });

@@ -1,23 +1,21 @@
 import { useLocalStorage } from '@/libs/tigera/ui-components/hooks';
+import { BannerContent } from '@/types/api';
 import React from 'react';
 import { usePromotionsContent } from '../../api';
-import Banner from '../Banner';
-import { BannerContent } from '@/types/api';
+import { useNotifications } from '../../hooks';
 import { hasNewContent } from '../../utils';
-import { useNotificationsEnabled } from '../../hooks';
+import Banner from '../Banner';
 
 const PromotionsBannerContainer: React.FC = () => {
     const [showBanner, setShowBanner] = useLocalStorage(
         'whisker.showPromotionsBanner',
         true,
     );
-    const [storedContent, setStoredContent] =
-        useLocalStorage<BannerContent | null>(
-            'whisker.promotionsBannerContent',
-            null,
-        );
+    const [storedContent, setStoredContent] = useLocalStorage<
+        BannerContent | undefined
+    >('whisker.promotionsBannerContent', undefined);
     const [isOpen, setIsOpen] = React.useState(showBanner);
-    const notificationsEnabled = useNotificationsEnabled();
+    const { notificationsEnabled, notificationsDisabled } = useNotifications();
     const content = usePromotionsContent(notificationsEnabled) ?? storedContent;
 
     React.useEffect(() => {
@@ -30,7 +28,14 @@ const PromotionsBannerContainer: React.FC = () => {
         }
     }, [content]);
 
-    return isOpen && showBanner && content && notificationsEnabled ? (
+    React.useEffect(() => {
+        if (notificationsDisabled) {
+            setIsOpen(false);
+            setStoredContent(undefined);
+        }
+    }, [notificationsDisabled]);
+
+    return isOpen && showBanner && content ? (
         <Banner
             link={content.bannerLink}
             description={content.bannerText}
