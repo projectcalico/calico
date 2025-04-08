@@ -1165,7 +1165,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 				vxlanMgrOps...,
 			)
 			dp.vxlanParentCV6 = make(chan string, 1)
-			vxlanMTU := config.VXLANMTU
+			vxlanMTU := config.VXLANMTUV6
 			if config.BPFEnabled {
 				vxlanMTU = 0
 			}
