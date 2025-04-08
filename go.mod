@@ -1,6 +1,8 @@
 module github.com/projectcalico/calico
 
-go 1.22
+go 1.23.0
+
+toolchain go1.23.4
 
 require (
 	github.com/BurntSushi/toml v1.3.2
@@ -74,8 +76,8 @@ require (
 	go.etcd.io/etcd/client/pkg/v3 v3.5.12
 	go.etcd.io/etcd/client/v2 v2.305.12
 	go.etcd.io/etcd/client/v3 v3.5.12
-	golang.org/x/crypto v0.33.0
-	golang.org/x/net v0.35.0
+	golang.org/x/crypto v0.35.0
+	golang.org/x/net v0.36.0
 	golang.org/x/sync v0.11.0
 	golang.org/x/sys v0.30.0
 	golang.org/x/text v0.22.0
@@ -96,7 +98,7 @@ require (
 	k8s.io/klog/v2 v2.120.1
 	k8s.io/kube-aggregator v0.28.15
 	k8s.io/kube-openapi v0.0.0-20230717233707-2695361300d9
-	k8s.io/kubernetes v1.28.15
+	k8s.io/kubernetes v1.29.14
 	k8s.io/utils v0.0.0-20240310230437-4693a0247e57
 	modernc.org/memory v1.7.2
 	sigs.k8s.io/controller-runtime v0.15.3
