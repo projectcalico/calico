@@ -21,6 +21,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/coreos/go-semver/semver"
@@ -901,6 +902,11 @@ func (r *CalicoManager) generateManifests() error {
 	env := os.Environ()
 	env = append(env, fmt.Sprintf("CALICO_VERSION=%s", r.calicoVersion))
 	env = append(env, fmt.Sprintf("OPERATOR_VERSION=%s", r.operatorVersion))
+	env = append(env, fmt.Sprintf("OPERATOR_REGISTRY=%s", r.operatorRegistry))
+	env = append(env, fmt.Sprintf("OPERATOR_IMAGE=%s", r.operatorImage))
+	if !slices.Equal(r.imageRegistries, defaultRegistries) {
+		env = append(env, fmt.Sprintf("REGISTRY=%s", r.imageRegistries[0]))
+	}
 	if err := r.makeInDirectoryIgnoreOutput(r.repoRoot, "gen-manifests", env...); err != nil {
 		logrus.WithError(err).Error("Failed to make manifests")
 		return err
