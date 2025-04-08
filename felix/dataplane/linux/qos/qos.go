@@ -266,7 +266,6 @@ func CreateEgressQdisc(tbs *TokenBucketState, hostDeviceName string, ifbDeviceNa
 	}
 
 	// check if host device has a ingress qdisc
-	hasQdisc := false
 	var qdisc *netlink.Ingress
 	qdiscList, err := netlink.QdiscList(hostDevice)
 	if err != nil {
@@ -277,13 +276,12 @@ func CreateEgressQdisc(tbs *TokenBucketState, hostDeviceName string, ifbDeviceNa
 		ingressQd, isIngress := qd.(*netlink.Ingress)
 		if isIngress {
 			qdisc = ingressQd
-			hasQdisc = true
 			break
 		}
 	}
 
 	// only add ingress qdisc on host device if it doesn't already exist
-	if !hasQdisc {
+	if qdisc == nil {
 		qdisc = &netlink.Ingress{
 			QdiscAttrs: netlink.QdiscAttrs{
 				LinkIndex: hostDevice.Attrs().Index,
@@ -306,24 +304,34 @@ func CreateEgressQdisc(tbs *TokenBucketState, hostDeviceName string, ifbDeviceNa
 	log.Debugf("Cleaning up existing filters on dev %s: %+v", hostDeviceName, filters)
 	for _, filter := range filters {
 		u32Filter, ok := filter.(*netlink.U32)
-		if ok {
-			for _, action := range u32Filter.Actions {
-				mirredAction, ok := action.(*netlink.MirredAction)
-				if ok {
-					log.Debugf("Found U32 filter %+v with MirredAction: %+v", u32Filter, mirredAction)
-					filterLink, err := netlink.LinkByIndex(mirredAction.Ifindex)
-					if err != nil {
-						return fmt.Errorf("get link for ifindex %d on dev %s: %w", mirredAction.Ifindex, hostDeviceName, err)
-					}
-					if strings.HasPrefix(filterLink.Attrs().Name, "bwp") {
-						log.Debugf("Cleaning up bandwidth plugin link (bwpXXXX) name %s: %+v", filterLink.Attrs().Name, filterLink)
-						err := netlink.LinkDel(filterLink)
-						if err != nil {
-							return fmt.Errorf("remove 'bwp' ifb link %s: %w", filterLink.Attrs().Name, err)
-						}
+		if !ok {
+			continue
+		}
+		for _, action := range u32Filter.Actions {
+			mirredAction, ok := action.(*netlink.MirredAction)
+			if !ok {
+				continue
+			}
+			log.Debugf("Found U32 filter %+v with MirredAction: %+v", u32Filter, mirredAction)
+			filterLink, err := netlink.LinkByIndex(mirredAction.Ifindex)
+			if err != nil {
+				if _, ok := err.(netlink.LinkNotFoundError); ok {
+					break
+				}
+				log.Debugf("Failed to get link for ifindex %d on dev %s, error: %v", mirredAction.Ifindex, hostDeviceName, err)
+				continue
+			}
+			if strings.HasPrefix(filterLink.Attrs().Name, "bwp") {
+				log.Debugf("Cleaning up bandwidth plugin link (bwpXXXX) name %s: %+v", filterLink.Attrs().Name, filterLink)
+				err := netlink.LinkDel(filterLink)
+				if err != nil {
+					if _, ok := err.(netlink.LinkNotFoundError); ok {
 						break
 					}
+					log.Debugf("Failed to remove 'bwp' ifb link %s, error: %v", filterLink.Attrs().Name, err)
+					continue
 				}
+				break
 			}
 		}
 		err := netlink.FilterDel(filter)
