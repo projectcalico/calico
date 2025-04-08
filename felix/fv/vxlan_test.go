@@ -114,6 +114,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 						if enableIPv6 {
 							felix.Exec("ip", "-6", "route")
 						}
+						felix.Exec("ip", "-d", "link")
 					}
 
 					infra.DumpErrorData()
