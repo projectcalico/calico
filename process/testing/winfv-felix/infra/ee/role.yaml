@@ -1,5 +1,5 @@
 # Overwrite OS Calico RBAC role to EE Calico RBAC role for calico-node.
-# Ref: https://github.com/tigera/node-private/blob/master/tests/k8st/infra/calico-kdd.yaml 
+# Ref: https://github.com/tigera/node-private/blob/master/tests/k8st/infra/calico-kdd.yaml
 kind: ClusterRole
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
@@ -8,11 +8,11 @@ rules:
   # The tests require that node has access to secrets for BGP peering.
   - apiGroups: [""]
     resources:
-    - secrets
+      - secrets
     verbs:
-    - get
-    - list
-    - watch
+      - get
+      - list
+      - watch
   # The CNI plugin needs to get pods, nodes, and namespaces.
   - apiGroups: [""]
     resources:
@@ -27,7 +27,7 @@ rules:
     resources:
       - endpointslices
     verbs:
-      - watch 
+      - watch
       - list
   - apiGroups: [""]
     resources:
