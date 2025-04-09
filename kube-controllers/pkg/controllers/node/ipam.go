@@ -825,7 +825,7 @@ func (c *IPAMController) checkAllocations() ([]string, error) {
 		// Clear the full sync flag.
 		c.fullSyncRequired = false
 	} else {
-		log.Info("Checking dirty nodes for leaks and redundant affinities")
+		log.Debug("Checking dirty nodes for leaks and redundant affinities")
 
 		// Collect allocation state for all nodes that have changed since the last sync.
 		c.allocationState.iterDirty(func(node string, allocations map[string]*allocation) {

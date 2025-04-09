@@ -48,6 +48,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"strings"
 	"syscall"
 
 	"github.com/containernetworking/plugins/pkg/ip"
@@ -227,7 +228,7 @@ func CreateIfb(ifbDeviceName string, mtu int) error {
 }
 
 func TeardownIfb(deviceName string) error {
-	_, err := ip.DelLinkByNameAddr(deviceName)
+	err := ip.DelLinkByName(deviceName)
 	if err != nil {
 		if err == ip.ErrLinkNotFound {
 			return nil
@@ -238,51 +239,52 @@ func TeardownIfb(deviceName string) error {
 	return nil
 }
 
-func CreateIngressQdisc(tbs *TokenBucketState, hostDeviceName string) error {
-	hostDevice, err := netlink.LinkByName(hostDeviceName)
+func CreateIngressQdisc(tbs *TokenBucketState, workloadDeviceName string) error {
+	workloadDevice, err := netlink.LinkByName(workloadDeviceName)
 	if err != nil {
 		return fmt.Errorf("get host device: %s", err)
 	}
-	return createTBF(tbs, hostDevice.Attrs().Index)
+	return createTBF(tbs, workloadDevice.Attrs().Index)
 }
 
-func UpdateIngressQdisc(tbs *TokenBucketState, hostDeviceName string) error {
-	hostDevice, err := netlink.LinkByName(hostDeviceName)
+func UpdateIngressQdisc(tbs *TokenBucketState, workloadDeviceName string) error {
+	workloadDevice, err := netlink.LinkByName(workloadDeviceName)
 	if err != nil {
 		return fmt.Errorf("get host device: %s", err)
 	}
-	return updateTBF(tbs, hostDevice.Attrs().Index)
+	return updateTBF(tbs, workloadDevice.Attrs().Index)
 }
 
-func CreateEgressQdisc(tbs *TokenBucketState, hostDeviceName string, ifbDeviceName string) error {
+func CreateEgressQdisc(tbs *TokenBucketState, workloadDeviceName string, ifbDeviceName string) error {
 	ifbDevice, err := netlink.LinkByName(ifbDeviceName)
 	if err != nil {
 		return fmt.Errorf("get ifb device %s: %w", ifbDeviceName, err)
 	}
-	hostDevice, err := netlink.LinkByName(hostDeviceName)
+	workloadDevice, err := netlink.LinkByName(workloadDeviceName)
 	if err != nil {
-		return fmt.Errorf("get host device %s: %w", hostDeviceName, err)
+		return fmt.Errorf("get host device %s: %w", workloadDeviceName, err)
 	}
 
 	// check if host device has a ingress qdisc
-	hasQdisc := false
-	qdiscList, err := netlink.QdiscList(hostDevice)
+	var qdisc *netlink.Ingress
+	qdiscList, err := netlink.QdiscList(workloadDevice)
 	if err != nil {
-		return fmt.Errorf("Failed to list qdiscs on dev %s: %w", hostDeviceName, err)
+		return fmt.Errorf("Failed to list qdiscs on dev %s: %w", workloadDeviceName, err)
 	}
 
-	for _, qdisc := range qdiscList {
-		_, isIngress := qdisc.(*netlink.Ingress)
+	for _, qd := range qdiscList {
+		ingressQd, isIngress := qd.(*netlink.Ingress)
 		if isIngress {
-			hasQdisc = true
+			qdisc = ingressQd
+			break
 		}
 	}
 
 	// only add ingress qdisc on host device if it doesn't already exist
-	if !hasQdisc {
-		qdisc := &netlink.Ingress{
+	if qdisc == nil {
+		qdisc = &netlink.Ingress{
 			QdiscAttrs: netlink.QdiscAttrs{
-				LinkIndex: hostDevice.Attrs().Index,
+				LinkIndex: workloadDevice.Attrs().Index,
 				Handle:    netlink.MakeHandle(0xffff, 0), // ffff:
 				Parent:    netlink.HANDLE_INGRESS,
 			},
@@ -290,15 +292,59 @@ func CreateEgressQdisc(tbs *TokenBucketState, hostDeviceName string, ifbDeviceNa
 
 		err = netlink.QdiscAdd(qdisc)
 		if err != nil {
-			return fmt.Errorf("create ingress qdisc %+v on dev %s: %s", qdisc, hostDeviceName, err)
+			return fmt.Errorf("create ingress qdisc %+v on dev %s: %w", qdisc, workloadDeviceName, err)
+		}
+	}
+
+	// List filters on workloadDevice to clean up filters and bandwidth plugin ifb devices (those have a "bwp" prefix), if present.
+	filters, err := netlink.FilterList(workloadDevice, netlink.HANDLE_INGRESS)
+	if err != nil {
+		return fmt.Errorf("list filters on dev %s: %w", workloadDeviceName, err)
+	}
+	log.Debugf("Cleaning up existing filters on dev %s: %+v", workloadDeviceName, filters)
+	for _, filter := range filters {
+		u32Filter, ok := filter.(*netlink.U32)
+		if !ok {
+			continue
+		}
+		for _, action := range u32Filter.Actions {
+			mirredAction, ok := action.(*netlink.MirredAction)
+			if !ok {
+				continue
+			}
+			log.Debugf("Found U32 filter %+v with MirredAction: %+v", u32Filter, mirredAction)
+			filterLink, err := netlink.LinkByIndex(mirredAction.Ifindex)
+			if err != nil {
+				if _, ok := err.(netlink.LinkNotFoundError); ok {
+					break
+				}
+				log.Debugf("Failed to get link for ifindex %d on dev %s, error: %v", mirredAction.Ifindex, workloadDeviceName, err)
+				continue
+			}
+			if strings.HasPrefix(filterLink.Attrs().Name, "bwp") {
+				log.Debugf("Cleaning up bandwidth plugin link (bwpXXXX) name %s: %+v", filterLink.Attrs().Name, filterLink)
+				err := netlink.LinkDel(filterLink)
+				if err != nil {
+					if _, ok := err.(netlink.LinkNotFoundError); ok {
+						break
+					}
+					log.Debugf("Failed to remove 'bwp' ifb link %s, error: %v", filterLink.Attrs().Name, err)
+					continue
+				}
+				break
+			}
+		}
+		err := netlink.FilterDel(filter)
+		if err != nil {
+			return fmt.Errorf("delete filter %+v on dev %s: %w", filter, workloadDeviceName, err)
 		}
 	}
 
 	// add filter on host device to mirror traffic to ifb device
 	filter := &netlink.U32{
 		FilterAttrs: netlink.FilterAttrs{
-			LinkIndex: hostDevice.Attrs().Index,
-			Parent:    netlink.MakeHandle(0xffff, 0), // ffff:, same as qdisc.Attrs().Handle
+			LinkIndex: workloadDevice.Attrs().Index,
+			Parent:    qdisc.Attrs().Handle,
 			Priority:  1,
 			Protocol:  syscall.ETH_P_ALL,
 		},
@@ -307,7 +353,7 @@ func CreateEgressQdisc(tbs *TokenBucketState, hostDeviceName string, ifbDeviceNa
 			netlink.NewMirredAction(ifbDevice.Attrs().Index),
 		},
 	}
-	err = netlink.FilterReplace(filter)
+	err = netlink.FilterAdd(filter)
 	if err != nil {
 		return fmt.Errorf("add egress filter %+v: %s", filter, err)
 	}

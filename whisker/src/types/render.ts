@@ -13,6 +13,6 @@ export type AppConfig = {
         cluster_id: string;
         cluster_type: string;
         calico_version: string;
-        notifications: string;
+        notifications: 'Enabled' | 'Disabled';
     };
 };
