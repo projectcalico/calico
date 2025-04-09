@@ -15,6 +15,7 @@
 package bucketing
 
 import (
+	"errors"
 	"fmt"
 	"sort"
 	"time"
@@ -25,6 +26,8 @@ import (
 	"github.com/projectcalico/calico/goldmane/proto"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
+
+var StopBucketIteration = errors.New("stop bucket iteration")
 
 // StreamReceiver represents an object that can receive streams of flows.
 type StreamReceiver interface {
@@ -378,13 +381,14 @@ func (r *BucketRing) maybeBuildFlowCollection(startIndex, endIndex int) *FlowCol
 
 	// Go through each bucket in the window and build the set of flows to emit.
 	keys := set.New[*types.DiachronicFlow]()
-	r.IterBuckets(startIndex, endIndex, func(i int) {
+	r.IterBuckets(startIndex, endIndex, func(i int) error {
 		logrus.WithFields(r.buckets[i].Fields()).Debug("Gathering flows from bucket")
 		keys.AddAll(r.buckets[i].Flows.Slice())
 
 		// Add a pointer to the bucket to the FlowCollection. This allows us to mark the bucket as pushed
 		// once emitted.
 		flows.buckets = append(flows.buckets, &r.buckets[i])
+		return nil
 	})
 
 	// Use the DiachronicFlow data to build the aggregated flows.
@@ -418,7 +422,7 @@ func (r *BucketRing) maybeBuildFlowCollection(startIndex, endIndex int) *FlowCol
 func (r *BucketRing) Statistics(req *proto.StatisticsRequest) ([]*proto.StatisticsResult, error) {
 	results := map[StatisticsKey]*proto.StatisticsResult{}
 
-	err := r.IterBucketsTime(req.StartTimeGte, req.StartTimeLt, func(b *AggregationBucket) {
+	err := r.IterBucketsTime(req.StartTimeGte, req.StartTimeLt, func(b *AggregationBucket) error {
 		stats := b.QueryStatistics(req)
 		if len(stats) > 0 {
 			logrus.WithFields(b.Fields()).WithField("num", len(stats)).Debug("Bucket provided statistics")
@@ -466,6 +470,7 @@ func (r *BucketRing) Statistics(req *proto.StatisticsRequest) ([]*proto.Statisti
 				results[k].PassedOut[0] += v.PassedOut
 			}
 		}
+		return nil
 	})
 	if err != nil {
 		return nil, err
@@ -531,10 +536,14 @@ func (r *BucketRing) streamingBucket() *AggregationBucket {
 
 // IterBuckets iterates over the buckets in the ring, from the starting index until the ending index.
 // i.e., i := start; i < end; i++ (but handles wraparound)
-func (r *BucketRing) IterBuckets(start, end int, f func(i int)) {
+func (r *BucketRing) IterBuckets(start, end int, f func(i int) error) {
 	idx := start
 	for idx != end {
-		f(idx)
+		if err := f(idx); err != nil {
+			if errors.Is(err, StopBucketIteration) {
+				return
+			}
+		}
 		idx = r.nextBucketIndex(idx)
 	}
 }
@@ -543,7 +552,7 @@ func (r *BucketRing) IterBuckets(start, end int, f func(i int)) {
 // If either time is not found, an error is returned.
 // If the start time is zero, it will start from the beginning of the ring.
 // If the end time is zero, it will iterate until the current time.
-func (r *BucketRing) IterBucketsTime(start, end int64, f func(b *AggregationBucket)) error {
+func (r *BucketRing) IterBucketsTime(start, end int64, f func(b *AggregationBucket) error) error {
 	// Find the buckets that contains the given times, if given.
 	startIdx := r.indexAdd(r.headIndex, 1)
 	if start != 0 {
@@ -556,8 +565,8 @@ func (r *BucketRing) IterBucketsTime(start, end int64, f func(b *AggregationBuck
 	if endIdx == -1 || startIdx == -1 {
 		return fmt.Errorf("failed to find bucket for time range %d:%d", start, end)
 	}
-	r.IterBuckets(startIdx, endIdx, func(i int) {
-		f(&r.buckets[i])
+	r.IterBuckets(startIdx, endIdx, func(i int) error {
+		return f(&r.buckets[i])
 	})
 	return nil
 }
