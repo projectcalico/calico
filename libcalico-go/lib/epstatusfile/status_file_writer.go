@@ -181,13 +181,22 @@ func WorkloadEndpointToWorkloadEndpointStatus(ep *proto.WorkloadEndpoint) *Workl
 		peerName = ep.LocalBgpPeer.BgpPeerName
 	}
 	epStatus := &WorkloadEndpointStatus{
-		IfaceName:   ep.Name,
-		Mac:         ep.Mac,
-		Ipv4Nets:    ep.Ipv4Nets,
-		Ipv6Nets:    ep.Ipv6Nets,
+		IfaceName: ep.Name,
+		Mac:       ep.Mac,
+		// Make sure that zero length slice is nilled out so that it compares
+		// equal after round-tripping through JSON.
+		Ipv4Nets:    normaliseZeroLenSlice(ep.Ipv4Nets),
+		Ipv6Nets:    normaliseZeroLenSlice(ep.Ipv6Nets),
 		BGPPeerName: peerName,
 	}
 	return epStatus
+}
+
+func normaliseZeroLenSlice[T any](nets []T) []T {
+	if len(nets) == 0 {
+		return nil
+	}
+	return nets
 }
 
 func GetWorkloadEndpointStatusFromFile(filePath string) (*WorkloadEndpointStatus, error) {
