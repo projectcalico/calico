@@ -27,6 +27,8 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
+var StopBucketIteration = errors.New("stop bucket iteration")
+
 // StreamReceiver represents an object that can receive streams of flows.
 type StreamReceiver interface {
 	Receive(FlowBuilder)
@@ -538,7 +540,7 @@ func (r *BucketRing) IterBuckets(start, end int, f func(i int) error) {
 	idx := start
 	for idx != end {
 		if err := f(idx); err != nil {
-			if errors.Is(err, set.StopIteration) {
+			if errors.Is(err, StopBucketIteration) {
 				return
 			}
 		}
