@@ -32,7 +32,7 @@ func TestRequestHandlerContextCancelledInHungRequest(t *testing.T) {
 
 	cancel()
 
-	cmdExec.ShutdownSignaler().Receive()
+	<-cmdExec.WaitForShutdown()
 	_, err := (<-resultChan).Result()
 	Expect(err).Should(Equal(context.Canceled))
 }
@@ -90,6 +90,6 @@ func TestRequestHandlerStopAndRequeue(t *testing.T) {
 
 	cancel()
 	logrus.Debug("Waiting for shutdown...")
-	<-cmdExec.ShutdownSignaler().Receive()
+	<-cmdExec.WaitForShutdown()
 	logrus.Debug("Finished waiting for shutdown.")
 }

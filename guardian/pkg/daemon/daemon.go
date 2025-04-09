@@ -16,10 +16,7 @@ package daemon
 
 import (
 	"context"
-	"os"
-	"os/signal"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -27,13 +24,21 @@ import (
 	"github.com/projectcalico/calico/guardian/pkg/config"
 	"github.com/projectcalico/calico/guardian/pkg/server"
 	"github.com/projectcalico/calico/guardian/pkg/tunnel"
+	"github.com/projectcalico/calico/libcalico-go/lib/health"
 )
 
 // Run starts the daemon, which configures and starts the services needed for guardian to run.
-func Run(cfg config.Config, proxyTargets []server.Target) {
+func Run(ctx context.Context, cfg config.Config, proxyTargets []server.Target) {
+	// Make an initial report that says we're live but not yet ready.
+	healthAggregator := health.NewHealthAggregator()
+	healthAggregator.ServeHTTP(cfg.HealthEnabled, "localhost", cfg.HealthPort)
+	healthAggregator.RegisterReporter("startup", &health.HealthReport{Live: true, Ready: true}, 0)
+	healthAggregator.Report("startup", &health.HealthReport{Live: true, Ready: false})
+
 	tunnelDialOpts := []tunnel.DialerOption{
 		tunnel.WithDialerRetryInterval(cfg.TunnelDialRetryInterval),
 		tunnel.WithDialerTimeout(cfg.TunnelDialTimeout),
+		tunnel.WithDialerRetryAttempts(cfg.TunnelDialRetryAttempts),
 		tunnel.WithDialerKeepAliveSettings(cfg.KeepAliveEnable, time.Duration(cfg.KeepAliveInterval)*time.Millisecond),
 	}
 
@@ -56,8 +61,6 @@ func Run(cfg config.Config, proxyTargets []server.Target) {
 	}
 
 	logrus.Infof("Using server name %s", tlsConfig.ServerName)
-
-	ctx := GetShutdownContext()
 
 	dialer, err := tunnel.NewTLSSessionDialer(cfg.VoltronURL, tlsConfig, tunnelDialOpts...)
 	if err != nil {
@@ -87,7 +90,7 @@ func Run(cfg config.Config, proxyTargets []server.Target) {
 		defer wg.Done()
 		// Allow requests to come down from the management cluster.
 		if err := srv.ListenAndServeManagementCluster(); err != nil {
-			logrus.WithError(err).Fatal("Serving the tunnel exited.")
+			logrus.WithError(err).Info("Serving the tunnel exited.")
 		}
 	}()
 
@@ -98,7 +101,7 @@ func Run(cfg config.Config, proxyTargets []server.Target) {
 			defer wg.Done()
 
 			if err := srv.ListenAndServeCluster(); err != nil {
-				logrus.WithError(err).Fatal("proxy tunnel exited with an error")
+				logrus.WithError(err).Info("proxy tunnel exited with an error")
 			}
 		}()
 	}
@@ -106,19 +109,4 @@ func Run(cfg config.Config, proxyTargets []server.Target) {
 	if err := srv.WaitForShutdown(); err != nil {
 		logrus.WithError(err).Fatal("proxy tunnel exited with an error")
 	}
-}
-
-// GetShutdownContext creates a context that's done when either syscall.SIGINT or syscall.SIGTERM notified.
-func GetShutdownContext() context.Context {
-	signalChan := make(chan os.Signal, 1)
-	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	go func() {
-		<-signalChan
-		logrus.Debug("Shutdown signal received, shutting down.")
-		cancel()
-	}()
-
-	return ctx
 }
