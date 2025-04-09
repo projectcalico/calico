@@ -23,5 +23,6 @@ filesystem/included-source
 config/
 kubeconfig.yaml
 ./tests/k8st/infra/calico.yaml.tmp
+tests/k8st/infra/operator/
 apiserver.crt
 apiserver.key

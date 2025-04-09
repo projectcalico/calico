@@ -1306,7 +1306,9 @@ $(REPO_ROOT)/.$(KIND_NAME).created: $(KUBECTL) $(KIND)
 	touch $@
 
 kind-cluster-destroy: $(KIND) $(KUBECTL)
-	-$(KUBECTL) --kubeconfig=$(KIND_KUBECONFIG) drain kind-control-plane kind-worker kind-worker2 kind-worker3 --ignore-daemonsets --force
+	# We need to drain the cluster gracefully when shutting down to avoid a netdev unregister error from the kernel.
+	# This requires we execute CNI del on pods with pod networking.
+	-$(KUBECTL) --kubeconfig=$(KIND_KUBECONFIG) drain kind-control-plane kind-worker kind-worker2 kind-worker3 --ignore-daemonsets --force --timeout=10m
 	-$(KIND) delete cluster --name $(KIND_NAME)
 	rm -f $(KIND_KUBECONFIG)
 	rm -f $(REPO_ROOT)/.$(KIND_NAME).created

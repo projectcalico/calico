@@ -114,7 +114,7 @@ class _TestBGPAdvert(TestBase):
 
         # Enable debug logging
         self.update_ds_env("calico-node",
-                           "kube-system",
+                           "calico-system",
                            {"BGP_LOGSEVERITYSCREEN": "debug"})
 
         # Establish BGPPeer from cluster nodes to node-extra
@@ -131,7 +131,7 @@ apiVersion: v1
 kind: Secret
 metadata:
   name: bgp-secrets
-  namespace: kube-system
+  namespace: calico-system
 type: Opaque
 stringData:
   rr-password: very-secret
