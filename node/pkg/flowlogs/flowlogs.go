@@ -1,18 +1,23 @@
 package flowlogs
 
 import (
+	"context"
 	"fmt"
 	"os"
+	"os/signal"
 	"path"
+	"syscall"
 	"time"
 
 	"github.com/projectcalico/calico/felix/collector/goldmane"
 	"github.com/projectcalico/calico/goldmane/pkg/types"
+	"github.com/projectcalico/calico/goldmane/proto"
 	"github.com/sirupsen/logrus"
 )
 
 func StartServerAndWatch() {
-	defer cleanupGoldmaneSocket()
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
 
 	err := ensureGoldmaneSocketDirectory(goldmane.LocalGoldmaneServer)
 	if err != nil {
@@ -27,18 +32,42 @@ func StartServerAndWatch() {
 	}
 
 	for {
+		if ctx.Err() != nil {
+			logrus.Info("Closing goldmane unix server")
+			cleanupGoldmaneSocket()
+			return
+		}
 		flows := nodeServer.ListAndFlush()
-		printFlows(flows)
-
+		for _, flow := range flows {
+			fmt.Printf("%s\n", flowToString(flow))
+		}
 		time.Sleep(time.Second)
 	}
 }
 
-func printFlows(flows []*types.Flow) {
-	for _, f := range flows {
-		fmt.Printf("Src={ns: %s ep:%s pkt:%v bytes:%v} Dst={ns:%s ep:%s pkt:%v bytes:%v}\n",
-			f.Key.SourceNamespace(), f.Key.SourceName(), f.PacketsIn, f.BytesIn,
-			f.Key.DestNamespace(), f.Key.DestNamespace(), f.PacketsOut, f.BytesOut)
+func flowToString(f *types.Flow) string {
+	output := fmt.Sprintf("Src={%s(%s/%s) %vP %vB} Dst={%s(%s/%s) %vP %vB} Proto=%s(%v) Action=%v",
+		endpointTypeToString(f.Key.SourceType()), f.Key.SourceNamespace(), f.Key.SourceName(), f.PacketsIn, f.BytesIn,
+		endpointTypeToString(f.Key.DestType()), f.Key.DestNamespace(), f.Key.DestName(), f.PacketsOut, f.BytesOut,
+		f.Key.Proto(), f.Key.DestPort(),
+		f.Key.Action(),
+	)
+
+	return output
+}
+
+func endpointTypeToString(ep proto.EndpointType) string {
+	switch ep {
+	case proto.EndpointType_WorkloadEndpoint:
+		return "wep"
+	case proto.EndpointType_HostEndpoint:
+		return "hep"
+	case proto.EndpointType_NetworkSet:
+		return "ns"
+	case proto.EndpointType_Network:
+		return "net"
+	default:
+		panic(fmt.Sprintf("Unexpected endpoint type: %v", ep))
 	}
 }
 
