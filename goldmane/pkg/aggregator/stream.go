@@ -20,10 +20,12 @@ type Stream struct {
 	cancel context.CancelFunc
 }
 
+// Close signals to the stream manager that this stream is done and should be closed.
 func (s *Stream) Close() {
 	s.done <- s.id
 }
 
+// Flows returns a channel that contains the output stream of FlowResults.
 func (s *Stream) Flows() <-chan *proto.FlowResult {
 	return s.out
 }
@@ -36,7 +38,7 @@ func (s *Stream) Receive(f *proto.FlowResult) error {
 	go func() {
 		if err := chanutil.WriteWithDeadline(s.ctx, s.in, f, 30*time.Second); err != nil {
 			if errors.Is(err, chanutil.ErrDeadlineExceeded) {
-				logrus.WithError(err).Error("timeout writing to stream channel")
+				logrus.WithField("id", s.id).WithError(err).Error("timeout writing to stream input channel")
 			}
 		}
 	}()

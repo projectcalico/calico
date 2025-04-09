@@ -76,10 +76,10 @@ var (
 		Help: "Duration of the rollover process.",
 	})
 
-	backfillLatency = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+	backfillLatency = prometheus.NewHistogram(prometheus.HistogramOpts{
 		Name: "goldmane_aggr_backfill_latency_ms",
 		Help: "Histogram measuring the time taken to backfill a stream.",
-	}, []string{"interval"})
+	})
 
 	numUniqueFlows = prometheus.NewGauge(prometheus.GaugeOpts{
 		Name: "goldmane_aggr_num_unique_flows",
@@ -99,6 +99,7 @@ func init() {
 	prometheus.MustRegister(flowChannelSize)
 	prometheus.MustRegister(rolloverLatency)
 	prometheus.MustRegister(rolloverDuration)
+	prometheus.MustRegister(backfillLatency)
 	prometheus.MustRegister(numUniqueFlows)
 	prometheus.MustRegister(numDroppedFlows)
 }
@@ -444,8 +445,7 @@ func (a *LogAggregator) backfill(stream *Stream) {
 	// Measure the time it takes to backfill the stream.
 	start := time.Now()
 	defer func() {
-		elapsed := fmt.Sprintf("%d", start.Sub(time.Unix(request.StartTimeGte, 0)))
-		backfillLatency.WithLabelValues(elapsed).Observe(float64(time.Since(start).Milliseconds()))
+		backfillLatency.Observe(float64(time.Since(start).Milliseconds()))
 	}()
 
 	// Go through the bucket ring, generating stream events for each flow that matches the request.
