@@ -30,6 +30,7 @@ import (
 	"github.com/projectcalico/calico/node/cmd/calico-node/bpf"
 	"github.com/projectcalico/calico/node/pkg/allocateip"
 	"github.com/projectcalico/calico/node/pkg/cni"
+	"github.com/projectcalico/calico/node/pkg/flowlogs"
 	"github.com/projectcalico/calico/node/pkg/health"
 	"github.com/projectcalico/calico/node/pkg/hostpathinit"
 	"github.com/projectcalico/calico/node/pkg/lifecycle/shutdown"
@@ -70,6 +71,9 @@ var thresholdTime = flagSet.Duration("threshold-time", 30*time.Second, "Threshol
 // Options for node status.
 var runStatusReporter = flagSet.Bool("status-reporter", false, "Run node status reporter")
 var showStatus = flagSet.Bool("show-status", false, "Print out node status")
+
+// Options for node flowlogs.
+var watchFlowlogs = flagSet.Bool("watch-flowlogs", false, "Watch for node flowlogs")
 
 // confd flags
 var runConfd = flagSet.Bool("confd", false, "Run confd")
@@ -171,6 +175,9 @@ func main() {
 		status.Run()
 	} else if *showStatus {
 		status.Show()
+		os.Exit(0)
+	} else if *watchFlowlogs {
+		flowlogs.StartServerAndWatch()
 		os.Exit(0)
 	} else {
 		fmt.Println("No valid options provided. Usage:")
