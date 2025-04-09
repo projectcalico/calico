@@ -146,7 +146,7 @@ func BuildConfigFromFlags(masterUrl, kubeconfigPath string) (*rest.Config, error
 		return GetInClusterConfig()
 	}
 	if kubeconfigPath == "" && masterUrl == "" {
-		log.Warning("Neither --kubeconfig nor --master was specified.  Using the inClusterConfig.  This might not work.")
+		log.Info("Neither --kubeconfig nor --master was specified.  Using the inClusterConfig.")
 		kubeconfig, err := GetInClusterConfig()
 		if err == nil {
 			return kubeconfig, nil
