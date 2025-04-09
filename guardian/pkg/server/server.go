@@ -53,20 +53,21 @@ type server struct {
 	listenPort string
 	listenHost string
 
-	shutdownCtx        context.Context
-	preemptiveShutdown chan struct{}
+	shutdownCtx context.Context
+	// function to run if there is an internal issue that warrants a shutdown.
+	shutdownFunc func()
 }
 
 func New(shutdownCtx context.Context, tunnelCert *tls.Certificate, dialer tunnel.SessionDialer, opts ...Option) (Server, error) {
-	var err error
+	shutdownCtx, cancel := context.WithCancel(shutdownCtx)
 	srv := &server{
-		http:               new(http.Server),
-		shutdownCtx:        shutdownCtx,
-		connRetryAttempts:  5,
-		connRetryInterval:  2 * time.Second,
-		listenPort:         "8080",
-		tunnelCert:         tunnelCert,
-		preemptiveShutdown: make(chan struct{}),
+		http:              new(http.Server),
+		connRetryAttempts: 5,
+		connRetryInterval: 2 * time.Second,
+		listenPort:        "8080",
+		tunnelCert:        tunnelCert,
+		shutdownCtx:       shutdownCtx,
+		shutdownFunc:      cancel,
 	}
 
 	for _, o := range opts {
@@ -97,7 +98,7 @@ func New(shutdownCtx context.Context, tunnelCert *tls.Certificate, dialer tunnel
 }
 
 func (srv *server) ListenAndServeManagementCluster() error {
-	defer close(srv.preemptiveShutdown)
+	defer srv.shutdownFunc()
 	if err := srv.tunnel.Connect(srv.shutdownCtx); err != nil {
 		return fmt.Errorf("failed to connect to tunnel: %w", err)
 	}
@@ -122,7 +123,7 @@ func (srv *server) ListenAndServeManagementCluster() error {
 }
 
 func (srv *server) ListenAndServeCluster() error {
-	defer close(srv.preemptiveShutdown)
+	defer srv.shutdownFunc()
 	logrus.Infof("Listening on %s:%s for connections to proxy to voltron", srv.listenHost, srv.listenPort)
 	if err := srv.tunnel.Connect(srv.shutdownCtx); err != nil {
 		return fmt.Errorf("failed to connect to tunnel: %w", err)
@@ -159,10 +160,7 @@ func (srv *server) ListenAndServeCluster() error {
 }
 
 func (srv *server) WaitForShutdown() error {
-	// TODO might just want to wrap the context we have.
 	select {
-	case <-srv.preemptiveShutdown:
-		logrus.Info("Received preemptive shutdown signal, shutting server down.")
 	case <-srv.shutdownCtx.Done():
 		logrus.Info("Received shutdown signal, shutting server down.")
 	}
