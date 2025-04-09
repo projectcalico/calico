@@ -96,7 +96,7 @@ else
 endif
 
 $(BIN)/calico-ipam: $(BIN)/calico
-	cp "$<" "$@"
+	ln -sf "./calico" "$@"
 
 ## Build the Calico network and ipam plugins for Windows
 $(WINDOWS_BIN)/install.exe: $(SRC_FILES)
