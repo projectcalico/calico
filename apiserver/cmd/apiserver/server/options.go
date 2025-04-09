@@ -159,9 +159,6 @@ func (o *CalicoServerOptions) Config() (*apiserver.Config, error) {
 	if err := o.RecommendedOptions.Audit.ApplyTo(&serverConfig.Config); err != nil {
 		return nil, err
 	}
-	if err := o.RecommendedOptions.Features.ApplyTo(&serverConfig.Config); err != nil {
-		return nil, err
-	}
 
 	if err := o.RecommendedOptions.CoreAPI.ApplyTo(serverConfig); err != nil {
 		return nil, err
@@ -171,8 +168,13 @@ func (o *CalicoServerOptions) Config() (*apiserver.Config, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	dynamicClient, err := dynamic.NewForConfig(serverConfig.ClientConfig)
 	if err != nil {
+		return nil, err
+	}
+
+	if err := o.RecommendedOptions.Features.ApplyTo(&serverConfig.Config, kubeClient, serverConfig.SharedInformerFactory); err != nil {
 		return nil, err
 	}
 
