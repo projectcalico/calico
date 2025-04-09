@@ -51,7 +51,7 @@ ${HELM} -n tigera-operator template \
 	--set tigeraOperator.image=$OPERATOR_IMAGE \
 	--set tigeraOperator.registry=$OPERATOR_REGISTRY \
 	--set calicoctl.tag=$CALICO_VERSION \
-	--set calicoctl.registry=$REGISTRY \
+	--set calicoctl.image=$REGISTRY/ctl \
 	../charts/tigera-operator >> tigera-operator.yaml
 
 ##########################################################################
@@ -132,7 +132,7 @@ ${HELM} template \
 	--set tigeraOperator.image=$OPERATOR_IMAGE \
 	--set tigeraOperator.version=$OPERATOR_VERSION \
 	--set tigeraOperator.registry=$OPERATOR_REGISTRY \
-	--set calicoctl.registry=$REGISTRY \
+	--set calicoctl.image=$REGISTRY/ctl \
 	--set calicoctl.tag=$CALICO_VERSION
 # The first two lines are a newline and a yaml separator - remove them.
 find ocp/tigera-operator -name "*.yaml" | xargs sed -i -e 1,2d
