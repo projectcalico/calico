@@ -123,7 +123,7 @@ func (w *EndpointStatusFileWriter) EnsureStatusDir(prefix string) ([]fs.DirEntry
 	entries, err := w.Filesys.ReadDir(path)
 	if err != nil && errors.Is(err, fs.ErrNotExist) {
 		// Discard ErrNotExist and return the result of attempting to create it.
-		return presentFiles, epStatuses, w.Filesys.Mkdir(path, fs.FileMode(0655))
+		return presentFiles, epStatuses, w.Filesys.Mkdir(path, fs.FileMode(0755))
 	}
 
 	// Iterate over each file entry.
