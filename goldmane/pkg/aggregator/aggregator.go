@@ -483,7 +483,7 @@ func (a *LogAggregator) backfill(stream *Stream) {
 
 		if stopBucketIteration {
 			// If the stream was closed while we were backfilling, we can stop iterating buckets.
-			return set.StopIteration
+			return bucketing.StopBucketIteration
 		}
 		return nil
 	})
