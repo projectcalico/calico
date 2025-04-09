@@ -7,6 +7,7 @@ import (
 
 	"github.com/projectcalico/calico/goldmane/proto"
 	"github.com/projectcalico/calico/lib/std/chanutil"
+	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 	"github.com/sirupsen/logrus"
 )
 
@@ -18,6 +19,9 @@ type Stream struct {
 	req    *streamRequest
 	ctx    context.Context
 	cancel context.CancelFunc
+
+	// rl is used to rate limit log messages that may happen frequently.
+	rl *logutils.RateLimitedLogger
 }
 
 // Close signals to the stream manager that this stream is done and should be closed.
@@ -37,8 +41,8 @@ func (s *Stream) Receive(f *proto.FlowResult) error {
 	// when backfilling flows for a newly connected Stream.
 	go func() {
 		if err := chanutil.WriteWithDeadline(s.ctx, s.in, f, 30*time.Second); err != nil {
-			if errors.Is(err, chanutil.ErrDeadlineExceeded) {
-				logrus.WithField("id", s.id).WithError(err).Error("timeout writing to stream input channel")
+			if !errors.Is(err, context.Canceled) {
+				s.rl.WithField("id", s.id).WithError(err).Error("error writing to stream input channel")
 			}
 		}
 	}()
@@ -66,6 +70,8 @@ func (s *Stream) send(f *proto.FlowResult) {
 
 	// Send the flow to the output channel. If the channel is full, wait for a bit before giving up.
 	if err := chanutil.WriteWithDeadline(s.ctx, s.out, f, 30*time.Second); err != nil {
-		logrus.WithError(err).Error("error writing flow to stream output")
+		if !errors.Is(err, context.Canceled) {
+			s.rl.WithField("id", s.id).WithError(err).Error("error writing flow to stream output")
+		}
 	}
 }

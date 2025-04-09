@@ -11,6 +11,7 @@ import (
 	"github.com/projectcalico/calico/goldmane/pkg/types"
 	"github.com/projectcalico/calico/goldmane/proto"
 	"github.com/projectcalico/calico/lib/std/chanutil"
+	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 )
 
 func NewStreamManager() *streamManager {
@@ -22,6 +23,10 @@ func NewStreamManager() *streamManager {
 		streamRequests:   make(chan *streamRequest, 10),
 		backfillRequests: make(chan *Stream, 10),
 		maxStreams:       maxStreams,
+		rl: logutils.NewRateLimitedLogger(
+			logutils.OptBurst(5),
+			logutils.OptInterval(30*time.Second),
+		),
 	}
 }
 
@@ -45,6 +50,9 @@ type streamManager struct {
 
 	// flowCh queues incoming flows to be processed by worker threads and emitted to streams.
 	flowCh chan bucketing.FlowBuilder
+
+	// rl is used to rate limit log messages that may happen frequently.
+	rl *logutils.RateLimitedLogger
 }
 
 func (m *streamManager) Run(ctx context.Context, numWorkers int) {
@@ -81,7 +89,7 @@ func (m *streamManager) Receive(b bucketing.FlowBuilder) {
 	// main thread.
 	go func() {
 		if err := chanutil.WriteWithDeadline(context.TODO(), m.flowCh, b, 30*time.Second); err != nil {
-			logrus.WithError(err).Error("stream manager failed to handle flow")
+			m.rl.WithError(err).Error("stream manager failed to handle flow")
 		}
 	}()
 }
@@ -134,6 +142,10 @@ func (m *streamManager) register(req *streamRequest) *Stream {
 		req:    req,
 		ctx:    ctx,
 		cancel: cancel,
+		rl: logutils.NewRateLimitedLogger(
+			logutils.OptBurst(3),
+			logutils.OptInterval(15*time.Second),
+		),
 	}
 	m.streams[stream.id] = stream
 
