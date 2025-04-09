@@ -76,7 +76,7 @@ func (w *localBGPPeerWatcher) OnFileCreation(fileName string) {
 		return
 	}
 	w.updateEpStatus(fileName, epStatus)
-	w.client.recheckPeerConfig()
+	w.client.recheckPeerConfig("file created")
 }
 
 func (w *localBGPPeerWatcher) OnFileUpdate(fileName string) {
@@ -89,14 +89,14 @@ func (w *localBGPPeerWatcher) OnFileUpdate(fileName string) {
 		return
 	}
 	w.updateEpStatus(fileName, epStatus)
-	w.client.recheckPeerConfig()
+	w.client.recheckPeerConfig("file updated")
 }
 
 func (w *localBGPPeerWatcher) OnFileDeletion(fileName string) {
 	log.WithField("file", fileName).Debug("Workload endpoint status file deleted")
 
 	w.deleteEpStatus(fileName)
-	w.client.recheckPeerConfig()
+	w.client.recheckPeerConfig("file deleted")
 }
 
 func (w *localBGPPeerWatcher) updateEpStatus(fileName string, epStatus *epstatus.WorkloadEndpointStatus) {

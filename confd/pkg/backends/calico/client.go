@@ -1632,8 +1632,8 @@ func (c *client) onNewUpdates() {
 	}
 }
 
-func (c *client) recheckPeerConfig() {
-	log.Info("Trigger to recheck BGP peers following possible password or local BGP peer update")
+func (c *client) recheckPeerConfig(reason string) {
+	log.WithField("trigger", reason).Info("Trigger to recheck BGP peers following possible password or local BGP peer update")
 	select {
 	// Non-blocking write into the recheckC channel.  The idea here is that we don't need to add
 	// a second trigger if there is already one pending.
