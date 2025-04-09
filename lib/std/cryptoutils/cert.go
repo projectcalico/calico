@@ -19,6 +19,7 @@ import (
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"math/big"
 	"time"
@@ -49,8 +50,7 @@ func GenerateSelfSignedCert(opts ...CertificateOptions) ([]byte, []byte, error) 
 
 	// Create certificate template
 	template := x509.Certificate{
-		SerialNumber: big.NewInt(1),
-
+		SerialNumber:          big.NewInt(1),
 		NotBefore:             time.Now(),
 		NotAfter:              time.Now().Add(24 * time.Hour), // Certificate valid for 24 hours
 		KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
@@ -78,4 +78,35 @@ func GenerateSelfSignedCert(opts ...CertificateOptions) ([]byte, []byte, error) 
 	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: keyDER})
 
 	return certPEM, keyPEM, nil
+}
+
+// ExtractServerNameFromCertBytes decodes the cert bytes as a certificate and pulls out
+func ExtractServerNameFromCertBytes(certBytes []byte) (string, error) {
+	certDERBlock, _ := pem.Decode(certBytes)
+	if certDERBlock == nil || certDERBlock.Type != "CERTIFICATE" {
+		return "", errors.New("cannot decode pem block for server certificate")
+	}
+
+	cert, err := x509.ParseCertificate(certDERBlock.Bytes)
+	if err != nil {
+		return "", fmt.Errorf("cannot decode pem block for server certificate: %w", err)
+	}
+	if len(cert.DNSNames) != 1 {
+		return "", fmt.Errorf("expected a single DNS name registered on the certificate: %w", err)
+	}
+	return cert.DNSNames[0], nil
+}
+
+func ParseCertificateBytes(certBytes []byte) (*x509.Certificate, error) {
+	certDERBlock, _ := pem.Decode(certBytes)
+	if certDERBlock == nil || certDERBlock.Type != "CERTIFICATE" {
+		return nil, errors.New("cannot decode pem block for server certificate")
+	}
+
+	cert, err := x509.ParseCertificate(certDERBlock.Bytes)
+	if err != nil {
+		return nil, fmt.Errorf("cannot decode pem block for server certificate: %w", err)
+	}
+
+	return cert, nil
 }

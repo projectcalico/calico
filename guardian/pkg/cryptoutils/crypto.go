@@ -18,10 +18,8 @@ package cryptoutils
 import (
 	"crypto/sha256"
 	"crypto/x509"
-	"encoding/pem"
 	"fmt"
 
-	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -35,20 +33,4 @@ func GenerateFingerprint(certificate *x509.Certificate) string {
 	fingerprint := fmt.Sprintf("%x", sha256.Sum256(certificate.Raw))
 	log.Debugf("Created fingerprint for cert with common name: %s and fingerprint: %s", certificate.Subject.CommonName, fingerprint)
 	return fingerprint
-}
-
-func ExtractServerName(pemServerCrt []byte) (string, error) {
-	certDERBlock, _ := pem.Decode(pemServerCrt)
-	if certDERBlock == nil || certDERBlock.Type != "CERTIFICATE" {
-		return "", errors.New("Cannot decode pem block for server certificate")
-	}
-
-	cert, err := x509.ParseCertificate(certDERBlock.Bytes)
-	if err != nil {
-		return "", fmt.Errorf("cannot decode pem block for server certificate: %w", err)
-	}
-	if len(cert.DNSNames) != 1 {
-		return "", fmt.Errorf("expected a single DNS name registered on the certificate: %w", err)
-	}
-	return cert.DNSNames[0], nil
 }
