@@ -188,7 +188,7 @@ type Config struct {
 	BPFLogLevel                        string            `config:"oneof(off,info,debug);off;non-zero"`
 	BPFConntrackLogLevel               string            `config:"oneof(off,debug);off;non-zero"`
 	BPFConntrackCleanupMode            string            `config:"oneof(Auto,Userspace,BPFProgram);Auto"`
-	BPFConntrackTimeouts               map[string]string `config:"keyvaluelist;CreationGracePeriod=10s,TCPPreEstablished=20s,TCPEstablished=1h,TCPFinsSeen=Auto,TCPResetSeen=40s,UDPLastSeen=60s,GenericIPLastSeen=10m,ICMPLastSeen=5s"`
+	BPFConntrackTimeouts               map[string]string `config:"keyvaluelist;CreationGracePeriod=10s,TCPSynSent=20s,TCPEstablished=1h,TCPFinsSeen=Auto,TCPResetSeen=40s,UDPTimeout=60s,GenericTimeout=10m,ICMPTimeout=5s"`
 	BPFLogFilters                      map[string]string `config:"keyvaluelist;;"`
 	BPFCTLBLogFilter                   string            `config:"oneof(all);;"`
 	BPFDataIfacePattern                *regexp.Regexp    `config:"regexp;^((en|wl|ww|sl|ib)[Popsx].*|(eth|wlan|wwan|bond).*)"`
@@ -1267,11 +1267,10 @@ type Param interface {
 
 func FromConfigUpdate(msg *proto.ConfigUpdate) *Config {
 	p := New()
-	// It doesn't have very great meaning for this standalone
-	// config object, but we use DatastorePerHost here, as the
-	// source, because proto.ConfigUpdate is formed by merging
-	// global and per-host datastore configuration fields.
-	_, _ = p.UpdateFrom(msg.Config, DatastorePerHost)
+	_, err := p.UpdateFromConfigUpdate(msg)
+	if err != nil {
+		log.WithError(err).Panic("Failed to convert ConfigUpdate back to Config.")
+	}
 	return p
 }
 
