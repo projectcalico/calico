@@ -160,10 +160,8 @@ func (srv *server) ListenAndServeCluster() error {
 }
 
 func (srv *server) WaitForShutdown() error {
-	select {
-	case <-srv.shutdownCtx.Done():
-		logrus.Info("Received shutdown signal, shutting server down.")
-	}
+	<-srv.shutdownCtx.Done()
+	logrus.Info("Received shutdown signal, shutting server down.")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
