@@ -1436,7 +1436,7 @@ func (c *client) getNodeMeshRestartTimeKVPair(v3res *apiv3.BGPConfiguration, key
 func (c *client) getNodeMeshPasswordKVPair(v3res *apiv3.BGPConfiguration, key interface{}) {
 	meshPasswordKey := getBGPConfigKey("node_mesh_password", key)
 
-	if c.secretWatcher != nil && v3res.Spec.NodeMeshPassword != nil && v3res.Spec.NodeMeshPassword.SecretKeyRef != nil {
+	if c.secretWatcher != nil && v3res != nil && v3res.Spec.NodeMeshPassword != nil && v3res.Spec.NodeMeshPassword.SecretKeyRef != nil {
 		password, err := c.secretWatcher.GetSecret(
 			v3res.Spec.NodeMeshPassword.SecretKeyRef.Name,
 			v3res.Spec.NodeMeshPassword.SecretKeyRef.Key,

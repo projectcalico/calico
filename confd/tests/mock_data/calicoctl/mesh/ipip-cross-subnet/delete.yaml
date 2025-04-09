@@ -6,4 +6,3 @@ spec:
   cidr: 192.168.0.0/16
   ipipMode: CrossSubnet
   natOutgoing: true
-

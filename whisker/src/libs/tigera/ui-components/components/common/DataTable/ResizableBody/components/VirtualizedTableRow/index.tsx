@@ -95,7 +95,6 @@ const VirtualizedTableRow = ({
                         }
 
                         if (virtualisationProps) {
-                            console.log('resetting height');
                             //force re-calculating the row height
                             virtualizationRef.current?.resetAfterIndex(0);
                         }

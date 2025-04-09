@@ -1,0 +1,24 @@
+---
+
+extends: default
+
+rules:
+  line-length: disable
+  document-start: disable
+  truthy: disable
+  indentation:
+    spaces: consistent
+    indent-sequences: consistent
+  comments:
+    require-starting-space: false
+    min-spaces-from-content: 1
+  comments-indentation: disable
+
+ignore:
+  # template files are not valid yaml
+  - charts/calico/templates/
+  - charts/tigera-operator/templates/
+  # these dirs are cloned repos, we don't own yamls that they may contain
+  - cni-plugin/containernetworking-plugins/
+  - cni-plugin/flannel-cni-plugin/
+  - pod2daemon/node-driver-registrar/

@@ -5,7 +5,6 @@ metadata:
 spec:
 
 ---
-
 kind: Node
 apiVersion: projectcalico.org/v3
 metadata:
@@ -15,7 +14,6 @@ spec:
     ipv4Address: 10.192.0.2/16
 
 ---
-
 kind: Node
 apiVersion: projectcalico.org/v3
 metadata:
@@ -25,7 +23,6 @@ spec:
     ipv4Address: 10.192.0.3/16
 
 ---
-
 kind: Node
 apiVersion: projectcalico.org/v3
 metadata:
@@ -35,7 +32,6 @@ spec:
     ipv4Address: 10.192.0.4/16
 
 ---
-
 kind: IPPool
 apiVersion: projectcalico.org/v3
 metadata:

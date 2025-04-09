@@ -5,15 +5,15 @@ metadata:
   namespace: istio-system
 spec:
   hosts:
-  - dikastes.calico.cluster.local
+    - dikastes.calico.cluster.local
   ports:
-  - name: grpc
-    protocol: grpc
-    number: 1
+    - name: grpc
+      protocol: grpc
+      number: 1
   resolution: STATIC
   location: MESH_EXTERNAL
   endpoints:
-  - address: unix:///var/run/dikastes/dikastes.sock
+    - address: unix:///var/run/dikastes/dikastes.sock
 ---
 apiVersion: networking.istio.io/v1alpha3
 kind: DestinationRule
@@ -33,37 +33,36 @@ metadata:
   namespace: istio-system
 spec:
   configPatches:
-  - applyTo: NETWORK_FILTER
-    match:
-      context: SIDECAR_INBOUND
-      listener:
-        filterChain:
-          filter:
-            name: envoy.tcp_proxy
-    patch:
-      operation: INSERT_BEFORE
-      value:
-        name: envoy.ext_authz
-        config:
-          stat_prefix: "dikastes"
-          grpc_service:
-            envoy_grpc:
-              cluster_name: "outbound|1||dikastes.calico.cluster.local"
-  - applyTo: HTTP_FILTER
-    match:
-      context: SIDECAR_INBOUND
-      listener:
-        filterChain:
-          filter:
-            name: envoy.http_connection_manager
-            subFilter:
-              name: envoy.router
-    patch:
-      operation: INSERT_BEFORE
-      value:
-        name: envoy.ext_authz
-        config:
-          grpc_service:
-            envoy_grpc:
-              cluster_name: "outbound|1||dikastes.calico.cluster.local"
-
+    - applyTo: NETWORK_FILTER
+      match:
+        context: SIDECAR_INBOUND
+        listener:
+          filterChain:
+            filter:
+              name: envoy.tcp_proxy
+      patch:
+        operation: INSERT_BEFORE
+        value:
+          name: envoy.ext_authz
+          config:
+            stat_prefix: "dikastes"
+            grpc_service:
+              envoy_grpc:
+                cluster_name: "outbound|1||dikastes.calico.cluster.local"
+    - applyTo: HTTP_FILTER
+      match:
+        context: SIDECAR_INBOUND
+        listener:
+          filterChain:
+            filter:
+              name: envoy.http_connection_manager
+              subFilter:
+                name: envoy.router
+      patch:
+        operation: INSERT_BEFORE
+        value:
+          name: envoy.ext_authz
+          config:
+            grpc_service:
+              envoy_grpc:
+                cluster_name: "outbound|1||dikastes.calico.cluster.local"

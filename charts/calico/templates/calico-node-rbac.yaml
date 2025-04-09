@@ -119,7 +119,7 @@ rules:
       - get
       - list
       - watch
-   # Calico creates some tiers on startup.
+  # Calico creates some tiers on startup.
   - apiGroups: ["crd.projectcalico.org"]
     resources:
       - tiers
@@ -270,9 +270,9 @@ roleRef:
   kind: ClusterRole
   name: flannel
 subjects:
-- kind: ServiceAccount
-  name: canal
-  namespace: kube-system
+  - kind: ServiceAccount
+    name: canal
+    namespace: kube-system
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -283,9 +283,9 @@ roleRef:
   kind: ClusterRole
   name: calico-node
 subjects:
-- kind: ServiceAccount
-  name: canal
-  namespace: kube-system
+  - kind: ServiceAccount
+    name: canal
+    namespace: kube-system
 {{- else }}
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -296,9 +296,9 @@ roleRef:
   kind: ClusterRole
   name: calico-node
 subjects:
-- kind: ServiceAccount
-  name: calico-node
-  namespace: kube-system
+  - kind: ServiceAccount
+    name: calico-node
+    namespace: kube-system
 {{- end }}
 ---
 
@@ -311,6 +311,6 @@ roleRef:
   kind: ClusterRole
   name: calico-cni-plugin
 subjects:
-- kind: ServiceAccount
-  name: calico-cni-plugin
-  namespace: kube-system
+  - kind: ServiceAccount
+    name: calico-cni-plugin
+    namespace: kube-system

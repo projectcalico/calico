@@ -23,11 +23,11 @@ export default {
             bg: 'transparent',
             _dark: {
                 borderColor: 'tigeraGrey.400',
-                color: 'white',
+                color: 'tigeraBlack',
                 _checked: {
                     border: 'none',
-                    bg: 'tigeraBlueMedium',
-                    borderColor: 'tigeraBlueMedium',
+                    bg: 'tigeraBlueMedium40',
+                    borderColor: 'tigeraBlueMedium40',
                     _hover: {
                         bg: 'tigeraBlueMedium80',
                         border: 'none',

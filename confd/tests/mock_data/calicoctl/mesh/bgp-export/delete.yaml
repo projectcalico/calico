@@ -8,7 +8,6 @@ spec:
   natOutgoing: true
 
 ---
-
 kind: IPPool
 apiVersion: projectcalico.org/v3
 metadata:
@@ -20,7 +19,6 @@ spec:
   disableBGPExport: true
 
 ---
-
 kind: IPPool
 apiVersion: projectcalico.org/v3
 metadata:
@@ -32,7 +30,6 @@ spec:
   disableBGPExport: false
 
 ---
-
 kind: IPPool
 apiVersion: projectcalico.org/v3
 metadata:
@@ -44,7 +41,6 @@ spec:
   natOutgoing: true
 
 ---
-
 kind: IPPool
 apiVersion: projectcalico.org/v3
 metadata:
@@ -57,7 +53,6 @@ spec:
   disableBGPExport: true
 
 ---
-
 kind: IPPool
 apiVersion: projectcalico.org/v3
 metadata:

@@ -102,6 +102,33 @@ func validateBackendTieredPolicyName(policy, tier string) error {
 	return nil
 }
 
+// ValidateTieredPolicyName validates v3 policy name, policies in the default tier can be named without the default. prefix.
+// Policy names in non default tier have to be in a format of tier.name
+func ValidateTieredPolicyName(policy, tier string) error {
+	if policy == "" {
+		return errors.New("Policy name is empty")
+	}
+	if policyNameIsFormatted(policy) {
+		return nil
+	}
+
+	tier = TierOrDefault(tier)
+	parts := strings.SplitN(policy, ".", 2)
+
+	if len(parts) == 1 && tier == "default" {
+		// Policy in default tier, without the default. prefix
+		return nil
+	}
+
+	if len(parts) == 2 && strings.HasPrefix(policy, tier+".") {
+		// Policy in format of tier.name with tier matching the prefix
+		return nil
+	}
+
+	// If we reached here the policy name is invalid. Either incorrect prefix or with additional . in the name
+	return fmt.Errorf("Incorrectly formatted policy name %s", policy)
+}
+
 func TieredPolicyName(policy string) string {
 	if policy == "" {
 		return ""

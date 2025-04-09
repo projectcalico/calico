@@ -14,11 +14,11 @@ spec:
     spec:
       hostNetwork: true
       tolerations:
-      - operator: Exists
-        effect: NoSchedule
+        - operator: Exists
+          effect: NoSchedule
       containers:
-      - name: generator
-        image: caseydavenport/flowgen
-        env:
-          - name: SERVER
-            value: "goldmane.calico-system:443"
+        - name: generator
+          image: caseydavenport/flowgen
+          env:
+            - name: SERVER
+              value: "goldmane.calico-system:443"
