@@ -455,8 +455,9 @@ func (a *LogAggregator) backfill(stream *Stream) {
 
 	// Go through the bucket ring, generating stream events for each flow that matches the request.
 	// Right now, the stream endpoint only supports aggregation windows of a single bucket interval.
-	err := a.buckets.IterBucketsTime(request.StartTimeGte, a.nowFunc().Unix(), func(bucket *bucketing.AggregationBucket) {
+	err := a.buckets.IterBucketsTime(request.StartTimeGte, a.nowFunc().Unix(), func(bucket *bucketing.AggregationBucket) error {
 		// Iterate all of the keys in this bucket.
+		stopBucketIteration := false
 		bucket.Flows.Iter(func(d *types.DiachronicFlow) error {
 			builder := bucketing.NewCachedFlowBuilder(d, bucket.StartTime, bucket.EndTime)
 			if f, id := builder.Build(request.Filter); f != nil {
@@ -464,7 +465,8 @@ func (a *LogAggregator) backfill(stream *Stream) {
 				case <-stream.ctx.Done():
 					// Stream closed while backfilling. Can stop.
 					logrus.WithField("id", stream.id).Debug("Stream closed while backfilling")
-					return fmt.Errorf("stream closed")
+					stopBucketIteration = true
+					return set.StopIteration
 				default:
 					// The flow matches the filter and time range.
 					if logrus.IsLevelEnabled(logrus.DebugLevel) {
@@ -478,6 +480,12 @@ func (a *LogAggregator) backfill(stream *Stream) {
 			}
 			return nil
 		})
+
+		if stopBucketIteration {
+			// If the stream was closed while we were backfilling, we can stop iterating buckets.
+			return set.StopIteration
+		}
+		return nil
 	})
 	if err != nil {
 		logrus.WithError(err).Warn("Error backfilling stream")
