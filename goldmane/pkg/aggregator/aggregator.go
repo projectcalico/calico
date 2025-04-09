@@ -25,7 +25,9 @@ import (
 	"github.com/projectcalico/calico/goldmane/pkg/aggregator/bucketing"
 	"github.com/projectcalico/calico/goldmane/pkg/types"
 	"github.com/projectcalico/calico/goldmane/proto"
+	"github.com/projectcalico/calico/lib/std/chanutil"
 	"github.com/projectcalico/calico/libcalico-go/lib/health"
+	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -202,6 +204,9 @@ type LogAggregator struct {
 
 	// health is the health aggregator to use for health checks.
 	health *health.HealthAggregator
+
+	// ratelimiter is used to rate limit log messages that may happen frequently.
+	rl *logutils.RateLimitedLogger
 }
 
 func NewLogAggregator(opts ...Option) *LogAggregator {
@@ -225,6 +230,10 @@ func NewLogAggregator(opts ...Option) *LogAggregator {
 			proto.SortBy_SourceNamespace: NewIndex(func(k *types.FlowKey) string { return k.SourceNamespace() }),
 		},
 		streams: NewStreamManager(),
+		rl: logutils.NewRateLimitedLogger(
+			logutils.OptBurst(5),
+			logutils.OptInterval(30*time.Second),
+		),
 	}
 
 	// Use a time-based Ring index by default.
@@ -342,13 +351,9 @@ func (a *LogAggregator) SetSink(s bucketing.Sink) chan struct{} {
 
 // Receive is used to send a flow update to the aggregator.
 func (a *LogAggregator) Receive(f *types.Flow) {
-	timeout := time.After(5 * time.Second)
-
-	select {
-	case a.recvChan <- f:
-	case <-timeout:
+	if err := chanutil.WriteWithDeadline(context.Background(), a.recvChan, f, 5*time.Second); err != nil {
 		numDroppedFlows.Inc()
-		logrus.Warn("Output channel full, dropping flow")
+		a.rl.Warn("Aggregator receive channel full, dropping flow")
 	}
 }
 
