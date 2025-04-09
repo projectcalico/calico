@@ -1155,6 +1155,7 @@ func createVXLANBaseTopologyOptions(vxlanMode api.VXLANMode, enableIPv6 bool, ro
 	// tested but we can verify the state with ethtool.
 	topologyOptions.ExtraEnvVars["FELIX_FeatureDetectOverride"] = fmt.Sprintf("ChecksumOffloadBroken=%t", brokenXSum)
 	topologyOptions.FelixDebugFilenameRegex = "vxlan|route_table|l3_route_resolver|int_dataplane"
+	topologyOptions.ExtraEnvVars["FELIX_BPFLogLevel"] = "off"
 	return topologyOptions
 }
 
