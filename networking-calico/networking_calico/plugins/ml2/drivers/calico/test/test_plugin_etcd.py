@@ -1007,7 +1007,6 @@ class TestPluginEtcdBase(_TestEtcdBase):
         # Remove the QoS policy from the network again.
         _log.debug("Retest after removing all QoS policy")
         del self.osdb_networks[1]['qos_policy_id']
-        del self.osdb_ports[0]['network_qos_policy_id']
         self.driver.update_port_postcommit(context)
 
         # Expected changes
