@@ -17,6 +17,7 @@ package server
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -27,6 +28,7 @@ import (
 	calicotls "github.com/projectcalico/calico/crypto/pkg/tls"
 	"github.com/projectcalico/calico/guardian/pkg/conn"
 	"github.com/projectcalico/calico/guardian/pkg/tunnel"
+	"github.com/projectcalico/calico/lib/std/chanutil"
 )
 
 // Server represents a server interface with methods for cluster and management cluster operations and graceful shutdown.
@@ -51,18 +53,20 @@ type server struct {
 	listenPort string
 	listenHost string
 
-	shutdownCtx context.Context
+	shutdownCtx        context.Context
+	preemptiveShutdown chan struct{}
 }
 
 func New(shutdownCtx context.Context, tunnelCert *tls.Certificate, dialer tunnel.SessionDialer, opts ...Option) (Server, error) {
 	var err error
 	srv := &server{
-		http:              new(http.Server),
-		shutdownCtx:       shutdownCtx,
-		connRetryAttempts: 5,
-		connRetryInterval: 2 * time.Second,
-		listenPort:        "8080",
-		tunnelCert:        tunnelCert,
+		http:               new(http.Server),
+		shutdownCtx:        shutdownCtx,
+		connRetryAttempts:  5,
+		connRetryInterval:  2 * time.Second,
+		listenPort:         "8080",
+		tunnelCert:         tunnelCert,
+		preemptiveShutdown: make(chan struct{}),
 	}
 
 	for _, o := range opts {
@@ -93,6 +97,7 @@ func New(shutdownCtx context.Context, tunnelCert *tls.Certificate, dialer tunnel
 }
 
 func (srv *server) ListenAndServeManagementCluster() error {
+	defer close(srv.preemptiveShutdown)
 	if err := srv.tunnel.Connect(srv.shutdownCtx); err != nil {
 		return fmt.Errorf("failed to connect to tunnel: %w", err)
 	}
@@ -117,6 +122,7 @@ func (srv *server) ListenAndServeManagementCluster() error {
 }
 
 func (srv *server) ListenAndServeCluster() error {
+	defer close(srv.preemptiveShutdown)
 	logrus.Infof("Listening on %s:%s for connections to proxy to voltron", srv.listenHost, srv.listenPort)
 	if err := srv.tunnel.Connect(srv.shutdownCtx); err != nil {
 		return fmt.Errorf("failed to connect to tunnel: %w", err)
@@ -153,14 +159,26 @@ func (srv *server) ListenAndServeCluster() error {
 }
 
 func (srv *server) WaitForShutdown() error {
-	<-srv.shutdownCtx.Done()
-	logrus.Info("Received shutdown signal, shutting server down.")
+	// TODO might just want to wrap the context we have.
+	select {
+	case <-srv.preemptiveShutdown:
+		logrus.Info("Received preemptive shutdown signal, shutting server down.")
+	case <-srv.shutdownCtx.Done():
+		logrus.Info("Received shutdown signal, shutting server down.")
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	err := srv.http.Shutdown(ctx)
-	logrus.Info("Server shutdown complete.")
 
+	logrus.Info("Waiting for tunnel to close...")
+	_, err := chanutil.Read(ctx, srv.tunnel.WaitForClose())
+	if !errors.Is(err, chanutil.ErrChannelClosed) {
+		logrus.WithError(err).Warn("failed to wait for tunnel to close")
+	}
+	logrus.Info("Tunnel is closed.")
+
+	err = srv.http.Shutdown(ctx)
+	logrus.Info("Server shutdown complete.")
 	return err
 }
 
