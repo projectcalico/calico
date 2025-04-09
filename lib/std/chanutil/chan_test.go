@@ -3,13 +3,14 @@ package chanutil_test
 import (
 	"context"
 	"errors"
+	"slices"
 	"testing"
 	"time"
 
 	"github.com/projectcalico/calico/lib/std/chanutil"
 )
 
-func TestChanUtilReadContextCancelled(t *testing.T) {
+func TestChanUtil_Read_ContextCancelled(t *testing.T) {
 	ch := make(chan string)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -24,7 +25,7 @@ func TestChanUtilReadContextCancelled(t *testing.T) {
 	}
 }
 
-func TestChanUtilReadChannelClosed(t *testing.T) {
+func TestChanUtil_Read_ChannelClosed(t *testing.T) {
 	ch := make(chan string)
 	close(ch)
 
@@ -36,7 +37,7 @@ func TestChanUtilReadChannelClosed(t *testing.T) {
 	}
 }
 
-func TestChanUtilReadSuccessfulInPrefilledChan(t *testing.T) {
+func TestChanUtil_Read_SuccessfulInPrefilledChan(t *testing.T) {
 	ch := make(chan string, 1)
 	ch <- "foobar"
 
@@ -49,7 +50,7 @@ func TestChanUtilReadSuccessfulInPrefilledChan(t *testing.T) {
 	}
 }
 
-func TestChanUtilReadWithDeadlineReturnsDeadlineExceeded(t *testing.T) {
+func TestChanUtil_ReadWithDeadline_ReturnsDeadlineExceeded(t *testing.T) {
 	ch := make(chan string, 1)
 
 	_, err := chanutil.ReadWithDeadline(context.Background(), ch, time.Millisecond*100)
@@ -57,5 +58,19 @@ func TestChanUtilReadWithDeadlineReturnsDeadlineExceeded(t *testing.T) {
 		t.Fatal("Expected and error to be returned.")
 	} else if !errors.Is(err, chanutil.ErrDeadlineExceeded) {
 		t.Fatalf("Expected channel closed error, got '%s'", err)
+	}
+}
+
+func TestChanUtil_ReadAllNonBlocking_ReturnsWhenChannelIsNotClosed(t *testing.T) {
+	ch := make(chan string, 3)
+	defer close(ch)
+
+	ch <- "foo"
+	ch <- "bar"
+	ch <- "baz"
+
+	all := chanutil.ReadAllNonBlocking(ch)
+	if !slices.Equal([]string{"foo", "bar", "baz"}, all) {
+		t.Fatalf("Expected all to be ['foo', 'bar', 'baz'], got '%v'", all)
 	}
 }
