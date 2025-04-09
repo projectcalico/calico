@@ -46,10 +46,7 @@ func Read[E any](ctx context.Context, ch <-chan E) (E, error) {
 func ReadNonBlocking[E any](ch <-chan E) (E, bool) {
 	select {
 	case v, ok := <-ch:
-		if !ok {
-			return v, false
-		}
-		return v, true
+		return v, ok
 	default:
 		var empty E
 		return empty, false
@@ -136,7 +133,10 @@ func WriteWithDeadline[E any](ctx context.Context, ch chan E, v E, duration time
 func Clear[R any](c <-chan R) {
 	for {
 		select {
-		case <-c:
+		case _, ok := <-c:
+			if !ok {
+				return
+			}
 		default:
 			return
 		}

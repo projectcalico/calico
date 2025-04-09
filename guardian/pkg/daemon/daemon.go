@@ -83,7 +83,7 @@ func Run(ctx context.Context, cfg config.Config, proxyTargets []server.Target) {
 		defer wg.Done()
 		// Allow requests to come down from the management cluster.
 		if err := srv.ListenAndServeManagementCluster(); err != nil {
-			logrus.WithError(err).Info("Serving the tunnel exited.")
+			logrus.WithError(err).Warn("Serving the tunnel exited.")
 		}
 	}()
 
@@ -94,7 +94,7 @@ func Run(ctx context.Context, cfg config.Config, proxyTargets []server.Target) {
 			defer wg.Done()
 
 			if err := srv.ListenAndServeCluster(); err != nil {
-				logrus.WithError(err).Info("proxy tunnel exited with an error")
+				logrus.WithError(err).Warn("proxy tunnel exited with an error")
 			}
 		}()
 	}

@@ -173,7 +173,7 @@ func (srv *server) WaitForShutdown() error {
 	logrus.Info("Waiting for tunnel to close...")
 	_, err := chanutil.Read(ctx, srv.tunnel.WaitForClose())
 	if !errors.Is(err, chanutil.ErrChannelClosed) {
-		logrus.WithError(err).Error("failed to wait for tunnel to close")
+		logrus.WithError(err).Warn("failed to wait for tunnel to close")
 	}
 	logrus.Info("Tunnel is closed.")
 

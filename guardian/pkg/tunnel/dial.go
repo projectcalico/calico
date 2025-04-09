@@ -207,20 +207,19 @@ func tlsDialViaHTTPProxy(d *net.Dialer, destination string, proxyTargetURL *url.
 	return mtlsC, nil
 }
 
-func dialRetry(ctx context.Context, f func() (net.Conn, error), retryAttempts int, retryInterval time.Duration) (net.Conn, error) {
-	var i int
-	for {
-		conn, err := f()
+func dialRetry(ctx context.Context, connFunc func() (net.Conn, error), retryAttempts int, retryInterval time.Duration) (net.Conn, error) {
+	for i := 0; ; i++ {
+		conn, err := connFunc()
 		if err != nil {
+			if retryAttempts > -1 && i > retryAttempts {
+				return nil, err
+			}
+
 			var xerr x509.UnknownAuthorityError
-			if errors.As(err, &xerr) {
+			if errors.Is(err, &xerr) {
 				logrus.WithError(err).Infof("TLS dial failed: %s. fingerprint='%s' issuerCommonName='%s' subjectCommonName='%s'", xerr.Error(), cryptoutils.GenerateFingerprint(xerr.Cert), xerr.Cert.Issuer.CommonName, xerr.Cert.Subject.CommonName)
 			} else {
 				logrus.WithError(err).Infof("TLS dial attempt %d failed, will retry in %s", i, retryInterval.String())
-			}
-
-			if retryAttempts > -1 && i >= retryAttempts {
-				return nil, err
 			}
 
 			if _, err := chanutil.Read(ctx, clock.After(retryInterval)); err != nil {

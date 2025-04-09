@@ -174,7 +174,7 @@ func (executor *commandExecutor[C, R]) loop(shutdownCtx context.Context) {
 		case cmd := <-executor.backlogChan:
 			logrus.Debugf("Received backlog command (current backlog size: %d).", len(executor.backlog))
 			if len(executor.backlog) > 50 {
-				logrus.Warningf("Backlog size exceeded has exceed 50.")
+				logrus.Warn("Backlog size exceeded has exceed 50.")
 			}
 			executor.backlog = append(executor.backlog, cmd)
 		case signal := <-executor.drainAndBacklogSig:
@@ -248,7 +248,7 @@ func (executor *commandExecutor[C, R]) executeCommand(ctx context.Context, req C
 		defer executor.inflightCmds.Done()
 		result, err := executor.command(ctx, req.Get())
 		if err != nil {
-			logrus.Debugf("Error executing command: %v", err)
+			logrus.WithError(err).Debug("Error executing command")
 			executor.errBuff.Write(err)
 			if errors.Is(err, io.EOF) || errors.Is(err, context.Canceled) {
 				executor.backlogChan <- req

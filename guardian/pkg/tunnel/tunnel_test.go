@@ -177,11 +177,6 @@ func TestTunnel_DialRetry(t *testing.T) {
 	defer close(livenessTickerChan)
 	defer close(timerChan)
 
-	mockTicker := new(mockclock.Ticker)
-	mockClock.On("NewTicker", mock.Anything).Return(mockTicker).Once()
-	mockTicker.On("Chan").Return((<-chan time.Time)(livenessTickerChan))
-	mockTicker.On("Stop").Return()
-
 	mockTimer := new(mockclock.Timer)
 
 	mockTimer.On("Chan").

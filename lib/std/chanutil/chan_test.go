@@ -212,6 +212,14 @@ func TestChanUtil_Clear(t *testing.T) {
 				return ch, func() { close(ch) }
 			},
 		},
+		{
+			description: "channel is closed and empty",
+			getChan: func() (chan string, func()) {
+				ch := make(chan string, 3)
+				close(ch)
+				return ch, func() {}
+			},
+		},
 	}
 	for _, tc := range tt {
 		t.Run(tc.description, func(t *testing.T) {
