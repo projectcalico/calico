@@ -15,3 +15,11 @@ packages:
       dir: "pkg/thirdpartymocks/{{.PackagePath}}"
     interfaces:
       Conn:
+  github.com/projectcalico/calico/lib/std/clock:
+    config:
+      outpkg: "{{.PackageName}}"
+      dir: "pkg/thirdpartymocks/std/clock"
+    interfaces:
+      Clock:
+      Ticker:
+      Timer:

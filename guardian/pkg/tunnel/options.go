@@ -18,10 +18,19 @@ import (
 	"errors"
 	"net/url"
 	"time"
+
+	"github.com/projectcalico/calico/guardian/pkg/health"
 )
 
 // Option is a common format for New() options
 type Option func(*tunnel) error
+
+func WithHealthReporter(healthReporter health.Reporter) Option {
+	return func(t *tunnel) error {
+		t.healthReporter = healthReporter
+		return nil
+	}
+}
 
 type DialerOption func(*sessionDialer) error
 
