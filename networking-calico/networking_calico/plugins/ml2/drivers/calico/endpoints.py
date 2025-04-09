@@ -249,6 +249,7 @@ class WorkloadEndpointSyncer(ResourceSyncer):
         Gets extra information for a port that is needed before sending it to
         etcd.
         """
+        LOG.debug("port = %r", port)
         port['fixed_ips'] = self.get_fixed_ips_for_port(
             context, port
         )
@@ -316,6 +317,7 @@ class WorkloadEndpointSyncer(ResourceSyncer):
         qos = {}
 
         qos_policy_id = port.get('qos_policy_id') or port.get('network_qos_policy_id')
+        LOG.debug("QoS Policy ID = %r", qos_policy_id)
         if qos_policy_id:
             rules = context.session.query(
                 qos_models.QosBandwidthLimitRule
