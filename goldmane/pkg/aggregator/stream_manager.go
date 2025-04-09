@@ -159,7 +159,7 @@ func (m *streamManager) close(id string) {
 	// via the Receive() method.
 	s.cancel()
 
-	// Closing the input channel will the recv() loop to finish processing any queued flows
+	// Closing the input channel will tell the recv() loop to finish processing any queued flows
 	// and exit, closing the output channel.
 	close(s.in)
 	delete(m.streams, id)
