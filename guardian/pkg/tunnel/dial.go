@@ -33,6 +33,8 @@ import (
 
 	calicoTLS "github.com/projectcalico/calico/crypto/pkg/tls"
 	"github.com/projectcalico/calico/guardian/pkg/cryptoutils"
+	"github.com/projectcalico/calico/lib/std/chanutil"
+	"github.com/projectcalico/calico/lib/std/clock"
 )
 
 const (
@@ -45,7 +47,7 @@ const (
 )
 
 type SessionDialer interface {
-	Dial() (Session, error)
+	Dial(ctx context.Context) (Session, error)
 }
 
 type Session interface {
@@ -70,26 +72,6 @@ type sessionDialer struct {
 	httpProxyURL *url.URL
 }
 
-// NewSessionDialer creates a new Dialer.
-func NewSessionDialer(addr string, opts ...DialerOption) (SessionDialer, error) {
-	d := &sessionDialer{
-		addr:              addr,
-		retryAttempts:     defaultDialRetries,
-		retryInterval:     defaultDialRetryInterval,
-		timeout:           defaultDialTimeout,
-		keepAliveEnable:   defaultKeepAlive,
-		keepAliveInterval: defaultKeepAliveInterval,
-	}
-
-	for _, opt := range opts {
-		if err := opt(d); err != nil {
-			return nil, fmt.Errorf("applying option failed: %w", err)
-		}
-	}
-
-	return d, nil
-}
-
 func NewTLSSessionDialer(addr string, tlsConfig *tls.Config, opts ...DialerOption) (SessionDialer, error) {
 	d := &sessionDialer{
 		addr:              addr,
@@ -110,14 +92,14 @@ func NewTLSSessionDialer(addr string, tlsConfig *tls.Config, opts ...DialerOptio
 	return d, nil
 }
 
-func (d *sessionDialer) Dial() (Session, error) {
+func (d *sessionDialer) Dial(ctx context.Context) (Session, error) {
 	var dialFunc func() (net.Conn, error)
 	if d.tlsConfig == nil {
 		dialFunc = func() (net.Conn, error) { return net.Dial("tcp", d.addr) }
 	} else {
 		dialFunc = d.dialTLS
 	}
-	conn, err := dialRetry(dialFunc, d.retryAttempts, d.retryInterval, d.timeout)
+	conn, err := dialRetry(ctx, dialFunc, d.retryAttempts, d.retryInterval)
 	if err != nil {
 		return nil, err
 	}
@@ -225,34 +207,30 @@ func tlsDialViaHTTPProxy(d *net.Dialer, destination string, proxyTargetURL *url.
 	return mtlsC, nil
 }
 
-func dialRetry(f func() (net.Conn, error), retryAttempts int, retryInterval time.Duration, timeout time.Duration) (net.Conn, error) {
-	var err error
-	var conn net.Conn
-
-	done := make(chan struct{})
-	go func() {
-		for i := 0; i < retryAttempts; i++ {
-			conn, err = f()
-			if err != nil {
-				var xerr x509.UnknownAuthorityError
-				if errors.As(err, &xerr) {
-					logrus.WithError(err).Infof("TLS dial failed: %s. fingerprint='%s' issuerCommonName='%s' subjectCommonName='%s'", xerr.Error(), cryptoutils.GenerateFingerprint(xerr.Cert), xerr.Cert.Issuer.CommonName, xerr.Cert.Subject.CommonName)
-				} else {
-					logrus.WithError(err).Infof("TLS dial attempt %d failed, will retry in %s", i, retryInterval.String())
-				}
-				time.Sleep(retryInterval)
-				continue
+func dialRetry(ctx context.Context, connFunc func() (net.Conn, error), retryAttempts int, retryInterval time.Duration) (net.Conn, error) {
+	for i := 0; ; i++ {
+		conn, err := connFunc()
+		if err != nil {
+			if retryAttempts > -1 && i > retryAttempts {
+				return nil, err
 			}
-			break
+
+			var xerr x509.UnknownAuthorityError
+			if errors.Is(err, &xerr) {
+				logrus.WithError(err).Infof("TLS dial failed: %s. fingerprint='%s' issuerCommonName='%s' subjectCommonName='%s'", xerr.Error(), cryptoutils.GenerateFingerprint(xerr.Cert), xerr.Cert.Issuer.CommonName, xerr.Cert.Subject.CommonName)
+			} else {
+				logrus.WithError(err).Infof("TLS dial attempt %d failed, will retry in %s", i, retryInterval.String())
+			}
+
+			if _, err := chanutil.Read(ctx, clock.After(retryInterval)); err != nil {
+				if errors.Is(err, context.Canceled) {
+					return nil, err
+				}
+			}
+
+			continue
 		}
-		close(done)
-	}()
 
-	select {
-	case <-done:
-	case <-time.After(timeout):
-		return nil, fmt.Errorf("dialer timed out after %s", timeout.String())
+		return conn, err
 	}
-
-	return conn, err
 }
