@@ -165,30 +165,32 @@ func (c *nodeLabelController) handleNodeUpdate(update model.KVPair) {
 	kn, err := getK8sNodeName(*n)
 	if err != nil {
 		logrus.WithError(err).Info("Unable to get corresponding k8s node name, skipping")
-	} else if kn != "" {
-		// Create a mapping from Kubernetes node -> Calico node.
-		logrus.Debugf("Mapping k8s node -> calico node. %s -> %s", kn, n.Name)
+		return
+	}
 
-		c.k8sNodeMapper[kn] = n.Name
+	if kn == "" {
+		logrus.WithError(err).Info("Corresponding k8s node name is empty, skipping")
+		return
+	}
 
-		node, err := c.nodeLister.Get(kn)
-		if err != nil {
-			logrus.WithError(err).WithField("node", kn).Error("Unable to get node")
-		}
+	// Create a mapping from Kubernetes node -> Calico node.
+	logrus.Debugf("Mapping k8s node -> calico node. %s -> %s", kn, n.Name)
 
-		if _, ok := c.calicoNodeCache[n.Name]; !ok {
-			// If this is new calicoNode trigger sync for corresponding k8s node.
-			// As we only sync labels k8s -> calico node, no need to sync when calico node already exists in our cache
-			c.calicoNodeCache[n.Name] = n
+	c.k8sNodeMapper[kn] = n.Name
 
-			if node != nil && c.syncStatus == bapi.InSync {
-				// Only trigger the update if the k8s node exists
-				c.k8sNodeUpdate <- node
-			}
-			return
-		}
+	node, err := c.nodeLister.Get(kn)
+	if err != nil {
+		logrus.WithError(err).WithField("node", kn).Error("Unable to get node")
+	}
 
-		c.calicoNodeCache[n.Name] = n
+	_, existsCalicoNode := c.calicoNodeCache[n.Name]
+	c.calicoNodeCache[n.Name] = n
+	if !existsCalicoNode &&
+		node != nil &&
+		c.syncStatus == bapi.InSync {
+		// If this is new calicoNode trigger sync for corresponding k8s node, if the k8s node exists.
+		// As we only sync labels k8s -> calico node, no need to sync when calico node already exists in our cache
+		c.k8sNodeUpdate <- node
 	}
 }
 
@@ -214,6 +216,7 @@ func (c *nodeLabelController) acceptScheduledRequests(stopCh <-chan struct{}) {
 func (c *nodeLabelController) syncAllNodesLabels() {
 	if c.syncStatus != bapi.InSync {
 		logrus.WithField("status", c.syncStatus).Debug("Not in sync, skipping node sync")
+		return
 	}
 	nodes, err := c.nodeLister.List(labels.Everything())
 	if err != nil {
