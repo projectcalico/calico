@@ -94,12 +94,20 @@ func (k *FlowKey) Proto() string {
 	return k.meta.Value().Proto
 }
 
+func (k *FlowKey) SourceType() proto.EndpointType {
+	return k.source.Value().SourceType
+}
+
 func (k *FlowKey) SourceName() string {
 	return k.source.Value().SourceName
 }
 
 func (k *FlowKey) SourceNamespace() string {
 	return k.source.Value().SourceNamespace
+}
+
+func (k *FlowKey) DestType() proto.EndpointType {
+	return k.dest.Value().DestType
 }
 
 func (k *FlowKey) DestName() string {
@@ -112,6 +120,22 @@ func (k *FlowKey) DestNamespace() string {
 
 func (k *FlowKey) DestPort() int64 {
 	return k.dest.Value().DestPort
+}
+
+func (k *FlowKey) DestServiceName() string {
+	return k.dest.Value().DestServiceName
+}
+
+func (k *FlowKey) DestServiceNamespace() string {
+	return k.dest.Value().DestServiceNamespace
+}
+
+func (k *FlowKey) DestServicePortName() string {
+	return k.dest.Value().DestServicePortName
+}
+
+func (k *FlowKey) DestServicePort() int64 {
+	return k.dest.Value().DestServicePort
 }
 
 // This struct should be an exact copy of the proto.Flow structure, but without the private fields.
