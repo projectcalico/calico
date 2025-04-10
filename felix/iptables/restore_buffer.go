@@ -114,7 +114,7 @@ func (b *RestoreInputBuilder) WriteForwardReference(chainName string) {
 // Panics if there is no open transaction.
 func (b *RestoreInputBuilder) WriteLine(line string) {
 	b.maybeWriteTransactionOpener()
-	b.writeFormattedLine(line)
+	b.writeFormattedLine("%s", line)
 }
 
 // GetBytesAndReset returns the contents of the buffer and, as a side effect, resets the buffer.  For performance,

@@ -452,7 +452,7 @@ func makeMac() *net.MAC {
 	if err != nil {
 		panic(err)
 	}
-	return &net.MAC{mac}
+	return &net.MAC{HardwareAddr: mac}
 }
 
 func makeEndpointPortsV1() []apiv1.EndpointPort {

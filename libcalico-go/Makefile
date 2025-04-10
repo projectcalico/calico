@@ -34,8 +34,8 @@ clean:
 ###############################################################################
 GENERATED_FILES:=./lib/apis/v3/zz_generated.deepcopy.go \
 	./lib/upgrade/migrator/clients/v1/k8s/custom/zz_generated.deepcopy.go \
-	./lib/apis/v3/openapi_generated.go \
-	./lib/apis/v1/openapi_generated.go
+	./lib/apis/v3/generated.openapi.go \
+	./lib/apis/v1/generated.openapi.go
 
 .PHONY: gen-files
 ## Force rebuild generated go utilities (e.g. deepcopy-gen) and generated files
@@ -58,39 +58,42 @@ gen-crds:
 	$(DOCKER_GO_BUILD) sh -c 'deepcopy-gen \
 		--v 1 --logtostderr \
 		--go-header-file "./docs/boilerplate.go.txt" \
-		--input-dirs "$(PACKAGE_NAME)/lib/upgrade/migrator/clients/v1/k8s/custom" \
 		--bounding-dirs "github.com/projectcalico/calico/libcalico-go" \
-		--output-file-base zz_generated.deepcopy'
+		--output-file zz_generated.deepcopy.go \
+		"$(PACKAGE_NAME)/lib/upgrade/migrator/clients/v1/k8s/custom"'
 
 ./lib/apis/v3/zz_generated.deepcopy.go: $(APIS_SRCS)
 	$(DOCKER_GO_BUILD) sh -c 'deepcopy-gen \
 		--v 1 --logtostderr \
 		--go-header-file "./docs/boilerplate.go.txt" \
-		--input-dirs "$(PACKAGE_NAME)/lib/apis/v3" \
 		--bounding-dirs "github.com/projectcalico/calico/libcalico-go" \
-		--output-file-base zz_generated.deepcopy'
+		--output-file zz_generated.deepcopy.go \
+		"$(PACKAGE_NAME)/lib/apis/v3"'
 
 # Generate OpenAPI spec
-./lib/apis/v3/openapi_generated.go: $(APIS_SRCS)
+./lib/apis/v3/generated.openapi.go: $(APIS_SRCS)
 	$(DOCKER_GO_BUILD) \
            sh -c 'openapi-gen \
                 --v 1 --logtostderr \
                 --go-header-file "./docs/boilerplate.go.txt" \
-                --input-dirs "$(PACKAGE_NAME)/lib/apis/v3,$(PACKAGE_NAME)/lib/apis/v1" \
-                --output-package "$(PACKAGE_NAME)/lib/apis/v3"'
+				--output-dir "./lib/apis/v3" \
+                --output-pkg "$(PACKAGE_NAME)/lib/apis/v3" \
+                "$(PACKAGE_NAME)/lib/apis/v3" \
+				"$(PACKAGE_NAME)/lib/apis/v1"'
 
 	$(DOCKER_GO_BUILD) \
            sh -c 'openapi-gen \
                 --v 1 --logtostderr \
                 --go-header-file "./docs/boilerplate.go.txt" \
-                --input-dirs "$(PACKAGE_NAME)/lib/apis/v1" \
-                --output-package "$(PACKAGE_NAME)/lib/apis/v1"'
+				--output-dir "./lib/apis/v1" \
+                --output-pkg "$(PACKAGE_NAME)/lib/apis/v1" \
+                "$(PACKAGE_NAME)/lib/apis/v1"'
 
 ###############################################################################
 # Static checks
 ###############################################################################
 # TODO: re-enable all linters
-LINT_ARGS += --disable gosimple,unused,structcheck,errcheck,deadcode,varcheck,ineffassign,staticcheck,govet
+LINT_ARGS += --disable gosimple,unused,errcheck,ineffassign,staticcheck
 
 .PHONY: check-gen-files
 check-gen-files: $(GENERATED_FILES) fix gen-crds

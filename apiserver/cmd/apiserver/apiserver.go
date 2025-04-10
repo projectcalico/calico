@@ -1,4 +1,4 @@
-// Copyright (c) 2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2021-2024 Tigera, Inc. All rights reserved.
 
 /*
 Copyright 2016 The Kubernetes Authors.
@@ -39,7 +39,9 @@ func main() {
 	// The ConsistentListFromCache feature gate requires our resourceStore
 	// to support method RequestWatchProgress, which it does not.  Force-disable
 	// the gate.
-	err := feature.DefaultMutableFeatureGate.SetFromMap(map[string]bool{string(features.ConsistentListFromCache): false})
+	err := feature.DefaultMutableFeatureGate.SetFromMap(map[string]bool{
+		string(features.ConsistentListFromCache): false,
+	})
 	if err != nil {
 		klog.Errorf("Error setting feature gates: %v.", err)
 		logs.FlushLogs()
@@ -56,7 +58,7 @@ func main() {
 		logs.FlushLogs()
 	}
 
-	cmd, err := server.NewCommandStartCalicoServer(os.Stdout)
+	cmd, _, err := server.NewCommandStartCalicoServer(os.Stdout)
 	if err != nil {
 		klog.Errorf("Error creating server: %v", err)
 		logs.FlushLogs()
