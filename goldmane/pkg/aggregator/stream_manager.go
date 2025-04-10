@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/goldmane/pkg/aggregator/bucketing"
@@ -13,6 +14,15 @@ import (
 	"github.com/projectcalico/calico/lib/std/chanutil"
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 )
+
+var numStreams = prometheus.NewGauge(prometheus.GaugeOpts{
+	Name: "goldmane_num_streams",
+	Help: "Number of active streams",
+})
+
+func init() {
+	prometheus.MustRegister(numStreams)
+}
 
 func NewStreamManager() *streamManager {
 	maxStreams := 100
@@ -55,10 +65,8 @@ type streamManager struct {
 	rl *logutils.RateLimitedLogger
 }
 
-func (m *streamManager) Run(ctx context.Context, numWorkers int) {
-	for range numWorkers {
-		go m.processIncomingFlows(ctx)
-	}
+func (m *streamManager) Run(ctx context.Context) {
+	go m.processIncomingFlows(ctx)
 
 	for {
 		select {
@@ -87,11 +95,9 @@ func (m *streamManager) Register(req *streamRequest) {
 func (m *streamManager) Receive(b bucketing.FlowBuilder) {
 	// It's important that the stream manager Receive function not block, as it's called from the
 	// main thread.
-	go func() {
-		if err := chanutil.WriteWithDeadline(context.TODO(), m.flowCh, b, 30*time.Second); err != nil {
-			m.rl.WithError(err).Error("stream manager failed to handle flow")
-		}
-	}()
+	if err := chanutil.WriteWithDeadline(context.TODO(), m.flowCh, b, 30*time.Second); err != nil {
+		m.rl.WithError(err).Error("stream manager failed to handle flow")
+	}
 }
 
 // backfillChannel returns a channel containing backfill requests. This channel filled when new
@@ -136,8 +142,7 @@ func (m *streamManager) register(req *streamRequest) *Stream {
 	ctx, cancel := context.WithCancel(context.Background())
 	stream := &Stream{
 		id:     uuid.NewString(),
-		out:    make(chan *proto.FlowResult, 5000),
-		in:     make(chan *proto.FlowResult, 5000),
+		out:    make(chan *proto.FlowResult, req.channelSize),
 		done:   m.closedStreamsCh,
 		req:    req,
 		ctx:    ctx,
@@ -148,9 +153,7 @@ func (m *streamManager) register(req *streamRequest) *Stream {
 		),
 	}
 	m.streams[stream.id] = stream
-
-	// Start the stream's receive loop.
-	go stream.recv()
+	numStreams.Set(float64(len(m.streams)))
 
 	logrus.WithField("id", stream.id).Debug("Registered new stream")
 	return stream
@@ -171,8 +174,8 @@ func (m *streamManager) close(id string) {
 	// via the Receive() method.
 	s.cancel()
 
-	// Closing the input channel will tell the recv() loop to finish processing any queued flows
-	// and exit, closing the output channel.
-	close(s.in)
+	// Close the stream's output channel.
+	close(s.out)
 	delete(m.streams, id)
+	numStreams.Set(float64(len(m.streams)))
 }

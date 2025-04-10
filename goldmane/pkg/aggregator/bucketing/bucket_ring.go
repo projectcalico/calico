@@ -541,6 +541,7 @@ func (r *BucketRing) IterBuckets(start, end int, f func(i int) error) {
 	for idx != end {
 		if err := f(idx); err != nil {
 			if errors.Is(err, StopBucketIteration) {
+				logrus.Info("StopIteration")
 				return
 			}
 		}
