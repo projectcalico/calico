@@ -41,9 +41,9 @@ type GoldmaneReporter struct {
 	once    sync.Once
 
 	// Fields related to goldmane unix socket
-	maySendToNodeSocket bool
-	nodeClient          *client.FlowClient
-	nodeClientLock      sync.RWMutex
+	mayReportToNodeSocket bool
+	nodeClient            *client.FlowClient
+	nodeClientLock        sync.RWMutex
 }
 
 func NewReporter(addr, cert, key, ca string) (*GoldmaneReporter, error) {
@@ -56,7 +56,7 @@ func NewReporter(addr, cert, key, ca string) (*GoldmaneReporter, error) {
 		client:  cli,
 
 		// Do not send flowlogs to node socket, if goldmane address set via FelixConfig is equal to node socket
-		maySendToNodeSocket: addr != LocalGoldmaneServer,
+		mayReportToNodeSocket: addr != LocalGoldmaneServer,
 	}, nil
 }
 
@@ -66,7 +66,7 @@ func (g *GoldmaneReporter) Start() error {
 		// We don't wait for the initial connection to start so we don't block the caller.
 		g.client.Connect(context.Background())
 
-		if g.maySendToNodeSocket {
+		if g.mayReportToNodeSocket {
 			go g.nodeSocketReporter()
 		}
 	})
@@ -97,6 +97,7 @@ func (g *GoldmaneReporter) nodeClientIsNil() bool {
 }
 
 func (g *GoldmaneReporter) mayStartNodeSocketReporter() {
+	// If node socket is already setup, do not try to set it up again.
 	if !g.nodeClientIsNil() {
 		return
 	}
@@ -110,11 +111,12 @@ func (g *GoldmaneReporter) mayStartNodeSocketReporter() {
 		logrus.WithError(err).Warn("Failed to create goldmane unix client")
 		return
 	}
-	logrus.Info("Created goldmane unix client")
+	logrus.Info("Created goldmane node client")
 	g.nodeClient.Connect(context.Background())
 }
 
 func (g *GoldmaneReporter) mayStopNodeSocketReporter() {
+	// If node socket is already closed, do not try to close it again.
 	if g.nodeClientIsNil() {
 		return
 	}
@@ -122,7 +124,7 @@ func (g *GoldmaneReporter) mayStopNodeSocketReporter() {
 	g.nodeClientLock.Lock()
 	defer g.nodeClientLock.Unlock()
 	g.nodeClient = nil
-	logrus.Info("Destroyed goldmane unix client")
+	logrus.Info("Destroyed goldmane node client")
 }
 
 func (g *GoldmaneReporter) Report(logSlice any) error {
@@ -135,8 +137,8 @@ func (g *GoldmaneReporter) Report(logSlice any) error {
 			goldmaneLog := convertFlowlogToGoldmane(l)
 			g.client.Push(goldmaneLog)
 
-			if g.maySendToNodeSocket {
-				// If goldmane local unix server exists, also send it flowlogs.
+			if g.mayReportToNodeSocket {
+				// If goldmane node server exists, also send flowlogs to it.
 				g.nodeClientLock.RLock()
 				if g.nodeClient != nil {
 					g.nodeClient.Push(goldmaneLog)

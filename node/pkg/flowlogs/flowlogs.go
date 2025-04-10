@@ -1,3 +1,17 @@
+// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package flowlogs
 
 import (
@@ -15,7 +29,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func StartServerAndWatch() {
+func StartServerAndWatch(num int) {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
@@ -31,29 +45,44 @@ func StartServerAndWatch() {
 		return
 	}
 
+	infinitLoop := num < 0
+	var count int
 	for {
-		if ctx.Err() != nil {
-			logrus.Info("Closing goldmane unix server")
+		if ctx.Err() != nil ||
+			(!infinitLoop && count >= num) {
+			logrus.Debug("Closing goldmane unix server")
+			nodeServer.Stop()
 			cleanupGoldmaneSocket()
 			return
 		}
+
 		flows := nodeServer.ListAndFlush()
 		for _, flow := range flows {
-			fmt.Printf("%s\n", flowToString(flow))
+			fmt.Printf("%s", flowToString(flow))
 		}
+		count = count + len(flows)
 		time.Sleep(time.Second)
 	}
 }
 
 func flowToString(f *types.Flow) string {
-	output := fmt.Sprintf("Src={%s(%s/%s) %vP %vB} Dst={%s(%s/%s) %vP %vB} Proto=%s(%v) Action=%v",
-		endpointTypeToString(f.Key.SourceType()), f.Key.SourceNamespace(), f.Key.SourceName(), f.PacketsIn, f.BytesIn,
-		endpointTypeToString(f.Key.DestType()), f.Key.DestNamespace(), f.Key.DestName(), f.PacketsOut, f.BytesOut,
-		f.Key.Proto(), f.Key.DestPort(),
-		f.Key.Action(),
+	startTime := time.Unix(f.StartTime, 0)
+	policyTrace := types.FlowLogPolicyToProto(f.Key.Policies())
+	return fmt.Sprintf(
+		"- Time=%v Reporter=%v Action=%v\n"+
+			"  Src=%s(%s/%s) Dst=%s(%s/%s) Svc=%s/%s Proto=%s(%v svc:%s/%v)\n"+
+			"  Counts={Ingress: %vPkts/%vBytes Egress:%vPkts/%vBytes} Connections={Started:%v Completed:%v Live:%v}\n"+
+			"  Enforced:\n%v\n"+
+			"  Pending:\n%v\n",
+		startTime, f.Key.Reporter(), f.Key.Action(),
+		endpointTypeToString(f.Key.SourceType()), f.Key.SourceNamespace(), f.Key.SourceName(),
+		endpointTypeToString(f.Key.DestType()), f.Key.DestNamespace(), f.Key.DestName(),
+		f.Key.DestServiceName(), f.Key.DestServiceNamespace(),
+		f.Key.Proto(), f.Key.DestPort(), f.Key.DestServicePortName(), f.Key.DestServicePort(),
+		f.PacketsIn, f.BytesIn, f.PacketsOut, f.BytesOut,
+		f.NumConnectionsStarted, f.NumConnectionsCompleted, f.NumConnectionsLive,
+		policyHitsToString(policyTrace.EnforcedPolicies), policyHitsToString(policyTrace.PendingPolicies),
 	)
-
-	return output
 }
 
 func endpointTypeToString(ep proto.EndpointType) string {
@@ -71,17 +100,25 @@ func endpointTypeToString(ep proto.EndpointType) string {
 	}
 }
 
+func policyHitsToString(policies []*proto.PolicyHit) string {
+	var out string
+	for _, p := range policies {
+		out = out + fmt.Sprintf("  - %v", p)
+	}
+	return out
+}
+
 func ensureGoldmaneSocketDirectory(addr string) error {
 	path := path.Dir(addr)
 	// Check if goldmane unix server exists at the expected location.
-	logrus.Info("Checking if goldmane unix server exists.")
+	logrus.Debug("Checking if goldmane unix server exists.")
 	if _, err := os.Stat(path); os.IsNotExist(err) {
-		logrus.WithField("path", path).Info("Goldmane unix socket directory does not exist.")
+		logrus.WithField("path", path).Debug("Goldmane unix socket directory does not exist.")
 		err := os.MkdirAll(path, 0o600)
 		if err != nil {
 			return err
 		}
-		logrus.WithField("path", path).Info("Created goldmane unix server directory.")
+		logrus.WithField("path", path).Debug("Created goldmane unix server directory.")
 	}
 	return nil
 }

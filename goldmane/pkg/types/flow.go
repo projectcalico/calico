@@ -122,6 +122,22 @@ func (k *FlowKey) DestPort() int64 {
 	return k.dest.Value().DestPort
 }
 
+func (k *FlowKey) DestServiceName() string {
+	return k.dest.Value().DestServiceName
+}
+
+func (k *FlowKey) DestServiceNamespace() string {
+	return k.dest.Value().DestServiceNamespace
+}
+
+func (k *FlowKey) DestServicePortName() string {
+	return k.dest.Value().DestServicePortName
+}
+
+func (k *FlowKey) DestServicePort() int64 {
+	return k.dest.Value().DestServicePort
+}
+
 // This struct should be an exact copy of the proto.Flow structure, but without the private fields.
 type Flow struct {
 	Key                     *FlowKey

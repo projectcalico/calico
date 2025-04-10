@@ -101,7 +101,7 @@ func (s *NodeServer) Run() error {
 }
 
 func (s *NodeServer) Stop() {
-	s.grpcServer.GracefulStop()
+	s.grpcServer.Stop()
 }
 
 func (s *NodeServer) List() []*types.Flow {
