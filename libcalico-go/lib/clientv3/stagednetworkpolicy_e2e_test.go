@@ -430,6 +430,44 @@ var _ = testutils.E2eDatastoreDescribe("StagedNetworkPolicy tests", testutils.Da
 		Entry("StagedNetworkPolicy with default tier prefix", "default.netpol", "netpol"),
 	)
 
+	DescribeTable("StagedNetworkPolicy name validation tests",
+		func(policyName string, tier string, expectError bool) {
+			namespace := "default"
+
+			if tier != "default" {
+				// Create the tier if required before running other tiered policy tests.
+				tierSpec := apiv3.TierSpec{Order: &tierOrder}
+				By("Creating the tier")
+				_, resErr := c.Tiers().Create(ctx, &apiv3.Tier{
+					ObjectMeta: metav1.ObjectMeta{Name: tier},
+					Spec:       tierSpec,
+				}, options.SetOptions{})
+				Expect(resErr).NotTo(HaveOccurred())
+			}
+
+			_, err := c.StagedNetworkPolicies().Create(ctx,
+				&apiv3.StagedNetworkPolicy{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      policyName,
+						Namespace: namespace},
+					Spec: apiv3.StagedNetworkPolicySpec{
+						Tier: tier,
+					},
+				}, options.SetOptions{})
+
+			if expectError {
+				Expect(err).To(HaveOccurred())
+			} else {
+				Expect(err).ToNot(HaveOccurred())
+			}
+		},
+		Entry("StagedNetworkPolicy in default tier without prefix", "netpol", "default", false),
+		Entry("StagedNetworkPolicy in default tier with prefix", "default.netpol", "default", false),
+		Entry("StagedNetworkPolicy in custom tier with correct prefix", "tier1.netpol", "tier1", false),
+		Entry("StagedNetworkPolicy in custom tier without prefix", "netpol", "tier1", true),
+		Entry("StagedNetworkPolicy in custom tier with incorrect prefix", "tier1.netpol", "tier2", true),
+	)
+
 	Describe("StagedNetworkPolicy watch functionality", func() {
 		It("should handle watch events for different resource versions and event types", func() {
 			By("Listing NetworkPolicies with the latest resource version and checking for two results with name1/spec2 and name2/spec2")

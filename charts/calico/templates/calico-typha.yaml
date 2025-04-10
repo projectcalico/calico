@@ -86,7 +86,7 @@ spec:
         seccompProfile:
           type: RuntimeDefault
       containers:
-        - image: {{ .Values.typha.image }}:{{.Values.version }}
+        - image: {{ .Values.typha.registry }}/{{ .Values.typha.image }}:{{.Values.version }}
           imagePullPolicy: {{.Values.imagePullPolicy}}
           name: calico-typha
           ports:

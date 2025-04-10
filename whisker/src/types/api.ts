@@ -112,3 +112,8 @@ export type FlowsFilter = Partial<{
 }>;
 
 export type FlowsFilterKeys = keyof FlowsFilter;
+
+export type BannerContent = {
+    bannerText: string;
+    bannerLink: string;
+};

@@ -38,7 +38,8 @@ spec:
             metadata:
               type: object
             spec:
-              description: ManagementClusterConnectionSpec defines the desired state
+              description:
+                ManagementClusterConnectionSpec defines the desired state
                 of ManagementClusterConnection
               properties:
                 guardianDeployment:
@@ -48,7 +49,8 @@ spec:
                       description: Spec is the specification of the guardian Deployment.
                       properties:
                         template:
-                          description: Template describes the guardian Deployment pod
+                          description:
+                            Template describes the guardian Deployment pod
                             that will be created.
                           properties:
                             spec:
@@ -60,7 +62,8 @@ spec:
                                     If specified, this overrides the specified guardian Deployment containers.
                                     If omitted, the guardian Deployment will use its default values for its containers.
                                   items:
-                                    description: GuardianDeploymentContainer is a guardian
+                                    description:
+                                      GuardianDeploymentContainer is a guardian
                                       Deployment container.
                                     properties:
                                       name:
@@ -84,7 +87,8 @@ spec:
                                               DynamicResourceAllocation feature gate.
                                               This field is immutable. It can only be set for containers.
                                             items:
-                                              description: ResourceClaim references
+                                              description:
+                                                ResourceClaim references
                                                 one entry in PodSpec.ResourceClaims.
                                               properties:
                                                 name:
@@ -141,11 +145,13 @@ spec:
                                     If specified, this overrides the specified guardian Deployment init containers.
                                     If omitted, the guardian Deployment will use its default values for its init containers.
                                   items:
-                                    description: GuardianDeploymentInitContainer is
+                                    description:
+                                      GuardianDeploymentInitContainer is
                                       a guardian Deployment init container.
                                     properties:
                                       name:
-                                        description: Name is an enum which identifies
+                                        description:
+                                          Name is an enum which identifies
                                           the guardian Deployment init container by
                                           name.
                                         type: string
@@ -163,7 +169,8 @@ spec:
                                               DynamicResourceAllocation feature gate.
                                               This field is immutable. It can only be set for containers.
                                             items:
-                                              description: ResourceClaim references
+                                              description:
+                                                ResourceClaim references
                                                 one entry in PodSpec.ResourceClaims.
                                               properties:
                                                 name:
@@ -224,7 +231,8 @@ spec:
                     should be able to access this address. This field is used by managed clusters only.
                   type: string
                 tls:
-                  description: TLS provides options for configuring how Managed Clusters
+                  description:
+                    TLS provides options for configuring how Managed Clusters
                     can establish an mTLS connection with the Management Cluster.
                   properties:
                     ca:
@@ -241,7 +249,8 @@ spec:
                   type: object
               type: object
             status:
-              description: ManagementClusterConnectionStatus defines the observed state
+              description:
+                ManagementClusterConnectionStatus defines the observed state
                 of ManagementClusterConnection
               properties:
                 conditions:
@@ -249,7 +258,8 @@ spec:
                     Conditions represents the latest observed set of conditions for the component. A component may be one or more of
                     Ready, Progressing, Degraded or other customer types.
                   items:
-                    description: Condition contains details for one aspect of the current
+                    description:
+                      Condition contains details for one aspect of the current
                       state of this API Resource.
                     properties:
                       lastTransitionTime:
