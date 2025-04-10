@@ -6,15 +6,25 @@
 
 # Helm binary to use. Default to the one installed by the Makefile.
 HELM=${HELM:-../bin/helm}
+YQ=${YQ:-../bin/yq}
 
 # Get versions to install.
-defaultCalicoVersion=$(cat ../charts/calico/values.yaml | grep version: | cut -d" " -f2)
+defaultCalicoVersion=$($YQ .version <../charts/calico/values.yaml)
 CALICO_VERSION=${CALICO_VERSION:-$defaultCalicoVersion}
 
-defaultOperatorVersion=$(cat ../charts/tigera-operator/values.yaml | grep version: | cut -d" " -f4)
+defaultRegistry=$($YQ .node.registry <../charts/calico/values.yaml)
+REGISTRY=${REGISTRY:-$defaultRegistry}
+
+defaultOperatorVersion=$($YQ .tigeraOperator.version <../charts/tigera-operator/values.yaml)
 OPERATOR_VERSION=${OPERATOR_VERSION:-$defaultOperatorVersion}
 
-NON_HELM_MANIFEST_IMAGES="calico/apiserver calico/windows calico/ctl calico/csi calico/node-driver-registrar calico/dikastes calico/flannel-migration-controller"
+defaultOperatorRegistry=$($YQ .tigeraOperator.registry <../charts/tigera-operator/values.yaml)
+OPERATOR_REGISTRY=${OPERATOR_REGISTRY:-$defaultOperatorRegistry}
+
+defaultOperatorImage=$($YQ .tigeraOperator.image <../charts/tigera-operator/values.yaml)
+OPERATOR_IMAGE=${OPERATOR_IMAGE:-$defaultOperatorImage}
+
+NON_HELM_MANIFEST_IMAGES="apiserver windows ctl csi node-driver-registrar dikastes flannel-migration-controller"
 
 echo "Generating manifests for Calico=$CALICO_VERSION and tigera-operator=$OPERATOR_VERSION"
 
@@ -38,7 +48,10 @@ ${HELM} -n tigera-operator template \
 	--set whisker.enabled=false \
 	--set goldmane.enabled=false \
 	--set tigeraOperator.version=$OPERATOR_VERSION \
+	--set tigeraOperator.image=$OPERATOR_IMAGE \
+	--set tigeraOperator.registry=$OPERATOR_REGISTRY \
 	--set calicoctl.tag=$CALICO_VERSION \
+	--set calicoctl.image=$REGISTRY/ctl \
 	../charts/tigera-operator >> tigera-operator.yaml
 
 ##########################################################################
@@ -52,6 +65,15 @@ for FILE in $(ls ../charts/calico/crds); do
 		--include-crds \
 		--show-only $FILE \
 	        --set version=$CALICO_VERSION \
+	        --set node.registry=$REGISTRY \
+	        --set calicoctl.registry=$REGISTRY \
+	        --set typha.registry=$REGISTRY \
+	        --set cni.registry=$REGISTRY \
+	        --set kubeControllers.registry=$REGISTRY \
+	        --set flannel.registry=$REGISTRY \
+	        --set flannelMigration.registry=$REGISTRY \
+	        --set dikastes.registry=$REGISTRY \
+	        --set csi-driver.registry=$REGISTRY \
 		-f ../charts/values/calico.yaml >> crds.yaml
 done
 
@@ -107,7 +129,10 @@ ${HELM} template \
 	--set apiServer.enabled=false \
 	--set goldmane.enabled=false \
 	--set whisker.enabled=false \
+	--set tigeraOperator.image=$OPERATOR_IMAGE \
 	--set tigeraOperator.version=$OPERATOR_VERSION \
+	--set tigeraOperator.registry=$OPERATOR_REGISTRY \
+	--set calicoctl.image=$REGISTRY/ctl \
 	--set calicoctl.tag=$CALICO_VERSION
 # The first two lines are a newline and a yaml separator - remove them.
 find ocp/tigera-operator -name "*.yaml" | xargs sed -i -e 1,2d
@@ -139,7 +164,9 @@ ${HELM} -n kube-system template \
 if [[ $CALICO_VERSION != master ]]; then
 echo "Replacing image versions for static manifests"
 	for img in $NON_HELM_MANIFEST_IMAGES; do
-		echo $img
-		find . -type f -exec sed -i "s|$img:[A-Xa-z0-9_.-]*|$img:$CALICO_VERSION|g" {} \;
+		curr_img=${defaultRegistry}/${img}
+		new_img=${REGISTRY}/${img}
+		echo "$curr_img:$defaultCalicoVersion --> $new_img:$CALICO_VERSION"
+		find . -type f -exec sed -i "s|${curr_img}:[A-Za-z0-9_.-]*|${new_img}:$CALICO_VERSION|g" {} \;
 	done
 fi
