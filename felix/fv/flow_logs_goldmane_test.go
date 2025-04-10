@@ -32,6 +32,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
 	"github.com/projectcalico/calico/felix/collector/flowlog"
+	"github.com/projectcalico/calico/felix/collector/goldmane"
 	"github.com/projectcalico/calico/felix/collector/types/endpoint"
 	"github.com/projectcalico/calico/felix/collector/types/tuple"
 	"github.com/projectcalico/calico/felix/fv/connectivity"
@@ -82,7 +83,7 @@ import (
 // Flow logs have little to do with the backend, and these tests are relatively slow, so
 // better to run with one backend only.  etcdv3 is easier because we create a fresh
 // datastore for every test and so don't need to worry about cleaning resources up.
-var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log tests", []apiconfig.DatastoreType{apiconfig.EtcdV3}, func(getInfra infrastructure.InfraFactory) {
+var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ pepper goldmane flow log tests", []apiconfig.DatastoreType{apiconfig.EtcdV3}, func(getInfra infrastructure.InfraFactory) {
 	bpfEnabled := os.Getenv("FELIX_FV_ENABLE_BPF") == "true"
 
 	var (
@@ -105,7 +106,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log tests", [
 
 		opts.ExtraEnvVars["FELIX_FLOWLOGSCOLLECTORDEBUGTRACE"] = "true"
 		opts.ExtraEnvVars["FELIX_FLOWLOGSFLUSHINTERVAL"] = "2"
-		opts.ExtraEnvVars["FELIX_FLOWLOGSGOLDMANESERVER"] = flowlogs.LocalGoldmaneServer
+		opts.ExtraEnvVars["FELIX_FLOWLOGSGOLDMANESERVER"] = goldmane.LocalGoldmaneServer
 	})
 
 	JustBeforeEach(func() {
@@ -591,7 +592,7 @@ var _ = infrastructure.DatastoreDescribe("goldmane flow log ipv6 tests", []apico
 		opts.ExtraEnvVars["FELIX_FLOWLOGSFLUSHINTERVAL"] = "2"
 		opts.ExtraEnvVars["FELIX_IPV6SUPPORT"] = "true"
 		opts.ExtraEnvVars["FELIX_DefaultEndpointToHostAction"] = "RETURN"
-		opts.ExtraEnvVars["FELIX_FLOWLOGSGOLDMANESERVER"] = flowlogs.LocalGoldmaneServer
+		opts.ExtraEnvVars["FELIX_FLOWLOGSGOLDMANESERVER"] = goldmane.LocalGoldmaneServer
 
 		tc, client = infrastructure.StartNNodeTopology(2, opts, infra)
 
