@@ -1,4 +1,4 @@
-// Copyright (c) 2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2021-2024 Tigera, Inc. All rights reserved.
 
 /*
 Copyright 2017 The Kubernetes Authors.
@@ -31,6 +31,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/apiserver/pkg/authorization/authorizerfactory"
 	k8sopenapi "k8s.io/apiserver/pkg/endpoints/openapi"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
@@ -54,24 +55,24 @@ type CalicoServerOptions struct {
 	PrintSwagger    bool
 	SwaggerFilePath string
 
-	// Enable Admission Controller support.
-	EnableAdmissionController bool
+	// This Kubernetes feature was made default in k8s 1.30, but may not be enabled prior.
+	EnableValidatingAdmissionPolicy bool
 
 	StopCh <-chan struct{}
 }
 
-func (s *CalicoServerOptions) addFlags(flags *pflag.FlagSet) {
-	s.RecommendedOptions.AddFlags(flags)
+func (o *CalicoServerOptions) addFlags(flags *pflag.FlagSet) {
+	o.RecommendedOptions.AddFlags(flags)
 
-	flags.BoolVar(&s.EnableAdmissionController, "enable-admission-controller-support", s.EnableAdmissionController,
-		"If true, admission controller hooks will be enabled.")
-	flags.BoolVar(&s.PrintSwagger, "print-swagger", false,
+	flags.BoolVar(&o.PrintSwagger, "print-swagger", false,
 		"If true, prints swagger to stdout and exits.")
-	flags.StringVar(&s.SwaggerFilePath, "swagger-file-path", "./",
+	flags.StringVar(&o.SwaggerFilePath, "swagger-file-path", "./",
 		"If print-swagger is set true, then write swagger.json to location specified. Default is current directory.")
+	flags.BoolVar(&o.EnableValidatingAdmissionPolicy, "enable-validating-admission-policy", true,
+		"If true, establishes watches for ValidatingAdmissionPolicy at startup.")
 }
 
-func (o CalicoServerOptions) Validate(args []string) error {
+func (o *CalicoServerOptions) Validate(args []string) error {
 	errors := []error{}
 	errors = append(errors, o.RecommendedOptions.Validate()...)
 	return utilerrors.NewAggregate(errors)
@@ -118,6 +119,12 @@ func (o *CalicoServerOptions) Config() (*apiserver.Config, error) {
 		return nil, err
 	}
 
+	// We now build the APIServer against >= k8s v1.29.
+	// FlowControl API resources graduated to v1 in this version,
+	// so if we run this APIServer on a backlevel (<v1.29) cluster,
+	// it will never go ready, due to a failed fetch of the v1 resources.
+	o.RecommendedOptions.Features.EnablePriorityAndFairness = false
+
 	// Explicitly setting cipher suites in order to remove deprecated ones
 	// The list is taken from https://github.com/golang/go/blob/dev.boringcrypto.go1.13/src/crypto/tls/boring.go#L54
 	cipherSuites := []uint16{
@@ -152,14 +159,17 @@ func (o *CalicoServerOptions) Config() (*apiserver.Config, error) {
 			return nil, err
 		}
 	} else {
+		// Validating Admission Policy is generally available in k8s 1.30 [1].
+		// The admission plugin "ValidatingAdmissionPolicy" fails to initialize due to
+		// a missing authorizer. When DisableAuth=true, we need a always allow authorizer
+		// to pass ValidateInitialization checks.
+		// [1] https://kubernetes.io/blog/2024/04/24/validating-admission-policy-ga/
+		serverConfig.Authorization.Authorizer = authorizerfactory.NewAlwaysAllowAuthorizer()
 		// always warn when auth is disabled, since this should only be used for testing
 		klog.Infof("Authentication and authorization disabled for testing purposes")
 	}
 
 	if err := o.RecommendedOptions.Audit.ApplyTo(&serverConfig.Config); err != nil {
-		return nil, err
-	}
-	if err := o.RecommendedOptions.Features.ApplyTo(&serverConfig.Config); err != nil {
 		return nil, err
 	}
 
@@ -171,8 +181,13 @@ func (o *CalicoServerOptions) Config() (*apiserver.Config, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	dynamicClient, err := dynamic.NewForConfig(serverConfig.ClientConfig)
 	if err != nil {
+		return nil, err
+	}
+
+	if err := o.RecommendedOptions.Features.ApplyTo(&serverConfig.Config, kubeClient, serverConfig.SharedInformerFactory); err != nil {
 		return nil, err
 	}
 

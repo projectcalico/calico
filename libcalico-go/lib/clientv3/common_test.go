@@ -57,7 +57,7 @@ var _ = testutils.E2eDatastoreDescribe("Common resource tests", testutils.Datast
 			By("Creating a new IPPool with name1/spec1 and expecting CreationTimestamp nanoseconds to be stripped off")
 			now := time.Now()
 			res1, outError := c.IPPools().Create(ctx, &apiv3.IPPool{
-				ObjectMeta: metav1.ObjectMeta{Name: name1, CreationTimestamp: metav1.Time{now}},
+				ObjectMeta: metav1.ObjectMeta{Name: name1, CreationTimestamp: metav1.Time{Time: now}},
 				Spec:       spec1,
 			}, options.SetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
