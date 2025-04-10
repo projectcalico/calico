@@ -1,0 +1,119 @@
+// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package server
+
+import (
+	"context"
+
+	"github.com/sirupsen/logrus"
+	"google.golang.org/grpc"
+
+	"github.com/projectcalico/calico/goldmane/pkg/aggregator"
+	"github.com/projectcalico/calico/goldmane/proto"
+)
+
+func NewFlowsServer(aggr *aggregator.LogAggregator) *FlowsServer {
+	return &FlowsServer{
+		aggr: aggr,
+	}
+}
+
+type FlowsServer struct {
+	proto.UnimplementedFlowsServer
+
+	aggr *aggregator.LogAggregator
+}
+
+func (s *FlowsServer) RegisterWith(srv *grpc.Server) {
+	// Register the server with the gRPC server.
+	proto.RegisterFlowsServer(srv, s)
+	logrus.Info("Registered FlowAPI Server")
+}
+
+func (s *FlowsServer) List(ctx context.Context, req *proto.FlowListRequest) (*proto.FlowListResult, error) {
+	return s.aggr.List(req)
+}
+
+func (s *FlowsServer) Stream(req *proto.FlowStreamRequest, server proto.Flows_StreamServer) error {
+	// Get a new Stream from the aggregator.
+	stream, err := s.aggr.Stream(req)
+	if err != nil {
+		return err
+	}
+	defer stream.Close()
+
+	// Create a channel to signal when the batch is done.
+	workerOutput := make(chan error, 1)
+	workerInput := make(chan []*proto.FlowResult)
+
+	// Start a worker to stream the flows to the server.
+	ctx := server.Context()
+	go s.streamWorker(ctx, server, workerInput, workerOutput)
+
+	var batch []*proto.FlowResult
+	for {
+		select {
+		case err := <-workerOutput:
+			logrus.WithError(err).Info("Batch completed")
+			if err != nil {
+				logrus.WithError(err).Error("error sending flow to client")
+				return err
+			}
+
+			if len(batch) > 0 {
+				// Send the batch to the worker and reset the batch for the next iteration.
+				workerInput <- batch
+				batch = []*proto.FlowResult{}
+			}
+		case flow := <-stream.Flows():
+			// We need to prioritize servicing the input channel, so read batches of flows to keep the channel served, and send them asynchronously.
+			batch = append(batch, flow)
+
+			select {
+			case workerInput <- batch:
+				// Worker is free to take the batch. Send what we have and reset the batch.
+				batch = []*proto.FlowResult{}
+			default:
+				// Worker is busy. Wait before sending the batch, and continue reading flows from the stream while we do.
+			}
+		case <-ctx.Done():
+			return server.Context().Err()
+		}
+	}
+}
+
+func (s *FlowsServer) streamWorker(ctx context.Context, server proto.Flows_StreamServer, in chan []*proto.FlowResult, out chan error) {
+	// Loop, sending batches of flows to the client.
+	for {
+		select {
+		case batch := <-in:
+			logrus.WithField("batch_size", len(batch)).Info("Sending batch of flows to client")
+			for _, flow := range batch {
+				if err := server.Send(flow); err != nil {
+					out <- err
+					return
+				}
+			}
+			// Signal that the batch is done.
+			out <- nil
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+func (s *FlowsServer) FilterHints(ctx context.Context, req *proto.FilterHintsRequest) (*proto.FilterHintsResult, error) {
+	return s.aggr.Hints(req)
+}

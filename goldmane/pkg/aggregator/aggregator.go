@@ -17,6 +17,7 @@ package aggregator
 import (
 	"context"
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -28,6 +29,7 @@ import (
 	"github.com/projectcalico/calico/lib/std/chanutil"
 	"github.com/projectcalico/calico/libcalico-go/lib/health"
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	cprometheus "github.com/projectcalico/calico/libcalico-go/lib/prometheus"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -41,7 +43,7 @@ const (
 	channelDepth = 5000
 
 	// batchSize is the max number of flows to process per batch.
-	batchSize = 500
+	batchSize = 1000
 
 	// healthName is the name of this component in the health aggregator.
 	healthName = "aggregator"
@@ -53,14 +55,14 @@ var (
 		Help: "Total number of flows received by Goldmane aggregator.",
 	})
 
-	flowIndexLatency = prometheus.NewHistogram(prometheus.HistogramOpts{
-		Name: "goldmane_aggr_flow_process_latency",
-		Help: "Histogram measuring the time taken to index a flow.",
+	flowIndexLatency = cprometheus.NewSummary(prometheus.SummaryOpts{
+		Name: "goldmane_aggr_flow_index_latency_ms",
+		Help: "Summary measuring the time taken to index a flow.",
 	})
 
-	flowIndexBatchSize = prometheus.NewHistogram(prometheus.HistogramOpts{
+	flowIndexBatchSize = cprometheus.NewSummary(prometheus.SummaryOpts{
 		Name: "goldmane_aggr_flow_index_batch_size",
-		Help: "Histogram measuring the number of flows processed in a batch.",
+		Help: "Measure the number of flows processed in a batch.",
 	})
 
 	flowChannelSize = prometheus.NewGauge(prometheus.GaugeOpts{
@@ -68,19 +70,19 @@ var (
 		Help: "Current size of the flow ingest buffer.",
 	})
 
-	rolloverLatency = prometheus.NewHistogram(prometheus.HistogramOpts{
+	rolloverLatency = cprometheus.NewSummary(prometheus.SummaryOpts{
 		Name: "goldmane_aggr_rollover_latency_ms",
-		Help: "Histogram measuring the time until the next rollover.",
+		Help: "Summary of the time until the next rollover.",
 	})
 
-	rolloverDuration = prometheus.NewHistogram(prometheus.HistogramOpts{
+	rolloverDuration = cprometheus.NewSummary(prometheus.SummaryOpts{
 		Name: "goldmane_aggr_rollover_duration_ms",
 		Help: "Duration of the rollover process.",
 	})
 
-	backfillLatency = prometheus.NewHistogram(prometheus.HistogramOpts{
+	backfillLatency = cprometheus.NewSummary(prometheus.SummaryOpts{
 		Name: "goldmane_aggr_backfill_latency_ms",
-		Help: "Histogram measuring the time taken to backfill a stream.",
+		Help: "Summary measuring the time taken to backfill a stream.",
 	})
 
 	numUniqueFlows = prometheus.NewGauge(prometheus.GaugeOpts{
@@ -130,6 +132,12 @@ type filterHintsResponse struct {
 type streamRequest struct {
 	respCh chan *Stream
 	req    *proto.FlowStreamRequest
+
+	// channel size allows configuration of the size of the channel to use for this stream.
+	// This is to avoid overloading the channel with too many flows at once.
+	// Note; This is a quick fix to avoid having to properly decouple streaming from the main loop.
+	// long term, we should do away with this and use a proper backpressure mechanism.
+	channelSize int
 }
 
 type sinkRequest struct {
@@ -305,7 +313,7 @@ func (a *LogAggregator) Run(startTime int64) {
 	// Start the stream manager on its own goroutine.
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	go a.streams.Run(ctx, 1)
+	go a.streams.Run(ctx)
 
 	// Schedule the first rollover one aggregation period from now.
 	rolloverCh := a.rolloverFunc(a.aggregationWindow)
@@ -322,7 +330,7 @@ func (a *LogAggregator) Run(startTime int64) {
 			if a.health != nil {
 				a.health.Report(healthName, &health.HealthReport{Live: true, Ready: true})
 			}
-			rolloverDuration.Observe(time.Since(start).Seconds())
+			rolloverDuration.Observe(float64(time.Since(start).Milliseconds()))
 		case req := <-a.listRequests:
 			req.respCh <- a.queryFlows(req.req)
 		case req := <-a.filterHintsRequests:
@@ -372,10 +380,23 @@ func (a *LogAggregator) Stream(req *proto.FlowStreamRequest) (*Stream, error) {
 	respCh := make(chan *Stream)
 	defer close(respCh)
 
+	// Determine the expected backfill size for this stream. We ensure a minimum channel size, while allowing for
+	// larger channels for streams that will need to handle a large amount of backfill data. This is mostly a hack
+	// to work around the fact that we don't have a proper backpressure mechanism in place yet.
+	channelSize := 0
+	if req.StartTimeGte != 0 {
+		a.buckets.IterBucketsTime(req.StartTimeGte, a.nowFunc().Unix(), func(bucket *bucketing.AggregationBucket) error {
+			channelSize += bucket.Flows.Len()
+			return nil
+		})
+	}
+	channelSize = int(math.Min(float64(channelSize), float64(channelDepth)))
+
 	// Register the stream with the stream manager. This will return a new Stream object.
 	a.streams.Register(&streamRequest{
-		respCh: respCh,
-		req:    req,
+		respCh:      respCh,
+		req:         req,
+		channelSize: channelSize,
 	})
 
 	// Wait for a response.
@@ -450,6 +471,7 @@ func (a *LogAggregator) backfill(stream *Stream) {
 	// Measure the time it takes to backfill the stream.
 	start := time.Now()
 	defer func() {
+		logrus.WithField("id", stream.id).WithField("duration", float64(time.Since(start).Milliseconds())).Info("Backfill complete")
 		backfillLatency.Observe(float64(time.Since(start).Milliseconds()))
 	}()
 
@@ -810,5 +832,5 @@ func (a *LogAggregator) indexFlow(flow *types.Flow) {
 	a.buckets.AddFlow(flow)
 
 	// Record time taken to process the flow.
-	flowIndexLatency.Observe(time.Since(flowStart).Seconds())
+	flowIndexLatency.Observe(float64(time.Since(flowStart).Milliseconds()))
 }
