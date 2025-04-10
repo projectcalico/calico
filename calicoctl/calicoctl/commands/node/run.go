@@ -374,7 +374,7 @@ Description:
 		for _, line := range strings.Split(string(output), "/n") {
 			errStr += fmt.Sprintf(" | %s/n", line)
 		}
-		return fmt.Errorf(errStr)
+		return fmt.Errorf("%s", errStr)
 	}
 
 	// Create the command to follow the docker logs for the calico/node

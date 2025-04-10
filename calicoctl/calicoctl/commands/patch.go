@@ -110,7 +110,7 @@ Description:
 		for _, err := range results.ResErrs {
 			errStr += fmt.Sprintf("Failed to patch '%s' resource: %v\n", results.SingleKind, err)
 		}
-		return fmt.Errorf(errStr)
+		return fmt.Errorf("%s", errStr)
 	}
 
 	return nil
