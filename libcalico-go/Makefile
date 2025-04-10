@@ -53,8 +53,14 @@ gen-files: gen-crds
 ## Force a rebuild of custom resource definition yamls
 gen-crds:
 	rm -rf config/crd
-	$(DOCKER_GO_BUILD) sh -c '$(GIT_CONFIG_SSH) controller-gen  crd:allowDangerousTypes=true,crdVersions=v1,deprecatedV1beta1CompatibilityPreserveUnknownFields=false,maxDescLen=0 paths=./lib/apis/... output:crd:dir=config/crd/'
+	# Generate CRDs
+	$(DOCKER_GO_BUILD) sh -c '$(GIT_CONFIG_SSH) controller-gen crd:allowDangerousTypes=true,crdVersions=v1,deprecatedV1beta1CompatibilityPreserveUnknownFields=false paths=./lib/apis/... output:crd:dir=config/crd/crd-felix/'
+	# Generate CRDs with maxDescLen=0
+	$(DOCKER_GO_BUILD) sh -c '$(GIT_CONFIG_SSH) controller-gen crd:allowDangerousTypes=true,crdVersions=v1,deprecatedV1beta1CompatibilityPreserveUnknownFields=false,maxDescLen=0 paths=./lib/apis/... output:crd:dir=config/crd/'
+	# Copy the Felix CRD over the one with truncated descriptions
+	cp config/crd/crd-felix/crd.projectcalico.org_felixconfigurations.yaml config/crd
 	# Cleanup
+	rm -rf config/crd/crd-felix/
 	rm -f config/crd/_.yaml
 	rm -f config/crd/_nodes.yaml
 	# Patch in manual tweaks to the generated CRDs.
