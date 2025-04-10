@@ -40,7 +40,7 @@ type GoldmaneReporter struct {
 	client  *client.FlowClient
 	once    sync.Once
 
-	// Fields related to goldmane unix socket
+	// Fields related to goldmane node socket
 	mayReportToNodeSocket bool
 	nodeClient            *client.FlowClient
 	nodeClientLock        sync.RWMutex

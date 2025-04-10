@@ -18,10 +18,11 @@ import (
 	"net"
 	"sync"
 
-	"github.com/projectcalico/calico/goldmane/pkg/server"
-	"github.com/projectcalico/calico/goldmane/pkg/types"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
+
+	"github.com/projectcalico/calico/goldmane/pkg/server"
+	"github.com/projectcalico/calico/goldmane/pkg/types"
 )
 
 const (
