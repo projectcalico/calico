@@ -982,7 +982,42 @@ class TestPluginEtcdBase(_TestEtcdBase):
         # Reset for future tests.
         lib.m_compat.cfg.CONF.calico.max_ingress_connections_per_port = 0
         lib.m_compat.cfg.CONF.calico.max_egress_connections_per_port = 0
+
+        # Set a QoS policy on the network instead of directly on the port.
+        #
+        # Note that the network_id at this point is 'calico-other-network-id'.
+        _log.debug("Test getting QoS policy from network object")
         del self.osdb_ports[0]['qos_policy_id']
+        self.assertEqual(context._port['network_id'], 'calico-other-network-id')
+        self.assertEqual(self.osdb_networks[1]['id'], 'calico-other-network-id')
+        self.osdb_networks[1]['qos_policy_id'] = '1'
+        self.driver.update_port_postcommit(context)
+
+        # Expected changes
+        ep_hello_value_v3['spec']['qosControls'] = {
+            'egressBandwidth': 10000000,
+        }
+        expected_writes = {
+            ep_hello_key_v3: ep_hello_value_v3,
+            sg_1_key_v3: sg_1_value_v3,
+        }
+        self.assertEtcdWrites(expected_writes)
+        self.assertEtcdDeletes(set())
+
+        # Remove the QoS policy from the network again.
+        _log.debug("Retest after removing all QoS policy")
+        del self.osdb_networks[1]['qos_policy_id']
+        del self.osdb_ports[0]['network_qos_policy_id']
+        self.driver.update_port_postcommit(context)
+
+        # Expected changes
+        del ep_hello_value_v3['spec']['qosControls']
+        expected_writes = {
+            ep_hello_key_v3: ep_hello_value_v3,
+            sg_1_key_v3: sg_1_value_v3,
+        }
+        self.assertEtcdWrites(expected_writes)
+        self.assertEtcdDeletes(set())
 
         # Reset the state for safety.
         self.osdb_ports[0]['fixed_ips'] = old_ips

@@ -225,7 +225,7 @@ class WorkloadEndpointSyncer(ResourceSyncer):
             )
         ]
 
-    def get_network_name_for_port(self, context, port):
+    def get_network_properties_for_port(self, context, port):
         network = context.session.query(
                 models_v2.Network
             ).filter_by(
@@ -233,14 +233,15 @@ class WorkloadEndpointSyncer(ResourceSyncer):
             ).first()
 
         try:
-            network_name = datamodel_v3.sanitize_label_name_value(
+            port['network_name'] = datamodel_v3.sanitize_label_name_value(
                 network['name'],
                 NETWORK_NAME_MAX_LENGTH,
             )
-            return network_name
         except Exception:
             LOG.warning(f"Failed to find network name for port {port['id']}")
-            return None
+
+        if 'qos_policy_id' in network:
+            port['network_qos_policy_id'] = network['qos_policy_id']
 
     def add_extra_port_information(self, context, port):
         """add_extra_port_information
@@ -248,6 +249,7 @@ class WorkloadEndpointSyncer(ResourceSyncer):
         Gets extra information for a port that is needed before sending it to
         etcd.
         """
+        LOG.debug("port = %r", port)
         port['fixed_ips'] = self.get_fixed_ips_for_port(
             context, port
         )
@@ -257,9 +259,7 @@ class WorkloadEndpointSyncer(ResourceSyncer):
         port['security_groups'] = self.get_security_groups_for_port(
             context, port
         )
-        port['network_name'] = self.get_network_name_for_port(
-            context, port
-        )
+        self.get_network_properties_for_port(context, port)
 
         self.add_port_gateways(port, context)
         self.add_port_interface_name(port)
@@ -316,7 +316,8 @@ class WorkloadEndpointSyncer(ResourceSyncer):
         """
         qos = {}
 
-        qos_policy_id = port.get('qos_policy_id')
+        qos_policy_id = port.get('qos_policy_id') or port.get('network_qos_policy_id')
+        LOG.debug("QoS Policy ID = %r", qos_policy_id)
         if qos_policy_id:
             rules = context.session.query(
                 qos_models.QosBandwidthLimitRule
