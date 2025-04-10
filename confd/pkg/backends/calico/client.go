@@ -365,7 +365,7 @@ type client struct {
 	secretWatcher *secretWatcher
 
 	// Subcomponent for accessing and watching local BGP peers.
-	localBGPPeerWatcher *localBGPPeerWatcher
+	localBGPPeerWatcher *LocalBGPPeerWatcher
 
 	// Channels used to decouple update and status processing.
 	syncerC  chan interface{}
@@ -1632,12 +1632,12 @@ func (c *client) onNewUpdates() {
 	}
 }
 
-func (c *client) recheckPeerConfig() {
-	log.Info("Trigger to recheck BGP peers following possible password or local BGP peer update")
+func (c *client) recheckPeerConfig(reason string) {
 	select {
 	// Non-blocking write into the recheckC channel.  The idea here is that we don't need to add
 	// a second trigger if there is already one pending.
 	case c.recheckC <- struct{}{}:
+		log.WithField("trigger", reason).Info("Triggered recheck of BGP peers.")
 	default:
 	}
 }
