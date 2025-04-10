@@ -25,6 +25,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/guardian/pkg/asyncutil"
+	"github.com/projectcalico/calico/lib/std/clock"
 )
 
 const (
@@ -97,7 +98,10 @@ func newTunnel(dialer SessionDialer, opts ...Option) (*tunnel, error) {
 func (t *tunnel) Connect(ctx context.Context) error {
 	var err error
 	t.connectOnce.Do(func() {
-		t.session, err = t.dialer.Dial()
+		// Block until the initial connection can be created. If this fails then return an error.
+		// It is up to the dialer to decide whether dialing should be retried, and for how long. An error
+		// return signals a fatal error.
+		t.session, err = t.dialer.Dial(ctx)
 		if err != nil {
 			logrus.WithError(err).Error("Failed to open initial connection.")
 			return
@@ -121,8 +125,17 @@ func (t *tunnel) Connect(ctx context.Context) error {
 			})
 		t.acceptConnExecutor = asyncutil.NewCommandExecutor(coordinatorCtx, t.cmdErrBuff,
 			func(ctx context.Context, a any) (net.Conn, error) {
-				logrus.Debug("Accepting connection from the other side of the tunnel.")
-				return t.session.Accept()
+				logrus.Debug("Waiting for connection from other side of tunnel.")
+
+				conn, err := t.session.Accept()
+				if err != nil {
+					logrus.WithError(err).Error("Failed to accept connection.")
+					return nil, err
+				}
+
+				logrus.Debug("Finished waiting for connection from other side of tunnel.")
+
+				return conn, err
 			})
 		t.getAddrExecutor = asyncutil.NewCommandExecutor(coordinatorCtx, t.cmdErrBuff,
 			func(ctx context.Context, a any) (net.Addr, error) {
@@ -143,26 +156,24 @@ func (t *tunnel) startServiceLoop(ctx context.Context) {
 
 	defer func() {
 		defer close(t.closed)
-		defer t.stopExecutors()
 
+		logrus.Info("Shutting down.")
 		if t.session != nil {
 			logrus.Info("Closing session.")
 			if err := t.session.Close(); err != nil {
 				logrus.WithError(err).Error("Failed to close mux.")
 			}
 		}
+
+		t.stopExecutors()
+		<-cmdCoordinator.WaitForShutdown()
 	}()
 
-	var recreateSession <-chan struct{}
+	var lastDrainTime time.Time
+	var drain <-chan time.Time
+	var drainFinished <-chan struct{}
+	drainInterval := 2 * time.Second
 
-	var drainCoordinatorCh <-chan asyncutil.Result[asyncutil.Signaler]
-	// Use a FunctionCallRateLimiter to 1) ensure we don't rapidly retry recreating the session if it's constantly
-	// disconnecting and 2) return an error if this is called to many times within a 30-second time window.
-	drainCoordinator := asyncutil.NewFunctionCallRateLimiter(2*time.Second, 30*time.Second, 5, func(any) (asyncutil.Signaler, error) {
-		return cmdCoordinator.DrainAndBacklog(), nil
-	})
-
-	defer drainCoordinator.Close()
 	for {
 		logrus.Debug("Waiting for signals.")
 		select {
@@ -177,35 +188,41 @@ func (t *tunnel) startServiceLoop(ctx context.Context) {
 				return
 			}
 
-			// If restartSession is not nil then we're already calling restart session.
-			if drainCoordinatorCh == nil {
-				logrus.Debug("Draining coordinator.")
-				drainCoordinatorCh = drainCoordinator.Run(nil)
-				logrus.Debug("Finished call.")
+			// Break from this block if we're in the middle of draining (drainAndBacklogFinished channel is not nil)
+			// or if the drainTimer hasn't expired yet (
+			if drainFinished != nil || drain != nil {
+				break
 			}
-		case r := <-drainCoordinatorCh:
-			// drainCoordinatorCh returns the result of the rate limited call to drain the coordinator. If the rate limit
-			// has been exceeded then it an error will be returned, otherwise the result of the call to the function
-			// is returned
-			drainCoordinatorCh = nil
 
-			// Capture any rate limiter errors while recreating the session and exit if there are any.
-			if sig, err := r.Result(); err != nil {
-				logrus.WithError(err).Error("Failed to handle request, closing tunnel permanently.")
-				return
-			} else {
-				// Set the signal to re-created the session once we receive the signal that the coordinator is drained.
-				recreateSession = sig.Receive()
-			}
-		case <-recreateSession:
-			recreateSession = nil
-			t.reCreateSession()
+			// Set the drain channel to signal that we executors should be drained. This is an immediate action if the
+			// amount of time past since the last drain is greater than the drainInterval (this is to avoid rapid draining
+			// on continuous errors).
+			duration := clock.Since(lastDrainTime.Add(drainInterval))
+			// The negative duration here makes the channel fire immediately if the drain interval has been exceeded.
+			drain = clock.NewTimer(-duration).Chan()
+		case <-drain:
+			drain = nil
+			logrus.Info("Starting drain and backlog...")
+
+			// Indicate that we're not ready.
+			drainFinished = cmdCoordinator.DrainAndBacklog()
+		case <-drainFinished:
+			logrus.Info("Finished draining, recreating the tunnel session...")
+
+			lastDrainTime = clock.Now()
+			drainFinished = nil
+
+			// Now that we've finished draining and backlogging, kick off the session recreation (which is done asynchronously
+			// and puts the session on the sessionChan when done.
+			t.reCreateSession(ctx)
 		case obj := <-t.sessionChan:
 			if obj.Err != nil {
 				logrus.WithError(obj.Err).Error("Failed to handle request, closing tunnel permanently.")
 				return
 			}
+
 			logrus.Info("Session successfully recreated, will handle any outstanding requests.")
+
 			t.session = obj.Obj
 			t.dialing = false
 
@@ -217,11 +234,11 @@ func (t *tunnel) startServiceLoop(ctx context.Context) {
 	}
 }
 
-func (t *tunnel) reCreateSession() {
+func (t *tunnel) reCreateSession(ctx context.Context) {
 	if !t.dialing {
 		t.dialing = true
 		go func() {
-			mux, err := t.dialer.Dial()
+			mux, err := t.dialer.Dial(ctx)
 			t.sessionChan <- newObjectWithErr(mux, err)
 		}()
 	}
@@ -276,6 +293,9 @@ func newListener(tunnel *tunnel) *listener {
 // Accept waits for a connection to be opened from the other side of the connection and returns it.
 func (l *listener) Accept() (net.Conn, error) {
 	c, err := l.tunnel.accept()
+	if err != nil {
+		logrus.WithError(err).Error("Failed to accept connection.")
+	}
 	return c, err
 }
 

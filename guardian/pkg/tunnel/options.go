@@ -25,7 +25,7 @@ type Option func(*tunnel) error
 
 type DialerOption func(*sessionDialer) error
 
-// WithKeepAliveSettings sets the Keep Alive settings for the tunnel.
+// WithDialerKeepAliveSettings sets the Keep Alive settings for the tunnel.
 func WithDialerKeepAliveSettings(enable bool, intervalDuration time.Duration) DialerOption {
 	return func(dialer *sessionDialer) error {
 		dialer.keepAliveEnable = enable

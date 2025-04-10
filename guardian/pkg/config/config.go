@@ -33,7 +33,7 @@ import (
 	"golang.org/x/net/http/httpproxy"
 
 	calicotls "github.com/projectcalico/calico/crypto/pkg/tls"
-	"github.com/projectcalico/calico/guardian/pkg/cryptoutils"
+	"github.com/projectcalico/calico/lib/std/cryptoutils"
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 )
 
@@ -54,14 +54,20 @@ type Config struct {
 	VoltronCAType string `default:"Tigera" split_words:"true"`
 	VoltronURL    string `required:"true" split_words:"true"`
 
+	// Configuration for health checking.
+	HealthEnabled bool `json:"health_enabled" envconfig:"HEALTH_ENABLED" default:"true"`
+	HealthPort    int  `json:"health_port" envconfig:"HEALTH_PORT" default:"8080"`
+
 	KeepAliveEnable   bool `default:"true" split_words:"true"`
 	KeepAliveInterval int  `default:"100" split_words:"true"`
 
 	K8sEndpoint string `default:"https://kubernetes.default" split_words:"true"`
 
-	TunnelDialRetryAttempts int           `default:"20" split_words:"true"`
+	// TunnelDialRetryAttempts is the number of times to the tunnel dialer should retry before failing.
+	// -1 means dial indefinitely.
+	TunnelDialRetryAttempts int           `default:"-1" split_words:"true"`
 	TunnelDialRetryInterval time.Duration `default:"5s" split_words:"true"`
-	TunnelDialTimeout       time.Duration `default:"60s" split_words:"true"`
+	TunnelDialTimeout       time.Duration `default:"10s" split_words:"true"`
 
 	TunnelDialRecreateOnTunnelClose bool          `default:"true" split_words:"true"`
 	ConnectionRetryAttempts         int           `default:"25" split_words:"true"`
@@ -175,21 +181,26 @@ func (cfg *Config) Cert() (string, *x509.CertPool, error) {
 		// we need to strip the ports
 		return strings.Split(cfg.VoltronURL, ":")[0], nil, nil
 	} else {
-		serverCrt := fmt.Sprintf("%s/management-cluster.crt", cfg.CertPath)
-		pemServerCrt, err := os.ReadFile(serverCrt)
+		certPath := fmt.Sprintf("%s/management-cluster.crt", cfg.CertPath)
+		certBytes, err := os.ReadFile(certPath)
 		if err != nil {
 			return "", nil, fmt.Errorf("failed to read server cert: %w", err)
 		}
 
+		cert, err := cryptoutils.ParseCertificateBytes(certBytes)
+		if err != nil {
+			return "", nil, fmt.Errorf("cannot decode pem block for server certificate: %w", err)
+		}
+		if len(cert.DNSNames) != 1 {
+			return "", nil, errors.New("expected a single DNS name registered on the certificate")
+		}
+		serverName := cert.DNSNames[0]
+
 		ca := x509.NewCertPool()
-		if ok := ca.AppendCertsFromPEM(pemServerCrt); !ok {
-			return "", nil, errors.New("cannot append the certificate to ca pool.")
+		if ok := ca.AppendCertsFromPEM(certBytes); !ok {
+			return "", nil, errors.New("failed to append the certificate to ca pool")
 		}
 
-		serverName, err := cryptoutils.ExtractServerName(pemServerCrt)
-		if err != nil {
-			return "", nil, err
-		}
 		return serverName, ca, nil
 	}
 }
