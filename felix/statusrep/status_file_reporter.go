@@ -318,6 +318,7 @@ func (fr *EndpointStatusFileReporter) reconcileStatusFiles() error {
 	logrus.Debug("Start reconcile status file")
 
 	fr.statusDirDeltaTracker.PendingUpdates().Iter(func(k string, v epstatus.WorkloadEndpointStatus) deltatracker.IterAction {
+		logrus.WithField("file", k).Debug("Applying update to status file.")
 		itemJSON, err := json.Marshal(v)
 		if err != nil {
 			logrus.WithError(err).WithField("file", k).Error("error json Marshal on endpoint status")
@@ -336,8 +337,9 @@ func (fr *EndpointStatusFileReporter) reconcileStatusFiles() error {
 	})
 
 	fr.statusDirDeltaTracker.PendingDeletions().Iter(func(k string) deltatracker.IterAction {
+		logrus.WithField("file", k).Debug("Deleting status file.")
 		err := fr.epStatusWriter.DeleteStatusFile(k)
-		if err != nil {
+		if err != nil && !errors.Is(err, fs.ErrNotExist) {
 			logrus.WithError(err).WithField("file", k).Error("error on deleting file")
 			lastError = err
 			return deltatracker.IterActionNoOp
