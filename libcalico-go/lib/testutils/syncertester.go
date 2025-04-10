@@ -546,7 +546,7 @@ func updatesEqual(actual, expected api.Update) bool {
 // update - this makes writing tests simpler.
 func kvpsEqual(actual, expected model.KVPair) bool {
 	if !reflect.DeepEqual(expected.Key, actual.Key) {
-		log.Debug("Keys are not equal: %#v != %#v", expected.Key, actual.Key)
+		log.Debugf("Keys are not equal: %#v != %#v", expected.Key, actual.Key)
 		return false
 	}
 	if expected.UID != nil && (actual.UID == nil || *actual.UID != *expected.UID) {
