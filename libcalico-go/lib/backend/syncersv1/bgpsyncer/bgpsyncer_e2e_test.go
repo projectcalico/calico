@@ -156,7 +156,7 @@ var _ = testutils.E2eDatastoreDescribe("BGP syncer tests", testutils.DatastoreAl
 			Expect(err).NotTo(HaveOccurred())
 
 			syncTester.ExpectCacheSize(expectedCacheSize)
-			syncTester.ExpectNoData(model.GlobalBGPConfigKey{"as_num"})
+			syncTester.ExpectNoData(model.GlobalBGPConfigKey{Name: "as_num"})
 
 			By("Creating an IPPool")
 			poolCIDR := "192.124.0.0/21"

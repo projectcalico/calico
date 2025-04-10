@@ -289,7 +289,7 @@ var _ = testutils.E2eDatastoreDescribe("Node tests (etcdv3)", testutils.Datastor
 
 			handle := "myhandle"
 			err = c.IPAM().AssignIP(ctx, ipam.AssignIPArgs{
-				IP:       cnet.IP{wepIp},
+				IP:       cnet.IP{IP: wepIp},
 				Hostname: name1,
 				HandleID: &handle,
 			})
