@@ -456,7 +456,7 @@ func (rg *routeGenerator) advertiseThisService(svc *v1.Service, ep *v1.Endpoints
 	}
 
 	// also do nothing if no cluster IPs are assigned
-	if len(svc.Spec.ClusterIPs) == 0 {
+	if svc.Spec.ClusterIP == "" || svc.Spec.ClusterIP == "None" {
 		logc.Debug("Skipping service with no cluster IPs")
 		return false
 	}

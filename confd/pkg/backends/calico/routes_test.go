@@ -48,6 +48,7 @@ func buildSimpleService() (svc *v1.Service, ep *v1.Endpoints) {
 		ObjectMeta: meta,
 		Spec: v1.ServiceSpec{
 			Type:                  v1.ServiceTypeClusterIP,
+			ClusterIP:             "127.0.0.1",
 			ClusterIPs:            []string{"127.0.0.1", "::1"},
 			ExternalTrafficPolicy: v1.ServiceExternalTrafficPolicyTypeLocal,
 			ExternalIPs:           []string{externalIP1, externalIP2},
@@ -65,6 +66,7 @@ func buildSimpleService2() (svc *v1.Service, ep *v1.Endpoints) {
 		ObjectMeta: meta,
 		Spec: v1.ServiceSpec{
 			Type:                  v1.ServiceTypeClusterIP,
+			ClusterIP:             "127.0.0.5",
 			ClusterIPs:            []string{"127.0.0.5", "::5"},
 			ExternalTrafficPolicy: v1.ServiceExternalTrafficPolicyTypeLocal,
 			ExternalIPs:           []string{externalIP1, externalIP2},
@@ -82,6 +84,7 @@ func buildSimpleService3() (svc *v1.Service, ep *v1.Endpoints) {
 		ObjectMeta: meta,
 		Spec: v1.ServiceSpec{
 			Type:                  v1.ServiceTypeLoadBalancer,
+			ClusterIP:             "127.0.0.10",
 			ClusterIPs:            []string{"127.0.0.10", "::a"},
 			ExternalTrafficPolicy: v1.ServiceExternalTrafficPolicyTypeLocal,
 			LoadBalancerIP:        loadBalancerIP1,
@@ -104,6 +107,7 @@ func buildSimpleService4() (svc *v1.Service, ep *v1.Endpoints) {
 		ObjectMeta: meta,
 		Spec: v1.ServiceSpec{
 			Type:                  v1.ServiceTypeLoadBalancer,
+			ClusterIP:             "127.0.0.11",
 			ClusterIPs:            []string{"127.0.0.11", "::b"},
 			ExternalTrafficPolicy: v1.ServiceExternalTrafficPolicyTypeLocal,
 			ExternalIPs:           []string{externalIP3},
