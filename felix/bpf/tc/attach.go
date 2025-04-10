@@ -66,6 +66,7 @@ type AttachPoint struct {
 	UDPOnly              bool
 	RedirectPeer         bool
 	FlowLogsEnabled      bool
+	OverlayTunnelID      uint32
 }
 
 var ErrDeviceNotFound = errors.New("device not found")
