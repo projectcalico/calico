@@ -78,7 +78,7 @@ export const useInfiniteFilterQuery = (
         enabled: query !== null,
     });
 
-const STREAM_TIME_OFFSET = -300;
+const STREAM_TIME_OFFSET = -60;
 
 export const useFlowLogsStream = (
     filterValues: Partial<Record<FilterKey, string[]>>,
