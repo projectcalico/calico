@@ -15,6 +15,7 @@
 package aggregator
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -24,7 +25,9 @@ import (
 	"github.com/projectcalico/calico/goldmane/pkg/aggregator/bucketing"
 	"github.com/projectcalico/calico/goldmane/pkg/types"
 	"github.com/projectcalico/calico/goldmane/proto"
+	"github.com/projectcalico/calico/lib/std/chanutil"
 	"github.com/projectcalico/calico/libcalico-go/lib/health"
+	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -75,6 +78,11 @@ var (
 		Help: "Duration of the rollover process.",
 	})
 
+	backfillLatency = prometheus.NewHistogram(prometheus.HistogramOpts{
+		Name: "goldmane_aggr_backfill_latency_ms",
+		Help: "Histogram measuring the time taken to backfill a stream.",
+	})
+
 	numUniqueFlows = prometheus.NewGauge(prometheus.GaugeOpts{
 		Name: "goldmane_aggr_num_unique_flows",
 		Help: "Number of unique flows in the aggregator.",
@@ -93,6 +101,7 @@ func init() {
 	prometheus.MustRegister(flowChannelSize)
 	prometheus.MustRegister(rolloverLatency)
 	prometheus.MustRegister(rolloverDuration)
+	prometheus.MustRegister(backfillLatency)
 	prometheus.MustRegister(numUniqueFlows)
 	prometheus.MustRegister(numDroppedFlows)
 }
@@ -161,9 +170,6 @@ type LogAggregator struct {
 
 	filterHintsRequests chan filterHintsRequest
 
-	// streamRequests is the channel to receive stream requests on.
-	streamRequests chan streamRequest
-
 	// sink is a sink to send aggregated flows to.
 	sink bucketing.Sink
 
@@ -198,6 +204,9 @@ type LogAggregator struct {
 
 	// health is the health aggregator to use for health checks.
 	health *health.HealthAggregator
+
+	// ratelimiter is used to rate limit log messages that may happen frequently.
+	rl *logutils.RateLimitedLogger
 }
 
 func NewLogAggregator(opts ...Option) *LogAggregator {
@@ -207,7 +216,6 @@ func NewLogAggregator(opts ...Option) *LogAggregator {
 		done:                make(chan struct{}),
 		listRequests:        make(chan listRequest),
 		filterHintsRequests: make(chan filterHintsRequest),
-		streamRequests:      make(chan streamRequest),
 		sinkChan:            make(chan *sinkRequest, 10),
 		recvChan:            make(chan *types.Flow, channelDepth),
 		rolloverFunc:        time.After,
@@ -222,6 +230,10 @@ func NewLogAggregator(opts ...Option) *LogAggregator {
 			proto.SortBy_SourceNamespace: NewIndex(func(k *types.FlowKey) string { return k.SourceNamespace() }),
 		},
 		streams: NewStreamManager(),
+		rl: logutils.NewRateLimitedLogger(
+			logutils.OptBurst(5),
+			logutils.OptInterval(30*time.Second),
+		),
 	}
 
 	// Use a time-based Ring index by default.
@@ -290,6 +302,11 @@ func (a *LogAggregator) Run(startTime int64) {
 		a.health.Report(healthName, &health.HealthReport{Live: true, Ready: true})
 	}
 
+	// Start the stream manager on its own goroutine.
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go a.streams.Run(ctx, 1)
+
 	// Schedule the first rollover one aggregation period from now.
 	rolloverCh := a.rolloverFunc(a.aggregationWindow)
 
@@ -310,12 +327,8 @@ func (a *LogAggregator) Run(startTime int64) {
 			req.respCh <- a.queryFlows(req.req)
 		case req := <-a.filterHintsRequests:
 			req.respCh <- a.queryFilterHints(req.req)
-		case req := <-a.streamRequests:
-			stream := a.streams.register(req)
-			req.respCh <- stream
-			a.backfill(stream, req.req)
-		case id := <-a.streams.closedStreams():
-			a.streams.close(id)
+		case stream := <-a.streams.backfillChannel():
+			a.backfill(stream)
 		case req := <-a.sinkChan:
 			logrus.WithField("sink", req.sink).Info("Setting aggregator sink")
 			a.sink = req.sink
@@ -338,13 +351,9 @@ func (a *LogAggregator) SetSink(s bucketing.Sink) chan struct{} {
 
 // Receive is used to send a flow update to the aggregator.
 func (a *LogAggregator) Receive(f *types.Flow) {
-	timeout := time.After(5 * time.Second)
-
-	select {
-	case a.recvChan <- f:
-	case <-timeout:
+	if err := chanutil.WriteWithDeadline(context.Background(), a.recvChan, f, 5*time.Second); err != nil {
 		numDroppedFlows.Inc()
-		logrus.Warn("Output channel full, dropping flow")
+		a.rl.Warn("Aggregator receive channel full, dropping flow")
 	}
 }
 
@@ -362,7 +371,14 @@ func (a *LogAggregator) Stream(req *proto.FlowStreamRequest) (*Stream, error) {
 
 	respCh := make(chan *Stream)
 	defer close(respCh)
-	a.streamRequests <- streamRequest{respCh, req}
+
+	// Register the stream with the stream manager. This will return a new Stream object.
+	a.streams.Register(&streamRequest{
+		respCh: respCh,
+		req:    req,
+	})
+
+	// Wait for a response.
 	s := <-respCh
 	if s == nil {
 		return nil, fmt.Errorf("failed to establish new stream")
@@ -420,7 +436,10 @@ func (a *LogAggregator) Statistics(req *proto.StatisticsRequest) ([]*proto.Stati
 }
 
 // backfill fills a new Stream instance with historical Flow data based on the request.
-func (a *LogAggregator) backfill(stream *Stream, request *proto.FlowStreamRequest) {
+func (a *LogAggregator) backfill(stream *Stream) {
+	// Get the original request parameters from the stream.
+	request := stream.req.req
+
 	if request.StartTimeGte == 0 {
 		// If no start time is provided, we don't need to backfill any data
 		// to this stream.
@@ -428,27 +447,48 @@ func (a *LogAggregator) backfill(stream *Stream, request *proto.FlowStreamReques
 		return
 	}
 
+	// Measure the time it takes to backfill the stream.
+	start := time.Now()
+	defer func() {
+		backfillLatency.Observe(float64(time.Since(start).Milliseconds()))
+	}()
+
 	// Go through the bucket ring, generating stream events for each flow that matches the request.
 	// Right now, the stream endpoint only supports aggregation windows of a single bucket interval.
-	err := a.buckets.IterBucketsTime(request.StartTimeGte, a.nowFunc().Unix(), func(bucket *bucketing.AggregationBucket) {
+	err := a.buckets.IterBucketsTime(request.StartTimeGte, a.nowFunc().Unix(), func(bucket *bucketing.AggregationBucket) error {
 		// Iterate all of the keys in this bucket.
+		stopBucketIteration := false
 		bucket.Flows.Iter(func(d *types.DiachronicFlow) error {
 			builder := bucketing.NewCachedFlowBuilder(d, bucket.StartTime, bucket.EndTime)
 			if f, id := builder.Build(request.Filter); f != nil {
-				// The flow matches the filter and time range.
-				if logrus.IsLevelEnabled(logrus.DebugLevel) {
-					logrus.WithFields(f.Key.Fields()).Debug("Sending backfilled flow to stream")
+				select {
+				case <-stream.ctx.Done():
+					// Stream closed while backfilling. Can stop.
+					logrus.WithField("id", stream.id).Debug("Stream closed while backfilling")
+					stopBucketIteration = true
+					return set.StopIteration
+				default:
+					// The flow matches the filter and time range.
+					if logrus.IsLevelEnabled(logrus.DebugLevel) {
+						logrus.WithFields(f.Key.Fields()).Debug("Sending backfilled flow to stream")
+					}
+					stream.Receive(&proto.FlowResult{
+						Id:   id,
+						Flow: types.FlowToProto(f),
+					})
 				}
-				stream.Receive(&proto.FlowResult{
-					Id:   id,
-					Flow: types.FlowToProto(f),
-				})
 			}
 			return nil
 		})
+
+		if stopBucketIteration {
+			// If the stream was closed while we were backfilling, we can stop iterating buckets.
+			return bucketing.StopBucketIteration
+		}
+		return nil
 	})
 	if err != nil {
-		logrus.WithError(err).Error("Error backfilling stream")
+		logrus.WithError(err).Warn("Error backfilling stream")
 	}
 }
 
