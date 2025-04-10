@@ -21,6 +21,7 @@ clean:
 	rm -rf vendor
 	rm -rf bin/*
 	rm -rf tests/logs
+	rm -rf tests/endpoint-status
 
 ###############################################################################
 # Building the binary
@@ -52,12 +53,14 @@ test: ut test-kdd test-etcd
 test-kdd: bin/confd-$(ARCH) bin/kubectl bin/bird bin/bird6 bin/calico-node bin/calicoctl bin/typha run-k8s-apiserver
 	-git clean -fx etc/calico/confd
 	mkdir -p tests/logs
+	mkdir -p tests/endpoint-status
 	docker run --rm --net=host \
 		-v $(CERTS_PATH):/home/user/certs \
 		-v $(CURDIR)/tests/:/tests/ \
 		-v $(CURDIR)/bin:/calico/bin/ \
 		-v $(CURDIR)/etc/calico:/etc/calico/ \
 		-v $(CURDIR)/../:/go/src/github.com/projectcalico/calico:rw \
+		-v $(CURDIR)/tests/endpoint-status:/var/run/calico/endpoint-status \
 		-e GOPATH=/go \
 		-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
 		-e FELIX_TYPHAADDR=127.0.0.1:5473 \
@@ -85,12 +88,14 @@ test-kdd: bin/confd-$(ARCH) bin/kubectl bin/bird bin/bird6 bin/calico-node bin/c
 test-etcd: bin/confd-$(ARCH) bin/etcdctl bin/bird bin/bird6 bin/calico-node bin/kubectl bin/calicoctl run-etcd run-k8s-apiserver
 	-git clean -fx etc/calico/confd
 	mkdir -p tests/logs
+	mkdir -p tests/endpoint-status
 	docker run --rm --net=host \
 		-v $(CERTS_PATH):/home/user/certs \
 		-v $(CURDIR)/tests/:/tests/ \
 		-v $(CURDIR)/bin:/calico/bin/ \
 		-v $(CURDIR)/etc/calico:/etc/calico/ \
 		-v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
+		-v $(CURDIR)/tests/endpoint-status:/var/run/calico/endpoint-status \
 		-e GOPATH=/go \
 		-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
 		-e UPDATE_EXPECTED_DATA=$(UPDATE_EXPECTED_DATA) \
