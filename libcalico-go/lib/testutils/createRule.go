@@ -54,7 +54,7 @@ func CreateRule(ipv, icmpType, icmpCode int, proto, cidrStr, tag, selector, inAc
 	src := api.EntityRule{
 		Tag: tag,
 		Net: &cnet.IPNet{
-			*cidr,
+			IPNet: *cidr,
 		},
 		Selector: selector,
 	}
