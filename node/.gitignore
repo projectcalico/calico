@@ -19,6 +19,7 @@ filesystem/usr
 bin
 kubectl
 /tests/k8st/kind
+/tests/st/endpoint-status
 filesystem/included-source
 config/
 kubeconfig.yaml
