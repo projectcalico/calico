@@ -1,0 +1,15 @@
+# This ConfigMap sets the Kubernetes API server endpoint, required when 
+# installing Calico on OpenShift with eBPF dataplane.
+# If you are installing Calico on OpenShift with the Iptables dataplane, you can remove it.
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: kubernetes-services-endpoint
+  namespace: tigera-operator
+data:
+  # By default, the hostname is formed by concatenating the "api" prefix, the cluster name you typed
+  # during the OpenShift initial configuration, and the base domain you selected in the same process. 
+  # It could also point to the load balancer in front of the API server.
+  KUBERNETES_SERVICE_HOST: "api.<cluster_name>.<base_domain>"
+  # OpenShift typically uses port 6443 as the default for the Kubernetes Service.
+  KUBERNETES_SERVICE_PORT: "6443"
