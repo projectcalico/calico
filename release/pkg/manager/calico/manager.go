@@ -644,7 +644,7 @@ func (r *CalicoManager) checkHashreleaseImagesPublished() ([]registry.Component,
 	for name, component := range r.imageComponents {
 		go func(name string, component registry.Component, ch chan imageExistsResult) {
 			exists, err := registry.ImageExists(component.ImageRef())
-			resultsCh <- imageExistsResult{
+			ch <- imageExistsResult{
 				name:   name,
 				image:  component.String(),
 				exists: exists,
@@ -658,10 +658,13 @@ func (r *CalicoManager) checkHashreleaseImagesPublished() ([]registry.Component,
 	for range r.imageComponents {
 		result := <-resultsCh
 		if result.err != nil {
-			resultsErr = errors.Join(resultsErr, fmt.Errorf("error checking %s exists: %s", result.image, result.err.Error()))
+			missingImages = append(missingImages, r.imageComponents[result.name])
 		} else if !result.exists {
 			missingImages = append(missingImages, r.imageComponents[result.name])
 		}
+	}
+	if len(missingImages) > 0 {
+		resultsErr = fmt.Errorf("unable to validate all images: %d images failed to validate", len(missingImages))
 	}
 	return missingImages, resultsErr
 }
