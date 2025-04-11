@@ -390,6 +390,7 @@ st-checks:
 		echo; \
 		exit 1; \
 	fi
+	mkdir -p tests/st/endpoint-status
 
 .PHONY: k8s-test
 ## Run the k8s tests
@@ -433,6 +434,7 @@ st: st-checks $(REMOTE_DEPS) image dist/calicoctl busybox.tar calico-node.tar wo
 		   --net=host \
 		   --privileged \
 		   -v $(CURDIR):/code \
+		   -v $(CURDIR)/tests/st/endpoint-status:/var/run/calico/endpoint-status:
 		   -e HOST_CHECKOUT_DIR=$(CURDIR) \
 		   -e DEBUG_FAILURES=$(DEBUG_FAILURES) \
 		   -e MY_IP=$(LOCAL_IP_ENV) \
