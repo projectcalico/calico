@@ -179,16 +179,12 @@ func ensureNodeSocketDirExists(dir string) error {
 }
 
 func cleanupNodeSocket(addr string) {
-	nodeSocketExists := func(addr string) bool {
-		_, err := os.Stat(addr)
-		// In case of any error, return false
-		return err == nil
+	_, err := os.Stat(addr)
+	if err != nil && os.IsNotExist(err) {
+		return
 	}
-
-	if nodeSocketExists(addr) {
-		err := os.Remove(addr)
-		if err != nil {
-			logrus.WithError(err).WithField("address", addr).Errorf("Failed to remove goldmane node socket")
-		}
+	err = os.Remove(addr)
+	if err != nil {
+		logrus.WithError(err).WithField("address", addr).Errorf("Failed to remove goldmane node socket")
 	}
 }

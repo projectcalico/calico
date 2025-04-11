@@ -78,14 +78,8 @@ func (g *GoldmaneReporter) Start() error {
 }
 
 func (g *GoldmaneReporter) nodeSocketReporter() {
-	nodeSocketExists := func() bool {
-		_, err := os.Stat(NodeSocketPath)
-		// In case of any error, return false
-		return err == nil
-	}
-
 	for {
-		if nodeSocketExists() {
+		if _, err := os.Stat(NodeSocketPath); err == nil {
 			g.mayStartNodeSocketReporter()
 		} else {
 			g.mayStopNodeSocketReporter()
