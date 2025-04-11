@@ -112,11 +112,6 @@ var _ = Describe("Endpoint Policy Status Reports [file-reporting]", func() {
 	var cancel context.CancelFunc
 	var doneC chan struct{}
 
-	tmpPath := "/go/src/github.com/projectcalico/calico/ut-tmp-dir"
-	statusDir := tmpPath + "/endpoint-status"
-	err := os.MkdirAll(statusDir, 0755)
-	Expect(err).ShouldNot(HaveOccurred())
-
 	endpoint := &proto.WorkloadEndpoint{
 		State:        "active",
 		Mac:          "01:02:03:04:05:06",
@@ -136,10 +131,16 @@ var _ = Describe("Endpoint Policy Status Reports [file-reporting]", func() {
 	}
 	key := names.WorkloadEndpointIDToWorkloadEndpointKey(wepID, "host")
 	mapKey := names.WorkloadEndpointKeyToStatusFilename(key)
-	filename := filepath.Join(statusDir, mapKey)
-	log.Infof("get filename %s", filename)
+	var tmpPath, statusDir, filename string
 
 	BeforeEach(func() {
+		var err error
+		tmpPath, err = os.MkdirTemp("", "status-file-reporter-ut")
+		statusDir = tmpPath + "/endpoint-status"
+		Expect(err).ShouldNot(HaveOccurred())
+		filename = filepath.Join(statusDir, mapKey)
+		log.Infof("get filename %s", filename)
+
 		endpointUpdatesC = make(chan interface{})
 		ctx, cancel = context.WithCancel(context.Background())
 		doneC = make(chan struct{})
@@ -148,6 +149,10 @@ var _ = Describe("Endpoint Policy Status Reports [file-reporting]", func() {
 	AfterEach(func() {
 		cancel()
 		Eventually(doneC).Should(BeClosed(), "Didn't receive signal indicating fileReporter exited")
+		if tmpPath != "" {
+			_ = os.RemoveAll(tmpPath)
+			tmpPath = ""
+		}
 	})
 
 	It("should create a new directory and retry if it fails", func() {
@@ -228,6 +233,56 @@ var _ = Describe("Endpoint Policy Status Reports [file-reporting]", func() {
 		Expect(reflect.DeepEqual(*epStatus, *endpointStatus)).To(BeTrue())
 	})
 
+	It("should not rewrite a file with the same content", func() {
+		type writeOp struct {
+			name string
+			data []byte
+		}
+		fileWriteC := make(chan writeOp, 100)
+		mockfs := mockFilesys{
+			writeCB: func(name string, data []byte, perm os.FileMode) {
+				fileWriteC <- writeOp{name: name, data: data}
+			},
+		}
+		reporter := NewEndpointStatusFileReporter(endpointUpdatesC, tmpPath, WithHostname("host"), WithFilesys(&mockfs))
+		reporter.reapplyInterval = 1 * time.Second
+		defer clearDir(statusDir)
+
+		go func() {
+			defer close(doneC)
+			reporter.SyncForever(ctx)
+		}()
+
+		Eventually(endpointUpdatesC, "10s").Should(BeSent(&proto.DataplaneInSync{}))
+
+		endpointEmptySlices := &proto.WorkloadEndpoint{
+			State:        "active",
+			Mac:          "01:02:03:04:05:06",
+			Name:         "cali12345-ab",
+			ProfileIds:   []string{},
+			Ipv4Nets:     []string{}, // Empty slices to check JSON round tripping.
+			Ipv6Nets:     []string{},
+			LocalBgpPeer: &proto.LocalBGPPeer{BgpPeerName: "global-peer"},
+		}
+		Eventually(endpointUpdatesC, "10s").Should(BeSent(&proto.WorkloadEndpointStatusUpdate{
+			Id: wepID,
+			Status: &proto.EndpointStatus{
+				Status: "up",
+			},
+			Endpoint: endpointEmptySlices,
+		}))
+
+		var wo writeOp
+		Eventually(fileWriteC, "10s").Should(Receive(&wo), "Tracker did not add desired file for endpoint with status up")
+		Consistently(fileWriteC, "5s").ShouldNot(Receive(&wo), "Tracker received extra write")
+
+		epStatus, err := epstatus.GetWorkloadEndpointStatusFromFile(filename)
+		Expect(err).ShouldNot(HaveOccurred())
+
+		endpointStatus := epstatus.WorkloadEndpointToWorkloadEndpointStatus(endpointEmptySlices)
+		Expect(*epStatus).To(Equal(*endpointStatus))
+	})
+
 	It("should add a desired file and remove old file", func() {
 		// Write a file which contains an old endpoint without BGP peer info.
 		endpointOld := &proto.WorkloadEndpoint{
@@ -242,7 +297,8 @@ var _ = Describe("Endpoint Policy Status Reports [file-reporting]", func() {
 		endpointStatusOld := epstatus.WorkloadEndpointToWorkloadEndpointStatus(endpointOld)
 		itemJSON, err := json.Marshal(endpointStatusOld)
 		Expect(err).ShouldNot(HaveOccurred())
-		err = os.WriteFile(filename, []byte(itemJSON), 0644)
+		_ = os.Mkdir(statusDir, 0755)
+		err = os.WriteFile(filename, itemJSON, 0644)
 		Expect(err).ShouldNot(HaveOccurred())
 
 		fileWriteC := make(chan string, 100)

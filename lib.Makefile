@@ -395,6 +395,7 @@ define update_calico_base_pin
 	bash -c '\
 		if [[ "$(new_ver)" > "$(old_ver)" ]]; then \
 			sed -i "s/^CALICO_BASE_VER[[:space:]]*=.*/CALICO_BASE_VER=$(new_ver)/" $(1); \
+			sed -i "s/^CALICO_BASE_UBI9_VER[[:space:]]*=.*/CALICO_BASE_UBI9_VER=$(subst ubi8,ubi9,$(new_ver))/" $(1); \
 			echo "CALICO_BASE_VER is updated to $(new_ver)"; \
 		else \
 			echo "no need to update CALICO_BASE_VER"; \

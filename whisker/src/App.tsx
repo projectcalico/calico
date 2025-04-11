@@ -1,4 +1,8 @@
 import { AppLayout, ChakraProvider } from '@/components';
+import {
+    AppErrorBoundary,
+    FlowLogsErrorBoundary,
+} from '@/components/core/ErrorBoundary';
 import { FlowLogsContainer } from '@/features/flowLogs/components';
 import { FlowLogsPage } from '@/pages';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -10,10 +14,7 @@ import {
     RouterProvider,
     createBrowserRouter,
 } from 'react-router-dom';
-import {
-    AppErrorBoundary,
-    FlowLogsErrorBoundary,
-} from '@/components/core/ErrorBoundary';
+import AppConfigProvider from '@/context/AppConfig';
 
 const queryClient = new QueryClient({
     defaultOptions: {
@@ -59,7 +60,10 @@ const App: React.FC = () => {
     return (
         <ChakraProvider>
             <QueryClientProvider client={queryClient}>
-                <RouterProvider router={router} />
+                <AppConfigProvider>
+                    <RouterProvider router={router} />
+                </AppConfigProvider>
+
                 <ReactQueryDevtools initialIsOpen={false} />
             </QueryClientProvider>
         </ChakraProvider>

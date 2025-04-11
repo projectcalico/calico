@@ -92,7 +92,7 @@ type Config struct {
 	ProfilePort int `json:"profile_port" envconfig:"PROFILE_PORT" default:"0"`
 
 	// PrometheusPort is the port to listen on for serving Prometheus metrics.
-	PrometheusPort int `json:"prometheus_port" envconfig:"PROMETHEUS_PORT" default:"9090"`
+	PrometheusPort int `json:"prometheus_port" envconfig:"PROMETHEUS_PORT" default:"0"`
 }
 
 func ConfigFromEnv() Config {

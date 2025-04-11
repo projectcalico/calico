@@ -2,8 +2,11 @@ import { CalicoCatIcon, CalicoWhiskerIcon } from '@/icons';
 import { Flex, Heading, LinkBox, LinkOverlay, Text } from '@chakra-ui/react';
 import React from 'react';
 import { appHeaderStyles } from './styles';
+import { useClusterId } from '@/hooks';
 
 const AppHeader: React.FC = () => {
+    const clusterId = useClusterId();
+
     return (
         <Flex as='header' sx={appHeaderStyles}>
             <Flex alignItems='center'>
@@ -18,11 +21,12 @@ const AppHeader: React.FC = () => {
                             Calico Whisker is a simplified version of the
                         </Text>
                         <LinkOverlay
+                            data-testId='app-header-calico-cloud-link'
                             fontSize='xs'
                             fontWeight='bold'
                             color='tigeraGoldMedium'
                             isExternal
-                            href='https://calicocloud.io'
+                            href={`https://calicocloud.io?utm_source=whisker&utm_medium=header-link&utm_campaign=oss-ui&whisker-id=${clusterId}`}
                         >
                             Service Graph from Calico Cloud
                         </LinkOverlay>

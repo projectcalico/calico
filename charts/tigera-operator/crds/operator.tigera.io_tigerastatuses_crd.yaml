@@ -33,7 +33,8 @@ spec:
       name: v1
       schema:
         openAPIV3Schema:
-          description: TigeraStatus represents the most recently observed status for
+          description:
+            TigeraStatus represents the most recently observed status for
             Calico or a Calico Enterprise functional area.
           properties:
             apiVersion:
@@ -64,16 +65,19 @@ spec:
                     Conditions represents the latest observed set of conditions for this component. A component may be one or more of
                     Available, Progressing, or Degraded.
                   items:
-                    description: TigeraStatusCondition represents a condition attached
+                    description:
+                      TigeraStatusCondition represents a condition attached
                       to a particular component.
                     properties:
                       lastTransitionTime:
-                        description: The timestamp representing the start time for the
+                        description:
+                          The timestamp representing the start time for the
                           current status.
                         format: date-time
                         type: string
                       message:
-                        description: Optionally, a detailed message providing additional
+                        description:
+                          Optionally, a detailed message providing additional
                           context.
                         type: string
                       observedGeneration:
@@ -87,11 +91,13 @@ spec:
                         description: A brief reason explaining the condition.
                         type: string
                       status:
-                        description: The status of the condition. May be True, False,
+                        description:
+                          The status of the condition. May be True, False,
                           or Unknown.
                         type: string
                       type:
-                        description: The type of condition. May be Available, Progressing,
+                        description:
+                          The type of condition. May be Available, Progressing,
                           or Degraded.
                         type: string
                     required:

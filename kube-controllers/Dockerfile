@@ -40,13 +40,13 @@ FROM ${CALICO_BASE}
 
 ARG GIT_VERSION=unknown
 
-LABEL description="Calico Kubernetes controllers monitor the Kubernetes API and perform actions based on cluster state"
-LABEL maintainer="maintainers@tigera.io"
-LABEL name="Calico Kubernetes controllers"
-LABEL release="1"
-LABEL summary="Calico Kubernetes controllers monitor the Kubernetes API and perform actions based on cluster state"
-LABEL vendor="Project Calico"
-LABEL version=${GIT_VERSION}
+LABEL org.opencontainers.image.description="Calico Kubernetes controllers monitor the Kubernetes API and perform actions based on cluster state"
+LABEL org.opencontainers.image.authors="maintainers@tigera.io"
+LABEL org.opencontainers.image.source="https://github.com/projectcalico/calico"
+LABEL org.opencontainers.image.title="Calico Kubernetes controllers"
+LABEL org.opencontainers.image.vendor="Project Calico"
+LABEL org.opencontainers.image.version="${GIT_VERSION}"
+LABEL org.opencontainers.image.licenses="Apache-2.0"
 
 COPY --from=source / /
 
