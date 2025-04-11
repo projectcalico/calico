@@ -679,18 +679,18 @@ func (r *CalicoManager) hashreleasePrereqs() error {
 
 	if r.publishImages {
 		return r.assertImageVersions()
-	}
-
-	missingImages, err := r.checkHashreleaseImagesPublished()
-	if err != nil {
-		return fmt.Errorf("errors checking images: %s", err)
-	} else if len(missingImages) > 0 {
-		return errr.ErrHashreleaseMissingImages{
-			Hashrelease:   r.hashrelease,
-			MissingImages: missingImages,
+	} else {
+		missingImages, err := r.checkHashreleaseImagesPublished()
+		if err != nil {
+			return fmt.Errorf("errors checking images: %s", err)
+		} else if len(missingImages) > 0 {
+			return errr.ErrHashreleaseMissingImages{
+				Hashrelease:   r.hashrelease,
+				MissingImages: missingImages,
+			}
 		}
+		logrus.Info("All images required for hashrelease have been published")
 	}
-	logrus.Info("All images required for hashrelease have been published")
 
 	if r.imageScanning {
 		logrus.Info("Sending images to ISS")
