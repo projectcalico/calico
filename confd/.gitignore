@@ -4,6 +4,7 @@ tmp/
 vendor
 .go-pkg-cache
 tests/logs/
+tests/endpoint-status
 /report/*
 etc/calico/confd/config
 Makefile.common*
