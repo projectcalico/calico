@@ -40,8 +40,8 @@ type FlowBuilder interface {
 	BuildInto(*proto.Filter, *proto.FlowResult) bool
 }
 
-func NewCachedFlowBuilder(d *types.DiachronicFlow, s, e int64) FlowBuilder {
-	return &CachedFlowBuilder{
+func NewDeferredFlowBuilder(d *types.DiachronicFlow, s, e int64) FlowBuilder {
+	return &DeferredFlowBuilder{
 		d: d,
 		w: d.GetWindows(s, e),
 		s: s,
@@ -49,7 +49,8 @@ func NewCachedFlowBuilder(d *types.DiachronicFlow, s, e int64) FlowBuilder {
 	}
 }
 
-type CachedFlowBuilder struct {
+// DeferredFlowBuilder is a FlowBuilder that defers the construction of the Flow object until it's needed.
+type DeferredFlowBuilder struct {
 	d *types.DiachronicFlow
 	s int64
 	e int64
@@ -61,13 +62,9 @@ type CachedFlowBuilder struct {
 	// Note: This is a bit of a hack, but it works for now. We can clean this up a lot by reconciling
 	// the Window and AggregationBucket objects, which fill similar roles.
 	w []*types.Window
-
-	// cache the result in case we get called multiple times so we can
-	// avoid re-aggregating the flow.
-	cachedFlow *types.Flow
 }
 
-func (f *CachedFlowBuilder) BuildInto(filter *proto.Filter, res *proto.FlowResult) bool {
+func (f *DeferredFlowBuilder) BuildInto(filter *proto.Filter, res *proto.FlowResult) bool {
 	if f.d.Matches(filter, f.s, f.e) {
 		if tf := f.d.AggregateWindows(f.w); tf != nil {
 			types.FlowIntoProto(tf, res.Flow)
@@ -511,13 +508,6 @@ func (r *BucketRing) Statistics(req *proto.StatisticsRequest) ([]*proto.Statisti
 // flushToStreams sends the flows in the current streaming bucket to the stream receiver.
 func (r *BucketRing) flushToStreams() {
 	start := time.Now()
-	defer func() {
-		if time.Since(start) > 1*time.Second {
-			logrus.WithFields(logrus.Fields{
-				"duration": time.Since(start),
-			}).Info("Flushing streams > 1s")
-		}
-	}()
 
 	if r.streams == nil {
 		logrus.Warn("No stream receiver configured, not sending flows to streams")
@@ -528,6 +518,13 @@ func (r *BucketRing) flushToStreams() {
 	// a single bucket of flows to the stream manager.
 	bucket := r.streamingBucket()
 	r.streamBucket(bucket, r.streams)
+
+	if time.Since(start) > 1*time.Second {
+		logrus.WithFields(logrus.Fields{
+			"duration":    time.Since(start),
+			"numInBucket": bucket.Flows.Len(),
+		}).Info("Flushing streams > 1s")
+	}
 }
 
 func (r *BucketRing) streamBucket(b *AggregationBucket, s StreamReceiver) {
@@ -535,7 +532,7 @@ func (r *BucketRing) streamBucket(b *AggregationBucket, s StreamReceiver) {
 	builders := []FlowBuilder{}
 	if b.Flows != nil {
 		b.Flows.Iter(func(d *types.DiachronicFlow) error {
-			builders = append(builders, NewCachedFlowBuilder(d, b.StartTime, b.EndTime))
+			builders = append(builders, NewDeferredFlowBuilder(d, b.StartTime, b.EndTime))
 			return nil
 		})
 	}

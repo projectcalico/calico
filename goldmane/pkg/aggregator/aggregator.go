@@ -361,7 +361,7 @@ func (a *LogAggregator) SetSink(s bucketing.Sink) chan struct{} {
 func (a *LogAggregator) Receive(f *types.Flow) {
 	if err := chanutil.WriteWithDeadline(context.Background(), a.recvChan, f, 5*time.Second); err != nil {
 		numDroppedFlows.Inc()
-		a.rl.Warn("Aggregator receive channel full, dropping flow")
+		a.rl.Warn("Aggregator receive channel full, dropping flow(s)")
 	}
 }
 
@@ -385,7 +385,7 @@ func (a *LogAggregator) Stream(req *proto.FlowStreamRequest) (*Stream, error) {
 	// to work around the fact that we don't have a proper backpressure mechanism in place yet.
 	channelSize := 0
 	if req.StartTimeGte != 0 {
-		a.buckets.IterBucketsTime(req.StartTimeGte, a.nowFunc().Unix(), func(bucket *bucketing.AggregationBucket) error {
+		_ = a.buckets.IterBucketsTime(req.StartTimeGte, a.nowFunc().Unix(), func(bucket *bucketing.AggregationBucket) error {
 			channelSize += bucket.Flows.Len()
 			return nil
 		})
@@ -482,7 +482,7 @@ func (a *LogAggregator) backfill(stream *Stream) {
 		// Iterate all of the keys in this bucket.
 		stopBucketIteration := false
 		bucket.Flows.Iter(func(d *types.DiachronicFlow) error {
-			builder := bucketing.NewCachedFlowBuilder(d, bucket.StartTime, bucket.EndTime)
+			builder := bucketing.NewDeferredFlowBuilder(d, bucket.StartTime, bucket.EndTime)
 			select {
 			case <-stream.ctx.Done():
 				// Stream closed while backfilling. Can stop.

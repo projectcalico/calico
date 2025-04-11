@@ -95,7 +95,7 @@ func (m *streamManager) Register(req *streamRequest) {
 // should be taken to avoid calling this function from the main loop.
 func (m *streamManager) Receive(b bucketing.FlowBuilder) {
 	if err := chanutil.WriteWithDeadline(context.TODO(), m.flowCh, b, 30*time.Second); err != nil {
-		m.rl.WithError(err).Error("stream manager failed to handle flow, dropping")
+		m.rl.WithError(err).Error("stream manager failed to handle flow(s), dropping")
 	}
 }
 
