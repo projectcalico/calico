@@ -37,9 +37,6 @@ var ImageMap = map[string]string{
 	"csi-node-driver-registrar": "calico/node-driver-registrar",
 }
 
-// privateImages is a list of images that require authentication.
-var privateImages = []string{}
-
 // ImageRef represents a container image.
 type ImageRef struct {
 	ref reference.Named
