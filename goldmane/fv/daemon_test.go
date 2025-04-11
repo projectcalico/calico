@@ -211,6 +211,17 @@ func TestFlows(t *testing.T) {
 	// Sincse we only emit after 2 seconds with an emitter aggregation window of 2 seconds, we
 	// should see at least one flow emitted after 4 seconds. We'll wait for 10 seconds to be sure.
 	Eventually(emitted.Count, 10*time.Second, 1*time.Second).Should(BeNumerically(">", 0))
+
+	// We should be able to see flows emitted in the stream as well.
+	s, err := cli.Stream(ctx, &proto.FlowStreamRequest{StartTimeGte: -300})
+	require.NoError(t, err)
+
+	for range 10 {
+		// We should receive a flow.
+		f, err := s.Recv()
+		require.NoError(t, err)
+		require.NotNil(t, f)
+	}
 }
 
 // TestHints tests that we can successfully retrieve hints from generated flows.
