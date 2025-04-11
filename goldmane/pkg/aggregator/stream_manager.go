@@ -2,6 +2,7 @@ package aggregator
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -25,7 +26,7 @@ func init() {
 func NewStreamManager() *streamManager {
 	maxStreams := 100
 	return &streamManager{
-		streams:          make(map[string]*Stream),
+		streams:          streamCache{streams: make(map[string]*Stream)},
 		flowCh:           make(chan bucketing.FlowBuilder, 5000),
 		closedStreamsCh:  make(chan string, maxStreams),
 		streamRequests:   make(chan *streamRequest, 10),
@@ -38,10 +39,46 @@ func NewStreamManager() *streamManager {
 	}
 }
 
+// We use a mutex to protect the cache of active Streams, as they are accessed from multiple
+// goroutines. The cache is a map of stream IDs to Stream objects.
+type streamCache struct {
+	sync.Mutex
+	streams map[string]*Stream
+}
+
+func (c *streamCache) Add(s *Stream) {
+	c.Lock()
+	defer c.Unlock()
+	c.streams[s.id] = s
+}
+
+func (c *streamCache) Remove(id string) {
+	c.Lock()
+	defer c.Unlock()
+	delete(c.streams, id)
+}
+
+func (c *streamCache) Get(id string) (*Stream, bool) {
+	c.Lock()
+	defer c.Unlock()
+	s, ok := c.streams[id]
+	return s, ok
+}
+
+func (c *streamCache) List() []*Stream {
+	c.Lock()
+	defer c.Unlock()
+	var streams []*Stream
+	for _, s := range c.streams {
+		streams = append(streams, s)
+	}
+	return streams
+}
+
 type streamManager struct {
 	// streams is a registry of active streams being served by the aggregator. Stream data
 	// is published to these streams on rollover.
-	streams map[string]*Stream
+	streams streamCache
 
 	// maxStreams configured the maximum number of concurrent streams that can be active.
 	// If this limit is reached, new streams will be rejected.
@@ -114,7 +151,8 @@ func (m *streamManager) processIncomingFlows(ctx context.Context) {
 			logrus.Debug("stream manager worker exiting")
 			return
 		case b := <-m.flowCh:
-			for _, s := range m.streams {
+			streams := m.streams.List()
+			for _, s := range streams {
 				select {
 				case <-s.ctx.Done():
 					logrus.WithField("id", s.id).Debug("Stream closed, skipping")
@@ -128,7 +166,7 @@ func (m *streamManager) processIncomingFlows(ctx context.Context) {
 }
 
 func (m *streamManager) register(req *streamRequest) *Stream {
-	if m.maxStreams > 0 && len(m.streams) >= m.maxStreams {
+	if m.maxStreams > 0 && len(m.streams.List()) >= m.maxStreams {
 		logrus.WithField("max", m.maxStreams).Warn("Max streams reached, rejecting new stream")
 		return nil
 	}
@@ -146,8 +184,8 @@ func (m *streamManager) register(req *streamRequest) *Stream {
 			logutils.OptInterval(15*time.Second),
 		),
 	}
-	m.streams[stream.id] = stream
-	numStreams.Set(float64(len(m.streams)))
+	m.streams.Add(stream)
+	numStreams.Set(float64(len(m.streams.List())))
 
 	logrus.WithField("id", stream.id).Debug("Registered new stream")
 	return stream
@@ -157,7 +195,7 @@ func (m *streamManager) register(req *streamRequest) *Stream {
 // Note: close terminates the stream's receive and output channels, so it should only be called from the
 // aggregator's main loop.
 func (m *streamManager) close(id string) {
-	s, ok := m.streams[id]
+	s, ok := m.streams.Get(id)
 	if !ok {
 		logrus.WithField("id", id).Warn("Asked to close unknown stream")
 		return
@@ -166,6 +204,6 @@ func (m *streamManager) close(id string) {
 
 	// Close the stream's output channel.
 	close(s.out)
-	delete(m.streams, id)
-	numStreams.Set(float64(len(m.streams)))
+	m.streams.Remove(id)
+	numStreams.Set(float64(len(m.streams.List())))
 }
