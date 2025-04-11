@@ -26,7 +26,7 @@ const AppHeader: React.FC = () => {
                             fontWeight='bold'
                             color='tigeraGoldMedium'
                             isExternal
-                            href={`https://calicocloud.io?utm_source=whisker&utm_medium=header-link&utm_campaign=oss-ui&whisker-id=${clusterId}`}
+                            href={`https://calicocloud.io?utm_source=whisker&utm_medium=header-link&utm_campaign=oss-ui&whisker_id=${clusterId}`}
                         >
                             Service Graph from Calico Cloud
                         </LinkOverlay>

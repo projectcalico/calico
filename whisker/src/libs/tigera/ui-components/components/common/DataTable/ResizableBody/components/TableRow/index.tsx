@@ -51,6 +51,8 @@ export const TableRow: React.FC<TableRowProps> = ({
         }
     };
 
+    const expandoHeight = React.useRef<number>();
+
     return (
         <React.Fragment key={row.original[keyProp]}>
             <Row
@@ -78,12 +80,20 @@ export const TableRow: React.FC<TableRowProps> = ({
                             ...style,
                             ...virtualisationProps.subRowStyles,
                             top: style?.top + virtualisationProps.rowHeight,
+                            height: 'max-content',
                         }),
                     }}
                     style={style}
                     {...row.getRowProps({
                         ...style,
                     })}
+                    setHeight={(height) => {
+                        if (height > 0) {
+                            expandoHeight.current = height;
+                        }
+                        virtualisationProps?.setRowHeight?.(height);
+                    }}
+                    containerHeight={expandoHeight.current}
                 />
             ) : null}
         </React.Fragment>

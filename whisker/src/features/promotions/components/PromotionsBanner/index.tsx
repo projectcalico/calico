@@ -5,6 +5,7 @@ import { usePromotionsContent } from '../../api';
 import { useNotifications } from '../../hooks';
 import { hasNewContent } from '../../utils';
 import Banner from '../Banner';
+import { useClusterId } from '@/hooks';
 
 const PromotionsBannerContainer: React.FC = () => {
     const [showBanner, setShowBanner] = useLocalStorage(
@@ -17,6 +18,7 @@ const PromotionsBannerContainer: React.FC = () => {
     const [isOpen, setIsOpen] = React.useState(showBanner);
     const { notificationsEnabled, notificationsDisabled } = useNotifications();
     const content = usePromotionsContent(notificationsEnabled) ?? storedContent;
+    const clusterId = useClusterId();
 
     React.useEffect(() => {
         if (content && !storedContent) {
@@ -43,6 +45,7 @@ const PromotionsBannerContainer: React.FC = () => {
                 setShowBanner(false);
                 setIsOpen(true);
             }}
+            clusterId={clusterId}
         />
     ) : null;
 };
