@@ -644,7 +644,7 @@ func (r *CalicoManager) checkHashreleaseImagesPublished() ([]registry.Component,
 	for name, component := range r.imageComponents {
 		go func(name string, component registry.Component, ch chan imageExistsResult) {
 			exists, err := registry.ImageExists(component.ImageRef())
-			ch <- imageExistsResult{
+			resultsCh <- imageExistsResult{
 				name:   name,
 				image:  component.String(),
 				exists: exists,
