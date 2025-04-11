@@ -60,14 +60,16 @@ export const useOmniFilterQuery = (
     fetchData: (query: string | null) => void;
 } => {
     const [filterQuery, setFilterQuery] = React.useState<string | null>(null);
-    const { data, fetchNextPage, isLoading, isFetchingNextPage } =
+    const { data, fetchNextPage, isLoading, isFetchingNextPage, refetch } =
         useInfiniteFilterQuery(filterParam, filterQuery);
 
     const fetchData = (query: string | null) => {
-        if (query !== null) {
-            setFilterQuery(query);
-        } else {
+        if (query === null) {
             fetchNextPage();
+        } else if (query === filterQuery) {
+            refetch();
+        } else {
+            setFilterQuery(query);
         }
     };
 
