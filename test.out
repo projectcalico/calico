@@ -1,0 +1,1922 @@
+make: Entering directory '/home/alex/Repositories/github.com/projectcalico/calico/confd'
+calico-local-apiserver
+calico-etcd
+docker run --detach \
+	--net=host \
+	--entrypoint=/usr/local/bin/etcd \
+	--name calico-etcd quay.io/coreos/etcd:v3.5.6 \
+	--enable-v2 \
+	--advertise-client-urls "http://192.168.50.67:2379,http://127.0.0.1:2379,http://192.168.50.67:4001,http://127.0.0.1:4001" \
+	--listen-client-urls "http://0.0.0.0:2379,http://0.0.0.0:4001"
+f3e59141e253e406571ac3ce0174643854aca5ddaff1d517af20622298b6f177
+docker run --detach --net=host \
+	--name calico-local-apiserver \
+	-v /home/alex/Repositories/github.com/projectcalico/calico:/go/src/github.com/projectcalico/calico \
+	-v /home/alex/Repositories/github.com/projectcalico/calico/hack/test/certs:/home/user/certs \
+	-e KUBECONFIG=/home/user/certs/kubeconfig \
+	calico/go-build:1.24.2-llvm18.1.8-k8s1.32.3 kube-apiserver \
+	--etcd-servers=http://192.168.50.67:2379 \
+	--service-cluster-ip-range=10.101.0.0/16,fd00:96::/112 \
+	--authorization-mode=RBAC \
+	--service-account-key-file=/home/user/certs/service-account.pem \
+	--service-account-signing-key-file=/home/user/certs/service-account-key.pem \
+	--service-account-issuer=https://localhost:443 \
+	--api-audiences=kubernetes.default \
+	--client-ca-file=/home/user/certs/ca.pem \
+	--tls-cert-file=/home/user/certs/kubernetes.pem \
+	--tls-private-key-file=/home/user/certs/kubernetes-key.pem \
+	--enable-priority-and-fairness=false \
+	--max-mutating-requests-inflight=0 \
+	--max-requests-inflight=0
+7566a2e357aba27542bfd4bdd54ede8cd821ec0b891048c2b6e148ce41e23271
+# Wait until the apiserver is accepting requests.
+while ! docker exec calico-local-apiserver kubectl get nodes; do echo "Waiting for apiserver to come up..."; sleep 2; done
+# Wait until we can configure a cluster role binding which allows anonymous auth.
+while ! docker exec calico-local-apiserver kubectl create \
+	clusterrolebinding anonymous-admin \
+	--clusterrole=cluster-admin \
+	--user=system:anonymous 2>/dev/null ; \
+	do echo "Waiting for calico-local-apiserver to come up"; \
+	sleep 1; \
+	done
+clusterrolebinding.rbac.authorization.k8s.io/anonymous-admin created
+# Create CustomResourceDefinition (CRD) for Calico resources
+while ! docker exec calico-local-apiserver kubectl \
+	apply -f /go/src/github.com/projectcalico/calico/libcalico-go/config/crd/; \
+	do echo "Trying to create CRDs"; \
+	sleep 1; \
+	done
+customresourcedefinition.apiextensions.k8s.io/bgpconfigurations.crd.projectcalico.org created
+customresourcedefinition.apiextensions.k8s.io/bgpfilters.crd.projectcalico.org created
+customresourcedefinition.apiextensions.k8s.io/bgppeers.crd.projectcalico.org created
+customresourcedefinition.apiextensions.k8s.io/blockaffinities.crd.projectcalico.org created
+customresourcedefinition.apiextensions.k8s.io/caliconodestatuses.crd.projectcalico.org created
+customresourcedefinition.apiextensions.k8s.io/clusterinformations.crd.projectcalico.org created
+customresourcedefinition.apiextensions.k8s.io/felixconfigurations.crd.projectcalico.org created
+customresourcedefinition.apiextensions.k8s.io/globalnetworkpolicies.crd.projectcalico.org created
+customresourcedefinition.apiextensions.k8s.io/globalnetworksets.crd.projectcalico.org created
+customresourcedefinition.apiextensions.k8s.io/hostendpoints.crd.projectcalico.org created
+customresourcedefinition.apiextensions.k8s.io/ipamblocks.crd.projectcalico.org created
+customresourcedefinition.apiextensions.k8s.io/ipamconfigs.crd.projectcalico.org created
+customresourcedefinition.apiextensions.k8s.io/ipamhandles.crd.projectcalico.org created
+customresourcedefinition.apiextensions.k8s.io/ippools.crd.projectcalico.org created
+customresourcedefinition.apiextensions.k8s.io/ipreservations.crd.projectcalico.org created
+customresourcedefinition.apiextensions.k8s.io/kubecontrollersconfigurations.crd.projectcalico.org created
+customresourcedefinition.apiextensions.k8s.io/networkpolicies.crd.projectcalico.org created
+customresourcedefinition.apiextensions.k8s.io/networksets.crd.projectcalico.org created
+customresourcedefinition.apiextensions.k8s.io/stagedglobalnetworkpolicies.crd.projectcalico.org created
+customresourcedefinition.apiextensions.k8s.io/stagedkubernetesnetworkpolicies.crd.projectcalico.org created
+customresourcedefinition.apiextensions.k8s.io/stagednetworkpolicies.crd.projectcalico.org created
+customresourcedefinition.apiextensions.k8s.io/tiers.crd.projectcalico.org created
+customresourcedefinition.apiextensions.k8s.io/adminnetworkpolicies.policy.networking.k8s.io created
+customresourcedefinition.apiextensions.k8s.io/baselineadminnetworkpolicies.policy.networking.k8s.io created
+git clean -fx etc/calico/confd
+mkdir -p tests/logs
+docker run --rm --net=host \
+	-v /home/alex/Repositories/github.com/projectcalico/calico/hack/test/certs:/home/user/certs \
+	-v /home/alex/Repositories/github.com/projectcalico/calico/confd/tests/:/tests/ \
+	-v /home/alex/Repositories/github.com/projectcalico/calico/confd/bin:/calico/bin/ \
+	-v /home/alex/Repositories/github.com/projectcalico/calico/confd/etc/calico:/etc/calico/ \
+	-v /home/alex/Repositories/github.com/projectcalico/calico/confd/../:/go/src/github.com/projectcalico/calico:rw \
+	-v /home/alex/Repositories/github.com/projectcalico/calico/confd/tests/endpoint-status:/var/run/calico/endpoint-status \
+	-e GOPATH=/go \
+	-e LOCAL_USER_ID=1000 \
+	-e FELIX_TYPHAADDR=127.0.0.1:5473 \
+	-e FELIX_TYPHAREADTIMEOUT=50 \
+	-e UPDATE_EXPECTED_DATA=false \
+	-w /go/src/github.com/projectcalico/calico/confd \
+	calico/go-build:1.24.2-llvm18.1.8-k8s1.32.3 /tests/test_suite_kdd.sh || \
+{ \
+    echo; \
+    echo === confd single-shot log:; \
+    cat tests/logs/kdd/logss || true; \
+    echo; \
+    echo === confd daemon log:; \
+    cat tests/logs/kdd/logd1 || true; \
+    echo; \
+    echo === Typha log:; \
+    cat tests/logs/kdd/typha || true; \
+    echo; \
+    false; \
+}
+Waiting for k8s API server to come on line
+Populating k8s with test data that cannot be handled by calicoctl
+customresourcedefinition.apiextensions.k8s.io/bgpconfigurations.crd.projectcalico.org configured
+customresourcedefinition.apiextensions.k8s.io/bgpfilters.crd.projectcalico.org configured
+customresourcedefinition.apiextensions.k8s.io/bgppeers.crd.projectcalico.org configured
+customresourcedefinition.apiextensions.k8s.io/blockaffinities.crd.projectcalico.org configured
+customresourcedefinition.apiextensions.k8s.io/caliconodestatuses.crd.projectcalico.org configured
+customresourcedefinition.apiextensions.k8s.io/clusterinformations.crd.projectcalico.org configured
+customresourcedefinition.apiextensions.k8s.io/felixconfigurations.crd.projectcalico.org configured
+customresourcedefinition.apiextensions.k8s.io/globalnetworkpolicies.crd.projectcalico.org configured
+customresourcedefinition.apiextensions.k8s.io/globalnetworksets.crd.projectcalico.org configured
+customresourcedefinition.apiextensions.k8s.io/hostendpoints.crd.projectcalico.org configured
+customresourcedefinition.apiextensions.k8s.io/ipamblocks.crd.projectcalico.org configured
+customresourcedefinition.apiextensions.k8s.io/ipamconfigs.crd.projectcalico.org configured
+customresourcedefinition.apiextensions.k8s.io/ipamhandles.crd.projectcalico.org configured
+customresourcedefinition.apiextensions.k8s.io/ippools.crd.projectcalico.org configured
+customresourcedefinition.apiextensions.k8s.io/ipreservations.crd.projectcalico.org configured
+customresourcedefinition.apiextensions.k8s.io/kubecontrollersconfigurations.crd.projectcalico.org configured
+customresourcedefinition.apiextensions.k8s.io/networkpolicies.crd.projectcalico.org configured
+customresourcedefinition.apiextensions.k8s.io/networksets.crd.projectcalico.org configured
+customresourcedefinition.apiextensions.k8s.io/stagedglobalnetworkpolicies.crd.projectcalico.org configured
+customresourcedefinition.apiextensions.k8s.io/stagedkubernetesnetworkpolicies.crd.projectcalico.org configured
+customresourcedefinition.apiextensions.k8s.io/stagednetworkpolicies.crd.projectcalico.org configured
+customresourcedefinition.apiextensions.k8s.io/tiers.crd.projectcalico.org configured
+customresourcedefinition.apiextensions.k8s.io/adminnetworkpolicies.policy.networking.k8s.io configured
+customresourcedefinition.apiextensions.k8s.io/baselineadminnetworkpolicies.policy.networking.k8s.io configured
+node/kube-master created
+node/kube-node-1 created
+node/kube-node-2 created
+blockaffinity.crd.projectcalico.org/kube-master-192-168-221-192-26 created
+blockaffinity.crd.projectcalico.org/kube-master-192-168-221-0-26 created
+blockaffinity.crd.projectcalico.org/kube-master-192-168-221-64-26 created
+blockaffinity.crd.projectcalico.org/kube-master-10-0-0-0-30 created
+blockaffinity.crd.projectcalico.org/kube-master-10-1-0-0-24 created
+blockaffinity.crd.projectcalico.org/kube-master-10-2-0-1-32 created
+blockaffinity.crd.projectcalico.org/loadbalancer-192-168-200-1-32 created
+Waiting for CRDs to be ready
+Successfully applied 7 resource(s)
+Successfully deleted 3 resource(s)
+
+Run test: test_node_mesh_bgp_password
+===============================
+Starting Typha
+Running confd as background process
+Running with PID  140
+Successfully applied 6 resource(s)
+Comparing with templates in mesh/password/step1
+comparing templates attempt 1
+comparing templates attempt 2
+secret/my-secrets-1 created
+Comparing with templates in mesh/password/step2
+comparing templates attempt 1
+secret/my-secrets-1 replaced
+Comparing with templates in mesh/password/step3
+comparing templates attempt 1
+secret/my-secrets-1 replaced
+Comparing with templates in mesh/password/step1
+comparing templates attempt 1
+secret "my-secrets-1" deleted
+Comparing with templates in mesh/password/step1
+comparing templates attempt 1
+Successfully deleted 1 'IPPool' resource(s)
+Successfully deleted 1 'IPPool' resource(s)
+Killing Typha
+Successfully applied 1 'BGPConfiguration' resource(s)
+
+===============================
+
+Run test: test_bgp_password_deadlock
+===============================
+Starting Typha
+Successfully applied 1 'BGPConfiguration' resource(s)
+node/node1 created
+Successfully applied 2 resource(s)
+node/node2 created
+Successfully applied 2 resource(s)
+node/node3 created
+Successfully applied 2 resource(s)
+node/node4 created
+Successfully applied 2 resource(s)
+node/node5 created
+Successfully applied 2 resource(s)
+node/node6 created
+Successfully applied 2 resource(s)
+node/node7 created
+Successfully applied 2 resource(s)
+node/node8 created
+Successfully applied 2 resource(s)
+node/node9 created
+Successfully applied 2 resource(s)
+node/node10 created
+Successfully applied 2 resource(s)
+node/node11 created
+Successfully applied 2 resource(s)
+node/node12 created
+Successfully applied 2 resource(s)
+node/node13 created
+Successfully applied 2 resource(s)
+node/node14 created
+Successfully applied 2 resource(s)
+node/node15 created
+Successfully applied 2 resource(s)
+node/node16 created
+Successfully applied 2 resource(s)
+node/node17 created
+Successfully applied 2 resource(s)
+node/node18 created
+Successfully applied 2 resource(s)
+node/node19 created
+Successfully applied 2 resource(s)
+node/node20 created
+Successfully applied 2 resource(s)
+node/node21 created
+Successfully applied 2 resource(s)
+node/node22 created
+Successfully applied 2 resource(s)
+node/node23 created
+Successfully applied 2 resource(s)
+node/node24 created
+Successfully applied 2 resource(s)
+node/node25 created
+Successfully applied 2 resource(s)
+node/node26 created
+Successfully applied 2 resource(s)
+node/node27 created
+Successfully applied 2 resource(s)
+node/node28 created
+Successfully applied 2 resource(s)
+node/node29 created
+Successfully applied 2 resource(s)
+node/node30 created
+Successfully applied 2 resource(s)
+node/node31 created
+Successfully applied 2 resource(s)
+node/node32 created
+Successfully applied 2 resource(s)
+node/node33 created
+Successfully applied 2 resource(s)
+node/node34 created
+Successfully applied 2 resource(s)
+node/node35 created
+Successfully applied 2 resource(s)
+node/node36 created
+Successfully applied 2 resource(s)
+node/node37 created
+Successfully applied 2 resource(s)
+node/node38 created
+Successfully applied 2 resource(s)
+node/node39 created
+Successfully applied 2 resource(s)
+node/node40 created
+Successfully applied 2 resource(s)
+node/node41 created
+Successfully applied 2 resource(s)
+node/node42 created
+Successfully applied 2 resource(s)
+node/node43 created
+Successfully applied 2 resource(s)
+node/node44 created
+Successfully applied 2 resource(s)
+node/node45 created
+Successfully applied 2 resource(s)
+node/node46 created
+Successfully applied 2 resource(s)
+node/node47 created
+Successfully applied 2 resource(s)
+node/node48 created
+Successfully applied 2 resource(s)
+node/node49 created
+Successfully applied 2 resource(s)
+node/node50 created
+Successfully applied 2 resource(s)
+node/node51 created
+Successfully applied 2 resource(s)
+node/node52 created
+Successfully applied 2 resource(s)
+node/node53 created
+Successfully applied 2 resource(s)
+node/node54 created
+Successfully applied 2 resource(s)
+node/node55 created
+Successfully applied 2 resource(s)
+node/node56 created
+Successfully applied 2 resource(s)
+node/node57 created
+Successfully applied 2 resource(s)
+node/node58 created
+Successfully applied 2 resource(s)
+node/node59 created
+Successfully applied 2 resource(s)
+node/node60 created
+Successfully applied 2 resource(s)
+node/node61 created
+Successfully applied 2 resource(s)
+node/node62 created
+Successfully applied 2 resource(s)
+node/node63 created
+Successfully applied 2 resource(s)
+node/node64 created
+Successfully applied 2 resource(s)
+node/node65 created
+Successfully applied 2 resource(s)
+node/node66 created
+Successfully applied 2 resource(s)
+node/node67 created
+Successfully applied 2 resource(s)
+node/node68 created
+Successfully applied 2 resource(s)
+node/node69 created
+Successfully applied 2 resource(s)
+node/node70 created
+Successfully applied 2 resource(s)
+node/node71 created
+Successfully applied 2 resource(s)
+node/node72 created
+Successfully applied 2 resource(s)
+node/node73 created
+Successfully applied 2 resource(s)
+node/node74 created
+Successfully applied 2 resource(s)
+node/node75 created
+Successfully applied 2 resource(s)
+node/node76 created
+Successfully applied 2 resource(s)
+node/node77 created
+Successfully applied 2 resource(s)
+node/node78 created
+Successfully applied 2 resource(s)
+node/node79 created
+Successfully applied 2 resource(s)
+node/node80 created
+Successfully applied 2 resource(s)
+node/node81 created
+Successfully applied 2 resource(s)
+node/node82 created
+Successfully applied 2 resource(s)
+node/node83 created
+Successfully applied 2 resource(s)
+node/node84 created
+Successfully applied 2 resource(s)
+node/node85 created
+Successfully applied 2 resource(s)
+node/node86 created
+Successfully applied 2 resource(s)
+node/node87 created
+Successfully applied 2 resource(s)
+node/node88 created
+Successfully applied 2 resource(s)
+node/node89 created
+Successfully applied 2 resource(s)
+node/node90 created
+Successfully applied 2 resource(s)
+node/node91 created
+Successfully applied 2 resource(s)
+node/node92 created
+Successfully applied 2 resource(s)
+node/node93 created
+Successfully applied 2 resource(s)
+node/node94 created
+Successfully applied 2 resource(s)
+node/node95 created
+Successfully applied 2 resource(s)
+node/node96 created
+Successfully applied 2 resource(s)
+node/node97 created
+Successfully applied 2 resource(s)
+node/node98 created
+Successfully applied 2 resource(s)
+node/node99 created
+Successfully applied 2 resource(s)
+secret/my-secrets-1 created
+Running confd as background process
+Running with PID  3203
+Comparing with templates in password-deadlock
+comparing templates attempt 1
+comparing templates attempt 2
+Killing Typha
+Successfully applied 1 'BGPConfiguration' resource(s)
+secret "my-secrets-1" deleted
+Successfully deleted 1 'BGPPeer' resource(s)
+node "node1" deleted
+Successfully deleted 1 'BGPPeer' resource(s)
+node "node2" deleted
+Successfully deleted 1 'BGPPeer' resource(s)
+node "node3" deleted
+Successfully deleted 1 'BGPPeer' resource(s)
+node "node4" deleted
+Successfully deleted 1 'BGPPeer' resource(s)
+node "node5" deleted
+Successfully deleted 1 'BGPPeer' resource(s)
+node "node6" deleted
+Successfully deleted 1 'BGPPeer' resource(s)
+node "node7" deleted
+Successfully deleted 1 'BGPPeer' resource(s)
+node "node8" deleted
+Successfully deleted 1 'BGPPeer' resource(s)
+node "node9" deleted
+Successfully deleted 1 'BGPPeer' resource(s)
+node "node10" deleted
+Successfully deleted 1 'BGPPeer' resource(s)
+node "node11" deleted
+Successfully deleted 1 'BGPPeer' resource(s)
+node "node12" deleted
+Successfully deleted 1 'BGPPeer' resource(s)
+node "node13" deleted
+Successfully deleted 1 'BGPPeer' resource(s)
+node "node14" deleted
+Successfully deleted 1 'BGPPeer' resource(s)
+node "node15" deleted
+Successfully deleted 1 'BGPPeer' resource(s)
+node "node16" deleted
+Successfully deleted 1 'BGPPeer' resource(s)
+node "node17" deleted
+Successfully deleted 1 'BGPPeer' resource(s)
+node "node18" deleted
+Successfully deleted 1 'BGPPeer' resource(s)
+node "node19" deleted
+Successfully deleted 1 'BGPPeer' resource(s)
+node "node20" deleted
+Successfully deleted 1 'BGPPeer' resource(s)
+node "node21" deleted
+Successfully deleted 1 'BGPPeer' resource(s)
+node "node22" deleted
+Successfully deleted 1 'BGPPeer' resource(s)
+node "node23" deleted
+Successfully deleted 1 'BGPPeer' resource(s)
+node "node24" deleted
+Successfully deleted 1 'BGPPeer' resource(s)
+node "node25" deleted
+Successfully deleted 1 'BGPPeer' resource(s)
+node "node26" deleted
+Successfully deleted 1 'BGPPeer' resource(s)
+node "node27" deleted
+Successfully deleted 1 'BGPPeer' resource(s)
+node "node28" deleted
+Successfully deleted 1 'BGPPeer' resource(s)
+node "node29" deleted
+Successfully deleted 1 'BGPPeer' resource(s)
+node "node30" deleted
+Successfully deleted 1 'BGPPeer' resource(s)
+node "node31" deleted
+Successfully deleted 1 'BGPPeer' resource(s)
+node "node32" deleted
+Successfully deleted 1 'BGPPeer' resource(s)
+node "node33" deleted
+Successfully deleted 1 'BGPPeer' resource(s)
+node "node34" deleted
+Successfully deleted 1 'BGPPeer' resource(s)
+node "node35" deleted
+Successfully deleted 1 'BGPPeer' resource(s)
+node "node36" deleted
+Successfully deleted 1 'BGPPeer' resource(s)
+node "node37" deleted
+Successfully deleted 1 'BGPPeer' resource(s)
+node "node38" deleted
+Successfully deleted 1 'BGPPeer' resource(s)
+node "node39" deleted
+Successfully deleted 1 'BGPPeer' resource(s)
+node "node40" deleted
+Successfully deleted 1 'BGPPeer' resource(s)
+node "node41" deleted
+Successfully deleted 1 'BGPPeer' resource(s)
+node "node42" deleted
+Successfully deleted 1 'BGPPeer' resource(s)
+node "node43" deleted
+Successfully deleted 1 'BGPPeer' resource(s)
+node "node44" deleted
+Successfully deleted 1 'BGPPeer' resource(s)
+node "node45" deleted
+Successfully deleted 1 'BGPPeer' resource(s)
+node "node46" deleted
+Successfully deleted 1 'BGPPeer' resource(s)
+node "node47" deleted
+Successfully deleted 1 'BGPPeer' resource(s)
+node "node48" deleted
+Successfully deleted 1 'BGPPeer' resource(s)
+node "node49" deleted
+Successfully deleted 1 'BGPPeer' resource(s)
+node "node50" deleted
+Successfully deleted 1 'BGPPeer' resource(s)
+node "node51" deleted
+Successfully deleted 1 'BGPPeer' resource(s)
+node "node52" deleted
+Successfully deleted 1 'BGPPeer' resource(s)
+node "node53" deleted
+Successfully deleted 1 'BGPPeer' resource(s)
+node "node54" deleted
+Successfully deleted 1 'BGPPeer' resource(s)
+node "node55" deleted
+Successfully deleted 1 'BGPPeer' resource(s)
+node "node56" deleted
+Successfully deleted 1 'BGPPeer' resource(s)
+node "node57" deleted
+Successfully deleted 1 'BGPPeer' resource(s)
+node "node58" deleted
+Successfully deleted 1 'BGPPeer' resource(s)
+node "node59" deleted
+Successfully deleted 1 'BGPPeer' resource(s)
+node "node60" deleted
+Successfully deleted 1 'BGPPeer' resource(s)
+node "node61" deleted
+Successfully deleted 1 'BGPPeer' resource(s)
+node "node62" deleted
+Successfully deleted 1 'BGPPeer' resource(s)
+node "node63" deleted
+Successfully deleted 1 'BGPPeer' resource(s)
+node "node64" deleted
+Successfully deleted 1 'BGPPeer' resource(s)
+node "node65" deleted
+Successfully deleted 1 'BGPPeer' resource(s)
+node "node66" deleted
+Successfully deleted 1 'BGPPeer' resource(s)
+node "node67" deleted
+Successfully deleted 1 'BGPPeer' resource(s)
+node "node68" deleted
+Successfully deleted 1 'BGPPeer' resource(s)
+node "node69" deleted
+Successfully deleted 1 'BGPPeer' resource(s)
+node "node70" deleted
+Successfully deleted 1 'BGPPeer' resource(s)
+node "node71" deleted
+Successfully deleted 1 'BGPPeer' resource(s)
+node "node72" deleted
+Successfully deleted 1 'BGPPeer' resource(s)
+node "node73" deleted
+Successfully deleted 1 'BGPPeer' resource(s)
+node "node74" deleted
+Successfully deleted 1 'BGPPeer' resource(s)
+node "node75" deleted
+Successfully deleted 1 'BGPPeer' resource(s)
+node "node76" deleted
+Successfully deleted 1 'BGPPeer' resource(s)
+node "node77" deleted
+Successfully deleted 1 'BGPPeer' resource(s)
+node "node78" deleted
+Successfully deleted 1 'BGPPeer' resource(s)
+node "node79" deleted
+Successfully deleted 1 'BGPPeer' resource(s)
+node "node80" deleted
+Successfully deleted 1 'BGPPeer' resource(s)
+node "node81" deleted
+Successfully deleted 1 'BGPPeer' resource(s)
+node "node82" deleted
+Successfully deleted 1 'BGPPeer' resource(s)
+node "node83" deleted
+Successfully deleted 1 'BGPPeer' resource(s)
+node "node84" deleted
+Successfully deleted 1 'BGPPeer' resource(s)
+node "node85" deleted
+Successfully deleted 1 'BGPPeer' resource(s)
+node "node86" deleted
+Successfully deleted 1 'BGPPeer' resource(s)
+node "node87" deleted
+Successfully deleted 1 'BGPPeer' resource(s)
+node "node88" deleted
+Successfully deleted 1 'BGPPeer' resource(s)
+node "node89" deleted
+Successfully deleted 1 'BGPPeer' resource(s)
+node "node90" deleted
+Successfully deleted 1 'BGPPeer' resource(s)
+node "node91" deleted
+Successfully deleted 1 'BGPPeer' resource(s)
+node "node92" deleted
+Successfully deleted 1 'BGPPeer' resource(s)
+node "node93" deleted
+Successfully deleted 1 'BGPPeer' resource(s)
+node "node94" deleted
+Successfully deleted 1 'BGPPeer' resource(s)
+node "node95" deleted
+Successfully deleted 1 'BGPPeer' resource(s)
+node "node96" deleted
+Successfully deleted 1 'BGPPeer' resource(s)
+node "node97" deleted
+Successfully deleted 1 'BGPPeer' resource(s)
+node "node98" deleted
+Successfully deleted 1 'BGPPeer' resource(s)
+node "node99" deleted
+===============================
+
+Run test: test_bgp_ttl_security
+===============================
+Starting Typha
+Running confd as background process
+Running with PID  6060
+Successfully applied 1 'BGPConfiguration' resource(s)
+Successfully applied 5 resource(s)
+Comparing with templates in ttl_security/explicit_node
+comparing templates attempt 1
+comparing templates attempt 2
+Successfully applied 1 'BGPConfiguration' resource(s)
+Successfully deleted 1 'BGPPeer' resource(s)
+Successfully deleted 1 'BGPPeer' resource(s)
+Killing Typha
+Starting Typha
+Running confd as background process
+Running with PID  6222
+Successfully applied 1 'BGPConfiguration' resource(s)
+Successfully applied 4 resource(s)
+Comparing with templates in ttl_security/peer_selector
+comparing templates attempt 1
+comparing templates attempt 2
+Successfully applied 1 'BGPConfiguration' resource(s)
+Successfully deleted 1 'BGPPeer' resource(s)
+Killing Typha
+Starting Typha
+Running confd as background process
+Running with PID  6367
+Successfully applied 1 'BGPConfiguration' resource(s)
+Successfully applied 4 resource(s)
+Comparing with templates in ttl_security/global
+comparing templates attempt 1
+comparing templates attempt 2
+Successfully applied 1 'BGPConfiguration' resource(s)
+Successfully deleted 1 'BGPPeer' resource(s)
+Killing Typha
+===============================
+
+Run test: test_bgp_ignored_interfaces
+===============================
+Starting Typha
+Running confd as background process
+Running with PID  6513
+Successfully applied 4 resource(s)
+Comparing with templates in ignored_interfaces
+comparing templates attempt 1
+Killing Typha
+===============================
+
+Run test: test_bgp_reachable_by
+===============================
+Starting Typha
+Running confd as background process
+Running with PID  6602
+Successfully applied 1 'BGPConfiguration' resource(s)
+Successfully applied 7 resource(s)
+Comparing with templates in reachable_by/global_peers
+comparing templates attempt 1
+comparing templates attempt 2
+Successfully applied 1 'BGPConfiguration' resource(s)
+Successfully deleted 1 'BGPPeer' resource(s)
+Successfully deleted 1 'BGPPeer' resource(s)
+Successfully deleted 1 'BGPPeer' resource(s)
+Successfully deleted 1 'BGPPeer' resource(s)
+Killing Typha
+Starting Typha
+Running confd as background process
+Running with PID  6797
+Successfully applied 1 'BGPConfiguration' resource(s)
+Successfully applied 8 resource(s)
+Comparing with templates in reachable_by/route_reflectors
+comparing templates attempt 1
+comparing templates attempt 2
+Successfully applied 1 'BGPConfiguration' resource(s)
+Successfully deleted 1 'BGPPeer' resource(s)
+Successfully deleted 1 'BGPPeer' resource(s)
+Successfully deleted 1 'BGPPeer' resource(s)
+Successfully deleted 1 'BGPPeer' resource(s)
+Successfully deleted 1 'BGPPeer' resource(s)
+Killing Typha
+===============================
+
+Run test: test_bgp_filters
+===============================
+Starting Typha
+Running confd as background process
+Running with PID  7001
+Successfully applied 1 'BGPConfiguration' resource(s)
+Successfully applied 5 resource(s)
+Comparing with templates in bgpfilter/single_filter/global_peer
+comparing templates attempt 1
+comparing templates attempt 2
+Successfully applied 1 'BGPConfiguration' resource(s)
+Successfully deleted 1 'BGPFilter' resource(s)
+Successfully deleted 1 'BGPPeer' resource(s)
+Killing Typha
+Starting Typha
+Running confd as background process
+Running with PID  7164
+Successfully applied 1 'BGPConfiguration' resource(s)
+Successfully applied 9 resource(s)
+Comparing with templates in bgpfilter/single_filter/explicit_peer
+comparing templates attempt 1
+Successfully applied 1 'BGPConfiguration' resource(s)
+Successfully deleted 1 'BGPFilter' resource(s)
+Successfully deleted 1 'BGPFilter' resource(s)
+Successfully deleted 1 'BGPPeer' resource(s)
+Successfully deleted 1 'BGPPeer' resource(s)
+Successfully deleted 1 'BGPPeer' resource(s)
+Successfully deleted 1 'BGPPeer' resource(s)
+Killing Typha
+Starting Typha
+Running confd as background process
+Running with PID  7383
+Successfully applied 1 'BGPConfiguration' resource(s)
+Successfully applied 6 resource(s)
+Comparing with templates in bgpfilter/multi_filter/global_peer
+comparing templates attempt 1
+comparing templates attempt 2
+Successfully applied 1 'BGPConfiguration' resource(s)
+Successfully deleted 1 'BGPFilter' resource(s)
+Successfully deleted 1 'BGPFilter' resource(s)
+Successfully deleted 1 'BGPPeer' resource(s)
+Killing Typha
+Starting Typha
+Running confd as background process
+Running with PID  7561
+Successfully applied 1 'BGPConfiguration' resource(s)
+Successfully applied 9 resource(s)
+Comparing with templates in bgpfilter/multi_filter/explicit_peer
+comparing templates attempt 1
+comparing templates attempt 2
+Successfully applied 1 'BGPConfiguration' resource(s)
+Successfully deleted 1 'BGPFilter' resource(s)
+Successfully deleted 1 'BGPFilter' resource(s)
+Successfully deleted 1 'BGPPeer' resource(s)
+Successfully deleted 1 'BGPPeer' resource(s)
+Successfully deleted 1 'BGPPeer' resource(s)
+Successfully deleted 1 'BGPPeer' resource(s)
+Killing Typha
+Starting Typha
+Running confd as background process
+Running with PID  7791
+Successfully applied 1 'BGPConfiguration' resource(s)
+Successfully applied 4 resource(s)
+Comparing with templates in bgpfilter/node_mesh
+comparing templates attempt 1
+Successfully deleted 1 'BGPFilter' resource(s)
+Killing Typha
+Starting Typha
+Running confd as background process
+Running with PID  7906
+Successfully applied 1 'BGPConfiguration' resource(s)
+Successfully applied 5 resource(s)
+Comparing with templates in bgpfilter/filter_deletion/step1
+comparing templates attempt 1
+comparing templates attempt 2
+Successfully deleted 1 'BGPFilter' resource(s)
+Comparing with templates in bgpfilter/filter_deletion/step2
+comparing templates attempt 1
+comparing templates attempt 2
+Successfully applied 1 'BGPConfiguration' resource(s)
+Successfully deleted 1 'BGPPeer' resource(s)
+Killing Typha
+Starting Typha
+Running confd as background process
+Running with PID  8107
+Successfully applied 1 'BGPConfiguration' resource(s)
+Successfully applied 7 resource(s)
+Comparing with templates in bgpfilter/filter_names/
+comparing templates attempt 1
+comparing templates attempt 2
+Successfully applied 1 'BGPConfiguration' resource(s)
+Successfully deleted 1 'BGPFilter' resource(s)
+Successfully deleted 1 'BGPFilter' resource(s)
+Successfully deleted 1 'BGPFilter' resource(s)
+Successfully deleted 1 'BGPPeer' resource(s)
+Killing Typha
+Starting Typha
+Running confd as background process
+Running with PID  8304
+Successfully applied 1 'BGPConfiguration' resource(s)
+Successfully applied 5 resource(s)
+Comparing with templates in bgpfilter/match_operators
+comparing templates attempt 1
+comparing templates attempt 2
+Successfully applied 1 'BGPConfiguration' resource(s)
+Successfully deleted 1 'BGPFilter' resource(s)
+Successfully deleted 1 'BGPPeer' resource(s)
+Killing Typha
+Starting Typha
+Running confd as background process
+Running with PID  8469
+Successfully applied 1 'BGPConfiguration' resource(s)
+Successfully applied 5 resource(s)
+Comparing with templates in bgpfilter/match_source
+comparing templates attempt 1
+comparing templates attempt 2
+Successfully applied 1 'BGPConfiguration' resource(s)
+Successfully deleted 1 'BGPFilter' resource(s)
+Successfully deleted 1 'BGPPeer' resource(s)
+Killing Typha
+Starting Typha
+Running confd as background process
+Running with PID  8632
+Successfully applied 1 'BGPConfiguration' resource(s)
+Successfully applied 5 resource(s)
+Comparing with templates in bgpfilter/match_interface
+comparing templates attempt 1
+comparing templates attempt 2
+Successfully applied 1 'BGPConfiguration' resource(s)
+Successfully deleted 1 'BGPFilter' resource(s)
+Successfully deleted 1 'BGPPeer' resource(s)
+Killing Typha
+Starting Typha
+Running confd as background process
+Running with PID  8797
+Successfully applied 1 'BGPConfiguration' resource(s)
+Successfully applied 9 resource(s)
+Comparing with templates in bgpfilter/import_only/explicit_peer
+comparing templates attempt 1
+Successfully applied 1 'BGPConfiguration' resource(s)
+Successfully deleted 1 'BGPFilter' resource(s)
+Successfully deleted 1 'BGPFilter' resource(s)
+Successfully deleted 1 'BGPPeer' resource(s)
+Successfully deleted 1 'BGPPeer' resource(s)
+Successfully deleted 1 'BGPPeer' resource(s)
+Successfully deleted 1 'BGPPeer' resource(s)
+Killing Typha
+Starting Typha
+Running confd as background process
+Running with PID  9006
+Successfully applied 1 'BGPConfiguration' resource(s)
+Successfully applied 5 resource(s)
+Comparing with templates in bgpfilter/import_only/global_peer
+comparing templates attempt 1
+comparing templates attempt 2
+Successfully applied 1 'BGPConfiguration' resource(s)
+Successfully deleted 1 'BGPFilter' resource(s)
+Successfully deleted 1 'BGPPeer' resource(s)
+Killing Typha
+Starting Typha
+Running confd as background process
+Running with PID  9168
+Successfully applied 1 'BGPConfiguration' resource(s)
+Successfully applied 9 resource(s)
+Comparing with templates in bgpfilter/export_only/explicit_peer
+comparing templates attempt 1
+comparing templates attempt 2
+Successfully applied 1 'BGPConfiguration' resource(s)
+Successfully deleted 1 'BGPFilter' resource(s)
+Successfully deleted 1 'BGPFilter' resource(s)
+Successfully deleted 1 'BGPPeer' resource(s)
+Successfully deleted 1 'BGPPeer' resource(s)
+Successfully deleted 1 'BGPPeer' resource(s)
+Successfully deleted 1 'BGPPeer' resource(s)
+Killing Typha
+Starting Typha
+Running confd as background process
+Running with PID  9396
+Successfully applied 1 'BGPConfiguration' resource(s)
+Successfully applied 5 resource(s)
+Comparing with templates in bgpfilter/export_only/global_peer
+comparing templates attempt 1
+comparing templates attempt 2
+Successfully applied 1 'BGPConfiguration' resource(s)
+Successfully deleted 1 'BGPFilter' resource(s)
+Successfully deleted 1 'BGPPeer' resource(s)
+Killing Typha
+Starting Typha
+Running confd as background process
+Running with PID  9558
+Successfully applied 1 'BGPConfiguration' resource(s)
+Successfully applied 9 resource(s)
+Comparing with templates in bgpfilter/v4_only/explicit_peer
+comparing templates attempt 1
+comparing templates attempt 2
+Successfully applied 1 'BGPConfiguration' resource(s)
+Successfully deleted 1 'BGPFilter' resource(s)
+Successfully deleted 1 'BGPFilter' resource(s)
+Successfully deleted 1 'BGPPeer' resource(s)
+Successfully deleted 1 'BGPPeer' resource(s)
+Successfully deleted 1 'BGPPeer' resource(s)
+Successfully deleted 1 'BGPPeer' resource(s)
+Killing Typha
+Starting Typha
+Running confd as background process
+Running with PID  9779
+Successfully applied 1 'BGPConfiguration' resource(s)
+Successfully applied 5 resource(s)
+Comparing with templates in bgpfilter/v4_only/global_peer
+comparing templates attempt 1
+comparing templates attempt 2
+Successfully applied 1 'BGPConfiguration' resource(s)
+Successfully deleted 1 'BGPFilter' resource(s)
+Successfully deleted 1 'BGPPeer' resource(s)
+Killing Typha
+Starting Typha
+Running confd as background process
+Running with PID  9938
+Successfully applied 1 'BGPConfiguration' resource(s)
+Successfully applied 9 resource(s)
+Comparing with templates in bgpfilter/v6_only/explicit_peer
+comparing templates attempt 1
+comparing templates attempt 2
+Successfully applied 1 'BGPConfiguration' resource(s)
+Successfully deleted 1 'BGPFilter' resource(s)
+Successfully deleted 1 'BGPFilter' resource(s)
+Successfully deleted 1 'BGPPeer' resource(s)
+Successfully deleted 1 'BGPPeer' resource(s)
+Successfully deleted 1 'BGPPeer' resource(s)
+Successfully deleted 1 'BGPPeer' resource(s)
+Killing Typha
+Starting Typha
+Running confd as background process
+Running with PID  10163
+Successfully applied 1 'BGPConfiguration' resource(s)
+Successfully applied 5 resource(s)
+Comparing with templates in bgpfilter/v6_only/global_peer
+comparing templates attempt 1
+comparing templates attempt 2
+Successfully applied 1 'BGPConfiguration' resource(s)
+Successfully deleted 1 'BGPFilter' resource(s)
+Successfully deleted 1 'BGPPeer' resource(s)
+Killing Typha
+===============================
+
+Run test: test_bgp_local_bgp_peer
+===============================
+Starting Typha
+Running confd as background process
+Running with PID  10325
+Successfully applied 1 'BGPConfiguration' resource(s)
+Successfully applied 6 resource(s)
+Comparing with templates in explicit_peering/local_bgp_peer/global
+comparing templates attempt 1
+Successfully applied 1 'BGPConfiguration' resource(s)
+Successfully deleted 1 'BGPFilter' resource(s)
+Successfully deleted 1 'BGPPeer' resource(s)
+Successfully deleted 1 'BGPPeer' resource(s)
+Killing Typha
+===============================
+Execute oneshot-mode tests
+Populating calico with test data using calicoctl:  mesh/bgp-export
+Successfully applied 10 resource(s)
+Starting Typha
+Comparing with templates in mesh/bgp-export
+comparing templates attempt 1
+Killing Typha
+Preparing Calico data for next test
+Successfully deleted 6 'IPPool' resource(s)
+Populating calico with test data using calicoctl:  mesh/ipip-always
+Successfully applied 5 resource(s)
+Starting Typha
+Comparing with templates in mesh/ipip-always
+comparing templates attempt 1
+Killing Typha
+Preparing Calico data for next test
+Successfully deleted 1 'IPPool' resource(s)
+Populating calico with test data using calicoctl:  mesh/ipip-cross-subnet
+Successfully applied 5 resource(s)
+Starting Typha
+Comparing with templates in mesh/ipip-cross-subnet
+comparing templates attempt 1
+Killing Typha
+Preparing Calico data for next test
+Successfully deleted 1 'IPPool' resource(s)
+Populating calico with test data using calicoctl:  mesh/ipip-off
+Successfully applied 6 resource(s)
+Starting Typha
+Comparing with templates in mesh/ipip-off
+comparing templates attempt 1
+Killing Typha
+Preparing Calico data for next test
+Successfully deleted 2 'IPPool' resource(s)
+Populating calico with test data using calicoctl:  mesh/vxlan-always
+Successfully applied 6 resource(s)
+Starting Typha
+Comparing with templates in mesh/vxlan-always
+comparing templates attempt 1
+Killing Typha
+Preparing Calico data for next test
+Successfully deleted 2 'IPPool' resource(s)
+Populating calico with test data using calicoctl:  explicit_peering/global
+Successfully applied 8 resource(s)
+Starting Typha
+Comparing with templates in explicit_peering/global
+comparing templates attempt 1
+Killing Typha
+Preparing Calico data for next test
+Successfully deleted 4 resource(s)
+Populating calico with test data using calicoctl:  explicit_peering/specific_node
+Successfully applied 7 resource(s)
+Starting Typha
+Comparing with templates in explicit_peering/specific_node
+comparing templates attempt 1
+Killing Typha
+Preparing Calico data for next test
+Successfully deleted 3 resource(s)
+Populating calico with test data using calicoctl:  explicit_peering/selectors
+Successfully applied 7 resource(s)
+Starting Typha
+Comparing with templates in explicit_peering/selectors
+comparing templates attempt 1
+Killing Typha
+Preparing Calico data for next test
+Successfully deleted 3 resource(s)
+Populating calico with test data using calicoctl:  explicit_peering/route_reflector
+Successfully applied 8 resource(s)
+Starting Typha
+Comparing with templates in explicit_peering/route_reflector
+comparing templates attempt 1
+Killing Typha
+Preparing Calico data for next test
+Successfully deleted 4 resource(s)
+Populating calico with test data using calicoctl:  explicit_peering/route_reflector_v6_by_ip
+Successfully applied 8 resource(s)
+Starting Typha
+Comparing with templates in explicit_peering/route_reflector_v6_by_ip
+comparing templates attempt 1
+Killing Typha
+Preparing Calico data for next test
+Successfully deleted 4 resource(s)
+Populating calico with test data using calicoctl:  mesh/static-routes
+Successfully applied 5 resource(s)
+service/service-1 created
+endpoints/service-1 created
+service/service-2 created
+endpoints/service-2 created
+service/service-v6-1 created
+endpoints/service-v6-1 created
+service/service-v6-2 created
+endpoints/service-v6-2 created
+Starting Typha
+Comparing with templates in mesh/static-routes
+comparing templates attempt 1
+Killing Typha
+Preparing Calico data for next test
+service "service-1" deleted
+service "service-2" deleted
+service "service-v6-1" deleted
+service "service-v6-2" deleted
+Successfully deleted 1 'IPPool' resource(s)
+Populating calico with test data using calicoctl:  mesh/static-routes-exclude-node
+Successfully applied 5 resource(s)
+service/service-1 created
+endpoints/service-1 created
+service/service-2 created
+endpoints/service-2 created
+service/service-v6-1 created
+endpoints/service-v6-1 created
+service/service-v6-2 created
+endpoints/service-v6-2 created
+Starting Typha
+Comparing with templates in mesh/static-routes-exclude-node
+comparing templates attempt 1
+Killing Typha
+Preparing Calico data for next test
+service "service-1" deleted
+service "service-2" deleted
+service "service-v6-1" deleted
+service "service-v6-2" deleted
+Successfully deleted 1 'IPPool' resource(s)
+Populating calico with test data using calicoctl:  mesh/communities
+Successfully applied 5 resource(s)
+Starting Typha
+Comparing with templates in mesh/communities
+comparing templates attempt 1
+Killing Typha
+Preparing Calico data for next test
+Successfully deleted 1 'IPPool' resource(s)
+Populating calico with test data using calicoctl:  mesh/restart-time
+Successfully applied 6 resource(s)
+Starting Typha
+Comparing with templates in mesh/restart-time
+comparing templates attempt 1
+Killing Typha
+Preparing Calico data for next test
+Successfully deleted 2 'IPPool' resource(s)
+Populating calico with test data using calicoctl:  explicit_peering/keepnexthop
+Successfully applied 8 resource(s)
+Starting Typha
+Comparing with templates in explicit_peering/keepnexthop
+comparing templates attempt 1
+Killing Typha
+Preparing Calico data for next test
+Successfully deleted 4 resource(s)
+Populating calico with test data using calicoctl:  explicit_peering/keepnexthop-global
+Successfully applied 7 resource(s)
+Starting Typha
+Comparing with templates in explicit_peering/keepnexthop-global
+comparing templates attempt 1
+Killing Typha
+Preparing Calico data for next test
+Successfully deleted 3 resource(s)
+Populating calico with test data using calicoctl:  mesh/static-routes-no-ipv4-address
+Successfully applied 3 resource(s)
+service/service-1 created
+endpoints/service-1 created
+service/service-2 created
+endpoints/service-2 created
+Starting Typha
+Comparing with templates in mesh/static-routes-no-ipv4-address
+comparing templates attempt 1
+Killing Typha
+Preparing Calico data for next test
+service "service-1" deleted
+service "service-2" deleted
+Successfully deleted 1 'IPPool' resource(s)
+Populating calico with test data using calicoctl:  mesh/bgp-export
+Successfully applied 10 resource(s)
+Starting Typha
+Comparing with templates in mesh/bgp-export
+comparing templates attempt 1
+Killing Typha
+Preparing Calico data for next test
+Successfully deleted 6 'IPPool' resource(s)
+Populating calico with test data using calicoctl:  mesh/ipip-always
+Successfully applied 5 resource(s)
+Starting Typha
+Comparing with templates in mesh/ipip-always
+comparing templates attempt 1
+Killing Typha
+Preparing Calico data for next test
+Successfully deleted 1 'IPPool' resource(s)
+Populating calico with test data using calicoctl:  mesh/ipip-cross-subnet
+Successfully applied 5 resource(s)
+Starting Typha
+Comparing with templates in mesh/ipip-cross-subnet
+comparing templates attempt 1
+Killing Typha
+Preparing Calico data for next test
+Successfully deleted 1 'IPPool' resource(s)
+Populating calico with test data using calicoctl:  mesh/ipip-off
+Successfully applied 6 resource(s)
+Starting Typha
+Comparing with templates in mesh/ipip-off
+comparing templates attempt 1
+Killing Typha
+Preparing Calico data for next test
+Successfully deleted 2 'IPPool' resource(s)
+Populating calico with test data using calicoctl:  mesh/vxlan-always
+Successfully applied 6 resource(s)
+Starting Typha
+Comparing with templates in mesh/vxlan-always
+comparing templates attempt 1
+Killing Typha
+Preparing Calico data for next test
+Successfully deleted 2 'IPPool' resource(s)
+Populating calico with test data using calicoctl:  explicit_peering/global
+Successfully applied 8 resource(s)
+Starting Typha
+Comparing with templates in explicit_peering/global
+comparing templates attempt 1
+Killing Typha
+Preparing Calico data for next test
+Successfully deleted 4 resource(s)
+Populating calico with test data using calicoctl:  explicit_peering/specific_node
+Successfully applied 7 resource(s)
+Starting Typha
+Comparing with templates in explicit_peering/specific_node
+comparing templates attempt 1
+Killing Typha
+Preparing Calico data for next test
+Successfully deleted 3 resource(s)
+Populating calico with test data using calicoctl:  explicit_peering/selectors
+Successfully applied 7 resource(s)
+Starting Typha
+Comparing with templates in explicit_peering/selectors
+comparing templates attempt 1
+Killing Typha
+Preparing Calico data for next test
+Successfully deleted 3 resource(s)
+Populating calico with test data using calicoctl:  explicit_peering/route_reflector
+Successfully applied 8 resource(s)
+Starting Typha
+Comparing with templates in explicit_peering/route_reflector
+comparing templates attempt 1
+Killing Typha
+Preparing Calico data for next test
+Successfully deleted 4 resource(s)
+Populating calico with test data using calicoctl:  explicit_peering/route_reflector_v6_by_ip
+Successfully applied 8 resource(s)
+Starting Typha
+Comparing with templates in explicit_peering/route_reflector_v6_by_ip
+comparing templates attempt 1
+Killing Typha
+Preparing Calico data for next test
+Successfully deleted 4 resource(s)
+Populating calico with test data using calicoctl:  mesh/static-routes
+Successfully applied 5 resource(s)
+service/service-1 created
+endpoints/service-1 created
+service/service-2 created
+endpoints/service-2 created
+service/service-v6-1 created
+endpoints/service-v6-1 created
+service/service-v6-2 created
+endpoints/service-v6-2 created
+Starting Typha
+Comparing with templates in mesh/static-routes
+comparing templates attempt 1
+Killing Typha
+Preparing Calico data for next test
+service "service-1" deleted
+service "service-2" deleted
+service "service-v6-1" deleted
+service "service-v6-2" deleted
+Successfully deleted 1 'IPPool' resource(s)
+Populating calico with test data using calicoctl:  mesh/static-routes-exclude-node
+Successfully applied 5 resource(s)
+service/service-1 created
+endpoints/service-1 created
+service/service-2 created
+endpoints/service-2 created
+service/service-v6-1 created
+endpoints/service-v6-1 created
+service/service-v6-2 created
+endpoints/service-v6-2 created
+Starting Typha
+Comparing with templates in mesh/static-routes-exclude-node
+comparing templates attempt 1
+Killing Typha
+Preparing Calico data for next test
+service "service-1" deleted
+service "service-2" deleted
+service "service-v6-1" deleted
+service "service-v6-2" deleted
+Successfully deleted 1 'IPPool' resource(s)
+Populating calico with test data using calicoctl:  mesh/communities
+Successfully applied 5 resource(s)
+Starting Typha
+Comparing with templates in mesh/communities
+comparing templates attempt 1
+Killing Typha
+Preparing Calico data for next test
+Successfully deleted 1 'IPPool' resource(s)
+Populating calico with test data using calicoctl:  mesh/restart-time
+Successfully applied 6 resource(s)
+Starting Typha
+Comparing with templates in mesh/restart-time
+comparing templates attempt 1
+Killing Typha
+Preparing Calico data for next test
+Successfully deleted 2 'IPPool' resource(s)
+Populating calico with test data using calicoctl:  explicit_peering/keepnexthop
+Successfully applied 8 resource(s)
+Starting Typha
+Comparing with templates in explicit_peering/keepnexthop
+comparing templates attempt 1
+Killing Typha
+Preparing Calico data for next test
+Successfully deleted 4 resource(s)
+Populating calico with test data using calicoctl:  explicit_peering/keepnexthop-global
+Successfully applied 7 resource(s)
+Starting Typha
+Comparing with templates in explicit_peering/keepnexthop-global
+comparing templates attempt 1
+Killing Typha
+Preparing Calico data for next test
+Successfully deleted 3 resource(s)
+Populating calico with test data using calicoctl:  mesh/static-routes-no-ipv4-address
+Successfully applied 3 resource(s)
+service/service-1 created
+endpoints/service-1 created
+service/service-2 created
+endpoints/service-2 created
+Starting Typha
+Comparing with templates in mesh/static-routes-no-ipv4-address
+comparing templates attempt 1
+Killing Typha
+Preparing Calico data for next test
+service "service-1" deleted
+service "service-2" deleted
+Successfully deleted 1 'IPPool' resource(s)
+Oneshot-mode tests passed
+Execute daemon-mode tests
+Successfully applied 1 'BGPConfiguration' resource(s)
+Starting Typha
+Running confd as background process
+Running with PID  13738
+Populating calico with test data using calicoctl:  mesh/bgp-export
+Successfully applied 10 resource(s)
+Comparing with templates in mesh/bgp-export
+comparing templates attempt 1
+comparing templates attempt 2
+Preparing Calico data for next test
+Successfully deleted 6 'IPPool' resource(s)
+Populating calico with test data using calicoctl:  mesh/ipip-always
+Successfully applied 5 resource(s)
+Comparing with templates in mesh/ipip-always
+comparing templates attempt 1
+Preparing Calico data for next test
+Successfully deleted 1 'IPPool' resource(s)
+Populating calico with test data using calicoctl:  mesh/ipip-cross-subnet
+Successfully applied 5 resource(s)
+Comparing with templates in mesh/ipip-cross-subnet
+comparing templates attempt 1
+Preparing Calico data for next test
+Successfully deleted 1 'IPPool' resource(s)
+Populating calico with test data using calicoctl:  mesh/ipip-off
+Successfully applied 6 resource(s)
+Comparing with templates in mesh/ipip-off
+comparing templates attempt 1
+Preparing Calico data for next test
+Successfully deleted 2 'IPPool' resource(s)
+Populating calico with test data using calicoctl:  mesh/route-reflector-mesh-enabled
+Successfully applied 8 resource(s)
+Comparing with templates in mesh/route-reflector-mesh-enabled
+comparing templates attempt 1
+comparing templates attempt 2
+Preparing Calico data for next test
+Successfully deleted 4 resource(s)
+Populating calico with test data using calicoctl:  mesh/static-routes
+Successfully applied 5 resource(s)
+service/service-1 created
+endpoints/service-1 created
+service/service-2 created
+endpoints/service-2 created
+service/service-v6-1 created
+endpoints/service-v6-1 created
+service/service-v6-2 created
+endpoints/service-v6-2 created
+Comparing with templates in mesh/static-routes
+comparing templates attempt 1
+Config changes for step 2
+Successfully applied 1 'BGPConfiguration' resource(s)
+Comparing with templates in mesh/static-routes/step2
+comparing templates attempt 1
+Preparing Calico data for next test
+service "service-1" deleted
+service "service-2" deleted
+service "service-v6-1" deleted
+service "service-v6-2" deleted
+Successfully deleted 1 'IPPool' resource(s)
+Populating calico with test data using calicoctl:  mesh/static-routes-exclude-node
+Successfully applied 5 resource(s)
+service/service-1 created
+endpoints/service-1 created
+service/service-2 created
+endpoints/service-2 created
+service/service-v6-1 created
+endpoints/service-v6-1 created
+service/service-v6-2 created
+endpoints/service-v6-2 created
+Comparing with templates in mesh/static-routes-exclude-node
+comparing templates attempt 1
+Config changes for step 2
+Successfully applied 1 'BGPConfiguration' resource(s)
+Comparing with templates in mesh/static-routes-exclude-node/step2
+comparing templates attempt 1
+Preparing Calico data for next test
+service "service-1" deleted
+service "service-2" deleted
+service "service-v6-1" deleted
+service "service-v6-2" deleted
+Successfully deleted 1 'IPPool' resource(s)
+Populating calico with test data using calicoctl:  mesh/communities
+Successfully applied 5 resource(s)
+Comparing with templates in mesh/communities
+comparing templates attempt 1
+Config changes for step 2
+Successfully applied 1 'BGPConfiguration' resource(s)
+Comparing with templates in mesh/communities/step2
+comparing templates attempt 1
+Preparing Calico data for next test
+Successfully deleted 1 'BGPConfiguration' resource(s)
+Successfully deleted 1 'IPPool' resource(s)
+Populating calico with test data using calicoctl:  mesh/restart-time
+Successfully applied 6 resource(s)
+Comparing with templates in mesh/restart-time
+comparing templates attempt 1
+Preparing Calico data for next test
+Successfully deleted 2 'IPPool' resource(s)
+Populating calico with test data using calicoctl:  mesh/bgp-export
+Successfully applied 10 resource(s)
+Comparing with templates in mesh/bgp-export
+comparing templates attempt 1
+Preparing Calico data for next test
+Successfully deleted 6 'IPPool' resource(s)
+Populating calico with test data using calicoctl:  mesh/ipip-always
+Successfully applied 5 resource(s)
+Comparing with templates in mesh/ipip-always
+comparing templates attempt 1
+Preparing Calico data for next test
+Successfully deleted 1 'IPPool' resource(s)
+Populating calico with test data using calicoctl:  mesh/ipip-cross-subnet
+Successfully applied 5 resource(s)
+Comparing with templates in mesh/ipip-cross-subnet
+comparing templates attempt 1
+Preparing Calico data for next test
+Successfully deleted 1 'IPPool' resource(s)
+Populating calico with test data using calicoctl:  mesh/ipip-off
+Successfully applied 6 resource(s)
+Comparing with templates in mesh/ipip-off
+comparing templates attempt 1
+Preparing Calico data for next test
+Successfully deleted 2 'IPPool' resource(s)
+Populating calico with test data using calicoctl:  mesh/route-reflector-mesh-enabled
+Successfully applied 8 resource(s)
+Comparing with templates in mesh/route-reflector-mesh-enabled
+comparing templates attempt 1
+comparing templates attempt 2
+Preparing Calico data for next test
+Successfully deleted 4 resource(s)
+Populating calico with test data using calicoctl:  mesh/static-routes
+Successfully applied 5 resource(s)
+service/service-1 created
+endpoints/service-1 created
+service/service-2 created
+endpoints/service-2 created
+service/service-v6-1 created
+endpoints/service-v6-1 created
+service/service-v6-2 created
+endpoints/service-v6-2 created
+Comparing with templates in mesh/static-routes
+comparing templates attempt 1
+Config changes for step 2
+Successfully applied 1 'BGPConfiguration' resource(s)
+Comparing with templates in mesh/static-routes/step2
+comparing templates attempt 1
+Preparing Calico data for next test
+service "service-1" deleted
+service "service-2" deleted
+service "service-v6-1" deleted
+service "service-v6-2" deleted
+Successfully deleted 1 'IPPool' resource(s)
+Populating calico with test data using calicoctl:  mesh/static-routes-exclude-node
+Successfully applied 5 resource(s)
+service/service-1 created
+endpoints/service-1 created
+service/service-2 created
+endpoints/service-2 created
+service/service-v6-1 created
+endpoints/service-v6-1 created
+service/service-v6-2 created
+endpoints/service-v6-2 created
+Comparing with templates in mesh/static-routes-exclude-node
+comparing templates attempt 1
+Config changes for step 2
+Successfully applied 1 'BGPConfiguration' resource(s)
+Comparing with templates in mesh/static-routes-exclude-node/step2
+comparing templates attempt 1
+Preparing Calico data for next test
+service "service-1" deleted
+service "service-2" deleted
+service "service-v6-1" deleted
+service "service-v6-2" deleted
+Successfully deleted 1 'IPPool' resource(s)
+Populating calico with test data using calicoctl:  mesh/communities
+Successfully applied 5 resource(s)
+Comparing with templates in mesh/communities
+comparing templates attempt 1
+Config changes for step 2
+Successfully applied 1 'BGPConfiguration' resource(s)
+Comparing with templates in mesh/communities/step2
+comparing templates attempt 1
+comparing templates attempt 2
+Preparing Calico data for next test
+Successfully deleted 1 'BGPConfiguration' resource(s)
+Successfully deleted 1 'IPPool' resource(s)
+Populating calico with test data using calicoctl:  mesh/restart-time
+Successfully applied 6 resource(s)
+Comparing with templates in mesh/restart-time
+comparing templates attempt 1
+Preparing Calico data for next test
+Successfully deleted 2 'IPPool' resource(s)
+Successfully applied 1 'BGPConfiguration' resource(s)
+Populating calico with test data using calicoctl:  explicit_peering/global
+Successfully applied 8 resource(s)
+Comparing with templates in explicit_peering/global
+comparing templates attempt 1
+Preparing Calico data for next test
+Successfully deleted 4 resource(s)
+Populating calico with test data using calicoctl:  explicit_peering/global-external
+Successfully applied 8 resource(s)
+Comparing with templates in explicit_peering/global-external
+comparing templates attempt 1
+Preparing Calico data for next test
+Successfully deleted 4 resource(s)
+Populating calico with test data using calicoctl:  explicit_peering/global-ipv6
+Successfully applied 8 resource(s)
+Comparing with templates in explicit_peering/global-ipv6
+comparing templates attempt 1
+Preparing Calico data for next test
+Successfully deleted 4 resource(s)
+Populating calico with test data using calicoctl:  explicit_peering/specific_node
+Successfully applied 7 resource(s)
+Comparing with templates in explicit_peering/specific_node
+comparing templates attempt 1
+Preparing Calico data for next test
+Successfully deleted 3 resource(s)
+Populating calico with test data using calicoctl:  explicit_peering/selectors
+Successfully applied 7 resource(s)
+Comparing with templates in explicit_peering/selectors
+comparing templates attempt 1
+comparing templates attempt 2
+Config changes for step 2
+Successfully applied 1 'BGPConfiguration' resource(s)
+Comparing with templates in explicit_peering/selectors/step2
+comparing templates attempt 1
+comparing templates attempt 2
+Preparing Calico data for next test
+Successfully deleted 3 resource(s)
+Populating calico with test data using calicoctl:  explicit_peering/route_reflector
+Successfully applied 8 resource(s)
+Comparing with templates in explicit_peering/route_reflector
+comparing templates attempt 1
+comparing templates attempt 2
+Preparing Calico data for next test
+Successfully deleted 4 resource(s)
+Populating calico with test data using calicoctl:  explicit_peering/keepnexthop
+Successfully applied 8 resource(s)
+Comparing with templates in explicit_peering/keepnexthop
+comparing templates attempt 1
+Preparing Calico data for next test
+Successfully deleted 4 resource(s)
+Populating calico with test data using calicoctl:  explicit_peering/keepnexthop-global
+Successfully applied 7 resource(s)
+Comparing with templates in explicit_peering/keepnexthop-global
+comparing templates attempt 1
+Preparing Calico data for next test
+Successfully deleted 3 resource(s)
+Populating calico with test data using calicoctl:  explicit_peering/local-as
+Successfully applied 7 resource(s)
+Comparing with templates in explicit_peering/local-as
+comparing templates attempt 1
+Preparing Calico data for next test
+Successfully deleted 3 resource(s)
+Populating calico with test data using calicoctl:  explicit_peering/local-as-global
+Successfully applied 8 resource(s)
+Comparing with templates in explicit_peering/local-as-global
+comparing templates attempt 1
+Preparing Calico data for next test
+Successfully deleted 4 resource(s)
+Populating calico with test data using calicoctl:  explicit_peering/global
+Successfully applied 8 resource(s)
+Comparing with templates in explicit_peering/global
+comparing templates attempt 1
+Preparing Calico data for next test
+Successfully deleted 4 resource(s)
+Populating calico with test data using calicoctl:  explicit_peering/global-external
+Successfully applied 8 resource(s)
+Comparing with templates in explicit_peering/global-external
+comparing templates attempt 1
+Preparing Calico data for next test
+Successfully deleted 4 resource(s)
+Populating calico with test data using calicoctl:  explicit_peering/global-ipv6
+Successfully applied 8 resource(s)
+Comparing with templates in explicit_peering/global-ipv6
+comparing templates attempt 1
+Preparing Calico data for next test
+Successfully deleted 4 resource(s)
+Populating calico with test data using calicoctl:  explicit_peering/specific_node
+Successfully applied 7 resource(s)
+Comparing with templates in explicit_peering/specific_node
+comparing templates attempt 1
+Preparing Calico data for next test
+Successfully deleted 3 resource(s)
+Populating calico with test data using calicoctl:  explicit_peering/selectors
+Successfully applied 7 resource(s)
+Comparing with templates in explicit_peering/selectors
+comparing templates attempt 1
+comparing templates attempt 2
+Config changes for step 2
+Successfully applied 1 'BGPConfiguration' resource(s)
+Comparing with templates in explicit_peering/selectors/step2
+comparing templates attempt 1
+comparing templates attempt 2
+Preparing Calico data for next test
+Successfully deleted 3 resource(s)
+Populating calico with test data using calicoctl:  explicit_peering/route_reflector
+Successfully applied 8 resource(s)
+Comparing with templates in explicit_peering/route_reflector
+comparing templates attempt 1
+comparing templates attempt 2
+Preparing Calico data for next test
+Successfully deleted 4 resource(s)
+Populating calico with test data using calicoctl:  explicit_peering/keepnexthop
+Successfully applied 8 resource(s)
+Comparing with templates in explicit_peering/keepnexthop
+comparing templates attempt 1
+comparing templates attempt 2
+Preparing Calico data for next test
+Successfully deleted 4 resource(s)
+Populating calico with test data using calicoctl:  explicit_peering/keepnexthop-global
+Successfully applied 7 resource(s)
+Comparing with templates in explicit_peering/keepnexthop-global
+comparing templates attempt 1
+Preparing Calico data for next test
+Successfully deleted 3 resource(s)
+Populating calico with test data using calicoctl:  explicit_peering/local-as
+Successfully applied 7 resource(s)
+Comparing with templates in explicit_peering/local-as
+comparing templates attempt 1
+Preparing Calico data for next test
+Successfully deleted 3 resource(s)
+Populating calico with test data using calicoctl:  explicit_peering/local-as-global
+Successfully applied 8 resource(s)
+Comparing with templates in explicit_peering/local-as-global
+comparing templates attempt 1
+comparing templates attempt 2
+Preparing Calico data for next test
+Successfully deleted 4 resource(s)
+Successfully applied 1 'BGPConfiguration' resource(s)
+Killing Typha
+Starting Typha
+Running confd as background process
+Running with PID  16787
+Populating calico with test data using calicoctl:  mesh/bgp-export
+Successfully applied 10 resource(s)
+Comparing with templates in mesh/bgp-export
+comparing templates attempt 1
+Preparing Calico data for next test
+Successfully deleted 6 'IPPool' resource(s)
+Populating calico with test data using calicoctl:  mesh/ipip-always
+Successfully applied 5 resource(s)
+Comparing with templates in mesh/ipip-always
+comparing templates attempt 1
+Preparing Calico data for next test
+Successfully deleted 1 'IPPool' resource(s)
+Populating calico with test data using calicoctl:  mesh/ipip-cross-subnet
+Successfully applied 5 resource(s)
+Comparing with templates in mesh/ipip-cross-subnet
+comparing templates attempt 1
+Preparing Calico data for next test
+Successfully deleted 1 'IPPool' resource(s)
+Populating calico with test data using calicoctl:  mesh/ipip-off
+Successfully applied 6 resource(s)
+Comparing with templates in mesh/ipip-off
+comparing templates attempt 1
+Preparing Calico data for next test
+Successfully deleted 2 'IPPool' resource(s)
+Populating calico with test data using calicoctl:  mesh/route-reflector-mesh-enabled
+Successfully applied 8 resource(s)
+Comparing with templates in mesh/route-reflector-mesh-enabled
+comparing templates attempt 1
+comparing templates attempt 2
+Preparing Calico data for next test
+Successfully deleted 4 resource(s)
+Populating calico with test data using calicoctl:  mesh/static-routes
+Successfully applied 5 resource(s)
+service/service-1 created
+endpoints/service-1 created
+service/service-2 created
+endpoints/service-2 created
+service/service-v6-1 created
+endpoints/service-v6-1 created
+service/service-v6-2 created
+endpoints/service-v6-2 created
+Comparing with templates in mesh/static-routes
+comparing templates attempt 1
+Config changes for step 2
+Successfully applied 1 'BGPConfiguration' resource(s)
+Comparing with templates in mesh/static-routes/step2
+comparing templates attempt 1
+Preparing Calico data for next test
+service "service-1" deleted
+service "service-2" deleted
+service "service-v6-1" deleted
+service "service-v6-2" deleted
+Successfully deleted 1 'IPPool' resource(s)
+Populating calico with test data using calicoctl:  mesh/static-routes-exclude-node
+Successfully applied 5 resource(s)
+service/service-1 created
+endpoints/service-1 created
+service/service-2 created
+endpoints/service-2 created
+service/service-v6-1 created
+endpoints/service-v6-1 created
+service/service-v6-2 created
+endpoints/service-v6-2 created
+Comparing with templates in mesh/static-routes-exclude-node
+comparing templates attempt 1
+Config changes for step 2
+Successfully applied 1 'BGPConfiguration' resource(s)
+Comparing with templates in mesh/static-routes-exclude-node/step2
+comparing templates attempt 1
+Preparing Calico data for next test
+service "service-1" deleted
+service "service-2" deleted
+service "service-v6-1" deleted
+service "service-v6-2" deleted
+Successfully deleted 1 'IPPool' resource(s)
+Populating calico with test data using calicoctl:  mesh/communities
+Successfully applied 5 resource(s)
+Comparing with templates in mesh/communities
+comparing templates attempt 1
+Config changes for step 2
+Successfully applied 1 'BGPConfiguration' resource(s)
+Comparing with templates in mesh/communities/step2
+comparing templates attempt 1
+Preparing Calico data for next test
+Successfully deleted 1 'BGPConfiguration' resource(s)
+Successfully deleted 1 'IPPool' resource(s)
+Populating calico with test data using calicoctl:  mesh/restart-time
+Successfully applied 6 resource(s)
+Comparing with templates in mesh/restart-time
+comparing templates attempt 1
+Preparing Calico data for next test
+Successfully deleted 2 'IPPool' resource(s)
+Populating calico with test data using calicoctl:  mesh/bgp-export
+Successfully applied 10 resource(s)
+Comparing with templates in mesh/bgp-export
+comparing templates attempt 1
+Preparing Calico data for next test
+Successfully deleted 6 'IPPool' resource(s)
+Populating calico with test data using calicoctl:  mesh/ipip-always
+Successfully applied 5 resource(s)
+Comparing with templates in mesh/ipip-always
+comparing templates attempt 1
+Preparing Calico data for next test
+Successfully deleted 1 'IPPool' resource(s)
+Populating calico with test data using calicoctl:  mesh/ipip-cross-subnet
+Successfully applied 5 resource(s)
+Comparing with templates in mesh/ipip-cross-subnet
+comparing templates attempt 1
+Preparing Calico data for next test
+Successfully deleted 1 'IPPool' resource(s)
+Populating calico with test data using calicoctl:  mesh/ipip-off
+Successfully applied 6 resource(s)
+Comparing with templates in mesh/ipip-off
+comparing templates attempt 1
+Preparing Calico data for next test
+Successfully deleted 2 'IPPool' resource(s)
+Populating calico with test data using calicoctl:  mesh/route-reflector-mesh-enabled
+Successfully applied 8 resource(s)
+Comparing with templates in mesh/route-reflector-mesh-enabled
+comparing templates attempt 1
+comparing templates attempt 2
+Preparing Calico data for next test
+Successfully deleted 4 resource(s)
+Populating calico with test data using calicoctl:  mesh/static-routes
+Successfully applied 5 resource(s)
+service/service-1 created
+endpoints/service-1 created
+service/service-2 created
+endpoints/service-2 created
+service/service-v6-1 created
+endpoints/service-v6-1 created
+service/service-v6-2 created
+endpoints/service-v6-2 created
+Comparing with templates in mesh/static-routes
+comparing templates attempt 1
+Config changes for step 2
+Successfully applied 1 'BGPConfiguration' resource(s)
+Comparing with templates in mesh/static-routes/step2
+comparing templates attempt 1
+Preparing Calico data for next test
+service "service-1" deleted
+service "service-2" deleted
+service "service-v6-1" deleted
+service "service-v6-2" deleted
+Successfully deleted 1 'IPPool' resource(s)
+Populating calico with test data using calicoctl:  mesh/static-routes-exclude-node
+Successfully applied 5 resource(s)
+service/service-1 created
+endpoints/service-1 created
+service/service-2 created
+endpoints/service-2 created
+service/service-v6-1 created
+endpoints/service-v6-1 created
+service/service-v6-2 created
+endpoints/service-v6-2 created
+Comparing with templates in mesh/static-routes-exclude-node
+comparing templates attempt 1
+Config changes for step 2
+Successfully applied 1 'BGPConfiguration' resource(s)
+Comparing with templates in mesh/static-routes-exclude-node/step2
+comparing templates attempt 1
+Preparing Calico data for next test
+service "service-1" deleted
+service "service-2" deleted
+service "service-v6-1" deleted
+service "service-v6-2" deleted
+Successfully deleted 1 'IPPool' resource(s)
+Populating calico with test data using calicoctl:  mesh/communities
+Successfully applied 5 resource(s)
+Comparing with templates in mesh/communities
+comparing templates attempt 1
+Config changes for step 2
+Successfully applied 1 'BGPConfiguration' resource(s)
+Comparing with templates in mesh/communities/step2
+comparing templates attempt 1
+comparing templates attempt 2
+Preparing Calico data for next test
+Successfully deleted 1 'BGPConfiguration' resource(s)
+Successfully deleted 1 'IPPool' resource(s)
+Populating calico with test data using calicoctl:  mesh/restart-time
+Successfully applied 6 resource(s)
+Comparing with templates in mesh/restart-time
+comparing templates attempt 1
+Preparing Calico data for next test
+Successfully deleted 2 'IPPool' resource(s)
+Successfully applied 1 'BGPConfiguration' resource(s)
+Populating calico with test data using calicoctl:  explicit_peering/global
+Successfully applied 8 resource(s)
+Comparing with templates in explicit_peering/global
+comparing templates attempt 1
+Preparing Calico data for next test
+Successfully deleted 4 resource(s)
+Populating calico with test data using calicoctl:  explicit_peering/global-external
+Successfully applied 8 resource(s)
+Comparing with templates in explicit_peering/global-external
+comparing templates attempt 1
+Preparing Calico data for next test
+Successfully deleted 4 resource(s)
+Populating calico with test data using calicoctl:  explicit_peering/global-ipv6
+Successfully applied 8 resource(s)
+Comparing with templates in explicit_peering/global-ipv6
+comparing templates attempt 1
+Preparing Calico data for next test
+Successfully deleted 4 resource(s)
+Populating calico with test data using calicoctl:  explicit_peering/specific_node
+Successfully applied 7 resource(s)
+Comparing with templates in explicit_peering/specific_node
+comparing templates attempt 1
+Preparing Calico data for next test
+Successfully deleted 3 resource(s)
+Populating calico with test data using calicoctl:  explicit_peering/selectors
+Successfully applied 7 resource(s)
+Comparing with templates in explicit_peering/selectors
+comparing templates attempt 1
+comparing templates attempt 2
+Config changes for step 2
+Successfully applied 1 'BGPConfiguration' resource(s)
+Comparing with templates in explicit_peering/selectors/step2
+comparing templates attempt 1
+comparing templates attempt 2
+Preparing Calico data for next test
+Successfully deleted 3 resource(s)
+Populating calico with test data using calicoctl:  explicit_peering/route_reflector
+Successfully applied 8 resource(s)
+Comparing with templates in explicit_peering/route_reflector
+comparing templates attempt 1
+comparing templates attempt 2
+Preparing Calico data for next test
+Successfully deleted 4 resource(s)
+Populating calico with test data using calicoctl:  explicit_peering/keepnexthop
+Successfully applied 8 resource(s)
+Comparing with templates in explicit_peering/keepnexthop
+comparing templates attempt 1
+comparing templates attempt 2
+Preparing Calico data for next test
+Successfully deleted 4 resource(s)
+Populating calico with test data using calicoctl:  explicit_peering/keepnexthop-global
+Successfully applied 7 resource(s)
+Comparing with templates in explicit_peering/keepnexthop-global
+comparing templates attempt 1
+Preparing Calico data for next test
+Successfully deleted 3 resource(s)
+Populating calico with test data using calicoctl:  explicit_peering/local-as
+Successfully applied 7 resource(s)
+Comparing with templates in explicit_peering/local-as
+comparing templates attempt 1
+Preparing Calico data for next test
+Successfully deleted 3 resource(s)
+Populating calico with test data using calicoctl:  explicit_peering/local-as-global
+Successfully applied 8 resource(s)
+Comparing with templates in explicit_peering/local-as-global
+comparing templates attempt 1
+Preparing Calico data for next test
+Successfully deleted 4 resource(s)
+Populating calico with test data using calicoctl:  explicit_peering/global
+Successfully applied 8 resource(s)
+Comparing with templates in explicit_peering/global
+comparing templates attempt 1
+Preparing Calico data for next test
+Successfully deleted 4 resource(s)
+Populating calico with test data using calicoctl:  explicit_peering/global-external
+Successfully applied 8 resource(s)
+Comparing with templates in explicit_peering/global-external
+comparing templates attempt 1
+Preparing Calico data for next test
+Successfully deleted 4 resource(s)
+Populating calico with test data using calicoctl:  explicit_peering/global-ipv6
+Successfully applied 8 resource(s)
+Comparing with templates in explicit_peering/global-ipv6
+comparing templates attempt 1
+Preparing Calico data for next test
+Successfully deleted 4 resource(s)
+Populating calico with test data using calicoctl:  explicit_peering/specific_node
+Successfully applied 7 resource(s)
+Comparing with templates in explicit_peering/specific_node
+comparing templates attempt 1
+Preparing Calico data for next test
+Successfully deleted 3 resource(s)
+Populating calico with test data using calicoctl:  explicit_peering/selectors
+Successfully applied 7 resource(s)
+Comparing with templates in explicit_peering/selectors
+comparing templates attempt 1
+comparing templates attempt 2
+Config changes for step 2
+Successfully applied 1 'BGPConfiguration' resource(s)
+Comparing with templates in explicit_peering/selectors/step2
+comparing templates attempt 1
+comparing templates attempt 2
+Preparing Calico data for next test
+Successfully deleted 3 resource(s)
+Populating calico with test data using calicoctl:  explicit_peering/route_reflector
+Successfully applied 8 resource(s)
+Comparing with templates in explicit_peering/route_reflector
+comparing templates attempt 1
+comparing templates attempt 2
+Preparing Calico data for next test
+Successfully deleted 4 resource(s)
+Populating calico with test data using calicoctl:  explicit_peering/keepnexthop
+Successfully applied 8 resource(s)
+Comparing with templates in explicit_peering/keepnexthop
+comparing templates attempt 1
+Preparing Calico data for next test
+Successfully deleted 4 resource(s)
+Populating calico with test data using calicoctl:  explicit_peering/keepnexthop-global
+Successfully applied 7 resource(s)
+Comparing with templates in explicit_peering/keepnexthop-global
+comparing templates attempt 1
+Preparing Calico data for next test
+Successfully deleted 3 resource(s)
+Populating calico with test data using calicoctl:  explicit_peering/local-as
+Successfully applied 7 resource(s)
+Comparing with templates in explicit_peering/local-as
+comparing templates attempt 1
+Preparing Calico data for next test
+Successfully deleted 3 resource(s)
+Populating calico with test data using calicoctl:  explicit_peering/local-as-global
+Successfully applied 8 resource(s)
+Comparing with templates in explicit_peering/local-as-global
+comparing templates attempt 1
+Preparing Calico data for next test
+Successfully deleted 4 resource(s)
+Successfully applied 1 'BGPConfiguration' resource(s)
+Killing Typha
+Daemon-mode tests passed
+Tests completed successfully
+git clean -fx etc/calico/confd
+Removing etc/calico/confd/config/bird.cfg
+Removing etc/calico/confd/config/bird6.cfg
+Removing etc/calico/confd/config/bird6_aggr.cfg
+Removing etc/calico/confd/config/bird6_ipam.cfg
+Removing etc/calico/confd/config/bird_aggr.cfg
+Removing etc/calico/confd/config/bird_ipam.cfg
+make: Leaving directory '/home/alex/Repositories/github.com/projectcalico/calico/confd'
