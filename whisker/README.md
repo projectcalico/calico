@@ -14,6 +14,8 @@ Run `yarn start`
 
 Go to `http://localhost:3000` using chrome with disabled web security
 
+To proxy to cluster backend run `kubectl -n calico-system port-forward pod/$(kubectl get pods -l k8s-app=whisker -n calico-system -o jsonpath='{.items[0].metadata.name}') 3002:3002`
+
 ## Build
 
 Run `yarn build`
