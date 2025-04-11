@@ -12,10 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package flowlogs
+package goldmane
 
 import (
-	"fmt"
 	"net"
 	"sync"
 
@@ -27,7 +26,9 @@ import (
 )
 
 const (
-	LocalGoldmaneServer = "unix:///var/log/calico/flowlogs/goldmane.sock"
+	NodeSocketAddress = "unix:///var/log/calico/flowlogs/goldmane.sock"
+	NodeSocketPath    = "/var/log/calico/flowlogs"
+	NodeSocketName    = "goldmane.sock"
 )
 
 type flowStore struct {
@@ -57,48 +58,63 @@ func (s *flowStore) Flush() {
 	s.flows = nil
 }
 
-type GoldmaneMock struct {
+func (s *flowStore) ListAndFlush() []*types.Flow {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	flows := s.flows
+	s.flows = nil
+	return flows
+}
+
+type NodeServer struct {
 	store      *flowStore
 	grpcServer *grpc.Server
 	once       sync.Once
 	sockAddr   string
 }
 
-func NewGoldmaneMock(addr string) *GoldmaneMock {
-	return &GoldmaneMock{
-		sockAddr: addr,
+func NewNodeServer(addr string) *NodeServer {
+	nodeServer := NodeServer{
+		sockAddr:   addr,
+		grpcServer: grpc.NewServer(),
+		store:      newFlowStore(),
 	}
+	col := server.NewFlowCollector(nodeServer.store)
+	col.RegisterWith(nodeServer.grpcServer)
+	return &nodeServer
 }
 
-func (g *GoldmaneMock) Run() {
-	g.once.Do(func() {
-		g.grpcServer = grpc.NewServer()
-		g.store = newFlowStore()
-		col := server.NewFlowCollector(g.store)
-		col.RegisterWith(g.grpcServer)
-
-		l, err := net.Listen("unix", g.sockAddr)
+func (s *NodeServer) Run() error {
+	var err error
+	s.once.Do(func() {
+		var l net.Listener
+		l, err = net.Listen("unix", s.sockAddr)
 		if err != nil {
-			panic(fmt.Sprintf("failed to start goldmane listener at %v - err: %v", g.sockAddr, err))
+			return
 		}
-		logrus.Infof("Running goldmane mock server at %v", g.sockAddr)
+		logrus.Infof("Running goldmane local server at %v", s.sockAddr)
 		go func() {
-			err := g.grpcServer.Serve(l)
+			err = s.grpcServer.Serve(l)
 			if err != nil {
-				panic(fmt.Sprintf("failed to start goldmane mock server - err: %v", err))
+				return
 			}
 		}()
 	})
+	return nil
 }
 
-func (g *GoldmaneMock) Stop() {
-	g.grpcServer.GracefulStop()
+func (s *NodeServer) Stop() {
+	s.grpcServer.Stop()
 }
 
-func (g *GoldmaneMock) List() []*types.Flow {
-	return g.store.List()
+func (s *NodeServer) List() []*types.Flow {
+	return s.store.List()
 }
 
-func (g *GoldmaneMock) Flush() {
-	g.store.Flush()
+func (s *NodeServer) Flush() {
+	s.store.Flush()
+}
+
+func (s *NodeServer) ListAndFlush() []*types.Flow {
+	return s.store.ListAndFlush()
 }
