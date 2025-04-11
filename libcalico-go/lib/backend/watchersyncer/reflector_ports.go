@@ -15,10 +15,17 @@
 package watchersyncer
 
 import (
+	"errors"
 	"strings"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+)
+
+var (
+	// Used to indicate that watching stopped because of a signal from the stop
+	// channel passed in from a client of the reflector.
+	errorStopRequested = errors.New("stop requested")
 )
 
 // Copied from client-go's reflector.go

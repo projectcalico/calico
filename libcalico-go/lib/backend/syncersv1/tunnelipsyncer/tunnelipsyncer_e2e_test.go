@@ -57,7 +57,7 @@ var _ = testutils.E2eDatastoreDescribe("Tunnel IP allocation syncer tests", test
 			// Create a SyncerTester to receive the tunnel IP allocation syncer callback events and to allow us
 			// to assert state.
 			syncTester := testutils.NewSyncerTester()
-			syncer := tunnelipsyncer.New(be, syncTester, "127.0.0.1")
+			syncer := tunnelipsyncer.New(be, syncTester, "127.0.0.1", config.Spec)
 			syncer.Start()
 			expectedCacheSize := 0
 
@@ -115,7 +115,7 @@ var _ = testutils.E2eDatastoreDescribe("Tunnel IP allocation syncer tests", test
 			// We need to create a new syncTester and syncer.
 			current := syncTester.GetCacheEntries()
 			syncTester = testutils.NewSyncerTester()
-			syncer = tunnelipsyncer.New(be, syncTester, "127.0.0.1")
+			syncer = tunnelipsyncer.New(be, syncTester, "127.0.0.1", config.Spec)
 			syncer.Start()
 
 			// Verify the data is the same as the data from the previous cache.  We got the cache in the previous
