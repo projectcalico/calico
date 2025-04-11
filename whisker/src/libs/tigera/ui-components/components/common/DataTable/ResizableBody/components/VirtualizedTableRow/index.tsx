@@ -7,10 +7,10 @@ import { VariableSizeList } from 'react-window';
 
 export interface VirtualisationProps {
     tableHeight: number;
-    subRowHeight: number;
     rowHeight: number;
     subRowStyles?: SystemStyleObject;
     shouldAnimate: (obj: any) => boolean;
+    setRowHeight?: (height: number) => void;
 }
 
 export type VirtualizedRowData = Omit<
