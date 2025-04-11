@@ -35,7 +35,7 @@ func StartAndWatch(num int) {
 	nodeServer := goldmane.NewNodeServer(goldmane.NodeSocketPath)
 	err := nodeServer.Run()
 	if err != nil {
-		logrus.WithError(err).Error("Failed to start node local goldmane server")
+		logrus.WithError(err).Error("Failed to start goldmane node server")
 		return
 	}
 	defer nodeServer.Stop()

@@ -72,7 +72,7 @@ var thresholdTime = flagSet.Duration("threshold-time", 30*time.Second, "Threshol
 var runStatusReporter = flagSet.Bool("status-reporter", false, "Run node status reporter")
 var showStatus = flagSet.Bool("show-status", false, "Print out node status")
 
-// Options for node flowlogs.
+// Options for watching node flowlogs.
 var fetchFlowlogs = flagSet.Int("flowlogs", 0, "Fetch a number of flowlogs. Use a negative value to watch forever.")
 
 // confd flags
