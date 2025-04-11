@@ -57,5 +57,5 @@ func New(client api.Client, callbacks api.SyncerCallbacks, node string, cfg apic
 		})
 	}
 
-	return watchersyncer.New(client, resourceTypes, callbacks)
+	return watchersyncer.New(client, resourceTypes, callbacks, watchersyncer.WithUseWatchList(cfg.K8sUseWatchList))
 }

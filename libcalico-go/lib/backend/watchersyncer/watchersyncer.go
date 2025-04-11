@@ -84,6 +84,14 @@ func WithWatchRetryTimeout(t time.Duration) Option {
 
 var _ = WithWatchRetryTimeout
 
+func WithUseWatchList(b bool) Option {
+	return func(ws *watcherSyncer) {
+		ws.useWatchList = b
+	}
+}
+
+var _ = WithUseWatchList
+
 // New creates a new multiple Watcher-backed api.Syncer.
 func New(client api.Client, resourceTypes []ResourceType, callbacks api.SyncerCallbacks, options ...Option) api.Syncer {
 	rs := &watcherSyncer{
@@ -112,6 +120,7 @@ type watcherSyncer struct {
 	wgws              *sync.WaitGroup
 	cancel            context.CancelFunc
 	watchRetryTimeout time.Duration
+	useWatchList      bool
 }
 
 func (ws *watcherSyncer) Start() {

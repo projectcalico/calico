@@ -17,6 +17,7 @@ package tunnelipsyncer
 import (
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
+	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
@@ -26,7 +27,7 @@ import (
 
 // New creates a new tunnel IP allocation v1 Syncer.  An optional node name may be supplied.  If set, the syncer only
 // watches the specified node rather than all nodes.
-func New(client api.Client, callbacks api.SyncerCallbacks, node string) api.Syncer {
+func New(client api.Client, callbacks api.SyncerCallbacks, node string, cfg apiconfig.CalicoAPIConfigSpec) api.Syncer {
 	resourceTypes := []watchersyncer.ResourceType{
 		{
 			ListInterface:   model.ResourceListOptions{Kind: apiv3.KindIPPool},
@@ -37,5 +38,5 @@ func New(client api.Client, callbacks api.SyncerCallbacks, node string) api.Sync
 		},
 	}
 
-	return watchersyncer.New(client, resourceTypes, callbacks)
+	return watchersyncer.New(client, resourceTypes, callbacks, watchersyncer.WithUseWatchList(cfg.K8sUseWatchList))
 }
