@@ -4,11 +4,15 @@ import { FlowLog } from '@/types/render';
 import FlowLogActionIndicator from '@/components/common/FlowLogActionIndicator';
 import { LogDetailsView } from '@/libs/tigera/ui-components/components/common';
 
+const TABS_HEIGHT = 38;
+const PADDING = 16;
+const JSON_TAB_OFFSET = TABS_HEIGHT + PADDING;
 type FlowLogDetailsProps = {
     flowLog: FlowLog;
+    height?: number;
 };
 
-const FlowLogDetails: React.FC<FlowLogDetailsProps> = ({ flowLog }) => {
+const FlowLogDetails: React.FC<FlowLogDetailsProps> = ({ flowLog, height }) => {
     const {
         start_time,
         end_time,
@@ -46,7 +50,10 @@ const FlowLogDetails: React.FC<FlowLogDetailsProps> = ({ flowLog }) => {
             jsonData={jsonData}
             stringifyTableData={false}
             tableStyles={tableStyles}
-            jsonTabStyles={jsonTabStyles}
+            jsonTabStyles={{
+                ...jsonTabStyles,
+                maxHeight: `${(height ?? 0) - JSON_TAB_OFFSET}px`,
+            }}
             defaultExpandedJsonNodes={2}
         />
     );
