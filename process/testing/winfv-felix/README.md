@@ -12,7 +12,7 @@ From setup-fv.sh
 - Setup VPC resources.
 - Create and bootstrap linux node (install docker) and windows node (setup etcd-endpoints, install pscp.exe and putty key to transfer files between windows and linux nodes).
 - Copy over run-fv.ps1 to linux node, add a line to copy back report from windows node to linux node.
-- Copy over docker credentials and log in to grc.io. Start etcd, kube-apiserver, kube-controller-manager on linux nodes.
+- Copy over docker credentials and log in to gcr.io. Start etcd, kube-apiserver, kube-controller-manager on linux nodes.
 - Setup wait-report.sh on linux node. 
 - Windows node wait until it found a file named `file-ready` on linux node.
 

@@ -2,7 +2,7 @@
 # Adapted from https://github.com/kubernetes-sigs/windows-testing/blob/e841a06620a293ab2c286b53f562a97f3397595f/capz/templates/windows-base.yaml#L27-L61
 
 Param(
-    [parameter(Mandatory = $false)] $ContainerdVersion="1.7.13"
+    [parameter(Mandatory = $false)] $ContainerdVersion="1.7.22"
 )
 
 $ErrorActionPreference = 'Stop'
@@ -41,3 +41,20 @@ if($CONTAINERD_URL -ne ""){
 }
 containerd.exe --version
 containerd-shim-runhcs-v1.exe --version
+
+Write-Host Applying registry fix for https://github.com/microsoft/Windows-Containers/issues/516 if on Windows 2022
+$needToRestart = $false
+if ((Get-ComputerInfo).OsBuildNumber -eq 20348 -and (Get-ItemProperty -Path "HKLM:SYSTEM\CurrentControlSet\Services\hns\State").FwPerfImprovementChange -ne 0) {
+    if ((Get-Item -Path 'HKLM:SYSTEM\\CurrentControlSet\\Services\\hns\\State') -eq $null ) {
+      New-Item -Path 'HKLM:SYSTEM\\CurrentControlSet\\Services\\hns\\State'
+    }
+    Remove-ItemProperty -Path 'HKLM:SYSTEM\\CurrentControlSet\\Services\\hns\\State' -Name 'FwPerfImprovementChange'
+    New-ItemProperty -Path 'HKLM:SYSTEM\\CurrentControlSet\\Services\\hns\\State' -Name 'FwPerfImprovementChange' -Value '0' -PropertyType 'DWORD'
+    $needToRestart = $true
+}
+
+if ($needToRestart)
+{
+  Write-host Restarting computer
+  Restart-Computer -Force
+}

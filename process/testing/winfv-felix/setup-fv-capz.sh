@@ -86,14 +86,25 @@ function start_cluster(){
   make -C $CAPZ_LOCATION install-calico RELEASE_STREAM=v3.28 HASH_RELEASE=true PRODUCT=calico || EXIT_CODE=$?
   if [[ $EXIT_CODE -ne 0 ]]; then
       echo "failed to install Calico"
+      echo "tigerastatus info:"
       ${KCAPZ} describe tigerastatus
       ${KCAPZ} get tigerastatus -o yaml
+      echo "calico-node-windows info:"
+      ${KCAPZ} describe pod -l k8s-app=calico-node-windows -n calico-system
+      ${KCAPZ} logs -l k8s-app=calico-node-windows -n calico-system --all-containers --ignore-errors
+      echo "kube-proxy-windows info:"
+      ${KCAPZ} describe pod -l k8s-app=kube-proxy-windows -n kube-system
+      ${KCAPZ} logs -l k8s-app=kube-proxy-windows -n kube-system --all-containers --ignore-errors
       exit $EXIT_CODE
   fi
+
+  # Enable felix debug logging, wait for felixconfiguration to exist first
+  timeout --foreground 300 bash -c "while ! ${KCAPZ} wait felixconfiguration default --for=jsonpath='{.spec}' --timeout=30s; do sleep 5; done"
+  ${KCAPZ} patch felixconfiguration default --type merge --patch='{"spec":{"logSeverityScreen":"Debug"}}'
+
   #Get Windows node ip
-  WIN_NODE=$(${KCAPZ} get nodes -o wide -l kubernetes.io/os=windows --no-headers | awk -v OFS='\t\t' '{print $6}')
-  export WIN_NODE_IP=${WIN_NODE: -1}
-  export LINUX_NODE=$(${KCAPZ} get nodes -l kubernetes.io/os=linux,'!node-role.kubernetes.io/control-plane' -o wide --no-headers | awk -v OFS='\t\t' '{print $6}')
+  export WIN_NODE_IP=$(${KCAPZ} get nodes -o wide -l kubernetes.io/os=windows --no-headers | awk -v OFS='\t\t' '{print $6}')
+  export LINUX_NODE_IP=$(${KCAPZ} get nodes -l kubernetes.io/os=linux,'!node-role.kubernetes.io/control-plane' -o wide --no-headers | awk -v OFS='\t\t' '{print $6}')
 }
 
 function upload_calico_images(){
@@ -134,7 +145,7 @@ function prepare_fv(){
     FV_RUN_CNI=$CALICO_HOME/process/testing/winfv-cni-plugin/run-cni-fv.ps1
     cp $CALICO_HOME/process/testing/winfv-cni-plugin/run-fv-cni-plugin.ps1 $FV_RUN_CNI
     sed -i "s?<your kube version>?${KUBE_VERSION}?g" $FV_RUN_CNI
-    sed -i "s?<your linux pip>?${LINUX_NODE}?g" $FV_RUN_CNI
+    sed -i "s?<your linux pip>?${LINUX_NODE_IP}?g" $FV_RUN_CNI
     sed -i "s?<your os version>?${WINDOWS_SERVER_VERSION}?g" $FV_RUN_CNI
     sed -i "s?<your container runtime>?containerd?g" $FV_RUN_CNI
     sed -i "s?<your containerd version>?${CONTAINERD_VERSION}?g" $FV_RUN_CNI
@@ -144,7 +155,7 @@ function prepare_fv(){
     FV_RUN_FELIX=$CALICO_HOME/process/testing/winfv-felix/run-felix-fv.ps1
     cp $CALICO_HOME/process/testing/winfv-felix/run-fv-full.ps1 $FV_RUN_FELIX
     sed -i "s?<your kube version>?${KUBE_VERSION}?g" $FV_RUN_FELIX
-    sed -i "s?<your linux pip>?${LINUX_NODE}?g" $FV_RUN_FELIX
+    sed -i "s?<your linux pip>?${LINUX_NODE_IP}?g" $FV_RUN_FELIX
     sed -i "s?<your os version>?${WINDOWS_SERVER_VERSION}?g" $FV_RUN_FELIX
     sed -i "s?<your container runtime>?containerd?g" $FV_RUN_FELIX
     sed -i "s?<your containerd version>?${CONTAINERD_VERSION}?g" $FV_RUN_FELIX
@@ -181,15 +192,15 @@ function start_test_infra(){
   $CALICO_HOME/process/testing/winfv-felix/infra/setup.sh $KUBECONFIG
 
   #Wait for porter pod to be running on windows node
-  for i in $(seq 1 30); do
+  for i in $(seq 1 60); do
     if [[ $(${KCAPZ} -n demo get pods porter --no-headers -o custom-columns=NAMESPACE:metadata.namespace,POD:metadata.name,PodIP:status.podIP,READY-true:status.containerStatuses[*].ready | awk -v OFS='\t\t' '{print $4}') = "true" ]] ; then
-      echo "Porter is ready"
+      echo "Porter is ready after $i tries"
       return
     fi
    echo "Waiting for porter to be ready"
    sleep 30
   done
-  echo "Porter windows did not start"
+  echo "Porter windows did not start after $i tries"
   exit 1
 }
 
@@ -202,10 +213,20 @@ function run_windows_fv(){
 }
 
 function get_test_results(){
+  # Get test logs
   $CAPZ_LOCATION/scp-from-node.sh $WIN_NODE_IP c:\\k\\report\\* $REPORT_DIR
   if [[ $SEMAPHORE == "false" ]]; then
     cat $REPORT_DIR/fv-test.log
   fi
+
+  # Get logs from windows pod
+  ${KCAPZ} logs -n calico-system -l k8s-app=calico-node-windows -c uninstall-calico > $REPORT_DIR/win-uninstall-calico.log
+  ${KCAPZ} logs -n calico-system -l k8s-app=calico-node-windows -c install-cni > $REPORT_DIR/win-install-cni.log
+  ${KCAPZ} logs -n calico-system -l k8s-app=calico-node-windows -c node > $REPORT_DIR/win-node.log
+  ${KCAPZ} logs -n calico-system -l k8s-app=calico-node-windows -c felix > $REPORT_DIR/win-felix.log
+
+  # Get logs from linux pod
+  ${KCAPZ} logs -n calico-system -l k8s-app=calico-node -c calico-node > $REPORT_DIR/linux-calico-node.log
 }
 
 prepare_env

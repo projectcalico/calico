@@ -13,6 +13,7 @@ $(CLUSTER_CREATED_MARKER): $(BINDIR)/kind $(BINDIR)/kubectl $(BINDIR)/clusterctl
 	@echo "Creating cluster $(CLUSTER_NAME_CAPZ) ..."
 	./create-cluster.sh
 	$(MAKE) generate-helpers
+	./bootstrap-cluster-ips.sh
 	./replace-win-containerd.sh
 	touch $@
 
