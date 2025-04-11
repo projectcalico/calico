@@ -239,8 +239,8 @@ func NewLogAggregator(opts ...Option) *LogAggregator {
 		},
 		streams: NewStreamManager(),
 		rl: logutils.NewRateLimitedLogger(
-			logutils.OptBurst(5),
-			logutils.OptInterval(30*time.Second),
+			logutils.OptBurst(1),
+			logutils.OptInterval(15*time.Second),
 		),
 	}
 

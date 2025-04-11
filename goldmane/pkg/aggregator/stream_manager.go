@@ -32,8 +32,8 @@ func NewStreamManager() *streamManager {
 		backfillRequests: make(chan *Stream, 10),
 		maxStreams:       maxStreams,
 		rl: logutils.NewRateLimitedLogger(
-			logutils.OptBurst(5),
-			logutils.OptInterval(30*time.Second),
+			logutils.OptBurst(1),
+			logutils.OptInterval(15*time.Second),
 		),
 	}
 }
@@ -90,11 +90,12 @@ func (m *streamManager) Register(req *streamRequest) {
 
 // Receive tells the stream manager about a new DiachronicFlow that has rolled over. The manager
 // informs all streams about the new flow, so they can decide to include it in their output.
+//
+// Note: Receive may block if the flow channel is full. This is expected to be a rare event, but care
+// should be taken to avoid calling this function from the main loop.
 func (m *streamManager) Receive(b bucketing.FlowBuilder) {
-	// It's important that the stream manager Receive function not block, as it's called from the
-	// main thread.
 	if err := chanutil.WriteWithDeadline(context.TODO(), m.flowCh, b, 30*time.Second); err != nil {
-		m.rl.WithError(err).Error("stream manager failed to handle flow")
+		m.rl.WithError(err).Error("stream manager failed to handle flow, dropping")
 	}
 }
 
@@ -104,7 +105,8 @@ func (m *streamManager) backfillChannel() <-chan *Stream {
 	return m.backfillRequests
 }
 
-// processIncomingFlows reads incoming flows from the stream manager and fans them out to the relevant streams.
+// processIncomingFlows reads incoming flows from the stream manager and fans them to active streams.
+// Each stream is responsible for deciding whether to include the flow in its output.
 func (m *streamManager) processIncomingFlows(ctx context.Context) {
 	for {
 		select {
@@ -140,7 +142,7 @@ func (m *streamManager) register(req *streamRequest) *Stream {
 		ctx:    ctx,
 		cancel: cancel,
 		rl: logutils.NewRateLimitedLogger(
-			logutils.OptBurst(3),
+			logutils.OptBurst(1),
 			logutils.OptInterval(15*time.Second),
 		),
 	}
@@ -161,10 +163,6 @@ func (m *streamManager) close(id string) {
 		return
 	}
 	logrus.WithField("id", id).Debug("Closing stream")
-
-	// Cancel the stream's context, which will stop any further processing of incoming flows
-	// via the Receive() method.
-	s.cancel()
 
 	// Close the stream's output channel.
 	close(s.out)

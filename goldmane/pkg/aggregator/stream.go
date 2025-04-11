@@ -26,10 +26,11 @@ type Stream struct {
 
 // Close signals to the stream manager that this stream is done and should be closed.
 func (s *Stream) Close() {
+	s.cancel()
 	s.done <- s.id
 }
 
-// Flows returns a channel that contains the output stream of FlowResults.
+// Flows returns a channel that contains the output from this stream.
 func (s *Stream) Flows() <-chan bucketing.FlowBuilder {
 	return s.out
 }

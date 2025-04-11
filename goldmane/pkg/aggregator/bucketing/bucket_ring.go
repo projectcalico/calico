@@ -531,12 +531,21 @@ func (r *BucketRing) flushToStreams() {
 }
 
 func (r *BucketRing) streamBucket(b *AggregationBucket, s StreamReceiver) {
+	// We need to construct a FlowBuilder for each DiachronicFlow in the bucket serially.
+	builders := []FlowBuilder{}
 	if b.Flows != nil {
 		b.Flows.Iter(func(d *types.DiachronicFlow) error {
-			s.Receive(NewCachedFlowBuilder(d, b.StartTime, b.EndTime))
+			builders = append(builders, NewCachedFlowBuilder(d, b.StartTime, b.EndTime))
 			return nil
 		})
 	}
+
+	// We can send the builders to the stream manager asynchronously to unblock the main loop.
+	go func() {
+		for _, b := range builders {
+			s.Receive(b)
+		}
+	}()
 }
 
 // streamingBucket returns the bucket currently slated to be sent to the stream manager.
