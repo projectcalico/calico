@@ -201,11 +201,36 @@ func (d *DiachronicFlow) appendWindow(flow *Flow, start, end int64) {
 	}
 }
 
+// Aggregate aggregates the statistics from the DiachronicFlow into a new Flow object over the specified time range.
 func (d *DiachronicFlow) Aggregate(startGte, startLt int64) *Flow {
 	if !d.Within(startGte, startLt) {
 		return nil
 	}
+	return d.AggregateWindows(d.GetWindows(startGte, startLt))
+}
 
+// GetWindows returns a slice of Windows that fall within the specified time range.
+func (d *DiachronicFlow) GetWindows(startGte, startLt int64) []*Window {
+	// Find the Windows that fall within the specified time range.
+	windows := make([]*Window, 0)
+	for _, w := range d.Windows {
+		if (startGte == 0 || w.start >= startGte) &&
+			(startLt == 0 || w.end <= startLt) {
+			if logrus.IsLevelEnabled(logrus.DebugLevel) {
+				logrus.WithFields(d.Key.Fields()).WithFields(logrus.Fields{
+					"window":  w,
+					"startGt": startGte,
+					"startLt": startLt,
+				}).Debug("Aggregating flow data from diachronic flow window")
+			}
+			windows = append(windows, &w)
+		}
+	}
+	return windows
+}
+
+// AggregateWindows aggregates the statistics from the given Windows into a new Flow object.
+func (d *DiachronicFlow) AggregateWindows(windows []*Window) *Flow {
 	// Create a new Flow object and populate it with aggregated statistics from the DiachronicFlow.
 	// acoss the time window specified by start and end.
 	f := &Flow{
@@ -216,46 +241,40 @@ func (d *DiachronicFlow) Aggregate(startGte, startLt int64) *Flow {
 
 	// Iterate each Window and aggregate the statistic contributions across all windows that fall within the
 	// specified time range.
-	for _, w := range d.Windows {
-		if (startGte == 0 || w.start >= startGte) &&
-			(startLt == 0 || w.end <= startLt) {
+	for _, w := range windows {
+		if logrus.IsLevelEnabled(logrus.DebugLevel) {
+			logrus.WithFields(d.Key.Fields()).WithFields(logrus.Fields{
+				"window": w,
+			}).Debug("Aggregating flow data from diachronic flow window")
+		}
 
-			if logrus.IsLevelEnabled(logrus.DebugLevel) {
-				logrus.WithFields(d.Key.Fields()).WithFields(logrus.Fields{
-					"window":  w,
-					"startGt": startGte,
-					"startLt": startLt,
-				}).Debug("Aggregating flow data from diachronic flow window")
-			}
+		// Sum up summable stats.
+		f.PacketsIn += w.PacketsIn
+		f.PacketsOut += w.PacketsOut
+		f.BytesIn += w.BytesIn
+		f.BytesOut += w.BytesOut
+		f.NumConnectionsStarted += w.NumConnectionsStarted
+		f.NumConnectionsCompleted += w.NumConnectionsCompleted
+		f.NumConnectionsLive += w.NumConnectionsLive
 
-			// Sum up summable stats.
-			f.PacketsIn += w.PacketsIn
-			f.PacketsOut += w.PacketsOut
-			f.BytesIn += w.BytesIn
-			f.BytesOut += w.BytesOut
-			f.NumConnectionsStarted += w.NumConnectionsStarted
-			f.NumConnectionsCompleted += w.NumConnectionsCompleted
-			f.NumConnectionsLive += w.NumConnectionsLive
+		// Merge labels. We use the intersection of the labels across all windows.
+		if f.SourceLabels.Value() != "" {
+			f.SourceLabels = intersection(f.SourceLabels, w.SourceLabels)
+		} else {
+			f.SourceLabels = w.SourceLabels
+		}
+		if f.DestLabels.Value() != "" {
+			f.DestLabels = intersection(f.DestLabels, w.DestLabels)
+		} else {
+			f.DestLabels = w.DestLabels
+		}
 
-			// Merge labels. We use the intersection of the labels across all windows.
-			if f.SourceLabels.Value() != "" {
-				f.SourceLabels = intersection(f.SourceLabels, w.SourceLabels)
-			} else {
-				f.SourceLabels = w.SourceLabels
-			}
-			if f.DestLabels.Value() != "" {
-				f.DestLabels = intersection(f.DestLabels, w.DestLabels)
-			} else {
-				f.DestLabels = w.DestLabels
-			}
-
-			// Update the flow's start and end times.
-			if f.StartTime == 0 || w.start < f.StartTime {
-				f.StartTime = w.start
-			}
-			if f.EndTime == 0 || w.end > f.EndTime {
-				f.EndTime = w.end
-			}
+		// Update the flow's start and end times.
+		if f.StartTime == 0 || w.start < f.StartTime {
+			f.StartTime = w.start
+		}
+		if f.EndTime == 0 || w.end > f.EndTime {
+			f.EndTime = w.end
 		}
 	}
 	return f

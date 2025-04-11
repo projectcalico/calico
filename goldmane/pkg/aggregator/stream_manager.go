@@ -9,8 +9,6 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/goldmane/pkg/aggregator/bucketing"
-	"github.com/projectcalico/calico/goldmane/pkg/types"
-	"github.com/projectcalico/calico/goldmane/proto"
 	"github.com/projectcalico/calico/lib/std/chanutil"
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 )
@@ -115,18 +113,12 @@ func (m *streamManager) processIncomingFlows(ctx context.Context) {
 			return
 		case b := <-m.flowCh:
 			for _, s := range m.streams {
-				// Build the flow, checking if the flow matches the stream's filter.
-				if f, id := b.Build(s.req.req.Filter); f != nil {
-					select {
-					case <-s.ctx.Done():
-						logrus.WithField("id", s.id).Debug("Stream closed, skipping")
-						continue
-					default:
-						s.Receive(&proto.FlowResult{
-							Id:   id,
-							Flow: types.FlowToProto(f),
-						})
-					}
+				select {
+				case <-s.ctx.Done():
+					logrus.WithField("id", s.id).Debug("Stream closed, skipping")
+					continue
+				default:
+					s.Receive(b)
 				}
 			}
 		}
@@ -142,7 +134,7 @@ func (m *streamManager) register(req *streamRequest) *Stream {
 	ctx, cancel := context.WithCancel(context.Background())
 	stream := &Stream{
 		id:     uuid.NewString(),
-		out:    make(chan *proto.FlowResult, req.channelSize),
+		out:    make(chan bucketing.FlowBuilder, req.channelSize),
 		done:   m.closedStreamsCh,
 		req:    req,
 		ctx:    ctx,

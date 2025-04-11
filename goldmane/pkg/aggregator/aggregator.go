@@ -66,8 +66,8 @@ var (
 	})
 
 	flowChannelSize = prometheus.NewGauge(prometheus.GaugeOpts{
-		Name: "goldmane_aggr_flow_ingest_buffer_size",
-		Help: "Current size of the flow ingest buffer.",
+		Name: "goldmane_aggr_flow_index_buffer_size",
+		Help: "Current size of the flow index buffer.",
 	})
 
 	rolloverLatency = cprometheus.NewSummary(prometheus.SummaryOpts{
@@ -390,7 +390,8 @@ func (a *LogAggregator) Stream(req *proto.FlowStreamRequest) (*Stream, error) {
 			return nil
 		})
 	}
-	channelSize = int(math.Min(float64(channelSize), float64(channelDepth)))
+	channelSize = int(math.Max(float64(channelSize), float64(channelDepth)))
+	logrus.WithField("channelSize", channelSize).Info("Calculated channel size for stream")
 
 	// Register the stream with the stream manager. This will return a new Stream object.
 	a.streams.Register(&streamRequest{
@@ -471,7 +472,7 @@ func (a *LogAggregator) backfill(stream *Stream) {
 	// Measure the time it takes to backfill the stream.
 	start := time.Now()
 	defer func() {
-		logrus.WithField("id", stream.id).WithField("duration", float64(time.Since(start).Milliseconds())).Info("Backfill complete")
+		logrus.WithField("id", stream.id).WithField("duration", time.Since(start)).Info("Backfill complete")
 		backfillLatency.Observe(float64(time.Since(start).Milliseconds()))
 	}()
 
@@ -482,23 +483,14 @@ func (a *LogAggregator) backfill(stream *Stream) {
 		stopBucketIteration := false
 		bucket.Flows.Iter(func(d *types.DiachronicFlow) error {
 			builder := bucketing.NewCachedFlowBuilder(d, bucket.StartTime, bucket.EndTime)
-			if f, id := builder.Build(request.Filter); f != nil {
-				select {
-				case <-stream.ctx.Done():
-					// Stream closed while backfilling. Can stop.
-					logrus.WithField("id", stream.id).Debug("Stream closed while backfilling")
-					stopBucketIteration = true
-					return set.StopIteration
-				default:
-					// The flow matches the filter and time range.
-					if logrus.IsLevelEnabled(logrus.DebugLevel) {
-						logrus.WithFields(f.Key.Fields()).Debug("Sending backfilled flow to stream")
-					}
-					stream.Receive(&proto.FlowResult{
-						Id:   id,
-						Flow: types.FlowToProto(f),
-					})
-				}
+			select {
+			case <-stream.ctx.Done():
+				// Stream closed while backfilling. Can stop.
+				logrus.WithField("id", stream.id).Debug("Stream closed while backfilling")
+				stopBucketIteration = true
+				return set.StopIteration
+			default:
+				stream.Receive(builder)
 			}
 			return nil
 		})
@@ -511,6 +503,7 @@ func (a *LogAggregator) backfill(stream *Stream) {
 	})
 	if err != nil {
 		logrus.WithError(err).Warn("Error backfilling stream")
+		return
 	}
 }
 
@@ -710,14 +703,21 @@ func (a *LogAggregator) Stop() {
 }
 
 func (a *LogAggregator) rollover() time.Duration {
+	start := a.nowFunc()
+	defer func() {
+		if a.nowFunc().Sub(start) > 1*time.Second {
+			logrus.WithField("duration", a.nowFunc().Sub(start)).Warn("Rollover took >1s")
+		}
+	}()
+
 	// Tell the bucket ring to rollover and capture the start time of the newest bucket.
 	// We'll use this below to determine when the next rollover should occur. The next bucket
 	// should always be one interval ahead of Now().
-	newBucketStart, keys := a.buckets.Rollover()
+	newBucketStart, diachronics := a.buckets.Rollover()
 
 	// Update DiachronicFlows. We need to remove any windows from the DiachronicFlows that have expired.
 	// Find the oldest bucket's start time and remove any data from the DiachronicFlows that is older than that.
-	keys.Iter(func(d *types.DiachronicFlow) error {
+	diachronics.Iter(func(d *types.DiachronicFlow) error {
 		// Rollover the DiachronicFlow. This will remove any expired data from it.
 		d.Rollover(a.buckets.BeginningOfHistory())
 
