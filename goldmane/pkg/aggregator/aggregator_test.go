@@ -1125,8 +1125,10 @@ func TestStreams(t *testing.T) {
 		// Expect three historical flows on the second stream: now-5, now-6, now-7.
 		// We should receive them in time order, and should NOT receive now-8 or now-9.
 		for i := 7; i >= 5; i-- {
-			var flow *proto.FlowResult
-			Eventually(stream2.Flows(), waitTimeout, retryTime).Should(Receive(&flow), fmt.Sprintf("Expected flow %d", i))
+			var builder *bucketing.DeferredFlowBuilder
+			flow := &proto.FlowResult{Flow: &proto.Flow{}}
+			Eventually(stream2.Flows(), waitTimeout, retryTime).Should(Receive(&builder), fmt.Sprintf("Expected flow %d", i))
+			require.True(t, builder.BuildInto(&proto.Filter{}, flow), "Failed to build flow")
 			Expect(flow.Flow.StartTime).To(Equal(c.Now().Unix() - int64(i)))
 		}
 
@@ -1153,10 +1155,15 @@ func TestStreams(t *testing.T) {
 		roller.rolloverAndAdvanceClock(1)
 
 		// Expect the flow to have been received on both streams.
-		var flow *proto.FlowResult
-		var flow2 *proto.FlowResult
-		Eventually(stream.Flows(), waitTimeout, retryTime).Should(Receive(&flow))
-		Eventually(stream2.Flows(), waitTimeout, retryTime).Should(Receive(&flow2))
+		b1 := &bucketing.DeferredFlowBuilder{}
+		b2 := &bucketing.DeferredFlowBuilder{}
+		flow := &proto.FlowResult{Flow: &proto.Flow{}}
+		flow2 := &proto.FlowResult{Flow: &proto.Flow{}}
+		Eventually(stream.Flows(), waitTimeout, retryTime).Should(Receive(&b1))
+		Eventually(stream2.Flows(), waitTimeout, retryTime).Should(Receive(&b2))
+
+		b1.BuildInto(&proto.Filter{}, flow)
+		b2.BuildInto(&proto.Filter{}, flow2)
 		ExpectFlowsEqual(t, fl, flow.Flow)
 		ExpectFlowsEqual(t, fl, flow2.Flow)
 
@@ -1229,9 +1236,11 @@ func TestStreams(t *testing.T) {
 		exp := googleproto.Clone(base).(*proto.Flow)
 
 		// Expect to receive 10 updates, one for each bucket.
-		for i := 0; i < 10; i++ {
-			var result *proto.FlowResult
-			Eventually(stream.Flows(), waitTimeout, retryTime).Should(Receive(&result), fmt.Sprintf("Timed out waiting for flow %d", i))
+		result := &proto.FlowResult{Flow: &proto.Flow{}}
+		for i := range 10 {
+			builder := &bucketing.DeferredFlowBuilder{}
+			Eventually(stream.Flows(), waitTimeout, retryTime).Should(Receive(&builder), fmt.Sprintf("Timed out waiting for flow %d", i))
+			require.True(t, builder.BuildInto(&proto.Filter{}, result))
 
 			require.NotEqual(t, 0, result.Flow.StartTime, "Expected non-zero StartTime")
 			require.NotEqual(t, 0, result.Flow.EndTime, "Expected non-zero EndTime")
