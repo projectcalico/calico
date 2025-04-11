@@ -6,6 +6,5 @@ export const tableStyles = {
 
 export const jsonTabStyles = {
     overflowY: 'auto',
-    maxHeight: '750px',
     textWrap: 'wrap',
 };
