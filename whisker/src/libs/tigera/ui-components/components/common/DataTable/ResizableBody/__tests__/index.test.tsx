@@ -262,7 +262,6 @@ describe('<ResizableBody/>', () => {
                     virtualisationProps={{
                         tableHeight: 1200,
                         rowHeight: 12,
-                        subRowHeight: 20,
                         shouldAnimate: jest.fn(),
                     }}
                 />
