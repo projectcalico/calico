@@ -102,6 +102,8 @@ func (w *FileWatcher) newFsnotifyWatcher() error {
 }
 
 func (w *FileWatcher) runFsnotifyWatcher(watcher *fsnotify.Watcher) error {
+	w.fsnotifyActive = true
+
 	// Listen for events and loop until error occurs.
 	for {
 		select {
@@ -134,8 +136,6 @@ func (w *FileWatcher) runFsnotifyWatcher(watcher *fsnotify.Watcher) error {
 					}
 				}
 			}
-			w.callbacks.OnInSync(true)
-
 		case err, ok := <-watcher.Errors:
 			if !ok {
 				// Stop if channel is closed.
@@ -164,10 +164,10 @@ func (w *FileWatcher) runWatcher() {
 			log.WithError(err).Info("Error initializing fsnotify. Falling back to polling.")
 		}
 
+		// Get current state of the directory and emit initial events.
 		w.scanDirectory()
+		w.callbacks.OnInSync(true)
 		if w.fsWatcher != nil {
-			// Get current state of the directory and emit initial events.
-			w.fsnotifyActive = true
 			// Run fsnotify watcher loop if possible.
 			err := w.runFsnotifyWatcher(w.fsWatcher)
 			w.fsnotifyActive = false
@@ -239,7 +239,6 @@ func (w *FileWatcher) scanDirectory() {
 
 	// Update lastState for next iteration.
 	w.lastState = currentState
-	w.callbacks.OnInSync(true)
 }
 
 // Stop stops the watcher.
