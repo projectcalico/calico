@@ -3,6 +3,7 @@ import PromotionsBanner from '..';
 import { useNotifications } from '@/features/promotions/hooks';
 import { usePromotionsContent } from '@/features/promotions/api';
 import { hasNewContent } from '@/features/promotions/utils';
+import { useClusterId } from '@/hooks';
 
 jest.mock('@/features/promotions/hooks', () => ({
     useNotifications: jest.fn(),
@@ -14,8 +15,13 @@ jest.mock('@/features/promotions/api', () => ({
 
 jest.mock('@/features/promotions/utils', () => ({ hasNewContent: jest.fn() }));
 
+jest.mock('@/hooks', () => ({ useClusterId: jest.fn() }));
+
 describe('<PromotionsBanner />', () => {
-    const config = { bannerLink: 'banner-link', bannerText: 'banner-text' };
+    const config = {
+        bannerLink: 'http://banner-link',
+        bannerText: 'banner-text',
+    };
 
     beforeEach(() => {
         jest.mocked(useNotifications).mockReturnValue({
@@ -56,5 +62,17 @@ describe('<PromotionsBanner />', () => {
         rerender(<PromotionsBanner />);
 
         expect(screen.getByText(newConfig.bannerText)).toBeInTheDocument();
+    });
+
+    it('should have the expected url', () => {
+        const clusterId = 'mock-id';
+        jest.mocked(useClusterId).mockReturnValue(clusterId);
+
+        render(<PromotionsBanner />);
+
+        expect(screen.getByRole('link')).toHaveProperty(
+            'href',
+            `http://banner-link/?utm_source=whisker&utm_medium=promo-banner-link&utm_campaign=oss-ui&whisker_id=${clusterId}`,
+        );
     });
 });

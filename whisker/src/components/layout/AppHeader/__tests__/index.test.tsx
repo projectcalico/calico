@@ -13,7 +13,7 @@ describe('<AppHeader />', () => {
             screen.getByTestId('app-header-calico-cloud-link'),
         ).toHaveProperty(
             'href',
-            expect.stringContaining(`whisker-id=fake-cluster-id`),
+            expect.stringContaining(`whisker_id=fake-cluster-id`),
         );
     });
 });
