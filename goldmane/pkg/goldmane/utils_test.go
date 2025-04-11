@@ -12,22 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package aggregator_test
+package goldmane_test
 
 import (
 	"time"
 
 	"github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/goldmane/pkg/aggregator/bucketing"
+	"github.com/projectcalico/calico/goldmane/pkg/storage"
 )
 
 // testSink implements the Sink interface for testing.
 type testSink struct {
-	buckets []*bucketing.FlowCollection
+	buckets []*storage.FlowCollection
 }
 
-func (t *testSink) Receive(b *bucketing.FlowCollection) {
+func (t *testSink) Receive(b *storage.FlowCollection) {
 	t.buckets = append(t.buckets, b)
 }
 
