@@ -207,8 +207,7 @@ func RunFelix(infra DatastoreInfra, id int, options TopologyOptions) *Felix {
 
 	var goldmaneServer *goldmane.NodeServer
 	if options.FlowLogSource == FlowLogSourceGoldmane {
-		sockAddr := path.Join(logDir, goldmane.NodeSocketName)
-		goldmaneServer = goldmane.NewNodeServer(sockAddr)
+		goldmaneServer = goldmane.NewNodeServer(logDir)
 		err := goldmaneServer.Run()
 		if err != nil {
 			logrus.WithError(err).Panic("Failed to start goldmane node server")

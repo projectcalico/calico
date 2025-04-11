@@ -15,8 +15,12 @@
 package goldmane
 
 import (
+	"context"
 	"net"
+	"os"
+	"path"
 	"sync"
+	"time"
 
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
@@ -73,9 +77,9 @@ type NodeServer struct {
 	sockAddr   string
 }
 
-func NewNodeServer(addr string) *NodeServer {
+func NewNodeServer(dir string) *NodeServer {
 	nodeServer := NodeServer{
-		sockAddr:   addr,
+		sockAddr:   path.Join(dir, NodeSocketName),
 		grpcServer: grpc.NewServer(),
 		store:      newFlowStore(),
 	}
@@ -86,6 +90,12 @@ func NewNodeServer(addr string) *NodeServer {
 
 func (s *NodeServer) Run() error {
 	var err error
+	err = ensureGoldmaneSocketDirectory(s.sockAddr)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to create goldmane unix server")
+		return err
+	}
+
 	s.once.Do(func() {
 		var l net.Listener
 		l, err = net.Listen("unix", s.sockAddr)
@@ -103,7 +113,27 @@ func (s *NodeServer) Run() error {
 	return nil
 }
 
+func (s *NodeServer) Watch(ctx context.Context, num int, processFlow func(*types.Flow)) {
+	infinitLoop := num < 0
+	var count int
+	for {
+		if ctx.Err() != nil ||
+			(!infinitLoop && count >= num) {
+			logrus.Debug("Closing goldmane unix server")
+			return
+		}
+
+		flows := s.ListAndFlush()
+		for _, f := range flows {
+			processFlow(f)
+		}
+		count = count + len(flows)
+		time.Sleep(time.Second)
+	}
+}
+
 func (s *NodeServer) Stop() {
+	cleanupGoldmaneSocket(s.sockAddr)
 	s.grpcServer.Stop()
 }
 
@@ -117,4 +147,34 @@ func (s *NodeServer) Flush() {
 
 func (s *NodeServer) ListAndFlush() []*types.Flow {
 	return s.store.ListAndFlush()
+}
+
+func ensureGoldmaneSocketDirectory(addr string) error {
+	path := path.Dir(addr)
+	logrus.Debug("Checking if goldmane node socket exists.")
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		logrus.WithField("path", path).Debug("Goldmane node socket directory does not exist.")
+		err := os.MkdirAll(path, 0o600)
+		if err != nil {
+			logrus.WithError(err).WithField("address", addr).Error("Failed to create node socket directory")
+			return err
+		}
+		logrus.WithField("path", path).Debug("Created goldmane unix server directory.")
+	}
+	return nil
+}
+
+func cleanupGoldmaneSocket(addr string) {
+	if NodeSocketExists() {
+		err := os.Remove(addr)
+		if err != nil {
+			logrus.WithError(err).WithField("address", addr).Errorf("Failed to remove goldmane node socket")
+		}
+	}
+}
+
+func NodeSocketExists() bool {
+	_, err := os.Stat(NodeSocketAddress)
+	// In case of any error, return false
+	return err == nil
 }

@@ -17,9 +17,7 @@ package flowlogs
 import (
 	"context"
 	"fmt"
-	"os"
 	"os/signal"
-	"path"
 	"syscall"
 	"time"
 
@@ -30,40 +28,21 @@ import (
 	"github.com/projectcalico/calico/goldmane/proto"
 )
 
-func StartServerAndWatch(num int) {
+func StartAndWatch(num int) {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	err := ensureGoldmaneSocketDirectory(goldmane.LocalGoldmaneServer)
-	if err != nil {
-		logrus.WithError(err).Error("Failed to create goldmane unix server")
-		return
-	}
-	nodeServer := goldmane.NewNodeServer(goldmane.LocalGoldmaneServer)
-	err = nodeServer.Run()
+	nodeServer := goldmane.NewNodeServer(goldmane.NodeSocketPath)
+	err := nodeServer.Run()
 	if err != nil {
 		logrus.WithError(err).Error("Failed to start node local goldmane server")
 		return
 	}
+	defer nodeServer.Stop()
 
-	infinitLoop := num < 0
-	var count int
-	for {
-		if ctx.Err() != nil ||
-			(!infinitLoop && count >= num) {
-			logrus.Debug("Closing goldmane unix server")
-			nodeServer.Stop()
-			cleanupGoldmaneSocket()
-			return
-		}
-
-		flows := nodeServer.ListAndFlush()
-		for _, flow := range flows {
-			fmt.Printf("%s", flowToString(flow))
-		}
-		count = count + len(flows)
-		time.Sleep(time.Second)
-	}
+	nodeServer.Watch(ctx, num, func(flow *types.Flow) {
+		fmt.Printf("%s", flowToString(flow))
+	})
 }
 
 func flowToString(f *types.Flow) string {
@@ -97,7 +76,7 @@ func endpointTypeToString(ep proto.EndpointType) string {
 	case proto.EndpointType_Network:
 		return "net"
 	default:
-		panic(fmt.Sprintf("Unexpected endpoint type: %v", ep))
+		return "unknown"
 	}
 }
 
@@ -107,28 +86,4 @@ func policyHitsToString(policies []*proto.PolicyHit) string {
 		out = out + fmt.Sprintf("  - %v", p)
 	}
 	return out
-}
-
-func ensureGoldmaneSocketDirectory(addr string) error {
-	path := path.Dir(addr)
-	// Check if goldmane unix server exists at the expected location.
-	logrus.Debug("Checking if goldmane unix server exists.")
-	if _, err := os.Stat(path); os.IsNotExist(err) {
-		logrus.WithField("path", path).Debug("Goldmane unix socket directory does not exist.")
-		err := os.MkdirAll(path, 0o600)
-		if err != nil {
-			return err
-		}
-		logrus.WithField("path", path).Debug("Created goldmane unix server directory.")
-	}
-	return nil
-}
-
-func cleanupGoldmaneSocket() {
-	if goldmane.NodeSocketExists() {
-		err := os.Remove(goldmane.LocalGoldmaneServer)
-		if err != nil {
-			logrus.WithError(err).Errorf("Failed to remove goldmane node socket")
-		}
-	}
 }

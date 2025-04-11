@@ -17,7 +17,6 @@ package goldmane
 import (
 	"context"
 	"fmt"
-	"os"
 	"sort"
 	"strings"
 	"sync"
@@ -82,12 +81,6 @@ func (g *GoldmaneReporter) nodeSocketReporter() {
 		}
 		time.Sleep(time.Second * 10)
 	}
-}
-
-func NodeSocketExists() bool {
-	_, err := os.Stat(NodeSocketAddress)
-	// In case of any error, return false
-	return err == nil
 }
 
 func (g *GoldmaneReporter) nodeClientIsNil() bool {

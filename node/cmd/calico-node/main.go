@@ -1,4 +1,4 @@
-// Copyright (c) 2018-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2018-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -177,7 +177,7 @@ func main() {
 		status.Show()
 		os.Exit(0)
 	} else if *fetchFlowlogs != 0 {
-		flowlogs.StartServerAndWatch(*fetchFlowlogs)
+		flowlogs.StartAndWatch(*fetchFlowlogs)
 		os.Exit(0)
 	} else {
 		fmt.Println("No valid options provided. Usage:")
