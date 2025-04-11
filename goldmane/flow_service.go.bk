@@ -54,19 +54,62 @@ func (s *FlowsServer) Stream(req *proto.FlowStreamRequest, server proto.Flows_St
 	}
 	defer stream.Close()
 
-	// Share memory for each flow result.
-	result := &proto.FlowResult{Flow: &proto.Flow{}}
+	// Create a channel to signal when the batch is done.
+	workerOutput := make(chan error, 1)
+	workerInput := make(chan []*proto.FlowResult)
 
+	// Start a worker to stream the flows to the server.
+	ctx := server.Context()
+	go s.streamWorker(ctx, server, workerInput, workerOutput)
+
+	var batch []*proto.FlowResult
 	for {
 		select {
+		case err := <-workerOutput:
+			logrus.WithError(err).Info("Batch completed")
+			if err != nil {
+				logrus.WithError(err).Error("error sending flow to client")
+				return err
+			}
+
+			if len(batch) > 0 {
+				// Send the batch to the worker and reset the batch for the next iteration.
+				workerInput <- batch
+				batch = []*proto.FlowResult{}
+			}
 		case flow := <-stream.Flows():
-			if flow.BuildInto(req.Filter, result) {
-				if err := server.Send(result); err != nil {
-					return err
+			// We need to prioritize servicing the input channel, so read batches of flows to keep the channel served, and send them asynchronously.
+			batch = append(batch, flow)
+
+			select {
+			case workerInput <- batch:
+				// Worker is free to take the batch. Send what we have and reset the batch.
+				batch = []*proto.FlowResult{}
+			default:
+				// Worker is busy. Wait before sending the batch, and continue reading flows from the stream while we do.
+			}
+		case <-ctx.Done():
+			return server.Context().Err()
+		}
+	}
+}
+
+func (s *FlowsServer) streamWorker(ctx context.Context, server proto.Flows_StreamServer, in chan []*proto.FlowResult, out chan error) {
+	// Loop, sending batches of flows to the client.
+	for {
+		select {
+		case batch := <-in:
+			logrus.WithField("batch_size", len(batch)).Info("Sending batch of flows to client")
+			for _, flow := range batch {
+				if err := server.Send(flow); err != nil {
+					out <- err
+					return
 				}
 			}
-		case <-server.Context().Done():
-			return server.Context().Err()
+			// Signal that the batch is done.
+			out <- nil
+		case <-ctx.Done():
+			return
 		}
 	}
 }
