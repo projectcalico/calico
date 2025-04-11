@@ -32,7 +32,7 @@ func StartAndWatch(num int) {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	nodeServer := goldmane.NewNodeServer(goldmane.NodeSocketPath)
+	nodeServer := goldmane.NewNodeServer(goldmane.NodeSocketDir)
 	err := nodeServer.Run()
 	if err != nil {
 		logrus.WithError(err).Error("Failed to start goldmane node server")
@@ -50,11 +50,11 @@ func flowToString(f *types.Flow) string {
 	policyTrace := types.FlowLogPolicyToProto(f.Key.Policies())
 	return fmt.Sprintf(
 		"- Time=%v Reporter=%v Action=%v\n"+
-			"  Src=%s(%s/%s) Dst=%s(%s/%s) Svc=%s/%s Proto=%s(%v svc:%s/%v)\n"+
+			"  Src={%s(%s/%s)} Dst={%s(%s/%s) Svc:%s/%s} Proto={%s(%v) Svc:%s/%v}\n"+
 			"  Counts={Ingress: %vPkts/%vBytes Egress:%vPkts/%vBytes} Connections={Started:%v Completed:%v Live:%v}\n"+
 			"  Enforced:\n%v\n"+
 			"  Pending:\n%v\n",
-		startTime, f.Key.Reporter(), f.Key.Action(),
+		startTime.Local(), f.Key.Reporter(), f.Key.Action(),
 		endpointTypeToString(f.Key.SourceType()), f.Key.SourceNamespace(), f.Key.SourceName(),
 		endpointTypeToString(f.Key.DestType()), f.Key.DestNamespace(), f.Key.DestName(),
 		f.Key.DestServiceName(), f.Key.DestServiceNamespace(),

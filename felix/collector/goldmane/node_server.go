@@ -16,6 +16,7 @@ package goldmane
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"os"
 	"path"
@@ -30,9 +31,13 @@ import (
 )
 
 const (
-	NodeSocketAddress = "unix:///var/log/calico/flowlogs/goldmane.sock"
-	NodeSocketPath    = "/var/log/calico/flowlogs"
-	NodeSocketName    = "goldmane.sock"
+	NodeSocketDir  = "/var/log/calico/flowlogs"
+	NodeSocketName = "goldmane.sock"
+)
+
+var (
+	NodeSocketPath    = path.Join(NodeSocketDir, NodeSocketName)
+	NodeSocketAddress = fmt.Sprintf("unix://%v", NodeSocketPath)
 )
 
 type flowStore struct {
@@ -74,12 +79,16 @@ type NodeServer struct {
 	store      *flowStore
 	grpcServer *grpc.Server
 	once       sync.Once
-	sockAddr   string
+
+	// In Calico node, the address of unix socket is always /var/log/calico/flowlogs/goldmane.sock.
+	// However, NodeServer is also used by Felix FVs, where the code is executed outside of Calico Node. In this case,
+	// unix socket is created in host filesystem, and instead mounted at the mentioned path in Felix containers.
+	dir string
 }
 
 func NewNodeServer(dir string) *NodeServer {
 	nodeServer := NodeServer{
-		sockAddr:   path.Join(dir, NodeSocketName),
+		dir:        dir,
 		grpcServer: grpc.NewServer(),
 		store:      newFlowStore(),
 	}
@@ -90,7 +99,7 @@ func NewNodeServer(dir string) *NodeServer {
 
 func (s *NodeServer) Run() error {
 	var err error
-	err = ensureNodeSocketDirExists(s.sockAddr)
+	err = ensureNodeSocketDirExists(s.dir)
 	if err != nil {
 		logrus.WithError(err).Error("Failed to create goldmane node socket")
 		return err
@@ -98,11 +107,12 @@ func (s *NodeServer) Run() error {
 
 	s.once.Do(func() {
 		var l net.Listener
-		l, err = net.Listen("unix", s.sockAddr)
+		sockAddr := s.Address()
+		l, err = net.Listen("unix", sockAddr)
 		if err != nil {
 			return
 		}
-		logrus.WithField("address", s.sockAddr).Info("Running goldmane node server")
+		logrus.WithField("address", sockAddr).Info("Running goldmane node server")
 		go func() {
 			err = s.grpcServer.Serve(l)
 			if err != nil {
@@ -134,7 +144,7 @@ func (s *NodeServer) Watch(ctx context.Context, num int, processFlow func(*types
 }
 
 func (s *NodeServer) Stop() {
-	cleanupNodeSocket(s.sockAddr)
+	cleanupNodeSocket(s.Address())
 	s.grpcServer.Stop()
 }
 
@@ -150,17 +160,20 @@ func (s *NodeServer) ListAndFlush() []*types.Flow {
 	return s.store.ListAndFlush()
 }
 
-func ensureNodeSocketDirExists(addr string) error {
-	path := path.Dir(addr)
+func (s *NodeServer) Address() string {
+	return path.Join(s.dir, NodeSocketName)
+}
+
+func ensureNodeSocketDirExists(dir string) error {
 	logrus.Debug("Checking if goldmane node socket exists.")
-	if _, err := os.Stat(path); os.IsNotExist(err) {
-		logrus.WithField("path", path).Debug("Goldmane node socket directory does not exist")
-		err := os.MkdirAll(path, 0o600)
+	if _, err := os.Stat(dir); os.IsNotExist(err) {
+		logrus.WithField("directory", dir).Debug("Goldmane node socket directory does not exist")
+		err := os.MkdirAll(dir, 0o600)
 		if err != nil {
-			logrus.WithError(err).WithField("address", addr).Error("Failed to create node socket directory")
+			logrus.WithError(err).WithField("directory", dir).Error("Failed to create node socket directory")
 			return err
 		}
-		logrus.WithField("path", path).Debug("Created goldmane node socket directory")
+		logrus.WithField("directory", dir).Debug("Created goldmane node socket directory")
 	}
 	return nil
 }
@@ -175,7 +188,7 @@ func cleanupNodeSocket(addr string) {
 }
 
 func NodeSocketExists() bool {
-	_, err := os.Stat(NodeSocketAddress)
+	_, err := os.Stat(NodeSocketPath)
 	// In case of any error, return false
 	return err == nil
 }

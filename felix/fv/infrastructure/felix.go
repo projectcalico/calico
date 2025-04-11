@@ -203,7 +203,7 @@ func RunFelix(infra DatastoreInfra, id int, options TopologyOptions) *Felix {
 	// aren't enabled the directory will just stay empty.
 	logDir := path.Join(cwLogDir, uniqueName)
 	Expect(os.MkdirAll(logDir, 0o777)).NotTo(HaveOccurred())
-	args = append(args, "-v", fmt.Sprintf("%v:%v", logDir, goldmane.NodeSocketPath))
+	args = append(args, "-v", fmt.Sprintf("%v:%v", logDir, goldmane.NodeSocketDir))
 
 	var goldmaneServer *goldmane.NodeServer
 	if options.FlowLogSource == FlowLogSourceGoldmane {
