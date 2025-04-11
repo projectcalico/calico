@@ -17,6 +17,7 @@ package goldmane
 import (
 	"context"
 	"fmt"
+	"os"
 	"sort"
 	"strings"
 	"sync"
@@ -32,6 +33,10 @@ import (
 	"github.com/projectcalico/calico/goldmane/pkg/client"
 	"github.com/projectcalico/calico/goldmane/pkg/types"
 	"github.com/projectcalico/calico/goldmane/proto"
+)
+
+const (
+	checkNodeSocketTimer = time.Second * 10
 )
 
 type GoldmaneReporter struct {
@@ -73,13 +78,19 @@ func (g *GoldmaneReporter) Start() error {
 }
 
 func (g *GoldmaneReporter) nodeSocketReporter() {
+	nodeSocketExists := func() bool {
+		_, err := os.Stat(NodeSocketPath)
+		// In case of any error, return false
+		return err == nil
+	}
+
 	for {
-		if NodeSocketExists() {
+		if nodeSocketExists() {
 			g.mayStartNodeSocketReporter()
 		} else {
 			g.mayStopNodeSocketReporter()
 		}
-		time.Sleep(time.Second * 10)
+		time.Sleep(checkNodeSocketTimer)
 	}
 }
 
