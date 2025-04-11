@@ -97,8 +97,8 @@ const FlowLogsList: React.FC<FlowLogsListProps> = ({
     const shouldAnimate = useShouldAnimate(maxStartTime, flowLogs);
 
     const renderRowSubComponent = React.useCallback(
-        ({ row }: CellProps<FlowLog>) => (
-            <FlowLogDetails flowLog={row.original} />
+        ({ row, height }: CellProps<FlowLog>) => (
+            <FlowLogDetails flowLog={row.original} height={height} />
         ),
         [],
     );
@@ -161,7 +161,6 @@ const FlowLogsList: React.FC<FlowLogsListProps> = ({
                 autoResetExpandedRow={true}
                 virtualisationProps={{
                     tableHeight: flowLogs?.length ? height : 0,
-                    subRowHeight: 820,
                     rowHeight: 35,
                     subRowStyles: subRowStyles,
                     shouldAnimate,

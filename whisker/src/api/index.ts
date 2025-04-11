@@ -79,6 +79,8 @@ export const useStream = <S, R>({
             setHasStoppedStreaming(false);
             setIsFetching(options.isUpdate || false);
             hasReplacedStream.current = false;
+            clearTimeout(timer.current);
+            hasTimeout.current = false;
 
             if (options.isUpdate) {
                 setData([]);
