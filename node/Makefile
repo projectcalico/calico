@@ -345,44 +345,57 @@ chart: ../bin/tigera-operator-$(GIT_VERSION).tgz
 ../bin/tigera-operator-$(GIT_VERSION).tgz:
 	make -C ../ bin/tigera-operator-$(GIT_VERSION).tgz
 
-calico-node.tar: $(NODE_CONTAINER_CREATED)
-	docker save --output $@ $(NODE_IMAGE):latest-$(ARCH)
-
-calico-typha.tar: ../go.mod $(shell find ../typha -name '*.go') $(shell find ../libcalico-go -name '*.go')
-	make -C ../typha image
-	docker save --output $@ calico/typha:latest-$(ARCH)
-
-calico-apiserver.tar: ../go.mod $(shell find ../apiserver -name '*.go') $(shell find ../libcalico-go -name '*.go')
-	make -C ../apiserver image
-	docker save --output $@ calico/apiserver:latest-$(ARCH)
+# Tag to use for images built for e2e testing. This must match the image tag used in
+# tests/k8st/infra/calico_versions.yml
+TEST_BUILD_TAG=test-build
 
 operator.tar: $(K8ST_IMAGE_TARS) tests/k8st/infra/calico_versions.yml
 	cd tests/k8st/infra/ && BRANCH=$(OPERATOR_BRANCH) ./build-operator.sh
-	docker save --output $@ docker.io/tigera/operator:test-build
+	docker save --output $@ docker.io/tigera/operator:$(TEST_BUILD_TAG)
+
+calico-node.tar: $(NODE_CONTAINER_CREATED)
+	docker tag $(NODE_IMAGE):latest-$(ARCH) $(NODE_IMAGE):$(TEST_BUILD_TAG)
+	docker save --output $@ $(NODE_IMAGE):$(TEST_BUILD_TAG)
+
+calico-typha.tar: ../go.mod $(shell find ../typha -name '*.go') $(shell find ../libcalico-go -name '*.go')
+	make -C ../typha image
+	docker tag calico/typha:latest-$(ARCH) calico/typha:$(TEST_BUILD_TAG)
+	docker save --output $@ calico/typha:$(TEST_BUILD_TAG)
+
+calico-apiserver.tar: ../go.mod $(shell find ../apiserver -name '*.go') $(shell find ../libcalico-go -name '*.go')
+	make -C ../apiserver image
+	docker tag calico/apiserver:latest-$(ARCH) calico/apiserver:$(TEST_BUILD_TAG)
+	docker save --output $@ calico/apiserver:$(TEST_BUILD_TAG)
 
 calico-cni.tar: ../go.mod $(shell find ../cni-plugin -name '*.go') $(shell find ../libcalico-go -name '*.go')
 	make -C ../cni-plugin image
-	docker save --output $@ calico/cni:latest-$(ARCH)
+	docker tag calico/cni:latest-$(ARCH) calico/cni:$(TEST_BUILD_TAG)
+	docker save --output $@ calico/cni:$(TEST_BUILD_TAG)
 
 csi.tar: ../go.mod $(shell find ../pod2daemon/ -name '*.go')
 	make -C ../pod2daemon image
-	docker save --output $@ calico/csi:latest-$(ARCH)
+	docker tag calico/csi:latest-$(ARCH) calico/csi:$(TEST_BUILD_TAG)
+	docker save --output $@ calico/csi:$(TEST_BUILD_TAG)
 
 node-driver-registrar.tar: ../go.mod $(shell find ../pod2daemon/ -name '*.go')
 	make -C ../pod2daemon image
-	docker save --output $@ calico/node-driver-registrar:latest-$(ARCH)
+	docker tag calico/node-driver-registrar:latest-$(ARCH) calico/node-driver-registrar:$(TEST_BUILD_TAG)
+	docker save --output $@ calico/node-driver-registrar:$(TEST_BUILD_TAG)
 
 pod2daemon.tar: ../go.mod $(shell find ../pod2daemon/ -name '*.go')
 	make -C ../pod2daemon image
-	docker save --output $@ calico/pod2daemon-flexvol:latest-$(ARCH)
+	docker tag calico/pod2daemon-flexvol:latest-$(ARCH) calico/pod2daemon-flexvol:$(TEST_BUILD_TAG)
+	docker save --output $@ calico/pod2daemon-flexvol:$(TEST_BUILD_TAG)
 
 calicoctl.tar: ../go.mod $(shell find ../calicoctl -name '*.go') $(shell find ../libcalico-go -name '*.go')
 	make -C ../calicoctl image
-	docker save --output $@ calico/ctl:latest-$(ARCH)
+	docker tag calico/ctl:latest-$(ARCH) calico/ctl:$(TEST_BUILD_TAG)
+	docker save --output $@ calico/ctl:$(TEST_BUILD_TAG)
 
 kube-controllers.tar: ../go.mod $(shell find ../kube-controllers -name '*.go') $(shell find ../libcalico-go -name '*.go')
 	make -C ../kube-controllers image
-	docker save --output $@ calico/kube-controllers:latest-$(ARCH)
+	docker tag calico/kube-controllers:latest-$(ARCH) calico/kube-controllers:$(TEST_BUILD_TAG)
+	docker save --output $@ calico/kube-controllers:$(TEST_BUILD_TAG)
 
 load-container-images: $(K8ST_IMAGE_TARS) $(KUBECTL)
 	# Load the latest tar files onto the currently running kind cluster.

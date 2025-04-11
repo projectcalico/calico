@@ -6,44 +6,44 @@ components:
     version: master
   typha:
     image: calico/typha
-    version: latest-amd64
+    version: test-build
   calico/node:
     image: library/node
-    version: latest-amd64
+    version: test-build
   calico/cni:
     image: calico/cni
-    version: latest-amd64
+    version: test-build
   calico/node-windows:
-    version: latest-amd64
+    version: test-build
   calico/cni-windows:
-    version: latest-amd64
+    version: test-build
   calico/kube-controllers:
     image: calico/kube-controllers
-    version: latest-amd64
+    version: test-build
   calico/goldmane:
-    version: latest-amd64
+    version: test-build
   flexvol:
     image: calico/pod2daemon-flexvol
-    version: latest-amd64
+    version: test-build
   calico/apiserver:
     image: calico/apiserver
-    version: latest-amd64
+    version: test-build
   calico/csi:
     image: calico/csi
-    version: latest-amd64
+    version: test-build
   csi-node-driver-registrar:
-    version: latest-amd64
+    version: test-build
   key-cert-provisioner:
-    version: latest-amd64
+    version: test-build
   calico/whisker:
-    version: latest-amd64
+    version: test-build
   calico/whisker-backend:
-    version: latest-amd64
+    version: test-build
   calico/envoy-gateway:
-    version: latest-amd64
+    version: test-build
   calico/envoy-proxy:
-    version: latest-amd64
+    version: test-build
   calico/envoy-ratelimit:
-    version: latest-amd64
+    version: test-build
   calico/guardian:
-    version: latest-amd64
+    version: test-build
