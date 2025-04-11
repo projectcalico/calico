@@ -37,41 +37,45 @@ type StreamReceiver interface {
 // FlowBuilder provides an interface for building Flows. It allows us to conserve memory by
 // only rendering Flow objects when they match the filter.
 type FlowBuilder interface {
-	// Build returns a Flow and its ID.
-	Build(*proto.Filter) (*types.Flow, int64)
+	BuildInto(*proto.Filter, *proto.FlowResult) bool
 }
 
 func NewCachedFlowBuilder(d *types.DiachronicFlow, s, e int64) FlowBuilder {
-	return &cachedFlowBuilder{
+	return &CachedFlowBuilder{
 		d: d,
+		w: d.GetWindows(s, e),
 		s: s,
 		e: e,
 	}
 }
 
-type cachedFlowBuilder struct {
+type CachedFlowBuilder struct {
 	d *types.DiachronicFlow
 	s int64
 	e int64
+
+	// w is the set of windows that this flow is in at the time this builder is instantiated.
+	// We hold references to the underlying Window objects so that we can aggregate across them on another
+	// goroutine without worrying about the original DiachronicFlow windows being modified.
+	//
+	// Note: This is a bit of a hack, but it works for now. We can clean this up a lot by reconciling
+	// the Window and AggregationBucket objects, which fill similar roles.
+	w []*types.Window
 
 	// cache the result in case we get called multiple times so we can
 	// avoid re-aggregating the flow.
 	cachedFlow *types.Flow
 }
 
-func (f *cachedFlowBuilder) Build(filter *proto.Filter) (*types.Flow, int64) {
+func (f *CachedFlowBuilder) BuildInto(filter *proto.Filter, res *proto.FlowResult) bool {
 	if f.d.Matches(filter, f.s, f.e) {
-		if f.cachedFlow == nil {
-			logrus.WithFields(logrus.Fields{
-				"start":  f.s,
-				"end":    f.e,
-				"flowID": f.d.ID,
-			}).Debug("Building flow")
-			f.cachedFlow = f.d.Aggregate(f.s, f.e)
+		if tf := f.d.AggregateWindows(f.w); tf != nil {
+			types.FlowIntoProto(tf, res.Flow)
+			res.Id = f.d.ID
+			return true
 		}
-		return f.cachedFlow, f.d.ID
 	}
-	return nil, 0
+	return false
 }
 
 type lookupFn func(key types.FlowKey) *types.DiachronicFlow
@@ -506,6 +510,15 @@ func (r *BucketRing) Statistics(req *proto.StatisticsRequest) ([]*proto.Statisti
 
 // flushToStreams sends the flows in the current streaming bucket to the stream receiver.
 func (r *BucketRing) flushToStreams() {
+	start := time.Now()
+	defer func() {
+		if time.Since(start) > 1*time.Second {
+			logrus.WithFields(logrus.Fields{
+				"duration": time.Since(start),
+			}).Info("Flushing streams > 1s")
+		}
+	}()
+
 	if r.streams == nil {
 		logrus.Warn("No stream receiver configured, not sending flows to streams")
 		return
@@ -541,7 +554,6 @@ func (r *BucketRing) IterBuckets(start, end int, f func(i int) error) {
 	for idx != end {
 		if err := f(idx); err != nil {
 			if errors.Is(err, StopBucketIteration) {
-				logrus.Info("StopIteration")
 				return
 			}
 		}
