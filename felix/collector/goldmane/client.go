@@ -56,7 +56,7 @@ func NewReporter(addr, cert, key, ca string) (*GoldmaneReporter, error) {
 		client:  cli,
 
 		// Do not send flowlogs to node socket, if goldmane address set via FelixConfig is equal to node socket
-		mayReportToNodeSocket: addr != LocalGoldmaneServer,
+		mayReportToNodeSocket: addr != NodeSocketAddress,
 	}, nil
 }
 
@@ -85,7 +85,7 @@ func (g *GoldmaneReporter) nodeSocketReporter() {
 }
 
 func NodeSocketExists() bool {
-	_, err := os.Stat(LocalGoldmaneServer)
+	_, err := os.Stat(NodeSocketAddress)
 	// In case of any error, return false
 	return err == nil
 }
@@ -105,8 +105,7 @@ func (g *GoldmaneReporter) mayStartNodeSocketReporter() {
 	var err error
 	g.nodeClientLock.Lock()
 	defer g.nodeClientLock.Unlock()
-	sockAddr := fmt.Sprintf("unix://%v", LocalGoldmaneServer)
-	g.nodeClient, err = client.NewFlowClient(sockAddr, "", "", "")
+	g.nodeClient, err = client.NewFlowClient(NodeSocketAddress, "", "", "")
 	if err != nil {
 		logrus.WithError(err).Warn("Failed to create goldmane unix client")
 		return

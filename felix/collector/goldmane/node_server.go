@@ -26,7 +26,9 @@ import (
 )
 
 const (
-	LocalGoldmaneServer = "/var/log/calico/flowlogs/goldmane.sock"
+	NodeSocketAddress = "unix:///var/log/calico/flowlogs/goldmane.sock"
+	NodeSocketPath    = "/var/log/calico/flowlogs"
+	NodeSocketName    = "goldmane.sock"
 )
 
 type flowStore struct {
