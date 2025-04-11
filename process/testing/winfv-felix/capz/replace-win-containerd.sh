@@ -23,7 +23,7 @@ set -o pipefail
 # access the CAPZ cluster.
 : ${KUBECTL:=./bin/kubectl}
 : ${KCAPZ:="${KUBECTL} --kubeconfig=./kubeconfig"}
-: ${CONTAINERD_VERSION:="v1.7.13"}
+: ${CONTAINERD_VERSION:="v1.7.22"}
 
 # Cordon+drain windows nodes, then run the powershell script that replaces
 # containerd with the specific version wanted and finally uncordon the nodes
@@ -32,7 +32,7 @@ echo "Installing containerd ${CONTAINERD_VERSION} on windows nodes"
 
 ${KCAPZ} cordon -l kubernetes.io/os=windows
 ${KCAPZ} drain -l kubernetes.io/os=windows --ignore-daemonsets
-WIN_NODES=$(${KCAPZ} get nodes -o wide -l kubernetes.io/os=windows --no-headers | awk '{print $6}' | awk -F '.' '{print $4}' | sort)
+WIN_NODES=$(${KCAPZ} get nodes -o wide -l kubernetes.io/os=windows --no-headers | awk '{print $6}' | sort)
 for n in ${WIN_NODES}
 do
   ./scp-to-node.sh $n ./replace-win-containerd.ps1 c:\\k\\replace-win-containerd.ps1

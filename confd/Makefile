@@ -105,7 +105,7 @@ ut:
 
 bin/kubectl:
 	mkdir -p $(@D)
-	curl -fsSL --retry 5 -o $@ https://dl.k8s.io/release/$(K8S_VERSION)/bin/linux/$(ARCH)/kubectl
+	curl -sSf -L --retry 5 https://dl.k8s.io/release/$(K8S_VERSION)/bin/linux/$(ARCH)/kubectl -o $@
 	chmod +x $@
 
 bin/bird bin/bird6:
