@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package aggregator
+package storage
 
 import (
 	"math"
@@ -33,8 +33,8 @@ type Ordered interface {
 type Index[E Ordered] interface {
 	List(opts IndexFindOpts) ([]*types.Flow, types.ListMeta)
 	SortValueSet(opts IndexFindOpts) ([]E, types.ListMeta)
-	Add(c *types.DiachronicFlow)
-	Remove(c *types.DiachronicFlow)
+	Add(c *DiachronicFlow)
+	Remove(c *DiachronicFlow)
 }
 
 func NewIndex[E Ordered](sortValueFunc func(*types.FlowKey) E) Index[E] {
@@ -45,7 +45,7 @@ func NewIndex[E Ordered](sortValueFunc func(*types.FlowKey) E) Index[E] {
 // It maintains a list of DiachronicFlows sorted based on the key function allowing for efficient querying.
 type index[E Ordered] struct {
 	sortValueFunc func(*types.FlowKey) E
-	diachronics   []*types.DiachronicFlow
+	diachronics   []*DiachronicFlow
 }
 
 type IndexFindOpts struct {
@@ -151,7 +151,7 @@ func calculateListMeta(total, pageSize int) types.ListMeta {
 	}
 }
 
-func (idx *index[E]) Add(d *types.DiachronicFlow) {
+func (idx *index[E]) Add(d *DiachronicFlow) {
 	if len(idx.diachronics) == 0 {
 		// This is the first flow in the index. No need to insert it carefully.
 		logrus.WithFields(d.Key.Fields()).Debug("Adding first DiachronicFlow to index")
@@ -176,12 +176,12 @@ func (idx *index[E]) Add(d *types.DiachronicFlow) {
 		if logrus.IsLevelEnabled(logrus.DebugLevel) {
 			logrus.WithFields(d.Key.Fields()).WithFields(logrus.Fields{"i": index}).Debug("Inserting new DiachronicFlow into index")
 		}
-		idx.diachronics = append(idx.diachronics[:index], append([]*types.DiachronicFlow{d}, idx.diachronics[index:]...)...)
+		idx.diachronics = append(idx.diachronics[:index], append([]*DiachronicFlow{d}, idx.diachronics[index:]...)...)
 	}
 	// The DiachronicFlow already exists in the index, so do nothing.
 }
 
-func (idx *index[E]) Remove(d *types.DiachronicFlow) {
+func (idx *index[E]) Remove(d *DiachronicFlow) {
 	// Find the index of the DiachronicFlow to be removed.
 	index := idx.lookup(d)
 
@@ -212,7 +212,7 @@ func (idx *index[E]) Remove(d *types.DiachronicFlow) {
 // lookup returns the index within the list of DiachronicFlows where the given DiachronicFlow either already exists or should be inserted.
 // - If the DiachronicFlow already exists, the index of the existing DiachronicFlow is returned.
 // - If the DiachronicFlow does not exist, the index where it should be inserted is returned.
-func (idx *index[E]) lookup(d *types.DiachronicFlow) int {
+func (idx *index[E]) lookup(d *DiachronicFlow) int {
 	return sort.Search(len(idx.diachronics), func(i int) bool {
 		// Compare the new DiachronicFlow with the DiachronicFlow at index i.
 		// - If the new DiachronicFlow sorts before the current DiachronicFlow, return true.
@@ -238,7 +238,7 @@ func (idx *index[E]) lookup(d *types.DiachronicFlow) int {
 }
 
 // evaluate evaluates the given DiachronicFlow and returns the Flow that matches the given options, or nil if no match is found.
-func (idx *index[E]) evaluate(c *types.DiachronicFlow, opts IndexFindOpts) *types.Flow {
+func (idx *index[E]) evaluate(c *DiachronicFlow, opts IndexFindOpts) *types.Flow {
 	if c.Matches(opts.filter, opts.startTimeGt, opts.startTimeLt) {
 		return c.Aggregate(opts.startTimeGt, opts.startTimeLt)
 	}
