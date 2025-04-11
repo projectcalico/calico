@@ -104,6 +104,7 @@ ut:
 
 
 bin/kubectl:
+	mkdir -p $(@D)
 	curl -sSf -L --retry 5 https://dl.k8s.io/release/$(K8S_VERSION)/bin/linux/$(ARCH)/kubectl -o $@
 	chmod +x $@
 
