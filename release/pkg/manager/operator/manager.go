@@ -27,6 +27,7 @@ import (
 	"github.com/projectcalico/calico/release/internal/pinnedversion"
 	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/internal/utils"
+	"github.com/projectcalico/calico/release/internal/version"
 	"github.com/projectcalico/calico/release/pkg/manager/branch"
 )
 
@@ -111,8 +112,17 @@ func NewManager(opts ...Option) *OperatorManager {
 		}
 	}
 
-	if o.dir == "" {
-		logrus.Fatal("No repository root specified")
+	if o.githubOrg == "" {
+		logrus.Fatal("GitHub organization not specified")
+	}
+	if o.repoName == "" {
+		logrus.Fatal("GitHub repository not specified")
+	}
+	if o.remote == "" {
+		logrus.Fatal("No git remote specified")
+	}
+	if o.version == "" {
+		logrus.Fatal("No operator version specified")
 	}
 
 	return o
@@ -170,6 +180,9 @@ func (o *OperatorManager) Build() error {
 }
 
 func (o *OperatorManager) PreBuildValidation(outputDir string) error {
+	if o.dir == "" {
+		logrus.Fatal("No repository root specified")
+	}
 	if !o.isHashRelease {
 		return fmt.Errorf("operator manager builds only for hash releases")
 	}
@@ -264,6 +277,37 @@ func (o *OperatorManager) PrePublishValidation() error {
 	}
 	if !o.publish {
 		logrus.Warn("Skipping publish is set, will treat as dry-run")
+	}
+	return nil
+}
+
+// ReleasePublic publishes the current draft release of the operator to make it publicly available.
+// It determines the latest release version, compares it with the current version, and marks the release as the latest if applicable.
+func (r *OperatorManager) ReleasePublic() error {
+	// Get the latest version
+	args := []string{
+		"release", "list", "--repo", fmt.Sprintf("%s/%s", r.githubOrg, r.repoName),
+		"--exclude-drafts", "--exclude-prereleases", "--json 'name,isLatest'",
+		"--jq '.[] | select(.isLatest) | .name'",
+	}
+	out, err := r.runner.RunInDir(r.calicoDir, "./bin/gh", args, nil)
+	if err != nil {
+		return fmt.Errorf("failed to get latest release: %s", err)
+	}
+
+	// Publish the draft release
+	args = []string{
+		"release", "edit", r.version, "--draft=false",
+		"--repo", fmt.Sprintf("%s/%s", r.githubOrg, r.repoName),
+	}
+	latest := version.New(strings.TrimSpace(out))
+	current := version.New(r.version)
+	if current.Semver().GreaterThan(latest.Semver()) {
+		args = append(args, "--latest")
+	}
+	_, err = r.runner.RunInDir(r.calicoDir, "./bin/gh", args, nil)
+	if err != nil {
+		return fmt.Errorf("failed to publish %s draft release: %s", r.version, err)
 	}
 	return nil
 }

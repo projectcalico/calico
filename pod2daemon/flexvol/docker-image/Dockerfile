@@ -49,13 +49,13 @@ FROM ${CALICO_BASE}
 
 ARG GIT_VERSION=unknown
 
-LABEL description="Calico FlexVolume driver installer to setup secure connections from Kubernetes pods to local daemons"
-LABEL maintainer="maintainers@tigera.io"
-LABEL name="Calico FlexVolume driver installer"
-LABEL release="1"
-LABEL summary="Calico FlexVolume driver installer to setup secure connections from Kubernetes pods to local daemons"
-LABEL vendor="Project Calico"
-LABEL version=${GIT_VERSION}
+LABEL org.opencontainers.image.description="Calico FlexVolume driver installer to setup secure connections from Kubernetes pods to local daemons"
+LABEL org.opencontainers.image.authors="maintainers@tigera.io"
+LABEL org.opencontainers.image.source="https://github.com/projectcalico/calico"
+LABEL org.opencontainers.image.title="Calico FlexVolume driver installer"
+LABEL org.opencontainers.image.vendor="Project Calico"
+LABEL org.opencontainers.image.version="${GIT_VERSION}"
+LABEL org.opencontainers.image.licenses="Apache-2.0"
 
 COPY --from=source / /
 

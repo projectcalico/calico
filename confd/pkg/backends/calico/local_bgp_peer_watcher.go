@@ -16,6 +16,7 @@ package calico
 import (
 	"net"
 	"path/filepath"
+	"reflect"
 	"sync"
 	"time"
 
@@ -30,24 +31,24 @@ const (
 
 // LocalBGPPeerWatcher watches endpoint status files and maintain
 // a cache to store active workload endpoint status.
-type localBGPPeerWatcher struct {
-	client                   *client
-	mutex                    sync.Mutex
-	activeFileNameToEpStatus map[string]epstatus.WorkloadEndpointStatus
-	fileWatcher              *epstatus.FileWatcher
+type LocalBGPPeerWatcher struct {
+	client                               *client
+	mutex                                sync.Mutex
+	activeLocalBGPPeerFileNameToEpStatus map[string]epstatus.WorkloadEndpointStatus
+	fileWatcher                          *epstatus.FileWatcher
 }
 
-func NewLocalBGPPeerWatcher(client *client, prefix string, pollIntervalSeconds int) (*localBGPPeerWatcher, error) {
+func NewLocalBGPPeerWatcher(client *client, prefix string, pollIntervalSeconds int) (*LocalBGPPeerWatcher, error) {
 	if pollIntervalSeconds == 0 {
 		pollIntervalSeconds = defaultPollIntervalSeconds
 	}
 
 	dir := filepath.Join(prefix, epstatus.GetDirStatus())
 
-	w := &localBGPPeerWatcher{
-		client:                   client,
-		activeFileNameToEpStatus: map[string]epstatus.WorkloadEndpointStatus{},
-		fileWatcher:              epstatus.NewFileWatcher(dir, time.Duration(pollIntervalSeconds)*time.Second),
+	w := &LocalBGPPeerWatcher{
+		client:                               client,
+		activeLocalBGPPeerFileNameToEpStatus: map[string]epstatus.WorkloadEndpointStatus{},
+		fileWatcher:                          epstatus.NewFileWatcher(dir, time.Duration(pollIntervalSeconds)*time.Second),
 	}
 	w.fileWatcher.SetCallbacks(epstatus.Callbacks{
 		OnFileCreation: w.OnFileCreation,
@@ -58,15 +59,15 @@ func NewLocalBGPPeerWatcher(client *client, prefix string, pollIntervalSeconds i
 	return w, nil
 }
 
-func (w *localBGPPeerWatcher) Start() {
+func (w *LocalBGPPeerWatcher) Start() {
 	w.fileWatcher.Start()
 }
 
-func (w *localBGPPeerWatcher) Stop() {
+func (w *LocalBGPPeerWatcher) Stop() {
 	w.fileWatcher.Stop()
 }
 
-func (w *localBGPPeerWatcher) OnFileCreation(fileName string) {
+func (w *LocalBGPPeerWatcher) OnFileCreation(fileName string) {
 	logCxt := log.WithField("file", fileName)
 
 	logCxt.Debug("Workload endpoint status file created")
@@ -75,40 +76,63 @@ func (w *localBGPPeerWatcher) OnFileCreation(fileName string) {
 		logCxt.WithError(err).Warn("Failed to read endpoint status from file, it may just be created.")
 		return
 	}
-	w.updateEpStatus(fileName, epStatus)
-	w.client.recheckPeerConfig()
+	if w.updateEpStatus(fileName, epStatus) {
+		w.client.recheckPeerConfig("endpoint status file created")
+	}
 }
 
-func (w *localBGPPeerWatcher) OnFileUpdate(fileName string) {
+func (w *LocalBGPPeerWatcher) OnFileUpdate(fileName string) {
 	logCxt := log.WithField("file", fileName)
 
 	logCxt.Debug("Workload endpoint status file updated")
 	epStatus, err := epstatus.GetWorkloadEndpointStatusFromFile(fileName)
 	if err != nil {
-		logCxt.WithError(err).Error("Failed to read endpoint status from file")
-		return
+		// Avoid spurious error messages when the file is mid-update.
+		time.Sleep(50 * time.Millisecond)
+		epStatus, err = epstatus.GetWorkloadEndpointStatusFromFile(fileName)
+		if err != nil {
+			logCxt.WithError(err).Error("Failed to read endpoint status from file")
+			return
+		}
 	}
-	w.updateEpStatus(fileName, epStatus)
-	w.client.recheckPeerConfig()
+	if w.updateEpStatus(fileName, epStatus) {
+		w.client.recheckPeerConfig("endpoint status file updated")
+	}
 }
 
-func (w *localBGPPeerWatcher) OnFileDeletion(fileName string) {
+func (w *LocalBGPPeerWatcher) OnFileDeletion(fileName string) {
 	log.WithField("file", fileName).Debug("Workload endpoint status file deleted")
 
-	w.deleteEpStatus(fileName)
-	w.client.recheckPeerConfig()
+	if w.deleteEpStatus(fileName) {
+		w.client.recheckPeerConfig("endpoint status file deleted")
+	}
 }
 
-func (w *localBGPPeerWatcher) updateEpStatus(fileName string, epStatus *epstatus.WorkloadEndpointStatus) {
+func (w *LocalBGPPeerWatcher) updateEpStatus(fileName string, epStatus *epstatus.WorkloadEndpointStatus) (changed bool) {
+	if epStatus.BGPPeerName == "" {
+		return w.deleteEpStatus(fileName)
+	}
+
 	w.mutex.Lock()
 	defer w.mutex.Unlock()
-	w.activeFileNameToEpStatus[fileName] = *epStatus
+	old, ok := w.activeLocalBGPPeerFileNameToEpStatus[fileName]
+	if ok && reflect.DeepEqual(old, *epStatus) {
+		log.WithField("file", fileName).Debug("Workload endpoint status file unchanged")
+		return false
+	}
+	w.activeLocalBGPPeerFileNameToEpStatus[fileName] = *epStatus
+	return true
 }
 
-func (w *localBGPPeerWatcher) deleteEpStatus(fileName string) {
+func (w *LocalBGPPeerWatcher) deleteEpStatus(fileName string) (changed bool) {
 	w.mutex.Lock()
 	defer w.mutex.Unlock()
-	delete(w.activeFileNameToEpStatus, fileName)
+	if _, ok := w.activeLocalBGPPeerFileNameToEpStatus[fileName]; !ok {
+		log.WithField("file", fileName).Debug("Endpoint status already gone.")
+		return false
+	}
+	delete(w.activeLocalBGPPeerFileNameToEpStatus, fileName)
+	return true
 }
 
 type localBGPPeerData struct {
@@ -118,13 +142,13 @@ type localBGPPeerData struct {
 	ipv6        string
 }
 
-func (w *localBGPPeerWatcher) GetActiveLocalBGPPeers() []localBGPPeerData {
+func (w *LocalBGPPeerWatcher) GetActiveLocalBGPPeers() []localBGPPeerData {
 	w.mutex.Lock()
 	defer w.mutex.Unlock()
 
-	peerData := []localBGPPeerData{}
+	var peerData []localBGPPeerData
 
-	for name, epStatus := range w.activeFileNameToEpStatus {
+	for name, epStatus := range w.activeLocalBGPPeerFileNameToEpStatus {
 		var ipv4, ipv6 string
 		if len(epStatus.Ipv4Nets) != 0 {
 			ip, _, err := net.ParseCIDR(epStatus.Ipv4Nets[0])
