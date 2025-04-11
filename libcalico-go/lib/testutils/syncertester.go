@@ -327,7 +327,7 @@ func (st *SyncerTester) hasUpdates(expectedUpdates []api.Update, checkOrder bool
 	updateAsKey := func(update api.Update) string {
 		path, err := model.KeyToDefaultPath(update.Key)
 		Expect(err).NotTo(HaveOccurred())
-		return fmt.Sprintf("%s;%s", update.UpdateType, path)
+		return fmt.Sprintf("%d;%s", update.UpdateType, path)
 	}
 
 	// removeFromActualUpdatesMap removes the update from the map, and returns an error if not found. It will remove
@@ -546,7 +546,7 @@ func updatesEqual(actual, expected api.Update) bool {
 // update - this makes writing tests simpler.
 func kvpsEqual(actual, expected model.KVPair) bool {
 	if !reflect.DeepEqual(expected.Key, actual.Key) {
-		log.Debug("Keys are not equal: %#v != %#v", expected.Key, actual.Key)
+		log.Debugf("Keys are not equal: %#v != %#v", expected.Key, actual.Key)
 		return false
 	}
 	if expected.UID != nil && (actual.UID == nil || *actual.UID != *expected.UID) {
