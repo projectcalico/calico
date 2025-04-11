@@ -224,9 +224,6 @@ func TestFlows(t *testing.T) {
 	}
 }
 
-func TestStreams(t *testing.T) {
-}
-
 // TestHints tests that we can successfully retrieve hints from generated flows.
 func TestHints(t *testing.T) {
 	cfg := daemon.Config{
