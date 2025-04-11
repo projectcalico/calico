@@ -654,19 +654,19 @@ func (r *CalicoManager) checkHashreleaseImagesPublished() ([]registry.Component,
 	}
 
 	var resultsErr error
-	missingImages := []registry.Component{}
+	unavailableImages := []registry.Component{}
 	for range r.imageComponents {
 		result := <-resultsCh
 		if result.err != nil {
-			missingImages = append(missingImages, r.imageComponents[result.name])
+			unavailableImages = append(unavailableImages, r.imageComponents[result.name])
 		} else if !result.exists {
-			missingImages = append(missingImages, r.imageComponents[result.name])
+			unavailableImages = append(unavailableImages, r.imageComponents[result.name])
 		}
 	}
-	if len(missingImages) > 0 {
-		resultsErr = fmt.Errorf("unable to validate all images: %d images failed to validate", len(missingImages))
+	if len(unavailableImages) > 0 {
+		resultsErr = fmt.Errorf("unable to validate all images: %d images failed to validate", len(unavailableImages))
 	}
-	return missingImages, resultsErr
+	return unavailableImages, resultsErr
 }
 
 // Check that the environment has the necessary prereqs for publishing hashrelease
