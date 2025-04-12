@@ -406,7 +406,7 @@ EOF
             # Label one node in order to exclude it from service advertisement.
             # After this, we should expect that all routes from that node are
             # withdrawn.
-            kubectl("label node %s node.kubernetes.io/exclude-from-external-load-balancers=true" % self.nodes[1])
+            kubectl("label node %s node.kubernetes.io/exclude-from-external-load-balancers=true --overwrite" % self.nodes[1])
 
             # Assert routes are correct and services are accessible.
             # It should no longer have a route via self.nodes[1]
