@@ -964,6 +964,8 @@ func countNodesWithNodeIP(c client.Interface) int {
 	return count
 }
 
+// Wait for conntrack to pick up so that flow is processed with the correct policy definition (this is a hack
+// because changing the policy before the flow is processed can result in unmatch rule ID).
 func waitForFlowlogFlush(bpfEnabled bool) {
 	if bpfEnabled {
 		// Make sure that conntrack scanning ticks at least once
