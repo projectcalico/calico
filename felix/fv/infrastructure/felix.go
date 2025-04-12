@@ -313,7 +313,7 @@ func (f *Felix) Stop() {
 	if CreateCgroupV2 {
 		_ = f.ExecMayFail("rmdir", path.Join("/run/calico/cgroup/", f.Name))
 	}
-	f.goldmaneServer.Stop()
+	f.GoldmaneNodeServerStop()
 	f.Container.Stop()
 
 	if CurrentGinkgoTestDescription().Failed {

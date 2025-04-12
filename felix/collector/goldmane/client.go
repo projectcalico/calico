@@ -60,7 +60,7 @@ func NewReporter(addr, cert, key, ca string) (*GoldmaneReporter, error) {
 		client:  cli,
 
 		// Do not send flowlogs to node socket, if goldmane address set via FelixConfig is equal to node socket
-		mayReportToNodeSocket: addr != NodeSocketAddress,
+		mayReportToNodeSocket: !strings.Contains(addr, NodeSocketPath),
 	}, nil
 }
 
