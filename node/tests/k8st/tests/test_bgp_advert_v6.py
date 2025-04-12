@@ -98,7 +98,7 @@ class _TestBGPAdvertV6(TestBaseV6):
         super(_TestBGPAdvertV6, self).setUp()
 
         # Create bgp test namespace
-        self.ns = "bgp-test"
+        self.ns = "bgp-test-v6"
         self.create_namespace(self.ns)
 
         self.nodes, self.ipv4s, self.ipv6s = node_info()
@@ -109,7 +109,7 @@ class _TestBGPAdvertV6(TestBaseV6):
 
         # Enable debug logging
         self.update_ds_env("calico-node",
-                           "kube-system",
+                           "calico-system",
                            {"BGP_LOGSEVERITYSCREEN": "debug"})
 
         # Establish BGPPeer from cluster nodes to node-extra
