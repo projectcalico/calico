@@ -17,6 +17,7 @@ package goldmane
 import (
 	"context"
 	"fmt"
+	"os"
 	"sort"
 	"strings"
 	"sync"
@@ -34,10 +35,19 @@ import (
 	"github.com/projectcalico/calico/goldmane/proto"
 )
 
+const (
+	checkNodeSocketTimer = time.Second * 10
+)
+
 type GoldmaneReporter struct {
 	address string
 	client  *client.FlowClient
 	once    sync.Once
+
+	// Fields related to goldmane node socket
+	mayReportToNodeSocket bool
+	nodeClient            *client.FlowClient
+	nodeClientLock        sync.RWMutex
 }
 
 func NewReporter(addr, cert, key, ca string) (*GoldmaneReporter, error) {
@@ -48,6 +58,9 @@ func NewReporter(addr, cert, key, ca string) (*GoldmaneReporter, error) {
 	return &GoldmaneReporter{
 		address: addr,
 		client:  cli,
+
+		// Do not send flowlogs to node socket, if goldmane address set via FelixConfig is equal to node socket
+		mayReportToNodeSocket: addr != NodeSocketAddress,
 	}, nil
 }
 
@@ -56,8 +69,59 @@ func (g *GoldmaneReporter) Start() error {
 	g.once.Do(func() {
 		// We don't wait for the initial connection to start so we don't block the caller.
 		g.client.Connect(context.Background())
+
+		if g.mayReportToNodeSocket {
+			go g.nodeSocketReporter()
+		}
 	})
 	return err
+}
+
+func (g *GoldmaneReporter) nodeSocketReporter() {
+	for {
+		if _, err := os.Stat(NodeSocketPath); err == nil {
+			g.mayStartNodeSocketReporter()
+		} else {
+			g.mayStopNodeSocketReporter()
+		}
+		time.Sleep(checkNodeSocketTimer)
+	}
+}
+
+func (g *GoldmaneReporter) nodeClientIsNil() bool {
+	g.nodeClientLock.RLock()
+	defer g.nodeClientLock.RUnlock()
+	return g.nodeClient == nil
+}
+
+func (g *GoldmaneReporter) mayStartNodeSocketReporter() {
+	// If node socket is already setup, do not try to set it up again.
+	if !g.nodeClientIsNil() {
+		return
+	}
+
+	var err error
+	g.nodeClientLock.Lock()
+	defer g.nodeClientLock.Unlock()
+	g.nodeClient, err = client.NewFlowClient(NodeSocketAddress, "", "", "")
+	if err != nil {
+		logrus.WithError(err).Warn("Failed to create goldmane unix client")
+		return
+	}
+	logrus.Info("Created goldmane node client")
+	g.nodeClient.Connect(context.Background())
+}
+
+func (g *GoldmaneReporter) mayStopNodeSocketReporter() {
+	// If node socket is already closed, do not try to close it again.
+	if g.nodeClientIsNil() {
+		return
+	}
+
+	g.nodeClientLock.Lock()
+	defer g.nodeClientLock.Unlock()
+	g.nodeClient = nil
+	logrus.Info("Destroyed goldmane node client")
 }
 
 func (g *GoldmaneReporter) Report(logSlice any) error {
@@ -67,7 +131,17 @@ func (g *GoldmaneReporter) Report(logSlice any) error {
 			logrus.WithField("num", len(logs)).Debug("Dispatching flow logs to goldmane")
 		}
 		for _, l := range logs {
-			g.client.Push(convertFlowlogToGoldmane(l))
+			goldmaneLog := convertFlowlogToGoldmane(l)
+			g.client.Push(goldmaneLog)
+
+			if g.mayReportToNodeSocket {
+				// If goldmane node server exists, also send flowlogs to it.
+				g.nodeClientLock.RLock()
+				if g.nodeClient != nil {
+					g.nodeClient.Push(goldmaneLog)
+				}
+				g.nodeClientLock.RUnlock()
+			}
 		}
 	default:
 		logrus.Panic("Unexpected kind of log dispatcher")
