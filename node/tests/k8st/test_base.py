@@ -261,7 +261,7 @@ class TestBase(TestCase):
     def get_calico_node_pod(self, nodeName):
         """Get the calico-node pod name for a given kind node"""
         def fn():
-            calicoPod = kubectl("-n kube-system get pods -o wide | grep calico-node | grep '%s '| cut -d' ' -f1" % nodeName)
+            calicoPod = kubectl("-n calico-system get pods -o wide | grep calico-node | grep '%s '| cut -d' ' -f1" % nodeName)
             if calicoPod is None:
                 raise Exception('calicoPod is None')
             return calicoPod.strip()

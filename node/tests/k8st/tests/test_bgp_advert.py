@@ -103,7 +103,7 @@ class _TestBGPAdvert(TestBase):
         super(_TestBGPAdvert, self).setUp()
 
         # Create bgp test namespace
-        self.ns = "bgp-test"
+        self.ns = "bgp-test-v4"
         self.create_namespace(self.ns)
 
         self.nodes, self.ips, _ = node_info()
