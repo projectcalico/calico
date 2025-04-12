@@ -17,7 +17,6 @@ ARG LIBNFTNL_VER=1.2.2-1
 ARG IPSET_VER=7.11-6
 ARG RUNIT_VER=2.1.2
 ARG BIRD_IMAGE=calico/bird:latest
-ARG UBI_IMAGE
 ARG BPFTOOL_IMAGE
 FROM ${BPFTOOL_IMAGE} AS bpftool
 FROM ${BIRD_IMAGE} AS bird
@@ -79,7 +78,7 @@ RUN curl -sfL https://ftp.debian.org/debian/pool/main/r/runit/runit_${RUNIT_VER}
     cd /root/admin/runit-${RUNIT_VER} && \
     package/compile
 
-FROM ${UBI_IMAGE} AS ubi
+FROM registry.access.redhat.com/ubi8/ubi-minimal:latest AS ubi
 
 ARG GIT_VERSION
 ARG IPTABLES_VER
