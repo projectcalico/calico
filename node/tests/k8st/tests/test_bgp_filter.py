@@ -40,7 +40,7 @@ class TestBGPFilter(TestBase):
 
         # Enable debug logging
         update_ds_env("calico-node",
-                      "kube-system",
+                      "calico-system",
                       {"BGP_LOGSEVERITYSCREEN": "debug"})
 
         # Create test namespace
@@ -122,7 +122,7 @@ EOF
             birdCmd = "birdcl6" if ipv6 else "birdcl"
             birdPeer = "Global_" if globalPeer else "Node_"
             birdPeer += peerIP.replace(".", "_").replace(":","_")
-            routes = kubectl("exec -n kube-system %s -- %s show route protocol %s" % (calicoPod, birdCmd, birdPeer))
+            routes = kubectl("exec -n calico-system %s -- %s show route protocol %s" % (calicoPod, birdCmd, birdPeer))
             result = re.search("%s *via %s on .* \[%s" % (re.escape(route), re.escape(peerIP), birdPeer), routes)
             if result is None and present:
                 raise Exception('route not present when it should be')
@@ -611,19 +611,19 @@ EOF
             if output is not None:
                 output = output.strip()
 
-            expectedOutput = """The BGPFilter "test-invalid-filter" is invalid: 
-* MatchOperator: Invalid value: "notin": Reason: failed to validate Field: MatchOperator because of Tag: matchOperator 
-* Action: Invalid value: "Accetp": Reason: failed to validate Field: Action because of Tag: filterAction 
-* MatchOperator: Invalid value: "in": Reason: failed to validate Field: MatchOperator because of Tag: matchOperator 
-* CIDR: Invalid value: "IPv4Address": Reason: failed to validate Field: CIDR because of Tag: netv4 
-* Action: Invalid value: "accept": Reason: failed to validate Field: Action because of Tag: filterAction 
-* MatchOperator: Invalid value: "equal": Reason: failed to validate Field: MatchOperator because of Tag: matchOperator 
-* Action: Invalid value: "Retecj": Reason: failed to validate Field: Action because of Tag: filterAction 
-* CIDR: Invalid value: "fd00:1111:1111:1111::/64": Reason: failed to validate Field: CIDR because of Tag: netv4 
-* MatchOperator: Invalid value: "notequal": Reason: failed to validate Field: MatchOperator because of Tag: matchOperator 
-* Action: Invalid value: "reject": Reason: failed to validate Field: Action because of Tag: filterAction 
-* CIDR: Invalid value: "ipv6Address": Reason: failed to validate Field: CIDR because of Tag: netv6 
-* MatchOperator: Invalid value: "Eqaul": Reason: failed to validate Field: MatchOperator because of Tag: matchOperator 
+            expectedOutput = """The BGPFilter "test-invalid-filter" is invalid:
+* MatchOperator: Invalid value: "notin": Reason: failed to validate Field: MatchOperator because of Tag: matchOperator
+* Action: Invalid value: "Accetp": Reason: failed to validate Field: Action because of Tag: filterAction
+* MatchOperator: Invalid value: "in": Reason: failed to validate Field: MatchOperator because of Tag: matchOperator
+* CIDR: Invalid value: "IPv4Address": Reason: failed to validate Field: CIDR because of Tag: netv4
+* Action: Invalid value: "accept": Reason: failed to validate Field: Action because of Tag: filterAction
+* MatchOperator: Invalid value: "equal": Reason: failed to validate Field: MatchOperator because of Tag: matchOperator
+* Action: Invalid value: "Retecj": Reason: failed to validate Field: Action because of Tag: filterAction
+* CIDR: Invalid value: "fd00:1111:1111:1111::/64": Reason: failed to validate Field: CIDR because of Tag: netv4
+* MatchOperator: Invalid value: "notequal": Reason: failed to validate Field: MatchOperator because of Tag: matchOperator
+* Action: Invalid value: "reject": Reason: failed to validate Field: Action because of Tag: filterAction
+* CIDR: Invalid value: "ipv6Address": Reason: failed to validate Field: CIDR because of Tag: netv6
+* MatchOperator: Invalid value: "Eqaul": Reason: failed to validate Field: MatchOperator because of Tag: matchOperator
 * CIDR: Invalid value: "10.111.111.0/24": Reason: failed to validate Field: CIDR because of Tag: netv6"""
             assert output == expectedOutput
 
