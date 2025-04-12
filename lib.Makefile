@@ -259,7 +259,7 @@ EXTRA_DOCKER_ARGS += -v $(GOMOD_CACHE):/go/pkg/mod:rw
 GOARCH_FLAGS :=-e GOARCH=$(ARCH)
 
 ifeq ($(ARCH),amd64)
-GOARCH_FLAGS += -e GOAMD64=v2
+GOARCH_FLAGS += -e GOAMD64=v3
 endif
 
 # Location of certificates used in UTs.
