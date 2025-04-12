@@ -121,6 +121,7 @@ func (f *Felix) TriggerDelayedStart() {
 		logrus.Panic("TriggerDelayedStart() called but startup wasn't delayed")
 	}
 	f.Exec("touch", "/start-trigger")
+	f.GoldmaneNodeServerStart()
 	f.startupDelayed = false
 }
 
@@ -207,10 +208,13 @@ func RunFelix(infra DatastoreInfra, id int, options TopologyOptions) *Felix {
 
 	var goldmaneServer *goldmane.NodeServer
 	if options.FlowLogSource == FlowLogSourceGoldmane {
+		logDir := path.Join(cwLogDir, uniqueName)
 		goldmaneServer = goldmane.NewNodeServer(logDir)
-		err := goldmaneServer.Run()
-		if err != nil {
-			logrus.WithError(err).Panic("Failed to start goldmane node server")
+
+		if !options.DelayFelixStart {
+			if err := goldmaneServer.Run(); err != nil {
+				logrus.WithError(err).Panic("Failed to start goldmane node server")
+			}
 		}
 	}
 
@@ -309,10 +313,8 @@ func (f *Felix) Stop() {
 	if CreateCgroupV2 {
 		_ = f.ExecMayFail("rmdir", path.Join("/run/calico/cgroup/", f.Name))
 	}
+	f.goldmaneServer.Stop()
 	f.Container.Stop()
-	if f.goldmaneServer != nil {
-		f.goldmaneServer.Stop()
-	}
 
 	if CurrentGinkgoTestDescription().Failed {
 		Expect(f.DataRaces()).To(BeEmpty(), "Test FAILED and data races were detected in the logs at teardown.")
@@ -325,7 +327,7 @@ func (f *Felix) Restart() {
 	oldPID := f.GetFelixPID()
 	f.Exec("kill", "-HUP", fmt.Sprint(oldPID))
 	Eventually(f.GetFelixPID, "10s", "100ms").ShouldNot(Equal(oldPID))
-	f.ResetGoldmaneFlows()
+	f.GoldmaneNodeServerReset()
 }
 
 func (f *Felix) RestartWithDelayedStartup() func() {
@@ -336,7 +338,7 @@ func (f *Felix) RestartWithDelayedStartup() func() {
 	f.restartDelayed = true
 	f.Exec("touch", "/delay-felix-restart")
 	f.Exec("kill", "-HUP", fmt.Sprint(oldPID))
-	f.ResetGoldmaneFlows()
+	f.GoldmaneNodeServerReset()
 	triggerChan := make(chan struct{})
 
 	go func() {
@@ -403,6 +405,34 @@ func (f *Felix) ProgramIptablesDNAT(serviceIP, targetIP, chain string, ipv6 bool
 	}
 }
 
+func (f *Felix) GoldmaneNodeServerStart() {
+	if f.goldmaneServer != nil {
+		if err := f.goldmaneServer.Run(); err != nil {
+			logrus.WithError(err).Panic("Failed to start goldmane node server")
+		}
+	}
+}
+
+func (f *Felix) GoldmaneNodeServerStop() {
+	if f.goldmaneServer != nil {
+		f.goldmaneServer.Flush()
+		f.goldmaneServer.Stop()
+	}
+}
+
+func (f *Felix) GoldmaneNodeServerReset() {
+	if f.goldmaneServer != nil {
+		f.goldmaneServer.Flush()
+	}
+}
+
+func (f *Felix) GoldmaneNodeServerAddress() string {
+	if f.goldmaneServer != nil {
+		return f.goldmaneServer.Address()
+	}
+	return ""
+}
+
 func (f *Felix) FlowLogs() ([]flowlog.FlowLog, error) {
 	switch f.TopologyOptions.FlowLogSource {
 	case FlowLogSourceFile:
@@ -427,12 +457,6 @@ func (f *Felix) FlowLogsFromGoldmane() ([]flowlog.FlowLog, error) {
 		flogs = append(flogs, goldmane.ConvertGoldmaneToFlowlog(types.FlowToProto(f)))
 	}
 	return flogs, nil
-}
-
-func (f *Felix) ResetGoldmaneFlows() {
-	if f.goldmaneServer != nil {
-		f.goldmaneServer.Flush()
-	}
 }
 
 func (f *Felix) ProgramNftablesDNAT(serviceIP, targetIP string, chain string, ipv6 bool) {

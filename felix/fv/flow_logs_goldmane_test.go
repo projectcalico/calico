@@ -299,14 +299,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log tests", [
 			tc.Felixes[ii].Exec("conntrack", "-L")
 		}
 
-		if bpfEnabled {
-			// Make sure that conntrack scanning ticks at least once
-			time.Sleep(3 * conntrack.ScanPeriod)
-		} else {
-			// Allow 6 seconds for the containers.Felix to poll conntrack.  (This is conntrack polling time plus 20%, which gives us
-			// 10% leeway over the polling jitter of 10%)
-			time.Sleep(6 * time.Second)
-		}
+		waitForFlowlogFlush(bpfEnabled)
 
 		// Delete conntrack state so that we don't keep seeing 0-metric copies of the logs.  This will allow the flows
 		// to expire quickly.
@@ -792,12 +785,11 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane node server tests"
 		opts.ExtraEnvVars["FELIX_FLOWLOGSFLUSHINTERVAL"] = "2"
 
 		// Set any URL just to enable goldmane, which causes many failure attempt to connect to it.
-		// However, eventaully goldmane reporter must connect to node server.
+		// However, eventaully goldmane reporter must connect to node server, and report flow logs.
 		opts.ExtraEnvVars["FELIX_FLOWLOGSGOLDMANESERVER"] = "localhost"
 		opts.FlowLogSource = infrastructure.FlowLogSourceGoldmane
-	})
+		opts.DelayFelixStart = true
 
-	JustBeforeEach(func() {
 		numNodes := 2
 		tc, _ = infrastructure.StartNNodeTopology(numNodes, opts, infra)
 
@@ -831,21 +823,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane node server tests"
 			cc.ExpectSome(source, wlHost2[1])
 		}
 
-		// Do 1 rounds of connectivity checking.
-		cc.CheckConnectivity()
-		for ii := range tc.Felixes {
-			tc.Felixes[ii].Exec("conntrack", "-L")
-		}
-
-		if bpfEnabled {
-			// Make sure that conntrack scanning ticks at least once
-			time.Sleep(3 * conntrack.ScanPeriod)
-		} else {
-			// Allow 6 seconds for the containers.Felix to poll conntrack.  (This is conntrack polling time plus 20%, which gives us
-			// 10% leeway over the polling jitter of 10%)
-			time.Sleep(6 * time.Second)
-		}
-
 		// Delete conntrack state so that we don't keep seeing 0-metric copies of the logs.  This will allow the flows
 		// to expire quickly.
 		for ii := range tc.Felixes {
@@ -864,12 +841,26 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane node server tests"
 		return false
 	}
 
+	nodeSocketExists := func() bool {
+		for _, felix := range tc.Felixes {
+			_, err := os.Stat(felix.GoldmaneNodeServerAddress())
+			return err == nil
+		}
+		return false
+	}
+
 	It("should connect and get some flow logs", func() {
-		Eventually(readFlowlogs, "20s", "4s").Should(BeTrue())
+		// No goldmane node server must exist.
+		Eventually(nodeSocketExists, "10s", "2s").Should(BeFalse())
+		Consistently(nodeSocketExists, "5s", "1s").Should(BeFalse())
 
 		for _, felix := range tc.Felixes {
-			felix.ResetGoldmaneFlows()
+			felix.TriggerDelayedStart()
 		}
+
+		// After Felix start, goldmane node server must exist.
+		Eventually(nodeSocketExists, "15s", "3s").Should(BeTrue())
+		Consistently(nodeSocketExists, "5s", "1s").Should(BeTrue())
 
 		// Do 1 rounds of connectivity checking.
 		cc.CheckConnectivity()
@@ -877,16 +868,33 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane node server tests"
 			tc.Felixes[ii].Exec("conntrack", "-L")
 		}
 
-		if bpfEnabled {
-			// Make sure that conntrack scanning ticks at least once
-			time.Sleep(3 * conntrack.ScanPeriod)
-		} else {
-			// Allow 6 seconds for the containers.Felix to poll conntrack.  (This is conntrack polling time plus 20%, which gives us
-			// 10% leeway over the polling jitter of 10%)
-			time.Sleep(6 * time.Second)
+		waitForFlowlogFlush(bpfEnabled)
+		Eventually(readFlowlogs, "20s", "4s").Should(BeTrue())
+
+		for _, felix := range tc.Felixes {
+			felix.GoldmaneNodeServerReset()
+		}
+
+		// Do 1 rounds of connectivity checking.
+		cc.CheckConnectivity()
+		waitForFlowlogFlush(bpfEnabled)
+		for ii := range tc.Felixes {
+			tc.Felixes[ii].Exec("conntrack", "-L")
 		}
 
 		Consistently(readFlowlogs, "10s", "2s").Should(BeTrue())
+
+		for _, felix := range tc.Felixes {
+			felix.GoldmaneNodeServerStop()
+		}
+
+		// After stoping goldmane node server, socket file must be cleaned up.
+		Eventually(nodeSocketExists, "10s", "2s").Should(BeFalse())
+		Consistently(nodeSocketExists, "5s", "1s").Should(BeFalse())
+
+		// ... and reading flowlogs must return no flowlog.
+		Eventually(readFlowlogs, "10s", "2s").Should(BeFalse())
+		Eventually(readFlowlogs, "10s", "2s").Should(BeFalse())
 	})
 
 	AfterEach(func() {
@@ -954,4 +962,15 @@ func countNodesWithNodeIP(c client.Interface) int {
 	}
 
 	return count
+}
+
+func waitForFlowlogFlush(bpfEnabled bool) {
+	if bpfEnabled {
+		// Make sure that conntrack scanning ticks at least once
+		time.Sleep(3 * conntrack.ScanPeriod)
+	} else {
+		// Allow 6 seconds for the containers.Felix to poll conntrack.  (This is conntrack polling time plus 20%, which gives us
+		// 10% leeway over the polling jitter of 10%)
+		time.Sleep(6 * time.Second)
+	}
 }
