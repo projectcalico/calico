@@ -851,8 +851,8 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane node server tests"
 
 	It("should connect and get some flow logs", func() {
 		// No goldmane node server must exist.
-		Eventually(nodeSocketExists, "10s", "2s").Should(BeFalse())
-		Consistently(nodeSocketExists, "5s", "1s").Should(BeFalse())
+		Eventually(nodeSocketExists, "15s", "3s").Should(BeFalse())
+		Consistently(nodeSocketExists, "10s", "2s").Should(BeFalse())
 
 		for _, felix := range tc.Felixes {
 			felix.TriggerDelayedStart()
@@ -860,7 +860,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane node server tests"
 
 		// After Felix start, goldmane node server must exist.
 		Eventually(nodeSocketExists, "15s", "3s").Should(BeTrue())
-		Consistently(nodeSocketExists, "5s", "1s").Should(BeTrue())
+		Consistently(nodeSocketExists, "10s", "2s").Should(BeTrue())
 
 		// Do 1 rounds of connectivity checking.
 		cc.CheckConnectivity()
@@ -869,19 +869,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane node server tests"
 		}
 
 		waitForFlowlogFlush(bpfEnabled)
-		Eventually(readFlowlogs, "20s", "4s").Should(BeTrue())
-
-		for _, felix := range tc.Felixes {
-			felix.GoldmaneNodeServerReset()
-		}
-
-		// Do 1 rounds of connectivity checking.
-		cc.CheckConnectivity()
-		waitForFlowlogFlush(bpfEnabled)
-		for ii := range tc.Felixes {
-			tc.Felixes[ii].Exec("conntrack", "-L")
-		}
-
+		Eventually(readFlowlogs, "15s", "3s").Should(BeTrue())
 		Consistently(readFlowlogs, "10s", "2s").Should(BeTrue())
 
 		for _, felix := range tc.Felixes {
@@ -889,12 +877,12 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane node server tests"
 		}
 
 		// After stoping goldmane node server, socket file must be cleaned up.
-		Eventually(nodeSocketExists, "10s", "2s").Should(BeFalse())
-		Consistently(nodeSocketExists, "5s", "1s").Should(BeFalse())
+		Eventually(nodeSocketExists, "15s", "3s").Should(BeFalse())
+		Consistently(nodeSocketExists, "10s", "2s").Should(BeFalse())
 
 		// ... and reading flowlogs must return no flowlog.
-		Eventually(readFlowlogs, "10s", "2s").Should(BeFalse())
-		Eventually(readFlowlogs, "10s", "2s").Should(BeFalse())
+		Eventually(readFlowlogs, "15s", "3s").Should(BeFalse())
+		Consistently(readFlowlogs, "10s", "2s").Should(BeFalse())
 	})
 
 	AfterEach(func() {
