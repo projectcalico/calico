@@ -1,8 +1,15 @@
 installation:
   enabled: true
-  kubernetesProvider: ""
   registry: docker.io
+
+  # Disable HA control plane.
   controlPlaneReplicas: 1
+
+  # Diable CSI / flexVolume as they are not used by these tests.
+  kubeletVolumePluginPath: "None"
+  flexVolumePath: "None"
+
+  # Configure CIDRs to match kubeadm cluster.
   calicoNetwork:
     ipPools:
     - cidr: 192.168.0.0/16
