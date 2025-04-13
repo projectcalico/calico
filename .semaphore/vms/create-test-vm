@@ -28,7 +28,7 @@ gcloud auth activate-service-account --key-file=$gcp_secret_key
 function create-vm() {
   gcloud --quiet compute instances create "${vm_name}" \
            --zone=${zone} \
-           --machine-type=n4-standard-4 \
+           --machine-type=n4-standard-8 \
            --image=ubuntu-2004-focal-v20250313 \
            --image-project=ubuntu-os-cloud \
            --boot-disk-size=$disk_size \

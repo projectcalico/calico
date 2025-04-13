@@ -45,17 +45,17 @@ template bgp bgp_template {
 # ------------- Node-to-node mesh -------------
 protocol bgp Mesh_with_master_node from bgp_template {
   neighbor %s as 64512;
-  passive on; 
+  passive on;
 }
 
 protocol bgp Mesh_with_node_1 from bgp_template {
   neighbor %s as 64512;
-  passive on; 
+  passive on;
 }
 
 protocol bgp Mesh_with_node_2 from bgp_template {
   neighbor %s as 64512;
-  passive on; 
+  passive on;
 }
 
 protocol bgp Mesh_with_node_3 from bgp_template {
@@ -76,6 +76,12 @@ class _TestLocalBGPPeer(TestBase):
         self.add_cleanup(lambda: self.delete_and_confirm(self.ns, "ns"))
 
         self.nodes, self.ips, _ = node_info()
+
+        # Clean up any existing external node just in case it was left over from
+        # a previous run.
+        self.delete_extra_node()
+
+        # Create the ToR node.
         self.external_node_ip = start_external_node_with_bgp(
             "kind-node-tor",
             bird_peer_config=self.get_bird_conf_tor(),
@@ -84,7 +90,7 @@ class _TestLocalBGPPeer(TestBase):
 
         # Enable debug logging on BGP and set endpointStatusPathPrefix
         self.update_ds_env("calico-node",
-                           "kube-system",
+                           "calico-system",
                            {"BGP_LOGSEVERITYSCREEN": "debug",
                             "FELIX_EndpointStatusPathPrefix": "/var/run/calico"})
 
@@ -184,7 +190,7 @@ spec:
 """)
 
         # Create the local peerings.
-        kubectl("""apply -f - << EOF    
+        kubectl("""apply -f - << EOF
 apiVersion: projectcalico.org/v3
 kind: BGPPeer
 metadata:
@@ -201,7 +207,7 @@ kind: BGPPeer
 metadata:
  name: node-peer
 spec:
- nodeSelector: kubernetes.io/hostname == 'kind-worker2' 
+ nodeSelector: kubernetes.io/hostname == 'kind-worker2'
  localWorkloadSelector: color == 'blue'
  asNumber: 65401
  filters:
@@ -259,7 +265,7 @@ spec:
         # run("kubectl exec -t %s -n %s -- sh -c 'ip route add 10.244.0.64/24 via 192.168.0.8'" % (pod.name, pod.ns))
 
     def setup_workload_pod_v6(self, pod, ipam_block):
-        # Copy bird 
+        # Copy bird
         bird_peer_config = self.get_bird_config_workload("65401", pod.ip,pod.ipv6, ipam_block, "fd12:3456:789a::1", "64512")
         with open('peers.conf', 'w') as peerconfig:
             peerconfig.write(bird_peer_config)
@@ -346,7 +352,7 @@ class TestLocalBGPPeer(_TestLocalBGPPeer):
 
     # In the tests of this class we have BGP peers between the
     # cluster nodes (kind-control-plane, kind-worker, kind-worker2, kind-worker3) with ASNumber 64512
-    # and the external node (kind-node-tor ASNumber 63000). We test BGP connections between local 
+    # and the external node (kind-node-tor ASNumber 63000). We test BGP connections between local
     # workload peers (ASNumber 65401) and the cluster nodes.
     #
     # - The full mesh between the cluster nodes is turned off by
@@ -355,10 +361,10 @@ class TestLocalBGPPeer(_TestLocalBGPPeer):
     # - Two pods (red & blue) are deployed on kind-worker node and two pods (red & blue)
     #   are deployed on kind-worker2 node.
     #
-    # - A global peer is created to select red pods as local bgp peers. 
+    # - A global peer is created to select red pods as local bgp peers.
     #   A node specific peer is created to select the blue pod on kind-worker2 node.
 
-    # Given a pod, check if should have BGP connections with the host. 
+    # Given a pod, check if should have BGP connections with the host.
     def assert_bgp_established(self, pod):
         output = run("kubectl exec -t %s -n %s -- birdcl show protocols" % (pod.name, pod.ns))
         regexp = "from_workload_to_local_host.*Established"
@@ -377,7 +383,7 @@ class TestLocalBGPPeer(_TestLocalBGPPeer):
         """
         Runs the tests for local bgp peers
         """
-        
+
         stop_for_debug()
 
         # Assert bgp sessions has been established to the following local workloads.
@@ -397,17 +403,17 @@ class TestLocalBGPPeer(_TestLocalBGPPeer):
         calico_node_w1 = calico_node_pod_name(self.red_pod_0_0.nodename)
         # Expect a single route like this for worker 1.
         # 10.123.0.0/26      via 192.168.162.157 on calicef4c701383 [Local_Workload_192_168_162_157 15:11:46] * (100/0) [AS65401i]
-        output = run("kubectl exec -t %s -n kube-system -- birdcl show route" % calico_node_w1)
+        output = run("kubectl exec -t %s -n calico-system -- birdcl show route" % calico_node_w1)
         self.assertRegexpMatches(output, "10\.123\.0\.0/26.*via .* on cali.*Local_Workload_.*AS65401")
-        output = run("kubectl exec -t %s -n kube-system -- birdcl6 show route" % calico_node_w1)
+        output = run("kubectl exec -t %s -n calico-system -- birdcl6 show route" % calico_node_w1)
         self.assertRegexpMatches(output, "ca11:c0::/96.*via .* on cali.*Local_Workload_.*AS65401")
 
         # Worker 2 should have 2 routes of each version, one for each child.
         calico_node_w2 = calico_node_pod_name(self.red_pod_1_0.nodename)
-        output = run("kubectl exec -t %s -n kube-system -- birdcl show route" % calico_node_w2)
+        output = run("kubectl exec -t %s -n calico-system -- birdcl show route" % calico_node_w2)
         self.assertRegexpMatches(output, "10\.123\.1\.0/26.*via .* on cali.*Local_Workload_.*AS65401")
         self.assertRegexpMatches(output, "10\.123\.3\.0/26.*via .* on cali.*Local_Workload_.*AS65401")
-        output = run("kubectl exec -t %s -n kube-system -- birdcl6 show route" % calico_node_w2)
+        output = run("kubectl exec -t %s -n calico-system -- birdcl6 show route" % calico_node_w2)
         self.assertRegexpMatches(output, "ca11:c0:1::/96.*via .* on cali.*Local_Workload_.*AS65401")
         self.assertRegexpMatches(output, "ca11:c0:3::/96.*via .* on cali.*Local_Workload_.*AS65401")
 
