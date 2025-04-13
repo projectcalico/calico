@@ -40,7 +40,7 @@ class TestBGPFilter(TestBase):
 
         # Enable debug logging
         update_ds_env("calico-node",
-                      "kube-system",
+                      "calico-system",
                       {"BGP_LOGSEVERITYSCREEN": "debug"})
 
         # Create test namespace
@@ -122,7 +122,7 @@ EOF
             birdCmd = "birdcl6" if ipv6 else "birdcl"
             birdPeer = "Global_" if globalPeer else "Node_"
             birdPeer += peerIP.replace(".", "_").replace(":","_")
-            routes = kubectl("exec -n kube-system %s -- %s show route protocol %s" % (calicoPod, birdCmd, birdPeer))
+            routes = kubectl("exec -n calico-system %s -- %s show route protocol %s" % (calicoPod, birdCmd, birdPeer))
             result = re.search("%s *via %s on .* \[%s" % (re.escape(route), re.escape(peerIP), birdPeer), routes)
             if result is None and present:
                 raise Exception('route not present when it should be')
