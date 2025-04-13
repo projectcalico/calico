@@ -17,6 +17,14 @@ installation:
 
 apiServer:
   enabled: true
+  apiServerDeployment:
+    spec:
+      template:
+        spec:
+          # Run apiserver on control-plane node so connectivity with k8s apiserver is not
+          # impacted by tests that disable / re-enable networking.
+          nodeSelector:
+            kubernetes.io/hostname: kind-control-plane
 
 goldmane:
   enabled: false
