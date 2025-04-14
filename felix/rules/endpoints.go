@@ -369,9 +369,15 @@ func (r *DefaultRuleRenderer) PolicyGroupToIptablesChains(group *PolicyGroup) []
 	// non-staged policy.  Staged policies don't set the mark bits when they
 	// fire.
 	const returnStride = 5
+	count := -1
 	seenNonStagedPolThisStride := false
-	for i, polName := range group.PolicyNames {
-		if i != 0 && i%returnStride == 0 && seenNonStagedPolThisStride {
+	for _, polName := range group.PolicyNames {
+		if model.PolicyIsStaged(polName) {
+			logrus.Debugf("Skip programming staged policy %v", polName)
+			continue
+		}
+		count++
+		if count != 0 && count%returnStride == 0 && seenNonStagedPolThisStride {
 			// If policy makes a verdict (i.e. the pass or accept bit is
 			// non-zero) return to the per-endpoint chain.  Note: the per-endpoint
 			// chain has a similar rule that only checks the accept bit.  Pass
@@ -386,7 +392,7 @@ func (r *DefaultRuleRenderer) PolicyGroupToIptablesChains(group *PolicyGroup) []
 		}
 
 		var match generictables.MatchCriteria
-		if i%returnStride == 0 || !seenNonStagedPolThisStride {
+		if count%returnStride == 0 || !seenNonStagedPolThisStride {
 			// Optimisation, we're the first rule in a block, immediately after
 			// start of chain or a RETURN rule, or, there are no non-staged
 			// policies ahead of us (so the mark bits cannot be set).
