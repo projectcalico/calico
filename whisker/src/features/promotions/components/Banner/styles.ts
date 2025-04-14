@@ -4,10 +4,11 @@ export const linkStyles = {
         fill: 'tigeraBlueMedium40',
     },
     textDecoration: 'underline',
+    fontSize: 'sm',
 };
 
 export const alertDescriptionStyles = {
     ml: 'auto',
-    fontSize: 'xs',
+    fontSize: 'sm',
     fontWeight: 'medium',
 };

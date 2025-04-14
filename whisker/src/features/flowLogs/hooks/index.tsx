@@ -1,6 +1,7 @@
 import { FlowLog } from '@/types/render';
 import React from 'react';
 import { getSeconds } from '../utils';
+import { usePromoBanner } from '@/context/PromoBanner';
 
 export const useMaxStartTime = (flowLogs: FlowLog[]) => {
     const max = React.useRef(0);
@@ -50,4 +51,18 @@ export const useShouldAnimate = (startTime: number, flowLogs: FlowLog[]) => {
     };
 
     return shouldAnimate;
+};
+
+const bannerHeight = 40;
+const headerHeight = 60;
+const containerPadding = 5;
+const omniFiltersHeight = 46;
+const tabsHeight = 34;
+
+export const useFlowLogsHeightOffset = () => {
+    const promoBanner = usePromoBanner();
+    const heights =
+        headerHeight + containerPadding + omniFiltersHeight + tabsHeight;
+
+    return promoBanner.state.isVisible ? heights + bannerHeight : heights;
 };

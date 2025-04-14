@@ -31,7 +31,7 @@ import {
 } from '@chakra-ui/react';
 import React from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
-import { streamButtonStyles } from './styles';
+import { streamButtonStyles, tabStyles } from './styles';
 import { useFlowLogsStream } from '@/features/flowLogs/api';
 import { useMaxStartTime } from '@/features/flowLogs/hooks';
 
@@ -235,7 +235,11 @@ const FlowLogsPage: React.FC = () => {
                         }}
                     >
                         <Tab data-testid='all-flows-tab'>
-                            <TabTitle title='All Flows' hasNoData={false} />
+                            <TabTitle
+                                title='All Flows'
+                                hasNoData={false}
+                                sx={tabStyles}
+                            />
                         </Tab>
                     </Link>
 
@@ -246,7 +250,11 @@ const FlowLogsPage: React.FC = () => {
                         }}
                     >
                         <Tab data-testid='denied-flows-tab'>
-                            <TabTitle title='Denied Flows' hasNoData={false} />
+                            <TabTitle
+                                title='Denied Flows'
+                                hasNoData={false}
+                                sx={tabStyles}
+                            />
                         </Tab>
                     </Link>
                 </TabList>
