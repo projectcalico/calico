@@ -83,6 +83,8 @@ type KubeConfig struct {
 	K8sClientQPS float32 `json:"k8sClientQPS"`
 	// K8sCurrentContext provides a context override for kubeconfig.
 	K8sCurrentContext string `json:"k8sCurrentContext" envconfig:"K8S_CURRENT_CONTEXT" default:""`
+	// K8sUseWatchList controls whether use of WatchList.
+	K8sUseWatchList bool `json:"k8sUseWatchList" envconfig:"K8S_USE_WATCH_LIST" default:"false"`
 }
 
 // NewCalicoAPIConfig creates a new (zeroed) CalicoAPIConfig struct with the

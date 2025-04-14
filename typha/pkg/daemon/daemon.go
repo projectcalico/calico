@@ -502,11 +502,11 @@ func (s ClientV3Shim) BGPSyncerByIface(callbacks bapi.SyncerCallbacks) bapi.Sync
 }
 
 func (s ClientV3Shim) TunnelIPAllocationSyncerByIface(callbacks bapi.SyncerCallbacks) bapi.Syncer {
-	return tunnelipsyncer.New(s.Backend(), callbacks, "")
+	return tunnelipsyncer.New(s.Backend(), callbacks, "", s.config.Spec)
 }
 
 func (s ClientV3Shim) NodeStatusSyncerByIface(callbacks bapi.SyncerCallbacks) bapi.Syncer {
-	return nodestatussyncer.New(s.Backend(), callbacks)
+	return nodestatussyncer.New(s.Backend(), callbacks, s.config.Spec)
 }
 
 // DatastoreClient is our interface to the datastore, used for mocking in the UTs.

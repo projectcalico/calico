@@ -20,6 +20,7 @@ import (
 	"sync"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // SyncStatus represents the overall state of the datastore.
@@ -133,8 +134,10 @@ type StatusClient interface {
 }
 
 type WatchOptions struct {
-	Revision            string
-	AllowWatchBookmarks bool
+	Revision             string
+	AllowWatchBookmarks  bool
+	SendInitialEvents    *bool
+	ResourceVersionMatch metav1.ResourceVersionMatch
 }
 
 type Syncer interface {
