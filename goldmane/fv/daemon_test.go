@@ -186,11 +186,12 @@ func TestFlows(t *testing.T) {
 	go func(ctx context.Context) {
 		for {
 			if ctx.Err() != nil {
+				pusher.Close()
 				return
 			}
 			f := testutils.NewRandomFlow(time.Now().Unix())
 			pusher.Push(types.ProtoToFlow(f))
-			time.Sleep(100 * time.Millisecond)
+			time.Sleep(1 * time.Millisecond)
 		}
 	}(ctx)
 
@@ -213,14 +214,20 @@ func TestFlows(t *testing.T) {
 	Eventually(emitted.Count, 10*time.Second, 1*time.Second).Should(BeNumerically(">", 0))
 
 	// We should be able to see flows emitted in the stream as well.
-	s, err := cli.Stream(ctx, &proto.FlowStreamRequest{StartTimeGte: -300})
-	require.NoError(t, err)
-
+	streams := []proto.Flows_StreamClient{}
 	for range 10 {
-		// We should receive a flow.
-		f, err := s.Recv()
+		s, err := cli.Stream(ctx, &proto.FlowStreamRequest{StartTimeGte: -300})
 		require.NoError(t, err)
-		require.NotNil(t, f)
+		streams = append(streams, s)
+	}
+
+	for _, s := range streams {
+		for range 10 {
+			// We should receive a flow.
+			f, err := s.Recv()
+			require.NoError(t, err)
+			require.NotNil(t, f)
+		}
 	}
 }
 
@@ -258,6 +265,7 @@ func TestHints(t *testing.T) {
 	go func(ctx context.Context) {
 		for {
 			if ctx.Err() != nil {
+				pusher.Close()
 				return
 			}
 			f := testutils.NewRandomFlow(time.Now().Unix())

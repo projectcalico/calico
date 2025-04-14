@@ -89,6 +89,7 @@ func Start() {
 			for flog := range gen.outChan {
 				flowClient.PushWait(types.ProtoToFlow(flog))
 			}
+			flowClient.Close()
 		}(c)
 	}
 
