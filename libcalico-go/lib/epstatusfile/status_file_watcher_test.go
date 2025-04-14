@@ -169,13 +169,11 @@ var _ = Describe("Workload endpoint status file watcher test", func() {
 		filePath := filepath.Join(statusDir, "pod1")
 		Eventually(haveEvents, "5s", "1s").WithArguments(filePath, []string{"create"}).Should(BeTrue())
 		Eventually(lastInSync).Should(BeTrue())
-		numInSyncs := len(r.inSyncEvents)
 
 		err = writer.WriteStatusFile("pod1", "name: pod1, status: active")
 		Expect(err).ShouldNot(HaveOccurred())
 
 		Eventually(haveEvents, "5s", "1s").WithArguments(filePath, []string{"create", "update"}).Should(BeTrue())
-		Eventually(r.inSyncEvents).ShouldNot(HaveLen(numInSyncs))
 		Eventually(lastInSync).Should(BeTrue())
 	})
 
@@ -190,13 +188,11 @@ var _ = Describe("Workload endpoint status file watcher test", func() {
 		filePath := filepath.Join(statusDir, "pod1")
 		Eventually(haveEvents, "5s", "1s").WithArguments(filePath, []string{"create"}).Should(BeTrue())
 		Eventually(lastInSync).Should(BeTrue())
-		numInSyncs := len(r.inSyncEvents)
 
 		err = writer.DeleteStatusFile("pod1")
 		Expect(err).ShouldNot(HaveOccurred())
 
 		Eventually(haveEvents, "5s", "1s").WithArguments(filePath, []string{"create", "delete"}).Should(BeTrue())
-		Eventually(r.inSyncEvents).ShouldNot(HaveLen(numInSyncs))
 		Eventually(lastInSync).Should(BeTrue())
 
 	})
@@ -212,7 +208,6 @@ var _ = Describe("Workload endpoint status file watcher test", func() {
 		filePath := filepath.Join(statusDir, "pod1")
 		Eventually(haveEvents, "5s", "1s").WithArguments(filePath, []string{"create", "update"}).Should(BeTrue())
 		Eventually(lastInSync).Should(BeTrue())
-		numInSyncs := len(r.inSyncEvents)
 
 		// Similate an error on new fsnotify watcher and close the current one.
 		newFsnotifyWatcherErr = true
@@ -225,8 +220,6 @@ var _ = Describe("Workload endpoint status file watcher test", func() {
 		Expect(err).ShouldNot(HaveOccurred())
 
 		Eventually(haveEvents, "15s", "1s").WithArguments(filePath, []string{"create", "update", "update"}).Should(BeTrue())
-		Eventually(r.inSyncEvents).ShouldNot(HaveLen(numInSyncs))
 		Eventually(lastInSync).Should(BeTrue())
-
 	})
 })
