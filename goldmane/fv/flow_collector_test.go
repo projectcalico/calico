@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -23,15 +24,21 @@ import (
 )
 
 type testSink struct {
+	sync.Mutex
 	flows []*types.Flow
 }
 
 func (t *testSink) Receive(f *types.Flow) {
+	t.Lock()
+	defer t.Unlock()
 	t.flows = append(t.flows, f)
 }
 
 func (t *testSink) flowReceivedFn(flow *proto.Flow) func() bool {
 	return func() bool {
+		t.Lock()
+		defer t.Unlock()
+
 		for _, f := range t.flows {
 			if goproto.Equal(flow, types.FlowToProto(f)) {
 				return true
@@ -103,6 +110,7 @@ func setupTest(t *testing.T, srvOption ServerSetupOption) func() {
 		}
 		lis.Close()
 		logCancel()
+		cli.Close()
 	}
 }
 

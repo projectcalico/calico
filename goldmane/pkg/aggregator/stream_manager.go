@@ -109,9 +109,6 @@ func (m *streamManager) Run(ctx context.Context) {
 			stream := m.register(req)
 			req.respCh <- stream
 			m.backfillRequests <- stream
-		case id := <-m.closedStreamsCh:
-			logrus.WithField("id", id).Debug("Stream closed")
-			m.close(id)
 		case <-ctx.Done():
 			logrus.Debug("Stream manager exiting")
 			return
@@ -123,6 +120,10 @@ func (m *streamManager) Register(req *streamRequest) {
 	// Register a new stream request. The request will be processed in the stream manager's
 	// main loop - Run().
 	m.streamRequests <- req
+}
+
+func (m *streamManager) ClosedStreams() <-chan string {
+	return m.closedStreamsCh
 }
 
 // Receive tells the stream manager about a new DiachronicFlow that has rolled over. The manager
@@ -191,10 +192,11 @@ func (m *streamManager) register(req *streamRequest) *Stream {
 	return stream
 }
 
-// close cleans up the stream with the given ID.
+// unregister removes a stream from the stream manager.
+//
 // Note: close terminates the stream's receive and output channels, so it should only be called from the
 // aggregator's main loop.
-func (m *streamManager) close(id string) {
+func (m *streamManager) unregister(id string) {
 	s, ok := m.streams.Get(id)
 	if !ok {
 		logrus.WithField("id", id).Warn("Asked to close unknown stream")
@@ -202,8 +204,11 @@ func (m *streamManager) close(id string) {
 	}
 	logrus.WithField("id", id).Debug("Closing stream")
 
-	// Close the stream's output channel.
+	// Close the stream's output channel. We can do this safely here only because this
+	// function is called from the main loop, which is the same goroutine that writes
+	// to this channel.
 	close(s.out)
 	m.streams.Remove(id)
 	numStreams.Set(float64(len(m.streams.List())))
+	logrus.WithField("id", id).Debug("Stream closed")
 }

@@ -46,7 +46,7 @@ func TestDiachronicFlow(t *testing.T) {
 		&types.FlowKeyMeta{},
 		&proto.PolicyTrace{},
 	)
-	df := types.NewDiachronicFlow(k)
+	df := types.NewDiachronicFlow(k, 0)
 
 	// Add flow data over a bunch of windows.
 	f := types.Flow{
