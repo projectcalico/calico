@@ -150,15 +150,6 @@ done
 sed -i -e '$ d' tigera-operator-ocp-upgrade.yaml
 
 ##########################################################################
-# Build Calico manifest used for in-repo testing. This is largely the same as the
-# one we ship, but with tweaked values.
-##########################################################################
-echo "Generating manifest from charts/values/$FILE"
-${HELM} -n kube-system template \
-	../charts/calico \
-	-f ../node/tests/k8st/infra/values.yaml > ../node/tests/k8st/infra/calico-kdd.yaml
-
-##########################################################################
 # Replace image versions for "static" Calico manifests.
 ##########################################################################
 if [[ $CALICO_VERSION != master ]]; then
