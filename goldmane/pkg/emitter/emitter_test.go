@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 	"time"
 	"unique"
@@ -119,6 +120,7 @@ func TestEmitterMainline(t *testing.T) {
 
 	// Creat a mock HTTP server to use as our sink.
 	numBucketsEmitted := 0
+	bucketLock := sync.Mutex{}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Verify the request.
 		require.Equal(t, "/path/to/flows", r.URL.Path)
@@ -137,6 +139,8 @@ func TestEmitterMainline(t *testing.T) {
 		require.NoError(t, err)
 		require.True(t, goproto.Equal(rp, types.FlowToProto(&flow)), "Received flow didn't match")
 
+		bucketLock.Lock()
+		defer bucketLock.Unlock()
 		numBucketsEmitted++
 	}))
 
@@ -158,6 +162,8 @@ func TestEmitterMainline(t *testing.T) {
 
 	// Wait for the emitter to process the bucket. It should emit the flow to the mock server.
 	require.Eventually(t, func() bool {
+		bucketLock.Lock()
+		defer bucketLock.Unlock()
 		return numBucketsEmitted == 1
 	}, 5*time.Second, 500*time.Millisecond)
 
@@ -228,6 +234,7 @@ func TestEmitterRetry(t *testing.T) {
 	// For this test, we configure the server to fail the first request with a 500 error
 	// and then succeed on subsequent requests. This verifies that the emitter retries in the case
 	// of a failure.
+	bucketLock := sync.Mutex{}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if numRequests < 1 {
 			w.WriteHeader(500)
@@ -247,6 +254,8 @@ func TestEmitterRetry(t *testing.T) {
 		require.Equal(t, buf.String(), string(expectedBody))
 		w.WriteHeader(http.StatusOK)
 
+		bucketLock.Lock()
+		defer bucketLock.Unlock()
 		numBucketsEmitted++
 	}))
 	opts := []emitter.Option{
@@ -268,6 +277,8 @@ func TestEmitterRetry(t *testing.T) {
 		return numRequests >= 2
 	}, 5*time.Second, 500*time.Millisecond, "Didn't retry the request?")
 	require.Eventually(t, func() bool {
+		bucketLock.Lock()
+		defer bucketLock.Unlock()
 		return numBucketsEmitted == 1
 	}, 5*time.Second, 500*time.Millisecond, "Didn't emit the flow?")
 }
@@ -373,6 +384,7 @@ func TestStaleBuckets(t *testing.T) {
 
 	// Creat a mock HTTP server to use as our sink. We don't expect any requests to be made.
 	numBucketsEmitted := 0
+	bucketLock := sync.Mutex{}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Check the body. We don't expect the first flow to be sent.
 		buf := new(bytes.Buffer)
@@ -383,7 +395,9 @@ func TestStaleBuckets(t *testing.T) {
 		}
 		require.Equal(t, buf.String(), string(okBody))
 
+		bucketLock.Lock()
 		numBucketsEmitted++
+		bucketLock.Unlock()
 		w.WriteHeader(http.StatusOK)
 	}))
 
@@ -418,6 +432,8 @@ func TestStaleBuckets(t *testing.T) {
 
 	// Expect the flow to be sent to the server.
 	require.Eventually(t, func() bool {
+		bucketLock.Lock()
+		defer bucketLock.Unlock()
 		return numBucketsEmitted == 1
 	}, 5*time.Second, 500*time.Millisecond)
 
