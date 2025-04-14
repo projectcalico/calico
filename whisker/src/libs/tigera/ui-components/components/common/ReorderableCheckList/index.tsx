@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import {
     Modal,
     ModalOverlay,
@@ -22,6 +22,7 @@ import {
     DraggableLocation,
 } from '@hello-pangea/dnd';
 import { DndIcon } from '@/icons';
+import { cloneDeep } from 'lodash';
 
 export type ReorderableList<T> = T & {
     checked: boolean;
@@ -35,6 +36,7 @@ interface ReorderableCheckListProps<T> {
     keyProp: string;
     labelProp: string;
     isOpen: boolean;
+    size: string;
 }
 
 const ReorderableCheckList = <T,>({
@@ -47,13 +49,9 @@ const ReorderableCheckList = <T,>({
     labelProp = 'id',
     ...rest
 }: ReorderableCheckListProps<T>) => {
-    const [list, setList] = React.useState(items);
+    const [list, setList] = React.useState(cloneDeep(items));
 
     const styles = useMultiStyleConfig('ReorderableCheckList', rest);
-
-    useEffect(() => {
-        setList(items);
-    }, [items]);
 
     const onDragEnd = (result: {
         source: DraggableLocation;
@@ -79,7 +77,6 @@ const ReorderableCheckList = <T,>({
             closeOnOverlayClick={false}
             isOpen={isOpen}
             onClose={onClose}
-            size='xs'
             {...rest}
         >
             <ModalOverlay />
@@ -185,7 +182,12 @@ const ReorderableCheckList = <T,>({
                     </DragDropContext>
                 </ModalBody>
                 <ModalFooter sx={styles.footer}>
-                    <Button onClick={onClose} variant={'outline'} mr={4}>
+                    <Button
+                        onClick={onClose}
+                        variant={'outline'}
+                        mr={4}
+                        sx={styles.footerButton}
+                    >
                         Cancel
                     </Button>
                     <Button
@@ -193,6 +195,7 @@ const ReorderableCheckList = <T,>({
                             onSave(list);
                             onClose();
                         }}
+                        sx={styles.footerButton}
                     >
                         Save
                     </Button>

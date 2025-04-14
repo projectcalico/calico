@@ -55,6 +55,7 @@ const FlowLogDetails: React.FC<FlowLogDetailsProps> = ({ flowLog, height }) => {
                 maxHeight: `${(height ?? 0) - JSON_TAB_OFFSET}px`,
             }}
             defaultExpandedJsonNodes={2}
+            size='lg'
         />
     );
 };
