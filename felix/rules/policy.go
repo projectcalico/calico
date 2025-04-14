@@ -930,12 +930,16 @@ func (r *DefaultRuleRenderer) CalculateRuleMatch(pRule *proto.Rule, ipVersion ui
 
 func PolicyChainName(prefix PolicyChainNamePrefix, polID *types.PolicyID, nft bool) string {
 	maxLen := iptables.MaxChainNameLength
+	name := polID.Name
 	if nft {
 		maxLen = nftables.MaxChainNameLength
+
+		// nftables doesn't allow ":" in chain names, so replace with "/".
+		name = strings.Replace(name, "staged:", "staged/", 1)
 	}
 	return hashutils.GetLengthLimitedID(
 		string(prefix),
-		polID.Tier+"/"+polID.Name,
+		polID.Tier+"/"+name,
 		maxLen,
 	)
 }
