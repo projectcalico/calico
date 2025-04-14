@@ -186,6 +186,7 @@ func TestFlows(t *testing.T) {
 	go func(ctx context.Context) {
 		for {
 			if ctx.Err() != nil {
+				pusher.Close()
 				return
 			}
 			f := testutils.NewRandomFlow(time.Now().Unix())
@@ -264,6 +265,7 @@ func TestHints(t *testing.T) {
 	go func(ctx context.Context) {
 		for {
 			if ctx.Err() != nil {
+				pusher.Close()
 				return
 			}
 			f := testutils.NewRandomFlow(time.Now().Unix())

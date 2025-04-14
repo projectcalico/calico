@@ -110,6 +110,7 @@ func setupTest(t *testing.T, srvOption ServerSetupOption) func() {
 		}
 		lis.Close()
 		logCancel()
+		cli.Close()
 	}
 }
 

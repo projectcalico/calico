@@ -94,6 +94,7 @@ func TestGoldmaneIntegration_FlowWatching(t *testing.T) {
 
 	cli, err := client.NewFlowClient("localhost:5444", clientCertFile.Name(), clientKeyFile.Name(), certFile.Name())
 	Expect(err).ShouldNot(HaveOccurred())
+	defer cli.Close()
 
 	// Wait for initial connection
 	_, err = chanutil.ReadWithDeadline(ctx, cli.Connect(ctx), time.Minute*20)
@@ -203,6 +204,7 @@ func TestGoldmaneIntegration_FilterHints(t *testing.T) {
 
 	cli, err := client.NewFlowClient("localhost:5444", clientCertFile.Name(), clientKeyFile.Name(), certFile.Name())
 	Expect(err).ShouldNot(HaveOccurred())
+	defer cli.Close()
 
 	// Wait for initial connection
 	_, err = chanutil.ReadWithDeadline(ctx, cli.Connect(ctx), time.Minute*20)
