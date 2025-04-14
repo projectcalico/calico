@@ -124,7 +124,7 @@ func (s *NodeServer) Run() error {
 }
 
 func (s *NodeServer) Watch(ctx context.Context, num int, processFlow func(*types.Flow)) {
-	infinitLoop := num < 0
+	infiniteLoop := num < 0
 	var count int
 	logrus.Debug("Starting to watch goldmane node socket")
 	for {
