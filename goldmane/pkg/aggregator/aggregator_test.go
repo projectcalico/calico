@@ -411,7 +411,7 @@ func TestRotation(t *testing.T) {
 		results, _ = agg.List(&proto.FlowListRequest{})
 		flows = results.Flows
 		return len(flows)
-	}, waitTimeout, retryTime).Should(Equal(0), "Flow did not rotate out")
+	}, 1*time.Second, retryTime).Should(Equal(0), "Flow did not rotate out")
 }
 
 func TestManyFlows(t *testing.T) {
@@ -981,7 +981,7 @@ func TestSink(t *testing.T) {
 		roller.rolloverAndAdvanceClock(1)
 		Consistently(func() int {
 			return sink.len()
-		}, waitTimeout, retryTime).Should(Equal(0), "Unexpected bucket pushed to sink")
+		}, 1*time.Second, retryTime).Should(Equal(0), "Unexpected bucket pushed to sink")
 
 		// Set the sink. Setting the Sink is asynchronous and triggers a check for flow emission - as such,
 		// we need to wait for this to complete before we can start sending flows.
@@ -1131,7 +1131,7 @@ func TestStreams(t *testing.T) {
 		defer stream2.Close()
 
 		// Expect nothing on the first stream, since it's starting from the present.
-		Consistently(stream.Flows(), waitTimeout, retryTime).ShouldNot(Receive())
+		Consistently(stream.Flows(), 1*time.Second, retryTime).ShouldNot(Receive())
 
 		// Expect three historical flows on the second stream: now-5, now-6, now-7.
 		// We should receive them in time order, and should NOT receive now-8 or now-9.
@@ -1144,7 +1144,7 @@ func TestStreams(t *testing.T) {
 		}
 
 		// We shouldn't receive any more flows.
-		Consistently(stream2.Flows(), waitTimeout, retryTime).ShouldNot(Receive(), "Expected no more flows")
+		Consistently(stream2.Flows(), 1*time.Second, retryTime).ShouldNot(Receive(), "Expected no more flows")
 
 		// Ingest some new flow data.
 		fl := testutils.NewRandomFlow(c.Now().Unix() - 1)
@@ -1179,8 +1179,8 @@ func TestStreams(t *testing.T) {
 		ExpectFlowsEqual(t, fl, flow2.Flow)
 
 		// Expect no other flows.
-		Consistently(stream.Flows(), waitTimeout, retryTime).ShouldNot(Receive())
-		Consistently(stream2.Flows(), waitTimeout, retryTime).ShouldNot(Receive())
+		Consistently(stream.Flows(), 1*time.Second, retryTime).ShouldNot(Receive())
+		Consistently(stream2.Flows(), 1*time.Second, retryTime).ShouldNot(Receive())
 	})
 
 	// This tests that the stream endpoint produces the correct results when a stream is started
@@ -1612,7 +1612,7 @@ func TestFilter(t *testing.T) {
 					results, _ = agg.List(tc.req)
 					flows = results.Flows
 					return len(flows)
-				}, waitTimeout, retryTime).Should(Equal(0))
+				}, 1*time.Second, retryTime).Should(Equal(0))
 				return
 			} else {
 				var err error
