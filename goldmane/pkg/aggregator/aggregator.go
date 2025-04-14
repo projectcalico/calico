@@ -215,6 +215,9 @@ type LogAggregator struct {
 
 	// ratelimiter is used to rate limit log messages that may happen frequently.
 	rl *logutils.RateLimitedLogger
+
+	// nextID is used to assign unique IDs to DiachronicFlows as they are created.
+	nextID int64
 }
 
 func NewLogAggregator(opts ...Option) *LogAggregator {
@@ -337,6 +340,8 @@ func (a *LogAggregator) Run(startTime int64) {
 			req.respCh <- a.queryFilterHints(req.req)
 		case stream := <-a.streams.backfillChannel():
 			a.backfill(stream)
+		case uid := <-a.streams.ClosedStreams():
+			a.streams.unregister(uid)
 		case req := <-a.sinkChan:
 			logrus.WithField("sink", req.sink).Info("Setting aggregator sink")
 			a.sink = req.sink
@@ -814,11 +819,14 @@ func (a *LogAggregator) indexFlow(flow *types.Flow) {
 	// Check if we are tracking a DiachronicFlow for this FlowKey, and create one if not.
 	// Then, add this Flow to the DiachronicFlow.
 	if _, ok := a.diachronics[*flow.Key]; !ok {
+		// Increment the next ID for the next DiachronicFlow.
+		a.nextID++
+
 		if logrus.IsLevelEnabled(logrus.DebugLevel) {
 			// Unpacking the key is a bit expensive, so only do it in debug mode.
 			logrus.WithFields(flow.Key.Fields()).Debug("Creating new DiachronicFlow for flow")
 		}
-		d := types.NewDiachronicFlow(flow.Key)
+		d := types.NewDiachronicFlow(flow.Key, a.nextID)
 		a.diachronics[*flow.Key] = d
 
 		// Add the DiachronicFlow to all indices.

@@ -61,12 +61,9 @@ func (w *Window) Contains(t int64) bool {
 	return t >= w.start && t <= w.end
 }
 
-var nextID int64
-
-func NewDiachronicFlow(k *FlowKey) *DiachronicFlow {
-	nextID++
+func NewDiachronicFlow(k *FlowKey, id int64) *DiachronicFlow {
 	return &DiachronicFlow{
-		ID:  nextID,
+		ID:  id,
 		Key: *k,
 	}
 }
