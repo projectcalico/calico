@@ -73,7 +73,7 @@ var runStatusReporter = flagSet.Bool("status-reporter", false, "Run node status 
 var showStatus = flagSet.Bool("show-status", false, "Print out node status")
 
 // Options for watching node flowlogs.
-var fetchFlowlogs = flagSet.Int("flowlogs", 0, "Fetch a number of flowlogs. Use a negative value to watch forever.")
+var fetchFlows = flagSet.Int("flows", 0, "Fetch a number of Flows. Use a negative value to watch forever.")
 
 // confd flags
 var runConfd = flagSet.Bool("confd", false, "Run confd")
