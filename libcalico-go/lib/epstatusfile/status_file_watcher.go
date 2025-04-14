@@ -81,6 +81,14 @@ func (w *FileWatcher) Start() {
 }
 
 func (w *FileWatcher) newFsnotifyWatcher() error {
+	oldWatcher := w.fsWatcher
+	if oldWatcher != nil {
+		err := oldWatcher.Close()
+		if err != nil {
+			log.WithError(err).Info("Ignoring error during fs-watch close")
+		}
+	}
+
 	// reset w.fsWatcher
 	w.fsWatcher = nil
 
@@ -182,7 +190,7 @@ func (w *FileWatcher) runWatcher() {
 
 		select {
 		case <-w.pollTicker.C:
-			w.scanDirectory()
+			continue
 		case <-w.stopChan:
 			return
 		}
