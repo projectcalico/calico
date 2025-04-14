@@ -55,19 +55,19 @@ func (s *flowStore) Receive(f *types.Flow) {
 	s.flows = append(s.flows, f)
 }
 
-func (s *flowStore) List() []*types.Flow {
+func (s *flowStore) list() []*types.Flow {
 	s.lock.RLock()
 	defer s.lock.RUnlock()
 	return s.flows
 }
 
-func (s *flowStore) Flush() {
+func (s *flowStore) flush() {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 	s.flows = nil
 }
 
-func (s *flowStore) ListAndFlush() []*types.Flow {
+func (s *flowStore) listAndFlush() []*types.Flow {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 	flows := s.flows
@@ -110,36 +110,43 @@ func (s *NodeServer) Run() error {
 		sockAddr := s.Address()
 		l, err = net.Listen("unix", sockAddr)
 		if err != nil {
+			logrus.WithError(err).Error("Failed to listen on goldmane node socket")
 			return
 		}
 		logrus.WithField("address", sockAddr).Info("Running goldmane node server")
 		go func() {
 			err = s.grpcServer.Serve(l)
 			if err != nil {
+				logrus.WithError(err).Error("Failed to start listening on goldmane node socket")
 				return
 			}
 		}()
 	})
-	return nil
+	return err
 }
 
-func (s *NodeServer) Watch(ctx context.Context, num int, processFlow func(*types.Flow)) {
+func (s *NodeServer) Watch(
+	ctx context.Context,
+	num int,
+	period time.Duration,
+	processFlow func(*types.Flow),
+) {
 	infiniteLoop := num < 0
 	var count int
 	logrus.Debug("Starting to watch goldmane node socket")
 	for {
 		if ctx.Err() != nil ||
-			(!infinitLoop && count >= num) {
+			(!infiniteLoop && count >= num) {
 			logrus.Debug("Stopped watching goldmane node socket")
 			return
 		}
 
-		flows := s.ListAndFlush()
+		flows := s.listAndFlush()
 		for _, f := range flows {
 			processFlow(f)
 		}
 		count = count + len(flows)
-		time.Sleep(time.Second)
+		time.Sleep(period)
 	}
 }
 
@@ -149,15 +156,15 @@ func (s *NodeServer) Stop() {
 }
 
 func (s *NodeServer) List() []*types.Flow {
-	return s.store.List()
+	return s.store.list()
 }
 
 func (s *NodeServer) Flush() {
-	s.store.Flush()
+	s.store.flush()
 }
 
-func (s *NodeServer) ListAndFlush() []*types.Flow {
-	return s.store.ListAndFlush()
+func (s *NodeServer) listAndFlush() []*types.Flow {
+	return s.store.listAndFlush()
 }
 
 func (s *NodeServer) Address() string {

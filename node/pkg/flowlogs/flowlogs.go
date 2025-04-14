@@ -40,7 +40,7 @@ func StartAndWatch(num int) {
 	}
 	defer nodeServer.Stop()
 
-	nodeServer.Watch(ctx, num, func(flow *types.Flow) {
+	nodeServer.Watch(ctx, num, time.Second, func(flow *types.Flow) {
 		fmt.Printf("%s", flowToString(flow))
 	})
 }

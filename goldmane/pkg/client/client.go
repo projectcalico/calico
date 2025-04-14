@@ -131,7 +131,7 @@ func (c *FlowClient) Connect(ctx context.Context) <-chan struct{} {
 
 			rc, err = c.connect(ctx)
 			if err != nil {
-				logrus.WithError(err).Warn("Failed to reconnect to flow server, will not retry (fatal error).")
+				logrus.WithError(err).Warn("Failed to reconnect to flow server, will not retry.")
 				return
 			}
 		}

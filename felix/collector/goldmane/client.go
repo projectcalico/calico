@@ -48,6 +48,7 @@ type GoldmaneReporter struct {
 	mayReportToNodeSocket bool
 	nodeClient            *client.FlowClient
 	nodeClientLock        sync.RWMutex
+	nodeClientCancel      context.CancelFunc
 }
 
 func NewReporter(addr, cert, key, ca string) (*GoldmaneReporter, error) {
@@ -109,7 +110,9 @@ func (g *GoldmaneReporter) mayStartNodeSocketReporter() {
 		return
 	}
 	logrus.Info("Created goldmane node client")
-	g.nodeClient.Connect(context.Background())
+	ctx, cancel := context.WithCancel(context.Background())
+	g.nodeClientCancel = cancel
+	g.nodeClient.Connect(ctx)
 }
 
 func (g *GoldmaneReporter) mayStopNodeSocketReporter() {
@@ -120,6 +123,7 @@ func (g *GoldmaneReporter) mayStopNodeSocketReporter() {
 
 	g.nodeClientLock.Lock()
 	defer g.nodeClientLock.Unlock()
+	g.nodeClientCancel()
 	g.nodeClient = nil
 	logrus.Info("Destroyed goldmane node client")
 }
