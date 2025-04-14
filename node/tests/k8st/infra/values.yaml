@@ -1,49 +1,39 @@
-# The Calico version to use when generating manifests.
-version: latest-amd64
-
-# Configure the images to use when generating manifests.
-node:
-  image: node
-  registry: docker.io/library
-calicoctl:
-  image: ctl
-  registry: docker.io/calico
-typha:
-  image: typha
-  registry: docker.io/calico
+installation:
   enabled: true
-cni:
-  image: cni
-  registry: docker.io/calico
-kubeControllers:
-  image: kube-controllers
-  registry: docker.io/calico
-flannel:
-  image: flannel
-  registry: docker.io/flannelcni
-  tag: v0.16.3
-flannelMigration:
-  image: flannel-migration
-  registry: docker.io/calico
-dikastes:
-  image: dikastes
-  registry: docker.io/calico
-csi-driver:
-  image: csi-driver
-  registry: docker.io/calico
+  registry: docker.io
 
-# CRDs are installed as part of cluster creation, so don't need them in
-# the test manifest.
-includeCRDs: false
+  # Disable HA control plane.
+  controlPlaneReplicas: 1
 
-datastore: kubernetes
-network: calico
-ipam: calico-ipam
-mtu: "1440"
-imagePullPolicy: Never
-etcd:
-  endpoints: "http://<ETCD_IP>:<ETCD_PORT>"
-  tls:
-    crt: null
-    ca: null
-    key: null
+  # Diable CSI / flexVolume as they are not used by these tests.
+  kubeletVolumePluginPath: "None"
+  flexVolumePath: "None"
+
+  # Configure CIDRs to match kubeadm cluster.
+  calicoNetwork:
+    ipPools:
+    - cidr: 192.168.0.0/16
+    - cidr: fd00:10:244::/64
+
+apiServer:
+  enabled: true
+  apiServerDeployment:
+    spec:
+      template:
+        spec:
+          # Run apiserver on control-plane node so connectivity with k8s apiserver is not
+          # impacted by tests that disable / re-enable networking.
+          nodeSelector:
+            kubernetes.io/hostname: kind-control-plane
+
+goldmane:
+  enabled: false
+
+whisker:
+  enabled: false
+
+# Configuration for the tigera operator
+tigeraOperator:
+  image: tigera/operator
+  version: test-build
+  registry: docker.io

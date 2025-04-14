@@ -15,6 +15,7 @@
 package aggregator_test
 
 import (
+	"sync"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -24,11 +25,41 @@ import (
 
 // testSink implements the Sink interface for testing.
 type testSink struct {
+	sync.Mutex
 	buckets []*bucketing.FlowCollection
 }
 
+func newTestSink() *testSink {
+	return &testSink{
+		buckets: []*bucketing.FlowCollection{},
+	}
+}
+
 func (t *testSink) Receive(b *bucketing.FlowCollection) {
+	t.Lock()
+	defer t.Unlock()
 	t.buckets = append(t.buckets, b)
+}
+
+func (t *testSink) len() int {
+	t.Lock()
+	defer t.Unlock()
+	return len(t.buckets)
+}
+
+func (t *testSink) reset() {
+	t.Lock()
+	defer t.Unlock()
+	t.buckets = []*bucketing.FlowCollection{}
+}
+
+func (t *testSink) bucket(idx int) *bucketing.FlowCollection {
+	t.Lock()
+	defer t.Unlock()
+	if idx >= len(t.buckets) {
+		return nil
+	}
+	return t.buckets[idx]
 }
 
 // rolloverController is a helper struct to control when rollovers occur.
@@ -70,17 +101,25 @@ func newClock(t int64) *clock {
 
 // clock is a helper structure for tests that need control over time.
 type clock struct {
+	sync.Mutex
 	t int64
 }
 
 func (c *clock) Now() time.Time {
+	c.Lock()
+	defer c.Unlock()
 	return time.Unix(c.t, 0)
 }
 
 func (c *clock) Advance(d time.Duration) {
+	c.Lock()
+	defer c.Unlock()
 	c.t += int64(d.Seconds())
 }
 
 func (c *clock) Set(t time.Time) {
+	c.Lock()
+	defer c.Unlock()
+
 	c.t = t.Unix()
 }
