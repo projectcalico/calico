@@ -65,13 +65,14 @@ import (
 )
 
 type mockDataplane struct {
-	mutex       sync.Mutex
-	lastProgID  int
-	progs       map[string]int
-	numAttaches map[string]int
-	policy      map[string]polprog.Rules
-	routes      map[ip.CIDR]struct{}
-	netlinkShim netlinkshim.Interface
+	mutex                sync.Mutex
+	lastProgID           int
+	progs                map[string]int
+	numAttaches          map[string]int
+	policy               map[string]polprog.Rules
+	routes               map[ip.CIDR]struct{}
+	netlinkShim          netlinkshim.Interface
+	natDevicesConfigured bool
 
 	ensureStartedFn    func()
 	ensureQdiscFn      func(string) (bool, error)
@@ -109,6 +110,11 @@ func (m *mockDataplane) interfaceByIndex(ifindex int) (*net.Interface, error) {
 }
 
 func (m *mockDataplane) ensureBPFDevices() error {
+	return nil
+}
+
+func (m *mockDataplane) configureBPFDevices() error {
+	m.natDevicesConfigured = true
 	return nil
 }
 
@@ -704,6 +710,13 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		It("should handle removing the HEP", func() {
 			genHEPUpdate()()
 			Expect(bpfEpMgr.hostIfaceToEpMap).To(BeEmpty())
+		})
+
+		It("should configure NAT devices only when both bpfin and bpfout are oper up", func() {
+			genIfaceUpdate("bpfin.cali", ifacemonitor.StateUp, 1000)()
+			Expect(dp.natDevicesConfigured).To(BeFalse())
+			genIfaceUpdate("bpfout.cali", ifacemonitor.StateUp, 1000)()
+			Expect(dp.natDevicesConfigured).To(BeTrue())
 		})
 
 		It("should attach/detach programs when ifaces are added/deleted", func() {
