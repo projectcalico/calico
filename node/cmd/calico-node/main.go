@@ -176,8 +176,8 @@ func main() {
 	} else if *showStatus {
 		status.Show()
 		os.Exit(0)
-	} else if *fetchFlowlogs != 0 {
-		flowlogs.StartAndWatch(*fetchFlowlogs)
+	} else if *fetchFlows != 0 {
+		flowlogs.StartAndWatch(*fetchFlows)
 		os.Exit(0)
 	} else {
 		fmt.Println("No valid options provided. Usage:")
