@@ -19,6 +19,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"sync"
 	"time"
 
 	"github.com/fsnotify/fsnotify"
@@ -32,6 +33,7 @@ var newFsnotifyWatcherErr bool
 type eventRecorder struct {
 	fileNameToEvents map[string][]string
 	inSyncEvents     []bool
+	sync.Mutex
 }
 
 func newEventRecorder() *eventRecorder {
@@ -41,6 +43,8 @@ func newEventRecorder() *eventRecorder {
 }
 
 func (e *eventRecorder) OnFileEvent(fileName string, event string) {
+	e.Lock()
+	defer e.Unlock()
 	log.WithField("file", fileName).Debugf("file %s", event)
 
 	// Initialize the slice if it doesn't exist
@@ -67,7 +71,21 @@ func (e *eventRecorder) OnFileDeletion(fileName string) {
 }
 
 func (e *eventRecorder) OnInSync(s bool) {
+	e.Lock()
+	defer e.Unlock()
 	e.inSyncEvents = append(e.inSyncEvents, s)
+}
+
+func (e *eventRecorder) Events() map[string][]string {
+	e.Lock()
+	defer e.Unlock()
+	return e.fileNameToEvents
+}
+
+func (e *eventRecorder) InSyncEvents() []bool {
+	e.Lock()
+	defer e.Unlock()
+	return e.inSyncEvents
 }
 
 func clearDir(dirPath string) {
@@ -108,7 +126,7 @@ var _ = Describe("Workload endpoint status file watcher test", func() {
 		// The kernel can fire many WRITE events for a single logical write, if the data is truncated.
 		// So, it's error-prone to check our sequence of logical events is directly-equivalent to the actual.
 		// Instead, we check that the logical sequence exists within the actual sequence, which should account for duplicates.
-		events, exist := r.fileNameToEvents[filePath]
+		events, exist := r.Events()[filePath]
 		if !exist {
 			return false
 		}
@@ -124,10 +142,11 @@ var _ = Describe("Workload endpoint status file watcher test", func() {
 	}
 
 	lastInSync := func() bool {
-		if len(r.inSyncEvents) == 0 {
+		e := r.InSyncEvents()
+		if len(e) == 0 {
 			return false
 		}
-		return r.inSyncEvents[len(r.inSyncEvents)-1]
+		return e[len(e)-1]
 	}
 
 	BeforeEach(func() {
@@ -153,7 +172,7 @@ var _ = Describe("Workload endpoint status file watcher test", func() {
 
 		filePath := filepath.Join(statusDir, "pod1")
 		Eventually(haveEvents, "5s", "1s").WithArguments(filePath, []string{"create"}).Should(BeTrue())
-		Eventually(r.inSyncEvents).ShouldNot(BeEmpty())
+		Eventually(r.InSyncEvents).ShouldNot(BeEmpty())
 
 		Eventually(lastInSync).Should(BeTrue())
 	})
