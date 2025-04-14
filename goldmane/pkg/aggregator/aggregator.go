@@ -337,6 +337,8 @@ func (a *LogAggregator) Run(startTime int64) {
 			req.respCh <- a.queryFilterHints(req.req)
 		case stream := <-a.streams.backfillChannel():
 			a.backfill(stream)
+		case uid := <-a.streams.ClosedStreams():
+			a.streams.unregister(uid)
 		case req := <-a.sinkChan:
 			logrus.WithField("sink", req.sink).Info("Setting aggregator sink")
 			a.sink = req.sink

@@ -26,7 +26,10 @@ type Stream struct {
 
 // Close signals to the stream manager that this stream is done and should be closed.
 func (s *Stream) Close() {
+	// Cancel the stream context - this will trigger any clients writing to the stream to stop.
 	s.cancel()
+
+	// Queue unregistration of the stream, and cleanup of its resources.
 	s.done <- s.id
 }
 
