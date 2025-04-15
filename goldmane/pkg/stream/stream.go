@@ -13,12 +13,20 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 )
 
-type Stream struct {
+type Stream interface {
+	Flows() <-chan storage.FlowBuilder
+	Close()
+	Ctx() context.Context
+	StartTimeGte() int64
+	ID() string
+}
+
+type stream struct {
 	// Public fields.
 	Req *proto.FlowStreamRequest
-	ID  string
 
 	// Private fields.
+	id     string
 	out    chan storage.FlowBuilder
 	done   chan<- string
 	ctx    context.Context
@@ -29,26 +37,34 @@ type Stream struct {
 }
 
 // Close signals to the stream manager that this stream is done and should be closed.
-func (s *Stream) Close() {
+func (s *stream) Close() {
 	// Cancel the stream context - this will trigger any clients writing to the stream to stop.
 	s.cancel()
 
 	// Queue unregistration of the stream, and cleanup of its resources.
-	s.done <- s.ID
+	s.done <- s.id
 }
 
-func (s *Stream) Ctx() context.Context {
+func (s *stream) Ctx() context.Context {
 	return s.ctx
 }
 
 // Flows returns a channel that contains the output from this stream.
-func (s *Stream) Flows() <-chan storage.FlowBuilder {
+func (s *stream) Flows() <-chan storage.FlowBuilder {
 	return s.out
+}
+
+func (s *stream) StartTimeGte() int64 {
+	return s.Req.StartTimeGte
+}
+
+func (s *stream) ID() string {
+	return s.id
 }
 
 // receive tells the Stream about a newly learned Flow that matches the Stream's filter and
 // queues it for processing. Note that emission of the Flow to the Stream's output channel is asynchronous.
-func (s *Stream) receive(b storage.FlowBuilder) {
+func (s *stream) receive(b storage.FlowBuilder) {
 	// It's important that we don't block here, as this is called from the main loop.
 	logrus.WithFields(logrus.Fields{"id": s.ID}).Debug("Sending flow to stream")
 
