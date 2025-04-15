@@ -370,14 +370,13 @@ func (r *DefaultRuleRenderer) PolicyGroupToIptablesChains(group *PolicyGroup) []
 	// fire.
 	const returnStride = 5
 	count := -1
-	seenNonStagedPolThisStride := false
 	for _, polName := range group.PolicyNames {
 		if model.PolicyIsStaged(polName) {
 			logrus.Debugf("Skip programming staged policy %v", polName)
 			continue
 		}
 		count++
-		if count != 0 && count%returnStride == 0 && seenNonStagedPolThisStride {
+		if count != 0 && count%returnStride == 0 {
 			// If policy makes a verdict (i.e. the pass or accept bit is
 			// non-zero) return to the per-endpoint chain.  Note: the per-endpoint
 			// chain has a similar rule that only checks the accept bit.  Pass
@@ -388,11 +387,10 @@ func (r *DefaultRuleRenderer) PolicyGroupToIptablesChains(group *PolicyGroup) []
 				Action:  r.Return(),
 				Comment: []string{"Return on verdict"},
 			})
-			seenNonStagedPolThisStride = false
 		}
 
 		var match generictables.MatchCriteria
-		if count%returnStride == 0 || !seenNonStagedPolThisStride {
+		if count%returnStride == 0 {
 			// Optimisation, we're the first rule in a block, immediately after
 			// start of chain or a RETURN rule, or, there are no non-staged
 			// policies ahead of us (so the mark bits cannot be set).
@@ -412,9 +410,6 @@ func (r *DefaultRuleRenderer) PolicyGroupToIptablesChains(group *PolicyGroup) []
 			Match:  match,
 			Action: r.Jump(chainToJumpTo),
 		})
-		if !model.PolicyIsStaged(polName) {
-			seenNonStagedPolThisStride = true
-		}
 	}
 	return []*generictables.Chain{{
 		Name:  group.ChainName(),
@@ -643,7 +638,7 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 					// Group is too small to have its own chain.
 					for _, p := range polGroup.PolicyNames {
 						if model.PolicyIsStaged(p) {
-							logrus.Debugf("Skip programming staged policy %v", p)
+							logrus.Debugf("Skip programming inlined staged policy %v", p)
 							continue
 						}
 						chainsToJumpTo = append(chainsToJumpTo, PolicyChainName(
