@@ -1,0 +1,9 @@
+apiVersion: operator.openshift.io/v1
+kind: Network
+metadata:
+  name: cluster
+spec:
+  # The eBPF dataplane doesn't require the kube-proxy to be deployed, so it's set to false.
+  # If you change the linuxDataplane to Iptables in 01-cr-installation.yaml, the deployKubeProxy parameter must be set to true.
+  deployKubeProxy: false
+status: {}
