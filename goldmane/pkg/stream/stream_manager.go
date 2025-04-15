@@ -1,4 +1,4 @@
-package aggregator
+package stream
 
 import (
 	"context"
@@ -9,7 +9,8 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/goldmane/pkg/aggregator/bucketing"
+	"github.com/projectcalico/calico/goldmane/pkg/storage"
+	"github.com/projectcalico/calico/goldmane/proto"
 	"github.com/projectcalico/calico/lib/std/chanutil"
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 )
@@ -23,11 +24,29 @@ func init() {
 	prometheus.MustRegister(numStreams)
 }
 
+type streamRequest struct {
+	respCh chan *Stream
+	req    *proto.FlowStreamRequest
+
+	// channel size allows configuration of the size of the channel to use for this stream.
+	// This is to avoid overloading the channel with too many flows at once.
+	// Note; This is a quick fix to avoid having to properly decouple streaming from the main loop.
+	// long term, we should do away with this and use a proper backpressure mechanism.
+	channelSize int
+}
+
+type StreamManager interface {
+	Run(ctx context.Context)
+	Register(*proto.FlowStreamRequest, int) chan *Stream
+	Backfills() <-chan *Stream
+	Receive(storage.FlowBuilder, string)
+}
+
 func NewStreamManager() *streamManager {
 	maxStreams := 100
 	return &streamManager{
 		streams:          streamCache{streams: make(map[string]*Stream)},
-		flowCh:           make(chan bucketing.FlowBuilder, 5000),
+		flowCh:           make(chan storage.FlowBuilder, 5000),
 		closedStreamsCh:  make(chan string, maxStreams),
 		streamRequests:   make(chan *streamRequest, 10),
 		backfillRequests: make(chan *Stream, 10),
@@ -49,7 +68,7 @@ type streamCache struct {
 func (c *streamCache) add(s *Stream) {
 	c.Lock()
 	defer c.Unlock()
-	c.streams[s.id] = s
+	c.streams[s.ID] = s
 }
 
 func (c *streamCache) remove(id string) {
@@ -84,7 +103,7 @@ func (c *streamCache) iter(f func(*Stream)) {
 	for _, s := range c.streams {
 		select {
 		case <-s.ctx.Done():
-			logrus.WithField("id", s.id).Debug("Stream closed, skipping")
+			logrus.WithField("id", s.ID).Debug("Stream closed, skipping")
 		default:
 			f(s)
 		}
@@ -110,7 +129,7 @@ type streamManager struct {
 	backfillRequests chan *Stream
 
 	// flowCh queues incoming flows to be processed by worker threads and emitted to streams.
-	flowCh chan bucketing.FlowBuilder
+	flowCh chan storage.FlowBuilder
 
 	// rl is used to rate limit log messages that may happen frequently.
 	rl *logutils.RateLimitedLogger
@@ -125,6 +144,8 @@ func (m *streamManager) Run(ctx context.Context) {
 			stream := m.register(req)
 			req.respCh <- stream
 			m.backfillRequests <- stream
+		case id := <-m.closedStreamsCh:
+			m.unregister(id)
 		case <-ctx.Done():
 			logrus.Debug("Stream manager exiting")
 			return
@@ -132,30 +153,42 @@ func (m *streamManager) Run(ctx context.Context) {
 	}
 }
 
-func (m *streamManager) Register(req *streamRequest) {
+func (m *streamManager) Register(req *proto.FlowStreamRequest, size int) chan *Stream {
+	sr := &streamRequest{
+		respCh:      make(chan *Stream, 1),
+		req:         req,
+		channelSize: size,
+	}
 	// Register a new stream request. The request will be processed in the stream manager's
 	// main loop - Run().
-	m.streamRequests <- req
+	m.streamRequests <- sr
+	return sr.respCh
 }
 
-func (m *streamManager) ClosedStreams() <-chan string {
-	return m.closedStreamsCh
-}
-
-// Receive tells the stream manager about a new DiachronicFlow that has rolled over. The manager
+// Receive tells the stream manager about a new flow. The manager
 // informs all streams about the new flow, so they can decide to include it in their output.
 //
 // Note: Receive may block if the flow channel is full. This is expected to be a rare event, but care
 // should be taken to avoid calling this function from the main loop.
-func (m *streamManager) Receive(b bucketing.FlowBuilder) {
+func (m *streamManager) Receive(b storage.FlowBuilder, id string) {
+	if id != "" {
+		// An explicit ID was given. Send to the stream with that ID.
+		s, ok := m.streams.get(id)
+		if ok {
+			s.receive(b)
+		}
+		return
+	}
+
+	// No ID was given - send to all streams.
 	if err := chanutil.WriteWithDeadline(context.TODO(), m.flowCh, b, 30*time.Second); err != nil {
 		m.rl.WithError(err).Error("stream manager failed to handle flow(s), dropping")
 	}
 }
 
-// backfillChannel returns a channel containing backfill requests. This channel filled when new
+// Backfills returns a channel containing backfill requests. This channel filled when new
 // streams are registered, and the backfill is handled asynchronously by the log aggregator.
-func (m *streamManager) backfillChannel() <-chan *Stream {
+func (m *streamManager) Backfills() <-chan *Stream {
 	return m.backfillRequests
 }
 
@@ -169,7 +202,7 @@ func (m *streamManager) processIncomingFlows(ctx context.Context) {
 			return
 		case b := <-m.flowCh:
 			m.streams.iter(func(s *Stream) {
-				s.Receive(b)
+				s.receive(b)
 			})
 		}
 	}
@@ -183,10 +216,10 @@ func (m *streamManager) register(req *streamRequest) *Stream {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	stream := &Stream{
-		id:     uuid.NewString(),
-		out:    make(chan bucketing.FlowBuilder, req.channelSize),
+		Req:    req.req,
+		ID:     uuid.NewString(),
+		out:    make(chan storage.FlowBuilder, req.channelSize),
 		done:   m.closedStreamsCh,
-		req:    req,
 		ctx:    ctx,
 		cancel: cancel,
 		rl: logutils.NewRateLimitedLogger(
@@ -197,14 +230,11 @@ func (m *streamManager) register(req *streamRequest) *Stream {
 	m.streams.add(stream)
 	numStreams.Set(float64(m.streams.size()))
 
-	logrus.WithField("id", stream.id).Debug("Registered new stream")
+	logrus.WithField("id", stream.ID).Debug("Registered new stream")
 	return stream
 }
 
 // unregister removes a stream from the stream manager.
-//
-// Note: close terminates the stream's receive and output channels, so it should only be called from the
-// aggregator's main loop.
 func (m *streamManager) unregister(id string) {
 	_, ok := m.streams.get(id)
 	if !ok {
