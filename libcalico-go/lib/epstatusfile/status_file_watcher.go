@@ -44,7 +44,8 @@ type FileWatcher struct {
 
 	pollTicker *time.Ticker
 
-	callbacks Callbacks
+	callbacks  Callbacks
+	inSyncOnce sync.Once
 
 	// Shim function variable to get a new watcher
 	newFsnotifyWatcherFunc func() (*fsnotify.Watcher, error)
@@ -186,7 +187,7 @@ func (w *FileWatcher) runWatcher() {
 
 		// Get current state of the directory and emit initial events.
 		w.scanDirectory()
-		w.callbacks.OnInSync(true)
+		w.onInSync()
 		if w.fsWatcher != nil {
 			// Run fsnotify watcher loop if possible.
 			err := w.runFsnotifyWatcher(w.fsWatcher)
@@ -285,4 +286,10 @@ func (w *FileWatcher) reportFsnotifyActivity(a bool) {
 	}
 
 	w.fsnotifyActive.reportActivity(a)
+}
+
+func (w *FileWatcher) onInSync() {
+	w.inSyncOnce.Do(func() {
+		w.callbacks.OnInSync(true)
+	})
 }
