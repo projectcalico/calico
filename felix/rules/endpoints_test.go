@@ -3508,7 +3508,7 @@ var _ = table.DescribeTable("PolicyGroup chains",
 		PolicyGroup{
 			Tier:        "default",
 			Direction:   PolicyDirectionOutbound,
-			PolicyNames: []string{"staged:a", "staged:b", "staged:c", "d", "e", "f", "g"},
+			PolicyNames: []string{"staged:a", "staged:b", "c", "d", "e", "f", "g", "h", "i"},
 			Selector:    "all()",
 		},
 		[]generictables.Rule{
@@ -3516,23 +3516,23 @@ var _ = table.DescribeTable("PolicyGroup chains",
 			// first non-staged policy.
 			{
 				Match:  Match(),
-				Action: JumpAction{Target: "cali-po-default/staged:a"},
+				Action: JumpAction{Target: "cali-po-default/c"},
 			},
 			{
-				Match:  Match(),
-				Action: JumpAction{Target: "cali-po-default/staged:b"},
-			},
-			{
-				Match:  Match(),
-				Action: JumpAction{Target: "cali-po-default/staged:c"},
-			},
-			{
-				Match:  Match(),
+				Match:  Match().MarkClear(0x18),
 				Action: JumpAction{Target: "cali-po-default/d"},
 			},
 			{
 				Match:  Match().MarkClear(0x18),
 				Action: JumpAction{Target: "cali-po-default/e"},
+			},
+			{
+				Match:  Match().MarkClear(0x18),
+				Action: JumpAction{Target: "cali-po-default/f"},
+			},
+			{
+				Match:  Match().MarkClear(0x18),
+				Action: JumpAction{Target: "cali-po-default/g"},
 			},
 			{
 				Match:   Match().MarkNotClear(0x18),
@@ -3541,11 +3541,11 @@ var _ = table.DescribeTable("PolicyGroup chains",
 			},
 			{
 				Match:  Match(),
-				Action: JumpAction{Target: "cali-po-default/f"},
+				Action: JumpAction{Target: "cali-po-default/h"},
 			},
 			{
 				Match:  Match().MarkClear(0x18),
-				Action: JumpAction{Target: "cali-po-default/g"},
+				Action: JumpAction{Target: "cali-po-default/i"},
 			},
 		},
 	),
@@ -3561,31 +3561,10 @@ var _ = table.DescribeTable("PolicyGroup chains",
 			// first non-staged policy.
 			{
 				Match:  Match(),
-				Action: JumpAction{Target: "cali-po-default/staged:a"},
-			},
-			{
-				Match:  Match(),
-				Action: JumpAction{Target: "cali-po-default/staged:b"},
-			},
-			{
-				Match:  Match(),
-				Action: JumpAction{Target: "cali-po-default/staged:c"},
-			},
-			{
-				Match:  Match(),
 				Action: JumpAction{Target: "cali-po-default/d"},
 			},
 			{
 				Match:  Match().MarkClear(0x18),
-				Action: JumpAction{Target: "cali-po-default/staged:e"},
-			},
-			{
-				Match:   Match().MarkNotClear(0x18),
-				Action:  ReturnAction{},
-				Comment: []string{"Return on verdict"},
-			},
-			{
-				Match:  Match(),
 				Action: JumpAction{Target: "cali-po-default/f"},
 			},
 			{
@@ -3604,26 +3583,6 @@ var _ = table.DescribeTable("PolicyGroup chains",
 		[]generictables.Rule{
 			// Match criteria and return rules get skipped until we hit the
 			// first non-staged policy.
-			{
-				Match:  Match(),
-				Action: JumpAction{Target: "cali-po-default/staged:a"},
-			},
-			{
-				Match:  Match(),
-				Action: JumpAction{Target: "cali-po-default/staged:b"},
-			},
-			{
-				Match:  Match(),
-				Action: JumpAction{Target: "cali-po-default/staged:c"},
-			},
-			{
-				Match:  Match(),
-				Action: JumpAction{Target: "cali-po-default/staged:d"},
-			},
-			{
-				Match:  Match(),
-				Action: JumpAction{Target: "cali-po-default/staged:e"},
-			},
 			{
 				Match:  Match(),
 				Action: JumpAction{Target: "cali-po-default/f"},
