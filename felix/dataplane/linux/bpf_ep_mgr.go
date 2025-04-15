@@ -3008,7 +3008,7 @@ func (m *bpfEndpointManager) extractTiers(tiers []*proto.TierInfo, direction Pol
 
 			for i, polName := range directionalPols {
 				if model.PolicyIsStaged(polName) {
-					logrus.Debugf("SKipping staged policy %v", polName)
+					logrus.Debugf("Skipping staged policy %v", polName)
 					continue
 				}
 				stagedOnly = false
