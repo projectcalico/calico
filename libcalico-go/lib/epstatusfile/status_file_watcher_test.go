@@ -56,7 +56,13 @@ func (e *fsnotifyError) ErrorNTimes(n int) {
 	e.remainingErrors = n
 }
 
-var fsNotifyErr = new(fsnotifyError)
+// A shim for generating artificial errors during fsnotify setup.
+func (e *fsnotifyError) newFsnotifyWatcherShim() (*fsnotify.Watcher, error) {
+	if e.ShouldError() {
+		return nil, fmt.Errorf("simulating an error on initializing fsnotify")
+	}
+	return fsnotify.NewWatcher()
+}
 
 type eventRecorder struct {
 	fileNameToEvents map[string][]string
@@ -128,16 +134,11 @@ func clearDir(dirPath string) {
 	log.Infof("Directory %s cleared successfully!", dirPath)
 }
 
-func newFsnotifyWatcherShim() (*fsnotify.Watcher, error) {
-	if fsNotifyErr.ShouldError() {
-		return nil, fmt.Errorf("simulating an error on initializing fsnotify")
-	}
-	return fsnotify.NewWatcher()
-}
-
 var _ = Describe("Workload endpoint status file watcher test", func() {
 	var w *FileWatcher
 	var r *eventRecorder
+	var fsnotifyErr *fsnotifyError
+	var fsnotifyActivity *activityReporter
 
 	tmpPath := "/go/src/github.com/projectcalico/calico/ut-tmp-dir"
 	statusDir := tmpPath + "/endpoint-status"
@@ -145,10 +146,6 @@ var _ = Describe("Workload endpoint status file watcher test", func() {
 	Expect(err).ShouldNot(HaveOccurred())
 
 	writer := NewEndpointStatusFileWriter(tmpPath)
-
-	notifyActive := func() bool {
-		return w.fsnotifyActive
-	}
 
 	haveEvents := func(filePath string, expected []string) bool {
 		// The kernel can fire many WRITE events for a single logical write, if the data is truncated.
@@ -179,8 +176,9 @@ var _ = Describe("Workload endpoint status file watcher test", func() {
 
 	BeforeEach(func() {
 		clearDir(statusDir)
-
-		w = NewFileWatcherWithShim(statusDir, 10*time.Second, newFsnotifyWatcherShim)
+		fsnotifyActivity = new(activityReporter)
+		fsnotifyErr = new(fsnotifyError)
+		w = NewFileWatcherWithShim(statusDir, 10*time.Second, fsnotifyErr.newFsnotifyWatcherShim, fsnotifyActivity)
 		r = newEventRecorder()
 		w.SetCallbacks(Callbacks{
 			OnFileCreation: r.OnFileCreate,
@@ -196,7 +194,7 @@ var _ = Describe("Workload endpoint status file watcher test", func() {
 
 		w.Start()
 		defer w.Stop()
-		Eventually(notifyActive, "3s").Should(BeTrue())
+		Eventually(fsnotifyActivity.Poll, "3s").Should(BeTrue())
 
 		filePath := filepath.Join(statusDir, "pod1")
 		Eventually(haveEvents, "5s", "1s").WithArguments(filePath, []string{"create"}).Should(BeTrue())
@@ -211,7 +209,7 @@ var _ = Describe("Workload endpoint status file watcher test", func() {
 
 		w.Start()
 		defer w.Stop()
-		Eventually(notifyActive, "3s").Should(BeTrue())
+		Eventually(fsnotifyActivity.Poll, "3s").Should(BeTrue())
 
 		filePath := filepath.Join(statusDir, "pod1")
 		Eventually(haveEvents, "5s", "1s").WithArguments(filePath, []string{"create"}).Should(BeTrue())
@@ -230,7 +228,7 @@ var _ = Describe("Workload endpoint status file watcher test", func() {
 
 		w.Start()
 		defer w.Stop()
-		Eventually(notifyActive, "3s").Should(BeTrue())
+		Eventually(fsnotifyActivity.Poll, "3s").Should(BeTrue())
 
 		filePath := filepath.Join(statusDir, "pod1")
 		Eventually(haveEvents, "5s", "1s").WithArguments(filePath, []string{"create"}).Should(BeTrue())
@@ -247,7 +245,7 @@ var _ = Describe("Workload endpoint status file watcher test", func() {
 	It("should receive events when fsnotify fails", func() {
 		w.Start()
 		defer w.Stop()
-		Eventually(notifyActive, "3s").Should(BeTrue())
+		Eventually(fsnotifyActivity.Poll, "3s").Should(BeTrue())
 
 		err = writer.WriteStatusFile("pod1", "name: pod1")
 		Expect(err).ShouldNot(HaveOccurred())
@@ -257,10 +255,10 @@ var _ = Describe("Workload endpoint status file watcher test", func() {
 		Eventually(lastInSync).Should(BeTrue())
 
 		// Simulate an error on new fsnotify watcher and close the current one, triggering a refresh on the watcher goroutine.
-		fsNotifyErr.ErrorNTimes(1)
+		fsnotifyErr.ErrorNTimes(1)
 		w.fsWatcher.Close()
 
-		Eventually(notifyActive, "3s").Should(BeFalse())
+		Eventually(fsnotifyActivity.Poll, "3s").Should(BeFalse())
 
 		err = writer.WriteStatusFile("pod1", "name: pod1, status: active")
 		Expect(err).ShouldNot(HaveOccurred())
