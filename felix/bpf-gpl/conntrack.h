@@ -1050,7 +1050,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 		}
 	}
 
-    if ((CALI_F_INGRESS && CALI_F_TUNNEL) || !skb_seen(ctx->skb)) {
+	if ((CALI_F_INGRESS && (CALI_F_IPIP || CALI_F_VXLAN)) || !skb_seen(ctx->skb)) {
 		/* Account for the src->dst leg if we haven't seen the packet yet.
 		 * Since when the traffic is tunneled, BPF program on the host
 		 * iface sees it first and marks it as seen before another
