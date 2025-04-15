@@ -780,15 +780,12 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane node server tests"
 		opts.FelixLogSeverity = "Debug"
 		opts = infrastructure.DefaultTopologyOptions()
 		opts.IPIPEnabled = false
+		opts.FlowLogSource = infrastructure.FlowLogSourceGoldmane
+		opts.DelayFelixStart = true
 
 		opts.ExtraEnvVars["FELIX_FLOWLOGSCOLLECTORDEBUGTRACE"] = "true"
 		opts.ExtraEnvVars["FELIX_FLOWLOGSFLUSHINTERVAL"] = "2"
-
-		// Set any URL just to enable goldmane, which causes many failure attempt to connect to it.
-		// However, eventaully goldmane reporter must connect to node server, and report flow logs.
-		opts.ExtraEnvVars["FELIX_FLOWLOGSGOLDMANESERVER"] = "localhost"
-		opts.FlowLogSource = infrastructure.FlowLogSourceGoldmane
-		opts.DelayFelixStart = true
+		opts.ExtraEnvVars["FELIX_FLOWLOGSLOCALSOCKET"] = "Enabled"
 
 		numNodes := 2
 		tc, _ = infrastructure.StartNNodeTopology(numNodes, opts, infra)

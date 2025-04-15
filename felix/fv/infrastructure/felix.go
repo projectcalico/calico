@@ -204,11 +204,11 @@ func RunFelix(infra DatastoreInfra, id int, options TopologyOptions) *Felix {
 	// aren't enabled the directory will just stay empty.
 	logDir := path.Join(cwLogDir, uniqueName)
 	Expect(os.MkdirAll(logDir, 0o777)).NotTo(HaveOccurred())
-	args = append(args, "-v", fmt.Sprintf("%v:%v", logDir, goldmane.NodeSocketDir))
+	nodeLogDir := "/var/log/calico/flowlogs" // This path is used by file reporter
 
 	var goldmaneServer *goldmane.NodeServer
 	if options.FlowLogSource == FlowLogSourceGoldmane {
-		logDir := path.Join(cwLogDir, uniqueName)
+		nodeLogDir = goldmane.NodeSocketDir
 		goldmaneServer = goldmane.NewNodeServer(logDir)
 
 		if !options.DelayFelixStart {
@@ -217,6 +217,8 @@ func RunFelix(infra DatastoreInfra, id int, options TopologyOptions) *Felix {
 			}
 		}
 	}
+
+	args = append(args, "-v", fmt.Sprintf("%v:%v", logDir, nodeLogDir))
 
 	if os.Getenv("FELIX_FV_NFTABLES") == "Enabled" {
 		logrus.Info("Enabling nftables with env var")

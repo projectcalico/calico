@@ -31,7 +31,7 @@ import (
 )
 
 const (
-	NodeSocketDir  = "/var/log/calico/flowlogs"
+	NodeSocketDir  = "/var/run/calico/flows"
 	NodeSocketName = "goldmane.sock"
 )
 
