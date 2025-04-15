@@ -150,7 +150,6 @@ func (t *flowGenerator) flowGenWorker(numPairs int) {
 		flowPairs = append(flowPairs, flows)
 	}
 
-	// One hour broken into 15s intervals is 240 intervals.
 	logrus.Info("Backfilling an hour of flow data")
 	for {
 		logrus.WithFields(logrus.Fields{
