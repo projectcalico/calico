@@ -31,8 +31,11 @@ import (
 )
 
 const (
+	// flowsPerSecond is the number of flows to generate per second across all nodes.
+	flowsPerSecond = 2000
+
 	// number of flows to generate per 15s interval.
-	flowsPerInterval = 300
+	flowsPerInterval = flowsPerSecond * 15
 
 	// Configuration for flow generation. We need to balance this - too much generation
 	// can overwhelm a single client and backpressure will be applied. Scaling horizontally
@@ -40,7 +43,7 @@ const (
 	//
 	// In a production system, nodes won't attempt to send an entire hour's worth of flow data at once,
 	// but we want to do so here to burden Goldmane.
-	numNodes       = 30
+	numNodes       = 250
 	flowsPerWorker = flowsPerInterval / numNodes
 	numWorkers     = numNodes
 
