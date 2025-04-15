@@ -319,7 +319,7 @@ func (a *Goldmane) Receive(f *types.Flow) {
 }
 
 // Stream returns a new Stream from the stream manager.
-func (a *Goldmane) Stream(req *proto.FlowStreamRequest) (*stream.Stream, error) {
+func (a *Goldmane) Stream(req *proto.FlowStreamRequest) (stream.Stream, error) {
 	logrus.WithField("req", req).Debug("Received stream request")
 
 	if req.StartTimeGte != 0 {
@@ -401,27 +401,24 @@ func (a *Goldmane) Statistics(req *proto.StatisticsRequest) ([]*proto.Statistics
 }
 
 // backfill fills a new Stream instance with historical Flow data based on the request.
-func (a *Goldmane) backfill(stream *stream.Stream) {
-	// Get the original request parameters from the stream.
-	request := stream.Req
-
-	if request.StartTimeGte == 0 {
+func (a *Goldmane) backfill(stream stream.Stream) {
+	if stream.StartTimeGte() == 0 {
 		// If no start time is provided, we don't need to backfill any data
 		// to this stream.
-		logrus.WithField("id", stream.ID).Debug("No start time provided, skipping backfill")
+		logrus.WithField("id", stream.ID()).Debug("No start time provided, skipping backfill")
 		return
 	}
 
 	// Measure the time it takes to backfill the stream.
 	start := time.Now()
 	defer func() {
-		logrus.WithField("id", stream.ID).WithField("duration", time.Since(start)).Info("Backfill complete")
+		logrus.WithField("id", stream.ID()).WithField("duration", time.Since(start)).Info("Backfill complete")
 		backfillLatency.Observe(float64(time.Since(start).Milliseconds()))
 	}()
 
 	// Go through the bucket ring, generating stream events for each flow that matches the request.
 	// Right now, the stream endpoint only supports aggregation windows of a single bucket interval.
-	err := a.flowStore.IterFlows(request.StartTimeGte, a.flowStore.BackfillEndTime(), func(d *storage.DiachronicFlow, s, e int64) error {
+	err := a.flowStore.IterFlows(stream.StartTimeGte(), a.flowStore.BackfillEndTime(), func(d *storage.DiachronicFlow, s, e int64) error {
 		builder := storage.NewDeferredFlowBuilder(d, s, e)
 		select {
 		case <-stream.Ctx().Done():
@@ -429,7 +426,7 @@ func (a *Goldmane) backfill(stream *stream.Stream) {
 			logrus.WithField("id", stream.ID).Debug("Stream closed while backfilling")
 			return set.StopIteration
 		default:
-			a.streams.Receive(builder, stream.ID)
+			a.streams.Receive(builder, stream.ID())
 		}
 		return nil
 	})

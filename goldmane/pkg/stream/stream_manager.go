@@ -25,7 +25,7 @@ func init() {
 }
 
 type streamRequest struct {
-	respCh chan *Stream
+	respCh chan Stream
 	req    *proto.FlowStreamRequest
 
 	// channel size allows configuration of the size of the channel to use for this stream.
@@ -37,19 +37,19 @@ type streamRequest struct {
 
 type StreamManager interface {
 	Run(ctx context.Context)
-	Register(*proto.FlowStreamRequest, int) chan *Stream
-	Backfills() <-chan *Stream
+	Register(*proto.FlowStreamRequest, int) chan Stream
+	Backfills() <-chan Stream
 	Receive(storage.FlowBuilder, string)
 }
 
 func NewStreamManager() *streamManager {
 	maxStreams := 100
 	return &streamManager{
-		streams:          streamCache{streams: make(map[string]*Stream)},
+		streams:          streamCache{streams: make(map[string]*stream)},
 		flowCh:           make(chan storage.FlowBuilder, 5000),
 		closedStreamsCh:  make(chan string, maxStreams),
 		streamRequests:   make(chan *streamRequest, 10),
-		backfillRequests: make(chan *Stream, 10),
+		backfillRequests: make(chan Stream, 10),
 		maxStreams:       maxStreams,
 		rl: logutils.NewRateLimitedLogger(
 			logutils.OptBurst(1),
@@ -62,13 +62,13 @@ func NewStreamManager() *streamManager {
 // goroutines. The cache is a map of stream IDs to Stream objects.
 type streamCache struct {
 	sync.Mutex
-	streams map[string]*Stream
+	streams map[string]*stream
 }
 
-func (c *streamCache) add(s *Stream) {
+func (c *streamCache) add(s *stream) {
 	c.Lock()
 	defer c.Unlock()
-	c.streams[s.ID] = s
+	c.streams[s.id] = s
 }
 
 func (c *streamCache) remove(id string) {
@@ -84,7 +84,7 @@ func (c *streamCache) remove(id string) {
 	}
 }
 
-func (c *streamCache) get(id string) (*Stream, bool) {
+func (c *streamCache) get(id string) (*stream, bool) {
 	c.Lock()
 	defer c.Unlock()
 	s, ok := c.streams[id]
@@ -97,13 +97,13 @@ func (c *streamCache) size() int {
 	return len(c.streams)
 }
 
-func (c *streamCache) iter(f func(*Stream)) {
+func (c *streamCache) iter(f func(*stream)) {
 	c.Lock()
 	defer c.Unlock()
 	for _, s := range c.streams {
 		select {
 		case <-s.ctx.Done():
-			logrus.WithField("id", s.ID).Debug("Stream closed, skipping")
+			logrus.WithField("id", s.id).Debug("Stream closed, skipping")
 		default:
 			f(s)
 		}
@@ -119,14 +119,14 @@ type streamManager struct {
 	// If this limit is reached, new streams will be rejected.
 	maxStreams int
 
-	// closedStreamsCh is a channel on which to receive UUIDs of streams that have been closed.
+	// closedStreamsCh is a channel on which to receive UUof streams that have been closed.
 	closedStreamsCh chan string
 
 	// streamRequests is the channel to receive requests for new streams.
 	streamRequests chan *streamRequest
 
 	// backfillRequests is a channel to send backfill requests on to the log aggregator.
-	backfillRequests chan *Stream
+	backfillRequests chan Stream
 
 	// flowCh queues incoming flows to be processed by worker threads and emitted to streams.
 	flowCh chan storage.FlowBuilder
@@ -153,9 +153,9 @@ func (m *streamManager) Run(ctx context.Context) {
 	}
 }
 
-func (m *streamManager) Register(req *proto.FlowStreamRequest, size int) chan *Stream {
+func (m *streamManager) Register(req *proto.FlowStreamRequest, size int) chan Stream {
 	sr := &streamRequest{
-		respCh:      make(chan *Stream, 1),
+		respCh:      make(chan Stream, 1),
 		req:         req,
 		channelSize: size,
 	}
@@ -188,7 +188,7 @@ func (m *streamManager) Receive(b storage.FlowBuilder, id string) {
 
 // Backfills returns a channel containing backfill requests. This channel filled when new
 // streams are registered, and the backfill is handled asynchronously by the log aggregator.
-func (m *streamManager) Backfills() <-chan *Stream {
+func (m *streamManager) Backfills() <-chan Stream {
 	return m.backfillRequests
 }
 
@@ -201,23 +201,23 @@ func (m *streamManager) processIncomingFlows(ctx context.Context) {
 			logrus.Debug("stream manager worker exiting")
 			return
 		case b := <-m.flowCh:
-			m.streams.iter(func(s *Stream) {
+			m.streams.iter(func(s *stream) {
 				s.receive(b)
 			})
 		}
 	}
 }
 
-func (m *streamManager) register(req *streamRequest) *Stream {
+func (m *streamManager) register(req *streamRequest) *stream {
 	if m.maxStreams > 0 && m.streams.size() >= m.maxStreams {
 		logrus.WithField("max", m.maxStreams).Warn("Max streams reached, rejecting new stream")
 		return nil
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
-	stream := &Stream{
+	stream := &stream{
 		Req:    req.req,
-		ID:     uuid.NewString(),
+		id:     uuid.NewString(),
 		out:    make(chan storage.FlowBuilder, req.channelSize),
 		done:   m.closedStreamsCh,
 		ctx:    ctx,
@@ -230,7 +230,7 @@ func (m *streamManager) register(req *streamRequest) *Stream {
 	m.streams.add(stream)
 	numStreams.Set(float64(m.streams.size()))
 
-	logrus.WithField("id", stream.ID).Debug("Registered new stream")
+	logrus.WithField("id", stream.id).Debug("Registered new stream")
 	return stream
 }
 
