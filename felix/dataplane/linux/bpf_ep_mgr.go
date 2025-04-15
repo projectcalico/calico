@@ -1103,11 +1103,9 @@ func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceStateUpdate) {
 				}
 			}
 			if update.Name == dataplanedefs.BPFInDev {
-				m.ifacesLock.Lock()
 				if err := m.reconcileBPFDevices(dataplanedefs.BPFInDev); err != nil {
 					log.WithError(err).Fatal("Failed to configure BPF devices")
 				}
-				m.ifacesLock.Unlock()
 			}
 		}
 		if m.initUnknownIfaces != nil {
