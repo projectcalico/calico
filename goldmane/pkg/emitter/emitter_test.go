@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 	"time"
 	"unique"
@@ -119,7 +120,11 @@ func TestEmitterMainline(t *testing.T) {
 
 	// Creat a mock HTTP server to use as our sink.
 	numBucketsEmitted := 0
+	mu := sync.Mutex{}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		defer mu.Unlock()
+
 		// Verify the request.
 		require.Equal(t, "/path/to/flows", r.URL.Path)
 		require.Equal(t, "POST", r.Method)
@@ -158,6 +163,8 @@ func TestEmitterMainline(t *testing.T) {
 
 	// Wait for the emitter to process the bucket. It should emit the flow to the mock server.
 	require.Eventually(t, func() bool {
+		mu.Lock()
+		defer mu.Unlock()
 		return numBucketsEmitted == 1
 	}, 5*time.Second, 500*time.Millisecond)
 
@@ -228,7 +235,11 @@ func TestEmitterRetry(t *testing.T) {
 	// For this test, we configure the server to fail the first request with a 500 error
 	// and then succeed on subsequent requests. This verifies that the emitter retries in the case
 	// of a failure.
+	mu := sync.Mutex{}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		defer mu.Unlock()
+
 		if numRequests < 1 {
 			w.WriteHeader(500)
 			numRequests++
@@ -265,9 +276,13 @@ func TestEmitterRetry(t *testing.T) {
 
 	// Wait for the emitter to process the bucket. It should emit the flow to the mock server.
 	require.Eventually(t, func() bool {
+		mu.Lock()
+		defer mu.Unlock()
 		return numRequests >= 2
 	}, 5*time.Second, 500*time.Millisecond, "Didn't retry the request?")
 	require.Eventually(t, func() bool {
+		mu.Lock()
+		defer mu.Unlock()
 		return numBucketsEmitted == 1
 	}, 5*time.Second, 500*time.Millisecond, "Didn't emit the flow?")
 }
@@ -373,7 +388,11 @@ func TestStaleBuckets(t *testing.T) {
 
 	// Creat a mock HTTP server to use as our sink. We don't expect any requests to be made.
 	numBucketsEmitted := 0
+	mu := sync.Mutex{}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		defer mu.Unlock()
+
 		// Check the body. We don't expect the first flow to be sent.
 		buf := new(bytes.Buffer)
 		_, err := buf.ReadFrom(r.Body)
@@ -418,6 +437,8 @@ func TestStaleBuckets(t *testing.T) {
 
 	// Expect the flow to be sent to the server.
 	require.Eventually(t, func() bool {
+		mu.Lock()
+		defer mu.Unlock()
 		return numBucketsEmitted == 1
 	}, 5*time.Second, 500*time.Millisecond)
 
