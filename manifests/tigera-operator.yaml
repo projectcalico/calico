@@ -196,7 +196,6 @@ rules:
       - apiservers/status
       - gatewayapis
       - gatewayapis/finalizers
-      - gatewayapis/status
       - goldmanes
       - goldmanes/finalizers
       - goldmanes/status
