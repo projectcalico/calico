@@ -19,6 +19,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/generictables"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 )
 
 type mockTable struct {
@@ -68,6 +69,7 @@ func (t *mockTable) RemoveChains(chains []*generictables.Chain) {
 }
 
 func (t *mockTable) RemoveChainByName(name string) {
+	Expect(model.PolicyIsStaged(name)).To(BeFalse())
 	delete(t.currentChains, name)
 }
 
