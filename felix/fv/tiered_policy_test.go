@@ -30,7 +30,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/projectcalico/calico/felix/collector/flowlog"
-	"github.com/projectcalico/calico/felix/collector/goldmane"
 	"github.com/projectcalico/calico/felix/collector/types/endpoint"
 	"github.com/projectcalico/calico/felix/collector/types/tuple"
 	"github.com/projectcalico/calico/felix/fv/connectivity"
@@ -444,7 +443,7 @@ var _ = infrastructure.DatastoreDescribe("connectivity tests and flow logs with 
 
 			opts.ExtraEnvVars["FELIX_FLOWLOGSCOLLECTORDEBUGTRACE"] = "true"
 			opts.ExtraEnvVars["FELIX_FLOWLOGSFLUSHINTERVAL"] = "2"
-			opts.ExtraEnvVars["FELIX_FLOWLOGSGOLDMANESERVER"] = goldmane.NodeSocketAddress
+			opts.ExtraEnvVars["FELIX_FLOWLOGSLOCALSOCKET"] = "Enabled"
 
 			testSetup()
 
