@@ -1,4 +1,4 @@
-package bucketing
+package storage
 
 import (
 	"github.com/sirupsen/logrus"
