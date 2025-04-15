@@ -35,9 +35,10 @@ import (
 
 const (
 	// numBuckets is the number of buckets to keep in memory.
-	// We keep 240 buckets. Assuming a default window of 15s each, this
-	// gives us a total of 1hr of history.
-	numBuckets = 240
+	// - 1 bucket that covers [now(), now()+15s], currently filling.
+	// - 1 bucket that is 15s into the future, to account for time skew.
+	// - 240 buckets of historical data. This gives us 1hr of history with default settings.
+	numBuckets = 242
 
 	// channelDepth is the depth of the channel to use for flow updates.
 	channelDepth = 5000
