@@ -1,4 +1,4 @@
-// Copyright (c) 2016,2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2025 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,10 +18,17 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"regexp"
 
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
+)
+
+var (
+	// Ensure user-supplied value is a valid time duration with one of the acceptable time
+	// units (smh).
+	validSinceRegex = regexp.MustCompile(`^[0-9]+[smh]$`)
 )
 
 // ValidateIP takes a string as an input and makes sure it's a valid IPv4 or IPv6 address.
@@ -46,4 +53,21 @@ func ValidateASNumber(str string) numorstring.ASNumber {
 		os.Exit(1)
 	}
 	return asn
+}
+
+// ValidateSinceDuration takes a string as an input and makes sure it has a valid value and
+// time unit.
+func ValidateSinceDuration(str string) {
+	if !validSinceRegex.MatchString(str) {
+		fmt.Printf("Error executing command: invalid duration for since flag (try 10s, 5m, or 1h): %s\n", str)
+		os.Exit(1)
+	}
+}
+
+// ValidateMaxLogs takes a int as an input and makes sure it has a non-negative value
+func ValidateMaxLogs(num int) {
+	if num < 0 {
+		fmt.Printf("Error executing command: negative value for max-logs flag\n")
+		os.Exit(1)
+	}
 }

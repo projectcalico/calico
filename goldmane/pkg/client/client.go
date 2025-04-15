@@ -65,6 +65,7 @@ func NewFlowClient(server, cert, key, caFile string) (*FlowClient, error) {
 
 // FlowClient pushes flow updates to the flow server.
 type FlowClient struct {
+	cancel      context.CancelFunc
 	inChan      chan *types.Flow
 	cache       *flowcache.ExpiringFlowCache
 	grpcCliConn *grpc.ClientConn
@@ -76,6 +77,9 @@ type FlowClient struct {
 func (c *FlowClient) Connect(ctx context.Context) <-chan struct{} {
 	logrus.Info("Starting flow client")
 
+	// Wrap the given context to make it cancelable.
+	ctx, c.cancel = context.WithCancel(ctx)
+
 	// Start the cache cleanup task.
 	go c.cache.Run(FlowCacheCleanup)
 
@@ -83,7 +87,6 @@ func (c *FlowClient) Connect(ctx context.Context) <-chan struct{} {
 	go func() {
 		defer func() {
 			logrus.Info("Stopping flow client")
-			close(c.inChan)
 			if err := c.grpcCliConn.Close(); err != nil {
 				logrus.WithError(err).Warn("Failed to close grpc client")
 			}
@@ -123,6 +126,11 @@ func (c *FlowClient) Connect(ctx context.Context) <-chan struct{} {
 					logrus.WithError(err).Warn("Failed to receive receipt")
 					break
 				}
+			}
+
+			if ctx.Err() != nil {
+				// Context was canceled - client is shutting down.
+				return
 			}
 
 			if err := rc.CloseSend(); err != nil {
@@ -215,6 +223,13 @@ func (c *FlowClient) Push(f *types.Flow) {
 	default:
 		logrus.Warn("Flow client buffer full, dropping flow")
 	}
+}
+
+// Close closes the flow client's input channel. This must be called from the same goroutine
+// that is pushing flows to the client when the client is no longer needed.
+func (c *FlowClient) Close() {
+	c.cancel()
+	close(c.inChan)
 }
 
 // backoff is a small helper to implement exponential backoff.
