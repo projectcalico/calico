@@ -20,6 +20,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 
+	v3 "github.com/projectcalico/calico/felix/bpf/conntrack/v3"
 	"github.com/projectcalico/calico/felix/collector"
 	"github.com/projectcalico/calico/felix/collector/types/tuple"
 	"github.com/projectcalico/calico/felix/timeshim"
@@ -120,9 +121,7 @@ func (r *InfoReader) makeConntrackInfo(key KeyInterface, val ValueInterface, dna
 		Bytes:   int(data.B2A.Bytes),
 	}
 
-	if data.B2A.Opener {
-		// We assume that one of the legs has the opener. If none or both, we
-		// cannot tell the direction anyway.
+	if val.Flags()&v3.FlagSrcDstBA != 0 {
 		ipSrc, ipDst = ipDst, ipSrc
 		portSrc, portDst = portDst, portSrc
 		coutersSrc, coutersDst = coutersDst, coutersSrc
