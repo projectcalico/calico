@@ -383,7 +383,7 @@ func TestRotation(t *testing.T) {
 	Expect(flowID).To(BeNumerically(">", 0))
 
 	// Rollover the aggregator until we push the flow out of the window.
-	roller.rolloverAndAdvanceClock(237)
+	roller.rolloverAndAdvanceClock(239)
 
 	// The flow should still be here.
 	Eventually(func() error {
