@@ -46,33 +46,49 @@ type streamCache struct {
 	streams map[string]*Stream
 }
 
-func (c *streamCache) Add(s *Stream) {
+func (c *streamCache) add(s *Stream) {
 	c.Lock()
 	defer c.Unlock()
 	c.streams[s.id] = s
 }
 
-func (c *streamCache) Remove(id string) {
+func (c *streamCache) remove(id string) {
 	c.Lock()
 	defer c.Unlock()
-	delete(c.streams, id)
+	s, ok := c.streams[id]
+	if ok {
+		// Close the stream's output channel. It is important that we do this here while holding the lock,
+		// allowing an atomic closure and removal from the cache. This ensures that no other goroutine
+		// can access the stream after its output channel is closed.
+		close(s.out)
+		delete(c.streams, id)
+	}
 }
 
-func (c *streamCache) Get(id string) (*Stream, bool) {
+func (c *streamCache) get(id string) (*Stream, bool) {
 	c.Lock()
 	defer c.Unlock()
 	s, ok := c.streams[id]
 	return s, ok
 }
 
-func (c *streamCache) List() []*Stream {
+func (c *streamCache) size() int {
 	c.Lock()
 	defer c.Unlock()
-	var streams []*Stream
+	return len(c.streams)
+}
+
+func (c *streamCache) iter(f func(*Stream)) {
+	c.Lock()
+	defer c.Unlock()
 	for _, s := range c.streams {
-		streams = append(streams, s)
+		select {
+		case <-s.ctx.Done():
+			logrus.WithField("id", s.id).Debug("Stream closed, skipping")
+		default:
+			f(s)
+		}
 	}
-	return streams
 }
 
 type streamManager struct {
@@ -152,22 +168,15 @@ func (m *streamManager) processIncomingFlows(ctx context.Context) {
 			logrus.Debug("stream manager worker exiting")
 			return
 		case b := <-m.flowCh:
-			streams := m.streams.List()
-			for _, s := range streams {
-				select {
-				case <-s.ctx.Done():
-					logrus.WithField("id", s.id).Debug("Stream closed, skipping")
-					continue
-				default:
-					s.Receive(b)
-				}
-			}
+			m.streams.iter(func(s *Stream) {
+				s.Receive(b)
+			})
 		}
 	}
 }
 
 func (m *streamManager) register(req *streamRequest) *Stream {
-	if m.maxStreams > 0 && len(m.streams.List()) >= m.maxStreams {
+	if m.maxStreams > 0 && m.streams.size() >= m.maxStreams {
 		logrus.WithField("max", m.maxStreams).Warn("Max streams reached, rejecting new stream")
 		return nil
 	}
@@ -185,8 +194,8 @@ func (m *streamManager) register(req *streamRequest) *Stream {
 			logutils.OptInterval(15*time.Second),
 		),
 	}
-	m.streams.Add(stream)
-	numStreams.Set(float64(len(m.streams.List())))
+	m.streams.add(stream)
+	numStreams.Set(float64(m.streams.size()))
 
 	logrus.WithField("id", stream.id).Debug("Registered new stream")
 	return stream
@@ -197,18 +206,14 @@ func (m *streamManager) register(req *streamRequest) *Stream {
 // Note: close terminates the stream's receive and output channels, so it should only be called from the
 // aggregator's main loop.
 func (m *streamManager) unregister(id string) {
-	s, ok := m.streams.Get(id)
+	_, ok := m.streams.get(id)
 	if !ok {
 		logrus.WithField("id", id).Warn("Asked to close unknown stream")
 		return
 	}
 	logrus.WithField("id", id).Debug("Closing stream")
 
-	// Close the stream's output channel. We can do this safely here only because this
-	// function is called from the main loop, which is the same goroutine that writes
-	// to this channel.
-	close(s.out)
-	m.streams.Remove(id)
-	numStreams.Set(float64(len(m.streams.List())))
+	m.streams.remove(id)
+	numStreams.Set(float64(m.streams.size()))
 	logrus.WithField("id", id).Debug("Stream closed")
 }
