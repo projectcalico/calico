@@ -1633,6 +1633,11 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 		*out = new(string)
 		**out = **in
 	}
+	if in.FlowLogsLocalSocket != nil {
+		in, out := &in.FlowLogsLocalSocket, &out.FlowLogsLocalSocket
+		*out = new(string)
+		**out = **in
+	}
 	if in.RouteTableRanges != nil {
 		in, out := &in.RouteTableRanges, &out.RouteTableRanges
 		*out = new(RouteTableRanges)

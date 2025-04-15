@@ -409,6 +409,7 @@ type Config struct {
 	FlowLogsFlushInterval        time.Duration `config:"seconds;300"`
 	FlowLogsCollectorDebugTrace  bool          `config:"bool;false"`
 	FlowLogsGoldmaneServer       string        `config:"string;"`
+	FlowLogsLocalSocket          string        `config:"oneof(Enabled,Disabled);Disabled"`
 	FlowLogsPolicyEvaluationMode string        `config:"oneof(None,Continuous);Continuous"`
 
 	KubeNodePortRanges []numorstring.Port `config:"portrange-list;30000:32767"`
@@ -536,7 +537,8 @@ func (config *Config) TableRefreshInterval() time.Duration {
 }
 
 func (config *Config) FlowLogsEnabled() bool {
-	return config.FlowLogsGoldmaneServer != ""
+	return config.FlowLogsGoldmaneServer != "" ||
+		config.FlowLogsLocalSocket == "Enabled"
 }
 
 // Copy makes a copy of the object.  Internal state is deep copied but config parameters are only shallow copied.

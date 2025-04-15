@@ -28,7 +28,8 @@ import (
 
 const (
 	// Log dispatcher names
-	FlowLogsGoldmaneReporterName = "goldmane"
+	FlowLogsGoldmaneReporterName   = "goldmane"
+	FlowLogsNodeSocketReporterName = "node socket"
 )
 
 // New creates the required dataplane stats collector, reporters and aggregators.
@@ -72,6 +73,16 @@ func New(
 			dispatchers[FlowLogsGoldmaneReporterName] = gd
 		}
 	}
+	if configParams.FlowLogsLocalSocket == "Enabled" {
+		log.Infof("Creating Flow Logs LocalSocketReporter with address %v", goldmane.NodeSocketAddress)
+		nd, err := goldmane.NewReporter(goldmane.NodeSocketAddress, "", "", "")
+		if err != nil {
+			log.WithError(err).Fatalf("Failed to create Flow Logs LocalSocketReporter.")
+		} else {
+			dispatchers[FlowLogsNodeSocketReporterName] = nd
+		}
+	}
+
 	if len(dispatchers) > 0 {
 		log.Info("Creating Flow Logs Reporter")
 		cw := flowlog.NewReporter(dispatchers, configParams.FlowLogsFlushInterval, healthAggregator)
@@ -84,24 +95,35 @@ func New(
 
 // configureFlowAggregation adds appropriate aggregators to the FlowLogReporter, depending on configuration.
 func configureFlowAggregation(configParams *config.Config, fr *flowlog.FlowLogReporter) {
+	// Set up aggregator for goldmane reporter.
 	if configParams.FlowLogsGoldmaneServer != "" {
-		log.Info("Creating golemane Aggregator for allowed")
-		gaa := flowlog.NewAggregator().
-			DisplayDebugTraceLogs(configParams.FlowLogsCollectorDebugTrace).
-			IncludeLabels(true).
-			IncludePolicies(true).
-			IncludeService(true).
-			ForAction(rules.RuleActionAllow)
+		log.Info("Creating goldmane Aggregator for allowed")
+		gaa := goldmaneFlowAggregator(rules.RuleActionAllow, configParams.FlowLogsCollectorDebugTrace)
 		log.Info("Adding Flow Logs Aggregator (allowed) for goldmane")
 		fr.AddAggregator(gaa, []string{FlowLogsGoldmaneReporterName})
 		log.Info("Creating goldmane Aggregator for denied")
-		gad := flowlog.NewAggregator().
-			DisplayDebugTraceLogs(configParams.FlowLogsCollectorDebugTrace).
-			IncludeLabels(true).
-			IncludePolicies(true).
-			IncludeService(true).
-			ForAction(rules.RuleActionDeny)
+		gad := goldmaneFlowAggregator(rules.RuleActionDeny, configParams.FlowLogsCollectorDebugTrace)
 		log.Info("Adding Flow Logs Aggregator (denied) for goldmane")
 		fr.AddAggregator(gad, []string{FlowLogsGoldmaneReporterName})
 	}
+	// Set up aggregator for node socket reporter.
+	if configParams.FlowLogsLocalSocket == "Enabled" {
+		log.Info("Creating node socket Aggregator for allowed")
+		gaa := goldmaneFlowAggregator(rules.RuleActionAllow, configParams.FlowLogsCollectorDebugTrace)
+		log.Info("Adding Flow Logs Aggregator (allowed) for node socket")
+		fr.AddAggregator(gaa, []string{FlowLogsNodeSocketReporterName})
+		log.Info("Creating node socket Aggregator for denied")
+		gad := goldmaneFlowAggregator(rules.RuleActionDeny, configParams.FlowLogsCollectorDebugTrace)
+		log.Info("Adding Flow Logs Aggregator (denied) for node socket")
+		fr.AddAggregator(gad, []string{FlowLogsNodeSocketReporterName})
+	}
+}
+
+func goldmaneFlowAggregator(forAction rules.RuleAction, traceEnabled bool) *flowlog.Aggregator {
+	return flowlog.NewAggregator().
+		DisplayDebugTraceLogs(traceEnabled).
+		IncludeLabels(true).
+		IncludePolicies(true).
+		IncludeService(true).
+		ForAction(forAction)
 }
