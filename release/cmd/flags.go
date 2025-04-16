@@ -431,6 +431,7 @@ var (
 		Aliases: []string{"max"},
 		Usage:   "The maximum number of hashreleases to keep on the hashrelease server",
 		Value:   hashreleaseserver.DefaultMax,
+		EnvVars: []string{"MAX_HASHRELEASES"},
 	}
 	publishHashreleaseFlag = &cli.BoolFlag{
 		Name:  "publish-to-hashrelease-server",
