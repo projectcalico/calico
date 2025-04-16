@@ -28,8 +28,8 @@ import (
 
 const (
 	// Log dispatcher names
-	FlowLogsGoldmaneReporterName   = "goldmane"
-	FlowLogsNodeSocketReporterName = "node socket"
+	FlowLogsGoldmaneReporterName = "goldmane"
+	FlowLogsLocalReporterName    = "node socket"
 )
 
 // New creates the required dataplane stats collector, reporters and aggregators.
@@ -76,7 +76,7 @@ func New(
 	if configParams.FlowLogsLocalReporterEnabled() {
 		log.Infof("Creating local Flow Logs Reporter with address %v", goldmane.NodeSocketAddress)
 		nd := goldmane.NewNodeSocketReporter()
-		dispatchers[FlowLogsNodeSocketReporterName] = nd
+		dispatchers[FlowLogsLocalReporterName] = nd
 	}
 
 	if len(dispatchers) > 0 {
@@ -107,11 +107,11 @@ func configureFlowAggregation(configParams *config.Config, fr *flowlog.FlowLogRe
 		log.Info("Creating node socket Aggregator for allowed")
 		gaa := flowAggregatorForGoldmane(rules.RuleActionAllow, configParams.FlowLogsCollectorDebugTrace)
 		log.Info("Adding Flow Logs Aggregator (allowed) for node socket")
-		fr.AddAggregator(gaa, []string{FlowLogsNodeSocketReporterName})
+		fr.AddAggregator(gaa, []string{FlowLogsLocalReporterName})
 		log.Info("Creating node socket Aggregator for denied")
 		gad := flowAggregatorForGoldmane(rules.RuleActionDeny, configParams.FlowLogsCollectorDebugTrace)
 		log.Info("Adding Flow Logs Aggregator (denied) for node socket")
-		fr.AddAggregator(gad, []string{FlowLogsNodeSocketReporterName})
+		fr.AddAggregator(gad, []string{FlowLogsLocalReporterName})
 	}
 }
 
