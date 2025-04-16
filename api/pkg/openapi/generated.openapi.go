@@ -3403,6 +3403,13 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							Format:      "",
 						},
 					},
+					"flowLogsLocalReporter": {
+						SchemaProps: spec.SchemaProps{
+							Description: "FlowLogsLocalReporter configures local unix socket for reporting flow data from each node. [Default: Disabled]",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 					"bpfProfiling": {
 						SchemaProps: spec.SchemaProps{
 							Description: "BPFProfiling controls profiling of BPF programs. At the monent, it can be Disabled or Enabled. [Default: Disabled]",
