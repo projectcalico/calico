@@ -74,7 +74,7 @@ func New(
 		}
 	}
 	if configParams.FlowLogsLocalSocket == "Enabled" {
-		log.Infof("Creating Flow Logs LocalSocketReporter with address %v", goldmane.NodeSocketAddress)
+		log.Infof("Creating Flow Logs node socket Reporter with address %v", goldmane.NodeSocketAddress)
 		nd := goldmane.NewNodeSocketReporter()
 		dispatchers[FlowLogsNodeSocketReporterName] = nd
 	}
