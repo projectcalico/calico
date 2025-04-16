@@ -16,7 +16,8 @@
         "test:update": "jest -u",
         "test:cov": "jest --coverage",
         "verify": "yarn format && yarn lint --quiet && yarn test:cov --silent && yarn build",
-        "postinstall": "husky"
+        "postinstall": "husky",
+        "patch": "yarn version --no-git-tag-version --new-version patch"
     },
     "dependencies": {
         "@chakra-ui/icons": "^2.2.4",

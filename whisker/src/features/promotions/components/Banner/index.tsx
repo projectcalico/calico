@@ -18,7 +18,7 @@ const Banner: React.FC<BannerProps> = ({
     onClose,
     clusterId,
 }) => (
-    <Alert status='info' padding='2px' data-testid={testId}>
+    <Alert status='info' padding={1} data-testid={testId}>
         <AlertDescription sx={alertDescriptionStyles}>
             {description}{' '}
             <Link

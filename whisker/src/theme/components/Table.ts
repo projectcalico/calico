@@ -63,6 +63,23 @@ const smallStyles = {
     },
 };
 
+const largeStyles = {
+    table: defaultStyles.table,
+    th: {
+        ...defaultStyles.th,
+        fontSize: 'sm',
+        fontWeight: '700',
+    },
+    tr: {
+        ...defaultStyles.tr,
+    },
+    td: {
+        ...defaultStyles.td,
+        fontSize: 'sm',
+        lineHeight: 'normal',
+    },
+};
+
 export default {
     baseStyle: {
         table: {
@@ -86,7 +103,7 @@ export default {
     sizes: {
         sm: smallStyles,
         md: defaultStyles,
-        lg: defaultStyles,
+        lg: largeStyles,
     },
     variants: {
         simple: {
