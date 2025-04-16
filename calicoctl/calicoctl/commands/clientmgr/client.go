@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2025 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,9 +19,12 @@ import (
 	"os"
 
 	log "github.com/sirupsen/logrus"
+	"k8s.io/client-go/kubernetes"
 
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/constants"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
+	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 )
 
@@ -60,4 +63,28 @@ func LoadClientConfig(cf string) (*apiconfig.CalicoAPIConfig, error) {
 	}
 
 	return apiconfig.LoadClientConfig(cf)
+}
+
+func GetClients(cf string) (kubeClient *kubernetes.Clientset, calicoClient client.Interface, bc bapi.Client, err error) {
+	calicoClient, err = NewClient(cf)
+	if err != nil {
+		return
+	}
+
+	// Get the backend client.
+	type accessor interface {
+		Backend() bapi.Client
+	}
+	bc = calicoClient.(accessor).Backend()
+
+	// Get a kube-client. If this is a kdd cluster, we can pull this from the backend.
+	// Otherwise, we need to build one ourselves.
+	if kc, ok := bc.(*k8s.KubeClient); ok {
+		// Pull from the kdd client.
+		kubeClient = kc.ClientSet
+	}
+	// TODO: Support etcd mode. For now, this is OK since we don't actually
+	// use the kubeClient yet. But we will do so eventually.
+
+	return
 }

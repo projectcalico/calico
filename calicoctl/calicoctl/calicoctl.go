@@ -1,4 +1,4 @@
-// Copyright (c) 2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019-2025 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -46,6 +46,7 @@ func main() {
     node         Calico node management.
     version      Display the version of this binary.
     datastore    Calico datastore management.
+    cluster      Access cluster information.
 
 Options:
   -h --help                    Show this screen.
@@ -129,6 +130,8 @@ Description:
 			err = commands.Node(args)
 		case "ipam":
 			err = commands.IPAM(args)
+		case "cluster":
+			err = commands.Cluster(args)
 		case "datastore":
 			err = commands.Datastore(args)
 		default:
