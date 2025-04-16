@@ -14,6 +14,10 @@ jest.mock('../../../api', () => ({
 
 jest.mock('../../FlowLogsList', () => jest.fn());
 
+jest.mock('../../../hooks', () => ({
+    useFlowLogsHeightOffset: jest.fn().mockReturnValue(1),
+}));
+
 describe('FlowLogsContainer', () => {
     it.skip('should call useFlowLogs with denied query params', () => {
         jest.mocked(useOutletContext).mockReturnValue({ view: 'denied' });
@@ -45,6 +49,7 @@ describe('FlowLogsContainer', () => {
                 error: undefined,
                 flowLogs: [],
                 isLoading: false,
+                heightOffset: 1,
             }),
             undefined,
         );

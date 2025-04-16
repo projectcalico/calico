@@ -6,6 +6,7 @@ jest.mock('@/pages', () => ({
 }));
 
 jest.mock('@/hooks', () => ({
+    ...jest.requireActual('@/hooks'),
     useClusterId: jest.fn().mockReturnValue('fake-cluster-id'),
 }));
 
