@@ -17,6 +17,7 @@ package hashreleaseserver
 import (
 	"bytes"
 	_ "embed"
+	"io"
 	"os"
 	"path/filepath"
 
@@ -62,6 +63,10 @@ func connect(cfg *Config) (*ssh.Session, error) {
 }
 
 func runSSHCommand(cfg *Config, command string) (string, error) {
+	return runSSHCommandWithStdin(cfg, command, nil)
+}
+
+func runSSHCommandWithStdin(cfg *Config, command string, stdin io.Reader) (string, error) {
 	session, err := connect(cfg)
 	if err != nil {
 		logrus.WithError(err).Error("failed to connect to remote host")
@@ -70,8 +75,12 @@ func runSSHCommand(cfg *Config, command string) (string, error) {
 	defer session.Close()
 	var stdoutBuf bytes.Buffer
 	session.Stdout = &stdoutBuf
+	if stdin != nil {
+		session.Stdin = stdin
+	}
 	logrus.WithField("command", command).Debug("Running command in remote host")
 	if err := session.Run(command); err != nil {
+		logrus.WithError(err).Error("Failed to run command")
 		return "", err
 	}
 	return stdoutBuf.String(), nil
