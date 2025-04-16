@@ -443,7 +443,7 @@ var _ = infrastructure.DatastoreDescribe("connectivity tests and flow logs with 
 
 			opts.ExtraEnvVars["FELIX_FLOWLOGSCOLLECTORDEBUGTRACE"] = "true"
 			opts.ExtraEnvVars["FELIX_FLOWLOGSFLUSHINTERVAL"] = "2"
-			opts.ExtraEnvVars["FELIX_FLOWLOGSGOLDMANESERVER"] = flowlogs.LocalGoldmaneServer
+			opts.ExtraEnvVars["FELIX_FLOWLOGSLOCALSOCKET"] = "Enabled"
 
 			testSetup()
 
