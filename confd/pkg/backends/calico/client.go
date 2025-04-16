@@ -192,7 +192,7 @@ func NewCalicoClient(confdConfig *config.Config) (*client, error) {
 	c.localBGPPeerWatcher.Start()
 
 	// Create a conditional that we use to wake up all of the watcher threads when there
-	// may some actionable updates.
+	// may be some actionable updates.
 	c.watcherCond = sync.NewCond(&c.cacheLock)
 
 	// Increment the waitForSync wait group.  This blocks the GetValues call until the
@@ -292,9 +292,11 @@ func NewCalicoClient(confdConfig *config.Config) (*client, error) {
 	return c, nil
 }
 
+// Strings for keying in-sync messages by their upstream source.
 var (
-	SourceSyncer         string = "SourceSyncer"
-	SourceRouteGenerator string = "SourceRouteGenerator"
+	SourceSyncer              string = "SourceSyncer"
+	SourceRouteGenerator      string = "SourceRouteGenerator"
+	SourceLocalBGPPeerWatcher string = "LocalBGPPeerWatcher"
 )
 
 // client implements the StoreClient interface for confd, and also implements the
@@ -425,7 +427,7 @@ func (c *client) ExcludeServiceAdvertisement() bool {
 	return false
 }
 
-// OnInSync handles multiplexing in-sync messages from multiple data sources
+// OnSyncChange handles multiplexing in-sync messages from multiple data sources
 // into a single representation of readiness.
 func (c *client) OnSyncChange(source string, ready bool) {
 	c.cacheLock.Lock()
@@ -439,13 +441,13 @@ func (c *client) OnSyncChange(source string, ready bool) {
 	log.Infof("Source %v readiness changed, ready=%v", source, ready)
 
 	// Check if we are fully in sync, before applying this change.
-	oldFullSync := c.sourceReady[SourceSyncer] && c.sourceReady[SourceRouteGenerator]
+	oldFullSync := c.inSync()
 
 	// Apply the change.
 	c.sourceReady[source] = ready
 
 	// Check if we are fully in sync now.
-	newFullSync := c.sourceReady[SourceSyncer] && c.sourceReady[SourceRouteGenerator]
+	newFullSync := c.inSync()
 
 	if newFullSync == oldFullSync {
 		log.Debugf("No change to full sync status (%v)", newFullSync)
@@ -465,6 +467,10 @@ func (c *client) OnSyncChange(source string, ready bool) {
 		log.Info("Full sync lost")
 		c.waitForSync.Add(1)
 	}
+}
+
+func (c *client) inSync() bool {
+	return c.sourceReady[SourceSyncer] && c.sourceReady[SourceRouteGenerator] && c.sourceReady[SourceLocalBGPPeerWatcher]
 }
 
 type bgpPeer struct {
