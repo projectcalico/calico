@@ -542,8 +542,15 @@ func (r *CalicoManager) publishToHashreleaseServer() error {
 		logrus.WithError(err).Error("Failed to publish hashrelease")
 		return err
 	}
+	if err := hashreleaseserver.AddToHashreleaseLibrary(r.hashrelease, &r.hashreleaseConfig); err != nil {
+		logrus.WithError(err).Error("Failed to add hashrelease to library")
+		return err
+	}
 	if r.hashrelease.Latest {
-		return hashreleaseserver.SetHashreleaseAsLatest(r.hashrelease, r.productCode, &r.hashreleaseConfig)
+		if err := hashreleaseserver.SetHashreleaseAsLatest(r.hashrelease, r.productCode, &r.hashreleaseConfig); err != nil {
+			logrus.WithError(err).Error("Failed to set hashrelease as latest")
+			return err
+		}
 	}
 	return nil
 }
