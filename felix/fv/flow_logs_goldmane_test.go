@@ -785,7 +785,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane node server tests"
 
 		opts.ExtraEnvVars["FELIX_FLOWLOGSCOLLECTORDEBUGTRACE"] = "true"
 		opts.ExtraEnvVars["FELIX_FLOWLOGSFLUSHINTERVAL"] = "2"
-		opts.ExtraEnvVars["FELIX_FLOWLOGSLOCALSOCKET"] = "Enabled"
+		opts.ExtraEnvVars["FELIX_FLOWLOGSLOCALREPORTER"] = "Enabled"
 
 		numNodes := 2
 		tc, _ = infrastructure.StartNNodeTopology(numNodes, opts, infra)

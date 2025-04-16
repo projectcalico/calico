@@ -73,8 +73,8 @@ func New(
 			dispatchers[FlowLogsGoldmaneReporterName] = gd
 		}
 	}
-	if configParams.FlowLogsLocalSocket == "Enabled" {
-		log.Infof("Creating Flow Logs node socket Reporter with address %v", goldmane.NodeSocketAddress)
+	if configParams.FlowLogsLocalReporterEnabled() {
+		log.Infof("Creating local Flow Logs Reporter with address %v", goldmane.NodeSocketAddress)
 		nd := goldmane.NewNodeSocketReporter()
 		dispatchers[FlowLogsNodeSocketReporterName] = nd
 	}
@@ -102,8 +102,8 @@ func configureFlowAggregation(configParams *config.Config, fr *flowlog.FlowLogRe
 		log.Info("Adding Flow Logs Aggregator (denied) for goldmane")
 		fr.AddAggregator(gad, []string{FlowLogsGoldmaneReporterName})
 	}
-	// Set up aggregator for node socket reporter.
-	if configParams.FlowLogsLocalSocket == "Enabled" {
+	// Set up aggregator for local socket reporter.
+	if configParams.FlowLogsLocalReporterEnabled() {
 		log.Info("Creating node socket Aggregator for allowed")
 		gaa := flowAggregatorForGoldmane(rules.RuleActionAllow, configParams.FlowLogsCollectorDebugTrace)
 		log.Info("Adding Flow Logs Aggregator (allowed) for node socket")

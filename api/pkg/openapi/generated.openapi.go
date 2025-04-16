@@ -3403,9 +3403,9 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							Format:      "",
 						},
 					},
-					"flowLogsLocalSocket": {
+					"flowLogsLocalReporter": {
 						SchemaProps: spec.SchemaProps{
-							Description: "FlowLogsLocalSocket configures local unix socket for reporting flow data from each node. [Default: Disabled]",
+							Description: "FlowLogsLocalReporter configures local unix socket for reporting flow data from each node. [Default: Disabled]",
 							Type:        []string{"string"},
 							Format:      "",
 						},

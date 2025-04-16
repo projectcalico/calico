@@ -1326,9 +1326,9 @@ spec:
                     FlowLogGoldmaneServer is the flow server endpoint to
                     which flow data should be published.
                   type: string
-                flowLogsLocalSocket:
+                flowLogsLocalReporter:
                   description:
-                    "FlowLogsLocalSocket configures local unix socket for
+                    "FlowLogsLocalReporter configures local unix socket for
                     reporting flow data from each node. [Default: Disabled]"
                   enum:
                     - Disabled
