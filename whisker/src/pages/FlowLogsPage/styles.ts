@@ -14,3 +14,7 @@ export const streamButtonStyles = {
         },
     },
 };
+
+export const tabStyles = {
+    fontSize: 'sm',
+};
