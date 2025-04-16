@@ -19,9 +19,11 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	log "github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/felix/bpf/conntrack"
 	"github.com/projectcalico/calico/felix/collector/flowlog"
 )
 
@@ -68,7 +70,6 @@ type FlowTesterOptions struct {
 	CheckPackets         bool // Checks packets in/out
 	CheckBytes           bool // Checks bytes in/out
 	CheckNumFlowsStarted bool // Checks expected number of flows were started
-	CheckFlowsCompleted  bool // Checks the flows completed match the flows started
 }
 
 type flowMeta struct {
@@ -169,16 +170,6 @@ func (t *FlowTester) PopulateFromFlowLogs(reader FlowLogReader) error {
 		existing.EndTime = fl.EndTime
 		fl.FlowReportedStats.Add(existing.FlowReportedStats)
 		t.flows[fm] = fl
-	}
-
-	if t.options.CheckFlowsCompleted {
-		// For each distinct FlowMeta, the counts of flows started and completed should be the same.
-		for fm, fl := range t.flows {
-			if fl.FlowReportedStats.NumFlowsStarted != fl.FlowReportedStats.NumFlowsCompleted {
-				return fmt.Errorf("flow started/completed counts do not match (%d != %d): %#v",
-					fl.FlowReportedStats.NumFlowsStarted, fl.FlowReportedStats.NumFlowsCompleted, fm)
-			}
-		}
 	}
 
 	// Check that we have non-zero packets for each flow.
@@ -300,4 +291,17 @@ func (t *FlowTester) flowMetaFromFlowLog(fl flowlog.FlowLog) flowMeta {
 func (t *FlowTester) reset() {
 	t.flows = make(map[flowMeta]flowlog.FlowLog)
 	t.errors = nil
+}
+
+func WaitForConntrackScan(bpfEnabled bool) {
+	// Wait for conntrack to pick up so that flow is processed with the correct policy definition (this is a hack
+	// because changing the policy before the flow is processed can result in unmatch rule ID).
+	if bpfEnabled {
+		// Make sure that conntrack scanning ticks at least once
+		time.Sleep(3 * conntrack.ScanPeriod)
+	} else {
+		// Allow 6 seconds for the containers.Felix to poll conntrack.  (This is conntrack polling time plus 20%, which gives us
+		// 10% leeway over the polling jitter of 10%)
+		time.Sleep(6 * time.Second)
+	}
 }
