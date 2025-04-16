@@ -27,21 +27,10 @@ type FlowLogsListProps = {
     onRowClicked: (row: VirtualizedRow) => void;
     onSortClicked: () => void;
     maxStartTime: number;
+    heightOffset: number;
 };
-//sum of height of table header, tablist, filters, banner and info
-const bannerHeight = 36;
-const headerHeight = 54;
-const containerPadding = 5;
-const omniFiltersHeight = 46;
-const tabsHeight = 34;
-const columnsHeight = 32;
-const HEADER_HEIGHT =
-    bannerHeight +
-    headerHeight +
-    containerPadding +
-    omniFiltersHeight +
-    tabsHeight +
-    columnsHeight;
+
+const columnsHeight = 36;
 
 const defaultColumnNames = getTableColumns(() => undefined)
     .filter((column) => !column.disableReordering)
@@ -75,6 +64,7 @@ const FlowLogsList: React.FC<FlowLogsListProps> = ({
     onRowClicked,
     onSortClicked,
     maxStartTime,
+    heightOffset,
 }) => {
     const onColumnCustomizerOpen = () => {
         setColCustomizerVisible(true);
@@ -114,7 +104,8 @@ const FlowLogsList: React.FC<FlowLogsListProps> = ({
 
     const body = document.body;
     const height =
-        Math.max(body.scrollHeight, body.offsetHeight) - HEADER_HEIGHT;
+        Math.max(body.scrollHeight, body.offsetHeight) -
+        (columnsHeight + heightOffset);
 
     const customizerIndex = originalColumns.findIndex(
         (col) => col.accessor === 'customizer_header',
@@ -122,25 +113,28 @@ const FlowLogsList: React.FC<FlowLogsListProps> = ({
 
     return (
         <>
-            <ReorderableCheckList
-                title='Customize Columns'
-                items={columns.filter((c) => !c.disableReordering)}
-                onSave={(list) => {
-                    const newStoredColumns = list
-                        .filter((column) => column.checked)
-                        .map((column) => column.Header as string);
-                    setStoredColumns(newStoredColumns);
-                    setColumns([
-                        originalColumns[expandoIndex],
-                        ...list,
-                        originalColumns[customizerIndex],
-                    ]);
-                }}
-                keyProp='Header'
-                labelProp='Header'
-                isOpen={colCustomizerVisible}
-                onClose={() => setColCustomizerVisible(false)}
-            />
+            {colCustomizerVisible && (
+                <ReorderableCheckList
+                    size='sm'
+                    title='Customize Columns'
+                    items={columns.filter((c) => !c.disableReordering)}
+                    onSave={(list) => {
+                        const newStoredColumns = list
+                            .filter((column) => column.checked)
+                            .map((column) => column.Header as string);
+                        setStoredColumns(newStoredColumns);
+                        setColumns([
+                            originalColumns[expandoIndex],
+                            ...list,
+                            originalColumns[customizerIndex],
+                        ]);
+                    }}
+                    keyProp='Header'
+                    labelProp='Header'
+                    isOpen={colCustomizerVisible}
+                    onClose={() => setColCustomizerVisible(false)}
+                />
+            )}
             <DataTable.Table
                 data-testid='flow-logs-table'
                 items={flowLogs}
@@ -170,6 +164,7 @@ const FlowLogsList: React.FC<FlowLogsListProps> = ({
                 initialState={{
                     sortBy: [{ id: 'start_time', desc: true }],
                 }}
+                size='lg'
             />
         </>
     );

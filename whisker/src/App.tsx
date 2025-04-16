@@ -15,6 +15,8 @@ import {
     createBrowserRouter,
 } from 'react-router-dom';
 import AppConfigProvider from '@/context/AppConfig';
+import PromoBannerProvider from './context/PromoBanner';
+import { useBuildInfo } from './hooks';
 
 const queryClient = new QueryClient({
     defaultOptions: {
@@ -56,13 +58,21 @@ export const routes: RouteObject[] = [
 
 const router = createBrowserRouter(routes);
 
+const Providers: React.FC<React.PropsWithChildren> = ({ children }) => (
+    <AppConfigProvider>
+        <PromoBannerProvider>{children}</PromoBannerProvider>
+    </AppConfigProvider>
+);
+
 const App: React.FC = () => {
+    useBuildInfo();
+
     return (
         <ChakraProvider>
             <QueryClientProvider client={queryClient}>
-                <AppConfigProvider>
+                <Providers>
                     <RouterProvider router={router} />
-                </AppConfigProvider>
+                </Providers>
 
                 <ReactQueryDevtools initialIsOpen={false} />
             </QueryClientProvider>

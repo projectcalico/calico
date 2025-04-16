@@ -1,6 +1,7 @@
 import { renderHook } from '@testing-library/react';
-import { useMaxStartTime, useShouldAnimate } from '..';
+import { useFlowLogsHeightOffset, useMaxStartTime, useShouldAnimate } from '..';
 import { FlowLog } from '@/types/render';
+import { PromoBannerContext } from '@/context/PromoBanner';
 
 const flowLog = {
     id: '1',
@@ -80,5 +81,36 @@ describe('useShouldAnimate', () => {
         const shouldAnimate = result.current;
 
         expect(shouldAnimate(flowLog)).toEqual(false);
+    });
+});
+
+describe('useFlowLogsHeightOffset', () => {
+    const createWrapper =
+        (isVisible: boolean) =>
+        ({ children }: any) => (
+            <PromoBannerContext.Provider
+                value={{
+                    dispatch: jest.fn(),
+                    state: { isVisible },
+                }}
+            >
+                <>{children}</>
+            </PromoBannerContext.Provider>
+        );
+
+    it('should include the banner height', () => {
+        const { result } = renderHook(() => useFlowLogsHeightOffset(), {
+            wrapper: createWrapper(true),
+        });
+
+        expect(result.current).toEqual(185);
+    });
+
+    it('should not include the banner height', () => {
+        const { result } = renderHook(() => useFlowLogsHeightOffset(), {
+            wrapper: createWrapper(false),
+        });
+
+        expect(result.current).toEqual(145);
     });
 });
