@@ -23,6 +23,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
+	v3 "github.com/projectcalico/calico/felix/bpf/conntrack/v3"
 	"github.com/projectcalico/calico/felix/collector"
 	"github.com/projectcalico/calico/felix/collector/types/tuple"
 	"github.com/projectcalico/calico/felix/timeshim/mocktime"
@@ -75,7 +76,7 @@ var _ = Describe("BPF Conntrack InfoReader", func() {
 		),
 		Entry("normal entry - no NAT - swapped legs",
 			conntrack.NewKey(123, backendIP, backendPort, clientIP, clientPort),
-			conntrack.NewValueNormal(now, 0, LegDstSrc, LegSrcDst),
+			conntrack.NewValueNormal(now, v3.FlagSrcDstBA, LegDstSrc, LegSrcDst),
 			collector.ConntrackInfo{
 				Tuple: makeTuple(clientIP, backendIP, clientPort, backendPort, 123),
 			},
@@ -90,7 +91,7 @@ var _ = Describe("BPF Conntrack InfoReader", func() {
 		),
 		Entry("normal entry - no NAT - expired - swapped legs",
 			conntrack.NewKey(123, backendIP, backendPort, clientIP, clientPort),
-			conntrack.NewValueNormal(now-time.Hour, 0, LegDstSrc, LegSrcDst),
+			conntrack.NewValueNormal(now-time.Hour, v3.FlagSrcDstBA, LegDstSrc, LegSrcDst),
 			collector.ConntrackInfo{
 				Expired: true,
 				Tuple:   makeTuple(clientIP, backendIP, clientPort, backendPort, 123),
@@ -108,7 +109,7 @@ var _ = Describe("BPF Conntrack InfoReader", func() {
 		),
 		Entry("reverse entry - NAT - swapped legs",
 			conntrack.NewKey(123, backendIP, backendPort, clientIP, clientPort),
-			conntrack.NewValueNATReverse(now, 0, LegDstSrc, LegSrcDst, net.IPv4(0, 0, 0, 0), svcIP, svcPort),
+			conntrack.NewValueNATReverse(now, v3.FlagSrcDstBA, LegDstSrc, LegSrcDst, net.IPv4(0, 0, 0, 0), svcIP, svcPort),
 			collector.ConntrackInfo{
 				IsDNAT:       true,
 				Tuple:        makeTuple(clientIP, backendIP, clientPort, backendPort, 123),
@@ -127,7 +128,7 @@ var _ = Describe("BPF Conntrack InfoReader", func() {
 		),
 		Entry("reverse entry - NAT - expired - swapped legs",
 			conntrack.NewKey(123, backendIP, backendPort, clientIP, clientPort),
-			conntrack.NewValueNATReverse(now-time.Hour, 0, LegDstSrc, LegSrcDst, net.IPv4(0, 0, 0, 0), svcIP, svcPort),
+			conntrack.NewValueNATReverse(now-time.Hour, v3.FlagSrcDstBA, LegDstSrc, LegSrcDst, net.IPv4(0, 0, 0, 0), svcIP, svcPort),
 			collector.ConntrackInfo{
 				Expired:      true,
 				IsDNAT:       true,
