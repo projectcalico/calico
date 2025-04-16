@@ -107,7 +107,16 @@ func HasHashrelease(hash string, cfg *Config) (bool, error) {
 // SetHashreleaseAsLatest sets the hashrelease as the latest for the stream
 func SetHashreleaseAsLatest(rel Hashrelease, productCode string, cfg *Config) error {
 	logrus.Debugf("Updating latest hashrelease for %s stream to %s", rel.Stream, rel.Name)
-	if _, err := runSSHCommand(cfg, fmt.Sprintf(`echo "%s/" > %s/latest-%s/%s.txt && echo %s >> %s`, rel.URL(), RemoteDocsPath(cfg.User), productCode, rel.Stream, rel.Note, remoteReleasesLibraryPath(cfg.User))); err != nil {
+	if _, err := runSSHCommand(cfg, fmt.Sprintf(`echo "%s/" > %s/latest-%s/%s.txt`, rel.URL(), RemoteDocsPath(cfg.User), productCode, rel.Stream)); err != nil {
+		logrus.WithError(err).Error("Failed to update latest hashrelease and hashrelease library")
+		return err
+	}
+	return nil
+}
+
+func AddToHashreleaseLibrary(rel Hashrelease, cfg *Config) error {
+	logrus.WithField("hashrelease", rel.Name).WithField("hash", rel.Hash).Debug("Adding hashrelease to library")
+	if _, err := runSSHCommand(cfg, fmt.Sprintf(`echo "%s - %s " >> %s`, rel.Hash, rel.Note, remoteReleasesLibraryPath(cfg.User))); err != nil {
 		logrus.WithError(err).Error("Failed to update latest hashrelease and hashrelease library")
 		return err
 	}
