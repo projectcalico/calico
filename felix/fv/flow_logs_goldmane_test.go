@@ -30,7 +30,6 @@ import (
 	. "github.com/onsi/gomega"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
-	"github.com/projectcalico/calico/felix/bpf/conntrack"
 	"github.com/projectcalico/calico/felix/collector/flowlog"
 	"github.com/projectcalico/calico/felix/collector/types/endpoint"
 	"github.com/projectcalico/calico/felix/collector/types/tuple"
@@ -298,14 +297,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log tests", [
 			tc.Felixes[ii].Exec("conntrack", "-L")
 		}
 
-		if bpfEnabled {
-			// Make sure that conntrack scanning ticks at least once
-			time.Sleep(3 * conntrack.ScanPeriod)
-		} else {
-			// Allow 6 seconds for the containers.Felix to poll conntrack.  (This is conntrack polling time plus 20%, which gives us
-			// 10% leeway over the polling jitter of 10%)
-			time.Sleep(6 * time.Second)
-		}
+		flowlogs.WaitForConntrackScan(bpfEnabled)
 
 		// Delete conntrack state so that we don't keep seeing 0-metric copies of the logs.  This will allow the flows
 		// to expire quickly.
@@ -345,6 +337,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log tests", [
 				MatchEnforcedPolicies:  true,
 				MatchLabels:            false,
 				Includes:               []flowlogs.IncludeFilter{flowlogs.IncludeByDestPort(wepPort)},
+				CheckNumFlowsStarted:   true,
 			})
 
 			err := flowTester.PopulateFromFlowLogs(tc.Felixes[0])
@@ -410,6 +403,11 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log tests", [
 					FlowEnforcedPolicySet: flowlog.FlowPolicySet{
 						"0|__PROFILE__|__PROFILE__.default|allow|0": {},
 					},
+					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
+						FlowReportedStats: flowlog.FlowReportedStats{
+							NumFlowsStarted: 3,
+						},
+					},
 				})
 
 			if err := flowTester.Finish(); err != nil {
@@ -434,6 +432,11 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log tests", [
 					FlowEnforcedPolicySet: flowlog.FlowPolicySet{
 						"0|__PROFILE__|__PROFILE__.default|allow|0": {},
 					},
+					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
+						FlowReportedStats: flowlog.FlowReportedStats{
+							NumFlowsStarted: 12,
+						},
+					},
 				})
 
 			flowTester.CheckFlow(
@@ -448,6 +451,11 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log tests", [
 					},
 					FlowEnforcedPolicySet: flowlog.FlowPolicySet{
 						"0|default|default/default.np-1|deny|0": {},
+					},
+					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
+						FlowReportedStats: flowlog.FlowReportedStats{
+							NumFlowsStarted: 12,
+						},
 					},
 				})
 
@@ -471,6 +479,11 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log tests", [
 					},
 					FlowEnforcedPolicySet: flowlog.FlowPolicySet{
 						"0|__PROFILE__|__PROFILE__.default|allow|0": {},
+					},
+					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
+						FlowReportedStats: flowlog.FlowReportedStats{
+							NumFlowsStarted: 3,
+						},
 					},
 				})
 
