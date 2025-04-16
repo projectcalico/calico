@@ -100,7 +100,7 @@ export const getTableColumns = (onColumnCustomizerOpen: () => void) => [
                     onClick={() => {
                         onColumnCustomizerOpen();
                     }}
-                    minHeight={8}
+                    minHeight='36px'
                 >
                     <Icon as={AddIcon} />
                 </Button>

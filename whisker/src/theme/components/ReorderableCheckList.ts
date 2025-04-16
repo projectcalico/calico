@@ -1,5 +1,26 @@
 export default {
-    parts: ['root', 'list', 'item', 'checkbox', 'footer', 'header', 'body'],
+    parts: [
+        'root',
+        'list',
+        'item',
+        'checkbox',
+        'footer',
+        'header',
+        'body',
+        'footerButton',
+    ],
+    sizes: {
+        sm: {
+            checkbox: {
+                '.chakra-checkbox__label': {
+                    fontSize: 'sm',
+                },
+            },
+            footerButton: {
+                fontSize: 'sm',
+            },
+        },
+    },
     baseStyle: {
         root: {
             pb: 2,

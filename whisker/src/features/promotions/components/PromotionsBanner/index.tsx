@@ -6,44 +6,53 @@ import { useNotifications } from '../../hooks';
 import { hasNewContent } from '../../utils';
 import Banner from '../Banner';
 import { useClusterId } from '@/hooks';
+import { usePromoBanner } from '@/context/PromoBanner';
 
 const PromotionsBannerContainer: React.FC = () => {
-    const [showBanner, setShowBanner] = useLocalStorage(
+    const [storedShowBanner, setStoredShowBanner] = useLocalStorage(
         'whisker.showPromotionsBanner',
         true,
     );
     const [storedContent, setStoredContent] = useLocalStorage<
         BannerContent | undefined
     >('whisker.promotionsBannerContent', undefined);
-    const [isOpen, setIsOpen] = React.useState(showBanner);
     const { notificationsEnabled, notificationsDisabled } = useNotifications();
     const content = usePromotionsContent(notificationsEnabled) ?? storedContent;
     const clusterId = useClusterId();
+
+    const {
+        dispatch,
+        state: { isVisible },
+    } = usePromoBanner();
+
+    React.useEffect(() => {
+        dispatch({ type: storedShowBanner ? 'show' : 'hide' });
+    }, []);
 
     React.useEffect(() => {
         if (content && !storedContent) {
             setStoredContent(content);
         } else if (hasNewContent(content, storedContent)) {
             setStoredContent(content);
-            setShowBanner(true);
-            setIsOpen(true);
+            setStoredShowBanner(true);
+            dispatch({ type: 'show' });
         }
     }, [content]);
 
     React.useEffect(() => {
         if (notificationsDisabled) {
-            setIsOpen(false);
+            dispatch({ type: 'hide' });
             setStoredContent(undefined);
         }
     }, [notificationsDisabled]);
 
-    return isOpen && showBanner && content ? (
+    return isVisible && storedShowBanner && content ? (
         <Banner
             link={content.bannerLink}
             description={content.bannerText}
             onClose={() => {
-                setShowBanner(false);
-                setIsOpen(true);
+                setStoredShowBanner(false);
+                dispatch({ type: 'hide' });
             }}
             clusterId={clusterId}
         />
