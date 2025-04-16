@@ -73,7 +73,7 @@ var runStatusReporter = flagSet.Bool("status-reporter", false, "Run node status 
 var showStatus = flagSet.Bool("show-status", false, "Print out node status")
 
 // Options for watching node flowlogs.
-var fetchFlows = flagSet.Int("flows", 0, "Fetch a number of Flows. Use a negative value to watch forever.")
+var flows = flagSet.Int("flows", 0, "Fetch a number of Flows. Use a negative value to watch forever.")
 
 // confd flags
 var runConfd = flagSet.Bool("confd", false, "Run confd")
@@ -176,9 +176,8 @@ func main() {
 	} else if *showStatus {
 		status.Show()
 		os.Exit(0)
-	} else if *fetchFlows != 0 {
-		flowlogs.StartAndWatch(*fetchFlows)
-		os.Exit(0)
+	} else if *flows != 0 {
+		flowlogs.RunFlowsCmd(*flows)
 	} else {
 		fmt.Println("No valid options provided. Usage:")
 		flagSet.PrintDefaults()

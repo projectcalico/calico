@@ -17,6 +17,7 @@ package flowlogs
 import (
 	"context"
 	"fmt"
+	"os"
 	"os/signal"
 	"syscall"
 	"time"
@@ -27,6 +28,13 @@ import (
 	"github.com/projectcalico/calico/goldmane/pkg/types"
 	"github.com/projectcalico/calico/goldmane/proto"
 )
+
+func RunFlowsCmd(num int) {
+	// Command-line tools should log to stderr to avoid confusion with the output.
+	logrus.SetOutput(os.Stderr)
+	StartAndWatch(num)
+	os.Exit(0)
+}
 
 func StartAndWatch(num int) {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)

@@ -75,12 +75,8 @@ func New(
 	}
 	if configParams.FlowLogsLocalSocket == "Enabled" {
 		log.Infof("Creating Flow Logs LocalSocketReporter with address %v", goldmane.NodeSocketAddress)
-		nd, err := goldmane.NewReporter(goldmane.NodeSocketAddress, "", "", "")
-		if err != nil {
-			log.WithError(err).Fatalf("Failed to create Flow Logs LocalSocketReporter.")
-		} else {
-			dispatchers[FlowLogsNodeSocketReporterName] = nd
-		}
+		nd := goldmane.NewNodeSocketReporter()
+		dispatchers[FlowLogsNodeSocketReporterName] = nd
 	}
 
 	if len(dispatchers) > 0 {
@@ -98,28 +94,28 @@ func configureFlowAggregation(configParams *config.Config, fr *flowlog.FlowLogRe
 	// Set up aggregator for goldmane reporter.
 	if configParams.FlowLogsGoldmaneServer != "" {
 		log.Info("Creating goldmane Aggregator for allowed")
-		gaa := goldmaneFlowAggregator(rules.RuleActionAllow, configParams.FlowLogsCollectorDebugTrace)
+		gaa := flowAggregatorForGoldmane(rules.RuleActionAllow, configParams.FlowLogsCollectorDebugTrace)
 		log.Info("Adding Flow Logs Aggregator (allowed) for goldmane")
 		fr.AddAggregator(gaa, []string{FlowLogsGoldmaneReporterName})
 		log.Info("Creating goldmane Aggregator for denied")
-		gad := goldmaneFlowAggregator(rules.RuleActionDeny, configParams.FlowLogsCollectorDebugTrace)
+		gad := flowAggregatorForGoldmane(rules.RuleActionDeny, configParams.FlowLogsCollectorDebugTrace)
 		log.Info("Adding Flow Logs Aggregator (denied) for goldmane")
 		fr.AddAggregator(gad, []string{FlowLogsGoldmaneReporterName})
 	}
 	// Set up aggregator for node socket reporter.
 	if configParams.FlowLogsLocalSocket == "Enabled" {
 		log.Info("Creating node socket Aggregator for allowed")
-		gaa := goldmaneFlowAggregator(rules.RuleActionAllow, configParams.FlowLogsCollectorDebugTrace)
+		gaa := flowAggregatorForGoldmane(rules.RuleActionAllow, configParams.FlowLogsCollectorDebugTrace)
 		log.Info("Adding Flow Logs Aggregator (allowed) for node socket")
 		fr.AddAggregator(gaa, []string{FlowLogsNodeSocketReporterName})
 		log.Info("Creating node socket Aggregator for denied")
-		gad := goldmaneFlowAggregator(rules.RuleActionDeny, configParams.FlowLogsCollectorDebugTrace)
+		gad := flowAggregatorForGoldmane(rules.RuleActionDeny, configParams.FlowLogsCollectorDebugTrace)
 		log.Info("Adding Flow Logs Aggregator (denied) for node socket")
 		fr.AddAggregator(gad, []string{FlowLogsNodeSocketReporterName})
 	}
 }
 
-func goldmaneFlowAggregator(forAction rules.RuleAction, traceEnabled bool) *flowlog.Aggregator {
+func flowAggregatorForGoldmane(forAction rules.RuleAction, traceEnabled bool) *flowlog.Aggregator {
 	return flowlog.NewAggregator().
 		DisplayDebugTraceLogs(traceEnabled).
 		IncludeLabels(true).
