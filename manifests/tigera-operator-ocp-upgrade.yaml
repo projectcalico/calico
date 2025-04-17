@@ -693,3 +693,4 @@ spec:
           volumeMounts:
             - name: calico-resources
               mountPath: /calico-resources
+---
