@@ -201,6 +201,10 @@ type poolAccessor struct {
 
 func (p poolAccessor) GetEnabledPools(ctx context.Context, ipVersion int) ([]v3.IPPool, error) {
 	return p.getPools(ctx, func(pool *v3.IPPool) bool {
+		if !pool.DeletionTimestamp.IsZero() {
+			log.Debugf("Skipping deleting IP pool (%s)", pool.Name)
+			return false
+		}
 		if pool.Spec.Disabled {
 			log.Debugf("Skipping disabled IP pool (%s)", pool.Name)
 			return false
