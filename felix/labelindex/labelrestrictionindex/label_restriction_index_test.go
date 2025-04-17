@@ -70,7 +70,7 @@ func TestLabelRestrictionIndex(t *testing.T) {
 	t.Log("Checking that the correct selectors are found...")
 	potentialMatches := func(labels map[string]string) []string {
 		var out []string
-		idx.IterPotentialMatches(labeledAdapter(labels), func(s string, s2 selector.Selector) {
+		idx.IterPotentialMatches(labeledAdapter(labels), func(s string, s2 *selector.Selector) {
 			Expect(out).NotTo(ContainElement(s), "IterPotentialMatches produced duplicate: "+s)
 			out = append(out, s)
 			Expect(s2).NotTo(BeNil())
@@ -228,7 +228,7 @@ func TestFindMostRestrictedLabel(t *testing.T) {
 		"findMostRestrictedLabel should handle >10k values when comparing to MustBePresent (edge case)")
 }
 
-func mustParseSelector(s string) selector.Selector {
+func mustParseSelector(s string) *selector.Selector {
 	sel, err := selector.Parse(s)
 	Expect(err).NotTo(HaveOccurred())
 	return sel
