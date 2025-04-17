@@ -89,7 +89,7 @@ func (dc *DockerConfig) GetAuth(registryURL string) (registry.AuthConfig, error)
 		if err != nil {
 			logWithRegistry.Debug("Failed to get credentials from default credsStore")
 		} else {
-			logWithRegistry.Debug("Got authenticatino information from default credsStore")
+			logWithRegistry.Debug("Got authentication information from default credsStore")
 			dc.Auths[registryURL] = dockerCreds.toAuthConfig()
 			return dc.Auths[registryURL], nil
 		}
