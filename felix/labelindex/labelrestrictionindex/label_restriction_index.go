@@ -29,7 +29,7 @@ import (
 // find a small subset of selectors that are candidate matches.
 type LabelRestrictionIndex[SelID comparable] struct {
 	// selectorsByID stores all selectors that we know about by their ID.
-	selectorsByID map[SelID]selector.Selector
+	selectorsByID map[SelID]*selector.Selector
 
 	// labelToValueToIDs stores a sub-index for each label name that occurs in
 	// a selector.  This is the main lookup datastructure.  The valuesSubIndex
@@ -62,7 +62,7 @@ type Gauge interface {
 
 func New[SelID comparable](opts ...Option[SelID]) *LabelRestrictionIndex[SelID] {
 	idx := &LabelRestrictionIndex[SelID]{
-		selectorsByID:     map[SelID]selector.Selector{},
+		selectorsByID:     map[SelID]*selector.Selector{},
 		labelToValueToIDs: map[string]*valuesSubIndex[SelID]{},
 		unoptimizedIDs:    set.New[SelID](),
 	}
@@ -72,7 +72,7 @@ func New[SelID comparable](opts ...Option[SelID]) *LabelRestrictionIndex[SelID] 
 	return idx
 }
 
-func (s *LabelRestrictionIndex[SelID]) AddSelector(id SelID, selector selector.Selector) {
+func (s *LabelRestrictionIndex[SelID]) AddSelector(id SelID, selector *selector.Selector) {
 	defer s.updateGauges()
 
 	// In case of changes with the same ID, delete it first to clean up the
@@ -230,7 +230,7 @@ type Labeled interface {
 	IterOwnAndParentLabels(func(k, v string))
 }
 
-func (s *LabelRestrictionIndex[SelID]) IterPotentialMatches(item Labeled, f func(SelID, selector.Selector)) {
+func (s *LabelRestrictionIndex[SelID]) IterPotentialMatches(item Labeled, f func(SelID, *selector.Selector)) {
 	emit := func(id SelID) error {
 		f(id, s.selectorsByID[id])
 		return nil

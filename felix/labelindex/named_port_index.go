@@ -170,7 +170,7 @@ type ipSetData struct {
 	// The selector and named port that this IP set represents.  If the selector is nil then
 	// this IP set represents an unfiltered named port.  If namedPortProtocol == ProtocolNone then
 	// this IP set represents a selector only, with no named port component.
-	selector          selector.Selector
+	selector          *selector.Selector
 	namedPortProtocol IPSetPortProtocol
 	namedPort         string
 
@@ -478,7 +478,7 @@ func extractCIDRsFromNetworkSet(netSet *model.NetworkSet) []ip.CIDR {
 
 var defaultLogCtx = log.WithField("fieldsSuppressedAtThisLogLevel", "true")
 
-func (idx *SelectorAndNamedPortIndex) UpdateIPSet(ipSetID string, sel selector.Selector, namedPortProtocol IPSetPortProtocol, namedPort string) {
+func (idx *SelectorAndNamedPortIndex) UpdateIPSet(ipSetID string, sel *selector.Selector, namedPortProtocol IPSetPortProtocol, namedPort string) {
 	logCxt := defaultLogCtx
 	if log.IsLevelEnabled(log.DebugLevel) {
 		logCxt = log.WithFields(log.Fields{
@@ -496,7 +496,7 @@ func (idx *SelectorAndNamedPortIndex) UpdateIPSet(ipSetID string, sel selector.S
 	// Check whether anything has actually changed before we do a scan.
 	oldIPSetData := idx.ipSetDataByID[ipSetID]
 	if oldIPSetData != nil {
-		if oldIPSetData.selector.UniqueID() == sel.UniqueID() &&
+		if oldIPSetData.selector.Equal(sel) &&
 			oldIPSetData.namedPortProtocol == namedPortProtocol &&
 			oldIPSetData.namedPort == namedPort {
 			// Spurious refresh of existing IP set.
@@ -721,7 +721,7 @@ func (idx *SelectorAndNamedPortIndex) scanEndpointAgainstIPSets(
 
 	// Iterate over potential new matches and incref any members that
 	// that produces.  (This may temporarily over count.)
-	idx.selectorCandidatesIdx.IterPotentialMatches(epData, func(ipSetID string, _ selector.Selector) {
+	idx.selectorCandidatesIdx.IterPotentialMatches(epData, func(ipSetID string, _ *selector.Selector) {
 		// Make sure we don't appear non-live if there are a lot of IP sets to get through.
 		idx.maybeReportLive()
 
