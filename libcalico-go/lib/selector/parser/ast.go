@@ -20,6 +20,8 @@ import (
 	"strings"
 
 	log "github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/calico/libcalico-go/lib/hash"
 )
 
 // Labels defines the interface of labels that can be used by selector
@@ -115,6 +117,7 @@ func (sel *Selector) EvaluateLabels(labels Labels) bool {
 
 func (sel *Selector) AcceptVisitor(v Visitor) {
 	sel.root.AcceptVisitor(v)
+	sel.updateFields()
 }
 
 func (sel *Selector) String() string {
@@ -138,6 +141,14 @@ func (sel *Selector) Equal(other *Selector) bool {
 
 func (sel *Selector) Root() Node {
 	return sel.root
+}
+
+func (sel *Selector) updateFields() {
+	fragments := sel.root.collectFragments([]string{})
+	str := strings.Join(fragments, "")
+	sel.stringRep = str
+	sel.hash = hash.MakeUniqueID("s", str)
+	sel.labelRestrictions = sel.root.LabelRestrictions()
 }
 
 type Node interface {

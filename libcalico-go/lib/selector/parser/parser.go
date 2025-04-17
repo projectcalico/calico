@@ -17,12 +17,10 @@ package parser
 import (
 	"errors"
 	"fmt"
-	"strings"
 	"sync"
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/libcalico-go/lib/hash"
 	"github.com/projectcalico/calico/libcalico-go/lib/selector/tokenizer"
 )
 
@@ -113,17 +111,10 @@ func (p *Parser) parseRoot(selector string, validateOnly bool) (sel *Selector, e
 		return
 	}
 
-	fragments := node.collectFragments([]string{})
-	str := strings.Join(fragments, "")
 	sel = &Selector{
 		root: node,
-
-		// We used to calculate these on first use but that leads to problems
-		// with comparing parsed selectors.
-		stringRep:         str,
-		hash:              hash.MakeUniqueID("s", str),
-		labelRestrictions: node.LabelRestrictions(),
 	}
+	sel.updateFields()
 
 	return
 }
