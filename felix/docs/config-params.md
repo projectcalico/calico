@@ -2488,6 +2488,19 @@ FlowLogGoldmaneServer is the flow server endpoint to which flow data should be p
 | `FelixConfiguration` schema | String. |
 | Default value (YAML) | none |
 
+### `FlowLogsLocalReporter` (config file) / `flowLogsLocalReporter` (YAML)
+
+Configures local unix socket for reporting flow data from each node.
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_FlowLogsLocalReporter` |
+| Encoding (env var/config file) | One of: <code>Disabled</code>, <code>Enabled</code> (case insensitive) |
+| Default value (above encoding) | `Disabled` |
+| `FelixConfiguration` field | `flowLogsLocalReporter` (YAML) `FlowLogsLocalReporter` (Go API) |
+| `FelixConfiguration` schema | One of: <code>"Disabled"</code>, <code>"Enabled"</code>. |
+| Default value (YAML) | `Disabled` |
+
 ### `FlowLogsPolicyEvaluationMode` (config file) / `flowLogsPolicyEvaluationMode` (YAML)
 
 Continuous - Felix evaluates active flows on a regular basis to determine the rule
