@@ -31,20 +31,6 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
-// AllSelector is a pre-calculated copy of the "all()" selector.
-var AllSelector selector.Selector
-
-func init() {
-	var err error
-	AllSelector, err = selector.Parse("all()")
-	if err != nil {
-		log.WithError(err).Panic("Failed to parse all() selector.")
-	}
-	// Force the selector's cache fields to be pre-populated.
-	_ = AllSelector.UniqueID()
-	_ = AllSelector.String()
-}
-
 // RuleScanner scans the rules sent to it by the ActiveRulesCalculator, looking for
 // selectors. It calculates the set of active selectors and emits events when they become
 // active/inactive.
@@ -87,7 +73,7 @@ type IPSetData struct {
 	// The selector and named port that this IP set represents.  To represent an unfiltered named
 	// port, set selector to AllSelector.  If NamedPortProtocol == ProtocolNone then
 	// this IP set represents a selector only, with no named port component.
-	Selector selector.Selector
+	Selector *selector.Selector
 
 	// NamedPortProtocol identifies the protocol (TCP or UDP) for a named port IP set.  It is
 	// set to ProtocolNone for a selector-only IP set.
@@ -514,13 +500,13 @@ func ruleToParsedRule(rule *model.Rule) (parsedRule *ParsedRule, allIPSets []*IP
 }
 
 // Converts a list of named ports to a list of IPSets.
-func namedPortsToIPSets(namedPorts []string, positiveSelectors []selector.Selector, proto labelindex.IPSetPortProtocol) []*IPSetData {
+func namedPortsToIPSets(namedPorts []string, positiveSelectors []*selector.Selector, proto labelindex.IPSetPortProtocol) []*IPSetData {
 	var ipSets []*IPSetData
 	if len(positiveSelectors) > 1 {
 		log.WithField("selectors", positiveSelectors).Panic(
 			"More than one positive selector passed to namedPortsToIPSets")
 	}
-	sel := AllSelector
+	sel := selector.All
 	if len(positiveSelectors) > 0 {
 		sel = positiveSelectors[0]
 	}
@@ -536,7 +522,7 @@ func namedPortsToIPSets(namedPorts []string, positiveSelectors []selector.Select
 }
 
 // Converts a list of selectors to a list of IPSets.
-func selectorsToIPSets(selectors []selector.Selector) []*IPSetData {
+func selectorsToIPSets(selectors []*selector.Selector) []*IPSetData {
 	var ipSets []*IPSetData
 	for _, s := range selectors {
 		ipSets = append(ipSets, &IPSetData{
@@ -573,13 +559,13 @@ func splitNamedAndNumericPorts(ports []numorstring.Port) (numericPorts []numorst
 // Returns at most one positive src/dst selector in src/dst.  The named port logic above relies on
 // this.  We still return a slice for those values in order to make it easier to use the utility
 // functions uniformly.
-func extractSelectors(rule *model.Rule) (src, dst, notSrc, notDst []selector.Selector) {
+func extractSelectors(rule *model.Rule) (src, dst, notSrc, notDst []*selector.Selector) {
 	// Calculate a minimal set of selectors.  combineMatchesIfPossible will try to combine the
 	// negative matches into that single selector, if possible.
 	srcRawSel, notSrcSel := combineMatchesIfPossible(rule.SrcSelector, rule.NotSrcSelector)
 	dstRawSel, notDstSel := combineMatchesIfPossible(rule.DstSelector, rule.NotDstSelector)
 
-	parseAndAppendSelectorIfNonZero := func(slice []selector.Selector, rawSelector string) []selector.Selector {
+	parseAndAppendSelectorIfNonZero := func(slice []*selector.Selector, rawSelector string) []*selector.Selector {
 		if rawSelector == "" {
 			return slice
 		}

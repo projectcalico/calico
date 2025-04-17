@@ -177,7 +177,7 @@ func (abp *ActiveBGPPeerCalculator) bgpPeerSelectsLocalNode(bgpPeer *v3.BGPPeer)
 }
 
 func (abp *ActiveBGPPeerCalculator) onPeerActive(bgpPeer *v3.BGPPeer) {
-	var newSelector sel.Selector
+	var newSelector *sel.Selector
 	var err error
 
 	logrus.WithField("bgppeer", bgpPeer).Debugf("BGPPeer is active.")
