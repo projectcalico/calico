@@ -17,12 +17,10 @@ package parser
 import (
 	"errors"
 	"fmt"
-	"strings"
 	"sync"
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/libcalico-go/lib/hash"
 	"github.com/projectcalico/calico/libcalico-go/lib/selector/tokenizer"
 )
 
@@ -90,40 +88,36 @@ func (p *Parser) parseRoot(selector string, validateOnly bool) (sel *Selector, e
 		p.tokBuf = tokens[:0]
 	}
 
+	var node Node
 	if tokens[0].Kind == tokenizer.TokEOF {
 		if validateOnly {
 			return nil, nil
 		}
-		return &Selector{root: &AllNode{}}, nil
-	}
-	if log.IsLevelEnabled(log.DebugLevel) {
-		log.Debugf("Tokens %v", tokens)
+		node = &AllNode{}
+	} else {
+		if log.IsLevelEnabled(log.DebugLevel) {
+			log.Debugf("Tokens %v", tokens)
+		}
+
+		// The "||" operator has the lowest precedence so we start with that.
+		var remTokens []tokenizer.Token
+		node, remTokens, err = p.parseOrExpression(tokens, validateOnly)
+		if err != nil {
+			return
+		}
+		if len(remTokens) != 1 {
+			err = errors.New(fmt.Sprint("unexpected content at end of selector ", remTokens))
+			return
+		}
+		if validateOnly {
+			return
+		}
 	}
 
-	// The "||" operator has the lowest precedence so we start with that.
-	node, remTokens, err := p.parseOrExpression(tokens, validateOnly)
-	if err != nil {
-		return
-	}
-	if len(remTokens) != 1 {
-		err = errors.New(fmt.Sprint("unexpected content at end of selector ", remTokens))
-		return
-	}
-	if validateOnly {
-		return
-	}
-
-	fragments := node.collectFragments([]string{})
-	str := strings.Join(fragments, "")
 	sel = &Selector{
 		root: node,
-
-		// We used to calculate these on first use but that leads to problems
-		// with comparing parsed selectors.
-		stringRep:         str,
-		hash:              hash.MakeUniqueID("s", str),
-		labelRestrictions: node.LabelRestrictions(),
 	}
+	sel.updateFields()
 
 	return
 }
