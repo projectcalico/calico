@@ -1633,6 +1633,13 @@ spec:
                 description: FlowLogGoldmaneServer is the flow server endpoint to
                   which flow data should be published.
                 type: string
+              flowLogsLocalReporter:
+                description: 'FlowLogsLocalReporter configures local unix socket for
+                  reporting flow data from each node. [Default: Disabled]'
+                enum:
+                - Disabled
+                - Enabled
+                type: string
               flowLogsPolicyEvaluationMode:
                 description: |-
                   Continuous - Felix evaluates active flows on a regular basis to determine the rule

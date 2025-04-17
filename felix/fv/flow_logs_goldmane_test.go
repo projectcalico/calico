@@ -31,6 +31,7 @@ import (
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	"github.com/projectcalico/calico/felix/collector/flowlog"
+	"github.com/projectcalico/calico/felix/collector/local"
 	"github.com/projectcalico/calico/felix/collector/types/endpoint"
 	"github.com/projectcalico/calico/felix/collector/types/tuple"
 	"github.com/projectcalico/calico/felix/fv/connectivity"
@@ -100,11 +101,11 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log tests", [
 		opts.FelixLogSeverity = "Debug"
 		opts = infrastructure.DefaultTopologyOptions()
 		opts.IPIPEnabled = false
-		opts.FlowLogSource = infrastructure.FlowLogSourceGoldmane
+		opts.FlowLogSource = infrastructure.FlowLogSourceLocalSocket
 
 		opts.ExtraEnvVars["FELIX_FLOWLOGSCOLLECTORDEBUGTRACE"] = "true"
 		opts.ExtraEnvVars["FELIX_FLOWLOGSFLUSHINTERVAL"] = "2"
-		opts.ExtraEnvVars["FELIX_FLOWLOGSGOLDMANESERVER"] = flowlogs.LocalGoldmaneServer
+		opts.ExtraEnvVars["FELIX_FLOWLOGSGOLDMANESERVER"] = local.SocketAddress
 	})
 
 	JustBeforeEach(func() {
@@ -572,7 +573,7 @@ var _ = infrastructure.DatastoreDescribe("goldmane flow log ipv6 tests", []apico
 
 		infra = getInfra(iOpts...)
 		opts := infrastructure.DefaultTopologyOptions()
-		opts.FlowLogSource = infrastructure.FlowLogSourceGoldmane
+		opts.FlowLogSource = infrastructure.FlowLogSourceLocalSocket
 
 		opts.EnableIPv6 = true
 		opts.IPIPEnabled = false
@@ -582,7 +583,7 @@ var _ = infrastructure.DatastoreDescribe("goldmane flow log ipv6 tests", []apico
 		opts.ExtraEnvVars["FELIX_FLOWLOGSFLUSHINTERVAL"] = "2"
 		opts.ExtraEnvVars["FELIX_IPV6SUPPORT"] = "true"
 		opts.ExtraEnvVars["FELIX_DefaultEndpointToHostAction"] = "RETURN"
-		opts.ExtraEnvVars["FELIX_FLOWLOGSGOLDMANESERVER"] = flowlogs.LocalGoldmaneServer
+		opts.ExtraEnvVars["FELIX_FLOWLOGSGOLDMANESERVER"] = local.SocketAddress
 
 		tc, client = infrastructure.StartNNodeTopology(2, opts, infra)
 
@@ -757,6 +758,176 @@ var _ = infrastructure.DatastoreDescribe("goldmane flow log ipv6 tests", []apico
 			}
 		}
 		Expect(numExpectedFlows).Should(Equal(2))
+	})
+})
+
+var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane local server tests", []apiconfig.DatastoreType{apiconfig.EtcdV3}, func(getInfra infrastructure.InfraFactory) {
+	bpfEnabled := os.Getenv("FELIX_FV_ENABLE_BPF") == "true"
+
+	var (
+		infra   infrastructure.DatastoreInfra
+		tc      infrastructure.TopologyContainers
+		opts    infrastructure.TopologyOptions
+		wlHost1 [2]*workload.Workload
+		wlHost2 [2]*workload.Workload
+		cc      *connectivity.Checker
+	)
+
+	BeforeEach(func() {
+		infra = getInfra()
+		opts.FelixLogSeverity = "Debug"
+		opts = infrastructure.DefaultTopologyOptions()
+		opts.IPIPEnabled = false
+		opts.FlowLogSource = infrastructure.FlowLogSourceLocalSocket
+		opts.DelayFelixStart = true
+
+		opts.ExtraEnvVars["FELIX_FLOWLOGSCOLLECTORDEBUGTRACE"] = "true"
+		opts.ExtraEnvVars["FELIX_FLOWLOGSFLUSHINTERVAL"] = "2"
+		opts.ExtraEnvVars["FELIX_FLOWLOGSLOCALREPORTER"] = "Enabled"
+
+		numNodes := 2
+		tc, _ = infrastructure.StartNNodeTopology(numNodes, opts, infra)
+
+		// Install a default profile that allows all ingress and egress, in the absence of any Policy.
+		infra.AddDefaultAllow()
+
+		// Create workloads on host 1.
+		for ii := range wlHost1 {
+			wIP := fmt.Sprintf("10.65.0.%d", ii)
+			wName := fmt.Sprintf("wl-host1-%d", ii)
+			wlHost1[ii] = workload.Run(tc.Felixes[0], wName, "default", wIP, "8055", "tcp")
+			wlHost1[ii].WorkloadEndpoint.GenerateName = "wl-host1-"
+			wlHost1[ii].ConfigureInInfra(infra)
+		}
+
+		// Create workloads on host 2.
+		for ii := range wlHost2 {
+			wIP := fmt.Sprintf("10.65.1.%d", ii)
+			wName := fmt.Sprintf("wl-host2-%d", ii)
+			wlHost2[ii] = workload.Run(tc.Felixes[1], wName, "default", wIP, "8055", "tcp")
+			wlHost2[ii].WorkloadEndpoint.GenerateName = "wl-host2-"
+			wlHost2[ii].ConfigureInInfra(infra)
+		}
+
+		// Describe the connectivity that we now expect.
+		cc = &connectivity.Checker{}
+		for _, source := range wlHost1 {
+			// Workloads on host 1 can connect to the first workload on host 2.
+			cc.ExpectSome(source, wlHost2[0])
+			// But not the second.
+			cc.ExpectSome(source, wlHost2[1])
+		}
+
+		// Delete conntrack state so that we don't keep seeing 0-metric copies of the logs.  This will allow the flows
+		// to expire quickly.
+		for ii := range tc.Felixes {
+			tc.Felixes[ii].Exec("conntrack", "-F")
+		}
+		for ii := range tc.Felixes {
+			tc.Felixes[ii].Exec("conntrack", "-L")
+		}
+	})
+
+	readFlowlogs := func() bool {
+		for _, felix := range tc.Felixes {
+			flogs, err := felix.FlowLogs()
+			return err == nil && len(flogs) > 0
+		}
+		return false
+	}
+
+	nodeSocketExists := func() bool {
+		for _, felix := range tc.Felixes {
+			_, err := os.Stat(felix.FlowServerAddress())
+			return err == nil
+		}
+		return false
+	}
+
+	It("should connect and get some flow logs", func() {
+		// No goldmane node server must exist.
+		Eventually(nodeSocketExists, "15s", "3s").Should(BeFalse())
+		Consistently(nodeSocketExists, "10s", "2s").Should(BeFalse())
+
+		for _, felix := range tc.Felixes {
+			felix.TriggerDelayedStart()
+		}
+
+		// After Felix start, goldmane node server must exist.
+		Eventually(nodeSocketExists, "15s", "3s").Should(BeTrue())
+		Consistently(nodeSocketExists, "10s", "2s").Should(BeTrue())
+
+		// Do 1 rounds of connectivity checking.
+		cc.CheckConnectivity()
+		for ii := range tc.Felixes {
+			tc.Felixes[ii].Exec("conntrack", "-L")
+		}
+
+		flowlogs.WaitForConntrackScan(bpfEnabled)
+
+		Eventually(readFlowlogs, "15s", "3s").Should(BeTrue())
+		Consistently(readFlowlogs, "10s", "2s").Should(BeTrue())
+
+		for _, felix := range tc.Felixes {
+			felix.FlowServerStop()
+		}
+
+		// After stoping goldmane node server, socket file must be cleaned up.
+		Eventually(nodeSocketExists, "15s", "3s").Should(BeFalse())
+		Consistently(nodeSocketExists, "10s", "2s").Should(BeFalse())
+
+		// ... and reading flowlogs must return no flowlog.
+		Eventually(readFlowlogs, "15s", "3s").Should(BeFalse())
+		Consistently(readFlowlogs, "10s", "2s").Should(BeFalse())
+	})
+
+	AfterEach(func() {
+		if CurrentGinkgoTestDescription().Failed {
+			for _, felix := range tc.Felixes {
+				logNFTDiags(felix)
+				felix.Exec("iptables-save", "-c")
+				felix.Exec("ipset", "list")
+				felix.Exec("ip", "r")
+				felix.Exec("ip", "a")
+			}
+			if bpfEnabled {
+				for _, felix := range tc.Felixes {
+					felix.Exec("calico-bpf", "ipsets", "dump")
+					felix.Exec("calico-bpf", "routes", "dump")
+					felix.Exec("calico-bpf", "nat", "dump")
+					felix.Exec("calico-bpf", "nat", "aff")
+					felix.Exec("calico-bpf", "conntrack", "dump")
+					felix.Exec("calico-bpf", "arp", "dump")
+					felix.Exec("calico-bpf", "counters", "dump")
+					felix.Exec("calico-bpf", "ifstate", "dump")
+					felix.Exec("calico-bpf", "policy", "dump", "eth0", "all")
+				}
+				for _, w := range wlHost1 {
+					tc.Felixes[0].Exec("calico-bpf", "policy", "dump", w.InterfaceName, "all")
+				}
+				for _, w := range wlHost1 {
+					tc.Felixes[1].Exec("calico-bpf", "policy", "dump", w.InterfaceName, "all")
+				}
+			}
+		}
+
+		for _, wl := range wlHost1 {
+			wl.Stop()
+		}
+		for _, wl := range wlHost2 {
+			wl.Stop()
+		}
+		for _, felix := range tc.Felixes {
+			if bpfEnabled {
+				felix.Exec("calico-bpf", "connect-time", "clean")
+			}
+			felix.Stop()
+		}
+
+		if CurrentGinkgoTestDescription().Failed {
+			infra.DumpErrorData()
+		}
+		infra.Stop()
 	})
 })
 
