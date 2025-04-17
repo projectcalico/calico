@@ -135,19 +135,17 @@ ${HELM} template \
 	--set calicoctl.image=$REGISTRY/ctl \
 	--set calicoctl.tag=$CALICO_VERSION
 # The first two lines are a newline and a yaml separator - remove them.
-find ocp/tigera-operator -name "*.yaml" | xargs sed -i -e 1,2d
+find ocp/tigera-operator -name "*.yaml" -print0 | xargs -0 sed -i -e 1,2d
 mv $(find ocp/tigera-operator -name "*.yaml") ocp/ && rm -r ocp/tigera-operator
 
 # Generating the upgrade manifest for OCP.
-# It excludes the CRs (01-*) and the specific BPF files to maintain compatibility with iptables.
-VALUES_FILES=$(ls ocp | grep -v -e '^01-' -e 'cluster-network-operator.yaml' -e '02-configmap-calico-resources.yaml')
+# It excludes files specific to configuring the BPF dataplane, CRs (03-cr-*) and CRDs to maintain compatibility and not change the existing configuration in already installed clusters.
+OCP_VALUES_FILES=$(ls ocp | grep -v -e '01-configmap-kubernetes-services-endpoint\.yaml' -e '02-configmap-calico-resources\.yaml' -e '^03-cr-' -e 'cluster-network-operator\.yaml' -e '\.*crd\.*')
 rm -f tigera-operator-ocp-upgrade.yaml
-for FILE in $VALUES_FILES; do
+for FILE in $OCP_VALUES_FILES; do
   cat "ocp/$FILE" >> tigera-operator-ocp-upgrade.yaml
-  echo -e "---" >> tigera-operator-ocp-upgrade.yaml  # Add divisor
+  echo -e "---" >> tigera-operator-ocp-upgrade.yaml  # Add separator
 done
-# Remove the last separator (last line)
-sed -i -e '$ d' tigera-operator-ocp-upgrade.yaml
 
 ##########################################################################
 # Replace image versions for "static" Calico manifests.
