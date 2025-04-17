@@ -112,9 +112,9 @@ type Config struct {
 // Note that the dataplane statistics channel (ds) is currently just used for the
 // policy syncer but will eventually also include NFLOG stats as well.
 type collector struct {
-	dataplaneInfoReader   DataplaneInfoReader
-	packetInfoReader      PacketInfoReader
-	conntrackInfoReader   ConntrackInfoReader
+	dataplaneInfoReader   types.DataplaneInfoReader
+	packetInfoReader      types.PacketInfoReader
+	conntrackInfoReader   types.ConntrackInfoReader
 	luc                   *calc.LookupsCache
 	epStats               map[tuple.Tuple]*Data
 	ticker                jitter.TickerInterface
@@ -212,22 +212,22 @@ func (c *collector) LogMetrics(mu metric.Update) {
 	}
 }
 
-func (c *collector) SetDataplaneInfoReader(dir DataplaneInfoReader) {
+func (c *collector) SetDataplaneInfoReader(dir types.DataplaneInfoReader) {
 	c.dataplaneInfoReader = dir
 }
 
-func (c *collector) SetPacketInfoReader(pir PacketInfoReader) {
+func (c *collector) SetPacketInfoReader(pir types.PacketInfoReader) {
 	c.packetInfoReader = pir
 }
 
-func (c *collector) SetConntrackInfoReader(cir ConntrackInfoReader) {
+func (c *collector) SetConntrackInfoReader(cir types.ConntrackInfoReader) {
 	c.conntrackInfoReader = cir
 }
 
 func (c *collector) startStatsCollectionAndReporting() {
 	var (
-		pktInfoC <-chan PacketInfo
-		ctInfoC  <-chan []ConntrackInfo
+		pktInfoC <-chan types.PacketInfo
+		ctInfoC  <-chan []types.ConntrackInfo
 	)
 
 	if c.packetInfoReader != nil {
@@ -628,7 +628,7 @@ func (c *collector) sendMetrics(data *Data, expired bool) {
 // This is important for services where the connection will have the cluster IP as the
 // pre-DNAT-ed destination, but we want the post-DNAT workload IP and port.
 // The pre-DNAT entry will also be used to lookup service related information.
-func (c *collector) handleCtInfo(ctInfo ConntrackInfo) {
+func (c *collector) handleCtInfo(ctInfo types.ConntrackInfo) {
 	// Get or create a data entry and update the counters. If no entry is returned then neither source nor dest are
 	// calico managed endpoints. A relevant conntrack entry requires at least one of the endpoints to be a local
 	// Calico managed endpoint.
@@ -650,7 +650,7 @@ func (c *collector) handleCtInfo(ctInfo ConntrackInfo) {
 	}
 }
 
-func (c *collector) applyPacketInfo(pktInfo PacketInfo) {
+func (c *collector) applyPacketInfo(pktInfo types.PacketInfo) {
 	var (
 		localEp        calc.EndpointData
 		localMatchData *calc.MatchData
