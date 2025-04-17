@@ -27,6 +27,7 @@ import (
 
 	"github.com/projectcalico/calico/app-policy/checker"
 	"github.com/projectcalico/calico/app-policy/policystore"
+	bpfconntrack "github.com/projectcalico/calico/felix/bpf/conntrack/timeouts"
 	"github.com/projectcalico/calico/felix/calc"
 	"github.com/projectcalico/calico/felix/collector/types"
 	"github.com/projectcalico/calico/felix/collector/types/metric"
@@ -104,6 +105,8 @@ type Config struct {
 	IsBPFDataplane bool
 
 	DisplayDebugTraceLogs bool
+
+	BPFConntrackTimeouts bpfconntrack.Timeouts
 }
 
 // A collector (a StatsManager really) collects StatUpdates from data sources
@@ -469,7 +472,9 @@ func (c *collector) checkEpStats() {
 	// We report stats at initial reporting delay after the last rule update. This aims to ensure we have the full set
 	// of data before we report the stats. As a minor finesse, pre-calculate the latest update time to consider reporting.
 	minLastRuleUpdatedAt := monotime.Now() - c.config.InitialReportingDelay
-	minExpirationAt := monotime.Now() - c.config.AgeTimeout
+
+	now := monotime.Now()
+	minExpirationAt := now - c.config.AgeTimeout
 
 	// For each entry
 	// - report metrics.  Metrics reported through the ticker processing will wait for the initial reporting delay
@@ -477,6 +482,24 @@ func (c *collector) checkEpStats() {
 	//   the flow is terminated or has changed.
 	// - check age and expire the entry if needed.
 	for _, data := range c.epStats {
+		if c.config.IsBPFDataplane {
+			switch data.Tuple.Proto {
+			case 6 /* TCP */ :
+				// We use reset because likely already cleaned it up as an expired
+				// connection if we haven't seen any update this long.
+				minExpirationAt = now - c.config.BPFConntrackTimeouts.TCPResetSeen
+			case 17 /* UDP */ :
+				minExpirationAt = now - c.config.BPFConntrackTimeouts.UDPTimeout
+			case 1 /* ICMP */, 58 /* ICMPv6 */ :
+				minExpirationAt = now - c.config.BPFConntrackTimeouts.ICMPTimeout
+			default:
+				minExpirationAt = now - c.config.BPFConntrackTimeouts.GenericTimeout
+			}
+			if minExpirationAt < 2*bpfconntrack.ScanPeriod {
+				minExpirationAt = now - 2*bpfconntrack.ScanPeriod
+			}
+		}
+
 		if data.IsDirty() && (data.Reported || data.RuleUpdatedAt() < minLastRuleUpdatedAt) {
 			c.checkPreDNATTuple(data)
 			c.reportMetrics(data, true)
