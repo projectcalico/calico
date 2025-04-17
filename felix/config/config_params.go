@@ -330,9 +330,9 @@ type Config struct {
 
 	LogFilePath string `config:"file;/var/log/calico/felix.log;die-on-fail"`
 
-	LogSeverityFile   string `config:"oneof(DEBUG,INFO,WARNING,ERROR,FATAL);INFO"`
-	LogSeverityScreen string `config:"oneof(DEBUG,INFO,WARNING,ERROR,FATAL);INFO"`
-	LogSeveritySys    string `config:"oneof(DEBUG,INFO,WARNING,ERROR,FATAL);INFO"`
+	LogSeverityFile   string `config:"oneof(TRACE,DEBUG,INFO,WARNING,ERROR,FATAL);INFO"`
+	LogSeverityScreen string `config:"oneof(TRACE,DEBUG,INFO,WARNING,ERROR,FATAL);INFO"`
+	LogSeveritySys    string `config:"oneof(TRACE,DEBUG,INFO,WARNING,ERROR,FATAL);INFO"`
 	// LogDebugFilenameRegex controls which source code files have their Debug log output included in the logs.
 	// Only logs from files with names that match the given regular expression are included.  The filter only applies
 	// to Debug level logs.
