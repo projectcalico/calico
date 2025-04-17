@@ -24,7 +24,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/felix/collector/goldmane"
+	"github.com/projectcalico/calico/felix/collector/local"
 	"github.com/projectcalico/calico/goldmane/pkg/types"
 	"github.com/projectcalico/calico/goldmane/proto"
 )
@@ -40,15 +40,15 @@ func StartAndWatch(num int) {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	nodeServer := goldmane.NewNodeServer(goldmane.NodeSocketDir)
-	err := nodeServer.Run()
+	flowServer := local.NewFlowServer(local.SocketDir)
+	err := flowServer.Run()
 	if err != nil {
-		logrus.WithError(err).Error("Failed to start goldmane node server")
+		logrus.WithError(err).Error("Failed to start local flow server")
 		return
 	}
-	defer nodeServer.Stop()
+	defer flowServer.Stop()
 
-	nodeServer.Watch(ctx, num, time.Second, func(flow *types.Flow) {
+	flowServer.Watch(ctx, num, time.Second, func(flow *types.Flow) {
 		fmt.Printf("%s", flowToString(flow))
 	})
 }

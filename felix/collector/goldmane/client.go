@@ -67,7 +67,7 @@ func (g *GoldmaneReporter) Report(logSlice any) error {
 			logrus.WithField("num", len(logs)).Debug("Dispatching flow logs to goldmane")
 		}
 		for _, l := range logs {
-			g.client.Push(convertFlowlogToGoldmane(l))
+			g.client.Push(ConvertFlowlogToGoldmane(l))
 		}
 	default:
 		logrus.Panic("Unexpected kind of log dispatcher")
@@ -115,7 +115,7 @@ func convertAction(a flowlog.Action) proto.Action {
 	return proto.Action_ActionUnspecified
 }
 
-func convertFlowlogToGoldmane(fl *flowlog.FlowLog) *types.Flow {
+func ConvertFlowlogToGoldmane(fl *flowlog.FlowLog) *types.Flow {
 	return &types.Flow{
 		Key: types.NewFlowKey(
 			&types.FlowKeySource{

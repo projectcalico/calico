@@ -36,6 +36,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/polprog"
 	"github.com/projectcalico/calico/felix/collector/flowlog"
 	"github.com/projectcalico/calico/felix/collector/goldmane"
+	"github.com/projectcalico/calico/felix/collector/local"
 	"github.com/projectcalico/calico/felix/fv/containers"
 	"github.com/projectcalico/calico/felix/fv/metrics"
 	"github.com/projectcalico/calico/felix/fv/tcpdump"
@@ -85,8 +86,8 @@ type Felix struct {
 
 	TopologyOptions TopologyOptions
 
-	uniqueName     string
-	goldmaneServer *goldmane.NodeServer
+	uniqueName string
+	flowServer *local.FlowServer
 }
 
 type workload interface {
@@ -121,7 +122,7 @@ func (f *Felix) TriggerDelayedStart() {
 		logrus.Panic("TriggerDelayedStart() called but startup wasn't delayed")
 	}
 	f.Exec("touch", "/start-trigger")
-	f.GoldmaneNodeServerStart()
+	f.FlowServerStart()
 	f.startupDelayed = false
 }
 
@@ -206,14 +207,14 @@ func RunFelix(infra DatastoreInfra, id int, options TopologyOptions) *Felix {
 	Expect(os.MkdirAll(logDir, 0o777)).NotTo(HaveOccurred())
 	nodeLogDir := "/var/log/calico/flowlogs" // This path is used by file reporter
 
-	var goldmaneServer *goldmane.NodeServer
-	if options.FlowLogSource == FlowLogSourceGoldmane {
-		nodeLogDir = goldmane.NodeSocketDir
-		goldmaneServer = goldmane.NewNodeServer(logDir)
+	var flowServer *local.FlowServer
+	if options.FlowLogSource == FlowLogSourceLocalSocket {
+		nodeLogDir = local.SocketDir
+		flowServer = local.NewFlowServer(logDir)
 
 		if !options.DelayFelixStart {
-			if err := goldmaneServer.Run(); err != nil {
-				logrus.WithError(err).Panic("Failed to start goldmane node server")
+			if err := flowServer.Run(); err != nil {
+				logrus.WithError(err).Panic("Failed to start local flow server")
 			}
 		}
 	}
@@ -304,7 +305,7 @@ func RunFelix(infra DatastoreInfra, id int, options TopologyOptions) *Felix {
 		startupDelayed:  options.DelayFelixStart,
 		uniqueName:      uniqueName,
 		TopologyOptions: options,
-		goldmaneServer:  goldmaneServer,
+		flowServer:      flowServer,
 	}
 }
 
@@ -315,7 +316,7 @@ func (f *Felix) Stop() {
 	if CreateCgroupV2 {
 		_ = f.ExecMayFail("rmdir", path.Join("/run/calico/cgroup/", f.Name))
 	}
-	f.GoldmaneNodeServerStop()
+	f.FlowServerStop()
 	f.Container.Stop()
 
 	if CurrentGinkgoTestDescription().Failed {
@@ -329,7 +330,7 @@ func (f *Felix) Restart() {
 	oldPID := f.GetFelixPID()
 	f.Exec("kill", "-HUP", fmt.Sprint(oldPID))
 	Eventually(f.GetFelixPID, "10s", "100ms").ShouldNot(Equal(oldPID))
-	f.GoldmaneNodeServerReset()
+	f.FlowServerReset()
 }
 
 func (f *Felix) RestartWithDelayedStartup() func() {
@@ -340,7 +341,7 @@ func (f *Felix) RestartWithDelayedStartup() func() {
 	f.restartDelayed = true
 	f.Exec("touch", "/delay-felix-restart")
 	f.Exec("kill", "-HUP", fmt.Sprint(oldPID))
-	f.GoldmaneNodeServerReset()
+	f.FlowServerReset()
 	triggerChan := make(chan struct{})
 
 	go func() {
@@ -407,30 +408,30 @@ func (f *Felix) ProgramIptablesDNAT(serviceIP, targetIP, chain string, ipv6 bool
 	}
 }
 
-func (f *Felix) GoldmaneNodeServerStart() {
-	if f.goldmaneServer != nil {
-		if err := f.goldmaneServer.Run(); err != nil {
-			logrus.WithError(err).Panic("Failed to start goldmane node server")
+func (f *Felix) FlowServerStart() {
+	if f.flowServer != nil {
+		if err := f.flowServer.Run(); err != nil {
+			logrus.WithError(err).Panic("Failed to start local flow server")
 		}
 	}
 }
 
-func (f *Felix) GoldmaneNodeServerStop() {
-	if f.goldmaneServer != nil {
-		f.goldmaneServer.Flush()
-		f.goldmaneServer.Stop()
+func (f *Felix) FlowServerStop() {
+	if f.flowServer != nil {
+		f.flowServer.Flush()
+		f.flowServer.Stop()
 	}
 }
 
-func (f *Felix) GoldmaneNodeServerReset() {
-	if f.goldmaneServer != nil {
-		f.goldmaneServer.Flush()
+func (f *Felix) FlowServerReset() {
+	if f.flowServer != nil {
+		f.flowServer.Flush()
 	}
 }
 
-func (f *Felix) GoldmaneNodeServerAddress() string {
-	if f.goldmaneServer != nil {
-		return f.goldmaneServer.Address()
+func (f *Felix) FlowServerAddress() string {
+	if f.flowServer != nil {
+		return f.flowServer.Address()
 	}
 	return ""
 }
@@ -439,18 +440,18 @@ func (f *Felix) FlowLogs() ([]flowlog.FlowLog, error) {
 	switch f.TopologyOptions.FlowLogSource {
 	case FlowLogSourceFile:
 		panic("not supported flow log reader")
-	case FlowLogSourceGoldmane:
-		return f.FlowLogsFromGoldmane()
+	case FlowLogSourceLocalSocket:
+		return f.FlowLogsFromLocalSocket()
 	default:
 		panic("unrecognized flow log source")
 	}
 }
 
-func (f *Felix) FlowLogsFromGoldmane() ([]flowlog.FlowLog, error) {
-	if f.goldmaneServer == nil {
-		return nil, fmt.Errorf("goldmane server not started")
+func (f *Felix) FlowLogsFromLocalSocket() ([]flowlog.FlowLog, error) {
+	if f.flowServer == nil {
+		return nil, fmt.Errorf("local flow server not started")
 	}
-	flows := f.goldmaneServer.List()
+	flows := f.flowServer.List()
 	if len(flows) == 0 {
 		return nil, fmt.Errorf("no flow log received yet")
 	}

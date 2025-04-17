@@ -31,7 +31,7 @@ import (
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	"github.com/projectcalico/calico/felix/collector/flowlog"
-	"github.com/projectcalico/calico/felix/collector/goldmane"
+	"github.com/projectcalico/calico/felix/collector/local"
 	"github.com/projectcalico/calico/felix/collector/types/endpoint"
 	"github.com/projectcalico/calico/felix/collector/types/tuple"
 	"github.com/projectcalico/calico/felix/fv/connectivity"
@@ -101,11 +101,11 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log tests", [
 		opts.FelixLogSeverity = "Debug"
 		opts = infrastructure.DefaultTopologyOptions()
 		opts.IPIPEnabled = false
-		opts.FlowLogSource = infrastructure.FlowLogSourceGoldmane
+		opts.FlowLogSource = infrastructure.FlowLogSourceLocalSocket
 
 		opts.ExtraEnvVars["FELIX_FLOWLOGSCOLLECTORDEBUGTRACE"] = "true"
 		opts.ExtraEnvVars["FELIX_FLOWLOGSFLUSHINTERVAL"] = "2"
-		opts.ExtraEnvVars["FELIX_FLOWLOGSGOLDMANESERVER"] = goldmane.NodeSocketAddress
+		opts.ExtraEnvVars["FELIX_FLOWLOGSGOLDMANESERVER"] = local.SocketAddress
 	})
 
 	JustBeforeEach(func() {
@@ -573,7 +573,7 @@ var _ = infrastructure.DatastoreDescribe("goldmane flow log ipv6 tests", []apico
 
 		infra = getInfra(iOpts...)
 		opts := infrastructure.DefaultTopologyOptions()
-		opts.FlowLogSource = infrastructure.FlowLogSourceGoldmane
+		opts.FlowLogSource = infrastructure.FlowLogSourceLocalSocket
 
 		opts.EnableIPv6 = true
 		opts.IPIPEnabled = false
@@ -583,7 +583,7 @@ var _ = infrastructure.DatastoreDescribe("goldmane flow log ipv6 tests", []apico
 		opts.ExtraEnvVars["FELIX_FLOWLOGSFLUSHINTERVAL"] = "2"
 		opts.ExtraEnvVars["FELIX_IPV6SUPPORT"] = "true"
 		opts.ExtraEnvVars["FELIX_DefaultEndpointToHostAction"] = "RETURN"
-		opts.ExtraEnvVars["FELIX_FLOWLOGSGOLDMANESERVER"] = goldmane.NodeSocketAddress
+		opts.ExtraEnvVars["FELIX_FLOWLOGSGOLDMANESERVER"] = local.SocketAddress
 
 		tc, client = infrastructure.StartNNodeTopology(2, opts, infra)
 
@@ -761,7 +761,7 @@ var _ = infrastructure.DatastoreDescribe("goldmane flow log ipv6 tests", []apico
 	})
 })
 
-var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane node server tests", []apiconfig.DatastoreType{apiconfig.EtcdV3}, func(getInfra infrastructure.InfraFactory) {
+var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane local server tests", []apiconfig.DatastoreType{apiconfig.EtcdV3}, func(getInfra infrastructure.InfraFactory) {
 	bpfEnabled := os.Getenv("FELIX_FV_ENABLE_BPF") == "true"
 
 	var (
@@ -778,7 +778,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane node server tests"
 		opts.FelixLogSeverity = "Debug"
 		opts = infrastructure.DefaultTopologyOptions()
 		opts.IPIPEnabled = false
-		opts.FlowLogSource = infrastructure.FlowLogSourceGoldmane
+		opts.FlowLogSource = infrastructure.FlowLogSourceLocalSocket
 		opts.DelayFelixStart = true
 
 		opts.ExtraEnvVars["FELIX_FLOWLOGSCOLLECTORDEBUGTRACE"] = "true"
@@ -838,7 +838,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane node server tests"
 
 	nodeSocketExists := func() bool {
 		for _, felix := range tc.Felixes {
-			_, err := os.Stat(felix.GoldmaneNodeServerAddress())
+			_, err := os.Stat(felix.FlowServerAddress())
 			return err == nil
 		}
 		return false
@@ -863,12 +863,13 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane node server tests"
 			tc.Felixes[ii].Exec("conntrack", "-L")
 		}
 
-		waitForFlowlogFlush(bpfEnabled)
+		flowlogs.WaitForConntrackScan(bpfEnabled)
+
 		Eventually(readFlowlogs, "15s", "3s").Should(BeTrue())
 		Consistently(readFlowlogs, "10s", "2s").Should(BeTrue())
 
 		for _, felix := range tc.Felixes {
-			felix.GoldmaneNodeServerStop()
+			felix.FlowServerStop()
 		}
 
 		// After stoping goldmane node server, socket file must be cleaned up.

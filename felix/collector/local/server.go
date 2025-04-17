@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package goldmane
+package local
 
 import (
 	"context"
@@ -31,13 +31,13 @@ import (
 )
 
 const (
-	NodeSocketDir  = "/var/run/calico/flows"
-	NodeSocketName = "goldmane.sock"
+	SocketDir  = "/var/run/calico/flows"
+	SocketName = "flows.sock"
 )
 
 var (
-	NodeSocketPath    = path.Join(NodeSocketDir, NodeSocketName)
-	NodeSocketAddress = fmt.Sprintf("unix://%v", NodeSocketPath)
+	SocketPath    = path.Join(SocketDir, SocketName)
+	SocketAddress = fmt.Sprintf("unix://%v", SocketPath)
 )
 
 type flowStore struct {
@@ -75,19 +75,20 @@ func (s *flowStore) listAndFlush() []*types.Flow {
 	return flows
 }
 
-type NodeServer struct {
+type FlowServer struct {
 	store      *flowStore
 	grpcServer *grpc.Server
 	once       sync.Once
 
-	// In Calico node, the address of unix socket is always /var/log/calico/flowlogs/goldmane.sock.
-	// However, NodeServer is also used by Felix FVs, where the code is executed outside of Calico Node. In this case,
-	// unix socket is created in host filesystem, and instead mounted at the mentioned path in Felix containers.
+	// In Calico node, the address of unix socket is always /var/run/calico/flows/flows.sock.
+	// However, FlowServer is also used by Felix FVs, where the code is executed outside of Calico Node.
+	// In this case, unix socket is created in host filesystem, and instead mounted at the mentioned path in
+	// Felix containers.
 	dir string
 }
 
-func NewNodeServer(dir string) *NodeServer {
-	nodeServer := NodeServer{
+func NewFlowServer(dir string) *FlowServer {
+	nodeServer := FlowServer{
 		dir:        dir,
 		grpcServer: grpc.NewServer(),
 		store:      newFlowStore(),
@@ -97,11 +98,11 @@ func NewNodeServer(dir string) *NodeServer {
 	return &nodeServer
 }
 
-func (s *NodeServer) Run() error {
+func (s *FlowServer) Run() error {
 	var err error
-	err = ensureNodeSocketDirExists(s.dir)
+	err = ensureLocalSocketDirExists(s.dir)
 	if err != nil {
-		logrus.WithError(err).Error("Failed to create goldmane node socket")
+		logrus.WithError(err).Error("Failed to create local socket")
 		return err
 	}
 
@@ -110,14 +111,14 @@ func (s *NodeServer) Run() error {
 		sockAddr := s.Address()
 		l, err = net.Listen("unix", sockAddr)
 		if err != nil {
-			logrus.WithError(err).Error("Failed to listen on goldmane node socket")
+			logrus.WithError(err).Error("Failed to listen on local socket")
 			return
 		}
-		logrus.WithField("address", sockAddr).Info("Running goldmane node server")
+		logrus.WithField("address", sockAddr).Info("Running local server")
 		go func() {
 			err = s.grpcServer.Serve(l)
 			if err != nil {
-				logrus.WithError(err).Error("Failed to start listening on goldmane node socket")
+				logrus.WithError(err).Error("Failed to start listening on local socket")
 				return
 			}
 		}()
@@ -125,7 +126,7 @@ func (s *NodeServer) Run() error {
 	return err
 }
 
-func (s *NodeServer) Watch(
+func (s *FlowServer) Watch(
 	ctx context.Context,
 	num int,
 	period time.Duration,
@@ -133,11 +134,11 @@ func (s *NodeServer) Watch(
 ) {
 	infiniteLoop := num < 0
 	var count int
-	logrus.Debug("Starting to watch goldmane node socket")
+	logrus.Debug("Starting to watch local socket")
 	for {
 		if ctx.Err() != nil ||
 			(!infiniteLoop && count >= num) {
-			logrus.Debug("Stopped watching goldmane node socket")
+			logrus.Debug("Stopped watching local socket")
 			return
 		}
 
@@ -150,48 +151,48 @@ func (s *NodeServer) Watch(
 	}
 }
 
-func (s *NodeServer) Stop() {
-	cleanupNodeSocket(s.Address())
+func (s *FlowServer) Stop() {
+	cleanupLocalSocket(s.Address())
 	s.grpcServer.Stop()
 }
 
-func (s *NodeServer) List() []*types.Flow {
+func (s *FlowServer) List() []*types.Flow {
 	return s.store.list()
 }
 
-func (s *NodeServer) Flush() {
+func (s *FlowServer) Flush() {
 	s.store.flush()
 }
 
-func (s *NodeServer) listAndFlush() []*types.Flow {
+func (s *FlowServer) listAndFlush() []*types.Flow {
 	return s.store.listAndFlush()
 }
 
-func (s *NodeServer) Address() string {
-	return path.Join(s.dir, NodeSocketName)
+func (s *FlowServer) Address() string {
+	return path.Join(s.dir, SocketName)
 }
 
-func ensureNodeSocketDirExists(dir string) error {
-	logrus.Debug("Checking if goldmane node socket exists.")
+func ensureLocalSocketDirExists(dir string) error {
+	logrus.Debug("Checking if local socket exists.")
 	if _, err := os.Stat(dir); os.IsNotExist(err) {
-		logrus.WithField("directory", dir).Debug("Goldmane node socket directory does not exist")
+		logrus.WithField("directory", dir).Debug("Local socket directory does not exist")
 		err := os.MkdirAll(dir, 0o600)
 		if err != nil {
-			logrus.WithError(err).WithField("directory", dir).Error("Failed to create node socket directory")
+			logrus.WithError(err).WithField("directory", dir).Error("Failed to create local socket directory")
 			return err
 		}
-		logrus.WithField("directory", dir).Debug("Created goldmane node socket directory")
+		logrus.WithField("directory", dir).Debug("Created local socket directory")
 	}
 	return nil
 }
 
-func cleanupNodeSocket(addr string) {
+func cleanupLocalSocket(addr string) {
 	_, err := os.Stat(addr)
 	if err != nil && os.IsNotExist(err) {
 		return
 	}
 	err = os.Remove(addr)
 	if err != nil {
-		logrus.WithError(err).WithField("address", addr).Errorf("Failed to remove goldmane node socket")
+		logrus.WithError(err).WithField("address", addr).Errorf("Failed to remove local socket")
 	}
 }
