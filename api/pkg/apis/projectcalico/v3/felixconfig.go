@@ -835,6 +835,10 @@ type FelixConfigurationSpec struct {
 	// FlowLogGoldmaneServer is the flow server endpoint to which flow data should be published.
 	FlowLogsGoldmaneServer *string `json:"flowLogsGoldmaneServer,omitempty"`
 
+	// FlowLogsLocalReporter configures local unix socket for reporting flow data from each node. [Default: Disabled]
+	// +kubebuilder:validation:Enum=Disabled;Enabled
+	FlowLogsLocalReporter *string `json:"flowLogsLocalReporter,omitempty"`
+
 	// BPFProfiling controls profiling of BPF programs. At the monent, it can be
 	// Disabled or Enabled. [Default: Disabled]
 	//+kubebuilder:validation:Enum=Enabled;Disabled
