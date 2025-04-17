@@ -374,7 +374,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 		cc.CheckConnectivity()
 		cc.CheckConnectivity()
 
-		flowlogs.WaitForConntrackScan(bpfEnabled)
+		metrics.WaitForConntrackScan(bpfEnabled)
 
 		// Delete conntrack state so that we don't keep seeing 0-metric copies of the logs.  This will allow the flows
 		// to expire quickly.
@@ -389,7 +389,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 			MatchLabels:            false,
 			MatchEnforcedPolicies:  true,
 			MatchPendingPolicies:   true,
-			Includes:               []flowlogs.IncludeFilter{flowlogs.IncludeByDestPort(wepPort)},
+			Includes:               []metrics.IncludeFilter{metrics.IncludeByDestPort(wepPort)},
 			CheckNumFlowsStarted:   true,
 		})
 
@@ -1015,7 +1015,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ aggregation of flow log wit
 		cc.CheckConnectivity()
 		cc.CheckConnectivity()
 
-		flowlogs.WaitForConntrackScan(bpfEnabled)
+		metrics.WaitForConntrackScan(bpfEnabled)
 
 		// Configured staged allow.
 		configureStagedAllow()
@@ -1025,7 +1025,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ aggregation of flow log wit
 		cc.CheckConnectivity()
 		cc.CheckConnectivity()
 
-		flowlogs.WaitForConntrackScan(bpfEnabled)
+		metrics.WaitForConntrackScan(bpfEnabled)
 
 		// Delete conntrack state so that we don't keep seeing 0-metric copies of the logs.  This will allow the flows
 		// to expire quickly.
@@ -1039,7 +1039,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ aggregation of flow log wit
 			ExpectEnforcedPolicies: true,
 			MatchLabels:            false,
 			MatchPendingPolicies:   false,
-			Includes:               []flowlogs.IncludeFilter{flowlogs.IncludeByDestPort(wepPort)},
+			Includes:               []metrics.IncludeFilter{metrics.IncludeByDestPort(wepPort)},
 			CheckNumFlowsStarted:   true,
 		})
 
@@ -1135,7 +1135,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ aggregation of flow log wit
 		cc.CheckConnectivity()
 		cc.CheckConnectivity()
 
-		flowlogs.WaitForConntrackScan(bpfEnabled)
+		metrics.WaitForConntrackScan(bpfEnabled)
 
 		// TODO (dimitrin): This is expected to fail once
 		// https://tigera.atlassian.net/browse/EV-5659 has been merged. At which point the staged
@@ -1149,7 +1149,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ aggregation of flow log wit
 		cc.CheckConnectivity()
 		cc.CheckConnectivity()
 
-		flowlogs.WaitForConntrackScan(bpfEnabled)
+		metrics.WaitForConntrackScan(bpfEnabled)
 
 		// Delete conntrack state so that we don't keep seeing 0-metric copies of the logs.  This will allow the flows
 		// to expire quickly.
@@ -1164,7 +1164,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ aggregation of flow log wit
 			MatchLabels:            false,
 			MatchEnforcedPolicies:  true,
 			MatchPendingPolicies:   true,
-			Includes:               []flowlogs.IncludeFilter{flowlogs.IncludeByDestPort(wepPort)},
+			Includes:               []metrics.IncludeFilter{metrics.IncludeByDestPort(wepPort)},
 			CheckNumFlowsStarted:   true,
 		})
 
@@ -1323,7 +1323,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ aggregation of flow log wit
 		cc.CheckConnectivity()
 		cc.CheckConnectivity()
 
-		flowlogs.WaitForConntrackScan(bpfEnabled)
+		metrics.WaitForConntrackScan(bpfEnabled)
 
 		// Configure staged drop.
 		configureStagedDrop()
@@ -1333,7 +1333,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ aggregation of flow log wit
 		cc.CheckConnectivity()
 		cc.CheckConnectivity()
 
-		flowlogs.WaitForConntrackScan(bpfEnabled)
+		metrics.WaitForConntrackScan(bpfEnabled)
 
 		// Delete conntrack state so that we don't keep seeing 0-metric copies of the logs.  This will allow the flows
 		// to expire quickly.
@@ -1348,7 +1348,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ aggregation of flow log wit
 			MatchLabels:            false,
 			MatchPendingPolicies:   false,
 			MatchEnforcedPolicies:  false,
-			Includes:               []flowlogs.IncludeFilter{flowlogs.IncludeByDestPort(wepPort)},
+			Includes:               []metrics.IncludeFilter{metrics.IncludeByDestPort(wepPort)},
 			CheckNumFlowsStarted:   true,
 		})
 
@@ -1776,7 +1776,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 		// Do 1 rounds of connectivity checking.
 		cc.CheckConnectivity()
 
-		flowlogs.WaitForConntrackScan(bpfEnabled)
+		metrics.WaitForConntrackScan(bpfEnabled)
 
 		// Configured staged allow.
 		configureStagedAllow()
@@ -1784,7 +1784,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 		// Do 1 rounds of connectivity checking within the flush log interval.
 		cc.CheckConnectivity()
 
-		flowlogs.WaitForConntrackScan(bpfEnabled)
+		metrics.WaitForConntrackScan(bpfEnabled)
 
 		// Delete conntrack state so that we don't keep seeing 0-metric copies of the logs.  This will allow the flows
 		// to expire quickly.
@@ -1956,7 +1956,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 		// Do 1 rounds of connectivity checking.
 		cc.CheckConnectivity()
 
-		flowlogs.WaitForConntrackScan(bpfEnabled)
+		metrics.WaitForConntrackScan(bpfEnabled)
 
 		// Configured staged pass.
 		configureStagedPass()
@@ -1964,7 +1964,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 		// Do 1 rounds of connectivity checking within the flush log interval.
 		cc.CheckConnectivity()
 
-		flowlogs.WaitForConntrackScan(bpfEnabled)
+		metrics.WaitForConntrackScan(bpfEnabled)
 
 		// Delete conntrack state so that we don't keep seeing 0-metric copies of the logs.  This will allow the flows
 		// to expire quickly.
