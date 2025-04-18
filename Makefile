@@ -39,8 +39,8 @@ clean:
 ci-preflight-checks:
 	$(MAKE) check-dockerfiles
 	$(MAKE) check-language
-	$(MAKE) check-ocp-no-crds
 	$(MAKE) generate
+	$(MAKE) check-ocp-no-crds
 	$(MAKE) check-dirty
 
 check-dockerfiles:
