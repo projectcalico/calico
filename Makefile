@@ -40,9 +40,9 @@ ci-preflight-checks:
 	$(MAKE) check-go-mod
 	$(MAKE) check-dockerfiles
 	$(MAKE) check-language
-	$(MAKE) check-ocp-no-crds
 	$(MAKE) generate
 	$(MAKE) fix-all
+	$(MAKE) check-ocp-no-crds
 	$(MAKE) yaml-lint
 	$(MAKE) check-dirty
 
