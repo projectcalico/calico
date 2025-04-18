@@ -18,8 +18,8 @@ import (
 	docopt "github.com/docopt/docopt-go"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/felix/buildinfo"
 	"github.com/projectcalico/calico/felix/daemon"
+	"github.com/projectcalico/calico/pkg/buildinfo"
 )
 
 const usage = `Felix, the Calico per-host daemon.

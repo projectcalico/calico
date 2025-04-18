@@ -33,7 +33,6 @@ import (
 	log "github.com/sirupsen/logrus"
 	"k8s.io/client-go/kubernetes"
 
-	"github.com/projectcalico/calico/felix/buildinfo"
 	"github.com/projectcalico/calico/felix/calc"
 	"github.com/projectcalico/calico/felix/collector"
 	"github.com/projectcalico/calico/felix/config"
@@ -64,6 +63,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
+	"github.com/projectcalico/calico/pkg/buildinfo"
 	"github.com/projectcalico/calico/pod2daemon/binder"
 	"github.com/projectcalico/calico/typha/pkg/discovery"
 	"github.com/projectcalico/calico/typha/pkg/syncclient"

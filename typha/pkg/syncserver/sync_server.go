@@ -39,7 +39,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/health"
 	cprometheus "github.com/projectcalico/calico/libcalico-go/lib/prometheus"
 	"github.com/projectcalico/calico/libcalico-go/lib/writelogger"
-	"github.com/projectcalico/calico/typha/pkg/buildinfo"
+	"github.com/projectcalico/calico/pkg/buildinfo"
 	"github.com/projectcalico/calico/typha/pkg/jitter"
 	"github.com/projectcalico/calico/typha/pkg/promutils"
 	"github.com/projectcalico/calico/typha/pkg/snapcache"
@@ -803,7 +803,6 @@ func (h *connection) handle(finishedWG *sync.WaitGroup) (err error) {
 	// Use this goroutine to wait for client messages and do the ping/pong liveness check.
 	h.logCxt.Info("Waiting for messages from client")
 	for {
-
 		select {
 		case msg := <-h.readC:
 			if msg == nil {

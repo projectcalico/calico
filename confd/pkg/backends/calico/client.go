@@ -30,7 +30,6 @@ import (
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/confd/pkg/buildinfo"
 	"github.com/projectcalico/calico/confd/pkg/config"
 	logutils "github.com/projectcalico/calico/confd/pkg/log"
 	"github.com/projectcalico/calico/confd/pkg/resource/template"
@@ -46,6 +45,7 @@ import (
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
+	"github.com/projectcalico/calico/pkg/buildinfo"
 	"github.com/projectcalico/calico/typha/pkg/syncclientutils"
 	"github.com/projectcalico/calico/typha/pkg/syncproto"
 )

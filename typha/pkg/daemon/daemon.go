@@ -42,7 +42,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/metricsserver"
 	"github.com/projectcalico/calico/libcalico-go/lib/upgrade/migrator"
 	"github.com/projectcalico/calico/libcalico-go/lib/upgrade/migrator/clients"
-	"github.com/projectcalico/calico/typha/pkg/buildinfo"
+	"github.com/projectcalico/calico/pkg/buildinfo"
 	"github.com/projectcalico/calico/typha/pkg/calc"
 	"github.com/projectcalico/calico/typha/pkg/config"
 	"github.com/projectcalico/calico/typha/pkg/jitter"

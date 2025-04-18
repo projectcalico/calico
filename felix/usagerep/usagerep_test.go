@@ -26,8 +26,8 @@ import (
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/felix/buildinfo"
 	"github.com/projectcalico/calico/felix/calc"
+	"github.com/projectcalico/calico/pkg/buildinfo"
 )
 
 const expectedNumberOfURLParams = 13

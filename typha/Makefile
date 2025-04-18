@@ -16,18 +16,6 @@ include ../lib.Makefile
 
 ###############################################################################
 
-# Linker flags for building Typha.
-#
-# We use -X to insert the version information into the placeholder variables
-# in the buildinfo package.
-#
-# We use -B to insert a build ID note into the executable, without which, the
-# RPM build tools complain.
-LDFLAGS := -X $(PACKAGE_NAME)/pkg/buildinfo.GitVersion=$(GIT_DESCRIPTION) \
-			-X $(PACKAGE_NAME)/pkg/buildinfo.BuildDate=$(DATE) \
-			-X $(PACKAGE_NAME)/pkg/buildinfo.GitRevision=$(GIT_COMMIT) \
-			-B 0x$(BUILD_ID)
-
 # All Typha go files.
 SRC_FILES:=$(shell find . $(foreach dir,$(NON_TYPHA_DIRS),-path ./$(dir) -prune -o) -type f -name '*.go' -print)
 
