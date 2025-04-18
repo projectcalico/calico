@@ -35,8 +35,8 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
-	"github.com/projectcalico/calico/node/buildinfo"
 	"github.com/projectcalico/calico/node/pkg/calicoclient"
+	"github.com/projectcalico/calico/pkg/buildinfo"
 	"github.com/projectcalico/calico/typha/pkg/syncclientutils"
 	"github.com/projectcalico/calico/typha/pkg/syncproto"
 )
@@ -113,7 +113,7 @@ func run(
 	typhaConfig := syncclientutils.ReadTyphaConfig([]string{"FELIX_", "CALICO_"})
 	if syncclientutils.MustStartSyncerClientIfTyphaConfigured(
 		&typhaConfig, syncproto.SyncerTypeTunnelIPAllocation,
-		buildinfo.GitVersion, nodename, fmt.Sprintf("tunnel-ip-allocation %s", buildinfo.GitVersion),
+		buildinfo.Version, nodename, fmt.Sprintf("tunnel-ip-allocation %s", buildinfo.Version),
 		r,
 	) {
 		log.Debug("Using typha syncclient")

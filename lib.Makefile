@@ -224,6 +224,18 @@ ifneq ($(OS),Windows_NT)
 DATE:=$(shell date -u +'%FT%T%z')
 endif
 
+# Common linker flags.
+#
+# We use -X to insert the version information into the placeholder variables
+# in the buildinfo package.
+#
+# We use -B to insert a build ID note into the executable, without which, the
+# RPM build tools complain.
+LDFLAGS=-X github.com/projectcalico/calico/pkg/buildinfo.Version=$(GIT_DESCRIPTION) \
+	-X github.com/projectcalico/calico/pkg/buildinfo.BuildDate=$(DATE) \
+	-X github.com/projectcalico/calico/pkg/buildinfo.GitRevision=$(GIT_COMMIT) \
+	-B 0x$(BUILD_ID)
+
 # Figure out the users UID/GID.  These are needed to run docker containers
 # as the current user and ensure that files built inside containers are
 # owned by the current user.
