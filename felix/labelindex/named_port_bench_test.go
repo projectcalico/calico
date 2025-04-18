@@ -232,7 +232,7 @@ func benchmarkSelectorUpdates(b *testing.B, numEndpoints int) {
 	}
 
 	// Pre-calculate the selectors.
-	var sels []selector.Selector
+	var sels []*selector.Selector
 	for i := 0; i < b.N; i++ {
 		sel, err := selector.Parse(fmt.Sprintf(`alpha == "beta" && has(ipset-%d)`, i%10))
 		if err != nil {
