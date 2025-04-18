@@ -148,6 +148,18 @@ else
 CGO_ENABLED?=0
 endif
 
+# Common linker flags.
+#
+# We use -X to insert the version information into the placeholder variables
+# in the buildinfo package.
+#
+# We use -B to insert a build ID note into the executable, without which, the
+# RPM build tools complain.
+LDFLAGS=-X github.com/projectcalico/pkg/buildinfo.GitVersion=$(GIT_DESCRIPTION) \
+	-X github.com/projectcalico/pkg/buildinfo.BuildDate=$(DATE) \
+	-X github.com/projectcalico/pkg/buildinfo.GitRevision=$(GIT_COMMIT) \
+	-B 0x$(BUILD_ID)
+
 # Build a binary with boring crypto support.
 # This function expects you to pass in two arguments:
 #   1st arg: path/to/input/package(s)

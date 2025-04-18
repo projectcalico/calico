@@ -50,8 +50,6 @@ clean:
 ###############################################################################
 # Building the binary
 ###############################################################################
-LDFLAGS = -X main.VERSION=$(GIT_VERSION)
-
 build: $(BINDIR)/kube-controllers-linux-$(ARCH) $(BINDIR)/check-status-linux-$(ARCH)
 build-all: $(addprefix sub-build-,$(VALIDARCHES))
 sub-build-%:

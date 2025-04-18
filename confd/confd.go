@@ -7,14 +7,12 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/confd/pkg/buildinfo"
 	"github.com/projectcalico/calico/confd/pkg/config"
 	"github.com/projectcalico/calico/confd/pkg/run"
+	"github.com/projectcalico/calico/pkg/buildinfo"
 )
 
-var (
-	printVersion bool
-)
+var printVersion bool
 
 func main() {
 	flag.BoolVar(&printVersion, "version", false, "print version and exit")

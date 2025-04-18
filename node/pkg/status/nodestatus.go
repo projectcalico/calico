@@ -26,10 +26,10 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/syncersv1/nodestatussyncer"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
-	"github.com/projectcalico/calico/node/buildinfo"
 	"github.com/projectcalico/calico/node/pkg/calicoclient"
 	"github.com/projectcalico/calico/node/pkg/lifecycle/startup"
 	populator "github.com/projectcalico/calico/node/pkg/status/populators"
+	"github.com/projectcalico/calico/pkg/buildinfo"
 	"github.com/projectcalico/calico/typha/pkg/syncclientutils"
 	"github.com/projectcalico/calico/typha/pkg/syncproto"
 )
@@ -38,7 +38,6 @@ import (
 
 // Run runs the node status reporter.
 func Run() {
-
 	startup.ConfigureLogging()
 
 	// This binary is only ever invoked _after_ the
@@ -151,7 +150,8 @@ type NodeStatusReporter struct {
 func NewNodeStatusReporter(node string,
 	cfg *apiconfig.CalicoAPIConfig,
 	client client.Interface,
-	populators PopulatorRegistry) *NodeStatusReporter {
+	populators PopulatorRegistry,
+) *NodeStatusReporter {
 	return &NodeStatusReporter{
 		nodename:       node,
 		cfg:            cfg,

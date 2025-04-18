@@ -23,8 +23,8 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/bpf"
-	"github.com/projectcalico/calico/felix/buildinfo"
 	"github.com/projectcalico/calico/felix/labelindex"
+	"github.com/projectcalico/calico/pkg/buildinfo"
 )
 
 const usage = `felix-xdp, dumping xdp state for Calico.
