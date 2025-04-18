@@ -45,9 +45,9 @@ var _ = Describe("Index", func() {
 	var (
 		updates []update
 		idx     *InheritIndex
-		a_eq_a1 selector.Selector
-		a_eq_b  selector.Selector
-		c_eq_d  selector.Selector
+		a_eq_a1 *selector.Selector
+		a_eq_b  *selector.Selector
+		c_eq_d  *selector.Selector
 		err     error
 	)
 
