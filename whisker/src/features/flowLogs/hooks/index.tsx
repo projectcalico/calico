@@ -15,7 +15,7 @@ export const useMaxStartTime = (flowLogs: FlowLog[]) => {
     return max;
 };
 
-const MAX_ELAPSED_TIME = 2.5;
+const MAX_ELAPSED_TIME = 0.1;
 export const useShouldAnimate = (startTime: number, flowLogs: FlowLog[]) => {
     const animatedMap = React.useRef<Map<string, string>>(new Map());
 
@@ -41,7 +41,8 @@ export const useShouldAnimate = (startTime: number, flowLogs: FlowLog[]) => {
             return false;
         }
 
-        const animate = flowLog.start_time.getTime() > startTime;
+        const animate =
+            flowLog.start_time.getTime() > startTime && startTime !== 0;
 
         if (animate) {
             animatedMap.current.set(flowLog.id, flowLog.id);
