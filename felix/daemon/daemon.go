@@ -117,14 +117,14 @@ func Run(configFile string, gitVersion string, buildDate string, gitRevision str
 
 	ctx := context.Background()
 
-	if len(buildinfo.GitVersion) == 0 && len(gitVersion) != 0 {
-		buildinfo.GitVersion = gitVersion
+	if len(buildinfo.Version) == 0 && len(gitVersion) != 0 {
+		buildinfo.Version = gitVersion
 		buildinfo.BuildDate = buildDate
 		buildinfo.GitRevision = gitRevision
 	}
 
 	buildInfoLogCxt := log.WithFields(log.Fields{
-		"version":    buildinfo.GitVersion,
+		"version":    buildinfo.Version,
 		"builddate":  buildinfo.BuildDate,
 		"gitcommit":  buildinfo.GitRevision,
 		"GOMAXPROCS": runtime.GOMAXPROCS(0),
@@ -534,7 +534,7 @@ configRetry:
 		log.Info("Connecting to Typha.")
 		typhaConnection = syncclient.New(
 			typhaDiscoverer,
-			buildinfo.GitVersion,
+			buildinfo.Version,
 			configParams.FelixHostname,
 			fmt.Sprintf("Revision: %s; Build date: %s",
 				buildinfo.GitRevision, buildinfo.BuildDate),

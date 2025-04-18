@@ -18,8 +18,8 @@ import "fmt"
 
 // Filled in by build process.
 var (
-	// GitVersion is the version of the code.
-	GitVersion string
+	// Version is the version of the code.
+	Version string
 
 	// GitRevision is the commit hash of the code.
 	GitRevision string
@@ -28,8 +28,8 @@ var (
 	BuildDate string
 )
 
-// Version prints version and build information.
-func Version() {
+// PrintVersion prints version and build information.
+func PrintVersion() {
 	fmt.Println("Version:     ", GitRevision)
 	fmt.Println("Build date:  ", BuildDate)
 	fmt.Println("Git commit:  ", GitRevision)

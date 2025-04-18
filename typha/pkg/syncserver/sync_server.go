@@ -934,7 +934,7 @@ func (h *connection) doHandshake() error {
 
 	// Respond to client's hello.
 	err = h.sendMsg(syncproto.MsgServerHello{
-		Version: buildinfo.GitVersion,
+		Version: buildinfo.Version,
 		// Echo back the SyncerType so that up-level clients know that we understood their request.  Down-level
 		// clients will ignore.
 		SyncerType:                  syncerType,

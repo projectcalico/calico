@@ -88,7 +88,7 @@ func Run() {
 
 	// Determine the name for this node.
 	nodeName := utils.DetermineNodeName()
-	log.Infof("Starting node %s with version %s", nodeName, buildinfo.GitVersion)
+	log.Infof("Starting node %s with version %s", nodeName, buildinfo.Version)
 
 	// Create the Calico API cli.
 	cfg, cli := calicoclient.CreateClient()
@@ -1084,7 +1084,7 @@ func ensureDefaultConfig(ctx context.Context, cfg *apiconfig.CalicoAPIConfig, c 
 		}
 	}
 
-	if err := c.EnsureInitialized(ctx, buildinfo.GitVersion, clusterType); err != nil {
+	if err := c.EnsureInitialized(ctx, buildinfo.Version, clusterType); err != nil {
 		return err
 	}
 

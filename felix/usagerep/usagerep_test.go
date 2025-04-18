@@ -256,7 +256,7 @@ var _ = Describe("UsageReporter with default URL", func() {
 		Expect(q.Get("size")).To(Equal("10"))
 		Expect(q.Get("weps")).To(Equal("234"))
 		Expect(q.Get("heps")).To(Equal("123"))
-		Expect(q.Get("version")).To(Equal(buildinfo.GitVersion))
+		Expect(q.Get("version")).To(Equal(buildinfo.Version))
 		Expect(q.Get("rev")).To(Equal(buildinfo.GitRevision))
 
 		Expect(url.Host).To(Equal("usage.projectcalico.org"))

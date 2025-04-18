@@ -52,7 +52,7 @@ func main() {
 		runtime.GOMAXPROCS(runtime.NumCPU())
 	}
 
-	buildinfo.Version()
+	buildinfo.PrintVersion()
 
 	cmd, _, err := server.NewCommandStartCalicoServer(os.Stdout)
 	if err != nil {

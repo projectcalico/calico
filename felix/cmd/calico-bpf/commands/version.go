@@ -27,7 +27,7 @@ var versionCmd = &cobra.Command{
 	Use:   "version",
 	Short: "Prints the version and exits",
 	Run: func(cmd *cobra.Command, args []string) {
-		version := "Version:            " + buildinfo.GitVersion + "\n" +
+		version := "Version:            " + buildinfo.Version + "\n" +
 			"Full git commit ID: " + buildinfo.GitRevision + "\n" +
 			"Build date:         " + buildinfo.BuildDate + "\n"
 		fmt.Print(version)

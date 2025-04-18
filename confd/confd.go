@@ -18,7 +18,7 @@ func main() {
 	flag.BoolVar(&printVersion, "version", false, "print version and exit")
 	flag.Parse()
 	if printVersion {
-		fmt.Printf("confd %s\n", buildinfo.GitVersion)
+		fmt.Printf("confd %s\n", buildinfo.Version)
 		os.Exit(0)
 	}
 

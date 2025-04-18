@@ -64,7 +64,7 @@ func Run() {
 	typhaConfig := syncclientutils.ReadTyphaConfig([]string{"FELIX_", "CALICO_"})
 	if syncclientutils.MustStartSyncerClientIfTyphaConfigured(
 		&typhaConfig, syncproto.SyncerTypeNodeStatus,
-		buildinfo.GitVersion, nodename, fmt.Sprintf("node-status %s", buildinfo.GitVersion),
+		buildinfo.Version, nodename, fmt.Sprintf("node-status %s", buildinfo.Version),
 		r,
 	) {
 		log.Debug("Using typha syncclient")

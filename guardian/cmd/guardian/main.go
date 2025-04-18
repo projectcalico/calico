@@ -35,7 +35,7 @@ func main() {
 
 	// For --version use case
 	if *versionFlag {
-		buildinfo.Version()
+		buildinfo.PrintVersion()
 		os.Exit(0)
 	}
 

@@ -82,7 +82,7 @@ Description:
 		}
 	}
 
-	fmt.Println("Client Version:   ", buildinfo.GitRevision)
+	fmt.Println("Client Version:   ", buildinfo.Version)
 	fmt.Println("Git commit:       ", buildinfo.GitRevision)
 
 	if clientOnly := argutils.ArgBoolOrFalse(parsedArgs, "--client"); clientOnly {

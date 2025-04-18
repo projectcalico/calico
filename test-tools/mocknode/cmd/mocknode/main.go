@@ -123,7 +123,7 @@ func main() {
 	}()
 	configureLogging()
 	logrus.WithFields(logrus.Fields{
-		"version": buildinfo.GitVersion,
+		"version": buildinfo.Version,
 	}).Info("Mock Calico Node starting up")
 
 	hostname, err := names.Hostname()
@@ -158,7 +158,7 @@ func startTyphaClient(st syncproto.SyncerType, hostname string) {
 		logrus.WithError(err).Panic("Failed to discover Typha.")
 	}
 	client := syncclient.New(typhaDiscoverer,
-		buildinfo.GitVersion,
+		buildinfo.Version,
 		hostname,
 		"",
 		cbs,

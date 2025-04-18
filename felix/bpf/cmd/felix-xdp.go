@@ -97,7 +97,7 @@ func dump() {
 // main is the entry point to the binary.
 func main() {
 	// Parse command-line args.
-	version := "Version:            " + buildinfo.GitVersion + "\n" +
+	version := "Version:            " + buildinfo.Version + "\n" +
 		"Full git commit ID: " + buildinfo.GitRevision + "\n" +
 		"Build date:         " + buildinfo.BuildDate + "\n"
 

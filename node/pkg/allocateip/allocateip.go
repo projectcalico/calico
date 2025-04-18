@@ -113,7 +113,7 @@ func run(
 	typhaConfig := syncclientutils.ReadTyphaConfig([]string{"FELIX_", "CALICO_"})
 	if syncclientutils.MustStartSyncerClientIfTyphaConfigured(
 		&typhaConfig, syncproto.SyncerTypeTunnelIPAllocation,
-		buildinfo.GitVersion, nodename, fmt.Sprintf("tunnel-ip-allocation %s", buildinfo.GitVersion),
+		buildinfo.Version, nodename, fmt.Sprintf("tunnel-ip-allocation %s", buildinfo.Version),
 		r,
 	) {
 		log.Debug("Using typha syncclient")

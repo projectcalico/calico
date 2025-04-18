@@ -79,7 +79,7 @@ func init() {
 func main() {
 	flag.Parse()
 	if version {
-		buildinfo.Version()
+		buildinfo.PrintVersion()
 		os.Exit(0)
 	}
 
