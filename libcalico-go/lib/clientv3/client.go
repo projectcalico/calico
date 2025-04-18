@@ -199,25 +199,29 @@ type poolAccessor struct {
 	client *client
 }
 
+func filterIPPool(pool *v3.IPPool, ipVersion int) bool {
+	if !pool.DeletionTimestamp.IsZero() {
+		log.Debugf("Skipping deleting IP pool (%s)", pool.Name)
+		return false
+	}
+	if pool.Spec.Disabled {
+		log.Debugf("Skipping disabled IP pool (%s)", pool.Name)
+		return false
+	}
+	if _, cidr, err := net.ParseCIDR(pool.Spec.CIDR); err == nil && cidr.Version() == ipVersion {
+		log.Debugf("Adding pool (%s) to the IPPool list", cidr.String())
+		return true
+	} else if err != nil {
+		log.Warnf("Failed to parse the IPPool: %s. Ignoring that IPPool", pool.Spec.CIDR)
+	} else {
+		log.Debugf("Ignoring IPPool: %s. IP version is different.", pool.Spec.CIDR)
+	}
+	return false
+}
+
 func (p poolAccessor) GetEnabledPools(ctx context.Context, ipVersion int) ([]v3.IPPool, error) {
 	return p.getPools(ctx, func(pool *v3.IPPool) bool {
-		if !pool.DeletionTimestamp.IsZero() {
-			log.Debugf("Skipping deleting IP pool (%s)", pool.Name)
-			return false
-		}
-		if pool.Spec.Disabled {
-			log.Debugf("Skipping disabled IP pool (%s)", pool.Name)
-			return false
-		}
-		if _, cidr, err := net.ParseCIDR(pool.Spec.CIDR); err == nil && cidr.Version() == ipVersion {
-			log.Debugf("Adding pool (%s) to the IPPool list", cidr.String())
-			return true
-		} else if err != nil {
-			log.Warnf("Failed to parse the IPPool: %s. Ignoring that IPPool", pool.Spec.CIDR)
-		} else {
-			log.Debugf("Ignoring IPPool: %s. IP version is different.", pool.Spec.CIDR)
-		}
-		return false
+		return filterIPPool(pool, ipVersion)
 	})
 }
 
