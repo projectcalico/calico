@@ -107,7 +107,10 @@ export const useFlowLogsStream = (
 
     useDidUpdate(() => {
         const startTimeGte = getTimeInSeconds(initialStreamStartTime.current);
-        const path = buildStreamPath(startTimeGte, filters);
+        const path = buildStreamPath(
+            startTimeGte ?? STREAM_TIME_OFFSET,
+            filters,
+        );
         startStream({
             path,
             isUpdate: true,
