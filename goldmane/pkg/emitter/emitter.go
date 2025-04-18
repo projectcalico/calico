@@ -30,7 +30,7 @@ import (
 	"k8s.io/client-go/util/workqueue"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/projectcalico/calico/goldmane/pkg/aggregator/bucketing"
+	"github.com/projectcalico/calico/goldmane/pkg/storage"
 	"github.com/projectcalico/calico/goldmane/pkg/types"
 	"github.com/projectcalico/calico/libcalico-go/lib/health"
 )
@@ -67,7 +67,7 @@ type Emitter struct {
 }
 
 // Make sure Emitter implements the Receiver interface to be able to receive aggregated Flows.
-var _ bucketing.Sink = &Emitter{}
+var _ storage.Sink = &Emitter{}
 
 func NewEmitter(opts ...Option) *Emitter {
 	e := &Emitter{
@@ -171,7 +171,7 @@ func (e *Emitter) reportHealth(report *health.HealthReport) {
 	}
 }
 
-func (e *Emitter) Receive(bucket *bucketing.FlowCollection) {
+func (e *Emitter) Receive(bucket *storage.FlowCollection) {
 	// Add the bucket to our internal map so we can retry it if needed.
 	// We'll remove it from the map once it's successfully emitted.
 	k := bucketKey{startTime: bucket.StartTime, endTime: bucket.EndTime}
@@ -197,7 +197,7 @@ func (e *Emitter) forget(k bucketKey) {
 	e.q.Forget(k)
 }
 
-func (e *Emitter) emit(bucket *bucketing.FlowCollection) error {
+func (e *Emitter) emit(bucket *storage.FlowCollection) error {
 	// Check if we have already emitted this batch. If it pre-dates
 	// the latest timestamp we've emitted, skip it. This can happen, for example, on restart when
 	// we learn already emitted flows from the cache.
@@ -225,7 +225,7 @@ func (e *Emitter) emit(bucket *bucketing.FlowCollection) error {
 	return nil
 }
 
-func (e *Emitter) collectionToReader(bucket *bucketing.FlowCollection) (*bytes.Reader, error) {
+func (e *Emitter) collectionToReader(bucket *storage.FlowCollection) (*bytes.Reader, error) {
 	body := []byte{}
 	for _, flow := range bucket.Flows {
 		if len(body) != 0 {

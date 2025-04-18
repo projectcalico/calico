@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package bucketing
+package storage
 
 import (
 	"time"
@@ -40,7 +40,7 @@ type AggregationBucket struct {
 	lookupFlow lookupFn
 
 	// Flows contains an indication of the flows that are part of this bucket.
-	Flows set.Set[*types.DiachronicFlow]
+	Flows set.Set[*DiachronicFlow]
 
 	// Tracker for statistics within this bucket.
 	stats *statisticsIndex
@@ -76,7 +76,7 @@ func NewAggregationBucket(start, end time.Time) *AggregationBucket {
 	return &AggregationBucket{
 		StartTime: start.Unix(),
 		EndTime:   end.Unix(),
-		Flows:     set.New[*types.DiachronicFlow](),
+		Flows:     set.New[*DiachronicFlow](),
 		stats:     newStatisticsIndex(),
 	}
 }
@@ -98,10 +98,10 @@ func (b *AggregationBucket) Reset(start, end int64) {
 
 	if b.Flows == nil {
 		// When resetting a nil bucket, we need to initialize the Flows set.
-		b.Flows = set.New[*types.DiachronicFlow]()
+		b.Flows = set.New[*DiachronicFlow]()
 	} else {
 		// Otherwise, use the existing set but clear it.
-		b.Flows.Iter(func(item *types.DiachronicFlow) error {
+		b.Flows.Iter(func(item *DiachronicFlow) error {
 			b.Flows.Discard(item)
 			return nil
 		})

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package types_test
+package storage_test
 
 import (
 	"testing"
@@ -20,14 +20,14 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/projectcalico/calico/goldmane/pkg/aggregator"
 	"github.com/projectcalico/calico/goldmane/pkg/internal/utils"
+	"github.com/projectcalico/calico/goldmane/pkg/storage"
 	"github.com/projectcalico/calico/goldmane/pkg/types"
 	"github.com/projectcalico/calico/goldmane/proto"
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 )
 
-func setupTest(t *testing.T, opts ...aggregator.Option) func() {
+func setupTest(t *testing.T) func() {
 	// Hook logrus into testing.T
 	utils.ConfigureLogging("DEBUG")
 	logCancel := logutils.RedirectLogrusToTestingT(t)
@@ -46,7 +46,7 @@ func TestDiachronicFlow(t *testing.T) {
 		&types.FlowKeyMeta{},
 		&proto.PolicyTrace{},
 	)
-	df := types.NewDiachronicFlow(k, 0)
+	df := storage.NewDiachronicFlow(k, 0)
 
 	// Add flow data over a bunch of windows.
 	f := types.Flow{

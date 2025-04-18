@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package types
+package storage
 
 import (
 	"slices"
@@ -22,6 +22,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/goldmane/pkg/types"
 	"github.com/projectcalico/calico/goldmane/proto"
 )
 
@@ -30,7 +31,7 @@ import (
 // across time windows.
 type DiachronicFlow struct {
 	ID  int64
-	Key FlowKey
+	Key types.FlowKey
 
 	// Windows is a slice of time windows that the DiachronicFlow has statistics for. Each element in the slice
 	// represents a time window, and the statistics for that window are stored in the corresponding index
@@ -61,7 +62,7 @@ func (w *Window) Contains(t int64) bool {
 	return t >= w.start && t <= w.end
 }
 
-func NewDiachronicFlow(k *FlowKey, id int64) *DiachronicFlow {
+func NewDiachronicFlow(k *types.FlowKey, id int64) *DiachronicFlow {
 	return &DiachronicFlow{
 		ID:  id,
 		Key: *k,
@@ -96,7 +97,7 @@ func (d *DiachronicFlow) Empty() bool {
 	return len(d.Windows) == 0
 }
 
-func (d *DiachronicFlow) AddFlow(flow *Flow, start, end int64) {
+func (d *DiachronicFlow) AddFlow(flow *types.Flow, start, end int64) {
 	if logrus.IsLevelEnabled(logrus.DebugLevel) {
 		logrus.WithFields(d.Key.Fields()).WithFields(logrus.Fields{
 			"flow":   flow,
@@ -129,7 +130,7 @@ func (d *DiachronicFlow) AddFlow(flow *Flow, start, end int64) {
 	d.addToWindow(flow, index)
 }
 
-func (d *DiachronicFlow) addToWindow(flow *Flow, index int) {
+func (d *DiachronicFlow) addToWindow(flow *types.Flow, index int) {
 	if logrus.IsLevelEnabled(logrus.DebugLevel) {
 		logrus.WithFields(d.Key.Fields()).WithFields(logrus.Fields{
 			"flow":   flow,
@@ -149,7 +150,7 @@ func (d *DiachronicFlow) addToWindow(flow *Flow, index int) {
 	d.Windows[index].DestLabels = intersection(d.Windows[index].DestLabels, flow.DestLabels)
 }
 
-func (d *DiachronicFlow) insertWindow(flow *Flow, index int, start, end int64) {
+func (d *DiachronicFlow) insertWindow(flow *types.Flow, index int, start, end int64) {
 	w := Window{
 		start:                   start,
 		end:                     end,
@@ -174,7 +175,7 @@ func (d *DiachronicFlow) insertWindow(flow *Flow, index int, start, end int64) {
 	}
 }
 
-func (d *DiachronicFlow) appendWindow(flow *Flow, start, end int64) {
+func (d *DiachronicFlow) appendWindow(flow *types.Flow, start, end int64) {
 	w := Window{
 		start:                   start,
 		end:                     end,
@@ -199,7 +200,7 @@ func (d *DiachronicFlow) appendWindow(flow *Flow, start, end int64) {
 }
 
 // Aggregate aggregates the statistics from the DiachronicFlow into a new Flow object over the specified time range.
-func (d *DiachronicFlow) Aggregate(startGte, startLt int64) *Flow {
+func (d *DiachronicFlow) Aggregate(startGte, startLt int64) *types.Flow {
 	if !d.Within(startGte, startLt) {
 		return nil
 	}
@@ -227,10 +228,10 @@ func (d *DiachronicFlow) GetWindows(startGte, startLt int64) []*Window {
 }
 
 // AggregateWindows aggregates the statistics from the given Windows into a new Flow object.
-func (d *DiachronicFlow) AggregateWindows(windows []*Window) *Flow {
+func (d *DiachronicFlow) AggregateWindows(windows []*Window) *types.Flow {
 	// Create a new Flow object and populate it with aggregated statistics from the DiachronicFlow.
 	// acoss the time window specified by start and end.
-	f := &Flow{
+	f := &types.Flow{
 		SourceLabels: unique.Make(""),
 		DestLabels:   unique.Make(""),
 	}
@@ -284,7 +285,7 @@ func (d *DiachronicFlow) Matches(filter *proto.Filter, startGte, startLt int64) 
 	if filter == nil {
 		return true
 	}
-	return Matches(filter, &d.Key)
+	return types.Matches(filter, &d.Key)
 }
 
 func (d *DiachronicFlow) Within(startGte, startLt int64) bool {

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package aggregator_test
+package goldmane_test
 
 import (
 	"sync"
@@ -20,22 +20,22 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/goldmane/pkg/aggregator/bucketing"
+	"github.com/projectcalico/calico/goldmane/pkg/storage"
 )
 
 // testSink implements the Sink interface for testing.
 type testSink struct {
 	sync.Mutex
-	buckets []*bucketing.FlowCollection
+	buckets []*storage.FlowCollection
 }
 
 func newTestSink() *testSink {
 	return &testSink{
-		buckets: []*bucketing.FlowCollection{},
+		buckets: []*storage.FlowCollection{},
 	}
 }
 
-func (t *testSink) Receive(b *bucketing.FlowCollection) {
+func (t *testSink) Receive(b *storage.FlowCollection) {
 	t.Lock()
 	defer t.Unlock()
 	t.buckets = append(t.buckets, b)
@@ -50,10 +50,10 @@ func (t *testSink) len() int {
 func (t *testSink) reset() {
 	t.Lock()
 	defer t.Unlock()
-	t.buckets = []*bucketing.FlowCollection{}
+	t.buckets = []*storage.FlowCollection{}
 }
 
-func (t *testSink) bucket(idx int) *bucketing.FlowCollection {
+func (t *testSink) bucket(idx int) *storage.FlowCollection {
 	t.Lock()
 	defer t.Unlock()
 	if idx >= len(t.buckets) {

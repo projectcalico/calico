@@ -20,7 +20,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/goldmane/pkg/aggregator/bucketing"
+	"github.com/projectcalico/calico/goldmane/pkg/storage"
 )
 
 type bucketKey struct {
@@ -31,18 +31,18 @@ type bucketKey struct {
 // bucketCache is a thread-safe cache of aggregation buckets.
 type bucketCache struct {
 	sync.Mutex
-	buckets    map[bucketKey]*bucketing.FlowCollection
+	buckets    map[bucketKey]*storage.FlowCollection
 	timestamps map[bucketKey]time.Time
 }
 
 func newBucketCache() *bucketCache {
 	return &bucketCache{
-		buckets:    map[bucketKey]*bucketing.FlowCollection{},
+		buckets:    map[bucketKey]*storage.FlowCollection{},
 		timestamps: map[bucketKey]time.Time{},
 	}
 }
 
-func (b *bucketCache) add(k bucketKey, bucket *bucketing.FlowCollection) {
+func (b *bucketCache) add(k bucketKey, bucket *storage.FlowCollection) {
 	b.Lock()
 	defer b.Unlock()
 	if _, exists := b.buckets[k]; exists {
@@ -55,7 +55,7 @@ func (b *bucketCache) add(k bucketKey, bucket *bucketing.FlowCollection) {
 	b.timestamps[k] = time.Now()
 }
 
-func (b *bucketCache) get(k bucketKey) (*bucketing.FlowCollection, bool) {
+func (b *bucketCache) get(k bucketKey) (*storage.FlowCollection, bool) {
 	b.Lock()
 	defer b.Unlock()
 	bucket, exists := b.buckets[k]

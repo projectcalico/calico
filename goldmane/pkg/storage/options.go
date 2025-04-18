@@ -12,9 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package bucketing
+package storage
 
-import "github.com/sirupsen/logrus"
+import (
+	"time"
+
+	"github.com/sirupsen/logrus"
+)
 
 type BucketRingOption func(*BucketRing)
 
@@ -31,16 +35,16 @@ func WithBucketsToAggregate(n int) BucketRingOption {
 	}
 }
 
-func WithLookup(lookup lookupFn) BucketRingOption {
-	return func(r *BucketRing) {
-		logrus.WithField("lookup", lookup).Debug("Setting lookup function")
-		r.lookupFlow = lookup
-	}
-}
-
 func WithStreamReceiver(sm StreamReceiver) BucketRingOption {
 	return func(r *BucketRing) {
 		logrus.WithField("streamReceiver", sm).Debug("Setting stream receiver")
 		r.streams = sm
+	}
+}
+
+func WithNowFunc(nowFunc func() time.Time) BucketRingOption {
+	return func(r *BucketRing) {
+		logrus.WithField("nowFunc", nowFunc).Debug("Setting now function")
+		r.nowFunc = nowFunc
 	}
 }

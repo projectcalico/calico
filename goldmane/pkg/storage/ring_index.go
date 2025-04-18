@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package aggregator
+package storage
 
 import (
 	"sort"
@@ -27,7 +27,7 @@ import (
 // swapping out the implementation possible, which is particularly useful for unit testing (but in general is a useful
 // property).
 type logAggregator interface {
-	flowSet(startGt, startLt int64) set.Set[*types.DiachronicFlow]
+	FlowSet(startGt, startLt int64) set.Set[*DiachronicFlow]
 }
 
 func NewRingIndex(a logAggregator) *RingIndex {
@@ -49,11 +49,11 @@ func (a *RingIndex) List(opts IndexFindOpts) ([]*types.Flow, types.ListMeta) {
 	// Default to time-sorted flow data.
 	// Collect all the flow keys across all buckets that match the request. We will then
 	// use DiachronicFlow data to combine statistics together for each key across the time range.
-	keys := a.agg.flowSet(opts.startTimeGt, opts.startTimeLt)
+	keys := a.agg.FlowSet(opts.startTimeGt, opts.startTimeLt)
 
 	// Aggregate the relevant DiachronicFlows across the time range.
 	flowsByKey := map[types.FlowKey]*types.Flow{}
-	keys.Iter(func(d *types.DiachronicFlow) error {
+	keys.Iter(func(d *DiachronicFlow) error {
 		logCtx := logrus.WithField("id", d.ID)
 		if logrus.IsLevelEnabled(logrus.DebugLevel) {
 			// Unpacking the key is a bit expensive, so only do it in debug mode.
@@ -111,10 +111,10 @@ func (a *RingIndex) List(opts IndexFindOpts) ([]*types.Flow, types.ListMeta) {
 	return flows, calculateListMeta(totalFlows, int(opts.pageSize))
 }
 
-func (r *RingIndex) Add(d *types.DiachronicFlow) {
+func (r *RingIndex) Add(d *DiachronicFlow) {
 }
 
-func (r *RingIndex) Remove(d *types.DiachronicFlow) {
+func (r *RingIndex) Remove(d *DiachronicFlow) {
 }
 
 func (a *RingIndex) SortValueSet(opts IndexFindOpts) ([]int64, types.ListMeta) {
@@ -129,12 +129,12 @@ func (a *RingIndex) FilterValueSet(valueFunc func(*types.FlowKey) []string, opts
 	// Default to time-sorted flow data.
 	// Collect all the flow keys across all buckets that match the request. We will then
 	// use DiachronicFlow data to combine statistics together for each key across the time range.
-	keys := a.agg.flowSet(opts.startTimeGt, opts.startTimeLt)
+	keys := a.agg.FlowSet(opts.startTimeGt, opts.startTimeLt)
 
 	// Aggregate the relevant DiachronicFlows across the time range.
 	var values []string
 	seen := set.New[string]()
-	keys.Iter(func(d *types.DiachronicFlow) error {
+	keys.Iter(func(d *DiachronicFlow) error {
 		if logrus.IsLevelEnabled(logrus.DebugLevel) {
 			logrus.WithFields(d.Key.Fields()).
 				WithFields(logrus.Fields{"filter": opts.filter}).

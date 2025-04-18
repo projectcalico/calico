@@ -32,11 +32,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	calicotls "github.com/projectcalico/calico/crypto/pkg/tls"
-	"github.com/projectcalico/calico/goldmane/pkg/aggregator"
-	"github.com/projectcalico/calico/goldmane/pkg/aggregator/bucketing"
 	"github.com/projectcalico/calico/goldmane/pkg/emitter"
+	"github.com/projectcalico/calico/goldmane/pkg/goldmane"
 	"github.com/projectcalico/calico/goldmane/pkg/internal/utils"
 	"github.com/projectcalico/calico/goldmane/pkg/server"
+	"github.com/projectcalico/calico/goldmane/pkg/storage"
 	"github.com/projectcalico/calico/libcalico-go/lib/debugserver"
 	"github.com/projectcalico/calico/libcalico-go/lib/health"
 )
@@ -149,14 +149,14 @@ func Run(ctx context.Context, cfg Config) {
 		logrus.WithError(err).Fatal("Failed to create gRPC server")
 	}
 
-	// Track options for log aggregator.
-	aggOpts := []aggregator.Option{
-		aggregator.WithRolloverTime(cfg.AggregationWindow),
-		aggregator.WithBucketsToCombine(int(cfg.EmitterAggregationWindow.Seconds()) / int(cfg.AggregationWindow.Seconds())),
-		aggregator.WithPushIndex(cfg.EmitAfterSeconds / int(cfg.AggregationWindow.Seconds())),
-		aggregator.WithHealthAggregator(healthAggregator),
+	// Track options for Goldmane.
+	opts := []goldmane.Option{
+		goldmane.WithRolloverTime(cfg.AggregationWindow),
+		goldmane.WithBucketsToCombine(int(cfg.EmitterAggregationWindow.Seconds()) / int(cfg.AggregationWindow.Seconds())),
+		goldmane.WithPushIndex(cfg.EmitAfterSeconds / int(cfg.AggregationWindow.Seconds())),
+		goldmane.WithHealthAggregator(healthAggregator),
 	}
-	agg := aggregator.NewLogAggregator(aggOpts...)
+	gm := goldmane.NewGoldmane(opts...)
 
 	if cfg.PushURL != "" {
 		// Create an emitter, which forwards flows to an upstream HTTP endpoint.
@@ -175,31 +175,31 @@ func Run(ctx context.Context, cfg Config) {
 			// Start a goroutine to manage sink enablement. This will monitor a file on disk to determine if
 			// the sink should be enabled or disabled, and update the aggregator configuration accordingly. This
 			// allows the sink to be enabled or disabled without a process restart.
-			mgr, err := newSinkManager(agg, logEmitter, cfg.FileConfigPath)
+			mgr, err := newSinkManager(gm, logEmitter, cfg.FileConfigPath)
 			if err != nil {
 				logrus.WithError(err).Fatal("Failed to create sink manager")
 			}
 			go mgr.run(ctx)
 		} else {
 			// Just set the sink directly.
-			agg.SetSink(logEmitter)
+			gm.SetSink(logEmitter)
 		}
 	}
 
-	// Create a flow collector to receive flows from clients, connected to the aggregator.
-	collector := server.NewFlowCollector(agg)
+	// Create a flow collector to receive flows from clients, connected goldmane.
+	collector := server.NewFlowCollector(gm)
 	collector.RegisterWith(grpcServer)
 	go collector.Run()
 
-	// Start the aggregator.
-	go agg.Run(bucketing.GetStartTime(int(cfg.AggregationWindow.Seconds())))
+	// Start Goldmane.
+	go gm.Run(storage.GetStartTime(int(cfg.AggregationWindow.Seconds())))
 
-	// Start a flow server, serving from the aggregator.
-	flowServer := server.NewFlowsServer(agg)
+	// Start a flow server, serving from Goldmane.
+	flowServer := server.NewFlowsServer(gm)
 	flowServer.RegisterWith(grpcServer)
 
-	// Start a statistics server, serving from the aggregator.
-	statsServer := server.NewStatisticsServer(agg)
+	// Start a statistics server, serving from Goldmane.
+	statsServer := server.NewStatisticsServer(gm)
 	statsServer.RegisterWith(grpcServer)
 
 	// Start the gRPC server.

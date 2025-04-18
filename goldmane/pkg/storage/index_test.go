@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package aggregator
+package storage
 
 import (
 	"testing"
@@ -27,11 +27,11 @@ import (
 )
 
 type simpleLogAggregatorStub struct {
-	diachronics []*types.DiachronicFlow
+	diachronics []*DiachronicFlow
 }
 
-func (l simpleLogAggregatorStub) flowSet(startGt, startLt int64) set.Set[*types.DiachronicFlow] {
-	s := set.New[*types.DiachronicFlow]()
+func (l simpleLogAggregatorStub) FlowSet(startGt, startLt int64) set.Set[*DiachronicFlow] {
+	s := set.New[*DiachronicFlow]()
 	for _, d := range l.diachronics {
 		if d.Within(startGt, startLt) {
 			s.Add(d)
@@ -62,7 +62,7 @@ func TestIndexAddRemove(t *testing.T) {
 
 	// Add some unique DiachronicFlows to the index.
 	// Add them out of order, just to make sure the index is working.
-	allFlows := []*types.DiachronicFlow{
+	allFlows := []*DiachronicFlow{
 		{
 			ID: 0,
 			Key: *types.NewFlowKey(
@@ -138,7 +138,7 @@ func TestIndexAddRemove(t *testing.T) {
 	Expect(flows[3].Key.DestName()).To(Equal("d"))
 
 	// Remove a DiachronicFlow from the index.
-	idx.Remove(&types.DiachronicFlow{
+	idx.Remove(&DiachronicFlow{
 		ID: 2,
 		Key: *types.NewFlowKey(
 			&types.FlowKeySource{},
@@ -160,7 +160,7 @@ func TestIndexAddRemove(t *testing.T) {
 
 	// Add a DiachronicFlow to the index that sorts the same as an existing DiachronicFlow.
 	// In this case, we're sorting on DestName, and adding a DiachronicFlow with the same DestName as an existing DiachronicFlow.
-	trickyFlow := &types.DiachronicFlow{
+	trickyFlow := &DiachronicFlow{
 		ID: 3,
 		Key: *types.NewFlowKey(
 			&types.FlowKeySource{},
@@ -216,7 +216,7 @@ func TestIndexAddRemove(t *testing.T) {
 }
 
 func TestIndexPagination_General(t *testing.T) {
-	allFlows := []*types.DiachronicFlow{
+	allFlows := []*DiachronicFlow{
 		{
 			ID: 0,
 			Key: *types.NewFlowKey(
@@ -524,9 +524,9 @@ func TestIndexPagination_KeyOnly(t *testing.T) {
 	for _, tc := range tt {
 		t.Run(tc.description, func(t *testing.T) {
 			defer setupTest(t)()
-			var allFlows []*types.DiachronicFlow
+			var allFlows []*DiachronicFlow
 			for i, key := range tc.flowKeys {
-				allFlows = append(allFlows, &types.DiachronicFlow{
+				allFlows = append(allFlows, &DiachronicFlow{
 					ID:  int64(i),
 					Key: key,
 				})
@@ -557,7 +557,7 @@ func TestIndexPagination_KeyOnly(t *testing.T) {
 }
 
 func TestRingIndexPagination_General(t *testing.T) {
-	allFlows := []*types.DiachronicFlow{
+	allFlows := []*DiachronicFlow{
 		{
 			ID: 0,
 			Key: *types.NewFlowKey(
@@ -569,7 +569,7 @@ func TestRingIndexPagination_General(t *testing.T) {
 				&types.FlowKeyMeta{},
 				&proto.PolicyTrace{},
 			),
-			Windows: []types.Window{},
+			Windows: []Window{},
 		},
 		{
 			ID: 1,
