@@ -27,10 +27,10 @@ apiServer:
             kubernetes.io/hostname: kind-control-plane
 
 goldmane:
-  enabled: false
+  enabled: true
 
 whisker:
-  enabled: false
+  enabled: true
 
 # Configuration for the tigera operator
 tigeraOperator:
