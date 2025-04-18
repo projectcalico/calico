@@ -86,18 +86,6 @@ FV_NUM_BATCHES?=1
 FV_BATCHES_TO_RUN?=$(shell seq $(FV_NUM_BATCHES))
 FV_SLOW_SPEC_THRESH=90
 
-# Linker flags for building Felix.
-#
-# We use -X to insert the version information into the placeholder variables
-# in the buildinfo package.
-#
-# We use -B to insert a build ID note into the executable, without which, the
-# RPM build tools complain.
-LDFLAGS= -X $(PACKAGE_NAME)/buildinfo.GitVersion=$(GIT_DESCRIPTION) \
-	-X $(PACKAGE_NAME)/buildinfo.BuildDate=$(DATE) \
-	-X $(PACKAGE_NAME)/buildinfo.GitRevision=$(GIT_COMMIT) \
-	-B 0x$(BUILD_ID)
-
 .PHONY: clean
 clean:
 	rm -rf bin \
