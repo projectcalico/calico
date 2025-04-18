@@ -1262,6 +1262,123 @@ func TestStreams(t *testing.T) {
 			ExpectFlowsEqual(t, exp, result.Flow, fmt.Sprintf("Flow %d", i))
 		}
 	})
+
+	// Test that streaming from various start / end times works as expected.
+	t.Run("TestStartTimes", func(t *testing.T) {
+		// Create a clock and rollover controller.
+		c := newClock(initialNow)
+		roller := &rolloverController{
+			ch:                    make(chan time.Time),
+			aggregationWindowSecs: 1,
+			clock:                 c,
+		}
+		opts := []aggregator.Option{
+			aggregator.WithRolloverTime(1 * time.Second),
+			aggregator.WithRolloverFunc(roller.After),
+			aggregator.WithNowFunc(c.Now),
+		}
+		defer setupTest(t, opts...)()
+
+		// Start the aggregator.
+		go agg.Run(c.Now().Unix())
+
+		// Create three flows that span across multiple buckets.
+		flow1 := testutils.NewRandomFlow(c.Now().Unix())
+		flow2 := testutils.NewRandomFlow(c.Now().Unix())
+		flow3 := testutils.NewRandomFlow(c.Now().Unix())
+
+		flows := []*proto.Flow{}
+		var startTimes []int64
+		for i := 2; i < 22; i += 2 {
+			for _, base := range []*proto.Flow{flow1, flow2, flow3} {
+				// Create a copy of the base flow and send it back in time.
+				fl := googleproto.Clone(base).(*proto.Flow)
+				fl.StartTime = base.StartTime - int64(i)
+				fl.EndTime = base.EndTime - int64(i)
+				startTimes = append(startTimes, fl.StartTime)
+				agg.Receive(types.ProtoToFlow(fl))
+				flows = append(flows, fl)
+			}
+		}
+
+		// Expect all flows to have been received. We should expect 3 flows,
+		// and each should have a NumConnectionsCompleted of 10 because they span 10 windows.
+		Eventually(func() error {
+			results, err := agg.List(&proto.FlowListRequest{})
+			if err != nil {
+				return err
+			}
+			flows := results.Flows
+			if len(flows) != 3 {
+				return fmt.Errorf("Expected 3 flows, got %d", len(flows))
+			}
+
+			for _, flow := range flows {
+				if flow.Flow.NumConnectionsStarted != 10 {
+					return fmt.Errorf("Expected 10 connections, got %d", flow.Flow.NumConnectionsStarted)
+				}
+			}
+			return nil
+		}, waitTimeout, retryTime).Should(BeNil())
+
+		// Start a stream from the beginning and we should get all the flows we created.
+		stream, err := agg.Stream(&proto.FlowStreamRequest{StartTimeGte: c.Now().Unix() - 30})
+		require.Nil(t, err)
+		require.NotNil(t, stream)
+		defer stream.Close()
+
+		// Verify we can read all the flows.
+		_, err = readStream(stream, len(flows))
+		require.Nil(t, err)
+
+		// Start a stream from the end time of the first bucket - we should get all of the other results,
+		// but not the first one. Note: flows array is in reverse time order, so the last flows are the oldest.
+		streamStart := flows[len(flows)-1].EndTime
+		stream, err = agg.Stream(&proto.FlowStreamRequest{StartTimeGte: streamStart})
+		require.Nil(t, err)
+		defer stream.Close()
+
+		// Verify we can read all the flows. We expect three fewer, since we should be starting
+		// after the first bucket (and we have three flows in each time window).
+		_, err = readStream(stream, len(flows)-3)
+		require.Nil(t, err)
+
+		// Stream again from another time in the middle, using end time.
+		// We expect to get only the last 6 flows.
+		streamStart = flows[9].EndTime
+		stream, err = agg.Stream(&proto.FlowStreamRequest{StartTimeGte: streamStart})
+		require.Nil(t, err)
+		defer stream.Close()
+		_, err = readStream(stream, 6)
+		require.Nil(t, err)
+
+		// Use the start time of the same flow, which should give us 9 flows instead.
+		streamStart = flows[9].StartTime
+		stream, err = agg.Stream(&proto.FlowStreamRequest{StartTimeGte: streamStart})
+		require.Nil(t, err)
+		defer stream.Close()
+		_, err = readStream(stream, 9)
+		require.Nil(t, err)
+	})
+}
+
+func readStream(stream *aggregator.Stream, exp int) ([]*proto.FlowResult, error) {
+	results := []*proto.FlowResult{}
+	for range exp {
+		select {
+		case r := <-stream.Flows():
+			f := &proto.FlowResult{Flow: &proto.Flow{}}
+			r.BuildInto(nil, f)
+			results = append(results, f)
+			if len(results) == exp {
+				// We got them all.
+				return results, nil
+			}
+		case <-time.After(100 * time.Millisecond):
+			return nil, fmt.Errorf("Timed out waiting for flow (got %d, want: %d)", len(results), exp)
+		}
+	}
+	return nil, fmt.Errorf("BUG: shouldn't be here")
 }
 
 // TestSortOrder tests basic functionality of the various sorted indices supported by the aggregator.

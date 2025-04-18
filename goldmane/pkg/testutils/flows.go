@@ -96,12 +96,15 @@ func NewRandomFlow(start int64) *proto.Flow {
 				},
 			},
 		},
-		StartTime:               start,
-		EndTime:                 start + 1,
-		BytesIn:                 100,
-		BytesOut:                200,
-		PacketsIn:               10,
-		PacketsOut:              20,
+		StartTime:  start,
+		EndTime:    start + 1,
+		BytesIn:    100,
+		BytesOut:   200,
+		PacketsIn:  10,
+		PacketsOut: 20,
+
+		// Note: many tests rely on the specific values of these fields to verify
+		// aggregation behaviour, so be careful when changing them.
 		NumConnectionsStarted:   1,
 		NumConnectionsLive:      2,
 		NumConnectionsCompleted: 3,
