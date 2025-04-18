@@ -48,6 +48,7 @@ import (
 	"github.com/projectcalico/calico/node/pkg/lifecycle/startup/autodetection"
 	"github.com/projectcalico/calico/node/pkg/lifecycle/startup/autodetection/ipv4"
 	"github.com/projectcalico/calico/node/pkg/lifecycle/utils"
+	"github.com/projectcalico/calico/pkg/buildinfo"
 )
 
 const (
@@ -68,9 +69,6 @@ const (
 	OSTypeWindows = "win"
 )
 
-// Version string, set during build.
-var VERSION string
-
 var (
 	// Default values, names for different configs.
 	defaultLogSeverity        = "Info"
@@ -90,7 +88,7 @@ func Run() {
 
 	// Determine the name for this node.
 	nodeName := utils.DetermineNodeName()
-	log.Infof("Starting node %s with version %s", nodeName, VERSION)
+	log.Infof("Starting node %s with version %s", nodeName, buildinfo.Version)
 
 	// Create the Calico API cli.
 	cfg, cli := calicoclient.CreateClient()
@@ -445,7 +443,6 @@ func waitForConnection(ctx context.Context, c client.Interface) {
 		// is working.  Getting a specific Node is a good option, even
 		// if the Node does not exist.
 		_, err := c.Nodes().Get(ctx, "foo", options.GetOptions{})
-
 		// We only care about a couple of error cases, all others would
 		// suggest the datastore is accessible.
 		if err != nil {
@@ -681,7 +678,6 @@ func evaluateENVBool(envVar string, defaultValue bool) bool {
 	if isSet {
 
 		switch strings.ToLower(envValue) {
-
 		case "false", "0", "no", "n", "f":
 			log.Infof("%s is %t through environment variable", envVar, false)
 			return false
@@ -1088,7 +1084,7 @@ func ensureDefaultConfig(ctx context.Context, cfg *apiconfig.CalicoAPIConfig, c 
 		}
 	}
 
-	if err := c.EnsureInitialized(ctx, VERSION, clusterType); err != nil {
+	if err := c.EnsureInitialized(ctx, buildinfo.Version, clusterType); err != nil {
 		return err
 	}
 

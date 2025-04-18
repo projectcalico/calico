@@ -39,7 +39,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/health"
 	cprometheus "github.com/projectcalico/calico/libcalico-go/lib/prometheus"
 	"github.com/projectcalico/calico/libcalico-go/lib/writelogger"
-	"github.com/projectcalico/calico/typha/pkg/buildinfo"
+	"github.com/projectcalico/calico/pkg/buildinfo"
 	"github.com/projectcalico/calico/typha/pkg/jitter"
 	"github.com/projectcalico/calico/typha/pkg/promutils"
 	"github.com/projectcalico/calico/typha/pkg/snapcache"
@@ -803,7 +803,6 @@ func (h *connection) handle(finishedWG *sync.WaitGroup) (err error) {
 	// Use this goroutine to wait for client messages and do the ping/pong liveness check.
 	h.logCxt.Info("Waiting for messages from client")
 	for {
-
 		select {
 		case msg := <-h.readC:
 			if msg == nil {
@@ -935,7 +934,7 @@ func (h *connection) doHandshake() error {
 
 	// Respond to client's hello.
 	err = h.sendMsg(syncproto.MsgServerHello{
-		Version: buildinfo.GitVersion,
+		Version: buildinfo.Version,
 		// Echo back the SyncerType so that up-level clients know that we understood their request.  Down-level
 		// clients will ignore.
 		SyncerType:                  syncerType,
