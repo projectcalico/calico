@@ -174,6 +174,7 @@ func (crw *k8sWatcherConverter) convertEvent(kevent kwatch.Event) []*api.WatchEv
 		return []*api.WatchEvent{{
 			Type: api.WatchBookmark,
 			New: &model.KVPair{
+				Value:    k8sRes,
 				Revision: revision,
 			},
 		}}

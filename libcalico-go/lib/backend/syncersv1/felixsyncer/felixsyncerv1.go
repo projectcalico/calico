@@ -137,5 +137,6 @@ func New(client api.Client, cfg apiconfig.CalicoAPIConfigSpec, callbacks api.Syn
 		client,
 		resourceTypes,
 		callbacks,
+		watchersyncer.WithUseWatchList(cfg.K8sUseWatchList),
 	)
 }

@@ -147,7 +147,7 @@ var _ = Describe("Node status FV tests", func() {
 			mock.setLastBootTime(BootTimeFirst)
 			mock.setError(nil)
 
-			syncer := nodestatussyncer.New(be, r)
+			syncer := nodestatussyncer.New(be, r, cfg.Spec)
 			syncer.Start()
 
 			go r.Run()
@@ -294,7 +294,7 @@ var _ = Describe("Node status FV tests", func() {
 
 			r = status.NewNodeStatusReporter(nodeName, cfg, c, status.GetPopulators())
 
-			syncer := nodestatussyncer.New(be, r)
+			syncer := nodestatussyncer.New(be, r, cfg.Spec)
 			syncer.Start()
 
 			go r.Run()

@@ -72,7 +72,7 @@ func Run() {
 	} else {
 		// Use the syncer locally.
 		log.Debug("Using local syncer")
-		syncer := nodestatussyncer.New(c.(backendClientAccessor).Backend(), r)
+		syncer := nodestatussyncer.New(c.(backendClientAccessor).Backend(), r, cfg.Spec)
 		syncer.Start()
 	}
 

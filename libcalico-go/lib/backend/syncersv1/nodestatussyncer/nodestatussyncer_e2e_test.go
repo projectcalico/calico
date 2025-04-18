@@ -55,7 +55,7 @@ var _ = testutils.E2eDatastoreDescribe("Calico node status syncer tests", testut
 			// Create a SyncerTester to receive the Calico node status syncer callback events and to allow us
 			// to assert state.
 			syncTester := testutils.NewSyncerTester()
-			syncer := nodestatussyncer.New(be, syncTester)
+			syncer := nodestatussyncer.New(be, syncTester, config.Spec)
 			syncer.Start()
 			expectedCacheSize := 0
 
@@ -113,7 +113,7 @@ var _ = testutils.E2eDatastoreDescribe("Calico node status syncer tests", testut
 			// We need to create a new syncTester and syncer.
 			current := syncTester.GetCacheEntries()
 			syncTester = testutils.NewSyncerTester()
-			syncer = nodestatussyncer.New(be, syncTester)
+			syncer = nodestatussyncer.New(be, syncTester, config.Spec)
 			syncer.Start()
 
 			// Verify the data is the same as the data from the previous cache.  We got the cache in the previous
