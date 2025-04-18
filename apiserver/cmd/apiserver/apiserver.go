@@ -29,6 +29,7 @@ import (
 	"k8s.io/component-base/logs"
 
 	"github.com/projectcalico/calico/apiserver/cmd/apiserver/server"
+	"github.com/projectcalico/calico/pkg/buildinfo"
 )
 
 func main() {
@@ -51,11 +52,7 @@ func main() {
 		runtime.GOMAXPROCS(runtime.NumCPU())
 	}
 
-	err = server.Version()
-	if err != nil {
-		logrus.Errorf("Error printing version info: %v.", err)
-		logs.FlushLogs()
-	}
+	buildinfo.PrintVersion()
 
 	cmd, _, err := server.NewCommandStartCalicoServer(os.Stdout)
 	if err != nil {

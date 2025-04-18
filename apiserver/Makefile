@@ -36,16 +36,6 @@ ifdef UNIT_TESTS
 UNIT_TEST_FLAGS = -run $(UNIT_TESTS) -v
 endif
 
-APISERVER_VERSION?=$(shell git describe --tags --dirty --always --abbrev=12)
-APISERVER_BUILD_DATE?=$(shell date -u +'%FT%T%z')
-APISERVER_GIT_REVISION?=$(shell git rev-parse --short HEAD)
-APISERVER_GIT_DESCRIPTION?=$(shell git describe --tags)
-
-LDFLAGS = -X $(PACKAGE_NAME)/cmd/apiserver/server.VERSION=$(APISERVER_VERSION) \
-	-X $(PACKAGE_NAME)/cmd/apiserver/server.BUILD_DATE=$(APISERVER_BUILD_DATE) \
-	-X $(PACKAGE_NAME)/cmd/apiserver/server.GIT_DESCRIPTION=$(APISERVER_GIT_DESCRIPTION) \
-	-X $(PACKAGE_NAME)/cmd/apiserver/server.GIT_REVISION=$(APISERVER_GIT_REVISION)
-
 ##############################################################################
 # Download and include ../lib.Makefile before anything else
 #   Additions to EXTRA_DOCKER_ARGS need to happen before the include since
@@ -53,7 +43,6 @@ LDFLAGS = -X $(PACKAGE_NAME)/cmd/apiserver/server.VERSION=$(APISERVER_VERSION) \
 ##############################################################################
 
 include ../lib.Makefile
-
 
 FIPS ?= false
 

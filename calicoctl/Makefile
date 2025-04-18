@@ -28,13 +28,6 @@ SRC_FILES=$(shell find $(CALICOCTL_DIR) -name '*.go') $(shell find ../libcalico-
 
 TEST_CONTAINER_NAME ?= calico/test
 
-CALICOCTL_GIT_REVISION?=$(shell git rev-parse --short HEAD)
-
-LDFLAGS=-X $(PACKAGE_NAME)/calicoctl/commands.VERSION=$(GIT_VERSION) \
-	-X $(PACKAGE_NAME)/calicoctl/commands.GIT_REVISION=$(CALICOCTL_GIT_REVISION) \
-	-X $(PACKAGE_NAME)/calicoctl/commands/common.VERSION=$(GIT_VERSION) \
-	-X main.VERSION=$(GIT_VERSION)
-
 .PHONY: clean
 ## Clean enough that a new release build will be clean
 clean:
