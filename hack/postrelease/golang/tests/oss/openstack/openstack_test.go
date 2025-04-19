@@ -36,7 +36,7 @@ func Test_OpenStackPublished(t *testing.T) {
 				t.Parallel()
 				resp, err := packageObj.Head()
 				assert.NoError(t, err)
-				assert.Equal(t, 200, resp.StatusCode, "blahblah")
+				assert.Equal(t, 200, resp.StatusCode, packageObj.URL())
 			})
 		}
 	}

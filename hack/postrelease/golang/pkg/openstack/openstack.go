@@ -19,18 +19,19 @@ type PackageRevision struct {
 	Template  *template.Template
 }
 
-func (pr PackageRevision) toURL() (string, error) {
+// URL returns the fully-qualified URL for the package file
+func (pr PackageRevision) URL() string {
 	buf := &bytes.Buffer{}
 	err := pr.Template.Execute(buf, pr)
-	return buf.String(), err
+	if err != nil {
+		panic(fmt.Errorf("could not generate url: %w", err))
+	}
+	return buf.String()
 }
 
 // Head fetches and returns the HTTP HEAD response for a given PackageRevision
 func (pr PackageRevision) Head() (*http.Response, error) {
-	url, err := pr.toURL()
-	if err != nil {
-		panic(fmt.Errorf("could not generate url: %w", err))
-	}
+	url := pr.URL()
 
 	response, err := http.Head(url)
 	if err != nil {
@@ -53,12 +54,12 @@ type ubuntuComponent struct {
 
 var urlTemplates = map[string]map[string]string{
 	"ubuntu": {
-		"felix":             "http://ppa.launchpad.net/project-calico/%s/ubuntu/pool/main/f/felix",
-		"networking-calico": "http://ppa.launchpad.net/project-calico/%s/ubuntu/pool/main/n/networking-calico",
+		"felix":             "https://ppa.launchpadcontent.net/project-calico/%s/ubuntu/pool/main/f/felix",
+		"networking-calico": "https://ppa.launchpadcontent.net/project-calico/%s/ubuntu/pool/main/n/networking-calico",
 	},
 	"rpm": {
-		"x86_64": "http://binaries.projectcalico.org/rpm/%s/x86_64",
-		"noarch": "http://binaries.projectcalico.org/rpm/%s/noarch",
+		"x86_64": "https://binaries.projectcalico.org/rpm/%s/x86_64",
+		"noarch": "https://binaries.projectcalico.org/rpm/%s/noarch",
 	},
 }
 
