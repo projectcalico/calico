@@ -991,6 +991,10 @@ type FelixConfigurationSpec struct {
 	// [Default: -1]
 	// +optional
 	GoMaxProcs *int `json:"goMaxProcs,omitempty" validate:"omitempty,gte=-1"`
+
+	// RequireMTUFile specifies whether mtu file is required to start the felix.
+	// Optional as to keep the same as previous behavior. [Default: false]
+	RequireMTUFile *bool `json:"requireMTUFile,omitempty"`
 }
 
 type HealthTimeoutOverride struct {
