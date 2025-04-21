@@ -207,10 +207,11 @@ func (c *resources) Get(ctx context.Context, opts options.GetOptions, kind, ns, 
 // List lists a resource from the backend datastore.
 func (c *resources) List(ctx context.Context, opts options.ListOptions, kind, listKind string, listObj resourceList) error {
 	list := model.ResourceListOptions{
-		Kind:      kind,
-		Name:      opts.Name,
-		Namespace: opts.Namespace,
-		Prefix:    opts.Prefix,
+		Kind:          kind,
+		Name:          opts.Name,
+		Namespace:     opts.Namespace,
+		Prefix:        opts.Prefix,
+		LabelSelector: opts.LabelSelector,
 	}
 
 	// Query the backend.

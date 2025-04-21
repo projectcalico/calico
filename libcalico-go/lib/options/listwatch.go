@@ -36,4 +36,7 @@ type ListOptions struct {
 	// as a mechanism for enumerating endpoints within a Pod (since the name construction for a
 	// Workload endpoint is hierarchically constructed).
 	Prefix bool
+
+	// LabelSelector filters results by label
+	LabelSelector string
 }

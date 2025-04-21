@@ -243,15 +243,16 @@ func cmdAdd(args *skel.CmdArgs) error {
 			maxBlocks = 1
 		}
 		assignArgs := ipam.AutoAssignArgs{
-			Num4:             num4,
-			Num6:             num6,
-			HandleID:         &handleID,
-			Hostname:         nodename,
-			IPv4Pools:        v4pools,
-			IPv6Pools:        v6pools,
-			MaxBlocksPerHost: maxBlocks,
-			Attrs:            attrs,
-			IntendedUse:      v3.IPPoolAllowedUseWorkload,
+			Num4:                     num4,
+			Num6:                     num6,
+			HandleID:                 &handleID,
+			Hostname:                 nodename,
+			IPv4Pools:                v4pools,
+			IPv6Pools:                v6pools,
+			MaxBlocksPerHost:         maxBlocks,
+			Attrs:                    attrs,
+			IntendedUse:              v3.IPPoolAllowedUseWorkload,
+			IpPoolsLabelSelectorKeys: conf.IPAM.IpPoolsLabelSelectorKeys,
 		}
 		if runtime.GOOS == "windows" {
 			rsvdAttrWindows := &ipam.HostReservedAttr{

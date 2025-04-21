@@ -366,6 +366,9 @@ func (c *customK8sResourceClient) List(ctx context.Context, list model.ListInter
 			}
 			opts.FieldSelector = fmt.Sprintf("metadata.name=%s", name)
 		}
+		if resList.LabelSelector != "" {
+			opts.LabelSelector = resList.LabelSelector
+		}
 
 		// Build the request.
 		req := c.restClient.Get().

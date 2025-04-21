@@ -25,7 +25,7 @@ import (
 // Interface used to access the enabled IPPools.
 type PoolAccessorInterface interface {
 	// Returns a list of enabled pools sorted in alphanumeric name order.
-	GetEnabledPools(ctx context.Context, ipVersion int) ([]v3.IPPool, error)
+	GetEnabledPools(ctx context.Context, ipVersion int, labelSelector string) ([]v3.IPPool, error)
 	// Returns a list of all pools sorted in alphanumeric name order.
 	GetAllPools(ctx context.Context) ([]v3.IPPool, error)
 }

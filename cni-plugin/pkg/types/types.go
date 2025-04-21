@@ -70,13 +70,14 @@ type NetConf struct {
 	VXLANMacPrefix string `json:"vxlan_mac_prefix"`
 	VXLANVNI       uint64 `json:"vxlan_vni"`
 	IPAM           struct {
-		Name       string
-		Type       string   `json:"type"`
-		Subnet     string   `json:"subnet"`
-		AssignIpv4 *string  `json:"assign_ipv4"`
-		AssignIpv6 *string  `json:"assign_ipv6"`
-		IPv4Pools  []string `json:"ipv4_pools,omitempty"`
-		IPv6Pools  []string `json:"ipv6_pools,omitempty"`
+		Name                     string
+		Type                     string   `json:"type"`
+		Subnet                   string   `json:"subnet"`
+		AssignIpv4               *string  `json:"assign_ipv4"`
+		AssignIpv6               *string  `json:"assign_ipv6"`
+		IPv4Pools                []string `json:"ipv4_pools,omitempty"`
+		IPv6Pools                []string `json:"ipv6_pools,omitempty"`
+		IpPoolsLabelSelectorKeys []string `json:"ip_pools_label_selector_keys,omitempty"`
 	} `json:"ipam,omitempty"`
 	Args                 Args                   `json:"args"`
 	MTU                  int                    `json:"mtu"`

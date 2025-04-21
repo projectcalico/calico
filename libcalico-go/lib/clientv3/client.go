@@ -219,14 +219,18 @@ func filterIPPool(pool *v3.IPPool, ipVersion int) bool {
 	return false
 }
 
-func (p poolAccessor) GetEnabledPools(ctx context.Context, ipVersion int) ([]v3.IPPool, error) {
-	return p.getPools(ctx, func(pool *v3.IPPool) bool {
+func (p poolAccessor) GetEnabledPools(ctx context.Context, ipVersion int, labelSector string) ([]v3.IPPool, error) {
+	return p.getPools(ctx, labelSector, func(pool *v3.IPPool) bool {
 		return filterIPPool(pool, ipVersion)
 	})
 }
 
-func (p poolAccessor) getPools(ctx context.Context, filter func(pool *v3.IPPool) bool) ([]v3.IPPool, error) {
-	pools, err := p.client.IPPools().List(ctx, options.ListOptions{})
+func (p poolAccessor) getPools(ctx context.Context, labelSelector string, filter func(pool *v3.IPPool) bool) ([]v3.IPPool, error) {
+	opt := options.ListOptions{}
+	if labelSelector != "" {
+		opt.LabelSelector = labelSelector
+	}
+	pools, err := p.client.IPPools().List(ctx, opt)
 	if err != nil {
 		return nil, err
 	}
@@ -241,7 +245,7 @@ func (p poolAccessor) getPools(ctx context.Context, filter func(pool *v3.IPPool)
 }
 
 func (p poolAccessor) GetAllPools(ctx context.Context) ([]v3.IPPool, error) {
-	return p.getPools(ctx, func(pool *v3.IPPool) bool {
+	return p.getPools(ctx, "", func(pool *v3.IPPool) bool {
 		return true
 	})
 }
