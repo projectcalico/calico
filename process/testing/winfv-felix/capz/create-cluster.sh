@@ -76,7 +76,6 @@ echo '  WIN_NODE_COUNT='${WIN_NODE_COUNT}
 : ${KIND:=./bin/kind}
 : ${KUBECTL:=./bin/kubectl}
 : ${CLUSTERCTL:=./bin/clusterctl}
-: ${YQ:=./bin/yq}
 : ${KCAPZ:="${KUBECTL} --kubeconfig=./kubeconfig"}
 
 # Base64 encode the variables
@@ -141,7 +140,7 @@ ${CLUSTERCTL} generate cluster ${CLUSTER_NAME_CAPZ} \
 
 # Cluster templates authenticate with Workload Identity by default. Modify the AzureClusterIdentity for ServicePrincipal authentication.
 # See https://capz.sigs.k8s.io/topics/identities for more details.
-${YQ} -i "with(. | select(.kind == \"AzureClusterIdentity\"); .spec.type |= \"ServicePrincipal\" | .spec.clientSecret.name |= \"${AZURE_CLUSTER_IDENTITY_SECRET_NAME}\" | .spec.clientSecret.namespace |= \"${AZURE_CLUSTER_IDENTITY_SECRET_NAMESPACE}\")" win-capz.yaml
+yq -i "with(. | select(.kind == \"AzureClusterIdentity\"); .spec.type |= \"ServicePrincipal\" | .spec.clientSecret.name |= \"${AZURE_CLUSTER_IDENTITY_SECRET_NAME}\" | .spec.clientSecret.namespace |= \"${AZURE_CLUSTER_IDENTITY_SECRET_NAMESPACE}\")" win-capz.yaml
 
 retry_command 600 "${KUBECTL} apply -f win-capz.yaml"
 

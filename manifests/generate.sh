@@ -6,22 +6,21 @@
 
 # Helm binary to use. Default to the one installed by the Makefile.
 HELM=${HELM:-../bin/helm}
-YQ=${YQ:-../bin/yq}
 
 # Get versions to install.
-defaultCalicoVersion=$($YQ .version <../charts/calico/values.yaml)
+defaultCalicoVersion=$(yq .version <../charts/calico/values.yaml)
 CALICO_VERSION=${CALICO_VERSION:-$defaultCalicoVersion}
 
-defaultRegistry=$($YQ .node.registry <../charts/calico/values.yaml)
+defaultRegistry=$(yq .node.registry <../charts/calico/values.yaml)
 REGISTRY=${REGISTRY:-$defaultRegistry}
 
-defaultOperatorVersion=$($YQ .tigeraOperator.version <../charts/tigera-operator/values.yaml)
+defaultOperatorVersion=$(yq .tigeraOperator.version <../charts/tigera-operator/values.yaml)
 OPERATOR_VERSION=${OPERATOR_VERSION:-$defaultOperatorVersion}
 
-defaultOperatorRegistry=$($YQ .tigeraOperator.registry <../charts/tigera-operator/values.yaml)
+defaultOperatorRegistry=$(yq .tigeraOperator.registry <../charts/tigera-operator/values.yaml)
 OPERATOR_REGISTRY=${OPERATOR_REGISTRY:-$defaultOperatorRegistry}
 
-defaultOperatorImage=$($YQ .tigeraOperator.image <../charts/tigera-operator/values.yaml)
+defaultOperatorImage=$(yq .tigeraOperator.image <../charts/tigera-operator/values.yaml)
 OPERATOR_IMAGE=${OPERATOR_IMAGE:-$defaultOperatorImage}
 
 NON_HELM_MANIFEST_IMAGES="apiserver windows ctl csi node-driver-registrar dikastes flannel-migration-controller"

@@ -81,7 +81,7 @@ generate:
 	$(MAKE) gen-manifests
 	$(MAKE) fix-changed
 
-gen-manifests: bin/helm bin/yq
+gen-manifests: bin/helm
 	cd ./manifests && \
 		OPERATOR_VERSION=$(OPERATOR_VERSION) \
 		CALICO_VERSION=$(CALICO_VERSION) \
@@ -181,13 +181,13 @@ release-test:
 
 # Currently our openstack builds either build *or* build and publish,
 # hence why we have two separate jobs here that do almost the same thing.
-build-openstack: bin/yq
-	$(eval VERSION=$(shell bin/yq '.version' charts/calico/values.yaml))
+build-openstack:
+	$(eval VERSION=$(shell yq '.version' charts/calico/values.yaml))
 	$(info Building openstack packages for version $(VERSION))
 	$(MAKE) -C release/packaging release VERSION=$(VERSION)
 
-publish-openstack: bin/yq
-	$(eval VERSION=$(shell bin/yq '.version' charts/calico/values.yaml))
+publish-openstack:
+	$(eval VERSION=$(shell yq '.version' charts/calico/values.yaml))
 	$(info Publishing openstack packages for version $(VERSION))
 	$(MAKE) -C release/packaging release-publish VERSION=$(VERSION)
 
@@ -201,7 +201,7 @@ helm-index:
 			     $(MAKE) semaphore-run-workflow
 
 # Creates the tar file used for installing Calico on OpenShift.
-bin/ocp.tgz: manifests/ocp/ bin/yq
+bin/ocp.tgz: manifests/ocp/
 	tar czvf $@ --exclude='.gitattributes' -C manifests/ ocp
 
 ## Generates release notes for the given version.
