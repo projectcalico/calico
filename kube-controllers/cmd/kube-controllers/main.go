@@ -51,12 +51,11 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/debugserver"
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
+	"github.com/projectcalico/calico/pkg/buildinfo"
 	"github.com/projectcalico/calico/typha/pkg/cmdwrapper"
 )
 
-// VERSION is filled out during the build process (using git describe output)
 var (
-	VERSION    string
 	version    bool
 	statusFile string
 )
@@ -80,7 +79,7 @@ func init() {
 func main() {
 	flag.Parse()
 	if version {
-		fmt.Println(VERSION)
+		buildinfo.PrintVersion()
 		os.Exit(0)
 	}
 

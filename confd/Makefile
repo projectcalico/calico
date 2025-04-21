@@ -11,8 +11,6 @@ include ../lib.Makefile
 
 ###############################################################################
 
-LDFLAGS=-X $(PACKAGE_NAME)/pkg/buildinfo.GitVersion=$(GIT_DESCRIPTION)
-
 # All go files.
 SRC_FILES:=$(shell find . -name '*.go' -not -path "./vendor/*" )
 
