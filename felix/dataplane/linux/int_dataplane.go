@@ -437,7 +437,8 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	ConfigureDefaultMTUs(hostMTU, &config)
 	podMTU := determinePodMTU(config)
 	if err := writeMTUFile(podMTU); err != nil {
-		log.WithError(err).Error("Failed to write MTU file, pod MTU may not be properly set")
+		log.WithError(err).Error("Failed to write MTU file shutting down")
+		return nil
 	}
 
 	featureDetector := environment.NewFeatureDetector(
