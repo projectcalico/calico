@@ -17,6 +17,7 @@ package collector
 import (
 	log "github.com/sirupsen/logrus"
 
+	bpfconntrack "github.com/projectcalico/calico/felix/bpf/conntrack/timeouts"
 	"github.com/projectcalico/calico/felix/calc"
 	"github.com/projectcalico/calico/felix/collector/flowlog"
 	"github.com/projectcalico/calico/felix/collector/goldmane"
@@ -50,6 +51,7 @@ func New(
 			FlowLogsFlushInterval: configParams.FlowLogsFlushInterval,
 			IsBPFDataplane:        configParams.BPFEnabled,
 			DisplayDebugTraceLogs: configParams.FlowLogsCollectorDebugTrace,
+			BPFConntrackTimeouts:  bpfconntrack.GetTimeouts(configParams.BPFConntrackTimeouts),
 		},
 	)
 
