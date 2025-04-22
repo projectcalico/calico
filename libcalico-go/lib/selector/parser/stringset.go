@@ -15,14 +15,14 @@
 package parser
 
 import (
+	"github.com/projectcalico/calico/lib/std/unique"
 	"sort"
-	"unique"
 )
 
-type StringSet []unique.Handle[string]
+type StringSet []unique.String
 
 // Contains returns true if a given string in current set
-func (ss StringSet) Contains(s unique.Handle[string]) bool {
+func (ss StringSet) Contains(s unique.String) bool {
 	// Defer to the binary search impl in the stdlib.  Note: it returns
 	// the "insertion point" for inserting the given string, so we need to
 	// check that the string really is there.
@@ -32,11 +32,11 @@ func (ss StringSet) Contains(s unique.Handle[string]) bool {
 
 // SliceCopy returns a new slice that contains the elements of the set in
 // sorted order.
-func (ss StringSet) SliceCopy() []unique.Handle[string] {
+func (ss StringSet) SliceCopy() []unique.String {
 	if ss == nil {
 		return nil
 	}
-	cp := make([]unique.Handle[string], len(ss), len(ss))
+	cp := make([]unique.String, len(ss), len(ss))
 	copy(cp, ss)
 	return cp
 }
@@ -52,7 +52,7 @@ func (ss StringSet) StringSlice() []string {
 	return out
 }
 
-func ConvertToStringSetInPlace(s []unique.Handle[string]) StringSet {
+func ConvertToStringSetInPlace(s []unique.String) StringSet {
 	if len(s) <= 1 {
 		// Nothing to do for nil, zero or a single-entry slice.
 		return s
