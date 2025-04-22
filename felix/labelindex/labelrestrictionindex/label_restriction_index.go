@@ -15,9 +15,10 @@
 package labelrestrictionindex
 
 import (
-	"github.com/sirupsen/logrus"
 	"iter"
 	"math"
+
+	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/lib/std/unique"
 	"github.com/projectcalico/calico/libcalico-go/lib/selector"
