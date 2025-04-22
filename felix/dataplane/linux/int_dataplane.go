@@ -41,6 +41,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/bpfmap"
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
 	bpfconntrack "github.com/projectcalico/calico/felix/bpf/conntrack"
+	bpftimeouts "github.com/projectcalico/calico/felix/bpf/conntrack/timeouts"
 	"github.com/projectcalico/calico/felix/bpf/events"
 	"github.com/projectcalico/calico/felix/bpf/failsafes"
 	bpfifstate "github.com/projectcalico/calico/felix/bpf/ifstate"
@@ -55,6 +56,7 @@ import (
 	bpfutils "github.com/projectcalico/calico/felix/bpf/utils"
 	"github.com/projectcalico/calico/felix/calc"
 	"github.com/projectcalico/calico/felix/collector"
+	collectortypes "github.com/projectcalico/calico/felix/collector/types"
 	"github.com/projectcalico/calico/felix/config"
 	felixconfig "github.com/projectcalico/calico/felix/config"
 	"github.com/projectcalico/calico/felix/dataplane/common"
@@ -213,7 +215,7 @@ type Config struct {
 	XDPEnabled                         bool
 	XDPAllowGeneric                    bool
 	BPFConntrackCleanupMode            apiv3.BPFConntrackMode
-	BPFConntrackTimeouts               bpfconntrack.Timeouts
+	BPFConntrackTimeouts               bpftimeouts.Timeouts
 	BPFCgroupV2                        string
 	BPFConnTimeLBEnabled               bool
 	BPFConnTimeLB                      string
@@ -835,8 +837,8 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		bpfEvnt            events.Events
 		bpfEventPoller     *bpfEventPoller
 
-		collectorPacketInfoReader    collector.PacketInfoReader
-		collectorConntrackInfoReader collector.ConntrackInfoReader
+		collectorPacketInfoReader    collectortypes.PacketInfoReader
+		collectorConntrackInfoReader collectortypes.ConntrackInfoReader
 	)
 
 	// Initialisation needed for bpf.

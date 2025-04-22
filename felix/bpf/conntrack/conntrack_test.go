@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,13 +26,12 @@ import (
 
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
 	"github.com/projectcalico/calico/felix/bpf/conntrack/cttestdata"
+	"github.com/projectcalico/calico/felix/bpf/conntrack/timeouts"
 	v2 "github.com/projectcalico/calico/felix/bpf/conntrack/v2"
 	"github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/bpf/mock"
 	"github.com/projectcalico/calico/felix/timeshim/mocktime"
 )
-
-var timeouts = conntrack.DefaultTimeouts()
 
 var _ = Describe("BPF Conntrack LivenessCalculator", func() {
 	var lc *conntrack.LivenessScanner
@@ -44,7 +43,7 @@ var _ = Describe("BPF Conntrack LivenessCalculator", func() {
 		mockTime = mocktime.New()
 		Expect(mockTime.KTimeNanos()).To(BeNumerically("==", cttestdata.Now))
 		ctMap = mock.NewMockMap(conntrack.MapParams)
-		lc = conntrack.NewLivenessScanner(timeouts, false, conntrack.WithTimeShim(mockTime))
+		lc = conntrack.NewLivenessScanner(timeouts.DefaultTimeouts(), false, conntrack.WithTimeShim(mockTime))
 		scanner = conntrack.NewScanner(ctMap, conntrack.KeyFromBytes, conntrack.ValueFromBytes, lc)
 	})
 

@@ -25,6 +25,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/calc"
+	"github.com/projectcalico/calico/felix/collector/types"
 	"github.com/projectcalico/calico/felix/collector/types/tuple"
 	"github.com/projectcalico/calico/felix/jitter"
 	"github.com/projectcalico/calico/felix/nfnetlink"
@@ -44,7 +45,7 @@ type NFLogReader struct {
 	nfIngressDoneC chan struct{}
 	nfEgressDoneC  chan struct{}
 
-	packetInfoC chan PacketInfo
+	packetInfoC chan types.PacketInfo
 
 	netlinkIngressGroup int
 	netlinkEgressGroup  int
@@ -61,7 +62,7 @@ func NewNFLogReader(lookupsCache *calc.LookupsCache, inGrp, eGrp, bufSize int, s
 		nfIngressDoneC: make(chan struct{}),
 		nfEgressDoneC:  make(chan struct{}),
 
-		packetInfoC: make(chan PacketInfo, 1000),
+		packetInfoC: make(chan types.PacketInfo, 1000),
 
 		netlinkIngressGroup: inGrp,
 		netlinkEgressGroup:  eGrp,
@@ -91,7 +92,7 @@ func (r *NFLogReader) Stop() {
 }
 
 // Chan returns the channel with converted data structures
-func (r *NFLogReader) PacketInfoChan() <-chan PacketInfo {
+func (r *NFLogReader) PacketInfoChan() <-chan types.PacketInfo {
 	return r.packetInfoC
 }
 
@@ -132,10 +133,10 @@ func (r *NFLogReader) run() {
 	}
 }
 
-func (r *NFLogReader) ConvertNflogPkt(dir rules.RuleDir, nPktAggr *nfnetlink.NflogPacketAggregate) PacketInfo {
-	info := PacketInfo{
+func (r *NFLogReader) ConvertNflogPkt(dir rules.RuleDir, nPktAggr *nfnetlink.NflogPacketAggregate) types.PacketInfo {
+	info := types.PacketInfo{
 		Direction: dir,
-		RuleHits:  make([]RuleHit, 0, len(nPktAggr.Prefixes)),
+		RuleHits:  make([]types.RuleHit, 0, len(nPktAggr.Prefixes)),
 	}
 
 	info.Tuple = extractTupleFromNflogTuple(nPktAggr.Tuple)
@@ -150,7 +151,7 @@ func (r *NFLogReader) ConvertNflogPkt(dir rules.RuleDir, nPktAggr *nfnetlink.Nfl
 			continue
 		}
 
-		info.RuleHits = append(info.RuleHits, RuleHit{
+		info.RuleHits = append(info.RuleHits, types.RuleHit{
 			RuleID: ruleID,
 			Hits:   prefix.Packets,
 			Bytes:  prefix.Bytes,
@@ -160,7 +161,7 @@ func (r *NFLogReader) ConvertNflogPkt(dir rules.RuleDir, nPktAggr *nfnetlink.Nfl
 	return info
 }
 
-func ConvertCtEntryToConntrackInfo(ctEntry nfnetlink.CtEntry) (ConntrackInfo, error) {
+func ConvertCtEntryToConntrackInfo(ctEntry nfnetlink.CtEntry) (types.ConntrackInfo, error) {
 	var (
 		ctTuple nfnetlink.CtTuple
 		err     error
@@ -176,7 +177,7 @@ func ConvertCtEntryToConntrackInfo(ctEntry nfnetlink.CtEntry) (ConntrackInfo, er
 	if ctEntry.IsDNAT() {
 		ctTuple, err = ctEntry.OriginalTuplePostDNAT()
 		if err != nil {
-			return ConntrackInfo{}, fmt.Errorf("error when extracting tuple without DNAT: %w", err)
+			return types.ConntrackInfo{}, fmt.Errorf("error when extracting tuple without DNAT: %w", err)
 		}
 	}
 
@@ -197,15 +198,15 @@ func ConvertCtEntryToConntrackInfo(ctEntry nfnetlink.CtEntry) (ConntrackInfo, er
 		natOutgoingPort = ctEntry.ReplyTuple.L4Dst.Port
 	}
 
-	ctInfo := ConntrackInfo{
+	ctInfo := types.ConntrackInfo{
 		Tuple:           tuple,
 		NatOutgoingPort: natOutgoingPort,
 		Expired:         entryExpired,
-		Counters: ConntrackCounters{
+		Counters: types.ConntrackCounters{
 			Packets: ctEntry.OriginalCounters.Packets,
 			Bytes:   ctEntry.OriginalCounters.Bytes,
 		},
-		ReplyCounters: ConntrackCounters{
+		ReplyCounters: types.ConntrackCounters{
 			Packets: ctEntry.ReplyCounters.Packets,
 			Bytes:   ctEntry.ReplyCounters.Bytes,
 		},
@@ -226,7 +227,7 @@ type NetLinkConntrackReader struct {
 	stopC    chan struct{}
 
 	ticker jitter.TickerInterface
-	outC   chan []ConntrackInfo
+	outC   chan []types.ConntrackInfo
 }
 
 // NewNetLinkConntrackReader returns a new NetLinkConntrackReader
@@ -234,7 +235,7 @@ func NewNetLinkConntrackReader(period time.Duration) *NetLinkConntrackReader {
 	return &NetLinkConntrackReader{
 		stopC:  make(chan struct{}),
 		ticker: jitter.NewTicker(period, period/10),
-		outC:   make(chan []ConntrackInfo, 1000),
+		outC:   make(chan []types.ConntrackInfo, 1000),
 	}
 }
 
@@ -260,7 +261,7 @@ func (r *NetLinkConntrackReader) run() {
 		case <-r.stopC:
 			return
 		case <-r.ticker.Channel():
-			ctInfos := make([]ConntrackInfo, 0, ConntrackInfoBatchSize)
+			ctInfos := make([]types.ConntrackInfo, 0, types.ConntrackInfoBatchSize)
 			_ = nfnetlink.ConntrackList(func(ctEntry nfnetlink.CtEntry) {
 				ci, err := ConvertCtEntryToConntrackInfo(ctEntry)
 				if err != nil {
@@ -268,12 +269,12 @@ func (r *NetLinkConntrackReader) run() {
 					return
 				}
 				ctInfos = append(ctInfos, ci)
-				if len(ctInfos) > ConntrackInfoBatchSize {
+				if len(ctInfos) > types.ConntrackInfoBatchSize {
 					select {
 					case <-r.stopC:
 						return
 					case r.outC <- ctInfos:
-						ctInfos = make([]ConntrackInfo, 0, ConntrackInfoBatchSize)
+						ctInfos = make([]types.ConntrackInfo, 0, types.ConntrackInfoBatchSize)
 					default:
 						// Keep buffering
 					}
@@ -290,7 +291,7 @@ func (r *NetLinkConntrackReader) run() {
 	}
 }
 
-func (r *NetLinkConntrackReader) ConntrackInfoChan() <-chan []ConntrackInfo {
+func (r *NetLinkConntrackReader) ConntrackInfoChan() <-chan []types.ConntrackInfo {
 	return r.outC
 }
 
