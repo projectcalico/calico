@@ -17,12 +17,18 @@ package internedlabels
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/projectcalico/calico/lib/std/unique"
 	"iter"
 	"maps"
+
+	"github.com/projectcalico/calico/lib/std/unique"
 )
 
 type handleMap = map[unique.String]unique.String
+
+var (
+	Nil   = Map{m: nil}
+	Empty = Map{m: map[unique.String]unique.String{}}
+)
 
 // Map is a read only string-to-string map that interns keys and
 // values so that each unique key and value string is only stored once.
@@ -40,7 +46,10 @@ type Map struct {
 func Make(m map[string]string) Map {
 	var hm handleMap
 	if m == nil {
-		return Map{}
+		return Nil
+	}
+	if len(m) == 0 {
+		return Empty
 	}
 	hm = make(handleMap, len(m))
 	for k, v := range m {
@@ -127,6 +136,26 @@ func (i Map) IsNil() bool {
 
 func (i Map) String() string {
 	return fmt.Sprint(i.RecomputeOriginalMap())
+}
+
+func (i Map) IntersectAndFilter(other Map, include func(unique.String, unique.String) bool) Map {
+	intersection := map[unique.String]unique.String{}
+	filtered := false
+	for k, v := range i.m {
+		if !include(k, v) {
+			filtered = true
+			continue
+		}
+		if otherV, ok := other.GetHandle(k); !ok || otherV != v {
+			filtered = true
+			continue
+		}
+		intersection[k] = v
+	}
+	if !filtered {
+		return i
+	}
+	return Map{m: intersection}
 }
 
 var _ json.Marshaler = Map{}

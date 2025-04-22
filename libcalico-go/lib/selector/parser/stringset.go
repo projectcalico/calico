@@ -15,8 +15,9 @@
 package parser
 
 import (
-	"github.com/projectcalico/calico/lib/std/unique"
 	"sort"
+
+	"github.com/projectcalico/calico/lib/std/unique"
 )
 
 type StringSet []unique.String
