@@ -16,11 +16,11 @@ package labelindex
 
 import (
 	"fmt"
+	"github.com/projectcalico/calico/lib/std/unique"
 	"iter"
 	"math"
 	"strings"
 	"time"
-	"unique"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
@@ -189,7 +189,7 @@ type ipSetData struct {
 // GetHandle implements the Labels interface for endpointData.  Combines the endpoint's own labels with
 // those of its parents on the fly.  This reduces the number of allocations we need to do, and
 // it's fast in the mainline case (where there are 0-1 parents).
-func (d *endpointData) GetHandle(labelName unique.Handle[string]) (handle unique.Handle[string], present bool) {
+func (d *endpointData) GetHandle(labelName unique.String) (handle unique.String, present bool) {
 	if handle, present = d.labels.GetHandle(labelName); present {
 		return
 	}
@@ -201,13 +201,13 @@ func (d *endpointData) GetHandle(labelName unique.Handle[string]) (handle unique
 	return
 }
 
-func (d *endpointData) OwnLabelHandles() iter.Seq2[unique.Handle[string], unique.Handle[string]] {
+func (d *endpointData) OwnLabelHandles() iter.Seq2[unique.String, unique.String] {
 	return d.labels.AllHandles()
 }
 
-func (d *endpointData) AllOwnAndParentLabelHandles() iter.Seq2[unique.Handle[string], unique.Handle[string]] {
-	return func(yield func(k, v unique.Handle[string]) bool) {
-		seenKeys := set.New[unique.Handle[string]]()
+func (d *endpointData) AllOwnAndParentLabelHandles() iter.Seq2[unique.String, unique.String] {
+	return func(yield func(k, v unique.String) bool) {
+		seenKeys := set.New[unique.String]()
 		defer seenKeys.Clear()
 
 		for k, v := range d.labels.AllHandles() {
@@ -275,7 +275,7 @@ type npParentData struct {
 	endpointIDs set.Set[any]
 }
 
-func (d *npParentData) OwnLabelHandles() iter.Seq2[unique.Handle[string], unique.Handle[string]] {
+func (d *npParentData) OwnLabelHandles() iter.Seq2[unique.String, unique.String] {
 	return d.labels.AllHandles()
 }
 
