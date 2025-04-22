@@ -16,6 +16,8 @@ package labelrestrictionindex
 
 import (
 	"fmt"
+	"github.com/projectcalico/calico/lib/std/unique"
+	"iter"
 	"testing"
 
 	. "github.com/onsi/gomega"
@@ -140,9 +142,13 @@ func TestLabelRestrictionIndex(t *testing.T) {
 
 type labeledAdapter map[string]string
 
-func (l labeledAdapter) IterOwnAndParentLabels(f func(k string, v string)) {
-	for k, v := range l {
-		f(k, v)
+func (l labeledAdapter) AllOwnAndParentLabelHandles() iter.Seq2[unique.String, unique.String] {
+	return func(yield func(unique.String, unique.String) bool) {
+		for k, v := range l {
+			if !yield(unique.Make(k), unique.Make(v)) {
+				return
+			}
+		}
 	}
 }
 
@@ -151,81 +157,107 @@ var _ Labeled = labeledAdapter(nil)
 func TestFindMostRestrictedLabel(t *testing.T) {
 	RegisterTestingT(t)
 
-	Expect(findMostRestrictedLabel(nil)).To(Equal(""),
+	Expect(mostRestricted(nil)).To(Equal(""),
 		"findMostRestrictedLabel should return '' for nil map")
 
-	Expect(findMostRestrictedLabel(map[string]parser.LabelRestriction{})).To(Equal(""),
+	Expect(mostRestricted(map[string]parser.LabelRestriction{})).To(Equal(""),
 		"findMostRestrictedLabel should return '' for empty map")
 
-	Expect(findMostRestrictedLabel(map[string]parser.LabelRestriction{
+	Expect(mostRestricted(map[string]parser.LabelRestriction{
 		"a": {},
 	})).To(Equal("a"),
 		"findMostRestrictedLabel should return the only option")
 
-	Expect(findMostRestrictedLabel(map[string]parser.LabelRestriction{
+	Expect(mostRestricted(map[string]parser.LabelRestriction{
 		"a": {},
 		"b": {},
 		"c": {},
 	})).To(Equal("c"),
 		"findMostRestrictedLabel should tie break on name")
 
-	Expect(findMostRestrictedLabel(map[string]parser.LabelRestriction{
+	Expect(mostRestricted(map[string]parser.LabelRestriction{
 		"a": {},
 		"b": {MustBePresent: true},
 		"c": {},
 	})).To(Equal("b"),
 		"findMostRestrictedLabel should prefer 'present' labels")
 
-	Expect(findMostRestrictedLabel(map[string]parser.LabelRestriction{
-		"a": {MustBePresent: true, MustHaveOneOfValues: []string{"A"}},
+	Expect(mostRestricted(map[string]parser.LabelRestriction{
+		"a": {MustBePresent: true, MustHaveOneOfValues: stringSliceToHandle([]string{"A"})},
 		"b": {MustBePresent: true},
 		"c": {},
 	})).To(Equal("a"),
 		"findMostRestrictedLabel should prefer 'value' labels")
 
-	Expect(findMostRestrictedLabel(map[string]parser.LabelRestriction{
-		"a": {MustBePresent: true, MustHaveOneOfValues: []string{"A1", "A2"}},
-		"b": {MustBePresent: true, MustHaveOneOfValues: []string{"B1"}},
+	Expect(mostRestricted(map[string]parser.LabelRestriction{
+		"a": {MustBePresent: true, MustHaveOneOfValues: stringSliceToHandle([]string{"A1", "A2"})},
+		"b": {MustBePresent: true, MustHaveOneOfValues: stringSliceToHandle([]string{"B1"})},
 		"c": {},
 	})).To(Equal("b"),
 		"findMostRestrictedLabel should prefer fewer values")
 
-	Expect(findMostRestrictedLabel(map[string]parser.LabelRestriction{
-		"a": {MustBePresent: true, MustHaveOneOfValues: []string{}},
+	Expect(mostRestricted(map[string]parser.LabelRestriction{
+		"a": {MustBePresent: true, MustHaveOneOfValues: stringSliceToHandle([]string{})},
 		"b": {MustBePresent: true},
 		"c": {},
 	})).To(Equal("a"),
 		"findMostRestrictedLabel should prefer impossible selector (no values)")
 
-	Expect(findMostRestrictedLabel(map[string]parser.LabelRestriction{
+	Expect(mostRestricted(map[string]parser.LabelRestriction{
 		"a": {MustBePresent: true, MustBeAbsent: true},
 		"b": {MustBePresent: true},
 		"c": {},
 	})).To(Equal("a"),
 		"findMostRestrictedLabel should prefer impossible selector (present and absent)")
 
-	var manyVals []string
+	var manyVals []unique.String
 	for i := 0; i < 15000; i++ {
-		manyVals = append(manyVals, fmt.Sprint(i))
+		manyVals = append(manyVals, unique.Make(fmt.Sprint(i)))
 	}
-	Expect(findMostRestrictedLabel(map[string]parser.LabelRestriction{
+	Expect(mostRestricted(map[string]parser.LabelRestriction{
 		"a": {MustBePresent: true, MustHaveOneOfValues: manyVals},
-		"b": {MustBePresent: true, MustHaveOneOfValues: []string{"B1"}},
+		"b": {MustBePresent: true, MustHaveOneOfValues: stringSliceToHandle([]string{"B1"})},
 		"c": {},
 	})).To(Equal("b"),
 		"findMostRestrictedLabel should handle >10k values (edge case)")
-	Expect(findMostRestrictedLabel(map[string]parser.LabelRestriction{
+	Expect(mostRestricted(map[string]parser.LabelRestriction{
 		"a": {MustBePresent: true, MustHaveOneOfValues: manyVals},
 		"b": {MustBePresent: true, MustHaveOneOfValues: manyVals},
 		"c": {},
 	})).To(Equal("b"),
 		"findMostRestrictedLabel should handle >10k values (edge case)")
-	Expect(findMostRestrictedLabel(map[string]parser.LabelRestriction{
+	Expect(mostRestricted(map[string]parser.LabelRestriction{
 		"a": {MustBePresent: true},
 		"b": {MustBePresent: true, MustHaveOneOfValues: manyVals},
 		"c": {},
 	})).To(Equal("b"),
 		"findMostRestrictedLabel should handle >10k values when comparing to MustBePresent (edge case)")
+}
+
+func mostRestricted(m map[string]parser.LabelRestriction) string {
+	var lrs map[unique.String]parser.LabelRestriction
+	if m != nil {
+		lrs = map[unique.String]parser.LabelRestriction{}
+		for k, v := range m {
+			lrs[unique.Make(k)] = v
+		}
+	}
+	handle, found := findMostRestrictedLabel(lrs)
+	if found {
+		return handle.Value()
+	}
+	return ""
+}
+
+func stringSliceToHandle(s []string) (out []unique.String) {
+	if s == nil {
+		return nil
+	}
+	out = make([]unique.String, len(s))
+	for _, s := range s {
+		out = append(out, unique.Make(s))
+	}
+	return
 }
 
 func mustParseSelector(s string) *selector.Selector {
