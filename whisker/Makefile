@@ -24,7 +24,7 @@ DOCKER_RUN_RM:=docker run --rm \
 	-w /code
 
 $(IMAGE_BUILD_MARKER): register build
-	$(DOCKER_BUILD) -t whisker:latest-$(ARCH) -f docker-image/Dockerfile .
+	$(DOCKER_BUILD) -t whisker:latest-$(ARCH) --build-arg GIT_VERSION=$(GIT_VERSION) -f docker-image/Dockerfile .
 	$(MAKE) retag-build-images-with-registries BUILD_IMAGES=$(BUILD_IMAGES) VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@
 

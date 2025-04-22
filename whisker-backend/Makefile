@@ -27,7 +27,7 @@ sub-image-%:
 # Build whisker-backend image.
 whisker-backend calico/whisker-backend: $(IMAGE_BUILD_MARKER)
 $(IMAGE_BUILD_MARKER): bin/whisker-backend-$(ARCH)
-	$(DOCKER_BUILD) --build-arg TARGETARCH=$(ARCH) -t whisker-backend:latest-$(ARCH) -f docker/Dockerfile .
+	$(DOCKER_BUILD) --build-arg TARGETARCH=$(ARCH) --build-arg GIT_VERSION=$(GIT_VERSION) -t whisker-backend:latest-$(ARCH) -f docker/Dockerfile .
 	$(MAKE) retag-build-images-with-registries BUILD_IMAGES=$(BUILD_IMAGES) VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@
 
