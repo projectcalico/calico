@@ -64,6 +64,7 @@ func benchInitialSnap(b *testing.B, numEndpoints int, numLocalEndpoints int, num
 	profUpdates := makeNamespaceUpdates(numNamespaces)
 	netSetUpdates := makeNetSetAndPolUpdates(netSetsAndPols)
 
+	var cg *CalcGraph
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		b.StopTimer()
@@ -77,7 +78,7 @@ func benchInitialSnap(b *testing.B, numEndpoints int, numLocalEndpoints int, num
 		es.Callback = func(message interface{}) {
 			numMessages++
 		}
-		cg := NewCalculationGraph(es, nil, conf, func() {})
+		cg = NewCalculationGraph(es, nil, conf, func() {})
 		keepAlive = cg // Keep CG alive after run so that memory profile shows its usage
 
 		logrus.SetLevel(logrus.WarnLevel)
@@ -104,6 +105,13 @@ func benchInitialSnap(b *testing.B, numEndpoints int, numLocalEndpoints int, num
 		b.ReportMetric(float64(time.Since(startTime).Seconds()), "s")
 		b.ReportMetric(float64(numMessages), "Msgs")
 	}
+	b.StopTimer()
+	runtime.GC()
+	time.Sleep(time.Second)
+	var m runtime.MemStats
+	runtime.ReadMemStats(&m)
+	b.ReportMetric(float64(m.HeapAlloc/(1024*1024)), "HeapAllocMB")
+	runtime.KeepAlive(cg)
 }
 
 // These trivial functions are broken out so that, when CPU profiling, each
