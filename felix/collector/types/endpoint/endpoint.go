@@ -54,7 +54,7 @@ type Metadata struct {
 func GetLabels(ed calc.EndpointData) map[string]string {
 	var labels map[string]string
 	if ed != nil {
-		labels = ed.Labels()
+		labels = ed.Labels().RecomputeOriginalMap() // FIXME RecomputeOriginalMap
 	}
 	if labels == nil {
 		labels = map[string]string{}
