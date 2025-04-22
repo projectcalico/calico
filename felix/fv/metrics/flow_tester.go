@@ -23,7 +23,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/felix/bpf/conntrack"
+	"github.com/projectcalico/calico/felix/bpf/conntrack/timeouts"
 	"github.com/projectcalico/calico/felix/collector/flowlog"
 )
 
@@ -298,7 +298,7 @@ func WaitForConntrackScan(bpfEnabled bool) {
 	// because changing the policy before the flow is processed can result in unmatch rule ID).
 	if bpfEnabled {
 		// Make sure that conntrack scanning ticks at least once
-		time.Sleep(3 * conntrack.ScanPeriod)
+		time.Sleep(3 * timeouts.ScanPeriod)
 	} else {
 		// Allow 6 seconds for the containers.Felix to poll conntrack.  (This is conntrack polling time plus 20%, which gives us
 		// 10% leeway over the polling jitter of 10%)
