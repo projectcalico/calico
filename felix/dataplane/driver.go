@@ -36,7 +36,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/aws"
 	"github.com/projectcalico/calico/felix/bpf"
-	"github.com/projectcalico/calico/felix/bpf/conntrack"
+	bpfconntrack "github.com/projectcalico/calico/felix/bpf/conntrack/timeouts"
 	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
 	"github.com/projectcalico/calico/felix/calc"
 	"github.com/projectcalico/calico/felix/collector"
@@ -391,7 +391,7 @@ func StartDataplaneDriver(
 			BPFExportBufferSizeMB:              configParams.BPFExportBufferSizeMB,
 			XDPEnabled:                         configParams.XDPEnabled,
 			XDPAllowGeneric:                    configParams.GenericXDPEnabled,
-			BPFConntrackTimeouts:               conntrack.GetTimeouts(configParams.BPFConntrackTimeouts),
+			BPFConntrackTimeouts:               bpfconntrack.GetTimeouts(configParams.BPFConntrackTimeouts),
 			BPFConntrackCleanupMode:            apiv3.BPFConntrackMode(configParams.BPFConntrackCleanupMode),
 			RouteTableManager:                  routeTableIndexAllocator,
 			MTUIfacePattern:                    configParams.MTUIfacePattern,
