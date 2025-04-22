@@ -15,12 +15,12 @@
 package labelnamevalueindex
 
 import (
-	"github.com/projectcalico/calico/lib/std/unique"
 	"iter"
 	"testing"
 
 	. "github.com/onsi/gomega"
 
+	"github.com/projectcalico/calico/lib/std/unique"
 	"github.com/projectcalico/calico/libcalico-go/lib/selector/parser"
 )
 

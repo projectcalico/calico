@@ -17,11 +17,11 @@ package parser
 import (
 	"errors"
 	"fmt"
-	"github.com/projectcalico/calico/lib/std/unique"
 	"sync"
 
 	log "github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/lib/std/unique"
 	"github.com/projectcalico/calico/libcalico-go/lib/selector/tokenizer"
 )
 

@@ -16,7 +16,6 @@ package labelindex
 
 import (
 	"fmt"
-	"github.com/projectcalico/calico/lib/std/unique"
 	"iter"
 	"math"
 	"strings"
@@ -32,6 +31,7 @@ import (
 	"github.com/projectcalico/calico/felix/labelindex/labelnamevalueindex"
 	"github.com/projectcalico/calico/felix/labelindex/labelrestrictionindex"
 	"github.com/projectcalico/calico/lib/std/internedlabels"
+	"github.com/projectcalico/calico/lib/std/unique"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/selector"

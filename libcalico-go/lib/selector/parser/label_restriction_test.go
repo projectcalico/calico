@@ -16,11 +16,12 @@ package parser
 
 import (
 	"fmt"
-	"github.com/projectcalico/calico/lib/std/unique"
 	"strings"
 	"testing"
 
 	. "github.com/onsi/gomega"
+
+	"github.com/projectcalico/calico/lib/std/unique"
 )
 
 var labelRestrictionsTests = []struct {
