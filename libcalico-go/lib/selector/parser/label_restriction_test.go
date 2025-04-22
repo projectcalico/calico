@@ -16,9 +16,9 @@ package parser
 
 import (
 	"fmt"
+	"github.com/projectcalico/calico/lib/std/unique"
 	"strings"
 	"testing"
-	"unique"
 
 	. "github.com/onsi/gomega"
 )
@@ -148,8 +148,8 @@ func TestLabelRestrictions(t *testing.T) {
 	}
 }
 
-func handleSlice(ss ...string) []unique.Handle[string] {
-	var hs = make([]unique.Handle[string], len(ss))
+func handleSlice(ss ...string) []unique.String {
+	var hs = make([]unique.String, len(ss))
 	for i, s := range ss {
 		hs[i] = unique.Make(s)
 	}

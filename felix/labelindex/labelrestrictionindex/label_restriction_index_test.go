@@ -16,9 +16,9 @@ package labelrestrictionindex
 
 import (
 	"fmt"
+	"github.com/projectcalico/calico/lib/std/unique"
 	"iter"
 	"testing"
-	"unique"
 
 	. "github.com/onsi/gomega"
 	"github.com/sirupsen/logrus"
@@ -142,8 +142,8 @@ func TestLabelRestrictionIndex(t *testing.T) {
 
 type labeledAdapter map[string]string
 
-func (l labeledAdapter) AllOwnAndParentLabelHandles() iter.Seq2[unique.Handle[string], unique.Handle[string]] {
-	return func(yield func(unique.Handle[string], unique.Handle[string]) bool) {
+func (l labeledAdapter) AllOwnAndParentLabelHandles() iter.Seq2[unique.String, unique.String] {
+	return func(yield func(unique.String, unique.String) bool) {
 		for k, v := range l {
 			if !yield(unique.Make(k), unique.Make(v)) {
 				return
@@ -210,7 +210,7 @@ func TestFindMostRestrictedLabel(t *testing.T) {
 	})).To(Equal("a"),
 		"findMostRestrictedLabel should prefer impossible selector (present and absent)")
 
-	var manyVals []unique.Handle[string]
+	var manyVals []unique.String
 	for i := 0; i < 15000; i++ {
 		manyVals = append(manyVals, unique.Make(fmt.Sprint(i)))
 	}
@@ -235,9 +235,9 @@ func TestFindMostRestrictedLabel(t *testing.T) {
 }
 
 func mostRestricted(m map[string]parser.LabelRestriction) string {
-	var lrs map[unique.Handle[string]]parser.LabelRestriction
+	var lrs map[unique.String]parser.LabelRestriction
 	if m != nil {
-		lrs = map[unique.Handle[string]]parser.LabelRestriction{}
+		lrs = map[unique.String]parser.LabelRestriction{}
 		for k, v := range m {
 			lrs[unique.Make(k)] = v
 		}
@@ -249,11 +249,11 @@ func mostRestricted(m map[string]parser.LabelRestriction) string {
 	return ""
 }
 
-func stringSliceToHandle(s []string) (out []unique.Handle[string]) {
+func stringSliceToHandle(s []string) (out []unique.String) {
 	if s == nil {
 		return nil
 	}
-	out = make([]unique.Handle[string], len(s))
+	out = make([]unique.String, len(s))
 	for _, s := range s {
 		out = append(out, unique.Make(s))
 	}
