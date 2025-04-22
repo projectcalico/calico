@@ -42,6 +42,7 @@ import (
 
 	"github.com/projectcalico/calico/cni-plugin/internal/pkg/utils"
 	"github.com/projectcalico/calico/cni-plugin/pkg/dataplane"
+	"github.com/projectcalico/calico/cni-plugin/pkg/ipamplugin"
 	"github.com/projectcalico/calico/cni-plugin/pkg/k8s"
 	"github.com/projectcalico/calico/cni-plugin/pkg/types"
 	libapi "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
@@ -407,10 +408,14 @@ func cmdAdd(args *skel.CmdArgs) (err error) {
 			// 3) Create the veth, configuring it on both the host and container namespace.
 
 			// 1) Run the IPAM plugin and make sure there's an IP address returned.
-			logger.WithFields(logrus.Fields{"paths": os.Getenv("CNI_PATH"),
-				"type": conf.IPAM.Type}).Debug("Looking for IPAM plugin in paths")
 			var ipamResult cnitypes.Result
-			ipamResult, err = ipam.ExecAdd(conf.IPAM.Type, args.StdinData)
+			if conf.IPAM.Type == "calico-ipam" {
+				ipamResult, err = ipamplugin.CmdAddCalicoIPAM(ctx, args, conf, *wepIDs, calicoClient)
+			} else {
+				logger.WithFields(logrus.Fields{"paths": os.Getenv("CNI_PATH"),
+					"type": conf.IPAM.Type}).Debug("Looking for IPAM plugin in paths")
+				ipamResult, err = ipam.ExecAdd(conf.IPAM.Type, args.StdinData)
+			}
 			logger.WithField("IPAM result", ipamResult).Info("Got result from IPAM plugin")
 			if err != nil {
 				return
@@ -669,8 +674,13 @@ func cmdDel(args *skel.CmdArgs) (err error) {
 		return
 	}
 
-	// Release the IP address by calling the configured IPAM plugin.
-	ipamErr := utils.DeleteIPAM(conf, args, logger)
+	var ipamErr error
+	if conf.IPAM.Type == "calico-ipam" {
+		ipamErr = ipamplugin.CmdDelCalicoIPAM(ctx, args, conf, *epIDs, calicoClient)
+	} else {
+		// Release the IP address by calling the configured IPAM plugin.
+		ipamErr = utils.DeleteIPAM(conf, args, logger)
+	}
 
 	// Delete the WorkloadEndpoint object from the datastore.
 	if _, err = calicoClient.WorkloadEndpoints().Delete(ctx, epIDs.Namespace, epIDs.WEPName, options.DeleteOptions{}); err != nil {
