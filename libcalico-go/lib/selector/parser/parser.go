@@ -17,8 +17,8 @@ package parser
 import (
 	"errors"
 	"fmt"
+	"github.com/projectcalico/calico/lib/std/unique"
 	"sync"
-	"unique"
 
 	log "github.com/sirupsen/logrus"
 
@@ -312,7 +312,7 @@ func (p *Parser) parseOperation(tokens []tokenizer.Token, validateOnly bool) (se
 		case tokenizer.TokIn, tokenizer.TokNotIn:
 			if tokens[2].Kind == tokenizer.TokLBrace {
 				remTokens = tokens[3:]
-				var values []unique.Handle[string]
+				var values []unique.String
 				for {
 					if remTokens[0].Kind == tokenizer.TokStringLiteral {
 						value := remTokens[0].Value

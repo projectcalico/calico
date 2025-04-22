@@ -44,8 +44,8 @@
 package labelindex
 
 import (
+	"github.com/projectcalico/calico/lib/std/unique"
 	"reflect"
-	"unique"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
@@ -70,7 +70,7 @@ type itemData struct {
 
 // GetHandle implements the Labels interface for itemData.  Combines the item's own labels with those
 // of its parents on the fly.
-func (itemData *itemData) GetHandle(labelName unique.Handle[string]) (handle unique.Handle[string], present bool) {
+func (itemData *itemData) GetHandle(labelName unique.String) (handle unique.String, present bool) {
 	if handle, present = itemData.labels.GetHandle(labelName); present {
 		return
 	}
