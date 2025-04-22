@@ -15,9 +15,9 @@
 package labelnamevalueindex
 
 import (
+	"github.com/projectcalico/calico/lib/std/unique"
 	"iter"
 	"testing"
-	"unique"
 
 	. "github.com/onsi/gomega"
 
@@ -142,8 +142,8 @@ func TestLabelValueIndexStrategies(t *testing.T) {
 	Expect(strat.Name()).To(Equal("no-match"))
 }
 
-func handleSlice(ss ...string) []unique.Handle[string] {
-	var hs = make([]unique.Handle[string], len(ss))
+func handleSlice(ss ...string) []unique.String {
+	var hs = make([]unique.String, len(ss))
 	for i, s := range ss {
 		hs[i] = unique.Make(s)
 	}
@@ -171,8 +171,8 @@ func scan(s ScanStrategy[string]) []string {
 
 type labels map[string]string
 
-func (l labels) OwnLabelHandles() iter.Seq2[unique.Handle[string], unique.Handle[string]] {
-	return func(yield func(unique.Handle[string], unique.Handle[string]) bool) {
+func (l labels) OwnLabelHandles() iter.Seq2[unique.String, unique.String] {
+	return func(yield func(unique.String, unique.String) bool) {
 		for k, v := range l {
 			if !yield(unique.Make(k), unique.Make(v)) {
 				return

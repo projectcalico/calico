@@ -17,19 +17,17 @@ package internedlabels
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/projectcalico/calico/lib/std/unique"
 	"iter"
 	"maps"
-	"unique"
-
-	"github.com/projectcalico/calico/lib/std/uniquestr"
 )
 
-type handleMap = map[uniquestr.Handle]uniquestr.Handle
+type handleMap = map[unique.String]unique.String
 
 // Map is a read only string-to-string map that interns keys and
 // values so that each unique key and value string is only stored once.
 //
-// The current implementation uses unique.Handle[string] internally, so
+// The current implementation uses unique.String internally, so
 // it is most efficient to query the map using AllHandles() and GetHandle().
 type Map struct {
 	_ [0]func() // Explicitly non-comparable; must use Equals() method.
@@ -46,7 +44,7 @@ func Make(m map[string]string) Map {
 	}
 	hm = make(handleMap, len(m))
 	for k, v := range m {
-		hm[uniquestr.Make(k)] = uniquestr.Make(v)
+		hm[unique.Make(k)] = unique.Make(v)
 	}
 	return Map{m: hm}
 }
@@ -72,10 +70,10 @@ func (i *Map) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (i Map) AllHandles() iter.Seq2[unique.Handle[string], unique.Handle[string]] {
-	return func(yield func(unique.Handle[string], unique.Handle[string]) bool) {
+func (i Map) AllHandles() iter.Seq2[unique.String, unique.String] {
+	return func(yield func(unique.String, unique.String) bool) {
 		for k, v := range i.m {
-			if !yield(unique.Handle[string](k), unique.Handle[string](v)) {
+			if !yield(unique.String(k), unique.String(v)) {
 				return
 			}
 		}
@@ -104,19 +102,19 @@ func (i Map) RecomputeOriginalMap() map[string]string {
 }
 
 func (i Map) GetString(k string) (string, bool) {
-	v, ok := (i.m)[uniquestr.Make(k)]
+	v, ok := (i.m)[unique.Make(k)]
 	if !ok {
 		return "", false
 	}
 	return v.Value(), true
 }
 
-func (i Map) GetHandle(h unique.Handle[string]) (unique.Handle[string], bool) {
-	v, ok := (i.m)[uniquestr.Handle(h)]
+func (i Map) GetHandle(h unique.String) (unique.String, bool) {
+	v, ok := (i.m)[h]
 	if !ok {
-		return unique.Handle[string]{}, false
+		return unique.String{}, false
 	}
-	return unique.Handle[string](v), true
+	return unique.String(v), true
 }
 
 func (i Map) Len() int {

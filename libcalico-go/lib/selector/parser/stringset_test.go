@@ -16,7 +16,7 @@ package parser_test
 
 import (
 	"fmt"
-	"unique"
+	"github.com/projectcalico/calico/lib/std/unique"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
@@ -50,8 +50,8 @@ var _ = DescribeTable("StringSet contains tests",
 		})
 
 		By("Copying itself correctly", func() {
-			Expect(stringSet.SliceCopy()).To(Equal(([]unique.Handle[string])(stringSet)), "SliceCopy should return the correct values.")
-			Expect(stringSet.SliceCopy()).NotTo(BeIdenticalTo(([]unique.Handle[string])(stringSet)), "SliceCopy() should return a copy.")
+			Expect(stringSet.SliceCopy()).To(Equal(([]unique.String)(stringSet)), "SliceCopy should return the correct values.")
+			Expect(stringSet.SliceCopy()).NotTo(BeIdenticalTo(([]unique.String)(stringSet)), "SliceCopy() should return a copy.")
 		})
 	},
 	Entry("nil", nil),
@@ -76,11 +76,11 @@ var _ = DescribeTable("StringSet dedupe",
 	Entry("with dupes", []string{"b", "a", "b", "a"}, []string{"a", "b"}),
 )
 
-func handleSlice(ss []string) []unique.Handle[string] {
+func handleSlice(ss []string) []unique.String {
 	if ss == nil {
 		return nil
 	}
-	var hs = make([]unique.Handle[string], len(ss))
+	var hs = make([]unique.String, len(ss))
 	for i, s := range ss {
 		hs[i] = unique.Make(s)
 	}

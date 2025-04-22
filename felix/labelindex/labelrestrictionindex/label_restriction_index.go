@@ -15,13 +15,11 @@
 package labelrestrictionindex
 
 import (
+	"github.com/sirupsen/logrus"
 	"iter"
 	"math"
-	"unique"
 
-	"github.com/sirupsen/logrus"
-
-	"github.com/projectcalico/calico/lib/std/uniquestr"
+	"github.com/projectcalico/calico/lib/std/unique"
 	"github.com/projectcalico/calico/libcalico-go/lib/selector"
 	"github.com/projectcalico/calico/libcalico-go/lib/selector/parser"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
@@ -39,7 +37,7 @@ type LabelRestrictionIndex[SelID comparable] struct {
 	// contains a map from label value to set of selectors that require that
 	// value along with a set of selectors that require that label be present
 	// (for some unspecified values).
-	labelToValueToIDs map[unique.Handle[string]]*valuesSubIndex[SelID]
+	labelToValueToIDs map[unique.String]*valuesSubIndex[SelID]
 
 	// unoptimizedIDs contains an entry for any selectors that have no
 	// valid label restrictions (and hence no entries in labelToValueToIDs).
@@ -66,7 +64,7 @@ type Gauge interface {
 func New[SelID comparable](opts ...Option[SelID]) *LabelRestrictionIndex[SelID] {
 	idx := &LabelRestrictionIndex[SelID]{
 		selectorsByID:     map[SelID]*selector.Selector{},
-		labelToValueToIDs: map[unique.Handle[string]]*valuesSubIndex[SelID]{},
+		labelToValueToIDs: map[unique.String]*valuesSubIndex[SelID]{},
 		unoptimizedIDs:    set.New[SelID](),
 	}
 	for _, o := range opts {
@@ -109,7 +107,7 @@ func (s *LabelRestrictionIndex[SelID]) AddSelector(id SelID, selector *selector.
 				logrus.WithFields(logrus.Fields{
 					"selector": selector.String(),
 					"label":    labelName.Value(),
-					"values":   uniquestr.SliceStringer(res.MustHaveOneOfValues),
+					"values":   unique.SliceStringer(res.MustHaveOneOfValues),
 				}).Debug("Optimising selector on must-have values.")
 			}
 			optimized = true
@@ -188,9 +186,9 @@ func (s *LabelRestrictionIndex[SelID]) DeleteSelector(id SelID) {
 	delete(s.selectorsByID, id)
 }
 
-func findMostRestrictedLabel(lrs map[unique.Handle[string]]parser.LabelRestriction) (unique.Handle[string], bool) {
-	var zeroHandle unique.Handle[string]
-	var bestLabel unique.Handle[string]
+func findMostRestrictedLabel(lrs map[unique.String]parser.LabelRestriction) (unique.String, bool) {
+	var zeroHandle unique.String
+	var bestLabel unique.String
 	var bestScore = -1
 	for label, res := range lrs {
 		score := scoreLabelRestriction(res)
@@ -231,7 +229,7 @@ type Labeled interface {
 	// resource exactly once, accounting for inheritance.  I.e.  if
 	// the resource and its parent have different values for the same label,
 	// it should produce the final applicable value.
-	AllOwnAndParentLabelHandles() iter.Seq2[unique.Handle[string], unique.Handle[string]]
+	AllOwnAndParentLabelHandles() iter.Seq2[unique.String, unique.String]
 }
 
 func (s *LabelRestrictionIndex[SelID]) IterPotentialMatches(item Labeled, f func(SelID, *selector.Selector)) {
@@ -270,13 +268,13 @@ func (s *LabelRestrictionIndex[SelID]) updateGauges() {
 // label, either matching particular values or a wildcard (such as
 // "has(labelName)").
 type valuesSubIndex[SelID comparable] struct {
-	selsMatchingSpecificValues map[unique.Handle[string]]set.Set[SelID]
+	selsMatchingSpecificValues map[unique.String]set.Set[SelID]
 	selsMatchingWildcard       set.Set[SelID]
 }
 
-func (t *valuesSubIndex[SelID]) Add(value unique.Handle[string], id SelID) {
+func (t *valuesSubIndex[SelID]) Add(value unique.String, id SelID) {
 	if t.selsMatchingSpecificValues == nil {
-		t.selsMatchingSpecificValues = map[unique.Handle[string]]set.Set[SelID]{}
+		t.selsMatchingSpecificValues = map[unique.String]set.Set[SelID]{}
 	}
 	values, ok := t.selsMatchingSpecificValues[value]
 	if !ok {
@@ -287,7 +285,7 @@ func (t *valuesSubIndex[SelID]) Add(value unique.Handle[string], id SelID) {
 	values.Add(id)
 }
 
-func (t *valuesSubIndex[SelID]) Remove(value unique.Handle[string], id SelID) {
+func (t *valuesSubIndex[SelID]) Remove(value unique.String, id SelID) {
 	values, ok := t.selsMatchingSpecificValues[value]
 	if !ok {
 		return

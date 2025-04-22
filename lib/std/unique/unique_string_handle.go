@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package uniquestr
+package unique
 
 import (
 	"encoding"
@@ -20,37 +20,37 @@ import (
 	"unique"
 )
 
-func Make(s string) Handle {
-	return Handle(unique.Make(s))
+func Make(s string) String {
+	return String(unique.Make(s))
 }
 
-// Handle is an alias for unique.Handle[string] that supports JSON
+// String is an alias for unique.String that supports JSON
 // serialization.  The serialized form is simply the underlying string.
-type Handle unique.Handle[string]
+type String unique.Handle[string]
 
 //goland:noinspection GoMixedReceiverTypes
-func (s Handle) MarshalText() (text []byte, err error) {
+func (s String) MarshalText() (text []byte, err error) {
 	str := s.Value()
 	return []byte(str), nil
 }
 
 //goland:noinspection GoMixedReceiverTypes
-func (s *Handle) UnmarshalText(text []byte) error {
+func (s *String) UnmarshalText(text []byte) error {
 	str := string(text)
 	h := unique.Make(str)
-	*s = Handle(h)
+	*s = String(h)
 	return nil
 }
 
-var _ encoding.TextMarshaler = Handle{}
-var _ encoding.TextUnmarshaler = &Handle{}
+var _ encoding.TextMarshaler = String{}
+var _ encoding.TextUnmarshaler = &String{}
 
 //goland:noinspection GoMixedReceiverTypes
-func (s Handle) Value() string {
+func (s String) Value() string {
 	return unique.Handle[string](s).Value()
 }
 
-type SliceStringer []unique.Handle[string]
+type SliceStringer []String
 
 func (s SliceStringer) String() string {
 	parts := make([]string, len(s))
