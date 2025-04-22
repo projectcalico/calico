@@ -23,8 +23,9 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
+	"github.com/projectcalico/calico/felix/bpf/conntrack/timeouts"
 	v3 "github.com/projectcalico/calico/felix/bpf/conntrack/v3"
-	"github.com/projectcalico/calico/felix/collector"
+	collector "github.com/projectcalico/calico/felix/collector/types"
 	"github.com/projectcalico/calico/felix/collector/types/tuple"
 	"github.com/projectcalico/calico/felix/timeshim/mocktime"
 )
@@ -55,7 +56,7 @@ var _ = Describe("BPF Conntrack InfoReader", func() {
 		mockTime = mocktime.New()
 		Expect(mockTime.KTimeNanos()).To(BeNumerically("==", now))
 		collectorCtInfoReader = conntrack.NewCollectorCtInfoReader()
-		reader = conntrack.NewInfoReader(timeouts, false, mockTime, collectorCtInfoReader)
+		reader = conntrack.NewInfoReader(timeouts.DefaultTimeouts(), false, mockTime, collectorCtInfoReader)
 	})
 
 	DescribeTable("forward entries",

@@ -21,6 +21,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
 	"github.com/projectcalico/calico/felix/bpf/conntrack/cttestdata"
+	"github.com/projectcalico/calico/felix/bpf/conntrack/timeouts"
 	"github.com/projectcalico/calico/felix/bpf/maps"
 )
 
@@ -54,7 +55,7 @@ func runCTCleanupTest(t *testing.T, tc cttestdata.CTCleanupTest) {
 func setUpConntrackScanTest(t *testing.T) *conntrack.BPFProgLivenessScanner {
 	RegisterTestingT(t)
 	scanner, err := conntrack.NewBPFProgLivenessScanner(
-		4, conntrack.DefaultTimeouts(), conntrack.BPFLogLevelDebug,
+		4, timeouts.DefaultTimeouts(), conntrack.BPFLogLevelDebug,
 		nil, "Disabled")
 	Expect(err).NotTo(HaveOccurred(), "Failed to create BPFProgLivenessScanner")
 	t.Cleanup(func() {

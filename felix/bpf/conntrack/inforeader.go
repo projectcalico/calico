@@ -20,8 +20,9 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 
+	"github.com/projectcalico/calico/felix/bpf/conntrack/timeouts"
 	v3 "github.com/projectcalico/calico/felix/bpf/conntrack/v3"
-	"github.com/projectcalico/calico/felix/collector"
+	collector "github.com/projectcalico/calico/felix/collector/types"
 	"github.com/projectcalico/calico/felix/collector/types/tuple"
 	"github.com/projectcalico/calico/felix/timeshim"
 )
@@ -39,7 +40,7 @@ func init() {
 
 // InfoReader is an EntryScannerSynced that provides information to Collector as ConntrackInfo.
 type InfoReader struct {
-	timeouts Timeouts
+	timeouts timeouts.Timeouts
 	dsr      bool
 	time     timeshim.Interface
 
@@ -57,7 +58,7 @@ type InfoReader struct {
 // NewInfoReader returns a new instance of InfoReader that can be used as a
 // EntryScannerSynced with Scanner and as ConntrackInfoReader with
 // collector.Collector.
-func NewInfoReader(timeouts Timeouts, dsr bool, time timeshim.Interface, collectorCtInfoReader *CollectorCtInfoReader) *InfoReader {
+func NewInfoReader(timeouts timeouts.Timeouts, dsr bool, time timeshim.Interface, collectorCtInfoReader *CollectorCtInfoReader) *InfoReader {
 	r := &InfoReader{
 		timeouts: timeouts,
 		dsr:      dsr,
@@ -100,7 +101,7 @@ func makeTuple(ipSrc, ipDst net.IP, portSrc, portDst uint16, proto uint8) tuple.
 }
 
 func (r *InfoReader) makeConntrackInfo(key KeyInterface, val ValueInterface, dnat bool) collector.ConntrackInfo {
-	_, expired := r.timeouts.EntryFinished(r.cachedKTime, key.Proto(), val)
+	_, expired := EntryFinished(r.timeouts, r.cachedKTime, key.Proto(), val)
 
 	proto := key.Proto()
 	ipSrc := key.AddrA()
