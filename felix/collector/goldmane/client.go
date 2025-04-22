@@ -32,6 +32,7 @@ import (
 	"github.com/projectcalico/calico/goldmane/pkg/client"
 	"github.com/projectcalico/calico/goldmane/pkg/types"
 	"github.com/projectcalico/calico/goldmane/proto"
+	"github.com/projectcalico/calico/lib/std/internedlabels"
 )
 
 type GoldmaneReporter struct {
@@ -277,18 +278,18 @@ func toFlowPolicySet(policies []*proto.PolicyHit) flowlog.FlowPolicySet {
 	return policySet
 }
 
-func ensureLabels(labels map[string]string) unique.Handle[string] {
-	if labels == nil {
+func ensureLabels(labels internedlabels.Map) unique.Handle[string] {
+	if labels.IsNil() {
 		return unique.Make("")
 	}
-	flat := utils.FlattenLabels(labels)
+	flat := utils.FlattenLabels(labels.RecomputeOriginalMap())
 	sort.Strings(flat)
 	return unique.Make(strings.Join(flat, ","))
 }
 
-func ensureFlowLogLabels(lables []string) map[string]string {
+func ensureFlowLogLabels(lables []string) internedlabels.Map {
 	if lables == nil {
-		return map[string]string{}
+		return internedlabels.Empty
 	}
-	return utils.UnflattenLabels(lables)
+	return internedlabels.Make(utils.UnflattenLabels(lables))
 }
