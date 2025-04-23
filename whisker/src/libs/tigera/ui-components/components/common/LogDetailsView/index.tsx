@@ -18,28 +18,38 @@ export interface LogDocument {
 
 interface LogDetailsViewProps extends HTMLChakraProps<'div'> {
     logDocument: LogDocument;
+    jsonData?: LogDocument;
     tableTabTitle?: string;
     jsonTabTitle?: string;
     sx?: SystemStyleObject;
     tableStyles?: TableProps;
+    jsonTabStyles?: SystemStyleObject;
     showTableOnly?: boolean;
     stringifyTableData?: boolean;
+    defaultExpandedJsonNodes?: number;
+    size?: string;
 }
 
 const LogDetailsView: React.FC<LogDetailsViewProps> = ({
     logDocument,
+    jsonData,
     tableStyles,
+    jsonTabStyles,
     tableTabTitle = 'Table',
     jsonTabTitle = 'JSON',
     showTableOnly = false,
     stringifyTableData = true,
+    defaultExpandedJsonNodes,
     ...rest
 }) => {
     const logViewStyles = useMultiStyleConfig('LogDetailsView', rest);
+    const { size } = rest;
+
     const Table = (
         <LogDetailsTable
             __css={logViewStyles.table}
             sx={{ ...tableStyles }}
+            size={size}
             logDocument={logDocument}
             stringifyTableData={stringifyTableData}
         />
@@ -60,10 +70,19 @@ const LogDetailsView: React.FC<LogDetailsViewProps> = ({
                             },
 
                             {
-                                content: <JsonPrettier data={logDocument} />,
+                                content: (
+                                    <JsonPrettier
+                                        data={jsonData ?? logDocument}
+                                        defaultExpandedNodes={
+                                            defaultExpandedJsonNodes
+                                        }
+                                    />
+                                ),
                                 title: jsonTabTitle,
+                                sx: jsonTabStyles,
                             },
                         ]}
+                        size={size}
                     />
                 </Box>
             )}

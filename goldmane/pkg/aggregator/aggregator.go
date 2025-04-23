@@ -15,30 +15,99 @@
 package aggregator
 
 import (
+	"context"
 	"fmt"
+	"math"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/goldmane/pkg/aggregator/bucketing"
 	"github.com/projectcalico/calico/goldmane/pkg/types"
 	"github.com/projectcalico/calico/goldmane/proto"
+	"github.com/projectcalico/calico/lib/std/chanutil"
 	"github.com/projectcalico/calico/libcalico-go/lib/health"
+	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	cprometheus "github.com/projectcalico/calico/libcalico-go/lib/prometheus"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
 const (
 	// numBuckets is the number of buckets to keep in memory.
-	// We keep 240 buckets. Assuming a default window of 15s each, this
-	// gives us a total of 1hr of history.
-	numBuckets = 240
+	// - 1 bucket that covers [now(), now()+15s], currently filling.
+	// - 1 bucket that is 15s into the future, to account for time skew.
+	// - 240 buckets of historical data. This gives us 1hr of history with default settings.
+	numBuckets = 242
 
 	// channelDepth is the depth of the channel to use for flow updates.
 	channelDepth = 5000
 
+	// batchSize is the max number of flows to process per batch.
+	batchSize = 1000
+
 	// healthName is the name of this component in the health aggregator.
 	healthName = "aggregator"
 )
+
+var (
+	receivedFlowCounter = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "goldmane_aggr_received_flows_total",
+		Help: "Total number of flows received by Goldmane aggregator.",
+	})
+
+	flowIndexLatency = cprometheus.NewSummary(prometheus.SummaryOpts{
+		Name: "goldmane_aggr_flow_index_latency_ms",
+		Help: "Summary measuring the time taken to index a flow.",
+	})
+
+	flowIndexBatchSize = cprometheus.NewSummary(prometheus.SummaryOpts{
+		Name: "goldmane_aggr_flow_index_batch_size",
+		Help: "Measure the number of flows processed in a batch.",
+	})
+
+	flowChannelSize = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "goldmane_aggr_flow_index_buffer_size",
+		Help: "Current size of the flow index buffer.",
+	})
+
+	rolloverLatency = cprometheus.NewSummary(prometheus.SummaryOpts{
+		Name: "goldmane_aggr_rollover_latency_ms",
+		Help: "Summary of the time until the next rollover.",
+	})
+
+	rolloverDuration = cprometheus.NewSummary(prometheus.SummaryOpts{
+		Name: "goldmane_aggr_rollover_duration_ms",
+		Help: "Duration of the rollover process.",
+	})
+
+	backfillLatency = cprometheus.NewSummary(prometheus.SummaryOpts{
+		Name: "goldmane_aggr_backfill_latency_ms",
+		Help: "Summary measuring the time taken to backfill a stream.",
+	})
+
+	numUniqueFlows = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "goldmane_aggr_num_unique_flows",
+		Help: "Number of unique flows in the aggregator.",
+	})
+
+	numDroppedFlows = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "goldmane_aggr_dropped_flows_total",
+		Help: "Total number of flows dropped by the aggregator.",
+	})
+)
+
+func init() {
+	prometheus.MustRegister(receivedFlowCounter)
+	prometheus.MustRegister(flowIndexLatency)
+	prometheus.MustRegister(flowIndexBatchSize)
+	prometheus.MustRegister(flowChannelSize)
+	prometheus.MustRegister(rolloverLatency)
+	prometheus.MustRegister(rolloverDuration)
+	prometheus.MustRegister(backfillLatency)
+	prometheus.MustRegister(numUniqueFlows)
+	prometheus.MustRegister(numDroppedFlows)
+}
 
 // listRequest is an internal helper used to synchronously request matching flows from the aggregator.
 type listRequest struct {
@@ -64,6 +133,12 @@ type filterHintsResponse struct {
 type streamRequest struct {
 	respCh chan *Stream
 	req    *proto.FlowStreamRequest
+
+	// channel size allows configuration of the size of the channel to use for this stream.
+	// This is to avoid overloading the channel with too many flows at once.
+	// Note; This is a quick fix to avoid having to properly decouple streaming from the main loop.
+	// long term, we should do away with this and use a proper backpressure mechanism.
+	channelSize int
 }
 
 type sinkRequest struct {
@@ -104,9 +179,6 @@ type LogAggregator struct {
 
 	filterHintsRequests chan filterHintsRequest
 
-	// streamRequests is the channel to receive stream requests on.
-	streamRequests chan streamRequest
-
 	// sink is a sink to send aggregated flows to.
 	sink bucketing.Sink
 
@@ -141,6 +213,12 @@ type LogAggregator struct {
 
 	// health is the health aggregator to use for health checks.
 	health *health.HealthAggregator
+
+	// ratelimiter is used to rate limit log messages that may happen frequently.
+	rl *logutils.RateLimitedLogger
+
+	// nextID is used to assign unique IDs to DiachronicFlows as they are created.
+	nextID int64
 }
 
 func NewLogAggregator(opts ...Option) *LogAggregator {
@@ -150,7 +228,6 @@ func NewLogAggregator(opts ...Option) *LogAggregator {
 		done:                make(chan struct{}),
 		listRequests:        make(chan listRequest),
 		filterHintsRequests: make(chan filterHintsRequest),
-		streamRequests:      make(chan streamRequest),
 		sinkChan:            make(chan *sinkRequest, 10),
 		recvChan:            make(chan *types.Flow, channelDepth),
 		rolloverFunc:        time.After,
@@ -165,6 +242,10 @@ func NewLogAggregator(opts ...Option) *LogAggregator {
 			proto.SortBy_SourceNamespace: NewIndex(func(k *types.FlowKey) string { return k.SourceNamespace() }),
 		},
 		streams: NewStreamManager(),
+		rl: logutils.NewRateLimitedLogger(
+			logutils.OptBurst(1),
+			logutils.OptInterval(15*time.Second),
+		),
 	}
 
 	// Use a time-based Ring index by default.
@@ -200,7 +281,7 @@ func NewLogAggregator(opts ...Option) *LogAggregator {
 	return a
 }
 
-func (a *LogAggregator) flowSet(startGt, startLt int64) set.Set[types.FlowKey] {
+func (a *LogAggregator) flowSet(startGt, startLt int64) set.Set[*types.DiachronicFlow] {
 	return a.buckets.FlowSet(startGt, startLt)
 }
 
@@ -213,7 +294,7 @@ func (a *LogAggregator) Run(startTime int64) {
 	opts := []bucketing.BucketRingOption{
 		bucketing.WithBucketsToAggregate(a.bucketsToAggregate),
 		bucketing.WithPushAfter(a.pushIndex),
-		bucketing.WithLookup(func(k types.FlowKey) *types.DiachronicFlow { return a.diachronics[k] }),
+		bucketing.WithLookup(a.diachronicFlow),
 		bucketing.WithStreamReceiver(a.streams),
 	}
 	a.buckets = bucketing.NewBucketRing(
@@ -233,30 +314,35 @@ func (a *LogAggregator) Run(startTime int64) {
 		a.health.Report(healthName, &health.HealthReport{Live: true, Ready: true})
 	}
 
+	// Start the stream manager on its own goroutine.
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go a.streams.Run(ctx)
+
 	// Schedule the first rollover one aggregation period from now.
 	rolloverCh := a.rolloverFunc(a.aggregationWindow)
 
 	for {
 		select {
 		case f := <-a.recvChan:
-			a.handleFlowUpdate(f)
+			a.handleFlowBatch(f)
 		case <-rolloverCh:
+			start := time.Now()
 			rolloverCh = a.rolloverFunc(a.rollover())
 
 			a.buckets.EmitFlowCollections(a.sink)
 			if a.health != nil {
 				a.health.Report(healthName, &health.HealthReport{Live: true, Ready: true})
 			}
+			rolloverDuration.Observe(float64(time.Since(start).Milliseconds()))
 		case req := <-a.listRequests:
 			req.respCh <- a.queryFlows(req.req)
 		case req := <-a.filterHintsRequests:
 			req.respCh <- a.queryFilterHints(req.req)
-		case req := <-a.streamRequests:
-			stream := a.streams.register(req)
-			req.respCh <- stream
-			a.backfill(stream, req.req)
-		case id := <-a.streams.closedStreams():
-			a.streams.close(id)
+		case stream := <-a.streams.backfillChannel():
+			a.backfill(stream)
+		case uid := <-a.streams.ClosedStreams():
+			a.streams.unregister(uid)
 		case req := <-a.sinkChan:
 			logrus.WithField("sink", req.sink).Info("Setting aggregator sink")
 			a.sink = req.sink
@@ -279,12 +365,9 @@ func (a *LogAggregator) SetSink(s bucketing.Sink) chan struct{} {
 
 // Receive is used to send a flow update to the aggregator.
 func (a *LogAggregator) Receive(f *types.Flow) {
-	timeout := time.After(5 * time.Second)
-
-	select {
-	case a.recvChan <- f:
-	case <-timeout:
-		logrus.Warn("Output channel full, dropping flow")
+	if err := chanutil.WriteWithDeadline(context.Background(), a.recvChan, f, 5*time.Second); err != nil {
+		numDroppedFlows.Inc()
+		a.rl.Warn("Aggregator receive channel full, dropping flow(s)")
 	}
 }
 
@@ -302,7 +385,28 @@ func (a *LogAggregator) Stream(req *proto.FlowStreamRequest) (*Stream, error) {
 
 	respCh := make(chan *Stream)
 	defer close(respCh)
-	a.streamRequests <- streamRequest{respCh, req}
+
+	// Determine the expected backfill size for this stream. We ensure a minimum channel size, while allowing for
+	// larger channels for streams that will need to handle a large amount of backfill data. This is mostly a hack
+	// to work around the fact that we don't have a proper backpressure mechanism in place yet.
+	channelSize := 0
+	if req.StartTimeGte != 0 {
+		_ = a.buckets.IterBucketsTime(req.StartTimeGte, a.nowFunc().Unix(), func(bucket *bucketing.AggregationBucket) error {
+			channelSize += bucket.Flows.Len()
+			return nil
+		})
+	}
+	channelSize = int(math.Max(float64(channelSize), float64(channelDepth)))
+	logrus.WithField("channelSize", channelSize).Info("Calculated channel size for stream")
+
+	// Register the stream with the stream manager. This will return a new Stream object.
+	a.streams.Register(&streamRequest{
+		respCh:      respCh,
+		req:         req,
+		channelSize: channelSize,
+	})
+
+	// Wait for a response.
 	s := <-respCh
 	if s == nil {
 		return nil, fmt.Errorf("failed to establish new stream")
@@ -360,7 +464,10 @@ func (a *LogAggregator) Statistics(req *proto.StatisticsRequest) ([]*proto.Stati
 }
 
 // backfill fills a new Stream instance with historical Flow data based on the request.
-func (a *LogAggregator) backfill(stream *Stream, request *proto.FlowStreamRequest) {
+func (a *LogAggregator) backfill(stream *Stream) {
+	// Get the original request parameters from the stream.
+	request := stream.req.req
+
 	if request.StartTimeGte == 0 {
 		// If no start time is provided, we don't need to backfill any data
 		// to this stream.
@@ -368,25 +475,41 @@ func (a *LogAggregator) backfill(stream *Stream, request *proto.FlowStreamReques
 		return
 	}
 
+	// Measure the time it takes to backfill the stream.
+	start := time.Now()
+	defer func() {
+		logrus.WithField("id", stream.id).WithField("duration", time.Since(start)).Info("Backfill complete")
+		backfillLatency.Observe(float64(time.Since(start).Milliseconds()))
+	}()
+
 	// Go through the bucket ring, generating stream events for each flow that matches the request.
 	// Right now, the stream endpoint only supports aggregation windows of a single bucket interval.
-	err := a.buckets.IterBucketsTime(request.StartTimeGte, a.nowFunc().Unix(), func(bucket *bucketing.AggregationBucket) {
+	err := a.buckets.IterBucketsTime(request.StartTimeGte, a.nowFunc().Unix(), func(bucket *bucketing.AggregationBucket) error {
 		// Iterate all of the keys in this bucket.
-		bucket.FlowKeys.Iter(func(key types.FlowKey) error {
-			builder := bucketing.NewCachedFlowBuilder(a.diachronics[key], bucket.StartTime, bucket.EndTime)
-			if f, id := builder.Build(request.Filter); f != nil {
-				// The flow matches the filter and time range.
-				logrus.WithField("flow", key).Debug("Sending backfilled flow to stream")
-				stream.Receive(&proto.FlowResult{
-					Id:   id,
-					Flow: types.FlowToProto(f),
-				})
+		stopBucketIteration := false
+		bucket.Flows.Iter(func(d *types.DiachronicFlow) error {
+			builder := bucketing.NewDeferredFlowBuilder(d, bucket.StartTime, bucket.EndTime)
+			select {
+			case <-stream.ctx.Done():
+				// Stream closed while backfilling. Can stop.
+				logrus.WithField("id", stream.id).Debug("Stream closed while backfilling")
+				stopBucketIteration = true
+				return set.StopIteration
+			default:
+				stream.Receive(builder)
 			}
 			return nil
 		})
+
+		if stopBucketIteration {
+			// If the stream was closed while we were backfilling, we can stop iterating buckets.
+			return bucketing.StopBucketIteration
+		}
+		return nil
 	})
 	if err != nil {
-		logrus.WithError(err).Error("Error backfilling stream")
+		logrus.WithError(err).Warn("Error backfilling stream")
+		return
 	}
 }
 
@@ -586,16 +709,21 @@ func (a *LogAggregator) Stop() {
 }
 
 func (a *LogAggregator) rollover() time.Duration {
+	start := a.nowFunc()
+	defer func() {
+		if a.nowFunc().Sub(start) > 1*time.Second {
+			logrus.WithField("duration", a.nowFunc().Sub(start)).Warn("Rollover took >1s")
+		}
+	}()
+
 	// Tell the bucket ring to rollover and capture the start time of the newest bucket.
 	// We'll use this below to determine when the next rollover should occur. The next bucket
 	// should always be one interval ahead of Now().
-	newBucketStart, keys := a.buckets.Rollover()
+	newBucketStart, diachronics := a.buckets.Rollover()
 
 	// Update DiachronicFlows. We need to remove any windows from the DiachronicFlows that have expired.
 	// Find the oldest bucket's start time and remove any data from the DiachronicFlows that is older than that.
-	keys.Iter(func(k types.FlowKey) error {
-		d := a.diachronics[k]
-
+	diachronics.Iter(func(d *types.DiachronicFlow) error {
 		// Rollover the DiachronicFlow. This will remove any expired data from it.
 		d.Rollover(a.buckets.BeginningOfHistory())
 
@@ -629,6 +757,7 @@ func (a *LogAggregator) rollover() time.Duration {
 			"nextBucketStart": nextBucketStart.Unix(),
 		}).Warn("Falling behind, scheduling immediate rollover")
 		// We don't actually use 0 time, as it could starve the main routine. Use a small amount of delay.
+		rolloverLatency.Observe(float64(10))
 		return 10 * time.Millisecond
 	}
 
@@ -639,18 +768,50 @@ func (a *LogAggregator) rollover() time.Duration {
 		"now":             now.Unix(),
 		"rolloverIn":      rolloverIn,
 	}).Debug("Scheduling next rollover")
+	rolloverLatency.Observe(float64(rolloverIn.Milliseconds()))
 	return rolloverIn
 }
 
-func (a *LogAggregator) handleFlowUpdate(flow *types.Flow) {
+func (a *LogAggregator) handleFlowBatch(first *types.Flow) {
+	// Index the flow that triggered the batch.
+	a.indexFlow(first)
+
+	// While we're here, check to see if there are any other flows to process.
+	numHandled := 1
+	for range batchSize {
+		select {
+		case f := <-a.recvChan:
+			a.indexFlow(f)
+			numHandled++
+		default:
+			// No more flows to process.
+			break
+		}
+	}
+	logrus.WithField("num", numHandled).Debug("Processed flow batch")
+
+	// Set the number of unique flows in the aggregator based on the number of DiachronicFlows.
+	numUniqueFlows.Set(float64(len(a.diachronics)))
+	flowChannelSize.Set(float64(len(a.recvChan)))
+	flowIndexBatchSize.Observe(float64(numHandled))
+}
+
+func (a *LogAggregator) indexFlow(flow *types.Flow) {
+	flowStart := time.Now()
+
 	logrus.WithField("flow", flow).Debug("Received Flow")
+
+	// Increment the received flow counter.
+	receivedFlowCounter.Inc()
 
 	// Find the window for this Flow based on the global bucket ring. We use the ring to ensure
 	// that time windows are consistent across all DiachronicFlows.
 	start, end, err := a.buckets.Window(flow)
 	if err != nil {
-		logrus.WithFields(logrus.Fields{"start": start, "end": end}).
-			WithFields(flow.Key.Fields()).
+		logrus.WithFields(logrus.Fields{
+			"start": flow.StartTime,
+			"now":   a.nowFunc().Unix(),
+		}).WithFields(flow.Key.Fields()).
 			WithError(err).
 			Warn("Unable to sort flow into a bucket")
 		return
@@ -659,11 +820,14 @@ func (a *LogAggregator) handleFlowUpdate(flow *types.Flow) {
 	// Check if we are tracking a DiachronicFlow for this FlowKey, and create one if not.
 	// Then, add this Flow to the DiachronicFlow.
 	if _, ok := a.diachronics[*flow.Key]; !ok {
+		// Increment the next ID for the next DiachronicFlow.
+		a.nextID++
+
 		if logrus.IsLevelEnabled(logrus.DebugLevel) {
 			// Unpacking the key is a bit expensive, so only do it in debug mode.
 			logrus.WithFields(flow.Key.Fields()).Debug("Creating new DiachronicFlow for flow")
 		}
-		d := types.NewDiachronicFlow(flow.Key)
+		d := types.NewDiachronicFlow(flow.Key, a.nextID)
 		a.diachronics[*flow.Key] = d
 
 		// Add the DiachronicFlow to all indices.
@@ -675,4 +839,7 @@ func (a *LogAggregator) handleFlowUpdate(flow *types.Flow) {
 
 	// Add the Flow to our bucket ring.
 	a.buckets.AddFlow(flow)
+
+	// Record time taken to process the flow.
+	flowIndexLatency.Observe(float64(time.Since(flowStart).Milliseconds()))
 }

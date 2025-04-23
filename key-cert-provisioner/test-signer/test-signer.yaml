@@ -6,7 +6,6 @@ metadata:
   name: test-signer
 
 ---
-
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -14,7 +13,6 @@ metadata:
   namespace: test-signer
 
 ---
-
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
@@ -29,7 +27,6 @@ subjects:
     namespace: test-signer
 
 ---
-
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -51,32 +48,32 @@ spec:
         - effect: NoSchedule
           operator: Exists
       containers:
-      - env:
-          - name: CA_KEY
-            value: /test-signer-ca/tls.key
-          - name: CA_CRT
-            value: /test-signer-ca/tls.crt
-          - name: SIGNER_NAME
-            value: tigera.io/test-signer
-        image: quay.io/tigera/test-signer:master
-        imagePullPolicy: Always
-        name: test-signer
-        resources: {}
-        securityContext:
-          allowPrivilegeEscalation: false
-          capabilities:
-            drop:
-              - ALL
-          privileged: false
-          runAsGroup: 10001
-          runAsNonRoot: true
-          runAsUser: 10001
-          seccompProfile:
-            type: RuntimeDefault
-        volumeMounts:
-          - mountPath: /test-signer-ca
-            name: test-signer-ca
-            readOnly: true
+        - env:
+            - name: CA_KEY
+              value: /test-signer-ca/tls.key
+            - name: CA_CRT
+              value: /test-signer-ca/tls.crt
+            - name: SIGNER_NAME
+              value: tigera.io/test-signer
+          image: quay.io/tigera/test-signer:master
+          imagePullPolicy: Always
+          name: test-signer
+          resources: {}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            privileged: false
+            runAsGroup: 10001
+            runAsNonRoot: true
+            runAsUser: 10001
+            seccompProfile:
+              type: RuntimeDefault
+          volumeMounts:
+            - mountPath: /test-signer-ca
+              name: test-signer-ca
+              readOnly: true
       nodeSelector:
         kubernetes.io/os: linux
       hostNetwork: true

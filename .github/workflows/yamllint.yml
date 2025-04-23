@@ -15,19 +15,20 @@ name: Yaml Lint
 on:  # yamllint disable-line rule:truthy
   pull_request:
     paths:
-      - '.semaphore/**/*.yml'
-      - '.semaphore/.yamllint.yml'
+      - '*.yml'
+      - '*.yaml'
+      - '.yamllint.yaml'
 
 jobs:
-  lintSemaphoreYaml:
+  lintYaml:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - id: yaml-lint
         uses: ibiqlik/action-yamllint@v3
         with:
-          file_or_dir: .semaphore/**/*.yml
-          config_file: .semaphore/.yamllint.yml
+          file_or_dir: ./
+          config_file: .yamllint.yaml
       - uses: actions/upload-artifact@v4
         if: always()
         with:

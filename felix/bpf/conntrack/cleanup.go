@@ -22,6 +22,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 
+	"github.com/projectcalico/calico/felix/bpf/conntrack/timeouts"
 	v3 "github.com/projectcalico/calico/felix/bpf/conntrack/v3"
 	"github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/timeshim"
@@ -54,7 +55,7 @@ func init() {
 }
 
 type LivenessScanner struct {
-	timeouts Timeouts
+	timeouts timeouts.Timeouts
 	dsr      bool
 	time     timeshim.Interface
 
@@ -68,7 +69,7 @@ type LivenessScanner struct {
 	reasonCounters map[string]prometheus.Counter
 }
 
-func NewLivenessScanner(timeouts Timeouts, dsr bool, opts ...LivenessScannerOpt) *LivenessScanner {
+func NewLivenessScanner(timeouts timeouts.Timeouts, dsr bool, opts ...LivenessScannerOpt) *LivenessScanner {
 	ls := &LivenessScanner{
 		timeouts:       timeouts,
 		dsr:            dsr,
@@ -131,7 +132,7 @@ func (l *LivenessScanner) Check(ctKey KeyInterface, ctVal ValueInterface, get En
 			}).WithError(err).Warn("Failed to look up reverse conntrack entry.")
 			return ScanVerdictOK
 		}
-		if reason, expired := l.timeouts.EntryExpired(now, ctKey.Proto(), revEntry); expired {
+		if reason, expired := EntryExpired(l.timeouts, now, ctKey.Proto(), revEntry); expired {
 			if debug {
 				log.WithFields(log.Fields{
 					"reason": reason,
@@ -145,7 +146,7 @@ func (l *LivenessScanner) Check(ctKey KeyInterface, ctVal ValueInterface, get En
 			// it once we come across it again.
 		}
 	case TypeNATReverse:
-		if reason, expired := l.timeouts.EntryExpired(now, ctKey.Proto(), ctVal); expired {
+		if reason, expired := EntryExpired(l.timeouts, now, ctKey.Proto(), ctVal); expired {
 			if debug {
 				log.WithFields(log.Fields{
 					"reason": reason,
@@ -156,7 +157,7 @@ func (l *LivenessScanner) Check(ctKey KeyInterface, ctVal ValueInterface, get En
 			return ScanVerdictDelete
 		}
 	case TypeNormal:
-		if reason, expired := l.timeouts.EntryExpired(now, ctKey.Proto(), ctVal); expired {
+		if reason, expired := EntryExpired(l.timeouts, now, ctKey.Proto(), ctVal); expired {
 			if debug {
 				log.WithFields(log.Fields{
 					"reason": reason,
@@ -441,4 +442,65 @@ func (sns *StaleNATScanner) IterationEnd() {
 	sns.natChecker.ConntrackScanEnd()
 	conntrackGaugeStaleNAT.Set(float64(sns.cleaned))
 	sns.cleaned = 0
+}
+
+func entryDone(t timeouts.Timeouts, nowNanos int64, proto uint8, entry ValueInterface, finishedOnly bool) (string, bool) {
+	age := time.Duration(nowNanos - entry.LastSeen())
+	switch proto {
+	case ProtoTCP:
+		dsr := entry.IsForwardDSR()
+		data := entry.Data()
+		rstSeen := data.RSTSeen()
+		if rstSeen && age > t.TCPResetSeen {
+			return "RST seen", true
+		}
+		finsSeen := (dsr && data.FINsSeenDSR()) || data.FINsSeen()
+		if finsSeen && (finishedOnly || age > t.TCPFinsSeen) {
+			// Both legs have been finished, tear down.
+			return "FINs seen", true
+		}
+		if data.Established() || dsr {
+			if entry.RSTSeen() != 0 && age > 2*60*time.Second {
+				return "no traffic on conn with RST with residual traffic for too long", true
+			}
+			if age > t.TCPEstablished {
+				return "no traffic on established flow for too long", true
+			}
+		} else {
+			if age > t.TCPSynSent {
+				return "no traffic on pre-established flow for too long", true
+			}
+		}
+		return "", false
+	case ProtoICMP, ProtoICMP6:
+		if age > t.ICMPTimeout {
+			return "no traffic on ICMP flow for too long", true
+		}
+	case ProtoUDP:
+		if age > t.UDPTimeout {
+			return "no traffic on UDP flow for too long", true
+		}
+	default:
+		if age > t.GenericTimeout {
+			return "no traffic on generic IP flow for too long", true
+		}
+	}
+	return "", false
+}
+
+// EntryExpired checks whether a given conntrack table entry for a given
+// protocol and time, is expired and can be deleted. If it returns true,
+// EntryFinished would also return true.
+//
+// WARNING: this implementation is duplicated in the conntrack_cleanup.c BPF
+// program.
+func EntryExpired(t timeouts.Timeouts, nowNanos int64, proto uint8, entry ValueInterface) (string, bool) {
+	return entryDone(t, nowNanos, proto, entry, false)
+}
+
+// EntryFinished checks whether a given conntrack table entry for a given
+// protocol and time, represents a finished/done connection. Not necessarily
+// expired and to be deleted. Just finished from apps point of view.
+func EntryFinished(t timeouts.Timeouts, nowNanos int64, proto uint8, entry ValueInterface) (string, bool) {
+	return entryDone(t, nowNanos, proto, entry, true)
 }

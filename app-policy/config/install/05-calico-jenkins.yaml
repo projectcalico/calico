@@ -46,7 +46,6 @@ metadata:
   name: calico-node
   namespace: kube-system
 ---
-
 # This manifest installs the calico/node container, as well
 # as the Calico CNI plugins and network config on
 # each master and worker node in a Kubernetes cluster.
@@ -74,7 +73,7 @@ spec:
         # marks the pod as a critical add-on, ensuring it gets
         # priority scheduling and that its resources are reserved
         # if it ever gets evicted.
-        scheduler.alpha.kubernetes.io/critical-pod: ''
+        scheduler.alpha.kubernetes.io/critical-pod: ""
     spec:
       hostNetwork: true
       serviceAccountName: calico-node
@@ -91,12 +90,12 @@ spec:
       # deletion": https://kubernetes.io/docs/concepts/workloads/pods/pod/#termination-of-pods.
       terminationGracePeriodSeconds: 0
       initContainers:
-      - name: flexvol-driver
-        image: quay.io/saurabh/flexvol:latest
-        imagePullPolicy: Always
-        volumeMounts:
-        - name: flexvol-driver-host
-          mountPath: /host/driver
+        - name: flexvol-driver
+          image: quay.io/saurabh/flexvol:latest
+          imagePullPolicy: Always
+          volumeMounts:
+            - name: flexvol-driver-host
+              mountPath: /host/driver
       containers:
         # Runs calico/node container on each Kubernetes node.  This
         # container programs network policy and routes on each
@@ -177,9 +176,9 @@ spec:
           readinessProbe:
             exec:
               command:
-              - /bin/readiness
-              - -bird
-              - -felix
+                - /bin/readiness
+                - -bird
+                - -felix
             periodSeconds: 10
           volumeMounts:
             - mountPath: /lib/modules
@@ -254,12 +253,11 @@ spec:
 # Create all the CustomResourceDefinitions needed for
 # Calico policy and networking mode.
 ---
-
 apiVersion: apiextensions.k8s.io/v1beta1
 description: Calico Felix Configuration
 kind: CustomResourceDefinition
 metadata:
-   name: felixconfigurations.crd.projectcalico.org
+  name: felixconfigurations.crd.projectcalico.org
 spec:
   scope: Cluster
   group: crd.projectcalico.org
@@ -270,7 +268,6 @@ spec:
     singular: felixconfiguration
 
 ---
-
 apiVersion: apiextensions.k8s.io/v1beta1
 description: Calico BGP Peers
 kind: CustomResourceDefinition
@@ -286,7 +283,6 @@ spec:
     singular: bgppeer
 
 ---
-
 apiVersion: apiextensions.k8s.io/v1beta1
 description: Calico BGP Configuration
 kind: CustomResourceDefinition
@@ -302,7 +298,6 @@ spec:
     singular: bgpconfiguration
 
 ---
-
 apiVersion: apiextensions.k8s.io/v1beta1
 description: Calico IP Pools
 kind: CustomResourceDefinition
@@ -318,7 +313,6 @@ spec:
     singular: ippool
 
 ---
-
 apiVersion: apiextensions.k8s.io/v1beta1
 description: Calico HostEndpoints
 kind: CustomResourceDefinition
@@ -334,7 +328,6 @@ spec:
     singular: hostendpoint
 
 ---
-
 apiVersion: apiextensions.k8s.io/v1beta1
 description: Calico Cluster Information
 kind: CustomResourceDefinition
@@ -350,7 +343,6 @@ spec:
     singular: clusterinformation
 
 ---
-
 apiVersion: apiextensions.k8s.io/v1beta1
 description: Calico Global Network Policies
 kind: CustomResourceDefinition
@@ -366,7 +358,6 @@ spec:
     singular: globalnetworkpolicy
 
 ---
-
 apiVersion: apiextensions.k8s.io/v1beta1
 description: Calico Global Network Sets
 kind: CustomResourceDefinition
@@ -382,7 +373,6 @@ spec:
     singular: globalnetworkset
 
 ---
-
 apiVersion: apiextensions.k8s.io/v1beta1
 description: Calico Network Policies
 kind: CustomResourceDefinition
@@ -396,4 +386,3 @@ spec:
     kind: NetworkPolicy
     plural: networkpolicies
     singular: networkpolicy
-

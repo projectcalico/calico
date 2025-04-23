@@ -21,6 +21,8 @@ import (
 	"sync"
 
 	"github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/calico/lib/std/chanutil"
 )
 
 // CommandExecutor executes commands sent using the Send channel asynchronously. The result is sent back on the <-chan Result[R}
@@ -35,24 +37,19 @@ type CommandExecutor[C any, R any] interface {
 // ExecutionController is an interface to manage the execution of commands of an Executor. It allows you to stop and resume
 // command execution, as well as retrieve a signaler to notify you about shutdown.
 type ExecutionController interface {
-	DrainAndBacklog() Signaler
+	DrainAndBacklog() <-chan struct{}
 	Resume()
-	ShutdownSignaler() Signaler
+	WaitForShutdown() <-chan struct{}
 }
 
 type executorCoordinator []ExecutionController
 
-func (coordinator executorCoordinator) DrainAndBacklog() Signaler {
-	var signalers []Signaler
-	for _, executor := range coordinator {
-		signalers = append(signalers, executor.DrainAndBacklog())
-	}
-
-	signal := NewSignaler()
+func (coordinator executorCoordinator) DrainAndBacklog() <-chan struct{} {
+	signal := make(chan struct{})
 	go func() {
-		defer signal.Send()
-		for _, signaler := range signalers {
-			<-signaler.Receive()
+		defer close(signal)
+		for _, executor := range coordinator {
+			<-executor.DrainAndBacklog()
 		}
 	}()
 
@@ -65,17 +62,12 @@ func (coordinator executorCoordinator) Resume() {
 	}
 }
 
-func (coordinator executorCoordinator) ShutdownSignaler() Signaler {
-	var signalers []Signaler
-	for _, executor := range coordinator {
-		signalers = append(signalers, executor.ShutdownSignaler())
-	}
-
-	signal := NewSignaler()
+func (coordinator executorCoordinator) WaitForShutdown() <-chan struct{} {
+	signal := make(chan struct{})
 	go func() {
-		defer signal.Send()
-		for _, signaler := range signalers {
-			<-signaler.Receive()
+		defer close(signal)
+		for _, executor := range coordinator {
+			<-executor.WaitForShutdown()
 		}
 	}()
 
@@ -83,17 +75,18 @@ func (coordinator executorCoordinator) ShutdownSignaler() Signaler {
 }
 
 type commandExecutor[C any, R any] struct {
-	command             func(context.Context, C) (R, error)
-	drainAndBacklogSig  chan Signaler
-	resumeBackloggedSig Signaler
-	cmdChan             chan Command[C, R]
+	command func(context.Context, C) (R, error)
+	cmdChan chan Command[C, R]
 	// backlogChan contains all the commands that failed with EOF, waiting to be retried.
 	backlogChan chan Command[C, R]
 	// inflightCmds keeps track of the number of commands that are currently being executed.
-	inflightCmds        sync.WaitGroup
-	executeSig          Signaler
-	shutdownCompleteSig Signaler
-	errBuff             ErrorBuffer
+	inflightCmds sync.WaitGroup
+
+	resumeBackloggedSig chan struct{}
+	drainAndBacklogSig  chan chan struct{}
+	shutdownCompleteSig chan struct{}
+
+	errBuff ErrorBuffer
 
 	backLogCommands bool
 	backlog         []Command[C, R]
@@ -117,11 +110,9 @@ func NewCommandExecutor[C any, R any](ctx context.Context, errBuff ErrorBuffer, 
 		errBuff:             errBuff,
 		cmdChan:             make(chan Command[C, R], 100),
 		backlogChan:         make(chan Command[C, R], 100),
-		drainAndBacklogSig:  make(chan Signaler, 100),
-		resumeBackloggedSig: NewSignaler(),
-
-		executeSig:          NewSignaler(),
-		shutdownCompleteSig: NewSignaler(),
+		drainAndBacklogSig:  make(chan chan struct{}, 100),
+		resumeBackloggedSig: make(chan struct{}),
+		shutdownCompleteSig: make(chan struct{}),
 	}
 
 	go executor.loop(ctx)
@@ -135,7 +126,7 @@ func (executor *commandExecutor[C, R]) loop(shutdownCtx context.Context) {
 	// doesn't wait on the channel provided.
 	defer func() {
 		defer stopCommands()
-		defer executor.shutdownCompleteSig.Close()
+		defer close(executor.shutdownCompleteSig)
 
 		// close the cmdChan in case anything tries to write to it. This will ensure a panic occurs while trying to
 		// clean up any outstanding cmd.
@@ -148,17 +139,20 @@ func (executor *commandExecutor[C, R]) loop(shutdownCtx context.Context) {
 
 		// Add all outstanding commands in the backlog or cmd channels to the backlog slice.
 		executor.drainBacklogChannel()
-		executor.backlog = append(executor.backlog, ReadAll(executor.cmdChan)...)
+		executor.backlog = append(executor.backlog, chanutil.ReadAllNonBlocking(executor.cmdChan)...)
 
-		logrus.Debug("Returning errors for outstanding requests due to shutdown.")
-		for _, cmd := range executor.backlog {
-			cmd.ReturnError(context.Canceled)
+		if len(executor.backlog) > 0 {
+			logrus.Debug("Returning errors for outstanding commands due to shutdown...")
+			for _, cmd := range executor.backlog {
+				cmd.ReturnError(context.Canceled)
+			}
+			logrus.Debug("Finished returning errors for outstanding commands.")
+		} else {
+			logrus.Debug("No outstanding commands, shutting down..")
 		}
-		logrus.Debug("Finished returning errors for outstanding requests due to shutdown.")
 
-		executor.executeSig.Close()
 		close(executor.drainAndBacklogSig)
-		executor.resumeBackloggedSig.Close()
+		close(executor.resumeBackloggedSig)
 	}()
 
 	var draining chan struct{}
@@ -179,6 +173,9 @@ func (executor *commandExecutor[C, R]) loop(shutdownCtx context.Context) {
 			}
 		case cmd := <-executor.backlogChan:
 			logrus.Debugf("Received backlog command (current backlog size: %d).", len(executor.backlog))
+			if len(executor.backlog) > 50 {
+				logrus.Warn("Backlog size exceeded has exceed 50.")
+			}
 			executor.backlog = append(executor.backlog, cmd)
 		case signal := <-executor.drainAndBacklogSig:
 			logrus.Debugf("Received requeue signal.")
@@ -186,21 +183,22 @@ func (executor *commandExecutor[C, R]) loop(shutdownCtx context.Context) {
 			stopCommands()
 			draining = make(chan struct{})
 			go func() {
-				defer signal.Send()
+				defer close(signal)
 				defer close(draining)
 
 				logrus.Debug("Waiting for inflight commands to finish...")
 				executor.inflightCmds.Wait()
+				// Clear the error buffer, as we don't want to return any errors when we resume accepting commands.
 				executor.errBuff.Clear()
 				logrus.Debug("Inflight commands finished, notifying listeners.")
 			}()
-		case <-executor.resumeBackloggedSig.Receive():
+		case <-executor.resumeBackloggedSig:
 			logrus.Debugf("Received resume signal.")
 			if draining != nil {
 				logrus.Debug("Waiting for drain to finish...")
 				// If the draining channel is not nil and hasn't been closed then we're still draining. We need to
 				// delay resuming so the backlog can be written too.
-				if _, read := ReadNoWait(draining); !read {
+				if _, read := chanutil.ReadNonBlocking(draining); !read {
 					logrus.Debug("delay resume signal not set, setting it.")
 					delayResume = draining
 					continue
@@ -224,7 +222,7 @@ func (executor *commandExecutor[C, R]) loop(shutdownCtx context.Context) {
 
 func (executor *commandExecutor[C, R]) drainBacklogChannel() {
 	logrus.Debugf("Backlog size: %d, adding to backlog.", len(executor.backlog))
-	executor.backlog = append(executor.backlog, ReadAll(executor.backlogChan)...)
+	executor.backlog = append(executor.backlog, chanutil.ReadAllNonBlocking(executor.backlogChan)...)
 }
 
 func (executor *commandExecutor[C, R]) execBacklog(shutdownCtx context.Context) (context.Context, func()) {
@@ -250,6 +248,7 @@ func (executor *commandExecutor[C, R]) executeCommand(ctx context.Context, req C
 		defer executor.inflightCmds.Done()
 		result, err := executor.command(ctx, req.Get())
 		if err != nil {
+			logrus.WithError(err).Debug("Error executing command")
 			executor.errBuff.Write(err)
 			if errors.Is(err, io.EOF) || errors.Is(err, context.Canceled) {
 				executor.backlogChan <- req
@@ -274,8 +273,8 @@ func (executor *commandExecutor[C, R]) Send(params C) <-chan Result[R] {
 // Commands that don't finish successfully (stopped) are added to the backlog. All incoming commands from send are
 // added to the backlog as well. When resume is called the commands on the backlog are executed and new commands are
 // executed immediately.
-func (executor *commandExecutor[Req, Resp]) DrainAndBacklog() Signaler {
-	signal := NewSignaler()
+func (executor *commandExecutor[Req, Resp]) DrainAndBacklog() <-chan struct{} {
+	signal := make(chan struct{})
 	executor.drainAndBacklogSig <- signal
 	return signal
 }
@@ -284,9 +283,9 @@ func (executor *commandExecutor[Req, Resp]) DrainAndBacklog() Signaler {
 // all backlogged commands are executed. Execution of backlogged commands (or new commands in general) are done in the background,
 // so executing the backlog is always a quick operation and won't block new commands from being executed.
 func (executor *commandExecutor[Req, Resp]) Resume() {
-	executor.resumeBackloggedSig.Send()
+	executor.resumeBackloggedSig <- struct{}{}
 }
 
-func (executor *commandExecutor[C, R]) ShutdownSignaler() Signaler {
+func (executor *commandExecutor[C, R]) WaitForShutdown() <-chan struct{} {
 	return executor.shutdownCompleteSig
 }

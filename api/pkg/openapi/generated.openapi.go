@@ -1328,7 +1328,7 @@ func schema_pkg_apis_projectcalico_v3_BPFConntrackTimeouts(ref common.ReferenceC
 				Properties: map[string]spec.Schema{
 					"creationGracePeriod": {
 						SchemaProps: spec.SchemaProps{
-							Description: "CreationGracePeriod gives a generic grace period to new connection\n before they are considered for cleanup [Default: 10s].",
+							Description: "CreationGracePeriod gives a generic grace period to new connections before they are considered for cleanup [Default: 10s].",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -3399,6 +3399,13 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					"flowLogsGoldmaneServer": {
 						SchemaProps: spec.SchemaProps{
 							Description: "FlowLogGoldmaneServer is the flow server endpoint to which flow data should be published.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"flowLogsLocalReporter": {
+						SchemaProps: spec.SchemaProps{
+							Description: "FlowLogsLocalReporter configures local unix socket for reporting flow data from each node. [Default: Disabled]",
 							Type:        []string{"string"},
 							Format:      "",
 						},

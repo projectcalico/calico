@@ -22,10 +22,13 @@ import (
 	"time"
 
 	. "github.com/onsi/gomega"
+	"github.com/stretchr/testify/mock"
 
 	netmocks "github.com/projectcalico/calico/guardian/pkg/thirdpartymocks/net"
+	mockclock "github.com/projectcalico/calico/guardian/pkg/thirdpartymocks/std/clock"
 	"github.com/projectcalico/calico/guardian/pkg/tunnel"
 	tunmocks "github.com/projectcalico/calico/guardian/pkg/tunnel/mocks"
+	"github.com/projectcalico/calico/lib/std/clock"
 )
 
 func TestTunnelOpenConnection(t *testing.T) {
@@ -62,16 +65,6 @@ func TestTunnelOpenConnection(t *testing.T) {
 			},
 			expectedErr: errors.New("some error"),
 		},
-		{
-			// TODO this tests takes about 10 seconds to run because we haven't mocked the timers, we should ensure we can do that.
-			description: "Session returns not nothing but EOF, should fail after 5 session restart retries within 30 seconds",
-			setSession: func(session *tunmocks.Session) {
-				session.
-					On("Close").Return(nil).Once().
-					On("Open").Return(nil, io.EOF)
-			},
-			expectedErr: errors.New("some error"),
-		},
 	}
 
 	for _, tc := range tt {
@@ -79,13 +72,13 @@ func TestTunnelOpenConnection(t *testing.T) {
 			mockDialer := new(tunmocks.SessionDialer)
 			mockSession := new(tunmocks.Session)
 
-			mockDialer.On("Dial").Return(mockSession, nil)
+			mockDialer.On("Dial", mock.Anything).Return(mockSession, nil)
 			tc.setSession(mockSession)
 
 			tun, err := tunnel.NewTunnel(mockDialer)
 			Expect(err).NotTo(HaveOccurred())
 
-			ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(time.Second*30))
+			ctx, cancel := context.WithDeadline(context.Background(), clock.Now().Add(time.Second*30))
 			defer func() {
 				cancel()
 				<-tun.WaitForClose()
@@ -145,7 +138,7 @@ func TestTunnelAcceptConnection(t *testing.T) {
 			mockDialer := tunmocks.NewSessionDialer(t)
 			mockSession := tunmocks.NewSession(t)
 
-			mockDialer.On("Dial").Return(mockSession, nil)
+			mockDialer.On("Dial", mock.Anything).Return(mockSession, nil)
 			tc.setSession(mockSession)
 
 			tun, err := tunnel.NewTunnel(mockDialer)
@@ -172,4 +165,60 @@ func TestTunnelAcceptConnection(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestTunnel_DialRetry(t *testing.T) {
+	setupTest(t)
+
+	mockClock := new(mockclock.Clock)
+
+	livenessTickerChan := make(chan time.Time)
+	timerChan := make(chan time.Time, 1)
+	defer close(livenessTickerChan)
+	defer close(timerChan)
+
+	mockTimer := new(mockclock.Timer)
+
+	mockTimer.On("Chan").
+		Run(func(mock.Arguments) { timerChan <- time.Now() }).
+		Return((<-chan time.Time)(timerChan))
+
+	mockTimer.On("Stop").Return()
+
+	mockClock.On("Now").Return(time.Now())
+	mockClock.On("Since", mock.Anything).Return(time.Duration(0))
+	mockClock.On("NewTimer", mock.Anything).Return(mockTimer)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	mockDialer := new(tunmocks.SessionDialer)
+	mockSession := new(tunmocks.Session)
+
+	mockDialer.On("Dial", mock.Anything).Return(mockSession, nil).Times(5)
+
+	_ = clock.DoWithClock(mockClock, func() error {
+		tun, err := tunnel.NewTunnel(mockDialer)
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(tun.Connect(ctx)).ShouldNot(HaveOccurred())
+		mockConn := new(netmocks.Conn)
+		mockSession.
+			On("Close").Return(nil).Once().
+			On("Open").Return(nil, io.EOF).Times(4).
+			On("Open").Return(mockConn, nil).Once()
+
+		conn, err := tun.Open()
+		Expect(err).ShouldNot(HaveOccurred())
+		Expect(conn).ShouldNot(BeNil())
+
+		cancel()
+		<-tun.WaitForClose()
+
+		return nil
+	})
+
+	mockSession.AssertExpectations(t)
+	mockClock.AssertExpectations(t)
+	mockDialer.AssertExpectations(t)
 }

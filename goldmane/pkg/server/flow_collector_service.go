@@ -16,7 +16,9 @@ package server
 
 import (
 	"io"
+	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/peer"
@@ -26,6 +28,30 @@ import (
 	"github.com/projectcalico/calico/goldmane/pkg/types"
 	"github.com/projectcalico/calico/goldmane/proto"
 )
+
+var (
+	labels = []string{"source"}
+
+	receivedFlowCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "goldmane_collector_received_flows",
+		Help: "Total number of flows received by Goldmane aggregator.",
+	}, labels)
+
+	flowProcessLatency = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Name: "goldmane_collector_flow_process_latency",
+		Help: "Histogram measuring the time taken to ingest a flow.",
+	}, labels)
+
+	numClients = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "goldmane_collector_num_clients",
+		Help: "Number of clients connected to the flow collector.",
+	})
+)
+
+func init() {
+	prometheus.MustRegister(receivedFlowCounter)
+	prometheus.MustRegister(flowProcessLatency)
+}
 
 type Sink interface {
 	Receive(*types.Flow)
@@ -69,6 +95,10 @@ func (p *flowCollectorService) Connect(srv proto.FlowCollector_ConnectServer) er
 }
 
 func (p *flowCollectorService) handleClient(srv proto.FlowCollector_ConnectServer) error {
+	// Track the number of clients connected to the collector.
+	numClients.Inc()
+	defer numClients.Dec()
+
 	scope := "unknown"
 	pr, ok := peer.FromContext(srv.Context())
 	if ok {
@@ -93,6 +123,8 @@ func (p *flowCollectorService) handleClient(srv proto.FlowCollector_ConnectServe
 			logCtx.WithError(err).Error("Failed to receive flow")
 			return err
 		}
+		receivedFlowCounter.WithLabelValues(scope).Inc()
+		start := time.Now()
 
 		// Convert to minified types.Flow object.
 		flow := types.ProtoToFlow(upd.Flow)
@@ -121,5 +153,7 @@ func (p *flowCollectorService) handleClient(srv proto.FlowCollector_ConnectServe
 			logCtx.WithError(err).Error("Failed to send receipt")
 			return err
 		}
+
+		flowProcessLatency.WithLabelValues(scope).Observe(time.Since(start).Seconds())
 	}
 }

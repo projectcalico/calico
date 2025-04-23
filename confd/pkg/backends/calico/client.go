@@ -192,7 +192,7 @@ func NewCalicoClient(confdConfig *config.Config) (*client, error) {
 	c.localBGPPeerWatcher.Start()
 
 	// Create a conditional that we use to wake up all of the watcher threads when there
-	// may some actionable updates.
+	// may be some actionable updates.
 	c.watcherCond = sync.NewCond(&c.cacheLock)
 
 	// Increment the waitForSync wait group.  This blocks the GetValues call until the
@@ -292,9 +292,11 @@ func NewCalicoClient(confdConfig *config.Config) (*client, error) {
 	return c, nil
 }
 
+// Strings for keying in-sync messages by their upstream source.
 var (
-	SourceSyncer         string = "SourceSyncer"
-	SourceRouteGenerator string = "SourceRouteGenerator"
+	SourceSyncer              string = "SourceSyncer"
+	SourceRouteGenerator      string = "SourceRouteGenerator"
+	SourceLocalBGPPeerWatcher string = "LocalBGPPeerWatcher"
 )
 
 // client implements the StoreClient interface for confd, and also implements the
@@ -365,7 +367,7 @@ type client struct {
 	secretWatcher *secretWatcher
 
 	// Subcomponent for accessing and watching local BGP peers.
-	localBGPPeerWatcher *localBGPPeerWatcher
+	localBGPPeerWatcher *LocalBGPPeerWatcher
 
 	// Channels used to decouple update and status processing.
 	syncerC  chan interface{}
@@ -425,7 +427,7 @@ func (c *client) ExcludeServiceAdvertisement() bool {
 	return false
 }
 
-// OnInSync handles multiplexing in-sync messages from multiple data sources
+// OnSyncChange handles multiplexing in-sync messages from multiple data sources
 // into a single representation of readiness.
 func (c *client) OnSyncChange(source string, ready bool) {
 	c.cacheLock.Lock()
@@ -439,13 +441,13 @@ func (c *client) OnSyncChange(source string, ready bool) {
 	log.Infof("Source %v readiness changed, ready=%v", source, ready)
 
 	// Check if we are fully in sync, before applying this change.
-	oldFullSync := c.sourceReady[SourceSyncer] && c.sourceReady[SourceRouteGenerator]
+	oldFullSync := c.inSync()
 
 	// Apply the change.
 	c.sourceReady[source] = ready
 
 	// Check if we are fully in sync now.
-	newFullSync := c.sourceReady[SourceSyncer] && c.sourceReady[SourceRouteGenerator]
+	newFullSync := c.inSync()
 
 	if newFullSync == oldFullSync {
 		log.Debugf("No change to full sync status (%v)", newFullSync)
@@ -465,6 +467,10 @@ func (c *client) OnSyncChange(source string, ready bool) {
 		log.Info("Full sync lost")
 		c.waitForSync.Add(1)
 	}
+}
+
+func (c *client) inSync() bool {
+	return c.sourceReady[SourceSyncer] && c.sourceReady[SourceRouteGenerator] && c.sourceReady[SourceLocalBGPPeerWatcher]
 }
 
 type bgpPeer struct {
@@ -1436,7 +1442,7 @@ func (c *client) getNodeMeshRestartTimeKVPair(v3res *apiv3.BGPConfiguration, key
 func (c *client) getNodeMeshPasswordKVPair(v3res *apiv3.BGPConfiguration, key interface{}) {
 	meshPasswordKey := getBGPConfigKey("node_mesh_password", key)
 
-	if c.secretWatcher != nil && v3res.Spec.NodeMeshPassword != nil && v3res.Spec.NodeMeshPassword.SecretKeyRef != nil {
+	if c.secretWatcher != nil && v3res != nil && v3res.Spec.NodeMeshPassword != nil && v3res.Spec.NodeMeshPassword.SecretKeyRef != nil {
 		password, err := c.secretWatcher.GetSecret(
 			v3res.Spec.NodeMeshPassword.SecretKeyRef.Name,
 			v3res.Spec.NodeMeshPassword.SecretKeyRef.Key,
@@ -1632,12 +1638,12 @@ func (c *client) onNewUpdates() {
 	}
 }
 
-func (c *client) recheckPeerConfig() {
-	log.Info("Trigger to recheck BGP peers following possible password or local BGP peer update")
+func (c *client) recheckPeerConfig(reason string) {
 	select {
 	// Non-blocking write into the recheckC channel.  The idea here is that we don't need to add
 	// a second trigger if there is already one pending.
 	case c.recheckC <- struct{}{}:
+		log.WithField("trigger", reason).Info("Triggered recheck of BGP peers.")
 	default:
 	}
 }

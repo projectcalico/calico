@@ -50,7 +50,7 @@ class DiagsCollector(object):
         for node in nodes:
             _log.info("")
             run("docker exec " + node + " ip r")
-        kubectl("logs -n kube-system -l k8s-app=calico-node")
+        kubectl("logs -n calico-system -l k8s-app=calico-node")
         _log.info("===================================================")
         _log.info("============= COLLECTED DIAGS FOR TEST ============")
         _log.info("===================================================")
@@ -272,7 +272,7 @@ def node_info():
     return nodes, ips, ip6s
 
 def calico_node_pod_name(nodename):
-    name = kubectl("get po -n kube-system -l k8s-app=calico-node --field-selector spec.nodeName=%s -o jsonpath='{.items[0].metadata.name}'" % nodename)
+    name = kubectl("get po -n calico-system -l k8s-app=calico-node --field-selector spec.nodeName=%s -o jsonpath='{.items[0].metadata.name}'" % nodename)
     return name
 
 def update_ds_env(ds, ns, env_vars):
@@ -307,7 +307,7 @@ def update_ds_env(ds, ns, env_vars):
         iterations_with_no_change = 0
         while True:
             time.sleep(10)
-            node_ds = api.read_namespaced_daemon_set_status("calico-node", "kube-system")
+            node_ds = api.read_namespaced_daemon_set_status("calico-node", "calico-system")
             _log.info("%d/%d nodes updated",
                       node_ds.status.updated_number_scheduled,
                       node_ds.status.desired_number_scheduled)
@@ -323,4 +323,4 @@ def update_ds_env(ds, ns, env_vars):
                 iterations_with_no_change = 0
 
         # Wait until all calico-node pods are ready.
-        kubectl("wait pod --for=condition=Ready -l k8s-app=calico-node -n kube-system --timeout=300s")
+        kubectl("wait pod --for=condition=Ready -l k8s-app=calico-node -n calico-system --timeout=300s")

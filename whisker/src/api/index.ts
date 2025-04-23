@@ -5,7 +5,9 @@ import {
     UseStreamOptions,
     UseStreamResult,
 } from '@/types/api';
+import { AppConfig } from '@/types/render';
 import { createEventSource } from '@/utils';
+import { useQuery } from '@tanstack/react-query';
 import React from 'react';
 
 export const API_URL = process.env.APP_API_URL;
@@ -51,6 +53,7 @@ const get = <T>(path: string, options: ApiOptions = {}): Promise<T> => {
 };
 
 const STREAM_THROTTLE = 1000;
+const MAX_FETCHING_TIMEOUT = 5000;
 
 export const useStream = <S, R>({
     path,
@@ -68,6 +71,7 @@ export const useStream = <S, R>({
     const timer = React.useRef<any>(null);
     const hasTimeout = React.useRef(false);
     const hasReplacedStream = React.useRef(false);
+    const isFetchingTimeout = React.useRef<NodeJS.Timeout | null>(null);
 
     const startStream = React.useCallback(
         (options: StartStreamOptions = {}) => {
@@ -75,6 +79,8 @@ export const useStream = <S, R>({
             setHasStoppedStreaming(false);
             setIsFetching(options.isUpdate || false);
             hasReplacedStream.current = false;
+            clearTimeout(timer.current);
+            hasTimeout.current = false;
 
             if (options.isUpdate) {
                 setData([]);
@@ -94,6 +100,17 @@ export const useStream = <S, R>({
             }
 
             const eventSource = eventSourceRef.current as EventSource;
+
+            if (isFetchingTimeout.current) {
+                clearTimeout(isFetchingTimeout.current);
+                isFetchingTimeout.current = null;
+            }
+
+            if (!isFetchingTimeout.current) {
+                isFetchingTimeout.current = setTimeout(() => {
+                    setIsFetching(false);
+                }, MAX_FETCHING_TIMEOUT);
+            }
 
             eventSource.onopen = () => {
                 setIsStreamOpen(true);
@@ -153,6 +170,7 @@ export const useStream = <S, R>({
 
         return () => {
             clearTimeout(timer.current ?? '');
+            clearTimeout(isFetchingTimeout.current ?? '');
             stopStream();
         };
     }, []);
@@ -168,6 +186,15 @@ export const useStream = <S, R>({
         isFetching,
     };
 };
+
+export const useAppConfigQuery = () =>
+    useQuery<AppConfig>({
+        queryKey: ['config'],
+        queryFn: () =>
+            fetch(process.env.APP_CONFIG_PATH).then((response) =>
+                response.json(),
+            ),
+    });
 
 export default {
     get,

@@ -15,7 +15,7 @@ const getSize = (
     rows: Row[],
     rowHeight: number,
     subRowHeight: number,
-) => (rows[i]?.isExpanded ? subRowHeight : rowHeight);
+) => (rows[i]?.isExpanded ? subRowHeight + rowHeight : rowHeight);
 
 const VariableSizeList = _VariableSizeList as unknown as React.ComponentType<
     VariableSizeListProps & { ref?: React.Ref<_VariableSizeList> }
@@ -34,14 +34,19 @@ const VirtualizedRows: React.FC<VirtualizedRowsProps> = ({
     ...rest
 }) => {
     const ref = React.useRef<_VariableSizeList | null>(null);
-    const { rowHeight, subRowHeight, shouldAnimate } = virtualisationProps;
+    const [expandoHeight, setExpandoHeight] = React.useState(0);
+    const { rowHeight, shouldAnimate } = virtualisationProps;
+
+    React.useEffect(() => {
+        ref.current?.resetAfterIndex(0);
+    }, [expandoHeight]);
 
     return (
         <VariableSizeList
             ref={ref}
             height={virtualisationProps.tableHeight}
             itemCount={rows.length}
-            itemSize={(i) => getSize(i, rows, rowHeight, subRowHeight)}
+            itemSize={(i) => getSize(i, rows, rowHeight, expandoHeight)}
             width={'full'}
             itemKey={(index, state: VirtualizedRowData) =>
                 state.data[index][keyProp]
@@ -50,7 +55,10 @@ const VirtualizedRows: React.FC<VirtualizedRowsProps> = ({
                 {
                     rows,
                     keyProp,
-                    virtualisationProps,
+                    virtualisationProps: {
+                        ...virtualisationProps,
+                        setRowHeight: (height) => setExpandoHeight(height),
+                    },
                     virtualizationRef: ref,
                     data,
                     shouldAnimate,

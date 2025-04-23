@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -51,6 +51,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/debugserver"
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
+	"github.com/projectcalico/calico/typha/pkg/cmdwrapper"
 )
 
 // VERSION is filled out during the build process (using git describe output)
@@ -230,6 +231,7 @@ func main() {
 	//       but many of our controllers are based on cache.ResourceCache which
 	//       runs forever once it is started.  It needs to be enhanced to respect
 	//       the stop channel passed to the controllers.
+	os.Exit(cmdwrapper.RestartReturnCode)
 }
 
 // Run the controller health checks.

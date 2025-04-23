@@ -21,6 +21,41 @@ import (
 	"github.com/projectcalico/calico/goldmane/proto"
 )
 
+const (
+	pub    = "pub"
+	pvt    = "pvt"
+	global = "Global"
+)
+
+// The UI displays some values differently than they are stored within Goldmane. As such,
+// users may sends filters for the UI displayed values, but we need to match against the
+// actual stored values. For example, the UI displays "PUBLIC NETWORK" but the stored value
+// is "pub".
+func names(valFn func() string) func() []string {
+	return func() []string {
+		n := valFn()
+		switch n {
+		case pub:
+			return []string{"PUBLIC NETWORK", pub}
+		case pvt:
+			return []string{"PRIVATE NETWORK", pvt}
+
+		}
+		return []string{n}
+	}
+}
+
+func namespaces(valFn func() string) func() []string {
+	return func() []string {
+		n := valFn()
+		switch n {
+		case global:
+			return []string{"-", global}
+		}
+		return []string{n}
+	}
+}
+
 // Matches returns true if the given flow Matches the given filter.
 func Matches(filter *proto.Filter, key *FlowKey) bool {
 	if filter == nil {
@@ -29,11 +64,11 @@ func Matches(filter *proto.Filter, key *FlowKey) bool {
 	}
 
 	comps := []matcher{
-		&stringComparison{filter: filter.SourceNames, valFn: key.SourceName},
-		&stringComparison{filter: filter.DestNames, valFn: key.DestName},
-		&stringComparison{filter: filter.SourceNamespaces, valFn: key.SourceNamespace},
-		&stringComparison{filter: filter.DestNamespaces, valFn: key.DestNamespace},
-		&stringComparison{filter: filter.Protocols, valFn: key.Proto},
+		&stringComparison{filter: filter.SourceNames, genVals: names(key.SourceName)},
+		&stringComparison{filter: filter.DestNames, genVals: names(key.DestName)},
+		&stringComparison{filter: filter.SourceNamespaces, genVals: namespaces(key.SourceNamespace)},
+		&stringComparison{filter: filter.DestNamespaces, genVals: namespaces(key.DestNamespace)},
+		&stringComparison{filter: filter.Protocols, genVals: func() []string { return []string{key.Proto()} }},
 		&actionMatch{filter: filter.Actions, key: key},
 		&portComparison{filter: filter.DestPorts, key: key},
 		&policyComparison{filter: filter.Policies, key: key},
@@ -86,7 +121,10 @@ func (p *portComparison) matches() bool {
 
 type stringComparison struct {
 	filter []*proto.StringMatch
-	valFn  func() string
+
+	// genVals returns a list of values on the underlying object to compare against the filter.
+	// If any of the values match, the comparison is considered a match.
+	genVals func() []string
 }
 
 func (c stringComparison) matches() bool {
@@ -99,14 +137,19 @@ func (c stringComparison) matches() bool {
 }
 
 func (c stringComparison) matchFilter(filter *proto.StringMatch) bool {
-	val := c.valFn()
+	vals := c.genVals()
 
 	if filter.Type == proto.MatchType_Exact {
-		return val == filter.Value
+		return slices.Contains(vals, filter.Value)
 	}
 
 	// Match type is not exact, so we need to do a substring match.
-	return strings.Contains(val, filter.Value)
+	for _, val := range vals {
+		if strings.Contains(val, filter.Value) {
+			return true
+		}
+	}
+	return false
 }
 
 type policyComparison struct {

@@ -25,13 +25,13 @@ FROM ${CALICO_BASE}
 
 ARG GIT_VERSION=unknown
 
-LABEL description="calicoctl(1) is a command line tool used to interface with the Calico datastore"
-LABEL maintainer="maintainers@tigera.io"
-LABEL name="Calico CLI tool"
-LABEL release="1"
-LABEL summary="Calico CLI tool"
-LABEL vendor="Project Calico"
-LABEL version=${GIT_VERSION}
+LABEL org.opencontainers.image.description="calicoctl(1) is a command line tool used to interface with the Calico datastore"
+LABEL org.opencontainers.image.authors="maintainers@tigera.io"
+LABEL org.opencontainers.image.source="https://github.com/projectcalico/calico"
+LABEL org.opencontainers.image.title="Calico CLI tool"
+LABEL org.opencontainers.image.vendor="Project Calico"
+LABEL org.opencontainers.image.version="${GIT_VERSION}"
+LABEL org.opencontainers.image.licenses="Apache-2.0"
 
 ENV CALICO_CTL_CONTAINER=TRUE
 

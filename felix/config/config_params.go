@@ -188,7 +188,7 @@ type Config struct {
 	BPFLogLevel                        string            `config:"oneof(off,info,debug);off;non-zero"`
 	BPFConntrackLogLevel               string            `config:"oneof(off,debug);off;non-zero"`
 	BPFConntrackCleanupMode            string            `config:"oneof(Auto,Userspace,BPFProgram);Auto"`
-	BPFConntrackTimeouts               map[string]string `config:"keyvaluelist;CreationGracePeriod=10s,TCPPreEstablished=20s,TCPEstablished=1h,TCPFinsSeen=Auto,TCPResetSeen=40s,UDPLastSeen=60s,GenericIPLastSeen=10m,ICMPLastSeen=5s"`
+	BPFConntrackTimeouts               map[string]string `config:"keyvaluelist;CreationGracePeriod=10s,TCPSynSent=20s,TCPEstablished=1h,TCPFinsSeen=Auto,TCPResetSeen=40s,UDPTimeout=60s,GenericTimeout=10m,ICMPTimeout=5s"`
 	BPFLogFilters                      map[string]string `config:"keyvaluelist;;"`
 	BPFCTLBLogFilter                   string            `config:"oneof(all);;"`
 	BPFDataIfacePattern                *regexp.Regexp    `config:"regexp;^((en|wl|ww|sl|ib)[Popsx].*|(eth|wlan|wwan|bond).*)"`
@@ -330,9 +330,9 @@ type Config struct {
 
 	LogFilePath string `config:"file;/var/log/calico/felix.log;die-on-fail"`
 
-	LogSeverityFile   string `config:"oneof(DEBUG,INFO,WARNING,ERROR,FATAL);INFO"`
-	LogSeverityScreen string `config:"oneof(DEBUG,INFO,WARNING,ERROR,FATAL);INFO"`
-	LogSeveritySys    string `config:"oneof(DEBUG,INFO,WARNING,ERROR,FATAL);INFO"`
+	LogSeverityFile   string `config:"oneof(TRACE,DEBUG,INFO,WARNING,ERROR,FATAL);INFO"`
+	LogSeverityScreen string `config:"oneof(TRACE,DEBUG,INFO,WARNING,ERROR,FATAL);INFO"`
+	LogSeveritySys    string `config:"oneof(TRACE,DEBUG,INFO,WARNING,ERROR,FATAL);INFO"`
 	// LogDebugFilenameRegex controls which source code files have their Debug log output included in the logs.
 	// Only logs from files with names that match the given regular expression are included.  The filter only applies
 	// to Debug level logs.
@@ -409,6 +409,7 @@ type Config struct {
 	FlowLogsFlushInterval        time.Duration `config:"seconds;300"`
 	FlowLogsCollectorDebugTrace  bool          `config:"bool;false"`
 	FlowLogsGoldmaneServer       string        `config:"string;"`
+	FlowLogsLocalReporter        string        `config:"oneof(Enabled,Disabled);Disabled"`
 	FlowLogsPolicyEvaluationMode string        `config:"oneof(None,Continuous);Continuous"`
 
 	KubeNodePortRanges []numorstring.Port `config:"portrange-list;30000:32767"`
@@ -535,8 +536,13 @@ func (config *Config) TableRefreshInterval() time.Duration {
 	return config.IptablesRefreshInterval
 }
 
+func (config *Config) FlowLogsLocalReporterEnabled() bool {
+	return config.FlowLogsLocalReporter == "Enabled"
+}
+
 func (config *Config) FlowLogsEnabled() bool {
-	return config.FlowLogsGoldmaneServer != ""
+	return config.FlowLogsGoldmaneServer != "" ||
+		config.FlowLogsLocalReporterEnabled()
 }
 
 // Copy makes a copy of the object.  Internal state is deep copied but config parameters are only shallow copied.
@@ -1267,11 +1273,10 @@ type Param interface {
 
 func FromConfigUpdate(msg *proto.ConfigUpdate) *Config {
 	p := New()
-	// It doesn't have very great meaning for this standalone
-	// config object, but we use DatastorePerHost here, as the
-	// source, because proto.ConfigUpdate is formed by merging
-	// global and per-host datastore configuration fields.
-	_, _ = p.UpdateFrom(msg.Config, DatastorePerHost)
+	_, err := p.UpdateFromConfigUpdate(msg)
+	if err != nil {
+		log.WithError(err).Panic("Failed to convert ConfigUpdate back to Config.")
+	}
 	return p
 }
 

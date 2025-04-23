@@ -78,7 +78,7 @@ export const useInfiniteFilterQuery = (
         enabled: query !== null,
     });
 
-const STREAM_TIME_OFFSET = -300;
+const STREAM_TIME_OFFSET = -60;
 
 export const useFlowLogsStream = (
     filterValues: Partial<Record<FilterKey, string[]>>,
@@ -107,7 +107,10 @@ export const useFlowLogsStream = (
 
     useDidUpdate(() => {
         const startTimeGte = getTimeInSeconds(initialStreamStartTime.current);
-        const path = buildStreamPath(startTimeGte, filters);
+        const path = buildStreamPath(
+            startTimeGte ?? STREAM_TIME_OFFSET,
+            filters,
+        );
         startStream({
             path,
             isUpdate: true,

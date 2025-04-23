@@ -812,4 +812,3 @@ data:
           securityContext:
             fsGroup: 1337
           {{- end }}
-

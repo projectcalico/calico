@@ -20,8 +20,8 @@ metadata:
     app: database
 spec:
   ports:
-  - port: 2379
-    name: http
+    - port: 2379
+      name: http
   selector:
     app: database
 ---
@@ -50,17 +50,17 @@ spec:
     spec:
       serviceAccountName: database
       containers:
-      - name: database
-        image: spikecurtis/yaobank-database:latest
-        imagePullPolicy: IfNotPresent
-        ports:
-        - containerPort: 2379
-        command: ["etcd"]
-        args:
-          - "-advertise-client-urls" 
-          - "http://database:2379"
-          - "-listen-client-urls"
-          - "http://0.0.0.0:2379"
+        - name: database
+          image: spikecurtis/yaobank-database:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 2379
+          command: ["etcd"]
+          args:
+            - "-advertise-client-urls"
+            - "http://database:2379"
+            - "-listen-client-urls"
+            - "http://0.0.0.0:2379"
 ---
 apiVersion: v1
 kind: Service
@@ -70,8 +70,8 @@ metadata:
     app: summary
 spec:
   ports:
-  - port: 80
-    name: http
+    - port: 80
+      name: http
   selector:
     app: summary
 ---
@@ -101,11 +101,11 @@ spec:
     spec:
       serviceAccountName: summary
       containers:
-      - name: summary
-        image: spikecurtis/yaobank-summary:latest
-        imagePullPolicy: Always
-        ports:
-        - containerPort: 80
+        - name: summary
+          image: spikecurtis/yaobank-summary:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 80
 ---
 apiVersion: v1
 kind: Service
@@ -115,8 +115,8 @@ metadata:
     app: customer
 spec:
   ports:
-  - port: 80
-    name: http
+    - port: 80
+      name: http
   selector:
     app: customer
 ---
@@ -146,11 +146,11 @@ spec:
     spec:
       serviceAccountName: customer
       containers:
-      - name: customer
-        image: spikecurtis/yaobank-customer:latest
-        imagePullPolicy: Always
-        ports:
-        - containerPort: 80
+        - name: customer
+          image: spikecurtis/yaobank-customer:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 80
 ---
 apiVersion: networking.istio.io/v1alpha3
 kind: Gateway
@@ -160,12 +160,12 @@ spec:
   selector:
     istio: ingressgateway # use istio default controller
   servers:
-  - port:
-      number: 80
-      name: http
-      protocol: HTTP
-    hosts:
-    - "*"
+    - port:
+        number: 80
+        name: http
+        protocol: HTTP
+      hosts:
+        - "*"
 ---
 apiVersion: networking.istio.io/v1alpha3
 kind: VirtualService
@@ -173,15 +173,15 @@ metadata:
   name: yaobank
 spec:
   hosts:
-  - "*"
+    - "*"
   gateways:
-  - yaobank
+    - yaobank
   http:
-  - match:
-    - uri:
-        prefix: /
-    route:
-    - destination:
-        host: customer
-        port:
-          number: 80
+    - match:
+        - uri:
+            prefix: /
+      route:
+        - destination:
+            host: customer
+            port:
+              number: 80

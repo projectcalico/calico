@@ -14,6 +14,8 @@
 
 package bucketing
 
+import "github.com/sirupsen/logrus"
+
 type BucketRingOption func(*BucketRing)
 
 func WithPushAfter(n int) BucketRingOption {
@@ -24,18 +26,21 @@ func WithPushAfter(n int) BucketRingOption {
 
 func WithBucketsToAggregate(n int) BucketRingOption {
 	return func(r *BucketRing) {
+		logrus.WithField("bucketsToAggregate", n).Debug("Setting buckets to aggregate")
 		r.bucketsToAggregate = n
 	}
 }
 
 func WithLookup(lookup lookupFn) BucketRingOption {
 	return func(r *BucketRing) {
+		logrus.WithField("lookup", lookup).Debug("Setting lookup function")
 		r.lookupFlow = lookup
 	}
 }
 
 func WithStreamReceiver(sm StreamReceiver) BucketRingOption {
 	return func(r *BucketRing) {
+		logrus.WithField("streamReceiver", sm).Debug("Setting stream receiver")
 		r.streams = sm
 	}
 }

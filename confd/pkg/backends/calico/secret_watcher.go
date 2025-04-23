@@ -177,19 +177,19 @@ func (sw *secretWatcher) SweepStale() {
 func (sw *secretWatcher) OnAdd(obj interface{}, isInInitialList bool) {
 	log.Debug("Secret added")
 	sw.updateSecret(obj.(*v1.Secret))
-	sw.client.recheckPeerConfig()
+	sw.client.recheckPeerConfig("secret added")
 }
 
 func (sw *secretWatcher) OnUpdate(oldObj, newObj interface{}) {
 	log.Debug("Secret updated")
 	sw.updateSecret(newObj.(*v1.Secret))
-	sw.client.recheckPeerConfig()
+	sw.client.recheckPeerConfig("secret updated")
 }
 
 func (sw *secretWatcher) OnDelete(obj interface{}) {
 	log.Debug("Secret deleted")
 	sw.deleteSecret(obj.(*v1.Secret))
-	sw.client.recheckPeerConfig()
+	sw.client.recheckPeerConfig("secret deleted")
 }
 
 func (sw *secretWatcher) updateSecret(secret *v1.Secret) {

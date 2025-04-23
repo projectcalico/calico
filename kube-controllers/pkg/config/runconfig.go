@@ -447,6 +447,10 @@ func mergeAutoHostEndpoints(envVars map[string]string, status *v3.KubeController
 			sc.Node.HostEndpoint.AutoCreate = v3.Disabled
 		}
 
+		if rc.Node.AutoHostEndpointConfig.CreateDefaultHostEndpoint == "" {
+			rc.Node.AutoHostEndpointConfig.CreateDefaultHostEndpoint = v3.DefaultHostEndpointsEnabled
+		}
+
 		sc.Node.HostEndpoint.CreateDefaultHostEndpoint = rc.Node.AutoHostEndpointConfig.CreateDefaultHostEndpoint
 
 		if rc.Node.AutoHostEndpointConfig.Templates != nil {
