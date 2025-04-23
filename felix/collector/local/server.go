@@ -110,7 +110,7 @@ func (s *FlowServer) Run() error {
 	// Try to clean up socket if it exists. Simply continue with any error. It might work fine to use the same socket.
 	err = cleanupLocalSocket(addr)
 	if err != nil {
-		logrus.WithError(err).WithField("address", addr).Errorf("Failed to clean up local socket")
+		logrus.WithError(err).WithField("address", addr).Debug("Failed to clean up local socket")
 	}
 
 	s.once.Do(func() {
