@@ -20,8 +20,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/projectcalico/calico/lib/std/internedlabels"
-	"github.com/projectcalico/calico/lib/std/unique"
+	"github.com/projectcalico/calico/lib/std/uniquelabels"
+	"github.com/projectcalico/calico/lib/std/uniquestr"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	net2 "github.com/projectcalico/calico/libcalico-go/lib/net"
 )
@@ -82,8 +82,8 @@ func MustParseNet(n string) net2.IPNet {
 	return *cidr
 }
 
-func IntersectAndFilterLabels(in, out internedlabels.Map) internedlabels.Map {
-	return out.IntersectAndFilter(in, func(k unique.String, _ unique.String) bool {
+func IntersectAndFilterLabels(in, out uniquelabels.Map) uniquelabels.Map {
+	return uniquelabels.IntersectAndFilter(in, out, func(k uniquestr.Handle, _ uniquestr.Handle) bool {
 		// Skip Calico labels from the logs
 		return !strings.HasPrefix(k.Value(), "projectcalico.org/")
 	})

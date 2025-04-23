@@ -19,7 +19,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	. "github.com/projectcalico/calico/felix/labelindex"
-	"github.com/projectcalico/calico/lib/std/internedlabels"
+	"github.com/projectcalico/calico/lib/std/uniquelabels"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/selector"
 )
@@ -79,8 +79,8 @@ var _ = Describe("Index", func() {
 
 	Context("with empty index", func() {
 		It("should do nothing when adding labels", func() {
-			idx.UpdateLabels("foo", internedlabels.Make(map[string]string{"a": "b"}), nil)
-			idx.UpdateLabels("bar", internedlabels.Make(map[string]string{}), nil)
+			idx.UpdateLabels("foo", uniquelabels.Make(map[string]string{"a": "b"}), nil)
+			idx.UpdateLabels("bar", uniquelabels.Make(map[string]string{}), nil)
 			Expect(updates).To(BeEmpty())
 		})
 		It("should do nothing when adding selectors", func() {
@@ -92,7 +92,7 @@ var _ = Describe("Index", func() {
 
 	Context("with one set of labels added", func() {
 		BeforeEach(func() {
-			idx.UpdateLabels("l1", internedlabels.Make(map[string]string{"a": "b", "c": "d"}), nil)
+			idx.UpdateLabels("l1", uniquelabels.Make(map[string]string{"a": "b", "c": "d"}), nil)
 		})
 
 		It("should ignore non-matching selectors", func() {
@@ -154,22 +154,22 @@ var _ = Describe("Index", func() {
 		})
 
 		It("should ignore non-matching labels", func() {
-			idx.UpdateLabels("l1", internedlabels.Make(map[string]string{"a": "b"}), nil)
+			idx.UpdateLabels("l1", uniquelabels.Make(map[string]string{"a": "b"}), nil)
 			Expect(updates).To(BeEmpty())
 		})
 		It("should fire correct events for match", func() {
 			By("firing for add")
-			idx.UpdateLabels("l1", internedlabels.Make(map[string]string{"a": "a1"}), nil)
+			idx.UpdateLabels("l1", uniquelabels.Make(map[string]string{"a": "a1"}), nil)
 			Expect(updates).To(Equal([]update{{
 				"start", "l1", "e1",
 			}}))
 			updates = updates[:0]
 			By("ignoring idempotent add")
-			idx.UpdateLabels("l1", internedlabels.Make(map[string]string{"a": "a1"}), nil)
+			idx.UpdateLabels("l1", uniquelabels.Make(map[string]string{"a": "a1"}), nil)
 			Expect(updates).To(BeEmpty())
 			By("ignoring update to also-matching labels")
 			idx.UpdateLabels("l1",
-				internedlabels.Make(map[string]string{"a": "a1", "b": "c"}), nil)
+				uniquelabels.Make(map[string]string{"a": "a1", "b": "c"}), nil)
 			Expect(updates).To(BeEmpty())
 			By("firing stop on delete")
 			idx.DeleteLabels("l1")
@@ -179,9 +179,9 @@ var _ = Describe("Index", func() {
 		})
 		It("should handle multiple matches", func() {
 			By("firing events for both")
-			idx.UpdateLabels("l1", internedlabels.Make(map[string]string{"a": "a1"}), nil)
+			idx.UpdateLabels("l1", uniquelabels.Make(map[string]string{"a": "a1"}), nil)
 			idx.UpdateLabels("l2",
-				internedlabels.Make(map[string]string{"a": "a1", "b": "b1"}), nil)
+				uniquelabels.Make(map[string]string{"a": "a1", "b": "b1"}), nil)
 			Expect(updates).To(Equal([]update{
 				{"start", "l1", "e1"},
 				{"start", "l2", "e1"},
@@ -189,7 +189,7 @@ var _ = Describe("Index", func() {
 			updates = updates[:0]
 
 			By("handling updates to non-matching labels")
-			idx.UpdateLabels("l1", internedlabels.Make(map[string]string{"a": "a2"}), nil)
+			idx.UpdateLabels("l1", uniquelabels.Make(map[string]string{"a": "a2"}), nil)
 			Expect(updates).To(Equal([]update{
 				{"stop", "l1", "e1"},
 			}))
