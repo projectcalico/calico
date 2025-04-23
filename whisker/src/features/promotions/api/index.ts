@@ -8,7 +8,7 @@ export const usePromotionsContent = (enabled: boolean) => {
         enabled: enabled && config !== undefined,
         queryKey: ['promotions-content'],
         queryFn: () =>
-            fetch(`${process.env.APP_CALICO_CLOUD_API_URL}/whisker/content`, {
+            fetch(`${config?.calico_cloud_url}/whisker/content`, {
                 method: 'POST',
                 headers: {
                     Accept: 'application/json',
