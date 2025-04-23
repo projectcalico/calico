@@ -126,7 +126,7 @@ func (p RESTStorageProvider) NewV3Storage(
 		},
 		p.StorageType,
 		authorizer,
-		[]string{"snp", "csnp", "calicostagednetworkpolicy", "calicostagednetworkpolicies"},
+		[]string{"snp"},
 	)
 
 	networksetRESTOptions, err := restOptionsGetter.GetRESTOptions(calico.Resource("networksets"), nil)
