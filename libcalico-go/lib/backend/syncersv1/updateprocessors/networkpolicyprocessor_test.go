@@ -349,7 +349,7 @@ var _ = Describe("Test end-to-end pod and network policy processing", func() {
 		// Expect that the NP matches the pod.
 		s, err := parser.Parse(np.Selector)
 		Expect(err).NotTo(HaveOccurred())
-		matches := s.Evaluate(wep.Labels)
+		matches := s.EvaluateLabels(wep.Labels)
 		Expect(matches).To(BeTrue(), fmt.Sprintf("%s does not match %+v", np.Selector, wep.Labels))
 	})
 
@@ -421,7 +421,7 @@ var _ = Describe("Test end-to-end pod and network policy processing", func() {
 		// Expect that the NP does NOT match the pod, since they are not in the same namespace.
 		s, err := parser.Parse(np.Selector)
 		Expect(err).NotTo(HaveOccurred())
-		matches := s.Evaluate(wep.Labels)
+		matches := s.EvaluateLabels(wep.Labels)
 		Expect(matches).To(BeFalse(), fmt.Sprintf("%s matches pod in other namespace %+v", np.Selector, wep.Labels))
 	})
 
@@ -508,7 +508,7 @@ var _ = Describe("Test end-to-end pod and network policy processing", func() {
 		// Expect that the NP ingress rule matches the pod.
 		s, err := parser.Parse(np.InboundRules[0].SrcSelector)
 		Expect(err).NotTo(HaveOccurred())
-		matches := s.Evaluate(wep.Labels)
+		matches := s.EvaluateLabels(wep.Labels)
 		Expect(matches).To(BeTrue(), fmt.Sprintf("%s does not match %+v", np.Selector, wep.Labels))
 	})
 })

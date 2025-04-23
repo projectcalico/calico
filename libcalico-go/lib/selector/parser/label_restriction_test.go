@@ -21,7 +21,7 @@ import (
 
 	. "github.com/onsi/gomega"
 
-	"github.com/projectcalico/calico/lib/std/unique"
+	"github.com/projectcalico/calico/lib/std/uniquestr"
 )
 
 var labelRestrictionsTests = []struct {
@@ -125,7 +125,7 @@ func TestLabelRestrictions(t *testing.T) {
 			if test.Res != nil {
 				res = LabelRestrictions{}
 				for k, v := range test.Res {
-					res[unique.Make(k)] = v
+					res[uniquestr.Make(k)] = v
 				}
 			}
 			Expect(lrs).To(Equal(res), fmt.Sprintf("Selector %s should produce restrictions: %v", test.Sel, test.Res))
@@ -149,10 +149,10 @@ func TestLabelRestrictions(t *testing.T) {
 	}
 }
 
-func handleSlice(ss ...string) []unique.String {
-	var hs = make([]unique.String, len(ss))
+func handleSlice(ss ...string) []uniquestr.Handle {
+	var hs = make([]uniquestr.Handle, len(ss))
 	for i, s := range ss {
-		hs[i] = unique.Make(s)
+		hs[i] = uniquestr.Make(s)
 	}
 	return hs
 }

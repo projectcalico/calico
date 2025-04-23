@@ -22,7 +22,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/calc"
 	"github.com/projectcalico/calico/felix/collector/utils"
-	"github.com/projectcalico/calico/lib/std/internedlabels"
+	"github.com/projectcalico/calico/lib/std/uniquelabels"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 )
 
@@ -52,15 +52,15 @@ type Metadata struct {
 	AggregatedName string `json:"aggregated_name"`
 }
 
-func GetLabels(ed calc.EndpointData) internedlabels.Map {
-	var labels internedlabels.Map
+func GetLabels(ed calc.EndpointData) uniquelabels.Map {
+	var labels uniquelabels.Map
 	if ed != nil {
 		labels = ed.Labels()
 	}
 	if labels.IsNil() {
 		// Explicitly don't want to return nil so that we can tell if the
 		// field is populated.
-		labels = internedlabels.Empty
+		labels = uniquelabels.Empty
 	}
 	return labels
 }

@@ -17,7 +17,7 @@ package model
 import (
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 
-	"github.com/projectcalico/calico/lib/std/internedlabels"
+	"github.com/projectcalico/calico/lib/std/uniquelabels"
 )
 
 // EndpointKey gives a shared interface to workload and host endpoint keys.
@@ -37,7 +37,7 @@ type Endpoint interface {
 	// WorkloadOrHostEndpoint is a no-op marker method for workload/host endpoints.
 	WorkloadOrHostEndpoint()
 
-	GetLabels() internedlabels.Map
+	GetLabels() uniquelabels.Map
 	GetProfileIDs() []string
 	GetPorts() []EndpointPort
 }

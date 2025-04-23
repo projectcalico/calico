@@ -27,7 +27,7 @@ import (
 	"github.com/projectcalico/calico/felix/collector/types/tuple"
 	"github.com/projectcalico/calico/felix/collector/utils"
 	logutil "github.com/projectcalico/calico/felix/logutils"
-	"github.com/projectcalico/calico/lib/std/internedlabels"
+	"github.com/projectcalico/calico/lib/std/uniquelabels"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 )
@@ -195,8 +195,8 @@ func (f *FlowSpec) AggregateMetricUpdate(mu *metric.Update) {
 		// Reset the aggregated data from this metric update.
 		f.FlowEnforcedPolicySets = nil
 		f.FlowPendingPolicySet = nil
-		f.FlowLabels.SrcLabels = internedlabels.Nil
-		f.FlowLabels.DstLabels = internedlabels.Nil
+		f.FlowLabels.SrcLabels = uniquelabels.Nil
+		f.FlowLabels.DstLabels = uniquelabels.Nil
 		f.resetAggrData = false
 	}
 	f.aggregateFlowLabels(*mu)
@@ -250,8 +250,8 @@ func (f *FlowSpec) GarbageCollect() int {
 }
 
 type FlowLabels struct {
-	SrcLabels internedlabels.Map
-	DstLabels internedlabels.Map
+	SrcLabels uniquelabels.Map
+	DstLabels uniquelabels.Map
 }
 
 func NewFlowLabels(mu metric.Update) FlowLabels {

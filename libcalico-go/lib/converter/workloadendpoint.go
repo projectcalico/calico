@@ -15,7 +15,7 @@
 package converter
 
 import (
-	"github.com/projectcalico/calico/lib/std/internedlabels"
+	"github.com/projectcalico/calico/lib/std/uniquelabels"
 	api "github.com/projectcalico/calico/libcalico-go/lib/apis/v1"
 	"github.com/projectcalico/calico/libcalico-go/lib/apis/v1/unversioned"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
@@ -84,7 +84,7 @@ func (w *WorkloadEndpointConverter) ConvertAPIToKVPair(a unversioned.Resource) (
 	d := model.KVPair{
 		Key: k,
 		Value: &model.WorkloadEndpoint{
-			Labels:                     internedlabels.Make(ah.Metadata.Labels),
+			Labels:                     uniquelabels.Make(ah.Metadata.Labels),
 			ActiveInstanceID:           ah.Metadata.ActiveInstanceID,
 			State:                      "active",
 			Name:                       ah.Spec.InterfaceName,
