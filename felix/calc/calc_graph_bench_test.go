@@ -27,6 +27,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/config"
+	"github.com/projectcalico/calico/lib/std/uniquelabels"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
@@ -64,6 +65,7 @@ func benchInitialSnap(b *testing.B, numEndpoints int, numLocalEndpoints int, num
 	profUpdates := makeNamespaceUpdates(numNamespaces)
 	netSetUpdates := makeNetSetAndPolUpdates(netSetsAndPols)
 
+	var cg *CalcGraph
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		b.StopTimer()
@@ -77,7 +79,7 @@ func benchInitialSnap(b *testing.B, numEndpoints int, numLocalEndpoints int, num
 		es.Callback = func(message interface{}) {
 			numMessages++
 		}
-		cg := NewCalculationGraph(es, nil, conf, func() {})
+		cg = NewCalculationGraph(es, nil, conf, func() {})
 		keepAlive = cg // Keep CG alive after run so that memory profile shows its usage
 
 		logrus.SetLevel(logrus.WarnLevel)
@@ -104,6 +106,13 @@ func benchInitialSnap(b *testing.B, numEndpoints int, numLocalEndpoints int, num
 		b.ReportMetric(float64(time.Since(startTime).Seconds()), "s")
 		b.ReportMetric(float64(numMessages), "Msgs")
 	}
+	b.StopTimer()
+	runtime.GC()
+	time.Sleep(time.Second)
+	var m runtime.MemStats
+	runtime.ReadMemStats(&m)
+	b.ReportMetric(float64(m.HeapAlloc/(1024*1024)), "HeapAllocMB")
+	runtime.KeepAlive(cg)
 }
 
 // These trivial functions are broken out so that, when CPU profiling, each
@@ -140,9 +149,9 @@ func makeNetSetAndPolUpdates(num int) []api.Update {
 		name := fmt.Sprintf("network-set-%d", i)
 		netset := &model.NetworkSet{
 			Nets: generateNetSetIPs(),
-			Labels: map[string]string{
+			Labels: uniquelabels.Make(map[string]string{
 				"network-set-name": name,
-			},
+			}),
 		}
 		updates = append(updates, api.Update{
 			KVPair: model.KVPair{
@@ -338,12 +347,12 @@ var markerLabels = []string{
 
 var labelSeed int
 
-func generateLabels() map[string]string {
+func generateLabels() uniquelabels.Map {
 	labelSeed++
 	labels := map[string]string{}
 	for _, n := range []int{10, 11, 20, 30, 40} {
 		labels[fmt.Sprintf("one-in-%d", n)] = fmt.Sprintf("value-%d", labelSeed%n)
 	}
 	labels[markerLabels[labelSeed%len(markerLabels)]] = "true"
-	return labels
+	return uniquelabels.Make(labels)
 }
