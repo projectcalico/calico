@@ -65,7 +65,7 @@ func flowToString(f *types.Flow) string {
 		startTime.Local(), f.Key.Reporter(), f.Key.Action(),
 		endpointTypeToString(f.Key.SourceType()), f.Key.SourceNamespace(), f.Key.SourceName(),
 		endpointTypeToString(f.Key.DestType()), f.Key.DestNamespace(), f.Key.DestName(),
-		f.Key.DestServiceName(), f.Key.DestServiceNamespace(),
+		f.Key.DestServiceNamespace(), f.Key.DestServiceName(),
 		f.Key.Proto(), f.Key.DestPort(), f.Key.DestServicePortName(), f.Key.DestServicePort(),
 		f.PacketsIn, f.BytesIn, f.PacketsOut, f.BytesOut,
 		f.NumConnectionsStarted, f.NumConnectionsCompleted, f.NumConnectionsLive,
