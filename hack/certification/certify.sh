@@ -58,6 +58,7 @@ declare -A calico_image_project=(
     ["dikastes"]="5e619e432f3c1acdd05f6240"
     ["goldmane"]="6807d5f727fc4018d2d4cc5c"
     ["whisker"]="6807d87d8db43667519d2dc0"
+    ["whisker-backend"]="68090ea39025c2c2944f2a24"
     ["envoy-gateway"]="6807d88c8e2dc72376ecf339"
     ["envoy-ratelimit"]="6808b8da9025c2c2944e3aa8"
     ["envoy-proxy"]="6808b8f5931aad6ba6b99fa6"
