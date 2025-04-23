@@ -26,7 +26,7 @@ import (
 	discovery "k8s.io/api/discovery/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/projectcalico/calico/lib/std/internedlabels"
+	"github.com/projectcalico/calico/lib/std/uniquelabels"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/encap"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	. "github.com/projectcalico/calico/libcalico-go/lib/backend/model"
@@ -92,7 +92,7 @@ var localWlEp1 = WorkloadEndpoint{
 		mustParseNet("fc00:fe11::1/128"),
 		mustParseNet("fc00:fe11::2/128"),
 	},
-	Labels: internedlabels.Make(map[string]string{
+	Labels: uniquelabels.Make(map[string]string{
 		"id": "loc-ep-1",
 		"a":  "a",
 		"b":  "b",
@@ -116,7 +116,7 @@ var localWlEp1WithLabelsButNoProfiles = WorkloadEndpoint{
 		mustParseNet("fc00:fe11::1/128"),
 		mustParseNet("fc00:fe11::2/128"),
 	},
-	Labels: internedlabels.Make(map[string]string{
+	Labels: uniquelabels.Make(map[string]string{
 		"id": "loc-ep-1",
 		"a":  "a",
 		"b":  "b",
@@ -141,7 +141,7 @@ var localWlEp1WithDupeNamedPorts = WorkloadEndpoint{
 		mustParseNet("fc00:fe11::1/128"),
 		mustParseNet("fc00:fe11::2/128"),
 	},
-	Labels: internedlabels.Make(map[string]string{
+	Labels: uniquelabels.Make(map[string]string{
 		"id": "loc-ep-1",
 		"a":  "a",
 		"b":  "b",
@@ -180,7 +180,7 @@ var localWlEp1DifferentIPs = WorkloadEndpoint{
 		mustParseNet("fc00:fe12::1/128"),
 		mustParseNet("fc00:fe12::2/128"),
 	},
-	Labels: internedlabels.Make(map[string]string{
+	Labels: uniquelabels.Make(map[string]string{
 		"id": "loc-ep-1",
 		"a":  "a",
 		"b":  "b",
@@ -206,7 +206,7 @@ var localWlEp2 = WorkloadEndpoint{
 		mustParseNet("fc00:fe11::2/128"),
 		mustParseNet("fc00:fe11::3/128"),
 	},
-	Labels: internedlabels.Make(map[string]string{
+	Labels: uniquelabels.Make(map[string]string{
 		"id": "loc-ep-2",
 		"a":  "a",
 		"b":  "b2",
@@ -229,7 +229,7 @@ var localWlEp2WithLabelsButNoProfiles = WorkloadEndpoint{
 		mustParseNet("fc00:fe11::2/128"),
 		mustParseNet("fc00:fe11::3/128"),
 	},
-	Labels: internedlabels.Make(map[string]string{
+	Labels: uniquelabels.Make(map[string]string{
 		"id": "loc-ep-2",
 		"a":  "a",
 		"b":  "b2",
@@ -260,7 +260,7 @@ var remoteWlEp1 = WorkloadEndpoint{
 	Mac:        mustParseMac("01:02:03:04:05:06"),
 	ProfileIDs: []string{"prof-1", "prof-2", "prof-missing"},
 	IPv4Nets:   []net.IPNet{mustParseNet("10.0.0.5/32")},
-	Labels: internedlabels.Make(map[string]string{
+	Labels: uniquelabels.Make(map[string]string{
 		"id": "rem-ep-1",
 	}),
 }
@@ -272,7 +272,7 @@ var remoteWlEp1DualStack = WorkloadEndpoint{
 	ProfileIDs: []string{"prof-1", "prof-2", "prof-missing"},
 	IPv4Nets:   []calinet.IPNet{mustParseNet("10.1.0.1/32"), mustParseNet("10.1.0.2/32")},
 	IPv6Nets:   []calinet.IPNet{mustParseNet("fe80:fe11::1/128"), mustParseNet("fe80:fe11::2/128")},
-	Labels: internedlabels.Make(map[string]string{
+	Labels: uniquelabels.Make(map[string]string{
 		"id": "rem-ep-1",
 		"x":  "x",
 		"y":  "y",
@@ -290,7 +290,7 @@ var hostEpWithName = HostEndpoint{
 		mustParseIP("fc00:fe11::1"),
 		mustParseIP("fc00:fe11::2"),
 	},
-	Labels: internedlabels.Make(map[string]string{
+	Labels: uniquelabels.Make(map[string]string{
 		"id": "loc-ep-1",
 		"a":  "a",
 		"b":  "b",
@@ -308,7 +308,7 @@ var hostEpWithNamedPorts = HostEndpoint{
 		mustParseIP("fc00:fe11::1"),
 		mustParseIP("fc00:fe11::2"),
 	},
-	Labels: internedlabels.Make(map[string]string{
+	Labels: uniquelabels.Make(map[string]string{
 		"id": "loc-ep-1",
 		"a":  "a",
 		"b":  "b",
@@ -336,7 +336,7 @@ var hostEp2NoName = HostEndpoint{
 		mustParseIP("fc00:fe11::2"),
 		mustParseIP("fc00:fe11::3"),
 	},
-	Labels: internedlabels.Make(map[string]string{
+	Labels: uniquelabels.Make(map[string]string{
 		"id": "loc-ep-2",
 		"a":  "a",
 		"b":  "b2",
@@ -697,7 +697,7 @@ var (
 			mustParseNet("feed:beef::/32"),
 			mustParseNet("feed:beef:0::/32"), // Non-canonical dupe.
 		},
-		Labels: internedlabels.Make(map[string]string{
+		Labels: uniquelabels.Make(map[string]string{
 			"a": "b",
 		}),
 	}
@@ -710,7 +710,7 @@ var netSet1WithBEqB = NetworkSet{
 		mustParseNet("12.1.0.0/24"),
 		mustParseNet("10.0.0.1/32"), // Overlaps with host endpoint.
 	},
-	Labels: internedlabels.Make(map[string]string{
+	Labels: uniquelabels.Make(map[string]string{
 		"foo": "bar",
 		"b":   "b",
 	}),
@@ -723,7 +723,7 @@ var (
 			mustParseNet("12.0.0.0/24"), // Overlaps with netset-1
 			mustParseNet("13.1.0.0/24"),
 		},
-		Labels: internedlabels.Make(map[string]string{
+		Labels: uniquelabels.Make(map[string]string{
 			"a": "b",
 		}),
 	}
@@ -737,7 +737,7 @@ var (
 			mustParseNet("12.1.0.0/16"),
 			mustParseNet("12.1.0.0/8"),
 		},
-		Labels: internedlabels.Make(map[string]string{
+		Labels: uniquelabels.Make(map[string]string{
 			"a": "b",
 		}),
 	}

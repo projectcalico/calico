@@ -24,7 +24,7 @@ import (
 	"github.com/projectcalico/calico/felix/collector/types/tuple"
 	"github.com/projectcalico/calico/felix/collector/utils"
 	"github.com/projectcalico/calico/felix/rules"
-	"github.com/projectcalico/calico/lib/std/internedlabels"
+	"github.com/projectcalico/calico/lib/std/uniquelabels"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	net2 "github.com/projectcalico/calico/libcalico-go/lib/net"
 )
@@ -41,7 +41,7 @@ var (
 	localHostEp1 = &model.HostEndpoint{
 		Name:              "eth1",
 		ExpectedIPv4Addrs: []net2.IP{utils.MustParseIP("10.0.0.1")},
-		Labels: internedlabels.Make(map[string]string{
+		Labels: uniquelabels.Make(map[string]string{
 			"id": "loc-ep-1",
 		}),
 	}
@@ -85,7 +85,7 @@ var (
 	remoteHostEp1 = &model.HostEndpoint{
 		Name:              "eth1",
 		ExpectedIPv4Addrs: []net2.IP{utils.MustParseIP("20.0.0.1")},
-		Labels: internedlabels.Make(map[string]string{
+		Labels: uniquelabels.Make(map[string]string{
 			"id": "rem-ep-1",
 		}),
 	}
@@ -443,7 +443,7 @@ var (
 					WorkloadID:     "kube-system/iperf-4235-5623461",
 					EndpointID:     "4352",
 				},
-				&model.WorkloadEndpoint{GenerateName: "iperf-4235-", Labels: internedlabels.Make(map[string]string{"test-app": "true"})},
+				&model.WorkloadEndpoint{GenerateName: "iperf-4235-", Labels: uniquelabels.Make(map[string]string{"test-app": "true"})},
 			),
 		},
 		DstEp: &calc.RemoteEndpointData{
@@ -454,7 +454,7 @@ var (
 					WorkloadID:     "default/nginx-412354-5123451",
 					EndpointID:     "4352",
 				},
-				&model.WorkloadEndpoint{GenerateName: "nginx-412354-", Labels: internedlabels.Make(map[string]string{"k8s-app": "true"})},
+				&model.WorkloadEndpoint{GenerateName: "nginx-412354-", Labels: uniquelabels.Make(map[string]string{"k8s-app": "true"})},
 			),
 		},
 		RuleIDs:      []*calc.RuleID{ingressRule1Allow},
@@ -476,7 +476,7 @@ var (
 					WorkloadID:     "kube-system/iperf-4235-5623461",
 					EndpointID:     "4352",
 				},
-				&model.WorkloadEndpoint{GenerateName: "iperf-4235-", Labels: internedlabels.Make(map[string]string{"test-app": "true"})},
+				&model.WorkloadEndpoint{GenerateName: "iperf-4235-", Labels: uniquelabels.Make(map[string]string{"test-app": "true"})},
 			),
 		},
 		DstEp: &calc.RemoteEndpointData{
@@ -487,7 +487,7 @@ var (
 					WorkloadID:     "default/nginx-412354-5123451",
 					EndpointID:     "4352",
 				},
-				&model.WorkloadEndpoint{GenerateName: "nginx-412354-", Labels: internedlabels.Make(map[string]string{"k8s-app": "true"})},
+				&model.WorkloadEndpoint{GenerateName: "nginx-412354-", Labels: uniquelabels.Make(map[string]string{"k8s-app": "true"})},
 			),
 		},
 		RuleIDs:      []*calc.RuleID{ingressRule1Allow},
@@ -505,7 +505,7 @@ var (
 					WorkloadID:     "kube-system/iperf-4235-5623461",
 					EndpointID:     "4352",
 				},
-				&model.WorkloadEndpoint{GenerateName: "iperf-4235-", Labels: internedlabels.Make(map[string]string{"test-app": "true"})},
+				&model.WorkloadEndpoint{GenerateName: "iperf-4235-", Labels: uniquelabels.Make(map[string]string{"test-app": "true"})},
 			),
 		},
 		DstEp: &calc.RemoteEndpointData{
@@ -516,7 +516,7 @@ var (
 					WorkloadID:     "default/nginx-412354-5123451",
 					EndpointID:     "4352",
 				},
-				&model.WorkloadEndpoint{GenerateName: "nginx-412354-", Labels: internedlabels.Make(map[string]string{"k8s-app": "true"})},
+				&model.WorkloadEndpoint{GenerateName: "nginx-412354-", Labels: uniquelabels.Make(map[string]string{"k8s-app": "true"})},
 			),
 		},
 		DstService: metric.ServiceInfo{
@@ -548,7 +548,7 @@ var (
 					WorkloadID:     "kube-system/iperf-4235-5623461",
 					EndpointID:     "4352",
 				},
-				&model.WorkloadEndpoint{GenerateName: "iperf-4235-", Labels: internedlabels.Make(map[string]string{"test-app": "true", "new-label": "true"})},
+				&model.WorkloadEndpoint{GenerateName: "iperf-4235-", Labels: uniquelabels.Make(map[string]string{"test-app": "true", "new-label": "true"})},
 			),
 		},
 		DstEp: &calc.RemoteEndpointData{
@@ -559,7 +559,7 @@ var (
 					WorkloadID:     "default/nginx-412354-5123451",
 					EndpointID:     "4352",
 				},
-				&model.WorkloadEndpoint{GenerateName: "nginx-412354-", Labels: internedlabels.Make(map[string]string{"k8s-app": "false"})},
+				&model.WorkloadEndpoint{GenerateName: "nginx-412354-", Labels: uniquelabels.Make(map[string]string{"k8s-app": "false"})},
 			),
 		},
 		RuleIDs:      []*calc.RuleID{ingressRule1Allow},
@@ -582,7 +582,7 @@ var (
 					WorkloadID:     "default/nginx-412354-5123451",
 					EndpointID:     "4352",
 				},
-				&model.WorkloadEndpoint{GenerateName: "nginx-412354-", Labels: internedlabels.Make(map[string]string{"k8s-app": "true"})},
+				&model.WorkloadEndpoint{GenerateName: "nginx-412354-", Labels: uniquelabels.Make(map[string]string{"k8s-app": "true"})},
 			),
 		},
 		RuleIDs:      []*calc.RuleID{ingressRule1Allow},
@@ -604,7 +604,7 @@ var (
 					WorkloadID:     "kube-system/iperf-4235-5623461",
 					EndpointID:     "4352",
 				},
-				&model.WorkloadEndpoint{GenerateName: "iperf-4235-", Labels: internedlabels.Make(map[string]string{"test-app": "true"})},
+				&model.WorkloadEndpoint{GenerateName: "iperf-4235-", Labels: uniquelabels.Make(map[string]string{"test-app": "true"})},
 			),
 		},
 		DstEp:        nil,
@@ -628,7 +628,7 @@ var (
 					WorkloadID:     "default/nginx-412354-5123451",
 					EndpointID:     "4352",
 				},
-				&model.WorkloadEndpoint{GenerateName: "nginx-412354-", Labels: internedlabels.Make(map[string]string{"k8s-app": "true"})},
+				&model.WorkloadEndpoint{GenerateName: "nginx-412354-", Labels: uniquelabels.Make(map[string]string{"k8s-app": "true"})},
 			),
 		},
 		RuleIDs:      []*calc.RuleID{ingressRule1Allow},
@@ -651,7 +651,7 @@ var (
 					WorkloadID:     "default/nginx-412354-5123451",
 					EndpointID:     "4352",
 				},
-				&model.WorkloadEndpoint{GenerateName: "nginx-412354-", Labels: internedlabels.Make(map[string]string{"k8s-app": "true"})},
+				&model.WorkloadEndpoint{GenerateName: "nginx-412354-", Labels: uniquelabels.Make(map[string]string{"k8s-app": "true"})},
 			),
 		},
 		RuleIDs:      []*calc.RuleID{ingressRule1Allow},
@@ -693,7 +693,7 @@ var (
 					WorkloadID:     "default/nginx-412354-5123451",
 					EndpointID:     "4352",
 				},
-				&model.WorkloadEndpoint{GenerateName: "nginx-412354-", Labels: internedlabels.Make(map[string]string{"k8s-app": "true"})},
+				&model.WorkloadEndpoint{GenerateName: "nginx-412354-", Labels: uniquelabels.Make(map[string]string{"k8s-app": "true"})},
 			),
 		},
 		RuleIDs:      []*calc.RuleID{ingressRule1Allow},
@@ -715,7 +715,7 @@ var (
 					WorkloadID:     "kube-system/iperf-4235-5623461",
 					EndpointID:     "4352",
 				},
-				&model.WorkloadEndpoint{GenerateName: "iperf-4235-", Labels: internedlabels.Make(map[string]string{"test-app": "true"})},
+				&model.WorkloadEndpoint{GenerateName: "iperf-4235-", Labels: uniquelabels.Make(map[string]string{"test-app": "true"})},
 			),
 		},
 		DstEp: &calc.RemoteEndpointData{
@@ -726,7 +726,7 @@ var (
 					WorkloadID:     "default/manually-created-pod",
 					EndpointID:     "4352",
 				},
-				&model.WorkloadEndpoint{GenerateName: "", Labels: internedlabels.Make(map[string]string{"k8s-app": "true"})},
+				&model.WorkloadEndpoint{GenerateName: "", Labels: uniquelabels.Make(map[string]string{"k8s-app": "true"})},
 			),
 		},
 		RuleIDs:      []*calc.RuleID{ingressRule1Allow},
@@ -750,7 +750,7 @@ var (
 					WorkloadID:     "kube-system/iperf-4235-5623461",
 					EndpointID:     "4352",
 				},
-				&model.WorkloadEndpoint{GenerateName: "iperf-4235-", Labels: internedlabels.Make(map[string]string{"test-app": "true"})},
+				&model.WorkloadEndpoint{GenerateName: "iperf-4235-", Labels: uniquelabels.Make(map[string]string{"test-app": "true"})},
 			),
 		},
 		DstEp: &calc.RemoteEndpointData{
@@ -761,7 +761,7 @@ var (
 					WorkloadID:     "default/nginx-412354-5123451",
 					EndpointID:     "4352",
 				},
-				&model.WorkloadEndpoint{GenerateName: "nginx-412354-", Labels: internedlabels.Make(map[string]string{"k8s-app": "true"})},
+				&model.WorkloadEndpoint{GenerateName: "nginx-412354-", Labels: uniquelabels.Make(map[string]string{"k8s-app": "true"})},
 			),
 		},
 		RuleIDs:      []*calc.RuleID{ingressRule1Allow},

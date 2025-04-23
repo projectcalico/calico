@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package internedlabels
+package uniquelabels
 
 import (
 	"bytes"
@@ -34,7 +34,7 @@ func TestInternedLabelsJSONRoundTrip(t *testing.T) {
 	}
 
 	if !bytes.Equal(j, j2) {
-		t.Errorf("Interned map should producce same JSON as normal map; got %s, want %s", j2, j)
+		t.Errorf("Interned map should produce same JSON as normal map; got %s, want %s", j2, j)
 	}
 
 	var out Map
@@ -43,6 +43,6 @@ func TestInternedLabelsJSONRoundTrip(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !in.Equals(out) {
-		t.Errorf("Intened map didn't round trip. Got %v, want %v", out, in)
+		t.Errorf("Interned map didn't round trip. Got %v, want %v", out, in)
 	}
 }

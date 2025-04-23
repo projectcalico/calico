@@ -30,8 +30,8 @@ import (
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/labelindex/labelnamevalueindex"
 	"github.com/projectcalico/calico/felix/labelindex/labelrestrictionindex"
-	"github.com/projectcalico/calico/lib/std/internedlabels"
-	"github.com/projectcalico/calico/lib/std/unique"
+	"github.com/projectcalico/calico/lib/std/uniquelabels"
+	"github.com/projectcalico/calico/lib/std/uniquestr"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/selector"
@@ -75,7 +75,7 @@ func init() {
 
 // endpointData holds the data that we need to know about a particular endpoint.
 type endpointData struct {
-	labels  internedlabels.Map
+	labels  uniquelabels.Map
 	nets    []ip.CIDR
 	ports   []model.EndpointPort
 	parents []*npParentData
@@ -189,7 +189,7 @@ type ipSetData struct {
 // GetHandle implements the Labels interface for endpointData.  Combines the endpoint's own labels with
 // those of its parents on the fly.  This reduces the number of allocations we need to do, and
 // it's fast in the mainline case (where there are 0-1 parents).
-func (d *endpointData) GetHandle(labelName unique.String) (handle unique.String, present bool) {
+func (d *endpointData) GetHandle(labelName uniquestr.Handle) (handle uniquestr.Handle, present bool) {
 	if handle, present = d.labels.GetHandle(labelName); present {
 		return
 	}
@@ -201,13 +201,13 @@ func (d *endpointData) GetHandle(labelName unique.String) (handle unique.String,
 	return
 }
 
-func (d *endpointData) OwnLabelHandles() iter.Seq2[unique.String, unique.String] {
+func (d *endpointData) OwnLabelHandles() iter.Seq2[uniquestr.Handle, uniquestr.Handle] {
 	return d.labels.AllHandles()
 }
 
-func (d *endpointData) AllOwnAndParentLabelHandles() iter.Seq2[unique.String, unique.String] {
-	return func(yield func(k, v unique.String) bool) {
-		seenKeys := set.New[unique.String]()
+func (d *endpointData) AllOwnAndParentLabelHandles() iter.Seq2[uniquestr.Handle, uniquestr.Handle] {
+	return func(yield func(k, v uniquestr.Handle) bool) {
+		seenKeys := set.New[uniquestr.Handle]()
 		defer seenKeys.Clear()
 
 		for k, v := range d.labels.AllHandles() {
@@ -271,11 +271,11 @@ func (d *endpointData) Equals(other *endpointData) bool {
 // if we have partial information.
 type npParentData struct {
 	id          string
-	labels      internedlabels.Map
+	labels      uniquelabels.Map
 	endpointIDs set.Set[any]
 }
 
-func (d *npParentData) OwnLabelHandles() iter.Seq2[unique.String, unique.String] {
+func (d *npParentData) OwnLabelHandles() iter.Seq2[uniquestr.Handle, uniquestr.Handle] {
 	return d.labels.AllHandles()
 }
 
@@ -599,7 +599,7 @@ func (idx *SelectorAndNamedPortIndex) DeleteIPSet(setID string) {
 
 func (idx *SelectorAndNamedPortIndex) UpdateEndpointOrSet(
 	id any,
-	labels internedlabels.Map,
+	labels uniquelabels.Map,
 	nets []ip.CIDR,
 	ports []model.EndpointPort,
 	parentIDs []string,
@@ -822,7 +822,7 @@ func (idx *SelectorAndNamedPortIndex) DeleteEndpoint(id any) {
 
 func (idx *SelectorAndNamedPortIndex) UpdateParentLabels(parentID string, rawLabels map[string]string) {
 	parentData := idx.getOrCreateParent(parentID)
-	labels := internedlabels.Make(rawLabels) // FIXME Should we move this upstream?
+	labels := uniquelabels.Make(rawLabels) // FIXME Should we move this upstream?
 	if parentData.labels.Equals(labels) {
 		log.WithField("parentID", parentID).Debug("Skipping no-op update to parent labels")
 		return
