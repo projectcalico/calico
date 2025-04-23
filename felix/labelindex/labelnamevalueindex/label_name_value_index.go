@@ -20,7 +20,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/lib/std/unique"
+	"github.com/projectcalico/calico/lib/std/uniquestr"
 	"github.com/projectcalico/calico/libcalico-go/lib/selector/parser"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
@@ -39,23 +39,23 @@ import (
 type LabelNameValueIndex[ItemID comparable, Item Labeled] struct {
 	nameOfTrackedItems    string
 	allItems              map[ItemID]Item
-	labelNameToValueToIDs map[unique.String]values[ItemID]
+	labelNameToValueToIDs map[uniquestr.Handle]values[ItemID]
 }
 
 type Labeled interface {
-	OwnLabelHandles() iter.Seq2[unique.String, unique.String]
+	OwnLabelHandles() iter.Seq2[uniquestr.Handle, uniquestr.Handle]
 }
 
 func New[ItemID comparable, Item Labeled](nameOfTrackedItems string) *LabelNameValueIndex[ItemID, Item] {
 	return &LabelNameValueIndex[ItemID, Item]{
 		nameOfTrackedItems:    nameOfTrackedItems,
 		allItems:              map[ItemID]Item{},
-		labelNameToValueToIDs: map[unique.String]values[ItemID]{},
+		labelNameToValueToIDs: map[uniquestr.Handle]values[ItemID]{},
 	}
 }
 
 type values[ItemID comparable] struct {
-	m     map[unique.String]set.Set[ItemID]
+	m     map[uniquestr.Handle]set.Set[ItemID]
 	count int
 }
 
@@ -77,7 +77,7 @@ func (idx *LabelNameValueIndex[ItemID, Item]) Add(id ItemID, item Item) {
 		vals, ok := idx.labelNameToValueToIDs[k]
 		if !ok {
 			vals = values[ItemID]{
-				m: map[unique.String]set.Set[ItemID]{},
+				m: map[uniquestr.Handle]set.Set[ItemID]{},
 			}
 			idx.labelNameToValueToIDs[k] = vals
 		}
@@ -118,7 +118,7 @@ func (idx *LabelNameValueIndex[ItemID, Item]) Remove(id ItemID) {
 // label name and selector LabelRestriction (which should be the restriction
 // for that label).  If the LabelRestriction is not "useful", returns
 // FullScanStrategy().
-func (idx *LabelNameValueIndex[ItemID, Item]) StrategyFor(labelName unique.String, r parser.LabelRestriction) ScanStrategy[ItemID] {
+func (idx *LabelNameValueIndex[ItemID, Item]) StrategyFor(labelName uniquestr.Handle, r parser.LabelRestriction) ScanStrategy[ItemID] {
 	if !r.MustBePresent {
 		// Not much we can do if the selector doesn't match on this label.
 		return FullScanStrategy[ItemID, Item]{allItems: idx.allItems}
@@ -139,7 +139,7 @@ func (idx *LabelNameValueIndex[ItemID, Item]) StrategyFor(labelName unique.Strin
 	// If we get here, then the selector does match on this label, and it cares
 	// about specific values. Whittle down the list of values to the ones that
 	// match objects that we're tracking.
-	var filteredMustHaves []unique.String
+	var filteredMustHaves []uniquestr.Handle
 	var idSets []set.Set[ItemID]
 	for _, v := range r.MustHaveOneOfValues {
 		if idsSet := idx.labelNameToValueToIDs[labelName].m[v]; idsSet != nil {
@@ -152,7 +152,7 @@ func (idx *LabelNameValueIndex[ItemID, Item]) StrategyFor(labelName unique.Strin
 		// We filtered all values out!  That means that the selector cannot
 		// match anything.  If it could match something, we'd have found it
 		// in the index.
-		logrus.Debugf("No %s with %s=%v", idx.nameOfTrackedItems, labelName.Value(), unique.SliceStringer(r.MustHaveOneOfValues))
+		logrus.Debugf("No %s with %s=%v", idx.nameOfTrackedItems, labelName.Value(), uniquestr.HandleSliceStringer(r.MustHaveOneOfValues))
 		return NoMatchStrategy[ItemID]{}
 	}
 
@@ -235,8 +235,8 @@ func (n NoMatchStrategy[ItemID]) Name() string {
 // a specific value for a certain label.  It is the narrowest, most optimized
 // strategy.
 type LabelNameSingleValueStrategy[ItemID comparable] struct {
-	label unique.String
-	value unique.String
+	label uniquestr.Handle
+	value uniquestr.Handle
 	idSet set.Set[ItemID]
 }
 
@@ -265,13 +265,13 @@ func (s LabelNameSingleValueStrategy[ItemID]) Name() string {
 // LabelNameMultiValueStrategy is a ScanStrategy that scans over items that have
 // specific, values for a certain label.
 type LabelNameMultiValueStrategy[ItemID comparable] struct {
-	label  unique.String
-	values []unique.String
+	label  uniquestr.Handle
+	values []uniquestr.Handle
 	idSets []set.Set[ItemID]
 }
 
 func (s LabelNameMultiValueStrategy[ItemID]) String() string {
-	return fmt.Sprintf("scan multi label %s=%v", s.label.Value(), unique.SliceStringer(s.values))
+	return fmt.Sprintf("scan multi label %s=%v", s.label.Value(), uniquestr.HandleSliceStringer(s.values))
 }
 
 func (s LabelNameMultiValueStrategy[ItemID]) EstimatedItemsToScan() int {
@@ -296,7 +296,7 @@ func (s LabelNameMultiValueStrategy[ItemID]) Name() string {
 // particular label, no matter the value of that label.  It is used for
 // selectors such as "has(labelName)".
 type LabelNameStrategy[ItemID comparable] struct {
-	label  unique.String
+	label  uniquestr.Handle
 	values values[ItemID]
 }
 

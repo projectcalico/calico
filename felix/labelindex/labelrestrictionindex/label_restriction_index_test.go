@@ -22,7 +22,7 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/lib/std/unique"
+	"github.com/projectcalico/calico/lib/std/uniquestr"
 	"github.com/projectcalico/calico/libcalico-go/lib/selector"
 	"github.com/projectcalico/calico/libcalico-go/lib/selector/parser"
 )
@@ -142,10 +142,10 @@ func TestLabelRestrictionIndex(t *testing.T) {
 
 type labeledAdapter map[string]string
 
-func (l labeledAdapter) AllOwnAndParentLabelHandles() iter.Seq2[unique.String, unique.String] {
-	return func(yield func(unique.String, unique.String) bool) {
+func (l labeledAdapter) AllOwnAndParentLabelHandles() iter.Seq2[uniquestr.Handle, uniquestr.Handle] {
+	return func(yield func(uniquestr.Handle, uniquestr.Handle) bool) {
 		for k, v := range l {
-			if !yield(unique.Make(k), unique.Make(v)) {
+			if !yield(uniquestr.Make(k), uniquestr.Make(v)) {
 				return
 			}
 		}
@@ -210,9 +210,9 @@ func TestFindMostRestrictedLabel(t *testing.T) {
 	})).To(Equal("a"),
 		"findMostRestrictedLabel should prefer impossible selector (present and absent)")
 
-	var manyVals []unique.String
+	var manyVals []uniquestr.Handle
 	for i := 0; i < 15000; i++ {
-		manyVals = append(manyVals, unique.Make(fmt.Sprint(i)))
+		manyVals = append(manyVals, uniquestr.Make(fmt.Sprint(i)))
 	}
 	Expect(mostRestricted(map[string]parser.LabelRestriction{
 		"a": {MustBePresent: true, MustHaveOneOfValues: manyVals},
@@ -235,11 +235,11 @@ func TestFindMostRestrictedLabel(t *testing.T) {
 }
 
 func mostRestricted(m map[string]parser.LabelRestriction) string {
-	var lrs map[unique.String]parser.LabelRestriction
+	var lrs map[uniquestr.Handle]parser.LabelRestriction
 	if m != nil {
-		lrs = map[unique.String]parser.LabelRestriction{}
+		lrs = map[uniquestr.Handle]parser.LabelRestriction{}
 		for k, v := range m {
-			lrs[unique.Make(k)] = v
+			lrs[uniquestr.Make(k)] = v
 		}
 	}
 	handle, found := findMostRestrictedLabel(lrs)
@@ -249,13 +249,13 @@ func mostRestricted(m map[string]parser.LabelRestriction) string {
 	return ""
 }
 
-func stringSliceToHandle(s []string) (out []unique.String) {
+func stringSliceToHandle(s []string) (out []uniquestr.Handle) {
 	if s == nil {
 		return nil
 	}
-	out = make([]unique.String, len(s))
+	out = make([]uniquestr.Handle, len(s))
 	for _, s := range s {
-		out = append(out, unique.Make(s))
+		out = append(out, uniquestr.Make(s))
 	}
 	return
 }

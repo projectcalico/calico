@@ -24,7 +24,7 @@ import (
 	"github.com/projectcalico/calico/felix/config"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/types"
-	"github.com/projectcalico/calico/lib/std/internedlabels"
+	"github.com/projectcalico/calico/lib/std/uniquelabels"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
 )
@@ -211,7 +211,7 @@ var _ = DescribeTable("ModelHostEndpointToProto",
 			Name:              "eth0",
 			ExpectedIPv4Addrs: []net.IP{mustParseIP("10.28.0.13"), mustParseIP("10.28.0.14")},
 			ExpectedIPv6Addrs: []net.IP{mustParseIP("dead::beef"), mustParseIP("dead::bee5")},
-			Labels: internedlabels.Make(map[string]string{
+			Labels: uniquelabels.Make(map[string]string{
 				"a": "b",
 			}),
 			ProfileIDs: []string{"prof1"},
@@ -234,7 +234,7 @@ var _ = DescribeTable("ModelHostEndpointToProto",
 			Name:              "eth0",
 			ExpectedIPv4Addrs: []net.IP{mustParseIP("10.28.0.13"), mustParseIP("10.28.0.14")},
 			ExpectedIPv6Addrs: []net.IP{mustParseIP("dead::beef"), mustParseIP("dead::bee5")},
-			Labels: internedlabels.Make(map[string]string{
+			Labels: uniquelabels.Make(map[string]string{
 				"a": "b",
 			}),
 			ProfileIDs: []string{"prof1"},

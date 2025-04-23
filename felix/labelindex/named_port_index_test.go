@@ -31,7 +31,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/ip"
 	. "github.com/projectcalico/calico/felix/labelindex"
-	"github.com/projectcalico/calico/lib/std/internedlabels"
+	"github.com/projectcalico/calico/lib/std/uniquelabels"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
@@ -947,7 +947,7 @@ func TestNamedPortIndex(t *testing.T) {
 				for _, s := range states {
 					names = append(names, s.Name)
 				}
-				t.Run(fmt.Sprintf("%s", strings.Join(names, " THEN ")),
+				t.Run(strings.Join(names, " THEN "),
 					func(t *testing.T) {
 						logutils.ConfigureLoggingForTestingT(t)
 						RegisterTestingT(t)
@@ -1078,7 +1078,7 @@ func applyStateTransition(idx *SelectorAndNamedPortIndex, rec *testRecorder, s1,
 		ep := ep
 		ops = append(ops, func() {
 			log.Infof("TEST HARNESS: Updating endpoint/set %v", k)
-			idx.UpdateEndpointOrSet(k, internedlabels.Make(ep.Labels), ep.CIDRs(), ep.Ports, ep.Parents)
+			idx.UpdateEndpointOrSet(k, uniquelabels.Make(ep.Labels), ep.CIDRs(), ep.Ports, ep.Parents)
 		})
 	}
 	for k := range s1.Endpoints {
@@ -1341,7 +1341,7 @@ var _ = Describe("SelectorAndNamedPortIndex", func() {
 								Mask: net.IPMask{255, 255, 0, 0},
 							}},
 						},
-						Labels: internedlabels.Make(map[string]string{"villain": "ghost"}),
+						Labels: uniquelabels.Make(map[string]string{"villain": "ghost"}),
 					},
 				},
 			})
@@ -1355,7 +1355,7 @@ var _ = Describe("SelectorAndNamedPortIndex", func() {
 								Mask: net.IPMask{255, 255, 0, 0},
 							}},
 						},
-						Labels: internedlabels.Make(map[string]string{"villain": "ghost"}),
+						Labels: uniquelabels.Make(map[string]string{"villain": "ghost"}),
 					},
 				},
 			})
@@ -1390,7 +1390,7 @@ var _ = Describe("SelectorAndNamedPortIndex", func() {
 								Mask: net.IPMask{255, 255, 0, 0},
 							}},
 						},
-						Labels:     internedlabels.Make(map[string]string{"villain": "ghost"}),
+						Labels:     uniquelabels.Make(map[string]string{"villain": "ghost"}),
 						ProfileIDs: []string{"doo"},
 					},
 				},
@@ -1409,7 +1409,7 @@ var _ = Describe("SelectorAndNamedPortIndex", func() {
 				Name:              "eth0",
 				ExpectedIPv4Addrs: []calinet.IP{calinet.MustParseIP("1.2.3.4")},
 				ExpectedIPv6Addrs: []calinet.IP{calinet.MustParseIP("aa:bb::cc:dd")},
-				Labels: internedlabels.Make(map[string]string{
+				Labels: uniquelabels.Make(map[string]string{
 					"label2": "",
 				}),
 				ProfileIDs: []string{"profile1"},
@@ -1430,7 +1430,7 @@ var _ = Describe("SelectorAndNamedPortIndex", func() {
 
 			// Update the hostendpoint labels so they are not matched by the
 			// selector.
-			hep.Labels = internedlabels.Make(map[string]string{
+			hep.Labels = uniquelabels.Make(map[string]string{
 				"label1": "value1",
 			})
 			uut.OnUpdate(api.Update{KVPair: hepKVP})
