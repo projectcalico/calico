@@ -49,8 +49,8 @@ import (
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/lib/std/internedlabels"
-	"github.com/projectcalico/calico/lib/std/unique"
+	"github.com/projectcalico/calico/lib/std/uniquelabels"
+	"github.com/projectcalico/calico/lib/std/uniquestr"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/selector"
@@ -64,13 +64,13 @@ import (
 // In particular, it holds it current explicitly-assigned labels and a pointer to the parent data
 // for each of its parents.
 type itemData struct {
-	labels  internedlabels.Map
+	labels  uniquelabels.Map
 	parents []*parentData
 }
 
 // GetHandle implements the Labels interface for itemData.  Combines the item's own labels with those
 // of its parents on the fly.
-func (itemData *itemData) GetHandle(labelName unique.String) (handle unique.String, present bool) {
+func (itemData *itemData) GetHandle(labelName uniquestr.Handle) (handle uniquestr.Handle, present bool) {
 	if handle, present = itemData.labels.GetHandle(labelName); present {
 		return
 	}
@@ -87,7 +87,7 @@ func (itemData *itemData) GetHandle(labelName unique.String) (handle unique.Stri
 // have partial information.
 type parentData struct {
 	id      string
-	labels  internedlabels.Map
+	labels  uniquelabels.Map
 	itemIDs set.Set[any]
 }
 
@@ -202,7 +202,7 @@ func (idx *InheritIndex) DeleteSelector(id interface{}) {
 	delete(idx.selectorsById, id)
 }
 
-func (idx *InheritIndex) UpdateLabels(id interface{}, labels internedlabels.Map, parentIDs []string) {
+func (idx *InheritIndex) UpdateLabels(id interface{}, labels uniquelabels.Map, parentIDs []string) {
 	log.Debug("Inherit index updating labels for ", id)
 	log.Debug("Num dirty items ", idx.dirtyItemIDs.Len(), " items")
 
@@ -307,7 +307,7 @@ func (idx *InheritIndex) onItemParentsUpdate(id interface{}, oldParents, newPare
 
 func (idx *InheritIndex) UpdateParentLabels(parentID string, labels map[string]string) {
 	parent := idx.getOrCreateParent(parentID)
-	parent.labels = internedlabels.Make(labels) // FIXME intern further upstream?
+	parent.labels = uniquelabels.Make(labels) // FIXME intern further upstream?
 	idx.flushChildren(parentID)
 }
 
@@ -316,7 +316,7 @@ func (idx *InheritIndex) DeleteParentLabels(parentID string) {
 	if parent == nil {
 		return
 	}
-	parent.labels = internedlabels.Map{}
+	parent.labels = uniquelabels.Map{}
 	idx.discardParentIfEmpty(parentID)
 	idx.flushChildren(parentID)
 }
