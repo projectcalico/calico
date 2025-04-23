@@ -126,7 +126,7 @@ func (p RESTStorageProvider) NewV3Storage(
 		},
 		p.StorageType,
 		authorizer,
-		[]string{"csnp", "calicostagednetworkpolicy", "calicostagednetworkpolicies"},
+		[]string{"snp", "csnp", "calicostagednetworkpolicy", "calicostagednetworkpolicies"},
 	)
 
 	networksetRESTOptions, err := restOptionsGetter.GetRESTOptions(calico.Resource("networksets"), nil)
@@ -214,7 +214,7 @@ func (p RESTStorageProvider) NewV3Storage(
 		},
 		p.StorageType,
 		authorizer,
-		[]string{"sgnp", "csgnp", "calicostagedglobalnetworkpolicies", "calicostagedglobalnetworkpolicy"},
+		[]string{"sgnp"},
 	)
 
 	gNetworkSetRESTOptions, err := restOptionsGetter.GetRESTOptions(calico.Resource("globalnetworksets"), nil)
