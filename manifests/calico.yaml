@@ -1612,6 +1612,17 @@ spec:
                     is leaving the network. By default the address used is an address on the interface the traffic is leaving on
                     (i.e. it uses the iptables MASQUERADE target).
                   type: string
+                natOutgoingExclusions:
+                  description: |-
+                    When a IP pool setting `natOutgoing` is true, packets sent from Calico networked containers in this IP pool to destinations will be masqueraded.
+                    Configure which type of destinations is excluded from being masqueraded.
+                    - IPPoolsOnly: destinations outside of this IP pool will be masqueraded.
+                    - IPPoolsAndHostIPs: destinations outside of this IP pool and all hosts will be masqueraded.
+                    [Default: IPPoolsOnly]
+                  enum:
+                    - IPPoolsOnly
+                    - IPPoolsAndHostIPs
+                  type: string
                 natPortRange:
                   anyOf:
                     - type: integer
