@@ -10,7 +10,7 @@ cat > /etc/config/config.json <<EOF
     "cluster_type": "${CLUSTER_TYPE}",
     "calico_version": "${CALICO_VERSION}",
     "notifications": "${NOTIFICATIONS:-"Enabled"}",
-    "calico_cloud_url": "${CALICO_CLOUD_URL:-"https://calicocloud.io"}"
+    "calico_cloud_url": "${CALICO_CLOUD_URL:-"https://www.calicocloud.io/api"}"
   }
 }
 EOF
