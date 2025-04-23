@@ -20,7 +20,7 @@ import (
 
 	. "github.com/onsi/gomega"
 
-	"github.com/projectcalico/calico/lib/std/unique"
+	"github.com/projectcalico/calico/lib/std/uniquestr"
 	"github.com/projectcalico/calico/libcalico-go/lib/selector/parser"
 )
 
@@ -80,7 +80,7 @@ func TestLabelValueIndexStrategies(t *testing.T) {
 	idx.Add("c3", labels{"a": "a3", "b": "b3"})
 
 	t.Log("Full-scan strategy...")
-	aHandle := unique.Make("a")
+	aHandle := uniquestr.Make("a")
 	strat := idx.StrategyFor(aHandle, parser.LabelRestriction{})
 	Expect(strat).To(BeAssignableToTypeOf(FullScanStrategy[string, labels]{}))
 	Expect(scan(strat)).To(ConsistOf("a1", "a2", "a3", "b1", "b2", "b3", "c1", "c2", "c3"))
@@ -95,7 +95,7 @@ func TestLabelValueIndexStrategies(t *testing.T) {
 	Expect(strat.Name()).To(Equal("label-name"))
 
 	t.Log("Label name with no matches...")
-	strat = idx.StrategyFor(unique.Make("nomatch"), parser.LabelRestriction{MustBePresent: true})
+	strat = idx.StrategyFor(uniquestr.Make("nomatch"), parser.LabelRestriction{MustBePresent: true})
 	Expect(strat).To(BeAssignableToTypeOf(NoMatchStrategy[string]{}))
 	Expect(scan(strat)).To(BeEmpty())
 	Expect(strat.EstimatedItemsToScan()).To(Equal(0))
@@ -142,10 +142,10 @@ func TestLabelValueIndexStrategies(t *testing.T) {
 	Expect(strat.Name()).To(Equal("no-match"))
 }
 
-func handleSlice(ss ...string) []unique.String {
-	var hs = make([]unique.String, len(ss))
+func handleSlice(ss ...string) []uniquestr.Handle {
+	var hs = make([]uniquestr.Handle, len(ss))
 	for i, s := range ss {
-		hs[i] = unique.Make(s)
+		hs[i] = uniquestr.Make(s)
 	}
 	return hs
 }
@@ -171,10 +171,10 @@ func scan(s ScanStrategy[string]) []string {
 
 type labels map[string]string
 
-func (l labels) OwnLabelHandles() iter.Seq2[unique.String, unique.String] {
-	return func(yield func(unique.String, unique.String) bool) {
+func (l labels) OwnLabelHandles() iter.Seq2[uniquestr.Handle, uniquestr.Handle] {
+	return func(yield func(uniquestr.Handle, uniquestr.Handle) bool) {
 		for k, v := range l {
-			if !yield(unique.Make(k), unique.Make(v)) {
+			if !yield(uniquestr.Make(k), uniquestr.Make(v)) {
 				return
 			}
 		}
