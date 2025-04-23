@@ -3,6 +3,7 @@
         "cluster_id": "",
         "cluster_type": "",
         "calico_version": "",
-        "notifications": "Enabled"
+        "notifications": "Enabled",
+        "calico_cloud_url": "https://www.dev.calicocloud.io/api"
     }
 }
