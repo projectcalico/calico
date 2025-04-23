@@ -58,8 +58,8 @@ func NewNodeLabelController(client client.Interface, nodeInformer cache.SharedIn
 		client:          client,
 		nodeInformer:    nodeInformer,
 		nodeLister:      v1lister.NewNodeLister(nodeInformer.GetIndexer()),
-		syncerUpdates:   make(chan interface{}, batchUpdateSize),
-		k8sNodeUpdate:   make(chan *v1.Node, batchUpdateSize),
+		syncerUpdates:   make(chan interface{}, utils.BatchUpdateSize),
+		k8sNodeUpdate:   make(chan *v1.Node, utils.BatchUpdateSize),
 		syncChan:        make(chan interface{}, 1),
 	}
 
@@ -206,7 +206,7 @@ func (c *nodeLabelController) acceptScheduledRequests(stopCh <-chan struct{}) {
 		case <-c.syncChan:
 			c.syncAllNodesLabels()
 		case node := <-c.k8sNodeUpdate:
-			c.syncNodeLabels(node)
+			utils.ProcessBatch(c.k8sNodeUpdate, node, c.syncNodeLabels)
 		case <-stopCh:
 			return
 		}
