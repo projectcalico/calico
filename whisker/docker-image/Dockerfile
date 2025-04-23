@@ -60,7 +60,19 @@ COPY docker-image/nginx.conf /etc/nginx/nginx.conf
 
 COPY dist /usr/share/nginx/html/
 
+COPY LICENSE /licenses/LICENSE
+
 FROM ${CALICO_BASE}
+
+ARG GIT_VERSION
+
+LABEL org.opencontainers.image.description="Whisker provides a UI to view flows."
+LABEL org.opencontainers.image.authors="maintainers@tigera.io"
+LABEL org.opencontainers.image.source="https://github.com/projectcalico/calico"
+LABEL org.opencontainers.image.title="Whisker"
+LABEL org.opencontainers.image.vendor="Project Calico"
+LABEL org.opencontainers.image.version="${GIT_VERSION}"
+LABEL org.opencontainers.image.licenses="Apache-2.0"
 
 COPY --from=source / /
 
