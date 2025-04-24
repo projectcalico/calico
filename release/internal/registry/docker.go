@@ -35,11 +35,7 @@ func (d *Docker) Token(img ImageRef) (string, error) {
 		err   error
 		scope = fmt.Sprintf("repository:%s:pull", img.Repository())
 	)
-	if img.RequiresAuth() {
-		token, err = getBearerTokenWithDefaultAuth(d, scope)
-	} else {
-		token, err = getBearerToken(d, scope)
-	}
+	token, err = getBearerToken(d, scope)
 	return token, err
 }
 
