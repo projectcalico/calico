@@ -2284,10 +2284,6 @@ var _ = table.DescribeTable("PolicyGroup chains",
 			Selector:    "all()",
 		},
 		[]generictables.Rule{
-			/*{
-				Match:  Match(),
-				Action: JumpAction{Target: "cali-pi-default/a"},
-			},*/
 			jumpToPolicyGroup("cali-pi-default/a", 0),
 		},
 	),
@@ -2299,15 +2295,7 @@ var _ = table.DescribeTable("PolicyGroup chains",
 			Selector:    "all()",
 		},
 		[]generictables.Rule{
-			/*{
-				Match:  Match(),
-				Action: JumpAction{Target: "cali-pi-default/a"},
-			},*/
 			jumpToPolicyGroup("cali-pi-default/a", 0),
-			/*{
-				Match:  Match().MarkClear(0x18),
-				Action: JumpAction{Target: "cali-pi-default/b"},
-			},*/
 			jumpToPolicyGroup("cali-pi-default/b", 0x18),
 		},
 	),
@@ -2319,20 +2307,8 @@ var _ = table.DescribeTable("PolicyGroup chains",
 			Selector:    "all()",
 		},
 		[]generictables.Rule{
-			/*{
-				Match:  Match(),
-				Action: JumpAction{Target: "cali-pi-default/a"},
-			},*/
 			jumpToPolicyGroup("cali-pi-default/a", 0),
-			/*{
-				Match:  Match().MarkClear(0x18),
-				Action: JumpAction{Target: "cali-pi-default/b"},
-			},*/
 			jumpToPolicyGroup("cali-pi-default/b", 0x18),
-			/*{
-				Match:  Match().MarkClear(0x18),
-				Action: JumpAction{Target: "cali-pi-default/c"},
-			},*/
 			jumpToPolicyGroup("cali-pi-default/c", 0x18),
 		},
 	),
@@ -2344,25 +2320,9 @@ var _ = table.DescribeTable("PolicyGroup chains",
 			Selector:    "all()",
 		},
 		[]generictables.Rule{
-			/*{
-				Match:  Match(),
-				Action: JumpAction{Target: "cali-pi-default/a"},
-			},*/
 			jumpToPolicyGroup("cali-pi-default/a", 0),
-			/*{
-				Match:  Match().MarkClear(0x18),
-				Action: JumpAction{Target: "cali-pi-default/b"},
-			},*/
 			jumpToPolicyGroup("cali-pi-default/b", 0x18),
-			/*{
-				Match:  Match().MarkClear(0x18),
-				Action: JumpAction{Target: "cali-pi-default/c"},
-			},*/
 			jumpToPolicyGroup("cali-pi-default/c", 0x18),
-			/*{
-				Match:  Match().MarkClear(0x18),
-				Action: JumpAction{Target: "cali-pi-default/d"},
-			},*/
 			jumpToPolicyGroup("cali-pi-default/d", 0x18),
 		},
 	),
@@ -2374,30 +2334,10 @@ var _ = table.DescribeTable("PolicyGroup chains",
 			Selector:    "all()",
 		},
 		[]generictables.Rule{
-			/*{
-				Match:  Match(),
-				Action: JumpAction{Target: "cali-pi-default/a"},
-			},*/
 			jumpToPolicyGroup("cali-pi-default/a", 0),
-			/*{
-				Match:  Match().MarkClear(0x18),
-				Action: JumpAction{Target: "cali-pi-default/b"},
-			},*/
 			jumpToPolicyGroup("cali-pi-default/b", 0x18),
-			/*{
-				Match:  Match().MarkClear(0x18),
-				Action: JumpAction{Target: "cali-pi-default/c"},
-			},*/
 			jumpToPolicyGroup("cali-pi-default/c", 0x18),
-			/*{
-				Match:  Match().MarkClear(0x18),
-				Action: JumpAction{Target: "cali-pi-default/d"},
-			},*/
 			jumpToPolicyGroup("cali-pi-default/d", 0x18),
-			/*{
-				Match:  Match().MarkClear(0x18),
-				Action: JumpAction{Target: "cali-pi-default/e"},
-			},*/
 			jumpToPolicyGroup("cali-pi-default/e", 0x18),
 		},
 	),
@@ -2409,30 +2349,10 @@ var _ = table.DescribeTable("PolicyGroup chains",
 			Selector:    "all()",
 		},
 		[]generictables.Rule{
-			/*{
-				Match:  Match(),
-				Action: JumpAction{Target: "cali-pi-default/a"},
-			},*/
 			jumpToPolicyGroup("cali-pi-default/a", 0),
-			/*{
-				Match:  Match().MarkClear(0x18),
-				Action: JumpAction{Target: "cali-pi-default/b"},
-			},*/
 			jumpToPolicyGroup("cali-pi-default/b", 0x18),
-			/*{
-				Match:  Match().MarkClear(0x18),
-				Action: JumpAction{Target: "cali-pi-default/c"},
-			},*/
 			jumpToPolicyGroup("cali-pi-default/c", 0x18),
-			/*{
-				Match:  Match().MarkClear(0x18),
-				Action: JumpAction{Target: "cali-pi-default/d"},
-			},*/
 			jumpToPolicyGroup("cali-pi-default/d", 0x18),
-			/*{
-				Match:  Match().MarkClear(0x18),
-				Action: JumpAction{Target: "cali-pi-default/e"},
-			},*/
 			jumpToPolicyGroup("cali-pi-default/e", 0x18),
 			{
 				// Only get a return action every 5 rules and only if it's
@@ -2441,10 +2361,6 @@ var _ = table.DescribeTable("PolicyGroup chains",
 				Action:  ReturnAction{},
 				Comment: []string{"Return on verdict"},
 			},
-			/*{
-				Match:  Match(),
-				Action: JumpAction{Target: "cali-pi-default/f"},
-			},*/
 			jumpToPolicyGroup("cali-pi-default/f", 0),
 		},
 	),
@@ -2456,45 +2372,17 @@ var _ = table.DescribeTable("PolicyGroup chains",
 			Selector:    "all()",
 		},
 		[]generictables.Rule{
-			/*{
-				Match:  Match(),
-				Action: JumpAction{Target: "cali-po-default/a"},
-			},*/
 			jumpToPolicyGroup("cali-po-default/a", 0),
-			/*{
-				Match:  Match().MarkClear(0x18),
-				Action: JumpAction{Target: "cali-po-default/b"},
-			},*/
 			jumpToPolicyGroup("cali-po-default/b", 0x18),
-			/*{
-				Match:  Match().MarkClear(0x18),
-				Action: JumpAction{Target: "cali-po-default/c"},
-			},*/
 			jumpToPolicyGroup("cali-po-default/c", 0x18),
-			/*{
-				Match:  Match().MarkClear(0x18),
-				Action: JumpAction{Target: "cali-po-default/d"},
-			},*/
 			jumpToPolicyGroup("cali-po-default/d", 0x18),
-			/*{
-				Match:  Match().MarkClear(0x18),
-				Action: JumpAction{Target: "cali-po-default/e"},
-			},*/
 			jumpToPolicyGroup("cali-po-default/e", 0x18),
 			{
 				Match:   Match().MarkNotClear(0x18),
 				Action:  ReturnAction{},
 				Comment: []string{"Return on verdict"},
 			},
-			/*{
-				Match:  Match(),
-				Action: JumpAction{Target: "cali-po-default/f"},
-			},*/
 			jumpToPolicyGroup("cali-po-default/f", 0),
-			/*{
-				Match:  Match().MarkClear(0x18),
-				Action: JumpAction{Target: "cali-po-default/g"},
-			},*/
 			jumpToPolicyGroup("cali-po-default/g", 0x18),
 		},
 	),
@@ -2508,39 +2396,18 @@ var _ = table.DescribeTable("PolicyGroup chains",
 		[]generictables.Rule{
 			// Match criteria and return rules get skipped until we hit the
 			// first non-staged policy.
-			{
-				Match:  Match(),
-				Action: JumpAction{Target: "cali-po-default/c"},
-			},
-			{
-				Match:  Match().MarkClear(0x18),
-				Action: JumpAction{Target: "cali-po-default/d"},
-			},
-			{
-				Match:  Match().MarkClear(0x18),
-				Action: JumpAction{Target: "cali-po-default/e"},
-			},
-			{
-				Match:  Match().MarkClear(0x18),
-				Action: JumpAction{Target: "cali-po-default/f"},
-			},
-			{
-				Match:  Match().MarkClear(0x18),
-				Action: JumpAction{Target: "cali-po-default/g"},
-			},
+			jumpToPolicyGroup("cali-po-default/c", 0),
+			jumpToPolicyGroup("cali-po-default/d", 0x18),
+			jumpToPolicyGroup("cali-po-default/e", 0x18),
+			jumpToPolicyGroup("cali-po-default/f", 0x18),
+			jumpToPolicyGroup("cali-po-default/g", 0x18),
 			{
 				Match:   Match().MarkNotClear(0x18),
 				Action:  ReturnAction{},
 				Comment: []string{"Return on verdict"},
 			},
-			{
-				Match:  Match(),
-				Action: JumpAction{Target: "cali-po-default/h"},
-			},
-			{
-				Match:  Match().MarkClear(0x18),
-				Action: JumpAction{Target: "cali-po-default/i"},
-			},
+			jumpToPolicyGroup("cali-po-default/h", 0),
+			jumpToPolicyGroup("cali-po-default/i", 0x18),
 		},
 	),
 	polGroupEntry(
@@ -2553,18 +2420,9 @@ var _ = table.DescribeTable("PolicyGroup chains",
 		[]generictables.Rule{
 			// Match criteria and return rules get skipped until we hit the
 			// first non-staged policy.
-			{
-				Match:  Match(),
-				Action: JumpAction{Target: "cali-po-default/d"},
-			},
-			{
-				Match:  Match().MarkClear(0x18),
-				Action: JumpAction{Target: "cali-po-default/f"},
-			},
-			{
-				Match:  Match().MarkClear(0x18),
-				Action: JumpAction{Target: "cali-po-default/g"},
-			},
+			jumpToPolicyGroup("cali-po-default/d", 0),
+			jumpToPolicyGroup("cali-po-default/f", 0x18),
+			jumpToPolicyGroup("cali-po-default/g", 0x18),
 		},
 	),
 	polGroupEntry(
@@ -2577,14 +2435,8 @@ var _ = table.DescribeTable("PolicyGroup chains",
 		[]generictables.Rule{
 			// Match criteria and return rules get skipped until we hit the
 			// first non-staged policy.
-			{
-				Match:  Match(),
-				Action: JumpAction{Target: "cali-po-default/f"},
-			},
-			{
-				Match:  Match().MarkClear(0x18),
-				Action: JumpAction{Target: "cali-po-default/g"},
-			},
+			jumpToPolicyGroup("cali-po-default/f", 0),
+			jumpToPolicyGroup("cali-po-default/g", 0x18),
 		},
 	),
 )
