@@ -290,3 +290,71 @@ func TestHints(t *testing.T) {
 		return nil
 	}, 5*time.Second, 1*time.Second).Should(Succeed())
 }
+
+func TestStatistics(t *testing.T) {
+	cfg := daemon.Config{
+		LogLevel:                 "debug",
+		Port:                     8988,
+		AggregationWindow:        time.Second * 1,
+		EmitAfterSeconds:         2,
+		EmitterAggregationWindow: time.Second * 2,
+	}
+	defer daemonSetup(t, cfg)()
+
+	// Generate credentials for the Goldmane client.
+	creds, err := client.ClientCredentials(clientCert, clientKey, clientCA)
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to create goldmane TLS credentials.")
+	}
+
+	// Generate credentials for the Goldmane client.
+	statsClient, err := client.NewStatisticsAPIClient(goldmaneURL, grpc.WithTransportCredentials(creds))
+	require.NoError(t, err)
+
+	// Send a request for statistics with no data.
+	Eventually(func() error {
+		res, err := statsClient.List(ctx, &proto.StatisticsRequest{})
+		if err != nil {
+			return err
+		}
+		if len(res) != 0 {
+			return fmt.Errorf("statistics returned non-empty result")
+		}
+		return nil
+	}, 5*time.Second, 1*time.Second).Should(Succeed())
+
+	// Create some flow data.
+	pusher, err := client.NewFlowClient(goldmaneURL, clientCert, clientKey, clientCA)
+	require.NoError(t, err)
+
+	connected := pusher.Connect(ctx)
+	require.NoError(t, err)
+	Eventually(connected, 5*time.Second, 100*time.Millisecond).Should(BeClosed())
+
+	go func(ctx context.Context) {
+		for {
+			if ctx.Err() != nil {
+				pusher.Close()
+				return
+			}
+			f := testutils.NewRandomFlow(time.Now().Unix())
+			pusher.Push(types.ProtoToFlow(f))
+			time.Sleep(100 * time.Millisecond)
+		}
+	}(ctx)
+
+	// Now statistics should return data.
+	Eventually(func() error {
+		res, err := statsClient.List(ctx, &proto.StatisticsRequest{})
+		if err != nil {
+			return err
+		}
+		if res == nil {
+			return fmt.Errorf("statistics returned nil")
+		}
+		if len(res) == 0 {
+			return fmt.Errorf("statistics returned empty")
+		}
+		return nil
+	}, 5*time.Second, 1*time.Second).Should(Succeed())
+}
