@@ -98,12 +98,14 @@ describe('useInfiniteFilterQuery', () => {
 });
 
 describe('useFlowLogsStream', () => {
+    const startTime = new Date();
+    const endTime = new Date();
+
     it('starts the stream with the expected params', () => {
         const startStreamMock = jest.fn();
-        const startTime = new Date();
         jest.mocked(useStream).mockReturnValue({
             startStream: startStreamMock,
-            data: [{ start_time: startTime }],
+            data: [{ start_time: startTime, end_time: endTime }],
         } as any);
         jest.mocked(transformToFlowsFilterQuery).mockReturnValue('');
 
@@ -128,10 +130,9 @@ describe('useFlowLogsStream', () => {
 
     it('calls start stream', () => {
         const startStreamMock = jest.fn();
-        const startTime = new Date();
         jest.mocked(useStream).mockReturnValue({
             startStream: startStreamMock,
-            data: [{ start_time: startTime }],
+            data: [{ start_time: startTime, end_time: endTime }],
         } as any);
         jest.mocked(transformToFlowsFilterQuery).mockReturnValue('');
 
