@@ -27,7 +27,7 @@ ARG TARGETARCH
 
 COPY --from=builder /status /status/
 
-COPY LICENSE /licenses/LICENSE
+COPY ${BIN_DIR}/LICENSE /licenses/LICENSE
 
 COPY ${BIN_DIR}/kubectl-${TARGETARCH} /usr/bin/kubectl
 COPY ${BIN_DIR}/kube-controllers-linux-${TARGETARCH} /usr/bin/kube-controllers

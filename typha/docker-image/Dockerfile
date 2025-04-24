@@ -18,7 +18,7 @@ FROM scratch AS source
 
 ARG TARGETARCH
 
-COPY LICENSE /licenses/LICENSE
+COPY bin/LICENSE /licenses/LICENSE
 
 COPY bin/calico-typha-${TARGETARCH} /usr/bin/calico-typha
 COPY typha.cfg /etc/calico/typha.cfg
