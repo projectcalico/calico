@@ -111,9 +111,15 @@ var (
 		Name: "felix_int_dataplane_messages",
 		Help: "Number dataplane messages by type.",
 	}, []string{"type"})
+	gaugeInitialResyncApplyTime = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "felix_int_dataplane_initial_resync_time_seconds",
+		Help: "Time in seconds that it took to do the initial resync with " +
+			"the dataplane and bring the dataplane into sync for the first time.",
+	})
 	summaryApplyTime = cprometheus.NewSummary(prometheus.SummaryOpts{
 		Name: "felix_int_dataplane_apply_time_seconds",
-		Help: "Time in seconds that it took to apply a dataplane update.",
+		Help: "Time in seconds for each incremental update to the dataplane " +
+			"(after the initial resync).",
 	})
 	summaryBatchSize = cprometheus.NewSummary(prometheus.SummaryOpts{
 		Name: "felix_int_dataplane_msg_batch_size",
@@ -139,6 +145,7 @@ var (
 
 func init() {
 	prometheus.MustRegister(countDataplaneSyncErrors)
+	prometheus.MustRegister(gaugeInitialResyncApplyTime)
 	prometheus.MustRegister(summaryApplyTime)
 	prometheus.MustRegister(countMessages)
 	prometheus.MustRegister(summaryBatchSize)
@@ -2137,10 +2144,7 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 				}
 				// Actually apply the changes to the dataplane.
 				d.apply()
-
-				// Record stats.
 				applyTime := time.Since(applyStart)
-				summaryApplyTime.Observe(applyTime.Seconds())
 
 				if d.dataplaneNeedsSync {
 					// Dataplane is still dirty, record an error.
@@ -2162,6 +2166,12 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 					if d.config.PostInSyncCallback != nil {
 						d.config.PostInSyncCallback()
 					}
+					// Record a dedicated stat for the initial resync.
+					gaugeInitialResyncApplyTime.Set(applyTime.Seconds())
+				} else {
+					// Don't record the initial resync in the summary stat. On
+					// a quiet cluster it can skew the stat for a long time.
+					summaryApplyTime.Observe(applyTime.Seconds())
 				}
 				d.reportHealth()
 			} else {
