@@ -18,7 +18,7 @@ quay.io and uses the API to set the expiry on that image.
 """
 
 # /// script
-# requires-python = ">=3.11"
+# requires-python = ">=3.9"
 # dependencies = [
 #     "rich",
 #     "rich-argparse",
