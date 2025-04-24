@@ -491,9 +491,14 @@ CRANE_CMD         = docker run -t --entrypoint /bin/sh -v $(DOCKER_CONFIG):/root
                     $(double_quote)crane
 endif
 
+ifdef LOCAL_PYTHON
+PYTHON3_CMD       = python3
+else
+PYTHON3_CMD       = docker run --rm -e QUAY_API_TOKEN -v .:/source -w /source python:3 python3.13
+endif
+
 GIT_CMD           = git
 DOCKER_CMD        = docker
-PYTHON3_CMD       = python3
 
 
 # RELEASE_PY3 is for Python invocations used for releasing,
