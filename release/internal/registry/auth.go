@@ -156,7 +156,7 @@ func readDockerConfig() (DockerConfig, error) {
 				logWithCredsStore.Debug("getting credentials from default credential store")
 				credsData, err := getCredsFromCredentialHelper(dockerConfig.CredsStore, reg)
 				if err != nil {
-					logWithCredsStore.WithError(err).Error(fmt.Sprintf("Unable to get credentials from credential store"))
+					logWithCredsStore.WithError(err).Error("Unable to get credentials from credential store")
 				} else {
 					dockerConfig.Auths[reg] = credsData.toAuthConfig()
 				}
@@ -173,6 +173,7 @@ func getCredsFromCredentialHelper(helperName string, domainName string) (credent
 		"Registry":    domainName,
 	})
 	credHelperLog.Debug("Getting credential data")
+	// nosemgrep: go.lang.security.audit.dangerous-exec-command.dangerous-exec-command
 	cmd := exec.Command(credentialHelperName, "get")
 
 	stdin, err := cmd.StdinPipe()
@@ -192,7 +193,10 @@ func getCredsFromCredentialHelper(helperName string, domainName string) (credent
 		return credentialHelperData{}, fmt.Errorf("failed to execute credential helper %s: %w", credentialHelperName, err)
 	}
 
-	io.WriteString(stdin, outputBuffer)
+	_, err = io.WriteString(stdin, outputBuffer)
+	if err != nil {
+		return credentialHelperData{}, fmt.Errorf("failed to send data to credential helper %s: %w", credentialHelperName, err)
+	}
 
 	err = stdin.Close()
 	if err != nil {
@@ -225,6 +229,9 @@ func getCredsFromCredentialHelper(helperName string, domainName string) (credent
 // getAuthFromDockerConfig retrieves the auth from the docker config.
 func getAuthFromDockerConfig(registryURL string) (registry.AuthConfig, error) {
 	dockerConfig, err := dockerConfigOnce()
+	if err != nil {
+		return registry.AuthConfig{}, fmt.Errorf("unable to fetch docker config: %w", err)
+	}
 
 	authConfig, err := dockerConfig.GetAuth(registryURL)
 	if err != nil {
