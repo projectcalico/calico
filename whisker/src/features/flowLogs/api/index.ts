@@ -142,7 +142,6 @@ export const useFlowLogsStream = (
     }, [filters]);
 
     const start = () => {
-        console.log('restarting: ', new Date(restartTime.current ?? 0));
         const path = buildStreamPath(
             getTimeInSeconds(restartTime.current),
             filters,
