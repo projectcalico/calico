@@ -223,8 +223,6 @@ func (c *loadBalancerController) onUpdate(update bapi.Update) {
 		}
 	case model.BlockKey:
 		c.syncerUpdates <- update.KVPair
-	default:
-		log.Warnf("Unexpected kind received over syncer: %s", update.KVPair.Key)
 	}
 }
 

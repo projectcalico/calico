@@ -35,6 +35,7 @@ import (
 	"k8s.io/klog/v2"
 
 	"github.com/projectcalico/calico/crypto/pkg/tls"
+	"github.com/projectcalico/calico/kube-controllers/pkg/cmdwrapper"
 	"github.com/projectcalico/calico/kube-controllers/pkg/config"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/controller"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/flannelmigration"
@@ -51,7 +52,6 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/debugserver"
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
-	"github.com/projectcalico/calico/typha/pkg/cmdwrapper"
 )
 
 // VERSION is filled out during the build process (using git describe output)

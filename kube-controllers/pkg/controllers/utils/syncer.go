@@ -97,28 +97,28 @@ func (d *DataFeed) OnStatusUpdated(status bapi.SyncStatus) {
 	}
 }
 
-func (c *DataFeed) OnUpdates(updates []bapi.Update) {
+func (d *DataFeed) OnUpdates(updates []bapi.Update) {
 	for _, upd := range updates {
-		c.onUpdate(upd)
+		d.onUpdate(upd)
 	}
 }
 
-func (c DataFeed) onUpdate(update bapi.Update) {
+func (d *DataFeed) onUpdate(update bapi.Update) {
 	// Pull out the update type.
 	t := reflect.TypeOf(update.Key)
 
-	if c.dataStore == Etcdv3 {
-		c.updateResourceVersion(update)
+	if d.dataStore == Etcdv3 {
+		d.updateResourceVersion(update)
 	}
 
 	// For each consumer registered for this type, send an update.
-	for _, f := range c.registrations[t] {
+	for _, f := range d.registrations[t] {
 		f(update)
 	}
 }
 
 // updateResourceVersion updates the resourceVersion of the resource when we run in etcd mode. The resource version is revision on the KVPair
-func (c DataFeed) updateResourceVersion(update bapi.Update) {
+func (d *DataFeed) updateResourceVersion(update bapi.Update) {
 	if update.Value == nil {
 		// We received delete, we don't have to update the resourceVersion as the resource does not exists
 		return

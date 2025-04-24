@@ -211,7 +211,7 @@ func (c *autoHostEndpointController) handleNodeUpdate(kvp model.KVPair) {
 	}
 }
 
-// handleHostEndpointUpdate handles HostEndpoint updates recieved via syncer.
+// handleHostEndpointUpdate handles HostEndpoint updates received via syncer.
 // We want to delete HostEndpoints that no longer exists, and add/update Auto-HostEndpoints to our local cache
 func (c *autoHostEndpointController) handleHostEndpointUpdate(kvp model.KVPair) {
 	if kvp.Value == nil {

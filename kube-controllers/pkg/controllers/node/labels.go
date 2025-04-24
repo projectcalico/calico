@@ -200,7 +200,7 @@ func (c *nodeLabelController) acceptScheduledRequests(stopCh <-chan struct{}) {
 	for {
 		select {
 		case update := <-c.syncerUpdates:
-			c.handleUpdate(update)
+			utils.ProcessBatch(c.syncerUpdates, update, c.handleUpdate)
 		case <-t.C:
 			c.syncAllNodesLabels()
 		case <-c.syncChan:
