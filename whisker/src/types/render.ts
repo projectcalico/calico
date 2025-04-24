@@ -14,6 +14,7 @@ export type AppConfig = {
         cluster_type: string;
         calico_version: string;
         notifications: 'Enabled' | 'Disabled';
+        calico_cloud_url: string;
     };
 };
 
