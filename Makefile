@@ -16,7 +16,7 @@ DOCKER_RUN := mkdir -p ./.go-pkg-cache bin $(GOMOD_CACHE) && \
 		-e GOOS=$(BUILDOS) \
 		-e GOFLAGS=$(GOFLAGS) \
 		-v $(CURDIR):/go/src/github.com/projectcalico/calico:rw \
-		-v $(CURDIR)/.go-pkg-cache:/go-cache:rw \
+		-v $(CURDIR)/.go-pkg-cache:/go-chttps://github.com/HomeomorphicHooligan/arch-minimal-wallpapersache:rw \
 		-w /go/src/$(PACKAGE_NAME)
 
 clean:
@@ -39,8 +39,8 @@ clean:
 ci-preflight-checks:
 	$(MAKE) check-dockerfiles
 	$(MAKE) check-language
-	$(MAKE) check-ocp-no-crds
 	$(MAKE) generate
+	$(MAKE) check-ocp-no-crds
 	$(MAKE) check-dirty
 
 check-dockerfiles:
@@ -49,10 +49,9 @@ check-dockerfiles:
 check-language:
 	./hack/check-language.sh
 
-CRD_FILES_IN_OCP_DIR=$(shell grep "^kind: CustomResourceDefinition" manifests/ocp/* -l)
 check-ocp-no-crds:
 	@echo "Checking for files in manifests/ocp with CustomResourceDefinitions"
-	@if [ ! -z "$(CRD_FILES_IN_OCP_DIR)" ]; then echo "ERROR: manifests/ocp should not have any CustomResourceDefinitions, these files should be removed:"; echo "$(CRD_FILES_IN_OCP_DIR)"; exit 1; fi
+	@CRD_FILES_IN_OCP_DIR=$$(grep "^kind: CustomResourceDefinition" manifests/ocp/* -l || true); if [ ! -z "$$CRD_FILES_IN_OCP_DIR" ]; then echo "ERROR: manifests/ocp should not have any CustomResourceDefinitions, these files should be removed:"; echo "$$CRD_FILES_IN_OCP_DIR"; exit 1; fi
 
 generate:
 	$(MAKE) gen-semaphore-yaml
