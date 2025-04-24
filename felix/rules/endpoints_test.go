@@ -172,21 +172,13 @@ var _ = Describe("Endpoints", func() {
 					{
 						Name: "cali-tw-cali1234",
 						Rules: []generictables.Rule{
-							{
-								Match:   Match(),
-								Action:  denyAction,
-								Comment: []string{"Endpoint admin disabled"},
-							},
+							endpointAdminDisabledRule(denyAction),
 						},
 					},
 					{
 						Name: "cali-fw-cali1234",
 						Rules: []generictables.Rule{
-							{
-								Match:   Match(),
-								Action:  denyAction,
-								Comment: []string{"Endpoint admin disabled"},
-							},
+							endpointAdminDisabledRule(denyAction),
 						},
 					},
 					{
@@ -322,15 +314,9 @@ var _ = Describe("Endpoints", func() {
 							conntrackDenyRule(denyAction),
 							clearMarkRule(),
 							startOfTierDefault(),
-							{
-								Match:  Match().MarkClear(0x10),
-								Action: JumpAction{Target: polGrpInABC.ChainName()},
-							},
+							jumpToPolicyGroup(polGrpInABC.ChainName(), 0x10),
 							policyAcceptedRule(),
-							{
-								Match:  Match().MarkClear(0x10),
-								Action: JumpAction{Target: polGrpInEF.ChainName()},
-							},
+							jumpToPolicyGroup(polGrpInEF.ChainName(), 0x10),
 							policyAcceptedRule(),
 							defaultTierDefaultDropRule(denyAction, denyActionString),
 							matchProfileIngress("prof1"),
@@ -350,15 +336,9 @@ var _ = Describe("Endpoints", func() {
 							dropVXLANRule,
 							dropIPIPRule,
 							startOfTierDefault(),
-							{
-								Match:  Match().MarkClear(0x10),
-								Action: JumpAction{Target: polGrpOutAB.ChainName()},
-							},
+							jumpToPolicyGroup(polGrpOutAB.ChainName(), 0x10),
 							policyAcceptedRule(),
-							{
-								Match:  Match().MarkClear(0x10),
-								Action: JumpAction{Target: polGrpOutDE.ChainName()},
-							},
+							jumpToPolicyGroup(polGrpOutDE.ChainName(), 0x10),
 							policyAcceptedRule(),
 							defaultTierDefaultDropRule(denyAction, denyActionString),
 							matchProfileEgress("prof1"),
@@ -755,10 +735,7 @@ var _ = Describe("Endpoints", func() {
 							startOfTierDefault(),
 							matchPolicyEgress("default", "c"),
 							// Extra NOTRACK action before returning in raw table.
-							{
-								Match:  Match().MarkSingleBitSet(0x8),
-								Action: NoTrackAction{},
-							},
+							untrackedRule(),
 							policyAcceptedRule(),
 							// No drop actions or profiles in raw table.
 						},
@@ -772,10 +749,7 @@ var _ = Describe("Endpoints", func() {
 							startOfTierDefault(),
 							matchPolicyIngress("default", "c"),
 							// Extra NOTRACK action before returning in raw table.
-							{
-								Match:  Match().MarkSingleBitSet(0x8),
-								Action: NoTrackAction{},
-							},
+							untrackedRule(),
 							policyAcceptedRule(),
 							// No drop actions or profiles in raw table.
 						},
@@ -1025,21 +999,13 @@ var _ = Describe("Endpoints", func() {
 					{
 						Name: "cali-tw-cali1234",
 						Rules: []generictables.Rule{
-							{
-								Match:   Match(),
-								Action:  denyAction,
-								Comment: []string{"Endpoint admin disabled"},
-							},
+							endpointAdminDisabledRule(denyAction),
 						},
 					},
 					{
 						Name: "cali-fw-cali1234",
 						Rules: []generictables.Rule{
-							{
-								Match:   Match(),
-								Action:  denyAction,
-								Comment: []string{"Endpoint admin disabled"},
-							},
+							endpointAdminDisabledRule(denyAction),
 						},
 					},
 					{
@@ -1179,15 +1145,9 @@ var _ = Describe("Endpoints", func() {
 							conntrackDenyRule(denyAction),
 							clearMarkRule(),
 							startOfTierDefault(),
-							{
-								Match:  Match().MarkClear(0x10),
-								Action: JumpAction{Target: polGrpInABC.ChainName()},
-							},
+							jumpToPolicyGroup(polGrpInABC.ChainName(), 0x10),
 							policyAcceptedRule(),
-							{
-								Match:  Match().MarkClear(0x10),
-								Action: JumpAction{Target: polGrpInEF.ChainName()},
-							},
+							jumpToPolicyGroup(polGrpInEF.ChainName(), 0x10),
 							policyAcceptedRule(),
 							nflogDefaultTierIngress(),
 							defaultTierDefaultDropRule(denyAction, denyActionString),
@@ -1209,15 +1169,9 @@ var _ = Describe("Endpoints", func() {
 							dropVXLANRule,
 							dropIPIPRule,
 							startOfTierDefault(),
-							{
-								Match:  Match().MarkClear(0x10),
-								Action: JumpAction{Target: polGrpOutAB.ChainName()},
-							},
+							jumpToPolicyGroup(polGrpOutAB.ChainName(), 0x10),
 							policyAcceptedRule(),
-							{
-								Match:  Match().MarkClear(0x10),
-								Action: JumpAction{Target: polGrpOutDE.ChainName()},
-							},
+							jumpToPolicyGroup(polGrpOutDE.ChainName(), 0x10),
 							policyAcceptedRule(),
 							nflogDefaultTierEgress(),
 							defaultTierDefaultDropRule(denyAction, denyActionString),
@@ -1584,15 +1538,9 @@ var _ = Describe("Endpoints", func() {
 							conntrackDenyRule(denyAction),
 							clearMarkRule(),
 							startOfTierDefault(),
-							{
-								Match:  Match().MarkClear(0x10),
-								Action: JumpAction{Target: "cali-po-default/afe"},
-							},
+							jumpToPolicyGroup("cali-po-default/afe", 0x10),
 							policyAcceptedRule(),
-							{
-								Match:  Match().MarkClear(0x10),
-								Action: JumpAction{Target: "cali-po-default/bfe"},
-							},
+							jumpToPolicyGroup("cali-po-default/bfe", 0x10),
 							policyAcceptedRule(),
 							nflogDefaultTierEgress(),
 							defaultTierDefaultDropRule(denyAction, denyActionString),
@@ -1644,10 +1592,7 @@ var _ = Describe("Endpoints", func() {
 							startOfTierDefault(),
 							matchPolicyEgress("default", "c"),
 							// Extra NOTRACK action before returning in raw table.
-							{
-								Match:  Match().MarkSingleBitSet(0x8),
-								Action: NoTrackAction{},
-							},
+							untrackedRule(),
 							policyAcceptedRule(),
 							// No drop actions or profiles in raw table.
 						},
@@ -1661,10 +1606,7 @@ var _ = Describe("Endpoints", func() {
 							startOfTierDefault(),
 							matchPolicyIngress("default", "c"),
 							// Extra NOTRACK action before returning in raw table.
-							{
-								Match:  Match().MarkSingleBitSet(0x8),
-								Action: NoTrackAction{},
-							},
+							untrackedRule(),
 							policyAcceptedRule(),
 							// No drop actions or profiles in raw table.
 						},
@@ -2342,10 +2284,11 @@ var _ = table.DescribeTable("PolicyGroup chains",
 			Selector:    "all()",
 		},
 		[]generictables.Rule{
-			{
+			/*{
 				Match:  Match(),
 				Action: JumpAction{Target: "cali-pi-default/a"},
-			},
+			},*/
+			jumpToPolicyGroup("cali-pi-default/a", 0),
 		},
 	),
 	polGroupEntry(
@@ -2356,14 +2299,16 @@ var _ = table.DescribeTable("PolicyGroup chains",
 			Selector:    "all()",
 		},
 		[]generictables.Rule{
-			{
+			/*{
 				Match:  Match(),
 				Action: JumpAction{Target: "cali-pi-default/a"},
-			},
-			{
+			},*/
+			jumpToPolicyGroup("cali-pi-default/a", 0),
+			/*{
 				Match:  Match().MarkClear(0x18),
 				Action: JumpAction{Target: "cali-pi-default/b"},
-			},
+			},*/
+			jumpToPolicyGroup("cali-pi-default/b", 0x18),
 		},
 	),
 	polGroupEntry(
@@ -2374,18 +2319,21 @@ var _ = table.DescribeTable("PolicyGroup chains",
 			Selector:    "all()",
 		},
 		[]generictables.Rule{
-			{
+			/*{
 				Match:  Match(),
 				Action: JumpAction{Target: "cali-pi-default/a"},
-			},
-			{
+			},*/
+			jumpToPolicyGroup("cali-pi-default/a", 0),
+			/*{
 				Match:  Match().MarkClear(0x18),
 				Action: JumpAction{Target: "cali-pi-default/b"},
-			},
-			{
+			},*/
+			jumpToPolicyGroup("cali-pi-default/b", 0x18),
+			/*{
 				Match:  Match().MarkClear(0x18),
 				Action: JumpAction{Target: "cali-pi-default/c"},
-			},
+			},*/
+			jumpToPolicyGroup("cali-pi-default/c", 0x18),
 		},
 	),
 	polGroupEntry(
@@ -2396,22 +2344,26 @@ var _ = table.DescribeTable("PolicyGroup chains",
 			Selector:    "all()",
 		},
 		[]generictables.Rule{
-			{
+			/*{
 				Match:  Match(),
 				Action: JumpAction{Target: "cali-pi-default/a"},
-			},
-			{
+			},*/
+			jumpToPolicyGroup("cali-pi-default/a", 0),
+			/*{
 				Match:  Match().MarkClear(0x18),
 				Action: JumpAction{Target: "cali-pi-default/b"},
-			},
-			{
+			},*/
+			jumpToPolicyGroup("cali-pi-default/b", 0x18),
+			/*{
 				Match:  Match().MarkClear(0x18),
 				Action: JumpAction{Target: "cali-pi-default/c"},
-			},
-			{
+			},*/
+			jumpToPolicyGroup("cali-pi-default/c", 0x18),
+			/*{
 				Match:  Match().MarkClear(0x18),
 				Action: JumpAction{Target: "cali-pi-default/d"},
-			},
+			},*/
+			jumpToPolicyGroup("cali-pi-default/d", 0x18),
 		},
 	),
 	polGroupEntry(
@@ -2422,26 +2374,31 @@ var _ = table.DescribeTable("PolicyGroup chains",
 			Selector:    "all()",
 		},
 		[]generictables.Rule{
-			{
+			/*{
 				Match:  Match(),
 				Action: JumpAction{Target: "cali-pi-default/a"},
-			},
-			{
+			},*/
+			jumpToPolicyGroup("cali-pi-default/a", 0),
+			/*{
 				Match:  Match().MarkClear(0x18),
 				Action: JumpAction{Target: "cali-pi-default/b"},
-			},
-			{
+			},*/
+			jumpToPolicyGroup("cali-pi-default/b", 0x18),
+			/*{
 				Match:  Match().MarkClear(0x18),
 				Action: JumpAction{Target: "cali-pi-default/c"},
-			},
-			{
+			},*/
+			jumpToPolicyGroup("cali-pi-default/c", 0x18),
+			/*{
 				Match:  Match().MarkClear(0x18),
 				Action: JumpAction{Target: "cali-pi-default/d"},
-			},
-			{
+			},*/
+			jumpToPolicyGroup("cali-pi-default/d", 0x18),
+			/*{
 				Match:  Match().MarkClear(0x18),
 				Action: JumpAction{Target: "cali-pi-default/e"},
-			},
+			},*/
+			jumpToPolicyGroup("cali-pi-default/e", 0x18),
 		},
 	),
 	polGroupEntry(
@@ -2452,26 +2409,31 @@ var _ = table.DescribeTable("PolicyGroup chains",
 			Selector:    "all()",
 		},
 		[]generictables.Rule{
-			{
+			/*{
 				Match:  Match(),
 				Action: JumpAction{Target: "cali-pi-default/a"},
-			},
-			{
+			},*/
+			jumpToPolicyGroup("cali-pi-default/a", 0),
+			/*{
 				Match:  Match().MarkClear(0x18),
 				Action: JumpAction{Target: "cali-pi-default/b"},
-			},
-			{
+			},*/
+			jumpToPolicyGroup("cali-pi-default/b", 0x18),
+			/*{
 				Match:  Match().MarkClear(0x18),
 				Action: JumpAction{Target: "cali-pi-default/c"},
-			},
-			{
+			},*/
+			jumpToPolicyGroup("cali-pi-default/c", 0x18),
+			/*{
 				Match:  Match().MarkClear(0x18),
 				Action: JumpAction{Target: "cali-pi-default/d"},
-			},
-			{
+			},*/
+			jumpToPolicyGroup("cali-pi-default/d", 0x18),
+			/*{
 				Match:  Match().MarkClear(0x18),
 				Action: JumpAction{Target: "cali-pi-default/e"},
-			},
+			},*/
+			jumpToPolicyGroup("cali-pi-default/e", 0x18),
 			{
 				// Only get a return action every 5 rules and only if it's
 				// not the last action.
@@ -2479,10 +2441,11 @@ var _ = table.DescribeTable("PolicyGroup chains",
 				Action:  ReturnAction{},
 				Comment: []string{"Return on verdict"},
 			},
-			{
+			/*{
 				Match:  Match(),
 				Action: JumpAction{Target: "cali-pi-default/f"},
-			},
+			},*/
+			jumpToPolicyGroup("cali-pi-default/f", 0),
 		},
 	),
 	polGroupEntry(
@@ -2493,39 +2456,46 @@ var _ = table.DescribeTable("PolicyGroup chains",
 			Selector:    "all()",
 		},
 		[]generictables.Rule{
-			{
+			/*{
 				Match:  Match(),
 				Action: JumpAction{Target: "cali-po-default/a"},
-			},
-			{
+			},*/
+			jumpToPolicyGroup("cali-po-default/a", 0),
+			/*{
 				Match:  Match().MarkClear(0x18),
 				Action: JumpAction{Target: "cali-po-default/b"},
-			},
-			{
+			},*/
+			jumpToPolicyGroup("cali-po-default/b", 0x18),
+			/*{
 				Match:  Match().MarkClear(0x18),
 				Action: JumpAction{Target: "cali-po-default/c"},
-			},
-			{
+			},*/
+			jumpToPolicyGroup("cali-po-default/c", 0x18),
+			/*{
 				Match:  Match().MarkClear(0x18),
 				Action: JumpAction{Target: "cali-po-default/d"},
-			},
-			{
+			},*/
+			jumpToPolicyGroup("cali-po-default/d", 0x18),
+			/*{
 				Match:  Match().MarkClear(0x18),
 				Action: JumpAction{Target: "cali-po-default/e"},
-			},
+			},*/
+			jumpToPolicyGroup("cali-po-default/e", 0x18),
 			{
 				Match:   Match().MarkNotClear(0x18),
 				Action:  ReturnAction{},
 				Comment: []string{"Return on verdict"},
 			},
-			{
+			/*{
 				Match:  Match(),
 				Action: JumpAction{Target: "cali-po-default/f"},
-			},
-			{
+			},*/
+			jumpToPolicyGroup("cali-po-default/f", 0),
+			/*{
 				Match:  Match().MarkClear(0x18),
 				Action: JumpAction{Target: "cali-po-default/g"},
-			},
+			},*/
+			jumpToPolicyGroup("cali-po-default/g", 0x18),
 		},
 	),
 	polGroupEntry(
@@ -2819,5 +2789,31 @@ func failSafeEgress() generictables.Rule {
 	return generictables.Rule{
 		Match:  Match(),
 		Action: JumpAction{Target: "cali-failsafe-out"},
+	}
+}
+
+func endpointAdminDisabledRule(denyAction generictables.Action) generictables.Rule {
+	return generictables.Rule{
+		Match:   Match(),
+		Action:  denyAction,
+		Comment: []string{"Endpoint admin disabled"},
+	}
+}
+
+func untrackedRule() generictables.Rule {
+	return generictables.Rule{
+		Match:  Match().MarkSingleBitSet(0x8),
+		Action: NoTrackAction{},
+	}
+}
+
+func jumpToPolicyGroup(target string, clearMark uint32) generictables.Rule {
+	match := Match()
+	if clearMark != 0 {
+		match = Match().MarkClear(clearMark)
+	}
+	return generictables.Rule{
+		Match:  match,
+		Action: JumpAction{Target: target},
 	}
 }
