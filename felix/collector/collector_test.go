@@ -41,6 +41,7 @@ import (
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/rules"
 	"github.com/projectcalico/calico/felix/types"
+	"github.com/projectcalico/calico/lib/std/uniquelabels"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
 )
@@ -111,36 +112,36 @@ var (
 		Name:     "cali1",
 		Mac:      utils.MustParseMac("01:02:03:04:05:06"),
 		IPv4Nets: []net.IPNet{utils.MustParseNet("10.0.0.1/32")},
-		Labels: map[string]string{
+		Labels: uniquelabels.Make(map[string]string{
 			"id": "local-ep-1",
-		},
+		}),
 	}
 	localWlEp2 = &model.WorkloadEndpoint{
 		State:    "active",
 		Name:     "cali2",
 		Mac:      utils.MustParseMac("01:02:03:04:05:07"),
 		IPv4Nets: []net.IPNet{utils.MustParseNet("10.0.0.2/32")},
-		Labels: map[string]string{
+		Labels: uniquelabels.Make(map[string]string{
 			"id": "local-ep-2",
-		},
+		}),
 	}
 	remoteWlEp1 = &model.WorkloadEndpoint{
 		State:    "active",
 		Name:     "cali3",
 		Mac:      utils.MustParseMac("02:02:03:04:05:06"),
 		IPv4Nets: []net.IPNet{utils.MustParseNet("20.0.0.1/32")},
-		Labels: map[string]string{
+		Labels: uniquelabels.Make(map[string]string{
 			"id": "remote-ep-1",
-		},
+		}),
 	}
 	remoteWlEp2 = &model.WorkloadEndpoint{
 		State:    "active",
 		Name:     "cali4",
 		Mac:      utils.MustParseMac("02:03:03:04:05:06"),
 		IPv4Nets: []net.IPNet{utils.MustParseNet("20.0.0.2/32")},
-		Labels: map[string]string{
+		Labels: uniquelabels.Make(map[string]string{
 			"id": "remote-ep-2",
-		},
+		}),
 	}
 	localEd1 = &calc.LocalEndpointData{
 		CommonEndpointData: calc.CalculateCommonEndpointData(localWlEPKey1, localWlEp1),
@@ -216,7 +217,7 @@ var (
 	}
 	netSet1 = model.NetworkSet{
 		Nets:   []net.IPNet{utils.MustParseNet(netSetIp1Str + "/32")},
-		Labels: map[string]string{"public": "true"},
+		Labels: uniquelabels.Make(map[string]string{"public": "true"}),
 	}
 
 	svcKey1 = model.ResourceKey{
