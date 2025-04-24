@@ -16,3 +16,11 @@ export type AppConfig = {
         notifications: 'Enabled' | 'Disabled';
     };
 };
+
+export type UniqueFlowLogs = {
+    startTime: number;
+    flowLogs: {
+        json: string;
+        flowLog: FlowLog;
+    }[];
+};
