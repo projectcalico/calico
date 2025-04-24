@@ -85,7 +85,7 @@ logging.basicConfig(
 log = logging.getLogger(__name__)
 
 GET_TAG_INFO_URL = (
-    "https://quay.io/api/v1/repository/{image_name}/tag?specificTag={image_tag}"
+    "https://quay.io/api/v1/repository/{image_name}/tag/?specificTag={image_tag}"
 )
 PUT_TAG_INFO_URL = "https://quay.io/api/v1/repository/{image_name}/tag/{image_tag}"
 DATETIME_FORMAT = "%a, %d %b %Y %X %z"
@@ -99,6 +99,7 @@ class ReturnCodes(IntEnum):
     OK = 0
     NOAPITOKEN = auto()
     INVALIDIMAGENAME = auto()
+    HTTPGETTAGINFOFAILED = auto()
     HTTPSETEXPIRYFORBIDDEN = auto()
     HTTPIMAGENOTFOUND = auto()
 
@@ -175,9 +176,18 @@ class Image:
             method="GET",
         )
         log.debug("Fetching tag data for tag '%s'", self.image_identifier)
-        with urllib.request.urlopen(req) as response:
-            data = json.load(response)
-            self.data = data
+        try:
+            with urllib.request.urlopen(req) as response:
+                data = json.load(response)
+                self.data = data
+        except urllib.error.HTTPError as http_exc:
+            log.error(
+                "Caught HTTP error getting tag data for '%s': %s",
+                self.image_identifier,
+                http_exc,
+            )
+            sys.exit(ReturnCodes.HTTPGETTAGINFOFAILED)
+
 
     def validate_dates(self):
         log.debug("Last modified date: '%s'", self.last_modified_datetime)
