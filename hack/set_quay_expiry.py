@@ -160,7 +160,7 @@ class Image:
     @property
     def is_expired(self):
         if self.expiry_datetime:
-            return self.expiry_datetime < datetime.datetime.now(tz=datetime.UTC)
+            return self.expiry_datetime < datetime.datetime.now(tz=datetime.timezone.utc)
         else:
             return False
 
@@ -340,7 +340,7 @@ def make_expiry_datetime(days: int, starting_date: Optional[datetime.datetime] =
 
     # Get the current timestamp. We'll use this as a default starting_date, but
     # also use it to validate that our expiration date is in the future.
-    now = datetime.datetime.now(tz=datetime.UTC)
+    now = datetime.datetime.now(tz=datetime.timezone.utc)
 
     if starting_date is None:
         starting_date = now
