@@ -249,7 +249,7 @@ func (m *routeManager) CompleteDeferredWork() error {
 		m.updateAllHostsIPSet()
 		m.ipSetDirty = false
 	}
-	// Program IPIP routes, only if ProgramIPIPRoutes is true
+	// Program routes, only if ProgramRoutes is true
 	if !m.dpConfig.ProgramRoutes {
 		m.routesDirty = false
 		return nil
@@ -392,6 +392,21 @@ func (m *routeManager) OnParentNameUpdate(name string) {
 
 // KeepIPIPDeviceInSync is a goroutine that configures the IPIP tunnel device, then periodically
 // checks that it is still correctly configured.
+func (m *routeManager) KeepBIRDIPIPDeviceInSync(xsumBroken bool) {
+	log.WithField("device", m.ipipDevice).Info("IPIP device thread started.")
+	for {
+		err := m.configureIPIPDevice(m.dpConfig.IPIPMTU, m.dpConfig.RulesConfig.IPIPTunnelAddress, xsumBroken)
+		if err != nil {
+			log.WithError(err).Warn("Failed configure IPIP tunnel device, retrying...")
+			time.Sleep(1 * time.Second)
+			continue
+		}
+		time.Sleep(10 * time.Second)
+	}
+}
+
+// KeepIPIPDeviceInSync is a goroutine that configures the IPIP tunnel device, then periodically
+// checks that it is still correctly configured.
 func (m *routeManager) KeepIPIPDeviceInSync(
 	ctx context.Context,
 	xsumBroken bool,
@@ -499,21 +514,6 @@ func (m *routeManager) getParentInterface() (netlink.Link, error) {
 	return nil, fmt.Errorf("Unable to find parent interface with address %s", localAddr)
 }
 
-// KeepIPIPDeviceInSync is a goroutine that configures the IPIP tunnel device, then periodically
-// checks that it is still correctly configured.
-func (m *routeManager) KeepBIRDIPIPDeviceInSync(xsumBroken bool) {
-	log.WithField("device", m.ipipDevice).Info("IPIP device thread started.")
-	for {
-		err := m.configureIPIPDevice(m.dpConfig.IPIPMTU, m.dpConfig.RulesConfig.IPIPTunnelAddress, xsumBroken)
-		if err != nil {
-			log.WithError(err).Warn("Failed configure IPIP tunnel device, retrying...")
-			time.Sleep(1 * time.Second)
-			continue
-		}
-		time.Sleep(10 * time.Second)
-	}
-}
-
 // configureIPIPDevice ensures the IPIP tunnel device is up and configures correctly.
 func (m *routeManager) configureIPIPDevice(mtu int, address net.IP, xsumBroken bool) error {
 	logCxt := log.WithFields(log.Fields{
@@ -528,15 +528,6 @@ func (m *routeManager) configureIPIPDevice(mtu int, address net.IP, xsumBroken b
 	ipip := &netlink.Iptun{
 		LinkAttrs: la,
 	}
-
-	/*if m.ipipDevice == dataplanedefs.IPIPIfaceName {
-		localAddr := m.getLocalHostAddr()
-		localIP := net.ParseIP(localAddr)
-		if localIP == nil {
-			return fmt.Errorf("invalid address %v", localAddr)
-		}
-		ipip.Local = localIP
-	}*/
 
 	link, err := m.nlHandle.LinkByName(m.ipipDevice)
 	if err != nil {

@@ -1074,7 +1074,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 				dp.noEncapDeviceC,
 			)
 		} else {
-			log.Info("IPIP using BGP enabled, starting thread to keep tunnel configuration in sync.")
+			log.Info("IPIP using BIRD enabled, starting thread to keep tunnel configuration in sync.")
 			dp.routeManager = newRouteManager(
 				ipSetsV4,
 				nil,
@@ -1462,7 +1462,7 @@ cleanupRetry:
 		if i > 0 {
 			log.Debugf("Retrying %v/%v times", i, maxCleanupRetries)
 		}
-		link, err := netlink.LinkByName("tunl0")
+		link, err := netlink.LinkByName(dataplanedefs.IPIPIfaceName)
 		if err != nil {
 			if _, ok := err.(netlink.LinkNotFoundError); ok {
 				log.Debug("IPIP disabled and no IPIP device found")
