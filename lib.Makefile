@@ -494,7 +494,7 @@ endif
 ifdef LOCAL_PYTHON
 PYTHON3_CMD       = python3
 else
-PYTHON3_CMD       = docker run --rm -e QUAY_API_TOKEN -v .:/source -w /source python:3.13 python3.13
+PYTHON3_CMD       = docker run --rm -e QUAY_API_TOKEN -v $(REPO_ROOT):$(REPO_ROOT) -w $(REPO_ROOT) python:3.13 python3.13
 endif
 
 GIT_CMD           = git
