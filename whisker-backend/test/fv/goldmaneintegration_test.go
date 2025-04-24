@@ -28,6 +28,7 @@ import (
 
 	"github.com/projectcalico/calico/goldmane/pkg/client"
 	gmdaemon "github.com/projectcalico/calico/goldmane/pkg/daemon"
+	"github.com/projectcalico/calico/goldmane/pkg/types"
 	"github.com/projectcalico/calico/goldmane/proto"
 	"github.com/projectcalico/calico/lib/httpmachinery/pkg/apiutil"
 	"github.com/projectcalico/calico/lib/std/chanutil"
@@ -93,6 +94,7 @@ func TestGoldmaneIntegration_FlowWatching(t *testing.T) {
 
 	cli, err := client.NewFlowClient("localhost:5444", clientCertFile.Name(), clientKeyFile.Name(), certFile.Name())
 	Expect(err).ShouldNot(HaveOccurred())
+	defer cli.Close()
 
 	// Wait for initial connection
 	_, err = chanutil.ReadWithDeadline(ctx, cli.Connect(ctx), time.Minute*20)
@@ -127,7 +129,7 @@ func TestGoldmaneIntegration_FlowWatching(t *testing.T) {
 	// uploaded flow.
 	waitForClockIntervalAlignment(aggrWindow + 1)
 
-	cli.Push(&proto.Flow{
+	cli.Push(types.ProtoToFlow(&proto.Flow{
 		Key: &proto.FlowKey{
 			SourceName:      "test-source-2",
 			SourceNamespace: "test-namespace-3",
@@ -135,7 +137,7 @@ func TestGoldmaneIntegration_FlowWatching(t *testing.T) {
 		},
 		StartTime: time.Now().Add(-1 * time.Second).Unix(),
 		EndTime:   time.Now().Unix(),
-	})
+	}))
 
 	obj, err := chanutil.ReadWithDeadline(ctx, scanner, time.Second*30)
 	Expect(err).ShouldNot(HaveOccurred())
@@ -202,6 +204,7 @@ func TestGoldmaneIntegration_FilterHints(t *testing.T) {
 
 	cli, err := client.NewFlowClient("localhost:5444", clientCertFile.Name(), clientKeyFile.Name(), certFile.Name())
 	Expect(err).ShouldNot(HaveOccurred())
+	defer cli.Close()
 
 	// Wait for initial connection
 	_, err = chanutil.ReadWithDeadline(ctx, cli.Connect(ctx), time.Minute*20)
@@ -211,7 +214,7 @@ func TestGoldmaneIntegration_FilterHints(t *testing.T) {
 	// This fixes a flake where we might push the flow at the rollover interval and streaming flows won't pick up the
 	// uploaded flow.
 	waitForClockIntervalAlignment(aggrWindow + 1)
-	cli.Push(&proto.Flow{
+	cli.Push(types.ProtoToFlow(&proto.Flow{
 		Key: &proto.FlowKey{
 			SourceName:      "test-source-2",
 			SourceNamespace: "test-namespace-3",
@@ -219,9 +222,9 @@ func TestGoldmaneIntegration_FilterHints(t *testing.T) {
 		},
 		StartTime: time.Now().Add(-1 * time.Second).Unix(),
 		EndTime:   time.Now().Unix(),
-	})
+	}))
 
-	cli.Push(&proto.Flow{
+	cli.Push(types.ProtoToFlow(&proto.Flow{
 		Key: &proto.FlowKey{
 			SourceName:      "test-source-3",
 			SourceNamespace: "test-namespace-3",
@@ -229,9 +232,9 @@ func TestGoldmaneIntegration_FilterHints(t *testing.T) {
 		},
 		StartTime: time.Now().Add(-1 * time.Second).Unix(),
 		EndTime:   time.Now().Unix(),
-	})
+	}))
 
-	cli.Push(&proto.Flow{
+	cli.Push(types.ProtoToFlow(&proto.Flow{
 		Key: &proto.FlowKey{
 			SourceName:      "test-source-3",
 			SourceNamespace: "test-namespace-4",
@@ -239,14 +242,13 @@ func TestGoldmaneIntegration_FilterHints(t *testing.T) {
 		},
 		StartTime: time.Now().Add(-1 * time.Second).Unix(),
 		EndTime:   time.Now().Unix(),
-	})
+	}))
 
 	req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("http://localhost:8080/%s", whiskerv1.FlowsFilterHintsPath), nil)
 	Expect(err).ShouldNot(HaveOccurred())
 
 	query := req.URL.Query()
 	query.Set("type", "SourceName")
-	//query.Set("pageSize", "3")
 	query.Set("filters", jsontestutil.MustMarshal(t, whiskerv1.Filters{
 		SourceNamespaces: whiskerv1.FilterMatches[string]{{V: "test-namespace", Type: whiskerv1.MatchType(proto.MatchType_Fuzzy)}},
 	}))

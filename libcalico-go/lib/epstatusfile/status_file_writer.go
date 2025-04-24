@@ -115,15 +115,15 @@ func (w *EndpointStatusFileWriter) DeleteStatusFile(name string) error {
 // the parent dir specified by prefix. Attempts to create the dir if it doesn't exist.
 // Returns all entries along with their unmarshaled WorkloadEndpointStatus structs within the dir if any exist.
 func (w *EndpointStatusFileWriter) EnsureStatusDir(prefix string) ([]fs.DirEntry, []WorkloadEndpointStatus, error) {
-	validEntries := []fs.DirEntry{}
-	epStatuses := []WorkloadEndpointStatus{}
+	var presentFiles []fs.DirEntry
+	var epStatuses []WorkloadEndpointStatus
 
 	path := filepath.Join(prefix, dirStatus)
 
 	entries, err := w.Filesys.ReadDir(path)
 	if err != nil && errors.Is(err, fs.ErrNotExist) {
 		// Discard ErrNotExist and return the result of attempting to create it.
-		return validEntries, epStatuses, w.Filesys.Mkdir(path, fs.FileMode(0655))
+		return presentFiles, epStatuses, w.Filesys.Mkdir(path, fs.FileMode(0755))
 	}
 
 	// Iterate over each file entry.
@@ -153,13 +153,13 @@ func (w *EndpointStatusFileWriter) EnsureStatusDir(prefix string) ([]fs.DirEntry
 		}
 
 		// Append entry to the slice.
-		validEntries = append(validEntries, entry)
+		presentFiles = append(presentFiles, entry)
 
 		// Append the parsed struct to the slice.
 		epStatuses = append(epStatuses, epStatus)
 	}
 
-	return validEntries, epStatuses, err
+	return presentFiles, epStatuses, err
 }
 
 type WorkloadEndpointStatus struct {
@@ -181,13 +181,22 @@ func WorkloadEndpointToWorkloadEndpointStatus(ep *proto.WorkloadEndpoint) *Workl
 		peerName = ep.LocalBgpPeer.BgpPeerName
 	}
 	epStatus := &WorkloadEndpointStatus{
-		IfaceName:   ep.Name,
-		Mac:         ep.Mac,
-		Ipv4Nets:    ep.Ipv4Nets,
-		Ipv6Nets:    ep.Ipv6Nets,
+		IfaceName: ep.Name,
+		Mac:       ep.Mac,
+		// Make sure that zero length slice is nilled out so that it compares
+		// equal after round-tripping through JSON.
+		Ipv4Nets:    normaliseZeroLenSlice(ep.Ipv4Nets),
+		Ipv6Nets:    normaliseZeroLenSlice(ep.Ipv6Nets),
 		BGPPeerName: peerName,
 	}
 	return epStatus
+}
+
+func normaliseZeroLenSlice[T any](nets []T) []T {
+	if len(nets) == 0 {
+		return nil
+	}
+	return nets
 }
 
 func GetWorkloadEndpointStatusFromFile(filePath string) (*WorkloadEndpointStatus, error) {

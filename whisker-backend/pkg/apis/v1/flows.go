@@ -116,8 +116,10 @@ func (a Actions) AsProtos() []proto.Action {
 	return protos
 }
 
-type SortBy proto.SortBy
-type SortBys []SortBy
+type (
+	SortBy  proto.SortBy
+	SortBys []SortBy
+)
 
 func (p SortBy) String() string                { return proto.SortBy(p).String() }
 func (p SortBy) MarshalJSON() ([]byte, error)  { return marshalToBytes(p) }

@@ -28,6 +28,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/bpfdefs"
+	"github.com/projectcalico/calico/felix/bpf/conntrack/timeouts"
 	"github.com/projectcalico/calico/felix/bpf/libbpf"
 	"github.com/projectcalico/calico/felix/bpf/maps"
 )
@@ -75,7 +76,7 @@ func registerConntrackMetrics() {
 // we require a privileged environment to test the BPF program.
 type BPFProgLivenessScanner struct {
 	ipVersion                    int
-	timeouts                     Timeouts
+	timeouts                     timeouts.Timeouts
 	logLevel                     BPFLogLevel
 	autoScale                    bool
 	configChangedRestartCallback func()
@@ -88,7 +89,7 @@ type BPFProgLivenessScanner struct {
 
 func NewBPFProgLivenessScanner(
 	ipVersion int,
-	timeouts Timeouts,
+	timeouts timeouts.Timeouts,
 	bpfLogLevel BPFLogLevel,
 	configChangedRestartCallback func(),
 	autoScalingMode string,

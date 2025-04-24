@@ -5,7 +5,6 @@ metadata:
 spec:
 
 ---
-
 kind: Node
 apiVersion: projectcalico.org/v3
 metadata:
@@ -16,7 +15,6 @@ spec:
     ipv6Address: fdf5:10::2/112
 
 ---
-
 kind: Node
 apiVersion: projectcalico.org/v3
 metadata:
@@ -27,7 +25,6 @@ spec:
     ipv6Address: fdf5:10::3/112
 
 ---
-
 kind: Node
 apiVersion: projectcalico.org/v3
 metadata:
@@ -38,7 +35,6 @@ spec:
     ipv6Address: fdf5:10::4/112
 
 ---
-
 kind: IPPool
 apiVersion: projectcalico.org/v3
 metadata:
@@ -50,7 +46,6 @@ spec:
   natOutgoing: true
 
 ---
-
 kind: IPPool
 apiVersion: projectcalico.org/v3
 metadata:

@@ -39,27 +39,6 @@ func (l MapAsLabels) Get(labelName string) (value string, present bool) {
 	return
 }
 
-// Selector represents a label selector.
-type Selector interface {
-	// Evaluate evaluates the selector against the given labels expressed as a concrete map.
-	Evaluate(labels map[string]string) bool
-
-	// EvaluateLabels evaluates the selector against the given labels expressed as an interface.
-	// This allows for labels that are calculated on the fly.
-	EvaluateLabels(labels Labels) bool
-
-	// String returns a string that represents this selector.
-	String() string
-
-	// UniqueID returns the unique ID that represents this selector.
-	UniqueID() string
-
-	// AcceptVisitor allows an external visitor to modify this selector.
-	AcceptVisitor(v Visitor)
-
-	LabelRestrictions() map[string]LabelRestriction
-}
-
 type LabelRestriction struct {
 	// MustBePresent is true if this label must be present for the selector to
 	// match. For example "has(labelName)" or "labelName == 'foo'"
@@ -121,58 +100,62 @@ func (v PrefixVisitor) Visit(n interface{}) {
 	}
 }
 
-type selectorRoot struct {
-	root                    node
-	cachedString            *string
-	cachedHash              *string
-	cachedLabelRestrictions *map[string]LabelRestriction
+type Selector struct {
+	root              Node
+	stringRep         string
+	hash              string
+	labelRestrictions map[string]LabelRestriction
 }
 
-func (sel *selectorRoot) Evaluate(labels map[string]string) bool {
+func (sel *Selector) Evaluate(labels map[string]string) bool {
 	return sel.EvaluateLabels(MapAsLabels(labels))
 }
 
-func (sel *selectorRoot) EvaluateLabels(labels Labels) bool {
+func (sel *Selector) EvaluateLabels(labels Labels) bool {
 	return sel.root.Evaluate(labels)
 }
 
-func (sel *selectorRoot) AcceptVisitor(v Visitor) {
+func (sel *Selector) AcceptVisitor(v Visitor) {
 	sel.root.AcceptVisitor(v)
+	sel.updateFields()
 }
 
-func (sel *selectorRoot) String() string {
-	if sel.cachedString == nil {
-		fragments := sel.root.collectFragments([]string{})
-		joined := strings.Join(fragments, "")
-		sel.cachedString = &joined
+func (sel *Selector) String() string {
+	return sel.stringRep
+}
+
+func (sel *Selector) UniqueID() string {
+	return sel.hash
+}
+
+func (sel *Selector) LabelRestrictions() map[string]LabelRestriction {
+	return sel.labelRestrictions
+}
+
+func (sel *Selector) Equal(other *Selector) bool {
+	if sel == nil || other == nil {
+		return sel == other
 	}
-	return *sel.cachedString
+	return other.hash == sel.hash
 }
 
-func (sel *selectorRoot) UniqueID() string {
-	if sel.cachedHash == nil {
-		hash := hash.MakeUniqueID("s", sel.String())
-		sel.cachedHash = &hash
-	}
-	return *sel.cachedHash
+func (sel *Selector) Root() Node {
+	return sel.root
 }
 
-func (sel *selectorRoot) LabelRestrictions() map[string]LabelRestriction {
-	if sel.cachedLabelRestrictions != nil {
-		return *sel.cachedLabelRestrictions
-	}
-	lrs := sel.root.LabelRestrictions()
-	sel.cachedLabelRestrictions = &lrs
-	return lrs
+func (sel *Selector) updateFields() {
+	fragments := sel.root.collectFragments([]string{})
+	str := strings.Join(fragments, "")
+	sel.stringRep = str
+	sel.hash = hash.MakeUniqueID("s", str)
+	sel.labelRestrictions = sel.root.LabelRestrictions()
 }
 
-var _ Selector = (*selectorRoot)(nil)
-
-type node interface {
+type Node interface {
 	Evaluate(labels Labels) bool
 	AcceptVisitor(v Visitor)
-	collectFragments(fragments []string) []string
 	LabelRestrictions() map[string]LabelRestriction
+	collectFragments(fragments []string) []string
 }
 
 type LabelEqValueNode struct {
@@ -423,10 +406,10 @@ func (node *HasNode) collectFragments(fragments []string) []string {
 	return append(fragments, "has(", node.LabelName, ")")
 }
 
-var _ node = (*HasNode)(nil)
+var _ Node = (*HasNode)(nil)
 
 type NotNode struct {
-	Operand node
+	Operand Node
 }
 
 func (node *NotNode) Evaluate(labels Labels) bool {
@@ -460,7 +443,7 @@ func (node *NotNode) collectFragments(fragments []string) []string {
 }
 
 type AndNode struct {
-	Operands []node
+	Operands []Node
 }
 
 func (node *AndNode) Evaluate(labels Labels) bool {
@@ -524,7 +507,7 @@ func (node *AndNode) collectFragments(fragments []string) []string {
 }
 
 type OrNode struct {
-	Operands []node
+	Operands []Node
 }
 
 func (node *OrNode) Evaluate(labels Labels) bool {

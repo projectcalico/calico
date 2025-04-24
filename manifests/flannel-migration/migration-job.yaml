@@ -117,9 +117,9 @@ roleRef:
   kind: ClusterRole
   name: flannel-migration-controller
 subjects:
-- kind: ServiceAccount
-  name: flannel-migration-controller
-  namespace: kube-system
+  - kind: ServiceAccount
+    name: flannel-migration-controller
+    namespace: kube-system
 
 ---
 # See https://github.com/projectcalico/kube-controllers
@@ -172,18 +172,16 @@ spec:
           readinessProbe:
             exec:
               command:
-              - /usr/bin/check-status
-              - -r
+                - /usr/bin/check-status
+                - -r
       volumes:
         - name: flannel-env-file
           hostPath:
             path: /run/flannel/subnet.env
 
 ---
-
 apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: flannel-migration-controller
   namespace: kube-system
-

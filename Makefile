@@ -42,6 +42,8 @@ ci-preflight-checks:
 	$(MAKE) check-language
 	$(MAKE) generate
 	$(MAKE) fix-all
+	$(MAKE) check-ocp-no-crds
+	$(MAKE) yaml-lint
 	$(MAKE) check-dirty
 
 check-go-mod:
@@ -52,6 +54,13 @@ check-dockerfiles:
 
 check-language:
 	./hack/check-language.sh
+
+check-ocp-no-crds:
+	@echo "Checking for files in manifests/ocp with CustomResourceDefinitions"
+	@CRD_FILES_IN_OCP_DIR=$$(grep "^kind: CustomResourceDefinition" manifests/ocp/* -l || true); if [ ! -z "$$CRD_FILES_IN_OCP_DIR" ]; then echo "ERROR: manifests/ocp should not have any CustomResourceDefinitions, these files should be removed:"; echo "$$CRD_FILES_IN_OCP_DIR"; exit 1; fi
+
+yaml-lint:
+	@docker run --rm $$(tty -s && echo "-it" || echo) -v $(PWD):/data cytopia/yamllint:latest .
 
 protobuf:
 	$(MAKE) -C app-policy protobuf
@@ -71,7 +80,7 @@ generate:
 	$(MAKE) gen-manifests
 	$(MAKE) fix-changed
 
-gen-manifests: bin/helm
+gen-manifests: bin/helm bin/yq
 	cd ./manifests && \
 		OPERATOR_VERSION=$(OPERATOR_VERSION) \
 		CALICO_VERSION=$(CALICO_VERSION) \
@@ -83,7 +92,7 @@ get-operator-crds: var-require-all-OPERATOR_BRANCH
 	@echo === Pulling new operator CRDs from branch $(OPERATOR_BRANCH) ===
 	@echo ================================================================
 	cd ./charts/tigera-operator/crds/ && \
-	for file in operator.tigera.io_*.yaml; do echo "downloading $$file from operator repo" && curl -fsSL https://raw.githubusercontent.com/tigera/operator/$(OPERATOR_BRANCH)/pkg/crds/operator/$${file%_crd.yaml}.yaml -o $${file}; done
+	for file in operator.tigera.io_*.yaml; do echo "downloading $$file from operator repo" && curl -fsSL https://raw.githubusercontent.com/tigera/operator/$(OPERATOR_BRANCH)/pkg/crds/operator/$${file} -o $${file}; done
 	$(MAKE) fix-changed
 
 gen-semaphore-yaml:
@@ -143,6 +152,13 @@ release/bin/release: $(shell find ./release -type f -name '*.go')
 bin/ghr:
 	$(DOCKER_RUN) -e GOBIN=/go/src/$(PACKAGE_NAME)/bin/ $(CALICO_BUILD) go install github.com/tcnksm/ghr@$(GHR_VERSION)
 
+# Install GitHub CLI
+bin/gh:
+	curl -sSL -o bin/gh.tgz https://github.com/cli/cli/releases/download/v$(GITHUB_CLI_VERSION)/gh_$(GITHUB_CLI_VERSION)_linux_amd64.tar.gz
+	tar -zxvf bin/gh.tgz -C bin/ gh_$(GITHUB_CLI_VERSION)_linux_amd64/bin/gh --strip-components=2
+	chmod +x $@
+	rm bin/gh.tgz
+
 # Build a release.
 release: release/bin/release
 	@release/bin/release release build
@@ -150,6 +166,9 @@ release: release/bin/release
 # Publish an already built release.
 release-publish: release/bin/release bin/ghr
 	@release/bin/release release publish
+
+release-public: bin/gh release/bin/release
+	@release/bin/release release public
 
 # Create a release branch.
 create-release-branch: release/bin/release
@@ -182,7 +201,7 @@ helm-index:
 
 # Creates the tar file used for installing Calico on OpenShift.
 bin/ocp.tgz: manifests/ocp/ bin/yq
-	tar czvf $@ -C manifests/ ocp
+	tar czvf $@ --exclude='.gitattributes' -C manifests/ ocp
 
 ## Generates release notes for the given version.
 .PHONY: release-notes

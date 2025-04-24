@@ -36,9 +36,9 @@ roleRef:
   kind: ClusterRole
   name: calico-kube-controllers
 subjects:
-- kind: ServiceAccount
-  name: calico-kube-controllers
-  namespace: kube-system
+  - kind: ServiceAccount
+    name: calico-kube-controllers
+    namespace: kube-system
 ---
 {{- else }}
 # Include a clusterrole for the kube-controllers component,
@@ -146,8 +146,8 @@ roleRef:
   kind: ClusterRole
   name: calico-kube-controllers
 subjects:
-- kind: ServiceAccount
-  name: calico-kube-controllers
-  namespace: kube-system
+  - kind: ServiceAccount
+    name: calico-kube-controllers
+    namespace: kube-system
 ---
 {{- end }}

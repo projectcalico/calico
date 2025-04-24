@@ -5,7 +5,7 @@ PACKAGE_NAME ?= github.com/projectcalico/calico/third_party/envoy-ratelimit
 ENVOY_RATELIMIT_IMAGE ?= envoy-ratelimit
 BUILD_IMAGES ?= $(ENVOY_RATELIMIT_IMAGE)
 
-ENVOY_RATELIMIT_VERSION=49af5cca
+ENVOY_RATELIMIT_VERSION=0141a24f
 
 ##############################################################################
 # Include lib.Makefile before anything else
@@ -24,7 +24,6 @@ init-source:: $(ENVOY_RATELIMIT_DOWNLOADED)
 $(ENVOY_RATELIMIT_DOWNLOADED):
 	git clone -n https://github.com/envoyproxy/ratelimit.git envoy-ratelimit
 	cd envoy-ratelimit && git checkout $(ENVOY_RATELIMIT_VERSION)
-	patch -d envoy-ratelimit -p1 < patches/0001-Bump-golang.org-x-net-to-v0.34.0-to-fix-CVE-2024-453.patch
 	touch $@
 
 .PHONY: build

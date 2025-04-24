@@ -41,6 +41,18 @@ func Read[E any](ctx context.Context, ch <-chan E) (E, error) {
 	}
 }
 
+// ReadNonBlocking reads from the given channel in a non-blocking manner. It returns the value read off the channel and
+// true if the read was successful, and an empty value and false otherwise.
+func ReadNonBlocking[E any](ch <-chan E) (E, bool) {
+	select {
+	case v, ok := <-ch:
+		return v, ok
+	default:
+		var empty E
+		return empty, false
+	}
+}
+
 // ReadWithDeadline is similar to Read but adds the extra convenience of allowing a duration to be specified which defines
 // the deadline that the channel has to read data.
 //
@@ -59,6 +71,23 @@ func ReadWithDeadline[E any](ctx context.Context, ch <-chan E, duration time.Dur
 		return v, nil
 	case <-time.After(duration):
 		return def, ErrDeadlineExceeded
+	}
+}
+
+// ReadAllNonBlocking reads all the values off the channel that are currently there and returns them as an array when
+// there's nothing left on the channel to read. It doesn't wait for the channel to be closed before returning.
+func ReadAllNonBlocking[R any](c <-chan R) []R {
+	var out []R
+	for {
+		select {
+		case v, ok := <-c:
+			if !ok {
+				return out
+			}
+			out = append(out, v)
+		default:
+			return out
+		}
 	}
 }
 
@@ -97,5 +126,19 @@ func WriteWithDeadline[E any](ctx context.Context, ch chan E, v E, duration time
 		return nil
 	case <-time.After(duration):
 		return ErrDeadlineExceeded
+	}
+}
+
+// Clear removes all items currently on the channel and returns.
+func Clear[R any](c <-chan R) {
+	for {
+		select {
+		case _, ok := <-c:
+			if !ok {
+				return
+			}
+		default:
+			return
+		}
 	}
 }

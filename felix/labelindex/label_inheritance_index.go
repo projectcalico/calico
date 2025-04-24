@@ -94,7 +94,7 @@ type MatchCallback func(selId, labelId interface{})
 type InheritIndex struct {
 	itemDataByID         map[interface{}]*itemData
 	parentDataByParentID map[string]*parentData
-	selectorsById        map[interface{}]selector.Selector
+	selectorsById        map[interface{}]*selector.Selector
 
 	// Current matches.
 	selIdsByLabelId map[interface{}]set.Set[any]
@@ -112,7 +112,7 @@ func NewInheritIndex(onMatchStarted, onMatchStopped MatchCallback) *InheritIndex
 	inheritIDx := InheritIndex{
 		itemDataByID:         itemData,
 		parentDataByParentID: map[string]*parentData{},
-		selectorsById:        map[interface{}]selector.Selector{},
+		selectorsById:        map[interface{}]*selector.Selector{},
 
 		selIdsByLabelId: map[interface{}]set.Set[any]{},
 		labelIdsBySelId: map[interface{}]set.Set[any]{},
@@ -167,14 +167,14 @@ func (l *InheritIndex) OnUpdate(update api.Update) (_ bool) {
 	return
 }
 
-func (idx *InheritIndex) UpdateSelector(id interface{}, sel selector.Selector) {
+func (idx *InheritIndex) UpdateSelector(id interface{}, sel *selector.Selector) {
 	if sel == nil {
 		log.WithField("id", id).Panic("Selector should not be nil")
 	}
 	oldSel := idx.selectorsById[id]
 	// Since the selectorRoot struct has cache fields, the easiest way to compare two
 	// selectors is to compare their IDs.
-	if oldSel != nil && oldSel.UniqueID() == sel.UniqueID() {
+	if oldSel.Equal(sel) {
 		log.WithField("selID", id).Debug("Skipping unchanged selector")
 		return
 	}
@@ -354,7 +354,7 @@ func (idx *InheritIndex) flushUpdates() {
 	})
 }
 
-func (idx *InheritIndex) scanAllLabels(selId interface{}, sel selector.Selector) {
+func (idx *InheritIndex) scanAllLabels(selId interface{}, sel *selector.Selector) {
 	log.Debugf("Scanning all (%v) labels against selector %v",
 		len(idx.itemDataByID), selId)
 	for labelId, labels := range idx.itemDataByID {
@@ -373,7 +373,7 @@ func (idx *InheritIndex) scanAllSelectors(labelId interface{}) {
 
 func (idx *InheritIndex) updateMatches(
 	selId interface{},
-	sel selector.Selector,
+	sel *selector.Selector,
 	labelId interface{},
 	labels parser.Labels,
 ) {

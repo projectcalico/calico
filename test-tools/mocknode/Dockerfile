@@ -26,13 +26,13 @@ FROM ${CALICO_BASE}
 ARG GIT_VERSION=unknown
 
 # Required labels for certification
-LABEL description="Calico mock node for scale testing"
-LABEL maintainer="shaun@tigera.io"
-LABEL name="Calico mock node"
-LABEL release="1"
-LABEL summary="Calico mock node for scale testing"
-LABEL vendor="Tigera"
-LABEL version=${GIT_VERSION}
+LABEL org.opencontainers.image.description="Calico mock node for scale testing"
+LABEL org.opencontainers.image.authors="shaun@tigera.io"
+LABEL org.opencontainers.image.source="https://github.com/projectcalico/calico"
+LABEL org.opencontainers.image.title="Calico mock node"
+LABEL org.opencontainers.image.vendor="Project Calico"
+LABEL org.opencontainers.image.version="${GIT_VERSION}"
+LABEL org.opencontainers.image.licenses="Apache-2.0"
 
 COPY --from=source / /
 
