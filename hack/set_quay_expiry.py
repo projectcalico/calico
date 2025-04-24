@@ -429,7 +429,7 @@ def main():
             continue
         image_obj = Image(image_spec)
         if args.action == "add":
-            image_obj.set_expiry(args.expiry_days, relative=args.relative_date)
+            image_obj.set_expiry(args.expiry_days, relative=args.relative_date, override=args.force_override)
         elif args.action == "remove":
             image_obj.remove_expiry(restore=args.restore)
 
