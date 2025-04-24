@@ -105,16 +105,22 @@ func (s *FlowServer) Run() error {
 		logrus.WithError(err).Error("Failed to create local socket")
 		return err
 	}
+	addr := s.Address()
+
+	// Try to clean up socket if it exists. Simply continue with any error. It might work fine to use the same socket.
+	err = cleanupLocalSocket(addr)
+	if err != nil {
+		logrus.WithError(err).WithField("address", addr).Debug("Failed to clean up local socket")
+	}
 
 	s.once.Do(func() {
 		var l net.Listener
-		sockAddr := s.Address()
-		l, err = net.Listen("unix", sockAddr)
+		l, err = net.Listen("unix", addr)
 		if err != nil {
 			logrus.WithError(err).Error("Failed to listen on local socket")
 			return
 		}
-		logrus.WithField("address", sockAddr).Info("Running local server")
+		logrus.WithField("address", addr).Info("Running local server")
 		go func() {
 			err = s.grpcServer.Serve(l)
 			if err != nil {
@@ -152,7 +158,10 @@ func (s *FlowServer) Watch(
 }
 
 func (s *FlowServer) Stop() {
-	cleanupLocalSocket(s.Address())
+	addr := s.Address()
+	if err := cleanupLocalSocket(addr); err != nil {
+		logrus.WithError(err).WithField("address", addr).Errorf("Failed to clean up local socket")
+	}
 	s.grpcServer.Stop()
 }
 
@@ -173,7 +182,7 @@ func (s *FlowServer) Address() string {
 }
 
 func ensureLocalSocketDirExists(dir string) error {
-	logrus.Debug("Checking if local socket exists.")
+	logrus.Debug("Checking if local socket directory exists.")
 	if _, err := os.Stat(dir); os.IsNotExist(err) {
 		logrus.WithField("directory", dir).Debug("Local socket directory does not exist")
 		err := os.MkdirAll(dir, 0o600)
@@ -186,13 +195,10 @@ func ensureLocalSocketDirExists(dir string) error {
 	return nil
 }
 
-func cleanupLocalSocket(addr string) {
+func cleanupLocalSocket(addr string) error {
 	_, err := os.Stat(addr)
 	if err != nil && os.IsNotExist(err) {
-		return
+		return nil
 	}
-	err = os.Remove(addr)
-	if err != nil {
-		logrus.WithError(err).WithField("address", addr).Errorf("Failed to remove local socket")
-	}
+	return os.Remove(addr)
 }
