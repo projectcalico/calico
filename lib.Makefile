@@ -494,7 +494,7 @@ endif
 ifdef LOCAL_PYTHON
 PYTHON3_CMD       = python3
 else
-PYTHON3_CMD       = docker run --rm -e QUAY_API_TOKEN -v .:/source -w /source python:3 python3.13
+PYTHON3_CMD       = docker run --rm -e QUAY_API_TOKEN -v .:/source -w /source python:3.13 python3.13
 endif
 
 GIT_CMD           = git
@@ -1590,6 +1590,7 @@ release-windows-with-tag: var-require-one-of-CONFIRM-DRYRUN var-require-all-IMAG
 			$(DOCKER_MANIFEST) annotate --os windows --arch amd64 --os-version $${version} $${manifest_image} $${image}; \
 		done; \
 		$(DOCKER_MANIFEST) push --purge $${manifest_image}; \
+		$(RELEASE_PY3) $(QUAY_SET_EXPIRY_SCRIPT) add --expiry-days=$(QUAY_EXPIRE_DAYS) $${manifest_image} $${all_images} \
 	done;
 
 release-windows: var-require-one-of-CONFIRM-DRYRUN var-require-all-DEV_REGISTRIES-WINDOWS_IMAGE var-require-one-of-VERSION-BRANCH_NAME
