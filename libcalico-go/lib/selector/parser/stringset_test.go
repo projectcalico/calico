@@ -21,29 +21,26 @@ import (
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
 
+	"github.com/projectcalico/calico/lib/std/uniquestr"
 	"github.com/projectcalico/calico/libcalico-go/lib/selector/parser"
 )
 
 var _ = DescribeTable("StringSet contains tests",
 	func(input []string) {
 		// Making a StringSet is destructive so start with a copy.
-		var cpy []string
-		if input != nil {
-			cpy = make([]string, len(input))
-			copy(cpy, input)
-		}
+		cpy := handleSlice(input)
 		stringSet := parser.ConvertToStringSetInPlace(cpy)
 
 		By("containing all the input values", func() {
 			for _, s := range input {
-				Expect(stringSet.Contains(s)).To(BeTrue(),
+				Expect(stringSet.Contains(uniquestr.Make(s))).To(BeTrue(),
 					fmt.Sprintf("input %v == %v didn't contain %v", input, stringSet, s))
 			}
 		})
 
 		By("not containing unexpected values", func() {
 			for _, s := range input {
-				Expect(stringSet.Contains(s+"bogus")).To(BeFalse(),
+				Expect(stringSet.Contains(uniquestr.Make(s+"bogus"))).To(BeFalse(),
 					fmt.Sprintf("input %v == %v contained %vbogus", input, stringSet, s))
 			}
 		})
@@ -53,8 +50,8 @@ var _ = DescribeTable("StringSet contains tests",
 		})
 
 		By("Copying itself correctly", func() {
-			Expect(stringSet.SliceCopy()).To(Equal(([]string)(stringSet)), "SliceCopy should return the correct values.")
-			Expect(stringSet.SliceCopy()).NotTo(BeIdenticalTo(([]string)(stringSet)), "SliceCopy() should return a copy.")
+			Expect(stringSet.SliceCopy()).To(Equal(([]uniquestr.Handle)(stringSet)), "SliceCopy should return the correct values.")
+			Expect(stringSet.SliceCopy()).NotTo(BeIdenticalTo(([]uniquestr.Handle)(stringSet)), "SliceCopy() should return a copy.")
 		})
 	},
 	Entry("nil", nil),
@@ -70,15 +67,22 @@ var _ = DescribeTable("StringSet contains tests",
 var _ = DescribeTable("StringSet dedupe",
 	func(input, expected []string) {
 		// Making a StringSet is destructive so start with a copy.
-		var cpy []string
-		if input != nil {
-			cpy = make([]string, len(input))
-			copy(cpy, input)
-		}
+		cpy := handleSlice(input)
 		stringSet := parser.ConvertToStringSetInPlace(cpy)
-		Expect([]string(stringSet)).To(Equal(expected))
+		Expect(stringSet.StringSlice()).To(Equal(expected))
 	},
 	Entry("empty", []string{}, []string{}),
 	Entry("without dupes", []string{"a", "b"}, []string{"a", "b"}),
 	Entry("with dupes", []string{"b", "a", "b", "a"}, []string{"a", "b"}),
 )
+
+func handleSlice(ss []string) []uniquestr.Handle {
+	if ss == nil {
+		return nil
+	}
+	var hs = make([]uniquestr.Handle, len(ss))
+	for i, s := range ss {
+		hs[i] = uniquestr.Make(s)
+	}
+	return hs
+}
