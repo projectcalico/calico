@@ -499,7 +499,6 @@ endif
 
 GIT_CMD           = git
 DOCKER_CMD        = docker
-PYTHON3_CMD       = python3
 
 
 # RELEASE_PY3 is for Python invocations used for releasing,
