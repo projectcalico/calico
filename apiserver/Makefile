@@ -97,6 +97,7 @@ sub-image-fips-%:
 
 $(API_SERVER_IMAGE): $(CONTAINER_MARKER)
 $(CONTAINER_CREATED): Dockerfile $(BINDIR)/apiserver-$(ARCH)
+	cp ../LICENSE.md $(BINDIR)/LICENSE
 	$(DOCKER_BUILD) --build-arg BIN_DIR=$(BINDIR) -t $(API_SERVER_IMAGE):latest-$(ARCH) -f Dockerfile .
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@
