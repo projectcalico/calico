@@ -19,7 +19,7 @@ FROM scratch AS source
 ARG BIN_DIR
 ARG TARGETARCH
 
-COPY LICENSE /licenses/LICENSE
+COPY ${BIN_DIR}/LICENSE /licenses/LICENSE
 
 COPY ${BIN_DIR}/apiserver-${TARGETARCH} /code/apiserver
 
