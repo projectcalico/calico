@@ -317,14 +317,13 @@ func TestStatistics(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		if res != nil {
-			return fmt.Errorf("statistics returned")
+		if len(res) != 0 {
+			return fmt.Errorf("statistics returned non-empty result")
 		}
 		return nil
 	}, 5*time.Second, 1*time.Second).Should(Succeed())
 
 	// Create some flow data.
-	// Create a client to pusher Flows.
 	pusher, err := client.NewFlowClient(goldmaneURL, clientCert, clientKey, clientCA)
 	require.NoError(t, err)
 
