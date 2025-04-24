@@ -18,7 +18,7 @@ FROM scratch AS source
 
 ARG BIN_DIR
 
-COPY ${BIN_DIR}/LICENSE /licenses/LICENSE
+COPY bin/LICENSE /licenses/LICENSE
 COPY ${BIN_DIR} /opt/cni/bin/
 
 FROM ${CALICO_BASE}
