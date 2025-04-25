@@ -2,6 +2,7 @@ include ../metadata.mk
 
 PACKAGE_NAME = github.com/projectcalico/calico/whisker-backend
 IMAGE_BUILD_MARKER = whisker-backend-$(ARCH).created
+BUILD_IMAGES = whisker-backend
 
 ###############################################################################
 # include ../lib.Makefile
@@ -11,7 +12,6 @@ IMAGE_BUILD_MARKER = whisker-backend-$(ARCH).created
 include ../lib.Makefile
 
 # Configure variables used by ci/cd common targets from lib.Makefile.
-BUILD_IMAGES=whisker-backend
 
 .PHONY: image build
 image: $(IMAGE_BUILD_MARKER)
