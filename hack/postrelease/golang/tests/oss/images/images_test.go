@@ -61,7 +61,7 @@ func TestMain(m *testing.M) {
 		failed = true
 	}
 	if operatorReleaseVersion == "" {
-		fmt.Println("Missing OPERATOR_RELEASE variable!")
+		fmt.Println("Missing OPERATOR_VERSION variable!")
 		failed = true
 	}
 	if failed {

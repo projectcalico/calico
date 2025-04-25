@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package conntrack
+package timeouts
 
 import (
 	"bufio"
@@ -24,6 +24,11 @@ import (
 	"time"
 
 	log "github.com/sirupsen/logrus"
+)
+
+const (
+	// ScanPeriod determines how often we iterate over the conntrack table.
+	ScanPeriod = 10 * time.Second
 )
 
 type Timeouts struct {
@@ -40,67 +45,6 @@ type Timeouts struct {
 	GenericTimeout time.Duration
 
 	ICMPTimeout time.Duration
-}
-
-func (t *Timeouts) entryDone(nowNanos int64, proto uint8, entry ValueInterface, finishedOnly bool) (string, bool) {
-	age := time.Duration(nowNanos - entry.LastSeen())
-	switch proto {
-	case ProtoTCP:
-		dsr := entry.IsForwardDSR()
-		data := entry.Data()
-		rstSeen := data.RSTSeen()
-		if rstSeen && age > t.TCPResetSeen {
-			return "RST seen", true
-		}
-		finsSeen := (dsr && data.FINsSeenDSR()) || data.FINsSeen()
-		if finsSeen && (finishedOnly || age > t.TCPFinsSeen) {
-			// Both legs have been finished, tear down.
-			return "FINs seen", true
-		}
-		if data.Established() || dsr {
-			if entry.RSTSeen() != 0 && age > 2*60*time.Second {
-				return "no traffic on conn with RST with residual traffic for too long", true
-			}
-			if age > t.TCPEstablished {
-				return "no traffic on established flow for too long", true
-			}
-		} else {
-			if age > t.TCPSynSent {
-				return "no traffic on pre-established flow for too long", true
-			}
-		}
-		return "", false
-	case ProtoICMP, ProtoICMP6:
-		if age > t.ICMPTimeout {
-			return "no traffic on ICMP flow for too long", true
-		}
-	case ProtoUDP:
-		if age > t.UDPTimeout {
-			return "no traffic on UDP flow for too long", true
-		}
-	default:
-		if age > t.GenericTimeout {
-			return "no traffic on generic IP flow for too long", true
-		}
-	}
-	return "", false
-}
-
-// EntryExpired checks whether a given conntrack table entry for a given
-// protocol and time, is expired and can be deleted. If it returns true,
-// EntryFinished would also return true.
-//
-// WARNING: this implementation is duplicated in the conntrack_cleanup.c BPF
-// program.
-func (t *Timeouts) EntryExpired(nowNanos int64, proto uint8, entry ValueInterface) (string, bool) {
-	return t.entryDone(nowNanos, proto, entry, false)
-}
-
-// EntryFinished checks whether a given conntrack table entry for a given
-// protocol and time, represents a finished/done connection. Not necessarily
-// expired and to be deleted. Just finished from apps point of view.
-func (t *Timeouts) EntryFinished(nowNanos int64, proto uint8, entry ValueInterface) (string, bool) {
-	return t.entryDone(nowNanos, proto, entry, true)
 }
 
 func DefaultTimeouts() Timeouts {

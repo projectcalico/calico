@@ -21,6 +21,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/felix/bpf/conntrack/timeouts"
 	"github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/jitter"
 )
@@ -65,9 +66,6 @@ const (
 	ScanVerdictOK ScanVerdict = iota
 	// ScanVerdictDelete means entry should be deleted
 	ScanVerdictDelete
-
-	// ScanPeriod determines how often we iterate over the conntrack table.
-	ScanPeriod = 10 * time.Second
 )
 
 // EntryGet is a function prototype provided to EntryScanner in case it needs to
@@ -186,7 +184,7 @@ func (s *Scanner) Start() {
 		log.Debug("Conntrack scanner thread started")
 		defer log.Debug("Conntrack scanner thread stopped")
 
-		ticker := jitter.NewTicker(ScanPeriod, 100*time.Millisecond)
+		ticker := jitter.NewTicker(timeouts.ScanPeriod, 100*time.Millisecond)
 
 		for {
 			s.Scan()
