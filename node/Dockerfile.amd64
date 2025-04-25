@@ -195,7 +195,7 @@ COPY clean-up-filesystem.sh /clean-up-filesystem.sh
 RUN touch /in-the-container && /clean-up-filesystem.sh
 
 # Add in top-level license file
-COPY LICENSE /licenses/LICENSE
+COPY dist/LICENSE /licenses/LICENSE
 
 # Copy everything into a fresh scratch image so that naive CVE scanners don't pick up binaries and libraries
 # that have been removed in our later layers.
