@@ -120,9 +120,9 @@ func New(
 	if options == nil {
 		options = &Options{}
 	}
-	cbskn, ok := cbs.(callbacksWithKeysKnown)
+	cbskn, ok := cbs.(CallbacksWithKeysKnown)
 	if !ok {
-		cbskn = callbacksWithKeysKnownAdapter{cbs}
+		cbskn = simpleCallbacksAdapter{cbs}
 	}
 	return &SyncerClient{
 		ID: id,
@@ -159,22 +159,29 @@ type SyncerClient struct {
 	handshakeStatus             *handshakeStatus
 	supportsNodeResourceUpdates bool
 
-	callbacks callbacksWithKeysKnown
+	callbacks CallbacksWithKeysKnown
 	Finished  sync.WaitGroup
 }
 
-type callbacksWithKeysKnown interface {
+type CallbacksWithKeysKnown interface {
 	api.SyncerCallbacks
 	OnUpdatesKeysKnown(updates []api.Update, keys []string)
 }
 
-type callbacksWithKeysKnownAdapter struct {
+type RestartAwareCallbacks interface {
+	CallbacksWithKeysKnown
+	OnTyphaConnectionRestarted()
+}
+
+type simpleCallbacksAdapter struct {
 	api.SyncerCallbacks
 }
 
-func (c callbacksWithKeysKnownAdapter) OnUpdatesKeysKnown(updates []api.Update, keys []string) {
+func (c simpleCallbacksAdapter) OnUpdatesKeysKnown(updates []api.Update, keys []string) {
 	c.OnUpdates(updates)
 }
+
+var _ CallbacksWithKeysKnown = simpleCallbacksAdapter{}
 
 type handshakeStatus struct {
 	helloReceivedChan chan struct{}
@@ -185,6 +192,39 @@ func (s *SyncerClient) Start(cxt context.Context) error {
 	// Connect synchronously so that we can return an error early if we can't connect at all.
 	s.logCxt.Info("Starting Typha client...")
 
+	var connectionFinishedWG sync.WaitGroup
+	err := s.startOneConnection(cxt, &connectionFinishedWG)
+	if err != nil {
+		return err
+	}
+
+	// Start a background goroutine to try to restart the connection if it fails.
+	// We can only do that if the client is restart-aware.
+	s.Finished.Add(1)
+	go func() {
+		defer s.Finished.Done()
+
+		for cxt.Err() == nil {
+			connectionFinishedWG.Wait()
+			if rac, ok := s.callbacks.(RestartAwareCallbacks); ok {
+				log.Info("Typha connection failed but client callback is restart-aware.  Restarting connection...")
+				rac.OnTyphaConnectionRestarted()
+			} else {
+				log.Info("Typha client callback is not restart-aware. Exiting...")
+				return
+			}
+			err := s.startOneConnection(cxt, &connectionFinishedWG)
+			if err != nil {
+				log.WithError(err).Error("Failed to restart Typha client. Exiting...")
+				return
+			}
+		}
+	}()
+
+	return nil
+}
+
+func (s *SyncerClient) startOneConnection(cxt context.Context, connFinished *sync.WaitGroup) error {
 	// Defensive: in case there's a bug in NextAddr() and it never stops returning values,
 	// set a sanity limit on the number of tries.
 	maxTries := s.calculateConnectionAttemptLimit(len(s.discoverer.CachedTyphaAddrs()))
@@ -212,18 +252,18 @@ func (s *SyncerClient) Start(cxt context.Context) error {
 
 	// Then start our background goroutines.  We start the main loop and a second goroutine to
 	// manage shutdown.
-	cxt, cancelFn := context.WithCancel(cxt)
-	s.Finished.Add(1)
-	go s.loop(cxt, cancelFn)
+	connCtx, cancelFn := context.WithCancel(cxt)
+	connFinished.Add(1)
+	go s.loop(connCtx, cancelFn, connFinished)
 
-	s.Finished.Add(1)
+	connFinished.Add(1)
 	go func() {
 		// Broadcast that we're finished.
-		defer s.Finished.Done()
+		defer connFinished.Done()
 
 		// Wait for the context to finish, either due to external cancel or our own loop
 		// exiting.
-		<-cxt.Done()
+		<-connCtx.Done()
 		s.logCxt.Info("Typha client Context asked us to exit, closing connection...")
 		// Close the connection.  This will trigger the main loop to exit if it hasn't
 		// already.
@@ -400,8 +440,8 @@ func (s *SyncerClient) logConnectionFailure(cxt context.Context, logCxt *log.Ent
 	logCxt.WithError(err).Errorf("Failed to %s", operation)
 }
 
-func (s *SyncerClient) loop(cxt context.Context, cancelFn context.CancelFunc) {
-	defer s.Finished.Done()
+func (s *SyncerClient) loop(cxt context.Context, cancelFn context.CancelFunc, connFinished *sync.WaitGroup) {
+	defer connFinished.Done()
 	defer cancelFn()
 
 	logCxt := s.logCxt.WithField("connection", s.connInfo)
