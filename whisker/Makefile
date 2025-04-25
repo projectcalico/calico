@@ -6,7 +6,7 @@ EXCLUDEARCH        ?=ppc64le s390x
 
 # Configure variables used by ci/cd common targets from lib.Makefile.
 BUILD_IMAGES=whisker
-BUILD_IMAGE_NAME=node:22.14
+BUILD_IMAGE_NAME=node:22.15
 
 ###############################################################################
 # include ../lib.Makefile
