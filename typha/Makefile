@@ -101,30 +101,31 @@ sub-image-fips-%:
 TYPHA_IMAGE_WITH_TAG=$(TYPHA_IMAGE):latest-$(ARCH)
 TYPHA_IMAGE_ID=$(shell docker images -q $(TYPHA_IMAGE_WITH_TAG))
 
+docker-image/LICENSE: ../LICENSE.md
+	cp ../LICENSE.md $@
+
 # This target actually builds the image if any of its dependencies have changed or if it's
 # missing from docker.
 $(TYPHA_CONTAINER_CREATED): $(BINDIR)/calico-typha-$(ARCH) \
-                            LICENSE \
+                            docker-image/LICENSE \
                             docker-image/Dockerfile \
                             docker-image/typha.cfg \
                             $(shell test "$(TYPHA_IMAGE_ID)" || echo force-rebuild)
 	rm -rf docker-image/bin
 	mkdir -p docker-image/bin
 	cp $(BINDIR)/calico-typha-$(ARCH) docker-image/bin/
-	cp LICENSE docker-image/
 	$(DOCKER_BUILD) -t $(TYPHA_IMAGE):latest-$(ARCH) -f docker-image/Dockerfile docker-image
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $(TYPHA_CONTAINER_CREATED)
 
 $(TYPHA_CONTAINER_FIPS_CREATED): $(BINDIR)/calico-typha-$(ARCH) \
-                            LICENSE \
+                            docker-image/LICENSE \
                             docker-image/Dockerfile \
                             docker-image/typha.cfg \
                             $(shell test "$(TYPHA_IMAGE_ID)" || echo force-rebuild)
 	rm -rf docker-image/bin
 	mkdir -p docker-image/bin
 	cp $(BINDIR)/calico-typha-$(ARCH) docker-image/bin/
-	cp LICENSE docker-image/
 	$(DOCKER_BUILD) -t $(TYPHA_IMAGE):latest-fips-$(ARCH) -f docker-image/Dockerfile docker-image
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest-fips LATEST_IMAGE_TAG=latest-fips
 	touch $(TYPHA_CONTAINER_FIPS_CREATED)
