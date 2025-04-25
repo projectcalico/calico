@@ -380,10 +380,18 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			options.SimulateRoutes = false
 			switch testOpts.tunnel {
 			case "none":
-				// nothing
+				// Enable adding simulated routes.
+				options.SimulateRoutes = true
 			case "ipip":
 				options.IPIPMode = api.IPIPModeAlways
-				options.SimulateRoutes = true
+				if options.EnableIPv6 {
+					options.SimulateRoutes = true
+					options.IPIPMode = api.IPIPModeNever
+				} else {
+					// Enable Felix programming IPIP routes.
+					options.SimulateRoutes = false
+					options.ExtraEnvVars["FELIX_ProgramRoutes"] = "Enabled"
+				}
 			case "vxlan":
 				options.VXLANMode = api.VXLANModeAlways
 				options.VXLANStrategy = infrastructure.NewDefaultVXLANStrategy(options.IPPoolCIDR, options.IPv6PoolCIDR)
