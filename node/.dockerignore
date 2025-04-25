@@ -7,7 +7,7 @@
 !vendor/github.com/kelseyhightower/confd/etc/calico/confd
 # - AlmaLinux repository file and our license
 !almalinux.repo
-!LICENSE
+!dist/LICENSE
 # - Files used in the windows image
 !windows-packaging/CalicoWindows/libs
 !windows-packaging/CalicoWindows/node
