@@ -263,6 +263,7 @@ sub-image-fips-%:
 	$(MAKE) image FIPS=true ARCH=$*
 
 dist/LICENSE: ../LICENSE.md
+	mkdir -p dist
 	cp ../LICENSE.md $@
 
 image $(NODE_IMAGE): register $(NODE_CONTAINER_MARKER)
