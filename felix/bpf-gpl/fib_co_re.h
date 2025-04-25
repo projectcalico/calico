@@ -6,7 +6,6 @@
 #define __CALI_FIB_CO_RE_H__
 
 #include "profiling.h"
-#include <linux/if_packet.h>
 
 static CALI_BPF_INLINE int forward_or_drop(struct cali_tc_ctx *ctx)
 {

@@ -82,7 +82,7 @@ const (
 	FlagNoDSR           Flags = 0x80
 	FlagBlackHoleDrop   Flags = 0x100
 	FlagBlackHoleReject Flags = 0x200
-	FlagWorkloadVM      Flags = 0x800
+	FlagVMWorkload      Flags = 0x800
 
 	FlagsUnknown            Flags = 0
 	FlagsRemoteWorkload           = FlagWorkload
@@ -169,7 +169,7 @@ func (v Value) String() string {
 		parts = append(parts, "tunneled")
 	}
 
-	if typeFlags&FlagWorkloadVM != 0 {
+	if typeFlags&FlagVMWorkload != 0 {
 		parts = append(parts, "vm")
 	}
 
