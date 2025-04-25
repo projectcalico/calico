@@ -5,7 +5,7 @@ PACKAGE_NAME ?= github.com/projectcalico/calico/third_party/envoy-proxy
 ENVOY_PROXY_IMAGE ?= envoy-proxy
 BUILD_IMAGES ?= $(ENVOY_PROXY_IMAGE)
 
-ENVOYBINARY_IMAGE ?= quay.io/tigera/envoybinary:v1.33.1
+ENVOYBINARY_IMAGE ?= quay.io/tigera/envoybinary:v1.31.5
 
 EXCLUDEARCH ?= ppc64le s390x
 
