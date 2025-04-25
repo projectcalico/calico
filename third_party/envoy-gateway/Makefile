@@ -5,7 +5,7 @@ PACKAGE_NAME ?= github.com/projectcalico/calico/third_party/envoy-gateway
 ENVOY_GATEWAY_IMAGE ?= envoy-gateway
 BUILD_IMAGES ?= $(ENVOY_GATEWAY_IMAGE)
 
-ENVOY_GATEWAY_VERSION=v1.3.2
+ENVOY_GATEWAY_VERSION=v1.2.6
 
 ##############################################################################
 # Include lib.Makefile before anything else
@@ -24,6 +24,7 @@ init-source:: $(ENVOY_GATEWAY_DOWNLOADED)
 $(ENVOY_GATEWAY_DOWNLOADED):
 	mkdir -p envoy-gateway
 	curl -sfL https://github.com/envoyproxy/gateway/archive/refs/tags/$(ENVOY_GATEWAY_VERSION).tar.gz | tar xz --strip-components 1 -C envoy-gateway
+	patch -d envoy-gateway -p1 < patches/0001-Bump-golang.org-x-net-to-v0.34.0-to-fix-CVE-2024-453.patch
 	touch $@
 
 .PHONY: build
