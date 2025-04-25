@@ -20,10 +20,11 @@ import (
 	"flag"
 	"fmt"
 
-	"github.com/projectcalico/calico/goldmane/pkg/client"
-	"github.com/projectcalico/calico/goldmane/proto"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
+
+	"github.com/projectcalico/calico/goldmane/pkg/client"
+	"github.com/projectcalico/calico/goldmane/proto"
 )
 
 var (
