@@ -93,7 +93,7 @@ var (
 	vxlanModeRegex          = regexp.MustCompile("^(Always|CrossSubnet|Never)$")
 	assignmentModeRegex     = regexp.MustCompile("^(Automatic|Manual)$")
 	assignIPsRegex          = regexp.MustCompile("^(AllServices|RequestedServicesOnly)$")
-	logLevelRegex           = regexp.MustCompile("^(Debug|Info|Warning|Error|Fatal)$")
+	logLevelRegex           = regexp.MustCompile("^(Trace|Debug|Info|Warning|Error|Fatal)$")
 	bpfLogLevelRegex        = regexp.MustCompile("^(Debug|Info|Off)$")
 	bpfServiceModeRegex     = regexp.MustCompile("^(Tunnel|DSR)$")
 	bpfCTLBRegex            = regexp.MustCompile("^(Disabled|Enabled|TCP)$")

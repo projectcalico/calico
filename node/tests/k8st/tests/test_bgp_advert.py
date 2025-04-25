@@ -114,7 +114,7 @@ class _TestBGPAdvert(TestBase):
 
         # Enable debug logging
         self.update_ds_env("calico-node",
-                           "kube-system",
+                           "calico-system",
                            {"BGP_LOGSEVERITYSCREEN": "debug"})
 
         # Establish BGPPeer from cluster nodes to node-extra
@@ -131,7 +131,7 @@ apiVersion: v1
 kind: Secret
 metadata:
   name: bgp-secrets
-  namespace: kube-system
+  namespace: calico-system
 type: Opaque
 stringData:
   rr-password: very-secret
@@ -406,7 +406,7 @@ EOF
             # Label one node in order to exclude it from service advertisement.
             # After this, we should expect that all routes from that node are
             # withdrawn.
-            kubectl("label node %s node.kubernetes.io/exclude-from-external-load-balancers=true" % self.nodes[1])
+            kubectl("label node %s node.kubernetes.io/exclude-from-external-load-balancers=true --overwrite" % self.nodes[1])
 
             # Assert routes are correct and services are accessible.
             # It should no longer have a route via self.nodes[1]
@@ -941,6 +941,19 @@ spec:
         kubernetes.io/os: linux
         kubernetes.io/hostname: %s
 ---
+apiVersion: projectcalico.org/v3
+kind: IPPool
+metadata:
+ name: loadbalancer-ip-pool
+spec:
+ cidr: 80.15.0.100/32
+ blockSize: 32
+ natOutgoing: true
+ disabled: false
+ assignmentMode: Automatic
+ allowedUses:
+  - LoadBalancer
+---
 apiVersion: v1
 kind: Service
 metadata:
@@ -950,7 +963,7 @@ metadata:
     app: nginx
     run: nginx-rr
   annotations:
-    metallb.universe.tf/loadBalancerIPs: 80.15.0.100
+    projectcalico.org/loadBalancerIPs: '["80.15.0.100"]'
 spec:
   ports:
   - port: 80
@@ -1012,3 +1025,4 @@ EOF
         load_balancer_ip = svc_dict['spec']['loadBalancerIP']
         retry_until_success(lambda: self.assertIn(cluster_ip, self.get_routes()))
         retry_until_success(lambda: self.assertIn(load_balancer_ip, self.get_routes()))
+        kubectl("delete ippool loadbalancer-ip-pool")

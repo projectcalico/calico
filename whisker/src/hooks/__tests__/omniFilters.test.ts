@@ -1,4 +1,4 @@
-import { renderHook } from '@/test-utils/helper';
+import { act, renderHook, waitFor } from '@/test-utils/helper';
 import { useSelectedListOmniFilters } from '..';
 import {
     OmniFilterParam,
@@ -150,17 +150,17 @@ describe('useSelectedListOmniFilters', () => {
 });
 
 describe('useOmniFilterData', () => {
-    const hookResponse = {
-        data: {
-            pageParams: [],
-            pages: [],
-        },
-        fetchNextPage: jest.fn(),
-        isLoading: false,
-        isFetchingNextPage: false,
-    } as any;
-
     it('should return the expected data', () => {
+        const hookResponse = {
+            data: {
+                pageParams: [],
+                pages: [],
+            },
+            fetchNextPage: jest.fn(),
+            refetch: jest.fn(),
+            isLoading: false,
+            isFetchingNextPage: false,
+        } as any;
         jest.mocked(useInfiniteFilterQuery).mockImplementation(
             (filterParam) => {
                 if (filterParam === 'policy') {
@@ -216,6 +216,9 @@ describe('useOmniFilterData', () => {
                 total: 0,
             },
         });
+
+        expect(hookResponse.fetchNextPage).not.toHaveBeenCalled();
+        expect(hookResponse.refetch).not.toHaveBeenCalled();
     });
 
     it('should fetch the next page', () => {
@@ -226,6 +229,7 @@ describe('useOmniFilterData', () => {
                 pages: [],
             },
             fetchNextPage: fetchNextPageMock,
+            refetch: jest.fn(),
             isLoading: false,
             isFetchingNextPage: false,
         } as any;
@@ -236,5 +240,34 @@ describe('useOmniFilterData', () => {
         result.current[1](ListOmniFilterKeys.source_namespace, null);
 
         expect(fetchNextPageMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('should refetch when the same query is passed', async () => {
+        const refetchMock = jest.fn();
+        const hookResponse = {
+            data: {
+                pageParams: [],
+                pages: [],
+            },
+            fetchNextPage: jest.fn(),
+            refetch: refetchMock,
+            isLoading: false,
+            isFetchingNextPage: false,
+        } as any;
+        jest.mocked(useInfiniteFilterQuery).mockReturnValue(hookResponse);
+
+        const { result, rerender } = renderHook(() => useOmniFilterData());
+
+        act(() =>
+            result.current[1](ListOmniFilterKeys.source_namespace, 'foo'),
+        );
+
+        rerender();
+
+        act(() =>
+            result.current[1](ListOmniFilterKeys.source_namespace, 'foo'),
+        );
+
+        await waitFor(() => expect(refetchMock).toHaveBeenCalledTimes(1));
     });
 });

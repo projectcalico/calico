@@ -81,7 +81,12 @@ const PortOmniFilter: React.FC<PortOmniFilterProps> = ({
                     <>
                         <OmniFilterTrigger
                             isOpen={isOpen}
-                            onClick={() => undefined}
+                            onClick={() =>
+                                reset({
+                                    port,
+                                    protocol,
+                                })
+                            }
                             label='Port'
                             isActive={!!(portLabel || protocol)}
                             isDisabled={isDisabled}

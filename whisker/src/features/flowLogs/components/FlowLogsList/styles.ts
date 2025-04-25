@@ -1,11 +1,14 @@
 export const tableStyles = {
-    fontFamily: 'courier',
+    fontFamily: 'monospace, monospace',
     overflow: 'hidden',
 };
 
 export const headerStyles = {
     '>div>div': {
         textTransform: 'none',
+        py: '2px',
+    },
+    '>div>div:last-of-type': {
         py: 0,
     },
     position: 'sticky',

@@ -151,23 +151,29 @@ rules:
   - apiGroups:
       - operator.tigera.io
     resources:
+      # Note: any resources used by the operator within an OwnerReference for resources
+      # it creates requires permissions to <resource>/finalizers.
+      - apiservers
       - apiservers/finalizers
+      - apiservers/status
       - gatewayapis
       - gatewayapis/finalizers
-      - installations
-      - installations/status
-      - installations/finalizers
-      - tigerastatuses
-      - tigerastatuses/status
-      - tigerastatuses/finalizers
-      - apiservers
-      - apiservers/status
-      - imagesets
-      - whiskers
       - goldmanes
+      - goldmanes/finalizers
+      - goldmanes/status
+      - imagesets
+      - installations
+      - installations/finalizers
+      - installations/status
       - managementclusterconnections
       - managementclusterconnections/finalizers
       - managementclusterconnections/status
+      - tigerastatuses
+      - tigerastatuses/status
+      - tigerastatuses/finalizers
+      - whiskers
+      - whiskers/finalizers
+      - whiskers/status
     verbs:
       - get
       - list
@@ -217,6 +223,7 @@ rules:
     resources:
       - kubecontrollersconfigurations
       - bgpconfigurations
+      - clusterinformations
     verbs:
       - get
       - list
@@ -375,13 +382,6 @@ rules:
       - ipamblocks
     verbs:
       - list
-  # Need this permission for the calicoctl version mismatch checking
-  - apiGroups:
-      - crd.projectcalico.org
-    resources:
-      - clusterinformations
-    verbs:
-      - get
   # For AWS security group setup.
   - apiGroups:
       - batch
@@ -393,6 +393,7 @@ rules:
       - update
       - list
       - watch
+      - delete
 {{- else }}
   # Add the appropriate pod security policy permissions
   - apiGroups:

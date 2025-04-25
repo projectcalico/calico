@@ -245,7 +245,7 @@ func (rg *routeGenerator) getAllRoutesForService(svc *v1.Service) []string {
 	routes := make([]string, 0)
 	if rg.client.AdvertiseClusterIPs() {
 		// Only advertise cluster IPs if we've been told to.
-		routes = append(routes, svc.Spec.ClusterIP)
+		routes = append(routes, svc.Spec.ClusterIPs...)
 	}
 	svcID := fmt.Sprintf("%s/%s", svc.Namespace, svc.Name)
 
@@ -455,9 +455,9 @@ func (rg *routeGenerator) advertiseThisService(svc *v1.Service, ep *v1.Endpoints
 		return false
 	}
 
-	// also do nothing if the clusterIP is empty or None
+	// also do nothing if no cluster IPs are assigned
 	if svc.Spec.ClusterIP == "" || svc.Spec.ClusterIP == "None" {
-		logc.Debug("Skipping service with no cluster IP")
+		logc.Debug("Skipping service with no cluster IPs")
 		return false
 	}
 

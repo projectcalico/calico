@@ -7,10 +7,10 @@ import { VariableSizeList } from 'react-window';
 
 export interface VirtualisationProps {
     tableHeight: number;
-    subRowHeight: number;
     rowHeight: number;
     subRowStyles?: SystemStyleObject;
     shouldAnimate: (obj: any) => boolean;
+    setRowHeight?: (height: number) => void;
 }
 
 export type VirtualizedRowData = Omit<
@@ -95,7 +95,6 @@ const VirtualizedTableRow = ({
                         }
 
                         if (virtualisationProps) {
-                            console.log('resetting height');
                             //force re-calculating the row height
                             virtualizationRef.current?.resetAfterIndex(0);
                         }

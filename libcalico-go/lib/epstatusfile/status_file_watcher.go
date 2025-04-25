@@ -32,6 +32,7 @@ type Callbacks struct {
 	OnFileCreation func(fileName string)
 	OnFileUpdate   func(fileName string)
 	OnFileDeletion func(fileName string)
+	OnInSync       func(inSync bool)
 }
 
 type FileWatcher struct {
@@ -43,22 +44,44 @@ type FileWatcher struct {
 
 	pollTicker *time.Ticker
 
-	callbacks Callbacks
+	callbacks  Callbacks
+	inSyncOnce sync.Once
 
 	// Shim function variable to get a new watcher
 	newFsnotifyWatcherFunc func() (*fsnotify.Watcher, error)
 
 	// variable for UT
-	fsnotifyActive bool
+	fsnotifyActive *activityReporter
+}
+
+// activityReporter is a test struct for reporting
+// whether a watch loop is running.
+type activityReporter struct {
+	active bool
+	mu     sync.Mutex
+}
+
+func (r *activityReporter) reportActivity(active bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	r.active = active
+}
+
+func (r *activityReporter) Poll() bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	return r.active
 }
 
 // NewWatcher creates a new Watcher instance.
 func NewFileWatcher(dir string, pollInterval time.Duration) *FileWatcher {
-	return NewFileWatcherWithShim(dir, pollInterval, fsnotify.NewWatcher)
+	return NewFileWatcherWithShim(dir, pollInterval, fsnotify.NewWatcher, nil)
 }
 
 // NewWatcher creates a new Watcher instance.
-func NewFileWatcherWithShim(dir string, pollInterval time.Duration, newFsnotifyWatcherFunc func() (*fsnotify.Watcher, error)) *FileWatcher {
+func NewFileWatcherWithShim(dir string, pollInterval time.Duration, newFsnotifyWatcherFunc func() (*fsnotify.Watcher, error), fsnotifyActivityReporter *activityReporter) *FileWatcher {
 	pollTicker := time.NewTicker(pollInterval)
 
 	return &FileWatcher{
@@ -67,6 +90,7 @@ func NewFileWatcherWithShim(dir string, pollInterval time.Duration, newFsnotifyW
 		stopChan:               make(chan struct{}),
 		pollTicker:             pollTicker,
 		newFsnotifyWatcherFunc: newFsnotifyWatcherFunc,
+		fsnotifyActive:         fsnotifyActivityReporter,
 	}
 }
 
@@ -80,8 +104,8 @@ func (w *FileWatcher) Start() {
 }
 
 func (w *FileWatcher) newFsnotifyWatcher() error {
-	// reset w.fsWatcher
-	w.fsWatcher = nil
+
+	w.closeWatcher()
 
 	watcher, err := w.newFsnotifyWatcherFunc()
 	if err != nil {
@@ -101,10 +125,7 @@ func (w *FileWatcher) newFsnotifyWatcher() error {
 }
 
 func (w *FileWatcher) runFsnotifyWatcher(watcher *fsnotify.Watcher) error {
-	w.fsnotifyActive = true
-
-	// Get current state of the directory and emit initial events.
-	w.scanDirectory()
+	w.reportFsnotifyActivity(true)
 
 	// Listen for events and loop until error occurs.
 	for {
@@ -138,7 +159,6 @@ func (w *FileWatcher) runFsnotifyWatcher(watcher *fsnotify.Watcher) error {
 					}
 				}
 			}
-
 		case err, ok := <-watcher.Errors:
 			if !ok {
 				// Stop if channel is closed.
@@ -155,9 +175,7 @@ func (w *FileWatcher) runFsnotifyWatcher(watcher *fsnotify.Watcher) error {
 // Start begins watching the directory.
 func (w *FileWatcher) runWatcher() {
 	defer func() {
-		if w.fsWatcher != nil {
-			defer w.fsWatcher.Close()
-		}
+		w.closeWatcher()
 	}()
 
 	for {
@@ -167,10 +185,13 @@ func (w *FileWatcher) runWatcher() {
 			log.WithError(err).Info("Error initializing fsnotify. Falling back to polling.")
 		}
 
+		// Get current state of the directory and emit initial events.
+		w.scanDirectory()
+		w.onInSync()
 		if w.fsWatcher != nil {
 			// Run fsnotify watcher loop if possible.
 			err := w.runFsnotifyWatcher(w.fsWatcher)
-			w.fsnotifyActive = false
+			w.reportFsnotifyActivity(false)
 			if err != nil {
 				// fall back to polling.
 				log.WithError(err).Info("Start polling directory on updates.")
@@ -182,7 +203,7 @@ func (w *FileWatcher) runWatcher() {
 
 		select {
 		case <-w.pollTicker.C:
-			w.scanDirectory()
+			continue
 		case <-w.stopChan:
 			return
 		}
@@ -244,4 +265,31 @@ func (w *FileWatcher) scanDirectory() {
 // Stop stops the watcher.
 func (w *FileWatcher) Stop() {
 	close(w.stopChan)
+}
+
+// closeWatcher ensures the fsnotify.Watcher cannot be double-closed.
+// Logs & continues if encounters close errors.
+func (w *FileWatcher) closeWatcher() {
+	if w.fsWatcher != nil {
+		err := w.fsWatcher.Close()
+		if err != nil {
+			log.WithError(err).Info("Ignoring error following close of fsWatcher")
+		}
+		// reset.
+		w.fsWatcher = nil
+	}
+}
+
+func (w *FileWatcher) reportFsnotifyActivity(a bool) {
+	if w.fsnotifyActive == nil {
+		return
+	}
+
+	w.fsnotifyActive.reportActivity(a)
+}
+
+func (w *FileWatcher) onInSync() {
+	w.inSyncOnce.Do(func() {
+		w.callbacks.OnInSync(true)
+	})
 }

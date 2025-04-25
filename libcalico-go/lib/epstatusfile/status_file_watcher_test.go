@@ -16,9 +16,11 @@ package epstatusfile
 
 import (
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
+	"sync"
 	"time"
 
 	"github.com/fsnotify/fsnotify"
@@ -27,10 +29,45 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-var newFsnotifyWatcherErr bool
+type fsnotifyError struct {
+	remainingErrors int
+	sync.Mutex
+}
+
+func (e *fsnotifyError) ShouldError() bool {
+	e.Lock()
+	defer func() {
+		if e.remainingErrors > 0 {
+			e.remainingErrors--
+			log.Debugf("fsnotifyError has %d failures remaining", e.remainingErrors)
+		}
+		e.Unlock()
+	}()
+
+	return e.remainingErrors != 0
+}
+
+// ErrorNTimes instructs ShouldError to return false the next N times.
+// Set to -1 to return false forever, or 0 to return true forever.
+func (e *fsnotifyError) ErrorNTimes(n int) {
+	e.Lock()
+	defer e.Unlock()
+
+	e.remainingErrors = n
+}
+
+// A shim for generating artificial errors during fsnotify setup.
+func (e *fsnotifyError) newFsnotifyWatcherShim() (*fsnotify.Watcher, error) {
+	if e.ShouldError() {
+		return nil, fmt.Errorf("simulating an error on initializing fsnotify")
+	}
+	return fsnotify.NewWatcher()
+}
 
 type eventRecorder struct {
 	fileNameToEvents map[string][]string
+	inSyncEvents     []bool
+	sync.Mutex
 }
 
 func newEventRecorder() *eventRecorder {
@@ -40,6 +77,8 @@ func newEventRecorder() *eventRecorder {
 }
 
 func (e *eventRecorder) OnFileEvent(fileName string, event string) {
+	e.Lock()
+	defer e.Unlock()
 	log.WithField("file", fileName).Debugf("file %s", event)
 
 	// Initialize the slice if it doesn't exist
@@ -65,6 +104,24 @@ func (e *eventRecorder) OnFileDeletion(fileName string) {
 	e.OnFileEvent(fileName, "delete")
 }
 
+func (e *eventRecorder) OnInSync(s bool) {
+	e.Lock()
+	defer e.Unlock()
+	e.inSyncEvents = append(e.inSyncEvents, s)
+}
+
+func (e *eventRecorder) Events() map[string][]string {
+	e.Lock()
+	defer e.Unlock()
+	return maps.Clone(e.fileNameToEvents)
+}
+
+func (e *eventRecorder) InSyncEvents() []bool {
+	e.Lock()
+	defer e.Unlock()
+	return e.inSyncEvents
+}
+
 func clearDir(dirPath string) {
 	entries, err := os.ReadDir(dirPath)
 	Expect(err).ShouldNot(HaveOccurred())
@@ -77,16 +134,11 @@ func clearDir(dirPath string) {
 	log.Infof("Directory %s cleared successfully!", dirPath)
 }
 
-func newFsnotifyWatcherShim() (*fsnotify.Watcher, error) {
-	if newFsnotifyWatcherErr {
-		return nil, fmt.Errorf("simulating an errro on initializing fsnotify")
-	}
-	return fsnotify.NewWatcher()
-}
-
 var _ = Describe("Workload endpoint status file watcher test", func() {
 	var w *FileWatcher
 	var r *eventRecorder
+	var fsnotifyErr *fsnotifyError
+	var fsnotifyActivity *activityReporter
 
 	tmpPath := "/go/src/github.com/projectcalico/calico/ut-tmp-dir"
 	statusDir := tmpPath + "/endpoint-status"
@@ -95,23 +147,44 @@ var _ = Describe("Workload endpoint status file watcher test", func() {
 
 	writer := NewEndpointStatusFileWriter(tmpPath)
 
-	notifyActive := func() bool {
-		return w.fsnotifyActive
+	haveEvents := func(filePath string, expected []string) bool {
+		// The kernel can fire many WRITE events for a single logical write, if the data is truncated.
+		// So, it's error-prone to check our sequence of logical events is directly-equivalent to the actual.
+		// Instead, we check that the logical sequence exists within the actual sequence, which should account for duplicates.
+		events, exist := r.Events()[filePath]
+		if !exist {
+			return false
+		}
+
+		window := len(expected)
+		for i := 0; i < len(events)-(window-1); i++ {
+			log.Infof("searching file events window %v, matching %v", events[i:i+window], expected)
+			if slices.Equal(events[i:i+window], expected) {
+				return true
+			}
+		}
+		return false
 	}
 
-	haveEvents := func(filePath string, events []string) bool {
-		return slices.Equal(r.fileNameToEvents[filePath], events)
+	lastInSync := func() bool {
+		e := r.InSyncEvents()
+		if len(e) == 0 {
+			return false
+		}
+		return e[len(e)-1]
 	}
 
 	BeforeEach(func() {
 		clearDir(statusDir)
-
-		w = NewFileWatcherWithShim(statusDir, 10*time.Second, newFsnotifyWatcherShim)
+		fsnotifyActivity = new(activityReporter)
+		fsnotifyErr = new(fsnotifyError)
+		w = NewFileWatcherWithShim(statusDir, 10*time.Second, fsnotifyErr.newFsnotifyWatcherShim, fsnotifyActivity)
 		r = newEventRecorder()
 		w.SetCallbacks(Callbacks{
 			OnFileCreation: r.OnFileCreate,
 			OnFileUpdate:   r.OnFileUpdate,
 			OnFileDeletion: r.OnFileDeletion,
+			OnInSync:       r.OnInSync,
 		})
 	})
 
@@ -121,10 +194,13 @@ var _ = Describe("Workload endpoint status file watcher test", func() {
 
 		w.Start()
 		defer w.Stop()
-		Eventually(notifyActive, "3s").Should(BeTrue())
+		Eventually(fsnotifyActivity.Poll, "3s").Should(BeTrue())
 
 		filePath := filepath.Join(statusDir, "pod1")
 		Eventually(haveEvents, "5s", "1s").WithArguments(filePath, []string{"create"}).Should(BeTrue())
+		Eventually(r.InSyncEvents).ShouldNot(BeEmpty())
+
+		Eventually(lastInSync).Should(BeTrue())
 	})
 
 	It("should receive events on files been updated", func() {
@@ -133,15 +209,17 @@ var _ = Describe("Workload endpoint status file watcher test", func() {
 
 		w.Start()
 		defer w.Stop()
-		Eventually(notifyActive, "3s").Should(BeTrue())
+		Eventually(fsnotifyActivity.Poll, "3s").Should(BeTrue())
 
 		filePath := filepath.Join(statusDir, "pod1")
 		Eventually(haveEvents, "5s", "1s").WithArguments(filePath, []string{"create"}).Should(BeTrue())
+		Eventually(lastInSync).Should(BeTrue())
 
 		err = writer.WriteStatusFile("pod1", "name: pod1, status: active")
 		Expect(err).ShouldNot(HaveOccurred())
 
 		Eventually(haveEvents, "5s", "1s").WithArguments(filePath, []string{"create", "update"}).Should(BeTrue())
+		Eventually(lastInSync).Should(BeTrue())
 	})
 
 	It("should receive events on files been deleted", func() {
@@ -150,38 +228,42 @@ var _ = Describe("Workload endpoint status file watcher test", func() {
 
 		w.Start()
 		defer w.Stop()
-		Eventually(notifyActive, "3s").Should(BeTrue())
+		Eventually(fsnotifyActivity.Poll, "3s").Should(BeTrue())
 
 		filePath := filepath.Join(statusDir, "pod1")
 		Eventually(haveEvents, "5s", "1s").WithArguments(filePath, []string{"create"}).Should(BeTrue())
+		Eventually(lastInSync).Should(BeTrue())
 
 		err = writer.DeleteStatusFile("pod1")
 		Expect(err).ShouldNot(HaveOccurred())
 
 		Eventually(haveEvents, "5s", "1s").WithArguments(filePath, []string{"create", "delete"}).Should(BeTrue())
+		Eventually(lastInSync).Should(BeTrue())
+
 	})
 
 	It("should receive events when fsnotify fails", func() {
 		w.Start()
 		defer w.Stop()
-		Eventually(notifyActive, "3s").Should(BeTrue())
+		Eventually(fsnotifyActivity.Poll, "3s").Should(BeTrue())
 
 		err = writer.WriteStatusFile("pod1", "name: pod1")
 		Expect(err).ShouldNot(HaveOccurred())
 
 		filePath := filepath.Join(statusDir, "pod1")
 		Eventually(haveEvents, "5s", "1s").WithArguments(filePath, []string{"create", "update"}).Should(BeTrue())
+		Eventually(lastInSync).Should(BeTrue())
 
-		// Similate an error on new fsnotify watcher and close the current one.
-		newFsnotifyWatcherErr = true
-		defer func() { newFsnotifyWatcherErr = false }()
+		// Simulate an error on new fsnotify watcher and close the current one, triggering a refresh on the watcher goroutine.
+		fsnotifyErr.ErrorNTimes(1)
 		w.fsWatcher.Close()
 
-		Eventually(notifyActive, "3s").Should(BeFalse())
+		Eventually(fsnotifyActivity.Poll, "3s").Should(BeFalse())
 
 		err = writer.WriteStatusFile("pod1", "name: pod1, status: active")
 		Expect(err).ShouldNot(HaveOccurred())
 
 		Eventually(haveEvents, "15s", "1s").WithArguments(filePath, []string{"create", "update", "update"}).Should(BeTrue())
+		Eventually(lastInSync).Should(BeTrue())
 	})
 })

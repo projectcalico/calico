@@ -15,9 +15,6 @@ BUILD_IMAGES   ?=$(CNI_PLUGIN_IMAGE)
 ###############################################################################
 include ../lib.Makefile
 
-###############################################################################
-LDFLAGS = -X main.VERSION=$(GIT_VERSION)
-
 SRC_FILES=$(shell find pkg cmd internal -name '*.go') $(shell find ../libcalico-go -name '*.go')
 TEST_SRC_FILES=$(shell find tests -name '*.go')
 WINFV_SRCFILES=$(shell find win_tests -name '*.go')
@@ -96,7 +93,7 @@ else
 endif
 
 $(BIN)/calico-ipam: $(BIN)/calico
-	cp "$<" "$@"
+	ln -sf "./calico" "$@"
 
 ## Build the Calico network and ipam plugins for Windows
 $(WINDOWS_BIN)/install.exe: $(SRC_FILES)

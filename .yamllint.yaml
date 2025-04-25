@@ -21,3 +21,4 @@ ignore:
   # these dirs are cloned repos, we don't own yamls that they may contain
   - cni-plugin/containernetworking-plugins/
   - cni-plugin/flannel-cni-plugin/
+  - pod2daemon/node-driver-registrar/

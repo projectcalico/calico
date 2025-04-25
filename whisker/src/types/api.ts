@@ -64,7 +64,10 @@ export type FilterHint = {
 
 export type ApiFilterResponse = {
     items: FilterHint[];
-    total: number;
+    total: {
+        totalResults: number;
+        totalPages: number;
+    };
 };
 
 export type StartStreamOptions = {
@@ -85,7 +88,7 @@ export type UseStreamResult<T> = {
 
 export type UseStreamOptions<S, R> = {
     path: string;
-    transformResponse: (stream: S) => R;
+    transformResponse: (stream: S) => R | null;
 };
 
 export type FlowsFilterQuery = {
@@ -93,8 +96,12 @@ export type FlowsFilterQuery = {
     type: 'Exact' | 'Fuzzy';
 };
 
+export type FlowsFilterValue =
+    | (FlowsFilterQuery[] & { name: FlowsFilterQuery }[])
+    | undefined;
+
 export type FlowsFilter = Partial<{
-    policies: FlowsFilterQuery[];
+    policies: { name: FlowsFilterQuery }[];
     source_names: FlowsFilterQuery[];
     dest_names: FlowsFilterQuery[];
     source_namespaces: FlowsFilterQuery[];
@@ -105,3 +112,8 @@ export type FlowsFilter = Partial<{
 }>;
 
 export type FlowsFilterKeys = keyof FlowsFilter;
+
+export type BannerContent = {
+    bannerText: string;
+    bannerLink: string;
+};

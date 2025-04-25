@@ -41,6 +41,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/bpfmap"
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
 	bpfconntrack "github.com/projectcalico/calico/felix/bpf/conntrack"
+	bpftimeouts "github.com/projectcalico/calico/felix/bpf/conntrack/timeouts"
 	"github.com/projectcalico/calico/felix/bpf/events"
 	"github.com/projectcalico/calico/felix/bpf/failsafes"
 	bpfifstate "github.com/projectcalico/calico/felix/bpf/ifstate"
@@ -55,6 +56,7 @@ import (
 	bpfutils "github.com/projectcalico/calico/felix/bpf/utils"
 	"github.com/projectcalico/calico/felix/calc"
 	"github.com/projectcalico/calico/felix/collector"
+	collectortypes "github.com/projectcalico/calico/felix/collector/types"
 	"github.com/projectcalico/calico/felix/config"
 	felixconfig "github.com/projectcalico/calico/felix/config"
 	"github.com/projectcalico/calico/felix/dataplane/common"
@@ -109,9 +111,15 @@ var (
 		Name: "felix_int_dataplane_messages",
 		Help: "Number dataplane messages by type.",
 	}, []string{"type"})
+	gaugeInitialResyncApplyTime = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "felix_int_dataplane_initial_resync_time_seconds",
+		Help: "Time in seconds that it took to do the initial resync with " +
+			"the dataplane and bring the dataplane into sync for the first time.",
+	})
 	summaryApplyTime = cprometheus.NewSummary(prometheus.SummaryOpts{
 		Name: "felix_int_dataplane_apply_time_seconds",
-		Help: "Time in seconds that it took to apply a dataplane update.",
+		Help: "Time in seconds for each incremental update to the dataplane " +
+			"(after the initial resync).",
 	})
 	summaryBatchSize = cprometheus.NewSummary(prometheus.SummaryOpts{
 		Name: "felix_int_dataplane_msg_batch_size",
@@ -137,6 +145,7 @@ var (
 
 func init() {
 	prometheus.MustRegister(countDataplaneSyncErrors)
+	prometheus.MustRegister(gaugeInitialResyncApplyTime)
 	prometheus.MustRegister(summaryApplyTime)
 	prometheus.MustRegister(countMessages)
 	prometheus.MustRegister(summaryBatchSize)
@@ -213,7 +222,7 @@ type Config struct {
 	XDPEnabled                         bool
 	XDPAllowGeneric                    bool
 	BPFConntrackCleanupMode            apiv3.BPFConntrackMode
-	BPFConntrackTimeouts               bpfconntrack.Timeouts
+	BPFConntrackTimeouts               bpftimeouts.Timeouts
 	BPFCgroupV2                        string
 	BPFConnTimeLBEnabled               bool
 	BPFConnTimeLB                      string
@@ -668,6 +677,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			config,
 			dp.loopSummarizer,
 			4,
+			config.VXLANMTU,
 		)
 		dp.vxlanParentC = make(chan string, 1)
 		go dp.vxlanManager.KeepVXLANDeviceInSync(context.Background(), config.VXLANMTU, dataplaneFeatures.ChecksumOffloadBroken, 10*time.Second, dp.vxlanParentC)
@@ -834,8 +844,8 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		bpfEvnt            events.Events
 		bpfEventPoller     *bpfEventPoller
 
-		collectorPacketInfoReader    collector.PacketInfoReader
-		collectorConntrackInfoReader collector.ConntrackInfoReader
+		collectorPacketInfoReader    collectortypes.PacketInfoReader
+		collectorConntrackInfoReader collectortypes.ConntrackInfoReader
 	)
 
 	// Initialisation needed for bpf.
@@ -1130,6 +1140,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 				config,
 				dp.loopSummarizer,
 				6,
+				config.VXLANMTUV6,
 			)
 			dp.vxlanParentCV6 = make(chan string, 1)
 			go dp.vxlanManagerV6.KeepVXLANDeviceInSync(context.Background(), config.VXLANMTUV6, dataplaneFeatures.ChecksumOffloadBroken, 10*time.Second, dp.vxlanParentCV6)
@@ -2133,10 +2144,7 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 				}
 				// Actually apply the changes to the dataplane.
 				d.apply()
-
-				// Record stats.
 				applyTime := time.Since(applyStart)
-				summaryApplyTime.Observe(applyTime.Seconds())
 
 				if d.dataplaneNeedsSync {
 					// Dataplane is still dirty, record an error.
@@ -2158,6 +2166,12 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 					if d.config.PostInSyncCallback != nil {
 						d.config.PostInSyncCallback()
 					}
+					// Record a dedicated stat for the initial resync.
+					gaugeInitialResyncApplyTime.Set(applyTime.Seconds())
+				} else {
+					// Don't record the initial resync in the summary stat. On
+					// a quiet cluster it can skew the stat for a long time.
+					summaryApplyTime.Observe(applyTime.Seconds())
 				}
 				d.reportHealth()
 			} else {

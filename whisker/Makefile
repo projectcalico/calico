@@ -4,17 +4,16 @@ PACKAGE_NAME = github.com/projectcalico/calico/whisker
 IMAGE_BUILD_MARKER = whisker_container-$(ARCH).created
 EXCLUDEARCH        ?=ppc64le s390x
 
+# Configure variables used by ci/cd common targets from lib.Makefile.
+BUILD_IMAGES=whisker
+BUILD_IMAGE_NAME=node:22.14
+
 ###############################################################################
 # include ../lib.Makefile
 #   Additions to EXTRA_DOCKER_ARGS need to happen before the include since
 #   that variable is evaluated when we declare DOCKER_RUN and siblings.
 ###############################################################################
 include ../lib.Makefile
-
-# Configure variables used by ci/cd common targets from lib.Makefile.
-BUILD_IMAGES=whisker
-
-BUILD_IMAGE_NAME=node:22.14
 
 DOCKER_RUN_RM:=docker run --rm \
 	--env CYPRESS_CACHE_FOLDER=/code/.cache/Cypress \

@@ -32,8 +32,8 @@ import (
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/projectcalico/calico/felix/bpf/conntrack"
 	"github.com/projectcalico/calico/felix/collector/flowlog"
+	"github.com/projectcalico/calico/felix/collector/local"
 	"github.com/projectcalico/calico/felix/collector/types/endpoint"
 	"github.com/projectcalico/calico/felix/collector/types/tuple"
 	"github.com/projectcalico/calico/felix/fv/connectivity"
@@ -96,12 +96,11 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 		infra = getInfra()
 		opts = infrastructure.DefaultTopologyOptions()
 		opts.IPIPEnabled = false
-		opts.FlowLogSource = infrastructure.FlowLogSourceGoldmane
+		opts.FlowLogSource = infrastructure.FlowLogSourceLocalSocket
 
 		opts.ExtraEnvVars["FELIX_FLOWLOGSFLUSHINTERVAL"] = "5"
 		opts.ExtraEnvVars["FELIX_FLOWLOGSCOLLECTORDEBUGTRACE"] = "true"
-		opts.ExtraEnvVars["FELIX_BPFCONNTRACKTIMEOUTS"] = "TCPFinsSeen=30s"
-		opts.ExtraEnvVars["FELIX_FLOWLOGSGOLDMANESERVER"] = flowlogs.LocalGoldmaneServer
+		opts.ExtraEnvVars["FELIX_FLOWLOGSGOLDMANESERVER"] = local.SocketAddress
 
 		// Start felix instances.
 		tc, client = infrastructure.StartNNodeTopology(2, opts, infra)
@@ -375,14 +374,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 		cc.CheckConnectivity()
 		cc.CheckConnectivity()
 
-		if bpfEnabled {
-			// Make sure that conntrack scanning ticks at least once
-			time.Sleep(3 * conntrack.ScanPeriod)
-		} else {
-			// Allow 6 seconds for the containers.Felix to poll conntrack.  (This is conntrack polling time plus 20%, which gives us
-			// 10% leeway over the polling jitter of 10%)
-			time.Sleep(6 * time.Second)
-		}
+		flowlogs.WaitForConntrackScan(bpfEnabled)
 
 		// Delete conntrack state so that we don't keep seeing 0-metric copies of the logs.  This will allow the flows
 		// to expire quickly.
@@ -398,9 +390,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 			MatchEnforcedPolicies:  true,
 			MatchPendingPolicies:   true,
 			Includes:               []flowlogs.IncludeFilter{flowlogs.IncludeByDestPort(wepPort)},
-			CheckBytes:             false,
 			CheckNumFlowsStarted:   true,
-			CheckFlowsCompleted:    true,
 		})
 
 		ep1_1_Meta := endpoint.Metadata{
@@ -820,11 +810,11 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ aggregation of flow log wit
 		infra = getInfra()
 		opts = infrastructure.DefaultTopologyOptions()
 		opts.IPIPEnabled = false
-		opts.FlowLogSource = infrastructure.FlowLogSourceGoldmane
+		opts.FlowLogSource = infrastructure.FlowLogSourceLocalSocket
 
 		opts.ExtraEnvVars["FELIX_FLOWLOGSFLUSHINTERVAL"] = "5"
 		opts.ExtraEnvVars["FELIX_FLOWLOGSCOLLECTORDEBUGTRACE"] = "true"
-		opts.ExtraEnvVars["FELIX_FLOWLOGSGOLDMANESERVER"] = flowlogs.LocalGoldmaneServer
+		opts.ExtraEnvVars["FELIX_FLOWLOGSGOLDMANESERVER"] = local.SocketAddress
 
 		// Start felix instances.
 		tc, client = infrastructure.StartNNodeTopology(2, opts, infra)
@@ -1025,16 +1015,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ aggregation of flow log wit
 		cc.CheckConnectivity()
 		cc.CheckConnectivity()
 
-		// Wait for conntrack to pick up so that flow is processed with the correct policy definition (this is a hack
-		// because changing the policy before the flow is processed can result in unmatch rule ID).
-		if bpfEnabled {
-			// Make sure that conntrack scanning ticks at least once
-			time.Sleep(3 * conntrack.ScanPeriod)
-		} else {
-			// Allow 6 seconds for the containers.Felix to poll conntrack.  (This is conntrack polling time plus 20%, which gives us
-			// 10% leeway over the polling jitter of 10%)
-			time.Sleep(6 * time.Second)
-		}
+		flowlogs.WaitForConntrackScan(bpfEnabled)
 
 		// Configured staged allow.
 		configureStagedAllow()
@@ -1044,14 +1025,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ aggregation of flow log wit
 		cc.CheckConnectivity()
 		cc.CheckConnectivity()
 
-		if bpfEnabled {
-			// Make sure that conntrack scanning ticks at least once
-			time.Sleep(3 * conntrack.ScanPeriod)
-		} else {
-			// Allow 6 seconds for the containers.Felix to poll conntrack.  (This is conntrack polling time plus 20%, which gives us
-			// 10% leeway over the polling jitter of 10%)
-			time.Sleep(6 * time.Second)
-		}
+		flowlogs.WaitForConntrackScan(bpfEnabled)
 
 		// Delete conntrack state so that we don't keep seeing 0-metric copies of the logs.  This will allow the flows
 		// to expire quickly.
@@ -1066,9 +1040,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ aggregation of flow log wit
 			MatchLabels:            false,
 			MatchPendingPolicies:   false,
 			Includes:               []flowlogs.IncludeFilter{flowlogs.IncludeByDestPort(wepPort)},
-			CheckBytes:             false,
 			CheckNumFlowsStarted:   true,
-			CheckFlowsCompleted:    true,
 		})
 
 		ep1_1_Meta := endpoint.Metadata{
@@ -1163,16 +1135,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ aggregation of flow log wit
 		cc.CheckConnectivity()
 		cc.CheckConnectivity()
 
-		// Wait for conntrack to pick up so that flow is processed with the correct policy definition (this is a hack
-		// because changing the policy before the flow is processed can result in unmatch rule ID).
-		if bpfEnabled {
-			// Make sure that conntrack scanning ticks at least once. Make sure the time is larger than the flush interval, 5s.
-			time.Sleep(6 * conntrack.ScanPeriod)
-		} else {
-			// Allow 6 seconds for the containers.Felix to poll conntrack.  (This is conntrack polling time plus 20%, which gives us
-			// 10% leeway over the polling jitter of 10%)
-			time.Sleep(6 * time.Second)
-		}
+		flowlogs.WaitForConntrackScan(bpfEnabled)
 
 		// TODO (dimitrin): This is expected to fail once
 		// https://tigera.atlassian.net/browse/EV-5659 has been merged. At which point the staged
@@ -1186,14 +1149,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ aggregation of flow log wit
 		cc.CheckConnectivity()
 		cc.CheckConnectivity()
 
-		if bpfEnabled {
-			// Make sure that conntrack scanning ticks at least once
-			time.Sleep(3 * conntrack.ScanPeriod)
-		} else {
-			// Allow 6 seconds for the containers.Felix to poll conntrack.  (This is conntrack polling time plus 20%, which gives us
-			// 10% leeway over the polling jitter of 10%)
-			time.Sleep(6 * time.Second)
-		}
+		flowlogs.WaitForConntrackScan(bpfEnabled)
 
 		// Delete conntrack state so that we don't keep seeing 0-metric copies of the logs.  This will allow the flows
 		// to expire quickly.
@@ -1209,9 +1165,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ aggregation of flow log wit
 			MatchEnforcedPolicies:  true,
 			MatchPendingPolicies:   true,
 			Includes:               []flowlogs.IncludeFilter{flowlogs.IncludeByDestPort(wepPort)},
-			CheckBytes:             false,
 			CheckNumFlowsStarted:   true,
-			CheckFlowsCompleted:    true,
 		})
 
 		ep1_1_Meta := endpoint.Metadata{
@@ -1369,16 +1323,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ aggregation of flow log wit
 		cc.CheckConnectivity()
 		cc.CheckConnectivity()
 
-		// Wait for conntrack to pick up so that flow is processed with the correct policy definition (this is a hack
-		// because changing the policy before the flow is processed can result in unmatch rule ID).
-		if bpfEnabled {
-			// Make sure that conntrack scanning ticks at least once
-			time.Sleep(3 * conntrack.ScanPeriod)
-		} else {
-			// Allow 6 seconds for the Felixes to poll conntrack.  (This is conntrack polling time plus 20%, which gives us
-			// 10% leeway over the polling jitter of 10%)
-			time.Sleep(6 * time.Second)
-		}
+		flowlogs.WaitForConntrackScan(bpfEnabled)
 
 		// Configure staged drop.
 		configureStagedDrop()
@@ -1388,14 +1333,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ aggregation of flow log wit
 		cc.CheckConnectivity()
 		cc.CheckConnectivity()
 
-		if bpfEnabled {
-			// Make sure that conntrack scanning ticks at least once
-			time.Sleep(3 * conntrack.ScanPeriod)
-		} else {
-			// Allow 6 seconds for the Felixes to poll conntrack.  (This is conntrack polling time plus 20%, which gives us
-			// 10% leeway over the polling jitter of 10%)
-			time.Sleep(6 * time.Second)
-		}
+		flowlogs.WaitForConntrackScan(bpfEnabled)
 
 		// Delete conntrack state so that we don't keep seeing 0-metric copies of the logs.  This will allow the flows
 		// to expire quickly.
@@ -1411,9 +1349,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ aggregation of flow log wit
 			MatchPendingPolicies:   false,
 			MatchEnforcedPolicies:  false,
 			Includes:               []flowlogs.IncludeFilter{flowlogs.IncludeByDestPort(wepPort)},
-			CheckBytes:             false,
 			CheckNumFlowsStarted:   true,
-			CheckFlowsCompleted:    true,
 		})
 
 		ep1_1_Meta := endpoint.Metadata{
@@ -1569,12 +1505,11 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 		infra = getInfra()
 		opts = infrastructure.DefaultTopologyOptions()
 		opts.IPIPEnabled = false
-		opts.FlowLogSource = infrastructure.FlowLogSourceGoldmane
+		opts.FlowLogSource = infrastructure.FlowLogSourceLocalSocket
 
 		opts.ExtraEnvVars["FELIX_FLOWLOGSFLUSHINTERVAL"] = "3"
 		opts.ExtraEnvVars["FELIX_FLOWLOGSCOLLECTORDEBUGTRACE"] = "true"
-		opts.ExtraEnvVars["FELIX_BPFCONNTRACKTIMEOUTS"] = "TCPFinsSeen=30s"
-		opts.ExtraEnvVars["FELIX_FLOWLOGSGOLDMANESERVER"] = flowlogs.LocalGoldmaneServer
+		opts.ExtraEnvVars["FELIX_FLOWLOGSGOLDMANESERVER"] = local.SocketAddress
 
 		// Start felix instances.
 		tc, client = infrastructure.StartNNodeTopology(2, opts, infra)
@@ -1840,16 +1775,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 		// Do 1 rounds of connectivity checking.
 		cc.CheckConnectivity()
 
-		// Wait for conntrack to pick up so that flow is processed with the correct policy definition (this is a hack
-		// because changing the policy before the flow is processed can result in unmatch rule ID).
-		if bpfEnabled {
-			// Make sure that conntrack scanning ticks at least once
-			time.Sleep(3 * conntrack.ScanPeriod)
-		} else {
-			// Allow 6 seconds for the containers.Felix to poll conntrack.  (This is conntrack polling time plus 20%, which gives us
-			// 10% leeway over the polling jitter of 10%)
-			time.Sleep(6 * time.Second)
-		}
+		flowlogs.WaitForConntrackScan(bpfEnabled)
 
 		// Configured staged allow.
 		configureStagedAllow()
@@ -1857,16 +1783,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 		// Do 1 rounds of connectivity checking within the flush log interval.
 		cc.CheckConnectivity()
 
-		// Wait for conntrack to pick up so that flow is processed with the correct policy definition (this is a hack
-		// because changing the policy before the flow is processed can result in unmatch rule ID).
-		if bpfEnabled {
-			// Make sure that conntrack scanning ticks at least once
-			time.Sleep(3 * conntrack.ScanPeriod)
-		} else {
-			// Allow 6 seconds for the containers.Felix to poll conntrack.  (This is conntrack polling time plus 20%, which gives us
-			// 10% leeway over the polling jitter of 10%)
-			time.Sleep(6 * time.Second)
-		}
+		flowlogs.WaitForConntrackScan(bpfEnabled)
 
 		// Delete conntrack state so that we don't keep seeing 0-metric copies of the logs.  This will allow the flows
 		// to expire quickly.
@@ -1885,7 +1802,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 				flowlogs.IncludeByDestPort(wep2Port),
 			},
 			CheckNumFlowsStarted: true,
-			CheckFlowsCompleted:  true,
 		})
 
 		ep1_1_Meta := endpoint.Metadata{
@@ -2039,17 +1955,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 		// Do 1 rounds of connectivity checking.
 		cc.CheckConnectivity()
 
-		// Wait for conntrack to pick up so that flow is processed with the correct policy definition (this is a hack
-		// because changing the policy before the flow is processed can result in unmatch rule ID).
-		if bpfEnabled {
-			// Make sure that conntrack scanning ticks at least once, and that the we wait for the
-			// flush interval to expire.
-			time.Sleep(3 * conntrack.ScanPeriod)
-		} else {
-			// Allow 6 seconds for the containers.Felix to poll conntrack.  (This is conntrack polling time plus 20%, which gives us
-			// 10% leeway over the polling jitter of 10%)
-			time.Sleep(6 * time.Second)
-		}
+		flowlogs.WaitForConntrackScan(bpfEnabled)
 
 		// Configured staged pass.
 		configureStagedPass()
@@ -2057,16 +1963,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 		// Do 1 rounds of connectivity checking within the flush log interval.
 		cc.CheckConnectivity()
 
-		// Wait for conntrack to pick up so that flow is processed with the correct policy definition (this is a hack
-		// because changing the policy before the flow is processed can result in unmatch rule ID).
-		if bpfEnabled {
-			// Make sure that conntrack scanning ticks at least once
-			time.Sleep(3 * conntrack.ScanPeriod)
-		} else {
-			// Allow 6 seconds for the containers.Felix to poll conntrack.  (This is conntrack polling time plus 20%, which gives us
-			// 10% leeway over the polling jitter of 10%)
-			time.Sleep(6 * time.Second)
-		}
+		flowlogs.WaitForConntrackScan(bpfEnabled)
 
 		// Delete conntrack state so that we don't keep seeing 0-metric copies of the logs.  This will allow the flows
 		// to expire quickly.
@@ -2085,7 +1982,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 				flowlogs.IncludeByDestPort(wep2Port),
 			},
 			CheckNumFlowsStarted: true,
-			CheckFlowsCompleted:  true,
 		})
 
 		ep1_1_Meta := endpoint.Metadata{

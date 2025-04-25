@@ -1,5 +1,7 @@
 import React from 'react';
 import { useSelectedListOmniFilters } from './omniFilters';
+import { useAppConfig } from '@/context/AppConfig';
+import { version } from '../../package.json';
 
 const DEBOUNCE_TIME = 500;
 
@@ -25,6 +27,16 @@ export const useDebouncedCallback = () => {
         setDebouncedValue(value);
         callback.current = debouncedFn;
     };
+};
+
+export const useClusterId = () => useAppConfig()?.config.cluster_id;
+
+export const useBuildInfo = () => {
+    React.useEffect(() => {
+        console.groupCollapsed('Build information');
+        console.info(`version = ${version}`);
+        console.groupEnd();
+    }, []);
 };
 
 export { useSelectedListOmniFilters };

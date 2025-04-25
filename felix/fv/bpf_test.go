@@ -44,6 +44,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
+	"github.com/projectcalico/calico/felix/bpf/conntrack/timeouts"
 	ctv3 "github.com/projectcalico/calico/felix/bpf/conntrack/v3"
 	"github.com/projectcalico/calico/felix/bpf/ifstate"
 	"github.com/projectcalico/calico/felix/bpf/ipsets"
@@ -743,7 +744,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							"--port-src", "12345", "--port-dst", "80")
 						Expect(err).NotTo(HaveOccurred())
 						return tcpdump.MatchCount("udp-be")
-					}, (conntrack.ScanPeriod + 5*time.Second).String(), "1s").
+					}, (timeouts.ScanPeriod + 5*time.Second).String(), "1s").
 						Should(BeNumerically(">=", 1)) // tcpdump may not get a packet and then get 2...
 
 					// Check that the service is properly NATted
@@ -3996,7 +3997,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 									// increasing.
 									start := time.Now()
 									prevCount := pc.PongCount()
-									for time.Since(start) < 2*conntrack.ScanPeriod {
+									for time.Since(start) < 2*timeouts.ScanPeriod {
 										time.Sleep(time.Second)
 										newCount := pc.PongCount()
 										Expect(prevCount).Should(
@@ -4068,7 +4069,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 									// it is alive by checking that the number of PONGs keeps
 									// increasing. The ct entry may not be old enough in the first
 									// iteration yet.
-									time.Sleep(3 * conntrack.ScanPeriod)
+									time.Sleep(3 * timeouts.ScanPeriod)
 									prevCount := pc.PongCount()
 
 									// Try log enough to see a ping-pong

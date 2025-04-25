@@ -54,11 +54,16 @@ func (s *FlowsServer) Stream(req *proto.FlowStreamRequest, server proto.Flows_St
 	}
 	defer stream.Close()
 
+	// Share memory for each flow result.
+	result := &proto.FlowResult{Flow: &proto.Flow{}}
+
 	for {
 		select {
 		case flow := <-stream.Flows():
-			if err := server.Send(flow); err != nil {
-				return err
+			if flow.BuildInto(req.Filter, result) {
+				if err := server.Send(result); err != nil {
+					return err
+				}
 			}
 		case <-server.Context().Done():
 			return server.Context().Err()
