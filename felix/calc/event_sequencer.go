@@ -435,6 +435,7 @@ func ModelWorkloadEndpointToProto(ep *model.WorkloadEndpoint, peerData *Endpoint
 		Annotations:                ep.Annotations,
 		QosControls:                qosControls,
 		LocalBgpPeer:               localBGPPeer,
+		Labels:                     ep.Labels,
 	}
 }
 

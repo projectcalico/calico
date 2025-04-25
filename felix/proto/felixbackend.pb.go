@@ -3019,6 +3019,7 @@ type WorkloadEndpoint struct {
 	Annotations                map[string]string      `protobuf:"bytes,11,rep,name=annotations,proto3" json:"annotations,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	QosControls                *QoSControls           `protobuf:"bytes,12,opt,name=qos_controls,json=qosControls,proto3" json:"qos_controls,omitempty"`
 	LocalBgpPeer               *LocalBGPPeer          `protobuf:"bytes,13,opt,name=local_bgp_peer,json=localBgpPeer,proto3" json:"local_bgp_peer,omitempty"`
+	Labels                     map[string]string      `protobuf:"bytes,14,rep,name=labels,proto3" json:"labels,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	unknownFields              protoimpl.UnknownFields
 	sizeCache                  protoimpl.SizeCache
 }
@@ -3140,6 +3141,13 @@ func (x *WorkloadEndpoint) GetQosControls() *QoSControls {
 func (x *WorkloadEndpoint) GetLocalBgpPeer() *LocalBGPPeer {
 	if x != nil {
 		return x.LocalBgpPeer
+	}
+	return nil
+}
+
+func (x *WorkloadEndpoint) GetLabels() map[string]string {
+	if x != nil {
+		return x.Labels
 	}
 	return nil
 }
@@ -6415,7 +6423,7 @@ const file_felixbackend_proto_rawDesc = "" +
 	"endpointIdJ\x04\b\x01\x10\x02R\bhostname\"x\n" +
 	"\x16WorkloadEndpointUpdate\x12)\n" +
 	"\x02id\x18\x01 \x01(\v2\x19.felix.WorkloadEndpointIDR\x02id\x123\n" +
-	"\bendpoint\x18\x05 \x01(\v2\x17.felix.WorkloadEndpointR\bendpoint\"\xe7\x04\n" +
+	"\bendpoint\x18\x05 \x01(\v2\x17.felix.WorkloadEndpointR\bendpoint\"\xdf\x05\n" +
 	"\x10WorkloadEndpoint\x12\x14\n" +
 	"\x05state\x18\x01 \x01(\tR\x05state\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x10\n" +
@@ -6431,8 +6439,12 @@ const file_felixbackend_proto_rawDesc = "" +
 	" \x03(\tR\x1aallowSpoofedSourcePrefixes\x12J\n" +
 	"\vannotations\x18\v \x03(\v2(.felix.WorkloadEndpoint.AnnotationsEntryR\vannotations\x125\n" +
 	"\fqos_controls\x18\f \x01(\v2\x12.felix.QoSControlsR\vqosControls\x129\n" +
-	"\x0elocal_bgp_peer\x18\r \x01(\v2\x13.felix.LocalBGPPeerR\flocalBgpPeer\x1a>\n" +
+	"\x0elocal_bgp_peer\x18\r \x01(\v2\x13.felix.LocalBGPPeerR\flocalBgpPeer\x12;\n" +
+	"\x06labels\x18\x0e \x03(\v2#.felix.WorkloadEndpoint.LabelsEntryR\x06labels\x1a>\n" +
 	"\x10AnnotationsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1a9\n" +
+	"\vLabelsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xed\x02\n" +
 	"\vQoSControls\x12*\n" +
@@ -6707,7 +6719,7 @@ func file_felixbackend_proto_rawDescGZIP() []byte {
 }
 
 var file_felixbackend_proto_enumTypes = make([]protoimpl.EnumInfo, 9)
-var file_felixbackend_proto_msgTypes = make([]protoimpl.MessageInfo, 86)
+var file_felixbackend_proto_msgTypes = make([]protoimpl.MessageInfo, 87)
 var file_felixbackend_proto_goTypes = []any{
 	(IPVersion)(0),                       // 0: felix.IPVersion
 	(RouteType)(0),                       // 1: felix.RouteType
@@ -6801,9 +6813,10 @@ var file_felixbackend_proto_goTypes = []any{
 	(*HTTPMatch_PathMatch)(nil),          // 89: felix.HTTPMatch.PathMatch
 	nil,                                  // 90: felix.RuleMetadata.AnnotationsEntry
 	nil,                                  // 91: felix.WorkloadEndpoint.AnnotationsEntry
-	nil,                                  // 92: felix.HostMetadataV4V6Update.LabelsEntry
-	nil,                                  // 93: felix.ServiceAccountUpdate.LabelsEntry
-	nil,                                  // 94: felix.NamespaceUpdate.LabelsEntry
+	nil,                                  // 92: felix.WorkloadEndpoint.LabelsEntry
+	nil,                                  // 93: felix.HostMetadataV4V6Update.LabelsEntry
+	nil,                                  // 94: felix.ServiceAccountUpdate.LabelsEntry
+	nil,                                  // 95: felix.NamespaceUpdate.LabelsEntry
 }
 var file_felixbackend_proto_depIdxs = []int32{
 	14,  // 0: felix.ToDataplane.in_sync:type_name -> felix.InSync
@@ -6887,55 +6900,56 @@ var file_felixbackend_proto_depIdxs = []int32{
 	91,  // 78: felix.WorkloadEndpoint.annotations:type_name -> felix.WorkloadEndpoint.AnnotationsEntry
 	36,  // 79: felix.WorkloadEndpoint.qos_controls:type_name -> felix.QoSControls
 	37,  // 80: felix.WorkloadEndpoint.local_bgp_peer:type_name -> felix.LocalBGPPeer
-	33,  // 81: felix.WorkloadEndpointRemove.id:type_name -> felix.WorkloadEndpointID
-	39,  // 82: felix.HostEndpointUpdate.id:type_name -> felix.HostEndpointID
-	41,  // 83: felix.HostEndpointUpdate.endpoint:type_name -> felix.HostEndpoint
-	43,  // 84: felix.HostEndpoint.tiers:type_name -> felix.TierInfo
-	43,  // 85: felix.HostEndpoint.untracked_tiers:type_name -> felix.TierInfo
-	43,  // 86: felix.HostEndpoint.pre_dnat_tiers:type_name -> felix.TierInfo
-	43,  // 87: felix.HostEndpoint.forward_tiers:type_name -> felix.TierInfo
-	39,  // 88: felix.HostEndpointRemove.id:type_name -> felix.HostEndpointID
-	39,  // 89: felix.HostEndpointStatusUpdate.id:type_name -> felix.HostEndpointID
-	47,  // 90: felix.HostEndpointStatusUpdate.status:type_name -> felix.EndpointStatus
-	39,  // 91: felix.HostEndpointStatusRemove.id:type_name -> felix.HostEndpointID
-	33,  // 92: felix.WorkloadEndpointStatusUpdate.id:type_name -> felix.WorkloadEndpointID
-	47,  // 93: felix.WorkloadEndpointStatusUpdate.status:type_name -> felix.EndpointStatus
-	35,  // 94: felix.WorkloadEndpointStatusUpdate.endpoint:type_name -> felix.WorkloadEndpoint
-	33,  // 95: felix.WorkloadEndpointStatusRemove.id:type_name -> felix.WorkloadEndpointID
-	0,   // 96: felix.WireguardStatusUpdate.ip_version:type_name -> felix.IPVersion
-	92,  // 97: felix.HostMetadataV4V6Update.labels:type_name -> felix.HostMetadataV4V6Update.LabelsEntry
-	61,  // 98: felix.IPAMPoolUpdate.pool:type_name -> felix.IPAMPool
-	65,  // 99: felix.ServiceAccountUpdate.id:type_name -> felix.ServiceAccountID
-	93,  // 100: felix.ServiceAccountUpdate.labels:type_name -> felix.ServiceAccountUpdate.LabelsEntry
-	65,  // 101: felix.ServiceAccountRemove.id:type_name -> felix.ServiceAccountID
-	68,  // 102: felix.NamespaceUpdate.id:type_name -> felix.NamespaceID
-	94,  // 103: felix.NamespaceUpdate.labels:type_name -> felix.NamespaceUpdate.LabelsEntry
-	68,  // 104: felix.NamespaceRemove.id:type_name -> felix.NamespaceID
-	1,   // 105: felix.RouteUpdate.types:type_name -> felix.RouteType
-	2,   // 106: felix.RouteUpdate.ip_pool_type:type_name -> felix.IPPoolType
-	69,  // 107: felix.RouteUpdate.tunnel_type:type_name -> felix.TunnelType
-	31,  // 108: felix.DataplaneStats.protocol:type_name -> felix.Protocol
-	76,  // 109: felix.DataplaneStats.stats:type_name -> felix.Statistic
-	77,  // 110: felix.DataplaneStats.rules:type_name -> felix.RuleTrace
-	3,   // 111: felix.DataplaneStats.action:type_name -> felix.Action
-	5,   // 112: felix.Statistic.direction:type_name -> felix.Statistic.Direction
-	6,   // 113: felix.Statistic.relativity:type_name -> felix.Statistic.Relativity
-	7,   // 114: felix.Statistic.kind:type_name -> felix.Statistic.Kind
-	3,   // 115: felix.Statistic.action:type_name -> felix.Action
-	24,  // 116: felix.RuleTrace.policy:type_name -> felix.PolicyID
-	20,  // 117: felix.RuleTrace.profile:type_name -> felix.ProfileID
-	8,   // 118: felix.RuleTrace.direction:type_name -> felix.RuleTrace.Direction
-	83,  // 119: felix.ServiceUpdate.ports:type_name -> felix.ServicePort
-	13,  // 120: felix.ConfigUpdate.SourceToRawConfigEntry.value:type_name -> felix.RawConfig
-	9,   // 121: felix.PolicySync.Sync:input_type -> felix.SyncRequest
-	75,  // 122: felix.PolicySync.Report:input_type -> felix.DataplaneStats
-	10,  // 123: felix.PolicySync.Sync:output_type -> felix.ToDataplane
-	74,  // 124: felix.PolicySync.Report:output_type -> felix.ReportResult
-	123, // [123:125] is the sub-list for method output_type
-	121, // [121:123] is the sub-list for method input_type
-	121, // [121:121] is the sub-list for extension type_name
-	121, // [121:121] is the sub-list for extension extendee
-	0,   // [0:121] is the sub-list for field type_name
+	92,  // 81: felix.WorkloadEndpoint.labels:type_name -> felix.WorkloadEndpoint.LabelsEntry
+	33,  // 82: felix.WorkloadEndpointRemove.id:type_name -> felix.WorkloadEndpointID
+	39,  // 83: felix.HostEndpointUpdate.id:type_name -> felix.HostEndpointID
+	41,  // 84: felix.HostEndpointUpdate.endpoint:type_name -> felix.HostEndpoint
+	43,  // 85: felix.HostEndpoint.tiers:type_name -> felix.TierInfo
+	43,  // 86: felix.HostEndpoint.untracked_tiers:type_name -> felix.TierInfo
+	43,  // 87: felix.HostEndpoint.pre_dnat_tiers:type_name -> felix.TierInfo
+	43,  // 88: felix.HostEndpoint.forward_tiers:type_name -> felix.TierInfo
+	39,  // 89: felix.HostEndpointRemove.id:type_name -> felix.HostEndpointID
+	39,  // 90: felix.HostEndpointStatusUpdate.id:type_name -> felix.HostEndpointID
+	47,  // 91: felix.HostEndpointStatusUpdate.status:type_name -> felix.EndpointStatus
+	39,  // 92: felix.HostEndpointStatusRemove.id:type_name -> felix.HostEndpointID
+	33,  // 93: felix.WorkloadEndpointStatusUpdate.id:type_name -> felix.WorkloadEndpointID
+	47,  // 94: felix.WorkloadEndpointStatusUpdate.status:type_name -> felix.EndpointStatus
+	35,  // 95: felix.WorkloadEndpointStatusUpdate.endpoint:type_name -> felix.WorkloadEndpoint
+	33,  // 96: felix.WorkloadEndpointStatusRemove.id:type_name -> felix.WorkloadEndpointID
+	0,   // 97: felix.WireguardStatusUpdate.ip_version:type_name -> felix.IPVersion
+	93,  // 98: felix.HostMetadataV4V6Update.labels:type_name -> felix.HostMetadataV4V6Update.LabelsEntry
+	61,  // 99: felix.IPAMPoolUpdate.pool:type_name -> felix.IPAMPool
+	65,  // 100: felix.ServiceAccountUpdate.id:type_name -> felix.ServiceAccountID
+	94,  // 101: felix.ServiceAccountUpdate.labels:type_name -> felix.ServiceAccountUpdate.LabelsEntry
+	65,  // 102: felix.ServiceAccountRemove.id:type_name -> felix.ServiceAccountID
+	68,  // 103: felix.NamespaceUpdate.id:type_name -> felix.NamespaceID
+	95,  // 104: felix.NamespaceUpdate.labels:type_name -> felix.NamespaceUpdate.LabelsEntry
+	68,  // 105: felix.NamespaceRemove.id:type_name -> felix.NamespaceID
+	1,   // 106: felix.RouteUpdate.types:type_name -> felix.RouteType
+	2,   // 107: felix.RouteUpdate.ip_pool_type:type_name -> felix.IPPoolType
+	69,  // 108: felix.RouteUpdate.tunnel_type:type_name -> felix.TunnelType
+	31,  // 109: felix.DataplaneStats.protocol:type_name -> felix.Protocol
+	76,  // 110: felix.DataplaneStats.stats:type_name -> felix.Statistic
+	77,  // 111: felix.DataplaneStats.rules:type_name -> felix.RuleTrace
+	3,   // 112: felix.DataplaneStats.action:type_name -> felix.Action
+	5,   // 113: felix.Statistic.direction:type_name -> felix.Statistic.Direction
+	6,   // 114: felix.Statistic.relativity:type_name -> felix.Statistic.Relativity
+	7,   // 115: felix.Statistic.kind:type_name -> felix.Statistic.Kind
+	3,   // 116: felix.Statistic.action:type_name -> felix.Action
+	24,  // 117: felix.RuleTrace.policy:type_name -> felix.PolicyID
+	20,  // 118: felix.RuleTrace.profile:type_name -> felix.ProfileID
+	8,   // 119: felix.RuleTrace.direction:type_name -> felix.RuleTrace.Direction
+	83,  // 120: felix.ServiceUpdate.ports:type_name -> felix.ServicePort
+	13,  // 121: felix.ConfigUpdate.SourceToRawConfigEntry.value:type_name -> felix.RawConfig
+	9,   // 122: felix.PolicySync.Sync:input_type -> felix.SyncRequest
+	75,  // 123: felix.PolicySync.Report:input_type -> felix.DataplaneStats
+	10,  // 124: felix.PolicySync.Sync:output_type -> felix.ToDataplane
+	74,  // 125: felix.PolicySync.Report:output_type -> felix.ReportResult
+	124, // [124:126] is the sub-list for method output_type
+	122, // [122:124] is the sub-list for method input_type
+	122, // [122:122] is the sub-list for extension type_name
+	122, // [122:122] is the sub-list for extension extendee
+	0,   // [0:122] is the sub-list for field type_name
 }
 
 func init() { file_felixbackend_proto_init() }
@@ -7016,7 +7030,7 @@ func file_felixbackend_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_felixbackend_proto_rawDesc), len(file_felixbackend_proto_rawDesc)),
 			NumEnums:      9,
-			NumMessages:   86,
+			NumMessages:   87,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

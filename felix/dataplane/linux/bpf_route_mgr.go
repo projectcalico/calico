@@ -350,6 +350,9 @@ func (m *bpfRouteManager) calculateRoute(cidr ip.CIDR) routes.ValueInterface {
 				pWepID := types.WorkloadEndpointIDToProto(wepID)
 				if wepScore > bestWepScore || wepScore == bestWepScore && pWepID.String() > bestWepID.String() {
 					flags |= routes.FlagsLocalWorkload
+					if isVMWorkload(wep.GetLabels()) {
+						flags |= routes.FlagVMWorkload
+					}
 					route = m.bpfOps.NewValueWithIfIndex(flags, ifaceIdx)
 					bestWepID = pWepID
 					bestWepScore = wepScore
@@ -761,4 +764,13 @@ func (m *bpfRouteManager) onRouteDeleteCB(k routes.KeyInterface) {
 
 func (m *bpfRouteManager) markCIDRsDirty(cidrs ...ip.CIDR) {
 	m.dirtyCIDRs.AddAll(cidrs)
+}
+
+func isVMWorkload(labels map[string]string) bool {
+	if val, ok := labels["kubevirt.io"]; ok {
+		if val == "virt-launcher" {
+			return true
+		}
+	}
+	return false
 }

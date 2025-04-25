@@ -45,6 +45,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
 	"github.com/projectcalico/calico/felix/bpf/conntrack/timeouts"
+	ctv3 "github.com/projectcalico/calico/felix/bpf/conntrack/v3"
 	"github.com/projectcalico/calico/felix/bpf/ifstate"
 	"github.com/projectcalico/calico/felix/bpf/ipsets"
 	"github.com/projectcalico/calico/felix/bpf/maps"
@@ -1468,6 +1469,42 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						"Traffic to the workload should be allowed after datastore is configured")
 				})
 			}
+
+			It("should not redirect to peer interface if the workload is a vm", func() {
+				if testOpts.ipv6 || testOpts.protocol == "udp" {
+					return
+				}
+				policy := api.NewNetworkPolicy()
+				policy.Name = "allow-all"
+				policy.Namespace = "default"
+				one := float64(1)
+				policy.Spec.Order = &one
+				policy.Spec.Ingress = []api.Rule{{Action: api.Allow}}
+				policy.Spec.Egress = []api.Rule{{Action: api.Allow}}
+				policy.Spec.Selector = "all()"
+				_, err := calicoClient.NetworkPolicies().Create(utils.Ctx, policy, utils.NoOptions)
+				vmPort := 8055
+				vmw := workload.New(tc.Felixes[0], "vmworkload", "default",
+					"10.65.0.4", strconv.Itoa(vmPort), testOpts.protocol)
+				labels := map[string]string{}
+				labels["name"] = "vmworkload"
+				labels["workload"] = "regular"
+				labels["kubevirt.io"] = "virt-launcher"
+				vmw.WorkloadEndpoint.Labels = labels
+				err = vmw.Start()
+				defer vmw.Stop()
+				Expect(err).NotTo(HaveOccurred())
+				vmw.ConfigureInInfra(infra)
+				cc.Expect(Some, w[1][0], vmw, ExpectWithSrcPort(12345))
+				cc.CheckConnectivity()
+				m := dumpCTMapsAny(4, tc.Felixes[0])
+				k := conntrack.NewKey(6, net.ParseIP(w[1][0].IP).To4(), 12345,
+					net.ParseIP(vmw.IP).To4(), 8055)
+				Expect(m).To(HaveKey(k))
+				val := m[k]
+				flags := val.Flags()
+				Expect(flags & ctv3.FlagNoRedir).To(Equal(ctv3.FlagNoRedir))
+			})
 
 			It("should have correct routes", func() {
 				tunnelAddr := ""
