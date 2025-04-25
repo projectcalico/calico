@@ -956,10 +956,10 @@ Felix always programs VXLAN routes.
 | --- | --- |
 | Environment variable | `FELIX_ProgramRoutes` |
 | Encoding (env var/config file) | One of: <code>Disabled</code>, <code>Enabled</code> (case insensitive) |
-| Default value (above encoding) | `Enabled` |
+| Default value (above encoding) | `Disabled` |
 | `FelixConfiguration` field | `programRoutes` (YAML) `ProgramRoutes` (Go API) |
 | `FelixConfiguration` schema | One of: <code>"Disabled"</code>, <code>"Enabled"</code>. |
-| Default value (YAML) | `Enabled` |
+| Default value (YAML) | `Disabled` |
 
 ### `RemoveExternalRoutes` (config file) / `removeExternalRoutes` (YAML)
 

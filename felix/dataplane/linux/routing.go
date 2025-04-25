@@ -18,12 +18,13 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/sirupsen/logrus"
+	"github.com/vishvananda/netlink"
+
 	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/routetable"
-	"github.com/sirupsen/logrus"
-	"github.com/vishvananda/netlink"
 )
 
 func isType(msg *proto.RouteUpdate, t proto.RouteType) bool {

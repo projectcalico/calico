@@ -24,7 +24,6 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
-	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 
 	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
@@ -245,9 +244,7 @@ func (m *routeManager) getLocalHostAddr() string {
 }
 
 func (m *routeManager) CompleteDeferredWork() error {
-	logrus.Info("pepper here0")
 	if m.ipSetDirty {
-		logrus.Info("pepper here1")
 		m.updateAllHostsIPSet()
 		m.ipSetDirty = false
 	}
@@ -398,7 +395,7 @@ func (m *routeManager) KeepBIRDIPIPDeviceInSync(xsumBroken bool) {
 	for {
 		err := m.configureIPIPDevice(m.dpConfig.IPIPMTU, m.dpConfig.RulesConfig.IPIPTunnelAddress, xsumBroken)
 		if err != nil {
-			log.WithError(err).Warn("Failed configure IPIP tunnel device, retrying...")
+			logrus.WithError(err).Warn("Failed configure IPIP tunnel device, retrying...")
 			time.Sleep(1 * time.Second)
 			continue
 		}
@@ -409,6 +406,10 @@ func (m *routeManager) KeepBIRDIPIPDeviceInSync(xsumBroken bool) {
 // KeepIPIPDeviceInSync is a goroutine that configures the IPIP tunnel device, then periodically
 // checks that it is still correctly configured.
 func (m *routeManager) KeepIPIPDeviceInSync(xsumBroken bool, wait time.Duration, parentNameC chan string) {
+	managedBy := "BIRD"
+	if m.dpConfig.ProgramRoutes {
+		managedBy = "Felix"
+	}
 	ctx := context.Background()
 	mtu := m.dpConfig.IPIPMTU
 	address := m.dpConfig.RulesConfig.IPIPTunnelAddress
@@ -417,10 +418,10 @@ func (m *routeManager) KeepIPIPDeviceInSync(xsumBroken bool, wait time.Duration,
 		"mtu":        mtu,
 		"xsumBroken": xsumBroken,
 		"wait":       wait,
+		"managedBy":  managedBy,
 	}).Info("IPIP device thread started.")
 
 	if !m.dpConfig.ProgramRoutes {
-		m.logCtx.Info("pepper syncing IPIP device for BIRD")
 		m.KeepBIRDIPIPDeviceInSync(xsumBroken)
 	}
 
@@ -519,12 +520,12 @@ func (m *routeManager) getParentInterface() (netlink.Link, error) {
 
 // configureIPIPDevice ensures the IPIP tunnel device is up and configures correctly.
 func (m *routeManager) configureIPIPDevice(mtu int, address net.IP, xsumBroken bool) error {
-	logCxt := log.WithFields(log.Fields{
+	logCtx := logrus.WithFields(logrus.Fields{
 		"mtu":        mtu,
 		"tunnelAddr": address,
 		"device":     m.ipipDevice,
 	})
-	logCxt.Debug("Configuring IPIP tunnel")
+	logCtx.Debug("Configuring IPIP tunnel")
 
 	la := netlink.NewLinkAttrs()
 	la.Name = m.ipipDevice
@@ -557,12 +558,17 @@ func (m *routeManager) configureIPIPDevice(mtu int, address net.IP, xsumBroken b
 	attrs := link.Attrs()
 	oldMTU := attrs.MTU
 	if oldMTU != mtu {
-		logCxt.WithField("oldMTU", oldMTU).Info("Tunnel device MTU needs to be updated")
+		logCtx.WithField("oldMTU", oldMTU).Info("Tunnel device MTU needs to be updated")
 		if err := m.nlHandle.LinkSetMTU(link, mtu); err != nil {
 			m.logCtx.WithError(err).Warn("Failed to set tunnel device MTU")
 			return err
 		}
-		logCxt.Info("Updated tunnel MTU")
+		logCtx.Info("Updated tunnel MTU")
+	}
+
+	if err := m.ensureAddressOnLink(m.ipipDevice, address); err != nil {
+		m.logCtx.WithError(err).Warn("Failed to set tunnel device IP")
+		return err
 	}
 
 	// If required, disable checksum offload.
@@ -573,28 +579,19 @@ func (m *routeManager) configureIPIPDevice(mtu int, address net.IP, xsumBroken b
 	}
 
 	if attrs.Flags&net.FlagUp == 0 {
-		logCxt.WithField("flags", attrs.Flags).Info("Tunnel wasn't admin up, enabling it")
+		logCtx.WithField("flags", attrs.Flags).Info("Tunnel wasn't admin up, enabling it")
 		if err := m.nlHandle.LinkSetUp(link); err != nil {
 			m.logCtx.WithError(err).Warn("Failed to set tunnel device up")
 			return err
 		}
-		logCxt.Info("Set tunnel admin up")
+		logCtx.Info("Set tunnel admin up")
 	}
-	// And the device is up.
-	/*if err := m.nlHandle.LinkSetUp(link); err != nil {
-		return fmt.Errorf("failed to set interface up: %s", err)
-	}*/
 
-	if err := m.setLinkAddressV4(m.ipipDevice, address); err != nil {
-		m.logCtx.WithError(err).Warn("Failed to set tunnel device IP")
-		return err
-	}
 	return nil
 }
 
-// setLinkAddressV4 updates the given link to set its local IP address.  It removes any other
-// addresses.
-func (m *routeManager) setLinkAddressV4(linkName string, address net.IP) error {
+// ensureAddressOnLink updates the given link to set its local IP address. It removes any other addresses.
+func (m *routeManager) ensureAddressOnLink(linkName string, address net.IP) error {
 	logCxt := m.logCtx.WithFields(logrus.Fields{
 		"link": linkName,
 		"addr": address,
