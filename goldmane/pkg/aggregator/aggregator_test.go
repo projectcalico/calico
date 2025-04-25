@@ -1262,6 +1262,90 @@ func TestStreams(t *testing.T) {
 			ExpectFlowsEqual(t, exp, result.Flow, fmt.Sprintf("Flow %d", i))
 		}
 	})
+
+	// This test verifies the behavior of stream backfill, by ensuring that the correct flows are emitted.
+	// It then performs a rollover, and verifies that no duplicates are emitted.
+	t.Run("Backfill and rollover", func(t *testing.T) {
+		// Create a clock and rollover controller.
+		c := newClock(initialNow)
+		roller := &rolloverController{
+			ch:                    make(chan time.Time),
+			aggregationWindowSecs: 1,
+			clock:                 c,
+		}
+		opts := []aggregator.Option{
+			aggregator.WithRolloverTime(1 * time.Second),
+			aggregator.WithRolloverFunc(roller.After),
+			aggregator.WithNowFunc(c.Now),
+		}
+		defer setupTest(t, opts...)()
+
+		// Start the aggregator.
+		go agg.Run(c.Now().Unix())
+
+		// Create a flow that will span multiple time buckets, with the
+		// newest start time falling at Now().
+		newestStart := c.Now().Unix()
+		base := testutils.NewRandomFlow(newestStart)
+		base.NumConnectionsCompleted = 1
+
+		// Fill the last 10 buckets with flows.
+		var startTimes []int64
+		for i := 0; i < 10; i += 1 {
+			// Create a copy of the base flow and send it back in time.
+			fl := googleproto.Clone(base).(*proto.Flow)
+			fl.StartTime = base.StartTime - int64(i)
+			fl.EndTime = base.EndTime - int64(i)
+			startTimes = append(startTimes, fl.StartTime)
+			agg.Receive(types.ProtoToFlow(fl))
+		}
+
+		// Wait for flows to be received.
+		Eventually(func() error {
+			results, err := agg.List(&proto.FlowListRequest{})
+			if err != nil {
+				return err
+			}
+			if len(results.Flows) != 1 {
+				return fmt.Errorf("Expected 1 flows, got %d", len(results.Flows))
+			}
+			return nil
+		}, waitTimeout, retryTime).Should(BeNil())
+
+		// Start a stream from the past, using the start time of the oldest flow.
+		stream, err := agg.Stream(&proto.FlowStreamRequest{StartTimeGte: startTimes[len(startTimes)-1]})
+		require.Nil(t, err)
+		require.NotNil(t, stream)
+		defer stream.Close()
+
+		streamed := newEnforcedFlowSet()
+
+		// Verify the flows - we should receive updates for each bucket from the start time until now-2, since
+		// the now-1 bucket is not yet rolled over.
+		for i := range 8 {
+			builder := &bucketing.DeferredFlowBuilder{}
+			result := &proto.FlowResult{Flow: &proto.Flow{}}
+			Eventually(stream.Flows(), waitTimeout, retryTime).Should(Receive(&builder), fmt.Sprintf("Timed out waiting for flow %d", i))
+			require.True(t, builder.BuildInto(&proto.Filter{}, result))
+
+			// Assert the start / end times are correct. They should match the start times we used to create the flows, in reverse order.
+			exp := googleproto.Clone(base).(*proto.Flow)
+			exp.StartTime = startTimes[len(startTimes)-1-i]
+			exp.EndTime = exp.StartTime + 1
+			ExpectFlowsEqual(t, exp, result.Flow, fmt.Sprintf("Flow %d", i))
+
+			// Track the flows we've seen, to ensure we don't get duplicates.
+			require.Nil(t, streamed.add(result))
+		}
+
+		// Trigger a rollover. We should get another flow, and it should not be a duplicate.
+		roller.rolloverAndAdvanceClock(1)
+		builder := &bucketing.DeferredFlowBuilder{}
+		result := &proto.FlowResult{Flow: &proto.Flow{}}
+		Eventually(stream.Flows(), waitTimeout, retryTime).Should(Receive(&builder))
+		require.True(t, builder.BuildInto(&proto.Filter{}, result))
+		require.Nil(t, streamed.add(result))
+	})
 }
 
 // TestSortOrder tests basic functionality of the various sorted indices supported by the aggregator.
