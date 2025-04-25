@@ -376,14 +376,14 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			options.NATOutgoingEnabled = true
 			options.AutoHEPsEnabled = true
 			// override IPIP being enabled by default
-			options.IPIPEnabled = false
-			options.IPIPRoutesEnabled = false
+			options.IPIPMode = api.IPIPModeNever
+			options.SimulateRoutes = false
 			switch testOpts.tunnel {
 			case "none":
 				// nothing
 			case "ipip":
-				options.IPIPEnabled = true
-				options.IPIPRoutesEnabled = true
+				options.IPIPMode = api.IPIPModeAlways
+				options.SimulateRoutes = true
 			case "vxlan":
 				options.VXLANMode = api.VXLANModeAlways
 				options.VXLANStrategy = infrastructure.NewDefaultVXLANStrategy(options.IPPoolCIDR, options.IPv6PoolCIDR)

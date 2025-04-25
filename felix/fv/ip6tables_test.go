@@ -56,7 +56,7 @@ var _ = infrastructure.DatastoreDescribe("IPv6 iptables/nftables tests", []apico
 		options = infrastructure.DefaultTopologyOptions()
 		options.EnableIPv6 = true
 		options.FelixLogSeverity = "Debug"
-		options.IPIPEnabled = false
+		options.IPIPMode = api.IPIPModeNever
 
 		iOpts := []infrastructure.CreateOption{
 			infrastructure.K8sWithIPv6(),
