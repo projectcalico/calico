@@ -376,14 +376,22 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			options.NATOutgoingEnabled = true
 			options.AutoHEPsEnabled = true
 			// override IPIP being enabled by default
-			options.IPIPEnabled = false
-			options.IPIPRoutesEnabled = false
+			options.IPIPMode = api.IPIPModeNever
+			options.SimulateRoutes = false
 			switch testOpts.tunnel {
 			case "none":
-				// nothing
+				// Enable adding simulated routes.
+				options.SimulateRoutes = true
 			case "ipip":
-				options.IPIPEnabled = true
-				options.IPIPRoutesEnabled = true
+				options.IPIPMode = api.IPIPModeAlways
+				if options.EnableIPv6 {
+					options.SimulateRoutes = true
+					options.IPIPMode = api.IPIPModeNever
+				} else {
+					// Enable Felix programming IPIP routes.
+					options.SimulateRoutes = false
+					options.ExtraEnvVars["FELIX_ProgramRoutes"] = "Enabled"
+				}
 			case "vxlan":
 				options.VXLANMode = api.VXLANModeAlways
 				options.VXLANStrategy = infrastructure.NewDefaultVXLANStrategy(options.IPPoolCIDR, options.IPv6PoolCIDR)
