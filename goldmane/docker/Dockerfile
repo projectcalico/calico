@@ -5,7 +5,7 @@ ARG GIT_VERSION
 COPY ./bin/goldmane-${TARGETARCH} /goldmane
 COPY ./bin/health-${TARGETARCH} /health
 
-COPY LICENSE /licenses/LICENSE
+COPY ./bin/LICENSE /licenses/LICENSE
 
 LABEL org.opencontainers.image.description="Goldmane is a flow aggregation service."
 LABEL org.opencontainers.image.authors="maintainers@tigera.io"
