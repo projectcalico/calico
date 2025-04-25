@@ -29,6 +29,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
+	"github.com/projectcalico/calico/pkg/buildinfo"
 	"github.com/projectcalico/calico/typha/pkg/discovery"
 	"github.com/projectcalico/calico/typha/pkg/syncclient"
 	"github.com/projectcalico/calico/typha/pkg/syncproto"
@@ -44,8 +45,6 @@ func init() {
 		counterLogErrors,
 	)
 }
-
-var VERSION string
 
 func newSyncerCallbacks(st syncproto.SyncerType) *syncerCallbacks {
 	return &syncerCallbacks{
@@ -124,7 +123,7 @@ func main() {
 	}()
 	configureLogging()
 	logrus.WithFields(logrus.Fields{
-		"version": VERSION,
+		"version": buildinfo.Version,
 	}).Info("Mock Calico Node starting up")
 
 	hostname, err := names.Hostname()
@@ -159,7 +158,7 @@ func startTyphaClient(st syncproto.SyncerType, hostname string) {
 		logrus.WithError(err).Panic("Failed to discover Typha.")
 	}
 	client := syncclient.New(typhaDiscoverer,
-		VERSION,
+		buildinfo.Version,
 		hostname,
 		"",
 		cbs,

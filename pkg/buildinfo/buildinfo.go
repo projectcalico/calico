@@ -1,5 +1,5 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
-
+// Copyright (c) 2019-2025 Tigera, Inc. All rights reserved.
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -14,5 +14,23 @@
 
 package buildinfo
 
-// Filled in by the build process.
-var GitVersion string
+import "fmt"
+
+// Filled in by build process.
+var (
+	// Version is the version of the code.
+	Version string
+
+	// GitRevision is the commit hash of the code.
+	GitRevision string
+
+	// BuildDate is the date when the code was built.
+	BuildDate string
+)
+
+// PrintVersion prints version and build information.
+func PrintVersion() {
+	fmt.Println("Version:     ", Version)
+	fmt.Println("Build date:  ", BuildDate)
+	fmt.Println("Git commit:  ", GitRevision)
+}

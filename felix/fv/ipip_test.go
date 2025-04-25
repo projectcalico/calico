@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -33,7 +33,7 @@ import (
 	"github.com/vishvananda/netlink"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	dpdefs "github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
+	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
 	"github.com/projectcalico/calico/felix/fv/connectivity"
 	"github.com/projectcalico/calico/felix/fv/containers"
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
@@ -82,7 +82,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology with BIRD pro
 				return err
 			}
 			for _, link := range links {
-				if link.Attrs().Name == "tunl0" {
+				if link.Attrs().Name == dataplanedefs.IPIPIfaceName {
 					return nil
 				}
 			}
@@ -573,7 +573,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology with Felix pr
 			if brokenXSum {
 				It("should disable checksum offload", func() {
 					Eventually(func() string {
-						out, err := felixes[0].ExecOutput("ethtool", "-k", dpdefs.IPIPIfaceName)
+						out, err := felixes[0].ExecOutput("ethtool", "-k", dataplanedefs.IPIPIfaceName)
 						if err != nil {
 							return fmt.Sprintf("ERROR: %v", err)
 						}
@@ -583,7 +583,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology with Felix pr
 			} else {
 				It("should not disable checksum offload", func() {
 					Eventually(func() string {
-						out, err := felixes[0].ExecOutput("ethtool", "-k", dpdefs.IPIPIfaceName)
+						out, err := felixes[0].ExecOutput("ethtool", "-k", dataplanedefs.IPIPIfaceName)
 						if err != nil {
 							return fmt.Sprintf("ERROR: %v", err)
 						}
@@ -1019,7 +1019,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology with Felix pr
 				mtuStr := "mtu 1480"
 				for _, felix := range felixes {
 					Eventually(func() string {
-						out, _ := felix.ExecOutput("ip", "-d", "link", "show", dpdefs.IPIPIfaceName)
+						out, _ := felix.ExecOutput("ip", "-d", "link", "show", dataplanedefs.IPIPIfaceName)
 						return out
 					}, "60s", "500ms").Should(ContainSubstring(mtuStr))
 				}
@@ -1038,7 +1038,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology with Felix pr
 				for _, felix := range felixes {
 					// Felix checks host MTU every 30s
 					Eventually(func() string {
-						out, _ := felix.ExecOutput("ip", "-d", "link", "show", dpdefs.IPIPIfaceName)
+						out, _ := felix.ExecOutput("ip", "-d", "link", "show", dataplanedefs.IPIPIfaceName)
 						return out
 					}, "60s", "500ms").Should(ContainSubstring(mtuStr))
 
@@ -1061,7 +1061,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology with Felix pr
 				for _, felix := range felixes {
 					// Felix checks host MTU every 30s
 					Eventually(func() string {
-						out, _ := felix.ExecOutput("ip", "-d", "link", "show", dpdefs.IPIPIfaceName)
+						out, _ := felix.ExecOutput("ip", "-d", "link", "show", dataplanedefs.IPIPIfaceName)
 						return out
 					}, "60s", "500ms").Should(ContainSubstring("mtu 1300"))
 				}
@@ -1161,7 +1161,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology with Felix pr
 					felixes[0].Exec("kill", "-STOP", fmt.Sprint(pid))
 
 					tc.Felixes[0].Exec("ip", "route", "add", "10.65.222.1", "via",
-						externalClient.IP, "dev", dpdefs.IPIPIfaceName, "onlink", "proto", "90")
+						externalClient.IP, "dev", dataplanedefs.IPIPIfaceName, "onlink", "proto", "90")
 
 					By("testing that the ext client can connect via ipip")
 					cc.ResetExpectations()
