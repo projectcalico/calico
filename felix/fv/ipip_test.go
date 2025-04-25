@@ -502,11 +502,11 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology with Felix pr
 		BrokenXSum  bool
 	}
 	for _, testConfig := range []testConf{
-		//{api.IPIPModeCrossSubnet, "CalicoIPAM", true},
-		//{api.IPIPModeCrossSubnet, "WorkloadIPs", false},
+		{api.IPIPModeCrossSubnet, "CalicoIPAM", true},
+		{api.IPIPModeCrossSubnet, "WorkloadIPs", false},
 
 		{api.IPIPModeAlways, "CalicoIPAM", true},
-		//{api.IPIPModeAlways, "WorkloadIPs", false},
+		{api.IPIPModeAlways, "WorkloadIPs", false},
 	} {
 		ipipMode := testConfig.IPIPMode
 		routeSource := testConfig.RouteSource
@@ -779,7 +779,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology with Felix pr
 					}
 				})
 
-				It("pepper1 should block host-to-host traffic in the absence of policy allowing it", func() {
+				It("should block host-to-host traffic in the absence of policy allowing it", func() {
 					cc.ExpectNone(tc.Felixes[0], hostW[1])
 					cc.ExpectNone(tc.Felixes[1], hostW[0])
 					cc.ExpectSome(w[0], w[1])
@@ -795,7 +795,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology with Felix pr
 					cc.CheckConnectivity()
 				})
 
-				It("pepper should allow felixes[0] to reach felixes[1] if ingress and egress policies are in place", func() {
+				It("should allow felixes[0] to reach felixes[1] if ingress and egress policies are in place", func() {
 					// Create a policy selecting felix[1] that allows egress.
 					policy := api.NewGlobalNetworkPolicy()
 					policy.Name = "f0-egress"
@@ -808,7 +808,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology with Felix pr
 					cc.ExpectNone(tc.Felixes[0], hostW[1])
 					cc.ExpectNone(tc.Felixes[1], hostW[0])
 
-					//time.Sleep(time.Minute * 60)
 					// Workload connectivity is unchanged.
 					cc.ExpectSome(w[0], w[1])
 					cc.ExpectSome(w[1], w[0])
