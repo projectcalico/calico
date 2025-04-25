@@ -129,10 +129,10 @@ ifeq ("$(wildcard ./$(REGISTRAR_IMAGE))", "")
 	@echo "Directory does not exist."
 	git clone --depth 1 --single-branch https://github.com/$(UPSTREAM_REGISTRAR_PROJECT).git
  endif
- 	cd $(REGISTRAR_IMAGE) && \
- 	  git checkout $(UPSTREAM_REGISTRAR_TAG) || \
- 	  git fetch --tags origin $(UPSTREAM_REGISTRAR_TAG) && \
- 	  git checkout $(UPSTREAM_REGISTRAR_TAG)
+	cd $(REGISTRAR_IMAGE) && \
+	  git checkout $(UPSTREAM_REGISTRAR_TAG) || \
+	  git fetch --tags origin $(UPSTREAM_REGISTRAR_TAG) && \
+	  git checkout $(UPSTREAM_REGISTRAR_TAG)
 
 clean-registrar:
 	rm -rf node-driver-registrar
