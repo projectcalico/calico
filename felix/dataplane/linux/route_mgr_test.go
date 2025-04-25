@@ -15,7 +15,6 @@
 package intdataplane
 
 import (
-	"context"
 	"net"
 	"time"
 
@@ -134,10 +133,8 @@ var _ = Describe("RouteManager", func() {
 	})
 
 	It("adds the route to the default table on next try when the parent route table is not immediately found", func() {
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
 		parentNameC := make(chan string)
-		go manager.KeepIPIPDeviceInSync(ctx, false, 1*time.Second, parentNameC)
+		go manager.KeepIPIPDeviceInSync(false, 1*time.Second, parentNameC)
 
 		manager.OnUpdate(&proto.HostMetadataUpdate{
 			Hostname: "host2",

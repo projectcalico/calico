@@ -245,7 +245,9 @@ func (m *routeManager) getLocalHostAddr() string {
 }
 
 func (m *routeManager) CompleteDeferredWork() error {
+	logrus.Info("pepper here0")
 	if m.ipSetDirty {
+		logrus.Info("pepper here1")
 		m.updateAllHostsIPSet()
 		m.ipSetDirty = false
 	}
@@ -393,7 +395,6 @@ func (m *routeManager) OnParentNameUpdate(name string) {
 // KeepIPIPDeviceInSync is a goroutine that configures the IPIP tunnel device, then periodically
 // checks that it is still correctly configured.
 func (m *routeManager) KeepBIRDIPIPDeviceInSync(xsumBroken bool) {
-	log.WithField("device", m.ipipDevice).Info("IPIP device thread started.")
 	for {
 		err := m.configureIPIPDevice(m.dpConfig.IPIPMTU, m.dpConfig.RulesConfig.IPIPTunnelAddress, xsumBroken)
 		if err != nil {
@@ -407,12 +408,8 @@ func (m *routeManager) KeepBIRDIPIPDeviceInSync(xsumBroken bool) {
 
 // KeepIPIPDeviceInSync is a goroutine that configures the IPIP tunnel device, then periodically
 // checks that it is still correctly configured.
-func (m *routeManager) KeepIPIPDeviceInSync(
-	ctx context.Context,
-	xsumBroken bool,
-	wait time.Duration,
-	parentNameC chan string,
-) {
+func (m *routeManager) KeepIPIPDeviceInSync(xsumBroken bool, wait time.Duration, parentNameC chan string) {
+	ctx := context.Background()
 	mtu := m.dpConfig.IPIPMTU
 	address := m.dpConfig.RulesConfig.IPIPTunnelAddress
 	m.logCtx.WithFields(logrus.Fields{
@@ -421,6 +418,12 @@ func (m *routeManager) KeepIPIPDeviceInSync(
 		"xsumBroken": xsumBroken,
 		"wait":       wait,
 	}).Info("IPIP device thread started.")
+
+	if !m.dpConfig.ProgramRoutes {
+		m.logCtx.Info("pepper syncing IPIP device for BIRD")
+		m.KeepBIRDIPIPDeviceInSync(xsumBroken)
+	}
+
 	logNextSuccess := true
 	parentName := ""
 
