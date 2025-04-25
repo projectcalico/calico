@@ -493,24 +493,16 @@ endif
 
 GIT_CMD           = git
 DOCKER_CMD        = docker
-PYTHON3_CMD       = python3
 
-
-# RELEASE_PY3 is for Python invocations used for releasing,
-# where we want to be able to DRY_RUN them.
 ifdef CONFIRM
 CRANE         = $(CRANE_CMD)
 GIT           = $(GIT_CMD)
 DOCKER        = $(DOCKER_CMD)
-RELEASE_PY3   = $(PYTHON3_CMD)
 else
-CRANE         = @echo [DRY RUN] $(CRANE_CMD)
-GIT           = @echo [DRY RUN] $(GIT_CMD)
-DOCKER        = @echo [DRY RUN] $(DOCKER_CMD)
-RELEASE_PY3   = @echo [DRY RUN] $(PYTHON3_CMD)
+CRANE         = echo [DRY RUN] $(CRANE_CMD)
+GIT           = echo [DRY RUN] $(GIT_CMD)
+DOCKER        = echo [DRY RUN] $(DOCKER_CMD)
 endif
-
-QUAY_SET_EXPIRY_SCRIPT = $(REPO_ROOT)/hack/set_quay_expiry.py
 
 commit-and-push-pr:
 	$(GIT) add $(GIT_COMMIT_FILES)
@@ -919,22 +911,8 @@ push-images-to-registry-%:
 
 # push-image-to-registry-% pushes the build / arch images specified by $* and VALIDARCHES to the registry
 # specified by REGISTRY.
-#
-# We also build a list of all of the iamges we're going to be pushing and then, once we're done, we set the expiry
-# on those images, either adding an expiry for normal pushes or removing it for releases, if we're pushing to quay.io
-# that is.
 push-image-to-registry-%:
-	$(eval BUILD_IMAGE=$(call unescapefs,$*))
-	$(eval EXPIRY_IMAGES_LIST=$(REGISTRY)/$(BUILD_IMAGE):$(IMAGETAG) $(addprefix $(REGISTRY)/$(BUILD_IMAGE):$(IMAGETAG)-,$(VALIDARCHES)))
-
-	$(MAKE) -j6 $(addprefix push-image-arch-to-registry-,$(VALIDARCHES)) BUILD_IMAGE=$(BUILD_IMAGE)
-
-ifeq ($(findstring quay.io,$(REGISTRY)),quay.io)
-	$(if $(RELEASE), \
-		$(RELEASE_PY3) $(QUAY_SET_EXPIRY_SCRIPT) remove $(EXPIRY_IMAGES_LIST), \
-		$(RELEASE_PY3) $(QUAY_SET_EXPIRY_SCRIPT) add --expiry-days=$(QUAY_EXPIRE_DAYS) $(EXPIRY_IMAGES_LIST) \
-	)
-endif
+	$(MAKE) -j6 $(addprefix push-image-arch-to-registry-,$(VALIDARCHES)) BUILD_IMAGE=$(call unescapefs,$*)
 
 # push-image-arch-to-registry-% pushes the build / arch image specified by $* and BUILD_IMAGE to the registry
 # specified by REGISTRY.

@@ -66,6 +66,3 @@ BPFTOOL_IMAGE=calico/bpftool:v7.5.0
 
 # The operator branch corresponding to this branch.
 OPERATOR_BRANCH=master
-
-# quay.io expiry time for hashrelease/dev images
-QUAY_EXPIRE_DAYS=90
