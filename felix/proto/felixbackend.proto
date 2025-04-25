@@ -405,6 +405,7 @@ message WorkloadEndpoint {
   map<string, string> annotations = 11;
   QoSControls qos_controls = 12;
   LocalBGPPeer local_bgp_peer = 13;
+  map<string, string> labels = 14;
 }
 
 message QoSControls {

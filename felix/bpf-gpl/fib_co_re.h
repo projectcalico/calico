@@ -6,6 +6,7 @@
 #define __CALI_FIB_CO_RE_H__
 
 #include "profiling.h"
+#include <linux/if_packet.h>
 
 static CALI_BPF_INLINE int forward_or_drop(struct cali_tc_ctx *ctx)
 {
@@ -89,7 +90,7 @@ skip_redir_ifindex:
 		bool redirect_peer = GLOBAL_FLAGS & CALI_GLOBALS_REDIRECT_PEER;
 
 		if (redirect_peer && ct_result_rc(state->ct_result.rc) == CALI_CT_ESTABLISHED_BYPASS &&
-			state->ct_result.ifindex_fwd != CT_INVALID_IFINDEX) {
+			state->ct_result.ifindex_fwd != CT_INVALID_IFINDEX && !(ctx->state->ct_result.flags & CALI_CT_FLAG_SKIP_REDIR)) {
 			rc = bpf_redirect_peer(state->ct_result.ifindex_fwd, 0);
 			if (rc == TC_ACT_REDIRECT) {
 				CALI_DEBUG("Redirect to peer interface (%d) succeeded.", state->ct_result.ifindex_fwd);

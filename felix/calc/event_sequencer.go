@@ -435,6 +435,7 @@ func ModelWorkloadEndpointToProto(ep *model.WorkloadEndpoint, peerData *Endpoint
 		Annotations:                ep.Annotations,
 		QosControls:                qosControls,
 		LocalBgpPeer:               localBGPPeer,
+		Labels:                     ep.Labels,
 	}
 }
 
@@ -483,6 +484,7 @@ func (buf *EventSequencer) flushEndpointTierUpdates() {
 		case model.WorkloadEndpointKey:
 			wlep := endpoint.(*model.WorkloadEndpoint)
 
+			log.Infof("Sridhar calc %+v", wlep.Labels)
 			buf.Callback(&proto.WorkloadEndpointUpdate{
 				Id: &proto.WorkloadEndpointID{
 					OrchestratorId: key.OrchestratorID,
