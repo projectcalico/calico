@@ -93,7 +93,7 @@ func describeBPFDualStackTests(ctlbEnabled, ipv6Dataplane bool) bool {
 			opts.NATOutgoingEnabled = true
 			opts.AutoHEPsEnabled = false
 			opts.IPIPMode = api.IPIPModeNever
-			opts.SimulateRoutes = false
+			opts.SimulateRoutes = true
 			opts.DelayFelixStart = true
 
 			if ipv6Dataplane {

@@ -1774,12 +1774,13 @@ func wireguardTopologyOptions(routeSource string, ipipEnabled, wireguardIPv4Enab
 	topologyOptions.ExtraEnvVars["FELIX_ROUTESOURCE"] = routeSource
 	topologyOptions.ExtraEnvVars["FELIX_PROMETHEUSMETRICSENABLED"] = "true"
 
-	// Assigning workload IPs using IPAM API.
-	topologyOptions.SimulateRoutes = false
-	if ipipEnabled {
+	if ipipEnabled && !wireguardIPv6Enabled {
 		topologyOptions.IPIPMode = api.IPIPModeAlways
+		topologyOptions.SimulateRoutes = false
+		topologyOptions.ExtraEnvVars["FELIX_ProgramRoutes"] = "Enabled"
 	} else {
 		topologyOptions.IPIPMode = api.IPIPModeNever
+		topologyOptions.SimulateRoutes = true
 	}
 
 	// With Wireguard and BPF mode the default IptablesMarkMask of 0xffff0000 isn't enough.
