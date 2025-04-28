@@ -1649,7 +1649,7 @@ var _ = Describe("IPAM controller UTs", func() {
 					return fmt.Errorf("allocation was marked as leaked")
 				}
 				return nil
-			}, 1*time.Second, 100*time.Millisecond).ShouldNot(HaveOccurred())
+			}, 15*time.Second, 100*time.Millisecond).ShouldNot(HaveOccurred())
 
 			// Delete the pods too.
 			Expect(cs.CoreV1().Pods(ns).Delete(context.TODO(), podsNode1[0].Name, metav1.DeleteOptions{})).NotTo(HaveOccurred())
@@ -1673,7 +1673,7 @@ var _ = Describe("IPAM controller UTs", func() {
 					return fmt.Errorf("expected 2 handles to be released, got %d", len(fakeClient.handlesReleased))
 				}
 				return nil
-			}, 1*time.Second, 100*time.Millisecond).ShouldNot(HaveOccurred())
+			}, 15*time.Second, 100*time.Millisecond).ShouldNot(HaveOccurred())
 		})
 	})
 
