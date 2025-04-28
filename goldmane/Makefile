@@ -3,15 +3,15 @@ include ../metadata.mk
 PACKAGE_NAME = github.com/projectcalico/calico/goldmane
 IMAGE_BUILD_MARKER = goldmane_container-$(ARCH).created
 
+# Configure variables used by ci/cd common targets from lib.Makefile.
+BUILD_IMAGES=goldmane
+
 ###############################################################################
 # include ../lib.Makefile
 #   Additions to EXTRA_DOCKER_ARGS need to happen before the include since
 #   that variable is evaluated when we declare DOCKER_RUN and siblings.
 ###############################################################################
 include ../lib.Makefile
-
-# Configure variables used by ci/cd common targets from lib.Makefile.
-BUILD_IMAGES=goldmane
 
 # Full set of binaries to build.
 BINARIES=bin/goldmane-$(ARCH) bin/health-$(ARCH)
