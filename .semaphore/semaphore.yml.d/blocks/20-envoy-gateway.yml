@@ -12,7 +12,7 @@
     jobs:
       - name: make ci
         commands:
-          - ../.semaphore/run-and-monitor make-ci.log make ci
+          - ../../.semaphore/run-and-monitor make-ci.log make ci
       - name: Build binary
         matrix:
           - env_var: ARCH
@@ -21,4 +21,4 @@
               - ppc64le
               - s390x
         commands:
-          - ../.semaphore/run-and-monitor image-$ARCH.log make build ARCH=$ARCH
+          - ../../.semaphore/run-and-monitor image-$ARCH.log make build ARCH=$ARCH
