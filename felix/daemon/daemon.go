@@ -592,7 +592,7 @@ configRetry:
 		}
 		healthAggregator.Report(healthName, &health.HealthReport{Live: true, Ready: true})
 		// Up-to-data Typha client will refuse to connect unless Typha signals
-		// that it supports nore resource updates.
+		// that it supports node resource updates.
 		configParams.SetUseNodeResourceUpdates(true)
 
 		go func() {

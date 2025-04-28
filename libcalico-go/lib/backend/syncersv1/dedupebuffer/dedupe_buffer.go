@@ -192,6 +192,19 @@ func (d *DedupeBuffer) OnUpdatesKeysKnown(updates []api.Update, keys []string) {
 
 func (d *DedupeBuffer) queueUpdate(key string, u api.Update) {
 	debug := log.IsLevelEnabled(log.DebugLevel)
+
+	if u.Value != nil {
+		// A new KV or an update. Since we dedupe sequences of updates for the
+		// same key, we need to recalculate the update type to make sense to the
+		// downstream receiver.  We do this even if the update is not on the
+		// queue in order to handle resyncs with Typha.
+		if d.liveResourceKeys.Contains(key) {
+			u.UpdateType = api.UpdateTypeKVUpdated
+		} else {
+			u.UpdateType = api.UpdateTypeKVNew
+		}
+	}
+
 	if element, ok := d.keyToPendingUpdate[key]; ok {
 		// Already got an in-flight update for this key.
 		if u.Value == nil && !d.liveResourceKeys.Contains(key) {
@@ -208,6 +221,7 @@ func (d *DedupeBuffer) queueUpdate(key string, u api.Update) {
 			if debug {
 				log.WithField("key", key).Debug("Key updated before being sent.")
 			}
+
 			usk := element.Value.(updateWithStringKey)
 			usk.update = u
 			element.Value = usk
