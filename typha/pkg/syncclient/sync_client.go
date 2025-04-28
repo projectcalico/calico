@@ -22,9 +22,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/rand"
 	"net"
 	"os"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/golang/snappy"
@@ -38,7 +40,13 @@ import (
 	"github.com/projectcalico/calico/typha/pkg/tlsutils"
 )
 
-var nextID uint64 = 1 // Non-zero so we can tell whether it's set at all.
+var nextID atomic.Uint64
+
+func init() {
+	// ID is used as a correlator in the Typha logs.  Put some entropy in
+	// it so it's easy to grep for.
+	nextID.Store(rand.Uint64() << 32)
+}
 
 const (
 	defaultReadtimeout  = 30 * time.Second
@@ -115,19 +123,15 @@ func New(
 	if err := options.validate(); err != nil {
 		log.WithField("options", options).WithError(err).Fatal("Invalid options")
 	}
-	id := nextID
-	nextID++
 	if options == nil {
 		options = &Options{}
 	}
-	cbskn, ok := cbs.(callbacksWithKeysKnown)
+	cbskn, ok := cbs.(CallbacksWithKeysKnown)
 	if !ok {
-		cbskn = callbacksWithKeysKnownAdapter{cbs}
+		cbskn = simpleCallbacksAdapter{cbs}
 	}
-	return &SyncerClient{
-		ID: id,
+	sc := &SyncerClient{
 		logCxt: log.WithFields(log.Fields{
-			"myID": id,
 			"type": options.SyncerType,
 		}),
 		callbacks:  cbskn,
@@ -138,43 +142,52 @@ func New(
 		myInfo:     myInfo,
 
 		options: options,
-		handshakeStatus: &handshakeStatus{
-			helloReceivedChan: make(chan struct{}, 1),
-		},
 	}
+	sc.refreshConnID()
+	return sc
+}
+
+func (s *SyncerClient) refreshConnID() {
+	s.connID = nextID.Add(1)
+	s.logCxt.Data["myID"] = s.connID
 }
 
 type SyncerClient struct {
-	ID                            uint64
 	logCxt                        *log.Entry
 	discoverer                    *discovery.Discoverer
 	connInfo                      *discovery.Typha
 	myHostname, myVersion, myInfo string
 	options                       *Options
 
-	connection                  net.Conn
-	connR                       io.Reader
-	encoder                     *gob.Encoder
-	decoder                     *gob.Decoder
-	handshakeStatus             *handshakeStatus
-	supportsNodeResourceUpdates bool
+	connection net.Conn
+	connID     uint64
+	connR      io.Reader
+	encoder    *gob.Encoder
+	decoder    *gob.Decoder
 
-	callbacks callbacksWithKeysKnown
+	callbacks CallbacksWithKeysKnown
 	Finished  sync.WaitGroup
 }
 
-type callbacksWithKeysKnown interface {
+type CallbacksWithKeysKnown interface {
 	api.SyncerCallbacks
 	OnUpdatesKeysKnown(updates []api.Update, keys []string)
 }
 
-type callbacksWithKeysKnownAdapter struct {
+type RestartAwareCallbacks interface {
+	CallbacksWithKeysKnown
+	OnTyphaConnectionRestarted()
+}
+
+type simpleCallbacksAdapter struct {
 	api.SyncerCallbacks
 }
 
-func (c callbacksWithKeysKnownAdapter) OnUpdatesKeysKnown(updates []api.Update, keys []string) {
+func (c simpleCallbacksAdapter) OnUpdatesKeysKnown(updates []api.Update, keys []string) {
 	c.OnUpdates(updates)
 }
+
+var _ CallbacksWithKeysKnown = simpleCallbacksAdapter{}
 
 type handshakeStatus struct {
 	helloReceivedChan chan struct{}
@@ -185,8 +198,44 @@ func (s *SyncerClient) Start(cxt context.Context) error {
 	// Connect synchronously so that we can return an error early if we can't connect at all.
 	s.logCxt.Info("Starting Typha client...")
 
+	var connectionFinishedWG sync.WaitGroup
+	err := s.startOneConnection(cxt, &connectionFinishedWG)
+	if err != nil {
+		return err
+	}
+
+	// Start a background goroutine to try to restart the connection if it fails.
+	// We can only do that if the client is restart-aware.
+	s.Finished.Add(1)
+	go func() {
+		defer s.Finished.Done()
+
+		for cxt.Err() == nil {
+			connectionFinishedWG.Wait()
+			if rac, ok := s.callbacks.(RestartAwareCallbacks); ok {
+				log.Info("Typha connection failed but client callback is restart-aware.  Restarting connection...")
+				s.refreshConnID()
+				rac.OnTyphaConnectionRestarted()
+			} else {
+				log.Info("Typha client callback is not restart-aware. Exiting...")
+				return
+			}
+			err := s.startOneConnection(cxt, &connectionFinishedWG)
+			if err != nil {
+				log.WithError(err).Error("Failed to restart Typha client. Exiting...")
+				return
+			}
+		}
+	}()
+
+	return nil
+}
+
+func (s *SyncerClient) startOneConnection(cxt context.Context, connFinished *sync.WaitGroup) error {
 	// Defensive: in case there's a bug in NextAddr() and it never stops returning values,
 	// set a sanity limit on the number of tries.
+	s.callbacks.OnStatusUpdated(api.WaitForDatastore)
+	startTime := time.Now()
 	maxTries := s.calculateConnectionAttemptLimit(len(s.discoverer.CachedTyphaAddrs()))
 	remainingTries := maxTries
 	cat := discovery.NewConnAttemptTracker(s.discoverer)
@@ -205,25 +254,26 @@ func (s *SyncerClient) Start(cxt context.Context) error {
 			s.logCxt.WithError(err).Warnf("Failed to connect to typha endpoint %s.  Will try another if available...", addr.Addr)
 			time.Sleep(100 * time.Millisecond) // Avoid tight loop.
 		} else {
-			s.logCxt.Infof("Successfully connected to Typha at %s.", addr.Addr)
+			s.logCxt.Infof("Successfully connected to Typha at %s after %v.", addr.Addr, time.Since(startTime))
+			s.callbacks.OnStatusUpdated(api.ResyncInProgress)
 			break
 		}
 	}
 
 	// Then start our background goroutines.  We start the main loop and a second goroutine to
 	// manage shutdown.
-	cxt, cancelFn := context.WithCancel(cxt)
-	s.Finished.Add(1)
-	go s.loop(cxt, cancelFn)
+	connCtx, cancelFn := context.WithCancel(cxt)
+	connFinished.Add(1)
+	go s.loop(connCtx, cancelFn, connFinished)
 
-	s.Finished.Add(1)
+	connFinished.Add(1)
 	go func() {
 		// Broadcast that we're finished.
-		defer s.Finished.Done()
+		defer connFinished.Done()
 
 		// Wait for the context to finish, either due to external cancel or our own loop
 		// exiting.
-		<-cxt.Done()
+		<-connCtx.Done()
 		s.logCxt.Info("Typha client Context asked us to exit, closing connection...")
 		// Close the connection.  This will trigger the main loop to exit if it hasn't
 		// already.
@@ -247,26 +297,6 @@ func (s *SyncerClient) calculateConnectionAttemptLimit(numDiscoveredTyphas int) 
 	// to double the number of instances that we detected.
 	maxTries := expectedNumTyphas * 2
 	return maxTries
-}
-
-// SupportsNodeResourceUpdates waits for the Typha server to send a hello and returns true if
-// the server supports node resource updates. If the given timeout is reached, an error is returned.
-func (s *SyncerClient) SupportsNodeResourceUpdates(timeout time.Duration) (bool, error) {
-	// If a previous call has already marked the handshake as complete, then just return the value.
-	if s.handshakeStatus.complete {
-		return s.supportsNodeResourceUpdates, nil
-	}
-
-	select {
-	case <-s.handshakeStatus.helloReceivedChan:
-		s.logCxt.Debug("Received MsgServerHello from server")
-		s.handshakeStatus.complete = true
-		return s.supportsNodeResourceUpdates, nil
-	case <-time.After(timeout):
-		// fallthrough
-	}
-
-	return false, fmt.Errorf("Timed out waiting for handshake to complete")
 }
 
 func (s *SyncerClient) connect(cxt context.Context, typhaAddr discovery.Typha) error {
@@ -400,8 +430,8 @@ func (s *SyncerClient) logConnectionFailure(cxt context.Context, logCxt *log.Ent
 	logCxt.WithError(err).Errorf("Failed to %s", operation)
 }
 
-func (s *SyncerClient) loop(cxt context.Context, cancelFn context.CancelFunc) {
-	defer s.Finished.Done()
+func (s *SyncerClient) loop(cxt context.Context, cancelFn context.CancelFunc, connFinished *sync.WaitGroup) {
+	defer connFinished.Done()
 	defer cancelFn()
 
 	logCxt := s.logCxt.WithField("connection", s.connInfo)
@@ -428,7 +458,7 @@ func (s *SyncerClient) loop(cxt context.Context, cancelFn context.CancelFunc) {
 			SyncerType:                     ourSyncerType,
 			SupportsDecoderRestart:         !s.options.DisableDecoderRestart,
 			SupportedCompressionAlgorithms: compAlgs,
-			ClientConnID:                   s.ID,
+			ClientConnID:                   s.connID,
 		},
 	)
 	if err != nil {
@@ -450,12 +480,13 @@ func (s *SyncerClient) loop(cxt context.Context, cancelFn context.CancelFunc) {
 	}
 	logCxt.WithField("serverMsg", serverHello).Info("ServerHello message received")
 
-	// Check whether Typha supports node resource updates.
+	// Abort if it looks like we're talking to an ancient Typha.  We used to
+	// allow the connection and inform the client, but that's not easy to
+	// do now that we reconnect to Typha on failure.
 	if !serverHello.SupportsNodeResourceUpdates {
-		logCxt.Info("Server responded without support for node resource updates, assuming older Typha")
+		logCxt.Warn("Server responded without support for node resource updates, disconnecting.")
+		return
 	}
-	s.supportsNodeResourceUpdates = serverHello.SupportsNodeResourceUpdates
-	s.handshakeStatus.helloReceivedChan <- struct{}{}
 
 	// Check the SyncerType reported by the server.  If the server is too old to support SyncerType then
 	// the message will have an empty string in place of the SyncerType.  In that case we only proceed if
