@@ -138,7 +138,7 @@ endif
 	rm -rf ./$(REGISTRAR_IMAGE)/vendor
 
 clean-registrar:
-	rm -rf node-driver-registrar
+	rm -rf ./$(REGISTRAR_IMAGE)
 
 ###############################################################################
 # Building the image
