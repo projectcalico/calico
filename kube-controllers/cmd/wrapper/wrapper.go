@@ -15,7 +15,7 @@
 package main
 
 import (
-	"github.com/projectcalico/calico/typha/pkg/cmdwrapper"
+	"github.com/projectcalico/calico/kube-controllers/pkg/cmdwrapper"
 )
 
 // This is a wrapper program to restart the passed in program anytime it exits
