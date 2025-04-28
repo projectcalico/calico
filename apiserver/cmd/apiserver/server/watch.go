@@ -5,6 +5,7 @@ package server
 import (
 	"context"
 	"fmt"
+	"maps"
 	"os"
 	"time"
 
@@ -84,12 +85,16 @@ func WatchExtensionAuth(ctx context.Context) (bool, error) {
 					n := new.(*corev1.ConfigMap)
 					// Only detect as changed if the version has changed
 					if o.ResourceVersion != n.ResourceVersion {
+						if maps.Equal(o.Data, n.Data) {
+							logrus.Info("Detected update to extension-apiserver-authentication ConfigMap: No change to data")
+							return
+						}
 						changedKey := findFirstDifferingKey(o, n)
 						logrus.WithFields(logrus.Fields{
 							"oldResourceVersion": o.ResourceVersion,
 							"newResourceVersion": n.ResourceVersion,
 							"changedDataKey":     changedKey,
-						}).Info("Detected update to extension-apiserver-authentication ConfigMap")
+						}).Info("Detected update to extension-apiserver-authentication ConfigMap: Require restart due to change in data")
 						changed = true
 						cancel()
 					}
@@ -111,11 +116,18 @@ func WatchExtensionAuth(ctx context.Context) (bool, error) {
 }
 
 func findFirstDifferingKey(old, new *corev1.ConfigMap) (key string) {
-	for key, v := range new.Data {
-		if ov, ok := old.Data[key]; !ok || ov != v {
+	for key, nv := range new.Data {
+		if ov, ok := old.Data[key]; !ok || ov != nv {
 			return key
 		}
 	}
 
-	return "key"
+	for key, v := range old.Data {
+		if nv, ok := new.Data[key]; !ok || nv != v {
+			return key
+		}
+	}
+
+	// maps are identical
+	return ""
 }

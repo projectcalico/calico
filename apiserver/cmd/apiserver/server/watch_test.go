@@ -29,13 +29,18 @@ func TestFindFirstDifferingKey(t *testing.T) {
 		Data: map[string]string{
 			"haystack0": "haystack",
 			"haystack1": "haystack",
-			"needle":    "found-you",
 			"haystack2": "haystack",
 		},
 	}
 
+	Expect(findFirstDifferingKey(&cfgmap1, &cfgmap2)).To(Equal(""))
+	Expect(findFirstDifferingKey(&cfgmap2, &cfgmap1)).To(Equal(""))
+
+	cfgmap2.Data["needle"] = "found-you"
+
 	Expect(findFirstDifferingKey(&cfgmap1, &cfgmap2)).To(Equal("needle"))
+	Expect(findFirstDifferingKey(&cfgmap2, &cfgmap1)).To(Equal("needle"))
 	cfgmap1.Data["needle"] = ""
 	Expect(findFirstDifferingKey(&cfgmap1, &cfgmap2)).To(Equal("needle"))
-
+	Expect(findFirstDifferingKey(&cfgmap2, &cfgmap1)).To(Equal("needle"))
 }
