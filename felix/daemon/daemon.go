@@ -591,15 +591,9 @@ configRetry:
 			break
 		}
 		healthAggregator.Report(healthName, &health.HealthReport{Live: true, Ready: true})
-
-		supportsNodeResourceUpdates, err := typhaConnection.SupportsNodeResourceUpdates(10 * time.Second)
-		if err != nil {
-			time.Sleep(time.Second) // Avoid tight restart loop in case we didn't really wait 10s above.
-			log.WithError(err).Fatal("Did not get hello message from Typha in time")
-			return
-		}
-		log.Debugf("Typha supports node resource updates: %v", supportsNodeResourceUpdates)
-		configParams.SetUseNodeResourceUpdates(supportsNodeResourceUpdates)
+		// Up-to-data Typha client will refuse to connect unless Typha signals
+		// that it supports nore resource updates.
+		configParams.SetUseNodeResourceUpdates(true)
 
 		go func() {
 			typhaConnection.Finished.Wait()
