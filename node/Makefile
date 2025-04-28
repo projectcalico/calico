@@ -151,6 +151,7 @@ LDFLAGS= -X $(PACKAGE_NAME)/pkg/lifecycle/startup.VERSION=$(GIT_VERSION) \
 SRC_FILES=$(shell find ./pkg -name '*.go') \
 	  $(shell find ./cmd -name '*.go') \
 	  $(shell find ../felix -name '*.go') \
+	  $(shell find ../typha -name '*.go') \
 	  $(shell find ../felix -name '*.[ch]') \
 	  $(shell find ../libcalico-go -name '*.go') \
 	  $(shell find ../goldmane -name '*.go') \
