@@ -128,11 +128,14 @@ clone-registrar-upstream:
 ifeq ("$(wildcard ./$(REGISTRAR_IMAGE))", "")
 	@echo "Directory does not exist."
 	git clone --depth 1 --single-branch https://github.com/$(UPSTREAM_REGISTRAR_PROJECT).git
+else
+	@echo "Upstream repo already cloned."
 endif
 	cd $(REGISTRAR_IMAGE) && \
 	  git checkout $(UPSTREAM_REGISTRAR_TAG) || \
 	  git fetch --tags origin $(UPSTREAM_REGISTRAR_TAG) && \
 	  git checkout $(UPSTREAM_REGISTRAR_TAG)
+	rm -rf ./$(REGISTRAR_IMAGE)/vendor
 
 clean-registrar:
 	rm -rf node-driver-registrar
