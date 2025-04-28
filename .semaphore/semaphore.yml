@@ -313,7 +313,7 @@ blocks:
       jobs:
         - name: make ci
           commands:
-            - ../.semaphore/run-and-monitor make-ci.log make ci
+            - ../../.semaphore/run-and-monitor make-ci.log make ci
         - name: Build binary
           matrix:
             - env_var: ARCH
@@ -322,7 +322,7 @@ blocks:
                 - ppc64le
                 - s390x
           commands:
-            - ../.semaphore/run-and-monitor image-$ARCH.log make build ARCH=$ARCH
+            - ../../.semaphore/run-and-monitor image-$ARCH.log make build ARCH=$ARCH
   - name: envoy-proxy
     run:
       when: "false or change_in(['/*', '/third_party/envoy-proxy'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
@@ -337,7 +337,7 @@ blocks:
       jobs:
         - name: make ci
           commands:
-            - ../.semaphore/run-and-monitor make-ci.log make ci
+            - ../../.semaphore/run-and-monitor make-ci.log make ci
         - name: Build binary
           matrix:
             - env_var: ARCH
@@ -346,7 +346,7 @@ blocks:
                 - ppc64le
                 - s390x
           commands:
-            - ../.semaphore/run-and-monitor image-$ARCH.log make build ARCH=$ARCH
+            - ../../.semaphore/run-and-monitor image-$ARCH.log make build ARCH=$ARCH
   - name: envoy-ratelimit
     run:
       when: "false or change_in(['/*', '/third_party/envoy-ratelimit'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
@@ -361,7 +361,7 @@ blocks:
       jobs:
         - name: make ci
           commands:
-            - ../.semaphore/run-and-monitor make-ci.log make ci
+            - ../../.semaphore/run-and-monitor make-ci.log make ci
         - name: Build binary
           matrix:
             - env_var: ARCH
@@ -370,7 +370,7 @@ blocks:
                 - ppc64le
                 - s390x
           commands:
-            - ../.semaphore/run-and-monitor image-$ARCH.log make build ARCH=$ARCH
+            - ../../.semaphore/run-and-monitor image-$ARCH.log make build ARCH=$ARCH
   - name: "Felix: Build"
     run:
       when: "false or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/hack/test/certs/', '/cni-plugin/pkg/dataplane/linux/dataplane_linux.go'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
