@@ -3,6 +3,7 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"maps"
@@ -85,7 +86,7 @@ func WatchExtensionAuth(ctx context.Context) (bool, error) {
 					n := new.(*corev1.ConfigMap)
 					// Only detect as changed if the version has changed
 					if o.ResourceVersion != n.ResourceVersion {
-						if maps.Equal(o.Data, n.Data) {
+						if maps.Equal(o.Data, n.Data) && binaryDataEqual(o, n) {
 							logrus.Info("Detected update to extension-apiserver-authentication ConfigMap: No change to data")
 							return
 						}
@@ -130,4 +131,20 @@ func findFirstDifferingKey(old, new *corev1.ConfigMap) (key string) {
 
 	// maps are identical
 	return ""
+}
+
+func binaryDataEqual(m1, m2 *corev1.ConfigMap) bool {
+	for k1, v1 := range m1.BinaryData {
+		if v2, ok := m2.BinaryData[k1]; !ok || !bytes.Equal(v1, v2) {
+			return false
+		}
+	}
+
+	for k2, v2 := range m2.BinaryData {
+		if v1, ok := m1.BinaryData[k2]; !ok || !bytes.Equal(v1, v2) {
+			return false
+		}
+	}
+
+	return true
 }
