@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,7 +16,6 @@ package intdataplane
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net"
 	"sync"
@@ -42,9 +41,8 @@ import (
 // when IPIP is enabled. It doesn't actually program the rules, because they are part of the
 // top-level static chains.
 //
-// ipipManager also takes care of the configuration of the IPIP tunnel device.
+// ipipManager also takes care of the configuration of the IPIP tunnel device, and programming IPIP routes.
 type ipipManager struct {
-	// Our dependencies.
 	routeTable routetable.Interface
 
 	// activeHostnameToIP maps hostname to string IP address. We don't bother to parse into
@@ -95,7 +93,7 @@ func newIPIPManager(
 	featureDetector environment.FeatureDetectorIface,
 ) *ipipManager {
 	nlHandle, _ := netlinkshim.NewRealNetlink()
-	return newRouteManagerWithShim(
+	return newIPIPManagerWithShim(
 		ipsetsDataplane,
 		mainRouteTable,
 		deviceName,
@@ -106,7 +104,7 @@ func newIPIPManager(
 	)
 }
 
-func newRouteManagerWithShim(
+func newIPIPManagerWithShim(
 	ipsetsDataplane dpsets.IPSetsDataplane,
 	mainRouteTable routetable.Interface,
 	deviceName string,
@@ -169,6 +167,12 @@ func (m *ipipManager) OnUpdate(msg interface{}) {
 			m.routesDirty = true
 		}
 
+		if isRemoteTunnelRoute(msg, proto.IPPoolType_IPIP) {
+			m.logCtx.WithField("msg", msg).Debug("IPIP data plane received route update for remote tunnel endpoint")
+			m.routesByDest[msg.Dst] = msg
+			m.routesDirty = true
+		}
+
 		// Process IPAM blocks that aren't associated to a single or /32 local workload
 		if routeIsLocalBlock(msg, proto.IPPoolType_IPIP) {
 			m.logCtx.WithField("msg", msg).Debug("IPIP data plane received route update for IPAM block")
@@ -184,7 +188,8 @@ func (m *ipipManager) OnUpdate(msg interface{}) {
 		// Check to make sure that we are dealing with messages of the correct IP version.
 		cidr, err := ip.CIDRFromString(msg.Dst)
 		if err != nil {
-			m.logCtx.WithError(err).WithField("msg", msg).Warning("Unable to parse route removal destination. Skipping update.")
+			m.logCtx.WithError(err).WithField("msg", msg).
+				Warning("Unable to parse route removal destination. Skipping update.")
 			return
 		}
 		if m.ipVersion != cidr.Version() {
@@ -350,13 +355,21 @@ func (m *ipipManager) updateRoutes() error {
 		}).Debug("IPIP manager sending unencapsulated L3 updates")
 		m.routeTable.SetRoutes(routetable.RouteClassIPIPSameSubnet, m.noEncapDevice, noEncapRoutes)
 	} else {
-		return errors.New("no encap route table not set, will defer adding routes")
+		m.logCtx.Debug("IPIP manager not sending unencapsulated L3 updates, no parent interface.")
 	}
 
 	return nil
 }
 
 func (m *ipipManager) tunneledRoute(cidr ip.CIDR, r *proto.RouteUpdate) *routetable.Target {
+	if isRemoteTunnelRoute(r, proto.IPPoolType_IPIP) {
+		// We treat remote tunnel routes as directly connected. They don't have a gateway of
+		// the VTEP because they ARE the VTEP!
+		return &routetable.Target{
+			CIDR: cidr,
+			MTU:  m.dpConfig.IPIPMTU,
+		}
+	}
 	// Extract the gateway addr for this route based on its remote address.
 	remoteAddr, ok := m.activeHostnameToIP[r.DstNodeName]
 	if !ok {
@@ -364,13 +377,12 @@ func (m *ipipManager) tunneledRoute(cidr ip.CIDR, r *proto.RouteUpdate) *routeta
 		return nil
 	}
 
-	ipipRoute := routetable.Target{
+	return &routetable.Target{
 		Type:     routetable.TargetTypeOnLink,
 		CIDR:     cidr,
 		GW:       ip.FromString(remoteAddr),
 		Protocol: m.routeProtocol,
 	}
-	return &ipipRoute
 }
 
 func (m *ipipManager) OnNoEncapDeviceUpdate(name string) {

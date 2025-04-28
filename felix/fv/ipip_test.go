@@ -153,7 +153,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology with BIRD pro
 		}
 	})
 
-	It("should have workload to workload connectivity", func() {
+	It("hould have workload to workload connectivity", func() {
 		cc.ExpectSome(w[0], w[1])
 		cc.ExpectSome(w[1], w[0])
 		cc.CheckConnectivity()
@@ -779,19 +779,23 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology with Felix pr
 					}
 				})
 
-				It("should block host-to-host traffic in the absence of policy allowing it", func() {
-					cc.ExpectNone(tc.Felixes[0], hostW[1])
-					cc.ExpectNone(tc.Felixes[1], hostW[0])
+				It("should have workload connectivity but not host connectivity", func() {
+					// Host endpoints (with no policies) block host-host traffic due to default drop.
+					cc.ExpectNone(felixes[0], hostW[1])
+					cc.ExpectNone(felixes[1], hostW[0])
+
+					// Host => workload is not allowed
+					cc.ExpectNone(felixes[0], w[1])
+					cc.ExpectNone(felixes[1], w[0])
+
+					// But host => own-workload is allowed
+					cc.ExpectSome(felixes[0], w[0])
+					cc.ExpectSome(felixes[1], w[1])
+
+					// But the rules to allow VXLAN between our hosts let the workload traffic through.
 					cc.ExpectSome(w[0], w[1])
 					cc.ExpectSome(w[1], w[0])
-					cc.CheckConnectivity()
-				})
 
-				It("should allow host-to-own-pod traffic in the absence of policy allowing it but not host to other-pods", func() {
-					cc.ExpectSome(tc.Felixes[0], w[0])
-					cc.ExpectSome(tc.Felixes[1], w[1])
-					cc.ExpectNone(tc.Felixes[0], w[1])
-					cc.ExpectNone(tc.Felixes[1], w[0])
 					cc.CheckConnectivity()
 				})
 

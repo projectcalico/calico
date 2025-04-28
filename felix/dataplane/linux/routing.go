@@ -122,3 +122,30 @@ func noEncapRoute(
 	}
 	return &noEncapRoute
 }
+
+// isRemoteTunnelRoute returns true if the route update signifies a need to program
+// a directly connected route on the VXLAN device for a remote tunnel endpoint. This is needed
+// in a few cases in order to ensure host <-> pod connectivity over the tunnel.
+func isRemoteTunnelRoute(msg *proto.RouteUpdate, ippoolType proto.IPPoolType) bool {
+	if msg.IpPoolType != ippoolType {
+		// Not VXLAN - can skip this update.
+		return false
+	}
+
+	var isRemoteTunnel bool
+	var isBlock bool
+	isRemoteTunnel = isType(msg, proto.RouteType_REMOTE_TUNNEL)
+	isBlock = isType(msg, proto.RouteType_REMOTE_WORKLOAD)
+
+	if isRemoteTunnel && msg.Borrowed {
+		// If we receive a route for a borrowed VXLAN tunnel IP, we need to make sure to program a route for it as it
+		// won't be covered by the block route.
+		return true
+	}
+	if isRemoteTunnel && isBlock {
+		// This happens when tunnel addresses are selected from an IP pool with blocks of a single address.
+		// These also need routes of the form "<IP> dev vxlan.calico" rather than "<block> via <VTEP>".
+		return true
+	}
+	return false
+}

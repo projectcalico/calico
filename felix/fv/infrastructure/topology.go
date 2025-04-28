@@ -50,15 +50,13 @@ type TopologyOptions struct {
 	EnableIPv6              bool
 	// Temporary flag to implement and test IPv6 in bpf dataplane.
 	// TODO: Remove it when IPv6 implementation in BPF mode is complete.
-	BPFEnableIPv6     bool
-	ExtraEnvVars      map[string]string
-	ExtraVolumes      map[string]string
-	WithTypha         bool
-	WithFelixTyphaTLS bool
-	TestManagesBPF    bool
-	TyphaLogSeverity  string
-	//IPIPEnabled               bool
-	//IPIPRoutesEnabled         bool
+	BPFEnableIPv6             bool
+	ExtraEnvVars              map[string]string
+	ExtraVolumes              map[string]string
+	WithTypha                 bool
+	WithFelixTyphaTLS         bool
+	TestManagesBPF            bool
+	TyphaLogSeverity          string
 	SimulateRoutes            bool
 	IPIPMode                  api.IPIPMode
 	VXLANMode                 api.VXLANMode
@@ -118,13 +116,11 @@ func DefaultTopologyOptions() TopologyOptions {
 		WithTypha:             false,
 		WithFelixTyphaTLS:     false,
 		TyphaLogSeverity:      "info",
-		//IPIPEnabled:           true,
-		//IPIPRoutesEnabled:     true,
-		IPIPMode:       v3.IPIPModeAlways,
-		SimulateRoutes: true,
-		IPPoolCIDR:     DefaultIPPoolCIDR,
-		IPv6PoolCIDR:   DefaultIPv6PoolCIDR,
-		UseIPPools:     true,
+		IPIPMode:              v3.IPIPModeAlways,
+		SimulateRoutes:        true,
+		IPPoolCIDR:            DefaultIPPoolCIDR,
+		IPv6PoolCIDR:          DefaultIPv6PoolCIDR,
+		UseIPPools:            true,
 	}
 }
 
@@ -147,12 +143,6 @@ func CreateDefaultIPPoolFromOpts(
 	case 4:
 		ipPool.Name = DefaultIPPoolName
 		ipPool.Spec.CIDR = opts.IPPoolCIDR
-		// IPIP is only supported on IPv4
-		/*if opts.IPIPEnabled {
-			ipPool.Spec.IPIPMode = api.IPIPModeAlways
-		} else {
-			ipPool.Spec.IPIPMode = api.IPIPModeNever
-		}*/
 		ipPool.Spec.IPIPMode = opts.IPIPMode
 
 		if len(opts.IPPoolUsages) > 0 {
@@ -161,6 +151,7 @@ func CreateDefaultIPPoolFromOpts(
 	case 6:
 		ipPool.Name = DefaultIPv6PoolName
 		ipPool.Spec.CIDR = opts.IPv6PoolCIDR
+		// IPIP is only supported on IPv4
 		ipPool.Spec.IPIPMode = api.IPIPModeNever
 
 		if len(opts.IPv6PoolUsages) > 0 {

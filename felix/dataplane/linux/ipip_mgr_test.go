@@ -27,6 +27,7 @@ import (
 
 	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
 	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
+	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/routetable"
@@ -39,7 +40,7 @@ var (
 	mockFailure = errors.New("mock failure")
 )
 
-var _ = Describe("ipipMgr (tunnel configuration)", func() {
+var _ = Describe("IpipMgr (tunnel configuration)", func() {
 	var (
 		ipipMgr   *ipipManager
 		ipSets    *dpsets.MockIPSets
@@ -65,7 +66,7 @@ var _ = Describe("ipipMgr (tunnel configuration)", func() {
 			currentRoutes: map[string][]routetable.Target{},
 		}
 		opRecorder := logutils.NewSummarizer("test")
-		ipipMgr = newRouteManagerWithShim(
+		ipipMgr = newIPIPManagerWithShim(
 			ipSets, rt, dataplanedefs.IPIPIfaceName,
 			Config{
 				MaxIPSetSize:       1024,
@@ -243,7 +244,7 @@ var _ = Describe("ipipManager IP set updates", func() {
 		la := netlink.NewLinkAttrs()
 		la.Name = "eth0"
 		opRecorder := logutils.NewSummarizer("test")
-		ipipMgr = newRouteManagerWithShim(
+		ipipMgr = newIPIPManagerWithShim(
 			ipSets, rt, dataplanedefs.IPIPIfaceName,
 			Config{
 				MaxIPSetSize:       1024,
@@ -389,7 +390,7 @@ var _ = Describe("ipipManager IP set updates", func() {
 	})
 })
 
-var _ = Describe("IPIPManager routing update", func() {
+var _ = Describe("IPIPManager route updates", func() {
 	var manager *ipipManager
 	var rt *mockRouteTable
 	var ipSets *dpsets.MockIPSets
@@ -403,11 +404,11 @@ var _ = Describe("IPIPManager routing update", func() {
 		la := netlink.NewLinkAttrs()
 		la.Name = "eth0"
 		opRecorder := logutils.NewSummarizer("test")
-		manager = newRouteManagerWithShim(
+		manager = newIPIPManagerWithShim(
 			ipSets, rt, dataplanedefs.IPIPIfaceName,
 			Config{
 				MaxIPSetSize:       1024,
-				Hostname:           "host1",
+				Hostname:           "node1",
 				ExternalNodesCidrs: []string{"10.10.10.0/24"},
 				RulesConfig: rules.Config{
 					IPIPTunnelAddress: net.ParseIP("192.168.0.1"),
@@ -426,11 +427,11 @@ var _ = Describe("IPIPManager routing update", func() {
 
 	It("successfully adds a route to the parent interface", func() {
 		manager.OnUpdate(&proto.HostMetadataUpdate{
-			Hostname: "host1",
+			Hostname: "node1",
 			Ipv4Addr: "10.0.0.1",
 		})
 		manager.OnUpdate(&proto.HostMetadataUpdate{
-			Hostname: "host2",
+			Hostname: "node2",
 			Ipv4Addr: "10.0.1.1",
 		})
 
@@ -449,7 +450,7 @@ var _ = Describe("IPIPManager routing update", func() {
 			Types:       proto.RouteType_REMOTE_WORKLOAD,
 			IpPoolType:  proto.IPPoolType_IPIP,
 			Dst:         "192.168.0.3/26",
-			DstNodeName: "host2",
+			DstNodeName: "node2",
 			DstNodeIp:   "10.0.1.1",
 			SameSubnet:  true,
 		})
@@ -458,7 +459,7 @@ var _ = Describe("IPIPManager routing update", func() {
 			Types:       proto.RouteType_REMOTE_WORKLOAD,
 			IpPoolType:  proto.IPPoolType_IPIP,
 			Dst:         "192.168.0.2/26",
-			DstNodeName: "host2",
+			DstNodeName: "node2",
 			DstNodeIp:   "10.0.1.1",
 		})
 
@@ -466,7 +467,7 @@ var _ = Describe("IPIPManager routing update", func() {
 			Types:       proto.RouteType_LOCAL_WORKLOAD,
 			IpPoolType:  proto.IPPoolType_IPIP,
 			Dst:         "192.168.0.100/26",
-			DstNodeName: "host1",
+			DstNodeName: "node1",
 			DstNodeIp:   "10.0.0.1",
 			SameSubnet:  true,
 		})
@@ -476,7 +477,7 @@ var _ = Describe("IPIPManager routing update", func() {
 			Types:       proto.RouteType_LOCAL_WORKLOAD,
 			IpPoolType:  proto.IPPoolType_IPIP,
 			Dst:         "192.168.0.10/32",
-			DstNodeName: "host1",
+			DstNodeName: "node1",
 			DstNodeIp:   "10.0.0.7",
 			SameSubnet:  true,
 		})
@@ -492,49 +493,84 @@ var _ = Describe("IPIPManager routing update", func() {
 		Expect(rt.currentRoutes["eth0"]).NotTo(BeNil())
 	})
 
-	It("adds the route to the default table on next try when the parent route table is not immediately found", func() {
+	It("should fall back to programming tunneled routes if the parent device is not known", func() {
 		parentNameC := make(chan string)
 		go manager.KeepIPIPDeviceInSync(false, 1*time.Second, parentNameC)
 
+		By("Sending another node's route.")
 		manager.OnUpdate(&proto.HostMetadataUpdate{
-			Hostname: "host2",
-			Ipv4Addr: "10.0.1.1/32",
+			Hostname: "node2",
+			Ipv4Addr: "10.0.0.2",
 		})
-
 		manager.OnUpdate(&proto.RouteUpdate{
 			Types:       proto.RouteType_REMOTE_WORKLOAD,
 			IpPoolType:  proto.IPPoolType_IPIP,
 			Dst:         "172.0.0.1/26",
-			DstNodeName: "host2",
-			DstNodeIp:   "172.8.8.8",
+			DstNodeName: "node2",
+			DstNodeIp:   "10.0.0.2",
 			SameSubnet:  true,
 		})
 
 		err := manager.CompleteDeferredWork()
-		Expect(err).NotTo(BeNil())
-		Expect(err.Error()).To(Equal("no encap route table not set, will defer adding routes"))
-		Expect(manager.routesDirty).To(BeTrue())
+		Expect(err).NotTo(HaveOccurred())
+		Expect(manager.routesDirty).To(BeFalse())
+		Expect(rt.currentRoutes["eth0"]).To(HaveLen(0))
+		Expect(rt.currentRoutes[dataplanedefs.IPIPIfaceName]).To(HaveLen(1))
 
+		By("Sending another local node update.")
 		manager.OnUpdate(&proto.HostMetadataUpdate{
-			Hostname: "host1",
+			Hostname: "node1",
 			Ipv4Addr: "10.0.0.1",
 		})
+		localAddr := manager.getLocalHostAddr()
+		Expect(localAddr).NotTo(BeNil())
 
-		Expect(manager.hostAddr).NotTo(BeZero())
-
-		// Note: parent name is sent after configuration so this receive
+		// Note: no encap device name is sent after configuration so this receive
 		// ensures we don't race.
 		Eventually(parentNameC, "2s").Should(Receive(Equal("eth0")))
 		manager.OnNoEncapDeviceUpdate("eth0")
 
-		err = manager.configureIPIPDevice(50, manager.dpConfig.RulesConfig.IPIPTunnelAddress, false)
-		Expect(err).NotTo(HaveOccurred())
-
 		Expect(rt.currentRoutes["eth0"]).To(HaveLen(0))
 		err = manager.CompleteDeferredWork()
+
 		Expect(err).NotTo(HaveOccurred())
 		Expect(manager.routesDirty).To(BeFalse())
 		Expect(rt.currentRoutes["eth0"]).To(HaveLen(1))
+		Expect(rt.currentRoutes[dataplanedefs.IPIPIfaceName]).To(HaveLen(0))
+	})
+
+	It("should program directly connected routes for remote nodes with borrowed IP addresses", func() {
+		By("Sending a borrowed tunnel IP address")
+		manager.OnUpdate(&proto.RouteUpdate{
+			Types:       proto.RouteType_REMOTE_TUNNEL,
+			IpPoolType:  proto.IPPoolType_IPIP,
+			Dst:         "10.0.1.1/32",
+			DstNodeName: "node2",
+			DstNodeIp:   "172.16.0.1",
+			Borrowed:    true,
+		})
+
+		err := manager.CompleteDeferredWork()
+		Expect(err).NotTo(HaveOccurred())
+
+		// Expect a directly connected route to the borrowed IP.
+		Expect(rt.currentRoutes[dataplanedefs.IPIPIfaceName]).To(HaveLen(1))
+		Expect(rt.currentRoutes[dataplanedefs.IPIPIfaceName][0]).To(Equal(
+			routetable.Target{
+				CIDR: ip.MustParseCIDROrIP("10.0.1.1/32"),
+				MTU:  1400,
+			}))
+
+		// Delete the route.
+		manager.OnUpdate(&proto.RouteRemove{
+			Dst: "10.0.1.1/32",
+		})
+
+		err = manager.CompleteDeferredWork()
+		Expect(err).NotTo(HaveOccurred())
+
+		// Expect no routes.
+		Expect(rt.currentRoutes[dataplanedefs.IPIPIfaceName]).To(HaveLen(0))
 	})
 })
 
