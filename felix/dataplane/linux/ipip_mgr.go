@@ -38,12 +38,12 @@ import (
 	"github.com/projectcalico/calico/felix/rules"
 )
 
-// routeManager manages the all-hosts IP set, which is used by some rules in our static chains
+// ipipManager manages the all-hosts IP set, which is used by some rules in our static chains
 // when IPIP is enabled. It doesn't actually program the rules, because they are part of the
 // top-level static chains.
 //
-// routeManager also takes care of the configuration of the IPIP tunnel device.
-type routeManager struct {
+// ipipManager also takes care of the configuration of the IPIP tunnel device.
+type ipipManager struct {
 	// Our dependencies.
 	routeTable routetable.Interface
 
@@ -85,7 +85,7 @@ type routeManager struct {
 	opRecorder logutils.OpRecorder
 }
 
-func newRouteManager(
+func newIPIPManager(
 	ipsetsDataplane dpsets.IPSetsDataplane,
 	mainRouteTable routetable.Interface,
 	deviceName string,
@@ -93,7 +93,7 @@ func newRouteManager(
 	opRecorder logutils.OpRecorder,
 	ipVersion uint8,
 	featureDetector environment.FeatureDetectorIface,
-) *routeManager {
+) *ipipManager {
 	nlHandle, _ := netlinkshim.NewRealNetlink()
 	return newRouteManagerWithShim(
 		ipsetsDataplane,
@@ -114,12 +114,12 @@ func newRouteManagerWithShim(
 	opRecorder logutils.OpRecorder,
 	nlHandle netlinkHandle,
 	ipVersion uint8,
-) *routeManager {
+) *ipipManager {
 	if ipVersion != 4 {
 		logrus.Errorf("IPIP manager only supports IPv4")
 		return nil
 	}
-	return &routeManager{
+	return &ipipManager{
 		ipsetsDataplane:    ipsetsDataplane,
 		activeHostnameToIP: map[string]string{},
 		myAddrChangedC:     make(chan struct{}, 1),
@@ -145,7 +145,7 @@ func newRouteManagerWithShim(
 	}
 }
 
-func (m *routeManager) OnUpdate(msg interface{}) {
+func (m *ipipManager) OnUpdate(msg interface{}) {
 	switch msg := msg.(type) {
 	case *proto.RouteUpdate:
 		cidr, err := ip.CIDRFromString(msg.Dst)
@@ -211,7 +211,7 @@ func (m *routeManager) OnUpdate(msg interface{}) {
 	}
 }
 
-func (m *routeManager) deleteRoute(dst string) {
+func (m *ipipManager) deleteRoute(dst string) {
 	_, exists := m.routesByDest[dst]
 	if exists {
 		logrus.Debug("deleting route dst ", dst)
@@ -227,7 +227,7 @@ func (m *routeManager) deleteRoute(dst string) {
 	}
 }
 
-func (m *routeManager) setLocalHostAddr(address string) {
+func (m *ipipManager) setLocalHostAddr(address string) {
 	m.myAddrLock.Lock()
 	defer m.myAddrLock.Unlock()
 	m.hostAddr = address
@@ -237,13 +237,13 @@ func (m *routeManager) setLocalHostAddr(address string) {
 	}
 }
 
-func (m *routeManager) getLocalHostAddr() string {
+func (m *ipipManager) getLocalHostAddr() string {
 	m.myAddrLock.Lock()
 	defer m.myAddrLock.Unlock()
 	return m.hostAddr
 }
 
-func (m *routeManager) CompleteDeferredWork() error {
+func (m *ipipManager) CompleteDeferredWork() error {
 	if m.ipSetDirty {
 		m.updateAllHostsIPSet()
 		m.ipSetDirty = false
@@ -291,7 +291,7 @@ func (m *routeManager) CompleteDeferredWork() error {
 	return nil
 }
 
-func (m *routeManager) updateAllHostsIPSet() {
+func (m *ipipManager) updateAllHostsIPSet() {
 	// For simplicity (and on the assumption that host add/removes are rare) rewrite
 	// the whole IP set whenever we get a change. To replace this with delta handling
 	// would require reference counting the IPs because it's possible for two hosts
@@ -306,7 +306,7 @@ func (m *routeManager) updateAllHostsIPSet() {
 	m.ipsetsDataplane.AddOrReplaceIPSet(m.ipSetMetadata, members)
 }
 
-func (m *routeManager) updateRoutes() error {
+func (m *ipipManager) updateRoutes() error {
 	// Iterate through all of our L3 routes and send them through to the
 	// RouteTable.  It's a little wasteful to recalculate everything but the
 	// RouteTable will avoid making dataplane changes for routes that haven't
@@ -356,7 +356,7 @@ func (m *routeManager) updateRoutes() error {
 	return nil
 }
 
-func (m *routeManager) tunneledRoute(cidr ip.CIDR, r *proto.RouteUpdate) *routetable.Target {
+func (m *ipipManager) tunneledRoute(cidr ip.CIDR, r *proto.RouteUpdate) *routetable.Target {
 	// Extract the gateway addr for this route based on its remote address.
 	remoteAddr, ok := m.activeHostnameToIP[r.DstNodeName]
 	if !ok {
@@ -373,7 +373,7 @@ func (m *routeManager) tunneledRoute(cidr ip.CIDR, r *proto.RouteUpdate) *routet
 	return &ipipRoute
 }
 
-func (m *routeManager) OnParentNameUpdate(name string) {
+func (m *ipipManager) OnNoEncapDeviceUpdate(name string) {
 	if name == "" {
 		m.logCtx.Warn("Empty parent interface name? Ignoring.")
 		return
@@ -391,7 +391,7 @@ func (m *routeManager) OnParentNameUpdate(name string) {
 
 // KeepIPIPDeviceInSync is a goroutine that configures the IPIP tunnel device, then periodically
 // checks that it is still correctly configured.
-func (m *routeManager) KeepBIRDIPIPDeviceInSync(xsumBroken bool) {
+func (m *ipipManager) KeepBIRDIPIPDeviceInSync(xsumBroken bool) {
 	for {
 		err := m.configureIPIPDevice(m.dpConfig.IPIPMTU, m.dpConfig.RulesConfig.IPIPTunnelAddress, xsumBroken)
 		if err != nil {
@@ -405,7 +405,7 @@ func (m *routeManager) KeepBIRDIPIPDeviceInSync(xsumBroken bool) {
 
 // KeepIPIPDeviceInSync is a goroutine that configures the IPIP tunnel device, then periodically
 // checks that it is still correctly configured.
-func (m *routeManager) KeepIPIPDeviceInSync(xsumBroken bool, wait time.Duration, parentNameC chan string) {
+func (m *ipipManager) KeepIPIPDeviceInSync(xsumBroken bool, wait time.Duration, parentNameC chan string) {
 	managedBy := "BIRD"
 	if m.dpConfig.ProgramRoutes {
 		managedBy = "Felix"
@@ -491,7 +491,7 @@ func (m *routeManager) KeepIPIPDeviceInSync(xsumBroken bool, wait time.Duration,
 
 // getParentInterface returns the parent interface for the given local address. This link returned is nil
 // if, and only if, an error occurred
-func (m *routeManager) getParentInterface() (netlink.Link, error) {
+func (m *ipipManager) getParentInterface() (netlink.Link, error) {
 	localAddr := m.getLocalHostAddr()
 	if localAddr == "" {
 		return nil, fmt.Errorf("local address not found")
@@ -519,7 +519,7 @@ func (m *routeManager) getParentInterface() (netlink.Link, error) {
 }
 
 // configureIPIPDevice ensures the IPIP tunnel device is up and configures correctly.
-func (m *routeManager) configureIPIPDevice(mtu int, address net.IP, xsumBroken bool) error {
+func (m *ipipManager) configureIPIPDevice(mtu int, address net.IP, xsumBroken bool) error {
 	logCtx := logrus.WithFields(logrus.Fields{
 		"mtu":        mtu,
 		"tunnelAddr": address,
@@ -591,7 +591,7 @@ func (m *routeManager) configureIPIPDevice(mtu int, address net.IP, xsumBroken b
 }
 
 // ensureAddressOnLink updates the given link to set its local IP address. It removes any other addresses.
-func (m *routeManager) ensureAddressOnLink(linkName string, address net.IP) error {
+func (m *ipipManager) ensureAddressOnLink(linkName string, address net.IP) error {
 	logCxt := m.logCtx.WithFields(logrus.Fields{
 		"link": linkName,
 		"addr": address,

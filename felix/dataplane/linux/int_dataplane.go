@@ -327,7 +327,7 @@ type InternalDataplane struct {
 	filterTables    []generictables.Table
 	ipSets          []dpsets.IPSetsDataplane
 
-	routeManager   *routeManager
+	ipipManager    *ipipManager
 	noEncapDeviceC chan string
 
 	vxlanManager   *vxlanManager
@@ -1056,7 +1056,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	if config.RulesConfig.IPIPEnabled {
 		log.Info("IPIP enabled, starting thread to keep tunnel configuration in sync.")
 		// Add a manager to keep the all-hosts IP set up to date.
-		dp.routeManager = newRouteManager(
+		dp.ipipManager = newIPIPManager(
 			ipSetsV4,
 			routeTableV4,
 			dataplanedefs.IPIPIfaceName,
@@ -1066,12 +1066,12 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			featureDetector,
 		)
 		dp.noEncapDeviceC = make(chan string, 1)
-		go dp.routeManager.KeepIPIPDeviceInSync(
+		go dp.ipipManager.KeepIPIPDeviceInSync(
 			dataplaneFeatures.ChecksumOffloadBroken,
 			time.Second*10,
 			dp.noEncapDeviceC,
 		)
-		dp.RegisterManager(dp.routeManager)
+		dp.RegisterManager(dp.ipipManager)
 	} else {
 		// Only clean up IPIP addresses if IPIP is implicitly disabled (no IPIP pools and not explicitly set in FelixConfig)
 		if config.RulesConfig.FelixConfigIPIPEnabled == nil {
@@ -2116,7 +2116,7 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 		case name := <-d.vxlanParentCV6:
 			d.vxlanManagerV6.OnParentNameUpdate(name)
 		case name := <-d.noEncapDeviceC:
-			d.routeManager.OnParentNameUpdate(name)
+			d.ipipManager.OnNoEncapDeviceUpdate(name)
 		case <-ipSetsRefreshC:
 			log.Debug("Refreshing IP sets state")
 			d.forceIPSetsRefresh = true
