@@ -208,7 +208,10 @@ func (s *SyncerClient) Start(cxt context.Context) error {
 	// We can only do that if the client is restart-aware.
 	s.Finished.Add(1)
 	go func() {
-		defer s.Finished.Done()
+		defer func() {
+			s.logCxt.Info("Typha client shutting down.")
+			s.Finished.Done()
+		}()
 
 		for cxt.Err() == nil {
 			connectionFinishedWG.Wait()
@@ -216,6 +219,7 @@ func (s *SyncerClient) Start(cxt context.Context) error {
 				log.Info("Typha connection failed but client callback is restart-aware.  Restarting connection...")
 				s.refreshConnID()
 				rac.OnTyphaConnectionRestarted()
+				s.callbacks.OnStatusUpdated(api.WaitForDatastore)
 			} else {
 				log.Info("Typha client callback is not restart-aware. Exiting...")
 				return
@@ -234,7 +238,7 @@ func (s *SyncerClient) Start(cxt context.Context) error {
 func (s *SyncerClient) startOneConnection(cxt context.Context, connFinished *sync.WaitGroup) error {
 	// Defensive: in case there's a bug in NextAddr() and it never stops returning values,
 	// set a sanity limit on the number of tries.
-	s.callbacks.OnStatusUpdated(api.WaitForDatastore)
+	s.logCxt.Debug("Signalling WaitForDatastore...")
 	startTime := time.Now()
 	maxTries := s.calculateConnectionAttemptLimit(len(s.discoverer.CachedTyphaAddrs()))
 	remainingTries := maxTries
@@ -255,7 +259,6 @@ func (s *SyncerClient) startOneConnection(cxt context.Context, connFinished *syn
 			time.Sleep(100 * time.Millisecond) // Avoid tight loop.
 		} else {
 			s.logCxt.Infof("Successfully connected to Typha at %s after %v.", addr.Addr, time.Since(startTime))
-			s.callbacks.OnStatusUpdated(api.ResyncInProgress)
 			break
 		}
 	}
@@ -436,6 +439,7 @@ func (s *SyncerClient) loop(cxt context.Context, cancelFn context.CancelFunc, co
 
 	logCxt := s.logCxt.WithField("connection", s.connInfo)
 	logCxt.Info("Started Typha client main loop")
+	s.callbacks.OnStatusUpdated(api.ResyncInProgress)
 
 	// Always start with basic gob encoding for the handshake.  We may upgrade to a compressed version below.
 	s.encoder = gob.NewEncoder(s.connection)
