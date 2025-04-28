@@ -331,7 +331,7 @@ var _ = Describe("Calico loadbalancer controller FV tests (etcd mode)", func() {
 					return ""
 				}
 				return service.Status.LoadBalancer.Ingress[0].IP
-			}, time.Second*15, 2*time.Second).Should(Equal(v4poolManualSpecifcIP))
+			}, time.Second*15, 500*time.Millisecond).Should(Equal(v4poolManualSpecifcIP))
 		})
 
 		It("Should not assign IP if there is no LoadBalancer IP pool", func() {

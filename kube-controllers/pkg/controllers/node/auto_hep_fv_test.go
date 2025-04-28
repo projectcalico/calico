@@ -838,7 +838,7 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 		}
 		Eventually(func() error {
 			return testutils.ExpectHostendpoint(c, expectedDefaultHepName, expectedDefaultHepLabels, expectedDefaultIPs, autoHepProfiles, defaultInterfaceName)
-		}, time.Second*15, 2*time.Second).Should(BeNil())
+		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
 	})
 
 	It("should properly hash hostendpoint name", func() {

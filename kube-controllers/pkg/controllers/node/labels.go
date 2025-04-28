@@ -158,9 +158,6 @@ func (c *nodeLabelController) handleNodeUpdate(update model.KVPair) {
 	}
 
 	n := update.Value.(*apiv3.Node)
-	if n.ResourceVersion == "" {
-		n.ResourceVersion = update.Revision
-	}
 
 	kn, err := getK8sNodeName(*n)
 	if err != nil {
