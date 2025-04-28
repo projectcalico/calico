@@ -18,6 +18,7 @@ import (
 	"container/list"
 	"fmt"
 	"sync"
+	"time"
 
 	log "github.com/sirupsen/logrus"
 
@@ -53,6 +54,7 @@ type DedupeBuffer struct {
 	// the consumer and that we have not subsequently sent a deletion for.
 	liveResourceKeys              set.Set[string]
 	liveKeysNotSeenSinceReconnect set.Set[string]
+	resyncStart                   time.Time
 	// pendingUpdates is the queue of updates that we want to send to the
 	// consumer.  We use a linked list so that we can remove items from
 	// the middle if they are deleted before making it off the queue.
@@ -79,8 +81,13 @@ func (d *DedupeBuffer) OnTyphaConnectionRestarted() {
 	// our in-flight state and make a transient copy of the keys that we have
 	// already sent so that we can figure out if any KVs were deleted while
 	// we were disconnected.
+	log.Info("Typha connection restarted, clearing pending update queue.")
 	clear(d.keyToPendingUpdate)
 	d.pendingUpdates = list.List{}
+	if d.liveKeysNotSeenSinceReconnect == nil {
+		// Not already doing a resync.
+		d.resyncStart = time.Now()
+	}
 	d.liveKeysNotSeenSinceReconnect = d.liveResourceKeys.Copy()
 }
 
@@ -344,6 +351,19 @@ func (d *DedupeBuffer) dropLockAndSendBatch(sink api.SyncerCallbacks, buf []any)
 }
 
 func (d *DedupeBuffer) onInSyncAfterReconnection() {
+	defer func() {
+		log.Infof("Resync with Typha complete; dropping resync-tracking state. Resync took %v.",
+			time.Since(d.resyncStart).Round(time.Millisecond))
+		d.liveKeysNotSeenSinceReconnect = nil
+	}()
+
+	if d.liveKeysNotSeenSinceReconnect.Len() == 0 {
+		return
+	}
+
+	log.Infof("In sync with Typha, synthesizing deletions for %d "+
+		"resources not seen during the resync.",
+		d.liveKeysNotSeenSinceReconnect.Len())
 	d.liveKeysNotSeenSinceReconnect.Iter(func(key string) error {
 		parsedKey := model.KeyFromDefaultPath(key)
 		if parsedKey == nil {
@@ -360,7 +380,6 @@ func (d *DedupeBuffer) onInSyncAfterReconnection() {
 		})
 		return nil
 	})
-	d.liveKeysNotSeenSinceReconnect = nil
 }
 
 var _ api.SyncerCallbacks = (*DedupeBuffer)(nil)
