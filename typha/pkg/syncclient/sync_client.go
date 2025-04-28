@@ -22,9 +22,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/rand"
 	"net"
 	"os"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/golang/snappy"
@@ -38,7 +40,13 @@ import (
 	"github.com/projectcalico/calico/typha/pkg/tlsutils"
 )
 
-var nextID uint64 = 1 // Non-zero so we can tell whether it's set at all.
+var nextID atomic.Uint64
+
+func init() {
+	// ID is used as a correlator in the Typha logs.  Put some entropy in
+	// it so it's easy to grep for.
+	nextID.Store(rand.Uint64() << 32)
+}
 
 const (
 	defaultReadtimeout  = 30 * time.Second
@@ -115,8 +123,6 @@ func New(
 	if err := options.validate(); err != nil {
 		log.WithField("options", options).WithError(err).Fatal("Invalid options")
 	}
-	id := nextID
-	nextID++
 	if options == nil {
 		options = &Options{}
 	}
@@ -124,10 +130,8 @@ func New(
 	if !ok {
 		cbskn = simpleCallbacksAdapter{cbs}
 	}
-	return &SyncerClient{
-		ID: id,
+	sc := &SyncerClient{
 		logCxt: log.WithFields(log.Fields{
-			"myID": id,
 			"type": options.SyncerType,
 		}),
 		callbacks:  cbskn,
@@ -138,26 +142,28 @@ func New(
 		myInfo:     myInfo,
 
 		options: options,
-		handshakeStatus: &handshakeStatus{
-			helloReceivedChan: make(chan struct{}, 1),
-		},
 	}
+	sc.refreshConnID()
+	return sc
+}
+
+func (s *SyncerClient) refreshConnID() {
+	s.connID = nextID.Add(1)
+	s.logCxt.Data["myID"] = s.connID
 }
 
 type SyncerClient struct {
-	ID                            uint64
 	logCxt                        *log.Entry
 	discoverer                    *discovery.Discoverer
 	connInfo                      *discovery.Typha
 	myHostname, myVersion, myInfo string
 	options                       *Options
 
-	connection                  net.Conn
-	connR                       io.Reader
-	encoder                     *gob.Encoder
-	decoder                     *gob.Decoder
-	handshakeStatus             *handshakeStatus
-	supportsNodeResourceUpdates bool
+	connection net.Conn
+	connID     uint64
+	connR      io.Reader
+	encoder    *gob.Encoder
+	decoder    *gob.Decoder
 
 	callbacks CallbacksWithKeysKnown
 	Finished  sync.WaitGroup
@@ -208,6 +214,7 @@ func (s *SyncerClient) Start(cxt context.Context) error {
 			connectionFinishedWG.Wait()
 			if rac, ok := s.callbacks.(RestartAwareCallbacks); ok {
 				log.Info("Typha connection failed but client callback is restart-aware.  Restarting connection...")
+				s.refreshConnID()
 				rac.OnTyphaConnectionRestarted()
 			} else {
 				log.Info("Typha client callback is not restart-aware. Exiting...")
@@ -228,6 +235,7 @@ func (s *SyncerClient) startOneConnection(cxt context.Context, connFinished *syn
 	// Defensive: in case there's a bug in NextAddr() and it never stops returning values,
 	// set a sanity limit on the number of tries.
 	s.callbacks.OnStatusUpdated(api.WaitForDatastore)
+	startTime := time.Now()
 	maxTries := s.calculateConnectionAttemptLimit(len(s.discoverer.CachedTyphaAddrs()))
 	remainingTries := maxTries
 	cat := discovery.NewConnAttemptTracker(s.discoverer)
@@ -246,7 +254,7 @@ func (s *SyncerClient) startOneConnection(cxt context.Context, connFinished *syn
 			s.logCxt.WithError(err).Warnf("Failed to connect to typha endpoint %s.  Will try another if available...", addr.Addr)
 			time.Sleep(100 * time.Millisecond) // Avoid tight loop.
 		} else {
-			s.logCxt.Infof("Successfully connected to Typha at %s.", addr.Addr)
+			s.logCxt.Infof("Successfully connected to Typha at %s after %v.", addr.Addr, time.Since(startTime))
 			s.callbacks.OnStatusUpdated(api.ResyncInProgress)
 			break
 		}
@@ -450,7 +458,7 @@ func (s *SyncerClient) loop(cxt context.Context, cancelFn context.CancelFunc, co
 			SyncerType:                     ourSyncerType,
 			SupportsDecoderRestart:         !s.options.DisableDecoderRestart,
 			SupportedCompressionAlgorithms: compAlgs,
-			ClientConnID:                   s.ID,
+			ClientConnID:                   s.connID,
 		},
 	)
 	if err != nil {
