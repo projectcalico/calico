@@ -5,7 +5,7 @@ PACKAGE_NAME ?= github.com/projectcalico/calico/third_party/envoy-gateway
 ENVOY_GATEWAY_IMAGE ?= envoy-gateway
 BUILD_IMAGES ?= $(ENVOY_GATEWAY_IMAGE)
 
-ENVOY_GATEWAY_VERSION=v1.2.6
+ENVOY_GATEWAY_VERSION=v1.2.7
 
 ##############################################################################
 # Include lib.Makefile before anything else
