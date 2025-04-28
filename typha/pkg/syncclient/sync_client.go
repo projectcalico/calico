@@ -189,11 +189,6 @@ func (c simpleCallbacksAdapter) OnUpdatesKeysKnown(updates []api.Update, keys []
 
 var _ CallbacksWithKeysKnown = simpleCallbacksAdapter{}
 
-type handshakeStatus struct {
-	helloReceivedChan chan struct{}
-	complete          bool
-}
-
 func (s *SyncerClient) Start(cxt context.Context) error {
 	// Connect synchronously so that we can return an error early if we can't connect at all.
 	s.logCxt.Info("Starting Typha client...")
