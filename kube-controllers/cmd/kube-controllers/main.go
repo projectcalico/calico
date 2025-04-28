@@ -34,8 +34,8 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 
+	"github.com/projectcalico/calico/cmdwrapper"
 	"github.com/projectcalico/calico/crypto/pkg/tls"
-	"github.com/projectcalico/calico/kube-controllers/pkg/cmdwrapper"
 	"github.com/projectcalico/calico/kube-controllers/pkg/config"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/controller"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/flannelmigration"
