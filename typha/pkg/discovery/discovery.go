@@ -21,6 +21,8 @@ import (
 	"math/rand"
 	"net"
 	"os"
+	"strings"
+	"time"
 
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -31,6 +33,8 @@ import (
 )
 
 var ErrServiceNotReady = errors.New("Kubernetes service missing IP or port")
+
+const maxRefreshInterval = 30 * time.Second
 
 type Typha struct {
 	Addr     string
@@ -44,6 +48,18 @@ func (t Typha) dedupeKey() string {
 		node = *t.NodeName
 	}
 	return fmt.Sprintf("%s/%s/%s", t.Addr, t.IP, node)
+}
+
+func (t Typha) String() string {
+	nodePart := ""
+	if t.NodeName != nil {
+		nodePart = "/" + *t.NodeName
+	}
+	if strings.Contains(t.Addr, t.IP) {
+		// Mainline: IP matches address; avoid printing it twice.
+		return t.Addr + nodePart
+	}
+	return t.Addr + "," + t.IP + nodePart
 }
 
 type Discoverer struct {
@@ -265,13 +281,14 @@ type ConnectionAttemptTracker struct {
 	discoverer           AddressLoader
 	previouslyTriedAddrs set.Set[string] // set contains output from dedupeKey()
 	allKnownAddrs        []Typha
+	refreshTime          time.Time
 }
 
 var ErrTriedAllAddrs = fmt.Errorf("tried all available discovered addresses")
 
 func (d *ConnectionAttemptTracker) NextAddr() (Typha, error) {
-	if d.previouslyTriedAddrs.Len() > 0 || len(d.allKnownAddrs) == 0 {
-		// Either the addresses have never been loaded or this is a retry.  Refresh the list of addresses
+	if time.Since(d.refreshTime) > maxRefreshInterval || d.previouslyTriedAddrs.Len() > 0 || len(d.allKnownAddrs) == 0 {
+		// Either the addresses are stale, have never been loaded or this is a retry.  Refresh the list of addresses
 		// before we choose. This is important during upgrade to prevent an unlucky calico-node daemon from
 		// loading all the old Typha addresses just before the new ones come online.  In that case we'd
 		// try all the old addresses one by one with a 10s timeout for each address before giving up.
@@ -284,7 +301,7 @@ func (d *ConnectionAttemptTracker) NextAddr() (Typha, error) {
 }
 
 func (d *ConnectionAttemptTracker) refreshAddrs() error {
-	if d.previouslyTriedAddrs.Len() == 0 {
+	if d.previouslyTriedAddrs.Len() == 0 && time.Since(d.refreshTime) < maxRefreshInterval {
 		// First time, use the cache if available.
 		d.allKnownAddrs = d.discoverer.CachedTyphaAddrs()
 		logrus.WithField("addrs", d.allKnownAddrs).Debug("Using cached typha addresses")
@@ -303,6 +320,7 @@ func (d *ConnectionAttemptTracker) refreshAddrs() error {
 		logrus.Panic("NextAddr() called but this cluster doesn't use Typha?")
 	}
 	d.allKnownAddrs = addrs
+	d.refreshTime = time.Now()
 	return nil
 }
 
