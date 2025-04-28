@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package aggregator_test
+package goldmane_test
 
 import (
 	"fmt"
@@ -26,9 +26,9 @@ import (
 	"github.com/stretchr/testify/require"
 	googleproto "google.golang.org/protobuf/proto"
 
-	"github.com/projectcalico/calico/goldmane/pkg/aggregator"
-	"github.com/projectcalico/calico/goldmane/pkg/aggregator/bucketing"
+	"github.com/projectcalico/calico/goldmane/pkg/goldmane"
 	"github.com/projectcalico/calico/goldmane/pkg/internal/utils"
+	"github.com/projectcalico/calico/goldmane/pkg/storage"
 	"github.com/projectcalico/calico/goldmane/pkg/testutils"
 	"github.com/projectcalico/calico/goldmane/pkg/types"
 	"github.com/projectcalico/calico/goldmane/proto"
@@ -41,25 +41,25 @@ var (
 )
 
 var (
-	agg *aggregator.LogAggregator
-	c   *clock
+	gm *goldmane.Goldmane
+	c  *clock
 )
 
 // initialNow is time.Now() at the start of the test. This must be
 // large enough that initialNow - numBuckets * aggregationWindowSecs is positive.
 const initialNow = 1000
 
-func setupTest(t *testing.T, opts ...aggregator.Option) func() {
+func setupTest(t *testing.T, opts ...goldmane.Option) func() {
 	// Register gomega with test.
 	RegisterTestingT(t)
 
 	// Hook logrus into testing.T
 	utils.ConfigureLogging("DEBUG")
 	logCancel := logutils.RedirectLogrusToTestingT(t)
-	agg = aggregator.NewLogAggregator(opts...)
+	gm = goldmane.NewGoldmane(opts...)
 	return func() {
-		agg.Stop()
-		agg = nil
+		gm.Stop()
+		gm = nil
 		c = nil
 		logCancel()
 	}
@@ -78,14 +78,14 @@ func ExpectFlowsEqual(t *testing.T, expected, actual *proto.Flow, additionalMsg 
 func TestList(t *testing.T) {
 	c := newClock(initialNow)
 	now := c.Now().Unix()
-	opts := []aggregator.Option{
-		aggregator.WithRolloverTime(1 * time.Second),
-		aggregator.WithNowFunc(c.Now),
+	opts := []goldmane.Option{
+		goldmane.WithRolloverTime(1 * time.Second),
+		goldmane.WithNowFunc(c.Now),
 	}
 	defer setupTest(t, opts...)()
 
-	// Start the aggregator.
-	go agg.Run(now)
+	// Start the goldmane.
+	go gm.Run(now)
 
 	// Ingest a flow log.
 	fl := &proto.Flow{
@@ -120,15 +120,15 @@ func TestList(t *testing.T) {
 		PacketsOut:            20,
 		NumConnectionsStarted: 1,
 	}
-	agg.Receive(types.ProtoToFlow(fl))
+	gm.Receive(types.ProtoToFlow(fl))
 
-	// Expect the aggregator to have received it.
+	// Expect Goldmane to have received it.
 	var flows []*proto.FlowResult
 	var meta *proto.ListMetadata
 	var err error
 	Eventually(func() error {
 		var results *proto.FlowListResult
-		results, err = agg.List(&proto.FlowListRequest{})
+		results, err = gm.List(&proto.FlowListRequest{})
 		meta, flows = results.Meta, results.Flows
 		if len(flows) == 1 {
 			return nil
@@ -177,13 +177,13 @@ func TestList(t *testing.T) {
 	id := flows[0].Id
 
 	// Send another copy of the flow log.
-	agg.Receive(types.ProtoToFlow(fl))
+	gm.Receive(types.ProtoToFlow(fl))
 
-	// Expect the aggregator to have received it. Aggregation of new flows
+	// Expect Goldmane to have received it. Aggregation of new flows
 	// happens asynchonously, so we may need to wait a few ms for it.
 	Eventually(func() error {
 		var results *proto.FlowListResult
-		results, err = agg.List(&proto.FlowListRequest{})
+		results, err = gm.List(&proto.FlowListRequest{})
 		flows = results.Flows
 		if err != nil {
 			return err
@@ -208,17 +208,17 @@ func TestList(t *testing.T) {
 	// ID should be unchanged.
 	Expect(flows[0].Id).To(Equal(id))
 
-	// Wait for the aggregator to rollover.
+	// Wait for Goldmane to rollover.
 	time.Sleep(1001 * time.Millisecond)
 
 	// Send another flow log.
-	agg.Receive(types.ProtoToFlow(fl))
+	gm.Receive(types.ProtoToFlow(fl))
 
-	// Expect the aggregator to have received it. This should be added to a new bucket,
+	// Expect Goldmane to have received it. This should be added to a new bucket,
 	// but aggregated into the same flow on read.
 	Eventually(func() error {
 		var results *proto.FlowListResult
-		results, err = agg.List(&proto.FlowListRequest{})
+		results, err = gm.List(&proto.FlowListRequest{})
 		flows = results.Flows
 		if err != nil {
 			return err
@@ -278,13 +278,13 @@ func TestLabelMerge(t *testing.T) {
 		aggregationWindowSecs: 1,
 		clock:                 c,
 	}
-	opts := []aggregator.Option{
-		aggregator.WithRolloverTime(1 * time.Second),
-		aggregator.WithRolloverFunc(roller.After),
-		aggregator.WithNowFunc(c.Now),
+	opts := []goldmane.Option{
+		goldmane.WithRolloverTime(1 * time.Second),
+		goldmane.WithRolloverFunc(roller.After),
+		goldmane.WithNowFunc(c.Now),
 	}
 	defer setupTest(t, opts...)()
-	go agg.Run(c.Now().Unix())
+	go gm.Run(c.Now().Unix())
 
 	// Create 10 flows, each with one common label and one unique label.
 	// All other fields are the same.
@@ -293,7 +293,7 @@ func TestLabelMerge(t *testing.T) {
 		fl := googleproto.Clone(base).(*proto.Flow)
 		fl.SourceLabels = []string{"common=src", fmt.Sprintf("unique-src=%d", i)}
 		fl.DestLabels = []string{"common=dst", fmt.Sprintf("unique-dest=%d", i)}
-		agg.Receive(types.ProtoToFlow(fl))
+		gm.Receive(types.ProtoToFlow(fl))
 	}
 
 	// Query for the flow, and expect that labels are properly aggregated. We should see
@@ -302,7 +302,7 @@ func TestLabelMerge(t *testing.T) {
 	var err error
 	Eventually(func() error {
 		var results *proto.FlowListResult
-		results, err = agg.List(&proto.FlowListRequest{})
+		results, err = gm.List(&proto.FlowListRequest{})
 		flows = results.Flows
 		if err != nil {
 			return err
@@ -320,7 +320,7 @@ func TestLabelMerge(t *testing.T) {
 	Expect(flows[0].Flow.DestLabels).To(ConsistOf("common=dst"))
 }
 
-// TestRotation tests that the aggregator correctly rotates out old flows.
+// TestRotation tests that Goldmane correctly rotates out old flows.
 func TestRotation(t *testing.T) {
 	// Create a clock and rollover controller.
 	c := newClock(initialNow)
@@ -330,13 +330,13 @@ func TestRotation(t *testing.T) {
 		aggregationWindowSecs: 1,
 		clock:                 c,
 	}
-	opts := []aggregator.Option{
-		aggregator.WithRolloverTime(1 * time.Second),
-		aggregator.WithRolloverFunc(roller.After),
-		aggregator.WithNowFunc(c.Now),
+	opts := []goldmane.Option{
+		goldmane.WithRolloverTime(1 * time.Second),
+		goldmane.WithRolloverFunc(roller.After),
+		goldmane.WithNowFunc(c.Now),
 	}
 	defer setupTest(t, opts...)()
-	go agg.Run(now)
+	go gm.Run(now)
 
 	// Create a Flow. This test relies on an understanding of the underlying bucket ring:
 	// - The index contains two extra buckets, one currently filling, and one in the future.
@@ -360,14 +360,14 @@ func TestRotation(t *testing.T) {
 		PacketsOut:            20,
 		NumConnectionsStarted: 1,
 	}
-	agg.Receive(types.ProtoToFlow(fl))
+	gm.Receive(types.ProtoToFlow(fl))
 
 	// We should be able to read it back.
 	var flows []*proto.FlowResult
 	var err error
 	Eventually(func() error {
 		var results *proto.FlowListResult
-		results, err = agg.List(&proto.FlowListRequest{})
+		results, err = gm.List(&proto.FlowListRequest{})
 		flows = results.Flows
 		if err != nil {
 			return err
@@ -382,13 +382,13 @@ func TestRotation(t *testing.T) {
 	flowID := flows[0].Id
 	Expect(flowID).To(BeNumerically(">", 0))
 
-	// Rollover the aggregator until we push the flow out of the window.
+	// Rollover Goldmane until we push the flow out of the window.
 	roller.rolloverAndAdvanceClock(239)
 
 	// The flow should still be here.
 	Eventually(func() error {
 		var results *proto.FlowListResult
-		results, err = agg.List(&proto.FlowListRequest{})
+		results, err = gm.List(&proto.FlowListRequest{})
 		flows = results.Flows
 		if err != nil {
 			return err
@@ -408,7 +408,7 @@ func TestRotation(t *testing.T) {
 	// We should no longer be able to read the flow.
 	Consistently(func() int {
 		var results *proto.FlowListResult
-		results, _ = agg.List(&proto.FlowListRequest{})
+		results, _ = gm.List(&proto.FlowListRequest{})
 		flows = results.Flows
 		return len(flows)
 	}, 1*time.Second, retryTime).Should(Equal(0), "Flow did not rotate out")
@@ -417,14 +417,14 @@ func TestRotation(t *testing.T) {
 func TestManyFlows(t *testing.T) {
 	c := newClock(initialNow)
 	now := c.Now().Unix()
-	opts := []aggregator.Option{
-		aggregator.WithRolloverTime(1 * time.Second),
-		aggregator.WithNowFunc(c.Now),
+	opts := []goldmane.Option{
+		goldmane.WithRolloverTime(1 * time.Second),
+		goldmane.WithNowFunc(c.Now),
 	}
 	defer setupTest(t, opts...)()
-	go agg.Run(now)
+	go gm.Run(now)
 
-	// Create 20k flows and send them as fast as we can. See how the aggregator handles it.
+	// Create 20k flows and send them as fast as we can. See how Goldmane handles it.
 	fl := &proto.Flow{
 		Key: &proto.FlowKey{
 			SourceName:      "test-src",
@@ -444,7 +444,7 @@ func TestManyFlows(t *testing.T) {
 		NumConnectionsStarted: 1,
 	}
 	for range 20000 {
-		agg.Receive(types.ProtoToFlow(fl))
+		gm.Receive(types.ProtoToFlow(fl))
 	}
 
 	// Query for the flow.
@@ -452,7 +452,7 @@ func TestManyFlows(t *testing.T) {
 	var meta *proto.ListMetadata
 	Eventually(func() bool {
 		var results *proto.FlowListResult
-		results, _ = agg.List(&proto.FlowListRequest{})
+		results, _ = gm.List(&proto.FlowListRequest{})
 		meta = results.Meta
 		flows = results.Flows
 		if len(flows) != 1 {
@@ -467,12 +467,12 @@ func TestManyFlows(t *testing.T) {
 func TestPagination(t *testing.T) {
 	c := newClock(initialNow)
 	now := c.Now().Unix()
-	opts := []aggregator.Option{
-		aggregator.WithRolloverTime(1 * time.Second),
-		aggregator.WithNowFunc(c.Now),
+	opts := []goldmane.Option{
+		goldmane.WithRolloverTime(1 * time.Second),
+		goldmane.WithNowFunc(c.Now),
 	}
 	defer setupTest(t, opts...)()
-	go agg.Run(now)
+	go gm.Run(now)
 
 	// Create 30 different flows.
 	for i := range 30 {
@@ -498,7 +498,7 @@ func TestPagination(t *testing.T) {
 			PacketsOut:            20,
 			NumConnectionsStarted: 1,
 		}
-		agg.Receive(types.ProtoToFlow(fl))
+		gm.Receive(types.ProtoToFlow(fl))
 	}
 
 	// Query without pagination.
@@ -506,7 +506,7 @@ func TestPagination(t *testing.T) {
 	var err error
 	Eventually(func() error {
 		var results *proto.FlowListResult
-		results, err = agg.List(&proto.FlowListRequest{})
+		results, err = gm.List(&proto.FlowListRequest{})
 		_, flows = results.Meta, results.Flows
 		if err != nil {
 			return err
@@ -518,7 +518,7 @@ func TestPagination(t *testing.T) {
 	}, waitTimeout, retryTime, "Didn't receive all flows").ShouldNot(HaveOccurred())
 
 	// Query with a page size of 5, encompassing the entire time range.
-	results, err := agg.List(&proto.FlowListRequest{
+	results, err := gm.List(&proto.FlowListRequest{
 		PageSize:     5,
 		StartTimeGte: now - 30,
 		StartTimeLt:  now + 1,
@@ -531,7 +531,7 @@ func TestPagination(t *testing.T) {
 	require.NotEqual(t, page0[0].Id, page0[4].Id, "should have unique flow IDs")
 
 	// Query the third page - should be a different 5 flows (skipping page 2).
-	results, err = agg.List(&proto.FlowListRequest{
+	results, err = gm.List(&proto.FlowListRequest{
 		PageSize:     5,
 		Page:         2,
 		StartTimeGte: now - 30,
@@ -554,7 +554,7 @@ func TestPagination(t *testing.T) {
 	require.NotEqual(t, page0, page2, "Page 0 and 2 should not be equal")
 
 	// Query the third page again. It should be consistent (since no new data).
-	results, err = agg.List(&proto.FlowListRequest{
+	results, err = gm.List(&proto.FlowListRequest{
 		PageSize:     5,
 		Page:         2,
 		StartTimeGte: now - 30,
@@ -568,18 +568,18 @@ func TestPagination(t *testing.T) {
 func TestTimeRanges(t *testing.T) {
 	c := newClock(initialNow)
 	now := c.Now().Unix()
-	opts := []aggregator.Option{
-		aggregator.WithRolloverTime(1 * time.Second),
-		aggregator.WithNowFunc(c.Now),
+	opts := []goldmane.Option{
+		goldmane.WithRolloverTime(1 * time.Second),
+		goldmane.WithNowFunc(c.Now),
 	}
 	prepareFlows := func() {
-		// Create a flow spread across a range of buckets within the aggregator.
+		// Create a flow spread across a range of buckets within the goldmane.
 		// 60 buckes of 1s each means we want one flow per second for 60s.
 		for i := range 60 {
 			startTime := now - int64(i) + 1
 			endTime := startTime + 1
 			fl := &proto.Flow{
-				// Start one rollover period into the future, since that is how the aggregator works.
+				// Start one rollover period into the future, since that is how Goldmane works.
 				Key: &proto.FlowKey{
 					SourceName:      "test-src",
 					SourceNamespace: "test-ns",
@@ -597,7 +597,7 @@ func TestTimeRanges(t *testing.T) {
 				PacketsOut:            20,
 				NumConnectionsStarted: 1,
 			}
-			agg.Receive(types.ProtoToFlow(fl))
+			gm.Receive(types.ProtoToFlow(fl))
 		}
 	}
 
@@ -619,7 +619,7 @@ func TestTimeRanges(t *testing.T) {
 		},
 		{
 			// This sets the time range explicitly, to include flows currently being aggregated and flows that
-			// are seen as from the "future" by the aggregator.
+			// are seen as from the "future" by the goldmane.
 			name:                          "All flows, including current + future",
 			query:                         &proto.FlowListRequest{StartTimeLt: now + 2},
 			expectedNumConnectionsStarted: 60,
@@ -662,7 +662,7 @@ func TestTimeRanges(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			defer setupTest(t, opts...)()
-			go agg.Run(now)
+			go gm.Run(now)
 
 			// Create flows.
 			prepareFlows()
@@ -674,14 +674,14 @@ func TestTimeRanges(t *testing.T) {
 				// Should return one aggregated flow that sums the component flows.
 				Eventually(func() bool {
 					var results *proto.FlowListResult
-					results, _ = agg.List(test.query)
+					results, _ = gm.List(test.query)
 					flows = results.Flows
 					return len(flows) == 1
 				}, waitTimeout, retryTime, "Didn't receive flow").Should(BeTrue())
 
 				Eventually(func() bool {
 					var results *proto.FlowListResult
-					results, _ = agg.List(test.query)
+					results, _ = gm.List(test.query)
 					flows = results.Flows
 					return flows[0].Flow.NumConnectionsStarted == int64(test.expectedNumConnectionsStarted)
 				}, waitTimeout, retryTime).Should(
@@ -712,7 +712,7 @@ func TestTimeRanges(t *testing.T) {
 			} else {
 				// Should consistently return no flows.
 				for range 10 {
-					results, err := agg.List(test.query)
+					results, err := gm.List(test.query)
 					if test.expectErr {
 						require.Error(t, err)
 						require.Nil(t, results)
@@ -733,7 +733,7 @@ func TestSink(t *testing.T) {
 		c := newClock(initialNow)
 		now := c.Now().Unix()
 
-		// Configure the aggregator with a test sink.
+		// Configure Goldmane with a test sink.
 		sink := newTestSink()
 		roller := &rolloverController{
 			ch:                    make(chan time.Time),
@@ -742,34 +742,34 @@ func TestSink(t *testing.T) {
 		}
 		pushIndex := 10
 		bucketsToCombine := 20
-		opts := []aggregator.Option{
-			aggregator.WithRolloverTime(1 * time.Second),
-			aggregator.WithRolloverFunc(roller.After),
-			aggregator.WithNowFunc(c.Now),
-			aggregator.WithBucketsToCombine(bucketsToCombine),
-			aggregator.WithPushIndex(pushIndex),
+		opts := []goldmane.Option{
+			goldmane.WithRolloverTime(1 * time.Second),
+			goldmane.WithRolloverFunc(roller.After),
+			goldmane.WithNowFunc(c.Now),
+			goldmane.WithBucketsToCombine(bucketsToCombine),
+			goldmane.WithPushIndex(pushIndex),
 		}
 		defer setupTest(t, opts...)()
 
-		// Start the aggregator, and rollover to trigger an emission.
+		// Start Goldmane, and rollover to trigger an emission.
 		// We shouldn't see any buckets pushed to the sink, as we haven't sent any flows.
-		go agg.Run(now)
+		go gm.Run(now)
 
 		// Set the sink. Setting the Sink is asynchronous and triggers a check for flow emission - as such,
 		// we need to wait for this to complete before we can start sending flows.
-		Eventually(agg.SetSink(sink), waitTimeout, retryTime).Should(BeClosed())
+		Eventually(gm.SetSink(sink), waitTimeout, retryTime).Should(BeClosed())
 
 		roller.rolloverAndAdvanceClock(1)
 		require.Equal(t, 0, sink.len())
 
-		// Write some data into the aggregator in a way that will trigger an emission on the next rollover.
+		// Write some data into Goldmane in a way that will trigger an emission on the next rollover.
 		// Write a flow that will trigger an emission, since it's within the push index.
 		fl := testutils.NewRandomFlow(now - int64(pushIndex))
-		agg.Receive(types.ProtoToFlow(fl))
+		gm.Receive(types.ProtoToFlow(fl))
 
 		// Wait for the flow to be received.
 		Eventually(func() error {
-			results, err := agg.List(&proto.FlowListRequest{})
+			results, err := gm.List(&proto.FlowListRequest{})
 			if err != nil {
 				return nil
 			}
@@ -814,7 +814,7 @@ func TestSink(t *testing.T) {
 				PacketsOut:            20,
 				NumConnectionsStarted: 1,
 			}
-			agg.Receive(types.ProtoToFlow(fl))
+			gm.Receive(types.ProtoToFlow(fl))
 		}
 
 		// Wait for all flows to be received.
@@ -863,13 +863,13 @@ func TestSink(t *testing.T) {
 		require.Equal(t, *types.ProtoToFlow(&exp), flow)
 	})
 
-	// This test verifies that the aggregator handles publishing multiple buckets of Flows if there are
+	// This test verifies that Goldmane handles publishing multiple buckets of Flows if there are
 	// multiple buckets worth of flows that haven't been published yet.
 	t.Run("PushMultiple", func(t *testing.T) {
 		c := newClock(initialNow)
 		now := c.Now().Unix()
 
-		// Configure the aggregator with a test sink.
+		// Configure Goldmane with a test sink.
 		sink := newTestSink()
 		roller := &rolloverController{
 			ch:                    make(chan time.Time),
@@ -878,33 +878,33 @@ func TestSink(t *testing.T) {
 		}
 		pushIndex := 10
 		bucketsToCombine := 20
-		opts := []aggregator.Option{
-			aggregator.WithRolloverTime(1 * time.Second),
-			aggregator.WithRolloverFunc(roller.After),
-			aggregator.WithNowFunc(c.Now),
-			aggregator.WithBucketsToCombine(bucketsToCombine),
-			aggregator.WithPushIndex(pushIndex),
+		opts := []goldmane.Option{
+			goldmane.WithRolloverTime(1 * time.Second),
+			goldmane.WithRolloverFunc(roller.After),
+			goldmane.WithNowFunc(c.Now),
+			goldmane.WithBucketsToCombine(bucketsToCombine),
+			goldmane.WithPushIndex(pushIndex),
 		}
 		defer setupTest(t, opts...)()
 
-		// Start the aggregator, and rollover to trigger an emission.
+		// Start Goldmane, and rollover to trigger an emission.
 		// We shouldn't see any buckets pushed to the sink, as we haven't sent any flows.
-		go agg.Run(now)
+		go gm.Run(now)
 
 		// Set the sink. Setting the Sink is asynchronous and triggers a check for flow emission - as such,
 		// we need to wait for this to complete before we can start sending flows.
-		Eventually(agg.SetSink(sink), waitTimeout, retryTime).Should(BeClosed())
+		Eventually(gm.SetSink(sink), waitTimeout, retryTime).Should(BeClosed())
 
-		// Load up the aggregator with Flow data across a widge range of buckets, spanning
+		// Load up Goldmane with Flow data across a widge range of buckets, spanning
 		// multiple emission windows.
 		for i := range 100 {
 			fl := testutils.NewRandomFlow(now - int64(pushIndex) - int64(i))
-			agg.Receive(types.ProtoToFlow(fl))
+			gm.Receive(types.ProtoToFlow(fl))
 		}
 
 		// Wait for the flows to be received.
 		Eventually(func() error {
-			results, err := agg.List(&proto.FlowListRequest{})
+			results, err := gm.List(&proto.FlowListRequest{})
 			if err != nil {
 				logrus.Infof("Got %d flows", len(results.Flows))
 				return nil
@@ -930,13 +930,13 @@ func TestSink(t *testing.T) {
 		}
 	})
 
-	// This test verifies that the aggregator handles publishing multiple buckets of Flows if there is no
+	// This test verifies that Goldmane handles publishing multiple buckets of Flows if there is no
 	// sink configured, but a sink is added later.
 	t.Run("AddSink", func(t *testing.T) {
 		c := newClock(initialNow)
 		now := c.Now().Unix()
 
-		// Configure the aggregator with a test sink.
+		// Configure Goldmane with a test sink.
 		sink := newTestSink()
 		roller := &rolloverController{
 			ch:                    make(chan time.Time),
@@ -945,29 +945,29 @@ func TestSink(t *testing.T) {
 		}
 		pushIndex := 10
 		bucketsToCombine := 20
-		opts := []aggregator.Option{
-			aggregator.WithRolloverTime(1 * time.Second),
-			aggregator.WithRolloverFunc(roller.After),
-			aggregator.WithNowFunc(c.Now),
-			aggregator.WithBucketsToCombine(bucketsToCombine),
-			aggregator.WithPushIndex(pushIndex),
+		opts := []goldmane.Option{
+			goldmane.WithRolloverTime(1 * time.Second),
+			goldmane.WithRolloverFunc(roller.After),
+			goldmane.WithNowFunc(c.Now),
+			goldmane.WithBucketsToCombine(bucketsToCombine),
+			goldmane.WithPushIndex(pushIndex),
 		}
 		defer setupTest(t, opts...)()
 
-		// Start the aggregator, and rollover to trigger an emission.
+		// Start Goldmane, and rollover to trigger an emission.
 		// We shouldn't see any buckets pushed to the sink, as we haven't sent any flows.
-		go agg.Run(now)
+		go gm.Run(now)
 
-		// Load up the aggregator with Flow data across a widge range of buckets, spanning
+		// Load up Goldmane with Flow data across a widge range of buckets, spanning
 		// multiple emission windows.
 		for i := range 100 {
 			fl := testutils.NewRandomFlow(now - int64(pushIndex) - int64(i))
-			agg.Receive(types.ProtoToFlow(fl))
+			gm.Receive(types.ProtoToFlow(fl))
 		}
 
 		// Wait for the flows to be received.
 		Eventually(func() error {
-			results, err := agg.List(&proto.FlowListRequest{})
+			results, err := gm.List(&proto.FlowListRequest{})
 			if err != nil {
 				return nil
 			}
@@ -985,7 +985,7 @@ func TestSink(t *testing.T) {
 
 		// Set the sink. Setting the Sink is asynchronous and triggers a check for flow emission - as such,
 		// we need to wait for this to complete before we can start sending flows.
-		Eventually(agg.SetSink(sink), waitTimeout, retryTime).Should(BeClosed())
+		Eventually(gm.SetSink(sink), waitTimeout, retryTime).Should(BeClosed())
 
 		// We should see the emissions now.
 		Eventually(func() int {
@@ -994,7 +994,7 @@ func TestSink(t *testing.T) {
 	})
 }
 
-// TestBucketDrift makes sure that the aggregator is able to account for its internal array of
+// TestBucketDrift makes sure that Goldmane is able to account for its internal array of
 // aggregation buckets slowly drifting with respect to time.Now(). This can happen due to the time taken to process
 // other operations on the shared main goroutine, and is accounted for by adjusting the the next rollover time.
 func TestBucketDrift(t *testing.T) {
@@ -1022,24 +1022,24 @@ func TestBucketDrift(t *testing.T) {
 		defer mu.Unlock()
 		return rolloverScheduledAt
 	}
-	opts := []aggregator.Option{
-		aggregator.WithRolloverTime(time.Duration(aggregationWindowSecs) * time.Second),
-		aggregator.WithRolloverFunc(rolloverFunc),
-		aggregator.WithNowFunc(c.Now),
+	opts := []goldmane.Option{
+		goldmane.WithRolloverTime(time.Duration(aggregationWindowSecs) * time.Second),
+		goldmane.WithRolloverFunc(rolloverFunc),
+		goldmane.WithNowFunc(c.Now),
 	}
 	defer setupTest(t, opts...)()
 
 	// This can get a bit confusing, so let's walk through it:
 	//
-	// - The aggregator maintains an internal array of buckets. The most recent bucket actually starts one aggregation window in the future, to handle clock skew between nodes.
+	// - Goldmane maintains an internal array of buckets. The most recent bucket actually starts one aggregation window in the future, to handle clock skew between nodes.
 	// - For this test, we want to simulate a rollover that happens slightly late.
 	// - Now() is mocked to 1000, With an aggregation window of 10s. So buckets[head] will cover 1010-1020, bucket[head-1] will cover 1000-1010.
 	// - Normally, a rollover would occur at 1010, adding a new bucket[head] covering 1020-1030.
 	// - For this test, we'll simulate a rollover at 1013, which is 3 seconds late.
 	//
-	// From there, we can expect the aggregator to notice that it has missed time somehow and accelerate the scheduling of the next rollover
+	// From there, we can expect Goldmane to notice that it has missed time somehow and accelerate the scheduling of the next rollover
 	// in order to compensate.
-	go agg.Run(c.Now().Unix())
+	go gm.Run(c.Now().Unix())
 
 	// We want to simulate a rollover that happens 3 seconds late for the scheduled rollover.
 	rt := int64(initialNow + aggregationWindowSecs + 3)
@@ -1054,7 +1054,7 @@ func TestBucketDrift(t *testing.T) {
 	nextRollover := int64(initialNow + 2*aggregationWindowSecs)
 	c.Set(time.Unix(nextRollover, 0))
 
-	// Trigger another rollover. This time, the aggregator should have caught up, so the rollover should be scheduled
+	// Trigger another rollover. This time, Goldmane should have caught up, so the rollover should be scheduled
 	// at the expected time of one aggregation window in the future (10s).
 	roller.rollover()
 
@@ -1066,7 +1066,7 @@ func TestBucketDrift(t *testing.T) {
 	c.Set(time.Unix(earlyRt, 0))
 	roller.rollover()
 
-	// The aggregator should notice that it's ahead of schedule and delay the next rollover by 4 seconds.
+	// Goldmane should notice that it's ahead of schedule and delay the next rollover by 4 seconds.
 	require.Equal(t, 14, int(getScheduledAt().Seconds()), "Delayed rollover should have been scheduled at 14s")
 
 	// And check what happens if we're so far behind that the next bucket is already in the past.
@@ -1087,26 +1087,26 @@ func TestStreams(t *testing.T) {
 			aggregationWindowSecs: 1,
 			clock:                 c,
 		}
-		opts := []aggregator.Option{
-			aggregator.WithRolloverTime(1 * time.Second),
-			aggregator.WithRolloverFunc(roller.After),
-			aggregator.WithNowFunc(c.Now),
+		opts := []goldmane.Option{
+			goldmane.WithRolloverTime(1 * time.Second),
+			goldmane.WithRolloverFunc(roller.After),
+			goldmane.WithNowFunc(c.Now),
 		}
 		defer setupTest(t, opts...)()
 
-		// Start the aggregator.
-		go agg.Run(c.Now().Unix())
+		// Start the goldmane.
+		go gm.Run(c.Now().Unix())
 
 		// Insert some random historical flow data from the past over the
 		// time range of now-10 to now-5.
 		for i := 5; i < 10; i++ {
 			fl := testutils.NewRandomFlow(c.Now().Unix() - int64(i))
-			agg.Receive(types.ProtoToFlow(fl))
+			gm.Receive(types.ProtoToFlow(fl))
 		}
 
 		// Expect the flows to have been received.
 		Eventually(func() error {
-			results, err := agg.List(&proto.FlowListRequest{})
+			results, err := gm.List(&proto.FlowListRequest{})
 			if err != nil {
 				return err
 			}
@@ -1118,14 +1118,14 @@ func TestStreams(t *testing.T) {
 
 		// Create two streams. The first will be be configured to start streaming from
 		// the present, and the second will be configured to start streaming from the past.
-		stream, err := agg.Stream(&proto.FlowStreamRequest{StartTimeGte: -1})
+		stream, err := gm.Stream(&proto.FlowStreamRequest{StartTimeGte: -1})
 		require.Nil(t, err)
 		require.NotNil(t, stream)
 		defer stream.Close()
 
 		// stream2 will start streaming from the past, and should receive some historical flows.
 		// we'll start it from now-7, so it should receive the flows from now-7 to now-5.
-		stream2, err := agg.Stream(&proto.FlowStreamRequest{StartTimeGte: c.Now().Unix() - 7})
+		stream2, err := gm.Stream(&proto.FlowStreamRequest{StartTimeGte: c.Now().Unix() - 7})
 		require.Nil(t, err)
 		require.NotNil(t, stream2)
 		defer stream2.Close()
@@ -1136,7 +1136,7 @@ func TestStreams(t *testing.T) {
 		// Expect three historical flows on the second stream: now-5, now-6, now-7.
 		// We should receive them in time order, and should NOT receive now-8 or now-9.
 		for i := 7; i >= 5; i-- {
-			var builder *bucketing.DeferredFlowBuilder
+			var builder *storage.DeferredFlowBuilder
 			flow := &proto.FlowResult{Flow: &proto.Flow{}}
 			Eventually(stream2.Flows(), waitTimeout, retryTime).Should(Receive(&builder), fmt.Sprintf("Expected flow %d", i))
 			require.True(t, builder.BuildInto(&proto.Filter{}, flow), "Failed to build flow")
@@ -1148,11 +1148,11 @@ func TestStreams(t *testing.T) {
 
 		// Ingest some new flow data.
 		fl := testutils.NewRandomFlow(c.Now().Unix() - 1)
-		agg.Receive(types.ProtoToFlow(fl))
+		gm.Receive(types.ProtoToFlow(fl))
 
-		// Expect the flow to have been received for a total of 6 flows in the aggregator.
+		// Expect the flow to have been received for a total of 6 flows in the goldmane.
 		Eventually(func() error {
-			results, err := agg.List(&proto.FlowListRequest{})
+			results, err := gm.List(&proto.FlowListRequest{})
 			if err != nil {
 				return err
 			}
@@ -1166,8 +1166,8 @@ func TestStreams(t *testing.T) {
 		roller.rolloverAndAdvanceClock(1)
 
 		// Expect the flow to have been received on both streams.
-		b1 := &bucketing.DeferredFlowBuilder{}
-		b2 := &bucketing.DeferredFlowBuilder{}
+		b1 := &storage.DeferredFlowBuilder{}
+		b2 := &storage.DeferredFlowBuilder{}
 		flow := &proto.FlowResult{Flow: &proto.Flow{}}
 		flow2 := &proto.FlowResult{Flow: &proto.Flow{}}
 		Eventually(stream.Flows(), waitTimeout, retryTime).Should(Receive(&b1))
@@ -1195,15 +1195,15 @@ func TestStreams(t *testing.T) {
 			aggregationWindowSecs: 1,
 			clock:                 c,
 		}
-		opts := []aggregator.Option{
-			aggregator.WithRolloverTime(1 * time.Second),
-			aggregator.WithRolloverFunc(roller.After),
-			aggregator.WithNowFunc(c.Now),
+		opts := []goldmane.Option{
+			goldmane.WithRolloverTime(1 * time.Second),
+			goldmane.WithRolloverFunc(roller.After),
+			goldmane.WithNowFunc(c.Now),
 		}
 		defer setupTest(t, opts...)()
 
-		// Start the aggregator.
-		go agg.Run(c.Now().Unix())
+		// Start the goldmane.
+		go gm.Run(c.Now().Unix())
 
 		// Create a flow that will span multiple time buckets.
 		newestStart := c.Now().Unix() - 2
@@ -1217,12 +1217,12 @@ func TestStreams(t *testing.T) {
 			fl.StartTime = base.StartTime - int64(i)
 			fl.EndTime = base.EndTime - int64(i)
 			startTimes = append(startTimes, fl.StartTime)
-			agg.Receive(types.ProtoToFlow(fl))
+			gm.Receive(types.ProtoToFlow(fl))
 		}
 
 		// Expect all 10 flows to have been received.
 		Eventually(func() error {
-			results, err := agg.List(&proto.FlowListRequest{})
+			results, err := gm.List(&proto.FlowListRequest{})
 			if err != nil {
 				return err
 			}
@@ -1238,7 +1238,7 @@ func TestStreams(t *testing.T) {
 
 		// Create a stream that starts from the past. The flow goes back 22 seconds,
 		// so start the stream from 30 seconds ago.
-		stream, err := agg.Stream(&proto.FlowStreamRequest{StartTimeGte: c.Now().Unix() - 30})
+		stream, err := gm.Stream(&proto.FlowStreamRequest{StartTimeGte: c.Now().Unix() - 30})
 		require.Nil(t, err)
 		require.NotNil(t, stream)
 		defer stream.Close()
@@ -1249,7 +1249,7 @@ func TestStreams(t *testing.T) {
 		// Expect to receive 10 updates, one for each bucket.
 		result := &proto.FlowResult{Flow: &proto.Flow{}}
 		for i := range 10 {
-			builder := &bucketing.DeferredFlowBuilder{}
+			builder := &storage.DeferredFlowBuilder{}
 			Eventually(stream.Flows(), waitTimeout, retryTime).Should(Receive(&builder), fmt.Sprintf("Timed out waiting for flow %d", i))
 			require.True(t, builder.BuildInto(&proto.Filter{}, result))
 
@@ -1273,15 +1273,15 @@ func TestStreams(t *testing.T) {
 			aggregationWindowSecs: 1,
 			clock:                 c,
 		}
-		opts := []aggregator.Option{
-			aggregator.WithRolloverTime(1 * time.Second),
-			aggregator.WithRolloverFunc(roller.After),
-			aggregator.WithNowFunc(c.Now),
+		opts := []goldmane.Option{
+			goldmane.WithRolloverTime(1 * time.Second),
+			goldmane.WithRolloverFunc(roller.After),
+			goldmane.WithNowFunc(c.Now),
 		}
 		defer setupTest(t, opts...)()
 
-		// Start the aggregator.
-		go agg.Run(c.Now().Unix())
+		// Start Goldmane.
+		go gm.Run(c.Now().Unix())
 
 		// Create a flow that will span multiple time buckets, with the
 		// newest start time falling at Now().
@@ -1297,12 +1297,12 @@ func TestStreams(t *testing.T) {
 			fl.StartTime = base.StartTime - int64(i)
 			fl.EndTime = base.EndTime - int64(i)
 			startTimes = append(startTimes, fl.StartTime)
-			agg.Receive(types.ProtoToFlow(fl))
+			gm.Receive(types.ProtoToFlow(fl))
 		}
 
 		// Wait for flows to be received.
 		Eventually(func() error {
-			results, err := agg.List(&proto.FlowListRequest{})
+			results, err := gm.List(&proto.FlowListRequest{})
 			if err != nil {
 				return err
 			}
@@ -1313,7 +1313,7 @@ func TestStreams(t *testing.T) {
 		}, waitTimeout, retryTime).Should(BeNil())
 
 		// Start a stream from the past, using the start time of the oldest flow.
-		stream, err := agg.Stream(&proto.FlowStreamRequest{StartTimeGte: startTimes[len(startTimes)-1]})
+		stream, err := gm.Stream(&proto.FlowStreamRequest{StartTimeGte: startTimes[len(startTimes)-1]})
 		require.Nil(t, err)
 		require.NotNil(t, stream)
 		defer stream.Close()
@@ -1323,7 +1323,7 @@ func TestStreams(t *testing.T) {
 		// Verify the flows - we should receive updates for each bucket from the start time until now-2, since
 		// the now-1 bucket is not yet rolled over.
 		for i := range 8 {
-			builder := &bucketing.DeferredFlowBuilder{}
+			builder := &storage.DeferredFlowBuilder{}
 			result := &proto.FlowResult{Flow: &proto.Flow{}}
 			Eventually(stream.Flows(), waitTimeout, retryTime).Should(Receive(&builder), fmt.Sprintf("Timed out waiting for flow %d", i))
 			require.True(t, builder.BuildInto(&proto.Filter{}, result))
@@ -1340,7 +1340,7 @@ func TestStreams(t *testing.T) {
 
 		// Trigger a rollover. We should get another flow, and it should not be a duplicate.
 		roller.rolloverAndAdvanceClock(1)
-		builder := &bucketing.DeferredFlowBuilder{}
+		builder := &storage.DeferredFlowBuilder{}
 		result := &proto.FlowResult{Flow: &proto.Flow{}}
 		Eventually(stream.Flows(), waitTimeout, retryTime).Should(Receive(&builder))
 		require.True(t, builder.BuildInto(&proto.Filter{}, result))
@@ -1348,7 +1348,7 @@ func TestStreams(t *testing.T) {
 	})
 }
 
-// TestSortOrder tests basic functionality of the various sorted indices supported by the aggregator.
+// TestSortOrder tests basic functionality of the various sorted indices supported by the goldmane.
 func TestSortOrder(t *testing.T) {
 	type tc struct {
 		name   string
@@ -1374,18 +1374,18 @@ func TestSortOrder(t *testing.T) {
 				aggregationWindowSecs: 1,
 				clock:                 c,
 			}
-			opts := []aggregator.Option{
-				aggregator.WithRolloverTime(1 * time.Second),
-				aggregator.WithRolloverFunc(roller.After),
-				aggregator.WithNowFunc(c.Now),
+			opts := []goldmane.Option{
+				goldmane.WithRolloverTime(1 * time.Second),
+				goldmane.WithRolloverFunc(roller.After),
+				goldmane.WithNowFunc(c.Now),
 			}
 			defer setupTest(t, opts...)()
-			go agg.Run(c.Now().Unix())
+			go gm.Run(c.Now().Unix())
 
 			// Create a bunch of random flows.
 			for range 100 {
 				fl := testutils.NewRandomFlow(c.Now().Unix() - 1)
-				agg.Receive(types.ProtoToFlow(fl))
+				gm.Receive(types.ProtoToFlow(fl))
 			}
 
 			// Query for Flows, sorted by the Index under test. Since we have created a bunch of random flows,
@@ -1393,7 +1393,7 @@ func TestSortOrder(t *testing.T) {
 			var flows []*proto.FlowResult
 			Eventually(func() bool {
 				var results *proto.FlowListResult
-				results, _ = agg.List(&proto.FlowListRequest{SortBy: []*proto.SortOption{{SortBy: tc.sortBy}}})
+				results, _ = gm.List(&proto.FlowListRequest{SortBy: []*proto.SortOption{{SortBy: tc.sortBy}}})
 				flows = results.Flows
 				return len(flows) > 3
 			}, waitTimeout, retryTime, "Didn't receive flows").Should(BeTrue())
@@ -1643,13 +1643,13 @@ func TestFilter(t *testing.T) {
 				aggregationWindowSecs: 1,
 				clock:                 c,
 			}
-			opts := []aggregator.Option{
-				aggregator.WithRolloverTime(1 * time.Second),
-				aggregator.WithRolloverFunc(roller.After),
-				aggregator.WithNowFunc(c.Now),
+			opts := []goldmane.Option{
+				goldmane.WithRolloverTime(1 * time.Second),
+				goldmane.WithRolloverFunc(roller.After),
+				goldmane.WithNowFunc(c.Now),
 			}
 			defer setupTest(t, opts...)()
-			go agg.Run(c.Now().Unix())
+			go gm.Run(c.Now().Unix())
 
 			// Create 10 flows, with a mix of fields to filter on.
 			for i := range 10 {
@@ -1684,8 +1684,8 @@ func TestFilter(t *testing.T) {
 					},
 				}
 
-				// Send it to the aggregator.
-				agg.Receive(types.ProtoToFlow(fl))
+				// Send it to the goldmane.
+				gm.Receive(types.ProtoToFlow(fl))
 			}
 
 			// Query for flows using the query from the testcase.
@@ -1693,7 +1693,7 @@ func TestFilter(t *testing.T) {
 			if tc.numFlows == 0 {
 				Consistently(func() int {
 					var results *proto.FlowListResult
-					results, _ = agg.List(tc.req)
+					results, _ = gm.List(tc.req)
 					flows = results.Flows
 					return len(flows)
 				}, 1*time.Second, retryTime).Should(Equal(0))
@@ -1702,7 +1702,7 @@ func TestFilter(t *testing.T) {
 				var err error
 				Eventually(func() error {
 					var results *proto.FlowListResult
-					results, err = agg.List(tc.req)
+					results, err = gm.List(tc.req)
 					flows = results.Flows
 					if err != nil {
 						return err
@@ -1782,13 +1782,13 @@ func TestFilterHints(t *testing.T) {
 				aggregationWindowSecs: 1,
 				clock:                 c,
 			}
-			opts := []aggregator.Option{
-				aggregator.WithRolloverTime(1 * time.Second),
-				aggregator.WithRolloverFunc(roller.After),
-				aggregator.WithNowFunc(c.Now),
+			opts := []goldmane.Option{
+				goldmane.WithRolloverTime(1 * time.Second),
+				goldmane.WithRolloverFunc(roller.After),
+				goldmane.WithNowFunc(c.Now),
 			}
 			defer setupTest(t, opts...)()
-			go agg.Run(c.Now().Unix())
+			go gm.Run(c.Now().Unix())
 
 			// Create 10 flows, with a mix of fields to filter on.
 			for i := range 10 {
@@ -1811,18 +1811,18 @@ func TestFilterHints(t *testing.T) {
 					},
 				}
 
-				// Send it to the aggregator.
-				agg.Receive(types.ProtoToFlow(fl))
+				// Send it to the goldmane.
+				gm.Receive(types.ProtoToFlow(fl))
 			}
 
 			// Wait for all flows to be received.
 			Eventually(func() bool {
-				results, _ := agg.List(&proto.FlowListRequest{})
+				results, _ := gm.List(&proto.FlowListRequest{})
 				return len(results.Flows) == 10
 			}, waitTimeout, retryTime, "Didn't receive all flows").Should(BeTrue())
 
 			// Query for hints using the query from the testcase.
-			results, err := agg.Hints(tc.req)
+			results, err := gm.Hints(tc.req)
 			require.NoError(t, err)
 
 			// Verify the hints.
@@ -1854,13 +1854,13 @@ func TestFilterHints(t *testing.T) {
 				aggregationWindowSecs: 1,
 				clock:                 c,
 			}
-			opts := []aggregator.Option{
-				aggregator.WithRolloverTime(1 * time.Second),
-				aggregator.WithRolloverFunc(roller.After),
-				aggregator.WithNowFunc(c.Now),
+			opts := []goldmane.Option{
+				goldmane.WithRolloverTime(1 * time.Second),
+				goldmane.WithRolloverFunc(roller.After),
+				goldmane.WithNowFunc(c.Now),
 			}
 			defer setupTest(t, opts...)()
-			go agg.Run(c.Now().Unix())
+			go gm.Run(c.Now().Unix())
 
 			// Create 10 flows, with a mix of fields to filter on.
 			for i := range 10 {
@@ -1884,18 +1884,18 @@ func TestFilterHints(t *testing.T) {
 					},
 				}
 
-				// Send it to the aggregator.
-				agg.Receive(types.ProtoToFlow(fl))
+				// Send it to the goldmane.
+				gm.Receive(types.ProtoToFlow(fl))
 			}
 
 			// Wait for all flows to be received.
 			Eventually(func() bool {
-				results, _ := agg.List(&proto.FlowListRequest{})
+				results, _ := gm.List(&proto.FlowListRequest{})
 				return len(results.Flows) == 10
 			}, waitTimeout, retryTime, "Didn't receive all flows").Should(BeTrue())
 
 			// Query for hints using the query from the testcase.
-			results, err := agg.Hints(tc.req)
+			results, err := gm.Hints(tc.req)
 			require.NoError(t, err)
 
 			// Verify the hints.
@@ -1937,14 +1937,14 @@ func TestStatistics(t *testing.T) {
 			// Store off the flows we created so the tests can refer to them.
 			flows = append(flows, fl)
 
-			// Send it to the aggregator.
-			agg.Receive(types.ProtoToFlow(fl))
+			// Send it to the goldmane.
+			gm.Receive(types.ProtoToFlow(fl))
 			roller.rolloverAndAdvanceClock(1)
 		}
 
 		// Wait for all flows to be received.
 		Eventually(func() bool {
-			results, _ := agg.List(&proto.FlowListRequest{})
+			results, _ := gm.List(&proto.FlowListRequest{})
 			return len(results.Flows) == 10
 		}, waitTimeout, retryTime).Should(BeTrue(), "Didn't receive all flows")
 		return flows
@@ -1961,19 +1961,19 @@ func TestStatistics(t *testing.T) {
 				aggregationWindowSecs: 1,
 				clock:                 c,
 			}
-			opts := []aggregator.Option{
-				aggregator.WithRolloverTime(1 * time.Second),
-				aggregator.WithRolloverFunc(roller.After),
-				aggregator.WithNowFunc(c.Now),
+			opts := []goldmane.Option{
+				goldmane.WithRolloverTime(1 * time.Second),
+				goldmane.WithRolloverFunc(roller.After),
+				goldmane.WithNowFunc(c.Now),
 			}
 			defer setupTest(t, opts...)()
-			go agg.Run(c.Now().Unix())
+			go gm.Run(c.Now().Unix())
 
 			// Create some flows.
 			flows := createFlows(numFlows, mutateUniquePolicyName)
 
 			// Query for packet statistics per-policy.
-			perPolicyStats, err := agg.Statistics(&proto.StatisticsRequest{
+			perPolicyStats, err := gm.Statistics(&proto.StatisticsRequest{
 				Type:    statType,
 				GroupBy: proto.StatisticsGroupBy_Policy,
 			})
@@ -1986,7 +1986,7 @@ func TestStatistics(t *testing.T) {
 
 			// Query for a specific policy hit - the one that is common across all flows.
 			hitToMatch := flows[0].Key.Policies.EnforcedPolicies[1]
-			stats, err := agg.Statistics(&proto.StatisticsRequest{
+			stats, err := gm.Statistics(&proto.StatisticsRequest{
 				Type:       statType,
 				GroupBy:    proto.StatisticsGroupBy_Policy,
 				TimeSeries: true,
@@ -2036,12 +2036,12 @@ func TestStatistics(t *testing.T) {
 
 			// Ingest the same flows again. This should double the statistics.
 			for _, fl := range flows {
-				agg.Receive(types.ProtoToFlow(fl))
+				gm.Receive(types.ProtoToFlow(fl))
 			}
 
 			// Wait for all flows to be received.
 			Eventually(func() error {
-				results, err := agg.List(&proto.FlowListRequest{})
+				results, err := gm.List(&proto.FlowListRequest{})
 				if err != nil {
 					return err
 				}
@@ -2058,7 +2058,7 @@ func TestStatistics(t *testing.T) {
 			}, waitTimeout, retryTime).ShouldNot(HaveOccurred(), "Didn't receive all flows")
 
 			// Query for new statistics.
-			stats, err = agg.Statistics(&proto.StatisticsRequest{
+			stats, err = gm.Statistics(&proto.StatisticsRequest{
 				Type:    statType,
 				GroupBy: proto.StatisticsGroupBy_Policy,
 			})
@@ -2093,20 +2093,20 @@ func TestStatistics(t *testing.T) {
 				aggregationWindowSecs: 1,
 				clock:                 c,
 			}
-			opts := []aggregator.Option{
-				aggregator.WithRolloverTime(1 * time.Second),
-				aggregator.WithRolloverFunc(roller.After),
-				aggregator.WithNowFunc(c.Now),
+			opts := []goldmane.Option{
+				goldmane.WithRolloverTime(1 * time.Second),
+				goldmane.WithRolloverFunc(roller.After),
+				goldmane.WithNowFunc(c.Now),
 			}
 			defer setupTest(t, opts...)()
-			go agg.Run(c.Now().Unix())
+			go gm.Run(c.Now().Unix())
 
 			// Create some flows.
 			_ = createFlows(numFlows, mutateUniquePolicyName)
 
 			// Send a query for non-time-series data, which will aggregate
 			// all the flows into a single statistic.
-			stats, err := agg.Statistics(&proto.StatisticsRequest{
+			stats, err := gm.Statistics(&proto.StatisticsRequest{
 				Type:       statType,
 				GroupBy:    proto.StatisticsGroupBy_Policy,
 				TimeSeries: false,
@@ -2116,7 +2116,7 @@ func TestStatistics(t *testing.T) {
 
 			// Collect the time-series data as well, so we can compre the aggregated data
 			// with the time-series data for the same range.
-			timeSeriesStats, err := agg.Statistics(&proto.StatisticsRequest{
+			timeSeriesStats, err := gm.Statistics(&proto.StatisticsRequest{
 				Type:       statType,
 				GroupBy:    proto.StatisticsGroupBy_Policy,
 				TimeSeries: true,
@@ -2146,13 +2146,13 @@ func TestStatistics(t *testing.T) {
 				aggregationWindowSecs: 1,
 				clock:                 c,
 			}
-			opts := []aggregator.Option{
-				aggregator.WithRolloverTime(1 * time.Second),
-				aggregator.WithRolloverFunc(roller.After),
-				aggregator.WithNowFunc(c.Now),
+			opts := []goldmane.Option{
+				goldmane.WithRolloverTime(1 * time.Second),
+				goldmane.WithRolloverFunc(roller.After),
+				goldmane.WithNowFunc(c.Now),
 			}
 			defer setupTest(t, opts...)()
-			go agg.Run(c.Now().Unix())
+			go gm.Run(c.Now().Unix())
 
 			// Create some flows, mutating the first policy hit in each to be an EndOfTier hit.
 			mutateEndOftier := func(fl *proto.Flow, i int) {
@@ -2177,7 +2177,7 @@ func TestStatistics(t *testing.T) {
 
 			// Send a query for non-time-series data, aggregated by Policy.
 			// Collect aggreated statistics, by policy rule.
-			stats, err := agg.Statistics(&proto.StatisticsRequest{
+			stats, err := gm.Statistics(&proto.StatisticsRequest{
 				Type:       statType,
 				GroupBy:    proto.StatisticsGroupBy_Policy,
 				TimeSeries: false,
@@ -2214,13 +2214,13 @@ func TestStatistics(t *testing.T) {
 				aggregationWindowSecs: 1,
 				clock:                 c,
 			}
-			opts := []aggregator.Option{
-				aggregator.WithRolloverTime(1 * time.Second),
-				aggregator.WithRolloverFunc(roller.After),
-				aggregator.WithNowFunc(c.Now),
+			opts := []goldmane.Option{
+				goldmane.WithRolloverTime(1 * time.Second),
+				goldmane.WithRolloverFunc(roller.After),
+				goldmane.WithNowFunc(c.Now),
 			}
 			defer setupTest(t, opts...)()
-			go agg.Run(c.Now().Unix())
+			go gm.Run(c.Now().Unix())
 
 			// Create some flows, mutating the first policy hit in each to be an EndOfTier hit.
 			mutateEndOftier := func(fl *proto.Flow, i int) {
@@ -2245,7 +2245,7 @@ func TestStatistics(t *testing.T) {
 
 			// Send a query for non-time-series data, aggregated by Policy.
 			// Collect aggreated statistics, by policy rule.
-			stats, err := agg.Statistics(&proto.StatisticsRequest{
+			stats, err := gm.Statistics(&proto.StatisticsRequest{
 				Type:       statType,
 				GroupBy:    proto.StatisticsGroupBy_PolicyRule,
 				TimeSeries: false,
@@ -2272,19 +2272,19 @@ func TestStatistics(t *testing.T) {
 				aggregationWindowSecs: 1,
 				clock:                 c,
 			}
-			opts := []aggregator.Option{
-				aggregator.WithRolloverTime(1 * time.Second),
-				aggregator.WithRolloverFunc(roller.After),
-				aggregator.WithNowFunc(c.Now),
+			opts := []goldmane.Option{
+				goldmane.WithRolloverTime(1 * time.Second),
+				goldmane.WithRolloverFunc(roller.After),
+				goldmane.WithNowFunc(c.Now),
 			}
 			defer setupTest(t, opts...)()
-			go agg.Run(c.Now().Unix())
+			go gm.Run(c.Now().Unix())
 
 			// Create some flows.
 			_ = createFlows(numFlows, mutateUniquePolicyName)
 
 			// Collect aggreated statistics, by policy rule.
-			stats, err := agg.Statistics(&proto.StatisticsRequest{
+			stats, err := gm.Statistics(&proto.StatisticsRequest{
 				Type:       statType,
 				GroupBy:    proto.StatisticsGroupBy_PolicyRule,
 				TimeSeries: false,
