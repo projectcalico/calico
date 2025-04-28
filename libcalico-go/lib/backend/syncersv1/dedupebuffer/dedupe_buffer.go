@@ -208,6 +208,14 @@ func (d *DedupeBuffer) queueUpdate(key string, u api.Update) {
 			if debug {
 				log.WithField("key", key).Debug("Key updated before being sent.")
 			}
+
+			if u.UpdateType == api.UpdateTypeKVNew && d.liveResourceKeys.Contains(key) {
+				// Since we're coalescing updates, make sure we send a consistent
+				// update type downstream.  (We may have seen "create", "delete",
+				// "create" and we're squashing out the "delete".
+				u.UpdateType = api.UpdateTypeKVUpdated
+			}
+
 			usk := element.Value.(updateWithStringKey)
 			usk.update = u
 			element.Value = usk
