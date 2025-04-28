@@ -118,6 +118,9 @@ func (d *DataFeed) onUpdate(update bapi.Update) {
 }
 
 // updateResourceVersion updates the resourceVersion of the resource when we run in etcd mode. The resource version is revision on the KVPair
+// This is a workaround for a fact that the backend syncer api does not update the resourceVersion.
+// Kube-controller syncer should not have to be aware of the datastore and the backend syncer should correctly update the resourceVersion
+// This can be removed once the backend syncer code is updates
 func (d *DataFeed) updateResourceVersion(update bapi.Update) {
 	if update.Value == nil {
 		// We received delete, we don't have to update the resourceVersion as the resource does not exists
