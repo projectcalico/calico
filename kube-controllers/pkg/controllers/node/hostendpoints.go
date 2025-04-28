@@ -150,7 +150,7 @@ func (c *autoHostEndpointController) acceptScheduledRequests(stopCh <-chan struc
 	for {
 		select {
 		case update := <-c.syncerUpdates:
-			utils.ProcessBatch(c.syncerUpdates, update, c.handleUpdate)
+			c.handleUpdate(update)
 		case <-t.C:
 			logrus.Info("Running periodic HostEndpoint sync")
 			c.syncHostEndpoints()

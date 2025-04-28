@@ -232,7 +232,7 @@ func (c *loadBalancerController) acceptScheduledRequests(stopCh <-chan struct{})
 	for {
 		select {
 		case update := <-c.syncerUpdates:
-			utils.ProcessBatch(c.syncerUpdates, update, c.handleUpdate)
+			c.handleUpdate(update)
 		case <-t.C:
 			log.Infof("Running periodic IPAM sync of Service LoadBalancer")
 			c.syncIPAM()
