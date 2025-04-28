@@ -104,7 +104,7 @@ var _ = Describe("Config", func() {
 
 			BeforeEach(func() {
 				ctx, cancel = context.WithCancel(context.Background())
-				m = &mockKCC{get: config.DefaultKCC.DeepCopy()}
+				m = &mockKCC{get: config.NewDefaultKubeControllersConfig().DeepCopy()}
 				ctrl = config.NewRunConfigController(ctx, *cfg, m)
 			})
 
@@ -292,7 +292,7 @@ var _ = Describe("Config", func() {
 
 			It("should create a default KubeControllersConfig", func(done Done) {
 				<-ctrl.ConfigChan()
-				Expect(m.create.Spec).To(Equal(config.DefaultKCC.Spec))
+				Expect(m.create.Spec).To(Equal(config.NewDefaultKubeControllersConfig().Spec))
 				close(done)
 			}, 600)
 
@@ -444,7 +444,7 @@ var _ = Describe("Config", func() {
 
 			BeforeEach(func() {
 				ctx, cancel = context.WithCancel(context.Background())
-				m = &mockKCC{get: config.DefaultKCC.DeepCopy()}
+				m = &mockKCC{get: config.NewDefaultKubeControllersConfig().DeepCopy()}
 				ctrl = config.NewRunConfigController(ctx, *cfg, m)
 			})
 
