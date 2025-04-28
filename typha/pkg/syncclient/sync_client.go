@@ -227,6 +227,7 @@ func (s *SyncerClient) Start(cxt context.Context) error {
 func (s *SyncerClient) startOneConnection(cxt context.Context, connFinished *sync.WaitGroup) error {
 	// Defensive: in case there's a bug in NextAddr() and it never stops returning values,
 	// set a sanity limit on the number of tries.
+	s.callbacks.OnStatusUpdated(api.WaitForDatastore)
 	maxTries := s.calculateConnectionAttemptLimit(len(s.discoverer.CachedTyphaAddrs()))
 	remainingTries := maxTries
 	cat := discovery.NewConnAttemptTracker(s.discoverer)
@@ -246,6 +247,7 @@ func (s *SyncerClient) startOneConnection(cxt context.Context, connFinished *syn
 			time.Sleep(100 * time.Millisecond) // Avoid tight loop.
 		} else {
 			s.logCxt.Infof("Successfully connected to Typha at %s.", addr.Addr)
+			s.callbacks.OnStatusUpdated(api.ResyncInProgress)
 			break
 		}
 	}
