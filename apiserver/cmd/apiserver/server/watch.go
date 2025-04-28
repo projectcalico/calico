@@ -90,11 +90,9 @@ func WatchExtensionAuth(ctx context.Context) (bool, error) {
 							logrus.Info("Detected update to extension-apiserver-authentication ConfigMap: No change to data")
 							return
 						}
-						changedKey := findFirstDifferingKey(o, n)
 						logrus.WithFields(logrus.Fields{
 							"oldResourceVersion": o.ResourceVersion,
 							"newResourceVersion": n.ResourceVersion,
-							"changedDataKey":     changedKey,
 						}).Info("Detected update to extension-apiserver-authentication ConfigMap: Require restart due to change in data")
 						changed = true
 						cancel()
@@ -114,23 +112,6 @@ func WatchExtensionAuth(ctx context.Context) (bool, error) {
 	controller.Run(ctx.Done())
 
 	return changed, nil
-}
-
-func findFirstDifferingKey(old, new *corev1.ConfigMap) (key string) {
-	for key, nv := range new.Data {
-		if ov, ok := old.Data[key]; !ok || ov != nv {
-			return key
-		}
-	}
-
-	for key, v := range old.Data {
-		if nv, ok := new.Data[key]; !ok || nv != v {
-			return key
-		}
-	}
-
-	// maps are identical
-	return ""
 }
 
 func binaryDataEqual(m1, m2 *corev1.ConfigMap) bool {
