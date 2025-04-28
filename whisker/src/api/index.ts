@@ -121,7 +121,11 @@ export const useStream = <S, R>({
                 setIsDataStreaming(true);
                 const stream = JSON.parse(event.data);
 
-                buffer.current.push(transformResponse(stream));
+                const transformed = transformResponse(stream);
+
+                if (transformed !== null) {
+                    buffer.current.push(transformed);
+                }
 
                 if (!hasTimeout.current) {
                     hasTimeout.current = true;

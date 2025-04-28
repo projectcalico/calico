@@ -26,19 +26,6 @@ SRC_FILES = $(shell find . -name '*.go') \
 		$(shell find ../api/pkg -name '*.go') \
 		$(shell find ../libcalico-go/lib/logutils -name '*.go')
 
-#############################################
-# Env vars related to building
-#############################################
-
-# Flags for building the binaries.
-#
-# We use -X to insert the version information into the placeholder variables
-# in the version package.
-LDFLAGS = -X $(PACKAGE_NAME)/pkg/version.BuildVersion=$(GIT_VERSION) \
-			  -X $(PACKAGE_NAME)/pkg/version.BuildDate=$(DATE) \
-			  -X $(PACKAGE_NAME)/pkg/version.GitDescription=$(GIT_DESCRIPTION) \
-			  -X $(PACKAGE_NAME)/pkg/version.GitRevision=$(GIT_COMMIT) \
-
 ##########################################################################################
 # BUILD
 ##########################################################################################

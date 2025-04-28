@@ -553,6 +553,13 @@ func (r *BucketRing) streamingBucket() *AggregationBucket {
 	return &r.buckets[idx]
 }
 
+// BackfillEndTime returns the time that backfill should complete at. This ensures that backfill doesn't
+// go past the end of the next bucket to be emitted on rollover, which would otherwise result in
+// duplicate and incomplete flows being streamed.
+func (r *BucketRing) BackfillEndTime() int64 {
+	return r.streamingBucket().StartTime
+}
+
 // IterBuckets iterates over the buckets in the ring, from the starting index until the ending index.
 // i.e., i := start; i < end; i++ (but handles wraparound)
 func (r *BucketRing) IterBuckets(start, end int, f func(i int) error) {

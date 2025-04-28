@@ -12,26 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package version
+package intdataplane
 
-import "fmt"
+import "github.com/vishvananda/netlink"
 
-// BuildVersion stores the SemVer for the given build
-var BuildVersion string
-
-// BuildDate stores the date of the build
-var BuildDate string
-
-// GitDescription stores the tag description
-var GitDescription string
-
-// GitRevision stores git commit hash for the given build
-var GitRevision string
-
-// Version prints version and build information.
-func Version() {
-	fmt.Println("Version:     ", BuildVersion)
-	fmt.Println("Build date:  ", BuildDate)
-	fmt.Println("Git tag ref: ", GitDescription)
-	fmt.Println("Git commit:  ", GitRevision)
+// added so that we can shim netlink for tests
+type netlinkHandle interface {
+	LinkByName(name string) (netlink.Link, error)
+	LinkSetMTU(link netlink.Link, mtu int) error
+	LinkSetUp(link netlink.Link) error
+	AddrList(link netlink.Link, family int) ([]netlink.Addr, error)
+	AddrAdd(link netlink.Link, addr *netlink.Addr) error
+	AddrDel(link netlink.Link, addr *netlink.Addr) error
+	LinkList() ([]netlink.Link, error)
+	LinkAdd(netlink.Link) error
+	LinkDel(netlink.Link) error
 }
