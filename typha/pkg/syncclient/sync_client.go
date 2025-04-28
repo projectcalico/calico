@@ -291,26 +291,6 @@ func (s *SyncerClient) calculateConnectionAttemptLimit(numDiscoveredTyphas int) 
 	return maxTries
 }
 
-// SupportsNodeResourceUpdates waits for the Typha server to send a hello and returns true if
-// the server supports node resource updates. If the given timeout is reached, an error is returned.
-func (s *SyncerClient) SupportsNodeResourceUpdates(timeout time.Duration) (bool, error) {
-	// If a previous call has already marked the handshake as complete, then just return the value.
-	if s.handshakeStatus.complete {
-		return s.supportsNodeResourceUpdates, nil
-	}
-
-	select {
-	case <-s.handshakeStatus.helloReceivedChan:
-		s.logCxt.Debug("Received MsgServerHello from server")
-		s.handshakeStatus.complete = true
-		return s.supportsNodeResourceUpdates, nil
-	case <-time.After(timeout):
-		// fallthrough
-	}
-
-	return false, fmt.Errorf("Timed out waiting for handshake to complete")
-}
-
 func (s *SyncerClient) connect(cxt context.Context, typhaAddr discovery.Typha) error {
 	log.Info("Starting Typha client")
 	var err error
@@ -492,12 +472,13 @@ func (s *SyncerClient) loop(cxt context.Context, cancelFn context.CancelFunc, co
 	}
 	logCxt.WithField("serverMsg", serverHello).Info("ServerHello message received")
 
-	// Check whether Typha supports node resource updates.
+	// Abort if it looks like we're talking to an ancient Typha.  We used to
+	// allow the connection and inform the client, but that's not easy to
+	// do now that we reconnect to Typha on failure.
 	if !serverHello.SupportsNodeResourceUpdates {
-		logCxt.Info("Server responded without support for node resource updates, assuming older Typha")
+		logCxt.Warn("Server responded without support for node resource updates, disconnecting.")
+		return
 	}
-	s.supportsNodeResourceUpdates = serverHello.SupportsNodeResourceUpdates
-	s.handshakeStatus.helloReceivedChan <- struct{}{}
 
 	// Check the SyncerType reported by the server.  If the server is too old to support SyncerType then
 	// the message will have an empty string in place of the SyncerType.  In that case we only proceed if
