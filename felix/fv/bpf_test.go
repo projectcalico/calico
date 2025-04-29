@@ -383,16 +383,8 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				// Enable adding simulated routes.
 				options.SimulateRoutes = true
 			case "ipip":
-				if options.EnableIPv6 {
-					// IPIP is not supported in IPv6. We need to mimic routes in FVs.
-					options.IPIPMode = api.IPIPModeNever
-					options.SimulateRoutes = true
-				} else {
-					// Allow Felix to programIPIP routes.
-					options.ExtraEnvVars["FELIX_ProgramRoutes"] = "Enabled"
-					options.IPIPMode = api.IPIPModeAlways
-					options.SimulateRoutes = false
-				}
+				// Enable adding simulated routes.
+				options.SimulateRoutes = true
 			case "vxlan":
 				options.VXLANMode = api.VXLANModeAlways
 				options.VXLANStrategy = infrastructure.NewDefaultVXLANStrategy(options.IPPoolCIDR, options.IPv6PoolCIDR)
