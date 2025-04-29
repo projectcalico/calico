@@ -57,8 +57,8 @@ func TestDedupeBuffer_SyncNoDupes(t *testing.T) {
 			Expect(rec.UpdatesSeen()).To(Equal([]string{
 				// WaitForDatastore gets skipped since it's in the same batch.
 				api.ResyncInProgress.String(),
-				"foo=bar",
-				"foo2=bar2",
+				"foo=bar (new)",
+				"foo2=bar2 (new)",
 				api.InSync.String(),
 			}))
 
@@ -71,7 +71,7 @@ func TestDedupeBuffer_SyncNoDupes(t *testing.T) {
 			}))
 			Expect(rec.FinalSyncState()).To(Equal(api.InSync))
 			Expect(rec.UpdatesSeen()).To(Equal([]string{
-				"foo=",
+				"foo= (deleted)",
 			}))
 
 			// Now send in a deletion, which is reverted before being sent.
@@ -84,7 +84,7 @@ func TestDedupeBuffer_SyncNoDupes(t *testing.T) {
 			}))
 			Expect(rec.FinalSyncState()).To(Equal(api.InSync))
 			Expect(rec.UpdatesSeen()).To(Equal([]string{
-				"foo2=bar3",
+				"foo2=bar3 (updated)",
 			}))
 
 			// Update both keys, should work as normal.
@@ -99,8 +99,8 @@ func TestDedupeBuffer_SyncNoDupes(t *testing.T) {
 			Expect(rec.FinalSyncState()).To(Equal(api.InSync))
 			Expect(rec.UpdatesSeen()).To(Equal([]string{
 				// WaitForDatastore gets skipped since it's in the same batch.
-				"foo=bar",
-				"foo2=bar2",
+				"foo=bar (new)",
+				"foo2=bar2 (updated)",
 			}))
 		})
 	}
@@ -136,8 +136,286 @@ func TestDedupeBuffer_SyncWithDupes(t *testing.T) {
 			Expect(rec.UpdatesSeen()).To(Equal([]string{
 				// WaitForDatastore skipped.
 				api.ResyncInProgress.String(),
-				"foo=bar3", // Update leap-frogs the original value.
-				"foo3=bar3",
+				"foo=bar3 (new)", // Update leap-frogs the original value.
+				"foo3=bar3 (new)",
+				api.InSync.String(),
+			}))
+		})
+	}
+}
+
+// TestDedupeBuffer_TyphaResyncMainline tests resync with Typha where some keys
+// stay the same, some are modified and some deleted during the resync.
+func TestDedupeBuffer_TyphaResyncMainline(t *testing.T) {
+	for _, onUpdatesVersion := range []string{"KeysKnown", "KeysNotKnown"} {
+		t.Run(onUpdatesVersion, func(t *testing.T) {
+			RegisterTestingT(t)
+			d := New()
+			onUpdates := wrapOnUpdates(d, onUpdatesVersion)
+			rec := NewReceiver()
+
+			// Send a simple initial state.
+			d.OnStatusUpdated(api.WaitForDatastore)
+			d.OnStatusUpdated(api.ResyncInProgress)
+			onUpdates([]api.Update{KVUpdate("key1", "v1")})
+			onUpdates([]api.Update{KVUpdate("key2", "v2")})
+			onUpdates([]api.Update{KVUpdate("key3", "v3")})
+			d.OnStatusUpdated(api.InSync)
+			sendNextBatchSync(d, rec)
+			Expect(rec.FinalValues()).To(Equal(map[string]string{
+				"key1": "v1",
+				"key2": "v2",
+				"key3": "v3",
+			}))
+			Expect(rec.FinalSyncState()).To(Equal(api.InSync))
+			Expect(rec.UpdatesSeen()).To(Equal([]string{
+				// WaitForDatastore skipped.
+				api.ResyncInProgress.String(),
+				"key1=v1 (new)",
+				"key2=v2 (new)",
+				"key3=v3 (new)",
+				api.InSync.String(),
+			}))
+			rec.ResetUpdatesSeen()
+
+			// Typha reconnection.
+			d.OnTyphaConnectionRestarted()
+			d.OnStatusUpdated(api.WaitForDatastore)
+			d.OnStatusUpdated(api.ResyncInProgress)
+			onUpdates([]api.Update{KVUpdate("key1", "v1")})  // Same
+			onUpdates([]api.Update{KVUpdate("key2", "v2b")}) // Changed
+			// onUpdates([]api.Update{KVUpdate("key3", "v3")}) // Deleted as part of resync.
+			onUpdates([]api.Update{KVUpdate("key4", "v4")})
+			d.OnStatusUpdated(api.InSync)
+			sendNextBatchSync(d, rec)
+			Expect(rec.FinalValues()).To(Equal(map[string]string{
+				"key1": "v1",
+				"key2": "v2b",
+				"key4": "v4",
+			}))
+			Expect(rec.FinalSyncState()).To(Equal(api.InSync))
+			Expect(rec.UpdatesSeen()).To(Equal([]string{
+				api.ResyncInProgress.String(),
+				"key1=v1 (updated)",
+				"key2=v2b (updated)",
+				"key4=v4 (new)",
+				"key3= (deleted)",
+				api.InSync.String(),
+			}))
+		})
+	}
+}
+
+// TestDedupeBuffer_TyphaDoubleResyncNoFlush tests a back-to-back resync with
+// Typha without flushing the queue. When the second resync begins the queue
+// should get thrown away so the end result should be the same as if the first
+// resync never started.
+func TestDedupeBuffer_TyphaDoubleResyncNoFlush(t *testing.T) {
+	// Tests a resync with Typha that itself gets interrupted by a new resync.
+
+	for _, onUpdatesVersion := range []string{"KeysKnown", "KeysNotKnown"} {
+		t.Run(onUpdatesVersion, func(t *testing.T) {
+			RegisterTestingT(t)
+			d := New()
+			onUpdates := wrapOnUpdates(d, onUpdatesVersion)
+			rec := NewReceiver()
+
+			// Send a simple initial state.
+			d.OnStatusUpdated(api.WaitForDatastore)
+			d.OnStatusUpdated(api.ResyncInProgress)
+			onUpdates([]api.Update{KVUpdate("key1", "v1")})
+			onUpdates([]api.Update{KVUpdate("key2", "v2")})
+			onUpdates([]api.Update{KVUpdate("key3", "v3")})
+			d.OnStatusUpdated(api.InSync)
+			sendNextBatchSync(d, rec)
+			Expect(rec.FinalValues()).To(Equal(map[string]string{
+				"key1": "v1",
+				"key2": "v2",
+				"key3": "v3",
+			}))
+			Expect(rec.FinalSyncState()).To(Equal(api.InSync))
+			Expect(rec.UpdatesSeen()).To(Equal([]string{
+				// WaitForDatastore skipped.
+				api.ResyncInProgress.String(),
+				"key1=v1 (new)",
+				"key2=v2 (new)",
+				"key3=v3 (new)",
+				api.InSync.String(),
+			}))
+			rec.ResetUpdatesSeen()
+
+			// Typha reconnection.
+			d.OnTyphaConnectionRestarted()
+			d.OnStatusUpdated(api.WaitForDatastore)
+			d.OnStatusUpdated(api.ResyncInProgress)
+			onUpdates([]api.Update{KVUpdate("key1", "v1")})  // Same
+			onUpdates([]api.Update{KVUpdate("key2", "v2b")}) // Changed
+			// onUpdates([]api.Update{KVUpdate("key3", "v3")}) // Deleted as part of resync.
+			onUpdates([]api.Update{KVUpdate("key4", "v4")})
+
+			// And another one before we flush the queue.
+			d.OnTyphaConnectionRestarted()
+			d.OnStatusUpdated(api.WaitForDatastore)
+			d.OnStatusUpdated(api.ResyncInProgress)
+			onUpdates([]api.Update{KVUpdate("key1", "v1b")}) // Same
+			onUpdates([]api.Update{KVUpdate("key2", "v2")})  // Changed
+			// onUpdates([]api.Update{KVUpdate("key3", "v3")}) // Deleted as part of resync.
+			onUpdates([]api.Update{KVUpdate("key4", "v4")})
+
+			d.OnStatusUpdated(api.InSync)
+			sendNextBatchSync(d, rec)
+			Expect(rec.FinalValues()).To(Equal(map[string]string{
+				"key1": "v1b",
+				"key2": "v2",
+				"key4": "v4",
+			}))
+			Expect(rec.FinalSyncState()).To(Equal(api.InSync))
+			Expect(rec.UpdatesSeen()).To(Equal([]string{
+				api.ResyncInProgress.String(),
+				"key1=v1b (updated)",
+				"key2=v2 (updated)",
+				"key4=v4 (new)",
+				"key3= (deleted)",
+				api.InSync.String(),
+			}))
+		})
+	}
+}
+
+// TestDedupeBuffer_TyphaDoubleResyncAfterFlush tests a back-to-back Typha
+// resync where some updates make it off the queue before the second resync
+// starts.
+func TestDedupeBuffer_TyphaDoubleResyncAfterFlush(t *testing.T) {
+	// Tests a resync with Typha that itself gets interrupted by a new resync.
+
+	for _, onUpdatesVersion := range []string{"KeysKnown", "KeysNotKnown"} {
+		t.Run(onUpdatesVersion, func(t *testing.T) {
+			RegisterTestingT(t)
+			d := New()
+			onUpdates := wrapOnUpdates(d, onUpdatesVersion)
+			rec := NewReceiver()
+
+			// Send a simple initial state.
+			d.OnStatusUpdated(api.WaitForDatastore)
+			d.OnStatusUpdated(api.ResyncInProgress)
+			onUpdates([]api.Update{KVUpdate("key1", "v1")})
+			onUpdates([]api.Update{KVUpdate("key2", "v2")})
+			onUpdates([]api.Update{KVUpdate("key3", "v3")})
+			d.OnStatusUpdated(api.InSync)
+			sendNextBatchSync(d, rec)
+			Expect(rec.FinalValues()).To(Equal(map[string]string{
+				"key1": "v1",
+				"key2": "v2",
+				"key3": "v3",
+			}))
+			Expect(rec.FinalSyncState()).To(Equal(api.InSync))
+			Expect(rec.UpdatesSeen()).To(Equal([]string{
+				// WaitForDatastore skipped.
+				api.ResyncInProgress.String(),
+				"key1=v1 (new)",
+				"key2=v2 (new)",
+				"key3=v3 (new)",
+				api.InSync.String(),
+			}))
+			rec.ResetUpdatesSeen()
+
+			// Typha reconnection.
+			d.OnTyphaConnectionRestarted()
+			d.OnStatusUpdated(api.WaitForDatastore)
+			d.OnStatusUpdated(api.ResyncInProgress)
+			onUpdates([]api.Update{KVUpdate("key1", "v1")})  // Same
+			onUpdates([]api.Update{KVUpdate("key2", "v2b")}) // Changed
+			// onUpdates([]api.Update{KVUpdate("key3", "v3")}) // Deleted as part of resync.
+			onUpdates([]api.Update{KVUpdate("key4", "v4")})
+
+			// Flush the queue before we send the in-sync.
+			sendNextBatchSync(d, rec)
+
+			// This update will go onto the queue but then get thrown away
+			// by OnTyphaConnectionRestarted().
+			onUpdates([]api.Update{KVUpdate("key5", "v5")})
+
+			// Then start a new resync.
+			d.OnTyphaConnectionRestarted()
+			d.OnStatusUpdated(api.WaitForDatastore)
+			d.OnStatusUpdated(api.ResyncInProgress)
+			onUpdates([]api.Update{KVUpdate("key1", "v1b")}) // Same
+			onUpdates([]api.Update{KVUpdate("key2", "v2")})  // Changed
+			// onUpdates([]api.Update{KVUpdate("key3", "v3")}) // Deleted as part of resync.
+			onUpdates([]api.Update{KVUpdate("key4", "v4")})
+
+			d.OnStatusUpdated(api.InSync)
+			sendNextBatchSync(d, rec)
+			Expect(rec.FinalValues()).To(Equal(map[string]string{
+				"key1": "v1b",
+				"key2": "v2",
+				"key4": "v4",
+			}))
+			Expect(rec.FinalSyncState()).To(Equal(api.InSync))
+			Expect(rec.UpdatesSeen()).To(Equal([]string{
+				api.ResyncInProgress.String(),
+				"key1=v1 (updated)",
+				"key2=v2b (updated)",
+				"key4=v4 (new)",
+				api.ResyncInProgress.String(),
+				"key1=v1b (updated)",
+				"key2=v2 (updated)",
+				"key4=v4 (updated)",
+				"key3= (deleted)", // Only deleted when we se in-sync.
+				api.InSync.String(),
+			}))
+		})
+	}
+}
+
+// TestDedupeBuffer_TyphaResyncNothingToDelete covers the case where the
+// liveKeysNotSeenSinceReconnect set is empty at the end of the resync.
+func TestDedupeBuffer_TyphaResyncNothingToDelete(t *testing.T) {
+	for _, onUpdatesVersion := range []string{"KeysKnown", "KeysNotKnown"} {
+		t.Run(onUpdatesVersion, func(t *testing.T) {
+			RegisterTestingT(t)
+			d := New()
+			onUpdates := wrapOnUpdates(d, onUpdatesVersion)
+			rec := NewReceiver()
+
+			// Send a simple initial state.
+			d.OnStatusUpdated(api.WaitForDatastore)
+			d.OnStatusUpdated(api.ResyncInProgress)
+			onUpdates([]api.Update{KVUpdate("key1", "v1")})
+			onUpdates([]api.Update{KVUpdate("key2", "v2")})
+			d.OnStatusUpdated(api.InSync)
+			sendNextBatchSync(d, rec)
+			Expect(rec.FinalValues()).To(Equal(map[string]string{
+				"key1": "v1",
+				"key2": "v2",
+			}))
+			Expect(rec.FinalSyncState()).To(Equal(api.InSync))
+			Expect(rec.UpdatesSeen()).To(Equal([]string{
+				// WaitForDatastore skipped.
+				api.ResyncInProgress.String(),
+				"key1=v1 (new)",
+				"key2=v2 (new)",
+				api.InSync.String(),
+			}))
+			rec.ResetUpdatesSeen()
+
+			// Typha reconnection.
+			d.OnTyphaConnectionRestarted()
+			d.OnStatusUpdated(api.WaitForDatastore)
+			d.OnStatusUpdated(api.ResyncInProgress)
+			onUpdates([]api.Update{KVUpdate("key1", "v1")})  // Same
+			onUpdates([]api.Update{KVUpdate("key2", "v2b")}) // Changed
+			d.OnStatusUpdated(api.InSync)
+			sendNextBatchSync(d, rec)
+			Expect(rec.FinalValues()).To(Equal(map[string]string{
+				"key1": "v1",
+				"key2": "v2b",
+			}))
+			Expect(rec.FinalSyncState()).To(Equal(api.InSync))
+			Expect(rec.UpdatesSeen()).To(Equal([]string{
+				api.ResyncInProgress.String(),
+				"key1=v1 (updated)",
+				"key2=v2b (updated)",
 				api.InSync.String(),
 			}))
 		})
@@ -170,6 +448,12 @@ func TestDedupeBuffer_Async(t *testing.T) {
 				"key3": "3a",
 				"key4": "4a",
 			}))
+			Expect(rec.UpdatesSeen()).To(ConsistOf(
+				"key1=1a (new)",
+				"key2=2a (new)",
+				"key3=3a (new)",
+				"key4=4a (new)",
+			))
 			rec.ResetUpdatesSeen()
 
 			// Receiver should now be blocked.  Send in a series of updates,
@@ -215,15 +499,15 @@ func TestDedupeBuffer_Async(t *testing.T) {
 			// but a key that gets updated twice between flushes of the queue
 			// is only sent once with its most recent value.
 			Expect(rec.UpdatesSeen()).To(Equal([]string{
-				"key1=1a", // Only dedupe things that are on the queue so this dupe does get sent.
-				"key2=2b",
-				"key3=3c", // The 3b update gets suppressed
-				"key4=",   // key4 was sent before so the deletion is sent
+				"key1=1a (updated)", // Only dedupe things that are on the queue so this dupe does get sent.
+				"key2=2b (updated)",
+				"key3=3c (updated)", // The 3b update gets suppressed
+				"key4= (deleted)",   // key4 was sent before so the deletion is sent
 				// key5 should never be sent.
-				"key6=6a",
-				"key7=7b",
+				"key6=6a (new)",
+				"key7=7b (new)",
 				"resync",
-				"key8=8a",
+				"key8=8a (new)",
 				"in-sync",
 			}))
 		})
@@ -261,6 +545,8 @@ func KVUpdate(key, value string) api.Update {
 	}
 	if value != "" {
 		u.KVPair.Value = value
+	} else {
+		u.UpdateType = api.UpdateTypeKVDeleted
 	}
 	return u
 }
@@ -329,7 +615,7 @@ func (r *Receiver) OnUpdates(updates []api.Update) {
 			v = update.Value.(string)
 			r.finalValues[k] = v
 		}
-		r.updatesSeen = append(r.updatesSeen, fmt.Sprintf("%s=%s", k, v))
+		r.updatesSeen = append(r.updatesSeen, fmt.Sprintf("%s=%s (%v)", k, v, update.UpdateType))
 	}
 	for r.block {
 		r.cond.Wait()
