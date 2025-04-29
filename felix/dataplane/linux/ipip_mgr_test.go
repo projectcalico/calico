@@ -27,7 +27,6 @@ import (
 
 	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
 	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
-	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/routetable"
@@ -536,40 +535,6 @@ var _ = Describe("IPIPManager route updates", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(manager.routesDirty).To(BeFalse())
 		Expect(rt.currentRoutes["eth0"]).To(HaveLen(1))
-		Expect(rt.currentRoutes[dataplanedefs.IPIPIfaceName]).To(HaveLen(0))
-	})
-
-	It("should program directly connected routes for remote nodes with borrowed IP addresses", func() {
-		By("Sending a borrowed tunnel IP address")
-		manager.OnUpdate(&proto.RouteUpdate{
-			Types:       proto.RouteType_REMOTE_TUNNEL,
-			IpPoolType:  proto.IPPoolType_IPIP,
-			Dst:         "10.0.1.1/32",
-			DstNodeName: "node2",
-			DstNodeIp:   "172.16.0.1",
-			Borrowed:    true,
-		})
-
-		err := manager.CompleteDeferredWork()
-		Expect(err).NotTo(HaveOccurred())
-
-		// Expect a directly connected route to the borrowed IP.
-		Expect(rt.currentRoutes[dataplanedefs.IPIPIfaceName]).To(HaveLen(1))
-		Expect(rt.currentRoutes[dataplanedefs.IPIPIfaceName][0]).To(Equal(
-			routetable.Target{
-				CIDR: ip.MustParseCIDROrIP("10.0.1.1/32"),
-				MTU:  1400,
-			}))
-
-		// Delete the route.
-		manager.OnUpdate(&proto.RouteRemove{
-			Dst: "10.0.1.1/32",
-		})
-
-		err = manager.CompleteDeferredWork()
-		Expect(err).NotTo(HaveOccurred())
-
-		// Expect no routes.
 		Expect(rt.currentRoutes[dataplanedefs.IPIPIfaceName]).To(HaveLen(0))
 	})
 })

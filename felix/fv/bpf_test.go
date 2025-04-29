@@ -388,10 +388,10 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					options.IPIPMode = api.IPIPModeNever
 					options.SimulateRoutes = true
 				} else {
-					// Enable Felix programming IPIP routes.
+					// Allow Felix to programIPIP routes.
+					options.ExtraEnvVars["FELIX_ProgramRoutes"] = "Enabled"
 					options.IPIPMode = api.IPIPModeAlways
 					options.SimulateRoutes = false
-					options.ExtraEnvVars["FELIX_ProgramRoutes"] = "Enabled"
 				}
 			case "vxlan":
 				options.VXLANMode = api.VXLANModeAlways
