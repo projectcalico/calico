@@ -21,6 +21,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/lib/std/uniquelabels"
 	v3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
@@ -164,7 +165,7 @@ type WorkloadEndpoint struct {
 	IPv6Nets                   []net.IPNet       `json:"ipv6_nets"`
 	IPv4NAT                    []IPNAT           `json:"ipv4_nat,omitempty"`
 	IPv6NAT                    []IPNAT           `json:"ipv6_nat,omitempty"`
-	Labels                     map[string]string `json:"labels,omitempty"`
+	Labels                     uniquelabels.Map  `json:"labels,omitempty"`
 	IPv4Gateway                *net.IP           `json:"ipv4_gateway,omitempty" validate:"omitempty,ipv4"`
 	IPv6Gateway                *net.IP           `json:"ipv6_gateway,omitempty" validate:"omitempty,ipv6"`
 	Ports                      []EndpointPort    `json:"ports,omitempty" validate:"dive"`
@@ -176,7 +177,7 @@ type WorkloadEndpoint struct {
 
 func (e *WorkloadEndpoint) WorkloadOrHostEndpoint() {}
 
-func (e *WorkloadEndpoint) GetLabels() map[string]string {
+func (e *WorkloadEndpoint) GetLabels() uniquelabels.Map {
 	return e.Labels
 }
 

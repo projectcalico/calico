@@ -27,6 +27,7 @@ import (
 	"github.com/projectcalico/calico/felix/collector/types/tuple"
 	"github.com/projectcalico/calico/felix/collector/utils"
 	logutil "github.com/projectcalico/calico/felix/logutils"
+	"github.com/projectcalico/calico/lib/std/uniquelabels"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 )
@@ -194,8 +195,8 @@ func (f *FlowSpec) AggregateMetricUpdate(mu *metric.Update) {
 		// Reset the aggregated data from this metric update.
 		f.FlowEnforcedPolicySets = nil
 		f.FlowPendingPolicySet = nil
-		f.FlowLabels.SrcLabels = nil
-		f.FlowLabels.DstLabels = nil
+		f.FlowLabels.SrcLabels = uniquelabels.Nil
+		f.FlowLabels.DstLabels = uniquelabels.Nil
 		f.resetAggrData = false
 	}
 	f.aggregateFlowLabels(*mu)
@@ -249,8 +250,8 @@ func (f *FlowSpec) GarbageCollect() int {
 }
 
 type FlowLabels struct {
-	SrcLabels map[string]string
-	DstLabels map[string]string
+	SrcLabels uniquelabels.Map
+	DstLabels uniquelabels.Map
 }
 
 func NewFlowLabels(mu metric.Update) FlowLabels {
@@ -265,16 +266,16 @@ func (f *FlowLabels) aggregateFlowLabels(mu metric.Update) {
 	dstLabels := endpoint.GetLabels(mu.DstEp)
 
 	// The flow labels are reset on calibration, so either copy the labels or intersect them.
-	if f.SrcLabels == nil {
+	if f.SrcLabels.IsNil() {
 		f.SrcLabels = srcLabels
 	} else {
-		f.SrcLabels = utils.IntersectLabels(srcLabels, f.SrcLabels)
+		f.SrcLabels = utils.IntersectAndFilterLabels(srcLabels, f.SrcLabels)
 	}
 
-	if f.DstLabels == nil {
+	if f.DstLabels.IsNil() {
 		f.DstLabels = dstLabels
 	} else {
-		f.DstLabels = utils.IntersectLabels(dstLabels, f.DstLabels)
+		f.DstLabels = utils.IntersectAndFilterLabels(dstLabels, f.DstLabels)
 	}
 }
 
