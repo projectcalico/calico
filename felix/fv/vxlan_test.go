@@ -958,8 +958,10 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 						felix.Exec("ipset", "list")
 						felix.Exec("ip", "r")
 						felix.Exec("ip", "a")
+						felix.Exec("calico-bpf", "routes", "dump")
 						if enableIPv6 {
 							felix.Exec("ip", "-6", "route")
+							felix.Exec("calico-bpf", "-6", "routes", "dump")
 						}
 					}
 				}
