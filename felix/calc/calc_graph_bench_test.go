@@ -28,6 +28,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/config"
+	"github.com/projectcalico/calico/lib/std/uniquelabels"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
@@ -168,9 +169,9 @@ func makeNetSetAndPolUpdates(num int) []api.Update {
 		name := fmt.Sprintf("network-set-%d", i)
 		netset := &model.NetworkSet{
 			Nets: generateNetSetIPs(),
-			Labels: map[string]string{
+			Labels: uniquelabels.Make(map[string]string{
 				"network-set-name": name,
-			},
+			}),
 		}
 		updates = append(updates, api.Update{
 			KVPair: model.KVPair{
@@ -366,7 +367,7 @@ var markerLabels = []string{
 
 var labelSeed int
 
-func generateLabels() map[string]string {
+func generateLabels() uniquelabels.Map {
 	labelSeed++
 	labels := map[string]string{}
 	for _, n := range []int{10, 11, 20, 30, 40} {
@@ -386,5 +387,5 @@ func generateLabels() map[string]string {
 		panic(err)
 	}
 
-	return labels
+	return uniquelabels.Make(labels)
 }

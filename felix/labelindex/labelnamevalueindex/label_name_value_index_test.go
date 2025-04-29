@@ -15,10 +15,12 @@
 package labelnamevalueindex
 
 import (
+	"iter"
 	"testing"
 
 	. "github.com/onsi/gomega"
 
+	"github.com/projectcalico/calico/lib/std/uniquestr"
 	"github.com/projectcalico/calico/libcalico-go/lib/selector/parser"
 )
 
@@ -78,30 +80,31 @@ func TestLabelValueIndexStrategies(t *testing.T) {
 	idx.Add("c3", labels{"a": "a3", "b": "b3"})
 
 	t.Log("Full-scan strategy...")
-	strat := idx.StrategyFor("a", parser.LabelRestriction{})
+	aHandle := uniquestr.Make("a")
+	strat := idx.StrategyFor(aHandle, parser.LabelRestriction{})
 	Expect(strat).To(BeAssignableToTypeOf(FullScanStrategy[string, labels]{}))
 	Expect(scan(strat)).To(ConsistOf("a1", "a2", "a3", "b1", "b2", "b3", "c1", "c2", "c3"))
 	Expect(strat.EstimatedItemsToScan()).To(Equal(9))
 	Expect(strat.Name()).To(Equal("full-scan"))
 
 	t.Log("Label name strategy...")
-	strat = idx.StrategyFor("a", parser.LabelRestriction{MustBePresent: true})
+	strat = idx.StrategyFor(aHandle, parser.LabelRestriction{MustBePresent: true})
 	Expect(strat).To(BeAssignableToTypeOf(LabelNameStrategy[string]{}))
 	Expect(scan(strat)).To(ConsistOf("a1", "a2", "a3", "c1", "c2", "c3"))
 	Expect(strat.EstimatedItemsToScan()).To(Equal(6))
 	Expect(strat.Name()).To(Equal("label-name"))
 
 	t.Log("Label name with no matches...")
-	strat = idx.StrategyFor("nomatch", parser.LabelRestriction{MustBePresent: true})
+	strat = idx.StrategyFor(uniquestr.Make("nomatch"), parser.LabelRestriction{MustBePresent: true})
 	Expect(strat).To(BeAssignableToTypeOf(NoMatchStrategy[string]{}))
 	Expect(scan(strat)).To(BeEmpty())
 	Expect(strat.EstimatedItemsToScan()).To(Equal(0))
 	Expect(strat.Name()).To(Equal("no-match"))
 
 	t.Log("Label name and value (single)")
-	strat = idx.StrategyFor("a", parser.LabelRestriction{
+	strat = idx.StrategyFor(aHandle, parser.LabelRestriction{
 		MustBePresent:       true,
-		MustHaveOneOfValues: []string{"a1"},
+		MustHaveOneOfValues: handleSlice("a1"),
 	})
 	Expect(strat).To(BeAssignableToTypeOf(LabelNameSingleValueStrategy[string]{}))
 	Expect(scan(strat)).To(ConsistOf("a1", "c1"))
@@ -109,9 +112,9 @@ func TestLabelValueIndexStrategies(t *testing.T) {
 	Expect(strat.Name()).To(Equal("single-value"))
 
 	t.Log("Label name and value (filtered to single)")
-	strat = idx.StrategyFor("a", parser.LabelRestriction{
+	strat = idx.StrategyFor(aHandle, parser.LabelRestriction{
 		MustBePresent:       true,
-		MustHaveOneOfValues: []string{"a1", "a4"},
+		MustHaveOneOfValues: handleSlice("a1", "a4"),
 	})
 	Expect(strat).To(BeAssignableToTypeOf(LabelNameSingleValueStrategy[string]{}))
 	Expect(scan(strat)).To(ConsistOf("a1", "c1"))
@@ -119,9 +122,9 @@ func TestLabelValueIndexStrategies(t *testing.T) {
 	Expect(strat.Name()).To(Equal("single-value"))
 
 	t.Log("Label name and value (multi)")
-	strat = idx.StrategyFor("a", parser.LabelRestriction{
+	strat = idx.StrategyFor(aHandle, parser.LabelRestriction{
 		MustBePresent:       true,
-		MustHaveOneOfValues: []string{"a1", "a2"},
+		MustHaveOneOfValues: handleSlice("a1", "a2"),
 	})
 	Expect(strat).To(BeAssignableToTypeOf(LabelNameMultiValueStrategy[string]{}))
 	Expect(scan(strat)).To(ConsistOf("a1", "c1", "a2", "c2"))
@@ -129,14 +132,22 @@ func TestLabelValueIndexStrategies(t *testing.T) {
 	Expect(strat.Name()).To(Equal("multi-value"))
 
 	t.Log("Label name and value (filtered to nothing)")
-	strat = idx.StrategyFor("a", parser.LabelRestriction{
+	strat = idx.StrategyFor(aHandle, parser.LabelRestriction{
 		MustBePresent:       true,
-		MustHaveOneOfValues: []string{"a4"},
+		MustHaveOneOfValues: handleSlice("a4"),
 	})
 	Expect(strat).To(BeAssignableToTypeOf(NoMatchStrategy[string]{}))
 	Expect(scan(strat)).To(ConsistOf())
 	Expect(strat.EstimatedItemsToScan()).To(Equal(0))
 	Expect(strat.Name()).To(Equal("no-match"))
+}
+
+func handleSlice(ss ...string) []uniquestr.Handle {
+	var hs = make([]uniquestr.Handle, len(ss))
+	for i, s := range ss {
+		hs[i] = uniquestr.Make(s)
+	}
+	return hs
 }
 
 func scan(s ScanStrategy[string]) []string {
@@ -160,6 +171,12 @@ func scan(s ScanStrategy[string]) []string {
 
 type labels map[string]string
 
-func (l labels) OwnLabels() map[string]string {
-	return l
+func (l labels) OwnLabelHandles() iter.Seq2[uniquestr.Handle, uniquestr.Handle] {
+	return func(yield func(uniquestr.Handle, uniquestr.Handle) bool) {
+		for k, v := range l {
+			if !yield(uniquestr.Make(k), uniquestr.Make(v)) {
+				return
+			}
+		}
+	}
 }
