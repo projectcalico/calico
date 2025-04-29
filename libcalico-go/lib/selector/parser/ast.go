@@ -21,22 +21,32 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/lib/std/uniquestr"
 	"github.com/projectcalico/calico/libcalico-go/lib/hash"
 )
 
 // Labels defines the interface of labels that can be used by selector
 type Labels interface {
-	// Get returns value and presence of the given labelName
-	Get(labelName string) (value string, present bool)
+	GetHandle(labelName uniquestr.Handle) (handle uniquestr.Handle, present bool)
 }
 
-// MapAsLabels allows you use map as labels
+// MapAsLabels allows you use a string map as the Labels interface.
+// Useful for testing.
 type MapAsLabels map[string]string
 
-// Get returns the value and presence of the given labelName key in the MapAsLabels
-func (l MapAsLabels) Get(labelName string) (value string, present bool) {
-	value, present = l[labelName]
-	return
+func (l MapAsLabels) GetHandle(labelName uniquestr.Handle) (handle uniquestr.Handle, present bool) {
+	value, present := l[labelName.Value()]
+	return uniquestr.Make(value), present
+}
+
+type LabelRestrictions map[uniquestr.Handle]LabelRestriction
+
+func (lr LabelRestrictions) String() string {
+	m := map[string]LabelRestriction{}
+	for k, v := range lr {
+		m[k.Value()] = v
+	}
+	return fmt.Sprint(m)
 }
 
 type LabelRestriction struct {
@@ -53,7 +63,12 @@ type LabelRestriction struct {
 	//
 	// Note: non-nil empty slice means "selector cannot match anything". For
 	// example an inconsistent selector such as: "a == 'B' && a == 'C'"
-	MustHaveOneOfValues []string
+	MustHaveOneOfValues []uniquestr.Handle
+}
+
+func (l LabelRestriction) String() string {
+	return fmt.Sprintf("{MustBePresent:%v, MustBeAbsent:%v, MustHaveOneOfValues:%v}",
+		l.MustBePresent, l.MustBeAbsent, uniquestr.HandleSliceStringer(l.MustHaveOneOfValues))
 }
 
 func (r LabelRestriction) PossibleToSatisfy() bool {
@@ -80,21 +95,21 @@ func (v PrefixVisitor) Visit(n interface{}) {
 	log.Debugf("PrefixVisitor visiting node %#v", n)
 	switch np := n.(type) {
 	case *LabelEqValueNode:
-		np.LabelName = fmt.Sprintf("%s%s", v.Prefix, np.LabelName)
+		np.LabelName = uniquestr.Make(fmt.Sprintf("%s%s", v.Prefix, np.LabelName.Value()))
 	case *LabelNeValueNode:
-		np.LabelName = fmt.Sprintf("%s%s", v.Prefix, np.LabelName)
+		np.LabelName = uniquestr.Make(fmt.Sprintf("%s%s", v.Prefix, np.LabelName.Value()))
 	case *LabelContainsValueNode:
-		np.LabelName = fmt.Sprintf("%s%s", v.Prefix, np.LabelName)
+		np.LabelName = uniquestr.Make(fmt.Sprintf("%s%s", v.Prefix, np.LabelName.Value()))
 	case *LabelStartsWithValueNode:
-		np.LabelName = fmt.Sprintf("%s%s", v.Prefix, np.LabelName)
+		np.LabelName = uniquestr.Make(fmt.Sprintf("%s%s", v.Prefix, np.LabelName.Value()))
 	case *LabelEndsWithValueNode:
-		np.LabelName = fmt.Sprintf("%s%s", v.Prefix, np.LabelName)
+		np.LabelName = uniquestr.Make(fmt.Sprintf("%s%s", v.Prefix, np.LabelName.Value()))
 	case *HasNode:
-		np.LabelName = fmt.Sprintf("%s%s", v.Prefix, np.LabelName)
+		np.LabelName = uniquestr.Make(fmt.Sprintf("%s%s", v.Prefix, np.LabelName.Value()))
 	case *LabelInSetNode:
-		np.LabelName = fmt.Sprintf("%s%s", v.Prefix, np.LabelName)
+		np.LabelName = uniquestr.Make(fmt.Sprintf("%s%s", v.Prefix, np.LabelName.Value()))
 	case *LabelNotInSetNode:
-		np.LabelName = fmt.Sprintf("%s%s", v.Prefix, np.LabelName)
+		np.LabelName = uniquestr.Make(fmt.Sprintf("%s%s", v.Prefix, np.LabelName.Value()))
 	default:
 		log.Debug("Node is a no-op")
 	}
@@ -104,9 +119,11 @@ type Selector struct {
 	root              Node
 	stringRep         string
 	hash              string
-	labelRestrictions map[string]LabelRestriction
+	labelRestrictions LabelRestrictions
 }
 
+// Evaluate the selector against the given labels map.
+// Deprecated: use EvaluateLabels instead. Evaluate is slow because it calculates unique.Handles on the fly.
 func (sel *Selector) Evaluate(labels map[string]string) bool {
 	return sel.EvaluateLabels(MapAsLabels(labels))
 }
@@ -128,7 +145,7 @@ func (sel *Selector) UniqueID() string {
 	return sel.hash
 }
 
-func (sel *Selector) LabelRestrictions() map[string]LabelRestriction {
+func (sel *Selector) LabelRestrictions() LabelRestrictions {
 	return sel.labelRestrictions
 }
 
@@ -154,28 +171,28 @@ func (sel *Selector) updateFields() {
 type Node interface {
 	Evaluate(labels Labels) bool
 	AcceptVisitor(v Visitor)
-	LabelRestrictions() map[string]LabelRestriction
+	LabelRestrictions() map[uniquestr.Handle]LabelRestriction
 	collectFragments(fragments []string) []string
 }
 
 type LabelEqValueNode struct {
-	LabelName string
-	Value     string
+	LabelName uniquestr.Handle
+	Value     uniquestr.Handle
 }
 
 func (node *LabelEqValueNode) Evaluate(labels Labels) bool {
-	val, ok := labels.Get(node.LabelName)
+	val, ok := labels.GetHandle(node.LabelName)
 	if ok {
 		return val == node.Value
 	}
 	return false
 }
 
-func (node *LabelEqValueNode) LabelRestrictions() map[string]LabelRestriction {
-	return map[string]LabelRestriction{
+func (node *LabelEqValueNode) LabelRestrictions() map[uniquestr.Handle]LabelRestriction {
+	return map[uniquestr.Handle]LabelRestriction{
 		node.LabelName: {
 			MustBePresent:       true,
-			MustHaveOneOfValues: []string{node.Value},
+			MustHaveOneOfValues: []uniquestr.Handle{node.Value},
 		},
 	}
 }
@@ -185,24 +202,24 @@ func (node *LabelEqValueNode) AcceptVisitor(v Visitor) {
 }
 
 func (node *LabelEqValueNode) collectFragments(fragments []string) []string {
-	return appendLabelOpAndQuotedString(fragments, node.LabelName, " == ", node.Value)
+	return appendLabelOpAndQuotedString(fragments, node.LabelName.Value(), " == ", node.Value.Value())
 }
 
 type LabelContainsValueNode struct {
-	LabelName string
-	Value     string
+	LabelName uniquestr.Handle
+	Value     uniquestr.Handle
 }
 
 func (node *LabelContainsValueNode) Evaluate(labels Labels) bool {
-	val, ok := labels.Get(node.LabelName)
+	val, ok := labels.GetHandle(node.LabelName)
 	if ok {
-		return strings.Contains(val, node.Value)
+		return strings.Contains(val.Value(), node.Value.Value())
 	}
 	return false
 }
 
-func (node *LabelContainsValueNode) LabelRestrictions() map[string]LabelRestriction {
-	return map[string]LabelRestriction{
+func (node *LabelContainsValueNode) LabelRestrictions() map[uniquestr.Handle]LabelRestriction {
+	return map[uniquestr.Handle]LabelRestriction{
 		node.LabelName: {
 			MustBePresent: true,
 		},
@@ -214,24 +231,24 @@ func (node *LabelContainsValueNode) AcceptVisitor(v Visitor) {
 }
 
 func (node *LabelContainsValueNode) collectFragments(fragments []string) []string {
-	return appendLabelOpAndQuotedString(fragments, node.LabelName, " contains ", node.Value)
+	return appendLabelOpAndQuotedString(fragments, node.LabelName.Value(), " contains ", node.Value.Value())
 }
 
 type LabelStartsWithValueNode struct {
-	LabelName string
-	Value     string
+	LabelName uniquestr.Handle
+	Value     uniquestr.Handle
 }
 
 func (node *LabelStartsWithValueNode) Evaluate(labels Labels) bool {
-	val, ok := labels.Get(node.LabelName)
+	val, ok := labels.GetHandle(node.LabelName)
 	if ok {
-		return strings.HasPrefix(val, node.Value)
+		return strings.HasPrefix(val.Value(), node.Value.Value())
 	}
 	return false
 }
 
-func (node *LabelStartsWithValueNode) LabelRestrictions() map[string]LabelRestriction {
-	return map[string]LabelRestriction{
+func (node *LabelStartsWithValueNode) LabelRestrictions() map[uniquestr.Handle]LabelRestriction {
+	return map[uniquestr.Handle]LabelRestriction{
 		node.LabelName: {
 			MustBePresent: true,
 		},
@@ -243,24 +260,24 @@ func (node *LabelStartsWithValueNode) AcceptVisitor(v Visitor) {
 }
 
 func (node *LabelStartsWithValueNode) collectFragments(fragments []string) []string {
-	return appendLabelOpAndQuotedString(fragments, node.LabelName, " starts with ", node.Value)
+	return appendLabelOpAndQuotedString(fragments, node.LabelName.Value(), " starts with ", node.Value.Value())
 }
 
 type LabelEndsWithValueNode struct {
-	LabelName string
-	Value     string
+	LabelName uniquestr.Handle
+	Value     uniquestr.Handle
 }
 
 func (node *LabelEndsWithValueNode) Evaluate(labels Labels) bool {
-	val, ok := labels.Get(node.LabelName)
+	val, ok := labels.GetHandle(node.LabelName)
 	if ok {
-		return strings.HasSuffix(val, node.Value)
+		return strings.HasSuffix(val.Value(), node.Value.Value())
 	}
 	return false
 }
 
-func (node *LabelEndsWithValueNode) LabelRestrictions() map[string]LabelRestriction {
-	return map[string]LabelRestriction{
+func (node *LabelEndsWithValueNode) LabelRestrictions() map[uniquestr.Handle]LabelRestriction {
+	return map[uniquestr.Handle]LabelRestriction{
 		node.LabelName: {
 			MustBePresent: true,
 		},
@@ -272,24 +289,24 @@ func (node *LabelEndsWithValueNode) AcceptVisitor(v Visitor) {
 }
 
 func (node *LabelEndsWithValueNode) collectFragments(fragments []string) []string {
-	return appendLabelOpAndQuotedString(fragments, node.LabelName, " ends with ", node.Value)
+	return appendLabelOpAndQuotedString(fragments, node.LabelName.Value(), " ends with ", node.Value.Value())
 }
 
 type LabelInSetNode struct {
-	LabelName string
+	LabelName uniquestr.Handle
 	Value     StringSet
 }
 
 func (node *LabelInSetNode) Evaluate(labels Labels) bool {
-	val, ok := labels.Get(node.LabelName)
+	val, ok := labels.GetHandle(node.LabelName)
 	if ok {
 		return node.Value.Contains(val)
 	}
 	return false
 }
 
-func (node *LabelInSetNode) LabelRestrictions() map[string]LabelRestriction {
-	return map[string]LabelRestriction{
+func (node *LabelInSetNode) LabelRestrictions() map[uniquestr.Handle]LabelRestriction {
+	return map[uniquestr.Handle]LabelRestriction{
 		node.LabelName: {
 			MustBePresent:       true,
 			MustHaveOneOfValues: node.Value.SliceCopy(),
@@ -302,11 +319,11 @@ func (node *LabelInSetNode) AcceptVisitor(v Visitor) {
 }
 
 func (node *LabelInSetNode) collectFragments(fragments []string) []string {
-	return collectInOpFragments(fragments, node.LabelName, "in", node.Value)
+	return collectInOpFragments(fragments, node.LabelName.Value(), "in", node.Value)
 }
 
 type LabelNotInSetNode struct {
-	LabelName string
+	LabelName uniquestr.Handle
 	Value     StringSet
 }
 
@@ -315,19 +332,19 @@ func (node *LabelNotInSetNode) AcceptVisitor(v Visitor) {
 }
 
 func (node *LabelNotInSetNode) Evaluate(labels Labels) bool {
-	val, ok := labels.Get(node.LabelName)
+	val, ok := labels.GetHandle(node.LabelName)
 	if ok {
 		return !node.Value.Contains(val)
 	}
 	return true
 }
 
-func (node *LabelNotInSetNode) LabelRestrictions() map[string]LabelRestriction {
+func (node *LabelNotInSetNode) LabelRestrictions() map[uniquestr.Handle]LabelRestriction {
 	return nil
 }
 
 func (node *LabelNotInSetNode) collectFragments(fragments []string) []string {
-	return collectInOpFragments(fragments, node.LabelName, "not in", node.Value)
+	return collectInOpFragments(fragments, node.LabelName.Value(), "not in", node.Value)
 }
 
 // collectInOpFragments is a shared implementation of collectFragments
@@ -336,7 +353,8 @@ func collectInOpFragments(fragments []string, labelName, op string, values Strin
 	var quote string
 	fragments = append(fragments, labelName, " ", op, " {")
 	first := true
-	for _, s := range values {
+	for _, h := range values {
+		s := h.Value()
 		if strings.Contains(s, `"`) {
 			quote = `'`
 		} else {
@@ -354,19 +372,19 @@ func collectInOpFragments(fragments []string, labelName, op string, values Strin
 }
 
 type LabelNeValueNode struct {
-	LabelName string
-	Value     string
+	LabelName uniquestr.Handle
+	Value     uniquestr.Handle
 }
 
 func (node *LabelNeValueNode) Evaluate(labels Labels) bool {
-	val, ok := labels.Get(node.LabelName)
+	val, ok := labels.GetHandle(node.LabelName)
 	if ok {
 		return val != node.Value
 	}
 	return true
 }
 
-func (node *LabelNeValueNode) LabelRestrictions() map[string]LabelRestriction {
+func (node *LabelNeValueNode) LabelRestrictions() map[uniquestr.Handle]LabelRestriction {
 	return nil
 }
 
@@ -375,23 +393,23 @@ func (node *LabelNeValueNode) AcceptVisitor(v Visitor) {
 }
 
 func (node *LabelNeValueNode) collectFragments(fragments []string) []string {
-	return appendLabelOpAndQuotedString(fragments, node.LabelName, " != ", node.Value)
+	return appendLabelOpAndQuotedString(fragments, node.LabelName.Value(), " != ", node.Value.Value())
 }
 
 type HasNode struct {
-	LabelName string
+	LabelName uniquestr.Handle
 }
 
 func (node *HasNode) Evaluate(labels Labels) bool {
-	_, ok := labels.Get(node.LabelName)
+	_, ok := labels.GetHandle(node.LabelName)
 	if ok {
 		return true
 	}
 	return false
 }
 
-func (node *HasNode) LabelRestrictions() map[string]LabelRestriction {
-	return map[string]LabelRestriction{
+func (node *HasNode) LabelRestrictions() map[uniquestr.Handle]LabelRestriction {
+	return map[uniquestr.Handle]LabelRestriction{
 		node.LabelName: {
 			MustBePresent: true,
 		},
@@ -403,7 +421,7 @@ func (node *HasNode) AcceptVisitor(v Visitor) {
 }
 
 func (node *HasNode) collectFragments(fragments []string) []string {
-	return append(fragments, "has(", node.LabelName, ")")
+	return append(fragments, "has(", node.LabelName.Value(), ")")
 }
 
 var _ Node = (*HasNode)(nil)
@@ -416,7 +434,7 @@ func (node *NotNode) Evaluate(labels Labels) bool {
 	return !node.Operand.Evaluate(labels)
 }
 
-func (node *NotNode) LabelRestrictions() map[string]LabelRestriction {
+func (node *NotNode) LabelRestrictions() map[uniquestr.Handle]LabelRestriction {
 	if hasNode, ok := node.Operand.(*HasNode); ok {
 		// !has() explicitly forbids the labels.
 		lr := hasNode.LabelRestrictions()
@@ -455,8 +473,8 @@ func (node *AndNode) Evaluate(labels Labels) bool {
 	return true
 }
 
-func (node *AndNode) LabelRestrictions() map[string]LabelRestriction {
-	lr := map[string]LabelRestriction{}
+func (node *AndNode) LabelRestrictions() map[uniquestr.Handle]LabelRestriction {
+	lr := map[uniquestr.Handle]LabelRestriction{}
 	for _, op := range node.Operands {
 		opLR := op.LabelRestrictions()
 		for ln, r := range opLR {
@@ -477,7 +495,7 @@ func (node *AndNode) LabelRestrictions() map[string]LabelRestriction {
 	return lr
 }
 
-func intersectStringSlicesInPlace(a []string, b []string) []string {
+func intersectStringSlicesInPlace(a, b []uniquestr.Handle) []uniquestr.Handle {
 	out := a[:0]
 	bSet := ConvertToStringSetInPlace(b)
 	for _, v1 := range a {
@@ -519,7 +537,7 @@ func (node *OrNode) Evaluate(labels Labels) bool {
 	return false
 }
 
-func (node *OrNode) LabelRestrictions() map[string]LabelRestriction {
+func (node *OrNode) LabelRestrictions() map[uniquestr.Handle]LabelRestriction {
 	lr := node.Operands[0].LabelRestrictions()
 	for _, op := range node.Operands[1:] {
 		opLR := op.LabelRestrictions()
@@ -551,7 +569,7 @@ func (node *OrNode) LabelRestrictions() map[string]LabelRestriction {
 	return lr
 }
 
-func unionStringSlicesInPlace(a []string, b []string) []string {
+func unionStringSlicesInPlace(a, b []uniquestr.Handle) []uniquestr.Handle {
 	// aSet will share storage with a, but when we append to a, it doesn't
 	// affect aSet.
 	aSet := ConvertToStringSetInPlace(a)
@@ -584,11 +602,11 @@ func (node *OrNode) collectFragments(fragments []string) []string {
 type AllNode struct {
 }
 
-func (node *AllNode) LabelRestrictions() map[string]LabelRestriction {
+func (node *AllNode) LabelRestrictions() map[uniquestr.Handle]LabelRestriction {
 	return nil
 }
 
-func (node *AllNode) Evaluate(labels Labels) bool {
+func (node *AllNode) Evaluate(_ Labels) bool {
 	return true
 }
 
@@ -613,11 +631,11 @@ func appendLabelOpAndQuotedString(fragments []string, label, op, s string) []str
 type GlobalNode struct {
 }
 
-func (node *GlobalNode) LabelRestrictions() map[string]LabelRestriction {
+func (node *GlobalNode) LabelRestrictions() map[uniquestr.Handle]LabelRestriction {
 	return nil
 }
 
-func (node *GlobalNode) Evaluate(labels Labels) bool {
+func (node *GlobalNode) Evaluate(_ Labels) bool {
 	return true
 }
 

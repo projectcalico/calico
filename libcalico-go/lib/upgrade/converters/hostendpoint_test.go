@@ -24,6 +24,7 @@ import (
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"github.com/projectcalico/calico/lib/std/uniquelabels"
 	apiv1 "github.com/projectcalico/calico/libcalico-go/lib/apis/v1"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
@@ -91,9 +92,9 @@ var hepTable = []TableEntry{
 			},
 			Value: &model.HostEndpoint{
 				Name: "eth3",
-				Labels: map[string]string{
+				Labels: uniquelabels.Make(map[string]string{
 					"foo": "bar",
-				},
+				}),
 				Ports: []model.EndpointPort{
 					{
 						Name:     "my-port",
