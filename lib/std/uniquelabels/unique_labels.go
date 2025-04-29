@@ -95,7 +95,7 @@ func (i *Map) UnmarshalJSON(data []byte) error {
 func (i Map) AllHandles() iter.Seq2[uniquestr.Handle, uniquestr.Handle] {
 	return func(yield func(uniquestr.Handle, uniquestr.Handle) bool) {
 		for k, v := range i.m {
-			if !yield(uniquestr.Handle(k), uniquestr.Handle(v)) {
+			if !yield(k, v) {
 				return
 			}
 		}
@@ -171,6 +171,10 @@ func IntersectAndFilter(a, b Map, include func(uniquestr.Handle, uniquestr.Handl
 		return IntersectAndFilter(b, a, include)
 	}
 
+	if include == nil {
+		include = noOpFilter
+	}
+	
 	// Do a pass to determine if we need to allocate a new map.
 	needToFilter := false
 	for k, v := range a.m {
@@ -203,6 +207,10 @@ func IntersectAndFilter(a, b Map, include func(uniquestr.Handle, uniquestr.Handl
 		return Empty
 	}
 	return Map{m: intersection}
+}
+
+func noOpFilter(uniquestr.Handle, uniquestr.Handle) bool {
+	return true
 }
 
 var _ json.Marshaler = Map{}
