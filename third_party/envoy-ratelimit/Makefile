@@ -26,6 +26,7 @@ init-source:: $(ENVOY_RATELIMIT_DOWNLOADED)
 $(ENVOY_RATELIMIT_DOWNLOADED):
 	git clone -n https://github.com/envoyproxy/ratelimit.git envoy-ratelimit
 	cd envoy-ratelimit && git checkout $(ENVOY_RATELIMIT_VERSION)
+	patch -d envoy-ratelimit -p1 < patches/0001-Bump-golang.org-x-net-to-v0.38.0.patch
 	touch $@
 
 .PHONY: build

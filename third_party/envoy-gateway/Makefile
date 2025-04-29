@@ -26,6 +26,7 @@ init-source:: $(ENVOY_GATEWAY_DOWNLOADED)
 $(ENVOY_GATEWAY_DOWNLOADED):
 	mkdir -p envoy-gateway
 	curl -sfL https://github.com/envoyproxy/gateway/archive/refs/tags/$(ENVOY_GATEWAY_VERSION).tar.gz | tar xz --strip-components 1 -C envoy-gateway
+	patch -d envoy-gateway -p1 < patches/0001-Bumping-x-net-and-containerd.patch
 	touch $@
 
 .PHONY: build
