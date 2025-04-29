@@ -177,7 +177,6 @@ func (m *ipipManager) OnUpdate(msg interface{}) {
 			delete(m.localIPAMBlocks, msg.Dst)
 			m.routesDirty = true
 		}
-
 	case *proto.RouteRemove:
 		// Check to make sure that we are dealing with messages of the correct IP version.
 		cidr, err := ip.CIDRFromString(msg.Dst)
@@ -247,18 +246,18 @@ func (m *ipipManager) CompleteDeferredWork() error {
 		m.updateAllHostsIPSet()
 		m.ipSetDirty = false
 	}
-	// Program routes, only if ProgramRoutes is true
+	// Program routes, only if Felix is responsible for programming IPIP routes.
 	if !m.dpConfig.ProgramRoutes {
 		m.routesDirty = false
 		return nil
 	}
 	if m.noEncapDevice == "" {
-		// Background goroutine hasn't sent us the parent interface name yet,
-		// but we can look it up synchronously.  OnParentNameUpdate will handle
+		// Background goroutine hasn't sent us the noEncap interface name yet,
+		// but we can look it up synchronously. OnNoEncapDeviceUpdate will handle
 		// any duplicate update when it arrives.
-		parent, err := m.getParentInterface()
+		noEncapDevice, err := m.getNoEncapInterface()
 		if err != nil {
-			// If we can't look up the parent interface then we're in trouble.
+			// If we can't look up the noEncap interface then we're in trouble.
 			// It likely means that our local address is missing or conflicting.  We
 			// won't be able to program same-subnet routes at all, so we'll
 			// fall back to programming all tunnel routes.  However, unless the
@@ -267,15 +266,15 @@ func (m *ipipManager) CompleteDeferredWork() error {
 			// component that spots that the interface is missing.
 			//
 			// Note: this behaviour changed when we unified all the main
-			// RouteTable instances into one.  Before that change, we chose to
+			// RouteTale instances into one.  Before that change, we chose to
 			// defer creation of our "no encap" RouteTable, so that the
 			// dataplane would stay untouched until the conflict was resolved.
 			// With only a single RouteTable, we need a different fallback.
 			m.logCtx.WithError(err).WithField("local address", m.getLocalHostAddr()).Error(
-				"Failed to find ipip tunnel device parent. Missing/conflicting local address? ipip route " +
+				"Failed to find noEncap interface. Missing/conflicting local address? ipip route " +
 					"programming is likely to fail.")
 		} else {
-			m.noEncapDevice = parent.Attrs().Name
+			m.noEncapDevice = noEncapDevice.Attrs().Name
 			m.routesDirty = true
 		}
 	}
@@ -335,11 +334,11 @@ func (m *ipipManager) updateRoutes() error {
 		}
 	}
 
-	m.logCtx.WithField("ipipRoutes", ipipRoutes).Debug("IPIP manager setting IPIP tunnled routes")
+	m.logCtx.WithField("routes", ipipRoutes).Debug("IPIP manager setting IPIP tunneled routes")
 	m.routeTable.SetRoutes(routetable.RouteClassIPIPTunnel, m.ipipDevice, ipipRoutes)
 
 	bhRoutes := blackholeRoutes(m.localIPAMBlocks, m.routeProtocol)
-	m.logCtx.WithField("balckholes", bhRoutes).Debug("IPIP manager setting blackhole routes")
+	m.logCtx.WithField("routes", bhRoutes).Debug("IPIP manager setting blackhole routes")
 	m.routeTable.SetRoutes(routetable.RouteClassIPAMBlockDrop, routetable.InterfaceNone, bhRoutes)
 
 	if m.noEncapDevice != "" {
@@ -349,7 +348,7 @@ func (m *ipipManager) updateRoutes() error {
 		}).Debug("IPIP manager sending unencapsulated L3 updates")
 		m.routeTable.SetRoutes(routetable.RouteClassIPIPSameSubnet, m.noEncapDevice, noEncapRoutes)
 	} else {
-		m.logCtx.Debug("IPIP manager not sending unencapsulated L3 updates, no parent interface.")
+		m.logCtx.Debug("IPIP manager not sending unencapsulated L3 updates, noEncap interface not found.")
 	}
 
 	return nil
@@ -373,21 +372,21 @@ func (m *ipipManager) tunneledRoute(cidr ip.CIDR, r *proto.RouteUpdate) *routeta
 
 func (m *ipipManager) OnNoEncapDeviceUpdate(name string) {
 	if name == "" {
-		m.logCtx.Warn("Empty parent interface name? Ignoring.")
+		m.logCtx.Warn("Empty noEncap interface name? Ignoring.")
 		return
 	}
 	if name == m.noEncapDevice {
 		return
 	}
 	if m.noEncapDevice != "" {
-		// We're changing parent interface, remove the old routes.
+		// We're changing noEncap interface, remove the old routes.
 		m.routeTable.SetRoutes(routetable.RouteClassIPIPSameSubnet, m.noEncapDevice, nil)
 	}
 	m.noEncapDevice = name
 	m.routesDirty = true
 }
 
-// KeepIPIPDeviceInSync is a goroutine that configures the IPIP tunnel device, then periodically
+// KeepBIRDIPIPDeviceInSync is a goroutine that configures the IPIP tunnel device for BIRD, then periodically
 // checks that it is still correctly configured.
 func (m *ipipManager) KeepBIRDIPIPDeviceInSync(xsumBroken bool) {
 	for {
@@ -403,7 +402,7 @@ func (m *ipipManager) KeepBIRDIPIPDeviceInSync(xsumBroken bool) {
 
 // KeepIPIPDeviceInSync is a goroutine that configures the IPIP tunnel device, then periodically
 // checks that it is still correctly configured.
-func (m *ipipManager) KeepIPIPDeviceInSync(xsumBroken bool, wait time.Duration, parentNameC chan string) {
+func (m *ipipManager) KeepIPIPDeviceInSync(xsumBroken bool, wait time.Duration, noEncapNameC chan string) {
 	usedBy := "BIRD"
 	if m.dpConfig.ProgramRoutes {
 		usedBy = "Felix"
@@ -424,7 +423,7 @@ func (m *ipipManager) KeepIPIPDeviceInSync(xsumBroken bool, wait time.Duration, 
 	}
 
 	logNextSuccess := true
-	parentName := ""
+	noEncapDevName := ""
 
 	sleepMonitoringChans := func(maxDuration time.Duration) {
 		timer := time.NewTimer(maxDuration)
@@ -446,9 +445,9 @@ func (m *ipipManager) KeepIPIPDeviceInSync(xsumBroken bool, wait time.Duration, 
 			continue
 		}
 
-		parent, err := m.getParentInterface()
+		noEncapDev, err := m.getNoEncapInterface()
 		if err != nil {
-			m.logCtx.WithError(err).Warn("Failed to find IPIP tunnel device parent, retrying...")
+			m.logCtx.WithError(err).Warn("Failed to find noEncap device, retrying...")
 			sleepMonitoringChans(1 * time.Second)
 			continue
 		}
@@ -462,14 +461,14 @@ func (m *ipipManager) KeepIPIPDeviceInSync(xsumBroken bool, wait time.Duration, 
 			continue
 		}
 
-		newParentName := parent.Attrs().Name
-		if newParentName != parentName {
+		newNoEncapDevName := noEncapDev.Attrs().Name
+		if newNoEncapDevName != noEncapDevName {
 			// Send a message back to the main loop to tell it to update the
 			// routing tables.
-			m.logCtx.Infof("IPIP device parent changed from %q to %q", parentName, newParentName)
+			m.logCtx.Infof("NoEncap device changed from %q to %q", noEncapDevName, newNoEncapDevName)
 			select {
-			case parentNameC <- newParentName:
-				parentName = newParentName
+			case noEncapNameC <- newNoEncapDevName:
+				noEncapDevName = newNoEncapDevName
 			case <-m.myAddrChangedC:
 				m.logCtx.Info("My address changed; restarting configuration.")
 				continue
@@ -487,15 +486,15 @@ func (m *ipipManager) KeepIPIPDeviceInSync(xsumBroken bool, wait time.Duration, 
 	m.logCtx.Info("KeepIPIPDeviceInSync exiting due to context.")
 }
 
-// getParentInterface returns the parent interface for the given local address. This link returned is nil
+// getNoEncapInterface returns the noEncap interface for the given local address. This link returned is nil
 // if, and only if, an error occurred
-func (m *ipipManager) getParentInterface() (netlink.Link, error) {
+func (m *ipipManager) getNoEncapInterface() (netlink.Link, error) {
 	localAddr := m.getLocalHostAddr()
 	if localAddr == "" {
 		return nil, fmt.Errorf("local address not found")
 	}
 
-	m.logCtx.WithField("local address", localAddr).Debug("Getting parent interface")
+	m.logCtx.WithField("local address", localAddr).Debug("Getting noEncap interface")
 	links, err := m.nlHandle.LinkList()
 	if err != nil {
 		return nil, err
@@ -508,12 +507,12 @@ func (m *ipipManager) getParentInterface() (netlink.Link, error) {
 		}
 		for _, addr := range addrs {
 			if addr.IPNet.IP.String() == localAddr {
-				m.logCtx.Debugf("Found parent interface: %s", link)
+				m.logCtx.Debugf("Found noEncap interface: %s", link)
 				return link, nil
 			}
 		}
 	}
-	return nil, fmt.Errorf("Unable to find parent interface with address %s", localAddr)
+	return nil, fmt.Errorf("Unable to find noEncap interface with address %s", localAddr)
 }
 
 // configureIPIPDevice ensures the IPIP tunnel device is up and configures correctly.

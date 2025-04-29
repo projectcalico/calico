@@ -399,11 +399,11 @@ func (m *vxlanManager) updateRoutes() {
 		}
 	}
 
-	m.logCtx.WithField("vxlanRoutes", vxlanRoutes).Debug("VXLAN manager setting VXLAN tunneled routes")
+	m.logCtx.WithField("routes", vxlanRoutes).Debug("VXLAN manager setting VXLAN tunneled routes")
 	m.routeTable.SetRoutes(routetable.RouteClassVXLANTunnel, m.vxlanDevice, vxlanRoutes)
 
 	bhRoutes := blackholeRoutes(m.localIPAMBlocks, m.routeProtocol)
-	m.logCtx.WithField("balckholes", bhRoutes).Debug("VXLAN manager setting blackhole routes")
+	m.logCtx.WithField("routes", bhRoutes).Debug("VXLAN manager setting blackhole routes")
 	m.routeTable.SetRoutes(routetable.RouteClassIPAMBlockDrop, routetable.InterfaceNone, bhRoutes)
 
 	if m.parentIfaceName != "" {

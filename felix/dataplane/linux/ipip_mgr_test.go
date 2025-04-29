@@ -424,7 +424,7 @@ var _ = Describe("IPIPManager route updates", func() {
 		)
 	})
 
-	It("successfully adds a route to the parent interface", func() {
+	It("successfully adds a route to the noEncap interface", func() {
 		manager.OnUpdate(&proto.HostMetadataUpdate{
 			Hostname: "node1",
 			Ipv4Addr: "10.0.0.1",
@@ -440,9 +440,9 @@ var _ = Describe("IPIPManager route updates", func() {
 
 		Expect(manager.hostAddr).NotTo(BeZero())
 		Expect(manager.noEncapDevice).NotTo(BeEmpty())
-		parent, err := manager.getParentInterface()
+		noEncapDev, err := manager.getNoEncapInterface()
 
-		Expect(parent).NotTo(BeNil())
+		Expect(noEncapDev).NotTo(BeNil())
 		Expect(err).NotTo(HaveOccurred())
 
 		manager.OnUpdate(&proto.RouteUpdate{
@@ -492,9 +492,9 @@ var _ = Describe("IPIPManager route updates", func() {
 		Expect(rt.currentRoutes["eth0"]).NotTo(BeNil())
 	})
 
-	It("should fall back to programming tunneled routes if the parent device is not known", func() {
-		parentNameC := make(chan string)
-		go manager.KeepIPIPDeviceInSync(false, 1*time.Second, parentNameC)
+	It("should fall back to programming tunneled routes if the noEncap device is not known", func() {
+		noEncapNameC := make(chan string)
+		go manager.KeepIPIPDeviceInSync(false, 1*time.Second, noEncapNameC)
 
 		By("Sending another node's route.")
 		manager.OnUpdate(&proto.HostMetadataUpdate{
@@ -526,7 +526,7 @@ var _ = Describe("IPIPManager route updates", func() {
 
 		// Note: no encap device name is sent after configuration so this receive
 		// ensures we don't race.
-		Eventually(parentNameC, "2s").Should(Receive(Equal("eth0")))
+		Eventually(noEncapNameC, "2s").Should(Receive(Equal("eth0")))
 		manager.OnNoEncapDeviceUpdate("eth0")
 
 		Expect(rt.currentRoutes["eth0"]).To(HaveLen(0))
