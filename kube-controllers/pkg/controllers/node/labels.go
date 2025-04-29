@@ -203,7 +203,8 @@ func (c *nodeLabelController) acceptScheduledRequests(stopCh <-chan struct{}) {
 		case <-c.syncChan:
 			c.syncAllNodesLabels()
 		case node := <-c.k8sNodeUpdate:
-			utils.ProcessBatch(c.k8sNodeUpdate, node, c.syncNodeLabels)
+			log := logrus.WithFields(logrus.Fields{"controller": "Labels", "type": "nodeUpdate"})
+			utils.ProcessBatch(c.k8sNodeUpdate, node, c.syncNodeLabels, log)
 		case <-stopCh:
 			return
 		}

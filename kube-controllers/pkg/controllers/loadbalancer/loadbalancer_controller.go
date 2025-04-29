@@ -239,7 +239,8 @@ func (c *loadBalancerController) acceptScheduledRequests(stopCh <-chan struct{})
 		case <-c.syncChan:
 			c.syncIPAM()
 		case svcKey := <-c.serviceUpdates:
-			utils.ProcessBatch(c.serviceUpdates, svcKey, c.syncService)
+			logEntry := log.WithFields(log.Fields{"controller": "LoadBalancer", "type": "serviceUpdate"})
+			utils.ProcessBatch(c.serviceUpdates, svcKey, c.syncService, logEntry)
 		case <-stopCh:
 			return
 		}

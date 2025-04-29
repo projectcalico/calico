@@ -123,7 +123,7 @@ func (d *DataFeed) onUpdate(update bapi.Update) {
 // This can be removed once the backend syncer code is updates
 func (d *DataFeed) updateResourceVersion(update bapi.Update) {
 	if update.Value == nil {
-		// We received delete, we don't have to update the resourceVersion as the resource does not exists
+		// We received delete, we don't have to update the resourceVersion as the resource does not exist
 		return
 	}
 

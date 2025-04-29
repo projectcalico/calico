@@ -157,7 +157,8 @@ func (c *autoHostEndpointController) acceptScheduledRequests(stopCh <-chan struc
 		case <-c.syncChan:
 			c.syncHostEndpoints()
 		case nodeName := <-c.nodeUpdates:
-			utils.ProcessBatch(c.nodeUpdates, nodeName, c.syncHostEndpointsForNode)
+			logEntry := logrus.WithFields(logrus.Fields{"controller": "HostEndpoint", "type": "nodeUpdate"})
+			utils.ProcessBatch(c.nodeUpdates, nodeName, c.syncHostEndpointsForNode, logEntry)
 		case <-stopCh:
 			return
 		}

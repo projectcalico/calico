@@ -3,7 +3,7 @@ package utils
 import (
 	"time"
 
-	log "github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -17,7 +17,7 @@ const (
 // ProcessBatch tries to batch multiple updates from a channel before triggering any further processing
 // This helps to handle bursts in the channel by quickly reading the items without blocking the channel,
 // and processing the updates once the channel is clear
-func ProcessBatch[T any](channel <-chan T, update T, fn func(T)) {
+func ProcessBatch[T any](channel <-chan T, update T, fn func(T), log *logrus.Entry) {
 	log.Debug("Reading batch of updates from channel")
 
 	var batch []T
