@@ -25,6 +25,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/dispatcher"
 	"github.com/projectcalico/calico/felix/ip"
+	"github.com/projectcalico/calico/lib/std/uniquelabels"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
@@ -44,7 +45,7 @@ func init() {
 type networkSetData struct {
 	cidrs  set.Set[ip.CIDR]
 	key    model.NetworkSetKey
-	labels map[string]string
+	labels uniquelabels.Map
 }
 
 func (n networkSetData) IsLocal() bool {
@@ -67,7 +68,7 @@ func (n networkSetData) Key() model.Key {
 	return n.key
 }
 
-func (n networkSetData) Labels() map[string]string {
+func (n networkSetData) Labels() uniquelabels.Map {
 	return n.labels
 }
 
