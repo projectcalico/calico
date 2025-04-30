@@ -25,14 +25,12 @@ import (
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
-	"golang.org/x/time/rate"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	v1lister "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
-	"k8s.io/client-go/util/workqueue"
 
 	"github.com/projectcalico/calico/kube-controllers/pkg/config"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/flannelmigration"
@@ -123,11 +121,6 @@ func NewIPAMController(cfg config.NodeControllerConfig, c client.Interface, cs k
 		client:    c,
 		clientset: cs,
 		config:    cfg,
-		rl: workqueue.NewTypedMaxOfRateLimiter(
-			workqueue.NewTypedItemExponentialFailureRateLimiter[any](5*time.Millisecond, 30*time.Second),
-			// 10 qps, 100 bucket size.  This is only for retry speed and its only the overall factor (not per item)
-			&workqueue.TypedBucketRateLimiter[any]{Limiter: rate.NewLimiter(rate.Limit(10), 100)},
-		),
 
 		syncChan: make(chan interface{}, 1),
 
@@ -162,7 +155,6 @@ func NewIPAMController(cfg config.NodeControllerConfig, c client.Interface, cs k
 }
 
 type IPAMController struct {
-	rl         workqueue.TypedRateLimiter[any]
 	client     client.Interface
 	clientset  kubernetes.Interface
 	podLister  v1lister.PodLister
@@ -1058,8 +1050,6 @@ func (c *IPAMController) syncIPAM() error {
 		logc := log.WithField("node", cnode)
 
 		// Potentially rate limit node cleanup.
-		rlKey := rateLimiterItemKey{Type: RateLimitCalicoDelete, Name: cnode}
-		time.Sleep(c.rl.When(rlKey))
 		logc.Info("Cleaning up IPAM affinities for deleted node")
 		if err := c.cleanupNode(cnode); err != nil {
 			// Store the error, but continue. Storing the error ensures we'll retry.
@@ -1067,7 +1057,6 @@ func (c *IPAMController) syncIPAM() error {
 			storedErr = err
 			continue
 		}
-		c.rl.Forget(rlKey)
 	}
 	if storedErr != nil {
 		return storedErr
