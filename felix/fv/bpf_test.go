@@ -4806,7 +4806,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			})
 		})
 
-		Describe("with BPF disabled to begin with", func() {
+		_ = testOpts.tunnel != "vxlan" && Describe("with BPF disabled to begin with", func() {
 			var pc *PersistentConnection
 
 			BeforeEach(func() {
