@@ -14,7 +14,7 @@
 
 ARG CALICO_BASE
 
-FROM registry.access.redhat.com/ubi8/ubi:latest AS ubi
+FROM registry.access.redhat.com/ubi9/ubi:latest AS ubi
 
 RUN dnf upgrade -y
 
@@ -38,13 +38,11 @@ COPY --from=ubi /usr/bin/sed /usr/bin/sed
 COPY --from=ubi /lib64/libacl.so.1 /lib64/libacl.so.1
 COPY --from=ubi /lib64/libattr.so.1 /lib64/libattr.so.1
 COPY --from=ubi /lib64/libcap.so.2 /lib64/libcap.so.2
-COPY --from=ubi /lib64/libcrypt.so.1 /lib64/libcrypt.so.1
-COPY --from=ubi /lib64/libcrypto.so.1.1 /lib64/libcrypto.so.1.1
-COPY --from=ubi /lib64/libdl.so.2 /lib64/libdl.so.2
+COPY --from=ubi /lib64/libcrypt.so.2 /lib64/libcrypt.so.2
+COPY --from=ubi /lib64/libcrypto.so.3 /lib64/libcrypto.so.3
 COPY --from=ubi /lib64/libpcre2-8.so.0 /lib64/libpcre2-8.so.0
-COPY --from=ubi /lib64/librt.so.1 /lib64/librt.so.1
 COPY --from=ubi /lib64/libselinux.so.1 /lib64/libselinux.so.1
-COPY --from=ubi /lib64/libssl.so.1.1 /lib64/libssl.so.1.1
+COPY --from=ubi /lib64/libssl.so.3 /lib64/libssl.so.3
 COPY --from=ubi /lib64/libtinfo.so.6 /lib64/libtinfo.so.6
 COPY --from=ubi /lib64/libz.so.1 /lib64/libz.so.1
 
@@ -62,7 +60,19 @@ COPY docker-image/nginx.conf /etc/nginx/nginx.conf
 
 COPY dist /usr/share/nginx/html/
 
+COPY LICENSE /licenses/LICENSE
+
 FROM ${CALICO_BASE}
+
+ARG GIT_VERSION
+
+LABEL org.opencontainers.image.description="Whisker provides a UI to view flows."
+LABEL org.opencontainers.image.authors="maintainers@tigera.io"
+LABEL org.opencontainers.image.source="https://github.com/projectcalico/calico"
+LABEL org.opencontainers.image.title="Whisker"
+LABEL org.opencontainers.image.vendor="Project Calico"
+LABEL org.opencontainers.image.version="${GIT_VERSION}"
+LABEL org.opencontainers.image.licenses="Apache-2.0"
 
 COPY --from=source / /
 

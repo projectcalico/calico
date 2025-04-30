@@ -7,17 +7,18 @@ import {
     TabPanel,
     useStyleConfig,
     SystemStyleObject,
+    TabsProps as ChakraTabsProps,
 } from '@chakra-ui/react';
 import { Tab } from './types';
 import Link from '../Link';
 
-interface TabsProps {
+type TabsProps = {
     tabs: Tab[];
     selectedTabId?: number;
     onTabSelected?: (id: number) => void;
     isLazy?: boolean;
     sx?: SystemStyleObject;
-}
+} & Omit<ChakraTabsProps, 'children'>;
 
 const Tabs: React.FC<React.PropsWithChildren<TabsProps>> = ({
     tabs,

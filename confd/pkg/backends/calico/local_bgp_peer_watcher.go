@@ -54,6 +54,7 @@ func NewLocalBGPPeerWatcher(client *client, prefix string, pollIntervalSeconds i
 		OnFileCreation: w.OnFileCreation,
 		OnFileUpdate:   w.OnFileUpdate,
 		OnFileDeletion: w.OnFileDeletion,
+		OnInSync:       w.OnInSync,
 	})
 
 	return w, nil
@@ -73,7 +74,8 @@ func (w *LocalBGPPeerWatcher) OnFileCreation(fileName string) {
 	logCxt.Debug("Workload endpoint status file created")
 	epStatus, err := epstatus.GetWorkloadEndpointStatusFromFile(fileName)
 	if err != nil {
-		logCxt.WithError(err).Warn("Failed to read endpoint status from file, it may just be created.")
+		// It's likely fine if reading fails on a creation event as the file might not yet be fully written.
+		logCxt.WithError(err).Debug("Failed to read endpoint status from file, it may just be created and yet to be fully written.")
 		return
 	}
 	if w.updateEpStatus(fileName, epStatus) {
@@ -106,6 +108,12 @@ func (w *LocalBGPPeerWatcher) OnFileDeletion(fileName string) {
 	if w.deleteEpStatus(fileName) {
 		w.client.recheckPeerConfig("endpoint status file deleted")
 	}
+}
+
+func (w *LocalBGPPeerWatcher) OnInSync(inSync bool) {
+	log.WithField("newValue", inSync).Debug("Received new inSync msg from upstream")
+
+	w.client.OnSyncChange(SourceLocalBGPPeerWatcher, inSync)
 }
 
 func (w *LocalBGPPeerWatcher) updateEpStatus(fileName string, epStatus *epstatus.WorkloadEndpointStatus) (changed bool) {

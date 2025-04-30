@@ -27,7 +27,7 @@ _log = logging.getLogger(__name__)
 class TestGracefulRestart(TestBase):
 
     def get_restart_node_pod_name(self):
-        self.restart_pod_name = run("kubectl get po -n kube-system" +
+        self.restart_pod_name = run("kubectl get po -n calico-system" +
                                     " -l k8s-app=calico-node" +
                                     " --field-selector status.podIP=" + self.restart_node_ip +
                                     " -o jsonpath='{.items[*].metadata.name}'")
@@ -98,13 +98,13 @@ class TestGracefulRestart(TestBase):
         # Test that we do _not_ observe route churn when Kubernetes
         # deletes and restarts a pod.
         def delete_calico_node_pod(self):
-            run("kubectl delete po %s -n kube-system" % self.restart_pod_name)
+            run("kubectl delete po %s -n calico-system" % self.restart_pod_name)
 
             # Wait until a replacement calico-node pod has been created.
             retry_until_success(self.get_restart_node_pod_name, retries=10, wait_time=1)
 
             # Wait until it is ready, before returning.
-            run("kubectl wait po %s -n kube-system --timeout=2m --for=condition=ready" %
+            run("kubectl wait po %s -n calico-system --timeout=2m --for=condition=ready" %
                 self.restart_pod_name)
 
         # Expect GR behaviour, i.e. no route churn.
@@ -114,7 +114,7 @@ class TestGracefulRestart(TestBase):
 class TestAllRunning(TestBase):
     def test_kubesystem_pods_running(self):
         with DiagsCollector():
-            self.check_pod_status('kube-system')
+            self.check_pod_status('calico-system')
 
     def test_default_pods_running(self):
         with DiagsCollector():
@@ -123,136 +123,3 @@ class TestAllRunning(TestBase):
     def test_calico_monitoring_pods_running(self):
         with DiagsCollector():
             self.check_pod_status('calico-monitoring')
-
-
-class TestSimplePolicy(TestBase):
-    def setUp(self):
-        TestBase.setUp(self)
-        self.create_namespace("policy-demo")
-        self.deploy(NGINX_IMAGE, "nginx", "policy-demo", 80)
-
-        # Create two client pods that live for the duration of the
-        # test.  We will use 'kubectl exec' to try wgets from these at
-        # particular times.
-        #
-        # We do it this way - instead of one-shot pods that are
-        # created, try wget, and then exit - because it takes a
-        # relatively long time (7 seconds?) in this test setup for
-        # Calico routing and policy to be set up correctly for a newly
-        # created pod.  In particular it's possible that connection
-        # from a just-created pod will fail because that pod's IP has
-        # not yet propagated to the IP set for the ingress policy on
-        # the server pod - which can confuse test code that is
-        # expecting connection failure for some other reason.
-        kubectl("run access -n policy-demo" +
-                " --overrides='{\"metadata\": {\"annotations\": {\"cni.projectcalico.org/floatingIPs\":\"[\\\"195.160.168.193\\\", \\\"2001:67c:275c:ff::1\\\"]\"}}}' "
-                " --image busybox --command /bin/sleep -- 3600")
-        kubectl("run no-access -n policy-demo" +
-                " --image busybox --command /bin/sleep -- 3600")
-        kubectl("wait --timeout=2m --for=condition=available" +
-                " deployment/nginx -n policy-demo")
-        kubectl("wait --timeout=2m --for=condition=ready" +
-                " pod/access -n policy-demo")
-        kubectl("wait --timeout=2m --for=condition=ready" +
-                " pod/no-access -n policy-demo")
-
-    def tearDown(self):
-        # Delete deployment
-        kubectl("delete --grace-period 0 pod access -n policy-demo")
-        kubectl("delete --grace-period 0 pod no-access -n policy-demo")
-        self.delete_and_confirm("policy-demo", "ns")
-
-    def test_simple_policy(self):
-        with DiagsCollector():
-            # Check we can talk to service.
-            retry_until_success(self.can_connect, retries=10, wait_time=1, function_args=["access"])
-            _log.info("Client 'access' connected to open service")
-            retry_until_success(self.can_connect, retries=10, wait_time=1, function_args=["no-access"])
-            _log.info("Client 'no-access' connected to open service")
-
-            # Create default-deny policy
-            policy = client.V1NetworkPolicy(
-                metadata=client.V1ObjectMeta(
-                    name="default-deny",
-                    namespace="policy-demo"
-                ),
-                spec={
-                    "podSelector": {
-                        "matchLabels": {},
-                    },
-                }
-            )
-            client.NetworkingV1Api().create_namespaced_network_policy(
-                body=policy,
-                namespace="policy-demo",
-            )
-            _log.debug("Isolation policy created")
-
-            # Check we cannot talk to service
-            retry_until_success(self.cannot_connect, retries=10, wait_time=1, function_args=["access"])
-            _log.info("Client 'access' failed to connect to isolated service")
-            retry_until_success(self.cannot_connect, retries=10, wait_time=1, function_args=["no-access"])
-            _log.info("Client 'no-access' failed to connect to isolated service")
-
-            # Create allow policy
-            policy = client.V1NetworkPolicy(
-                metadata=client.V1ObjectMeta(
-                    name="access-nginx",
-                    namespace="policy-demo"
-                ),
-                spec={
-                    'ingress': [{
-                        'from': [{
-                            'podSelector': {
-                                'matchLabels': {
-                                    'run': 'access'
-                                }
-                            }
-                        }]
-                    }],
-                    'podSelector': {
-                        'matchLabels': {
-                            'app': 'nginx'
-                        }
-                    }
-                }
-            )
-            client.NetworkingV1Api().create_namespaced_network_policy(
-                body=policy,
-                namespace="policy-demo",
-            )
-            _log.debug("Allow policy created.")
-
-            # Check we can talk to service as 'access'
-            retry_until_success(self.can_connect, retries=10, wait_time=1, function_args=["access"])
-            _log.info("Client 'access' connected to protected service")
-
-            # Check we cannot talk to service as 'no-access'
-            retry_until_success(self.cannot_connect, retries=10, wait_time=1, function_args=["no-access"])
-            _log.info("Client 'no-access' failed to connect to protected service")
-
-    def can_connect(self, name):
-        if not self.check_connected(name):
-            _log.warning("'%s' failed to connect, when connection was expected", name)
-            raise self.ConnectionError
-        _log.info("'%s' connected, as expected", name)
-
-    def cannot_connect(self, name):
-        if self.check_connected(name):
-            _log.warning("'%s' unexpectedly connected", name)
-            raise self.ConnectionError
-        _log.info("'%s' failed to connect, as expected", name)
-
-    @staticmethod
-    def check_connected(name):
-        try:
-            kubectl("exec " + name + " -n policy-demo" +
-                    " -- /bin/wget -O /dev/null -q --timeout=1 nginx")
-        except subprocess.CalledProcessError:
-            _log.exception("Failed to wget from nginx service")
-            return False
-        _log.debug("Contacted service")
-        return True
-
-    class ConnectionError(Exception):
-        pass

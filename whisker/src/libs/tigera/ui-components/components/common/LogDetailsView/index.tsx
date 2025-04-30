@@ -27,6 +27,7 @@ interface LogDetailsViewProps extends HTMLChakraProps<'div'> {
     showTableOnly?: boolean;
     stringifyTableData?: boolean;
     defaultExpandedJsonNodes?: number;
+    size?: string;
 }
 
 const LogDetailsView: React.FC<LogDetailsViewProps> = ({
@@ -42,10 +43,13 @@ const LogDetailsView: React.FC<LogDetailsViewProps> = ({
     ...rest
 }) => {
     const logViewStyles = useMultiStyleConfig('LogDetailsView', rest);
+    const { size } = rest;
+
     const Table = (
         <LogDetailsTable
             __css={logViewStyles.table}
             sx={{ ...tableStyles }}
+            size={size}
             logDocument={logDocument}
             stringifyTableData={stringifyTableData}
         />
@@ -78,6 +82,7 @@ const LogDetailsView: React.FC<LogDetailsViewProps> = ({
                                 sx: jsonTabStyles,
                             },
                         ]}
+                        size={size}
                     />
                 </Box>
             )}

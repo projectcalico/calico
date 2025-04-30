@@ -23,7 +23,7 @@ type Collector interface {
 	Start() error
 	ReportingChannel() chan<- *proto.DataplaneStats
 	RegisterMetricsReporter(types.Reporter)
-	SetDataplaneInfoReader(DataplaneInfoReader)
-	SetPacketInfoReader(PacketInfoReader)
-	SetConntrackInfoReader(ConntrackInfoReader)
+	SetDataplaneInfoReader(types.DataplaneInfoReader)
+	SetPacketInfoReader(types.PacketInfoReader)
+	SetConntrackInfoReader(types.ConntrackInfoReader)
 }

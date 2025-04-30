@@ -30,6 +30,7 @@ import (
 // rest implements a RESTStorage for API services against etcd
 type REST struct {
 	*genericregistry.Store
+	shortNames []string
 }
 
 // EmptyObject returns an empty instance
@@ -89,5 +90,9 @@ func NewREST(scheme *runtime.Scheme, opts server.Options) (*REST, error) {
 		DestroyFunc: dFunc,
 	}
 
-	return &REST{store}, nil
+	return &REST{store, opts.ShortNames}, nil
+}
+
+func (r *REST) ShortNames() []string {
+	return r.shortNames
 }

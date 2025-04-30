@@ -1,6 +1,7 @@
 import { FlowLog } from '@/types/render';
 import React from 'react';
 import { getSeconds } from '../utils';
+import { usePromoBanner } from '@/context/PromoBanner';
 
 export const useMaxStartTime = (flowLogs: FlowLog[]) => {
     const max = React.useRef(0);
@@ -14,7 +15,7 @@ export const useMaxStartTime = (flowLogs: FlowLog[]) => {
     return max;
 };
 
-const MAX_ELAPSED_TIME = 2.5;
+const MAX_ELAPSED_TIME = 0.1;
 export const useShouldAnimate = (startTime: number, flowLogs: FlowLog[]) => {
     const animatedMap = React.useRef<Map<string, string>>(new Map());
 
@@ -40,7 +41,8 @@ export const useShouldAnimate = (startTime: number, flowLogs: FlowLog[]) => {
             return false;
         }
 
-        const animate = flowLog.start_time.getTime() > startTime;
+        const animate =
+            flowLog.start_time.getTime() > startTime && startTime !== 0;
 
         if (animate) {
             animatedMap.current.set(flowLog.id, flowLog.id);
@@ -50,4 +52,18 @@ export const useShouldAnimate = (startTime: number, flowLogs: FlowLog[]) => {
     };
 
     return shouldAnimate;
+};
+
+const bannerHeight = 40;
+const headerHeight = 60;
+const containerPadding = 5;
+const omniFiltersHeight = 46;
+const tabsHeight = 34;
+
+export const useFlowLogsHeightOffset = () => {
+    const promoBanner = usePromoBanner();
+    const heights =
+        headerHeight + containerPadding + omniFiltersHeight + tabsHeight;
+
+    return promoBanner.state.isVisible ? heights + bannerHeight : heights;
 };

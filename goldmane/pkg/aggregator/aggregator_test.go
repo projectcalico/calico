@@ -17,6 +17,7 @@ package aggregator_test
 import (
 	"fmt"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -382,7 +383,7 @@ func TestRotation(t *testing.T) {
 	Expect(flowID).To(BeNumerically(">", 0))
 
 	// Rollover the aggregator until we push the flow out of the window.
-	roller.rolloverAndAdvanceClock(237)
+	roller.rolloverAndAdvanceClock(239)
 
 	// The flow should still be here.
 	Eventually(func() error {
@@ -410,7 +411,7 @@ func TestRotation(t *testing.T) {
 		results, _ = agg.List(&proto.FlowListRequest{})
 		flows = results.Flows
 		return len(flows)
-	}, waitTimeout, retryTime).Should(Equal(0), "Flow did not rotate out")
+	}, 1*time.Second, retryTime).Should(Equal(0), "Flow did not rotate out")
 }
 
 func TestManyFlows(t *testing.T) {
@@ -733,7 +734,7 @@ func TestSink(t *testing.T) {
 		now := c.Now().Unix()
 
 		// Configure the aggregator with a test sink.
-		sink := &testSink{buckets: []*bucketing.FlowCollection{}}
+		sink := newTestSink()
 		roller := &rolloverController{
 			ch:                    make(chan time.Time),
 			aggregationWindowSecs: 1,
@@ -759,7 +760,7 @@ func TestSink(t *testing.T) {
 		Eventually(agg.SetSink(sink), waitTimeout, retryTime).Should(BeClosed())
 
 		roller.rolloverAndAdvanceClock(1)
-		require.Len(t, sink.buckets, 0)
+		require.Equal(t, 0, sink.len())
 
 		// Write some data into the aggregator in a way that will trigger an emission on the next rollover.
 		// Write a flow that will trigger an emission, since it's within the push index.
@@ -781,10 +782,10 @@ func TestSink(t *testing.T) {
 		// Rollover to trigger the emission. This will mark all buckets from -50 to -30 as emitted.
 		roller.rolloverAndAdvanceClock(1)
 		Eventually(func() int {
-			return len(sink.buckets)
+			return sink.len()
 		}, waitTimeout, retryTime).Should(Equal(1), "Expected 1 bucket to be pushed to the sink")
-		require.Len(t, sink.buckets[0].Flows, 1, "Expected 1 flow in the bucket")
-		sink.buckets = []*bucketing.FlowCollection{}
+		require.Len(t, sink.bucket(0).Flows, 1, "Expected 1 flow in the bucket")
+		sink.reset()
 
 		// We've rolled over once. The next emission should happen after
 		// bucktsToCombine more rollovers, which is the point at which the first bucket
@@ -823,21 +824,21 @@ func TestSink(t *testing.T) {
 		// won't appear in this emission, since they are in the first 5 buckets which
 		// haven't reached the emission window yet.
 		roller.rolloverAndAdvanceClock(nextEmission - 1)
-		require.Len(t, sink.buckets, 0)
+		require.Equal(t, sink.len(), 0)
 
 		// Rollover until we trigger the next emission. This time, the flows we added above will be present.
 		roller.rolloverAndAdvanceClock(1)
 		Eventually(func() int {
-			return len(sink.buckets)
+			return sink.len()
 		}, waitTimeout, retryTime).Should(Equal(1), "Expected 1 bucket to be pushed to the sink")
 
 		// We expect the collection to have been aggregated across 20 intervals, for a total of 20 seconds.
-		require.Equal(t, int64(1012), sink.buckets[0].EndTime)
-		require.Equal(t, int64(992), sink.buckets[0].StartTime)
-		require.Equal(t, int64(20), sink.buckets[0].EndTime-sink.buckets[0].StartTime)
+		require.Equal(t, int64(1012), sink.bucket(0).EndTime)
+		require.Equal(t, int64(992), sink.bucket(0).StartTime)
+		require.Equal(t, int64(20), sink.bucket(0).EndTime-sink.bucket(0).StartTime)
 
 		// Expect the bucket to have aggregated to a single flow, since all flows are identical.
-		require.Len(t, sink.buckets[0].Flows, 1)
+		require.Len(t, sink.bucket(0).Flows, 1)
 
 		// Statistics should be aggregated correctly.
 		exp := proto.Flow{
@@ -857,7 +858,7 @@ func TestSink(t *testing.T) {
 			PacketsOut:            100,
 			NumConnectionsStarted: 5,
 		}
-		flow := sink.buckets[0].Flows[0]
+		flow := sink.bucket(0).Flows[0]
 		require.NotNil(t, flow)
 		require.Equal(t, *types.ProtoToFlow(&exp), flow)
 	})
@@ -869,7 +870,7 @@ func TestSink(t *testing.T) {
 		now := c.Now().Unix()
 
 		// Configure the aggregator with a test sink.
-		sink := &testSink{buckets: []*bucketing.FlowCollection{}}
+		sink := newTestSink()
 		roller := &rolloverController{
 			ch:                    make(chan time.Time),
 			aggregationWindowSecs: 1,
@@ -919,13 +920,13 @@ func TestSink(t *testing.T) {
 		// we expect to see 5 emissions.
 		roller.rolloverAndAdvanceClock(1)
 		Eventually(func() int {
-			return len(sink.buckets)
+			return sink.len()
 		}, waitTimeout, retryTime).Should(Equal(5), "Expected 5 buckets to be pushed to the sink")
 
 		// We shouldn't see any more emissions.
 		for range 400 {
 			roller.rolloverAndAdvanceClock(1)
-			require.Len(t, sink.buckets, 5, "Unexpected bucket pushed to sink")
+			require.Equal(t, 5, sink.len(), "Unexpected bucket pushed to sink")
 		}
 	})
 
@@ -936,7 +937,7 @@ func TestSink(t *testing.T) {
 		now := c.Now().Unix()
 
 		// Configure the aggregator with a test sink.
-		sink := &testSink{buckets: []*bucketing.FlowCollection{}}
+		sink := newTestSink()
 		roller := &rolloverController{
 			ch:                    make(chan time.Time),
 			aggregationWindowSecs: 1,
@@ -979,8 +980,8 @@ func TestSink(t *testing.T) {
 		// Rollover. Since we haven't provided a Sink, we shouldn't see any emissions.
 		roller.rolloverAndAdvanceClock(1)
 		Consistently(func() int {
-			return len(sink.buckets)
-		}, waitTimeout, retryTime).Should(Equal(0), "Unexpected bucket pushed to sink")
+			return sink.len()
+		}, 1*time.Second, retryTime).Should(Equal(0), "Unexpected bucket pushed to sink")
 
 		// Set the sink. Setting the Sink is asynchronous and triggers a check for flow emission - as such,
 		// we need to wait for this to complete before we can start sending flows.
@@ -988,7 +989,7 @@ func TestSink(t *testing.T) {
 
 		// We should see the emissions now.
 		Eventually(func() int {
-			return len(sink.buckets)
+			return sink.len()
 		}, waitTimeout, retryTime).Should(Equal(5), "Expected 5 buckets to be pushed to the sink")
 	})
 }
@@ -1006,10 +1007,20 @@ func TestBucketDrift(t *testing.T) {
 		clock:                 c,
 	}
 
+	// Track the scheduled rollover time. We need a mutex to prevent data races, as
+	// this is being accessed from multiple goroutines.
+	mu := sync.Mutex{}
 	var rolloverScheduledAt time.Duration
 	rolloverFunc := func(d time.Duration) <-chan time.Time {
+		mu.Lock()
+		defer mu.Unlock()
 		rolloverScheduledAt = d
 		return roller.After(d)
+	}
+	getScheduledAt := func() time.Duration {
+		mu.Lock()
+		defer mu.Unlock()
+		return rolloverScheduledAt
 	}
 	opts := []aggregator.Option{
 		aggregator.WithRolloverTime(time.Duration(aggregationWindowSecs) * time.Second),
@@ -1037,7 +1048,7 @@ func TestBucketDrift(t *testing.T) {
 
 	// Assert that the rollover function was called with an expedited reschedule time of 7 seconds, compared to the
 	// expected rollover interval of 10 seconds.
-	require.Equal(t, 7, int(rolloverScheduledAt.Seconds()), "Expedited rollover should have been scheduled at 7s")
+	require.Equal(t, 7, int(getScheduledAt().Seconds()), "Expedited rollover should have been scheduled at 7s")
 
 	// Advance the clock to the expected time of the next rollover.
 	nextRollover := int64(initialNow + 2*aggregationWindowSecs)
@@ -1047,7 +1058,7 @@ func TestBucketDrift(t *testing.T) {
 	// at the expected time of one aggregation window in the future (10s).
 	roller.rollover()
 
-	require.Equal(t, aggregationWindowSecs, int(rolloverScheduledAt.Seconds()), "Expected rollover to be scheduled at 10s")
+	require.Equal(t, aggregationWindowSecs, int(getScheduledAt().Seconds()), "Expected rollover to be scheduled at 10s")
 
 	// Now let's try the other dirction - simulate a rollover that happens 4 seconds early.
 	// We expect the next rollover to occur at 1030, so trigger one at 1026.
@@ -1056,7 +1067,7 @@ func TestBucketDrift(t *testing.T) {
 	roller.rollover()
 
 	// The aggregator should notice that it's ahead of schedule and delay the next rollover by 4 seconds.
-	require.Equal(t, 14, int(rolloverScheduledAt.Seconds()), "Delayed rollover should have been scheduled at 14s")
+	require.Equal(t, 14, int(getScheduledAt().Seconds()), "Delayed rollover should have been scheduled at 14s")
 
 	// And check what happens if we're so far behind that the next bucket is already in the past.
 	// The next bucket should start at 1040, so trigger a rollover at 1055.
@@ -1064,7 +1075,7 @@ func TestBucketDrift(t *testing.T) {
 	lateRt := int64(initialNow + 5*aggregationWindowSecs + 5)
 	c.Set(time.Unix(lateRt, 0))
 	roller.rollover()
-	require.Equal(t, 10*time.Millisecond, rolloverScheduledAt, "Immediate rollover should have been scheduled for 10ms")
+	require.Equal(t, 10*time.Millisecond, getScheduledAt(), "Immediate rollover should have been scheduled for 10ms")
 }
 
 func TestStreams(t *testing.T) {
@@ -1120,18 +1131,20 @@ func TestStreams(t *testing.T) {
 		defer stream2.Close()
 
 		// Expect nothing on the first stream, since it's starting from the present.
-		Consistently(stream.Flows(), waitTimeout, retryTime).ShouldNot(Receive())
+		Consistently(stream.Flows(), 1*time.Second, retryTime).ShouldNot(Receive())
 
 		// Expect three historical flows on the second stream: now-5, now-6, now-7.
 		// We should receive them in time order, and should NOT receive now-8 or now-9.
 		for i := 7; i >= 5; i-- {
-			var flow *proto.FlowResult
-			Eventually(stream2.Flows(), waitTimeout, retryTime).Should(Receive(&flow), fmt.Sprintf("Expected flow %d", i))
+			var builder *bucketing.DeferredFlowBuilder
+			flow := &proto.FlowResult{Flow: &proto.Flow{}}
+			Eventually(stream2.Flows(), waitTimeout, retryTime).Should(Receive(&builder), fmt.Sprintf("Expected flow %d", i))
+			require.True(t, builder.BuildInto(&proto.Filter{}, flow), "Failed to build flow")
 			Expect(flow.Flow.StartTime).To(Equal(c.Now().Unix() - int64(i)))
 		}
 
 		// We shouldn't receive any more flows.
-		Consistently(stream2.Flows(), waitTimeout, retryTime).ShouldNot(Receive(), "Expected no more flows")
+		Consistently(stream2.Flows(), 1*time.Second, retryTime).ShouldNot(Receive(), "Expected no more flows")
 
 		// Ingest some new flow data.
 		fl := testutils.NewRandomFlow(c.Now().Unix() - 1)
@@ -1153,16 +1166,21 @@ func TestStreams(t *testing.T) {
 		roller.rolloverAndAdvanceClock(1)
 
 		// Expect the flow to have been received on both streams.
-		var flow *proto.FlowResult
-		var flow2 *proto.FlowResult
-		Eventually(stream.Flows(), waitTimeout, retryTime).Should(Receive(&flow))
-		Eventually(stream2.Flows(), waitTimeout, retryTime).Should(Receive(&flow2))
+		b1 := &bucketing.DeferredFlowBuilder{}
+		b2 := &bucketing.DeferredFlowBuilder{}
+		flow := &proto.FlowResult{Flow: &proto.Flow{}}
+		flow2 := &proto.FlowResult{Flow: &proto.Flow{}}
+		Eventually(stream.Flows(), waitTimeout, retryTime).Should(Receive(&b1))
+		Eventually(stream2.Flows(), waitTimeout, retryTime).Should(Receive(&b2))
+
+		b1.BuildInto(&proto.Filter{}, flow)
+		b2.BuildInto(&proto.Filter{}, flow2)
 		ExpectFlowsEqual(t, fl, flow.Flow)
 		ExpectFlowsEqual(t, fl, flow2.Flow)
 
 		// Expect no other flows.
-		Consistently(stream.Flows(), waitTimeout, retryTime).ShouldNot(Receive())
-		Consistently(stream2.Flows(), waitTimeout, retryTime).ShouldNot(Receive())
+		Consistently(stream.Flows(), 1*time.Second, retryTime).ShouldNot(Receive())
+		Consistently(stream2.Flows(), 1*time.Second, retryTime).ShouldNot(Receive())
 	})
 
 	// This tests that the stream endpoint produces the correct results when a stream is started
@@ -1229,9 +1247,11 @@ func TestStreams(t *testing.T) {
 		exp := googleproto.Clone(base).(*proto.Flow)
 
 		// Expect to receive 10 updates, one for each bucket.
-		for i := 0; i < 10; i++ {
-			var result *proto.FlowResult
-			Eventually(stream.Flows(), waitTimeout, retryTime).Should(Receive(&result), fmt.Sprintf("Timed out waiting for flow %d", i))
+		result := &proto.FlowResult{Flow: &proto.Flow{}}
+		for i := range 10 {
+			builder := &bucketing.DeferredFlowBuilder{}
+			Eventually(stream.Flows(), waitTimeout, retryTime).Should(Receive(&builder), fmt.Sprintf("Timed out waiting for flow %d", i))
+			require.True(t, builder.BuildInto(&proto.Filter{}, result))
 
 			require.NotEqual(t, 0, result.Flow.StartTime, "Expected non-zero StartTime")
 			require.NotEqual(t, 0, result.Flow.EndTime, "Expected non-zero EndTime")
@@ -1241,6 +1261,90 @@ func TestStreams(t *testing.T) {
 			exp.EndTime = exp.StartTime + 1
 			ExpectFlowsEqual(t, exp, result.Flow, fmt.Sprintf("Flow %d", i))
 		}
+	})
+
+	// This test verifies the behavior of stream backfill, by ensuring that the correct flows are emitted.
+	// It then performs a rollover, and verifies that no duplicates are emitted.
+	t.Run("Backfill and rollover", func(t *testing.T) {
+		// Create a clock and rollover controller.
+		c := newClock(initialNow)
+		roller := &rolloverController{
+			ch:                    make(chan time.Time),
+			aggregationWindowSecs: 1,
+			clock:                 c,
+		}
+		opts := []aggregator.Option{
+			aggregator.WithRolloverTime(1 * time.Second),
+			aggregator.WithRolloverFunc(roller.After),
+			aggregator.WithNowFunc(c.Now),
+		}
+		defer setupTest(t, opts...)()
+
+		// Start the aggregator.
+		go agg.Run(c.Now().Unix())
+
+		// Create a flow that will span multiple time buckets, with the
+		// newest start time falling at Now().
+		newestStart := c.Now().Unix()
+		base := testutils.NewRandomFlow(newestStart)
+		base.NumConnectionsCompleted = 1
+
+		// Fill the last 10 buckets with flows.
+		var startTimes []int64
+		for i := 0; i < 10; i += 1 {
+			// Create a copy of the base flow and send it back in time.
+			fl := googleproto.Clone(base).(*proto.Flow)
+			fl.StartTime = base.StartTime - int64(i)
+			fl.EndTime = base.EndTime - int64(i)
+			startTimes = append(startTimes, fl.StartTime)
+			agg.Receive(types.ProtoToFlow(fl))
+		}
+
+		// Wait for flows to be received.
+		Eventually(func() error {
+			results, err := agg.List(&proto.FlowListRequest{})
+			if err != nil {
+				return err
+			}
+			if len(results.Flows) != 1 {
+				return fmt.Errorf("Expected 1 flows, got %d", len(results.Flows))
+			}
+			return nil
+		}, waitTimeout, retryTime).Should(BeNil())
+
+		// Start a stream from the past, using the start time of the oldest flow.
+		stream, err := agg.Stream(&proto.FlowStreamRequest{StartTimeGte: startTimes[len(startTimes)-1]})
+		require.Nil(t, err)
+		require.NotNil(t, stream)
+		defer stream.Close()
+
+		streamed := newEnforcedFlowSet()
+
+		// Verify the flows - we should receive updates for each bucket from the start time until now-2, since
+		// the now-1 bucket is not yet rolled over.
+		for i := range 8 {
+			builder := &bucketing.DeferredFlowBuilder{}
+			result := &proto.FlowResult{Flow: &proto.Flow{}}
+			Eventually(stream.Flows(), waitTimeout, retryTime).Should(Receive(&builder), fmt.Sprintf("Timed out waiting for flow %d", i))
+			require.True(t, builder.BuildInto(&proto.Filter{}, result))
+
+			// Assert the start / end times are correct. They should match the start times we used to create the flows, in reverse order.
+			exp := googleproto.Clone(base).(*proto.Flow)
+			exp.StartTime = startTimes[len(startTimes)-1-i]
+			exp.EndTime = exp.StartTime + 1
+			ExpectFlowsEqual(t, exp, result.Flow, fmt.Sprintf("Flow %d", i))
+
+			// Track the flows we've seen, to ensure we don't get duplicates.
+			require.Nil(t, streamed.add(result))
+		}
+
+		// Trigger a rollover. We should get another flow, and it should not be a duplicate.
+		roller.rolloverAndAdvanceClock(1)
+		builder := &bucketing.DeferredFlowBuilder{}
+		result := &proto.FlowResult{Flow: &proto.Flow{}}
+		Eventually(stream.Flows(), waitTimeout, retryTime).Should(Receive(&builder))
+		require.True(t, builder.BuildInto(&proto.Filter{}, result))
+		require.Nil(t, streamed.add(result))
 	})
 }
 
@@ -1592,7 +1696,7 @@ func TestFilter(t *testing.T) {
 					results, _ = agg.List(tc.req)
 					flows = results.Flows
 					return len(flows)
-				}, waitTimeout, retryTime).Should(Equal(0))
+				}, 1*time.Second, retryTime).Should(Equal(0))
 				return
 			} else {
 				var err error

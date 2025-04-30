@@ -242,7 +242,6 @@ rules:
       - apiservers/status
       - gatewayapis
       - gatewayapis/finalizers
-      - gatewayapis/status
       - goldmanes
       - goldmanes/finalizers
       - goldmanes/status
@@ -694,3 +693,4 @@ spec:
           volumeMounts:
             - name: calico-resources
               mountPath: /calico-resources
+---

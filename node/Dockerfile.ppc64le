@@ -48,7 +48,7 @@ COPY --from=bird /bird* /bin/
 COPY filesystem/ /
 
 # Add in top-level license file
-COPY LICENSE /licenses/LICENSE
+COPY dist/LICENSE /licenses/LICENSE
 
 # Copy in the calico-node binary
 COPY dist/bin/calico-node-${ARCH} /bin/calico-node

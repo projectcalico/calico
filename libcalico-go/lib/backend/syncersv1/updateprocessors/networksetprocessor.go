@@ -20,6 +20,7 @@ import (
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/lib/std/uniquelabels"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/watchersyncer"
@@ -70,7 +71,7 @@ func convertNetworkSetV2ToV1Value(val interface{}) (interface{}, error) {
 	// conceptually limited to k8s, but then namespaces are themselves a k8s only concept.
 	v1value := &model.NetworkSet{
 		Nets:   addrs,
-		Labels: labelsWithCalicoNamespace,
+		Labels: uniquelabels.Make(labelsWithCalicoNamespace),
 		ProfileIDs: []string{
 			conversion.NamespaceProfileNamePrefix + v3res.Namespace,
 		},

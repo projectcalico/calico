@@ -51,12 +51,11 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/debugserver"
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
-	"github.com/projectcalico/calico/typha/pkg/cmdwrapper"
+	"github.com/projectcalico/calico/pkg/buildinfo"
+	"github.com/projectcalico/calico/pkg/cmdwrapper"
 )
 
-// VERSION is filled out during the build process (using git describe output)
 var (
-	VERSION    string
 	version    bool
 	statusFile string
 )
@@ -80,7 +79,7 @@ func init() {
 func main() {
 	flag.Parse()
 	if version {
-		fmt.Println(VERSION)
+		buildinfo.PrintVersion()
 		os.Exit(0)
 	}
 
@@ -152,7 +151,7 @@ func main() {
 		informers:   make([]cache.SharedIndexInformer, 0),
 	}
 
-	dataFeed := utils.NewDataFeed(calicoClient)
+	dataFeed := utils.NewDataFeed(calicoClient, cfg.DatastoreType)
 
 	var runCfg config.RunConfig
 	// flannelmigration doesn't use the datastore config API
@@ -190,7 +189,7 @@ func main() {
 		controllerCtrl.InitControllers(ctx, runCfg, k8sClientset, calicoClient, dataFeed)
 	}
 
-	if cfg.DatastoreType == "etcdv3" {
+	if cfg.DatastoreType == utils.Etcdv3 {
 		// If configured to do so, start an etcdv3 compaction.
 		go startCompactor(ctx, runCfg.EtcdV3CompactionPeriod)
 	}

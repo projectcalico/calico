@@ -59,6 +59,7 @@ const defaultProps = {
     onSortClicked: jest.fn(),
     maxStartTime: 0,
     flowLogs: [],
+    heightOffset: 0,
 };
 
 describe('FlowLogsList', () => {
