@@ -75,7 +75,7 @@ func (w *LocalBGPPeerWatcher) OnFileCreation(fileName string) {
 	epStatus, err := epstatus.GetWorkloadEndpointStatusFromFile(fileName)
 	if err != nil {
 		// It's likely fine if reading fails on a creation event as the file might not yet be fully written.
-		logCxt.WithError(err).Debug("Failed to read endpoint status from file, it may just be created.")
+		logCxt.WithError(err).Debug("Failed to read endpoint status from file, it may just be created and yet to be fully written.")
 		return
 	}
 	if w.updateEpStatus(fileName, epStatus) {
