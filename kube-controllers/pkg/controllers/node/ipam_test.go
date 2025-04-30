@@ -19,6 +19,7 @@ import (
 	"math/big"
 	"time"
 
+	"github.com/aws/smithy-go/ptr"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
@@ -29,6 +30,8 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/tools/cache"
+
+	gonet "net"
 
 	"github.com/projectcalico/calico/kube-controllers/pkg/config"
 	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
@@ -125,6 +128,10 @@ var _ = Describe("IPAM controller UTs", func() {
 		pods = make(chan *v1.Pod, 1)
 		_, err := podInformer.AddEventHandler(&cache.ResourceEventHandlerFuncs{
 			AddFunc: func(obj interface{}) {
+				pod := obj.(*v1.Pod)
+				pods <- pod
+			},
+			DeleteFunc: func(obj interface{}) {
 				pod := obj.(*v1.Pod)
 				pods <- pod
 			},
@@ -622,6 +629,116 @@ var _ = Describe("IPAM controller UTs", func() {
 		Eventually(func() bool {
 			return fakeClient.affinityReleased("cnode")
 		}, assertionTimeout, 100*time.Millisecond).Should(BeTrue())
+	})
+
+	It("FOCUS should handle rapid and peristent node churn", func() {
+		// Start the controller.
+		c.Start(stopChan)
+
+		// Mark the syncer as InSync so that the GC will be triggered.
+		c.onStatusUpdate(bapi.InSync)
+
+		// Start a goroutine which continuously creates and deletes many nodes, assigning IPs to them.
+		// This is a stress test to ensure that the controller can handle rapid churn.
+		start := 0
+		churnNodes := func() {
+			// Create 1k nodes.
+			for i := start; i < start+1000; i++ {
+				n := &v1.Node{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("node-%d", i)}}
+				cs.CoreV1().Nodes().Create(context.TODO(), n, metav1.CreateOptions{})
+
+				// Create a pod for the allocation so that it doesn't get GC'd.
+				pod := v1.Pod{}
+				pod.Name = fmt.Sprintf("test-pod-%d", i)
+				pod.Namespace = "test-namespace"
+				pod.Spec.NodeName = "kname"
+				_, err := cs.CoreV1().Pods(pod.Namespace).Create(context.TODO(), &pod, metav1.CreateOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				var gotPod *v1.Pod
+				Eventually(pods).WithTimeout(time.Second).Should(Receive(&gotPod))
+
+				// Allocate IPs to each node.
+				ip := net.BigIntToIP(big.NewInt(int64(i)+1000), false)
+				cidr := ip.Network()
+				cidr.Mask = gonet.CIDRMask(30, 32)
+				key := model.BlockKey{CIDR: *cidr}
+				b := model.AllocationBlock{
+					CIDR:        *cidr,
+					Affinity:    ptr.String(fmt.Sprintf("host:%s", n.Name)),
+					Allocations: []*int{ptr.Int(0), ptr.Int(1), nil, nil},
+					Unallocated: []int{2, 3},
+					Attributes: []model.AllocationAttribute{
+						{
+							AttrPrimary: ptr.String(fmt.Sprintf("ipip-tunnel-addr-i-%d", i)),
+							AttrSecondary: map[string]string{
+								ipam.AttributeNode: n.Name,
+								ipam.AttributeType: ipam.AttributeTypeIPIP,
+							},
+						},
+						{
+							AttrPrimary: ptr.String(fmt.Sprintf("handle-%d", i)),
+							AttrSecondary: map[string]string{
+								ipam.AttributeNode:      n.Name,
+								ipam.AttributePod:       pod.Name,
+								ipam.AttributeNamespace: "test-namespace",
+							},
+						},
+					},
+				}
+				kvp := model.KVPair{Key: key, Value: &b}
+				// blockCIDR := kvp.Key.(model.BlockKey).CIDR.String()
+				update := bapi.Update{KVPair: kvp, UpdateType: bapi.UpdateTypeKVNew}
+				c.onUpdate(update)
+			}
+
+			// Wait a moment.
+			time.Sleep(1 * time.Second)
+
+			// Delete all of the nodes.
+			for i := start; i < start+1000; i++ {
+				n := &v1.Node{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("node-%d", i)}}
+				cs.CoreV1().Nodes().Delete(context.TODO(), n.Name, metav1.DeleteOptions{})
+				c.OnKubernetesNodeDeleted(n)
+			}
+
+			// Delete all the pods.
+			for i := start; i < start+1000; i++ {
+				pod := v1.Pod{}
+				pod.Name = fmt.Sprintf("test-pod-%d", i)
+				pod.Namespace = "test-namespace"
+				cs.CoreV1().Pods(pod.Namespace).Delete(context.TODO(), pod.Name, metav1.DeleteOptions{})
+				var gotPod *v1.Pod
+				Eventually(pods).WithTimeout(time.Second).Should(Receive(&gotPod))
+			}
+			start += 1000
+		}
+
+		churnNodes()
+
+		fakeClient := cli.IPAM().(*fakeIPAMClient)
+
+		// We should see a number of IPs released equal to 2 * 1k * number of churned nodes.
+		Eventually(func() int {
+			return len(fakeClient.handlesReleased)
+		}, 30*time.Second, 100*time.Millisecond).Should(Equal(2000), "Not all handles released")
+		// We should see a number of blocks released equal to 1k * number of churned nodes.
+		Eventually(func() int {
+			return len(fakeClient.affinitiesReleased)
+		}, 30*time.Second, 100*time.Millisecond).Should(Equal(1000), "Not all blocks released")
+
+		// Churn again a few times.
+		for range 5 {
+			churnNodes()
+			time.Sleep(5 * time.Second)
+		}
+		// We should see a number of blocks released equal to 1k * number of churned nodes.
+		Eventually(func() int {
+			return len(fakeClient.handlesReleased)
+		}, 30*time.Second, 100*time.Millisecond).Should(Equal(12000), "Not all handles released")
+		// We should see a number of blocks released equal to 1k * number of churned nodes.
+		Eventually(func() int {
+			return len(fakeClient.affinitiesReleased)
+		}, 30*time.Second, 100*time.Millisecond).Should(Equal(6000), "Not all blocks released")
 	})
 
 	It("should handle clusterinformation updates and maintain its clusterinformation datastoreReady cache", func() {
