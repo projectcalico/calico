@@ -1075,11 +1075,22 @@ func (c *IPAMController) syncIPAM() error {
 
 	c.allocationState.syncComplete()
 	log.Debug("IPAM sync completed")
+
+	// If there is still dirty state, then we need to do another pass.
+	if len(c.confirmedLeaks) > 0 {
+		log.WithField("num", len(c.confirmedLeaks)).Info("Confirmed leaks still exist, scheduling another pass")
+		kick(c.syncChan)
+	}
 	return nil
 }
 
 // garbageCollectKnownLeaks checks all known allocations and garbage collects any confirmed leaks.
 func (c *IPAMController) garbageCollectKnownLeaks() error {
+	// limit the number of concurrent IPs we attempt to release at once.
+	maxBatchSize := 1000
+
+	var opts []ipam.ReleaseOptions
+	leaks := map[ipam.ReleaseOptions]*allocation{}
 	for id, a := range c.confirmedLeaks {
 		logc := log.WithFields(a.fields())
 
@@ -1098,23 +1109,54 @@ func (c *IPAMController) garbageCollectKnownLeaks() error {
 			continue
 		}
 
-		logc.Info("Garbage collecting leaked IP address")
-		unallocated, err := c.client.IPAM().ReleaseIPs(context.TODO(), a.ReleaseOptions())
-		if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok || len(unallocated) == 1 {
-			logc.WithField("handle", a.handle).Debug("IP already released")
-			continue
-		} else if err != nil {
-			logc.WithError(err).WithField("handle", a.handle).Warning("Failed to release leaked IP")
-			return err
+		opts = append(opts, a.ReleaseOptions())
+		leaks[a.ReleaseOptions()] = a
+
+		if len(opts) >= maxBatchSize {
+			break
 		}
+	}
+
+	if len(opts) == 0 {
+		// Nothing to do.
+		return nil
+	}
+
+	// By release multple IPs at once, we can reduce the number of API calls the underlying IPAM code needs to make
+	// in order to release the IPs. This is especially apparent when there are multple IP addresses from the same block
+	// that must be released, as they can all be released in a single API call to update the block.
+	log.WithField("num", len(opts)).Info("Garbage collecting leaked IP addresses")
+	_, releasedOpts, err := c.client.IPAM().ReleaseIPs(context.TODO(), opts...)
+
+	// First, go through the returned options and update allocation state. These are the IPs that were successfully
+	// released, or were unallocated to begin with. In either case, we can mark them as released.
+	for _, opt := range releasedOpts {
+		// Find the allocation that matches these release options.
+		a := leaks[opt]
+		logc := log.WithFields(a.fields())
 
 		// No longer a leak. Remove it here so we're not dependent on receiving
 		// the update from the syncer (which we will do eventually, this is just cleaner).
 		c.allocationState.release(a)
-
 		c.incrementReclamationMetric(a.block, a.node())
+		delete(c.confirmedLeaks, a.id())
 
-		delete(c.confirmedLeaks, id)
+		logc.Debug("Successfully garbage collected leaked IP address")
+		delete(leaks, opt)
+	}
+
+	// Note any leaks that we couldn't release.
+	for _, a := range leaks {
+		logc := log.WithFields(a.fields())
+		logc.Warn("Leaked IP address was not successfully garbage collected")
+	}
+
+	// Check the error.
+	if err != nil {
+		if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok {
+			log.WithError(err).Warn("Failed to garbage collect one or more leaked IP addresses")
+			return err
+		}
 	}
 	return nil
 }
