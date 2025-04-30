@@ -221,6 +221,7 @@ const (
 	FlagNPLoop    uint16 = (1 << 11)
 	FlagNPRemote  uint16 = (1 << 12)
 	FlagNoDSR     uint16 = (1 << 13)
+	FlagNoRedir   uint16 = (1 << 14)
 )
 
 func (e Value) ReverseNATKey() KeyInterface {
