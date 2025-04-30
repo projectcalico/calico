@@ -263,7 +263,7 @@ func (d *endpointData) Equals(other *endpointData) bool {
 type npParentData struct {
 	id          string
 	labels      uniquelabels.Map
-	endpointIDs set.Set[any]
+	endpointIDs set.Typed[any]
 }
 
 func (d *npParentData) OwnLabelHandles() iter.Seq2[uniquestr.Handle, uniquestr.Handle] {
