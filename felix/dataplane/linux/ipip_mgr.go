@@ -367,6 +367,7 @@ func (m *ipipManager) tunneledRoute(cidr ip.CIDR, r *proto.RouteUpdate) *routeta
 		CIDR:     cidr,
 		GW:       ip.FromString(remoteAddr),
 		Protocol: m.routeProtocol,
+		MTU:      m.dpConfig.IPIPMTU,
 	}
 }
 

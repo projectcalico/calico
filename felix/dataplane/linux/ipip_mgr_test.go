@@ -412,8 +412,9 @@ var _ = Describe("IPIPManager route updates", func() {
 				RulesConfig: rules.Config{
 					IPIPTunnelAddress: net.ParseIP("192.168.0.1"),
 				},
-				ProgramRoutes: true,
-				IPIPMTU:       1400,
+				ProgramRoutes:       true,
+				IPIPMTU:             1400,
+				DeviceRouteProtocol: dataplanedefs.DefaultRouteProto,
 			},
 			opRecorder,
 			&mockIPIPDataplane{
