@@ -174,6 +174,7 @@ type Config struct {
 	DeviceRouteSourceAddressIPv6   net.IP
 	DeviceRouteProtocol            netlink.RouteProtocol
 	RemoveExternalRoutes           bool
+	ProgramRoutes                  bool
 	IPForwarding                   string
 	TableRefreshInterval           time.Duration
 	IptablesPostWriteCheckInterval time.Duration
@@ -326,7 +327,8 @@ type InternalDataplane struct {
 	filterTables    []generictables.Table
 	ipSets          []dpsets.IPSetsDataplane
 
-	ipipManager *ipipManager
+	ipipManager    *ipipManager
+	noEncapDeviceC chan string
 
 	vxlanManager   *vxlanManager
 	vxlanParentC   chan string
@@ -1054,9 +1056,22 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	if config.RulesConfig.IPIPEnabled {
 		log.Info("IPIP enabled, starting thread to keep tunnel configuration in sync.")
 		// Add a manager to keep the all-hosts IP set up to date.
-		dp.ipipManager = newIPIPManager(ipSetsV4, config.MaxIPSetSize, config.ExternalNodesCidrs)
-		go dp.ipipManager.KeepIPIPDeviceInSync(config.IPIPMTU, config.RulesConfig.IPIPTunnelAddress, dataplaneFeatures.ChecksumOffloadBroken)
-		dp.RegisterManager(dp.ipipManager) // IPv4-only
+		dp.ipipManager = newIPIPManager(
+			ipSetsV4,
+			routeTableV4,
+			dataplanedefs.IPIPIfaceName,
+			config,
+			dp.loopSummarizer,
+			4,
+			featureDetector,
+		)
+		dp.noEncapDeviceC = make(chan string, 1)
+		go dp.ipipManager.KeepIPIPDeviceInSync(
+			dataplaneFeatures.ChecksumOffloadBroken,
+			time.Second*10,
+			dp.noEncapDeviceC,
+		)
+		dp.RegisterManager(dp.ipipManager)
 	} else {
 		// Only clean up IPIP addresses if IPIP is implicitly disabled (no IPIP pools and not explicitly set in FelixConfig)
 		if config.RulesConfig.FelixConfigIPIPEnabled == nil {
@@ -1433,7 +1448,7 @@ cleanupRetry:
 		if i > 0 {
 			log.Debugf("Retrying %v/%v times", i, maxCleanupRetries)
 		}
-		link, err := netlink.LinkByName("tunl0")
+		link, err := netlink.LinkByName(dataplanedefs.IPIPIfaceName)
 		if err != nil {
 			if _, ok := err.(netlink.LinkNotFoundError); ok {
 				log.Debug("IPIP disabled and no IPIP device found")
@@ -2100,6 +2115,8 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 			d.vxlanManager.OnParentNameUpdate(name)
 		case name := <-d.vxlanParentCV6:
 			d.vxlanManagerV6.OnParentNameUpdate(name)
+		case name := <-d.noEncapDeviceC:
+			d.ipipManager.OnNoEncapDeviceUpdate(name)
 		case <-ipSetsRefreshC:
 			log.Debug("Refreshing IP sets state")
 			d.forceIPSetsRefresh = true
