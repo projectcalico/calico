@@ -84,12 +84,12 @@ require (
 	go.etcd.io/etcd/client/pkg/v3 v3.5.12
 	go.etcd.io/etcd/client/v2 v2.305.12
 	go.etcd.io/etcd/client/v3 v3.5.12
-	golang.org/x/crypto v0.36.0
-	golang.org/x/net v0.37.0
-	golang.org/x/sync v0.12.0
-	golang.org/x/sys v0.31.0
-	golang.org/x/text v0.23.0
-	golang.org/x/time v0.5.0
+	golang.org/x/crypto v0.37.0
+	golang.org/x/net v0.39.0
+	golang.org/x/sync v0.13.0
+	golang.org/x/sys v0.32.0
+	golang.org/x/text v0.24.0
+	golang.org/x/time v0.11.0
 	golang.zx2c4.com/wireguard/wgctrl v0.0.0-20200324154536-ceff61240acf
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240701130421-f6361c86f094
 	google.golang.org/grpc v1.65.0
@@ -264,7 +264,7 @@ require (
 	golang.org/x/exp v0.0.0-20230905200255-921286631fa9 // indirect
 	golang.org/x/mod v0.17.0 // indirect
 	golang.org/x/oauth2 v0.20.0 // indirect
-	golang.org/x/term v0.30.0 // indirect
+	golang.org/x/term v0.31.0 // indirect
 	golang.org/x/tools v0.21.1-0.20240508182429-e35e4ccd0d2d // indirect
 	golang.zx2c4.com/wireguard v0.0.20200121 // indirect
 	google.golang.org/api v0.169.0 // indirect
