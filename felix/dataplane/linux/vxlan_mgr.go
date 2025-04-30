@@ -27,6 +27,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 
+	bpfutils "github.com/projectcalico/calico/felix/bpf/utils"
 	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
 	"github.com/projectcalico/calico/felix/ethtool"
 	"github.com/projectcalico/calico/felix/ip"
@@ -614,7 +615,7 @@ func (m *vxlanManager) configureVXLANDevice(
 		Port:      m.vxlanPort,
 	}
 
-	if m.dpConfig.BPFEnabled {
+	if m.dpConfig.BPFEnabled && bpfutils.BTFEnabled {
 		vxlan.FlowBased = true
 	} else {
 		parent, err := m.getParentInterface(localVTEP)
