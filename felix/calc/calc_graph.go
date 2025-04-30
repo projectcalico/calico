@@ -398,7 +398,8 @@ func NewCalculationGraph(
 	hostIPPassthru.RegisterWith(allUpdDispatcher)
 	cg.hostIPPassthru = hostIPPassthru
 
-	if conf.BPFEnabled || conf.Encapsulation.VXLANEnabled || conf.Encapsulation.VXLANEnabledV6 || conf.WireguardEnabled || conf.WireguardEnabledV6 {
+	if conf.BPFEnabled || conf.Encapsulation.VXLANEnabled || conf.Encapsulation.VXLANEnabledV6 ||
+		conf.WireguardEnabled || conf.WireguardEnabledV6 || conf.ProgramRoutesEnabled() {
 		// Calculate simple node-ownership routes.
 		//        ...
 		//     Dispatcher (all updates)
