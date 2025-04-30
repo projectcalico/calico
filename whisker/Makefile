@@ -22,10 +22,14 @@ DOCKER_RUN_RM:=docker run --rm \
 	-v $${PWD}:/code \
 	-w /code
 
-$(IMAGE_BUILD_MARKER): register build
-	$(DOCKER_BUILD) -t whisker:latest-$(ARCH) -f docker-image/Dockerfile .
+$(IMAGE_BUILD_MARKER): register build bin/LICENSE
+	$(DOCKER_BUILD) --build-arg BIN_DIR=bin -t whisker:latest-$(ARCH) -f docker-image/Dockerfile .
 	$(MAKE) retag-build-images-with-registries BUILD_IMAGES=$(BUILD_IMAGES) VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@
+
+bin/LICENSE: ../LICENSE.md
+	@mkdir -p bin
+	cp ../LICENSE.md $@
 
 .PHONY: image build
 image: $(IMAGE_BUILD_MARKER)

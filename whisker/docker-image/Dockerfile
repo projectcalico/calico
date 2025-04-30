@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+ARG BIN_DIR
 ARG CALICO_BASE
 
 FROM registry.access.redhat.com/ubi9/ubi:latest AS ubi
@@ -21,7 +22,7 @@ RUN dnf upgrade -y
 COPY docker-image/nginx.repo /etc/yum.repos.d/nginx.repo
 
 RUN dnf --enablerepo=nginx-stable install -y \
-    nginx
+  nginx
 
 FROM scratch AS source
 
@@ -60,7 +61,7 @@ COPY docker-image/nginx.conf /etc/nginx/nginx.conf
 
 COPY dist /usr/share/nginx/html/
 
-COPY LICENSE /licenses/LICENSE
+COPY ${BIN_DIR}LICENSE /licenses/LICENSE
 
 FROM ${CALICO_BASE}
 
