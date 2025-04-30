@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -327,6 +327,9 @@ var _ = Describe("Calico loadbalancer controller FV tests (etcd mode)", func() {
 
 			Eventually(func() string {
 				service, _ := k8sClient.CoreV1().Services(testNamespace).Get(context.Background(), basicService.Name, metav1.GetOptions{})
+				if len(service.Status.LoadBalancer.Ingress) == 0 {
+					return ""
+				}
 				return service.Status.LoadBalancer.Ingress[0].IP
 			}, time.Second*15, 500*time.Millisecond).Should(Equal(v4poolManualSpecifcIP))
 		})
