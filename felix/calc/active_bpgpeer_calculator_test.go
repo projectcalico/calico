@@ -20,6 +20,7 @@ import (
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"github.com/projectcalico/calico/lib/std/uniquelabels"
 	libv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
@@ -57,7 +58,7 @@ var _ = Describe("ActiveBGPPeerCalculator", func() {
 				},
 				Value: &model.WorkloadEndpoint{
 					Name:   "w-red",
-					Labels: map[string]string{"color": "red"},
+					Labels: uniquelabels.Make(map[string]string{"color": "red"}),
 				},
 			},
 		})
@@ -70,7 +71,7 @@ var _ = Describe("ActiveBGPPeerCalculator", func() {
 				},
 				Value: &model.WorkloadEndpoint{
 					Name:   "w-blue",
-					Labels: map[string]string{"color": "blue"},
+					Labels: uniquelabels.Make(map[string]string{"color": "blue"}),
 				},
 			},
 		})
@@ -83,7 +84,7 @@ var _ = Describe("ActiveBGPPeerCalculator", func() {
 				},
 				Value: &model.WorkloadEndpoint{
 					Name:   "w-yellow",
-					Labels: map[string]string{"color": "yellow"},
+					Labels: uniquelabels.Make(map[string]string{"color": "yellow"}),
 				},
 			},
 		})
@@ -96,7 +97,7 @@ var _ = Describe("ActiveBGPPeerCalculator", func() {
 				},
 				Value: &model.WorkloadEndpoint{
 					Name:   "w-red-2",
-					Labels: map[string]string{"color": "red"},
+					Labels: uniquelabels.Make(map[string]string{"color": "red"}),
 				},
 			},
 		})
@@ -222,7 +223,7 @@ var _ = Describe("ActiveBGPPeerCalculator", func() {
 					},
 					Value: &model.WorkloadEndpoint{
 						Name:   "w-red-2",
-						Labels: map[string]string{"color": "blue"},
+						Labels: uniquelabels.Make(map[string]string{"color": "blue"}),
 					},
 				},
 			})

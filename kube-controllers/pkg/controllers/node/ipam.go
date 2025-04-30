@@ -1,4 +1,4 @@
-// Copyright (c) 2019,2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -66,10 +66,6 @@ var (
 )
 
 const (
-	// Length of the update channel and the max items to handle in a batch
-	// before kicking off a sync.
-	batchUpdateSize = 1000
-
 	// Used to label an allocation that does not have its node attribute set.
 	unknownNodeLabel = "unknown_node"
 )
@@ -138,11 +134,11 @@ func NewIPAMController(cfg config.NodeControllerConfig, c client.Interface, cs k
 		podLister:  v1lister.NewPodLister(pi),
 		nodeLister: v1lister.NewNodeLister(ni),
 
-		nodeDeletionChan: make(chan struct{}, batchUpdateSize),
-		podDeletionChan:  make(chan *v1.Pod, batchUpdateSize),
+		nodeDeletionChan: make(chan struct{}, utils.BatchUpdateSize),
+		podDeletionChan:  make(chan *v1.Pod, utils.BatchUpdateSize),
 
 		// Buffered channels for potentially bursty channels.
-		syncerUpdates: make(chan interface{}, batchUpdateSize),
+		syncerUpdates: make(chan interface{}, utils.BatchUpdateSize),
 
 		allBlocks:                   make(map[string]model.KVPair),
 		allocationsByBlock:          make(map[string]map[string]*allocation),
@@ -253,8 +249,6 @@ func (c *IPAMController) onUpdate(update bapi.Update) {
 		}
 	case model.BlockKey:
 		c.syncerUpdates <- update.KVPair
-	default:
-		log.Warnf("Unexpected kind received over syncer: %s", update.KVPair.Key)
 	}
 }
 
@@ -294,63 +288,19 @@ func (c *IPAMController) acceptScheduleRequests(stopCh <-chan struct{}) {
 		// Wait until something wakes us up, or we are stopped.
 		select {
 		case <-c.nodeDeletionChan:
-			// Allow bursts of node deletion events to be consolidated.
-			// We wait a short time to see if more events come in before processing.
-			wait := time.After(c.consolidationWindow)
-			var i int
-		nodeConsolidationLoop:
-			for i = 1; i < batchUpdateSize; i++ {
-				select {
-				case <-c.nodeDeletionChan:
-					i++
-				case <-wait:
-					break nodeConsolidationLoop
-				}
-			}
+			logEntry := log.WithFields(log.Fields{"controller": "Ipam", "type": "nodeDeletion"})
+			utils.ProcessBatch(c.nodeDeletionChan, struct{}{}, nil, logEntry)
 
 			// When one or more nodes are deleted, trigger a full sync to ensure that we release
 			// their affinities.
-			c.fullScanNextSync(fmt.Sprintf("%d node deletion event(s)", i))
+			c.fullScanNextSync("Batch node deletion")
 			kick(c.syncChan)
 		case pod := <-c.podDeletionChan:
-			// Mark the pod's node as dirty.
-			c.allocationState.markDirty(pod.Spec.NodeName, "pod deletion")
-
-			// Allow bursts of pod deletion events to be consolidated.
-			// We wait a short time to see if more events come in before processing.
-			wait := time.After(c.consolidationWindow)
-			var i int
-		podConsolidationLoop:
-			for i = 1; i < batchUpdateSize; i++ {
-				select {
-				case pod = <-c.podDeletionChan:
-					i++
-					c.allocationState.markDirty(pod.Spec.NodeName, "pod deletion")
-				case <-wait:
-					break podConsolidationLoop
-				}
-			}
+			logEntry := log.WithFields(log.Fields{"controller": "Ipam", "type": "podDeletion"})
+			utils.ProcessBatch(c.podDeletionChan, pod, c.allocationState.markDirtyPodDeleted, logEntry)
 			kick(c.syncChan)
 		case upd := <-c.syncerUpdates:
 			c.handleUpdate(upd)
-
-			// It's possible we get a rapid series of updates in a row. Use
-			// a consolidation loop to handle "batches" of updates before triggering a sync.
-			// We wait a short time to see if more events come in before processing.
-			wait := time.After(c.consolidationWindow)
-			var i int
-		consolidationLoop:
-			for i = 1; i < batchUpdateSize; i++ {
-				select {
-				case upd = <-c.syncerUpdates:
-					c.handleUpdate(upd)
-				case <-wait:
-					break consolidationLoop
-				}
-			}
-
-			// Kick the sync channel to trigger a resync after handling a batch.
-			log.WithField("batchSize", i).Debug("Triggering sync after batch of updates")
 			kick(c.syncChan)
 		case <-t.C:
 			// Periodic IPAM sync, queue a full scan of the IPAM data.

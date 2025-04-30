@@ -17,6 +17,8 @@ package server
 import (
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"github.com/projectcalico/calico/goldmane/pkg/aggregator"
 	"github.com/projectcalico/calico/goldmane/proto"
@@ -46,6 +48,17 @@ func (s *Statistics) List(req *proto.StatisticsRequest, server proto.Statistics_
 		logrus.WithError(err).Error("Failed to get statistics")
 		return err
 	}
+
+	if len(responses) == 0 {
+		// Send an explicit NotFound error. We also send an empty statistics object - this is to workaround a behavior we have seen
+		// with some Go proxies where trailers are not properly proxied in the case of a "trailers-only" gRPC response with
+		// no body.
+		if err := server.Send(&proto.StatisticsResult{}); err != nil {
+			logrus.WithError(err).Error("failed to send empty result")
+		}
+		return status.Error(codes.NotFound, "No statistics matching request")
+	}
+
 	for _, resp := range responses {
 		if err := server.Send(resp); err != nil {
 			logrus.WithError(err).Error("Failed to send statistics response")
