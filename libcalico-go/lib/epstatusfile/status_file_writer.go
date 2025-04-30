@@ -215,7 +215,6 @@ func GetWorkloadEndpointStatusFromFile(filePath string) (*WorkloadEndpointStatus
 	var epStatus WorkloadEndpointStatus
 	err = json.Unmarshal(data, &epStatus)
 	if err != nil {
-		logCxt.WithError(err).Error("Failed to unmarshal JSON")
 		return nil, err
 	}
 
