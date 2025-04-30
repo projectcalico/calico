@@ -384,6 +384,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				options.SimulateRoutes = true
 			case "ipip":
 				// Enable adding simulated routes.
+				options.IPIPMode = api.IPIPModeAlways
 				options.SimulateRoutes = true
 			case "vxlan":
 				options.VXLANMode = api.VXLANModeAlways
