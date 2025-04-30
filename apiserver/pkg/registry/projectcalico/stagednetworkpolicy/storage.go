@@ -39,6 +39,7 @@ type REST struct {
 	*genericregistry.Store
 	rbac.CalicoResourceLister
 	authorizer authorizer.TierAuthorizer
+	shortNames []string
 }
 
 // EmptyObject returns an empty instance
@@ -98,7 +99,7 @@ func NewREST(scheme *runtime.Scheme, opts server.Options, calicoResourceLister r
 		DestroyFunc: dFunc,
 	}
 
-	return &REST{store, calicoResourceLister, authorizer.NewTierAuthorizer(opts.Authorizer)}, nil
+	return &REST{store, calicoResourceLister, authorizer.NewTierAuthorizer(opts.Authorizer), opts.ShortNames}, nil
 }
 
 func (r *REST) List(ctx context.Context, options *metainternalversion.ListOptions) (runtime.Object, error) {
@@ -161,4 +162,8 @@ func (r *REST) Watch(ctx context.Context, options *metainternalversion.ListOptio
 	}
 
 	return r.Store.Watch(ctx, options)
+}
+
+func (r *REST) ShortNames() []string {
+	return r.shortNames
 }
