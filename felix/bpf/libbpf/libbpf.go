@@ -23,7 +23,7 @@ import (
 
 	"golang.org/x/sys/unix"
 
-	"github.com/projectcalico/calico/felix/bpf/bpfutils"
+	"github.com/projectcalico/calico/felix/bpf/utils"
 )
 
 // #cgo CFLAGS: -I${SRCDIR}/../../bpf-gpl/libbpf/src -I${SRCDIR}/../../bpf-gpl/libbpf/include/uapi -I${SRCDIR}/../../bpf-gpl -Werror
@@ -101,7 +101,7 @@ func (m *Map) IsJumpMap() bool {
 }
 
 func OpenObject(filename string) (*Obj, error) {
-	bpfutils.IncreaseLockedMemoryQuota()
+	utils.IncreaseLockedMemoryQuota()
 	cFilename := C.CString(filename)
 	defer C.free(unsafe.Pointer(cFilename))
 	obj, err := C.bpf_obj_open(cFilename)

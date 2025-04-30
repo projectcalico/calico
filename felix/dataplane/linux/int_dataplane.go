@@ -667,7 +667,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 	if config.RulesConfig.VXLANEnabled {
 		var fdbOpts []vxlanfdb.Option
-		if config.BPFEnabled {
+		if config.BPFEnabled && bpfutils.BTFEnabled {
 			fdbOpts = append(fdbOpts, vxlanfdb.WithARPUpdatesOnly())
 		}
 		vxlanFDB := vxlanfdb.New(netlink.FAMILY_V4, dataplanedefs.VXLANIfaceNameV4, featureDetector, config.NetlinkTimeout, fdbOpts...)
@@ -685,7 +685,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		)
 		dp.vxlanParentC = make(chan string, 1)
 		vxlanMTU := config.VXLANMTU
-		if config.BPFEnabled {
+		if config.BPFEnabled && bpfutils.BTFEnabled {
 			vxlanMTU = 0
 		}
 		go dp.vxlanManager.KeepVXLANDeviceInSync(context.Background(), vxlanMTU, dataplaneFeatures.ChecksumOffloadBroken, 10*time.Second, dp.vxlanParentC)
