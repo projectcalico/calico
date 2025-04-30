@@ -303,6 +303,7 @@ ut fv: run-k8s-apiserver
 	-v $(CERTS_PATH):/home/user/certs \
 	-e KUBECONFIG=/go/src/github.com/projectcalico/calico/hack/test/certs/kubeconfig \
 	-e ETCD_ENDPOINTS=http://$(LOCAL_IP_ENV):2379 \
+	-e GINKGO_ARGS="$(GINKGO_ARGS)" \
 	$(CALICO_BUILD) ./run-uts $(WHAT)
 
 ###############################################################################
