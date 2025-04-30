@@ -420,6 +420,7 @@ func (t *TcGlobalData) Set(m *Map) error {
 		C.ushort(t.Profiling),
 		C.uint(t.NatIn),
 		C.uint(t.NatOut),
+		C.uint(t.OverlayTunnelID),
 		C.uint(t.LogFilterJmp),
 		&cJumps[0], // it is safe because we hold the reference here until we return.
 		&cJumpsV6[0],
