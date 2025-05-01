@@ -17,6 +17,7 @@ import (
 	"context"
 	"fmt"
 	"math/big"
+	gonet "net"
 	"time"
 
 	"github.com/aws/smithy-go/ptr"
@@ -30,8 +31,6 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/tools/cache"
-
-	gonet "net"
 
 	"github.com/projectcalico/calico/kube-controllers/pkg/config"
 	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"

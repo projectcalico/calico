@@ -1042,24 +1042,8 @@ func (c *IPAMController) syncIPAM() error {
 	// Delete any nodes that we determined can be removed in checkAllocations. These
 	// nodes are no longer in the Kubernetes API, and have no valid allocations, so can be cleaned up entirely
 	// from Calico IPAM.
-	var storedErr error
-	if len(nodesToRelease) > 0 {
-		log.WithField("num", len(nodesToRelease)).Info("Found a batch of nodes to release")
-	}
-	for _, cnode := range nodesToRelease {
-		logc := log.WithField("node", cnode)
-
-		// Potentially rate limit node cleanup.
-		logc.Info("Cleaning up IPAM affinities for deleted node")
-		if err := c.cleanupNode(cnode); err != nil {
-			// Store the error, but continue. Storing the error ensures we'll retry.
-			logc.WithError(err).Warnf("Error cleaning up node")
-			storedErr = err
-			continue
-		}
-	}
-	if storedErr != nil {
-		return storedErr
+	if err = c.releaseNodes(nodesToRelease); err != nil {
+		return err
 	}
 
 	c.allocationState.syncComplete()
@@ -1076,7 +1060,7 @@ func (c *IPAMController) syncIPAM() error {
 // garbageCollectKnownLeaks checks all known allocations and garbage collects any confirmed leaks.
 func (c *IPAMController) garbageCollectKnownLeaks() error {
 	// limit the number of concurrent IPs we attempt to release at once.
-	maxBatchSize := 1000
+	maxBatchSize := 10000
 
 	var opts []ipam.ReleaseOptions
 	leaks := map[ipam.ReleaseOptions]*allocation{}
@@ -1148,6 +1132,26 @@ func (c *IPAMController) garbageCollectKnownLeaks() error {
 		}
 	}
 	return nil
+}
+
+func (c *IPAMController) releaseNodes(nodes []string) error {
+	var storedErr error
+	if len(nodes) > 0 {
+		log.WithField("num", len(nodes)).Info("Found a batch of nodes to release")
+	}
+	for _, cnode := range nodes {
+		logc := log.WithField("node", cnode)
+
+		// Potentially rate limit node cleanup.
+		logc.Info("Cleaning up IPAM affinities for deleted node")
+		if err := c.cleanupNode(cnode); err != nil {
+			// Store the error, but continue. Storing the error ensures we'll retry.
+			logc.WithError(err).Warnf("Error cleaning up node")
+			storedErr = err
+			continue
+		}
+	}
+	return storedErr
 }
 
 func (c *IPAMController) cleanupNode(cnode string) error {
