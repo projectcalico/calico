@@ -31,6 +31,7 @@ const usage = `pktgen: generates packets for Felix FV testing.
 Usage:
   pktgen <ip_src> <ip_dst> <proto> [--ip-id=<ip_id>] [--port-src=<port_src>] [--port-dst=<port_dst>]
          [--tcp-syn] [--tcp-ack] [--tcp-fin] [--tcp-rst] [--tcp-ack-no=<ack_no>] [--tcp-seq-no=<seq_no>]
+		 [--ip-dnf=[y|n]] [--payload-size=<size>]
 `
 
 func main() {
@@ -93,6 +94,25 @@ func main() {
 		dport = uint16(p)
 	}
 
+	payloadSize := 64
+	if args["--payload-size"] != nil {
+		p, err := strconv.Atoi(args["--payload-size"].(string))
+		if err != nil {
+			log.WithError(err).Fatal("destination port not a number")
+		}
+		payloadSize = p
+	}
+
+	ipDNF := true
+	if args["--ip-dnf"] != nil {
+		ipDNF = false
+		if args["--ip-dnf"].(string) == "y" {
+			ipDNF = true
+		} else if args["--ip-dnf"].(string) != "n" {
+			log.Fatal("wrong value for --ip-dnf. It can be only 'y' or 'n'")
+		}
+	}
+
 	var proto layers.IPProtocol
 
 	switch args["<proto>"] {
@@ -104,21 +124,24 @@ func main() {
 		log.Fatal("unsupported protocol")
 	}
 
-	payload := make([]byte, 64)
+	payload := make([]byte, payloadSize)
 
 	var iphdr gopacket.SerializableLayer
 	if family == 4 {
-		iphdr = &layers.IPv4{
+		ip4 := &layers.IPv4{
 			Version:  4,
 			Id:       ipID,
 			IHL:      5,
 			TTL:      64,
-			Flags:    layers.IPv4DontFragment,
 			SrcIP:    ipsrc,
 			DstIP:    ipdst,
 			Protocol: proto,
 			Length:   5 * 4,
 		}
+		if ipDNF {
+			ip4.Flags = layers.IPv4DontFragment
+		}
+		iphdr = ip4
 	} else {
 		iphdr = &layers.IPv6{
 			Version:    6,
