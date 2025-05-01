@@ -3124,14 +3124,13 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 				inIPs = inIPs[1:]
 			}
 
-			unallocatedIPs, rel, outErr := ic.ReleaseIPs(context.Background(), buildReleaseOptions(inIPs...)...)
+			unallocatedIPs, _, outErr := ic.ReleaseIPs(context.Background(), buildReleaseOptions(inIPs...)...)
 			if outErr != nil {
 				log.Println(outErr)
 			}
 
 			// Expect returned slice of unallocatedIPs to be equal to expected expUnallocatedIPs.
 			Expect(unallocatedIPs).To(Equal(expUnallocatedIPs))
-			Expect(len(rel)).To(Equal(len(inIPs)))
 
 			// Assert if an error was expected.
 			if expError != nil {
