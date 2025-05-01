@@ -23,7 +23,6 @@
           # or replace the existing version.  Happily we do know that, so let's do it upfront here.
           - sudo apt-get remove -y python3-wrapt || true
           - git checkout -b devstack-test
-          - export LIBVIRT_TYPE=qemu
           - export UPPER_CONSTRAINTS_FILE=https://releases.openstack.org/constraints/upper/yoga
           - export NC_PLUGIN_REPO=$(dirname $(pwd))
           - export NC_PLUGIN_REF=$(git rev-parse --abbrev-ref HEAD)
@@ -62,7 +61,6 @@
           # or replace the existing version.  Happily we do know that, so let's do it upfront here.
           - sudo apt-get remove -y python3-wrapt || true
           - git checkout -b devstack-test
-          - export LIBVIRT_TYPE=qemu
           - export UPPER_CONSTRAINTS_FILE=https://raw.githubusercontent.com/openstack/requirements/refs/heads/stable/2024.1/upper-constraints.txt
           - export NC_PLUGIN_REPO=$(dirname $(pwd))
           - export NC_PLUGIN_REF=$(git rev-parse --abbrev-ref HEAD)
