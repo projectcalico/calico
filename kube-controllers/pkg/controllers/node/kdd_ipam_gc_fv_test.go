@@ -249,7 +249,7 @@ var _ = Describe("IPAM garbage collection FV tests with short leak grace period"
 		Expect(len(affs.KVPairs)).To(Equal(2))
 
 		By("releasing the second IP address to create an empty affine block", func() {
-			unalloc, err := calicoClient.IPAM().ReleaseIPs(context.Background(), ipam.ReleaseOptions{Address: "192.168.0.65", Handle: handle2})
+			unalloc, _, err := calicoClient.IPAM().ReleaseIPs(context.Background(), ipam.ReleaseOptions{Address: "192.168.0.65", Handle: handle2})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(len(unalloc)).To(Equal(0))
 		})
@@ -726,7 +726,7 @@ var _ = Describe("IPAM garbage collection FV tests with long leak grace period",
 		Expect(len(affs.KVPairs)).To(Equal(2))
 
 		By("releasing the second IP address to create an empty affine block", func() {
-			unalloc, err := calicoClient.IPAM().ReleaseIPs(context.Background(), ipam.ReleaseOptions{Address: "192.168.0.65", Handle: handle2})
+			unalloc, _, err := calicoClient.IPAM().ReleaseIPs(context.Background(), ipam.ReleaseOptions{Address: "192.168.0.65", Handle: handle2})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(len(unalloc)).To(Equal(0))
 		})
