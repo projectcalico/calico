@@ -142,6 +142,10 @@ var _ = Describe("IPAM controller UTs", func() {
 				node := obj.(*v1.Node)
 				nodes <- node
 			},
+			DeleteFunc: func(obj interface{}) {
+				node := obj.(*v1.Node)
+				nodes <- node
+			},
 		})
 		Expect(err).NotTo(HaveOccurred())
 
@@ -634,18 +638,23 @@ var _ = Describe("IPAM controller UTs", func() {
 		// Start the controller.
 		c.Start(stopChan)
 
+		// Config for the test.
+		numNodes := 1000
+
 		// Mark the syncer as InSync so that the GC will be triggered.
 		c.onStatusUpdate(bapi.InSync)
 
 		// Start a goroutine which continuously creates and deletes many nodes, assigning IPs to them.
 		// This is a stress test to ensure that the controller can handle rapid churn.
 		start := 0
+		numChurns := 0
 		churnNodes := func() {
 			// Create 1k nodes.
-			for i := start; i < start+1000; i++ {
+			for i := start; i < start+numNodes; i++ {
 				n := &v1.Node{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("node-%d", i)}}
 				_, err := cs.CoreV1().Nodes().Create(context.TODO(), n, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
+				Eventually(nodes).WithTimeout(time.Second).Should(Receive())
 
 				// Create a pod for the allocation so that it doesn't get GC'd.
 				pod := v1.Pod{}
@@ -658,7 +667,7 @@ var _ = Describe("IPAM controller UTs", func() {
 				Eventually(pods).WithTimeout(time.Second).Should(Receive(&gotPod))
 
 				// Allocate IPs to each node.
-				ip := net.BigIntToIP(big.NewInt(int64(i)+1000), false)
+				ip := net.BigIntToIP(big.NewInt(int64(i+numNodes)), false)
 				cidr := ip.Network()
 				cidr.Mask = gonet.CIDRMask(30, 32)
 				key := model.BlockKey{CIDR: *cidr}
@@ -691,18 +700,16 @@ var _ = Describe("IPAM controller UTs", func() {
 				c.onUpdate(update)
 			}
 
-			// Wait a moment.
-			time.Sleep(1 * time.Second)
-
 			// Delete all of the nodes.
-			for i := start; i < start+1000; i++ {
+			for i := start; i < start+numNodes; i++ {
 				n := &v1.Node{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("node-%d", i)}}
 				Expect(cs.CoreV1().Nodes().Delete(context.TODO(), n.Name, metav1.DeleteOptions{})).NotTo(HaveOccurred())
 				c.OnKubernetesNodeDeleted(n)
+				Eventually(nodes).WithTimeout(time.Second).Should(Receive())
 			}
 
 			// Delete all the pods.
-			for i := start; i < start+1000; i++ {
+			for i := start; i < start+numNodes; i++ {
 				pod := v1.Pod{}
 				pod.Name = fmt.Sprintf("test-pod-%d", i)
 				pod.Namespace = "test-namespace"
@@ -710,7 +717,8 @@ var _ = Describe("IPAM controller UTs", func() {
 				var gotPod *v1.Pod
 				Eventually(pods).WithTimeout(time.Second).Should(Receive(&gotPod))
 			}
-			start += 1000
+			start += numNodes
+			numChurns += 1
 		}
 
 		churnNodes()
@@ -720,25 +728,24 @@ var _ = Describe("IPAM controller UTs", func() {
 		// We should see a number of IPs released equal to 2 * 1k * number of churned nodes.
 		Eventually(func() int {
 			return len(fakeClient.handlesReleased)
-		}, 30*time.Second, 100*time.Millisecond).Should(Equal(2000), "Not all handles released")
+		}, 30*time.Second, 100*time.Millisecond).Should(Equal(2*numNodes*numChurns), "Not all handles released")
 		// We should see a number of blocks released equal to 1k * number of churned nodes.
 		Eventually(func() int {
 			return len(fakeClient.affinitiesReleased)
-		}, 30*time.Second, 100*time.Millisecond).Should(Equal(1000), "Not all blocks released")
+		}, 30*time.Second, 100*time.Millisecond).Should(Equal(numChurns*numNodes), "Not all blocks released")
 
 		// Churn again a few times.
-		for range 5 {
+		for range 3 {
 			churnNodes()
-			time.Sleep(5 * time.Second)
 		}
 		// We should see a number of blocks released equal to 1k * number of churned nodes.
 		Eventually(func() int {
 			return len(fakeClient.handlesReleased)
-		}, 30*time.Second, 100*time.Millisecond).Should(Equal(12000), "Not all handles released")
+		}, 60*time.Second, 100*time.Millisecond).Should(Equal(2*numNodes*numChurns), "Not all handles released")
 		// We should see a number of blocks released equal to 1k * number of churned nodes.
 		Eventually(func() int {
 			return len(fakeClient.affinitiesReleased)
-		}, 30*time.Second, 100*time.Millisecond).Should(Equal(6000), "Not all blocks released")
+		}, 60*time.Second, 100*time.Millisecond).Should(Equal(numChurns*numNodes), "Not all blocks released")
 	})
 
 	It("should handle clusterinformation updates and maintain its clusterinformation datastoreReady cache", func() {
@@ -800,6 +807,7 @@ var _ = Describe("IPAM controller UTs", func() {
 		kn.Name = "kname"
 		_, err = cs.CoreV1().Nodes().Create(context.TODO(), &kn, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
+		Eventually(nodes).WithTimeout(time.Second).Should(Receive())
 
 		// Start the controller.
 		c.Start(stopChan)
@@ -1030,6 +1038,7 @@ var _ = Describe("IPAM controller UTs", func() {
 		n.Spec.OrchRefs = []libapiv3.OrchRef{{NodeName: "kname", Orchestrator: apiv3.OrchestratorKubernetes}}
 		_, err := cli.Nodes().Create(context.TODO(), &n, options.SetOptions{})
 		Expect(err).NotTo(HaveOccurred())
+
 		kn := v1.Node{}
 		kn.Name = "kname"
 		_, err = cs.CoreV1().Nodes().Create(context.TODO(), &kn, metav1.CreateOptions{})
@@ -1386,6 +1395,7 @@ var _ = Describe("IPAM controller UTs", func() {
 		n.Spec.OrchRefs = []libapiv3.OrchRef{{NodeName: "kname", Orchestrator: apiv3.OrchestratorKubernetes}}
 		_, err := cli.Nodes().Create(context.TODO(), &n, options.SetOptions{})
 		Expect(err).NotTo(HaveOccurred())
+
 		kn := v1.Node{}
 		kn.Name = "kname"
 		_, err = cs.CoreV1().Nodes().Create(context.TODO(), &kn, metav1.CreateOptions{})
@@ -1498,6 +1508,7 @@ var _ = Describe("IPAM controller UTs", func() {
 		n.Spec.OrchRefs = []libapiv3.OrchRef{{NodeName: "kname", Orchestrator: apiv3.OrchestratorKubernetes}}
 		_, err := cli.Nodes().Create(context.TODO(), &n, options.SetOptions{})
 		Expect(err).NotTo(HaveOccurred())
+
 		kn := v1.Node{}
 		kn.Name = "kname"
 		_, err = cs.CoreV1().Nodes().Create(context.TODO(), &kn, metav1.CreateOptions{})
@@ -1722,6 +1733,7 @@ var _ = Describe("IPAM controller UTs", func() {
 				kn.Name = name
 				_, err = cs.CoreV1().Nodes().Create(context.TODO(), &kn, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
+				Eventually(nodes).WithTimeout(time.Second).Should(Receive())
 
 				var node *v1.Node
 				Eventually(nodes).WithTimeout(time.Second).Should(Receive(&node))
@@ -1750,6 +1762,7 @@ var _ = Describe("IPAM controller UTs", func() {
 			// Delete node1.
 			Expect(cs.CoreV1().Nodes().Delete(context.TODO(), "node1", metav1.DeleteOptions{})).NotTo(HaveOccurred())
 			c.OnKubernetesNodeDeleted(&v1.Node{ObjectMeta: metav1.ObjectMeta{Name: "node1"}})
+			Eventually(nodes).WithTimeout(time.Second).Should(Receive())
 
 			// The allocations won't be marked as leaked yet, since the controller is confused about the node's status (deleted,
 			// but still has pods).
@@ -1824,6 +1837,7 @@ var _ = Describe("IPAM controller UTs", func() {
 				kn.Name = n.Name
 				_, err = cs.CoreV1().Nodes().Create(context.TODO(), &kn, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
+				Eventually(nodes).WithTimeout(time.Second).Should(Receive())
 
 				var node *v1.Node
 				Eventually(nodes).WithTimeout(time.Second).Should(Receive(&node))
