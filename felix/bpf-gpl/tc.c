@@ -197,6 +197,13 @@ int calico_tc_main(struct __sk_buff *skb)
 		ctx->fwd.res = TC_ACT_SHOT;
 		goto finalize;
 	}
+
+	if (ip_is_frag(ip_hdr(ctx))) {
+		CALI_DEBUG("Dropping unsupported IP fragments!");
+		ctx->fwd.res = TC_ACT_SHOT;
+		goto finalize;
+	}
+
 	return pre_policy_processing(ctx);
 
 allow:
@@ -1674,7 +1681,7 @@ icmp_ttl_exceeded:
 	state->icmp_type = ICMPV6_TIME_EXCEED;
 	state->icmp_code = ICMPV6_EXC_HOPLIMIT;
 #else
-	if (ip_frag_no(ip_hdr(ctx))) {
+	if (ip_is_frag(ip_hdr(ctx))) {
 		goto deny;
 	}
 	state->icmp_type = ICMP_TIME_EXCEEDED;
