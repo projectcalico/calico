@@ -644,14 +644,15 @@ var _ = Describe("IPAM controller UTs", func() {
 			// Create 1k nodes.
 			for i := start; i < start+1000; i++ {
 				n := &v1.Node{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("node-%d", i)}}
-				cs.CoreV1().Nodes().Create(context.TODO(), n, metav1.CreateOptions{})
+				_, err := cs.CoreV1().Nodes().Create(context.TODO(), n, metav1.CreateOptions{})
+				Expect(err).NotTo(HaveOccurred())
 
 				// Create a pod for the allocation so that it doesn't get GC'd.
 				pod := v1.Pod{}
 				pod.Name = fmt.Sprintf("test-pod-%d", i)
 				pod.Namespace = "test-namespace"
 				pod.Spec.NodeName = "kname"
-				_, err := cs.CoreV1().Pods(pod.Namespace).Create(context.TODO(), &pod, metav1.CreateOptions{})
+				_, err = cs.CoreV1().Pods(pod.Namespace).Create(context.TODO(), &pod, metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
 				var gotPod *v1.Pod
 				Eventually(pods).WithTimeout(time.Second).Should(Receive(&gotPod))
@@ -696,7 +697,7 @@ var _ = Describe("IPAM controller UTs", func() {
 			// Delete all of the nodes.
 			for i := start; i < start+1000; i++ {
 				n := &v1.Node{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("node-%d", i)}}
-				cs.CoreV1().Nodes().Delete(context.TODO(), n.Name, metav1.DeleteOptions{})
+				Expect(cs.CoreV1().Nodes().Delete(context.TODO(), n.Name, metav1.DeleteOptions{})).NotTo(HaveOccurred())
 				c.OnKubernetesNodeDeleted(n)
 			}
 
@@ -705,7 +706,7 @@ var _ = Describe("IPAM controller UTs", func() {
 				pod := v1.Pod{}
 				pod.Name = fmt.Sprintf("test-pod-%d", i)
 				pod.Namespace = "test-namespace"
-				cs.CoreV1().Pods(pod.Namespace).Delete(context.TODO(), pod.Name, metav1.DeleteOptions{})
+				Expect(cs.CoreV1().Pods(pod.Namespace).Delete(context.TODO(), pod.Name, metav1.DeleteOptions{})).NotTo(HaveOccurred())
 				var gotPod *v1.Pod
 				Eventually(pods).WithTimeout(time.Second).Should(Receive(&gotPod))
 			}
