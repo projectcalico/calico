@@ -719,7 +719,7 @@ func createPod(podName string, ip string, handle string, node string, k8sClient 
 func deletePodWithIP(pod string, ip string, k8sClient *kubernetes.Clientset, calicoClient client.Interface) {
 	err := k8sClient.CoreV1().Pods("default").Delete(context.Background(), pod, metav1.DeleteOptions{})
 	ExpectWithOffset(1, err).NotTo(HaveOccurred())
-	_, err = calicoClient.IPAM().ReleaseIPs(context.Background(), ipam.ReleaseOptions{Address: ip})
+	_, _, err = calicoClient.IPAM().ReleaseIPs(context.Background(), ipam.ReleaseOptions{Address: ip})
 	ExpectWithOffset(1, err).NotTo(HaveOccurred())
 }
 

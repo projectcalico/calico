@@ -728,7 +728,7 @@ func (c *loadBalancerController) releaseIP(svcKey serviceKey, ip string) error {
 	releaseOptions := ipam.ReleaseOptions{
 		Address: ip,
 	}
-	_, err := c.calicoClient.IPAM().ReleaseIPs(context.Background(), releaseOptions)
+	_, _, err := c.calicoClient.IPAM().ReleaseIPs(context.Background(), releaseOptions)
 	if err != nil {
 		log.Errorf("error on removing assigned IP %s", ip)
 		return err
