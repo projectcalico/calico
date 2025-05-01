@@ -1112,11 +1112,13 @@ func (c ipamClient) ReleaseIPs(ctx context.Context, ips ...ReleaseOptions) ([]ne
 		_, cidr, _ := net.ParseCIDR(blockCIDR)
 		go func(cidr net.IPNet, ips []ReleaseOptions, hm map[string]*model.KVPair) {
 			defer sem.Release(1)
-			r := retVal{Released: ips}
+			r := retVal{}
 			unalloc, err := c.releaseIPsFromBlock(ctx, hm, ips, cidr)
 			if err != nil {
 				log.Errorf("Error releasing IPs: %v", err)
 				r.Error = err
+			} else {
+				r.Released = ips
 			}
 			r.Unallocated = unalloc
 			resultChan <- r
