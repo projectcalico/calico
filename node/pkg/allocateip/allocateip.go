@@ -422,7 +422,7 @@ func correctAllocationWithHandle(ctx context.Context, c client.Interface, addr, 
 	}
 
 	// Release the old allocation.
-	_, err := c.IPAM().ReleaseIPs(ctx, ipam.ReleaseOptions{Address: ipAddr.String()})
+	_, _, err := c.IPAM().ReleaseIPs(ctx, ipam.ReleaseOptions{Address: ipAddr.String()})
 	if err != nil {
 		// If we fail to release the old allocation, return an error.
 		log.WithField("IP", ipAddr.String()).WithError(err).Error("Error releasing address")
