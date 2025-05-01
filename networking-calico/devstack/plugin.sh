@@ -83,8 +83,8 @@ cgroup_device_acl = [
     "/dev/vfio/vfio",
 ]
 dynamic_ownership = 0
-user = "nova"
-group = "nova"
+user = "stack"
+group = "stack"
 EOF
 
 		    # Use the Calico plugin.  We make this change here, instead
