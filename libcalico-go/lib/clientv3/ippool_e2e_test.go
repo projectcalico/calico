@@ -1117,7 +1117,7 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests (etcd only)", testutils.Dat
 			Expect(err).To(HaveOccurred())
 
 			By("deleting the block and creating a pool with a different blockSize")
-			unreleased, err := c.IPAM().ReleaseIPs(ctx, assigned...)
+			unreleased, _, err := c.IPAM().ReleaseIPs(ctx, assigned...)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(unreleased).To(HaveLen(0))
 			_, err = c.IPPools().Create(ctx, &apiv3.IPPool{
