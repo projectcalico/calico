@@ -5,7 +5,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.16.5
+    controller-gen.kubebuilder.io/version: v0.17.3
   name: apiservers.operator.tigera.io
 spec:
   group: operator.tigera.io
@@ -1650,7 +1650,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.16.5
+    controller-gen.kubebuilder.io/version: v0.17.3
   name: gatewayapis.operator.tigera.io
 spec:
   group: operator.tigera.io
@@ -5455,7 +5455,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.16.5
+    controller-gen.kubebuilder.io/version: v0.17.3
   name: goldmanes.operator.tigera.io
 spec:
   group: operator.tigera.io
@@ -6984,7 +6984,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.16.5
+    controller-gen.kubebuilder.io/version: v0.17.3
   name: imagesets.operator.tigera.io
 spec:
   group: operator.tigera.io
@@ -7064,7 +7064,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.16.5
+    controller-gen.kubebuilder.io/version: v0.17.3
   name: installations.operator.tigera.io
 spec:
   group: operator.tigera.io
@@ -12400,6 +12400,26 @@ spec:
                 cni:
                   description: CNI specifies the CNI that will be used by this installation.
                   properties:
+                    binDir:
+                      description: |-
+                        BinDir is the path to the CNI binaries directory.
+                        If you have changed the installation directory for CNI binaries in the container runtime configuration,
+                        please ensure that this field points to the same directory as specified in the container runtime settings.
+                        Default directory depends on the KubernetesProvider.
+                        * For KubernetesProvider GKE, this field defaults to "/home/kubernetes/bin".
+                        * For KubernetesProvider OpenShift, this field defaults to "/var/lib/cni/bin".
+                        * Otherwise, this field defaults to "/opt/cni/bin".
+                      type: string
+                    confDir:
+                      description: |-
+                        ConfDir is the path to the CNI config directory.
+                        If you have changed the installation directory for CNI configuration in the container runtime configuration,
+                        please ensure that this field points to the same directory as specified in the container runtime settings.
+                        Default directory depends on the KubernetesProvider.
+                        * For KubernetesProvider GKE, this field defaults to "/etc/cni/net.d".
+                        * For KubernetesProvider OpenShift, this field defaults to "/var/run/multus/cni/net.d".
+                        * Otherwise, this field defaults to "/etc/cni/net.d".
+                      type: string
                     ipam:
                       description: |-
                         IPAM specifies the pod IP address management that will be used in the Calico or
@@ -21197,6 +21217,26 @@ spec:
                     cni:
                       description: CNI specifies the CNI that will be used by this installation.
                       properties:
+                        binDir:
+                          description: |-
+                            BinDir is the path to the CNI binaries directory.
+                            If you have changed the installation directory for CNI binaries in the container runtime configuration,
+                            please ensure that this field points to the same directory as specified in the container runtime settings.
+                            Default directory depends on the KubernetesProvider.
+                            * For KubernetesProvider GKE, this field defaults to "/home/kubernetes/bin".
+                            * For KubernetesProvider OpenShift, this field defaults to "/var/lib/cni/bin".
+                            * Otherwise, this field defaults to "/opt/cni/bin".
+                          type: string
+                        confDir:
+                          description: |-
+                            ConfDir is the path to the CNI config directory.
+                            If you have changed the installation directory for CNI configuration in the container runtime configuration,
+                            please ensure that this field points to the same directory as specified in the container runtime settings.
+                            Default directory depends on the KubernetesProvider.
+                            * For KubernetesProvider GKE, this field defaults to "/etc/cni/net.d".
+                            * For KubernetesProvider OpenShift, this field defaults to "/var/run/multus/cni/net.d".
+                            * Otherwise, this field defaults to "/etc/cni/net.d".
+                          type: string
                         ipam:
                           description: |-
                             IPAM specifies the pod IP address management that will be used in the Calico or
@@ -24733,7 +24773,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.16.5
+    controller-gen.kubebuilder.io/version: v0.17.3
   name: managementclusterconnections.operator.tigera.io
 spec:
   group: operator.tigera.io
@@ -25056,7 +25096,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.16.5
+    controller-gen.kubebuilder.io/version: v0.17.3
   name: tigerastatuses.operator.tigera.io
 spec:
   group: operator.tigera.io
@@ -25174,7 +25214,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.16.5
+    controller-gen.kubebuilder.io/version: v0.17.3
   name: whiskers.operator.tigera.io
 spec:
   group: operator.tigera.io
