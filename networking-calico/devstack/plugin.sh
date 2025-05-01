@@ -72,19 +72,6 @@ EOF
 		    # enabled services should exist at this point.
 		    echo Calico plugin: post-config
 
-		    # Update qemu configuration (shouldn't be anything
-		    # in there so safe to blow away)
-		    sudo sh -c "cat > /etc/libvirt/qemu.conf" << EOF
-user = "root"
-group = "root"
-cgroup_device_acl = [
-    "/dev/null", "/dev/full", "/dev/zero",
-    "/dev/random", "/dev/urandom",
-    "/dev/ptmx", "/dev/kvm", "/dev/kqemu",
-    "/dev/rtc", "/dev/hpet", "/dev/net/tun",
-]
-EOF
-
 		    # Use the Calico plugin.  We make this change here, instead
 		    # of putting 'Q_PLUGIN=calico' in the settings file,
 		    # because the latter would require adding Calico plugin
