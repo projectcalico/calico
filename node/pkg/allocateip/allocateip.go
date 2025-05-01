@@ -636,7 +636,7 @@ func removeHostTunnelAddr(ctx context.Context, c client.Interface, node *libapi.
 			} else if len(attr) == 0 && storedHandle == nil {
 				// Scenario #2: The allocation exists, but has no handle whatsoever.
 				// This is an ancient allocation and can be released.
-				if _, err := c.IPAM().ReleaseIPs(ctx, ipam.ReleaseOptions{Address: ipAddr.String()}); err != nil {
+				if _, _, err := c.IPAM().ReleaseIPs(ctx, ipam.ReleaseOptions{Address: ipAddr.String()}); err != nil {
 					logCtx.WithError(err).WithField("IP", ipAddr.String()).Error("Error releasing address from IPAM")
 					return err
 				}
@@ -644,7 +644,7 @@ func removeHostTunnelAddr(ctx context.Context, c client.Interface, node *libapi.
 				// Scenario #3: The allocation exists, has a handle, and it matches the one we expect.
 				// This means the handle object itself was wrongfully deleted. We can clean it up
 				// by releasing the IP directly with both address and handle specified.
-				if _, err := c.IPAM().ReleaseIPs(ctx, ipam.ReleaseOptions{Address: ipAddr.String(), Handle: handle}); err != nil {
+				if _, _, err := c.IPAM().ReleaseIPs(ctx, ipam.ReleaseOptions{Address: ipAddr.String(), Handle: handle}); err != nil {
 					logCtx.WithError(err).WithField("IP", ipAddr.String()).Error("Error releasing address from IPAM")
 					return err
 				}
