@@ -23,7 +23,7 @@ FROM scratch AS source
 ARG BIN_DIR
 ARG TARGETARCH
 
-COPY ${BIN_DIR}/LICENSE /licenses/LICENSE
+COPY bin/LICENSE /licenses/LICENSE
 
 # Typical Linux systems start numbering human users at 1000, reserving 1-999
 # for services, so we pick 999 to be least likely to overlap.

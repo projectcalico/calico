@@ -61,7 +61,7 @@ COPY docker-image/nginx.conf /etc/nginx/nginx.conf
 
 COPY dist /usr/share/nginx/html/
 
-COPY ${BIN_DIR}LICENSE /licenses/LICENSE
+COPY ${BIN_DIR}/LICENSE /licenses/LICENSE
 
 FROM ${CALICO_BASE}
 
