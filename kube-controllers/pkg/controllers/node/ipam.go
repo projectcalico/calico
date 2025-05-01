@@ -280,7 +280,7 @@ func (c *IPAMController) acceptScheduleRequests(stopCh <-chan struct{}) {
 		// Wait until something wakes us up, or we are stopped.
 		select {
 		case <-c.nodeDeletionChan:
-			logEntry := log.WithFields(log.Fields{"controller": "Ipam", "type": "nodeDeletion"})
+			logEntry := log.WithFields(log.Fields{"controller": "ipam", "type": "nodeDeletion"})
 			utils.ProcessBatch(c.nodeDeletionChan, struct{}{}, nil, logEntry)
 
 			// When one or more nodes are deleted, trigger a full sync to ensure that we release
@@ -288,11 +288,12 @@ func (c *IPAMController) acceptScheduleRequests(stopCh <-chan struct{}) {
 			c.fullScanNextSync("Batch node deletion")
 			kick(c.syncChan)
 		case pod := <-c.podDeletionChan:
-			logEntry := log.WithFields(log.Fields{"controller": "Ipam", "type": "podDeletion"})
+			logEntry := log.WithFields(log.Fields{"controller": "ipam", "type": "podDeletion"})
 			utils.ProcessBatch(c.podDeletionChan, pod, c.allocationState.markDirtyPodDeleted, logEntry)
 			kick(c.syncChan)
 		case upd := <-c.syncerUpdates:
-			c.handleUpdate(upd)
+			logEntry := log.WithFields(log.Fields{"controller": "ipam", "type": "syncerUpdate"})
+			utils.ProcessBatch(c.syncerUpdates, upd, c.handleUpdate, logEntry)
 			kick(c.syncChan)
 		case <-t.C:
 			// Periodic IPAM sync, queue a full scan of the IPAM data.
