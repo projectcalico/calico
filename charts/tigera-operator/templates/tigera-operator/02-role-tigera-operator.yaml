@@ -194,6 +194,8 @@ rules:
     resources:
       - installations
       - apiservers
+      - whiskers
+      - goldmanes
     verbs:
       - delete
   - apiGroups:

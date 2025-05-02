@@ -1376,6 +1376,11 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 		*out = new(numorstring.Port)
 		**out = **in
 	}
+	if in.NATOutgoingExclusions != nil {
+		in, out := &in.NATOutgoingExclusions, &out.NATOutgoingExclusions
+		*out = new(NATOutgoingExclusionsType)
+		**out = **in
+	}
 	if in.DeviceRouteProtocol != nil {
 		in, out := &in.DeviceRouteProtocol, &out.DeviceRouteProtocol
 		*out = new(int)

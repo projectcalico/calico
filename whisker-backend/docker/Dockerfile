@@ -4,7 +4,7 @@ ARG TARGETARCH
 ARG GIT_VERSION
 COPY ./bin/whisker-backend-${TARGETARCH} /whisker-backend
 
-COPY LICENSE /licenses/LICENSE
+COPY ./bin/LICENSE /licenses/LICENSE
 
 LABEL org.opencontainers.image.description="Whisker Backend is the backend service for the Whisker UI."
 LABEL org.opencontainers.image.authors="maintainers@tigera.io"

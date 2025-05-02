@@ -112,8 +112,8 @@ func NewAutoHEPController(cfg config.NodeControllerConfig, client client.Interfa
 		config:         cfg,
 		client:         client,
 		nodeCache:      make(map[string]*libapi.Node),
-		nodeUpdates:    make(chan string, batchUpdateSize),
-		syncerUpdates:  make(chan interface{}, batchUpdateSize),
+		nodeUpdates:    make(chan string, utils.BatchUpdateSize),
+		syncerUpdates:  make(chan interface{}, utils.BatchUpdateSize),
 		syncChan:       make(chan interface{}, 1),
 		autoHEPTracker: hostEndpointTracker{hostEndpointsByNode: make(map[string]map[string]*api.HostEndpoint)},
 	}
@@ -157,7 +157,8 @@ func (c *autoHostEndpointController) acceptScheduledRequests(stopCh <-chan struc
 		case <-c.syncChan:
 			c.syncHostEndpoints()
 		case nodeName := <-c.nodeUpdates:
-			c.syncHostEndpointsForNode(nodeName)
+			logEntry := logrus.WithFields(logrus.Fields{"controller": "HostEndpoint", "type": "nodeUpdate"})
+			utils.ProcessBatch(c.nodeUpdates, nodeName, c.syncHostEndpointsForNode, logEntry)
 		case <-stopCh:
 			return
 		}
@@ -211,7 +212,7 @@ func (c *autoHostEndpointController) handleNodeUpdate(kvp model.KVPair) {
 	}
 }
 
-// handleHostEndpointUpdate handles HostEndpoint updates recieved via syncer.
+// handleHostEndpointUpdate handles HostEndpoint updates received via syncer.
 // We want to delete HostEndpoints that no longer exists, and add/update Auto-HostEndpoints to our local cache
 func (c *autoHostEndpointController) handleHostEndpointUpdate(kvp model.KVPair) {
 	if kvp.Value == nil {
@@ -228,10 +229,6 @@ func (c *autoHostEndpointController) handleHostEndpointUpdate(kvp model.KVPair) 
 	}
 
 	hostEndpoint := kvp.Value.(*api.HostEndpoint)
-	if hostEndpoint.ResourceVersion == "" {
-		// In ETCD mode the resourceVersion on the resource is empty, we need to set it from the KVPair revision to be able to use the cached value for update
-		hostEndpoint.ResourceVersion = kvp.Revision
-	}
 
 	if isAutoHostEndpoint(hostEndpoint) {
 		if c.syncStatus == bapi.InSync {
