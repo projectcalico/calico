@@ -60,6 +60,123 @@ func TestGroupVersion(t *testing.T) {
 	}
 }
 
+// TestPolicyWatch checks that the WatchManager closes watch when a new Tier is added
+func TestPolicyWatch(t *testing.T) {
+	const name = "test-policywatch"
+	rootTestFunc := func() func(t *testing.T) {
+		return func(t *testing.T) {
+			client, shutdownServer := getFreshApiserverAndClient(t, func() runtime.Object {
+				return &v3.GlobalNetworkPolicy{}
+			})
+			defer shutdownServer()
+			if err := testPolicyWatch(client); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+
+	if !t.Run(name, rootTestFunc()) {
+		t.Errorf("test-policywatch test failed")
+	}
+}
+
+func testPolicyWatch(client calicoclient.Interface) error {
+	order := float64(100.0)
+	tier := &v3.Tier{
+		ObjectMeta: metav1.ObjectMeta{Name: "custom-tier"},
+		Spec: v3.TierSpec{
+			Order: &order,
+		},
+	}
+
+	globalNetworkPolicy := &v3.GlobalNetworkPolicy{ObjectMeta: metav1.ObjectMeta{Name: "policy"}}
+
+	w, err := client.ProjectcalicoV3().GlobalNetworkPolicies().Watch(context.Background(), metav1.ListOptions{})
+	if err != nil {
+		return fmt.Errorf("error watching GlobalNetworkPolicies (%s)", err)
+	}
+
+	done := sync.WaitGroup{}
+	done.Add(1)
+	timeout := time.After(5 * time.Second)
+	var timeoutErr error
+	var events []watch.Event
+
+	go func() {
+		defer done.Done()
+		for i := 0; i < 1; i++ {
+			select {
+			case e := <-w.ResultChan():
+				events = append(events, e)
+			case <-timeout:
+				timeoutErr = fmt.Errorf("timed out waiting for events")
+				return
+			}
+		}
+	}()
+
+	// We should be able to receive this add event in our watch
+	_, err = client.ProjectcalicoV3().GlobalNetworkPolicies().Create(context.Background(), globalNetworkPolicy, metav1.CreateOptions{})
+	if err != nil {
+		return fmt.Errorf("error creating GlobalNetworkPolicy (%s)", err)
+	}
+	defer func() {
+		_ = client.ProjectcalicoV3().GlobalNetworkPolicies().Delete(context.Background(), globalNetworkPolicy.Name, metav1.DeleteOptions{})
+	}()
+
+	// Creating a new Tier should force the watch to be closed
+	_, err = client.ProjectcalicoV3().Tiers().Create(context.Background(), tier, metav1.CreateOptions{})
+	if err != nil {
+		return fmt.Errorf("error creating Tier (%s)", err)
+	}
+	defer func() {
+		_ = client.ProjectcalicoV3().Tiers().Delete(context.Background(), tier.Name, metav1.DeleteOptions{})
+	}()
+
+	done.Wait()
+
+	if timeoutErr != nil {
+		return timeoutErr
+	}
+
+	if len(events) != 1 {
+		return fmt.Errorf("expected 1 event, got %d", len(events))
+	}
+
+	if events[0].Type != watch.Added {
+		return fmt.Errorf("expected add event, got %s", events[0])
+	}
+
+	// Check that the watch is closed by trying to read from the channel
+	done = sync.WaitGroup{}
+	done.Add(1)
+	var chClosedError error
+	timeout = time.After(5 * time.Second)
+
+	go func() {
+		defer done.Done()
+		for {
+			select {
+			case _, ok := <-w.ResultChan():
+				if !ok {
+					return
+				}
+			case <-timeout:
+				chClosedError = fmt.Errorf("watch should be closed")
+				return
+			}
+		}
+	}()
+
+	done.Wait()
+
+	if chClosedError != nil {
+		return chClosedError
+	}
+
+	return nil
+}
+
 func testGroupVersion(client calicoclient.Interface) error {
 	gv := client.ProjectcalicoV3().RESTClient().APIVersion()
 	if gv.Group != v3.GroupName {
