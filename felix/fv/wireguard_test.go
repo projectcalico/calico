@@ -1776,11 +1776,11 @@ func wireguardTopologyOptions(routeSource string, ipipEnabled, wireguardIPv4Enab
 
 	if ipipEnabled && !wireguardIPv6Enabled {
 		topologyOptions.IPIPMode = api.IPIPModeAlways
-		topologyOptions.SimulateRoutes = false
+		topologyOptions.SimulateBIRDRoutes = false
 		topologyOptions.ExtraEnvVars["FELIX_ProgramRoutes"] = "Enabled"
 	} else {
 		topologyOptions.IPIPMode = api.IPIPModeNever
-		topologyOptions.SimulateRoutes = true
+		topologyOptions.SimulateBIRDRoutes = true
 	}
 
 	// With Wireguard and BPF mode the default IptablesMarkMask of 0xffff0000 isn't enough.

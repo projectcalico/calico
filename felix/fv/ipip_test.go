@@ -64,7 +64,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology with BIRD pro
 		if (NFTMode() || BPFMode()) && getDataStoreType(infra) == "etcdv3" {
 			Skip("Skipping NFT / BPF test for etcdv3 backend.")
 		}
-		tc, client = infrastructure.StartNNodeTopology(2, infrastructure.DefaultTopologyOptions(), infra)
+		topologyOptions := infrastructure.DefaultTopologyOptions()
+		topologyOptions.EnableIPv6 = false
+		tc, client = infrastructure.StartNNodeTopology(2, topologyOptions, infra)
 
 		// Install a default profile that allows all ingress and egress, in the absence of any Policy.
 		infra.AddDefaultAllow()
@@ -1226,7 +1228,8 @@ func createIPIPBaseTopologyOptions(
 	topologyOptions := infrastructure.DefaultTopologyOptions()
 	topologyOptions.IPIPMode = ipipMode
 	topologyOptions.VXLANMode = api.VXLANModeNever
-	topologyOptions.SimulateRoutes = false
+	topologyOptions.SimulateBIRDRoutes = false
+	topologyOptions.EnableIPv6 = false
 	topologyOptions.ExtraEnvVars["FELIX_ProgramRoutes"] = "Enabled"
 	topologyOptions.ExtraEnvVars["FELIX_ROUTESOURCE"] = routeSource
 	// We force the broken checksum handling on or off so that we're not dependent on kernel version
