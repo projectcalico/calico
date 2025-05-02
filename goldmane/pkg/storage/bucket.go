@@ -15,6 +15,7 @@
 package storage
 
 import (
+	"sync"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -24,8 +25,15 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
+// AggregationBucket is a FlowProvider that represents a bucket of aggregated flows.
+var _ FlowProvider = &AggregationBucket{}
+
 // An aggregation bucket represents a bucket of aggregated flows across a time range.
 type AggregationBucket struct {
+	// The mutex is used to protect access to the bucket's Flows set, which may be
+	// modified and accessed by multiple goroutines concurrently.
+	sync.RWMutex
+
 	// index is the index of the bucket in the ring.
 	index int
 
@@ -33,8 +41,8 @@ type AggregationBucket struct {
 	StartTime int64
 	EndTime   int64
 
-	// Pushed indicates whether this bucket has been pushed to the emitter.
-	Pushed bool
+	// pushed indicates whether this bucket has been pushed to the emitter.
+	pushed bool
 
 	// LookupFlow is a function that can be used to look up a DiachronicFlow by its key.
 	lookupFlow lookupFn
@@ -44,10 +52,15 @@ type AggregationBucket struct {
 
 	// Tracker for statistics within this bucket.
 	stats *statisticsIndex
+
+	streamed bool
 }
 
 func (b *AggregationBucket) AddFlow(flow *types.Flow) {
-	if b.Pushed {
+	b.Lock()
+	defer b.Unlock()
+
+	if b.pushed {
 		logrus.WithField("flow", flow).Warn("Adding flow to already published bucket")
 	}
 
@@ -85,15 +98,18 @@ func (b *AggregationBucket) Fields() logrus.Fields {
 	return logrus.Fields{
 		"start_time": b.StartTime,
 		"end_time":   b.EndTime,
-		"flows":      b.Flows.Len(),
 		"index":      b.index,
 	}
 }
 
 func (b *AggregationBucket) Reset(start, end int64) {
+	b.Lock()
+	defer b.Unlock()
+
 	b.StartTime = start
 	b.EndTime = end
-	b.Pushed = false
+	b.pushed = false
+	b.streamed = false
 	b.stats = newStatisticsIndex()
 
 	if b.Flows == nil {
@@ -106,6 +122,18 @@ func (b *AggregationBucket) Reset(start, end int64) {
 			return nil
 		})
 	}
+}
+
+func (b *AggregationBucket) Iter(fn func(FlowBuilder) bool) {
+	b.RLock()
+	defer b.RUnlock()
+
+	b.Flows.Iter(func(d *DiachronicFlow) error {
+		if fn(NewDeferredFlowBuilder(d, b.StartTime, b.EndTime)) {
+			return set.StopIteration
+		}
+		return nil
+	})
 }
 
 func (b *AggregationBucket) QueryStatistics(q *proto.StatisticsRequest) map[StatisticsKey]*counts {
