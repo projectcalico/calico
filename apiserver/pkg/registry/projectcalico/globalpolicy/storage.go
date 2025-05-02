@@ -16,6 +16,7 @@ package globalpolicy
 
 import (
 	"context"
+
 	"github.com/google/uuid"
 	calico "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"k8s.io/apimachinery/pkg/api/meta"
