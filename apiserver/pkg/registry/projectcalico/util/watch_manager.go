@@ -2,6 +2,7 @@ package util
 
 import (
 	"context"
+	"sync"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/sirupsen/logrus"
@@ -13,7 +14,7 @@ import (
 )
 
 type WatchRecord struct {
-	Id    string
+	ID    string
 	Kind  string
 	Watch watch.Interface
 	Ctx   context.Context
@@ -27,6 +28,7 @@ type WatchManager struct {
 	client       api.Client
 	syncer       api.Syncer
 	sync         chan struct{}
+	lock         sync.Mutex
 	watchRecords map[string]WatchRecord
 }
 
@@ -83,8 +85,8 @@ func (m *WatchManager) OnUpdates(updates []api.Update) {
 
 // AddWatch adds a watch to our map and triggers monitoring for watch closure by the consumer or API server
 func (m *WatchManager) AddWatch(record WatchRecord) {
-	logrus.WithFields(logrus.Fields{"Id": record.Id, "Kind": record.Kind}).Debug("Adding WatchRecord")
-	m.watchRecords[record.Id] = record
+	logrus.WithFields(logrus.Fields{"id": record.ID, "Kind": record.Kind}).Debug("Adding WatchRecord")
+	m.watchRecords[record.ID] = record
 	go m.monitorWatch(record)
 }
 
@@ -93,8 +95,10 @@ func (m *WatchManager) monitorWatch(record WatchRecord) {
 	for {
 		<-record.Ctx.Done()
 		// Watch has been closed, we should remove it from our map
-		logrus.WithFields(logrus.Fields{"Id": record.Id, "Kind": record.Kind}).Debug("Stopping WatchRecord")
-		delete(m.watchRecords, record.Id)
+		logrus.WithFields(logrus.Fields{"id": record.ID, "Kind": record.Kind}).Debug("Stopping WatchRecord")
+		m.lock.Lock()
+		delete(m.watchRecords, record.ID)
+		m.lock.Unlock()
 		return
 	}
 }

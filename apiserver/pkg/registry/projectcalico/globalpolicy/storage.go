@@ -173,14 +173,14 @@ func (r *REST) Watch(ctx context.Context, options *metainternalversion.ListOptio
 	}
 
 	record := util.WatchRecord{
-		Id:    uuid.New().String(),
+		ID:    uuid.New().String(),
 		Kind:  calico.KindGlobalNetworkPolicy,
 		Watch: w,
 		Ctx:   ctx,
 	}
 	r.watchManager.AddWatch(record)
 
-	return w, err
+	return w, nil
 }
 
 func (r *REST) ShortNames() []string {
