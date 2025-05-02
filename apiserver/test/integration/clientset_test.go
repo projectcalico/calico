@@ -89,31 +89,12 @@ func testPolicyWatch(client calicoclient.Interface) error {
 		},
 	}
 
-	globalNetworkPolicy := &v3.GlobalNetworkPolicy{ObjectMeta: metav1.ObjectMeta{Name: "policy"}}
+	globalNetworkPolicy := &v3.GlobalNetworkPolicy{ObjectMeta: metav1.ObjectMeta{Name: "global-net-pol-watch"}}
 
 	w, err := client.ProjectcalicoV3().GlobalNetworkPolicies().Watch(context.Background(), metav1.ListOptions{})
 	if err != nil {
 		return fmt.Errorf("error watching GlobalNetworkPolicies (%s)", err)
 	}
-
-	done := sync.WaitGroup{}
-	done.Add(1)
-	timeout := time.After(5 * time.Second)
-	var timeoutErr error
-	var events []watch.Event
-
-	go func() {
-		defer done.Done()
-		for i := 0; i < 1; i++ {
-			select {
-			case e := <-w.ResultChan():
-				events = append(events, e)
-			case <-timeout:
-				timeoutErr = fmt.Errorf("timed out waiting for events")
-				return
-			}
-		}
-	}()
 
 	// We should be able to receive this add event in our watch
 	_, err = client.ProjectcalicoV3().GlobalNetworkPolicies().Create(context.Background(), globalNetworkPolicy, metav1.CreateOptions{})
@@ -122,6 +103,25 @@ func testPolicyWatch(client calicoclient.Interface) error {
 	}
 	defer func() {
 		_ = client.ProjectcalicoV3().GlobalNetworkPolicies().Delete(context.Background(), globalNetworkPolicy.Name, metav1.DeleteOptions{})
+	}()
+
+	done := sync.WaitGroup{}
+	done.Add(1)
+	timeout := time.After(5 * time.Second)
+	var timeoutErr error
+	var event watch.Event
+
+	go func() {
+		defer done.Done()
+		for {
+			select {
+			case event = <-w.ResultChan():
+				return
+			case <-timeout:
+				timeoutErr = fmt.Errorf("timed out waiting for events")
+				return
+			}
+		}
 	}()
 
 	// Creating a new Tier should force the watch to be closed
@@ -139,12 +139,8 @@ func testPolicyWatch(client calicoclient.Interface) error {
 		return timeoutErr
 	}
 
-	if len(events) != 1 {
-		return fmt.Errorf("expected 1 event, got %d", len(events))
-	}
-
-	if events[0].Type != watch.Added {
-		return fmt.Errorf("expected add event, got %s", events[0])
+	if event.Type != watch.Added {
+		return fmt.Errorf("expected add event, got %s", event)
 	}
 
 	// Check that the watch is closed by trying to read from the channel
