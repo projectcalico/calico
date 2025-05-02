@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2024-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -38,6 +38,8 @@ const (
 	RouteClassWireguard
 	RouteClassVXLANSameSubnet
 	RouteClassVXLANTunnel
+	RouteClassIPIPSameSubnet
+	RouteClassIPIPTunnel
 	RouteClassIPAMBlockDrop
 
 	RouteClassMax
@@ -45,7 +47,8 @@ const (
 
 func (c RouteClass) IsRemote() bool {
 	switch c {
-	case RouteClassVXLANTunnel, RouteClassVXLANSameSubnet, RouteClassWireguard:
+	case RouteClassVXLANTunnel, RouteClassVXLANSameSubnet, RouteClassWireguard,
+		RouteClassIPIPTunnel, RouteClassIPIPSameSubnet:
 		return true
 	default:
 		return false
@@ -116,7 +119,7 @@ func (t Target) RouteScope() netlink.Scope {
 	case TargetTypeProhibit:
 		return netlink.SCOPE_UNIVERSE
 	case TargetTypeOnLink:
-		return netlink.SCOPE_LINK
+		return netlink.SCOPE_UNIVERSE
 	default:
 		return netlink.SCOPE_LINK
 	}

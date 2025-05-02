@@ -1,4 +1,4 @@
-// Copyright (c) 2021-2022 Tigera, Inc. All rights reserved.
+// Copyright (c) 2021-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -56,7 +56,7 @@ var _ = infrastructure.DatastoreDescribe("IPv6 iptables/nftables tests", []apico
 		options = infrastructure.DefaultTopologyOptions()
 		options.EnableIPv6 = true
 		options.FelixLogSeverity = "Debug"
-		options.IPIPEnabled = false
+		options.IPIPMode = api.IPIPModeNever
 
 		iOpts := []infrastructure.CreateOption{
 			infrastructure.K8sWithIPv6(),
