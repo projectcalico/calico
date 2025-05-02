@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2024-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -50,7 +50,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ openstack status-reporting"
 		topologyOptions := infrastructure.DefaultTopologyOptions()
 		topologyOptions.VXLANMode = api.VXLANModeAlways
 		topologyOptions.VXLANStrategy = infrastructure.NewDefaultVXLANStrategy(topologyOptions.IPPoolCIDR, topologyOptions.IPv6PoolCIDR)
-		topologyOptions.IPIPEnabled = false
+		topologyOptions.IPIPMode = api.IPIPModeNever
 		topologyOptions.EnableIPv6 = false
 		topologyOptions.ExtraEnvVars["FELIX_ENDPOINTREPORTINGENABLED"] = "true"
 		topologyOptions.ExtraEnvVars["FELIX_OPENSTACKREGION"] = "r0"
