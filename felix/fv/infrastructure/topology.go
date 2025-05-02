@@ -26,7 +26,6 @@ import (
 	"github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -117,7 +116,7 @@ func DefaultTopologyOptions() TopologyOptions {
 		WithTypha:             false,
 		WithFelixTyphaTLS:     false,
 		TyphaLogSeverity:      "info",
-		IPIPMode:              v3.IPIPModeAlways,
+		IPIPMode:              api.IPIPModeAlways,
 		SimulateBIRDRoutes:    true,
 		IPPoolCIDR:            DefaultIPPoolCIDR,
 		IPv6PoolCIDR:          DefaultIPv6PoolCIDR,
