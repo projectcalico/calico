@@ -934,6 +934,15 @@ blocks:
             # this was causing the DevStack setup to fail, because pip doesn't know how to uninstall
             # or replace the existing version.  Happily we do know that, so let's do it upfront here.
             - sudo apt-get remove -y python3-wrapt || true
+            # Install all the packages that would trigger an initramfs update using a workaround
+            # for limited /boot partition space in the ubuntu2004 image
+            - sudo apt update
+            - sudo rsync -av /boot/ /boot2/
+            - sudo mount --bind /boot2 /boot
+            - sudo apt install -y cryptsetup lsscsi open-iscsi thin-provisioning-tools
+            - sudo umount /boot
+            - sudo rsync -av /boot2/ /boot/ --exclude "*.new" --exclude "*.dpkg-bak" --delete --inplace
+            - sudo rm -rf /boot2/
             - git checkout -b devstack-test
             - export LIBVIRT_TYPE=qemu
             - export UPPER_CONSTRAINTS_FILE=https://releases.openstack.org/constraints/upper/yoga
