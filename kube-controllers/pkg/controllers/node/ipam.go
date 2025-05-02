@@ -24,6 +24,7 @@ import (
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -745,6 +746,8 @@ func (c *IPAMController) releaseUnusedBlocks() error {
 // - There are no longer any IP allocations on the node, OR
 // - The remaining IP allocations on the node are all determined to be leaked IP addresses.
 func (c *IPAMController) checkAllocations() ([]string, error) {
+	defer logIfSlow(time.Now(), "Allocation scan complete")
+
 	// For each node present in IPAM, if it doesn't exist in the Kubernetes API then we
 	// should consider it a candidate for cleanup.
 	nodesToCheck := map[string]map[string]*allocation{}
@@ -1006,6 +1009,8 @@ func (c *IPAMController) allocationIsValid(a *allocation, preferCache bool) bool
 }
 
 func (c *IPAMController) syncIPAM() error {
+	defer logIfSlow(time.Now(), "IPAM sync complete")
+
 	if !c.datastoreReady {
 		log.Warn("datastore is locked, skipping ipam sync")
 		return nil
@@ -1060,6 +1065,8 @@ func (c *IPAMController) syncIPAM() error {
 
 // garbageCollectKnownLeaks checks all known allocations and garbage collects any confirmed leaks.
 func (c *IPAMController) garbageCollectKnownLeaks() error {
+	defer logIfSlow(time.Now(), "Leak GC complete")
+
 	// limit the number of concurrent IPs we attempt to release at once.
 	maxBatchSize := 10000
 
@@ -1068,9 +1075,8 @@ func (c *IPAMController) garbageCollectKnownLeaks() error {
 	for id, a := range c.confirmedLeaks {
 		logc := log.WithFields(a.fields())
 
-		// Final check that the allocation is leaked, this time ignoring our cache
-		// to make sure we're working with up-to-date information.
-		if c.allocationIsValid(a, false) {
+		// Final check that the allocation is leaked.
+		if c.allocationIsValid(a, true) {
 			logc.Info("Leaked IP has been resurrected after querying latest state")
 			delete(c.confirmedLeaks, id)
 			a.markValid()
@@ -1403,5 +1409,11 @@ func (c *IPAMController) pause() func() {
 	<-pauseConfirmed
 	return func() {
 		doneChan <- struct{}{}
+	}
+}
+
+func logIfSlow(start time.Time, msg string) {
+	if dur := time.Since(start); dur > 5*time.Second {
+		logrus.WithField("duration", dur).Info(msg)
 	}
 }
