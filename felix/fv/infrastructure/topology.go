@@ -153,9 +153,7 @@ func CreateDefaultIPPoolFromOpts(
 		ipPool.Name = DefaultIPv6PoolName
 		ipPool.Spec.CIDR = opts.IPv6PoolCIDR
 		// IPIP is only supported on IPv4
-		if opts.IPIPMode != api.IPIPModeNever {
-			ginkgo.Fail("IPIPMode must be IPIPModeNever for v6!")
-		}
+		ipPool.Spec.IPIPMode = api.IPIPModeNever
 
 		if len(opts.IPv6PoolUsages) > 0 {
 			ipPool.Spec.AllowedUses = opts.IPv6PoolUsages
