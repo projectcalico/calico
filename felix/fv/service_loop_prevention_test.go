@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -50,7 +50,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ service loop prevention; wi
 		if BPFMode() {
 			options.EnableIPv6 = true
 		}
-		options.IPIPEnabled = false
+		options.IPIPMode = api.IPIPModeNever
 		tc, client = infrastructure.StartNNodeTopology(2, options, infra)
 		if BPFMode() {
 			ensureAllNodesBPFProgramsAttached(tc.Felixes)
