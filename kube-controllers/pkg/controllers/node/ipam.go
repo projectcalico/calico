@@ -1121,7 +1121,7 @@ func (c *IPAMController) garbageCollectKnownLeaks() error {
 		c.incrementReclamationMetric(a.block, a.node())
 		delete(c.confirmedLeaks, a.id())
 
-		logc.Debug("Successfully garbage collected leaked IP address")
+		logc.Info("Successfully garbage collected leaked IP address")
 		delete(leaks, opt)
 	}
 
