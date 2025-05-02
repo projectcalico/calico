@@ -56,6 +56,10 @@
 #include "bpf_helpers.h"
 #include "rule_counters.h"
 
+#ifndef IPVER6
+#include "ip_v4_fragment.h"
+#endif
+
 #define HAS_HOST_CONFLICT_PROG CALI_F_TO_HEP
 
 /* calico_tc_main is the main function used in all of the tc programs.  It is specialised
@@ -198,17 +202,25 @@ int calico_tc_main(struct __sk_buff *skb)
 		goto finalize;
 	}
 
+#ifndef IPVER6
 	if (ip_is_frag(ip_hdr(ctx))) {
-		CALI_DEBUG("Dropping unsupported IP fragments!");
-		ctx->fwd.res = TC_ACT_SHOT;
-		goto finalize;
+		if (!frags4_handle(ctx)) {
+			goto deny;
+		}
 	}
+#endif
 
 	return pre_policy_processing(ctx);
 
 allow:
 finalize:
 	return forward_or_drop(ctx);
+
+#ifndef IPVER6
+deny:
+	ctx->fwd.res = TC_ACT_SHOT;
+	goto finalize;
+#endif
 }
 
 static CALI_BPF_INLINE int pre_policy_processing(struct cali_tc_ctx *ctx)
