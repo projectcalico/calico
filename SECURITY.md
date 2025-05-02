@@ -10,7 +10,8 @@ automatic support for v3.25.x is dropped.
 
 ## CVEs Detected by Security Scanners
 
-If you are using automated tools (e.g., Trivy, Grype, Docker Scout, etc.) and find CVEs in Calico container images or dependencies, please check our [VEX repository](https://github.com/tigera/vex) **before submitting** a report. This repository contains Tigera’s analysis of known CVEs, including whether they are exploitable or applicable to our supported versions. This helps reduce duplicate reports and gives you context on known scanner findings.
+When using automated security scanning tools (e.g., Trivy, Grype, Docker Scout), CVEs may be flagged in Calico container images due to vulnerabilities in third-party dependencies. Before submitting any reports related to these findings, check the [Tigera VEX repository](https://github.com/tigera/vex).
+The repository provides analysis of third-party CVEs that may appear in Calico images, including whether they are exploitable or applicable to our supported versions. Reviewing this information helps avoid duplicate reports and offers context for scanner-detected issues.
 
 ## Reporting a Vulnerability
 
