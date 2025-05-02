@@ -167,6 +167,13 @@ func (m *ipipManager) OnUpdate(msg interface{}) {
 			m.routesDirty = true
 		}
 
+		m.logCtx.WithField("msg", msg).Infof("kir0  %v", msg.Borrowed)
+		if isRemoteTunnelRoute(msg, proto.IPPoolType_IPIP) {
+			m.logCtx.WithField("msg", msg).Info("kir IPIP data plane received route update for remote tunnel endpoint")
+			m.routesByDest[msg.Dst] = msg
+			m.routesDirty = true
+		}
+
 		// Process IPAM blocks that aren't associated to a single or /32 local workload
 		if routeIsLocalBlock(msg, proto.IPPoolType_IPIP) {
 			m.logCtx.WithField("msg", msg).Debug("IPIP data plane received route update for IPAM block")
@@ -355,6 +362,16 @@ func (m *ipipManager) updateRoutes() error {
 }
 
 func (m *ipipManager) tunneledRoute(cidr ip.CIDR, r *proto.RouteUpdate) *routetable.Target {
+	/*if isRemoteTunnelRoute(r, proto.IPPoolType_IPIP) {
+		// We treat remote tunnel routes as directly connected. They don't have a gateway of
+		// the VTEP because they ARE the VTEP!
+		return &routetable.Target{
+			CIDR:     cidr,
+			MTU:      m.dpConfig.IPIPMTU,
+			Protocol: m.routeProtocol,
+		}
+	}*/
+	logrus.Infof("kir %v", r)
 	// Extract the gateway addr for this route based on its remote address.
 	remoteAddr, ok := m.activeHostnameToIP[r.DstNodeName]
 	if !ok {

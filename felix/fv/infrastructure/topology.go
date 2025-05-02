@@ -59,6 +59,7 @@ type TopologyOptions struct {
 	TyphaLogSeverity          string
 	SimulateRoutes            bool
 	IPIPMode                  api.IPIPMode
+	IPIPStrategy              VXLANStrategy
 	VXLANMode                 api.VXLANMode
 	VXLANStrategy             VXLANStrategy
 	WireguardEnabled          bool
@@ -374,6 +375,9 @@ func StartNNodeTopology(
 
 		setUpBGPNodeIPAndIPIPTunnelIP := n > 1 || opts.NeedNodeIP
 		if opts.IPIPMode != api.IPIPModeNever {
+			//ExpectWithOffset(1, opts.IPIPStrategy).ToNot(BeNil(), "IPIPMode is set but IPIPStrategy is nil")
+			//infra.SetExpectedIPIPTunnelAddr(felix, opts.IPIPStrategy.TunnelAddress(i))
+			//expectedIPs = append(expectedIPs, felix.ExpectedIPIPTunnelAddr)
 			infra.SetExpectedIPIPTunnelAddr(felix, IPv4CIDR, i, setUpBGPNodeIPAndIPIPTunnelIP)
 			expectedIPs = append(expectedIPs, felix.ExpectedIPIPTunnelAddr)
 		}

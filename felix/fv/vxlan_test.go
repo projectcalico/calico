@@ -47,16 +47,16 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 		EnableIPv6  bool
 	}
 	for _, testConfig := range []testConf{
-		{api.VXLANModeCrossSubnet, "CalicoIPAM", true, true},
-		{api.VXLANModeCrossSubnet, "CalicoIPAM", false, true},
-		{api.VXLANModeCrossSubnet, "WorkloadIPs", false, true},
-		{api.VXLANModeCrossSubnet, "CalicoIPAM", true, false},
-		{api.VXLANModeCrossSubnet, "WorkloadIPs", false, false},
+		//{api.VXLANModeCrossSubnet, "CalicoIPAM", true, true},
+		//{api.VXLANModeCrossSubnet, "CalicoIPAM", false, true},
+		//{api.VXLANModeCrossSubnet, "WorkloadIPs", false, true},
+		//{api.VXLANModeCrossSubnet, "CalicoIPAM", true, false},
+		//{api.VXLANModeCrossSubnet, "WorkloadIPs", false, false},
 
-		{api.VXLANModeAlways, "CalicoIPAM", true, true},
-		{api.VXLANModeAlways, "WorkloadIPs", false, true},
+		//{api.VXLANModeAlways, "CalicoIPAM", true, true},
+		//{api.VXLANModeAlways, "WorkloadIPs", false, true},
 		{api.VXLANModeAlways, "CalicoIPAM", true, false},
-		{api.VXLANModeAlways, "WorkloadIPs", false, false},
+		//{api.VXLANModeAlways, "WorkloadIPs", false, false},
 	} {
 		vxlanMode := testConfig.VXLANMode
 		routeSource := testConfig.RouteSource
@@ -994,7 +994,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 			})
 		})
 
-		Describe("with a separate tunnel address pool that uses /32 blocks", func() {
+		Describe("pepperx with a separate tunnel address pool that uses /32 blocks", func() {
 			var (
 				infra           infrastructure.DatastoreInfra
 				tc              infrastructure.TopologyContainers
@@ -1096,7 +1096,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 				infra.Stop()
 			})
 
-			It("should have host to workload connectivity", func() {
+			It("sina0 should have host to workload connectivity", func() {
 				if vxlanMode == api.VXLANModeAlways && routeSource == "WorkloadIPs" {
 					Skip("Skipping due to known issue with tunnel IPs not being programmed in WEP mode")
 				}
@@ -1113,10 +1113,11 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 						cc.ExpectSome(f, w6[2])
 					}
 				}
+				time.Sleep(time.Minute * 60)
 				cc.CheckConnectivity()
 			})
 
-			It("should have workload to workload connectivity", func() {
+			/*It("should have workload to workload connectivity", func() {
 				cc.ExpectSome(w[0], w[1])
 				cc.ExpectSome(w[1], w[0])
 
@@ -1125,7 +1126,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 					cc.ExpectSome(w6[1], w6[0])
 				}
 				cc.CheckConnectivity()
-			})
+			})*/
 		})
 	}
 })

@@ -151,8 +151,8 @@ func newVXLANManagerWithShims(
 // isRemoteTunnelRoute returns true if the route update signifies a need to program
 // a directly connected route on the VXLAN device for a remote tunnel endpoint. This is needed
 // in a few cases in order to ensure host <-> pod connectivity over the tunnel.
-func isRemoteTunnelRoute(msg *proto.RouteUpdate) bool {
-	if msg.IpPoolType != proto.IPPoolType_VXLAN {
+func isRemoteTunnelRoute(msg *proto.RouteUpdate, ippoolType proto.IPPoolType) bool {
+	if msg.IpPoolType != ippoolType {
 		// Not VXLAN - can skip this update.
 		return false
 	}
@@ -162,12 +162,15 @@ func isRemoteTunnelRoute(msg *proto.RouteUpdate) bool {
 	isRemoteTunnel = isType(msg, proto.RouteType_REMOTE_TUNNEL)
 	isBlock = isType(msg, proto.RouteType_REMOTE_WORKLOAD)
 
+	logrus.Infof("nina0 %v", msg)
 	if isRemoteTunnel && msg.Borrowed {
+		logrus.Infof("nina1 %v", msg)
 		// If we receive a route for a borrowed VXLAN tunnel IP, we need to make sure to program a route for it as it
 		// won't be covered by the block route.
 		return true
 	}
 	if isRemoteTunnel && isBlock {
+		logrus.Infof("nina2 %v", msg)
 		// This happens when tunnel addresses are selected from an IP pool with blocks of a single address.
 		// These also need routes of the form "<IP> dev vxlan.calico" rather than "<block> via <VTEP>".
 		return true
@@ -199,7 +202,8 @@ func (m *vxlanManager) OnUpdate(protoBufMsg interface{}) {
 			m.routesDirty = true
 		}
 
-		if isRemoteTunnelRoute(msg) {
+		m.logCtx.WithField("msg", msg).Infof("kir0  %v", msg.Borrowed)
+		if isRemoteTunnelRoute(msg, proto.IPPoolType_VXLAN) {
 			m.logCtx.WithField("msg", msg).Debug("VXLAN data plane received route update for remote tunnel endpoint")
 			m.routesByDest[msg.Dst] = msg
 			m.routesDirty = true
@@ -418,7 +422,7 @@ func (m *vxlanManager) updateRoutes() {
 }
 
 func (m *vxlanManager) tunneledRoute(cidr ip.CIDR, r *proto.RouteUpdate) *routetable.Target {
-	if isRemoteTunnelRoute(r) {
+	if isRemoteTunnelRoute(r, proto.IPPoolType_VXLAN) {
 		// We treat remote tunnel routes as directly connected. They don't have a gateway of
 		// the VTEP because they ARE the VTEP!
 		return &routetable.Target{
