@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -89,7 +89,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 					topologyOptions.DelayFelixStart = true
 					topologyOptions.VXLANMode = api.VXLANModeAlways
 					topologyOptions.VXLANStrategy = infrastructure.NewDefaultVXLANStrategy(topologyOptions.IPPoolCIDR, topologyOptions.IPv6PoolCIDR)
-					topologyOptions.IPIPEnabled = false
+					topologyOptions.IPIPMode = api.IPIPModeNever
 					topologyOptions.EnableIPv6 = enableIPv6
 
 					// Need n>1 or the infra won't set up IP pools!
@@ -139,7 +139,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 					topologyOptions := infrastructure.DefaultTopologyOptions()
 					topologyOptions.VXLANMode = api.VXLANModeAlways
 					topologyOptions.VXLANStrategy = infrastructure.NewDefaultVXLANStrategy(topologyOptions.IPPoolCIDR, topologyOptions.IPv6PoolCIDR)
-					topologyOptions.IPIPEnabled = false
+					topologyOptions.IPIPMode = api.IPIPModeNever
 					topologyOptions.EnableIPv6 = enableIPv6
 
 					// Configure the interface pattern so that it doesn't match any host interfaces.

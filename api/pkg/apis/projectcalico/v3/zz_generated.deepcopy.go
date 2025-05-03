@@ -1391,6 +1391,11 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 		*out = new(bool)
 		**out = **in
 	}
+	if in.ProgramRoutes != nil {
+		in, out := &in.ProgramRoutes, &out.ProgramRoutes
+		*out = new(string)
+		**out = **in
+	}
 	if in.ExternalNodesCIDRList != nil {
 		in, out := &in.ExternalNodesCIDRList, &out.ExternalNodesCIDRList
 		*out = new([]string)

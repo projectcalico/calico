@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2024-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -46,8 +46,8 @@ func NewMainTable(
 		// So, if we see RTPROTO_BOOT on a route, it's ours if it's also
 		// associated with one of our interfaces.  But, if we see a route with
 		// defaultVXLANProto, we know it's ours.
-		allRouteProtos = []netlink.RouteProtocol{unix.RTPROT_BOOT, dataplanedefs.VXLANDefaultProto}
-		exclusiveRouteProtos = []netlink.RouteProtocol{dataplanedefs.VXLANDefaultProto}
+		allRouteProtos = []netlink.RouteProtocol{unix.RTPROT_BOOT, dataplanedefs.DefaultRouteProto}
+		exclusiveRouteProtos = []netlink.RouteProtocol{dataplanedefs.DefaultRouteProto}
 	} else {
 		// If DeviceRouteProtocol is not RTPROTO_BOOT, then we use that value
 		// for all our routes and we don't need to worry about RTPROTO_BOOT.

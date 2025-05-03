@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -62,7 +62,7 @@ var _ = Context("_BPF-SAFE_ Latency tests with initialized Felix and etcd datast
 
 	BeforeEach(func() {
 		topologyOptions := infrastructure.DefaultTopologyOptions()
-		topologyOptions.IPIPEnabled = false
+		topologyOptions.IPIPMode = api.IPIPModeNever
 		topologyOptions.ExtraEnvVars["FELIX_BPFLOGLEVEL"] = "off" // For best perf.
 
 		tc, etcd, client, infra = infrastructure.StartSingleNodeEtcdTopology(topologyOptions)

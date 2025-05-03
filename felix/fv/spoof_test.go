@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -169,7 +169,7 @@ var _ = Describe("Spoof tests", func() {
 			Expect(err).NotTo(HaveOccurred())
 			opts := infrastructure.DefaultTopologyOptions()
 			opts.EnableIPv6 = true
-			opts.IPIPEnabled = false
+			opts.IPIPMode = api.IPIPModeNever
 			opts.ExtraEnvVars["FELIX_BPFConnectTimeLoadBalancing"] = string(api.BPFConnectTimeLBDisabled)
 			opts.ExtraEnvVars["FELIX_BPFHostNetworkedNATWithoutCTLB"] = string(api.BPFHostNetworkedNATEnabled)
 			opts.ExtraEnvVars["FELIX_IPV6SUPPORT"] = "true"

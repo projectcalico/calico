@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -62,7 +62,7 @@ func describeHostEndpointTests(getInfra infrastructure.InfraFactory, allInterfac
 	BeforeEach(func() {
 		infra = getInfra()
 		options := infrastructure.DefaultTopologyOptions()
-		options.IPIPEnabled = false
+		options.IPIPMode = api.IPIPModeNever
 		options.WithTypha = true
 		tc, client = infrastructure.StartNNodeTopology(2, options, infra)
 
@@ -600,7 +600,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ with IP forwarding disabled
 			infra = getInfra()
 			options := infrastructure.DefaultTopologyOptions()
 			options.DelayFelixStart = true
-			options.IPIPEnabled = false
+			options.IPIPMode = api.IPIPModeNever
 			options.WithTypha = true
 			options.ExtraEnvVars["FELIX_IPFORWARDING"] = "Disabled"
 			tc, client = infrastructure.StartNNodeTopology(2, options, infra)

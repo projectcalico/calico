@@ -95,7 +95,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 	BeforeEach(func() {
 		infra = getInfra()
 		opts = infrastructure.DefaultTopologyOptions()
-		opts.IPIPEnabled = false
+		opts.IPIPMode = api.IPIPModeNever
 		opts.FlowLogSource = infrastructure.FlowLogSourceLocalSocket
 
 		opts.ExtraEnvVars["FELIX_FLOWLOGSFLUSHINTERVAL"] = "5"
@@ -809,7 +809,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ aggregation of flow log wit
 	BeforeEach(func() {
 		infra = getInfra()
 		opts = infrastructure.DefaultTopologyOptions()
-		opts.IPIPEnabled = false
+		opts.IPIPMode = api.IPIPModeNever
 		opts.FlowLogSource = infrastructure.FlowLogSourceLocalSocket
 
 		opts.ExtraEnvVars["FELIX_FLOWLOGSFLUSHINTERVAL"] = "5"
@@ -1504,7 +1504,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 	BeforeEach(func() {
 		infra = getInfra()
 		opts = infrastructure.DefaultTopologyOptions()
-		opts.IPIPEnabled = false
+		opts.IPIPMode = api.IPIPModeNever
 		opts.FlowLogSource = infrastructure.FlowLogSourceLocalSocket
 
 		opts.ExtraEnvVars["FELIX_FLOWLOGSFLUSHINTERVAL"] = "3"

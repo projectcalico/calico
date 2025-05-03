@@ -2948,6 +2948,13 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							Format:      "",
 						},
 					},
+					"programRoutes": {
+						SchemaProps: spec.SchemaProps{
+							Description: "ProgramRoutes specifies whether Felix should program IPIP or unencapsulated routes instead of BIRD. Felix always programs VXLAN routes. [Default: Disabled]",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 					"ipForwarding": {
 						SchemaProps: spec.SchemaProps{
 							Description: "IPForwarding controls whether Felix sets the host sysctls to enable IP forwarding.  IP forwarding is required when using Calico for workload networking.  This should be disabled only on hosts where Calico is used solely for host protection. In BPF mode, due to a kernel interaction, either IPForwarding must be enabled or BPFEnforceRPF must be disabled. [Default: Enabled]",

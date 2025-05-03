@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2024-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -51,7 +51,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ endpoint-to-host-action tes
 		}
 		infra = getInfra()
 		options := infrastructure.DefaultTopologyOptions()
-		options.IPIPEnabled = false
+		options.IPIPMode = api.IPIPModeNever
 		options.DelayFelixStart = true
 		options.FelixLogSeverity = "Debug"
 		tc, client = infrastructure.StartNNodeTopology(2, options, infra)
