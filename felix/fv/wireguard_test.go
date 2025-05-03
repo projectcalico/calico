@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -1764,8 +1764,6 @@ func wireguardTopologyOptions(routeSource string, ipipEnabled, wireguardIPv4Enab
 	topologyOptions.DelayFelixStart = true
 	// Enable IPv6 if IPv6 Wireguard will be enabled.
 	topologyOptions.EnableIPv6 = wireguardIPv6Enabled
-	// Assigning workload IPs using IPAM API.
-	topologyOptions.IPIPRoutesEnabled = false
 	// Indicate wireguard is enabled
 	topologyOptions.WireguardEnabled = wireguardIPv4Enabled
 	topologyOptions.WireguardEnabledV6 = wireguardIPv6Enabled
@@ -1775,7 +1773,15 @@ func wireguardTopologyOptions(routeSource string, ipipEnabled, wireguardIPv4Enab
 	}
 	topologyOptions.ExtraEnvVars["FELIX_ROUTESOURCE"] = routeSource
 	topologyOptions.ExtraEnvVars["FELIX_PROMETHEUSMETRICSENABLED"] = "true"
-	topologyOptions.IPIPEnabled = ipipEnabled
+
+	if ipipEnabled && !wireguardIPv6Enabled {
+		topologyOptions.IPIPMode = api.IPIPModeAlways
+		topologyOptions.SimulateBIRDRoutes = false
+		topologyOptions.ExtraEnvVars["FELIX_ProgramRoutes"] = "Enabled"
+	} else {
+		topologyOptions.IPIPMode = api.IPIPModeNever
+		topologyOptions.SimulateBIRDRoutes = true
+	}
 
 	// With Wireguard and BPF mode the default IptablesMarkMask of 0xffff0000 isn't enough.
 	topologyOptions.ExtraEnvVars["FELIX_IPTABLESMARKMASK"] = "4294934528" // 0xffff8000

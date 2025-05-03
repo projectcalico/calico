@@ -376,14 +376,16 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			options.NATOutgoingEnabled = true
 			options.AutoHEPsEnabled = true
 			// override IPIP being enabled by default
-			options.IPIPEnabled = false
-			options.IPIPRoutesEnabled = false
+			options.IPIPMode = api.IPIPModeNever
+			options.SimulateBIRDRoutes = false
 			switch testOpts.tunnel {
 			case "none":
-				// nothing
+				// Enable adding simulated routes.
+				options.SimulateBIRDRoutes = true
 			case "ipip":
-				options.IPIPEnabled = true
-				options.IPIPRoutesEnabled = true
+				// IPIP is not supported in IPv6. We need to mimic routes in FVs.
+				options.IPIPMode = api.IPIPModeAlways
+				options.SimulateBIRDRoutes = true
 			case "vxlan":
 				options.VXLANMode = api.VXLANModeAlways
 				options.VXLANStrategy = infrastructure.NewDefaultVXLANStrategy(options.IPPoolCIDR, options.IPv6PoolCIDR)
