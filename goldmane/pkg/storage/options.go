@@ -35,7 +35,7 @@ func WithBucketsToAggregate(n int) BucketRingOption {
 	}
 }
 
-func WithStreamReceiver(sm StreamReceiver) BucketRingOption {
+func WithStreamReceiver(sm Receiver) BucketRingOption {
 	return func(r *BucketRing) {
 		logrus.WithField("streamReceiver", sm).Debug("Setting stream receiver")
 		r.streams = sm
