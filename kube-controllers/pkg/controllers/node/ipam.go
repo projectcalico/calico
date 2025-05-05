@@ -1112,7 +1112,10 @@ func (c *IPAMController) garbageCollectKnownLeaks() error {
 	// released, or were unallocated to begin with. In either case, we can mark them as released.
 	for _, opt := range releasedOpts {
 		// Find the allocation that matches these release options.
-		a := leaks[opt]
+		a, ok := leaks[opt]
+		if !ok {
+			logrus.WithField("opt", opt).Fatalf("BUG: unable to find allocation for release options: %+v", leaks)
+		}
 		logc := log.WithFields(a.fields())
 
 		// No longer a leak. Remove it here so we're not dependent on receiving
