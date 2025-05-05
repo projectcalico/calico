@@ -502,7 +502,7 @@ func (p *PortListParam) Parse(raw string) (interface{}, error) {
 	var result []ProtoPort
 	for _, portStr := range strings.Split(raw, ",") {
 		portStr = strings.Trim(portStr, " ")
-		if portStr == "" {
+		if portStr == "" || portStr == "[]" {
 			continue
 		}
 
