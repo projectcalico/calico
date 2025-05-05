@@ -66,12 +66,8 @@ func (m *WatchManager) OnStatusUpdated(status api.SyncStatus) {
 
 func (m *WatchManager) OnUpdates(updates []api.Update) {
 	for _, u := range updates {
-		if u.KVPair.Value == nil {
-			// We do not need to cancel watches for delete as the original watch is still valid with other records
-			return
-		}
-
-		if u.Key.(model.ResourceKey).Kind == v3.KindTier {
+		// We do not need to cancel watches for delete as the original watch is still valid with other records
+		if u.Key.(model.ResourceKey).Kind == v3.KindTier && u.KVPair.Value != nil {
 			// New Tier added, we need to stop all watches in case there is a user that can watch policies in the new Tier
 			// When the watch is re-established it will contain policies in the newly created Tier
 			logrus.WithField("Tier", u.Key.(model.ResourceKey).Name).Debug("New Tier added, closing all policy watches")
@@ -92,13 +88,11 @@ func (m *WatchManager) AddWatch(record WatchRecord) {
 
 // minitorWatch waits to see if the context is done signaling that the watch has been ended. We can remove the watch from our map
 func (m *WatchManager) monitorWatch(record WatchRecord) {
-	for {
-		<-record.Ctx.Done()
-		// Watch has been closed, we should remove it from our map
-		logrus.WithFields(logrus.Fields{"id": record.ID, "Kind": record.Kind}).Debug("Stopping WatchRecord")
-		m.lock.Lock()
-		delete(m.watchRecords, record.ID)
-		m.lock.Unlock()
-		return
-	}
+	<-record.Ctx.Done()
+	// Watch has been closed, we should remove it from our map
+	logrus.WithFields(logrus.Fields{"id": record.ID, "Kind": record.Kind}).Debug("Watch has been stopped, removing watch record")
+	m.lock.Lock()
+	delete(m.watchRecords, record.ID)
+	m.lock.Unlock()
+	return
 }
