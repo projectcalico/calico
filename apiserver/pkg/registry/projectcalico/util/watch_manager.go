@@ -70,8 +70,9 @@ func (m *WatchManager) OnUpdates(updates []api.Update) {
 		if u.Key.(model.ResourceKey).Kind == v3.KindTier && u.KVPair.Value != nil {
 			// New Tier added, we need to stop all watches in case there is a user that can watch policies in the new Tier
 			// When the watch is re-established it will contain policies in the newly created Tier
-			logrus.WithField("Tier", u.Key.(model.ResourceKey).Name).Debug("New Tier added, closing all policy watches")
+			logrus.WithField("Tier", u.Key.(model.ResourceKey).Name).Debug("New Tier added, removing all WatchRecords")
 			for _, record := range m.watchRecords {
+				logrus.WithFields(logrus.Fields{"id": record.ID, "Kind": record.Kind}).Debug("Closing watch")
 				record.Watch.Stop()
 			}
 			m.watchRecords = map[string]WatchRecord{}
@@ -90,7 +91,7 @@ func (m *WatchManager) AddWatch(record WatchRecord) {
 func (m *WatchManager) monitorWatch(record WatchRecord) {
 	<-record.Ctx.Done()
 	// Watch has been closed, we should remove it from our map
-	logrus.WithFields(logrus.Fields{"id": record.ID, "Kind": record.Kind}).Debug("Watch has been stopped, removing watch record")
+	logrus.WithFields(logrus.Fields{"id": record.ID, "Kind": record.Kind}).Debug("Watch has been stopped, removing WatchRecord")
 	m.lock.Lock()
 	delete(m.watchRecords, record.ID)
 	m.lock.Unlock()
