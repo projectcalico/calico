@@ -327,14 +327,11 @@ type InternalDataplane struct {
 	filterTables    []generictables.Table
 	ipSets          []dpsets.IPSetsDataplane
 
-	ipipManager    *ipipManager
-	noEncapDeviceC chan string
-
-	vxlanManager   *vxlanManager
-	vxlanParentC   chan string
-	vxlanManagerV6 *vxlanManager
-	vxlanParentCV6 chan string
-	vxlanFDBs      []*vxlanfdb.VXLANFDB
+	dataInterfaceC   chan string
+	dataInterfaceCV6 chan string
+	routeManager     *routeManager
+	routeManagerV6   *routeManager
+	vxlanFDBs        []*vxlanfdb.VXLANFDB
 
 	linkAddrsManagers []*linkaddrs.LinkAddrsManager
 
@@ -671,19 +668,26 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		vxlanFDB := vxlanfdb.New(netlink.FAMILY_V4, dataplanedefs.VXLANIfaceNameV4, featureDetector, config.NetlinkTimeout)
 		dp.vxlanFDBs = append(dp.vxlanFDBs, vxlanFDB)
 
-		dp.vxlanManager = newVXLANManager(
+		dp.routeManager = newRouteManager(
 			ipSetsV4,
 			routeTableV4,
 			vxlanFDB,
 			dataplanedefs.VXLANIfaceNameV4,
-			config,
-			dp.loopSummarizer,
+			proto.IPPoolType_VXLAN,
 			4,
 			config.VXLANMTU,
+			config,
+			dp.loopSummarizer,
 		)
-		dp.vxlanParentC = make(chan string, 1)
-		go dp.vxlanManager.KeepVXLANDeviceInSync(context.Background(), config.VXLANMTU, dataplaneFeatures.ChecksumOffloadBroken, 10*time.Second, dp.vxlanParentC)
-		dp.RegisterManager(dp.vxlanManager)
+		dp.dataInterfaceC = make(chan string, 1)
+		go dp.routeManager.KeepVXLANDeviceInSync(
+			context.Background(),
+			config.VXLANMTU,
+			dataplaneFeatures.ChecksumOffloadBroken,
+			10*time.Second,
+			dp.dataInterfaceC,
+		)
+		dp.RegisterManager(dp.routeManager)
 	} else {
 		// Start a cleanup goroutine not to block felix if it needs to retry
 		go cleanUpVXLANDevice(dataplanedefs.VXLANIfaceNameV4)
@@ -1056,22 +1060,24 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	if config.RulesConfig.IPIPEnabled {
 		log.Info("IPIP enabled, starting thread to keep tunnel configuration in sync.")
 		// Add a manager to keep the all-hosts IP set up to date.
-		dp.ipipManager = newIPIPManager(
+		dp.routeManager = newRouteManager(
 			ipSetsV4,
 			routeTableV4,
+			nil,
 			dataplanedefs.IPIPIfaceName,
+			proto.IPPoolType_IPIP,
+			4,
+			config.IPIPMTU,
 			config,
 			dp.loopSummarizer,
-			4,
-			featureDetector,
 		)
-		dp.noEncapDeviceC = make(chan string, 1)
-		go dp.ipipManager.KeepIPIPDeviceInSync(
+		dp.dataInterfaceC = make(chan string, 1)
+		go dp.routeManager.KeepIPIPDeviceInSync(
 			dataplaneFeatures.ChecksumOffloadBroken,
 			time.Second*10,
-			dp.noEncapDeviceC,
+			dp.dataInterfaceC,
 		)
-		dp.RegisterManager(dp.ipipManager)
+		dp.RegisterManager(dp.routeManager)
 	} else {
 		// Only clean up IPIP addresses if IPIP is implicitly disabled (no IPIP pools and not explicitly set in FelixConfig)
 		if config.RulesConfig.FelixConfigIPIPEnabled == nil {
@@ -1147,19 +1153,26 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			vxlanFDBV6 := vxlanfdb.New(netlink.FAMILY_V6, dataplanedefs.VXLANIfaceNameV6, featureDetector, config.NetlinkTimeout)
 			dp.vxlanFDBs = append(dp.vxlanFDBs, vxlanFDBV6)
 
-			dp.vxlanManagerV6 = newVXLANManager(
+			dp.routeManagerV6 = newRouteManager(
 				ipSetsV6,
 				routeTableV6,
 				vxlanFDBV6,
 				dataplanedefs.VXLANIfaceNameV6,
-				config,
-				dp.loopSummarizer,
+				proto.IPPoolType_VXLAN,
 				6,
 				config.VXLANMTUV6,
+				config,
+				dp.loopSummarizer,
 			)
-			dp.vxlanParentCV6 = make(chan string, 1)
-			go dp.vxlanManagerV6.KeepVXLANDeviceInSync(context.Background(), config.VXLANMTUV6, dataplaneFeatures.ChecksumOffloadBroken, 10*time.Second, dp.vxlanParentCV6)
-			dp.RegisterManager(dp.vxlanManagerV6)
+			dp.dataInterfaceCV6 = make(chan string, 1)
+			go dp.routeManagerV6.KeepVXLANDeviceInSync(
+				context.Background(),
+				config.VXLANMTUV6,
+				dataplaneFeatures.ChecksumOffloadBroken,
+				10*time.Second,
+				dp.dataInterfaceCV6,
+			)
+			dp.RegisterManager(dp.routeManagerV6)
 		} else {
 			// Start a cleanup goroutine not to block felix if it needs to retry
 			go cleanUpVXLANDevice(dataplanedefs.VXLANIfaceNameV6)
@@ -2111,12 +2124,10 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 			d.onDatastoreMessage(msg)
 		case ifaceUpdate := <-d.ifaceUpdates:
 			d.onIfaceMonitorMessage(ifaceUpdate)
-		case name := <-d.vxlanParentC:
-			d.vxlanManager.OnParentNameUpdate(name)
-		case name := <-d.vxlanParentCV6:
-			d.vxlanManagerV6.OnParentNameUpdate(name)
-		case name := <-d.noEncapDeviceC:
-			d.ipipManager.OnNoEncapDeviceUpdate(name)
+		case name := <-d.dataInterfaceC:
+			d.routeManager.OnDataDeviceUpdate(name)
+		case name := <-d.dataInterfaceCV6:
+			d.routeManagerV6.OnDataDeviceUpdate(name)
 		case <-ipSetsRefreshC:
 			log.Debug("Refreshing IP sets state")
 			d.forceIPSetsRefresh = true
