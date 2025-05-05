@@ -73,7 +73,12 @@ func (s *stream) run() {
 		case <-s.ctx.Done():
 			logrus.WithField("id", s.ID).Debug("Stream context done")
 			return
-		case b := <-s.in:
+		case b, ok := <-s.in:
+			if !ok {
+				logrus.WithField("id", s.ID).Debug("Stream input channel closed")
+				return
+			}
+
 			b.Iter(func(f storage.FlowBuilder) bool {
 				if err := chanutil.WriteWithDeadline(s.ctx, s.out, f, 60*time.Second); err != nil {
 					// If we hit an error, indicate that we should stop iteration.
