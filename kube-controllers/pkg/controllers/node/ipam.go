@@ -24,7 +24,6 @@ import (
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -1071,7 +1070,7 @@ func (c *IPAMController) garbageCollectKnownLeaks() error {
 	maxBatchSize := 10000
 
 	var opts []ipam.ReleaseOptions
-	leaks := map[ipam.ReleaseOptions]*allocation{}
+	leaks := map[string]*allocation{}
 	for id, a := range c.confirmedLeaks {
 		logc := log.WithFields(a.fields())
 
@@ -1090,7 +1089,7 @@ func (c *IPAMController) garbageCollectKnownLeaks() error {
 		}
 
 		opts = append(opts, a.ReleaseOptions())
-		leaks[a.ReleaseOptions()] = a
+		leaks[a.ReleaseOptions().Address] = a
 
 		if len(opts) >= maxBatchSize {
 			break
@@ -1112,9 +1111,9 @@ func (c *IPAMController) garbageCollectKnownLeaks() error {
 	// released, or were unallocated to begin with. In either case, we can mark them as released.
 	for _, opt := range releasedOpts {
 		// Find the allocation that matches these release options.
-		a, ok := leaks[opt]
+		a, ok := leaks[opt.Address]
 		if !ok {
-			logrus.WithField("opt", opt).Fatalf("BUG: unable to find allocation for release options: %+v", leaks)
+			log.WithField("opt", opt).Fatalf("BUG: unable to find allocation for release options: %+v", leaks)
 		}
 		logc := log.WithFields(a.fields())
 
@@ -1125,7 +1124,7 @@ func (c *IPAMController) garbageCollectKnownLeaks() error {
 		delete(c.confirmedLeaks, a.id())
 
 		logc.Info("Successfully garbage collected leaked IP address")
-		delete(leaks, opt)
+		delete(leaks, opt.Address)
 	}
 
 	// Note any leaks that we couldn't release.
@@ -1417,6 +1416,6 @@ func (c *IPAMController) pause() func() {
 
 func logIfSlow(start time.Time, msg string) {
 	if dur := time.Since(start); dur > 5*time.Second {
-		logrus.WithField("duration", dur).Info(msg)
+		log.WithField("duration", dur).Info(msg)
 	}
 }
