@@ -80,10 +80,10 @@ func (c *streamCache) remove(id string) {
 		return
 	}
 
-	// Close the stream's output channel. It is important that we do this here while holding the lock,
+	// Close the stream's input channel. It is important that we do this here while holding the lock,
 	// allowing an atomic closure and removal from the cache. This ensures that no other goroutine
-	// can access the stream after its output channel is closed.
-	close(s.out)
+	// can access the stream after its input channel is closed.
+	close(s.in)
 	delete(c.streams, id)
 }
 

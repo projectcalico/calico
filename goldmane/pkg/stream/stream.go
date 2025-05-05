@@ -64,6 +64,10 @@ func (s *stream) ID() string {
 }
 
 func (s *stream) run() {
+	// Close the output channel when the stream is done. This ensures we don't try to
+	// write to a closed channel.
+	defer close(s.out)
+
 	for {
 		select {
 		case <-s.ctx.Done():
