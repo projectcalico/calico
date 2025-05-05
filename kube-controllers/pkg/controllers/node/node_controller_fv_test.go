@@ -338,7 +338,7 @@ var _ = Describe("Calico node controller FV tests (KDD mode)", func() {
 		})
 
 		// This is a test for a specific bug which was fixed by https://github.com/projectcalico/libcalico-go/pull/1345
-		FIt("should handle improperly formatted handle IDs", func() {
+		It("should handle improperly formatted handle IDs", func() {
 			nodeA := "node-a"
 
 			// Create the nodes in the Kubernetes API.
