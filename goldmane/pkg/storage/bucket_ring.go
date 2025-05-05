@@ -130,9 +130,10 @@ func NewBucketRing(n, interval int, now int64, opts ...BucketRingOption) *Bucket
 	}
 
 	logrus.WithFields(logrus.Fields{
-		"headIndex":    ring.headIndex,
-		"curBucket":    ring.buckets[ring.headIndex],
-		"oldestBucket": ring.buckets[(ring.headIndex+1)%n],
+		"headIndex": ring.headIndex,
+		"start":     ring.BeginningOfHistory(),
+		"end":       ring.EndOfHistory(),
+		"now":       now,
 	}).Debug("Initialized bucket ring")
 	return ring
 }
@@ -688,6 +689,7 @@ func (r *BucketRing) flushToStreams() {
 	// Collect the set of flows to emit to the stream manager. Each rollover, we emit
 	// a single bucket of flows to the stream manager.
 	bucket := r.streamingBucket()
+	logrus.WithFields(bucket.Fields()).Debug("Flushing bucket to stream manager")
 	r.streamBucket(bucket, r.streams)
 
 	if time.Since(start) > 1*time.Second {
