@@ -1130,7 +1130,7 @@ func (c ipamClient) ReleaseIPs(ctx context.Context, ips ...ReleaseOptions) ([]ne
 	opts := []ReleaseOptions{}
 	for i := 0; i < len(ipsByBlock); i++ {
 		r := <-resultChan
-		log.Debugf("Received response #%d from release goroutine: %v", i, r)
+		log.Debugf("Received response #%d from release goroutine: %+v", i, r)
 		if r.Error != nil && err == nil {
 			err = r.Error
 		}
