@@ -2343,6 +2343,9 @@ func testPolicyWatch(client calicoclient.Interface) error {
 	}()
 
 	w, err := client.ProjectcalicoV3().GlobalNetworkPolicies().Watch(context.Background(), metav1.ListOptions{})
+	if err != nil {
+		return fmt.Errorf("error watching GlobalNetworkPolicy (%s)", err)
+	}
 
 	done := sync.WaitGroup{}
 	done.Add(1)

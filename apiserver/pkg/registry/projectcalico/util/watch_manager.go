@@ -94,5 +94,4 @@ func (m *WatchManager) monitorWatch(record WatchRecord) {
 	m.lock.Lock()
 	delete(m.watchRecords, record.ID)
 	m.lock.Unlock()
-	return
 }
