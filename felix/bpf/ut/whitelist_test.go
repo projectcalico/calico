@@ -21,6 +21,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
+	v3 "github.com/projectcalico/calico/felix/bpf/conntrack/v3"
 	"github.com/projectcalico/calico/felix/bpf/routes"
 	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
 	"github.com/projectcalico/calico/felix/ip"
@@ -89,6 +90,53 @@ func TestAllowFromWorkloadExitHost(t *testing.T) {
 		// Approved by both WEP and HEP
 		Expect(ctr.Data().A2B.Approved).To(BeTrue())
 		Expect(ctr.Data().B2A.Approved).To(BeTrue())
+	})
+}
+
+func TestSkipRedirectPeerHostToVMWorkload(t *testing.T) {
+	RegisterTestingT(t)
+
+	bpfIfaceName = "HWvwl"
+	defer func() { bpfIfaceName = "" }()
+	_, ipv4, l4, _, pktBytes, err := testPacketUDPDefault()
+	Expect(err).NotTo(HaveOccurred())
+	udp := l4.(*layers.UDP)
+
+	ctMap := conntrack.Map()
+	err = ctMap.EnsureExists()
+	Expect(err).NotTo(HaveOccurred())
+	resetCTMap(ctMap) // ensure it is clean
+
+	hostIP = node1ip
+	// Insert a reverse route for the source workload.
+	rtKey := routes.NewKey(srcV4CIDR).AsBytes()
+	rtVal := routes.NewValue(routes.FlagsRemoteWorkload | routes.FlagInIPAMPool).AsBytes()
+	err = rtMap.Update(rtKey, rtVal)
+	Expect(err).NotTo(HaveOccurred())
+	rtKey = routes.NewKey(dstV4CIDR).AsBytes()
+	rtVal = routes.NewValueWithIfIndex(routes.FlagsLocalWorkload|routes.FlagVMWorkload|routes.FlagInIPAMPool, 1).AsBytes()
+	err = rtMap.Update(rtKey, rtVal)
+	Expect(err).NotTo(HaveOccurred())
+	defer resetRTMap(rtMap)
+	ctKey := conntrack.NewKey(uint8(ipv4.Protocol),
+		ipv4.SrcIP, uint16(udp.SrcPort), ipv4.DstIP, uint16(udp.DstPort))
+	skbMark = 0
+	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
+		res, err := bpfrun(pktBytes)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+
+		ct, err := conntrack.LoadMapMem(ctMap)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(ct).Should(HaveKey(ctKey))
+
+		ctr := ct[ctKey]
+
+		// Approved by HEP
+		Expect(ctr.Data().A2B.Approved).To(BeTrue())
+		// NOt approved by WEP yet
+		Expect(ctr.Data().B2A.Approved).NotTo(BeTrue())
+		Expect(ctr.Flags() & v3.FlagNoRedirPeer).To(Equal(v3.FlagNoRedirPeer))
 	})
 }
 

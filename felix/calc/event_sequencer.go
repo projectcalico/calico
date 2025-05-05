@@ -27,6 +27,7 @@ import (
 	"github.com/projectcalico/calico/felix/multidict"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/types"
+	"github.com/projectcalico/calico/lib/std/uniquelabels"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
@@ -421,6 +422,11 @@ func ModelWorkloadEndpointToProto(ep *model.WorkloadEndpoint, peerData *Endpoint
 		}
 	}
 
+	epType := proto.WorkloadType_REGULAR
+	if isVMWorkload(ep.Labels) {
+		epType = proto.WorkloadType_VM
+	}
+
 	return &proto.WorkloadEndpoint{
 		State:                      ep.State,
 		Name:                       ep.Name,
@@ -435,7 +441,7 @@ func ModelWorkloadEndpointToProto(ep *model.WorkloadEndpoint, peerData *Endpoint
 		Annotations:                ep.Annotations,
 		QosControls:                qosControls,
 		LocalBgpPeer:               localBGPPeer,
-		Labels:                     ep.Labels,
+		Type:                       epType,
 	}
 }
 
@@ -1266,4 +1272,13 @@ func natsToProtoNatInfo(nats []model.IPNAT) []*proto.NatInfo {
 		}
 	}
 	return protoNats
+}
+
+func isVMWorkload(labels uniquelabels.Map) bool {
+	if val, ok := labels.GetString("kubevirt.io"); ok {
+		if val == "virt-launcher" {
+			return true
+		}
+	}
+	return false
 }
