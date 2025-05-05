@@ -240,4 +240,18 @@ var _ = DescribeTable("WorkloadEndpoint name parsing",
 		Workload:     "workload",
 		Endpoint:     "eth0",
 	}),
+	Entry("Workload name used instead of WorkloadEndpoint name", "coredns-668d6bf9bc-bxhr6", false, names.WorkloadEndpointIdentifiers{
+		Node:         "coredns",
+		Orchestrator: "668d6bf9bc",
+		Endpoint:     "",
+		Workload:     "bxhr6",
+		Pod:          "",
+	}),
+	Entry("Workload name with lots of dashes used instead of WorkloadEndpoint name", "calico-kube-controllers-7946b84856-2fwwq", true, names.WorkloadEndpointIdentifiers{
+		Node:         "",
+		Orchestrator: "",
+		Workload:     "",
+		Endpoint:     "",
+		Pod:          "",
+	}),
 )
