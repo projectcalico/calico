@@ -16,6 +16,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"strings"
 
@@ -54,15 +55,15 @@ func main() {
 		// cali40s:buYu-wdtmS21f_KbIqrPSoG
 		fmt.Println("cali40" + sel.UniqueID()[:25])
 	case "print-tree":
-		printTree("", sel.Root(), false)
+		printTree(os.Stdout, "", sel.Root(), false)
 	default:
 		logrus.Fatalln("Usage: calico-selector id|set-name|print-tree <selector>")
 	}
 }
 
-func printTree(indent string, n parser.Node, continueLine bool) {
+func printTree(w io.Writer, indent string, n parser.Node, continueLine bool) {
 	p := func(v string, args ...any) {
-		fmt.Printf(indent+v+"\n", args...)
+		_, _ = fmt.Fprintf(w, indent+v+"\n", args...)
 	}
 	nextIndent := strings.ReplaceAll(indent, "-", " ")
 	if continueLine {
@@ -77,33 +78,33 @@ func printTree(indent string, n parser.Node, continueLine bool) {
 	case *parser.GlobalNode:
 		p("global()")
 	case *parser.LabelEqValueNode:
-		p("(%s == %q)", n.LabelName, n.Value)
+		p("(%s == %q)", n.LabelName.Value(), n.Value.Value())
 	case *parser.LabelNeValueNode:
-		p("(%s != %q)", n.LabelName, n.Value)
+		p("(%s != %q)", n.LabelName.Value(), n.Value.Value())
 	case *parser.LabelInSetNode:
-		p("(%s in {%s})", n.LabelName, strings.Join(n.Value, ","))
+		p("(%s in {%s})", n.LabelName.Value(), strings.Join(n.Value.StringSlice(), ","))
 	case *parser.LabelNotInSetNode:
-		p("(%s not in {%s})", n.LabelName, strings.Join(n.Value, ","))
+		p("(%s not in {%s})", n.LabelName.Value(), strings.Join(n.Value.StringSlice(), ","))
 	case *parser.LabelStartsWithValueNode:
-		p("(%s starts with %q)", n.LabelName, n.Value)
+		p("(%s starts with %q)", n.LabelName.Value(), n.Value.Value())
 	case *parser.LabelEndsWithValueNode:
-		p("(%s ends with %q)", n.LabelName, n.Value)
+		p("(%s ends with %q)", n.LabelName.Value(), n.Value.Value())
 	case *parser.LabelContainsValueNode:
-		p("(%s contains %q)", n.LabelName, n.Value)
+		p("(%s contains %q)", n.LabelName.Value(), n.Value.Value())
 	case *parser.HasNode:
-		p("has(%s)", n.LabelName)
+		p("has(%s)", n.LabelName.Value())
 	case *parser.NotNode:
 		p("NOT")
-		printTree(nextIndent, n.Operand, false)
+		printTree(w, nextIndent, n.Operand, false)
 	case *parser.AndNode:
 		p("AND")
 		for i, op := range n.Operands {
-			printTree(nextIndent, op, i < len(n.Operands)-1)
+			printTree(w, nextIndent, op, i < len(n.Operands)-1)
 		}
 	case *parser.OrNode:
 		p("OR")
 		for i, op := range n.Operands {
-			printTree(nextIndent, op, i < len(n.Operands)-1)
+			printTree(w, nextIndent, op, i < len(n.Operands)-1)
 		}
 	default:
 		p("unknown node type: %v", n)
