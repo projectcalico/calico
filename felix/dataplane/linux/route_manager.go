@@ -365,7 +365,15 @@ func (m *routeManager) getLocalHostAddr() string {
 }
 
 func (m *routeManager) getLocalVTEPParent() (netlink.Link, error) {
-	return m.getParentInterface(m.getLocalVTEP())
+	localVTEP := m.getLocalVTEP()
+	if localVTEP == nil {
+		return nil, fmt.Errorf("local VTEP not yet known")
+	}
+	parentDeviceIP := localVTEP.ParentDeviceIp
+	if m.ipVersion == 6 {
+		parentDeviceIP = localVTEP.ParentDeviceIpv6
+	}
+	return m.detectDataIface(parentDeviceIP)
 }
 
 func (m *routeManager) ipipEnabled() bool {
@@ -394,7 +402,7 @@ func (m *routeManager) CompleteDeferredWork() error {
 
 			dataIface, err = m.getLocalVTEPParent()
 		} else if m.ipipEnabled() {
-			dataIface, err = m.getNoEncapInterface()
+			dataIface, err = m.detectDataIface(m.getLocalHostAddr())
 		}
 		if err != nil {
 			// If we can't look up the parent interface then we're in trouble.
@@ -665,7 +673,7 @@ func (m *routeManager) KeepIPIPDeviceInSync(xsumBroken bool, wait time.Duration,
 			continue
 		}
 
-		noEncapDev, err := m.getNoEncapInterface()
+		noEncapDev, err := m.detectDataIface(m.getLocalHostAddr())
 		if err != nil {
 			m.logCtx.WithError(err).Warn("Failed to find noEncap device, retrying...")
 			sleepMonitoringChans(1 * time.Second)
@@ -706,33 +714,35 @@ func (m *routeManager) KeepIPIPDeviceInSync(xsumBroken bool, wait time.Duration,
 	m.logCtx.Info("KeepIPIPDeviceInSync exiting due to context.")
 }
 
-// getNoEncapInterface returns the noEncap interface for the given local address. This link returned is nil
-// if, and only if, an error occurred
-func (m *routeManager) getNoEncapInterface() (netlink.Link, error) {
-	localAddr := m.getLocalHostAddr()
-	if localAddr == "" {
-		return nil, fmt.Errorf("local address not found")
+func (m *routeManager) detectDataIface(dataAddr string) (netlink.Link, error) {
+	if dataAddr == "" {
+		return nil, fmt.Errorf("empty data interface address")
 	}
 
-	m.logCtx.WithField("local address", localAddr).Debug("Getting noEncap interface")
+	m.logCtx.WithField("address", dataAddr).Debug("Getting data interface")
 	links, err := m.nlHandle.LinkList()
 	if err != nil {
 		return nil, err
 	}
 
+	family := netlink.FAMILY_V4
+	if m.ipVersion == 6 {
+		family = netlink.FAMILY_V6
+	}
+
 	for _, link := range links {
-		addrs, err := m.nlHandle.AddrList(link, netlink.FAMILY_V4)
+		addrs, err := m.nlHandle.AddrList(link, family)
 		if err != nil {
 			return nil, err
 		}
 		for _, addr := range addrs {
-			if addr.IPNet.IP.String() == localAddr {
-				m.logCtx.Debugf("Found noEncap interface: %s", link)
+			if addr.IPNet.IP.String() == dataAddr {
+				m.logCtx.Debugf("Found data interface: %s", link)
 				return link, nil
 			}
 		}
 	}
-	return nil, fmt.Errorf("Unable to find noEncap interface with address %s", localAddr)
+	return nil, fmt.Errorf("Unable to find data interface with address %s", dataAddr)
 }
 
 // configureIPIPDevice ensures the IPIP tunnel device is up and configures correctly.
@@ -885,39 +895,6 @@ func (m *routeManager) KeepVXLANDeviceInSync(
 	m.logCtx.Info("KeepVXLANDeviceInSync exiting due to context.")
 }
 
-// getParentInterface returns the parent interface for the given local VTEP based on IP address. This link returned is nil
-// if, and only if, an error occurred
-func (m *routeManager) getParentInterface(localVTEP *proto.VXLANTunnelEndpointUpdate) (netlink.Link, error) {
-	if localVTEP == nil {
-		return nil, fmt.Errorf("local VTEP not yet known")
-	}
-	m.logCtx.WithField("localVTEP", localVTEP).Debug("Getting parent interface")
-	links, err := m.nlHandle.LinkList()
-	if err != nil {
-		return nil, err
-	}
-
-	family := netlink.FAMILY_V4
-	parentDeviceIP := localVTEP.ParentDeviceIp
-	if m.ipVersion == 6 {
-		family = netlink.FAMILY_V6
-		parentDeviceIP = localVTEP.ParentDeviceIpv6
-	}
-	for _, link := range links {
-		addrs, err := m.nlHandle.AddrList(link, family)
-		if err != nil {
-			return nil, err
-		}
-		for _, addr := range addrs {
-			if addr.IPNet.IP.String() == parentDeviceIP {
-				m.logCtx.Debugf("Found parent interface: %+v", link)
-				return link, nil
-			}
-		}
-	}
-	return nil, fmt.Errorf("unable to find parent interface with address %s", parentDeviceIP)
-}
-
 // configureVXLANDevice ensures the VXLAN tunnel device is up and configured correctly.
 func (m *routeManager) configureVXLANDevice(
 	mtu int,
@@ -926,19 +903,19 @@ func (m *routeManager) configureVXLANDevice(
 ) error {
 	logCtx := m.logCtx.WithFields(logrus.Fields{"device": m.tunnelDevice})
 	logCtx.Debug("Configuring VXLAN tunnel device")
-	parent, err := m.getParentInterface(localVTEP)
+	addr := localVTEP.Ipv4Addr
+	parentDeviceIP := localVTEP.ParentDeviceIp
+	if m.ipVersion == 6 {
+		addr = localVTEP.Ipv6Addr
+		parentDeviceIP = localVTEP.ParentDeviceIpv6
+	}
+	parent, err := m.detectDataIface(parentDeviceIP)
 	if err != nil {
 		return err
 	}
 	mac, err := parseMacForIPVersion(localVTEP, m.ipVersion)
 	if err != nil {
 		return err
-	}
-	addr := localVTEP.Ipv4Addr
-	parentDeviceIP := localVTEP.ParentDeviceIp
-	if m.ipVersion == 6 {
-		addr = localVTEP.Ipv6Addr
-		parentDeviceIP = localVTEP.ParentDeviceIpv6
 	}
 	la := netlink.NewLinkAttrs()
 	la.Name = m.tunnelDevice
