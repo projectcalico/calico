@@ -185,6 +185,22 @@ func (o *Obj) AttachClassifier(secName, ifName string, ingress bool, prio int) (
 	return int(ret.prog_id), int(ret.priority), int(ret.handle), nil
 }
 
+func (o *Obj) AttachTCX(secName, ifName string) (*Link, error) {
+	cSecName := C.CString(secName)
+	cIfName := C.CString(ifName)
+	defer C.free(unsafe.Pointer(cSecName))
+	defer C.free(unsafe.Pointer(cIfName))
+	ifIndex, err := C.if_nametoindex(cIfName)
+	if err != nil {
+		return nil, fmt.Errorf("error get ifindex for %s:%w", ifName, err)
+	}
+	link, err := C.bpf_tcx_program_attach(o.obj, cSecName, C.int(ifIndex))
+	if err != nil {
+		return nil, fmt.Errorf("error attaching tcx program %w", err)
+	}
+	return &Link{link: link}, nil
+}
+
 func (o *Obj) AttachXDP(ifName, progName string, oldID int, mode uint) (int, error) {
 	cProgName := C.CString(progName)
 	cIfName := C.CString(ifName)

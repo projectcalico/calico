@@ -67,6 +67,23 @@ struct bpf_tc_opts bpf_tc_program_attach(struct bpf_object *obj, char *secName, 
 	return attach;
 }
 
+struct bpf_link* bpf_tcx_program_attach(struct bpf_object *obj, char *secName, int ifIndex)
+{
+	DECLARE_LIBBPF_OPTS(bpf_tcx_opts, attach);
+	struct bpf_program *prog = bpf_object__find_program_by_name(obj, secName);
+	if (!prog) {
+		errno = ENOENT;
+		return NULL;
+	}
+	struct bpf_link *link =  bpf_program__attach_tcx(prog, ifIndex, &attach);
+	int err = libbpf_get_error(link);
+        if (err) {
+                link = NULL;
+        }
+        set_errno(err);
+        return link;
+}
+
 void bpf_tc_program_detach(int ifindex, int handle, int pref, bool ingress)
 {
 	DECLARE_LIBBPF_OPTS(bpf_tc_hook, hook,
