@@ -39,9 +39,163 @@ var (
 	mockFailure = errors.New("mock failure")
 )
 
-var _ = Describe("IpipMgr (tunnel configuration)", func() {
+var _ = Describe("RouteManager for ipip ip pools", func() {
+	var manager *routeManager
+	var rt *mockRouteTable
+	var ipSets *dpsets.MockIPSets
+
+	BeforeEach(func() {
+		ipSets = dpsets.NewMockIPSets()
+		rt = &mockRouteTable{
+			currentRoutes: map[string][]routetable.Target{},
+		}
+
+		la := netlink.NewLinkAttrs()
+		la.Name = "eth0"
+		opRecorder := logutils.NewSummarizer("test")
+		manager = newRouteManagerWithShims(
+			ipSets, rt, nil, dataplanedefs.IPIPIfaceName,
+			proto.IPPoolType_IPIP,
+			4,
+			1400,
+			Config{
+				MaxIPSetSize:       1024,
+				Hostname:           "node1",
+				ExternalNodesCidrs: []string{"10.10.10.0/24"},
+				RulesConfig: rules.Config{
+					IPIPTunnelAddress: net.ParseIP("192.168.0.1"),
+				},
+				ProgramRoutes:       true,
+				DeviceRouteProtocol: dataplanedefs.DefaultRouteProto,
+			},
+			opRecorder,
+			&mockIPIPDataplane{
+				links:          []netlink.Link{&mockLink{attrs: la}},
+				tunnelLinkName: dataplanedefs.IPIPIfaceName,
+			},
+		)
+	})
+
+	It("successfully adds a route to the noEncap interface", func() {
+		manager.OnUpdate(&proto.HostMetadataUpdate{
+			Hostname: "node1",
+			Ipv4Addr: "10.0.0.1",
+		})
+		manager.OnUpdate(&proto.HostMetadataUpdate{
+			Hostname: "node2",
+			Ipv4Addr: "10.0.1.1",
+		})
+
+		err := manager.configureIPIPDevice(50, manager.dpConfig.RulesConfig.IPIPTunnelAddress, false)
+		Expect(err).NotTo(HaveOccurred())
+		manager.OnDataDeviceUpdate("eth0")
+
+		Expect(manager.hostAddr).NotTo(BeZero())
+		Expect(manager.dataDevice).NotTo(BeEmpty())
+		noEncapDev, err := manager.detectDataIface(manager.getLocalHostAddr())
+
+		Expect(noEncapDev).NotTo(BeNil())
+		Expect(err).NotTo(HaveOccurred())
+
+		manager.OnUpdate(&proto.RouteUpdate{
+			Types:       proto.RouteType_REMOTE_WORKLOAD,
+			IpPoolType:  proto.IPPoolType_IPIP,
+			Dst:         "192.168.0.3/26",
+			DstNodeName: "node2",
+			DstNodeIp:   "10.0.1.1",
+			SameSubnet:  true,
+		})
+
+		manager.OnUpdate(&proto.RouteUpdate{
+			Types:       proto.RouteType_REMOTE_WORKLOAD,
+			IpPoolType:  proto.IPPoolType_IPIP,
+			Dst:         "192.168.0.2/26",
+			DstNodeName: "node2",
+			DstNodeIp:   "10.0.1.1",
+		})
+
+		manager.OnUpdate(&proto.RouteUpdate{
+			Types:       proto.RouteType_LOCAL_WORKLOAD,
+			IpPoolType:  proto.IPPoolType_IPIP,
+			Dst:         "192.168.0.100/26",
+			DstNodeName: "node1",
+			DstNodeIp:   "10.0.0.1",
+			SameSubnet:  true,
+		})
+
+		// Borrowed /32 should not be programmed as blackhole.
+		manager.OnUpdate(&proto.RouteUpdate{
+			Types:       proto.RouteType_LOCAL_WORKLOAD,
+			IpPoolType:  proto.IPPoolType_IPIP,
+			Dst:         "192.168.0.10/32",
+			DstNodeName: "node1",
+			DstNodeIp:   "10.0.0.7",
+			SameSubnet:  true,
+		})
+
+		Expect(rt.currentRoutes[dataplanedefs.IPIPIfaceName]).To(HaveLen(0))
+		Expect(rt.currentRoutes[routetable.InterfaceNone]).To(HaveLen(0))
+
+		err = manager.CompleteDeferredWork()
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(rt.currentRoutes[dataplanedefs.IPIPIfaceName]).To(HaveLen(1))
+		Expect(rt.currentRoutes[routetable.InterfaceNone]).To(HaveLen(1))
+		Expect(rt.currentRoutes["eth0"]).NotTo(BeNil())
+	})
+
+	It("should fall back to programming tunneled routes if the noEncap device is not known", func() {
+		dataDeviceC := make(chan string)
+		go manager.KeepIPIPDeviceInSync(false, 1*time.Second, dataDeviceC)
+
+		By("Sending another node's route.")
+		manager.OnUpdate(&proto.HostMetadataUpdate{
+			Hostname: "node2",
+			Ipv4Addr: "10.0.0.2",
+		})
+		manager.OnUpdate(&proto.RouteUpdate{
+			Types:       proto.RouteType_REMOTE_WORKLOAD,
+			IpPoolType:  proto.IPPoolType_IPIP,
+			Dst:         "172.0.0.1/26",
+			DstNodeName: "node2",
+			DstNodeIp:   "10.0.0.2",
+			SameSubnet:  true,
+		})
+
+		err := manager.CompleteDeferredWork()
+		Expect(err).NotTo(HaveOccurred())
+		Expect(manager.routesDirty).To(BeFalse())
+		Expect(rt.currentRoutes["eth0"]).To(HaveLen(0))
+		Expect(rt.currentRoutes[dataplanedefs.IPIPIfaceName]).To(HaveLen(1))
+
+		By("Sending another local node update.")
+		manager.OnUpdate(&proto.HostMetadataUpdate{
+			Hostname: "node1",
+			Ipv4Addr: "10.0.0.1",
+		})
+		localAddr := manager.getLocalHostAddr()
+		Expect(localAddr).NotTo(BeNil())
+
+		// Note: no encap device name is sent after configuration so this receive
+		// ensures we don't race.
+
+		By("waiting")
+		Eventually(dataDeviceC, "2s").Should(Receive(Equal("eth0")))
+		manager.OnDataDeviceUpdate("eth0")
+
+		Expect(rt.currentRoutes["eth0"]).To(HaveLen(0))
+		err = manager.CompleteDeferredWork()
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(manager.routesDirty).To(BeFalse())
+		Expect(rt.currentRoutes["eth0"]).To(HaveLen(1))
+		Expect(rt.currentRoutes[dataplanedefs.IPIPIfaceName]).To(HaveLen(0))
+	})
+})
+
+var _ = Describe("IpipManager (tunnel configuration)", func() {
 	var (
-		ipipMgr   *ipipManager
+		ipipMgr   *routeManager
 		ipSets    *dpsets.MockIPSets
 		dataplane *mockIPIPDataplane
 		rt        *mockRouteTable
@@ -65,8 +219,11 @@ var _ = Describe("IpipMgr (tunnel configuration)", func() {
 			currentRoutes: map[string][]routetable.Target{},
 		}
 		opRecorder := logutils.NewSummarizer("test")
-		ipipMgr = newIPIPManagerWithShim(
-			ipSets, rt, dataplanedefs.IPIPIfaceName,
+		ipipMgr = newRouteManagerWithShims(
+			ipSets, rt, nil, dataplanedefs.IPIPIfaceName,
+			proto.IPPoolType_IPIP,
+			4,
+			1400,
 			Config{
 				MaxIPSetSize:       1024,
 				Hostname:           "node1",
@@ -74,7 +231,6 @@ var _ = Describe("IpipMgr (tunnel configuration)", func() {
 			},
 			opRecorder,
 			dataplane,
-			4,
 		)
 	})
 
@@ -225,7 +381,7 @@ var _ = Describe("IpipMgr (tunnel configuration)", func() {
 
 var _ = Describe("ipipManager IP set updates", func() {
 	var (
-		ipipMgr *ipipManager
+		ipipMgr *routeManager
 		ipSets  *dpsets.MockIPSets
 		rt      *mockRouteTable
 	)
@@ -243,8 +399,11 @@ var _ = Describe("ipipManager IP set updates", func() {
 		la := netlink.NewLinkAttrs()
 		la.Name = "eth0"
 		opRecorder := logutils.NewSummarizer("test")
-		ipipMgr = newIPIPManagerWithShim(
-			ipSets, rt, dataplanedefs.IPIPIfaceName,
+		ipipMgr = newRouteManagerWithShims(
+			ipSets, rt, nil, dataplanedefs.IPIPIfaceName,
+			proto.IPPoolType_IPIP,
+			4,
+			1400,
 			Config{
 				MaxIPSetSize:       1024,
 				Hostname:           "host1",
@@ -255,13 +414,12 @@ var _ = Describe("ipipManager IP set updates", func() {
 				links:          []netlink.Link{&mockLink{attrs: la}},
 				tunnelLinkName: dataplanedefs.IPIPIfaceName,
 			},
-			4,
 		)
 		ipipMgr.OnUpdate(&proto.HostMetadataUpdate{
 			Hostname: "host1",
 			Ipv4Addr: "10.0.0.1",
 		})
-		ipipMgr.OnNoEncapDeviceUpdate("eth0")
+		ipipMgr.OnDataDeviceUpdate("eth0")
 	})
 
 	It("should not create the IP set until first call to CompleteDeferredWork()", func() {
@@ -386,157 +544,6 @@ var _ = Describe("ipipManager IP set updates", func() {
 				Expect(ipSets.AddOrReplaceCalled).To(BeFalse())
 			})
 		})
-	})
-})
-
-var _ = Describe("IPIPManager route updates", func() {
-	var manager *ipipManager
-	var rt *mockRouteTable
-	var ipSets *dpsets.MockIPSets
-
-	BeforeEach(func() {
-		ipSets = dpsets.NewMockIPSets()
-		rt = &mockRouteTable{
-			currentRoutes: map[string][]routetable.Target{},
-		}
-
-		la := netlink.NewLinkAttrs()
-		la.Name = "eth0"
-		opRecorder := logutils.NewSummarizer("test")
-		manager = newIPIPManagerWithShim(
-			ipSets, rt, dataplanedefs.IPIPIfaceName,
-			Config{
-				MaxIPSetSize:       1024,
-				Hostname:           "node1",
-				ExternalNodesCidrs: []string{"10.10.10.0/24"},
-				RulesConfig: rules.Config{
-					IPIPTunnelAddress: net.ParseIP("192.168.0.1"),
-				},
-				ProgramRoutes:       true,
-				IPIPMTU:             1400,
-				DeviceRouteProtocol: dataplanedefs.DefaultRouteProto,
-			},
-			opRecorder,
-			&mockIPIPDataplane{
-				links:          []netlink.Link{&mockLink{attrs: la}},
-				tunnelLinkName: dataplanedefs.IPIPIfaceName,
-			},
-			4,
-		)
-	})
-
-	It("successfully adds a route to the noEncap interface", func() {
-		manager.OnUpdate(&proto.HostMetadataUpdate{
-			Hostname: "node1",
-			Ipv4Addr: "10.0.0.1",
-		})
-		manager.OnUpdate(&proto.HostMetadataUpdate{
-			Hostname: "node2",
-			Ipv4Addr: "10.0.1.1",
-		})
-
-		err := manager.configureIPIPDevice(50, manager.dpConfig.RulesConfig.IPIPTunnelAddress, false)
-		Expect(err).NotTo(HaveOccurred())
-		manager.OnNoEncapDeviceUpdate("eth0")
-
-		Expect(manager.hostAddr).NotTo(BeZero())
-		Expect(manager.noEncapDevice).NotTo(BeEmpty())
-		noEncapDev, err := manager.getNoEncapInterface()
-
-		Expect(noEncapDev).NotTo(BeNil())
-		Expect(err).NotTo(HaveOccurred())
-
-		manager.OnUpdate(&proto.RouteUpdate{
-			Types:       proto.RouteType_REMOTE_WORKLOAD,
-			IpPoolType:  proto.IPPoolType_IPIP,
-			Dst:         "192.168.0.3/26",
-			DstNodeName: "node2",
-			DstNodeIp:   "10.0.1.1",
-			SameSubnet:  true,
-		})
-
-		manager.OnUpdate(&proto.RouteUpdate{
-			Types:       proto.RouteType_REMOTE_WORKLOAD,
-			IpPoolType:  proto.IPPoolType_IPIP,
-			Dst:         "192.168.0.2/26",
-			DstNodeName: "node2",
-			DstNodeIp:   "10.0.1.1",
-		})
-
-		manager.OnUpdate(&proto.RouteUpdate{
-			Types:       proto.RouteType_LOCAL_WORKLOAD,
-			IpPoolType:  proto.IPPoolType_IPIP,
-			Dst:         "192.168.0.100/26",
-			DstNodeName: "node1",
-			DstNodeIp:   "10.0.0.1",
-			SameSubnet:  true,
-		})
-
-		// Borrowed /32 should not be programmed as blackhole.
-		manager.OnUpdate(&proto.RouteUpdate{
-			Types:       proto.RouteType_LOCAL_WORKLOAD,
-			IpPoolType:  proto.IPPoolType_IPIP,
-			Dst:         "192.168.0.10/32",
-			DstNodeName: "node1",
-			DstNodeIp:   "10.0.0.7",
-			SameSubnet:  true,
-		})
-
-		Expect(rt.currentRoutes[dataplanedefs.IPIPIfaceName]).To(HaveLen(0))
-		Expect(rt.currentRoutes[routetable.InterfaceNone]).To(HaveLen(0))
-
-		err = manager.CompleteDeferredWork()
-
-		Expect(err).NotTo(HaveOccurred())
-		Expect(rt.currentRoutes[dataplanedefs.IPIPIfaceName]).To(HaveLen(1))
-		Expect(rt.currentRoutes[routetable.InterfaceNone]).To(HaveLen(1))
-		Expect(rt.currentRoutes["eth0"]).NotTo(BeNil())
-	})
-
-	It("should fall back to programming tunneled routes if the noEncap device is not known", func() {
-		noEncapNameC := make(chan string)
-		go manager.KeepIPIPDeviceInSync(false, 1*time.Second, noEncapNameC)
-
-		By("Sending another node's route.")
-		manager.OnUpdate(&proto.HostMetadataUpdate{
-			Hostname: "node2",
-			Ipv4Addr: "10.0.0.2",
-		})
-		manager.OnUpdate(&proto.RouteUpdate{
-			Types:       proto.RouteType_REMOTE_WORKLOAD,
-			IpPoolType:  proto.IPPoolType_IPIP,
-			Dst:         "172.0.0.1/26",
-			DstNodeName: "node2",
-			DstNodeIp:   "10.0.0.2",
-			SameSubnet:  true,
-		})
-
-		err := manager.CompleteDeferredWork()
-		Expect(err).NotTo(HaveOccurred())
-		Expect(manager.routesDirty).To(BeFalse())
-		Expect(rt.currentRoutes["eth0"]).To(HaveLen(0))
-		Expect(rt.currentRoutes[dataplanedefs.IPIPIfaceName]).To(HaveLen(1))
-
-		By("Sending another local node update.")
-		manager.OnUpdate(&proto.HostMetadataUpdate{
-			Hostname: "node1",
-			Ipv4Addr: "10.0.0.1",
-		})
-		localAddr := manager.getLocalHostAddr()
-		Expect(localAddr).NotTo(BeNil())
-
-		// Note: no encap device name is sent after configuration so this receive
-		// ensures we don't race.
-		Eventually(noEncapNameC, "2s").Should(Receive(Equal("eth0")))
-		manager.OnNoEncapDeviceUpdate("eth0")
-
-		Expect(rt.currentRoutes["eth0"]).To(HaveLen(0))
-		err = manager.CompleteDeferredWork()
-
-		Expect(err).NotTo(HaveOccurred())
-		Expect(manager.routesDirty).To(BeFalse())
-		Expect(rt.currentRoutes["eth0"]).To(HaveLen(1))
-		Expect(rt.currentRoutes[dataplanedefs.IPIPIfaceName]).To(HaveLen(0))
 	})
 })
 
