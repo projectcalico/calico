@@ -131,7 +131,7 @@ var _ = testutils.E2eDatastoreDescribe("BGPPeer tests", testutils.DatastoreAll, 
 				Spec:       spec2,
 			}, options.SetOptions{})
 			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).To(Equal("resource already exists: BGPPeer(" + name1 + ")"))
+			Expect(outError.Error()).To(ContainSubstring("resource already exists: BGPPeer(" + name1 + ") with error:"))
 
 			By("Getting BGPPeer (name1) and comparing the output against spec1")
 			res, outError := c.BGPPeers().Get(ctx, name1, options.GetOptions{})

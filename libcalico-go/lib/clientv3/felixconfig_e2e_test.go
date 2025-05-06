@@ -105,7 +105,7 @@ var _ = testutils.E2eDatastoreDescribe("FelixConfiguration tests", testutils.Dat
 				Spec:       spec2,
 			}, options.SetOptions{})
 			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).To(Equal("resource already exists: FelixConfiguration(" + name1 + ")"))
+			Expect(outError.Error()).To(ContainSubstring("resource already exists: FelixConfiguration(" + name1 + ") with error:"))
 
 			By("Getting FelixConfiguration (name1) and comparing the output against spec1")
 			res, outError := c.FelixConfigurations().Get(ctx, name1, options.GetOptions{})
