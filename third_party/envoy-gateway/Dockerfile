@@ -22,5 +22,14 @@ COPY --from=source --chown=65532:65532 /var/lib /var/lib
 
 USER 65532:65532
 
+# These labels are required for OCP Certification
+LABEL description="Envoy Gateway is an implementation of the Kubernetes Gateway API using the envoy-gateway project"
+LABEL maintainer="maintainers@tigera.io"
+LABEL name="Envoy Gateway"
+LABEL release="1"
+LABEL summary="Envoy Gateway is an implementation of the Kubernetes Gateway API using the envoy-gateway project"
+LABEL vendor="Project Calico"
+LABEL version="${GIT_VERSION}"
+
 ENTRYPOINT ["/usr/local/bin/envoy-gateway"]
 ENV PATH="$PATH:/usr/local/bin"

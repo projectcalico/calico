@@ -44,6 +44,15 @@ FROM ${CALICO_BASE}
 
 COPY --from=source / /
 
+# These labels are required for OCP Certification
+LABEL description="Envoy Proxy is WHATEVER ENVOY PROXY DOES"
+LABEL maintainer="maintainers@tigera.io"
+LABEL name="Envoy Proxy"
+LABEL release="1"
+LABEL summary="Envoy Gateway is THE SAME EXPLANATION AS THE DESCRIPTION"
+LABEL vendor="Project Calico"
+LABEL version="${GIT_VERSION}"
+
 EXPOSE 10000
 ENTRYPOINT ["/usr/local/bin/envoy"]
 CMD ["-c", "/etc/envoy/envoy.yaml"]
