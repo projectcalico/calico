@@ -52,22 +52,22 @@ var (
 
 	// Directories that publish images.
 	imageReleaseDirs = []string{
-		"third_party/envoy-gateway",
-		"third_party/envoy-proxy",
-		"third_party/envoy-ratelimit",
 		"apiserver",
 		"app-policy",
 		"calicoctl",
 		"cni-plugin",
+		"goldmane",
+		"guardian",
 		"key-cert-provisioner",
 		"kube-controllers",
 		"node",
+		"third_party/envoy-gateway",
+		"third_party/envoy-proxy",
+		"third_party/envoy-ratelimit",
 		"pod2daemon",
 		"typha",
-		"goldmane",
 		"whisker",
 		"whisker-backend",
-		"guardian",
 	}
 
 	// Directories for Windows.
@@ -89,6 +89,8 @@ var (
 		"envoy-gateway",
 		"envoy-proxy",
 		"envoy-ratelimit",
+		"goldmane",
+		"guardian",
 		"key-cert-provisioner",
 		"kube-controllers",
 		"node",
@@ -96,7 +98,8 @@ var (
 		"pod2daemon-flexvol",
 		"test-signer",
 		"typha",
-		"goldmane",
+		"whisker",
+		"whisker-backend",
 	}
 	windowsImages = []string{
 		"cni-windows",
