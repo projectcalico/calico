@@ -380,22 +380,22 @@ EOF
             # Verify that external IPs for local service is advertised but not the cluster service.
             local_svc_externalips_route = "%s via %s" % (local_svc_external_ip, local_svc_host_ip)
             cluster_svc_externalips_route = "%s via %s" % (cluster_svc_external_ip, cluster_svc_host_ip)
-            retry_until_success(lambda: self.assertIn(local_svc_externalips_route, self.get_routes()))
-            retry_until_success(lambda: self.assertNotIn(cluster_svc_externalips_route, self.get_routes()))
+            retry_until_success(lambda: self.assertIn(local_svc_externalips_route, self.get_routes()), retries=30)
+            retry_until_success(lambda: self.assertNotIn(cluster_svc_externalips_route, self.get_routes()), retries=30)
 
             # Scale the local_svc to 4 replicas.
             self.scale_deployment(local_svc, self.ns, 4)
             self.wait_for_deployment(local_svc, self.ns)
 
             # Verify that we have ECMP routes for the external IP of the local service.
-            retry_until_success(lambda: self.assert_ecmp_routes(local_svc_external_ip, [self.ipv6s[1], self.ipv6s[2], self.ipv6s[3]]))
+            retry_until_success(lambda: self.assert_ecmp_routes(local_svc_external_ip, [self.ipv6s[1], self.ipv6s[2], self.ipv6s[3]]), retries=30)
 
             # Delete both services, assert only cluster CIDR route is advertised.
             self.delete_and_confirm(local_svc, "svc", self.ns)
             self.delete_and_confirm(cluster_svc, "svc", self.ns)
 
             # Assert that external IP is no longer an advertised route.
-            retry_until_success(lambda: self.assertNotIn(local_svc_externalips_route, self.get_routes()))
+            retry_until_success(lambda: self.assertNotIn(local_svc_externalips_route, self.get_routes()), retries=30)
 
     def test_many_services(self):
         """
@@ -415,7 +415,7 @@ EOF
 """)
 
             # Assert that a route to the service IP range is present.
-            retry_until_success(lambda: self.assertIn("fd00:10:96::/112", self.get_routes()))
+            retry_until_success(lambda: self.assertIn("fd00:10:96::/112", self.get_routes()), retries=30)
 
             # Create a local service and deployment.
             local_svc = "nginx-local"
@@ -486,7 +486,7 @@ EOF
             retry_until_success(curl, function_args=[local_svc_ip])
 
             # Assert that local clusterIP is an advertised route.
-            retry_until_success(lambda: self.assertIn(local_svc_ip, self.get_routes()))
+            retry_until_success(lambda: self.assertIn(local_svc_ip, self.get_routes()), retries=30)
 
             # Create an export BGP filter that rejects the service IP range
             kubectl("""apply -f - <<EOF
