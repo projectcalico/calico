@@ -1,3 +1,17 @@
+// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package set
 
 import (
@@ -9,26 +23,34 @@ const (
 	sizeStoredInMap       = -1
 )
 
+var arrCapForSize = [adaptiveSetArrayLimit + 1]int{
+	0, 1, 2, 4, 4, 8, 8, 8, 8, 16, 16, 16, 16, 16, 16, 16, 16,
+}
+
 // Adaptive is a set implementation that uses different underlying data
 // structures depending on the size of the set.  For sets that usually empty
 // or have only one or two elements, it is more than twice as fast and it uses
 // ~10x less memory. It gets progressively slower as the number of elements
-// increases, but at adaptiveSetArrayLimit it switches to a map-based
+// increases. Above adaptiveSetArrayLimit it switches to a map-based
 // implementation like set.Typed (with slight overhead relative to set.Typed).
 //
 // The zero value of Adaptive is an empty set (so it may be embedded in other
-// datastructures). It should not be copied after first use.
+// datastructures).
+//
+// should not be copied after first use. Since the struct carries the size,
+// copying by value and then mutating can result in two Adaptive instances
+// sharing storage but with different sizes; this is not recommended!
 type Adaptive[T comparable] struct {
-	// p holds different types depending on the size of the set.
-	// if size == 0, p is nil.
-	// if size is in the range [1, adaptiveSetArrayLimit], p is a pointer to
-	//    an array of size elements, rounded up to power of two.
-	// if size > adaptiveSetArrayLimit, p is a pointer to a map[T]v
-	p unsafe.Pointer
-
 	// size is either the number of elements in the set, or sizeStoredInMap
 	// if the set is backed by a map.
 	size int
+
+	// p holds different types depending on size.
+	// if size == 0, p is nil.
+	// if size is in the range [1, adaptiveSetArrayLimit], p is a pointer to
+	//    an array with length size, rounded up to next power of two.
+	// if size == sizeStoredInMap, p is a pointer to a map[T]v
+	p unsafe.Pointer
 }
 
 func NewAdaptive[T comparable]() *Adaptive[T] {
@@ -54,13 +76,10 @@ func (a *Adaptive[T]) Len() int {
 	return int(a.size)
 }
 
-var arrCapForSize = [adaptiveSetArrayLimit + 1]int{
-	0, 1, 2, 4, 4, 8, 8, 8, 8, 16, 16, 16, 16, 16, 16, 16, 16,
-}
-
 func (a *Adaptive[T]) Add(item T) {
 	switch a.size {
 	case 0:
+		// Array of one item is just the item.
 		a.p = unsafe.Pointer(&item)
 		a.size = 1
 	default:
@@ -72,21 +91,21 @@ func (a *Adaptive[T]) Add(item T) {
 				return
 			}
 		}
-		if len(tSlice) < cap(tSlice) {
-			// Still room in existing slice.
+
+		// If we get here, need to add the element to the set.
+		if a.size < adaptiveSetArrayLimit {
+			// Set is still small enough to use a slice.
+			if len(tSlice) == cap(tSlice) {
+				// Need to grow the slice; we do it manually so we can control
+				// the exact new capacity.
+				tSlice = growSliceCap(tSlice, arrCapForSize[a.size+1])
+				a.p = unsafe.Pointer(&tSlice[0])
+			}
 			tSlice = append(tSlice, item)
 			a.size++
 			return
 		}
-		if a.size < adaptiveSetArrayLimit {
-			// Still allowed to grow the slice.
-			s2 := make([]T, a.size, arrCapForSize[a.size+1])
-			copy(s2, tSlice)
-			s2 = append(s2, item)
-			a.p = unsafe.Pointer(&s2[0])
-			a.size++
-			return
-		}
+
 		// Need to upgrade to a map.
 		m := make(map[T]v, a.size+1)
 		for _, t := range tSlice {
@@ -99,6 +118,12 @@ func (a *Adaptive[T]) Add(item T) {
 		m := *(*map[T]v)(a.p)
 		m[item] = emptyValue
 	}
+}
+
+func growSliceCap[T any](in []T, newCap int) []T {
+	out := make([]T, len(in), newCap)
+	copy(out, in)
+	return out
 }
 
 func (a *Adaptive[T]) AddAll(itemArray []T) {
