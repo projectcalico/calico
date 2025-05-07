@@ -58,7 +58,9 @@ lint: install
 
 ci: install format lint yarn-test
 
+.PHONY: clean
 clean:
+	rm -rf bin dist node_modules *.created *.published
 
 ###############################################################################
 # Release

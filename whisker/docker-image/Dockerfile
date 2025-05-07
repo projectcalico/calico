@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-ARG BIN_DIR
 ARG CALICO_BASE
 
 FROM registry.access.redhat.com/ubi9/ubi:latest AS ubi
@@ -61,7 +60,7 @@ COPY docker-image/nginx.conf /etc/nginx/nginx.conf
 
 COPY dist /usr/share/nginx/html/
 
-COPY ${BIN_DIR}/LICENSE /licenses/LICENSE
+COPY bin/LICENSE /licenses/LICENSE
 
 FROM ${CALICO_BASE}
 
