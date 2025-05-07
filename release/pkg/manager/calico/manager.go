@@ -59,6 +59,7 @@ var (
 		"app-policy",
 		"calicoctl",
 		"cni-plugin",
+		"guardian",
 		"key-cert-provisioner",
 		"kube-controllers",
 		"node",
@@ -67,7 +68,6 @@ var (
 		"goldmane",
 		"whisker",
 		"whisker-backend",
-		"guardian",
 	}
 
 	// Directories for Windows.
@@ -89,6 +89,7 @@ var (
 		"envoy-gateway",
 		"envoy-proxy",
 		"envoy-ratelimit",
+		"guardian",
 		"key-cert-provisioner",
 		"kube-controllers",
 		"node",
@@ -97,6 +98,8 @@ var (
 		"test-signer",
 		"typha",
 		"goldmane",
+		"whisker",
+		"whisker-backend",
 	}
 	windowsImages = []string{
 		"cni-windows",
