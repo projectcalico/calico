@@ -16,7 +16,6 @@ package intdataplane
 
 import (
 	"bytes"
-	"context"
 	"fmt"
 	"net"
 	"reflect"
@@ -53,7 +52,6 @@ type routeManager struct {
 	// activeHostnameToIP maps hostname to string IP address. We don't bother to parse into
 	// net.IPs because we're going to pass them directly to the IPSet API.
 	activeHostnameToIP map[string]string
-	ipSetDirty         bool
 	ipsetsDataplane    dpsets.IPSetsDataplane
 	ipSetMetadata      ipsets.IPSetMetadata
 
@@ -65,13 +63,9 @@ type routeManager struct {
 	// Local information
 	hostname       string
 	hostAddr       string
-	myAddrLock     sync.Mutex
-	myAddrChangedC chan struct{}
-
-	// Holds this node's VTEP information.
-	myVTEPLock     sync.Mutex
-	myVTEPChangedC chan struct{}
 	myVTEP         *proto.VXLANTunnelEndpointUpdate
+	myInfoLock     sync.Mutex
+	myInfoChangedC chan struct{}
 
 	// VXLAN configuration.
 	vxlanID   int
@@ -80,8 +74,9 @@ type routeManager struct {
 
 	// Indicates if configuration has changed since the last apply.
 	routesDirty       bool
-	externalNodeCIDRs []string
+	ipSetDirty        bool
 	vtepsDirty        bool
+	externalNodeCIDRs []string
 	nlHandle          netlinkHandle
 	dpConfig          Config
 	routeProtocol     netlink.RouteProtocol
@@ -158,8 +153,7 @@ func newRouteManagerWithShims(
 		routesByDest:       map[string]*proto.RouteUpdate{},
 		localIPAMBlocks:    map[string]*proto.RouteUpdate{},
 		vtepsByNode:        map[string]*proto.VXLANTunnelEndpointUpdate{},
-		myVTEPChangedC:     make(chan struct{}, 1),
-		myAddrChangedC:     make(chan struct{}, 1),
+		myInfoChangedC:     make(chan struct{}, 1),
 		tunnelDevice:       tunnelDevice,
 		tunnelDeviceMTU:    mtu,
 		vxlanID:            dpConfig.RulesConfig.VXLANVNI,
@@ -167,14 +161,17 @@ func newRouteManagerWithShims(
 		ipVersion:          ipVersion,
 		ippoolType:         ippoolType,
 		externalNodeCIDRs:  dpConfig.ExternalNodesCidrs,
-		ipSetDirty:         true,
 		routesDirty:        true,
+		ipSetDirty:         ippoolType == proto.IPPoolType_IPIP,
 		vtepsDirty:         ippoolType == proto.IPPoolType_VXLAN,
 		dpConfig:           dpConfig,
 		nlHandle:           nlHandle,
 		routeProtocol:      calculateRouteProtocol(dpConfig),
-		logCtx:             logrus.WithField("ipVersion", ipVersion),
-		opRecorder:         opRecorder,
+		logCtx: logrus.WithFields(logrus.Fields{
+			"ipVersion":     ipVersion,
+			"tunnel device": tunnelDevice,
+		}),
+		opRecorder: opRecorder,
 	}
 }
 
@@ -296,6 +293,12 @@ func (m *routeManager) OnUpdate(protoBufMsg interface{}) {
 		m.routesDirty = true
 		m.vtepsDirty = true
 	case *proto.HostMetadataUpdate:
+		if m.ippoolType != proto.IPPoolType_IPIP {
+			// Skip since the update is for a mismatched IP pool type.
+			m.logCtx.WithField("msg", msg).Debug("Skipping mismatched ip pool update")
+			return
+		}
+
 		m.logCtx.WithField("hostname", msg.Hostname).Debug("Host update/create")
 		if msg.Hostname == m.hostname {
 			logrus.Info("pepsi")
@@ -305,6 +308,12 @@ func (m *routeManager) OnUpdate(protoBufMsg interface{}) {
 		m.ipSetDirty = true
 		m.routesDirty = true
 	case *proto.HostMetadataRemove:
+		if m.ippoolType != proto.IPPoolType_IPIP {
+			// Skip since the update is for a mismatched IP pool type.
+			m.logCtx.WithField("msg", msg).Debug("Skipping mismatched ip pool update")
+			return
+		}
+
 		m.logCtx.WithField("hostname", msg.Hostname).Debug("Host removed")
 		if msg.Hostname == m.hostname {
 			m.setLocalHostAddr("")
@@ -332,48 +341,35 @@ func (m *routeManager) deleteRoute(dst string) {
 }
 
 func (m *routeManager) setLocalVTEP(vtep *proto.VXLANTunnelEndpointUpdate) {
-	m.myVTEPLock.Lock()
-	defer m.myVTEPLock.Unlock()
+	m.myInfoLock.Lock()
+	defer m.myInfoLock.Unlock()
 	m.myVTEP = vtep
 	select {
-	case m.myVTEPChangedC <- struct{}{}:
+	case m.myInfoChangedC <- struct{}{}:
 	default:
 	}
 }
 
 func (m *routeManager) getLocalVTEP() *proto.VXLANTunnelEndpointUpdate {
-	m.myVTEPLock.Lock()
-	defer m.myVTEPLock.Unlock()
+	m.myInfoLock.Lock()
+	defer m.myInfoLock.Unlock()
 	return m.myVTEP
 }
 
 func (m *routeManager) setLocalHostAddr(address string) {
-	logrus.Infof("pepper %v", address)
-	m.myAddrLock.Lock()
-	defer m.myAddrLock.Unlock()
+	m.myInfoLock.Lock()
+	defer m.myInfoLock.Unlock()
 	m.hostAddr = address
 	select {
-	case m.myAddrChangedC <- struct{}{}:
+	case m.myInfoChangedC <- struct{}{}:
 	default:
 	}
 }
 
 func (m *routeManager) getLocalHostAddr() string {
-	m.myAddrLock.Lock()
-	defer m.myAddrLock.Unlock()
+	m.myInfoLock.Lock()
+	defer m.myInfoLock.Unlock()
 	return m.hostAddr
-}
-
-func (m *routeManager) getLocalVTEPParent() (netlink.Link, error) {
-	localVTEP := m.getLocalVTEP()
-	if localVTEP == nil {
-		return nil, fmt.Errorf("local VTEP not yet known")
-	}
-	parentDeviceIP := localVTEP.ParentDeviceIp
-	if m.ipVersion == 6 {
-		parentDeviceIP = localVTEP.ParentDeviceIpv6
-	}
-	return m.detectDataIface(parentDeviceIP)
 }
 
 func (m *routeManager) ipipEnabled() bool {
@@ -385,25 +381,11 @@ func (m *routeManager) vxlanEnabled() bool {
 }
 
 func (m *routeManager) CompleteDeferredWork() error {
-	if m.ipSetDirty {
-		m.updateAllHostsIPSet()
-		m.ipSetDirty = false
-	}
-
 	if m.dataDevice == "" {
 		// Background goroutine hasn't sent us the parent interface name yet,
 		// but we can look it up synchronously.  OnParentNameUpdate will handle
 		// any duplicate update when it arrives.
-		var (
-			err       error
-			dataIface netlink.Link
-		)
-		if m.vxlanEnabled() {
-
-			dataIface, err = m.getLocalVTEPParent()
-		} else if m.ipipEnabled() {
-			dataIface, err = m.detectDataIface(m.getLocalHostAddr())
-		}
+		dataIface, err := m.detectDataIface()
 		if err != nil {
 			// If we can't look up the parent interface then we're in trouble.
 			// It likely means that our VTEP is missing or conflicting.  We
@@ -425,6 +407,11 @@ func (m *routeManager) CompleteDeferredWork() error {
 			m.dataDevice = dataIface.Attrs().Name
 			m.routesDirty = true
 		}
+	}
+
+	if m.ipSetDirty {
+		m.updateAllHostsIPSet()
+		m.ipSetDirty = false
 	}
 
 	if m.vtepsDirty {
@@ -604,84 +591,57 @@ func (m *routeManager) OnDataDeviceUpdate(name string) {
 	}
 	if m.dataDevice != "" {
 		// We're changing parent interface, remove the old routes.
-		if m.vxlanEnabled() {
-			m.routeTable.SetRoutes(routetable.RouteClassVXLANSameSubnet, m.dataDevice, nil)
-		} else if m.ipipEnabled() {
-			m.routeTable.SetRoutes(routetable.RouteClassIPIPSameSubnet, m.dataDevice, nil)
+		routeClass := routetable.RouteClassVXLANSameSubnet
+		if m.ipipEnabled() {
+			routeClass = routetable.RouteClassIPIPSameSubnet
 		}
+		m.routeTable.SetRoutes(routeClass, m.dataDevice, nil)
 	}
 	m.dataDevice = name
 	m.routesDirty = true
 }
 
-// KeepBIRDIPIPDeviceInSync is a goroutine that configures the IPIP tunnel device for BIRD, then periodically
 // checks that it is still correctly configured.
-func (m *routeManager) KeepBIRDIPIPDeviceInSync(xsumBroken bool) {
-	for {
-		err := m.configureIPIPDevice(m.dpConfig.IPIPMTU, m.dpConfig.RulesConfig.IPIPTunnelAddress, xsumBroken)
-		if err != nil {
-			logrus.WithError(err).Warn("Failed configure IPIP tunnel device, retrying...")
-			time.Sleep(1 * time.Second)
-			continue
-		}
-		time.Sleep(10 * time.Second)
-	}
-}
-
-// KeepIPIPDeviceInSync is a goroutine that configures the IPIP tunnel device, then periodically
-// checks that it is still correctly configured.
-func (m *routeManager) KeepIPIPDeviceInSync(xsumBroken bool, wait time.Duration, noEncapNameC chan string) {
-	usedBy := "BIRD"
-	if m.dpConfig.ProgramRoutes {
-		usedBy = "Felix"
-	}
-	ctx := context.Background()
-	mtu := m.dpConfig.IPIPMTU
-	address := m.dpConfig.RulesConfig.IPIPTunnelAddress
+func (m *routeManager) KeepDeviceInSync(mtu int, xsumBroken bool, wait time.Duration, dataIfaceC chan string) {
 	m.logCtx.WithFields(logrus.Fields{
 		"device":     m.tunnelDevice,
 		"mtu":        mtu,
 		"xsumBroken": xsumBroken,
 		"wait":       wait,
-		"used by":    usedBy,
 	}).Info("IPIP device thread started.")
-
-	if !m.dpConfig.ProgramRoutes {
-		m.KeepBIRDIPIPDeviceInSync(xsumBroken)
-	}
-
 	logNextSuccess := true
-	noEncapDevName := ""
+	dataIface := ""
 
 	sleepMonitoringChans := func(maxDuration time.Duration) {
 		timer := time.NewTimer(maxDuration)
 		defer timer.Stop()
 		select {
 		case <-timer.C:
-		case <-ctx.Done():
-			logrus.Debug("Sleep returning early: context finished.")
-		case <-m.myAddrChangedC:
-			logrus.Debug("Sleep returning early: local address changed.")
+		case <-m.myInfoChangedC:
+			logrus.Debug("Sleep returning early: local information changed.")
 		}
 	}
 
-	for ctx.Err() == nil {
-		localAddr := m.getLocalHostAddr()
-		if localAddr == "" {
+	for {
+		if m.missingLocalInfo() {
 			m.logCtx.Debug("Missing local address information, retrying...")
 			sleepMonitoringChans(10 * time.Second)
 			continue
 		}
 
-		noEncapDev, err := m.detectDataIface(m.getLocalHostAddr())
+		dataDevice, err := m.detectDataIface()
 		if err != nil {
 			m.logCtx.WithError(err).Warn("Failed to find noEncap device, retrying...")
 			sleepMonitoringChans(1 * time.Second)
 			continue
 		}
 
-		m.logCtx.WithField("localAddr", address).Debug("Configuring IPIP device")
-		err = m.configureIPIPDevice(mtu, address, xsumBroken)
+		m.logCtx.Debug("Configuring IPIP device")
+		if m.ipipEnabled() {
+			err = m.configureIPIPDevice(mtu, xsumBroken)
+		} else {
+			err = m.configureVXLANDevice(mtu, xsumBroken)
+		}
 		if err != nil {
 			m.logCtx.WithError(err).Warn("Failed to configure IPIP tunnel device, retrying...")
 			logNextSuccess = true
@@ -689,18 +649,16 @@ func (m *routeManager) KeepIPIPDeviceInSync(xsumBroken bool, wait time.Duration,
 			continue
 		}
 
-		newNoEncapDevName := noEncapDev.Attrs().Name
-		if newNoEncapDevName != noEncapDevName {
+		newDataIface := dataDevice.Attrs().Name
+		if newDataIface != dataIface {
 			// Send a message back to the main loop to tell it to update the
 			// routing tables.
-			m.logCtx.Infof("NoEncap device changed from %q to %q", noEncapDevName, newNoEncapDevName)
+			m.logCtx.Infof("data device changed from %q to %q", dataIface, newDataIface)
 			select {
-			case noEncapNameC <- newNoEncapDevName:
-				noEncapDevName = newNoEncapDevName
-			case <-m.myAddrChangedC:
-				m.logCtx.Info("My address changed; restarting configuration.")
-				continue
-			case <-ctx.Done():
+			case dataIfaceC <- newDataIface:
+				dataIface = newDataIface
+			case <-m.myInfoChangedC:
+				m.logCtx.Info("My information changed; restarting configuration.")
 				continue
 			}
 		}
@@ -711,12 +669,30 @@ func (m *routeManager) KeepIPIPDeviceInSync(xsumBroken bool, wait time.Duration,
 		}
 		sleepMonitoringChans(wait)
 	}
-	m.logCtx.Info("KeepIPIPDeviceInSync exiting due to context.")
 }
 
-func (m *routeManager) detectDataIface(dataAddr string) (netlink.Link, error) {
+func (m *routeManager) missingLocalInfo() bool {
+	return (m.vxlanEnabled() && m.getLocalVTEP() == nil) ||
+		(m.ipipEnabled() && m.getLocalHostAddr() == "")
+}
+
+func (m *routeManager) detectDataIface() (netlink.Link, error) {
+	var dataAddr string
+	if m.vxlanEnabled() {
+		localVTEP := m.getLocalVTEP()
+		if localVTEP == nil {
+			return nil, fmt.Errorf("local VTEP not yet known")
+		}
+		dataAddr = localVTEP.ParentDeviceIp
+		if m.ipVersion == 6 {
+			dataAddr = localVTEP.ParentDeviceIpv6
+		}
+	} else if m.ipipEnabled() {
+		dataAddr = m.getLocalHostAddr()
+	}
+
 	if dataAddr == "" {
-		return nil, fmt.Errorf("empty data interface address")
+		return nil, fmt.Errorf("failed to find data interface address")
 	}
 
 	m.logCtx.WithField("address", dataAddr).Debug("Getting data interface")
@@ -745,171 +721,16 @@ func (m *routeManager) detectDataIface(dataAddr string) (netlink.Link, error) {
 	return nil, fmt.Errorf("Unable to find data interface with address %s", dataAddr)
 }
 
-// configureIPIPDevice ensures the IPIP tunnel device is up and configures correctly.
-func (m *routeManager) configureIPIPDevice(mtu int, address net.IP, xsumBroken bool) error {
-	logCtx := logrus.WithFields(logrus.Fields{
-		"mtu":        mtu,
-		"tunnelAddr": address,
-		"device":     m.tunnelDevice,
-	})
-	logCtx.Debug("Configuring IPIP tunnel")
-
-	la := netlink.NewLinkAttrs()
-	la.Name = m.tunnelDevice
-	ipip := &netlink.Iptun{
-		LinkAttrs: la,
-	}
-
-	link, err := m.nlHandle.LinkByName(m.tunnelDevice)
-	if err != nil {
-		m.logCtx.WithError(err).Info("Failed to get IPIP tunnel device, assuming it isn't present")
-
-		// We call out to "ip tunnel", which takes care of loading the kernel module if
-		// needed.  The tunl0 device is actually created automatically by the kernel
-		// module.
-		if err := m.nlHandle.LinkAdd(ipip); err == syscall.EEXIST {
-			// Device already exists - likely a race.
-			m.logCtx.Debug("IPIP device already exists, likely created by someone else.")
-		} else if err != nil {
-			// Error other than "device exists" - return it.
-			return err
-		}
-
-		link, err = m.nlHandle.LinkByName(m.tunnelDevice)
-		if err != nil {
-			m.logCtx.WithError(err).Warning("Failed to get tunnel device")
-			return err
-		}
-	}
-
-	attrs := link.Attrs()
-	oldMTU := attrs.MTU
-	if oldMTU != mtu {
-		logCtx.WithField("oldMTU", oldMTU).Info("Tunnel device MTU needs to be updated")
-		if err := m.nlHandle.LinkSetMTU(link, mtu); err != nil {
-			m.logCtx.WithError(err).Warn("Failed to set tunnel device MTU")
-			return err
-		}
-		logCtx.Info("Updated tunnel MTU")
-	}
-
-	if err := m.ensureAddressOnIPIPLink(m.tunnelDevice, address); err != nil {
-		m.logCtx.WithError(err).Warn("Failed to set tunnel device IP")
-		return err
-	}
-
-	// If required, disable checksum offload.
-	if xsumBroken {
-		if err := ethtool.EthtoolTXOff(m.tunnelDevice); err != nil {
-			return fmt.Errorf("failed to disable checksum offload: %s", err)
-		}
-	}
-
-	if attrs.Flags&net.FlagUp == 0 {
-		logCtx.WithField("flags", attrs.Flags).Info("Tunnel wasn't admin up, enabling it")
-		if err := m.nlHandle.LinkSetUp(link); err != nil {
-			m.logCtx.WithError(err).Warn("Failed to set tunnel device up")
-			return err
-		}
-		logCtx.Info("Set tunnel admin up")
-	}
-
-	return nil
-}
-
-// KeepVXLANDeviceInSync is a goroutine that configures the VXLAN tunnel device, then periodically
-// checks that it is still correctly configured.
-func (m *routeManager) KeepVXLANDeviceInSync(
-	ctx context.Context,
-	mtu int,
-	xsumBroken bool,
-	wait time.Duration,
-	parentNameC chan string,
-) {
-	m.logCtx.WithFields(logrus.Fields{
-		"mtu":        mtu,
-		"xsumBroken": xsumBroken,
-		"wait":       wait,
-	}).Info("VXLAN tunnel device thread started.")
-	logNextSuccess := true
-	parentName := ""
-
-	sleepMonitoringChans := func(maxDuration time.Duration) {
-		timer := time.NewTimer(maxDuration)
-		defer timer.Stop()
-		select {
-		case <-timer.C:
-		case <-ctx.Done():
-			logrus.Debug("Sleep returning early: context finished.")
-		case <-m.myVTEPChangedC:
-			logrus.Debug("Sleep returning early: VTEP changed.")
-		}
-	}
-
-	for ctx.Err() == nil {
-		localVTEP := m.getLocalVTEP()
-		if localVTEP == nil {
-			m.logCtx.Debug("Missing local VTEP information, retrying...")
-			sleepMonitoringChans(10 * time.Second)
-			continue
-		}
-
-		parent, err := m.getLocalVTEPParent()
-		if err != nil {
-			m.logCtx.WithError(err).Warn("Failed to find VXLAN tunnel device parent, retrying...")
-			sleepMonitoringChans(1 * time.Second)
-			continue
-		}
-
-		m.logCtx.WithField("localVTEP", localVTEP).Debug("Configuring VXLAN device")
-		err = m.configureVXLANDevice(mtu, localVTEP, xsumBroken)
-		if err != nil {
-			m.logCtx.WithError(err).Warn("Failed to configure VXLAN tunnel device, retrying...")
-			logNextSuccess = true
-			sleepMonitoringChans(1 * time.Second)
-			continue
-		}
-
-		newParentName := parent.Attrs().Name
-		if newParentName != parentName {
-			// Send a message back to the main loop to tell it to update the
-			// routing tables.
-			m.logCtx.Infof("VXLAN device parent changed from %q to %q", parentName, newParentName)
-			select {
-			case parentNameC <- newParentName:
-				parentName = newParentName
-			case <-m.myVTEPChangedC:
-				m.logCtx.Info("My VTEP changed; restarting configuration.")
-				continue
-			case <-ctx.Done():
-				continue
-			}
-		}
-
-		if logNextSuccess {
-			m.logCtx.Info("VXLAN tunnel device configured")
-			logNextSuccess = false
-		}
-		sleepMonitoringChans(wait)
-	}
-	m.logCtx.Info("KeepVXLANDeviceInSync exiting due to context.")
-}
-
 // configureVXLANDevice ensures the VXLAN tunnel device is up and configured correctly.
-func (m *routeManager) configureVXLANDevice(
-	mtu int,
-	localVTEP *proto.VXLANTunnelEndpointUpdate,
-	xsumBroken bool,
-) error {
-	logCtx := m.logCtx.WithFields(logrus.Fields{"device": m.tunnelDevice})
-	logCtx.Debug("Configuring VXLAN tunnel device")
+func (m *routeManager) configureVXLANDevice(mtu int, xsumBroken bool) error {
+	localVTEP := m.getLocalVTEP()
 	addr := localVTEP.Ipv4Addr
 	parentDeviceIP := localVTEP.ParentDeviceIp
 	if m.ipVersion == 6 {
 		addr = localVTEP.Ipv6Addr
 		parentDeviceIP = localVTEP.ParentDeviceIpv6
 	}
-	parent, err := m.detectDataIface(parentDeviceIP)
+	parent, err := m.detectDataIface()
 	if err != nil {
 		return err
 	}
@@ -928,11 +749,38 @@ func (m *routeManager) configureVXLANDevice(
 		SrcAddr:      ip.FromString(parentDeviceIP).AsNetIP(),
 	}
 
+	return m.configureTunnelDevice(vxlan, addr, mtu, xsumBroken)
+}
+
+// configureIPIPDevice ensures the IPIP tunnel device is up and configures correctly.
+func (m *routeManager) configureIPIPDevice(mtu int, xsumBroken bool) error {
+	la := netlink.NewLinkAttrs()
+	la.Name = m.tunnelDevice
+	ipip := &netlink.Iptun{
+		LinkAttrs: la,
+	}
+	address := m.dpConfig.RulesConfig.IPIPTunnelAddress
+
+	if len(address) == 0 {
+		return fmt.Errorf("Address is not set")
+	}
+	return m.configureTunnelDevice(ipip, address.String(), mtu, xsumBroken)
+}
+
+func (m *routeManager) configureTunnelDevice(newLink netlink.Link, addr string, mtu int, xsumBroken bool) error {
+	if newLink == nil {
+		return fmt.Errorf("no tunnel link provided")
+	}
+	logCtx := m.logCtx.WithFields(logrus.Fields{
+		"mtu":        mtu,
+		"tunnelAddr": addr,
+	})
+	logCtx.Debug("Configuring tunnel device")
 	// Try to get the device.
 	link, err := m.nlHandle.LinkByName(m.tunnelDevice)
 	if err != nil {
 		m.logCtx.WithError(err).Info("Failed to get VXLAN tunnel device, assuming it isn't present")
-		if err := m.nlHandle.LinkAdd(vxlan); err == syscall.EEXIST {
+		if err := m.nlHandle.LinkAdd(newLink); err == syscall.EEXIST {
 			// Device already exists - likely a race.
 			m.logCtx.Debug("VXLAN device already exists, likely created by someone else.")
 		} else if err != nil {
@@ -947,23 +795,25 @@ func (m *routeManager) configureVXLANDevice(
 		}
 	}
 
-	// At this point, we have successfully queried the existing device, or made sure it exists if it didn't
-	// already. Check for mismatched configuration. If they don't match, recreate the device.
-	if incompat := vxlanLinksIncompat(vxlan, link); incompat != "" {
-		// Existing device doesn't match desired configuration - delete it and recreate.
-		logrus.Warningf("%q exists with incompatible configuration: %v; recreating device", vxlan.Name, incompat)
-		if err = m.nlHandle.LinkDel(link); err != nil {
-			return fmt.Errorf("failed to delete interface: %v", err)
-		}
-		if err = m.nlHandle.LinkAdd(vxlan); err != nil {
-			if err == syscall.EEXIST {
-				logrus.Warnf("Failed to create VXLAN device. Another device with this VNI may already exist")
+	if m.vxlanEnabled() {
+		// At this point, we have successfully queried the existing device, or made sure it exists if it didn't
+		// already. Check for mismatched configuration. If they don't match, recreate the device.
+		if incompat := vxlanLinksIncompat(newLink, link); incompat != "" {
+			// Existing device doesn't match desired configuration - delete it and recreate.
+			logrus.Warningf("%q exists with incompatible configuration: %v; recreating device", m.tunnelDevice, incompat)
+			if err = m.nlHandle.LinkDel(link); err != nil {
+				return fmt.Errorf("failed to delete interface: %v", err)
 			}
-			return fmt.Errorf("failed to create vxlan interface: %v", err)
-		}
-		link, err = m.nlHandle.LinkByName(vxlan.Name)
-		if err != nil {
-			return err
+			if err = m.nlHandle.LinkAdd(newLink); err != nil {
+				if err == syscall.EEXIST {
+					logrus.Warnf("Failed to create VXLAN device. Another device with this VNI may already exist")
+				}
+				return fmt.Errorf("failed to create vxlan interface: %v", err)
+			}
+			link, err = m.nlHandle.LinkByName(m.tunnelDevice)
+			if err != nil {
+				return err
+			}
 		}
 	}
 
@@ -971,11 +821,11 @@ func (m *routeManager) configureVXLANDevice(
 	attrs := link.Attrs()
 	oldMTU := attrs.MTU
 	if oldMTU != mtu {
-		logCtx.WithFields(logrus.Fields{"old": oldMTU, "new": mtu}).Info("VXLAN device MTU needs to be updated")
+		m.logCtx.WithFields(logrus.Fields{"old": oldMTU, "new": mtu}).Info("VXLAN device MTU needs to be updated")
 		if err := m.nlHandle.LinkSetMTU(link, mtu); err != nil {
 			m.logCtx.WithError(err).Warn("Failed to set vxlan tunnel device MTU")
 		} else {
-			logCtx.Info("Updated vxlan tunnel MTU")
+			m.logCtx.Info("Updated vxlan tunnel MTU")
 		}
 	}
 
@@ -993,7 +843,7 @@ func (m *routeManager) configureVXLANDevice(
 
 	// And the device is up.
 	if err := m.nlHandle.LinkSetUp(link); err != nil {
-		return fmt.Errorf("failed to set interface up: %s", err)
+		return fmt.Errorf("failed to set interface up: %w", err)
 	}
 
 	return nil
@@ -1041,59 +891,6 @@ func (m *routeManager) ensureAddressOnLink(ipStr string, link netlink.Link) erro
 			return fmt.Errorf("failed to add IP address")
 		}
 	}
-	return nil
-}
-
-// ensureAddressOnLink updates the given link to set its local IP address. It removes any other addresses.
-func (m *routeManager) ensureAddressOnIPIPLink(linkName string, address net.IP) error {
-	logCxt := m.logCtx.WithFields(logrus.Fields{
-		"link": linkName,
-		"addr": address,
-	})
-	logCxt.Debug("Setting local IPv4 address on link.")
-	link, err := m.nlHandle.LinkByName(linkName)
-	if err != nil {
-		m.logCtx.WithError(err).WithField("name", linkName).Warning("Failed to get device")
-		return err
-	}
-
-	addrs, err := m.nlHandle.AddrList(link, netlink.FAMILY_V4)
-	if err != nil {
-		m.logCtx.WithError(err).Warn("Failed to list interface addresses")
-		return err
-	}
-
-	found := false
-	for _, oldAddr := range addrs {
-		if address != nil && oldAddr.IP.Equal(address) {
-			logCxt.Debug("Address already present.")
-			found = true
-			continue
-		}
-		logCxt.WithField("oldAddr", oldAddr).Info("Removing old address")
-		if err := m.nlHandle.AddrDel(link, &oldAddr); err != nil {
-			m.logCtx.WithError(err).Warn("Failed to delete address")
-			return err
-		}
-	}
-
-	if !found && address != nil {
-		logCxt.Info("Address wasn't present, adding it.")
-		mask := net.CIDRMask(32, 32)
-		ipNet := net.IPNet{
-			IP:   address.Mask(mask), // Mask the IP to match ParseCIDR()'s behaviour.
-			Mask: mask,
-		}
-		addr := &netlink.Addr{
-			IPNet: &ipNet,
-		}
-		if err := m.nlHandle.AddrAdd(link, addr); err != nil {
-			m.logCtx.WithError(err).WithField("addr", address).Warn("Failed to add address")
-			return err
-		}
-	}
-	logCxt.Debug("Address set.")
-
 	return nil
 }
 

@@ -15,8 +15,6 @@
 package intdataplane
 
 import (
-	"errors"
-	"fmt"
 	"net"
 	"time"
 
@@ -32,11 +30,6 @@ import (
 	"github.com/projectcalico/calico/felix/routetable"
 	"github.com/projectcalico/calico/felix/rules"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
-)
-
-var (
-	notFound    = errors.New("not found")
-	mockFailure = errors.New("mock failure")
 )
 
 var _ = Describe("RouteManager for ipip ip pools", func() {
@@ -86,13 +79,13 @@ var _ = Describe("RouteManager for ipip ip pools", func() {
 			Ipv4Addr: "10.0.1.1",
 		})
 
-		err := manager.configureIPIPDevice(50, manager.dpConfig.RulesConfig.IPIPTunnelAddress, false)
+		err := manager.configureIPIPDevice(50, false)
 		Expect(err).NotTo(HaveOccurred())
 		manager.OnDataDeviceUpdate("eth0")
 
 		Expect(manager.hostAddr).NotTo(BeZero())
 		Expect(manager.dataDevice).NotTo(BeEmpty())
-		noEncapDev, err := manager.detectDataIface(manager.getLocalHostAddr())
+		noEncapDev, err := manager.detectDataIface()
 
 		Expect(noEncapDev).NotTo(BeNil())
 		Expect(err).NotTo(HaveOccurred())
@@ -146,7 +139,7 @@ var _ = Describe("RouteManager for ipip ip pools", func() {
 
 	It("should fall back to programming tunneled routes if the noEncap device is not known", func() {
 		dataDeviceC := make(chan string)
-		go manager.KeepIPIPDeviceInSync(false, 1*time.Second, dataDeviceC)
+		go manager.KeepDeviceInSync(1400, false, 1*time.Second, dataDeviceC)
 
 		By("Sending another node's route.")
 		manager.OnUpdate(&proto.HostMetadataUpdate{
@@ -193,193 +186,7 @@ var _ = Describe("RouteManager for ipip ip pools", func() {
 	})
 })
 
-var _ = Describe("IpipManager (tunnel configuration)", func() {
-	var (
-		ipipMgr   *routeManager
-		ipSets    *dpsets.MockIPSets
-		dataplane *mockIPIPDataplane
-		rt        *mockRouteTable
-	)
-
-	ip, _, err := net.ParseCIDR("10.0.0.1/32")
-	if err != nil {
-		panic("Failed to parse test IP")
-	}
-	_, ipNet2, err := net.ParseCIDR("10.0.0.2/32")
-	if err != nil {
-		panic("Failed to parse test IP")
-	}
-
-	BeforeEach(func() {
-		dataplane = &mockIPIPDataplane{
-			tunnelLinkName: dataplanedefs.IPIPIfaceName,
-		}
-		ipSets = dpsets.NewMockIPSets()
-		rt = &mockRouteTable{
-			currentRoutes: map[string][]routetable.Target{},
-		}
-		opRecorder := logutils.NewSummarizer("test")
-		ipipMgr = newRouteManagerWithShims(
-			ipSets, rt, nil, dataplanedefs.IPIPIfaceName,
-			proto.IPPoolType_IPIP,
-			4,
-			1400,
-			Config{
-				MaxIPSetSize:       1024,
-				Hostname:           "node1",
-				ExternalNodesCidrs: nil,
-			},
-			opRecorder,
-			dataplane,
-		)
-	})
-
-	Describe("after calling configureIPIPDevice", func() {
-		ip2, _, err := net.ParseCIDR("10.0.0.2/32")
-		if err != nil {
-			panic("Failed to parse test IP")
-		}
-
-		BeforeEach(func() {
-			err = ipipMgr.configureIPIPDevice(1400, ip, false)
-			Expect(err).ToNot(HaveOccurred())
-		})
-
-		It("should create the interface", func() {
-			Expect(dataplane.tunnelLink).ToNot(BeNil())
-		})
-		It("should set the MTU", func() {
-			Expect(dataplane.tunnelLinkAttrs.MTU).To(Equal(1400))
-		})
-		It("should set the interface UP", func() {
-			Expect(dataplane.tunnelLinkAttrs.Flags).To(Equal(net.FlagUp))
-		})
-		It("should configure the address", func() {
-			Expect(dataplane.addrs).To(HaveLen(1))
-			Expect(dataplane.addrs[0].IP.String()).To(Equal("10.0.0.1"))
-		})
-
-		Describe("after second call with same params", func() {
-			BeforeEach(func() {
-				dataplane.ResetCalls()
-				err := ipipMgr.configureIPIPDevice(1400, ip, false)
-				Expect(err).ToNot(HaveOccurred())
-			})
-			It("should avoid creating the interface", func() {
-				Expect(dataplane.LinkAddCalled).To(BeFalse())
-			})
-			It("should avoid setting the interface UP again", func() {
-				Expect(dataplane.LinkSetUpCalled).To(BeFalse())
-			})
-			It("should avoid setting the MTU again", func() {
-				Expect(dataplane.LinkSetMTUCalled).To(BeFalse())
-			})
-			It("should avoid setting the address again", func() {
-				Expect(dataplane.AddrUpdated).To(BeFalse())
-			})
-		})
-
-		Describe("after second call with different params", func() {
-			BeforeEach(func() {
-				dataplane.ResetCalls()
-				err = ipipMgr.configureIPIPDevice(1500, ip2, false)
-				Expect(err).ToNot(HaveOccurred())
-			})
-			It("should avoid creating the interface", func() {
-				Expect(dataplane.LinkAddCalled).To(BeFalse())
-			})
-			It("should avoid setting the interface UP again", func() {
-				Expect(dataplane.LinkSetUpCalled).To(BeFalse())
-			})
-			It("should set the MTU", func() {
-				Expect(dataplane.tunnelLinkAttrs.MTU).To(Equal(1500))
-			})
-			It("should reconfigure the address", func() {
-				Expect(dataplane.addrs).To(HaveLen(1))
-				Expect(dataplane.addrs[0].IP.String()).To(Equal("10.0.0.2"))
-			})
-		})
-
-		Describe("after second call with nil IP", func() {
-			BeforeEach(func() {
-				dataplane.ResetCalls()
-				err := ipipMgr.configureIPIPDevice(1500, nil, false)
-				Expect(err).ToNot(HaveOccurred())
-			})
-			It("should avoid creating the interface", func() {
-				Expect(dataplane.LinkAddCalled).To(BeFalse())
-			})
-			It("should avoid setting the interface UP again", func() {
-				Expect(dataplane.LinkSetUpCalled).To(BeFalse())
-			})
-			It("should set the MTU", func() {
-				Expect(dataplane.tunnelLinkAttrs.MTU).To(Equal(1500))
-			})
-			It("should remove the address", func() {
-				Expect(dataplane.addrs).To(HaveLen(0))
-			})
-		})
-	})
-
-	Describe("after calling configureIPIPDevice with no IP", func() {
-		BeforeEach(func() {
-			err := ipipMgr.configureIPIPDevice(1400, nil, false)
-			Expect(err).ToNot(HaveOccurred())
-		})
-
-		It("should create the interface", func() {
-			Expect(dataplane.tunnelLink).ToNot(BeNil())
-		})
-		It("should set the MTU", func() {
-			Expect(dataplane.tunnelLinkAttrs.MTU).To(Equal(1400))
-		})
-		It("should set the interface UP", func() {
-			Expect(dataplane.tunnelLinkAttrs.Flags).To(Equal(net.FlagUp))
-		})
-		It("should configure the address", func() {
-			Expect(dataplane.addrs).To(HaveLen(0))
-		})
-	})
-
-	// Cover the error cases.  We pass the error back up the stack, check that that happens
-	// for all calls.
-	const expNumCalls = 8
-	It("a successful call should only call into dataplane expected number of times", func() {
-		// This spec is a sanity-check that we've got the expNumCalls constant correct.
-		err := ipipMgr.configureIPIPDevice(1400, ip, false)
-		Expect(err).ToNot(HaveOccurred())
-		Expect(dataplane.NumCalls).To(BeNumerically("==", expNumCalls))
-	})
-	for i := 1; i <= expNumCalls; i++ {
-		if i == 1 {
-			continue // First LinkByName failure is handled.
-		}
-		i := i
-		Describe(fmt.Sprintf("with a failure after %v calls", i), func() {
-			BeforeEach(func() {
-				dataplane.ErrorAtCall = i
-			})
-
-			It("should return the error", func() {
-				Expect(ipipMgr.configureIPIPDevice(1400, ip, false)).To(Equal(mockFailure))
-			})
-
-			Describe("with an IP to remove", func() {
-				BeforeEach(func() {
-					dataplane.addrs = append(dataplane.addrs,
-						netlink.Addr{
-							IPNet: ipNet2,
-						})
-				})
-				It("should return the error", func() {
-					Expect(ipipMgr.configureIPIPDevice(1400, ip, false)).To(Equal(mockFailure))
-				})
-			})
-		})
-	}
-})
-
-var _ = Describe("ipipManager IP set updates", func() {
+var _ = Describe("RouteManager all-hosts IP set updates", func() {
 	var (
 		ipipMgr *routeManager
 		ipSets  *dpsets.MockIPSets
@@ -546,149 +353,3 @@ var _ = Describe("ipipManager IP set updates", func() {
 		})
 	})
 })
-
-type mockIPIPDataplane struct {
-	tunnelLink      *mockLink
-	tunnelLinkAttrs *netlink.LinkAttrs
-	tunnelLinkName  string
-	addrs           []netlink.Addr
-
-	LinkAddCalled    bool
-	LinkSetMTUCalled bool
-	LinkSetUpCalled  bool
-	AddrUpdated      bool
-
-	NumCalls    int
-	ErrorAtCall int
-
-	links []netlink.Link
-}
-
-func (d *mockIPIPDataplane) ResetCalls() {
-	d.LinkAddCalled = false
-	d.LinkSetMTUCalled = false
-	d.LinkSetUpCalled = false
-	d.AddrUpdated = false
-}
-
-func (d *mockIPIPDataplane) incCallCount() error {
-	d.NumCalls += 1
-	if d.NumCalls == d.ErrorAtCall {
-		log.Warn("Simulating an error due to call count")
-		return mockFailure
-	}
-	return nil
-}
-
-func (d *mockIPIPDataplane) LinkByName(name string) (netlink.Link, error) {
-	log.WithField("name", name).Info("LinkByName called")
-
-	if err := d.incCallCount(); err != nil {
-		return nil, err
-	}
-
-	Expect(name).To(Equal(d.tunnelLinkName))
-	if d.tunnelLink == nil {
-		return nil, notFound
-	}
-	return d.tunnelLink, nil
-}
-
-func (d *mockIPIPDataplane) LinkSetMTU(link netlink.Link, mtu int) error {
-	d.LinkSetMTUCalled = true
-	if err := d.incCallCount(); err != nil {
-		return err
-	}
-	Expect(link.Attrs().Name).To(Equal(d.tunnelLinkName))
-	d.tunnelLinkAttrs.MTU = mtu
-	return nil
-}
-
-func (d *mockIPIPDataplane) LinkSetUp(link netlink.Link) error {
-	d.LinkSetUpCalled = true
-	if err := d.incCallCount(); err != nil {
-		return err
-	}
-	Expect(link.Attrs().Name).To(Equal(d.tunnelLinkName))
-	d.tunnelLinkAttrs.Flags |= net.FlagUp
-	return nil
-}
-
-func (d *mockIPIPDataplane) AddrList(link netlink.Link, family int) ([]netlink.Addr, error) {
-	if err := d.incCallCount(); err != nil {
-		return nil, err
-	}
-
-	name := link.Attrs().Name
-	Expect(name).Should(BeElementOf(d.tunnelLinkName, "eth0"))
-	if name == "eth0" {
-		return []netlink.Addr{{
-			IPNet: &net.IPNet{
-				IP: net.IPv4(10, 0, 0, 1),
-			}},
-		}, nil
-	}
-	return d.addrs, nil
-}
-
-func (d *mockIPIPDataplane) AddrAdd(link netlink.Link, addr *netlink.Addr) error {
-	d.AddrUpdated = true
-	if err := d.incCallCount(); err != nil {
-		return err
-	}
-	Expect(d.addrs).NotTo(ContainElement(*addr))
-	d.addrs = append(d.addrs, *addr)
-	return nil
-}
-
-func (d *mockIPIPDataplane) AddrDel(link netlink.Link, addr *netlink.Addr) error {
-	d.AddrUpdated = true
-	if err := d.incCallCount(); err != nil {
-		return err
-	}
-	Expect(d.addrs).To(HaveLen(1))
-	Expect(d.addrs[0].IP.String()).To(Equal(addr.IP.String()))
-	d.addrs = nil
-	return nil
-}
-
-func (d *mockIPIPDataplane) LinkList() ([]netlink.Link, error) {
-	return d.links, nil
-}
-
-func (d *mockIPIPDataplane) LinkAdd(l netlink.Link) error {
-	d.LinkAddCalled = true
-	if err := d.incCallCount(); err != nil {
-		return err
-	}
-	Expect(l.Attrs().Name).To(Equal(d.tunnelLinkName))
-	if d.tunnelLink == nil {
-		log.Info("Creating tunnel link")
-		link := &mockLink{}
-		link.attrs.Name = d.tunnelLinkName
-		d.tunnelLinkAttrs = &link.attrs
-		d.tunnelLink = link
-	}
-	return nil
-}
-
-func (d *mockIPIPDataplane) LinkDel(_ netlink.Link) error {
-	return nil
-}
-
-type mockLink struct {
-	attrs netlink.LinkAttrs
-	typ   string
-}
-
-func (l *mockLink) Attrs() *netlink.LinkAttrs {
-	return &l.attrs
-}
-
-func (l *mockLink) Type() string {
-	if l.typ == "" {
-		return "not implemented"
-	}
-
-	return l.typ
-}

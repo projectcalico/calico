@@ -15,7 +15,6 @@
 package intdataplane
 
 import (
-	"context"
 	"net"
 	"time"
 
@@ -116,13 +115,13 @@ var _ = Describe("RouteManager for vxlan ip pools", func() {
 		localVTEP := manager.getLocalVTEP()
 		Expect(localVTEP).NotTo(BeNil())
 
-		err := manager.configureVXLANDevice(50, localVTEP, false)
+		err := manager.configureVXLANDevice(50, false)
 		Expect(err).NotTo(HaveOccurred())
 		manager.OnDataDeviceUpdate("eth0")
 
 		Expect(manager.myVTEP).NotTo(BeNil())
 		Expect(manager.dataDevice).NotTo(BeEmpty())
-		parent, err := manager.getLocalVTEPParent()
+		parent, err := manager.detectDataIface()
 
 		Expect(parent).NotTo(BeNil())
 		Expect(err).NotTo(HaveOccurred())
@@ -204,13 +203,13 @@ var _ = Describe("RouteManager for vxlan ip pools", func() {
 		localVTEP := managerV6.getLocalVTEP()
 		Expect(localVTEP).NotTo(BeNil())
 
-		err := managerV6.configureVXLANDevice(50, localVTEP, false)
+		err := managerV6.configureVXLANDevice(50, false)
 		Expect(err).NotTo(HaveOccurred())
 		managerV6.OnDataDeviceUpdate("eth0")
 
 		Expect(managerV6.myVTEP).NotTo(BeNil())
 		Expect(managerV6.dataDevice).NotTo(BeEmpty())
-		parent, err := managerV6.getLocalVTEPParent()
+		parent, err := managerV6.detectDataIface()
 
 		Expect(parent).NotTo(BeNil())
 		Expect(err).NotTo(HaveOccurred())
@@ -275,10 +274,8 @@ var _ = Describe("RouteManager for vxlan ip pools", func() {
 	})
 
 	It("should fall back to programming tunneled routes if the parent device is not known", func() {
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
 		parentNameC := make(chan string)
-		go manager.KeepVXLANDeviceInSync(ctx, 1400, false, 1*time.Second, parentNameC)
+		go manager.KeepDeviceInSync(1400, false, 1*time.Second, parentNameC)
 
 		By("Sending another node's VTEP and route.")
 		manager.OnUpdate(&proto.VXLANTunnelEndpointUpdate{
@@ -327,10 +324,8 @@ var _ = Describe("RouteManager for vxlan ip pools", func() {
 	})
 
 	It("IPv6: should fall back to programming tunneled routes if the parent device is not known", func() {
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
 		parentNameC := make(chan string)
-		go managerV6.KeepVXLANDeviceInSync(ctx, 1400, false, 1*time.Second, parentNameC)
+		go managerV6.KeepDeviceInSync(1400, false, 1*time.Second, parentNameC)
 
 		By("Sending another node's VTEP and route.")
 		managerV6.OnUpdate(&proto.VXLANTunnelEndpointUpdate{
