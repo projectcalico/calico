@@ -122,7 +122,7 @@ func (c completedConfig) New() (*ProjectCalicoServer, error) {
 	calicoLister := NewCalicoResourceLister(cc)
 
 	// Create the manager for policy watches. It keeps track of established watches and makes sure they are canceled
-	// in case of on update that the watch should contain
+	// in case of on update that the watch necessitates recreation of the watch.
 	watchManager := util.NewWatchManager(cc)
 
 	// Create the RBAC calculator,

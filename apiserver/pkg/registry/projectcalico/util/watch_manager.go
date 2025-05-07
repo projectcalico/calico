@@ -28,15 +28,14 @@ type WatchManager struct {
 	client       api.Client
 	syncer       api.Syncer
 	sync         chan struct{}
-	lock         sync.Mutex
-	watchRecords map[string]WatchRecord
+	watchRecords sync.Map
 }
 
 func NewWatchManager(cc api.Client) *WatchManager {
 	return &WatchManager{
 		client:       cc,
 		sync:         make(chan struct{}),
-		watchRecords: make(map[string]WatchRecord),
+		watchRecords: sync.Map{},
 	}
 }
 
@@ -71,11 +70,13 @@ func (m *WatchManager) OnUpdates(updates []api.Update) {
 			// New Tier added, we need to stop all watches in case there is a user that can watch policies in the new Tier
 			// When the watch is re-established it will contain policies in the newly created Tier
 			logrus.WithField("Tier", u.Key.(model.ResourceKey).Name).Debug("New Tier added, removing all WatchRecords")
-			for _, record := range m.watchRecords {
+			m.watchRecords.Range(func(k, v interface{}) bool {
+				record := v.(WatchRecord)
 				logrus.WithFields(logrus.Fields{"id": record.ID, "Kind": record.Kind}).Debug("Closing watch")
 				record.Watch.Stop()
-			}
-			m.watchRecords = map[string]WatchRecord{}
+				return true
+			})
+			m.watchRecords = sync.Map{}
 		}
 	}
 }
@@ -83,16 +84,14 @@ func (m *WatchManager) OnUpdates(updates []api.Update) {
 // AddWatch adds a watch to our map and triggers monitoring for watch closure by the consumer or API server
 func (m *WatchManager) AddWatch(record WatchRecord) {
 	logrus.WithFields(logrus.Fields{"id": record.ID, "Kind": record.Kind}).Debug("Adding WatchRecord")
-	m.watchRecords[record.ID] = record
+	m.watchRecords.Store(record.ID, record)
 	go m.monitorWatch(record)
 }
 
-// minitorWatch waits to see if the context is done signaling that the watch has been ended. We can remove the watch from our map
+// monitorWatch waits to see if the context is done signaling that the watch has been ended. We can remove the watch from our map
 func (m *WatchManager) monitorWatch(record WatchRecord) {
 	<-record.Ctx.Done()
 	// Watch has been closed, we should remove it from our map
 	logrus.WithFields(logrus.Fields{"id": record.ID, "Kind": record.Kind}).Debug("Watch has been stopped, removing WatchRecord")
-	m.lock.Lock()
-	delete(m.watchRecords, record.ID)
-	m.lock.Unlock()
+	m.watchRecords.Delete(record.ID)
 }
