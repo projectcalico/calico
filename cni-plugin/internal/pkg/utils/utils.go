@@ -94,15 +94,15 @@ func nodenameFromFile(filename string) string {
 
 // MTUFromFile reads the /var/lib/calico/mtu file if it exists and
 // returns the MTU within.
-func MTUFromFile(filename string) (int, error) {
+func MTUFromFile(filename string, conf types.NetConf) (int, error) {
 	if filename == "" {
 		filename = MTUFilePath
 	}
 	data, err := os.ReadFile(filename)
 	if err != nil {
-		if os.IsNotExist(err) {
+		if os.IsNotExist(err) && conf.RequireMTUFile {
 			// File doesn't exist, fail explicitly so it can retry and ensure the file is created.
-			logrus.WithError(err).Errorf("File %s does not exist", filename)
+			logrus.WithField("filename", filename).WithError(err).Errorf("File does not exist")
 			return 0, err
 		}
 		logrus.WithError(err).Errorf("Failed to read %s", filename)
