@@ -501,6 +501,8 @@ type Config struct {
 	loadClientConfigFromEnvironment func() (*apiconfig.CalicoAPIConfig, error)
 
 	useNodeResourceUpdates bool
+
+	RequireMTUFile bool `config:"bool;false"`
 }
 
 func (config *Config) FilterAllowAction() string {
