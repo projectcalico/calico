@@ -71,7 +71,16 @@ func (m *WatchManager) OnUpdates(updates []api.Update) {
 			// When the watch is re-established it will contain policies in the newly created Tier
 			logrus.WithField("Tier", u.Key.(model.ResourceKey).Name).Debug("New Tier added, removing all WatchRecords")
 			m.watchRecords.Range(func(k, v interface{}) bool {
-				record := v.(WatchRecord)
+				id, ok := k.(string)
+				if !ok {
+					logrus.WithField("id", k).Warn("ID is not a string")
+					return true
+				}
+				record, ok := v.(WatchRecord)
+				if !ok {
+					logrus.WithField("id", id).Errorf("Value is not a WatchRecord")
+					return true
+				}
 				logrus.WithFields(logrus.Fields{"id": record.ID, "Kind": record.Kind}).Debug("Closing watch")
 				record.Watch.Stop()
 				return true
