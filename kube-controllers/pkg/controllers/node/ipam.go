@@ -25,12 +25,14 @@ import (
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
+	"golang.org/x/time/rate"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	v1lister "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
+	"k8s.io/client-go/util/workqueue"
 
 	"github.com/projectcalico/calico/kube-controllers/pkg/config"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/flannelmigration"
@@ -66,6 +68,9 @@ var (
 const (
 	// Used to label an allocation that does not have its node attribute set.
 	unknownNodeLabel = "unknown_node"
+
+	// key for ratelimited sync retries.
+	retryKey = "ipamSyncRetry"
 )
 
 func init() {
@@ -117,12 +122,35 @@ func NewIPAMController(cfg config.NodeControllerConfig, c client.Interface, cs k
 	if cfg.LeakGracePeriod != nil {
 		leakGracePeriod = &cfg.LeakGracePeriod.Duration
 	}
+
+	syncChan := make(chan interface{}, 1)
+
+	// Create a rate limited that compares two distinct limiters and uses the max. This rate limiter is used
+	// only to control the retry rate of whole IPAM sync executions.
+	rl := workqueue.NewTypedMaxOfRateLimiter(
+		// Exponential backoff, starting at 5ms and max of 30s.
+		workqueue.NewTypedItemExponentialFailureRateLimiter[any](5*time.Millisecond, 30*time.Second),
+		// A bucket limiter, bursting to 100 with a limit of 10 per second.
+		&workqueue.TypedBucketRateLimiter[any]{Limiter: rate.NewLimiter(rate.Limit(10), 100)},
+	)
+
+	// Retry controller takes the rate limiter as input and schedules events to the channel
+	// when the desired duration has passed.
+	retryController := utils.NewRetryController(
+		// Use the ratelimiter above to calculate when retries should occur.
+		func() time.Duration { return rl.When(retryKey) },
+		// Kick the sync channel when the retry timer pops.
+		func() { kick(syncChan) },
+		// Clear the ratelimiter on success.
+		func() { rl.Forget(retryKey) },
+	)
+
 	return &IPAMController{
 		client:    c,
 		clientset: cs,
 		config:    cfg,
 
-		syncChan: make(chan interface{}, 1),
+		syncChan: syncChan,
 
 		podLister:  v1lister.NewPodLister(pi),
 		nodeLister: v1lister.NewNodeLister(ni),
@@ -151,6 +179,9 @@ func NewIPAMController(cfg config.NodeControllerConfig, c client.Interface, cs k
 
 		// For unit testing purposes.
 		pauseRequestChannel: make(chan pauseRequest),
+
+		// Retries.
+		retryController: retryController,
 	}
 }
 
@@ -216,6 +247,9 @@ type IPAMController struct {
 
 	// fullSyncRequired marks whether or not a full scan of IPAM data is required on the next sync.
 	fullSyncRequired bool
+
+	// retryController manages retries and backoff of full IPAM syncs.
+	retryController *utils.RetryController
 }
 
 func (c *IPAMController) Start(stop chan struct{}) {
@@ -276,6 +310,8 @@ func (c *IPAMController) acceptScheduleRequests(stopCh <-chan struct{}) {
 	}
 	t := time.NewTicker(period)
 	log.Infof("Will run periodic IPAM sync every %s", period)
+
+	// Use time.Tick to add tightloop protection on the main loop.
 	for {
 		// Wait until something wakes us up, or we are stopped.
 		select {
@@ -310,10 +346,13 @@ func (c *IPAMController) acceptScheduleRequests(stopCh <-chan struct{}) {
 			log.Debug("Triggered IPAM sync")
 			err := c.syncIPAM()
 			if err != nil {
-				// We can kick ourselves on error for a retry. We have rate limiting
-				// built into the cleanup code.
+				// For errors, tell the retry controller to schedule a retry. It will ensure at most
+				// one retry is queued at a time, and also manage backoff.
 				log.WithError(err).Warn("error syncing IPAM data")
-				kick(c.syncChan)
+				c.retryController.ScheduleRetry()
+			} else {
+				// Mark sync as a success.
+				c.retryController.Success()
 			}
 
 			// Update prometheus metrics.
@@ -1144,10 +1183,12 @@ func (c *IPAMController) garbageCollectKnownLeaks() error {
 }
 
 func (c *IPAMController) releaseNodes(nodes []string) error {
-	var storedErr error
-	if len(nodes) > 0 {
-		log.WithField("num", len(nodes)).Info("Found a batch of nodes to release")
+	if len(nodes) == 0 {
+		return nil
 	}
+
+	log.WithField("num", len(nodes)).Info("Found a batch of nodes to release")
+	var storedErr error
 	for _, cnode := range nodes {
 		logc := log.WithField("node", cnode)
 
@@ -1157,7 +1198,6 @@ func (c *IPAMController) releaseNodes(nodes []string) error {
 			// Store the error, but continue. Storing the error ensures we'll retry.
 			logc.WithError(err).Warnf("Error cleaning up node")
 			storedErr = err
-			continue
 		}
 	}
 	return storedErr
