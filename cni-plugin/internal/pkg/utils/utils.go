@@ -44,6 +44,11 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
+const (
+	// Path to the file that contains the MTU value.
+	MTUFilePath = "/var/lib/calico/mtu"
+)
+
 // DetermineNodename gets the node name, in order of priority:
 // 1. Nodename field in NetConf
 // 2. Nodename from the file /var/lib/calico/nodename
@@ -89,16 +94,16 @@ func nodenameFromFile(filename string) string {
 
 // MTUFromFile reads the /var/lib/calico/mtu file if it exists and
 // returns the MTU within.
-func MTUFromFile(filename string) (int, error) {
+func MTUFromFile(filename string, conf types.NetConf) (int, error) {
 	if filename == "" {
-		filename = "/var/lib/calico/mtu"
+		filename = MTUFilePath
 	}
 	data, err := os.ReadFile(filename)
 	if err != nil {
-		if os.IsNotExist(err) {
-			// File doesn't exist, return zero.
-			logrus.Infof("File %s does not exist", filename)
-			return 0, nil
+		if os.IsNotExist(err) && conf.RequireMTUFile {
+			// File doesn't exist, fail explicitly so it can retry and ensure the file is created.
+			logrus.WithField("filename", filename).WithError(err).Errorf("File does not exist")
+			return 0, err
 		}
 		logrus.WithError(err).Errorf("Failed to read %s", filename)
 		return 0, err
