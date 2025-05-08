@@ -1734,6 +1734,41 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					cc.CheckConnectivity(conntrackChecks(tc.Felixes)...)
 				})
 
+				_ = testOpts.protocol == "udp" && !testOpts.ipv6 && !testOpts.dsr && testOpts.tunnel == "none" &&
+					It("should handle fragmented UDP", func() {
+						By("Setting src node MTU to be small and trigger fragmentation")
+						tc.Felixes[1].Exec("ip", "link", "set", "eth0", "mtu", "1000")
+
+						tcpdump1 := tc.Felixes[1].AttachTCPDump("eth0")
+						tcpdump1.SetLogEnabled(true)
+						tcpdump1.AddMatcher("udp-frags", regexp.MustCompile(
+							fmt.Sprintf("%s.* > %s.*", w[1][0].IP, w[0][0].IP)))
+						tcpdump1.Start("-vvv", "src", "host", w[1][0].IP, "and", "dst", "host", w[0][0].IP)
+						defer tcpdump1.Stop()
+
+						tcpdump0 := w[0][0].AttachTCPDump()
+						tcpdump0.SetLogEnabled(true)
+						tcpdump0.AddMatcher("udp-no-frags", regexp.MustCompile(
+							fmt.Sprintf("%s\\.30444 > %s\\.30444: \\[udp sum ok\\] UDP, length 1400", w[1][0].IP, w[0][0].IP)))
+						tcpdump0.Start("-vvv", "src", "host", w[1][0].IP, "and", "dst", "host", w[0][0].IP)
+						defer tcpdump1.Stop()
+
+						// Give tcpdump some time to start up!
+						time.Sleep(time.Second)
+
+						// Send a packet with large payload without the DNF flag
+						_, err := w[1][0].RunCmd("pktgen", w[1][0].IP, w[0][0].IP, "udp",
+							"--port-src", "30444", "--port-dst", "30444", "--ip-dnf=n", "--payload-size=1400")
+						Expect(err).NotTo(HaveOccurred())
+
+						// We should see two fragments on the host interface
+						Eventually(func() int { return tcpdump1.MatchCount("udp-frags") }).Should(Equal(2))
+						// We should see a reassembled packet at the destination workload.
+						// If ebpf program did not reassemble the packet, we would still
+						// see two fragments!
+						Eventually(func() int { return tcpdump0.MatchCount("udp-no-frags") }).Should(Equal(1))
+					})
+
 				if (testOpts.protocol == "tcp" || (testOpts.protocol == "udp" && !testOpts.udpUnConnected)) &&
 					testOpts.connTimeEnabled && !testOpts.dsr {
 
@@ -4268,7 +4303,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 									externalClient.Exec("ip", "-6", "route", "add", w[0][0].IP, "via", tc.Felixes[0].IPv6, "dev", "eth0")
 									externalClient.Exec("ip", "addr", "add", "169.254.169.254", "dev", remoteWL.InterfaceName)
 									// Need to change the MTU on the host side of the veth. If
-									// we change it on the eth0 of the docker iface, not ICMP
+									// we change it on the eth0 of the docker iface, no ICMP
 									// is generated.
 									externalClient.Exec("ip", "link", "set", "ethwl", "mtu", "1300")
 									for _, f := range tc.Felixes {
