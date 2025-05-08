@@ -83,7 +83,7 @@ type VXLANFDB struct {
 	nl             *handlemgr.HandleManager
 
 	newNetlinkHandle func() (netlinkshim.Interface, error)
-	arpOnly          bool
+	neighOnly        bool
 }
 
 type comparableHWAddr string
@@ -108,9 +108,9 @@ func WithNetlinkHandleShim(newNetlinkHandle func() (netlinkshim.Interface, error
 	}
 }
 
-func WithARPUpdatesOnly() Option {
+func WithNeighUpdatesOnly() Option {
 	return func(fdb *VXLANFDB) {
-		fdb.arpOnly = true
+		fdb.neighOnly = true
 	}
 }
 
@@ -180,7 +180,7 @@ func (f *VXLANFDB) QueueResync() {
 
 func (f *VXLANFDB) SetVTEPs(vteps []VTEP) {
 	f.arpEntries.Desired().DeleteAll()
-	if !f.arpOnly {
+	if !f.neighOnly {
 		f.fdbEntries.Desired().DeleteAll()
 	}
 	for _, t := range vteps {
@@ -189,7 +189,7 @@ func (f *VXLANFDB) SetVTEPs(vteps []VTEP) {
 		// broadcast ARP to all VXLAN peers.
 		comparableMAC := makeComparableHWAddr(t.TunnelMAC)
 		f.arpEntries.Desired().Set(t.TunnelIP, comparableMAC)
-		if !f.arpOnly {
+		if !f.neighOnly {
 			// Add an FDB entry.  While this is also a MAC/IP tuple, it tells
 			// the kernel something very different!  The FDB entry tells the
 			// kernel that, if it needs to send traffic to the VTEP MAC, it
@@ -235,7 +235,7 @@ func (f *VXLANFDB) Apply() error {
 		},
 	)
 
-	if !f.arpOnly {
+	if !f.neighOnly {
 		applyFamily(f, nl, "FDB", f.fdbEntries,
 			func(hwAddr comparableHWAddr, ipAddr ip.Addr) *netlink.Neigh {
 				return &netlink.Neigh{
@@ -349,7 +349,7 @@ func (f *VXLANFDB) resync(nl netlinkshim.Interface) error {
 	if err != nil {
 		return err
 	}
-	if !f.arpOnly {
+	if !f.neighOnly {
 		err = resyncFamily(f, nl, "FDB", unix.AF_BRIDGE, f.fdbEntries,
 			func(f func(k comparableHWAddr, v ip.Addr), hwAddr comparableHWAddr, ipAddr ip.Addr) {
 				f(hwAddr, ipAddr)

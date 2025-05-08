@@ -670,7 +670,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	if config.RulesConfig.VXLANEnabled {
 		var fdbOpts []vxlanfdb.Option
 		if config.BPFEnabled && bpfutils.BTFEnabled {
-			fdbOpts = append(fdbOpts, vxlanfdb.WithARPUpdatesOnly())
+			fdbOpts = append(fdbOpts, vxlanfdb.WithNeighUpdatesOnly())
 		}
 		vxlanFDB := vxlanfdb.New(netlink.FAMILY_V4, dataplanedefs.VXLANIfaceNameV4, featureDetector, config.NetlinkTimeout, fdbOpts...)
 		dp.vxlanFDBs = append(dp.vxlanFDBs, vxlanFDB)
@@ -1158,12 +1158,13 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 				fdbOpts     []vxlanfdb.Option
 				vxlanMgrOps []vxlanMgrOption
 			)
-			if config.BPFEnabled {
+			if config.BPFEnabled && bpfutils.BTFEnabled {
+				// BPF mode uses the same device for both V4 and V6
 				vxlanName = dataplanedefs.VXLANIfaceNameV4
 				if dp.vxlanManager != nil {
 					vxlanMgrOps = append(vxlanMgrOps, vxlanMgrWithDualStack())
 				}
-				fdbOpts = append(fdbOpts, vxlanfdb.WithARPUpdatesOnly())
+				fdbOpts = append(fdbOpts, vxlanfdb.WithNeighUpdatesOnly())
 				go cleanUpVXLANDevice(dataplanedefs.VXLANIfaceNameV6)
 			}
 			vxlanFDBV6 := vxlanfdb.New(netlink.FAMILY_V6, vxlanName, featureDetector, config.NetlinkTimeout, fdbOpts...)
@@ -1182,7 +1183,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			)
 			dp.vxlanParentCV6 = make(chan string, 1)
 			vxlanMTU := config.VXLANMTUV6
-			if config.BPFEnabled {
+			if config.BPFEnabled && bpfutils.BTFEnabled {
 				vxlanMTU = 0
 			}
 			go dp.vxlanManagerV6.KeepVXLANDeviceInSync(context.Background(), vxlanMTU,

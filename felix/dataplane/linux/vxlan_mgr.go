@@ -78,6 +78,11 @@ type vxlanManager struct {
 	logCtx     *logrus.Entry
 	opRecorder logutils.OpRecorder
 
+	// In dual-stack setup in ebpf mode, for the sake of simplicity, we still
+	// run 2 instance of the vxlan manager, one for each ip version - like in
+	// the *tables mode. However, they share the same device. The device is
+	// created and maintained by the V4 manager and the V6 manager is
+	// responsible only for assigning the right V6 IP to the device.
 	maintainIPOnly bool
 }
 

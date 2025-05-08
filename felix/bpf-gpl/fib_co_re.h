@@ -132,8 +132,8 @@ skip_redir_ifindex:
 				.l4_protocol = state->ip_proto,
 			};
 #ifdef IPVER6
-		ipv6_addr_t_to_be32_4_ip(fib_params(ctx)->ipv6_src, &state->ip_src);
-		ipv6_addr_t_to_be32_4_ip(fib_params(ctx)->ipv6_dst, &state->ip_dst);
+			ipv6_addr_t_to_be32_4_ip(fib_params(ctx)->ipv6_src, &state->ip_src);
+			ipv6_addr_t_to_be32_4_ip(fib_params(ctx)->ipv6_dst, &state->ip_dst);
 #else
 			fib_params(ctx)->ipv4_src = state->ip_src;
 			fib_params(ctx)->ipv4_dst = state->ip_dst;

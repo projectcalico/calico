@@ -172,7 +172,7 @@ void bpf_tc_set_globals(struct bpf_map *map,
 		.profiling = profiling,
 		.natin_idx = natin,
 		.natout_idx = natout,
-		overlay_tunnel_id = overlay_tunnel_id,
+		.overlay_tunnel_id = overlay_tunnel_id,
 		.log_filter_jmp = log_filter_jmp,
 	};
 
