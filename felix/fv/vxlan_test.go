@@ -99,7 +99,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 				assignTunnelAddresses(infra, tc, client)
 			})
 
-			AfterEach(func() {
+			JustAfterEach(func() {
 				if CurrentGinkgoTestDescription().Failed {
 					for _, felix := range felixes {
 						if NFTMode() {
@@ -114,9 +114,14 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 						if enableIPv6 {
 							felix.Exec("ip", "-6", "route")
 						}
+						felix.Exec("ip", "-d", "link")
 					}
-				}
 
+					infra.DumpErrorData()
+				}
+			})
+
+			AfterEach(func() {
 				for _, wl := range w {
 					wl.Stop()
 				}
@@ -130,10 +135,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 					wl.Stop()
 				}
 				tc.Stop()
-
-				if CurrentGinkgoTestDescription().Failed {
-					infra.DumpErrorData()
-				}
 				infra.Stop()
 			})
 
@@ -719,7 +720,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 				}
 			})
 
-			It("should configure the vxlan device correctly", func() {
+			_ = !BPFMode() && It("should configure the vxlan device correctly", func() {
 				// The VXLAN device should appear with default MTU, etc. FV environment uses MTU 1500,
 				// which means that we should expect 1450 after subtracting VXLAN overhead for IPv4 or 1430 for IPv6.
 				mtuStr := "mtu 1450"
@@ -842,12 +843,16 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 				// Wait for the VXLAN device to be created.
 				mtuStr := "mtu 1450"
 				mtuStrV6 := "mtu 1430"
+				if BPFMode() {
+					mtuStr = "mtu 1500"
+					mtuStrV6 = "mtu 1500"
+				}
 				for _, felix := range felixes {
 					Eventually(func() string {
 						out, _ := felix.ExecOutput("ip", "-d", "link", "show", "vxlan.calico")
 						return out
 					}, "60s", "500ms").Should(ContainSubstring(mtuStr))
-					if enableIPv6 {
+					if !BPFMode() && enableIPv6 {
 						Eventually(func() string {
 							out, _ := felix.ExecOutput("ip", "-d", "link", "show", "vxlan-v6.calico")
 							return out
@@ -863,19 +868,22 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 				_, err := client.FelixConfigurations().Create(context.Background(), felixConfig, options.SetOptions{})
 				Expect(err).NotTo(HaveOccurred())
 
-				// Expect the ipv4 VXLAN device to be deleted.
-				for _, felix := range felixes {
-					Eventually(func() string {
-						out, _ := felix.ExecOutput("ip", "-d", "link", "show", "vxlan.calico")
-						return out
-					}, "60s", "500ms").ShouldNot(ContainSubstring(mtuStr))
-					// IPv6 ignores the VXLAN enabled flag and must be disabled at the pool level. As such the ipv6
-					// interfaces should still exist at this point
-					if enableIPv6 {
+				if !BPFMode() || !enableIPv6 {
+					// Expect the ipv4 VXLAN device to be deleted. In BPFMode
+					// the same device is used for V6 as well
+					for _, felix := range felixes {
 						Eventually(func() string {
-							out, _ := felix.ExecOutput("ip", "-d", "link", "show", "vxlan-v6.calico")
+							out, _ := felix.ExecOutput("ip", "-d", "link", "show", "vxlan.calico")
 							return out
-						}, "60s", "500ms").Should(ContainSubstring(mtuStrV6))
+						}, "60s", "500ms").ShouldNot(ContainSubstring(mtuStr))
+						// IPv6 ignores the VXLAN enabled flag and must be disabled at the pool level. As such the ipv6
+						// interfaces should still exist at this point
+						if enableIPv6 {
+							Eventually(func() string {
+								out, _ := felix.ExecOutput("ip", "-d", "link", "show", "vxlan-v6.calico")
+								return out
+							}, "60s", "500ms").Should(ContainSubstring(mtuStrV6))
+						}
 					}
 				}
 
@@ -889,6 +897,10 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 					// Expect the ipv6 VXLAN device to be deleted.
 					for _, felix := range felixes {
 						Eventually(func() string {
+							if BPFMode() {
+								out, _ := felix.ExecOutput("ip", "-d", "link", "show", "vxlan.calico")
+								return out
+							}
 							out, _ := felix.ExecOutput("ip", "-d", "link", "show", "vxlan-v6.calico")
 							return out
 						}, "60s", "500ms").ShouldNot(ContainSubstring(mtuStrV6))
@@ -946,8 +958,10 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 						felix.Exec("ipset", "list")
 						felix.Exec("ip", "r")
 						felix.Exec("ip", "a")
+						felix.Exec("calico-bpf", "routes", "dump")
 						if enableIPv6 {
 							felix.Exec("ip", "-6", "route")
+							felix.Exec("calico-bpf", "-6", "routes", "dump")
 						}
 					}
 				}
@@ -1073,6 +1087,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 						if enableIPv6 {
 							felix.Exec("ip", "-6", "route")
 						}
+						felix.Exec("calico-bpf", "routes", "dump")
 					}
 				}
 
@@ -1142,6 +1157,7 @@ func createVXLANBaseTopologyOptions(vxlanMode api.VXLANMode, enableIPv6 bool, ro
 	// tested but we can verify the state with ethtool.
 	topologyOptions.ExtraEnvVars["FELIX_FeatureDetectOverride"] = fmt.Sprintf("ChecksumOffloadBroken=%t", brokenXSum)
 	topologyOptions.FelixDebugFilenameRegex = "vxlan|route_table|l3_route_resolver|int_dataplane"
+	topologyOptions.ExtraEnvVars["FELIX_BPFLogLevel"] = "off"
 	return topologyOptions
 }
 
@@ -1198,7 +1214,7 @@ func setupWorkloads(infra infrastructure.DatastoreInfra, tc infrastructure.Topol
 		return nil
 	}, "10s", "100ms").ShouldNot(HaveOccurred())
 
-	if enableIPv6 {
+	if enableIPv6 && !BPFMode() {
 		Eventually(func() error {
 			for i, f := range tc.Felixes {
 				out, err := f.ExecOutput("ip", "link")
