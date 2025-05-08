@@ -1140,7 +1140,7 @@ func (c *IPAMController) garbageCollectKnownLeaks() error {
 		return nil
 	}
 
-	// By release multple IPs at once, we can reduce the number of API calls the underlying IPAM code needs to make
+	// By releasing multiple IPs at once, we can reduce the number of API calls the underlying IPAM code needs to make
 	// in order to release the IPs. This is especially apparent when there are multple IP addresses from the same block
 	// that must be released, as they can all be released in a single API call to update the block.
 	log.WithField("num", len(opts)).Info("Garbage collecting leaked IP addresses")
