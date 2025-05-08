@@ -20,7 +20,7 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	log "github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 
 	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
@@ -32,6 +32,94 @@ import (
 	"github.com/projectcalico/calico/felix/rules"
 	"github.com/projectcalico/calico/felix/vxlanfdb"
 )
+
+type mockVXLANDataplane struct {
+	links     []netlink.Link
+	ipVersion uint8
+}
+
+func (m *mockVXLANDataplane) LinkByName(name string) (netlink.Link, error) {
+	la := netlink.NewLinkAttrs()
+	la.Name = "vxlan"
+	link := &netlink.Vxlan{
+		LinkAttrs:    la,
+		VxlanId:      1,
+		Port:         20,
+		VtepDevIndex: 2,
+		SrcAddr:      ip.FromString("172.0.0.2").AsNetIP(),
+	}
+
+	la.Name = "vxlan-v6"
+	if m.ipVersion == 6 {
+		link = &netlink.Vxlan{
+			LinkAttrs:    la,
+			VxlanId:      1,
+			Port:         20,
+			VtepDevIndex: 2,
+			SrcAddr:      ip.FromString("fc00:10:96::2").AsNetIP(),
+		}
+	}
+
+	return link, nil
+}
+
+func (m *mockVXLANDataplane) LinkSetMTU(link netlink.Link, mtu int) error {
+	return nil
+}
+
+func (m *mockVXLANDataplane) LinkSetUp(link netlink.Link) error {
+	return nil
+}
+
+func (m *mockVXLANDataplane) AddrList(link netlink.Link, family int) ([]netlink.Addr, error) {
+	l := []netlink.Addr{{
+		IPNet: &net.IPNet{
+			IP: net.IPv4(172, 0, 0, 2),
+		},
+	}}
+
+	if m.ipVersion == 6 {
+		l = []netlink.Addr{{
+			IPNet: &net.IPNet{
+				IP: net.ParseIP("fc00:10:96::2"),
+			},
+		}}
+	}
+	return l, nil
+}
+
+func (m *mockVXLANDataplane) AddrAdd(link netlink.Link, addr *netlink.Addr) error {
+	return nil
+}
+
+func (m *mockVXLANDataplane) AddrDel(link netlink.Link, addr *netlink.Addr) error {
+	return nil
+}
+
+func (m *mockVXLANDataplane) LinkList() ([]netlink.Link, error) {
+	return m.links, nil
+}
+
+func (m *mockVXLANDataplane) LinkAdd(netlink.Link) error {
+	return nil
+}
+
+func (m *mockVXLANDataplane) LinkDel(netlink.Link) error {
+	return nil
+}
+
+type mockVXLANFDB struct {
+	setVTEPsCalls int
+	currentVTEPs  []vxlanfdb.VTEP
+}
+
+func (t *mockVXLANFDB) SetVTEPs(targets []vxlanfdb.VTEP) {
+	logrus.WithFields(logrus.Fields{
+		"targets": targets,
+	}).Debug("SetVTEPs")
+	t.currentVTEPs = targets
+	t.setVTEPsCalls++
+}
 
 var _ = Describe("RouteManager for vxlan ip pools", func() {
 	var manager, managerV6 *routeManager
@@ -441,91 +529,3 @@ var _ = Describe("RouteManager for vxlan ip pools", func() {
 		Expect(rt.currentRoutes["vxlan.calico"]).To(HaveLen(0))
 	})
 })
-
-type mockVXLANDataplane struct {
-	links     []netlink.Link
-	ipVersion uint8
-}
-
-func (m *mockVXLANDataplane) LinkByName(name string) (netlink.Link, error) {
-	la := netlink.NewLinkAttrs()
-	la.Name = "vxlan"
-	link := &netlink.Vxlan{
-		LinkAttrs:    la,
-		VxlanId:      1,
-		Port:         20,
-		VtepDevIndex: 2,
-		SrcAddr:      ip.FromString("172.0.0.2").AsNetIP(),
-	}
-
-	la.Name = "vxlan-v6"
-	if m.ipVersion == 6 {
-		link = &netlink.Vxlan{
-			LinkAttrs:    la,
-			VxlanId:      1,
-			Port:         20,
-			VtepDevIndex: 2,
-			SrcAddr:      ip.FromString("fc00:10:96::2").AsNetIP(),
-		}
-	}
-
-	return link, nil
-}
-
-func (m *mockVXLANDataplane) LinkSetMTU(link netlink.Link, mtu int) error {
-	return nil
-}
-
-func (m *mockVXLANDataplane) LinkSetUp(link netlink.Link) error {
-	return nil
-}
-
-func (m *mockVXLANDataplane) AddrList(link netlink.Link, family int) ([]netlink.Addr, error) {
-	l := []netlink.Addr{{
-		IPNet: &net.IPNet{
-			IP: net.IPv4(172, 0, 0, 2),
-		},
-	}}
-
-	if m.ipVersion == 6 {
-		l = []netlink.Addr{{
-			IPNet: &net.IPNet{
-				IP: net.ParseIP("fc00:10:96::2"),
-			},
-		}}
-	}
-	return l, nil
-}
-
-func (m *mockVXLANDataplane) AddrAdd(link netlink.Link, addr *netlink.Addr) error {
-	return nil
-}
-
-func (m *mockVXLANDataplane) AddrDel(link netlink.Link, addr *netlink.Addr) error {
-	return nil
-}
-
-func (m *mockVXLANDataplane) LinkList() ([]netlink.Link, error) {
-	return m.links, nil
-}
-
-func (m *mockVXLANDataplane) LinkAdd(netlink.Link) error {
-	return nil
-}
-
-func (m *mockVXLANDataplane) LinkDel(netlink.Link) error {
-	return nil
-}
-
-type mockVXLANFDB struct {
-	setVTEPsCalls int
-	currentVTEPs  []vxlanfdb.VTEP
-}
-
-func (t *mockVXLANFDB) SetVTEPs(targets []vxlanfdb.VTEP) {
-	log.WithFields(log.Fields{
-		"targets": targets,
-	}).Debug("SetVTEPs")
-	t.currentVTEPs = targets
-	t.setVTEPsCalls++
-}
