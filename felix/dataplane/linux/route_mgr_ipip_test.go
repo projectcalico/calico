@@ -83,7 +83,7 @@ var _ = Describe("RouteManager for ipip ip pools", func() {
 		Expect(err).NotTo(HaveOccurred())
 		manager.OnDataDeviceUpdate("eth0")
 
-		Expect(manager.hostAddr).NotTo(BeZero())
+		Expect(manager.myHostAddr).NotTo(BeZero())
 		Expect(manager.dataDevice).NotTo(BeEmpty())
 		noEncapDev, err := manager.detectDataIface()
 
