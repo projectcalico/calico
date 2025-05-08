@@ -155,7 +155,7 @@ func (r nodes) Delete(ctx context.Context, name string, opts options.DeleteOptio
 		ropts = append(ropts, ipam.ReleaseOptions{Address: ip.String()})
 	}
 
-	_, err = r.client.IPAM().ReleaseIPs(context.Background(), ropts...)
+	_, _, err = r.client.IPAM().ReleaseIPs(context.Background(), ropts...)
 	switch err.(type) {
 	case nil, errors.ErrorResourceDoesNotExist, errors.ErrorOperationNotSupported:
 	default:
