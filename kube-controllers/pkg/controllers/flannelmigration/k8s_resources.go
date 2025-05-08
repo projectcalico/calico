@@ -508,7 +508,7 @@ func (n k8snode) Drain() error {
 	nodeName := string(n)
 	log.Infof("Start drain node %s", nodeName)
 	out, err := exec.Command("/usr/bin/kubectl", "drain",
-		"--ignore-daemonsets", "--delete-local-data", "--force", nodeName).CombinedOutput()
+		"--ignore-daemonsets", "--delete-emptydir-data", "--force", nodeName).CombinedOutput()
 	if err != nil {
 		log.Errorf("Drain node %s. \n ---Drain Node--- \n%s\n ------", nodeName, string(out))
 		return err
@@ -574,7 +574,6 @@ func updateConfigMapValue(k8sClientset *kubernetes.Clientset, namespace, name, k
 
 	log.Infof("Config map %s updated %s=%s.", name, key, value)
 	return nil
-
 }
 
 // wait for a node label to disappear.
