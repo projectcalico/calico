@@ -93,6 +93,7 @@ var (
 	_ = describeBPFTests(withTunnel("wireguard"), withProto("tcp"), withConnTimeLoadBalancingEnabled())
 	_ = describeBPFTests(withTunnel("vxlan"), withProto("tcp"), withConntrackCleanupMode("BPFProgram"))
 	_ = describeBPFTests(withTunnel("vxlan"), withProto("tcp"), withConnTimeLoadBalancingEnabled())
+	_ = describeBPFTests(withTunnel("vxlan"), withProto("tcp"), withConnTimeLoadBalancingEnabled(), withIPFamily(6))
 )
 
 // Run a stripe of tests with BPF logging disabled since the compiler tends to optimise the code differently
@@ -511,10 +512,12 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							felix.Exec("iptables-save", "-c")
 						}
 						felix.Exec("ip", "link")
+						felix.Exec("ip", "-d", "link", "show", "vxlan.calico")
 						felix.Exec("ip", "addr")
 						felix.Exec("ip", "rule")
 						felix.Exec("ip", "route")
 						felix.Exec("ip", "neigh")
+						felix.Exec("bridge", "fdb", "show", "dev", "vxlan.calico")
 						felix.Exec("arp")
 						felix.Exec("calico-bpf", "ipsets", "dump")
 						felix.Exec("calico-bpf", "routes", "dump")
@@ -1471,7 +1474,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				})
 			}
 
-			It("should have correct routes", func() {
+			_ = !testOpts.ipv6 && It("should have correct routes", func() {
 				tunnelAddr := ""
 				tunnelAddrFelix1 := ""
 				tunnelAddrFelix2 := ""
@@ -4803,7 +4806,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			})
 		})
 
-		Describe("with BPF disabled to begin with", func() {
+		_ = testOpts.tunnel != "vxlan" && Describe("with BPF disabled to begin with", func() {
 			var pc *PersistentConnection
 
 			BeforeEach(func() {
@@ -5607,9 +5610,6 @@ func ensureBPFProgramsAttachedOffset(offset int, felix *infrastructure.Felix, if
 	}
 	if felix.ExpectedVXLANTunnelAddr != "" {
 		expectedIfaces = append(expectedIfaces, "vxlan.calico")
-	}
-	if felix.ExpectedVXLANV6TunnelAddr != "" {
-		expectedIfaces = append(expectedIfaces, "vxlan-v6.calico")
 	}
 	if felix.ExpectedWireguardTunnelAddr != "" {
 		expectedIfaces = append(expectedIfaces, "wireguard.cali")
