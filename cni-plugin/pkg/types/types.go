@@ -145,7 +145,7 @@ type NetConf struct {
 	EtcdAuthority string `json:"etcd_authority"`
 	Hostname      string `json:"hostname"`
 
-	// RequireMTUFile specifies whether mtu file is required to exeute the cni-plugin
+	// RequireMTUFile specifies whether mtu file is required to execute the cni-plugin
 	RequireMTUFile bool `json:"require_mtu_file,omitempty"`
 }
 
