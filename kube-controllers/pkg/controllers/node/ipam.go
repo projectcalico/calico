@@ -311,7 +311,6 @@ func (c *IPAMController) acceptScheduleRequests(stopCh <-chan struct{}) {
 	t := time.NewTicker(period)
 	log.Infof("Will run periodic IPAM sync every %s", period)
 
-	// Use time.Tick to add tightloop protection on the main loop.
 	for {
 		// Wait until something wakes us up, or we are stopped.
 		select {
