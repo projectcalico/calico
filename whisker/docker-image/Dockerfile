@@ -79,7 +79,7 @@ LABEL maintainer="maintainers@tigera.io"
 LABEL name="Whisker"
 LABEL release=1
 LABEL summary="Whisker provides a UI to view flows."
-LABEL vendor=Project Calico
+LABEL vendor="Project Calico"
 LABEL version="${GIT_VERSION}"
 
 COPY --from=source / /
