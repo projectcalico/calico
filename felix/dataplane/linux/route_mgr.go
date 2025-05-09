@@ -15,12 +15,10 @@
 package intdataplane
 
 import (
-	"bytes"
 	"fmt"
 	"net"
 	"reflect"
 	"strings"
-	"sync"
 	"syscall"
 	"time"
 
@@ -31,14 +29,19 @@ import (
 	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
 	"github.com/projectcalico/calico/felix/ethtool"
 	"github.com/projectcalico/calico/felix/ip"
-	"github.com/projectcalico/calico/felix/ipsets"
 	"github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/felix/netlinkshim"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/routetable"
-	"github.com/projectcalico/calico/felix/rules"
-	"github.com/projectcalico/calico/felix/vxlanfdb"
 )
+
+type tunnelProvider interface {
+	Manager
+	route(ip.CIDR, *proto.RouteUpdate) *routetable.Target
+	Device() (netlink.Link, string, error)
+	dataDeviceAddr() string
+	updateDataDevice(link netlink.Link)
+}
 
 type routeManager struct {
 	// Our dependencies.
@@ -48,57 +51,37 @@ type routeManager struct {
 	ipVersion            uint8
 	ippoolType           proto.IPPoolType
 
+	provider tunnelProvider
+
 	// Device information
 	dataDevice      string
 	tunnelDevice    string
 	tunnelDeviceMTU int
 
-	// activeHostnameToIP maps hostname to string IP address. We don't bother to parse into
-	// net.IPs because we're going to pass them directly to the IPSet API.
-	activeHostnameToIP map[string]string
-	ipsetsDataplane    dpsets.IPSetsDataplane
-	ipSetMetadata      ipsets.IPSetMetadata
-
 	// Hold pending updates.
 	routesByDest    map[string]*proto.RouteUpdate
 	localIPAMBlocks map[string]*proto.RouteUpdate
-	vtepsByNode     map[string]*proto.VXLANTunnelEndpointUpdate
 
 	// Local host information
-	hostname       string
-	myHostAddr     string
-	myVTEP         *proto.VXLANTunnelEndpointUpdate
-	myInfoLock     sync.Mutex
-	myInfoChangedC chan struct{}
-
-	// VXLAN configuration.
-	vxlanID   int
-	vxlanPort int
-	fdb       VXLANFDB
+	hostname         string
+	providerChangedC chan struct{}
 
 	// Indicates if configuration has changed since the last apply.
-	routesDirty       bool
-	ipSetOrVTEPDirty  bool
-	externalNodeCIDRs []string
-	nlHandle          netlinkHandle
-	dpConfig          Config
-	routeProtocol     netlink.RouteProtocol
+	routesDirty   bool
+	nlHandle      netlinkHandle
+	dpConfig      Config
+	routeProtocol netlink.RouteProtocol
 
 	// Log context
 	logCtx     *logrus.Entry
 	opRecorder logutils.OpRecorder
 }
 
-type VXLANFDB interface {
-	SetVTEPs(vteps []vxlanfdb.VTEP)
-}
-
 func newRouteManager(
 	ipsetsDataplane dpsets.IPSetsDataplane,
 	mainRouteTable routetable.Interface,
-	fdb VXLANFDB,
-	tunnelDevice string,
 	ippoolType proto.IPPoolType,
+	fdb VXLANFDB,
 	ipVersion uint8,
 	mtu int,
 	dpConfig Config,
@@ -108,9 +91,8 @@ func newRouteManager(
 	return newRouteManagerWithShims(
 		ipsetsDataplane,
 		mainRouteTable,
-		fdb,
-		tunnelDevice,
 		ippoolType,
+		fdb,
 		ipVersion,
 		mtu,
 		dpConfig,
@@ -122,9 +104,8 @@ func newRouteManager(
 func newRouteManagerWithShims(
 	ipsetsDataplane dpsets.IPSetsDataplane,
 	mainRouteTable routetable.Interface,
-	fdb VXLANFDB,
-	tunnelDevice string,
 	ippoolType proto.IPPoolType,
+	fdb VXLANFDB,
 	ipVersion uint8,
 	mtu int,
 	dpConfig Config,
@@ -132,55 +113,69 @@ func newRouteManagerWithShims(
 	nlHandle netlinkHandle,
 ) *routeManager {
 
-	ipsetID := rules.IPSetIDAllVXLANSourceNets
-	routeClassTunnel := routetable.RouteClassVXLANTunnel
-	routeClassSameSubnet := routetable.RouteClassVXLANSameSubnet
-	if ippoolType == proto.IPPoolType_IPIP {
+	manager := routeManager{
+		hostname:         dpConfig.Hostname,
+		routeTable:       mainRouteTable,
+		routesByDest:     map[string]*proto.RouteUpdate{},
+		localIPAMBlocks:  map[string]*proto.RouteUpdate{},
+		providerChangedC: make(chan struct{}, 1),
+		tunnelDeviceMTU:  mtu,
+		ipVersion:        ipVersion,
+		ippoolType:       ippoolType,
+		routesDirty:      true,
+		dpConfig:         dpConfig,
+		nlHandle:         nlHandle,
+		routeProtocol:    calculateRouteProtocol(dpConfig),
+		opRecorder:       opRecorder,
+	}
+
+	switch ippoolType {
+	case proto.IPPoolType_IPIP:
 		if ipVersion != 4 {
 			logrus.Errorf("Route manager only supports IPIP pool in IPv4")
 			return nil
 		}
-
-		ipsetID = rules.IPSetIDAllHostNets
-		routeClassTunnel = routetable.RouteClassIPIPTunnel
-		routeClassSameSubnet = routetable.RouteClassIPIPSameSubnet
+		ipipManager := newIPIPManager(
+			ipsetsDataplane,
+			dataplanedefs.IPIPIfaceName,
+			ipVersion,
+			mtu,
+			dpConfig,
+			manager.triggerRouteUpdate,
+			opRecorder,
+		)
+		manager.provider = ipipManager
+		manager.routeClassTunnel = routetable.RouteClassIPIPTunnel
+		manager.routeClassSameSubnet = routetable.RouteClassIPIPSameSubnet
+		manager.tunnelDevice = dataplanedefs.IPIPIfaceName
+	case proto.IPPoolType_VXLAN:
+		iface := dataplanedefs.VXLANIfaceNameV4
+		if ipVersion == 6 {
+			iface = dataplanedefs.VXLANIfaceNameV6
+		}
+		vxlanManager := newVXLANManager(
+			ipsetsDataplane,
+			fdb,
+			iface,
+			ipVersion,
+			mtu,
+			dpConfig,
+			manager.triggerRouteUpdate,
+			opRecorder,
+		)
+		manager.provider = vxlanManager
+		manager.routeClassTunnel = routetable.RouteClassVXLANTunnel
+		manager.routeClassSameSubnet = routetable.RouteClassVXLANSameSubnet
+		manager.tunnelDevice = iface
+	default:
+		panic("Invalid IP pool for route manager")
 	}
 
-	return &routeManager{
-		ipsetsDataplane: ipsetsDataplane,
-		ipSetMetadata: ipsets.IPSetMetadata{
-			MaxSize: dpConfig.MaxIPSetSize,
-			SetID:   ipsetID,
-			Type:    ipsets.IPSetTypeHashNet,
-		},
-		activeHostnameToIP:   map[string]string{},
-		hostname:             dpConfig.Hostname,
-		routeTable:           mainRouteTable,
-		routeClassTunnel:     routeClassTunnel,
-		routeClassSameSubnet: routeClassSameSubnet,
-		fdb:                  fdb,
-		routesByDest:         map[string]*proto.RouteUpdate{},
-		localIPAMBlocks:      map[string]*proto.RouteUpdate{},
-		vtepsByNode:          map[string]*proto.VXLANTunnelEndpointUpdate{},
-		myInfoChangedC:       make(chan struct{}, 1),
-		tunnelDevice:         tunnelDevice,
-		tunnelDeviceMTU:      mtu,
-		vxlanID:              dpConfig.RulesConfig.VXLANVNI,
-		vxlanPort:            dpConfig.RulesConfig.VXLANPort,
-		ipVersion:            ipVersion,
-		ippoolType:           ippoolType,
-		externalNodeCIDRs:    dpConfig.ExternalNodesCidrs,
-		routesDirty:          true,
-		ipSetOrVTEPDirty:     true,
-		dpConfig:             dpConfig,
-		nlHandle:             nlHandle,
-		routeProtocol:        calculateRouteProtocol(dpConfig),
-		logCtx: logrus.WithFields(logrus.Fields{
-			"ipVersion":     ipVersion,
-			"tunnel device": tunnelDevice,
-		}),
-		opRecorder: opRecorder,
-	}
+	manager.logCtx = logrus.WithFields(logrus.Fields{
+		"ipVersion":     ipVersion,
+		"tunnel device": manager.tunnelDevice,
+	})
+	return &manager
 }
 
 func calculateRouteProtocol(dpConfig Config) netlink.RouteProtocol {
@@ -202,8 +197,8 @@ func calculateRouteProtocol(dpConfig Config) netlink.RouteProtocol {
 // isRemoteTunnelRoute returns true if the route update signifies a need to program
 // a directly connected route on the VXLAN device for a remote tunnel endpoint. This is needed
 // in a few cases in order to ensure host <-> pod connectivity over the tunnel.
-func (m *routeManager) isRemoteTunnelRoute(msg *proto.RouteUpdate) bool {
-	if msg.IpPoolType != m.ippoolType {
+func isRemoteTunnelRoute(msg *proto.RouteUpdate, ippoolType proto.IPPoolType) bool {
+	if msg.IpPoolType != ippoolType {
 		// Not relevant IP pool - can skip this update.
 		return false
 	}
@@ -251,7 +246,7 @@ func (m *routeManager) OnUpdate(protoBufMsg interface{}) {
 			m.routesDirty = true
 		}
 
-		if m.isRemoteTunnelRoute(msg) {
+		if isRemoteTunnelRoute(msg, m.ippoolType) {
 			m.logCtx.WithField("msg", msg).Debug("Route manager received route update for remote tunnel endpoint")
 			m.routesByDest[msg.Dst] = msg
 			m.routesDirty = true
@@ -281,73 +276,22 @@ func (m *routeManager) OnUpdate(protoBufMsg interface{}) {
 			return
 		}
 		m.deleteRoute(msg.Dst)
-	case *proto.VXLANTunnelEndpointUpdate:
-		if m.ippoolType != proto.IPPoolType_VXLAN {
-			// Skip since the update is for a mismatched IP pool type.
-			m.logCtx.WithField("msg", msg).Debug("Skipping mismatched ip pool update")
-			return
-		}
+	default:
+		m.provider.OnUpdate(msg)
+	}
+}
 
-		// Check to make sure that we are dealing with messages of the correct IP version.
-		if (m.ipVersion == 4 && msg.Ipv4Addr == "") || (m.ipVersion == 6 && msg.Ipv6Addr == "") {
-			// Skip since the update is for a mismatched IP version
-			m.logCtx.WithField("msg", msg).Debug("Skipping mismatched IP version update")
-			return
-		}
-
-		m.logCtx.WithField("msg", msg).Debug("Route manager received VTEP update")
-		if msg.Node == m.hostname {
-			m.setLocalVTEP(msg)
-		} else {
-			m.vtepsByNode[msg.Node] = msg
-		}
-		m.routesDirty = true
-		m.ipSetOrVTEPDirty = true
-	case *proto.VXLANTunnelEndpointRemove:
-		if m.ippoolType != proto.IPPoolType_VXLAN {
-			// Skip since the update is for a mismatched IP pool type.
-			m.logCtx.WithField("msg", msg).Debug("Skipping mismatched ip pool update")
-			return
-		}
-
-		m.logCtx.WithField("msg", msg).Debug("Route manager received VTEP remove")
-		if msg.Node == m.hostname {
-			m.setLocalVTEP(nil)
-		} else {
-			delete(m.vtepsByNode, msg.Node)
-		}
-		m.routesDirty = true
-		m.ipSetOrVTEPDirty = true
-	case *proto.HostMetadataUpdate:
-		if m.ippoolType != proto.IPPoolType_IPIP {
-			// Skip since the update is for a mismatched IP pool type.
-			m.logCtx.WithField("msg", msg).Debug("Skipping mismatched ip pool update")
-			return
-		}
-
-		m.logCtx.WithField("hostname", msg.Hostname).Debug("Host update/create")
-		if msg.Hostname == m.hostname {
-			logrus.Info("pepsi")
-			m.setLocalHostAddr(msg.Ipv4Addr)
-		}
-		m.activeHostnameToIP[msg.Hostname] = msg.Ipv4Addr
-		m.ipSetOrVTEPDirty = true
-		m.routesDirty = true
-	case *proto.HostMetadataRemove:
-		if m.ippoolType != proto.IPPoolType_IPIP {
-			// Skip since the update is for a mismatched IP pool type.
-			m.logCtx.WithField("msg", msg).Debug("Skipping mismatched ip pool update")
-			return
-		}
-
-		m.logCtx.WithField("hostname", msg.Hostname).Debug("Host removed")
-		if msg.Hostname == m.hostname {
-			m.setLocalHostAddr("")
-		}
-		delete(m.activeHostnameToIP, msg.Hostname)
-		m.ipSetOrVTEPDirty = true
+// TODO: improve this
+func (m *routeManager) triggerRouteUpdate(providerChaned bool) {
+	if providerChaned {
+		m.providerChangedC <- struct{}{}
+	} else {
 		m.routesDirty = true
 	}
+}
+
+func (m *routeManager) vxlanEnabled() bool {
+	return m.ippoolType == proto.IPPoolType_VXLAN
 }
 
 func isType(msg *proto.RouteUpdate, t proto.RouteType) bool {
@@ -404,46 +348,6 @@ func (m *routeManager) deleteRoute(dst string) {
 	}
 }
 
-func (m *routeManager) setLocalVTEP(vtep *proto.VXLANTunnelEndpointUpdate) {
-	m.myInfoLock.Lock()
-	defer m.myInfoLock.Unlock()
-	m.myVTEP = vtep
-	select {
-	case m.myInfoChangedC <- struct{}{}:
-	default:
-	}
-}
-
-func (m *routeManager) getLocalVTEP() *proto.VXLANTunnelEndpointUpdate {
-	m.myInfoLock.Lock()
-	defer m.myInfoLock.Unlock()
-	return m.myVTEP
-}
-
-func (m *routeManager) setLocalHostAddr(address string) {
-	m.myInfoLock.Lock()
-	defer m.myInfoLock.Unlock()
-	m.myHostAddr = address
-	select {
-	case m.myInfoChangedC <- struct{}{}:
-	default:
-	}
-}
-
-func (m *routeManager) getLocalHostAddr() string {
-	m.myInfoLock.Lock()
-	defer m.myInfoLock.Unlock()
-	return m.myHostAddr
-}
-
-func (m *routeManager) ipipEnabled() bool {
-	return m.ippoolType == proto.IPPoolType_IPIP
-}
-
-func (m *routeManager) vxlanEnabled() bool {
-	return m.ippoolType == proto.IPPoolType_VXLAN
-}
-
 func (m *routeManager) CompleteDeferredWork() error {
 	if m.dataDevice == "" {
 		// Background goroutine hasn't sent us the data interface name yet,
@@ -464,13 +368,7 @@ func (m *routeManager) CompleteDeferredWork() error {
 			// defer creation of our "no encap" RouteTable, so that the
 			// dataplane would stay untouched until the conflict was resolved.
 			// With only a single RouteTable, we need a different fallback.
-			var localInfo any
-			if m.vxlanEnabled() {
-				localInfo = m.getLocalVTEP()
-			} else {
-				localInfo = m.getLocalHostAddr()
-			}
-			m.logCtx.WithError(err).WithField("local", localInfo).Error(
+			m.logCtx.WithError(err).Error(
 				"Failed to find data device. Missing/conflicting local information? route programming is likely to fail.")
 		} else {
 			m.dataDevice = dataIface.Attrs().Name
@@ -478,76 +376,13 @@ func (m *routeManager) CompleteDeferredWork() error {
 		}
 	}
 
-	if m.ipSetOrVTEPDirty {
-		m.updateIPSetOrVTEP()
-		m.ipSetOrVTEPDirty = false
-	}
+	err := m.provider.CompleteDeferredWork()
 
 	if m.routesDirty {
 		m.updateRoutes()
 		m.routesDirty = false
 	}
-
-	return nil
-}
-
-func (m *routeManager) updateIPSetOrVTEP() {
-	if m.vxlanEnabled() {
-		m.updateNeighborsAndAllowedSources()
-	} else if m.ipipEnabled() {
-		m.updateAllHostsIPSet()
-	}
-}
-
-func (m *routeManager) updateAllHostsIPSet() {
-	// For simplicity (and on the assumption that host add/removes are rare) rewrite
-	// the whole IP set whenever we get a change. To replace this with delta handling
-	// would require reference counting the IPs because it's possible for two hosts
-	// to (at least transiently) share an IP. That would add occupancy and make the
-	// code more complex.
-	m.logCtx.Info("All-hosts IP set out-of sync, refreshing it.")
-	members := make([]string, 0, len(m.activeHostnameToIP)+len(m.externalNodeCIDRs))
-	for _, ip := range m.activeHostnameToIP {
-		members = append(members, ip)
-	}
-	members = append(members, m.externalNodeCIDRs...)
-	m.ipsetsDataplane.AddOrReplaceIPSet(m.ipSetMetadata, members)
-}
-
-func (m *routeManager) updateNeighborsAndAllowedSources() {
-	m.logCtx.Debug("VTEPs are dirty, updating allowed VXLAN sources and L2 neighbors.")
-	m.opRecorder.RecordOperation("update-vxlan-vteps")
-
-	// We allow VXLAN packets from configured external sources as well as
-	// each Calico node with a valid VTEP.
-	allowedVXLANSources := make([]string, 0, len(m.vtepsByNode)+len(m.externalNodeCIDRs))
-	allowedVXLANSources = append(allowedVXLANSources, m.externalNodeCIDRs...)
-
-	// Collect the L2 neighbors and the VTEPS.
-	var l2routes []vxlanfdb.VTEP
-	for _, u := range m.vtepsByNode {
-		mac, err := parseMacForIPVersion(u, m.ipVersion)
-		if err != nil {
-			// Don't block programming of other VTEPs if somehow we receive one with a bad mac.
-			m.logCtx.WithError(err).Warn("Failed to parse VTEP mac address")
-			continue
-		}
-		addr := u.Ipv4Addr
-		parentDeviceIP := u.ParentDeviceIp
-		if m.ipVersion == 6 {
-			addr = u.Ipv6Addr
-			parentDeviceIP = u.ParentDeviceIpv6
-		}
-		l2routes = append(l2routes, vxlanfdb.VTEP{
-			TunnelMAC: mac,
-			TunnelIP:  ip.FromIPOrCIDRString(addr),
-			HostIP:    ip.FromIPOrCIDRString(parentDeviceIP),
-		})
-		allowedVXLANSources = append(allowedVXLANSources, parentDeviceIP)
-	}
-	m.logCtx.WithField("l2routes", l2routes).Debug("VXLAN manager sending L2 updates")
-	m.fdb.SetVTEPs(l2routes)
-	m.ipsetsDataplane.AddOrReplaceIPSet(m.ipSetMetadata, allowedVXLANSources)
+	return err
 }
 
 func (m *routeManager) updateRoutes() {
@@ -571,7 +406,7 @@ func (m *routeManager) updateRoutes() {
 			// We've got everything we need to program this route as a no-encap route.
 			noEncapRoutes = append(noEncapRoutes, *noEncapRoute)
 			logCtx.WithField("route", r).Debug("Destination in same subnet, using no-encap route.")
-		} else if tunnelRoute := m.tunneledRoute(cidr, r); tunnelRoute != nil {
+		} else if tunnelRoute := m.provider.route(cidr, r); tunnelRoute != nil {
 			tunnelRoutes = append(tunnelRoutes, *tunnelRoute)
 			logCtx.WithField("route", tunnelRoute).Debug("adding tunnel route to list for addition")
 		} else {
@@ -635,62 +470,6 @@ func noEncapRoute(ifaceName string, cidr ip.CIDR, r *proto.RouteUpdate, proto ne
 	return &noEncapRoute
 }
 
-func (m *routeManager) tunneledRoute(cidr ip.CIDR, r *proto.RouteUpdate) *routetable.Target {
-	switch m.ippoolType {
-	case proto.IPPoolType_IPIP:
-		return m.ipipRoute(cidr, r)
-	case proto.IPPoolType_VXLAN:
-		return m.vxlanRoute(cidr, r)
-	default:
-		panic("unknown IP pool type is set.")
-	}
-}
-
-func (m *routeManager) ipipRoute(cidr ip.CIDR, r *proto.RouteUpdate) *routetable.Target {
-	// Extract the gateway addr for this route based on its remote address.
-	remoteAddr, ok := m.activeHostnameToIP[r.DstNodeName]
-	if !ok {
-		// When the local address arrives, it'll set routesDirty=true so this loop will execute again.
-		return nil
-	}
-
-	return &routetable.Target{
-		Type:     routetable.TargetTypeOnLink,
-		CIDR:     cidr,
-		GW:       ip.FromString(remoteAddr),
-		Protocol: m.routeProtocol,
-		MTU:      m.dpConfig.IPIPMTU,
-	}
-}
-
-func (m *routeManager) vxlanRoute(cidr ip.CIDR, r *proto.RouteUpdate) *routetable.Target {
-	if m.isRemoteTunnelRoute(r) {
-		// We treat remote tunnel routes as directly connected. They don't have a gateway of
-		// the VTEP because they ARE the VTEP!
-		return &routetable.Target{
-			CIDR: cidr,
-			MTU:  m.tunnelDeviceMTU,
-		}
-	}
-
-	// Extract the gateway addr for this route based on its remote VTEP.
-	vtep, ok := m.vtepsByNode[r.DstNodeName]
-	if !ok {
-		// When the VTEP arrives, it'll set routesDirty=true so this loop will execute again.
-		return nil
-	}
-	vtepAddr := vtep.Ipv4Addr
-	if m.ipVersion == 6 {
-		vtepAddr = vtep.Ipv6Addr
-	}
-	return &routetable.Target{
-		Type: routetable.TargetTypeVXLAN,
-		CIDR: cidr,
-		GW:   ip.FromString(vtepAddr),
-		MTU:  m.tunnelDeviceMTU,
-	}
-}
-
 func (m *routeManager) OnDataDeviceUpdate(name string) {
 	if name == "" {
 		m.logCtx.Warn("Empty data interface name? Ignoring.")
@@ -723,13 +502,13 @@ func (m *routeManager) KeepDeviceInSync(mtu int, xsumBroken bool, wait time.Dura
 		defer timer.Stop()
 		select {
 		case <-timer.C:
-		case <-m.myInfoChangedC:
+		case <-m.providerChangedC:
 			logrus.Debug("Sleep returning early: local information changed.")
 		}
 	}
 
 	for {
-		if m.missingLocalInfo() {
+		if m.provider.dataDeviceAddr() == "" {
 			m.logCtx.Debug("Missing local information, retrying...")
 			sleepMonitoringChans(10 * time.Second)
 			continue
@@ -743,11 +522,7 @@ func (m *routeManager) KeepDeviceInSync(mtu int, xsumBroken bool, wait time.Dura
 		}
 
 		m.logCtx.Debug("Configuring tunnel device")
-		if m.ipipEnabled() {
-			err = m.configureIPIPDevice(mtu, xsumBroken)
-		} else {
-			err = m.configureVXLANDevice(mtu, xsumBroken)
-		}
+		m.configureTunnelDevice(mtu, xsumBroken)
 		if err != nil {
 			m.logCtx.WithError(err).Warn("Failed to configure tunnel device, retrying...")
 			logNextSuccess = true
@@ -763,7 +538,7 @@ func (m *routeManager) KeepDeviceInSync(mtu int, xsumBroken bool, wait time.Dura
 			select {
 			case dataIfaceC <- newDataIface:
 				dataIface = newDataIface
-			case <-m.myInfoChangedC:
+			case <-m.providerChangedC:
 				m.logCtx.Info("My information changed; restarting configuration.")
 				continue
 			}
@@ -777,28 +552,10 @@ func (m *routeManager) KeepDeviceInSync(mtu int, xsumBroken bool, wait time.Dura
 	}
 }
 
-func (m *routeManager) missingLocalInfo() bool {
-	return (m.vxlanEnabled() && m.getLocalVTEP() == nil) ||
-		(m.ipipEnabled() && m.getLocalHostAddr() == "")
-}
-
 func (m *routeManager) detectDataIface() (netlink.Link, error) {
-	var dataAddr string
-	if m.vxlanEnabled() {
-		localVTEP := m.getLocalVTEP()
-		if localVTEP == nil {
-			return nil, fmt.Errorf("local VTEP not yet known")
-		}
-		dataAddr = localVTEP.ParentDeviceIp
-		if m.ipVersion == 6 {
-			dataAddr = localVTEP.ParentDeviceIpv6
-		}
-	} else if m.ipipEnabled() {
-		dataAddr = m.getLocalHostAddr()
-	}
-
+	dataAddr := m.provider.dataDeviceAddr()
 	if dataAddr == "" {
-		return nil, fmt.Errorf("failed to find data interface address")
+		return nil, fmt.Errorf("local data interface not yet known")
 	}
 
 	m.logCtx.WithField("address", dataAddr).Debug("Getting data interface")
@@ -827,53 +584,11 @@ func (m *routeManager) detectDataIface() (netlink.Link, error) {
 	return nil, fmt.Errorf("Unable to find data interface with address %s", dataAddr)
 }
 
-// configureVXLANDevice ensures the VXLAN tunnel device is up and configured correctly.
-func (m *routeManager) configureVXLANDevice(mtu int, xsumBroken bool) error {
-	localVTEP := m.getLocalVTEP()
-	addr := localVTEP.Ipv4Addr
-	parentDeviceIP := localVTEP.ParentDeviceIp
-	if m.ipVersion == 6 {
-		addr = localVTEP.Ipv6Addr
-		parentDeviceIP = localVTEP.ParentDeviceIpv6
-	}
-	parent, err := m.detectDataIface()
+func (m *routeManager) configureTunnelDevice(mtu int, xsumBroken bool) error {
+	newLink, addr, err := m.provider.Device()
 	if err != nil {
 		return err
 	}
-	mac, err := parseMacForIPVersion(localVTEP, m.ipVersion)
-	if err != nil {
-		return err
-	}
-	la := netlink.NewLinkAttrs()
-	la.Name = m.tunnelDevice
-	la.HardwareAddr = mac
-	vxlan := &netlink.Vxlan{
-		LinkAttrs:    la,
-		VxlanId:      m.vxlanID,
-		Port:         m.vxlanPort,
-		VtepDevIndex: parent.Attrs().Index,
-		SrcAddr:      ip.FromString(parentDeviceIP).AsNetIP(),
-	}
-
-	return m.configureTunnelDevice(vxlan, addr, mtu, xsumBroken)
-}
-
-// configureIPIPDevice ensures the IPIP tunnel device is up and configures correctly.
-func (m *routeManager) configureIPIPDevice(mtu int, xsumBroken bool) error {
-	la := netlink.NewLinkAttrs()
-	la.Name = m.tunnelDevice
-	ipip := &netlink.Iptun{
-		LinkAttrs: la,
-	}
-	address := m.dpConfig.RulesConfig.IPIPTunnelAddress
-
-	if len(address) == 0 {
-		return fmt.Errorf("Address is not set")
-	}
-	return m.configureTunnelDevice(ipip, address.String(), mtu, xsumBroken)
-}
-
-func (m *routeManager) configureTunnelDevice(newLink netlink.Link, addr string, mtu int, xsumBroken bool) error {
 	if newLink == nil {
 		return fmt.Errorf("no tunnel link provided")
 	}
@@ -952,6 +667,16 @@ func (m *routeManager) configureTunnelDevice(newLink netlink.Link, addr string, 
 		return fmt.Errorf("failed to set interface up: %w", err)
 	}
 
+	// And set the device state to up if needed.
+	if attrs.Flags&net.FlagUp == 0 {
+		logCtx.WithField("flags", attrs.Flags).Info("Tunnel wasn't admin up, enabling it")
+		if err := m.nlHandle.LinkSetUp(link); err != nil {
+			m.logCtx.WithError(err).Warn("Failed to set tunnel device up")
+			return err
+		}
+		logCtx.Info("Set tunnel admin up")
+	}
+
 	return nil
 }
 
@@ -998,60 +723,4 @@ func (m *routeManager) ensureAddressOnLink(ipStr string, link netlink.Link) erro
 		}
 	}
 	return nil
-}
-
-// vlanLinksIncompat takes two vxlan devices and compares them to make sure they match. If they do not match,
-// this function will return a message indicating which configuration is mismatched.
-func vxlanLinksIncompat(l1, l2 netlink.Link) string {
-	if l1.Type() != l2.Type() {
-		return fmt.Sprintf("link type: %v vs %v", l1.Type(), l2.Type())
-	}
-
-	v1 := l1.(*netlink.Vxlan)
-	v2 := l2.(*netlink.Vxlan)
-
-	if v1.VxlanId != v2.VxlanId {
-		return fmt.Sprintf("vni: %v vs %v", v1.VxlanId, v2.VxlanId)
-	}
-
-	if v1.VtepDevIndex > 0 && v2.VtepDevIndex > 0 && v1.VtepDevIndex != v2.VtepDevIndex {
-		return fmt.Sprintf("vtep (external) interface: %v vs %v", v1.VtepDevIndex, v2.VtepDevIndex)
-	}
-
-	if len(v1.SrcAddr) > 0 && len(v2.SrcAddr) > 0 && !v1.SrcAddr.Equal(v2.SrcAddr) {
-		return fmt.Sprintf("vtep (external) IP: %v vs %v", v1.SrcAddr, v2.SrcAddr)
-	}
-
-	if len(v1.Group) > 0 && len(v2.Group) > 0 && !v1.Group.Equal(v2.Group) {
-		return fmt.Sprintf("group address: %v vs %v", v1.Group, v2.Group)
-	}
-
-	if v1.L2miss != v2.L2miss {
-		return fmt.Sprintf("l2miss: %v vs %v", v1.L2miss, v2.L2miss)
-	}
-
-	if v1.Port > 0 && v2.Port > 0 && v1.Port != v2.Port {
-		return fmt.Sprintf("port: %v vs %v", v1.Port, v2.Port)
-	}
-
-	if v1.GBP != v2.GBP {
-		return fmt.Sprintf("gbp: %v vs %v", v1.GBP, v2.GBP)
-	}
-
-	if len(v1.Attrs().HardwareAddr) > 0 && len(v2.Attrs().HardwareAddr) > 0 && !bytes.Equal(v1.Attrs().HardwareAddr, v2.Attrs().HardwareAddr) {
-		return fmt.Sprintf("vtep mac addr: %v vs %v", v1.Attrs().HardwareAddr, v2.Attrs().HardwareAddr)
-	}
-
-	return ""
-}
-
-func parseMacForIPVersion(vtep *proto.VXLANTunnelEndpointUpdate, ipVersion uint8) (net.HardwareAddr, error) {
-	switch ipVersion {
-	case 4:
-		return net.ParseMAC(vtep.Mac)
-	case 6:
-		return net.ParseMAC(vtep.MacV6)
-	default:
-		return nil, fmt.Errorf("Invalid IP version")
-	}
 }

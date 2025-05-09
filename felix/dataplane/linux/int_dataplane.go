@@ -326,7 +326,6 @@ type InternalDataplane struct {
 	filterTables    []generictables.Table
 	ipSets          []dpsets.IPSetsDataplane
 
-	ipipManager      *ipipManager
 	dataInterfaceC   chan string
 	dataInterfaceCV6 chan string
 	routeManager     *routeManager
@@ -671,9 +670,8 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		dp.routeManager = newRouteManager(
 			ipSetsV4,
 			routeTableV4,
-			vxlanFDB,
-			dataplanedefs.VXLANIfaceNameV4,
 			proto.IPPoolType_VXLAN,
+			vxlanFDB,
 			4,
 			config.VXLANMTU,
 			config,
@@ -1057,34 +1055,26 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	dp.RegisterManager(newFloatingIPManager(natTableV4, ruleRenderer, 4, config.FloatingIPsEnabled))
 	dp.RegisterManager(newMasqManager(ipSetsV4, natTableV4, ruleRenderer, config.MaxIPSetSize, 4))
 	if config.RulesConfig.IPIPEnabled {
-		if config.ProgramRoutes {
-			log.Info("IPIP enabled, starting thread to keep tunnel configuration in sync.")
-			// Add a manager to keep the all-hosts IP set up to date.
-			dp.routeManager = newRouteManager(
-				ipSetsV4,
-				routeTableV4,
-				nil,
-				dataplanedefs.IPIPIfaceName,
-				proto.IPPoolType_IPIP,
-				4,
-				config.IPIPMTU,
-				config,
-				dp.loopSummarizer,
-			)
-			dp.dataInterfaceC = make(chan string, 1)
-			go dp.routeManager.KeepDeviceInSync(
-				config.IPIPMTU,
-				dataplaneFeatures.ChecksumOffloadBroken,
-				time.Second*10,
-				dp.dataInterfaceC,
-			)
-			dp.RegisterManager(dp.routeManager)
-		} else {
-			// Add a manager to keep the all-hosts IP set up to date.
-			dp.ipipManager = newIPIPManager(ipSetsV4, config.MaxIPSetSize, config.ExternalNodesCidrs)
-			go dp.ipipManager.KeepIPIPDeviceInSync(config.IPIPMTU, config.RulesConfig.IPIPTunnelAddress, dataplaneFeatures.ChecksumOffloadBroken)
-			dp.RegisterManager(dp.ipipManager) // IPv4-only
-		}
+		log.Info("IPIP enabled, starting thread to keep tunnel configuration in sync.")
+		// Add a manager to keep the all-hosts IP set up to date.
+		dp.routeManager = newRouteManager(
+			ipSetsV4,
+			routeTableV4,
+			proto.IPPoolType_IPIP,
+			nil,
+			4,
+			config.IPIPMTU,
+			config,
+			dp.loopSummarizer,
+		)
+		dp.dataInterfaceC = make(chan string, 1)
+		go dp.routeManager.KeepDeviceInSync(
+			config.IPIPMTU,
+			dataplaneFeatures.ChecksumOffloadBroken,
+			time.Second*10,
+			dp.dataInterfaceC,
+		)
+		dp.RegisterManager(dp.routeManager)
 	} else {
 		// Only clean up IPIP addresses if IPIP is implicitly disabled (no IPIP pools and not explicitly set in FelixConfig)
 		if config.RulesConfig.FelixConfigIPIPEnabled == nil {
@@ -1163,9 +1153,8 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			dp.routeManagerV6 = newRouteManager(
 				ipSetsV6,
 				routeTableV6,
-				vxlanFDBV6,
-				dataplanedefs.VXLANIfaceNameV6,
 				proto.IPPoolType_VXLAN,
+				vxlanFDBV6,
 				6,
 				config.VXLANMTUV6,
 				config,

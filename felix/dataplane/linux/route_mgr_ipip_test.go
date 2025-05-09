@@ -32,7 +32,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
-var _ = Describe("RouteManager for ipip ip pools", func() {
+var _ = Describe("RouteManager for ipip pools", func() {
 	var manager *routeManager
 	var rt *mockRouteTable
 	var ipSets *dpsets.MockIPSets
@@ -47,8 +47,7 @@ var _ = Describe("RouteManager for ipip ip pools", func() {
 		la.Name = "eth0"
 		opRecorder := logutils.NewSummarizer("test")
 		manager = newRouteManagerWithShims(
-			ipSets, rt, nil, dataplanedefs.IPIPIfaceName,
-			proto.IPPoolType_IPIP,
+			ipSets, rt, proto.IPPoolType_IPIP, nil,
 			4,
 			1400,
 			Config{
@@ -79,7 +78,7 @@ var _ = Describe("RouteManager for ipip ip pools", func() {
 			Ipv4Addr: "10.0.1.1",
 		})
 
-		err := manager.configureIPIPDevice(50, false)
+		err := manager.configureTunnelDevice(50, false)
 		Expect(err).NotTo(HaveOccurred())
 		manager.OnDataDeviceUpdate("eth0")
 
@@ -186,9 +185,9 @@ var _ = Describe("RouteManager for ipip ip pools", func() {
 	})
 })
 
-var _ = Describe("RouteManager all-hosts IP set updates", func() {
+var _ = Describe("ipipManager all-hosts IP set updates", func() {
 	var (
-		ipipMgr *routeManager
+		ipipMgr *ipipManager
 		ipSets  *dpsets.MockIPSets
 		rt      *mockRouteTable
 	)
@@ -206,7 +205,7 @@ var _ = Describe("RouteManager all-hosts IP set updates", func() {
 		la := netlink.NewLinkAttrs()
 		la.Name = "eth0"
 		opRecorder := logutils.NewSummarizer("test")
-		ipipMgr = newRouteManagerWithShims(
+		ipipMgr = newIPIPManagerWithShims(
 			ipSets, rt, nil, dataplanedefs.IPIPIfaceName,
 			proto.IPPoolType_IPIP,
 			4,
