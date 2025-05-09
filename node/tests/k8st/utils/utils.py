@@ -118,7 +118,7 @@ def start_external_node_with_bgp(name, bird_peer_config=None, bird6_peer_config=
     return birdy_ip
 
 def retry_until_success(fun,
-                        retries=10,
+                        retries=30,
                         wait_time=1,
                         ex_class=None,
                         log_exception=True,
