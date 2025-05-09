@@ -10,6 +10,7 @@ jobs:
       issues: write
       pull-requests: write
     steps:
+      # This step marks support issues and PRs as stale.
       - uses: actions/stale@v9
         with:
           # Issues configuration. We mark issues as stale after 30 days, and close them another two weeks after that if there
@@ -22,7 +23,7 @@ jobs:
 
           # Once an issue is triaged as either an enhancement or a bug, we have accepted it as real and
           # it can be exempted from automatic closure.
-          exempt-issue-labels: "kind/enhancement,kind/bug"
+          exempt-issue-labels: "kind/enhancement,kind/bug,triage/eternal"
 
           # PR configuration. For PRs, we mark them as stale after a couple of months but we never automatically close them.
           # This just makes it easier to search for stale PRs.
@@ -30,5 +31,26 @@ jobs:
           days-before-pr-stale: 60
           days-before-pr-close: -1
           stale-pr-message: "This PR is stale because it has been open for 60 days with no activity."
+
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      # This step marks kind/enhancement and kind/bug as stale, after a longer period of time.
+      - uses: actions/stale@v9
+        with:
+          # Mark enhancement and bug issues stale after 6 months, then close them after another month of inactivity.
+          days-before-issue-stale: 180
+          days-before-issue-close: 30
+          stale-issue-label: "stale"
+          stale-issue-message: "This issue is stale because it is kind/enhancement or kind/bug and has been open for 180 days with no activity."
+          close-issue-message: "This issue was closed because it has been inactive for 30 days since being marked as stale."
+
+          # This action applies only to enhancement and bug type issues, which we want to mark stale but at a much
+          # slower rate than untagged and support issues.
+          any-of-issue-labels: "kind/enhancement,kind/bug"
+          exempt-issue-labels: "triage/eternal"
+
+          # This action doesn't do anything for PRs.
+          days-before-pr-stale: -1
+          days-before-pr-close: -1
 
           repo-token: ${{ secrets.GITHUB_TOKEN }}

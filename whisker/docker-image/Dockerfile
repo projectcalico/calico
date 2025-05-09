@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-ARG BIN_DIR
 ARG CALICO_BASE
 
 FROM registry.access.redhat.com/ubi9/ubi:latest AS ubi
