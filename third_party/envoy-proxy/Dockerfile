@@ -44,7 +44,25 @@ FROM ${CALICO_BASE}
 
 COPY --from=source / /
 
+# These labels are required for OCP Certification
+LABEL description="This image contains a build of the Envoy project's envoy proxy component from github.com/envoyproxy/envoy, which is a cloud-native, high-performance proxy application"
+LABEL maintainer="maintainers@tigera.io"
+LABEL name="Envoy Proxy"
+LABEL release="1"
+LABEL summary="envoy-proxy is the proxy component of Calico's implementation of the Kubernetes Gateway API"
+LABEL vendor="Project Calico"
+LABEL version="${GIT_VERSION}"
+
+LABEL org.opencontainers.image.description="This image contains a build of the Envoy project's envoy proxy component from github.com/envoyproxy/envoy, which is a cloud-native, high-performance proxy application"
+LABEL org.opencontainers.image.authors="maintainers@tigera.io"
+LABEL org.opencontainers.image.source="https://github.com/projectcalico/calico"
+LABEL org.opencontainers.image.title="envoy-proxy is the proxy component of Calico's implementation of the Kubernetes Gateway API"
+LABEL org.opencontainers.image.vendor="Project Calico"
+LABEL org.opencontainers.image.version="${GIT_VERSION}"
+LABEL org.opencontainers.image.licenses="Apache-2.0"
+
 EXPOSE 10000
+
 ENTRYPOINT ["/usr/local/bin/envoy"]
 CMD ["-c", "/etc/envoy/envoy.yaml"]
 ENV PATH="$PATH:/usr/local/bin"
