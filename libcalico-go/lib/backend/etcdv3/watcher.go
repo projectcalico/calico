@@ -21,6 +21,10 @@ import (
 
 	log "github.com/sirupsen/logrus"
 	clientv3 "go.etcd.io/etcd/client/v3"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/util/validation/field"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
@@ -39,6 +43,14 @@ func (c *etcdV3Client) Watch(cxt context.Context, l model.ListInterface, options
 		if err != nil {
 			return nil, err
 		}
+	}
+
+	// etcdv3 backend doesn't support WatchList, watch revision must be greater than 0.
+	if rev == 0 {
+		allErrs := field.ErrorList{}
+		allErrs = append(allErrs, field.Invalid(field.NewPath("revision"), rev, "watch revision must be greater than 0 for etcdv3 backend"))
+		// return the same error as apiserver, let watcherCache fallback to list.
+		return nil, apierrors.NewInvalid(schema.GroupKind{Group: metav1.GroupName, Kind: "ListOptions"}, "", allErrs)
 	}
 
 	wc := &watcher{
@@ -90,30 +102,6 @@ func (wc *watcher) watchLoop() {
 	key, opts := calculateListKeyAndOptions(logCxt, wc.list)
 
 	log.Debug("Starting watcher.watchLoop")
-	if wc.initialRev == 0 {
-		// No initial revision supplied, so perform a list of current configuration
-		// which will also get the current revision we will start our watch from.
-		var kvps *model.KVPairList
-		var err error
-		if kvps, err = wc.listCurrent(); err != nil {
-			log.Errorf("failed to list current with latest state: %v", err)
-			// Error considered as terminating error, hence terminate watcher.
-			wc.sendError(err)
-			return
-		}
-
-		// If we're handling profiles, filter out the default-allow profile.
-		if len(kvps.KVPairs) > 0 && (key == profilesKey || key == defaultAllowProfileKey) {
-			wc.removeDefaultAllowProfile(kvps)
-		}
-
-		// We are sending an initial sync of entries to the watcher to provide current
-		// state.  To the perspective of the watcher, these are added entries, so set the
-		// event type to WatchAdded.
-		log.WithField("NumEntries", len(kvps.KVPairs)).Debug("Sending create events for each existing entry")
-		wc.sendAddedEvents(kvps)
-	}
-
 	opts = append(opts, clientv3.WithRev(wc.initialRev+1), clientv3.WithPrevKV())
 	logCxt = logCxt.WithFields(log.Fields{
 		"etcdv3-etcdKey": key,
@@ -143,48 +131,6 @@ func (wc *watcher) watchLoop() {
 
 	// If we exit the loop, it means the watcher has closed for some reason.
 	log.Warn("etcdv3 watch channel closed")
-}
-
-// listCurrent retrieves the existing entries.
-func (wc *watcher) listCurrent() (*model.KVPairList, error) {
-	log.Info("Performing initial list with no revision")
-	list, err := wc.client.List(wc.ctx, wc.list, "")
-	if err != nil {
-		return nil, err
-	}
-
-	wc.initialRev, err = strconv.ParseInt(list.Revision, 10, 64)
-	if err != nil {
-		log.WithError(err).Error("List returned revision that could not be parsed")
-		return nil, err
-	}
-
-	return list, nil
-}
-
-// removeDefaultAllowProfile filters out the default-allow profile out of the
-// given kvps list.
-func (wc *watcher) removeDefaultAllowProfile(list *model.KVPairList) {
-	log.Debugf("Filtering the default-allow profile out of the kvps list")
-	n := 0
-	s := list.KVPairs
-	for _, kvp := range s {
-		if kvp.Key != defaultAllowProfileResourceKey {
-			s[n] = kvp
-			n++
-		}
-	}
-	list.KVPairs = s[:n]
-}
-
-// sendAddedEvents sends an ADDED event for each entry in the kvp list.
-func (wc *watcher) sendAddedEvents(list *model.KVPairList) {
-	for _, kv := range list.KVPairs {
-		wc.sendEvent(&api.WatchEvent{
-			Type: api.WatchAdded,
-			New:  kv,
-		})
-	}
 }
 
 // terminateWatcher terminates the resources associated with the watcher.
