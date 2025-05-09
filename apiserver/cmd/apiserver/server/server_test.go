@@ -15,8 +15,12 @@
 package server
 
 import (
+	"crypto/tls"
 	"os"
+	"reflect"
 	"testing"
+
+	calicotls "github.com/projectcalico/calico/crypto/pkg/tls"
 )
 
 func TestCATypeFlagParsing(t *testing.T) {
@@ -52,6 +56,42 @@ func TestCATypeFlagParsing(t *testing.T) {
 				parsedEnableValidatingAdmissionController,
 				testCase.expectedEnableValidatingAdmissionController,
 				testCase.args,
+			)
+		}
+	}
+}
+
+func TestTLSCipherParsing(t *testing.T) {
+	testCases := []struct {
+		ciphersName       string
+		expectedCiphersID []uint16
+		errorExpected     bool
+	}{
+		{"", calicotls.DefaultCiphers(), false},
+		{
+			"TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256,TLS_CHACHA20_POLY1305_SHA256,TLS_RSA_WITH_AES_256_GCM_SHA384",
+			[]uint16{tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256, tls.TLS_CHACHA20_POLY1305_SHA256, tls.TLS_RSA_WITH_AES_256_GCM_SHA384},
+			false,
+		},
+		{"madeup-cipher", nil, true},
+	}
+
+	for _, testCase := range testCases {
+		os.Setenv("TLS_CIPHER_SUITES", testCase.ciphersName)
+
+		opts := &CalicoServerOptions{}
+		ciphersID, err := opts.TLSCiphers()
+		if err != nil && !testCase.errorExpected {
+			t.Fatalf("Failed to parse cipher: %v", err)
+		}
+		if testCase.errorExpected && err == nil {
+			t.Fatalf("Failed to parse unsupported cipher. Expected error but got nil")
+		}
+		if !reflect.DeepEqual(ciphersID, testCase.expectedCiphersID) {
+			t.Fatalf(
+				"Parsed value %v for TLS_CIPHER_SUITES, expected %v",
+				testCase.ciphersName,
+				testCase.expectedCiphersID,
 			)
 		}
 	}
