@@ -662,40 +662,6 @@ func defaultPolicyName(d *model.KVPair) error {
 		value.Name = polName
 	}
 
-	if _, ok := d.Value.(*apiv3.StagedNetworkPolicy); ok {
-		value := d.Value.(*apiv3.StagedNetworkPolicy)
-
-		annotations, err := storePolicyName(value.Name, value.Annotations)
-		if err != nil {
-			return err
-		}
-
-		value.Annotations = annotations
-
-		polName, err := names.BackendTieredPolicyName(value.Name, value.Spec.Tier)
-		if err != nil {
-			return err
-		}
-		value.Name = polName
-	}
-
-	if _, ok := d.Value.(*apiv3.StagedGlobalNetworkPolicy); ok {
-		value := d.Value.(*apiv3.StagedGlobalNetworkPolicy)
-
-		annotations, err := storePolicyName(value.Name, value.Annotations)
-		if err != nil {
-			return err
-		}
-
-		value.Annotations = annotations
-
-		polName, err := names.BackendTieredPolicyName(value.Name, value.Spec.Tier)
-		if err != nil {
-			return err
-		}
-		value.Name = polName
-	}
-
 	d.Key = defaultPolicyKey(d.Key)
 
 	return nil
@@ -705,9 +671,7 @@ func defaultPolicyKey(k model.Key) model.Key {
 	if _, ok := k.(model.ResourceKey); ok {
 		resourceKey := k.(model.ResourceKey)
 		if resourceKey.Kind == apiv3.KindNetworkPolicy ||
-			resourceKey.Kind == apiv3.KindStagedNetworkPolicy ||
-			resourceKey.Kind == apiv3.KindGlobalNetworkPolicy ||
-			resourceKey.Kind == apiv3.KindStagedGlobalNetworkPolicy {
+			resourceKey.Kind == apiv3.KindGlobalNetworkPolicy {
 			// To avoid conflicts all policies need to have the tier prefix added to the name to ensure they are unique
 			polName := names.TieredPolicyName(resourceKey.Name)
 			resourceKey.Name = polName

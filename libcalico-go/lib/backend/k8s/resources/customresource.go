@@ -523,9 +523,7 @@ func (c *customK8sResourceClient) convertKVPairToResource(kvp *model.KVPair) (Re
 
 func (c *customK8sResourceClient) defaultPolicyName(name string) string {
 	if c.resourceKind == apiv3.KindGlobalNetworkPolicy ||
-		c.resourceKind == apiv3.KindNetworkPolicy ||
-		c.resourceKind == apiv3.KindStagedGlobalNetworkPolicy ||
-		c.resourceKind == apiv3.KindStagedNetworkPolicy {
+		c.resourceKind == apiv3.KindNetworkPolicy {
 		// Policies in default tier are stored in the backend with the default prefix, if the prefix is not present we prefix it now
 		name = names.TieredPolicyName(name)
 	}
