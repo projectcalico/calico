@@ -53,7 +53,11 @@ type AggregationBucket struct {
 	// Tracker for statistics within this bucket.
 	stats *statisticsIndex
 
-	streamed bool
+	// ready is set when this bucket is sent to any stream, and cleared when this bucket is reset.
+	// It can thus be used to determine when a bucket is rolled over between Goldmane deciding to stream it,
+	// and the bucket actually being emited. In this case, we should skip streaming the bucket as its contents
+	// are no longer valid.
+	ready bool
 }
 
 func (b *AggregationBucket) AddFlow(flow *types.Flow) {
@@ -109,7 +113,7 @@ func (b *AggregationBucket) Reset(start, end int64) {
 	b.StartTime = start
 	b.EndTime = end
 	b.pushed = false
-	b.streamed = false
+	b.ready = false
 	b.stats = newStatisticsIndex()
 
 	if b.Flows == nil {
@@ -124,9 +128,22 @@ func (b *AggregationBucket) Reset(start, end int64) {
 	}
 }
 
+// markReady marks this bucket as ready to be consumed by a stream.
+func (b *AggregationBucket) markReady() {
+	b.RLock()
+	defer b.RUnlock()
+	b.ready = true
+}
+
 func (b *AggregationBucket) Iter(fn func(FlowBuilder) bool) {
 	b.RLock()
 	defer b.RUnlock()
+
+	if !b.ready {
+		// Bucket has been reset since it was streamed. Skip it.
+		logrus.WithFields(b.Fields()).Info("Skipping bucket that has since rolled over")
+		return
+	}
 
 	b.Flows.Iter(func(d *DiachronicFlow) error {
 		if fn(NewDeferredFlowBuilder(d, b.StartTime, b.EndTime)) {

@@ -701,7 +701,7 @@ func (r *BucketRing) flushToStreams() {
 }
 
 func (r *BucketRing) streamBucket(b *AggregationBucket, s Receiver) {
-	b.streamed = true
+	b.markReady()
 	s.Receive(b, "")
 }
 
