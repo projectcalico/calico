@@ -1,11 +1,11 @@
 module github.com/projectcalico/api
 
-go 1.24.2
+go 1.24.3
 
 require (
 	github.com/jinzhu/copier v0.4.0
 	github.com/onsi/ginkgo v1.16.5
-	github.com/onsi/gomega v1.36.2
+	github.com/onsi/gomega v1.37.0
 	k8s.io/api v0.32.4
 	k8s.io/apimachinery v0.32.4
 	k8s.io/client-go v0.32.4
