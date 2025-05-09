@@ -436,10 +436,10 @@ The log severity above which logs are sent to the log file.
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_LogSeverityFile` |
-| Encoding (env var/config file) | One of: <code>DEBUG</code>, <code>ERROR</code>, <code>FATAL</code>, <code>INFO</code>, <code>WARNING</code> (case insensitive) |
+| Encoding (env var/config file) | One of: <code>DEBUG</code>, <code>ERROR</code>, <code>FATAL</code>, <code>INFO</code>, <code>TRACE</code>, <code>WARNING</code> (case insensitive) |
 | Default value (above encoding) | `INFO` |
 | `FelixConfiguration` field | `logSeverityFile` (YAML) `LogSeverityFile` (Go API) |
-| `FelixConfiguration` schema | One of: <code>Debug</code>, <code>Error</code>, <code>Fatal</code>, <code>Info</code>, <code>Warning</code>. |
+| `FelixConfiguration` schema | One of: <code>Debug</code>, <code>Error</code>, <code>Fatal</code>, <code>Info</code>, <code>Trace</code>, <code>Warning</code>. |
 | Default value (YAML) | `Info` |
 
 ### `LogSeverityScreen` (config file) / `logSeverityScreen` (YAML)
@@ -449,10 +449,10 @@ The log severity above which logs are sent to the stdout.
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_LogSeverityScreen` |
-| Encoding (env var/config file) | One of: <code>DEBUG</code>, <code>ERROR</code>, <code>FATAL</code>, <code>INFO</code>, <code>WARNING</code> (case insensitive) |
+| Encoding (env var/config file) | One of: <code>DEBUG</code>, <code>ERROR</code>, <code>FATAL</code>, <code>INFO</code>, <code>TRACE</code>, <code>WARNING</code> (case insensitive) |
 | Default value (above encoding) | `INFO` |
 | `FelixConfiguration` field | `logSeverityScreen` (YAML) `LogSeverityScreen` (Go API) |
-| `FelixConfiguration` schema | One of: <code>Debug</code>, <code>Error</code>, <code>Fatal</code>, <code>Info</code>, <code>Warning</code>. |
+| `FelixConfiguration` schema | One of: <code>Debug</code>, <code>Error</code>, <code>Fatal</code>, <code>Info</code>, <code>Trace</code>, <code>Warning</code>. |
 | Default value (YAML) | `Info` |
 
 ### `LogSeveritySys` (config file) / `logSeveritySys` (YAML)
@@ -462,10 +462,10 @@ The log severity above which logs are sent to the syslog. Set to None for no log
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_LogSeveritySys` |
-| Encoding (env var/config file) | One of: <code>DEBUG</code>, <code>ERROR</code>, <code>FATAL</code>, <code>INFO</code>, <code>WARNING</code> (case insensitive) |
+| Encoding (env var/config file) | One of: <code>DEBUG</code>, <code>ERROR</code>, <code>FATAL</code>, <code>INFO</code>, <code>TRACE</code>, <code>WARNING</code> (case insensitive) |
 | Default value (above encoding) | `INFO` |
 | `FelixConfiguration` field | `logSeveritySys` (YAML) `LogSeveritySys` (Go API) |
-| `FelixConfiguration` schema | One of: <code>Debug</code>, <code>Error</code>, <code>Fatal</code>, <code>Info</code>, <code>Warning</code>. |
+| `FelixConfiguration` schema | One of: <code>Debug</code>, <code>Error</code>, <code>Fatal</code>, <code>Info</code>, <code>Trace</code>, <code>Warning</code>. |
 | Default value (YAML) | `Info` |
 
 ## <a id="process-prometheus-metrics">Process: Prometheus metrics
@@ -2487,6 +2487,19 @@ FlowLogGoldmaneServer is the flow server endpoint to which flow data should be p
 | `FelixConfiguration` field | `flowLogsGoldmaneServer` (YAML) `FlowLogsGoldmaneServer` (Go API) |
 | `FelixConfiguration` schema | String. |
 | Default value (YAML) | none |
+
+### `FlowLogsLocalReporter` (config file) / `flowLogsLocalReporter` (YAML)
+
+Configures local unix socket for reporting flow data from each node.
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_FlowLogsLocalReporter` |
+| Encoding (env var/config file) | One of: <code>Disabled</code>, <code>Enabled</code> (case insensitive) |
+| Default value (above encoding) | `Disabled` |
+| `FelixConfiguration` field | `flowLogsLocalReporter` (YAML) `FlowLogsLocalReporter` (Go API) |
+| `FelixConfiguration` schema | One of: <code>"Disabled"</code>, <code>"Enabled"</code>. |
+| Default value (YAML) | `Disabled` |
 
 ### `FlowLogsPolicyEvaluationMode` (config file) / `flowLogsPolicyEvaluationMode` (YAML)
 
