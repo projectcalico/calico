@@ -532,12 +532,21 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 	logger.Info("Wrote updated endpoint to datastore")
 
 	// Add the interface created above to the CNI result.
-	result.Interfaces = append(result.Interfaces, &cniv1.Interface{
-		Name:    endpoint.Spec.InterfaceName,
-		Mac:     endpoint.Spec.MAC,
+	hostInterface := &cniv1.Interface{
+		Name: hostVethName,
+	}
+	contInterface := &cniv1.Interface{
+		Name:    args.IfName,
+		Mac:     contVethMac,
 		Mtu:     conf.MTU,
 		Sandbox: args.Netns,
-	})
+	}
+
+	result.Interfaces = append(result.Interfaces, hostInterface, contInterface)
+
+	for _, ip := range result.IPs {
+		ip.Interface = cniv1.Int(1)
+	}
 
 	// Conditionally wait for host-local Felix to program the policy for this WEP.
 	// Error if negative, ignore if 0.
