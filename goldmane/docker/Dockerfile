@@ -20,7 +20,7 @@ LABEL maintainer="maintainers@tigera.io"
 LABEL name="Goldmane"
 LABEL release=1
 LABEL summary="Goldmane is a flow aggregation service."
-LABEL vendor=Project Calico
+LABEL vendor="Project Calico"
 LABEL version="${GIT_VERSION}"
 
 USER 10001:10001
