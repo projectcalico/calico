@@ -123,15 +123,9 @@ func (o *CalicoServerOptions) Config() (*apiserver.Config, error) {
 	// it will never go ready, due to a failed fetch of the v1 resources.
 	o.RecommendedOptions.Features.EnablePriorityAndFairness = false
 
-	var tlsCipherSuites []uint16
-	if env := os.Getenv("TLS_CIPHER_SUITES"); env != "" {
-		cipherSuites, err := calicotls.ParseTLSCiphers(env)
-		if err != nil {
-			return nil, err
-		}
-		tlsCipherSuites = cipherSuites
-	} else {
-		tlsCipherSuites = calicotls.DefaultCiphers()
+	tlsCipherSuites, err := calicotls.ParseTLSCiphers(os.Getenv("TLS_CIPHER_SUITES"))
+	if err != nil {
+		return nil, err
 	}
 
 	serverConfig.SecureServing.CipherSuites = tlsCipherSuites

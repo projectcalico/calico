@@ -72,8 +72,13 @@ func supportedCipherMap() map[string]uint16 {
 }
 
 // ParseTLSCiphers takes a comma-separated string of cipher names and returns a slice of uint16 representing the ciphers.
+// If ciphers is empty, it returns the default ciphers.
 // It returns an error if any of the cipher names are not supported.
 func ParseTLSCiphers(ciphers string) ([]uint16, error) {
+	if ciphers == "" {
+		return DefaultCiphers(), nil
+	}
+
 	var result []uint16
 	supportedCiphers := supportedCipherMap()
 
