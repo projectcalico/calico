@@ -19,6 +19,7 @@ import (
 	"crypto/x509"
 	"fmt"
 	"os"
+	"strings"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -32,8 +33,6 @@ var tls12Ciphers = []uint16{
 	tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
 	tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
 	tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
-	tls.TLS_RSA_WITH_AES_256_GCM_SHA384,
-	tls.TLS_RSA_WITH_AES_128_GCM_SHA256,
 	tls.TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA,
 	tls.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,
 	tls.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA,
@@ -44,6 +43,56 @@ var tls13Ciphers = []uint16{
 	tls.TLS_AES_256_GCM_SHA384,
 	tls.TLS_CHACHA20_POLY1305_SHA256,
 	tls.TLS_AES_128_GCM_SHA256,
+}
+
+// Legacy Ciphers we want to support for backwards compatibility.
+var legacyCiphers = []uint16{
+	tls.TLS_RSA_WITH_AES_256_GCM_SHA384,
+	tls.TLS_RSA_WITH_AES_128_GCM_SHA256,
+}
+
+// DefaultCiphers returns the ciphers supported by TLS 1.3 and the PFS ciphers supported by TLS 1.2.
+func DefaultCiphers() []uint16 {
+	return append(tls13Ciphers, tls12Ciphers...)
+}
+
+func supportedCipherMap() map[string]uint16 {
+	cipherMap := make(map[string]uint16)
+	addCiphers := func(ciphers []uint16) {
+		for _, cipher := range ciphers {
+			cipherName := tls.CipherSuiteName(cipher)
+			cipherMap[cipherName] = cipher
+		}
+	}
+
+	addCiphers(DefaultCiphers())
+	addCiphers(legacyCiphers)
+
+	return cipherMap
+}
+
+// ParseTLSCiphers takes a comma-separated string of cipher names and returns a slice of uint16 representing the ciphers.
+// If ciphers is empty, it returns the default ciphers.
+// It returns an error if any of the cipher names are not supported.
+func ParseTLSCiphers(ciphers string) ([]uint16, error) {
+	if ciphers == "" {
+		return DefaultCiphers(), nil
+	}
+
+	var result []uint16
+	supportedCiphers := supportedCipherMap()
+
+	cipherNames := strings.Split(ciphers, ",")
+	for _, name := range cipherNames {
+		name = strings.TrimSpace(name)
+		cipherValue, ok := supportedCiphers[name]
+		if !ok {
+			return nil, fmt.Errorf("unsupported cipher: %s", name)
+		}
+		result = append(result, cipherValue)
+	}
+
+	return result, nil
 }
 
 // NewTLSConfig returns a tls.Config with the recommended default settings for Calico components. Based on build flags,
