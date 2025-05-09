@@ -26,5 +26,13 @@ LABEL summary="envoy-gateway is the proxy management component of Calico's imple
 LABEL vendor="Project Calico"
 LABEL version="${GIT_VERSION}"
 
+LABEL org.opencontainers.image.description="This image contains a build of the Envoy project's gateway component from github.com/envoyproxy/gateway, which manages the envoy-proxy component as a kubernetes gateway service."
+LABEL org.opencontainers.image.authors="maintainers@tigera.io"
+LABEL org.opencontainers.image.source="https://github.com/projectcalico/calico"
+LABEL org.opencontainers.image.title="envoy-gateway is the proxy management component of Calico's implementation of the Kubernetes Gateway API"
+LABEL org.opencontainers.image.vendor="Project Calico"
+LABEL org.opencontainers.image.version="${GIT_VERSION}"
+LABEL org.opencontainers.image.licenses="Apache-2.0"
+
 ENTRYPOINT ["/usr/local/bin/envoy-gateway"]
 ENV PATH="$PATH:/usr/local/bin"
