@@ -2311,3 +2311,113 @@ func testBGPFilterClient(client calicoclient.Interface, name string) error {
 
 	return nil
 }
+
+// TestPolicyWatch checks that the WatchManager closes watch when a new Tier is added
+func TestPolicyWatch(t *testing.T) {
+	const name = "test-policywatch"
+	rootTestFunc := func() func(t *testing.T) {
+		return func(t *testing.T) {
+			client, shutdownServer := getFreshApiserverAndClient(t, func() runtime.Object {
+				return &v3.GlobalNetworkPolicy{}
+			})
+			defer shutdownServer()
+			if err := testPolicyWatch(client); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+
+	if !t.Run(name, rootTestFunc()) {
+		t.Errorf("test-policywatch test failed")
+	}
+}
+
+func testPolicyWatch(client calicoclient.Interface) error {
+	globalNetworkPolicy := &v3.GlobalNetworkPolicy{ObjectMeta: metav1.ObjectMeta{Name: "global-net-pol-watch"}}
+	_, err := client.ProjectcalicoV3().GlobalNetworkPolicies().Create(context.Background(), globalNetworkPolicy, metav1.CreateOptions{})
+	if err != nil {
+		return fmt.Errorf("error creating GlobalNetworkPolicy (%s)", err)
+	}
+	defer func() {
+		_ = client.ProjectcalicoV3().GlobalNetworkPolicies().Delete(context.Background(), globalNetworkPolicy.Name, metav1.DeleteOptions{})
+	}()
+
+	w, err := client.ProjectcalicoV3().GlobalNetworkPolicies().Watch(context.Background(), metav1.ListOptions{})
+	if err != nil {
+		return fmt.Errorf("error watching GlobalNetworkPolicy (%s)", err)
+	}
+
+	done := sync.WaitGroup{}
+	done.Add(1)
+	timeout := time.After(5 * time.Second)
+	var timeoutErr error
+	var event watch.Event
+
+	go func() {
+		defer done.Done()
+		for {
+			select {
+			case event = <-w.ResultChan():
+				return
+			case <-timeout:
+				timeoutErr = fmt.Errorf("timed out waiting for events")
+				return
+			}
+		}
+	}()
+
+	done.Wait()
+
+	if timeoutErr != nil {
+		return timeoutErr
+	}
+
+	if event.Type != watch.Added {
+		return fmt.Errorf("unexpected event type %s", event)
+	}
+
+	order := float64(100.0)
+	tier := &v3.Tier{
+		ObjectMeta: metav1.ObjectMeta{Name: "custom-tier"},
+		Spec: v3.TierSpec{
+			Order: &order,
+		},
+	}
+
+	// Creating a new Tier should force the watch to be closed
+	_, err = client.ProjectcalicoV3().Tiers().Create(context.Background(), tier, metav1.CreateOptions{})
+	if err != nil {
+		return fmt.Errorf("error creating Tier (%s)", err)
+	}
+	defer func() {
+		_ = client.ProjectcalicoV3().Tiers().Delete(context.Background(), tier.Name, metav1.DeleteOptions{})
+	}()
+
+	done = sync.WaitGroup{}
+	done.Add(1)
+	var chClosedError error
+	timeout = time.After(5 * time.Second)
+
+	go func() {
+		defer done.Done()
+		for {
+			select {
+			case _, ok := <-w.ResultChan():
+				if !ok {
+					return
+				}
+			case <-timeout:
+				chClosedError = fmt.Errorf("watch should be closed")
+				return
+			}
+		}
+	}()
+
+	done.Wait()
+
+	if chClosedError != nil {
+		return chClosedError
+	}
+
+	return nil
+}
