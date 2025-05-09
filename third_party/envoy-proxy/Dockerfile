@@ -53,6 +53,14 @@ LABEL summary="envoy-proxy is the proxy component of Calico's implementation of 
 LABEL vendor="Project Calico"
 LABEL version="${GIT_VERSION}"
 
+LABEL org.opencontainers.image.description="This image contains a build of the Envoy project's envoy proxy component from github.com/envoyproxy/envoy, which is a cloud-native, high-performance proxy application"
+LABEL org.opencontainers.image.authors="maintainers@tigera.io"
+LABEL org.opencontainers.image.source="https://github.com/projectcalico/calico"
+LABEL org.opencontainers.image.title="envoy-proxy is the proxy component of Calico's implementation of the Kubernetes Gateway API"
+LABEL org.opencontainers.image.vendor="Project Calico"
+LABEL org.opencontainers.image.version="${GIT_VERSION}"
+LABEL org.opencontainers.image.licenses="Apache-2.0"
+
 EXPOSE 10000
 
 ENTRYPOINT ["/usr/local/bin/envoy"]
