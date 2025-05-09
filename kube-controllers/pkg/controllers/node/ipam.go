@@ -1112,8 +1112,10 @@ func (c *IPAMController) garbageCollectKnownLeaks() error {
 	for id, a := range c.confirmedLeaks {
 		logc := log.WithFields(a.fields())
 
-		// Final check that the allocation is leaked.
-		if c.allocationIsValid(a, true) {
+		// Final check that the allocation is leaked. We prefer the cache when the hosting node has been
+		// deleted, as we're reasonably confident this is a leak. Otherwise, we go to the API server directly for extra confidence
+		// that the Pod is actually gone.
+		if c.allocationIsValid(a, a.knode == "") {
 			logc.Info("Leaked IP has been resurrected after querying latest state")
 			delete(c.confirmedLeaks, id)
 			a.markValid()

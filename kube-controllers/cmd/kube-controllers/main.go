@@ -356,6 +356,10 @@ func getClients(kubeconfig string) (*kubernetes.Clientset, client.Interface, err
 		return nil, nil, fmt.Errorf("failed to build kubernetes client config: %s", err)
 	}
 
+	// Increase the QPS of the Kubernetes client as well. This is also used heavily by the IPAM GC controller
+	// in some circumstances.
+	k8sconfig.QPS = 100
+
 	// Get Kubernetes clientset
 	k8sClientset, err := kubernetes.NewForConfig(k8sconfig)
 	if err != nil {
