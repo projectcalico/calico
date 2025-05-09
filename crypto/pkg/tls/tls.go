@@ -19,31 +19,83 @@ import (
 	"crypto/x509"
 	"fmt"
 	"os"
+	"sort"
+	"strings"
 
 	log "github.com/sirupsen/logrus"
 )
 
-// Ciphers supported by TLS 1.2
-var tls12Ciphers = []uint16{
-	tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
-	tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
-	tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256,
-	tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256,
-	tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
-	tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
-	tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
-	tls.TLS_RSA_WITH_AES_256_GCM_SHA384,
-	tls.TLS_RSA_WITH_AES_128_GCM_SHA256,
-	tls.TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA,
-	tls.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,
-	tls.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA,
+type CipherInfo struct {
+	ID      uint16
+	Default bool
+	Order   int
 }
 
-// Ciphers supported by TLS 1.3
-var tls13Ciphers = []uint16{
-	tls.TLS_AES_256_GCM_SHA384,
-	tls.TLS_CHACHA20_POLY1305_SHA256,
-	tls.TLS_AES_128_GCM_SHA256,
+var supportedCiphers = map[string]CipherInfo{
+	// TLS 1.3 (Strongest)
+	"TLS_AES_256_GCM_SHA384":       {ID: tls.TLS_AES_256_GCM_SHA384, Default: true, Order: 1},
+	"TLS_CHACHA20_POLY1305_SHA256": {ID: tls.TLS_CHACHA20_POLY1305_SHA256, Default: true, Order: 2},
+	"TLS_AES_128_GCM_SHA256":       {ID: tls.TLS_AES_128_GCM_SHA256, Default: true, Order: 3},
+
+	// TLS 1.2 (PFS with ECDHE)
+	"TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384":       {ID: tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384, Default: true, Order: 4},
+	"TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384":         {ID: tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384, Default: true, Order: 5},
+	"TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256":   {ID: tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256, Default: true, Order: 6},
+	"TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256": {ID: tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256, Default: true, Order: 7},
+	"TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256":         {ID: tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256, Default: true, Order: 8},
+	"TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256":       {ID: tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256, Default: true, Order: 9},
+
+	// TLS 1.2 (CBC mode, weaker than GCM)
+	"TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA": {ID: tls.TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA, Default: true, Order: 10},
+	"TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA":   {ID: tls.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA, Default: true, Order: 11},
+	"TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA":   {ID: tls.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA, Default: true, Order: 12},
+
+	// TLS 1.2 (Non-PFS, Legacy/Weak)
+	"TLS_RSA_WITH_AES_256_GCM_SHA384": {ID: tls.TLS_RSA_WITH_AES_256_GCM_SHA384, Default: false, Order: 13},
+	"TLS_RSA_WITH_AES_128_GCM_SHA256": {ID: tls.TLS_RSA_WITH_AES_128_GCM_SHA256, Default: false, Order: 14},
+}
+
+// DefaultCiphers returns the ciphers supported by TLS 1.3 and the PFS ciphers supported by TLS 1.2, ordered by the the cipher strength.
+func DefaultCiphers() []uint16 {
+	type kv struct {
+		Name  string
+		Value CipherInfo
+	}
+	var ordered []kv
+	for name, info := range supportedCiphers {
+		if info.Default {
+			ordered = append(ordered, kv{Name: name, Value: info})
+		}
+	}
+
+	// Sort by Order
+	sort.Slice(ordered, func(i, j int) bool {
+		return ordered[i].Value.Order < ordered[j].Value.Order
+	})
+
+	// Collect sorted IDs
+	result := make([]uint16, len(ordered))
+	for i, entry := range ordered {
+		result[i] = entry.Value.ID
+	}
+	return result
+}
+
+// ParseTLSCiphers takes a comma-separated string of cipher names and returns a slice of uint16 representing the ciphers.
+// It returns an error if any of the cipher names are not supported.
+func ParseTLSCiphers(ciphers string) ([]uint16, error) {
+	var result []uint16
+	cipherNames := strings.Split(ciphers, ",")
+	for _, name := range cipherNames {
+		name = strings.TrimSpace(name)
+		cipherValue, ok := supportedCiphers[name]
+		if !ok {
+			return nil, fmt.Errorf("unsupported cipher: %s", name)
+		}
+		result = append(result, cipherValue.ID)
+	}
+
+	return result, nil
 }
 
 // NewTLSConfig returns a tls.Config with the recommended default settings for Calico components. Based on build flags,
@@ -53,7 +105,7 @@ func NewTLSConfig() *tls.Config {
 	return &tls.Config{
 		MinVersion:   tls.VersionTLS12,
 		MaxVersion:   tls.VersionTLS13,
-		CipherSuites: append(tls12Ciphers, tls13Ciphers...),
+		CipherSuites: DefaultCiphers(),
 	}
 }
 
