@@ -44,15 +44,16 @@ FROM scratch
 COPY --from=source / /
 
 # These labels are required for OCP Certification
-LABEL description="Envoy Proxy is WHATEVER ENVOY PROXY DOES"
+LABEL description="This image contains a build of the Envoy project's envoy proxy component from github.com/envoyproxy/envoy, which is a cloud-native, high-performance proxy application"
 LABEL maintainer="maintainers@tigera.io"
 LABEL name="Envoy Proxy"
 LABEL release="1"
-LABEL summary="Envoy Gateway is THE SAME EXPLANATION AS THE DESCRIPTION"
+LABEL summary="envoy-proxy is the proxy component of Calico's implementation of the Kubernetes Gateway API"
 LABEL vendor="Project Calico"
 LABEL version="${GIT_VERSION}"
 
 EXPOSE 10000
+
 ENTRYPOINT ["/usr/local/bin/envoy"]
 CMD ["-c", "/etc/envoy/envoy.yaml"]
 ENV PATH="$PATH:/usr/local/bin"
