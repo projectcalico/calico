@@ -746,7 +746,7 @@ func (r *CalicoManager) assertImageVersions() error {
 					}
 				}
 			}
-		case "csi":
+		case "csi", "dikastes", "goldmane", "node-driver-registrar", "pod2daemon-flexvol", "whisker", "whisker-backend":
 			for _, reg := range r.imageRegistries {
 				out, err := r.runner.Run("docker", []string{"inspect", `--format='{{ index .Config.Labels "org.opencontainers.image.version" }}'`, fmt.Sprintf("%s/%s:%s", reg, img, r.calicoVersion)}, nil)
 				if err != nil {
@@ -764,18 +764,9 @@ func (r *CalicoManager) assertImageVersions() error {
 					return fmt.Errorf("version does not match for image %s/%s:%s", reg, img, r.calicoVersion)
 				}
 			}
-		case "dikastes":
-			for _, reg := range r.imageRegistries {
-				out, err := r.runner.Run("docker", []string{"inspect", `--format='{{ index .Config.Labels "org.opencontainers.image.version" }}'`, fmt.Sprintf("%s/%s:%s", reg, img, r.calicoVersion)}, nil)
-				if err != nil {
-					return fmt.Errorf("failed to run get version from %s image: %s", img, err)
-				} else if !strings.Contains(out, r.calicoVersion) {
-					return fmt.Errorf("version does not match for image %s/%s:%s", reg, img, r.calicoVersion)
-				}
-			}
-		case "key-cert-provisioner":
-			// key-cert-provisioner does not have version information in the image.
-		case "kube-controllers":
+		case "key-cert-provisioner", "test-signer":
+			// key-cert-provisioner images do not have version information.
+		case "guardian", "kube-controllers":
 			for _, reg := range r.imageRegistries {
 				out, err := r.runner.Run("docker", []string{"run", "--rm", fmt.Sprintf("%s/%s:%s", reg, img, r.calicoVersion), "--version"}, nil)
 				if err != nil {
@@ -793,26 +784,6 @@ func (r *CalicoManager) assertImageVersions() error {
 					return fmt.Errorf("version does not match for image %s/%s:%s", reg, img, r.calicoVersion)
 				}
 			}
-		case "node-driver-registrar":
-			for _, reg := range r.imageRegistries {
-				out, err := r.runner.Run("docker", []string{"inspect", `--format='{{ index .Config.Labels "org.opencontainers.image.version" }}'`, fmt.Sprintf("%s/%s:%s", reg, img, r.calicoVersion)}, nil)
-				if err != nil {
-					return fmt.Errorf("failed to run get version from %s image: %s", img, err)
-				} else if !strings.Contains(out, r.calicoVersion) {
-					return fmt.Errorf("version does not match for image %s/%s:%s", reg, img, r.calicoVersion)
-				}
-			}
-		case "pod2daemon-flexvol":
-			for _, reg := range r.imageRegistries {
-				out, err := r.runner.Run("docker", []string{"inspect", `--format='{{ index .Config.Labels "org.opencontainers.image.version" }}'`, fmt.Sprintf("%s/%s:%s", reg, img, r.calicoVersion)}, nil)
-				if err != nil {
-					return fmt.Errorf("failed to run get version from %s image: %s", img, err)
-				} else if !strings.Contains(out, r.calicoVersion) {
-					return fmt.Errorf("version does not match for image %s/%s:%s", reg, img, r.calicoVersion)
-				}
-			}
-		case "test-signer":
-			// test-signer does not have version information in the image.
 		case "typha":
 			for _, reg := range r.imageRegistries {
 				out, err := r.runner.Run("docker", []string{"run", "--rm", fmt.Sprintf("%s/%s:%s", reg, img, r.calicoVersion), "calico-typha", "--version"}, nil)
@@ -822,8 +793,6 @@ func (r *CalicoManager) assertImageVersions() error {
 					return fmt.Errorf("version does not match for image %s/%s:%s", reg, img, r.calicoVersion)
 				}
 			}
-		case "goldmane":
-			// goldmane does not have version information in the image.
 		case "envoy-gateway", "envoy-proxy", "envoy-ratelimit":
 			// Envoy images do not have version information.
 		default:
