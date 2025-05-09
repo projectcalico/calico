@@ -436,10 +436,10 @@ The log severity above which logs are sent to the log file.
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_LogSeverityFile` |
-| Encoding (env var/config file) | One of: <code>DEBUG</code>, <code>ERROR</code>, <code>FATAL</code>, <code>INFO</code>, <code>WARNING</code> (case insensitive) |
+| Encoding (env var/config file) | One of: <code>DEBUG</code>, <code>ERROR</code>, <code>FATAL</code>, <code>INFO</code>, <code>TRACE</code>, <code>WARNING</code> (case insensitive) |
 | Default value (above encoding) | `INFO` |
 | `FelixConfiguration` field | `logSeverityFile` (YAML) `LogSeverityFile` (Go API) |
-| `FelixConfiguration` schema | One of: <code>Debug</code>, <code>Error</code>, <code>Fatal</code>, <code>Info</code>, <code>Warning</code>. |
+| `FelixConfiguration` schema | One of: <code>Debug</code>, <code>Error</code>, <code>Fatal</code>, <code>Info</code>, <code>Trace</code>, <code>Warning</code>. |
 | Default value (YAML) | `Info` |
 
 ### `LogSeverityScreen` (config file) / `logSeverityScreen` (YAML)
@@ -449,10 +449,10 @@ The log severity above which logs are sent to the stdout.
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_LogSeverityScreen` |
-| Encoding (env var/config file) | One of: <code>DEBUG</code>, <code>ERROR</code>, <code>FATAL</code>, <code>INFO</code>, <code>WARNING</code> (case insensitive) |
+| Encoding (env var/config file) | One of: <code>DEBUG</code>, <code>ERROR</code>, <code>FATAL</code>, <code>INFO</code>, <code>TRACE</code>, <code>WARNING</code> (case insensitive) |
 | Default value (above encoding) | `INFO` |
 | `FelixConfiguration` field | `logSeverityScreen` (YAML) `LogSeverityScreen` (Go API) |
-| `FelixConfiguration` schema | One of: <code>Debug</code>, <code>Error</code>, <code>Fatal</code>, <code>Info</code>, <code>Warning</code>. |
+| `FelixConfiguration` schema | One of: <code>Debug</code>, <code>Error</code>, <code>Fatal</code>, <code>Info</code>, <code>Trace</code>, <code>Warning</code>. |
 | Default value (YAML) | `Info` |
 
 ### `LogSeveritySys` (config file) / `logSeveritySys` (YAML)
@@ -462,10 +462,10 @@ The log severity above which logs are sent to the syslog. Set to None for no log
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_LogSeveritySys` |
-| Encoding (env var/config file) | One of: <code>DEBUG</code>, <code>ERROR</code>, <code>FATAL</code>, <code>INFO</code>, <code>WARNING</code> (case insensitive) |
+| Encoding (env var/config file) | One of: <code>DEBUG</code>, <code>ERROR</code>, <code>FATAL</code>, <code>INFO</code>, <code>TRACE</code>, <code>WARNING</code> (case insensitive) |
 | Default value (above encoding) | `INFO` |
 | `FelixConfiguration` field | `logSeveritySys` (YAML) `LogSeveritySys` (Go API) |
-| `FelixConfiguration` schema | One of: <code>Debug</code>, <code>Error</code>, <code>Fatal</code>, <code>Info</code>, <code>Warning</code>. |
+| `FelixConfiguration` schema | One of: <code>Debug</code>, <code>Error</code>, <code>Fatal</code>, <code>Info</code>, <code>Trace</code>, <code>Warning</code>. |
 | Default value (YAML) | `Info` |
 
 ## <a id="process-prometheus-metrics">Process: Prometheus metrics
@@ -892,6 +892,22 @@ is leaving the network. By default the address used is an address on the interfa
 | `FelixConfiguration` schema | String. |
 | Default value (YAML) | none |
 
+### `NATOutgoingExclusions` (config file) / `natOutgoingExclusions` (YAML)
+
+When a IP pool setting `natOutgoing` is true, packets sent from Calico networked containers in this IP pool to destinations will be masqueraded.
+Configure which type of destinations is excluded from being masqueraded.
+- IPPoolsOnly: destinations outside of this IP pool will be masqueraded.
+- IPPoolsAndHostIPs: destinations outside of this IP pool and all hosts will be masqueraded.
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_NATOutgoingExclusions` |
+| Encoding (env var/config file) | One of: <code>IPPoolsAndHostIPs</code>, <code>IPPoolsOnly</code> (case insensitive) |
+| Default value (above encoding) | `IPPoolsOnly` |
+| `FelixConfiguration` field | `natOutgoingExclusions` (YAML) `NATOutgoingExclusions` (Go API) |
+| `FelixConfiguration` schema | One of: <code>"IPPoolsAndHostIPs"</code>, <code>"IPPoolsOnly"</code>. |
+| Default value (YAML) | `IPPoolsOnly` |
+
 ### `NATPortRange` (config file) / `natPortRange` (YAML)
 
 Specifies the range of ports that is used for port mapping when doing outgoing NAT. When unset the default behavior of the
@@ -946,6 +962,20 @@ like Application layer policy.
 | `FelixConfiguration` field | `policySyncPathPrefix` (YAML) `PolicySyncPathPrefix` (Go API) |
 | `FelixConfiguration` schema | String. |
 | Default value (YAML) | none |
+
+### `ProgramRoutes` (config file) / `programRoutes` (YAML)
+
+Specifies whether Felix should program IPIP or unencapsulated routes instead of BIRD.
+Felix always programs VXLAN routes.
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_ProgramRoutes` |
+| Encoding (env var/config file) | One of: <code>Disabled</code>, <code>Enabled</code> (case insensitive) |
+| Default value (above encoding) | `Disabled` |
+| `FelixConfiguration` field | `programRoutes` (YAML) `ProgramRoutes` (Go API) |
+| `FelixConfiguration` schema | One of: <code>"Disabled"</code>, <code>"Enabled"</code>. |
+| Default value (YAML) | `Disabled` |
 
 ### `RemoveExternalRoutes` (config file) / `removeExternalRoutes` (YAML)
 
@@ -2487,6 +2517,19 @@ FlowLogGoldmaneServer is the flow server endpoint to which flow data should be p
 | `FelixConfiguration` field | `flowLogsGoldmaneServer` (YAML) `FlowLogsGoldmaneServer` (Go API) |
 | `FelixConfiguration` schema | String. |
 | Default value (YAML) | none |
+
+### `FlowLogsLocalReporter` (config file) / `flowLogsLocalReporter` (YAML)
+
+Configures local unix socket for reporting flow data from each node.
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_FlowLogsLocalReporter` |
+| Encoding (env var/config file) | One of: <code>Disabled</code>, <code>Enabled</code> (case insensitive) |
+| Default value (above encoding) | `Disabled` |
+| `FelixConfiguration` field | `flowLogsLocalReporter` (YAML) `FlowLogsLocalReporter` (Go API) |
+| `FelixConfiguration` schema | One of: <code>"Disabled"</code>, <code>"Enabled"</code>. |
+| Default value (YAML) | `Disabled` |
 
 ### `FlowLogsPolicyEvaluationMode` (config file) / `flowLogsPolicyEvaluationMode` (YAML)
 

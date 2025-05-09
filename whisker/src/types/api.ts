@@ -88,7 +88,7 @@ export type UseStreamResult<T> = {
 
 export type UseStreamOptions<S, R> = {
     path: string;
-    transformResponse: (stream: S) => R;
+    transformResponse: (stream: S) => R | null;
 };
 
 export type FlowsFilterQuery = {

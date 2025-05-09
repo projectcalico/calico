@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2024-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,10 +17,11 @@ package dataplanedefs
 import "github.com/vishvananda/netlink"
 
 const (
-	IPIPIfaceName                           = "tunl0"
-	VXLANIfaceNameV4                        = "vxlan.calico"
-	VXLANIfaceNameV6                        = "vxlan-v6.calico"
-	VXLANDefaultProto netlink.RouteProtocol = 80
+	IPIPIfaceName    = "tunl0"
+	VXLANIfaceNameV4 = "vxlan.calico"
+	VXLANIfaceNameV6 = "vxlan-v6.calico"
+
+	DefaultRouteProto netlink.RouteProtocol = 80
 
 	BPFInDev  = "bpfin.cali"
 	BPFOutDev = "bpfout.cali"

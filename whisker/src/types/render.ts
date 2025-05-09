@@ -14,5 +14,14 @@ export type AppConfig = {
         cluster_type: string;
         calico_version: string;
         notifications: 'Enabled' | 'Disabled';
+        calico_cloud_url: string;
     };
+};
+
+export type UniqueFlowLogs = {
+    startTime: number;
+    flowLogs: {
+        json: string;
+        flowLog: FlowLog;
+    }[];
 };

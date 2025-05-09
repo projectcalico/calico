@@ -1,11 +1,10 @@
 export const tableStyles = {
-    fontFamily: 'courier',
+    fontFamily: 'monospace, monospace',
     bg: 'tigera-color-surface',
     w: 'full',
 };
 
 export const jsonTabStyles = {
     overflowY: 'auto',
-    maxHeight: '750px',
     textWrap: 'wrap',
 };

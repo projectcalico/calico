@@ -299,6 +299,78 @@ blocks:
               value: "sig-network.*Conformance"
           commands:
             - .semaphore/run-and-monitor e2e-test.log make e2e-test
+  - name: envoy-gateway
+    run:
+      when: "false or change_in(['/*', '/third_party/envoy-gateway'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+    execution_time_limit:
+      minutes: 30
+    dependencies:
+      - Prerequisites
+    task:
+      prologue:
+        commands:
+          - cd third_party/envoy-gateway
+      jobs:
+        - name: make ci
+          commands:
+            - ../../.semaphore/run-and-monitor make-ci.log make ci
+        - name: Build binary
+          matrix:
+            - env_var: ARCH
+              values:
+                - arm64
+                - ppc64le
+                - s390x
+          commands:
+            - ../../.semaphore/run-and-monitor image-$ARCH.log make build ARCH=$ARCH
+  - name: envoy-proxy
+    run:
+      when: "false or change_in(['/*', '/third_party/envoy-proxy'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+    execution_time_limit:
+      minutes: 30
+    dependencies:
+      - Prerequisites
+    task:
+      prologue:
+        commands:
+          - cd third_party/envoy-proxy
+      jobs:
+        - name: make ci
+          commands:
+            - ../../.semaphore/run-and-monitor make-ci.log make ci
+        - name: Build binary
+          matrix:
+            - env_var: ARCH
+              values:
+                - arm64
+                - ppc64le
+                - s390x
+          commands:
+            - ../../.semaphore/run-and-monitor image-$ARCH.log make build ARCH=$ARCH
+  - name: envoy-ratelimit
+    run:
+      when: "false or change_in(['/*', '/third_party/envoy-ratelimit'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+    execution_time_limit:
+      minutes: 30
+    dependencies:
+      - Prerequisites
+    task:
+      prologue:
+        commands:
+          - cd third_party/envoy-ratelimit
+      jobs:
+        - name: make ci
+          commands:
+            - ../../.semaphore/run-and-monitor make-ci.log make ci
+        - name: Build binary
+          matrix:
+            - env_var: ARCH
+              values:
+                - arm64
+                - ppc64le
+                - s390x
+          commands:
+            - ../../.semaphore/run-and-monitor image-$ARCH.log make build ARCH=$ARCH
   - name: "Felix: Build"
     run:
       when: "false or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/hack/test/certs/', '/cni-plugin/pkg/dataplane/linux/dataplane_linux.go'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
@@ -742,6 +814,19 @@ blocks:
           commands:
             - ../.semaphore/run-and-monitor ci.log make ci
             - test-results publish ./report/*.xml --name "pod2daemon-ut-tests" || true
+  - name: "Tools (hack directory)"
+    run:
+      when: "false or change_in(['/*', '/hack/', '/api/', '/libcalico-go/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+    dependencies:
+      - Prerequisites
+    task:
+      prologue:
+        commands:
+          - cd hack
+      jobs:
+        - name: "Tools (hack directory)"
+          commands:
+            - ../.semaphore/run-and-monitor make-ci.log make ci
   - name: Typha
     run:
       when: "false or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/hack/test/certs/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
@@ -862,6 +947,15 @@ blocks:
             # this was causing the DevStack setup to fail, because pip doesn't know how to uninstall
             # or replace the existing version.  Happily we do know that, so let's do it upfront here.
             - sudo apt-get remove -y python3-wrapt || true
+            # Install all the packages that would trigger an initramfs update using a workaround
+            # for limited /boot partition space in the ubuntu2004 image
+            - sudo apt update
+            - sudo rsync -av /boot/ /boot2/
+            - sudo mount --bind /boot2 /boot
+            - sudo apt install -y cryptsetup lsscsi open-iscsi thin-provisioning-tools
+            - sudo umount /boot
+            - sudo rsync -av /boot2/ /boot/ --exclude "*.new" --exclude "*.dpkg-bak" --delete --inplace
+            - sudo rm -rf /boot2/
             - git checkout -b devstack-test
             - export LIBVIRT_TYPE=qemu
             - export UPPER_CONSTRAINTS_FILE=https://releases.openstack.org/constraints/upper/yoga

@@ -1,17 +1,17 @@
-# Open-source postrelease tests!
+# Open-source postrelease tests
 
 ## How to run
 
 You can use `go test`` to run the tests:
 
-```
-$ go test -v ./...
+```bash
+go test -v ./...
 ```
 
 Or, for slightly nicer/cleaner progress output, `gotestsum`:
 
-```
-$ gotestsum --format dots-v2 ./...
+```bash
+gotestsum --format dots-v2 ./...
 ```
 
 ## How to lint
@@ -21,7 +21,7 @@ adding new tests or functionality, please consider doing the same.
 
 ## Structure
 
-```
+```text
 pkg/*           # All the various utility functions
 tests/          # The actual test suites
   oss/          # Test suites for Calico OSS specifically

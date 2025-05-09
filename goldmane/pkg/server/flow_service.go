@@ -20,20 +20,20 @@ import (
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 
-	"github.com/projectcalico/calico/goldmane/pkg/aggregator"
+	"github.com/projectcalico/calico/goldmane/pkg/goldmane"
 	"github.com/projectcalico/calico/goldmane/proto"
 )
 
-func NewFlowsServer(aggr *aggregator.LogAggregator) *FlowsServer {
+func NewFlowsServer(aggr *goldmane.Goldmane) *FlowsServer {
 	return &FlowsServer{
-		aggr: aggr,
+		gm: aggr,
 	}
 }
 
 type FlowsServer struct {
 	proto.UnimplementedFlowsServer
 
-	aggr *aggregator.LogAggregator
+	gm *goldmane.Goldmane
 }
 
 func (s *FlowsServer) RegisterWith(srv *grpc.Server) {
@@ -43,22 +43,27 @@ func (s *FlowsServer) RegisterWith(srv *grpc.Server) {
 }
 
 func (s *FlowsServer) List(ctx context.Context, req *proto.FlowListRequest) (*proto.FlowListResult, error) {
-	return s.aggr.List(req)
+	return s.gm.List(req)
 }
 
 func (s *FlowsServer) Stream(req *proto.FlowStreamRequest, server proto.Flows_StreamServer) error {
 	// Get a new Stream from the aggregator.
-	stream, err := s.aggr.Stream(req)
+	stream, err := s.gm.Stream(req)
 	if err != nil {
 		return err
 	}
 	defer stream.Close()
 
+	// Share memory for each flow result.
+	result := &proto.FlowResult{Flow: &proto.Flow{}}
+
 	for {
 		select {
 		case flow := <-stream.Flows():
-			if err := server.Send(flow); err != nil {
-				return err
+			if flow.BuildInto(req.Filter, result) {
+				if err := server.Send(result); err != nil {
+					return err
+				}
 			}
 		case <-server.Context().Done():
 			return server.Context().Err()
@@ -67,5 +72,5 @@ func (s *FlowsServer) Stream(req *proto.FlowStreamRequest, server proto.Flows_St
 }
 
 func (s *FlowsServer) FilterHints(ctx context.Context, req *proto.FilterHintsRequest) (*proto.FilterHintsResult, error) {
-	return s.aggr.Hints(req)
+	return s.gm.Hints(req)
 }

@@ -42,6 +42,9 @@ hashrelease-build: bin/release var-require-all-GITHUB_TOKEN
 hashrelease-publish: bin/release var-require-all-GITHUB_TOKEN
 	@bin/release hashrelease publish
 
+hashrelease-svr-gc: bin/release
+	@bin/release hashrelease garbage-collect
+
 ###############################################################################
 # Release
 ###############################################################################

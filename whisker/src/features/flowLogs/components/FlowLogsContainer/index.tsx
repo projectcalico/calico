@@ -5,6 +5,7 @@ import React from 'react';
 import { useOutletContext } from 'react-router-dom';
 import FlowLogsList from '../FlowLogsList';
 import { TableSkeleton } from '@/libs/tigera/ui-components/components/common';
+import { useFlowLogsHeightOffset } from '../../hooks';
 
 export type FlowLogsContext = {
     view: 'all' | 'denied';
@@ -25,6 +26,7 @@ const FlowLogsContainer: React.FC = () => {
         isFetching,
         maxStartTime,
     } = useOutletContext<FlowLogsContext>();
+    const heightOffset = useFlowLogsHeightOffset();
 
     return isFetching ? (
         <TableSkeleton
@@ -39,6 +41,7 @@ const FlowLogsContainer: React.FC = () => {
             onRowClicked={onRowClicked}
             onSortClicked={onSortClicked}
             maxStartTime={maxStartTime}
+            heightOffset={heightOffset}
         />
     );
 };

@@ -31,6 +31,7 @@ import (
 
 	"github.com/projectcalico/calico/app-policy/policystore"
 	"github.com/projectcalico/calico/felix/calc"
+	clttypes "github.com/projectcalico/calico/felix/collector/types"
 	"github.com/projectcalico/calico/felix/collector/types/counter"
 	"github.com/projectcalico/calico/felix/collector/types/metric"
 	"github.com/projectcalico/calico/felix/collector/types/tuple"
@@ -40,6 +41,7 @@ import (
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/rules"
 	"github.com/projectcalico/calico/felix/types"
+	"github.com/projectcalico/calico/lib/std/uniquelabels"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
 )
@@ -110,36 +112,36 @@ var (
 		Name:     "cali1",
 		Mac:      utils.MustParseMac("01:02:03:04:05:06"),
 		IPv4Nets: []net.IPNet{utils.MustParseNet("10.0.0.1/32")},
-		Labels: map[string]string{
+		Labels: uniquelabels.Make(map[string]string{
 			"id": "local-ep-1",
-		},
+		}),
 	}
 	localWlEp2 = &model.WorkloadEndpoint{
 		State:    "active",
 		Name:     "cali2",
 		Mac:      utils.MustParseMac("01:02:03:04:05:07"),
 		IPv4Nets: []net.IPNet{utils.MustParseNet("10.0.0.2/32")},
-		Labels: map[string]string{
+		Labels: uniquelabels.Make(map[string]string{
 			"id": "local-ep-2",
-		},
+		}),
 	}
 	remoteWlEp1 = &model.WorkloadEndpoint{
 		State:    "active",
 		Name:     "cali3",
 		Mac:      utils.MustParseMac("02:02:03:04:05:06"),
 		IPv4Nets: []net.IPNet{utils.MustParseNet("20.0.0.1/32")},
-		Labels: map[string]string{
+		Labels: uniquelabels.Make(map[string]string{
 			"id": "remote-ep-1",
-		},
+		}),
 	}
 	remoteWlEp2 = &model.WorkloadEndpoint{
 		State:    "active",
 		Name:     "cali4",
 		Mac:      utils.MustParseMac("02:03:03:04:05:06"),
 		IPv4Nets: []net.IPNet{utils.MustParseNet("20.0.0.2/32")},
-		Labels: map[string]string{
+		Labels: uniquelabels.Make(map[string]string{
 			"id": "remote-ep-2",
-		},
+		}),
 	}
 	localEd1 = &calc.LocalEndpointData{
 		CommonEndpointData: calc.CalculateCommonEndpointData(localWlEPKey1, localWlEp1),
@@ -215,7 +217,7 @@ var (
 	}
 	netSet1 = model.NetworkSet{
 		Nets:   []net.IPNet{utils.MustParseNet(netSetIp1Str + "/32")},
-		Labels: map[string]string{"public": "true"},
+		Labels: uniquelabels.Make(map[string]string{"public": "true"}),
 	}
 
 	svcKey1 = model.ResourceKey{
@@ -682,7 +684,7 @@ var proxyBackendIngressPktAllow = map[nfnetlink.NflogPacketTuple]*nfnetlink.Nflo
 	},
 }
 
-func convertCtEntry(e nfnetlink.CtEntry, _ uint32) ConntrackInfo {
+func convertCtEntry(e nfnetlink.CtEntry, _ uint32) clttypes.ConntrackInfo {
 	i, _ := ConvertCtEntryToConntrackInfo(e)
 	return i
 }
@@ -851,7 +853,7 @@ var outCtEntryWithDNAT = nfnetlink.CtEntry{
 
 var _ = Describe("Conntrack Datasource", func() {
 	var c *collector
-	var ciReaderSenderChan chan []ConntrackInfo
+	var ciReaderSenderChan chan []clttypes.ConntrackInfo
 	// var piReaderInfoSenderChan chan PacketInfo
 	var lm *calc.LookupsCache
 	var epMapDelete map[[16]byte]calc.EndpointData
@@ -893,7 +895,7 @@ var _ = Describe("Conntrack Datasource", func() {
 
 		c.SetPacketInfoReader(nflogReader)
 
-		ciReaderSenderChan = make(chan []ConntrackInfo, 1)
+		ciReaderSenderChan = make(chan []clttypes.ConntrackInfo, 1)
 		c.SetConntrackInfoReader(dummyConntrackInfoReader{
 			MockSenderChannel: ciReaderSenderChan,
 		})
@@ -906,7 +908,7 @@ var _ = Describe("Conntrack Datasource", func() {
 			t := tuple.New(remoteIp1, localIp1, proto_tcp, srcPort, dstPort)
 
 			// will call handlerInfo from c.Start() in BeforeEach
-			ciReaderSenderChan <- []ConntrackInfo{convertCtEntry(inCtEntry, 0)}
+			ciReaderSenderChan <- []clttypes.ConntrackInfo{convertCtEntry(inCtEntry, 0)}
 
 			Eventually(c.epStats, "500ms", "100ms").Should(HaveKey(*t))
 
@@ -919,7 +921,7 @@ var _ = Describe("Conntrack Datasource", func() {
 		It("should handle destination becoming non-local by removing entry on next conntrack update for reported flow", func() {
 			t := tuple.New(remoteIp1, localIp1, proto_tcp, srcPort, dstPort)
 			// will call handlerInfo from c.Start() in BeforeEach
-			ciReaderSenderChan <- []ConntrackInfo{convertCtEntry(inCtEntry, 0)}
+			ciReaderSenderChan <- []clttypes.ConntrackInfo{convertCtEntry(inCtEntry, 0)}
 
 			Eventually(c.epStats, "500ms", "100ms").Should(HaveKey(*t))
 
@@ -927,7 +929,7 @@ var _ = Describe("Conntrack Datasource", func() {
 			data := c.epStats[*t]
 			data.Reported = true
 			lm.SetMockData(epMapDelete, nil, nil, nil)
-			ciReaderSenderChan <- []ConntrackInfo{convertCtEntry(inCtEntry, 0)}
+			ciReaderSenderChan <- []clttypes.ConntrackInfo{convertCtEntry(inCtEntry, 0)}
 
 			// This is a reported flow, and is a conntrack update - this should not impact the stored data at all.
 			Consistently(c.epStats, "500ms", "100ms").Should(HaveKey(*t))
@@ -935,13 +937,13 @@ var _ = Describe("Conntrack Datasource", func() {
 		It("should handle destination becoming non-local by removing entry on next conntrack update for unreported flow", func() {
 			t := tuple.New(remoteIp1, localIp1, proto_tcp, srcPort, dstPort)
 			// will call handlerInfo from c.Start() in BeforeEach
-			ciReaderSenderChan <- []ConntrackInfo{convertCtEntry(inCtEntry, 0)}
+			ciReaderSenderChan <- []clttypes.ConntrackInfo{convertCtEntry(inCtEntry, 0)}
 
 			Eventually(c.epStats, "500ms", "100ms").Should(HaveKey(*t))
 
 			// Data is not reported. Remove endpoints from mock data and send in CT entry again.
 			lm.SetMockData(epMapDelete, nil, nil, nil)
-			ciReaderSenderChan <- []ConntrackInfo{convertCtEntry(inCtEntry, 0)}
+			ciReaderSenderChan <- []clttypes.ConntrackInfo{convertCtEntry(inCtEntry, 0)}
 
 			// This is an unreported flow, and is a conntrack update. We can update the endpoint, but we never downgrade
 			// to having no endpoint (since we handle the situation where endpoint is deleted before we gather all
@@ -951,7 +953,7 @@ var _ = Describe("Conntrack Datasource", func() {
 		It("should handle destination changing on next conntrack update for reported flow", func() {
 			t := tuple.New(remoteIp1, localIp1, proto_tcp, srcPort, dstPort)
 			// will call handlerInfo from c.Start() in BeforeEach
-			ciReaderSenderChan <- []ConntrackInfo{convertCtEntry(inCtEntry, 0)}
+			ciReaderSenderChan <- []clttypes.ConntrackInfo{convertCtEntry(inCtEntry, 0)}
 
 			Eventually(c.epStats, "500ms", "100ms").Should(HaveKey(*t))
 
@@ -962,7 +964,7 @@ var _ = Describe("Conntrack Datasource", func() {
 			oldDest := data.DstEp
 
 			lm.SetMockData(epMapSwapLocal, nil, nil, nil)
-			ciReaderSenderChan <- []ConntrackInfo{convertCtEntry(inCtEntry, 0)}
+			ciReaderSenderChan <- []clttypes.ConntrackInfo{convertCtEntry(inCtEntry, 0)}
 
 			// This is a reported flow, and is a conntrack update - this should not impact the stored data at all since
 			// the endpoint should not be changing for a constant connection.
@@ -973,7 +975,7 @@ var _ = Describe("Conntrack Datasource", func() {
 		It("should handle destination changing on next conntrack update for unreported flow", func() {
 			t := tuple.New(remoteIp1, localIp1, proto_tcp, srcPort, dstPort)
 			// will call handlerInfo from c.Start() in BeforeEach
-			ciReaderSenderChan <- []ConntrackInfo{convertCtEntry(inCtEntry, 0)}
+			ciReaderSenderChan <- []clttypes.ConntrackInfo{convertCtEntry(inCtEntry, 0)}
 
 			Eventually(c.epStats, "500ms", "100ms").Should(HaveKey(*t))
 
@@ -983,7 +985,7 @@ var _ = Describe("Conntrack Datasource", func() {
 			oldDest := data.DstEp
 
 			lm.SetMockData(epMapSwapLocal, nil, nil, nil)
-			ciReaderSenderChan <- []ConntrackInfo{convertCtEntry(inCtEntry, 0)}
+			ciReaderSenderChan <- []clttypes.ConntrackInfo{convertCtEntry(inCtEntry, 0)}
 
 			// This is an unreported flow, and is a conntrack update. We can update the endpoint.
 			Consistently(c.epStats, "500ms", "100ms").Should(HaveKey(*t))
@@ -1079,7 +1081,7 @@ var _ = Describe("Conntrack Datasource", func() {
 			t := tuple.New(localIp1, remoteIp1, proto_tcp, srcPort, dstPort)
 
 			// will call handlerInfo from c.Start() in BeforeEach
-			ciReaderSenderChan <- []ConntrackInfo{convertCtEntry(outCtEntry, 0)}
+			ciReaderSenderChan <- []clttypes.ConntrackInfo{convertCtEntry(outCtEntry, 0)}
 
 			Eventually(c.epStats, "500ms", "100ms").Should(HaveKey(*t))
 			data := c.epStats[*t]
@@ -1096,7 +1098,7 @@ var _ = Describe("Conntrack Datasource", func() {
 			t := tuple.New(localIp1, remoteIp1, proto_tcp, srcPort, dstPort)
 
 			// will call handlerInfo from c.Start() in BeforeEach
-			ciReaderSenderChan <- []ConntrackInfo{convertCtEntry(outCtEntryWithSNAT, 0)}
+			ciReaderSenderChan <- []clttypes.ConntrackInfo{convertCtEntry(outCtEntryWithSNAT, 0)}
 
 			Eventually(c.epStats, "500ms", "100ms").Should(HaveKey(*t))
 			data := c.epStats[*t]
@@ -1107,7 +1109,7 @@ var _ = Describe("Conntrack Datasource", func() {
 			t := tuple.New(localIp1, localIp1, proto_tcp, srcPort, srcPort2)
 
 			// will call handlerInfo from c.Start() in BeforeEach
-			ciReaderSenderChan <- []ConntrackInfo{convertCtEntry(outCtEntrySNATToServiceToSelf, 0)}
+			ciReaderSenderChan <- []clttypes.ConntrackInfo{convertCtEntry(outCtEntrySNATToServiceToSelf, 0)}
 
 			Eventually(c.epStats, "500ms", "100ms").Should(HaveKey(*t))
 			data := c.epStats[*t]
@@ -1117,7 +1119,7 @@ var _ = Describe("Conntrack Datasource", func() {
 		It("should handle source becoming non-local by removing entry on next conntrack update for reported flow", func() {
 			t := tuple.New(localIp1, remoteIp1, proto_tcp, srcPort, dstPort)
 			// will call handlerInfo from c.Start() in BeforeEach
-			ciReaderSenderChan <- []ConntrackInfo{convertCtEntry(outCtEntry, 0)}
+			ciReaderSenderChan <- []clttypes.ConntrackInfo{convertCtEntry(outCtEntry, 0)}
 
 			Eventually(c.epStats, "500ms", "100ms").Should(HaveKey(*t))
 
@@ -1125,7 +1127,7 @@ var _ = Describe("Conntrack Datasource", func() {
 			data := c.epStats[*t]
 			data.Reported = true
 			lm.SetMockData(epMapDelete, nil, nil, nil)
-			ciReaderSenderChan <- []ConntrackInfo{convertCtEntry(outCtEntry, 0)}
+			ciReaderSenderChan <- []clttypes.ConntrackInfo{convertCtEntry(outCtEntry, 0)}
 
 			// This is a reported flow, and is a conntrack update - this should not impact the stored data at all.
 			Consistently(c.epStats, "500ms", "100ms").Should(HaveKey(*t))
@@ -1133,13 +1135,13 @@ var _ = Describe("Conntrack Datasource", func() {
 		It("should handle source becoming non-local by removing entry on next conntrack update for unreported flow", func() {
 			t := tuple.New(localIp1, remoteIp1, proto_tcp, srcPort, dstPort)
 			// will call handlerInfo from c.Start() in BeforeEach
-			ciReaderSenderChan <- []ConntrackInfo{convertCtEntry(outCtEntry, 0)}
+			ciReaderSenderChan <- []clttypes.ConntrackInfo{convertCtEntry(outCtEntry, 0)}
 
 			Eventually(c.epStats, "500ms", "100ms").Should(HaveKey(*t))
 
 			// Data is not reported. Remove endpoints from mock data and send in CT entry again.
 			lm.SetMockData(epMapDelete, nil, nil, nil)
-			ciReaderSenderChan <- []ConntrackInfo{convertCtEntry(outCtEntry, 0)}
+			ciReaderSenderChan <- []clttypes.ConntrackInfo{convertCtEntry(outCtEntry, 0)}
 
 			// This is an unreported flow, and is a conntrack update. We can update the endpoint, but we never downgrade
 			// to having no endpoint (since we handle the situation where endpoint is deleted before we gather all
@@ -1149,7 +1151,7 @@ var _ = Describe("Conntrack Datasource", func() {
 		It("should handle source changing on next conntrack update for reported flow", func() {
 			t := tuple.New(localIp1, remoteIp1, proto_tcp, srcPort, dstPort)
 			// will call handlerInfo from c.Start() in BeforeEach
-			ciReaderSenderChan <- []ConntrackInfo{convertCtEntry(outCtEntry, 0)}
+			ciReaderSenderChan <- []clttypes.ConntrackInfo{convertCtEntry(outCtEntry, 0)}
 
 			Eventually(c.epStats, "500ms", "100ms").Should(HaveKey(*t))
 
@@ -1160,7 +1162,7 @@ var _ = Describe("Conntrack Datasource", func() {
 			oldDest := data.DstEp
 
 			lm.SetMockData(epMapSwapLocal, nil, nil, nil)
-			ciReaderSenderChan <- []ConntrackInfo{convertCtEntry(outCtEntry, 0)}
+			ciReaderSenderChan <- []clttypes.ConntrackInfo{convertCtEntry(outCtEntry, 0)}
 
 			// This is a reported flow, and is a conntrack update - this should not impact the stored data at all since
 			// the endpoint should not be changing for a constant connection.
@@ -1171,7 +1173,7 @@ var _ = Describe("Conntrack Datasource", func() {
 		It("should handle source changing on next conntrack update for unreported flow", func() {
 			t := tuple.New(localIp1, remoteIp1, proto_tcp, srcPort, dstPort)
 			// will call handlerInfo from c.Start() in BeforeEach
-			ciReaderSenderChan <- []ConntrackInfo{convertCtEntry(outCtEntry, 0)}
+			ciReaderSenderChan <- []clttypes.ConntrackInfo{convertCtEntry(outCtEntry, 0)}
 
 			Eventually(c.epStats, "500ms", "100ms").Should(HaveKey(*t))
 
@@ -1181,7 +1183,7 @@ var _ = Describe("Conntrack Datasource", func() {
 			oldDest := data.DstEp
 
 			lm.SetMockData(epMapSwapLocal, nil, nil, nil)
-			ciReaderSenderChan <- []ConntrackInfo{convertCtEntry(outCtEntry, 0)}
+			ciReaderSenderChan <- []clttypes.ConntrackInfo{convertCtEntry(outCtEntry, 0)}
 
 			// This is an unreported flow, and is a conntrack update. We can update the endpoint.
 			Consistently(c.epStats, "500ms", "100ms").Should(HaveKey(*t))
@@ -1277,7 +1279,7 @@ var _ = Describe("Conntrack Datasource", func() {
 			t1 := tuple.New(localIp1, localIp2, proto_tcp, srcPort, dstPort)
 
 			// will call handlerInfo from c.Start() in BeforeEach
-			ciReaderSenderChan <- []ConntrackInfo{convertCtEntry(localCtEntry, 0)}
+			ciReaderSenderChan <- []clttypes.ConntrackInfo{convertCtEntry(localCtEntry, 0)}
 
 			Eventually(c.epStats, "500ms", "100ms").Should(HaveKey(*t1))
 
@@ -1293,7 +1295,7 @@ var _ = Describe("Conntrack Datasource", func() {
 			t := tuple.New(remoteIp1, localIp1, proto_tcp, srcPort, dstPort)
 
 			// will call handlerInfo from c.Start() in BeforeEach
-			ciReaderSenderChan <- []ConntrackInfo{convertCtEntry(inCtEntryWithDNAT, 0)}
+			ciReaderSenderChan <- []clttypes.ConntrackInfo{convertCtEntry(inCtEntryWithDNAT, 0)}
 
 			Eventually(c.epStats, "500ms", "100ms").Should(HaveKey(*t))
 
@@ -1307,7 +1309,7 @@ var _ = Describe("Conntrack Datasource", func() {
 	Describe("Test local source to local destination with DNAT", func() {
 		It("should create a single entry with 'local' connection direction and with correct tuple extracted", func() {
 			t1 := tuple.New(localIp1, localIp2, proto_tcp, srcPort, dstPort)
-			ciReaderSenderChan <- []ConntrackInfo{convertCtEntry(localCtEntryWithDNAT, 0)}
+			ciReaderSenderChan <- []clttypes.ConntrackInfo{convertCtEntry(localCtEntryWithDNAT, 0)}
 			Eventually(c.epStats, "500ms", "100ms").Should(HaveKey((Equal(*t1))))
 			data := c.epStats[*t1]
 			Expect(data.ConntrackPacketsCounter()).Should(Equal(*counter.New(localCtEntryWithDNAT.OriginalCounters.Packets)))
@@ -1320,7 +1322,7 @@ var _ = Describe("Conntrack Datasource", func() {
 		It("Handle TCP conntrack entries with TCP state TIME_WAIT after NFLOGs gathered", func() {
 			By("handling a conntrack update to start tracking stats for tuple")
 			t := tuple.New(remoteIp1, localIp1, proto_tcp, srcPort, dstPort)
-			ciReaderSenderChan <- []ConntrackInfo{convertCtEntry(inCtEntry, 0)}
+			ciReaderSenderChan <- []clttypes.ConntrackInfo{convertCtEntry(inCtEntry, 0)}
 			Eventually(c.epStats, "500ms", "100ms").Should(HaveKey(*t))
 			data := c.epStats[*t]
 			Expect(data.ConntrackPacketsCounter()).Should(Equal(*counter.New(inCtEntry.OriginalCounters.Packets)))
@@ -1334,7 +1336,7 @@ var _ = Describe("Conntrack Datasource", func() {
 			inCtEntryUpdatedCounters.OriginalCounters.Bytes = inCtEntry.OriginalCounters.Bytes + 10
 			inCtEntryUpdatedCounters.ReplyCounters.Packets = inCtEntry.ReplyCounters.Packets + 2
 			inCtEntryUpdatedCounters.ReplyCounters.Bytes = inCtEntry.ReplyCounters.Bytes + 50
-			ciReaderSenderChan <- []ConntrackInfo{convertCtEntry(inCtEntryUpdatedCounters, 0)}
+			ciReaderSenderChan <- []clttypes.ConntrackInfo{convertCtEntry(inCtEntryUpdatedCounters, 0)}
 			Eventually(c.epStats, "500ms", "100ms").Should(HaveKey(*t))
 			// know update is complete
 			Eventually(func() counter.Counter {
@@ -1351,7 +1353,7 @@ var _ = Describe("Conntrack Datasource", func() {
 			inCtEntryStateCloseWait.ProtoInfo.State = nfnl.TCP_CONNTRACK_CLOSE_WAIT
 			inCtEntryStateCloseWait.ReplyCounters.Packets = inCtEntryUpdatedCounters.ReplyCounters.Packets + 1
 			inCtEntryStateCloseWait.ReplyCounters.Bytes = inCtEntryUpdatedCounters.ReplyCounters.Bytes + 10
-			ciReaderSenderChan <- []ConntrackInfo{convertCtEntry(inCtEntryStateCloseWait, 0)}
+			ciReaderSenderChan <- []clttypes.ConntrackInfo{convertCtEntry(inCtEntryStateCloseWait, 0)}
 			Eventually(c.epStats, "500ms", "100ms").Should(HaveKey(*t))
 			// know update is complete
 			Eventually(func() counter.Counter {
@@ -1373,13 +1375,13 @@ var _ = Describe("Conntrack Datasource", func() {
 			By("handling a conntrack update with TCP TIME_WAIT")
 			inCtEntryStateTimeWait := inCtEntry
 			inCtEntryStateTimeWait.ProtoInfo.State = nfnl.TCP_CONNTRACK_TIME_WAIT
-			ciReaderSenderChan <- []ConntrackInfo{convertCtEntry(inCtEntryStateTimeWait, 0)}
+			ciReaderSenderChan <- []clttypes.ConntrackInfo{convertCtEntry(inCtEntryStateTimeWait, 0)}
 			Eventually(c.epStats, "500ms", "100ms").ShouldNot(HaveKey(*t))
 		})
 		It("Handle TCP conntrack entries with TCP state TIME_WAIT before NFLOGs gathered", func() {
 			By("handling a conntrack update to start tracking stats for tuple")
 			t := tuple.New(remoteIp1, localIp1, proto_tcp, srcPort, dstPort)
-			ciReaderSenderChan <- []ConntrackInfo{convertCtEntry(inCtEntry, 0)}
+			ciReaderSenderChan <- []clttypes.ConntrackInfo{convertCtEntry(inCtEntry, 0)}
 			Eventually(c.epStats, "500ms", "100ms").Should(HaveKey(*t))
 
 			// know update is complete
@@ -1398,7 +1400,7 @@ var _ = Describe("Conntrack Datasource", func() {
 			inCtEntryUpdatedCounters.OriginalCounters.Bytes = inCtEntry.OriginalCounters.Bytes + 10
 			inCtEntryUpdatedCounters.ReplyCounters.Packets = inCtEntry.ReplyCounters.Packets + 2
 			inCtEntryUpdatedCounters.ReplyCounters.Bytes = inCtEntry.ReplyCounters.Bytes + 50
-			ciReaderSenderChan <- []ConntrackInfo{convertCtEntry(inCtEntryUpdatedCounters, 0)}
+			ciReaderSenderChan <- []clttypes.ConntrackInfo{convertCtEntry(inCtEntryUpdatedCounters, 0)}
 			Eventually(c.epStats, "500ms", "100ms").Should(HaveKey(*t))
 
 			// know update is complete
@@ -1416,7 +1418,7 @@ var _ = Describe("Conntrack Datasource", func() {
 			inCtEntryStateCloseWait.ProtoInfo.State = nfnl.TCP_CONNTRACK_CLOSE_WAIT
 			inCtEntryStateCloseWait.ReplyCounters.Packets = inCtEntryUpdatedCounters.ReplyCounters.Packets + 1
 			inCtEntryStateCloseWait.ReplyCounters.Bytes = inCtEntryUpdatedCounters.ReplyCounters.Bytes + 10
-			ciReaderSenderChan <- []ConntrackInfo{convertCtEntry(inCtEntryStateCloseWait, 0)}
+			ciReaderSenderChan <- []clttypes.ConntrackInfo{convertCtEntry(inCtEntryStateCloseWait, 0)}
 			Eventually(c.epStats, "500ms", "100ms").Should(HaveKey(*t))
 
 			// know update is complete
@@ -1431,7 +1433,7 @@ var _ = Describe("Conntrack Datasource", func() {
 			By("handling a conntrack update with TCP TIME_WAIT")
 			inCtEntryStateTimeWait := inCtEntry
 			inCtEntryStateTimeWait.ProtoInfo.State = nfnl.TCP_CONNTRACK_TIME_WAIT
-			ciReaderSenderChan <- []ConntrackInfo{convertCtEntry(inCtEntryStateTimeWait, 0)}
+			ciReaderSenderChan <- []clttypes.ConntrackInfo{convertCtEntry(inCtEntryStateTimeWait, 0)}
 			Eventually(c.epStats, "500ms", "100ms").Should(HaveKey(*t))
 
 			By("handling an nflog update for destination matching on policy - all policy info is now gathered",
@@ -1475,7 +1477,7 @@ var _ = Describe("Conntrack Datasource", func() {
 		It("handle pre-DNAT info on conntrack", func() {
 			By("handling a conntrack update to start tracking stats for tuple (w/ DNAT)")
 			t := tuple.New(localIp1, localIp2, proto_tcp, srcPort, dstPort)
-			ciReaderSenderChan <- []ConntrackInfo{convertCtEntry(localCtEntryWithDNAT, 0)}
+			ciReaderSenderChan <- []clttypes.ConntrackInfo{convertCtEntry(localCtEntryWithDNAT, 0)}
 			Eventually(c.epStats, "500ms", "100ms").Should(HaveKey(*t))
 
 			// Flagging as expired will attempt to expire the data when NFLOGs and service info are gathered.
@@ -1847,11 +1849,11 @@ func BenchmarkApplyStatUpdate(b *testing.B) {
 }
 
 type dummyConntrackInfoReader struct {
-	MockSenderChannel chan []ConntrackInfo
+	MockSenderChannel chan []clttypes.ConntrackInfo
 }
 
 func (d dummyConntrackInfoReader) Start() error { return nil }
-func (d dummyConntrackInfoReader) ConntrackInfoChan() <-chan []ConntrackInfo {
+func (d dummyConntrackInfoReader) ConntrackInfoChan() <-chan []clttypes.ConntrackInfo {
 	return d.MockSenderChannel
 }
 

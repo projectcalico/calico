@@ -122,6 +122,14 @@ const (
 	FlowLogsPolicyEvaluationModeContinuous FlowLogsPolicyEvaluationModeType = "Continuous"
 )
 
+// +kubebuilder:validation:Enum=IPPoolsOnly;IPPoolsAndHostIPs
+type NATOutgoingExclusionsType string
+
+const (
+	NATOutgoingExclusionsIPPoolsOnly       NATOutgoingExclusionsType = "IPPoolsOnly"
+	NATOutgoingExclusionsIPPoolsAndHostIPs NATOutgoingExclusionsType = "IPPoolsAndHostIPs"
+)
+
 // FelixConfigurationSpec contains the values of the Felix configuration.
 type FelixConfigurationSpec struct {
 	// UseInternalDataplaneDriver, if true, Felix will use its internal dataplane programming logic.  If false, it
@@ -308,16 +316,16 @@ type FelixConfigurationSpec struct {
 	LogFilePath string `json:"logFilePath,omitempty"`
 
 	// LogSeverityFile is the log severity above which logs are sent to the log file. [Default: Info]
-	// +kubebuilder:validation:Pattern=`^(?i)(Debug|Info|Warning|Error|Fatal)?$`
+	// +kubebuilder:validation:Pattern=`^(?i)(Trace|Debug|Info|Warning|Error|Fatal)?$`
 	LogSeverityFile string `json:"logSeverityFile,omitempty" validate:"omitempty,logLevel"`
 
 	// LogSeverityScreen is the log severity above which logs are sent to the stdout. [Default: Info]
-	// +kubebuilder:validation:Pattern=`^(?i)(Debug|Info|Warning|Error|Fatal)?$`
+	// +kubebuilder:validation:Pattern=`^(?i)(Trace|Debug|Info|Warning|Error|Fatal)?$`
 	LogSeverityScreen string `json:"logSeverityScreen,omitempty" validate:"omitempty,logLevel"`
 
 	// LogSeveritySys is the log severity above which logs are sent to the syslog. Set to None for no logging to syslog.
 	// [Default: Info]
-	// +kubebuilder:validation:Pattern=`^(?i)(Debug|Info|Warning|Error|Fatal)?$`
+	// +kubebuilder:validation:Pattern=`^(?i)(Trace|Debug|Info|Warning|Error|Fatal)?$`
 	LogSeveritySys string `json:"logSeveritySys,omitempty" validate:"omitempty,logLevel"`
 
 	// LogDebugFilenameRegex controls which source code files have their Debug log output included in the logs.
@@ -482,6 +490,13 @@ type FelixConfigurationSpec struct {
 	// (i.e. it uses the iptables MASQUERADE target).
 	NATOutgoingAddress string `json:"natOutgoingAddress,omitempty"`
 
+	// When a IP pool setting `natOutgoing` is true, packets sent from Calico networked containers in this IP pool to destinations will be masqueraded.
+	// Configure which type of destinations is excluded from being masqueraded.
+	// - IPPoolsOnly: destinations outside of this IP pool will be masqueraded.
+	// - IPPoolsAndHostIPs: destinations outside of this IP pool and all hosts will be masqueraded.
+	// [Default: IPPoolsOnly]
+	NATOutgoingExclusions *NATOutgoingExclusionsType `json:"natOutgoingExclusions,omitempty" validate:"omitempty,oneof=IPPoolsOnly IPPoolsAndHostIPs"`
+
 	// DeviceRouteSourceAddress IPv4 address to set as the source hint for routes programmed by Felix. When not set
 	// the source address for local traffic from host to workload will be determined by the kernel.
 	DeviceRouteSourceAddress string `json:"deviceRouteSourceAddress,omitempty"`
@@ -498,6 +513,11 @@ type FelixConfigurationSpec struct {
 	// always clean up expected routes that use the configured DeviceRouteProtocol.  To add your own routes, you must
 	// use a distinct protocol (in addition to setting this field to false).
 	RemoveExternalRoutes *bool `json:"removeExternalRoutes,omitempty"`
+
+	// ProgramRoutes specifies whether Felix should program IPIP or unencapsulated routes instead of BIRD.
+	// Felix always programs VXLAN routes. [Default: Disabled]
+	// +kubebuilder:validation:Enum=Enabled;Disabled
+	ProgramRoutes *string `json:"programRoutes,omitempty"`
 
 	// IPForwarding controls whether Felix sets the host sysctls to enable IP forwarding.  IP forwarding is required
 	// when using Calico for workload networking.  This should be disabled only on hosts where Calico is used solely for
@@ -834,6 +854,10 @@ type FelixConfigurationSpec struct {
 
 	// FlowLogGoldmaneServer is the flow server endpoint to which flow data should be published.
 	FlowLogsGoldmaneServer *string `json:"flowLogsGoldmaneServer,omitempty"`
+
+	// FlowLogsLocalReporter configures local unix socket for reporting flow data from each node. [Default: Disabled]
+	// +kubebuilder:validation:Enum=Disabled;Enabled
+	FlowLogsLocalReporter *string `json:"flowLogsLocalReporter,omitempty"`
 
 	// BPFProfiling controls profiling of BPF programs. At the monent, it can be
 	// Disabled or Enabled. [Default: Disabled]

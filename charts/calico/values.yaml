@@ -2,25 +2,34 @@
 version: master
 
 # Configure the images to use when generating manifests.
+# If a new image is added, update manifests/generate.sh
 node:
-  image: quay.io/calico/node
+  image: node
+  registry: quay.io/calico
 calicoctl:
-  image: quay.io/calico/ctl
+  image: ctl
+  registry: quay.io/calico
 typha:
-  image: quay.io/calico/typha
+  image: typha
+  registry: quay.io/calico
 cni:
-  image: quay.io/calico/cni
+  image: cni
+  registry: quay.io/calico
 kubeControllers:
-  image: quay.io/calico/kube-controllers
+  image: kube-controllers
+  registry: quay.io/calico
 flannel:
   image: quay.io/flannel/flannel
   tag: v0.24.4
 flannelMigration:
-  image: quay.io/calico/flannel-migration
+  image: flannel-migration
+  registry: quay.io/calico
 dikastes:
-  image: quay.io/calico/dikastes
+  image: dikastes
+  registry: quay.io/calico
 csi-driver:
-  image: quay.io/calico/csi-driver
+  image: csi-driver
+  registry: quay.io/calico
 
 # Some defaults used in the templates.
 includeCRDs: true

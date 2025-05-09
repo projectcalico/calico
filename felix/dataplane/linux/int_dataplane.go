@@ -41,6 +41,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/bpfmap"
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
 	bpfconntrack "github.com/projectcalico/calico/felix/bpf/conntrack"
+	bpftimeouts "github.com/projectcalico/calico/felix/bpf/conntrack/timeouts"
 	"github.com/projectcalico/calico/felix/bpf/events"
 	"github.com/projectcalico/calico/felix/bpf/failsafes"
 	bpfifstate "github.com/projectcalico/calico/felix/bpf/ifstate"
@@ -55,6 +56,7 @@ import (
 	bpfutils "github.com/projectcalico/calico/felix/bpf/utils"
 	"github.com/projectcalico/calico/felix/calc"
 	"github.com/projectcalico/calico/felix/collector"
+	collectortypes "github.com/projectcalico/calico/felix/collector/types"
 	"github.com/projectcalico/calico/felix/config"
 	felixconfig "github.com/projectcalico/calico/felix/config"
 	"github.com/projectcalico/calico/felix/dataplane/common"
@@ -109,9 +111,15 @@ var (
 		Name: "felix_int_dataplane_messages",
 		Help: "Number dataplane messages by type.",
 	}, []string{"type"})
+	gaugeInitialResyncApplyTime = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "felix_int_dataplane_initial_resync_time_seconds",
+		Help: "Time in seconds that it took to do the initial resync with " +
+			"the dataplane and bring the dataplane into sync for the first time.",
+	})
 	summaryApplyTime = cprometheus.NewSummary(prometheus.SummaryOpts{
 		Name: "felix_int_dataplane_apply_time_seconds",
-		Help: "Time in seconds that it took to apply a dataplane update.",
+		Help: "Time in seconds for each incremental update to the dataplane " +
+			"(after the initial resync).",
 	})
 	summaryBatchSize = cprometheus.NewSummary(prometheus.SummaryOpts{
 		Name: "felix_int_dataplane_msg_batch_size",
@@ -137,6 +145,7 @@ var (
 
 func init() {
 	prometheus.MustRegister(countDataplaneSyncErrors)
+	prometheus.MustRegister(gaugeInitialResyncApplyTime)
 	prometheus.MustRegister(summaryApplyTime)
 	prometheus.MustRegister(countMessages)
 	prometheus.MustRegister(summaryBatchSize)
@@ -165,6 +174,7 @@ type Config struct {
 	DeviceRouteSourceAddressIPv6   net.IP
 	DeviceRouteProtocol            netlink.RouteProtocol
 	RemoveExternalRoutes           bool
+	ProgramRoutes                  bool
 	IPForwarding                   string
 	TableRefreshInterval           time.Duration
 	IptablesPostWriteCheckInterval time.Duration
@@ -213,7 +223,7 @@ type Config struct {
 	XDPEnabled                         bool
 	XDPAllowGeneric                    bool
 	BPFConntrackCleanupMode            apiv3.BPFConntrackMode
-	BPFConntrackTimeouts               bpfconntrack.Timeouts
+	BPFConntrackTimeouts               bpftimeouts.Timeouts
 	BPFCgroupV2                        string
 	BPFConnTimeLBEnabled               bool
 	BPFConnTimeLB                      string
@@ -317,7 +327,8 @@ type InternalDataplane struct {
 	filterTables    []generictables.Table
 	ipSets          []dpsets.IPSetsDataplane
 
-	ipipManager *ipipManager
+	ipipManager    *ipipManager
+	noEncapDeviceC chan string
 
 	vxlanManager   *vxlanManager
 	vxlanParentC   chan string
@@ -835,8 +846,8 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		bpfEvnt            events.Events
 		bpfEventPoller     *bpfEventPoller
 
-		collectorPacketInfoReader    collector.PacketInfoReader
-		collectorConntrackInfoReader collector.ConntrackInfoReader
+		collectorPacketInfoReader    collectortypes.PacketInfoReader
+		collectorConntrackInfoReader collectortypes.ConntrackInfoReader
 	)
 
 	// Initialisation needed for bpf.
@@ -1045,9 +1056,22 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	if config.RulesConfig.IPIPEnabled {
 		log.Info("IPIP enabled, starting thread to keep tunnel configuration in sync.")
 		// Add a manager to keep the all-hosts IP set up to date.
-		dp.ipipManager = newIPIPManager(ipSetsV4, config.MaxIPSetSize, config.ExternalNodesCidrs)
-		go dp.ipipManager.KeepIPIPDeviceInSync(config.IPIPMTU, config.RulesConfig.IPIPTunnelAddress, dataplaneFeatures.ChecksumOffloadBroken)
-		dp.RegisterManager(dp.ipipManager) // IPv4-only
+		dp.ipipManager = newIPIPManager(
+			ipSetsV4,
+			routeTableV4,
+			dataplanedefs.IPIPIfaceName,
+			config,
+			dp.loopSummarizer,
+			4,
+			featureDetector,
+		)
+		dp.noEncapDeviceC = make(chan string, 1)
+		go dp.ipipManager.KeepIPIPDeviceInSync(
+			dataplaneFeatures.ChecksumOffloadBroken,
+			time.Second*10,
+			dp.noEncapDeviceC,
+		)
+		dp.RegisterManager(dp.ipipManager)
 	} else {
 		// Only clean up IPIP addresses if IPIP is implicitly disabled (no IPIP pools and not explicitly set in FelixConfig)
 		if config.RulesConfig.FelixConfigIPIPEnabled == nil {
@@ -1424,7 +1448,7 @@ cleanupRetry:
 		if i > 0 {
 			log.Debugf("Retrying %v/%v times", i, maxCleanupRetries)
 		}
-		link, err := netlink.LinkByName("tunl0")
+		link, err := netlink.LinkByName(dataplanedefs.IPIPIfaceName)
 		if err != nil {
 			if _, ok := err.(netlink.LinkNotFoundError); ok {
 				log.Debug("IPIP disabled and no IPIP device found")
@@ -2091,6 +2115,8 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 			d.vxlanManager.OnParentNameUpdate(name)
 		case name := <-d.vxlanParentCV6:
 			d.vxlanManagerV6.OnParentNameUpdate(name)
+		case name := <-d.noEncapDeviceC:
+			d.ipipManager.OnNoEncapDeviceUpdate(name)
 		case <-ipSetsRefreshC:
 			log.Debug("Refreshing IP sets state")
 			d.forceIPSetsRefresh = true
@@ -2135,10 +2161,7 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 				}
 				// Actually apply the changes to the dataplane.
 				d.apply()
-
-				// Record stats.
 				applyTime := time.Since(applyStart)
-				summaryApplyTime.Observe(applyTime.Seconds())
 
 				if d.dataplaneNeedsSync {
 					// Dataplane is still dirty, record an error.
@@ -2160,6 +2183,12 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 					if d.config.PostInSyncCallback != nil {
 						d.config.PostInSyncCallback()
 					}
+					// Record a dedicated stat for the initial resync.
+					gaugeInitialResyncApplyTime.Set(applyTime.Seconds())
+				} else {
+					// Don't record the initial resync in the summary stat. On
+					// a quiet cluster it can skew the stat for a long time.
+					summaryApplyTime.Observe(applyTime.Seconds())
 				}
 				d.reportHealth()
 			} else {

@@ -616,6 +616,14 @@ spec:
                     FlowLogGoldmaneServer is the flow server endpoint to
                     which flow data should be published.
                   type: string
+                flowLogsLocalReporter:
+                  description:
+                    "FlowLogsLocalReporter configures local unix socket for
+                    reporting flow data from each node. [Default: Disabled]"
+                  enum:
+                    - Disabled
+                    - Enabled
+                  type: string
                 flowLogsPolicyEvaluationMode:
                   description: |-
                     Continuous - Felix evaluates active flows on a regular basis to determine the rule
@@ -865,19 +873,19 @@ spec:
                   description:
                     "LogSeverityFile is the log severity above which logs
                     are sent to the log file. [Default: Info]"
-                  pattern: ^(?i)(Debug|Info|Warning|Error|Fatal)?$
+                  pattern: ^(?i)(Trace|Debug|Info|Warning|Error|Fatal)?$
                   type: string
                 logSeverityScreen:
                   description:
                     "LogSeverityScreen is the log severity above which logs
                     are sent to the stdout. [Default: Info]"
-                  pattern: ^(?i)(Debug|Info|Warning|Error|Fatal)?$
+                  pattern: ^(?i)(Trace|Debug|Info|Warning|Error|Fatal)?$
                   type: string
                 logSeveritySys:
                   description: |-
                     LogSeveritySys is the log severity above which logs are sent to the syslog. Set to None for no logging to syslog.
                     [Default: Info]
-                  pattern: ^(?i)(Debug|Info|Warning|Error|Fatal)?$
+                  pattern: ^(?i)(Trace|Debug|Info|Warning|Error|Fatal)?$
                   type: string
                 maxIpsetSize:
                   description: |-
@@ -908,6 +916,17 @@ spec:
                     NATOutgoingAddress specifies an address to use when performing source NAT for traffic in a natOutgoing pool that
                     is leaving the network. By default the address used is an address on the interface the traffic is leaving on
                     (i.e. it uses the iptables MASQUERADE target).
+                  type: string
+                natOutgoingExclusions:
+                  description: |-
+                    When a IP pool setting `natOutgoing` is true, packets sent from Calico networked containers in this IP pool to destinations will be masqueraded.
+                    Configure which type of destinations is excluded from being masqueraded.
+                    - IPPoolsOnly: destinations outside of this IP pool will be masqueraded.
+                    - IPPoolsAndHostIPs: destinations outside of this IP pool and all hosts will be masqueraded.
+                    [Default: IPPoolsOnly]
+                  enum:
+                    - IPPoolsOnly
+                    - IPPoolsAndHostIPs
                   type: string
                 natPortRange:
                   anyOf:
@@ -976,6 +995,14 @@ spec:
                   description: |-
                     PolicySyncPathPrefix is used to by Felix to communicate policy changes to external services,
                     like Application layer policy. [Default: Empty]
+                  type: string
+                programRoutes:
+                  description: |-
+                    ProgramRoutes specifies whether Felix should program IPIP or unencapsulated routes instead of BIRD.
+                    Felix always programs VXLAN routes. [Default: Disabled]
+                  enum:
+                    - Enabled
+                    - Disabled
                   type: string
                 prometheusGoMetricsEnabled:
                   description: |-

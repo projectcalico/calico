@@ -30,7 +30,6 @@ import (
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/confd/pkg/buildinfo"
 	"github.com/projectcalico/calico/confd/pkg/config"
 	logutils "github.com/projectcalico/calico/confd/pkg/log"
 	"github.com/projectcalico/calico/confd/pkg/resource/template"
@@ -46,6 +45,7 @@ import (
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
+	"github.com/projectcalico/calico/pkg/buildinfo"
 	"github.com/projectcalico/calico/typha/pkg/syncclientutils"
 	"github.com/projectcalico/calico/typha/pkg/syncproto"
 )
@@ -192,7 +192,7 @@ func NewCalicoClient(confdConfig *config.Config) (*client, error) {
 	c.localBGPPeerWatcher.Start()
 
 	// Create a conditional that we use to wake up all of the watcher threads when there
-	// may some actionable updates.
+	// may be some actionable updates.
 	c.watcherCond = sync.NewCond(&c.cacheLock)
 
 	// Increment the waitForSync wait group.  This blocks the GetValues call until the
@@ -242,7 +242,7 @@ func NewCalicoClient(confdConfig *config.Config) (*client, error) {
 	c.nodeV1Processor = updateprocessors.NewBGPNodeUpdateProcessor(clientCfg.Spec.K8sUsePodCIDR)
 	if syncclientutils.MustStartSyncerClientIfTyphaConfigured(
 		&confdConfig.Typha, syncproto.SyncerTypeBGP,
-		buildinfo.GitVersion, template.NodeName, fmt.Sprintf("confd %s", buildinfo.GitVersion),
+		buildinfo.Version, template.NodeName, fmt.Sprintf("confd %s", buildinfo.Version),
 		c,
 	) {
 		log.Debug("Using typha syncclient")
@@ -292,9 +292,11 @@ func NewCalicoClient(confdConfig *config.Config) (*client, error) {
 	return c, nil
 }
 
+// Strings for keying in-sync messages by their upstream source.
 var (
-	SourceSyncer         string = "SourceSyncer"
-	SourceRouteGenerator string = "SourceRouteGenerator"
+	SourceSyncer              string = "SourceSyncer"
+	SourceRouteGenerator      string = "SourceRouteGenerator"
+	SourceLocalBGPPeerWatcher string = "LocalBGPPeerWatcher"
 )
 
 // client implements the StoreClient interface for confd, and also implements the
@@ -425,7 +427,7 @@ func (c *client) ExcludeServiceAdvertisement() bool {
 	return false
 }
 
-// OnInSync handles multiplexing in-sync messages from multiple data sources
+// OnSyncChange handles multiplexing in-sync messages from multiple data sources
 // into a single representation of readiness.
 func (c *client) OnSyncChange(source string, ready bool) {
 	c.cacheLock.Lock()
@@ -439,13 +441,13 @@ func (c *client) OnSyncChange(source string, ready bool) {
 	log.Infof("Source %v readiness changed, ready=%v", source, ready)
 
 	// Check if we are fully in sync, before applying this change.
-	oldFullSync := c.sourceReady[SourceSyncer] && c.sourceReady[SourceRouteGenerator]
+	oldFullSync := c.inSync()
 
 	// Apply the change.
 	c.sourceReady[source] = ready
 
 	// Check if we are fully in sync now.
-	newFullSync := c.sourceReady[SourceSyncer] && c.sourceReady[SourceRouteGenerator]
+	newFullSync := c.inSync()
 
 	if newFullSync == oldFullSync {
 		log.Debugf("No change to full sync status (%v)", newFullSync)
@@ -465,6 +467,10 @@ func (c *client) OnSyncChange(source string, ready bool) {
 		log.Info("Full sync lost")
 		c.waitForSync.Add(1)
 	}
+}
+
+func (c *client) inSync() bool {
+	return c.sourceReady[SourceSyncer] && c.sourceReady[SourceRouteGenerator] && c.sourceReady[SourceLocalBGPPeerWatcher]
 }
 
 type bgpPeer struct {
