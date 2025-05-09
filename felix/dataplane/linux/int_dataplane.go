@@ -668,7 +668,11 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	}
 
 	if config.RulesConfig.VXLANEnabled {
-		vxlanFDB := vxlanfdb.New(netlink.FAMILY_V4, dataplanedefs.VXLANIfaceNameV4, featureDetector, config.NetlinkTimeout)
+		var fdbOpts []vxlanfdb.Option
+		if config.BPFEnabled && bpfutils.BTFEnabled {
+			fdbOpts = append(fdbOpts, vxlanfdb.WithNeighUpdatesOnly())
+		}
+		vxlanFDB := vxlanfdb.New(netlink.FAMILY_V4, dataplanedefs.VXLANIfaceNameV4, featureDetector, config.NetlinkTimeout, fdbOpts...)
 		dp.vxlanFDBs = append(dp.vxlanFDBs, vxlanFDB)
 
 		dp.vxlanManager = newVXLANManager(
@@ -682,7 +686,11 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			config.VXLANMTU,
 		)
 		dp.vxlanParentC = make(chan string, 1)
-		go dp.vxlanManager.KeepVXLANDeviceInSync(context.Background(), config.VXLANMTU, dataplaneFeatures.ChecksumOffloadBroken, 10*time.Second, dp.vxlanParentC)
+		vxlanMTU := config.VXLANMTU
+		if config.BPFEnabled && bpfutils.BTFEnabled {
+			vxlanMTU = 0
+		}
+		go dp.vxlanManager.KeepVXLANDeviceInSync(context.Background(), vxlanMTU, dataplaneFeatures.ChecksumOffloadBroken, 10*time.Second, dp.vxlanParentC)
 		dp.RegisterManager(dp.vxlanManager)
 	} else {
 		// Start a cleanup goroutine not to block felix if it needs to retry
@@ -1144,21 +1152,42 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		dp.filterTables = append(dp.filterTables, filterTableV6)
 
 		if config.RulesConfig.VXLANEnabledV6 {
-			vxlanFDBV6 := vxlanfdb.New(netlink.FAMILY_V6, dataplanedefs.VXLANIfaceNameV6, featureDetector, config.NetlinkTimeout)
+			vxlanName := dataplanedefs.VXLANIfaceNameV6
+
+			var (
+				fdbOpts     []vxlanfdb.Option
+				vxlanMgrOps []vxlanMgrOption
+			)
+			if config.BPFEnabled && bpfutils.BTFEnabled {
+				// BPF mode uses the same device for both V4 and V6
+				vxlanName = dataplanedefs.VXLANIfaceNameV4
+				if dp.vxlanManager != nil {
+					vxlanMgrOps = append(vxlanMgrOps, vxlanMgrWithDualStack())
+				}
+				fdbOpts = append(fdbOpts, vxlanfdb.WithNeighUpdatesOnly())
+				go cleanUpVXLANDevice(dataplanedefs.VXLANIfaceNameV6)
+			}
+			vxlanFDBV6 := vxlanfdb.New(netlink.FAMILY_V6, vxlanName, featureDetector, config.NetlinkTimeout, fdbOpts...)
 			dp.vxlanFDBs = append(dp.vxlanFDBs, vxlanFDBV6)
 
 			dp.vxlanManagerV6 = newVXLANManager(
 				ipSetsV6,
 				routeTableV6,
 				vxlanFDBV6,
-				dataplanedefs.VXLANIfaceNameV6,
+				vxlanName,
 				config,
 				dp.loopSummarizer,
 				6,
 				config.VXLANMTUV6,
+				vxlanMgrOps...,
 			)
 			dp.vxlanParentCV6 = make(chan string, 1)
-			go dp.vxlanManagerV6.KeepVXLANDeviceInSync(context.Background(), config.VXLANMTUV6, dataplaneFeatures.ChecksumOffloadBroken, 10*time.Second, dp.vxlanParentCV6)
+			vxlanMTU := config.VXLANMTUV6
+			if config.BPFEnabled && bpfutils.BTFEnabled {
+				vxlanMTU = 0
+			}
+			go dp.vxlanManagerV6.KeepVXLANDeviceInSync(context.Background(), vxlanMTU,
+				dataplaneFeatures.ChecksumOffloadBroken, 10*time.Second, dp.vxlanParentCV6)
 			dp.RegisterManager(dp.vxlanManagerV6)
 		} else {
 			// Start a cleanup goroutine not to block felix if it needs to retry
