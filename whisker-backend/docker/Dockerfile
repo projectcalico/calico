@@ -19,7 +19,7 @@ LABEL maintainer="maintainers@tigera.io"
 LABEL name="Whisker Backend"
 LABEL release=1
 LABEL summary="Whisker Backend is the backend service for the Whisker UI."
-LABEL vendor=Project Calico
+LABEL vendor="Project Calico"
 LABEL version="${GIT_VERSION}"
 
 USER 10001:10001
