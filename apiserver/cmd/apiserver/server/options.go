@@ -80,6 +80,18 @@ func (o *CalicoServerOptions) Complete() error {
 	return nil
 }
 
+func (o *CalicoServerOptions) TLSCiphers() ([]uint16, error) {
+	if env := os.Getenv("TLS_CIPHER_SUITES"); env != "" {
+		cipherSuites, err := calicotls.ParseTLSCiphers(env)
+		if err != nil {
+			return nil, err
+		}
+		return cipherSuites, nil
+	} else {
+		return calicotls.DefaultCiphers(), nil
+	}
+}
+
 func (o *CalicoServerOptions) Config() (*apiserver.Config, error) {
 	// TODO have a "real" external address
 	if err := o.RecommendedOptions.SecureServing.MaybeDefaultWithSelfSignedCerts("localhost", nil, []net.IP{net.ParseIP("127.0.0.1")}); err != nil {
@@ -123,15 +135,9 @@ func (o *CalicoServerOptions) Config() (*apiserver.Config, error) {
 	// it will never go ready, due to a failed fetch of the v1 resources.
 	o.RecommendedOptions.Features.EnablePriorityAndFairness = false
 
-	var tlsCipherSuites []uint16
-	if env := os.Getenv("TLS_CIPHER_SUITES"); env != "" {
-		cipherSuites, err := calicotls.ParseTLSCiphers(env)
-		if err != nil {
-			return nil, err
-		}
-		tlsCipherSuites = cipherSuites
-	} else {
-		tlsCipherSuites = calicotls.DefaultCiphers()
+	tlsCipherSuites, err := o.TLSCiphers()
+	if err != nil {
+		return nil, err
 	}
 
 	serverConfig.SecureServing.CipherSuites = tlsCipherSuites
