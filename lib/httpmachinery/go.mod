@@ -1,13 +1,13 @@
 module github.com/projectcalico/calico/lib/httpmachinery
 
-go 1.23.7
+go 1.24.3
 
 require (
 	github.com/go-playground/form v3.1.4+incompatible
-	github.com/go-playground/validator/v10 v10.22.1
+	github.com/go-playground/validator/v10 v10.26.0
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/mux v1.8.1
-	github.com/onsi/gomega v1.36.2
+	github.com/onsi/gomega v1.37.0
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.10.0
 )
