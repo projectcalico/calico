@@ -298,7 +298,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log tests", [
 			tc.Felixes[ii].Exec("conntrack", "-L")
 		}
 
-		metrics.WaitForConntrackScan(bpfEnabled)
+		flowlogs.WaitForConntrackScan(bpfEnabled)
 
 		// Delete conntrack state so that we don't keep seeing 0-metric copies of the logs.  This will allow the flows
 		// to expire quickly.
