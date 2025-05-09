@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019-2025 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,13 +15,12 @@
 package intdataplane
 
 import (
-	"context"
 	"net"
 	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	log "github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 
 	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
@@ -115,15 +114,15 @@ type mockVXLANFDB struct {
 }
 
 func (t *mockVXLANFDB) SetVTEPs(targets []vxlanfdb.VTEP) {
-	log.WithFields(log.Fields{
+	logrus.WithFields(logrus.Fields{
 		"targets": targets,
 	}).Debug("SetVTEPs")
 	t.currentVTEPs = targets
 	t.setVTEPsCalls++
 }
 
-var _ = Describe("VXLANManager", func() {
-	var manager, managerV6 *vxlanManager
+var _ = Describe("RouteManager for vxlan ip pools", func() {
+	var manager, managerV6 *routeManager
 	var rt *mockRouteTable
 	var fdb *mockVXLANFDB
 
@@ -137,11 +136,14 @@ var _ = Describe("VXLANManager", func() {
 		la := netlink.NewLinkAttrs()
 		la.Name = "eth0"
 		opRecorder := logutils.NewSummarizer("test")
-		manager = newVXLANManagerWithShims(
+		manager = newRouteManagerWithShims(
 			dpsets.NewMockIPSets(),
 			rt,
 			fdb,
-			"vxlan.calico",
+			dataplanedefs.VXLANIfaceNameV4,
+			proto.IPPoolType_VXLAN,
+			4,
+			4444,
 			Config{
 				MaxIPSetSize:       5,
 				Hostname:           "node1",
@@ -156,15 +158,16 @@ var _ = Describe("VXLANManager", func() {
 				links:     []netlink.Link{&mockLink{attrs: la}},
 				ipVersion: 4,
 			},
-			4,
-			4444,
 		)
 
-		managerV6 = newVXLANManagerWithShims(
+		managerV6 = newRouteManagerWithShims(
 			dpsets.NewMockIPSets(),
 			rt,
 			fdb,
-			"vxlan-v6.calico",
+			dataplanedefs.VXLANIfaceNameV6,
+			proto.IPPoolType_VXLAN,
+			6,
+			6666,
 			Config{
 				MaxIPSetSize:       5,
 				Hostname:           "node1",
@@ -179,8 +182,6 @@ var _ = Describe("VXLANManager", func() {
 				links:     []netlink.Link{&mockLink{attrs: la}},
 				ipVersion: 6,
 			},
-			6,
-			6666,
 		)
 	})
 
@@ -202,13 +203,13 @@ var _ = Describe("VXLANManager", func() {
 		localVTEP := manager.getLocalVTEP()
 		Expect(localVTEP).NotTo(BeNil())
 
-		err := manager.configureVXLANDevice(50, localVTEP, false)
+		err := manager.configureVXLANDevice(50, false)
 		Expect(err).NotTo(HaveOccurred())
-		manager.OnParentNameUpdate("eth0")
+		manager.OnDataDeviceUpdate("eth0")
 
 		Expect(manager.myVTEP).NotTo(BeNil())
-		Expect(manager.parentIfaceName).NotTo(BeEmpty())
-		parent, err := manager.getLocalVTEPParent()
+		Expect(manager.dataDevice).NotTo(BeEmpty())
+		parent, err := manager.detectDataIface()
 
 		Expect(parent).NotTo(BeNil())
 		Expect(err).NotTo(HaveOccurred())
@@ -290,13 +291,13 @@ var _ = Describe("VXLANManager", func() {
 		localVTEP := managerV6.getLocalVTEP()
 		Expect(localVTEP).NotTo(BeNil())
 
-		err := managerV6.configureVXLANDevice(50, localVTEP, false)
+		err := managerV6.configureVXLANDevice(50, false)
 		Expect(err).NotTo(HaveOccurred())
-		managerV6.OnParentNameUpdate("eth0")
+		managerV6.OnDataDeviceUpdate("eth0")
 
 		Expect(managerV6.myVTEP).NotTo(BeNil())
-		Expect(managerV6.parentIfaceName).NotTo(BeEmpty())
-		parent, err := managerV6.getLocalVTEPParent()
+		Expect(managerV6.dataDevice).NotTo(BeEmpty())
+		parent, err := managerV6.detectDataIface()
 
 		Expect(parent).NotTo(BeNil())
 		Expect(err).NotTo(HaveOccurred())
@@ -361,10 +362,8 @@ var _ = Describe("VXLANManager", func() {
 	})
 
 	It("should fall back to programming tunneled routes if the parent device is not known", func() {
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
 		parentNameC := make(chan string)
-		go manager.KeepVXLANDeviceInSync(ctx, 1400, false, 1*time.Second, parentNameC)
+		go manager.KeepDeviceInSync(1400, false, 1*time.Second, parentNameC)
 
 		By("Sending another node's VTEP and route.")
 		manager.OnUpdate(&proto.VXLANTunnelEndpointUpdate{
@@ -401,7 +400,7 @@ var _ = Describe("VXLANManager", func() {
 		// Note: parent name is sent after configuration so this receive
 		// ensures we don't race.
 		Eventually(parentNameC, "2s").Should(Receive(Equal("eth0")))
-		manager.OnParentNameUpdate("eth0")
+		manager.OnDataDeviceUpdate("eth0")
 
 		Expect(rt.currentRoutes["eth0"]).To(HaveLen(0))
 		err = manager.CompleteDeferredWork()
@@ -413,10 +412,8 @@ var _ = Describe("VXLANManager", func() {
 	})
 
 	It("IPv6: should fall back to programming tunneled routes if the parent device is not known", func() {
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
 		parentNameC := make(chan string)
-		go managerV6.KeepVXLANDeviceInSync(ctx, 1400, false, 1*time.Second, parentNameC)
+		go managerV6.KeepDeviceInSync(1400, false, 1*time.Second, parentNameC)
 
 		By("Sending another node's VTEP and route.")
 		managerV6.OnUpdate(&proto.VXLANTunnelEndpointUpdate{
@@ -453,7 +450,7 @@ var _ = Describe("VXLANManager", func() {
 		// Note: parent name is sent after configuration so this receive
 		// ensures we don't race.
 		Eventually(parentNameC, "2s").Should(Receive(Equal("eth0")))
-		managerV6.OnParentNameUpdate("eth0")
+		managerV6.OnDataDeviceUpdate("eth0")
 
 		Expect(rt.currentRoutes["eth0"]).To(HaveLen(0))
 		err = managerV6.CompleteDeferredWork()
