@@ -65,8 +65,7 @@ func supportedCipherMap() map[string]uint16 {
 		}
 	}
 
-	addCiphers(tls12Ciphers)
-	addCiphers(tls13Ciphers)
+	addCiphers(DefaultCiphers())
 	addCiphers(legacyCiphers)
 
 	return cipherMap
