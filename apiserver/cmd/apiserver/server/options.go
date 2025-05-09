@@ -131,7 +131,7 @@ func (o *CalicoServerOptions) Config() (*apiserver.Config, error) {
 		}
 		tlsCipherSuites = cipherSuites
 	} else {
-		tlsCipherSuites = calicotls.GetTLSCipherDefaults()
+		tlsCipherSuites = calicotls.DefaultCiphers()
 	}
 
 	serverConfig.SecureServing.CipherSuites = tlsCipherSuites
