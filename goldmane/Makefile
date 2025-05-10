@@ -73,6 +73,16 @@ gen-mocks:
 	$(DOCKER_RUN) $(CALICO_BUILD) sh -c 'mockery'
 
 ###############################################################################
+# Run load generator against a real cluster using your KUBECONFIG env var.
+###############################################################################
+load:
+	kubectl get secret -n calico-system node-certs --template='{{index .data "tls.key"}}' | base64 -d > tls.key
+	kubectl get secret -n calico-system node-certs --template='{{index .data "tls.crt"}}' | base64 -d > tls.crt
+	kubectl get secret -n calico-system goldmane-key-pair --template='{{index .data "tls.crt"}}' | base64 -d > ca.crt
+	kubectl port-forward -n calico-system svc/goldmane 7443:7443 &
+	SERVER=goldmane:7443 CLIENT_CERT=tls.crt CLIENT_KEY=tls.key CA_FILE=ca.crt go run ./cmd/flowgen/main.go
+
+###############################################################################
 # Release
 ###############################################################################
 ## Deploys images to registry

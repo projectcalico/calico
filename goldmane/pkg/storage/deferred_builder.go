@@ -19,6 +19,14 @@ import (
 	"github.com/projectcalico/calico/goldmane/proto"
 )
 
+type FlowProvider interface {
+	Iter(func(FlowBuilder) bool)
+}
+
+type Receiver interface {
+	Receive(FlowProvider, string)
+}
+
 // FlowBuilder provides an interface for building Flows. It allows us to conserve memory by
 // only rendering Flow objects when they match the filter.
 type FlowBuilder interface {
