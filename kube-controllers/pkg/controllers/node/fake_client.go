@@ -262,14 +262,14 @@ func (f *fakeIPAMClient) AutoAssign(ctx context.Context, args ipam.AutoAssignArg
 
 // ReleaseIPs releases any of the given IP addresses that are currently assigned,
 // so that they are available to be used in another assignment.
-func (f *fakeIPAMClient) ReleaseIPs(ctx context.Context, opts ...ipam.ReleaseOptions) ([]cnet.IP, error) {
+func (f *fakeIPAMClient) ReleaseIPs(ctx context.Context, opts ...ipam.ReleaseOptions) ([]cnet.IP, []ipam.ReleaseOptions, error) {
 	f.Lock()
 	defer f.Unlock()
 
 	for _, opt := range opts {
 		f.handlesReleased[opt.Handle] = true
 	}
-	return nil, nil
+	return nil, opts, nil
 }
 
 // GetAssignmentAttributes returns the attributes stored with the given IP address

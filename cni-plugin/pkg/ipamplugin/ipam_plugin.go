@@ -294,7 +294,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 				for _, v6 := range v6Assignments.IPs {
 					v6IPs = append(v6IPs, ipam.ReleaseOptions{Address: v6.IP.String()})
 				}
-				_, err := calicoClient.IPAM().ReleaseIPs(ctx, v6IPs...)
+				_, _, err := calicoClient.IPAM().ReleaseIPs(ctx, v6IPs...)
 				if err != nil {
 					logrus.Errorf("Error releasing IPv6 addresses %+v on IPv4 address assignment failure: %s", v6IPs, err)
 				}
@@ -310,7 +310,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 				for _, v4 := range v4Assignments.IPs {
 					v4IPs = append(v4IPs, ipam.ReleaseOptions{Address: v4.IP.String()})
 				}
-				_, err := calicoClient.IPAM().ReleaseIPs(ctx, v4IPs...)
+				_, _, err := calicoClient.IPAM().ReleaseIPs(ctx, v4IPs...)
 				if err != nil {
 					logrus.Errorf("Error releasing IPv4 addresses %+v on IPv6 address assignment failure: %s", v4IPs, err)
 				}
@@ -354,7 +354,7 @@ func acquireIPAMLockBestEffort(path string) unlockFn {
 	if path == "" {
 		path = ipamLockPath
 	}
-	err := os.MkdirAll(filepath.Dir(path), 0777)
+	err := os.MkdirAll(filepath.Dir(path), 0o777)
 	if err != nil {
 		logrus.WithError(err).Error("Failed to make directory for IPAM lock")
 		// Fall through, still a slight chance the file is there for us to access.

@@ -196,7 +196,7 @@ func TestIPAM(t *testing.T) {
 			ips = append(ips, ipam.ReleaseOptions{Address: ip.IP.String()})
 		}
 		// Release the IPs
-		_, err = client.IPAM().ReleaseIPs(ctx, ips...)
+		_, _, err = client.IPAM().ReleaseIPs(ctx, ips...)
 		Expect(err).NotTo(HaveOccurred())
 	})
 }
