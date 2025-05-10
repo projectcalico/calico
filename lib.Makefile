@@ -84,7 +84,7 @@ endif
 # This is only needed when running non-native binaries.
 register:
 ifneq ($(BUILDARCH),$(ARCH))
-	docker run --rm --privileged multiarch/qemu-user-static:register || true
+	docker run --privileged --rm tonistiigi/binfmt --install all || true
 endif
 
 # If this is a release, also tag and push additional images.
@@ -262,11 +262,8 @@ GOARCH_FLAGS :=-e GOARCH=$(ARCH)
 REPO_ROOT := $(shell git rev-parse --show-toplevel)
 CERTS_PATH := $(REPO_ROOT)/hack/test/certs
 
-QEMU_IMAGE ?= calico/qemu-user-static:latest
-
 # DOCKER_BUILD is the base build command used for building all images.
 DOCKER_BUILD=docker buildx build --load --platform=linux/$(ARCH) --pull \
-	     --build-arg QEMU_IMAGE=$(QEMU_IMAGE) \
 	     --build-arg UBI_IMAGE=$(UBI_IMAGE) \
 	     --build-arg GIT_VERSION=$(GIT_VERSION)
 

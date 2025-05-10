@@ -12,13 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-ARG QEMU_IMAGE
-
-FROM ${QEMU_IMAGE} AS qemu
-
 FROM alpine:3 AS builder
-
-COPY --from=qemu /usr/bin/qemu-*-static /usr/bin/
 
 # Make sure the status file is owned by our user.
 RUN mkdir /status
