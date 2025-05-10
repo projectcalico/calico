@@ -122,15 +122,11 @@ func (o *CalicoServerOptions) Config() (*apiserver.Config, error) {
 	// it will never go ready, due to a failed fetch of the v1 resources.
 	o.RecommendedOptions.Features.EnablePriorityAndFairness = false
 
-	// Explicitly setting cipher suites in order to remove deprecated ones
-	// The list is taken from https://github.com/golang/go/blob/dev.boringcrypto.go1.13/src/crypto/tls/boring.go#L54
+	// Explicitly setting cipher suites in order to remove deprecated and weaker ones
+	// This list was originally taken from https://github.com/golang/go/blob/dev.boringcrypto.go1.13/src/crypto/tls/boring.go#L54
 	cipherSuites := []uint16{
-		tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
 		tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
-		tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
 		tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
-		tls.TLS_RSA_WITH_AES_128_GCM_SHA256,
-		tls.TLS_RSA_WITH_AES_256_GCM_SHA384,
 	}
 	serverConfig.SecureServing.CipherSuites = cipherSuites
 	serverConfig.SecureServing.MinTLSVersion = tls.VersionTLS12
