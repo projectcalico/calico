@@ -17,17 +17,11 @@
 # This ensures that testing of Felix in this repository is done in the same
 # userspace environment as it will be deployed in calico/node.
 
-ARG QEMU_IMAGE
-
-FROM ${QEMU_IMAGE} AS qemu
-
 FROM calico/bpftool:v7.4.0 AS bpftool
 
 FROM debian:12-slim AS source
 
 LABEL maintainer="Shaun Crampton <shaun@tigera.io>"
-
-COPY --from=qemu /usr/bin/qemu-*-static /usr/bin
 
 # Install remaining runtime deps required for felix from the global repository
 RUN apt-get update && apt-get install -y \
@@ -73,8 +67,6 @@ COPY felix.cfg /etc/calico/felix.cfg
 COPY calico-felix-wrapper /usr/bin
 
 COPY --from=bpftool /bpftool /usr/bin
-
-RUN rm -f /usr/bin/qemu-*-static
 
 FROM scratch
 
