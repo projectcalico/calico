@@ -12,6 +12,9 @@ function load_image() {
     docker cp ./node-driver-registrar.tar ${node}:/node-driver-registrar.tar
     docker cp ./pod2daemon.tar ${node}:/pod2daemon.tar
     docker cp ./kube-controllers.tar ${node}:/kube-controllers.tar
+    docker cp ./goldmane.tar ${node}:/goldmane.tar
+    docker cp ./whisker.tar ${node}:/whisker.tar
+    docker cp ./whisker-backend.tar ${node}:/whisker-backend.tar
     docker exec -t ${node} ctr -n=k8s.io images import /operator.tar
     docker exec -t ${node} ctr -n=k8s.io images import /calico-node.tar
     docker exec -t ${node} ctr -n=k8s.io images import /calico-typha.tar
@@ -22,7 +25,10 @@ function load_image() {
     docker exec -t ${node} ctr -n=k8s.io images import /node-driver-registrar.tar
     docker exec -t ${node} ctr -n=k8s.io images import /pod2daemon.tar
     docker exec -t ${node} ctr -n=k8s.io images import /kube-controllers.tar
-    docker exec -t ${node} rm /calico-node.tar /calico-typha.tar /calicoctl.tar /calico-cni.tar /pod2daemon.tar /csi.tar /node-driver-registrar.tar /kube-controllers.tar /calico-apiserver.tar /operator.tar
+    docker exec -t ${node} ctr -n=k8s.io images import /goldmane.tar
+    docker exec -t ${node} ctr -n=k8s.io images import /whisker.tar
+    docker exec -t ${node} ctr -n=k8s.io images import /whisker-backend.tar
+    docker exec -t ${node} rm /calico-node.tar /calico-typha.tar /calicoctl.tar /calico-cni.tar /pod2daemon.tar /csi.tar /node-driver-registrar.tar /kube-controllers.tar /calico-apiserver.tar /operator.tar /goldmane.tar /whisker.tar /whisker-backend.tar
 }
 
 load_image kind-control-plane
