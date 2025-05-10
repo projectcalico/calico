@@ -371,7 +371,7 @@ func (m *routeManager) CompleteDeferredWork() error {
 			m.logCtx.WithError(err).Error(
 				"Failed to find data device. Missing/conflicting local information? route programming is likely to fail.")
 		} else {
-			m.dataDevice = dataIface.Attrs().Name
+			m.updateDataDevice(dataIface)
 			m.routesDirty = true
 		}
 	}
@@ -383,6 +383,11 @@ func (m *routeManager) CompleteDeferredWork() error {
 		m.routesDirty = false
 	}
 	return err
+}
+
+func (m *routeManager) updateDataDevice(link netlink.Link) {
+	m.dataDevice = link.Attrs().Name
+	m.provider.updateDataDevice(link)
 }
 
 func (m *routeManager) updateRoutes() {
@@ -482,7 +487,13 @@ func (m *routeManager) OnDataDeviceUpdate(name string) {
 		// We're changing parent interface, remove the old routes.
 		m.routeTable.SetRoutes(m.routeClassSameSubnet, m.dataDevice, nil)
 	}
-	m.dataDevice = name
+	link, err := m.nlHandle.LinkByName(name)
+	if err != nil {
+		m.logCtx.Warn("data interface does not exist anymore!")
+		return
+	}
+
+	m.updateDataDevice(link)
 	m.routesDirty = true
 }
 
