@@ -19,78 +19,30 @@ import (
 	_ "embed"
 	"fmt"
 	"html/template"
-	"strings"
 
 	"github.com/sirupsen/logrus"
 	"github.com/slack-go/slack"
-
-	"github.com/projectcalico/calico/release/internal/registry"
 )
 
-var (
-	//go:embed templates/hashrelease-published.json.gotmpl
-	publishedMessageTemplateData string
-	//go:embed templates/failure.json.gotmpl
-	failureMessageTemplateData string
-	//go:embed templates/missing-images.json.gotmpl
-	missingImagesMessageTemplateData string
-)
-
-// BaseMessageData contains the common fields for all messages.
-type BaseMessageData struct {
-	ReleaseName     string
-	Product         string
-	Stream          string
-	ProductVersion  string
-	OperatorVersion string
-	ReleaseType     string
-	CIURL           string
-}
+//go:embed templates/hashrelease-published.json.gotmpl
+var publishedMessageTemplateData string
 
 // HashreleasePublishedMessageData contains the fields for sending a message about a hashrelease being published.
-type HashreleasePublishedMessageData struct {
-	BaseMessageData
+type HashreleaseMessageData struct {
+	ReleaseName        string
+	Product            string
+	Stream             string
+	ProductVersion     string
+	OperatorVersion    string
+	ReleaseType        string
+	CIURL              string
 	DocsURL            string
 	ImageScanResultURL string
 }
 
-// MissingImagesMessageData contains the fields for sending a message about missing images.
-type MissingImagesMessageData struct {
-	BaseMessageData
-	MissingImages []registry.Component
-}
-
-// FailureMessageData contains the fields for sending a message about a failure.
-type FailureMessageData struct {
-	BaseMessageData
-	Error string
-}
-
 // PostHashreleaseAnnouncement sends a message to slack about a hashrelease being published.
-func PostHashreleaseAnnouncement(cfg *Config, msg *HashreleasePublishedMessageData) error {
+func PostHashreleaseAnnouncement(cfg *Config, msg *HashreleaseMessageData) error {
 	message, err := renderMessage(publishedMessageTemplateData, msg)
-	if err != nil {
-		logrus.WithError(err).Error("Failed to render message")
-		return err
-	}
-	return sendToSlack(cfg, message)
-}
-
-// PostMissingImagesMessage sends a message to slack about missing images.
-func PostMissingImagesMessage(cfg *Config, msg *MissingImagesMessageData) error {
-	message, err := renderMessage(missingImagesMessageTemplateData, msg)
-	if err != nil {
-		logrus.WithError(err).Error("Failed to render message")
-		return err
-	}
-	return sendToSlack(cfg, message)
-}
-
-// PostFailureMessage sends a message to slack about a failure.
-func PostFailureMessage(cfg *Config, msg *FailureMessageData) error {
-	// msg.Error might contain literal newlines, which aren't allowed.
-	msg.Error = strings.ReplaceAll(msg.Error, "\n", "\\n")
-	message, err := renderMessage(failureMessageTemplateData, msg)
 	if err != nil {
 		logrus.WithError(err).Error("Failed to render message")
 		return err
