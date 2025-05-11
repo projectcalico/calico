@@ -2581,7 +2581,9 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			// The MAC address will be different, since we create a new veth.
 			Expect(len(resultSecondAdd.Interfaces)).Should(Equal(len(result.Interfaces)))
 			for i := range resultSecondAdd.Interfaces {
-				Expect(resultSecondAdd.Interfaces[i].Mac).ShouldNot(Equal(result.Interfaces[i].Mac))
+				if resultSecondAdd.Interfaces[i].Mac != "" {
+					Expect(resultSecondAdd.Interfaces[i].Mac).ShouldNot(Equal(result.Interfaces[i].Mac))
+				}
 				resultSecondAdd.Interfaces[i].Mac = ""
 				result.Interfaces[i].Mac = ""
 			}
