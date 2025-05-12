@@ -16,6 +16,7 @@ package resources
 
 import (
 	"context"
+	"sync/atomic"
 
 	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -39,28 +40,47 @@ func pagedList(
 	*model.KVPairList,
 	error,
 ) {
+	// Wrap our incoming listFunc with one that stashes the revision and number
+	// of items we've seen so far.  This allows us to use the more efficient
+	// EachListItem() method, while also capturing the list metadata that we
+	// need.
+	listResourceVersion := ""
+	var numItemsLoaded atomic.Int64 // listFunc is called from background goroutine.
+	listFunc = func(ctx context.Context, opts metav1.ListOptions) (runtime.Object, error) {
+		obj, err := listFunc(ctx, opts)
+		m, err := meta.ListAccessor(obj)
+		if err != nil {
+			return nil, err
+		}
+		if m.GetResourceVersion() != "" {
+			listResourceVersion = m.GetResourceVersion()
+		}
+		numItemsLoaded.Add(int64(meta.LenList(obj)))
+		return obj, err
+	}
 	lp := pager.New(listFunc)
+
 	opts := metav1.ListOptions{ResourceVersion: revision}
 	if revision != "" {
 		opts.ResourceVersionMatch = metav1.ResourceVersionMatchNotOlderThan
 	}
-	result, isPaged, err := lp.List(ctx, opts)
-	if err != nil {
-		return nil, K8sErrorToCalico(err, list)
-	}
-	logCtx := log.WithField("pagedList", isPaged)
-	logCtx.Debug("List() call completed, convert results")
 
-	// For each item in the response, convert it to a KVPair and add it to the list.
-	kvps := []*model.KVPair{}
-	err = meta.EachListItem(result, func(obj runtime.Object) error {
+	var kvps []*model.KVPair
+	err := lp.EachListItem(ctx, opts, func(obj runtime.Object) error {
 		res := obj.(Resource)
 		result, err := toKVPs(res)
 		if err != nil {
-			logCtx.WithError(err).WithField("Item", res).Warning("unable to process resource, skipping")
+			log.WithError(err).WithField("Item", res).Warning("Unable to process resource, skipping")
 			return nil
 		}
 		if result != nil {
+			if kvps == nil {
+				// Try to guess a suitable result slice capacity.  In practice,
+				// this will be the size of the first page (but that's usually
+				// the only page.)
+				ratio := len(result)
+				kvps = make([]*model.KVPair, 0, int(numItemsLoaded.Load())*ratio)
+			}
 			kvps = append(kvps, result...)
 		}
 		return nil
@@ -69,13 +89,12 @@ func pagedList(
 		return nil, K8sErrorToCalico(err, list)
 	}
 
-	// Extract list revision information.
-	m, err := meta.ListAccessor(result)
-	if err != nil {
-		return nil, err
+	if listResourceVersion == "" {
+		log.WithField("list", list).Panic("Failed to extract resource version from list.")
 	}
+
 	return &model.KVPairList{
 		KVPairs:  kvps,
-		Revision: m.GetResourceVersion(),
+		Revision: listResourceVersion,
 	}, nil
 }
