@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"net"
 	"sync"
+	"time"
 
 	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
@@ -58,11 +59,13 @@ type vxlanManager struct {
 	vxlanPort int
 	fdb       VXLANFDB
 
+	routeMgr *routeManager
+
 	// Indicates if configuration has changed since the last apply.
-	triggerRouteUpdate func(bool)
-	vtepsDirty         bool
-	externalNodeCIDRs  []string
-	dpConfig           Config
+	//triggerRouteUpdate func(bool)
+	vtepsDirty        bool
+	externalNodeCIDRs []string
+	dpConfig          Config
 
 	// Log context
 	logCtx     *logrus.Entry
@@ -75,61 +78,75 @@ type VXLANFDB interface {
 
 func newVXLANManager(
 	ipsetsDataplane dpsets.IPSetsDataplane,
+	mainRouteTable routetable.Interface,
 	fdb VXLANFDB,
 	tunnelDevice string,
 	ipVersion uint8,
 	mtu int,
 	dpConfig Config,
-	triggerRouteUpdate func(bool),
+	//triggerRouteUpdate func(bool),
 	opRecorder logutils.OpRecorder,
 ) *vxlanManager {
 	return newVXLANManagerWithShims(
 		ipsetsDataplane,
+		mainRouteTable,
 		fdb,
 		tunnelDevice,
 		ipVersion,
 		mtu,
 		dpConfig,
-		triggerRouteUpdate,
+		//triggerRouteUpdate,
 		opRecorder,
 	)
 }
 
 func newVXLANManagerWithShims(
 	ipsetsDataplane dpsets.IPSetsDataplane,
+	mainRouteTable routetable.Interface,
 	fdb VXLANFDB,
 	tunnelDevice string,
 	ipVersion uint8,
 	mtu int,
 	dpConfig Config,
-	triggerRouteUpdate func(bool),
+	//triggerRouteUpdate func(bool),
 	opRecorder logutils.OpRecorder,
 ) *vxlanManager {
-	return &vxlanManager{
+	manager := &vxlanManager{
 		ipsetsDataplane: ipsetsDataplane,
 		ipSetMetadata: ipsets.IPSetMetadata{
 			MaxSize: dpConfig.MaxIPSetSize,
 			SetID:   rules.IPSetIDAllVXLANSourceNets,
 			Type:    ipsets.IPSetTypeHashNet,
 		},
-		hostname:           dpConfig.Hostname,
-		fdb:                fdb,
-		vtepsByNode:        map[string]*proto.VXLANTunnelEndpointUpdate{},
-		tunnelDevice:       tunnelDevice,
-		tunnelDeviceMTU:    mtu,
-		vxlanID:            dpConfig.RulesConfig.VXLANVNI,
-		vxlanPort:          dpConfig.RulesConfig.VXLANPort,
-		ipVersion:          ipVersion,
-		externalNodeCIDRs:  dpConfig.ExternalNodesCidrs,
-		triggerRouteUpdate: triggerRouteUpdate,
-		vtepsDirty:         true,
-		dpConfig:           dpConfig,
+		hostname:          dpConfig.Hostname,
+		fdb:               fdb,
+		vtepsByNode:       map[string]*proto.VXLANTunnelEndpointUpdate{},
+		tunnelDevice:      tunnelDevice,
+		tunnelDeviceMTU:   mtu,
+		vxlanID:           dpConfig.RulesConfig.VXLANVNI,
+		vxlanPort:         dpConfig.RulesConfig.VXLANPort,
+		ipVersion:         ipVersion,
+		externalNodeCIDRs: dpConfig.ExternalNodesCidrs,
+		//triggerRouteUpdate: triggerRouteUpdate,
+		vtepsDirty: true,
+		dpConfig:   dpConfig,
 		logCtx: logrus.WithFields(logrus.Fields{
 			"ipVersion":     ipVersion,
 			"tunnel device": tunnelDevice,
 		}),
 		opRecorder: opRecorder,
+		routeMgr: newRouteManager(
+			mainRouteTable,
+			proto.IPPoolType_VXLAN,
+			ipVersion,
+			mtu,
+			dpConfig,
+			opRecorder,
+		),
 	}
+
+	manager.routeMgr.setTunnelRouteFunc(manager.route)
+	return manager
 }
 
 func (m *vxlanManager) OnUpdate(protoBufMsg interface{}) {
@@ -149,7 +166,7 @@ func (m *vxlanManager) OnUpdate(protoBufMsg interface{}) {
 			m.vtepsByNode[msg.Node] = msg
 		}
 		m.vtepsDirty = true
-		m.triggerRouteUpdate(false)
+		//m.triggerRouteUpdate(false)
 	case *proto.VXLANTunnelEndpointRemove:
 		m.logCtx.WithField("msg", msg).Debug("Route manager received VTEP remove")
 		if msg.Node == m.hostname {
@@ -158,7 +175,9 @@ func (m *vxlanManager) OnUpdate(protoBufMsg interface{}) {
 			delete(m.vtepsByNode, msg.Node)
 		}
 		m.vtepsDirty = true
-		m.triggerRouteUpdate(false)
+		//m.triggerRouteUpdate(false)
+	default:
+		m.routeMgr.OnUpdate(msg)
 	}
 }
 
@@ -166,7 +185,7 @@ func (m *vxlanManager) setLocalVTEP(vtep *proto.VXLANTunnelEndpointUpdate) {
 	m.myVTEPLock.Lock()
 	defer m.myVTEPLock.Unlock()
 	m.myVTEP = vtep
-	m.triggerRouteUpdate(true)
+	//m.triggerRouteUpdate(true)
 }
 
 func (m *vxlanManager) getLocalVTEP() *proto.VXLANTunnelEndpointUpdate {
@@ -180,7 +199,8 @@ func (m *vxlanManager) CompleteDeferredWork() error {
 		m.updateNeighborsAndAllowedSources()
 		m.vtepsDirty = false
 	}
-	return nil
+
+	return m.routeMgr.CompleteDeferredWork()
 }
 
 func (m *vxlanManager) updateNeighborsAndAllowedSources() {
@@ -261,6 +281,19 @@ func (m *vxlanManager) dataDeviceAddr() string {
 		dataAddr = localVTEP.ParentDeviceIpv6
 	}
 	return dataAddr
+}
+
+func (m *vxlanManager) OnDataDeviceUpdate(name string) {
+	link, err := m.routeMgr.updateDataDevice(name)
+	if err != nil {
+		m.logCtx.Warn("data interdace does not exist anymore")
+		return
+	}
+	m.dataDevice = link
+}
+
+func (m *vxlanManager) KeepVXLANDeviceInSync(mtu int, xsumBroken bool, wait time.Duration, dataIfaceC chan string) {
+	m.routeMgr.KeepDeviceInSync(mtu, xsumBroken, wait, dataIfaceC, m.Device)
 }
 
 // configureVXLANDevice ensures the VXLAN tunnel device is up and configured correctly.

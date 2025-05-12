@@ -25,7 +25,6 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 
-	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
 	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
 	"github.com/projectcalico/calico/felix/ethtool"
 	"github.com/projectcalico/calico/felix/ip"
@@ -35,13 +34,13 @@ import (
 	"github.com/projectcalico/calico/felix/routetable"
 )
 
-type tunnelProvider interface {
+/*type tunnelProvider interface {
 	Manager
 	route(ip.CIDR, *proto.RouteUpdate) *routetable.Target
 	Device() (netlink.Link, string, error)
 	dataDeviceAddr() string
 	updateDataDevice(link netlink.Link)
-}
+}*/
 
 type routeManager struct {
 	// Our dependencies.
@@ -51,12 +50,15 @@ type routeManager struct {
 	ipVersion            uint8
 	ippoolType           proto.IPPoolType
 
-	provider tunnelProvider
+	//provider tunnelProvider
 
 	// Device information
-	dataDevice      string
+	dataDevice     string
+	dataDeviceAddr string
+
 	tunnelDevice    string
 	tunnelDeviceMTU int
+	tunnelRoutesFn  func(ip.CIDR, *proto.RouteUpdate) *routetable.Target
 
 	// Hold pending updates.
 	routesByDest    map[string]*proto.RouteUpdate
@@ -78,10 +80,8 @@ type routeManager struct {
 }
 
 func newRouteManager(
-	ipsetsDataplane dpsets.IPSetsDataplane,
 	mainRouteTable routetable.Interface,
 	ippoolType proto.IPPoolType,
-	fdb VXLANFDB,
 	ipVersion uint8,
 	mtu int,
 	dpConfig Config,
@@ -89,10 +89,10 @@ func newRouteManager(
 ) *routeManager {
 	nlHandle, _ := netlinkshim.NewRealNetlink()
 	return newRouteManagerWithShims(
-		ipsetsDataplane,
+		//ipsetsDataplane,
 		mainRouteTable,
 		ippoolType,
-		fdb,
+		//fdb,
 		ipVersion,
 		mtu,
 		dpConfig,
@@ -102,10 +102,10 @@ func newRouteManager(
 }
 
 func newRouteManagerWithShims(
-	ipsetsDataplane dpsets.IPSetsDataplane,
+	//ipsetsDataplane dpsets.IPSetsDataplane,
 	mainRouteTable routetable.Interface,
 	ippoolType proto.IPPoolType,
-	fdb VXLANFDB,
+	//fdb VXLANFDB,
 	ipVersion uint8,
 	mtu int,
 	dpConfig Config,
@@ -129,7 +129,7 @@ func newRouteManagerWithShims(
 		opRecorder:       opRecorder,
 	}
 
-	switch ippoolType {
+	/*switch ippoolType {
 	case proto.IPPoolType_IPIP:
 		if ipVersion != 4 {
 			logrus.Errorf("Route manager only supports IPIP pool in IPv4")
@@ -169,7 +169,7 @@ func newRouteManagerWithShims(
 		manager.tunnelDevice = iface
 	default:
 		panic("Invalid IP pool for route manager")
-	}
+	}*/
 
 	manager.logCtx = logrus.WithFields(logrus.Fields{
 		"ipVersion":     ipVersion,
@@ -276,12 +276,13 @@ func (m *routeManager) OnUpdate(protoBufMsg interface{}) {
 			return
 		}
 		m.deleteRoute(msg.Dst)
-	default:
-		m.provider.OnUpdate(msg)
+		//default:
+		//m.provider.OnUpdate(msg)
 	}
 }
 
 // TODO: improve this
+// func (m *routeManager) triggerRouteUpdate(providerChaned bool) {
 func (m *routeManager) triggerRouteUpdate(providerChaned bool) {
 	if providerChaned {
 		m.providerChangedC <- struct{}{}
@@ -371,23 +372,42 @@ func (m *routeManager) CompleteDeferredWork() error {
 			m.logCtx.WithError(err).Error(
 				"Failed to find data device. Missing/conflicting local information? route programming is likely to fail.")
 		} else {
-			m.updateDataDevice(dataIface)
+			//m.updateDataDevice(dataIface)
+			m.updateDataDevice(dataIface.Attrs().Name)
 			m.routesDirty = true
 		}
 	}
 
-	err := m.provider.CompleteDeferredWork()
+	//err := m.provider.CompleteDeferredWork()
 
 	if m.routesDirty {
 		m.updateRoutes()
 		m.routesDirty = false
 	}
-	return err
+	//return err
+	return nil
 }
 
-func (m *routeManager) updateDataDevice(link netlink.Link) {
-	m.dataDevice = link.Attrs().Name
-	m.provider.updateDataDevice(link)
+func (m *routeManager) updateDataDevice(name string) (netlink.Link, error) {
+	if name == "" {
+		m.logCtx.Warn("Empty data interface name? Ignoring.")
+		return nil, fmt.Errorf("empty data interface")
+	}
+	if name == m.dataDevice {
+		return nil, fmt.Errorf("something")
+	}
+	if m.dataDevice != "" {
+		// We're changing parent interface, remove the old routes.
+		m.routeTable.SetRoutes(m.routeClassSameSubnet, m.dataDevice, nil)
+	}
+	link, err := m.nlHandle.LinkByName(name)
+	if err != nil {
+		m.logCtx.Warn("data interface does not exist anymore!")
+		return nil, fmt.Errorf("something")
+	}
+	m.dataDevice = name
+	m.routesDirty = true
+	return link, nil
 }
 
 func (m *routeManager) updateRoutes() {
@@ -411,7 +431,7 @@ func (m *routeManager) updateRoutes() {
 			// We've got everything we need to program this route as a no-encap route.
 			noEncapRoutes = append(noEncapRoutes, *noEncapRoute)
 			logCtx.WithField("route", r).Debug("Destination in same subnet, using no-encap route.")
-		} else if tunnelRoute := m.provider.route(cidr, r); tunnelRoute != nil {
+		} else if tunnelRoute := m.tunnelRoutesFn(cidr, r); tunnelRoute != nil {
 			tunnelRoutes = append(tunnelRoutes, *tunnelRoute)
 			logCtx.WithField("route", tunnelRoute).Debug("adding tunnel route to list for addition")
 		} else {
@@ -435,6 +455,10 @@ func (m *routeManager) updateRoutes() {
 	} else {
 		m.logCtx.Debug("Route manager not sending unencapsulated L3 updates, no data interface.")
 	}
+}
+
+func (m *routeManager) setTunnelRouteFunc(fn func(ip.CIDR, *proto.RouteUpdate) *routetable.Target) {
+	m.tunnelRoutesFn = fn
 }
 
 func blackholeRoutes(localIPAMBlocks map[string]*proto.RouteUpdate, proto netlink.RouteProtocol) []routetable.Target {
@@ -475,30 +499,14 @@ func noEncapRoute(ifaceName string, cidr ip.CIDR, r *proto.RouteUpdate, proto ne
 	return &noEncapRoute
 }
 
-func (m *routeManager) OnDataDeviceUpdate(name string) {
-	if name == "" {
-		m.logCtx.Warn("Empty data interface name? Ignoring.")
-		return
-	}
-	if name == m.dataDevice {
-		return
-	}
-	if m.dataDevice != "" {
-		// We're changing parent interface, remove the old routes.
-		m.routeTable.SetRoutes(m.routeClassSameSubnet, m.dataDevice, nil)
-	}
-	link, err := m.nlHandle.LinkByName(name)
-	if err != nil {
-		m.logCtx.Warn("data interface does not exist anymore!")
-		return
-	}
-
-	m.updateDataDevice(link)
-	m.routesDirty = true
-}
-
 // checks that it is still correctly configured.
-func (m *routeManager) KeepDeviceInSync(mtu int, xsumBroken bool, wait time.Duration, dataIfaceC chan string) {
+func (m *routeManager) KeepDeviceInSync(
+	mtu int,
+	xsumBroken bool,
+	wait time.Duration,
+	dataIfaceC chan string,
+	getDevice func() (netlink.Link, string, error),
+) {
 	m.logCtx.WithFields(logrus.Fields{
 		"device":     m.tunnelDevice,
 		"mtu":        mtu,
@@ -519,7 +527,8 @@ func (m *routeManager) KeepDeviceInSync(mtu int, xsumBroken bool, wait time.Dura
 	}
 
 	for {
-		if m.provider.dataDeviceAddr() == "" {
+		//if m.provider.dataDeviceAddr() == "" {
+		if m.dataDeviceAddr == "" {
 			m.logCtx.Debug("Missing local information, retrying...")
 			sleepMonitoringChans(10 * time.Second)
 			continue
@@ -532,8 +541,15 @@ func (m *routeManager) KeepDeviceInSync(mtu int, xsumBroken bool, wait time.Dura
 			continue
 		}
 
+		link, addr, err := getDevice()
+		if err != nil {
+			m.logCtx.WithError(err).Warn("Failed to find data device, retrying...")
+			sleepMonitoringChans(1 * time.Second)
+			continue
+		}
+
 		m.logCtx.Debug("Configuring tunnel device")
-		m.configureTunnelDevice(mtu, xsumBroken)
+		m.configureTunnelDevice(link, addr, mtu, xsumBroken)
 		if err != nil {
 			m.logCtx.WithError(err).Warn("Failed to configure tunnel device, retrying...")
 			logNextSuccess = true
@@ -564,7 +580,8 @@ func (m *routeManager) KeepDeviceInSync(mtu int, xsumBroken bool, wait time.Dura
 }
 
 func (m *routeManager) detectDataIface() (netlink.Link, error) {
-	dataAddr := m.provider.dataDeviceAddr()
+	//dataAddr := m.provider.dataDeviceAddr()
+	dataAddr := m.dataDeviceAddr
 	if dataAddr == "" {
 		return nil, fmt.Errorf("local data interface not yet known")
 	}
@@ -595,11 +612,14 @@ func (m *routeManager) detectDataIface() (netlink.Link, error) {
 	return nil, fmt.Errorf("Unable to find data interface with address %s", dataAddr)
 }
 
-func (m *routeManager) configureTunnelDevice(mtu int, xsumBroken bool) error {
-	newLink, addr, err := m.provider.Device()
+func (m *routeManager) configureTunnelDevice(
+	newLink netlink.Link,
+	addr string,
+	mtu int, xsumBroken bool) error {
+	/*newLink, addr, err := m.provider.Device()
 	if err != nil {
 		return err
-	}
+	}*/
 	if newLink == nil {
 		return fmt.Errorf("no tunnel link provided")
 	}

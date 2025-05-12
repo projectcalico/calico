@@ -330,6 +330,8 @@ type InternalDataplane struct {
 	dataInterfaceCV6 chan string
 	routeManager     *routeManager
 	routeManagerV6   *routeManager
+	vxlanManager     *vxlanManager
+	vxlanManagerV6   *vxlanManager
 	vxlanFDBs        []*vxlanfdb.VXLANFDB
 
 	linkAddrsManagers []*linkaddrs.LinkAddrsManager
@@ -666,12 +668,11 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	if config.RulesConfig.VXLANEnabled {
 		vxlanFDB := vxlanfdb.New(netlink.FAMILY_V4, dataplanedefs.VXLANIfaceNameV4, featureDetector, config.NetlinkTimeout)
 		dp.vxlanFDBs = append(dp.vxlanFDBs, vxlanFDB)
-
-		dp.routeManager = newRouteManager(
+		dp.vxlanManager = newVXLANManager(
 			ipSetsV4,
 			routeTableV4,
-			proto.IPPoolType_VXLAN,
 			vxlanFDB,
+			dataplanedefs.VXLANIfaceNameV4,
 			4,
 			config.VXLANMTU,
 			config,
