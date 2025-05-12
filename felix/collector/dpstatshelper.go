@@ -69,6 +69,7 @@ func New(
 			configParams.TyphaCertFile,
 			configParams.TyphaKeyFile,
 			configParams.TyphaCAFile,
+			configParams.TLSCipherSuites,
 		)
 		if err != nil {
 			log.WithError(err).Fatalf("Failed to create Flow Logs GoldmaneReporter.")

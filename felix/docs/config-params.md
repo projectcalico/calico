@@ -121,6 +121,17 @@ Auto-detected from the node's hostname if not provided.
 | Default value (above encoding) | none |
 | Notes | Required, config file / env var only. | 
 
+### `TLSCipherSuites` (config file / env var only)
+
+A comma-separated list specifying the TLS cipher suite names to be used for securing communication.
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_TLSCipherSuites` |
+| Encoding (env var/config file) | String |
+| Default value (above encoding) | none |
+| Notes | Config file / env var only. | 
+
 ### `TyphaAddr` (config file / env var only)
 
 If set, tells Felix to connect to Typha at the given address and port. Overrides TyphaK8sServiceName.

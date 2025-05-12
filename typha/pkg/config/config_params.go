@@ -133,6 +133,8 @@ type Config struct {
 	CAFile         string `config:"file(must-exist);;local"`
 	ClientCN       string `config:"string;"`
 	ClientURISAN   string `config:"string;"`
+	// TLSCipherSuites is a comma-separated list specifying the TLS cipher suite names to be used for securing communication.
+	TLSCipherSuites string `config:"string;"`
 
 	DebugMemoryProfilePath  string `config:"file;;"`
 	DebugDisableLogDropping bool   `config:"bool;false"`
