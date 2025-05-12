@@ -40,7 +40,7 @@ else
 endif
 
 gen-mocks:
-	$(DOCKER_RUN) $(CALICO_BUILD) sh -c 'mockery'
+	$(DOCKER_RUN) $(CALICO_BUILD) sh -c 'mockery
 
 gen-files: gen-mocks
 
@@ -69,8 +69,11 @@ $(GUARDIAN_CONTAINER_CREATED): docker-image/guardian/Dockerfile $(BINDIR)/guardi
 #############################################
 .PHONY: ut
 ## Run only Unit Tests.
-ut:
+ut: generate-test-certs
 	$(DOCKER_GO_BUILD) go test ./... -cover -count 1
+
+generate-test-certs:
+	./test/generate-certs.sh
 
 ##########################################################################################
 # CI/CD
@@ -86,6 +89,7 @@ ci: static-checks ut
 clean:
 	rm -rf $(BINDIR)
 	rm -f $(GUARDIAN_CONTAINER_CREATED)
+	rm -rf test/tmp
 
 #############################################
 # Deploy images to registry
