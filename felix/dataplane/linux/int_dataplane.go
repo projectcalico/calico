@@ -2512,7 +2512,7 @@ func (d *InternalDataplane) apply() {
 	for _, ipSets := range d.ipSets {
 		ipSetsWG.Add(1)
 		go func(ipSets dpsets.IPSetsDataplane) {
-			ipSets.ApplyUpdates()
+			ipSets.ApplyUpdates(nil)
 			d.reportHealth()
 			ipSetsWG.Done()
 		}(ipSets)
