@@ -16,7 +16,7 @@ package intdataplane
 
 import (
 	"fmt"
-	"sync"
+	"time"
 
 	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
@@ -35,6 +35,7 @@ type ipipManager struct {
 	hostname      string
 	ipVersion     uint8
 	routeProtocol netlink.RouteProtocol
+	routeMgr      *routeManager
 
 	// Device information
 	tunnelDevice    string
@@ -46,16 +47,11 @@ type ipipManager struct {
 	ipsetsDataplane    dpsets.IPSetsDataplane
 	ipSetMetadata      ipsets.IPSetMetadata
 
-	// Local host information
-	myHostAddr string
-	myInfoLock sync.Mutex
-
 	// Indicates if configuration has changed since the last apply.
-	triggerRouteUpdate func(bool)
-	routesDirty        bool
-	ipSetDirty         bool
-	externalNodeCIDRs  []string
-	dpConfig           Config
+	routesDirty       bool
+	ipSetDirty        bool
+	externalNodeCIDRs []string
+	dpConfig          Config
 
 	// Log context
 	logCtx     *logrus.Entry
@@ -64,31 +60,31 @@ type ipipManager struct {
 
 func newIPIPManager(
 	ipsetsDataplane dpsets.IPSetsDataplane,
+	mainRouteTable routetable.Interface,
 	tunnelDevice string,
 	ipVersion uint8,
 	mtu int,
 	dpConfig Config,
-	triggerRouteUpdate func(bool),
 	opRecorder logutils.OpRecorder,
 ) *ipipManager {
 	return newIPIPManagerWithShims(
 		ipsetsDataplane,
+		mainRouteTable,
 		tunnelDevice,
 		ipVersion,
 		mtu,
 		dpConfig,
-		triggerRouteUpdate,
 		opRecorder,
 	)
 }
 
 func newIPIPManagerWithShims(
 	ipsetsDataplane dpsets.IPSetsDataplane,
+	mainRouteTable routetable.Interface,
 	tunnelDevice string,
 	ipVersion uint8,
 	mtu int,
 	dpConfig Config,
-	triggerRouteUpdate func(bool),
 	opRecorder logutils.OpRecorder,
 ) *ipipManager {
 
@@ -97,7 +93,7 @@ func newIPIPManagerWithShims(
 		return nil
 	}
 
-	return &ipipManager{
+	manager := &ipipManager{
 		ipsetsDataplane: ipsetsDataplane,
 		ipSetMetadata: ipsets.IPSetMetadata{
 			MaxSize: dpConfig.MaxIPSetSize,
@@ -110,7 +106,6 @@ func newIPIPManagerWithShims(
 		tunnelDeviceMTU:    mtu,
 		ipVersion:          ipVersion,
 		externalNodeCIDRs:  dpConfig.ExternalNodesCidrs,
-		triggerRouteUpdate: triggerRouteUpdate,
 		ipSetDirty:         true,
 		dpConfig:           dpConfig,
 		routeProtocol:      calculateRouteProtocol(dpConfig),
@@ -119,7 +114,24 @@ func newIPIPManagerWithShims(
 			"tunnel device": tunnelDevice,
 		}),
 		opRecorder: opRecorder,
+		routeMgr: newRouteManager(
+			mainRouteTable,
+			proto.IPPoolType_IPIP,
+			tunnelDevice,
+			ipVersion,
+			mtu,
+			dpConfig,
+			opRecorder,
+		),
 	}
+
+	manager.routeMgr.routeClassTunnel = routetable.RouteClassIPIPTunnel
+	manager.routeMgr.routeClassSameSubnet = routetable.RouteClassIPIPSameSubnet
+	manager.routeMgr.setTunnelRouteFunc(manager.route)
+	if dpConfig.ProgramRoutes {
+		manager.routeMgr.triggerRouteUpdate()
+	}
+	return manager
 }
 
 func (m *ipipManager) OnUpdate(protoBufMsg interface{}) {
@@ -127,7 +139,7 @@ func (m *ipipManager) OnUpdate(protoBufMsg interface{}) {
 	case *proto.HostMetadataUpdate:
 		m.logCtx.WithField("hostname", msg.Hostname).Debug("Host update/create")
 		if msg.Hostname == m.hostname {
-			m.setLocalHostAddr(msg.Ipv4Addr)
+			m.routeMgr.updateDataIfaceAddr(msg.Ipv4Addr)
 		}
 		m.activeHostnameToIP[msg.Hostname] = msg.Ipv4Addr
 		m.ipSetDirty = true
@@ -135,38 +147,33 @@ func (m *ipipManager) OnUpdate(protoBufMsg interface{}) {
 	case *proto.HostMetadataRemove:
 		m.logCtx.WithField("hostname", msg.Hostname).Debug("Host removed")
 		if msg.Hostname == m.hostname {
-			m.setLocalHostAddr("")
+			m.routeMgr.updateDataIfaceAddr("")
 		}
 		delete(m.activeHostnameToIP, msg.Hostname)
 		m.ipSetDirty = true
 		m.mayUpdateRoutes()
+	default:
+		if m.dpConfig.ProgramRoutes {
+			m.routeMgr.OnUpdate(msg)
+		}
 	}
 }
 
 func (m *ipipManager) mayUpdateRoutes() {
 	// Only update routes if only Felix is responsible for programming routes.
 	if m.dpConfig.ProgramRoutes {
-		m.triggerRouteUpdate(false)
+		m.routeMgr.triggerRouteUpdate()
 	}
-}
-
-func (m *ipipManager) setLocalHostAddr(address string) {
-	m.myInfoLock.Lock()
-	defer m.myInfoLock.Unlock()
-	m.myHostAddr = address
-	m.triggerRouteUpdate(true)
-}
-
-func (m *ipipManager) getLocalHostAddr() string {
-	m.myInfoLock.Lock()
-	defer m.myInfoLock.Unlock()
-	return m.myHostAddr
 }
 
 func (m *ipipManager) CompleteDeferredWork() error {
 	if m.ipSetDirty {
 		m.updateAllHostsIPSet()
 		m.ipSetDirty = false
+	}
+
+	if m.dpConfig.ProgramRoutes {
+		return m.routeMgr.CompleteDeferredWork()
 	}
 	return nil
 }
@@ -203,25 +210,20 @@ func (m *ipipManager) route(cidr ip.CIDR, r *proto.RouteUpdate) *routetable.Targ
 	}
 }
 
-func (m *ipipManager) updateDataDevice(_ netlink.Link) {
-	return
-}
+func (m *ipipManager) KeepIPIPDeviceInSync(mtu int, xsumBroken bool, wait time.Duration, dataIfaceC chan string) {
+	ipipDevice := func(_ netlink.Link) (netlink.Link, string, error) {
+		la := netlink.NewLinkAttrs()
+		la.Name = m.tunnelDevice
+		ipip := &netlink.Iptun{
+			LinkAttrs: la,
+		}
+		address := m.dpConfig.RulesConfig.IPIPTunnelAddress
 
-func (m *ipipManager) dataDeviceAddr() string {
-	return m.getLocalHostAddr()
-}
-
-// configureIPIPDevice ensures the IPIP tunnel device is up and configures correctly.
-func (m *ipipManager) Device() (netlink.Link, string, error) {
-	la := netlink.NewLinkAttrs()
-	la.Name = m.tunnelDevice
-	ipip := &netlink.Iptun{
-		LinkAttrs: la,
+		if len(address) == 0 {
+			return nil, "", fmt.Errorf("Address is not set")
+		}
+		return ipip, address.String(), nil
 	}
-	address := m.dpConfig.RulesConfig.IPIPTunnelAddress
 
-	if len(address) == 0 {
-		return nil, "", fmt.Errorf("Address is not set")
-	}
-	return ipip, address.String(), nil
+	m.routeMgr.KeepDeviceInSync(mtu, xsumBroken, wait, dataIfaceC, ipipDevice)
 }

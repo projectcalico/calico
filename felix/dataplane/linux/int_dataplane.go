@@ -326,13 +326,14 @@ type InternalDataplane struct {
 	filterTables    []generictables.Table
 	ipSets          []dpsets.IPSetsDataplane
 
-	dataInterfaceC   chan string
-	dataInterfaceCV6 chan string
-	routeManager     *routeManager
-	routeManagerV6   *routeManager
-	vxlanManager     *vxlanManager
-	vxlanManagerV6   *vxlanManager
-	vxlanFDBs        []*vxlanfdb.VXLANFDB
+	dataInterfaceC chan string
+	ipipManager    *ipipManager
+
+	parentInterfaceC   chan string
+	parentInterfaceCV6 chan string
+	vxlanManager       *vxlanManager
+	vxlanManagerV6     *vxlanManager
+	vxlanFDBs          []*vxlanfdb.VXLANFDB
 
 	linkAddrsManagers []*linkaddrs.LinkAddrsManager
 
@@ -678,14 +679,14 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			config,
 			dp.loopSummarizer,
 		)
-		dp.dataInterfaceC = make(chan string, 1)
-		go dp.routeManager.KeepDeviceInSync(
+		dp.parentInterfaceC = make(chan string, 1)
+		go dp.vxlanManager.KeepVXLANDeviceInSync(
 			config.VXLANMTU,
 			dataplaneFeatures.ChecksumOffloadBroken,
 			10*time.Second,
-			dp.dataInterfaceC,
+			dp.parentInterfaceC,
 		)
-		dp.RegisterManager(dp.routeManager)
+		dp.RegisterManager(dp.vxlanManager)
 	} else {
 		// Start a cleanup goroutine not to block felix if it needs to retry
 		go cleanUpVXLANDevice(dataplanedefs.VXLANIfaceNameV4)
@@ -1058,24 +1059,23 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	if config.RulesConfig.IPIPEnabled {
 		log.Info("IPIP enabled, starting thread to keep tunnel configuration in sync.")
 		// Add a manager to keep the all-hosts IP set up to date.
-		dp.routeManager = newRouteManager(
+		dp.ipipManager = newIPIPManager(
 			ipSetsV4,
 			routeTableV4,
-			proto.IPPoolType_IPIP,
-			nil,
+			dataplanedefs.IPIPIfaceName,
 			4,
 			config.IPIPMTU,
 			config,
 			dp.loopSummarizer,
 		)
 		dp.dataInterfaceC = make(chan string, 1)
-		go dp.routeManager.KeepDeviceInSync(
+		go dp.ipipManager.KeepIPIPDeviceInSync(
 			config.IPIPMTU,
 			dataplaneFeatures.ChecksumOffloadBroken,
 			time.Second*10,
 			dp.dataInterfaceC,
 		)
-		dp.RegisterManager(dp.routeManager)
+		dp.RegisterManager(dp.ipipManager)
 	} else {
 		// Only clean up IPIP addresses if IPIP is implicitly disabled (no IPIP pools and not explicitly set in FelixConfig)
 		if config.RulesConfig.FelixConfigIPIPEnabled == nil {
@@ -1151,24 +1151,24 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			vxlanFDBV6 := vxlanfdb.New(netlink.FAMILY_V6, dataplanedefs.VXLANIfaceNameV6, featureDetector, config.NetlinkTimeout)
 			dp.vxlanFDBs = append(dp.vxlanFDBs, vxlanFDBV6)
 
-			dp.routeManagerV6 = newRouteManager(
+			dp.vxlanManagerV6 = newVXLANManager(
 				ipSetsV6,
 				routeTableV6,
-				proto.IPPoolType_VXLAN,
 				vxlanFDBV6,
+				dataplanedefs.VXLANIfaceNameV6,
 				6,
 				config.VXLANMTUV6,
 				config,
 				dp.loopSummarizer,
 			)
-			dp.dataInterfaceCV6 = make(chan string, 1)
-			go dp.routeManagerV6.KeepDeviceInSync(
+			dp.parentInterfaceCV6 = make(chan string, 1)
+			go dp.vxlanManagerV6.KeepVXLANDeviceInSync(
 				config.VXLANMTUV6,
 				dataplaneFeatures.ChecksumOffloadBroken,
 				10*time.Second,
-				dp.dataInterfaceCV6,
+				dp.parentInterfaceCV6,
 			)
-			dp.RegisterManager(dp.routeManagerV6)
+			dp.RegisterManager(dp.vxlanManagerV6)
 		} else {
 			// Start a cleanup goroutine not to block felix if it needs to retry
 			go cleanUpVXLANDevice(dataplanedefs.VXLANIfaceNameV6)
@@ -2121,9 +2121,11 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 		case ifaceUpdate := <-d.ifaceUpdates:
 			d.onIfaceMonitorMessage(ifaceUpdate)
 		case name := <-d.dataInterfaceC:
-			d.routeManager.OnDataDeviceUpdate(name)
-		case name := <-d.dataInterfaceCV6:
-			d.routeManagerV6.OnDataDeviceUpdate(name)
+			d.ipipManager.routeMgr.OnDataDeviceUpdate(name)
+		case name := <-d.parentInterfaceC:
+			d.vxlanManager.routeMgr.OnDataDeviceUpdate(name)
+		case name := <-d.parentInterfaceCV6:
+			d.vxlanManagerV6.routeMgr.OnDataDeviceUpdate(name)
 		case <-ipSetsRefreshC:
 			log.Debug("Refreshing IP sets state")
 			d.forceIPSetsRefresh = true
