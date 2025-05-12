@@ -45,7 +45,7 @@ type server struct {
 
 	tunnelCert *tls.Certificate
 
-	tlsCipherSuits string
+	tlsCipherSuites string
 
 	tunnel tunnel.Tunnel
 
@@ -85,7 +85,7 @@ func New(shutdownCtx context.Context, tunnelCert *tls.Certificate, dialer tunnel
 	srv.proxyMux = http.NewServeMux()
 	srv.http.Handler = srv.proxyMux
 
-	handler, err := NewProxy(srv.targets, srv.tlsCipherSuits)
+	handler, err := NewProxy(srv.targets, srv.tlsCipherSuites)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create proxy: %w", err)
 	}
@@ -112,7 +112,7 @@ func (srv *server) ListenAndServeManagementCluster() error {
 	}
 
 	// we need to upgrade the tunnel to a TLS listener to support HTTP2 on this side.
-	tlsConfig, err := calicotls.NewTLSConfigFromString(srv.tlsCipherSuits)
+	tlsConfig, err := calicotls.NewTLSConfigFromString(srv.tlsCipherSuites)
 	if err != nil {
 		return fmt.Errorf("failed to create TLS config: %w", err)
 	}

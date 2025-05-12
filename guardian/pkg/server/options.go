@@ -51,7 +51,7 @@ func WithConnectionRetryInterval(connRetryInterval time.Duration) Option {
 // WithTLSCipherSuites sets the TLS cipher suites to use for the tunnel connection.
 func WithTLSCipherSuites(ciphers string) Option {
 	return func(c *server) error {
-		c.tlsCipherSuits = ciphers
+		c.tlsCipherSuites = ciphers
 		return nil
 	}
 }
