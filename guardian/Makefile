@@ -70,7 +70,12 @@ $(GUARDIAN_CONTAINER_CREATED): docker-image/guardian/Dockerfile $(BINDIR)/guardi
 .PHONY: ut
 ## Run only Unit Tests.
 ut:
-	$(DOCKER_GO_BUILD) go test ./... -cover -count 1
+	$(DOCKER_GO_BUILD) go test ./pkg/... -cover -count 1
+
+.PHONY: ut
+## Run only Unit Tests.
+fv:
+	$(DOCKER_GO_BUILD) go test ./tests/fv/... -cover -count 1
 
 ##########################################################################################
 # CI/CD
@@ -81,7 +86,7 @@ ut:
 # Run CI cycle - build, test, etc.
 #############################################
 ## Run all CI steps for build and test, likely other targets.
-ci: static-checks ut
+ci: static-checks ut fv
 
 clean:
 	rm -rf $(BINDIR)
