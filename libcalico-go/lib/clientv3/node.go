@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -155,7 +155,7 @@ func (r nodes) Delete(ctx context.Context, name string, opts options.DeleteOptio
 		ropts = append(ropts, ipam.ReleaseOptions{Address: ip.String()})
 	}
 
-	_, err = r.client.IPAM().ReleaseIPs(context.Background(), ropts...)
+	_, _, err = r.client.IPAM().ReleaseIPs(context.Background(), ropts...)
 	switch err.(type) {
 	case nil, errors.ErrorResourceDoesNotExist, errors.ErrorOperationNotSupported:
 	default:

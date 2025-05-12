@@ -95,22 +95,41 @@ func ParseTLSCiphers(ciphers string) ([]uint16, error) {
 	return result, nil
 }
 
-// NewTLSConfig returns a tls.Config with the recommended default settings for Calico components. Based on build flags,
-// boringCrypto may be used and fips strict mode may be enforced, which can override the parameters defined in this func.
-func NewTLSConfig() *tls.Config {
+// NewTLSConfig returns a tls.Config with the recommended default settings for Calico components, using the TLS cipher suite IDs provided in the cipherSuites parameter.
+// Based on build flags, boringCrypto may be used and fips strict mode may be enforced, which can override the parameters defined in this func.
+func NewTLSConfig(cipherSuites []uint16) *tls.Config {
 	log.WithField("BuiltWithBoringCrypto", BuiltWithBoringCrypto).Debug("creating a TLS config")
+	if cipherSuites == nil {
+		cipherSuites = DefaultCiphers()
+	}
 	return &tls.Config{
 		MinVersion:   tls.VersionTLS12,
 		MaxVersion:   tls.VersionTLS13,
-		CipherSuites: append(tls12Ciphers, tls13Ciphers...),
+		CipherSuites: cipherSuites,
 	}
 }
 
-// NewMutualTLSConfig generates a tls.Config configured to enable mTLS with clients using the provided cert, key, and CA file paths.
-// If any of the files cannot be read, an error is returned.
-func NewMutualTLSConfig(cert, key, ca string) (*tls.Config, error) {
+// NewTLSConfigFromCipherString returns a tls.Config with the recommended default settings for Calico components, using TLS cipher suite names provided as a comma-separated string.
+// The names are parsed into cipher suite IDs, and if parsing fails, an error is returned.
+// Based on build flags, boringCrypto may be used and fips strict mode may be enforced, which can override the parameters defined in this func.
+func NewTLSConfigFromCipherString(cipherSuites string) (*tls.Config, error) {
+	log.WithField("BuiltWithBoringCrypto", BuiltWithBoringCrypto).Debug("creating a TLS config")
+	ciphers, err := ParseTLSCiphers(cipherSuites)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse ciphers: %s", err)
+	}
+	return NewTLSConfig(ciphers), nil
+}
+
+// NewMutualTLSConfig generates a tls.Config configured to enable mTLS with clients using the provided cert, key, and CA file paths,
+// as well as a comma-separated list of cipher suites specified in cipherSuites.
+// If any of the files cannot be read, or if the cipherSuites string cannot be parsed, an error is returned.
+func NewMutualTLSConfig(cert, key, ca, cipherSuites string) (*tls.Config, error) {
 	// Configure use of mTLS.
-	tlsCfg := NewTLSConfig()
+	tlsCfg, err := NewTLSConfigFromCipherString(cipherSuites)
+	if err != nil {
+		return nil, err
+	}
 	tlsCfg.ClientAuth = tls.RequireAndVerifyClientCert
 
 	// Load Server cert and key and add to the TLS config.

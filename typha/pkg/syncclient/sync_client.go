@@ -56,6 +56,8 @@ type Options struct {
 	ServerURISAN   string
 	SyncerType     syncproto.SyncerType
 
+	TLSCipherSuites string
+
 	// DisableDecoderRestart disables decoder restart and the features that depend on
 	// it (such as compression).  Useful for simulating an older client in UT.
 	DisableDecoderRestart bool
@@ -281,7 +283,10 @@ func (s *SyncerClient) connect(cxt context.Context, typhaAddr discovery.Typha) e
 			log.WithError(err).Error("Failed to load certificate and key")
 			return err
 		}
-		tlsConfig := calicotls.NewTLSConfig()
+		tlsConfig, err := calicotls.NewTLSConfigFromCipherString(s.options.TLSCipherSuites)
+		if err != nil {
+			log.WithError(err).Error("Fail to create TLS config: %w.", err)
+		}
 		tlsConfig.Certificates = []tls.Certificate{cert}
 		// Typha API is a private binary API so we can enforce a recent TLS variant without
 		// worrying about back-compatibility with old browsers (for example).

@@ -115,7 +115,10 @@ func NewEtcdV3Client(config *apiconfig.EtcdConfig) (api.Client, error) {
 		return nil, fmt.Errorf("could not initialize etcdv3 client: %+v", err)
 	}
 
-	baseTLSConfig := calicotls.NewTLSConfig()
+	baseTLSConfig, err := calicotls.NewTLSConfigFromCipherString(config.EtcdTLSCipherSuites)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create TLS config: %s", err)
+	}
 	tlsConfig.MaxVersion = baseTLSConfig.MaxVersion
 	tlsConfig.MinVersion = baseTLSConfig.MinVersion
 	tlsConfig.CipherSuites = baseTLSConfig.CipherSuites

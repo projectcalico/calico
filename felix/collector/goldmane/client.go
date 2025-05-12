@@ -41,8 +41,8 @@ type GoldmaneReporter struct {
 	once    sync.Once
 }
 
-func NewReporter(addr, cert, key, ca string) (*GoldmaneReporter, error) {
-	cli, err := client.NewFlowClient(addr, cert, key, ca)
+func NewReporter(addr, cert, key, ca, cipherSuites string) (*GoldmaneReporter, error) {
+	cli, err := client.NewFlowClient(addr, cert, key, ca, cipherSuites)
 	if err != nil {
 		return nil, err
 	}

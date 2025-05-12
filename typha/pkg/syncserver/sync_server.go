@@ -153,6 +153,8 @@ type Config struct {
 	ClientURISAN                   string
 	WriteBufferSize                int
 
+	TLSCipherSuites string
+
 	// DebugLogWrites tells the server to wrap each connection with a Writer that
 	// logs every write.  Intended only for use in tests!
 	DebugLogWrites bool
@@ -346,7 +348,12 @@ func (s *Server) serve(cxt context.Context) {
 				"keyFile":  s.config.KeyFile,
 			}).WithError(tlsErr).Panic("Failed to load certificate and key")
 		}
-		tlsConfig := calicotls.NewTLSConfig()
+
+		var tlsConfig *tls.Config
+		tlsConfig, err = calicotls.NewTLSConfigFromCipherString(s.config.TLSCipherSuites)
+		if err != nil {
+			log.WithError(err).Panic("Fail to create TLS config: %w.", err)
+		}
 		tlsConfig.Certificates = []tls.Certificate{cert}
 
 		// Arrange for server to verify the clients' certificates.

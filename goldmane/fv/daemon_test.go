@@ -134,7 +134,7 @@ func TestDaemonCanary(t *testing.T) {
 	defer daemonSetup(t, cfg)()
 
 	// Generate credentials for the Goldmane client.
-	creds, err := client.ClientCredentials(clientCert, clientKey, clientCA)
+	creds, err := client.ClientCredentials(clientCert, clientKey, clientCA, "")
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to create goldmane TLS credentials.")
 	}
@@ -164,7 +164,7 @@ func TestFlows(t *testing.T) {
 	defer daemonSetup(t, cfg)()
 
 	// Generate credentials for the Goldmane client.
-	creds, err := client.ClientCredentials(clientCert, clientKey, clientCA)
+	creds, err := client.ClientCredentials(clientCert, clientKey, clientCA, "")
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to create goldmane TLS credentials.")
 	}
@@ -175,7 +175,7 @@ func TestFlows(t *testing.T) {
 	require.NotNil(t, cli)
 
 	// Create a client to pusher Flows.
-	pusher, err := client.NewFlowClient(goldmaneURL, clientCert, clientKey, clientCA)
+	pusher, err := client.NewFlowClient(goldmaneURL, clientCert, clientKey, clientCA, "")
 	require.NoError(t, err)
 
 	connected := pusher.Connect(ctx)
@@ -243,7 +243,7 @@ func TestHints(t *testing.T) {
 	defer daemonSetup(t, cfg)()
 
 	// Generate credentials for the Goldmane client.
-	creds, err := client.ClientCredentials(clientCert, clientKey, clientCA)
+	creds, err := client.ClientCredentials(clientCert, clientKey, clientCA, "")
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to create goldmane TLS credentials.")
 	}
@@ -254,7 +254,7 @@ func TestHints(t *testing.T) {
 	require.NotNil(t, cli)
 
 	// Create a client to pusher Flows.
-	pusher, err := client.NewFlowClient(goldmaneURL, clientCert, clientKey, clientCA)
+	pusher, err := client.NewFlowClient(goldmaneURL, clientCert, clientKey, clientCA, "")
 	require.NoError(t, err)
 
 	connected := pusher.Connect(ctx)
@@ -302,7 +302,7 @@ func TestStatistics(t *testing.T) {
 	defer daemonSetup(t, cfg)()
 
 	// Generate credentials for the Goldmane client.
-	creds, err := client.ClientCredentials(clientCert, clientKey, clientCA)
+	creds, err := client.ClientCredentials(clientCert, clientKey, clientCA, "")
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to create goldmane TLS credentials.")
 	}
@@ -324,7 +324,7 @@ func TestStatistics(t *testing.T) {
 	}, 5*time.Second, 1*time.Second).Should(Succeed())
 
 	// Create some flow data.
-	pusher, err := client.NewFlowClient(goldmaneURL, clientCert, clientKey, clientCA)
+	pusher, err := client.NewFlowClient(goldmaneURL, clientCert, clientKey, clientCA, "")
 	require.NoError(t, err)
 
 	connected := pusher.Connect(ctx)

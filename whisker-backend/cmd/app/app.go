@@ -31,7 +31,7 @@ func Run(ctx context.Context, cfg *config.Config) {
 	logrus.WithField("cfg", cfg.String()).Info("Applying configuration...")
 
 	// Generate credentials for the Goldmane client.
-	creds, err := client.ClientCredentials(cfg.TLSCertPath, cfg.TLSKeyPath, cfg.CACertPath)
+	creds, err := client.ClientCredentials(cfg.TLSCertPath, cfg.TLSKeyPath, cfg.CACertPath, cfg.TLSCipherSuites)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to create goldmane TLS credentials.")
 	}
