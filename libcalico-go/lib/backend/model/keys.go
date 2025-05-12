@@ -653,6 +653,7 @@ func ParseValue(key Key, rawData []byte) (interface{}, error) {
 				return nil, err
 			}
 		}
+		policy.Name = determinePolicyName(policy.Name, policy.Spec.Tier)
 	}
 
 	if valueType == reflect.TypeOf(apiv3.GlobalNetworkPolicy{}) {
@@ -664,6 +665,7 @@ func ParseValue(key Key, rawData []byte) (interface{}, error) {
 				return nil, err
 			}
 		}
+		policy.Name = determinePolicyName(policy.Name, policy.Spec.Tier)
 	}
 
 	if valueType == reflect.TypeOf(apiv3.StagedNetworkPolicy{}) {
@@ -675,6 +677,7 @@ func ParseValue(key Key, rawData []byte) (interface{}, error) {
 				return nil, err
 			}
 		}
+		policy.Name = determinePolicyName(policy.Name, policy.Spec.Tier)
 	}
 
 	if valueType == reflect.TypeOf(apiv3.StagedGlobalNetworkPolicy{}) {
@@ -686,6 +689,7 @@ func ParseValue(key Key, rawData []byte) (interface{}, error) {
 				return nil, err
 			}
 		}
+		policy.Name = determinePolicyName(policy.Name, policy.Spec.Tier)
 	}
 
 	return iface, nil
@@ -721,4 +725,13 @@ func SerializeValue(d *KVPair) ([]byte, error) {
 		return []byte(fmt.Sprint(d.Value)), nil
 	}
 	return json.Marshal(d.Value)
+}
+
+func determinePolicyName(name, tier string) string {
+	if tier == "default" || tier == "" {
+		// It's possible the policy does not contain tier, that means it's in the default Tier it's added later by the API server
+		return strings.TrimPrefix(name, "default.")
+	}
+
+	return name
 }
