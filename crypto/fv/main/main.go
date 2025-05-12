@@ -12,7 +12,7 @@ func main() {
 	server := http.Server{
 		Addr:      ":8083",
 		Handler:   fipsHandler{},
-		TLSConfig: tls.NewTLSConfig(),
+		TLSConfig: tls.NewTLSConfig(tls.DefaultCiphers()),
 	}
 
 	err := server.ListenAndServeTLS("tmp/tls.crt", "tmp/tls.key")

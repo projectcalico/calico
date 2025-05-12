@@ -37,11 +37,11 @@ const (
 // just validates that it should be able to with the given parameters).
 //
 // If an error is returned, it means that no amount of retrying will create the client with the same parameters.
-func NewFlowClient(server, cert, key, caFile string) (*FlowClient, error) {
+func NewFlowClient(server, cert, key, caFile, cipherSuites string) (*FlowClient, error) {
 	// Get credentials.
 	opts := []grpc.DialOption{}
 	if caFile != "" || cert != "" || key != "" {
-		creds, err := ClientCredentials(cert, key, caFile)
+		creds, err := ClientCredentials(cert, key, caFile, cipherSuites)
 		if err != nil {
 			return nil, err
 		}
