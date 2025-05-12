@@ -34,9 +34,12 @@ import (
 
 const ContentTypeMultilineJSON = "application/x-ndjson"
 
-func newHTTPClient(caCert, clientKey, clientCert, serverName string) (*http.Client, error) {
+func newHTTPClient(caCert, clientKey, clientCert, serverName, cipherSuites string) (*http.Client, error) {
 	// Create a new HTTP client.
-	tlsConfig := calicotls.NewTLSConfig()
+	tlsConfig, err := calicotls.NewTLSConfigFromString(cipherSuites)
+	if err != nil {
+		return nil, fmt.Errorf("error creating TLS config: %w", err)
+	}
 	tlsConfig.ServerName = serverName
 	if caCert != "" {
 		caCertPool := x509.NewCertPool()
@@ -76,9 +79,9 @@ func newHTTPClient(caCert, clientKey, clientCert, serverName string) (*http.Clie
 	}, nil
 }
 
-func newEmitterClient(url, caCert, clientKey, clientCert, serverName string) (*emitterClient, error) {
+func newEmitterClient(url, caCert, clientKey, clientCert, serverName, cipherSuites string) (*emitterClient, error) {
 	// Create an initial HTTP client, and a function to help encapsualte the reload logic.
-	client, err := newHTTPClient(caCert, clientKey, clientCert, serverName)
+	client, err := newHTTPClient(caCert, clientKey, clientCert, serverName, cipherSuites)
 	if err != nil {
 		return nil, err
 	}
@@ -93,7 +96,7 @@ func newEmitterClient(url, caCert, clientKey, clientCert, serverName string) (*e
 		go func() {
 			for range updChan {
 				logrus.Info("Reloading client after certificate change")
-				client, err = newHTTPClient(caCert, clientKey, clientCert, serverName)
+				client, err = newHTTPClient(caCert, clientKey, clientCert, serverName, cipherSuites)
 				if err != nil {
 					logrus.WithError(err).Error("Failed to reload client after certificate change")
 					continue
