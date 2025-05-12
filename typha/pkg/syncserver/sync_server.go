@@ -349,9 +349,10 @@ func (s *Server) serve(cxt context.Context) {
 			}).WithError(tlsErr).Panic("Failed to load certificate and key")
 		}
 
-		tlsConfig, err := calicotls.NewTLSConfigFromString(s.config.TLSCipherSuites)
+		var tlsConfig *tls.Config
+		tlsConfig, err = calicotls.NewTLSConfigFromString(s.config.TLSCipherSuites)
 		if err != nil {
-			log.WithError(err).Panic("Fail to create TLS config: %v.", err)
+			log.WithError(err).Panic("Fail to create TLS config: %w.", err)
 		}
 		tlsConfig.Certificates = []tls.Certificate{cert}
 

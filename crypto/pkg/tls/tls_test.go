@@ -16,11 +16,13 @@ package tls
 
 import (
 	"crypto/tls"
-	"reflect"
 	"testing"
+
+	. "github.com/onsi/gomega"
 )
 
 func TestTLSCipherParsing(t *testing.T) {
+	RegisterTestingT(t)
 	testCases := []struct {
 		ciphersName       string
 		expectedCiphersID []uint16
@@ -37,18 +39,7 @@ func TestTLSCipherParsing(t *testing.T) {
 
 	for _, testCase := range testCases {
 		ciphersID, err := ParseTLSCiphers(testCase.ciphersName)
-		if err != nil && !testCase.errorExpected {
-			t.Fatalf("Failed to parse cipher: %v", err)
-		}
-		if testCase.errorExpected && err == nil {
-			t.Fatalf("Failed to parse unsupported cipher. Expected error but got nil")
-		}
-		if !reflect.DeepEqual(ciphersID, testCase.expectedCiphersID) {
-			t.Fatalf(
-				"Parsed value %v for TLS_CIPHER_SUITES, expected %v",
-				testCase.ciphersName,
-				testCase.expectedCiphersID,
-			)
-		}
+		Expect(err != nil).To(Equal(testCase.errorExpected))
+		Expect(ciphersID).To(Equal(testCase.expectedCiphersID))
 	}
 }
