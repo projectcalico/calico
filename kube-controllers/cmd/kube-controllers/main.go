@@ -359,6 +359,7 @@ func getClients(kubeconfig string) (*kubernetes.Clientset, client.Interface, err
 	// Increase the QPS of the Kubernetes client as well. This is also used heavily by the IPAM GC controller
 	// in some circumstances.
 	k8sconfig.QPS = 100
+	k8sconfig.Burst = 200
 
 	// Get Kubernetes clientset
 	k8sClientset, err := kubernetes.NewForConfig(k8sconfig)
