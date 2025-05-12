@@ -186,7 +186,8 @@ func (m *IPSets) GetDesiredMembers(setID string) (set.Set[string], error) {
 	panic("Not implemented")
 }
 
-func (m *IPSets) ApplyUpdates() {
+func (m *IPSets) ApplyUpdates(ipsetFilter func(ipSetName string) bool) (programmedIPs set.Set[string]) {
+	return nil
 }
 
 func (m *IPSets) ApplyDeletions() bool {
