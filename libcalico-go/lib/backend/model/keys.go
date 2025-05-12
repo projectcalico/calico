@@ -652,8 +652,9 @@ func ParseValue(key Key, rawData []byte) (interface{}, error) {
 			if err != nil {
 				return nil, err
 			}
+		} else {
+			policy.Name = determinePolicyName(policy.Name, policy.Spec.Tier)
 		}
-		policy.Name = determinePolicyName(policy.Name, policy.Spec.Tier)
 	}
 
 	if valueType == reflect.TypeOf(apiv3.GlobalNetworkPolicy{}) {
@@ -664,8 +665,9 @@ func ParseValue(key Key, rawData []byte) (interface{}, error) {
 			if err != nil {
 				return nil, err
 			}
+		} else {
+			policy.Name = determinePolicyName(policy.Name, policy.Spec.Tier)
 		}
-		policy.Name = determinePolicyName(policy.Name, policy.Spec.Tier)
 	}
 
 	if valueType == reflect.TypeOf(apiv3.StagedNetworkPolicy{}) {
@@ -676,8 +678,9 @@ func ParseValue(key Key, rawData []byte) (interface{}, error) {
 			if err != nil {
 				return nil, err
 			}
+		} else {
+			policy.Name = determinePolicyName(policy.Name, policy.Spec.Tier)
 		}
-		policy.Name = determinePolicyName(policy.Name, policy.Spec.Tier)
 	}
 
 	if valueType == reflect.TypeOf(apiv3.StagedGlobalNetworkPolicy{}) {
@@ -688,8 +691,9 @@ func ParseValue(key Key, rawData []byte) (interface{}, error) {
 			if err != nil {
 				return nil, err
 			}
+		} else {
+			policy.Name = determinePolicyName(policy.Name, policy.Spec.Tier)
 		}
-		policy.Name = determinePolicyName(policy.Name, policy.Spec.Tier)
 	}
 
 	return iface, nil
