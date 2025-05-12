@@ -39,11 +39,12 @@ type TyphaConfig struct {
 	// confd will then initiate a secure (TLS) connection to Typha.  Typha must present a
 	// certificate signed by a CA in CAFile, and with CN matching CN or URI SAN matching
 	// URISAN.
-	KeyFile  string
-	CertFile string
-	CAFile   string
-	CN       string
-	URISAN   string
+	KeyFile         string
+	CertFile        string
+	CAFile          string
+	CN              string
+	URISAN          string
+	TLSCipherSuites string
 }
 
 // ReadTyphaConfig reads the TyphaConfig from environment variables.
