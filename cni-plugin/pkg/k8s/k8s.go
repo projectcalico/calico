@@ -37,6 +37,7 @@ import (
 	"github.com/projectcalico/calico/cni-plugin/internal/pkg/utils"
 	"github.com/projectcalico/calico/cni-plugin/internal/pkg/utils/cri"
 	"github.com/projectcalico/calico/cni-plugin/pkg/dataplane"
+	"github.com/projectcalico/calico/cni-plugin/pkg/ipamplugin"
 	"github.com/projectcalico/calico/cni-plugin/pkg/types"
 	"github.com/projectcalico/calico/cni-plugin/pkg/wait"
 	libapi "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
@@ -189,28 +190,28 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 	var generateName string
 	var serviceAccount string
 
-	// Only attempt to fetch the labels and annotations from Kubernetes
-	// if the policy type has been set to "k8s". This allows users to
-	// run the plugin under Kubernetes without needing it to access the
-	// Kubernetes API
-	if conf.Policy.PolicyType == "k8s" {
-		annotNS, err := getK8sNSInfo(client, epIDs.Namespace)
-		if err != nil {
-			return nil, err
-		}
-		logger.WithField("NS Annotations", annotNS).Debug("Fetched K8s namespace annotations")
+	if conf.IPAM.Type == "calico-ipam" {
+		var ipAddrsNoIpam, ipAddrs string
 
-		labels, annot, ports, profiles, generateName, serviceAccount, err = getK8sPodInfo(client, epIDs.Pod, epIDs.Namespace)
-		if err != nil {
-			return nil, err
-		}
-		logger.WithField("labels", labels).Debug("Fetched K8s labels")
-		logger.WithField("annotations", annot).Debug("Fetched K8s annotations")
-		logger.WithField("ports", ports).Debug("Fetched K8s ports")
-		logger.WithField("profiles", profiles).Debug("Generated profiles")
+		// Only attempt to fetch the labels and annotations from Kubernetes
+		// if the policy type has been set to "k8s". This allows users to
+		// run the plugin under Kubernetes without needing it to access the
+		// Kubernetes API
+		if conf.Policy.PolicyType == "k8s" {
+			annotNS, err := getK8sNSInfo(client, epIDs.Namespace)
+			if err != nil {
+				return nil, err
+			}
+			logger.WithField("NS Annotations", annotNS).Debug("Fetched K8s namespace annotations")
 
-		// Check for calico IPAM specific annotations and set them if needed.
-		if conf.IPAM.Type == "calico-ipam" {
+			labels, annot, ports, profiles, generateName, serviceAccount, err = getK8sPodInfo(client, epIDs.Pod, epIDs.Namespace)
+			if err != nil {
+				return nil, err
+			}
+			logger.WithField("labels", labels).Debug("Fetched K8s labels")
+			logger.WithField("annotations", annot).Debug("Fetched K8s annotations")
+			logger.WithField("ports", ports).Debug("Fetched K8s ports")
+			logger.WithField("profiles", profiles).Debug("Generated profiles")
 
 			var v4pools, v6pools, ipFamilies string
 
@@ -234,10 +235,6 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 			}
 
 			if len(v4pools) != 0 || len(v6pools) != 0 || len(ipFamilies) != 0 {
-				var stdinData map[string]interface{}
-				if err := json.Unmarshal(args.StdinData, &stdinData); err != nil {
-					return nil, err
-				}
 				var v4PoolSlice, v6PoolSlice, ipFamilieSlice []string
 
 				if len(v4pools) > 0 {
@@ -245,11 +242,7 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 						logger.WithField("IPv4Pool", v4pools).Error("Error parsing IPv4 IPPools")
 						return nil, err
 					}
-
-					if _, ok := stdinData["ipam"].(map[string]interface{}); !ok {
-						return nil, errors.New("data on stdin was of unexpected type")
-					}
-					stdinData["ipam"].(map[string]interface{})["ipv4_pools"] = v4PoolSlice
+					conf.IPAM.IPv4Pools = v4PoolSlice
 					logger.WithField("ipv4_pools", v4pools).Debug("Setting IPv4 Pools")
 				}
 				if len(v6pools) > 0 {
@@ -257,11 +250,7 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 						logger.WithField("IPv6Pool", v6pools).Error("Error parsing IPv6 IPPools")
 						return nil, err
 					}
-
-					if _, ok := stdinData["ipam"].(map[string]interface{}); !ok {
-						return nil, errors.New("data on stdin was of unexpected type")
-					}
-					stdinData["ipam"].(map[string]interface{})["ipv6_pools"] = v6PoolSlice
+					conf.IPAM.IPv6Pools = v6PoolSlice
 					logger.WithField("ipv6_pools", v6pools).Debug("Setting IPv6 Pools")
 				}
 
@@ -284,103 +273,96 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 							return nil, fmt.Errorf("error parsing ipFamilies: %s", ipFamilies)
 						}
 					}
-
-					if _, ok := stdinData["ipam"].(map[string]interface{}); !ok {
-						return nil, errors.New("data on stdin was of unexpected type")
-					}
-
-					stdinData["ipam"].(map[string]interface{})["assign_ipv4"] = &assignV4
-					stdinData["ipam"].(map[string]interface{})["assign_ipv6"] = &assignV6
+					conf.IPAM.AssignIpv4 = &assignV4
+					conf.IPAM.AssignIpv6 = &assignV6
 					logger.WithField("assign_ipv4", assignV4).Debug("Setting assignV4")
 					logger.WithField("assign_ipv6", assignV6).Debug("Setting assignV6")
 				}
+			}
+			ipAddrsNoIpam = annot["cni.projectcalico.org/ipAddrsNoIpam"]
+			ipAddrs = annot["cni.projectcalico.org/ipAddrs"]
+		}
+		switch {
+		case ipAddrsNoIpam != "" && ipAddrs != "":
+			// Can't have both ipAddrs and ipAddrsNoIpam annotations at the same time.
+			e := fmt.Errorf("can't have both annotations: 'ipAddrs' and 'ipAddrsNoIpam' in use at the same time")
+			logger.Error(e)
+			return nil, e
+		case ipAddrsNoIpam != "":
+			if !conf.FeatureControl.IPAddrsNoIpam {
+				e := fmt.Errorf("requested feature is not enabled: ip_addrs_no_ipam")
+				logger.Error(e)
+				return nil, e
+			}
+			// ipAddrsNoIpam annotation is set so bypass IPAM, and set the IPs manually.
+			overriddenResult, err := overrideIPAMResult(ipAddrsNoIpam, logger)
+			if err != nil {
+				return nil, err
+			}
+			logger.Debugf("Bypassing IPAM to set the result to: %+v", overriddenResult)
 
-				newData, err := json.Marshal(stdinData)
-				if err != nil {
-					logger.WithField("stdinData", stdinData).Error("Error Marshaling data")
-					return nil, err
+			// Convert overridden IPAM result into current Result.
+			// This method fill in all the empty fields necessary for CNI output according to spec.
+			result, err = cniv1.NewResultFromResult(overriddenResult)
+			if err != nil {
+				return nil, err
+			}
+
+			if len(result.IPs) == 0 {
+				return nil, errors.New("failed to build result")
+			}
+		case ipAddrs != "":
+			// If the endpoint already exists, we need to attempt to release the previous IP addresses here
+			// since the ADD call will fail when it tries to reallocate the same IPs.
+			if endpoint != nil {
+				logger.Info("Endpoint already exists and ipAddrs is set. Release any old IPs")
+				if err := releaseIPAddrs(endpoint.Spec.IPNetworks, calicoClient, logger); err != nil {
+					return nil, fmt.Errorf("failed to release ipAddrs: %s", err)
 				}
-				args.StdinData = newData
-				logger.Debug("Updated stdin data")
+			}
+
+			logger.Infof("Parsing annotation \"cni.projectcalico.org/ipAddrs\":%s", ipAddrs)
+
+			// We need to make sure there is only one IPv4 and/or one IPv6
+			// passed in, since CNI spec only supports one of each right now.
+			ipList, err := validateAndExtractIPs(ipAddrs, "cni.projectcalico.org/ipAddrs", logger)
+			if err != nil {
+				return nil, err
+			}
+
+			result = &cniv1.Result{
+				CNIVersion: cniv1.ImplementedSpecVersion,
+			}
+
+			// Go through all the IPs passed in as annotation value and call IPAM plugin
+			// for each, and populate the result variable with IP4 and/or IP6 IPs returned
+			// from the IPAM plugin.
+			for _, ip := range ipList {
+				// Call CmdAddCalicoIPAM with the ip address.
+				r, err := ipamplugin.CmdAddCalicoIPAMWithIP(ctx, args, conf, epIDs, calicoClient, ip)
+				if err != nil {
+					return nil, fmt.Errorf("error getting IP from IPAM: %s", err)
+				}
+
+				result.IPs = append(result.IPs, r.IPs[0])
+				version := "6"
+				if r.IPs[0].Address.IP.To4() != nil {
+					version = "4"
+				}
+				logger.Debugf("Adding IPv%s: %s to result", version, ip.String())
+			}
+		default:
+			result, err = ipamplugin.CmdAddCalicoIPAM(ctx, args, conf, epIDs, calicoClient)
+			if err != nil {
+				return nil, err
 			}
 		}
-	}
-
-	ipAddrsNoIpam := annot["cni.projectcalico.org/ipAddrsNoIpam"]
-	ipAddrs := annot["cni.projectcalico.org/ipAddrs"]
-
-	// Switch based on which annotations are passed or not passed.
-	switch {
-	case ipAddrs == "" && ipAddrsNoIpam == "":
+	} else {
 		// Call the IPAM plugin.
 		result, err = utils.AddIPAM(conf, args, logger)
 		if err != nil {
 			return nil, err
 		}
-
-	case ipAddrs != "" && ipAddrsNoIpam != "":
-		// Can't have both ipAddrs and ipAddrsNoIpam annotations at the same time.
-		e := fmt.Errorf("can't have both annotations: 'ipAddrs' and 'ipAddrsNoIpam' in use at the same time")
-		logger.Error(e)
-		return nil, e
-
-	case ipAddrsNoIpam != "":
-		// Validate that we're allowed to use this feature.
-		if conf.IPAM.Type != "calico-ipam" {
-			e := fmt.Errorf("ipAddrsNoIpam is not compatible with configured IPAM: %s", conf.IPAM.Type)
-			logger.Error(e)
-			return nil, e
-		}
-		if !conf.FeatureControl.IPAddrsNoIpam {
-			e := fmt.Errorf("requested feature is not enabled: ip_addrs_no_ipam")
-			logger.Error(e)
-			return nil, e
-		}
-
-		// ipAddrsNoIpam annotation is set so bypass IPAM, and set the IPs manually.
-		overriddenResult, err := overrideIPAMResult(ipAddrsNoIpam, logger)
-		if err != nil {
-			return nil, err
-		}
-		logger.Debugf("Bypassing IPAM to set the result to: %+v", overriddenResult)
-
-		// Convert overridden IPAM result into current Result.
-		// This method fill in all the empty fields necessary for CNI output according to spec.
-		result, err = cniv1.NewResultFromResult(overriddenResult)
-		if err != nil {
-			return nil, err
-		}
-
-		if len(result.IPs) == 0 {
-			return nil, errors.New("failed to build result")
-		}
-
-	case ipAddrs != "":
-		// Validate that we're allowed to use this feature.
-		if conf.IPAM.Type != "calico-ipam" {
-			e := fmt.Errorf("ipAddrs is not compatible with configured IPAM: %s", conf.IPAM.Type)
-			logger.Error(e)
-			return nil, e
-		}
-
-		// If the endpoint already exists, we need to attempt to release the previous IP addresses here
-		// since the ADD call will fail when it tries to reallocate the same IPs. releaseIPAddrs assumes
-		// that Calico IPAM is in use, which is OK here since only Calico IPAM supports the ipAddrs
-		// annotation.
-		if endpoint != nil {
-			logger.Info("Endpoint already exists and ipAddrs is set. Release any old IPs")
-			if err := releaseIPAddrs(endpoint.Spec.IPNetworks, calicoClient, logger); err != nil {
-				return nil, fmt.Errorf("failed to release ipAddrs: %s", err)
-			}
-		}
-
-		// When ipAddrs annotation is set, we call out to the configured IPAM plugin
-		// requesting the specific IP addresses included in the annotation.
-		result, err = ipAddrsResult(ipAddrs, conf, args, logger)
-		if err != nil {
-			return nil, err
-		}
-		logger.Debugf("IPAM result set to: %+v", result)
 	}
 
 	// Configure the endpoint (creating if required).
@@ -648,9 +630,17 @@ func CmdDelK8s(ctx context.Context, c calicoclient.Interface, epIDs utils.WEPIde
 
 	// Release the IP address for this container by calling the configured IPAM plugin.
 	logger.Info("Releasing IP address(es)")
-	err = utils.DeleteIPAM(conf, args, logger)
-	if err != nil {
-		return err
+
+	if conf.IPAM.Type == "calico-ipam" {
+		err = ipamplugin.CmdDelCalicoIPAM(ctx, args, conf, epIDs, c)
+		if err != nil {
+			return err
+		}
+	} else {
+		err = utils.DeleteIPAM(conf, args, logger)
+		if err != nil {
+			return err
+		}
 	}
 
 	logger.Info("Teardown processing complete.")

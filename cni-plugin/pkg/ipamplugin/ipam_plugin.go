@@ -142,14 +142,6 @@ func cmdAdd(args *skel.CmdArgs) error {
 		return fmt.Errorf("error constructing WorkloadEndpoint name: %s", err)
 	}
 
-	handleID := utils.GetHandleID(conf.Name, args.ContainerID, epIDs.WEPName)
-
-	logger := logrus.WithFields(logrus.Fields{
-		"Workload":    epIDs.WEPName,
-		"ContainerID": epIDs.ContainerID,
-		"HandleID":    handleID,
-	})
-
 	ipamArgs := ipamArgs{}
 	if err = cnitypes.LoadArgs(args.Args, &ipamArgs); err != nil {
 		return err
@@ -169,179 +161,241 @@ func cmdAdd(args *skel.CmdArgs) error {
 	ctx, cancel := context.WithTimeout(ctx, 90*time.Second)
 	defer cancel()
 
-	r := &cniv1.Result{}
+	var r *cniv1.Result
 	if ipamArgs.IP != nil {
-		logger.Infof("Calico CNI IPAM request IP: %v", ipamArgs.IP)
-
-		assignArgs := ipam.AssignIPArgs{
-			IP:       cnet.IP{IP: ipamArgs.IP},
-			HandleID: &handleID,
-			Hostname: nodename,
-			Attrs:    attrs,
-		}
-		logger.WithField("assignArgs", assignArgs).Info("Assigning provided IP")
-		assignIPWithLock := func() error {
-			unlock := acquireIPAMLockBestEffort(conf.IPAMLockFile)
-			defer unlock()
-			return calicoClient.IPAM().AssignIP(ctx, assignArgs)
-		}
-		err := assignIPWithLock()
+		r, err = CmdAddCalicoIPAMWithIP(ctx, args, conf, *epIDs, calicoClient, ipamArgs.IP)
 		if err != nil {
 			return err
-		}
-
-		var ipNetwork net.IPNet
-
-		if ipamArgs.IP.To4() == nil {
-			// It's an IPv6 address.
-			ipNetwork = net.IPNet{IP: ipamArgs.IP, Mask: net.CIDRMask(128, 128)}
-			r.IPs = append(r.IPs, &cniv1.IPConfig{
-				Address: ipNetwork,
-			})
-
-			logger.WithField("result.IPs", ipamArgs.IP).Info("Appending an IPv6 address to the result")
-		} else {
-			// It's an IPv4 address.
-			ipNetwork = net.IPNet{IP: ipamArgs.IP, Mask: net.CIDRMask(32, 32)}
-			r.IPs = append(r.IPs, &cniv1.IPConfig{
-				Address: ipNetwork,
-			})
-
-			logger.WithField("result.IPs", ipamArgs.IP).Info("Appending an IPv4 address to the result")
 		}
 	} else {
-		// Default to assigning an IPv4 address
-		num4 := 1
-		if conf.IPAM.AssignIpv4 != nil && *conf.IPAM.AssignIpv4 == "false" {
-			num4 = 0
-		}
-
-		// Default to NOT assigning an IPv6 address
-		num6 := 0
-		if conf.IPAM.AssignIpv6 != nil && *conf.IPAM.AssignIpv6 == "true" {
-			num6 = 1
-		}
-
-		logger.Infof("Calico CNI IPAM request count IPv4=%d IPv6=%d", num4, num6)
-
-		v4pools, err := utils.ResolvePools(ctx, calicoClient, conf.IPAM.IPv4Pools, true)
+		r, err = CmdAddCalicoIPAM(ctx, args, conf, *epIDs, calicoClient)
 		if err != nil {
 			return err
 		}
-
-		v6pools, err := utils.ResolvePools(ctx, calicoClient, conf.IPAM.IPv6Pools, false)
-		if err != nil {
-			return err
-		}
-
-		logger.Debugf("Calico CNI IPAM handle=%s", handleID)
-		var maxBlocks int
-		if conf.WindowsUseSingleNetwork {
-			// When running in single-network mode (for kube-proxy compatibility), limit the
-			// number of blocks we're allowed to create.
-			logrus.Info("Running in single-HNS-network mode, limiting number of IPAM blocks to 1.")
-			maxBlocks = 1
-		}
-		assignArgs := ipam.AutoAssignArgs{
-			Num4:             num4,
-			Num6:             num6,
-			HandleID:         &handleID,
-			Hostname:         nodename,
-			IPv4Pools:        v4pools,
-			IPv6Pools:        v6pools,
-			MaxBlocksPerHost: maxBlocks,
-			Attrs:            attrs,
-			IntendedUse:      v3.IPPoolAllowedUseWorkload,
-		}
-		if runtime.GOOS == "windows" {
-			rsvdAttrWindows := &ipam.HostReservedAttr{
-				StartOfBlock: 3,
-				EndOfBlock:   1,
-				Handle:       ipam.WindowsReservedHandle,
-				Note:         "windows host rsvd",
-			}
-			assignArgs.HostReservedAttrIPv4s = rsvdAttrWindows
-		}
-		logger.WithField("assignArgs", assignArgs).Info("Auto assigning IP")
-		autoAssignWithLock := func(calicoClient client.Interface, ctx context.Context, assignArgs ipam.AutoAssignArgs) (*ipam.IPAMAssignments, *ipam.IPAMAssignments, error) {
-			// Acquire a best-effort host-wide lock to prevent multiple copies of the CNI plugin trying to assign
-			// concurrently. AutoAssign is concurrency safe already but serialising the CNI plugins means that
-			// we only attempt one IPAM claim at a time on the host's active IPAM block.  This reduces the load
-			// on the API server by a factor of the number of concurrent requests.
-			unlock := acquireIPAMLockBestEffort(conf.IPAMLockFile)
-			defer unlock()
-			return calicoClient.IPAM().AutoAssign(ctx, assignArgs)
-		}
-		v4Assignments, v6Assignments, err := autoAssignWithLock(calicoClient, ctx, assignArgs)
-		var v4ips, v6ips []cnet.IPNet
-		if v4Assignments != nil {
-			v4ips = v4Assignments.IPs
-		}
-		if v6Assignments != nil {
-			v6ips = v6Assignments.IPs
-		}
-		logger.Infof("Calico CNI IPAM assigned addresses IPv4=%v IPv6=%v", v4ips, v6ips)
-		if err != nil {
-			return err
-		}
-
-		// Check if IPv4 address assignment fails but IPv6 address assignment succeeds. Release IPs for the successful IPv6 address assignment.
-		if num4 == 1 && v4Assignments != nil && len(v4Assignments.IPs) < num4 {
-			if num6 == 1 && v6Assignments != nil && len(v6Assignments.IPs) > 0 {
-				logger.Infof("Assigned IPv6 addresses but failed to assign IPv4 addresses. Releasing %d IPv6 addresses", len(v6Assignments.IPs))
-				// Free the assigned IPv6 addresses when v4 address assignment fails.
-				v6IPs := []ipam.ReleaseOptions{}
-				for _, v6 := range v6Assignments.IPs {
-					v6IPs = append(v6IPs, ipam.ReleaseOptions{Address: v6.IP.String()})
-				}
-				_, err := calicoClient.IPAM().ReleaseIPs(ctx, v6IPs...)
-				if err != nil {
-					logrus.Errorf("Error releasing IPv6 addresses %+v on IPv4 address assignment failure: %s", v6IPs, err)
-				}
-			}
-		}
-
-		// Check if IPv6 address assignment fails but IPv4 address assignment succeeds. Release IPs for the successful IPv4 address assignment.
-		if num6 == 1 && v6Assignments != nil && len(v6Assignments.IPs) < num6 {
-			if num4 == 1 && v4Assignments != nil && len(v4Assignments.IPs) > 0 {
-				logger.Infof("Assigned IPv4 addresses but failed to assign IPv6 addresses. Releasing %d IPv4 addresses", len(v4Assignments.IPs))
-				// Free the assigned IPv4 addresses when v4 address assignment fails.
-				v4IPs := []ipam.ReleaseOptions{}
-				for _, v4 := range v4Assignments.IPs {
-					v4IPs = append(v4IPs, ipam.ReleaseOptions{Address: v4.IP.String()})
-				}
-				_, err := calicoClient.IPAM().ReleaseIPs(ctx, v4IPs...)
-				if err != nil {
-					logrus.Errorf("Error releasing IPv4 addresses %+v on IPv6 address assignment failure: %s", v4IPs, err)
-				}
-			}
-		}
-
-		if num4 == 1 {
-			if err := v4Assignments.PartialFulfillmentError(); err != nil {
-				return fmt.Errorf("failed to request IPv4 addresses: %w", err)
-			}
-			ipV4Network := net.IPNet{IP: v4Assignments.IPs[0].IP, Mask: v4Assignments.IPs[0].Mask}
-			r.IPs = append(r.IPs, &cniv1.IPConfig{
-				Address: ipV4Network,
-			})
-		}
-
-		if num6 == 1 {
-			if err := v6Assignments.PartialFulfillmentError(); err != nil {
-				return fmt.Errorf("failed to request IPv6 addresses: %w", err)
-			}
-			ipV6Network := net.IPNet{IP: v6Assignments.IPs[0].IP, Mask: v6Assignments.IPs[0].Mask}
-			r.IPs = append(r.IPs, &cniv1.IPConfig{
-				Address: ipV6Network,
-			})
-		}
-
-		logger.WithFields(logrus.Fields{"result.IPs": r.IPs}).Debug("IPAM Result")
 	}
 
 	// Print result to stdout, in the format defined by the requested cniVersion.
 	return cnitypes.PrintResult(r, conf.CNIVersion)
+}
+
+func CmdAddCalicoIPAMWithIP(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epIDs utils.WEPIdentifiers, calicoClient client.Interface, ip net.IP) (*cniv1.Result, error) {
+	nodename := utils.DetermineNodename(conf)
+
+	utils.ConfigureLogging(conf)
+
+	handleID := utils.GetHandleID(conf.Name, args.ContainerID, epIDs.WEPName)
+
+	logger := logrus.WithFields(logrus.Fields{
+		"Workload":    epIDs.WEPName,
+		"ContainerID": epIDs.ContainerID,
+		"HandleID":    handleID,
+	})
+
+	// We attach important attributes to the allocation.
+	attrs := map[string]string{
+		ipam.AttributeNode:      nodename,
+		ipam.AttributeTimestamp: time.Now().UTC().String(),
+	}
+	if epIDs.Pod != "" {
+		attrs[ipam.AttributePod] = epIDs.Pod
+		attrs[ipam.AttributeNamespace] = epIDs.Namespace
+	}
+
+	r := &cniv1.Result{}
+	logger.Infof("Calico CNI IPAM request IP: %v", ip)
+
+	assignArgs := ipam.AssignIPArgs{
+		IP:       cnet.IP{IP: ip},
+		HandleID: &handleID,
+		Hostname: nodename,
+		Attrs:    attrs,
+	}
+	logger.WithField("assignArgs", assignArgs).Info("Assigning provided IP")
+	assignIPWithLock := func() error {
+		unlock := acquireIPAMLockBestEffort(conf.IPAMLockFile)
+		defer unlock()
+		return calicoClient.IPAM().AssignIP(ctx, assignArgs)
+	}
+	err := assignIPWithLock()
+	if err != nil {
+		return nil, err
+	}
+
+	var ipNetwork net.IPNet
+
+	if ip.To4() == nil {
+		// It's an IPv6 address.
+		ipNetwork = net.IPNet{IP: ip, Mask: net.CIDRMask(128, 128)}
+		r.IPs = append(r.IPs, &cniv1.IPConfig{
+			Address: ipNetwork,
+		})
+
+		logger.WithField("result.IPs", ip).Info("Appending an IPv6 address to the result")
+	} else {
+		// It's an IPv4 address.
+		ipNetwork = net.IPNet{IP: ip, Mask: net.CIDRMask(32, 32)}
+		r.IPs = append(r.IPs, &cniv1.IPConfig{
+			Address: ipNetwork,
+		})
+
+		logger.WithField("result.IPs", ip).Info("Appending an IPv4 address to the result")
+	}
+	return r, nil
+}
+
+func CmdAddCalicoIPAM(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epIDs utils.WEPIdentifiers, calicoClient client.Interface) (*cniv1.Result, error) {
+	nodename := utils.DetermineNodename(conf)
+
+	utils.ConfigureLogging(conf)
+
+	handleID := utils.GetHandleID(conf.Name, args.ContainerID, epIDs.WEPName)
+
+	logger := logrus.WithFields(logrus.Fields{
+		"Workload":    epIDs.WEPName,
+		"ContainerID": epIDs.ContainerID,
+		"HandleID":    handleID,
+	})
+
+	// We attach important attributes to the allocation.
+	attrs := map[string]string{
+		ipam.AttributeNode:      nodename,
+		ipam.AttributeTimestamp: time.Now().UTC().String(),
+	}
+	if epIDs.Pod != "" {
+		attrs[ipam.AttributePod] = epIDs.Pod
+		attrs[ipam.AttributeNamespace] = epIDs.Namespace
+	}
+
+	r := &cniv1.Result{}
+	// Default to assigning an IPv4 address
+	num4 := 1
+	if conf.IPAM.AssignIpv4 != nil && *conf.IPAM.AssignIpv4 == "false" {
+		num4 = 0
+	}
+
+	// Default to NOT assigning an IPv6 address
+	num6 := 0
+	if conf.IPAM.AssignIpv6 != nil && *conf.IPAM.AssignIpv6 == "true" {
+		num6 = 1
+	}
+
+	logger.Infof("Calico CNI IPAM request count IPv4=%d IPv6=%d", num4, num6)
+
+	v4pools, err := utils.ResolvePools(ctx, calicoClient, conf.IPAM.IPv4Pools, true)
+	if err != nil {
+		return nil, err
+	}
+
+	v6pools, err := utils.ResolvePools(ctx, calicoClient, conf.IPAM.IPv6Pools, false)
+	if err != nil {
+		return nil, err
+	}
+
+	logger.Debugf("Calico CNI IPAM handle=%s", handleID)
+	var maxBlocks int
+	if conf.WindowsUseSingleNetwork {
+		// When running in single-network mode (for kube-proxy compatibility), limit the
+		// number of blocks we're allowed to create.
+		logrus.Info("Running in single-HNS-network mode, limiting number of IPAM blocks to 1.")
+		maxBlocks = 1
+	}
+	assignArgs := ipam.AutoAssignArgs{
+		Num4:             num4,
+		Num6:             num6,
+		HandleID:         &handleID,
+		Hostname:         nodename,
+		IPv4Pools:        v4pools,
+		IPv6Pools:        v6pools,
+		MaxBlocksPerHost: maxBlocks,
+		Attrs:            attrs,
+		IntendedUse:      v3.IPPoolAllowedUseWorkload,
+	}
+	if runtime.GOOS == "windows" {
+		rsvdAttrWindows := &ipam.HostReservedAttr{
+			StartOfBlock: 3,
+			EndOfBlock:   1,
+			Handle:       ipam.WindowsReservedHandle,
+			Note:         "windows host rsvd",
+		}
+		assignArgs.HostReservedAttrIPv4s = rsvdAttrWindows
+	}
+	logger.WithField("assignArgs", assignArgs).Info("Auto assigning IP")
+	autoAssignWithLock := func(calicoClient client.Interface, ctx context.Context, assignArgs ipam.AutoAssignArgs) (*ipam.IPAMAssignments, *ipam.IPAMAssignments, error) {
+		// Acquire a best-effort host-wide lock to prevent multiple copies of the CNI plugin trying to assign
+		// concurrently. AutoAssign is concurrency safe already but serialising the CNI plugins means that
+		// we only attempt one IPAM claim at a time on the host's active IPAM block.  This reduces the load
+		// on the API server by a factor of the number of concurrent requests.
+		unlock := acquireIPAMLockBestEffort(conf.IPAMLockFile)
+		defer unlock()
+		return calicoClient.IPAM().AutoAssign(ctx, assignArgs)
+	}
+	v4Assignments, v6Assignments, err := autoAssignWithLock(calicoClient, ctx, assignArgs)
+	var v4ips, v6ips []cnet.IPNet
+	if v4Assignments != nil {
+		v4ips = v4Assignments.IPs
+	}
+	if v6Assignments != nil {
+		v6ips = v6Assignments.IPs
+	}
+	logger.Infof("Calico CNI IPAM assigned addresses IPv4=%v IPv6=%v", v4ips, v6ips)
+	if err != nil {
+		return nil, err
+	}
+
+	// Check if IPv4 address assignment fails but IPv6 address assignment succeeds. Release IPs for the successful IPv6 address assignment.
+	if num4 == 1 && v4Assignments != nil && len(v4Assignments.IPs) < num4 {
+		if num6 == 1 && v6Assignments != nil && len(v6Assignments.IPs) > 0 {
+			logger.Infof("Assigned IPv6 addresses but failed to assign IPv4 addresses. Releasing %d IPv6 addresses", len(v6Assignments.IPs))
+			// Free the assigned IPv6 addresses when v4 address assignment fails.
+			v6IPs := []ipam.ReleaseOptions{}
+			for _, v6 := range v6Assignments.IPs {
+				v6IPs = append(v6IPs, ipam.ReleaseOptions{Address: v6.IP.String()})
+			}
+			_, err := calicoClient.IPAM().ReleaseIPs(ctx, v6IPs...)
+			if err != nil {
+				logrus.Errorf("Error releasing IPv6 addresses %+v on IPv4 address assignment failure: %s", v6IPs, err)
+			}
+		}
+	}
+
+	// Check if IPv6 address assignment fails but IPv4 address assignment succeeds. Release IPs for the successful IPv4 address assignment.
+	if num6 == 1 && v6Assignments != nil && len(v6Assignments.IPs) < num6 {
+		if num4 == 1 && v4Assignments != nil && len(v4Assignments.IPs) > 0 {
+			logger.Infof("Assigned IPv4 addresses but failed to assign IPv6 addresses. Releasing %d IPv4 addresses", len(v4Assignments.IPs))
+			// Free the assigned IPv4 addresses when v4 address assignment fails.
+			v4IPs := []ipam.ReleaseOptions{}
+			for _, v4 := range v4Assignments.IPs {
+				v4IPs = append(v4IPs, ipam.ReleaseOptions{Address: v4.IP.String()})
+			}
+			_, err := calicoClient.IPAM().ReleaseIPs(ctx, v4IPs...)
+			if err != nil {
+				logrus.Errorf("Error releasing IPv4 addresses %+v on IPv6 address assignment failure: %s", v4IPs, err)
+			}
+		}
+	}
+
+	if num4 == 1 {
+		if err := v4Assignments.PartialFulfillmentError(); err != nil {
+			return nil, fmt.Errorf("failed to request IPv4 addresses: %w", err)
+		}
+		ipV4Network := net.IPNet{IP: v4Assignments.IPs[0].IP, Mask: v4Assignments.IPs[0].Mask}
+		r.IPs = append(r.IPs, &cniv1.IPConfig{
+			Address: ipV4Network,
+		})
+	}
+
+	if num6 == 1 {
+		if err := v6Assignments.PartialFulfillmentError(); err != nil {
+			return nil, fmt.Errorf("failed to request IPv6 addresses: %w", err)
+		}
+		ipV6Network := net.IPNet{IP: v6Assignments.IPs[0].IP, Mask: v6Assignments.IPs[0].Mask}
+		r.IPs = append(r.IPs, &cniv1.IPConfig{
+			Address: ipV6Network,
+		})
+	}
+
+	logger.WithFields(logrus.Fields{"result.IPs": r.IPs}).Debug("IPAM Result")
+	return r, nil
 }
 
 type unlockFn func()
@@ -402,6 +456,14 @@ func cmdDel(args *skel.CmdArgs) error {
 		return fmt.Errorf("error constructing WorkloadEndpoint name: %s", err)
 	}
 
+	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(ctx, 90*time.Second)
+	defer cancel()
+
+	return CmdDelCalicoIPAM(ctx, args, conf, *epIDs, calicoClient)
+}
+
+func CmdDelCalicoIPAM(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epIDs utils.WEPIdentifiers, calicoClient client.Interface) error {
 	handleID := utils.GetHandleID(conf.Name, args.ContainerID, epIDs.WEPName)
 	logger := logrus.WithFields(logrus.Fields{
 		"Workload":    epIDs.WEPName,
@@ -410,9 +472,6 @@ func cmdDel(args *skel.CmdArgs) error {
 	})
 
 	logger.Info("Releasing address using handleID")
-	ctx := context.Background()
-	ctx, cancel := context.WithTimeout(ctx, 90*time.Second)
-	defer cancel()
 
 	// Acquire a best-effort host-wide lock to prevent multiple copies of the CNI plugin trying to assign/delete
 	// concurrently. ReleaseXXX is concurrency safe already but serialising the CNI plugins means that
