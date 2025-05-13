@@ -15,7 +15,8 @@ type MatchMap[A, B comparable, ID constraints.Unsigned] struct {
 	aIDs *IDAllocTracker[A, ID]
 	bIDs *IDAllocTracker[B, ID]
 
-	aToB []*bitset.BitSet
+	aToB    []*bitset.BitSet
+	bCounts []int
 }
 
 func NewMatchMap[A, B comparable, ID constraints.Unsigned]() *MatchMap[A, B, ID] {
@@ -42,7 +43,15 @@ func (mm *MatchMap[A, B, ID]) Put(a A, b B) error {
 	}
 	mm.ensureRow(aID)
 	row := mm.aToB[aID-1] // 0 ID is forbidden so we store ID-1.
+	oldCount := row.Len()
 	row.Add(int(bID - 1))
+	if row.Len() > oldCount {
+		mm.bCounts = slices.Grow(mm.bCounts, int(bID))
+		for len(mm.bCounts) < int(bID) {
+			mm.bCounts = append(mm.bCounts, 0)
+		}
+		mm.bCounts[bID-1]++
+	}
 	return nil
 }
 
@@ -78,13 +87,19 @@ func (mm *MatchMap[A, B, ID]) Delete(a A, b B) {
 	if row == nil {
 		return
 	}
+	oldLen := row.Len()
 	row.Discard(int(bID - 1))
+	if row.Len() == oldLen {
+		return
+	}
 	if row.Len() == 0 {
 		mm.aToB[aID-1] = nil
 		mm.aIDs.Release(a)
 	}
-	for range mm.AllAsForB(b) {
-		return // FIXME count the Bs
+
+	mm.bCounts[bID-1]--
+	if mm.bCounts[bID-1] != 0 {
+		return
 	}
 	mm.bIDs.Release(b)
 }
