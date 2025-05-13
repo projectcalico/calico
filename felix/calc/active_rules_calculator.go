@@ -30,13 +30,6 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
-type ruleScanner interface {
-	OnPolicyActive(model.PolicyKey, *model.Policy)
-	OnPolicyInactive(model.PolicyKey)
-	OnProfileActive(model.ProfileRulesKey, *model.ProfileRules)
-	OnProfileInactive(model.ProfileRulesKey)
-}
-
 type FelixSender interface {
 	SendUpdateToFelix(update model.KVPair)
 }
@@ -44,6 +37,16 @@ type FelixSender interface {
 type PolicyMatchListener interface {
 	OnPolicyMatch(policyKey model.PolicyKey, endpointKey model.EndpointKey)
 	OnPolicyMatchStopped(policyKey model.PolicyKey, endpointKey model.EndpointKey)
+}
+
+type ActivePolicyListener interface {
+	OnPolicyActive(policyKey model.PolicyKey, policy *model.Policy)
+	OnPolicyInactive(model.PolicyKey)
+}
+
+type ActiveProfileListener interface {
+	OnProfileActive(model.ProfileRulesKey, *model.ProfileRules)
+	OnProfileInactive(model.ProfileRulesKey)
 }
 
 // ActiveRulesCalculator calculates the set of policies and profiles (i.e. the rules) that
@@ -88,9 +91,10 @@ type ActiveRulesCalculator struct {
 	missingProfiles set.Set[string]
 
 	// Callback objects.
-	RuleScanner           ruleScanner
-	PolicyMatchListeners  []PolicyMatchListener
-	PolicyLookupCache     ruleScanner
+	PolicyMatchListeners   []PolicyMatchListener
+	ActivePolicyListeners  []ActivePolicyListener
+	ActiveProfileListeners []ActiveProfileListener
+
 	OnPolicyCountsChanged func(numTiers, numPolicies, numProfiles, numALPPolicies int)
 	OnAlive               func()
 }
@@ -415,14 +419,12 @@ func (arc *ActiveRulesCalculator) sendProfileUpdate(profileID string, rules *mod
 			}
 			rules = &DummyDropRules
 		}
-		arc.RuleScanner.OnProfileActive(key, rules)
-		if arc.PolicyLookupCache != nil {
-			arc.PolicyLookupCache.OnProfileActive(key, rules)
+		for _, l := range arc.ActiveProfileListeners {
+			l.OnProfileActive(key, rules)
 		}
 	} else {
-		arc.RuleScanner.OnProfileInactive(key)
-		if arc.PolicyLookupCache != nil {
-			arc.PolicyLookupCache.OnProfileInactive(key)
+		for _, l := range arc.ActiveProfileListeners {
+			l.OnProfileInactive(key)
 		}
 	}
 }
@@ -438,18 +440,12 @@ func (arc *ActiveRulesCalculator) sendPolicyUpdate(policyKey model.PolicyKey, po
 			// we know its selector, which is inside the policy struct.
 			log.WithField("policyKey", policyKey).Panic("Unknown policy became active!")
 		}
-		arc.RuleScanner.OnPolicyActive(policyKey, policy)
-		if arc.PolicyLookupCache != nil {
-			arc.PolicyLookupCache.OnPolicyActive(policyKey, policy)
-		} else {
-			log.Debug("PolicyLookup OnPolicyActive : cache nil on windows platform")
+		for _, l := range arc.ActivePolicyListeners {
+			l.OnPolicyActive(policyKey, policy)
 		}
 	} else {
-		arc.RuleScanner.OnPolicyInactive(policyKey)
-		if arc.PolicyLookupCache != nil {
-			arc.PolicyLookupCache.OnPolicyInactive(policyKey)
-		} else {
-			log.Debug("PolicyLookup OnPolicyInactive : cache nil on windows platform")
+		for _, l := range arc.ActivePolicyListeners {
+			l.OnPolicyInactive(policyKey)
 		}
 	}
 }

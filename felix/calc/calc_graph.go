@@ -246,7 +246,8 @@ func NewCalculationGraph(
 	//
 	ruleScanner := NewRuleScanner()
 	// Wire up the rule scanner's inputs.
-	activeRulesCalc.RuleScanner = ruleScanner
+	activeRulesCalc.ActivePolicyListeners = append(activeRulesCalc.ActivePolicyListeners, ruleScanner)
+	activeRulesCalc.ActiveProfileListeners = append(activeRulesCalc.ActiveProfileListeners, ruleScanner)
 	// Send IP set added/removed events to the dataplane.  We'll hook up the other outputs
 	// below.
 	ruleScanner.RulesUpdateCallbacks = callbacks
@@ -500,7 +501,8 @@ func NewCalculationGraph(
 
 		// The lookup cache, caches policy information for prefix lookups. Hook into the
 		// ActiveRulesCalculator to receive local active policy/profile information.
-		activeRulesCalc.PolicyLookupCache = cache.polCache
+		activeRulesCalc.ActiveProfileListeners = append(activeRulesCalc.ActiveProfileListeners, cache.polCache)
+		activeRulesCalc.ActivePolicyListeners = append(activeRulesCalc.ActivePolicyListeners, cache.polCache)
 
 		// The lookup cache, also provides local endpoint lookups and corresponding tier information.
 		// Hook into the PolicyResolver to receive this information.
