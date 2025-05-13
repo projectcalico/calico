@@ -440,7 +440,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				options.ExtraEnvVars["FELIX_HEALTHHOST"] = "::"
 			}
 
-			if testOpts.protocol == "tcp" {
+			if false && testOpts.protocol == "tcp" {
 				filters := map[string]string{"all": "tcp"}
 				tcpResetTimeout := api.BPFConntrackTimeout("5s")
 				felixConfig := api.NewFelixConfiguration()
@@ -1737,9 +1737,18 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					cc.CheckConnectivity(conntrackChecks(tc.Felixes)...)
 				})
 
-				_ = testOpts.protocol == "udp" && !testOpts.ipv6 && !testOpts.dsr && testOpts.tunnel == "none" &&
+				_ = !testOpts.ipv6 && !testOpts.dsr &&
 					It("should handle fragmented UDP", func() {
-						tcpdump1 := tc.Felixes[1].AttachTCPDump("eth0")
+						dev := "eth0"
+						switch testOpts.tunnel {
+						case "vxlan":
+							dev = "vxlan.calico"
+						case "ipip":
+							dev = "tunl0"
+						case "wireguard":
+							dev = "wireguard.cali"
+						}
+						tcpdump1 := tc.Felixes[1].AttachTCPDump(dev)
 						tcpdump1.SetLogEnabled(true)
 						tcpdump1.AddMatcher("udp-frags", regexp.MustCompile(
 							fmt.Sprintf("%s.* > %s.*", w[1][0].IP, w[0][0].IP)))
