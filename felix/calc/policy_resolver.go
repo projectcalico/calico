@@ -19,7 +19,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/dispatcher"
-	"github.com/projectcalico/calico/felix/multidict"
+	"github.com/projectcalico/calico/lib/std/matchmap"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
@@ -50,8 +50,7 @@ func init() {
 // expects to be told via its OnPolicyMatch(Stopped) methods which policies match
 // which endpoints.  The ActiveRulesCalculator does that calculation.
 type PolicyResolver struct {
-	policyIDToEndpointIDs multidict.Multidict[model.PolicyKey, model.EndpointKey]
-	endpointIDToPolicyIDs multidict.Multidict[model.EndpointKey, model.PolicyKey]
+	policyIDToEndpointIDs *matchmap.MatchMap[model.PolicyKey, model.EndpointKey, uint32]
 	allPolicies           map[model.PolicyKey]policyMetadata // Only storing metadata for lower occupancy.
 	sortedTierData        []*TierInfo
 	endpoints             map[model.Key]model.Endpoint // Local WEPs/HEPs only.
@@ -68,8 +67,7 @@ type PolicyResolverCallbacks interface {
 
 func NewPolicyResolver() *PolicyResolver {
 	return &PolicyResolver{
-		policyIDToEndpointIDs: multidict.New[model.PolicyKey, model.EndpointKey](),
-		endpointIDToPolicyIDs: multidict.New[model.EndpointKey, model.PolicyKey](),
+		policyIDToEndpointIDs: matchmap.NewMatchMap[model.PolicyKey, model.EndpointKey, uint32](),
 		allPolicies:           map[model.PolicyKey]policyMetadata{},
 		endpoints:             make(map[model.Key]model.Endpoint),
 		dirtyEndpoints:        set.New[model.EndpointKey](),
@@ -121,7 +119,7 @@ func (pr *PolicyResolver) OnUpdate(update api.Update) (filterOut bool) {
 		pr.policySorter.OnUpdate(update)
 		pr.markAllEndpointsDirty()
 	}
-	gaugeNumActivePolicies.Set(float64(pr.policyIDToEndpointIDs.Len()))
+	gaugeNumActivePolicies.Set(float64(pr.policyIDToEndpointIDs.LenA()))
 	return
 }
 
@@ -133,16 +131,16 @@ func (pr *PolicyResolver) OnDatamodelStatus(status api.SyncStatus) {
 
 func (pr *PolicyResolver) markAllEndpointsDirty() {
 	log.Debugf("Marking all endpoints dirty")
-	pr.endpointIDToPolicyIDs.IterKeys(func(epID model.EndpointKey) {
+	for epID := range pr.policyIDToEndpointIDs.AllBs() {
 		pr.dirtyEndpoints.Add(epID)
-	})
+	}
 }
 
 func (pr *PolicyResolver) markEndpointsMatchingPolicyDirty(polKey model.PolicyKey) {
 	log.Debugf("Marking all endpoints matching %v dirty", polKey)
-	pr.policyIDToEndpointIDs.Iter(polKey, func(epID model.EndpointKey) {
+	for epID := range pr.policyIDToEndpointIDs.AllBsForA(polKey) {
 		pr.dirtyEndpoints.Add(epID)
-	})
+	}
 }
 
 func (pr *PolicyResolver) OnPolicyMatch(policyKey model.PolicyKey, endpointKey model.EndpointKey) {
@@ -152,15 +150,13 @@ func (pr *PolicyResolver) OnPolicyMatch(policyKey model.PolicyKey, endpointKey m
 		policy := pr.allPolicies[policyKey]
 		pr.policySorter.UpdatePolicy(policyKey, &policy)
 	}
-	pr.policyIDToEndpointIDs.Put(policyKey, endpointKey)
-	pr.endpointIDToPolicyIDs.Put(endpointKey, policyKey)
+	pr.policyIDToEndpointIDs.MustPut(policyKey, endpointKey)
 	pr.dirtyEndpoints.Add(endpointKey)
 }
 
 func (pr *PolicyResolver) OnPolicyMatchStopped(policyKey model.PolicyKey, endpointKey model.EndpointKey) {
 	log.Debugf("Deleting policy match %v -> %v", policyKey, endpointKey)
-	pr.policyIDToEndpointIDs.Discard(policyKey, endpointKey)
-	pr.endpointIDToPolicyIDs.Discard(endpointKey, policyKey)
+	pr.policyIDToEndpointIDs.Delete(policyKey, endpointKey)
 
 	// This policy is not active anymore, we no longer need to track it for sorting.
 	if !pr.policyIDToEndpointIDs.ContainsKey(policyKey) {
@@ -205,7 +201,7 @@ func (pr *PolicyResolver) sendEndpointUpdate(endpointID model.EndpointKey) error
 		}
 		for _, polKV := range tier.OrderedPolicies {
 			log.Debugf("Checking if policy %v matches %v", polKV.Key, endpointID)
-			if pr.endpointIDToPolicyIDs.Contains(endpointID, polKV.Key) {
+			if pr.policyIDToEndpointIDs.Get(polKV.Key, endpointID) {
 				log.Debugf("Policy %v matches %v", polKV.Key, endpointID)
 				tierMatches = true
 				filteredTier.OrderedPolicies = append(filteredTier.OrderedPolicies,

@@ -127,9 +127,6 @@ func TestPolicyResolver_OnPolicyMatch(t *testing.T) {
 	if !pr.policyIDToEndpointIDs.ContainsKey(polKey) {
 		t.Error("Adding new policy - expected PolicyIDToEndpointIDs to contain new policy but it does not")
 	}
-	if !pr.endpointIDToPolicyIDs.ContainsKey(endpointKey) {
-		t.Error("Adding new policy - expected EndpointIDToPolicyIDs to contain endpoint but it does not")
-	}
 	if !pr.dirtyEndpoints.Contains(endpointKey) {
 		t.Error("Adding new policy - expected DirtyEndpoints to contain endpoint for policy but it does not")
 	}
@@ -183,9 +180,6 @@ func TestPolicyResolver_OnPolicyMatchStopped(t *testing.T) {
 
 	if pr.policyIDToEndpointIDs.ContainsKey(polKey) {
 		t.Error("Deleting existing policy - expected PolicyIDToEndpointIDs not to contain policy but it does")
-	}
-	if pr.endpointIDToPolicyIDs.ContainsKey(endpointKey) {
-		t.Error("Deleting existing policy - expected EndpointIDToPolicyIDs not to contain endpoint but it does")
 	}
 	if !pr.dirtyEndpoints.Contains(endpointKey) {
 		t.Error("Deleting existing policy - expected DirtyEndpoints to contain endpoint but it does not")
