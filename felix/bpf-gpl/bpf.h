@@ -255,6 +255,8 @@ static CALI_BPF_INLINE __attribute__((noreturn)) void bpf_exit(int rc) {
 
 #define ip_is_dnf(ip) ((ip)->frag_off & bpf_htons(0x4000))
 #define ip_is_frag(ip) ((ip)->frag_off & bpf_htons(0x3fff))
+#define ip_is_first_frag(ip) (((ip)->frag_off & bpf_htons(0x3fff)) == bpf_htons(0x2000))
+#define ip_is_last_frag(ip) (!((ip)->frag_off & bpf_htons(0x2000)))
 #endif
 
 #ifndef IP_FMT
