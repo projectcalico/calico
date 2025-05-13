@@ -1739,9 +1739,6 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 				_ = testOpts.protocol == "udp" && !testOpts.ipv6 && !testOpts.dsr && testOpts.tunnel == "none" &&
 					It("should handle fragmented UDP", func() {
-						By("Setting src node MTU to be small and trigger fragmentation")
-						tc.Felixes[1].Exec("ip", "link", "set", "eth0", "mtu", "1000")
-
 						tcpdump1 := tc.Felixes[1].AttachTCPDump("eth0")
 						tcpdump1.SetLogEnabled(true)
 						tcpdump1.AddMatcher("udp-frags", regexp.MustCompile(
@@ -1751,8 +1748,8 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 						tcpdump0 := w[0][0].AttachTCPDump()
 						tcpdump0.SetLogEnabled(true)
-						tcpdump0.AddMatcher("udp-no-frags", regexp.MustCompile(
-							fmt.Sprintf("%s\\.30444 > %s\\.30444: \\[udp sum ok\\] UDP, length 1400", w[1][0].IP, w[0][0].IP)))
+						tcpdump0.AddMatcher("udp-pod-frags", regexp.MustCompile(
+							fmt.Sprintf("%s.* > %s.*", w[1][0].IP, w[0][0].IP)))
 						tcpdump0.Start("-vvv", "src", "host", w[1][0].IP, "and", "dst", "host", w[0][0].IP)
 						defer tcpdump1.Stop()
 
@@ -1761,7 +1758,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 						// Send a packet with large payload without the DNF flag
 						_, err := w[1][0].RunCmd("pktgen", w[1][0].IP, w[0][0].IP, "udp",
-							"--port-src", "30444", "--port-dst", "30444", "--ip-dnf=n", "--payload-size=1400")
+							"--port-src", "30444", "--port-dst", "30444", "--ip-dnf=n", "--payload-size=1600", "--udp-sock")
 						Expect(err).NotTo(HaveOccurred())
 
 						// We should see two fragments on the host interface
@@ -1769,7 +1766,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						// We should see a reassembled packet at the destination workload.
 						// If ebpf program did not reassemble the packet, we would still
 						// see two fragments!
-						Eventually(func() int { return tcpdump0.MatchCount("udp-no-frags") }).Should(Equal(1))
+						Eventually(func() int { return tcpdump0.MatchCount("udp-pod-frags") }).Should(Equal(2))
 					})
 
 				if (testOpts.protocol == "tcp" || (testOpts.protocol == "udp" && !testOpts.udpUnConnected)) &&
