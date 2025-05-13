@@ -270,6 +270,17 @@ static CALI_BPF_INLINE int pre_policy_processing(struct cali_tc_ctx *ctx)
 		}
 	}
 
+#ifndef IPVER6
+	if (CALI_F_FROM_HOST && ip_is_frag(ip_hdr(ctx)) && !ip_is_first_frag(ip_hdr(ctx))) {
+		if (frags4_lookup_ct(ctx)) {
+			if (ip_is_last_frag(ip_hdr(ctx))) {
+				frags4_remove_ct(ctx);
+			}
+			goto allow;
+		}
+	}
+#endif
+
 	ctx->state->pol_rc = CALI_POL_NO_MATCH;
 
 	/* Do conntrack lookup before anything else */
@@ -1275,6 +1286,12 @@ int calico_tc_skb_accepted_entrypoint(struct __sk_buff *skb)
 		update_rule_counters(ctx);
 		skb_log(ctx, true);
 	}
+
+#ifndef IPVER6
+	if (CALI_F_FROM_HOST && ip_is_first_frag(ip_hdr(ctx))) {
+		frags4_record_ct(ctx);
+	}
+#endif
 
 	ctx->fwd = calico_tc_skb_accepted(ctx);
 	return forward_or_drop(ctx);
