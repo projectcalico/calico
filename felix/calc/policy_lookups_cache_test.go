@@ -203,7 +203,7 @@ var _ = Describe("PolicyLookupsCache tests", func() {
 		func(key model.PolicyKey, pol *model.Policy, prefix [64]byte, expectedRuleID *RuleID) {
 			// Send the policy update and check that the entry is now in the cache
 			c := "Querying prefix " + string(prefix[:]) + "\n"
-			pc.OnPolicyActive(key, pol)
+			pc.OnPolicyActive(key, pol, nil)
 			rid := pc.GetRuleIDFromNFLOGPrefix(prefix)
 			Expect(rid).NotTo(BeNil(), c+pc.Dump())
 			Expect(*rid).To(Equal(*expectedRuleID))
@@ -258,7 +258,7 @@ var _ = Describe("PolicyLookupsCache tests", func() {
 
 	It("should handle tier drops when there are multiple policies in the same tier", func() {
 		By("Creating policy GNP1 in tier 1")
-		pc.OnPolicyActive(gnp1_t1_0i0e_key, gnp1_t1_0i0e)
+		pc.OnPolicyActive(gnp1_t1_0i0e_key, gnp1_t1_0i0e, nil)
 
 		By("Checking the default tier drops are cached")
 		rid := pc.GetRuleIDFromNFLOGPrefix(prefix_nomatch_t1_i)
@@ -269,7 +269,7 @@ var _ = Describe("PolicyLookupsCache tests", func() {
 		Expect(*rid).To(Equal(*ruleID_nomatch_t1_e))
 
 		By("Creating policy NP1 in tier 1")
-		pc.OnPolicyActive(np1_t1_0i1e_key, np1_t1_0i1e)
+		pc.OnPolicyActive(np1_t1_0i1e_key, np1_t1_0i1e, nil)
 
 		By("Checking the default tier drops are cached")
 		rid = pc.GetRuleIDFromNFLOGPrefix(prefix_nomatch_t1_i)
@@ -302,7 +302,7 @@ var _ = Describe("PolicyLookupsCache tests", func() {
 
 	It("should handle a policy being updated", func() {
 		By("Creating policy GNP1 in tier 1")
-		pc.OnPolicyActive(gnp1_t1_1i1e_key, gnp1_t1_1i1e)
+		pc.OnPolicyActive(gnp1_t1_1i1e_key, gnp1_t1_1i1e, nil)
 
 		By("Checking the ingress and egress rules are cached")
 		rid := pc.GetRuleIDFromNFLOGPrefix(prefix_gnp1_t1_i0A)
@@ -319,7 +319,7 @@ var _ = Describe("PolicyLookupsCache tests", func() {
 		Expect(rid).To(BeNil(), pc.Dump())
 
 		By("Creating policy GNP1 in tier 1")
-		pc.OnPolicyActive(gnp1_t1_4i2e_key, gnp1_t1_4i2e)
+		pc.OnPolicyActive(gnp1_t1_4i2e_key, gnp1_t1_4i2e, nil)
 
 		By("Checking the old ingress rule is still cached (it is unchanged by the update)")
 		rid = pc.GetRuleIDFromNFLOGPrefix(prefix_gnp1_t1_i0A)
@@ -342,7 +342,7 @@ var _ = Describe("PolicyLookupsCache tests", func() {
 		Expect(*rid).To(Equal(*ruleID_gnp1_t1_e1A))
 
 		By("Update policy GNP1 in tier 1 with more rules")
-		pc.OnPolicyActive(gnp1_t1_1i1e_key, gnp1_t1_1i1e)
+		pc.OnPolicyActive(gnp1_t1_1i1e_key, gnp1_t1_1i1e, nil)
 
 		By("Checking the ingress and egress rules are cached")
 		rid = pc.GetRuleIDFromNFLOGPrefix(prefix_gnp1_t1_i0A)
@@ -359,7 +359,7 @@ var _ = Describe("PolicyLookupsCache tests", func() {
 		Expect(rid).To(BeNil(), pc.Dump())
 
 		By("Update policy GNP1 in tier 1 with no rules")
-		pc.OnPolicyActive(gnp1_t1_0i0e_key, gnp1_t1_0i0e)
+		pc.OnPolicyActive(gnp1_t1_0i0e_key, gnp1_t1_0i0e, nil)
 
 		By("Checking the ingress and egress rules are not cached")
 		rid = pc.GetRuleIDFromNFLOGPrefix(prefix_gnp1_t1_i0A)
@@ -400,7 +400,7 @@ var _ = Describe("PolicyLookupsCache 64bit id test", func() {
 	pc := NewPolicyLookupsCache()
 
 	It("should not create 64bit IDs by default", func() {
-		pc.OnPolicyActive(gnp1_t1_4i2e_key, gnp1_t1_4i2e)
+		pc.OnPolicyActive(gnp1_t1_4i2e_key, gnp1_t1_4i2e, nil)
 		Expect(pc.GetRuleIDFromNFLOGPrefix(prefix_gnp1_t1_i1D)).To(Equal(ruleID_gnp1_t1_i1D))
 		Expect(pc.GetID64FromNFLOGPrefix(prefix_gnp1_t1_i1D)).To(Equal(uint64(0)))
 	})
@@ -411,7 +411,7 @@ var _ = Describe("PolicyLookupsCache 64bit id test", func() {
 		var id64 uint64
 
 		By("injecting policy creates nflong prefix and id64", func() {
-			pc.OnPolicyActive(gnp1_t1_4i2e_key, gnp1_t1_4i2e)
+			pc.OnPolicyActive(gnp1_t1_4i2e_key, gnp1_t1_4i2e, nil)
 			Expect(pc.GetRuleIDFromNFLOGPrefix(prefix_gnp1_t1_i1D)).To(Equal(ruleID_gnp1_t1_i1D))
 			id64 = pc.GetID64FromNFLOGPrefix(prefix_gnp1_t1_i1D)
 			Expect(id64).NotTo(Equal(uint64(0)))

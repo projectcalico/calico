@@ -61,6 +61,8 @@ func BenchmarkSnapshotThenDeleteLocal200Local10kTotal10000NetsetPols(b *testing.
 	benchInitialSnap(b, 10000, 200, 200, 0, 10000)
 }
 
+var cg *CalcGraph
+
 func benchInitialSnap(
 	b *testing.B,
 	numEndpoints int,
@@ -80,7 +82,6 @@ func benchInitialSnap(
 	profUpdates := makeNamespaceUpdates(numNamespaces)
 	netSetUpdates := makeNetSetAndPolUpdates(netSetsAndPols)
 
-	var cg *CalcGraph
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		b.StopTimer()
