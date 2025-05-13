@@ -207,6 +207,8 @@ int calico_tc_main(struct __sk_buff *skb)
 		if (!frags4_handle(ctx)) {
 			goto deny;
 		}
+		/* force it through stack to trigger any further necessary fragmentation */
+		ctx->state->flags |= CALI_ST_SKIP_REDIR_ONCE;
 	}
 #endif
 
@@ -1374,7 +1376,7 @@ int calico_tc_skb_new_flow_entrypoint(struct __sk_buff *skb)
 	if (CALI_F_TO_HOST && state->flags & CALI_ST_SKIP_FIB) {
 		ct_ctx_nat->flags |= CALI_CT_FLAG_SKIP_FIB;
 	}
-	if (CALI_F_FROM_HEP && state->flags & CALI_ST_SKIP_REDIR_PEER) {
+	if (state->flags & CALI_ST_SKIP_REDIR_PEER) {
 		ct_ctx_nat->flags |= CALI_CT_FLAG_SKIP_REDIR_PEER;
 	}
 	if (CALI_F_TO_WEP) {
