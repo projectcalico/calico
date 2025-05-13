@@ -68,6 +68,6 @@ func (fc *FlowCollection) AddFlow(flow types.Flow) {
 // Note this must be called synchronously with the bucket ring.
 func (fc *FlowCollection) Complete() {
 	for _, b := range fc.buckets {
-		b.Pushed = true
+		b.pushed = true
 	}
 }
