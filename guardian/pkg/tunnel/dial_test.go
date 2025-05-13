@@ -19,6 +19,7 @@ import (
 func handleConnection(t *testing.T, conn net.Conn, listener net.Listener) {
 	conn, err := listener.Accept()
 	Expect(err).NotTo(HaveOccurred())
+	Expect(conn).NotTo(BeNil())
 	defer conn.Close()
 	t.Log("Accepted connection from client")
 
