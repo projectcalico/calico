@@ -627,11 +627,6 @@ func (m *routeManager) configureTunnelDevice(
 		}
 	}
 
-	// And the device is up.
-	if err := m.nlHandle.LinkSetUp(link); err != nil {
-		return fmt.Errorf("failed to set interface up: %w", err)
-	}
-
 	// And set the device state to up if needed.
 	if attrs.Flags&net.FlagUp == 0 {
 		logCtx.WithField("flags", attrs.Flags).Info("Tunnel wasn't admin up, enabling it")

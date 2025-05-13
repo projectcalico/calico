@@ -15,211 +15,137 @@
 package intdataplane
 
 import (
-	"errors"
 	"net"
+	"time"
 
-	//. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
+
+	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
+	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
+	"github.com/projectcalico/calico/felix/logutils"
+	"github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/felix/routetable"
+	"github.com/projectcalico/calico/felix/rules"
+	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
-var (
-	notFound    = errors.New("not found")
-	mockFailure = errors.New("mock failure")
-)
-
-/*var _ = Describe("IpipMgr (tunnel configuration)", func() {
+var _ = Describe("RouteManager for ipip pools", func() {
 	var (
 		ipipMgr   *ipipManager
-		ipSets    *dpsets.MockIPSets
-		dataplane *mockIPIPDataplane
-	)
-
-	ip, _, err := net.ParseCIDR("10.0.0.1/32")
-	if err != nil {
-		panic("Failed to parse test IP")
-	}
-	_, ipNet2, err := net.ParseCIDR("10.0.0.2/32")
-	if err != nil {
-		panic("Failed to parse test IP")
-	}
-
-	BeforeEach(func() {
-		dataplane = &mockIPIPDataplane{
-			tunnelLinkName: dataplanedefs.IPIPIfaceName,
-		}
-		ipSets = dpsets.NewMockIPSets()
-		ipipMgr = newIPIPManagerWithShim(ipSets, 1024, dataplane, nil)
-	})
-
-	Describe("after calling configureIPIPDevice", func() {
-		ip2, _, err := net.ParseCIDR("10.0.0.2/32")
-		if err != nil {
-			panic("Failed to parse test IP")
-		}
-
-		BeforeEach(func() {
-			err = ipipMgr.configureIPIPDevice(1400, ip, false)
-			Expect(err).ToNot(HaveOccurred())
-		})
-
-		It("should create the interface", func() {
-			Expect(dataplane.tunnelLink).ToNot(BeNil())
-		})
-		It("should set the MTU", func() {
-			Expect(dataplane.tunnelLinkAttrs.MTU).To(Equal(1400))
-		})
-		It("should set the interface UP", func() {
-			Expect(dataplane.tunnelLinkAttrs.Flags).To(Equal(net.FlagUp))
-		})
-		It("should configure the address", func() {
-			Expect(dataplane.addrs).To(HaveLen(1))
-			Expect(dataplane.addrs[0].IP.String()).To(Equal("10.0.0.1"))
-		})
-
-		Describe("after second call with same params", func() {
-			BeforeEach(func() {
-				dataplane.ResetCalls()
-				err := ipipMgr.configureIPIPDevice(1400, ip, false)
-				Expect(err).ToNot(HaveOccurred())
-			})
-			It("should avoid creating the interface", func() {
-				Expect(dataplane.LinkAddCalled).To(BeFalse())
-			})
-			It("should avoid setting the interface UP again", func() {
-				Expect(dataplane.LinkSetUpCalled).To(BeFalse())
-			})
-			It("should avoid setting the MTU again", func() {
-				Expect(dataplane.LinkSetMTUCalled).To(BeFalse())
-			})
-			It("should avoid setting the address again", func() {
-				Expect(dataplane.AddrUpdated).To(BeFalse())
-			})
-		})
-
-		Describe("after second call with different params", func() {
-			BeforeEach(func() {
-				dataplane.ResetCalls()
-				err = ipipMgr.configureIPIPDevice(1500, ip2, false)
-				Expect(err).ToNot(HaveOccurred())
-			})
-			It("should avoid creating the interface", func() {
-				Expect(dataplane.LinkAddCalled).To(BeFalse())
-			})
-			It("should avoid setting the interface UP again", func() {
-				Expect(dataplane.LinkSetUpCalled).To(BeFalse())
-			})
-			It("should set the MTU", func() {
-				Expect(dataplane.tunnelLinkAttrs.MTU).To(Equal(1500))
-			})
-			It("should reconfigure the address", func() {
-				Expect(dataplane.addrs).To(HaveLen(1))
-				Expect(dataplane.addrs[0].IP.String()).To(Equal("10.0.0.2"))
-			})
-		})
-
-		Describe("after second call with nil IP", func() {
-			BeforeEach(func() {
-				dataplane.ResetCalls()
-				err := ipipMgr.configureIPIPDevice(1500, nil, false)
-				Expect(err).ToNot(HaveOccurred())
-			})
-			It("should avoid creating the interface", func() {
-				Expect(dataplane.LinkAddCalled).To(BeFalse())
-			})
-			It("should avoid setting the interface UP again", func() {
-				Expect(dataplane.LinkSetUpCalled).To(BeFalse())
-			})
-			It("should set the MTU", func() {
-				Expect(dataplane.tunnelLinkAttrs.MTU).To(Equal(1500))
-			})
-			It("should remove the address", func() {
-				Expect(dataplane.addrs).To(HaveLen(0))
-			})
-		})
-	})
-
-	Describe("after calling configureIPIPDevice with no IP", func() {
-		BeforeEach(func() {
-			err := ipipMgr.configureIPIPDevice(1400, nil, false)
-			Expect(err).ToNot(HaveOccurred())
-		})
-
-		It("should create the interface", func() {
-			Expect(dataplane.tunnelLink).ToNot(BeNil())
-		})
-		It("should set the MTU", func() {
-			Expect(dataplane.tunnelLinkAttrs.MTU).To(Equal(1400))
-		})
-		It("should set the interface UP", func() {
-			Expect(dataplane.tunnelLinkAttrs.Flags).To(Equal(net.FlagUp))
-		})
-		It("should configure the address", func() {
-			Expect(dataplane.addrs).To(HaveLen(0))
-		})
-	})
-
-	// Cover the error cases.  We pass the error back up the stack, check that that happens
-	// for all calls.
-	const expNumCalls = 8
-	It("a successful call should only call into dataplane expected number of times", func() {
-		// This spec is a sanity-check that we've got the expNumCalls constant correct.
-		err := ipipMgr.configureIPIPDevice(1400, ip, false)
-		Expect(err).ToNot(HaveOccurred())
-		Expect(dataplane.NumCalls).To(BeNumerically("==", expNumCalls))
-	})
-	for i := 1; i <= expNumCalls; i++ {
-		if i == 1 {
-			continue // First LinkByName failure is handled.
-		}
-		i := i
-		Describe(fmt.Sprintf("with a failure after %v calls", i), func() {
-			BeforeEach(func() {
-				dataplane.ErrorAtCall = i
-			})
-
-			It("should return the error", func() {
-				Expect(ipipMgr.configureIPIPDevice(1400, ip, false)).To(Equal(mockFailure))
-			})
-
-			Describe("with an IP to remove", func() {
-				BeforeEach(func() {
-					dataplane.addrs = append(dataplane.addrs,
-						netlink.Addr{
-							IPNet: ipNet2,
-						})
-				})
-				It("should return the error", func() {
-					Expect(ipipMgr.configureIPIPDevice(1400, ip, false)).To(Equal(mockFailure))
-				})
-			})
-		})
-	}
-})*/
-
-/*var _ = Describe("ipipManager IP set updates", func() {
-	var (
-		ipipMgr   *ipipManager
+		routeMgr  *routeManager
+		rt        *mockRouteTable
 		ipSets    *dpsets.MockIPSets
 		dataplane *mockIPIPDataplane
 	)
 
 	const (
-		externalCIDR = "11.0.0.1/32"
+		externalCIDR = "10.10.10.0/24"
 	)
 
 	BeforeEach(func() {
-		dataplane = &mockIPIPDataplane{}
 		ipSets = dpsets.NewMockIPSets()
-		ipipMgr = newIPIPManagerWithShim(ipSets, 1024, dataplane, []string{externalCIDR})
+		rt = &mockRouteTable{
+			currentRoutes: map[string][]routetable.Target{},
+		}
+
+		la := netlink.NewLinkAttrs()
+		la.Name = "eth0"
+		opRecorder := logutils.NewSummarizer("test")
+
+		dpConfig := Config{
+			MaxIPSetSize:       1024,
+			Hostname:           "node1",
+			ExternalNodesCidrs: []string{"10.10.10.0/24"},
+			RulesConfig: rules.Config{
+				IPIPTunnelAddress: net.ParseIP("192.168.0.1"),
+			},
+			ProgramRoutes:       true,
+			DeviceRouteProtocol: dataplanedefs.DefaultRouteProto,
+		}
+		dataplane = &mockIPIPDataplane{
+			links:          []netlink.Link{&mockLink{attrs: la}},
+			tunnelLinkName: dataplanedefs.IPIPIfaceName,
+		}
+		routeMgr = newRouteManagerWithShims(
+			rt,
+			proto.IPPoolType_IPIP,
+			dataplanedefs.IPIPIfaceName,
+			4,
+			1400,
+			dpConfig,
+			opRecorder,
+			dataplane,
+		)
+		ipipMgr = newIPIPManager(
+			ipSets, routeMgr, dataplanedefs.IPIPIfaceName,
+			4,
+			1400,
+			dpConfig,
+			opRecorder,
+		)
 	})
 
-	It("should not create the IP set until first call to CompleteDeferredWork()", func() {
-		Expect(ipSets.AddOrReplaceCalled).To(BeFalse())
-		err := ipipMgr.CompleteDeferredWork()
+	It("should configure tunnel properly", func() {
+		ipipMgr.OnUpdate(&proto.HostMetadataUpdate{
+			Hostname: "node1",
+			Ipv4Addr: "10.0.0.1",
+		})
+		routeMgr.OnDataDeviceUpdate("eth0")
+
+		Expect(routeMgr.dataDeviceAddr).NotTo(BeZero())
+		Expect(routeMgr.dataDevice).NotTo(BeEmpty())
+		noEncapDev, err := routeMgr.detectDataIface()
+		Expect(err).NotTo(HaveOccurred())
+		Expect(noEncapDev).NotTo(BeNil())
+
+		link, addr, err := ipipMgr.device(noEncapDev)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(link).NotTo(BeNil())
+		Expect(addr).NotTo(BeZero())
+
+		err = routeMgr.configureTunnelDevice(link, addr, 1400, false)
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(noEncapDev).NotTo(BeNil())
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(dataplane.tunnelLink).ToNot(BeNil())
+		Expect(dataplane.tunnelLinkAttrs.MTU).To(Equal(1400))
+		Expect(dataplane.tunnelLinkAttrs.Flags).To(Equal(net.FlagUp))
+		Expect(dataplane.addrs).To(HaveLen(1))
+		Expect(dataplane.addrs[0].IP.String()).To(Equal("192.168.0.1"))
+
+		dataplane.ResetCalls()
+		err = routeMgr.configureTunnelDevice(link, addr, 50, false)
 		Expect(err).ToNot(HaveOccurred())
-		Expect(ipSets.AddOrReplaceCalled).To(BeTrue())
+		Expect(dataplane.LinkAddCalled).To(BeFalse())
+		Expect(dataplane.LinkSetUpCalled).To(BeFalse())
+		Expect(dataplane.LinkSetMTUCalled).To(BeTrue())
+		Expect(dataplane.tunnelLinkAttrs.MTU).To(Equal(50))
+		Expect(dataplane.AddrUpdated).To(BeFalse())
+
+		dataplane.ResetCalls()
+		err = routeMgr.configureTunnelDevice(link, addr, 1500, false)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(dataplane.LinkAddCalled).To(BeFalse())
+		Expect(dataplane.LinkSetUpCalled).To(BeFalse())
+		Expect(dataplane.tunnelLinkAttrs.MTU).To(Equal(1500))
+		Expect(dataplane.addrs).To(HaveLen(1))
+		Expect(dataplane.addrs[0].IP.String()).To(Equal("192.168.0.1"))
+
+		dataplane.ResetCalls()
+		err = routeMgr.configureTunnelDevice(link, "", 1500, false)
+		Expect(err).To(HaveOccurred())
+		Expect(dataplane.tunnelLink).ToNot(BeNil())
+		Expect(dataplane.LinkAddCalled).To(BeFalse())
+		Expect(dataplane.LinkSetUpCalled).To(BeFalse())
+		Expect(dataplane.tunnelLinkAttrs.MTU).To(Equal(1500))
+		Expect(dataplane.tunnelLinkAttrs.Flags).To(Equal(net.FlagUp))
+		Expect(dataplane.addrs).To(HaveLen(1))
+		Expect(dataplane.addrs[0].IP.String()).To(Equal("192.168.0.1"))
 	})
 
 	allHostsSet := func() set.Set[string] {
@@ -228,117 +154,209 @@ var (
 		return ipSets.Members["all-hosts-net"]
 	}
 
-	Describe("after adding an IP for host1", func() {
-		BeforeEach(func() {
-			ipipMgr.OnUpdate(&proto.HostMetadataUpdate{
-				Hostname: "host1",
-				Ipv4Addr: "10.0.0.1",
-			})
-			err := ipipMgr.CompleteDeferredWork()
-			Expect(err).ToNot(HaveOccurred())
+	It("should handle IPSet updates correctly", func() {
+		By("checking the the IP set is not created until first call to CompleteDeferredWork()")
+		Expect(ipSets.AddOrReplaceCalled).To(BeFalse())
+		err := ipipMgr.CompleteDeferredWork()
+		Expect(err).ToNot(HaveOccurred())
+		Expect(ipSets.AddOrReplaceCalled).To(BeTrue())
+
+		By("adding host1")
+		ipipMgr.OnUpdate(&proto.HostMetadataUpdate{
+			Hostname: "host1",
+			Ipv4Addr: "10.0.0.1",
 		})
+		err = ipipMgr.CompleteDeferredWork()
+		Expect(err).ToNot(HaveOccurred())
+		Expect(allHostsSet()).To(Equal(set.From("10.0.0.1", externalCIDR)))
 
-		It("should add host1's IP to the IP set", func() {
-			Expect(allHostsSet()).To(Equal(set.From("10.0.0.1", externalCIDR)))
+		By("adding host2")
+		ipipMgr.OnUpdate(&proto.HostMetadataUpdate{
+			Hostname: "host2",
+			Ipv4Addr: "10.0.0.2",
 		})
+		err = ipipMgr.CompleteDeferredWork()
+		Expect(err).ToNot(HaveOccurred())
+		Expect(allHostsSet()).To(Equal(set.From("10.0.0.1", "10.0.0.2", externalCIDR)))
 
-		Describe("after adding an IP for host2", func() {
-			BeforeEach(func() {
-				ipipMgr.OnUpdate(&proto.HostMetadataUpdate{
-					Hostname: "host2",
-					Ipv4Addr: "10.0.0.2",
-				})
-				err := ipipMgr.CompleteDeferredWork()
-				Expect(err).ToNot(HaveOccurred())
-			})
-			It("should add the IP to the IP set", func() {
-				Expect(allHostsSet()).To(Equal(set.From("10.0.0.1", "10.0.0.2", externalCIDR)))
-			})
+		By("testing tolerance for duplicate ip")
+		ipipMgr.OnUpdate(&proto.HostMetadataUpdate{
+			Hostname: "host3",
+			Ipv4Addr: "10.0.0.2",
 		})
+		err = ipipMgr.CompleteDeferredWork()
+		Expect(err).ToNot(HaveOccurred())
+		Expect(allHostsSet()).To(Equal(set.From("10.0.0.1", "10.0.0.2", externalCIDR)))
 
-		Describe("after adding a duplicate IP", func() {
-			BeforeEach(func() {
-				ipipMgr.OnUpdate(&proto.HostMetadataUpdate{
-					Hostname: "host2",
-					Ipv4Addr: "10.0.0.1",
-				})
-				err := ipipMgr.CompleteDeferredWork()
-				Expect(err).ToNot(HaveOccurred())
-			})
-			It("should tolerate the duplicate", func() {
-				Expect(allHostsSet()).To(Equal(set.From("10.0.0.1", externalCIDR)))
-			})
-
-			Describe("after removing a duplicate IP", func() {
-				BeforeEach(func() {
-					ipipMgr.OnUpdate(&proto.HostMetadataRemove{
-						Hostname: "host2",
-					})
-					err := ipipMgr.CompleteDeferredWork()
-					Expect(err).ToNot(HaveOccurred())
-				})
-				It("should keep the IP in the IP set", func() {
-					Expect(allHostsSet()).To(Equal(set.From("10.0.0.1", externalCIDR)))
-				})
-
-				Describe("after removing initial copy of IP", func() {
-					BeforeEach(func() {
-						ipipMgr.OnUpdate(&proto.HostMetadataRemove{
-							Hostname: "host1",
-						})
-						err := ipipMgr.CompleteDeferredWork()
-						Expect(err).ToNot(HaveOccurred())
-					})
-					It("should remove the IP", func() {
-						Expect(allHostsSet().Len()).To(Equal(1))
-					})
-				})
-			})
+		By("removing the duplicate ip should keep the ip")
+		ipipMgr.OnUpdate(&proto.HostMetadataRemove{
+			Hostname: "host3",
 		})
+		err = ipipMgr.CompleteDeferredWork()
+		Expect(err).ToNot(HaveOccurred())
+		Expect(allHostsSet()).To(Equal(set.From("10.0.0.1", "10.0.0.2", externalCIDR)))
 
-		Describe("after adding/removing a duplicate IP in one batch", func() {
-			BeforeEach(func() {
-				ipipMgr.OnUpdate(&proto.HostMetadataUpdate{
-					Hostname: "host2",
-					Ipv4Addr: "10.0.0.1",
-				})
-				ipipMgr.OnUpdate(&proto.HostMetadataRemove{
-					Hostname: "host2",
-				})
-				err := ipipMgr.CompleteDeferredWork()
-				Expect(err).ToNot(HaveOccurred())
-			})
-			It("should keep the IP in the IP set", func() {
-				Expect(allHostsSet()).To(Equal(set.From("10.0.0.1", externalCIDR)))
-			})
+		By("removing the initial copy of ip")
+		ipipMgr.OnUpdate(&proto.HostMetadataRemove{
+			Hostname: "host2",
 		})
+		err = ipipMgr.CompleteDeferredWork()
+		Expect(err).ToNot(HaveOccurred())
+		Expect(allHostsSet()).To(Equal(set.From("10.0.0.1", externalCIDR)))
 
-		Describe("after changing IP for host1", func() {
-			BeforeEach(func() {
-				ipipMgr.OnUpdate(&proto.HostMetadataUpdate{
-					Hostname: "host1",
-					Ipv4Addr: "10.0.0.2",
-				})
-				err := ipipMgr.CompleteDeferredWork()
-				Expect(err).ToNot(HaveOccurred())
-			})
-			It("should update the IP set", func() {
-				Expect(allHostsSet()).To(Equal(set.From("10.0.0.2", externalCIDR)))
-			})
+		By("adding/removing a duplicate IP in one batch")
+		ipipMgr.OnUpdate(&proto.HostMetadataUpdate{
+			Hostname: "host2",
+			Ipv4Addr: "10.0.0.1",
 		})
+		ipipMgr.OnUpdate(&proto.HostMetadataRemove{
+			Hostname: "host2",
+		})
+		err = ipipMgr.CompleteDeferredWork()
+		Expect(err).ToNot(HaveOccurred())
+		Expect(allHostsSet()).To(Equal(set.From("10.0.0.1", externalCIDR)))
 
-		Describe("after a no-op batch", func() {
-			BeforeEach(func() {
-				ipSets.AddOrReplaceCalled = false
-				err := ipipMgr.CompleteDeferredWork()
-				Expect(err).ToNot(HaveOccurred())
-			})
-			It("shouldn't rewrite the IP set", func() {
-				Expect(ipSets.AddOrReplaceCalled).To(BeFalse())
-			})
+		By("changing ip of host1")
+		ipipMgr.OnUpdate(&proto.HostMetadataUpdate{
+			Hostname: "host1",
+			Ipv4Addr: "10.0.0.2",
 		})
+		err = ipipMgr.CompleteDeferredWork()
+		Expect(err).ToNot(HaveOccurred())
+		Expect(allHostsSet()).To(Equal(set.From("10.0.0.2", externalCIDR)))
+
+		By("sending a no-op batch")
+		ipSets.AddOrReplaceCalled = false
+		err = ipipMgr.CompleteDeferredWork()
+		Expect(err).ToNot(HaveOccurred())
+		Expect(ipSets.AddOrReplaceCalled).To(BeFalse())
+		Expect(allHostsSet()).To(Equal(set.From("10.0.0.2", externalCIDR)))
 	})
-})*/
+
+	It("successfully adds a route to the noEncap interface", func() {
+		ipipMgr.OnUpdate(&proto.HostMetadataUpdate{
+			Hostname: "node1",
+			Ipv4Addr: "10.0.0.1",
+		})
+		ipipMgr.OnUpdate(&proto.HostMetadataUpdate{
+			Hostname: "node2",
+			Ipv4Addr: "10.0.1.1",
+		})
+
+		routeMgr.OnDataDeviceUpdate("eth0")
+
+		Expect(routeMgr.dataDeviceAddr).NotTo(BeZero())
+		Expect(routeMgr.dataDevice).NotTo(BeEmpty())
+		noEncapDev, err := routeMgr.detectDataIface()
+		Expect(err).NotTo(HaveOccurred())
+		Expect(noEncapDev).NotTo(BeNil())
+
+		link, addr, err := ipipMgr.device(noEncapDev)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(link).NotTo(BeNil())
+		Expect(addr).NotTo(BeZero())
+
+		err = routeMgr.configureTunnelDevice(link, addr, 50, false)
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(noEncapDev).NotTo(BeNil())
+		Expect(err).NotTo(HaveOccurred())
+
+		ipipMgr.OnUpdate(&proto.RouteUpdate{
+			Types:       proto.RouteType_REMOTE_WORKLOAD,
+			IpPoolType:  proto.IPPoolType_IPIP,
+			Dst:         "192.168.0.3/26",
+			DstNodeName: "node2",
+			DstNodeIp:   "10.0.1.1",
+			SameSubnet:  true,
+		})
+
+		ipipMgr.OnUpdate(&proto.RouteUpdate{
+			Types:       proto.RouteType_REMOTE_WORKLOAD,
+			IpPoolType:  proto.IPPoolType_IPIP,
+			Dst:         "192.168.0.2/26",
+			DstNodeName: "node2",
+			DstNodeIp:   "10.0.1.1",
+		})
+
+		ipipMgr.OnUpdate(&proto.RouteUpdate{
+			Types:       proto.RouteType_LOCAL_WORKLOAD,
+			IpPoolType:  proto.IPPoolType_IPIP,
+			Dst:         "192.168.0.100/26",
+			DstNodeName: "node1",
+			DstNodeIp:   "10.0.0.1",
+			SameSubnet:  true,
+		})
+
+		// Borrowed /32 should not be programmed as blackhole.
+		ipipMgr.OnUpdate(&proto.RouteUpdate{
+			Types:       proto.RouteType_LOCAL_WORKLOAD,
+			IpPoolType:  proto.IPPoolType_IPIP,
+			Dst:         "192.168.0.10/32",
+			DstNodeName: "node1",
+			DstNodeIp:   "10.0.0.7",
+			SameSubnet:  true,
+		})
+
+		Expect(rt.currentRoutes[dataplanedefs.IPIPIfaceName]).To(HaveLen(0))
+		Expect(rt.currentRoutes[routetable.InterfaceNone]).To(HaveLen(0))
+
+		err = ipipMgr.CompleteDeferredWork()
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(rt.currentRoutes[dataplanedefs.IPIPIfaceName]).To(HaveLen(1))
+		Expect(rt.currentRoutes[routetable.InterfaceNone]).To(HaveLen(1))
+		Expect(rt.currentRoutes["eth0"]).NotTo(BeNil())
+	})
+
+	It("should fall back to programming tunneled routes if the noEncap device is not known", func() {
+		dataDeviceC := make(chan string)
+		go ipipMgr.KeepIPIPDeviceInSync(1400, false, 1*time.Second, dataDeviceC)
+
+		By("Sending another node's route.")
+		ipipMgr.OnUpdate(&proto.HostMetadataUpdate{
+			Hostname: "node2",
+			Ipv4Addr: "10.0.0.2",
+		})
+		ipipMgr.OnUpdate(&proto.RouteUpdate{
+			Types:       proto.RouteType_REMOTE_WORKLOAD,
+			IpPoolType:  proto.IPPoolType_IPIP,
+			Dst:         "172.0.0.1/26",
+			DstNodeName: "node2",
+			DstNodeIp:   "10.0.0.2",
+			SameSubnet:  true,
+		})
+
+		err := ipipMgr.CompleteDeferredWork()
+		Expect(err).NotTo(HaveOccurred())
+		Expect(ipipMgr.routesDirty).To(BeFalse())
+		Expect(rt.currentRoutes["eth0"]).To(HaveLen(0))
+		Expect(rt.currentRoutes[dataplanedefs.IPIPIfaceName]).To(HaveLen(1))
+
+		By("Sending another local node update.")
+		ipipMgr.OnUpdate(&proto.HostMetadataUpdate{
+			Hostname: "node1",
+			Ipv4Addr: "10.0.0.1",
+		})
+		localAddr := routeMgr.dataIfaceAddr()
+		Expect(localAddr).NotTo(BeNil())
+
+		// Note: no encap device name is sent after configuration so this receive
+		// ensures we don't race.
+
+		By("waiting")
+		Eventually(dataDeviceC, "2s").Should(Receive(Equal("eth0")))
+		routeMgr.OnDataDeviceUpdate("eth0")
+
+		Expect(rt.currentRoutes["eth0"]).To(HaveLen(0))
+		err = ipipMgr.CompleteDeferredWork()
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(ipipMgr.routesDirty).To(BeFalse())
+		Expect(rt.currentRoutes["eth0"]).To(HaveLen(1))
+		Expect(rt.currentRoutes[dataplanedefs.IPIPIfaceName]).To(HaveLen(0))
+	})
+})
 
 type mockIPIPDataplane struct {
 	tunnelLink      *mockLink
