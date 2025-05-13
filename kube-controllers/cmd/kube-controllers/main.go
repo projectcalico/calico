@@ -334,7 +334,17 @@ func startCompactor(ctx context.Context, interval time.Duration) {
 // getClients builds and returns Kubernetes and Calico clients.
 func getClients(kubeconfig string) (*kubernetes.Clientset, client.Interface, error) {
 	// Get Calico client
-	calicoClient, err := client.NewFromEnv()
+	config, err := apiconfig.LoadClientConfigFromEnvironment()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// Increase the client QPS on the Calico client.
+	// - For one, this client is shared across a number of different controllers, so will need a higher request count.
+	// - Secondly, the IPAM GC controller can potentially generate a very large number of requests.
+	config.Spec.K8sClientQPS = 500
+
+	calicoClient, err := client.New(*config)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to build Calico client: %s", err)
 	}
@@ -345,6 +355,11 @@ func getClients(kubeconfig string) (*kubernetes.Clientset, client.Interface, err
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to build kubernetes client config: %s", err)
 	}
+
+	// Increase the QPS of the Kubernetes client as well. This is also used heavily by the IPAM GC controller
+	// in some circumstances.
+	k8sconfig.QPS = 100
+	k8sconfig.Burst = 200
 
 	// Get Kubernetes clientset
 	k8sClientset, err := kubernetes.NewForConfig(k8sconfig)
