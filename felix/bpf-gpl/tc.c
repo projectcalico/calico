@@ -56,6 +56,10 @@
 #include "bpf_helpers.h"
 #include "rule_counters.h"
 
+#ifndef IPVER6
+#include "ip_v4_fragment.h"
+#endif
+
 #define HAS_HOST_CONFLICT_PROG CALI_F_TO_HEP
 
 /* calico_tc_main is the main function used in all of the tc programs.  It is specialised
@@ -197,11 +201,26 @@ int calico_tc_main(struct __sk_buff *skb)
 		ctx->fwd.res = TC_ACT_SHOT;
 		goto finalize;
 	}
+
+#ifndef IPVER6
+	if (CALI_F_TO_HOST && ip_is_frag(ip_hdr(ctx))) {
+		if (!frags4_handle(ctx)) {
+			goto deny;
+		}
+	}
+#endif
+
 	return pre_policy_processing(ctx);
 
 allow:
 finalize:
 	return forward_or_drop(ctx);
+
+#ifndef IPVER6
+deny:
+	ctx->fwd.res = TC_ACT_SHOT;
+	goto finalize;
+#endif
 }
 
 static CALI_BPF_INLINE int pre_policy_processing(struct cali_tc_ctx *ctx)
@@ -250,6 +269,17 @@ static CALI_BPF_INLINE int pre_policy_processing(struct cali_tc_ctx *ctx)
 			goto allow;
 		}
 	}
+
+#ifndef IPVER6
+	if (CALI_F_FROM_HOST && ip_is_frag(ip_hdr(ctx)) && !ip_is_first_frag(ip_hdr(ctx))) {
+		if (frags4_lookup_ct(ctx)) {
+			if (ip_is_last_frag(ip_hdr(ctx))) {
+				frags4_remove_ct(ctx);
+			}
+			goto allow;
+		}
+	}
+#endif
 
 	ctx->state->pol_rc = CALI_POL_NO_MATCH;
 
@@ -1259,6 +1289,12 @@ int calico_tc_skb_accepted_entrypoint(struct __sk_buff *skb)
 		skb_log(ctx, true);
 	}
 
+#ifndef IPVER6
+	if (CALI_F_FROM_HOST && ip_is_first_frag(ip_hdr(ctx))) {
+		frags4_record_ct(ctx);
+	}
+#endif
+
 	ctx->fwd = calico_tc_skb_accepted(ctx);
 	return forward_or_drop(ctx);
 
@@ -1681,7 +1717,7 @@ icmp_ttl_exceeded:
 	state->icmp_type = ICMPV6_TIME_EXCEED;
 	state->icmp_code = ICMPV6_EXC_HOPLIMIT;
 #else
-	if (ip_frag_no(ip_hdr(ctx))) {
+	if (ip_is_frag(ip_hdr(ctx))) {
 		goto deny;
 	}
 	state->icmp_type = ICMP_TIME_EXCEEDED;
