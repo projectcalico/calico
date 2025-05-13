@@ -66,10 +66,10 @@ func TestDialTLS(t *testing.T) {
 
 	address := "localhost:8081"
 
-	servercrt, err := filepath.Abs("../../test/certs/server.crt")
+	servercrt, err := filepath.Abs("../../test/tmp/server.crt")
 	Expect(err).NotTo(HaveOccurred())
 
-	serverKey, err := filepath.Abs("../../test/certs/server.key")
+	serverKey, err := filepath.Abs("../../test/tmp/server.key")
 	Expect(err).NotTo(HaveOccurred())
 
 	cert, err := tls.LoadX509KeyPair(servercrt, serverKey)

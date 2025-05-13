@@ -19,7 +19,9 @@ func TestProxyWithHTTP(t *testing.T) {
 	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		Expect(r.URL.Path).To(Equal("/test"))
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("Hello"))
+		_, err := w.Write([]byte("Hello"))
+		Expect(err).NotTo(HaveOccurred())
+
 	}))
 	defer mockServer.Close()
 
@@ -62,13 +64,14 @@ func TestProxyWithHTTPS(t *testing.T) {
 
 	mockServer := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("Hello from HTTPS"))
+		_, err := w.Write([]byte("Hello from HTTPS"))
+		Expect(err).NotTo(HaveOccurred())
 	}))
 
-	servercrt, err := filepath.Abs("../../test/certs/server.crt")
+	servercrt, err := filepath.Abs("../../test/tmp/server.crt")
 	Expect(err).NotTo(HaveOccurred())
 
-	serverKey, err := filepath.Abs("../../test/certs/server.key")
+	serverKey, err := filepath.Abs("../../test/tmp/server.key")
 	Expect(err).NotTo(HaveOccurred())
 
 	cert, err := tls.LoadX509KeyPair(servercrt, serverKey)
@@ -84,7 +87,7 @@ func TestProxyWithHTTPS(t *testing.T) {
 		targetURL, err := url.Parse(mockServer.URL)
 		Expect(err).NotTo(HaveOccurred())
 
-		cabundleCert, err := filepath.Abs("../../test/certs/rootCA.crt")
+		cabundleCert, err := filepath.Abs("../../test/tmp/rootCA.crt")
 		Expect(err).NotTo(HaveOccurred())
 		targets := []server.Target{
 			{

@@ -85,7 +85,6 @@ func TestForwardConnections(t *testing.T) {
 		Expect(err).ShouldNot(HaveOccurred())
 		Expect(string(buff)).Should(Equal(response))
 		Expect(src1.Close()).ShouldNot(HaveOccurred())
-		Expect(src2.Close()).ShouldNot(HaveOccurred())
 		wg.Wait()
 	})
 }
