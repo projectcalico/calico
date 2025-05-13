@@ -103,8 +103,7 @@ func newRouteManagerWithShims(
 	opRecorder logutils.OpRecorder,
 	nlHandle netlinkHandle,
 ) *routeManager {
-
-	manager := routeManager{
+	return &routeManager{
 		hostname:         dpConfig.Hostname,
 		routeTable:       mainRouteTable,
 		routesByDest:     map[string]*proto.RouteUpdate{},
@@ -118,13 +117,11 @@ func newRouteManagerWithShims(
 		nlHandle:         nlHandle,
 		routeProtocol:    calculateRouteProtocol(dpConfig),
 		opRecorder:       opRecorder,
+		logCtx: logrus.WithFields(logrus.Fields{
+			"ipVersion":     ipVersion,
+			"tunnel device": tunnelDevice,
+		}),
 	}
-
-	manager.logCtx = logrus.WithFields(logrus.Fields{
-		"ipVersion":     ipVersion,
-		"tunnel device": manager.tunnelDevice,
-	})
-	return &manager
 }
 
 func calculateRouteProtocol(dpConfig Config) netlink.RouteProtocol {
@@ -523,7 +520,7 @@ func (m *routeManager) KeepDeviceInSync(
 		}
 
 		m.logCtx.Debug("Configuring tunnel device")
-		m.configureTunnelDevice(link, addr, mtu, xsumBroken)
+		err = m.configureTunnelDevice(link, addr, mtu, xsumBroken)
 		if err != nil {
 			m.logCtx.WithError(err).Warn("Failed to configure tunnel device, retrying...")
 			logNextSuccess = true

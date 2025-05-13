@@ -36,13 +36,9 @@ import (
 
 type vxlanManager struct {
 	// Our dependencies.
-	hostname  string
-	ipVersion uint8
-	routeMgr  *routeManager
-
-	// Device information
-	tunnelDevice    string
-	tunnelDeviceMTU int
+	hostname string
+	routeMgr *routeManager
+	fdb      VXLANFDB
 
 	ipsetsDataplane dpsets.IPSetsDataplane
 	ipSetMetadata   ipsets.IPSetMetadata
@@ -55,9 +51,11 @@ type vxlanManager struct {
 	myVTEP     *proto.VXLANTunnelEndpointUpdate
 
 	// VXLAN configuration.
-	vxlanID   int
-	vxlanPort int
-	fdb       VXLANFDB
+	vxlanDevice string
+	vxlanID     int
+	vxlanPort   int
+	ipVersion   uint8
+	mtu         int
 
 	// Indicates if configuration has changed since the last apply.
 	vtepsDirty        bool
@@ -75,31 +73,9 @@ type VXLANFDB interface {
 
 func newVXLANManager(
 	ipsetsDataplane dpsets.IPSetsDataplane,
-	mainRouteTable routetable.Interface,
+	routeMgr *routeManager,
 	fdb VXLANFDB,
-	tunnelDevice string,
-	ipVersion uint8,
-	mtu int,
-	dpConfig Config,
-	opRecorder logutils.OpRecorder,
-) *vxlanManager {
-	return newVXLANManagerWithShims(
-		ipsetsDataplane,
-		mainRouteTable,
-		fdb,
-		tunnelDevice,
-		ipVersion,
-		mtu,
-		dpConfig,
-		opRecorder,
-	)
-}
-
-func newVXLANManagerWithShims(
-	ipsetsDataplane dpsets.IPSetsDataplane,
-	mainRouteTable routetable.Interface,
-	fdb VXLANFDB,
-	tunnelDevice string,
+	deviceName string,
 	ipVersion uint8,
 	mtu int,
 	dpConfig Config,
@@ -115,35 +91,31 @@ func newVXLANManagerWithShims(
 		hostname:          dpConfig.Hostname,
 		fdb:               fdb,
 		vtepsByNode:       map[string]*proto.VXLANTunnelEndpointUpdate{},
-		tunnelDevice:      tunnelDevice,
-		tunnelDeviceMTU:   mtu,
+		vxlanDevice:       deviceName,
 		vxlanID:           dpConfig.RulesConfig.VXLANVNI,
 		vxlanPort:         dpConfig.RulesConfig.VXLANPort,
 		ipVersion:         ipVersion,
+		mtu:               mtu,
 		externalNodeCIDRs: dpConfig.ExternalNodesCidrs,
 		vtepsDirty:        true,
 		dpConfig:          dpConfig,
 		logCtx: logrus.WithFields(logrus.Fields{
 			"ipVersion":     ipVersion,
-			"tunnel device": tunnelDevice,
+			"tunnel device": deviceName,
 		}),
 		opRecorder: opRecorder,
-		routeMgr: newRouteManager(
-			mainRouteTable,
-			proto.IPPoolType_VXLAN,
-			tunnelDevice,
-			ipVersion,
-			mtu,
-			dpConfig,
-			opRecorder,
-		),
 	}
 
-	manager.routeMgr.routeClassTunnel = routetable.RouteClassVXLANTunnel
-	manager.routeMgr.routeClassSameSubnet = routetable.RouteClassVXLANSameSubnet
-	manager.routeMgr.setTunnelRouteFunc(manager.route)
+	manager.registerRouteManager(routeMgr)
 	manager.routeMgr.triggerRouteUpdate()
 	return manager
+}
+
+func (m *vxlanManager) registerRouteManager(routeMgr *routeManager) {
+	m.routeMgr = routeMgr
+	m.routeMgr.routeClassTunnel = routetable.RouteClassVXLANTunnel
+	m.routeMgr.routeClassSameSubnet = routetable.RouteClassVXLANSameSubnet
+	m.routeMgr.setTunnelRouteFunc(m.route)
 }
 
 func (m *vxlanManager) OnUpdate(protoBufMsg interface{}) {
@@ -249,7 +221,7 @@ func (m *vxlanManager) route(cidr ip.CIDR, r *proto.RouteUpdate) *routetable.Tar
 		// the VTEP because they ARE the VTEP!
 		return &routetable.Target{
 			CIDR: cidr,
-			MTU:  m.tunnelDeviceMTU,
+			MTU:  m.mtu,
 		}
 	}
 
@@ -267,42 +239,42 @@ func (m *vxlanManager) route(cidr ip.CIDR, r *proto.RouteUpdate) *routetable.Tar
 		Type: routetable.TargetTypeVXLAN,
 		CIDR: cidr,
 		GW:   ip.FromString(vtepAddr),
-		MTU:  m.tunnelDeviceMTU,
+		MTU:  m.mtu,
 	}
 }
 
 func (m *vxlanManager) KeepVXLANDeviceInSync(mtu int, xsumBroken bool, wait time.Duration, dataIfaceC chan string) {
-	vxlanDevice := func(parent netlink.Link) (netlink.Link, string, error) {
-		localVTEP := m.getLocalVTEP()
-		addr := localVTEP.Ipv4Addr
-		parentDeviceIP := localVTEP.ParentDeviceIp
-		if m.ipVersion == 6 {
-			addr = localVTEP.Ipv6Addr
-			parentDeviceIP = localVTEP.ParentDeviceIpv6
-		}
+	m.routeMgr.KeepDeviceInSync(mtu, xsumBroken, wait, dataIfaceC, m.device)
+}
 
-		if parent == nil {
-			return nil, "", fmt.Errorf("no parent device available")
-		}
-
-		mac, err := parseMacForIPVersion(localVTEP, m.ipVersion)
-		if err != nil {
-			return nil, "", err
-		}
-		la := netlink.NewLinkAttrs()
-		la.Name = m.tunnelDevice
-		la.HardwareAddr = mac
-		vxlan := &netlink.Vxlan{
-			LinkAttrs:    la,
-			VxlanId:      m.vxlanID,
-			Port:         m.vxlanPort,
-			VtepDevIndex: parent.Attrs().Index,
-			SrcAddr:      ip.FromString(parentDeviceIP).AsNetIP(),
-		}
-		return vxlan, addr, nil
+func (m *vxlanManager) device(parent netlink.Link) (netlink.Link, string, error) {
+	localVTEP := m.getLocalVTEP()
+	addr := localVTEP.Ipv4Addr
+	parentDeviceIP := localVTEP.ParentDeviceIp
+	if m.ipVersion == 6 {
+		addr = localVTEP.Ipv6Addr
+		parentDeviceIP = localVTEP.ParentDeviceIpv6
 	}
 
-	m.routeMgr.KeepDeviceInSync(mtu, xsumBroken, wait, dataIfaceC, vxlanDevice)
+	if parent == nil {
+		return nil, "", fmt.Errorf("no parent device available")
+	}
+
+	mac, err := parseMacForIPVersion(localVTEP, m.ipVersion)
+	if err != nil {
+		return nil, "", err
+	}
+	la := netlink.NewLinkAttrs()
+	la.Name = m.vxlanDevice
+	la.HardwareAddr = mac
+	vxlan := &netlink.Vxlan{
+		LinkAttrs:    la,
+		VxlanId:      m.vxlanID,
+		Port:         m.vxlanPort,
+		VtepDevIndex: parent.Attrs().Index,
+		SrcAddr:      ip.FromString(parentDeviceIP).AsNetIP(),
+	}
+	return vxlan, addr, nil
 }
 
 // vlanLinksIncompat takes two vxlan devices and compares them to make sure they match. If they do not match,

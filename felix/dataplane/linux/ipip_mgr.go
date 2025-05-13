@@ -60,27 +60,7 @@ type ipipManager struct {
 
 func newIPIPManager(
 	ipsetsDataplane dpsets.IPSetsDataplane,
-	mainRouteTable routetable.Interface,
-	tunnelDevice string,
-	ipVersion uint8,
-	mtu int,
-	dpConfig Config,
-	opRecorder logutils.OpRecorder,
-) *ipipManager {
-	return newIPIPManagerWithShims(
-		ipsetsDataplane,
-		mainRouteTable,
-		tunnelDevice,
-		ipVersion,
-		mtu,
-		dpConfig,
-		opRecorder,
-	)
-}
-
-func newIPIPManagerWithShims(
-	ipsetsDataplane dpsets.IPSetsDataplane,
-	mainRouteTable routetable.Interface,
+	routeMgr *routeManager,
 	tunnelDevice string,
 	ipVersion uint8,
 	mtu int,
@@ -114,24 +94,26 @@ func newIPIPManagerWithShims(
 			"tunnel device": tunnelDevice,
 		}),
 		opRecorder: opRecorder,
-		routeMgr: newRouteManager(
-			mainRouteTable,
-			proto.IPPoolType_IPIP,
-			tunnelDevice,
-			ipVersion,
-			mtu,
-			dpConfig,
-			opRecorder,
-		),
 	}
 
-	manager.routeMgr.routeClassTunnel = routetable.RouteClassIPIPTunnel
-	manager.routeMgr.routeClassSameSubnet = routetable.RouteClassIPIPSameSubnet
-	manager.routeMgr.setTunnelRouteFunc(manager.route)
+	manager.registerRouteManager(routeMgr)
 	if dpConfig.ProgramRoutes {
 		manager.routeMgr.triggerRouteUpdate()
 	}
 	return manager
+}
+
+func (m *ipipManager) registerRouteManager(routeMgr *routeManager) {
+	m.routeMgr = routeMgr
+	m.routeMgr.ippoolType = proto.IPPoolType_IPIP
+	m.routeMgr.ipVersion = m.ipVersion
+	m.routeMgr.tunnelDeviceMTU = m.tunnelDeviceMTU
+	m.routeMgr.dpConfig = m.dpConfig
+	m.routeMgr.opRecorder = m.opRecorder
+	m.routeMgr.tunnelDevice = m.tunnelDevice
+	m.routeMgr.routeClassTunnel = routetable.RouteClassIPIPTunnel
+	m.routeMgr.routeClassSameSubnet = routetable.RouteClassIPIPSameSubnet
+	m.routeMgr.setTunnelRouteFunc(m.route)
 }
 
 func (m *ipipManager) OnUpdate(protoBufMsg interface{}) {
@@ -211,19 +193,19 @@ func (m *ipipManager) route(cidr ip.CIDR, r *proto.RouteUpdate) *routetable.Targ
 }
 
 func (m *ipipManager) KeepIPIPDeviceInSync(mtu int, xsumBroken bool, wait time.Duration, dataIfaceC chan string) {
-	ipipDevice := func(_ netlink.Link) (netlink.Link, string, error) {
-		la := netlink.NewLinkAttrs()
-		la.Name = m.tunnelDevice
-		ipip := &netlink.Iptun{
-			LinkAttrs: la,
-		}
-		address := m.dpConfig.RulesConfig.IPIPTunnelAddress
+	m.routeMgr.KeepDeviceInSync(mtu, xsumBroken, wait, dataIfaceC, m.device)
+}
 
-		if len(address) == 0 {
-			return nil, "", fmt.Errorf("Address is not set")
-		}
-		return ipip, address.String(), nil
+func (m *ipipManager) device(_ netlink.Link) (netlink.Link, string, error) {
+	la := netlink.NewLinkAttrs()
+	la.Name = m.tunnelDevice
+	ipip := &netlink.Iptun{
+		LinkAttrs: la,
 	}
+	address := m.dpConfig.RulesConfig.IPIPTunnelAddress
 
-	m.routeMgr.KeepDeviceInSync(mtu, xsumBroken, wait, dataIfaceC, ipipDevice)
+	if len(address) == 0 {
+		return nil, "", fmt.Errorf("Address is not set")
+	}
+	return ipip, address.String(), nil
 }
