@@ -84,8 +84,8 @@ func MustParseNet(n string) net2.IPNet {
 
 func IntersectAndFilterLabels(in, out uniquelabels.Map) uniquelabels.Map {
 	return uniquelabels.IntersectAndFilter(in, out, func(k uniquestr.Handle, _ uniquestr.Handle) bool {
-		// Skip Calico labels from the logs
-		return !strings.HasPrefix(k.Value(), "projectcalico.org/")
+		// Include all labels without applying any filtering
+		return true
 	})
 }
 
