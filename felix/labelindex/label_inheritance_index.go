@@ -106,6 +106,10 @@ type InheritIndex struct {
 	OnMatchStarted MatchCallback
 	OnMatchStopped MatchCallback
 
+	// Optional callbacks for first/last match events.
+	OnFirstMatchStarted func(selId any)
+	OnLastMatchStopped  func(selId any)
+
 	dirtyItemIDs set.Set[any]
 }
 
@@ -119,8 +123,10 @@ func NewInheritIndex(onMatchStarted, onMatchStopped MatchCallback) *InheritIndex
 		matches: matchmap.NewMatchMap[any, any, uint32](),
 
 		// Callback functions
-		OnMatchStarted: onMatchStarted,
-		OnMatchStopped: onMatchStopped,
+		OnMatchStarted:      onMatchStarted,
+		OnMatchStopped:      onMatchStopped,
+		OnFirstMatchStarted: func(selId any) {},
+		OnLastMatchStopped:  func(selId any) {},
 
 		dirtyItemIDs: set.New[any](),
 	}
@@ -186,6 +192,10 @@ func (idx *InheritIndex) UpdateSelector(id interface{}, sel *selector.Selector) 
 	}).Info("Updating selector")
 	idx.scanAllLabels(id, sel)
 	idx.selectorsById[id] = sel
+}
+
+func (l *InheritIndex) SelectorMatchesSomething(key any) bool {
+	return l.matches.ContainsKey(key)
 }
 
 func (idx *InheritIndex) DeleteSelector(id interface{}) {
@@ -377,11 +387,23 @@ func (idx *InheritIndex) updateMatches(
 	}
 }
 
+func (idx *InheritIndex) ForceMatch(selId, labelId interface{}) {
+	idx.storeMatch(selId, labelId)
+}
+
+func (idx *InheritIndex) RemoveForceMatch(selId, labelId interface{}) {
+	idx.deleteMatch(selId, labelId)
+}
+
 func (idx *InheritIndex) storeMatch(selId, labelId interface{}) {
-	previouslyMatched := idx.matches.Get(selId, labelId)
-	if !previouslyMatched {
+	selectorPreviouslyMatchedAnything := idx.SelectorMatchesSomething(selId)
+	if !selectorPreviouslyMatchedAnything || !idx.matches.Get(selId, labelId) {
 		log.Debugf("Selector %v now matches labels %v", selId, labelId)
 		idx.matches.MustPut(selId, labelId)
+		if !selectorPreviouslyMatchedAnything {
+			log.Debugf("Selector %v now matches something", selId)
+			idx.OnFirstMatchStarted(selId)
+		}
 		idx.OnMatchStarted(selId, labelId)
 	}
 }
@@ -393,5 +415,11 @@ func (idx *InheritIndex) deleteMatch(selId, labelId interface{}) {
 			selId, labelId)
 		idx.matches.Delete(selId, labelId)
 		idx.OnMatchStopped(selId, labelId)
+
+		selectorMatchesAnything := idx.SelectorMatchesSomething(selId)
+		if !selectorMatchesAnything {
+			log.Debugf("Selector %v no longer matches anything", selId)
+			idx.OnLastMatchStopped(selId)
+		}
 	}
 }
