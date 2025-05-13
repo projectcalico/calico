@@ -16,6 +16,7 @@ package calc
 
 import (
 	"fmt"
+	"iter"
 	"strconv"
 	"strings"
 	"sync"
@@ -89,8 +90,8 @@ func (pc *PolicyLookupsCache) SetUseIDs() {
 	pc.useIDs = true
 }
 
-func (pc *PolicyLookupsCache) OnPolicyActive(key model.PolicyKey, policy *model.Policy) {
-	pc.updatePolicyRulesNFLOGPrefixes(key, policy)
+func (pc *PolicyLookupsCache) OnPolicyActive(policyKey model.PolicyKey, policy *model.Policy, affectedEndpoints iter.Seq[any]) {
+	pc.updatePolicyRulesNFLOGPrefixes(policyKey, policy)
 }
 
 func (pc *PolicyLookupsCache) OnPolicyInactive(key model.PolicyKey) {

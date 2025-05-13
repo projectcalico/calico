@@ -15,6 +15,7 @@
 package calc
 
 import (
+	"iter"
 	"reflect"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
@@ -40,7 +41,7 @@ type PolicyMatchListener interface {
 }
 
 type ActivePolicyListener interface {
-	OnPolicyActive(policyKey model.PolicyKey, policy *model.Policy)
+	OnPolicyActive(policyKey model.PolicyKey, policy *model.Policy, affectedEndpoints iter.Seq[any])
 	OnPolicyInactive(model.PolicyKey)
 }
 
@@ -441,7 +442,7 @@ func (arc *ActiveRulesCalculator) sendPolicyUpdate(policyKey model.PolicyKey, po
 			log.WithField("policyKey", policyKey).Panic("Unknown policy became active!")
 		}
 		for _, l := range arc.ActivePolicyListeners {
-			l.OnPolicyActive(policyKey, policy)
+			l.OnPolicyActive(policyKey, policy, arc.labelIndex.AllMatches(policyKey))
 		}
 	} else {
 		for _, l := range arc.ActivePolicyListeners {

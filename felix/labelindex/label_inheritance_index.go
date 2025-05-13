@@ -44,6 +44,7 @@
 package labelindex
 
 import (
+	"iter"
 	"reflect"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
@@ -196,6 +197,14 @@ func (idx *InheritIndex) UpdateSelector(id interface{}, sel *selector.Selector) 
 
 func (l *InheritIndex) SelectorMatchesSomething(key any) bool {
 	return l.matches.ContainsKey(key)
+}
+
+func (l *InheritIndex) SelectorMatches(key, itemKey any) bool {
+	return l.matches.Get(key, itemKey)
+}
+
+func (l *InheritIndex) AllMatches(key model.PolicyKey) iter.Seq[any] {
+	return l.matches.AllBsForA(key)
 }
 
 func (idx *InheritIndex) DeleteSelector(id interface{}) {

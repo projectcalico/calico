@@ -369,9 +369,10 @@ func NewCalculationGraph(
 	//                  |
 	//             <dataplane>
 	//
-	polResolver := NewPolicyResolver()
+	polResolver := NewPolicyResolver(activeRulesCalc.labelIndex)
 	// Hook up the inputs to the policy resolver.
-	activeRulesCalc.RegisterPolicyMatchListener(polResolver)
+	activeRulesCalc.PolicyMatchListeners = append(activeRulesCalc.PolicyMatchListeners, polResolver)
+	activeRulesCalc.ActivePolicyListeners = append(activeRulesCalc.ActivePolicyListeners, polResolver)
 	polResolver.RegisterWith(allUpdDispatcher, localEndpointDispatcher)
 	// And hook its output to the callbacks.
 	polResolver.RegisterCallback(callbacks)
