@@ -16,7 +16,7 @@ import (
 	"github.com/projectcalico/calico/guardian/pkg/tunnel"
 )
 
-func handleConnection(t *testing.T, conn net.Conn, listener net.Listener) {
+func handleConnection(t *testing.T, listener net.Listener) {
 	conn, err := listener.Accept()
 	Expect(err).NotTo(HaveOccurred())
 	Expect(conn).NotTo(BeNil())
@@ -52,7 +52,7 @@ func TestDialPlainTCP(t *testing.T) {
 	defer listener.Close()
 
 	go func() {
-		handleConnection(t, nil, listener)
+		handleConnection(t, listener)
 	}()
 
 	dialer, err := tunnel.NewTLSSessionDialer(address, nil)
@@ -83,7 +83,7 @@ func TestDialTLS(t *testing.T) {
 	defer listener.Close()
 
 	go func() {
-		handleConnection(t, nil, listener)
+		handleConnection(t, listener)
 	}()
 
 	// Load the server's certificate
