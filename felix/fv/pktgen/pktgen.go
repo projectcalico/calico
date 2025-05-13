@@ -31,7 +31,7 @@ const usage = `pktgen: generates packets for Felix FV testing.
 Usage:
   pktgen <ip_src> <ip_dst> <proto> [--ip-id=<ip_id>] [--port-src=<port_src>] [--port-dst=<port_dst>]
          [--tcp-syn] [--tcp-ack] [--tcp-fin] [--tcp-rst] [--tcp-ack-no=<ack_no>] [--tcp-seq-no=<seq_no>]
-		 [--ip-dnf=[y|n]] [--payload-size=<size>]
+		 [--ip-dnf=[y|n]] [--payload-size=<size>] [--udp-sock]
 `
 
 func main() {
@@ -111,6 +111,11 @@ func main() {
 		} else if args["--ip-dnf"].(string) != "n" {
 			log.Fatal("wrong value for --ip-dnf. It can be only 'y' or 'n'")
 		}
+	}
+
+	useUDPSock := false
+	if _, ok := args["--udp-sock"]; ok {
+		useUDPSock = true
 	}
 
 	var proto layers.IPProtocol
@@ -241,6 +246,32 @@ func main() {
 		s    int
 		addr unix.Sockaddr
 	)
+
+	if useUDPSock {
+		s, err = unix.Socket(unix.AF_INET, unix.SOCK_DGRAM, 0)
+
+		if err != nil || s < 0 {
+			log.WithError(err).Fatal("failed to create UDP socket")
+		}
+
+		if !ipDNF {
+			err = unix.SetsockoptInt(s, unix.IPPROTO_IP, unix.IP_PMTUDISC, unix.IP_PMTUDISC_DONT)
+			if err != nil {
+				log.WithError(err).Fatal("failed to set IP_PMTUDISC_DONT")
+			}
+		}
+
+		addr = &unix.SockaddrInet4{
+			Port: int(dport),
+		}
+		copy(addr.(*unix.SockaddrInet4).Addr[:], ipdst.To4()[:4])
+
+		if err := unix.Sendto(s, payload, 0, addr); err != nil {
+			log.WithError(err).Fatal("failed to send packet")
+		}
+
+		return
+	}
 
 	if family == 4 {
 		s, err = unix.Socket(unix.AF_INET, unix.SOCK_RAW, unix.IPPROTO_RAW)
