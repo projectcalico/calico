@@ -472,7 +472,7 @@ func (cc *controllerControl) InitControllers(ctx context.Context, cfg config.Run
 
 	// We don't need the full Pod object. In order to reduce memory usage, add a transform that only
 	// includes the fields we need.
-	if err := podInformer.SetTransform(cc.podTransformer); err != nil {
+	if err := podInformer.SetTransform(cc.podTransformer(cfg.Controllers.WorkloadEndpoint != nil)); err != nil {
 		log.WithError(err).Fatal("Failed to set transform on pod informer")
 	}
 }
@@ -480,51 +480,53 @@ func (cc *controllerControl) InitControllers(ctx context.Context, cfg config.Run
 // podTransformer is passed to the pod informer used by kube-controllers in order to reduce the amount of
 // memory used by the pod cache.  It takes a full v1.Pod and returns a slimmed down version of the pod
 // that only contains the fields we care about.
-func (cc *controllerControl) podTransformer(a any) (any, error) {
-	pod, ok := a.(*v1.Pod)
-	if !ok {
-		return nil, fmt.Errorf("expected *v1.Pod, got %T", a)
-	}
+func (cc *controllerControl) podTransformer(podControllerEnabled bool) cache.TransformFunc {
+	return func(a any) (any, error) {
+		pod, ok := a.(*v1.Pod)
+		if !ok {
+			return nil, fmt.Errorf("expected *v1.Pod, got %T", a)
+		}
 
-	p := &v1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      pod.Name,
-			Namespace: pod.Namespace,
-			UID:       pod.UID,
-		},
-		Spec: v1.PodSpec{
-			NodeName:    pod.Spec.NodeName,
-			HostNetwork: pod.Spec.HostNetwork,
-		},
-		Status: v1.PodStatus{
-			PodIPs: pod.Status.PodIPs,
-			Phase:  pod.Status.Phase,
-		},
-	}
+		p := &v1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      pod.Name,
+				Namespace: pod.Namespace,
+				UID:       pod.UID,
+			},
+			Spec: v1.PodSpec{
+				NodeName:    pod.Spec.NodeName,
+				HostNetwork: pod.Spec.HostNetwork,
+			},
+			Status: v1.PodStatus{
+				PodIPs: pod.Status.PodIPs,
+				Phase:  pod.Status.Phase,
+			},
+		}
 
-	if cc.controllers["Pod"] != nil {
-		// We only need the full labels and service account name if we are running the Pod
-		// controller, as they are sync'd to etcd for policy matching.
-		p.Labels = pod.Labels
-		p.Spec.ServiceAccountName = pod.Spec.ServiceAccountName
-	}
+		if podControllerEnabled {
+			// We only need the full labels and service account name if we are running the Pod
+			// controller, as they are sync'd to etcd for policy matching.
+			p.Labels = pod.Labels
+			p.Spec.ServiceAccountName = pod.Spec.ServiceAccountName
+		}
 
-	// Include the annotations we care about, if they exist.
-	if pod.Annotations != nil {
-		for _, annotation := range []string{
-			conversion.AnnotationPodIPs,
-			conversion.AnnotationAWSPodIPs,
-		} {
-			if value, ok := pod.Annotations[annotation]; ok {
-				if p.Annotations == nil {
-					p.Annotations = make(map[string]string)
+		// Include the annotations we care about, if they exist.
+		if pod.Annotations != nil {
+			for _, annotation := range []string{
+				conversion.AnnotationPodIPs,
+				conversion.AnnotationAWSPodIPs,
+			} {
+				if value, ok := pod.Annotations[annotation]; ok {
+					if p.Annotations == nil {
+						p.Annotations = make(map[string]string)
+					}
+					p.Annotations[annotation] = value
 				}
-				p.Annotations[annotation] = value
 			}
 		}
-	}
 
-	return p, nil
+		return p, nil
+	}
 }
 
 // registerInformers registers the given informers, if not already registered. Registered informers
