@@ -14,18 +14,15 @@
 
 package registry
 
-import "fmt"
+import (
+	"fmt"
+)
 
 // Component represents a component in the pinned version file.
 type Component struct {
 	Version  string `yaml:"version"`
 	Image    string `yaml:"image,omitempty"`
 	Registry string `yaml:"registry,omitempty"`
-}
-
-// ImageRef returns the image reference of the component.
-func (c Component) ImageRef() ImageRef {
-	return ParseImage(c.String())
 }
 
 // String returns the string representation of the component.
