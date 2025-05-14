@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@ package clientv3
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
 
@@ -64,13 +65,10 @@ func (r networkPolicies) Create(ctx context.Context, res *apiv3.NetworkPolicy, o
 	if err := validator.Validate(res); err != nil {
 		return nil, err
 	}
-
-	// Properly prefix the name
-	backendPolicyName, err := names.BackendTieredPolicyName(res.GetObjectMeta().GetName(), res.Spec.Tier)
+	err := names.ValidateTieredPolicyName(res.Name, tier)
 	if err != nil {
 		return nil, err
 	}
-	res.GetObjectMeta().SetName(backendPolicyName)
 
 	// Add tier labels to policy for lookup.
 	if tier != "default" {
@@ -104,13 +102,10 @@ func (r networkPolicies) Update(ctx context.Context, res *apiv3.NetworkPolicy, o
 	if err := validator.Validate(res); err != nil {
 		return nil, err
 	}
-
-	// Properly prefix the name
-	backendPolicyName, err := names.BackendTieredPolicyName(res.GetObjectMeta().GetName(), res.Spec.Tier)
+	err := names.ValidateTieredPolicyName(res.Name, res.Spec.Tier)
 	if err != nil {
 		return nil, err
 	}
-	res.GetObjectMeta().SetName(backendPolicyName)
 
 	// Add tier labels to policy for lookup.
 	tier := names.TierOrDefault(res.Spec.Tier)
@@ -133,8 +128,7 @@ func (r networkPolicies) Update(ctx context.Context, res *apiv3.NetworkPolicy, o
 
 // Delete takes name of the NetworkPolicy and deletes it. Returns an error if one occurs.
 func (r networkPolicies) Delete(ctx context.Context, namespace, name string, opts options.DeleteOptions) (*apiv3.NetworkPolicy, error) {
-	backendPolicyName := names.TieredPolicyName(name)
-	out, err := r.client.resources.Delete(ctx, opts, apiv3.KindNetworkPolicy, namespace, backendPolicyName)
+	out, err := r.client.resources.Delete(ctx, opts, apiv3.KindNetworkPolicy, namespace, name)
 	if out != nil {
 		// Add the tier labels if necessary
 		out.GetObjectMeta().SetLabels(defaultTierLabelIfMissing(out.GetObjectMeta().GetLabels()))
@@ -146,8 +140,7 @@ func (r networkPolicies) Delete(ctx context.Context, namespace, name string, opt
 // Get takes name of the NetworkPolicy, and returns the corresponding NetworkPolicy object,
 // and an error if there is any.
 func (r networkPolicies) Get(ctx context.Context, namespace, name string, opts options.GetOptions) (*apiv3.NetworkPolicy, error) {
-	backendPolicyName := names.TieredPolicyName(name)
-	out, err := r.client.resources.Get(ctx, opts, apiv3.KindNetworkPolicy, namespace, backendPolicyName)
+	out, err := r.client.resources.Get(ctx, opts, apiv3.KindNetworkPolicy, namespace, name)
 	if out != nil {
 		// Add the tier labels if necessary
 		out.GetObjectMeta().SetLabels(defaultTierLabelIfMissing(out.GetObjectMeta().GetLabels()))
@@ -161,6 +154,9 @@ func (r networkPolicies) Get(ctx context.Context, namespace, name string, opts o
 				return res_out, tierErr
 			}
 			res_out.Spec.Tier = tier
+		}
+		if res_out.Name != name {
+			return nil, fmt.Errorf("resource not found NetworkPolicy(%s/%s)", namespace, name)
 		}
 		return res_out, err
 	}
