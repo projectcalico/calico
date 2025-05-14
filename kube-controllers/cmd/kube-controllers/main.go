@@ -511,13 +511,14 @@ func (cc *controllerControl) podTransformer(a any) (any, error) {
 
 	// Include the annotations we care about, if they exist.
 	if pod.Annotations != nil {
-		p.Annotations = make(map[string]string)
-
 		for _, annotation := range []string{
-			conversion.AnnotationAWSPodIPs,
+			conversion.AnnotationPodIPs,
 			conversion.AnnotationAWSPodIPs,
 		} {
 			if value, ok := pod.Annotations[annotation]; ok {
+				if p.Annotations == nil {
+					p.Annotations = make(map[string]string)
+				}
 				p.Annotations[annotation] = value
 			}
 		}
