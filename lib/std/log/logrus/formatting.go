@@ -42,9 +42,22 @@ const (
 	FileNameUnknown = "<nil>"
 )
 
+var (
+	// This is the name of this package as calculated by the runtime package.
+	logPkgName string
+)
+
 func init() {
 	// We need logrus to record the caller on each log entry for us.
 	logrus.SetReportCaller(true)
+
+	pc, _, _, ok := runtime.Caller(0)
+	if !ok {
+		return
+	}
+
+	fn := runtime.FuncForPC(pc).Name()
+	logPkgName = strings.TrimSuffix(getPackageName(fn), "/logrus")
 }
 
 type MetricsCounter interface {
@@ -231,21 +244,6 @@ func FormatForSyslog(entry *logrus.Entry) string {
 	appendKVsAndNewLine(b, entry.Data)
 
 	return b.String()
-}
-
-var (
-	// This is the name of this package as calculated by the runtime package.
-	logPkgName string
-)
-
-func init() {
-	pc, _, _, ok := runtime.Caller(0)
-	if !ok {
-		return
-	}
-
-	fn := runtime.FuncForPC(pc).Name()
-	logPkgName = strings.TrimSuffix(getPackageName(fn), "/logrus")
 }
 
 func getFileInfo(entry *logrus.Entry) (string, int) {
@@ -525,11 +523,6 @@ type BackgroundHook struct {
 	debugFileNameRE *regexp.Regexp
 
 	destinations []*Destination
-
-	// Our own copy of the dropped logs counter, used for logging out when we drop logs.
-	// Must be read/updated using atomic.XXX.
-	numDroppedLogs  uint64
-	lastDropLogTime time.Duration
 
 	// Counter
 	counter MetricsCounter
