@@ -1,5 +1,11 @@
 package logrus
 
+import (
+	"io"
+
+	"github.com/projectcalico/calico/lib/std/log/types"
+)
+
 type Option func(*config)
 
 func WithComponentName(name string) Option {
@@ -8,8 +14,20 @@ func WithComponentName(name string) Option {
 	}
 }
 
-func WithOutput(name string) Option {
+func WithOutput(output io.Writer) Option {
 	return func(c *config) {
-		c.componentName = name
+		c.output = output
+	}
+}
+
+func WithFormatter(formatter types.Formatter) Option {
+	return func(c *config) {
+		c.formatter = formatter
+	}
+}
+
+func WithLevel(level types.Level) Option {
+	return func(c *config) {
+		c.level = level
 	}
 }

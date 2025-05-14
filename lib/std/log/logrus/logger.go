@@ -18,10 +18,15 @@ type config struct {
 	componentName string
 	output        io.Writer
 	level         types.Level
+	formatter     types.Formatter
 }
 
 type logger struct {
 	logrus *logrus.Logger
+}
+
+func (logger *logger) StandardLogger() types.Logger {
+	return logger
 }
 
 func (logger *logger) RedirectToTestingT(t *testing.T) func() {
@@ -47,12 +52,20 @@ func New(opts ...Option) types.Logger {
 }
 
 func newLogger(cfg config) types.Logger {
-	formatter := &Formatter{Component: cfg.componentName}
-	formatter.init()
+	var logrusFormatter logrus.Formatter
+
+	if cfg.formatter != nil {
+		logrusFormatter = &formatterWrapper{cfg.formatter}
+	} else {
+		formatter := &Formatter{Component: cfg.componentName}
+		formatter.init()
+
+		logrusFormatter = formatter
+	}
 
 	lgrs := logrus.New()
 	lgrs.SetReportCaller(true)
-	lgrs.SetFormatter(formatter)
+	lgrs.SetFormatter(logrusFormatter)
 	lgrs.SetOutput(cfg.output)
 	lgrs.SetLevel(logrus.Level(cfg.level))
 

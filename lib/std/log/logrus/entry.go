@@ -13,6 +13,14 @@ type entry struct {
 	entry *logrus.Entry
 }
 
+func (e *entry) GetLevel() types.Level {
+	return types.Level(e.entry.Level)
+}
+
+func (e *entry) Logger() types.Logger {
+	return &logger{e.entry.Logger}
+}
+
 func (e *entry) Dup() types.Entry {
 	return &entry{e.entry.Dup()}
 }
@@ -167,4 +175,8 @@ func (e *entry) Fatalln(args ...interface{}) {
 
 func (e *entry) Panicln(args ...interface{}) {
 	e.entry.Panicln(args...)
+}
+
+func (e *entry) Fields() types.Fields {
+	return types.Fields(e.entry.Data)
 }
