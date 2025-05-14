@@ -50,6 +50,24 @@ int bpf_program_fd(struct bpf_object *obj, char *secname)
 	return fd;
 }
 
+int bpf_update_link(struct bpf_object *obj, char *progName, char *path)
+{
+	struct bpf_link *link = bpf_link__open(path);
+	int err = libbpf_get_error(link);
+	if (err) {
+		return err;
+	}
+	struct bpf_program *prog = bpf_object__find_program_by_name(obj, progName);
+        if (prog == NULL) {
+                errno = ENOENT;
+                return -1;
+        }
+
+	err = bpf_link__update_program(link, prog);
+	set_errno(err);
+	return err;
+}
+
 struct bpf_tc_opts bpf_tc_program_attach(struct bpf_object *obj, char *secName, int ifIndex, bool ingress, int prio, int handle)
 {
 	DECLARE_LIBBPF_OPTS(bpf_tc_hook, hook,

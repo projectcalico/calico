@@ -302,6 +302,32 @@ func (l *Link) Close() error {
 	return fmt.Errorf("link nil")
 }
 
+func (l *Link) Pin(path string) error {
+	if l.link != nil {
+		cPath := C.CString(path)
+		defer C.free(unsafe.Pointer(cPath))
+		errno := C.bpf_link__pin(l.link, cPath)
+		if errno != 0 {
+			return fmt.Errorf("faild to pin link to %s: %w", path, syscall.Errno(errno))
+		}
+		return nil
+	}
+	return fmt.Errorf("link nil")
+}
+
+func (o *Obj) UpdateLink(path, progName string) error {
+	cPath := C.CString(path)
+	cProgName := C.CString(progName)
+	defer C.free(unsafe.Pointer(cPath))
+	defer C.free(unsafe.Pointer(cProgName))
+
+	_, err := C.bpf_update_link(o.obj, cProgName, cPath)
+	if err != nil {
+		return fmt.Errorf("error updating link %w", err)
+	}
+	return nil
+}
+
 func CreateQDisc(ifName string) error {
 	cIfName := C.CString(ifName)
 	defer C.free(unsafe.Pointer(cIfName))
