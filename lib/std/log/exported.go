@@ -12,8 +12,9 @@ import (
 )
 
 type (
-	Entry = types.Entry
-	Level = types.Level
+	Entry  = types.Entry
+	Level  = types.Level
+	Fields = types.Fields
 )
 
 const (
@@ -47,8 +48,8 @@ func ConfigureStandardLoggerForTesting(t *testing.T) func() {
 	}
 }
 
-func NewEntry() types.Entry {
-	return std.NewEntry()
+func NewEntry(l types.Logger) types.Entry {
+	return l.NewEntry()
 }
 
 // SetOutput sets the standard logger output.
