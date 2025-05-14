@@ -1,0 +1,15 @@
+- name: whisker-backend
+  run:
+    when: "${FORCE_RUN} or change_in(['/*', '/whisker-backend/', '/goldmane/', '/lib/std/', '/lib/httpmachinery/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+  execution_time_limit:
+    minutes: 30
+  dependencies:
+    - Prerequisites
+  task:
+    prologue:
+      commands:
+        - cd lib
+    jobs:
+      - name: make ci
+        commands:
+          - ../.semaphore/run-and-monitor make-ci.log make ci
