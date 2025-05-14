@@ -15,12 +15,9 @@
 package nat
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 	"path"
-	"strconv"
 	"strings"
 	"time"
 
@@ -73,47 +70,14 @@ func RemoveConnectTimeLoadBalancer(cgroupv2 string) error {
 		return nil
 	}
 
-	cgroupPath, err := ensureCgroupPath(cgroupv2)
+	bpfMount, err := utils.MaybeMountBPFfs()
 	if err != nil {
-		return errors.Wrap(err, "failed to set-up cgroupv2")
+		return errors.Wrap(err, "Failed to mount bpffs")
 	}
 
-	cmd := exec.Command("bpftool", "-j", "-p", "cgroup", "show", cgroupPath)
-	log.WithField("args", cmd.Args).Info("Running bpftool to look up programs attached to cgroup")
-	out, err := cmd.Output()
-	if err != nil || strings.TrimSpace(string(out)) == "" {
-		log.WithError(err).WithField("output", string(out)).Info(
-			"Failed to list BPF programs.  Assuming not supported/nothing to clean up.")
-		return err
-	}
-
-	var progs []cgroupProgs
-
-	err = json.Unmarshal(out, &progs)
-	if err != nil {
-		log.WithError(err).WithField("output", string(out)).Error("BPF program list not json.")
-		return err
-	}
-
-	for _, p := range progs {
-		if !strings.HasPrefix(p.Name, "cali_") {
-			continue
-		}
-
-		cmd = exec.Command("bpftool", "cgroup", "detach", cgroupPath, p.AttachType, "id", strconv.Itoa(p.ID))
-		log.WithField("args", cmd.Args).Info("Running bpftool to detach program")
-		out, err = cmd.CombinedOutput()
-		if err != nil {
-			log.WithError(err).WithField("output", string(out)).Error(
-				"Failed to detach connect-time load balancing program.")
-			return err
-		}
-	}
-
-	bpf.CleanUpCalicoPins("/sys/fs/bpf/calico_connect4")
+	bpf.CleanUpCalicoPins(path.Join(bpfMount, bpfdefs.CtlbPinDir))
 	ctlbProgsMap := newProgramsMap()
 	os.Remove(ctlbProgsMap.Path())
-
 	return nil
 }
 
@@ -160,18 +124,22 @@ func loadProgram(logLevel, ipver string, udpNotSeen time.Duration, excludeUDP bo
 }
 
 func attachProgram(name, ipver, bpfMount, cgroupPath string, udpNotSeen time.Duration, excludeUDP bool, obj *libbpf.Obj) error {
-
-	progPinDir := path.Join(bpfMount, "calico_connect4")
-	_ = os.RemoveAll(progPinDir)
-
 	progName := "calico_" + name + "_v" + ipver
-
-	// N.B. no need to remember the link since we are never going to detach
-	// these programs unless Felix restarts.
-	if _, err := obj.AttachCGroup(cgroupPath, progName); err != nil {
-		return fmt.Errorf("failed to attach program %s: %w", progName, err)
+	progPinDir := path.Join(bpfMount, progName)
+	if _, err := os.Stat(progPinDir); err == nil {
+		if err := obj.UpdateLink(progPinDir, progName); err != nil {
+			return fmt.Errorf("error updating program %s : %w", progName, err)
+		}
+		return nil
 	}
 
+	link, err := obj.AttachCGroup(cgroupPath, progName)
+	if err != nil {
+		return fmt.Errorf("failed to attach program %s: %w", progName, err)
+	}
+	if link != nil {
+		link.Pin(progPinDir)
+	}
 	log.WithFields(log.Fields{"program": progName, "cgroup": cgroupPath}).Info("Loaded cgroup program")
 
 	return nil
@@ -194,10 +162,15 @@ func updateCTLBJumpMap(jumpMap maps.Map, obj *libbpf.Obj) error {
 }
 
 func InstallConnectTimeLoadBalancer(ipv4Enabled, ipv6Enabled bool, cgroupv2 string, logLevel string, udpNotSeen time.Duration, excludeUDP bool) error {
-
 	bpfMount, err := utils.MaybeMountBPFfs()
 	if err != nil {
 		log.WithError(err).Error("Failed to mount bpffs, unable to do connect-time load balancing")
+		return err
+	}
+
+	pinDir := path.Join(bpfMount, bpfdefs.CtlbPinDir)
+	if err = os.MkdirAll(pinDir, 0700); err != nil {
+		log.WithError(err).Error("Failed to create pin dir, unable to do connect-time load balancing")
 		return err
 	}
 
@@ -222,32 +195,32 @@ func InstallConnectTimeLoadBalancer(ipv4Enabled, ipv6Enabled bool, cgroupv2 stri
 			return err
 		}
 		defer v46Obj.Close()
-		err = attachProgram("connect", "4", bpfMount, cgroupPath, udpNotSeen, excludeUDP, v4Obj)
+		err = attachProgram("connect", "4", pinDir, cgroupPath, udpNotSeen, excludeUDP, v4Obj)
 		if err != nil {
 			return err
 		}
-		err = attachProgram("connect", "46", bpfMount, cgroupPath, udpNotSeen, excludeUDP, v46Obj)
+		err = attachProgram("connect", "46", pinDir, cgroupPath, udpNotSeen, excludeUDP, v46Obj)
 		if err != nil {
 			return err
 		}
 
 		if !excludeUDP {
-			err = attachProgram("sendmsg", "4", bpfMount, cgroupPath, udpNotSeen, false, v4Obj)
+			err = attachProgram("sendmsg", "4", pinDir, cgroupPath, udpNotSeen, false, v4Obj)
 			if err != nil {
 				return err
 			}
 
-			err = attachProgram("recvmsg", "4", bpfMount, cgroupPath, udpNotSeen, false, v4Obj)
+			err = attachProgram("recvmsg", "4", pinDir, cgroupPath, udpNotSeen, false, v4Obj)
 			if err != nil {
 				return err
 			}
 
-			err = attachProgram("sendmsg", "46", bpfMount, cgroupPath, udpNotSeen, false, v46Obj)
+			err = attachProgram("sendmsg", "46", pinDir, cgroupPath, udpNotSeen, false, v46Obj)
 			if err != nil {
 				return err
 			}
 
-			err = attachProgram("recvmsg", "46", bpfMount, cgroupPath, udpNotSeen, false, v46Obj)
+			err = attachProgram("recvmsg", "46", pinDir, cgroupPath, udpNotSeen, false, v46Obj)
 			if err != nil {
 				return err
 			}
@@ -327,5 +300,6 @@ func ensureCgroupPath(cgroupv2 string) (string, error) {
 			return "", errors.Wrap(err, "failed to create cgroup")
 		}
 	}
+	log.Infof("Sridhar Cgroup path %s", cgroupPath)
 	return cgroupPath, nil
 }
