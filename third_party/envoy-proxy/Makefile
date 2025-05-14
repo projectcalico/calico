@@ -26,7 +26,7 @@ build: ;
 
 .PHONY: clean
 clean:
-	rm -f .envoy-proxy.*
+	rm -f .envoy-proxy.* .*.created* .*.published* .release.*
 	rm -fr bin/ envoy-proxy/
 	-docker image rm -f $$(docker images $(ENVOY_PROXY_IMAGE) -a -q)
 
