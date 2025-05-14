@@ -205,6 +205,7 @@ int calico_tc_main(struct __sk_buff *skb)
 #ifndef IPVER6
 	if (CALI_F_TO_HOST && ip_is_frag(ip_hdr(ctx))) {
 		if (!frags4_handle(ctx)) {
+			deny_reason(ctx, CALI_REASON_FRAG_WAIT);
 			goto deny;
 		}
 		/* force it through stack to trigger any further necessary fragmentation */
@@ -281,6 +282,9 @@ static CALI_BPF_INLINE int pre_policy_processing(struct cali_tc_ctx *ctx)
 			ctx->state->flags |= CALI_ST_IS_FRAG;
 			goto allow;
 		}
+
+		deny_reason(ctx, CALI_REASON_FRAG_REORDER);
+		goto deny;
 	}
 #endif
 
