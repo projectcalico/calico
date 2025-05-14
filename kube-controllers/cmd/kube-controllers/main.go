@@ -28,6 +28,8 @@ import (
 	"go.etcd.io/etcd/client/pkg/v3/srv"
 	"go.etcd.io/etcd/client/pkg/v3/transport"
 	clientv3 "go.etcd.io/etcd/client/v3"
+	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apiserver/pkg/storage/etcd3"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
@@ -47,6 +49,7 @@ import (
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/utils"
 	"github.com/projectcalico/calico/kube-controllers/pkg/status"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/debugserver"
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
@@ -480,6 +483,64 @@ func (cc *controllerControl) InitControllers(ctx context.Context, cfg config.Run
 		loadBalancerController := loadbalancer.NewLoadBalancerController(k8sClientset, calicoClient, *cfg.Controllers.LoadBalancer, serviceInformer, dataFeed)
 		cc.controllers["LoadBalancer"] = loadBalancerController
 		cc.registerInformers(serviceInformer)
+	}
+
+	// We don't need the full Pod object. In order to reduce memory usage, add a transform that only
+	// includes the fields we need.
+	if err := podInformer.SetTransform(cc.podTransformer(cfg.Controllers.WorkloadEndpoint != nil)); err != nil {
+		log.WithError(err).Fatal("Failed to set transform on pod informer")
+	}
+}
+
+// podTransformer is passed to the pod informer used by kube-controllers in order to reduce the amount of
+// memory used by the pod cache.  It takes a full v1.Pod and returns a slimmed down version of the pod
+// that only contains the fields we care about.
+func (cc *controllerControl) podTransformer(podControllerEnabled bool) cache.TransformFunc {
+	return func(a any) (any, error) {
+		pod, ok := a.(*v1.Pod)
+		if !ok {
+			return nil, fmt.Errorf("expected *v1.Pod, got %T", a)
+		}
+
+		p := &v1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      pod.Name,
+				Namespace: pod.Namespace,
+				UID:       pod.UID,
+			},
+			Spec: v1.PodSpec{
+				NodeName:    pod.Spec.NodeName,
+				HostNetwork: pod.Spec.HostNetwork,
+			},
+			Status: v1.PodStatus{
+				PodIPs: pod.Status.PodIPs,
+				Phase:  pod.Status.Phase,
+			},
+		}
+
+		if podControllerEnabled {
+			// We only need the full labels and service account name if we are running the Pod
+			// controller, as they are sync'd to etcd for policy matching.
+			p.Labels = pod.Labels
+			p.Spec.ServiceAccountName = pod.Spec.ServiceAccountName
+		}
+
+		// Include the annotations we care about, if they exist.
+		if pod.Annotations != nil {
+			for _, annotation := range []string{
+				conversion.AnnotationPodIPs,
+				conversion.AnnotationAWSPodIPs,
+			} {
+				if value, ok := pod.Annotations[annotation]; ok {
+					if p.Annotations == nil {
+						p.Annotations = make(map[string]string)
+					}
+					p.Annotations[annotation] = value
+				}
+			}
+		}
+
+		return p, nil
 	}
 }
 
