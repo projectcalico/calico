@@ -40,7 +40,7 @@ else
 endif
 
 gen-mocks:
-	$(DOCKER_RUN) $(CALICO_BUILD) sh -c 'mockery
+	$(DOCKER_RUN) $(CALICO_BUILD) sh -c 'mockery'
 
 gen-files: gen-mocks
 

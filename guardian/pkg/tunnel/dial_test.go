@@ -65,7 +65,7 @@ func TestDialPlainTCP(t *testing.T) {
 func TestDialTLS(t *testing.T) {
 	setupTest(t)
 
-	address := "localhost:8081"
+	address := "localhost:8080"
 
 	servercrt, err := filepath.Abs("../../test/tmp/server.crt")
 	Expect(err).NotTo(HaveOccurred())
