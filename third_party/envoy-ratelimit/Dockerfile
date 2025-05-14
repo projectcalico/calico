@@ -1,10 +1,12 @@
 # Copyright (c) 2024-2025 Tigera, Inc. All rights reserved.
 
 ARG CALICO_BASE
+ARG GIT_VERSION=unknown
 
 FROM ${CALICO_BASE}
 
 ARG TARGETARCH
+ARG GIT_VERSION
 
 COPY bin/envoy-ratelimit-${TARGETARCH} /bin/ratelimit
 

@@ -20,7 +20,7 @@ import (
 
 	"github.com/projectcalico/calico/cni-plugin/pkg/ipamplugin"
 	"github.com/projectcalico/calico/cni-plugin/pkg/plugin"
-	"github.com/projectcalico/calico/typha/pkg/buildinfo"
+	"github.com/projectcalico/calico/pkg/buildinfo"
 )
 
 func main() {
@@ -28,9 +28,9 @@ func main() {
 	_, filename := filepath.Split(os.Args[0])
 	switch filename {
 	case "calico", "calico.exe":
-		plugin.Main(buildinfo.GitVersion)
+		plugin.Main(buildinfo.Version)
 	case "calico-ipam", "calico-ipam.exe":
-		ipamplugin.Main(buildinfo.GitVersion)
+		ipamplugin.Main(buildinfo.Version)
 	default:
 		panic("Unknown binary name: " + filename)
 	}
