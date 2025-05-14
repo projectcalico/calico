@@ -39,7 +39,7 @@ const (
 	DefaultBranchName          = utils.DefaultBranch
 	DefaultReleaseBranchPrefix = "release"
 	DefaultDevTagSuffix        = "0.dev"
-	DefaultRegistry            = registry.QuayRegistry
+	DefaultRegistry            = "quay.io"
 )
 
 type OperatorManager struct {
