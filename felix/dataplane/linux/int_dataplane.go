@@ -670,18 +670,9 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		vxlanFDB := vxlanfdb.New(netlink.FAMILY_V4, dataplanedefs.VXLANIfaceNameV4, featureDetector, config.NetlinkTimeout)
 		dp.vxlanFDBs = append(dp.vxlanFDBs, vxlanFDB)
 
-		routeMgr := newRouteManager(
-			routeTableV4,
-			proto.IPPoolType_VXLAN,
-			dataplanedefs.VXLANIfaceNameV4,
-			4,
-			config.VXLANMTU,
-			config,
-			dp.loopSummarizer,
-		)
 		dp.vxlanManager = newVXLANManager(
 			ipSetsV4,
-			routeMgr,
+			routeTableV4,
 			vxlanFDB,
 			dataplanedefs.VXLANIfaceNameV4,
 			4,
@@ -1069,18 +1060,9 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	if config.RulesConfig.IPIPEnabled {
 		log.Info("IPIP enabled, starting thread to keep tunnel configuration in sync.")
 		// Add a manager to keep the all-hosts IP set up to date.
-		routeMgr := newRouteManager(
-			routeTableV4,
-			proto.IPPoolType_IPIP,
-			dataplanedefs.IPIPIfaceName,
-			4,
-			config.IPIPMTU,
-			config,
-			dp.loopSummarizer,
-		)
 		dp.ipipManager = newIPIPManager(
 			ipSetsV4,
-			routeMgr,
+			routeTableV4,
 			dataplanedefs.IPIPIfaceName,
 			4,
 			config.IPIPMTU,
@@ -1170,18 +1152,9 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			vxlanFDBV6 := vxlanfdb.New(netlink.FAMILY_V6, dataplanedefs.VXLANIfaceNameV6, featureDetector, config.NetlinkTimeout)
 			dp.vxlanFDBs = append(dp.vxlanFDBs, vxlanFDBV6)
 
-			routeMgr := newRouteManager(
-				routeTableV4,
-				proto.IPPoolType_VXLAN,
-				dataplanedefs.VXLANIfaceNameV6,
-				6,
-				config.IPIPMTU,
-				config,
-				dp.loopSummarizer,
-			)
 			dp.vxlanManagerV6 = newVXLANManager(
 				ipSetsV6,
-				routeMgr,
+				routeTableV6,
 				vxlanFDBV6,
 				dataplanedefs.VXLANIfaceNameV6,
 				6,

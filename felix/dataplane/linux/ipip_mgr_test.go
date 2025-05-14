@@ -15,6 +15,7 @@
 package intdataplane
 
 import (
+	"errors"
 	"net"
 	"time"
 
@@ -35,7 +36,6 @@ import (
 var _ = Describe("RouteManager for ipip pools", func() {
 	var (
 		ipipMgr   *ipipManager
-		routeMgr  *routeManager
 		rt        *mockRouteTable
 		ipSets    *dpsets.MockIPSets
 		dataplane *mockIPIPDataplane
@@ -55,36 +55,26 @@ var _ = Describe("RouteManager for ipip pools", func() {
 		la.Name = "eth0"
 		opRecorder := logutils.NewSummarizer("test")
 
-		dpConfig := Config{
-			MaxIPSetSize:       1024,
-			Hostname:           "node1",
-			ExternalNodesCidrs: []string{"10.10.10.0/24"},
-			RulesConfig: rules.Config{
-				IPIPTunnelAddress: net.ParseIP("192.168.0.1"),
-			},
-			ProgramRoutes:       true,
-			DeviceRouteProtocol: dataplanedefs.DefaultRouteProto,
-		}
 		dataplane = &mockIPIPDataplane{
 			links:          []netlink.Link{&mockLink{attrs: la}},
 			tunnelLinkName: dataplanedefs.IPIPIfaceName,
 		}
-		routeMgr = newRouteManagerWithShims(
-			rt,
-			proto.IPPoolType_IPIP,
-			dataplanedefs.IPIPIfaceName,
+		ipipMgr = newIPIPManagerWithSims(
+			ipSets, rt, dataplanedefs.IPIPIfaceName,
 			4,
 			1400,
-			dpConfig,
+			Config{
+				MaxIPSetSize:       1024,
+				Hostname:           "node1",
+				ExternalNodesCidrs: []string{"10.10.10.0/24"},
+				RulesConfig: rules.Config{
+					IPIPTunnelAddress: net.ParseIP("192.168.0.1"),
+				},
+				ProgramRoutes:       true,
+				DeviceRouteProtocol: dataplanedefs.DefaultRouteProto,
+			},
 			opRecorder,
 			dataplane,
-		)
-		ipipMgr = newIPIPManager(
-			ipSets, routeMgr, dataplanedefs.IPIPIfaceName,
-			4,
-			1400,
-			dpConfig,
-			opRecorder,
 		)
 	})
 
@@ -93,11 +83,11 @@ var _ = Describe("RouteManager for ipip pools", func() {
 			Hostname: "node1",
 			Ipv4Addr: "10.0.0.1",
 		})
-		routeMgr.OnDataDeviceUpdate("eth0")
+		ipipMgr.routeMgr.OnDataDeviceUpdate("eth0")
 
-		Expect(routeMgr.dataDeviceAddr).NotTo(BeZero())
-		Expect(routeMgr.dataDevice).NotTo(BeEmpty())
-		noEncapDev, err := routeMgr.detectDataIface()
+		Expect(ipipMgr.routeMgr.dataDeviceAddr).NotTo(BeZero())
+		Expect(ipipMgr.routeMgr.dataDevice).NotTo(BeEmpty())
+		noEncapDev, err := ipipMgr.routeMgr.detectDataIface()
 		Expect(err).NotTo(HaveOccurred())
 		Expect(noEncapDev).NotTo(BeNil())
 
@@ -106,7 +96,7 @@ var _ = Describe("RouteManager for ipip pools", func() {
 		Expect(link).NotTo(BeNil())
 		Expect(addr).NotTo(BeZero())
 
-		err = routeMgr.configureTunnelDevice(link, addr, 1400, false)
+		err = ipipMgr.routeMgr.configureTunnelDevice(link, addr, 1400, false)
 		Expect(err).NotTo(HaveOccurred())
 
 		Expect(noEncapDev).NotTo(BeNil())
@@ -119,7 +109,7 @@ var _ = Describe("RouteManager for ipip pools", func() {
 		Expect(dataplane.addrs[0].IP.String()).To(Equal("192.168.0.1"))
 
 		dataplane.ResetCalls()
-		err = routeMgr.configureTunnelDevice(link, addr, 50, false)
+		err = ipipMgr.routeMgr.configureTunnelDevice(link, addr, 50, false)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(dataplane.LinkAddCalled).To(BeFalse())
 		Expect(dataplane.LinkSetUpCalled).To(BeFalse())
@@ -128,7 +118,7 @@ var _ = Describe("RouteManager for ipip pools", func() {
 		Expect(dataplane.AddrUpdated).To(BeFalse())
 
 		dataplane.ResetCalls()
-		err = routeMgr.configureTunnelDevice(link, addr, 1500, false)
+		err = ipipMgr.routeMgr.configureTunnelDevice(link, addr, 1500, false)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(dataplane.LinkAddCalled).To(BeFalse())
 		Expect(dataplane.LinkSetUpCalled).To(BeFalse())
@@ -137,7 +127,7 @@ var _ = Describe("RouteManager for ipip pools", func() {
 		Expect(dataplane.addrs[0].IP.String()).To(Equal("192.168.0.1"))
 
 		dataplane.ResetCalls()
-		err = routeMgr.configureTunnelDevice(link, "", 1500, false)
+		err = ipipMgr.routeMgr.configureTunnelDevice(link, "", 1500, false)
 		Expect(err).To(HaveOccurred())
 		Expect(dataplane.tunnelLink).ToNot(BeNil())
 		Expect(dataplane.LinkAddCalled).To(BeFalse())
@@ -243,11 +233,11 @@ var _ = Describe("RouteManager for ipip pools", func() {
 			Ipv4Addr: "10.0.1.1",
 		})
 
-		routeMgr.OnDataDeviceUpdate("eth0")
+		ipipMgr.routeMgr.OnDataDeviceUpdate("eth0")
 
-		Expect(routeMgr.dataDeviceAddr).NotTo(BeZero())
-		Expect(routeMgr.dataDevice).NotTo(BeEmpty())
-		noEncapDev, err := routeMgr.detectDataIface()
+		Expect(ipipMgr.routeMgr.dataDeviceAddr).NotTo(BeZero())
+		Expect(ipipMgr.routeMgr.dataDevice).NotTo(BeEmpty())
+		noEncapDev, err := ipipMgr.routeMgr.detectDataIface()
 		Expect(err).NotTo(HaveOccurred())
 		Expect(noEncapDev).NotTo(BeNil())
 
@@ -256,7 +246,7 @@ var _ = Describe("RouteManager for ipip pools", func() {
 		Expect(link).NotTo(BeNil())
 		Expect(addr).NotTo(BeZero())
 
-		err = routeMgr.configureTunnelDevice(link, addr, 50, false)
+		err = ipipMgr.routeMgr.configureTunnelDevice(link, addr, 50, false)
 		Expect(err).NotTo(HaveOccurred())
 
 		Expect(noEncapDev).NotTo(BeNil())
@@ -338,7 +328,7 @@ var _ = Describe("RouteManager for ipip pools", func() {
 			Hostname: "node1",
 			Ipv4Addr: "10.0.0.1",
 		})
-		localAddr := routeMgr.dataIfaceAddr()
+		localAddr := ipipMgr.routeMgr.dataIfaceAddr()
 		Expect(localAddr).NotTo(BeNil())
 
 		// Note: no encap device name is sent after configuration so this receive
@@ -346,7 +336,7 @@ var _ = Describe("RouteManager for ipip pools", func() {
 
 		By("waiting")
 		Eventually(dataDeviceC, "2s").Should(Receive(Equal("eth0")))
-		routeMgr.OnDataDeviceUpdate("eth0")
+		ipipMgr.routeMgr.OnDataDeviceUpdate("eth0")
 
 		Expect(rt.currentRoutes["eth0"]).To(HaveLen(0))
 		err = ipipMgr.CompleteDeferredWork()
@@ -357,6 +347,11 @@ var _ = Describe("RouteManager for ipip pools", func() {
 		Expect(rt.currentRoutes[dataplanedefs.IPIPIfaceName]).To(HaveLen(0))
 	})
 })
+
+var (
+	notFound    = errors.New("not found")
+	mockFailure = errors.New("mock failure")
+)
 
 type mockIPIPDataplane struct {
 	tunnelLink      *mockLink

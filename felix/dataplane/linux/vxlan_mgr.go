@@ -28,6 +28,7 @@ import (
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/ipsets"
 	"github.com/projectcalico/calico/felix/logutils"
+	"github.com/projectcalico/calico/felix/netlinkshim"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/routetable"
 	"github.com/projectcalico/calico/felix/rules"
@@ -73,13 +74,38 @@ type VXLANFDB interface {
 
 func newVXLANManager(
 	ipsetsDataplane dpsets.IPSetsDataplane,
-	routeMgr *routeManager,
+	mainRouteTable routetable.Interface,
 	fdb VXLANFDB,
 	deviceName string,
 	ipVersion uint8,
 	mtu int,
 	dpConfig Config,
 	opRecorder logutils.OpRecorder,
+) *vxlanManager {
+	nlHandle, _ := netlinkshim.NewRealNetlink()
+	return newVXLANManagerWithShims(
+		ipsetsDataplane,
+		mainRouteTable,
+		fdb,
+		deviceName,
+		ipVersion,
+		mtu,
+		dpConfig,
+		opRecorder,
+		nlHandle,
+	)
+}
+
+func newVXLANManagerWithShims(
+	ipsetsDataplane dpsets.IPSetsDataplane,
+	mainRouteTable routetable.Interface,
+	fdb VXLANFDB,
+	deviceName string,
+	ipVersion uint8,
+	mtu int,
+	dpConfig Config,
+	opRecorder logutils.OpRecorder,
+	nlHandle netlinkHandle,
 ) *vxlanManager {
 	manager := &vxlanManager{
 		ipsetsDataplane: ipsetsDataplane,
@@ -104,15 +130,24 @@ func newVXLANManager(
 			"tunnel device": deviceName,
 		}),
 		opRecorder: opRecorder,
+		routeMgr: newRouteManager(
+			mainRouteTable,
+			proto.IPPoolType_VXLAN,
+			deviceName,
+			ipVersion,
+			mtu,
+			dpConfig,
+			opRecorder,
+			nlHandle,
+		),
 	}
 
-	manager.registerRouteManager(routeMgr)
+	manager.updateRouteManager()
 	manager.routeMgr.triggerRouteUpdate()
 	return manager
 }
 
-func (m *vxlanManager) registerRouteManager(routeMgr *routeManager) {
-	m.routeMgr = routeMgr
+func (m *vxlanManager) updateRouteManager() {
 	m.routeMgr.routeClassTunnel = routetable.RouteClassVXLANTunnel
 	m.routeMgr.routeClassSameSubnet = routetable.RouteClassVXLANSameSubnet
 	m.routeMgr.setTunnelRouteFunc(m.route)

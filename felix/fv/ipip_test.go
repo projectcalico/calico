@@ -29,7 +29,7 @@ import (
 	. "github.com/onsi/gomega"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
-	log "github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -155,13 +155,13 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology with BIRD pro
 		}
 	})
 
-	It("pepper0 should have workload to workload connectivity", func() {
+	It("should have workload to workload connectivity", func() {
 		cc.ExpectSome(w[0], w[1])
 		cc.ExpectSome(w[1], w[0])
 		cc.CheckConnectivity()
 	})
 
-	It("pepper1 should have host to workload connectivity", func() {
+	It("should have host to workload connectivity", func() {
 		cc.ExpectSome(tc.Felixes[0], w[1])
 		cc.ExpectSome(tc.Felixes[0], w[0])
 		cc.CheckConnectivity()
@@ -469,7 +469,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology with BIRD pro
 					}
 				}
 				c.Spec.ExternalNodesCIDRList = &[]string{addr}
-				log.WithFields(log.Fields{"felixconfiguration": c, "adding Addr": addr}).Info("Updating FelixConfiguration ")
+				logrus.WithFields(logrus.Fields{"felixconfiguration": c, "adding Addr": addr}).Info("Updating FelixConfiguration ")
 				_, err = client.FelixConfigurations().Update(ctx, c, options.SetOptions{})
 				Expect(err).NotTo(HaveOccurred())
 			}
@@ -610,7 +610,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology with Felix pr
 				}
 			})
 
-			It("pepper9 should have workload to workload connectivity", func() {
+			It("should have workload to workload connectivity", func() {
 				cc.ExpectSome(w[0], w[1])
 				cc.ExpectSome(w[1], w[0])
 				cc.CheckConnectivity()
@@ -1140,7 +1140,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology with Felix pr
 							}
 						}
 						c.Spec.ExternalNodesCIDRList = &[]string{addr}
-						log.WithFields(log.Fields{"felixconfiguration": c, "adding Addr": addr}).Info("Updating FelixConfiguration ")
+						logrus.WithFields(logrus.Fields{"felixconfiguration": c, "adding Addr": addr}).Info("Updating FelixConfiguration ")
 						_, err = client.FelixConfigurations().Update(ctx, c, options.SetOptions{})
 						Expect(err).NotTo(HaveOccurred())
 					}

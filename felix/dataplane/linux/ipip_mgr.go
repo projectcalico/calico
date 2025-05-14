@@ -25,6 +25,7 @@ import (
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/ipsets"
 	"github.com/projectcalico/calico/felix/logutils"
+	"github.com/projectcalico/calico/felix/netlinkshim"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/routetable"
 	"github.com/projectcalico/calico/felix/rules"
@@ -60,12 +61,35 @@ type ipipManager struct {
 
 func newIPIPManager(
 	ipsetsDataplane dpsets.IPSetsDataplane,
-	routeMgr *routeManager,
+	mainRouteTable routetable.Interface,
 	tunnelDevice string,
 	ipVersion uint8,
 	mtu int,
 	dpConfig Config,
 	opRecorder logutils.OpRecorder,
+) *ipipManager {
+	nlHandle, _ := netlinkshim.NewRealNetlink()
+	return newIPIPManagerWithSims(
+		ipsetsDataplane,
+		mainRouteTable,
+		tunnelDevice,
+		ipVersion,
+		mtu,
+		dpConfig,
+		opRecorder,
+		nlHandle,
+	)
+}
+
+func newIPIPManagerWithSims(
+	ipsetsDataplane dpsets.IPSetsDataplane,
+	mainRouteTable routetable.Interface,
+	tunnelDevice string,
+	ipVersion uint8,
+	mtu int,
+	dpConfig Config,
+	opRecorder logutils.OpRecorder,
+	nlHandle netlinkHandle,
 ) *ipipManager {
 
 	if ipVersion != 4 {
@@ -94,23 +118,26 @@ func newIPIPManager(
 			"tunnel device": tunnelDevice,
 		}),
 		opRecorder: opRecorder,
+		routeMgr: newRouteManager(
+			mainRouteTable,
+			proto.IPPoolType_IPIP,
+			tunnelDevice,
+			ipVersion,
+			mtu,
+			dpConfig,
+			opRecorder,
+			nlHandle,
+		),
 	}
 
-	manager.registerRouteManager(routeMgr)
+	manager.updateRouteManager()
 	if dpConfig.ProgramRoutes {
 		manager.routeMgr.triggerRouteUpdate()
 	}
 	return manager
 }
 
-func (m *ipipManager) registerRouteManager(routeMgr *routeManager) {
-	m.routeMgr = routeMgr
-	m.routeMgr.ippoolType = proto.IPPoolType_IPIP
-	m.routeMgr.ipVersion = m.ipVersion
-	m.routeMgr.tunnelDeviceMTU = m.tunnelDeviceMTU
-	m.routeMgr.dpConfig = m.dpConfig
-	m.routeMgr.opRecorder = m.opRecorder
-	m.routeMgr.tunnelDevice = m.tunnelDevice
+func (m *ipipManager) updateRouteManager() {
 	m.routeMgr.routeClassTunnel = routetable.RouteClassIPIPTunnel
 	m.routeMgr.routeClassSameSubnet = routetable.RouteClassIPIPSameSubnet
 	m.routeMgr.setTunnelRouteFunc(m.route)

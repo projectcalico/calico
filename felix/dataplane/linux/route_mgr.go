@@ -30,7 +30,6 @@ import (
 	"github.com/projectcalico/calico/felix/ethtool"
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/logutils"
-	"github.com/projectcalico/calico/felix/netlinkshim"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/routetable"
 )
@@ -72,28 +71,6 @@ type routeManager struct {
 }
 
 func newRouteManager(
-	mainRouteTable routetable.Interface,
-	ippoolType proto.IPPoolType,
-	tunnelDevice string,
-	ipVersion uint8,
-	mtu int,
-	dpConfig Config,
-	opRecorder logutils.OpRecorder,
-) *routeManager {
-	nlHandle, _ := netlinkshim.NewRealNetlink()
-	return newRouteManagerWithShims(
-		mainRouteTable,
-		ippoolType,
-		tunnelDevice,
-		ipVersion,
-		mtu,
-		dpConfig,
-		opRecorder,
-		nlHandle,
-	)
-}
-
-func newRouteManagerWithShims(
 	mainRouteTable routetable.Interface,
 	ippoolType proto.IPPoolType,
 	tunnelDevice string,

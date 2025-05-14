@@ -124,7 +124,6 @@ func (t *mockVXLANFDB) SetVTEPs(targets []vxlanfdb.VTEP) {
 var _ = Describe("VXLANManager", func() {
 	var (
 		vxlanMgr, vxlanMgrV6 *vxlanManager
-		routeMgr, routeMgrV6 *routeManager
 		rt                   *mockRouteTable
 		fdb                  *mockVXLANFDB
 	)
@@ -149,9 +148,10 @@ var _ = Describe("VXLANManager", func() {
 				VXLANPort: 20,
 			},
 		}
-		routeMgr = newRouteManagerWithShims(
+		vxlanMgr = newVXLANManagerWithShims(
+			dpsets.NewMockIPSets(),
 			rt,
-			proto.IPPoolType_VXLAN,
+			fdb,
 			dataplanedefs.VXLANIfaceNameV4,
 			4,
 			4444,
@@ -162,17 +162,6 @@ var _ = Describe("VXLANManager", func() {
 				ipVersion: 4,
 			},
 		)
-		vxlanMgr = newVXLANManager(
-			dpsets.NewMockIPSets(),
-			routeMgr,
-			fdb,
-			dataplanedefs.VXLANIfaceNameV4,
-			4,
-			4444,
-			dpConfig,
-			opRecorder,
-		)
-		//vxlanMgr.updateRouteManager(routeMgr)
 
 		dpConfigV6 := Config{
 			MaxIPSetSize:       5,
@@ -183,12 +172,13 @@ var _ = Describe("VXLANManager", func() {
 				VXLANPort: 20,
 			},
 		}
-		routeMgrV6 = newRouteManagerWithShims(
+		vxlanMgrV6 = newVXLANManagerWithShims(
+			dpsets.NewMockIPSets(),
 			rt,
-			proto.IPPoolType_VXLAN,
+			fdb,
 			dataplanedefs.VXLANIfaceNameV6,
 			6,
-			4444,
+			6666,
 			dpConfigV6,
 			opRecorder,
 			&mockVXLANDataplane{
@@ -196,17 +186,6 @@ var _ = Describe("VXLANManager", func() {
 				ipVersion: 6,
 			},
 		)
-		vxlanMgrV6 = newVXLANManager(
-			dpsets.NewMockIPSets(),
-			routeMgrV6,
-			fdb,
-			dataplanedefs.VXLANIfaceNameV6,
-			6,
-			6666,
-			dpConfigV6,
-			opRecorder,
-		)
-		//vxlanMgrV6.updateRouteManager(routeMgrV6)
 	})
 
 	It("successfully adds a route to the parent interface", func() {
@@ -227,12 +206,12 @@ var _ = Describe("VXLANManager", func() {
 		localVTEP := vxlanMgr.getLocalVTEP()
 		Expect(localVTEP).NotTo(BeNil())
 
-		routeMgr.OnDataDeviceUpdate("eth0")
+		vxlanMgr.routeMgr.OnDataDeviceUpdate("eth0")
 
 		Expect(vxlanMgr.myVTEP).NotTo(BeNil())
-		Expect(routeMgr.dataDevice).NotTo(BeEmpty())
+		Expect(vxlanMgr.routeMgr.dataDevice).NotTo(BeEmpty())
 
-		parent, err := routeMgr.detectDataIface()
+		parent, err := vxlanMgr.routeMgr.detectDataIface()
 		Expect(err).NotTo(HaveOccurred())
 		Expect(parent).NotTo(BeNil())
 
@@ -241,7 +220,7 @@ var _ = Describe("VXLANManager", func() {
 		Expect(link).NotTo(BeNil())
 		Expect(addr).NotTo(BeZero())
 
-		err = routeMgr.configureTunnelDevice(link, addr, 50, false)
+		err = vxlanMgr.routeMgr.configureTunnelDevice(link, addr, 50, false)
 		Expect(err).NotTo(HaveOccurred())
 
 		Expect(parent).NotTo(BeNil())
@@ -324,12 +303,12 @@ var _ = Describe("VXLANManager", func() {
 		localVTEP := vxlanMgrV6.getLocalVTEP()
 		Expect(localVTEP).NotTo(BeNil())
 
-		routeMgrV6.OnDataDeviceUpdate("eth0")
+		vxlanMgrV6.routeMgr.OnDataDeviceUpdate("eth0")
 
 		Expect(vxlanMgrV6.myVTEP).NotTo(BeNil())
-		Expect(routeMgrV6.dataDevice).NotTo(BeEmpty())
+		Expect(vxlanMgrV6.routeMgr.dataDevice).NotTo(BeEmpty())
 
-		parent, err := routeMgrV6.detectDataIface()
+		parent, err := vxlanMgrV6.routeMgr.detectDataIface()
 		Expect(err).NotTo(HaveOccurred())
 		Expect(parent).NotTo(BeNil())
 
@@ -338,7 +317,7 @@ var _ = Describe("VXLANManager", func() {
 		Expect(link).NotTo(BeNil())
 		Expect(addr).NotTo(BeZero())
 
-		err = routeMgrV6.configureTunnelDevice(link, addr, 50, false)
+		err = vxlanMgrV6.routeMgr.configureTunnelDevice(link, addr, 50, false)
 		Expect(err).NotTo(HaveOccurred())
 
 		Expect(parent).NotTo(BeNil())
@@ -425,7 +404,7 @@ var _ = Describe("VXLANManager", func() {
 
 		err := vxlanMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
-		Expect(routeMgr.routesDirty).To(BeFalse())
+		Expect(vxlanMgr.routeMgr.routesDirty).To(BeFalse())
 		Expect(rt.currentRoutes["eth0"]).To(HaveLen(0))
 		Expect(rt.currentRoutes[dataplanedefs.VXLANIfaceNameV4]).To(HaveLen(1))
 
@@ -442,13 +421,13 @@ var _ = Describe("VXLANManager", func() {
 		// Note: parent name is sent after configuration so this receive
 		// ensures we don't race.
 		Eventually(parentNameC, "2s").Should(Receive(Equal("eth0")))
-		routeMgr.OnDataDeviceUpdate("eth0")
+		vxlanMgr.routeMgr.OnDataDeviceUpdate("eth0")
 
 		Expect(rt.currentRoutes["eth0"]).To(HaveLen(0))
 		err = vxlanMgr.CompleteDeferredWork()
 
 		Expect(err).NotTo(HaveOccurred())
-		Expect(routeMgr.routesDirty).To(BeFalse())
+		Expect(vxlanMgr.routeMgr.routesDirty).To(BeFalse())
 		Expect(rt.currentRoutes["eth0"]).To(HaveLen(1))
 		Expect(rt.currentRoutes[dataplanedefs.VXLANIfaceNameV4]).To(HaveLen(0))
 	})
@@ -475,7 +454,7 @@ var _ = Describe("VXLANManager", func() {
 
 		err := vxlanMgrV6.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
-		Expect(routeMgrV6.routesDirty).To(BeFalse())
+		Expect(vxlanMgrV6.routeMgr.routesDirty).To(BeFalse())
 		Expect(rt.currentRoutes["eth0"]).To(HaveLen(0))
 		Expect(rt.currentRoutes[dataplanedefs.VXLANIfaceNameV6]).To(HaveLen(1))
 
@@ -492,13 +471,13 @@ var _ = Describe("VXLANManager", func() {
 		// Note: parent name is sent after configuration so this receive
 		// ensures we don't race.
 		Eventually(parentNameC, "2s").Should(Receive(Equal("eth0")))
-		routeMgrV6.OnDataDeviceUpdate("eth0")
+		vxlanMgrV6.routeMgr.OnDataDeviceUpdate("eth0")
 
 		Expect(rt.currentRoutes["eth0"]).To(HaveLen(0))
 		err = vxlanMgrV6.CompleteDeferredWork()
 
 		Expect(err).NotTo(HaveOccurred())
-		Expect(routeMgrV6.routesDirty).To(BeFalse())
+		Expect(vxlanMgrV6.routeMgr.routesDirty).To(BeFalse())
 		Expect(rt.currentRoutes["eth0"]).To(HaveLen(1))
 		Expect(rt.currentRoutes[dataplanedefs.VXLANIfaceNameV6]).To(HaveLen(0))
 	})
