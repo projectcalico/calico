@@ -7,7 +7,7 @@
 
 #include "bpf.h"
 
-#define MAX_COUNTERS_SIZE 17
+#define MAX_COUNTERS_SIZE 19
 
 typedef __u64 counters_t[MAX_COUNTERS_SIZE];
 
@@ -24,6 +24,10 @@ CALI_MAP(cali_counters, 3,
 		BPF_MAP_TYPE_PERCPU_HASH,
 		struct counters_key, counters_t, 20000,
 		0)
+
+CALI_MAP(cali_counters_scratch, 2,
+		BPF_MAP_TYPE_PERCPU_ARRAY,
+		__u32, counters_t, 1, 0)
 
 static CALI_BPF_INLINE counters_t *counters_get(int ifindex)
 {
@@ -49,7 +53,12 @@ static CALI_BPF_INLINE counters_t *counters_get(int ifindex)
 		/* If there was no entry created yet, create it. It is a hash
 		 * map so any entry must be created first!
 		 */
-		counters_t ctrs = {};
+		int scratch_zero = 0;
+		counters_t *ctrs = cali_counters_scratch_lookup_elem(&scratch_zero);
+		if (!ctrs) {
+			return NULL;
+		}
+
 		if (cali_counters_update_elem(&key, ctrs, BPF_ANY)) {
 			return NULL;
 		}
