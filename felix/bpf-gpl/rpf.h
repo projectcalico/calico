@@ -85,6 +85,7 @@ static CALI_BPF_INLINE bool hep_rpf_check(struct cali_tc_ctx *ctx)
 	switch(rc) {
 		case BPF_FIB_LKUP_RET_SUCCESS:
 		case BPF_FIB_LKUP_RET_NO_NEIGH:
+		case BPF_FIB_LKUP_RET_FRAG_NEEDED:
 			if (strict) {
 				ret = ctx->skb->ingress_ifindex == fib_params.ifindex;
 #ifdef IPVER6
