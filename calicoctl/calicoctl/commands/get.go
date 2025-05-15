@@ -21,12 +21,12 @@ import (
 	"strings"
 
 	"github.com/docopt/docopt-go"
-	"github.com/projectcalico/calico/lib/std/log"
 
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/argutils"
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/common"
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/constants"
 	"github.com/projectcalico/calico/calicoctl/calicoctl/util"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 func Get(args []string) error {

@@ -9,10 +9,11 @@ import (
 	"sync"
 
 	calico "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"github.com/projectcalico/calico/lib/std/log"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	k8sauth "k8s.io/apiserver/pkg/authorization/authorizer"
 	"k8s.io/apiserver/pkg/endpoints/filters"
+
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 type TierAuthorizer interface {

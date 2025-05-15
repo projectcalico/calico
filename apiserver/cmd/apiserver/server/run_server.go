@@ -26,13 +26,13 @@ import (
 	"os"
 	gpath "path"
 
-	"github.com/projectcalico/calico/lib/std/log"
 	"k8s.io/apiserver/pkg/admission/plugin/policy/validating"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	"k8s.io/apiserver/pkg/server/options"
 	"k8s.io/klog/v2"
 
 	"github.com/projectcalico/calico/apiserver/pkg/apiserver"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // PrepareServer prepares the server for execution. After invoking the caller should run RunServer.

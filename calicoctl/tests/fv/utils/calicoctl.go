@@ -22,6 +22,7 @@ import (
 	"strings"
 
 	. "github.com/onsi/gomega"
+
 	"github.com/projectcalico/calico/lib/std/log"
 )
 

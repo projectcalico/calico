@@ -24,8 +24,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/projectcalico/calico/lib/std/log"
 	"golang.org/x/sync/errgroup"
+
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // CmdExecutor will execute a command and return its output and its error

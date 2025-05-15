@@ -20,9 +20,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/projectcalico/calico/lib/std/log"
-
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/clientmgr"
+	"github.com/projectcalico/calico/lib/std/log"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
