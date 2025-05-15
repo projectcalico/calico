@@ -323,9 +323,12 @@ func (s *IPSets) GetDesiredMembers(setID string) (set.Set[string], error) {
 	return strs, nil
 }
 
-// ApplyUpdates applies the updates to the dataplane.  Returns a set of programmed IPs in the IPSets included by the
-// ipsetFilter.
-func (s *IPSets) ApplyUpdates(filter func(setName string) bool) (programmedIPs set.Set[string]) {
+// ApplyUpdates applies the updates to the dataplane.  If listener is non-nil,
+// it will receive callbacks when members are programmed.  The callbacks occur
+// before we have final confirmation that the members are in the dataplane, so
+// the caller may wish to defer acting on the information until ApplyUpdates
+// returns.
+func (s *IPSets) ApplyUpdates(listener ipsets.UpdateListener) {
 	success := false
 	retryDelay := 1 * time.Millisecond
 	backOff := func() {
@@ -333,7 +336,6 @@ func (s *IPSets) ApplyUpdates(filter func(setName string) bool) (programmedIPs s
 		retryDelay *= 2
 	}
 
-	programmedIPs = set.New[string]()
 	for attempt := 0; attempt < 10; attempt++ {
 		if attempt > 0 {
 			s.logCxt.Info("Retrying after an nftables set update failure...")
@@ -352,7 +354,7 @@ func (s *IPSets) ApplyUpdates(filter func(setName string) bool) (programmedIPs s
 			s.resyncRequired = false
 		}
 
-		if err := s.tryUpdates(filter, programmedIPs); err != nil {
+		if err := s.tryUpdates(listener); err != nil {
 			// Update failures may mean that our iptables updates fail.  We need to do an immediate resync.
 			s.logCxt.WithError(err).Warning("Failed to update IP sets. Marking dataplane for resync.")
 			s.resyncRequired = true
@@ -582,7 +584,7 @@ func (s *IPSets) NFTablesSet(name string) *knftables.Set {
 }
 
 // tryUpdates attempts to apply any pending updates to the dataplane.
-func (s *IPSets) tryUpdates(ipsetFilter func(ipSetName string) bool, programmedIPs set.Set[string]) error {
+func (s *IPSets) tryUpdates(listener ipsets.UpdateListener) error {
 	var dirtyIPSets []string
 
 	s.ipSetsWithDirtyMembers.Iter(func(setName string) error {
@@ -636,13 +638,13 @@ func (s *IPSets) tryUpdates(ipsetFilter func(ipSetName string) bool, programmedI
 		})
 
 		// Add desired members to the set.
+		listenerCares := listener != nil && listener.CaresAboutIPSet(setName)
 		members.Desired().Iter(func(member SetMember) {
 			if members.Dataplane().Contains(member) {
 				return
 			}
-			if ipsetFilter != nil && ipsetFilter(setName) {
-				// We want to include the IPs from this set.
-				programmedIPs.Add(member.String())
+			if listenerCares {
+				listener.OnMemberProgrammed(member.String())
 			}
 			tx.Add(&knftables.Element{
 				Set: setName,
