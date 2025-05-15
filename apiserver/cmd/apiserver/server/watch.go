@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019-2025 Tigera, Inc. All rights reserved.
 
 package server
 
@@ -10,12 +10,12 @@ import (
 	"os"
 	"time"
 
-	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
 )
 
@@ -68,14 +68,14 @@ func WatchExtensionAuth(ctx context.Context) (bool, error) {
 		Handler: cache.ResourceEventHandlerFuncs{
 			AddFunc: func(_ interface{}) {
 				if synced {
-					logrus.Info("Detected creation of extension-apiserver-authentication ConfigMap")
+					log.Info("Detected creation of extension-apiserver-authentication ConfigMap")
 					changed = true
 					cancel()
 				}
 			},
 			DeleteFunc: func(_ interface{}) {
 				if synced {
-					logrus.Info("Detected deletion of extension-apiserver-authentication ConfigMap")
+					log.Info("Detected deletion of extension-apiserver-authentication ConfigMap")
 					changed = true
 					cancel()
 				}
@@ -87,10 +87,10 @@ func WatchExtensionAuth(ctx context.Context) (bool, error) {
 					// Only detect as changed if the version has changed
 					if o.ResourceVersion != n.ResourceVersion {
 						if maps.Equal(o.Data, n.Data) && binaryDataEqual(o, n) {
-							logrus.Info("Detected update to extension-apiserver-authentication ConfigMap: No change to data")
+							log.Info("Detected update to extension-apiserver-authentication ConfigMap: No change to data")
 							return
 						}
-						logrus.WithFields(logrus.Fields{
+						log.WithFields(log.Fields{
 							"oldResourceVersion": o.ResourceVersion,
 							"newResourceVersion": n.ResourceVersion,
 						}).Info("Detected update to extension-apiserver-authentication ConfigMap: Require restart due to change in data")

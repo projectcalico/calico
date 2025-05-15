@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,13 +23,13 @@ import (
 	"testing"
 
 	. "github.com/onsi/gomega"
-	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/fake"
 
 	"github.com/projectcalico/calico/felix/bpf/mock"
 	"github.com/projectcalico/calico/felix/bpf/proxy"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 func benchmarkProxyUpdates(b *testing.B, svcN, epsN int) {
@@ -70,9 +70,9 @@ func benchmarkProxyUpdates(b *testing.B, svcN, epsN int) {
 
 func BenchmarkProxyUpdates(b *testing.B) {
 	RegisterTestingT(b)
-	loglevel := logrus.GetLevel()
-	logrus.SetLevel(logrus.WarnLevel)
-	defer logrus.SetLevel(loglevel)
+	loglevel := log.GetLevel()
+	log.SetLevel(log.WarnLevel)
+	defer log.SetLevel(loglevel)
 
 	tests := []struct {
 		svcCount int

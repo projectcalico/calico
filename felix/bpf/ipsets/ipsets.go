@@ -19,12 +19,12 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
-	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/idalloc"
 	"github.com/projectcalico/calico/felix/ipsets"
 	"github.com/projectcalico/calico/felix/logutils"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -56,7 +56,7 @@ type bpfIPSets struct {
 
 	opRecorder logutils.OpRecorder
 
-	lg *log.Entry
+	lg log.Entry
 
 	filterIPSet func(string) bool
 }

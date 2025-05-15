@@ -7,11 +7,11 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/goldmane/pkg/storage"
 	"github.com/projectcalico/calico/goldmane/proto"
 	"github.com/projectcalico/calico/lib/std/chanutil"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 )
 
@@ -103,7 +103,7 @@ func (c *streamCache) iter(f func(*stream)) {
 	for _, s := range c.streams {
 		select {
 		case <-s.ctx.Done():
-			logrus.WithField("id", s.id).Debug("Stream closed, skipping")
+			log.WithField("id", s.id).Debug("Stream closed, skipping")
 		default:
 			f(s)
 		}
@@ -147,7 +147,7 @@ func (m *streamManager) Run(ctx context.Context) {
 		case id := <-m.closedStreamsCh:
 			m.unregister(id)
 		case <-ctx.Done():
-			logrus.Debug("Stream manager exiting")
+			log.Debug("Stream manager exiting")
 			return
 		}
 	}
@@ -198,7 +198,7 @@ func (m *streamManager) processIncomingFlows(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			logrus.Debug("stream manager worker exiting")
+			log.Debug("stream manager worker exiting")
 			return
 		case b := <-m.flowCh:
 			m.streams.iter(func(s *stream) {
@@ -210,7 +210,7 @@ func (m *streamManager) processIncomingFlows(ctx context.Context) {
 
 func (m *streamManager) register(req *streamRequest) *stream {
 	if m.maxStreams > 0 && m.streams.size() >= m.maxStreams {
-		logrus.WithField("max", m.maxStreams).Warn("Max streams reached, rejecting new stream")
+		log.WithField("max", m.maxStreams).Warn("Max streams reached, rejecting new stream")
 		return nil
 	}
 
@@ -230,7 +230,7 @@ func (m *streamManager) register(req *streamRequest) *stream {
 	m.streams.add(stream)
 	numStreams.Set(float64(m.streams.size()))
 
-	logrus.WithField("id", stream.id).Debug("Registered new stream")
+	log.WithField("id", stream.id).Debug("Registered new stream")
 	return stream
 }
 
@@ -238,12 +238,12 @@ func (m *streamManager) register(req *streamRequest) *stream {
 func (m *streamManager) unregister(id string) {
 	_, ok := m.streams.get(id)
 	if !ok {
-		logrus.WithField("id", id).Warn("Asked to close unknown stream")
+		log.WithField("id", id).Warn("Asked to close unknown stream")
 		return
 	}
-	logrus.WithField("id", id).Debug("Closing stream")
+	log.WithField("id", id).Debug("Closing stream")
 
 	m.streams.remove(id)
 	numStreams.Set(float64(m.streams.size()))
-	logrus.WithField("id", id).Debug("Stream closed")
+	log.WithField("id", id).Debug("Stream closed")
 }

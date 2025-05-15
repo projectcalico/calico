@@ -19,13 +19,13 @@ import (
 	"sync/atomic"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	log "github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/api/meta"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/uuid"
 
+	"github.com/projectcalico/calico/lib/std/log"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
@@ -424,7 +424,7 @@ func (w *watcher) hasTerminated() bool {
 }
 
 // logWithResource returns a logrus entry with key resource attributes included.
-func logWithResource(res resource) *log.Entry {
+func logWithResource(res resource) log.Entry {
 	return log.WithFields(log.Fields{
 		"Kind":            res.GetObjectKind().GroupVersionKind(),
 		"Name":            res.GetObjectMeta().GetName(),

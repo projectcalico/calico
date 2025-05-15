@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,9 +18,8 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 
-	"github.com/sirupsen/logrus"
-
 	"github.com/projectcalico/calico/felix/environment"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 const (
@@ -74,7 +73,7 @@ func RuleHashes(c *Chain, renderFunc ruleRenderFn, features *environment.Feature
 	s := sha256.New224()
 	_, err := s.Write([]byte(c.Name))
 	if err != nil {
-		logrus.WithFields(logrus.Fields{
+		log.WithFields(log.Fields{
 			"chain": c.Name,
 		}).WithError(err).Panic("Failed to write suffix to hash.")
 		return nil
@@ -87,7 +86,7 @@ func RuleHashes(c *Chain, renderFunc ruleRenderFn, features *environment.Feature
 		s.Reset()
 		_, err = s.Write(hash)
 		if err != nil {
-			logrus.WithFields(logrus.Fields{
+			log.WithFields(log.Fields{
 				"action":   rule.Action,
 				"position": ii,
 				"chain":    c.Name,
@@ -96,7 +95,7 @@ func RuleHashes(c *Chain, renderFunc ruleRenderFn, features *environment.Feature
 		ruleForHashing := renderFunc(&rule, c.Name, features)
 		_, err = s.Write([]byte(ruleForHashing))
 		if err != nil {
-			logrus.WithFields(logrus.Fields{
+			log.WithFields(log.Fields{
 				"ruleFragment": ruleForHashing,
 				"action":       rule.Action,
 				"position":     ii,
@@ -107,8 +106,8 @@ func RuleHashes(c *Chain, renderFunc ruleRenderFn, features *environment.Feature
 		// Encode the hash using a compact character set.  We use the URL-safe base64
 		// variant because it uses '-' and '_', which are more shell-friendly.
 		hashes[ii] = base64.RawURLEncoding.EncodeToString(hash)[:HashLength]
-		if logrus.GetLevel() >= logrus.DebugLevel {
-			logrus.WithFields(logrus.Fields{
+		if log.GetLevel() >= log.DebugLevel {
+			log.WithFields(log.Fields{
 				"ruleFragment": ruleForHashing,
 				"action":       rule.Action,
 				"position":     ii,

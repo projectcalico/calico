@@ -1,4 +1,4 @@
-// Copyright (c) 2021-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2021-2025 Tigera, Inc. All rights reserved.
 
 /*
 Copyright 2017 The Kubernetes Authors.
@@ -26,7 +26,6 @@ import (
 	"time"
 
 	"github.com/projectcalico/api/pkg/openapi"
-	"github.com/sirupsen/logrus"
 	"github.com/spf13/pflag"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apiserver/pkg/authorization/authorizerfactory"
@@ -37,6 +36,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/projectcalico/calico/apiserver/pkg/apiserver"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // CalicoServerOptions contains the aggregation of configuration structs for
@@ -163,7 +163,7 @@ func (o *CalicoServerOptions) Config() (*apiserver.Config, error) {
 		// [1] https://kubernetes.io/blog/2024/04/24/validating-admission-policy-ga/
 		serverConfig.Authorization.Authorizer = authorizerfactory.NewAlwaysAllowAuthorizer()
 		// always warn when auth is disabled, since this should only be used for testing
-		logrus.Info("Authentication and authorization disabled for testing purposes")
+		log.Info("Authentication and authorization disabled for testing purposes")
 	}
 
 	if err := o.RecommendedOptions.Audit.ApplyTo(&serverConfig.Config); err != nil {

@@ -21,10 +21,9 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/sirupsen/logrus"
-
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -81,12 +80,12 @@ func Combine(m1, m2 generictables.MatchCriteria) generictables.MatchCriteria {
 	}
 
 	if m1p.ipVersion != m2p.ipVersion {
-		logrus.Panicf("Probably bug: IP versions do not match: %d != %d", m1p.ipVersion, m2p.ipVersion)
+		log.Panicf("Probably bug: IP versions do not match: %d != %d", m1p.ipVersion, m2p.ipVersion)
 	}
 	if m1p.proto != "" && m2p.proto != "" && m1p.proto != m2p.proto {
-		logrus.Panicf("Probably bug: Protocols do not match: %s != %s", m1p.proto, m2p.proto)
+		log.Panicf("Probably bug: Protocols do not match: %s != %s", m1p.proto, m2p.proto)
 	} else if m1p.protoNum != 0 && m2p.protoNum != 0 && m1p.protoNum != m2p.protoNum {
-		logrus.Panicf("Probably bug: Protocols do not match: %d != %d", m1p.protoNum, m2p.protoNum)
+		log.Panicf("Probably bug: Protocols do not match: %d != %d", m1p.protoNum, m2p.protoNum)
 	}
 
 	cp := nftMatch{
@@ -120,7 +119,7 @@ func (m nftMatch) protocol() string {
 	if m.protoNum != 0 {
 		return fmt.Sprintf("%d", m.protoNum)
 	}
-	logrus.Panicf("Probably bug: No protocol set: %s", m.clauses)
+	log.Panicf("Probably bug: No protocol set: %s", m.clauses)
 	return ""
 }
 
@@ -140,7 +139,7 @@ func (m nftMatch) transportProto() string {
 	case "tcp", "udp", "sctp":
 		return m.proto
 	}
-	logrus.WithFields(logrus.Fields{
+	log.WithFields(log.Fields{
 		"proto": m.proto,
 		"num":   m.protoNum,
 	}).Panicf("Probably bug: protocol is not one of TCP/UDP/SCTP: %s", m.clauses)
@@ -190,7 +189,7 @@ func (m nftMatch) String() string {
 
 func (m nftMatch) MarkClear(mark uint32) generictables.MatchCriteria {
 	if mark == 0 {
-		logrus.Panic("Probably bug: zero mark")
+		log.Panic("Probably bug: zero mark")
 	}
 	m.clauses = append(m.clauses, fmt.Sprintf("meta mark & %#x == 0", mark))
 	return m
@@ -198,7 +197,7 @@ func (m nftMatch) MarkClear(mark uint32) generictables.MatchCriteria {
 
 func (m nftMatch) MarkNotClear(mark uint32) generictables.MatchCriteria {
 	if mark == 0 {
-		logrus.Panic("Probably bug: zero mark")
+		log.Panic("Probably bug: zero mark")
 	}
 	m.clauses = append(m.clauses, fmt.Sprintf("meta mark & %#x != 0", mark))
 	return m
@@ -209,13 +208,13 @@ func (m nftMatch) MarkSingleBitSet(mark uint32) generictables.MatchCriteria {
 		// Disallow multi-bit matches to force user to think about the mask they should use.
 		// For example, if you are storing a number in the mark then you likely want to match on its
 		// 0-bits too
-		logrus.WithField("mark", mark).Panic("MarkSingleBitSet() should only be used with a single mark bit")
+		log.WithField("mark", mark).Panic("MarkSingleBitSet() should only be used with a single mark bit")
 	}
 	return m.MarkMatchesWithMask(mark, mark)
 }
 
 func (m nftMatch) MarkMatchesWithMask(mark, mask uint32) generictables.MatchCriteria {
-	logCxt := logrus.WithFields(logrus.Fields{
+	logCxt := log.WithFields(log.Fields{
 		"mark": mark,
 		"mask": mask,
 	})
@@ -230,7 +229,7 @@ func (m nftMatch) MarkMatchesWithMask(mark, mask uint32) generictables.MatchCrit
 }
 
 func (m nftMatch) NotMarkMatchesWithMask(mark, mask uint32) generictables.MatchCriteria {
-	logCxt := logrus.WithFields(logrus.Fields{
+	logCxt := log.WithFields(log.Fields{
 		"mark": mark,
 		"mask": mask,
 	})
@@ -317,9 +316,9 @@ func (m nftMatch) NotConntrackState(stateNames string) generictables.MatchCriter
 
 func (m nftMatch) Protocol(name string) generictables.MatchCriteria {
 	if m.proto != "" {
-		logrus.WithField("protocol", m.proto).Fatal("Protocol already set")
+		log.WithField("protocol", m.proto).Fatal("Protocol already set")
 	} else if m.protoNum != 0 {
-		logrus.WithField("protocol", m.protoNum).Fatal("Protocol already set")
+		log.WithField("protocol", m.protoNum).Fatal("Protocol already set")
 	}
 	m.proto = name
 
@@ -337,9 +336,9 @@ func (m nftMatch) NotProtocol(name string) generictables.MatchCriteria {
 
 func (m nftMatch) ProtocolNum(num uint8) generictables.MatchCriteria {
 	if m.proto != "" {
-		logrus.WithField("protocol", m.proto).Fatal("Protocol already set")
+		log.WithField("protocol", m.proto).Fatal("Protocol already set")
 	} else if m.protoNum != 0 {
-		logrus.WithField("protocol", m.protoNum).Fatal("Protocol already set")
+		log.WithField("protocol", m.protoNum).Fatal("Protocol already set")
 	}
 	m.protoNum = num
 
@@ -433,7 +432,7 @@ func (m nftMatch) IPSetNames() []string {
 	for _, clause := range []string(m.clauses) {
 		match := ipSetMatch.FindStringSubmatch(clause)
 		if len(match) > 2 {
-			logrus.WithField("clause", clause).Panic("Probably bug: multiple IP set names found")
+			log.WithField("clause", clause).Panic("Probably bug: multiple IP set names found")
 		} else if len(match) == 2 {
 			// Found a match.
 			ipSetNames.Add(match[1])
