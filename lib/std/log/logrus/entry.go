@@ -13,6 +13,10 @@ type entry struct {
 	entry *logrus.Entry
 }
 
+func (e *entry) GetTime() time.Time {
+	return e.entry.Time
+}
+
 func (e *entry) GetLevel() types.Level {
 	return types.Level(e.entry.Level)
 }

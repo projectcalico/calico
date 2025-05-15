@@ -15,10 +15,12 @@ import (
 var _ types.Logger = &logger{}
 
 type config struct {
-	componentName string
-	output        io.Writer
-	level         types.Level
-	formatter     types.Formatter
+	componentName  string
+	output         io.Writer
+	level          types.Level
+	formatter      types.Formatter
+	hooks          []types.Hook
+	backgroundHook *BackgroundHook
 }
 
 type logger struct {
@@ -68,6 +70,13 @@ func newLogger(cfg config) types.Logger {
 	lgrs.SetFormatter(logrusFormatter)
 	lgrs.SetOutput(cfg.output)
 	lgrs.SetLevel(logrus.Level(cfg.level))
+	for _, hook := range cfg.hooks {
+		lgrs.AddHook(&hookWrapper{hook})
+	}
+
+	if cfg.backgroundHook != nil {
+		lgrs.AddHook(cfg.backgroundHook)
+	}
 
 	return &logger{lgrs}
 }
