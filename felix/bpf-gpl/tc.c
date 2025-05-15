@@ -56,6 +56,10 @@
 #include "bpf_helpers.h"
 #include "rule_counters.h"
 
+#ifndef IPVER6
+#include "ip_v4_fragment.h"
+#endif
+
 #define HAS_HOST_CONFLICT_PROG CALI_F_TO_HEP
 
 /* calico_tc_main is the main function used in all of the tc programs.  It is specialised
@@ -197,11 +201,29 @@ int calico_tc_main(struct __sk_buff *skb)
 		ctx->fwd.res = TC_ACT_SHOT;
 		goto finalize;
 	}
+
+#ifndef IPVER6
+	if (CALI_F_TO_HOST && ip_is_frag(ip_hdr(ctx))) {
+		if (!frags4_handle(ctx)) {
+			deny_reason(ctx, CALI_REASON_FRAG_WAIT);
+			goto deny;
+		}
+		/* force it through stack to trigger any further necessary fragmentation */
+		ctx->state->flags |= CALI_ST_SKIP_REDIR_ONCE;
+	}
+#endif
+
 	return pre_policy_processing(ctx);
 
 allow:
 finalize:
 	return forward_or_drop(ctx);
+
+#ifndef IPVER6
+deny:
+	ctx->fwd.res = TC_ACT_SHOT;
+	goto finalize;
+#endif
 }
 
 static CALI_BPF_INLINE int pre_policy_processing(struct cali_tc_ctx *ctx)
@@ -250,6 +272,21 @@ static CALI_BPF_INLINE int pre_policy_processing(struct cali_tc_ctx *ctx)
 			goto allow;
 		}
 	}
+
+#ifndef IPVER6
+	if (CALI_F_FROM_HOST && ip_is_frag(ip_hdr(ctx)) && !ip_is_first_frag(ip_hdr(ctx))) {
+		if (frags4_lookup_ct(ctx)) {
+			if (ip_is_last_frag(ip_hdr(ctx))) {
+				frags4_remove_ct(ctx);
+			}
+			ctx->state->flags |= CALI_ST_IS_FRAG;
+			goto allow;
+		}
+
+		deny_reason(ctx, CALI_REASON_FRAG_REORDER);
+		goto deny;
+	}
+#endif
 
 	ctx->state->pol_rc = CALI_POL_NO_MATCH;
 
@@ -1259,6 +1296,13 @@ int calico_tc_skb_accepted_entrypoint(struct __sk_buff *skb)
 		skb_log(ctx, true);
 	}
 
+#ifndef IPVER6
+	if (CALI_F_FROM_HOST && ip_is_first_frag(ip_hdr(ctx))) {
+		frags4_record_ct(ctx);
+		ctx->state->flags |= CALI_ST_IS_FRAG;
+	}
+#endif
+
 	ctx->fwd = calico_tc_skb_accepted(ctx);
 	return forward_or_drop(ctx);
 
@@ -1340,7 +1384,7 @@ int calico_tc_skb_new_flow_entrypoint(struct __sk_buff *skb)
 	if (CALI_F_TO_HOST && state->flags & CALI_ST_SKIP_FIB) {
 		ct_ctx_nat->flags |= CALI_CT_FLAG_SKIP_FIB;
 	}
-	if (CALI_F_FROM_HEP && state->flags & CALI_ST_SKIP_REDIR_PEER) {
+	if (state->flags & CALI_ST_SKIP_REDIR_PEER) {
 		ct_ctx_nat->flags |= CALI_CT_FLAG_SKIP_REDIR_PEER;
 	}
 	if (CALI_F_TO_WEP) {
@@ -1681,7 +1725,7 @@ icmp_ttl_exceeded:
 	state->icmp_type = ICMPV6_TIME_EXCEED;
 	state->icmp_code = ICMPV6_EXC_HOPLIMIT;
 #else
-	if (ip_frag_no(ip_hdr(ctx))) {
+	if (ip_is_frag(ip_hdr(ctx))) {
 		goto deny;
 	}
 	state->icmp_type = ICMP_TIME_EXCEEDED;
