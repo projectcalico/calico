@@ -15,16 +15,11 @@
 package registry
 
 import (
-	"context"
 	"fmt"
-	"io"
-	"net/http"
-	"strings"
 
-	"github.com/distribution/reference"
-	"github.com/docker/distribution/manifest/manifestlist"
-	"github.com/docker/distribution/manifest/schema2"
-	"github.com/sirupsen/logrus"
+	"github.com/google/go-containerregistry/pkg/authn"
+	"github.com/google/go-containerregistry/pkg/name"
+	"github.com/google/go-containerregistry/pkg/v1/remote"
 )
 
 // ImageMap maps the image name to the repository.
@@ -37,78 +32,15 @@ var ImageMap = map[string]string{
 	"csi-node-driver-registrar": "calico/node-driver-registrar",
 }
 
-// ImageRef represents a container image.
-type ImageRef struct {
-	ref reference.Named
-}
-
-// Repository returns the repository part of the image.
-func (i ImageRef) Repository() string {
-	return reference.Path(i.ref)
-}
-
-// Tag returns the tag part of the image.
-func (i ImageRef) Tag() string {
-	return reference.TagNameOnly(i.ref).(reference.NamedTagged).Tag()
-}
-
-// Registry returns the Registry option for the image's specified domain
-func (i ImageRef) Registry() Registry {
-	domain := reference.Domain(i.ref)
-	return GetRegistry(domain)
-}
-
-// String returns the image reference as a fully qualfied string
-func (i ImageRef) String() string {
-	return i.ref.String()
-}
-
-// ParseImage returns an ImageRef for the fully qualified name of the image
-func ParseImage(img string) ImageRef {
-	ref, err := reference.ParseNormalizedNamed(img)
+func CheckComponentImage(component Component) (bool, error) {
+	ref, err := name.ParseReference(component.String())
 	if err != nil {
-		logrus.WithError(err).Fatal("Failed to parse image")
+		return false, fmt.Errorf("failed to parse image reference for %s: %w", component.String(), err)
 	}
-	return ImageRef{ref}
-}
 
-// ImageExists checks if an image exists in a registry.
-func ImageExists(img ImageRef) (bool, error) {
-	registry := img.Registry()
-	manifestURL := registry.ManifestURL(img)
-	token, err := registry.Token(img)
+	_, err = remote.Head(ref, remote.WithAuthFromKeychain(authn.DefaultKeychain))
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("failed to get image descriptor for %s: %w", component.String(), err)
 	}
-	logrus.WithFields(logrus.Fields{
-		"image":       img.String(),
-		"manifestURL": manifestURL,
-	}).Debug("Checking if image exists")
-	req, err := http.NewRequest(http.MethodGet, manifestURL, nil)
-	if err != nil {
-		logrus.WithError(err).Error("Failed to create request")
-		return false, err
-	}
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
-	// Docker Hub requires the "Accept" header to be set for manifest requests.
-	// While it is forgiving in most cases, windows images request will fail without it.
-	accepts := []string{
-		manifestlist.MediaTypeManifestList,
-		schema2.MediaTypeManifest,
-	}
-	req.Header.Set("Accept", strings.Join(accepts, ", "))
-	resp, err := http.DefaultClient.Do(req.WithContext(context.Background()))
-	if err != nil {
-		logrus.WithError(err).Error("Failed to get manifest")
-		return false, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode == http.StatusOK {
-		return true, nil
-	} else if resp.StatusCode == http.StatusNotFound {
-		body, _ := io.ReadAll(resp.Body)
-		logrus.WithField("image", img.String()).Error("Failed to get manifest: HTTP 404")
-		return false, fmt.Errorf("unable to find image: %s", body)
-	}
-	return false, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+	return true, nil
 }
