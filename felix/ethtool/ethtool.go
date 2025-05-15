@@ -1,4 +1,4 @@
-// Copyright (c) 2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2021-2025 Tigera, Inc. All rights reserved.
 //
 // Based on the version in the Weave project, Copyright Weaveworks:
 // https://github.com/weaveworks/weave/blob/c69e140e9e43d456b6fe5812a2bc61bc67953b93/net/ethtool.go
