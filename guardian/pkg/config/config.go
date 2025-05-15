@@ -157,7 +157,7 @@ func (cfg *Config) TLSConfig() (*tls.Config, *tls.Certificate, error) {
 }
 
 func (cfg *Config) configureLogging() {
-	log.SetLevelFromString(cfg.LogLevel)
+	log.SetLevelWithDefault(cfg.LogLevel, log.WarnLevel)
 }
 
 func (cfg *Config) Cert() (string, *x509.CertPool, error) {

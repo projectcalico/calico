@@ -17,7 +17,7 @@ package health
 import (
 	"context"
 
-	log "github.com/sirupsen/logrus"
+	"github.com/projectcalico/calico/lib/std/log"
 
 	dikastesproto "github.com/projectcalico/calico/app-policy/proto"
 )

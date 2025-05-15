@@ -19,7 +19,7 @@ import (
 	"strconv"
 	"strings"
 
-	log "github.com/sirupsen/logrus"
+	"github.com/projectcalico/calico/lib/std/log"
 
 	syncapi "github.com/projectcalico/calico/felix/proto"
 )
