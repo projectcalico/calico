@@ -30,9 +30,39 @@ const (
 	TraceLevel
 )
 
+var AllLevels = []Level{
+	PanicLevel,
+	FatalLevel,
+	ErrorLevel,
+	WarnLevel,
+	InfoLevel,
+	DebugLevel,
+	TraceLevel,
+}
+
 type Hook interface {
 	Levels() []Level
 	Fire(Entry) error
+}
+
+type genericHook struct {
+	levels []Level
+	fire   func(Entry) error
+}
+
+func (g *genericHook) Levels() []Level {
+	return g.levels
+}
+
+func (g *genericHook) Fire(entry Entry) error {
+	return g.fire(entry)
+}
+
+func NewHook(levels []Level, fire func(Entry) error) Hook {
+	return &genericHook{
+		levels: levels,
+		fire:   fire,
+	}
 }
 
 // Fields type, used to pass to `WithFields`.
@@ -106,6 +136,7 @@ type Logger interface {
 }
 
 type Entry interface {
+	GetTime() time.Time
 	Logger() Logger
 	Bytes() ([]byte, error)
 	Debug(args ...interface{})
