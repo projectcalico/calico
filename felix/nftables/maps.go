@@ -21,13 +21,13 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
 	"sigs.k8s.io/knftables"
 
 	"github.com/projectcalico/calico/felix/deltatracker"
 	"github.com/projectcalico/calico/felix/ipsets"
 	"github.com/projectcalico/calico/felix/logutils"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -85,7 +85,7 @@ type Maps struct {
 	gaugeNumMaps prometheus.Gauge
 	opReporter   logutils.OpRecorder
 	sleep        func(time.Duration)
-	logCxt       *logrus.Entry
+	logCxt       log.Entry
 
 	nft knftables.Interface
 
@@ -122,7 +122,7 @@ func NewMapsWithShims(
 	recorder logutils.OpRecorder,
 ) *Maps {
 	familyStr := string(ipVersionConfig.Family)
-	familyLogger := logrus.WithFields(logrus.Fields{"family": ipVersionConfig.Family})
+	familyLogger := log.WithFields(log.Fields{"family": ipVersionConfig.Family})
 
 	return &Maps{
 		IPVersionConfig:      ipVersionConfig,
@@ -149,7 +149,7 @@ func (s *Maps) AddOrReplaceMap(meta MapMetadata, members map[string][]string) {
 	// DeltaTracker will catch that and mark it for recreation.
 	s.mapNameToAllMetadata[meta.Name] = meta
 
-	logCtx := s.logCxt.WithFields(logrus.Fields{"name": meta.Name, "type": meta.Type})
+	logCtx := s.logCxt.WithFields(log.Fields{"name": meta.Name, "type": meta.Type})
 
 	logCtx.Info("Queueing map for creation")
 	logCtx.WithField("members", members).Info("Queueing map for creation")
@@ -226,7 +226,7 @@ func (s *Maps) RemoveMap(mapName string) {
 		s.mapNameToMembers[mapName].Desired().DeleteAll()
 	} else {
 		// If it's not in the dataplane, clean it up immediately.
-		logrus.WithField("id", mapName).Debug("map to remove not in the dataplane.")
+		log.WithField("id", mapName).Debug("map to remove not in the dataplane.")
 		delete(s.mapNameToMembers, mapName)
 	}
 	s.updateDirtiness(mapName)
@@ -237,7 +237,7 @@ func (s *Maps) RemoveMap(mapName string) {
 func (s *Maps) AddMembers(mapName string, newMembers map[string][]string) {
 	setMeta, ok := s.mapNameToAllMetadata[mapName]
 	if !ok {
-		logrus.WithField("mapName", mapName).Panic("AddMembers called for nonexistent map.")
+		log.WithField("mapName", mapName).Panic("AddMembers called for nonexistent map.")
 	}
 	canonMembers := s.filterAndCanonicaliseMembers(setMeta.Type, newMembers)
 	if canonMembers.Len() == 0 {
@@ -258,7 +258,7 @@ func (s *Maps) AddMembers(mapName string, newMembers map[string][]string) {
 func (s *Maps) RemoveMembers(mapName string, removedMembers map[string][]string) {
 	setMeta, ok := s.mapNameToAllMetadata[mapName]
 	if !ok {
-		logrus.WithField("mapName", mapName).Panic("RemoveMembers called for nonexistent map.")
+		log.WithField("mapName", mapName).Panic("RemoveMembers called for nonexistent map.")
 	}
 	canonMembers := s.filterAndCanonicaliseMembers(setMeta.Type, removedMembers)
 	if canonMembers.Len() == 0 {
@@ -292,7 +292,7 @@ func (s *Maps) LoadDataplaneState() error {
 	// Log the time spent as we exit the function.
 	resyncStart := time.Now()
 	defer func() {
-		s.logCxt.WithFields(logrus.Fields{
+		s.logCxt.WithFields(log.Fields{
 			"resyncDuration":         time.Since(resyncStart),
 			"mapsWithDirtyMembers":   s.mapsWithDirtyMembers.Len(),
 			"mapsToCreateOrRecreate": s.mapNameToProgrammedMetadata.PendingUpdates().Len(),
@@ -422,7 +422,7 @@ func (s *Maps) LoadDataplaneState() error {
 		if _, ok := s.mapNameToAllMetadata[name]; !ok {
 			// Defensive: this map is not in the dataplane, and it's not
 			// one we are tracking, clean up its member tracker.
-			logrus.WithField("name", name).Warn("Cleaning up leaked(?) map member tracker.")
+			log.WithField("name", name).Warn("Cleaning up leaked(?) map member tracker.")
 			delete(s.mapNameToMembers, name)
 			continue
 		}
@@ -444,7 +444,7 @@ func (s *Maps) NFTablesMap(name string) *knftables.Map {
 	switch metadata.Type {
 	case MapTypeInterfaceMatch:
 	default:
-		logrus.WithField("type", metadata.Type).Panic("Unexpected map type")
+		log.WithField("type", metadata.Type).Panic("Unexpected map type")
 	}
 
 	return &knftables.Map{
@@ -624,7 +624,7 @@ func CanonicaliseMapMember(mtype MapType, key string, value []string) MapMember 
 		// An action and a chain.
 		return interfaceToChain{key, splits[0], splits[1]}
 	default:
-		logrus.Errorf("Unknown map type: %v", mtype)
+		log.Errorf("Unknown map type: %v", mtype)
 	}
 	return nil
 }
@@ -671,7 +671,7 @@ func mapType(t MapType, ipVersion int) string {
 	case MapTypeInterfaceMatch:
 		return "ifname : verdict"
 	default:
-		logrus.WithField("type", string(t)).Panic("Unknown MapType")
+		log.WithField("type", string(t)).Panic("Unknown MapType")
 	}
 	return ""
 }

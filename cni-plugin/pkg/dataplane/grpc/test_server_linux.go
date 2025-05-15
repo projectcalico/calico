@@ -22,12 +22,12 @@ import (
 
 	"github.com/containernetworking/plugins/pkg/ip"
 	"github.com/containernetworking/plugins/pkg/ns"
-	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/proto"
 
 	pb "github.com/projectcalico/calico/cni-plugin/pkg/dataplane/grpc/proto"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 type TestServer struct {

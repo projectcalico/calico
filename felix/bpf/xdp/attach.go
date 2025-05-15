@@ -19,7 +19,6 @@ import (
 	"path"
 	"strings"
 
-	log "github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 
 	"github.com/projectcalico/calico/felix/bpf"
@@ -27,6 +26,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/hook"
 	"github.com/projectcalico/calico/felix/bpf/libbpf"
 	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 const DetachedID = 0
@@ -76,7 +76,7 @@ func (ap *AttachPoint) ProgramName() string {
 	return "cali_xdp_preamble"
 }
 
-func (ap *AttachPoint) Log() *log.Entry {
+func (ap *AttachPoint) Log() log.Entry {
 	return log.WithFields(log.Fields{
 		"iface":    ap.Iface,
 		"modes":    ap.Modes,

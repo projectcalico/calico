@@ -18,7 +18,8 @@ package wireguard
 
 import (
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 var _ prometheus.Collector = (*Metrics)(nil)
@@ -35,7 +36,7 @@ func (collector *Metrics) Collect(_ chan<- prometheus.Metric) {
 func MustNewWireguardMetrics() *Metrics {
 	wg, err := NewWireguardMetrics()
 	if err != nil {
-		logrus.Panic(err)
+		log.Panic(err)
 	}
 	return wg
 }

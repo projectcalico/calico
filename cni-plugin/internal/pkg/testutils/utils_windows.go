@@ -32,7 +32,6 @@ import (
 	types020 "github.com/containernetworking/cni/pkg/types/020"
 	cniv1 "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/mcuadros/go-version"
-	log "github.com/sirupsen/logrus"
 	"golang.org/x/sys/windows/registry"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -40,6 +39,7 @@ import (
 	"github.com/projectcalico/calico/cni-plugin/pkg/dataplane/windows"
 	"github.com/projectcalico/calico/cni-plugin/pkg/k8s"
 	plugintypes "github.com/projectcalico/calico/cni-plugin/pkg/types"
+	"github.com/projectcalico/calico/lib/std/log"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 )
 
@@ -436,7 +436,7 @@ func NetworkPod(
 		return fmt.Errorf("failed to load netconf: %v", err)
 	}
 
-	var logger *log.Entry
+	var logger log.Entry
 
 	logger = log.WithFields(log.Fields{
 		"ContainerID": containerID,
@@ -457,7 +457,7 @@ func CreateNetwork(netconf string) (*hcsshim.HNSNetwork, error) {
 
 	_, subNet, _ := net.ParseCIDR(conf.IPAM.Subnet)
 
-	var logger *log.Entry
+	var logger log.Entry
 	logger = log.WithFields(log.Fields{
 		"Name": conf.Name,
 	})
@@ -488,7 +488,7 @@ func CreateEndpoint(hnsNetwork *hcsshim.HNSNetwork, netconf string) (*hcsshim.HN
 
 	_, subNet, _ := net.ParseCIDR(conf.IPAM.Subnet)
 
-	var logger *log.Entry
+	var logger log.Entry
 	logger = log.WithFields(log.Fields{
 		"Name": conf.Name,
 	})

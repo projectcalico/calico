@@ -17,8 +17,7 @@ package calc
 import (
 	"context"
 
-	"github.com/sirupsen/logrus"
-
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 )
 
@@ -55,7 +54,7 @@ func (a *SyncerCallbacksDecoupler) SendToContext(cxt context.Context, sink api.S
 				sink.OnUpdates(obj)
 			}
 		case <-cxt.Done():
-			logrus.WithError(cxt.Err()).Info("Context asked us to stop")
+			log.WithError(cxt.Err()).Info("Context asked us to stop")
 			return
 		}
 	}

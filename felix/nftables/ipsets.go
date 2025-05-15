@@ -23,7 +23,6 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
-	log "github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
 	"sigs.k8s.io/knftables"
 
@@ -32,6 +31,7 @@ import (
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/ipsets"
 	"github.com/projectcalico/calico/felix/logutils"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -94,7 +94,7 @@ type IPSets struct {
 
 	resyncRequired bool
 
-	logCxt *log.Entry
+	logCxt log.Entry
 
 	// Optional filter.  When non-nil, only these IP set IDs will be rendered into the dataplane
 	// as Linux IP sets.

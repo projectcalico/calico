@@ -23,8 +23,6 @@ import (
 	"time"
 	"unique"
 
-	"github.com/sirupsen/logrus"
-
 	"github.com/projectcalico/calico/felix/collector/flowlog"
 	"github.com/projectcalico/calico/felix/collector/types/endpoint"
 	"github.com/projectcalico/calico/felix/collector/types/tuple"
@@ -32,6 +30,7 @@ import (
 	"github.com/projectcalico/calico/goldmane/pkg/client"
 	"github.com/projectcalico/calico/goldmane/pkg/types"
 	"github.com/projectcalico/calico/goldmane/proto"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/lib/std/uniquelabels"
 )
 
@@ -64,14 +63,14 @@ func (g *GoldmaneReporter) Start() error {
 func (g *GoldmaneReporter) Report(logSlice any) error {
 	switch logs := logSlice.(type) {
 	case []*flowlog.FlowLog:
-		if logrus.IsLevelEnabled(logrus.DebugLevel) {
-			logrus.WithField("num", len(logs)).Debug("Dispatching flow logs to goldmane")
+		if log.IsLevelEnabled(log.DebugLevel) {
+			log.WithField("num", len(logs)).Debug("Dispatching flow logs to goldmane")
 		}
 		for _, l := range logs {
 			g.client.Push(ConvertFlowlogToGoldmane(l))
 		}
 	default:
-		logrus.Panic("Unexpected kind of log dispatcher")
+		log.Panic("Unexpected kind of log dispatcher")
 	}
 	return nil
 }
@@ -88,7 +87,7 @@ func convertType(t endpoint.Type) proto.EndpointType {
 	case endpoint.Net:
 		pt = proto.EndpointType_Network
 	default:
-		logrus.WithField("type", t).Warn("Unexpected endpoint type")
+		log.WithField("type", t).Warn("Unexpected endpoint type")
 	}
 	return pt
 }
@@ -100,7 +99,7 @@ func convertReporter(r flowlog.ReporterType) proto.Reporter {
 	case flowlog.ReporterDst:
 		return proto.Reporter_Dst
 	}
-	logrus.WithField("reporter", r).Fatal("BUG: Unexpected reporter")
+	log.WithField("reporter", r).Fatal("BUG: Unexpected reporter")
 	return proto.Reporter_Dst
 }
 
@@ -111,7 +110,7 @@ func convertAction(a flowlog.Action) proto.Action {
 	case flowlog.ActionDeny:
 		return proto.Action_Deny
 	default:
-		logrus.WithField("action", a).Fatal("BUG: Unexpected action")
+		log.WithField("action", a).Fatal("BUG: Unexpected action")
 	}
 	return proto.Action_ActionUnspecified
 }
@@ -254,7 +253,7 @@ func toPolicyHits(labels flowlog.FlowPolicySet) []*proto.PolicyHit {
 	for p := range labels {
 		h, err := proto.HitFromString(p)
 		if err != nil {
-			logrus.WithError(err).WithField("label", p).Panic("Failed to parse policy hit")
+			log.WithError(err).WithField("label", p).Panic("Failed to parse policy hit")
 		}
 		hits = append(hits, h)
 	}
@@ -270,7 +269,7 @@ func toFlowPolicySet(policies []*proto.PolicyHit) flowlog.FlowPolicySet {
 	policySet := make(flowlog.FlowPolicySet)
 	for _, pol := range policies {
 		if s, err := pol.ToString(); err != nil {
-			logrus.WithError(err).WithField("policy", pol).Error("Failed to convert policy hit to string")
+			log.WithError(err).WithField("policy", pol).Error("Failed to convert policy hit to string")
 		} else {
 			policySet[s] = struct{}{}
 		}

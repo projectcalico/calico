@@ -18,7 +18,8 @@ import (
 	"os"
 
 	"github.com/go-ini/ini"
-	log "github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 func LoadConfigFile(filename string) (map[string]string, error) {

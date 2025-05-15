@@ -17,10 +17,9 @@ package handlemgr
 import (
 	"time"
 
-	"github.com/sirupsen/logrus"
-
 	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/netlinkshim"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 const (
@@ -92,7 +91,7 @@ func (r *HandleManager) Handle() (netlinkshim.Interface, error) {
 		r.cachedHandle = nlHandle
 	}
 	if r.numRepeatFailures > 0 {
-		logrus.WithField("numFailures", r.numRepeatFailures).Info(
+		log.WithField("numFailures", r.numRepeatFailures).Info(
 			"Connected to netlink after previous failures.")
 		r.numRepeatFailures = 0
 	}
@@ -101,31 +100,31 @@ func (r *HandleManager) Handle() (netlinkshim.Interface, error) {
 
 func (r *HandleManager) newHandle() (netlinkshim.Interface, error) {
 	if r.numRepeatFailures >= maxConnFailures {
-		logrus.WithField("numFailures", r.numRepeatFailures).Panic(
+		log.WithField("numFailures", r.numRepeatFailures).Panic(
 			"Repeatedly failed to connect to netlink.")
 	}
-	logrus.Debug("Trying to connect to netlink")
+	log.Debug("Trying to connect to netlink")
 	nlHandle, err := r.newNetlinkHandle()
 	if err != nil {
 		r.numRepeatFailures++
-		logrus.WithError(err).WithField("numFailures", r.numRepeatFailures).Error(
+		log.WithError(err).WithField("numFailures", r.numRepeatFailures).Error(
 			"Failed to connect to netlink")
 		return nil, err
 	}
 	err = nlHandle.SetSocketTimeout(r.socketTimeout)
 	if err != nil {
 		r.numRepeatFailures++
-		logrus.WithError(err).WithField("numFailures", r.numRepeatFailures).Error(
+		log.WithError(err).WithField("numFailures", r.numRepeatFailures).Error(
 			"Failed to set netlink timeout")
 		nlHandle.Delete()
 		return nil, err
 	}
 	if r.strictEnabled && r.featureDetector.GetFeatures().KernelSideRouteFiltering {
-		logrus.Debug("Kernel supports route filtering, enabling 'strict' netlink mode.")
+		log.Debug("Kernel supports route filtering, enabling 'strict' netlink mode.")
 		err = nlHandle.SetStrictCheck(true)
 		if err != nil {
 			r.numRepeatFailures++
-			logrus.WithError(err).WithField("numFailures", r.numRepeatFailures).Error(
+			log.WithError(err).WithField("numFailures", r.numRepeatFailures).Error(
 				"Failed to set netlink strict mode")
 			nlHandle.Delete()
 			return nil, err

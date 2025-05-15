@@ -21,8 +21,8 @@ import (
 	"time"
 
 	"github.com/docopt/docopt-go"
-	log "github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/pkg/buildinfo"
 	"github.com/projectcalico/calico/typha/pkg/config"

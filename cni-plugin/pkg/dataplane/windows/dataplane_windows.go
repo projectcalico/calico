@@ -32,12 +32,12 @@ import (
 	"github.com/juju/clock"
 	"github.com/juju/errors"
 	"github.com/juju/mutex"
-	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/util/wait"
 
 	"github.com/projectcalico/calico/cni-plugin/internal/pkg/utils/cri"
 	"github.com/projectcalico/calico/cni-plugin/internal/pkg/utils/winpol"
 	"github.com/projectcalico/calico/cni-plugin/pkg/types"
+	"github.com/projectcalico/calico/lib/std/log"
 	api "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	calicoclient "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
@@ -50,10 +50,10 @@ const (
 
 type windowsDataplane struct {
 	conf   types.NetConf
-	logger *logrus.Entry
+	logger log.Entry
 }
 
-func NewWindowsDataplane(conf types.NetConf, logger *logrus.Entry) *windowsDataplane {
+func NewWindowsDataplane(conf types.NetConf, logger log.Entry) *windowsDataplane {
 	return &windowsDataplane{
 		conf:   conf,
 		logger: logger,
@@ -75,17 +75,17 @@ func acquireLock() (mutex.Releaser, error) {
 		Delay:   50 * time.Millisecond,
 		Timeout: 90000 * time.Millisecond,
 	}
-	logrus.Infof("Trying to acquire lock %v", spec)
+	log.Infof("Trying to acquire lock %v", spec)
 	m, err := mutex.Acquire(spec)
 	if err != nil {
-		logrus.Errorf("Error acquiring lock %v", spec)
+		log.Errorf("Error acquiring lock %v", spec)
 		return nil, err
 	}
-	logrus.Infof("Acquired lock %v", spec)
+	log.Infof("Acquired lock %v", spec)
 	return m, nil
 }
 
-func SetupL2bridgeNetwork(networkName string, subNet *net.IPNet, logger *logrus.Entry) (*hcsshim.HNSNetwork, error) {
+func SetupL2bridgeNetwork(networkName string, subNet *net.IPNet, logger log.Entry) (*hcsshim.HNSNetwork, error) {
 	hnsNetwork, err := EnsureNetworkExists(networkName, subNet, logger)
 	if err != nil {
 		logger.Errorf("Unable to create hns network %s", networkName)
@@ -112,7 +112,7 @@ func SetupL2bridgeNetwork(networkName string, subNet *net.IPNet, logger *logrus.
 	return hnsNetwork, err
 }
 
-func SetupVxlanNetwork(networkName string, subNet *net.IPNet, vni uint64, logger *logrus.Entry) (*hcsshim.HNSNetwork, error) {
+func SetupVxlanNetwork(networkName string, subNet *net.IPNet, vni uint64, logger log.Entry) (*hcsshim.HNSNetwork, error) {
 	hnsNetwork, err := ensureVxlanNetworkExists(networkName, subNet, vni, logger)
 	if err != nil {
 		logger.Errorf("Unable to create hns network %s", networkName)
@@ -143,7 +143,7 @@ func (d *windowsDataplane) DoNetworking(
 ) (hostVethName, contVethMAC string, err error) {
 	hostVethName = desiredVethName
 	if len(routes) > 0 {
-		logrus.WithField("routes", routes).Debug("Ignoring in-container routes; not supported on Windows.")
+		log.WithField("routes", routes).Debug("Ignoring in-container routes; not supported on Windows.")
 	}
 	podIP, subNet, _ := net.ParseCIDR(result.IPs[0].Address.String())
 
@@ -282,19 +282,19 @@ func lookupIPAMPools(
 	for _, p := range pools.Items {
 		_, ipNet, err := net.ParseCIDR(p.Spec.CIDR)
 		if err != nil {
-			logrus.WithError(err).WithField("rawCIDR", p.Spec.CIDR).Warn("IP pool contained bad CIDR, ignoring")
+			log.WithError(err).WithField("rawCIDR", p.Spec.CIDR).Warn("IP pool contained bad CIDR, ignoring")
 			continue
 		}
 		cidrs = append(cidrs, ipNet)
 		if ipNet.Contains(podIP) {
-			logrus.WithField("pool", p.Spec).Debug("Found pool containing pod IP")
+			log.WithField("pool", p.Spec).Debug("Found pool containing pod IP")
 			natOutgoing = p.Spec.NATOutgoing
 		}
 	}
 	return
 }
 
-func ensureVxlanNetworkExists(networkName string, subNet *net.IPNet, vni uint64, logger *logrus.Entry) (*hcsshim.HNSNetwork, error) {
+func ensureVxlanNetworkExists(networkName string, subNet *net.IPNet, vni uint64, logger log.Entry) (*hcsshim.HNSNetwork, error) {
 	var err error
 	createNetwork := true
 	expectedAddressPrefix := subNet.String()
@@ -415,7 +415,7 @@ func ensureVxlanNetworkExists(networkName string, subNet *net.IPNet, vni uint64,
 	return existingNetwork, nil
 }
 
-func EnsureNetworkExists(networkName string, subNet *net.IPNet, logger *logrus.Entry) (*hcsshim.HNSNetwork, error) {
+func EnsureNetworkExists(networkName string, subNet *net.IPNet, logger log.Entry) (*hcsshim.HNSNetwork, error) {
 	var err error
 	createNetwork := true
 	addressPrefix := subNet.String()
@@ -472,7 +472,7 @@ func EnsureNetworkExists(networkName string, subNet *net.IPNet, logger *logrus.E
 }
 
 func EnsureVXLANTunnelAddr(ctx context.Context, calicoClient calicoclient.Interface, nodeName string, ipNet *net.IPNet, networkName string) error {
-	logrus.Debug("Checking the node's VXLAN tunnel address")
+	log.Debug("Checking the node's VXLAN tunnel address")
 	var updateRequired bool
 	node, err := calicoClient.Nodes().Get(ctx, nodeName, options.GetOptions{})
 	if err != nil {
@@ -481,7 +481,7 @@ func EnsureVXLANTunnelAddr(ctx context.Context, calicoClient calicoclient.Interf
 
 	expectedIP := getNthIP(ipNet, 1).String()
 	if node.Spec.IPv4VXLANTunnelAddr != expectedIP {
-		logrus.WithField("ip", expectedIP).Debug("VXLAN tunnel IP to be updated")
+		log.WithField("ip", expectedIP).Debug("VXLAN tunnel IP to be updated")
 		updateRequired = true
 	}
 
@@ -491,7 +491,7 @@ func EnsureVXLANTunnelAddr(ctx context.Context, calicoClient calicoclient.Interf
 	}
 	expectedMAC := mac.String()
 	if node.Spec.VXLANTunnelMACAddr != expectedMAC {
-		logrus.WithField("mac", expectedMAC).Debug("VXLAN tunnel MAC to be updated")
+		log.WithField("mac", expectedMAC).Debug("VXLAN tunnel MAC to be updated")
 		updateRequired = true
 	}
 
@@ -505,7 +505,7 @@ func EnsureVXLANTunnelAddr(ctx context.Context, calicoClient calicoclient.Interf
 	return err
 }
 
-func createAndAttachVxlanHostEP(epName string, hnsNetwork *hcsshim.HNSNetwork, subNet *net.IPNet, logger *logrus.Entry) (*hcsshim.HNSEndpoint, error) {
+func createAndAttachVxlanHostEP(epName string, hnsNetwork *hcsshim.HNSNetwork, subNet *net.IPNet, logger log.Entry) (*hcsshim.HNSEndpoint, error) {
 	var err error
 	endpointAddress := getNthIP(subNet, 2)
 
@@ -554,7 +554,7 @@ func createAndAttachVxlanHostEP(epName string, hnsNetwork *hcsshim.HNSNetwork, s
 	return newEndpoint, nil
 }
 
-func CreateAndAttachHostEP(epName string, hnsNetwork *hcsshim.HNSNetwork, subNet *net.IPNet, logger *logrus.Entry) (*hcsshim.HNSEndpoint, error) {
+func CreateAndAttachHostEP(epName string, hnsNetwork *hcsshim.HNSNetwork, subNet *net.IPNet, logger log.Entry) (*hcsshim.HNSEndpoint, error) {
 	var err error
 	endpointAddress := getNthIP(subNet, 2)
 	attachEndpoint := true
@@ -607,7 +607,7 @@ func CreateAndAttachHostEP(epName string, hnsNetwork *hcsshim.HNSNetwork, subNet
 	return hnsEndpoint, err
 }
 
-func chkMgmtIPandEnableForwarding(networkName string, hnsEndpoint *hcsshim.HNSEndpoint, logger *logrus.Entry) (network *hcsshim.HNSNetwork, err error) {
+func chkMgmtIPandEnableForwarding(networkName string, hnsEndpoint *hcsshim.HNSEndpoint, logger log.Entry) (network *hcsshim.HNSNetwork, err error) {
 	startTime := time.Now()
 	logCxt := logger.WithField("network", networkName)
 
@@ -664,7 +664,7 @@ func chkMgmtIPandEnableForwarding(networkName string, hnsEndpoint *hcsshim.HNSEn
 	return network, nil
 }
 
-func enableForwarding(netInterface net.Interface, logger *logrus.Entry) error {
+func enableForwarding(netInterface net.Interface, logger log.Entry) error {
 	interfaceIdx := strconv.Itoa(netInterface.Index)
 	cmd := fmt.Sprintf("Set-NetIPInterface -ifIndex %s -AddressFamily IPv4 -Forwarding Enabled", interfaceIdx)
 	if _, _, err := winutils.Powershell(cmd); err != nil {
@@ -889,7 +889,7 @@ func (d *windowsDataplane) createAndAttachContainerEP(args *skel.CmdArgs,
 	}
 }
 
-func cleanUpEndpointByIP(IP net.IP, logger *logrus.Entry, isDockerV1 bool) error {
+func cleanUpEndpointByIP(IP net.IP, logger log.Entry, isDockerV1 bool) error {
 	if isDockerV1 {
 		endpoints, err := hcsshim.HNSListEndpointRequest()
 		if err != nil {
@@ -928,7 +928,7 @@ func cleanUpEndpointByIP(IP net.IP, logger *logrus.Entry, isDockerV1 bool) error
 	return nil
 }
 
-func cleanUpEndpointByName(endpointName string, logger *logrus.Entry, isDockerV1 bool) error {
+func cleanUpEndpointByName(endpointName string, logger log.Entry, isDockerV1 bool) error {
 	if isDockerV1 {
 		hnsEndpoint, err := hcsshim.GetHNSEndpointByName(endpointName)
 		if hcsshim.IsNotExist(err) {
@@ -958,7 +958,7 @@ func cleanUpEndpointByName(endpointName string, logger *logrus.Entry, isDockerV1
 	}
 }
 
-func lookupManagementIface(mgmtIP net.IP, logger *logrus.Entry) (net.Interface, error) {
+func lookupManagementIface(mgmtIP net.IP, logger log.Entry) (net.Interface, error) {
 	interfaces, err := net.Interfaces()
 	if err != nil {
 		logger.WithError(err).Error("Failed to look up host interfaces")
@@ -983,7 +983,7 @@ func lookupManagementIface(mgmtIP net.IP, logger *logrus.Entry) (net.Interface, 
 	return net.Interface{}, fmt.Errorf("couldn't find an interface matching management IP %s", mgmtIP.String())
 }
 
-func lookupManagementAddr(mgmtIP net.IP, logger *logrus.Entry) (*net.IPNet, error) {
+func lookupManagementAddr(mgmtIP net.IP, logger log.Entry) (*net.IPNet, error) {
 	interfaces, err := net.Interfaces()
 	if err != nil {
 		logger.WithError(err).Error("Failed to look up host interfaces")
@@ -1030,7 +1030,7 @@ func SetupRoutes(hostVeth interface{}, result *cniv1.Result) error {
 
 	// Go through all the IPs and add routes for each IP in the result.
 	for _, ipAddr := range result.IPs {
-		logrus.WithFields(logrus.Fields{"interface": hostVeth, "IP": ipAddr.Address}).Debugf("STUB: CNI adding route")
+		log.WithFields(log.Fields{"interface": hostVeth, "IP": ipAddr.Address}).Debugf("STUB: CNI adding route")
 	}
 	return nil
 }
@@ -1074,7 +1074,7 @@ func NetworkApplicationContainer(args *skel.CmdArgs) error {
 
 	hnsEndpoint, err := hcsshim.GetHNSEndpointByName(hnsEndpointName)
 	if err != nil {
-		logrus.Errorf("Endpoint does not exist with hns endpoint name: %v\n ", hnsEndpointName)
+		log.Errorf("Endpoint does not exist with hns endpoint name: %v\n ", hnsEndpointName)
 		return err
 	}
 
@@ -1084,7 +1084,7 @@ func NetworkApplicationContainer(args *skel.CmdArgs) error {
 			// In that case, return nil to allow Calico CNI to return good pod status to kubelet.
 			return nil
 		}
-		logrus.Errorf("Failed to attach hns endpoint: %s to container: %v\n ", hnsEndpoint, args.ContainerID)
+		log.Errorf("Failed to attach hns endpoint: %s to container: %v\n ", hnsEndpoint, args.ContainerID)
 		return err
 	}
 
@@ -1116,50 +1116,50 @@ func GetMacAddr(mgmtIp string) (addr string) {
 func GetDRMACAddr(networkName string, subNet *net.IPNet) (net.HardwareAddr, error) {
 	hnsNetwork, err := hcsshim.GetHNSNetworkByName(networkName)
 	if err != nil {
-		logrus.Infof("hns network %s not found", networkName)
+		log.Infof("hns network %s not found", networkName)
 		return nil, err
 	}
 
 	hcnNetwork, err := hcn.GetNetworkByName(networkName)
 	if err != nil {
-		logrus.Infof("hcn network %s not found", networkName)
+		log.Infof("hcn network %s not found", networkName)
 		return nil, err
 	}
 
 	err = hcn.RemoteSubnetSupported()
 	if err != nil {
-		logrus.Infof("remote subnet not supported")
+		log.Infof("remote subnet not supported")
 		return nil, err
 	}
 
 	var remoteDRMAC string
 	var providerAddress string
-	logrus.Infof("Checking HNS network for DR MAC : [%+v]", hnsNetwork)
+	log.Infof("Checking HNS network for DR MAC : [%+v]", hnsNetwork)
 	for _, policy := range hcnNetwork.Policies {
-		logrus.Infof("inside for loop. policy = [%+v]", policy)
+		log.Infof("inside for loop. policy = [%+v]", policy)
 		if policy.Type == hcn.DrMacAddress {
-			logrus.Infof("policy type is drmacaddress")
+			log.Infof("policy type is drmacaddress")
 			policySettings := hcn.DrMacAddressNetworkPolicySetting{}
 			err = json.Unmarshal(policy.Settings, &policySettings)
 			if err != nil {
 				return nil, fmt.Errorf("Failed to unmarshal settings")
 			}
 			remoteDRMAC = policySettings.Address
-			logrus.Infof("remote dr mac = %v", remoteDRMAC)
+			log.Infof("remote dr mac = %v", remoteDRMAC)
 		}
 		if policy.Type == hcn.ProviderAddress {
-			logrus.Infof("policy type is provideraddress")
+			log.Infof("policy type is provideraddress")
 			policySettings := hcn.ProviderAddressEndpointPolicySetting{}
 			err = json.Unmarshal(policy.Settings, &policySettings)
 			if err != nil {
 				return nil, fmt.Errorf("Failed to unmarshal settings")
 			}
 			providerAddress = policySettings.ProviderAddress
-			logrus.Infof("providerAddress = %v", providerAddress)
+			log.Infof("providerAddress = %v", providerAddress)
 		}
 	}
 	if providerAddress != hnsNetwork.ManagementIP {
-		logrus.Infof("Cannot use DR MAC %v since PA %v does not match %v", remoteDRMAC, providerAddress, hnsNetwork.ManagementIP)
+		log.Infof("Cannot use DR MAC %v since PA %v does not match %v", remoteDRMAC, providerAddress, hnsNetwork.ManagementIP)
 		remoteDRMAC = ""
 	}
 
@@ -1174,6 +1174,6 @@ func GetDRMACAddr(networkName string, subNet *net.IPNet) (net.HardwareAddr, erro
 		return nil, fmt.Errorf("Cannot parse DR MAC %v: %+v", remoteDRMAC, err)
 	}
 
-	logrus.Infof("mac address = %v", mac)
+	log.Infof("mac address = %v", mac)
 	return mac, nil
 }

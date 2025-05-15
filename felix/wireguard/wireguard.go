@@ -24,7 +24,6 @@ import (
 	"sync"
 	"time"
 
-	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 
@@ -37,6 +36,7 @@ import (
 	"github.com/projectcalico/calico/felix/routetable"
 	"github.com/projectcalico/calico/felix/routetable/ownershippol"
 	"github.com/projectcalico/calico/felix/timeshim"
+	"github.com/projectcalico/calico/lib/std/log"
 	lclogutils "github.com/projectcalico/calico/libcalico-go/lib/logutils"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
@@ -167,7 +167,7 @@ type Wireguard struct {
 	// The write proc sys function.
 	writeProcSys func(path, value string) error
 
-	logCtx            *log.Entry
+	logCtx            log.Entry
 	rateLimitedLogger *lclogutils.RateLimitedLogger
 }
 

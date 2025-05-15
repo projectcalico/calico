@@ -20,10 +20,10 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/sirupsen/logrus"
 	"github.com/snowzach/rotatefilehook"
 	cli "github.com/urfave/cli/v2"
 
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/release/internal/slack"
 	"github.com/projectcalico/calico/release/internal/utils"
 )
@@ -50,10 +50,10 @@ func logPrettifier(f *runtime.Frame) (string, string) {
 func configureLogging(filename string) {
 
 	if debug {
-		logrus.SetLevel(logrus.DebugLevel)
+		log.SetLevel(log.DebugLevel)
 	}
 
-	logrus.SetFormatter(&logrus.TextFormatter{
+	log.SetFormatter(&log.TextFormatter{
 		DisableLevelTruncation: true,
 		CallerPrettyfier:       logPrettifier,
 	})
@@ -63,8 +63,8 @@ func configureLogging(filename string) {
 		MaxSize:    100,
 		MaxAge:     30,
 		MaxBackups: 10,
-		Level:      logrus.DebugLevel,
-		Formatter: &logrus.TextFormatter{
+		Level:      log.DebugLevel,
+		Formatter: &log.TextFormatter{
 			DisableColors:          true,
 			DisableLevelTruncation: true,
 			CallerPrettyfier:       logPrettifier,
@@ -74,7 +74,7 @@ func configureLogging(filename string) {
 		panic(err)
 	}
 
-	logrus.AddHook(rotateFileHook)
+	log.AddHook(rotateFileHook)
 }
 
 // slackConfig returns a config for slack based on the CLI context.

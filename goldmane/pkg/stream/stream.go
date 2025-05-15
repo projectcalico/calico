@@ -5,11 +5,10 @@ import (
 	"errors"
 	"time"
 
-	"github.com/sirupsen/logrus"
-
 	"github.com/projectcalico/calico/goldmane/pkg/storage"
 	"github.com/projectcalico/calico/goldmane/proto"
 	"github.com/projectcalico/calico/lib/std/chanutil"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 )
 
@@ -66,7 +65,7 @@ func (s *stream) ID() string {
 // queues it for processing. Note that emission of the Flow to the Stream's output channel is asynchronous.
 func (s *stream) receive(b storage.FlowBuilder) {
 	// It's important that we don't block here, as this is called from the main loop.
-	logrus.WithFields(logrus.Fields{"id": s.ID}).Debug("Sending flow to stream")
+	log.WithFields(log.Fields{"id": s.ID}).Debug("Sending flow to stream")
 
 	// Send the flow to the output channel. If the channel is full, wait for a bit before giving up.
 	if err := chanutil.WriteWithDeadline(s.ctx, s.out, b, 1*time.Second); err != nil {

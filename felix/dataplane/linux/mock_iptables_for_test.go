@@ -16,9 +16,9 @@ package intdataplane
 
 import (
 	. "github.com/onsi/gomega"
-	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/generictables"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 type mockTable struct {

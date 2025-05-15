@@ -18,9 +18,8 @@ import (
 	"errors"
 	"reflect"
 
-	"github.com/sirupsen/logrus"
-
 	"github.com/projectcalico/calico/felix/config"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	v1v "github.com/projectcalico/calico/libcalico-go/lib/validator/v1"
@@ -32,7 +31,7 @@ func NewValidationFilter(sink api.SyncerCallbacks, felixConfig *config.Config) *
 		sink:   sink,
 		config: felixConfig,
 
-		cachedKVLogEntry: logrus.WithFields(logrus.Fields{
+		cachedKVLogEntry: log.WithFields(log.Fields{
 			"key":   "",
 			"value": "",
 		}),
@@ -43,7 +42,7 @@ type ValidationFilter struct {
 	sink   api.SyncerCallbacks
 	config *config.Config
 
-	cachedKVLogEntry *logrus.Entry
+	cachedKVLogEntry log.Entry
 }
 
 func (v *ValidationFilter) OnStatusUpdated(status api.SyncStatus) {

@@ -21,11 +21,11 @@ import (
 	"io/fs"
 	"time"
 
-	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/util/wait"
 
 	"github.com/projectcalico/calico/felix/deltatracker"
 	"github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/lib/std/log"
 	epstatus "github.com/projectcalico/calico/libcalico-go/lib/epstatusfile"
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
 )
@@ -147,28 +147,28 @@ func (fr *EndpointStatusFileReporter) SyncForever(ctx context.Context) {
 	// Timer channels are stored separately from the timer, and nilled-out when not needed.
 	var retry, scheduledReapply *time.Timer
 	var retryC, scheduledReapplyC <-chan time.Time
-	logrus.Info("Endpoint status file reporter running.")
+	log.Info("Endpoint status file reporter running.")
 	for {
 		select {
 		case <-ctx.Done():
-			logrus.Debug("Context cancelled, cleaning up and stopping endpoint status file reporter...")
+			log.Debug("Context cancelled, cleaning up and stopping endpoint status file reporter...")
 			fr.drainTimer(retry)
 			fr.drainTimer(scheduledReapply)
 			return
 
 		case e, ok := <-fr.endpointUpdatesC:
 			if !ok {
-				logrus.Panic("Input channel closed unexpectedly")
+				log.Panic("Input channel closed unexpectedly")
 			}
 
 			switch e.(type) {
 			case *proto.DataplaneInSync:
-				logrus.Debug("DataplaneInSync received from upstream.")
+				log.Debug("DataplaneInSync received from upstream.")
 				fr.inSyncWithUpstream = true
 				resyncWithKernelNeeded = true
 
 			default:
-				logrus.WithField("endpoint", e).Debug("Handling endpoint update")
+				log.WithField("endpoint", e).Debug("Handling endpoint update")
 				fr.handleEndpointUpdate(e)
 			}
 
@@ -180,7 +180,7 @@ func (fr *EndpointStatusFileReporter) SyncForever(ctx context.Context) {
 		if resyncWithKernelNeeded {
 			err := fr.resyncDataplaneWithKernel()
 			if err != nil {
-				logrus.WithError(err).Warn("Encountered an error while resyncing state with kernel. Queueing retry...")
+				log.WithError(err).Warn("Encountered an error while resyncing state with kernel. Queueing retry...")
 				retryTimerResetNeeded = true
 			} else {
 				resyncWithKernelNeeded = false
@@ -192,7 +192,7 @@ func (fr *EndpointStatusFileReporter) SyncForever(ctx context.Context) {
 			// but that case will be close to a no-op.
 			err := fr.reconcileStatusFiles()
 			if err != nil {
-				logrus.WithError(err).Warn("Encountered one or more errors while reconciling endpoint status dir. Queueing retry...")
+				log.WithError(err).Warn("Encountered one or more errors while reconciling endpoint status dir. Queueing retry...")
 				retryTimerResetNeeded = true
 				resyncWithKernelNeeded = true
 			}
@@ -250,7 +250,7 @@ func (fr *EndpointStatusFileReporter) handleEndpointUpdate(e interface{}) {
 	switch m := e.(type) {
 	case *proto.WorkloadEndpointStatusUpdate:
 		if m.Id == nil {
-			logrus.WithField("update", m).Warn("Couldn't handle nil WorkloadEndpointStatusUpdate")
+			log.WithField("update", m).Warn("Couldn't handle nil WorkloadEndpointStatusUpdate")
 			return
 		}
 		key := names.WorkloadEndpointIDToWorkloadEndpointKey(m.Id, fr.hostname)
@@ -258,43 +258,43 @@ func (fr *EndpointStatusFileReporter) handleEndpointUpdate(e interface{}) {
 
 		epStatus := epstatus.WorkloadEndpointToWorkloadEndpointStatus(m.Endpoint)
 		if epStatus == nil {
-			logrus.WithField("update", m).Error("Failed to construct WorkloadEndpointStatus from WorkloadEndpointUpdate")
+			log.WithField("update", m).Error("Failed to construct WorkloadEndpointStatus from WorkloadEndpointUpdate")
 			return
 		}
 
 		if m.Status.Status == statusDown {
-			logrus.WithField("update", e).Debug("Skipping WorkloadEndpointStatusUpdate with down status")
+			log.WithField("update", e).Debug("Skipping WorkloadEndpointStatusUpdate with down status")
 			fr.statusDirDeltaTracker.Desired().Delete(fn)
 			return
 		} else if m.Status.Status == statusUp {
 			// Explicitly checking the opposite case here (rather than fallthrough)
 			// in-case of a terrible failure where status is neither "up" nor "down".
-			logrus.WithField("update", e).Debug("Handling WorkloadEndpointUpdate with up status")
+			log.WithField("update", e).Debug("Handling WorkloadEndpointUpdate with up status")
 			fr.statusDirDeltaTracker.Desired().Set(fn, *epStatus)
 		} else {
-			logrus.WithField("update", e).Warn("Skipping update with unrecognized status")
+			log.WithField("update", e).Warn("Skipping update with unrecognized status")
 		}
 
 	case *proto.WorkloadEndpointStatusRemove:
 		if m.Id == nil {
-			logrus.WithField("update", m).Warn("Couldn't handle nil WorkloadEndpointStatusRemove")
+			log.WithField("update", m).Warn("Couldn't handle nil WorkloadEndpointStatusRemove")
 			return
 		}
 		key := names.WorkloadEndpointIDToWorkloadEndpointKey(m.Id, fr.hostname)
 		fn := names.WorkloadEndpointKeyToStatusFilename(key)
 
-		logrus.WithField("remove", e).Debug("Handling WorkloadEndpointStatusRemove")
+		log.WithField("remove", e).Debug("Handling WorkloadEndpointStatusRemove")
 		fr.statusDirDeltaTracker.Desired().Delete(fn)
 
 	default:
-		logrus.WithField("update", e).Debug("Skipping undesired endpoint update")
+		log.WithField("update", e).Debug("Skipping undesired endpoint update")
 	}
 }
 
 // A sub-call of SyncForever.
 // Overwrites our user-space representation of the kernel with a fresh snapshot.
 func (fr *EndpointStatusFileReporter) resyncDataplaneWithKernel() error {
-	logrus.Debug("resync dataplane with kernel")
+	log.Debug("resync dataplane with kernel")
 	// Load any pre-existing committed dataplane entries.
 	entries, epStatuses, err := fr.epStatusWriter.EnsureStatusDir(fr.endpointStatusDirPrefix)
 	if err != nil {
@@ -303,7 +303,7 @@ func (fr *EndpointStatusFileReporter) resyncDataplaneWithKernel() error {
 
 	return fr.statusDirDeltaTracker.Dataplane().ReplaceAllIter(func(f func(k string, v epstatus.WorkloadEndpointStatus)) error {
 		for i, entry := range entries {
-			logrus.Debugf("Dataplane ReplaceFromIter %v: %v", entry.Name(), epStatuses[i])
+			log.Debugf("Dataplane ReplaceFromIter %v: %v", entry.Name(), epStatuses[i])
 			f(entry.Name(), epStatuses[i])
 		}
 		return nil
@@ -315,19 +315,19 @@ func (fr *EndpointStatusFileReporter) resyncDataplaneWithKernel() error {
 func (fr *EndpointStatusFileReporter) reconcileStatusFiles() error {
 	var lastError error
 
-	logrus.Debug("Start reconcile status file")
+	log.Debug("Start reconcile status file")
 
 	fr.statusDirDeltaTracker.PendingUpdates().Iter(func(k string, v epstatus.WorkloadEndpointStatus) deltatracker.IterAction {
-		logrus.WithField("file", k).Debug("Applying update to status file.")
+		log.WithField("file", k).Debug("Applying update to status file.")
 		itemJSON, err := json.Marshal(v)
 		if err != nil {
-			logrus.WithError(err).WithField("file", k).Error("error json Marshal on endpoint status")
+			log.WithError(err).WithField("file", k).Error("error json Marshal on endpoint status")
 			lastError = err
 			return deltatracker.IterActionNoOp
 		}
 		err = fr.epStatusWriter.WriteStatusFile(k, string(itemJSON))
 		if err != nil {
-			logrus.WithError(err).WithField("file", k).Warn("error on processing pending updates")
+			log.WithError(err).WithField("file", k).Warn("error on processing pending updates")
 			if !errors.Is(err, fs.ErrExist) {
 				lastError = err
 				return deltatracker.IterActionNoOp
@@ -337,10 +337,10 @@ func (fr *EndpointStatusFileReporter) reconcileStatusFiles() error {
 	})
 
 	fr.statusDirDeltaTracker.PendingDeletions().Iter(func(k string) deltatracker.IterAction {
-		logrus.WithField("file", k).Debug("Deleting status file.")
+		log.WithField("file", k).Debug("Deleting status file.")
 		err := fr.epStatusWriter.DeleteStatusFile(k)
 		if err != nil && !errors.Is(err, fs.ErrNotExist) {
-			logrus.WithError(err).WithField("file", k).Error("error on deleting file")
+			log.WithError(err).WithField("file", k).Error("error on deleting file")
 			lastError = err
 			return deltatracker.IterActionNoOp
 		}

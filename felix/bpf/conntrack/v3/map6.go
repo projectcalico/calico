@@ -20,10 +20,10 @@ import (
 	"net"
 	"time"
 
-	log "github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 
 	"github.com/projectcalico/calico/felix/bpf/maps"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 //	struct calico_ct_key {

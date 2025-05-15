@@ -19,7 +19,7 @@ import (
 	"sync"
 	"time"
 
-	log "github.com/sirupsen/logrus"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // Ticker tries to emit events on channel C at minDuration intervals plus up to maxJitter.

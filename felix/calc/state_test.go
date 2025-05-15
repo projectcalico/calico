@@ -19,12 +19,12 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/sirupsen/logrus"
 	googleproto "google.golang.org/protobuf/proto"
 
 	"github.com/projectcalico/calico/felix/dataplane/mock"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/types"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
@@ -315,7 +315,7 @@ func (s State) KVsCopy() map[string]interface{} {
 func kvToPath(kv model.KVPair) string {
 	path, err := model.KeyToDefaultPath(kv.Key)
 	if err != nil {
-		logrus.WithField("key", kv.Key).Panic("Unable to convert key to default path")
+		log.WithField("key", kv.Key).Panic("Unable to convert key to default path")
 	}
 	return path
 }

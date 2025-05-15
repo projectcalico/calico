@@ -16,11 +16,11 @@ package commands
 
 import (
 	"github.com/pkg/errors"
-	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 
 	"github.com/projectcalico/calico/felix/bpf/ifstate"
 	"github.com/projectcalico/calico/felix/bpf/maps"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 func init() {

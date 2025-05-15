@@ -19,7 +19,6 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/generictables"
@@ -27,6 +26,7 @@ import (
 	"github.com/projectcalico/calico/felix/iptables/testutils"
 	"github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/felix/rules"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 var _ = Describe("Table with an empty dataplane (nft)", func() {
