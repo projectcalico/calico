@@ -49,6 +49,10 @@ func (e *entry) WithField(key string, value interface{}) types.Entry {
 	return &entry{e.entry.WithField(key, value)}
 }
 
+func (e *entry) SetField(key string, value interface{}) {
+	e.entry.Data[key] = value
+}
+
 func (e *entry) WithFields(fields types.Fields) types.Entry {
 	return &entry{e.entry.WithFields(logrus.Fields(fields))}
 }
