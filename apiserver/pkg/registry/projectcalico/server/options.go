@@ -22,7 +22,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/sirupsen/logrus"
+	"github.com/projectcalico/calico/lib/std/log"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apiserver/pkg/authorization/authorizer"
 	"k8s.io/apiserver/pkg/registry/generic/registry"
@@ -165,7 +165,7 @@ func (o Options) GetStorage(
 			indexers,
 		)
 		if err != nil {
-			logrus.Warning("error (%w)", err)
+			log.Warning("error (%w)", err)
 			return registry.DryRunnableStorage{}, nil, err
 		}
 		dryRunnableStorage := registry.DryRunnableStorage{Storage: storageInterface, Codec: etcdRESTOpts.StorageConfig.Codec}

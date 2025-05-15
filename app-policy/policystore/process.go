@@ -15,7 +15,7 @@
 package policystore
 
 import (
-	log "github.com/sirupsen/logrus"
+	"github.com/projectcalico/calico/lib/std/log"
 
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/types"
