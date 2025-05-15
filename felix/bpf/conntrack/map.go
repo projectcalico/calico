@@ -21,10 +21,9 @@ import (
 	"net"
 	"time"
 
-	log "github.com/sirupsen/logrus"
-
 	v2 "github.com/projectcalico/calico/felix/bpf/conntrack/v2"
 	"github.com/projectcalico/calico/felix/bpf/maps"
+	"github.com/projectcalico/calico/lib/std/log"
 
 	// When adding a new ct version, change curVerXXX to point to the new version
 	curVerCleanup "github.com/projectcalico/calico/felix/bpf/conntrack/cleanupv1"

@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,8 +17,7 @@ package ipsets
 import (
 	"strings"
 
-	log "github.com/sirupsen/logrus"
-
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -28,7 +27,7 @@ type CallBackFunc func(ipSetId string)
 type IPSets struct {
 	IPVersionConfig  *IPVersionConfig
 	ipSetIDToIPSet   map[string]*ipSet
-	logCxt           *log.Entry
+	logCxt           log.Entry
 	callbackOnUpdate CallBackFunc
 }
 

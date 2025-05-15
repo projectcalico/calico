@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,11 +24,11 @@ import (
 	"testing"
 
 	. "github.com/onsi/gomega"
-	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/bpf/bpfmap"
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
 	bpfmaps "github.com/projectcalico/calico/felix/bpf/maps"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 func restoreMaps(maps *bpfmap.Maps) {
@@ -43,10 +43,10 @@ func restoreMaps(maps *bpfmap.Maps) {
 		m.(*bpfmaps.PinnedMap).Close()
 		err := m.EnsureExists()
 		if err != nil {
-			logrus.WithError(err).Panic("Failed to initialise maps")
+			log.WithError(err).Panic("Failed to initialise maps")
 		}
 	}
-	logrus.Info("maps restored")
+	log.Info("maps restored")
 }
 
 func TestMapResize(t *testing.T) {
@@ -252,11 +252,11 @@ func TestMapIterationDeleteAfter(t *testing.T) {
 func TestDeleteDuringIter(t *testing.T) {
 	RegisterTestingT(t)
 	defer cleanUpMaps()
-	logLevel := logrus.GetLevel()
+	logLevel := log.GetLevel()
 	defer func() {
-		logrus.SetLevel(logLevel)
+		log.SetLevel(logLevel)
 	}()
-	logrus.SetLevel(logrus.InfoLevel)
+	log.SetLevel(log.InfoLevel)
 
 	testDelDuringIterN(10)
 	testDelDuringIterN(11)
@@ -337,7 +337,7 @@ func testDelDuringIterN(numEntries int) {
 		"Should see at least as many entries as we left in the second pass")
 	Expect(len(seenKeys)).To(BeNumerically("<=", numLeftAfterSecondPass+numInsertedInThirdPass),
 		"Should see all of the numLeftAfterSecondPass and some of the numInsertedInThirdPass")
-	logrus.WithField("numSeen", len(seenKeys)).Info("Saw this many keys")
+	log.WithField("numSeen", len(seenKeys)).Info("Saw this many keys")
 }
 
 func setUpMapTestWithSingleKV(t *testing.T) (conntrack.Key, error) {
@@ -374,9 +374,9 @@ func BenchmarkMapIteration500k(b *testing.B) {
 
 func benchMapIteration(b *testing.B, n int) {
 	defer cleanUpMaps()
-	logLevel := logrus.GetLevel()
-	logrus.SetLevel(logrus.InfoLevel)
-	defer logrus.SetLevel(logLevel)
+	logLevel := log.GetLevel()
+	log.SetLevel(log.InfoLevel)
+	defer log.SetLevel(logLevel)
 	setUpConntrackMapEntries(b, n)
 	var keepK, keepV []byte
 	b.ReportAllocs()
@@ -434,9 +434,9 @@ func BenchmarkMapIteratorMulti500k(b *testing.B) {
 }
 
 func benchMapIteratorMulti(b *testing.B, n int) {
-	logLevel := logrus.GetLevel()
-	logrus.SetLevel(logrus.InfoLevel)
-	defer logrus.SetLevel(logLevel)
+	logLevel := log.GetLevel()
+	log.SetLevel(log.InfoLevel)
+	defer log.SetLevel(logLevel)
 	setUpConntrackMapEntries(b, n)
 
 	b.ReportAllocs()

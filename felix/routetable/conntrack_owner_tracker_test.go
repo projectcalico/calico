@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2024-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,9 +23,9 @@ import (
 	"time"
 
 	. "github.com/onsi/gomega"
-	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/ip"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 var (
@@ -242,7 +242,7 @@ func (m *mockConntrack) NumPendingRemovals() int {
 // RemoveConntrackFlows is a called by background goroutine.  It blocks until
 // the foreground test code signals that the fake removal is complete.
 func (m *mockConntrack) RemoveConntrackFlows(ipVersion uint8, ipAddr net.IP) {
-	logCtx := logrus.WithFields(logrus.Fields{
+	logCtx := log.WithFields(log.Fields{
 		"ipVersion": ipVersion,
 		"ipAddr":    ipAddr,
 	})

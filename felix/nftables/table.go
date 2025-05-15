@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,8 +24,6 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/sirupsen/logrus"
-	log "github.com/sirupsen/logrus"
 	"sigs.k8s.io/knftables"
 
 	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
@@ -34,6 +32,7 @@ import (
 	"github.com/projectcalico/calico/felix/ipsets"
 	"github.com/projectcalico/calico/felix/iptables/cmdshim"
 	"github.com/projectcalico/calico/felix/logutils"
+	"github.com/projectcalico/calico/lib/std/log"
 	logutilslc "github.com/projectcalico/calico/libcalico-go/lib/logutils"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
@@ -229,7 +228,7 @@ type NftablesTable struct {
 	peakNftablesReadTime  time.Duration
 	peakNftablesWriteTime time.Duration
 
-	logCxt               *log.Entry
+	logCxt               log.Entry
 	updateRateLimitedLog *logutilslc.RateLimitedLogger
 
 	gaugeNumChains prometheus.Gauge
@@ -842,7 +841,7 @@ func (t *NftablesTable) Apply() (rescheduleAfter time.Duration) {
 		lastReadToNow = now.Sub(t.lastReadTime)
 
 		// Refresh interval is set, start with that.
-		logrus.WithFields(logrus.Fields{
+		log.WithFields(log.Fields{
 			"lastReadToNow":   lastReadToNow,
 			"refreshInterval": t.refreshInterval,
 		}).Debug("Calculating reschedule time")
@@ -897,13 +896,13 @@ func (t *NftablesTable) applyUpdates() error {
 		t.logCxt.WithField("chainName", chainName).Debug("Checking dirty chain")
 		if _, present := t.desiredStateOfChain(chainName); !present {
 			// About to delete this chain, flush it first to sever dependencies.
-			t.logCxt.WithFields(logrus.Fields{
+			t.logCxt.WithFields(log.Fields{
 				"chainName": chainName,
 			}).Debug("Flushing chain before deletion")
 			tx.Flush(&knftables.Chain{Name: chainName})
 		} else if _, ok := t.chainToDataplaneHashes[chainName]; !ok {
 			// Chain doesn't exist in dataplane, mark it for creation.
-			t.logCxt.WithFields(logrus.Fields{
+			t.logCxt.WithFields(log.Fields{
 				"chainName": chainName,
 			}).Debug("Adding chain")
 			tx.Add(&knftables.Chain{Name: chainName})
@@ -927,14 +926,14 @@ func (t *NftablesTable) applyUpdates() error {
 				if set := t.IPSetsDataplane.(*IPSets).NFTablesSet(setName); set != nil {
 					tx.Add(set)
 				} else {
-					t.logCxt.WithFields(logrus.Fields{
+					t.logCxt.WithFields(log.Fields{
 						"chain": chainName,
 						"set":   setName,
 					}).Warn("IP Set for chain has not yet been received by data plane")
 				}
 			}
 
-			t.logCxt.WithFields(logrus.Fields{
+			t.logCxt.WithFields(log.Fields{
 				"chainName": chainName,
 				"previous":  previousHashes,
 				"current":   currentHashes,
@@ -946,14 +945,14 @@ func (t *NftablesTable) applyUpdates() error {
 					}
 					rendered := t.render.Render(chainName, currentHashes[i], chain.Rules[i], features)
 					rendered.Handle = t.chainToFullRules[chainName][i].Handle
-					t.logCxt.WithFields(logrus.Fields{
+					t.logCxt.WithFields(log.Fields{
 						"chainName": chainName,
 						"handle":    *rendered.Handle,
 					}).Debug("Replacing rule in chain")
 					tx.Replace(rendered)
 				} else if i < len(previousHashes) {
 					// previousHashes was longer, remove the old rules from the end.
-					t.logCxt.WithFields(logrus.Fields{
+					t.logCxt.WithFields(log.Fields{
 						"chainName": chainName,
 					}).Debug("Deleting old rule from end of chain")
 					tx.Delete(&knftables.Rule{
@@ -962,7 +961,7 @@ func (t *NftablesTable) applyUpdates() error {
 					})
 				} else {
 					// currentHashes was longer.  Append.
-					t.logCxt.WithFields(logrus.Fields{
+					t.logCxt.WithFields(log.Fields{
 						"chainName": chainName,
 					}).Debug("Appending rule to chain")
 					tx.Add(t.render.Render(chainName, currentHashes[i], chain.Rules[i], features))
@@ -1043,7 +1042,7 @@ func (t *NftablesTable) applyUpdates() error {
 	t.dirtyChains.Iter(func(chainName string) error {
 		if _, ok := t.desiredStateOfChain(chainName); !ok {
 			// Chain deletion
-			t.logCxt.WithFields(logrus.Fields{
+			t.logCxt.WithFields(log.Fields{
 				"chainName": chainName,
 			}).Debug("Deleting chain that is no longer needed")
 			tx.Delete(&knftables.Chain{Name: chainName})
@@ -1063,7 +1062,7 @@ func (t *NftablesTable) applyUpdates() error {
 		// Run the transaction.
 		t.opReporter.RecordOperation(fmt.Sprintf("update-%v-v%d", t.name, t.ipVersion))
 
-		if logrus.IsLevelEnabled(logrus.TraceLevel) {
+		if log.IsLevelEnabled(log.TraceLevel) {
 			t.logCxt.Tracef("Updating nftables: %s", tx.String())
 		}
 
