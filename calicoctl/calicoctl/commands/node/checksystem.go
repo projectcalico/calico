@@ -25,7 +25,7 @@ import (
 
 	docopt "github.com/docopt/docopt-go"
 	goversion "github.com/mcuadros/go-version"
-	log "github.com/sirupsen/logrus"
+	"github.com/projectcalico/calico/lib/std/log"
 
 	"github.com/projectcalico/calico/calicoctl/calicoctl/util"
 )

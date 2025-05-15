@@ -22,7 +22,7 @@ import (
 	"strings"
 
 	. "github.com/onsi/gomega"
-	log "github.com/sirupsen/logrus"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 var calicoctl = "/go/src/github.com/projectcalico/calico/calicoctl/bin/calicoctl-linux-" + runtime.GOARCH
