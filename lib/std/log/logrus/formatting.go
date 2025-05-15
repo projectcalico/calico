@@ -30,6 +30,8 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/calico/lib/std/log/types"
 )
 
 const (
@@ -58,6 +60,14 @@ func init() {
 
 	fn := runtime.FuncForPC(pc).Name()
 	logPkgName = strings.TrimSuffix(getPackageName(fn), "/logrus")
+}
+
+type TextFormatter struct {
+	logrus.TextFormatter
+}
+
+func (t *TextFormatter) Format(e types.Entry) ([]byte, error) {
+	return t.TextFormatter.Format(e.(*entry).entry)
 }
 
 type MetricsCounter interface {
@@ -246,6 +256,12 @@ func FormatForSyslog(entry *logrus.Entry) string {
 	return b.String()
 }
 
+var forTest bool
+
+func MarkForTesting() {
+	forTest = true
+}
+
 func getFileInfo(entry *logrus.Entry) (string, int) {
 	if entry.Caller == nil {
 		return FileNameUnknown, 0
@@ -278,6 +294,13 @@ func getFileInfo(entry *logrus.Entry) (string, int) {
 		// The first frame that doesn't match the log package is the caller that we want to log.
 		if !strings.HasPrefix(pkg, logPkgName) {
 			targetFrame = frame
+			break
+		}
+
+		// Unfortunately, to properly test this, we need to signal to include test files from this package.
+		if forTest && strings.HasSuffix(frame.File, "_test.go") {
+			targetFrame = frame
+			break
 		}
 	}
 
