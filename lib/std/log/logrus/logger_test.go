@@ -79,7 +79,7 @@ func TestFormatter(t *testing.T) {
 			fields: types.Fields{
 				"__flush__": true, // Internal value that should be ignored.
 			},
-			expectedLog: fmt.Sprintf("<TIME> [INFO][<PID>] <FILE> <LINE>: The answer is 42.\n"),
+			expectedLog: "<TIME> [INFO][<PID>] <FILE> <LINE>: The answer is 42.\n",
 		},
 		{
 			description: "With fields",
@@ -145,20 +145,6 @@ var (
 	}
 )
 
-type testCounterType struct {
-	count int
-}
-
-func (t *testCounterType) Inc() {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (t *testCounterType) Add(f float64) {
-	//TODO implement me
-	panic("implement me")
-}
-
 func TestBackgroundHookFlushing(t *testing.T) {
 	tt := []struct {
 		description     string
@@ -204,13 +190,12 @@ func TestBackgroundHookFlushing(t *testing.T) {
 				Level:   reallogrus.DebugLevel,
 				Channel: c,
 			}
-			counter := &testCounterType{}
 
 			logger := logrus.New(
 				logrus.WithFormatter(&logrus.TextFormatter{}),
 				logrus.WithLevel(types.DebugLevel),
 				logrus.WithOutput(&logrus.NullWriter{}),
-				logrus.WithBackgroundHook(types.AllLevels, types.DebugLevel, []*logrus.Destination{testDest}, counter, tc.hookOpts...))
+				logrus.WithBackgroundHook(types.AllLevels, types.DebugLevel, []*logrus.Destination{testDest}, nil, tc.hookOpts...))
 
 			ctx := context.Background()
 			tc.logFunc(logger)
@@ -263,13 +248,12 @@ func TestBackgroundHookFlushing_BackgroundBlockingScenarios(t *testing.T) {
 				Level:   reallogrus.DebugLevel,
 				Channel: c,
 			}
-			counter := &testCounterType{}
 
 			logger := logrus.New(
 				logrus.WithFormatter(&logrus.TextFormatter{}),
 				logrus.WithLevel(types.DebugLevel),
 				logrus.WithOutput(&logrus.NullWriter{}),
-				logrus.WithBackgroundHook(types.AllLevels, types.DebugLevel, []*logrus.Destination{testDest}, counter))
+				logrus.WithBackgroundHook(types.AllLevels, types.DebugLevel, []*logrus.Destination{testDest}, nil))
 
 			done := make(chan struct{})
 			go func() {

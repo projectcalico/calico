@@ -13,6 +13,14 @@ type entry struct {
 	entry *logrus.Entry
 }
 
+func (e *entry) IsLevelEnabled(level types.Level) bool {
+	return e.entry.Logger.IsLevelEnabled(logrus.Level(level))
+}
+
+func (e *entry) SetLevel(level types.Level) {
+	e.entry.Logger.SetLevel(logrus.Level(level))
+}
+
 func (e *entry) GetTime() time.Time {
 	return e.entry.Time
 }
