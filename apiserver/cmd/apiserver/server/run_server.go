@@ -26,7 +26,7 @@ import (
 	"os"
 	gpath "path"
 
-	"github.com/sirupsen/logrus"
+	"github.com/projectcalico/calico/lib/std/log"
 	"k8s.io/apiserver/pkg/admission/plugin/policy/validating"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	"k8s.io/apiserver/pkg/server/options"
@@ -53,7 +53,7 @@ func PrepareServer(opts *CalicoServerOptions) (*apiserver.ProjectCalicoServer, e
 		return nil, err
 	}
 
-	logrus.Debug("Completing API server configuration")
+	log.Debug("Completing API server configuration")
 	return config.Complete().New()
 }
 
@@ -71,19 +71,19 @@ func RunServer(opts *CalicoServerOptions, server *apiserver.ProjectCalicoServer)
 	}()
 
 	go func() {
-		logrus.Info("Starting watch extension")
+		log.Info("Starting watch extension")
 		changed, err := WatchExtensionAuth(ctx)
 		if err != nil {
-			logrus.Error("Unable to watch the extension auth ConfigMap: ", err)
+			log.Error("Unable to watch the extension auth ConfigMap: ", err)
 		}
 		if changed {
-			logrus.Info("Detected change in extension-apiserver-authentication ConfigMap, exiting so apiserver can be restarted")
+			log.Info("Detected change in extension-apiserver-authentication ConfigMap, exiting so apiserver can be restarted")
 			cancel()
 		}
 	}()
 
 	go func() {
-		logrus.Info("Running the API server")
+		log.Info("Running the API server")
 
 		// Start the Calico resource handler and shared informers and wait for sync before starting other components.
 		server.CalicoResourceLister.Start()
@@ -101,11 +101,11 @@ func RunServer(opts *CalicoServerOptions, server *apiserver.ProjectCalicoServer)
 					os.Exit(0)
 					return nil
 				}); err != nil {
-				logrus.Error("failed to add post start hook swagger-printer:", err)
+				log.Error("failed to add post start hook swagger-printer:", err)
 			}
 		}
 		if err := server.GenericAPIServer.PrepareRun().RunWithContext(ctx); err != nil {
-			logrus.Error("Error running API server: ", err)
+			log.Error("Error running API server: ", err)
 		}
 	}()
 

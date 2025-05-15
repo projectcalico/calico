@@ -23,7 +23,7 @@ import (
 	"io"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"github.com/sirupsen/logrus"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/spf13/cobra"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
 	"k8s.io/kubernetes/pkg/util/interrupt"
@@ -69,7 +69,7 @@ func NewCommandStartCalicoServer(out io.Writer) (*cobra.Command, *CalicoServerOp
 			}
 			return RunServer(opts, server)
 		}); err != nil {
-			logrus.Fatalf("error running server (%s)", err)
+			log.Fatalf("error running server (%s)", err)
 			return
 		}
 	}

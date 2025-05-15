@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"os"
 
-	log "github.com/sirupsen/logrus"
+	"github.com/projectcalico/calico/lib/std/log"
 	"google.golang.org/grpc"
 
 	dikastesproto "github.com/projectcalico/calico/app-policy/proto"
