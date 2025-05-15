@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -51,7 +51,7 @@ var _ = Describe("Static", func() {
 			if ipvs {
 				// Accept IPVS-forwarded traffic.
 				expRules = append(expRules, generictables.Rule{
-					Match:  Match().MarkNotClear(0xff00),
+					Match:  Match().MarkNotClear(conf.MarkEndpoint),
 					Action: ReturnAction{},
 				})
 			}
@@ -106,8 +106,9 @@ var _ = Describe("Static", func() {
 					MarkPass:               0x20,
 					MarkScratch0:           0x40,
 					MarkScratch1:           0x80,
-					MarkEndpoint:           0xff00,
-					MarkNonCaliEndpoint:    0x100,
+					MarkDrop:               0x200,
+					MarkEndpoint:           0xff000,
+					MarkNonCaliEndpoint:    0x1000,
 					KubeIPVSSupportEnabled: kubeIPVSEnabled,
 					KubeNodePortRanges:     []numorstring.Port{{MinPort: 30030, MaxPort: 30040, PortName: ""}},
 					FilterDenyAction:       denyActionString,
@@ -292,7 +293,7 @@ var _ = Describe("Static", func() {
 						Name: "cali-forward-endpoint-mark",
 						Rules: []generictables.Rule{
 							{
-								Match:  Match().NotMarkMatchesWithMask(0x100, 0xff00),
+								Match:  Match().NotMarkMatchesWithMask(0x1000, 0xff000),
 								Action: JumpAction{Target: ChainDispatchFromEndPointMark},
 							},
 							{
@@ -303,7 +304,7 @@ var _ = Describe("Static", func() {
 								Action: JumpAction{Target: ChainDispatchToHostEndpointForward},
 							},
 							{
-								Action: ClearMarkAction{Mark: 0xff00},
+								Action: ClearMarkAction{Mark: 0xff000},
 							},
 							{
 								Match:   Match().MarkSingleBitSet(0x10),
@@ -687,7 +688,7 @@ var _ = Describe("Static", func() {
 		})
 
 		Describe(fmt.Sprintf("with IPIP enabled and IPVS=%v", kubeIPVSEnabled), func() {
-			epMark := uint32(0xff00)
+			epMark := uint32(0xff000)
 			BeforeEach(func() {
 				conf = Config{
 					WorkloadIfacePrefixes:  []string{"cali"},
@@ -699,8 +700,9 @@ var _ = Describe("Static", func() {
 					MarkPass:               0x20,
 					MarkScratch0:           0x40,
 					MarkScratch1:           0x80,
+					MarkDrop:               0x200,
 					MarkEndpoint:           epMark,
-					MarkNonCaliEndpoint:    0x100,
+					MarkNonCaliEndpoint:    0x1000,
 					KubeIPVSSupportEnabled: kubeIPVSEnabled,
 					FilterDenyAction:       denyActionString,
 				}
@@ -1281,8 +1283,9 @@ var _ = Describe("Static", func() {
 				MarkPass:               0x20,
 				MarkScratch0:           0x40,
 				MarkScratch1:           0x80,
-				MarkEndpoint:           0xff00,
-				MarkNonCaliEndpoint:    0x100,
+				MarkDrop:               0x200,
+				MarkEndpoint:           0xff000,
+				MarkNonCaliEndpoint:    0x1000,
 				KubeIPVSSupportEnabled: true,
 				KubeNodePortRanges: []numorstring.Port{
 					{MinPort: 30030, MaxPort: 30040, PortName: ""},
@@ -1379,8 +1382,9 @@ var _ = Describe("Static", func() {
 				MarkPass:                     0x20,
 				MarkScratch0:                 0x40,
 				MarkScratch1:                 0x80,
-				MarkEndpoint:                 0xff00,
-				MarkNonCaliEndpoint:          0x100,
+				MarkDrop:                     0x200,
+				MarkEndpoint:                 0xff000,
+				MarkNonCaliEndpoint:          0x1000,
 			}
 		})
 
@@ -1494,8 +1498,9 @@ var _ = Describe("Static", func() {
 				MarkPass:                     0x20,
 				MarkScratch0:                 0x40,
 				MarkScratch1:                 0x80,
-				MarkEndpoint:                 0xff00,
-				MarkNonCaliEndpoint:          0x100,
+				MarkDrop:                     0x200,
+				MarkEndpoint:                 0xff000,
+				MarkNonCaliEndpoint:          0x1000,
 				FilterAllowAction:            "RETURN",
 			}
 		})
@@ -1565,7 +1570,7 @@ var _ = Describe("Static", func() {
 	})
 
 	Describe("with RETURN accept action", func() {
-		epMark := uint32(0xff00)
+		epMark := uint32(0xff000)
 		BeforeEach(func() {
 			conf = Config{
 				WorkloadIfacePrefixes: []string{"cali"},
@@ -1575,8 +1580,9 @@ var _ = Describe("Static", func() {
 				MarkPass:              0x20,
 				MarkScratch0:          0x40,
 				MarkScratch1:          0x80,
+				MarkDrop:              0x200,
 				MarkEndpoint:          epMark,
-				MarkNonCaliEndpoint:   0x100,
+				MarkNonCaliEndpoint:   0x1000,
 				FilterAllowAction:     "RETURN",
 				MangleAllowAction:     "RETURN",
 			}
@@ -1694,8 +1700,9 @@ var _ = Describe("Static", func() {
 						MarkPass:                    0x20,
 						MarkScratch0:                0x40,
 						MarkScratch1:                0x80,
-						MarkEndpoint:                0xff00,
-						MarkNonCaliEndpoint:         0x100,
+						MarkDrop:                    0x200,
+						MarkEndpoint:                0xff000,
+						MarkNonCaliEndpoint:         0x1000,
 						WireguardEnabled:            enableIPv4,
 						WireguardEnabledV6:          enableIPv6,
 						WireguardInterfaceName:      "wireguard.cali",
@@ -1867,6 +1874,7 @@ var _ = Describe("Static", func() {
 				MarkAccept:   0x10,
 				MarkPass:     0x20,
 				MarkScratch0: 0x40,
+				MarkDrop:     0x200,
 				BPFEnabled:   true,
 			}
 		})

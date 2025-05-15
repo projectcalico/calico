@@ -533,8 +533,11 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 
 	// Add the interface created above to the CNI result.
 	result.Interfaces = append(result.Interfaces, &cniv1.Interface{
-		Name: endpoint.Spec.InterfaceName},
-	)
+		Name:    endpoint.Spec.InterfaceName,
+		Mac:     endpoint.Spec.MAC,
+		Mtu:     conf.MTU,
+		Sandbox: args.Netns,
+	})
 
 	// Conditionally wait for host-local Felix to program the policy for this WEP.
 	// Error if negative, ignore if 0.
@@ -665,7 +668,7 @@ func releaseIPAddrs(ipAddrs []string, calico calicoclient.Interface, logger *log
 		if err != nil {
 			return err
 		}
-		unallocated, err := calico.IPAM().ReleaseIPs(context.Background(), libipam.ReleaseOptions{Address: cip.String()})
+		unallocated, _, err := calico.IPAM().ReleaseIPs(context.Background(), libipam.ReleaseOptions{Address: cip.String()})
 		if err != nil {
 			log.WithError(err).Error("Failed to release explicit IP")
 			return err
@@ -721,7 +724,6 @@ func ipAddrsResult(ipAddrs string, conf types.NetConf, args *skel.CmdArgs, logge
 // to get current.Result and then it unsets the IP field from CNI_ARGS ENV var,
 // so it doesn't pollute the subsequent requests.
 func callIPAMWithIP(ip net.IP, conf types.NetConf, args *skel.CmdArgs, logger *logrus.Entry) (*cniv1.Result, error) {
-
 	// Save the original value of the CNI_ARGS ENV var for backup.
 	originalArgs := os.Getenv("CNI_ARGS")
 	logger.Debugf("Original CNI_ARGS=%s", originalArgs)

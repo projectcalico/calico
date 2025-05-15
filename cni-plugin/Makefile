@@ -15,10 +15,7 @@ BUILD_IMAGES   ?=$(CNI_PLUGIN_IMAGE)
 ###############################################################################
 include ../lib.Makefile
 
-###############################################################################
-LDFLAGS = -X main.VERSION=$(GIT_VERSION)
-
-SRC_FILES=$(shell find pkg cmd internal -name '*.go')
+SRC_FILES=$(shell find pkg cmd internal -name '*.go') $(shell find ../libcalico-go -name '*.go')
 TEST_SRC_FILES=$(shell find tests -name '*.go')
 WINFV_SRCFILES=$(shell find win_tests -name '*.go')
 
@@ -96,7 +93,7 @@ else
 endif
 
 $(BIN)/calico-ipam: $(BIN)/calico
-	cp "$<" "$@"
+	ln -sf "./calico" "$@"
 
 ## Build the Calico network and ipam plugins for Windows
 $(WINDOWS_BIN)/install.exe: $(SRC_FILES)
@@ -110,12 +107,20 @@ $(WINDOWS_BIN)/calico.exe: $(SRC_FILES)
 $(WINDOWS_BIN)/calico-ipam.exe: $(WINDOWS_BIN)/calico.exe
 	cp "$<" "$@"
 
+protobuf pkg/dataplane/grpc/proto/cnibackend.pb.go: pkg/dataplane/grpc/proto/cnibackend.proto
+	$(DOCKER_RUN) -v $(CURDIR)/pkg/dataplane/grpc/proto:/proto:rw \
+		$(CALICO_BUILD) sh -c 'protoc --proto_path=/proto --go_out=/proto --go-grpc_out=/ --go_opt=paths=source_relative cnibackend.proto'
+	$(MAKE) fix-changed
+
 # NOTE: WINDOWS_IMAGE_REQS must be defined with the requirements to build the windows
 # image. These must be added as reqs to 'image-windows' (originally defined in
 # lib.Makefile) on the specific package Makefile otherwise they are not correctly
 # recognized.
-WINDOWS_IMAGE_REQS := Dockerfile-windows build build-win-cni-bins
+WINDOWS_IMAGE_REQS := Dockerfile-windows build build-win-cni-bins bin/LICENSE
 image-windows: $(WINDOWS_IMAGE_REQS)
+
+bin/LICENSE: ../LICENSE.md
+	cp ../LICENSE.md bin/LICENSE
 
 ###############################################################################
 # Building the image
@@ -128,19 +133,19 @@ sub-image-fips-%:
 	$(MAKE) image FIPS=true ARCH=$*
 
 # Builds the statically compiled binaries into a container.
-$(DEPLOY_CONTAINER_STATIC_MARKER): Dockerfile build build-cni-bins
+$(DEPLOY_CONTAINER_STATIC_MARKER): Dockerfile build build-cni-bins bin/LICENSE
 	$(DOCKER_BUILD) --build-arg BIN_DIR=$(BIN) -t $(CNI_PLUGIN_IMAGE):latest-$(ARCH) -f Dockerfile .
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@
 
 # Builds the FIPS binaries into a container.
-$(DEPLOY_CONTAINER_FIPS_MARKER): Dockerfile build build-cni-bins
+$(DEPLOY_CONTAINER_FIPS_MARKER): Dockerfile build build-cni-bins bin/LICENSE
 	$(DOCKER_BUILD) --build-arg BIN_DIR=$(BIN) -t $(CNI_PLUGIN_IMAGE):latest-fips-$(ARCH) -f Dockerfile .
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest-fips LATEST_IMAGE_TAG=latest-fips
 	touch $@
 
 # These are the files that we need to copy from the containernetworking-plugins project to our image.
-CN_FILES := host-local portmap loopback tuning bandwidth
+CN_FILES := host-local portmap loopback tuning
 
 CONTAINERNETWORKING_PLUGINS_CLONED=.containernetworking-plugins-$(CNI_VERSION).cloned
 
@@ -152,7 +157,7 @@ $(CONTAINERNETWORKING_PLUGINS_CLONED):
 
 CN_FLAGS=-ldflags "-X github.com/containernetworking/plugins/pkg/utils/buildversion.BuildVersion=$(GIT_VERSION)"
 
-$(BIN)/host-local $(BIN)/loopback $(BIN)/portmap $(BIN)/tuning $(BIN)/bandwidth &: $(CONTAINERNETWORKING_PLUGINS_CLONED)
+$(BIN)/host-local $(BIN)/loopback $(BIN)/portmap $(BIN)/tuning  &: $(CONTAINERNETWORKING_PLUGINS_CLONED)
 	docker run \
 		$(EXTRA_DOCKER_ARGS) \
 		-v $(CURDIR)/containernetworking-plugins:/go/src/github.com/containernetworking/plugins:z \
@@ -190,7 +195,7 @@ $(WINDOWS_BIN)/flannel.exe: $(FLANNEL_CNI_PLUGIN_CLONED)
 	cp flannel-cni-plugin/dist/flannel-$(ARCH).exe $(WINDOWS_BIN)/flannel.exe
 
 .PHONY: build-cni-bins build-win-cni-bins
-build-cni-bins: $(BIN)/flannel $(BIN)/loopback $(BIN)/host-local $(BIN)/portmap $(BIN)/tuning $(BIN)/bandwidth
+build-cni-bins: $(BIN)/flannel $(BIN)/loopback $(BIN)/host-local $(BIN)/portmap $(BIN)/tuning
 build-win-cni-bins: $(WINDOWS_BIN)/flannel.exe
 
 ###############################################################################

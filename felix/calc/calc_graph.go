@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2025 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,6 +24,7 @@ import (
 	"github.com/projectcalico/calico/felix/labelindex"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/serviceindex"
+	"github.com/projectcalico/calico/felix/types"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
@@ -53,8 +54,9 @@ type rulesUpdateCallbacks interface {
 }
 
 type endpointCallbacks interface {
-	OnEndpointTierUpdate(endpointKey model.Key,
-		endpoint interface{},
+	OnEndpointTierUpdate(endpointKey model.EndpointKey,
+		endpoint model.Endpoint,
+		peerData *EndpointBGPPeer,
 		filteredTiers []TierInfo)
 }
 
@@ -77,9 +79,9 @@ type passthruCallbacks interface {
 	OnIPPoolUpdate(model.IPPoolKey, *model.IPPool)
 	OnIPPoolRemove(model.IPPoolKey)
 	OnServiceAccountUpdate(*proto.ServiceAccountUpdate)
-	OnServiceAccountRemove(proto.ServiceAccountID)
+	OnServiceAccountRemove(types.ServiceAccountID)
 	OnNamespaceUpdate(*proto.NamespaceUpdate)
-	OnNamespaceRemove(proto.NamespaceID)
+	OnNamespaceRemove(types.NamespaceID)
 	OnWireguardUpdate(string, *model.Wireguard)
 	OnWireguardRemove(string)
 	OnGlobalBGPConfigUpdate(*v3.BGPConfiguration)
@@ -143,7 +145,12 @@ func (g *CalcGraph) Flush() {
 	g.policyResolver.Flush()
 }
 
-func NewCalculationGraph(callbacks PipelineCallbacks, conf *config.Config, liveCallback func()) *CalcGraph {
+func NewCalculationGraph(
+	callbacks PipelineCallbacks,
+	cache *LookupsCache,
+	conf *config.Config,
+	liveCallback func(),
+) *CalcGraph {
 	hostname := conf.FelixHostname
 	log.Infof("Creating calculation graph, filtered to hostname %v", hostname)
 	cg := &CalcGraph{}
@@ -369,6 +376,11 @@ func NewCalculationGraph(callbacks PipelineCallbacks, conf *config.Config, liveC
 	polResolver.RegisterCallback(callbacks)
 	cg.policyResolver = polResolver
 
+	// Create and hook up the active BGP peer calculator.
+	activeBGPPeerCalc := NewActiveBGPPeerCalculator(hostname)
+	activeBGPPeerCalc.RegisterWith(localEndpointDispatcher, allUpdDispatcher)
+	activeBGPPeerCalc.OnEndpointBGPPeerDataUpdate = polResolver.OnEndpointBGPPeerDataUpdate
+
 	// Register for host IP updates.
 	//
 	//        ...
@@ -386,7 +398,8 @@ func NewCalculationGraph(callbacks PipelineCallbacks, conf *config.Config, liveC
 	hostIPPassthru.RegisterWith(allUpdDispatcher)
 	cg.hostIPPassthru = hostIPPassthru
 
-	if conf.BPFEnabled || conf.Encapsulation.VXLANEnabled || conf.Encapsulation.VXLANEnabledV6 || conf.WireguardEnabled || conf.WireguardEnabledV6 {
+	if conf.BPFEnabled || conf.Encapsulation.VXLANEnabled || conf.Encapsulation.VXLANEnabledV6 ||
+		conf.WireguardEnabled || conf.WireguardEnabledV6 || conf.ProgramRoutesEnabled() {
 		// Calculate simple node-ownership routes.
 		//        ...
 		//     Dispatcher (all updates)
@@ -458,6 +471,47 @@ func NewCalculationGraph(callbacks PipelineCallbacks, conf *config.Config, liveC
 	profileDecoder.RegisterWith(allUpdDispatcher)
 	cg.profileDecoder = profileDecoder
 
+	// The remote endpoint reverse lookup receiver only need to know about non-local endpoints.
+	// Create another dispatcher that will filter out non-local endpoints.
+	//
+	//          ...
+	//       Dispatcher (all updates)
+	//         / ...
+	//        / All Host/Workload Endpoints
+	//       /
+	//   Dispatcher (remote updates)
+	//     <filter>
+	remoteEndpointDispatcher := dispatcher.NewDispatcher()
+	(*remoteEndpointDispatcherReg)(remoteEndpointDispatcher).RegisterWith(allUpdDispatcher)
+	remoteEndpointFilter := &remoteEndpointFilter{hostname: hostname}
+	remoteEndpointFilter.RegisterWith(remoteEndpointDispatcher)
+
+	if cache != nil {
+		// The lookup cache, caches endpoint (and node), networksets, policy and service information.
+		//        ...
+		//     Dispatcher (remote updates)
+		//         |
+		//         | Workload and host endpoints
+		//         |
+		//       lookup cache
+		//
+		cache.epCache.RegisterWith(allUpdDispatcher, remoteEndpointDispatcher)
+		cache.svcCache.RegisterWith(allUpdDispatcher)
+
+		// The lookup cache, caches policy information for prefix lookups. Hook into the
+		// ActiveRulesCalculator to receive local active policy/profile information.
+		activeRulesCalc.PolicyLookupCache = cache.polCache
+
+		// The lookup cache, also provides local endpoint lookups and corresponding tier information.
+		// Hook into the PolicyResolver to receive this information.
+		polResolver.RegisterCallback(cache.epCache)
+
+		// The lookup cache also caches networkset information for flow log reporting.
+		cache.nsCache.RegisterWith(allUpdDispatcher)
+	} else {
+		log.Debug("lookup cache is disabled")
+	}
+
 	// Register for IP Pool updates. EncapsulationResolver will send a message to the
 	// dataplane so that Felix is restarted if IPIP and/or VXLAN encapsulation changes
 	// due to IP pool changes, so that it is recalculated at Felix startup.
@@ -515,5 +569,41 @@ func (f *endpointHostnameFilter) OnUpdate(update api.Update) (filterOut bool) {
 			log.WithField("id", update.Key).Info("Local endpoint updated")
 		}
 	}
+	return
+}
+
+type remoteEndpointDispatcherReg dispatcher.Dispatcher
+
+func (l *remoteEndpointDispatcherReg) RegisterWith(disp *dispatcher.Dispatcher) {
+	red := (*dispatcher.Dispatcher)(l)
+	disp.Register(model.WorkloadEndpointKey{}, red.OnUpdate)
+	disp.Register(model.HostEndpointKey{}, red.OnUpdate)
+	disp.RegisterStatusHandler(red.OnDatamodelStatus)
+}
+
+// remoteEndpointFilter provides an UpdateHandler that filters out endpoints
+// that are on the given host.
+type remoteEndpointFilter struct {
+	hostname string
+}
+
+func (f *remoteEndpointFilter) RegisterWith(remoteEndpointDisp *dispatcher.Dispatcher) {
+	remoteEndpointDisp.Register(model.WorkloadEndpointKey{}, f.OnUpdate)
+	remoteEndpointDisp.Register(model.HostEndpointKey{}, f.OnUpdate)
+}
+
+func (f *remoteEndpointFilter) OnUpdate(update api.Update) (filterOut bool) {
+	switch key := update.Key.(type) {
+	case model.WorkloadEndpointKey:
+		if key.Hostname == f.hostname {
+			filterOut = true
+		}
+	case model.HostEndpointKey:
+		if key.Hostname == f.hostname {
+			filterOut = true
+		}
+	}
+	// Do not log for remote endpoints, since there can be many and logging each
+	// will impact performance.
 	return
 }

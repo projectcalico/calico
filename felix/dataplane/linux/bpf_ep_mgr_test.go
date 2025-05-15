@@ -1,6 +1,6 @@
 //go:build !windows
 
-// Copyright (c) 2021-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2021-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -30,6 +30,7 @@ import (
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
+	googleproto "google.golang.org/protobuf/proto"
 
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/asm"
@@ -47,6 +48,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/state"
 	"github.com/projectcalico/calico/felix/bpf/tc"
 	"github.com/projectcalico/calico/felix/bpf/xdp"
+	"github.com/projectcalico/calico/felix/calc"
 	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/idalloc"
 	"github.com/projectcalico/calico/felix/ifacemonitor"
@@ -58,17 +60,19 @@ import (
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/routetable"
 	"github.com/projectcalico/calico/felix/rules"
+	"github.com/projectcalico/calico/felix/types"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
 type mockDataplane struct {
-	mutex       sync.Mutex
-	lastProgID  int
-	progs       map[string]int
-	numAttaches map[string]int
-	policy      map[string]polprog.Rules
-	routes      map[ip.CIDR]struct{}
-	netlinkShim netlinkshim.Interface
+	mutex                sync.Mutex
+	lastProgID           int
+	progs                map[string]int
+	numAttaches          map[string]int
+	policy               map[string]polprog.Rules
+	routes               map[ip.CIDR]struct{}
+	netlinkShim          netlinkshim.Interface
+	natDevicesConfigured bool
 
 	ensureStartedFn    func()
 	ensureQdiscFn      func(string) (bool, error)
@@ -109,6 +113,11 @@ func (m *mockDataplane) ensureBPFDevices() error {
 	return nil
 }
 
+func (m *mockDataplane) configureBPFDevices() error {
+	m.natDevicesConfigured = true
+	return nil
+}
+
 func (m *mockDataplane) loadDefaultPolicies() error {
 	return nil
 }
@@ -116,7 +125,6 @@ func (m *mockDataplane) loadDefaultPolicies() error {
 func (m *mockDataplane) ensureProgramAttached(ap attachPoint) (qDiscInfo, error) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
-
 	key := ap.IfaceName() + ":" + ap.HookName().String()
 	m.numAttaches[key] = m.numAttaches[key] + 1
 	return qDiscInfo{valid: true, prio: 49152, handle: 1}, nil
@@ -286,9 +294,9 @@ func (m *mockDataplane) delRoute(cidr ip.CIDR) {
 	delete(m.routes, cidr)
 }
 
-func (m *mockDataplane) ruleMatchID(dir, action, owner, name string, idx int) polprog.RuleMatchID {
+func (m *mockDataplane) ruleMatchID(dir rules.RuleDir, action string, owner rules.RuleOwnerType, idx int, name string) polprog.RuleMatchID {
 	h := fnv.New64a()
-	h.Write([]byte(action + owner + dir + strconv.Itoa(idx+1) + name))
+	h.Write([]byte(action + owner.String() + dir.String() + strconv.Itoa(idx+1) + name))
 	return h.Sum64()
 }
 
@@ -359,6 +367,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		commonMaps           *bpfmap.CommonMaps
 		rrConfigNormal       rules.Config
 		ruleRenderer         rules.RuleRenderer
+		lookupsCache         *calc.LookupsCache
 		filterTableV4        Table
 		filterTableV6        Table
 		ifStateMap           *mock.Map
@@ -432,6 +441,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			MarkScratch1:           0x40,
 			MarkEndpoint:           0xff00,
 			MarkNonCaliEndpoint:    0x0100,
+			MarkDrop:               0x80,
 			KubeIPVSSupportEnabled: true,
 			WorkloadIfacePrefixes:  []string{"cali", "tap"},
 			VXLANPort:              4789,
@@ -448,7 +458,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 	newBpfEpMgr := func(ipv6Enabled bool) {
 		var err error
-		bpfEpMgr, err = newBPFEndpointManager(
+		bpfEpMgr, err = NewBPFEndpointManager(
 			mockDP,
 			&Config{
 				Hostname:              "uthost",
@@ -478,6 +488,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			logutils.NewSummarizer("test"),
 			&routetable.DummyTable{}, // FIXME test the routes.
 			&routetable.DummyTable{}, // FIXME test the routes.
+			lookupsCache,
 			nil,
 			environment.NewFeatureDetector(nil).GetFeatures(),
 			1250,
@@ -513,10 +524,10 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 	genHEPUpdate := func(heps ...interface{}) func() {
 		return func() {
-			hostIfaceToEp := make(map[string]proto.HostEndpoint)
+			hostIfaceToEp := make(map[string]*proto.HostEndpoint)
 			for i := 0; i < len(heps); i += 2 {
 				log.Infof("%v = %v", heps[i], heps[i+1])
-				hostIfaceToEp[heps[i].(string)] = heps[i+1].(proto.HostEndpoint)
+				hostIfaceToEp[heps[i].(string)] = heps[i+1].(*proto.HostEndpoint)
 			}
 			log.Infof("2 hostIfaceToEp = %v", hostIfaceToEp)
 			bpfEpMgr.OnHEPUpdate(hostIfaceToEp)
@@ -607,7 +618,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		}
 	}
 
-	hostEp := proto.HostEndpoint{
+	hostEp := &proto.HostEndpoint{
 		Name: "uthost-eth0",
 		PreDnatTiers: []*proto.TierInfo{
 			{
@@ -617,7 +628,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		},
 	}
 
-	hostEpNorm := proto.HostEndpoint{
+	hostEpNorm := &proto.HostEndpoint{
 		Name: "uthost-eth0",
 		Tiers: []*proto.TierInfo{
 			{
@@ -640,6 +651,16 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 	It("exists", func() {
 		Expect(bpfEpMgr).NotTo(BeNil())
+	})
+
+	Context("with lookup cache", func() {
+		BeforeEach(func() {
+			lookupsCache = calc.NewLookupsCache()
+		})
+
+		It("exists", func() {
+			Expect(bpfEpMgr).NotTo(BeNil())
+		})
 	})
 
 	It("does not have HEP in initial state", func() {
@@ -686,11 +707,23 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			genHEPUpdate(allInterfaces, hostEpNorm)()
 		})
 
+		It("should handle removing the HEP", func() {
+			genHEPUpdate()()
+			Expect(bpfEpMgr.hostIfaceToEpMap).To(BeEmpty())
+		})
+
+		It("should configure NAT devices only when both bpfin and bpfout are oper up", func() {
+			genIfaceUpdate("bpfin.cali", ifacemonitor.StateUp, 1000)()
+			Expect(dp.natDevicesConfigured).To(BeFalse())
+			genIfaceUpdate("bpfout.cali", ifacemonitor.StateUp, 1000)()
+			Expect(dp.natDevicesConfigured).To(BeTrue())
+		})
+
 		It("should attach/detach programs when ifaces are added/deleted", func() {
 			dataIfacePattern = "^eth|bond*"
 			newBpfEpMgr(false)
 			genUntracked("default", "untracked1")()
-			newHEP := hostEp
+			newHEP := googleproto.Clone(hostEp).(*proto.HostEndpoint)
 			newHEP.UntrackedTiers = []*proto.TierInfo{{
 				Name:            "default",
 				IngressPolicies: []string{"untracked1"},
@@ -995,10 +1028,16 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			genHostMetadataUpdate("1.2.3.4")()
 			Expect(dp.numOfAttaches("cali12345:ingress")).To(Equal(3))
 			Expect(dp.numOfAttaches("cali12345:egress")).To(Equal(3))
+			genHostMetadataUpdate("1.2.3.4")()
+			Expect(dp.numOfAttaches("cali12345:ingress")).To(Equal(3))
+			Expect(dp.numOfAttaches("cali12345:egress")).To(Equal(3))
 
 			genHostMetadataV6Update("1::5/128")()
 			Expect(dp.numOfAttaches("cali12345:ingress")).To(Equal(4))
 			Expect(dp.numOfAttaches("cali12345:egress")).To(Equal(4))
+			genHostMetadataV6Update("1::4")()
+			Expect(dp.numOfAttaches("cali12345:ingress")).To(Equal(5))
+			Expect(dp.numOfAttaches("cali12345:egress")).To(Equal(5))
 			genHostMetadataV6Update("1::4")()
 			Expect(dp.numOfAttaches("cali12345:ingress")).To(Equal(5))
 			Expect(dp.numOfAttaches("cali12345:egress")).To(Equal(5))
@@ -1174,7 +1213,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 				genIfaceUpdate("eth21", ifacemonitor.StateUp, 31)()
 				genIfaceUpdate("bond1", ifacemonitor.StateUp, 12)()
 				genUntracked("default", "untracked1")()
-				newHEP := hostEp
+				newHEP := googleproto.Clone(hostEp).(*proto.HostEndpoint)
 				newHEP.UntrackedTiers = []*proto.TierInfo{{
 					Name:            "default",
 					IngressPolicies: []string{"untracked1"},
@@ -1231,7 +1270,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			It("should attach XDP to slave devices", func() {
 				By("adding untracked policy")
 				genUntracked("default", "untracked1")()
-				newHEP := hostEp
+				newHEP := googleproto.Clone(hostEp).(*proto.HostEndpoint)
 				newHEP.UntrackedTiers = []*proto.TierInfo{{
 					Name:            "default",
 					IngressPolicies: []string{"untracked1"},
@@ -1343,7 +1382,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 			It("stores host endpoint for eth0", func() {
 				Expect(bpfEpMgr.hostIfaceToEpMap["eth0"]).To(Equal(hostEp))
-				Expect(bpfEpMgr.policiesToWorkloads[proto.PolicyID{
+				Expect(bpfEpMgr.policiesToWorkloads[types.PolicyID{
 					Tier: "default",
 					Name: "default.mypolicy",
 				}]).To(HaveKey("eth0"))
@@ -1366,7 +1405,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 				By("adding untracked policy")
 				genUntracked("default", "untracked1")()
-				newHEP := hostEp
+				newHEP := googleproto.Clone(hostEp).(*proto.HostEndpoint)
 				newHEP.UntrackedTiers = []*proto.TierInfo{{
 					Name:            "default",
 					IngressPolicies: []string{"untracked1"},
@@ -1393,7 +1432,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 			It("stores host endpoint for eth0", func() {
 				Expect(bpfEpMgr.hostIfaceToEpMap["eth0"]).To(Equal(hostEp))
-				Expect(bpfEpMgr.policiesToWorkloads[proto.PolicyID{
+				Expect(bpfEpMgr.policiesToWorkloads[types.PolicyID{
 					Tier: "default",
 					Name: "default.mypolicy",
 				}]).To(HaveKey("eth0"))
@@ -1412,7 +1451,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 			It("stores host endpoint for eth0", func() {
 				Expect(bpfEpMgr.hostIfaceToEpMap["eth0"]).To(Equal(hostEp))
-				Expect(bpfEpMgr.policiesToWorkloads[proto.PolicyID{
+				Expect(bpfEpMgr.policiesToWorkloads[types.PolicyID{
 					Tier: "default",
 					Name: "default.mypolicy",
 				}]).To(HaveKey("eth0"))
@@ -1431,7 +1470,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 			It("stores host endpoint for eth0", func() {
 				Expect(bpfEpMgr.hostIfaceToEpMap["eth0"]).To(Equal(hostEp))
-				Expect(bpfEpMgr.policiesToWorkloads[proto.PolicyID{
+				Expect(bpfEpMgr.policiesToWorkloads[types.PolicyID{
 					Tier: "default",
 					Name: "default.mypolicy",
 				}]).To(HaveKey("eth0"))
@@ -1442,7 +1481,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 				It("clears host endpoint for eth0", func() {
 					Expect(bpfEpMgr.hostIfaceToEpMap).To(BeEmpty())
-					Expect(bpfEpMgr.policiesToWorkloads[proto.PolicyID{
+					Expect(bpfEpMgr.policiesToWorkloads[types.PolicyID{
 						Tier: "default",
 						Name: "default.mypolicy",
 					}]).NotTo(HaveKey("eth0"))
@@ -1453,7 +1492,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 				It("clears host endpoint for eth0", func() {
 					Expect(bpfEpMgr.hostIfaceToEpMap).To(BeEmpty())
-					Expect(bpfEpMgr.policiesToWorkloads[proto.PolicyID{
+					Expect(bpfEpMgr.policiesToWorkloads[types.PolicyID{
 						Tier: "default",
 						Name: "default.mypolicy",
 					}]).NotTo(HaveKey("eth0"))
@@ -1466,8 +1505,8 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		It("should update the maps with ruleIds", func() {
 			ingRule := &proto.Rule{Action: "Allow", RuleId: "INGRESSALLOW1234"}
 			egrRule := &proto.Rule{Action: "Allow", RuleId: "EGRESSALLOW12345"}
-			ingRuleMatchId := bpfEpMgr.dp.ruleMatchID("Ingress", "Allow", "Policy", "allowPol", 0)
-			egrRuleMatchId := bpfEpMgr.dp.ruleMatchID("Egress", "Allow", "Policy", "allowPol", 0)
+			ingRuleMatchId := bpfEpMgr.dp.ruleMatchID(rules.RuleDirIngress, "Allow", rules.RuleOwnerTypePolicy, 0, "allowPol")
+			egrRuleMatchId := bpfEpMgr.dp.ruleMatchID(rules.RuleDirEgress, "Allow", rules.RuleOwnerTypePolicy, 0, "allowPol")
 			k := make([]byte, 8)
 			v := make([]byte, 8)
 			rcMap := bpfEpMgr.commonMaps.RuleCountersMap
@@ -1491,7 +1530,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 			// update the ingress rule of the policy
 			ingDenyRule := &proto.Rule{Action: "Deny", RuleId: "INGRESSDENY12345"}
-			ingDenyRuleMatchId := bpfEpMgr.dp.ruleMatchID("Ingress", "Deny", "Policy", "allowPol", 0)
+			ingDenyRuleMatchId := bpfEpMgr.dp.ruleMatchID(rules.RuleDirIngress, "Deny", rules.RuleOwnerTypePolicy, 0, "allowPol")
 			bpfEpMgr.OnUpdate(&proto.ActivePolicyUpdate{
 				Id:     &proto.PolicyID{Tier: "default", Name: "allowPol"},
 				Policy: &proto.Policy{InboundRules: []*proto.Rule{ingDenyRule}, OutboundRules: []*proto.Rule{egrRule}},
@@ -1531,8 +1570,8 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		})
 
 		It("should cleanup the bpf map after restart", func() {
-			ingRuleMatchId := bpfEpMgr.dp.ruleMatchID("Ingress", "Allow", "Policy", "allowPol", 0)
-			egrRuleMatchId := bpfEpMgr.dp.ruleMatchID("Egress", "Allow", "Policy", "allowPol", 0)
+			ingRuleMatchId := bpfEpMgr.dp.ruleMatchID(rules.RuleDirIngress, "Allow", rules.RuleOwnerTypePolicy, 0, "allowPol")
+			egrRuleMatchId := bpfEpMgr.dp.ruleMatchID(rules.RuleDirEgress, "Allow", rules.RuleOwnerTypePolicy, 0, "allowPol")
 			k := make([]byte, 8)
 			v := make([]byte, 8)
 			rcMap := bpfEpMgr.commonMaps.RuleCountersMap
@@ -2623,7 +2662,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			genIfaceUpdate("eth0", ifacemonitor.StateUp, 10)()
 			genUntracked("default", "untracked1")()
 			genPolicy("default", "mypolicy")()
-			hostEp := hostEpNorm
+			hostEp := googleproto.Clone(hostEpNorm).(*proto.HostEndpoint)
 			hostEp.UntrackedTiers = []*proto.TierInfo{{
 				Name:            "default",
 				IngressPolicies: []string{"untracked1"},

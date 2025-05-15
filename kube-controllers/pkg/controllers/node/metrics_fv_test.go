@@ -1,4 +1,4 @@
-// Copyright (c) 2021-2023 Tigera, Inc. All rights reserved.
+// Copyright (c) 2021-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -132,7 +132,10 @@ var _ = Describe("kube-controllers metrics FV tests", func() {
 		// Shorten the leak grace period for testing, allowing reclamations to happen quickly.
 		kcc := api.NewKubeControllersConfiguration()
 		kcc.Name = "default"
-		kcc.Spec.Controllers.Node = &api.NodeControllerConfig{LeakGracePeriod: &metav1.Duration{Duration: 5 * time.Second}}
+		kcc.Spec.Controllers.Node = &api.NodeControllerConfig{LeakGracePeriod: &metav1.Duration{Duration: 5 * time.Second}, HostEndpoint: &api.AutoHostEndpointConfig{
+			AutoCreate:                api.Disabled,
+			CreateDefaultHostEndpoint: api.DefaultHostEndpointsDisabled,
+		}}
 		_, err = calicoClient.KubeControllersConfiguration().Create(context.Background(), kcc, options.SetOptions{})
 		Expect(err).ToNot(HaveOccurred())
 
@@ -716,7 +719,7 @@ func createPod(podName string, ip string, handle string, node string, k8sClient 
 func deletePodWithIP(pod string, ip string, k8sClient *kubernetes.Clientset, calicoClient client.Interface) {
 	err := k8sClient.CoreV1().Pods("default").Delete(context.Background(), pod, metav1.DeleteOptions{})
 	ExpectWithOffset(1, err).NotTo(HaveOccurred())
-	_, err = calicoClient.IPAM().ReleaseIPs(context.Background(), ipam.ReleaseOptions{Address: ip})
+	_, _, err = calicoClient.IPAM().ReleaseIPs(context.Background(), ipam.ReleaseOptions{Address: ip})
 	ExpectWithOffset(1, err).NotTo(HaveOccurred())
 }
 

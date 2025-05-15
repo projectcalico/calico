@@ -26,14 +26,13 @@ import (
 	"github.com/vishvananda/netlink"
 
 	"github.com/projectcalico/calico/felix/bpf/bpfdefs"
-	"github.com/projectcalico/calico/felix/bpf/bpfutils"
 	"github.com/projectcalico/calico/felix/bpf/hook"
 	"github.com/projectcalico/calico/felix/bpf/libbpf"
 	"github.com/projectcalico/calico/felix/bpf/utils"
 )
 
 func checkBTFEnabled() []bool {
-	if bpfutils.BTFEnabled {
+	if utils.BTFEnabled {
 		return []bool{false, true}
 	}
 	return []bool{false}
@@ -47,7 +46,7 @@ func TestPrecompiledBinariesAreLoadable(t *testing.T) {
 	Expect(bpffs).To(Equal("/sys/fs/bpf"))
 
 	defer func() {
-		bpfutils.BTFEnabled = bpfutils.SupportsBTF()
+		utils.BTFEnabled = utils.SupportsBTF()
 	}()
 
 	testObject := func(file string) {
@@ -67,6 +66,23 @@ func TestPrecompiledBinariesAreLoadable(t *testing.T) {
 
 	objects["tc_preamble.o"] = struct{}{}
 	objects["xdp_preamble.o"] = struct{}{}
+	objects["conntrack_cleanup_debug_co-re_v4.o"] = struct{}{}
+	objects["conntrack_cleanup_debug_co-re_v6.o"] = struct{}{}
+	objects["conntrack_cleanup_no_log_co-re_v4.o"] = struct{}{}
+	objects["conntrack_cleanup_no_log_co-re_v6.o"] = struct{}{}
+	for _, logLevel := range []string{"debug", "no_log"} {
+		for _, btf := range []bool{false, true} {
+			for _, ipv := range []string{"v46", "v4", "v6"} {
+				core := ""
+				if btf {
+					core = "_co-re"
+				}
+				filename := "connect_balancer_" + logLevel + core + fmt.Sprintf("_%s.o", ipv)
+				objects[filename] = struct{}{}
+			}
+		}
+	}
+
 	for obj := range objects {
 		log.Debugf("Object %s", obj)
 		t.Run(obj, func(t *testing.T) {

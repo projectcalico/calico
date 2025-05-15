@@ -33,14 +33,17 @@ function git_auto_version {
     timestamp=`date -u '+%Y%m%d%H%M%S+0000'`
 
     # Generate corresponding PEP 440 version number.
+    # Note that PEP 440 only allows [N!]N(.N)*[{a|b|rc}N][.postN][.devN]
+    # https://packaging.python.org/en/latest/specifications/version-specifiers/#version-specifiers
     if test ${commits_since} -eq 0; then
 	# There are no commits since the last tag.
 	version=${last_tag}
     else
-	version=${last_tag}.post${commits_since}+${timestamp}+${sha}
+	version=${last_tag}.post${commits_since}
     fi
 
-    echo $version
+    echo $version | sed 's/-0.dev/rc/'
+
 }
 
 # Get the current Git commit ID.

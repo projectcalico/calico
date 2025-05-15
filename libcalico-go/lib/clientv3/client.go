@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -87,6 +87,21 @@ func (c client) NetworkPolicies() NetworkPolicyInterface {
 // GlobalNetworkPolicies returns an interface for managing policy resources.
 func (c client) GlobalNetworkPolicies() GlobalNetworkPolicyInterface {
 	return globalNetworkPolicies{client: c}
+}
+
+// StagedNetworkPolicies returns an interface for managing policy resources.
+func (c client) StagedNetworkPolicies() StagedNetworkPolicyInterface {
+	return stagedNetworkPolicies{client: c}
+}
+
+// StagedGlobalNetworkPolicies returns an interface for managing policy resources.
+func (c client) StagedGlobalNetworkPolicies() StagedGlobalNetworkPolicyInterface {
+	return stagedGlobalNetworkPolicies{client: c}
+}
+
+// StagedKubernetesNetworkPolicies returns an interface for managing policy resources.
+func (c client) StagedKubernetesNetworkPolicies() StagedKubernetesNetworkPolicyInterface {
+	return stagedKubernetesNetworkPolicies{client: c}
 }
 
 // IPPools returns an interface for managing IP pool resources.
@@ -184,26 +199,34 @@ type poolAccessor struct {
 	client *client
 }
 
-func (p poolAccessor) GetEnabledPools(ipVersion int) ([]v3.IPPool, error) {
-	return p.getPools(func(pool *v3.IPPool) bool {
-		if pool.Spec.Disabled {
-			log.Debugf("Skipping disabled IP pool (%s)", pool.Name)
-			return false
-		}
-		if _, cidr, err := net.ParseCIDR(pool.Spec.CIDR); err == nil && cidr.Version() == ipVersion {
-			log.Debugf("Adding pool (%s) to the IPPool list", cidr.String())
-			return true
-		} else if err != nil {
-			log.Warnf("Failed to parse the IPPool: %s. Ignoring that IPPool", pool.Spec.CIDR)
-		} else {
-			log.Debugf("Ignoring IPPool: %s. IP version is different.", pool.Spec.CIDR)
-		}
+func filterIPPool(pool *v3.IPPool, ipVersion int) bool {
+	if !pool.DeletionTimestamp.IsZero() {
+		log.Debugf("Skipping deleting IP pool (%s)", pool.Name)
 		return false
+	}
+	if pool.Spec.Disabled {
+		log.Debugf("Skipping disabled IP pool (%s)", pool.Name)
+		return false
+	}
+	if _, cidr, err := net.ParseCIDR(pool.Spec.CIDR); err == nil && cidr.Version() == ipVersion {
+		log.Debugf("Adding pool (%s) to the IPPool list", cidr.String())
+		return true
+	} else if err != nil {
+		log.Warnf("Failed to parse the IPPool: %s. Ignoring that IPPool", pool.Spec.CIDR)
+	} else {
+		log.Debugf("Ignoring IPPool: %s. IP version is different.", pool.Spec.CIDR)
+	}
+	return false
+}
+
+func (p poolAccessor) GetEnabledPools(ctx context.Context, ipVersion int) ([]v3.IPPool, error) {
+	return p.getPools(ctx, func(pool *v3.IPPool) bool {
+		return filterIPPool(pool, ipVersion)
 	})
 }
 
-func (p poolAccessor) getPools(filter func(pool *v3.IPPool) bool) ([]v3.IPPool, error) {
-	pools, err := p.client.IPPools().List(context.Background(), options.ListOptions{})
+func (p poolAccessor) getPools(ctx context.Context, filter func(pool *v3.IPPool) bool) ([]v3.IPPool, error) {
+	pools, err := p.client.IPPools().List(ctx, options.ListOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -217,8 +240,8 @@ func (p poolAccessor) getPools(filter func(pool *v3.IPPool) bool) ([]v3.IPPool, 
 	return filtered, nil
 }
 
-func (p poolAccessor) GetAllPools() ([]v3.IPPool, error) {
-	return p.getPools(func(pool *v3.IPPool) bool {
+func (p poolAccessor) GetAllPools(ctx context.Context) ([]v3.IPPool, error) {
+	return p.getPools(ctx, func(pool *v3.IPPool) bool {
 		return true
 	})
 }
@@ -415,7 +438,7 @@ func (c client) ensureTierExists(ctx context.Context, name string, defaultAction
 	if _, err := c.Tiers().Create(ctx, tier, options.SetOptions{}); err != nil {
 		switch err.(type) {
 		case cerrors.ErrorResourceAlreadyExists:
-			log.WithError(err).Infof("Tier %v already exists.", name)
+			log.Debugf("Tier %v already exists.", name)
 			return nil
 		case cerrors.ErrorConnectionUnauthorized:
 			log.WithError(err).Warnf("Unauthorized to create tier %v.", name)

@@ -96,7 +96,12 @@ func (sw *secretWatcher) ensureWatchingSecret(name string) {
 		log.Debugf("Start a watch for secret '%v' (namespace %v)", name, sw.namespace)
 		// We're not watching this secret yet, so start a watch for it.
 		watcher := cache.NewListWatchFromClient(sw.k8sClientset.CoreV1().RESTClient(), "secrets", sw.namespace, fields.OneTermEqualSelector("metadata.name", name))
-		_, controller := cache.NewInformer(watcher, &v1.Secret{}, 0, sw)
+		_, controller := cache.NewInformerWithOptions(cache.InformerOptions{
+			ListerWatcher: watcher,
+			ObjectType:    &v1.Secret{},
+			ResyncPeriod:  0,
+			Handler:       sw,
+		})
 		sw.watches[name] = &secretWatchData{stopCh: make(chan struct{})}
 		go controller.Run(sw.watches[name].stopCh)
 		log.Debugf("Controller for secret '%v' is now running", name)
@@ -172,19 +177,19 @@ func (sw *secretWatcher) SweepStale() {
 func (sw *secretWatcher) OnAdd(obj interface{}, isInInitialList bool) {
 	log.Debug("Secret added")
 	sw.updateSecret(obj.(*v1.Secret))
-	sw.client.recheckPeerConfig()
+	sw.client.recheckPeerConfig("secret added")
 }
 
 func (sw *secretWatcher) OnUpdate(oldObj, newObj interface{}) {
 	log.Debug("Secret updated")
 	sw.updateSecret(newObj.(*v1.Secret))
-	sw.client.recheckPeerConfig()
+	sw.client.recheckPeerConfig("secret updated")
 }
 
 func (sw *secretWatcher) OnDelete(obj interface{}) {
 	log.Debug("Secret deleted")
 	sw.deleteSecret(obj.(*v1.Secret))
-	sw.client.recheckPeerConfig()
+	sw.client.recheckPeerConfig("secret deleted")
 }
 
 func (sw *secretWatcher) updateSecret(secret *v1.Secret) {

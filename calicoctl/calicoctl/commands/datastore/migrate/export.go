@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2025 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -50,10 +50,13 @@ var allV3Resources []string = []string{
 	"bgppeers",
 	"tiers", // Must come before policies since policies reference tiers.
 	"globalnetworkpolicies",
+	"stagedglobalnetworkpolicies",
 	"globalnetworksets",
 	"hostendpoints",
 	"kubecontrollersconfigurations",
 	"networkpolicies",
+	"stagednetworkpolicies",
+	"stagedkubernetesnetworkpolicies",
 	"networksets",
 	"nodes", // Must be before resources that reference nodes.
 	"bgpconfigurations",
@@ -63,20 +66,23 @@ var allV3Resources []string = []string{
 }
 
 var resourceDisplayMap map[string]string = map[string]string{
-	"ippools":                       "IPPools",
-	"bgpconfigurations":             "BGPConfigurations",
-	"bgppeers":                      "BGPPeers",
-	"felixconfigurations":           "FelixConfigurations",
-	"globalnetworkpolicies":         "GlobalNetworkPolicies",
-	"globalnetworksets":             "GlobalNetworkSets",
-	"hostendpoints":                 "HostEndpoints",
-	"kubecontrollersconfigurations": "KubeControllersConfigurations",
-	"networkpolicies":               "NetworkPolicies",
-	"networksets":                   "NetworkSets",
-	"nodes":                         "Nodes",
-	"ipreservations":                "IPReservations",
-	"bgpfilters":                    "BGPFilters",
-	"tiers":                         "Tiers",
+	"ippools":                         "IPPools",
+	"bgpconfigurations":               "BGPConfigurations",
+	"bgppeers":                        "BGPPeers",
+	"felixconfigurations":             "FelixConfigurations",
+	"globalnetworkpolicies":           "GlobalNetworkPolicies",
+	"stagedglobalnetworkpolicies":     "StagedGlobalNetworkPolicies",
+	"globalnetworksets":               "GlobalNetworkSets",
+	"hostendpoints":                   "HostEndpoints",
+	"kubecontrollersconfigurations":   "KubeControllersConfigurations",
+	"networkpolicies":                 "NetworkPolicies",
+	"stagednetworkpolicies":           "StagedNetworkPolicies",
+	"stagedkubernetesnetworkpolicies": "StagedKubernetesNetworkPolicyPolicies",
+	"networksets":                     "NetworkSets",
+	"nodes":                           "Nodes",
+	"ipreservations":                  "IPReservations",
+	"bgpfilters":                      "BGPFilters",
+	"tiers":                           "Tiers",
 }
 
 var namespacedResources map[string]struct{} = map[string]struct{}{

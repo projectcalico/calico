@@ -35,7 +35,7 @@ import (
 // NewKubernetesNetworkPolicyClient returns a new client for interacting with Kubernetes NetworkPolicy objects.
 // Note that this client is only intended for use by the felix syncer in KDD mode, and as such is largely unimplemented
 // except for the functions required by the syncer.
-func NewKubernetesNetworkPolicyClient(c *kubernetes.Clientset) K8sResourceClient {
+func NewKubernetesNetworkPolicyClient(c kubernetes.Interface) K8sResourceClient {
 	return &networkPolicyClient{
 		Converter: conversion.NewConverter(),
 		clientSet: c,
@@ -45,7 +45,7 @@ func NewKubernetesNetworkPolicyClient(c *kubernetes.Clientset) K8sResourceClient
 // Implements the api.Client interface for Kubernetes NetworkPolicy.
 type networkPolicyClient struct {
 	conversion.Converter
-	clientSet *kubernetes.Clientset
+	clientSet kubernetes.Interface
 }
 
 func (c *networkPolicyClient) Create(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {

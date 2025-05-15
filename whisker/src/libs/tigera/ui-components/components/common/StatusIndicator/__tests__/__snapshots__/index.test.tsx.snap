@@ -1,0 +1,22 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`<StatusIndicator/> it renders 1`] = `
+<DocumentFragment>
+  <div
+    class="css-1tljkm1"
+  >
+    <div
+      class="css-fw3qcu"
+    />
+    <p
+      class="chakra-text css-0"
+    >
+      foo
+    </p>
+  </div>
+  <span
+    hidden=""
+    id="__chakra_env"
+  />
+</DocumentFragment>
+`;

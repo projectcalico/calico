@@ -16,7 +16,6 @@ package main
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 
 	"github.com/sirupsen/logrus"
@@ -33,9 +32,9 @@ import (
 	"github.com/projectcalico/calico/release/pkg/tasks"
 )
 
-func hashreleaseOutputDir(repoRootDir, hash string) string {
+func baseHashreleaseOutputDir(repoRootDir string) string {
 	baseOutputDir := filepath.Join(append([]string{repoRootDir}, releaseOutputPath...)...)
-	return filepath.Join(baseOutputDir, "hashrelease", hash)
+	return filepath.Join(baseOutputDir, "hashrelease")
 }
 
 // hashreleaseCommand is used to build and publish hashreleases,
@@ -55,7 +54,7 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 		// The build command is used to produce a new local hashrelease in the output directory.
 		{
 			Name:  "build",
-			Usage: "Build a hashrelease locally in _output/",
+			Usage: "Build a hashrelease locally",
 			Flags: hashreleaseBuildFlags(),
 			Action: func(c *cli.Context) error {
 				configureLogging("hashrelease-build.log")
@@ -72,6 +71,9 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 					return fmt.Errorf("failed to clone operator repository: %v", err)
 				}
 
+				// Define the base hashrelease directory.
+				baseHashreleaseDir := baseHashreleaseOutputDir(cfg.RepoRootDir)
+
 				// Create the pinned config.
 				pinned := pinnedversion.CalicoPinnedVersions{
 					Dir:                 cfg.TmpDir,
@@ -84,16 +86,9 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 						Dir:      operatorDir,
 					},
 				}
-
 				data, err := pinned.GenerateFile()
 				if err != nil {
 					return fmt.Errorf("failed to generate pinned version file: %v", err)
-				}
-
-				// Create the output directory for the hashrelease.
-				dir := hashreleaseOutputDir(cfg.RepoRootDir, data.Hash())
-				if err := os.MkdirAll(dir, utils.DirPerms); err != nil {
-					return fmt.Errorf("failed to create hashrelease output directory: %v", err)
 				}
 
 				// Check if the hashrelease has already been published.
@@ -128,17 +123,16 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 					}
 				}
 
-				// Configure a release builder using the generated versions, and use it
-				// to build a Calico release.
-				pinnedOpts, err := pinned.ManagerOptions()
-				if err != nil {
-					return fmt.Errorf(("failed to retrieve pinned version options for manager: %v"), err)
-				}
-				opts := append(pinnedOpts,
+				// Define the hashrelease directory using the hash from the pinned file.
+				hashreleaseDir := filepath.Join(baseHashreleaseDir, data.Hash())
+
+				opts := []calico.Option{
+					calico.WithVersion(data.ProductVersion()),
+					calico.WithOperator(c.String(operatorRegistryFlag.Name), c.String(operatorImageFlag.Name), data.OperatorVersion()),
 					calico.WithRepoRoot(cfg.RepoRootDir),
 					calico.WithReleaseBranchPrefix(c.String(releaseBranchPrefixFlag.Name)),
 					calico.IsHashRelease(),
-					calico.WithOutputDir(dir),
+					calico.WithOutputDir(hashreleaseDir),
 					calico.WithBuildImages(c.Bool(buildHashreleaseImageFlag.Name)),
 					calico.WithValidate(!c.Bool(skipValidationFlag.Name)),
 					calico.WithReleaseBranchValidation(!c.Bool(skipBranchCheckFlag.Name)),
@@ -146,7 +140,7 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 					calico.WithRepoName(c.String(repoFlag.Name)),
 					calico.WithRepoRemote(c.String(repoRemoteFlag.Name)),
 					calico.WithArchitectures(c.StringSlice(archFlag.Name)),
-				)
+				}
 				if reg := c.StringSlice(registryFlag.Name); len(reg) > 0 {
 					opts = append(opts, calico.WithImageRegistries(reg))
 				}
@@ -162,19 +156,23 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 				if err != nil {
 					return fmt.Errorf("failed to determine release version: %v", err)
 				}
-				if _, err := outputs.ReleaseNotes(utils.ProjectCalicoOrg, c.String(githubTokenFlag.Name), cfg.RepoRootDir, filepath.Join(dir, releaseNotesDir), releaseVersion); err != nil {
-					return err
+				if c.String(orgFlag.Name) == utils.TigeraOrg {
+					logrus.Warn("Release notes are not supported for Tigera releases, skipping...")
+				} else {
+					if _, err := outputs.ReleaseNotes(utils.ProjectCalicoOrg, c.String(githubTokenFlag.Name), cfg.RepoRootDir, filepath.Join(hashreleaseDir, releaseNotesDir), releaseVersion); err != nil {
+						return err
+					}
 				}
 
 				// Adjsut the formatting of the generated outputs to match the legacy hashrelease format.
-				return tasks.ReformatHashrelease(dir, cfg.TmpDir)
+				return tasks.ReformatHashrelease(hashreleaseDir, cfg.TmpDir)
 			},
 		},
 
 		// The publish command is used to publish a locally built hashrelease to the hashrelease server.
 		{
 			Name:  "publish",
-			Usage: "Publish hashrelease from _output/ to hashrelease server",
+			Usage: "Publish a pre-built hashrelease",
 			Flags: hashreleasePublishFlags(),
 			Action: func(c *cli.Context) error {
 				configureLogging("hashrelease-publish.log")
@@ -185,7 +183,7 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 				}
 
 				// Extract the pinned version as a hashrelease.
-				hashrel, err := pinnedversion.LoadHashrelease(cfg.RepoRootDir, cfg.TmpDir, hashreleaseOutputDir(cfg.RepoRootDir, ""), c.Bool(latestFlag.Name))
+				hashrel, err := pinnedversion.LoadHashrelease(cfg.RepoRootDir, cfg.TmpDir, baseHashreleaseOutputDir(cfg.RepoRootDir), c.Bool(latestFlag.Name))
 				if err != nil {
 					return fmt.Errorf("failed to load hashrelease from pinned file: %v", err)
 				}
@@ -207,8 +205,10 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 					operator.WithValidate(!c.Bool(skipValidationFlag.Name)),
 					operator.WithTempDirectory(cfg.TmpDir),
 				)
-				if err := o.Publish(); err != nil {
-					return err
+				if !c.Bool(skipOperatorFlag.Name) {
+					if err := o.Publish(); err != nil {
+						return err
+					}
 				}
 
 				opts := []calico.Option{
@@ -229,31 +229,51 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 				if reg := c.StringSlice(registryFlag.Name); len(reg) > 0 {
 					opts = append(opts, calico.WithImageRegistries(reg))
 				}
+				// Note: We only need to check that the correct images exist if we haven't built them ourselves.
+				// So, skip this check if we're configured to build and publish images from the local codebase.
+				if !c.Bool(publishHashreleaseImageFlag.Name) {
+					components, err := pinnedversion.RetrieveImageComponents(cfg.TmpDir)
+					if err != nil {
+						return fmt.Errorf("failed to retrieve images for the hashrelease: %v", err)
+					}
+					opts = append(opts, calico.WithComponents(components))
+				}
 				r := calico.NewManager(opts...)
 				if err := r.PublishRelease(); err != nil {
 					return err
 				}
 
+				if !c.Bool(skipImageScanFlag.Name) {
+					hashrel.ImageScanResultURL, err = imagescanner.RetrieveResultURL(cfg.TmpDir)
+					// Only log error as a warning if the image scan result URL could not be retrieved
+					// as it is not an error that should stop the hashrelease process.
+					if err != nil {
+						logrus.WithError(err).Warn("Failed to retrieve image scan result URL")
+					}
+				}
+
 				// Send a slack message to notify that the hashrelease has been published.
 				if c.Bool(publishHashreleaseFlag.Name) {
-					if err := tasks.HashreleaseSlackMessage(slackConfig(c), hashrel, !c.Bool(skipImageScanFlag.Name), ciJobURL(c), cfg.TmpDir); err != nil {
-						return err
-					}
+					return tasks.AnnounceHashrelease(slackConfig(c), hashrel, ciJobURL(c))
 				}
 				return nil
 			},
 		},
 
-		// The garbage-collect command is used to clean up older hashreleases from the hashrelease server.
-		{
-			Name:    "garbage-collect",
-			Usage:   "Clean up older hashreleases",
-			Aliases: []string{"gc"},
-			Flags:   []cli.Flag{maxHashreleasesFlag},
-			Action: func(c *cli.Context) error {
-				configureLogging("hashrelease-garbage-collect.log")
-				return hashreleaseserver.CleanOldHashreleases(hashreleaseServerConfig(c), c.Int(maxHashreleasesFlag.Name))
-			},
+		hashreleaseGarbageCollectCommand(cfg),
+	}
+}
+
+// hashreleaseGarbageCollectCommand is used to clean up older hashreleases from the hashrelease server.
+func hashreleaseGarbageCollectCommand(cfg *Config) *cli.Command {
+	return &cli.Command{
+		Name:    "garbage-collect",
+		Usage:   "Clean up older hashreleases",
+		Aliases: []string{"gc"},
+		Flags:   []cli.Flag{maxHashreleasesFlag},
+		Action: func(c *cli.Context) error {
+			configureLogging("hashrelease-garbage-collect.log")
+			return hashreleaseserver.CleanOldHashreleases(hashreleaseServerConfig(c), c.Int(maxHashreleasesFlag.Name))
 		},
 	}
 }

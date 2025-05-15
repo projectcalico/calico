@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -167,4 +167,13 @@ func getScreenDestination(configParams *config.Config, logLevel log.Level) *logu
 		configParams.DebugDisableLogDropping,
 		counterLogErrors,
 	)
+}
+
+// TODO(dimitrin): Once logrus is upgraded to 1.2.0+, replace all logutils Trace calls with
+// calls to logrus Trace.
+// Tracef prints the debug log if display is true.
+func Tracef(display bool, format string, args ...interface{}) {
+	if display {
+		log.Debugf(format, args...)
+	}
 }

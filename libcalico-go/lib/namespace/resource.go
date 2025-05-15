@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -30,7 +30,11 @@ const (
 
 func IsNamespaced(kind string) bool {
 	switch kind {
-	case libapiv3.KindWorkloadEndpoint, apiv3.KindNetworkPolicy, apiv3.KindNetworkSet:
+	case libapiv3.KindWorkloadEndpoint,
+		apiv3.KindNetworkPolicy,
+		apiv3.KindStagedNetworkPolicy,
+		apiv3.KindStagedKubernetesNetworkPolicy,
+		apiv3.KindNetworkSet:
 		return true
 	case KindKubernetesNetworkPolicy:
 		// KindKubernetesNetworkPolicy is a special-case resource. We don't expose it over the
@@ -42,7 +46,7 @@ func IsNamespaced(kind string) bool {
 		return true
 	case KindKubernetesService:
 		return true
+	default:
+		return false
 	}
-
-	return false
 }

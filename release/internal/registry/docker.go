@@ -18,12 +18,25 @@ import (
 	"fmt"
 )
 
+const DockerRegistry = "docker.io"
+
 // Docker represents the Docker registry
 type Docker struct{}
 
 // URL returns the URL for the Docker registry
 func (d *Docker) URL() string {
-	return "docker.io"
+	return DockerRegistry
+}
+
+// Token returns the token to access the Docker registry for the image
+func (d *Docker) Token(img ImageRef) (string, error) {
+	var (
+		token string
+		err   error
+		scope = fmt.Sprintf("repository:%s:pull", img.Repository())
+	)
+	token, err = getBearerToken(d, scope)
+	return token, err
 }
 
 // TokenURL returns the token URL for the Docker registry

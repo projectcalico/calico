@@ -3,11 +3,10 @@ apiVersion: projectcalico.org/v3
 metadata:
   name: default
 spec:
-    logSeverityScreen: Info
-    nodeMeshMaxRestartTime: 10s
+  logSeverityScreen: Info
+  nodeMeshMaxRestartTime: 10s
 
 ---
-
 kind: Node
 apiVersion: projectcalico.org/v3
 metadata:
@@ -18,7 +17,6 @@ spec:
     ipv6Address: "2001::103/64"
 
 ---
-
 kind: Node
 apiVersion: projectcalico.org/v3
 metadata:
@@ -29,7 +27,6 @@ spec:
     ipv6Address: "2001::102/64"
 
 ---
-
 kind: Node
 apiVersion: projectcalico.org/v3
 metadata:
@@ -40,7 +37,6 @@ spec:
     ipv6Address: "2001::104/64"
 
 ---
-
 kind: IPPool
 apiVersion: projectcalico.org/v3
 metadata:
@@ -51,7 +47,6 @@ spec:
   natOutgoing: true
 
 ---
-
 kind: IPPool
 apiVersion: projectcalico.org/v3
 metadata:

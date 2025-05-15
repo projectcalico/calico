@@ -27,6 +27,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
 	conntrack3 "github.com/projectcalico/calico/felix/bpf/conntrack/v3"
 	v3 "github.com/projectcalico/calico/felix/bpf/conntrack/v3"
+	"github.com/projectcalico/calico/felix/bpf/counters"
 	"github.com/projectcalico/calico/felix/bpf/nat"
 	"github.com/projectcalico/calico/felix/bpf/polprog"
 	"github.com/projectcalico/calico/felix/bpf/routes"
@@ -223,7 +224,7 @@ func TestNATPodPodXNode(t *testing.T) {
 		respPkt = udpResponseRaw(recvPkt)
 		res, err := bpfrun(respPkt)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+		Expect(res.Retval).To(Equal(resTC_ACT_REDIRECT))
 		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
 		fmt.Printf("pktR = %+v\n", pktR)
 
@@ -256,7 +257,7 @@ func TestNATPodPodXNode(t *testing.T) {
 	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(respPkt)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+		Expect(res.Retval).To(Equal(resTC_ACT_REDIRECT))
 
 		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
 		fmt.Printf("pktR = %+v\n", pktR)
@@ -926,7 +927,7 @@ func TestNATNodePort(t *testing.T) {
 	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(icmpEncaped)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+		Expect(res.Retval).To(Equal(resTC_ACT_REDIRECT))
 
 		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
 		fmt.Printf("pktR = %+v\n", pktR)
@@ -1243,7 +1244,7 @@ func TestNATNodePortNoFWD(t *testing.T) {
 		respPkt = udpResponseRaw(recvPkt)
 		res, err := bpfrun(respPkt)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+		Expect(res.Retval).To(Equal(resTC_ACT_REDIRECT))
 
 		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
 		fmt.Printf("pktR = %+v\n", pktR)
@@ -2388,6 +2389,7 @@ func TestNATSourceCollision(t *testing.T) {
 	bpfIfaceName = "SPRT"
 	defer func() { bpfIfaceName = "" }()
 	resetCTMap(ctMap)
+	resetCTMap(countersMap)
 
 	// Setup node2 with backend pod such that conntrack has an active TCP
 	// connection with which we will collide the next SYN.
@@ -2442,8 +2444,8 @@ func TestNATSourceCollision(t *testing.T) {
 	// Create an active TCP conntrack entry pair
 	ctKey := conntrack.NewKey(tcpProto, clientIP, clientPort, node1ip, nodeportPort)
 	revKey := conntrack.NewKey(tcpProto, clientIP, clientPort, podIP, podPort)
-	ctVal := conntrack.NewValueNATForward(0, 0, 0, revKey)
-	revVal := conntrack.NewValueNATReverse(0, 0, 0,
+	ctVal := conntrack.NewValueNATForward(0, 0, revKey)
+	revVal := conntrack.NewValueNATReverse(0, 0,
 		conntrack.Leg{
 			Seqno:    12345,
 			SynSeen:  true,
@@ -2554,7 +2556,7 @@ func TestNATSourceCollision(t *testing.T) {
 	runBpfTest(t, "calico_from_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(respPkt)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+		Expect(res.Retval).To(Equal(resTC_ACT_REDIRECT))
 		Expect(res.dataOut).To(Equal(respPkt))
 
 		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
@@ -2594,7 +2596,7 @@ func TestNATSourceCollision(t *testing.T) {
 	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(pktBytes)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+		Expect(res.Retval).To(Equal(resTC_ACT_REDIRECT))
 
 		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
 		fmt.Printf("pktR = %+v\n", pktR)
@@ -2604,6 +2606,11 @@ func TestNATSourceCollision(t *testing.T) {
 
 		tcp := tcpL.(*layers.TCP)
 		Expect(uint16(tcp.SrcPort)).To(Equal(newSPort))
+
+		bpfCounters, err := counters.Read(countersMap, 1, 0)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(int(bpfCounters[counters.SourceCollisionHit])).To(Equal(1))
+		Expect(int(bpfCounters[counters.SourceCollisionResolutionFailed])).To(Equal(0))
 
 		recvPkt = res.dataOut
 	})
@@ -2651,6 +2658,10 @@ func TestNATSourceCollision(t *testing.T) {
 		res, err := bpfrun(pktBytes)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(res.Retval).To(Equal(resTC_ACT_SHOT))
+		bpfCounters, err := counters.Read(countersMap, 1, 0)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(int(bpfCounters[counters.SourceCollisionHit])).To(Equal(2))
+		Expect(int(bpfCounters[counters.SourceCollisionResolutionFailed])).To(Equal(1))
 	}, withPSNATPorts(22222, 22222))
 
 	// It should eventually succeed if we keep retransmitting and it is possible to pick
@@ -3011,7 +3022,7 @@ func TestNATPodPodXNodeV6(t *testing.T) {
 		respPkt = udpResponseRawV6(recvPkt)
 		res, err := bpfrun(respPkt)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+		Expect(res.Retval).To(Equal(resTC_ACT_REDIRECT))
 		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
 		fmt.Printf("pktR = %+v\n", pktR)
 
@@ -3044,7 +3055,7 @@ func TestNATPodPodXNodeV6(t *testing.T) {
 	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(respPkt)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+		Expect(res.Retval).To(Equal(resTC_ACT_REDIRECT))
 
 		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
 		fmt.Printf("pktR = %+v\n", pktR)

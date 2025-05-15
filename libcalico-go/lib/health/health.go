@@ -196,14 +196,12 @@ func (aggregator *HealthAggregator) Report(name string, report *HealthReport) {
 	reporter := aggregator.reporters[name]
 
 	reports := aggregator.reporters[name].reports
-	logCxt := log.WithFields(log.Fields{
-		"name":      name,
-		"newReport": formatReport(&reports, report),
-		"oldReport": formatReport(&reports, &reporter.latest),
-	})
-
 	if reporter.latest != *report {
-		logCxt.Info("Health of component changed")
+		log.WithFields(log.Fields{
+			"name":      name,
+			"newReport": formatReport(&reports, report),
+			"oldReport": formatReport(&reports, &reporter.latest),
+		}).Info("Health of component changed")
 		reporter.latest = *report
 	}
 	reporter.timestamp = time.Now()

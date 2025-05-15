@@ -21,6 +21,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/lib/std/uniquelabels"
 	"github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
 )
@@ -33,6 +34,12 @@ var (
 type HostEndpointKey struct {
 	Hostname   string `json:"-" validate:"required,hostname"`
 	EndpointID string `json:"-" validate:"required,namespacedName"`
+}
+
+func (key HostEndpointKey) WorkloadOrHostEndpointKey() {}
+
+func (key HostEndpointKey) Host() string {
+	return key.Hostname
 }
 
 func (key HostEndpointKey) defaultPath() (string, error) {
@@ -62,6 +69,8 @@ func (key HostEndpointKey) valueType() (reflect.Type, error) {
 func (key HostEndpointKey) String() string {
 	return fmt.Sprintf("HostEndpoint(node=%s, name=%s)", key.Hostname, key.EndpointID)
 }
+
+var _ EndpointKey = HostEndpointKey{}
 
 type HostEndpointListOptions struct {
 	Hostname   string
@@ -102,10 +111,26 @@ func (options HostEndpointListOptions) KeyFromDefaultPath(path string) Key {
 }
 
 type HostEndpoint struct {
-	Name              string            `json:"name,omitempty" validate:"omitempty,interface"`
-	ExpectedIPv4Addrs []net.IP          `json:"expected_ipv4_addrs,omitempty" validate:"omitempty,dive,ipv4"`
-	ExpectedIPv6Addrs []net.IP          `json:"expected_ipv6_addrs,omitempty" validate:"omitempty,dive,ipv6"`
-	Labels            map[string]string `json:"labels,omitempty" validate:"omitempty,labels"`
-	ProfileIDs        []string          `json:"profile_ids,omitempty" validate:"omitempty,dive,name"`
-	Ports             []EndpointPort    `json:"ports,omitempty" validate:"dive"`
+	Name              string           `json:"name,omitempty" validate:"omitempty,interface"`
+	ExpectedIPv4Addrs []net.IP         `json:"expected_ipv4_addrs,omitempty" validate:"omitempty,dive,ipv4"`
+	ExpectedIPv6Addrs []net.IP         `json:"expected_ipv6_addrs,omitempty" validate:"omitempty,dive,ipv6"`
+	Labels            uniquelabels.Map `json:"labels,omitempty" validate:"omitempty,labels"`
+	ProfileIDs        []string         `json:"profile_ids,omitempty" validate:"omitempty,dive,name"`
+	Ports             []EndpointPort   `json:"ports,omitempty" validate:"dive"`
 }
+
+func (e *HostEndpoint) WorkloadOrHostEndpoint() {}
+
+func (e *HostEndpoint) GetLabels() uniquelabels.Map {
+	return e.Labels
+}
+
+func (e *HostEndpoint) GetProfileIDs() []string {
+	return e.ProfileIDs
+}
+
+func (e *HostEndpoint) GetPorts() []EndpointPort {
+	return e.Ports
+}
+
+var _ Endpoint = (*HostEndpoint)(nil)

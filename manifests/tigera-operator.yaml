@@ -17,6 +17,24 @@ metadata:
 imagePullSecrets:
   []
 ---
+# Source: tigera-operator/templates/tigera-operator/02-role-tigera-operator-secrets.yaml
+# Permissions required to manipulate operator secrets for a Calico cluster.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: tigera-operator-secrets
+  labels:
+    k8s-app: tigera-operator
+rules:
+  - apiGroups:
+      - ""
+    resources:
+      - secrets
+    verbs:
+      - create
+      - update
+      - delete
+---
 # Source: tigera-operator/templates/tigera-operator/02-role-tigera-operator.yaml
 # Permissions required when running the operator for a Calico cluster.
 apiVersion: rbac.authorization.k8s.io/v1
@@ -48,6 +66,7 @@ rules:
       - adminnetworkpolicies.policy.networking.k8s.io
       - apiservers.operator.tigera.io
       - baselineadminnetworkpolicies.policy.networking.k8s.io
+      - gatewayapis.operator.tigera.io
       - imagesets.operator.tigera.io
       - installations.operator.tigera.io
       - tigerastatuses.operator.tigera.io
@@ -59,6 +78,7 @@ rules:
       - clusterinformations.crd.projectcalico.org
       - felixconfigurations.crd.projectcalico.org
       - globalnetworkpolicies.crd.projectcalico.org
+      - stagedglobalnetworkpolicies.crd.projectcalico.org
       - globalnetworksets.crd.projectcalico.org
       - hostendpoints.crd.projectcalico.org
       - ipamblocks.crd.projectcalico.org
@@ -68,8 +88,13 @@ rules:
       - ipreservations.crd.projectcalico.org
       - kubecontrollersconfigurations.crd.projectcalico.org
       - networkpolicies.crd.projectcalico.org
+      - stagednetworkpolicies.crd.projectcalico.org
+      - stagedkubernetesnetworkpolicies.crd.projectcalico.org
       - networksets.crd.projectcalico.org
       - tiers.crd.projectcalico.org
+      - whiskers.operator.tigera.io
+      - goldmanes.operator.tigera.io
+      - managementclusterconnections.operator.tigera.io
   - apiGroups:
       - ""
     resources:
@@ -80,7 +105,6 @@ rules:
       - endpoints
       - events
       - configmaps
-      - secrets
       - serviceaccounts
     verbs:
       - create
@@ -93,6 +117,7 @@ rules:
       - ""
     resources:
       - resourcequotas
+      - secrets
     verbs:
       - list
       - get
@@ -164,16 +189,29 @@ rules:
   - apiGroups:
       - operator.tigera.io
     resources:
+      # Note: any resources used by the operator within an OwnerReference for resources
+      # it creates requires permissions to <resource>/finalizers.
+      - apiservers
       - apiservers/finalizers
+      - apiservers/status
+      - gatewayapis
+      - gatewayapis/finalizers
+      - goldmanes
+      - goldmanes/finalizers
+      - goldmanes/status
+      - imagesets
       - installations
-      - installations/status
       - installations/finalizers
+      - installations/status
+      - managementclusterconnections
+      - managementclusterconnections/finalizers
+      - managementclusterconnections/status
       - tigerastatuses
       - tigerastatuses/status
       - tigerastatuses/finalizers
-      - apiservers
-      - apiservers/status
-      - imagesets
+      - whiskers
+      - whiskers/finalizers
+      - whiskers/status
     verbs:
       - get
       - list
@@ -194,12 +232,14 @@ rules:
     resources:
       - installations
       - apiservers
+      - whiskers
+      - goldmanes
     verbs:
       - delete
   - apiGroups:
-    - networking.k8s.io
+      - networking.k8s.io
     resources:
-    - networkpolicies
+      - networkpolicies
     verbs:
       - create
       - update
@@ -208,45 +248,46 @@ rules:
       - list
       - watch
   - apiGroups:
-    - crd.projectcalico.org
+      - crd.projectcalico.org
     resources:
-    - felixconfigurations
-    - ippools
+      - felixconfigurations
+      - ippools
     verbs:
-    - create
-    - patch
-    - list
-    - get
-    - watch
+      - create
+      - patch
+      - list
+      - get
+      - watch
   - apiGroups:
-    - crd.projectcalico.org
+      - crd.projectcalico.org
     resources:
-    - kubecontrollersconfigurations
-    - bgpconfigurations
+      - kubecontrollersconfigurations
+      - bgpconfigurations
+      - clusterinformations
     verbs:
-    - get
-    - list
-    - watch
+      - get
+      - list
+      - watch
   - apiGroups:
-    - projectcalico.org
+      - projectcalico.org
     resources:
-    - ippools
+      - ippools
     verbs:
-    - create
-    - update
-    - delete
-    - patch
-    - get
-    - list
-    - watch
+      - create
+      - update
+      - delete
+      - patch
+      - get
+      - list
+      - watch
   - apiGroups:
-    - projectcalico.org
+      - projectcalico.org
     resources:
-    - ipamconfigurations
+      - ipamconfigurations
     verbs:
-    - get
-    - list
-    - watch
+      - get
+      - list
+      - watch
   - apiGroups:
       - scheduling.k8s.io
     resources:
@@ -370,6 +411,74 @@ rules:
       - create
       - list
       - watch
+  # Additions for Gateway API support.
+  # 1. The operator needs to reconcile gateway.networking.k8s.io and gateway.envoyproxy.io CRDs.
+  - apiGroups:
+      - apiextensions.k8s.io
+    resources:
+      - customresourcedefinitions
+    verbs:
+      - update
+    resourceNames:
+      - backendlbpolicies.gateway.networking.k8s.io
+      - backendtlspolicies.gateway.networking.k8s.io
+      - gatewayclasses.gateway.networking.k8s.io
+      - gateways.gateway.networking.k8s.io
+      - grpcroutes.gateway.networking.k8s.io
+      - httproutes.gateway.networking.k8s.io
+      - referencegrants.gateway.networking.k8s.io
+      - tcproutes.gateway.networking.k8s.io
+      - tlsroutes.gateway.networking.k8s.io
+      - udproutes.gateway.networking.k8s.io
+      - backends.gateway.envoyproxy.io
+      - backendtrafficpolicies.gateway.envoyproxy.io
+      - clienttrafficpolicies.gateway.envoyproxy.io
+      - envoyextensionpolicies.gateway.envoyproxy.io
+      - envoypatchpolicies.gateway.envoyproxy.io
+      - envoyproxies.gateway.envoyproxy.io
+      - httproutefilters.gateway.envoyproxy.io
+      - securitypolicies.gateway.envoyproxy.io
+  # 2. GatewayClasses and EnvoyProxy configurations.
+  - apiGroups:
+      - gateway.networking.k8s.io
+    resources:
+      - gatewayclasses
+    verbs:
+      - create
+      - update
+      - delete
+      - list
+      - get
+      - watch
+  - apiGroups:
+      - gateway.envoyproxy.io
+    resources:
+      - envoyproxies
+    verbs:
+      - create
+      - update
+      - delete
+      - list
+      - get
+      - watch
+  # 3. For Gateway API the operator needs to be able to create and reconcile a certificate
+  # generation job.
+  - apiGroups:
+      - batch
+    resources:
+      - jobs
+    verbs:
+      - create
+      - list
+      - watch
+  - apiGroups:
+      - batch
+    resources:
+      - jobs
+    verbs:
+      - update
+    resourceNames:
+      - tigera-gateway-api-gateway-helm-certgen
 ---
 # Source: tigera-operator/templates/tigera-operator/02-rolebinding-tigera-operator.yaml
 kind: ClusterRoleBinding
@@ -379,12 +488,29 @@ metadata:
   labels:
     k8s-app: tigera-operator
 subjects:
-- kind: ServiceAccount
-  name: tigera-operator
-  namespace: tigera-operator
+  - kind: ServiceAccount
+    name: tigera-operator
+    namespace: tigera-operator
 roleRef:
   kind: ClusterRole
   name: tigera-operator
+  apiGroup: rbac.authorization.k8s.io
+---
+# Source: tigera-operator/templates/tigera-operator/02-rolebinding-tigera-operator-secrets.yaml
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: tigera-operator-secrets
+  namespace: tigera-operator
+  labels:
+    k8s-app: tigera-operator
+subjects:
+  - kind: ServiceAccount
+    name: tigera-operator
+    namespace: tigera-operator
+roleRef:
+  kind: ClusterRole
+  name: tigera-operator-secrets
   apiGroup: rbac.authorization.k8s.io
 ---
 # Source: tigera-operator/templates/tigera-operator/02-tigera-operator.yaml

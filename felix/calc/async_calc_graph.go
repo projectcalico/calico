@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -97,6 +97,7 @@ func NewAsyncCalcGraph(
 	conf *config.Config,
 	outputChannels []chan<- interface{},
 	healthAggregator *health.HealthAggregator,
+	lookupCache *LookupsCache,
 ) *AsyncCalcGraph {
 	eventSequencer := NewEventSequencer(conf)
 	g := &AsyncCalcGraph{
@@ -105,7 +106,7 @@ func NewAsyncCalcGraph(
 		eventSequencer:   eventSequencer,
 		healthAggregator: healthAggregator,
 	}
-	g.CalcGraph = NewCalculationGraph(eventSequencer, conf, g.reportHealth)
+	g.CalcGraph = NewCalculationGraph(eventSequencer, lookupCache, conf, g.reportHealth)
 	if conf.DebugSimulateCalcGraphHangAfter != 0 {
 		log.WithField("delay", conf.DebugSimulateCalcGraphHangAfter).Warn(
 			"Simulating a calculation graph hang.")

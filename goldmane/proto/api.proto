@@ -1,0 +1,563 @@
+syntax = "proto3";
+
+package goldmane;
+
+option go_package = "./proto";
+
+// Flows provides APIs for querying aggregated Flow data.
+//
+// The returned Flows will be aggregated across cluster nodes, as well as the specified aggregation
+// time interval.
+service Flows {
+  // List is an API call to query for one or more Flows.
+  rpc List(FlowListRequest) returns (FlowListResult);
+
+  // Stream is an API call to return a long running stream of new Flows as they are generated.
+  rpc Stream(FlowStreamRequest) returns (stream FlowResult);
+
+  // FilterHints can be used to discover available filter criteria, such as
+  // Namespaces and source / destination names. It allows progressive filtering of criteria based on
+  // other filters. i.e., return the flow destinations given a source namespace.
+  // Note that this API provides hints to the UI based on past flows and other values may be valid.
+  rpc FilterHints(FilterHintsRequest) returns (FilterHintsResult);
+}
+
+// FlowListRequest defines a message to request a particular selection of aggregated Flow objects.
+message FlowListRequest {
+  // StartTimeGt specifies the beginning of a time window with which to filter Flows. Flows
+  // will be returned only if their start time is greater than or equal to the given value.
+  //
+  // - A value of zero indicates the oldest start time available by the server.
+  // - A value greater than zero indicates an absolute time in seconds since the Unix epoch.
+  // - A value less than zero indicates a relative number of seconds from "now", as determined by the server.
+  int64 start_time_gte = 1;
+
+  // StartTimeLt specifies the end of a time window with which to filter flows. Flows will
+  // be returned only if their start time occurs before the requested time.
+  //
+  // - A value of zero means "now", as determined by the server at the time of request.
+  // - A value greater than zero indicates an absolute time in seconds since the Unix epoch.
+  // - A value less than zero indicates a relative number of seconds from "now", as determined by the server.
+  int64 start_time_lt = 2;
+
+  // Page specifies the page to return. It requires that PageSize is also specified in order
+  // to determine page boundaries. Note that pages may change over time as new flow data is collected or expired.
+  // Querying the same page at different points in time may return different results.
+  int64 page = 3;
+
+  // PageSize configures the maximum number of results to return as part of this query.
+  int64 page_size = 4;
+
+  // SortBy configures how to sort the results of this query. By default flows are sorted by start time.
+  // The returned list is sorted by each sort option, in order, using the next sort option in the list as a tie-breaker.
+  // Note: At the moment, only a single sort option is supported.
+  repeated SortOption sort_by = 5;
+
+  // Filter allows specification of one or more criteria on which to filter the returned Flows.
+  Filter filter = 6;
+
+  // AggregationInterval is the width of the time window in seconds across which to aggregate when generating
+  // Flows to return. This must be a multiple of 15.
+  int64 aggregation_interval = 7;
+}
+
+// FlowListResult is a message containing a list of FlowResults and ListMetadata.
+message FlowListResult {
+  // Meta specifies metadata about the returned flows.
+  ListMetadata meta = 1;
+
+  // Flows is a list of FlowResult objects.
+  repeated FlowResult flows = 2;
+}
+
+// FlowStreamRequest defines a message to request a stream of aggregated Flows.
+message FlowStreamRequest {
+  // StartTimeGt specifies the beginning of a time window from which to stream Flows. Flows
+  // will be streamed only if their start time is greater than or equal to the given value.
+  //
+  // - A value of zero means "now", as determined by the server at the time of request.
+  // - A value greater than zero indicates an absolute time in seconds since the Unix epoch.
+  // - A value less than zero indicates a relative number of seconds from "now", as determined by the server.
+  int64 start_time_gte = 1;
+
+  // Filter allows specification of one or more criteria on which to filter the returned Flows.
+  Filter filter = 2;
+
+  // AggregationInterval defines both the frequency of streamed updates for each Flow, and the amount of time that FlowResult covers.
+  // It must always be 15s.
+  //
+  // Every AggregationInterval the server must send a FlowResult containing the aggregated data for that Flow from a
+  // time interval of width AggregationInterval.
+  //
+  // For a Flow that has continuous traffic, the server should send updates covering the range
+  // [now-2*AggregationInterval, now-AggregationInterval] so that the data is reasonably likely to be complete.
+  int64 aggregation_interval = 3;
+}
+
+message FilterHintsRequest {
+  // Type is type of Filter to query.
+  FilterType type = 1;
+
+  // Filter is a set of filter criteria used to narrow down returned results.
+  Filter filter = 2;
+
+  // StartTimeGt specifies the beginning of a time window with which to filter (inclusive).
+  //
+  // - A value of zero indicates the oldest start time available by the server.
+  // - A value greater than zero indicates an absolute time in seconds since the Unix epoch.
+  // - A value less than zero indicates a relative number of seconds from "now", as determined by the server.
+  int64 start_time_gte = 3;
+
+  // StartTimeLt specifies the end of a time window with which to filter.
+  //
+  // - A value of zero means "now", as determined by the server at the time of request.
+  // - A value greater than zero indicates an absolute time in seconds since the Unix epoch.
+  // - A value less than zero indicates a relative number of seconds from "now", as determined by the server.
+  int64 start_time_lt = 4;
+
+  // Page specifies the page number to return. It requires that PageSize is also specified in order
+  // to determine page boundaries. Note that pages may change over time as new flow data is collected or expired.
+  // Querying the same page at different points in time may return different results.
+  int64 page = 5;
+
+  // PageSize configures the maximum number of results to return as part of this query.
+  int64 page_size = 6;
+}
+
+message FilterHintsResult {
+  // ListMetadata specifies list information about the flows returned.
+  ListMetadata meta = 1;
+
+  // FilterHint contains the values that flows can be filtered on.
+  repeated FilterHint hints = 2;
+}
+
+// ListMetadata contains information about a returned list of items, such as pagination information (total number of pages
+// and total number of results).
+message ListMetadata {
+  // totalPages is the total number of pages that exist given that a pageSize was specified.
+  int64 totalPages = 1;
+
+  // TotalResults are the total number of results that would have been returned if no pagination was specified.
+  int64 totalResults = 2;
+}
+
+message FilterHint {
+  string value = 1;
+}
+
+// FilterType specifies which fields on the underlying Flow data to collect.
+enum FilterType {
+  FilterTypeUnspecified = 0;
+  FilterTypeDestName = 1;
+  FilterTypeSourceName = 2;
+  FilterTypeDestNamespace = 3;
+  FilterTypeSourceNamespace = 4;
+  FilterTypePolicyTier = 5;
+  FilterTypePolicyName = 6;
+}
+
+// FlowResult wraps a Flow object with additional metadata.
+message FlowResult {
+  // ID is an opaque integer value ID that can be used to identify a Flow, and is 1:1 with the FlowKey.
+  // Note that this ID is not valid across server restarts. Its primary use-case is for correlating FlowResult
+  // updates from a Stream request.
+  int64 id = 1;
+
+  // The Flow object itself.
+  Flow flow = 2;
+}
+
+enum Action {
+  ActionUnspecified = 0;
+  Allow = 1;
+  Deny = 2;
+  Pass = 3;
+}
+
+// Filter defines criteria for selecting a set of Flows based on their parameters.
+message Filter {
+  // SourceNames allows filtering on the source name field. Combined using logical OR.
+  repeated StringMatch source_names = 1;
+
+  // SourceNamespaces filters on the source namespace field. Combined using logical OR.
+  repeated StringMatch source_namespaces = 2;
+
+  // DestNames filters on the destination name field. Combined using logical OR.
+  repeated StringMatch dest_names = 3;
+
+  // DestNamespaces filters on the destination namespace field. Combined using logical OR.
+  repeated StringMatch dest_namespaces = 4;
+
+  // Protocols filters on the protocol field. Combined using logical OR.
+  repeated StringMatch protocols = 5;
+
+  // DestPorts filters on the port field. Combined using logical OR.
+  repeated PortMatch dest_ports = 6;
+
+  // Actions filters on the action field. Combined using logical OR.
+  repeated Action actions = 7;
+
+  // Policies matches on policy fields. Combined using logical OR.
+  repeated PolicyMatch policies = 8;
+}
+
+enum MatchType {
+  // Match the value exactly.
+  Exact = 0;
+
+  // Use fuzzy matching on the value.
+  Fuzzy = 1;
+}
+
+message StringMatch {
+  string value = 1;
+  MatchType type = 2;
+}
+
+message PortMatch {
+  int64 port = 1;
+}
+
+message SortOption {
+  // SortBy declares the field by which to sort.
+  SortBy sort_by = 1;
+}
+
+// PolicyMatch defines criteria for matching one or more policy rules within a Flow's
+// policy trace.
+message PolicyMatch {
+  PolicyKind kind = 1;
+  string tier = 2;
+  string namespace = 3;
+  string name = 4;
+  Action action = 5;
+}
+
+enum PolicyKind {
+  // Unspecified
+  KindUnspecified = 0;
+
+  // Calico policy types.
+  CalicoNetworkPolicy = 1;
+  GlobalNetworkPolicy = 2;
+  StagedNetworkPolicy = 3;
+  StagedGlobalNetworkPolicy = 4;
+  StagedKubernetesNetworkPolicy = 5;
+
+  // Native Kubernetes types.
+  NetworkPolicy = 6;
+  AdminNetworkPolicy = 7;
+  BaselineAdminNetworkPolicy = 8;
+
+  // Calico Profiles.
+  Profile = 9;
+  EndOfTier = 10;
+}
+
+enum SortBy {
+  Time = 0;
+  DestName = 1;
+  DestNamespace = 2;
+  DestType = 3;
+  SourceName = 4;
+  SourceNamespace = 5;
+  SourceType = 6;
+}
+
+// FlowCollector provides APIs capable of receiving streams of Flow data from cluster nodes.
+service FlowCollector {
+  // Connect receives a connection that may stream one or more FlowUpdates. A FlowReceipt is returned
+  // to the client by the server after each FlowUpdate.
+  //
+  // Following a connection or reconnection to the server, clients should duplicates of previously transmitted FlowsUpdates
+  // in order to allow the server to rebuild its cache, as well as any new FlowUpdates that have not previously been transmitted.
+  // The server is responsible for deduplicating where needed.
+  rpc Connect(stream FlowUpdate) returns (stream FlowReceipt);
+}
+
+// FlowReceipt is a response from the server to a client after publishing a Flow.
+message FlowReceipt {}
+
+// FlowUpdate wraps a Flow with additional metadata.
+message FlowUpdate {
+  // Flow contains the actual flow being sent.
+  Flow flow = 1;
+}
+
+enum EndpointType {
+  // For queries, unspecified means "do not filter on this field".
+  EndpointTypeUnspecified = 0;
+
+  // WorkloadEndpoint represents an application endpoint with its own network identity. For example,
+  // a Kubernetes Pod.
+  WorkloadEndpoint = 1;
+
+  // HostEndpoint represents a host machine.
+  HostEndpoint = 2;
+
+  // NetworkSet represents an address from within a configured projectcalico.org/v3 NetworkSet or
+  // GlobalNetworkSet.
+  NetworkSet = 3;
+
+  // Network represents an endpoint on a public or private network not known by Calico. For example,
+  // traffic from the public internet or private LAN not covered by a NetworkSet.
+  Network = 4;
+}
+
+enum Reporter {
+  // For queries, unspecified means "do not filter on this field".
+  ReporterUnspecified = 0;
+  Src = 1;
+  Dst = 2;
+}
+
+// FlowKey includes the identifying fields for a Flow.
+// - Source: Name, namespace, type, and labels.
+// - Destination: Name, namespace, type, labels and port
+// - Action taken on the connection.
+// - Reporter (i.e., measured at source or destination).
+// - Protocol of the connection (TCP, UDP, etc.).
+message FlowKey {
+  // SourceName is the name of the source for this Flow.
+  // The value is contextualized by the source_type field:
+  // - For WorkloadEndpoint, this represents a set of pods that share a GenerateName.
+  // - For HostEndpoint, this is the host endpoint name.
+  // - For NetworkSet, it is the name of the network set.
+  // - For Network, this is either "pub" for a public network, or "pvt" for a private network.
+  string source_name = 1;
+
+  // SourceNamespace is the namespace of the source pods for this flow.
+  string source_namespace = 2;
+
+  // SourceType is the type of the source, used to contextualize the source
+  // name and namespace fields.
+  EndpointType source_type = 3;
+
+  // DestName is the name of the destination for this Flow.
+  // The value is contextualized by the source_type field:
+  // - For WorkloadEndpoint, this represents a set of pods that share a GenerateName.
+  // - For HostEndpoint, this is the host endpoint name.
+  // - For NetworkSet, it is the name of the network set.
+  // - For Network, this is either "pub" for a public network, or "pvt" for a private network.
+  string dest_name = 4;
+
+  // DestNamespace is the namespace of the destination pods for this flow.
+  string dest_namespace = 5;
+
+  // DestType is the type of the destination, used to contextualize the dest
+  // name and namespace fields.
+  EndpointType dest_type = 6;
+
+  // DestPort is the destination port on the specified protocol accessed by this flow.
+  int64 dest_port = 7;
+
+  // DestServiceName is the name of the destination service, if any.
+  string dest_service_name = 8;
+
+  // DestServiceNamespace is the namespace of the destination service, if any.
+  string dest_service_namespace = 9;
+
+  // DestServicePortName is the name of the port on the destination service, if any.
+  string dest_service_port_name = 10;
+
+  // DestServicePort is the port number on the destination service.
+  int64 dest_service_port = 11;
+
+  // Proto is the L4 protocol for this flow. For example, TCP, UDP, SCTP, ICMP.
+  string proto = 12;
+
+  // Reporter is either "src" or "dst", depending on whether this flow was generated
+  // at the initiating or terminating end of the connection attempt.
+  Reporter reporter = 13;
+
+  // Action is the ultimate action taken on the flow.
+  Action action = 14;
+
+  // Policies includes an entry for each policy rule that took an action on the connections
+  // aggregated into this flow.
+  PolicyTrace policies = 15;
+}
+
+// Flow is a message representing statistics gathered about connections that share common fields,
+// aggregated across either time, nodes, or both.
+message Flow {
+  // Key includes the identifying fields for this flow.
+  FlowKey Key = 1;
+
+  // StartTime is the start time for this flow. It is represented as the number of
+  // seconds since the UNIX epoch.
+  int64 start_time = 2;
+
+  // EndTime is the end time for this flow. It is always at least one aggregation
+  // interval after the start time.
+  int64 end_time = 3;
+
+  // SourceLabels contains the intersection of labels that appear on all source
+  // pods that contributed to this flow.
+  repeated string source_labels = 4;
+
+  // SourceLabels contains the intersection of labels that appear on all destination
+  // pods that contributed to this flow.
+  repeated string dest_labels = 5;
+
+  // Statistics.
+  int64 packets_in = 6;
+  int64 packets_out = 7;
+  int64 bytes_in = 8;
+  int64 bytes_out = 9;
+
+  // NumConnectionsStarted tracks the total number of new connections recorded for this Flow. It counts each
+  // connection attempt that matches the FlowKey that was made between this Flow's StartTime and EndTime.
+  int64 num_connections_started = 10;
+
+  // NumConnectionsCompleted tracks the total number of completed TCP connections recorded for this Flow. It counts each
+  // connection that matches the FlowKey that was completed between this Flow's StartTime and EndTime.
+  int64 num_connections_completed = 11;
+
+  // NumConnectionsLive tracks the total number of still active connections recorded for this Flow. It counts each
+  // connection that matches the FlowKey that was active at this Flow's EndTime.
+  int64 num_connections_live = 12;
+}
+
+message PolicyTrace {
+  // EnforcedPolicies shows the active dataplane policy rules traversed by this Flow.
+  repeated PolicyHit enforced_policies = 1;
+
+  // PendingPolicies shows the expected policy rules traversed by this Flow when including
+  // staged policies.
+  repeated PolicyHit pending_policies = 2;
+}
+
+// PolicyHit represents a policy rule that was traversed by this flow. It can be either an enforced policy hit
+// from the dataplane, or a staged policy hit that is not yet active.
+message PolicyHit {
+  // Kind corresponds to the resource Kind for the policy.
+  PolicyKind kind = 1;
+
+  // Namespace is the Kubernetes namespace of the Policy, if namespaced. It is empty for global /
+  // cluster-scoped policy kinds.
+  string namespace = 2;
+
+  // Name is the Name of the policy object.
+  string name = 3;
+
+  // Tier is the Tier of the policy object.
+  string tier = 4;
+
+  // Action is the action taken by this policy rule.
+  Action action = 5;
+
+  // PolicyIndex is the order of the Policy among all policies traversed.
+  int64 policy_index = 6;
+
+  // RuleIndex is the order of the Rule within the Policy rules.
+  int64 rule_index = 7;
+
+  // Trigger indicates the first policy that selected this Flow and thus triggered the tier's
+  // end-of-tier action. This is only valid for kind=EndOfTier, and is nil otherwise.
+  PolicyHit trigger = 8;
+}
+
+// Statistics provides APIs for retrieving Flow statistics.
+service Statistics {
+  // List returns statistics data for the given request. One StatisticsResult will be returned for
+  // each matching PolicyHit and direction over the timeframe, containing time-series data covering the
+  // provided time range.
+  rpc List(StatisticsRequest) returns (stream StatisticsResult);
+}
+
+// StatisticType represents the types of data available over the Statistics API endpoint.
+enum StatisticType {
+  PacketCount = 0;
+  ByteCount = 1;
+  LiveConnectionCount = 2;
+}
+
+enum StatisticsGroupBy {
+  // Policy configures statistics groupings on a per-policy basis.
+  Policy = 0;
+
+  // PolicyRule configures statistics groupings on a per-policy-rule basis.
+  PolicyRule = 1;
+}
+
+message StatisticsRequest {
+  // The start time from which to collect statistics (inclusive).
+  //
+  // - A value of zero indicates the oldest start time available by the server.
+  // - A value greater than zero indicates an absolute time in seconds since the Unix epoch.
+  // - A value less than zero indicates a relative number of seconds from "now", as determined by the server.
+  int64 start_time_gte = 1;
+
+  // The end time indicates the end of the windows from which to collect statistics.
+  //
+  // - A value of zero means "now", as determined by the server at the time of request.
+  // - A value greater than zero indicates an absolute time in seconds since the Unix epoch.
+  // - A value less than zero indicates a relative number of seconds from "now", as determined by the server.
+  int64 start_time_lt = 2;
+
+  // Type is the type of statistic to return. e.g., packets, bytes, etc.
+  StatisticType type = 3;
+
+  // Configure statistics aggregation.
+  // - Policy: each StatisticsResult will contain statistics for a particular policy.
+  // - PolicyRule: each StatisticsResult will contain statistics for a particular policy rule.
+  // - Any: return both per-Policy and per-PolicyRule results.
+  StatisticsGroupBy group_by = 4;
+
+  // Optionally configure fields to filter results. If provided, any policies not matching the PolicyMatch
+  // will be omitted from the results.
+  PolicyMatch policy_match = 5;
+
+  // TimeSeries configures whether or not to return time-series data in the response. If true,
+  // the response will include multiple datapoints over the given time window. If false, data
+  // across the time window will be aggregated into a single data point.
+  bool time_series = 6;
+}
+
+enum RuleDirection {
+  Any = 0;
+  Ingress = 1;
+  Egress = 2;
+}
+
+message StatisticsResult {
+  // Policy identifies the policy / rule for which this data applies. Its meaning is contextualized
+  // by the GroupBy field.
+  //
+  // - StatisticsGroupBy_Policy: this field represents the specific Policy, and statistics are aggregated across all
+  //                             rules within that policy. Rule identifiers (Action, RuleID) will be omitted.
+  //
+  // - StatisticsGroupBy_PolicyRule: this field identifies a specific rule within a Policy, and statistics are scoped to
+  //                                 that particular rule.
+  PolicyHit policy = 1;
+
+  // For statistics results targeting a specific policy rule, the direction
+  // contextualizes the rule ID as either an ingress or egress rule.
+  //
+  // For statistics results grouped by policy, both ingress and egress statistics will be included.
+  RuleDirection direction = 2;
+
+  // GroupBy indicates whether the statistics in this result are aggregated for a policy, or for
+  // a specific rule within that policy.
+  StatisticsGroupBy group_by = 3;
+
+  // Type indicates the type of data carried in this result. e.g., PacketCount vs ByteCount.
+  StatisticType type = 4;
+
+  // AllowedIn contains the count of the requested statistic that was allowed for ingress flows.
+  // The semantic meaning (e.g., packets vs bytes) is indicated by the Type field.
+  repeated int64 allowed_in = 5;
+  repeated int64 allowed_out = 6;
+
+  repeated int64 denied_in = 7;
+  repeated int64 denied_out = 8;
+
+  repeated int64 passed_in = 9;
+  repeated int64 passed_out = 10;
+
+  // X is the x axis of the data for time-series data. i.e., the timestamp. For non-timeseries data,
+  // this will be nil.
+  repeated int64 x = 11;
+}

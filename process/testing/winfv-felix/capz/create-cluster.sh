@@ -26,6 +26,7 @@ set -o pipefail
 : "${AZURE_RESOURCE_GROUP:?Environment variable empty or not defined.}"
 : "${WINDOWS_SERVER_VERSION:?Environment variable empty or not defined.}"
 : "${KUBE_VERSION:?Environment variable empty or not defined.}"
+: "${AZ_KUBE_VERSION:?Environment variable empty or not defined.}"
 : "${CLUSTER_API_VERSION:?Environment variable empty or not defined.}"
 : "${CAPI_KUBEADM_VERSION:?Environment variable empty or not defined.}"
 : "${AZURE_PROVIDER_VERSION:?Environment variable empty or not defined.}"
@@ -130,10 +131,6 @@ export AZURE_SSH_PUBLIC_KEY_B64
 # Windows sets the public key via cloudbase-init which take the raw text as input
 AZURE_SSH_PUBLIC_KEY=$(< "${SSH_KEY_FILE}.pub" tr -d '\r\n')
 export AZURE_SSH_PUBLIC_KEY
-
-# Azure image versions use versions corresponding to kubernetes versions, e.g. 129.7.20240717 corresponds to k8s v1.29.7
-AZ_VERSION="$(az vm image list --publisher cncf-upstream --offer capi --all -o json | jq '.[-1].version' -r)"
-AZ_KUBE_VERSION="${AZ_VERSION:0:1}"."${AZ_VERSION:1:2}".$(echo "${AZ_VERSION}" | cut -d'.' -f2)
 
 ${CLUSTERCTL} generate cluster ${CLUSTER_NAME_CAPZ} \
   --kubernetes-version ${AZ_KUBE_VERSION} \

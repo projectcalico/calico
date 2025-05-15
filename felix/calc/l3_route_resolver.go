@@ -742,11 +742,12 @@ func (c *L3RouteResolver) flush() {
 		}
 
 		rt := &proto.RouteUpdate{
-			Type:       proto.RouteType_CIDR_INFO,
 			IpPoolType: proto.IPPoolType_NONE,
 			Dst:        cidr.String(),
 		}
 		poolAllowsCrossSubnet := false
+		var blockSeen bool
+		var blockNodeName string
 		for _, entry := range buf {
 			ri := entry.Data.(RouteInfo)
 			if len(ri.Pools) > 0 {
@@ -766,13 +767,20 @@ func (c *L3RouteResolver) flush() {
 			}
 			if len(ri.Blocks) > 0 {
 				// We only expect one Block entry for any given CIDR. This constraint is upheld by the datastore.
+				if blockSeen && blockNodeName != ri.Blocks[0].NodeName {
+					logCxt.Debug("Borrowed block IP")
+					rt.Borrowed = true
+				} else {
+					blockSeen = true
+					blockNodeName = ri.Blocks[0].NodeName
+				}
 				rt.DstNodeName = ri.Blocks[0].NodeName
 				if rt.DstNodeName == c.myNodeName {
 					logCxt.Debug("Local workload route.")
-					rt.Type = proto.RouteType_LOCAL_WORKLOAD
+					rt.Types |= proto.RouteType_LOCAL_WORKLOAD
 				} else {
 					logCxt.Debug("Remote workload route.")
-					rt.Type = proto.RouteType_REMOTE_WORKLOAD
+					rt.Types |= proto.RouteType_REMOTE_WORKLOAD
 				}
 			}
 			if len(ri.Host.NodeNames) > 0 {
@@ -780,10 +788,10 @@ func (c *L3RouteResolver) flush() {
 
 				if rt.DstNodeName == c.myNodeName {
 					logCxt.Debug("Local host route.")
-					rt.Type = proto.RouteType_LOCAL_HOST
+					rt.Types |= proto.RouteType_LOCAL_HOST
 				} else {
 					logCxt.Debug("Remote host route.")
-					rt.Type = proto.RouteType_REMOTE_HOST
+					rt.Types |= proto.RouteType_REMOTE_HOST
 				}
 			}
 
@@ -794,21 +802,25 @@ func (c *L3RouteResolver) flush() {
 				// multiple workload, or workload and tunnel, or multiple node Refs with the same IP. Since this will be
 				// transient, we can always just use the first entry (and related tunnel entries)
 				rt.DstNodeName = ri.Refs[0].NodeName
+				if blockSeen && blockNodeName != rt.DstNodeName {
+					logCxt.Debug("Borrowed ref IP")
+					rt.Borrowed = true
+				}
 				if ri.Refs[0].RefType == RefTypeWEP {
 					// This is not a tunnel ref, so must be a workload.
 					if ri.Refs[0].NodeName == c.myNodeName {
-						rt.Type = proto.RouteType_LOCAL_WORKLOAD
 						rt.LocalWorkload = true
+						rt.Types |= proto.RouteType_LOCAL_WORKLOAD
 					} else {
-						rt.Type = proto.RouteType_REMOTE_WORKLOAD
+						rt.Types |= proto.RouteType_REMOTE_WORKLOAD
 					}
 				} else {
 					// This is a tunnel ref, set type and also store the tunnel type in the route. It is possible for
 					// multiple tunnels to have the same IP, so collate all tunnel types on the same node.
 					if ri.Refs[0].NodeName == c.myNodeName {
-						rt.Type = proto.RouteType_LOCAL_TUNNEL
+						rt.Types |= proto.RouteType_LOCAL_TUNNEL
 					} else {
-						rt.Type = proto.RouteType_REMOTE_TUNNEL
+						rt.Types |= proto.RouteType_REMOTE_TUNNEL
 					}
 
 					rt.TunnelType = &proto.TunnelType{}

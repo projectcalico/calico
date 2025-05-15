@@ -41,6 +41,7 @@ class DiagsCollector(object):
         _log.info("===================================================")
         _log.info("============= COLLECTING DIAGS FOR TEST ===========")
         _log.info("===================================================")
+        kubectl("version")
         kubectl("get deployments,pods,svc,endpoints --all-namespaces -o wide")
         for resource in ["node", "bgpconfig", "bgppeer", "gnp", "felixconfig"]:
             _log.info("")
@@ -49,7 +50,7 @@ class DiagsCollector(object):
         for node in nodes:
             _log.info("")
             run("docker exec " + node + " ip r")
-        kubectl("logs -n kube-system -l k8s-app=calico-node")
+        kubectl("logs -n calico-system -l k8s-app=calico-node")
         _log.info("===================================================")
         _log.info("============= COLLECTED DIAGS FOR TEST ============")
         _log.info("===================================================")
@@ -117,7 +118,7 @@ def start_external_node_with_bgp(name, bird_peer_config=None, bird6_peer_config=
     return birdy_ip
 
 def retry_until_success(fun,
-                        retries=10,
+                        retries=30,
                         wait_time=1,
                         ex_class=None,
                         log_exception=True,
@@ -183,18 +184,20 @@ def function_name(f):
 def run(command, logerr=True, allow_fail=False, allow_codes=[], returnerr=False):
     out = ""
     _log.info("[%s] %s", datetime.datetime.now(), command)
-    try:
-        out = subprocess.check_output(command,
-                                      shell=True,
-                                      stderr=subprocess.STDOUT)
-        _log.info("Output:\n%s", out)
-    except subprocess.CalledProcessError as e:
+
+    process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    out, err = process.communicate()
+    _log.info("Out:\n%s", out)
+    _log.info("Err:\n%s", err)
+
+    retcode = process.poll()
+    if retcode:
         if logerr:
-            _log.exception("Failure output:\n%s", e.output)
+            _log.exception("Failure output:\n%s\nerr:\n%s", out, err)
         if not allow_fail:
-            raise
+            raise subprocess.CalledProcessError(retcode, command, output="stdout: " + out + " stderr: " + err)
         if returnerr:
-            return e.output
+            return err
     return out
 
 
@@ -268,6 +271,10 @@ def node_info():
         ips.append(node_ip)
     return nodes, ips, ip6s
 
+def calico_node_pod_name(nodename):
+    name = kubectl("get po -n calico-system -l k8s-app=calico-node --field-selector spec.nodeName=%s -o jsonpath='{.items[0].metadata.name}'" % nodename)
+    return name
+
 def update_ds_env(ds, ns, env_vars):
         config.load_kube_config(os.environ.get('KUBECONFIG'))
         api = client.AppsV1Api(client.ApiClient())
@@ -300,7 +307,7 @@ def update_ds_env(ds, ns, env_vars):
         iterations_with_no_change = 0
         while True:
             time.sleep(10)
-            node_ds = api.read_namespaced_daemon_set_status("calico-node", "kube-system")
+            node_ds = api.read_namespaced_daemon_set_status("calico-node", "calico-system")
             _log.info("%d/%d nodes updated",
                       node_ds.status.updated_number_scheduled,
                       node_ds.status.desired_number_scheduled)
@@ -316,4 +323,4 @@ def update_ds_env(ds, ns, env_vars):
                 iterations_with_no_change = 0
 
         # Wait until all calico-node pods are ready.
-        kubectl("wait pod --for=condition=Ready -l k8s-app=calico-node -n kube-system --timeout=300s")
+        kubectl("wait pod --for=condition=Ready -l k8s-app=calico-node -n calico-system --timeout=300s")

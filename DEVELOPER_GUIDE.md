@@ -49,6 +49,19 @@ build for arm64, run the following:
 make image ARCH=arm64
 ```
 
+### Building with an alternative base image
+
+Many Calico components (e.g. Typha) depend on `calico/base` as a base image.
+It is possible to override this image via its Makefile variable:
+
+```
+make image CALICO_BASE=some/image
+```
+
+
+The chosen base image must be suitably similar to the default (which is based on Red Hat UBI at the time of writing) for the build to succeed. Note that by building your own images, you will miss out on the regression testing done by the Calico team for the images that we ship, and support from the Calico team will be on a best-effort basis.
+
+
 ### Updating Calico helm chart and manifests
 
 The Calico helm charts can be found in the `charts/` directory. After making changes to the templates in the chart,

@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2022 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -112,6 +112,22 @@ type WindowsManageFirewallRulesMode string
 const (
 	WindowsManageFirewallRulesEnabled  WindowsManageFirewallRulesMode = "Enabled"
 	WindowsManageFirewallRulesDisabled WindowsManageFirewallRulesMode = "Disabled"
+)
+
+// +kubebuilder:validation:Enum=None;Continuous
+type FlowLogsPolicyEvaluationModeType string
+
+const (
+	FlowLogsPolicyEvaluationModeNone       FlowLogsPolicyEvaluationModeType = "None"
+	FlowLogsPolicyEvaluationModeContinuous FlowLogsPolicyEvaluationModeType = "Continuous"
+)
+
+// +kubebuilder:validation:Enum=IPPoolsOnly;IPPoolsAndHostIPs
+type NATOutgoingExclusionsType string
+
+const (
+	NATOutgoingExclusionsIPPoolsOnly       NATOutgoingExclusionsType = "IPPoolsOnly"
+	NATOutgoingExclusionsIPPoolsAndHostIPs NATOutgoingExclusionsType = "IPPoolsAndHostIPs"
 )
 
 // FelixConfigurationSpec contains the values of the Felix configuration.
@@ -300,16 +316,16 @@ type FelixConfigurationSpec struct {
 	LogFilePath string `json:"logFilePath,omitempty"`
 
 	// LogSeverityFile is the log severity above which logs are sent to the log file. [Default: Info]
-	// +kubebuilder:validation:Pattern=`^(?i)(Debug|Info|Warning|Error|Fatal)?$`
+	// +kubebuilder:validation:Pattern=`^(?i)(Trace|Debug|Info|Warning|Error|Fatal)?$`
 	LogSeverityFile string `json:"logSeverityFile,omitempty" validate:"omitempty,logLevel"`
 
 	// LogSeverityScreen is the log severity above which logs are sent to the stdout. [Default: Info]
-	// +kubebuilder:validation:Pattern=`^(?i)(Debug|Info|Warning|Error|Fatal)?$`
+	// +kubebuilder:validation:Pattern=`^(?i)(Trace|Debug|Info|Warning|Error|Fatal)?$`
 	LogSeverityScreen string `json:"logSeverityScreen,omitempty" validate:"omitempty,logLevel"`
 
 	// LogSeveritySys is the log severity above which logs are sent to the syslog. Set to None for no logging to syslog.
 	// [Default: Info]
-	// +kubebuilder:validation:Pattern=`^(?i)(Debug|Info|Warning|Error|Fatal)?$`
+	// +kubebuilder:validation:Pattern=`^(?i)(Trace|Debug|Info|Warning|Error|Fatal)?$`
 	LogSeveritySys string `json:"logSeveritySys,omitempty" validate:"omitempty,logLevel"`
 
 	// LogDebugFilenameRegex controls which source code files have their Debug log output included in the logs.
@@ -379,7 +395,7 @@ type FelixConfigurationSpec struct {
 	// file reporting is disabled if field is left empty.
 	//
 	// Chosen directory should match the directory used by the CNI plugin for PodStartupDelay.
-	// [Default: ""]
+	// [Default: /var/run/calico]
 	EndpointStatusPathPrefix string `json:"endpointStatusPathPrefix,omitempty"`
 
 	// IptablesMarkMask is the mask that Felix selects its IPTables Mark bits from. Should be a 32 bit hexadecimal
@@ -474,6 +490,13 @@ type FelixConfigurationSpec struct {
 	// (i.e. it uses the iptables MASQUERADE target).
 	NATOutgoingAddress string `json:"natOutgoingAddress,omitempty"`
 
+	// When a IP pool setting `natOutgoing` is true, packets sent from Calico networked containers in this IP pool to destinations will be masqueraded.
+	// Configure which type of destinations is excluded from being masqueraded.
+	// - IPPoolsOnly: destinations outside of this IP pool will be masqueraded.
+	// - IPPoolsAndHostIPs: destinations outside of this IP pool and all hosts will be masqueraded.
+	// [Default: IPPoolsOnly]
+	NATOutgoingExclusions *NATOutgoingExclusionsType `json:"natOutgoingExclusions,omitempty" validate:"omitempty,oneof=IPPoolsOnly IPPoolsAndHostIPs"`
+
 	// DeviceRouteSourceAddress IPv4 address to set as the source hint for routes programmed by Felix. When not set
 	// the source address for local traffic from host to workload will be determined by the kernel.
 	DeviceRouteSourceAddress string `json:"deviceRouteSourceAddress,omitempty"`
@@ -490,6 +513,11 @@ type FelixConfigurationSpec struct {
 	// always clean up expected routes that use the configured DeviceRouteProtocol.  To add your own routes, you must
 	// use a distinct protocol (in addition to setting this field to false).
 	RemoveExternalRoutes *bool `json:"removeExternalRoutes,omitempty"`
+
+	// ProgramRoutes specifies whether Felix should program IPIP or unencapsulated routes instead of BIRD.
+	// Felix always programs VXLAN routes. [Default: Disabled]
+	// +kubebuilder:validation:Enum=Enabled;Disabled
+	ProgramRoutes *string `json:"programRoutes,omitempty"`
 
 	// IPForwarding controls whether Felix sets the host sysctls to enable IP forwarding.  IP forwarding is required
 	// when using Calico for workload networking.  This should be disabled only on hosts where Calico is used solely for
@@ -611,6 +639,19 @@ type FelixConfigurationSpec struct {
 	// [Default: Auto]
 	BPFConntrackCleanupMode *BPFConntrackMode `json:"bpfConntrackMode,omitempty" validate:"omitempty,oneof=Auto Userspace BPFProgram"`
 
+	// BPFConntrackTimers overrides the default values for the specified conntrack timer if
+	// set. Each value can be either a duration or `Auto` to pick the value from
+	// a Linux conntrack timeout.
+	//
+	// Configurable timers are: CreationGracePeriod, TCPSynSent,
+	// TCPEstablished, TCPFinsSeen, TCPResetSeen, UDPTimeout, GenericTimeout,
+	// ICMPTimeout.
+	//
+	// Unset values are replaced by the default values with a warning log for
+	// incorrect values.
+	// +optional
+	BPFConntrackTimeouts *BPFConntrackTimeouts `json:"bpfConntrackTimeouts,omitempty" validate:"omitempty"`
+
 	// BPFLogFilters is a map of key=values where the value is
 	// a pcap filter expression and the key is an interface name with 'all'
 	// denoting all interfaces, 'weps' all workload endpoints and 'heps' all host
@@ -724,6 +765,19 @@ type FelixConfigurationSpec struct {
 	// an entry for each active connection.  Warning: changing the size of the conntrack map can cause disruption.
 	BPFMapSizeConntrack *int `json:"bpfMapSizeConntrack,omitempty"`
 
+	// BPFMapSizePerCPUConntrack determines the size of conntrack map based on the number of CPUs. If set to a
+	// non-zero value, overrides BPFMapSizeConntrack with `BPFMapSizePerCPUConntrack * (Number of CPUs)`.
+	// This map must be large enough to hold an entry for each active connection.  Warning: changing the size of the
+	// conntrack map can cause disruption.
+	BPFMapSizePerCPUConntrack *int `json:"bpfMapSizePerCpuConntrack,omitempty"`
+
+	// BPFMapSizeConntrackScaling controls whether and how we scale the conntrack map size depending
+	// on its usage. 'Disabled' make the size stay at the default or whatever is set by
+	// BPFMapSizeConntrack*. 'DoubleIfFull' doubles the size when the map is pretty much full even
+	// after cleanups. [Default: DoubleIfFull]
+	// +kubebuilder:validation:Pattern=`^(?i)(Disabled|DoubleIfFull)?$`
+	BPFMapSizeConntrackScaling string `json:"bpfMapSizeConntrackScaling,omitempty"`
+
 	// BPFMapSizeConntrackCleanupQueue sets the size for the map used to hold NAT conntrack entries that are queued
 	// for cleanup.  This should be big enough to hold all the NAT entries that expire within one cleanup interval.
 	// +kubebuilder:validation:Minimum=1
@@ -768,6 +822,17 @@ type FelixConfigurationSpec struct {
 	// DNS cache.
 	BPFExcludeCIDRsFromNAT *[]string `json:"bpfExcludeCIDRsFromNAT,omitempty" validate:"omitempty,cidrs"`
 
+	// BPFExportBufferSizeMB in BPF mode, controls the buffer size used for sending BPF events to felix.
+	// [Default: 1]
+	BPFExportBufferSizeMB *int `json:"bpfExportBufferSizeMB,omitempty" validate:"omitempty,cidrs"`
+
+	// Continuous - Felix evaluates active flows on a regular basis to determine the rule
+	// traces in the flow logs. Any policy updates that impact a flow will be reflected in the
+	// pending_policies field, offering a near-real-time view of policy changes across flows.
+	// None - Felix stops evaluating pending traces.
+	// [Default: Continuous]
+	FlowLogsPolicyEvaluationMode *FlowLogsPolicyEvaluationModeType `json:"flowLogsPolicyEvaluationMode,omitempty"`
+
 	// BPFRedirectToPeer controls which whether it is allowed to forward straight to the
 	// peer side of the workload devices. It is allowed for any host L2 devices by default
 	// (L2Only), but it breaks TCP dump on the host side of workload device as it bypasses
@@ -777,6 +842,27 @@ type FelixConfigurationSpec struct {
 	// Use Enabled with caution. [Default: L2Only]
 	//+kubebuilder:validation:Enum=Enabled;Disabled;L2Only
 	BPFRedirectToPeer string `json:"bpfRedirectToPeer,omitempty"`
+
+	// FlowLogsFlushInterval configures the interval at which Felix exports flow logs.
+	// +kubebuilder:validation:Type=string
+	// +kubebuilder:validation:Pattern=`^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$`
+	FlowLogsFlushInterval *metav1.Duration `json:"flowLogsFlushInterval,omitempty" configv1timescale:"seconds"`
+
+	// When FlowLogsCollectorDebugTrace is set to true, enables the logs in the collector to be
+	// printed in their entirety.
+	FlowLogsCollectorDebugTrace *bool `json:"flowLogsCollectorDebugTrace,omitempty"`
+
+	// FlowLogGoldmaneServer is the flow server endpoint to which flow data should be published.
+	FlowLogsGoldmaneServer *string `json:"flowLogsGoldmaneServer,omitempty"`
+
+	// FlowLogsLocalReporter configures local unix socket for reporting flow data from each node. [Default: Disabled]
+	// +kubebuilder:validation:Enum=Disabled;Enabled
+	FlowLogsLocalReporter *string `json:"flowLogsLocalReporter,omitempty"`
+
+	// BPFProfiling controls profiling of BPF programs. At the monent, it can be
+	// Disabled or Enabled. [Default: Disabled]
+	//+kubebuilder:validation:Enum=Enabled;Disabled
+	BPFProfiling string `json:"bpfProfiling,omitempty"`
 
 	// RouteSource configures where Felix gets its routing information.
 	// - WorkloadIPs: use workload endpoints to construct routes.
@@ -803,7 +889,12 @@ type FelixConfigurationSpec struct {
 
 	// WireguardEnabledV6 controls whether Wireguard is enabled for IPv6 (encapsulating IPv6 traffic over an IPv6 underlay network). [Default: false]
 	WireguardEnabledV6 *bool `json:"wireguardEnabledV6,omitempty"`
-	// WireguardThreadingEnabled controls whether Wireguard has NAPI threading enabled. [Default: false]
+	// WireguardThreadingEnabled controls whether Wireguard has Threaded NAPI enabled. [Default: false]
+	// This increases the maximum number of packets a Wireguard interface can process.
+	// Consider threaded NAPI only if you have high packets per second workloads that are causing dropping packets due to a saturated `softirq` CPU core.
+	// There is a [known issue](https://lore.kernel.org/netdev/CALrw=nEoT2emQ0OAYCjM1d_6Xe_kNLSZ6dhjb5FxrLFYh4kozA@mail.gmail.com/T/) with this setting
+	// that may cause NAPI to get stuck holding the global `rtnl_mutex` when a peer is removed.
+	// Workaround: Make sure your Linux kernel [includes this patch](https://github.com/torvalds/linux/commit/56364c910691f6d10ba88c964c9041b9ab777bd6) to unwedge NAPI.
 	WireguardThreadingEnabled *bool `json:"wireguardThreadingEnabled,omitempty"`
 	// WireguardListeningPort controls the listening port used by IPv4 Wireguard. [Default: 51820]
 	WireguardListeningPort *int `json:"wireguardListeningPort,omitempty" validate:"omitempty,gt=0,lte=65535"`
@@ -934,6 +1025,56 @@ type ProtoPort struct {
 	Port     uint16 `json:"port"`
 	// +optional
 	Net string `json:"net,omitempty"`
+}
+
+// +kubebuilder:validation:Pattern=`^(([0-9]*(\.[0-9]*)?(ms|s|h|m|us)+)+|Auto)$`
+type BPFConntrackTimeout string
+
+type BPFConntrackTimeouts struct {
+	// CreationGracePeriod gives a generic grace period to new connections
+	// before they are considered for cleanup [Default: 10s].
+	// +optional
+	CreationGracePeriod *BPFConntrackTimeout `json:"creationGracePeriod,omitempty"`
+	// TCPSynSent controls how long it takes before considering this entry for
+	// cleanup after the last SYN without a response. If set to 'Auto', the
+	// value from nf_conntrack_tcp_timeout_syn_sent is used. If nil, Calico uses
+	// its own default value. [Default: 20s].
+	// +optional
+	TCPSynSent *BPFConntrackTimeout `json:"tcpSynSent,omitempty"`
+	// TCPEstablished controls how long it takes before considering this entry for
+	// cleanup after the connection became idle. If set to 'Auto', the
+	// value from nf_conntrack_tcp_timeout_established is used. If nil, Calico uses
+	// its own default value. [Default: 1h].
+	// +optional
+	TCPEstablished *BPFConntrackTimeout `json:"tcpEstablished,omitempty"`
+	// TCPFinsSeen controls how long it takes before considering this entry for
+	// cleanup after the connection was closed gracefully. If set to 'Auto', the
+	// value from nf_conntrack_tcp_timeout_time_wait is used. If nil, Calico uses
+	// its own default value. [Default: Auto].
+	// +optional
+	TCPFinsSeen *BPFConntrackTimeout `json:"tcpFinsSeen,omitempty"`
+	// TCPResetSeen controls how long it takes before considering this entry for
+	// cleanup after the connection was aborted. If nil, Calico uses its own
+	// default value. [Default: 40s].
+	// +optional
+	TCPResetSeen *BPFConntrackTimeout `json:"tcpResetSeen,omitempty"`
+	// UDPTimeout controls how long it takes before considering this entry for
+	// cleanup after the connection became idle. If nil, Calico uses its own
+	// default value. [Default: 60s].
+	// +optional
+	UDPTimeout *BPFConntrackTimeout `json:"udpTimeout,omitempty"`
+	// GenericTimeout controls how long it takes before considering this
+	// entry for cleanup after the connection became idle. If set to 'Auto', the
+	// value from nf_conntrack_generic_timeout is used. If nil, Calico uses its
+	// own default value. [Default: 10m].
+	// +optional
+	GenericTimeout *BPFConntrackTimeout `json:"genericTimeout,omitempty"`
+	// ICMPTimeout controls how long it takes before considering this
+	// entry for cleanup after the connection became idle. If set to 'Auto', the
+	// value from nf_conntrack_icmp_timeout is used. If nil, Calico uses its
+	// own default value. [Default: 5s].
+	// +optional
+	ICMPTimeout *BPFConntrackTimeout `json:"icmpTimeout,omitempty"`
 }
 
 // New FelixConfiguration creates a new (zeroed) FelixConfiguration struct with the TypeMetadata

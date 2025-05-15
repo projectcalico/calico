@@ -5,7 +5,7 @@ metadata:
 spec:
   order: 100
   ingress:
-  - action: deny
-    source: 
-      selector: type=='application'
+    - action: deny
+      source:
+        selector: type=='application'
   selector: type=='database'

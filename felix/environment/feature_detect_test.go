@@ -1,4 +1,4 @@
-// Copyright (c) 2018-2022 Tigera, Inc. All rights reserved.
+// Copyright (c) 2018-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -53,6 +53,7 @@ func TestFeatureDetection(t *testing.T) {
 				SNATFullyRandom:       true,
 				MASQFullyRandom:       true,
 				ChecksumOffloadBroken: true,
+				NFLogSize:             false,
 			},
 		},
 		{
@@ -63,6 +64,7 @@ func TestFeatureDetection(t *testing.T) {
 				SNATFullyRandom:       true,
 				MASQFullyRandom:       false,
 				ChecksumOffloadBroken: true,
+				NFLogSize:             false,
 			},
 		},
 		{
@@ -73,6 +75,7 @@ func TestFeatureDetection(t *testing.T) {
 				SNATFullyRandom:       false,
 				MASQFullyRandom:       false,
 				ChecksumOffloadBroken: true,
+				NFLogSize:             false,
 			},
 		},
 		{
@@ -83,6 +86,7 @@ func TestFeatureDetection(t *testing.T) {
 				SNATFullyRandom:       false,
 				MASQFullyRandom:       false,
 				ChecksumOffloadBroken: true,
+				NFLogSize:             false,
 			},
 		},
 		{
@@ -93,6 +97,18 @@ func TestFeatureDetection(t *testing.T) {
 				SNATFullyRandom:       false,
 				MASQFullyRandom:       false,
 				ChecksumOffloadBroken: true,
+				NFLogSize:             false,
+			},
+		},
+		{
+			"garbage",
+			"Linux version 3.12.0",
+			Features{
+				RestoreSupportsLock:   false,
+				SNATFullyRandom:       false,
+				MASQFullyRandom:       false,
+				ChecksumOffloadBroken: true,
+				NFLogSize:             false,
 			},
 		},
 		{
@@ -103,6 +119,7 @@ func TestFeatureDetection(t *testing.T) {
 				SNATFullyRandom:       false,
 				MASQFullyRandom:       false,
 				ChecksumOffloadBroken: true,
+				NFLogSize:             false,
 			},
 		},
 		{
@@ -113,16 +130,18 @@ func TestFeatureDetection(t *testing.T) {
 				SNATFullyRandom:       false,
 				MASQFullyRandom:       false,
 				ChecksumOffloadBroken: true,
+				NFLogSize:             false,
 			},
 		},
 		{
 			"iptables v1.6.2",
 			"Linux version 4.20.0", // Triggers test harness to support KernelSideRouteFiltering
 			Features{
-				RestoreSupportsLock:      true,
 				SNATFullyRandom:          true,
 				MASQFullyRandom:          true,
+				RestoreSupportsLock:      true,
 				ChecksumOffloadBroken:    true,
+				NFLogSize:                true,
 				KernelSideRouteFiltering: true,
 			},
 		},
@@ -134,6 +153,18 @@ func TestFeatureDetection(t *testing.T) {
 				SNATFullyRandom:       false,
 				MASQFullyRandom:       false,
 				ChecksumOffloadBroken: true,
+				NFLogSize:             false,
+			},
+		},
+		{
+			"iptables v1.8.4",
+			"Linux version 4.8.0",
+			Features{
+				RestoreSupportsLock:   true,
+				SNATFullyRandom:       true,
+				MASQFullyRandom:       true,
+				ChecksumOffloadBroken: true,
+				NFLogSize:             true,
 			},
 		},
 		{
@@ -144,16 +175,20 @@ func TestFeatureDetection(t *testing.T) {
 				SNATFullyRandom:       true,
 				MASQFullyRandom:       true,
 				ChecksumOffloadBroken: true,
+				NFLogSize:             true,
 			},
 		},
 		{
 			"iptables v1.8.4",
 			"Linux version 5.8.0",
 			Features{
-				RestoreSupportsLock:   true,
-				SNATFullyRandom:       true,
-				MASQFullyRandom:       true,
-				ChecksumOffloadBroken: false,
+				RestoreSupportsLock:      true,
+				SNATFullyRandom:          true,
+				MASQFullyRandom:          true,
+				ChecksumOffloadBroken:    false,
+				NFLogSize:                true,
+				IPIPDeviceIsL3:           false,
+				KernelSideRouteFiltering: false,
 			},
 		},
 	} {
@@ -205,6 +240,7 @@ func TestFeatureDetectionOverride(t *testing.T) {
 				SNATFullyRandom:       true,
 				MASQFullyRandom:       true,
 				ChecksumOffloadBroken: true,
+				NFLogSize:             false,
 			},
 			map[string]string{},
 		},
@@ -216,6 +252,7 @@ func TestFeatureDetectionOverride(t *testing.T) {
 				SNATFullyRandom:       true,
 				MASQFullyRandom:       false,
 				ChecksumOffloadBroken: true,
+				NFLogSize:             false,
 			},
 			map[string]string{
 				"RestoreSupportsLock": "true",
@@ -229,11 +266,14 @@ func TestFeatureDetectionOverride(t *testing.T) {
 				SNATFullyRandom:       true,
 				MASQFullyRandom:       false,
 				ChecksumOffloadBroken: true,
+				NFLogSize:             true,
 			},
 			map[string]string{
-				"RestoreSupportsLock": "true",
-				"SNATFullyRandom":     "true",
-				"MASQFullyRandom":     "false",
+				"RestoreSupportsLock":   "true",
+				"SNATFullyRandom":       "true",
+				"MASQFullyRandom":       "false",
+				"ChecksumOffloadBroken": "true",
+				"NFLogSize":             "true",
 			},
 		},
 	} {
@@ -392,7 +432,8 @@ func TestIptablesBackendDetection(t *testing.T) {
 				Ip4NftKube:    2,
 			},
 			"nft",
-		}, {
+		},
+		{
 			"Output from legacy with kube chains and has nft chains",
 			"auto",
 			ipOutputFactory{
@@ -516,28 +557,36 @@ func TestBPFFeatureDetection(t *testing.T) {
 		{
 			"Linux version 5.10.0 - ubuntu",
 			Features{
-				IPIPDeviceIsL3: false,
+				NFLogSize:             true,
+				IPIPDeviceIsL3:        false,
+				ChecksumOffloadBroken: false,
 			},
 			map[string]string{},
 		},
 		{
 			"Linux version 5.14.0 - something else",
 			Features{
-				IPIPDeviceIsL3: true,
+				NFLogSize:             true,
+				IPIPDeviceIsL3:        true,
+				ChecksumOffloadBroken: false,
 			},
 			map[string]string{},
 		},
 		{
 			"Linux version 5.15.0",
 			Features{
-				IPIPDeviceIsL3: true,
+				NFLogSize:             true,
+				IPIPDeviceIsL3:        true,
+				ChecksumOffloadBroken: false,
 			},
 			map[string]string{},
 		},
 		{
 			"Linux version 5.10.0 - Default",
 			Features{
-				IPIPDeviceIsL3: true,
+				NFLogSize:             true,
+				IPIPDeviceIsL3:        true,
+				ChecksumOffloadBroken: false,
 			},
 			map[string]string{
 				"IPIPDeviceIsL3": "true",
@@ -546,7 +595,9 @@ func TestBPFFeatureDetection(t *testing.T) {
 		{
 			"Linux version 5.14.0",
 			Features{
-				IPIPDeviceIsL3: false,
+				NFLogSize:             true,
+				IPIPDeviceIsL3:        false,
+				ChecksumOffloadBroken: false,
 			},
 			map[string]string{
 				"IPIPDeviceIsL3": "false",
@@ -555,7 +606,9 @@ func TestBPFFeatureDetection(t *testing.T) {
 		{
 			"Linux version 5.16.0 - Ubuntu",
 			Features{
-				IPIPDeviceIsL3: false,
+				NFLogSize:             true,
+				IPIPDeviceIsL3:        false,
+				ChecksumOffloadBroken: false,
 			},
 			map[string]string{
 				"IPIPDeviceIsL3": "false",
@@ -566,6 +619,7 @@ func TestBPFFeatureDetection(t *testing.T) {
 			Features{
 				ChecksumOffloadBroken: true,
 				IPIPDeviceIsL3:        false,
+				NFLogSize:             true,
 			},
 			map[string]string{},
 		},
@@ -574,6 +628,7 @@ func TestBPFFeatureDetection(t *testing.T) {
 			Features{
 				ChecksumOffloadBroken: true,
 				IPIPDeviceIsL3:        true,
+				NFLogSize:             true,
 			},
 			map[string]string{},
 		},
@@ -582,6 +637,7 @@ func TestBPFFeatureDetection(t *testing.T) {
 			Features{
 				ChecksumOffloadBroken: true,
 				IPIPDeviceIsL3:        true,
+				NFLogSize:             true,
 			},
 			map[string]string{},
 		},
@@ -590,6 +646,7 @@ func TestBPFFeatureDetection(t *testing.T) {
 			Features{
 				ChecksumOffloadBroken: true,
 				IPIPDeviceIsL3:        true,
+				NFLogSize:             true,
 			},
 			map[string]string{
 				"IPIPDeviceIsL3": "true",
@@ -600,6 +657,7 @@ func TestBPFFeatureDetection(t *testing.T) {
 			Features{
 				ChecksumOffloadBroken: true,
 				IPIPDeviceIsL3:        false,
+				NFLogSize:             true,
 			},
 			map[string]string{
 				"IPIPDeviceIsL3": "false",
@@ -610,6 +668,7 @@ func TestBPFFeatureDetection(t *testing.T) {
 			Features{
 				ChecksumOffloadBroken: true,
 				IPIPDeviceIsL3:        false,
+				NFLogSize:             true,
 			},
 			map[string]string{
 				"IPIPDeviceIsL3": "false",

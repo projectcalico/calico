@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@ package watchersyncer
 import (
 	"context"
 	"sync"
+	"time"
 
 	log "github.com/sirupsen/logrus"
 
@@ -32,12 +33,25 @@ const (
 // ResourceType groups together the watch and conversion information for a
 // specific resource type.
 type ResourceType struct {
-	// ListInterface specifies the resource type to watch\.
+	// ListInterface specifies the resource type to watch.
 	ListInterface model.ListInterface
 
 	// UpdateProcessor converts the raw KVPairs returned from the datastore into the appropriate
 	// KVPairs required for the syncer.  This is optional.
 	UpdateProcessor SyncerUpdateProcessor
+
+	// SendDeletesOnConnFail will send deletes for all resources (and therefore do a full resync) if
+	// the connection fails at any point.
+	SendDeletesOnConnFail bool
+}
+
+// Error indicating a problem with a watcher communicating with the backend.
+type errorSyncBackendError struct {
+	Err error
+}
+
+func (e errorSyncBackendError) Error() string {
+	return e.Err.Error()
 }
 
 // SyncerUpdateProcessor is used to convert a Watch update into one or more additional
@@ -61,22 +75,36 @@ type SyncerUpdateProcessor interface {
 }
 
 type WatcherCacheProvider interface {
-	WatcherCache(resourceType ResourceType, results chan interface{}) WatcherCacheIface
+	WatcherCache(resourceType ResourceType, results chan interface{}, watchTimeout time.Duration) WatcherCacheIface
 }
+
+type Option func(*watcherSyncer)
+
+func WithWatchRetryTimeout(t time.Duration) Option {
+	return func(ws *watcherSyncer) {
+		ws.watchRetryTimeout = t
+	}
+}
+
+var _ = WithWatchRetryTimeout
 
 // New creates a new multiple Watcher-backed api.Syncer.
-func New(client api.Client, resourceTypes []ResourceType, callbacks api.SyncerCallbacks) api.Syncer {
-	return NewFromProvider(NewWatcherCacheFactory(client), resourceTypes, callbacks)
+func New(client api.Client, resourceTypes []ResourceType, callbacks api.SyncerCallbacks, options ...Option) api.Syncer {
+	return NewFromProvider(NewWatcherCacheFactory(client), resourceTypes, callbacks, options...)
 }
 
-func NewFromProvider(watcherCacheProvider WatcherCacheProvider, resourceTypes []ResourceType, callbacks api.SyncerCallbacks) api.Syncer {
+func NewFromProvider(watcherCacheProvider WatcherCacheProvider, resourceTypes []ResourceType, callbacks api.SyncerCallbacks, options ...Option) api.Syncer {
 	rs := &watcherSyncer{
-		watcherCaches: make([]WatcherCacheIface, len(resourceTypes)),
-		results:       make(chan interface{}, 2000),
-		callbacks:     callbacks,
+		watcherCaches:     make([]WatcherCacheIface, len(resourceTypes)),
+		results:           make(chan interface{}, 2000),
+		callbacks:         callbacks,
+		watchRetryTimeout: DefaultWatchRetryTimeout,
+	}
+	for _, o := range options {
+		o(rs)
 	}
 	for i, r := range resourceTypes {
-		rs.watcherCaches[i] = watcherCacheProvider.WatcherCache(r, rs.results)
+		rs.watcherCaches[i] = watcherCacheProvider.WatcherCache(r, rs.results, rs.watchRetryTimeout)
 	}
 	return rs
 }
@@ -87,14 +115,15 @@ type WatcherCacheIface interface {
 
 // watcherSyncer implements the api.Syncer interface.
 type watcherSyncer struct {
-	status        api.SyncStatus
-	watcherCaches []WatcherCacheIface
-	results       chan interface{}
-	numSynced     int
-	callbacks     api.SyncerCallbacks
-	wgwc          *sync.WaitGroup
-	wgws          *sync.WaitGroup
-	cancel        context.CancelFunc
+	status            api.SyncStatus
+	watcherCaches     []WatcherCacheIface
+	results           chan interface{}
+	numSynced         int
+	callbacks         api.SyncerCallbacks
+	wgwc              *sync.WaitGroup
+	wgws              *sync.WaitGroup
+	cancel            context.CancelFunc
+	watchRetryTimeout time.Duration
 }
 
 func (ws *watcherSyncer) Start() {
@@ -206,10 +235,17 @@ func (ws *watcherSyncer) processResult(updates []api.Update, result interface{})
 		// If this is a parsing error, and if the callbacks support
 		// it, then send the error update.
 		log.WithError(r).Debug("Error received in main syncer event processing loop")
-		if ec, ok := ws.callbacks.(api.SyncerParseFailCallbacks); ok {
-			log.Debug("syncer receiver can receive parse failed callbacks")
-			if pe, ok := r.(cerrors.ErrorParsingDatastoreEntry); ok {
+		if pe, ok := r.(cerrors.ErrorParsingDatastoreEntry); ok {
+			if ec, ok := ws.callbacks.(api.SyncerParseFailCallbacks); ok {
+				log.Debug("syncer receiver can receive parse failed callbacks")
 				ec.ParseFailed(pe.RawKey, pe.RawValue)
+			}
+		}
+
+		if se, ok := r.(errorSyncBackendError); ok {
+			if ec, ok := ws.callbacks.(api.SyncFailCallbacks); ok {
+				log.Debug("syncer receiver can receive sync failed callbacks")
+				ec.SyncFailed(se.Err)
 			}
 		}
 

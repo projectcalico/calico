@@ -77,8 +77,14 @@ $(BINDIR)/csi-driver-s390x: ARCH=s390x
 $(BINDIR)/csi-driver-%: $(SRC_FILES)
 	$(call build_binary, csidriver/main.go, $@)
 
+protobuf proto/udsver.pb.go: proto/udsver.proto
+	$(DOCKER_RUN) -v $(CURDIR)/proto:/proto:rw \
+		$(CALICO_BUILD) sh -c 'protoc --proto_path=/proto --go_out=/proto --go-grpc_out=. --go_opt=paths=source_relative udsver.proto'
+	# Make sure the generated code won't cause a static-checks failure.
+	$(MAKE) fix-changed
+
 UPSTREAM_REGISTRAR_PROJECT ?= kubernetes-csi/$(REGISTRAR_IMAGE)
-UPSTREAM_REGISTRAR_TAG     ?= a498c31b88cd31f8ea7bafd0d715a75f9939fa1f
+UPSTREAM_REGISTRAR_TAG     ?= f0fd46fc3fbdb6fe20fc2d2614631816b551a143 #https://github.com/kubernetes-csi/node-driver-registrar/commit/f0fd46fc3fbdb6fe20fc2d2614631816b551a143
 
 REGISTRAR_TIGERA_BUILD_CMD="cd /go/src/github.com/$(UPSTREAM_REGISTRAR_PROJECT) && \
 	go build -tags $(TAGS) -buildvcs=false -v -o $(BINDIR)/csi-node-driver-registrar cmd/csi-node-driver-registrar/*.go"
@@ -117,18 +123,22 @@ $(BINDIR)/node-driver-registrar-%: clone-registrar-upstream
 			$(CALICO_BUILD) \
 			/bin/bash -c $(REGISTRAR_BUILD_CMD)
 			mv $(REGISTRAR_IMAGE)/$(BINDIR)/csi-node-driver-registrar $@
+
 clone-registrar-upstream:
 ifeq ("$(wildcard ./$(REGISTRAR_IMAGE))", "")
 	@echo "Directory does not exist."
 	git clone --depth 1 --single-branch https://github.com/$(UPSTREAM_REGISTRAR_PROJECT).git
+else
+	@echo "Upstream repo already cloned."
 endif
 	cd $(REGISTRAR_IMAGE) && \
 	  git checkout $(UPSTREAM_REGISTRAR_TAG) || \
 	  git fetch --tags origin $(UPSTREAM_REGISTRAR_TAG) && \
 	  git checkout $(UPSTREAM_REGISTRAR_TAG)
+	rm -rf ./$(REGISTRAR_IMAGE)/vendor
 
 clean-registrar:
-	rm -rf node-driver-registrar
+	rm -rf ./$(REGISTRAR_IMAGE)
 
 ###############################################################################
 # Building the image
@@ -149,28 +159,33 @@ sub-image-fips-%:
 
 $(FLEXVOL_IMAGE): $(FLEXVOL_CONTAINER_MARKER)
 $(FLEXVOL_CONTAINER_CREATED): flexvol/docker-image/Dockerfile bin/flexvol-$(ARCH)
+	cp ../LICENSE.md bin/LICENSE
 	$(DOCKER_BUILD) --build-arg BIN_DIR=bin -t $(FLEXVOL_IMAGE):latest-$(ARCH) -f flexvol/docker-image/Dockerfile .
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest BUILD_IMAGES=$(FLEXVOL_IMAGE)
 	touch $@
 
 $(CSI_IMAGE): $(CSI_CONTAINER_MARKER)
 $(CSI_CONTAINER_CREATED): csidriver/Dockerfile $(BINDIR)/csi-driver-$(ARCH)
+	cp ../LICENSE.md $(BINDIR)/LICENSE
 	$(DOCKER_BUILD) --build-arg BIN_DIR=$(BINDIR) -t $(CSI_IMAGE):latest-$(ARCH) -f csidriver/Dockerfile .
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest BUILD_IMAGES=$(CSI_IMAGE)
 	touch $@
 
 $(CSI_CONTAINER_FIPS_CREATED): csidriver/Dockerfile $(BINDIR)/csi-driver-$(ARCH)
+	cp ../LICENSE.md $(BINDIR)/LICENSE
 	$(DOCKER_BUILD) --build-arg BIN_DIR=$(BINDIR) -t $(CSI_IMAGE):latest-fips-$(ARCH) -f csidriver/Dockerfile .
 	$(MAKE) FIPS=true retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest-fips BUILD_IMAGES=$(CSI_IMAGE) LATEST_IMAGE_TAG=latest-fips
 	touch $@
 
 $(REGISTRAR_IMAGE): $(REGISTRAR_CONTAINER_MARKER)
 $(REGISTRAR_CONTAINER_CREATED): node-driver-registrar-docker/Dockerfile $(BINDIR)/node-driver-registrar-$(ARCH)
+	cp ../LICENSE.md $(BINDIR)/LICENSE
 	$(DOCKER_BUILD) --build-arg BIN_DIR=$(BINDIR) --build-arg UPSTREAM_VER=$(UPSTREAM_REGISTRAR_TAG) -t $(REGISTRAR_IMAGE):latest-$(ARCH) -f node-driver-registrar-docker/Dockerfile .
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest BUILD_IMAGES=$(REGISTRAR_IMAGE)
 	touch $@
 
 $(REGISTRAR_CONTAINER_FIPS_CREATED): node-driver-registrar-docker/Dockerfile $(BINDIR)/node-driver-registrar-$(ARCH)
+	cp ../LICENSE.md $(BINDIR)/LICENSE
 	$(DOCKER_BUILD) --build-arg BIN_DIR=$(BINDIR) --build-arg UPSTREAM_VER=$(UPSTREAM_REGISTRAR_TAG) -t $(REGISTRAR_IMAGE):latest-fips-$(ARCH) -f node-driver-registrar-docker/Dockerfile .
 	$(MAKE) FIPS=true retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest-fips BUILD_IMAGES=$(REGISTRAR_IMAGE) LATEST_IMAGE_TAG=latest-fips
 	touch $@

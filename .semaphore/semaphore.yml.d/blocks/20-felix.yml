@@ -4,10 +4,6 @@
   dependencies:
     - Prerequisites
   task:
-    agent:
-      machine:
-        type: f1-standard-2
-        os_image: ubuntu2004
     prologue:
       commands:
         - cd felix
@@ -23,8 +19,8 @@
           - "cache store fv.test-${SEMAPHORE_GIT_SHA} fv/fv.test"
           - cache store go-pkg-cache .go-pkg-cache
           - "cache store go-mod-cache ${HOME}/go/pkg/mod/cache"
-          - docker save -o /tmp/calico-felix.tar calico/felix:latest-amd64
-          - "cache store felix-image-${SEMAPHORE_GIT_SHA} /tmp/calico-felix.tar"
+          - docker save -o /tmp/calico-felix-test.tar calico/felix-test:latest-amd64
+          - "cache store felix-image-${SEMAPHORE_GIT_SHA} /tmp/calico-felix-test.tar"
           - docker save -o /tmp/felixtest-typha.tar felix-test/typha:latest-amd64
           - "cache store felixtest-typha-image-${SEMAPHORE_GIT_SHA} /tmp/felixtest-typha.tar"
           - ../.semaphore/run-and-monitor ut.log make ut
@@ -55,9 +51,8 @@
               - s390x
         commands:
           # Only building the code, not the image here because the felix image is now only used for FV tests, which
-          # only run on AMD64 at the moment. Skip building protofbufs because the build fails on ARM due to missing
-          # image. We know they are up-to-date because an earlier build job checks already.
-          - ../.semaphore/run-and-monitor build-$ARCH.log make build ARCH=$ARCH SKIP_PROTOBUF=true
+          # only run on AMD64 at the moment.
+          - ../.semaphore/run-and-monitor build-$ARCH.log make build ARCH=$ARCH
 - name: "Felix: Build - native arm64 runner"
   run:
     when: "${FORCE_RUN} or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
@@ -75,8 +70,7 @@
     jobs:
       - name: Build binary
         commands:
-          # Skipping protobuf build because it fails on ARM (but the pre-flight check ensures it's up-to-date).
-          - ../.semaphore/run-and-monitor build-arm64.log make build ARCH=arm64 SKIP_PROTOBUF=true
+          - ../.semaphore/run-and-monitor build-arm64.log make build ARCH=arm64
 - name: "Felix: Build Windows binaries"
   run:
     when: "${FORCE_RUN} or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
@@ -132,6 +126,10 @@
   dependencies:
     - "Felix: Build"
   task:
+    agent:
+      machine:
+        type: f1-standard-4
+        os_image: ubuntu2204
     prologue:
       commands:
         - cd felix
@@ -157,9 +155,9 @@
           ' ; fi
         - sudo systemctl restart docker
         # Load in the docker images pre-built by the build job.
-        - docker load -i /tmp/calico-felix.tar
-        - docker tag calico/felix:latest-amd64 felix:latest-amd64
-        - rm /tmp/calico-felix.tar
+        - docker load -i /tmp/calico-felix-test.tar
+        - docker tag calico/felix-test:latest-amd64 felix-test:latest-amd64
+        - rm /tmp/calico-felix-test.tar
         - docker load -i /tmp/felixtest-typha.tar
         - docker tag felix-test/typha:latest-amd64 typha:latest-amd64
         - rm /tmp/felixtest-typha.tar

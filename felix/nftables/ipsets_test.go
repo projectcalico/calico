@@ -38,7 +38,7 @@ var _ = Describe("IPSets with empty data plane", func() {
 	})
 
 	It("should Apply() on an empty state)", func() {
-		Expect(s.ApplyUpdates).NotTo(Panic())
+		Expect(func() { s.ApplyUpdates(nil) }).NotTo(Panic())
 	})
 
 	It("should handle a failed ListElements call", func() {
@@ -49,7 +49,7 @@ var _ = Describe("IPSets with empty data plane", func() {
 		s.AddOrReplaceIPSet(m1, []string{"10.0.0.1"})
 		s.AddOrReplaceIPSet(m2, []string{"10.0.0.2"})
 		s.AddOrReplaceIPSet(m3, []string{"10.0.0.3"})
-		s.ApplyUpdates()
+		s.ApplyUpdates(nil)
 
 		// Modifiy each set out-of-band.
 		tx := f.NewTransaction()
@@ -73,7 +73,7 @@ var _ = Describe("IPSets with empty data plane", func() {
 		// Trigger a resync, which should fix the out-of-band modifications.
 		f.Reset()
 		s.QueueResync()
-		s.ApplyUpdates()
+		s.ApplyUpdates(nil)
 
 		// Expect all errors to have been executed.
 		Expect(f.ListElementsErrors).To(HaveLen(0))
@@ -90,7 +90,7 @@ var _ = Describe("IPSets with empty data plane", func() {
 		It(fmt.Sprintf("should program IP sets of type %s", t), func() {
 			meta := ipsets.IPSetMetadata{SetID: "test", Type: t}
 			s.AddOrReplaceIPSet(meta, []string{})
-			Expect(s.ApplyUpdates).NotTo(Panic())
+			Expect(func() { s.ApplyUpdates(nil) }).NotTo(Panic())
 			sets, err := f.List(context.Background(), "sets")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(sets).To(HaveLen(1))
@@ -101,7 +101,7 @@ var _ = Describe("IPSets with empty data plane", func() {
 		// Create an IP set in the dataplane via the IPSets object.
 		meta := ipsets.IPSetMetadata{SetID: "test", Type: ipsets.IPSetTypeHashIP}
 		s.AddOrReplaceIPSet(meta, []string{"10.0.0.1", "10.0.0.2"})
-		Expect(s.ApplyUpdates).NotTo(Panic())
+		Expect(func() { s.ApplyUpdates(nil) }).NotTo(Panic())
 
 		// Create an IP set in the dataplane directly.
 		tx := f.NewTransaction()
@@ -123,7 +123,7 @@ var _ = Describe("IPSets with empty data plane", func() {
 
 		// Trigger a resync.
 		s.QueueResync()
-		Expect(s.ApplyUpdates).NotTo(Panic())
+		Expect(func() { s.ApplyUpdates(nil) }).NotTo(Panic())
 		Expect(s.ApplyDeletions()).To(BeFalse())
 
 		// We expect:
@@ -144,6 +144,24 @@ var _ = Describe("IPSets with empty data plane", func() {
 		))
 	})
 
+	It("should resync with a large number of sets", func() {
+		// Create a large number of sets - larger than the number of gorooutines we limit
+		// ourselves to in the resync code.
+		tx := f.NewTransaction()
+		tx.Add(&knftables.Table{})
+		for i := 0; i < 200; i++ {
+			tx.Add(&knftables.Set{
+				Name: fmt.Sprintf("set-%d", i),
+				Type: "ipv4_addr",
+			})
+		}
+		Expect(f.Run(context.Background(), tx)).NotTo(HaveOccurred())
+
+		// Trigger a resync.
+		s.QueueResync()
+		Expect(func() { s.ApplyUpdates(nil) }).NotTo(Panic())
+	})
+
 	It("should handle unexpected sets with types that are not supported", func() {
 		// Create an IP set direclty in the dataplane, with a type that is not supported by the IPSets object.
 		tx := f.NewTransaction()
@@ -156,7 +174,7 @@ var _ = Describe("IPSets with empty data plane", func() {
 
 		// Trigger a resync. We should delete the unexpected set.
 		s.QueueResync()
-		Expect(s.ApplyUpdates).NotTo(Panic())
+		Expect(func() { s.ApplyUpdates(nil) }).NotTo(Panic())
 		Expect(s.ApplyDeletions()).To(BeFalse())
 
 		// We expect the set to be deleted.
@@ -185,7 +203,7 @@ var _ = Describe("IPSets with empty data plane", func() {
 
 		// Apply.
 		s.QueueResync()
-		Expect(s.ApplyUpdates).NotTo(Panic())
+		Expect(func() { s.ApplyUpdates(nil) }).NotTo(Panic())
 
 		// Expect the set to exist.
 		sets, err := f.List(context.Background(), "sets")
@@ -209,7 +227,7 @@ var _ = DescribeTable("IPSets programming v4",
 		ipv := ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil)
 		s := NewIPSets(ipv, f, logutils.NewSummarizer("test loop"))
 		s.AddOrReplaceIPSet(meta, members)
-		Expect(s.ApplyUpdates).NotTo(Panic())
+		Expect(func() { s.ApplyUpdates(nil) }).NotTo(Panic())
 
 		// Read it back.
 		sets, err := f.List(context.Background(), "sets")
@@ -222,7 +240,7 @@ var _ = DescribeTable("IPSets programming v4",
 
 		// Trigger a resync to make sure we can handle it.
 		s.QueueResync()
-		Expect(s.ApplyUpdates).NotTo(Panic())
+		Expect(func() { s.ApplyUpdates(nil) }).NotTo(Panic())
 
 		// Read it back again.
 		m, err = f.ListElements(context.Background(), "set", "cali40"+meta.SetID)
@@ -263,7 +281,7 @@ var _ = DescribeTable("IPSets programming v6",
 		ipv := ipsets.NewIPVersionConfig(ipsets.IPFamilyV6, "cali", nil, nil)
 		s := NewIPSets(ipv, f, logutils.NewSummarizer("test loop"))
 		s.AddOrReplaceIPSet(meta, members)
-		Expect(s.ApplyUpdates).NotTo(Panic())
+		Expect(func() { s.ApplyUpdates(nil) }).NotTo(Panic())
 
 		// Read it back.
 		sets, err := f.List(context.Background(), "sets")
@@ -276,7 +294,7 @@ var _ = DescribeTable("IPSets programming v6",
 
 		// Trigger a resync to make sure we can handle it.
 		s.QueueResync()
-		Expect(s.ApplyUpdates).NotTo(Panic())
+		Expect(func() { s.ApplyUpdates(nil) }).NotTo(Panic())
 
 		// Read it back again.
 		m, err = f.ListElements(context.Background(), "set", "cali60"+meta.SetID)
@@ -337,7 +355,7 @@ var _ = DescribeTable("NFTablesSet",
 		ipv := ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil)
 		s := NewIPSets(ipv, f, logutils.NewSummarizer("test loop"))
 		s.AddOrReplaceIPSet(meta, []string{})
-		Expect(s.ApplyUpdates).NotTo(Panic())
+		Expect(func() { s.ApplyUpdates(nil) }).NotTo(Panic())
 		Expect(s.NFTablesSet(fmt.Sprintf("cali40%s", meta.SetID))).To(Equal(exp))
 	},
 

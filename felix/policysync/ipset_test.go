@@ -28,20 +28,20 @@ import (
 var _ = Describe("AddIPSetsRule", func() {
 
 	It("should add all fields that end in IpSetIds", func() {
-		r := proto.Rule{}
+		r := &proto.Rule{}
 		var fields []string
 		rt := reflect.TypeOf(r)
-		rv := reflect.ValueOf(&r)
-		for i := 0; i < rt.NumField(); i++ {
-			fn := rt.Field(i).Name
+		rv := reflect.Indirect(reflect.ValueOf(r))
+		for i := 0; i < rv.Type().NumField(); i++ {
+			fn := rt.Elem().Field(i).Name
 			if strings.HasSuffix(fn, "IpSetIds") {
 				fields = append(fields, fn)
-				fv := rv.Elem().Field(i)
+				fv := rv.Field(i)
 				fv.Set(reflect.ValueOf([]string{fn}))
 			}
 		}
 		result := make(map[string]bool)
-		policysync.AddIPSetsRule(&r, result)
+		policysync.AddIPSetsRule(r, result)
 		for _, fn := range fields {
 			Expect(result[fn]).To(BeTrue())
 		}

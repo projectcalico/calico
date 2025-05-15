@@ -31,9 +31,9 @@ import (
 	"github.com/projectcalico/calico/calicoctl/calicoctl/util"
 	"github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
+	"github.com/projectcalico/calico/pkg/buildinfo"
 )
 
-var VERSION, GIT_REVISION string
 var VERSION_SUMMARY string
 
 func init() {
@@ -82,8 +82,8 @@ Description:
 		}
 	}
 
-	fmt.Println("Client Version:   ", VERSION)
-	fmt.Println("Git commit:       ", GIT_REVISION)
+	fmt.Println("Client Version:   ", buildinfo.Version)
+	fmt.Println("Git commit:       ", buildinfo.GitRevision)
 
 	if clientOnly := argutils.ArgBoolOrFalse(parsedArgs, "--client"); clientOnly {
 		return nil

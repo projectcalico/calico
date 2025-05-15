@@ -15,24 +15,24 @@
 package calc_test
 
 import (
-	"fmt"
-	"reflect"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
+	googleproto "google.golang.org/protobuf/proto"
 
 	"github.com/projectcalico/calico/felix/calc"
 	"github.com/projectcalico/calico/felix/config"
 	"github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/felix/types"
+	"github.com/projectcalico/calico/lib/std/uniquelabels"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 
 var _ = DescribeTable("ModelWorkloadEndpointToProto",
-	func(in model.WorkloadEndpoint, expected proto.WorkloadEndpoint) {
-		out := calc.ModelWorkloadEndpointToProto(&in, []*proto.TierInfo{})
-		Expect(*out).To(Equal(expected))
+	func(in model.WorkloadEndpoint, expected *proto.WorkloadEndpoint) {
+		out := calc.ModelWorkloadEndpointToProto(&in, nil, []*proto.TierInfo{})
+		Expect(out).To(Equal(expected))
 	},
 	Entry("workload endpoint with NAT", model.WorkloadEndpoint{
 		State:      "up",
@@ -48,7 +48,8 @@ var _ = DescribeTable("ModelWorkloadEndpointToProto",
 			},
 		},
 		IPv6NAT: []model.IPNAT{},
-	}, proto.WorkloadEndpoint{
+		Labels:  uniquelabels.Make(map[string]string{"kubevirt.io": "virt-launcher"}),
+	}, &proto.WorkloadEndpoint{
 		State:      "up",
 		Name:       "bill",
 		Mac:        "01:02:03:04:05:06",
@@ -64,12 +65,13 @@ var _ = DescribeTable("ModelWorkloadEndpointToProto",
 		},
 		Ipv6Nat:                    []*proto.NatInfo{},
 		AllowSpoofedSourcePrefixes: []string{},
+		Type:                       proto.WorkloadType_VM,
 	}),
 	Entry("workload endpoint with source IP spoofing configured", model.WorkloadEndpoint{
 		State:                      "up",
 		Name:                       "bill",
 		AllowSpoofedSourcePrefixes: []net.IPNet{net.MustParseCIDR("8.8.8.8/32")},
-	}, proto.WorkloadEndpoint{
+	}, &proto.WorkloadEndpoint{
 		State:                      "up",
 		Name:                       "bill",
 		Ipv4Nets:                   []string{},
@@ -78,6 +80,58 @@ var _ = DescribeTable("ModelWorkloadEndpointToProto",
 		Ipv4Nat:                    []*proto.NatInfo{},
 		Ipv6Nat:                    []*proto.NatInfo{},
 		AllowSpoofedSourcePrefixes: []string{"8.8.8.8/32"},
+		Type:                       proto.WorkloadType_REGULAR,
+	}),
+	Entry("workload endpoint with QoSControls", model.WorkloadEndpoint{
+		State:      "up",
+		Name:       "bill",
+		Mac:        mustParseMac("01:02:03:04:05:06"),
+		ProfileIDs: []string{},
+		IPv4Nets:   []net.IPNet{mustParseNet("10.28.0.13/32")},
+		IPv6Nets:   []net.IPNet{},
+		IPv4NAT: []model.IPNAT{
+			{
+				IntIP: mustParseIP("10.28.0.13"),
+				ExtIP: mustParseIP("172.16.1.3"),
+			},
+		},
+		IPv6NAT: []model.IPNAT{},
+		QoSControls: &model.QoSControls{
+			IngressBandwidth:      1000000,
+			EgressBandwidth:       2000000,
+			IngressBurst:          3000000,
+			EgressBurst:           4000000,
+			IngressPacketRate:     5000000,
+			EgressPacketRate:      6000000,
+			IngressMaxConnections: 7000000,
+			EgressMaxConnections:  8000000,
+		},
+	}, &proto.WorkloadEndpoint{
+		State:      "up",
+		Name:       "bill",
+		Mac:        "01:02:03:04:05:06",
+		ProfileIds: []string{},
+		Ipv4Nets:   []string{"10.28.0.13/32"},
+		Ipv6Nets:   []string{},
+		Tiers:      []*proto.TierInfo{},
+		Ipv4Nat: []*proto.NatInfo{
+			{
+				ExtIp: "172.16.1.3",
+				IntIp: "10.28.0.13",
+			},
+		},
+		Ipv6Nat:                    []*proto.NatInfo{},
+		AllowSpoofedSourcePrefixes: []string{},
+		QosControls: &proto.QoSControls{
+			IngressBandwidth:      1000000,
+			EgressBandwidth:       2000000,
+			IngressBurst:          3000000,
+			EgressBurst:           4000000,
+			IngressPacketRate:     5000000,
+			EgressPacketRate:      6000000,
+			IngressMaxConnections: 7000000,
+			EgressMaxConnections:  8000000,
+		},
 	}),
 )
 
@@ -116,16 +170,11 @@ var _ = Describe("ParsedRulesToActivePolicyUpdate", func() {
 		// all filled in.  If any are still at their zero value, either the test is out of date
 		// or we forgot to add conversion logic for that field.
 		protoUpdate := calc.ParsedRulesToActivePolicyUpdate(model.PolicyKey{Name: "a-policy"}, &fullyLoadedParsedRules)
-		protoPolicy := *protoUpdate.Policy
-		protoPolicyValue := reflect.ValueOf(protoPolicy)
-		numFields := protoPolicyValue.NumField()
-		for i := 0; i < numFields; i++ {
-			field := protoPolicyValue.Field(i)
-			fieldName := reflect.TypeOf(protoPolicy).Field(i).Name
-			Expect(field.Interface()).NotTo(Equal(reflect.Zero(field.Type()).Interface()),
-				fmt.Sprintf("Field %s in the protobuf struct was still at its zero value; "+
-					"missing from conversion or fully-loaded rule?", fieldName))
-		}
+		protoPolicy := protoUpdate.GetPolicy()
+		Expect(protoPolicy.GetNamespace()).NotTo(BeNil())
+		Expect(protoPolicy.GetInboundRules()).NotTo(BeNil())
+		Expect(protoPolicy.GetOutboundRules()).NotTo(BeNil())
+		Expect(protoPolicy.GetOriginalSelector()).NotTo(BeNil())
 	})
 
 	It("should convert the fully-loaded rule", func() {
@@ -139,14 +188,14 @@ var _ = Describe("ParsedRulesToActivePolicyUpdate", func() {
 			Expect(r.RuleId).ToNot(Equal(""))
 			r.RuleId = ""
 		}
-		Expect(protoUpdate).To(Equal(&fullyLoadedProtoRules))
+		Expect(googleproto.Equal(protoUpdate, &fullyLoadedProtoRules)).To(BeTrue())
 	})
 })
 
 var _ = DescribeTable("ModelHostEndpointToProto",
-	func(in model.HostEndpoint, tiers, untrackedTiers []*proto.TierInfo, forwardTiers []*proto.TierInfo, expected proto.HostEndpoint) {
+	func(in model.HostEndpoint, tiers, untrackedTiers []*proto.TierInfo, forwardTiers []*proto.TierInfo, expected *proto.HostEndpoint) {
 		out := calc.ModelHostEndpointToProto(&in, tiers, untrackedTiers, nil, forwardTiers)
-		Expect(*out).To(Equal(expected))
+		Expect(out).To(Equal(expected))
 	},
 	Entry("minimal endpoint",
 		model.HostEndpoint{
@@ -155,7 +204,7 @@ var _ = DescribeTable("ModelHostEndpointToProto",
 		nil,
 		nil,
 		nil,
-		proto.HostEndpoint{
+		&proto.HostEndpoint{
 			ExpectedIpv4Addrs: []string{"10.28.0.13"},
 			ExpectedIpv6Addrs: []string{},
 		},
@@ -165,15 +214,15 @@ var _ = DescribeTable("ModelHostEndpointToProto",
 			Name:              "eth0",
 			ExpectedIPv4Addrs: []net.IP{mustParseIP("10.28.0.13"), mustParseIP("10.28.0.14")},
 			ExpectedIPv6Addrs: []net.IP{mustParseIP("dead::beef"), mustParseIP("dead::bee5")},
-			Labels: map[string]string{
+			Labels: uniquelabels.Make(map[string]string{
 				"a": "b",
-			},
+			}),
 			ProfileIDs: []string{"prof1"},
 		},
 		[]*proto.TierInfo{{Name: "a", IngressPolicies: []string{"b", "c"}}},
 		[]*proto.TierInfo{{Name: "d", IngressPolicies: []string{"e", "f"}}},
 		[]*proto.TierInfo{{Name: "g", IngressPolicies: []string{"h", "i"}}},
-		proto.HostEndpoint{
+		&proto.HostEndpoint{
 			Name:              "eth0",
 			ExpectedIpv4Addrs: []string{"10.28.0.13", "10.28.0.14"},
 			ExpectedIpv6Addrs: []string{"dead::beef", "dead::bee5"},
@@ -188,15 +237,15 @@ var _ = DescribeTable("ModelHostEndpointToProto",
 			Name:              "eth0",
 			ExpectedIPv4Addrs: []net.IP{mustParseIP("10.28.0.13"), mustParseIP("10.28.0.14")},
 			ExpectedIPv6Addrs: []net.IP{mustParseIP("dead::beef"), mustParseIP("dead::bee5")},
-			Labels: map[string]string{
+			Labels: uniquelabels.Make(map[string]string{
 				"a": "b",
-			},
+			}),
 			ProfileIDs: []string{"prof1"},
 		},
 		[]*proto.TierInfo{{Name: "a", IngressPolicies: []string{"b"}}},
 		[]*proto.TierInfo{{Name: "a", EgressPolicies: []string{"c"}}},
 		[]*proto.TierInfo{{Name: "a", EgressPolicies: []string{"d"}}},
-		proto.HostEndpoint{
+		&proto.HostEndpoint{
 			Name:              "eth0",
 			ExpectedIpv4Addrs: []string{"10.28.0.13", "10.28.0.14"},
 			ExpectedIpv6Addrs: []string{"dead::beef", "dead::bee5"},
@@ -240,13 +289,13 @@ var _ = Describe("ServiceAccount update/remove", func() {
 			Id:     &proto.ServiceAccountID{Name: "test", Namespace: "test"},
 			Labels: map[string]string{"k1": "v1"},
 		})
-		uut.OnServiceAccountRemove(proto.ServiceAccountID{Name: "test", Namespace: "test"})
+		uut.OnServiceAccountRemove(types.ServiceAccountID{Name: "test", Namespace: "test"})
 		uut.Flush()
 		Expect(recorder.Messages).To(BeNil())
 	})
 
 	It("should coalesce remove + add", func() {
-		uut.OnServiceAccountRemove(proto.ServiceAccountID{Name: "test", Namespace: "test"})
+		uut.OnServiceAccountRemove(types.ServiceAccountID{Name: "test", Namespace: "test"})
 		uut.OnServiceAccountUpdate(&proto.ServiceAccountUpdate{
 			Id:     &proto.ServiceAccountID{Name: "test", Namespace: "test"},
 			Labels: map[string]string{"k1": "v1"},
@@ -271,7 +320,7 @@ var _ = Describe("ServiceAccount update/remove", func() {
 		// Clear messages
 		recorder.Messages = make([]interface{}, 0)
 
-		uut.OnServiceAccountRemove(proto.ServiceAccountID{Name: "test", Namespace: "test"})
+		uut.OnServiceAccountRemove(types.ServiceAccountID{Name: "test", Namespace: "test"})
 		uut.Flush()
 		Expect(recorder.Messages).To(Equal([]interface{}{&proto.ServiceAccountRemove{
 			Id: &proto.ServiceAccountID{Name: "test", Namespace: "test"},
@@ -311,13 +360,13 @@ var _ = Describe("Namespace update/remove", func() {
 			Id:     &proto.NamespaceID{Name: "test"},
 			Labels: map[string]string{"k1": "v1"},
 		})
-		uut.OnNamespaceRemove(proto.NamespaceID{Name: "test"})
+		uut.OnNamespaceRemove(types.NamespaceID{Name: "test"})
 		uut.Flush()
 		Expect(recorder.Messages).To(BeNil())
 	})
 
 	It("should coalesce remove + add", func() {
-		uut.OnNamespaceRemove(proto.NamespaceID{Name: "test"})
+		uut.OnNamespaceRemove(types.NamespaceID{Name: "test"})
 		uut.OnNamespaceUpdate(&proto.NamespaceUpdate{
 			Id:     &proto.NamespaceID{Name: "test"},
 			Labels: map[string]string{"k1": "v1"},
@@ -342,7 +391,7 @@ var _ = Describe("Namespace update/remove", func() {
 		// Clear messages
 		recorder.Messages = make([]interface{}, 0)
 
-		uut.OnNamespaceRemove(proto.NamespaceID{Name: "test"})
+		uut.OnNamespaceRemove(types.NamespaceID{Name: "test"})
 		uut.Flush()
 		Expect(recorder.Messages).To(Equal([]interface{}{&proto.NamespaceRemove{
 			Id: &proto.NamespaceID{Name: "test"},

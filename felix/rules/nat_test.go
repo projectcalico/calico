@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -38,6 +38,7 @@ var _ = Describe("NAT", func() {
 		MarkPass:          0x10,
 		MarkScratch0:      0x20,
 		MarkScratch1:      0x40,
+		MarkDrop:          0x80,
 		MarkEndpoint:      0xff00,
 	}
 
@@ -55,6 +56,24 @@ var _ = Describe("NAT", func() {
 					Match: Match().
 						SourceIPSet("cali40masq-ipam-pools").
 						NotDestIPSet("cali40all-ipam-pools"),
+				},
+			},
+		}))
+	})
+	It("should render rules when active with all hosts NAT exclusion", func() {
+		localConfig := rrConfigNormal
+		localConfig.NATOutgoingExclusions = "IPPoolsAndHostIPs"
+		renderer = NewRenderer(localConfig)
+
+		Expect(renderer.NATOutgoingChain(true, 4)).To(Equal(&generictables.Chain{
+			Name: "cali-nat-outgoing",
+			Rules: []generictables.Rule{
+				{
+					Action: MasqAction{},
+					Match: Match().
+						SourceIPSet("cali40masq-ipam-pools").
+						NotDestIPSet("cali40all-ipam-pools").
+						NotDestIPSet("cali40all-hosts-net"),
 				},
 			},
 		}))

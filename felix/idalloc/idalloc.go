@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -129,4 +129,11 @@ func (a *IDAllocator) GetAndRelease(id string) uint64 {
 	delete(a.uint64ToStr, oldID)
 	delete(a.strToUint64, id)
 	return oldID
+}
+
+// GetReverse returns the original value (id) based on the generated id - if it
+// exists.
+func (a *IDAllocator) GetReverse(id64 uint64) (string, bool) {
+	id, ok := a.uint64ToStr[id64]
+	return id, ok
 }

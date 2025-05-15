@@ -88,8 +88,10 @@ func (w *Workload) Runs() bool {
 	return w.isRunning
 }
 
-var workloadIdx = 0
-var sideServIdx = 0
+var (
+	workloadIdx = 0
+	sideServIdx = 0
+)
 
 const defaultMTU = 1450
 
@@ -386,6 +388,21 @@ func (w *Workload) ConfigureInInfra(infra infrastructure.DatastoreInfra) {
 	Expect(err).NotTo(HaveOccurred(), "Failed to add workload")
 }
 
+// UpdateInInfra updates the workload endpoint for this Workload.
+func (w *Workload) UpdateInInfra(infra infrastructure.DatastoreInfra) {
+	wep := w.WorkloadEndpoint
+	if wep.Namespace == "" {
+		wep.Namespace = "default"
+	}
+	wep.Spec.Workload = w.Name
+	wep.Spec.Endpoint = w.Name
+	wep.Spec.InterfaceName = w.InterfaceName
+	var err error
+	w.WorkloadEndpoint, err = infra.UpdateWorkload(wep)
+	log.WithFields(log.Fields{"Workload": w, "WorkloadEndpoint": w.WorkloadEndpoint, "QoSControls": w.WorkloadEndpoint.Spec.QoSControls}).Infof("Update WorkloadEndpoint")
+	Expect(err).NotTo(HaveOccurred(), "Failed to update workload")
+}
+
 // ConfigureInInfraAsSpoofInterface creates a valid workload endpoint for this Workload, using the spoof interface
 // added with AddSpoofInterface. After calling AddSpoofInterface(), UseSpoofInterface(true), and, this method,
 // connectivity should work because the workload and felix will agree on the interface that should be used.
@@ -494,9 +511,7 @@ func (w *Workload) ExecCombinedOutput(args ...string) (string, error) {
 	return w.C.ExecCombinedOutput(args...)
 }
 
-var (
-	rttRegexp = regexp.MustCompile(`rtt=(.*) ms`)
-)
+var rttRegexp = regexp.MustCompile(`rtt=(.*) ms`)
 
 func (w *Workload) LatencyTo(ip, port string) (time.Duration, string) {
 	if strings.Contains(ip, ":") {
@@ -636,11 +651,10 @@ type PersistentConnectionOpts struct {
 	Timeout             time.Duration
 }
 
-func (w *Workload) StartPersistentConnection(
+func (w *Workload) StartPersistentConnectionMayFail(
 	ip string, port int,
 	opts PersistentConnectionOpts,
-) *connectivity.PersistentConnection {
-
+) (*connectivity.PersistentConnection, error) {
 	pc := &connectivity.PersistentConnection{
 		RuntimeName:         w.C.Name,
 		Runtime:             w.C,
@@ -654,6 +668,15 @@ func (w *Workload) StartPersistentConnection(
 	}
 
 	err := pc.Start()
+
+	return pc, err
+}
+
+func (w *Workload) StartPersistentConnection(
+	ip string, port int,
+	opts PersistentConnectionOpts,
+) *connectivity.PersistentConnection {
+	pc, err := w.StartPersistentConnectionMayFail(ip, port, opts)
 	Expect(err).NotTo(HaveOccurred())
 
 	return pc
@@ -872,4 +895,10 @@ func (w *Workload) SetInterfaceUp(b bool) {
 	} else {
 		w.C.Exec("ip", "link", "set", "down", w.InterfaceName)
 	}
+}
+
+func (w *Workload) ExecCommand(name string, args ...string) *exec.Cmd {
+	args = append([]string{"exec", w.C.Name, "ip", "netns", "exec", w.NamespaceID(), name}, args...)
+	cmd := utils.Command("docker", args...)
+	return cmd
 }

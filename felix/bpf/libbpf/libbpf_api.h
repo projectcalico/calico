@@ -153,8 +153,10 @@ void bpf_tc_set_globals(struct bpf_map *map,
 			uint flags,
 			ushort wg_port,
 			ushort wg6_port,
+			ushort profiling,
 			uint natin,
 			uint natout,
+			uint overlay_tunnel_id,
 			uint log_filter_jmp,
 			uint *jumps,
 			uint *jumps6)
@@ -167,8 +169,10 @@ void bpf_tc_set_globals(struct bpf_map *map,
 		.psnat_len = psnat_len,
 		.flags = flags,
 		.wg_port = wg_port,
+		.profiling = profiling,
 		.natin_idx = natin,
 		.natout_idx = natout,
+		.overlay_tunnel_id = overlay_tunnel_id,
 		.log_filter_jmp = log_filter_jmp,
 	};
 
@@ -208,24 +212,24 @@ void bpf_ct_cleanup_set_globals(
     struct bpf_map *map,
     uint64_t creation_grace,
 
-    uint64_t tcp_pre_established,
+    uint64_t tcp_syn_sent,
     uint64_t tcp_established,
     uint64_t tcp_fins_seen,
     uint64_t tcp_reset_seen,
 
-    uint64_t udp_last_seen,
-    uint64_t generic_last_seen,
-    uint64_t icmp_last_seen
+    uint64_t udp_timeout,
+    uint64_t generic_timeout,
+    uint64_t icmp_timeout
 ) {
 	struct cali_ct_cleanup_globals data = {
 		.creation_grace = creation_grace,
-		.tcp_pre_established = tcp_pre_established,
+		.tcp_syn_sent = tcp_syn_sent,
 		.tcp_established = tcp_established,
 		.tcp_fins_seen = tcp_fins_seen,
 		.tcp_reset_seen = tcp_reset_seen,
-		.udp_last_seen = udp_last_seen,
-		.generic_last_seen = generic_last_seen,
-		.icmp_last_seen = icmp_last_seen,
+		.udp_timeout = udp_timeout,
+		.generic_timeout = generic_timeout,
+		.icmp_timeout = icmp_timeout,
 	};
 
 	set_errno(bpf_map__set_initial_value(map, (void*)(&data), sizeof(data)));
@@ -334,7 +338,7 @@ void bpf_xdp_set_globals(struct bpf_map *map, char *iface_name, uint *jumps, uin
 	strncpy(data.v4.iface_name, iface_name, sizeof(data.v4.iface_name));
 	data.v4.iface_name[sizeof(data.v4.iface_name)-1] = '\0';
 	data.v6 = data.v4;
-	
+
 	int i;
 
 	for (i = 0; i < sizeof(data.v4.jumps)/sizeof(__u32); i++) {

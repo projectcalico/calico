@@ -29,7 +29,6 @@ import (
 
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/bpfdefs"
-	"github.com/projectcalico/calico/felix/bpf/bpfutils"
 	"github.com/projectcalico/calico/felix/bpf/jump"
 	"github.com/projectcalico/calico/felix/bpf/libbpf"
 	"github.com/projectcalico/calico/felix/bpf/maps"
@@ -119,42 +118,9 @@ func RemoveConnectTimeLoadBalancer(cgroupv2 string) error {
 
 func loadProgram(logLevel, ipver string, udpNotSeen time.Duration, excludeUDP bool) (*libbpf.Obj, error) {
 	filename := path.Join(bpfdefs.ObjectDir, ProgFileName(logLevel, ipver))
-
-	log.WithField("filename", filename).Debug("Loading object file")
-	obj, err := libbpf.OpenObject(filename)
+	obj, err := bpf.LoadObject(filename, &libbpf.CTLBGlobalData{UDPNotSeen: udpNotSeen, ExcludeUDP: excludeUDP})
 	if err != nil {
-		return nil, fmt.Errorf("failed to load %s: %w", filename, err)
-	}
-
-	for m, err := obj.FirstMap(); m != nil && err == nil; m, err = m.NextMap() {
-		// In case of global variables, libbpf creates an internal map <prog_name>.rodata
-		// The values are read only for the BPF programs, but can be set to a value from
-		// userspace before the program is loaded.
-		mapName := m.Name()
-		if m.IsMapInternal() {
-			if strings.HasPrefix(mapName, ".rodata") {
-				continue
-			}
-			if err := libbpf.CTLBSetGlobals(m, udpNotSeen, excludeUDP); err != nil {
-				return nil, fmt.Errorf("error setting globals: %w", err)
-			}
-			continue
-		}
-
-		if size := maps.Size(mapName); size != 0 {
-			err := m.SetSize(size)
-			if err != nil {
-				return nil, fmt.Errorf("error set map size %s: %w", m.Name(), err)
-			}
-		}
-		if err := m.SetPinPath(path.Join(bpfdefs.GlobalPinDir, mapName)); err != nil {
-			return nil, fmt.Errorf("error pinning map %s: %w", mapName, err)
-		}
-		log.WithFields(log.Fields{"obj": filename, "map": mapName}).Debug("Pinned map")
-	}
-
-	if err := obj.Load(); err != nil {
-		return nil, fmt.Errorf("error loading object %s: %w", filename, err)
+		return nil, fmt.Errorf("error loading %s:%w", filename, err)
 	}
 	return obj, nil
 }
@@ -303,11 +269,11 @@ func ProgFileName(logLevel string, ipver string) string {
 	}
 
 	btf := ""
-	if bpfutils.BTFEnabled {
+	if utils.BTFEnabled {
 		btf = "_co-re"
 	}
 
-	return fmt.Sprintf("connect_time_%s_v%s%s.o", logLevel, ipver, btf)
+	return fmt.Sprintf("connect_balancer_%s%s_v%s.o", logLevel, btf, ipver)
 }
 
 func ensureCgroupPath(cgroupv2 string) (string, error) {

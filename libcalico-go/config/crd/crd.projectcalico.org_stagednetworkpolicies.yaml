@@ -1,0 +1,366 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.17.3
+  name: stagednetworkpolicies.crd.projectcalico.org
+spec:
+  group: crd.projectcalico.org
+  names:
+    kind: StagedNetworkPolicy
+    listKind: StagedNetworkPolicyList
+    plural: stagednetworkpolicies
+    singular: stagednetworkpolicy
+  preserveUnknownFields: false
+  scope: Namespaced
+  versions:
+    - name: v1
+      schema:
+        openAPIV3Schema:
+          properties:
+            apiVersion:
+              type: string
+            kind:
+              type: string
+            metadata:
+              type: object
+            spec:
+              properties:
+                egress:
+                  items:
+                    properties:
+                      action:
+                        type: string
+                      destination:
+                        properties:
+                          namespaceSelector:
+                            type: string
+                          nets:
+                            items:
+                              type: string
+                            type: array
+                          notNets:
+                            items:
+                              type: string
+                            type: array
+                          notPorts:
+                            items:
+                              anyOf:
+                                - type: integer
+                                - type: string
+                              pattern: ^.*
+                              x-kubernetes-int-or-string: true
+                            type: array
+                          notSelector:
+                            type: string
+                          ports:
+                            items:
+                              anyOf:
+                                - type: integer
+                                - type: string
+                              pattern: ^.*
+                              x-kubernetes-int-or-string: true
+                            type: array
+                          selector:
+                            type: string
+                          serviceAccounts:
+                            properties:
+                              names:
+                                items:
+                                  type: string
+                                type: array
+                              selector:
+                                type: string
+                            type: object
+                          services:
+                            properties:
+                              name:
+                                type: string
+                              namespace:
+                                type: string
+                            type: object
+                        type: object
+                      http:
+                        properties:
+                          methods:
+                            items:
+                              type: string
+                            type: array
+                          paths:
+                            items:
+                              properties:
+                                exact:
+                                  type: string
+                                prefix:
+                                  type: string
+                              type: object
+                            type: array
+                        type: object
+                      icmp:
+                        properties:
+                          code:
+                            type: integer
+                          type:
+                            type: integer
+                        type: object
+                      ipVersion:
+                        type: integer
+                      metadata:
+                        properties:
+                          annotations:
+                            additionalProperties:
+                              type: string
+                            type: object
+                        type: object
+                      notICMP:
+                        properties:
+                          code:
+                            type: integer
+                          type:
+                            type: integer
+                        type: object
+                      notProtocol:
+                        anyOf:
+                          - type: integer
+                          - type: string
+                        pattern: ^.*
+                        x-kubernetes-int-or-string: true
+                      protocol:
+                        anyOf:
+                          - type: integer
+                          - type: string
+                        pattern: ^.*
+                        x-kubernetes-int-or-string: true
+                      source:
+                        properties:
+                          namespaceSelector:
+                            type: string
+                          nets:
+                            items:
+                              type: string
+                            type: array
+                          notNets:
+                            items:
+                              type: string
+                            type: array
+                          notPorts:
+                            items:
+                              anyOf:
+                                - type: integer
+                                - type: string
+                              pattern: ^.*
+                              x-kubernetes-int-or-string: true
+                            type: array
+                          notSelector:
+                            type: string
+                          ports:
+                            items:
+                              anyOf:
+                                - type: integer
+                                - type: string
+                              pattern: ^.*
+                              x-kubernetes-int-or-string: true
+                            type: array
+                          selector:
+                            type: string
+                          serviceAccounts:
+                            properties:
+                              names:
+                                items:
+                                  type: string
+                                type: array
+                              selector:
+                                type: string
+                            type: object
+                          services:
+                            properties:
+                              name:
+                                type: string
+                              namespace:
+                                type: string
+                            type: object
+                        type: object
+                    required:
+                      - action
+                    type: object
+                  type: array
+                ingress:
+                  items:
+                    properties:
+                      action:
+                        type: string
+                      destination:
+                        properties:
+                          namespaceSelector:
+                            type: string
+                          nets:
+                            items:
+                              type: string
+                            type: array
+                          notNets:
+                            items:
+                              type: string
+                            type: array
+                          notPorts:
+                            items:
+                              anyOf:
+                                - type: integer
+                                - type: string
+                              pattern: ^.*
+                              x-kubernetes-int-or-string: true
+                            type: array
+                          notSelector:
+                            type: string
+                          ports:
+                            items:
+                              anyOf:
+                                - type: integer
+                                - type: string
+                              pattern: ^.*
+                              x-kubernetes-int-or-string: true
+                            type: array
+                          selector:
+                            type: string
+                          serviceAccounts:
+                            properties:
+                              names:
+                                items:
+                                  type: string
+                                type: array
+                              selector:
+                                type: string
+                            type: object
+                          services:
+                            properties:
+                              name:
+                                type: string
+                              namespace:
+                                type: string
+                            type: object
+                        type: object
+                      http:
+                        properties:
+                          methods:
+                            items:
+                              type: string
+                            type: array
+                          paths:
+                            items:
+                              properties:
+                                exact:
+                                  type: string
+                                prefix:
+                                  type: string
+                              type: object
+                            type: array
+                        type: object
+                      icmp:
+                        properties:
+                          code:
+                            type: integer
+                          type:
+                            type: integer
+                        type: object
+                      ipVersion:
+                        type: integer
+                      metadata:
+                        properties:
+                          annotations:
+                            additionalProperties:
+                              type: string
+                            type: object
+                        type: object
+                      notICMP:
+                        properties:
+                          code:
+                            type: integer
+                          type:
+                            type: integer
+                        type: object
+                      notProtocol:
+                        anyOf:
+                          - type: integer
+                          - type: string
+                        pattern: ^.*
+                        x-kubernetes-int-or-string: true
+                      protocol:
+                        anyOf:
+                          - type: integer
+                          - type: string
+                        pattern: ^.*
+                        x-kubernetes-int-or-string: true
+                      source:
+                        properties:
+                          namespaceSelector:
+                            type: string
+                          nets:
+                            items:
+                              type: string
+                            type: array
+                          notNets:
+                            items:
+                              type: string
+                            type: array
+                          notPorts:
+                            items:
+                              anyOf:
+                                - type: integer
+                                - type: string
+                              pattern: ^.*
+                              x-kubernetes-int-or-string: true
+                            type: array
+                          notSelector:
+                            type: string
+                          ports:
+                            items:
+                              anyOf:
+                                - type: integer
+                                - type: string
+                              pattern: ^.*
+                              x-kubernetes-int-or-string: true
+                            type: array
+                          selector:
+                            type: string
+                          serviceAccounts:
+                            properties:
+                              names:
+                                items:
+                                  type: string
+                                type: array
+                              selector:
+                                type: string
+                            type: object
+                          services:
+                            properties:
+                              name:
+                                type: string
+                              namespace:
+                                type: string
+                            type: object
+                        type: object
+                    required:
+                      - action
+                    type: object
+                  type: array
+                order:
+                  type: number
+                performanceHints:
+                  items:
+                    type: string
+                  type: array
+                selector:
+                  type: string
+                serviceAccountSelector:
+                  type: string
+                stagedAction:
+                  type: string
+                tier:
+                  type: string
+                types:
+                  items:
+                    type: string
+                  type: array
+              type: object
+          type: object
+      served: true
+      storage: true

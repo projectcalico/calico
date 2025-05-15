@@ -17,9 +17,8 @@ ARG LIBNFTNL_VER=1.2.2-1
 ARG IPSET_VER=7.11-6
 ARG RUNIT_VER=2.1.2
 ARG BIRD_IMAGE=calico/bird:latest
-ARG UBI_IMAGE
-
-FROM calico/bpftool:v7.4.0 AS bpftool
+ARG BPFTOOL_IMAGE
+FROM ${BPFTOOL_IMAGE} AS bpftool
 FROM ${BIRD_IMAGE} AS bird
 
 # Use this build stage to build iptables rpm and runit binaries.
@@ -79,11 +78,10 @@ RUN curl -sfL https://ftp.debian.org/debian/pool/main/r/runit/runit_${RUNIT_VER}
     cd /root/admin/runit-${RUNIT_VER} && \
     package/compile
 
-FROM ${UBI_IMAGE} AS ubi
+FROM registry.access.redhat.com/ubi8/ubi-minimal:latest AS ubi
 
 ARG GIT_VERSION
 ARG IPTABLES_VER
-ARG LIBNFTNL_VER
 ARG IPSET_VER
 ARG RUNIT_VER
 
@@ -138,7 +136,7 @@ RUN rpm -i /tmp/rpms/iptables-libs-${IPTABLES_VER}.el8.x86_64.rpm && \
 # iproute-tc and nftables depend on iptables-libs and should be installed after it.
 RUN microdnf --enablerepo=baseos install iproute-tc nftables
 
-# Install iptables via rpm. Install compatible libnftnl version with the selected iptables version
+# Install iptables via rpm.
 RUN rpm -i /tmp/rpms/iptables-legacy-${IPTABLES_VER}.el8.2.x86_64.rpm && \
     rpm -i /tmp/rpms/iptables-nft-${IPTABLES_VER}.el8.x86_64.rpm && \
     # Install ipset version
@@ -197,7 +195,7 @@ COPY clean-up-filesystem.sh /clean-up-filesystem.sh
 RUN touch /in-the-container && /clean-up-filesystem.sh
 
 # Add in top-level license file
-COPY LICENSE /licenses/LICENSE
+COPY dist/LICENSE /licenses/LICENSE
 
 # Copy everything into a fresh scratch image so that naive CVE scanners don't pick up binaries and libraries
 # that have been removed in our later layers.
@@ -209,13 +207,13 @@ ARG GIT_VERSION
 ENV SVDIR=/etc/service/enabled
 
 # Required labels for certification
-LABEL description="Calico node handles networking and policy for Calico"
-LABEL maintainer="maintainers@tigera.io"
-LABEL name="Calico node"
-LABEL release="1"
-LABEL summary="Calico node handles networking and policy for Calico"
-LABEL vendor="Project Calico"
-LABEL version=${GIT_VERSION}
+LABEL org.opencontainers.image.description="Calico node handles networking and policy for Calico"
+LABEL org.opencontainers.image.authors="maintainers@tigera.io"
+LABEL org.opencontainers.image.source="https://github.com/projectcalico/calico"
+LABEL org.opencontainers.image.title="Calico node"
+LABEL org.opencontainers.image.vendor="Project Calico"
+LABEL org.opencontainers.image.version="${GIT_VERSION}"
+LABEL org.opencontainers.image.licenses="Apache-2.0"
 
 COPY --from=ubi / /
 

@@ -32,6 +32,7 @@ var debugFlag = &cli.BoolFlag{
 	Name:        "debug",
 	Aliases:     []string{"d"},
 	Usage:       "Enable verbose log output",
+	EnvVars:     []string{"DEBUG"},
 	Value:       false,
 	Destination: &debug,
 }
@@ -58,7 +59,7 @@ var (
 		Name:    "repo",
 		Usage:   "The GitHub repository to use for the release",
 		EnvVars: []string{"GIT_REPO"},
-		Value:   utils.Calico,
+		Value:   utils.CalicoRepoName,
 	}
 	repoRemoteFlag = &cli.StringFlag{
 		Name:    "remote",
@@ -68,11 +69,6 @@ var (
 	}
 
 	// Branch/Tag flags are flags used for branch & tag management
-	mainBranchFlag = &cli.StringFlag{
-		Name:  "main-branch",
-		Usage: "The main branch to use for the release",
-		Value: utils.DefaultBranch,
-	}
 	releaseBranchPrefixFlag = &cli.StringFlag{
 		Name:    "release-branch-prefix",
 		Usage:   "The stardard prefix used to denote release branches",
@@ -86,18 +82,27 @@ var (
 		Value:   "0.dev",
 	}
 	publishBranchFlag = &cli.BoolFlag{
-		Name:  "publish-branch",
-		Usage: "Push branch git. If false, all changes are local.",
-		Value: true,
+		Name:    "git-publish",
+		Aliases: []string{"publish-branch"},
+		Usage:   "Push branch git. If false, all changes are local.",
+		Value:   true,
 	}
 	newBranchFlag = &cli.StringFlag{
 		Name:  "branch-stream",
-		Usage: fmt.Sprintf("The new major and minor versions for the branch to create e.g. vX.Y to create a %s-vX.Y branch", releaseBranchPrefixFlag.Value),
+		Usage: fmt.Sprintf("The new major and minor versions for the branch to create e.g. vX.Y to create a <release-branch-prefix>-vX.Y branch e.g. v1.37 for %s-v1.37 branch", releaseBranchPrefixFlag.Value),
 	}
 	baseBranchFlag = &cli.StringFlag{
 		Name:    "base-branch",
+		Aliases: []string{"base", "main-branch"},
 		Usage:   "The base branch to cut the release branch from",
 		EnvVars: []string{"RELEASE_BRANCH_BASE"},
+		Value:   utils.DefaultBranch,
+		Action: func(c *cli.Context, str string) error {
+			if str != utils.DefaultBranch {
+				logrus.Warnf("The new branch will be created from %s which is not the default branch %s", str, utils.DefaultBranch)
+			}
+			return nil
+		},
 	}
 )
 
@@ -216,6 +221,13 @@ var (
 		Name:    operatorBranchFlag.Name,
 		Usage:   "The base branch to cut the Tigera operator release branch from",
 		EnvVars: []string{"OPERATOR_BRANCH_BASE"},
+		Value:   operator.DefaultBranchName,
+		Action: func(c *cli.Context, str string) error {
+			if str != operator.DefaultBranchName {
+				logrus.Warnf("The new branch will be created from %s which is not the default branch %s", str, operator.DefaultBranchName)
+			}
+			return nil
+		},
 	}
 
 	// Container image flags
@@ -419,6 +431,7 @@ var (
 		Aliases: []string{"max"},
 		Usage:   "The maximum number of hashreleases to keep on the hashrelease server",
 		Value:   hashreleaseserver.DefaultMax,
+		EnvVars: []string{"MAX_HASHRELEASES"},
 	}
 	publishHashreleaseFlag = &cli.BoolFlag{
 		Name:  "publish-to-hashrelease-server",

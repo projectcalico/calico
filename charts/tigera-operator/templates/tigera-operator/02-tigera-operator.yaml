@@ -45,6 +45,10 @@ spec:
       hostNetwork: true
       # This must be set when hostNetwork is true or else the cluster services won't resolve
       dnsPolicy: ClusterFirstWithHostNet
+      {{- if .Values.dnsConfig }}
+      dnsConfig:
+        {{- toYaml .Values.dnsConfig | nindent 8 }}
+      {{- end }}
       containers:
         - name: tigera-operator
           image: {{ template "tigera-operator.image" .Values.tigeraOperator}}
@@ -53,7 +57,7 @@ spec:
             - operator
           args:
             # Configure tigera-operator to manage installation of the necessary CRDs.
-            - -manage-crds=true
+            - -manage-crds={{ .Values.manageCRDs }}
           volumeMounts:
             - name: var-lib-calico
               readOnly: true
@@ -98,6 +102,10 @@ spec:
             - operator
           args:
             - -bootstrap-crds
+          envFrom:
+            - configMapRef:
+                name: kubernetes-services-endpoint
+                optional: true
         # Install any v3 API resources provided in the calico-resources ConfigMap.
         - name: create-initial-resources
           image: {{.Values.calicoctl.image}}:{{.Values.calicoctl.tag}}

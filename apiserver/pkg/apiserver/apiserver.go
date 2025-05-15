@@ -1,8 +1,9 @@
-// Copyright (c) 2019-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019-2025 Tigera, Inc. All rights reserved.
 
 package apiserver
 
 import (
+	"context"
 	"sync"
 	"time"
 
@@ -15,16 +16,17 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
-	"k8s.io/apimachinery/pkg/version"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/informers"
 	corev1listers "k8s.io/client-go/listers/core/v1"
 	rbacv1listers "k8s.io/client-go/listers/rbac/v1"
 	"k8s.io/client-go/rest"
+	utilversion "k8s.io/component-base/version"
 
 	"github.com/projectcalico/calico/apiserver/pkg/rbac"
 	calicorest "github.com/projectcalico/calico/apiserver/pkg/registry/projectcalico/rest"
+	"github.com/projectcalico/calico/apiserver/pkg/registry/projectcalico/util"
 	"github.com/projectcalico/calico/apiserver/pkg/storage/calico"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
@@ -73,6 +75,7 @@ type ProjectCalicoServer struct {
 	GenericAPIServer      *genericapiserver.GenericAPIServer
 	RBACCalculator        rbac.Calculator
 	CalicoResourceLister  CalicoResourceLister
+	WatchManager          *util.WatchManager
 	SharedInformerFactory informers.SharedInformerFactory
 }
 
@@ -88,14 +91,10 @@ type CompletedConfig struct {
 
 // Complete fills in any fields not set that are required to have valid data. It's mutating the receiver.
 func (cfg *Config) Complete() CompletedConfig {
+	cfg.GenericConfig.EffectiveVersion = utilversion.NewEffectiveVersion("1.0")
 	c := completedConfig{
 		cfg.GenericConfig.Complete(),
 		&cfg.ExtraConfig,
-	}
-
-	c.GenericConfig.Version = &version.Info{
-		Major: "1",
-		Minor: "0",
 	}
 
 	return CompletedConfig{&c}
@@ -122,6 +121,10 @@ func (c completedConfig) New() (*ProjectCalicoServer, error) {
 	// implement our own syncer-based cache.
 	calicoLister := NewCalicoResourceLister(cc)
 
+	// Create the manager for policy watches. It keeps track of established watches and makes sure they are canceled
+	// in case of on update that the watch necessitates recreation of the watch.
+	watchManager := util.NewWatchManager(cc)
+
 	// Create the RBAC calculator,
 	calculator, err := c.NewRBACCalculator(calicoLister)
 	if err != nil {
@@ -132,11 +135,12 @@ func (c completedConfig) New() (*ProjectCalicoServer, error) {
 		GenericAPIServer:      genericServer,
 		RBACCalculator:        calculator,
 		CalicoResourceLister:  calicoLister,
+		WatchManager:          watchManager,
 		SharedInformerFactory: c.GenericConfig.SharedInformerFactory,
 	}
 
 	apiGroupInfo.VersionedResourcesStorageMap["v3"], err = calicostore.NewV3Storage(
-		Scheme, c.GenericConfig.RESTOptionsGetter, c.GenericConfig.Authorization.Authorizer, calicoLister)
+		Scheme, c.GenericConfig.RESTOptionsGetter, c.GenericConfig.Authorization.Authorizer, calicoLister, watchManager)
 	if err != nil {
 		return nil, err
 	}
@@ -168,7 +172,7 @@ type k8sRoleGetter struct {
 	roleLister rbacv1listers.RoleLister
 }
 
-func (r *k8sRoleGetter) GetRole(namespace, name string) (*rbacv1.Role, error) {
+func (r *k8sRoleGetter) GetRole(ctx context.Context, namespace, name string) (*rbacv1.Role, error) {
 	return r.roleLister.Roles(namespace).Get(name)
 }
 
@@ -177,7 +181,7 @@ type k8sRoleBindingLister struct {
 	roleBindingLister rbacv1listers.RoleBindingLister
 }
 
-func (r *k8sRoleBindingLister) ListRoleBindings(namespace string) ([]*rbacv1.RoleBinding, error) {
+func (r *k8sRoleBindingLister) ListRoleBindings(ctx context.Context, namespace string) ([]*rbacv1.RoleBinding, error) {
 	return r.roleBindingLister.RoleBindings(namespace).List(labels.Everything())
 }
 
@@ -186,7 +190,7 @@ type k8sClusterRoleGetter struct {
 	clusterRoleLister rbacv1listers.ClusterRoleLister
 }
 
-func (r *k8sClusterRoleGetter) GetClusterRole(name string) (*rbacv1.ClusterRole, error) {
+func (r *k8sClusterRoleGetter) GetClusterRole(ctx context.Context, name string) (*rbacv1.ClusterRole, error) {
 	return r.clusterRoleLister.Get(name)
 }
 
@@ -195,7 +199,7 @@ type k8sClusterRoleBindingLister struct {
 	clusterRoleBindingLister rbacv1listers.ClusterRoleBindingLister
 }
 
-func (r *k8sClusterRoleBindingLister) ListClusterRoleBindings() ([]*rbacv1.ClusterRoleBinding, error) {
+func (r *k8sClusterRoleBindingLister) ListClusterRoleBindings(ctx context.Context) ([]*rbacv1.ClusterRoleBinding, error) {
 	return r.clusterRoleBindingLister.List(labels.Everything())
 }
 

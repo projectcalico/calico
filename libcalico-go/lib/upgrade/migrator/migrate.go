@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -34,6 +34,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
+	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 	"github.com/projectcalico/calico/libcalico-go/lib/upgrade/converters"
 	"github.com/projectcalico/calico/libcalico-go/lib/upgrade/migrator/clients"
@@ -372,7 +373,7 @@ var noFilter = func(_ model.Key) bool { return false }
 // Filter to filter out K8s backed network policies
 var filterGNP = func(k model.Key) bool {
 	gk := k.(model.PolicyKey)
-	return strings.HasPrefix(gk.Name, "knp.default.")
+	return strings.HasPrefix(gk.Name, names.K8sNetworkPolicyNamePrefix)
 }
 
 // Filter to filter out K8s (namespace) and OpenStack backed profiles

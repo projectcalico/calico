@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2024-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -321,9 +321,17 @@ func loadFelixParamMetadata(params []*FieldInfo) ([]*FieldInfo, error) {
 			continue
 		}
 
-		parsedDefault := fmt.Sprint(metadata.Default)
-		if parsedDefault == "<nil>" {
+		var parsedDefault string
+		// On PPC (under Qemu), *regexp.Regexp has a String() method that
+		// sometimes hits SIGSEGV on a nil pointer.  (On x86, the String()
+		// method panics instead and the panic is recovered by fmt.Sprint().)
+		if safeIsNil(metadata.Default) {
 			parsedDefault = ""
+		} else {
+			parsedDefault = fmt.Sprint(metadata.Default)
+			if parsedDefault == "<nil>" {
+				parsedDefault = ""
+			}
 		}
 		parsedDefaultJSON, err := json.Marshal(metadata.Default)
 		if err != nil {
@@ -356,6 +364,18 @@ func loadFelixParamMetadata(params []*FieldInfo) ([]*FieldInfo, error) {
 		params = append(params, pm)
 	}
 	return params, nil
+}
+
+func safeIsNil(v any) bool {
+	if v == nil {
+		// The nil interface, no type or value.
+		return true
+	}
+	if reflect.ValueOf(v).Kind() == reflect.Ptr && reflect.ValueOf(v).IsNil() {
+		// Typed nil.
+		return true
+	}
+	return false
 }
 
 //go:embed config_params.go
@@ -506,13 +526,13 @@ func v3TypesToDescription(si StructInfo, prop v1.JSONSchemaProps) (infoSchema st
 	if len(prop.Enum) > 0 {
 		var parts []string
 		for _, e := range prop.Enum {
-			var enumConst string
+			var enumConst any
 			err := json.Unmarshal(e.Raw, &enumConst)
 			if err != nil {
 				logrus.WithError(err).WithField("enum", e.Raw).Fatal("Failed to unmarshal enum constant.")
 			}
-			enumConsts = append(enumConsts, enumConst)
-			parts = append(parts, "`"+enumConst+"`")
+			enumConsts = append(enumConsts, fmt.Sprint(enumConst))
+			parts = append(parts, fmt.Sprintf("`%s`", e.Raw))
 		}
 		sort.Strings(parts)
 		enumConsts = parts

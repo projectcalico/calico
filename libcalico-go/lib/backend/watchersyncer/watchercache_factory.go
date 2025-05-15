@@ -15,6 +15,8 @@
 package watchersyncer
 
 import (
+	"time"
+
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 )
 
@@ -24,8 +26,8 @@ type WatcherCacheFactory struct {
 	client api.Client
 }
 
-func (w WatcherCacheFactory) WatcherCache(resourceType ResourceType, results chan interface{}) WatcherCacheIface {
-	return newWatcherCache(w.client, resourceType, results)
+func (w WatcherCacheFactory) WatcherCache(resourceType ResourceType, results chan interface{}, watchTimeout time.Duration) WatcherCacheIface {
+	return newWatcherCache(w.client, resourceType, results, watchTimeout)
 }
 
 func NewWatcherCacheFactory(client api.Client) WatcherCacheProvider {

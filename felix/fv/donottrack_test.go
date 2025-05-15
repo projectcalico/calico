@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -63,7 +63,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ do-not-track policy tests; 
 		if BPFMode() {
 			options.EnableIPv6 = true
 			options.ExtraEnvVars["FELIX_BPFLogLevel"] = "debug"
-			options.IPIPEnabled = false
+			options.IPIPMode = api.IPIPModeNever
 		}
 		tc, client = infrastructure.StartNNodeTopology(2, options, infra)
 		cc = &Checker{}
@@ -206,17 +206,10 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ do-not-track policy tests; 
 			Expect(tc.Felixes[0].IPSetNames()).To(ContainElements(elems))
 		}
 
-		By("Having only failsafe connectivity after replacing host-0's egress rules with Deny")
+		By("Having only failsafe connectivity after removing host-0's egress rule")
 		// Since there's no conntrack, removing rules in one direction is enough to prevent
 		// connectivity in either direction.
-		host0Pol.Spec.Egress = []api.Rule{
-			{
-				Action: api.Deny,
-				Destination: api.EntityRule{
-					Selector: host0Selector,
-				},
-			},
-		}
+		host0Pol.Spec.Egress = []api.Rule{}
 		host0Pol, err := client.GlobalNetworkPolicies().Update(ctx, host0Pol, options.SetOptions{})
 		Expect(err).NotTo(HaveOccurred())
 

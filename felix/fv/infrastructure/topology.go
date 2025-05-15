@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2022 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -36,6 +36,12 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/resources"
 )
 
+const (
+	FlowLogSourceNone = iota
+	FlowLogSourceFile
+	FlowLogSourceLocalSocket
+)
+
 type TopologyOptions struct {
 	FelixLogSeverity        string
 	FelixDebugFilenameRegex string
@@ -43,16 +49,18 @@ type TopologyOptions struct {
 	EnableIPv6              bool
 	// Temporary flag to implement and test IPv6 in bpf dataplane.
 	// TODO: Remove it when IPv6 implementation in BPF mode is complete.
-	BPFEnableIPv6             bool
-	ExtraEnvVars              map[string]string
-	ExtraVolumes              map[string]string
-	WithTypha                 bool
-	WithFelixTyphaTLS         bool
-	TestManagesBPF            bool
-	TyphaLogSeverity          string
-	IPIPEnabled               bool
-	IPIPRoutesEnabled         bool
+	BPFEnableIPv6     bool
+	ExtraEnvVars      map[string]string
+	ExtraVolumes      map[string]string
+	WithTypha         bool
+	WithFelixTyphaTLS bool
+	TestManagesBPF    bool
+	TyphaLogSeverity  string
+	// In some cases, we rely on BIRD to program IPIP and noEncap routes. VXLAN routes are always programmed by Felix.
+	SimulateBIRDRoutes        bool
+	IPIPMode                  api.IPIPMode
 	VXLANMode                 api.VXLANMode
+	VXLANStrategy             VXLANStrategy
 	WireguardEnabled          bool
 	WireguardEnabledV6        bool
 	InitialFelixConfiguration *api.FelixConfiguration
@@ -65,7 +73,10 @@ type TopologyOptions struct {
 	UseIPPools                bool
 	IPPoolCIDR                string
 	IPv6PoolCIDR              string
+	IPPoolUsages              []api.IPPoolAllowedUse
+	IPv6PoolUsages            []api.IPPoolAllowedUse
 	NeedNodeIP                bool
+	FlowLogSource             int
 }
 
 // Calico containers created during topology creation.
@@ -105,8 +116,8 @@ func DefaultTopologyOptions() TopologyOptions {
 		WithTypha:             false,
 		WithFelixTyphaTLS:     false,
 		TyphaLogSeverity:      "info",
-		IPIPEnabled:           true,
-		IPIPRoutesEnabled:     true,
+		IPIPMode:              api.IPIPModeAlways,
+		SimulateBIRDRoutes:    true,
 		IPPoolCIDR:            DefaultIPPoolCIDR,
 		IPv6PoolCIDR:          DefaultIPv6PoolCIDR,
 		UseIPPools:            true,
@@ -132,16 +143,20 @@ func CreateDefaultIPPoolFromOpts(
 	case 4:
 		ipPool.Name = DefaultIPPoolName
 		ipPool.Spec.CIDR = opts.IPPoolCIDR
+		ipPool.Spec.IPIPMode = opts.IPIPMode
 
-		// IPIP is only supported on IPv4
-		if opts.IPIPEnabled {
-			ipPool.Spec.IPIPMode = api.IPIPModeAlways
-		} else {
-			ipPool.Spec.IPIPMode = api.IPIPModeNever
+		if len(opts.IPPoolUsages) > 0 {
+			ipPool.Spec.AllowedUses = opts.IPPoolUsages
 		}
 	case 6:
 		ipPool.Name = DefaultIPv6PoolName
 		ipPool.Spec.CIDR = opts.IPv6PoolCIDR
+		// IPIP is only supported on IPv4
+		ipPool.Spec.IPIPMode = api.IPIPModeNever
+
+		if len(opts.IPv6PoolUsages) > 0 {
+			ipPool.Spec.AllowedUses = opts.IPv6PoolUsages
+		}
 	default:
 		log.WithField("ipVersion", ipVersion).Panic("Unknown IP version")
 	}
@@ -217,7 +232,7 @@ func StartNNodeTopology(
 	success := false
 	var err error
 
-	if opts.EnableIPv6 && opts.IPIPEnabled && os.Getenv("FELIX_FV_ENABLE_BPF") == "true" {
+	if opts.EnableIPv6 && opts.IPIPMode != api.IPIPModeNever && os.Getenv("FELIX_FV_ENABLE_BPF") == "true" {
 		log.Errorf("IPIP not supported in BPF with ipv6!")
 		return
 	}
@@ -235,6 +250,10 @@ func StartNNodeTopology(
 
 	if opts.VXLANMode == "" {
 		opts.VXLANMode = api.VXLANModeNever
+	}
+
+	if opts.IPIPMode == "" {
+		opts.IPIPMode = api.IPIPModeNever
 	}
 
 	// Get client.
@@ -334,6 +353,7 @@ func StartNNodeTopology(
 	Expect(err).To(BeNil())
 	_, IPv6CIDR, err := net.ParseCIDR(opts.IPv6PoolCIDR)
 	Expect(err).To(BeNil())
+
 	for i := 0; i < n; i++ {
 		opts.ExtraEnvVars["BPF_LOG_PFX"] = ""
 		felix := tc.Felixes[i]
@@ -353,16 +373,17 @@ func StartNNodeTopology(
 		}
 
 		setUpBGPNodeIPAndIPIPTunnelIP := n > 1 || opts.NeedNodeIP
-		if opts.IPIPEnabled {
+		if opts.IPIPMode != api.IPIPModeNever {
 			infra.SetExpectedIPIPTunnelAddr(felix, IPv4CIDR, i, setUpBGPNodeIPAndIPIPTunnelIP)
 			expectedIPs = append(expectedIPs, felix.ExpectedIPIPTunnelAddr)
 		}
 		if opts.VXLANMode != api.VXLANModeNever {
-			infra.SetExpectedVXLANTunnelAddr(felix, IPv4CIDR, i, n > 1)
+			ExpectWithOffset(1, opts.VXLANStrategy).ToNot(BeNil(), "VXLANMode is set but VXLANStrategy is nil")
+			infra.SetExpectedVXLANTunnelAddr(felix, opts.VXLANStrategy.TunnelAddress(i))
 			expectedIPs = append(expectedIPs, felix.ExpectedVXLANTunnelAddr)
 			if opts.EnableIPv6 {
 				expectedIPs = append(expectedIPs, felix.IPv6)
-				infra.SetExpectedVXLANV6TunnelAddr(felix, IPv6CIDR, i, n > 1)
+				infra.SetExpectedVXLANV6TunnelAddr(felix, opts.VXLANStrategy.TunnelAddressV6(i))
 				expectedIPs = append(expectedIPs, felix.ExpectedVXLANV6TunnelAddr)
 			}
 		}
@@ -436,27 +457,18 @@ func StartNNodeTopology(
 				defer wg.Done()
 				defer ginkgo.GinkgoRecover()
 				jBlock := fmt.Sprintf("%d.%d.%d.0/24", IPv4CIDR.IP[0], IPv4CIDR.IP[1], j)
-				if opts.IPIPEnabled && opts.IPIPRoutesEnabled {
-					// Can get "Nexthop device is not up" error here if tunl0 device is
-					// not ready yet, which can happen especially if Felix start was
-					// delayed.
-					Eventually(func() error {
-						return iFelix.ExecMayFail("ip", "route", "add", jBlock, "via", jFelix.IP, "dev", "tunl0", "onlink")
-					}, "10s", "1s").ShouldNot(HaveOccurred())
-				} else if opts.VXLANMode == api.VXLANModeNever {
-					// If VXLAN is enabled, Felix will program these routes itself.
-					err := iFelix.ExecMayFail("ip", "route", "add", jBlock, "via", jFelix.IP, "dev", "eth0")
-					Expect(err).ToNot(HaveOccurred())
+				if needToSimulateBIRDRoutesIPIP(&opts) {
+					programBIRDRoutesIPIP(iFelix, jBlock, jFelix.IP)
+				} else if needToSimulateBIRDRoutesNoEncap(&opts) {
+					programBIRDRoutesNoEncap(iFelix, jBlock, jFelix.IP, false)
 				}
 				if opts.EnableIPv6 {
-					jBlockV6 := fmt.Sprintf("%x%x:%x%x:%x%x:%x%x:%x%x:0:%d:0/112", IPv6CIDR.IP[0], IPv6CIDR.IP[1], IPv6CIDR.IP[2], IPv6CIDR.IP[3], IPv6CIDR.IP[4], IPv6CIDR.IP[5], IPv6CIDR.IP[6], IPv6CIDR.IP[7], IPv6CIDR.IP[8], IPv6CIDR.IP[9], j)
-					if opts.VXLANMode == api.VXLANModeNever {
-						// If VXLAN is enabled, Felix will program these routes itself.
-						// If IPIP routes are enabled, these routes will conflict with configured ones and a 'RTNETLINK answers: File exists' error would occur.
-						err := iFelix.ExecMayFail("ip", "-6", "route", "add", jBlockV6, "via", jFelix.IPv6, "dev", "eth0")
-						Expect(err).ToNot(HaveOccurred())
+					if needToSimulateBIRDRoutesNoEncap(&opts) {
+						jBlockV6 := fmt.Sprintf("%x%x:%x%x:%x%x:%x%x:%x%x:0:%d:0/112",
+							IPv6CIDR.IP[0], IPv6CIDR.IP[1], IPv6CIDR.IP[2], IPv6CIDR.IP[3], IPv6CIDR.IP[4],
+							IPv6CIDR.IP[5], IPv6CIDR.IP[6], IPv6CIDR.IP[7], IPv6CIDR.IP[8], IPv6CIDR.IP[9], j)
+						programBIRDRoutesNoEncap(iFelix, jBlockV6, jFelix.IPv6, true)
 					}
-
 				}
 			}(i, j, iFelix, jFelix)
 		}
@@ -465,6 +477,34 @@ func StartNNodeTopology(
 	wg.Wait()
 	success = true
 	return
+}
+
+func needToSimulateBIRDRoutesIPIP(opts *TopologyOptions) bool {
+	return opts.SimulateBIRDRoutes && opts.IPIPMode == api.IPIPModeAlways
+}
+
+func needToSimulateBIRDRoutesNoEncap(opts *TopologyOptions) bool {
+	return opts.SimulateBIRDRoutes && opts.VXLANMode == api.VXLANModeNever && opts.IPIPMode == api.IPIPModeNever
+}
+
+func programBIRDRoutesIPIP(felix *Felix, dest, gw string) {
+	// Can get "Nexthop device is not up" error here if tunl0 device is
+	// not ready yet, which can happen especially if Felix start was delayed.
+	Eventually(func() error {
+		return felix.ExecMayFail("ip", "route", "add", dest, "via", gw, "dev", "tunl0", "onlink", "proto", "100")
+	}, "10s", "1s").ShouldNot(HaveOccurred())
+}
+
+func programBIRDRoutesNoEncap(felix *Felix, dest, gw string, ipv6 bool) {
+	// If VXLAN is enabled, Felix will program these routes itself.
+	// If IPIP routes are enabled, these routes will conflict with configured ones and a 'RTNETLINK answers: File exists' error would occur.
+	if ipv6 {
+		err := felix.ExecMayFail("ip", "-6", "route", "add", dest, "via", gw, "dev", "eth0")
+		Expect(err).ToNot(HaveOccurred())
+	} else {
+		err := felix.ExecMayFail("ip", "route", "add", dest, "via", gw, "dev", "eth0")
+		Expect(err).ToNot(HaveOccurred())
+	}
 }
 
 func mustInitDatastore(client client.Interface) {

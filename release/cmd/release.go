@@ -24,6 +24,7 @@ import (
 	"github.com/projectcalico/calico/release/internal/outputs"
 	"github.com/projectcalico/calico/release/internal/version"
 	"github.com/projectcalico/calico/release/pkg/manager/calico"
+	"github.com/projectcalico/calico/release/pkg/manager/operator"
 )
 
 func releaseOutputDir(repoRootDir, version string) string {
@@ -31,12 +32,12 @@ func releaseOutputDir(repoRootDir, version string) string {
 	return filepath.Join(baseOutputDir, "upload", version)
 }
 
-// The release command suite is used to build and publish official Calico releases.
+// The release command suite is used to build and publish official releases.
 func releaseCommand(cfg *Config) *cli.Command {
 	return &cli.Command{
 		Name:        "release",
 		Aliases:     []string{"rel"},
-		Usage:       "Build and publish official Calico releases.",
+		Usage:       "Build and publish official releases.",
 		Subcommands: releaseSubCommands(cfg),
 	}
 }
@@ -47,7 +48,7 @@ func releaseSubCommands(cfg *Config) []*cli.Command {
 		{
 			Name:  "generate-release-notes",
 			Usage: "Generate release notes for the next release",
-			Flags: []cli.Flag{orgFlag, githubTokenFlag},
+			Flags: []cli.Flag{orgFlag, devTagSuffixFlag, githubTokenFlag},
 			Action: func(c *cli.Context) error {
 				configureLogging("release-notes.log")
 
@@ -72,7 +73,7 @@ func releaseSubCommands(cfg *Config) []*cli.Command {
 		// Build a release.
 		{
 			Name:  "build",
-			Usage: "Build an official Calico release",
+			Usage: "Build an official release",
 			Flags: releaseBuildFlags(),
 			Action: func(c *cli.Context) error {
 				configureLogging("release-build.log")
@@ -102,6 +103,7 @@ func releaseSubCommands(cfg *Config) []*cli.Command {
 				}
 				if c.Bool(skipValidationFlag.Name) {
 					opts = append(opts, calico.WithValidate(false))
+					opts = append(opts, calico.WithReleaseBranchValidation(false))
 				}
 				if reg := c.StringSlice(registryFlag.Name); len(reg) > 0 {
 					opts = append(opts, calico.WithImageRegistries(reg))
@@ -114,7 +116,7 @@ func releaseSubCommands(cfg *Config) []*cli.Command {
 		// Publish a release.
 		{
 			Name:  "publish",
-			Usage: "Publish a pre-built Calico release",
+			Usage: "Publish a pre-built release",
 			Flags: releasePublishFlags(),
 			Action: func(c *cli.Context) error {
 				configureLogging("release-publish.log")
@@ -142,6 +144,52 @@ func releaseSubCommands(cfg *Config) []*cli.Command {
 				r := calico.NewManager(opts...)
 				return r.PublishRelease()
 			},
+		},
+
+		// Publish a release to the public.
+		releasePublicSubCommands(cfg),
+	}
+}
+
+func releasePublicSubCommands(cfg *Config) *cli.Command {
+	return &cli.Command{
+		Name:  "public",
+		Usage: "Make a published release available to the public",
+		Flags: []cli.Flag{
+			orgFlag,
+			repoFlag,
+			repoRemoteFlag,
+			operatorOrgFlag,
+			operatorRepoFlag,
+			operatorRepoRemoteFlag,
+		},
+		Action: func(c *cli.Context) error {
+			configureLogging("release-public.log")
+			ver, operatorVer, err := version.VersionsFromManifests(cfg.RepoRootDir)
+			if err != nil {
+				return err
+			}
+			opts := []calico.Option{
+				calico.WithRepoRoot(cfg.RepoRootDir),
+				calico.WithVersion(ver.FormattedString()),
+				calico.WithOperatorVersion(operatorVer.FormattedString()),
+				calico.WithGithubOrg(c.String(orgFlag.Name)),
+				calico.WithRepoName(c.String(repoFlag.Name)),
+				calico.WithRepoRemote(repoRemoteFlag.Name),
+			}
+			m := calico.NewManager(opts...)
+			if err := m.ReleasePublic(); err != nil {
+				return err
+			}
+			opOpts := []operator.Option{
+				operator.WithVersion(operatorVer.FormattedString()),
+				operator.WithCalicoDirectory(cfg.RepoRootDir),
+				operator.WithGithubOrg(c.String(operatorOrgFlag.Name)),
+				operator.WithRepoName(c.String(operatorRepoFlag.Name)),
+				operator.WithRepoRemote(c.String(operatorRepoRemoteFlag.Name)),
+			}
+			o := operator.NewManager(opOpts...)
+			return o.ReleasePublic()
 		},
 	}
 }

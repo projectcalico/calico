@@ -48,7 +48,7 @@ var _ = Describe("Resources watcher ", func() {
 
 		It("should return error WatchEvent with unexpected kwatch event type", func() {
 			events := kwc.convertEvent(kwatch.Event{
-				Type: kwatch.Bookmark,
+				Type: "GARBAGE",
 			})
 			Expect(events).To(HaveLen(1))
 			Expect(events[0].Type).To(Equal(api.WatchError))

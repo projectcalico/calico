@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2022 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2025 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -224,6 +224,8 @@ var _ = DescribeTable("Config parsing",
 	},
 
 	Entry("Netlink Timeout - default value", "NetlinkTimeoutSecs", "", time.Duration(10*time.Second), false),
+
+	Entry("EndpointStatusPathPrefix - default value", "EndpointStatusPathPrefix", "", "/var/run/calico", false),
 
 	Entry("FelixHostname", "FelixHostname", "hostname", "hostname"),
 	Entry("FelixHostname FQDN", "FelixHostname", "hostname.foo.bar.com", "hostname.foo.bar.com"),
@@ -838,7 +840,7 @@ var _ = Describe("Config copy tests", func() {
 		Expect(conf.RawValues()).To(Equal(conf.Copy().RawValues()))
 	})
 
-	It("should copy via protobuf correctly", func() {
+	It("should copy via protobuf correctly UpdateFromConfigUpdate", func() {
 		pb := conf.ToConfigUpdate()
 		confCp := config.New()
 		changedFields, err := confCp.UpdateFromConfigUpdate(pb)
@@ -850,6 +852,17 @@ var _ = Describe("Config copy tests", func() {
 		Expect(confCp.RawValues()).To(Equal(conf.RawValues()))
 
 		changedFields, err = confCp.UpdateFromConfigUpdate(pb)
+		Expect(err).To(Succeed())
+		Expect(changedFields).To(BeEmpty())
+		Expect(confCp.RawValues()).To(Equal(conf.RawValues()))
+	})
+
+	It("should copy via protobuf correctly FromConfigUpdate", func() {
+		pb := conf.ToConfigUpdate()
+		confCp := config.FromConfigUpdate(pb)
+		Expect(confCp.RawValues()).To(Equal(conf.RawValues()))
+
+		changedFields, err := confCp.UpdateFromConfigUpdate(pb)
 		Expect(err).To(Succeed())
 		Expect(changedFields).To(BeEmpty())
 		Expect(confCp.RawValues()).To(Equal(conf.RawValues()))

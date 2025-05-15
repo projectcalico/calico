@@ -26,6 +26,8 @@ import (
 	"github.com/projectcalico/calico/felix/labelindex"
 	"github.com/projectcalico/calico/felix/multidict"
 	"github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/felix/types"
+	"github.com/projectcalico/calico/lib/std/uniquelabels"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
@@ -37,6 +39,13 @@ type configInterface interface {
 	UpdateFrom(map[string]string, config.Source) (changed bool, err error)
 	RawValues() map[string]string
 	ToConfigUpdate() *proto.ConfigUpdate
+}
+
+// EndpointUpdate contains information about updates applied to the endpoint.
+type endpointUpdate struct {
+	endpoint interface{}
+	peerData *EndpointBGPPeer
+	tierInfo []TierInfo
 }
 
 // EventSequencer buffers and coalesces updates from the calculation graph then flushes them
@@ -55,8 +64,7 @@ type EventSequencer struct {
 	pendingProfileUpdates        map[model.ProfileRulesKey]*ParsedRules
 	pendingProfileDeletes        set.Set[model.ProfileRulesKey]
 	pendingEncapUpdate           *config.Encapsulation
-	pendingEndpointUpdates       map[model.Key]interface{}
-	pendingEndpointTierUpdates   map[model.Key][]TierInfo
+	pendingEndpointUpdates       map[model.Key]endpointUpdate
 	pendingEndpointDeletes       set.Set[model.Key]
 	pendingHostIPUpdates         map[string]*net.IP
 	pendingHostIPDeletes         set.Set[string]
@@ -69,10 +77,10 @@ type EventSequencer struct {
 	pendingNotReady              bool
 	pendingGlobalConfig          map[string]string
 	pendingHostConfig            map[string]string
-	pendingServiceAccountUpdates map[proto.ServiceAccountID]*proto.ServiceAccountUpdate
-	pendingServiceAccountDeletes set.Set[proto.ServiceAccountID]
-	pendingNamespaceUpdates      map[proto.NamespaceID]*proto.NamespaceUpdate
-	pendingNamespaceDeletes      set.Set[proto.NamespaceID]
+	pendingServiceAccountUpdates map[types.ServiceAccountID]*proto.ServiceAccountUpdate
+	pendingServiceAccountDeletes set.Set[types.ServiceAccountID]
+	pendingNamespaceUpdates      map[types.NamespaceID]*proto.NamespaceUpdate
+	pendingNamespaceDeletes      set.Set[types.NamespaceID]
 	pendingRouteUpdates          map[routeID]*proto.RouteUpdate
 	pendingRouteDeletes          set.Set[routeID]
 	pendingVTEPUpdates           map[string]*proto.VXLANTunnelEndpointUpdate
@@ -92,8 +100,8 @@ type EventSequencer struct {
 	sentHostIPv6s       set.Set[string]
 	sentHosts           set.Set[string]
 	sentIPPools         set.Set[ip.CIDR]
-	sentServiceAccounts set.Set[proto.ServiceAccountID]
-	sentNamespaces      set.Set[proto.NamespaceID]
+	sentServiceAccounts set.Set[types.ServiceAccountID]
+	sentNamespaces      set.Set[types.NamespaceID]
 	sentRoutes          set.Set[routeID]
 	sentVTEPs           set.Set[string]
 	sentWireguard       set.Set[string]
@@ -137,8 +145,7 @@ func NewEventSequencer(conf configInterface) *EventSequencer {
 		pendingPolicyDeletes:         set.New[model.PolicyKey](),
 		pendingProfileUpdates:        map[model.ProfileRulesKey]*ParsedRules{},
 		pendingProfileDeletes:        set.New[model.ProfileRulesKey](),
-		pendingEndpointUpdates:       map[model.Key]interface{}{},
-		pendingEndpointTierUpdates:   map[model.Key][]TierInfo{},
+		pendingEndpointUpdates:       map[model.Key]endpointUpdate{},
 		pendingEndpointDeletes:       set.New[model.Key](),
 		pendingHostIPUpdates:         map[string]*net.IP{},
 		pendingHostIPDeletes:         set.New[string](),
@@ -148,10 +155,10 @@ func NewEventSequencer(conf configInterface) *EventSequencer {
 		pendingHostMetadataDeletes:   set.New[string](),
 		pendingIPPoolUpdates:         map[ip.CIDR]*model.IPPool{},
 		pendingIPPoolDeletes:         set.New[ip.CIDR](),
-		pendingServiceAccountUpdates: map[proto.ServiceAccountID]*proto.ServiceAccountUpdate{},
-		pendingServiceAccountDeletes: set.New[proto.ServiceAccountID](),
-		pendingNamespaceUpdates:      map[proto.NamespaceID]*proto.NamespaceUpdate{},
-		pendingNamespaceDeletes:      set.New[proto.NamespaceID](),
+		pendingServiceAccountUpdates: map[types.ServiceAccountID]*proto.ServiceAccountUpdate{},
+		pendingServiceAccountDeletes: set.New[types.ServiceAccountID](),
+		pendingNamespaceUpdates:      map[types.NamespaceID]*proto.NamespaceUpdate{},
+		pendingNamespaceDeletes:      set.New[types.NamespaceID](),
 		pendingRouteUpdates:          map[routeID]*proto.RouteUpdate{},
 		pendingRouteDeletes:          set.New[routeID](),
 		pendingVTEPUpdates:           map[string]*proto.VXLANTunnelEndpointUpdate{},
@@ -170,8 +177,8 @@ func NewEventSequencer(conf configInterface) *EventSequencer {
 		sentHostIPv6s:       set.New[string](),
 		sentHosts:           set.New[string](),
 		sentIPPools:         set.New[ip.CIDR](),
-		sentServiceAccounts: set.New[proto.ServiceAccountID](),
-		sentNamespaces:      set.New[proto.NamespaceID](),
+		sentServiceAccounts: set.New[types.ServiceAccountID](),
+		sentNamespaces:      set.New[types.NamespaceID](),
 		sentRoutes:          set.New[routeID](),
 		sentVTEPs:           set.New[string](),
 		sentWireguard:       set.New[string](),
@@ -389,11 +396,37 @@ func (buf *EventSequencer) flushProfileDeletes() {
 	})
 }
 
-func ModelWorkloadEndpointToProto(ep *model.WorkloadEndpoint, tiers []*proto.TierInfo) *proto.WorkloadEndpoint {
+func ModelWorkloadEndpointToProto(ep *model.WorkloadEndpoint, peerData *EndpointBGPPeer, tiers []*proto.TierInfo) *proto.WorkloadEndpoint {
 	mac := ""
 	if ep.Mac != nil {
 		mac = ep.Mac.String()
 	}
+	var qosControls *proto.QoSControls
+	if ep.QoSControls != nil {
+		qosControls = &proto.QoSControls{
+			IngressBandwidth:      ep.QoSControls.IngressBandwidth,
+			EgressBandwidth:       ep.QoSControls.EgressBandwidth,
+			IngressBurst:          ep.QoSControls.IngressBurst,
+			EgressBurst:           ep.QoSControls.EgressBurst,
+			IngressPacketRate:     ep.QoSControls.IngressPacketRate,
+			EgressPacketRate:      ep.QoSControls.EgressPacketRate,
+			IngressMaxConnections: ep.QoSControls.IngressMaxConnections,
+			EgressMaxConnections:  ep.QoSControls.EgressMaxConnections,
+		}
+	}
+
+	var localBGPPeer *proto.LocalBGPPeer
+	if peerData != nil {
+		localBGPPeer = &proto.LocalBGPPeer{
+			BgpPeerName: peerData.v3PeerName,
+		}
+	}
+
+	epType := proto.WorkloadType_REGULAR
+	if isVMWorkload(ep.Labels) {
+		epType = proto.WorkloadType_VM
+	}
+
 	return &proto.WorkloadEndpoint{
 		State:                      ep.State,
 		Name:                       ep.Name,
@@ -406,6 +439,9 @@ func ModelWorkloadEndpointToProto(ep *model.WorkloadEndpoint, tiers []*proto.Tie
 		Ipv6Nat:                    natsToProtoNatInfo(ep.IPv6NAT),
 		AllowSpoofedSourcePrefixes: netsToStrings(ep.AllowSpoofedSourcePrefixes),
 		Annotations:                ep.Annotations,
+		QosControls:                qosControls,
+		LocalBgpPeer:               localBGPPeer,
+		Type:                       epType,
 	}
 }
 
@@ -422,39 +458,45 @@ func ModelHostEndpointToProto(ep *model.HostEndpoint, tiers, untrackedTiers, pre
 	}
 }
 
-func (buf *EventSequencer) OnEndpointTierUpdate(key model.Key,
-	endpoint interface{},
+func (buf *EventSequencer) OnEndpointTierUpdate(endpointKey model.EndpointKey,
+	endpoint model.Endpoint,
+	peerData *EndpointBGPPeer,
 	filteredTiers []TierInfo,
 ) {
 	if endpoint == nil {
 		// Deletion. Squash any queued updates.
-		delete(buf.pendingEndpointUpdates, key)
-		delete(buf.pendingEndpointTierUpdates, key)
-		if buf.sentEndpoints.Contains(key) {
+		delete(buf.pendingEndpointUpdates, endpointKey)
+		if buf.sentEndpoints.Contains(endpointKey) {
 			// We'd previously sent an update, so we need to send a deletion.
-			buf.pendingEndpointDeletes.Add(key)
+			buf.pendingEndpointDeletes.Add(endpointKey)
 		}
 	} else {
 		// Update.
-		buf.pendingEndpointDeletes.Discard(key)
-		buf.pendingEndpointUpdates[key] = endpoint
-		buf.pendingEndpointTierUpdates[key] = filteredTiers
+		buf.pendingEndpointDeletes.Discard(endpointKey)
+		buf.pendingEndpointUpdates[endpointKey] = endpointUpdate{
+			endpoint: endpoint,
+			peerData: peerData,
+			tierInfo: filteredTiers,
+		}
 	}
 }
 
 func (buf *EventSequencer) flushEndpointTierUpdates() {
-	for key, endpoint := range buf.pendingEndpointUpdates {
-		tiers, untrackedTiers, preDNATTiers, forwardTiers := tierInfoToProtoTierInfo(buf.pendingEndpointTierUpdates[key])
+	for key, endpointUpdate := range buf.pendingEndpointUpdates {
+		endpoint := endpointUpdate.endpoint
+
+		tiers, untrackedTiers, preDNATTiers, forwardTiers := tierInfoToProtoTierInfo(endpointUpdate.tierInfo)
 		switch key := key.(type) {
 		case model.WorkloadEndpointKey:
 			wlep := endpoint.(*model.WorkloadEndpoint)
+
 			buf.Callback(&proto.WorkloadEndpointUpdate{
 				Id: &proto.WorkloadEndpointID{
 					OrchestratorId: key.OrchestratorID,
 					WorkloadId:     key.WorkloadID,
 					EndpointId:     key.EndpointID,
 				},
-				Endpoint: ModelWorkloadEndpointToProto(wlep, tiers),
+				Endpoint: ModelWorkloadEndpointToProto(wlep, endpointUpdate.peerData, tiers),
 			})
 		case model.HostEndpointKey:
 			hep := endpoint.(*model.HostEndpoint)
@@ -469,7 +511,6 @@ func (buf *EventSequencer) flushEndpointTierUpdates() {
 		buf.sentEndpoints.Add(key)
 		// And clean up the pending buffer.
 		delete(buf.pendingEndpointUpdates, key)
-		delete(buf.pendingEndpointTierUpdates, key)
 	}
 }
 
@@ -894,7 +935,7 @@ func (buf *EventSequencer) flushAddsOrRemoves(setID string) {
 
 func (buf *EventSequencer) OnServiceAccountUpdate(update *proto.ServiceAccountUpdate) {
 	// We trust the caller not to send us an update with nil ID, so safe to dereference.
-	id := *update.Id
+	id := types.ProtoToServiceAccountID(update.Id)
 	log.WithFields(log.Fields{
 		"key":    id,
 		"labels": update.GetLabels(),
@@ -903,7 +944,7 @@ func (buf *EventSequencer) OnServiceAccountUpdate(update *proto.ServiceAccountUp
 	buf.pendingServiceAccountUpdates[id] = update
 }
 
-func (buf *EventSequencer) OnServiceAccountRemove(id proto.ServiceAccountID) {
+func (buf *EventSequencer) OnServiceAccountRemove(id types.ServiceAccountID) {
 	log.WithFields(log.Fields{
 		"key": id,
 	}).Debug("ServiceAccount removed")
@@ -915,8 +956,9 @@ func (buf *EventSequencer) OnServiceAccountRemove(id proto.ServiceAccountID) {
 
 func (buf *EventSequencer) flushServiceAccounts() {
 	// Order doesn't matter, but send removes first to reduce max occupancy
-	buf.pendingServiceAccountDeletes.Iter(func(id proto.ServiceAccountID) error {
-		msg := proto.ServiceAccountRemove{Id: &id}
+	buf.pendingServiceAccountDeletes.Iter(func(id types.ServiceAccountID) error {
+		protoID := types.ServiceAccountIDToProto(id)
+		msg := proto.ServiceAccountRemove{Id: protoID}
 		buf.Callback(&msg)
 		buf.sentServiceAccounts.Discard(id)
 		return nil
@@ -924,18 +966,18 @@ func (buf *EventSequencer) flushServiceAccounts() {
 	buf.pendingServiceAccountDeletes.Clear()
 	for _, msg := range buf.pendingServiceAccountUpdates {
 		buf.Callback(msg)
-		id := msg.Id
+		id := types.ProtoToServiceAccountID(msg.GetId())
 		// We safely dereferenced the Id in OnServiceAccountUpdate before adding it to the pending updates map, so
 		// it is safe to do so here.
-		buf.sentServiceAccounts.Add(*id)
+		buf.sentServiceAccounts.Add(id)
 	}
-	buf.pendingServiceAccountUpdates = make(map[proto.ServiceAccountID]*proto.ServiceAccountUpdate)
+	buf.pendingServiceAccountUpdates = make(map[types.ServiceAccountID]*proto.ServiceAccountUpdate)
 	log.Debug("Done flushing Service Accounts")
 }
 
 func (buf *EventSequencer) OnNamespaceUpdate(update *proto.NamespaceUpdate) {
 	// We trust the caller not to send us an update with nil ID, so safe to dereference.
-	id := *update.Id
+	id := types.ProtoToNamespaceID(update.GetId())
 	log.WithFields(log.Fields{
 		"key":    id,
 		"labels": update.GetLabels(),
@@ -944,7 +986,7 @@ func (buf *EventSequencer) OnNamespaceUpdate(update *proto.NamespaceUpdate) {
 	buf.pendingNamespaceUpdates[id] = update
 }
 
-func (buf *EventSequencer) OnNamespaceRemove(id proto.NamespaceID) {
+func (buf *EventSequencer) OnNamespaceRemove(id types.NamespaceID) {
 	log.WithFields(log.Fields{
 		"key": id,
 	}).Debug("Namespace removed")
@@ -998,13 +1040,16 @@ func (buf *EventSequencer) OnGlobalBGPConfigUpdate(cfg *v3.BGPConfiguration) {
 			}
 			buf.pendingGlobalBGPConfig.ServiceLoadbalancerCidrs = append(buf.pendingGlobalBGPConfig.ServiceLoadbalancerCidrs, block.CIDR)
 		}
+		buf.pendingGlobalBGPConfig.LocalWorkloadPeeringIpV4 = cfg.Spec.LocalWorkloadPeeringIPV4
+		buf.pendingGlobalBGPConfig.LocalWorkloadPeeringIpV6 = cfg.Spec.LocalWorkloadPeeringIPV6
 	}
 }
 
 func (buf *EventSequencer) flushNamespaces() {
 	// Order doesn't matter, but send removes first to reduce max occupancy
-	buf.pendingNamespaceDeletes.Iter(func(id proto.NamespaceID) error {
-		msg := proto.NamespaceRemove{Id: &id}
+	buf.pendingNamespaceDeletes.Iter(func(id types.NamespaceID) error {
+		protoID := types.NamespaceIDToProto(id)
+		msg := proto.NamespaceRemove{Id: protoID}
 		buf.Callback(&msg)
 		buf.sentNamespaces.Discard(id)
 		return nil
@@ -1012,12 +1057,12 @@ func (buf *EventSequencer) flushNamespaces() {
 	buf.pendingNamespaceDeletes.Clear()
 	for _, msg := range buf.pendingNamespaceUpdates {
 		buf.Callback(msg)
-		id := msg.Id
+		id := types.ProtoToNamespaceID(msg.GetId())
 		// We safely dereferenced the Id in OnNamespaceUpdate before adding it to the pending updates map, so
 		// it is safe to do so here.
-		buf.sentNamespaces.Add(*id)
+		buf.sentNamespaces.Add(id)
 	}
-	buf.pendingNamespaceUpdates = make(map[proto.NamespaceID]*proto.NamespaceUpdate)
+	buf.pendingNamespaceUpdates = make(map[types.NamespaceID]*proto.NamespaceUpdate)
 	log.Debug("Done flushing Namespaces")
 }
 
@@ -1227,4 +1272,13 @@ func natsToProtoNatInfo(nats []model.IPNAT) []*proto.NatInfo {
 		}
 	}
 	return protoNats
+}
+
+func isVMWorkload(labels uniquelabels.Map) bool {
+	if val, ok := labels.GetString("kubevirt.io"); ok {
+		if val == "virt-launcher" {
+			return true
+		}
+	}
+	return false
 }

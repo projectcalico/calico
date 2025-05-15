@@ -451,10 +451,10 @@ func (rw blockReaderWriter) deleteHandle(ctx context.Context, kvp *model.KVPair)
 
 // getPoolForIP returns the pool if the given IP is within a configured
 // Calico pool, and nil otherwise.
-func (rw blockReaderWriter) getPoolForIP(ip cnet.IP, enabledPools []v3.IPPool) (*v3.IPPool, error) {
+func (rw blockReaderWriter) getPoolForIP(ctx context.Context, ip cnet.IP, enabledPools []v3.IPPool) (*v3.IPPool, error) {
 	if enabledPools == nil {
 		var err error
-		enabledPools, err = rw.pools.GetEnabledPools(ip.Version())
+		enabledPools, err = rw.pools.GetEnabledPools(ctx, ip.Version())
 		if err != nil {
 			return nil, err
 		}

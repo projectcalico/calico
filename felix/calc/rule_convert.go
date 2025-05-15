@@ -20,6 +20,7 @@ import (
 
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 	log "github.com/sirupsen/logrus"
+	googleproto "google.golang.org/protobuf/proto"
 
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
@@ -62,9 +63,9 @@ func fillInRuleIDs(rules []*proto.Rule, ruleIDSeed string) {
 		// library.
 		// TODO(smc) Can we do better than hashing the protobuf?
 		rule.RuleId = ""
-		data, err := rule.Marshal()
+		data, err := googleproto.Marshal(rule)
 		if err != nil {
-			log.WithError(err).WithField("rule", rule).Panic("Failed to marshal rule")
+			log.WithError(err).WithField("rule", rule.String()).Panic("Failed to marshal rule")
 		}
 		_, err = s.Write(data)
 		if err != nil {

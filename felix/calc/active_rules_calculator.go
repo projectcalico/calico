@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -42,8 +42,8 @@ type FelixSender interface {
 }
 
 type PolicyMatchListener interface {
-	OnPolicyMatch(policyKey model.PolicyKey, endpointKey model.Key)
-	OnPolicyMatchStopped(policyKey model.PolicyKey, endpointKey model.Key)
+	OnPolicyMatch(policyKey model.PolicyKey, endpointKey model.EndpointKey)
+	OnPolicyMatchStopped(policyKey model.PolicyKey, endpointKey model.EndpointKey)
 }
 
 // ActiveRulesCalculator calculates the set of policies and profiles (i.e. the rules) that
@@ -91,6 +91,7 @@ type ActiveRulesCalculator struct {
 	// Callback objects.
 	RuleScanner           ruleScanner
 	PolicyMatchListeners  []PolicyMatchListener
+	PolicyLookupCache     ruleScanner
 	OnPolicyCountsChanged func(numTiers, numPolicies, numProfiles, numALPPolicies int)
 	OnAlive               func()
 }
@@ -121,7 +122,6 @@ func (arc *ActiveRulesCalculator) RegisterWith(localEndpointDispatcher, allUpdDi
 	localEndpointDispatcher.Register(model.WorkloadEndpointKey{}, arc.OnUpdate)
 	localEndpointDispatcher.Register(model.HostEndpointKey{}, arc.OnUpdate)
 	// ...as well as all the policies and profiles.
-	allUpdDispatcher.Register(model.PolicyKey{}, arc.OnUpdate)
 	allUpdDispatcher.Register(model.PolicyKey{}, arc.OnUpdate)
 	allUpdDispatcher.Register(model.ProfileRulesKey{}, arc.OnUpdate)
 	allUpdDispatcher.Register(model.ResourceKey{}, arc.OnUpdate)
@@ -364,7 +364,7 @@ func (arc *ActiveRulesCalculator) onMatchStarted(selID, labelId interface{}) {
 		}
 		arc.sendPolicyUpdate(polKey, policy)
 	}
-	if labelId, ok := labelId.(model.Key); ok {
+	if labelId, ok := labelId.(model.EndpointKey); ok {
 		for _, l := range arc.PolicyMatchListeners {
 			l.OnPolicyMatch(polKey, labelId)
 		}
@@ -381,7 +381,7 @@ func (arc *ActiveRulesCalculator) onMatchStopped(selID, labelId interface{}) {
 		policy, _ := arc.allPolicies.Get(polKey)
 		arc.sendPolicyUpdate(polKey, policy)
 	}
-	if labelId, ok := labelId.(model.Key); ok {
+	if labelId, ok := labelId.(model.EndpointKey); ok {
 		for _, l := range arc.PolicyMatchListeners {
 			l.OnPolicyMatchStopped(polKey, labelId)
 		}
@@ -423,8 +423,14 @@ func (arc *ActiveRulesCalculator) sendProfileUpdate(profileID string, rules *mod
 			rules = &DummyDropRules
 		}
 		arc.RuleScanner.OnProfileActive(key, rules)
+		if arc.PolicyLookupCache != nil {
+			arc.PolicyLookupCache.OnProfileActive(key, rules)
+		}
 	} else {
 		arc.RuleScanner.OnProfileInactive(key)
+		if arc.PolicyLookupCache != nil {
+			arc.PolicyLookupCache.OnProfileInactive(key)
+		}
 	}
 }
 
@@ -440,8 +446,18 @@ func (arc *ActiveRulesCalculator) sendPolicyUpdate(policyKey model.PolicyKey, po
 			log.WithField("policyKey", policyKey).Panic("Unknown policy became active!")
 		}
 		arc.RuleScanner.OnPolicyActive(policyKey, policy)
+		if arc.PolicyLookupCache != nil {
+			arc.PolicyLookupCache.OnPolicyActive(policyKey, policy)
+		} else {
+			log.Debug("PolicyLookup OnPolicyActive : cache nil on windows platform")
+		}
 	} else {
 		arc.RuleScanner.OnPolicyInactive(policyKey)
+		if arc.PolicyLookupCache != nil {
+			arc.PolicyLookupCache.OnPolicyInactive(policyKey)
+		} else {
+			log.Debug("PolicyLookup OnPolicyInactive : cache nil on windows platform")
+		}
 	}
 }
 

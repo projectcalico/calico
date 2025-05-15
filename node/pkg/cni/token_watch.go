@@ -125,7 +125,6 @@ func (t *TokenRefresher) Stop() {
 
 func (t *TokenRefresher) Run() {
 	var nextExpiration time.Time
-	rand := rand.New(rand.NewSource(time.Now().UnixNano()))
 	for {
 		tu, err := t.UpdateToken()
 		if err != nil {
@@ -141,16 +140,8 @@ func (t *TokenRefresher) Run() {
 			}
 
 		}
-		now := time.Now()
-		var sleepTime time.Duration
 		// Do some basic rate limiting to prevent flooding the kube apiserver with requests
-		if nextExpiration.Before(now.Add(t.minTokenRetryDuration * t.defaultRefreshFraction)) {
-			sleepTime = t.minTokenRetryDuration
-		} else {
-			sleepTime = nextExpiration.Sub(now) / t.defaultRefreshFraction
-		}
-		jitter := rand.Float32() * float32(sleepTime)
-		sleepTime += time.Duration(jitter)
+		sleepTime := t.getSleepTime(&nextExpiration)
 		if logrus.IsLevelEnabled(logrus.DebugLevel) {
 			logrus.Debugf("Going to sleep for %s", sleepTime.String())
 		}
@@ -160,6 +151,29 @@ func (t *TokenRefresher) Run() {
 			return
 		}
 	}
+}
+
+func (t *TokenRefresher) getSleepTime(nextExpiration *time.Time) time.Duration {
+	now := time.Now()
+	sleepTime := nextExpiration.Sub(now) / t.defaultRefreshFraction
+	const cniTokenRefreshIntervalName = "CNI_TOKEN_REFRESH_INTERVAL"
+	cniTokenRefreshInterval := os.Getenv(cniTokenRefreshIntervalName)
+	if cniTokenRefreshInterval != "" {
+		duration, err := time.ParseDuration(cniTokenRefreshInterval)
+		if err == nil {
+			logrus.WithField("interval", duration).Debugf("Detected a valid %s", cniTokenRefreshIntervalName)
+			sleepTime = duration
+		} else {
+			logrus.WithError(err).WithField(cniTokenRefreshIntervalName, cniTokenRefreshInterval).Errorf("Detected an invalid %s.", cniTokenRefreshIntervalName)
+		}
+	}
+	if nextExpiration.Before(now.Add(t.minTokenRetryDuration * t.defaultRefreshFraction)) {
+		sleepTime = t.minTokenRetryDuration
+	}
+	rand := rand.New(rand.NewSource(time.Now().UnixNano()))
+	jitter := rand.Float32() * float32(sleepTime)
+	sleepTime += time.Duration(jitter)
+	return sleepTime
 }
 
 func (t *TokenRefresher) tokenRequestSupported(clientset *kubernetes.Clientset) bool {

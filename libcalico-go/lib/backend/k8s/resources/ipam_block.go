@@ -41,7 +41,7 @@ const (
 	IPAMBlockCRDName      = "ipamblocks.crd.projectcalico.org"
 )
 
-func NewIPAMBlockClient(c *kubernetes.Clientset, r *rest.RESTClient) K8sResourceClient {
+func NewIPAMBlockClient(c kubernetes.Interface, r rest.Interface) K8sResourceClient {
 	// Create a resource client which manages k8s CRDs.
 	rc := customK8sResourceClient{
 		clientSet:       c,
@@ -157,7 +157,10 @@ func (c *ipamBlockClient) List(ctx context.Context, list model.ListInterface, re
 		return nil, err
 	}
 
-	kvpl := &model.KVPairList{KVPairs: []*model.KVPair{}}
+	kvpl := &model.KVPairList{
+		KVPairs:  []*model.KVPair{},
+		Revision: v3list.Revision,
+	}
 	for _, i := range v3list.KVPairs {
 		v1kvp, err := IPAMBlockV3toV1(i)
 		if err != nil {

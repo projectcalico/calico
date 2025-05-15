@@ -43,7 +43,7 @@ type routeGenerator struct {
 	client                     *client
 	nodeName                   string
 	svcInformer, epInformer    cache.Controller
-	svcIndexer, epIndexer      cache.Indexer
+	svcIndexer, epIndexer      cache.Store
 	svcRouteMap                map[string]map[string]bool
 	routeAdvertisementRefCount map[string]int
 	resyncKnownRoutesTrigger   chan struct{}
@@ -88,12 +88,24 @@ func NewRouteGenerator(c *client) (rg *routeGenerator, err error) {
 	// set up services informer
 	svcWatcher := cache.NewListWatchFromClient(client.CoreV1().RESTClient(), "services", "", fields.Everything())
 	svcHandler := cache.ResourceEventHandlerFuncs{AddFunc: rg.onSvcAdd, UpdateFunc: rg.onSvcUpdate, DeleteFunc: rg.onSvcDelete}
-	rg.svcIndexer, rg.svcInformer = cache.NewIndexerInformer(svcWatcher, &v1.Service{}, 0, svcHandler, cache.Indexers{})
+	rg.svcIndexer, rg.svcInformer = cache.NewInformerWithOptions(cache.InformerOptions{
+		ListerWatcher: svcWatcher,
+		ObjectType:    &v1.Service{},
+		ResyncPeriod:  0,
+		Handler:       svcHandler,
+		Indexers:      cache.Indexers{},
+	})
 
 	// set up endpoints informer
 	epWatcher := cache.NewListWatchFromClient(client.CoreV1().RESTClient(), "endpoints", "", fields.Everything())
 	epHandler := cache.ResourceEventHandlerFuncs{AddFunc: rg.onEPAdd, UpdateFunc: rg.onEPUpdate, DeleteFunc: rg.onEPDelete}
-	rg.epIndexer, rg.epInformer = cache.NewIndexerInformer(epWatcher, &v1.Endpoints{}, 0, epHandler, cache.Indexers{})
+	rg.epIndexer, rg.epInformer = cache.NewInformerWithOptions(cache.InformerOptions{
+		ListerWatcher: epWatcher,
+		ObjectType:    &v1.Endpoints{},
+		ResyncPeriod:  0,
+		Handler:       epHandler,
+		Indexers:      cache.Indexers{},
+	})
 
 	return
 }
@@ -233,7 +245,7 @@ func (rg *routeGenerator) getAllRoutesForService(svc *v1.Service) []string {
 	routes := make([]string, 0)
 	if rg.client.AdvertiseClusterIPs() {
 		// Only advertise cluster IPs if we've been told to.
-		routes = append(routes, svc.Spec.ClusterIP)
+		routes = append(routes, svc.Spec.ClusterIPs...)
 	}
 	svcID := fmt.Sprintf("%s/%s", svc.Namespace, svc.Name)
 
@@ -443,9 +455,9 @@ func (rg *routeGenerator) advertiseThisService(svc *v1.Service, ep *v1.Endpoints
 		return false
 	}
 
-	// also do nothing if the clusterIP is empty or None
+	// also do nothing if no cluster IPs are assigned
 	if svc.Spec.ClusterIP == "" || svc.Spec.ClusterIP == "None" {
-		logc.Debug("Skipping service with no cluster IP")
+		logc.Debug("Skipping service with no cluster IPs")
 		return false
 	}
 

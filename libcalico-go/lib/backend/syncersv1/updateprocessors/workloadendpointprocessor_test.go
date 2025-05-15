@@ -22,6 +22,7 @@ import (
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 
+	"github.com/projectcalico/calico/lib/std/uniquelabels"
 	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
@@ -105,10 +106,10 @@ var _ = Describe("Test the WorkloadEndpoint update processor", func() {
 				State: "active",
 				Name:  iface1,
 				Ports: []model.EndpointPort{},
-				Labels: map[string]string{
+				Labels: uniquelabels.Make(map[string]string{
 					"projectcalico.org/namespace":    ns1,
 					"projectcalico.org/orchestrator": oid1,
-				},
+				}),
 				IPv4Nets: []cnet.IPNet{expectedIPv4Net},
 			},
 			Revision: "abcde",
@@ -170,11 +171,11 @@ var _ = Describe("Test the WorkloadEndpoint update processor", func() {
 					ProfileIDs: []string{"testProfile"},
 					IPv4Nets:   []cnet.IPNet{expectedIPv4Net},
 					IPv4NAT:    []model.IPNAT{expectedIPv4NAT},
-					Labels: map[string]string{
+					Labels: uniquelabels.Make(map[string]string{
 						"testLabel":                      "label",
 						"projectcalico.org/namespace":    ns2,
 						"projectcalico.org/orchestrator": oid2,
-					},
+					}),
 					IPv4Gateway: expectedIPv4Gateway,
 					IPv6Gateway: expectedIPv6Gateway,
 					Ports: []model.EndpointPort{
@@ -353,11 +354,11 @@ var _ = Describe("Test the WorkloadEndpoint update processor", func() {
 				State: "active",
 				Name:  iface1,
 				Ports: []model.EndpointPort{},
-				Labels: map[string]string{
+				Labels: uniquelabels.Make(map[string]string{
 					"projectcalico.org/namespace":    ns1,
 					"projectcalico.org/orchestrator": oid1,
 					"k1":                             "v1",
-				},
+				}),
 				IPv4Nets: []cnet.IPNet{expectedIPv4Net},
 			},
 			Revision: "abcde",
@@ -397,13 +398,75 @@ var _ = Describe("Test the WorkloadEndpoint update processor", func() {
 				State: "active",
 				Name:  iface1,
 				Ports: []model.EndpointPort{},
-				Labels: map[string]string{
+				Labels: uniquelabels.Make(map[string]string{
 					"projectcalico.org/namespace":      ns1,
 					"projectcalico.org/orchestrator":   oid1,
 					"k1":                               "v1",
 					"projectcalico.org/serviceaccount": "test-serviceaccount-name",
-				},
+				}),
 				IPv4Nets: []cnet.IPNet{expectedIPv4Net},
+			},
+			Revision: "abcde",
+		}))
+	})
+
+	It("should convert a WEP with QoSControls configured", func() {
+		up := updateprocessors.NewWorkloadEndpointUpdateProcessor()
+
+		res := libapiv3.NewWorkloadEndpoint()
+		res.Namespace = ns1
+		res.Labels = map[string]string{
+			"projectcalico.org/namespace":    ns1,
+			"projectcalico.org/orchestrator": oid1,
+		}
+		res.Spec.Node = hn1
+		res.Spec.Orchestrator = oid1
+		res.Spec.Workload = wid1
+		res.Spec.Endpoint = eid1
+		res.Spec.InterfaceName = iface1
+		res.Spec.IPNetworks = []string{"10.100.10.1"}
+		res.Spec.QoSControls = &libapiv3.QoSControls{
+			IngressBandwidth:      1000000,
+			EgressBandwidth:       2000000,
+			IngressBurst:          3000000,
+			EgressBurst:           4000000,
+			IngressPacketRate:     5000000,
+			EgressPacketRate:      6000000,
+			IngressMaxConnections: 7000000,
+			EgressMaxConnections:  8000000,
+		}
+
+		kvps, err := up.Process(&model.KVPair{
+			Key:      v3WorkloadEndpointKey1,
+			Value:    res,
+			Revision: "abcde",
+		})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(kvps).To(HaveLen(1))
+		_, ipn, err := cnet.ParseCIDROrIP("10.100.10.1")
+		Expect(err).NotTo(HaveOccurred())
+		expectedIPv4Net := *(ipn.Network())
+		Expect(kvps[0]).To(Equal(&model.KVPair{
+			Key: v1WorkloadEndpointKey1,
+			Value: &model.WorkloadEndpoint{
+				State: "active",
+				Name:  iface1,
+				Ports: []model.EndpointPort{},
+				Labels: uniquelabels.Make(map[string]string{
+					"projectcalico.org/namespace":    ns1,
+					"projectcalico.org/orchestrator": oid1,
+				}),
+				IPv4Nets: []cnet.IPNet{expectedIPv4Net},
+				QoSControls: &model.QoSControls{
+					IngressBandwidth:      1000000,
+					EgressBandwidth:       2000000,
+					IngressBurst:          3000000,
+					EgressBurst:           4000000,
+					IngressPacketRate:     5000000,
+					EgressPacketRate:      6000000,
+					IngressMaxConnections: 7000000,
+					EgressMaxConnections:  8000000,
+				},
 			},
 			Revision: "abcde",
 		}))

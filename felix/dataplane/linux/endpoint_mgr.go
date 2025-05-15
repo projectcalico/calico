@@ -31,15 +31,17 @@ import (
 	"github.com/projectcalico/calico/felix/ifacemonitor"
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/iptables"
+	"github.com/projectcalico/calico/felix/linkaddrs"
 	"github.com/projectcalico/calico/felix/nftables"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/routetable"
 	"github.com/projectcalico/calico/felix/rules"
+	"github.com/projectcalico/calico/felix/types"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
 type hepListener interface {
-	OnHEPUpdate(hostIfaceToEpMap map[string]proto.HostEndpoint)
+	OnHEPUpdate(hostIfaceToEpMap map[string]*proto.HostEndpoint)
 }
 
 type endpointManagerCallbacks struct {
@@ -76,7 +78,7 @@ func newEndpointManagerCallbacks(callbacks *common.Callbacks, ipVersion uint8) e
 	}
 }
 
-func (c *endpointManagerCallbacks) InvokeInterfaceCallbacks(old, new map[string]proto.HostEndpointID) {
+func (c *endpointManagerCallbacks) InvokeInterfaceCallbacks(old, new map[string]types.HostEndpointID) {
 	for ifaceName, oldEpID := range old {
 		if newEpID, ok := new[ifaceName]; ok {
 			if oldEpID != newEpID {
@@ -93,11 +95,11 @@ func (c *endpointManagerCallbacks) InvokeInterfaceCallbacks(old, new map[string]
 	}
 }
 
-func (c *endpointManagerCallbacks) InvokeUpdateHostEndpoint(hostEpID proto.HostEndpointID) {
+func (c *endpointManagerCallbacks) InvokeUpdateHostEndpoint(hostEpID types.HostEndpointID) {
 	c.updateHostEndpoint.Invoke(hostEpID)
 }
 
-func (c *endpointManagerCallbacks) InvokeRemoveHostEndpoint(hostEpID proto.HostEndpointID) {
+func (c *endpointManagerCallbacks) InvokeRemoveHostEndpoint(hostEpID types.HostEndpointID) {
 	c.removeHostEndpoint.Invoke(hostEpID)
 }
 
@@ -137,28 +139,29 @@ type endpointManager struct {
 	epMarkMapper rules.EndpointMarkMapper
 	newMatch     func() generictables.MatchCriteria
 	actions      generictables.ActionFactory
+	filterMaps   nftables.MapsDataplane
 
 	// Pending updates, cleared in CompleteDeferredWork as the data is copied to the activeXYZ
 	// fields.
-	pendingWlEpUpdates  map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint
+	pendingWlEpUpdates  map[types.WorkloadEndpointID]*proto.WorkloadEndpoint
 	pendingIfaceUpdates map[string]ifacemonitor.State
-	dirtyPolicyIDs      set.Set[proto.PolicyID]
+	dirtyPolicyIDs      set.Set[types.PolicyID]
 
 	// Active state, updated in CompleteDeferredWork.
-	activeWlEndpoints                map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint
-	activeWlIfaceNameToID            map[string]proto.WorkloadEndpointID
+	activeWlEndpoints                map[types.WorkloadEndpointID]*proto.WorkloadEndpoint
+	activeWlIfaceNameToID            map[string]types.WorkloadEndpointID
 	activeUpIfaces                   set.Set[string]
-	activeWlIDToChains               map[proto.WorkloadEndpointID][]*generictables.Chain
+	activeWlIDToChains               map[types.WorkloadEndpointID][]*generictables.Chain
 	activeWlDispatchChains           map[string]*generictables.Chain
 	activeEPMarkDispatchChains       map[string]*generictables.Chain
 	ifaceNameToPolicyGroupChainNames map[string][]string /*chain name*/
 
-	activePolicySelectors map[proto.PolicyID]string
+	activePolicySelectors map[types.PolicyID]string
 	policyChainRefCounts  map[string]int // Chain name to count.
 
 	// Workload endpoints that would be locally active but are 'shadowed' by other endpoints
 	// with the same interface name.
-	shadowedWlEndpoints map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint
+	shadowedWlEndpoints map[types.WorkloadEndpointID]*proto.WorkloadEndpoint
 
 	// wlIfaceNamesToReconfigure contains names of workload interfaces that need to have
 	// their configuration (sysctls etc.) refreshed.
@@ -181,7 +184,7 @@ type endpointManager struct {
 	// from the dataplane).
 	hostIfaceToAddrs map[string]set.Set[string]
 	// rawHostEndpoints contains the raw (i.e. not resolved to interface) host endpoints.
-	rawHostEndpoints map[proto.HostEndpointID]*proto.HostEndpoint
+	rawHostEndpoints map[types.HostEndpointID]*proto.HostEndpoint
 	// hostEndpointsDirty is set to true when host endpoints are updated.
 	hostEndpointsDirty bool
 	// activeHostIfaceToChains maps host interface name to the chains that we've programmed.
@@ -194,10 +197,18 @@ type endpointManager struct {
 	activeHostFilterDispatchChains map[string]*generictables.Chain
 	activeHostMangleDispatchChains map[string]*generictables.Chain
 	// activeHostEpIDToIfaceNames records which interfaces we resolved each host endpoint to.
-	activeHostEpIDToIfaceNames map[proto.HostEndpointID][]string
+	activeHostEpIDToIfaceNames map[types.HostEndpointID][]string
 	// activeIfaceNameToHostEpID records which endpoint we resolved each host interface to.
-	activeIfaceNameToHostEpID map[string]proto.HostEndpointID
-	newIfaceNameToHostEpID    map[string]proto.HostEndpointID
+	activeIfaceNameToHostEpID map[string]types.HostEndpointID
+	newIfaceNameToHostEpID    map[string]types.HostEndpointID
+
+	// localBGPPeerIP records information on current local bgp peer IP.
+	localBGPPeerIP string
+	// newLocalBGPPeerIP records information on the new local bgp peer IP from GlobalBGPConfigUpdate.
+	newLocalBGPPeerIP         string
+	needToCheckLocalBGPPeerIP bool
+
+	linkAddrsMgr *linkaddrs.LinkAddrsManager
 
 	needToCheckDispatchChains     bool
 	needToCheckEndpointMarkChains bool
@@ -209,7 +220,7 @@ type endpointManager struct {
 	bpfEndpointManager     hepListener
 }
 
-type EndpointStatusUpdateCallback func(ipVersion uint8, id interface{}, status string)
+type EndpointStatusUpdateCallback func(ipVersion uint8, id interface{}, status string, extraInfo interface{})
 
 type procSysWriter func(path, value string) error
 
@@ -225,11 +236,13 @@ func newEndpointManager(
 	wlInterfacePrefixes []string,
 	onWorkloadEndpointStatusUpdate EndpointStatusUpdateCallback,
 	defaultRPFilter string,
+	filterMaps nftables.MapsDataplane,
 	bpfEnabled bool,
 	bpfEndpointManager hepListener,
 	callbacks *common.Callbacks,
 	floatingIPsEnabled bool,
 	nft bool,
+	linkAddrsMgr *linkaddrs.LinkAddrsManager,
 ) *endpointManager {
 	return newEndpointManagerWithShims(
 		rawTable,
@@ -245,11 +258,13 @@ func newEndpointManager(
 		writeProcSys,
 		os.Stat,
 		defaultRPFilter,
+		filterMaps,
 		bpfEnabled,
 		bpfEndpointManager,
 		callbacks,
 		floatingIPsEnabled,
 		nft,
+		linkAddrsMgr,
 	)
 }
 
@@ -267,11 +282,13 @@ func newEndpointManagerWithShims(
 	procSysWriter procSysWriter,
 	osStat func(name string) (os.FileInfo, error),
 	defaultRPFilter string,
+	filterMaps nftables.MapsDataplane,
 	bpfEnabled bool,
 	bpfEndpointManager hepListener,
 	callbacks *common.Callbacks,
 	floatingIPsEnabled bool,
 	nft bool,
+	linkAddrsMgr *linkaddrs.LinkAddrsManager,
 ) *endpointManager {
 	wlIfacesPattern := "^(" + strings.Join(wlInterfacePrefixes, "|") + ").*"
 	wlIfacesRegexp := regexp.MustCompile(wlIfacesPattern)
@@ -283,11 +300,12 @@ func newEndpointManagerWithShims(
 		actions = nftables.Actions()
 	}
 
-	return &endpointManager{
+	epManager := &endpointManager{
 		ipVersion:              ipVersion,
 		wlIfacesRegexp:         wlIfacesRegexp,
 		kubeIPVSSupportEnabled: kubeIPVSSupportEnabled,
 		bpfEnabled:             bpfEnabled,
+		filterMaps:             filterMaps,
 		bpfEndpointManager:     bpfEndpointManager,
 		floatingIPsEnabled:     floatingIPsEnabled,
 
@@ -305,21 +323,21 @@ func newEndpointManagerWithShims(
 
 		// Pending updates, we store these up as OnUpdate is called, then process them
 		// in CompleteDeferredWork and transfer the important data to the activeXYX fields.
-		pendingWlEpUpdates:  map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint{},
+		pendingWlEpUpdates:  map[types.WorkloadEndpointID]*proto.WorkloadEndpoint{},
 		pendingIfaceUpdates: map[string]ifacemonitor.State{},
-		dirtyPolicyIDs:      set.New[proto.PolicyID](),
+		dirtyPolicyIDs:      set.New[types.PolicyID](),
 
 		activeUpIfaces: set.New[string](),
 
-		activeWlEndpoints:                map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint{},
-		activeWlIfaceNameToID:            map[string]proto.WorkloadEndpointID{},
-		activeWlIDToChains:               map[proto.WorkloadEndpointID][]*generictables.Chain{},
+		activeWlEndpoints:                map[types.WorkloadEndpointID]*proto.WorkloadEndpoint{},
+		activeWlIfaceNameToID:            map[string]types.WorkloadEndpointID{},
+		activeWlIDToChains:               map[types.WorkloadEndpointID][]*generictables.Chain{},
 		ifaceNameToPolicyGroupChainNames: map[string][]string{},
 
-		activePolicySelectors: map[proto.PolicyID]string{},
+		activePolicySelectors: map[types.PolicyID]string{},
 		policyChainRefCounts:  map[string]int{},
 
-		shadowedWlEndpoints: map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint{},
+		shadowedWlEndpoints: map[types.WorkloadEndpointID]*proto.WorkloadEndpoint{},
 
 		wlIfaceNamesToReconfigure: set.New[string](),
 
@@ -330,7 +348,7 @@ func newEndpointManagerWithShims(
 		defaultRPFilter:      defaultRPFilter,
 
 		hostIfaceToAddrs:   map[string]set.Set[string]{},
-		rawHostEndpoints:   map[proto.HostEndpointID]*proto.HostEndpoint{},
+		rawHostEndpoints:   map[types.HostEndpointID]*proto.HostEndpoint{},
 		hostEndpointsDirty: true,
 
 		activeHostIfaceToRawChains:           map[string][]*generictables.Chain{},
@@ -347,31 +365,40 @@ func newEndpointManagerWithShims(
 		activeEPMarkDispatchChains:     map[string]*generictables.Chain{},
 		needToCheckDispatchChains:      true, // Need to do start-of-day update.
 		needToCheckEndpointMarkChains:  true, // Need to do start-of-day update.
+		needToCheckLocalBGPPeerIP:      true, // Need to do start-of-day update.
 
 		OnEndpointStatusUpdate: onWorkloadEndpointStatusUpdate,
 		callbacks:              newEndpointManagerCallbacks(callbacks, ipVersion),
+
+		linkAddrsMgr: linkAddrsMgr,
 	}
+
+	return epManager
 }
 
 func (m *endpointManager) OnUpdate(protoBufMsg interface{}) {
 	log.WithField("msg", protoBufMsg).Debug("Received message")
 	switch msg := protoBufMsg.(type) {
 	case *proto.WorkloadEndpointUpdate:
-		m.pendingWlEpUpdates[*msg.Id] = msg.Endpoint
+		id := types.ProtoToWorkloadEndpointID(msg.GetId())
+		m.pendingWlEpUpdates[id] = msg.Endpoint
 	case *proto.WorkloadEndpointRemove:
-		m.pendingWlEpUpdates[*msg.Id] = nil
+		id := types.ProtoToWorkloadEndpointID(msg.GetId())
+		m.pendingWlEpUpdates[id] = nil
 	case *proto.HostEndpointUpdate:
 		log.WithField("msg", msg).Debug("Host endpoint update")
-		m.callbacks.InvokeUpdateHostEndpoint(*msg.Id)
-		m.rawHostEndpoints[*msg.Id] = msg.Endpoint
+		id := types.ProtoToHostEndpointID(msg.GetId())
+		m.callbacks.InvokeUpdateHostEndpoint(id)
+		m.rawHostEndpoints[id] = msg.Endpoint
 		m.hostEndpointsDirty = true
-		m.epIDsToUpdateStatus.Add(*msg.Id)
+		m.epIDsToUpdateStatus.Add(id)
 	case *proto.HostEndpointRemove:
 		log.WithField("msg", msg).Debug("Host endpoint removed")
-		m.callbacks.InvokeRemoveHostEndpoint(*msg.Id)
-		delete(m.rawHostEndpoints, *msg.Id)
+		id := types.ProtoToHostEndpointID(msg.GetId())
+		m.callbacks.InvokeRemoveHostEndpoint(id)
+		delete(m.rawHostEndpoints, id)
 		m.hostEndpointsDirty = true
-		m.epIDsToUpdateStatus.Add(*msg.Id)
+		m.epIDsToUpdateStatus.Add(id)
 	case *ifaceStateUpdate:
 		log.WithField("update", msg).Debug("Interface state changed.")
 		m.pendingIfaceUpdates[msg.Name] = msg.State
@@ -389,7 +416,8 @@ func (m *endpointManager) OnUpdate(protoBufMsg interface{}) {
 		m.hostEndpointsDirty = true
 	case *proto.ActivePolicyUpdate:
 		newSel := msg.Policy.OriginalSelector
-		if oldSel, ok := m.activePolicySelectors[*msg.Id]; ok && oldSel == newSel {
+		id := types.ProtoToPolicyID(msg.GetId())
+		if oldSel, ok := m.activePolicySelectors[id]; ok && oldSel == newSel {
 			// No change that we care about.
 			return
 		} else if ok {
@@ -398,18 +426,22 @@ func (m *endpointManager) OnUpdate(protoBufMsg interface{}) {
 			// need to do that for new policies because the calc graph guarantees
 			// that we'll see an endpoint update after any new policies are
 			// added to an endpoint.
-			m.dirtyPolicyIDs.Add(*msg.Id)
+			m.dirtyPolicyIDs.Add(id)
 		}
 		log.WithFields(log.Fields{
-			"id":       *msg.Id,
+			"id":       id,
 			"selector": newSel,
 		}).Debug("Active policy selector new/updated.")
-		m.activePolicySelectors[*msg.Id] = newSel
+		m.activePolicySelectors[id] = newSel
 	case *proto.ActivePolicyRemove:
 		// We can only get a remove after no endpoints are using this policy
 		// so we no longer need to track it at all.
-		m.dirtyPolicyIDs.Discard(*msg.Id)
-		delete(m.activePolicySelectors, *msg.Id)
+		id := types.ProtoToPolicyID(msg.GetId())
+		m.dirtyPolicyIDs.Discard(id)
+		delete(m.activePolicySelectors, id)
+	case *proto.GlobalBGPConfigUpdate:
+		log.Debug("GlobalBGPConfig updated.")
+		m.onBGPConfigUpdate(msg)
 	}
 }
 
@@ -484,7 +516,7 @@ wepLoop:
 		for _, t := range wep.Tiers {
 			for _, pols := range [][]string{t.IngressPolicies, t.EgressPolicies} {
 				for _, p := range pols {
-					polID := proto.PolicyID{
+					polID := types.PolicyID{
 						Tier: t.Name,
 						Name: p,
 					}
@@ -521,7 +553,7 @@ func (m *endpointManager) tiersUseDirtyPolicy(tiers []*proto.TierInfo) bool {
 	for _, t := range tiers {
 		for _, pols := range [][]string{t.IngressPolicies, t.EgressPolicies} {
 			for _, p := range pols {
-				polID := proto.PolicyID{
+				polID := types.PolicyID{
 					Tier: t.Name,
 					Name: p,
 				}
@@ -554,19 +586,19 @@ func (m *endpointManager) updateEndpointStatuses() {
 	log.WithField("dirtyEndpoints", m.epIDsToUpdateStatus).Debug("Reporting endpoint status.")
 	m.epIDsToUpdateStatus.Iter(func(item interface{}) error {
 		switch id := item.(type) {
-		case proto.WorkloadEndpointID:
-			status := m.calculateWorkloadEndpointStatus(id)
-			m.OnEndpointStatusUpdate(m.ipVersion, id, status)
-		case proto.HostEndpointID:
+		case types.WorkloadEndpointID:
+			status, endpoint := m.calculateWorkloadEndpointStatus(id)
+			m.OnEndpointStatusUpdate(m.ipVersion, id, status, endpoint)
+		case types.HostEndpointID:
 			status := m.calculateHostEndpointStatus(id)
-			m.OnEndpointStatusUpdate(m.ipVersion, id, status)
+			m.OnEndpointStatusUpdate(m.ipVersion, id, status, nil)
 		}
 
 		return set.RemoveItem
 	})
 }
 
-func (m *endpointManager) calculateWorkloadEndpointStatus(id proto.WorkloadEndpointID) string {
+func (m *endpointManager) calculateWorkloadEndpointStatus(id types.WorkloadEndpointID) (string, *proto.WorkloadEndpoint) {
 	logCxt := log.WithField("workloadEndpointID", id)
 	logCxt.Debug("Re-evaluating workload endpoint status")
 	var operUp, adminUp, failed bool
@@ -597,10 +629,10 @@ func (m *endpointManager) calculateWorkloadEndpointStatus(id proto.WorkloadEndpo
 		"status":  status,
 	})
 	logCxt.Info("Re-evaluated workload endpoint status")
-	return status
+	return status, workload
 }
 
-func (m *endpointManager) calculateHostEndpointStatus(id proto.HostEndpointID) (status string) {
+func (m *endpointManager) calculateHostEndpointStatus(id types.HostEndpointID) (status string) {
 	logCxt := log.WithField("hostEndpointID", id)
 	logCxt.Debug("Re-evaluating host endpoint status")
 	var resolved, operUp bool
@@ -656,7 +688,17 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 		m.needToCheckDispatchChains = true
 	}
 
-	removeActiveWorkload := func(logCxt *log.Entry, oldWorkload *proto.WorkloadEndpoint, id proto.WorkloadEndpointID) {
+	removeActiveWorkload := func(logCxt *log.Entry, oldWorkload *proto.WorkloadEndpoint, id types.WorkloadEndpointID) {
+		if !m.bpfEnabled {
+			// QoS state should be removed before the workload itself is removed
+			if oldWorkload != nil {
+				logCxt.Info("Deleting QoS bandwidth state if present")
+				err := m.maybeUpdateQoSBandwidth(oldWorkload, nil)
+				if err != nil {
+					logCxt.WithError(err).WithField("workload", oldWorkload).Debug("Error deleting QoS bandwidth state, workload may have been already removed.")
+				}
+			}
+		}
 		m.callbacks.InvokeRemoveWorkload(oldWorkload)
 		m.filterTable.RemoveChains(m.activeWlIDToChains[id])
 		delete(m.activeWlIDToChains, id)
@@ -667,6 +709,7 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 			logCxt.Info("Workload removed, deleting old state.")
 			m.routeTable.SetRoutes(oldWorkload.Name, nil)
 			m.wlIfaceNamesToReconfigure.Discard(oldWorkload.Name)
+			m.linkAddrsMgr.RemoveLinkLocalAddress(oldWorkload.Name)
 			delete(m.activeWlIfaceNameToID, oldWorkload.Name)
 			if m.hasSourceSpoofingConfiguration(oldWorkload.Name) {
 				logCxt.Debugf("Removing RPF configuration for old workload %s", oldWorkload.Name)
@@ -724,6 +767,7 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 					}
 					m.routeTable.SetRoutes(oldWorkload.Name, nil)
 					m.wlIfaceNamesToReconfigure.Discard(oldWorkload.Name)
+					m.linkAddrsMgr.RemoveLinkLocalAddress(oldWorkload.Name)
 					delete(m.activeWlIfaceNameToID, oldWorkload.Name)
 				}
 				adminUp := workload.State == "active"
@@ -795,6 +839,14 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 				m.activeWlIfaceNameToID[workload.Name] = id
 				delete(m.pendingWlEpUpdates, id)
 
+				if !m.bpfEnabled {
+					logCxt.Info("Updating QoS bandwidth state if changed")
+					err := m.maybeUpdateQoSBandwidth(oldWorkload, workload)
+					if err != nil {
+						logCxt.WithError(err).WithFields(log.Fields{"oldWorkload": oldWorkload, "newWorkload": workload}).Debug("Error updating QoS bandwidth state")
+					}
+				}
+
 				m.callbacks.InvokeUpdateWorkload(oldWorkload, workload)
 			} else {
 				logCxt.Info("Workload removed, deleting its chains.")
@@ -805,7 +857,7 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 				if oldWorkload != nil {
 					// Check for another endpoint with the same interface name,
 					// that should now become active.
-					bestShadowedId := proto.WorkloadEndpointID{}
+					bestShadowedId := types.WorkloadEndpointID{}
 					for sId, sWorkload := range m.shadowedWlEndpoints {
 						logCxt.Infof("Old workload %v", oldWorkload)
 						logCxt.Infof("Shadowed workload %v", sWorkload)
@@ -828,6 +880,13 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 	}
 
 	if !m.bpfEnabled && m.needToCheckDispatchChains {
+		if m.filterMaps != nil {
+			// Update dispatch verdict maps if needed.
+			fromMappings, toMappings := m.ruleRenderer.DispatchMappings(m.activeWlEndpoints)
+			m.filterMaps.AddOrReplaceMap(nftables.MapMetadata{Name: rules.NftablesFromWorkloadDispatchMap, Type: nftables.MapTypeInterfaceMatch}, fromMappings)
+			m.filterMaps.AddOrReplaceMap(nftables.MapMetadata{Name: rules.NftablesToWorkloadDispatchMap, Type: nftables.MapTypeInterfaceMatch}, toMappings)
+		}
+
 		// Rewrite the dispatch chains if they've changed.
 		newDispatchChains := m.ruleRenderer.WorkloadDispatchChains(m.activeWlEndpoints)
 		m.updateDispatchChains(m.activeWlDispatchChains, newDispatchChains, m.filterTable)
@@ -835,6 +894,18 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 
 		// Set flag to update endpoint mark chains.
 		m.needToCheckEndpointMarkChains = true
+	}
+
+	if m.needToCheckLocalBGPPeerIP {
+		m.needToCheckLocalBGPPeerIP = false
+		m.localBGPPeerIP = m.newLocalBGPPeerIP
+		log.WithFields(log.Fields{
+			"oldIP": m.localBGPPeerIP,
+			"newIP": m.newLocalBGPPeerIP}).Debug("local BGP peer IP updated.")
+		// Reconfigure the interfaces of all active workload endpoints.
+		for ifaceName := range m.activeWlIfaceNameToID {
+			m.wlIfaceNamesToReconfigure.Add(ifaceName)
+		}
 	}
 
 	m.wlIfaceNamesToReconfigure.Iter(func(ifaceName string) error {
@@ -853,7 +924,7 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 }
 
 func (m *endpointManager) updateWorkloadEndpointChains(
-	id proto.WorkloadEndpointID,
+	id types.WorkloadEndpointID,
 	workload *proto.WorkloadEndpoint,
 	adminUp bool,
 ) {
@@ -866,6 +937,7 @@ func (m *endpointManager) updateWorkloadEndpointChains(
 		adminUp,
 		tierGroups,
 		workload.ProfileIds,
+		workload.QosControls,
 	)
 	m.filterTable.UpdateChains(chains)
 	m.activeWlIDToChains[id] = chains
@@ -898,7 +970,7 @@ func (m *endpointManager) groupTieredPolicy(tieredPolicies []*proto.TierInfo, fi
 	return tierPolGroups
 }
 
-func wlIdsAscending(id1, id2 *proto.WorkloadEndpointID) bool {
+func wlIdsAscending(id1, id2 *types.WorkloadEndpointID) bool {
 	if id1.OrchestratorId == id2.OrchestratorId {
 		// Need to compare WorkloadId.
 		if id1.WorkloadId == id2.WorkloadId {
@@ -942,7 +1014,7 @@ func (m *endpointManager) resolveEndpointMarks() {
 	m.updateDispatchChains(m.activeEPMarkDispatchChains, newEndpointMarkDispatchChains, m.filterTable)
 }
 
-func (m *endpointManager) resolveHostEndpoints() map[string]proto.HostEndpointID {
+func (m *endpointManager) resolveHostEndpoints() map[string]types.HostEndpointID {
 	// Host endpoint resolution
 	// ------------------------
 	//
@@ -969,13 +1041,13 @@ func (m *endpointManager) resolveHostEndpoints() map[string]proto.HostEndpointID
 	// own.  Rather it is looking at the set of local non-workload interfaces and
 	// seeing which of them are matched by the current set of HostEndpoints as a
 	// whole.
-	newIfaceNameToHostEpID := map[string]proto.HostEndpointID{}
+	newIfaceNameToHostEpID := map[string]types.HostEndpointID{}
 	for ifaceName, ifaceAddrs := range m.hostIfaceToAddrs {
 		ifaceCxt := log.WithFields(log.Fields{
 			"ifaceName":  ifaceName,
 			"ifaceAddrs": ifaceAddrs,
 		})
-		bestHostEpId := proto.HostEndpointID{}
+		bestHostEpId := types.HostEndpointID{}
 	HostEpLoop:
 		for id, hostEp := range m.rawHostEndpoints {
 			logCxt := ifaceCxt.WithField("id", id)
@@ -1027,7 +1099,7 @@ func (m *endpointManager) resolveHostEndpoints() map[string]proto.HostEndpointID
 	}
 
 	// Similar loop to find the best all-interfaces host endpoint.
-	bestHostEpId := proto.HostEndpointID{}
+	bestHostEpId := types.HostEndpointID{}
 	for id, hostEp := range m.rawHostEndpoints {
 		logCxt := log.WithField("id", id)
 		if !forAllInterfaces(hostEp) {
@@ -1052,11 +1124,11 @@ func (m *endpointManager) resolveHostEndpoints() map[string]proto.HostEndpointID
 	if m.bpfEndpointManager != nil {
 		// Construct map of interface names to host endpoints, and pass to the BPF endpoint
 		// manager.
-		hostIfaceToEpMap := map[string]proto.HostEndpoint{}
+		hostIfaceToEpMap := map[string]*proto.HostEndpoint{}
 		for ifaceName, id := range newIfaceNameToHostEpID {
 			// Note, dereference the proto.HostEndpoint here so that the data lifetime
 			// is decoupled from the validity of the pointer here.
-			hostIfaceToEpMap[ifaceName] = *m.rawHostEndpoints[id]
+			hostIfaceToEpMap[ifaceName] = m.rawHostEndpoints[id]
 		}
 		m.bpfEndpointManager.OnHEPUpdate(hostIfaceToEpMap)
 	}
@@ -1068,9 +1140,9 @@ func (m *endpointManager) updateHostEndpoints() {
 	// Calculate filtered name/id maps for untracked and pre-DNAT policy, and a reverse map from
 	// each active host endpoint to the interfaces it is in use for.
 	newIfaceNameToHostEpID := m.newIfaceNameToHostEpID
-	newPreDNATIfaceNameToHostEpID := map[string]proto.HostEndpointID{}
-	newUntrackedIfaceNameToHostEpID := map[string]proto.HostEndpointID{}
-	newHostEpIDToIfaceNames := map[proto.HostEndpointID][]string{}
+	newPreDNATIfaceNameToHostEpID := map[string]types.HostEndpointID{}
+	newUntrackedIfaceNameToHostEpID := map[string]types.HostEndpointID{}
+	newHostEpIDToIfaceNames := map[types.HostEndpointID][]string{}
 	for ifaceName, id := range newIfaceNameToHostEpID {
 		logCxt := log.WithField("id", id).WithField("ifaceName", ifaceName)
 		ep := m.rawHostEndpoints[id]
@@ -1360,7 +1432,7 @@ func (m *endpointManager) interfaceExistsInProcSys(name string) (bool, error) {
 	return true, nil
 }
 
-func configureInterface(name string, ipVersion int, rpFilter string, writeProcSys procSysWriter) error {
+func configureProcSysForInterface(name string, ipVersion int, rpFilter string, writeProcSys procSysWriter) error {
 	log.WithField("ifaceName", name).Info(
 		"Applying /proc/sys configuration to interface.")
 
@@ -1455,7 +1527,12 @@ func (m *endpointManager) configureInterface(name string) error {
 		rpFilter = "0"
 	}
 
-	return configureInterface(name, int(m.ipVersion), rpFilter, m.writeProcSys)
+	err = configureProcSysForInterface(name, int(m.ipVersion), rpFilter, m.writeProcSys)
+	if err != nil {
+		return err
+	}
+
+	return m.ensureLocalBGPPeerIPOnInterface(name)
 }
 
 func writeProcSys(path, value string) error {
@@ -1483,7 +1560,7 @@ func forAllInterfaces(hep *proto.HostEndpoint) bool {
 }
 
 // for implementing the endpointsSource interface
-func (m *endpointManager) GetRawHostEndpoints() map[proto.HostEndpointID]*proto.HostEndpoint {
+func (m *endpointManager) GetRawHostEndpoints() map[types.HostEndpointID]*proto.HostEndpoint {
 	return m.rawHostEndpoints
 }
 
@@ -1495,14 +1572,14 @@ func (m *endpointManager) groupPolicies(tierName string, names []string, directi
 		Tier:        tierName,
 		Direction:   direction,
 		PolicyNames: []string{names[0]},
-		Selector: m.activePolicySelectors[proto.PolicyID{
+		Selector: m.activePolicySelectors[types.PolicyID{
 			Tier: tierName,
 			Name: names[0],
 		}],
 	}
 	groups := []*rules.PolicyGroup{group}
 	for _, name := range names[1:] {
-		sel := m.activePolicySelectors[proto.PolicyID{
+		sel := m.activePolicySelectors[types.PolicyID{
 			Tier: tierName,
 			Name: name,
 		}]
@@ -1587,4 +1664,63 @@ func (m *endpointManager) updatePolicyGroups(ifaceName string, allGroups []rules
 	} else {
 		delete(m.ifaceNameToPolicyGroupChainNames, ifaceName)
 	}
+}
+
+func (m *endpointManager) onBGPConfigUpdate(update *proto.GlobalBGPConfigUpdate) {
+	if m.ipVersion == 4 {
+		if update.LocalWorkloadPeeringIpV4 != m.localBGPPeerIP {
+			m.needToCheckLocalBGPPeerIP = true
+			m.newLocalBGPPeerIP = update.LocalWorkloadPeeringIpV4
+		}
+	} else {
+		if update.LocalWorkloadPeeringIpV6 != m.localBGPPeerIP {
+			m.needToCheckLocalBGPPeerIP = true
+			m.newLocalBGPPeerIP = update.LocalWorkloadPeeringIpV6
+		}
+	}
+}
+
+func (m *endpointManager) ifaceIsForLocalBGPPeer(name string) bool {
+	id, ok := m.activeWlIfaceNameToID[name]
+	if !ok {
+		return false
+	}
+	ep := m.activeWlEndpoints[id]
+	return ep != nil && ep.LocalBgpPeer != nil && len(ep.LocalBgpPeer.BgpPeerName) != 0
+}
+
+func (m *endpointManager) ensureLocalBGPPeerIPOnInterface(name string) error {
+	logCtx := log.WithField("iface", name)
+	logCtx.Debug("Configure interface for local bpg peer role")
+
+	if m.ifaceIsForLocalBGPPeer(name) {
+		if len(m.localBGPPeerIP) == 0 {
+			logCtx.Warning("no peer ip is defined trying to configure local BGP peer ip on interface")
+			return fmt.Errorf("interface belongs to a local BGP peer but peer IP is not defined yet.")
+		}
+
+		ipAddr := ip.FromString(m.localBGPPeerIP)
+		if ipAddr == nil {
+			logCtx.WithField("localBGPPeerIP", m.localBGPPeerIP).Error("Failed to parse peer ip")
+			return fmt.Errorf("Failed to parse peer ip")
+		}
+
+		var ipCIDR ip.CIDR
+		if m.ipVersion == 4 {
+			ipCIDR = ip.CIDRFromAddrAndPrefix(ipAddr, 32)
+		} else {
+			ipCIDR = ip.CIDRFromAddrAndPrefix(ipAddr, 128)
+		}
+
+		if err := m.linkAddrsMgr.SetLinkLocalAddress(name, ipCIDR); err != nil {
+			log.WithError(err).Warning("Failed to add peer ip")
+			return err
+		}
+		logCtx.WithFields(log.Fields{"address": ipCIDR}).Info("Assigned host side address to workload interface to set up local BGP peer")
+	} else {
+		m.linkAddrsMgr.RemoveLinkLocalAddress(name)
+	}
+
+	logCtx.Debug("Completed configure local bgp role on device")
+	return nil
 }

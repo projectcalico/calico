@@ -22,6 +22,7 @@ import (
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/rules"
+	"github.com/projectcalico/calico/felix/types"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -35,14 +36,14 @@ type policyManager struct {
 	ipVersion        uint8
 	rawEgressOnly    bool
 	ipSetFilterDirty bool // Only used in "raw only" mode.
-	neededIPSets     map[proto.PolicyID]set.Set[string]
+	neededIPSets     map[types.PolicyID]set.Set[string]
 	ipSetsCallback   func(neededIPSets set.Set[string])
 	nftablesEnabled  bool
 }
 
 type policyRenderer interface {
-	PolicyToIptablesChains(policyID *proto.PolicyID, policy *proto.Policy, ipVersion uint8) []*generictables.Chain
-	ProfileToIptablesChains(profileID *proto.ProfileID, policy *proto.Profile, ipVersion uint8) (inbound, outbound *generictables.Chain)
+	PolicyToIptablesChains(policyID *types.PolicyID, policy *proto.Policy, ipVersion uint8) []*generictables.Chain
+	ProfileToIptablesChains(profileID *types.ProfileID, policy *proto.Profile, ipVersion uint8) (inbound, outbound *generictables.Chain)
 }
 
 func newPolicyManager(rawTable, mangleTable, filterTable Table, ruleRenderer policyRenderer, ipVersion uint8, nft bool) *policyManager {
@@ -69,7 +70,7 @@ func newRawEgressPolicyManager(rawTable Table, ruleRenderer policyRenderer, ipVe
 		rawEgressOnly: true,
 		// Make sure we set the filter at start-of-day, even if there are no policies.
 		ipSetFilterDirty: true,
-		neededIPSets:     make(map[proto.PolicyID]set.Set[string]),
+		neededIPSets:     make(map[types.PolicyID]set.Set[string]),
 		ipSetsCallback:   ipSetsCallback,
 		nftablesEnabled:  nft,
 	}
@@ -78,13 +79,14 @@ func newRawEgressPolicyManager(rawTable Table, ruleRenderer policyRenderer, ipVe
 func (m *policyManager) OnUpdate(msg interface{}) {
 	switch msg := msg.(type) {
 	case *proto.ActivePolicyUpdate:
+		id := types.ProtoToPolicyID(msg.GetId())
 		if m.rawEgressOnly && !msg.Policy.Untracked {
 			log.WithField("id", msg.Id).Debug("Clean up non-untracked policy.")
-			m.cleanUpPolicy(msg.Id)
+			m.cleanUpPolicy(&id)
 			return
 		}
 		log.WithField("id", msg.Id).Debug("Updating policy chains")
-		chains := m.ruleRenderer.PolicyToIptablesChains(msg.Id, msg.Policy, m.ipVersion)
+		chains := m.ruleRenderer.PolicyToIptablesChains(&id, msg.Policy, m.ipVersion)
 		if m.rawEgressOnly {
 			neededIPSets := set.New[string]()
 			filteredChains := []*generictables.Chain(nil)
@@ -95,7 +97,7 @@ func (m *policyManager) OnUpdate(msg interface{}) {
 				}
 			}
 			chains = filteredChains
-			m.updateNeededIPSets(msg.Id, neededIPSets)
+			m.updateNeededIPSets(&id, neededIPSets)
 		}
 		// We can't easily tell whether the policy is in use in a particular table, and, if the policy
 		// type gets changed it may move between tables.  Hence, we put the policy into all tables.
@@ -105,27 +107,30 @@ func (m *policyManager) OnUpdate(msg interface{}) {
 		m.filterTable.UpdateChains(chains)
 	case *proto.ActivePolicyRemove:
 		log.WithField("id", msg.Id).Debug("Removing policy chains")
-		m.cleanUpPolicy(msg.Id)
+		id := types.ProtoToPolicyID(msg.GetId())
+		m.cleanUpPolicy(&id)
 	case *proto.ActiveProfileUpdate:
+		id := types.ProtoToProfileID(msg.GetId())
 		if m.rawEgressOnly {
 			log.WithField("id", msg.Id).Debug("Ignore non-untracked profile")
 			return
 		}
 		log.WithField("id", msg.Id).Debug("Updating profile chains")
-		inbound, outbound := m.ruleRenderer.ProfileToIptablesChains(msg.Id, msg.Profile, m.ipVersion)
+		inbound, outbound := m.ruleRenderer.ProfileToIptablesChains(&id, msg.Profile, m.ipVersion)
 		m.filterTable.UpdateChains([]*generictables.Chain{inbound, outbound})
 		m.mangleTable.UpdateChains([]*generictables.Chain{outbound})
 	case *proto.ActiveProfileRemove:
 		log.WithField("id", msg.Id).Debug("Removing profile chains")
-		inName := rules.ProfileChainName(rules.ProfileInboundPfx, msg.Id, m.nftablesEnabled)
-		outName := rules.ProfileChainName(rules.ProfileOutboundPfx, msg.Id, m.nftablesEnabled)
+		id := types.ProtoToProfileID(msg.GetId())
+		inName := rules.ProfileChainName(rules.ProfileInboundPfx, &id, m.nftablesEnabled)
+		outName := rules.ProfileChainName(rules.ProfileOutboundPfx, &id, m.nftablesEnabled)
 		m.filterTable.RemoveChainByName(inName)
 		m.filterTable.RemoveChainByName(outName)
 		m.mangleTable.RemoveChainByName(outName)
 	}
 }
 
-func (m *policyManager) cleanUpPolicy(id *proto.PolicyID) {
+func (m *policyManager) cleanUpPolicy(id *types.PolicyID) {
 	if m.rawEgressOnly {
 		m.updateNeededIPSets(id, nil)
 	}
@@ -140,7 +145,7 @@ func (m *policyManager) cleanUpPolicy(id *proto.PolicyID) {
 	m.rawTable.RemoveChainByName(outName)
 }
 
-func (m *policyManager) updateNeededIPSets(id *proto.PolicyID, neededIPSets set.Set[string]) {
+func (m *policyManager) updateNeededIPSets(id *types.PolicyID, neededIPSets set.Set[string]) {
 	if neededIPSets != nil {
 		m.neededIPSets[*id] = neededIPSets
 	} else {

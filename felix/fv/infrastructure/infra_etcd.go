@@ -1,4 +1,4 @@
-// Copyright (c) 2018-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2018-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -55,17 +55,9 @@ func GetEtcdDatastoreInfra() (*EtcdDatastoreInfra, error) {
 		return nil, errors.New("failed to create etcd container")
 	}
 
-	arch := utils.GetSysArch()
-
 	// In BPF mode, start BPF logging.
 	if os.Getenv("FELIX_FV_ENABLE_BPF") == "true" {
-		eds.bpfLog = containers.Run("bpf-log",
-			containers.RunOpts{
-				AutoRemove:       true,
-				IgnoreEmptyLines: true,
-			},
-			"--privileged",
-			"calico/bpftool:v5.3-"+arch, "/bpftool", "prog", "tracelog")
+		eds.bpfLog = RunBPFLog()
 	}
 
 	eds.Endpoint = fmt.Sprintf("https://%s:6443", eds.etcdContainer.IP)
@@ -115,16 +107,12 @@ func (eds *EtcdDatastoreInfra) SetExpectedIPIPTunnelAddr(felix *Felix, cidr *net
 	}
 }
 
-func (eds *EtcdDatastoreInfra) SetExpectedVXLANTunnelAddr(felix *Felix, cidr *net.IPNet, idx int, needBGP bool) {
-	if needBGP {
-		felix.ExpectedVXLANTunnelAddr = fmt.Sprintf("%d.%d.%d.0", cidr.IP[0], cidr.IP[1], idx)
-	}
+func (eds *EtcdDatastoreInfra) SetExpectedVXLANTunnelAddr(felix *Felix, ip string) {
+	felix.ExpectedVXLANTunnelAddr = ip
 }
 
-func (eds *EtcdDatastoreInfra) SetExpectedVXLANV6TunnelAddr(felix *Felix, cidr *net.IPNet, idx int, needBGP bool) {
-	if needBGP {
-		felix.ExpectedVXLANV6TunnelAddr = fmt.Sprintf("%x%x:%x%x:%x%x:%x%x:%x%x:%x%x:%d:0", cidr.IP[0], cidr.IP[1], cidr.IP[2], cidr.IP[3], cidr.IP[4], cidr.IP[5], cidr.IP[6], cidr.IP[7], cidr.IP[8], cidr.IP[9], cidr.IP[10], cidr.IP[11], idx)
-	}
+func (eds *EtcdDatastoreInfra) SetExpectedVXLANV6TunnelAddr(felix *Felix, ip string) {
+	felix.ExpectedVXLANV6TunnelAddr = ip
 }
 
 func (eds *EtcdDatastoreInfra) SetExpectedWireguardTunnelAddr(felix *Felix, cidr *net.IPNet, idx int, needWireguard bool) {
@@ -188,6 +176,10 @@ func (eds *EtcdDatastoreInfra) AddWorkload(wep *libapi.WorkloadEndpoint) (*libap
 func (eds *EtcdDatastoreInfra) RemoveWorkload(ns string, name string) error {
 	_, err := eds.GetCalicoClient().WorkloadEndpoints().Delete(utils.Ctx, ns, name, options.DeleteOptions{})
 	return err
+}
+
+func (eds *EtcdDatastoreInfra) UpdateWorkload(wep *libapi.WorkloadEndpoint) (*libapi.WorkloadEndpoint, error) {
+	return eds.GetCalicoClient().WorkloadEndpoints().Update(utils.Ctx, wep, options.SetOptions{})
 }
 
 func (eds *EtcdDatastoreInfra) AddAllowToDatastore(selector string) error {

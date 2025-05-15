@@ -49,8 +49,8 @@ type DatastoreInfra interface {
 	// SetExpectedVXLANTunnelAddr will set the Felix object's
 	// ExpectedVXLANTunnelAddr field, if we expect Felix to see that field being
 	// set after it has started up for the first time.
-	SetExpectedVXLANTunnelAddr(felix *Felix, cidr *net.IPNet, idx int, needVXLAN bool)
-	SetExpectedVXLANV6TunnelAddr(felix *Felix, cidr *net.IPNet, idx int, needVXLAN bool)
+	SetExpectedVXLANTunnelAddr(felix *Felix, ip string)
+	SetExpectedVXLANV6TunnelAddr(felix *Felix, ip string)
 	// SetExpectedWireguardTunnelAddr will set the Felix object's
 	// ExpectedWireguardTunnelAddr field, if we expect Felix to see that field being
 	// set after it has started up for the first time.
@@ -75,6 +75,9 @@ type DatastoreInfra interface {
 	AddWorkload(wep *libapi.WorkloadEndpoint) (*libapi.WorkloadEndpoint, error)
 	// RemoveWorkload reverses the effect of AddWorkload.
 	RemoveWorkload(ns string, name string) error
+	// UpdateWorkload updates a workload in the infra. On kdd the workload is
+	// removed then added.
+	UpdateWorkload(wep *libapi.WorkloadEndpoint) (*libapi.WorkloadEndpoint, error)
 	// AddDefaultAllow will ensure that the datastore is configured so that
 	// the default profile/namespace will allow traffic. Returns the name of the
 	// default profile.

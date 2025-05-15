@@ -17,6 +17,7 @@ package watchersyncer
 import (
 	"reflect"
 	"sync"
+	"time"
 
 	"github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
@@ -45,13 +46,13 @@ func NewWatcherCachePool(client api.Client) WatcherCacheProvider {
 	}
 }
 
-func (w *WatcherCachePool) WatcherCache(resourceType ResourceType, results chan interface{}) WatcherCacheIface {
-	mapping := w.getOrCreateCache(resourceType)
+func (w *WatcherCachePool) WatcherCache(resourceType ResourceType, results chan interface{}, watchTimeout time.Duration) WatcherCacheIface {
+	mapping := w.getOrCreateCache(resourceType, watchTimeout)
 	mapping.fanout.addOutput(results)
 	return mapping.fanout
 }
 
-func (w *WatcherCachePool) getOrCreateCache(resourceType ResourceType) *resourceTypeToCacheMapping {
+func (w *WatcherCachePool) getOrCreateCache(resourceType ResourceType, watchTimeout time.Duration) *resourceTypeToCacheMapping {
 	// ResourceType may not be comparable, so we need to do a scan...
 	for _, mapping := range w.caches {
 		if reflect.DeepEqual(mapping.resourceType, resourceType) {
@@ -59,7 +60,7 @@ func (w *WatcherCachePool) getOrCreateCache(resourceType ResourceType) *resource
 		}
 	}
 	results := make(chan interface{})
-	cache := newWatcherCache(w.client, resourceType, results)
+	cache := newWatcherCache(w.client, resourceType, results, watchTimeout)
 	fo := &watcherCacheFanout{
 		resourceType:  resourceType,
 		upstreamCache: cache,

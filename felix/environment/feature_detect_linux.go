@@ -1,4 +1,4 @@
-// Copyright (c) 2018-2022 Tigera, Inc. All rights reserved.
+// Copyright (c) 2018-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -49,6 +49,8 @@ var (
 	v3Dot10Dot0 = MustParseVersion("3.10.0")
 	// v3Dot14Dot0 added the random-fully feature on the iptables interface.
 	v3Dot14Dot0 = MustParseVersion("3.14.0")
+	// v4Dot8Dot0 adds support for NFLog size.
+	v4Dot8Dot0 = MustParseVersion("4.8.0")
 	// v5Dot7Dot0 contains a fix for checksum offloading.
 	v5Dot7Dot0 = MustParseVersion("5.7.0")
 	// v5Dot14Dot0 is the fist kernel version that IPIP tunnels acts like other L3
@@ -134,6 +136,7 @@ func (d *FeatureDetector) refreshFeaturesLockHeld() {
 		ChecksumOffloadBroken:    kerV.Compare(v5Dot7Dot0) <= 0,
 		IPIPDeviceIsL3:           d.ipipDeviceIsL3(),
 		KernelSideRouteFiltering: netlinkSupportsStrict,
+		NFLogSize:                kerV.Compare(v4Dot8Dot0) >= 0,
 	}
 
 	for k, v := range d.featureOverride {

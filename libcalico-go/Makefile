@@ -53,15 +53,25 @@ gen-files: gen-crds
 ## Force a rebuild of custom resource definition yamls
 gen-crds:
 	rm -rf config/crd
-	$(DOCKER_GO_BUILD) sh -c '$(GIT_CONFIG_SSH) controller-gen  crd:allowDangerousTypes=true,crdVersions=v1,deprecatedV1beta1CompatibilityPreserveUnknownFields=false paths=./lib/apis/... output:crd:dir=config/crd/'
-	@rm config/crd/_.yaml
-	# Patch in manual tweaks to the generated CRDs.
-	patch -p2 < patches/0001-Add-nullable-to-IPAM-block-allocations-field.patch
+	# Generate CRDs without descriptions
+	$(DOCKER_GO_BUILD) sh -c '$(GIT_CONFIG_SSH) controller-gen crd:allowDangerousTypes=true,crdVersions=v1,deprecatedV1beta1CompatibilityPreserveUnknownFields=false,maxDescLen=0 paths=./lib/apis/... output:crd:dir=config/crd/'
+	# Generate CRDs with descriptions, and place them into a temp directory
+	$(DOCKER_GO_BUILD) sh -c '$(GIT_CONFIG_SSH) controller-gen crd:allowDangerousTypes=true,crdVersions=v1,deprecatedV1beta1CompatibilityPreserveUnknownFields=false paths=./lib/apis/... output:crd:dir=config/crd/crd-felix'
+	# Copy over felix CRD with descriptions
+	cp config/crd/crd-felix/crd.projectcalico.org_felixconfigurations.yaml config/crd
+	# Cleanup
+	rm -rf config/crd/crd-felix/
+	rm -f config/crd/_.yaml
+	rm -f config/crd/_nodes.yaml
 	# Remove the first yaml separator line.
 	$(DOCKER_GO_BUILD) sh -c 'find ./config/crd -name "*.yaml" | xargs sed -i 1d'
 	# Add K8S AdminNetworkPolicy CRD
-	curl $(NETPOL_CRD_URL)/$(NETPOL_ANP_CRD) -o ./config/crd/$(NETPOL_ANP_CRD)
-	curl $(NETPOL_CRD_URL)/$(NETPOL_BANP_CRD) -o ./config/crd/$(NETPOL_BANP_CRD)
+	curl -sSfL --retry 3 $(NETPOL_CRD_URL)/$(NETPOL_ANP_CRD) -o ./config/crd/$(NETPOL_ANP_CRD)
+	curl -sSfL --retry 3 $(NETPOL_CRD_URL)/$(NETPOL_BANP_CRD) -o ./config/crd/$(NETPOL_BANP_CRD)
+	# Run prettier to fix indentation
+	docker run --rm --user $(id -u):$(id -g) -v $(CURDIR)/config/crd/:/work/config/crd/ tmknom/prettier --write --parser=yaml /work
+	# Patch in manual tweaks to the generated CRDs.
+	patch -p2 < patches/0001-Add-nullable-to-IPAM-block-allocations-field.patch
 
 ./lib/upgrade/migrator/clients/v1/k8s/custom/zz_generated.deepcopy.go: $(UPGRADE_SRCS)
 	$(DOCKER_GO_BUILD) sh -c 'deepcopy-gen \

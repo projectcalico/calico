@@ -24,6 +24,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
+	"golang.org/x/sync/errgroup"
 	"sigs.k8s.io/knftables"
 
 	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
@@ -324,7 +325,7 @@ func (s *IPSets) GetDesiredMembers(setID string) (set.Set[string], error) {
 
 // ApplyUpdates applies the updates to the dataplane.  Returns a set of programmed IPs in the IPSets included by the
 // ipsetFilter.
-func (s *IPSets) ApplyUpdates() {
+func (s *IPSets) ApplyUpdates(filter func(setName string) bool) (programmedIPs set.Set[string]) {
 	success := false
 	retryDelay := 1 * time.Millisecond
 	backOff := func() {
@@ -332,14 +333,15 @@ func (s *IPSets) ApplyUpdates() {
 		retryDelay *= 2
 	}
 
+	programmedIPs = set.New[string]()
 	for attempt := 0; attempt < 10; attempt++ {
 		if attempt > 0 {
-			s.logCxt.Info("Retrying after an ipsets update failure...")
+			s.logCxt.Info("Retrying after an nftables set update failure...")
 		}
 		if s.resyncRequired {
 			// Compare our in-memory state against the dataplane and queue up
 			// modifications to fix any inconsistencies.
-			s.logCxt.Debug("Resyncing ipsets with dataplane.")
+			s.logCxt.Debug("Resyncing nftables sets with dataplane.")
 			s.opReporter.RecordOperation(fmt.Sprint("resync-nft-sets-v", s.IPVersionConfig.Family.Version()))
 
 			if err := s.tryResync(); err != nil {
@@ -350,7 +352,7 @@ func (s *IPSets) ApplyUpdates() {
 			s.resyncRequired = false
 		}
 
-		if err := s.tryUpdates(); err != nil {
+		if err := s.tryUpdates(filter, programmedIPs); err != nil {
 			// Update failures may mean that our iptables updates fail.  We need to do an immediate resync.
 			s.logCxt.WithError(err).Warning("Failed to update IP sets. Marking dataplane for resync.")
 			s.resyncRequired = true
@@ -364,6 +366,7 @@ func (s *IPSets) ApplyUpdates() {
 	if !success {
 		s.logCxt.Panic("Failed to update IP sets after multiple retries.")
 	}
+	return
 }
 
 // tryResync attempts to bring our state into sync with the dataplane.  It scans the contents of the
@@ -404,47 +407,33 @@ func (s *IPSets) tryResync() error {
 	type setData struct {
 		setName string
 		elems   []*knftables.Element
-		err     error
-	}
-	setsChan := make(chan setData)
-	defer close(setsChan)
-
-	// Start a goroutine to list the elements of each set. Limit concurrent set reads to
-	// avoid spawning too many goroutines if there are a large number of sets.
-	routineLimit := make(chan struct{}, 100)
-	defer close(routineLimit)
-	for _, setName := range sets {
-		// Wait for room in the limiting channel.
-		routineLimit <- struct{}{}
-
-		// Start a goroutine to read this set.
-		go func(name string) {
-			// Make sure to indicate that we're done by removing ourselves from the limiter channel.
-			defer func() { <-routineLimit }()
-
-			elems, err := s.nft.ListElements(ctx, "set", name)
-			if err != nil {
-				setsChan <- setData{setName: name, err: err}
-				return
-			}
-			setsChan <- setData{setName: name, elems: elems}
-		}(setName)
 	}
 
-	// We expect a response for every set we asked for.
+	// Create an errgroup to wait for all the set reads to complete.
+	g, egCtx := errgroup.WithContext(ctx)
+	g.SetLimit(100)
 	responses := make([]setData, len(sets))
-	for i := range responses {
-		setData := <-setsChan
-		responses[i] = setData
+
+	for i, name := range sets {
+		// Start a goroutine to read this set.
+		g.Go(func() error {
+			elems, err := s.nft.ListElements(egCtx, "set", name)
+			if err != nil {
+				return err
+			}
+			responses[i] = setData{setName: name, elems: elems}
+			return nil
+		})
+	}
+
+	// Wait for all the set reads to complete.
+	if err := g.Wait(); err != nil {
+		return fmt.Errorf("failed to list set elements: %w", err)
 	}
 
 	for _, setData := range responses {
 		setName := setData.setName
 		logCxt := s.logCxt.WithField("setName", setName)
-		if setData.err != nil {
-			logCxt.WithError(err).Error("Failed to list set elements.")
-			return setData.err
-		}
 
 		// TODO: We need to be able to extract the set type from the dataplane, otherwise we cannot
 		// tell whether or not an IP set has the correct type.
@@ -593,7 +582,7 @@ func (s *IPSets) NFTablesSet(name string) *knftables.Set {
 }
 
 // tryUpdates attempts to apply any pending updates to the dataplane.
-func (s *IPSets) tryUpdates() error {
+func (s *IPSets) tryUpdates(ipsetFilter func(ipSetName string) bool, programmedIPs set.Set[string]) error {
 	var dirtyIPSets []string
 
 	s.ipSetsWithDirtyMembers.Iter(func(setName string) error {
@@ -650,6 +639,10 @@ func (s *IPSets) tryUpdates() error {
 		members.Desired().Iter(func(member SetMember) {
 			if members.Dataplane().Contains(member) {
 				return
+			}
+			if ipsetFilter != nil && ipsetFilter(setName) {
+				// We want to include the IPs from this set.
+				programmedIPs.Add(member.String())
 			}
 			tx.Add(&knftables.Element{
 				Set: setName,

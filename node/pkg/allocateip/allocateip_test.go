@@ -1,4 +1,4 @@
-// Copyright (c) 2018-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2018-2025 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -1478,11 +1478,11 @@ func newIPPoolErrorAccessor(err error) *ipPoolErrorAccessor {
 	return &ipPoolErrorAccessor{err}
 }
 
-func (i *ipPoolErrorAccessor) GetEnabledPools(ipVersion int) ([]api.IPPool, error) {
+func (i *ipPoolErrorAccessor) GetEnabledPools(ctx context.Context, ipVersion int) ([]api.IPPool, error) {
 	return nil, i.err
 }
 
-func (i *ipPoolErrorAccessor) GetAllPools() ([]api.IPPool, error) {
+func (i *ipPoolErrorAccessor) GetAllPools(ctx context.Context) ([]api.IPPool, error) {
 	return nil, i.err
 }
 
@@ -1600,5 +1600,17 @@ func (c shimClient) EnsureInitialized(ctx context.Context, calicoVersion, cluste
 }
 
 func (c shimClient) Tiers() client.TierInterface {
+	panic("not implemented")
+}
+
+func (c shimClient) StagedGlobalNetworkPolicies() client.StagedGlobalNetworkPolicyInterface {
+	panic("not implemented")
+}
+
+func (c shimClient) StagedKubernetesNetworkPolicies() client.StagedKubernetesNetworkPolicyInterface {
+	panic("not implemented")
+}
+
+func (c shimClient) StagedNetworkPolicies() client.StagedNetworkPolicyInterface {
 	panic("not implemented")
 }

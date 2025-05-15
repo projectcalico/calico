@@ -25,12 +25,20 @@
       version: {{.ProductVersion}}
     calico/api:
       version: {{.ProductVersion}}
+    calico/goldmane:
+      version: {{.ProductVersion}}
     networking-calico:
       version: {{.ReleaseBranch}}
     flannel:
       version: v0.12.0
       registry: quay.io
     calico/dikastes:
+      version: {{.ProductVersion}}
+    calico/envoy-gateway:
+      version: {{.ProductVersion}}
+    calico/envoy-proxy:
+      version: {{.ProductVersion}}
+    calico/envoy-ratelimit:
       version: {{.ProductVersion}}
     flexvol:
       version: {{.ProductVersion}}
@@ -43,4 +51,10 @@
     calico/cni-windows:
       version: {{.ProductVersion}}
     calico/node-windows:
+      version: {{.ProductVersion}}
+    calico/guardian:
+      version: {{.ProductVersion}}
+    calico/whisker:
+      version: {{.ProductVersion}}
+    calico/whisker-backend:
       version: {{.ProductVersion}}

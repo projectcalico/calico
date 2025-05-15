@@ -12,10 +12,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-ARG QEMU_IMAGE
 ARG BIRD_IMAGE
 
-FROM ${QEMU_IMAGE} AS qemu
 FROM ${BIRD_IMAGE} AS bird
 
 FROM calico/bpftool:v7.4.0 AS bpftool
@@ -29,17 +27,13 @@ ARG GIT_VERSION
 ENV SVDIR=/etc/service/enabled
 
 # Required labels for certification
-LABEL description="Calico node handles networking and policy for Calico"
-LABEL maintainer="maintainers@tigera.io"
-LABEL name="Calico node"
-LABEL release="1"
-LABEL summary="Calico node handles networking and policy for Calico"
-LABEL vendor="Project Calico"
-LABEL version=${GIT_VERSION}
-
-# Enable non-native builds of this image on an amd64 hosts.
-# This must be the first RUN command in this file!
-COPY --from=qemu /usr/bin/qemu-s390x-static /usr/bin/qemu-s390x-static
+LABEL org.opencontainers.image.description="Calico node handles networking and policy for Calico"
+LABEL org.opencontainers.image.authors="maintainers@tigera.io"
+LABEL org.opencontainers.image.source="https://github.com/projectcalico/calico"
+LABEL org.opencontainers.image.title="Calico node"
+LABEL org.opencontainers.image.vendor="Project Calico"
+LABEL org.opencontainers.image.version="${GIT_VERSION}"
+LABEL org.opencontainers.image.licenses="Apache-2.0"
 
 # Install remaining runtime deps required for felix from the global repository
 RUN apk add --no-cache bash ip6tables ipset iputils iproute2 conntrack-tools runit file ca-certificates
@@ -49,9 +43,6 @@ COPY --from=bird /bird* /bin/
 
 # Copy in the filesystem - this contains felix, calico-bgp-daemon etc...
 COPY filesystem/ /
-
-# Add in top-level license file
-COPY LICENSE /licenses/LICENSE
 
 # Copy in the calico-node binary
 COPY dist/bin/calico-node-${ARCH} /bin/calico-node
@@ -65,8 +56,6 @@ RUN chmod u+s /bin/mountns
 COPY --from=bpftool /bpftool /bin
 
 # Add in top-level license file
-COPY LICENSE /licenses
-
-RUN rm /usr/bin/qemu-s390x-static
+COPY dist/LICENSE /licenses/LICENSE
 
 CMD ["start_runit"]

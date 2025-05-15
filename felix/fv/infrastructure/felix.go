@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2023 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,26 +20,36 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	log "github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/bpf/jump"
 	"github.com/projectcalico/calico/felix/bpf/polprog"
+	"github.com/projectcalico/calico/felix/collector/flowlog"
+	"github.com/projectcalico/calico/felix/collector/goldmane"
+	"github.com/projectcalico/calico/felix/collector/local"
 	"github.com/projectcalico/calico/felix/fv/containers"
 	"github.com/projectcalico/calico/felix/fv/metrics"
 	"github.com/projectcalico/calico/felix/fv/tcpdump"
 	"github.com/projectcalico/calico/felix/fv/utils"
+	"github.com/projectcalico/calico/goldmane/pkg/types"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
+
+var atomicCounter uint32
+
+var cwLogDir = os.Getenv("FV_CWLOGDIR")
 
 // FIXME: isolate individual Felix instances in their own cgroups.  Unfortunately, this doesn't work on systems that are using cgroupv1
 // see https://elixir.bootlin.com/linux/v5.3.11/source/include/linux/cgroup-defs.h#L788 for explanation.
@@ -75,6 +85,9 @@ type Felix struct {
 	Workloads      []workload
 
 	TopologyOptions TopologyOptions
+
+	uniqueName string
+	flowServer *local.FlowServer
 }
 
 type workload interface {
@@ -86,34 +99,35 @@ type workload interface {
 
 func (f *Felix) GetFelixPID() int {
 	if f.startupDelayed {
-		log.Panic("GetFelixPID() called but startup is delayed")
+		logrus.Panic("GetFelixPID() called but startup is delayed")
 	}
 	if f.restartDelayed {
-		log.Panic("GetFelixPID() called but restart is delayed")
+		logrus.Panic("GetFelixPID() called but restart is delayed")
 	}
 	return f.GetSinglePID("calico-felix")
 }
 
 func (f *Felix) GetFelixPIDs() []int {
 	if f.startupDelayed {
-		log.Panic("GetFelixPIDs() called but startup is delayed")
+		logrus.Panic("GetFelixPIDs() called but startup is delayed")
 	}
 	if f.restartDelayed {
-		log.Panic("GetFelixPIDs() called but restart is delayed")
+		logrus.Panic("GetFelixPIDs() called but restart is delayed")
 	}
 	return f.GetPIDs("calico-felix")
 }
 
 func (f *Felix) TriggerDelayedStart() {
 	if !f.startupDelayed {
-		log.Panic("TriggerDelayedStart() called but startup wasn't delayed")
+		logrus.Panic("TriggerDelayedStart() called but startup wasn't delayed")
 	}
 	f.Exec("touch", "/start-trigger")
+	f.FlowServerStart()
 	f.startupDelayed = false
 }
 
 func RunFelix(infra DatastoreInfra, id int, options TopologyOptions) *Felix {
-	log.Info("Starting felix")
+	logrus.Info("Starting felix")
 	ipv6Enabled := fmt.Sprint(options.EnableIPv6)
 	bpfEnableIPv6 := fmt.Sprint(options.BPFEnableIPv6)
 
@@ -151,6 +165,12 @@ func RunFelix(infra DatastoreInfra, id int, options TopologyOptions) *Felix {
 	if fvBin == "" {
 		fvBin = fmt.Sprintf("bin/calico-felix-%s", arch)
 	}
+
+	if cwLogDir == "" {
+		wDir, err := os.Getwd()
+		Expect(err).NotTo(HaveOccurred())
+		cwLogDir = filepath.Join(wDir, "/cwlogs")
+	}
 	volumes := map[string]string{
 		path.Join(wd, "..", "bin"):        "/usr/local/bin",
 		path.Join(wd, "..", fvBin):        "/usr/local/bin/calico-felix",
@@ -163,10 +183,10 @@ func RunFelix(infra DatastoreInfra, id int, options TopologyOptions) *Felix {
 
 	if os.Getenv("FELIX_FV_ENABLE_BPF") == "true" {
 		if !options.TestManagesBPF {
-			log.Info("FELIX_FV_ENABLE_BPF=true, enabling BPF with env var")
+			logrus.Info("FELIX_FV_ENABLE_BPF=true, enabling BPF with env var")
 			envVars["FELIX_BPFENABLED"] = "true"
 		} else {
-			log.Info("FELIX_FV_ENABLE_BPF=true but test manages BPF state itself, not using env var")
+			logrus.Info("FELIX_FV_ENABLE_BPF=true but test manages BPF state itself, not using env var")
 		}
 
 		if CreateCgroupV2 {
@@ -174,8 +194,35 @@ func RunFelix(infra DatastoreInfra, id int, options TopologyOptions) *Felix {
 		}
 	}
 
+	// For FV, tell Felix to write CloudWatch logs to a file instead of to the real
+	// AWS API.  Whether logs are actually generated, at all, still depends on
+	// FELIX_CLOUDWATCHLOGSREPORTERENABLED; tests that want that should call
+	// EnableCloudWatchLogs().
+	uniqueName := fmt.Sprintf("%d-%d-%d", id, os.Getpid(), int(atomic.AddUint32(&atomicCounter, 1)))
+	volumes[cwLogDir] = "/cwlogs"
+
+	// It's fine to always create the directory for felix flow logs, if they
+	// aren't enabled the directory will just stay empty.
+	logDir := path.Join(cwLogDir, uniqueName)
+	Expect(os.MkdirAll(logDir, 0o777)).NotTo(HaveOccurred())
+	nodeLogDir := "/var/log/calico/flowlogs" // This path is used by file reporter
+
+	var flowServer *local.FlowServer
+	if options.FlowLogSource == FlowLogSourceLocalSocket {
+		nodeLogDir = local.SocketDir
+		flowServer = local.NewFlowServer(logDir)
+
+		if !options.DelayFelixStart {
+			if err := flowServer.Run(); err != nil {
+				logrus.WithError(err).Panic("Failed to start local flow server")
+			}
+		}
+	}
+
+	args = append(args, "-v", fmt.Sprintf("%v:%v", logDir, nodeLogDir))
+
 	if os.Getenv("FELIX_FV_NFTABLES") == "Enabled" {
-		log.Info("Enabling nftables with env var")
+		logrus.Info("Enabling nftables with env var")
 		envVars["FELIX_NFTABLESMODE"] = "Enabled"
 	}
 
@@ -256,7 +303,9 @@ func RunFelix(infra DatastoreInfra, id int, options TopologyOptions) *Felix {
 	return &Felix{
 		Container:       c,
 		startupDelayed:  options.DelayFelixStart,
+		uniqueName:      uniqueName,
 		TopologyOptions: options,
+		flowServer:      flowServer,
 	}
 }
 
@@ -267,6 +316,7 @@ func (f *Felix) Stop() {
 	if CreateCgroupV2 {
 		_ = f.ExecMayFail("rmdir", path.Join("/run/calico/cgroup/", f.Name))
 	}
+	f.FlowServerStop()
 	f.Container.Stop()
 
 	if CurrentGinkgoTestDescription().Failed {
@@ -280,23 +330,25 @@ func (f *Felix) Restart() {
 	oldPID := f.GetFelixPID()
 	f.Exec("kill", "-HUP", fmt.Sprint(oldPID))
 	Eventually(f.GetFelixPID, "10s", "100ms").ShouldNot(Equal(oldPID))
+	f.FlowServerReset()
 }
 
 func (f *Felix) RestartWithDelayedStartup() func() {
 	if f.restartDelayed {
-		log.Panic("RestartWithDelayedStartup() called but restart was delayed already")
+		logrus.Panic("RestartWithDelayedStartup() called but restart was delayed already")
 	}
 	oldPID := f.GetFelixPID()
 	f.restartDelayed = true
 	f.Exec("touch", "/delay-felix-restart")
 	f.Exec("kill", "-HUP", fmt.Sprint(oldPID))
+	f.FlowServerReset()
 	triggerChan := make(chan struct{})
 
 	go func() {
 		defer GinkgoRecover()
 		select {
 		case <-time.After(time.Second * 30):
-			log.Panic("Restart with delayed startup timed out after 30s")
+			logrus.Panic("Restart with delayed startup timed out after 30s")
 		case <-triggerChan:
 			return
 		}
@@ -354,6 +406,60 @@ func (f *Felix) ProgramIptablesDNAT(serviceIP, targetIP, chain string, ipv6 bool
 			"-j", "DNAT", "--to-destination", targetIP,
 		)
 	}
+}
+
+func (f *Felix) FlowServerStart() {
+	if f.flowServer != nil {
+		if err := f.flowServer.Run(); err != nil {
+			logrus.WithError(err).Panic("Failed to start local flow server")
+		}
+	}
+}
+
+func (f *Felix) FlowServerStop() {
+	if f.flowServer != nil {
+		f.flowServer.Flush()
+		f.flowServer.Stop()
+	}
+}
+
+func (f *Felix) FlowServerReset() {
+	if f.flowServer != nil {
+		f.flowServer.Flush()
+	}
+}
+
+func (f *Felix) FlowServerAddress() string {
+	if f.flowServer != nil {
+		return f.flowServer.Address()
+	}
+	return ""
+}
+
+func (f *Felix) FlowLogs() ([]flowlog.FlowLog, error) {
+	switch f.TopologyOptions.FlowLogSource {
+	case FlowLogSourceFile:
+		panic("not supported flow log reader")
+	case FlowLogSourceLocalSocket:
+		return f.FlowLogsFromLocalSocket()
+	default:
+		panic("unrecognized flow log source")
+	}
+}
+
+func (f *Felix) FlowLogsFromLocalSocket() ([]flowlog.FlowLog, error) {
+	if f.flowServer == nil {
+		return nil, fmt.Errorf("local flow server not started")
+	}
+	flows := f.flowServer.List()
+	if len(flows) == 0 {
+		return nil, fmt.Errorf("no flow log received yet")
+	}
+	var flogs []flowlog.FlowLog
+	for _, f := range flows {
+		flogs = append(flogs, goldmane.ConvertGoldmaneToFlowlog(types.FlowToProto(f)))
+	}
+	return flogs, nil
 }
 
 func (f *Felix) ProgramNftablesDNAT(serviceIP, targetIP string, chain string, ipv6 bool) {
@@ -417,6 +523,9 @@ func (f *Felix) BPFIfState(family int) map[string]BPFIfState {
 
 		name := match[3]
 		flags := match[2]
+		if strings.Contains(flags, "notmanaged") {
+			continue
+		}
 		ifIndex, _ := strconv.Atoi(match[1])
 
 		inPolV4 := -1

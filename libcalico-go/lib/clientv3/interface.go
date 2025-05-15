@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -43,6 +43,12 @@ type Interface interface {
 	BlockAffinitiesClient
 	// Tiers returns an interface for managing tier resources.
 	Tiers() TierInterface
+	// StagedGlobalNetworkPolicies returns an interface for managing staged global network policy resources.
+	StagedGlobalNetworkPolicies() StagedGlobalNetworkPolicyInterface
+	// StagedNetworkPolicies returns an interface for managing staged namespaced network policy resources.
+	StagedNetworkPolicies() StagedNetworkPolicyInterface
+	// StagedKubernetesNetworkPolicies returns an interface for managing staged kubernetes network policy resources.
+	StagedKubernetesNetworkPolicies() StagedKubernetesNetworkPolicyInterface
 
 	// EnsureInitialized is used to ensure the backend datastore is correctly
 	// initialized for use by Calico.  This method may be called multiple times, and

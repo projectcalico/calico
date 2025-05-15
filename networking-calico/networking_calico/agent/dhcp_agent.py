@@ -120,6 +120,11 @@ class FakePlugin(object):
 
     get_networks = None
 
+    # New method required sometime between Yoga and Caracal releases - see
+    # https://github.com/projectcalico/calico/issues/9216 for discussion.
+    def get_ports(self, port_filters):
+        return None
+
 
 def empty_network(network_id=NETWORK_ID):
     """Construct and return an empty network model."""

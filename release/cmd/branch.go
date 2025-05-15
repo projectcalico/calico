@@ -18,7 +18,6 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/sirupsen/logrus"
 	cli "github.com/urfave/cli/v2"
 
 	"github.com/projectcalico/calico/release/internal/utils"
@@ -53,12 +52,12 @@ func branchSubCommands(cfg *Config) []*cli.Command {
 				skipValidationFlag,
 			},
 			Action: func(c *cli.Context) error {
-				configureLogging("cut-branch.log")
+				configureLogging("branch-cut.log")
 
 				m := branch.NewManager(
 					branch.WithRepoRoot(cfg.RepoRootDir),
 					branch.WithRepoRemote(c.String(repoRemoteFlag.Name)),
-					branch.WithMainBranch(c.String(mainBranchFlag.Name)),
+					branch.WithMainBranch(c.String(baseBranchFlag.Name)),
 					branch.WithDevTagIdentifier(c.String(devTagSuffixFlag.Name)),
 					branch.WithReleaseBranchPrefix(c.String(releaseBranchPrefixFlag.Name)),
 					branch.WithValidate(!c.Bool(skipValidationFlag.Name)),
@@ -79,12 +78,7 @@ func branchSubCommands(cfg *Config) []*cli.Command {
 				skipValidationFlag,
 			),
 			Action: func(c *cli.Context) error {
-				configureLogging("cut-operator-branch.log")
-
-				// Warn if the new branch is not the default base branch
-				if c.String(newBranchFlag.Name) != newBranchFlag.Value {
-					logrus.Warnf("The new branch will be created from %s which is not the default branch %s", c.String(newBranchFlag.Name), newBranchFlag.Value)
-				}
+				configureLogging("branch-cut-operator.log")
 
 				// Clone the operator repository
 				operatorDir := filepath.Join(cfg.TmpDir, operator.DefaultRepoName)

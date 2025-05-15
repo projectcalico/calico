@@ -157,6 +157,7 @@ var _ = Describe("VXLANManager", func() {
 				ipVersion: 4,
 			},
 			4,
+			4444,
 		)
 
 		managerV6 = newVXLANManagerWithShims(
@@ -179,6 +180,7 @@ var _ = Describe("VXLANManager", func() {
 				ipVersion: 6,
 			},
 			6,
+			6666,
 		)
 	})
 
@@ -212,7 +214,7 @@ var _ = Describe("VXLANManager", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		manager.OnUpdate(&proto.RouteUpdate{
-			Type:        proto.RouteType_REMOTE_WORKLOAD,
+			Types:       proto.RouteType_REMOTE_WORKLOAD,
 			IpPoolType:  proto.IPPoolType_VXLAN,
 			Dst:         "172.0.0.1/26",
 			DstNodeName: "node2",
@@ -221,7 +223,7 @@ var _ = Describe("VXLANManager", func() {
 		})
 
 		manager.OnUpdate(&proto.RouteUpdate{
-			Type:        proto.RouteType_REMOTE_WORKLOAD,
+			Types:       proto.RouteType_REMOTE_WORKLOAD,
 			IpPoolType:  proto.IPPoolType_VXLAN,
 			Dst:         "172.0.0.2/26",
 			DstNodeName: "node2",
@@ -229,7 +231,7 @@ var _ = Describe("VXLANManager", func() {
 		})
 
 		manager.OnUpdate(&proto.RouteUpdate{
-			Type:        proto.RouteType_LOCAL_WORKLOAD,
+			Types:       proto.RouteType_LOCAL_WORKLOAD,
 			IpPoolType:  proto.IPPoolType_VXLAN,
 			Dst:         "172.0.0.0/26",
 			DstNodeName: "node0",
@@ -239,7 +241,7 @@ var _ = Describe("VXLANManager", func() {
 
 		// Borrowed /32 should not be programmed as blackhole.
 		manager.OnUpdate(&proto.RouteUpdate{
-			Type:        proto.RouteType_LOCAL_WORKLOAD,
+			Types:       proto.RouteType_LOCAL_WORKLOAD,
 			IpPoolType:  proto.IPPoolType_VXLAN,
 			Dst:         "172.0.0.1/32",
 			DstNodeName: "node1",
@@ -300,7 +302,7 @@ var _ = Describe("VXLANManager", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		managerV6.OnUpdate(&proto.RouteUpdate{
-			Type:        proto.RouteType_REMOTE_WORKLOAD,
+			Types:       proto.RouteType_REMOTE_WORKLOAD,
 			IpPoolType:  proto.IPPoolType_VXLAN,
 			Dst:         "fc00:10:244::1/112",
 			DstNodeName: "node2",
@@ -309,7 +311,7 @@ var _ = Describe("VXLANManager", func() {
 		})
 
 		managerV6.OnUpdate(&proto.RouteUpdate{
-			Type:        proto.RouteType_REMOTE_WORKLOAD,
+			Types:       proto.RouteType_REMOTE_WORKLOAD,
 			IpPoolType:  proto.IPPoolType_VXLAN,
 			Dst:         "fc00:10:244::2/112",
 			DstNodeName: "node2",
@@ -317,7 +319,7 @@ var _ = Describe("VXLANManager", func() {
 		})
 
 		managerV6.OnUpdate(&proto.RouteUpdate{
-			Type:        proto.RouteType_LOCAL_WORKLOAD,
+			Types:       proto.RouteType_LOCAL_WORKLOAD,
 			IpPoolType:  proto.IPPoolType_VXLAN,
 			Dst:         "fc00:10:244::/112",
 			DstNodeName: "node0",
@@ -327,7 +329,7 @@ var _ = Describe("VXLANManager", func() {
 
 		// Borrowed /128 should not be programmed as blackhole.
 		managerV6.OnUpdate(&proto.RouteUpdate{
-			Type:        proto.RouteType_LOCAL_WORKLOAD,
+			Types:       proto.RouteType_LOCAL_WORKLOAD,
 			IpPoolType:  proto.IPPoolType_VXLAN,
 			Dst:         "fc00:10:244::1/128",
 			DstNodeName: "node1",
@@ -372,7 +374,7 @@ var _ = Describe("VXLANManager", func() {
 			ParentDeviceIp: "172.0.12.1",
 		})
 		manager.OnUpdate(&proto.RouteUpdate{
-			Type:        proto.RouteType_REMOTE_WORKLOAD,
+			Types:       proto.RouteType_REMOTE_WORKLOAD,
 			IpPoolType:  proto.IPPoolType_VXLAN,
 			Dst:         "172.0.0.1/26",
 			DstNodeName: "node2",
@@ -424,7 +426,7 @@ var _ = Describe("VXLANManager", func() {
 			ParentDeviceIpv6: "fc00:10:10::1",
 		})
 		managerV6.OnUpdate(&proto.RouteUpdate{
-			Type:        proto.RouteType_REMOTE_WORKLOAD,
+			Types:       proto.RouteType_REMOTE_WORKLOAD,
 			IpPoolType:  proto.IPPoolType_VXLAN,
 			Dst:         "fc00:10:244::1/112",
 			DstNodeName: "node2",
@@ -460,5 +462,73 @@ var _ = Describe("VXLANManager", func() {
 		Expect(managerV6.routesDirty).To(BeFalse())
 		Expect(rt.currentRoutes["eth0"]).To(HaveLen(1))
 		Expect(rt.currentRoutes[dataplanedefs.VXLANIfaceNameV6]).To(HaveLen(0))
+	})
+
+	It("should program directly connected routes for remote VTEPs with borrowed IP addresses", func() {
+		By("Sending a borrowed tunnel IP address")
+		manager.OnUpdate(&proto.RouteUpdate{
+			Types:       proto.RouteType_REMOTE_TUNNEL,
+			IpPoolType:  proto.IPPoolType_VXLAN,
+			Dst:         "10.0.1.1/32",
+			DstNodeName: "node2",
+			DstNodeIp:   "172.16.0.1",
+			Borrowed:    true,
+		})
+
+		err := manager.CompleteDeferredWork()
+		Expect(err).NotTo(HaveOccurred())
+
+		// Expect a directly connected route to the borrowed IP.
+		Expect(rt.currentRoutes[dataplanedefs.VXLANIfaceNameV4]).To(HaveLen(1))
+		Expect(rt.currentRoutes[dataplanedefs.VXLANIfaceNameV4][0]).To(Equal(
+			routetable.Target{
+				CIDR: ip.MustParseCIDROrIP("10.0.1.1/32"),
+				MTU:  4444,
+			}))
+
+		// Delete the route.
+		manager.OnUpdate(&proto.RouteRemove{
+			Dst: "10.0.1.1/32",
+		})
+
+		err = manager.CompleteDeferredWork()
+		Expect(err).NotTo(HaveOccurred())
+
+		// Expect no routes.
+		Expect(rt.currentRoutes["vxlan.calico"]).To(HaveLen(0))
+	})
+
+	It("IPv6: should program directly connected routes for remote VTEPs with borrowed IP addresses", func() {
+		By("Sending a borrowed tunnel IP address")
+		managerV6.OnUpdate(&proto.RouteUpdate{
+			Types:       proto.RouteType_REMOTE_TUNNEL,
+			IpPoolType:  proto.IPPoolType_VXLAN,
+			Dst:         "fc00:10:244::1/112",
+			DstNodeName: "node2",
+			DstNodeIp:   "fc00:10:10::8",
+			Borrowed:    true,
+		})
+
+		err := managerV6.CompleteDeferredWork()
+		Expect(err).NotTo(HaveOccurred())
+
+		// Expect a directly connected route to the borrowed IP.
+		Expect(rt.currentRoutes[dataplanedefs.VXLANIfaceNameV6]).To(HaveLen(1))
+		Expect(rt.currentRoutes[dataplanedefs.VXLANIfaceNameV6][0]).To(Equal(
+			routetable.Target{
+				CIDR: ip.MustParseCIDROrIP("fc00:10:244::1/112"),
+				MTU:  6666,
+			}))
+
+		// Delete the route.
+		managerV6.OnUpdate(&proto.RouteRemove{
+			Dst: "fc00:10:244::1/112",
+		})
+
+		err = managerV6.CompleteDeferredWork()
+		Expect(err).NotTo(HaveOccurred())
+
+		// Expect no routes.
+		Expect(rt.currentRoutes["vxlan.calico"]).To(HaveLen(0))
 	})
 })

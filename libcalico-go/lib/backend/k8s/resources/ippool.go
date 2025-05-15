@@ -33,7 +33,7 @@ const (
 	IPPoolCRDName      = "ippools.crd.projectcalico.org"
 )
 
-func NewIPPoolClient(c *kubernetes.Clientset, r *rest.RESTClient) K8sResourceClient {
+func NewIPPoolClient(c kubernetes.Interface, r rest.Interface) K8sResourceClient {
 	return &customK8sResourceClient{
 		clientSet:       c,
 		restClient:      r,

@@ -30,7 +30,7 @@ const (
 	KubeControllersConfigCRDName      = "kubecontrollersconfigurations.crd.projectcalico.org"
 )
 
-func NewKubeControllersConfigClient(c *kubernetes.Clientset, r *rest.RESTClient) K8sResourceClient {
+func NewKubeControllersConfigClient(c kubernetes.Interface, r rest.Interface) K8sResourceClient {
 	return &customK8sResourceClient{
 		clientSet:       c,
 		restClient:      r,

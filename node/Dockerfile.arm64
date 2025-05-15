@@ -17,21 +17,14 @@ ARG LIBNFTNL_VER=1.2.2-1
 ARG IPSET_VER=7.11-6
 ARG RUNIT_VER=2.1.2
 ARG BIRD_IMAGE=calico/bird:latest
-ARG QEMU_IMAGE
-ARG UBI_IMAGE
 
 FROM calico/bpftool:v7.4.0 AS bpftool
-FROM ${QEMU_IMAGE} AS qemu
 FROM ${BIRD_IMAGE} AS bird
 
 # Use this build stage to build iptables rpm and runit binaries.
 # We need to rebuild the iptables rpm because the prepackaged rpm does not have legacy iptables binaries.
 # We need to build runit because there aren't any rpms for it in AlmaLinux or ubi repositories.
 FROM almalinux:8 AS almalinux
-
-# Enable non-native builds of this image on an amd64 hosts.
-# This must be the first RUN command in this file!
-COPY --from=qemu /usr/bin/qemu-aarch64-static /usr/bin/qemu-aarch64-static
 
 ARG IPTABLES_VER
 ARG LIBNFTNL_VER
@@ -85,17 +78,12 @@ RUN curl -sfL https://ftp.debian.org/debian/pool/main/r/runit/runit_${RUNIT_VER}
     cd /root/admin/runit-${RUNIT_VER} && \
     package/compile
 
-FROM ${UBI_IMAGE} AS ubi
+FROM registry.access.redhat.com/ubi8/ubi-minimal:latest AS ubi
 
 ARG GIT_VERSION
 ARG IPTABLES_VER
-ARG LIBNFTNL_VER
 ARG IPSET_VER
 ARG RUNIT_VER
-
-# Enable non-native builds of this image on an amd64 hosts.
-# This must be the first RUN command in this file!
-COPY --from=qemu /usr/bin/qemu-aarch64-static /usr/bin/qemu-aarch64-static
 
 # Update base packages to pick up security updates.  Must do this before adding the AlmaLinux repo.
 RUN microdnf upgrade
@@ -148,10 +136,8 @@ RUN rpm -i /tmp/rpms/iptables-libs-${IPTABLES_VER}.el8.aarch64.rpm && \
 # iproute-tc and nftables depend on iptables-libs and should be installed after it.
 RUN microdnf --enablerepo=baseos install iproute-tc nftables
 
-# Install iptables via rpm. Install compatible libnftnl version with the selected iptables version
-RUN rpm --force -i /tmp/rpms/libnftnl-${LIBNFTNL_VER}.el8.aarch64.rpm && \
-    # Install both and select at runtime.
-    rpm -i /tmp/rpms/iptables-legacy-${IPTABLES_VER}.el8.2.aarch64.rpm && \
+# Install iptables via rpm.
+RUN rpm -i /tmp/rpms/iptables-legacy-${IPTABLES_VER}.el8.2.aarch64.rpm && \
     rpm -i /tmp/rpms/iptables-nft-${IPTABLES_VER}.el8.aarch64.rpm && \
     # Install ipset version
     rpm --force -i /tmp/rpms/ipset-libs-${IPSET_VER}.el8.aarch64.rpm && \
@@ -206,15 +192,10 @@ RUN chmod u+s /bin/mountns
 # Clean out as many files as we can from the filesystem.  We no longer need dnf or the platform python install
 # or any of its dependencies.
 COPY clean-up-filesystem.sh /clean-up-filesystem.sh
-# Allowing qemu binaries to persist.
-RUN sed -i 's#zmore#zmore\n\tqemu\n#m' /clean-up-filesystem.sh
 RUN touch /in-the-container && /clean-up-filesystem.sh
 
-# Delete qemu binaries
-RUN rm /usr/bin/qemu-aarch64-static
-
 # Add in top-level license file
-COPY LICENSE /licenses/LICENSE
+COPY dist/LICENSE /licenses/LICENSE
 
 # Copy everything into a fresh scratch image so that naive CVE scanners don't pick up binaries and libraries
 # that have been removed in our later layers.
@@ -226,13 +207,13 @@ ARG GIT_VERSION
 ENV SVDIR=/etc/service/enabled
 
 # Required labels for certification
-LABEL description="Calico node handles networking and policy for Calico"
-LABEL maintainer="maintainers@tigera.io"
-LABEL name="Calico node"
-LABEL release="1"
-LABEL summary="Calico node handles networking and policy for Calico"
-LABEL vendor="Project Calico"
-LABEL version=${GIT_VERSION}
+LABEL org.opencontainers.image.description="Calico node handles networking and policy for Calico"
+LABEL org.opencontainers.image.authors="maintainers@tigera.io"
+LABEL org.opencontainers.image.source="https://github.com/projectcalico/calico"
+LABEL org.opencontainers.image.title="Calico node"
+LABEL org.opencontainers.image.vendor="Project Calico"
+LABEL org.opencontainers.image.version="${GIT_VERSION}"
+LABEL org.opencontainers.image.licenses="Apache-2.0"
 
 COPY --from=ubi / /
 

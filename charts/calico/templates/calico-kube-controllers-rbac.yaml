@@ -36,9 +36,9 @@ roleRef:
   kind: ClusterRole
   name: calico-kube-controllers
 subjects:
-- kind: ServiceAccount
-  name: calico-kube-controllers
-  namespace: kube-system
+  - kind: ServiceAccount
+    name: calico-kube-controllers
+    namespace: kube-system
 ---
 {{- else }}
 # Include a clusterrole for the kube-controllers component,
@@ -111,6 +111,7 @@ rules:
       - create
       - update
       - delete
+      - watch
   # Needs access to update clusterinformations.
   - apiGroups: ["crd.projectcalico.org"]
     resources:
@@ -128,6 +129,7 @@ rules:
     verbs:
       # read its own config
       - get
+      - list
       # create a default if none exists
       - create
       # update status
@@ -144,8 +146,8 @@ roleRef:
   kind: ClusterRole
   name: calico-kube-controllers
 subjects:
-- kind: ServiceAccount
-  name: calico-kube-controllers
-  namespace: kube-system
+  - kind: ServiceAccount
+    name: calico-kube-controllers
+    namespace: kube-system
 ---
 {{- end }}

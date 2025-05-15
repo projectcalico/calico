@@ -401,6 +401,12 @@ func writeCNIConfig(c config) {
 		logrus.Fatal(err)
 	}
 
+	// Safeguarding since WriteFile does not change existing file's permissions.
+	err = os.Chmod(path, perm)
+	if err != nil {
+		logrus.Fatal(err)
+	}
+
 	content, err := os.ReadFile(path)
 	if err != nil {
 		logrus.Fatal(err)

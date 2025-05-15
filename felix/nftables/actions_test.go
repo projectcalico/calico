@@ -46,4 +46,6 @@ var _ = DescribeTable("Actions",
 	Entry("SaveConnMarkAction", environment.Features{}, SaveConnMarkAction{}, "ct mark set mark"),
 	Entry("RestoreConnMarkAction", environment.Features{}, RestoreConnMarkAction{}, "meta mark set ct mark"),
 	Entry("SetConnMarkAction", environment.Features{}, SetConnMarkAction{Mark: 0x1000, Mask: 0xf000}, "ct mark set ct mark & 0xffff0fff ^ 0x1000"),
+	Entry("LimitPacketRateAction", environment.Features{}, LimitPacketRateAction{Rate: 1000}, "limit rate over 1000/second drop"),
+	Entry("LimitNumConnectionsAction", environment.Features{}, LimitNumConnectionsAction{Num: 10, RejectWith: generictables.RejectWithTCPReset}, "ct count over 10 reject with tcp reset"),
 )

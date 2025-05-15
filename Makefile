@@ -37,11 +37,17 @@ clean:
 	rm -rf ./bin
 
 ci-preflight-checks:
+	$(MAKE) check-go-mod
 	$(MAKE) check-dockerfiles
 	$(MAKE) check-language
 	$(MAKE) generate
 	$(MAKE) fix-all
+	$(MAKE) check-ocp-no-crds
+	$(MAKE) yaml-lint
 	$(MAKE) check-dirty
+
+check-go-mod:
+	$(DOCKER_GO_BUILD) ./hack/check-go-mod.sh
 
 check-dockerfiles:
 	./hack/check-dockerfiles.sh
@@ -49,15 +55,32 @@ check-dockerfiles:
 check-language:
 	./hack/check-language.sh
 
+check-ocp-no-crds:
+	@echo "Checking for files in manifests/ocp with CustomResourceDefinitions"
+	@CRD_FILES_IN_OCP_DIR=$$(grep "^kind: CustomResourceDefinition" manifests/ocp/* -l || true); if [ ! -z "$$CRD_FILES_IN_OCP_DIR" ]; then echo "ERROR: manifests/ocp should not have any CustomResourceDefinitions, these files should be removed:"; echo "$$CRD_FILES_IN_OCP_DIR"; exit 1; fi
+
+yaml-lint:
+	@docker run --rm $$(tty -s && echo "-it" || echo) -v $(PWD):/data cytopia/yamllint:latest .
+
+protobuf:
+	$(MAKE) -C app-policy protobuf
+	$(MAKE) -C cni-plugin protobuf
+	$(MAKE) -C felix protobuf
+	$(MAKE) -C pod2daemon protobuf
+	$(MAKE) -C goldmane protobuf
+
 generate:
 	$(MAKE) gen-semaphore-yaml
+	$(MAKE) protobuf
+	$(MAKE) -C lib gen-files
 	$(MAKE) -C api gen-files
 	$(MAKE) -C libcalico-go gen-files
 	$(MAKE) -C felix gen-files
-	$(MAKE) -C app-policy protobuf
+	$(MAKE) -C goldmane gen-files
 	$(MAKE) gen-manifests
+	$(MAKE) fix-changed
 
-gen-manifests: bin/helm
+gen-manifests: bin/helm bin/yq
 	cd ./manifests && \
 		OPERATOR_VERSION=$(OPERATOR_VERSION) \
 		CALICO_VERSION=$(CALICO_VERSION) \
@@ -69,7 +92,8 @@ get-operator-crds: var-require-all-OPERATOR_BRANCH
 	@echo === Pulling new operator CRDs from branch $(OPERATOR_BRANCH) ===
 	@echo ================================================================
 	cd ./charts/tigera-operator/crds/ && \
-	for file in operator.tigera.io_*.yaml; do echo "downloading $$file from operator repo" && curl -fsSL https://raw.githubusercontent.com/tigera/operator/$(OPERATOR_BRANCH)/pkg/crds/operator/$${file%_crd.yaml}.yaml -o $${file}; done
+	for file in operator.tigera.io_*.yaml; do echo "downloading $$file from operator repo" && curl -fsSL https://raw.githubusercontent.com/tigera/operator/$(OPERATOR_BRANCH)/pkg/crds/operator/$${file} -o $${file}; done
+	$(MAKE) fix-changed
 
 gen-semaphore-yaml:
 	cd .semaphore && ./generate-semaphore-yaml.sh
@@ -119,6 +143,7 @@ e2e-test-adminpolicy:
 ###############################################################################
 # Release logic below
 ###############################################################################
+.PHONY: release release-publish create-release-branch release-test build-openstack publish-openstack release-notes
 # Build the release tool.
 release/bin/release: $(shell find ./release -type f -name '*.go')
 	$(MAKE) -C release
@@ -127,6 +152,13 @@ release/bin/release: $(shell find ./release -type f -name '*.go')
 bin/ghr:
 	$(DOCKER_RUN) -e GOBIN=/go/src/$(PACKAGE_NAME)/bin/ $(CALICO_BUILD) go install github.com/tcnksm/ghr@$(GHR_VERSION)
 
+# Install GitHub CLI
+bin/gh:
+	curl -sSL -o bin/gh.tgz https://github.com/cli/cli/releases/download/v$(GITHUB_CLI_VERSION)/gh_$(GITHUB_CLI_VERSION)_linux_amd64.tar.gz
+	tar -zxvf bin/gh.tgz -C bin/ gh_$(GITHUB_CLI_VERSION)_linux_amd64/bin/gh --strip-components=2
+	chmod +x $@
+	rm bin/gh.tgz
+
 # Build a release.
 release: release/bin/release
 	@release/bin/release release build
@@ -134,6 +166,9 @@ release: release/bin/release
 # Publish an already built release.
 release-publish: release/bin/release bin/ghr
 	@release/bin/release release publish
+
+release-public: bin/gh release/bin/release
+	@release/bin/release release public
 
 # Create a release branch.
 create-release-branch: release/bin/release
@@ -166,7 +201,7 @@ helm-index:
 
 # Creates the tar file used for installing Calico on OpenShift.
 bin/ocp.tgz: manifests/ocp/ bin/yq
-	tar czvf $@ -C manifests/ ocp
+	tar czvf $@ --exclude='.gitattributes' -C manifests/ ocp
 
 ## Generates release notes for the given version.
 .PHONY: release-notes
@@ -189,6 +224,8 @@ endif
 		-e GITHUB_TOKEN=$(GITHUB_TOKEN) \
 		python:3 \
 		bash -c '/usr/local/bin/python release/get-contributors.py >> /code/AUTHORS.md'
+
+update-pins: update-go-build-pin update-calico-base-pin
 
 ###############################################################################
 # Post-release validation
