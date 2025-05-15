@@ -6,9 +6,10 @@ import (
 	"strconv"
 
 	"github.com/go-logr/logr"
-	"github.com/projectcalico/calico/lib/std/log"
 	"k8s.io/component-base/logs"
 	"k8s.io/klog/v2"
+
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // logrusLevel sets LOG_LEVEL and if not defined will set it based on klog verbosity

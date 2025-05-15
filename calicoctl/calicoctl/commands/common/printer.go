@@ -25,12 +25,12 @@ import (
 	"text/tabwriter"
 
 	"github.com/google/safetext/yamltemplate"
-	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/go-json/json"
 	"github.com/projectcalico/go-yaml-wrapper"
 	"k8s.io/apimachinery/pkg/runtime"
 
 	"github.com/projectcalico/calico/calicoctl/calicoctl/resourcemgr"
+	"github.com/projectcalico/calico/lib/std/log"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	calicoErrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"

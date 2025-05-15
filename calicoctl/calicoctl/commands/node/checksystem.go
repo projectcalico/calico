@@ -25,9 +25,9 @@ import (
 
 	docopt "github.com/docopt/docopt-go"
 	goversion "github.com/mcuadros/go-version"
-	"github.com/projectcalico/calico/lib/std/log"
 
 	"github.com/projectcalico/calico/calicoctl/calicoctl/util"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // The minimum allowed linux kernel version is 2.6.24, which introduced network

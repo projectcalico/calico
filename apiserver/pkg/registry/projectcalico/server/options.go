@@ -22,7 +22,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/projectcalico/calico/lib/std/log"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apiserver/pkg/authorization/authorizer"
 	"k8s.io/apiserver/pkg/registry/generic/registry"
@@ -33,6 +32,7 @@ import (
 
 	"github.com/projectcalico/calico/apiserver/pkg/storage/calico"
 	"github.com/projectcalico/calico/apiserver/pkg/storage/etcd"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 type errUnsupportedStorageType struct {

@@ -15,9 +15,10 @@
 package calico
 
 import (
-	"github.com/projectcalico/calico/lib/std/log"
 	"k8s.io/apiserver/pkg/registry/generic/registry"
 	"k8s.io/apiserver/pkg/storage/storagebackend/factory"
+
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // NewStorage creates a new libcalico-based storage.Interface implementation

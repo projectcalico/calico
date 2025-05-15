@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/go-yaml-wrapper"
 	"k8s.io/apimachinery/pkg/api/meta"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -29,6 +28,7 @@ import (
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/clientmgr"
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/file"
 	"github.com/projectcalico/calico/calicoctl/calicoctl/resourcemgr"
+	"github.com/projectcalico/calico/lib/std/log"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	calicoErrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
