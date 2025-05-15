@@ -27,8 +27,8 @@ import (
 
 	"github.com/docopt/docopt-go"
 	"github.com/olekukonko/tablewriter"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/shirou/gopsutil/v4/process"
-	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/calicoctl/calicoctl/util"
 )

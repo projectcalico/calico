@@ -20,8 +20,8 @@ import (
 	"os"
 	"reflect"
 
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/go-yaml-wrapper"
-	log "github.com/sirupsen/logrus"
 	networkingv1 "k8s.io/api/networking/v1"
 
 	yamlsep "github.com/projectcalico/calico/calicoctl/calicoctl/util/yaml"
