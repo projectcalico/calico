@@ -20,8 +20,6 @@ import (
 	"math/bits"
 	"strings"
 
-	log "github.com/sirupsen/logrus"
-
 	. "github.com/projectcalico/calico/felix/bpf/asm"
 	"github.com/projectcalico/calico/felix/bpf/ipsets"
 	"github.com/projectcalico/calico/felix/bpf/maps"
@@ -29,6 +27,7 @@ import (
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/rules"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // Verifier imposes a limit on how many jumps can be on the same code path.

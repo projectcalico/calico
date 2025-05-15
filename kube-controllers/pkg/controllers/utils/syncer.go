@@ -18,8 +18,8 @@ import (
 	"reflect"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/lib/std/log"
 	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
@@ -91,7 +91,7 @@ func (d *DataFeed) RegisterForNotification(key model.Key, h UpdateHandler) {
 }
 
 func (d *DataFeed) OnStatusUpdated(status bapi.SyncStatus) {
-	logrus.Infof("Node controller syncer status updated: %s", status)
+	log.Infof("Node controller syncer status updated: %s", status)
 	for _, f := range d.statusRegistrations {
 		f(status)
 	}

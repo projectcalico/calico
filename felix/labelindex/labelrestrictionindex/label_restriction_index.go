@@ -18,8 +18,7 @@ import (
 	"iter"
 	"math"
 
-	"github.com/sirupsen/logrus"
-
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/lib/std/uniquestr"
 	"github.com/projectcalico/calico/libcalico-go/lib/selector"
 	"github.com/projectcalico/calico/libcalico-go/lib/selector/parser"
@@ -90,14 +89,14 @@ func (s *LabelRestrictionIndex[SelID]) AddSelector(id SelID, selector *selector.
 	// to pick the most restrictive.
 	labelName, found := findMostRestrictedLabel(lrs)
 	optimized := false
-	debug := logrus.IsLevelEnabled(logrus.DebugLevel)
+	debug := log.IsLevelEnabled(log.DebugLevel)
 	if found {
 		res := lrs[labelName]
 		if !res.PossibleToSatisfy() {
 			// Selector is impossible to satisfy, we don't even need to
 			// add it to the index(!)
 			if debug {
-				logrus.WithField("selector", selector.String()).Debug(
+				log.WithField("selector", selector.String()).Debug(
 					"Selector is not possible to satisfy.")
 			}
 			optimized = true
@@ -105,7 +104,7 @@ func (s *LabelRestrictionIndex[SelID]) AddSelector(id SelID, selector *selector.
 			// Selector requires one of a few specific values for this
 			// label, add it to the individual values index.
 			if debug {
-				logrus.WithFields(logrus.Fields{
+				log.WithFields(log.Fields{
 					"selector": selector.String(),
 					"label":    labelName.Value(),
 					"values":   uniquestr.HandleSliceStringer(res.MustHaveOneOfValues),
@@ -124,7 +123,7 @@ func (s *LabelRestrictionIndex[SelID]) AddSelector(id SelID, selector *selector.
 			// Selector requires that this label is present, add it to the
 			// wildcards.
 			if debug {
-				logrus.WithFields(logrus.Fields{
+				log.WithFields(log.Fields{
 					"selector": selector.String(),
 					"label":    labelName.Value(),
 				}).Debug("Optimising selector on wildcard.")
@@ -141,7 +140,7 @@ func (s *LabelRestrictionIndex[SelID]) AddSelector(id SelID, selector *selector.
 
 	if !optimized {
 		// We weren't able to optimise the selector
-		logrus.Debugf("Unable to optimise selector: %q", selector)
+		log.Debugf("Unable to optimise selector: %q", selector)
 		s.unoptimizedIDs.Add(id)
 	}
 }

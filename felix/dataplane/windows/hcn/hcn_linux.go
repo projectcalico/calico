@@ -20,7 +20,8 @@ import (
 	"reflect"
 
 	"github.com/davecgh/go-spew/spew"
-	"github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 type API struct{}
@@ -46,9 +47,9 @@ func (network *HostComputeNetwork) RemovePolicy(request PolicyNetworkRequest) er
 outer:
 	for _, p := range network.Policies {
 		for _, p2 := range request.Policies {
-			logrus.Infof("Comparing\n%s\nagainst\n%s", spew.Sdump(p), spew.Sdump(p2))
+			log.Infof("Comparing\n%s\nagainst\n%s", spew.Sdump(p), spew.Sdump(p2))
 			if reflect.DeepEqual(p, p2) {
-				logrus.Info("Match!")
+				log.Info("Match!")
 				continue outer
 			}
 		}

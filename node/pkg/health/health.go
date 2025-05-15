@@ -24,9 +24,9 @@ import (
 	"strings"
 	"time"
 
-	log "github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
 
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/node/pkg/health/bird"
 )
 

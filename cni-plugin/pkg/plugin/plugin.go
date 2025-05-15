@@ -35,7 +35,6 @@ import (
 	"github.com/containernetworking/plugins/pkg/ipam"
 	"github.com/mcuadros/go-version"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
@@ -44,6 +43,7 @@ import (
 	"github.com/projectcalico/calico/cni-plugin/pkg/dataplane"
 	"github.com/projectcalico/calico/cni-plugin/pkg/k8s"
 	"github.com/projectcalico/calico/cni-plugin/pkg/types"
+	"github.com/projectcalico/calico/lib/std/log"
 	libapi "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/resources"
 	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
@@ -85,7 +85,7 @@ func testConnection() error {
 		return fmt.Errorf("error getting ClusterInformation: %v", err)
 	}
 	if !*ci.Spec.DatastoreReady {
-		logrus.Info("Upgrade may be in progress, ready flag is not set")
+		log.Info("Upgrade may be in progress, ready flag is not set")
 		return fmt.Errorf("Calico is currently not ready to process requests")
 	}
 
@@ -135,10 +135,10 @@ func pollEndpointReadiness(endpoint string, interval, timeout time.Duration) err
 		func(context.Context) (bool, error) {
 			if isReady, err := isEndpointReady(endpoint, interval); !isReady {
 				if err != nil {
-					logrus.Errorf("Endpoint may not be ready:%v", err)
+					log.Errorf("Endpoint may not be ready:%v", err)
 					return false, nil
 				}
-				logrus.Error("Endpoint not ready")
+				log.Error("Endpoint not ready")
 				return false, nil
 			}
 			return true, nil
@@ -159,7 +159,7 @@ func cmdAdd(args *skel.CmdArgs) (err error) {
 			err = errors.New(msg)
 		}
 		if err != nil {
-			logrus.WithError(err).Error("Final result of CNI ADD was an error.")
+			log.WithError(err).Error("Final result of CNI ADD was an error.")
 		}
 	}()
 
@@ -190,7 +190,7 @@ func cmdAdd(args *skel.CmdArgs) (err error) {
 			s := "%s: check that the calico/node container is running and has mounted /var/lib/calico/"
 			return fmt.Errorf(s, err)
 		}
-		logrus.Debug("/var/lib/calico/nodename exists")
+		log.Debug("/var/lib/calico/nodename exists")
 	}
 
 	// Determine MTU to use.
@@ -199,7 +199,7 @@ func cmdAdd(args *skel.CmdArgs) (err error) {
 	} else if conf.MTU == 0 && mtu != 0 {
 		// No MTU specified in config, but an MTU file was found on disk.
 		// Use the value from the file.
-		logrus.WithField("mtu", mtu).Debug("Using MTU from /var/lib/calico/mtu")
+		log.WithField("mtu", mtu).Debug("Using MTU from /var/lib/calico/mtu")
 		conf.MTU = mtu
 	}
 	if conf.NumQueues <= 0 {
@@ -215,7 +215,7 @@ func cmdAdd(args *skel.CmdArgs) (err error) {
 		return
 	}
 
-	logrus.WithField("EndpointIDs", wepIDs).Debug("Extracted identifiers")
+	log.WithField("EndpointIDs", wepIDs).Debug("Extracted identifiers")
 
 	calicoClient, err := utils.CreateClient(conf)
 	if err != nil {
@@ -230,7 +230,7 @@ func cmdAdd(args *skel.CmdArgs) (err error) {
 		return
 	}
 	if !*ci.Spec.DatastoreReady {
-		logrus.Info("Upgrade may be in progress, ready flag is not set")
+		log.Info("Upgrade may be in progress, ready flag is not set")
 		err = fmt.Errorf("Calico is currently not ready to process requests")
 		return
 	}
@@ -280,16 +280,16 @@ func cmdAdd(args *skel.CmdArgs) (err error) {
 		return
 	}
 
-	var logger *logrus.Entry
+	var logger log.Entry
 	if wepIDs.Orchestrator == api.OrchestratorKubernetes {
-		logger = logrus.WithFields(logrus.Fields{
+		logger = log.WithFields(log.Fields{
 			"WorkloadEndpoint": fmt.Sprintf("%s%s", wepPrefix, wepIDs.Endpoint),
 			"ContainerID":      wepIDs.ContainerID,
 			"Pod":              wepIDs.Pod,
 			"Namespace":        wepIDs.Namespace,
 		})
 	} else {
-		logger = logrus.WithFields(logrus.Fields{
+		logger = log.WithFields(log.Fields{
 			"ContainerID": wepIDs.ContainerID,
 		})
 	}
@@ -407,7 +407,7 @@ func cmdAdd(args *skel.CmdArgs) (err error) {
 			// 3) Create the veth, configuring it on both the host and container namespace.
 
 			// 1) Run the IPAM plugin and make sure there's an IP address returned.
-			logger.WithFields(logrus.Fields{"paths": os.Getenv("CNI_PATH"),
+			logger.WithFields(log.Fields{"paths": os.Getenv("CNI_PATH"),
 				"type": conf.IPAM.Type}).Debug("Looking for IPAM plugin in paths")
 			var ipamResult cnitypes.Result
 			ipamResult, err = ipam.ExecAdd(conf.IPAM.Type, args.StdinData)
@@ -486,7 +486,7 @@ func cmdAdd(args *skel.CmdArgs) (err error) {
 				return
 			}
 
-			logger.WithFields(logrus.Fields{
+			logger.WithFields(log.Fields{
 				"HostVethName":     hostVethName,
 				"ContainerVethMac": contVethMac,
 			}).Info("Networked namespace")
@@ -593,7 +593,7 @@ func cmdDel(args *skel.CmdArgs) (err error) {
 			err = errors.New(msg)
 		}
 		if err != nil {
-			logrus.WithError(err).Error("Final result of CNI DEL was an error.")
+			log.WithError(err).Error("Final result of CNI DEL was an error.")
 		}
 	}()
 
@@ -617,7 +617,7 @@ func cmdDel(args *skel.CmdArgs) (err error) {
 			err = fmt.Errorf(s, err)
 			return
 		}
-		logrus.Debug("/var/lib/calico/nodename exists")
+		log.Debug("/var/lib/calico/nodename exists")
 	}
 
 	// Determine which node name to use.
@@ -628,7 +628,7 @@ func cmdDel(args *skel.CmdArgs) (err error) {
 	if err != nil {
 		return
 	}
-	logger := logrus.WithFields(logrus.Fields{"ContainerID": epIDs.ContainerID})
+	logger := log.WithFields(log.Fields{"ContainerID": epIDs.ContainerID})
 
 	var calicoClient clientv3.Interface
 	calicoClient, err = utils.CreateClient(conf)
@@ -644,7 +644,7 @@ func cmdDel(args *skel.CmdArgs) (err error) {
 		return
 	}
 	if !*ci.Spec.DatastoreReady {
-		logrus.Info("Upgrade may be in progress, ready flag is not set")
+		log.Info("Upgrade may be in progress, ready flag is not set")
 		err = fmt.Errorf("Calico is currently not ready to process requests")
 		return
 	}
@@ -656,7 +656,7 @@ func cmdDel(args *skel.CmdArgs) (err error) {
 		return
 	}
 
-	logger.WithFields(logrus.Fields{
+	logger.WithFields(log.Fields{
 		"Orchestrator":     epIDs.Orchestrator,
 		"Node":             epIDs.Node,
 		"WorkloadEndpoint": epIDs.WEPName,
@@ -742,7 +742,7 @@ func Main(version string) {
 		if err == nil {
 			os.Exit(0)
 		}
-		logrus.WithError(err).Error("data store connection failed")
+		log.WithError(err).Error("data store connection failed")
 		cniError := cnitypes.Error{
 			Code:    100,
 			Msg:     "data store connection failed",
@@ -753,7 +753,7 @@ func Main(version string) {
 	}
 
 	if err := utils.AddIgnoreUnknownArgs(); err != nil {
-		logrus.WithError(err).Error("Failed to set IgnoreUnknown=1")
+		log.WithError(err).Error("Failed to set IgnoreUnknown=1")
 		cniError := cnitypes.Error{
 			Code:    100,
 			Msg:     "failed to set IgnoreUnknown=1",

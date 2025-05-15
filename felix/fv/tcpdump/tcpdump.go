@@ -25,9 +25,9 @@ import (
 
 	"github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/fv/utils"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // Attach use if tcpdump is available in the container
@@ -118,7 +118,7 @@ func (t *TCPDump) MatchCount(name string) int {
 	defer t.lock.Unlock()
 
 	c := t.matchers[name].count
-	logrus.Infof("[%s] Match count for %s is %v", t.contName, name, c)
+	log.Infof("[%s] Match count for %s is %v", t.contName, name, c)
 	return c
 }
 
@@ -133,7 +133,7 @@ func (t *TCPDump) ResetCount(name string) {
 	defer t.lock.Unlock()
 
 	t.matchers[name].count = 0
-	logrus.Infof("[%s] Reset count for %s", t.contName, name)
+	log.Infof("[%s] Reset count for %s", t.contName, name)
 }
 
 func (t *TCPDump) Start(expr ...string) {
@@ -168,7 +168,7 @@ func (t *TCPDump) Stop() {
 		err = t.cmd.Process.Kill()
 	}
 	if err != nil {
-		logrus.WithError(err).Error("Failed to kill tcpdump; maybe it failed to start?")
+		log.WithError(err).Error("Failed to kill tcpdump; maybe it failed to start?")
 	}
 }
 
@@ -182,7 +182,7 @@ func (t *TCPDump) readStdout() {
 		t.lock.Unlock()
 
 		if logEnabled {
-			logrus.Infof("[%s] %s", t.contName, line)
+			log.Infof("[%s] %s", t.contName, line)
 		}
 		t.lock.Lock()
 		for _, m := range t.matchers {
@@ -192,7 +192,7 @@ func (t *TCPDump) readStdout() {
 		}
 		t.lock.Unlock()
 	}
-	logrus.WithError(s.Err()).Info("TCPDump stdout finished")
+	log.WithError(s.Err()).Info("TCPDump stdout finished")
 }
 
 func (t *TCPDump) readStderr() {
@@ -216,11 +216,11 @@ func (t *TCPDump) readStderr() {
 
 	for s.Scan() {
 		line := s.Text()
-		logrus.Infof("[%s] ERR: %s", t.contName, line)
+		log.Infof("[%s] ERR: %s", t.contName, line)
 		if strings.Contains(line, "listening") {
 			listening = true
 			safeClose()
 		}
 	}
-	logrus.WithError(s.Err()).Info("TCPDump stderr finished")
+	log.WithError(s.Err()).Info("TCPDump stderr finished")
 }

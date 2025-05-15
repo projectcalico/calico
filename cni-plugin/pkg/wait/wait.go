@@ -24,8 +24,8 @@ import (
 	"time"
 
 	"github.com/fsnotify/fsnotify"
-	"github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/lib/std/log"
 	libapi "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
 )
@@ -34,7 +34,7 @@ import (
 // is seen in the provided directory. Unblocks with an error after exceeding timeout.
 func ForEndpointReadyWithTimeout(policyDir string, endpoint *libapi.WorkloadEndpoint, timeout time.Duration) error {
 	if endpoint == nil {
-		logrus.Panic("Endpoint is nil")
+		log.Panic("Endpoint is nil")
 	}
 
 	key, err := names.V3WorkloadEndpointToWorkloadEndpointKey(endpoint)
@@ -42,7 +42,7 @@ func ForEndpointReadyWithTimeout(policyDir string, endpoint *libapi.WorkloadEndp
 		return fmt.Errorf("failed to convert endpoint to key: %w", err)
 	}
 	filename := names.WorkloadEndpointKeyToStatusFilename(key)
-	log := logrus.WithFields(logrus.Fields{
+	log := log.WithFields(log.Fields{
 		"policyDir":   policyDir,
 		"namespace":   endpoint.Namespace,
 		"workload":    endpoint.Name,
@@ -63,7 +63,7 @@ func ForEndpointReadyWithTimeout(policyDir string, endpoint *libapi.WorkloadEndp
 // Unblocks without error when the designated file is seen in directory.
 // Returns with error if context is cancelled before file is found.
 func waitUntilFileExists(ctx context.Context, directory, filename string) error {
-	log := logrus.WithFields(logrus.Fields{
+	log := log.WithFields(log.Fields{
 		"directory":   directory,
 		"disiredFile": filename,
 	})
@@ -99,7 +99,7 @@ exitFileNotFound:
 // Returns the last error encountered, though
 // more than one error may occurr before returning.
 func waitUntilFileExistsOrError(ctx context.Context, directory, filename string) (found bool, err error) {
-	log := logrus.WithFields(logrus.Fields{
+	log := log.WithFields(log.Fields{
 		"directory":   directory,
 		"desiredFile": filename,
 	})
@@ -173,7 +173,7 @@ func startWatchForFile(ctx context.Context, directory, filename string) (func() 
 //
 // Returns false, and nil error if context is cancelled.
 func waitForCreateEvent(ctx context.Context, watcher *fsnotify.Watcher, filename string) (bool, error) {
-	log := logrus.WithFields(logrus.Fields{
+	log := log.WithFields(log.Fields{
 		"watchedDirectories": watcher.WatchList(),
 		"targetFilename":     filename,
 	})
@@ -206,7 +206,7 @@ func waitForCreateEvent(ctx context.Context, watcher *fsnotify.Watcher, filename
 func closeWatcherAndIgnoreErr(w *fsnotify.Watcher) {
 	err := w.Close()
 	if err != nil {
-		logrus.WithError(err).Debug("Ignoring error encountered while closing filesystem watch")
+		log.WithError(err).Debug("Ignoring error encountered while closing filesystem watch")
 	}
 }
 

@@ -19,10 +19,10 @@ package bpf
 import (
 	"time"
 
-	log "github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 
 	"github.com/projectcalico/calico/felix/bpf/asm"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 type ProgFD uint32

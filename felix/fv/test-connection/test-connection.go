@@ -36,12 +36,12 @@ import (
 	"github.com/google/uuid"
 	"github.com/ishidawataru/sctp"
 	reuse "github.com/libp2p/go-reuseport"
-	log "github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 
 	"github.com/projectcalico/calico/felix/fv/cgroup"
 	"github.com/projectcalico/calico/felix/fv/connectivity"
 	"github.com/projectcalico/calico/felix/fv/utils"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 const usage = `test-connection: test connection to some target, for Felix FV testing.

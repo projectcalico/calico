@@ -20,8 +20,9 @@ import (
 	"time"
 
 	"github.com/patrickmn/go-cache"
-	log "github.com/sirupsen/logrus"
 	"k8s.io/client-go/util/workqueue"
+
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // ResourceCache stores resources and queues updates when those resources
@@ -97,7 +98,7 @@ type calicoCache struct {
 	workqueue        workqueue.TypedRateLimitingInterface[any]
 	ListFunc         func() (map[string]interface{}, error)
 	ObjectType       reflect.Type
-	log              *log.Entry
+	log              log.Entry
 	running          bool
 	mut              *sync.Mutex
 	reconcilerConfig ReconcilerConfig
@@ -111,7 +112,7 @@ func NewResourceCache(args ResourceCacheArgs) ResourceCache {
 		workqueue:       workqueue.NewTypedRateLimitingQueue(workqueue.DefaultTypedControllerRateLimiter[any]()),
 		ListFunc:        args.ListFunc,
 		ObjectType:      args.ObjectType,
-		log: func() *log.Entry {
+		log: func() log.Entry {
 			if args.LogTypeDesc == "" {
 				return log.WithFields(log.Fields{"type": args.ObjectType})
 			}

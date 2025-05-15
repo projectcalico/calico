@@ -17,12 +17,11 @@ package rules
 import (
 	"fmt"
 
-	log "github.com/sirupsen/logrus"
-
 	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/nftables"
 	"github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/lib/std/log"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 

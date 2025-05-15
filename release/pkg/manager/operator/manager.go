@@ -21,8 +21,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/sirupsen/logrus"
-
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/pinnedversion"
 	"github.com/projectcalico/calico/release/internal/registry"
@@ -108,7 +107,7 @@ func NewManager(opts ...Option) *OperatorManager {
 	}
 	for _, opt := range opts {
 		if err := opt(o); err != nil {
-			logrus.WithError(err).Fatal("Failed to apply option")
+			log.WithError(err).Fatal("Failed to apply option")
 		}
 	}
 
@@ -130,7 +129,7 @@ func (o *OperatorManager) Build() error {
 	}
 	defer func() {
 		if _, err := o.runner.RunInDir(o.dir, "git", []string{"reset", "--hard"}, nil); err != nil {
-			logrus.WithError(err).Error("Failed to reset repository")
+			log.WithError(err).Error("Failed to reset repository")
 		}
 	}()
 	env := os.Environ()
@@ -168,7 +167,7 @@ func (o *OperatorManager) Build() error {
 
 func (o *OperatorManager) PreBuildValidation(outputDir string) error {
 	if o.dir == "" {
-		logrus.Fatal("No repository root specified")
+		log.Fatal("No repository root specified")
 	}
 	if !o.isHashRelease {
 		return fmt.Errorf("operator manager builds only for hash releases")
@@ -212,14 +211,14 @@ func (o *OperatorManager) Publish() error {
 			return err
 		}
 	}
-	fields := logrus.Fields{}
+	fields := log.Fields{}
 	if !o.publish {
-		logrus.Warn("Skipping publish is set, will treat as dry-run")
+		log.Warn("Skipping publish is set, will treat as dry-run")
 		fields["dry-run"] = "true"
 	}
 	operatorComponent, err := pinnedversion.RetrievePinnedOperator(o.tmpDir)
 	if err != nil {
-		logrus.WithError(err).Error("Failed to get operator component")
+		log.WithError(err).Error("Failed to get operator component")
 		return err
 	}
 	var imageList []string
@@ -231,7 +230,7 @@ func (o *OperatorManager) Publish() error {
 				return err
 			}
 		}
-		logrus.WithFields(fields).Info("Pushed operator image")
+		log.WithFields(fields).Info("Pushed operator image")
 		imageList = append(imageList, imgName)
 	}
 	delete(fields, "image")
@@ -242,7 +241,7 @@ func (o *OperatorManager) Publish() error {
 			return err
 		}
 	}
-	logrus.WithFields(fields).Info("Pushed operator manifest")
+	log.WithFields(fields).Info("Pushed operator manifest")
 	delete(fields, "manifest")
 	initImage := operatorComponent.InitImage()
 	fields["image"] = initImage
@@ -251,7 +250,7 @@ func (o *OperatorManager) Publish() error {
 			return err
 		}
 	}
-	logrus.WithFields(fields).Info("Pushed operator init image")
+	log.WithFields(fields).Info("Pushed operator init image")
 	return nil
 }
 
@@ -263,23 +262,23 @@ func (o *OperatorManager) PrePublishValidation() error {
 		return fmt.Errorf("no architectures specified")
 	}
 	if !o.publish {
-		logrus.Warn("Skipping publish is set, will treat as dry-run")
+		log.Warn("Skipping publish is set, will treat as dry-run")
 	}
 	return nil
 }
 
 func (o *OperatorManager) PreReleasePublicValidation() error {
 	if o.githubOrg == "" {
-		logrus.Fatal("GitHub organization not specified")
+		log.Fatal("GitHub organization not specified")
 	}
 	if o.repoName == "" {
-		logrus.Fatal("GitHub repository not specified")
+		log.Fatal("GitHub repository not specified")
 	}
 	if o.remote == "" {
-		logrus.Fatal("No git remote specified")
+		log.Fatal("No git remote specified")
 	}
 	if o.version == "" {
-		logrus.Fatal("No operator version specified")
+		log.Fatal("No operator version specified")
 	}
 	return nil
 }

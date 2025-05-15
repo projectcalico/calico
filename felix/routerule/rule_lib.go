@@ -17,12 +17,12 @@ package routerule
 import (
 	"net"
 
-	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
 	"k8s.io/utils/ptr"
 
 	"github.com/projectcalico/calico/felix/ip"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // Rule is a wrapper structure around netlink rule.
@@ -46,7 +46,7 @@ func (r *Rule) NetLinkRule() *netlink.Rule {
 	return r.nlRule
 }
 
-func (r *Rule) LogCxt() *log.Entry {
+func (r *Rule) LogCxt() log.Entry {
 	var src interface{}
 	if r.nlRule.Src != nil {
 		src = r.nlRule.Src

@@ -19,9 +19,9 @@ import (
 	"regexp"
 	"strings"
 
-	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 
+	"github.com/projectcalico/calico/lib/std/log"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/node/pkg/lifecycle/utils"
 )

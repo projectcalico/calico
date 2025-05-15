@@ -15,12 +15,11 @@
 package dataplane
 
 import (
-	"github.com/sirupsen/logrus"
-
 	"github.com/projectcalico/calico/cni-plugin/pkg/dataplane/windows"
 	"github.com/projectcalico/calico/cni-plugin/pkg/types"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
-func getDefaultSystemDataplane(conf types.NetConf, logger *logrus.Entry) (Dataplane, error) {
+func getDefaultSystemDataplane(conf types.NetConf, logger log.Entry) (Dataplane, error) {
 	return windows.NewWindowsDataplane(conf, logger), nil
 }
