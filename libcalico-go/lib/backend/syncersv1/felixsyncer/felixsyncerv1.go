@@ -27,6 +27,10 @@ import (
 
 // New creates a new Felix v1 Syncer.
 func New(client api.Client, cfg apiconfig.CalicoAPIConfigSpec, callbacks api.SyncerCallbacks, isLeader bool) api.Syncer {
+	return NewFromProvider(watchersyncer.NewWatcherCacheFactory(client), cfg, callbacks, isLeader)
+}
+
+func NewFromProvider(watcherCacheProvider watchersyncer.WatcherCacheProvider, cfg apiconfig.CalicoAPIConfigSpec, callbacks api.SyncerCallbacks, isLeader bool) api.Syncer {
 	// Felix always needs ClusterInformation and FelixConfiguration resources.
 	resourceTypes := []watchersyncer.ResourceType{
 		{
@@ -133,8 +137,8 @@ func New(client api.Client, cfg apiconfig.CalicoAPIConfigSpec, callbacks api.Syn
 		resourceTypes = append(resourceTypes, additionalTypes...)
 	}
 
-	return watchersyncer.New(
-		client,
+	return watchersyncer.NewFromProvider(
+		watcherCacheProvider,
 		resourceTypes,
 		callbacks,
 	)

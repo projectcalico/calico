@@ -36,6 +36,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/syncersv1/felixsyncer"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/syncersv1/nodestatussyncer"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/syncersv1/tunnelipsyncer"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/watchersyncer"
 	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/debugserver"
 	"github.com/projectcalico/calico/libcalico-go/lib/health"
@@ -118,7 +119,12 @@ func New() *TyphaDaemon {
 			if err != nil {
 				return nil, err
 			}
-			return ClientV3Shim{client.(RealClientV3), config}, nil
+			realClient := client.(RealClientV3)
+			return ClientV3Shim{
+				RealClientV3:         realClient,
+				config:               config,
+				watcherCacheProvider: watchersyncer.NewWatcherCachePool(realClient.Backend()),
+			}, nil
 		},
 		ConfigureEarlyLogging: logutils.ConfigureEarlyLogging,
 		ConfigureLogging:      logutils.ConfigureLogging,
@@ -490,23 +496,24 @@ func (t *TyphaDaemon) WaitAndShutDown(cxt context.Context) {
 // ClientV3Shim wraps a real client, allowing its syncer to be mocked.
 type ClientV3Shim struct {
 	RealClientV3
-	config apiconfig.CalicoAPIConfig
+	config               apiconfig.CalicoAPIConfig
+	watcherCacheProvider watchersyncer.WatcherCacheProvider
 }
 
 func (s ClientV3Shim) FelixSyncerByIface(callbacks bapi.SyncerCallbacks) bapi.Syncer {
-	return felixsyncer.New(s.Backend(), s.config.Spec, callbacks, true)
+	return felixsyncer.NewFromProvider(s.watcherCacheProvider, s.config.Spec, callbacks, true)
 }
 
 func (s ClientV3Shim) BGPSyncerByIface(callbacks bapi.SyncerCallbacks) bapi.Syncer {
-	return bgpsyncer.New(s.Backend(), callbacks, "", s.config.Spec)
+	return bgpsyncer.NewFromProvider(s.watcherCacheProvider, callbacks, "", s.config.Spec)
 }
 
 func (s ClientV3Shim) TunnelIPAllocationSyncerByIface(callbacks bapi.SyncerCallbacks) bapi.Syncer {
-	return tunnelipsyncer.New(s.Backend(), callbacks, "")
+	return tunnelipsyncer.NewFromProvider(s.watcherCacheProvider, callbacks, "")
 }
 
 func (s ClientV3Shim) NodeStatusSyncerByIface(callbacks bapi.SyncerCallbacks) bapi.Syncer {
-	return nodestatussyncer.New(s.Backend(), callbacks)
+	return nodestatussyncer.NewFromProvider(s.watcherCacheProvider, callbacks)
 }
 
 // DatastoreClient is our interface to the datastore, used for mocking in the UTs.
