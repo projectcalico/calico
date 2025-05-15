@@ -23,8 +23,8 @@ import (
 
 	"github.com/kelseyhightower/envconfig"
 	"github.com/projectcalico/go-yaml-wrapper"
-	log "github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	api "github.com/projectcalico/calico/libcalico-go/lib/apis/v1"
 	"github.com/projectcalico/calico/libcalico-go/lib/apis/v1/unversioned"
