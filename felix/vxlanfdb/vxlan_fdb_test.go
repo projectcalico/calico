@@ -20,7 +20,6 @@ import (
 	"time"
 
 	. "github.com/onsi/gomega"
-	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
 
@@ -28,12 +27,13 @@ import (
 	"github.com/projectcalico/calico/felix/ifacemonitor"
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/netlinkshim/mocknetlink"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 )
 
 func init() {
-	logrus.SetFormatter(&logutils.Formatter{})
-	logrus.SetLevel(logrus.DebugLevel)
+	log.SetFormatter(&logutils.Formatter{})
+	log.SetLevel(log.DebugLevel)
 }
 
 const (

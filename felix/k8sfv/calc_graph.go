@@ -18,9 +18,10 @@ import (
 	"context"
 	"sync"
 
-	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
+
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 func rotateLabels(clientset *kubernetes.Clientset, nsPrefix string) error {

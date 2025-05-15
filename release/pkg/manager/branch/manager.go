@@ -17,8 +17,7 @@ package branch
 import (
 	"fmt"
 
-	"github.com/sirupsen/logrus"
-
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/utils"
 	"github.com/projectcalico/calico/release/internal/version"
@@ -56,28 +55,28 @@ func NewManager(opts ...Option) *BranchManager {
 	// Apply the options
 	for _, o := range opts {
 		if err := o(b); err != nil {
-			logrus.WithError(err).Fatal("Failed to apply option")
+			log.WithError(err).Fatal("Failed to apply option")
 		}
 	}
 
 	// Validate the configuration
 	if b.repoRoot == "" {
-		logrus.Fatal("No repository root specified")
+		log.Fatal("No repository root specified")
 	}
 	if b.remote == "" {
-		logrus.Fatal("No remote repository source specified")
+		log.Fatal("No remote repository source specified")
 	}
 	if b.mainBranch == "" {
-		logrus.Fatal("No main branch specified")
+		log.Fatal("No main branch specified")
 	}
 	if b.devTagIdentifier == "" {
-		logrus.Fatal("No development tag identifier specified")
+		log.Fatal("No development tag identifier specified")
 	}
 	if b.releaseBranchPrefix == "" {
-		logrus.Fatal("No release branch prefix specified")
+		log.Fatal("No release branch prefix specified")
 	}
 
-	logrus.WithFields(logrus.Fields{
+	log.WithFields(log.Fields{
 		"repoRoot":            b.repoRoot,
 		"remote":              b.remote,
 		"mainBranch":          b.mainBranch,
@@ -97,7 +96,7 @@ func (b *BranchManager) CutVersionedBranch(stream string) error {
 		}
 	}
 	newBranchName := fmt.Sprintf("%s-%s", b.releaseBranchPrefix, stream)
-	logrus.WithField("branch", newBranchName).Info("Creating new release branch")
+	log.WithField("branch", newBranchName).Info("Creating new release branch")
 	if _, err := b.git("checkout", "-b", newBranchName); err != nil {
 		return err
 	}
@@ -134,7 +133,7 @@ func (b *BranchManager) CutReleaseBranch() error {
 	}
 	nextVersion := ver.NextBranchVersion()
 	nextVersionTag := fmt.Sprintf("%s-%s", nextVersion.FormattedString(), b.devTagIdentifier)
-	logrus.WithField("tag", nextVersionTag).Info("Creating new development tag")
+	log.WithField("tag", nextVersionTag).Info("Creating new development tag")
 	if _, err := b.git("commit", "--allow-empty", "-m", fmt.Sprintf("Begin development for %s", nextVersion.FormattedString())); err != nil {
 		return err
 	}

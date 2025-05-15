@@ -18,7 +18,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/sirupsen/logrus"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 const (
@@ -141,7 +141,7 @@ func SectionName(endpointType EndpointType, fromOrTo ToOrFromEp) string {
 func ProgFilename(ipVer int, epType EndpointType, toOrFrom ToOrFromEp, epToHostDrop, fib, dsr bool, logLevel string, btf bool) string {
 	if epToHostDrop && (epType != EpTypeWorkload || toOrFrom == ToEp) {
 		// epToHostDrop only makes sense in the from-workload program.
-		logrus.Debug("Ignoring epToHostDrop, doesn't apply to this target")
+		log.Debug("Ignoring epToHostDrop, doesn't apply to this target")
 		epToHostDrop = false
 	}
 
@@ -155,7 +155,7 @@ func ProgFilename(ipVer int, epType EndpointType, toOrFrom ToOrFromEp, epToHostD
 
 		if !realFIB {
 			// FIB lookup only makes sense for traffic towards the host.
-			logrus.Debug("Ignoring fib enabled, doesn't apply to this target")
+			log.Debug("Ignoring fib enabled, doesn't apply to this target")
 		}
 		fib = realFIB
 	}

@@ -28,12 +28,12 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
-	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/iptables/cmdshim"
 	"github.com/projectcalico/calico/felix/logutils"
+	"github.com/projectcalico/calico/lib/std/log"
 	logutilslc "github.com/projectcalico/calico/libcalico-go/lib/logutils"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
@@ -270,7 +270,7 @@ type Table struct {
 	// implementation.
 	lockProbeInterval time.Duration
 
-	logCxt               *log.Entry
+	logCxt               log.Entry
 	updateRateLimitedLog *logutilslc.RateLimitedLogger
 
 	gaugeNumChains        prometheus.Gauge
@@ -677,7 +677,7 @@ func (t *Table) loadDataplaneState() {
 	// chains for refresh.
 	logCxt := t.logCxt.WithField("chainName", "")
 	for chainName, expectedHashes := range t.chainToDataplaneHashes {
-		// Re-using one logrus.Entry to reduce allocations.
+		// Re-using one log.Entry to reduce allocations.
 		logCxt.Data["chainName"] = chainName
 
 		if t.dirtyChains.Contains(chainName) || t.dirtyInsertAppend.Contains(chainName) {

@@ -20,8 +20,8 @@ import (
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
-	"github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
 )
@@ -29,7 +29,7 @@ import (
 func init() {
 	testutils.HookLogrusForGinkgo()
 	logutils.ConfigureFormatter("test")
-	logrus.SetLevel(logrus.DebugLevel)
+	log.SetLevel(log.DebugLevel)
 }
 
 func TestFlowlogs(t *testing.T) {

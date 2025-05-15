@@ -23,13 +23,13 @@ import (
 
 	"github.com/containernetworking/cni/pkg/skel"
 	cniv1 "github.com/containernetworking/cni/pkg/types/100"
-	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/resolver"
 
 	"github.com/projectcalico/calico/cni-plugin/pkg/dataplane/grpc/proto"
 	"github.com/projectcalico/calico/cni-plugin/pkg/types"
+	"github.com/projectcalico/calico/lib/std/log"
 	api "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	calicoclient "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 )
@@ -42,7 +42,7 @@ type grpcDataplane struct {
 	socket            string
 	allowIPForwarding bool
 	mtu               int
-	logger            *logrus.Entry
+	logger            log.Entry
 	options           map[string]string
 }
 
@@ -50,7 +50,7 @@ func init() {
 	resolver.SetDefaultScheme("passthrough")
 }
 
-func NewGrpcDataplane(conf types.NetConf, logger *logrus.Entry) (*grpcDataplane, error) {
+func NewGrpcDataplane(conf types.NetConf, logger log.Entry) (*grpcDataplane, error) {
 	socket, ok := conf.DataplaneOptions["socket"].(string)
 	if !ok {
 		return nil, fmt.Errorf("GRPC dataplane socket not configured")

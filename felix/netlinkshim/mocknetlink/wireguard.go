@@ -19,11 +19,11 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"github.com/sirupsen/logrus"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/netlinkshim"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -188,10 +188,10 @@ func (d *MockWireguard) ConfigureDevice(name string, cfg wgtypes.Config) error {
 		d.WireguardConfigUpdated = true
 	}
 	if cfg.ReplacePeers || len(cfg.Peers) > 0 {
-		logrus.Debug("Update peers for wireguard link")
+		log.Debug("Update peers for wireguard link")
 		existing := link.WireguardPeers
 		if cfg.ReplacePeers || link.WireguardPeers == nil {
-			logrus.Debug("Reset internal peers map")
+			log.Debug("Reset internal peers map")
 			link.WireguardPeers = map[wgtypes.Key]wgtypes.Peer{}
 		}
 		for _, peerCfg := range cfg.Peers {

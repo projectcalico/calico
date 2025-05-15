@@ -24,8 +24,8 @@ import (
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/client"
-	"github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/release/internal/command"
 )
 
@@ -51,7 +51,7 @@ type ManifestList struct {
 func NewDockerRunner() (d *DockerRunner, err error) {
 	dockerClient, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
-		logrus.WithError(err).Error("failed to create docker client")
+		log.WithError(err).Error("failed to create docker client")
 		return nil, err
 	}
 	return &DockerRunner{
@@ -63,31 +63,31 @@ func NewDockerRunner() (d *DockerRunner, err error) {
 func MustDockerRunner() *DockerRunner {
 	d, err := NewDockerRunner()
 	if err != nil {
-		logrus.WithError(err).Fatal("failed to create docker runner")
+		log.WithError(err).Fatal("failed to create docker runner")
 	}
 	return d
 }
 
 // PullImage pulls the image if it does not exist
 func (d *DockerRunner) PullImage(img string) error {
-	logrus.WithField("image", img).Debug("Checking if image exists")
+	log.WithField("image", img).Debug("Checking if image exists")
 	imageSummary, err := d.dockerClient.ImageList(context.Background(), image.ListOptions{
 		Filters: filters.NewArgs(filters.Arg("reference", img)),
 	})
 	if err != nil {
-		logrus.WithError(err).Error("failed to list images")
+		log.WithError(err).Error("failed to list images")
 		return err
 	}
 	if len(imageSummary) == 0 {
-		logrus.WithField("image", img).Debug("Image does not exist, pulling...")
+		log.WithField("image", img).Debug("Image does not exist, pulling...")
 		reader, err := d.dockerClient.ImagePull(context.Background(), img, image.PullOptions{})
 		if err != nil {
-			logrus.WithError(err).Error("failed to pull image")
+			log.WithError(err).Error("failed to pull image")
 			return err
 		}
 		defer reader.Close()
 		if _, err := io.Copy(os.Stdout, reader); err != nil {
-			logrus.WithError(err).Error("failed to copy image pull output")
+			log.WithError(err).Error("failed to copy image pull output")
 			return err
 		}
 	}
@@ -96,12 +96,12 @@ func (d *DockerRunner) PullImage(img string) error {
 
 // TagImage tags the image with the new tag
 func (d *DockerRunner) TagImage(currentTag, newTag string) error {
-	logrus.WithFields(logrus.Fields{
+	log.WithFields(log.Fields{
 		"currentTag": currentTag,
 		"newTag":     newTag,
 	}).Debug("Tagging image")
 	if err := d.dockerClient.ImageTag(context.Background(), currentTag, newTag); err != nil {
-		logrus.WithError(err).Error("failed to tag image")
+		log.WithError(err).Error("failed to tag image")
 		return err
 	}
 	return nil
@@ -109,41 +109,41 @@ func (d *DockerRunner) TagImage(currentTag, newTag string) error {
 
 // PushImage pushes the image to the registry
 func (d *DockerRunner) PushImage(img string) error {
-	logrus.WithField("image", img).Debug("Pushing image")
+	log.WithField("image", img).Debug("Pushing image")
 	if _, err := command.Run("docker", []string{"push", img}); err != nil {
-		logrus.WithError(err).Error("failed to create manifest list")
+		log.WithError(err).Error("failed to create manifest list")
 		return err
 	}
-	logrus.WithField("image", img).Debug("Image pushed")
+	log.WithField("image", img).Debug("Image pushed")
 	return nil
 }
 
 // RemoveImage removes the image if it exists
 func (d *DockerRunner) RemoveImage(img string) error {
-	logrus.WithField("image", img).Debug("Checking if image exists")
+	log.WithField("image", img).Debug("Checking if image exists")
 	images, err := d.dockerClient.ImageList(context.Background(), image.ListOptions{
 		Filters: filters.NewArgs(filters.Arg("reference", img)),
 	})
 	if err != nil {
-		logrus.WithError(err).Error("failed to list images")
+		log.WithError(err).Error("failed to list images")
 		return err
 	}
 	if len(images) == 0 {
-		logrus.Debug(img, " image does not exist")
+		log.Debug(img, " image does not exist")
 		return nil
 	}
 
 	for _, img := range images {
-		logrus.WithField("image", img.ID).Debug("Removing image")
+		log.WithField("image", img.ID).Debug("Removing image")
 		_, err := d.dockerClient.ImageRemove(context.Background(), img.ID, image.RemoveOptions{
 			Force:         true,
 			PruneChildren: true,
 		})
 		if err != nil {
-			logrus.WithField("image", img.ID).WithError(err).Error("failed to remove image")
+			log.WithField("image", img.ID).WithError(err).Error("failed to remove image")
 			return err
 		}
-		logrus.WithField("image", img.ID).Debug("Image removed")
+		log.WithField("image", img.ID).Debug("Image removed")
 	}
 	return nil
 }
@@ -156,11 +156,11 @@ func (d *DockerRunner) ManifestPush(manifestListName string, images []string) er
 	createArgs := []string{"manifest", "create", "--amend", manifestListName}
 	createArgs = append(createArgs, images...)
 	if _, err := command.Run("docker", createArgs); err != nil {
-		logrus.WithError(err).Error("failed to create manifest list")
+		log.WithError(err).Error("failed to create manifest list")
 		return err
 	}
 	if _, err := command.Run("docker", []string{"manifest", "push", manifestListName}); err != nil {
-		logrus.WithError(err).Error("failed to push manifest list")
+		log.WithError(err).Error("failed to push manifest list")
 		return err
 	}
 	return nil
@@ -168,16 +168,16 @@ func (d *DockerRunner) ManifestPush(manifestListName string, images []string) er
 
 // RunContainer runs a container with the given config and host config
 func (d *DockerRunner) RunContainer(containerConfig *container.Config, hostConfig *container.HostConfig) (container.CreateResponse, error) {
-	logrus.WithField("image", containerConfig.Image).Debug("Creating container")
+	log.WithField("image", containerConfig.Image).Debug("Creating container")
 	response, err := d.dockerClient.ContainerCreate(context.Background(), containerConfig, hostConfig, nil, nil, "")
 	if err != nil {
-		logrus.WithError(err).Error("failed to create container")
+		log.WithError(err).Error("failed to create container")
 		return container.CreateResponse{}, err
 	}
 
-	logrus.WithField("containerID", response.ID).Debug("Starting container ", response.ID)
+	log.WithField("containerID", response.ID).Debug("Starting container ", response.ID)
 	if err := d.dockerClient.ContainerStart(context.Background(), response.ID, container.StartOptions{}); err != nil {
-		logrus.WithField("containerID", response.ID).WithError(err).Error("failed to start container")
+		log.WithField("containerID", response.ID).WithError(err).Error("failed to start container")
 		return container.CreateResponse{}, err
 	}
 	return response, nil
@@ -185,7 +185,7 @@ func (d *DockerRunner) RunContainer(containerConfig *container.Config, hostConfi
 
 // ExecInContainer executes a command in the container
 func (d *DockerRunner) ExecInContainer(containerID string, cmd ...string) (container.ExecInspect, error) {
-	logrus.WithFields(logrus.Fields{
+	log.WithFields(log.Fields{
 		"containerID": containerID,
 		"cmd":         cmd,
 	}).Debug("Creating exec instance")
@@ -195,31 +195,31 @@ func (d *DockerRunner) ExecInContainer(containerID string, cmd ...string) (conta
 		Cmd:          cmd,
 	})
 	if err != nil {
-		logrus.WithError(err).Error("failed to create exec instance")
+		log.WithError(err).Error("failed to create exec instance")
 		return container.ExecInspect{}, err
 	}
 
-	logrus.WithFields(logrus.Fields{
+	log.WithFields(log.Fields{
 		"containerID": containerID,
 		"execID":      exec.ID,
 	}).Debug("Attach to the exec instance")
 	resp, err := d.dockerClient.ContainerExecAttach(context.Background(), exec.ID, container.ExecAttachOptions{})
 	if err != nil {
-		logrus.WithError(err).Error("failed to start exec instance")
+		log.WithError(err).Error("failed to start exec instance")
 	}
 	defer resp.Close()
 
 	output, err := io.ReadAll(resp.Reader)
 	if err != nil {
-		logrus.WithError(err).Error("failed to read exec output")
+		log.WithError(err).Error("failed to read exec output")
 		return container.ExecInspect{}, err
 	}
 
-	logrus.WithField("cmd", cmd).Infof("printing output...\n%s\n...end of output", string(output))
+	log.WithField("cmd", cmd).Infof("printing output...\n%s\n...end of output", string(output))
 
 	inspect, err := d.dockerClient.ContainerExecInspect(context.Background(), exec.ID)
 	if err != nil {
-		logrus.WithError(err).Error("failed to inspect exec instance")
+		log.WithError(err).Error("failed to inspect exec instance")
 		return container.ExecInspect{}, err
 	}
 	return inspect, nil
@@ -228,7 +228,7 @@ func (d *DockerRunner) ExecInContainer(containerID string, cmd ...string) (conta
 // StopContainer stops the container
 func (d *DockerRunner) StopContainer(containerID string) error {
 	if err := d.dockerClient.ContainerStop(context.Background(), containerID, container.StopOptions{}); err != nil {
-		logrus.WithError(err).Error("failed to stop container")
+		log.WithError(err).Error("failed to stop container")
 		return err
 	}
 	return nil
@@ -237,7 +237,7 @@ func (d *DockerRunner) StopContainer(containerID string) error {
 // RemoveContainer removes the container
 func (d *DockerRunner) RemoveContainer(containerID string) error {
 	if err := d.dockerClient.ContainerRemove(context.Background(), containerID, container.RemoveOptions{}); err != nil {
-		logrus.WithError(err).Error("failed to remove container")
+		log.WithError(err).Error("failed to remove container")
 		return err
 	}
 	return nil

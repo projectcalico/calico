@@ -26,9 +26,10 @@ import (
 	"syscall"
 
 	csi "github.com/container-storage-interface/spec/lib/go/csi"
-	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+
+	"github.com/projectcalico/calico/lib/std/log"
 
 	// TODO: move the object in here to a common package
 	"github.com/projectcalico/calico/pod2daemon/flexvol/creds"

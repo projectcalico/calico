@@ -23,9 +23,9 @@ import (
 	"go/token"
 	"os"
 
-	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
 
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 )
 
@@ -37,10 +37,10 @@ func main() {
 	configureLogging()
 
 	if flag.CommandLine.NArg() == 0 {
-		logrus.Info("No files specified")
+		log.Info("No files specified")
 		os.Exit(0)
 	} else if flag.CommandLine.NArg() > 1 && *inPlace {
-		logrus.Info("Processing multiple files...")
+		log.Info("Processing multiple files...")
 		var g errgroup.Group
 		for _, fileName := range flag.CommandLine.Args() {
 			g.Go(func() error {
@@ -94,13 +94,13 @@ func processFile(fileName string) (err error) {
 				// Success, remove the backup file.
 				err = os.Remove(fileName + ".bak")
 				if err != nil {
-					logrus.WithError(err).Error("Failed to remove backup file.")
+					log.WithError(err).Error("Failed to remove backup file.")
 				}
 			} else {
 				// Failure, try to restore the backup file.
 				err := os.Rename(fileName+".bak", fileName)
 				if err != nil {
-					logrus.WithError(err).Error("Failed to move backup file back to original location.")
+					log.WithError(err).Error("Failed to move backup file back to original location.")
 				}
 			}
 		}()
@@ -114,7 +114,7 @@ func processFile(fileName string) (err error) {
 				if err == nil {
 					err = fmt.Errorf("failed to close file %q: %w", fileName, cerr)
 				} else {
-					logrus.WithError(cerr).Error("Failed to close file")
+					log.WithError(cerr).Error("Failed to close file")
 				}
 			}
 		}()
@@ -129,12 +129,12 @@ func processFile(fileName string) (err error) {
 
 func configureLogging() {
 	logutils.ConfigureFormatter("coalesce-imports")
-	logrus.SetLevel(logrus.FatalLevel)
-	logLevel, err := logrus.ParseLevel(*logLevel)
+	log.SetLevel(log.FatalLevel)
+	logLevel, err := log.ParseLevel(*logLevel)
 	if err != nil {
-		logrus.Fatalf("Failed to parse log level: %v", err)
+		log.Fatalf("Failed to parse log level: %v", err)
 	}
-	logrus.SetLevel(logLevel)
+	log.SetLevel(logLevel)
 }
 
 // Largely cribbed from the go/ast package:

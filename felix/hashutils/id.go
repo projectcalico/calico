@@ -18,7 +18,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 
-	log "github.com/sirupsen/logrus"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 const shortenedPrefix = "_"

@@ -23,10 +23,10 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
 	"github.com/projectcalico/calico/felix/fv/workload"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
 )
@@ -119,7 +119,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Pod setup status wait", []a
 
 			By("checking if the stale file has been cleaned up")
 			fileExists := func() bool {
-				logrus.WithField("file", name).Info("Checking existence of expected file in endpoint-status dir")
+				log.WithField("file", name).Info("Checking existence of expected file in endpoint-status dir")
 				_, err := tc.Felixes[0].ExecOutput("stat", name)
 				return err == nil
 			}

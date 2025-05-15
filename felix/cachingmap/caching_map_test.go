@@ -19,10 +19,10 @@ import (
 	"testing"
 
 	. "github.com/onsi/gomega"
-	log "github.com/sirupsen/logrus"
 
 	. "github.com/projectcalico/calico/felix/cachingmap"
 	"github.com/projectcalico/calico/felix/logutils"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 func init() {

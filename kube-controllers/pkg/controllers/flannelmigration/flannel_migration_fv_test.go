@@ -26,12 +26,12 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/projectcalico/calico/felix/fv/containers"
 	"github.com/projectcalico/calico/kube-controllers/tests/testutils"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	backend "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
@@ -71,7 +71,7 @@ var _ = Describe("flannel-migration-controller FV test", func() {
 	logKubectl := func(args ...string) {
 		out, err := apiserver.ExecOutput(args...)
 		Expect(err).ShouldNot(HaveOccurred())
-		logrus.Infof("--- kubectl output --- \n%s", out)
+		log.Infof("--- kubectl output --- \n%s", out)
 	}
 
 	startController := func() {

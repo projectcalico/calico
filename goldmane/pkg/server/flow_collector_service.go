@@ -19,7 +19,6 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/peer"
 
@@ -27,6 +26,7 @@ import (
 	"github.com/projectcalico/calico/goldmane/pkg/internal/flowcache"
 	"github.com/projectcalico/calico/goldmane/pkg/types"
 	"github.com/projectcalico/calico/goldmane/proto"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 var (
@@ -80,14 +80,14 @@ type flowCollectorService struct {
 }
 
 func (p *flowCollectorService) Run() {
-	logrus.Info("Starting flow collector")
+	log.Info("Starting flow collector")
 	p.deduplicator.Run(client.FlowCacheCleanup)
 }
 
 func (p *flowCollectorService) RegisterWith(srv *grpc.Server) {
 	// Register the collector with the gRPC server.
 	proto.RegisterFlowCollectorServer(srv, p)
-	logrus.Info("Registered FlowCollector Server")
+	log.Info("Registered FlowCollector Server")
 }
 
 func (p *flowCollectorService) Connect(srv proto.FlowCollector_ConnectServer) error {
@@ -104,7 +104,7 @@ func (p *flowCollectorService) handleClient(srv proto.FlowCollector_ConnectServe
 	if ok {
 		scope = pr.Addr.String()
 	}
-	logCtx := logrus.WithField("who", scope)
+	logCtx := log.WithField("who", scope)
 	logCtx.Info("Connection from client")
 
 	num := 0

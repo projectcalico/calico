@@ -28,9 +28,9 @@ import (
 	"time"
 
 	"github.com/golang/snappy"
-	log "github.com/sirupsen/logrus"
 
 	calicotls "github.com/projectcalico/calico/crypto/pkg/tls"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/readlogger"
 	"github.com/projectcalico/calico/typha/pkg/discovery"
@@ -146,7 +146,7 @@ func New(
 
 type SyncerClient struct {
 	ID                            uint64
-	logCxt                        *log.Entry
+	logCxt                        log.Entry
 	discoverer                    *discovery.Discoverer
 	connInfo                      *discovery.Typha
 	myHostname, myVersion, myInfo string
@@ -392,7 +392,7 @@ func extractTCPConn(c net.Conn) *net.TCPConn {
 	}
 }
 
-func (s *SyncerClient) logConnectionFailure(cxt context.Context, logCxt *log.Entry, err error, operation string) {
+func (s *SyncerClient) logConnectionFailure(cxt context.Context, logCxt log.Entry, err error, operation string) {
 	if cxt.Err() != nil {
 		logCxt.WithError(err).Warn("Connection failed while being shut down by context.")
 		return
@@ -533,7 +533,7 @@ func (s *SyncerClient) loop(cxt context.Context, cancelFn context.CancelFunc) {
 	}
 }
 
-func (s *SyncerClient) restartDecoder(cxt context.Context, logCxt *log.Entry, msg syncproto.MsgDecoderRestart) error {
+func (s *SyncerClient) restartDecoder(cxt context.Context, logCxt log.Entry, msg syncproto.MsgDecoderRestart) error {
 	logCxt.WithField("msg", msg).Info("Server asked us to restart our decoder")
 	// Check if we should enable compression.
 	switch msg.CompressionAlgorithm {
@@ -554,7 +554,7 @@ func (s *SyncerClient) restartDecoder(cxt context.Context, logCxt *log.Entry, ms
 
 // sendMessageToServer sends a single value-type MsgXYZ object to the server.  It updates the connection's
 // write deadline to ensure we don't block forever.  Logs errors via logConnectionFailure.
-func (s *SyncerClient) sendMessageToServer(cxt context.Context, logCxt *log.Entry, op string, message interface{}) error {
+func (s *SyncerClient) sendMessageToServer(cxt context.Context, logCxt log.Entry, op string, message interface{}) error {
 	err := s.connection.SetWriteDeadline(time.Now().Add(s.options.writeTimeout()))
 	if err != nil {
 		s.logConnectionFailure(cxt, logCxt, err, "set timeout before "+op)
@@ -572,7 +572,7 @@ func (s *SyncerClient) sendMessageToServer(cxt context.Context, logCxt *log.Entr
 
 // readMessageFromServer reads a single value-type MsgXYZ object from the server.  It updates the connection's
 // read deadline to ensure we don't block forever.  Logs errors via logConnectionFailure.
-func (s *SyncerClient) readMessageFromServer(cxt context.Context, logCxt *log.Entry) (interface{}, error) {
+func (s *SyncerClient) readMessageFromServer(cxt context.Context, logCxt log.Entry) (interface{}, error) {
 	var envelope syncproto.Envelope
 	// Update the read deadline before we try to read, otherwise we could block for a very long time if the
 	// TCP connection was severed without being cleanly shut down.  Typha sends regular pings so we should receive

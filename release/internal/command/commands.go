@@ -22,7 +22,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/sirupsen/logrus"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // CommandRunner runs the given command. Useful for mocking commands in unit tests.
@@ -46,7 +46,7 @@ func (r *RealCommandRunner) RunInDir(dir, name string, args []string, env []stri
 	}
 	cmd.Dir = dir
 	var outb, errb bytes.Buffer
-	if logrus.IsLevelEnabled(logrus.DebugLevel) {
+	if log.IsLevelEnabled(log.DebugLevel) {
 		// If debug level is enabled, also write to stdout.
 		cmd.Stdout = io.MultiWriter(os.Stdout, &outb)
 		cmd.Stderr = io.MultiWriter(os.Stderr, &errb)
@@ -55,7 +55,7 @@ func (r *RealCommandRunner) RunInDir(dir, name string, args []string, env []stri
 		cmd.Stdout = io.MultiWriter(&outb)
 		cmd.Stderr = io.MultiWriter(&errb)
 	}
-	logrus.WithFields(logrus.Fields{
+	log.WithFields(log.Fields{
 		"cmd": cmd.String(),
 		"dir": dir,
 	}).Debugf("Running %s command", name)
@@ -74,7 +74,7 @@ func (r *RealCommandRunner) RunInDirNoCapture(dir, name string, args []string, e
 	cmd.Dir = dir
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	logrus.WithFields(logrus.Fields{
+	log.WithFields(log.Fields{
 		"cmd": cmd.String(),
 		"dir": dir,
 	}).Debugf("Running %s command", name)

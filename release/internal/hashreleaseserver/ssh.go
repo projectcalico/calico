@@ -21,15 +21,16 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/sirupsen/logrus"
 	"github.com/skeema/knownhosts"
 	"golang.org/x/crypto/ssh"
+
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 func connect(cfg *Config) (*ssh.Session, error) {
 	key, err := os.ReadFile(cfg.Key)
 	if err != nil {
-		logrus.WithField("key", cfg.Key).WithError(err).Error("Unable to read ssh key")
+		log.WithField("key", cfg.Key).WithError(err).Error("Unable to read ssh key")
 		return nil, err
 	}
 	signer, err := ssh.ParsePrivateKey(key)
@@ -69,7 +70,7 @@ func runSSHCommand(cfg *Config, command string) (string, error) {
 func runSSHCommandWithStdin(cfg *Config, command string, stdin io.Reader) (string, error) {
 	session, err := connect(cfg)
 	if err != nil {
-		logrus.WithError(err).Error("failed to connect to remote host")
+		log.WithError(err).Error("failed to connect to remote host")
 		return "", err
 	}
 	defer session.Close()
@@ -78,9 +79,9 @@ func runSSHCommandWithStdin(cfg *Config, command string, stdin io.Reader) (strin
 	if stdin != nil {
 		session.Stdin = stdin
 	}
-	logrus.WithField("command", command).Debug("Running command in remote host")
+	log.WithField("command", command).Debug("Running command in remote host")
 	if err := session.Run(command); err != nil {
-		logrus.WithError(err).Error("Failed to run command")
+		log.WithError(err).Error("Failed to run command")
 		return "", err
 	}
 	return stdoutBuf.String(), nil

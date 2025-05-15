@@ -20,11 +20,10 @@ import (
 	"sort"
 	"time"
 
-	"github.com/sirupsen/logrus"
-
 	"github.com/projectcalico/calico/felix/dispatcher"
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/lib/std/log"
 	apiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/encap"
@@ -171,7 +170,7 @@ func (i l3rrNodeInfo) AddressesAsCIDRs() []ip.CIDR {
 }
 
 func NewL3RouteResolver(hostname string, callbacks routeCallbacks, useNodeResourceUpdates bool, routeSource string) *L3RouteResolver {
-	logrus.Info("Creating L3 route resolver")
+	log.Info("Creating L3 route resolver")
 	l3rr := &L3RouteResolver{
 		myNodeName: hostname,
 		callbacks:  callbacks,
@@ -192,10 +191,10 @@ func NewL3RouteResolver(hostname string, callbacks routeCallbacks, useNodeResour
 
 func (c *L3RouteResolver) RegisterWith(allUpdDispatcher, localDispatcher *dispatcher.Dispatcher) {
 	if c.useNodeResourceUpdates {
-		logrus.Info("Registering L3 route resolver (node resources on)")
+		log.Info("Registering L3 route resolver (node resources on)")
 		allUpdDispatcher.Register(model.ResourceKey{}, c.OnResourceUpdate)
 	} else {
-		logrus.Info("Registering L3 route resolver (node resources off)")
+		log.Info("Registering L3 route resolver (node resources off)")
 		allUpdDispatcher.Register(model.HostIPKey{}, c.OnHostIPUpdate)
 	}
 
@@ -203,7 +202,7 @@ func (c *L3RouteResolver) RegisterWith(allUpdDispatcher, localDispatcher *dispat
 
 	// Depending on if we're using workload endpoints for routing information, we may
 	// need all WEPs, or only local WEPs.
-	logrus.WithField("routeSource", c.routeSource).Info("Registering for L3 route updates")
+	log.WithField("routeSource", c.routeSource).Info("Registering for L3 route updates")
 	if c.routeSource == "WorkloadIPs" {
 		// Driven off of workload IP addresses. Register for all WEP updates.
 		allUpdDispatcher.Register(model.WorkloadEndpointKey{}, c.OnWorkloadUpdate)
@@ -227,12 +226,12 @@ func (c *L3RouteResolver) OnWorkloadUpdate(update api.Update) (_ bool) {
 	if update.Value != nil {
 		newWorkload := update.Value.(*model.WorkloadEndpoint)
 		newCIDRs = append(newWorkload.IPv4Nets, newWorkload.IPv6Nets...)
-		logrus.WithField("workload", key).WithField("newCIDRs", newCIDRs).Debug("Workload update")
+		log.WithField("workload", key).WithField("newCIDRs", newCIDRs).Debug("Workload update")
 	}
 
 	if reflect.DeepEqual(oldCIDRs, newCIDRs) {
 		// No change, ignore.
-		logrus.Debug("No change to CIDRs, ignore.")
+		log.Debug("No change to CIDRs, ignore.")
 		return
 	}
 
@@ -275,7 +274,7 @@ func (c *L3RouteResolver) OnBlockUpdate(update api.Update) (_ bool) {
 		// for duplicates here. Look at the routes contributed by this block and determine if we
 		// need to send any updates.
 		newRoutes := c.routesFromBlock(update)
-		logrus.WithField("numRoutes", len(newRoutes)).Debug("IPAM block update")
+		log.WithField("numRoutes", len(newRoutes)).Debug("IPAM block update")
 		cachedRoutes, ok := c.blockToRoutes[key]
 		if !ok {
 			cachedRoutes = set.New[nodenameRoute]()
@@ -297,20 +296,20 @@ func (c *L3RouteResolver) OnBlockUpdate(update api.Update) (_ bool) {
 			// Current route is not in new set - we need to withdraw the route, and also
 			// remove it from internal state.
 			deletes.Add(r)
-			logrus.WithField("route", r).Debug("Found stale route")
+			log.WithField("route", r).Debug("Found stale route")
 			return set.RemoveItem
 		})
 
 		// Now scan the new routes, looking for additions.  Cache them and queue up adds.
 		for _, r := range newRoutes {
-			logCxt := logrus.WithField("newRoute", r)
+			logCxt := log.WithField("newRoute", r)
 			c.maybeReportLive()
 			if cachedRoutes.Contains(r) {
 				logCxt.Debug("Desired route already exists, skip")
 				continue
 			}
 
-			logrus.WithField("route", r).Debug("Found new route")
+			log.WithField("route", r).Debug("Found new route")
 			cachedRoutes.Add(r)
 			adds.Add(r)
 		}
@@ -329,7 +328,7 @@ func (c *L3RouteResolver) OnBlockUpdate(update api.Update) (_ bool) {
 		})
 	} else {
 		// Block has been deleted. Clean up routes that were contributed by this block.
-		logrus.WithField("update", update).Debug("IPAM block deleted")
+		log.WithField("update", update).Debug("IPAM block deleted")
 		routes := c.blockToRoutes[key]
 		if routes != nil {
 			routes.Iter(func(nr nodenameRoute) error {
@@ -355,7 +354,7 @@ func (c *L3RouteResolver) OnResourceUpdate(update api.Update) (_ bool) {
 	// Extract the nodename and check whether the node was known already.
 	nodeName := update.Key.(model.ResourceKey).Name
 
-	logCxt := logrus.WithField("node", nodeName).WithField("update", update)
+	logCxt := log.WithField("node", nodeName).WithField("update", update)
 	logCxt.Debug("OnResourceUpdate triggered")
 
 	// Update our tracking data structures.
@@ -370,7 +369,7 @@ func (c *L3RouteResolver) OnResourceUpdate(update api.Update) (_ bool) {
 				// throw away one or the other.
 				ipv4, caliNodeCIDR, err := cnet.ParseCIDROrIP(bgp.IPv4Address)
 				if err != nil {
-					logrus.WithError(err).Panic("Failed to parse already-validated IPv4 address")
+					log.WithError(err).Panic("Failed to parse already-validated IPv4 address")
 				}
 				nodeInfo.V4Addr = ip.FromCalicoIP(*ipv4).(ip.V4Addr)
 				nodeInfo.V4CIDR = ip.CIDRFromCalicoNet(*caliNodeCIDR).(ip.V4CIDR)
@@ -378,7 +377,7 @@ func (c *L3RouteResolver) OnResourceUpdate(update api.Update) (_ bool) {
 			if bgp.IPv6Address != "" {
 				ipv6, caliNodeCIDRV6, err := cnet.ParseCIDROrIP(bgp.IPv6Address)
 				if err != nil {
-					logrus.WithError(err).Panic("Failed to parse already-validated IPv6 address")
+					log.WithError(err).Panic("Failed to parse already-validated IPv6 address")
 				}
 				nodeInfo.V6Addr = ip.FromCalicoIP(*ipv6).(ip.V6Addr)
 				nodeInfo.V6CIDR = ip.CIDRFromCalicoNet(*caliNodeCIDRV6).(ip.V6CIDR)
@@ -433,7 +432,7 @@ func (c *L3RouteResolver) OnResourceUpdate(update api.Update) (_ bool) {
 				if err == nil && parsed != nil {
 					nodeInfo.Addresses = append(nodeInfo.Addresses, ip.FromCalicoIP(*parsed))
 				} else {
-					logrus.WithError(err).WithField("addr", a.Address).Warn("not an IP")
+					log.WithError(err).WithField("addr", a.Address).Warn("not an IP")
 				}
 			}
 		}
@@ -450,7 +449,7 @@ func (c *L3RouteResolver) OnHostIPUpdate(update api.Update) (_ bool) {
 	defer c.flush()
 
 	nodeName := update.Key.(model.HostIPKey).Hostname
-	logrus.WithField("node", nodeName).Debug("OnHostIPUpdate triggered")
+	log.WithField("node", nodeName).Debug("OnHostIPUpdate triggered")
 
 	var newNodeInfo *l3rrNodeInfo
 	if update.Value != nil {
@@ -504,7 +503,7 @@ func (c *L3RouteResolver) onNodeUpdate(nodeName string, newNodeInfo *l3rrNodeInf
 				wasSameSubnet := nodeExisted && oldNodeInfo.V4CIDR.ContainsV4(otherNodesIPv4)
 				nowSameSubnet := myNewNodeInfoKnown && myNewV4CIDR.ContainsV4(otherNodesIPv4)
 				if wasSameSubnet != nowSameSubnet {
-					logrus.WithField("route", r).Debug("Update to our subnet invalidated route")
+					log.WithField("route", r).Debug("Update to our subnet invalidated route")
 					c.trie.MarkCIDRDirty(r.dst)
 				}
 			})
@@ -523,7 +522,7 @@ func (c *L3RouteResolver) onNodeUpdate(nodeName string, newNodeInfo *l3rrNodeInf
 				wasSameSubnet := nodeExisted && oldNodeInfo.V6CIDR.ContainsV6(otherNodesIPv6)
 				nowSameSubnet := myNewNodeInfoKnown && myNewV6CIDR.ContainsV6(otherNodesIPv6)
 				if wasSameSubnet != nowSameSubnet {
-					logrus.WithField("route", r).Debug("Update to our subnet invalidated route")
+					log.WithField("route", r).Debug("Update to our subnet invalidated route")
 					c.trie.MarkCIDRDirty(r.dst)
 				}
 			})
@@ -625,7 +624,7 @@ func (c *L3RouteResolver) OnPoolUpdate(update api.Update) (_ bool) {
 		newPool = c.getPoolInfo(update)
 	}
 	if newPool != nil && newPool.PoolType != proto.IPPoolType_NONE {
-		logrus.WithFields(logrus.Fields{
+		log.WithFields(log.Fields{
 			"oldType": oldPool.PoolType,
 			"newType": newPool.PoolType,
 			"newPool": *newPool,
@@ -646,7 +645,7 @@ func (c *L3RouteResolver) getPoolInfo(update api.Update) *l3rrPoolInfo {
 	case *model.IPPool:
 		v1Pool = v
 	default:
-		logrus.Panic("Encountered unexpected value type when handling Pool update")
+		log.Panic("Encountered unexpected value type when handling Pool update")
 	}
 
 	return &l3rrPoolInfo{
@@ -678,13 +677,13 @@ func (c *L3RouteResolver) routesFromBlock(update api.Update) map[string]nodename
 	case model.BlockKey:
 		b = update.Value.(*model.AllocationBlock)
 	default:
-		logrus.WithField("key", k).Panic("Unexpected key type for Block update")
+		log.WithField("key", k).Panic("Unexpected key type for Block update")
 	}
 
 	routes := make(map[string]nodenameRoute)
 	for _, alloc := range b.NonAffineAllocations() {
 		if alloc.Host == "" {
-			logrus.WithField("IP", alloc.Addr).Warn(
+			log.WithField("IP", alloc.Addr).Warn(
 				"Unable to create route for IP; the node it belongs to was not recorded in IPAM")
 			continue
 		}
@@ -697,7 +696,7 @@ func (c *L3RouteResolver) routesFromBlock(update api.Update) map[string]nodename
 
 	host := b.Host()
 	if host != "" {
-		logrus.WithField("host", host).Debug("Block has a host, including block-via-host route")
+		log.WithField("host", host).Debug("Block has a host, including block-via-host route")
 		r := nodenameRoute{
 			dst:      ip.CIDRFromCalicoNet(b.CIDR),
 			nodeName: host,
@@ -713,7 +712,7 @@ func (c *L3RouteResolver) routesFromBlock(update api.Update) map[string]nodename
 func (c *L3RouteResolver) flush() {
 	var buf []ip.CIDRTrieEntry
 	c.trie.dirtyCIDRs.Iter(func(cidr ip.CIDR) error {
-		logCxt := logrus.WithField("cidr", cidr)
+		logCxt := log.WithField("cidr", cidr)
 		logCxt.Debug("Flushing dirty route")
 		trie := c.trie.trieForCIDR(cidr)
 
@@ -859,7 +858,7 @@ func (c *L3RouteResolver) flush() {
 						rt.DstNodeIp = dstNodeInfo.V6Addr.String()
 					}
 				default:
-					logrus.WithField("cidr", cidr).Panic("Invalid IP version")
+					log.WithField("cidr", cidr).Panic("Invalid IP version")
 				}
 			}
 		}
@@ -867,7 +866,7 @@ func (c *L3RouteResolver) flush() {
 
 		if rt.Dst != emptyV4Addr.AsCIDR().String() && rt.Dst != emptyV6Addr.AsCIDR().String() {
 			// Skip sending a route for an empty CIDR
-			logrus.WithField("route", rt).Debug("Sending route")
+			log.WithField("route", rt).Debug("Sending route")
 			c.callbacks.OnRouteUpdate(rt)
 			c.trie.SetRouteSent(cidr, true)
 		}
@@ -965,7 +964,7 @@ func NewRouteTrie() *RouteTrie {
 }
 
 func (r *RouteTrie) UpdatePool(cidr ip.CIDR, poolType proto.IPPoolType, natOutgoing bool, crossSubnet bool) {
-	logrus.WithFields(logrus.Fields{
+	log.WithFields(log.Fields{
 		"cidr":        cidr,
 		"poolType":    poolType,
 		"nat":         natOutgoing,
@@ -1040,7 +1039,7 @@ func (r *RouteTrie) AddHost(cidr ip.CIDR, nodeName string) {
 	r.updateCIDR(cidr, func(ri *RouteInfo) {
 		ri.Host.NodeNames = append(ri.Host.NodeNames, nodeName)
 		if len(ri.Host.NodeNames) > 1 {
-			logrus.WithFields(logrus.Fields{
+			log.WithFields(log.Fields{
 				"cidr":  cidr,
 				"nodes": ri.Host.NodeNames,
 			}).Warn("Some nodes share IP address, route calculation may choose wrong node.")
@@ -1098,7 +1097,7 @@ func (r *RouteTrie) RemoveRef(cidr ip.CIDR, nodename string, rt RefType) {
 				// Decref the Ref.
 				ri.Refs[i].RefCount--
 				if ri.Refs[i].RefCount < 0 {
-					logrus.WithField("cidr", cidr).Panic("BUG: Asked to decref a workload past 0.")
+					log.WithField("cidr", cidr).Panic("BUG: Asked to decref a workload past 0.")
 				} else if ri.Refs[i].RefCount == 0 {
 					// Remove it from the list.
 					ri.Refs = append(ri.Refs[:i], ri.Refs[i+1:]...)
@@ -1111,7 +1110,7 @@ func (r *RouteTrie) RemoveRef(cidr ip.CIDR, nodename string, rt RefType) {
 		}
 
 		// Unable to find the requested Ref.
-		logrus.WithField("cidr", cidr).Panic("BUG: Asked to decref a workload that doesn't exist.")
+		log.WithField("cidr", cidr).Panic("BUG: Asked to decref a workload that doesn't exist.")
 	})
 }
 
@@ -1123,7 +1122,7 @@ func (r *RouteTrie) SetRouteSent(cidr ip.CIDR, sent bool) {
 
 func (r *RouteTrie) updateCIDR(cidr ip.CIDR, updateFn func(info *RouteInfo)) bool {
 	if cidr == nil {
-		logrus.WithField("cidr", cidr).Debug("Ignoring nil CIDR update")
+		log.WithField("cidr", cidr).Debug("Ignoring nil CIDR update")
 		return false
 	}
 
@@ -1139,16 +1138,16 @@ func (r *RouteTrie) updateCIDR(cidr ip.CIDR, updateFn func(info *RouteInfo)) boo
 	// Check if the update was a no-op.
 	if riCopy.Equals(ri) {
 		// Change was a no-op, ignore.
-		logrus.WithField("cidr", cidr).Debug("Ignoring no-op change")
+		log.WithField("cidr", cidr).Debug("Ignoring no-op change")
 		return false
 	}
 
 	// Not a no-op; mark CIDR as dirty.
-	logrus.WithFields(logrus.Fields{"old": riCopy, "new": ri}).Debug("Route updated, marking dirty.")
+	log.WithFields(log.Fields{"old": riCopy, "new": ri}).Debug("Route updated, marking dirty.")
 	r.MarkCIDRDirty(cidr)
 	if ri.IsZero() {
 		// No longer have *anything* to track about this CIDR, clean it up.
-		logrus.WithField("cidr", cidr).Debug("RouteInfo is zero, cleaning up.")
+		log.WithField("cidr", cidr).Debug("RouteInfo is zero, cleaning up.")
 		trie.Delete(cidr)
 		return true
 	}
@@ -1175,7 +1174,7 @@ func (r *RouteTrie) trieForCIDR(cidr ip.CIDR) *ip.CIDRTrie {
 	case ip.V6CIDR:
 		trie = r.v6T
 	default:
-		logrus.WithField("cidr", cidr).Panic("Invalid CIDR type")
+		log.WithField("cidr", cidr).Panic("Invalid CIDR type")
 	}
 	return trie
 }
@@ -1296,13 +1295,13 @@ func (nr *nodeRoutes) Add(r nodenameRoute) {
 func (nr *nodeRoutes) Remove(r nodenameRoute) {
 	_, ok := nr.cache[r.nodeName]
 	if !ok {
-		logrus.WithField("route", r).Panic("BUG: Asked to decref for node that doesn't exist")
+		log.WithField("route", r).Panic("BUG: Asked to decref for node that doesn't exist")
 	}
 	nr.cache[r.nodeName][r.dst]--
 	if nr.cache[r.nodeName][r.dst] == 0 {
 		delete(nr.cache[r.nodeName], r.dst)
 	} else if nr.cache[r.nodeName][r.dst] < 0 {
-		logrus.WithField("route", r).Panic("BUG: Asked to decref a route past 0.")
+		log.WithField("route", r).Panic("BUG: Asked to decref a route past 0.")
 	}
 	if len(nr.cache[r.nodeName]) == 0 {
 		delete(nr.cache, r.nodeName)

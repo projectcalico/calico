@@ -27,10 +27,10 @@ import (
 	cniv1 "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/plugins/pkg/ip"
 	"github.com/containernetworking/plugins/pkg/ns"
-	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 
 	"github.com/projectcalico/calico/cni-plugin/pkg/types"
+	"github.com/projectcalico/calico/lib/std/log"
 	api "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	calicoclient "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/netlinkutils"
@@ -40,10 +40,10 @@ type linuxDataplane struct {
 	allowIPForwarding bool
 	mtu               int
 	queues            int
-	logger            *logrus.Entry
+	logger            log.Entry
 }
 
-func NewLinuxDataplane(conf types.NetConf, logger *logrus.Entry) *linuxDataplane {
+func NewLinuxDataplane(conf types.NetConf, logger log.Entry) *linuxDataplane {
 	return &linuxDataplane{
 		allowIPForwarding: conf.ContainerSettings.AllowIPForwarding,
 		mtu:               conf.MTU,
@@ -172,7 +172,7 @@ func (d *linuxDataplane) DoWorkloadNetnsSetUp(
 			// IP for up to a second and we don't need it because it's a point-to-point link.
 			//
 			// This must be done before we set the links UP.
-			logrus.Debug("Interface has IPv6 address, disabling DAD.")
+			log.Debug("Interface has IPv6 address, disabling DAD.")
 			err = disableDAD(contVethName)
 			if err != nil {
 				return err
@@ -347,7 +347,7 @@ func (d *linuxDataplane) DoWorkloadNetnsSetUp(
 }
 
 func disableDAD(contVethName string) error {
-	logrus.WithField("interface", contVethName).Info("Disabling DAD on interface.")
+	log.WithField("interface", contVethName).Info("Disabling DAD on interface.")
 	dadSysctl := fmt.Sprintf("/proc/sys/net/ipv6/conf/%s/accept_dad", contVethName)
 	if err := writeProcSys(dadSysctl, "0"); err != nil {
 		return fmt.Errorf("failed to disable DAD for %s: %w", contVethName, err)
@@ -382,12 +382,12 @@ func SetupRoutes(hostNlHandle *netlink.Handle, hostVeth netlink.Link, result *cn
 				// exactly what we are intending to program.
 				// If the route we want is already there then most likely it's programmed by Felix, so we ignore it,
 				// and we return an error if none of the routes match the route we're trying to program.
-				logrus.WithFields(logrus.Fields{"route": route, "scope": route.Scope}).Debug("Constructed route")
+				log.WithFields(log.Fields{"route": route, "scope": route.Scope}).Debug("Constructed route")
 				for _, r := range routes {
-					logrus.WithFields(logrus.Fields{"interface": hostVeth.Attrs().Name, "route": r, "scope": r.Scope}).Debug("Routes for the interface")
+					log.WithFields(log.Fields{"interface": hostVeth.Attrs().Name, "route": r, "scope": r.Scope}).Debug("Routes for the interface")
 					if r.LinkIndex == route.LinkIndex && r.Dst.IP.Equal(route.Dst.IP) && r.Scope == route.Scope {
 						// Route was already present on the host.
-						logrus.WithFields(logrus.Fields{"interface": hostVeth.Attrs().Name}).Infof("CNI skipping add route. Route already exists")
+						log.WithFields(log.Fields{"interface": hostVeth.Attrs().Name}).Infof("CNI skipping add route. Route already exists")
 						return nil
 					}
 				}
@@ -421,7 +421,7 @@ func SetupRoutes(hostNlHandle *netlink.Handle, hostVeth netlink.Link, result *cn
 			}
 		}
 
-		logrus.WithFields(logrus.Fields{"interface": hostVeth, "IP": ipAddr.Address}).Debugf("CNI adding route")
+		log.WithFields(log.Fields{"interface": hostVeth, "IP": ipAddr.Address}).Debugf("CNI adding route")
 	}
 	return nil
 }
@@ -547,7 +547,7 @@ func writeProcSys(path, value string) error {
 
 func (d *linuxDataplane) CleanUpNamespace(args *skel.CmdArgs) error {
 	// Only try to delete the device if a namespace was passed in.
-	logCtx := d.logger.WithFields(logrus.Fields{
+	logCtx := d.logger.WithFields(log.Fields{
 		"netns": args.Netns,
 		"iface": args.IfName,
 	})

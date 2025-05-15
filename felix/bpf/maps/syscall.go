@@ -20,8 +20,9 @@ import (
 	"runtime"
 	"unsafe"
 
-	log "github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
+
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // #include "syscall.h"

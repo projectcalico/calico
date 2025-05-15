@@ -18,9 +18,9 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/sirupsen/logrus"
 	cli "github.com/urfave/cli/v2"
 
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/release/internal/outputs"
 	"github.com/projectcalico/calico/release/internal/version"
 	"github.com/projectcalico/calico/release/pkg/manager/calico"
@@ -64,8 +64,8 @@ func releaseSubCommands(cfg *Config) []*cli.Command {
 					return fmt.Errorf("failed to generate release notes: %w", err)
 				}
 
-				logrus.WithField("file", filePath).Info("Generated release notes")
-				logrus.Info("Please review for accuracy, and format appropriately before releasing.")
+				log.WithField("file", filePath).Info("Generated release notes")
+				log.Info("Please review for accuracy, and format appropriately before releasing.")
 				return nil
 			},
 		},

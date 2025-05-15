@@ -17,10 +17,9 @@ package policysync
 import (
 	"reflect"
 
-	log "github.com/sirupsen/logrus"
-
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/types"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // MaxMembersPerMessage sets the limit on how many IP Set members to include in an outgoing gRPC message, which has a

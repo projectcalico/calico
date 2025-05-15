@@ -22,7 +22,7 @@ import (
 	"encoding/binary"
 	"os"
 
-	"github.com/sirupsen/logrus"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // Binary is an in memory representation of a BPF binary
@@ -91,7 +91,7 @@ func (b *Binary) replaceAllLoadImm32(orig, replacement []byte) {
 
 // PatchSkbMark replaces SKBM with the expected mark - for tests.
 func (b *Binary) PatchSkbMark(mark uint32) {
-	logrus.WithField("mark", mark).Debug("Patching skb mark")
+	log.WithField("mark", mark).Debug("Patching skb mark")
 	b.patchU32Placeholder("SKBM", uint32(mark))
 }
 

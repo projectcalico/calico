@@ -15,9 +15,10 @@
 package proxy
 
 import (
-	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
+
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 //nolint:staticcheck // Ignore SA1019 deprecated until kubernetes/pkg/proxy/types.go fixes sets.String
