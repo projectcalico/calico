@@ -12,6 +12,8 @@ RUN mkdir -p /var/lib/eg
 
 FROM ${CALICO_BASE}
 ARG TARGETARCH
+ARG GIT_VERSION=unknown
+
 COPY bin/envoy-gateway-${TARGETARCH} /usr/local/bin/envoy-gateway
 COPY --from=source --chown=65532:65532 /var/lib /var/lib
 
