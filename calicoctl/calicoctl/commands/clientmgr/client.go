@@ -18,7 +18,7 @@ import (
 	"fmt"
 	"os"
 
-	log "github.com/sirupsen/logrus"
+	"github.com/projectcalico/calico/lib/std/log"
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/constants"

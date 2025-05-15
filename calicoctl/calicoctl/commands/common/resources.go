@@ -19,8 +19,8 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/go-yaml-wrapper"
-	log "github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/api/meta"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"

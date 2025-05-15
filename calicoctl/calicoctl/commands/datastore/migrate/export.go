@@ -23,7 +23,7 @@ import (
 
 	"github.com/docopt/docopt-go"
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"github.com/sirupsen/logrus"
+	"github.com/projectcalico/calico/lib/std/log"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -158,7 +158,7 @@ Description:
 	// Check that the datastore configured datastore is etcd
 	cfg, err := clientmgr.LoadClientConfig(cf)
 	if err != nil {
-		logrus.Info("Error loading config")
+		log.Info("Error loading config")
 		return err
 	}
 
