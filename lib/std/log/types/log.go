@@ -78,10 +78,9 @@ type Formatter interface {
 }
 
 type Logger interface {
-	GetLevel() Level
+	AddHook(hook Hook) // TODO probably want to remove this, we don't want random hooks (most likely?).
 	IsLevelEnabled(level Level) bool
-	SetReportCaller(reportCaller bool)
-	AddHook(hook Hook)
+	GetLevel() Level
 	SetLevel(level Level)
 	SetFormatter(formatter Formatter)
 	GetOutput() io.Writer
@@ -136,6 +135,8 @@ type Logger interface {
 }
 
 type Entry interface {
+	IsLevelEnabled(level Level) bool
+	SetLevel(level Level)
 	GetTime() time.Time
 	Logger() Logger
 	Bytes() ([]byte, error)

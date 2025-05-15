@@ -15,27 +15,10 @@
 package logrus_test
 
 import (
-	"runtime"
-
-	reallogrus "github.com/sirupsen/logrus"
-
-	"github.com/projectcalico/calico/lib/std/log/logrus"
 	"github.com/projectcalico/calico/lib/std/log/types"
 )
 
 // debugFromAnotherFile calls Debug on the logger; it's in another file to test filename filtering!
 func debugFromAnotherFile(logger types.Logger, msg string) {
 	logger.Debug(msg)
-}
-
-func callFormat(formatter *logrus.Formatter, entry *reallogrus.Entry) error {
-	_, err := formatter.Format(entry)
-	return err
-}
-
-func getFrame() *runtime.Frame {
-	pc := make([]uintptr, 25)
-	runtime.Callers(0, pc)
-	frame, _ := runtime.CallersFrames(pc).Next()
-	return &frame
 }
