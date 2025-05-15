@@ -16,6 +16,7 @@ package clientv3_test
 
 import (
 	"context"
+	"os/exec"
 	"time"
 
 	. "github.com/onsi/ginkgo"
@@ -426,6 +427,19 @@ var _ = testutils.E2eDatastoreDescribe("NetworkPolicy tests", testutils.Datastor
 		Entry("NetworkPolicy without default tier prefix", "netpol", "default.netpol"),
 		Entry("NetworkPolicy with default tier prefix", "default.netpol", "netpol"),
 	)
+
+	Describe("NetworkPolicy without name on the projectcalico.org annotation", func() {
+		It("Should return the name without default prefix", func() {
+			if config.Spec.DatastoreType == apiconfig.Kubernetes {
+				// We create the policies as a CRD to prevent the api server adding the correct annotation
+				err := exec.Command("kubectl", "create", "-f", "../../test/mock-policies.yaml").Run()
+				Expect(err).ToNot(HaveOccurred())
+
+				_, err = c.NetworkPolicies().Get(ctx, "default", "prefix-test-policy", options.GetOptions{})
+				Expect(err).ToNot(HaveOccurred())
+			}
+		})
+	})
 
 	DescribeTable("NetworkPolicy name validation tests",
 		func(policyName string, tier string, expectError bool) {
