@@ -21,20 +21,86 @@ func SetFailImmediately(fail bool) {
 func Equal[T comparable](t *testing.T, expected, actual T, msgAndArgs ...interface{}) bool {
 	t.Helper()
 	if expected != actual {
-		return Fail(t, fmt.Sprintf("Expected %v to equal %v", expected, actual))
+		return Fail(t, fmt.Sprintf("Expected %v to equal %v", expected, actual), msgAndArgs...)
 	}
 	return false
 }
 
+type AnyStruct interface {
+	*struct{} | struct{}
+}
+
 func ObjectsEqual[T any](t *testing.T, expected, actual T, msgAndArgs ...interface{}) bool {
 	t.Helper()
-	return reflect.DeepEqual(expected, actual)
+	if !reflect.DeepEqual(expected, actual) {
+		return Fail(t, fmt.Sprintf("Expected %v to equal %v", expected, actual), msgAndArgs...)
+	}
+	return false
+}
+
+func NoError(t *testing.T, err error, msgAndArgs ...interface{}) bool {
+	t.Helper()
+	if err != nil {
+		return Fail(t, fmt.Sprintf("Expected no error, got %v", err), msgAndArgs...)
+	}
+	return false
+}
+
+func Nil[T any](t *testing.T, v *T, msgAndArgs ...interface{}) bool {
+	t.Helper()
+	var zero *T
+	if v != zero {
+		return Fail(t, "Expected value to be nil", msgAndArgs...)
+	}
+	return true
+}
+
+func NotNil[T any](t *testing.T, v *T, msgAndArgs ...interface{}) bool {
+	t.Helper()
+	var zero *T
+	if v == zero {
+		return Fail(t, "Expected value to not be nil", msgAndArgs...)
+	}
+	return true
+}
+
+func ErrorIs(t *testing.T, expectedErr error, err error, msgAndArgs ...interface{}) bool {
+	t.Helper()
+	if err == nil {
+		return Fail(t, "Expected error, got none", msgAndArgs...)
+	}
+	return false
+}
+
+func Panic(t *testing.T, f func(), msgAndArgs ...interface{}) bool {
+	t.Helper()
+	var panicked bool
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+				panicked = true
+			}
+		}()
+		f()
+	}()
+	if !panicked {
+		return Fail(t, "Expected panic, got none", msgAndArgs...)
+	}
+	return true
 }
 
 func ContainsKey[K comparable, V any](t *testing.T, m map[K]V, expectedKey K, msgAndArgs ...interface{}) bool {
 	t.Helper()
 	if _, ok := m[expectedKey]; !ok {
-		return Fail(t, fmt.Sprintf("Expected map to contain key %v", expectedKey))
+		return Fail(t, fmt.Sprintf("Expected map to contain key %v", expectedKey), msgAndArgs...)
+	}
+	return false
+}
+
+func ContainsSubstring(t *testing.T, expectedSubstring, str string, msgAndArgs ...interface{}) bool {
+	t.Helper()
+	if !strings.Contains(str, expectedSubstring) {
+		return Fail(t, fmt.Sprintf("Expected %s to contain substring %s", str, expectedSubstring), msgAndArgs...)
 	}
 	return false
 }
@@ -42,7 +108,7 @@ func ContainsKey[K comparable, V any](t *testing.T, m map[K]V, expectedKey K, ms
 func NotContainKey[K comparable, V any](t *testing.T, m map[K]V, expectedKey K, msgAndArgs ...interface{}) bool {
 	t.Helper()
 	if _, ok := m[expectedKey]; ok {
-		return Fail(t, fmt.Sprintf("Expected map to not contain key %v", expectedKey))
+		return Fail(t, fmt.Sprintf("Expected map to not contain key %v", expectedKey), msgAndArgs...)
 	}
 	return false
 }
@@ -52,19 +118,9 @@ func ContainsKeyWithComparable[K comparable, V comparable](t *testing.T, m map[K
 	if !ContainsKey(t, m, expectedKey, msgAndArgs...) {
 		return false
 	} else if m[expectedKey] != expectedValue {
-		return Fail(t, fmt.Sprintf("Expected map[%v] to be %v, got %v", expectedKey, expectedValue, m[expectedKey]))
+		return Fail(t, fmt.Sprintf("Expected map[%v] to be %v, got %v", expectedKey, expectedValue, m[expectedKey]), msgAndArgs...)
 	}
 	return true
-}
-
-func ContainsKeyWithObject[K comparable, V comparable](t *testing.T, m map[K]V, key K, value V, msgAndArgs ...interface{}) {
-	t.Helper()
-	if _, ok := m[key]; !ok {
-		t.Errorf("Expected map to contain key %v", key)
-	}
-	if m[key] != value {
-		t.Errorf("Expected map[%v] to be %v, got %v", key, value, m[key])
-	}
 }
 
 // Fail reports a failure through
