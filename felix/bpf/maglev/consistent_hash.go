@@ -21,7 +21,7 @@ type ConsistentHash struct {
 }
 
 // M is a prime number much larger than any backend set we expect to have.
-const M = 71
+const M = 65537
 
 type consistentHashOpt func(*ConsistentHash)
 
