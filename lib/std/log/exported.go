@@ -2,6 +2,7 @@ package log
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"strings"
 	"testing"
@@ -36,6 +37,10 @@ func StandardLogger() types.Logger {
 	return std
 }
 
+func New() types.Logger {
+	return logrus.New()
+}
+
 func ConfigureStandardLoggerForTesting(t *testing.T) func() {
 	old := std
 
@@ -60,12 +65,6 @@ func SetOutput(out io.Writer) {
 // SetFormatter sets the standard logger formatter.
 func SetFormatter(formatter types.Formatter) {
 	std.SetFormatter(formatter)
-}
-
-// SetReportCaller sets whether the standard logger will include the calling
-// method as a field.
-func SetReportCaller(include bool) {
-	std.SetReportCaller(include)
 }
 
 // SetLevel sets the standard logger level.
@@ -306,30 +305,39 @@ func Fatalln(args ...interface{}) {
 	std.Fatalln(args...)
 }
 
-func ParseLevel(lvl string) types.Level {
+func ParseLevel(lvl string) (types.Level, error) {
 	switch strings.ToLower(lvl) {
 	case "panic":
-		return types.PanicLevel
+		return types.PanicLevel, nil
 	case "fatal":
-		return types.FatalLevel
+		return types.FatalLevel, nil
 	case "error":
-		return types.ErrorLevel
+		return types.ErrorLevel, nil
 	case "warn", "warning":
-		return types.WarnLevel
+		return types.WarnLevel, nil
 	case "info":
-		return types.InfoLevel
+		return types.InfoLevel, nil
 	case "debug":
-		return types.DebugLevel
+		return types.DebugLevel, nil
 	case "trace":
-		return types.TraceLevel
+		return types.TraceLevel, nil
 	default:
 		Warn("Invalid logging level passed in. Will use default level set to WARN")
 
 		// Setting default to WARN.
-		return types.WarnLevel
+		return types.WarnLevel, fmt.Errorf("invalid logging level %s", lvl)
 	}
 }
 
-func SetLevelFromString(lvl string) {
-	std.SetLevel(ParseLevel(lvl))
+func ParseLevelOrDefault(lvl string, defaultLevel types.Level) types.Level {
+	parsed, err := ParseLevel(lvl)
+	if err != nil {
+		return defaultLevel
+	}
+
+	return parsed
+}
+
+func SetLevelWithDefault(lvl string, defaultLevel types.Level) {
+	std.SetLevel(ParseLevelOrDefault(lvl, defaultLevel))
 }
