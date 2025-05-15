@@ -900,7 +900,7 @@ func assertNumBlocks(bc backend.Client, num int) error {
 	}
 	if len(blocks.KVPairs) != num {
 		for _, kvp := range blocks.KVPairs {
-			logrus.Infof("[TEST] found block: %+v", kvp.Value.(*model.AllocationBlock))
+			log.Infof("[TEST] found block: %+v", kvp.Value.(*model.AllocationBlock))
 		}
 		return fmt.Errorf("Expected %d blocks, found %d", num, len(blocks.KVPairs))
 	}
