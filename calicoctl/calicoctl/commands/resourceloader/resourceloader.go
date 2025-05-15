@@ -20,11 +20,11 @@ import (
 	"os"
 	"reflect"
 
-	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/go-yaml-wrapper"
 	networkingv1 "k8s.io/api/networking/v1"
 
 	yamlsep "github.com/projectcalico/calico/calicoctl/calicoctl/util/yaml"
+	"github.com/projectcalico/calico/lib/std/log"
 	apiv1 "github.com/projectcalico/calico/libcalico-go/lib/apis/v1"
 	"github.com/projectcalico/calico/libcalico-go/lib/apis/v1/unversioned"
 	v1validator "github.com/projectcalico/calico/libcalico-go/lib/validator/v1"

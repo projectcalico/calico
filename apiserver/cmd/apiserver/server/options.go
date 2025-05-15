@@ -26,7 +26,6 @@ import (
 	"time"
 
 	"github.com/projectcalico/api/pkg/openapi"
-	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/spf13/pflag"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apiserver/pkg/authorization/authorizerfactory"
@@ -37,6 +36,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/projectcalico/calico/apiserver/pkg/apiserver"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // CalicoServerOptions contains the aggregation of configuration structs for

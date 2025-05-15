@@ -27,10 +27,10 @@ import (
 
 	"github.com/docopt/docopt-go"
 	"github.com/olekukonko/tablewriter"
-	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/shirou/gopsutil/v4/process"
 
 	"github.com/projectcalico/calico/calicoctl/calicoctl/util"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // Status prints status of the node and returns error (if any)
