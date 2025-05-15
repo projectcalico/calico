@@ -391,6 +391,11 @@ message WorkloadEndpointUpdate {
   WorkloadEndpoint endpoint = 5;
 }
 
+enum WorkloadType {
+  REGULAR = 0;
+  VM = 1;
+}
+
 message WorkloadEndpoint {
   string state = 1;
   string name = 2;
@@ -405,6 +410,7 @@ message WorkloadEndpoint {
   map<string, string> annotations = 11;
   QoSControls qos_controls = 12;
   LocalBGPPeer local_bgp_peer = 13;
+  WorkloadType type = 14;
 }
 
 message QoSControls {

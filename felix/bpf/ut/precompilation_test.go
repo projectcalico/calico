@@ -26,14 +26,13 @@ import (
 	"github.com/vishvananda/netlink"
 
 	"github.com/projectcalico/calico/felix/bpf/bpfdefs"
-	"github.com/projectcalico/calico/felix/bpf/bpfutils"
 	"github.com/projectcalico/calico/felix/bpf/hook"
 	"github.com/projectcalico/calico/felix/bpf/libbpf"
 	"github.com/projectcalico/calico/felix/bpf/utils"
 )
 
 func checkBTFEnabled() []bool {
-	if bpfutils.BTFEnabled {
+	if utils.BTFEnabled {
 		return []bool{false, true}
 	}
 	return []bool{false}
@@ -47,7 +46,7 @@ func TestPrecompiledBinariesAreLoadable(t *testing.T) {
 	Expect(bpffs).To(Equal("/sys/fs/bpf"))
 
 	defer func() {
-		bpfutils.BTFEnabled = bpfutils.SupportsBTF()
+		utils.BTFEnabled = utils.SupportsBTF()
 	}()
 
 	testObject := func(file string) {

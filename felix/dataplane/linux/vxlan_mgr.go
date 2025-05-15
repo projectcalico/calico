@@ -24,6 +24,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 
+	bpfutils "github.com/projectcalico/calico/felix/bpf/utils"
 	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/ipsets"
@@ -68,6 +69,14 @@ type vxlanManager struct {
 	opRecorder logutils.OpRecorder
 }
 
+type vxlanMgrOption func(m *vxlanManager)
+
+func vxlanMgrWithDualStack() vxlanMgrOption {
+	return func(m *vxlanManager) {
+		m.routeMgr.maintainIPOnly = true
+	}
+}
+
 type VXLANFDB interface {
 	SetVTEPs(vteps []vxlanfdb.VTEP)
 }
@@ -81,6 +90,7 @@ func newVXLANManager(
 	mtu int,
 	dpConfig Config,
 	opRecorder logutils.OpRecorder,
+	opts ...vxlanMgrOption,
 ) *vxlanManager {
 	nlHandle, _ := netlinkshim.NewRealNetlink()
 	return newVXLANManagerWithShims(
@@ -93,6 +103,7 @@ func newVXLANManager(
 		dpConfig,
 		opRecorder,
 		nlHandle,
+		opts...,
 	)
 }
 
@@ -106,8 +117,9 @@ func newVXLANManagerWithShims(
 	dpConfig Config,
 	opRecorder logutils.OpRecorder,
 	nlHandle netlinkHandle,
+	opts ...vxlanMgrOption,
 ) *vxlanManager {
-	manager := &vxlanManager{
+	m := &vxlanManager{
 		ipsetsDataplane: ipsetsDataplane,
 		ipSetMetadata: ipsets.IPSetMetadata{
 			MaxSize: dpConfig.MaxIPSetSize,
@@ -142,9 +154,13 @@ func newVXLANManagerWithShims(
 		),
 	}
 
-	manager.updateRouteManager()
-	manager.routeMgr.triggerRouteUpdate()
-	return manager
+	m.updateRouteManager()
+	m.routeMgr.triggerRouteUpdate()
+	for _, o := range opts {
+		o(m)
+	}
+
+	return m
 }
 
 func (m *vxlanManager) updateRouteManager() {
@@ -245,6 +261,7 @@ func (m *vxlanManager) updateNeighborsAndAllowedSources() {
 		})
 		allowedVXLANSources = append(allowedVXLANSources, parentDeviceIP)
 	}
+
 	m.logCtx.WithField("l2routes", l2routes).Debug("VXLAN manager sending L2 updates")
 	m.fdb.SetVTEPs(l2routes)
 	m.ipsetsDataplane.AddOrReplaceIPSet(m.ipSetMetadata, allowedVXLANSources)
@@ -283,7 +300,16 @@ func (m *vxlanManager) KeepVXLANDeviceInSync(mtu int, xsumBroken bool, wait time
 }
 
 func (m *vxlanManager) device(parent netlink.Link) (netlink.Link, string, error) {
+	if parent == nil {
+		return nil, "", fmt.Errorf("no parent device available")
+	}
+
 	localVTEP := m.getLocalVTEP()
+	mac, err := parseMacForIPVersion(localVTEP, m.ipVersion)
+	if err != nil {
+		return nil, "", err
+	}
+
 	addr := localVTEP.Ipv4Addr
 	parentDeviceIP := localVTEP.ParentDeviceIp
 	if m.ipVersion == 6 {
@@ -291,23 +317,20 @@ func (m *vxlanManager) device(parent netlink.Link) (netlink.Link, string, error)
 		parentDeviceIP = localVTEP.ParentDeviceIpv6
 	}
 
-	if parent == nil {
-		return nil, "", fmt.Errorf("no parent device available")
-	}
-
-	mac, err := parseMacForIPVersion(localVTEP, m.ipVersion)
-	if err != nil {
-		return nil, "", err
-	}
 	la := netlink.NewLinkAttrs()
 	la.Name = m.vxlanDevice
 	la.HardwareAddr = mac
 	vxlan := &netlink.Vxlan{
-		LinkAttrs:    la,
-		VxlanId:      m.vxlanID,
-		Port:         m.vxlanPort,
-		VtepDevIndex: parent.Attrs().Index,
-		SrcAddr:      ip.FromString(parentDeviceIP).AsNetIP(),
+		LinkAttrs: la,
+		Port:      m.vxlanPort,
+	}
+
+	if m.dpConfig.BPFEnabled && bpfutils.BTFEnabled {
+		vxlan.FlowBased = true
+	} else {
+		vxlan.VxlanId = m.vxlanID
+		vxlan.VtepDevIndex = parent.Attrs().Index
+		vxlan.SrcAddr = ip.FromString(parentDeviceIP).AsNetIP()
 	}
 	return vxlan, addr, nil
 }
@@ -326,7 +349,7 @@ func vxlanLinksIncompat(l1, l2 netlink.Link) string {
 		return fmt.Sprintf("vni: %v vs %v", v1.VxlanId, v2.VxlanId)
 	}
 
-	if v1.VtepDevIndex > 0 && v2.VtepDevIndex > 0 && v1.VtepDevIndex != v2.VtepDevIndex {
+	if v1.VtepDevIndex != v2.VtepDevIndex {
 		return fmt.Sprintf("vtep (external) interface: %v vs %v", v1.VtepDevIndex, v2.VtepDevIndex)
 	}
 

@@ -24,7 +24,7 @@ import (
 	"golang.org/x/sys/unix"
 
 	"github.com/projectcalico/calico/felix/bpf/asm"
-	"github.com/projectcalico/calico/felix/bpf/bpfutils"
+	"github.com/projectcalico/calico/felix/bpf/utils"
 )
 
 // #include "bpf_syscall.h"
@@ -39,7 +39,7 @@ const maxLogSize = 128 * 1024 * 1024
 
 func LoadBPFProgramFromInsns(insns asm.Insns, name, license string, progType uint32) (fd ProgFD, err error) {
 	log.Debugf("LoadBPFProgramFromInsns(%v, %q, %v, %v)", insns, name, license, progType)
-	bpfutils.IncreaseLockedMemoryQuota()
+	utils.IncreaseLockedMemoryQuota()
 
 	// Occasionally see retryable errors here, retry silently a few times before going into log-collection mode.
 	backoff := 1 * time.Millisecond

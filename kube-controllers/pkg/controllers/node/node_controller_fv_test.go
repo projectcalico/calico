@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -376,9 +376,13 @@ var _ = Describe("Calico node controller FV tests (KDD mode)", func() {
 			_, err = bc.Update(context.Background(), blocks.KVPairs[0])
 			Expect(err).NotTo(HaveOccurred())
 
+			// Wait for the block update to be received.
+			time.Sleep(3 * time.Second)
+
 			// Deleting NodeA should clean up all IPAM data.
 			err = k8sClient.CoreV1().Nodes().Delete(context.Background(), nodeA, metav1.DeleteOptions{})
 			Expect(err).NotTo(HaveOccurred())
+
 			Eventually(func() error {
 				if err := assertIPsWithHandle(calicoClient.IPAM(), handleA, 0); err != nil {
 					return err
@@ -895,7 +899,10 @@ func assertNumBlocks(bc backend.Client, num int) error {
 		return fmt.Errorf("error querying blocks: %s", err)
 	}
 	if len(blocks.KVPairs) != num {
-		return fmt.Errorf("Expected %d blocks, found %d. Blocks: %#v", num, len(blocks.KVPairs), blocks)
+		for _, kvp := range blocks.KVPairs {
+			logrus.Infof("[TEST] found block: %+v", kvp.Value.(*model.AllocationBlock))
+		}
+		return fmt.Errorf("Expected %d blocks, found %d", num, len(blocks.KVPairs))
 	}
 	return nil
 }

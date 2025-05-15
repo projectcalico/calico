@@ -68,6 +68,13 @@ type routeManager struct {
 	// Log context
 	logCtx     *logrus.Entry
 	opRecorder logutils.OpRecorder
+
+	// In dual-stack setup in ebpf mode, for the sake of simplicity, we still
+	// run 2 instance of the vxlan manager, one for each ip version - like in
+	// the *tables mode. However, they share the same device. The device is
+	// created and maintained by the V4 manager and the V6 manager is
+	// responsible only for assigning the right V6 IP to the device.
+	maintainIPOnly bool
 }
 
 func newRouteManager(
@@ -543,6 +550,9 @@ func (m *routeManager) configureTunnelDevice(
 	link, err := m.nlHandle.LinkByName(m.tunnelDevice)
 	if err != nil {
 		m.logCtx.WithError(err).Info("Failed to get tunnel device, assuming it isn't present")
+		if m.maintainIPOnly {
+			return err
+		}
 		if err := m.nlHandle.LinkAdd(newLink); err == syscall.EEXIST {
 			// Device already exists - likely a race.
 			m.logCtx.Debug("Tunnel device already exists, likely created by someone else.")
@@ -556,6 +566,13 @@ func (m *routeManager) configureTunnelDevice(
 		if err != nil {
 			return fmt.Errorf("can't locate created tunnel device %v", m.tunnelDevice)
 		}
+	}
+
+	if m.maintainIPOnly {
+		if err := m.ensureAddressOnLink(addr, link); err != nil {
+			return fmt.Errorf("failed to ensure address of interface: %s", err)
+		}
+		return nil
 	}
 
 	if m.vxlanEnabled() {
@@ -583,7 +600,7 @@ func (m *routeManager) configureTunnelDevice(
 	// Make sure the MTU is set correctly.
 	attrs := link.Attrs()
 	oldMTU := attrs.MTU
-	if oldMTU != mtu {
+	if mtu != 0 && oldMTU != mtu {
 		m.logCtx.WithFields(logrus.Fields{"old": oldMTU, "new": mtu}).Info("Tunnel device MTU needs to be updated")
 		if err := m.nlHandle.LinkSetMTU(link, mtu); err != nil {
 			m.logCtx.WithError(err).Warn("Failed to set tunnel device MTU")
