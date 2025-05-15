@@ -23,7 +23,6 @@ import (
 	"testing"
 
 	. "github.com/onsi/gomega"
-	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	k8sp "k8s.io/kubernetes/pkg/proxy"
@@ -32,6 +31,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/mock"
 	"github.com/projectcalico/calico/felix/bpf/nat"
 	"github.com/projectcalico/calico/felix/cachingmap"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 func makeSvcEpsPair(svcIdx, epCnt, port int, opts ...K8sServicePortOption) (k8sp.ServicePort, []k8sp.Endpoint) {
@@ -141,9 +141,9 @@ func benchmarkStartupSync(b *testing.B, svcCnt, epCnt int) {
 
 func BenchmarkStartupSync(b *testing.B) {
 	RegisterTestingT(b)
-	loglevel := logrus.GetLevel()
-	logrus.SetLevel(logrus.WarnLevel)
-	defer logrus.SetLevel(loglevel)
+	loglevel := log.GetLevel()
+	log.SetLevel(log.WarnLevel)
+	defer log.SetLevel(loglevel)
 
 	benchmarkStartupSync(b, 10, 1)
 	benchmarkStartupSync(b, 10, 10)
@@ -226,9 +226,9 @@ func runBenchmarkServiceUpdate(b *testing.B, svcCnt, epCnt int, mockMaps bool, o
 
 func BenchmarkServiceUpdate(b *testing.B) {
 	RegisterTestingT(b)
-	loglevel := logrus.GetLevel()
-	logrus.SetLevel(logrus.WarnLevel)
-	defer logrus.SetLevel(loglevel)
+	loglevel := log.GetLevel()
+	log.SetLevel(log.WarnLevel)
+	defer log.SetLevel(loglevel)
 
 	dynaNodePort := func() K8sServicePortOption {
 		np := 0

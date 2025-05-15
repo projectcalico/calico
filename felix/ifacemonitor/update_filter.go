@@ -20,11 +20,11 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
 
 	"github.com/projectcalico/calico/felix/timeshim"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 const FlapDampingDelay = 100 * time.Millisecond
@@ -64,7 +64,7 @@ func FilterUpdates(ctx context.Context,
 		op(u)
 	}
 
-	logrus.Debug("FilterUpdates: starting")
+	log.Debug("FilterUpdates: starting")
 	var timerC <-chan time.Time
 
 	type timestampedUpd struct {
@@ -78,11 +78,11 @@ mainLoop:
 	for {
 		select {
 		case <-ctx.Done():
-			logrus.Info("FilterUpdates: Context expired, stopping")
+			log.Info("FilterUpdates: Context expired, stopping")
 			return
 		case linkUpd, ok := <-linkInC:
 			if !ok {
-				logrus.Error("FilterUpdates: link input channel closed.")
+				log.Error("FilterUpdates: link input channel closed.")
 				return
 			}
 			idx := int(linkUpd.Index)
@@ -109,16 +109,16 @@ mainLoop:
 				})
 		case routeUpd, ok := <-routeInC:
 			if !ok {
-				logrus.Error("FilterUpdates: route input channel closed.")
+				log.Error("FilterUpdates: route input channel closed.")
 				return
 			}
-			logrus.WithField("route", routeUpd).Debug("Route update")
+			log.WithField("route", routeUpd).Debug("Route update")
 			if !routeIsLocalUnicast(routeUpd.Route) {
-				logrus.WithField("route", routeUpd).Debug("Ignoring non-local route.")
+				log.WithField("route", routeUpd).Debug("Ignoring non-local route.")
 				continue
 			}
 			if routeUpd.LinkIndex == 0 {
-				logrus.WithField("route", routeUpd).Debug("Ignoring route with no link index.")
+				log.WithField("route", routeUpd).Debug("Ignoring route with no link index.")
 				continue
 			}
 
@@ -127,24 +127,24 @@ mainLoop:
 
 			var readyToSendTime time.Time
 			if routeUpd.Type == unix.RTM_NEWROUTE {
-				logrus.WithField("addr", routeUpd.Dst).Debug("FilterUpdates: got address ADD")
+				log.WithField("addr", routeUpd.Dst).Debug("FilterUpdates: got address ADD")
 				if len(oldUpds) == 0 {
 					// This is an add for a new IP and there's nothing else in the queue for this interface.
 					// Short circuit.  We care about flaps where IPs are temporarily removed so no need to
 					// delay an add.
-					logrus.Debug("FilterUpdates: add with empty queue, short circuit.")
+					log.Debug("FilterUpdates: add with empty queue, short circuit.")
 					routeOutC <- routeUpd
 					continue
 				}
 
 				// Else, there's something else in the queue, need to process the queue...
-				logrus.Debug("FilterUpdates: add with non-empty queue.")
+				log.Debug("FilterUpdates: add with non-empty queue.")
 				// We don't actually need to delay the add itself so we don't set any delay here.  It will
 				// still be queued up behind other updates.
 				readyToSendTime = u.Time.Now()
 			} else {
 				// Got a delete, it might be a flap so queue the update.
-				logrus.WithField("addr", routeUpd.Dst).Debug("FilterUpdates: got address DEL")
+				log.WithField("addr", routeUpd.Dst).Debug("FilterUpdates: got address DEL")
 				readyToSendTime = u.Time.Now().Add(FlapDampingDelay)
 			}
 
@@ -153,11 +153,11 @@ mainLoop:
 			// updates for different IPs in flight.
 			upds := oldUpds[:0]
 			for _, upd := range oldUpds {
-				logrus.WithField("previous", upd).Debug("FilterUpdates: examining previous update.")
+				log.WithField("previous", upd).Debug("FilterUpdates: examining previous update.")
 				if oldAddrUpd, ok := upd.Update.(netlink.RouteUpdate); ok {
 					if ipNetsEqual(oldAddrUpd.Dst, routeUpd.Dst) {
 						// New update for the same IP, suppress the old update
-						logrus.WithField("address", oldAddrUpd.Dst.String()).Debug(
+						log.WithField("address", oldAddrUpd.Dst.String()).Debug(
 							"Received update for same IP within a short time, squashed the old update.")
 						continue
 					}
@@ -167,26 +167,26 @@ mainLoop:
 			upds = append(upds, timestampedUpd{ReadyAt: readyToSendTime, Update: routeUpd})
 			updatesByIfaceIdx[idx] = upds
 		case <-timerC:
-			logrus.Debug("FilterUpdates: timer popped.")
+			log.Debug("FilterUpdates: timer popped.")
 			timerC = nil
 		}
 
 		if timerC != nil {
 			// Optimisation: we much have just queued an update but there's already a timer set and we know
 			// that timer must pop before the one for the new update.  Skip recalculating the timer.
-			logrus.Debug("FilterUpdates: timer already set.")
+			log.Debug("FilterUpdates: timer already set.")
 			continue mainLoop
 		}
 
 		var nextUpdTime time.Time
 		for idx, upds := range updatesByIfaceIdx {
-			logrus.WithField("ifaceIdx", idx).Debug("FilterUpdates: examining updates for interface.")
+			log.WithField("ifaceIdx", idx).Debug("FilterUpdates: examining updates for interface.")
 			for len(upds) > 0 {
 				firstUpd := upds[0]
 				if u.Time.Since(firstUpd.ReadyAt) >= 0 {
 					// Either update is old enough to prevent flapping or it's an address being added.
 					// Ready to send...
-					logrus.WithField("update", firstUpd).Debug("FilterUpdates: update ready to send.")
+					log.WithField("update", firstUpd).Debug("FilterUpdates: update ready to send.")
 					switch u := firstUpd.Update.(type) {
 					case netlink.RouteUpdate:
 						routeOutC <- u
@@ -196,7 +196,7 @@ mainLoop:
 					upds = upds[1:]
 				} else {
 					// Update is too new, figure out when it'll be safe to send it.
-					logrus.WithField("update", firstUpd).Debug("FilterUpdates: update not ready.")
+					log.WithField("update", firstUpd).Debug("FilterUpdates: update not ready.")
 					if nextUpdTime.IsZero() || firstUpd.ReadyAt.Before(nextUpdTime) {
 						nextUpdTime = firstUpd.ReadyAt
 					}
@@ -204,10 +204,10 @@ mainLoop:
 				}
 			}
 			if len(upds) == 0 {
-				logrus.WithField("ifaceIdx", idx).Debug("FilterUpdates: no more updates for interface.")
+				log.WithField("ifaceIdx", idx).Debug("FilterUpdates: no more updates for interface.")
 				delete(updatesByIfaceIdx, idx)
 			} else {
-				logrus.WithField("ifaceIdx", idx).WithField("num", len(upds)).Debug(
+				log.WithField("ifaceIdx", idx).WithField("num", len(upds)).Debug(
 					"FilterUpdates: still updates for interface.")
 				updatesByIfaceIdx[idx] = upds
 			}
@@ -223,7 +223,7 @@ mainLoop:
 		if delay <= 0 {
 			delay = 1
 		}
-		logrus.WithField("delay", delay).Debug("FilterUpdates: calculated delay.")
+		log.WithField("delay", delay).Debug("FilterUpdates: calculated delay.")
 		timerC = u.Time.After(delay)
 	}
 }

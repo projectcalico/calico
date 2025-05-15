@@ -15,13 +15,13 @@
 package intdataplane
 
 import (
-	log "github.com/sirupsen/logrus"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/routetable"
 	"github.com/projectcalico/calico/felix/wireguard"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // wireguardManager manages the dataplane resources that are used for wireguard encrypted traffic. This includes:

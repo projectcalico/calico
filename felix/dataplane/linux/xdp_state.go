@@ -20,14 +20,13 @@ import (
 	"strings"
 	"time"
 
-	log "github.com/sirupsen/logrus"
-
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/dataplane/common"
 	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
 	"github.com/projectcalico/calico/felix/ipsets"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/types"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -305,7 +304,7 @@ type xdpIPState struct {
 	newCurrentState   *xdpSystemState
 	bpfActions        *xdpBPFActions
 	cbIDs             []*common.CbID
-	logCxt            *log.Entry
+	logCxt            log.Entry
 }
 
 type ipsetIDsToMembers struct {

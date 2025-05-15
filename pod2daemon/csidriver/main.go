@@ -18,8 +18,7 @@ import (
 	"flag"
 	"os"
 
-	log "github.com/sirupsen/logrus"
-
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 	"github.com/projectcalico/calico/pod2daemon/csidriver/driver"
 )

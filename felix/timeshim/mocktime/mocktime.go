@@ -19,9 +19,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/sirupsen/logrus"
-
 	"github.com/projectcalico/calico/felix/timeshim"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 var StartTime, _ = time.Parse(time.RFC3339, "2006-01-02T15:04:05Z")
@@ -64,7 +63,7 @@ func (m *mockTimer) fire() {
 	select {
 	case m.C <- m.TimeToFire: // Should never block since there channel has cap 1.
 	default:
-		logrus.Panic("Blocked while trying to fire timer")
+		log.Panic("Blocked while trying to fire timer")
 	}
 }
 
@@ -162,7 +161,7 @@ func (m *MockTime) incrementTimeLockHeld(t time.Duration) {
 	}
 
 	m.currentTime = m.currentTime.Add(t)
-	logrus.WithField("increment", t).WithField("t", m.currentTime.Sub(StartTime)).Info("Incrementing time")
+	log.WithField("increment", t).WithField("t", m.currentTime.Sub(StartTime)).Info("Incrementing time")
 
 	if len(m.timers) == 0 {
 		return
@@ -172,12 +171,12 @@ func (m *MockTime) incrementTimeLockHeld(t time.Duration) {
 		return m.timers[i].TimeToFire.Before(m.timers[j].TimeToFire)
 	})
 
-	logrus.WithField("delay", m.timers[0].TimeToFire.Sub(m.currentTime)).Info("Next timer.")
+	log.WithField("delay", m.timers[0].TimeToFire.Sub(m.currentTime)).Info("Next timer.")
 
 	for len(m.timers) > 0 &&
 		(m.timers[0].TimeToFire.Before(m.currentTime) ||
 			m.timers[0].TimeToFire.Equal(m.currentTime)) {
-		logrus.WithField("timer", m.timers[0]).Info("Firing timer.")
+		log.WithField("timer", m.timers[0]).Info("Firing timer.")
 		m.timers[0].fire()
 		m.timers = m.timers[1:]
 	}

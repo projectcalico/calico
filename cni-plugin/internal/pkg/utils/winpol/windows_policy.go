@@ -22,9 +22,8 @@ import (
 	"net"
 	"strings"
 
-	"github.com/sirupsen/logrus"
-
 	"github.com/projectcalico/calico/cni-plugin/internal/pkg/utils/hcn"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 type PolicyMarshaller interface {
@@ -37,7 +36,7 @@ func CalculateEndpointPolicies(
 	extraNATExceptions []*net.IPNet,
 	natOutgoing bool,
 	mgmtIP net.IP,
-	logger *logrus.Entry,
+	logger log.Entry,
 ) ([]json.RawMessage, []hcn.EndpointPolicy, error) {
 	inputPols := n.GetHNSEndpointPolicies()
 	var outputV1Pols []json.RawMessage

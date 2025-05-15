@@ -19,10 +19,10 @@ import (
 	"fmt"
 	"time"
 
-	log "github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 
 	"github.com/projectcalico/calico/felix/logutils"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -43,7 +43,7 @@ var (
 // RouteRules represents set of routing rules with same ip family.
 // The target of those rules are set of routing tables.
 type RouteRules struct {
-	logCxt *log.Entry
+	logCxt log.Entry
 
 	IPVersion int
 

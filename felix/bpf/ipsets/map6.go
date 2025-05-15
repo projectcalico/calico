@@ -21,11 +21,11 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 
 	"github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/ip"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // WARNING: must be kept in sync with the definitions in bpf/polprog/pol_prog_builder.go.
@@ -124,12 +124,12 @@ func ProtoIPSetMemberToBPFEntryV6(id uint64, member string) IPSetEntryInterface 
 		case "udp":
 			protocol = 17
 		default:
-			logrus.WithField("member", member).Warn("Unknown protocol in named port member")
+			log.WithField("member", member).Warn("Unknown protocol in named port member")
 			return nil
 		}
 		port64, err := strconv.ParseUint(parts[1], 10, 16)
 		if err != nil {
-			logrus.WithField("member", member).WithError(err).Panic("Failed to parse port")
+			log.WithField("member", member).WithError(err).Panic("Failed to parse port")
 		}
 		port = uint16(port64)
 	} else {

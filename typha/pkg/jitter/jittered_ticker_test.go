@@ -20,7 +20,8 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 var _ = Describe("Real 20ms + 10ms Ticker", func() {
@@ -48,7 +49,7 @@ var _ = Describe("Real 20ms + 10ms Ticker", func() {
 			<-ticker.C
 			now := time.Now()
 			duration := time.Since(lastTime)
-			logrus.WithField("duration", duration).Debug("Tick")
+			log.WithField("duration", duration).Debug("Tick")
 			if duration < 25*time.Millisecond {
 				foundLT5 = true
 			} else {
@@ -86,7 +87,7 @@ var _ = Describe("Delay calculation", func() {
 		foundGT5 := false
 		for i := 0; i < 40; i++ {
 			duration := ticker.calculateDelay()
-			logrus.WithField("duration", duration).Debug("Tick")
+			log.WithField("duration", duration).Debug("Tick")
 			if duration < 25*time.Millisecond {
 				foundLT5 = true
 			} else {

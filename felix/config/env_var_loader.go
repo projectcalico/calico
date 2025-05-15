@@ -17,7 +17,7 @@ package config
 import (
 	"strings"
 
-	log "github.com/sirupsen/logrus"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // LoadConfigFromEnvironment extracts raw config parameters (identified by

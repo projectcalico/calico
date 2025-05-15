@@ -22,7 +22,6 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -36,11 +35,12 @@ import (
 	proxy "github.com/projectcalico/calico/felix/bpf/proxy"
 	"github.com/projectcalico/calico/felix/bpf/routes"
 	"github.com/projectcalico/calico/felix/ip"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 func init() {
-	logrus.SetOutput(GinkgoWriter)
-	logrus.SetLevel(logrus.DebugLevel)
+	log.SetOutput(GinkgoWriter)
+	log.SetLevel(log.DebugLevel)
 }
 
 var _ = Describe("BPF Syncer", func() {
@@ -687,9 +687,9 @@ var _ = Describe("BPF Syncer", func() {
 		By("adding a route should fix one missing expanded NP", makestep(func() {
 			s.SetTriggerFn(func() {
 				go func() {
-					logrus.Info("Syncer triggered")
+					log.Info("Syncer triggered")
 					err := s.Apply(state)
-					logrus.WithError(err).Info("Syncer result")
+					log.WithError(err).Info("Syncer result")
 				}()
 			})
 			rt.Update(
@@ -1372,7 +1372,7 @@ func (m *mockNATMap) Iter(iter maps.IterCallback) error {
 }
 
 func (m *mockNATMap) Update(k, v []byte) error {
-	logrus.WithFields(logrus.Fields{
+	log.WithFields(log.Fields{
 		"k": k, "v": v,
 	}).Debug("mockNATMap.Update()")
 
@@ -1404,7 +1404,7 @@ func (m *mockNATMap) Get(k []byte) ([]byte, error) {
 }
 
 func (m *mockNATMap) Delete(k []byte) error {
-	logrus.WithFields(logrus.Fields{
+	log.WithFields(log.Fields{
 		"k": k,
 	}).Debug("mockNATMap.Delete()")
 
@@ -1465,7 +1465,7 @@ func (m *mockNATBackendMap) Iter(iter maps.IterCallback) error {
 }
 
 func (m *mockNATBackendMap) Update(k, v []byte) error {
-	logrus.WithFields(logrus.Fields{
+	log.WithFields(log.Fields{
 		"k": k, "v": v,
 	}).Debug("mockNATBackendMap.Update()")
 
@@ -1497,7 +1497,7 @@ func (m *mockNATBackendMap) Get(k []byte) ([]byte, error) {
 }
 
 func (m *mockNATBackendMap) Delete(k []byte) error {
-	logrus.WithFields(logrus.Fields{
+	log.WithFields(log.Fields{
 		"k": k,
 	}).Debug("mockNATBackendMap.Delete()")
 

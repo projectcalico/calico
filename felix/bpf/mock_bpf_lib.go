@@ -24,9 +24,8 @@ import (
 	"path"
 	"strconv"
 
-	log "github.com/sirupsen/logrus"
-
 	"github.com/projectcalico/calico/felix/labelindex"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 var id = 0

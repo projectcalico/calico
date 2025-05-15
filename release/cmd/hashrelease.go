@@ -18,9 +18,9 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/sirupsen/logrus"
 	cli "github.com/urfave/cli/v2"
 
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/release/internal/hashreleaseserver"
 	"github.com/projectcalico/calico/release/internal/imagescanner"
 	"github.com/projectcalico/calico/release/internal/outputs"
@@ -100,7 +100,7 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 					if c.Bool(ciFlag.Name) {
 						return fmt.Errorf("hashrelease %s has already been published", data.Hash())
 					} else {
-						logrus.Warnf("hashrelease %s has already been published", data.Hash())
+						log.Warnf("hashrelease %s has already been published", data.Hash())
 					}
 				}
 
@@ -157,7 +157,7 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 					return fmt.Errorf("failed to determine release version: %v", err)
 				}
 				if c.String(orgFlag.Name) == utils.TigeraOrg {
-					logrus.Warn("Release notes are not supported for Tigera releases, skipping...")
+					log.Warn("Release notes are not supported for Tigera releases, skipping...")
 				} else {
 					if _, err := outputs.ReleaseNotes(utils.ProjectCalicoOrg, c.String(githubTokenFlag.Name), cfg.RepoRootDir, filepath.Join(hashreleaseDir, releaseNotesDir), releaseVersion); err != nil {
 						return err
@@ -248,7 +248,7 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 					// Only log error as a warning if the image scan result URL could not be retrieved
 					// as it is not an error that should stop the hashrelease process.
 					if err != nil {
-						logrus.WithError(err).Warn("Failed to retrieve image scan result URL")
+						log.WithError(err).Warn("Failed to retrieve image scan result URL")
 					}
 				}
 
@@ -309,12 +309,12 @@ func validateHashreleaseBuildFlags(c *cli.Context) error {
 	} else {
 		// If building images, log a warning if no registry is specified.
 		if c.Bool(buildHashreleaseImageFlag.Name) && len(c.StringSlice(registryFlag.Name)) == 0 {
-			logrus.Warn("Building images without specifying a registry will result in images being built with the default registries")
+			log.Warn("Building images without specifying a registry will result in images being built with the default registries")
 		}
 
 		// If using the default operator image and registry, log a warning.
 		if c.String(operatorRegistryFlag.Name) == "" {
-			logrus.Warnf("Local builds should specify an operator registry using %s", operatorRegistryFlag)
+			log.Warnf("Local builds should specify an operator registry using %s", operatorRegistryFlag)
 		}
 	}
 

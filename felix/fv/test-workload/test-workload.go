@@ -31,7 +31,6 @@ import (
 	nsutils "github.com/containernetworking/plugins/pkg/testutils"
 	"github.com/docopt/docopt-go"
 	"github.com/ishidawataru/sctp"
-	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 
 	"github.com/projectcalico/calico/cni-plugin/pkg/dataplane/linux"
@@ -39,6 +38,7 @@ import (
 	"github.com/projectcalico/calico/felix/fv/cgroup"
 	"github.com/projectcalico/calico/felix/fv/connectivity"
 	"github.com/projectcalico/calico/felix/fv/utils"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 )
 
@@ -399,7 +399,7 @@ func main() {
 	panicIfError(err)
 }
 
-func loopRespondingToPackets(logCxt *log.Entry, p net.PacketConn) {
+func loopRespondingToPackets(logCxt log.Entry, p net.PacketConn) {
 	defer p.Close()
 	for {
 		buffer := make([]byte, 1024)

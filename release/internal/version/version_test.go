@@ -17,9 +17,9 @@ package version_test
 import (
 	"testing"
 
-	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/release/internal/version"
 )
 
@@ -41,7 +41,7 @@ func TestDetermineReleaseVersion(t *testing.T) {
 	}
 
 	for current, next := range expectations {
-		logrus.Infof("Test current version = %v", current)
+		log.Infof("Test current version = %v", current)
 		actual, err := version.DetermineReleaseVersion(version.New(current), "0.dev")
 		require.NoError(t, err)
 		require.Equal(t, next, actual.FormattedString())

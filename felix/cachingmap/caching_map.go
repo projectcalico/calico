@@ -17,9 +17,8 @@ package cachingmap
 import (
 	"fmt"
 
-	"github.com/sirupsen/logrus"
-
 	"github.com/projectcalico/calico/felix/deltatracker"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // DataplaneMap is an interface of the underlying map that is being cached by the
@@ -57,7 +56,7 @@ func New[K comparable, V comparable](name string, dpMap DataplaneMap[K, V]) *Cac
 				// Since we require V to be comparable, can just use '==' here.
 				return a == b
 			}),
-			deltatracker.WithLogCtx[K, V](logrus.WithField("bpfMap", name)),
+			deltatracker.WithLogCtx[K, V](log.WithField("bpfMap", name)),
 		),
 	}
 	return cm
@@ -66,10 +65,10 @@ func New[K comparable, V comparable](name string, dpMap DataplaneMap[K, V]) *Cac
 // LoadCacheFromDataplane loads the contents of the DP map into the dataplane cache, allowing it to be queried with
 // GetDataplane and IterDataplane.
 func (c *CachingMap[K, V]) LoadCacheFromDataplane() error {
-	logrus.WithField("name", c.name).Debug("Loading BPF map from dataplane.")
+	log.WithField("name", c.name).Debug("Loading BPF map from dataplane.")
 	dp, err := c.dpMap.Load()
 	if err != nil {
-		logrus.WithError(err).WithField("name", c.name).Warn("Failed to load cache of dataplane map")
+		log.WithError(err).WithField("name", c.name).Warn("Failed to load cache of dataplane map")
 		return err
 	}
 	c.deltaTracker.Dataplane().ReplaceAllMap(dp)
@@ -126,7 +125,7 @@ func (c *CachingMap[K, V]) maybeLoadCache() error {
 // ApplyUpdatesOnly applies any pending adds/updates to the dataplane map.  It doesn't delete any keys that are no
 // longer wanted.
 func (c *CachingMap[K, V]) ApplyUpdatesOnly() error {
-	logrus.WithField("name", c.name).Debug("Applying updates to DP map.")
+	log.WithField("name", c.name).Debug("Applying updates to DP map.")
 	err := c.maybeLoadCache()
 	if err != nil {
 		return err
@@ -135,7 +134,7 @@ func (c *CachingMap[K, V]) ApplyUpdatesOnly() error {
 	c.deltaTracker.PendingUpdates().Iter(func(k K, v V) deltatracker.IterAction {
 		err := c.dpMap.Update(k, v)
 		if err != nil {
-			logrus.WithError(err).Warn("Error while updating DP map")
+			log.WithError(err).Warn("Error while updating DP map")
 			errs = append(errs, err)
 			return deltatracker.IterActionNoOp
 		}
@@ -150,7 +149,7 @@ func (c *CachingMap[K, V]) ApplyUpdatesOnly() error {
 // ApplyDeletionsOnly applies any pending deletions to the dataplane map.  It doesn't add or update any keys that
 // are new/changed.
 func (c *CachingMap[K, V]) ApplyDeletionsOnly() error {
-	logrus.WithField("name", c.name).Debug("Applying deletions to DP map.")
+	log.WithField("name", c.name).Debug("Applying deletions to DP map.")
 	err := c.maybeLoadCache()
 	if err != nil {
 		return err
@@ -159,7 +158,7 @@ func (c *CachingMap[K, V]) ApplyDeletionsOnly() error {
 	c.deltaTracker.PendingDeletions().Iter(func(k K) deltatracker.IterAction {
 		err := c.dpMap.Delete(k)
 		if err != nil && !c.dpMap.ErrIsNotExists(err) {
-			logrus.WithError(err).Warn("Error while deleting from DP map")
+			log.WithError(err).Warn("Error while deleting from DP map")
 			errs = append(errs, err)
 			return deltatracker.IterActionNoOp
 		}

@@ -17,7 +17,7 @@ package daemon
 import (
 	"time"
 
-	log "github.com/sirupsen/logrus"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 func panicAfter(delay time.Duration) {

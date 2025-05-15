@@ -26,12 +26,12 @@ import (
 	"os"
 	"time"
 
-	log "github.com/sirupsen/logrus"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // Common code for verifying whether a peer certificate has a required Common Name and/or a required
 // URI SAN.
-func CertificateVerifier(logCxt *log.Entry, roots *x509.CertPool, requiredCN, requiredURISAN string) func([][]byte, [][]*x509.Certificate) error {
+func CertificateVerifier(logCxt log.Entry, roots *x509.CertPool, requiredCN, requiredURISAN string) func([][]byte, [][]*x509.Certificate) error {
 	log.WithFields(log.Fields{
 		"roots":          roots,
 		"requiredCN":     requiredCN,

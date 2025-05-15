@@ -22,23 +22,23 @@ import (
 	"github.com/projectcalico/calico/goldmane/pkg/client"
 	"github.com/projectcalico/calico/lib/httpmachinery/pkg/server"
 	gorillaadpt "github.com/projectcalico/calico/lib/httpmachinery/pkg/server/adaptors/gorilla"
-	logrus "github.com/projectcalico/calico/lib/std/log"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/whisker-backend/pkg/config"
 	v1 "github.com/projectcalico/calico/whisker-backend/pkg/handlers/v1"
 )
 
 func Run(ctx context.Context, cfg *config.Config) {
-	logrus.WithField("cfg", cfg.String()).Info("Applying configuration...")
+	log.WithField("cfg", cfg.String()).Info("Applying configuration...")
 
 	// Generate credentials for the Goldmane client.
 	creds, err := client.ClientCredentials(cfg.TLSCertPath, cfg.TLSKeyPath, cfg.CACertPath)
 	if err != nil {
-		logrus.WithError(err).Fatal("Failed to create goldmane TLS credentials.")
+		log.WithError(err).Fatal("Failed to create goldmane TLS credentials.")
 	}
 
 	gmCli, err := client.NewFlowsAPIClient(cfg.GoldmaneHost, grpc.WithTransportCredentials(creds))
 	if err != nil {
-		logrus.WithError(err).Fatal("Failed to create goldmane client.")
+		log.WithError(err).Fatal("Failed to create goldmane client.")
 	}
 
 	opts := []server.Option{
@@ -58,16 +58,16 @@ func Run(ctx context.Context, cfg *config.Config) {
 		opts...,
 	)
 	if err != nil {
-		logrus.WithError(err).Fatal("Failed to create server.")
+		log.WithError(err).Fatal("Failed to create server.")
 	}
 
 	// TODO Should we require that this is TLS? It will be in the same pod as nginx.
-	logrus.Infof("Listening on %s.", cfg.HostAddr())
+	log.Infof("Listening on %s.", cfg.HostAddr())
 	if err := srv.ListenAndServe(ctx); err != nil {
-		logrus.WithError(err).Fatal("Failed to start server.")
+		log.WithError(err).Fatal("Failed to start server.")
 	}
 
 	if err := srv.WaitForShutdown(); err != nil {
-		logrus.WithError(err).Fatal("An unexpected error occurred while waiting for shutdown.")
+		log.WithError(err).Fatal("An unexpected error occurred while waiting for shutdown.")
 	}
 }
