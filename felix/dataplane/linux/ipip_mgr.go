@@ -15,6 +15,7 @@
 package intdataplane
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -31,6 +32,13 @@ import (
 	"github.com/projectcalico/calico/felix/rules"
 )
 
+// ipipManager manages the all-hosts IP set, which is used by some rules in our static chains
+// when IPIP is enabled. It doesn't actually program the rules, because they are part of the
+// top-level static chains.
+//
+// ipipManager also takes care of the configuration of the IPIP tunnel device, and programming IPIP routes by using
+// route manager. Route updates are only sent to the route manager when Felix is reponsible for programming routes.
+// If BIRD is in charge of IPIP routes, ipipManager is only responsible for configuration of the IPIP tunnel device.
 type ipipManager struct {
 	// Our dependencies.
 	hostname      string
@@ -97,7 +105,7 @@ func newIPIPManagerWithSims(
 		return nil
 	}
 
-	manager := &ipipManager{
+	m := &ipipManager{
 		ipsetsDataplane: ipsetsDataplane,
 		ipSetMetadata: ipsets.IPSetMetadata{
 			MaxSize: dpConfig.MaxIPSetSize,
@@ -130,11 +138,9 @@ func newIPIPManagerWithSims(
 		),
 	}
 
-	manager.updateRouteManager()
-	if dpConfig.ProgramRoutes {
-		manager.routeMgr.triggerRouteUpdate()
-	}
-	return manager
+	m.updateRouteManager()
+	m.mayUpdateRoutes()
+	return m
 }
 
 func (m *ipipManager) updateRouteManager() {
@@ -169,7 +175,7 @@ func (m *ipipManager) OnUpdate(protoBufMsg interface{}) {
 }
 
 func (m *ipipManager) mayUpdateRoutes() {
-	// Only update routes if only Felix is responsible for programming routes.
+	// Only update routes if only Felix is responsible for programming IPIP routes.
 	if m.dpConfig.ProgramRoutes {
 		m.routeMgr.triggerRouteUpdate()
 	}
@@ -219,8 +225,14 @@ func (m *ipipManager) route(cidr ip.CIDR, r *proto.RouteUpdate) *routetable.Targ
 	}
 }
 
-func (m *ipipManager) KeepIPIPDeviceInSync(mtu int, xsumBroken bool, wait time.Duration, dataIfaceC chan string) {
-	m.routeMgr.KeepDeviceInSync(mtu, xsumBroken, wait, dataIfaceC, m.device)
+func (m *ipipManager) KeepIPIPDeviceInSync(
+	ctx context.Context,
+	mtu int,
+	xsumBroken bool,
+	wait time.Duration,
+	dataIfaceC chan string,
+) {
+	m.routeMgr.KeepDeviceInSync(ctx, mtu, xsumBroken, wait, dataIfaceC, m.device)
 }
 
 func (m *ipipManager) device(_ netlink.Link) (netlink.Link, string, error) {

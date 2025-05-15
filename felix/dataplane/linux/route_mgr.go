@@ -15,6 +15,7 @@
 package intdataplane
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"reflect"
@@ -56,8 +57,8 @@ type routeManager struct {
 	localIPAMBlocks map[string]*proto.RouteUpdate
 
 	// Local host information
-	hostname         string
-	providerChangedC chan struct{}
+	hostname       string
+	tunnelChangedC chan struct{}
 
 	// Indicates if configuration has changed since the last apply.
 	routesDirty   bool
@@ -88,19 +89,19 @@ func newRouteManager(
 	nlHandle netlinkHandle,
 ) *routeManager {
 	return &routeManager{
-		hostname:         dpConfig.Hostname,
-		routeTable:       mainRouteTable,
-		routesByDest:     map[string]*proto.RouteUpdate{},
-		localIPAMBlocks:  map[string]*proto.RouteUpdate{},
-		providerChangedC: make(chan struct{}, 1),
-		tunnelDevice:     tunnelDevice,
-		tunnelDeviceMTU:  mtu,
-		ipVersion:        ipVersion,
-		ippoolType:       ippoolType,
-		dpConfig:         dpConfig,
-		nlHandle:         nlHandle,
-		routeProtocol:    calculateRouteProtocol(dpConfig),
-		opRecorder:       opRecorder,
+		hostname:        dpConfig.Hostname,
+		routeTable:      mainRouteTable,
+		routesByDest:    map[string]*proto.RouteUpdate{},
+		localIPAMBlocks: map[string]*proto.RouteUpdate{},
+		tunnelChangedC:  make(chan struct{}, 1),
+		tunnelDevice:    tunnelDevice,
+		tunnelDeviceMTU: mtu,
+		ipVersion:       ipVersion,
+		ippoolType:      ippoolType,
+		dpConfig:        dpConfig,
+		nlHandle:        nlHandle,
+		routeProtocol:   calculateRouteProtocol(dpConfig),
+		opRecorder:      opRecorder,
 		logCtx: logrus.WithFields(logrus.Fields{
 			"ipVersion":     ipVersion,
 			"tunnel device": tunnelDevice,
@@ -217,7 +218,7 @@ func (m *routeManager) updateDataIfaceAddr(addr string) {
 	m.dataDeviceLock.Lock()
 	defer m.dataDeviceLock.Unlock()
 	m.dataDeviceAddr = addr
-	m.providerChangedC <- struct{}{}
+	m.tunnelChangedC <- struct{}{}
 }
 
 func (m *routeManager) dataIfaceAddr() string {
@@ -424,7 +425,7 @@ func noEncapRoute(ifaceName string, cidr ip.CIDR, r *proto.RouteUpdate, proto ne
 }
 
 func (m *routeManager) detectDataIface() (netlink.Link, error) {
-	dataAddr := m.dataDeviceAddr
+	dataAddr := m.dataIfaceAddr()
 	if dataAddr == "" {
 		return nil, fmt.Errorf("local data interface not yet known")
 	}
@@ -457,6 +458,7 @@ func (m *routeManager) detectDataIface() (netlink.Link, error) {
 
 // checks that it is still correctly configured.
 func (m *routeManager) KeepDeviceInSync(
+	ctx context.Context,
 	mtu int,
 	xsumBroken bool,
 	wait time.Duration,
@@ -477,12 +479,14 @@ func (m *routeManager) KeepDeviceInSync(
 		defer timer.Stop()
 		select {
 		case <-timer.C:
-		case <-m.providerChangedC:
-			logrus.Debug("Sleep returning early: local information changed.")
+		case <-ctx.Done():
+			logrus.Debug("Sleep returning early: context finished.")
+		case <-m.tunnelChangedC:
+			logrus.Debug("Sleep returning early: tunnel changed.")
 		}
 	}
 
-	for {
+	for ctx.Err() == nil {
 		if m.dataIfaceAddr() == "" {
 			m.logCtx.Debug("Missing local information, retrying...")
 			sleepMonitoringChans(10 * time.Second)
@@ -520,8 +524,10 @@ func (m *routeManager) KeepDeviceInSync(
 			select {
 			case dataIfaceC <- newDataIface:
 				dataIface = newDataIface
-			case <-m.providerChangedC:
-				m.logCtx.Info("My information changed; restarting configuration.")
+			case <-m.tunnelChangedC:
+				m.logCtx.Info("Tunnel changed; restarting configuration.")
+				continue
+			case <-ctx.Done():
 				continue
 			}
 		}

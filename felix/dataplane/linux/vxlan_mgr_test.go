@@ -15,6 +15,7 @@
 package intdataplane
 
 import (
+	"context"
 	"net"
 	"time"
 
@@ -384,7 +385,9 @@ var _ = Describe("VXLANManager", func() {
 
 	It("should fall back to programming tunneled routes if the parent device is not known", func() {
 		parentNameC := make(chan string)
-		go vxlanMgr.KeepVXLANDeviceInSync(1400, false, 1*time.Second, parentNameC)
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		go vxlanMgr.KeepVXLANDeviceInSync(ctx, 1400, false, 1*time.Second, parentNameC)
 
 		By("Sending another node's VTEP and route.")
 		vxlanMgr.OnUpdate(&proto.VXLANTunnelEndpointUpdate{
@@ -434,7 +437,9 @@ var _ = Describe("VXLANManager", func() {
 
 	It("IPv6: should fall back to programming tunneled routes if the parent device is not known", func() {
 		parentNameC := make(chan string)
-		go vxlanMgrV6.KeepVXLANDeviceInSync(1400, false, 1*time.Second, parentNameC)
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		go vxlanMgrV6.KeepVXLANDeviceInSync(ctx, 1400, false, 1*time.Second, parentNameC)
 
 		By("Sending another node's VTEP and route.")
 		vxlanMgrV6.OnUpdate(&proto.VXLANTunnelEndpointUpdate{

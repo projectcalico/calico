@@ -15,6 +15,7 @@
 package intdataplane
 
 import (
+	"context"
 	"errors"
 	"net"
 	"time"
@@ -301,7 +302,9 @@ var _ = Describe("RouteManager for ipip pools", func() {
 
 	It("should fall back to programming tunneled routes if the noEncap device is not known", func() {
 		dataDeviceC := make(chan string)
-		go ipipMgr.KeepIPIPDeviceInSync(1400, false, 1*time.Second, dataDeviceC)
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		go ipipMgr.KeepIPIPDeviceInSync(ctx, 1400, false, 1*time.Second, dataDeviceC)
 
 		By("Sending another node's route.")
 		ipipMgr.OnUpdate(&proto.HostMetadataUpdate{

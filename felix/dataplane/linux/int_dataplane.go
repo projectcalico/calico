@@ -15,6 +15,7 @@
 package intdataplane
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net"
@@ -690,6 +691,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			vxlanMTU = 0
 		}
 		go dp.vxlanManager.KeepVXLANDeviceInSync(
+			context.Background(),
 			vxlanMTU,
 			dataplaneFeatures.ChecksumOffloadBroken,
 			10*time.Second,
@@ -1079,6 +1081,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		)
 		dp.dataInterfaceC = make(chan string, 1)
 		go dp.ipipManager.KeepIPIPDeviceInSync(
+			context.Background(),
 			config.IPIPMTU,
 			dataplaneFeatures.ChecksumOffloadBroken,
 			time.Second*10,
@@ -1192,6 +1195,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 				vxlanMTU = 0
 			}
 			go dp.vxlanManagerV6.KeepVXLANDeviceInSync(
+				context.Background(),
 				vxlanMTU,
 				dataplaneFeatures.ChecksumOffloadBroken,
 				10*time.Second,

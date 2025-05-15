@@ -16,6 +16,7 @@ package intdataplane
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"net"
 	"sync"
@@ -138,8 +139,8 @@ func newVXLANManagerWithShims(
 		vtepsDirty:        true,
 		dpConfig:          dpConfig,
 		logCtx: logrus.WithFields(logrus.Fields{
-			"ipVersion":     ipVersion,
-			"tunnel device": deviceName,
+			"ipVersion": ipVersion,
+			"device":    deviceName,
 		}),
 		opRecorder: opRecorder,
 		routeMgr: newRouteManager(
@@ -179,7 +180,7 @@ func (m *vxlanManager) OnUpdate(protoBufMsg interface{}) {
 			return
 		}
 
-		m.logCtx.WithField("msg", msg).Debug("Route manager received VTEP update")
+		m.logCtx.WithField("msg", msg).Debug("VXLAN manager received VTEP update")
 		if msg.Node == m.hostname {
 			m.setLocalVTEP(msg)
 		} else {
@@ -188,7 +189,7 @@ func (m *vxlanManager) OnUpdate(protoBufMsg interface{}) {
 		m.vtepsDirty = true
 		m.routeMgr.triggerRouteUpdate()
 	case *proto.VXLANTunnelEndpointRemove:
-		m.logCtx.WithField("msg", msg).Debug("Route manager received VTEP remove")
+		m.logCtx.WithField("msg", msg).Debug("VXLAN manager received VTEP remove")
 		if msg.Node == m.hostname {
 			m.setLocalVTEP(nil)
 		} else {
@@ -295,8 +296,14 @@ func (m *vxlanManager) route(cidr ip.CIDR, r *proto.RouteUpdate) *routetable.Tar
 	}
 }
 
-func (m *vxlanManager) KeepVXLANDeviceInSync(mtu int, xsumBroken bool, wait time.Duration, dataIfaceC chan string) {
-	m.routeMgr.KeepDeviceInSync(mtu, xsumBroken, wait, dataIfaceC, m.device)
+func (m *vxlanManager) KeepVXLANDeviceInSync(
+	ctx context.Context,
+	mtu int,
+	xsumBroken bool,
+	wait time.Duration,
+	parentIfaceC chan string,
+) {
+	m.routeMgr.KeepDeviceInSync(ctx, mtu, xsumBroken, wait, parentIfaceC, m.device)
 }
 
 func (m *vxlanManager) device(parent netlink.Link) (netlink.Link, string, error) {
