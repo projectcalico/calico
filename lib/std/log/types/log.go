@@ -168,6 +168,7 @@ type Entry interface {
 	WithContext(ctx context.Context) Entry
 	WithError(err error) Entry
 	WithField(key string, value interface{}) Entry
+	SetField(key string, value interface{})
 	WithFields(fields Fields) Entry
 	WithTime(t time.Time) Entry
 	Fields() Fields
