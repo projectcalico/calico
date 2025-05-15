@@ -42,6 +42,8 @@ COPY --from=envoybinary --chown=0:0 --chmod=755 \
 
 FROM ${CALICO_BASE}
 
+ARG GIT_VERSION=unknown
+
 COPY --from=source / /
 
 # These labels are required for OCP Certification
