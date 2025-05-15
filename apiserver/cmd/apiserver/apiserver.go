@@ -22,13 +22,13 @@ import (
 	"os"
 	"runtime"
 
-	"github.com/projectcalico/calico/lib/std/log"
 	"k8s.io/apiserver/pkg/features"
 	"k8s.io/apiserver/pkg/util/feature"
 	"k8s.io/component-base/cli"
 	"k8s.io/component-base/logs"
 
 	"github.com/projectcalico/calico/apiserver/cmd/apiserver/server"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/pkg/buildinfo"
 )
 

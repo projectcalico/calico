@@ -15,11 +15,10 @@
 package types
 
 import (
-	"github.com/projectcalico/calico/lib/std/log"
-
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/proto"
 	ftypes "github.com/projectcalico/calico/felix/types"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 type IPToEndpointsIndex interface {

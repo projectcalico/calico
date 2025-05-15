@@ -19,6 +19,7 @@ import (
 	"strings"
 
 	authz "github.com/envoyproxy/go-control-plane/envoy/service/auth/v3"
+
 	"github.com/projectcalico/calico/lib/std/log"
 )
 

@@ -5,8 +5,9 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"github.com/projectcalico/calico/lib/std/log"
 	"k8s.io/component-base/logs"
+
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 func TestLogLevel(t *testing.T) {

@@ -21,7 +21,6 @@ import (
 	"time"
 
 	"github.com/projectcalico/calico/lib/std/log"
-
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"

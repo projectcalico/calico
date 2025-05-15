@@ -18,11 +18,11 @@ import (
 	"context"
 	"time"
 
-	"github.com/projectcalico/calico/lib/std/log"
 	"google.golang.org/grpc"
 
 	"github.com/projectcalico/calico/app-policy/policystore"
 	"github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 const (
