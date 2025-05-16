@@ -16,6 +16,7 @@ package codec
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -150,7 +151,7 @@ func decodeParameters[RequestParams any](decoder *form.Decoder, reqParams Reques
 				msgs = append(msgs, fmt.Sprintf("failed to decode %s: %s", key, fieldErr.Error()))
 			}
 
-			return fmt.Errorf(strings.Join(msgs, "; "))
+			return errors.New(strings.Join(msgs, "; "))
 		}
 		return err
 	}
