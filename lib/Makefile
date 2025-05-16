@@ -13,3 +13,17 @@ gen-mocks:
 	$(DOCKER_RUN) $(CALICO_BUILD) sh -c 'cd httpmachinery && mockery'
 
 gen-files: gen-mocks
+
+ci: static-checks ut
+
+ut:
+	@for dir in $$(find . -maxdepth 2 -name "go.mod" -exec dirname {} \; | sort -u); do \
+		echo "Testing $$dir..."; \
+		$(DOCKER_GO_BUILD) sh -c "cd $$dir && go test ./... -cover -count 1"; \
+	done
+
+static-checks:
+	@for dir in $$(find . -maxdepth 2 -name "go.mod" -exec dirname {} \; | sort -u); do \
+		echo "Static checking $$dir..."; \
+		$(DOCKER_RUN) $(CALICO_BUILD) sh -c "$(GIT_CONFIG_SSH) cd $$dir && golangci-lint run $(LINT_ARGS)"; \
+	done
