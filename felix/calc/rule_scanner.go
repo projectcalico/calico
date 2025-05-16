@@ -16,6 +16,7 @@ package calc
 
 import (
 	"fmt"
+	"iter"
 	"strings"
 
 	"github.com/projectcalico/api/pkg/lib/numorstring"
@@ -167,9 +168,9 @@ func (rs *RuleScanner) OnProfileInactive(key model.ProfileRulesKey) {
 	rs.RulesUpdateCallbacks.OnProfileInactive(key)
 }
 
-func (rs *RuleScanner) OnPolicyActive(key model.PolicyKey, policy *model.Policy) {
+func (rs *RuleScanner) OnPolicyActive(policyKey model.PolicyKey, policy *model.Policy, affectedEndpoints iter.Seq[any]) {
 	parsedRules := rs.updateRules(
-		key,
+		policyKey,
 		policy.InboundRules,
 		policy.OutboundRules,
 		policy.DoNotTrack,
@@ -177,7 +178,7 @@ func (rs *RuleScanner) OnPolicyActive(key model.PolicyKey, policy *model.Policy)
 		policy.Namespace,
 		selector.Normalise(policy.Selector),
 	)
-	rs.RulesUpdateCallbacks.OnPolicyActive(key, parsedRules)
+	rs.RulesUpdateCallbacks.OnPolicyActive(policyKey, parsedRules)
 }
 
 func (rs *RuleScanner) OnPolicyInactive(key model.PolicyKey) {
