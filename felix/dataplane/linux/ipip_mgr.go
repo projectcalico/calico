@@ -22,7 +22,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 
 	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
@@ -35,6 +34,7 @@ import (
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/routetable"
 	"github.com/projectcalico/calico/felix/rules"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // ipipManager manages the all-hosts IP set, which is used by some rules in our static chains
@@ -79,7 +79,7 @@ type ipipManager struct {
 	routeProtocol     netlink.RouteProtocol
 
 	// Log context
-	logCtx     *logrus.Entry
+	logCtx     log.Entry
 	opRecorder logutils.OpRecorder
 }
 
@@ -114,7 +114,7 @@ func newIPIPManagerWithShim(
 	ipVersion uint8,
 ) *ipipManager {
 	if ipVersion != 4 {
-		logrus.Errorf("IPIP manager only supports IPv4")
+		log.Errorf("IPIP manager only supports IPv4")
 		return nil
 	}
 	return &ipipManager{
@@ -138,7 +138,7 @@ func newIPIPManagerWithShim(
 		dpConfig:          dpConfig,
 		nlHandle:          nlHandle,
 		routeProtocol:     calculateRouteProtocol(dpConfig),
-		logCtx:            logrus.WithField("ipVersion", ipVersion),
+		logCtx:            log.WithField("ipVersion", ipVersion),
 		opRecorder:        opRecorder,
 	}
 }
@@ -212,14 +212,14 @@ func (m *ipipManager) OnUpdate(msg interface{}) {
 func (m *ipipManager) deleteRoute(dst string) {
 	_, exists := m.routesByDest[dst]
 	if exists {
-		logrus.Debug("deleting route dst ", dst)
+		log.Debug("deleting route dst ", dst)
 		// In case the route changes type to one we no longer care about...
 		delete(m.routesByDest, dst)
 		m.routesDirty = true
 	}
 
 	if _, exists := m.localIPAMBlocks[dst]; exists {
-		logrus.Debug("deleting local ipam dst ", dst)
+		log.Debug("deleting local ipam dst ", dst)
 		delete(m.localIPAMBlocks, dst)
 		m.routesDirty = true
 	}
@@ -342,7 +342,7 @@ func (m *ipipManager) updateRoutes() error {
 	m.routeTable.SetRoutes(routetable.RouteClassIPAMBlockDrop, routetable.InterfaceNone, bhRoutes)
 
 	if m.noEncapDevice != "" {
-		m.logCtx.WithFields(logrus.Fields{
+		m.logCtx.WithFields(log.Fields{
 			"noEncapDevice": m.noEncapDevice,
 			"routes":        noEncapRoutes,
 		}).Debug("IPIP manager sending unencapsulated L3 updates")
@@ -393,7 +393,7 @@ func (m *ipipManager) KeepBIRDIPIPDeviceInSync(xsumBroken bool) {
 	for {
 		err := m.configureIPIPDevice(m.dpConfig.IPIPMTU, m.dpConfig.RulesConfig.IPIPTunnelAddress, xsumBroken)
 		if err != nil {
-			logrus.WithError(err).Warn("Failed configure IPIP tunnel device, retrying...")
+			log.WithError(err).Warn("Failed configure IPIP tunnel device, retrying...")
 			time.Sleep(1 * time.Second)
 			continue
 		}
@@ -411,7 +411,7 @@ func (m *ipipManager) KeepIPIPDeviceInSync(xsumBroken bool, wait time.Duration, 
 	ctx := context.Background()
 	mtu := m.dpConfig.IPIPMTU
 	address := m.dpConfig.RulesConfig.IPIPTunnelAddress
-	m.logCtx.WithFields(logrus.Fields{
+	m.logCtx.WithFields(log.Fields{
 		"device":     m.ipipDevice,
 		"mtu":        mtu,
 		"xsumBroken": xsumBroken,
@@ -432,9 +432,9 @@ func (m *ipipManager) KeepIPIPDeviceInSync(xsumBroken bool, wait time.Duration, 
 		select {
 		case <-timer.C:
 		case <-ctx.Done():
-			logrus.Debug("Sleep returning early: context finished.")
+			log.Debug("Sleep returning early: context finished.")
 		case <-m.myAddrChangedC:
-			logrus.Debug("Sleep returning early: local address changed.")
+			log.Debug("Sleep returning early: local address changed.")
 		}
 	}
 
@@ -518,7 +518,7 @@ func (m *ipipManager) getNoEncapInterface() (netlink.Link, error) {
 
 // configureIPIPDevice ensures the IPIP tunnel device is up and configures correctly.
 func (m *ipipManager) configureIPIPDevice(mtu int, address net.IP, xsumBroken bool) error {
-	logCtx := logrus.WithFields(logrus.Fields{
+	logCtx := log.WithFields(log.Fields{
 		"mtu":        mtu,
 		"tunnelAddr": address,
 		"device":     m.ipipDevice,
@@ -590,7 +590,7 @@ func (m *ipipManager) configureIPIPDevice(mtu int, address net.IP, xsumBroken bo
 
 // ensureAddressOnLink updates the given link to set its local IP address. It removes any other addresses.
 func (m *ipipManager) ensureAddressOnLink(linkName string, address net.IP) error {
-	logCxt := m.logCtx.WithFields(logrus.Fields{
+	logCxt := m.logCtx.WithFields(log.Fields{
 		"link": linkName,
 		"addr": address,
 	})

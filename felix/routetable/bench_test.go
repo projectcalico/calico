@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2024-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,7 +24,6 @@ import (
 
 	. "github.com/onsi/gomega"
 	"github.com/prometheus/procfs"
-	"github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 
 	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
@@ -34,6 +33,7 @@ import (
 	mocknetlink "github.com/projectcalico/calico/felix/netlinkshim/mocknetlink"
 	. "github.com/projectcalico/calico/felix/routetable"
 	"github.com/projectcalico/calico/felix/routetable/ownershippol"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // Note: these benchmarks must be run as root, because they create a dummy
@@ -57,7 +57,7 @@ func benchResyncNumRoutes(b *testing.B, numRoutes int) {
 	}
 
 	logutils.ConfigureEarlyLogging()
-	logrus.SetLevel(logrus.WarnLevel)
+	log.SetLevel(log.WarnLevel)
 
 	ifaceName := fmt.Sprintf("testcali%04x", rand.Intn(65536))
 	utils.Run("ip", "link", "add", "name", ifaceName, "type", "dummy")

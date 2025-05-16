@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2024-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,9 +27,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/sirupsen/logrus"
-
 	"github.com/projectcalico/calico/felix/config"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
@@ -43,7 +42,7 @@ func main() {
 
 	params, err := config.CombinedFieldInfo()
 	if err != nil {
-		logrus.Fatalf("Failed to load param metadata: %v", err)
+		log.Fatalf("Failed to load param metadata: %v", err)
 	}
 
 	switch *format {
@@ -58,18 +57,18 @@ func main() {
 	case "missing-defaults":
 		outputMissingDefaults(params)
 	default:
-		logrus.Fatalf("Unknown format: %v", *format)
+		log.Fatalf("Unknown format: %v", *format)
 	}
 }
 
 func configureLogging() {
 	logutils.ConfigureFormatter("docgen")
-	logrus.SetLevel(logrus.FatalLevel)
-	logLevel, err := logrus.ParseLevel(*logLevel)
+	log.SetLevel(log.FatalLevel)
+	logLevel, err := log.ParseLevel(*logLevel)
 	if err != nil {
-		logrus.Fatalf("Failed to parse log level: %v", err)
+		log.Fatalf("Failed to parse log level: %v", err)
 	}
-	logrus.SetLevel(logLevel)
+	log.SetLevel(logLevel)
 }
 
 func outputMarkdown(params []*config.FieldInfo) {
@@ -275,6 +274,6 @@ func outputJSON(params []*config.FieldInfo) {
 		Groups:  groups,
 	})
 	if err != nil {
-		logrus.WithError(err).Fatal("Failed to encode JSON")
+		log.WithError(err).Fatal("Failed to encode JSON")
 	}
 }

@@ -21,10 +21,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/sirupsen/logrus"
-	log "github.com/sirupsen/logrus"
-
 	"github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 const (
@@ -100,7 +98,7 @@ func NewEndpointStatusFileWriterWithShims(statusDirPath string, filesys Filesys)
 
 func (w *EndpointStatusFileWriter) WriteStatusFile(name string, epStatusJSON string) error {
 	// Write file to dir.
-	logrus.WithField("filename", name).Debug("Writing endpoint-status file to status-dir")
+	log.WithField("filename", name).Debug("Writing endpoint-status file to status-dir")
 	filename := filepath.Join(w.statusDirPrefix, dirStatus, name)
 
 	return w.Filesys.WriteFile(filename, []byte(epStatusJSON), 0644)
@@ -135,7 +133,7 @@ func (w *EndpointStatusFileWriter) EnsureStatusDir(prefix string) ([]fs.DirEntry
 
 		// Construct the full file path.
 		filePath := filepath.Join(path, entry.Name())
-		logCxt := logrus.WithField("file", filePath)
+		logCxt := log.WithField("file", filePath)
 
 		var epStatus WorkloadEndpointStatus
 

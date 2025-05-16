@@ -21,8 +21,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/sirupsen/logrus"
-
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 )
@@ -120,11 +119,11 @@ func (r *StateRecorder) handleUpdates(updates []api.Update) {
 		if r.blockAfter > 0 {
 			r.blockAfter--
 			if r.blockAfter == 0 {
-				logrus.WithField("duration", r.blockDuration).Info("----- Recorder about to block")
+				log.WithField("duration", r.blockDuration).Info("----- Recorder about to block")
 				r.L.Unlock()
 				time.Sleep(r.blockDuration)
 				r.L.Lock()
-				logrus.Info("----- Recorder woke up")
+				log.Info("----- Recorder woke up")
 			}
 		}
 	}

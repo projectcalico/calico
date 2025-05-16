@@ -18,10 +18,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/sirupsen/logrus"
-
 	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/generictables"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 type namespaceable interface {
@@ -53,7 +52,7 @@ func (s *actionSet) Reject(with generictables.RejectWith) generictables.Action {
 		return RejectAction{With: "tcp reset"}
 	}
 	if with != "" {
-		logrus.WithField("reject-with", with).Panic("Unknown reject-with value")
+		log.WithField("reject-with", with).Panic("Unknown reject-with value")
 	}
 	return RejectAction{}
 }
@@ -463,7 +462,7 @@ type LimitPacketRateAction struct {
 
 func (a LimitPacketRateAction) ToFragment(features *environment.Features) string {
 	if a.Rate < 0 {
-		logrus.WithField("rate", a.Rate).Panic("Invalid rate")
+		log.WithField("rate", a.Rate).Panic("Invalid rate")
 	}
 	return fmt.Sprintf("limit rate over %d/second drop", a.Rate)
 }
@@ -484,10 +483,10 @@ func (a LimitNumConnectionsAction) ToFragment(features *environment.Features) st
 	case generictables.RejectWithTCPReset:
 		rejectWith = "tcp reset"
 	default:
-		logrus.WithField("reject-with", a.RejectWith).Panic("Unknown reject-with value")
+		log.WithField("reject-with", a.RejectWith).Panic("Unknown reject-with value")
 	}
 	if a.Num < 0 {
-		logrus.WithField("rate", a.Num).Panic("Invalid limit")
+		log.WithField("rate", a.Num).Panic("Invalid limit")
 	}
 	return fmt.Sprintf("ct count over %d reject with %s", a.Num, rejectWith)
 }
