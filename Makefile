@@ -19,11 +19,17 @@ DOCKER_RUN := mkdir -p ./.go-pkg-cache bin $(GOMOD_CACHE) && \
 		-v $(CURDIR)/.go-pkg-cache:/go-cache:rw \
 		-w /go/src/$(PACKAGE_NAME)
 
+.PHONY: update-file-copyrights
 update-file-copyrights:
 ifndef BASE_BRANCH
 	$(error BASE_BRANCH is not defined. Please set BASE_BRANCH to the target branch (e.g., 'main'))
 endif
+	# Update outdated copyrights for updated files.
 	YEAR=$$(date +%Y); git diff --diff-filter=d --name-only $(BASE_BRANCH) | xargs sed -i "/Copyright (c) $$YEAR Tigera/!s/Copyright (c) \([0-9]\{4\}\)\(-[0-9]\{4\}\)\{0,1\} Tigera/Copyright (c) \1-$$YEAR Tigera/"
+	# Add copyright to new files that don't have it.
+	YEAR=$$(date +%Y); \
+	git diff --name-only --diff-filter=A $(BASE_BRANCH) | grep '\.go$$' | \
+	xargs -I {} sh -c 'if ! grep -q "Copyright (c)" "{}"; then sed "s/YEAR/'$$YEAR'/g" hack/copyright.template | cat - "{}" > temp && mv temp "{}"; fi'
 
 clean:
 	$(MAKE) -C api clean
