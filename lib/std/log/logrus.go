@@ -291,22 +291,6 @@ func (logger *logger) GetLevel() Level {
 	return Level(logger.Logger.GetLevel())
 }
 
-type hookAdaptor struct {
-	Hook
-}
-
-func (adaptor *hookAdaptor) Levels() []logrus.Level {
-	var levels []logrus.Level
-	for _, level := range adaptor.Hook.Levels() {
-		levels = append(levels, logrus.Level(level))
-	}
-	return levels
-}
-
-func (adaptor *hookAdaptor) Fire(e *logrus.Entry) error {
-	return adaptor.Hook.Fire(&entry{e})
-}
-
 // AddHook adds a hook to the logger hooks.
 func (logger *logger) AddHook(hook Hook) {
 	logger.Logger.AddHook(&hookAdaptor{hook})
