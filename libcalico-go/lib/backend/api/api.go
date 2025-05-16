@@ -120,6 +120,10 @@ type Client interface {
 
 	// Clean removes Calico data from the backend datastore.  Used for test purposes.
 	Clean() error
+
+	// Close attempts to close any connections to the datastore.  Using the
+	// client after calling this method may result in undefined behavior.
+	Close() error
 }
 
 // StatusClient extends Client, is the interface to the backend datastore.

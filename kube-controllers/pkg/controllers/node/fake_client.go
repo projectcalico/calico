@@ -181,6 +181,10 @@ func (f *FakeCalicoClient) EnsureInitialized(ctx context.Context, calicoVersion 
 	panic("not implemented")
 }
 
+func (f *FakeCalicoClient) Close() error {
+	return nil
+}
+
 // fakeNodeClient implements the clientv3 NodeInterface for testing purposes.
 type fakeNodeClient struct {
 	sync.Mutex
