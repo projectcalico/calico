@@ -20,7 +20,6 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/snowzach/rotatefilehook"
 	cli "github.com/urfave/cli/v2"
 
 	"github.com/projectcalico/calico/lib/std/log"
@@ -58,18 +57,18 @@ func configureLogging(filename string) {
 		CallerPrettyfier:       logPrettifier,
 	})
 
-	rotateFileHook, err := rotatefilehook.NewRotateFileHook(rotatefilehook.RotateFileConfig{
-		Filename:   filename,
-		MaxSize:    100,
-		MaxAge:     30,
-		MaxBackups: 10,
-		Level:      log.DebugLevel,
-		Formatter: &log.TextFormatter{
+	rotateFileHook, err := log.NewRotateFileHook(
+		filename,
+		100,
+		30,
+		10,
+		log.DebugLevel,
+		&log.TextFormatter{
 			DisableColors:          true,
 			DisableLevelTruncation: true,
 			CallerPrettyfier:       logPrettifier,
 		},
-	})
+	)
 	if err != nil {
 		panic(err)
 	}
