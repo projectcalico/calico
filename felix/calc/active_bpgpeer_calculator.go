@@ -20,10 +20,10 @@ import (
 	"sort"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/dispatcher"
 	"github.com/projectcalico/calico/felix/labelindex"
+	"github.com/projectcalico/calico/lib/std/log"
 	libv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
@@ -83,7 +83,7 @@ func (abp *ActiveBGPPeerCalculator) RegisterWith(localEndpointDispatcher, allUpd
 }
 
 func (abp *ActiveBGPPeerCalculator) OnUpdate(update api.Update) (_ bool) {
-	logCxt := logrus.WithField("update", update)
+	logCxt := log.WithField("update", update)
 	switch id := update.Key.(type) {
 	case model.WorkloadEndpointKey:
 		// Delegate to the label index.  It will call us back when the match status changes.
@@ -122,7 +122,7 @@ func (abp *ActiveBGPPeerCalculator) OnUpdate(update api.Update) (_ bool) {
 				// Our node was deleted.  We must handle this as if the node
 				// never existed in order to maintain the calculation graph's
 				// invariant.
-				logrus.Warning("Node resource for this node was deleted. Local BGP peer calculation may be disrupted.")
+				log.Warning("Node resource for this node was deleted. Local BGP peer calculation may be disrupted.")
 				abp.onLocalNodeLabelUpdate(nil)
 			}
 		case v3.KindProfile:
@@ -131,7 +131,7 @@ func (abp *ActiveBGPPeerCalculator) OnUpdate(update api.Update) (_ bool) {
 			// Ignore other kinds of v3 resource.
 		}
 	default:
-		logrus.Infof("Ignoring unexpected update: %v %#v",
+		log.Infof("Ignoring unexpected update: %v %#v",
 			reflect.TypeOf(update.Key), update)
 	}
 
@@ -142,7 +142,7 @@ func (abp *ActiveBGPPeerCalculator) onLocalNodeLabelUpdate(labels map[string]str
 	if maps.Equal(labels, abp.nodeLabels) {
 		return
 	}
-	logrus.WithFields(logrus.Fields{
+	log.WithFields(log.Fields{
 		"old": abp.nodeLabels,
 		"new": labels,
 	}).Info("Labels of the local host updated.")
@@ -169,7 +169,7 @@ func (abp *ActiveBGPPeerCalculator) bgpPeerSelectsLocalNode(bgpPeer *v3.BGPPeer)
 
 	selector, err := sel.Parse(bgpPeer.Spec.NodeSelector)
 	if err != nil {
-		logrus.WithError(err).Errorf("BGPPeer had invalid node selector: %q.  Will ignore this BGPPeer.", bgpPeer.Spec.NodeSelector)
+		log.WithError(err).Errorf("BGPPeer had invalid node selector: %q.  Will ignore this BGPPeer.", bgpPeer.Spec.NodeSelector)
 		selector = sel.NoMatch
 	}
 
@@ -180,7 +180,7 @@ func (abp *ActiveBGPPeerCalculator) onPeerActive(bgpPeer *v3.BGPPeer) {
 	var newSelector *sel.Selector
 	var err error
 
-	logrus.WithField("bgppeer", bgpPeer).Debugf("BGPPeer is active.")
+	log.WithField("bgppeer", bgpPeer).Debugf("BGPPeer is active.")
 	name := bgpPeer.Name
 	abp.allBGPPeersByName[name] = bgpPeer
 	rawSelector := bgpPeer.Spec.LocalWorkloadSelector
@@ -189,7 +189,7 @@ func (abp *ActiveBGPPeerCalculator) onPeerActive(bgpPeer *v3.BGPPeer) {
 	} else {
 		newSelector, err = sel.Parse(rawSelector)
 		if err != nil {
-			logrus.WithError(err).Errorf("BGPPeer had invalid local workload selector: %q.  Will ignore this BGPPeer.", rawSelector)
+			log.WithError(err).Errorf("BGPPeer had invalid local workload selector: %q.  Will ignore this BGPPeer.", rawSelector)
 			newSelector = sel.NoMatch
 		}
 	}

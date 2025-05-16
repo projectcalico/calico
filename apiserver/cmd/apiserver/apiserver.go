@@ -1,4 +1,4 @@
-// Copyright (c) 2021-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2021-2025 Tigera, Inc. All rights reserved.
 
 /*
 Copyright 2016 The Kubernetes Authors.
@@ -22,13 +22,13 @@ import (
 	"os"
 	"runtime"
 
-	"github.com/sirupsen/logrus"
 	"k8s.io/apiserver/pkg/features"
 	"k8s.io/apiserver/pkg/util/feature"
 	"k8s.io/component-base/cli"
 	"k8s.io/component-base/logs"
 
 	"github.com/projectcalico/calico/apiserver/cmd/apiserver/server"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/pkg/buildinfo"
 )
 
@@ -43,7 +43,7 @@ func main() {
 		string(features.ConsistentListFromCache): false,
 	})
 	if err != nil {
-		logrus.Errorf("Error setting feature gates: %v.", err)
+		log.Errorf("Error setting feature gates: %v.", err)
 		logs.FlushLogs()
 		os.Exit(1)
 	}
@@ -56,7 +56,7 @@ func main() {
 
 	cmd, _, err := server.NewCommandStartCalicoServer(os.Stdout)
 	if err != nil {
-		logrus.Errorf("Error creating server: %v", err)
+		log.Errorf("Error creating server: %v", err)
 		logs.FlushLogs()
 		os.Exit(1)
 	}

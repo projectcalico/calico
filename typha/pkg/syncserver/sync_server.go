@@ -32,9 +32,9 @@ import (
 
 	"github.com/golang/snappy"
 	"github.com/prometheus/client_golang/prometheus"
-	log "github.com/sirupsen/logrus"
 
 	calicotls "github.com/projectcalico/calico/crypto/pkg/tls"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/health"
 	cprometheus "github.com/projectcalico/calico/libcalico-go/lib/prometheus"
@@ -622,7 +622,7 @@ func (s *Server) ShuttingDown() bool {
 
 // TerminateRandomConnection tries to drop a connection at random.  On success, returns true.  If there are no
 // connections returns false.
-func (s *Server) TerminateRandomConnection(logCtx *log.Entry, reason string) bool {
+func (s *Server) TerminateRandomConnection(logCtx log.Entry, reason string) bool {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 	for connID, conn := range s.connIDToConn {
@@ -683,7 +683,7 @@ type connection struct {
 	flushWriter          func() error
 	readC                chan interface{}
 
-	logCxt                       *log.Entry
+	logCxt                       log.Entry
 	chosenCompression            syncproto.CompressionAlgorithm
 	clientSupportsDecoderRestart bool
 
@@ -836,7 +836,7 @@ func (h *connection) handle(finishedWG *sync.WaitGroup) (err error) {
 
 // readFromClient reads messages from the client and puts them on the h.readC channel.  It is responsible for closing the
 // channel.
-func (h *connection) readFromClient(logCxt *log.Entry) {
+func (h *connection) readFromClient(logCxt log.Entry) {
 	defer func() {
 		h.cancelCxt()
 		close(h.readC)
@@ -869,7 +869,7 @@ func (h *connection) readFromClient(logCxt *log.Entry) {
 }
 
 // waitForMessage blocks, waiting for a message on the h.readC channel.  It imposes a timeout.
-func (h *connection) waitForMessage(logCxt *log.Entry, timeout time.Duration) (interface{}, error) {
+func (h *connection) waitForMessage(logCxt log.Entry, timeout time.Duration) (interface{}, error) {
 	timer := time.NewTimer(timeout)
 	defer timer.Stop()
 	select {
@@ -1059,7 +1059,7 @@ func (h *connection) maybeResetWriteTimeout() error {
 // sendDeltaUpdatesToClient follows the breadcrumbs from the given one, sending delta updates from each
 // subsequent breadcrumb to the client.  It does not send the deltas from the given breadcrumb (it assumes
 // that breadcrumb was sent to the client already as the snapshot).
-func (h *connection) sendDeltaUpdatesToClient(logCxt *log.Entry, breadcrumb *snapcache.Breadcrumb) {
+func (h *connection) sendDeltaUpdatesToClient(logCxt log.Entry, breadcrumb *snapcache.Breadcrumb) {
 	defer func() {
 		logCxt.Info("KV-sender goroutine shutting down")
 		h.cancelCxt()
@@ -1201,7 +1201,7 @@ func (h *connection) sendDeltaUpdatesToClient(logCxt *log.Entry, breadcrumb *sna
 }
 
 // streamSnapshotToClient takes the snapshot contained in the Breadcrumb and streams it to the client in chunks.
-func (h *connection) streamSnapshotToClient(logCxt *log.Entry, breadcrumb *snapcache.Breadcrumb) error {
+func (h *connection) streamSnapshotToClient(logCxt log.Entry, breadcrumb *snapcache.Breadcrumb) error {
 	startTime := time.Now()
 	err := writeSnapshotMessages(
 		h.cxt,
@@ -1221,7 +1221,7 @@ func (h *connection) streamSnapshotToClient(logCxt *log.Entry, breadcrumb *snapc
 // writeSnapshotMessages chunks the given breadcrumb up into syncproto.MsgKVs objects and calls writeMsg for each one.
 func writeSnapshotMessages(
 	ctx context.Context,
-	logCxt *log.Entry,
+	logCxt log.Entry,
 	breadcrumb *snapcache.Breadcrumb,
 	writeMsg func(any) error,
 	maxMsgSize int,
@@ -1279,7 +1279,7 @@ func writeSnapshotMessages(
 }
 
 // sendPingsToClient loops, sending pings to the client at the configured interval.
-func (h *connection) sendPingsToClient(logCxt *log.Entry) {
+func (h *connection) sendPingsToClient(logCxt log.Entry) {
 	defer func() {
 		h.cancelCxt()
 		h.shutDownWG.Done()

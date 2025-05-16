@@ -1,4 +1,4 @@
-// Copyright (c) 2022 Tigera, Inc. All rights reserved.
+// Copyright (c) 2022-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,8 +16,8 @@ package promutils
 
 import (
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/typha/pkg/syncproto"
 )
 
@@ -30,7 +30,7 @@ func GetOrRegister[T prometheus.Collector](collector T) T {
 		if err, ok := err.(prometheus.AlreadyRegisteredError); ok {
 			return err.ExistingCollector.(T)
 		}
-		logrus.WithError(err).WithField("collector", collector).Panic("Failed to register prometheus collector.")
+		log.WithError(err).WithField("collector", collector).Panic("Failed to register prometheus collector.")
 	}
 	return collector
 }

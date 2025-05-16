@@ -20,11 +20,10 @@ import (
 	"os"
 	"time"
 
-	"github.com/sirupsen/logrus"
-
 	confdConfig "github.com/projectcalico/calico/confd/pkg/config"
 	confd "github.com/projectcalico/calico/confd/pkg/run"
 	felix "github.com/projectcalico/calico/felix/daemon"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 	"github.com/projectcalico/calico/node/cmd/calico-node/bpf"
 	"github.com/projectcalico/calico/node/pkg/allocateip"
@@ -97,7 +96,7 @@ var initHostpaths = flagSet.Bool("hostpath-init", false, "Initialize hostpaths f
 func main() {
 	// Log to stdout.  this prevents our logs from being interpreted as errors by, for example,
 	// fluentd's default configuration.
-	logrus.SetOutput(os.Stdout)
+	log.SetOutput(os.Stdout)
 
 	// Set up logging formatting.
 	logutils.ConfigureFormatter("node")
@@ -135,30 +134,31 @@ func main() {
 		buildinfo.PrintVersion()
 		os.Exit(0)
 	} else if *runFelix {
-		logrus.SetFormatter(&logutils.Formatter{Component: "felix"})
+		log.SetFormatter(log.NewDefaultFormatterWithName("felix"))
 		felix.Run("/etc/calico/felix.cfg", buildinfo.Version, buildinfo.BuildDate, buildinfo.GitRevision)
 	} else if *runBPF {
 		// Command-line tools should log to stderr to avoid confusion with the output.
-		logrus.SetOutput(os.Stderr)
+		log.SetOutput(os.Stderr)
 		bpf.RunBPFCmd()
 	} else if *runInit {
-		logrus.SetFormatter(&logutils.Formatter{Component: "init"})
 		if *bestEffort {
-			logrus.SetFormatter(&logutils.Formatter{Component: "init-best-effort"})
+			log.SetFormatter(log.NewDefaultFormatterWithName("init-best-effort"))
+		} else {
+			log.SetFormatter(log.NewDefaultFormatterWithName("init"))
 		}
 		nodeinit.Run(*bestEffort)
 	} else if *runStartup {
-		logrus.SetFormatter(&logutils.Formatter{Component: "startup"})
+		log.SetFormatter(log.NewDefaultFormatterWithName("startup"))
 		startup.Run()
 	} else if *runShutdown {
-		logrus.SetFormatter(&logutils.Formatter{Component: "shutdown"})
+		log.SetFormatter(log.NewDefaultFormatterWithName("shutdown"))
 		shutdown.Run()
 	} else if *monitorAddrs {
-		logrus.SetFormatter(&logutils.Formatter{Component: "monitor-addresses"})
+		log.SetFormatter(log.NewDefaultFormatterWithName("monitor-addresses"))
 		startup.ConfigureLogging()
 		startup.MonitorIPAddressSubnets()
 	} else if *runConfd {
-		logrus.SetFormatter(&logutils.Formatter{Component: "confd"})
+		log.SetFormatter(log.NewDefaultFormatterWithName("confd"))
 		cfg, err := confdConfig.InitConfig(true)
 		if err != nil {
 			panic(err)
@@ -168,20 +168,20 @@ func main() {
 		cfg.Onetime = *confdRunOnce
 		confd.Run(cfg)
 	} else if *runAllocateTunnelAddrs {
-		logrus.SetFormatter(&logutils.Formatter{Component: "tunnel-ip-allocator"})
+		log.SetFormatter(log.NewDefaultFormatterWithName("tunnel-ip-allocator"))
 		if *allocateTunnelAddrsRunOnce {
 			allocateip.Run(nil)
 		} else {
 			allocateip.Run(make(chan struct{}))
 		}
 	} else if *monitorToken {
-		logrus.SetFormatter(&logutils.Formatter{Component: "cni-config-monitor"})
+		log.SetFormatter(log.NewDefaultFormatterWithName("cni-config-monitor"))
 		cni.Run()
 	} else if *initHostpaths {
-		logrus.SetFormatter(&logutils.Formatter{Component: "hostpath-init"})
+		log.SetFormatter(log.NewDefaultFormatterWithName("hostpath-init"))
 		hostpathinit.Run()
 	} else if *runStatusReporter {
-		logrus.SetFormatter(&logutils.Formatter{Component: "status-reporter"})
+		log.SetFormatter(log.NewDefaultFormatterWithName("status-reporter"))
 		status.Run()
 	} else if *showStatus {
 		status.Show()
