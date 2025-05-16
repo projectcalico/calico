@@ -26,6 +26,7 @@ import (
 
 	"github.com/projectcalico/calico/apiserver/pkg/rbac"
 	calicorest "github.com/projectcalico/calico/apiserver/pkg/registry/projectcalico/rest"
+	"github.com/projectcalico/calico/apiserver/pkg/registry/projectcalico/util"
 	"github.com/projectcalico/calico/apiserver/pkg/storage/calico"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
@@ -74,6 +75,7 @@ type ProjectCalicoServer struct {
 	GenericAPIServer      *genericapiserver.GenericAPIServer
 	RBACCalculator        rbac.Calculator
 	CalicoResourceLister  CalicoResourceLister
+	WatchManager          *util.WatchManager
 	SharedInformerFactory informers.SharedInformerFactory
 }
 
@@ -119,6 +121,10 @@ func (c completedConfig) New() (*ProjectCalicoServer, error) {
 	// implement our own syncer-based cache.
 	calicoLister := NewCalicoResourceLister(cc)
 
+	// Create the manager for policy watches. It keeps track of established watches and makes sure they are canceled
+	// in case of on update that the watch necessitates recreation of the watch.
+	watchManager := util.NewWatchManager(cc)
+
 	// Create the RBAC calculator,
 	calculator, err := c.NewRBACCalculator(calicoLister)
 	if err != nil {
@@ -129,11 +135,12 @@ func (c completedConfig) New() (*ProjectCalicoServer, error) {
 		GenericAPIServer:      genericServer,
 		RBACCalculator:        calculator,
 		CalicoResourceLister:  calicoLister,
+		WatchManager:          watchManager,
 		SharedInformerFactory: c.GenericConfig.SharedInformerFactory,
 	}
 
 	apiGroupInfo.VersionedResourcesStorageMap["v3"], err = calicostore.NewV3Storage(
-		Scheme, c.GenericConfig.RESTOptionsGetter, c.GenericConfig.Authorization.Authorizer, calicoLister)
+		Scheme, c.GenericConfig.RESTOptionsGetter, c.GenericConfig.Authorization.Authorizer, calicoLister, watchManager)
 	if err != nil {
 		return nil, err
 	}

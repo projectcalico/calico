@@ -1,7 +1,6 @@
 {{ if .Values.installation.enabled }}
 {{ $installSpec := omit .Values.installation "enabled" }}
 {{ $_ := set $installSpec "imagePullSecrets" (include "tigera-operator.imagePullSecrets" . | fromYamlArray) }}
-{{ $_ := set $installSpec "kubeletVolumePluginPath" .Values.kubeletVolumePluginPath }}
 
 apiVersion: operator.tigera.io/v1
 kind: Installation

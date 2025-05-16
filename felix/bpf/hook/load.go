@@ -17,8 +17,8 @@ package hook
 import (
 	"strings"
 
-	"github.com/projectcalico/calico/felix/bpf/bpfutils"
 	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
+	bpfutils "github.com/projectcalico/calico/felix/bpf/utils"
 )
 
 func init() {

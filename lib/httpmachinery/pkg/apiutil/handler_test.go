@@ -38,7 +38,7 @@ func TestJSONListResponse(t *testing.T) {
 
 	hdlr := apiutil.NewJSONListOrEventStreamHandler(func(ctx apicontext.Context, params Request) apiutil.ListOrStreamResponse[Response] {
 		Expect(params.ReqField).To(Equal("value"))
-		return apiutil.NewListOrStreamResponse[Response]().SetStatus(http.StatusOK).SendList(20, []Response{
+		return apiutil.NewListOrStreamResponse[Response]().SetStatus(http.StatusOK).SendList(apiutil.ListMeta{TotalPages: 20}, []Response{
 			{RespField: "foo"},
 			{RespField: "bar"},
 		})
