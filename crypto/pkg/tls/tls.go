@@ -97,20 +97,28 @@ func ParseTLSCiphers(ciphers string) ([]uint16, error) {
 
 // NewTLSConfig returns a tls.Config with the recommended default settings for Calico components. Based on build flags,
 // boringCrypto may be used and fips strict mode may be enforced, which can override the parameters defined in this func.
-func NewTLSConfig() *tls.Config {
+func NewTLSConfig() (*tls.Config, error) {
 	log.WithField("BuiltWithBoringCrypto", BuiltWithBoringCrypto).Debug("creating a TLS config")
+	env := os.Getenv("TLS_CIPHER_SUITES")
+	ciphers, err := ParseTLSCiphers(env)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create TLS Config: %w", err)
+	}
 	return &tls.Config{
 		MinVersion:   tls.VersionTLS12,
 		MaxVersion:   tls.VersionTLS13,
-		CipherSuites: append(tls12Ciphers, tls13Ciphers...),
-	}
+		CipherSuites: ciphers,
+	}, nil
 }
 
 // NewMutualTLSConfig generates a tls.Config configured to enable mTLS with clients using the provided cert, key, and CA file paths.
 // If any of the files cannot be read, an error is returned.
 func NewMutualTLSConfig(cert, key, ca string) (*tls.Config, error) {
 	// Configure use of mTLS.
-	tlsCfg := NewTLSConfig()
+	tlsCfg, err := NewTLSConfig()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create TLS Config: %w", err)
+	}
 	tlsCfg.ClientAuth = tls.RequireAndVerifyClientCert
 
 	// Load Server cert and key and add to the TLS config.
