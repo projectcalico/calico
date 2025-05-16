@@ -43,7 +43,7 @@ bin/envoy-gateway-$(ARCH): init-source
 
 .PHONY: clean
 clean:
-	rm -f .envoy-gateway.*
+	rm -f .envoy-gateway.* .*.created* .*.published* .release.*
 	rm -fr bin/ envoy-gateway/
 	-docker image rm -f $$(docker images $(ENVOY_GATEWAY_IMAGE) -a -q)
 

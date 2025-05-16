@@ -1,6 +1,8 @@
 ARG CALICO_BASE
 FROM ${CALICO_BASE}
 ARG TARGETARCH
+ARG GIT_VERSION=unknown
+
 COPY bin/envoy-ratelimit-${TARGETARCH} /bin/ratelimit
 
 # These labels are required for OCP Certification
