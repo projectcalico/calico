@@ -94,6 +94,14 @@ func (o *Obj) AttachCGroup(_, _ string) (*Link, error) {
 	panic("LIBBPF syscall stub")
 }
 
+func (o *Obj) AttachCGroupLegacy(_, _ string) error {
+	panic("LIBBPF syscall stub")
+}
+
+func (o *Obj) UpdateLink(_, _ string) error {
+	panic("LIBBPF syscall stub")
+}
+
 func (o *Obj) PinPrograms(_ string) error {
 	panic("LIBBPF syscall stub")
 }
@@ -115,6 +123,18 @@ func CreateQDisc(ifName string) error {
 }
 
 func RemoveQDisc(ifName string) error {
+	panic("LIBBPF syscall stub")
+}
+
+func DetachLink(_ string) error {
+	panic("LIBBPF syscall stub")
+}
+
+func (l *Link) Pin(_ string) error {
+	panic("LIBBPF syscall stub")
+}
+
+func DetachCTLBProgramsLegacy(_ string) error {
 	panic("LIBBPF syscall stub")
 }
 
