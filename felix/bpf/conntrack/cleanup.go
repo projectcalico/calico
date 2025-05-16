@@ -19,13 +19,13 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
-	log "github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 
 	"github.com/projectcalico/calico/felix/bpf/conntrack/timeouts"
 	v3 "github.com/projectcalico/calico/felix/bpf/conntrack/v3"
 	"github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/timeshim"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 var (

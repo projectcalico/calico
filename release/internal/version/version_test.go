@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2024-2025 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,9 +17,9 @@ package version_test
 import (
 	"testing"
 
-	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/release/internal/version"
 )
 
@@ -41,7 +41,7 @@ func TestDetermineReleaseVersion(t *testing.T) {
 	}
 
 	for current, next := range expectations {
-		logrus.Infof("Test current version = %v", current)
+		log.Infof("Test current version = %v", current)
 		actual, err := version.DetermineReleaseVersion(version.New(current), "0.dev")
 		require.NoError(t, err)
 		require.Equal(t, next, actual.FormattedString())

@@ -22,10 +22,10 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	log "github.com/sirupsen/logrus"
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/projectcalico/calico/felix/k8sfv/leastsquares"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 var _ = Describe("testing the test code", func() {

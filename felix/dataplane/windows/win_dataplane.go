@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,8 +19,6 @@ import (
 	"regexp"
 	"time"
 
-	log "github.com/sirupsen/logrus"
-
 	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
 	"github.com/projectcalico/calico/felix/dataplane/windows/hcn"
 	"github.com/projectcalico/calico/felix/dataplane/windows/hns"
@@ -29,6 +27,7 @@ import (
 	"github.com/projectcalico/calico/felix/jitter"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/throttle"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/health"
 )
 
