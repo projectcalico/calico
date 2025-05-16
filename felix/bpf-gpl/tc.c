@@ -204,12 +204,8 @@ int calico_tc_main(struct __sk_buff *skb)
 
 #ifndef IPVER6
 	if (CALI_F_TO_HOST && ip_is_frag(ip_hdr(ctx))) {
-		if (!frags4_handle(ctx)) {
-			deny_reason(ctx, CALI_REASON_FRAG_WAIT);
-			goto deny;
-		}
-		/* force it through stack to trigger any further necessary fragmentation */
-		ctx->state->flags |= CALI_ST_SKIP_REDIR_ONCE;
+		CALI_JUMP_TO(ctx, PROG_INDEX_IP_FRAG);
+		goto deny;
 	}
 #endif
 
@@ -2077,3 +2073,47 @@ deny:
 	CALI_DEBUG("DENY due to policy");
 	return TC_ACT_SHOT;
 }
+
+#ifndef IPVER6
+SEC("tc")
+int calico_tc_skb_ipv4_frag(struct __sk_buff *skb)
+{
+	/* Initialise the context, which is stored on the stack, and the state, which
+	 * we use to pass data from one program to the next via tail calls. */
+	DECLARE_TC_CTX(_ctx,
+		.skb = skb,
+		.fwd = {
+			.res = TC_ACT_UNSPEC,
+			.reason = CALI_REASON_UNKNOWN,
+		},
+	);
+	struct cali_tc_ctx *ctx = &_ctx;
+
+	CALI_DEBUG("Entering calico_tc_skb_ipv4_frag");
+	CALI_DEBUG("iphdr_offset %d ihl %d", skb_iphdr_offset(ctx), ctx->ipheader_len);
+
+	if (skb_refresh_validate_ptrs(ctx, UDP_SIZE)) {
+		deny_reason(ctx, CALI_REASON_SHORT);
+		CALI_DEBUG("Too short");
+		goto deny;
+	}
+
+	tc_state_fill_from_iphdr_v4(ctx);
+
+	if (!frags4_handle(ctx)) {
+		deny_reason(ctx, CALI_REASON_FRAG_WAIT);
+		goto deny;
+	}
+	/* force it through stack to trigger any further necessary fragmentation */
+	ctx->state->flags |= CALI_ST_SKIP_REDIR_ONCE;
+
+	return pre_policy_processing(ctx);
+
+finalize:
+	return forward_or_drop(ctx);
+
+deny:
+	ctx->fwd.res = TC_ACT_SHOT;
+	goto finalize;
+}
+#endif /* !IPVER6 */
