@@ -15,6 +15,7 @@
 package libbpf
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"syscall"
@@ -31,6 +32,16 @@ import (
 // #cgo arm64 LDFLAGS: -L${SRCDIR}/../../bpf-gpl/include/libbpf/src/arm64 -lbpf -lelf -lz
 // #include "libbpf_api.h"
 import "C"
+
+const (
+	PROG_TYPE_CGROUP_INET4_CONNECT = iota
+	PROG_TYPE_CGROUP_INET4_SENDMSG
+	PROG_TYPE_CGROUP_INET4_RECVMSG
+	PROG_TYPE_CGROUP_INET6_CONNECT
+	PROG_TYPE_CGROUP_INET6_SENDMSG
+	PROG_TYPE_CGROUP_INET6_RECVMSG
+	PROG_TYPE_MAX
+)
 
 type Obj struct {
 	obj *C.struct_bpf_object
@@ -163,6 +174,17 @@ func QueryClassifier(ifindex, handle, pref int, ingress bool) (int, error) {
 func DetachClassifier(ifindex, handle, pref int, ingress bool) error {
 	_, err := C.bpf_tc_program_detach(C.int(ifindex), C.int(handle), C.int(pref), C.bool(ingress))
 
+	return err
+}
+
+func DetachCTLBProgramsLegacy(targetFd int) error {
+	var err error
+	for i := PROG_TYPE_CGROUP_INET4_CONNECT; i < PROG_TYPE_MAX; i++ {
+		_, perr := C.bpf_ctlb_detach_legacy(C.int(targetFd), C.int(i))
+		if perr != nil {
+			errors.Join(err, perr)
+		}
+	}
 	return err
 }
 
@@ -313,6 +335,13 @@ func (l *Link) Pin(path string) error {
 		return nil
 	}
 	return fmt.Errorf("link nil")
+}
+
+func DetachLink(path string) error {
+	cPath := C.CString(path)
+	defer C.free(unsafe.Pointer(cPath))
+	_, err := C.bpf_detach_link(cPath)
+	return err
 }
 
 func (o *Obj) UpdateLink(path, progName string) error {
