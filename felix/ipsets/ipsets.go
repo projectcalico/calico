@@ -332,9 +332,20 @@ func (s *IPSets) GetDesiredMembers(setID string) (set.Set[string], error) {
 	return strs, nil
 }
 
-// ApplyUpdates applies the updates to the dataplane.  Returns a set of programmed IPs in the IPSets included by the
-// ipsetFilter.
-func (s *IPSets) ApplyUpdates(ipsetFilter func(ipSetName string) bool) (programmedIPs set.Set[string]) {
+type UpdateListener interface {
+	// CaresAboutIPSet allows for skipping notifications for IP sets that are
+	// not of interest to the listener. If this method returns false for a
+	// given IP set, no notifications will be sent for that IP set.
+	CaresAboutIPSet(ipSetName string) bool
+	OnMemberProgrammed(rawIPSetMember string)
+}
+
+// ApplyUpdates applies the updates to the dataplane.  If listener is non-nil,
+// it will receive callbacks when members are programmed.  The callbacks occur
+// before we have final confirmation that the members are in the dataplane, so
+// the caller may wish to defer acting on the information until ApplyUpdates
+// returns.
+func (s *IPSets) ApplyUpdates(listener UpdateListener) {
 	success := false
 	retryDelay := 1 * time.Millisecond
 	backOff := func() {
@@ -342,7 +353,6 @@ func (s *IPSets) ApplyUpdates(ipsetFilter func(ipSetName string) bool) (programm
 		retryDelay *= 2
 	}
 
-	programmedIPs = set.New[string]()
 	for attempt := 0; attempt < 10; attempt++ {
 		if attempt > 0 {
 			s.logCxt.Info("Retrying after an ipsets update failure...")
@@ -367,7 +377,7 @@ func (s *IPSets) ApplyUpdates(ipsetFilter func(ipSetName string) bool) (programm
 		s.tryTempIPSetDeletions()
 
 		dirtyIPSets := s.dirtyIPSetsForUpdate()
-		if err := s.tryUpdates(dirtyIPSets, ipsetFilter, programmedIPs); err != nil {
+		if err := s.tryUpdates(dirtyIPSets, listener); err != nil {
 			if attempt >= 5 {
 				// Persistent failures, try a full resync.
 				s.logCxt.WithError(err).WithField("attempt", attempt).Warning(
@@ -391,8 +401,6 @@ func (s *IPSets) ApplyUpdates(ipsetFilter func(ipSetName string) bool) (programm
 		s.logCxt.Panic("Failed to update IP sets after multiple retries.")
 	}
 	gaugeNumTotalIpsets.Set(float64(s.setNameToProgrammedMetadata.Dataplane().Len()))
-
-	return programmedIPs
 }
 
 // tryResync attempts to bring our state into sync with the dataplane.  It scans the contents of the
@@ -747,12 +755,14 @@ func ParseRange(s string) (min int, max int, err error) {
 	return
 }
 
-// tryUpdates attempts to create and/or update IP sets.  It attempts to do the updates as a single
-// 'ipset restore' session in order to minimise process forking overhead.  Note: unlike
-// 'iptables-restore', 'ipset restore' is not atomic, updates are applied individually.
-// This function updates the set of programmed IPs - that is the IPs that were added or replaced in the IPSets
-// included by the ipsetFilter.
-func (s *IPSets) tryUpdates(dirtyIPSets []string, ipsetFilter func(ipSetName string) bool, programmedIPs set.Set[string]) (err error) {
+// tryUpdates attempts to create and/or update IP sets.  It attempts to do the
+// updates as a single 'ipset restore' session in order to minimise process
+// forking overhead.  Note: unlike 'iptables-restore', 'ipset restore' is not
+// atomic, updates are applied incrementally in batches.
+//
+// If listener is non-nil, it will receive callbacks for IPs added to IP sets
+// that it is interested in.
+func (s *IPSets) tryUpdates(dirtyIPSets []string, listener UpdateListener) (err error) {
 	if len(dirtyIPSets) == 0 {
 		s.logCxt.Debug("No dirty IP sets.")
 		return nil
@@ -804,12 +814,7 @@ func (s *IPSets) tryUpdates(dirtyIPSets []string, ipsetFilter func(ipSetName str
 			log.WithField("setName", setName).Debug("Writing updates to IP set.")
 		}
 		touchedIPSets = append(touchedIPSets, setName)
-		var progIPs set.Set[string]
-		if ipsetFilter != nil && ipsetFilter(setName) {
-			// We want to include the IPs from this set.
-			progIPs = programmedIPs
-		}
-		writeErr = s.writeUpdates(setName, stdin, progIPs)
+		writeErr = s.writeUpdates(setName, stdin, listener)
 		if writeErr != nil {
 			break
 		}
@@ -869,8 +874,11 @@ func (s *IPSets) dirtyIPSetsForUpdate() []string {
 	return dirtyIPSets
 }
 
-func (s *IPSets) writeUpdates(setName string, w io.Writer, programmedIPs set.Set[string]) (err error) {
+func (s *IPSets) writeUpdates(setName string, w io.Writer, listener UpdateListener) (err error) {
 	logCxt := s.logCxt.WithField("setName", setName)
+	if listener == nil || !listener.CaresAboutIPSet(setName) {
+		listener = nil
+	}
 
 	desiredMeta, desiredExists := s.setNameToProgrammedMetadata.Desired().Get(setName)
 	dpMeta, dpExists := s.setNameToProgrammedMetadata.Dataplane().Get(setName)
@@ -958,8 +966,8 @@ func (s *IPSets) writeUpdates(setName string, w io.Writer, programmedIPs set.Set
 			// If we exit with an error, the dataplane state will be resynced.
 			return deltatracker.IterActionNoOpStopIteration
 		}
-		if programmedIPs != nil {
-			programmedIPs.Add(memberStr)
+		if listener != nil {
+			listener.OnMemberProgrammed(memberStr)
 		}
 		return deltatracker.IterActionUpdateDataplane
 	})

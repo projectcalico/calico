@@ -208,6 +208,7 @@ var _ = Describe("IPFamily", func() {
 var _ = Describe("IP sets dataplane", func() {
 	var dataplane *mockDataplane
 	var ipsets *IPSets
+	var listener *mockListener
 
 	meta := IPSetMetadata{
 		MaxSize: 1234,
@@ -249,7 +250,11 @@ var _ = Describe("IP sets dataplane", func() {
 
 	reschedRequested := false
 	apply := func() {
-		ipsets.ApplyUpdates(nil)
+		if listener != nil { // Avoid nil interface/pointer confusion
+			ipsets.ApplyUpdates(listener)
+		} else {
+			ipsets.ApplyUpdates(nil)
+		}
 		reschedRequested = ipsets.ApplyDeletions()
 	}
 
@@ -259,6 +264,7 @@ var _ = Describe("IP sets dataplane", func() {
 	}
 
 	BeforeEach(func() {
+		listener = nil
 		dataplane = newMockDataplane()
 		ipsets = NewIPSetsWithShims(
 			v4VersionConf,
@@ -685,8 +691,9 @@ var _ = Describe("IP sets dataplane", func() {
 			})
 		})
 
-		Describe("after creating second IP set", func() {
+		Describe("after creating second IP set, with a listener that filters to the main IP set", func() {
 			BeforeEach(func() {
+				listener = &mockListener{}
 				ipsets.AddOrReplaceIPSet(meta2, []string{"10.0.0.1", "10.0.0.3"})
 				apply()
 			})
@@ -696,6 +703,12 @@ var _ = Describe("IP sets dataplane", func() {
 					v4MainIPSetName:  {"10.0.0.1", "10.0.0.2"},
 					v4MainIPSetName2: {"10.0.0.1", "10.0.0.3"},
 				})
+			})
+
+			It("should record main IP set update only", func() {
+				ipsets.AddOrReplaceIPSet(meta, []string{"10.0.0.2", "10.0.0.4"})
+				apply()
+				Expect(listener.SeenMembers).To(Equal(set.From[string]("10.0.0.4")))
 			})
 
 			Context("with filtering to single IP set", func() {
@@ -1114,3 +1127,18 @@ var _ = DescribeTable("ParseRange tests",
 	Entry("FOO-1", "FOO-1", 0, 0, true),
 	Entry("FOO", "FOO", 0, 0, true),
 )
+
+type mockListener struct {
+	SeenMembers set.Typed[string]
+}
+
+func (m *mockListener) CaresAboutIPSet(ipSetName string) bool {
+	return ipSetName == v4MainIPSetName
+}
+
+func (m *mockListener) OnMemberProgrammed(rawIPSetMember string) {
+	if m.SeenMembers == nil {
+		m.SeenMembers = set.New[string]()
+	}
+	m.SeenMembers.Add(rawIPSetMember)
+}
