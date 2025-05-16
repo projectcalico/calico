@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -32,7 +32,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/proxy"
 )
 
-func log(format string, a ...interface{}) {
+func writeLog(format string, a ...interface{}) {
 	fmt.Fprintf(GinkgoWriter, format, a...)
 }
 
@@ -632,8 +632,8 @@ func newMockSyncer(stop chan struct{}) *mockSyncer {
 func (s *mockSyncer) Stop() {}
 
 func (s *mockSyncer) Apply(state proxy.DPSyncerState) error {
-	log("SvcMap = %+v\n", state.SvcMap)
-	log("EpsMap = %+v\n", state.EpsMap)
+	writeLog("SvcMap = %+v\n", state.SvcMap)
+	writeLog("EpsMap = %+v\n", state.EpsMap)
 	select {
 	case s.out <- state:
 		return <-s.in

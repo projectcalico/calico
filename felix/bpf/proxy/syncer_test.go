@@ -93,8 +93,8 @@ var _ = Describe("BPF Syncer", func() {
 	makestep := func(step func()) func() {
 		return func() {
 			defer func() {
-				log("svcs = %+v\n", svcs)
-				log("eps = %+v\n", eps)
+				writeLog("svcs = %+v\n", svcs)
+				writeLog("eps = %+v\n", eps)
 			}()
 
 			step()
@@ -224,8 +224,8 @@ var _ = Describe("BPF Syncer", func() {
 				cnt++
 				key := conntrack.KeyFromBytes(k)
 				val := conntrack.ValueFromBytes(v)
-				log("key = %s\n", key)
-				log("val = %s\n", val)
+				writeLog("key = %s\n", key)
+				writeLog("val = %s\n", val)
 				return maps.IterNone
 			})
 			Expect(err).NotTo(HaveOccurred())
@@ -265,8 +265,8 @@ var _ = Describe("BPF Syncer", func() {
 				cnt++
 				key := conntrack.KeyFromBytes(k)
 				val := conntrack.ValueFromBytes(v)
-				log("key = %s\n", key)
-				log("val = %s\n", val)
+				writeLog("key = %s\n", key)
+				writeLog("val = %s\n", val)
 				return maps.IterNone
 			})
 			Expect(err).NotTo(HaveOccurred())
@@ -344,8 +344,8 @@ var _ = Describe("BPF Syncer", func() {
 				cnt++
 				key := conntrack.KeyFromBytes(k)
 				val := conntrack.ValueFromBytes(v)
-				log("key = %s\n", key)
-				log("val = %s\n", val)
+				writeLog("key = %s\n", key)
+				writeLog("val = %s\n", val)
 				return maps.IterNone
 			})
 			Expect(err).NotTo(HaveOccurred())
@@ -627,8 +627,8 @@ var _ = Describe("BPF Syncer", func() {
 				return cnt
 			}()))
 
-			log("state.SvcMap = %+v\n", state.SvcMap)
-			log("state.EpsMap = %+v\n", state.EpsMap)
+			writeLog("state.SvcMap = %+v\n", state.SvcMap)
+			writeLog("state.EpsMap = %+v\n", state.EpsMap)
 			err := s.Apply(state)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -1103,8 +1103,8 @@ var _ = Describe("BPF Syncer", func() {
 				cnt++
 				key := conntrack.KeyFromBytes(k)
 				val := conntrack.ValueFromBytes(v)
-				log("key = %s\n", key)
-				log("val = %s\n", val)
+				writeLog("key = %s\n", key)
+				writeLog("val = %s\n", val)
 				return maps.IterNone
 			})
 			Expect(err).NotTo(HaveOccurred())
@@ -1247,8 +1247,8 @@ var _ = Describe("BPF Syncer", func() {
 				cnt++
 				key := conntrack.KeyFromBytes(k)
 				val := conntrack.ValueFromBytes(v)
-				log("key = %s\n", key)
-				log("val = %s\n", val)
+				writeLog("key = %s\n", key)
+				writeLog("val = %s\n", val)
 				return maps.IterNone
 			})
 
