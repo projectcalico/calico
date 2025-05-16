@@ -109,10 +109,10 @@ func NewTLSConfig(cipherSuites []uint16) *tls.Config {
 	}
 }
 
-// NewTLSConfigFromString returns a tls.Config with the recommended default settings for Calico components, using TLS cipher suite names provided as a comma-separated string.
+// NewTLSConfigFromCipherString returns a tls.Config with the recommended default settings for Calico components, using TLS cipher suite names provided as a comma-separated string.
 // The names are parsed into cipher suite IDs, and if parsing fails, an error is returned.
 // Based on build flags, boringCrypto may be used and fips strict mode may be enforced, which can override the parameters defined in this func.
-func NewTLSConfigFromString(cipherSuites string) (*tls.Config, error) {
+func NewTLSConfigFromCipherString(cipherSuites string) (*tls.Config, error) {
 	log.WithField("BuiltWithBoringCrypto", BuiltWithBoringCrypto).Debug("creating a TLS config")
 	ciphers, err := ParseTLSCiphers(cipherSuites)
 	if err != nil {
@@ -126,7 +126,7 @@ func NewTLSConfigFromString(cipherSuites string) (*tls.Config, error) {
 // If any of the files cannot be read, or if the cipherSuites string cannot be parsed, an error is returned.
 func NewMutualTLSConfig(cert, key, ca, cipherSuites string) (*tls.Config, error) {
 	// Configure use of mTLS.
-	tlsCfg, err := NewTLSConfigFromString(cipherSuites)
+	tlsCfg, err := NewTLSConfigFromCipherString(cipherSuites)
 	if err != nil {
 		return nil, err
 	}

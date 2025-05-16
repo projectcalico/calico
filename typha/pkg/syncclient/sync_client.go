@@ -283,9 +283,9 @@ func (s *SyncerClient) connect(cxt context.Context, typhaAddr discovery.Typha) e
 			log.WithError(err).Error("Failed to load certificate and key")
 			return err
 		}
-		tlsConfig, err := calicotls.NewTLSConfigFromString(s.options.TLSCipherSuites)
+		tlsConfig, err := calicotls.NewTLSConfigFromCipherString(s.options.TLSCipherSuites)
 		if err != nil {
-			log.WithError(err).Panic("Fail to create TLS config: %w.", err)
+			log.WithError(err).Error("Fail to create TLS config: %w.", err)
 		}
 		tlsConfig.Certificates = []tls.Certificate{cert}
 		// Typha API is a private binary API so we can enforce a recent TLS variant without

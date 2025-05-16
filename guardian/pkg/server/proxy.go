@@ -66,7 +66,7 @@ func newTargetHandler(tgt Target, ciphers string) (func(http.ResponseWriter, *ht
 	if tgt.Transport != nil {
 		p.Transport = tgt.Transport
 	} else if tgt.Dest.Scheme == "https" {
-		tlsCfg, err := tls.NewTLSConfigFromString(ciphers)
+		tlsCfg, err := tls.NewTLSConfigFromCipherString(ciphers)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create TLS config: %w", err)
 		}

@@ -350,7 +350,7 @@ func (s *Server) serve(cxt context.Context) {
 		}
 
 		var tlsConfig *tls.Config
-		tlsConfig, err = calicotls.NewTLSConfigFromString(s.config.TLSCipherSuites)
+		tlsConfig, err = calicotls.NewTLSConfigFromCipherString(s.config.TLSCipherSuites)
 		if err != nil {
 			log.WithError(err).Panic("Fail to create TLS config: %w.", err)
 		}

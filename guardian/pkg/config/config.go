@@ -126,7 +126,7 @@ func (cfg *Config) TLSConfig() (*tls.Config, *tls.Certificate, error) {
 		return nil, nil, fmt.Errorf("failed to create X509 key pair: %w", err)
 	}
 
-	tlsConfig, err := calicotls.NewTLSConfigFromString(cfg.TLSCipherSuites)
+	tlsConfig, err := calicotls.NewTLSConfigFromCipherString(cfg.TLSCipherSuites)
 	if err != nil {
 		return nil, nil, err
 	}

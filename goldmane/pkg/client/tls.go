@@ -57,7 +57,7 @@ func tlsConfig(cert, key, caFile, cipherSuites string) (*tls.Config, error) {
 	caCertPool.AppendCertsFromPEM(caCert)
 
 	// Create TLS config.
-	cfg, err := calicotls.NewTLSConfigFromString(cipherSuites)
+	cfg, err := calicotls.NewTLSConfigFromCipherString(cipherSuites)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create TLS config: %w", err)
 	}
