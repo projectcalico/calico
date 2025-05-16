@@ -212,6 +212,7 @@ var tcJumpMapIndexes = map[string][]int{
 		tcdefs.ProgIndexHostCtConflict,
 		tcdefs.ProgIndexIcmpInnerNat,
 		tcdefs.ProgIndexNewFlow,
+		tcdefs.ProgIndexIPFrag,
 	},
 	"IPv4 debug": []int{
 		tcdefs.ProgIndexMainDebug,
@@ -222,6 +223,7 @@ var tcJumpMapIndexes = map[string][]int{
 		tcdefs.ProgIndexHostCtConflictDebug,
 		tcdefs.ProgIndexIcmpInnerNatDebug,
 		tcdefs.ProgIndexNewFlowDebug,
+		tcdefs.ProgIndexIPFragDebug,
 	},
 	"IPv6": []int{
 		tcdefs.ProgIndexMain,
