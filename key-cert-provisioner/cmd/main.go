@@ -28,7 +28,6 @@ import (
 func main() {
 	flag.Parse()
 	log.SetLevel(log.InfoLevel)
-	log.SetReportCaller(true)
 	// Initiate (and validate) env variables
 	config := cfg.GetConfigOrDie()
 	ctx, cancel := context.WithTimeout(context.TODO(), config.TimeoutDuration)

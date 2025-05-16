@@ -12,13 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package logrus_test
+package log_test
 
-import (
-	"github.com/projectcalico/calico/lib/std/log/types"
-)
+import "github.com/projectcalico/calico/lib/std/log"
 
 // debugFromAnotherFile calls Debug on the logger; it's in another file to test filename filtering!
-func debugFromAnotherFile(logger types.Logger, msg string) {
+func debugFromAnotherFile(logger log.Logger, msg string) {
 	logger.Debug(msg)
 }

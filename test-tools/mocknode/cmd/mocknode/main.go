@@ -220,17 +220,17 @@ func configureLogging() {
 	// Since we push our logs onto a second thread via a channel, we can disable the
 	// Logger's built-in mutex completely.
 	log.StandardLogger().SetNoLock()
-	screenDest := logutils.NewStreamDestination(
+	screenDest := log.NewStreamDestination(
 		logLevel,
 		os.Stdout,
-		make(chan logutils.QueuedLog, 1000),
+		make(chan log.QueuedLog, 1000),
 		false,
 		counterLogErrors,
 	)
-	hook := logutils.NewBackgroundHook(
-		logutils.FilterLevels(logLevel),
+	hook := log.NewBackgroundHook(
+		log.FilterLevels(logLevel),
 		log.PanicLevel,
-		[]*logutils.Destination{screenDest},
+		[]*log.Destination{screenDest},
 		counterLogErrors,
 	)
 	hook.Start()
