@@ -76,8 +76,8 @@ func testfn(makeIPs func(ips []net.IP) proxy.K8sServicePortOption) {
 	makestep := func(step func()) func() {
 		return func() {
 			defer func() {
-				log("svcs = %+v\n", svcs)
-				log("eps = %+v\n", eps)
+				writeLog("svcs = %+v\n", svcs)
+				writeLog("eps = %+v\n", eps)
 			}()
 
 			step()

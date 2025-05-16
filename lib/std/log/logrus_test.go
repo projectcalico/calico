@@ -189,7 +189,7 @@ func TestBackgroundHookFlushing(t *testing.T) {
 			}
 
 			logger := log.New(
-				log.WithFormatter(log.NewTextFormatter()),
+				log.WithFormatter(log.NewTextFormatter(log.TextFormatterConfig{})),
 				log.WithLevel(log.DebugLevel),
 				log.WithOutput(&log.NullWriter{}),
 				log.WithBackgroundHook(log.AllLevels, log.DebugLevel, []*log.Destination{testDest}, nil, tc.hookOpts...))
@@ -247,7 +247,7 @@ func TestBackgroundHookFlushing_BackgroundBlockingScenarios(t *testing.T) {
 			}
 
 			logger := log.New(
-				log.WithFormatter(log.NewTextFormatter()),
+				log.WithFormatter(log.NewTextFormatter(log.TextFormatterConfig{})),
 				log.WithLevel(log.DebugLevel),
 				log.WithOutput(&log.NullWriter{}),
 				log.WithBackgroundHook(log.AllLevels, log.DebugLevel, []*log.Destination{testDest}, nil))

@@ -277,6 +277,10 @@ func (logger *logger) Panicln(args ...interface{}) {
 	logger.Logger.Panicln(args...)
 }
 
+func (logger *logger) SetNoLock() {
+	logger.Logger.SetNoLock()
+}
+
 func (logger *logger) Exit(code int) {
 	logger.Logger.Exit(code)
 }
@@ -307,10 +311,6 @@ type logrusWrapper struct {
 
 func (l *logrusWrapper) Format(e Entry) ([]byte, error) {
 	return l.Formatter.Format(e.(*entry).entry)
-}
-
-func NewTextFormatter() Formatter {
-	return &logrusWrapper{&logrus.TextFormatter{}}
 }
 
 type formatterAdaptor struct {
