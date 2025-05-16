@@ -30,7 +30,6 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/bpf/jump"
 	"github.com/projectcalico/calico/felix/bpf/polprog"
@@ -42,6 +41,7 @@ import (
 	"github.com/projectcalico/calico/felix/fv/tcpdump"
 	"github.com/projectcalico/calico/felix/fv/utils"
 	"github.com/projectcalico/calico/goldmane/pkg/types"
+	"github.com/projectcalico/calico/lib/std/log"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
@@ -99,27 +99,27 @@ type workload interface {
 
 func (f *Felix) GetFelixPID() int {
 	if f.startupDelayed {
-		logrus.Panic("GetFelixPID() called but startup is delayed")
+		log.Panic("GetFelixPID() called but startup is delayed")
 	}
 	if f.restartDelayed {
-		logrus.Panic("GetFelixPID() called but restart is delayed")
+		log.Panic("GetFelixPID() called but restart is delayed")
 	}
 	return f.GetSinglePID("calico-felix")
 }
 
 func (f *Felix) GetFelixPIDs() []int {
 	if f.startupDelayed {
-		logrus.Panic("GetFelixPIDs() called but startup is delayed")
+		log.Panic("GetFelixPIDs() called but startup is delayed")
 	}
 	if f.restartDelayed {
-		logrus.Panic("GetFelixPIDs() called but restart is delayed")
+		log.Panic("GetFelixPIDs() called but restart is delayed")
 	}
 	return f.GetPIDs("calico-felix")
 }
 
 func (f *Felix) TriggerDelayedStart() {
 	if !f.startupDelayed {
-		logrus.Panic("TriggerDelayedStart() called but startup wasn't delayed")
+		log.Panic("TriggerDelayedStart() called but startup wasn't delayed")
 	}
 	f.Exec("touch", "/start-trigger")
 	f.FlowServerStart()
@@ -127,7 +127,7 @@ func (f *Felix) TriggerDelayedStart() {
 }
 
 func RunFelix(infra DatastoreInfra, id int, options TopologyOptions) *Felix {
-	logrus.Info("Starting felix")
+	log.Info("Starting felix")
 	ipv6Enabled := fmt.Sprint(options.EnableIPv6)
 	bpfEnableIPv6 := fmt.Sprint(options.BPFEnableIPv6)
 
@@ -183,10 +183,10 @@ func RunFelix(infra DatastoreInfra, id int, options TopologyOptions) *Felix {
 
 	if os.Getenv("FELIX_FV_ENABLE_BPF") == "true" {
 		if !options.TestManagesBPF {
-			logrus.Info("FELIX_FV_ENABLE_BPF=true, enabling BPF with env var")
+			log.Info("FELIX_FV_ENABLE_BPF=true, enabling BPF with env var")
 			envVars["FELIX_BPFENABLED"] = "true"
 		} else {
-			logrus.Info("FELIX_FV_ENABLE_BPF=true but test manages BPF state itself, not using env var")
+			log.Info("FELIX_FV_ENABLE_BPF=true but test manages BPF state itself, not using env var")
 		}
 
 		if CreateCgroupV2 {
@@ -214,7 +214,7 @@ func RunFelix(infra DatastoreInfra, id int, options TopologyOptions) *Felix {
 
 		if !options.DelayFelixStart {
 			if err := flowServer.Run(); err != nil {
-				logrus.WithError(err).Panic("Failed to start local flow server")
+				log.WithError(err).Panic("Failed to start local flow server")
 			}
 		}
 	}
@@ -222,7 +222,7 @@ func RunFelix(infra DatastoreInfra, id int, options TopologyOptions) *Felix {
 	args = append(args, "-v", fmt.Sprintf("%v:%v", logDir, nodeLogDir))
 
 	if os.Getenv("FELIX_FV_NFTABLES") == "Enabled" {
-		logrus.Info("Enabling nftables with env var")
+		log.Info("Enabling nftables with env var")
 		envVars["FELIX_NFTABLESMODE"] = "Enabled"
 	}
 
@@ -335,7 +335,7 @@ func (f *Felix) Restart() {
 
 func (f *Felix) RestartWithDelayedStartup() func() {
 	if f.restartDelayed {
-		logrus.Panic("RestartWithDelayedStartup() called but restart was delayed already")
+		log.Panic("RestartWithDelayedStartup() called but restart was delayed already")
 	}
 	oldPID := f.GetFelixPID()
 	f.restartDelayed = true
@@ -348,7 +348,7 @@ func (f *Felix) RestartWithDelayedStartup() func() {
 		defer GinkgoRecover()
 		select {
 		case <-time.After(time.Second * 30):
-			logrus.Panic("Restart with delayed startup timed out after 30s")
+			log.Panic("Restart with delayed startup timed out after 30s")
 		case <-triggerChan:
 			return
 		}
@@ -411,7 +411,7 @@ func (f *Felix) ProgramIptablesDNAT(serviceIP, targetIP, chain string, ipv6 bool
 func (f *Felix) FlowServerStart() {
 	if f.flowServer != nil {
 		if err := f.flowServer.Run(); err != nil {
-			logrus.WithError(err).Panic("Failed to start local flow server")
+			log.WithError(err).Panic("Failed to start local flow server")
 		}
 	}
 }

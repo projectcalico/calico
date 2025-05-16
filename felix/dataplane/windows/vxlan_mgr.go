@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,10 +21,9 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/sirupsen/logrus"
-
 	"github.com/projectcalico/calico/felix/dataplane/windows/hcn"
 	"github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -71,32 +70,32 @@ func (m *vxlanManager) OnUpdate(protoBufMsg interface{}) {
 	switch msg := protoBufMsg.(type) {
 	case *proto.RouteUpdate:
 		if msg.Types&proto.RouteType_REMOTE_WORKLOAD != 0 && msg.IpPoolType == proto.IPPoolType_VXLAN {
-			logrus.WithField("msg", msg).Debug("VXLAN data plane received route update")
+			log.WithField("msg", msg).Debug("VXLAN data plane received route update")
 			m.routesByDest[msg.Dst] = msg
 			m.dirty = true
 		} else {
 			// Same processing as for RouteRemove, in case we had this destination for a
 			// VXLAN route but it has now changed to non-VXLAN.
 			if _, ok := m.routesByDest[msg.Dst]; ok {
-				logrus.WithField("msg", msg).Debug("VXLAN data plane received non-VXLAN update for previous VXLAN route")
+				log.WithField("msg", msg).Debug("VXLAN data plane received non-VXLAN update for previous VXLAN route")
 				m.dirty = true
 			}
 			delete(m.routesByDest, msg.Dst)
 		}
 	case *proto.RouteRemove:
 		if _, ok := m.routesByDest[msg.Dst]; ok {
-			logrus.WithField("msg", msg).Debug("VXLAN data plane received route remove")
+			log.WithField("msg", msg).Debug("VXLAN data plane received route remove")
 			m.dirty = true
 		}
 		delete(m.routesByDest, msg.Dst)
 	case *proto.VXLANTunnelEndpointUpdate:
-		logrus.WithField("msg", msg).Debug("VXLAN data plane received VTEP update")
+		log.WithField("msg", msg).Debug("VXLAN data plane received VTEP update")
 		if msg.Node != m.hostname { // Skip creating a route to ourselves.
 			m.vtepsByNode[msg.Node] = msg
 			m.dirty = true
 		}
 	case *proto.VXLANTunnelEndpointRemove:
-		logrus.WithField("msg", msg).Debug("VXLAN data plane received VTEP remove")
+		log.WithField("msg", msg).Debug("VXLAN data plane received VTEP remove")
 		if msg.Node != m.hostname { // Can't have a route to ourselves.
 			delete(m.vtepsByNode, msg.Node)
 			m.dirty = true
@@ -106,13 +105,13 @@ func (m *vxlanManager) OnUpdate(protoBufMsg interface{}) {
 
 func (m *vxlanManager) CompleteDeferredWork() error {
 	if !m.dirty {
-		logrus.Debug("No change since last application, nothing to do")
+		log.Debug("No change since last application, nothing to do")
 		return nil
 	}
 	// Find the right network
 	networks, err := m.hcn.ListNetworks()
 	if err != nil {
-		logrus.WithError(err).Error("Failed to look up HNS networks.")
+		log.WithError(err).Error("Failed to look up HNS networks.")
 		return err
 	}
 
@@ -138,17 +137,17 @@ func (m *vxlanManager) CompleteDeferredWork() error {
 	// Calculate what should be there as a whole, then, below, we'll remove items that are already there from this set.
 	netPolsToAdd := set.New[hcn.RemoteSubnetRoutePolicySetting]()
 	for dest, route := range m.routesByDest {
-		logrus.WithFields(logrus.Fields{
+		log.WithFields(log.Fields{
 			"node":  dest,
 			"route": route,
 		}).Debug("Currently-active route")
 
 		vtep := m.vtepsByNode[route.DstNodeName]
 		if vtep == nil {
-			logrus.WithField("node", route.DstNodeName).Info("Received route without corresponding VTEP")
+			log.WithField("node", route.DstNodeName).Info("Received route without corresponding VTEP")
 			continue
 		}
-		logrus.WithFields(logrus.Fields{"vtep": vtep, "route": route}).Debug("Found VTEP for route")
+		log.WithFields(log.Fields{"vtep": vtep, "route": route}).Debug("Found VTEP for route")
 
 		networkPolicySettings := hcn.RemoteSubnetRoutePolicySetting{
 			IsolationId:                 uint16(m.vxlanID),
@@ -167,7 +166,7 @@ func (m *vxlanManager) CompleteDeferredWork() error {
 			existingPolSettings := hcn.RemoteSubnetRoutePolicySetting{}
 			err = json.Unmarshal(policy.Settings, &existingPolSettings)
 			if err != nil {
-				logrus.Error("Failed to unmarshal existing route policy")
+				log.Error("Failed to unmarshal existing route policy")
 				return err
 			}
 
@@ -178,7 +177,7 @@ func (m *vxlanManager) CompleteDeferredWork() error {
 				ProviderAddress:             existingPolSettings.ProviderAddress,
 				DestinationPrefix:           existingPolSettings.DestinationPrefix,
 			}
-			logCxt := logrus.WithField("route", existingPolSettings)
+			logCxt := log.WithField("route", existingPolSettings)
 			if netPolsToAdd.Contains(filteredPolSettings) {
 				logCxt.Debug("Found route that we still want")
 				netPolsToAdd.Discard(filteredPolSettings)
@@ -192,7 +191,7 @@ func (m *vxlanManager) CompleteDeferredWork() error {
 	wrapPolSettings := func(polSettings hcn.RemoteSubnetRoutePolicySetting) *hcn.PolicyNetworkRequest {
 		polJSON, err := json.Marshal(polSettings)
 		if err != nil {
-			logrus.WithError(err).WithField("policy", polSettings).Error("Failed to martial HCN policy")
+			log.WithError(err).WithField("policy", polSettings).Error("Failed to martial HCN policy")
 			return nil
 		}
 		pol := hcn.NetworkPolicy{
@@ -213,7 +212,7 @@ func (m *vxlanManager) CompleteDeferredWork() error {
 		}
 		err = network.RemovePolicy(*polReq)
 		if err != nil {
-			logrus.WithError(err).WithField("request", polSetting).Error("Failed to remove unwanted VXLAN route policy")
+			log.WithError(err).WithField("request", polSetting).Error("Failed to remove unwanted VXLAN route policy")
 			return nil
 		}
 		return set.RemoveItem
@@ -227,7 +226,7 @@ func (m *vxlanManager) CompleteDeferredWork() error {
 		}
 		err = network.AddPolicy(*polReq)
 		if err != nil {
-			logrus.WithError(err).WithField("request", polReq).Error("Failed to add VXLAN route policy")
+			log.WithError(err).WithField("request", polReq).Error("Failed to add VXLAN route policy")
 			return nil
 		}
 		return set.RemoveItem
@@ -235,10 +234,10 @@ func (m *vxlanManager) CompleteDeferredWork() error {
 
 	// Wrap up and check for errors.
 	if netPolsToAdd.Len() == 0 && netPolsToRemove.Len() == 0 {
-		logrus.Info("All VXLAN route updates succeeded.")
+		log.Info("All VXLAN route updates succeeded.")
 		m.dirty = false
 	} else {
-		logrus.WithFields(logrus.Fields{
+		log.WithFields(log.Fields{
 			"numFailedAdds":    netPolsToAdd.Len(),
 			"numFailedRemoves": netPolsToRemove.Len(),
 		}).Error("Not all VXLAN route updates succeeded.")
