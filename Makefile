@@ -29,7 +29,7 @@ endif
 	# Add copyright to new files that don't have it.
 	YEAR=$$(date +%Y); \
 	git diff --name-only --diff-filter=A $(BASE_BRANCH) | grep '\.go$$' | \
-	xargs -I {} sh -c 'if ! grep -q "Copyright (c)" "{}"; then sed "s/YEAR/'$$YEAR'/g" hack/copyright.template | cat - "{}" > temp && mv temp "{}"; fi'
+	xargs -I {} sh -c 'if ! grep -q "Copyright (c)" "{}"; then sed "s/YEAR/'$$YEAR'/g" hack/copyright.template | (cat -; echo; cat "{}") > temp && mv temp "{}"; fi'
 
 clean:
 	$(MAKE) -C api clean
