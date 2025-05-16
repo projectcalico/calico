@@ -34,13 +34,6 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/utils"
 )
 
-type cgroupProgs struct {
-	ID          int    `json:"id"`
-	AttachType  string `json:"attach_type"`
-	AttachFlags string `json:"attach_flags"`
-	Name        string `json:"name"`
-}
-
 const (
 	ProgIndexCTLBConnectV6 = iota
 	ProgIndexCTLBSendV6
@@ -77,21 +70,25 @@ func RemoveConnectTimeLoadBalancer(cgroupv2 string) error {
 	}
 
 	pinDir := path.Join(bpfMount, bpfdefs.CtlbPinDir)
+	defer bpf.CleanUpCalicoPins(pinDir)
+	ctlbProgsMap := newProgramsMap()
+	defer os.Remove(ctlbProgsMap.Path())
+
 	if err := detachCtlbPrograms(pinDir, cgroupv2); err != nil {
 		return err
 	}
 	bpf.CleanUpCalicoPins(pinDir)
-	ctlbProgsMap := newProgramsMap()
-	os.Remove(ctlbProgsMap.Path())
 	return nil
 }
 
 func detachCtlbPrograms(pinDir, cgroupv2 string) error {
+	numLinksDetached := 0
 	err := filepath.Walk(pinDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
 		if strings.HasPrefix(info.Name(), "cali_") || strings.HasPrefix(info.Name(), "calico_") {
+			numLinksDetached++
 			log.WithField("path", path).Debug("Detaching pinned link")
 			err = libbpf.DetachLink(path)
 			if err != nil {
@@ -102,22 +99,21 @@ func detachCtlbPrograms(pinDir, cgroupv2 string) error {
 		return nil
 	})
 	if err != nil && !os.IsNotExist(err) {
-		log.Errorf("error detaching link %w", err)
+		log.WithError(err).Error("error detaching link")
 		return err
 	}
-	if err == nil {
-		return nil
+	if numLinksDetached == 0 {
+		return detachLegacyCtlb(cgroupv2)
 	}
-	return DetachLegacyCtlb(pinDir)
+	return nil
 }
 
-func DetachLegacyCtlb(cgroupv2 string) error {
-	cg, err := os.Open(cgroupv2)
+func detachLegacyCtlb(cgroupv2 string) error {
+	cgroupPath, err := ensureCgroupPath(cgroupv2)
 	if err != nil {
-		return fmt.Errorf("error opening cgroup root %s : %w", cgroupv2, err)
+		return errors.Wrap(err, "failed to set-up cgroupv2")
 	}
-	defer cg.Close()
-	return libbpf.DetachCTLBProgramsLegacy(int(cg.Fd()))
+	return libbpf.DetachCTLBProgramsLegacy(cgroupPath)
 }
 
 func loadProgram(logLevel, ipver string, udpNotSeen time.Duration, excludeUDP bool) (*libbpf.Obj, error) {
@@ -129,7 +125,7 @@ func loadProgram(logLevel, ipver string, udpNotSeen time.Duration, excludeUDP bo
 	return obj, nil
 }
 
-func attachProgram(name, ipver, bpfMount, cgroupPath string, udpNotSeen time.Duration, excludeUDP bool, obj *libbpf.Obj) error {
+func attachProgram(name, ipver, bpfMount, cgroupPath string, udpNotSeen time.Duration, excludeUDP bool, obj *libbpf.Obj, legacy bool) error {
 	progName := "calico_" + name + "_v" + ipver
 	progPinDir := path.Join(bpfMount, progName)
 	if _, err := os.Stat(progPinDir); err == nil {
@@ -139,9 +135,23 @@ func attachProgram(name, ipver, bpfMount, cgroupPath string, udpNotSeen time.Dur
 		return nil
 	}
 
+	// Used only for UT to test legacy way to attach.
+	if legacy {
+		err := obj.AttachCGroupLegacy(cgroupPath, progName)
+		if err != nil {
+			return fmt.Errorf("failed to attach program %s: %w", progName, err)
+		}
+		return nil
+	}
+
+	// Tries non-legacy and fallsback to legacy if non-legacy fails.
 	link, err := obj.AttachCGroup(cgroupPath, progName)
 	if err != nil {
-		return fmt.Errorf("failed to attach program %s: %w", progName, err)
+		err = obj.AttachCGroupLegacy(cgroupPath, progName)
+		if err != nil {
+			return fmt.Errorf("failed to attach program %s: %w", progName, err)
+		}
+		link = nil
 	}
 	if link != nil {
 		defer link.Close()
@@ -151,7 +161,6 @@ func attachProgram(name, ipver, bpfMount, cgroupPath string, udpNotSeen time.Dur
 		}
 	}
 	log.WithFields(log.Fields{"program": progName, "cgroup": cgroupPath}).Info("Loaded cgroup program")
-
 	return nil
 }
 
@@ -171,7 +180,7 @@ func updateCTLBJumpMap(jumpMap maps.Map, obj *libbpf.Obj) error {
 	return nil
 }
 
-func InstallConnectTimeLoadBalancer(ipv4Enabled, ipv6Enabled bool, cgroupv2 string, logLevel string, udpNotSeen time.Duration, excludeUDP bool) error {
+func installCTLB(ipv4Enabled, ipv6Enabled bool, cgroupv2 string, logLevel string, udpNotSeen time.Duration, excludeUDP, legacy bool) error {
 	bpfMount, err := utils.MaybeMountBPFfs()
 	if err != nil {
 		log.WithError(err).Error("Failed to mount bpffs, unable to do connect-time load balancing")
@@ -205,32 +214,32 @@ func InstallConnectTimeLoadBalancer(ipv4Enabled, ipv6Enabled bool, cgroupv2 stri
 			return err
 		}
 		defer v46Obj.Close()
-		err = attachProgram("connect", "4", pinDir, cgroupPath, udpNotSeen, excludeUDP, v4Obj)
+		err = attachProgram("connect", "4", pinDir, cgroupPath, udpNotSeen, excludeUDP, v4Obj, legacy)
 		if err != nil {
 			return err
 		}
-		err = attachProgram("connect", "46", pinDir, cgroupPath, udpNotSeen, excludeUDP, v46Obj)
+		err = attachProgram("connect", "46", pinDir, cgroupPath, udpNotSeen, excludeUDP, v46Obj, legacy)
 		if err != nil {
 			return err
 		}
 
 		if !excludeUDP {
-			err = attachProgram("sendmsg", "4", pinDir, cgroupPath, udpNotSeen, false, v4Obj)
+			err = attachProgram("sendmsg", "4", pinDir, cgroupPath, udpNotSeen, false, v4Obj, legacy)
 			if err != nil {
 				return err
 			}
 
-			err = attachProgram("recvmsg", "4", pinDir, cgroupPath, udpNotSeen, false, v4Obj)
+			err = attachProgram("recvmsg", "4", pinDir, cgroupPath, udpNotSeen, false, v4Obj, legacy)
 			if err != nil {
 				return err
 			}
 
-			err = attachProgram("sendmsg", "46", pinDir, cgroupPath, udpNotSeen, false, v46Obj)
+			err = attachProgram("sendmsg", "46", pinDir, cgroupPath, udpNotSeen, false, v46Obj, legacy)
 			if err != nil {
 				return err
 			}
 
-			err = attachProgram("recvmsg", "46", pinDir, cgroupPath, udpNotSeen, false, v46Obj)
+			err = attachProgram("recvmsg", "46", pinDir, cgroupPath, udpNotSeen, false, v46Obj, legacy)
 			if err != nil {
 				return err
 			}
@@ -258,18 +267,18 @@ func InstallConnectTimeLoadBalancer(ipv4Enabled, ipv6Enabled bool, cgroupv2 stri
 				return err
 			}
 		} else {
-			err = attachProgram("connect", "6", bpfMount, cgroupPath, udpNotSeen, excludeUDP, v6Obj)
+			err = attachProgram("connect", "6", bpfMount, cgroupPath, udpNotSeen, excludeUDP, v6Obj, legacy)
 			if err != nil {
 				return err
 			}
 
 			if !excludeUDP {
-				err = attachProgram("sendmsg", "6", bpfMount, cgroupPath, udpNotSeen, false, v6Obj)
+				err = attachProgram("sendmsg", "6", bpfMount, cgroupPath, udpNotSeen, false, v6Obj, legacy)
 				if err != nil {
 					return err
 				}
 
-				err = attachProgram("recvmsg", "6", bpfMount, cgroupPath, udpNotSeen, false, v6Obj)
+				err = attachProgram("recvmsg", "6", bpfMount, cgroupPath, udpNotSeen, false, v6Obj, legacy)
 				if err != nil {
 					return err
 				}
@@ -277,6 +286,14 @@ func InstallConnectTimeLoadBalancer(ipv4Enabled, ipv6Enabled bool, cgroupv2 stri
 		}
 	}
 	return nil
+}
+
+func InstallConnectTimeLoadBalancer(ipv4Enabled, ipv6Enabled bool, cgroupv2 string, logLevel string, udpNotSeen time.Duration, excludeUDP bool) error {
+	return installCTLB(ipv4Enabled, ipv6Enabled, cgroupv2, logLevel, udpNotSeen, excludeUDP, false)
+}
+
+func InstallConnectTimeLoadBalancerLegacy(ipv4Enabled, ipv6Enabled bool, cgroupv2 string, logLevel string, udpNotSeen time.Duration, excludeUDP bool) error {
+	return installCTLB(ipv4Enabled, ipv6Enabled, cgroupv2, logLevel, udpNotSeen, excludeUDP, true)
 }
 
 func ProgFileName(logLevel string, ipver string) string {
