@@ -368,7 +368,6 @@ func (s *IPSets) ApplyUpdates(listener ipsets.UpdateListener) {
 	if !success {
 		s.logCxt.Panic("Failed to update IP sets after multiple retries.")
 	}
-	return
 }
 
 // tryResync attempts to bring our state into sync with the dataplane.  It scans the contents of the
@@ -622,8 +621,8 @@ func (s *IPSets) tryUpdates(listener ipsets.UpdateListener) error {
 	for _, setName := range dirtyIPSets {
 		// If the set is already programmed, we can skip it.
 		if _, ok := s.setNameToProgrammedMetadata.Dataplane().Get(setName); !ok {
-			if set := s.NFTablesSet(setName); set != nil {
-				tx.Add(set)
+			if nfSet := s.NFTablesSet(setName); nfSet != nil {
+				tx.Add(nfSet)
 			}
 		}
 
@@ -813,6 +812,7 @@ func CanonicaliseMember(t ipsets.IPSetType, member string) SetMember {
 		if ipAddr == nil {
 			// This should be prevented by validation in libcalico-go.
 			log.WithField("ip", member).Panic("Failed to parse IP")
+			panic("Failed to parse IP part of IP,port member")
 		}
 		return simpleMember(ipAddr.String())
 	case ipsets.IPSetTypeHashIPPort:
@@ -825,6 +825,7 @@ func CanonicaliseMember(t ipsets.IPSetType, member string) SetMember {
 		if ipAddr == nil {
 			// This should be prevented by validation.
 			log.WithField("member", member).Panic("Failed to parse IP part of IP,port member")
+			panic("Failed to parse IP part of IP,port member")
 		}
 		parts = strings.Split(parts[1], ":")
 		if len(parts) != 2 {
