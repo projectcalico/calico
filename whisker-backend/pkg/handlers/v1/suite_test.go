@@ -33,7 +33,7 @@ func setupTest(t *testing.T) scaffold {
 	RegisterTestingT(t)
 
 	ctx := new(apicontextmocks.Context)
-	ctx.On("Logger").Return(log.NewEntry(), "")
+	ctx.On("Logger").Return(log.NewEntry(log.StandardLogger()), "")
 
 	zeroTime, err := time.Parse(time.RFC3339, "1970-01-01T00:00:00Z")
 	Expect(err).ShouldNot(HaveOccurred())

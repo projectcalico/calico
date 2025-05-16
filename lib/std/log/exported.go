@@ -5,47 +5,29 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"sync"
 	"testing"
 	"time"
-
-	"github.com/projectcalico/calico/lib/std/log/logrus"
-	"github.com/projectcalico/calico/lib/std/log/types"
-)
-
-type (
-	Entry  = types.Entry
-	Level  = types.Level
-	Fields = types.Fields
-)
-
-const (
-	PanicLevel = types.PanicLevel
-	FatalLevel = types.FatalLevel
-	ErrorLevel = types.ErrorLevel
-	WarnLevel  = types.WarnLevel
-	InfoLevel  = types.InfoLevel
-	DebugLevel = types.DebugLevel
-	TraceLevel = types.TraceLevel
 )
 
 var (
 	// std is the name of the standard logger in stdlib `log`
-	std = logrus.New()
+	std = newLogrus()
 )
 
-func StandardLogger() types.Logger {
+func StandardLogger() Logger {
 	return std
 }
 
-func New() types.Logger {
-	return logrus.New()
+func New(opts ...Option) Logger {
+	return newLogrus(opts...)
 }
 
 func ConfigureStandardLoggerForTesting(t *testing.T) func() {
 	old := std
 
-	std = logrus.New(logrus.WithComponentName("test"))
-	std.SetLevel(types.DebugLevel)
+	std = newLogrus(WithComponentName("test"))
+	std.SetLevel(DebugLevel)
 	std.RedirectToTestingT(t)
 
 	return func() {
@@ -53,7 +35,7 @@ func ConfigureStandardLoggerForTesting(t *testing.T) func() {
 	}
 }
 
-func NewEntry(l types.Logger) types.Entry {
+func NewEntry(l Logger) Entry {
 	return l.NewEntry()
 }
 
@@ -63,37 +45,37 @@ func SetOutput(out io.Writer) {
 }
 
 // SetFormatter sets the standard logger formatter.
-func SetFormatter(formatter types.Formatter) {
+func SetFormatter(formatter Formatter) {
 	std.SetFormatter(formatter)
 }
 
 // SetLevel sets the standard logger level.
-func SetLevel(level types.Level) {
+func SetLevel(level Level) {
 	std.SetLevel(level)
 }
 
 // GetLevel returns the standard logger level.
-func GetLevel() types.Level {
+func GetLevel() Level {
 	return std.GetLevel()
 }
 
 // IsLevelEnabled checks if the log level of the standard logger is greater than the level param
-func IsLevelEnabled(level types.Level) bool {
+func IsLevelEnabled(level Level) bool {
 	return std.IsLevelEnabled(level)
 }
 
 // AddHook adds a hook to the standard logger hooks.
-func AddHook(hook types.Hook) {
+func AddHook(hook Hook) {
 	std.AddHook(hook)
 }
 
 // WithError creates an entry from the standard logger and adds an error to it, using the value defined in ErrorKey as key.
-func WithError(err error) types.Entry {
+func WithError(err error) Entry {
 	return std.WithError(err)
 }
 
 // WithContext creates an entry from the standard logger and adds a context to it.
-func WithContext(ctx context.Context) types.Entry {
+func WithContext(ctx context.Context) Entry {
 	return std.WithContext(ctx)
 }
 
@@ -102,7 +84,7 @@ func WithContext(ctx context.Context) types.Entry {
 //
 // Note that it doesn't log until you call Debug, Print, Info, Warn, Fatal
 // or Panic on the Entry it returns.
-func WithField(key string, value interface{}) types.Entry {
+func WithField(key string, value interface{}) Entry {
 	return std.WithField(key, value)
 }
 
@@ -112,7 +94,7 @@ func WithField(key string, value interface{}) types.Entry {
 //
 // Note that it doesn't log until you call Debug, Print, Info, Warn, Fatal
 // or Panic on the Entry it returns.
-func WithFields(fields types.Fields) types.Entry {
+func WithFields(fields Fields) Entry {
 	return std.WithFields(fields)
 }
 
@@ -121,7 +103,7 @@ func WithFields(fields types.Fields) types.Entry {
 //
 // Note that it doesn't log until you call Debug, Print, Info, Warn, Fatal
 // or Panic on the Entry it returns.
-func WithTime(t time.Time) types.Entry {
+func WithTime(t time.Time) Entry {
 	return std.WithTime(t)
 }
 
@@ -171,47 +153,47 @@ func Fatal(args ...interface{}) {
 }
 
 // TraceFn logs a message from a func at level Trace on the standard logger.
-func TraceFn(fn types.LogFunction) {
+func TraceFn(fn LogFunction) {
 	std.TraceFn(fn)
 }
 
 // DebugFn logs a message from a func at level Debug on the standard logger.
-func DebugFn(fn types.LogFunction) {
+func DebugFn(fn LogFunction) {
 	std.DebugFn(fn)
 }
 
 // PrintFn logs a message from a func at level Info on the standard logger.
-func PrintFn(fn types.LogFunction) {
+func PrintFn(fn LogFunction) {
 	std.PrintFn(fn)
 }
 
 // InfoFn logs a message from a func at level Info on the standard logger.
-func InfoFn(fn types.LogFunction) {
+func InfoFn(fn LogFunction) {
 	std.InfoFn(fn)
 }
 
 // WarnFn logs a message from a func at level Warn on the standard logger.
-func WarnFn(fn types.LogFunction) {
+func WarnFn(fn LogFunction) {
 	std.WarnFn(fn)
 }
 
 // WarningFn logs a message from a func at level Warn on the standard logger.
-func WarningFn(fn types.LogFunction) {
+func WarningFn(fn LogFunction) {
 	std.WarningFn(fn)
 }
 
 // ErrorFn logs a message from a func at level Error on the standard logger.
-func ErrorFn(fn types.LogFunction) {
+func ErrorFn(fn LogFunction) {
 	std.ErrorFn(fn)
 }
 
 // PanicFn logs a message from a func at level Panic on the standard logger.
-func PanicFn(fn types.LogFunction) {
+func PanicFn(fn LogFunction) {
 	std.PanicFn(fn)
 }
 
 // FatalFn logs a message from a func at level Fatal on the standard logger then the process will exit with status set to 1.
-func FatalFn(fn types.LogFunction) {
+func FatalFn(fn LogFunction) {
 	std.FatalFn(fn)
 }
 
@@ -305,31 +287,31 @@ func Fatalln(args ...interface{}) {
 	std.Fatalln(args...)
 }
 
-func ParseLevel(lvl string) (types.Level, error) {
+func ParseLevel(lvl string) (Level, error) {
 	switch strings.ToLower(lvl) {
 	case "panic":
-		return types.PanicLevel, nil
+		return PanicLevel, nil
 	case "fatal":
-		return types.FatalLevel, nil
+		return FatalLevel, nil
 	case "error":
-		return types.ErrorLevel, nil
+		return ErrorLevel, nil
 	case "warn", "warning":
-		return types.WarnLevel, nil
+		return WarnLevel, nil
 	case "info":
-		return types.InfoLevel, nil
+		return InfoLevel, nil
 	case "debug":
-		return types.DebugLevel, nil
+		return DebugLevel, nil
 	case "trace":
-		return types.TraceLevel, nil
+		return TraceLevel, nil
 	default:
 		Warn("Invalid logging level passed in. Will use default level set to WARN")
 
 		// Setting default to WARN.
-		return types.WarnLevel, fmt.Errorf("invalid logging level %s", lvl)
+		return WarnLevel, fmt.Errorf("invalid logging level %s", lvl)
 	}
 }
 
-func ParseLevelOrDefault(lvl string, defaultLevel types.Level) types.Level {
+func ParseLevelOrDefault(lvl string, defaultLevel Level) Level {
 	parsed, err := ParseLevel(lvl)
 	if err != nil {
 		return defaultLevel
@@ -338,6 +320,19 @@ func ParseLevelOrDefault(lvl string, defaultLevel types.Level) types.Level {
 	return parsed
 }
 
-func SetLevelWithDefault(lvl string, defaultLevel types.Level) {
+func SetLevelWithDefault(lvl string, defaultLevel Level) {
 	std.SetLevel(ParseLevelOrDefault(lvl, defaultLevel))
+}
+
+var confForTestingOnce sync.Once
+
+// ConfigureLoggingForTestingT configures logrus to write to the logger of the
+// given testing.T.  It should be called at the start of each "go test" that
+// wants to capture log output.  It registers a cleanup with the testing.T to
+// remove the log redirection at the end of the test.
+func ConfigureLoggingForTestingT(t *testing.T) {
+	confForTestingOnce.Do(func() {
+		std.SetFormatter(NewDefaultFormatterWithName("test"))
+	})
+	t.Cleanup(std.RedirectToTestingT(t))
 }
