@@ -32,7 +32,6 @@ import (
 )
 
 func init() {
-	log.SetFormatter(&logutils.Formatter{})
 	log.SetLevel(log.DebugLevel)
 }
 

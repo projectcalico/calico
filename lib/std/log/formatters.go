@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package logrus
+package log
 
 import (
 	"bytes"
@@ -20,18 +20,14 @@ import (
 	"io"
 	"os"
 	"path"
-	"regexp"
 	"runtime"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/sirupsen/logrus"
-
-	"github.com/projectcalico/calico/lib/std/log/types"
 )
 
 const (
@@ -50,9 +46,6 @@ var (
 )
 
 func init() {
-	// We need logrus to record the caller on each log entry for us.
-	logrus.SetReportCaller(true)
-
 	pc, _, _, ok := runtime.Caller(0)
 	if !ok {
 		return
@@ -62,41 +55,11 @@ func init() {
 	logPkgName = strings.TrimSuffix(getPackageName(fn), "/logrus")
 }
 
-type TextFormatter struct {
-	logrus.TextFormatter
+type Formatter interface {
+	Format(Entry) ([]byte, error)
 }
 
-func (t *TextFormatter) Format(e types.Entry) ([]byte, error) {
-	return t.TextFormatter.Format(e.(*entry).entry)
-}
-
-type MetricsCounter interface {
-	// Inc increments the counter by 1. Use Add to increment it by arbitrary
-	// non-negative values.
-	Inc()
-	// Add adds the given value to the counter. It panics if the value is <
-	// 0.
-	Add(float64)
-}
-
-// FilterLevels returns all the logrus.Level values <= maxLevel.
-func FilterLevels(maxLevel logrus.Level) []logrus.Level {
-	levels := []logrus.Level{}
-	for _, l := range logrus.AllLevels {
-		if l <= maxLevel {
-			levels = append(levels, l)
-		}
-	}
-	return levels
-}
-
-func ConfigureFormatter(componentName string) {
-	formatter := &Formatter{Component: componentName}
-	formatter.init()
-	logrus.SetFormatter(formatter)
-}
-
-// Formatter is our custom log formatter designed to balance ease of machine processing
+// defaultFormatter is our custom log formatter designed to balance ease of machine processing
 // with human readability.  Logs include:
 //   - A sortable millisecond timestamp, for scanning and correlating logs
 //   - The log level, near the beginning of the line, to aid in visual scanning
@@ -111,45 +74,42 @@ func ConfigureFormatter(componentName string) {
 //
 //	2017-01-05 09:17:48.238 [INFO][85386] endpoint_mgr.go 434: Skipping configuration of
 //	interface because it is oper down. ifaceName="cali1234"
-type Formatter struct {
+type defaultFormatter struct {
 	// If specified, prepends the component to the file name. This is useful for when
 	// multiple components are logging to the same file (e.g., calico/node) for distinguishing
 	// which component sourced the logrus.
-	Component string
+	component string
 
 	initOnce                sync.Once
 	preComputedInfixByLevel []string
 }
 
-var maxLevel = logrus.Level(len(logrus.AllLevels))
-
-func (f *Formatter) init() {
-	f.initOnce.Do(func() {
-		f.preComputedInfixByLevel = make([]string, len(logrus.AllLevels))
-		for _, level := range logrus.AllLevels {
-			var buf bytes.Buffer
-			f.computeInfix(&buf, level)
-			f.preComputedInfixByLevel[level] = buf.String()
-		}
-	})
+func NewDefaultFormatter() Formatter {
+	return NewDefaultFormatterWithName("")
 }
 
-const TimeFormat = "2006-01-02 15:04:05.000"
-const timeFormatLen = len(TimeFormat)
+func NewDefaultFormatterWithName(name string) Formatter {
+	f := &defaultFormatter{component: name}
+	f.preComputedInfixByLevel = make([]string, len(logrus.AllLevels))
+	for _, level := range AllLevels {
+		var buf bytes.Buffer
+		f.computeInfix(&buf, level)
+		f.preComputedInfixByLevel[level] = buf.String()
+	}
+	return f
+}
 
-func (f *Formatter) Format(entry *logrus.Entry) ([]byte, error) {
-	f.init()
-
-	b := entry.Buffer
+func (f *defaultFormatter) Format(entry Entry) ([]byte, error) {
+	b := entry.buffer()
 	if b == nil {
 		b = &bytes.Buffer{}
 	}
 
 	fileName, lineNo := getFileInfo(entry)
 
-	b.Grow(timeFormatLen + 32 + len(fileName) + len(entry.Message) + len(entry.Data)*32)
-	AppendTime(b, entry.Time)
-	f.writeInfix(b, entry.Level)
+	b.Grow(timeFormatLen + 32 + len(fileName) + len(entry.message()) + len(entry.Fields())*32)
+	AppendTime(b, entry.GetTime())
+	f.writeInfix(b, entry.GetLevel())
 	b.WriteString(fileName)
 	b.WriteByte(' ')
 	if lineNo == 0 {
@@ -160,13 +120,13 @@ func (f *Formatter) Format(entry *logrus.Entry) ([]byte, error) {
 		_, _ = b.Write(buf)
 	}
 	b.WriteString(": ")
-	b.WriteString(entry.Message)
-	appendKVsAndNewLine(b, entry.Data)
+	b.WriteString(entry.message())
+	appendKVsAndNewLine(b, entry.Fields())
 
 	return b.Bytes(), nil
 }
 
-func (f *Formatter) writeInfix(b *bytes.Buffer, level logrus.Level) {
+func (f *defaultFormatter) writeInfix(b *bytes.Buffer, level Level) {
 	if level >= maxLevel {
 		// Slow path for unknown log levels.
 		f.computeInfix(b, level)
@@ -174,41 +134,11 @@ func (f *Formatter) writeInfix(b *bytes.Buffer, level logrus.Level) {
 	_, _ = b.WriteString(f.preComputedInfixByLevel[level])
 }
 
-func (f *Formatter) computeInfix(b *bytes.Buffer, level logrus.Level) {
+func (f *defaultFormatter) computeInfix(b *bytes.Buffer, level Level) {
 	_, _ = fmt.Fprintf(b, " [%s][%d] ", strings.ToUpper(level.String()), os.Getpid())
-	if f.Component != "" {
-		_, _ = fmt.Fprintf(b, "%s/", f.Component)
+	if f.component != "" {
+		_, _ = fmt.Fprintf(b, "%s/", f.component)
 	}
-}
-
-// AppendTime appends a time to the buffer in our format
-// "2006-01-02 15:04:05.000".
-func AppendTime(b *bytes.Buffer, t time.Time) {
-	// Want "2006-01-02 15:04:05.000" but the formatter has an optimised
-	// impl of RFC3339Nano, which we can easily tweak into our format.
-	b.Grow(timeFormatLen)
-	buf := b.AvailableBuffer()
-	buf = t.AppendFormat(buf, time.RFC3339Nano)
-	buf = buf[:timeFormatLen]
-	const tPos = len("2006-01-02T") - 1
-	buf[tPos] = ' '
-	const dotPos = len("2006-01-02T15:04:05.") - 1
-
-	// RFC3339Nano truncates the fractional seconds if zero, put the dot in
-	// place if it isn't already and overwrite any non-digit characters with
-	// zeros to replace the timezone or 'Z' that RFC3339Nano might have added.
-	overwrite := false
-	if buf[dotPos] != '.' {
-		buf[dotPos] = '.'
-		overwrite = true
-	}
-	for i := dotPos + 1; i < len(buf); i++ {
-		if overwrite || buf[i] < '0' || buf[i] > '9' {
-			buf[i] = '0'
-			overwrite = true
-		}
-	}
-	_, _ = b.Write(buf)
 }
 
 var preComputedInfixByLevelSyslog = make([]string, len(logrus.AllLevels))
@@ -225,19 +155,19 @@ func init() {
 //
 //	INFO endpoint_mgr.go 434: Skipping configuration of interface because it is oper down.
 //	ifaceName="cali1234"
-func FormatForSyslog(entry *logrus.Entry) string {
-	b := entry.Buffer
+func FormatForSyslog(entry Entry) string {
+	b := entry.buffer()
 	if b == nil {
 		b = &bytes.Buffer{}
 	}
 
 	fileName, lineNo := getFileInfo(entry)
 
-	b.Grow(timeFormatLen + 32 + len(fileName) + len(entry.Message) + len(entry.Data)*32)
-	if entry.Level < maxLevel {
-		b.WriteString(preComputedInfixByLevelSyslog[entry.Level])
+	b.Grow(timeFormatLen + 32 + len(fileName) + len(entry.message()) + len(entry.Fields())*32)
+	if entry.GetLevel() < maxLevel {
+		b.WriteString(preComputedInfixByLevelSyslog[entry.GetLevel()])
 	} else {
-		b.WriteString(strings.ToUpper(entry.Level.String()))
+		b.WriteString(strings.ToUpper(entry.GetLevel().String()))
 		b.WriteByte(' ')
 	}
 	b.WriteString(fileName)
@@ -250,8 +180,8 @@ func FormatForSyslog(entry *logrus.Entry) string {
 		_, _ = b.Write(buf)
 	}
 	b.WriteString(": ")
-	b.WriteString(entry.Message)
-	appendKVsAndNewLine(b, entry.Data)
+	b.WriteString(entry.message())
+	appendKVsAndNewLine(b, entry.Fields())
 
 	return b.String()
 }
@@ -262,8 +192,9 @@ func MarkForTesting() {
 	forTest = true
 }
 
-func getFileInfo(entry *logrus.Entry) (string, int) {
-	if entry.Caller == nil {
+func getFileInfo(entry Entry) (string, int) {
+	caller := entry.caller()
+	if caller == nil {
 		return FileNameUnknown, 0
 	}
 
@@ -281,7 +212,7 @@ func getFileInfo(entry *logrus.Entry) (string, int) {
 		// 	// This is done for historical reasons, and to make FuncForPC
 		// 	// work correctly for entries in the result of runtime.Callers.
 		// 	// Decrement to get back to the instruction we care about.
-		if pcs[i] == entry.Caller.PC+1 {
+		if pcs[i] == caller.PC+1 {
 			startIdx = i
 			break
 		}
@@ -325,7 +256,7 @@ func getPackageName(f string) string {
 
 // appendKeysAndNewLine writes the entry's KV pairs to the end of the buffer,
 // followed by a newline.  Entries are written in sorted order.
-func appendKVsAndNewLine(b *bytes.Buffer, data logrus.Fields) {
+func appendKVsAndNewLine(b *bytes.Buffer, data Fields) {
 	if len(data) == 0 {
 		b.WriteByte('\n')
 		return
@@ -383,7 +314,7 @@ func (w *NullWriter) Write(p []byte) (int, error) {
 }
 
 type QueuedLog struct {
-	Level         logrus.Level
+	Level         Level
 	Message       []byte
 	SyslogMessage string
 	WaitGroup     *sync.WaitGroup
@@ -400,7 +331,7 @@ func (ql QueuedLog) OnLogDone() {
 }
 
 func NewStreamDestination(
-	level logrus.Level,
+	level Level,
 	writer io.Writer,
 	c chan QueuedLog,
 	disableLogDropping bool,
@@ -423,7 +354,7 @@ func NewStreamDestination(
 }
 
 func NewSyslogDestination(
-	level logrus.Level,
+	level Level,
 	writer syslogWriter,
 	c chan QueuedLog,
 	disableLogDropping bool,
@@ -447,7 +378,7 @@ func NewSyslogDestination(
 
 type Destination struct {
 	// Level is the minimum level that a log must have to be logged to this destination.
-	Level logrus.Level
+	Level Level
 	// Channel is the channel used to queue logs to the background worker thread.  Public for
 	// test purposes.
 	Channel chan QueuedLog
@@ -518,161 +449,21 @@ type syslogWriter interface {
 
 func writeToSyslog(writer syslogWriter, ql QueuedLog) error {
 	switch ql.Level {
-	case logrus.PanicLevel:
+	case PanicLevel:
 		return writer.Crit(ql.SyslogMessage)
-	case logrus.FatalLevel:
+	case FatalLevel:
 		return writer.Crit(ql.SyslogMessage)
-	case logrus.ErrorLevel:
+	case ErrorLevel:
 		return writer.Err(ql.SyslogMessage)
-	case logrus.WarnLevel:
+	case WarnLevel:
 		return writer.Warning(ql.SyslogMessage)
-	case logrus.InfoLevel:
+	case InfoLevel:
 		return writer.Info(ql.SyslogMessage)
-	case logrus.DebugLevel:
+	case DebugLevel:
 		return writer.Debug(ql.SyslogMessage)
 	default:
 		return nil
 	}
-}
-
-// BackgroundHook is a logrus Hook that (synchronously) formats each log and sends it to one or more
-// Destinations for writing on a background thread.  It supports filtering destinations on
-// individual log levels.  We write logs from background threads so that blocking of the output
-// stream doesn't block the mainline code.  Up to a point, we queue logs for writing, then we start
-// dropping logs.
-type BackgroundHook struct {
-	levels          []logrus.Level
-	syslogLevel     logrus.Level
-	debugFileNameRE *regexp.Regexp
-
-	destinations []*Destination
-
-	// Counter
-	counter MetricsCounter
-}
-
-type BackgroundHookOpt func(hook *BackgroundHook)
-
-func WithDebugFileRegexp(re *regexp.Regexp) BackgroundHookOpt {
-	return func(hook *BackgroundHook) {
-		hook.debugFileNameRE = re
-	}
-}
-
-var _ = WithDebugFileRegexp
-
-func NewBackgroundHook(
-	levels []logrus.Level,
-	syslogLevel logrus.Level,
-	destinations []*Destination,
-	counter MetricsCounter,
-	opts ...BackgroundHookOpt,
-) *BackgroundHook {
-	bh := &BackgroundHook{
-		destinations: destinations,
-		levels:       levels,
-		syslogLevel:  syslogLevel,
-		counter:      counter,
-	}
-	for _, opt := range opts {
-		opt(bh)
-	}
-	return bh
-}
-
-func (h *BackgroundHook) Levels() []logrus.Level {
-	return h.levels
-}
-
-func (h *BackgroundHook) Fire(entry *logrus.Entry) (err error) {
-	if entry.Buffer != nil {
-		defer entry.Buffer.Truncate(0)
-	}
-
-	if entry.Level >= logrus.DebugLevel && h.debugFileNameRE != nil {
-		// This is a debug log, check if debug logging is enabled for this file.
-		fileName, _ := getFileInfo(entry)
-		if fileName == FileNameUnknown || !h.debugFileNameRE.MatchString(fileName) {
-			return nil
-		}
-	}
-
-	var serialized []byte
-	if serialized, err = entry.Logger.Formatter.Format(entry); err != nil {
-		return
-	}
-
-	// entry's buffer will be reused after we return but we're about to send the message over
-	// a channel so we need to take a copy.
-	bufCopy := make([]byte, len(serialized))
-	copy(bufCopy, serialized)
-
-	ql := QueuedLog{
-		Level:   entry.Level,
-		Message: bufCopy,
-	}
-
-	if entry.Level <= h.syslogLevel {
-		// syslog gets its own log string since our default log string duplicates a lot of
-		// syslog metadata.  Only calculate that string if it's needed.
-		ql.SyslogMessage = FormatForSyslog(entry)
-	}
-
-	var waitGroup *sync.WaitGroup
-	if entry.Level <= logrus.FatalLevel || entry.Data[FieldForceFlush] == true {
-		// If the process is about to be killed (or we're asked to do so), flush the logrus.
-		waitGroup = &sync.WaitGroup{}
-		ql.WaitGroup = waitGroup
-	}
-
-	for _, dest := range h.destinations {
-		if ql.Level > dest.Level {
-			continue
-		}
-		if waitGroup != nil {
-			// Thread safety: we must call add before we send the wait group over the
-			// channel (or the background thread could be scheduled immediately and
-			// call Done() before we call Add()).  Since we don't know if the send
-			// will succeed that leads to the need to call Done() on the 'default:'
-			// branch below to correctly pair Add()/Done() calls.
-			waitGroup.Add(1)
-		}
-
-		if ok := dest.Send(ql); !ok {
-			// Background thread isn't keeping up.  Drop the log and count how many
-			// we've dropped.
-			if waitGroup != nil {
-				waitGroup.Done()
-			}
-			// Increment the number of dropped logs
-			dest.counter.Inc()
-		}
-	}
-	if waitGroup != nil {
-		waitGroup.Wait()
-	}
-	return
-}
-
-func (h *BackgroundHook) Start() {
-	for _, d := range h.destinations {
-		go d.LoopWritingLogs()
-	}
-}
-
-// SafeParseLogLevel parses a string version of a logrus log level, defaulting to logrus.PanicLevel on failure.
-func SafeParseLogLevel(logLevel string) logrus.Level {
-	defaultedLevel := logrus.PanicLevel
-	if logLevel != "" {
-		parsedLevel, err := logrus.ParseLevel(logLevel)
-		if err == nil {
-			defaultedLevel = parsedLevel
-		} else {
-			logrus.WithField("raw level", logLevel).Warn(
-				"Invalid log level, defaulting to panic")
-		}
-	}
-	return defaultedLevel
 }
 
 // TestingTWriter adapts a *testing.T as a Writer so it can be used as a target
@@ -686,28 +477,4 @@ func (l TestingTWriter) Write(p []byte) (n int, err error) {
 	l.T.Helper()
 	l.T.Log(strings.TrimRight(string(p), "\r\n"))
 	return len(p), nil
-}
-
-// RedirectLogrusToTestingT redirects logrus output to the given testing.T.  It
-// returns a func() that can be called to restore the original log output.
-func RedirectLogrusToTestingT(t *testing.T) (cancel func()) {
-	oldOut := logrus.StandardLogger().Out
-	cancel = func() {
-		logrus.SetOutput(oldOut)
-	}
-	logrus.SetOutput(TestingTWriter{T: t})
-	return
-}
-
-var confForTestingOnce sync.Once
-
-// ConfigureLoggingForTestingT configures logrus to write to the logger of the
-// given testing.T.  It should be called at the start of each "go test" that
-// wants to capture log output.  It registers a cleanup with the testing.T to
-// remove the log redirection at the end of the test.
-func ConfigureLoggingForTestingT(t *testing.T) {
-	confForTestingOnce.Do(func() {
-		logrus.SetFormatter(&Formatter{Component: "test"})
-	})
-	t.Cleanup(RedirectLogrusToTestingT(t))
 }

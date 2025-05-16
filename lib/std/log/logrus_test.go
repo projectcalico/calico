@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package logrus_test
+package log_test
 
 import (
 	"bytes"
@@ -29,41 +29,38 @@ import (
 	"testing"
 	"time"
 
-	reallogrus "github.com/sirupsen/logrus"
-
 	"github.com/projectcalico/calico/lib/std/chanutil"
-	"github.com/projectcalico/calico/lib/std/log/logrus"
-	"github.com/projectcalico/calico/lib/std/log/types"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/lib/std/testutils/assert"
 )
 
 func init() {
-	logrus.MarkForTesting()
+	log.MarkForTesting()
 }
 
 func TestFileLocationWithDifferentInvocations(t *testing.T) {
 	tt := []struct {
 		description string
-		logFunc     func(logger types.Logger)
+		logFunc     func(logger log.Logger)
 	}{
 		{
 			description: "logger.Info",
-			logFunc:     func(logger types.Logger) { logger.Info("Test log") },
+			logFunc:     func(logger log.Logger) { logger.Info("Test log") },
 		},
 		{
 			description: "logger.WithField(...).Info",
-			logFunc:     func(logger types.Logger) { logger.Info("Test log") },
+			logFunc:     func(logger log.Logger) { logger.Info("Test log") },
 		},
 	}
 
 	for _, tc := range tt {
 		t.Run(tc.description, func(t *testing.T) {
 			buf := &bytes.Buffer{}
-			logger := logrus.New(
-				logrus.WithLevel(types.DebugLevel),
-				logrus.WithOutput(buf))
+			logger := log.New(
+				log.WithLevel(log.DebugLevel),
+				log.WithOutput(buf))
 			tc.logFunc(logger)
-			assert.ContainsSubstring(t, "logutils_test.go", buf.String())
+			assert.ContainsSubstring(t, "logrus_test.go", buf.String())
 		})
 	}
 }
@@ -71,19 +68,19 @@ func TestFileLocationWithDifferentInvocations(t *testing.T) {
 func TestFormatter(t *testing.T) {
 	tt := []struct {
 		description string
-		fields      types.Fields
+		fields      log.Fields
 		expectedLog string
 	}{
 		{
 			description: "Basic",
-			fields: types.Fields{
+			fields: log.Fields{
 				"__flush__": true, // Internal value that should be ignored.
 			},
 			expectedLog: "<TIME> [INFO][<PID>] <FILE> <LINE>: The answer is 42.\n",
 		},
 		{
 			description: "With fields",
-			fields: types.Fields{
+			fields: log.Fields{
 				"a":   10,
 				"b":   "foobar",
 				"c":   theTime(),
@@ -97,12 +94,12 @@ func TestFormatter(t *testing.T) {
 		t.Run(tc.description, func(t *testing.T) {
 			buf := &bytes.Buffer{}
 			var entryTime string
-			logger := logrus.New(
-				logrus.WithLevel(types.DebugLevel),
-				logrus.WithOutput(buf),
-				logrus.WithHooks(types.NewHook([]types.Level{types.InfoLevel}, func(entry types.Entry) error {
+			logger := log.New(
+				log.WithLevel(log.DebugLevel),
+				log.WithOutput(buf),
+				log.WithHooks(log.NewHook([]log.Level{log.InfoLevel}, func(entry log.Entry) error {
 					timeBuff := bytes.NewBuffer(nil)
-					logrus.AppendTime(timeBuff, entry.GetTime())
+					log.AppendTime(timeBuff, entry.GetTime())
 					entryTime = timeBuff.String()
 					return nil
 				})))
@@ -133,13 +130,13 @@ func theTime() time.Time {
 }
 
 var (
-	message1 = logrus.QueuedLog{
-		Level:         reallogrus.InfoLevel,
+	message1 = log.QueuedLog{
+		Level:         log.InfoLevel,
 		Message:       []byte("Message"),
 		SyslogMessage: "syslog message",
 	}
-	message2 = logrus.QueuedLog{
-		Level:         reallogrus.InfoLevel,
+	message2 = log.QueuedLog{
+		Level:         log.InfoLevel,
 		Message:       []byte("Message2"),
 		SyslogMessage: "syslog message2",
 	}
@@ -148,14 +145,14 @@ var (
 func TestBackgroundHookFlushing(t *testing.T) {
 	tt := []struct {
 		description     string
-		logFunc         func(logger types.Logger)
+		logFunc         func(logger log.Logger)
 		expectedMessage string
-		hookOpts        []logrus.BackgroundHookOpt
+		hookOpts        []log.BackgroundHookOpt
 		shouldFlush     bool
 	}{
 		{
 			description: "Let debug logs through by default",
-			logFunc: func(logger types.Logger) {
+			logFunc: func(logger log.Logger) {
 				logger.Debug("Hello")
 			},
 			expectedMessage: "level=debug msg=Hello",
@@ -163,39 +160,39 @@ func TestBackgroundHookFlushing(t *testing.T) {
 		},
 		{
 			description: "Should filter debug logs with regex option",
-			logFunc: func(logger types.Logger) {
+			logFunc: func(logger log.Logger) {
 				logger.Debug("Hello")
 			},
-			hookOpts: []logrus.BackgroundHookOpt{
-				logrus.WithDebugFileRegexp(regexp.MustCompile("another_file_for_test")),
+			hookOpts: []log.BackgroundHookOpt{
+				log.WithDebugFileRegexp(regexp.MustCompile("another_file_for_test")),
 			},
 			shouldFlush: false,
 		},
 		{
 			description: "Should debug logs when regex matches",
-			logFunc: func(logger types.Logger) {
+			logFunc: func(logger log.Logger) {
 				debugFromAnotherFile(logger, "What?")
 			},
 			expectedMessage: "level=debug msg=\"What?\"",
-			hookOpts: []logrus.BackgroundHookOpt{
-				logrus.WithDebugFileRegexp(regexp.MustCompile("another_file_for_test")),
+			hookOpts: []log.BackgroundHookOpt{
+				log.WithDebugFileRegexp(regexp.MustCompile("another_file_for_test")),
 			},
 			shouldFlush: true,
 		},
 	}
 	for _, tc := range tt {
 		t.Run(tc.description, func(t *testing.T) {
-			c := make(chan logrus.QueuedLog, 10)
-			testDest := &logrus.Destination{
-				Level:   reallogrus.DebugLevel,
+			c := make(chan log.QueuedLog, 10)
+			testDest := &log.Destination{
+				Level:   log.DebugLevel,
 				Channel: c,
 			}
 
-			logger := logrus.New(
-				logrus.WithFormatter(&logrus.TextFormatter{}),
-				logrus.WithLevel(types.DebugLevel),
-				logrus.WithOutput(&logrus.NullWriter{}),
-				logrus.WithBackgroundHook(types.AllLevels, types.DebugLevel, []*logrus.Destination{testDest}, nil, tc.hookOpts...))
+			logger := log.New(
+				log.WithFormatter(log.NewTextFormatter()),
+				log.WithLevel(log.DebugLevel),
+				log.WithOutput(&log.NullWriter{}),
+				log.WithBackgroundHook(log.AllLevels, log.DebugLevel, []*log.Destination{testDest}, nil, tc.hookOpts...))
 
 			ctx := context.Background()
 			tc.logFunc(logger)
@@ -213,28 +210,28 @@ func TestBackgroundHookFlushing(t *testing.T) {
 func TestBackgroundHookFlushing_BackgroundBlockingScenarios(t *testing.T) {
 	tt := []struct {
 		description     string
-		logFunc         func(t *testing.T, logger types.Logger)
+		logFunc         func(t *testing.T, logger log.Logger)
 		expectedMessage string
-		hookOpts        []logrus.BackgroundHookOpt
+		hookOpts        []log.BackgroundHookOpt
 		shouldBlock     bool
 	}{
 		{
 			description: "When calling Panic, should block waiting for the background thread",
-			logFunc: func(t *testing.T, logger types.Logger) {
+			logFunc: func(t *testing.T, logger log.Logger) {
 				assert.Panic(t, func() { logger.Panic("Should flush") })
 			},
 			shouldBlock: true,
 		},
 		{
 			description: "When calling Panic, should block waiting for the background thread",
-			logFunc: func(t *testing.T, logger types.Logger) {
-				logger.WithField(logrus.FieldForceFlush, true).Info("Should flush")
+			logFunc: func(t *testing.T, logger log.Logger) {
+				logger.WithField(log.FieldForceFlush, true).Info("Should flush")
 			},
 			shouldBlock: true,
 		},
 		{
 			description: "When calling Panic, should block waiting for the background thread",
-			logFunc: func(t *testing.T, logger types.Logger) {
+			logFunc: func(t *testing.T, logger log.Logger) {
 				logger.Info("Should not flush")
 			},
 			shouldBlock: false,
@@ -243,17 +240,17 @@ func TestBackgroundHookFlushing_BackgroundBlockingScenarios(t *testing.T) {
 	for _, tc := range tt {
 		t.Run(tc.description, func(t *testing.T) {
 			ctx := context.Background()
-			c := make(chan logrus.QueuedLog, 10)
-			testDest := &logrus.Destination{
-				Level:   reallogrus.DebugLevel,
+			c := make(chan log.QueuedLog, 10)
+			testDest := &log.Destination{
+				Level:   log.DebugLevel,
 				Channel: c,
 			}
 
-			logger := logrus.New(
-				logrus.WithFormatter(&logrus.TextFormatter{}),
-				logrus.WithLevel(types.DebugLevel),
-				logrus.WithOutput(&logrus.NullWriter{}),
-				logrus.WithBackgroundHook(types.AllLevels, types.DebugLevel, []*logrus.Destination{testDest}, nil))
+			logger := log.New(
+				log.WithFormatter(log.NewTextFormatter()),
+				log.WithLevel(log.DebugLevel),
+				log.WithOutput(&log.NullWriter{}),
+				log.WithBackgroundHook(log.AllLevels, log.DebugLevel, []*log.Destination{testDest}, nil))
 
 			done := make(chan struct{})
 			go func() {
@@ -289,10 +286,10 @@ func readNextMsg(pr *io.PipeReader) (string, error) {
 }
 
 func TestStreamDestination_ReportsDroppedLogsToBackgroundThread(t *testing.T) {
-	c := make(chan logrus.QueuedLog, 1)
+	c := make(chan log.QueuedLog, 1)
 	_, pw := io.Pipe()
-	s := logrus.NewStreamDestination(
-		reallogrus.InfoLevel, pw, c, false, nil,
+	s := log.NewStreamDestination(
+		log.InfoLevel, pw, c, false, nil,
 	)
 
 	// The first message should be queued on the channel.
@@ -303,8 +300,8 @@ func TestStreamDestination_ReportsDroppedLogsToBackgroundThread(t *testing.T) {
 	assert.ObjectsEqual(t, message1, <-c)
 	// The third message should go through.
 	assert.Equal(t, true, s.Send(message1))
-	assert.ObjectsEqual(t, <-c, logrus.QueuedLog{
-		Level:          reallogrus.InfoLevel,
+	assert.ObjectsEqual(t, <-c, log.QueuedLog{
+		Level:          log.InfoLevel,
 		Message:        []byte("Message"),
 		SyslogMessage:  "syslog message",
 		NumSkippedLogs: 1,
@@ -317,25 +314,25 @@ func TestStreamDestination_ReportsDroppedLogsToBackgroundThread(t *testing.T) {
 func TestDestination_DoesNotDropLogsWhenDropLogsDisabled(t *testing.T) {
 	tt := []struct {
 		description string
-		destination func() (chan logrus.QueuedLog, *logrus.Destination)
+		destination func() (chan log.QueuedLog, *log.Destination)
 	}{
 		{
 			description: "StreamDestination",
-			destination: func() (chan logrus.QueuedLog, *logrus.Destination) {
-				c := make(chan logrus.QueuedLog, 1)
+			destination: func() (chan log.QueuedLog, *log.Destination) {
+				c := make(chan log.QueuedLog, 1)
 				_, pw := io.Pipe()
-				return c, logrus.NewStreamDestination(
-					reallogrus.InfoLevel, pw, c, true, nil,
+				return c, log.NewStreamDestination(
+					log.InfoLevel, pw, c, true, nil,
 				)
 			},
 		},
 		{
 			description: "SyslogDestination",
-			destination: func() (chan logrus.QueuedLog, *logrus.Destination) {
-				c := make(chan logrus.QueuedLog, 1)
+			destination: func() (chan log.QueuedLog, *log.Destination) {
+				c := make(chan log.QueuedLog, 1)
 				_, pw := io.Pipe()
-				return c, logrus.NewSyslogDestination(
-					reallogrus.InfoLevel, (*mockSyslogWriter)(pw), c, true, nil,
+				return c, log.NewSyslogDestination(
+					log.InfoLevel, (*mockSyslogWriter)(pw), c, true, nil,
 				)
 			},
 		},
@@ -363,8 +360,8 @@ func TestDestination_DoesNotDropLogsWhenDropLogsDisabled(t *testing.T) {
 	}
 }
 
-func newQueuedLog(l reallogrus.Level, msg, sysMsg string, skipped uint, wg *sync.WaitGroup) logrus.QueuedLog {
-	return logrus.QueuedLog{
+func newQueuedLog(l log.Level, msg, sysMsg string, skipped uint, wg *sync.WaitGroup) log.QueuedLog {
+	return log.QueuedLog{
 		Level:          l,
 		Message:        []byte(msg),
 		SyslogMessage:  sysMsg,
@@ -377,26 +374,26 @@ func TestStreamDestination_WithRealBackgroundThread(t *testing.T) {
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
 
-	createStreamDest := func() (chan logrus.QueuedLog, *io.PipeReader, *logrus.Destination) {
-		c := make(chan logrus.QueuedLog, 1)
+	createStreamDest := func() (chan log.QueuedLog, *io.PipeReader, *log.Destination) {
+		c := make(chan log.QueuedLog, 1)
 		pr, pw := io.Pipe()
-		return c, pr, logrus.NewStreamDestination(reallogrus.InfoLevel, pw, c, false, nil)
+		return c, pr, log.NewStreamDestination(log.InfoLevel, pw, c, false, nil)
 	}
 
-	createSyslogDest := func(l reallogrus.Level) func() (chan logrus.QueuedLog, *io.PipeReader, *logrus.Destination) {
-		return func() (chan logrus.QueuedLog, *io.PipeReader, *logrus.Destination) {
-			c := make(chan logrus.QueuedLog, 1)
+	createSyslogDest := func(l log.Level) func() (chan log.QueuedLog, *io.PipeReader, *log.Destination) {
+		return func() (chan log.QueuedLog, *io.PipeReader, *log.Destination) {
+			c := make(chan log.QueuedLog, 1)
 			pr, pw := io.Pipe()
-			return c, pr, logrus.NewSyslogDestination(l, (*mockSyslogWriter)(pw), c, false, nil)
+			return c, pr, log.NewSyslogDestination(l, (*mockSyslogWriter)(pw), c, false, nil)
 		}
 	}
 
 	type test struct {
 		description      string
-		queuedLog        logrus.QueuedLog
+		queuedLog        log.QueuedLog
 		expectedMessages []string
 		bypassSend       bool
-		destination      func() (chan logrus.QueuedLog, *io.PipeReader, *logrus.Destination)
+		destination      func() (chan log.QueuedLog, *io.PipeReader, *log.Destination)
 	}
 
 	tt := []test{
@@ -409,43 +406,43 @@ func TestStreamDestination_WithRealBackgroundThread(t *testing.T) {
 		{
 			description:      "[StreamDestination] should log number of dropped logs",
 			destination:      createStreamDest,
-			queuedLog:        newQueuedLog(reallogrus.InfoLevel, "Message", "syslog message", 1, nil),
+			queuedLog:        newQueuedLog(log.InfoLevel, "Message", "syslog message", 1, nil),
 			expectedMessages: []string{"... dropped 1 logs ...\n", "Message"},
 			bypassSend:       true,
 		},
 		{
 			description:      "[StreamDestination] should trigger WaitGroup",
 			destination:      createStreamDest,
-			queuedLog:        newQueuedLog(reallogrus.InfoLevel, "Message", "syslog message", 0, nil),
+			queuedLog:        newQueuedLog(log.InfoLevel, "Message", "syslog message", 0, nil),
 			expectedMessages: []string{"Message"},
 			bypassSend:       true,
 		},
 		{
 			description:      "[SyslogDestination] should log number of dropped logs",
-			destination:      createSyslogDest(reallogrus.InfoLevel),
-			queuedLog:        newQueuedLog(reallogrus.InfoLevel, "Message", "syslog message", 1, nil),
+			destination:      createSyslogDest(log.InfoLevel),
+			queuedLog:        newQueuedLog(log.InfoLevel, "Message", "syslog message", 1, nil),
 			expectedMessages: []string{"WARNING ... dropped 1 logs ...\n", "INFO syslog message"},
 			bypassSend:       true,
 		},
 		{
 			description:      "[SyslogDestination] should trigger WaitGroup",
-			destination:      createSyslogDest(reallogrus.InfoLevel),
-			queuedLog:        newQueuedLog(reallogrus.InfoLevel, "Message", "syslog message", 0, nil),
+			destination:      createSyslogDest(log.InfoLevel),
+			queuedLog:        newQueuedLog(log.InfoLevel, "Message", "syslog message", 0, nil),
 			expectedMessages: []string{"INFO syslog message"},
 			bypassSend:       true,
 		},
 	}
 
 	levelTests := []struct {
-		level reallogrus.Level
+		level log.Level
 		text  string
 	}{
-		{reallogrus.InfoLevel, "INFO"},
-		{reallogrus.WarnLevel, "WARNING"},
-		{reallogrus.DebugLevel, "DEBUG"},
-		{reallogrus.ErrorLevel, "ERROR"},
-		{reallogrus.FatalLevel, "CRITICAL"},
-		{reallogrus.PanicLevel, "CRITICAL"},
+		{log.InfoLevel, "INFO"},
+		{log.WarnLevel, "WARNING"},
+		{log.DebugLevel, "DEBUG"},
+		{log.ErrorLevel, "ERROR"},
+		{log.FatalLevel, "CRITICAL"},
+		{log.PanicLevel, "CRITICAL"},
 	}
 
 	for _, lt := range levelTests {
@@ -571,7 +568,7 @@ func FuzzAppendTime(f *testing.F) {
 		buf2 := pool.Get().(*bytes.Buffer)
 		{
 			buf1.Write(timeVal.AppendFormat(buf1.AvailableBuffer(), tFormat))
-			logrus.AppendTime(buf2, timeVal)
+			log.AppendTime(buf2, timeVal)
 			if !bytes.Equal(buf1.Bytes(), buf2.Bytes()) {
 				t.Fatalf("Expected %s, got %s", buf1.String(), buf2.String())
 			}
@@ -581,7 +578,7 @@ func FuzzAppendTime(f *testing.F) {
 		{
 			utc := timeVal.UTC()
 			buf1.Write(utc.AppendFormat(buf1.AvailableBuffer(), tFormat))
-			logrus.AppendTime(buf2, utc)
+			log.AppendTime(buf2, utc)
 			if !bytes.Equal(buf1.Bytes(), buf2.Bytes()) {
 				t.Fatalf("UTC: Expected %s, got %s", buf1.String(), buf2.String())
 			}

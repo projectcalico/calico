@@ -22,7 +22,7 @@ func setupTest(t *testing.T) scaffold {
 	RegisterTestingT(t)
 
 	ctx := new(apicontextmocks.Context)
-	ctx.On("Logger").Return(log.NewEntry(), "")
+	ctx.On("Logger").Return(log.NewEntry(log.StandardLogger()), "")
 
 	return scaffold{
 		apiCtx: ctx,

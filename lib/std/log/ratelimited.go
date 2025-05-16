@@ -18,8 +18,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-
-	"github.com/projectcalico/calico/lib/std/log/types"
 )
 
 const (
@@ -84,7 +82,7 @@ func OptBurst(n int) RateLimitedLoggerOpt {
 	}
 }
 
-func OptLogger(l types.Logger) RateLimitedLoggerOpt {
+func OptLogger(l Logger) RateLimitedLoggerOpt {
 	return func(r *RateLimitedLogger) {
 		r.entry = NewEntry(l)
 	}
@@ -146,7 +144,7 @@ func (logger *RateLimitedLogger) logEntry() Entry {
 
 		entry := logger.entry
 		if skipped > 0 || logger.data.remainingBurst == 0 {
-			fields := types.Fields{}
+			fields := Fields{}
 			if skipped > 0 {
 				fields[fieldLogSkipped] = skipped
 			}
@@ -189,7 +187,7 @@ func (logger *RateLimitedLogger) WithField(key string, value interface{}) *RateL
 }
 
 // WithFields adds a map of fields to the RateLimitedLogger.
-func (logger *RateLimitedLogger) WithFields(fields types.Fields) *RateLimitedLogger {
+func (logger *RateLimitedLogger) WithFields(fields Fields) *RateLimitedLogger {
 	return &RateLimitedLogger{
 		data:  logger.data,
 		entry: logger.entry.WithFields(fields),

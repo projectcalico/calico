@@ -34,7 +34,6 @@ import (
 	"github.com/projectcalico/calico/felix/iptables/cmdshim"
 	"github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/lib/std/log"
-	logutilslc "github.com/projectcalico/calico/libcalico-go/lib/logutils"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -271,7 +270,7 @@ type Table struct {
 	lockProbeInterval time.Duration
 
 	logCxt               log.Entry
-	updateRateLimitedLog *logutilslc.RateLimitedLogger
+	updateRateLimitedLog *log.RateLimitedLogger
 
 	gaugeNumChains        prometheus.Gauge
 	gaugeNumRules         prometheus.Gauge
@@ -416,9 +415,9 @@ func NewTable(
 		chainToDataplaneHashes: map[string][]string{},
 		chainToFullRules:       map[string][]string{},
 		logCxt:                 log.WithFields(logFields),
-		updateRateLimitedLog: logutilslc.NewRateLimitedLogger(
-			logutilslc.OptInterval(30*time.Second),
-			logutilslc.OptBurst(100),
+		updateRateLimitedLog: log.NewRateLimitedLogger(
+			log.OptInterval(30*time.Second),
+			log.OptBurst(100),
 		).WithFields(logFields),
 		hashCommentPrefix: hashPrefix,
 		hashCommentRegexp: hashCommentRegexp,
@@ -678,7 +677,7 @@ func (t *Table) loadDataplaneState() {
 	logCxt := t.logCxt.WithField("chainName", "")
 	for chainName, expectedHashes := range t.chainToDataplaneHashes {
 		// Re-using one log.Entry to reduce allocations.
-		logCxt.Data["chainName"] = chainName
+		logCxt.SetField("chainName", chainName)
 
 		if t.dirtyChains.Contains(chainName) || t.dirtyInsertAppend.Contains(chainName) {
 			// Already an update pending for this chain; no point in flagging it as

@@ -123,7 +123,7 @@ type collector struct {
 	ticker                jitter.TickerInterface
 	tickerPolicyEval      jitter.TickerInterface
 	config                *Config
-	dumpLog               *log.Logger
+	dumpLog               log.Logger
 	ds                    chan *proto.DataplaneStats
 	metricReporters       []types.Reporter
 	policyStoreManager    policystore.PolicyStoreManager
@@ -914,7 +914,7 @@ type MessageOnlyFormatter struct{}
 
 func (f *MessageOnlyFormatter) Format(entry log.Entry) ([]byte, error) {
 	b := &bytes.Buffer{}
-	b.WriteString(entry.Message)
+	b.WriteString(entry.Message())
 	b.WriteByte('\n')
 	return b.Bytes(), nil
 }

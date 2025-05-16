@@ -56,8 +56,8 @@ func (v *ValidationFilter) OnUpdates(updates []api.Update) {
 		// WithFields allocates a lot so we re-use a cached log entry for these
 		// logs.
 		logCxt := v.cachedKVLogEntry
-		v.cachedKVLogEntry.Data["key"] = update.Key
-		v.cachedKVLogEntry.Data["value"] = update.Value
+		v.cachedKVLogEntry.SetField("key", update.Key)
+		v.cachedKVLogEntry.SetField("value", update.Value)
 
 		logCxt.Debug("Validating KV pair.")
 		validatorFunc := v1v.Validate

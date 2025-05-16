@@ -33,7 +33,6 @@ import (
 	"github.com/projectcalico/calico/felix/iptables/cmdshim"
 	"github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/lib/std/log"
-	logutilslc "github.com/projectcalico/calico/libcalico-go/lib/logutils"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -229,7 +228,7 @@ type NftablesTable struct {
 	peakNftablesWriteTime time.Duration
 
 	logCxt               log.Entry
-	updateRateLimitedLog *logutilslc.RateLimitedLogger
+	updateRateLimitedLog *log.RateLimitedLogger
 
 	gaugeNumChains prometheus.Gauge
 	gaugeNumRules  prometheus.Gauge
@@ -351,9 +350,9 @@ func NewTable(
 		chainToDataplaneHashes: map[string][]string{},
 		chainToFullRules:       map[string][]*knftables.Rule{},
 		logCxt:                 log.WithFields(logFields),
-		updateRateLimitedLog: logutilslc.NewRateLimitedLogger(
-			logutilslc.OptInterval(30*time.Second),
-			logutilslc.OptBurst(100),
+		updateRateLimitedLog: log.NewRateLimitedLogger(
+			log.OptInterval(30*time.Second),
+			log.OptBurst(100),
 		).WithFields(logFields),
 		hashCommentPrefix: hashPrefix,
 		ourChainsRegexp:   ourChainsRegexp,

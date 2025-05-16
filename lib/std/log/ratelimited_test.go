@@ -21,7 +21,6 @@ import (
 	"time"
 
 	"github.com/projectcalico/calico/lib/std/log"
-	"github.com/projectcalico/calico/lib/std/log/logrus"
 	"github.com/projectcalico/calico/lib/std/testutils/assert"
 )
 
@@ -85,10 +84,10 @@ func TestFirstAndIntervalLogging(t *testing.T) {
 
 			counter := &mockLogFormatter{}
 
-			logrusLogger := logrus.New(
-				logrus.WithOutput(os.Stderr),
-				logrus.WithFormatter(counter),
-				logrus.WithLevel(log.DebugLevel),
+			logrusLogger := log.New(
+				log.WithOutput(os.Stderr),
+				log.WithFormatter(counter),
+				log.WithLevel(log.DebugLevel),
 			)
 
 			logger := log.NewRateLimitedLogger(log.OptInterval(200*time.Millisecond), log.OptLogger(logrusLogger))

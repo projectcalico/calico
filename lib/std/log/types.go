@@ -1,8 +1,11 @@
-package types
+package log
 
 import (
+	"bytes"
 	"context"
+	"fmt"
 	"io"
+	"runtime"
 	"testing"
 	"time"
 )
@@ -28,41 +31,78 @@ const (
 	DebugLevel
 	// TraceLevel level. Designates finer-grained informational events than the Debug.
 	TraceLevel
+
+	TimeFormat    = "2006-01-02 15:04:05.000"
+	timeFormatLen = len(TimeFormat)
 )
 
-var AllLevels = []Level{
-	PanicLevel,
-	FatalLevel,
-	ErrorLevel,
-	WarnLevel,
-	InfoLevel,
-	DebugLevel,
-	TraceLevel,
+var (
+	AllLevels = []Level{
+		PanicLevel,
+		FatalLevel,
+		ErrorLevel,
+		WarnLevel,
+		InfoLevel,
+		DebugLevel,
+		TraceLevel,
+	}
+
+	maxLevel = Level(len(AllLevels))
+)
+
+func (level Level) MarshalText() ([]byte, error) {
+	switch level {
+	case TraceLevel:
+		return []byte("trace"), nil
+	case DebugLevel:
+		return []byte("debug"), nil
+	case InfoLevel:
+		return []byte("info"), nil
+	case WarnLevel:
+		return []byte("warning"), nil
+	case ErrorLevel:
+		return []byte("error"), nil
+	case FatalLevel:
+		return []byte("fatal"), nil
+	case PanicLevel:
+		return []byte("panic"), nil
+	}
+
+	return nil, fmt.Errorf("not a valid logrus level %d", level)
+}
+
+// Convert the Level to a string. E.g. PanicLevel becomes "panic".
+func (level Level) String() string {
+	if b, err := level.MarshalText(); err == nil {
+		return string(b)
+	} else {
+		return "unknown"
+	}
+}
+
+// FilterLevels returns all the logrus.Level values <= maxLevel.
+func FilterLevels(maxLevel Level) []Level {
+	var levels []Level
+	for _, l := range AllLevels {
+		if l <= maxLevel {
+			levels = append(levels, l)
+		}
+	}
+	return levels
+}
+
+type MetricsCounter interface {
+	// Inc increments the counter by 1. Use Add to increment it by arbitrary
+	// non-negative values.
+	Inc()
+	// Add adds the given value to the counter. It panics if the value is <
+	// 0.
+	Add(float64)
 }
 
 type Hook interface {
 	Levels() []Level
 	Fire(Entry) error
-}
-
-type genericHook struct {
-	levels []Level
-	fire   func(Entry) error
-}
-
-func (g *genericHook) Levels() []Level {
-	return g.levels
-}
-
-func (g *genericHook) Fire(entry Entry) error {
-	return g.fire(entry)
-}
-
-func NewHook(levels []Level, fire func(Entry) error) Hook {
-	return &genericHook{
-		levels: levels,
-		fire:   fire,
-	}
 }
 
 // Fields type, used to pass to `WithFields`.
@@ -73,23 +113,7 @@ type Fields map[string]interface{}
 // generating the log message and then checking if the level is enabled
 type LogFunction func() []interface{}
 
-type Formatter interface {
-	Format(Entry) ([]byte, error)
-}
-
 type Logger interface {
-	AddHook(hook Hook) // TODO probably want to remove this, we don't want random hooks (most likely?).
-	IsLevelEnabled(level Level) bool
-	GetLevel() Level
-	SetLevel(level Level)
-	SetFormatter(formatter Formatter)
-	GetOutput() io.Writer
-	SetOutput(output io.Writer)
-	WithField(key string, value interface{}) Entry
-	WithFields(fields Fields) Entry
-	WithError(err error) Entry
-	WithContext(ctx context.Context) Entry
-	WithTime(t time.Time) Entry
 	Logf(level Level, format string, args ...interface{})
 	Tracef(format string, args ...interface{})
 	Debugf(format string, args ...interface{})
@@ -130,6 +154,20 @@ type Logger interface {
 	Errorln(args ...interface{})
 	Panicln(args ...interface{})
 	Fatalln(args ...interface{})
+
+	AddHook(hook Hook) // TODO probably want to remove this, we don't want random hooks (most likely?).
+	GetFormatter() Formatter
+	IsLevelEnabled(level Level) bool
+	GetLevel() Level
+	SetLevel(level Level)
+	SetFormatter(formatter Formatter)
+	GetOutput() io.Writer
+	SetOutput(output io.Writer)
+	WithField(key string, value interface{}) Entry
+	WithFields(fields Fields) Entry
+	WithError(err error) Entry
+	WithContext(ctx context.Context) Entry
+	WithTime(t time.Time) Entry
 	NewEntry() Entry
 	RedirectToTestingT(t *testing.T) func()
 }
@@ -137,7 +175,6 @@ type Logger interface {
 type Entry interface {
 	IsLevelEnabled(level Level) bool
 	SetLevel(level Level)
-	GetTime() time.Time
 	Logger() Logger
 	Bytes() ([]byte, error)
 	Debug(args ...interface{})
@@ -160,6 +197,7 @@ type Entry interface {
 	Println(args ...interface{})
 	String() (string, error)
 	Trace(args ...interface{})
+	Tracef(format string, args ...interface{})
 	Warn(args ...interface{})
 	Warnf(format string, args ...interface{})
 	Warnln(args ...interface{})
@@ -174,4 +212,9 @@ type Entry interface {
 	WithTime(t time.Time) Entry
 	Fields() Fields
 	GetLevel() Level
+
+	caller() *runtime.Frame
+	buffer() *bytes.Buffer
+	message() string
+	GetTime() time.Time
 }

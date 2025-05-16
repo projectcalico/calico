@@ -16,7 +16,6 @@ package nftables
 
 import (
 	"fmt"
-	"log"
 	"math/bits"
 	"regexp"
 	"strings"
