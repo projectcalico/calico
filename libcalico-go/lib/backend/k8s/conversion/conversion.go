@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2025 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,8 +23,6 @@ import (
 	"github.com/google/uuid"
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
-	"github.com/sirupsen/logrus"
-	log "github.com/sirupsen/logrus"
 	kapiv1 "k8s.io/api/core/v1"
 	discovery "k8s.io/api/discovery/v1"
 	networkingv1 "k8s.io/api/networking/v1"
@@ -33,6 +31,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	adminpolicy "sigs.k8s.io/network-policy-api/apis/v1alpha1"
 
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
@@ -370,7 +369,7 @@ func (c converter) K8sAdminNetworkPolicyToCalico(anp *adminpolicy.AdminNetworkPo
 func k8sANPHandleFailedRules(action adminpolicy.AdminNetworkPolicyRuleAction) *apiv3.Rule {
 	if action == adminpolicy.AdminNetworkPolicyRuleActionDeny ||
 		action == adminpolicy.AdminNetworkPolicyRuleActionPass {
-		logrus.Warn("replacing failed rule with a deny-all one.")
+		log.Warn("replacing failed rule with a deny-all one.")
 		return &apiv3.Rule{
 			Action: apiv3.Deny,
 		}
@@ -501,7 +500,7 @@ func (c converter) calculateANPPolicyTypes(ingressRules []apiv3.Rule, egressRule
 
 func k8sBANPHandleFailedRules(action adminpolicy.BaselineAdminNetworkPolicyRuleAction) *apiv3.Rule {
 	if action == adminpolicy.BaselineAdminNetworkPolicyRuleActionDeny {
-		logrus.Warn("replacing failed rule with a deny-all one.")
+		log.Warn("replacing failed rule with a deny-all one.")
 		return &apiv3.Rule{
 			Action: apiv3.Deny,
 		}

@@ -5,9 +5,9 @@ import (
 	"sync"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/watch"
 
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/watchersyncer"
@@ -69,19 +69,19 @@ func (m *WatchManager) OnUpdates(updates []api.Update) {
 		if u.Key.(model.ResourceKey).Kind == v3.KindTier && u.KVPair.Value != nil {
 			// New Tier added, we need to stop all watches in case there is a user that can watch policies in the new Tier
 			// When the watch is re-established it will contain policies in the newly created Tier
-			logrus.WithField("Tier", u.Key.(model.ResourceKey).Name).Debug("New Tier added, removing all WatchRecords")
+			log.WithField("Tier", u.Key.(model.ResourceKey).Name).Debug("New Tier added, removing all WatchRecords")
 			m.watchRecords.Range(func(k, v interface{}) bool {
 				id, ok := k.(string)
 				if !ok {
-					logrus.WithField("id", k).Warn("ID is not a string")
+					log.WithField("id", k).Warn("ID is not a string")
 					return true
 				}
 				record, ok := v.(WatchRecord)
 				if !ok {
-					logrus.WithField("id", id).Errorf("Value is not a WatchRecord")
+					log.WithField("id", id).Errorf("Value is not a WatchRecord")
 					return true
 				}
-				logrus.WithFields(logrus.Fields{"id": record.ID, "Kind": record.Kind}).Debug("Closing watch")
+				log.WithFields(log.Fields{"id": record.ID, "Kind": record.Kind}).Debug("Closing watch")
 				record.Watch.Stop()
 				return true
 			})
@@ -92,7 +92,7 @@ func (m *WatchManager) OnUpdates(updates []api.Update) {
 
 // AddWatch adds a watch to our map and triggers monitoring for watch closure by the consumer or API server
 func (m *WatchManager) AddWatch(record WatchRecord) {
-	logrus.WithFields(logrus.Fields{"id": record.ID, "Kind": record.Kind}).Debug("Adding WatchRecord")
+	log.WithFields(log.Fields{"id": record.ID, "Kind": record.Kind}).Debug("Adding WatchRecord")
 	m.watchRecords.Store(record.ID, record)
 	go m.monitorWatch(record)
 }
@@ -101,6 +101,6 @@ func (m *WatchManager) AddWatch(record WatchRecord) {
 func (m *WatchManager) monitorWatch(record WatchRecord) {
 	<-record.Ctx.Done()
 	// Watch has been closed, we should remove it from our map
-	logrus.WithFields(logrus.Fields{"id": record.ID, "Kind": record.Kind}).Debug("Watch has been stopped, removing WatchRecord")
+	log.WithFields(log.Fields{"id": record.ID, "Kind": record.Kind}).Debug("Watch has been stopped, removing WatchRecord")
 	m.watchRecords.Delete(record.ID)
 }
