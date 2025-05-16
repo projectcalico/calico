@@ -77,11 +77,13 @@ func main() {
 	keyPEM, err := os.ReadFile(caKey)
 	if err != nil {
 		log.Fatal(err)
+		return
 	}
 
 	keyDER, _ := pem.Decode(keyPEM)
 	if keyDER == nil {
 		log.Fatal("No key found")
+		return
 	}
 
 	var parsedKey interface{}
@@ -100,6 +102,7 @@ func main() {
 	certDER, _ := pem.Decode(certPEM)
 	if certDER == nil {
 		log.Fatal("No certificate found")
+		return
 	}
 
 	crt, err := x509.ParseCertificate(certDER.Bytes)
@@ -133,6 +136,7 @@ func main() {
 			block, _ := pem.Decode(cert.Spec.Request)
 			if block == nil {
 				log.Fatal("failed to decode csr")
+				return
 			}
 
 			cr, err := x509.ParseCertificateRequest(block.Bytes)
