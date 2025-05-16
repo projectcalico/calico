@@ -22,12 +22,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/sirupsen/logrus"
 	goproto "google.golang.org/protobuf/proto"
 
 	"github.com/projectcalico/calico/goldmane/pkg/client"
 	"github.com/projectcalico/calico/goldmane/pkg/types"
 	"github.com/projectcalico/calico/goldmane/proto"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 const (
@@ -52,9 +52,9 @@ const (
 )
 
 func Start() {
-	logrus.Info("Starting flow generator")
+	log.Info("Starting flow generator")
 	defer func() {
-		logrus.Info("Stopping flow generator")
+		log.Info("Stopping flow generator")
 	}()
 
 	// Create a flow client.
@@ -62,7 +62,7 @@ func Start() {
 	if s := os.Getenv("SERVER"); s != "" {
 		server = s
 	}
-	logrus.WithField("server", server).Info("Connecting to server")
+	log.WithField("server", server).Info("Connecting to server")
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -80,7 +80,7 @@ func Start() {
 			os.Getenv("CA_FILE"),
 		)
 		if err != nil {
-			logrus.WithError(err).Fatal("Failed to dial server")
+			log.WithError(err).Fatal("Failed to dial server")
 		}
 		<-c.Connect(ctx)
 
@@ -126,7 +126,7 @@ type flowGenerator struct {
 
 func (t *flowGenerator) generateFlogs() {
 	// Split the work of generating flows across multiple workers, each generating a subset of the total number of flows.
-	logrus.WithFields(logrus.Fields{
+	log.WithFields(log.Fields{
 		"numWorkers":     numWorkers,
 		"flowsPerWorker": flowsPerWorker,
 	}).Info("Starting flow generation workers")
@@ -145,14 +145,14 @@ func (t *flowGenerator) flowGenWorker(numPairs int) {
 	for range numPairs {
 		flows, err := t.randomFlows(startTime.Unix(), endTime.Unix())
 		if err != nil {
-			logrus.WithError(err).Fatal("Failed to generate flows")
+			log.WithError(err).Fatal("Failed to generate flows")
 		}
 		flowPairs = append(flowPairs, flows)
 	}
 
-	logrus.Info("Backfilling an hour of flow data")
+	log.Info("Backfilling an hour of flow data")
 	for {
-		logrus.WithFields(logrus.Fields{
+		log.WithFields(log.Fields{
 			"start": startTime,
 			"end":   endTime,
 		}).Info("Filling bucket")
@@ -173,11 +173,11 @@ func (t *flowGenerator) flowGenWorker(numPairs int) {
 			break
 		}
 	}
-	logrus.Info("Backfill complete")
+	log.Info("Backfill complete")
 
 	// At this point, we've backfilled all of Goldmane's in-memory storage with a full hour of flow data.
 	// We can now start generating new flows every 15s.
-	logrus.Info("Starting to generate new flows")
+	log.Info("Starting to generate new flows")
 	for {
 		endTime = time.Now().UTC()
 		startTime = endTime.Add(-15 * time.Second)

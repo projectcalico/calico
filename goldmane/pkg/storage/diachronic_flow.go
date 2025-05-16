@@ -20,10 +20,9 @@ import (
 	"strings"
 	"unique"
 
-	"github.com/sirupsen/logrus"
-
 	"github.com/projectcalico/calico/goldmane/pkg/types"
 	"github.com/projectcalico/calico/goldmane/proto"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // DiachronicFlow is a representation of a Flow over time. Each DiachronicFlow corresponds to a single FlowKey,
@@ -77,8 +76,8 @@ func (d *DiachronicFlow) Rollover(limiter int64) {
 	for i := len(d.Windows) - 1; i >= 0; i-- {
 		w := d.Windows[i]
 		if w.end <= limiter {
-			if logrus.IsLevelEnabled(logrus.DebugLevel) {
-				logrus.WithFields(logrus.Fields{
+			if log.IsLevelEnabled(log.DebugLevel) {
+				log.WithFields(log.Fields{
 					"limiter": limiter,
 					"index":   i,
 					"endTime": w.end,
@@ -90,7 +89,7 @@ func (d *DiachronicFlow) Rollover(limiter int64) {
 			return
 		}
 	}
-	logrus.Debug("Rollover called with no windows to rollover")
+	log.Debug("Rollover called with no windows to rollover")
 }
 
 func (d *DiachronicFlow) Empty() bool {
@@ -98,8 +97,8 @@ func (d *DiachronicFlow) Empty() bool {
 }
 
 func (d *DiachronicFlow) AddFlow(flow *types.Flow, start, end int64) {
-	if logrus.IsLevelEnabled(logrus.DebugLevel) {
-		logrus.WithFields(d.Key.Fields()).WithFields(logrus.Fields{
+	if log.IsLevelEnabled(log.DebugLevel) {
+		log.WithFields(d.Key.Fields()).WithFields(log.Fields{
 			"flow":   flow,
 			"window": Window{start: start, end: end},
 		}).Debug("Adding flow data to diachronic flow")
@@ -131,8 +130,8 @@ func (d *DiachronicFlow) AddFlow(flow *types.Flow, start, end int64) {
 }
 
 func (d *DiachronicFlow) addToWindow(flow *types.Flow, index int) {
-	if logrus.IsLevelEnabled(logrus.DebugLevel) {
-		logrus.WithFields(d.Key.Fields()).WithFields(logrus.Fields{
+	if log.IsLevelEnabled(log.DebugLevel) {
+		log.WithFields(d.Key.Fields()).WithFields(log.Fields{
 			"flow":   flow,
 			"window": d.Windows[index],
 			"index":  index,
@@ -166,8 +165,8 @@ func (d *DiachronicFlow) insertWindow(flow *types.Flow, index int, start, end in
 	}
 	d.Windows = append(d.Windows[:index], append([]Window{w}, d.Windows[index:]...)...)
 
-	if logrus.IsLevelEnabled(logrus.DebugLevel) {
-		logrus.WithFields(d.Key.Fields()).WithFields(logrus.Fields{
+	if log.IsLevelEnabled(log.DebugLevel) {
+		log.WithFields(d.Key.Fields()).WithFields(log.Fields{
 			"flow":   flow,
 			"window": w,
 			"index":  index,
@@ -191,8 +190,8 @@ func (d *DiachronicFlow) appendWindow(flow *types.Flow, start, end int64) {
 	}
 	d.Windows = append(d.Windows, w)
 
-	if logrus.IsLevelEnabled(logrus.DebugLevel) {
-		logrus.WithFields(d.Key.Fields()).WithFields(logrus.Fields{
+	if log.IsLevelEnabled(log.DebugLevel) {
+		log.WithFields(d.Key.Fields()).WithFields(log.Fields{
 			"flow":   flow,
 			"window": w,
 		}).Debug("Adding flow to new window")
@@ -214,8 +213,8 @@ func (d *DiachronicFlow) GetWindows(startGte, startLt int64) []*Window {
 	for _, w := range d.Windows {
 		if (startGte == 0 || w.start >= startGte) &&
 			(startLt == 0 || w.end <= startLt) {
-			if logrus.IsLevelEnabled(logrus.DebugLevel) {
-				logrus.WithFields(d.Key.Fields()).WithFields(logrus.Fields{
+			if log.IsLevelEnabled(log.DebugLevel) {
+				log.WithFields(d.Key.Fields()).WithFields(log.Fields{
 					"window":  w,
 					"startGt": startGte,
 					"startLt": startLt,
@@ -240,8 +239,8 @@ func (d *DiachronicFlow) AggregateWindows(windows []*Window) *types.Flow {
 	// Iterate each Window and aggregate the statistic contributions across all windows that fall within the
 	// specified time range.
 	for _, w := range windows {
-		if logrus.IsLevelEnabled(logrus.DebugLevel) {
-			logrus.WithFields(d.Key.Fields()).WithFields(logrus.Fields{
+		if log.IsLevelEnabled(log.DebugLevel) {
+			log.WithFields(d.Key.Fields()).WithFields(log.Fields{
 				"window": w,
 			}).Debug("Aggregating flow data from diachronic flow window")
 		}
@@ -298,8 +297,8 @@ func (d *DiachronicFlow) Within(startGte, startLt int64) bool {
 		}
 	}
 
-	if logrus.IsLevelEnabled(logrus.DebugLevel) {
-		logrus.WithFields(d.Key.Fields()).WithFields(logrus.Fields{
+	if log.IsLevelEnabled(log.DebugLevel) {
+		log.WithFields(d.Key.Fields()).WithFields(log.Fields{
 			"startGte": startGte,
 			"startLt":  startLt,
 		}).Debug("DiachronicFlow does not have data for time range")

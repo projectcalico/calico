@@ -16,8 +16,7 @@ package utils
 import (
 	"os"
 
-	"github.com/sirupsen/logrus"
-
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 )
 
@@ -27,15 +26,15 @@ import (
 func ConfigureLogging(logLevel string) {
 	// Install a hook that adds file/line number information.
 	logutils.ConfigureFormatter("goldmane")
-	logrus.SetOutput(os.Stdout)
+	log.SetOutput(os.Stdout)
 
 	// Override with desired log level
-	level, err := logrus.ParseLevel(logLevel)
+	level, err := log.ParseLevel(logLevel)
 	if err != nil {
-		logrus.Error("Invalid logging level passed in. Will use default level set to WARN")
+		log.Error("Invalid logging level passed in. Will use default level set to WARN")
 		// Setting default to WARN
-		level = logrus.WarnLevel
+		level = log.WarnLevel
 	}
 
-	logrus.SetLevel(level)
+	log.SetLevel(level)
 }

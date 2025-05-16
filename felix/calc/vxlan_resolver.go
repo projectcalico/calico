@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2022 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019-2025 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,10 +18,9 @@ import (
 	"crypto/sha1"
 	gonet "net"
 
-	"github.com/sirupsen/logrus"
-
 	"github.com/projectcalico/calico/felix/dispatcher"
 	"github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/lib/std/log"
 	apiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
@@ -99,7 +98,7 @@ func (c *VXLANResolver) OnResourceUpdate(update api.Update) (_ bool) {
 	}
 
 	nodeName := update.Key.(model.ResourceKey).Name
-	logCtx := logrus.WithField("node", nodeName).WithField("update", update)
+	logCtx := log.WithField("node", nodeName).WithField("update", update)
 	logCtx.Debug("OnResourceUpdate triggered")
 	if update.Value != nil && update.Value.(*apiv3.Node).Spec.BGP != nil {
 		node := update.Value.(*apiv3.Node)
@@ -133,7 +132,7 @@ func (c *VXLANResolver) OnResourceUpdate(update api.Update) (_ bool) {
 // with the node.
 func (c *VXLANResolver) OnHostIPUpdate(update api.Update) (_ bool) {
 	nodeName := update.Key.(model.HostIPKey).Hostname
-	logrus.WithField("node", nodeName).Debug("OnHostIPUpdate triggered")
+	log.WithField("node", nodeName).Debug("OnHostIPUpdate triggered")
 
 	if update.Value != nil {
 		c.onNodeIPUpdate(nodeName, update.Value.(*cnet.IP).String(), "")
@@ -145,14 +144,14 @@ func (c *VXLANResolver) OnHostIPUpdate(update api.Update) (_ bool) {
 }
 
 func (c *VXLANResolver) onNodeIPUpdate(nodeName string, newIPv4 string, newIPv6 string) {
-	logCtx := logrus.WithField("node", nodeName)
+	logCtx := log.WithField("node", nodeName)
 	// Host IP updated or added. If it was added, we should check to see if we're ready
 	// to send a VTEP and associated routes. If we already knew about this one, we need to
 	// see if it has changed. If it has, we should reprogram the VTEP.
 	currIPv4 := c.nodeNameToIPv4Addr[nodeName]
 	currIPv6 := c.nodeNameToIPv6Addr[nodeName]
 
-	logCtx = logCtx.WithFields(logrus.Fields{
+	logCtx = logCtx.WithFields(log.Fields{
 		"newIPv4":  newIPv4,
 		"currIPv4": currIPv4,
 		"newIPv6":  newIPv6,
@@ -186,13 +185,13 @@ func (c *VXLANResolver) OnHostConfigUpdate(update api.Update) (_ bool) {
 	switch update.Key.(model.HostConfigKey).Name {
 	case "IPv4VXLANTunnelAddr":
 		nodeName := update.Key.(model.HostConfigKey).Hostname
-		logCtx := logrus.WithField("node", nodeName).WithField("value", update.Value)
+		logCtx := log.WithField("node", nodeName).WithField("value", update.Value)
 		logCtx.Debug("IPv4VXLANTunnelAddr update")
 		if update.Value != nil {
 			// Update for a VXLAN tunnel address.
 			newIPv4 := update.Value.(string)
 			currIPv4 := c.nodeNameToVXLANTunnelAddr[nodeName]
-			logCtx = logCtx.WithFields(logrus.Fields{"newIPv4": newIPv4, "currIPv4": currIPv4})
+			logCtx = logCtx.WithFields(log.Fields{"newIPv4": newIPv4, "currIPv4": currIPv4})
 			logCtx.Debug("IPv4VXLANTunnelAddr update")
 			// Try sending a VTEP update.
 			c.nodeNameToVXLANTunnelAddr[nodeName] = newIPv4
@@ -204,13 +203,13 @@ func (c *VXLANResolver) OnHostConfigUpdate(update api.Update) (_ bool) {
 		c.sendVTEPUpdateOrRemove(nodeName)
 	case "VXLANTunnelMACAddr":
 		nodeName := update.Key.(model.HostConfigKey).Hostname
-		logCtx := logrus.WithField("node", nodeName).WithField("value", update.Value)
+		logCtx := log.WithField("node", nodeName).WithField("value", update.Value)
 		logCtx.Debug("VXLANTunnelMACAddr update")
 		if update.Value != nil {
 			// Update for a VXLAN tunnel MAC address.
 			newMAC := update.Value.(string)
 			currMAC := c.vtepMACForHost(nodeName, 4)
-			logCtx = logCtx.WithFields(logrus.Fields{"newMAC": newMAC, "currMAC": currMAC})
+			logCtx = logCtx.WithFields(log.Fields{"newMAC": newMAC, "currMAC": currMAC})
 			logCtx.Debug("VXLANTunnelMACAddr update")
 			c.nodeNameToVXLANMac[nodeName] = newMAC
 		} else {
@@ -220,13 +219,13 @@ func (c *VXLANResolver) OnHostConfigUpdate(update api.Update) (_ bool) {
 		c.sendVTEPUpdateOrRemove(nodeName)
 	case "IPv6VXLANTunnelAddr":
 		nodeName := update.Key.(model.HostConfigKey).Hostname
-		logCtx := logrus.WithField("node", nodeName).WithField("value", update.Value)
+		logCtx := log.WithField("node", nodeName).WithField("value", update.Value)
 		logCtx.Debug("IPv6VXLANTunnelAddr update")
 		if update.Value != nil {
 			// Update for a VXLAN tunnel address.
 			newIPv6 := update.Value.(string)
 			currIPv6 := c.nodeNameToVXLANTunnelAddrV6[nodeName]
-			logCtx = logCtx.WithFields(logrus.Fields{"newIPv6": newIPv6, "currIPv6": currIPv6})
+			logCtx = logCtx.WithFields(log.Fields{"newIPv6": newIPv6, "currIPv6": currIPv6})
 			logCtx.Debug("IPv6VXLANTunnelAddr update")
 			// Try sending a VTEP update.
 			c.nodeNameToVXLANTunnelAddrV6[nodeName] = newIPv6
@@ -238,13 +237,13 @@ func (c *VXLANResolver) OnHostConfigUpdate(update api.Update) (_ bool) {
 		c.sendVTEPUpdateOrRemove(nodeName)
 	case "VXLANTunnelMACAddrV6":
 		nodeName := update.Key.(model.HostConfigKey).Hostname
-		logCtx := logrus.WithField("node", nodeName).WithField("value", update.Value)
+		logCtx := log.WithField("node", nodeName).WithField("value", update.Value)
 		logCtx.Debug("VXLANTunnelMACAddrV6 update")
 		if update.Value != nil {
 			// Update for a VXLAN tunnel MAC address.
 			newMACV6 := update.Value.(string)
 			currMACV6 := c.vtepMACForHost(nodeName, 6)
-			logCtx = logCtx.WithFields(logrus.Fields{"newMACV6": newMACV6, "currMAC": currMACV6})
+			logCtx = logCtx.WithFields(log.Fields{"newMACV6": newMACV6, "currMAC": currMACV6})
 			logCtx.Debug("VXLANTunnelMACAddrV6 update")
 			c.nodeNameToVXLANMacV6[nodeName] = newMACV6
 		} else {
@@ -259,7 +258,7 @@ func (c *VXLANResolver) OnHostConfigUpdate(update api.Update) (_ bool) {
 // hasVTEPInfo returns whether there is IPv4 and/or IPv6 VTEP information fully available in vxlanResolver's
 // internal state
 func (c *VXLANResolver) hasVTEPInfo(node string) (bool, bool) {
-	logCtx := logrus.WithField("node", node)
+	logCtx := log.WithField("node", node)
 	hasV4Info, hasV6Info := true, true
 
 	if _, ok := c.nodeNameToVXLANTunnelAddr[node]; !ok {
@@ -289,7 +288,7 @@ func (c *VXLANResolver) hasVTEPInfo(node string) (bool, bool) {
 // (preceded by a VTEP remove if a previous update had already been sent). If neither IPv4 nor IPv6 information is available
 // and a VTEP update was sent previously, a VTEP remove is sent. Otherwise, nothing is sent.
 func (c *VXLANResolver) sendVTEPUpdateOrRemove(node string) {
-	logCtx := logrus.WithField("node", node)
+	logCtx := log.WithField("node", node)
 
 	hasV4Info, hasV6Info := c.hasVTEPInfo(node)
 	oldVTEP, hasSentVTEP := c.nodeNameToSentVTEP[node]
@@ -361,7 +360,7 @@ func (c *VXLANResolver) vtepEqual(vtep1, vtep2 *proto.VXLANTunnelEndpointUpdate)
 // vtepMACForHost calculates a deterministic MAC address based on the provided host.
 // The returned address matches the address assigned to the VXLAN device on that node.
 func (c *VXLANResolver) vtepMACForHost(nodename string, ipVersion int) string {
-	logCtx := logrus.WithFields(logrus.Fields{"node": nodename, "ipVersion": ipVersion})
+	logCtx := log.WithFields(log.Fields{"node": nodename, "ipVersion": ipVersion})
 	var mac string
 
 	switch ipVersion {
