@@ -1,4 +1,4 @@
-// Copyright (c) 2022 Tigera, Inc. All rights reserved.
+// Copyright (c) 2022-2025 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,10 +19,10 @@ import (
 	"net"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/config"
 	"github.com/projectcalico/calico/felix/dispatcher"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/encap"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
@@ -53,11 +53,11 @@ func (r *EncapsulationResolver) RegisterWith(dispatcher *dispatcher.Dispatcher) 
 }
 
 func (r *EncapsulationResolver) OnPoolUpdate(update api.Update) (filterOut bool) {
-	logrus.WithField("update", update).Debug("EncapsulationResolver: OnPoolUpdate")
+	log.WithField("update", update).Debug("EncapsulationResolver: OnPoolUpdate")
 
 	err := r.encapCalc.handlePool(update.KVPair)
 	if err != nil {
-		logrus.Infof("error handling update %+v: %v. Ignoring.", update, err)
+		log.Infof("error handling update %+v: %v. Ignoring.", update, err)
 		return
 	}
 
@@ -67,7 +67,7 @@ func (r *EncapsulationResolver) OnPoolUpdate(update api.Update) (filterOut bool)
 }
 
 func (r *EncapsulationResolver) OnStatusUpdate(status api.SyncStatus) {
-	logrus.WithField("status", status).Debug("EncapsulationResolver: SyncStatus update")
+	log.WithField("status", status).Debug("EncapsulationResolver: SyncStatus update")
 
 	if !r.inSync && status == api.InSync {
 		r.inSync = true
@@ -78,7 +78,7 @@ func (r *EncapsulationResolver) OnStatusUpdate(status api.SyncStatus) {
 func (r *EncapsulationResolver) triggerCalculation() {
 	if !r.inSync {
 		// Do nothing if EncapsulationResolver hasn't sync'ed all updates yet
-		logrus.Debug("EncapsulationResolver: skip calculation because inSync is false")
+		log.Debug("EncapsulationResolver: skip calculation because inSync is false")
 		return
 	}
 
@@ -91,7 +91,7 @@ func (r *EncapsulationResolver) triggerCalculation() {
 	if r.config.Encapsulation.IPIPEnabled != newEncap.IPIPEnabled ||
 		r.config.Encapsulation.VXLANEnabled != newEncap.VXLANEnabled ||
 		r.config.Encapsulation.VXLANEnabledV6 != newEncap.VXLANEnabledV6 {
-		logrus.WithFields(logrus.Fields{
+		log.WithFields(log.Fields{
 			"oldIPIPEnabled":    r.config.Encapsulation.IPIPEnabled,
 			"newIPIPEnabled":    newEncap.IPIPEnabled,
 			"oldVXLANEnabled":   r.config.Encapsulation.VXLANEnabled,
@@ -118,7 +118,7 @@ type EncapsulationCalculator struct {
 
 func NewEncapsulationCalculator(config *config.Config, ippoolKVPList *model.KVPairList) *EncapsulationCalculator {
 	if config == nil {
-		logrus.Panic("Starting EncapsulationResolver with config==nil.")
+		log.Panic("Starting EncapsulationResolver with config==nil.")
 	}
 
 	encapCalc := &EncapsulationCalculator{
@@ -139,7 +139,7 @@ func (c *EncapsulationCalculator) initPools(ippoolKVPList *model.KVPairList) {
 	for _, kvp := range ippoolKVPList.KVPairs {
 		err := c.handlePool(*kvp)
 		if err != nil {
-			logrus.Infof("error handling update %+v: %v. Ignoring.", *kvp, err)
+			log.Infof("error handling update %+v: %v. Ignoring.", *kvp, err)
 		}
 	}
 }
@@ -228,7 +228,7 @@ func (c *EncapsulationCalculator) updatePool(cidr string, ipipEnabled, vxlanEnab
 	if vxlanEnabled {
 		parsed, _, err := net.ParseCIDR(cidr)
 		if err != nil {
-			logrus.WithError(err).Fatal("Invalid CIDR")
+			log.WithError(err).Fatal("Invalid CIDR")
 		}
 		if parsed.To4() != nil {
 			c.vxlanPools[cidr] = struct{}{}

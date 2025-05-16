@@ -25,12 +25,12 @@ import (
 	"time"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	log "github.com/sirupsen/logrus"
 	"go.etcd.io/etcd/client/pkg/v3/srv"
 	"go.etcd.io/etcd/client/pkg/v3/transport"
 	clientv3 "go.etcd.io/etcd/client/v3"
 
 	calicotls "github.com/projectcalico/calico/crypto/pkg/tls"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
@@ -481,7 +481,7 @@ func (c *etcdV3Client) List(ctx context.Context, l model.ListInterface, revision
 	}, nil
 }
 
-func calculateListKeyAndOptions(logCxt *log.Entry, l model.ListInterface) (string, []clientv3.OpOption) {
+func calculateListKeyAndOptions(logCxt log.Entry, l model.ListInterface) (string, []clientv3.OpOption) {
 	// -  If the final name segment of the name is itself a prefix, then just perform a prefix Get
 	//    using the constructed key.
 	// -  If the etcdKey is actually fully qualified, then perform an exact Get using the constructed
