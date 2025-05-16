@@ -8,8 +8,7 @@ Log entries will be logged in the following format:
 package log
 
 import (
-	log "github.com/sirupsen/logrus"
-
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 )
 

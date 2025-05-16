@@ -22,9 +22,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/sirupsen/logrus"
-
 	"github.com/projectcalico/calico/lib/httpmachinery/pkg/apiutil"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // HTTPServer is the interface that most, if not all, our http servers need to implement. It allows for starting tls /
@@ -115,7 +114,7 @@ func (s *httpServer) WaitForShutdown() error {
 	var err error
 	select {
 	case <-s.shutdownCtx.Done():
-		logrus.Info("Received shutdown signal, shutting server down.")
+		log.Info("Received shutdown signal, shutting server down.")
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		err = s.srv.Shutdown(ctx)

@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,7 +19,6 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	k8sp "k8s.io/kubernetes/pkg/proxy"
@@ -28,12 +27,13 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/proxy"
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/logutils"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 func init() {
 	logutils.ConfigureEarlyLogging()
-	logrus.SetOutput(GinkgoWriter)
-	logrus.SetLevel(logrus.DebugLevel)
+	log.SetOutput(GinkgoWriter)
+	log.SetLevel(log.DebugLevel)
 }
 
 func testfn(makeIPs func(ips []net.IP) proxy.K8sServicePortOption) {
