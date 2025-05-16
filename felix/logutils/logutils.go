@@ -20,9 +20,8 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/projectcalico/calico/felix/config"
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
-
 	"github.com/projectcalico/calico/lib/std/log"
+	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 )
 
 var (

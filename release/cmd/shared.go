@@ -52,22 +52,20 @@ func configureLogging(filename string) {
 		log.SetLevel(log.DebugLevel)
 	}
 
-	log.SetFormatter(&log.TextFormatter{
-		DisableLevelTruncation: true,
-		CallerPrettyfier:       logPrettifier,
-	})
-
-	rotateFileHook, err := log.NewRotateFileHook(
-		filename,
-		100,
-		30,
-		10,
-		log.DebugLevel,
-		&log.TextFormatter{
-			DisableColors:          true,
+	log.SetFormatter(log.NewTextFormatter(
+		log.TextFormatterConfig{
 			DisableLevelTruncation: true,
 			CallerPrettyfier:       logPrettifier,
-		},
+		}))
+
+	rotateFileHook, err := log.NewRotateFileHook(
+		filename, 100, 30, 10, log.DebugLevel,
+		log.NewTextFormatter(
+			log.TextFormatterConfig{
+				DisableColors:          true,
+				DisableLevelTruncation: true,
+				CallerPrettyfier:       logPrettifier,
+			}),
 	)
 	if err != nil {
 		panic(err)
