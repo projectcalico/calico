@@ -19,6 +19,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/felix/ipsets"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -186,8 +187,7 @@ func (m *IPSets) GetDesiredMembers(setID string) (set.Set[string], error) {
 	panic("Not implemented")
 }
 
-func (m *IPSets) ApplyUpdates(ipsetFilter func(ipSetName string) bool) (programmedIPs set.Set[string]) {
-	return nil
+func (m *IPSets) ApplyUpdates(_ ipsets.UpdateListener) {
 }
 
 func (m *IPSets) ApplyDeletions() bool {
