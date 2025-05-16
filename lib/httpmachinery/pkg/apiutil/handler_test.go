@@ -55,9 +55,13 @@ func TestJSONListResponse(t *testing.T) {
 
 	hdlr.ServeHTTP(apiutil.NewNOOPRouterConfig(), w, r)
 
+	type ListMetadata struct {
+		TotalPages int `json:"totalPages"`
+	}
+
 	type ListResponse struct {
-		Items []Response `json:"items"`
-		Total int        `json:"total"`
+		Items []Response   `json:"items"`
+		Total ListMetadata `json:"total"`
 	}
 
 	Expect(testutil.MustUnmarshal[ListResponse](t, w.Body.Bytes())).To(Equal(&ListResponse{
@@ -65,7 +69,9 @@ func TestJSONListResponse(t *testing.T) {
 			{RespField: "foo"},
 			{RespField: "bar"},
 		},
-		Total: 20,
+		Total: ListMetadata{
+			TotalPages: 20,
+		},
 	}))
 }
 
