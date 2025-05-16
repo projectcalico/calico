@@ -3,6 +3,9 @@ package log
 import (
 	"regexp"
 	"sync"
+
+	"github.com/sirupsen/logrus"
+	"github.com/snowzach/rotatefilehook"
 )
 
 type genericHook struct {
@@ -146,4 +149,55 @@ func (h *BackgroundHook) Start() {
 	for _, d := range h.destinations {
 		go d.LoopWritingLogs()
 	}
+}
+
+type hookAdaptor struct {
+	Hook
+}
+
+func (adaptor *hookAdaptor) Levels() []logrus.Level {
+	var levels []logrus.Level
+	for _, level := range adaptor.Hook.Levels() {
+		levels = append(levels, logrus.Level(level))
+	}
+	return levels
+}
+
+func (adaptor *hookAdaptor) Fire(e *logrus.Entry) error {
+	return adaptor.Hook.Fire(&entry{e})
+}
+
+type logrusHookWrapper struct {
+	logrus.Hook
+}
+
+func (l *logrusHookWrapper) Levels() []Level {
+	var r []Level
+	for _, level := range l.Hook.Levels() {
+		r = append(r, Level(level))
+	}
+	return r
+}
+
+func (l *logrusHookWrapper) Fire(e Entry) error {
+	return l.Hook.Fire(e.(*entry).entry)
+}
+
+func NewRotateFileHook(
+	filename string,
+	maxSize int,
+	maxAge int,
+	maxBackups int,
+	level Level,
+	formatter Formatter,
+) (Hook, error) {
+	hook, err := rotatefilehook.NewRotateFileHook(rotatefilehook.RotateFileConfig{
+		Filename:   filename,
+		MaxSize:    maxSize,
+		MaxAge:     maxAge,
+		MaxBackups: maxBackups,
+		Level:      logrus.Level(level),
+		Formatter:  &formatterAdaptor{formatter},
+	})
+	return &logrusHookWrapper{hook}, err
 }
