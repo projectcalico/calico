@@ -92,8 +92,8 @@ int bpf_ctlb_detach_legacy(int target_fd, int prog_type) {
 		goto out;
 	}
 
-	if (bpf_prog_query(target_fd, attach_type, 0, &attach_flags, &prog_id, &prog_cnt)) {
-		err = ENOENT;
+	err = bpf_prog_query(target_fd, attach_type, 0, &attach_flags, &prog_id, &prog_cnt);
+	if (err) {
 		goto out;
 	}
 	int prog_fd = bpf_prog_get_fd_by_id(prog_id);
