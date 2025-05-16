@@ -37,6 +37,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/projectcalico/calico/apiserver/pkg/apiserver"
+	calicotls "github.com/projectcalico/calico/crypto/pkg/tls"
 )
 
 // CalicoServerOptions contains the aggregation of configuration structs for
@@ -122,17 +123,12 @@ func (o *CalicoServerOptions) Config() (*apiserver.Config, error) {
 	// it will never go ready, due to a failed fetch of the v1 resources.
 	o.RecommendedOptions.Features.EnablePriorityAndFairness = false
 
-	// Explicitly setting cipher suites in order to remove deprecated ones
-	// The list is taken from https://github.com/golang/go/blob/dev.boringcrypto.go1.13/src/crypto/tls/boring.go#L54
-	cipherSuites := []uint16{
-		tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
-		tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
-		tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
-		tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
-		tls.TLS_RSA_WITH_AES_128_GCM_SHA256,
-		tls.TLS_RSA_WITH_AES_256_GCM_SHA384,
+	tlsCipherSuites, err := calicotls.ParseTLSCiphers(os.Getenv("TLS_CIPHER_SUITES"))
+	if err != nil {
+		return nil, err
 	}
-	serverConfig.SecureServing.CipherSuites = cipherSuites
+
+	serverConfig.SecureServing.CipherSuites = tlsCipherSuites
 	serverConfig.SecureServing.MinTLSVersion = tls.VersionTLS12
 
 	if o.PrintSwagger {
