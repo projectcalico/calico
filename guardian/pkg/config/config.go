@@ -85,6 +85,8 @@ type Config struct {
 	Listen     bool   `default:"true"`
 	ListenHost string `default:"" split_words:"true"`
 	ListenPort string `default:"8080" split_words:"true"`
+
+	TLSCipherSuites string `default:"" split_words:"true"`
 }
 
 func newConfig() (*Config, error) {
@@ -123,7 +125,11 @@ func (cfg *Config) TLSConfig() (*tls.Config, *tls.Certificate, error) {
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create X509 key pair: %w", err)
 	}
-	tlsConfig := calicotls.NewTLSConfig()
+
+	tlsConfig, err := calicotls.NewTLSConfigFromCipherString(cfg.TLSCipherSuites)
+	if err != nil {
+		return nil, nil, err
+	}
 	tlsConfig.Certificates = []tls.Certificate{cert}
 
 	rootCA := x509.NewCertPool()

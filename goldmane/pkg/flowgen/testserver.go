@@ -78,6 +78,7 @@ func Start() {
 			os.Getenv("CLIENT_CERT"),
 			os.Getenv("CLIENT_KEY"),
 			os.Getenv("CA_FILE"),
+			os.Getenv("TLS_CIPHER_SUITES"),
 		)
 		if err != nil {
 			logrus.WithError(err).Fatal("Failed to dial server")

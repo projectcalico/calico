@@ -93,6 +93,9 @@ type Config struct {
 
 	// PrometheusPort is the port to listen on for serving Prometheus metrics.
 	PrometheusPort int `json:"prometheus_port" envconfig:"PROMETHEUS_PORT" default:"0"`
+
+	// TLSCipherSuites is a comma-separated list specifying the TLS cipher suite names to be used for securing communication.
+	TLSCipherSuites string `json:"tls_cipher_suites" envconfig:"TLS_CIPHER_SUITES"`
 }
 
 func ConfigFromEnv() Config {
@@ -110,7 +113,7 @@ func ConfigFromEnv() Config {
 func newGRPCServer(cfg *Config) (*grpc.Server, error) {
 	opts := []grpc.ServerOption{}
 	if cfg.ServerCertPath != "" && cfg.ServerKeyPath != "" {
-		tlsCfg, err := calicotls.NewMutualTLSConfig(cfg.ServerCertPath, cfg.ServerKeyPath, cfg.CACertPath)
+		tlsCfg, err := calicotls.NewMutualTLSConfig(cfg.ServerCertPath, cfg.ServerKeyPath, cfg.CACertPath, cfg.TLSCipherSuites)
 		if err != nil {
 			return nil, err
 		}
@@ -168,6 +171,7 @@ func Run(ctx context.Context, cfg Config) {
 			emitter.WithClientCertPath(cfg.ClientCertPath),
 			emitter.WithServerName(cfg.ServerName),
 			emitter.WithHealthAggregator(healthAggregator),
+			emitter.WithTLSCipherSuites(cfg.TLSCipherSuites),
 		)
 		go logEmitter.Run(ctx)
 

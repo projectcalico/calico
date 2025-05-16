@@ -27,8 +27,8 @@ import (
 
 // ClientCredentials returns the transport credentials for a Goldmane gRPC client, configured to
 // authenticate with mTLS using the provided client certificate, key, and CA certificate.
-func ClientCredentials(cert, key, ca string) (credentials.TransportCredentials, error) {
-	tlsCfg, err := tlsConfig(cert, key, ca)
+func ClientCredentials(cert, key, ca, cipherSuites string) (credentials.TransportCredentials, error) {
+	tlsCfg, err := tlsConfig(cert, key, ca, cipherSuites)
 	if err != nil {
 		return nil, err
 	}
@@ -36,7 +36,7 @@ func ClientCredentials(cert, key, ca string) (credentials.TransportCredentials, 
 	return creds, nil
 }
 
-func tlsConfig(cert, key, caFile string) (*tls.Config, error) {
+func tlsConfig(cert, key, caFile, cipherSuites string) (*tls.Config, error) {
 	// Load client cert.
 	logrus.WithFields(logrus.Fields{
 		"cert": cert,
@@ -57,7 +57,10 @@ func tlsConfig(cert, key, caFile string) (*tls.Config, error) {
 	caCertPool.AppendCertsFromPEM(caCert)
 
 	// Create TLS config.
-	cfg := calicotls.NewTLSConfig()
+	cfg, err := calicotls.NewTLSConfigFromCipherString(cipherSuites)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create TLS config: %w", err)
+	}
 	cfg.Certificates = []tls.Certificate{certificate}
 	cfg.RootCAs = caCertPool
 	return cfg, nil

@@ -413,7 +413,11 @@ func newEtcdV3Client() (*clientv3.Client, error) {
 		return nil, err
 	}
 
-	baseTLSConfig := tls.NewTLSConfig()
+	baseTLSConfig, err := tls.NewTLSConfigFromCipherString(config.Spec.EtcdTLSCipherSuites)
+	if err != nil {
+		return nil, err
+	}
+
 	tlsClient.MaxVersion = baseTLSConfig.MaxVersion
 	tlsClient.MinVersion = baseTLSConfig.MinVersion
 	tlsClient.CipherSuites = baseTLSConfig.CipherSuites

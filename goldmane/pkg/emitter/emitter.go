@@ -54,6 +54,9 @@ type Emitter struct {
 	clientCert string
 	serverName string
 
+	// Comma-separated TLS cipher suite names.
+	ciphers string
+
 	// For health checking.
 	health *health.HealthAggregator
 
@@ -84,7 +87,7 @@ func NewEmitter(opts ...Option) *Emitter {
 	}
 
 	var err error
-	e.client, err = newEmitterClient(e.url, e.caCert, e.clientKey, e.clientCert, e.serverName)
+	e.client, err = newEmitterClient(e.url, e.caCert, e.clientKey, e.clientCert, e.serverName, e.ciphers)
 	if err != nil {
 		logrus.Fatalf("Error creating emitter client: %v", err)
 	}
