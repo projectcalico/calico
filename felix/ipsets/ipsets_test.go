@@ -16,7 +16,6 @@ package ipsets_test
 
 import (
 	"fmt"
-	"slices"
 	"time"
 
 	. "github.com/onsi/ginkgo"
@@ -249,7 +248,7 @@ var _ = Describe("IP sets dataplane", func() {
 
 	reschedRequested := false
 	apply := func() {
-		ipsets.ApplyUpdates(nil)
+		ipsets.ApplyUpdates()
 		reschedRequested = ipsets.ApplyDeletions()
 	}
 
@@ -282,7 +281,7 @@ var _ = Describe("IP sets dataplane", func() {
 		// Apply updates.
 		ipsets.ApplyDeletions() // No-op
 		dataplane.ExpectMembers(map[string][]string{})
-		ipsets.ApplyUpdates(nil)
+		ipsets.ApplyUpdates()
 		dataplane.ExpectMembers(map[string][]string{
 			v4MainIPSetName: {"10.0.0.2", "10.0.0.3"},
 		})
@@ -742,12 +741,9 @@ var _ = Describe("IP sets dataplane", func() {
 				})
 			})
 
-			Describe("after another process interferes with our IP sets", func() {
+			Describe("after another process flushes an IP set", func() {
 				BeforeEach(func() {
-					// Flush one IP set.
 					dataplane.IPSetMembers[v4MainIPSetName] = set.New[string]()
-					// Remove one IP from the other IP set.
-					dataplane.IPSetMembers[v4MainIPSetName2] = set.From("10.0.0.1")
 				})
 
 				It("should be detected and fixed by a resync", func() {
@@ -755,43 +751,6 @@ var _ = Describe("IP sets dataplane", func() {
 					dataplane.ExpectMembers(map[string][]string{
 						v4MainIPSetName:  {"10.0.0.1", "10.0.0.2"},
 						v4MainIPSetName2: {"10.0.0.1", "10.0.0.3"},
-					})
-				})
-
-				It("should only fix one IP set if problem is discovered as part of an update", func() {
-					// Simulate a failure to write one IP set.
-					dataplane.RestoreOpFailures = []string{"write-ip"}
-					// Trigger an update to only one IP set.
-					ipsets.AddMembers(ipSetID2, []string{"10.0.0.4"})
-
-					apply()
-					// The _other_ IP set shouldn't get fixed due to the
-					// targeted resync.
-					dataplane.ExpectMembers(map[string][]string{
-						v4MainIPSetName:  {},
-						v4MainIPSetName2: {"10.0.0.1", "10.0.0.3", "10.0.0.4"},
-					})
-
-					// But the next timer-triggered resync should catch it.
-					resyncAndApply()
-					dataplane.ExpectMembers(map[string][]string{
-						v4MainIPSetName:  {"10.0.0.1", "10.0.0.2"},
-						v4MainIPSetName2: {"10.0.0.1", "10.0.0.3", "10.0.0.4"},
-					})
-				})
-
-				It("should be detected after many transient errors", func() {
-					// Simulate lots of transient failures in a row, followed by success.
-					dataplane.RestoreOpFailures = slices.Repeat([]string{"write-ip"}, 6)
-					// Trigger an update to only one IP set.
-					ipsets.AddMembers(ipSetID2, []string{"10.0.0.4"})
-					apply()
-
-					// This time, the dataplane should escalate to a full resync,
-					// and both IP sets should get fixed.
-					dataplane.ExpectMembers(map[string][]string{
-						v4MainIPSetName:  {"10.0.0.1", "10.0.0.2"},
-						v4MainIPSetName2: {"10.0.0.1", "10.0.0.3", "10.0.0.4"},
 					})
 				})
 			})
@@ -843,7 +802,7 @@ var _ = Describe("IP sets dataplane", func() {
 			})
 			It("should panic eventually", func() {
 				ipsets.AddMembers(ipSetID, []string{"10.0.0.5"})
-				Expect(func() { ipsets.ApplyUpdates(nil) }).To(Panic())
+				Expect(func() { ipsets.ApplyUpdates() }).To(Panic())
 				Expect(dataplane.CumulativeSleep).To(BeNumerically(">", time.Second))
 			})
 		})
@@ -853,7 +812,7 @@ var _ = Describe("IP sets dataplane", func() {
 			})
 			It("should panic eventually", func() {
 				ipsets.QueueResync()
-				Expect(func() { ipsets.ApplyUpdates(nil) }).To(Panic())
+				Expect(func() { ipsets.ApplyUpdates() }).To(Panic())
 				Expect(dataplane.CumulativeSleep).To(BeNumerically(">", time.Second))
 			})
 		})
@@ -864,7 +823,7 @@ var _ = Describe("IP sets dataplane", func() {
 			})
 			It("should panic eventually", func() {
 				ipsets.QueueResync()
-				Expect(func() { ipsets.ApplyUpdates(nil) }).To(Panic())
+				Expect(func() { ipsets.ApplyUpdates() }).To(Panic())
 				Expect(dataplane.CumulativeSleep).To(BeNumerically(">", time.Second))
 			})
 		})

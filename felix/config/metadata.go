@@ -61,7 +61,7 @@ var nodeFields = set.From(
 )
 
 var ConfigGroups = map[string]string{
-	"^(Datastore|Typha|Etcd|FelixHostname|TLS)": "00 Datastore connection",
+	"^(Datastore|Typha|Etcd|FelixHostname)": "00 Datastore connection",
 
 	"^Log":                       "00 Process: Logging",
 	"^Go":                        "00 Process: Go runtime",

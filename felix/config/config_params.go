@@ -288,9 +288,6 @@ type Config struct {
 	// TyphaCN and TyphaURISAN must be set.
 	TyphaURISAN string `config:"string;;local"`
 
-	// TLSCipherSuites is a comma-separated list specifying the TLS cipher suite names to be used for securing communication.
-	TLSCipherSuites string `config:"string;;local"`
-
 	Ipv6Support bool `config:"bool;true"`
 
 	IptablesBackend                    string            `config:"oneof(legacy,nft,auto);auto"`

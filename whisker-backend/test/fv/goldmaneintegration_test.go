@@ -92,7 +92,7 @@ func TestGoldmaneIntegration_FlowWatching(t *testing.T) {
 		app.Run(ctx, whiskerCfg)
 	}()
 
-	cli, err := client.NewFlowClient("localhost:5444", clientCertFile.Name(), clientKeyFile.Name(), certFile.Name(), "")
+	cli, err := client.NewFlowClient("localhost:5444", clientCertFile.Name(), clientKeyFile.Name(), certFile.Name())
 	Expect(err).ShouldNot(HaveOccurred())
 	defer cli.Close()
 
@@ -202,7 +202,7 @@ func TestGoldmaneIntegration_FilterHints(t *testing.T) {
 		app.Run(ctx, whiskerCfg)
 	}()
 
-	cli, err := client.NewFlowClient("localhost:5444", clientCertFile.Name(), clientKeyFile.Name(), certFile.Name(), "")
+	cli, err := client.NewFlowClient("localhost:5444", clientCertFile.Name(), clientKeyFile.Name(), certFile.Name())
 	Expect(err).ShouldNot(HaveOccurred())
 	defer cli.Close()
 

@@ -100,7 +100,7 @@ func setupTest(t *testing.T, srvOption ServerSetupOption) func() {
 	}
 
 	// Create a new flow collector client.
-	cli, err = client.NewFlowClient("unix://"+lis.Addr().String(), "", "", "", "")
+	cli, err = client.NewFlowClient("unix://"+lis.Addr().String(), "", "", "")
 	require.NoError(t, err)
 	require.NotNil(t, cli)
 

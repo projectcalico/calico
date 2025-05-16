@@ -63,9 +63,3 @@ func WithHealthAggregator(agg *health.HealthAggregator) Option {
 		e.health = agg
 	}
 }
-
-func WithTLSCipherSuites(ciphers string) Option {
-	return func(e *Emitter) {
-		e.ciphers = ciphers
-	}
-}

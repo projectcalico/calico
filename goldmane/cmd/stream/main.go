@@ -19,7 +19,6 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"os"
 
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
@@ -51,7 +50,7 @@ func main() {
 
 	// Create a stream client.
 	// Generate credentials for the Goldmane client.
-	creds, err := client.ClientCredentials(clientCert, clientKey, clientCA, os.Getenv("TLS_CIPHER_SUITES"))
+	creds, err := client.ClientCredentials(clientCert, clientKey, clientCA)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to create goldmane TLS credentials.")
 	}

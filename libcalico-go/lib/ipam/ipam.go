@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2024 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -992,15 +992,11 @@ func (c ipamClient) AssignIP(ctx context.Context, args AssignIPArgs) error {
 
 // ReleaseIPs releases any of the given IP addresses that are currently assigned,
 // so that they are available to be used in another assignment.
-// ReleaseIPs returns:
-// - A list of IPs that were asked to be released, but were not allocated.
-// - A list of ReleaseOptions that did not encounter an error (either not allocated, or successfully released).
-// - An error, if one occurred.
-func (c ipamClient) ReleaseIPs(ctx context.Context, ips ...ReleaseOptions) ([]net.IP, []ReleaseOptions, error) {
+func (c ipamClient) ReleaseIPs(ctx context.Context, ips ...ReleaseOptions) ([]net.IP, error) {
 	for i := 0; i < len(ips); i++ {
 		// Validate the input.
 		if ips[i].Address == "" {
-			return nil, nil, fmt.Errorf("No IP address specified in options: %+v", ips[i])
+			return nil, fmt.Errorf("No IP address specified in options: %+v", ips[i])
 		}
 
 		// Sanitize any handles.
@@ -1013,11 +1009,11 @@ func (c ipamClient) ReleaseIPs(ctx context.Context, ips ...ReleaseOptions) ([]ne
 	// Get IP pools up front so we don't need to query for each IP address.
 	v4Pools, err := c.pools.GetEnabledPools(ctx, 4)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	v6Pools, err := c.pools.GetEnabledPools(ctx, 6)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	// Group IP addresses by block to minimize the number of writes
@@ -1028,7 +1024,7 @@ func (c ipamClient) ReleaseIPs(ctx context.Context, ips ...ReleaseOptions) ([]ne
 
 		ip, err := opts.AsNetIP()
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 
 		// Find the IP pools for this address in the enabled pools if possible.
@@ -1038,19 +1034,19 @@ func (c ipamClient) ReleaseIPs(ctx context.Context, ips ...ReleaseOptions) ([]ne
 			pool, err = c.blockReaderWriter.getPoolForIP(ctx, *ip, v4Pools)
 			if err != nil {
 				log.WithError(err).Warnf("Failed to get pool for IP")
-				return nil, nil, err
+				return nil, err
 			}
 		case 6:
 			pool, err = c.blockReaderWriter.getPoolForIP(ctx, *ip, v6Pools)
 			if err != nil {
 				log.WithError(err).Warnf("Failed to get pool for IP")
-				return nil, nil, err
+				return nil, err
 			}
 		}
 
 		if pool == nil {
 			if cidr, err := c.blockReaderWriter.getBlockForIP(ctx, *ip); err != nil {
-				return nil, nil, err
+				return nil, err
 			} else {
 				if cidr == nil {
 					// The IP isn't in any block so it's already unallocated.
@@ -1087,7 +1083,7 @@ func (c ipamClient) ReleaseIPs(ctx context.Context, ips ...ReleaseOptions) ([]ne
 		// List all handles, so we don't need to query them individually, and populate the map.
 		allHandles, err := c.blockReaderWriter.listHandles(ctx, "")
 		if err != nil {
-			return unallocated, nil, err
+			return unallocated, err
 		}
 		for _, h := range allHandles.KVPairs {
 			handleMap[sanitizeHandle(h.Key.(model.IPAMHandleKey).HandleID)] = h
@@ -1099,7 +1095,6 @@ func (c ipamClient) ReleaseIPs(ctx context.Context, ips ...ReleaseOptions) ([]ne
 	type retVal struct {
 		Error       error
 		Unallocated []net.IP
-		Released    []ReleaseOptions
 	}
 	resultChan := make(chan retVal, len(ipsByBlock))
 	sem := semaphore.NewWeighted(int64(runtime.GOMAXPROCS(-1)))
@@ -1117,8 +1112,6 @@ func (c ipamClient) ReleaseIPs(ctx context.Context, ips ...ReleaseOptions) ([]ne
 			if err != nil {
 				log.Errorf("Error releasing IPs: %v", err)
 				r.Error = err
-			} else {
-				r.Released = ips
 			}
 			r.Unallocated = unalloc
 			resultChan <- r
@@ -1127,17 +1120,15 @@ func (c ipamClient) ReleaseIPs(ctx context.Context, ips ...ReleaseOptions) ([]ne
 
 	// Read the response from each goroutine.
 	err = nil
-	opts := []ReleaseOptions{}
 	for i := 0; i < len(ipsByBlock); i++ {
 		r := <-resultChan
-		log.Debugf("Received response #%d from release goroutine: %+v", i, r)
+		log.Debugf("Received response #%d from release goroutine: %v", i, r)
 		if r.Error != nil && err == nil {
 			err = r.Error
 		}
 		unallocated = append(unallocated, r.Unallocated...)
-		opts = append(opts, r.Released...)
 	}
-	return unallocated, opts, err
+	return unallocated, err
 }
 
 func (c ipamClient) releaseIPsFromBlock(ctx context.Context, handleMap map[string]*model.KVPair, ips []ReleaseOptions, blockCIDR net.IPNet) ([]net.IP, error) {
@@ -2057,7 +2048,7 @@ func (c ipamClient) ensureConsistentAffinity(ctx context.Context, b *model.Alloc
 			logCtx.WithError(err).WithField("node", affinityCfg.Host).Error("Failed to get node for host")
 			return err
 		}
-		logCtx.Debug("Node doesn't exist, no need to check its affinity")
+		logCtx.Info("Node doesn't exist, no need to release affinity")
 		return nil
 	}
 

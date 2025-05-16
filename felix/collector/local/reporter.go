@@ -76,7 +76,7 @@ func (l *LocalSocketReporter) mayStartClient() {
 	var err error
 	l.clientLock.Lock()
 	defer l.clientLock.Unlock()
-	l.client, err = client.NewFlowClient(SocketAddress, "", "", "", "")
+	l.client, err = client.NewFlowClient(SocketAddress, "", "", "")
 	if err != nil {
 		logrus.WithError(err).Warn("Failed to create local socket client")
 		return

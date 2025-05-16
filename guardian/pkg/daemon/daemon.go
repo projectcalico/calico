@@ -46,7 +46,6 @@ func Run(ctx context.Context, cfg config.Config, proxyTargets []server.Target) {
 		server.WithProxyTargets(proxyTargets),
 		server.WithConnectionRetryAttempts(cfg.ConnectionRetryAttempts),
 		server.WithConnectionRetryInterval(cfg.ConnectionRetryInterval),
-		server.WithTLSCipherSuites(cfg.TLSCipherSuites),
 	}
 
 	tlsConfig, cert, err := cfg.TLSConfig()

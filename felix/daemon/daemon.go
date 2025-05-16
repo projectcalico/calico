@@ -540,14 +540,13 @@ configRetry:
 				buildinfo.GitRevision, buildinfo.BuildDate),
 			syncerToValidator,
 			&syncclient.Options{
-				ReadTimeout:     configParams.TyphaReadTimeout,
-				WriteTimeout:    configParams.TyphaWriteTimeout,
-				KeyFile:         configParams.TyphaKeyFile,
-				CertFile:        configParams.TyphaCertFile,
-				CAFile:          configParams.TyphaCAFile,
-				ServerCN:        configParams.TyphaCN,
-				ServerURISAN:    configParams.TyphaURISAN,
-				TLSCipherSuites: configParams.TLSCipherSuites,
+				ReadTimeout:  configParams.TyphaReadTimeout,
+				WriteTimeout: configParams.TyphaWriteTimeout,
+				KeyFile:      configParams.TyphaKeyFile,
+				CertFile:     configParams.TyphaCertFile,
+				CAFile:       configParams.TyphaCAFile,
+				ServerCN:     configParams.TyphaCN,
+				ServerURISAN: configParams.TyphaURISAN,
 			},
 		)
 	} else {

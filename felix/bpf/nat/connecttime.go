@@ -29,6 +29,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/bpfdefs"
+	"github.com/projectcalico/calico/felix/bpf/bpfutils"
 	"github.com/projectcalico/calico/felix/bpf/jump"
 	"github.com/projectcalico/calico/felix/bpf/libbpf"
 	"github.com/projectcalico/calico/felix/bpf/maps"
@@ -269,7 +270,7 @@ func ProgFileName(logLevel string, ipver string) string {
 	}
 
 	btf := ""
-	if utils.BTFEnabled {
+	if bpfutils.BTFEnabled {
 		btf = "_co-re"
 	}
 

@@ -24,7 +24,6 @@ import (
 
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/labelindex"
-	"github.com/projectcalico/calico/felix/proto"
 	cprometheus "github.com/projectcalico/calico/libcalico-go/lib/prometheus"
 )
 
@@ -193,12 +192,11 @@ func (f IPFamily) Version() int {
 
 // IPSetMetadata contains the metadata for a particular IP set, such as its name, type and size.
 type IPSetMetadata struct {
-	SetID      string
-	Type       IPSetType
-	UpdateType proto.IPSetUpdate_IPSetType
-	MaxSize    int
-	RangeMin   int
-	RangeMax   int
+	SetID    string
+	Type     IPSetType
+	MaxSize  int
+	RangeMin int
+	RangeMax int
 }
 
 // IPVersionConfig wraps up the metadata for a particular IP version.  It can be used by

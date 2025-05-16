@@ -32,10 +32,9 @@ type Config struct {
 	LogLevel     string `default:"info" envconfig:"LOG_LEVEL"`
 
 	// TLS certificate and key for both server TLS and Goldmane client mTLS.
-	TLSCertPath     string `default:"" envconfig:"TLS_CERT_PATH"`
-	TLSKeyPath      string `default:"" envconfig:"TLS_KEY_PATH"`
-	CACertPath      string `default:"/etc/pki/tls/certs/tigera-ca-bundle.crt" envconfig:"CA_CERT_PATH"`
-	TLSCipherSuites string `default:"" envconfig:"TLS_CIPHER_SUITES"`
+	TLSCertPath string `default:"" envconfig:"TLS_CERT_PATH"`
+	TLSKeyPath  string `default:"" envconfig:"TLS_KEY_PATH"`
+	CACertPath  string `default:"/etc/pki/tls/certs/tigera-ca-bundle.crt" envconfig:"CA_CERT_PATH"`
 }
 
 func NewConfig() (*Config, error) {

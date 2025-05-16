@@ -41,11 +41,10 @@ const (
 	operatorComponentsFileName = "pinned_components.yml"
 )
 
-var excludedComponents = []string{
+var noImageComponents = []string{
 	utils.Calico,
 	"calico/api",
 	"networking-calico",
-	"flannel",
 }
 
 type PinnedVersions interface {
@@ -274,7 +273,7 @@ func RetrieveImageComponents(outputDir string) (map[string]registry.Component, e
 	components[initImage.Image] = operator.InitImage()
 	for name, component := range components {
 		// Remove components that do not produce images.
-		if utils.Contains(excludedComponents, name) {
+		if utils.Contains(noImageComponents, name) {
 			delete(components, name)
 			continue
 		}

@@ -35,7 +35,7 @@ type Proxy struct {
 }
 
 // NewProxy returns an initialized Proxy
-func NewProxy(tgts []Target, ciphers string) (*Proxy, error) {
+func NewProxy(tgts []Target) (*Proxy, error) {
 	p := &Proxy{
 		mux: http.NewServeMux(),
 	}
@@ -48,7 +48,7 @@ func NewProxy(tgts []Target, ciphers string) (*Proxy, error) {
 			log.Debugf("Configuring CA cert for secure communication %s for %s", t.CAFile, t.Dest.Scheme)
 			return nil, fmt.Errorf("CA configured for url scheme %q", t.Dest.Scheme)
 		}
-		hdlr, err := newTargetHandler(t, ciphers)
+		hdlr, err := newTargetHandler(t)
 		if err != nil {
 			return nil, err
 		}
@@ -59,17 +59,14 @@ func NewProxy(tgts []Target, ciphers string) (*Proxy, error) {
 	return p, nil
 }
 
-func newTargetHandler(tgt Target, ciphers string) (func(http.ResponseWriter, *http.Request), error) {
+func newTargetHandler(tgt Target) (func(http.ResponseWriter, *http.Request), error) {
 	p := httputil.NewSingleHostReverseProxy(tgt.Dest)
 	p.FlushInterval = -1
 
 	if tgt.Transport != nil {
 		p.Transport = tgt.Transport
 	} else if tgt.Dest.Scheme == "https" {
-		tlsCfg, err := tls.NewTLSConfigFromCipherString(ciphers)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create TLS config: %w", err)
-		}
+		tlsCfg := tls.NewTLSConfig()
 
 		if tgt.AllowInsecureTLS {
 			tlsCfg.InsecureSkipVerify = true

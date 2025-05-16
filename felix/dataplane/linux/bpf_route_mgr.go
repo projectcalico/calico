@@ -325,17 +325,7 @@ func (m *bpfRouteManager) calculateRoute(cidr ip.CIDR) routes.ValueInterface {
 	var route routes.ValueInterface
 
 	rts := cgRoute.GetTypes()
-	if rts&proto.RouteType_REMOTE_TUNNEL == proto.RouteType_REMOTE_TUNNEL {
-		// Handle RouteType_REMOTE_TUNNEL first as borrowed IPs are going to
-		// have RouteType_LOCAL_WORKLOAD as as well.
-		flags |= routes.FlagsRemoteTunneledHost
-		switch cgRoute.IpPoolType {
-		case proto.IPPoolType_VXLAN:
-			flags |= routes.FlagVXLAN
-		}
-		nodeIP := net.ParseIP(cgRoute.DstNodeIp)
-		route = m.bpfOps.NewValueWithNextHop(flags, ip.FromNetIP(nodeIP))
-	} else if rts&proto.RouteType_LOCAL_WORKLOAD == proto.RouteType_LOCAL_WORKLOAD && !cgRoute.Borrowed /* not ours */ {
+	if rts&proto.RouteType_LOCAL_WORKLOAD == proto.RouteType_LOCAL_WORKLOAD {
 		if !cgRoute.LocalWorkload {
 			// Just the local IPAM block, not an actual workload.
 			return nil
@@ -370,6 +360,9 @@ func (m *bpfRouteManager) calculateRoute(cidr ip.CIDR) routes.ValueInterface {
 				return nil
 			})
 		}
+	} else if rts&proto.RouteType_REMOTE_TUNNEL == proto.RouteType_REMOTE_TUNNEL {
+		flags |= routes.FlagsRemoteTunneledHost
+		route = m.bpfOps.NewValueWithNextHop(flags, cidr.Addr())
 	} else if rts&proto.RouteType_REMOTE_HOST == proto.RouteType_REMOTE_HOST {
 		flags |= routes.FlagsRemoteHost
 		if cgRoute.DstNodeIp == "" {
@@ -394,9 +387,7 @@ func (m *bpfRouteManager) calculateRoute(cidr ip.CIDR) routes.ValueInterface {
 			flags |= routes.FlagTunneled
 		}
 		switch cgRoute.IpPoolType {
-		case proto.IPPoolType_VXLAN:
-			flags |= routes.FlagTunneled | routes.FlagVXLAN
-		case proto.IPPoolType_IPIP:
+		case proto.IPPoolType_VXLAN, proto.IPPoolType_IPIP:
 			flags |= routes.FlagTunneled
 		}
 		if cgRoute.DstNodeIp == "" {
