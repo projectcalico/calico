@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -75,10 +76,48 @@ func RemoveConnectTimeLoadBalancer(cgroupv2 string) error {
 		return errors.Wrap(err, "Failed to mount bpffs")
 	}
 
-	bpf.CleanUpCalicoPins(path.Join(bpfMount, bpfdefs.CtlbPinDir))
+	pinDir := path.Join(bpfMount, bpfdefs.CtlbPinDir)
+	if err := detachCtlbPrograms(pinDir, cgroupv2); err != nil {
+		return err
+	}
+	bpf.CleanUpCalicoPins(pinDir)
 	ctlbProgsMap := newProgramsMap()
 	os.Remove(ctlbProgsMap.Path())
 	return nil
+}
+
+func detachCtlbPrograms(pinDir, cgroupv2 string) error {
+	err := filepath.Walk(pinDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if strings.HasPrefix(info.Name(), "cali_") || strings.HasPrefix(info.Name(), "calico_") {
+			log.WithField("path", path).Debug("Detaching pinned link")
+			err = libbpf.DetachLink(path)
+			if err != nil {
+				log.WithField("path", path).Error("Error detaching link")
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil && !os.IsNotExist(err) {
+		log.Errorf("error detaching link %w", err)
+		return err
+	}
+	if err == nil {
+		return nil
+	}
+	return DetachLegacyCtlb(pinDir)
+}
+
+func DetachLegacyCtlb(cgroupv2 string) error {
+	cg, err := os.Open(cgroupv2)
+	if err != nil {
+		return fmt.Errorf("error opening cgroup root %s : %w", cgroupv2, err)
+	}
+	defer cg.Close()
+	return libbpf.DetachCTLBProgramsLegacy(int(cg.Fd()))
 }
 
 func loadProgram(logLevel, ipver string, udpNotSeen time.Duration, excludeUDP bool) (*libbpf.Obj, error) {
@@ -138,7 +177,11 @@ func attachProgram(name, ipver, bpfMount, cgroupPath string, udpNotSeen time.Dur
 		return fmt.Errorf("failed to attach program %s: %w", progName, err)
 	}
 	if link != nil {
-		link.Pin(progPinDir)
+		defer link.Close()
+		err := link.Pin(progPinDir)
+		if err != nil {
+			return fmt.Errorf("failed to pin program %s:%w", progName, err)
+		}
 	}
 	log.WithFields(log.Fields{"program": progName, "cgroup": cgroupPath}).Info("Loaded cgroup program")
 
@@ -300,6 +343,5 @@ func ensureCgroupPath(cgroupv2 string) (string, error) {
 			return "", errors.Wrap(err, "failed to create cgroup")
 		}
 	}
-	log.Infof("Sridhar Cgroup path %s", cgroupPath)
 	return cgroupPath, nil
 }
