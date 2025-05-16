@@ -15,7 +15,6 @@
 package collector
 
 import (
-	"bytes"
 	"fmt"
 	"strings"
 	"time"
@@ -906,17 +905,6 @@ func reportDataplaneStatsUpdateErrorMetrics(dataplaneErrorDelta uint32) {
 	}
 	dataplaneStatsUpdateErrorsInLastMinute += dataplaneErrorDelta
 	gaugeDataplaneStatsUpdateErrorsPerMinute.Set(float64(dataplaneStatsUpdateErrorsInLastMinute))
-}
-
-// Logrus Formatter that strips the log entry of formatting such as time, log
-// level and simply outputs *only* the message.
-type MessageOnlyFormatter struct{}
-
-func (f *MessageOnlyFormatter) Format(entry log.Entry) ([]byte, error) {
-	b := &bytes.Buffer{}
-	b.WriteString(entry.Message())
-	b.WriteByte('\n')
-	return b.Bytes(), nil
 }
 
 // equal returns true if the rule IDs are equal. The order of the content should also the same for

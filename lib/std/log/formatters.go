@@ -25,7 +25,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"testing"
 
 	"github.com/sirupsen/logrus"
 )
@@ -52,7 +51,7 @@ func init() {
 	}
 
 	fn := runtime.FuncForPC(pc).Name()
-	logPkgName = strings.TrimSuffix(getPackageName(fn), "/logrus")
+	logPkgName = getPackageName(fn)
 }
 
 type Formatter interface {
@@ -90,7 +89,7 @@ func NewDefaultFormatter() Formatter {
 
 func NewDefaultFormatterWithName(name string) Formatter {
 	f := &defaultFormatter{component: name}
-	f.preComputedInfixByLevel = make([]string, len(logrus.AllLevels))
+	f.preComputedInfixByLevel = make([]string, len(AllLevels))
 	for _, level := range AllLevels {
 		var buf bytes.Buffer
 		f.computeInfix(&buf, level)
@@ -141,10 +140,10 @@ func (f *defaultFormatter) computeInfix(b *bytes.Buffer, level Level) {
 	}
 }
 
-var preComputedInfixByLevelSyslog = make([]string, len(logrus.AllLevels))
+var preComputedInfixByLevelSyslog = make([]string, len(AllLevels))
 
 func init() {
-	for _, level := range logrus.AllLevels {
+	for _, level := range AllLevels {
 		preComputedInfixByLevelSyslog[level] = strings.ToUpper(level.String()) + " "
 	}
 }
@@ -466,15 +465,76 @@ func writeToSyslog(writer syslogWriter, ql QueuedLog) error {
 	}
 }
 
-// TestingTWriter adapts a *testing.T as a Writer so it can be used as a target
-// for logrus.  typically, it should be used via the ConfigureLoggingForTestingT
-// helper.
-type TestingTWriter struct {
-	T *testing.T
+type TextFormatterConfig struct {
+	// Set to true to bypass checking for a TTY before outputting colors.
+	ForceColors bool
+
+	// Force disabling colors.
+	DisableColors bool
+
+	// Force quoting of all values
+	ForceQuote bool
+
+	// DisableQuote disables quoting for all values.
+	// DisableQuote will have a lower priority than ForceQuote.
+	// If both of them are set to true, quote will be forced on all values.
+	DisableQuote bool
+
+	// Override coloring based on CLICOLOR and CLICOLOR_FORCE. - https://bixense.com/clicolors/
+	EnvironmentOverrideColors bool
+
+	// Disable timestamp logging. useful when output is redirected to logging
+	// system that already adds timestamps.
+	DisableTimestamp bool
+
+	// Enable logging the full timestamp when a TTY is attached instead of just
+	// the time passed since beginning of execution.
+	FullTimestamp bool
+
+	// TimestampFormat to use for display when a full timestamp is printed.
+	// The format to use is the same than for time.Format or time.Parse from the standard
+	// library.
+	// The standard Library already provides a set of predefined format.
+	TimestampFormat string
+
+	// The fields are sorted by default for a consistent output. For applications
+	// that log extremely frequently and don't use the JSON formatter this may not
+	// be desired.
+	DisableSorting bool
+
+	// The keys sorting function, when uninitialized it uses sort.Strings.
+	SortingFunc func([]string)
+
+	// Disables the truncation of the level text to 4 characters.
+	DisableLevelTruncation bool
+
+	// PadLevelText Adds padding the level text so that all the levels output at the same length
+	// PadLevelText is a superset of the DisableLevelTruncation option
+	PadLevelText bool
+
+	// QuoteEmptyFields will wrap empty fields in quotes if true
+	QuoteEmptyFields bool
+
+	// CallerPrettyfier can be set by the user to modify the content
+	// of the function and file keys in the data when ReportCaller is
+	// activated. If any of the returned value is the empty string the
+	// corresponding key will be removed from fields.
+	CallerPrettyfier func(*runtime.Frame) (function string, file string)
 }
 
-func (l TestingTWriter) Write(p []byte) (n int, err error) {
-	l.T.Helper()
-	l.T.Log(strings.TrimRight(string(p), "\r\n"))
-	return len(p), nil
+func NewTextFormatter(cfg TextFormatterConfig) Formatter {
+	return &logrusWrapper{&logrus.TextFormatter{
+		ForceColors:            cfg.ForceColors,
+		DisableColors:          cfg.DisableColors,
+		ForceQuote:             cfg.ForceQuote,
+		DisableTimestamp:       cfg.DisableTimestamp,
+		DisableLevelTruncation: cfg.DisableLevelTruncation,
+		PadLevelText:           cfg.PadLevelText,
+		QuoteEmptyFields:       cfg.QuoteEmptyFields,
+		FullTimestamp:          cfg.FullTimestamp,
+		TimestampFormat:        cfg.TimestampFormat,
+		DisableSorting:         cfg.DisableSorting,
+		SortingFunc:            cfg.SortingFunc,
+		CallerPrettyfier:       cfg.CallerPrettyfier,
+	}}
 }

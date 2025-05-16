@@ -2,6 +2,8 @@ package log
 
 import (
 	"bytes"
+	"strings"
+	"testing"
 	"time"
 )
 
@@ -33,4 +35,17 @@ func AppendTime(b *bytes.Buffer, t time.Time) {
 		}
 	}
 	_, _ = b.Write(buf)
+}
+
+// TestingTWriter adapts a *testing.T as a Writer so it can be used as a target
+// for logrus.  typically, it should be used via the ConfigureLoggingForTestingT
+// helper.
+type TestingTWriter struct {
+	T *testing.T
+}
+
+func (l TestingTWriter) Write(p []byte) (n int, err error) {
+	l.T.Helper()
+	l.T.Log(strings.TrimRight(string(p), "\r\n"))
+	return len(p), nil
 }
