@@ -170,6 +170,7 @@ type Logger interface {
 	WithTime(t time.Time) Entry
 	NewEntry() Entry
 	RedirectToTestingT(t *testing.T) func()
+	SetNoLock()
 }
 
 type Entry interface {
