@@ -7034,6 +7034,8 @@ spec:
             # Prevents the container from sleeping forever.
             - name: SLEEP
               value: "false"
+            - name: REQUIRE_MTU_FILE
+              value: "false"
           volumeMounts:
             - mountPath: /host/opt/cni/bin
               name: cni-bin-dir
@@ -7145,6 +7147,8 @@ spec:
               value: "false"
             - name: FELIX_HEALTHENABLED
               value: "true"
+            - name: FELIX_REQUIRE_MTU_FILE
+              value: "false"
           securityContext:
             privileged: true
           resources:
