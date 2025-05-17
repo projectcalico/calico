@@ -548,6 +548,12 @@ func (c *etcdV3Client) IsClean() (bool, error) {
 	return len(resp.Kvs) == 0, nil
 }
 
+// Close() closes the underlying etcd client
+func (c *etcdV3Client) Close() error {
+	log.Debug("Calling Close on etcdv3 client")
+	return c.etcdClient.Close()
+}
+
 // getTTLOption returns a OpOption slice containing a Lease granted for the TTL.
 func (c *etcdV3Client) getTTLOption(ctx context.Context, d *model.KVPair) ([]clientv3.OpOption, error) {
 	putOpts := []clientv3.OpOption{}

@@ -35,6 +35,7 @@ import (
 type EtcdDatastoreInfra struct {
 	etcdContainer *containers.Container
 	bpfLog        *containers.Container
+	client        client.Interface
 
 	Endpoint    string
 	BadEndpoint string
@@ -87,7 +88,10 @@ func (eds *EtcdDatastoreInfra) GetBadEndpointDockerArgs() []string {
 }
 
 func (eds *EtcdDatastoreInfra) GetCalicoClient() client.Interface {
-	return utils.GetEtcdClient(eds.etcdContainer.IP)
+	if eds.client == nil {
+		eds.client = utils.GetEtcdClient(eds.etcdContainer.IP)
+	}
+	return eds.client
 }
 
 func (eds *EtcdDatastoreInfra) GetClusterGUID() string {
@@ -221,5 +225,7 @@ func (eds *EtcdDatastoreInfra) Stop() {
 	eds.bpfLog.StopLogs()
 	eds.etcdContainer.StopLogs()
 	eds.bpfLog.Stop()
+	err := eds.client.Close()
+	log.WithError(err).Warn("Client Close() returned an error.  Ignoring.")
 	eds.etcdContainer.Stop()
 }

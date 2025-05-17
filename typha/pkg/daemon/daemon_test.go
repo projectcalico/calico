@@ -287,6 +287,10 @@ func (b *mockDatastore) EnsureInitialized(ctx context.Context, version, clusterT
 	return nil
 }
 
+func (b *mockDatastore) Close() error {
+	return nil
+}
+
 // Tiers returns an interface for managing tier resources.
 func (b *mockDatastore) Tiers() clientv3.TierInterface {
 	panic("not implemented")
