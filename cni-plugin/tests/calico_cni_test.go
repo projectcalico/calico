@@ -15,6 +15,7 @@ import (
 
 	cniv1 "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/plugins/pkg/ns"
+	"github.com/mcuadros/go-version"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
@@ -934,6 +935,63 @@ var _ = Describe("CalicoCni", func() {
 			close(done)
 		}, 10)
 
+	})
+
+	Context("When CNI ADD success, return all interfaces", func() {
+		ipPool4 := "10.0.0.0/8"
+		netconf := fmt.Sprintf(`
+		{
+			"cniVersion": "%s",
+			"name": "net1",
+			"type": "calico",
+			"etcd_endpoints": "http://%s:2379",
+			"nodename_file_optional": true,
+			"datastore_type": "%s",
+			"ipam": {
+				"type": "host-local",
+				"subnet": "%s"
+			}
+		}`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"), ipPool4)
+
+		BeforeEach(func() {
+			if version.Compare(cniVersion, "0.3.0", "<") {
+				Skip("Skipping test because of CNI version < 0.3.0")
+			}
+		})
+
+		It("should allocate IPv4 only", func() {
+			_, ipPool4CIDR, err := net.ParseCIDR(ipPool4)
+			Expect(err).NotTo(HaveOccurred())
+
+			_, result, _, contAddresses, _, contNs, err := testutils.CreateContainer(netconf, "", testutils.TEST_DEFAULT_NS, "")
+			Expect(err).ShouldNot(HaveOccurred())
+
+			Expect(len(contAddresses)).Should(Equal(1))
+
+			for _, ip := range contAddresses {
+				podIP := ip.IP
+				Expect(ipPool4CIDR.Contains(podIP)).Should(BeTrue())
+			}
+
+			interfaces := result.Interfaces
+
+			Expect(len(interfaces)).Should(Equal(2))
+			Expect(len(result.IPs)).Should(Equal(1))
+
+			for _, ip := range result.IPs {
+				interfaceIndex := ip.Interface
+				Expect(interfaceIndex).ShouldNot(BeNil())
+				iface := interfaces[*interfaceIndex]
+				Expect(iface).ShouldNot(BeNil())
+				Expect(iface.Name).Should(Equal("eth0"))
+				Expect(iface.Mac).ShouldNot(BeEmpty())
+				Expect(iface.Sandbox).ShouldNot(BeEmpty())
+			}
+
+			// Delete the container.
+			_, err = testutils.DeleteContainer(netconf, contNs.Path(), "", testutils.TEST_DEFAULT_NS)
+			Expect(err).ShouldNot(HaveOccurred())
+		})
 	})
 })
 
