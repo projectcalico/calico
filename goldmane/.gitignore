@@ -1,2 +1,5 @@
 coverage.profile
 *.log
+ca.crt
+tls.crt
+tls.key

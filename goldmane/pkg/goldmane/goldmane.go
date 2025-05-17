@@ -17,7 +17,6 @@ package goldmane
 import (
 	"context"
 	"fmt"
-	"math"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -31,7 +30,6 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/health"
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 	cprometheus "github.com/projectcalico/calico/libcalico-go/lib/prometheus"
-	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
 const (
@@ -329,18 +327,8 @@ func (a *Goldmane) Stream(req *proto.FlowStreamRequest) (stream.Stream, error) {
 		req.StartTimeGte, _ = a.normalizeTimeRange(req.StartTimeGte, 0)
 	}
 
-	// Determine the expected backfill size for this stream. We ensure a minimum channel size, while allowing for
-	// larger channels for streams that will need to handle a large amount of backfill data. This is mostly a hack
-	// to work around the fact that we don't have a proper backpressure mechanism in place yet.
-	channelSize := 0
-	if req.StartTimeGte != 0 {
-		channelSize = int(a.flowStore.NumFlows(req.StartTimeGte, a.nowFunc().Unix()))
-	}
-	channelSize = int(math.Max(float64(channelSize), float64(channelDepth)))
-	logrus.WithField("channelSize", channelSize).Info("Calculated channel size for stream")
-
 	// Register the stream with the stream manager. This will return a new Stream object.
-	respCh := a.streams.Register(req, channelSize)
+	respCh := a.streams.Register(req, 2*numBuckets)
 	defer close(respCh)
 
 	// Wait for a response.
@@ -412,28 +400,10 @@ func (a *Goldmane) backfill(stream stream.Stream) {
 	// Measure the time it takes to backfill the stream.
 	start := time.Now()
 	defer func() {
-		logrus.WithField("id", stream.ID()).WithField("duration", time.Since(start)).Info("Backfill complete")
+		logrus.WithField("id", stream.ID()).WithField("duration", time.Since(start)).Debug("Backfill complete")
 		backfillLatency.Observe(float64(time.Since(start).Milliseconds()))
 	}()
-
-	// Go through the bucket ring, generating stream events for each flow that matches the request.
-	// Right now, the stream endpoint only supports aggregation windows of a single bucket interval.
-	err := a.flowStore.IterFlows(stream.StartTimeGte(), a.flowStore.BackfillEndTime(), func(d *storage.DiachronicFlow, s, e int64) error {
-		builder := storage.NewDeferredFlowBuilder(d, s, e)
-		select {
-		case <-stream.Ctx().Done():
-			// Stream closed while backfilling. Can stop.
-			logrus.WithField("id", stream.ID).Debug("Stream closed while backfilling")
-			return set.StopIteration
-		default:
-			a.streams.Receive(builder, stream.ID())
-		}
-		return nil
-	})
-	if err != nil {
-		logrus.WithError(err).Warn("Error backfilling stream")
-		return
-	}
+	a.flowStore.Backfill(a.streams, stream.ID(), stream.StartTimeGte())
 }
 
 // normalizeTimeRange normalizes the time range for a query, converting absent and relative time indicators
