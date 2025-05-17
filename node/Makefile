@@ -291,7 +291,19 @@ $(FELIX_GPL_SOURCE): .felix-gpl-source.created
 ###############################################################################
 # FV Tests
 ###############################################################################
-K8ST_IMAGE_TARS=calico-node.tar calico-typha.tar calico-apiserver.tar calico-cni.tar pod2daemon.tar csi.tar node-driver-registrar.tar calicoctl.tar kube-controllers.tar operator.tar
+K8ST_IMAGE_TARS=calico-node.tar \
+	calico-typha.tar \
+	calico-apiserver.tar \
+	calico-cni.tar \
+	pod2daemon.tar \
+	csi.tar \
+	node-driver-registrar.tar \
+	calicoctl.tar \
+	kube-controllers.tar \
+	operator.tar \
+	whisker.tar \
+	whisker-backend.tar \
+	goldmane.tar
 
 ifeq ($(SEMAPHORE_GIT_REF_TYPE), pull-request)
 # Determine the tests to run using the test spider tool, which emits a list of impacted packages.
@@ -396,6 +408,21 @@ kube-controllers.tar: ../go.mod $(shell find ../kube-controllers -name '*.go') $
 	make -C ../kube-controllers image
 	docker tag calico/kube-controllers:latest-$(ARCH) calico/kube-controllers:$(TEST_BUILD_TAG)
 	docker save --output $@ calico/kube-controllers:$(TEST_BUILD_TAG)
+
+goldmane.tar: ../go.mod $(shell find ../goldmane -name '*.go')
+	make -C ../goldmane image
+	docker tag calico/goldmane:latest-$(ARCH) calico/goldmane:$(TEST_BUILD_TAG)
+	docker save --output $@ calico/goldmane:$(TEST_BUILD_TAG)
+
+whisker.tar: ../go.mod $(shell find ../whisker)
+	make -C ../whisker image
+	docker tag calico/whisker:latest-$(ARCH) calico/whisker:$(TEST_BUILD_TAG)
+	docker save --output $@ calico/whisker:$(TEST_BUILD_TAG)
+
+whisker-backend.tar: ../go.mod $(shell find ../whisker-backend -name '*.go')
+	make -C ../whisker-backend image
+	docker tag calico/whisker-backend:latest-$(ARCH) calico/whisker-backend:$(TEST_BUILD_TAG)
+	docker save --output $@ calico/whisker-backend:$(TEST_BUILD_TAG)
 
 load-container-images: $(K8ST_IMAGE_TARS) $(KUBECTL)
 	# Load the latest tar files onto the currently running kind cluster.
