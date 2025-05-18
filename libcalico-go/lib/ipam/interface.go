@@ -100,6 +100,13 @@ type Interface interface {
 	// GetUtilization returns IP utilization info for the specified pools, or for all pools.
 	GetUtilization(ctx context.Context, args GetUtilizationArgs) ([]*PoolUtilization, error)
 
+	// CleanupBlocksForRemovedNodes cleans up IPAM blocks that have affinity to nodes
+	// that are no longer in the cluster.
+	// activeNodes: List of active node names in the cluster
+	// force: If true, will delete blocks even if they have active IP allocations
+	// Returns: Number of blocks cleaned up and any error encountered
+	CleanupBlocksForRemovedNodes(ctx context.Context, activeNodes []string, force bool) (int, error)
+
 	// EnsureBlock returns single IPv4/IPv6 IPAM block for a host as specified by the provided BlockArgs.
 	// If there is no block allocated already for this host, allocate one and return its CIDR.
 	// Otherwise, return the CIDR of the IPAM block allocated for this host.

@@ -32,6 +32,7 @@ func IPAM(args []string) error {
   <BINARY_NAME> ipam <command> [<args>...]
 
     check            Check the integrity of the IPAM datastructures.
+    clean            Clean up orphaned or unused IPAM resources.
     release          Release a Calico assigned IP address.
     show             Show details of a Calico configuration,
                      assigned IP address, or of overall IP usage.
@@ -70,6 +71,8 @@ Description:
 	switch command {
 	case "check":
 		return ipam.Check(args, buildinfo.Version)
+	case "clean":
+		return ipam.Clean(args, buildinfo.Version)
 	case "release":
 		return ipam.Release(args, buildinfo.Version)
 	case "show":
