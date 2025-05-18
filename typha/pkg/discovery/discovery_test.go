@@ -18,6 +18,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -275,20 +276,58 @@ var _ = Describe("ConnectionAttemptTracker", func() {
 		cat = NewConnAttemptTracker(discoverer)
 	})
 
+	It("should expire cached last seen entries", func() {
+		By("Recording the last seen time in the map")
+		cat.pickNextTypha([]Typha{
+			typha1,
+			typha2,
+		})
+		Expect(cat.triedAddrsLastSeen).To(HaveLen(1))
+		lastSeen := cat.triedAddrsLastSeen[typha1.dedupeKey()]
+		Expect(lastSeen).To(BeTemporally("~", time.Now(), 100*time.Millisecond))
+
+		By("Refreshing last seen if the particular typha is still present")
+		cat.triedAddrsLastSeen[typha1.dedupeKey()] = time.Now().Add(-6 * time.Minute)
+		cat.pickNextTypha([]Typha{
+			typha1,
+			typha2,
+		})
+		lastSeen = cat.triedAddrsLastSeen[typha1.dedupeKey()]
+		Expect(lastSeen).To(BeTemporally("~", time.Now(), 100*time.Millisecond))
+
+		By("Not expiring typha1 straight away")
+		cat.pickNextTypha([]Typha{
+			typha2,
+			typha3,
+			typha4,
+		})
+		Expect(cat.triedAddrsLastSeen[typha1.dedupeKey()]).To(Equal(lastSeen))
+
+		By("Expiring typha1 once it times out")
+		cat.triedAddrsLastSeen[typha1.dedupeKey()] = time.Now().Add(-6 * time.Minute)
+		cat.pickNextTypha([]Typha{
+			typha2,
+			typha3,
+			typha4,
+		})
+		Expect(cat.triedAddrsLastSeen).NotTo(HaveKey(typha1.dedupeKey()))
+	})
+
 	Describe("with same addrs each time", func() {
 		BeforeEach(func() {
 			addrs := []Typha{typha1, typha2}
 			discoverer.TyphaAddrsToReturn = []typhaAddrsResp{
 				{ts: addrs},
-				{ts: addrs},
 			}
 			discoverer.CachedAddrs = addrs
 		})
-		It("should return the addresses in order then give up", func() {
+		It("should return the addresses in order", func() {
 			Expect(cat.NextAddr()).To(Equal(typha1))
 			Expect(cat.NextAddr()).To(Equal(typha2))
-			_, err := cat.NextAddr()
-			Expect(err).To(Equal(ErrTriedAllAddrs))
+
+			// After returning all addresses, it should reset.
+			Expect(cat.NextAddr()).To(Equal(typha1))
+			Expect(cat.NextAddr()).To(Equal(typha2))
 		})
 	})
 
@@ -298,15 +337,19 @@ var _ = Describe("ConnectionAttemptTracker", func() {
 				{ts: []Typha{typha1, typha3}},
 				{ts: []Typha{typha3, typha4}},
 				{ts: []Typha{typha3, typha4}},
+				{ts: []Typha{typha3, typha4}},
 			}
 			discoverer.CachedAddrs = []Typha{typha1, typha2}
 		})
-		It("should return the addresses in order then give up", func() {
-			Expect(cat.NextAddr()).To(Equal(typha1))
+		It("should return the addresses in order", func() {
+			Expect(cat.NextAddr()).To(Equal(typha1)) // From cache
+			// typha2 never returned due to forced reload.
+			// typha1 returned again but it gets skipped due to already being seen.
 			Expect(cat.NextAddr()).To(Equal(typha3))
+			// Reloads again, typha3 gets skipped this time.
 			Expect(cat.NextAddr()).To(Equal(typha4))
-			_, err := cat.NextAddr()
-			Expect(err).To(Equal(ErrTriedAllAddrs))
+			// Reloads again, no fresh typhas, so we get typha3 again.
+			Expect(cat.NextAddr()).To(Equal(typha3))
 		})
 	})
 
@@ -333,16 +376,14 @@ type typhaAddrsResp struct {
 
 type mockDiscoverer struct {
 	TyphaAddrsToReturn []typhaAddrsResp
+	n                  int
 	CachedAddrs        []Typha
 }
 
 func (m *mockDiscoverer) LoadTyphaAddrs() (ts []Typha, err error) {
-	if len(m.TyphaAddrsToReturn) == 0 {
-		Fail("no more canned results")
-	}
-	ts = m.TyphaAddrsToReturn[0].ts
-	err = m.TyphaAddrsToReturn[0].err
-	m.TyphaAddrsToReturn = m.TyphaAddrsToReturn[1:]
+	ts = m.TyphaAddrsToReturn[m.n].ts
+	err = m.TyphaAddrsToReturn[m.n].err
+	m.n = (m.n + 1) % len(m.TyphaAddrsToReturn)
 	m.CachedAddrs = ts
 	return
 }
