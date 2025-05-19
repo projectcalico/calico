@@ -343,20 +343,29 @@ func (l *Link) Pin(path string) error {
 	return fmt.Errorf("link nil")
 }
 
-func DetachLink(path string) error {
+func OpenLink(path string) (*Link, error) {
 	cPath := C.CString(path)
 	defer C.free(unsafe.Pointer(cPath))
-	_, err := C.bpf_detach_link(cPath)
-	return err
+	link, err := C.bpf_link_open(cPath)
+	if err != nil {
+		return nil, fmt.Errorf("error opening link %w", err)
+	}
+	return &Link{link: link}, nil
 }
 
-func (o *Obj) UpdateLink(path, progName string) error {
-	cPath := C.CString(path)
+func (l *Link) Detach() error {
+	errno := C.bpf_link__detach(l.link)
+	if errno != 0 {
+		return fmt.Errorf("failed to detach link %w", syscall.Errno(errno))
+	}
+	return nil
+}
+
+func (l *Link) Update(obj *Obj, progName string) error {
 	cProgName := C.CString(progName)
-	defer C.free(unsafe.Pointer(cPath))
 	defer C.free(unsafe.Pointer(cProgName))
 
-	_, err := C.bpf_update_link(o.obj, cProgName, cPath)
+	_, err := C.bpf_update_link(l.link, obj.obj, cProgName)
 	if err != nil {
 		return fmt.Errorf("error updating link %w", err)
 	}
