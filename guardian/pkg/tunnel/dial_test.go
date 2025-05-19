@@ -6,7 +6,6 @@ import (
 	"crypto/x509"
 	"net"
 	"os"
-	"path/filepath"
 	"testing"
 	"time"
 
@@ -14,6 +13,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/calico/guardian/pkg/tunnel"
+	"github.com/projectcalico/calico/guardian/test/utils"
 )
 
 func handleConnection(t *testing.T, listener net.Listener) {
@@ -66,14 +66,13 @@ func TestDialTLS(t *testing.T) {
 	setupTest(t)
 
 	address := "localhost:8080"
+	tmpDir := os.TempDir()
 
-	servercrt, err := filepath.Abs("../../test/tmp/server.crt")
-	Expect(err).NotTo(HaveOccurred())
+	serverCrt, serverKey := utils.CreateKeyCertPair(tmpDir)
+	defer serverCrt.Close()
+	defer serverKey.Close()
 
-	serverKey, err := filepath.Abs("../../test/tmp/server.key")
-	Expect(err).NotTo(HaveOccurred())
-
-	cert, err := tls.LoadX509KeyPair(servercrt, serverKey)
+	cert, err := tls.LoadX509KeyPair(serverCrt.Name(), serverKey.Name())
 	if err != nil {
 		t.Fatalf("Failed to load server certificate and key: %v", err)
 	}
@@ -88,7 +87,7 @@ func TestDialTLS(t *testing.T) {
 
 	// Load the server's certificate
 	certPool := x509.NewCertPool()
-	caCert, err := os.ReadFile(servercrt)
+	caCert, err := os.ReadFile(serverCrt.Name())
 	Expect(err).NotTo(HaveOccurred())
 	certPool.AppendCertsFromPEM(caCert)
 

@@ -69,11 +69,8 @@ $(GUARDIAN_CONTAINER_CREATED): docker-image/guardian/Dockerfile $(BINDIR)/guardi
 #############################################
 .PHONY: ut
 ## Run only Unit Tests.
-ut: generate-test-certs
+ut:
 	$(DOCKER_GO_BUILD) go test ./... -cover -count 1
-
-generate-test-certs:
-	./test/generate-certs.sh
 
 ##########################################################################################
 # CI/CD
