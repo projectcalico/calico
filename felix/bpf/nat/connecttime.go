@@ -90,7 +90,13 @@ func detachCtlbPrograms(pinDir, cgroupv2 string) error {
 		if strings.HasPrefix(info.Name(), "cali_") || strings.HasPrefix(info.Name(), "calico_") {
 			numLinksDetached++
 			log.WithField("path", path).Debug("Detaching pinned link")
-			err = libbpf.DetachLink(path)
+			link, err := libbpf.OpenLink(path)
+			if err != nil {
+				log.WithField("path", path).Error("Error opening link")
+				return err
+			}
+			defer link.Close()
+			err = link.Detach()
 			if err != nil {
 				log.WithField("path", path).Error("Error detaching link")
 				return err
@@ -127,9 +133,14 @@ func loadProgram(logLevel, ipver string, udpNotSeen time.Duration, excludeUDP bo
 
 func attachProgram(name, ipver, bpfMount, cgroupPath string, udpNotSeen time.Duration, excludeUDP bool, obj *libbpf.Obj, legacy bool) error {
 	progName := "calico_" + name + "_v" + ipver
-	progPinDir := path.Join(bpfMount, progName)
-	if _, err := os.Stat(progPinDir); err == nil {
-		if err := obj.UpdateLink(progPinDir, progName); err != nil {
+	progPinPath := path.Join(bpfMount, progName)
+	if _, err := os.Stat(progPinPath); err == nil {
+		link, err := libbpf.OpenLink(progPinPath)
+		if err != nil {
+			return fmt.Errorf("error opening link %s : %w", progPinPath, err)
+		}
+		defer link.Close()
+		if err := link.Update(obj, progName); err != nil {
 			return fmt.Errorf("error updating program %s : %w", progName, err)
 		}
 		return nil
@@ -155,7 +166,7 @@ func attachProgram(name, ipver, bpfMount, cgroupPath string, udpNotSeen time.Dur
 	}
 	if link != nil {
 		defer link.Close()
-		err := link.Pin(progPinDir)
+		err := link.Pin(progPinPath)
 		if err != nil {
 			return fmt.Errorf("failed to pin program %s:%w", progName, err)
 		}

@@ -133,6 +133,22 @@ func (l *Link) Pin(_ string) error {
 	panic("LIBBPF syscall stub")
 }
 
+func (l *Link) Update(obj *Obj, progName string) error {
+	panic("LIBBPF syscall stub")
+}
+
+func (l *Link) Close() error {
+	panic("LIBBPF syscall stub")
+}
+
+func OpenLink(path string) (*Link, error) {
+	panic("LIBBPF syscall stub")
+}
+
+func (l *Link) Detach() error {
+	panic("LIBBPF syscall stub")
+}
+
 func DetachCTLBProgramsLegacy(_ string) error {
 	panic("LIBBPF syscall stub")
 }
