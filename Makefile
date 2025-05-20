@@ -57,9 +57,13 @@ ci-preflight-checks:
 	$(MAKE) check-ocp-no-crds
 	$(MAKE) yaml-lint
 	$(MAKE) check-dirty
+	$(MAKE) go-vet
 
 check-go-mod:
 	$(DOCKER_GO_BUILD) ./hack/check-go-mod.sh
+
+go-vet:
+	$(DOCKER_GO_BUILD) go vet ./...
 
 check-dockerfiles:
 	./hack/check-dockerfiles.sh
