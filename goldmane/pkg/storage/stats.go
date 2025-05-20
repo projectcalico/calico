@@ -1,10 +1,9 @@
 package storage
 
 import (
-	"github.com/sirupsen/logrus"
-
 	"github.com/projectcalico/calico/goldmane/pkg/types"
 	"github.com/projectcalico/calico/goldmane/proto"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // StatisticsKey represents the key for a set of statistics.
@@ -111,7 +110,7 @@ func (s *statistics) add(flow *types.Flow, action proto.Action) {
 			s.connections.PassedOut += flow.NumConnectionsLive
 		}
 	default:
-		logrus.WithField("action", flow.Key.Action()).Error("Unknown action")
+		log.WithField("action", flow.Key.Action()).Error("Unknown action")
 	}
 }
 
@@ -150,7 +149,7 @@ func (s *statisticsIndex) QueryStatistics(q *proto.StatisticsRequest) map[Statis
 				results[rk] = s.retrieve(rk, &q.GroupBy, q.Type)
 			}
 		default:
-			logrus.WithField("group_by", q.GroupBy).Error("Unknown group by")
+			log.WithField("group_by", q.GroupBy).Error("Unknown group by")
 			return nil
 		}
 	}
@@ -208,7 +207,7 @@ func (s *statisticsIndex) retrieve(k StatisticsKey, groupBy *proto.StatisticsGro
 	case proto.StatisticType_LiveConnectionCount:
 		return &data.connections
 	default:
-		logrus.WithField("type", t).Error("Unknown statistic type")
+		log.WithField("type", t).Error("Unknown statistic type")
 	}
 	return nil
 }
@@ -221,7 +220,7 @@ func direction(flow *types.Flow) string {
 }
 
 func (s *statisticsIndex) AddFlow(flow *types.Flow) {
-	logrus.WithField("flow", flow).Debug("Adding flow to statistics index")
+	log.WithField("flow", flow).Debug("Adding flow to statistics index")
 
 	// Add the stats from this Flow, aggregated across all the policies it matches.
 	s.add(flow, flow.Key.Action())
@@ -260,7 +259,7 @@ func (s *statisticsIndex) AddFlow(flow *types.Flow) {
 			polToRules[pk] = make(map[StatisticsKey]proto.Action)
 		}
 		if action, ok := polToRules[pk][sk]; ok && action != hit.Action {
-			logrus.WithFields(logrus.Fields{
+			log.WithFields(log.Fields{
 				"policy":      sk,
 				"conflicting": hit.Action,
 				"selected":    action,
@@ -272,7 +271,7 @@ func (s *statisticsIndex) AddFlow(flow *types.Flow) {
 
 	// For each Policy, add this Flow to the PolicyStatistics object.
 	for pk, rules := range polToRules {
-		logrus.WithField("policy", pk).Debug("Adding flow statistics to policy")
+		log.WithField("policy", pk).Debug("Adding flow statistics to policy")
 		ps, ok := s.policies[pk]
 		if !ok {
 			ps = &policyStatistics{rules: make(map[StatisticsKey]*statistics)}
@@ -291,7 +290,7 @@ func (s *statisticsIndex) AddFlow(flow *types.Flow) {
 				ps.rules[k] = rs
 			}
 
-			logrus.WithField("rule", k).Debug("Adding flow statistics to rule")
+			log.WithField("rule", k).Debug("Adding flow statistics to rule")
 			rs.add(flow, action)
 		}
 	}

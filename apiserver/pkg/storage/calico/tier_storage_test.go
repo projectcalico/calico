@@ -14,7 +14,6 @@ import (
 	"time"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"github.com/sirupsen/logrus"
 	apitesting "k8s.io/apimachinery/pkg/api/apitesting"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
@@ -27,6 +26,7 @@ import (
 	"k8s.io/apiserver/pkg/storage"
 	"k8s.io/apiserver/pkg/storage/storagebackend"
 
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
@@ -348,7 +348,7 @@ func TestTierGuaranteedUpdate(t *testing.T) {
 	}}
 
 	for i, tt := range tests {
-		logrus.Infof("Start to run test on tt: %+v", tt)
+		log.Infof("Start to run test on tt: %+v", tt)
 		out := &v3.Tier{}
 		selector := fmt.Sprintf("foo-%d", i)
 		if tt.expectNoUpdate {
@@ -597,17 +597,17 @@ func testTierSetup(t *testing.T) (context.Context, *resourceStore) {
 	codec := apitesting.TestCodec(codecs, v3.SchemeGroupVersion)
 	cfg, err := apiconfig.LoadClientConfig("")
 	if err != nil {
-		logrus.Errorf("Failed to load client config: %q", err)
+		log.Errorf("Failed to load client config: %q", err)
 		os.Exit(1)
 	}
 	cfg.Spec.DatastoreType = "etcdv3"
 	cfg.Spec.EtcdEndpoints = "http://localhost:2379"
 	c, err := clientv3.New(*cfg)
 	if err != nil {
-		logrus.Errorf("Failed creating client: %q", err)
+		log.Errorf("Failed creating client: %q", err)
 		os.Exit(1)
 	}
-	logrus.Tracef("Client: %v", c)
+	log.Tracef("Client: %v", c)
 
 	opts := Options{
 		RESTOptions: generic.RESTOptions{

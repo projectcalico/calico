@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,13 +23,12 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
 	"k8s.io/utils/ptr"
 
-	"github.com/projectcalico/calico/felix/logutils"
 	. "github.com/projectcalico/calico/felix/routerule"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -57,7 +56,7 @@ var _ = Describe("RouteRules Construct", func() {
 			RulesMatchSrcFWMark,
 			10*time.Second,
 			dataplane.NewNetlinkHandle,
-			logutils.NewSummarizer("test loop"),
+			log.NewSummarizer("test loop"),
 		)
 		Expect(err).To(HaveOccurred())
 	})
@@ -71,7 +70,7 @@ var _ = Describe("RouteRules Construct", func() {
 			RulesMatchSrcFWMark,
 			10*time.Second,
 			dataplane.NewNetlinkHandle,
-			logutils.NewSummarizer("test loop"),
+			log.NewSummarizer("test loop"),
 		)
 		Expect(err).To(HaveOccurred())
 
@@ -84,7 +83,7 @@ var _ = Describe("RouteRules Construct", func() {
 			RulesMatchSrcFWMark,
 			10*time.Second,
 			dataplane.NewNetlinkHandle,
-			logutils.NewSummarizer("test loop"),
+			log.NewSummarizer("test loop"),
 		)
 		Expect(err).To(HaveOccurred())
 
@@ -97,7 +96,7 @@ var _ = Describe("RouteRules Construct", func() {
 			RulesMatchSrcFWMark,
 			10*time.Second,
 			dataplane.NewNetlinkHandle,
-			logutils.NewSummarizer("test loop"),
+			log.NewSummarizer("test loop"),
 		)
 		Expect(err).To(HaveOccurred())
 	})
@@ -111,7 +110,7 @@ var _ = Describe("RouteRules Construct", func() {
 			RulesMatchSrcFWMark,
 			10*time.Second,
 			dataplane.NewNetlinkHandle,
-			logutils.NewSummarizer("test loop"),
+			log.NewSummarizer("test loop"),
 		)
 		Expect(err).NotTo(HaveOccurred())
 	})
@@ -138,7 +137,7 @@ var _ = Describe("RouteRules", func() {
 			RulesMatchSrcFWMark,
 			10*time.Second,
 			dataplane.NewNetlinkHandle,
-			logutils.NewSummarizer("test loop"),
+			log.NewSummarizer("test loop"),
 		)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(rrs).ToNot(BeNil())

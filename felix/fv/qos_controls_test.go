@@ -27,11 +27,11 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/format"
-	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/fv/connectivity"
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
 	"github.com/projectcalico/calico/felix/fv/workload"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	api "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 )
@@ -95,7 +95,7 @@ var _ = infrastructure.DatastoreDescribe(
 				}
 				out, err := tc.Felixes[felixId].ExecOutput(args...)
 				Expect(err).NotTo(HaveOccurred())
-				logrus.Infof("%s output:\n%v", strings.Join(args, " "), out)
+				log.Infof("%s output:\n%v", strings.Join(args, " "), out)
 				return out
 			}
 		}
@@ -103,7 +103,7 @@ var _ = infrastructure.DatastoreDescribe(
 		Context("With bandwidth limits", func() {
 			getQdisc := func() string {
 				out, err := tc.Felixes[1].ExecOutput("tc", "qdisc")
-				logrus.Infof("tc qdisc output:\n%v", out)
+				log.Infof("tc qdisc output:\n%v", out)
 				Expect(err).NotTo(HaveOccurred())
 				return out
 			}
@@ -117,7 +117,7 @@ var _ = infrastructure.DatastoreDescribe(
 				By("Running iperf3 client on workload 1")
 				baselineRate, err := retryIperfClient(w[1], 5, 5*time.Second, "-c", w[0].IP, "-O5", "-J")
 				Expect(err).NotTo(HaveOccurred())
-				logrus.Infof("iperf client rate with no bandwidth limit (bps): %v", baselineRate)
+				log.Infof("iperf client rate with no bandwidth limit (bps): %v", baselineRate)
 				// Expect the baseline rate to be much greater (>=100x) the bandwidth
 				// that we are going to configure just below. In practice we see
 				// several Gbps here.
@@ -139,7 +139,7 @@ var _ = infrastructure.DatastoreDescribe(
 
 				ingressLimitedRate, err := retryIperfClient(w[1], 5, 5*time.Second, "-c", w[0].IP, "-O5", "-J", "-R")
 				Expect(err).NotTo(HaveOccurred())
-				logrus.Infof("iperf client rate with ingress bandwidth limit (bps): %v", ingressLimitedRate)
+				log.Infof("iperf client rate with ingress bandwidth limit (bps): %v", ingressLimitedRate)
 				// Expect the limited rate to be within 20% of the desired rate
 				Expect(ingressLimitedRate).To(BeNumerically(">=", 100000.0*0.8))
 				Expect(ingressLimitedRate).To(BeNumerically("<=", 100000.0*1.2))
@@ -160,7 +160,7 @@ var _ = infrastructure.DatastoreDescribe(
 
 				egressLimitedRate, err := retryIperfClient(w[1], 5, 5*time.Second, "-c", w[0].IP, "-O5", "-J")
 				Expect(err).NotTo(HaveOccurred())
-				logrus.Infof("iperf client rate with egress bandwidth limit (bps): %v", egressLimitedRate)
+				log.Infof("iperf client rate with egress bandwidth limit (bps): %v", egressLimitedRate)
 				// Expect the limited rate to be within 20% of the desired rate
 				Expect(egressLimitedRate).To(BeNumerically(">=", 100000.0*0.8))
 				Expect(egressLimitedRate).To(BeNumerically("<=", 100000.0*1.2))
@@ -195,7 +195,7 @@ var _ = infrastructure.DatastoreDescribe(
 				By("Running iperf3 client on workload 1")
 				baselineRate, err := retryIperfClient(w[1], 5, 5*time.Second, "-c", w[0].IP, "-O5", "-M1000", "-J")
 				Expect(err).NotTo(HaveOccurred())
-				logrus.Infof("iperf client rate with no packet rate limit (bps): %v", baselineRate)
+				log.Infof("iperf client rate with no packet rate limit (bps): %v", baselineRate)
 				// Expect the baseline rate to be much greater (>=100x) the bandwidth that we
 				// would get with the packet rate we are going to configure just below (1000 byte
 				// packets * 8 bits/byte * 100 packets/s = 800000 bps). In practice we see several
@@ -224,7 +224,7 @@ var _ = infrastructure.DatastoreDescribe(
 
 				ingressLimitedRate, err := retryIperfClient(w[1], 5, 5*time.Second, "-c", w[0].IP, "-O5", "-M1000", "-J")
 				Expect(err).NotTo(HaveOccurred())
-				logrus.Infof("iperf client rate with ingress packet rate limit on server (bps): %v", ingressLimitedRate)
+				log.Infof("iperf client rate with ingress packet rate limit on server (bps): %v", ingressLimitedRate)
 				// Expect the limited rate to be below an estimated desired rate (1000 byte packets * 8 bits/byte * 100 packets/s = 800000 bps), with a 20% margin
 				Expect(ingressLimitedRate).To(BeNumerically("<=", 800000.0*1.2))
 
@@ -268,7 +268,7 @@ var _ = infrastructure.DatastoreDescribe(
 
 				egressLimitedRate, err := retryIperfClient(w[1], 5, 5*time.Second, "-c", w[0].IP, "-O5", "-M1000", "-J")
 				Expect(err).NotTo(HaveOccurred())
-				logrus.Infof("iperf client rate with egress packet rate limit on client (bps): %v", egressLimitedRate)
+				log.Infof("iperf client rate with egress packet rate limit on client (bps): %v", egressLimitedRate)
 				// Expect the limited rate to be below an estimated desired rate (1000 byte packets * 8 bits/byte * 100 packets/s = 800000 bps) , with a 20% margin
 				Expect(egressLimitedRate).To(BeNumerically("<=", 800000.0*1.2))
 
@@ -302,7 +302,7 @@ var _ = infrastructure.DatastoreDescribe(
 		Context("With connection limits", func() {
 			tryConnect := func(w *workload.Workload, ip string, port int, opts workload.PersistentConnectionOpts) func() error {
 				return func() error {
-					logrus.Info("Trying to start connection")
+					log.Info("Trying to start connection")
 					pc, err := w.StartPersistentConnectionMayFail(ip, port, opts)
 					if err == nil {
 						pc.Stop()
@@ -322,7 +322,7 @@ var _ = infrastructure.DatastoreDescribe(
 
 				By("Starting n+1th connection on workload 1, expecting success")
 				Eventually(tryConnect(w[1], w[0].IP, 8055, workload.PersistentConnectionOpts{}), "10s", "1s").ShouldNot(HaveOccurred())
-				logrus.Infof("%dth connection suceeded as expected", numConnections)
+				log.Infof("%dth connection suceeded as expected", numConnections)
 
 				By("Stopping persistent connections")
 				for i := range len(pcs) {
@@ -356,14 +356,14 @@ var _ = infrastructure.DatastoreDescribe(
 
 				By("Starting n+1th connection on workload 1, expecting failure")
 				Eventually(tryConnect(w[1], w[0].IP, 8055, workload.PersistentConnectionOpts{}), "10s", "1s").Should(HaveOccurred())
-				logrus.Infof("%dth connection failed as expected", numConnections)
+				log.Infof("%dth connection failed as expected", numConnections)
 
 				By("Stopping one persistent connection to free up a spot in the limit")
 				pcs[len(pcs)-1].Stop()
 
 				By("Starting nth connection on workload 1, expecting success")
 				Eventually(tryConnect(w[1], w[0].IP, 8055, workload.PersistentConnectionOpts{}), "10s", "1s").ShouldNot(HaveOccurred())
-				logrus.Infof("%dth connection failed as expected", numConnections-1)
+				log.Infof("%dth connection failed as expected", numConnections-1)
 
 				By("Stopping remaining persistent connections")
 				for i := range len(pcs) - 1 {
@@ -415,7 +415,7 @@ var _ = infrastructure.DatastoreDescribe(
 
 				By("Starting n+1th connection on workload 1, expecting failure")
 				Eventually(tryConnect(w[1], w[0].IP, 8055, workload.PersistentConnectionOpts{}), "10s", "1s").Should(HaveOccurred())
-				logrus.Infof("%dth connection failed as expected", numConnections)
+				log.Infof("%dth connection failed as expected", numConnections)
 
 				By("Stopping persistent connections")
 				for i := range len(pcs) {
@@ -447,7 +447,7 @@ var _ = infrastructure.DatastoreDescribe(
 
 				By("Starting n+1th connection on workload 1, expecting success")
 				Eventually(tryConnect(w[1], w[0].IP, 8055, workload.PersistentConnectionOpts{}), "10s", "1s").ShouldNot(HaveOccurred())
-				logrus.Infof("%dth connection suceeded as expected", numConnections)
+				log.Infof("%dth connection suceeded as expected", numConnections)
 
 				By("Stopping persistent connections")
 				for i := range len(pcs) {
@@ -503,7 +503,7 @@ func retryIperfClient(w *workload.Workload, retryNum int, retryInterval time.Dur
 
 	for i := range retryNum {
 		// Use i+1 when logging to begin counting from 1, not 0
-		logrus.Infof("retryIperfClient: Retry %d of %d", i+1, retryNum)
+		log.Infof("retryIperfClient: Retry %d of %d", i+1, retryNum)
 		out, err = w.ExecOutput(args...)
 		if err != nil {
 			time.Sleep(retryInterval)

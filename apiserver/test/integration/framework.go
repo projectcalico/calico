@@ -1,4 +1,4 @@
-// Copyright (c) 2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2021-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,7 +26,6 @@ import (
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	calicoclient "github.com/projectcalico/api/pkg/client/clientset_generated/clientset"
-	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
@@ -34,6 +33,7 @@ import (
 
 	"github.com/projectcalico/calico/apiserver/cmd/apiserver/server"
 	"github.com/projectcalico/calico/apiserver/pkg/apiserver"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 const defaultEtcdPathPrefix = ""
@@ -136,14 +136,14 @@ func waitForApiserverUp(serverURL string, stopCh <-chan struct{}) error {
 			case <-stopCh:
 				return true, fmt.Errorf("apiserver failed")
 			default:
-				logrus.Infof("Waiting for : %#v", serverURL)
+				log.Infof("Waiting for : %#v", serverURL)
 				tr := &http.Transport{
 					TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 				}
 				c := &http.Client{Transport: tr}
 				_, err := c.Get(serverURL)
 				if err == nil {
-					logrus.Tracef("Found server after %v tries and duration %v",
+					log.Tracef("Found server after %v tries and duration %v",
 						tries, time.Since(startWaiting))
 					return true, nil
 				}

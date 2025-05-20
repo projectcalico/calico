@@ -24,7 +24,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 
 	bpfutils "github.com/projectcalico/calico/felix/bpf/utils"
@@ -38,6 +37,7 @@ import (
 	"github.com/projectcalico/calico/felix/routetable"
 	"github.com/projectcalico/calico/felix/rules"
 	"github.com/projectcalico/calico/felix/vxlanfdb"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 type vxlanManager struct {
@@ -75,7 +75,7 @@ type vxlanManager struct {
 	routeProtocol     netlink.RouteProtocol
 
 	// Log context
-	logCtx     *logrus.Entry
+	logCtx     log.Entry
 	opRecorder logutils.OpRecorder
 
 	// In dual-stack setup in ebpf mode, for the sake of simplicity, we still
@@ -136,7 +136,7 @@ func newVXLANManagerWithShims(
 	mtu int,
 	opts ...vxlanMgrOption,
 ) *vxlanManager {
-	logCtx := logrus.WithField("ipVersion", ipVersion)
+	logCtx := log.WithField("ipVersion", ipVersion)
 	m := &vxlanManager{
 		ipsetsDataplane: ipsetsDataplane,
 		ipSetMetadata: ipsets.IPSetMetadata{
@@ -284,14 +284,14 @@ func (m *vxlanManager) OnUpdate(protoBufMsg interface{}) {
 func (m *vxlanManager) deleteRoute(dst string) {
 	_, exists := m.routesByDest[dst]
 	if exists {
-		logrus.Debug("deleting route dst ", dst)
+		log.Debug("deleting route dst ", dst)
 		// In case the route changes type to one we no longer care about...
 		delete(m.routesByDest, dst)
 		m.routesDirty = true
 	}
 
 	if _, exists := m.localIPAMBlocks[dst]; exists {
-		logrus.Debug("deleting local ipam dst ", dst)
+		log.Debug("deleting local ipam dst ", dst)
 		delete(m.localIPAMBlocks, dst)
 		m.routesDirty = true
 	}
@@ -433,7 +433,7 @@ func (m *vxlanManager) updateRoutes() {
 	m.routeTable.SetRoutes(routetable.RouteClassIPAMBlockDrop, routetable.InterfaceNone, bhRoutes)
 
 	if m.parentIfaceName != "" {
-		m.logCtx.WithFields(logrus.Fields{
+		m.logCtx.WithFields(log.Fields{
 			"noEncapDevice": m.parentIfaceName,
 			"routes":        noEncapRoutes,
 		}).Debug("VXLAN manager sending unencapsulated L3 updates")
@@ -496,7 +496,7 @@ func (m *vxlanManager) KeepVXLANDeviceInSync(
 	wait time.Duration,
 	parentNameC chan string,
 ) {
-	m.logCtx.WithFields(logrus.Fields{
+	m.logCtx.WithFields(log.Fields{
 		"mtu":        mtu,
 		"xsumBroken": xsumBroken,
 		"wait":       wait,
@@ -510,9 +510,9 @@ func (m *vxlanManager) KeepVXLANDeviceInSync(
 		select {
 		case <-timer.C:
 		case <-ctx.Done():
-			logrus.Debug("Sleep returning early: context finished.")
+			log.Debug("Sleep returning early: context finished.")
 		case <-m.myVTEPChangedC:
-			logrus.Debug("Sleep returning early: VTEP changed.")
+			log.Debug("Sleep returning early: VTEP changed.")
 		}
 	}
 
@@ -604,7 +604,7 @@ func (m *vxlanManager) configureVXLANDevice(
 	localVTEP *proto.VXLANTunnelEndpointUpdate,
 	xsumBroken bool,
 ) error {
-	logCtx := m.logCtx.WithFields(logrus.Fields{"device": m.vxlanDevice})
+	logCtx := m.logCtx.WithFields(log.Fields{"device": m.vxlanDevice})
 	logCtx.Debug("Configuring VXLAN tunnel device")
 
 	mac, err := parseMacForIPVersion(localVTEP, m.ipVersion)
@@ -669,13 +669,13 @@ func (m *vxlanManager) configureVXLANDevice(
 	// already. Check for mismatched configuration. If they don't match, recreate the device.
 	if incompat := vxlanLinksIncompat(vxlan, link); incompat != "" {
 		// Existing device doesn't match desired configuration - delete it and recreate.
-		logrus.Warningf("%q exists with incompatible configuration: %v; recreating device", vxlan.Name, incompat)
+		log.Warningf("%q exists with incompatible configuration: %v; recreating device", vxlan.Name, incompat)
 		if err = m.nlHandle.LinkDel(link); err != nil {
 			return fmt.Errorf("failed to delete interface: %v", err)
 		}
 		if err = m.nlHandle.LinkAdd(vxlan); err != nil {
 			if err == syscall.EEXIST {
-				logrus.Warnf("Failed to create VXLAN device. Another device with this VNI may already exist")
+				log.Warnf("Failed to create VXLAN device. Another device with this VNI may already exist")
 			}
 			return fmt.Errorf("failed to create vxlan interface: %v", err)
 		}
@@ -689,7 +689,7 @@ func (m *vxlanManager) configureVXLANDevice(
 	attrs := link.Attrs()
 	oldMTU := attrs.MTU
 	if mtu != 0 && oldMTU != mtu {
-		logCtx.WithFields(logrus.Fields{"old": oldMTU, "new": mtu}).Info("VXLAN device MTU needs to be updated")
+		logCtx.WithFields(log.Fields{"old": oldMTU, "new": mtu}).Info("VXLAN device MTU needs to be updated")
 		if err := m.nlHandle.LinkSetMTU(link, mtu); err != nil {
 			m.logCtx.WithError(err).Warn("Failed to set vxlan tunnel device MTU")
 		} else {
@@ -747,7 +747,7 @@ func (m *vxlanManager) ensureAddressOnLink(ipStr string, link netlink.Link) erro
 			addrPresent = true
 			continue
 		}
-		m.logCtx.WithFields(logrus.Fields{
+		m.logCtx.WithFields(log.Fields{
 			"address": existing,
 			"link":    link.Attrs().Name,
 		}).Warn("Removing unwanted IP from VXLAN device")
@@ -758,7 +758,7 @@ func (m *vxlanManager) ensureAddressOnLink(ipStr string, link netlink.Link) erro
 
 	// Actually add the desired address to the interface if needed.
 	if !addrPresent {
-		m.logCtx.WithFields(logrus.Fields{"address": addr}).Info("Assigning address to VXLAN device")
+		m.logCtx.WithFields(log.Fields{"address": addr}).Info("Assigning address to VXLAN device")
 		if err := m.nlHandle.AddrAdd(link, &addr); err != nil {
 			return fmt.Errorf("failed to add IP address")
 		}

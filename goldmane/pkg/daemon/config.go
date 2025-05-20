@@ -20,11 +20,10 @@ import (
 	"os"
 	"time"
 
-	"github.com/sirupsen/logrus"
-
 	"github.com/projectcalico/calico/goldmane/pkg/goldmane"
 	"github.com/projectcalico/calico/goldmane/pkg/internal/utils"
 	"github.com/projectcalico/calico/goldmane/pkg/storage"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 type goldmaneFileConfig struct {
@@ -69,16 +68,16 @@ func newSinkManager(agg *goldmane.Goldmane, sink storage.Sink, path string) (*si
 }
 
 func (f *sinkManager) run(ctx context.Context) {
-	logrus.WithField("path", f.path).Info("Starting sink manager with config path")
-	defer logrus.Warn("Sink manager exiting")
+	log.WithField("path", f.path).Info("Starting sink manager with config path")
+	defer log.Warn("Sink manager exiting")
 	defer close(f.upd)
 
 	// Start of day - check if we should enable the sink.
 	if sinkEnabled(f.path) {
-		logrus.Debug("Sink enabled at startup")
+		log.Debug("Sink enabled at startup")
 		f.gm.SetSink(f.sink)
 	}
-	logrus.Info("Sink manager started")
+	log.Info("Sink manager started")
 
 	// Start the file watch.
 	go f.watchFn(ctx)
@@ -98,7 +97,7 @@ func (f *sinkManager) set(enabled bool) {
 		// No change.
 		return
 	}
-	logrus.WithField("enabled", enabled).Info("Sink enablement changed")
+	log.WithField("enabled", enabled).Info("Sink enablement changed")
 	if enabled {
 		f.gm.SetSink(f.sink)
 	} else {
@@ -116,13 +115,13 @@ func sinkEnabled(path string) bool {
 	// Open the file and read the contents.
 	contents, err := os.ReadFile(path)
 	if err != nil {
-		logrus.WithError(err).Warn("Error reading emitter enabled file")
+		log.WithError(err).Warn("Error reading emitter enabled file")
 		return false
 	}
 	var cfg goldmaneFileConfig
 	err = json.Unmarshal(contents, &cfg)
 	if err != nil {
-		logrus.WithError(err).Warn("Error unmarshalling emitter enabled file")
+		log.WithError(err).Warn("Error unmarshalling emitter enabled file")
 		return false
 	}
 	return cfg.EmitFlows
