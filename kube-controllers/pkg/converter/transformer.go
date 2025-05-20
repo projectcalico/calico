@@ -44,6 +44,9 @@ func PodTransformer(podControllerEnabled bool) cache.TransformFunc {
 				HostNetwork: pod.Spec.HostNetwork,
 			},
 			Status: v1.PodStatus{
+				// Strictly speaking, we could probably get away with just using PodIPs here,
+				// but better to be safe than sorry.
+				PodIP:  pod.Status.PodIP,
 				PodIPs: pod.Status.PodIPs,
 				Phase:  pod.Status.Phase,
 			},
@@ -59,6 +62,7 @@ func PodTransformer(podControllerEnabled bool) cache.TransformFunc {
 		// Include the annotations we care about, if they exist.
 		if pod.Annotations != nil {
 			for _, annotation := range []string{
+				conversion.AnnotationPodIP,
 				conversion.AnnotationPodIPs,
 				conversion.AnnotationAWSPodIPs,
 			} {
