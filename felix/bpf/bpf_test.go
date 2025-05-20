@@ -29,7 +29,6 @@ import (
 
 	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/labelindex"
-	"github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/lib/std/log"
 )
 
@@ -55,7 +54,7 @@ func cleanup(calicoDir string) error {
 }
 
 func setup() {
-	logutils.ConfigureEarlyLogging()
+	log.ConfigureEarlyLogging()
 	log.SetLevel(log.DebugLevel)
 
 	_ = cleanup("")

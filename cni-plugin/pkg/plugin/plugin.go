@@ -48,7 +48,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/resources"
 	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
+
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
 )
@@ -708,7 +708,7 @@ func cmdDummyCheck(args *skel.CmdArgs) (err error) {
 
 func Main(version string) {
 	// Set up logging formatting.
-	logutils.ConfigureFormatter("cni-plugin")
+	log.ConfigureFormatter("cni-plugin")
 
 	// Use a new flag set so as not to conflict with existing libraries which use "flag"
 	flagSet := flag.NewFlagSet("Calico", flag.ExitOnError)

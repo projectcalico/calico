@@ -19,7 +19,7 @@ import (
 	"os"
 
 	"github.com/projectcalico/calico/lib/std/log"
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
+
 	"github.com/projectcalico/calico/pod2daemon/csidriver/driver"
 )
 
@@ -27,7 +27,7 @@ func main() {
 	// Set the log output to stdout to prevent some components from interpreting logs as errors (e.g. fluentd).
 	log.SetOutput(os.Stdout)
 	// Set up logging formatting.
-	logutils.ConfigureFormatter("csi-driver")
+	log.ConfigureFormatter("csi-driver")
 	// Set the preliminary log level
 	log.SetLevel(log.WarnLevel)
 

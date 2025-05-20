@@ -23,11 +23,10 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/calico/lib/std/log"
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 )
 
 func init() {
-	logutils.ConfigureFormatter("test")
+	log.ConfigureFormatter("test")
 }
 
 func TestDiags(t *testing.T) {

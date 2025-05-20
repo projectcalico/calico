@@ -26,7 +26,6 @@ import (
 	"github.com/projectcalico/calico/felix/netlinkshim"
 	"github.com/projectcalico/calico/felix/netlinkshim/mocknetlink"
 	"github.com/projectcalico/calico/lib/std/log"
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 )
 
 func init() {
@@ -170,7 +169,7 @@ func listLinkAddrs(nl netlinkshim.Interface, link netlink.Link) []string {
 
 func setup(t *testing.T, family int) (*mocknetlink.MockNetlinkDataplane, *LinkAddrsManager) {
 	RegisterTestingT(t)
-	logutils.ConfigureLoggingForTestingT(t)
+	log.ConfigureLoggingForTestingT(t)
 
 	dataplane := mocknetlink.New()
 	m := New(

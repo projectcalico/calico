@@ -26,12 +26,11 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/nat"
 	"github.com/projectcalico/calico/felix/bpf/proxy"
 	"github.com/projectcalico/calico/felix/ip"
-	"github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/lib/std/log"
 )
 
 func init() {
-	logutils.ConfigureEarlyLogging()
+	log.ConfigureEarlyLogging()
 	log.SetOutput(GinkgoWriter)
 	log.SetLevel(log.DebugLevel)
 }

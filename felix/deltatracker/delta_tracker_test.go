@@ -20,12 +20,11 @@ import (
 
 	. "github.com/onsi/gomega"
 
-	"github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/lib/std/log"
 )
 
 func init() {
-	logutils.ConfigureEarlyLogging()
+	log.ConfigureEarlyLogging()
 	log.SetLevel(log.DebugLevel)
 }
 

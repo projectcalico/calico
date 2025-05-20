@@ -12,7 +12,6 @@ import (
 	"github.com/projectcalico/calico/goldmane/proto"
 	"github.com/projectcalico/calico/lib/std/chanutil"
 	"github.com/projectcalico/calico/lib/std/log"
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 )
 
 var numStreams = prometheus.NewGauge(prometheus.GaugeOpts{
@@ -51,9 +50,9 @@ func NewStreamManager() *streamManager {
 		streamRequests:   make(chan *streamRequest, 10),
 		backfillRequests: make(chan Stream, 10),
 		maxStreams:       maxStreams,
-		rl: logutils.NewRateLimitedLogger(
-			logutils.OptBurst(1),
-			logutils.OptInterval(15*time.Second),
+		rl: log.NewRateLimitedLogger(
+			log.OptBurst(1),
+			log.OptInterval(15*time.Second),
 		),
 	}
 }
@@ -132,7 +131,7 @@ type streamManager struct {
 	flowCh chan storage.FlowBuilder
 
 	// rl is used to rate limit log messages that may happen frequently.
-	rl *logutils.RateLimitedLogger
+	rl *log.RateLimitedLogger
 }
 
 func (m *streamManager) Run(ctx context.Context) {
@@ -222,9 +221,9 @@ func (m *streamManager) register(req *streamRequest) *stream {
 		done:   m.closedStreamsCh,
 		ctx:    ctx,
 		cancel: cancel,
-		rl: logutils.NewRateLimitedLogger(
-			logutils.OptBurst(1),
-			logutils.OptInterval(15*time.Second),
+		rl: log.NewRateLimitedLogger(
+			log.OptBurst(1),
+			log.OptInterval(15*time.Second),
 		),
 	}
 	m.streams.add(stream)

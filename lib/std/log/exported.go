@@ -326,6 +326,10 @@ func SetLevelWithDefault(lvl string, defaultLevel Level) {
 	std.SetLevel(ParseLevelOrDefault(lvl, defaultLevel))
 }
 
+func ConfigureFormatter(componentName string) {
+	SetFormatter(NewDefaultFormatterWithName(componentName))
+}
+
 var confForTestingOnce sync.Once
 
 // ConfigureLoggingForTestingT configures logrus to write to the logger of the

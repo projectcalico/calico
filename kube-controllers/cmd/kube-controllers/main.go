@@ -49,7 +49,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/debugserver"
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
+
 	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
 	"github.com/projectcalico/calico/pkg/buildinfo"
 	"github.com/projectcalico/calico/pkg/cmdwrapper"
@@ -84,7 +84,7 @@ func main() {
 	}
 
 	// Set up logging formatting.
-	logutils.ConfigureFormatter("kube-controllers")
+	log.ConfigureFormatter("kube-controllers")
 
 	// Attempt to load configuration.
 	cfg := new(config.Config)

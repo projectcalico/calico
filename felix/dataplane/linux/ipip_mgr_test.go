@@ -26,7 +26,6 @@ import (
 
 	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
 	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
-	"github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/routetable"
 	"github.com/projectcalico/calico/felix/rules"
@@ -64,7 +63,7 @@ var _ = Describe("IpipMgr (tunnel configuration)", func() {
 		rt = &mockRouteTable{
 			currentRoutes: map[string][]routetable.Target{},
 		}
-		opRecorder := logutils.NewSummarizer("test")
+		opRecorder := log.NewSummarizer("test")
 		ipipMgr = newIPIPManagerWithShim(
 			ipSets, rt, dataplanedefs.IPIPIfaceName,
 			Config{
@@ -242,7 +241,7 @@ var _ = Describe("ipipManager IP set updates", func() {
 
 		la := netlink.NewLinkAttrs()
 		la.Name = "eth0"
-		opRecorder := logutils.NewSummarizer("test")
+		opRecorder := log.NewSummarizer("test")
 		ipipMgr = newIPIPManagerWithShim(
 			ipSets, rt, dataplanedefs.IPIPIfaceName,
 			Config{
@@ -402,7 +401,7 @@ var _ = Describe("IPIPManager route updates", func() {
 
 		la := netlink.NewLinkAttrs()
 		la.Name = "eth0"
-		opRecorder := logutils.NewSummarizer("test")
+		opRecorder := log.NewSummarizer("test")
 		manager = newIPIPManagerWithShim(
 			ipSets, rt, dataplanedefs.IPIPIfaceName,
 			Config{

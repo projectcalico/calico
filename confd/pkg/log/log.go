@@ -9,12 +9,11 @@ package log
 
 import (
 	"github.com/projectcalico/calico/lib/std/log"
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 )
 
 func init() {
 	// Set up logging formatting.
-	logutils.ConfigureFormatter("confd")
+	log.ConfigureFormatter("confd")
 }
 
 // SetLevel sets the log level. Valid levels are panic, fatal, error, warn, info and debug.

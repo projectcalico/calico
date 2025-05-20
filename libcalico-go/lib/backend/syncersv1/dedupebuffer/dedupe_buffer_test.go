@@ -24,12 +24,11 @@ import (
 	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 )
 
 func init() {
 	// Set up logging formatting.
-	logutils.ConfigureFormatter("test")
+	log.ConfigureFormatter("test")
 	log.SetLevel(log.DebugLevel)
 }
 

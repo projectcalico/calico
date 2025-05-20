@@ -28,7 +28,6 @@ import (
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/netlinkshim/mocknetlink"
 	"github.com/projectcalico/calico/lib/std/log"
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 )
 
 func init() {
@@ -159,7 +158,7 @@ func TestVXLANFDB_LinkCreatedAfterSetup(t *testing.T) {
 // TestVXLANFDB_IPv6 mainline test for IPv6.
 func TestVXLANFDB_IPv6(t *testing.T) {
 	RegisterTestingT(t)
-	logutils.ConfigureLoggingForTestingT(t)
+	log.ConfigureLoggingForTestingT(t)
 
 	dataplane := mocknetlink.New()
 	fdb := New(
@@ -739,7 +738,7 @@ func TestVXLANFDB_TransientNetlinkErrors(t *testing.T) {
 
 func setup(t *testing.T) (*mocknetlink.MockNetlinkDataplane, *VXLANFDB) {
 	RegisterTestingT(t)
-	logutils.ConfigureLoggingForTestingT(t)
+	log.ConfigureLoggingForTestingT(t)
 
 	dataplane := mocknetlink.New()
 	fdb := New(

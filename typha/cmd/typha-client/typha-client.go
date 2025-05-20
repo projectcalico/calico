@@ -27,7 +27,6 @@ import (
 	"github.com/projectcalico/calico/pkg/buildinfo"
 	"github.com/projectcalico/calico/typha/pkg/config"
 	"github.com/projectcalico/calico/typha/pkg/discovery"
-	"github.com/projectcalico/calico/typha/pkg/logutils"
 	"github.com/projectcalico/calico/typha/pkg/syncclient"
 	"github.com/projectcalico/calico/typha/pkg/syncproto"
 )
@@ -70,8 +69,8 @@ func (s *syncerCallbacks) OnUpdates(updates []api.Update) {
 
 func main() {
 	// Set up logging.
-	logutils.ConfigureEarlyLogging()
-	logutils.ConfigureLogging(&config.Config{
+	log.ConfigureEarlyLogging()
+	log.ConfigureLogging(&config.Config{
 		LogSeverityScreen:       "info",
 		DebugDisableLogDropping: true,
 	})

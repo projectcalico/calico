@@ -29,7 +29,6 @@ import (
 
 	"github.com/projectcalico/calico/felix/config"
 	"github.com/projectcalico/calico/lib/std/log"
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -62,7 +61,7 @@ func main() {
 }
 
 func configureLogging() {
-	logutils.ConfigureFormatter("docgen")
+	log.ConfigureFormatter("docgen")
 	log.SetLevel(log.FatalLevel)
 	logLevel, err := log.ParseLevel(*logLevel)
 	if err != nil {

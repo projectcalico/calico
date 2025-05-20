@@ -1843,13 +1843,13 @@ func (c *client) keyUpdated(key string) {
 
 func (c *client) updateLogLevel() {
 	if envLevel := os.Getenv("BGP_LOGSEVERITYSCREEN"); envLevel != "" {
-		logutils.SetLevel(envLevel)
+		log.SetLevel(envLevel)
 	} else if nodeLevel := c.cache[c.nodeLogKey]; nodeLevel != "" {
-		logutils.SetLevel(nodeLevel)
+		log.SetLevel(nodeLevel)
 	} else if globalLogLevel := c.cache[globalLogging]; globalLogLevel != "" {
-		logutils.SetLevel(globalLogLevel)
+		log.SetLevel(globalLogLevel)
 	} else {
-		logutils.SetLevel("info")
+		log.SetLevel("info")
 	}
 }
 

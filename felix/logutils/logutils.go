@@ -21,7 +21,6 @@ import (
 
 	"github.com/projectcalico/calico/felix/config"
 	"github.com/projectcalico/calico/lib/std/log"
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 )
 
 var (
@@ -52,7 +51,7 @@ func ConfigureEarlyLogging() {
 	log.SetOutput(os.Stdout)
 
 	// Set up logging formatting.
-	logutils.ConfigureFormatter("felix")
+	log.ConfigureFormatter("felix")
 
 	// First try the early-only environment variable.  Since the normal
 	// config processing doesn't know about that variable, normal config
@@ -138,7 +137,7 @@ func ConfigureLogging(configParams *config.Config) {
 
 	// Disable logrus' default output, which only supports a single destination.  We use the
 	// hook above to fan out logs to multiple destinations.
-	log.SetOutput(&logutils.NullWriter{})
+	log.SetOutput(&log.NullWriter{})
 
 	// Do any deferred error logging.
 	if fileDirErr != nil {

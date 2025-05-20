@@ -40,13 +40,13 @@ import (
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
+
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 
 func Main(version string) {
 	// Set up logging formatting.
-	logutils.ConfigureFormatter("ipam")
+	log.ConfigureFormatter("ipam")
 
 	// Display the version on "-v", otherwise just delegate to the skel code.
 	// Use a new flag set so as not to conflict with existing libraries which use "flag"

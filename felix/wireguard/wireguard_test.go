@@ -31,7 +31,6 @@ import (
 	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/ifacemonitor"
 	"github.com/projectcalico/calico/felix/ip"
-	"github.com/projectcalico/calico/felix/logutils"
 	mocknetlink "github.com/projectcalico/calico/felix/netlinkshim/mocknetlink"
 	"github.com/projectcalico/calico/felix/timeshim/mocktime"
 	. "github.com/projectcalico/calico/felix/wireguard"
@@ -290,7 +289,7 @@ func describeEnableTests(enableV4, enableV6 bool) {
 				FelixRouteProtocol,
 				s.status,
 				s.writeProcSys,
-				logutils.NewSummarizer("test loop v4"),
+				log.NewSummarizer("test loop v4"),
 				mockFeatureDetector,
 			)
 
@@ -317,7 +316,7 @@ func describeEnableTests(enableV4, enableV6 bool) {
 				FelixRouteProtocol,
 				sV6.status,
 				sV6.writeProcSys,
-				logutils.NewSummarizer("test loop v6"),
+				log.NewSummarizer("test loop v6"),
 				mockFeatureDetector,
 			)
 
@@ -3395,7 +3394,7 @@ var _ = Describe("Wireguard (disabled)", func() {
 			FelixRouteProtocol,
 			s.status,
 			s.writeProcSys,
-			logutils.NewSummarizer("test loop"),
+			log.NewSummarizer("test loop"),
 			mockFeatureDetector,
 		)
 
@@ -3412,7 +3411,7 @@ var _ = Describe("Wireguard (disabled)", func() {
 			FelixRouteProtocol,
 			sV6.status,
 			sV6.writeProcSys,
-			logutils.NewSummarizer("test loop"),
+			log.NewSummarizer("test loop"),
 			mockFeatureDetector,
 		)
 	})
@@ -3722,7 +3721,7 @@ var _ = Describe("Wireguard (with no table index)", func() {
 				FelixRouteProtocol,
 				s.status,
 				s.writeProcSys,
-				logutils.NewSummarizer("test loop"),
+				log.NewSummarizer("test loop"),
 				mockFeatureDetector,
 			)
 		}

@@ -27,7 +27,7 @@ import (
 	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
+
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	"github.com/projectcalico/calico/pkg/buildinfo"
 	"github.com/projectcalico/calico/typha/pkg/discovery"
@@ -119,7 +119,7 @@ const (
 
 func main() {
 	defer func() {
-		log.WithField(logutils.FieldForceFlush, true).Warning("Exiting...")
+		log.WithField(log.FieldForceFlush, true).Warning("Exiting...")
 	}()
 	configureLogging()
 	log.WithFields(log.Fields{
@@ -211,11 +211,11 @@ func getMyCPUTime() time.Duration {
 func configureLogging() {
 	logLevel := log.InfoLevel
 	log.SetLevel(logLevel)
-	logutils.ConfigureFormatter("mocknode")
+	log.ConfigureFormatter("mocknode")
 
 	// Disable logrus' default output, which only supports a single destination.  We use the
 	// hook above to fan out logs to multiple destinations.
-	log.SetOutput(&logutils.NullWriter{})
+	log.SetOutput(&log.NullWriter{})
 
 	// Since we push our logs onto a second thread via a channel, we can disable the
 	// Logger's built-in mutex completely.

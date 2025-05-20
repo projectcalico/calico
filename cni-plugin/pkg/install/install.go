@@ -32,7 +32,7 @@ import (
 	"k8s.io/client-go/rest"
 
 	"github.com/projectcalico/calico/lib/std/log"
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
+
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
 	"github.com/projectcalico/calico/node/pkg/cni"
@@ -119,7 +119,7 @@ func loadConfig() config {
 
 func Install(version string) error {
 	// Set up logging formatting.
-	logutils.ConfigureFormatter("cni-installer")
+	log.ConfigureFormatter("cni-installer")
 
 	// Clean up any existing binaries / config / assets.
 	if err := os.RemoveAll(winutils.GetHostPath("/host/etc/cni/net.d/calico-tls")); err != nil && !os.IsNotExist(err) {

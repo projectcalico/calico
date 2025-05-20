@@ -79,7 +79,6 @@ import (
 	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/health"
-	logutilslc "github.com/projectcalico/calico/libcalico-go/lib/logutils"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -399,7 +398,7 @@ type bpfEndpointManager struct {
 	v6 *bpfEndpointManagerDataplane
 
 	healthAggregator     *health.HealthAggregator
-	updateRateLimitedLog *logutilslc.RateLimitedLogger
+	updateRateLimitedLog *log.RateLimitedLogger
 }
 
 type bpfEndpointManagerDataplane struct {
@@ -552,9 +551,9 @@ func NewBPFEndpointManager(
 		})
 	}
 
-	m.updateRateLimitedLog = logutilslc.NewRateLimitedLogger(
-		logutilslc.OptInterval(30*time.Second),
-		logutilslc.OptBurst(10),
+	m.updateRateLimitedLog = log.NewRateLimitedLogger(
+		log.OptInterval(30*time.Second),
+		log.OptBurst(10),
 	)
 
 	// Calculate allowed XDP attachment modes.  Note, in BPF mode untracked ingress policy is

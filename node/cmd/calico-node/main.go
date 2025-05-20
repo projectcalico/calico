@@ -24,7 +24,7 @@ import (
 	confd "github.com/projectcalico/calico/confd/pkg/run"
 	felix "github.com/projectcalico/calico/felix/daemon"
 	"github.com/projectcalico/calico/lib/std/log"
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
+
 	"github.com/projectcalico/calico/node/cmd/calico-node/bpf"
 	"github.com/projectcalico/calico/node/pkg/allocateip"
 	"github.com/projectcalico/calico/node/pkg/cni"
@@ -99,7 +99,7 @@ func main() {
 	log.SetOutput(os.Stdout)
 
 	// Set up logging formatting.
-	logutils.ConfigureFormatter("node")
+	log.ConfigureFormatter("node")
 
 	// Parse the provided flags.
 	err := flagSet.Parse(os.Args[1:])

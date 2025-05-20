@@ -47,7 +47,7 @@ import (
 	"github.com/projectcalico/calico/felix/ifacemonitor"
 	"github.com/projectcalico/calico/felix/ipsets"
 	"github.com/projectcalico/calico/felix/iptables"
-	"github.com/projectcalico/calico/felix/logutils"
+	logutil "github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/felix/markbits"
 	"github.com/projectcalico/calico/felix/nfnetlink"
 	"github.com/projectcalico/calico/felix/nftables"
@@ -352,7 +352,7 @@ func StartDataplaneDriver(
 				if configParams.DebugMemoryProfilePath == "" {
 					return
 				}
-				logutils.DumpHeapMemoryProfile(configParams.DebugMemoryProfilePath)
+				logutil.DumpHeapMemoryProfile(configParams.DebugMemoryProfilePath)
 			},
 			HealthAggregator:                   healthAggregator,
 			WatchdogTimeout:                    configParams.DataplaneWatchdogTimeout,

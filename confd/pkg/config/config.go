@@ -98,10 +98,10 @@ func InitConfig(ignoreFlags bool) (*Config, error) {
 
 	if level := os.Getenv("BGP_LOGSEVERITYSCREEN"); level != "" {
 		// If specified, use the provided log level.
-		logutils.SetLevel(level)
+		log.SetLevel(level)
 	} else {
 		// Default to info level logs.
-		logutils.SetLevel("info")
+		log.SetLevel("info")
 	}
 
 	return &config, nil

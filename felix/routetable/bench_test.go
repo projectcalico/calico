@@ -29,7 +29,6 @@ import (
 	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
 	"github.com/projectcalico/calico/felix/fv/utils"
 	"github.com/projectcalico/calico/felix/ip"
-	"github.com/projectcalico/calico/felix/logutils"
 	mocknetlink "github.com/projectcalico/calico/felix/netlinkshim/mocknetlink"
 	. "github.com/projectcalico/calico/felix/routetable"
 	"github.com/projectcalico/calico/felix/routetable/ownershippol"
@@ -56,7 +55,7 @@ func benchResyncNumRoutes(b *testing.B, numRoutes int) {
 		b.Fatal("This test must be run as root.")
 	}
 
-	logutils.ConfigureEarlyLogging()
+	log.ConfigureEarlyLogging()
 	log.SetLevel(log.WarnLevel)
 
 	ifaceName := fmt.Sprintf("testcali%04x", rand.Intn(65536))
@@ -66,7 +65,7 @@ func benchResyncNumRoutes(b *testing.B, numRoutes int) {
 	})
 	utils.Run("ip", "link", "set", "dev", ifaceName, "up")
 
-	sum := logutils.NewSummarizer("test")
+	sum := log.NewSummarizer("test")
 	mockDP := mocknetlink.New()
 	rt := New(
 		ownershippol.NewMainTable(

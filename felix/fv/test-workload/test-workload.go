@@ -39,7 +39,6 @@ import (
 	"github.com/projectcalico/calico/felix/fv/connectivity"
 	"github.com/projectcalico/calico/felix/fv/utils"
 	"github.com/projectcalico/calico/lib/std/log"
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 )
 
 const usage = `test-workload, test workload for Felix FV testing.
@@ -52,7 +51,7 @@ Usage:
 
 func main() {
 	log.SetLevel(log.DebugLevel)
-	logutils.ConfigureFormatter("test-workload")
+	log.ConfigureFormatter("test-workload")
 
 	// If we've been told to, move into this felix's cgroup.
 	cgroup.MaybeMoveToFelixCgroupv2()

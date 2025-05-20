@@ -26,7 +26,6 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/projectcalico/calico/lib/std/log"
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 )
 
 var logLevel = flag.String("log-level", "fatal", "Log level, one of fatal, error, info, debug, etc.")
@@ -128,7 +127,7 @@ func processFile(fileName string) (err error) {
 }
 
 func configureLogging() {
-	logutils.ConfigureFormatter("coalesce-imports")
+	log.ConfigureFormatter("coalesce-imports")
 	log.SetLevel(log.FatalLevel)
 	logLevel, err := log.ParseLevel(*logLevel)
 	if err != nil {

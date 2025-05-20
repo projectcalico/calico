@@ -17,7 +17,6 @@ import (
 	"os"
 
 	"github.com/projectcalico/calico/lib/std/log"
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 )
 
 // ConfigureLogging configures the logging framework. The logging level that will
@@ -25,7 +24,7 @@ import (
 // The output will be set to STDOUT and the format is TextFormat
 func ConfigureLogging(logLevel string) {
 	// Install a hook that adds file/line number information.
-	logutils.ConfigureFormatter("goldmane")
+	log.ConfigureFormatter("goldmane")
 	log.SetOutput(os.Stdout)
 
 	// Override with desired log level
