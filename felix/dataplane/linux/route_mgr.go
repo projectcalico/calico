@@ -140,7 +140,7 @@ func isRemoteTunnelRoute(msg *proto.RouteUpdate, ippoolType proto.IPPoolType) bo
 	isBlock = isType(msg, proto.RouteType_REMOTE_WORKLOAD)
 
 	if isRemoteTunnel && msg.Borrowed {
-		// If we receive a route for a borrowed VXLAN tunnel IP, we need to make sure to program a route for it as it
+		// If we receive a route for a borrowed tunnel IP, we need to make sure to program a route for it as it
 		// won't be covered by the block route.
 		return true
 	}
