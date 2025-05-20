@@ -109,7 +109,7 @@ EOF
 		timestamp=`date "+%a %b %d %Y"`
 		{
 		    cat <<EOF
-* ${timestamp} Neil Jerram <neil@tigera.io> ${rpmver}-${rpmrel}
+* ${timestamp} Daniel Fox<dan.fox@tigera.io> ${rpmver}-${rpmrel}
 EOF
 		    if ${release}; then
 			cat <<EOF
