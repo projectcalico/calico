@@ -19,11 +19,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/sirupsen/logrus"
-
 	"github.com/projectcalico/calico/guardian/pkg/config"
 	"github.com/projectcalico/calico/guardian/pkg/server"
 	"github.com/projectcalico/calico/guardian/pkg/tunnel"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // Run starts the daemon, which configures and starts the services needed for guardian to run.
@@ -37,7 +36,7 @@ func Run(ctx context.Context, cfg config.Config, proxyTargets []server.Target) {
 
 	proxyURL, err := cfg.GetHTTPProxyURL()
 	if err != nil {
-		logrus.WithError(err).Fatal("Failed to resolve proxy URL.")
+		log.WithError(err).Fatal("Failed to resolve proxy URL.")
 	} else if proxyURL != nil {
 		tunnelDialOpts = append(tunnelDialOpts, tunnel.WithDialerHTTPProxyURL(proxyURL))
 	}
@@ -50,30 +49,30 @@ func Run(ctx context.Context, cfg config.Config, proxyTargets []server.Target) {
 
 	tlsConfig, cert, err := cfg.TLSConfig()
 	if err != nil {
-		logrus.WithError(err).Fatal("Failed to create tls config")
+		log.WithError(err).Fatal("Failed to create tls config")
 	}
 
-	logrus.Infof("Using server name %s", tlsConfig.ServerName)
+	log.Infof("Using server name %s", tlsConfig.ServerName)
 
 	dialer, err := tunnel.NewTLSSessionDialer(cfg.VoltronURL, tlsConfig, tunnelDialOpts...)
 	if err != nil {
-		logrus.WithError(err).Fatal("Failed to create session dialer.")
+		log.WithError(err).Fatal("Failed to create session dialer.")
 	}
 
 	srv, err := server.New(ctx, cert, dialer, srvOpts...)
 	if err != nil {
-		logrus.WithError(err).Fatal("Failed to create server")
+		log.WithError(err).Fatal("Failed to create server")
 	}
 
 	health, err := server.NewHealth()
 	if err != nil {
-		logrus.WithError(err).Fatal("Failed to create health server")
+		log.WithError(err).Fatal("Failed to create health server")
 	}
 
 	go func() {
 		// Health checks start, meaning everything before has worked.
 		if err = health.ListenAndServeHTTP(); err != nil {
-			logrus.WithError(err).Fatal("Health exited with error")
+			log.WithError(err).Fatal("Health exited with error")
 		}
 	}()
 
@@ -83,7 +82,7 @@ func Run(ctx context.Context, cfg config.Config, proxyTargets []server.Target) {
 		defer wg.Done()
 		// Allow requests to come down from the management cluster.
 		if err := srv.ListenAndServeManagementCluster(); err != nil {
-			logrus.WithError(err).Warn("Serving the tunnel exited.")
+			log.WithError(err).Warn("Serving the tunnel exited.")
 		}
 	}()
 
@@ -94,12 +93,12 @@ func Run(ctx context.Context, cfg config.Config, proxyTargets []server.Target) {
 			defer wg.Done()
 
 			if err := srv.ListenAndServeCluster(); err != nil {
-				logrus.WithError(err).Warn("proxy tunnel exited with an error")
+				log.WithError(err).Warn("proxy tunnel exited with an error")
 			}
 		}()
 	}
 
 	if err := srv.WaitForShutdown(); err != nil {
-		logrus.WithError(err).Fatal("proxy tunnel exited with an error")
+		log.WithError(err).Fatal("proxy tunnel exited with an error")
 	}
 }

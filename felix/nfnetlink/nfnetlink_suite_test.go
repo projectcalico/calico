@@ -21,7 +21,7 @@ import (
 	"github.com/onsi/ginkgo/reporters"
 	"github.com/onsi/gomega"
 
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
 )
 
@@ -33,5 +33,5 @@ func TestNfnetlink(t *testing.T) {
 
 func init() {
 	testutils.HookLogrusForGinkgo()
-	logutils.ConfigureFormatter("test")
+	log.ConfigureFormatter("test")
 }

@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2023 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,9 +15,10 @@
 package proxy
 
 import (
-	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
+
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 //nolint:staticcheck // Ignore SA1019 deprecated until kubernetes/pkg/proxy/types.go fixes sets.String

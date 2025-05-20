@@ -28,8 +28,8 @@ import (
 	"github.com/docopt/docopt-go"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/collectors"
-	log "github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/syncersv1/bgpsyncer"
@@ -67,7 +67,7 @@ Options:
 // should simply call InitializeAndServeForever() to start the Typha server.  The lifecycle is broken out into
 // several individual methods for ease of testing.
 type TyphaDaemon struct {
-	BuildInfoLogCxt *log.Entry
+	BuildInfoLogCxt log.Entry
 	ConfigFilePath  string
 	DatastoreClient DatastoreClient
 	ConfigParams    *config.Config

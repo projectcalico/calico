@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2024-2025 Tigera, Inc. All rights reserved.
 
 package authorizer
 
@@ -9,10 +9,11 @@ import (
 	"sync"
 
 	calico "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"github.com/sirupsen/logrus"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	k8sauth "k8s.io/apiserver/pkg/authorization/authorizer"
 	"k8s.io/apiserver/pkg/endpoints/filters"
+
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 type TierAuthorizer interface {
@@ -39,13 +40,13 @@ func (a *authorizer) AuthorizeTierOperation(
 	tierName string,
 ) error {
 	if a.Authorizer == nil {
-		logrus.Debug("No authorizer - allow operation")
+		log.Debug("No authorizer - allow operation")
 		return nil
 	}
 
 	attributes, err := filters.GetAuthorizerAttributes(ctx)
 	if err != nil {
-		logrus.Errorf("Unable to extract authorizer attributes: %s", err)
+		log.Errorf("Unable to extract authorizer attributes: %s", err)
 		return err
 	}
 
@@ -78,7 +79,7 @@ func (a *authorizer) AuthorizeTierOperation(
 			Path:            "/apis/projectcalico.org/v3/tiers/" + tierName,
 		}
 
-		logrus.Trace("Checking authorization using tier resource type (user can get tier)")
+		log.Trace("Checking authorization using tier resource type (user can get tier)")
 		logAuthorizerAttributes(attrs)
 		decisionGetTier, _, _ = a.Authorizer.Authorize(context.TODO(), attrs)
 	}()
@@ -111,7 +112,7 @@ func (a *authorizer) AuthorizeTierOperation(
 			Path:            path,
 		}
 
-		logrus.Trace("Checking authorization using tier scoped resource type (policy name match)")
+		log.Trace("Checking authorization using tier scoped resource type (policy name match)")
 		logAuthorizerAttributes(attrs)
 		decisionPolicy, _, _ = a.Authorizer.Authorize(context.TODO(), attrs)
 	}()
@@ -132,7 +133,7 @@ func (a *authorizer) AuthorizeTierOperation(
 			Path:            path,
 		}
 
-		logrus.Trace("Checking authorization using tier scoped resource type (tier name match)")
+		log.Trace("Checking authorization using tier scoped resource type (tier name match)")
 		logAuthorizerAttributes(attrs)
 		decisionTierWildcard, _, _ = a.Authorizer.Authorize(context.TODO(), attrs)
 	}()
@@ -144,13 +145,13 @@ func (a *authorizer) AuthorizeTierOperation(
 	// then allow the request.
 	if decisionGetTier == k8sauth.DecisionAllow &&
 		(decisionPolicy == k8sauth.DecisionAllow || decisionTierWildcard == k8sauth.DecisionAllow) {
-		logrus.Trace("Operation allowed")
+		log.Trace("Operation allowed")
 		return nil
 	}
 
 	// Request is forbidden.
 	reason := forbiddenMessage(attributes, "tier", tierName, decisionGetTier)
-	logrus.Debugf("Operation on Calico tiered policy is forbidden: %v", reason)
+	log.Debugf("Operation on Calico tiered policy is forbidden: %v", reason)
 	return k8serrors.NewForbidden(calico.Resource(attributes.GetResource()), policyName, errors.New(reason))
 }
 
@@ -186,15 +187,15 @@ func forbiddenMessage(attributes k8sauth.Attributes, ownerResource, ownerName st
 
 // logAuthorizerAttributes logs out the auth attributes.
 func logAuthorizerAttributes(requestAttributes k8sauth.Attributes) {
-	if logrus.IsLevelEnabled(logrus.DebugLevel) {
-		logrus.Debugf("Authorizer APIGroup: %s", requestAttributes.GetAPIGroup())
-		logrus.Debugf("Authorizer APIVersion: %s", requestAttributes.GetAPIVersion())
-		logrus.Debugf("Authorizer Name: %s", requestAttributes.GetName())
-		logrus.Debugf("Authorizer Namespace: %s", requestAttributes.GetNamespace())
-		logrus.Debugf("Authorizer Resource: %s", requestAttributes.GetResource())
-		logrus.Debugf("Authorizer Subresource: %s", requestAttributes.GetSubresource())
-		logrus.Debugf("Authorizer User: %s", requestAttributes.GetUser())
-		logrus.Debugf("Authorizer Verb: %s", requestAttributes.GetVerb())
-		logrus.Debugf("Authorizer Path: %s", requestAttributes.GetPath())
+	if log.IsLevelEnabled(log.DebugLevel) {
+		log.Debugf("Authorizer APIGroup: %s", requestAttributes.GetAPIGroup())
+		log.Debugf("Authorizer APIVersion: %s", requestAttributes.GetAPIVersion())
+		log.Debugf("Authorizer Name: %s", requestAttributes.GetName())
+		log.Debugf("Authorizer Namespace: %s", requestAttributes.GetNamespace())
+		log.Debugf("Authorizer Resource: %s", requestAttributes.GetResource())
+		log.Debugf("Authorizer Subresource: %s", requestAttributes.GetSubresource())
+		log.Debugf("Authorizer User: %s", requestAttributes.GetUser())
+		log.Debugf("Authorizer Verb: %s", requestAttributes.GetVerb())
+		log.Debugf("Authorizer Path: %s", requestAttributes.GetPath())
 	}
 }

@@ -1,4 +1,4 @@
-// Copyright (c) 2023 Tigera, Inc. All rights reserved.
+// Copyright (c) 2023-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,7 +18,7 @@ import (
 	"fmt"
 	"reflect"
 
-	"github.com/sirupsen/logrus"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // DeltaTracker (conceptually) tracks the differences between two key/value maps
@@ -91,7 +91,7 @@ type DeltaTracker[K comparable, V any] struct {
 	// valuesEqual is the comparison function for the value type, it defaults to
 	// reflect.DeepEqual.
 	valuesEqual func(a, b V) bool
-	logCtx      *logrus.Entry
+	logCtx      log.Entry
 }
 
 type Option[K comparable, V any] func(tracker *DeltaTracker[K, V])
@@ -101,7 +101,7 @@ func WithValuesEqualFn[K comparable, V any](f func(a, b V) bool) Option[K, V] {
 		tracker.valuesEqual = f
 	}
 }
-func WithLogCtx[K comparable, V any](lc *logrus.Entry) Option[K, V] {
+func WithLogCtx[K comparable, V any](lc log.Entry) Option[K, V] {
 	return func(tracker *DeltaTracker[K, V]) {
 		tracker.logCtx = lc
 	}
@@ -115,14 +115,14 @@ func New[K comparable, V any](opts ...Option[K, V]) *DeltaTracker[K, V] {
 		// the caller does Desired().Delete(k) to remove the mapping, we may
 		// keep hold of the same map in the inDataplaneNotDesired map resulting
 		// in aliasing.
-		logrus.Panic("Map values should not be used in a DeltaTracker.")
+		log.Panic("Map values should not be used in a DeltaTracker.")
 	}
 	cm := &DeltaTracker[K, V]{
 		inDataplaneAndDesired: make(map[K]V),
 		inDataplaneNotDesired: make(map[K]V),
 		desiredUpdates:        make(map[K]V),
 		valuesEqual:           func(a, b V) bool { return reflect.DeepEqual(a, b) },
-		logCtx:                logrus.WithFields(nil),
+		logCtx:                log.WithFields(nil),
 	}
 	for _, o := range opts {
 		o(cm)
@@ -140,8 +140,8 @@ func (c *DeltaTracker[K, V]) Desired() *DesiredView[K, V] {
 // the dataplane cache records as being in the dataplane, the update is added to the pending updates set.
 // Removes the key from the pending deletions set.
 func (c *DesiredView[K, V]) Set(k K, v V) {
-	if logrus.GetLevel() >= logrus.DebugLevel {
-		c.logCtx.WithFields(logrus.Fields{"k": k, "v": v}).Debug("Set")
+	if log.GetLevel() >= log.DebugLevel {
+		c.logCtx.WithFields(log.Fields{"k": k, "v": v}).Debug("Set")
 	}
 
 	currentVal, presentInDP := c.inDataplaneNotDesired[k]
@@ -186,8 +186,8 @@ func (c *DesiredView[K, V]) Get(k K) (V, bool) {
 // Delete deletes the given key from the desired state of the dataplane. If the KV is in the dataplane
 // cache, it is added to the pending deletions set.  Removes the key from the pending updates set.
 func (c *DesiredView[K, V]) Delete(k K) {
-	if logrus.GetLevel() >= logrus.DebugLevel {
-		c.logCtx.WithFields(logrus.Fields{"k": k}).Debug("Delete (desired)")
+	if log.GetLevel() >= log.DebugLevel {
+		c.logCtx.WithFields(log.Fields{"k": k}).Debug("Delete (desired)")
 	}
 	_, presentInDesired := c.desiredUpdates[k]
 	if presentInDesired {
@@ -324,7 +324,7 @@ func (c *DataplaneView[K, V]) ReplaceAllIter(iter func(func(k K, v V)) error) er
 	// Now done with oldInDPDesired, replace it.
 	c.inDataplaneAndDesired = newInDPDesired
 	c.inDataplaneNotDesired = newInDPNotDesired
-	c.logCtx.WithFields(logrus.Fields{
+	c.logCtx.WithFields(log.Fields{
 		"totalInDataplane":        len(c.inDataplaneAndDesired) + len(c.inDataplaneNotDesired),
 		"pendingCreatesOrUpdates": len(c.desiredUpdates),
 		"pendingDeletions":        len(c.inDataplaneNotDesired),

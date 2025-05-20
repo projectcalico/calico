@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,8 +17,7 @@ package main
 import (
 	"context"
 
-	"github.com/sirupsen/logrus"
-
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/typha/pkg/daemon"
 )
 
@@ -48,5 +47,5 @@ import (
 func main() {
 	typha := daemon.New()
 	err := typha.InitializeAndServeForever(context.Background())
-	logrus.WithError(err).Panic("InitializeAndServeForever returned")
+	log.WithError(err).Panic("InitializeAndServeForever returned")
 }

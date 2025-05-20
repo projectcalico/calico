@@ -19,17 +19,15 @@ import (
 	"flag"
 	"os"
 
-	log "github.com/sirupsen/logrus"
-
 	"github.com/projectcalico/calico/key-cert-provisioner/pkg/cfg"
 	"github.com/projectcalico/calico/key-cert-provisioner/pkg/k8s"
 	"github.com/projectcalico/calico/key-cert-provisioner/pkg/tls"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 func main() {
 	flag.Parse()
 	log.SetLevel(log.InfoLevel)
-	log.SetReportCaller(true)
 	// Initiate (and validate) env variables
 	config := cfg.GetConfigOrDie()
 	ctx, cancel := context.WithTimeout(context.TODO(), config.TimeoutDuration)
