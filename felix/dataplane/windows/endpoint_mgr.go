@@ -433,9 +433,8 @@ func (m *endpointManager) CompleteDeferredWork() error {
 			m.activeWlEndpoints[id] = workload
 
 			rules := m.getHnsPolicyRules(id, endpointId, flatIngressRules, flatEgressRules)
-			// Check if rules are already applied.
+			// Check if the rules have already been applied.
 			rulesApplied, ok := m.activeWlACLPolicies[id]
-
 			if !ok || !reflect.DeepEqual(rules, rulesApplied) {
 				// Apply updated rules to the endpoint.
 				err := m.applyRules(id, endpointId, rules)
