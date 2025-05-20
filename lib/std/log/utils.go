@@ -16,6 +16,8 @@ package log
 
 import (
 	"bytes"
+	"fmt"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -62,4 +64,40 @@ func (l TestingTWriter) Write(p []byte) (n int, err error) {
 	l.T.Helper()
 	l.T.Log(strings.TrimRight(string(p), "\r\n"))
 	return len(p), nil
+}
+
+// ConfigureEarlyLogging installs our logging adapters and enables early logging to screen
+// if it is enabled by either the <envPrefix>_EARLYLOGSEVERITYSCREEN or <envPrefix>_LOGSEVERITYSCREEN
+// environment variable.
+func ConfigureEarlyLogging(formatterName, envPrefix string) {
+	// Log to stdout.  This prevents fluentd, for example, from interpreting all our logs as errors by default.
+	SetOutput(os.Stdout)
+
+	// Set up logging formatting.
+	ConfigureFormatter(formatterName)
+
+	envPrefix = strings.ToUpper(envPrefix)
+
+	// First try the early-only environment variable.  Since the normal
+	// config processing doesn't know about that variable, normal config
+	// will override it once it's loaded.
+	rawLogLevel := os.Getenv(fmt.Sprintf("%s_EARLYLOGSEVERITYSCREEN", envPrefix))
+	if rawLogLevel == "" {
+		// Early-only flag not set, look for the normal config-owned
+		// variable.
+		rawLogLevel = os.Getenv(fmt.Sprintf("%s_LOGSEVERITYSCREEN", envPrefix))
+	}
+
+	// Default to logging errors.
+	logLevelScreen := ErrorLevel
+	if rawLogLevel != "" {
+		parsedLevel, err := ParseLevel(rawLogLevel)
+		if err == nil {
+			logLevelScreen = parsedLevel
+		} else {
+			WithError(err).Error("Failed to parse early log level, defaulting to error.")
+		}
+	}
+	SetLevel(logLevelScreen)
+	Infof("Early screen log level set to %v", logLevelScreen)
 }

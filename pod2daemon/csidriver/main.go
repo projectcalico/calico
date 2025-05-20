@@ -19,7 +19,6 @@ import (
 	"os"
 
 	"github.com/projectcalico/calico/lib/std/log"
-
 	"github.com/projectcalico/calico/pod2daemon/csidriver/driver"
 )
 

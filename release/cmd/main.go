@@ -22,7 +22,6 @@ import (
 	cli "github.com/urfave/cli/v2"
 
 	"github.com/projectcalico/calico/lib/std/log"
-
 	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/utils"
 	"github.com/projectcalico/calico/release/pkg/tasks"

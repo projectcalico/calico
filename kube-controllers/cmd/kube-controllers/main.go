@@ -49,7 +49,6 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/debugserver"
-
 	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
 	"github.com/projectcalico/calico/pkg/buildinfo"
 	"github.com/projectcalico/calico/pkg/cmdwrapper"

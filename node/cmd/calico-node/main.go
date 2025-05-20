@@ -24,7 +24,6 @@ import (
 	confd "github.com/projectcalico/calico/confd/pkg/run"
 	felix "github.com/projectcalico/calico/felix/daemon"
 	"github.com/projectcalico/calico/lib/std/log"
-
 	"github.com/projectcalico/calico/node/cmd/calico-node/bpf"
 	"github.com/projectcalico/calico/node/pkg/allocateip"
 	"github.com/projectcalico/calico/node/pkg/cni"

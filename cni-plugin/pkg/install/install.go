@@ -32,7 +32,6 @@ import (
 	"k8s.io/client-go/rest"
 
 	"github.com/projectcalico/calico/lib/std/log"
-
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
 	"github.com/projectcalico/calico/node/pkg/cni"

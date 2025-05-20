@@ -40,7 +40,6 @@ import (
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
-
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 

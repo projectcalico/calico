@@ -30,7 +30,6 @@ import (
 	flxrules "github.com/projectcalico/calico/felix/rules"
 	ftypes "github.com/projectcalico/calico/felix/types"
 	"github.com/projectcalico/calico/lib/std/log"
-
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
 )
 

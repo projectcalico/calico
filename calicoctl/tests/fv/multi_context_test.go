@@ -21,6 +21,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	. "github.com/projectcalico/calico/calicoctl/tests/fv/utils"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 func init() {

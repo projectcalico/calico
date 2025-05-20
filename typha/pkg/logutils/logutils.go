@@ -48,34 +48,7 @@ const logQueueSize = 100
 // environment variable.
 // It also disables glog's log to disk default behaviour.
 func ConfigureEarlyLogging() {
-	// Log to stdout.  This prevents fluentd, for example, from interpreting all our logs as errors by default.
-	log.SetOutput(os.Stdout)
-
-	// Set up logging formatting.
-	log.ConfigureFormatter("typha")
-
-	// First try the early-only environment variable.  Since the normal
-	// config processing doesn't know about that variable, normal config
-	// will override it once it's loaded.
-	rawLogLevel := os.Getenv("TYPHA_EARLYLOGSEVERITYSCREEN")
-	if rawLogLevel == "" {
-		// Early-only flag not set, look for the normal config-owned
-		// variable.
-		rawLogLevel = os.Getenv("TYPHA_LOGSEVERITYSCREEN")
-	}
-
-	// Default to logging errors.
-	logLevelScreen := log.ErrorLevel
-	if rawLogLevel != "" {
-		parsedLevel, err := log.ParseLevel(rawLogLevel)
-		if err == nil {
-			logLevelScreen = parsedLevel
-		} else {
-			log.WithError(err).Error("Failed to parse early log level, defaulting to error.")
-		}
-	}
-	log.SetLevel(logLevelScreen)
-	log.Infof("Early screen log level set to %v", logLevelScreen)
+	log.ConfigureEarlyLogging("typha", "TYPHA")
 }
 
 // ConfigureLogging uses the resolved configuration to complete the logging
