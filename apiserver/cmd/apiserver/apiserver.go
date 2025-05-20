@@ -36,11 +36,16 @@ func main() {
 	logs.InitLogs()
 	defer logs.FlushLogs()
 
-	// The ConsistentListFromCache feature gate requires our resourceStore
-	// to support method RequestWatchProgress, which it does not.  Force-disable
-	// the gate.
 	err := feature.DefaultMutableFeatureGate.SetFromMap(map[string]bool{
+		// The ConsistentListFromCache feature gate requires our resourceStore
+		// to support method RequestWatchProgress, which it does not.  Force-disable
+		// the gate.
 		string(features.ConsistentListFromCache): false,
+
+		// WatchList requires watch bookmarks, which our API server does not currently support.
+		// Note that the WatchBookmarks feature is required to be true - we should probably add
+		// support for this!
+		string(features.WatchList): false,
 	})
 	if err != nil {
 		logrus.Errorf("Error setting feature gates: %v.", err)
