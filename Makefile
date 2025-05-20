@@ -57,9 +57,15 @@ ci-preflight-checks:
 	$(MAKE) check-ocp-no-crds
 	$(MAKE) yaml-lint
 	$(MAKE) check-dirty
+	$(MAKE) go-vet
 
 check-go-mod:
 	$(DOCKER_GO_BUILD) ./hack/check-go-mod.sh
+
+go-vet:
+	# Go vet will check that libbpf headers can be found; make sure they're available.
+	$(MAKE) -C felix clone-libbpf
+	$(DOCKER_GO_BUILD) go vet ./...
 
 check-dockerfiles:
 	./hack/check-dockerfiles.sh
