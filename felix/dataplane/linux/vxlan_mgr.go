@@ -155,19 +155,16 @@ func newVXLANManagerWithShims(
 		),
 	}
 
-	m.updateRouteManager()
+	m.routeMgr.routeClassTunnel = routetable.RouteClassVXLANTunnel
+	m.routeMgr.routeClassSameSubnet = routetable.RouteClassVXLANSameSubnet
+	m.routeMgr.setTunnelRouteFunc(m.route)
 	m.routeMgr.triggerRouteUpdate()
+
 	for _, o := range opts {
 		o(m)
 	}
 
 	return m
-}
-
-func (m *vxlanManager) updateRouteManager() {
-	m.routeMgr.routeClassTunnel = routetable.RouteClassVXLANTunnel
-	m.routeMgr.routeClassSameSubnet = routetable.RouteClassVXLANSameSubnet
-	m.routeMgr.setTunnelRouteFunc(m.route)
 }
 
 func (m *vxlanManager) OnUpdate(protoBufMsg interface{}) {

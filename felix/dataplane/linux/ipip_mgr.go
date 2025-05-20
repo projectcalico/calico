@@ -101,7 +101,7 @@ func newIPIPManagerWithSims(
 ) *ipipManager {
 
 	if ipVersion != 4 {
-		logrus.Errorf("IPIP manager is only supports in IPv4")
+		logrus.Errorf("IPIP manager only supports IPv4")
 		return nil
 	}
 
@@ -122,8 +122,8 @@ func newIPIPManagerWithSims(
 		dpConfig:           dpConfig,
 		routeProtocol:      calculateRouteProtocol(dpConfig),
 		logCtx: logrus.WithFields(logrus.Fields{
-			"ipVersion":     ipVersion,
-			"tunnel device": tunnelDevice,
+			"ipVersion":    ipVersion,
+			"tunnelDevice": tunnelDevice,
 		}),
 		opRecorder: opRecorder,
 		routeMgr: newRouteManager(
@@ -138,15 +138,12 @@ func newIPIPManagerWithSims(
 		),
 	}
 
-	m.updateRouteManager()
-	m.mayUpdateRoutes()
-	return m
-}
-
-func (m *ipipManager) updateRouteManager() {
 	m.routeMgr.routeClassTunnel = routetable.RouteClassIPIPTunnel
 	m.routeMgr.routeClassSameSubnet = routetable.RouteClassIPIPSameSubnet
 	m.routeMgr.setTunnelRouteFunc(m.route)
+
+	m.maybeUpdateRoutes()
+	return m
 }
 
 func (m *ipipManager) OnUpdate(protoBufMsg interface{}) {
@@ -158,7 +155,7 @@ func (m *ipipManager) OnUpdate(protoBufMsg interface{}) {
 		}
 		m.activeHostnameToIP[msg.Hostname] = msg.Ipv4Addr
 		m.ipSetDirty = true
-		m.mayUpdateRoutes()
+		m.maybeUpdateRoutes()
 	case *proto.HostMetadataRemove:
 		m.logCtx.WithField("hostname", msg.Hostname).Debug("Host removed")
 		if msg.Hostname == m.hostname {
@@ -166,7 +163,7 @@ func (m *ipipManager) OnUpdate(protoBufMsg interface{}) {
 		}
 		delete(m.activeHostnameToIP, msg.Hostname)
 		m.ipSetDirty = true
-		m.mayUpdateRoutes()
+		m.maybeUpdateRoutes()
 	default:
 		if m.dpConfig.ProgramRoutes {
 			m.routeMgr.OnUpdate(msg)
