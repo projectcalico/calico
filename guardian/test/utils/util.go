@@ -14,7 +14,6 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-var serialNumber int = 0
 var RSAKeySize int = 2048
 
 func CreateKeyCertPair(dir string) (*os.File, *os.File) {
