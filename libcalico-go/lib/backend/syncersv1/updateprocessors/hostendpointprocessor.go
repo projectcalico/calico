@@ -19,6 +19,7 @@ import (
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
+	"github.com/projectcalico/calico/lib/std/uniquelabels"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/watchersyncer"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
@@ -75,7 +76,7 @@ func convertHostEndpointV2ToV1(kvp *model.KVPair) (*model.KVPair, error) {
 		Name:              v3res.Spec.InterfaceName,
 		ExpectedIPv4Addrs: ipv4Addrs,
 		ExpectedIPv6Addrs: ipv6Addrs,
-		Labels:            v3res.GetLabels(),
+		Labels:            uniquelabels.Make(v3res.GetLabels()),
 		ProfileIDs:        v3res.Spec.Profiles,
 		Ports:             ports,
 	}
