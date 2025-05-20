@@ -1,4 +1,4 @@
-// Copyright (c) 2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2021-2025 Tigera, Inc. All rights reserved.
 
 /*
 Copyright 2017 The Kubernetes Authors.
@@ -22,7 +22,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apiserver/pkg/authorization/authorizer"
 	"k8s.io/apiserver/pkg/registry/generic/registry"
@@ -33,6 +32,7 @@ import (
 
 	"github.com/projectcalico/calico/apiserver/pkg/storage/calico"
 	"github.com/projectcalico/calico/apiserver/pkg/storage/etcd"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 type errUnsupportedStorageType struct {
@@ -165,7 +165,7 @@ func (o Options) GetStorage(
 			indexers,
 		)
 		if err != nil {
-			logrus.Warning("error (%w)", err)
+			log.Warning("error (%w)", err)
 			return registry.DryRunnableStorage{}, nil, err
 		}
 		dryRunnableStorage := registry.DryRunnableStorage{Storage: storageInterface, Codec: etcdRESTOpts.StorageConfig.Codec}

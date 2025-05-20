@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,7 +24,6 @@ import (
 	"sync"
 	"time"
 
-	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 
@@ -37,7 +36,7 @@ import (
 	"github.com/projectcalico/calico/felix/routetable"
 	"github.com/projectcalico/calico/felix/routetable/ownershippol"
 	"github.com/projectcalico/calico/felix/timeshim"
-	lclogutils "github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -167,8 +166,8 @@ type Wireguard struct {
 	// The write proc sys function.
 	writeProcSys func(path, value string) error
 
-	logCtx            *log.Entry
-	rateLimitedLogger *lclogutils.RateLimitedLogger
+	logCtx            log.Entry
+	rateLimitedLogger *log.RateLimitedLogger
 }
 
 func New(
@@ -300,7 +299,7 @@ func NewWithShims(
 		writeProcSys:         writeProcSys,
 		opRecorder:           opRecorder,
 		logCtx:               logCtx,
-		rateLimitedLogger:    lclogutils.NewRateLimitedLogger(lclogutils.OptInterval(4 * time.Hour)).WithFields(logCtx.Data),
+		rateLimitedLogger:    log.NewRateLimitedLogger(log.OptInterval(4 * time.Hour)).WithFields(logCtx.Fields()),
 	}
 }
 

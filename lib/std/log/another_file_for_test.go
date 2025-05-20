@@ -1,4 +1,4 @@
-// Copyright (c) 2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2021-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,13 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package logutils_test
+package log_test
 
-import (
-	"github.com/sirupsen/logrus"
-)
+import "github.com/projectcalico/calico/lib/std/log"
 
 // debugFromAnotherFile calls Debug on the logger; it's in another file to test filename filtering!
-func debugFromAnotherFile(logger *logrus.Logger, msg string) {
+func debugFromAnotherFile(logger log.Logger, msg string) {
 	logger.Debug(msg)
 }

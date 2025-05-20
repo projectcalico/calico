@@ -1,4 +1,4 @@
-// Copyright (c) 2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2021-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,7 +18,8 @@ package wireguard
 
 import (
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 var _ prometheus.Collector = (*Metrics)(nil)
@@ -35,7 +36,7 @@ func (collector *Metrics) Collect(_ chan<- prometheus.Metric) {
 func MustNewWireguardMetrics() *Metrics {
 	wg, err := NewWireguardMetrics()
 	if err != nil {
-		logrus.Panic(err)
+		log.Panic(err)
 	}
 	return wg
 }
