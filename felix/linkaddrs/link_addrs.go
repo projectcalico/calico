@@ -19,7 +19,6 @@ import (
 	"strings"
 	"time"
 
-	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 
 	"github.com/projectcalico/calico/felix/deltatracker"
@@ -27,6 +26,7 @@ import (
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/netlinkshim"
 	"github.com/projectcalico/calico/felix/netlinkshim/handlemgr"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // Linkaddrs manages link local addresses assigned to cali interfaces.
@@ -74,7 +74,7 @@ type LinkAddrsManager struct {
 	nl               *handlemgr.HandleManager
 	newNetlinkHandle func() (netlinkshim.Interface, error)
 
-	logCtx *log.Entry
+	logCtx log.Entry
 }
 
 type Option func(*LinkAddrsManager)

@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -28,11 +28,11 @@ import (
 	"github.com/fsnotify/fsnotify"
 	"github.com/kelseyhightower/envconfig"
 	"github.com/nmrshll/go-cp"
-	"github.com/sirupsen/logrus"
 	"go.etcd.io/etcd/client/pkg/v3/fileutil"
 	"k8s.io/client-go/rest"
 
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/calico/lib/std/log"
+
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
 	"github.com/projectcalico/calico/node/pkg/cni"
@@ -84,7 +84,7 @@ func directoryExists(dir string) bool {
 	if os.IsNotExist(err) {
 		return false
 	} else if err != nil {
-		logrus.WithError(err).Fatalf("Failed to check if directory %s exists", dir)
+		log.WithError(err).Fatalf("Failed to check if directory %s exists", dir)
 		return false
 	}
 	return info.IsDir()
@@ -95,7 +95,7 @@ func fileExists(file string) bool {
 	if os.IsNotExist(err) {
 		return false
 	} else if err != nil {
-		logrus.WithError(err).Fatalf("Failed to check if file %s exists", file)
+		log.WithError(err).Fatalf("Failed to check if file %s exists", file)
 		return false
 	}
 	return !info.IsDir()
@@ -103,7 +103,7 @@ func fileExists(file string) bool {
 
 func mkdir(path string) {
 	if err := os.MkdirAll(path, 0o777); err != nil {
-		logrus.WithError(err).Fatalf("Failed to create directory %s", path)
+		log.WithError(err).Fatalf("Failed to create directory %s", path)
 	}
 }
 
@@ -111,7 +111,7 @@ func loadConfig() config {
 	var c config
 	err := envconfig.Process("", &c)
 	if err != nil {
-		logrus.Fatal(err.Error())
+		log.Fatal(err.Error())
 	}
 
 	return c
@@ -119,11 +119,11 @@ func loadConfig() config {
 
 func Install(version string) error {
 	// Set up logging formatting.
-	logutils.ConfigureFormatter("cni-installer")
+	log.ConfigureFormatter("cni-installer")
 
 	// Clean up any existing binaries / config / assets.
 	if err := os.RemoveAll(winutils.GetHostPath("/host/etc/cni/net.d/calico-tls")); err != nil && !os.IsNotExist(err) {
-		logrus.WithError(err).Warnf("Error removing old TLS directory")
+		log.WithError(err).Warnf("Error removing old TLS directory")
 	}
 
 	// Load config.
@@ -136,7 +136,7 @@ func Install(version string) error {
 	c.ServiceAccountToken = make([]byte, 0)
 	var err error
 	if fileExists(serviceAccountTokenFile) {
-		logrus.Info("Running as a Kubernetes pod")
+		log.Info("Running as a Kubernetes pod")
 		// FIXME: get rid of this and call rest.InClusterConfig() directly when containerd v1.6 is EOL'd
 		kubecfg, err = winutils.GetInClusterConfig()
 		if err != nil {
@@ -161,18 +161,18 @@ func Install(version string) error {
 		etcdCertPath := fmt.Sprintf("%s/%s", c.TLSAssetsDir, "etcd-cert")
 		etcdKeyPath := fmt.Sprintf("%s/%s", c.TLSAssetsDir, "etcd-key")
 		if !fileExists(etcdCaPath) && !fileExists(etcdCertPath) && !fileExists(etcdKeyPath) {
-			logrus.Infof("No TLS assets found in %s, skipping", c.TLSAssetsDir)
+			log.Infof("No TLS assets found in %s, skipping", c.TLSAssetsDir)
 		} else {
-			logrus.Info("Installing any TLS assets")
+			log.Info("Installing any TLS assets")
 			mkdir(winutils.GetHostPath("/host/etc/cni/net.d/calico-tls"))
 			if err := copyFileAndPermissions(etcdCaPath, winutils.GetHostPath("/host/etc/cni/net.d/calico-tls/etcd-ca")); err != nil {
-				logrus.Warnf("Missing etcd-ca")
+				log.Warnf("Missing etcd-ca")
 			}
 			if err := copyFileAndPermissions(etcdCertPath, winutils.GetHostPath("/host/etc/cni/net.d/calico-tls/etcd-cert")); err != nil {
-				logrus.Warnf("Missing etcd-cert")
+				log.Warnf("Missing etcd-cert")
 			}
 			if err := copyFileAndPermissions(etcdKeyPath, winutils.GetHostPath("/host/etc/cni/net.d/calico-tls/etcd-key")); err != nil {
-				logrus.Warnf("Missing etcd-key")
+				log.Warnf("Missing etcd-key")
 			}
 		}
 	}
@@ -183,7 +183,7 @@ func Install(version string) error {
 	calicoBinaryOK := false
 	for _, d := range dirs {
 		if err := fileutil.IsDirWriteable(d); err != nil {
-			logrus.Infof("%s is not writeable, skipping", d)
+			log.Infof("%s is not writeable, skipping", d)
 			continue
 		}
 
@@ -193,7 +193,7 @@ func Install(version string) error {
 		// Iterate through each binary we might want to install.
 		files, err := os.ReadDir(containerBinDir)
 		if err != nil {
-			logrus.Fatal(err)
+			log.Fatal(err)
 		}
 		for _, binary := range files {
 			target := fmt.Sprintf("%s/%s", d, binary.Name())
@@ -206,38 +206,38 @@ func Install(version string) error {
 				continue
 			}
 			if fileExists(target) && !c.UpdateCNIBinaries {
-				logrus.Infof("Skipping installation of %s", target)
+				log.Infof("Skipping installation of %s", target)
 				continue
 			}
 			if err := copyFileAndPermissions(source, target); err != nil {
-				logrus.WithError(err).Errorf("Failed to install %s", target)
+				log.WithError(err).Errorf("Failed to install %s", target)
 				os.Exit(1)
 			}
 			// Verify if the binary was installed successfully, exit (to retry) otherwise
 			binaryOK, err := destinationUptoDate(source, target)
 			if err != nil || !binaryOK {
-				logrus.WithError(err).Errorf("Failed to verify installed binary %s", target)
+				log.WithError(err).Errorf("Failed to verify installed binary %s", target)
 				os.Exit(1)
 			}
 			if binary.Name() == "calico" || binary.Name() == "calico.exe" {
 				calicoBinaryOK = true
 			}
-			logrus.Infof("Installed %s", target)
+			log.Infof("Installed %s", target)
 		}
 
 		// Binaries were placed into at least one directory
-		logrus.Infof("Wrote Calico CNI binaries to %s\n", d)
+		log.Infof("Wrote Calico CNI binaries to %s\n", d)
 		binsWritten = true
 
 		// Print version number if it was successfully installed
 		if calicoBinaryOK {
-			logrus.Infof("CNI plugin version: %s", version)
+			log.Infof("CNI plugin version: %s", version)
 		}
 	}
 
 	// If binaries were not placed, exit
 	if !binsWritten {
-		logrus.WithError(err).Fatalf("found no writeable directory, exiting")
+		log.WithError(err).Fatalf("found no writeable directory, exiting")
 	}
 
 	if kubecfg != nil {
@@ -251,7 +251,7 @@ func Install(version string) error {
 
 	// Unless told otherwise, sleep forever.
 	// This prevents Kubernetes from restarting the pod repeatedly.
-	logrus.Infof("Done configuring CNI.  Sleep= %v", c.ShouldSleep)
+	log.Infof("Done configuring CNI.  Sleep= %v", c.ShouldSleep)
 	for c.ShouldSleep {
 		// Kubernetes Secrets can be updated.  If so, we need to install the updated
 		// version to the host. Just check the timestamp on the certificate to see if it
@@ -260,7 +260,7 @@ func Install(version string) error {
 
 		watcher, err := fsnotify.NewWatcher()
 		if err != nil {
-			logrus.Fatal(err)
+			log.Fatal(err)
 		}
 
 		done := make(chan bool)
@@ -270,26 +270,26 @@ func Install(version string) error {
 			for {
 				select {
 				case <-watcher.Events:
-					logrus.Infoln("Updating installed secrets at:", time.Now().String())
+					log.Infoln("Updating installed secrets at:", time.Now().String())
 					files, err := os.ReadDir(c.TLSAssetsDir)
 					if err != nil {
-						logrus.Warn(err)
+						log.Warn(err)
 					}
 					for _, f := range files {
 						if err = copyFileAndPermissions(winutils.GetHostPath(c.TLSAssetsDir+"/"+f.Name()), winutils.GetHostPath("/host/etc/cni/net.d/calico-tls/"+f.Name())); err != nil {
-							logrus.Warn(err)
+							log.Warn(err)
 							continue
 						}
 					}
 				case err := <-watcher.Errors:
-					logrus.Fatal(err)
+					log.Fatal(err)
 				}
 			}
 		}()
 
 		err = watcher.Add(filename)
 		if err != nil {
-			logrus.Fatal(err)
+			log.Fatal(err)
 		}
 
 		<-done
@@ -316,15 +316,15 @@ func writeCNIConfig(c config) {
 	// Pick the config template to use. This can either be through an env var,
 	// or a file mounted into the container.
 	if c.CNINetworkConfig != "" {
-		logrus.Info("Using CNI config template from CNI_NETWORK_CONFIG environment variable.")
+		log.Info("Using CNI config template from CNI_NETWORK_CONFIG environment variable.")
 		netconf = c.CNINetworkConfig
 	}
 	if c.CNINetworkConfigFile != "" {
-		logrus.Info("Using CNI config template from CNI_NETWORK_CONFIG_FILE")
+		log.Info("Using CNI config template from CNI_NETWORK_CONFIG_FILE")
 		var err error
 		netconfBytes, err := os.ReadFile(c.CNINetworkConfigFile)
 		if err != nil {
-			logrus.Fatal(err)
+			log.Fatal(err)
 		}
 		netconf = string(netconfBytes)
 	}
@@ -333,7 +333,7 @@ func writeCNIConfig(c config) {
 
 	nodename, err := names.Hostname()
 	if err != nil {
-		logrus.Fatal(err)
+		log.Fatal(err)
 	}
 
 	// Perform replacement of platform specific variables
@@ -382,45 +382,45 @@ func writeCNIConfig(c config) {
 
 	err = isValidJSON(netconf)
 	if err != nil {
-		logrus.Fatalf("%s is not a valid json object\nerror: %s", netconf, err)
+		log.Fatalf("%s is not a valid json object\nerror: %s", netconf, err)
 	}
 
 	// Write out the file.
 	// File permission: default (0600) and testing (0644)
 	permString := getEnv("TEST_FILE_PERMISSION", "0600")
-	logrus.Infof("CNI config file permission is set to %s\n", permString)
+	log.Infof("CNI config file permission is set to %s\n", permString)
 	perm, err := stringToFileMode(permString)
 	if err != nil {
-		logrus.Fatal(err)
+		log.Fatal(err)
 	}
 
 	name := getEnv("CNI_CONF_NAME", "10-calico.conflist")
 	path := winutils.GetHostPath(fmt.Sprintf("/host/etc/cni/net.d/%s", name))
 	err = os.WriteFile(path, []byte(netconf), perm)
 	if err != nil {
-		logrus.Fatal(err)
+		log.Fatal(err)
 	}
 
 	// Safeguarding since WriteFile does not change existing file's permissions.
 	err = os.Chmod(path, perm)
 	if err != nil {
-		logrus.Fatal(err)
+		log.Fatal(err)
 	}
 
 	content, err := os.ReadFile(path)
 	if err != nil {
-		logrus.Fatal(err)
+		log.Fatal(err)
 	}
-	logrus.Infof("Created %s", winutils.GetHostPath(fmt.Sprintf("/host/etc/cni/net.d/%s", name)))
+	log.Infof("Created %s", winutils.GetHostPath(fmt.Sprintf("/host/etc/cni/net.d/%s", name)))
 	text := string(content)
 	fmt.Println(text)
 
 	// Remove any old config file, if one exists.
 	oldName := getEnv("CNI_OLD_CONF_NAME", "10-calico.conflist")
 	if name != oldName {
-		logrus.Infof("Removing %s", winutils.GetHostPath(fmt.Sprintf("/host/etc/cni/net.d/%s", oldName)))
+		log.Infof("Removing %s", winutils.GetHostPath(fmt.Sprintf("/host/etc/cni/net.d/%s", oldName)))
 		if err := os.Remove(winutils.GetHostPath(fmt.Sprintf("/host/etc/cni/net.d/%s", oldName))); err != nil {
-			logrus.WithError(err).Warnf("Failed to remove %s", oldName)
+			log.WithError(err).Warnf("Failed to remove %s", oldName)
 		}
 	}
 }
@@ -433,7 +433,7 @@ func copyFileAndPermissions(src, dst string) (err error) {
 		return err
 	}
 	if skip {
-		logrus.WithField("file", dst).Info("File is already up to date, skipping")
+		log.WithField("file", dst).Info("File is already up to date, skipping")
 		return nil
 	}
 
@@ -451,7 +451,7 @@ func copyFileAndPermissions(src, dst string) (err error) {
 	}
 
 	if runtime.GOOS == "windows" {
-		logrus.Debug("chmod doesn't work on windows, skipping setting permissions")
+		log.Debug("chmod doesn't work on windows, skipping setting permissions")
 		// chmod doesn't work on windows
 		return
 	}
@@ -491,12 +491,12 @@ current-context: calico-context`
 
 	clientset, err := cni.BuildClientSet()
 	if err != nil {
-		logrus.WithError(err).Fatal("Unable to create client for generating CNI token")
+		log.WithError(err).Fatal("Unable to create client for generating CNI token")
 	}
 	tr := cni.NewTokenRefresher(clientset, cni.NamespaceOfUsedServiceAccount(), cni.CNIServiceAccountName())
 	tu, err := tr.UpdateToken()
 	if err != nil {
-		logrus.WithError(err).Fatal("Unable to create token for CNI kubeconfig")
+		log.WithError(err).Fatal("Unable to create token for CNI kubeconfig")
 	}
 	data = strings.Replace(data, "TOKEN", tu.Token, 1)
 	data = strings.Replace(data, "__KUBERNETES_SERVICE_PROTOCOL__", getEnv("KUBERNETES_SERVICE_PROTOCOL", "https"), -1)
@@ -512,7 +512,7 @@ current-context: calico-context`
 	}
 
 	if err := os.WriteFile(winutils.GetHostPath("/host/etc/cni/net.d/calico-kubeconfig"), []byte(data), 0o600); err != nil {
-		logrus.Fatal(err)
+		log.Fatal(err)
 	}
 }
 
@@ -551,13 +551,13 @@ func destinationUptoDate(src, dst string) (bool, error) {
 	// Files have the same exact size and mode, check the actual contents.
 	f1, err := os.Open(src)
 	if err != nil {
-		logrus.Fatal(err)
+		log.Fatal(err)
 	}
 	defer f1.Close()
 
 	f2, err := os.Open(dst)
 	if err != nil {
-		logrus.Fatal(err)
+		log.Fatal(err)
 	}
 	defer f2.Close()
 

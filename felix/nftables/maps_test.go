@@ -24,7 +24,6 @@ import (
 	"sigs.k8s.io/knftables"
 
 	"github.com/projectcalico/calico/felix/ipsets"
-	"github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/felix/nftables"
 	. "github.com/projectcalico/calico/felix/nftables"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
@@ -52,7 +51,7 @@ var _ = Describe("Maps with empty data plane", func() {
 		// Reset chain references.
 		chainRefs = make(map[string]int)
 
-		s = NewMaps(ipv, f, increfChain, decrefChain, logutils.NewSummarizer("test loop"))
+		s = NewMaps(ipv, f, increfChain, decrefChain, log.NewSummarizer("test loop"))
 	})
 
 	It("should generate MapUpdates on empty state)", func() {

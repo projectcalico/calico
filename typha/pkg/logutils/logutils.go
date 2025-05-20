@@ -18,9 +18,8 @@ import (
 	"os"
 
 	"github.com/prometheus/client_golang/prometheus"
-	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/typha/pkg/config"
 )
 
@@ -53,7 +52,7 @@ func ConfigureEarlyLogging() {
 	log.SetOutput(os.Stdout)
 
 	// Set up logging formatting.
-	logutils.ConfigureFormatter("typha")
+	log.ConfigureFormatter("typha")
 
 	// First try the early-only environment variable.  Since the normal
 	// config processing doesn't know about that variable, normal config
@@ -84,9 +83,9 @@ func ConfigureEarlyLogging() {
 // attaches them to logrus.
 func ConfigureLogging(configParams *config.Config) {
 	// Parse the log levels, defaulting to panic if in doubt.
-	logLevelScreen := logutils.SafeParseLogLevel(configParams.LogSeverityScreen)
-	logLevelFile := logutils.SafeParseLogLevel(configParams.LogSeverityFile)
-	logLevelSyslog := logutils.SafeParseLogLevel(configParams.LogSeveritySys)
+	logLevelScreen := log.ParseLevelOrDefault(configParams.LogSeverityScreen, log.PanicLevel)
+	logLevelFile := log.ParseLevelOrDefault(configParams.LogSeverityFile, log.PanicLevel)
+	logLevelSyslog := log.ParseLevelOrDefault(configParams.LogSeveritySys, log.PanicLevel)
 
 	// Work out the most verbose level that is being logged.
 	mostVerboseLevel := logLevelScreen
@@ -101,7 +100,7 @@ func ConfigureLogging(configParams *config.Config) {
 	log.SetLevel(mostVerboseLevel)
 
 	// Screen target.
-	var dests []*logutils.Destination
+	var dests []*log.Destination
 	if configParams.LogSeverityScreen != "" {
 		dests = append(dests, getScreenDestination(configParams, logLevelScreen))
 	}
@@ -110,7 +109,7 @@ func ConfigureLogging(configParams *config.Config) {
 	// of the logger.
 	var fileDirErr, fileOpenErr error
 	if configParams.LogSeverityFile != "" && configParams.LogFilePath != "" {
-		var destination *logutils.Destination
+		var destination *log.Destination
 		destination, fileDirErr, fileOpenErr = getFileDestination(configParams, logLevelFile)
 		if fileDirErr == nil && fileOpenErr == nil && destination != nil {
 			dests = append(dests, destination)
@@ -120,20 +119,20 @@ func ConfigureLogging(configParams *config.Config) {
 	// Syslog target.  Again, we record the error if we fail to connect to syslog.
 	var sysErr error
 	if configParams.LogSeveritySys != "" {
-		var destination *logutils.Destination
+		var destination *log.Destination
 		destination, sysErr = getSyslogDestination(configParams, logLevelSyslog)
 		if sysErr == nil && destination != nil {
 			dests = append(dests, destination)
 		}
 	}
 
-	hook := logutils.NewBackgroundHook(logutils.FilterLevels(mostVerboseLevel), logLevelSyslog, dests, counterDroppedLogs)
+	hook := log.NewBackgroundHook(log.FilterLevels(mostVerboseLevel), logLevelSyslog, dests, counterDroppedLogs)
 	hook.Start()
 	log.AddHook(hook)
 
 	// Disable logrus' default output, which only supports a single destination.  We use the
 	// hook above to fan out logs to multiple destinations.
-	log.SetOutput(&logutils.NullWriter{})
+	log.SetOutput(&log.NullWriter{})
 
 	// Since we push our logs onto a second thread via a channel, we can disable the
 	// Logger's built-in mutex completely.
@@ -158,11 +157,11 @@ func ConfigureLogging(configParams *config.Config) {
 	}
 }
 
-func getScreenDestination(configParams *config.Config, logLevel log.Level) *logutils.Destination {
-	return logutils.NewStreamDestination(
+func getScreenDestination(configParams *config.Config, logLevel log.Level) *log.Destination {
+	return log.NewStreamDestination(
 		logLevel,
 		os.Stdout,
-		make(chan logutils.QueuedLog, logQueueSize),
+		make(chan log.QueuedLog, logQueueSize),
 		configParams.DebugDisableLogDropping,
 		counterLogErrors,
 	)

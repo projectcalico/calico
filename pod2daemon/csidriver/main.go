@@ -1,4 +1,4 @@
-// Copyright (c) 2022-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2022-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,9 +18,8 @@ import (
 	"flag"
 	"os"
 
-	log "github.com/sirupsen/logrus"
+	"github.com/projectcalico/calico/lib/std/log"
 
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 	"github.com/projectcalico/calico/pod2daemon/csidriver/driver"
 )
 
@@ -28,7 +27,7 @@ func main() {
 	// Set the log output to stdout to prevent some components from interpreting logs as errors (e.g. fluentd).
 	log.SetOutput(os.Stdout)
 	// Set up logging formatting.
-	logutils.ConfigureFormatter("csi-driver")
+	log.ConfigureFormatter("csi-driver")
 	// Set the preliminary log level
 	log.SetLevel(log.WarnLevel)
 

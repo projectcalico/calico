@@ -24,12 +24,11 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
-	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink/nl"
 
 	"github.com/projectcalico/calico/felix/nfnetlink/nfnl"
 	"github.com/projectcalico/calico/felix/nfnetlink/pkt"
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 const (
@@ -93,7 +92,7 @@ func init() {
 }
 
 var (
-	rll = logutils.NewRateLimitedLogger(logutils.OptInterval(time.Minute))
+	rll = log.NewRateLimitedLogger(log.OptInterval(time.Minute))
 )
 
 func NflogSubscribe(groupNum int, bufSize int, ch chan<- map[NflogPacketTuple]*NflogPacketAggregate, done <-chan struct{}, includeConnTrack bool) error {

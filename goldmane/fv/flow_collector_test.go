@@ -10,7 +10,6 @@ import (
 	"time"
 
 	. "github.com/onsi/gomega"
-	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 	goproto "google.golang.org/protobuf/proto"
@@ -20,7 +19,7 @@ import (
 	"github.com/projectcalico/calico/goldmane/pkg/testutils"
 	"github.com/projectcalico/calico/goldmane/pkg/types"
 	"github.com/projectcalico/calico/goldmane/proto"
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 type testSink struct {
@@ -85,8 +84,8 @@ func setupServer(t *testing.T) func() {
 func setupTest(t *testing.T, srvOption ServerSetupOption) func() {
 	// Register gomega with test.
 	RegisterTestingT(t)
-	logrus.SetLevel(logrus.DebugLevel)
-	logCancel := logutils.RedirectLogrusToTestingT(t)
+	log.SetLevel(log.DebugLevel)
+	logCancel := log.RedirectLogrusToTestingT(t)
 
 	// Create a socket listener.
 	var err error
@@ -119,7 +118,7 @@ func newSocketListener() (net.Listener, error) {
 	d := os.TempDir()
 
 	sock := fmt.Sprintf("%s/goldmane.sock", d)
-	logrus.WithField("socket", sock).Info("Creating socket for test server")
+	log.WithField("socket", sock).Info("Creating socket for test server")
 
 	// Create a new listener on a local socket.
 	return net.Listen("unix", sock)
@@ -135,7 +134,7 @@ func TestFlowCollection(t *testing.T) {
 	connected := cli.Connect(ctx)
 	select {
 	case <-connected:
-		logrus.Info("Connected to server")
+		log.Info("Connected to server")
 	case <-ctx.Done():
 		require.Fail(t, "Timed out waiting for server connection")
 	}

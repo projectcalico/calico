@@ -18,7 +18,6 @@ import (
 	"strings"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	log "github.com/sirupsen/logrus"
 	"google.golang.org/genproto/googleapis/rpc/code"
 	"google.golang.org/genproto/googleapis/rpc/status"
 
@@ -30,7 +29,8 @@ import (
 	"github.com/projectcalico/calico/felix/rules"
 	flxrules "github.com/projectcalico/calico/felix/rules"
 	ftypes "github.com/projectcalico/calico/felix/types"
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/calico/lib/std/log"
+
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
 )
 
@@ -42,8 +42,8 @@ var (
 	INTERNAL          = int32(code.Code_INTERNAL)
 	UNKNOWN           = int32(code.Code_UNKNOWN)
 
-	rlog1 = logutils.NewRateLimitedLogger()
-	rlog2 = logutils.NewRateLimitedLogger()
+	rlog1 = log.NewRateLimitedLogger()
+	rlog2 = log.NewRateLimitedLogger()
 )
 
 // Action is an enumeration of actions a policy rule can take if it is matched.

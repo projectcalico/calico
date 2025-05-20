@@ -15,14 +15,15 @@
 package calico
 
 import (
-	"github.com/sirupsen/logrus"
 	"k8s.io/apiserver/pkg/registry/generic/registry"
 	"k8s.io/apiserver/pkg/storage/storagebackend/factory"
+
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // NewStorage creates a new libcalico-based storage.Interface implementation
 func NewStorage(opts Options) (registry.DryRunnableStorage, factory.DestroyFunc) {
-	logrus.Debug("Constructing Calico Storage")
+	log.Debug("Constructing Calico Storage")
 
 	switch opts.RESTOptions.ResourcePrefix {
 	case "projectcalico.org/networkpolicies":
@@ -68,7 +69,7 @@ func NewStorage(opts Options) (registry.DryRunnableStorage, factory.DestroyFunc)
 	case "projectcalico.org/blockaffinities":
 		return NewBlockAffinityStorage(opts)
 	default:
-		logrus.Fatalf("Unable to create storage for resource %v", opts.RESTOptions.ResourcePrefix)
+		log.Fatalf("Unable to create storage for resource %v", opts.RESTOptions.ResourcePrefix)
 		return registry.DryRunnableStorage{}, nil
 	}
 }
