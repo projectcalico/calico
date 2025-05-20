@@ -17,10 +17,9 @@ package storage
 import (
 	"time"
 
-	"github.com/sirupsen/logrus"
-
 	"github.com/projectcalico/calico/goldmane/pkg/types"
 	"github.com/projectcalico/calico/goldmane/proto"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -48,21 +47,21 @@ type AggregationBucket struct {
 
 func (b *AggregationBucket) AddFlow(flow *types.Flow) {
 	if b.Pushed {
-		logrus.WithField("flow", flow).Warn("Adding flow to already published bucket")
+		log.WithField("flow", flow).Warn("Adding flow to already published bucket")
 	}
 
 	if flow == nil {
-		logrus.Fatal("BUG: Attempted to add nil flow to bucket")
+		log.Fatal("BUG: Attempted to add nil flow to bucket")
 	}
 	if flow.Key == nil {
-		logrus.WithField("flow", flow).Fatal("BUG: Attempted to add flow with nil key to bucket")
+		log.WithField("flow", flow).Fatal("BUG: Attempted to add flow with nil key to bucket")
 	}
 	if b.lookupFlow == nil {
-		logrus.WithField("flow", flow).Fatal("BUG: Attempted to add flow to bucket with no lookup function")
+		log.WithField("flow", flow).Fatal("BUG: Attempted to add flow to bucket with no lookup function")
 	}
 	d := b.lookupFlow(*flow.Key)
 	if d == nil {
-		logrus.WithField("flow", flow).Fatal("BUG: Attempted to add flow with no corresponding DiachronicFlow")
+		log.WithField("flow", flow).Fatal("BUG: Attempted to add flow with no corresponding DiachronicFlow")
 	}
 
 	// Mark this Flow as part of this bucket.
@@ -81,8 +80,8 @@ func NewAggregationBucket(start, end time.Time) *AggregationBucket {
 	}
 }
 
-func (b *AggregationBucket) Fields() logrus.Fields {
-	return logrus.Fields{
+func (b *AggregationBucket) Fields() log.Fields {
+	return log.Fields{
 		"start_time": b.StartTime,
 		"end_time":   b.EndTime,
 		"flows":      b.Flows.Len(),

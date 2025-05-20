@@ -1,4 +1,4 @@
-// Copyright (c) 2021-2022 Tigera, Inc. All rights reserved.
+// Copyright (c) 2021-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,9 +25,8 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/sirupsen/logrus"
-
 	"github.com/projectcalico/calico/felix/bpf/bpfdefs"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/node/pkg/lifecycle/startup"
 )
 
@@ -37,7 +36,7 @@ func Run(bestEffort bool) {
 
 	err := ensureBPFFilesystem()
 	if err != nil {
-		logrus.WithError(err).Error("Failed to mount BPF filesystem.")
+		log.WithError(err).Error("Failed to mount BPF filesystem.")
 		if !bestEffort {
 			os.Exit(2) // Using 2 just to distinguish from the usage error case.
 		}
@@ -45,7 +44,7 @@ func Run(bestEffort bool) {
 
 	err = ensureCgroupV2Filesystem()
 	if err != nil {
-		logrus.WithError(err).Error("Failed to mount cgroup2 filesystem.")
+		log.WithError(err).Error("Failed to mount cgroup2 filesystem.")
 		if !bestEffort {
 			os.Exit(3)
 		}
@@ -54,7 +53,7 @@ func Run(bestEffort bool) {
 
 func ensureBPFFilesystem() error {
 	// Check if the BPF filesystem is mounted at the expected location.
-	logrus.Info("Checking if BPF filesystem is mounted.")
+	log.Info("Checking if BPF filesystem is mounted.")
 	mounts, err := os.Open("/proc/mounts")
 	if err != nil {
 		return fmt.Errorf("failed to open /proc/mounts: %w", err)
@@ -66,7 +65,7 @@ func ensureBPFFilesystem() error {
 		fs := parts[2]
 
 		if mountPoint == bpfdefs.DefaultBPFfsPath && fs == "bpf" {
-			logrus.Info("BPF filesystem is mounted.")
+			log.Info("BPF filesystem is mounted.")
 			return nil
 		}
 	}
@@ -75,12 +74,12 @@ func ensureBPFFilesystem() error {
 	}
 
 	// If we get here, the BPF filesystem is not mounted.  Try to mount it.
-	logrus.Info("BPF filesystem is not mounted. Trying to mount it...")
+	log.Info("BPF filesystem is not mounted. Trying to mount it...")
 	err = syscall.Mount(bpfdefs.DefaultBPFfsPath, bpfdefs.DefaultBPFfsPath, "bpf", 0, "")
 	if err != nil {
 		return fmt.Errorf("failed to mount BPF filesystem: %w", err)
 	}
-	logrus.Info("Mounted BPF filesystem.")
+	log.Info("Mounted BPF filesystem.")
 	return nil
 }
 
@@ -89,7 +88,7 @@ func ensureBPFFilesystem() error {
 // This is needed by felix to attach CTLB programs and implement k8s services correctly.
 func ensureCgroupV2Filesystem() error {
 	// Check if the Cgroup2 filesystem is mounted at the expected location.
-	logrus.Info("Checking if cgroup2 filesystem is mounted.")
+	log.Info("Checking if cgroup2 filesystem is mounted.")
 	mountInfoFile := "/nodeproc/1/mountinfo"
 	mounts, err := os.Open(mountInfoFile)
 	if err != nil {
@@ -108,7 +107,7 @@ func ensureCgroupV2Filesystem() error {
 			fsType := strings.Split(extraInfo[1], " ")[0] // fsType is the first string after -
 
 			if mountPoint == cgroupV2Path && fsType == "cgroup2" {
-				logrus.Info("Cgroup2 filesystem is mounted.")
+				log.Info("Cgroup2 filesystem is mounted.")
 				return nil
 			}
 		}
@@ -118,21 +117,21 @@ func ensureCgroupV2Filesystem() error {
 	}
 
 	// If we get here, the Cgroup2 filesystem is not mounted.  Try to mount it.
-	logrus.Info("Cgroup2 filesystem is not mounted. Trying to mount it...")
+	log.Info("Cgroup2 filesystem is not mounted. Trying to mount it...")
 
 	err = os.MkdirAll(cgroupV2Path, 0700)
 	if err != nil {
 		return fmt.Errorf("failed to prepare mount point: %v. err: %w", cgroupV2Path, err)
 	}
-	logrus.Infof("Mount point %s is ready for mounting root cgroup2 fs", cgroupV2Path)
+	log.Infof("Mount point %s is ready for mounting root cgroup2 fs", cgroupV2Path)
 
 	mountCmd := exec.Command("mountns", cgroupV2Path)
 	out, err := mountCmd.Output()
-	logrus.Debugf("Executed %v. err:%v out:\n%s", mountCmd, err, out)
+	log.Debugf("Executed %v. err:%v out:\n%s", mountCmd, err, out)
 	if err != nil {
 		return fmt.Errorf("failed to mount cgroup2 filesystem: %w", err)
 	}
 
-	logrus.Infof("Mounted root cgroup2 filesystem.")
+	log.Infof("Mounted root cgroup2 filesystem.")
 	return nil
 }
