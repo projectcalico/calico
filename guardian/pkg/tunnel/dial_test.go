@@ -43,59 +43,57 @@ func handleConnection(t *testing.T, listener net.Listener) {
 	Expect(err).ShouldNot(HaveOccurred())
 }
 
-func TestDialPlainTCP(t *testing.T) {
+func TestDial(t *testing.T) {
 	setupTest(t)
-
 	address := "localhost:8080"
-	listener, err := net.Listen("tcp", address)
-	Expect(err).NotTo(HaveOccurred())
-	defer listener.Close()
 
-	go func() {
-		handleConnection(t, listener)
-	}()
+	t.Run("Dial Plain TCP", func(t *testing.T) {
+		listener, err := net.Listen("tcp", address)
+		Expect(err).NotTo(HaveOccurred())
+		defer listener.Close()
 
-	dialer, err := tunnel.NewTLSSessionDialer(address, nil)
-	Expect(err).NotTo(HaveOccurred())
+		go func() {
+			handleConnection(t, listener)
+		}()
 
-	assertExpectations(t, dialer)
+		dialer, err := tunnel.NewTLSSessionDialer(address, nil)
+		Expect(err).NotTo(HaveOccurred())
 
-}
-
-func TestDialTLS(t *testing.T) {
-	setupTest(t)
-
-	address := "localhost:8080"
-	tmpDir := os.TempDir()
-
-	serverCrt, serverKey := utils.CreateKeyCertPair(tmpDir)
-	defer serverCrt.Close()
-	defer serverKey.Close()
-
-	cert, err := tls.LoadX509KeyPair(serverCrt.Name(), serverKey.Name())
-	if err != nil {
-		t.Fatalf("Failed to load server certificate and key: %v", err)
-	}
-
-	listener, err := tls.Listen("tcp", address, &tls.Config{Certificates: []tls.Certificate{cert}})
-	Expect(err).NotTo(HaveOccurred())
-	defer listener.Close()
-
-	go func() {
-		handleConnection(t, listener)
-	}()
-
-	// Load the server's certificate
-	certPool := x509.NewCertPool()
-	caCert, err := os.ReadFile(serverCrt.Name())
-	Expect(err).NotTo(HaveOccurred())
-	certPool.AppendCertsFromPEM(caCert)
-
-	dialer, err := tunnel.NewTLSSessionDialer(address, &tls.Config{
-		RootCAs: certPool,
+		assertExpectations(t, dialer)
 	})
-	Expect(err).NotTo(HaveOccurred())
-	assertExpectations(t, dialer)
+
+	t.Run("Dial TLS", func(t *testing.T) {
+		tmpDir := os.TempDir()
+
+		serverCrt, serverKey := utils.CreateKeyCertPair(tmpDir)
+		defer serverCrt.Close()
+		defer serverKey.Close()
+
+		cert, err := tls.LoadX509KeyPair(serverCrt.Name(), serverKey.Name())
+		if err != nil {
+			t.Fatalf("Failed to load server certificate and key: %v", err)
+		}
+
+		listener, err := tls.Listen("tcp", address, &tls.Config{Certificates: []tls.Certificate{cert}})
+		Expect(err).NotTo(HaveOccurred())
+		defer listener.Close()
+
+		go func() {
+			handleConnection(t, listener)
+		}()
+
+		// Load the server's certificate
+		certPool := x509.NewCertPool()
+		caCert, err := os.ReadFile(serverCrt.Name())
+		Expect(err).NotTo(HaveOccurred())
+		certPool.AppendCertsFromPEM(caCert)
+
+		dialer, err := tunnel.NewTLSSessionDialer(address, &tls.Config{
+			RootCAs: certPool,
+		})
+		Expect(err).NotTo(HaveOccurred())
+		assertExpectations(t, dialer)
+	})
 }
 
 func assertExpectations(t *testing.T, dialer tunnel.SessionDialer) {
