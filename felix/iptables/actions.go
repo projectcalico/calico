@@ -17,10 +17,9 @@ package iptables
 import (
 	"fmt"
 
-	"github.com/sirupsen/logrus"
-
 	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/generictables"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 func Actions() generictables.ActionFactory {
@@ -432,10 +431,10 @@ type LimitPacketRateAction struct {
 
 func (a LimitPacketRateAction) ToFragment(features *environment.Features) string {
 	if a.Mark == 0 {
-		logrus.WithField("mark", a.Mark).Panic("Invalid mark")
+		log.WithField("mark", a.Mark).Panic("Invalid mark")
 	}
 	if a.Rate < 0 {
-		logrus.WithField("rate", a.Rate).Panic("Invalid rate")
+		log.WithField("rate", a.Rate).Panic("Invalid rate")
 	}
 	return fmt.Sprintf("-m limit --limit %d/sec --jump MARK --set-mark %#x/%#x", a.Rate, a.Mark, a.Mark)
 }
@@ -452,7 +451,7 @@ type LimitNumConnectionsAction struct {
 
 func (a LimitNumConnectionsAction) ToFragment(features *environment.Features) string {
 	if a.Num < 0 {
-		logrus.WithField("rate", a.Num).Panic("Invalid limit")
+		log.WithField("rate", a.Num).Panic("Invalid limit")
 	}
 	// '-m tcp --tcp-flags FIN,SYN,RST,ACK SYN' is equivalent to '--syn' but the long form is shown on the output of 'iptables-*-save', so use the long form too for consistency
 	return fmt.Sprintf("-p tcp -m tcp --tcp-flags FIN,SYN,RST,ACK SYN -m connlimit --connlimit-above %d --connlimit-mask 0 -j REJECT --reject-with %s", a.Num, a.RejectWith)

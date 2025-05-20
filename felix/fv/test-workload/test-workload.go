@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -31,7 +31,6 @@ import (
 	nsutils "github.com/containernetworking/plugins/pkg/testutils"
 	"github.com/docopt/docopt-go"
 	"github.com/ishidawataru/sctp"
-	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 
 	"github.com/projectcalico/calico/cni-plugin/pkg/dataplane/linux"
@@ -39,7 +38,7 @@ import (
 	"github.com/projectcalico/calico/felix/fv/cgroup"
 	"github.com/projectcalico/calico/felix/fv/connectivity"
 	"github.com/projectcalico/calico/felix/fv/utils"
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 const usage = `test-workload, test workload for Felix FV testing.
@@ -52,7 +51,7 @@ Usage:
 
 func main() {
 	log.SetLevel(log.DebugLevel)
-	logutils.ConfigureFormatter("test-workload")
+	log.ConfigureFormatter("test-workload")
 
 	// If we've been told to, move into this felix's cgroup.
 	cgroup.MaybeMoveToFelixCgroupv2()
@@ -399,7 +398,7 @@ func main() {
 	panicIfError(err)
 }
 
-func loopRespondingToPackets(logCxt *log.Entry, p net.PacketConn) {
+func loopRespondingToPackets(logCxt log.Entry, p net.PacketConn) {
 	defer p.Close()
 	for {
 		buffer := make([]byte, 1024)

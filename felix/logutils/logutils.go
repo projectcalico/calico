@@ -18,10 +18,9 @@ import (
 	"os"
 
 	"github.com/prometheus/client_golang/prometheus"
-	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/config"
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 var (
@@ -48,34 +47,7 @@ const logQueueSize = 100
 // if it is enabled by either the FELIX_EARLYLOGSEVERITYSCREEN or FELIX_LOGSEVERITYSCREEN
 // environment variable.
 func ConfigureEarlyLogging() {
-	// Log to stdout.  This prevents fluentd, for example, from interpreting all our logs as errors by default.
-	log.SetOutput(os.Stdout)
-
-	// Set up logging formatting.
-	logutils.ConfigureFormatter("felix")
-
-	// First try the early-only environment variable.  Since the normal
-	// config processing doesn't know about that variable, normal config
-	// will override it once it's loaded.
-	rawLogLevel := os.Getenv("FELIX_EARLYLOGSEVERITYSCREEN")
-	if rawLogLevel == "" {
-		// Early-only flag not set, look for the normal config-owned
-		// variable.
-		rawLogLevel = os.Getenv("FELIX_LOGSEVERITYSCREEN")
-	}
-
-	// Default to logging errors.
-	logLevelScreen := log.ErrorLevel
-	if rawLogLevel != "" {
-		parsedLevel, err := log.ParseLevel(rawLogLevel)
-		if err == nil {
-			logLevelScreen = parsedLevel
-		} else {
-			log.WithError(err).Error("Failed to parse early log level, defaulting to error.")
-		}
-	}
-	log.SetLevel(logLevelScreen)
-	log.Infof("Early screen log level set to %v", logLevelScreen)
+	log.ConfigureEarlyLogging("felix", "FELIX")
 }
 
 // ConfigureLogging uses the resolved configuration to complete the logging
@@ -83,9 +55,9 @@ func ConfigureEarlyLogging() {
 // attaches them to logrus.
 func ConfigureLogging(configParams *config.Config) {
 	// Parse the log levels, defaulting to panic if in doubt.
-	logLevelScreen := logutils.SafeParseLogLevel(configParams.LogSeverityScreen)
-	logLevelFile := logutils.SafeParseLogLevel(configParams.LogSeverityFile)
-	logLevelSyslog := logutils.SafeParseLogLevel(configParams.LogSeveritySys)
+	logLevelScreen := log.ParseLevelOrDefault(configParams.LogSeverityScreen, log.PanicLevel)
+	logLevelFile := log.ParseLevelOrDefault(configParams.LogSeverityFile, log.PanicLevel)
+	logLevelSyslog := log.ParseLevelOrDefault(configParams.LogSeveritySys, log.PanicLevel)
 
 	// Work out the most verbose level that is being logged.
 	mostVerboseLevel := logLevelScreen
@@ -100,7 +72,7 @@ func ConfigureLogging(configParams *config.Config) {
 	log.SetLevel(mostVerboseLevel)
 
 	// Screen target.
-	var dests []*logutils.Destination
+	var dests []*log.Destination
 	if configParams.LogSeverityScreen != "" {
 		dests = append(dests, getScreenDestination(configParams, logLevelScreen))
 	}
@@ -109,7 +81,7 @@ func ConfigureLogging(configParams *config.Config) {
 	// of the logger.
 	var fileDirErr, fileOpenErr error
 	if configParams.LogSeverityFile != "" && configParams.LogFilePath != "" {
-		var destination *logutils.Destination
+		var destination *log.Destination
 		destination, fileDirErr, fileOpenErr = getFileDestination(configParams, logLevelFile)
 		if fileDirErr == nil && fileOpenErr == nil && destination != nil {
 			dests = append(dests, destination)
@@ -119,26 +91,26 @@ func ConfigureLogging(configParams *config.Config) {
 	// Syslog target.  Again, we record the error if we fail to connect to syslog.
 	var sysErr error
 	if configParams.LogSeveritySys != "" {
-		var destination *logutils.Destination
+		var destination *log.Destination
 		destination, sysErr = getSyslogDestination(configParams, logLevelSyslog)
 		if sysErr == nil && destination != nil {
 			dests = append(dests, destination)
 		}
 	}
 
-	hook := logutils.NewBackgroundHook(
-		logutils.FilterLevels(mostVerboseLevel),
+	hook := log.NewBackgroundHook(
+		log.FilterLevels(mostVerboseLevel),
 		logLevelSyslog,
 		dests,
 		counterDroppedLogs,
-		logutils.WithDebugFileRegexp(configParams.LogDebugFilenameRegex),
+		log.WithDebugFileRegexp(configParams.LogDebugFilenameRegex),
 	)
 	hook.Start()
 	log.AddHook(hook)
 
 	// Disable logrus' default output, which only supports a single destination.  We use the
 	// hook above to fan out logs to multiple destinations.
-	log.SetOutput(&logutils.NullWriter{})
+	log.SetOutput(&log.NullWriter{})
 
 	// Do any deferred error logging.
 	if fileDirErr != nil {
@@ -159,11 +131,11 @@ func ConfigureLogging(configParams *config.Config) {
 	}
 }
 
-func getScreenDestination(configParams *config.Config, logLevel log.Level) *logutils.Destination {
-	return logutils.NewStreamDestination(
+func getScreenDestination(configParams *config.Config, logLevel log.Level) *log.Destination {
+	return log.NewStreamDestination(
 		logLevel,
 		os.Stdout,
-		make(chan logutils.QueuedLog, logQueueSize),
+		make(chan log.QueuedLog, logQueueSize),
 		configParams.DebugDisableLogDropping,
 		counterLogErrors,
 	)
