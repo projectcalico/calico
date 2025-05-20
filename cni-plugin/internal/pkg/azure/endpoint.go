@@ -1,4 +1,4 @@
-// Copyright (c) 2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2018-2025 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,7 +21,8 @@ import (
 	"os"
 
 	"github.com/natefinch/atomic"
-	"github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // AzureEndpoint represents a container networked using Calico in conjunction with
@@ -44,7 +45,7 @@ func (ae *AzureEndpoint) Write() error {
 	if err := atomic.WriteFile(ae.filename(), r); err != nil {
 		return err
 	}
-	logrus.Infof("Stored AzureEndpoint: %#v", ae)
+	log.Infof("Stored AzureEndpoint: %#v", ae)
 	return nil
 }
 
@@ -53,12 +54,12 @@ func (ae *AzureEndpoint) Load() error {
 	if err != nil {
 		return nil
 	}
-	logrus.Infof("Loaded AzureEndpoint: %s", bytes)
+	log.Infof("Loaded AzureEndpoint: %s", bytes)
 	return json.Unmarshal(bytes, ae)
 }
 
 func (ae *AzureEndpoint) Delete() error {
-	logrus.Infof("Deleting AzureEndpoint: %#v", ae)
+	log.Infof("Deleting AzureEndpoint: %#v", ae)
 	return os.Remove(ae.filename())
 }
 

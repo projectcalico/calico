@@ -1,4 +1,4 @@
-// Copyright (c) 2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019-2025 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,9 +20,8 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/sirupsen/logrus"
-
 	"github.com/projectcalico/calico/felix/idalloc"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 type checkpoint struct {
@@ -33,7 +32,7 @@ type checkpoint struct {
 func main() {
 	fmt.Println("Finding collision in the ID allocator hash function (this will take a while)...")
 
-	logrus.SetLevel(logrus.InfoLevel)
+	log.SetLevel(log.InfoLevel)
 
 	alloc := idalloc.New()
 	hash := func(id string) uint64 {

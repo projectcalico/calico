@@ -17,7 +17,7 @@ package storage
 import (
 	"time"
 
-	"github.com/sirupsen/logrus"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 type BucketRingOption func(*BucketRing)
@@ -30,21 +30,21 @@ func WithPushAfter(n int) BucketRingOption {
 
 func WithBucketsToAggregate(n int) BucketRingOption {
 	return func(r *BucketRing) {
-		logrus.WithField("bucketsToAggregate", n).Debug("Setting buckets to aggregate")
+		log.WithField("bucketsToAggregate", n).Debug("Setting buckets to aggregate")
 		r.bucketsToAggregate = n
 	}
 }
 
 func WithStreamReceiver(sm StreamReceiver) BucketRingOption {
 	return func(r *BucketRing) {
-		logrus.WithField("streamReceiver", sm).Debug("Setting stream receiver")
+		log.WithField("streamReceiver", sm).Debug("Setting stream receiver")
 		r.streams = sm
 	}
 }
 
 func WithNowFunc(nowFunc func() time.Time) BucketRingOption {
 	return func(r *BucketRing) {
-		logrus.WithField("nowFunc", nowFunc).Debug("Setting now function")
+		log.WithField("nowFunc", nowFunc).Debug("Setting now function")
 		r.nowFunc = nowFunc
 	}
 }

@@ -22,7 +22,6 @@ import (
 	"time"
 
 	. "github.com/onsi/gomega"
-	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	googleproto "google.golang.org/protobuf/proto"
 
@@ -32,7 +31,7 @@ import (
 	"github.com/projectcalico/calico/goldmane/pkg/testutils"
 	"github.com/projectcalico/calico/goldmane/pkg/types"
 	"github.com/projectcalico/calico/goldmane/proto"
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 var (
@@ -55,7 +54,7 @@ func setupTest(t *testing.T, opts ...goldmane.Option) func() {
 
 	// Hook logrus into testing.T
 	utils.ConfigureLogging("DEBUG")
-	logCancel := logutils.RedirectLogrusToTestingT(t)
+	logCancel := log.RedirectLogrusToTestingT(t)
 	gm = goldmane.NewGoldmane(opts...)
 	return func() {
 		gm.Stop()
@@ -906,11 +905,11 @@ func TestSink(t *testing.T) {
 		Eventually(func() error {
 			results, err := gm.List(&proto.FlowListRequest{})
 			if err != nil {
-				logrus.Infof("Got %d flows", len(results.Flows))
+				log.Infof("Got %d flows", len(results.Flows))
 				return nil
 			}
 			if len(results.Flows) < 80 {
-				logrus.Infof("Got %d flows", len(results.Flows))
+				log.Infof("Got %d flows", len(results.Flows))
 				return fmt.Errorf("Expected 80 flows, got %d", len(results.Flows))
 			}
 			return nil

@@ -12,7 +12,6 @@ import (
 	"time"
 
 	. "github.com/onsi/gomega"
-	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 
@@ -22,7 +21,7 @@ import (
 	"github.com/projectcalico/calico/goldmane/pkg/types"
 	"github.com/projectcalico/calico/goldmane/proto"
 	"github.com/projectcalico/calico/lib/std/cryptoutils"
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 var (
@@ -37,9 +36,9 @@ var (
 
 func daemonSetup(t *testing.T, cfg daemon.Config) func() {
 	RegisterTestingT(t)
-	logrus.SetLevel(logrus.DebugLevel)
-	logutils.ConfigureFormatter("daemonfv")
-	logCancel := logutils.RedirectLogrusToTestingT(t)
+	log.SetLevel(log.DebugLevel)
+	log.ConfigureFormatter("daemonfv")
+	logCancel := log.RedirectLogrusToTestingT(t)
 
 	// The context acts as a global timeout for the test to make sure we don't hang.
 	var cancel context.CancelFunc
@@ -65,7 +64,7 @@ func daemonSetup(t *testing.T, cfg daemon.Config) func() {
 	// flows are being emitted.
 	emitted = &emissionCounter{}
 	testServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		logrus.WithField("path", r.URL.Path).Info("[TEST] Received request")
+		log.WithField("path", r.URL.Path).Info("[TEST] Received request")
 		emitted.Inc()
 	}))
 	cfg.PushURL = testServer.URL
@@ -136,7 +135,7 @@ func TestDaemonCanary(t *testing.T) {
 	// Generate credentials for the Goldmane client.
 	creds, err := client.ClientCredentials(clientCert, clientKey, clientCA)
 	if err != nil {
-		logrus.WithError(err).Fatal("Failed to create goldmane TLS credentials.")
+		log.WithError(err).Fatal("Failed to create goldmane TLS credentials.")
 	}
 
 	// Verify we can connect to the server.
@@ -166,7 +165,7 @@ func TestFlows(t *testing.T) {
 	// Generate credentials for the Goldmane client.
 	creds, err := client.ClientCredentials(clientCert, clientKey, clientCA)
 	if err != nil {
-		logrus.WithError(err).Fatal("Failed to create goldmane TLS credentials.")
+		log.WithError(err).Fatal("Failed to create goldmane TLS credentials.")
 	}
 
 	// Create a client to interact with Flows.
@@ -245,7 +244,7 @@ func TestHints(t *testing.T) {
 	// Generate credentials for the Goldmane client.
 	creds, err := client.ClientCredentials(clientCert, clientKey, clientCA)
 	if err != nil {
-		logrus.WithError(err).Fatal("Failed to create goldmane TLS credentials.")
+		log.WithError(err).Fatal("Failed to create goldmane TLS credentials.")
 	}
 
 	// Create a client to interact with Flows.
@@ -304,7 +303,7 @@ func TestStatistics(t *testing.T) {
 	// Generate credentials for the Goldmane client.
 	creds, err := client.ClientCredentials(clientCert, clientKey, clientCA)
 	if err != nil {
-		logrus.WithError(err).Fatal("Failed to create goldmane TLS credentials.")
+		log.WithError(err).Fatal("Failed to create goldmane TLS credentials.")
 	}
 
 	// Generate credentials for the Goldmane client.

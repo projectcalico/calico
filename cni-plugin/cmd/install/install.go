@@ -1,4 +1,4 @@
-// Copyright (c) 2023 Tigera, Inc. All rights reserved.
+// Copyright (c) 2023-2025 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,9 +15,8 @@
 package main
 
 import (
-	"github.com/sirupsen/logrus"
-
 	"github.com/projectcalico/calico/cni-plugin/pkg/install"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // VERSION is filled out during the build process (using git describe output)
@@ -26,6 +25,6 @@ var VERSION string
 func main() {
 	err := install.Install(VERSION)
 	if err != nil {
-		logrus.WithError(err).Fatal("Error installing CNI plugin")
+		log.WithError(err).Fatal("Error installing CNI plugin")
 	}
 }

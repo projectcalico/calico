@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,12 +17,12 @@ package routerule
 import (
 	"net"
 
-	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
 	"k8s.io/utils/ptr"
 
 	"github.com/projectcalico/calico/felix/ip"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // Rule is a wrapper structure around netlink rule.
@@ -46,7 +46,7 @@ func (r *Rule) NetLinkRule() *netlink.Rule {
 	return r.nlRule
 }
 
-func (r *Rule) LogCxt() *log.Entry {
+func (r *Rule) LogCxt() log.Entry {
 	var src interface{}
 	if r.nlRule.Src != nil {
 		src = r.nlRule.Src

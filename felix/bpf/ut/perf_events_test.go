@@ -23,9 +23,9 @@ import (
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	. "github.com/onsi/gomega"
-	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/bpf/perf"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 const (
