@@ -16,6 +16,7 @@ package calc
 
 import (
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"net"
 	"runtime"
