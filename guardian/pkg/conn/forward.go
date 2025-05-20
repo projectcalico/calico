@@ -21,7 +21,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/sirupsen/logrus"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // Forward sends all data coming from the srcConn to the dstConn, and all data coming from dstConn to srcConn. Both
@@ -41,18 +41,18 @@ func Forward(srcConn net.Conn, dstCon net.Conn) {
 func forwardConnection(srcConn net.Conn, dstCon net.Conn, wg *sync.WaitGroup) {
 	defer func() {
 		if err := srcConn.Close(); err != nil && !isUseOfClosedNetworkErr(err) {
-			logrus.WithError(err).Error("failed to close src connection")
+			log.WithError(err).Error("failed to close src connection")
 		}
 	}()
 	defer func() {
 		if err := dstCon.Close(); err != nil && !isUseOfClosedNetworkErr(err) {
-			logrus.WithError(err).Error("failed to close dst connection")
+			log.WithError(err).Error("failed to close dst connection")
 		}
 	}()
 	defer wg.Done()
 
 	if _, err := io.Copy(dstCon, srcConn); err != nil && !isUseOfClosedNetworkErr(err) {
-		logrus.WithError(err).Error("failed to forward data")
+		log.WithError(err).Error("failed to forward data")
 	}
 }
 

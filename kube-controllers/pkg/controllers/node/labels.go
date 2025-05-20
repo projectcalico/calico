@@ -18,13 +18,13 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	v1lister "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
 
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/utils"
+	"github.com/projectcalico/calico/lib/std/log"
 	apiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
@@ -69,7 +69,7 @@ func NewNodeLabelController(client client.Interface, nodeInformer cache.SharedIn
 		DeleteFunc: c.OnKubernetesNodeDelete,
 	})
 	if err != nil {
-		logrus.WithError(err).Fatal("Failed to add event handler for Node")
+		log.WithError(err).Fatal("Failed to add event handler for Node")
 	}
 
 	return c
@@ -123,7 +123,7 @@ func (c *nodeLabelController) handleUpdate(update interface{}) {
 		c.syncStatus = update
 		switch update {
 		case bapi.InSync:
-			logrus.WithField("status", update).Info("Syncer in sync, kicking sync channel")
+			log.WithField("status", update).Info("Syncer in sync, kicking sync channel")
 			kick(c.syncChan)
 		}
 	case model.KVPair:
@@ -148,7 +148,7 @@ func (c *nodeLabelController) handleNodeUpdate(update model.KVPair) {
 		for kn, cn := range c.k8sNodeMapper {
 			if cn == nodeName {
 				// Remove it from node map.
-				logrus.Debugf("Unmapping k8s node -> calico node. %s -> %s", kn, cn)
+				log.Debugf("Unmapping k8s node -> calico node. %s -> %s", kn, cn)
 				delete(c.k8sNodeMapper, kn)
 				delete(c.calicoNodeCache, cn)
 				break
@@ -161,23 +161,23 @@ func (c *nodeLabelController) handleNodeUpdate(update model.KVPair) {
 
 	kn, err := getK8sNodeName(*n)
 	if err != nil {
-		logrus.WithError(err).Info("Unable to get corresponding k8s node name, skipping")
+		log.WithError(err).Info("Unable to get corresponding k8s node name, skipping")
 		return
 	}
 
 	if kn == "" {
-		logrus.WithError(err).Info("Corresponding k8s node name is empty, skipping")
+		log.WithError(err).Info("Corresponding k8s node name is empty, skipping")
 		return
 	}
 
 	// Create a mapping from Kubernetes node -> Calico node.
-	logrus.Debugf("Mapping k8s node -> calico node. %s -> %s", kn, n.Name)
+	log.Debugf("Mapping k8s node -> calico node. %s -> %s", kn, n.Name)
 
 	c.k8sNodeMapper[kn] = n.Name
 
 	node, err := c.nodeLister.Get(kn)
 	if err != nil {
-		logrus.WithError(err).WithField("node", kn).Error("Unable to get node")
+		log.WithError(err).WithField("node", kn).Error("Unable to get node")
 	}
 
 	_, existsCalicoNode := c.calicoNodeCache[n.Name]
@@ -192,7 +192,7 @@ func (c *nodeLabelController) handleNodeUpdate(update model.KVPair) {
 }
 
 func (c *nodeLabelController) acceptScheduledRequests(stopCh <-chan struct{}) {
-	logrus.Infof("Will run periodic Node labels sync every %s", timer)
+	log.Infof("Will run periodic Node labels sync every %s", timer)
 	t := time.NewTicker(timer)
 	for {
 		select {
@@ -203,7 +203,7 @@ func (c *nodeLabelController) acceptScheduledRequests(stopCh <-chan struct{}) {
 		case <-c.syncChan:
 			c.syncAllNodesLabels()
 		case node := <-c.k8sNodeUpdate:
-			log := logrus.WithFields(logrus.Fields{"controller": "Labels", "type": "nodeUpdate"})
+			log := log.WithFields(log.Fields{"controller": "Labels", "type": "nodeUpdate"})
 			utils.ProcessBatch(c.k8sNodeUpdate, node, c.syncNodeLabels, log)
 		case <-stopCh:
 			return
@@ -213,12 +213,12 @@ func (c *nodeLabelController) acceptScheduledRequests(stopCh <-chan struct{}) {
 
 func (c *nodeLabelController) syncAllNodesLabels() {
 	if c.syncStatus != bapi.InSync {
-		logrus.WithField("status", c.syncStatus).Debug("Not in sync, skipping node sync")
+		log.WithField("status", c.syncStatus).Debug("Not in sync, skipping node sync")
 		return
 	}
 	nodes, err := c.nodeLister.List(labels.Everything())
 	if err != nil {
-		logrus.WithError(err).Error("failed to list nodes")
+		log.WithError(err).Error("failed to list nodes")
 		return
 	}
 	for _, node := range nodes {
@@ -231,17 +231,17 @@ func (c *nodeLabelController) syncAllNodesLabels() {
 // been synced from Kubernetes, so that it doesn't overwrite user provided labels (e.g.,
 // via calicoctl or another Calico controller).
 func (c *nodeLabelController) syncNodeLabels(node *v1.Node) {
-	logrus.WithField("node", node.Name).Debug("Syncing node labels")
+	log.WithField("node", node.Name).Debug("Syncing node labels")
 	// Get the Calico node representation.
 	name, ok := c.k8sNodeMapper[node.Name]
 	if !ok {
 		// We haven't learned this Calico node yet.
-		logrus.Debugf("Update for node with no Calico equivalent")
+		log.Debugf("Update for node with no Calico equivalent")
 		return
 	}
 	calNode, ok := c.calicoNodeCache[name]
 	if !ok {
-		logrus.Warnf("Calico Node does not exists")
+		log.Warnf("Calico Node does not exists")
 		return
 	}
 	if calNode.Labels == nil {
@@ -261,18 +261,18 @@ func (c *nodeLabelController) syncNodeLabels(node *v1.Node) {
 	oldLabels := map[string]string{}
 	if a, ok := calNode.Annotations[nodeLabelAnnotation]; ok {
 		if err := json.Unmarshal([]byte(a), &oldLabels); err != nil {
-			logrus.WithError(err).Error("Failed to unmarshal node labels")
+			log.WithError(err).Error("Failed to unmarshal node labels")
 			return
 		}
 	}
-	logrus.Debugf("Determined previously synced labels: %s", oldLabels)
+	log.Debugf("Determined previously synced labels: %s", oldLabels)
 
 	// We've synced labels before. Determine diffs to apply.
 	// For each k/v in node.Labels, if it isn't present or the value
 	// differs, add it to the node.
 	for k, v := range node.Labels {
 		if v2, ok := calNode.Labels[k]; !ok || v != v2 {
-			logrus.Debugf("Adding node label %s=%s", k, v)
+			log.Debugf("Adding node label %s=%s", k, v)
 			calNode.Labels[k] = v
 			needsUpdate = true
 		}
@@ -283,7 +283,7 @@ func (c *nodeLabelController) syncNodeLabels(node *v1.Node) {
 	for k, v := range oldLabels {
 		if _, ok := node.Labels[k]; !ok {
 			// The old label is no longer present. Remove it.
-			logrus.Debugf("Deleting node label %s=%s", k, v)
+			log.Debugf("Deleting node label %s=%s", k, v)
 			delete(calNode.Labels, k)
 			needsUpdate = true
 		}
@@ -292,7 +292,7 @@ func (c *nodeLabelController) syncNodeLabels(node *v1.Node) {
 	// Set the annotation to the correct values.
 	bytes, err := json.Marshal(node.Labels)
 	if err != nil {
-		logrus.WithError(err).Errorf("Error marshalling node labels")
+		log.WithError(err).Errorf("Error marshalling node labels")
 		return
 	}
 	calNode.Annotations[nodeLabelAnnotation] = string(bytes)
@@ -300,10 +300,10 @@ func (c *nodeLabelController) syncNodeLabels(node *v1.Node) {
 	// Update the node in the datastore.
 	if needsUpdate {
 		if _, err := c.client.Nodes().Update(context.Background(), calNode, options.SetOptions{}); err != nil {
-			logrus.WithError(err).Warnf("Failed to update node, retrying")
+			log.WithError(err).Warnf("Failed to update node, retrying")
 			return
 		}
 		c.calicoNodeCache[calNode.Name] = calNode
-		logrus.WithField("node", node.ObjectMeta.Name).Info("Successfully synced node labels")
+		log.WithField("node", node.ObjectMeta.Name).Info("Successfully synced node labels")
 	}
 }

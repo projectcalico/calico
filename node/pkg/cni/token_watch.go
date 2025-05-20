@@ -11,13 +11,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/sirupsen/logrus"
 	authenticationv1 "k8s.io/api/authentication/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
 )
 
@@ -56,7 +56,7 @@ type TokenUpdate struct {
 func NamespaceOfUsedServiceAccount() string {
 	namespace, err := os.ReadFile(winutils.GetHostPath(serviceAccountNamespace))
 	if err != nil {
-		logrus.WithError(err).Fatal("Failed to read service account namespace file")
+		log.WithError(err).Fatal("Failed to read service account namespace file")
 	}
 	return string(namespace)
 }
@@ -64,7 +64,7 @@ func NamespaceOfUsedServiceAccount() string {
 func BuildClientSet() (*kubernetes.Clientset, error) {
 	kubeconfig := os.Getenv("KUBECONFIG")
 	cfg, err := winutils.BuildConfigFromFlags("", kubeconfig)
-	logrus.WithFields(logrus.Fields{"KUBECONFIG": kubeconfig, "cfg": cfg}).Debug("running cni.BuildClientSet")
+	log.WithFields(log.Fields{"KUBECONFIG": kubeconfig, "cfg": cfg}).Debug("running cni.BuildClientSet")
 	if err != nil {
 		return nil, err
 	}
@@ -101,11 +101,11 @@ func (t *TokenRefresher) UpdateToken() (TokenUpdate, error) {
 
 	tokenRequest, err := t.clientset.CoreV1().ServiceAccounts(t.namespace).CreateToken(context.TODO(), t.serviceAccountName, tr, metav1.CreateOptions{})
 	if apierrors.IsNotFound(err) && !t.tokenRequestSupported(t.clientset) {
-		logrus.WithError(err).Debug("Unable to create token for CNI kubeconfig as token request api is not supported, falling back to local service account token")
+		log.WithError(err).Debug("Unable to create token for CNI kubeconfig as token request api is not supported, falling back to local service account token")
 		return tokenUpdateFromFile()
 	}
 	if err != nil {
-		logrus.WithError(err).Error("Unable to create token for CNI kubeconfig")
+		log.WithError(err).Error("Unable to create token for CNI kubeconfig")
 		return TokenUpdate{}, err
 	}
 
@@ -128,7 +128,7 @@ func (t *TokenRefresher) Run() {
 	for {
 		tu, err := t.UpdateToken()
 		if err != nil {
-			logrus.WithError(err).Error("Failed to update CNI token, retrying...")
+			log.WithError(err).Error("Failed to update CNI token, retrying...")
 			// Reset nextExpiration to retry directly
 			nextExpiration = time.Time{}
 		} else {
@@ -142,8 +142,8 @@ func (t *TokenRefresher) Run() {
 		}
 		// Do some basic rate limiting to prevent flooding the kube apiserver with requests
 		sleepTime := t.getSleepTime(&nextExpiration)
-		if logrus.IsLevelEnabled(logrus.DebugLevel) {
-			logrus.Debugf("Going to sleep for %s", sleepTime.String())
+		if log.IsLevelEnabled(log.DebugLevel) {
+			log.Debugf("Going to sleep for %s", sleepTime.String())
 		}
 		select {
 		case <-time.After(sleepTime):
@@ -161,10 +161,10 @@ func (t *TokenRefresher) getSleepTime(nextExpiration *time.Time) time.Duration {
 	if cniTokenRefreshInterval != "" {
 		duration, err := time.ParseDuration(cniTokenRefreshInterval)
 		if err == nil {
-			logrus.WithField("interval", duration).Debugf("Detected a valid %s", cniTokenRefreshIntervalName)
+			log.WithField("interval", duration).Debugf("Detected a valid %s", cniTokenRefreshIntervalName)
 			sleepTime = duration
 		} else {
-			logrus.WithError(err).WithField(cniTokenRefreshIntervalName, cniTokenRefreshInterval).Errorf("Detected an invalid %s.", cniTokenRefreshIntervalName)
+			log.WithError(err).WithField(cniTokenRefreshIntervalName, cniTokenRefreshInterval).Errorf("Detected an invalid %s.", cniTokenRefreshIntervalName)
 		}
 	}
 	if nextExpiration.Before(now.Add(t.minTokenRetryDuration * t.defaultRefreshFraction)) {
@@ -195,14 +195,14 @@ func (t *TokenRefresher) tokenRequestSupported(clientset *kubernetes.Clientset) 
 func tokenUpdateFromFile() (TokenUpdate, error) {
 	tokenBytes, err := os.ReadFile(winutils.GetHostPath(tokenFile))
 	if err != nil {
-		logrus.WithError(err).Error("Failed to read service account token file")
+		log.WithError(err).Error("Failed to read service account token file")
 		return TokenUpdate{}, err
 	}
 	token := string(tokenBytes)
 	tokenSegments := strings.Split(token, ".")
 	if len(tokenSegments) != 3 {
 		err := fmt.Errorf("invalid token segment size: %d", len(tokenSegments))
-		logrus.WithError(err).Error("Failed parsing service account token")
+		log.WithError(err).Error("Failed parsing service account token")
 		return TokenUpdate{}, err
 	}
 	unparsedClaims := tokenSegments[1]
@@ -212,13 +212,13 @@ func tokenUpdateFromFile() (TokenUpdate, error) {
 	}
 	decodedClaims, err := base64.URLEncoding.DecodeString(unparsedClaims)
 	if err != nil {
-		logrus.WithError(err).Error("Failed to decode service account token claims")
+		log.WithError(err).Error("Failed to decode service account token claims")
 		return TokenUpdate{}, err
 	}
 	var claimMap map[string]interface{}
 	err = json.Unmarshal(decodedClaims, &claimMap)
 	if err != nil {
-		logrus.WithError(err).Error("Failed to unmarshal service account token claims")
+		log.WithError(err).Error("Failed to unmarshal service account token claims")
 		return TokenUpdate{}, err
 	}
 	return TokenUpdate{
@@ -230,23 +230,23 @@ func tokenUpdateFromFile() (TokenUpdate, error) {
 func Run() {
 	clientset, err := BuildClientSet()
 	if err != nil {
-		logrus.WithError(err).Fatal("Failed to create in cluster client set")
+		log.WithError(err).Fatal("Failed to create in cluster client set")
 	}
 	tr := NewTokenRefresher(clientset, NamespaceOfUsedServiceAccount(), CNIServiceAccountName())
 	tokenChan := tr.TokenChan()
 	go tr.Run()
 
 	for tu := range tokenChan {
-		logrus.Info("Update of CNI kubeconfig triggered based on elapsed time.")
+		log.Info("Update of CNI kubeconfig triggered based on elapsed time.")
 		kubeconfig := os.Getenv("KUBECONFIG")
 		cfg, err := winutils.BuildConfigFromFlags("", kubeconfig)
 		if err != nil {
-			logrus.WithError(err).Error("Error generating kube config.")
+			log.WithError(err).Error("Error generating kube config.")
 			continue
 		}
 		err = rest.LoadTLSFiles(cfg)
 		if err != nil {
-			logrus.WithError(err).Error("Error loading TLS files.")
+			log.WithError(err).Error("Error loading TLS files.")
 			continue
 		}
 		writeKubeconfig(cfg, tu.Token)
@@ -257,7 +257,7 @@ func Run() {
 // This can be set via the CALICO_CNI_SERVICE_ACCOUNT environment variable, and defaults to "calico-cni-plugin" (on Linux, "calico-cni-plugin-windows" on Windows) otherwise.
 func CNIServiceAccountName() string {
 	if sa := os.Getenv("CALICO_CNI_SERVICE_ACCOUNT"); sa != "" {
-		logrus.WithField("name", sa).Debug("Using service account from CALICO_CNI_SERVICE_ACCOUNT")
+		log.WithField("name", sa).Debug("Using service account from CALICO_CNI_SERVICE_ACCOUNT")
 		return sa
 	}
 	return defaultServiceAccountName
@@ -289,8 +289,8 @@ current-context: calico-context`
 
 	// Write the filled out config to disk.
 	if err := os.WriteFile(winutils.GetHostPath(kubeconfigPath), []byte(data), 0600); err != nil {
-		logrus.WithError(err).Error("Failed to write CNI plugin kubeconfig file")
+		log.WithError(err).Error("Failed to write CNI plugin kubeconfig file")
 		return
 	}
-	logrus.WithField("path", winutils.GetHostPath(kubeconfigPath)).Info("Wrote updated CNI kubeconfig file.")
+	log.WithField("path", winutils.GetHostPath(kubeconfigPath)).Info("Wrote updated CNI kubeconfig file.")
 }

@@ -18,10 +18,10 @@ import (
 	"reflect"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apiserver/pkg/storage"
 
+	"github.com/projectcalico/calico/lib/std/log"
 	libapi "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/calico/libcalico-go/lib/errors"
 )
@@ -130,7 +130,7 @@ func convertToAAPI(libcalicoObject runtime.Object) (res runtime.Object) {
 		BlockAffinityConverter{}.convertToAAPI(obj, aapi)
 		return aapi
 	default:
-		logrus.Tracef("Unrecognized libcalico object (type %v)", reflect.TypeOf(libcalicoObject))
+		log.Tracef("Unrecognized libcalico object (type %v)", reflect.TypeOf(libcalicoObject))
 		return nil
 	}
 }

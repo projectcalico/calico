@@ -27,12 +27,12 @@ import (
 	"syscall"
 
 	"github.com/pkg/errors"
-	log "github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 
 	"github.com/projectcalico/calico/felix/bpf/bpfdefs"
 	"github.com/projectcalico/calico/felix/bpf/libbpf"
 	"github.com/projectcalico/calico/felix/bpf/utils"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 func IsNotExists(err error) bool {

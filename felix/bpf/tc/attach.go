@@ -24,14 +24,13 @@ import (
 	"strconv"
 	"strings"
 
-	log "github.com/sirupsen/logrus"
-
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/bpfdefs"
 	"github.com/projectcalico/calico/felix/bpf/hook"
 	"github.com/projectcalico/calico/felix/bpf/libbpf"
 	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
 	"github.com/projectcalico/calico/felix/dataplane/linux/qos"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 type AttachPoint struct {
@@ -73,7 +72,7 @@ var ErrDeviceNotFound = errors.New("device not found")
 var ErrInterrupted = errors.New("dump interrupted")
 var prefHandleRe = regexp.MustCompile(`pref ([^ ]+) .* handle ([^ ]+)`)
 
-func (ap *AttachPoint) Log() *log.Entry {
+func (ap *AttachPoint) Log() log.Entry {
 	return log.WithFields(log.Fields{
 		"iface": ap.Iface,
 		"type":  ap.Type,
