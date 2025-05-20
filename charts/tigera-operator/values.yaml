@@ -66,11 +66,11 @@ dnsConfig: {}
 # Image and registry configuration for the tigera/operator pod.
 tigeraOperator:
   image: tigera/operator
-  version: v1.36.7
+  version: v1.36.9
   registry: quay.io
 calicoctl:
   image: docker.io/calico/ctl
-  tag: v3.29.3
+  tag: v3.29.4
 
 kubeletVolumePluginPath: /var/lib/kubelet
 
