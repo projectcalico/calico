@@ -126,7 +126,7 @@ func calculateRouteProtocol(dpConfig Config) netlink.RouteProtocol {
 }
 
 // isRemoteTunnelRoute returns true if the route update signifies a need to program
-// a directly connected route on the VXLAN device for a remote tunnel endpoint. This is needed
+// a directly connected route on the VXLAN/IPIP device for a remote tunnel endpoint. This is needed
 // in a few cases in order to ensure host <-> pod connectivity over the tunnel.
 func isRemoteTunnelRoute(msg *proto.RouteUpdate, ippoolType proto.IPPoolType) bool {
 	if msg.IpPoolType != ippoolType {
@@ -146,7 +146,7 @@ func isRemoteTunnelRoute(msg *proto.RouteUpdate, ippoolType proto.IPPoolType) bo
 	}
 	if isRemoteTunnel && isBlock {
 		// This happens when tunnel addresses are selected from an IP pool with blocks of a single address.
-		// These also need routes of the form "<IP> dev vxlan.calico" rather than "<block> via <VTEP>".
+		// These also need routes of the form "<IP> dev vxlan.calico" rather than "<block> via <TunnelEndpoint>".
 		return true
 	}
 	return false
@@ -241,7 +241,7 @@ func (m *routeManager) routeIsLocalBlock(msg *proto.RouteUpdate) bool {
 	if !isType(msg, proto.RouteType_LOCAL_WORKLOAD) {
 		return false
 	}
-	// Only care about a specific ippool
+	// Only care about IPPools which match the encap type of the manager.
 	if msg.IpPoolType != m.ippoolType {
 		return false
 	}
@@ -456,7 +456,7 @@ func (m *routeManager) detectDataIface() (netlink.Link, error) {
 	return nil, fmt.Errorf("Unable to find data interface with address %s", dataAddr)
 }
 
-// checks that it is still correctly configured.
+// KeepDeviceInSync runs in a loop and checks that the device is still correctly configured, and updates it if necessary.
 func (m *routeManager) KeepDeviceInSync(
 	ctx context.Context,
 	mtu int,

@@ -174,7 +174,7 @@ func (m *ipipManager) OnUpdate(protoBufMsg interface{}) {
 	}
 }
 
-func (m *ipipManager) mayUpdateRoutes() {
+func (m *ipipManager) maybeUpdateRoutes() {
 	// Only update routes if only Felix is responsible for programming IPIP routes.
 	if m.dpConfig.ProgramRoutes {
 		m.routeMgr.triggerRouteUpdate()
