@@ -139,7 +139,7 @@ type streamManager struct {
 }
 
 func (m *streamManager) Run(ctx context.Context) {
-	go m.processIncomingFlows(ctx)
+	go m.processIncoming(ctx)
 
 	for {
 		select {
@@ -194,8 +194,8 @@ func (m *streamManager) Backfills() <-chan Stream {
 	return m.backfillRequests
 }
 
-// processIncomingFlows reads incoming updates and fans them to registered streams.
-func (m *streamManager) processIncomingFlows(ctx context.Context) {
+// processIncoming reads incoming updates and fans them to registered streams.
+func (m *streamManager) processIncoming(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():

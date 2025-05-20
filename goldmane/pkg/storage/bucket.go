@@ -130,8 +130,8 @@ func (b *AggregationBucket) Reset(start, end int64) {
 
 // markReady marks this bucket as ready to be consumed by a stream.
 func (b *AggregationBucket) markReady() {
-	b.RLock()
-	defer b.RUnlock()
+	b.Lock()
+	defer b.Unlock()
 	b.ready = true
 }
 
