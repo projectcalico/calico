@@ -239,7 +239,7 @@ func (ap *AttachPoint) listAttachedPrograms(includeLegacy bool) ([]attachedProg,
 	}
 	// Lines look like this; the section name always includes calico.
 	// filter protocol all pref 49152 bpf chain 0 handle 0x1 to_hep_no_log.o:[calico_to_host_ep] direct-action not_in_hw id 821 tag ee402594f8f85ac3 jited
-	var progsToClean []attachedProg
+	var progsAttached []attachedProg
 	for _, line := range strings.Split(string(out), "\n") {
 		if !strings.Contains(line, "cali_tc_preambl") && (!includeLegacy || !strings.Contains(line, "calico")) {
 			continue
@@ -251,10 +251,10 @@ func (ap *AttachPoint) listAttachedPrograms(includeLegacy bool) ([]attachedProg,
 				handle: sm[2],
 			}
 			log.WithField("prog", p).Debug("Found old calico program")
-			progsToClean = append(progsToClean, p)
+			progsAttached = append(progsAttached, p)
 		}
 	}
-	return progsToClean, nil
+	return progsAttached, nil
 }
 
 // ProgramName returns the name of the program associated with this AttachPoint
