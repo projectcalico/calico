@@ -1,8 +1,11 @@
 FROM ppc64le/ubuntu:focal
-MAINTAINER Daniel Fox <dan.fox@tigera.io>
-ENV STREAM focal
+LABEL org.opencontainers.image.authors="Daniel Fox <dan.fox@tigera.io>"
+ENV STREAM=focal
 
-COPY install-ubuntu-build-deps install-ubuntu-build-deps
-RUN ./install-ubuntu-build-deps
+RUN \
+    --mount=type=cache,target=/var/cache/apt/archives \
+    --mount=type=cache,target=/var/lib/apt/lists \
+    --mount=type=bind,from=install-ubuntu-build-deps,dest=/install-ubuntu-build-deps \
+    /install-ubuntu-build-deps
 
 WORKDIR /code
