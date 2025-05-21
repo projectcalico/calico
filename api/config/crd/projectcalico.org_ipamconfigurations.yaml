@@ -27,12 +27,15 @@ spec:
             type: object
           spec:
             properties:
+              autoAllocateBlocks:
+                type: boolean
               maxBlocksPerHost:
                 format: int32
                 type: integer
               strictAffinity:
                 type: boolean
             required:
+            - autoAllocateBlocks
             - strictAffinity
             type: object
         type: object

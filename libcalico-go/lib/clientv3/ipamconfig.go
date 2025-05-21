@@ -26,10 +26,10 @@ import (
 
 // IPAMConfigInterface has methods to work with IPAMConfig resources.
 type IPAMConfigInterface interface {
-	Create(ctx context.Context, res *libapiv3.IPAMConfig, opts options.SetOptions) (*libapiv3.IPAMConfig, error)
-	Update(ctx context.Context, res *libapiv3.IPAMConfig, opts options.SetOptions) (*libapiv3.IPAMConfig, error)
-	Delete(ctx context.Context, name string, opts options.DeleteOptions) (*libapiv3.IPAMConfig, error)
-	Get(ctx context.Context, name string, opts options.GetOptions) (*libapiv3.IPAMConfig, error)
+	Create(ctx context.Context, res *libapiv3.IPAMConfiguration, opts options.SetOptions) (*libapiv3.IPAMConfiguration, error)
+	Update(ctx context.Context, res *libapiv3.IPAMConfiguration, opts options.SetOptions) (*libapiv3.IPAMConfiguration, error)
+	Delete(ctx context.Context, name string, opts options.DeleteOptions) (*libapiv3.IPAMConfiguration, error)
+	Get(ctx context.Context, name string, opts options.GetOptions) (*libapiv3.IPAMConfiguration, error)
 	List(ctx context.Context, opts options.ListOptions) (*libapiv3.IPAMConfigList, error)
 	Watch(ctx context.Context, opts options.ListOptions) (watch.Interface, error)
 }
@@ -39,7 +39,7 @@ type IPAMConfigs struct {
 	client client
 }
 
-func validateMetadata(res *libapiv3.IPAMConfig) error {
+func validateMetadata(res *libapiv3.IPAMConfiguration) error {
 	if res.ObjectMeta.GetName() != libapiv3.GlobalIPAMConfigName {
 		return errors.New("Cannot create a IPAMConfiguration resource with a name other than \"default\"")
 	}
@@ -48,7 +48,7 @@ func validateMetadata(res *libapiv3.IPAMConfig) error {
 
 // Create takes the representation of a IPAMConfig and creates it.  Returns the stored
 // representation of the IPAMConfig, and an error, if there is any.
-func (r IPAMConfigs) Create(ctx context.Context, res *libapiv3.IPAMConfig, opts options.SetOptions) (*libapiv3.IPAMConfig, error) {
+func (r IPAMConfigs) Create(ctx context.Context, res *libapiv3.IPAMConfiguration, opts options.SetOptions) (*libapiv3.IPAMConfiguration, error) {
 	if err := validator.Validate(res); err != nil {
 		return nil, err
 	} else if err := validateMetadata(res); err != nil {
@@ -57,14 +57,14 @@ func (r IPAMConfigs) Create(ctx context.Context, res *libapiv3.IPAMConfig, opts 
 
 	out, err := r.client.resources.Create(ctx, opts, libapiv3.KindIPAMConfig, res)
 	if out != nil {
-		return out.(*libapiv3.IPAMConfig), err
+		return out.(*libapiv3.IPAMConfiguration), err
 	}
 	return nil, err
 }
 
 // Update takes the representation of a IPAMConfig and updates it. Returns the stored
 // representation of the IPAMConfig, and an error, if there is any.
-func (r IPAMConfigs) Update(ctx context.Context, res *libapiv3.IPAMConfig, opts options.SetOptions) (*libapiv3.IPAMConfig, error) {
+func (r IPAMConfigs) Update(ctx context.Context, res *libapiv3.IPAMConfiguration, opts options.SetOptions) (*libapiv3.IPAMConfiguration, error) {
 	if err := validator.Validate(res); err != nil {
 		return nil, err
 	} else if err := validateMetadata(res); err != nil {
@@ -73,26 +73,26 @@ func (r IPAMConfigs) Update(ctx context.Context, res *libapiv3.IPAMConfig, opts 
 
 	out, err := r.client.resources.Update(ctx, opts, libapiv3.KindIPAMConfig, res)
 	if out != nil {
-		return out.(*libapiv3.IPAMConfig), err
+		return out.(*libapiv3.IPAMConfiguration), err
 	}
 	return nil, err
 }
 
 // Delete takes name of the IPAMConfig and deletes it. Returns an error if one occurs.
-func (r IPAMConfigs) Delete(ctx context.Context, name string, opts options.DeleteOptions) (*libapiv3.IPAMConfig, error) {
+func (r IPAMConfigs) Delete(ctx context.Context, name string, opts options.DeleteOptions) (*libapiv3.IPAMConfiguration, error) {
 	out, err := r.client.resources.Delete(ctx, opts, libapiv3.KindIPAMConfig, noNamespace, name)
 	if out != nil {
-		return out.(*libapiv3.IPAMConfig), err
+		return out.(*libapiv3.IPAMConfiguration), err
 	}
 	return nil, err
 }
 
 // Get takes name of the IPAMConfig, and returns the corresponding IPAMConfig object,
 // and an error if there is any.
-func (r IPAMConfigs) Get(ctx context.Context, name string, opts options.GetOptions) (*libapiv3.IPAMConfig, error) {
+func (r IPAMConfigs) Get(ctx context.Context, name string, opts options.GetOptions) (*libapiv3.IPAMConfiguration, error) {
 	out, err := r.client.resources.Get(ctx, opts, libapiv3.KindIPAMConfig, noNamespace, name)
 	if out != nil {
-		return out.(*libapiv3.IPAMConfig), err
+		return out.(*libapiv3.IPAMConfiguration), err
 	}
 	return nil, err
 }

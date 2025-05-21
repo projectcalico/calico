@@ -24,7 +24,7 @@ func NewIPAMConfigurationStorage(opts Options) (registry.DryRunnableStorage, fac
 	c := CreateClientFromConfig()
 	createFn := func(ctx context.Context, c clientv3.Interface, obj resourceObject, opts clientOpts) (resourceObject, error) {
 		oso := opts.(options.SetOptions)
-		res := obj.(*libapi.IPAMConfig)
+		res := obj.(*libapi.IPAMConfiguration)
 		if res.Name != libapi.GlobalIPAMConfigName {
 			return nil, fmt.Errorf("IPAM config resource name has to be default")
 		}
@@ -32,7 +32,7 @@ func NewIPAMConfigurationStorage(opts Options) (registry.DryRunnableStorage, fac
 	}
 	updateFn := func(ctx context.Context, c clientv3.Interface, obj resourceObject, opts clientOpts) (resourceObject, error) {
 		oso := opts.(options.SetOptions)
-		res := obj.(*libapi.IPAMConfig)
+		res := obj.(*libapi.IPAMConfiguration)
 		return c.IPAMConfig().Update(ctx, res, oso)
 	}
 	getFn := func(ctx context.Context, c clientv3.Interface, ns string, name string, opts clientOpts) (resourceObject, error) {
@@ -57,7 +57,7 @@ func NewIPAMConfigurationStorage(opts Options) (registry.DryRunnableStorage, fac
 		versioner:         APIObjectVersioner{},
 		aapiType:          reflect.TypeOf(aapi.IPAMConfiguration{}),
 		aapiListType:      reflect.TypeOf(aapi.IPAMConfigurationList{}),
-		libCalicoType:     reflect.TypeOf(libapi.IPAMConfig{}),
+		libCalicoType:     reflect.TypeOf(libapi.IPAMConfiguration{}),
 		libCalicoListType: reflect.TypeOf(libapi.IPAMConfigList{}),
 		isNamespaced:      false,
 		create:            createFn,
@@ -76,7 +76,7 @@ type IPAMConfigConverter struct{}
 
 func (gc IPAMConfigConverter) convertToLibcalico(aapiObj runtime.Object) resourceObject {
 	aapiIPAMConfig := aapiObj.(*aapi.IPAMConfiguration)
-	lcgIPAMConfig := &libapi.IPAMConfig{}
+	lcgIPAMConfig := &libapi.IPAMConfiguration{}
 	lcgIPAMConfig.TypeMeta = aapiIPAMConfig.TypeMeta
 	lcgIPAMConfig.ObjectMeta = aapiIPAMConfig.ObjectMeta
 	lcgIPAMConfig.Kind = libapi.KindIPAMConfig
@@ -91,7 +91,7 @@ func (gc IPAMConfigConverter) convertToLibcalico(aapiObj runtime.Object) resourc
 }
 
 func (gc IPAMConfigConverter) convertToAAPI(libcalicoObject resourceObject, aapiObj runtime.Object) {
-	lcgIPAMConfig := libcalicoObject.(*libapi.IPAMConfig)
+	lcgIPAMConfig := libcalicoObject.(*libapi.IPAMConfiguration)
 	aapiIPAMConfig := aapiObj.(*aapi.IPAMConfiguration)
 
 	// Copy spec but ignore internal field AutoAllocateBlocks.

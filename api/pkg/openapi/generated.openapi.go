@@ -4332,7 +4332,7 @@ func schema_pkg_apis_projectcalico_v3_IPAMConfigurationSpec(ref common.Reference
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Description: "IPAMConfigurationSpec contains the specification for an IPPool resource.",
+				Description: "IPAMConfigurationSpec contains the specification for an IPAMConfiguration resource.",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"strictAffinity": {
@@ -4350,8 +4350,16 @@ func schema_pkg_apis_projectcalico_v3_IPAMConfigurationSpec(ref common.Reference
 							Format:      "int32",
 						},
 					},
+					"autoAllocateBlocks": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Whether or not to auto allocate blocks to hosts.",
+							Default:     false,
+							Type:        []string{"boolean"},
+							Format:      "",
+						},
+					},
 				},
-				Required: []string{"strictAffinity"},
+				Required: []string{"strictAffinity", "autoAllocateBlocks"},
 			},
 		},
 	}

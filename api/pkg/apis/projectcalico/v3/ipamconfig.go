@@ -48,7 +48,7 @@ type IPAMConfiguration struct {
 	Spec IPAMConfigurationSpec `json:"spec,omitempty" protobuf:"bytes,2,opt,name=spec"`
 }
 
-// IPAMConfigurationSpec contains the specification for an IPPool resource.
+// IPAMConfigurationSpec contains the specification for an IPAMConfiguration resource.
 type IPAMConfigurationSpec struct {
 	// When StrictAffinity is true, borrowing IP addresses is not allowed.
 	StrictAffinity bool `json:"strictAffinity" validate:"required"`
@@ -56,6 +56,9 @@ type IPAMConfigurationSpec struct {
 	// MaxBlocksPerHost, if non-zero, is the max number of blocks that can be
 	// affine to each host.
 	MaxBlocksPerHost int32 `json:"maxBlocksPerHost,omitempty"`
+
+	// Whether or not to auto allocate blocks to hosts.
+	AutoAllocateBlocks bool `json:"autoAllocateBlocks"`
 }
 
 // NewIPAMConfiguration creates a new (zeroed) IPAMConfiguration struct with the TypeMetadata initialised to the current
@@ -63,7 +66,7 @@ type IPAMConfigurationSpec struct {
 func NewIPAMConfiguration() *IPAMConfiguration {
 	return &IPAMConfiguration{
 		TypeMeta: metav1.TypeMeta{
-			Kind:       KindIPPool,
+			Kind:       KindIPAMConfiguration,
 			APIVersion: GroupVersionCurrent,
 		},
 	}
