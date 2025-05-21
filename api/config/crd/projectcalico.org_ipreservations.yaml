@@ -13,7 +13,7 @@ spec:
     plural: ipreservations
     singular: ipreservation
   preserveUnknownFields: false
-  scope: Namespaced
+  scope: Cluster
   versions:
   - name: v3
     schema:

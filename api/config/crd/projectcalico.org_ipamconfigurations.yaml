@@ -13,7 +13,7 @@ spec:
     plural: ipamconfigurations
     singular: ipamconfiguration
   preserveUnknownFields: false
-  scope: Namespaced
+  scope: Cluster
   versions:
   - name: v3
     schema:

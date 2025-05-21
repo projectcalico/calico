@@ -13,7 +13,7 @@ spec:
     plural: stagedglobalnetworkpolicies
     singular: stagedglobalnetworkpolicy
   preserveUnknownFields: false
-  scope: Namespaced
+  scope: Cluster
   versions:
   - name: v3
     schema:

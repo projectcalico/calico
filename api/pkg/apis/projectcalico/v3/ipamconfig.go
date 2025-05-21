@@ -25,6 +25,7 @@ const (
 
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:resource:scope=Cluster
 
 // IPAMConfigurationList contains a list of IPAMConfiguration resources.
 type IPAMConfigurationList struct {
@@ -37,6 +38,7 @@ type IPAMConfigurationList struct {
 // +genclient
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:resource:scope=Cluster
 
 // IPAMConfiguration contains information about a block for IP address assignment.
 type IPAMConfiguration struct {
