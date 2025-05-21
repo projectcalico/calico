@@ -30,6 +30,8 @@ type IPAMBlockExpansion interface{}
 
 type IPAMConfigurationExpansion interface{}
 
+type IPAMHandleExpansion interface{}
+
 type IPPoolExpansion interface{}
 
 type IPReservationExpansion interface{}

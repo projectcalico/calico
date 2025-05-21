@@ -27,6 +27,7 @@ type ProjectcalicoV3Interface interface {
 	HostEndpointsGetter
 	IPAMBlocksGetter
 	IPAMConfigurationsGetter
+	IPAMHandlesGetter
 	IPPoolsGetter
 	IPReservationsGetter
 	KubeControllersConfigurationsGetter
@@ -94,6 +95,10 @@ func (c *ProjectcalicoV3Client) IPAMBlocks(namespace string) IPAMBlockInterface 
 
 func (c *ProjectcalicoV3Client) IPAMConfigurations() IPAMConfigurationInterface {
 	return newIPAMConfigurations(c)
+}
+
+func (c *ProjectcalicoV3Client) IPAMHandles(namespace string) IPAMHandleInterface {
+	return newIPAMHandles(c, namespace)
 }
 
 func (c *ProjectcalicoV3Client) IPPools() IPPoolInterface {

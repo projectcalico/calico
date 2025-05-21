@@ -66,6 +66,10 @@ func (c *FakeProjectcalicoV3) IPAMConfigurations() v3.IPAMConfigurationInterface
 	return newFakeIPAMConfigurations(c)
 }
 
+func (c *FakeProjectcalicoV3) IPAMHandles(namespace string) v3.IPAMHandleInterface {
+	return newFakeIPAMHandles(c, namespace)
+}
+
 func (c *FakeProjectcalicoV3) IPPools() v3.IPPoolInterface {
 	return newFakeIPPools(c)
 }

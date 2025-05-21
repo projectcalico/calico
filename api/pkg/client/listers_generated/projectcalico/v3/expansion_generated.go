@@ -60,6 +60,14 @@ type IPAMBlockNamespaceListerExpansion interface{}
 // IPAMConfigurationLister.
 type IPAMConfigurationListerExpansion interface{}
 
+// IPAMHandleListerExpansion allows custom methods to be added to
+// IPAMHandleLister.
+type IPAMHandleListerExpansion interface{}
+
+// IPAMHandleNamespaceListerExpansion allows custom methods to be added to
+// IPAMHandleNamespaceLister.
+type IPAMHandleNamespaceListerExpansion interface{}
+
 // IPPoolListerExpansion allows custom methods to be added to
 // IPPoolLister.
 type IPPoolListerExpansion interface{}
