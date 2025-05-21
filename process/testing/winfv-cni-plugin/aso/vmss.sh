@@ -39,6 +39,14 @@ EOF
   rm -rf infra/manifests || true
   ${GOMPLATE} --input-dir infra/templates --output-dir infra/manifests
 
+  # Stop for debug
+  echo "Check for pause file..."
+  while [ ! -f /home/semaphore/pause-for-debug ];
+  do
+    echo "#"
+    sleep 30
+  done
+
   ${KUBECTL} apply -f infra/manifests/resource-group.yaml
   ${KUBECTL} apply -f infra/manifests/password.yaml
   ${KUBECTL} apply -f infra/manifests/vnet.yaml
