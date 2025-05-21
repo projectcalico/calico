@@ -27,6 +27,7 @@ type stream struct {
 
 	// Private fields.
 	id     string
+	in     chan storage.FlowProvider
 	out    chan storage.FlowBuilder
 	done   chan<- string
 	ctx    context.Context
@@ -62,16 +63,45 @@ func (s *stream) ID() string {
 	return s.id
 }
 
-// receive tells the Stream about a newly learned Flow that matches the Stream's filter and
-// queues it for processing. Note that emission of the Flow to the Stream's output channel is asynchronous.
-func (s *stream) receive(b storage.FlowBuilder) {
+func (s *stream) run() {
+	// Close the output channel when the stream is done. This ensures we don't try to
+	// write to a closed channel.
+	defer close(s.out)
+
+	for {
+		select {
+		case <-s.ctx.Done():
+			logrus.WithField("id", s.ID).Debug("Stream context done")
+			return
+		case b, ok := <-s.in:
+			if !ok {
+				logrus.WithField("id", s.ID).Debug("Stream input channel closed")
+				return
+			}
+
+			b.Iter(func(f storage.FlowBuilder) bool {
+				if err := chanutil.WriteWithDeadline(s.ctx, s.out, f, 60*time.Second); err != nil {
+					// If we hit an error, indicate that we should stop iteration.
+					s.rl.WithFields(logrus.Fields{"id": s.ID}).WithError(err).Debug("Error writing flow to stream output")
+					return true
+				}
+				// If we didn't hit an error, continue iteration.
+				return false
+			})
+		}
+	}
+}
+
+// receive tells the Stream about a newly learned source of flows and queues it for processing.
+// Note that emission of the individual Flow objects to the Stream's output channel is asynchronous.
+func (s *stream) receive(b storage.FlowProvider) {
 	// It's important that we don't block here, as this is called from the main loop.
-	logrus.WithFields(logrus.Fields{"id": s.ID}).Debug("Sending flow to stream")
+	logrus.WithFields(logrus.Fields{"id": s.ID}).Debug("Sending FlowProvider to stream")
 
 	// Send the flow to the output channel. If the channel is full, wait for a bit before giving up.
-	if err := chanutil.WriteWithDeadline(s.ctx, s.out, b, 1*time.Second); err != nil {
+	if err := chanutil.WriteWithDeadline(s.ctx, s.in, b, 1*time.Second); err != nil {
 		if !errors.Is(err, context.Canceled) {
-			s.rl.WithField("id", s.ID).WithError(err).Error("error writing flow to stream output")
+			s.rl.WithField("id", s.ID).WithError(err).Error("error writing flow provider to stream input")
 		}
 	}
 }

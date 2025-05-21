@@ -112,7 +112,6 @@ func TestGoldmaneIntegration_FlowWatching(t *testing.T) {
 	req.Header.Set("Accept", "text/event-stream")
 
 	resp, err := http.DefaultClient.Do(req)
-
 	Expect(err).ShouldNot(HaveOccurred())
 
 	go func() {

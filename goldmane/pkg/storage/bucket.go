@@ -15,6 +15,7 @@
 package storage
 
 import (
+	"sync"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -24,8 +25,15 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
+// AggregationBucket is a FlowProvider that represents a bucket of aggregated flows.
+var _ FlowProvider = &AggregationBucket{}
+
 // An aggregation bucket represents a bucket of aggregated flows across a time range.
 type AggregationBucket struct {
+	// The mutex is used to protect access to the bucket's Flows set, which may be
+	// modified and accessed by multiple goroutines concurrently.
+	sync.RWMutex
+
 	// index is the index of the bucket in the ring.
 	index int
 
@@ -33,8 +41,8 @@ type AggregationBucket struct {
 	StartTime int64
 	EndTime   int64
 
-	// Pushed indicates whether this bucket has been pushed to the emitter.
-	Pushed bool
+	// pushed indicates whether this bucket has been pushed to the emitter.
+	pushed bool
 
 	// LookupFlow is a function that can be used to look up a DiachronicFlow by its key.
 	lookupFlow lookupFn
@@ -44,10 +52,19 @@ type AggregationBucket struct {
 
 	// Tracker for statistics within this bucket.
 	stats *statisticsIndex
+
+	// ready is set when this bucket is sent to any stream, and cleared when this bucket is reset.
+	// It can thus be used to determine when a bucket is rolled over between Goldmane deciding to stream it,
+	// and the bucket actually being emited. In this case, we should skip streaming the bucket as its contents
+	// are no longer valid.
+	ready bool
 }
 
 func (b *AggregationBucket) AddFlow(flow *types.Flow) {
-	if b.Pushed {
+	b.Lock()
+	defer b.Unlock()
+
+	if b.pushed {
 		logrus.WithField("flow", flow).Warn("Adding flow to already published bucket")
 	}
 
@@ -85,15 +102,18 @@ func (b *AggregationBucket) Fields() logrus.Fields {
 	return logrus.Fields{
 		"start_time": b.StartTime,
 		"end_time":   b.EndTime,
-		"flows":      b.Flows.Len(),
 		"index":      b.index,
 	}
 }
 
 func (b *AggregationBucket) Reset(start, end int64) {
+	b.Lock()
+	defer b.Unlock()
+
 	b.StartTime = start
 	b.EndTime = end
-	b.Pushed = false
+	b.pushed = false
+	b.ready = false
 	b.stats = newStatisticsIndex()
 
 	if b.Flows == nil {
@@ -106,6 +126,31 @@ func (b *AggregationBucket) Reset(start, end int64) {
 			return nil
 		})
 	}
+}
+
+// markReady marks this bucket as ready to be consumed by a stream.
+func (b *AggregationBucket) markReady() {
+	b.Lock()
+	defer b.Unlock()
+	b.ready = true
+}
+
+func (b *AggregationBucket) Iter(fn func(FlowBuilder) bool) {
+	b.RLock()
+	defer b.RUnlock()
+
+	if !b.ready {
+		// Bucket has been reset since it was streamed. Skip it.
+		logrus.WithFields(b.Fields()).Info("Skipping bucket that has since rolled over")
+		return
+	}
+
+	b.Flows.Iter(func(d *DiachronicFlow) error {
+		if fn(NewDeferredFlowBuilder(d, b.StartTime, b.EndTime)) {
+			return set.StopIteration
+		}
+		return nil
+	})
 }
 
 func (b *AggregationBucket) QueryStatistics(q *proto.StatisticsRequest) map[StatisticsKey]*counts {
