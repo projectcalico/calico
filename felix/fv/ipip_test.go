@@ -1176,7 +1176,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology with Felix pr
 			})
 		})
 
-		Describe("with a borrowed tunnel IP on one host", func() {
+		Describe("pepper0 with a borrowed tunnel IP on one host", func() {
 			var (
 				infra           infrastructure.DatastoreInfra
 				tc              infrastructure.TopologyContainers
@@ -1197,7 +1197,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology with Felix pr
 
 				topologyOptions = createIPIPBaseTopologyOptions(ipipMode, routeSource, brokenXSum)
 				topologyOptions.FelixLogSeverity = "Debug"
-				topologyOptions.IPIPStrategy = infrastructure.NewBorrowedIPVXLANStrategy(topologyOptions.IPPoolCIDR, topologyOptions.IPv6PoolCIDR, 3)
+				topologyOptions.IPIPStrategy = infrastructure.NewBorrowedIPTunnelStrategy(topologyOptions.IPPoolCIDR, topologyOptions.IPv6PoolCIDR, 3)
 
 				cc = &connectivity.Checker{}
 
@@ -1257,7 +1257,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology with Felix pr
 			})
 		})
 
-		Describe("with a separate tunnel address pool that uses /32 blocks", func() {
+		Describe("pepper1 with a separate tunnel address pool that uses /32 blocks", func() {
 			var (
 				infra           infrastructure.DatastoreInfra
 				tc              infrastructure.TopologyContainers
@@ -1305,7 +1305,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology with Felix pr
 				Expect(err).To(HaveOccurred()) // IPIP does not support IPv6 yet.
 
 				// Configure the VXLAN strategy to use this IP pool for tunnel addresses allocation.
-				topologyOptions.IPIPStrategy = infrastructure.NewDefaultVXLANStrategy(tunnelPool.Spec.CIDR, tunnelPoolV6.Spec.CIDR)
+				topologyOptions.IPIPStrategy = infrastructure.NewDefaultTunnelStrategy(tunnelPool.Spec.CIDR, tunnelPoolV6.Spec.CIDR)
 
 				cc = &connectivity.Checker{}
 
@@ -1421,6 +1421,7 @@ func createIPIPBaseTopologyOptions(
 ) infrastructure.TopologyOptions {
 	topologyOptions := infrastructure.DefaultTopologyOptions()
 	topologyOptions.IPIPMode = ipipMode
+	topologyOptions.IPIPStrategy = infrastructure.NewDefaultTunnelStrategy(topologyOptions.IPPoolCIDR, topologyOptions.IPv6PoolCIDR)
 	topologyOptions.VXLANMode = api.VXLANModeNever
 	topologyOptions.SimulateBIRDRoutes = false
 	topologyOptions.EnableIPv6 = false

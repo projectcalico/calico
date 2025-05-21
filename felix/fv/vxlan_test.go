@@ -931,7 +931,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 
 				topologyOptions = createVXLANBaseTopologyOptions(vxlanMode, enableIPv6, routeSource, brokenXSum)
 				topologyOptions.FelixLogSeverity = "Debug"
-				topologyOptions.VXLANStrategy = infrastructure.NewBorrowedIPVXLANStrategy(topologyOptions.IPPoolCIDR, topologyOptions.IPv6PoolCIDR, 3)
+				topologyOptions.VXLANStrategy = infrastructure.NewBorrowedIPTunnelStrategy(topologyOptions.IPPoolCIDR, topologyOptions.IPv6PoolCIDR, 3)
 
 				cc = &connectivity.Checker{}
 
@@ -1057,7 +1057,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 				Expect(err).NotTo(HaveOccurred())
 
 				// Configure the VXLAN strategy to use this IP pool for tunnel addresses allocation.
-				topologyOptions.VXLANStrategy = infrastructure.NewDefaultVXLANStrategy(tunnelPool.Spec.CIDR, tunnelPoolV6.Spec.CIDR)
+				topologyOptions.VXLANStrategy = infrastructure.NewDefaultTunnelStrategy(tunnelPool.Spec.CIDR, tunnelPoolV6.Spec.CIDR)
 
 				cc = &connectivity.Checker{}
 
@@ -1147,7 +1147,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 func createVXLANBaseTopologyOptions(vxlanMode api.VXLANMode, enableIPv6 bool, routeSource string, brokenXSum bool) infrastructure.TopologyOptions {
 	topologyOptions := infrastructure.DefaultTopologyOptions()
 	topologyOptions.VXLANMode = vxlanMode
-	topologyOptions.VXLANStrategy = infrastructure.NewDefaultVXLANStrategy(topologyOptions.IPPoolCIDR, topologyOptions.IPv6PoolCIDR)
+	topologyOptions.VXLANStrategy = infrastructure.NewDefaultTunnelStrategy(topologyOptions.IPPoolCIDR, topologyOptions.IPv6PoolCIDR)
 	topologyOptions.IPIPMode = api.IPIPModeNever
 	topologyOptions.EnableIPv6 = enableIPv6
 	topologyOptions.ExtraEnvVars["FELIX_ROUTESOURCE"] = routeSource

@@ -88,7 +88,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 					topologyOptions := infrastructure.DefaultTopologyOptions()
 					topologyOptions.DelayFelixStart = true
 					topologyOptions.VXLANMode = api.VXLANModeAlways
-					topologyOptions.VXLANStrategy = infrastructure.NewDefaultVXLANStrategy(topologyOptions.IPPoolCIDR, topologyOptions.IPv6PoolCIDR)
+					topologyOptions.VXLANStrategy = infrastructure.NewDefaultTunnelStrategy(topologyOptions.IPPoolCIDR, topologyOptions.IPv6PoolCIDR)
 					topologyOptions.IPIPMode = api.IPIPModeNever
 					topologyOptions.EnableIPv6 = enableIPv6
 
@@ -138,7 +138,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 					infra = getInfra()
 					topologyOptions := infrastructure.DefaultTopologyOptions()
 					topologyOptions.VXLANMode = api.VXLANModeAlways
-					topologyOptions.VXLANStrategy = infrastructure.NewDefaultVXLANStrategy(topologyOptions.IPPoolCIDR, topologyOptions.IPv6PoolCIDR)
+					topologyOptions.VXLANStrategy = infrastructure.NewDefaultTunnelStrategy(topologyOptions.IPPoolCIDR, topologyOptions.IPv6PoolCIDR)
 					topologyOptions.IPIPMode = api.IPIPModeNever
 					topologyOptions.EnableIPv6 = enableIPv6
 
