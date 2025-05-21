@@ -44,11 +44,13 @@
 package labelindex
 
 import (
+	"iter"
 	"reflect"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/lib/std/matchmap"
 	"github.com/projectcalico/calico/lib/std/uniquelabels"
 	"github.com/projectcalico/calico/lib/std/uniquestr"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
@@ -99,12 +101,15 @@ type InheritIndex struct {
 	selectorsById        map[interface{}]*selector.Selector
 
 	// Current matches.
-	selIdsByLabelId map[interface{}]set.Set[any]
-	labelIdsBySelId map[interface{}]set.Set[any]
+	matches *matchmap.MatchMap[any, any, uint32]
 
 	// Callback functions
 	OnMatchStarted MatchCallback
 	OnMatchStopped MatchCallback
+
+	// Optional callbacks for first/last match events.
+	OnFirstMatchStarted func(selId any)
+	OnLastMatchStopped  func(selId any)
 
 	dirtyItemIDs set.Set[any]
 }
@@ -116,12 +121,13 @@ func NewInheritIndex(onMatchStarted, onMatchStopped MatchCallback) *InheritIndex
 		parentDataByParentID: map[string]*parentData{},
 		selectorsById:        map[interface{}]*selector.Selector{},
 
-		selIdsByLabelId: map[interface{}]set.Set[any]{},
-		labelIdsBySelId: map[interface{}]set.Set[any]{},
+		matches: matchmap.NewMatchMap[any, any, uint32](),
 
 		// Callback functions
-		OnMatchStarted: onMatchStarted,
-		OnMatchStopped: onMatchStopped,
+		OnMatchStarted:      onMatchStarted,
+		OnMatchStopped:      onMatchStopped,
+		OnFirstMatchStarted: func(selId any) {},
+		OnLastMatchStopped:  func(selId any) {},
 
 		dirtyItemIDs: set.New[any](),
 	}
@@ -189,15 +195,22 @@ func (idx *InheritIndex) UpdateSelector(id interface{}, sel *selector.Selector) 
 	idx.selectorsById[id] = sel
 }
 
+func (l *InheritIndex) SelectorMatchesSomething(key any) bool {
+	return l.matches.ContainsKey(key)
+}
+
+func (l *InheritIndex) SelectorMatches(key, itemKey any) bool {
+	return l.matches.Get(key, itemKey)
+}
+
+func (l *InheritIndex) AllMatches(key model.PolicyKey) iter.Seq[any] {
+	return l.matches.AllBsForA(key)
+}
+
 func (idx *InheritIndex) DeleteSelector(id interface{}) {
 	log.Infof("Deleting selector %v", id)
-	matchSet := idx.labelIdsBySelId[id]
-	if matchSet != nil {
-		matchSet.Iter(func(labelId interface{}) error {
-			// This modifies the set we're iterating over, but that's safe in Go.
-			idx.deleteMatch(id, labelId)
-			return nil
-		})
+	for labelID := range idx.matches.AllBsForA(id) {
+		idx.deleteMatch(id, labelID)
 	}
 	delete(idx.selectorsById, id)
 }
@@ -340,13 +353,8 @@ func (idx *InheritIndex) flushUpdates() {
 		if !ok {
 			// Item deleted.
 			log.Debugf("Flushing delete of item %v", itemID)
-			matchSet := idx.selIdsByLabelId[itemID]
-			if matchSet != nil {
-				matchSet.Iter(func(selId interface{}) error {
-					// This modifies the set we're iterating over, but that's safe in Go.
-					idx.deleteMatch(selId, itemID)
-					return nil
-				})
+			for selID := range idx.matches.AllAsForB(itemID) {
+				idx.deleteMatch(selID, itemID)
 			}
 		} else {
 			// Item updated/created, re-evaluate labels.
@@ -388,48 +396,39 @@ func (idx *InheritIndex) updateMatches(
 	}
 }
 
+func (idx *InheritIndex) ForceMatch(selId, labelId interface{}) {
+	idx.storeMatch(selId, labelId)
+}
+
+func (idx *InheritIndex) RemoveForceMatch(selId, labelId interface{}) {
+	idx.deleteMatch(selId, labelId)
+}
+
 func (idx *InheritIndex) storeMatch(selId, labelId interface{}) {
-	labelIds := idx.labelIdsBySelId[selId]
-	if labelIds == nil {
-		labelIds = set.New[any]()
-		idx.labelIdsBySelId[selId] = labelIds
-	}
-	previouslyMatched := labelIds.Contains(labelId)
-	if !previouslyMatched {
+	selectorPreviouslyMatchedAnything := idx.SelectorMatchesSomething(selId)
+	if !selectorPreviouslyMatchedAnything || !idx.matches.Get(selId, labelId) {
 		log.Debugf("Selector %v now matches labels %v", selId, labelId)
-		labelIds.Add(labelId)
-
-		selIDs, ok := idx.selIdsByLabelId[labelId]
-		if !ok {
-			selIDs = set.New[any]()
-			idx.selIdsByLabelId[labelId] = selIDs
+		idx.matches.MustPut(selId, labelId)
+		if !selectorPreviouslyMatchedAnything {
+			log.Debugf("Selector %v now matches something", selId)
+			idx.OnFirstMatchStarted(selId)
 		}
-		selIDs.Add(selId)
-
 		idx.OnMatchStarted(selId, labelId)
 	}
 }
 
 func (idx *InheritIndex) deleteMatch(selId, labelId interface{}) {
-	labelIds := idx.labelIdsBySelId[selId]
-	if labelIds == nil {
-		return
-	}
-	previouslyMatched := labelIds.Contains(labelId)
+	previouslyMatched := idx.matches.Get(selId, labelId)
 	if previouslyMatched {
 		log.Debugf("Selector %v no longer matches labels %v",
 			selId, labelId)
-
-		labelIds.Discard(labelId)
-		if labelIds.Len() == 0 {
-			delete(idx.labelIdsBySelId, selId)
-		}
-
-		idx.selIdsByLabelId[labelId].Discard(selId)
-		if idx.selIdsByLabelId[labelId].Len() == 0 {
-			delete(idx.selIdsByLabelId, labelId)
-		}
-
+		idx.matches.Delete(selId, labelId)
 		idx.OnMatchStopped(selId, labelId)
+
+		selectorMatchesAnything := idx.SelectorMatchesSomething(selId)
+		if !selectorMatchesAnything {
+			log.Debugf("Selector %v no longer matches anything", selId)
+			idx.OnLastMatchStopped(selId)
+		}
 	}
 }

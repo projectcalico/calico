@@ -183,7 +183,88 @@ type ipSetData struct {
 
 	// memberToRefCount stores a reference count for each member in the IP set.  Reference counts
 	// may be >1 if an IP address is shared by more than one endpoint.
-	memberToRefCount map[IPSetMember]uint64
+	memberToRefCount     map[IPSetMember]uint64
+	cidrMemberToRefCount map[ip.CIDR]uint64
+	ipV4MemberToRefCount map[ip.V4Addr]uint64
+}
+
+func increfMap[K comparable](m *map[K]uint64, k K) (newCount uint64) {
+	if *m == nil {
+		*m = map[K]uint64{
+			k: 1,
+		}
+		return 1
+	}
+	newCount = (*m)[k] + 1
+	(*m)[k] = newCount
+	return
+}
+
+func (d *ipSetData) IncrefMember(member IPSetMember) (newCount uint64) {
+	if member.Protocol == ProtocolNone {
+		if member.CIDR.Version() == 4 && member.CIDR.IsSingleAddress() {
+			return increfMap(&d.ipV4MemberToRefCount, member.CIDR.Addr().(ip.V4Addr))
+		}
+		return increfMap(&d.cidrMemberToRefCount, member.CIDR)
+	}
+	return increfMap(&d.memberToRefCount, member)
+}
+
+func decrefMap[K comparable](m *map[K]uint64, k K) (newCount uint64) {
+	if *m == nil {
+		log.WithField("member", k).Panic("Decref of unknown member")
+		return 0
+	}
+	oldCount := (*m)[k]
+	if oldCount == 0 {
+		log.WithField("member", k).Panic("Decref of zero count member")
+		return 0
+	}
+	newCount = oldCount - 1
+	if newCount == 0 {
+		delete(*m, k)
+	} else {
+		(*m)[k] = newCount
+	}
+	if len(*m) == 0 {
+		// If the map is empty, we can free it.
+		*m = nil
+	}
+	return
+}
+
+func (d *ipSetData) DecrefMember(member IPSetMember) (newCount uint64) {
+	if member.Protocol == ProtocolNone {
+		if member.CIDR.Version() == 4 && member.CIDR.IsSingleAddress() {
+			return decrefMap(&d.ipV4MemberToRefCount, member.CIDR.Addr().(ip.V4Addr))
+		}
+		return decrefMap(&d.cidrMemberToRefCount, member.CIDR)
+	}
+	return decrefMap(&d.memberToRefCount, member)
+}
+
+func (d *ipSetData) AllMembers() iter.Seq2[IPSetMember, uint64] {
+	return func(yield func(member IPSetMember, refCount uint64) bool) {
+		for member, refCount := range d.memberToRefCount {
+			if !yield(member, refCount) {
+				return
+			}
+		}
+		for member, refCount := range d.cidrMemberToRefCount {
+			if !yield(IPSetMember{
+				CIDR: member,
+			}, refCount) {
+				return
+			}
+		}
+		for member, refCount := range d.ipV4MemberToRefCount {
+			if !yield(IPSetMember{
+				CIDR: member.AsCIDR(),
+			}, refCount) {
+				return
+			}
+		}
+	}
 }
 
 // GetHandle implements the Labels interface for endpointData.  Combines the endpoint's own labels with
@@ -520,7 +601,7 @@ func (idx *SelectorAndNamedPortIndex) UpdateIPSet(ipSetID string, sel *selector.
 		// which isn't currently possible in Felix, since the ID is formed by hashing the other
 		// values.  For completeness, handle (inefficiently) by simulating a deletion.
 		log.WithField("ipSetID", ipSetID).Warn("IP set selector or named port changed for existing ID.")
-		for m := range oldIPSetData.memberToRefCount {
+		for m := range oldIPSetData.AllMembers() {
 			// Emit deletion events for the members.  We don't need to do that
 			// for the expected, non-test code path because it's handled
 			// en-masse.
@@ -535,7 +616,6 @@ func (idx *SelectorAndNamedPortIndex) UpdateIPSet(ipSetID string, sel *selector.
 		selector:          sel,
 		namedPort:         namedPort,
 		namedPortProtocol: namedPortProtocol,
-		memberToRefCount:  map[IPSetMember]uint64{},
 	}
 	idx.ipSetDataByID[ipSetID] = newIPSetData
 	idx.selectorCandidatesIdx.AddSelector(ipSetID, sel)
@@ -559,14 +639,13 @@ func (idx *SelectorAndNamedPortIndex) UpdateIPSet(ipSetID string, sel *selector.
 		}
 		epData.AddMatchingIPSetID(ipSetID)
 		for _, member := range contrib {
-			refCount := newIPSetData.memberToRefCount[member]
-			if refCount == 0 {
+			newRefCount := newIPSetData.IncrefMember(member)
+			if newRefCount == 1 {
 				if log.GetLevel() >= log.DebugLevel {
 					logCxt.WithField("member", member).Debug("New IP set member")
 				}
 				idx.onMemberAdded(ipSetID, member)
 			}
-			newIPSetData.memberToRefCount[member] = refCount + 1
 		}
 	})
 }
@@ -754,12 +833,11 @@ func (idx *SelectorAndNamedPortIndex) scanEndpointAgainstIPSets(
 			// input data.
 			newIPSetContribution := idx.CalculateEndpointContribution(epData, ipSetData)
 			for _, newMember := range newIPSetContribution {
-				newRefCount := ipSetData.memberToRefCount[newMember] + 1
+				newRefCount := ipSetData.IncrefMember(newMember)
 				if newRefCount == 1 {
 					// New member in the IP set.
 					idx.onMemberAdded(ipSetID, newMember)
 				}
-				ipSetData.memberToRefCount[newMember] = newRefCount
 			}
 		}
 	})
@@ -770,15 +848,12 @@ func (idx *SelectorAndNamedPortIndex) scanEndpointAgainstIPSets(
 		// removed so we emit an event.
 		ipSetData := idx.ipSetDataByID[ipSetID]
 		for _, oldMember := range oldMembers {
-			newRefCount := ipSetData.memberToRefCount[oldMember] - 1
+			newRefCount := ipSetData.DecrefMember(oldMember)
 			if newRefCount == 0 {
 				// Member no longer in the IP set.  Emit event and clean up the old reference
 				// count.
 				log.Debugf("Member removed: %s, %v", ipSetID, oldMember)
 				idx.onMemberRemoved(ipSetID, oldMember)
-				delete(ipSetData.memberToRefCount, oldMember)
-			} else {
-				ipSetData.memberToRefCount[oldMember] = newRefCount
 			}
 		}
 	}
@@ -799,14 +874,11 @@ func (idx *SelectorAndNamedPortIndex) DeleteEndpoint(id any) {
 		log.WithField("ipSetID", ipSetID).Debug("Removing endpoint from IP set")
 		ipSetData := idx.ipSetDataByID[ipSetID]
 		for _, oldMember := range contributions {
-			newRefCount := ipSetData.memberToRefCount[oldMember] - 1
+			newRefCount := ipSetData.DecrefMember(oldMember)
 			if newRefCount == 0 {
 				// Member no longer in the IP set.  Emit event and clean up the old reference
 				// count.
 				idx.onMemberRemoved(ipSetID, oldMember)
-				delete(ipSetData.memberToRefCount, oldMember)
-			} else {
-				ipSetData.memberToRefCount[oldMember] = newRefCount
 			}
 		}
 	}

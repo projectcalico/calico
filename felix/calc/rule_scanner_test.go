@@ -94,7 +94,7 @@ var _ = DescribeTable("RuleScanner rule conversion should generate correct Parse
 			OutboundRules: []model.Rule{},
 			Selector:      "a  ==  'A' ",
 		}
-		rs.OnPolicyActive(policyKey, policy)
+		rs.OnPolicyActive(policyKey, policy, nil)
 		Expect(ur.activeRules).To(Equal(map[model.Key]*ParsedRules{
 			policyKey: {
 				Namespace:        "namespace",
