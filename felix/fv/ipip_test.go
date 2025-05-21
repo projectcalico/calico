@@ -1176,7 +1176,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology with Felix pr
 			})
 		})
 
-		Describe("pepper0 with a borrowed tunnel IP on one host", func() {
+		Describe("with a borrowed tunnel IP on one host", func() {
 			var (
 				infra           infrastructure.DatastoreInfra
 				tc              infrastructure.TopologyContainers
@@ -1208,7 +1208,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology with Felix pr
 				felixes = tc.Felixes
 
 				// Assign tunnel addresees in IPAM based on the topology.
-				assignIPIPAddresses(infra, tc, client)
+				assignTunnelAddresses(infra, tc, client)
 			})
 
 			AfterEach(func() {
@@ -1257,7 +1257,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology with Felix pr
 			})
 		})
 
-		Describe("pepper1 with a separate tunnel address pool that uses /32 blocks", func() {
+		Describe("with a separate tunnel address pool that uses /32 blocks", func() {
 			var (
 				infra           infrastructure.DatastoreInfra
 				tc              infrastructure.TopologyContainers
@@ -1316,7 +1316,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology with Felix pr
 				felixes = tc.Felixes
 
 				// Assign tunnel addresees in IPAM based on the topology.
-				assignIPIPAddresses(infra, tc, client)
+				assignTunnelAddresses(infra, tc, client)
 			})
 
 			AfterEach(func() {
@@ -1481,25 +1481,4 @@ func setupIPIPWorkloads(infra infrastructure.DatastoreInfra, tc infrastructure.T
 	}
 
 	return
-}
-
-// assignTunnelAddresses assigns tunnel addresses in IPAM based on the tunnel addresses specified in the topology to make sure
-// our IPAM state is consistent with the topology.
-func assignIPIPAddresses(infra infrastructure.DatastoreInfra, tc infrastructure.TopologyContainers, client client.Interface) {
-	for _, f := range tc.Felixes {
-		// Assign the tunnel address.
-		if f.ExpectedIPIPTunnelAddr != "" {
-			handle := fmt.Sprintf("ipip-tunnel-addr-%s", f.Hostname)
-			err := client.IPAM().AssignIP(context.Background(), ipam.AssignIPArgs{
-				IP:       net.MustParseIP(f.ExpectedIPIPTunnelAddr),
-				HandleID: &handle,
-				Attrs: map[string]string{
-					ipam.AttributeNode: f.Hostname,
-					ipam.AttributeType: ipam.AttributeTypeIPIP,
-				},
-				Hostname: f.Hostname,
-			})
-			Expect(err).NotTo(HaveOccurred(), "failed to assign IPIP tunnel address")
-		}
-	}
 }

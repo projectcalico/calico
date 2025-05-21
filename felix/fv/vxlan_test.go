@@ -1191,6 +1191,19 @@ func assignTunnelAddresses(infra infrastructure.DatastoreInfra, tc infrastructur
 			})
 			Expect(err).NotTo(HaveOccurred(), "failed to assign VXLAN v6 tunnel address")
 		}
+		if f.ExpectedIPIPTunnelAddr != "" {
+			handle := fmt.Sprintf("ipip-tunnel-addr-%s", f.Hostname)
+			err := client.IPAM().AssignIP(context.Background(), ipam.AssignIPArgs{
+				IP:       net.MustParseIP(f.ExpectedIPIPTunnelAddr),
+				HandleID: &handle,
+				Attrs: map[string]string{
+					ipam.AttributeNode: f.Hostname,
+					ipam.AttributeType: ipam.AttributeTypeIPIP,
+				},
+				Hostname: f.Hostname,
+			})
+			Expect(err).NotTo(HaveOccurred(), "failed to assign IPIP tunnel address")
+		}
 	}
 }
 
