@@ -3,9 +3,9 @@
 REPO_NAME=${REPO_NAME:-master}
 test -n "$SECRET_KEY"
 
-rootdir=`git rev-parse --show-toplevel`
-keydir=`mktemp -t -d calico-publish-debs.XXXXXX`
-cp -a $SECRET_KEY ${keydir}/key
+rootdir=$(git rev-parse --show-toplevel)
+keydir=$(mktemp -t -d calico-publish-debs.XXXXXX)
+cp -a "$SECRET_KEY" "${keydir}/key"
 
 # Sign all source packages.
 if [ -t 0 ]; then
@@ -17,9 +17,9 @@ else
     # -ti to docker-run, and $SECRET_KEY must not require a pass phrase.
     interactive=
 fi
-docker run --rm ${interactive} -v ${rootdir}:/code -v ${keydir}:/keydir -w /code/release/packaging/output calico-build/focal /bin/sh -c "gpg --import --batch < /keydir/key && debsign -k'*@' --re-sign *_*_source.changes"
+docker run --rm ${interactive} -v "${rootdir}:/code" -v "${keydir}:/keydir" -w /code/release/packaging/output calico-build/focal /bin/sh -c "gpg --import --batch < /keydir/key && debsign -k'*@' --re-sign *_*_source.changes"
 
-for series in focal jammy; do
+for series in focal jammy noble; do
     # Get the packages and versions that already exist in the PPA, so we can avoid
     # uploading the same package and version as already exist.  (As they would be rejected
     # anyway by Launchpad.)
@@ -30,14 +30,15 @@ for series in focal jammy; do
 
     # Use the Distribution header to map changes files to Ubuntu versions, as some of our
     # packages don't include the Ubuntu version name in the changes file name.
-    for changes_file in `grep -l "Distribution: ${series}" *_source.changes`; do
+    # shellcheck disable=SC2013
+    for changes_file in $(grep -l "Distribution: ${series}" ./*_source.changes); do
         already_exists=false
         for existing in ${existing_packages}; do
-            if [ ${changes_file} = ${existing}_source.changes ]; then
+            if [ "${changes_file}" = "${existing}_source.changes" ]; then
                 already_exists=true
                 break
             fi
         done
-        ${already_exists} || docker run --rm -v ${rootdir}:/code -w /code/release/packaging/output calico-build/${series} dput -u ppa:project-calico/${REPO_NAME} ${changes_file} | ts "[upload $series]"
+        ${already_exists} || docker run --rm -v "${rootdir}:/code" -w /code/release/packaging/output calico-build/${series} dput -u "ppa:project-calico/${REPO_NAME}" "${changes_file}" | ts "[upload $series]"
     done
 done
