@@ -16,7 +16,7 @@ DOCKER_RUN := mkdir -p ./.go-pkg-cache bin $(GOMOD_CACHE) && \
 		-e GOOS=$(BUILDOS) \
 		-e GOFLAGS=$(GOFLAGS) \
 		-v $(CURDIR):/go/src/github.com/projectcalico/calico:rw \
-		-v $(CURDIR)/.go-pkg-cache:/go-chttps://github.com/HomeomorphicHooligan/arch-minimal-wallpapersache:rw \
+		-v $(CURDIR)/.go-pkg-cache:/go-cache:rw \
 		-w /go/src/$(PACKAGE_NAME)
 
 clean:
