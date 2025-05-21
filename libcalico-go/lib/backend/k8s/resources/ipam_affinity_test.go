@@ -80,8 +80,8 @@ var _ = Describe("BlockAffinityClient tests with fake REST client", func() {
 		fakeREST = &fake.RESTClient{
 			NegotiatedSerializer: serializer.WithoutConversionCodecFactory{CodecFactory: scheme.Codecs},
 			GroupVersion: schema.GroupVersion{
-				Group:   "crd.projectcalico.org",
-				Version: "v1",
+				Group:   "projectcalico.org",
+				Version: "v3",
 			},
 			VersionedAPIPath: "/apis",
 		}

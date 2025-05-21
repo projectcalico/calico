@@ -19,7 +19,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
-var SchemeGroupVersion = schema.GroupVersion{Group: "crd.projectcalico.org", Version: "v1"}
+var SchemeGroupVersion = schema.GroupVersion{Group: "projectcalico.org", Version: "v3"}
 
 var (
 	SchemeBuilder      runtime.SchemeBuilder
