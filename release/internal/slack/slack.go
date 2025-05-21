@@ -14,10 +14,6 @@
 
 package slack
 
-import (
-	_ "embed"
-)
-
 // Config is the configuration for the Slack client
 type Config struct {
 	// Token is the token for the Slack API
