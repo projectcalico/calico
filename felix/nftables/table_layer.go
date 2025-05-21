@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2024-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,14 +19,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sirupsen/logrus"
-
 	"github.com/projectcalico/calico/felix/generictables"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 func NewTableLayer(name string, table generictables.Table) generictables.Table {
 	if _, ok := table.(MapsDataplane); !ok {
-		logrus.Panicf("Table %s does not implement MapsDataplane", name)
+		log.Panicf("Table %s does not implement MapsDataplane", name)
 	}
 
 	return &tableLayer{
@@ -78,7 +77,7 @@ func (t *tableLayer) namespaceRules(rules []generictables.Rule) []generictables.
 func (t *tableLayer) namespaceMapMember(m []string) []string {
 	// We expect a single map member for all verdict map members used in Felix today.
 	if len(m) != 1 {
-		logrus.Panicf("Unexpected map member: %s", m)
+		log.Panicf("Unexpected map member: %s", m)
 	}
 
 	// For return action, no namespacing needed.
@@ -89,7 +88,7 @@ func (t *tableLayer) namespaceMapMember(m []string) []string {
 	// TODO: We only use "goto" in map members right now. If we add other actions, we'll need to namespace them.
 	// This is a very brittle implementation that assumes that the map member is a single string that starts with "goto ".
 	if !strings.HasPrefix(m[0], "goto ") {
-		logrus.Panicf("Unexpected map member: %s", m)
+		log.Panicf("Unexpected map member: %s", m)
 	}
 	return []string{fmt.Sprintf("goto %s", t.namespaceName(m[0][5:]))}
 }

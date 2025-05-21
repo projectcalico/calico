@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2025 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,10 +19,10 @@ import (
 	"fmt"
 	"sync/atomic"
 
-	"github.com/sirupsen/logrus"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	kwatch "k8s.io/apimachinery/pkg/watch"
 
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 )
@@ -50,7 +50,7 @@ func newK8sWatcherConverterOneToMany(
 ) api.WatchInterface {
 	ctx, cancel := context.WithCancel(ctx)
 	wc := &k8sWatcherConverter{
-		logCxt:     logrus.WithField("resource", name),
+		logCxt:     log.WithField("resource", name),
 		converter:  converter,
 		k8sWatch:   k8sWatch,
 		context:    ctx,
@@ -62,7 +62,7 @@ func newK8sWatcherConverterOneToMany(
 }
 
 type k8sWatcherConverter struct {
-	logCxt     *logrus.Entry
+	logCxt     log.Entry
 	converter  ConvertK8sResourceToKVPairs
 	k8sWatch   kwatch.Interface
 	context    context.Context

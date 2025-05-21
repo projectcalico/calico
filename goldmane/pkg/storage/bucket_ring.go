@@ -20,10 +20,9 @@ import (
 	"sort"
 	"time"
 
-	"github.com/sirupsen/logrus"
-
 	"github.com/projectcalico/calico/goldmane/pkg/types"
 	"github.com/projectcalico/calico/goldmane/proto"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -101,7 +100,7 @@ func NewBucketRing(n, interval int, now int64, opts ...BucketRingOption) *Bucket
 		opt(ring)
 	}
 
-	logrus.WithFields(logrus.Fields{
+	log.WithFields(log.Fields{
 		"num":        n,
 		"bucketSize": time.Duration(interval) * time.Second,
 	}).Debug("Initializing aggregation buckets")
@@ -129,7 +128,7 @@ func NewBucketRing(n, interval int, now int64, opts ...BucketRingOption) *Bucket
 		}
 	}
 
-	logrus.WithFields(logrus.Fields{
+	log.WithFields(log.Fields{
 		"headIndex":    ring.headIndex,
 		"curBucket":    ring.buckets[ring.headIndex],
 		"oldestBucket": ring.buckets[(ring.headIndex+1)%n],
@@ -263,7 +262,7 @@ func (r *BucketRing) Rollover(sink Sink) int64 {
 	start := r.nowFunc()
 	defer func() {
 		if r.nowFunc().Sub(start) > 1*time.Second {
-			logrus.WithField("duration", r.nowFunc().Sub(start)).Warn("Rollover took >1s")
+			log.WithField("duration", r.nowFunc().Sub(start)).Warn("Rollover took >1s")
 		}
 	}()
 
@@ -299,8 +298,8 @@ func (r *BucketRing) Rollover(sink Sink) int64 {
 		if d.Empty() {
 			// If the DiachronicFlow is empty, we can remove it. This means it hasn't received any
 			// flow updates in a long time.
-			if logrus.IsLevelEnabled(logrus.DebugLevel) {
-				logrus.WithFields(d.Key.Fields()).Debug("Removing empty DiachronicFlow")
+			if log.IsLevelEnabled(log.DebugLevel) {
+				log.WithFields(d.Key.Fields()).Debug("Removing empty DiachronicFlow")
 			}
 			for _, idx := range r.indices {
 				idx.Remove(d)
@@ -323,7 +322,7 @@ func (r *BucketRing) AddFlow(flow *types.Flow) {
 	// that time windows are consistent across all DiachronicFlows.
 	start, end, err := r.Window(flow)
 	if err != nil {
-		logrus.WithFields(logrus.Fields{
+		log.WithFields(log.Fields{
 			"start": flow.StartTime,
 			// "now":   a.nowFunc().Unix(),
 		}).WithFields(flow.Key.Fields()).
@@ -335,9 +334,9 @@ func (r *BucketRing) AddFlow(flow *types.Flow) {
 	// Check if we are tracking a DiachronicFlow for this FlowKey, and create one if not.
 	// Then, add this Flow to the DiachronicFlow.
 	if _, ok := r.diachronics[*flow.Key]; !ok {
-		if logrus.IsLevelEnabled(logrus.DebugLevel) {
+		if log.IsLevelEnabled(log.DebugLevel) {
 			// Unpacking the key is a bit expensive, so only do it in debug mode.
-			logrus.WithFields(flow.Key.Fields()).Debug("Creating new DiachronicFlow for flow")
+			log.WithFields(flow.Key.Fields()).Debug("Creating new DiachronicFlow for flow")
 		}
 		r.nextID++
 		d := NewDiachronicFlow(flow.Key, r.nextID)
@@ -353,7 +352,7 @@ func (r *BucketRing) AddFlow(flow *types.Flow) {
 	// Sort this update into a bucket.
 	_, bucket := r.findBucket(flow.StartTime)
 	if bucket == nil {
-		logrus.WithFields(logrus.Fields{
+		log.WithFields(log.Fields{
 			"time":   flow.StartTime,
 			"oldest": r.BeginningOfHistory(),
 			"newest": r.EndOfHistory(),
@@ -364,7 +363,7 @@ func (r *BucketRing) AddFlow(flow *types.Flow) {
 	fields := bucket.Fields()
 	fields["flowStart"] = flow.StartTime
 	fields["head"] = r.headIndex
-	logrus.WithFields(fields).Debug("Adding flow to bucket")
+	log.WithFields(fields).Debug("Adding flow to bucket")
 	bucket.AddFlow(flow)
 }
 
@@ -447,7 +446,7 @@ func (r *BucketRing) findBucket(time int64) (int, *AggregationBucket) {
 			break
 		}
 	}
-	logrus.WithFields(logrus.Fields{
+	log.WithFields(log.Fields{
 		"time":   time,
 		"oldest": r.BeginningOfHistory(),
 		"newest": r.EndOfHistory(),
@@ -477,7 +476,7 @@ func (r *BucketRing) indexBetween(start, end, target int) bool {
 
 func (r *BucketRing) EmitFlowCollections(sink Sink) {
 	if sink == nil {
-		logrus.Debug("No sink configured, skip flow emission")
+		log.Debug("No sink configured, skip flow emission")
 		return
 	}
 
@@ -490,7 +489,7 @@ func (r *BucketRing) EmitFlowCollections(sink Sink) {
 	for {
 		c := r.maybeBuildFlowCollection(startIndex, endIndex)
 		if c == nil {
-			logrus.WithFields(logrus.Fields{
+			log.WithFields(log.Fields{
 				"startIndex": startIndex,
 				"endIndex":   endIndex,
 				"startTime":  r.buckets[startIndex].StartTime,
@@ -516,7 +515,7 @@ func (r *BucketRing) EmitFlowCollections(sink Sink) {
 	for i := len(collections) - 1; i >= 0; i-- {
 		c := collections[i]
 		if len(c.Flows) > 0 {
-			logrus.WithFields(logrus.Fields{
+			log.WithFields(log.Fields{
 				"start": c.StartTime,
 				"end":   c.EndTime,
 				"num":   len(c.Flows),
@@ -529,7 +528,7 @@ func (r *BucketRing) EmitFlowCollections(sink Sink) {
 
 // maybeBuildFlowCollection returns a collection of flows to emit, or nil if the flow collection has already been emitted.
 func (r *BucketRing) maybeBuildFlowCollection(startIndex, endIndex int) *FlowCollection {
-	logrus.WithFields(logrus.Fields{
+	log.WithFields(log.Fields{
 		"startIndex": startIndex,
 		"endIndex":   endIndex,
 		"startTime":  r.buckets[startIndex].StartTime,
@@ -539,10 +538,10 @@ func (r *BucketRing) maybeBuildFlowCollection(startIndex, endIndex int) *FlowCol
 	// Check if we're ready to emit. Wait until the oldest bucket in the window has not yet
 	// been pushed, as any newer buckets will not have been pushed either.
 	if r.buckets[startIndex].Pushed {
-		logrus.WithFields(r.buckets[startIndex].Fields()).Debug("Bucket has already been published, waiting for next bucket")
+		log.WithFields(r.buckets[startIndex].Fields()).Debug("Bucket has already been published, waiting for next bucket")
 		return nil
 	}
-	logrus.WithFields(r.buckets[startIndex].Fields()).Debug("Bucket is ready to emit")
+	log.WithFields(r.buckets[startIndex].Fields()).Debug("Bucket is ready to emit")
 	startTime := r.buckets[startIndex].StartTime
 	endTime := r.buckets[endIndex].StartTime
 
@@ -551,7 +550,7 @@ func (r *BucketRing) maybeBuildFlowCollection(startIndex, endIndex int) *FlowCol
 	// Go through each bucket in the window and build the set of flows to emit.
 	keys := set.New[*DiachronicFlow]()
 	r.iterBuckets(startIndex, endIndex, func(i int) error {
-		logrus.WithFields(r.buckets[i].Fields()).Debug("Gathering flows from bucket")
+		log.WithFields(r.buckets[i].Fields()).Debug("Gathering flows from bucket")
 		keys.AddAll(r.buckets[i].Flows.Slice())
 
 		// Add a pointer to the bucket to the FlowCollection. This allows us to mark the bucket as pushed
@@ -562,8 +561,8 @@ func (r *BucketRing) maybeBuildFlowCollection(startIndex, endIndex int) *FlowCol
 
 	// Use the DiachronicFlow data to build the aggregated flows.
 	keys.Iter(func(d *DiachronicFlow) error {
-		if logrus.IsLevelEnabled(logrus.DebugLevel) {
-			logrus.WithFields(d.Key.Fields()).WithFields(logrus.Fields{
+		if log.IsLevelEnabled(log.DebugLevel) {
+			log.WithFields(d.Key.Fields()).WithFields(log.Fields{
 				"start": startTime,
 				"end":   endTime,
 			}).Debug("Building aggregated flow for emission")
@@ -577,10 +576,10 @@ func (r *BucketRing) maybeBuildFlowCollection(startIndex, endIndex int) *FlowCol
 	// The next bucket that will trigger an emission is the one after the end of the current window.
 	// Log this for debugging purposes.
 	nextBucket := r.buckets[r.nextBucketIndex(endIndex)]
-	logrus.WithFields(nextBucket.Fields()).Debug("Next bucket to emit")
+	log.WithFields(nextBucket.Fields()).Debug("Next bucket to emit")
 
 	if len(flows.Flows) == 0 {
-		logrus.WithFields(logrus.Fields{
+		log.WithFields(log.Fields{
 			"start": startTime,
 			"end":   endTime,
 		}).Debug("No flows to emit in window")
@@ -594,7 +593,7 @@ func (r *BucketRing) Statistics(req *proto.StatisticsRequest) ([]*proto.Statisti
 	err := r.iterBucketsTime(req.StartTimeGte, req.StartTimeLt, func(b *AggregationBucket) error {
 		stats := b.QueryStatistics(req)
 		if len(stats) > 0 {
-			logrus.WithFields(b.Fields()).WithField("num", len(stats)).Debug("Bucket provided statistics")
+			log.WithFields(b.Fields()).WithField("num", len(stats)).Debug("Bucket provided statistics")
 		}
 
 		for k, v := range stats {
@@ -660,12 +659,12 @@ func (r *BucketRing) Statistics(req *proto.StatisticsRequest) ([]*proto.Statisti
 		}
 		s1, err := resultsList[i].Policy.ToString()
 		if err != nil {
-			logrus.WithError(err).Error("Invalid policy hit, statistics sorting may be off")
+			log.WithError(err).Error("Invalid policy hit, statistics sorting may be off")
 			return false
 		}
 		s2, err := resultsList[j].Policy.ToString()
 		if err != nil {
-			logrus.WithError(err).Error("Invalid policy hit, statistics sorting may be off")
+			log.WithError(err).Error("Invalid policy hit, statistics sorting may be off")
 			return false
 		}
 		return s1 < s2
@@ -678,7 +677,7 @@ func (r *BucketRing) flushToStreams() {
 	start := time.Now()
 
 	if r.streams == nil {
-		logrus.Warn("No stream receiver configured, not sending flows to streams")
+		log.Warn("No stream receiver configured, not sending flows to streams")
 		return
 	}
 
@@ -688,7 +687,7 @@ func (r *BucketRing) flushToStreams() {
 	r.streamBucket(bucket, r.streams)
 
 	if time.Since(start) > 1*time.Second {
-		logrus.WithFields(logrus.Fields{
+		log.WithFields(log.Fields{
 			"duration":    time.Since(start),
 			"numInBucket": bucket.Flows.Len(),
 		}).Info("Flushing streams > 1s")

@@ -17,7 +17,6 @@ package daemon
 import (
 	"context"
 	"fmt"
-	"log"
 	"net"
 	"net/http"
 	"os"
@@ -25,7 +24,6 @@ import (
 
 	"github.com/kelseyhightower/envconfig"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"k8s.io/client-go/tools/clientcmd"
@@ -37,6 +35,7 @@ import (
 	"github.com/projectcalico/calico/goldmane/pkg/internal/utils"
 	"github.com/projectcalico/calico/goldmane/pkg/server"
 	"github.com/projectcalico/calico/goldmane/pkg/storage"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/debugserver"
 	"github.com/projectcalico/calico/libcalico-go/lib/health"
 )
@@ -99,7 +98,7 @@ func ConfigFromEnv() Config {
 	// Load configuration from environment variables.
 	var cfg Config
 	if err := envconfig.Process("", &cfg); err != nil {
-		logrus.WithError(err).Fatal("Failed to load configuration from environment")
+		log.WithError(err).Fatal("Failed to load configuration from environment")
 	}
 
 	utils.ConfigureLogging(cfg.LogLevel)
@@ -121,8 +120,8 @@ func newGRPCServer(cfg *Config) (*grpc.Server, error) {
 }
 
 func Run(ctx context.Context, cfg Config) {
-	logrus.WithField("cfg", cfg).Info("Loaded configuration")
-	defer logrus.Warn("Shutting down")
+	log.WithField("cfg", cfg).Info("Loaded configuration")
+	defer log.Warn("Shutting down")
 
 	// Make an initial report that says we're live but not yet ready.
 	healthAggregator := health.NewHealthAggregator()
@@ -135,18 +134,18 @@ func Run(ctx context.Context, cfg Config) {
 	var kclient client.Client
 	cliCfg, err := clientcmd.BuildConfigFromFlags("", os.Getenv("KUBECONFIG"))
 	if err != nil {
-		logrus.WithError(err).Warn("Failed to load Kubernetes client configuration")
+		log.WithError(err).Warn("Failed to load Kubernetes client configuration")
 	} else {
 		kclient, err = client.New(cliCfg, client.Options{})
 		if err != nil {
-			logrus.WithError(err).Warn("Failed to create Kubernetes client")
+			log.WithError(err).Warn("Failed to create Kubernetes client")
 		}
 	}
 
 	// Create the shared gRPC server with TLS enabled.
 	grpcServer, err := newGRPCServer(&cfg)
 	if err != nil {
-		logrus.WithError(err).Fatal("Failed to create gRPC server")
+		log.WithError(err).Fatal("Failed to create gRPC server")
 	}
 
 	// Track options for Goldmane.
@@ -177,7 +176,7 @@ func Run(ctx context.Context, cfg Config) {
 			// allows the sink to be enabled or disabled without a process restart.
 			mgr, err := newSinkManager(gm, logEmitter, cfg.FileConfigPath)
 			if err != nil {
-				logrus.WithError(err).Fatal("Failed to create sink manager")
+				log.WithError(err).Fatal("Failed to create sink manager")
 			}
 			go mgr.run(ctx)
 		} else {
@@ -207,7 +206,7 @@ func Run(ctx context.Context, cfg Config) {
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
 	}
-	logrus.Info("Listening on ", cfg.Port)
+	log.Info("Listening on ", cfg.Port)
 
 	go func() {
 		if err := grpcServer.Serve(lis); err != nil {
@@ -223,13 +222,13 @@ func Run(ctx context.Context, cfg Config) {
 
 	if cfg.PrometheusPort != 0 {
 		// Serve prometheus metrics.
-		logrus.Infof("Starting Prometheus metrics server on port %d", cfg.PrometheusPort)
+		log.Infof("Starting Prometheus metrics server on port %d", cfg.PrometheusPort)
 		go func() {
 			mux := http.NewServeMux()
 			mux.Handle("/metrics", promhttp.Handler())
 			err := http.ListenAndServe(fmt.Sprintf(":%d", cfg.PrometheusPort), mux)
 			if err != nil {
-				logrus.WithError(err).Fatal("Failed to serve prometheus metrics")
+				log.WithError(err).Fatal("Failed to serve prometheus metrics")
 			}
 		}()
 	}
