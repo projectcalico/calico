@@ -22,6 +22,8 @@ type Interface interface {
 	CalicoNodeStatuses() CalicoNodeStatusInformer
 	// ClusterInformations returns a ClusterInformationInformer.
 	ClusterInformations() ClusterInformationInformer
+	// ClusterInformationLists returns a ClusterInformationListInformer.
+	ClusterInformationLists() ClusterInformationListInformer
 	// FelixConfigurations returns a FelixConfigurationInformer.
 	FelixConfigurations() FelixConfigurationInformer
 	// GlobalNetworkPolicies returns a GlobalNetworkPolicyInformer.
@@ -93,6 +95,11 @@ func (v *version) CalicoNodeStatuses() CalicoNodeStatusInformer {
 // ClusterInformations returns a ClusterInformationInformer.
 func (v *version) ClusterInformations() ClusterInformationInformer {
 	return &clusterInformationInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
+}
+
+// ClusterInformationLists returns a ClusterInformationListInformer.
+func (v *version) ClusterInformationLists() ClusterInformationListInformer {
+	return &clusterInformationListInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
 }
 
 // FelixConfigurations returns a FelixConfigurationInformer.

@@ -4,13 +4,13 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.17.3
-  name: clusterinformation.projectcalico.org
+  name: clusterinformations.projectcalico.org
 spec:
   group: projectcalico.org
   names:
     kind: ClusterInformation
     listKind: ClusterInformationList
-    plural: clusterinformation
+    plural: clusterinformations
     singular: clusterinformation
   preserveUnknownFields: false
   scope: Cluster

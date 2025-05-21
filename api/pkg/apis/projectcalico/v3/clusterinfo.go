@@ -23,9 +23,9 @@ const (
 	KindClusterInformationList = "ClusterInformationList"
 )
 
+// +genclient
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-// +kubebuilder:resource:scope=Cluster
 
 // ClusterInformationList is a list of ClusterInformation objects.
 type ClusterInformationList struct {
@@ -38,8 +38,7 @@ type ClusterInformationList struct {
 // +genclient
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-// +kubebuilder:resource:scope=Cluster
-
+// +kubebuilder:resource:scope=Cluster,path=clusterinformations
 type ClusterInformation struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`

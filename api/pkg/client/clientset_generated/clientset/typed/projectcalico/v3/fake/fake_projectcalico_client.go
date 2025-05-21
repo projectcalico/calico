@@ -38,6 +38,10 @@ func (c *FakeProjectcalicoV3) ClusterInformations() v3.ClusterInformationInterfa
 	return newFakeClusterInformations(c)
 }
 
+func (c *FakeProjectcalicoV3) ClusterInformationLists() v3.ClusterInformationListInterface {
+	return newFakeClusterInformationLists(c)
+}
+
 func (c *FakeProjectcalicoV3) FelixConfigurations() v3.FelixConfigurationInterface {
 	return newFakeFelixConfigurations(c)
 }
