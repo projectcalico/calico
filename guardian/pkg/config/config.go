@@ -123,7 +123,10 @@ func (cfg *Config) TLSConfig() (*tls.Config, *tls.Certificate, error) {
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create X509 key pair: %w", err)
 	}
-	tlsConfig := calicotls.NewTLSConfig()
+	tlsConfig, err := calicotls.NewTLSConfig()
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to create TLS Config: %w", err)
+	}
 	tlsConfig.Certificates = []tls.Certificate{cert}
 
 	rootCA := x509.NewCertPool()

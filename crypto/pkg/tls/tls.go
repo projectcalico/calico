@@ -19,6 +19,7 @@ import (
 	"crypto/x509"
 	"fmt"
 	"os"
+	"strings"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -32,8 +33,6 @@ var tls12Ciphers = []uint16{
 	tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
 	tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
 	tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
-	tls.TLS_RSA_WITH_AES_256_GCM_SHA384,
-	tls.TLS_RSA_WITH_AES_128_GCM_SHA256,
 	tls.TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA,
 	tls.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,
 	tls.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA,
@@ -46,22 +45,80 @@ var tls13Ciphers = []uint16{
 	tls.TLS_AES_128_GCM_SHA256,
 }
 
+// Legacy Ciphers we want to support for backwards compatibility.
+var legacyCiphers = []uint16{
+	tls.TLS_RSA_WITH_AES_256_GCM_SHA384,
+	tls.TLS_RSA_WITH_AES_128_GCM_SHA256,
+}
+
+// DefaultCiphers returns the ciphers supported by TLS 1.3 and the PFS ciphers supported by TLS 1.2.
+func DefaultCiphers() []uint16 {
+	return append(tls13Ciphers, tls12Ciphers...)
+}
+
+func supportedCipherMap() map[string]uint16 {
+	cipherMap := make(map[string]uint16)
+	addCiphers := func(ciphers []uint16) {
+		for _, cipher := range ciphers {
+			cipherName := tls.CipherSuiteName(cipher)
+			cipherMap[cipherName] = cipher
+		}
+	}
+
+	addCiphers(DefaultCiphers())
+	addCiphers(legacyCiphers)
+
+	return cipherMap
+}
+
+// ParseTLSCiphers takes a comma-separated string of cipher names and returns a slice of uint16 representing the ciphers.
+// If ciphers is empty, it returns the default ciphers.
+// It returns an error if any of the cipher names are not supported.
+func ParseTLSCiphers(ciphers string) ([]uint16, error) {
+	if ciphers == "" {
+		return DefaultCiphers(), nil
+	}
+
+	var result []uint16
+	supportedCiphers := supportedCipherMap()
+
+	cipherNames := strings.Split(ciphers, ",")
+	for _, name := range cipherNames {
+		name = strings.TrimSpace(name)
+		cipherValue, ok := supportedCiphers[name]
+		if !ok {
+			return nil, fmt.Errorf("unsupported cipher: %s", name)
+		}
+		result = append(result, cipherValue)
+	}
+
+	return result, nil
+}
+
 // NewTLSConfig returns a tls.Config with the recommended default settings for Calico components. Based on build flags,
 // boringCrypto may be used and fips strict mode may be enforced, which can override the parameters defined in this func.
-func NewTLSConfig() *tls.Config {
+func NewTLSConfig() (*tls.Config, error) {
 	log.WithField("BuiltWithBoringCrypto", BuiltWithBoringCrypto).Debug("creating a TLS config")
+	env := os.Getenv("TLS_CIPHER_SUITES")
+	ciphers, err := ParseTLSCiphers(env)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create TLS Config: %w", err)
+	}
 	return &tls.Config{
 		MinVersion:   tls.VersionTLS12,
 		MaxVersion:   tls.VersionTLS13,
-		CipherSuites: append(tls12Ciphers, tls13Ciphers...),
-	}
+		CipherSuites: ciphers,
+	}, nil
 }
 
 // NewMutualTLSConfig generates a tls.Config configured to enable mTLS with clients using the provided cert, key, and CA file paths.
 // If any of the files cannot be read, an error is returned.
 func NewMutualTLSConfig(cert, key, ca string) (*tls.Config, error) {
 	// Configure use of mTLS.
-	tlsCfg := NewTLSConfig()
+	tlsCfg, err := NewTLSConfig()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create TLS Config: %w", err)
+	}
 	tlsCfg.ClientAuth = tls.RequireAndVerifyClientCert
 
 	// Load Server cert and key and add to the TLS config.

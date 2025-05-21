@@ -711,6 +711,21 @@ blocks:
         - name: "libcalico-go: tests"
           commands:
             - ../.semaphore/run-and-monitor make-ci.log make ci
+  - name: lib
+    run:
+      when: "false or change_in(['/lib/'])"
+    execution_time_limit:
+      minutes: 30
+    dependencies:
+      - Prerequisites
+    task:
+      prologue:
+        commands:
+          - cd lib
+      jobs:
+        - name: make ci
+          commands:
+            - ../.semaphore/run-and-monitor make-ci.log make ci
   - name: "Node: Build"
     run:
       when: "false or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/confd/', '/bird/', '/pod2daemon/', '/node/', '/hack/test/certs/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"

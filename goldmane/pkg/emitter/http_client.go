@@ -36,7 +36,10 @@ const ContentTypeMultilineJSON = "application/x-ndjson"
 
 func newHTTPClient(caCert, clientKey, clientCert, serverName string) (*http.Client, error) {
 	// Create a new HTTP client.
-	tlsConfig := calicotls.NewTLSConfig()
+	tlsConfig, err := calicotls.NewTLSConfig()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create TLS Config: %w", err)
+	}
 	tlsConfig.ServerName = serverName
 	if caCert != "" {
 		caCertPool := x509.NewCertPool()
