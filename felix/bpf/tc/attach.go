@@ -120,12 +120,12 @@ func (ap *AttachPoint) AttachProgram() (bpf.AttachResult, error) {
 
 	/* XXX we should remember the tag of the program and skip the rest if the tag is
 	* still the same */
-	progsToClean, err := ap.listAttachedPrograms(true)
+	progsAttached, err := ap.listAttachedPrograms(true)
 	if err != nil {
 		return nil, err
 	}
 
-	prio := findFilterPriority(progsToClean)
+	prio, handle := findFilterPriority(progsAttached)
 	obj, err := ap.loadObject(binaryToLoad)
 	if err != nil {
 		logCxt.Warn("Failed to load program")
@@ -133,17 +133,12 @@ func (ap *AttachPoint) AttachProgram() (bpf.AttachResult, error) {
 	}
 	defer obj.Close()
 
-	res.progId, res.prio, res.handle, err = obj.AttachClassifier("cali_tc_preamble", ap.Iface, ap.Hook == hook.Ingress, prio)
+	res.progId, res.prio, res.handle, err = obj.AttachClassifier("cali_tc_preamble", ap.Iface, ap.Hook == hook.Ingress, prio, handle)
 	if err != nil {
 		logCxt.Warnf("Failed to attach to TC section cali_tc_preamble")
 		return nil, err
 	}
 	logCxt.Info("Program attached to TC.")
-
-	if err := ap.detachPrograms(progsToClean); err != nil {
-		return nil, err
-	}
-
 	return res, nil
 }
 
@@ -373,19 +368,26 @@ func RemoveQdisc(ifaceName string) error {
 	return libbpf.RemoveQDisc(ifaceName)
 }
 
-func findFilterPriority(progsToClean []attachedProg) int {
+func findFilterPriority(progsToClean []attachedProg) (int, int) {
 	prio := 0
+	handle := 0
 	for _, p := range progsToClean {
 		pref, err := strconv.Atoi(p.pref)
 		if err != nil {
 			continue
 		}
 
+		handle64, err := strconv.ParseInt(p.handle[2:], 16, 64)
+		if err != nil {
+			continue
+		}
+
 		if pref > prio {
 			prio = pref
+			handle = int(handle64)
 		}
 	}
-	return prio
+	return prio, handle
 }
 
 func (ap *AttachPoint) Config() string {
