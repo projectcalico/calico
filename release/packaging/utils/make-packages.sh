@@ -51,8 +51,6 @@ for package_type in "$@"; do
         debver=${FORCE_VERSION_DEB:-$(git_version_to_deb "${version}")}
         debver=$(strip_v "${debver}")
 
-        echo "**** DEB VER IS ${debver}"
-
         # Current time in Debian changelog format; e.g. Wed, 02
         # Mar 2016 14:08:51 +0000.
         timestamp=$(date "+%a, %d %b %Y %H:%M:%S %z")
