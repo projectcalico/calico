@@ -31,6 +31,7 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
 
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
@@ -145,7 +146,7 @@ func (c *blockAffinityClient) toV3(kvpv1 *model.KVPair) *model.KVPair {
 			Name: name,
 			Kind: libapiv3.KindBlockAffinity,
 		},
-		Value: &libapiv3.BlockAffinity{
+		Value: &v3.BlockAffinity{
 			TypeMeta: metav1.TypeMeta{
 				Kind:       libapiv3.KindBlockAffinity,
 				APIVersion: "projectcalico.org/v3",
@@ -154,12 +155,12 @@ func (c *blockAffinityClient) toV3(kvpv1 *model.KVPair) *model.KVPair {
 				Name:            name,
 				ResourceVersion: kvpv1.Revision,
 			},
-			Spec: libapiv3.BlockAffinitySpec{
-				State:   string(state),
+			Spec: v3.BlockAffinitySpec{
+				State:   v3.BlockAffinityState(state),
 				Node:    host,
 				Type:    affinityType,
 				CIDR:    cidr,
-				Deleted: fmt.Sprintf("%t", kvpv1.Value.(*model.BlockAffinity).Deleted),
+				Deleted: kvpv1.Value.(*model.BlockAffinity).Deleted,
 			},
 		},
 		Revision: kvpv1.Revision,

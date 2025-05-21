@@ -53,6 +53,9 @@ type BlockAffinitySpec struct {
 	// The node that this block affinity is assigned to.
 	Node string `json:"node"`
 
+	// The type of affinity.
+	Type string `json:"type,omitempty"`
+
 	// The CIDR range this block affinity references.
 	CIDR string `json:"cidr"`
 

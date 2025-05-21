@@ -48,6 +48,14 @@ type GlobalNetworkSetListerExpansion interface{}
 // HostEndpointLister.
 type HostEndpointListerExpansion interface{}
 
+// IPAMBlockListerExpansion allows custom methods to be added to
+// IPAMBlockLister.
+type IPAMBlockListerExpansion interface{}
+
+// IPAMBlockNamespaceListerExpansion allows custom methods to be added to
+// IPAMBlockNamespaceLister.
+type IPAMBlockNamespaceListerExpansion interface{}
+
 // IPAMConfigurationListerExpansion allows custom methods to be added to
 // IPAMConfigurationLister.
 type IPAMConfigurationListerExpansion interface{}

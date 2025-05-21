@@ -26,6 +26,8 @@ type GlobalNetworkSetExpansion interface{}
 
 type HostEndpointExpansion interface{}
 
+type IPAMBlockExpansion interface{}
+
 type IPAMConfigurationExpansion interface{}
 
 type IPPoolExpansion interface{}

@@ -25,6 +25,7 @@ type ProjectcalicoV3Interface interface {
 	GlobalNetworkPoliciesGetter
 	GlobalNetworkSetsGetter
 	HostEndpointsGetter
+	IPAMBlocksGetter
 	IPAMConfigurationsGetter
 	IPPoolsGetter
 	IPReservationsGetter
@@ -85,6 +86,10 @@ func (c *ProjectcalicoV3Client) GlobalNetworkSets() GlobalNetworkSetInterface {
 
 func (c *ProjectcalicoV3Client) HostEndpoints() HostEndpointInterface {
 	return newHostEndpoints(c)
+}
+
+func (c *ProjectcalicoV3Client) IPAMBlocks(namespace string) IPAMBlockInterface {
+	return newIPAMBlocks(c, namespace)
 }
 
 func (c *ProjectcalicoV3Client) IPAMConfigurations() IPAMConfigurationInterface {
