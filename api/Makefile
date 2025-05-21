@@ -52,6 +52,9 @@ build: gen-files examples
 # Regenerate all files if the gen exes changed or any "types.go" files changed
 .PHONY: gen-files
 gen-files .generate_files: lint-cache-dir clean-generated
+	# Generate CRDs without descriptions
+	$(DOCKER_RUN) $(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) controller-gen crd:allowDangerousTypes=true,crdVersions=v1,deprecatedV1beta1CompatibilityPreserveUnknownFields=false,maxDescLen=0 paths=./pkg/apis/... output:crd:dir=config/crd/'
+
 	# Generate defaults
 	$(DOCKER_RUN) $(CALICO_BUILD) \
 	   sh -c '$(GIT_CONFIG_SSH) defaulter-gen \
