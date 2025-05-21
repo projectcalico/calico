@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019-2025 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,7 +21,7 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	log "github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 
 	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
@@ -115,7 +115,7 @@ type mockVXLANFDB struct {
 }
 
 func (t *mockVXLANFDB) SetVTEPs(targets []vxlanfdb.VTEP) {
-	log.WithFields(log.Fields{
+	logrus.WithFields(logrus.Fields{
 		"targets": targets,
 	}).Debug("SetVTEPs")
 	t.currentVTEPs = targets
@@ -123,9 +123,11 @@ func (t *mockVXLANFDB) SetVTEPs(targets []vxlanfdb.VTEP) {
 }
 
 var _ = Describe("VXLANManager", func() {
-	var manager, managerV6 *vxlanManager
-	var rt *mockRouteTable
-	var fdb *mockVXLANFDB
+	var (
+		vxlanMgr, vxlanMgrV6 *vxlanManager
+		rt                   *mockRouteTable
+		fdb                  *mockVXLANFDB
+	)
 
 	BeforeEach(func() {
 		rt = &mockRouteTable{
@@ -137,83 +139,95 @@ var _ = Describe("VXLANManager", func() {
 		la := netlink.NewLinkAttrs()
 		la.Name = "eth0"
 		opRecorder := logutils.NewSummarizer("test")
-		manager = newVXLANManagerWithShims(
+
+		dpConfig := Config{
+			MaxIPSetSize:       5,
+			Hostname:           "node1",
+			ExternalNodesCidrs: []string{"10.0.0.0/24"},
+			RulesConfig: rules.Config{
+				VXLANVNI:  1,
+				VXLANPort: 20,
+			},
+		}
+		vxlanMgr = newVXLANManagerWithShims(
 			dpsets.NewMockIPSets(),
 			rt,
 			fdb,
-			"vxlan.calico",
-			Config{
-				MaxIPSetSize:       5,
-				Hostname:           "node1",
-				ExternalNodesCidrs: []string{"10.0.0.0/24"},
-				RulesConfig: rules.Config{
-					VXLANVNI:  1,
-					VXLANPort: 20,
-				},
-			},
+			dataplanedefs.VXLANIfaceNameV4,
+			4,
+			4444,
+			dpConfig,
 			opRecorder,
 			&mockVXLANDataplane{
 				links:     []netlink.Link{&mockLink{attrs: la}},
 				ipVersion: 4,
 			},
-			4,
-			4444,
 		)
 
-		managerV6 = newVXLANManagerWithShims(
+		dpConfigV6 := Config{
+			MaxIPSetSize:       5,
+			Hostname:           "node1",
+			ExternalNodesCidrs: []string{"fd00:10:244::/112"},
+			RulesConfig: rules.Config{
+				VXLANVNI:  1,
+				VXLANPort: 20,
+			},
+		}
+		vxlanMgrV6 = newVXLANManagerWithShims(
 			dpsets.NewMockIPSets(),
 			rt,
 			fdb,
-			"vxlan-v6.calico",
-			Config{
-				MaxIPSetSize:       5,
-				Hostname:           "node1",
-				ExternalNodesCidrs: []string{"fd00:10:244::/112"},
-				RulesConfig: rules.Config{
-					VXLANVNI:  1,
-					VXLANPort: 20,
-				},
-			},
+			dataplanedefs.VXLANIfaceNameV6,
+			6,
+			6666,
+			dpConfigV6,
 			opRecorder,
 			&mockVXLANDataplane{
 				links:     []netlink.Link{&mockLink{attrs: la}},
 				ipVersion: 6,
 			},
-			6,
-			6666,
 		)
 	})
 
 	It("successfully adds a route to the parent interface", func() {
-		manager.OnUpdate(&proto.VXLANTunnelEndpointUpdate{
+		vxlanMgr.OnUpdate(&proto.VXLANTunnelEndpointUpdate{
 			Node:           "node1",
 			Mac:            "00:0a:74:9d:68:16",
 			Ipv4Addr:       "10.0.0.0",
 			ParentDeviceIp: "172.0.0.2",
 		})
 
-		manager.OnUpdate(&proto.VXLANTunnelEndpointUpdate{
+		vxlanMgr.OnUpdate(&proto.VXLANTunnelEndpointUpdate{
 			Node:           "node2",
 			Mac:            "00:0a:95:9d:68:16",
 			Ipv4Addr:       "10.0.80.0/32",
 			ParentDeviceIp: "172.0.12.1",
 		})
 
-		localVTEP := manager.getLocalVTEP()
+		localVTEP := vxlanMgr.getLocalVTEP()
 		Expect(localVTEP).NotTo(BeNil())
 
-		err := manager.configureVXLANDevice(50, localVTEP, false)
-		Expect(err).NotTo(HaveOccurred())
-		manager.OnParentNameUpdate("eth0")
+		vxlanMgr.routeMgr.OnParentDeviceUpdate("eth0")
 
-		Expect(manager.myVTEP).NotTo(BeNil())
-		Expect(manager.parentIfaceName).NotTo(BeEmpty())
-		parent, err := manager.getLocalVTEPParent()
+		Expect(vxlanMgr.myVTEP).NotTo(BeNil())
+		Expect(vxlanMgr.routeMgr.parentDevice).NotTo(BeEmpty())
+
+		parent, err := vxlanMgr.routeMgr.detectParentIface()
+		Expect(err).NotTo(HaveOccurred())
+		Expect(parent).NotTo(BeNil())
+
+		link, addr, err := vxlanMgr.device(parent)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(link).NotTo(BeNil())
+		Expect(addr).NotTo(BeZero())
+
+		err = vxlanMgr.routeMgr.configureTunnelDevice(link, addr, 50, false)
+		Expect(err).NotTo(HaveOccurred())
 
 		Expect(parent).NotTo(BeNil())
 		Expect(err).NotTo(HaveOccurred())
 
-		manager.OnUpdate(&proto.RouteUpdate{
+		vxlanMgr.OnUpdate(&proto.RouteUpdate{
 			Types:       proto.RouteType_REMOTE_WORKLOAD,
 			IpPoolType:  proto.IPPoolType_VXLAN,
 			Dst:         "172.0.0.1/26",
@@ -222,7 +236,7 @@ var _ = Describe("VXLANManager", func() {
 			SameSubnet:  true,
 		})
 
-		manager.OnUpdate(&proto.RouteUpdate{
+		vxlanMgr.OnUpdate(&proto.RouteUpdate{
 			Types:       proto.RouteType_REMOTE_WORKLOAD,
 			IpPoolType:  proto.IPPoolType_VXLAN,
 			Dst:         "172.0.0.2/26",
@@ -230,7 +244,7 @@ var _ = Describe("VXLANManager", func() {
 			DstNodeIp:   "172.8.8.8",
 		})
 
-		manager.OnUpdate(&proto.RouteUpdate{
+		vxlanMgr.OnUpdate(&proto.RouteUpdate{
 			Types:       proto.RouteType_LOCAL_WORKLOAD,
 			IpPoolType:  proto.IPPoolType_VXLAN,
 			Dst:         "172.0.0.0/26",
@@ -240,7 +254,7 @@ var _ = Describe("VXLANManager", func() {
 		})
 
 		// Borrowed /32 should not be programmed as blackhole.
-		manager.OnUpdate(&proto.RouteUpdate{
+		vxlanMgr.OnUpdate(&proto.RouteUpdate{
 			Types:       proto.RouteType_LOCAL_WORKLOAD,
 			IpPoolType:  proto.IPPoolType_VXLAN,
 			Dst:         "172.0.0.1/32",
@@ -252,7 +266,7 @@ var _ = Describe("VXLANManager", func() {
 		Expect(rt.currentRoutes["vxlan.calico"]).To(HaveLen(0))
 		Expect(rt.currentRoutes[routetable.InterfaceNone]).To(HaveLen(0))
 
-		err = manager.CompleteDeferredWork()
+		err = vxlanMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
 
 		Expect(rt.currentRoutes["vxlan.calico"]).To(HaveLen(1))
@@ -267,41 +281,50 @@ var _ = Describe("VXLANManager", func() {
 			TunnelMAC: mac,
 		}))
 		Expect(fdb.setVTEPsCalls).To(Equal(1))
-		err = manager.CompleteDeferredWork()
+		err = vxlanMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
 		Expect(fdb.setVTEPsCalls).To(Equal(1))
 	})
 
 	It("successfully adds a IPv6 route to the parent interface", func() {
-		managerV6.OnUpdate(&proto.VXLANTunnelEndpointUpdate{
+		vxlanMgrV6.OnUpdate(&proto.VXLANTunnelEndpointUpdate{
 			Node:             "node1",
 			MacV6:            "00:0a:74:9d:68:16",
 			Ipv6Addr:         "fd00:10:244::",
 			ParentDeviceIpv6: "fc00:10:96::2",
 		})
 
-		managerV6.OnUpdate(&proto.VXLANTunnelEndpointUpdate{
+		vxlanMgrV6.OnUpdate(&proto.VXLANTunnelEndpointUpdate{
 			Node:             "node2",
 			MacV6:            "00:0a:95:9d:68:16",
 			Ipv6Addr:         "fd00:10:96::/112",
 			ParentDeviceIpv6: "fc00:10:10::1",
 		})
 
-		localVTEP := managerV6.getLocalVTEP()
+		localVTEP := vxlanMgrV6.getLocalVTEP()
 		Expect(localVTEP).NotTo(BeNil())
 
-		err := managerV6.configureVXLANDevice(50, localVTEP, false)
-		Expect(err).NotTo(HaveOccurred())
-		managerV6.OnParentNameUpdate("eth0")
+		vxlanMgrV6.routeMgr.OnParentDeviceUpdate("eth0")
 
-		Expect(managerV6.myVTEP).NotTo(BeNil())
-		Expect(managerV6.parentIfaceName).NotTo(BeEmpty())
-		parent, err := managerV6.getLocalVTEPParent()
+		Expect(vxlanMgrV6.myVTEP).NotTo(BeNil())
+		Expect(vxlanMgrV6.routeMgr.parentDevice).NotTo(BeEmpty())
+
+		parent, err := vxlanMgrV6.routeMgr.detectParentIface()
+		Expect(err).NotTo(HaveOccurred())
+		Expect(parent).NotTo(BeNil())
+
+		link, addr, err := vxlanMgrV6.device(parent)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(link).NotTo(BeNil())
+		Expect(addr).NotTo(BeZero())
+
+		err = vxlanMgrV6.routeMgr.configureTunnelDevice(link, addr, 50, false)
+		Expect(err).NotTo(HaveOccurred())
 
 		Expect(parent).NotTo(BeNil())
 		Expect(err).NotTo(HaveOccurred())
 
-		managerV6.OnUpdate(&proto.RouteUpdate{
+		vxlanMgrV6.OnUpdate(&proto.RouteUpdate{
 			Types:       proto.RouteType_REMOTE_WORKLOAD,
 			IpPoolType:  proto.IPPoolType_VXLAN,
 			Dst:         "fc00:10:244::1/112",
@@ -310,7 +333,7 @@ var _ = Describe("VXLANManager", func() {
 			SameSubnet:  true,
 		})
 
-		managerV6.OnUpdate(&proto.RouteUpdate{
+		vxlanMgrV6.OnUpdate(&proto.RouteUpdate{
 			Types:       proto.RouteType_REMOTE_WORKLOAD,
 			IpPoolType:  proto.IPPoolType_VXLAN,
 			Dst:         "fc00:10:244::2/112",
@@ -318,7 +341,7 @@ var _ = Describe("VXLANManager", func() {
 			DstNodeIp:   "fc00:10:10::8",
 		})
 
-		managerV6.OnUpdate(&proto.RouteUpdate{
+		vxlanMgrV6.OnUpdate(&proto.RouteUpdate{
 			Types:       proto.RouteType_LOCAL_WORKLOAD,
 			IpPoolType:  proto.IPPoolType_VXLAN,
 			Dst:         "fc00:10:244::/112",
@@ -328,7 +351,7 @@ var _ = Describe("VXLANManager", func() {
 		})
 
 		// Borrowed /128 should not be programmed as blackhole.
-		managerV6.OnUpdate(&proto.RouteUpdate{
+		vxlanMgrV6.OnUpdate(&proto.RouteUpdate{
 			Types:       proto.RouteType_LOCAL_WORKLOAD,
 			IpPoolType:  proto.IPPoolType_VXLAN,
 			Dst:         "fc00:10:244::1/128",
@@ -340,7 +363,7 @@ var _ = Describe("VXLANManager", func() {
 		Expect(rt.currentRoutes["vxlan-v6.calico"]).To(HaveLen(0))
 		Expect(rt.currentRoutes[routetable.InterfaceNone]).To(HaveLen(0))
 
-		err = managerV6.CompleteDeferredWork()
+		err = vxlanMgrV6.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
 
 		Expect(rt.currentRoutes["vxlan-v6.calico"]).To(HaveLen(1))
@@ -355,25 +378,25 @@ var _ = Describe("VXLANManager", func() {
 			TunnelMAC: mac,
 		}))
 		Expect(fdb.setVTEPsCalls).To(Equal(1))
-		err = managerV6.CompleteDeferredWork()
+		err = vxlanMgrV6.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
 		Expect(fdb.setVTEPsCalls).To(Equal(1))
 	})
 
 	It("should fall back to programming tunneled routes if the parent device is not known", func() {
+		parentNameC := make(chan string)
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
-		parentNameC := make(chan string)
-		go manager.KeepVXLANDeviceInSync(ctx, 1400, false, 1*time.Second, parentNameC)
+		go vxlanMgr.KeepVXLANDeviceInSync(ctx, 1400, false, 1*time.Second, parentNameC)
 
 		By("Sending another node's VTEP and route.")
-		manager.OnUpdate(&proto.VXLANTunnelEndpointUpdate{
+		vxlanMgr.OnUpdate(&proto.VXLANTunnelEndpointUpdate{
 			Node:           "node2",
 			Mac:            "00:0a:95:9d:68:16",
 			Ipv4Addr:       "10.0.80.0/32",
 			ParentDeviceIp: "172.0.12.1",
 		})
-		manager.OnUpdate(&proto.RouteUpdate{
+		vxlanMgr.OnUpdate(&proto.RouteUpdate{
 			Types:       proto.RouteType_REMOTE_WORKLOAD,
 			IpPoolType:  proto.IPPoolType_VXLAN,
 			Dst:         "172.0.0.1/26",
@@ -382,50 +405,50 @@ var _ = Describe("VXLANManager", func() {
 			SameSubnet:  true,
 		})
 
-		err := manager.CompleteDeferredWork()
+		err := vxlanMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
-		Expect(manager.routesDirty).To(BeFalse())
+		Expect(vxlanMgr.routeMgr.routesDirty).To(BeFalse())
 		Expect(rt.currentRoutes["eth0"]).To(HaveLen(0))
 		Expect(rt.currentRoutes[dataplanedefs.VXLANIfaceNameV4]).To(HaveLen(1))
 
 		By("Sending another local VTEP.")
-		manager.OnUpdate(&proto.VXLANTunnelEndpointUpdate{
+		vxlanMgr.OnUpdate(&proto.VXLANTunnelEndpointUpdate{
 			Node:           "node1",
 			Mac:            "00:0a:74:9d:68:16",
 			Ipv4Addr:       "10.0.0.0",
 			ParentDeviceIp: "172.0.0.2",
 		})
-		localVTEP := manager.getLocalVTEP()
+		localVTEP := vxlanMgr.getLocalVTEP()
 		Expect(localVTEP).NotTo(BeNil())
 
 		// Note: parent name is sent after configuration so this receive
 		// ensures we don't race.
 		Eventually(parentNameC, "2s").Should(Receive(Equal("eth0")))
-		manager.OnParentNameUpdate("eth0")
+		vxlanMgr.routeMgr.OnParentDeviceUpdate("eth0")
 
 		Expect(rt.currentRoutes["eth0"]).To(HaveLen(0))
-		err = manager.CompleteDeferredWork()
+		err = vxlanMgr.CompleteDeferredWork()
 
 		Expect(err).NotTo(HaveOccurred())
-		Expect(manager.routesDirty).To(BeFalse())
+		Expect(vxlanMgr.routeMgr.routesDirty).To(BeFalse())
 		Expect(rt.currentRoutes["eth0"]).To(HaveLen(1))
 		Expect(rt.currentRoutes[dataplanedefs.VXLANIfaceNameV4]).To(HaveLen(0))
 	})
 
 	It("IPv6: should fall back to programming tunneled routes if the parent device is not known", func() {
+		parentNameC := make(chan string)
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
-		parentNameC := make(chan string)
-		go managerV6.KeepVXLANDeviceInSync(ctx, 1400, false, 1*time.Second, parentNameC)
+		go vxlanMgrV6.KeepVXLANDeviceInSync(ctx, 1400, false, 1*time.Second, parentNameC)
 
 		By("Sending another node's VTEP and route.")
-		managerV6.OnUpdate(&proto.VXLANTunnelEndpointUpdate{
+		vxlanMgrV6.OnUpdate(&proto.VXLANTunnelEndpointUpdate{
 			Node:             "node2",
 			MacV6:            "00:0a:95:9d:68:16",
 			Ipv6Addr:         "fd00:10:96::/112",
 			ParentDeviceIpv6: "fc00:10:10::1",
 		})
-		managerV6.OnUpdate(&proto.RouteUpdate{
+		vxlanMgrV6.OnUpdate(&proto.RouteUpdate{
 			Types:       proto.RouteType_REMOTE_WORKLOAD,
 			IpPoolType:  proto.IPPoolType_VXLAN,
 			Dst:         "fc00:10:244::1/112",
@@ -434,39 +457,39 @@ var _ = Describe("VXLANManager", func() {
 			SameSubnet:  true,
 		})
 
-		err := managerV6.CompleteDeferredWork()
+		err := vxlanMgrV6.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
-		Expect(managerV6.routesDirty).To(BeFalse())
+		Expect(vxlanMgrV6.routeMgr.routesDirty).To(BeFalse())
 		Expect(rt.currentRoutes["eth0"]).To(HaveLen(0))
 		Expect(rt.currentRoutes[dataplanedefs.VXLANIfaceNameV6]).To(HaveLen(1))
 
 		By("Sending another local VTEP.")
-		managerV6.OnUpdate(&proto.VXLANTunnelEndpointUpdate{
+		vxlanMgrV6.OnUpdate(&proto.VXLANTunnelEndpointUpdate{
 			Node:             "node1",
 			MacV6:            "00:0a:74:9d:68:16",
 			Ipv6Addr:         "fd00:10:244::",
 			ParentDeviceIpv6: "fc00:10:96::2",
 		})
-		localVTEP := managerV6.getLocalVTEP()
+		localVTEP := vxlanMgrV6.getLocalVTEP()
 		Expect(localVTEP).NotTo(BeNil())
 
 		// Note: parent name is sent after configuration so this receive
 		// ensures we don't race.
 		Eventually(parentNameC, "2s").Should(Receive(Equal("eth0")))
-		managerV6.OnParentNameUpdate("eth0")
+		vxlanMgrV6.routeMgr.OnParentDeviceUpdate("eth0")
 
 		Expect(rt.currentRoutes["eth0"]).To(HaveLen(0))
-		err = managerV6.CompleteDeferredWork()
+		err = vxlanMgrV6.CompleteDeferredWork()
 
 		Expect(err).NotTo(HaveOccurred())
-		Expect(managerV6.routesDirty).To(BeFalse())
+		Expect(vxlanMgrV6.routeMgr.routesDirty).To(BeFalse())
 		Expect(rt.currentRoutes["eth0"]).To(HaveLen(1))
 		Expect(rt.currentRoutes[dataplanedefs.VXLANIfaceNameV6]).To(HaveLen(0))
 	})
 
 	It("should program directly connected routes for remote VTEPs with borrowed IP addresses", func() {
 		By("Sending a borrowed tunnel IP address")
-		manager.OnUpdate(&proto.RouteUpdate{
+		vxlanMgr.OnUpdate(&proto.RouteUpdate{
 			Types:       proto.RouteType_REMOTE_TUNNEL,
 			IpPoolType:  proto.IPPoolType_VXLAN,
 			Dst:         "10.0.1.1/32",
@@ -475,7 +498,7 @@ var _ = Describe("VXLANManager", func() {
 			Borrowed:    true,
 		})
 
-		err := manager.CompleteDeferredWork()
+		err := vxlanMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
 
 		// Expect a directly connected route to the borrowed IP.
@@ -487,11 +510,11 @@ var _ = Describe("VXLANManager", func() {
 			}))
 
 		// Delete the route.
-		manager.OnUpdate(&proto.RouteRemove{
+		vxlanMgr.OnUpdate(&proto.RouteRemove{
 			Dst: "10.0.1.1/32",
 		})
 
-		err = manager.CompleteDeferredWork()
+		err = vxlanMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
 
 		// Expect no routes.
@@ -500,7 +523,7 @@ var _ = Describe("VXLANManager", func() {
 
 	It("IPv6: should program directly connected routes for remote VTEPs with borrowed IP addresses", func() {
 		By("Sending a borrowed tunnel IP address")
-		managerV6.OnUpdate(&proto.RouteUpdate{
+		vxlanMgrV6.OnUpdate(&proto.RouteUpdate{
 			Types:       proto.RouteType_REMOTE_TUNNEL,
 			IpPoolType:  proto.IPPoolType_VXLAN,
 			Dst:         "fc00:10:244::1/112",
@@ -509,7 +532,7 @@ var _ = Describe("VXLANManager", func() {
 			Borrowed:    true,
 		})
 
-		err := managerV6.CompleteDeferredWork()
+		err := vxlanMgrV6.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
 
 		// Expect a directly connected route to the borrowed IP.
@@ -521,11 +544,11 @@ var _ = Describe("VXLANManager", func() {
 			}))
 
 		// Delete the route.
-		managerV6.OnUpdate(&proto.RouteRemove{
+		vxlanMgrV6.OnUpdate(&proto.RouteRemove{
 			Dst: "fc00:10:244::1/112",
 		})
 
-		err = managerV6.CompleteDeferredWork()
+		err = vxlanMgrV6.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
 
 		// Expect no routes.
