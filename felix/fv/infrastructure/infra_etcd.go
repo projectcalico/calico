@@ -104,9 +104,9 @@ func (eds *EtcdDatastoreInfra) GetClusterGUID() string {
 	return ci.Spec.ClusterGUID
 }
 
-func (eds *EtcdDatastoreInfra) SetExpectedIPIPTunnelAddr(felix *Felix, cidr *net.IPNet, idx int, needBGP bool) {
+func (eds *EtcdDatastoreInfra) SetExpectedIPIPTunnelAddr(felix *Felix, ip string, needBGP bool) {
 	if needBGP {
-		felix.ExpectedIPIPTunnelAddr = fmt.Sprintf("%d.%d.%d.1", cidr.IP[0], cidr.IP[1], idx)
+		felix.ExpectedIPIPTunnelAddr = ip
 		felix.ExtraSourceIPs = append(felix.ExtraSourceIPs, felix.ExpectedIPIPTunnelAddr)
 	}
 }

@@ -49,7 +49,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ openstack status-reporting"
 
 		topologyOptions := infrastructure.DefaultTopologyOptions()
 		topologyOptions.VXLANMode = api.VXLANModeAlways
-		topologyOptions.VXLANStrategy = infrastructure.NewDefaultVXLANStrategy(topologyOptions.IPPoolCIDR, topologyOptions.IPv6PoolCIDR)
+		topologyOptions.VXLANStrategy = infrastructure.NewDefaultTunnelStrategy(topologyOptions.IPPoolCIDR, topologyOptions.IPv6PoolCIDR)
 		topologyOptions.IPIPMode = api.IPIPModeNever
 		topologyOptions.EnableIPv6 = false
 		topologyOptions.ExtraEnvVars["FELIX_ENDPOINTREPORTINGENABLED"] = "true"

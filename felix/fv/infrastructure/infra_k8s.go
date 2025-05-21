@@ -640,8 +640,8 @@ func (kds *K8sDatastoreInfra) GetClusterGUID() string {
 	return ci.Spec.ClusterGUID
 }
 
-func (kds *K8sDatastoreInfra) SetExpectedIPIPTunnelAddr(felix *Felix, cidr *net.IPNet, idx int, needBGP bool) {
-	felix.ExpectedIPIPTunnelAddr = fmt.Sprintf("%d.%d.%d.1", cidr.IP[0], cidr.IP[1], idx)
+func (kds *K8sDatastoreInfra) SetExpectedIPIPTunnelAddr(felix *Felix, ip string, needBGP bool) {
+	felix.ExpectedIPIPTunnelAddr = ip
 	felix.ExtraSourceIPs = append(felix.ExtraSourceIPs, felix.ExpectedIPIPTunnelAddr)
 }
 
