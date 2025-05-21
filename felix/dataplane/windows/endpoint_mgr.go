@@ -68,7 +68,7 @@ type endpointManager struct {
 	pendingWlEpUpdates map[types.WorkloadEndpointID]*proto.WorkloadEndpoint
 	// activeWlEndpoints stores the active/current state that was applied per endpoint
 	activeWlEndpoints map[types.WorkloadEndpointID]*proto.WorkloadEndpoint
-	// activeWlACLPolicies stores the active/current hns policy rules that was applied per endpoint
+	// activeWlACLPolicies stores the active/current hns policy rules that were applied per endpoint
 	activeWlACLPolicies map[types.WorkloadEndpointID][]*hns.ACLPolicy
 	// addressToEndpointId serves as a hns endpoint id cache. It enables us to lookup the hns
 	// endpoint id for a given endpoint ip address.
