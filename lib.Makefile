@@ -1256,7 +1256,7 @@ run-k8s-apiserver: stop-k8s-apiserver run-etcd
 
 	# Create CustomResourceDefinition (CRD) for Calico resources
 	while ! docker exec $(APISERVER_NAME) kubectl \
-		apply -f /go/src/github.com/projectcalico/calico/libcalico-go/config/crd/; \
+		apply -f /go/src/github.com/projectcalico/calico/api/config/crd/; \
 		do echo "Trying to create CRDs"; \
 		sleep 1; \
 		done
@@ -1311,7 +1311,7 @@ $(REPO_ROOT)/.$(KIND_NAME).created: $(KUBECTL) $(KIND)
 
 	# Wait for controller manager to be running and healthy, then create Calico CRDs.
 	while ! KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) get serviceaccount default; do echo "Waiting for default serviceaccount to be created..."; sleep 2; done
-	while ! KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) create -f $(REPO_ROOT)/libcalico-go/config/crd; do echo "Waiting for CRDs to be created"; sleep 2; done
+	while ! KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) create -f $(REPO_ROOT)/api/config/crd; do echo "Waiting for CRDs to be created"; sleep 2; done
 	touch $@
 
 kind-cluster-destroy: $(KIND) $(KUBECTL)

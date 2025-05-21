@@ -25,7 +25,7 @@ import (
 
 const (
 	NetworkPolicyResourceName = "NetworkPolicies"
-	NetworkPolicyCRDName      = "networkpolicies.crd.projectcalico.org"
+	NetworkPolicyCRDName      = "networkpolicies.projectcalico.org"
 )
 
 func NewNetworkPolicyClient(c kubernetes.Interface, r rest.Interface) K8sResourceClient {

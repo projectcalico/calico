@@ -25,7 +25,7 @@ import (
 
 const (
 	BGPPeerResourceName = "BGPPeers"
-	BGPPeerCRDName      = "bgppeers.crd.projectcalico.org"
+	BGPPeerCRDName      = "bgppeers.projectcalico.org"
 )
 
 func NewBGPPeerClient(c kubernetes.Interface, r rest.Interface) K8sResourceClient {

@@ -32,7 +32,7 @@ import (
 
 const (
 	IPAMConfigResourceName = "IPAMConfigs"
-	IPAMConfigCRDName      = "ipamconfigs.crd.projectcalico.org"
+	IPAMConfigCRDName      = "ipamconfigs.projectcalico.org"
 )
 
 func NewIPAMConfigClient(c kubernetes.Interface, r rest.Interface) K8sResourceClient {
@@ -98,7 +98,7 @@ func (c ipamConfigClient) toV3(kvpv1 *model.KVPair) *model.KVPair {
 		Value: &libapiv3.IPAMConfig{
 			TypeMeta: metav1.TypeMeta{
 				Kind:       libapiv3.KindIPAMConfig,
-				APIVersion: "crd.projectcalico.org/v1",
+				APIVersion: "projectcalico.org/v3",
 			},
 			ObjectMeta: m,
 			Spec: libapiv3.IPAMConfigSpec{

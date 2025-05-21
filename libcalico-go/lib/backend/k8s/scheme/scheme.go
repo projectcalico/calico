@@ -36,8 +36,8 @@ func AddCalicoResourcesToScheme() {
 			func(scheme *runtime.Scheme) error {
 				scheme.AddKnownTypes(
 					schema.GroupVersion{
-						Group:   "crd.projectcalico.org",
-						Version: "v1",
+						Group:   "projectcalico.org",
+						Version: "v3",
 					},
 					&apiv3.FelixConfiguration{},
 					&apiv3.FelixConfigurationList{},
@@ -91,6 +91,6 @@ func AddCalicoResourcesToScheme() {
 		if err != nil {
 			log.WithError(err).Fatal("failed to add calico resources to scheme")
 		}
-		metav1.AddToGroupVersion(scheme.Scheme, schema.GroupVersion{Group: "crd.projectcalico.org", Version: "v1"})
+		metav1.AddToGroupVersion(scheme.Scheme, schema.GroupVersion{Group: "projectcalico.org", Version: "v3"})
 	})
 }

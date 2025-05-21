@@ -41,7 +41,7 @@ import (
 
 const (
 	BlockAffinityResourceName = "BlockAffinities"
-	BlockAffinityCRDName      = "blockaffinities.crd.projectcalico.org"
+	BlockAffinityCRDName      = "blockaffinities.projectcalico.org"
 )
 
 func NewBlockAffinityClient(c kubernetes.Interface, r rest.Interface) K8sResourceClient {
@@ -148,7 +148,7 @@ func (c *blockAffinityClient) toV3(kvpv1 *model.KVPair) *model.KVPair {
 		Value: &libapiv3.BlockAffinity{
 			TypeMeta: metav1.TypeMeta{
 				Kind:       libapiv3.KindBlockAffinity,
-				APIVersion: "crd.projectcalico.org/v1",
+				APIVersion: "projectcalico.org/v3",
 			},
 			ObjectMeta: metav1.ObjectMeta{
 				Name:            name,

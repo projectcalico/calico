@@ -38,7 +38,7 @@ import (
 
 const (
 	IPAMBlockResourceName = "IPAMBlocks"
-	IPAMBlockCRDName      = "ipamblocks.crd.projectcalico.org"
+	IPAMBlockCRDName      = "ipamblocks.projectcalico.org"
 )
 
 func NewIPAMBlockClient(c kubernetes.Interface, r rest.Interface) K8sResourceClient {
@@ -255,7 +255,7 @@ func IPAMBlockV1toV3(kvpv1 *model.KVPair) *model.KVPair {
 		Value: &libapiv3.IPAMBlock{
 			TypeMeta: metav1.TypeMeta{
 				Kind:       libapiv3.KindIPAMBlock,
-				APIVersion: "crd.projectcalico.org/v1",
+				APIVersion: "projectcalico.org/v3",
 			},
 			ObjectMeta: metav1.ObjectMeta{
 				Name:            name,

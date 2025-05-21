@@ -84,7 +84,7 @@ func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 		return nil, err
 	}
 
-	crdClientV1, err := buildCRDClientV1(*config)
+	crdClientV1, err := buildCRDClientV3(*config)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to build V1 CRD client: %v", err)
 	}
@@ -541,6 +541,25 @@ func (c *KubeClient) Close() error {
 // buildK8SAdminPolicyClient builds a RESTClient configured to interact (Baseline) Admin Network Policy.
 func buildK8SAdminPolicyClient(cfg *rest.Config) (*adminpolicyclient.PolicyV1alpha1Client, error) {
 	return adminpolicyclient.NewForConfig(cfg)
+}
+
+func buildCRDClientV3(cfg rest.Config) (*rest.RESTClient, error) {
+	cfg.GroupVersion = &schema.GroupVersion{
+		Group:   "projectcalico.org",
+		Version: "v3",
+	}
+	cfg.APIPath = "/apis"
+	cfg.ContentType = runtime.ContentTypeJSON
+	cfg.NegotiatedSerializer = serializer.WithoutConversionCodecFactory{CodecFactory: scheme.Codecs}
+
+	cli, err := rest.RESTClientFor(&cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	calischeme.AddCalicoResourcesToScheme()
+
+	return cli, nil
 }
 
 // buildCRDClientV1 builds a RESTClient configured to interact with Calico CustomResourceDefinitions

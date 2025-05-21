@@ -25,7 +25,7 @@ import (
 
 const (
 	StagedKubernetesNetworkPolicyResourceName = "StagedKubernetesNetworkPolicies"
-	StagedKubernetesNetworkPolicyCRDName      = "stagedkubernetesnetworkpolicies.crd.projectcalico.org"
+	StagedKubernetesNetworkPolicyCRDName      = "stagedkubernetesnetworkpolicies.projectcalico.org"
 )
 
 func NewStagedKubernetesNetworkPolicyClient(c *kubernetes.Clientset, r *rest.RESTClient) K8sResourceClient {

@@ -25,7 +25,7 @@ import (
 
 const (
 	FelixConfigResourceName = "FelixConfigurations"
-	FelixConfigCRDName      = "felixconfigurations.crd.projectcalico.org"
+	FelixConfigCRDName      = "felixconfigurations.projectcalico.org"
 )
 
 func NewFelixConfigClient(c kubernetes.Interface, r rest.Interface) K8sResourceClient {

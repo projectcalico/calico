@@ -30,7 +30,7 @@ import (
 
 const (
 	IPPoolResourceName = "IPPools"
-	IPPoolCRDName      = "ippools.crd.projectcalico.org"
+	IPPoolCRDName      = "ippools.projectcalico.org"
 )
 
 func NewIPPoolClient(c kubernetes.Interface, r rest.Interface) K8sResourceClient {
