@@ -41,7 +41,7 @@ EOF
 
   # Stop for debug
   echo "Check for pause file..."
-  while [ -f /home/semaphore/pause-for-debug ];
+  while [ ! -f /home/semaphore/pause-for-debug ];
   do
     echo "#"
     sleep 30
