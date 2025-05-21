@@ -59,6 +59,7 @@ type TopologyOptions struct {
 	// In some cases, we rely on BIRD to program IPIP and noEncap routes. VXLAN routes are always programmed by Felix.
 	SimulateBIRDRoutes        bool
 	IPIPMode                  api.IPIPMode
+	IPIPStrategy              VXLANStrategy
 	VXLANMode                 api.VXLANMode
 	VXLANStrategy             VXLANStrategy
 	WireguardEnabled          bool
@@ -374,7 +375,9 @@ func StartNNodeTopology(
 
 		setUpBGPNodeIPAndIPIPTunnelIP := n > 1 || opts.NeedNodeIP
 		if opts.IPIPMode != api.IPIPModeNever {
-			infra.SetExpectedIPIPTunnelAddr(felix, IPv4CIDR, i, setUpBGPNodeIPAndIPIPTunnelIP)
+			ExpectWithOffset(1, opts.IPIPStrategy).ToNot(BeNil(), "IPIPMode is set but IPIPStrategy is nil")
+			//infra.SetExpectedIPIPTunnelAddr(felix, IPv4CIDR, i, setUpBGPNodeIPAndIPIPTunnelIP)
+			infra.SetExpectedIPIPTunnelAddr(felix, opts.IPIPStrategy.TunnelAddress(i), setUpBGPNodeIPAndIPIPTunnelIP)
 			expectedIPs = append(expectedIPs, felix.ExpectedIPIPTunnelAddr)
 		}
 		if opts.VXLANMode != api.VXLANModeNever {
