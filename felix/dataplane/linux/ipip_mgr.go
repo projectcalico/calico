@@ -151,7 +151,7 @@ func (m *ipipManager) OnUpdate(protoBufMsg interface{}) {
 	case *proto.HostMetadataUpdate:
 		m.logCtx.WithField("hostname", msg.Hostname).Debug("Host update/create")
 		if msg.Hostname == m.hostname {
-			m.routeMgr.updateDataIfaceAddr(msg.Ipv4Addr)
+			m.routeMgr.updateParentIfaceAddr(msg.Ipv4Addr)
 		}
 		m.activeHostnameToIP[msg.Hostname] = msg.Ipv4Addr
 		m.ipSetDirty = true
@@ -159,7 +159,7 @@ func (m *ipipManager) OnUpdate(protoBufMsg interface{}) {
 	case *proto.HostMetadataRemove:
 		m.logCtx.WithField("hostname", msg.Hostname).Debug("Host removed")
 		if msg.Hostname == m.hostname {
-			m.routeMgr.updateDataIfaceAddr("")
+			m.routeMgr.updateParentIfaceAddr("")
 		}
 		delete(m.activeHostnameToIP, msg.Hostname)
 		m.ipSetDirty = true
@@ -227,9 +227,9 @@ func (m *ipipManager) KeepIPIPDeviceInSync(
 	mtu int,
 	xsumBroken bool,
 	wait time.Duration,
-	dataIfaceC chan string,
+	parentIfaceC chan string,
 ) {
-	m.routeMgr.KeepDeviceInSync(ctx, mtu, xsumBroken, wait, dataIfaceC, m.device)
+	m.routeMgr.KeepDeviceInSync(ctx, mtu, xsumBroken, wait, parentIfaceC, m.device)
 }
 
 func (m *ipipManager) device(_ netlink.Link) (netlink.Link, string, error) {

@@ -327,14 +327,14 @@ type InternalDataplane struct {
 	filterTables    []generictables.Table
 	ipSets          []dpsets.IPSetsDataplane
 
-	dataInterfaceC chan string
-	ipipManager    *ipipManager
+	ipipParentIfaceC chan string
+	ipipManager      *ipipManager
 
-	parentInterfaceC   chan string
-	parentInterfaceCV6 chan string
-	vxlanManager       *vxlanManager
-	vxlanManagerV6     *vxlanManager
-	vxlanFDBs          []*vxlanfdb.VXLANFDB
+	vxlanParentIfaceC   chan string
+	vxlanParentIfaceCV6 chan string
+	vxlanManager        *vxlanManager
+	vxlanManagerV6      *vxlanManager
+	vxlanFDBs           []*vxlanfdb.VXLANFDB
 
 	linkAddrsManagers []*linkaddrs.LinkAddrsManager
 
@@ -685,7 +685,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			config,
 			dp.loopSummarizer,
 		)
-		dp.parentInterfaceC = make(chan string, 1)
+		dp.vxlanParentIfaceC = make(chan string, 1)
 		vxlanMTU := config.VXLANMTU
 		if config.BPFEnabled && bpfutils.BTFEnabled {
 			vxlanMTU = 0
@@ -695,7 +695,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			vxlanMTU,
 			dataplaneFeatures.ChecksumOffloadBroken,
 			10*time.Second,
-			dp.parentInterfaceC,
+			dp.vxlanParentIfaceC,
 		)
 		dp.RegisterManager(dp.vxlanManager)
 	} else {
@@ -1079,13 +1079,13 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			config,
 			dp.loopSummarizer,
 		)
-		dp.dataInterfaceC = make(chan string, 1)
+		dp.ipipParentIfaceC = make(chan string, 1)
 		go dp.ipipManager.KeepIPIPDeviceInSync(
 			context.Background(),
 			config.IPIPMTU,
 			dataplaneFeatures.ChecksumOffloadBroken,
 			time.Second*10,
-			dp.dataInterfaceC,
+			dp.ipipParentIfaceC,
 		)
 		dp.RegisterManager(dp.ipipManager)
 	} else {
@@ -1189,7 +1189,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 				dp.loopSummarizer,
 				vxlanMgrOps...,
 			)
-			dp.parentInterfaceCV6 = make(chan string, 1)
+			dp.vxlanParentIfaceCV6 = make(chan string, 1)
 			vxlanMTU := config.VXLANMTUV6
 			if config.BPFEnabled && bpfutils.BTFEnabled {
 				vxlanMTU = 0
@@ -1199,7 +1199,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 				vxlanMTU,
 				dataplaneFeatures.ChecksumOffloadBroken,
 				10*time.Second,
-				dp.parentInterfaceCV6,
+				dp.vxlanParentIfaceCV6,
 			)
 			dp.RegisterManager(dp.vxlanManagerV6)
 		} else {
@@ -2153,12 +2153,12 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 			d.onDatastoreMessage(msg)
 		case ifaceUpdate := <-d.ifaceUpdates:
 			d.onIfaceMonitorMessage(ifaceUpdate)
-		case name := <-d.dataInterfaceC:
-			d.ipipManager.routeMgr.OnDataDeviceUpdate(name)
-		case name := <-d.parentInterfaceC:
-			d.vxlanManager.routeMgr.OnDataDeviceUpdate(name)
-		case name := <-d.parentInterfaceCV6:
-			d.vxlanManagerV6.routeMgr.OnDataDeviceUpdate(name)
+		case name := <-d.ipipParentIfaceC:
+			d.ipipManager.routeMgr.OnParentDeviceUpdate(name)
+		case name := <-d.vxlanParentIfaceC:
+			d.vxlanManager.routeMgr.OnParentDeviceUpdate(name)
+		case name := <-d.vxlanParentIfaceCV6:
+			d.vxlanManagerV6.routeMgr.OnParentDeviceUpdate(name)
 		case <-ipSetsRefreshC:
 			log.Debug("Refreshing IP sets state")
 			d.forceIPSetsRefresh = true

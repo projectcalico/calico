@@ -84,11 +84,11 @@ var _ = Describe("RouteManager for ipip pools", func() {
 			Hostname: "node1",
 			Ipv4Addr: "10.0.0.1",
 		})
-		ipipMgr.routeMgr.OnDataDeviceUpdate("eth0")
+		ipipMgr.routeMgr.OnParentDeviceUpdate("eth0")
 
-		Expect(ipipMgr.routeMgr.dataDeviceAddr).NotTo(BeZero())
-		Expect(ipipMgr.routeMgr.dataDevice).NotTo(BeEmpty())
-		noEncapDev, err := ipipMgr.routeMgr.detectDataIface()
+		Expect(ipipMgr.routeMgr.parentDeviceAddr).NotTo(BeZero())
+		Expect(ipipMgr.routeMgr.parentDevice).NotTo(BeEmpty())
+		noEncapDev, err := ipipMgr.routeMgr.detectParentIface()
 		Expect(err).NotTo(HaveOccurred())
 		Expect(noEncapDev).NotTo(BeNil())
 
@@ -234,11 +234,11 @@ var _ = Describe("RouteManager for ipip pools", func() {
 			Ipv4Addr: "10.0.1.1",
 		})
 
-		ipipMgr.routeMgr.OnDataDeviceUpdate("eth0")
+		ipipMgr.routeMgr.OnParentDeviceUpdate("eth0")
 
-		Expect(ipipMgr.routeMgr.dataDeviceAddr).NotTo(BeZero())
-		Expect(ipipMgr.routeMgr.dataDevice).NotTo(BeEmpty())
-		noEncapDev, err := ipipMgr.routeMgr.detectDataIface()
+		Expect(ipipMgr.routeMgr.parentDeviceAddr).NotTo(BeZero())
+		Expect(ipipMgr.routeMgr.parentDevice).NotTo(BeEmpty())
+		noEncapDev, err := ipipMgr.routeMgr.detectParentIface()
 		Expect(err).NotTo(HaveOccurred())
 		Expect(noEncapDev).NotTo(BeNil())
 
@@ -331,7 +331,7 @@ var _ = Describe("RouteManager for ipip pools", func() {
 			Hostname: "node1",
 			Ipv4Addr: "10.0.0.1",
 		})
-		localAddr := ipipMgr.routeMgr.dataIfaceAddr()
+		localAddr := ipipMgr.routeMgr.parentIfaceAddr()
 		Expect(localAddr).NotTo(BeNil())
 
 		// Note: no encap device name is sent after configuration so this receive
@@ -339,7 +339,7 @@ var _ = Describe("RouteManager for ipip pools", func() {
 
 		By("waiting")
 		Eventually(dataDeviceC, "2s").Should(Receive(Equal("eth0")))
-		ipipMgr.routeMgr.OnDataDeviceUpdate("eth0")
+		ipipMgr.routeMgr.OnParentDeviceUpdate("eth0")
 
 		Expect(rt.currentRoutes["eth0"]).To(HaveLen(0))
 		err = ipipMgr.CompleteDeferredWork()

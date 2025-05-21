@@ -210,7 +210,7 @@ func (m *vxlanManager) setLocalVTEP(vtep *proto.VXLANTunnelEndpointUpdate) {
 			parentAddr = vtep.ParentDeviceIpv6
 		}
 	}
-	m.routeMgr.updateDataIfaceAddr(parentAddr)
+	m.routeMgr.updateParentIfaceAddr(parentAddr)
 }
 
 func (m *vxlanManager) getLocalVTEP() *proto.VXLANTunnelEndpointUpdate {

@@ -207,12 +207,12 @@ var _ = Describe("VXLANManager", func() {
 		localVTEP := vxlanMgr.getLocalVTEP()
 		Expect(localVTEP).NotTo(BeNil())
 
-		vxlanMgr.routeMgr.OnDataDeviceUpdate("eth0")
+		vxlanMgr.routeMgr.OnParentDeviceUpdate("eth0")
 
 		Expect(vxlanMgr.myVTEP).NotTo(BeNil())
-		Expect(vxlanMgr.routeMgr.dataDevice).NotTo(BeEmpty())
+		Expect(vxlanMgr.routeMgr.parentDevice).NotTo(BeEmpty())
 
-		parent, err := vxlanMgr.routeMgr.detectDataIface()
+		parent, err := vxlanMgr.routeMgr.detectParentIface()
 		Expect(err).NotTo(HaveOccurred())
 		Expect(parent).NotTo(BeNil())
 
@@ -304,12 +304,12 @@ var _ = Describe("VXLANManager", func() {
 		localVTEP := vxlanMgrV6.getLocalVTEP()
 		Expect(localVTEP).NotTo(BeNil())
 
-		vxlanMgrV6.routeMgr.OnDataDeviceUpdate("eth0")
+		vxlanMgrV6.routeMgr.OnParentDeviceUpdate("eth0")
 
 		Expect(vxlanMgrV6.myVTEP).NotTo(BeNil())
-		Expect(vxlanMgrV6.routeMgr.dataDevice).NotTo(BeEmpty())
+		Expect(vxlanMgrV6.routeMgr.parentDevice).NotTo(BeEmpty())
 
-		parent, err := vxlanMgrV6.routeMgr.detectDataIface()
+		parent, err := vxlanMgrV6.routeMgr.detectParentIface()
 		Expect(err).NotTo(HaveOccurred())
 		Expect(parent).NotTo(BeNil())
 
@@ -424,7 +424,7 @@ var _ = Describe("VXLANManager", func() {
 		// Note: parent name is sent after configuration so this receive
 		// ensures we don't race.
 		Eventually(parentNameC, "2s").Should(Receive(Equal("eth0")))
-		vxlanMgr.routeMgr.OnDataDeviceUpdate("eth0")
+		vxlanMgr.routeMgr.OnParentDeviceUpdate("eth0")
 
 		Expect(rt.currentRoutes["eth0"]).To(HaveLen(0))
 		err = vxlanMgr.CompleteDeferredWork()
@@ -476,7 +476,7 @@ var _ = Describe("VXLANManager", func() {
 		// Note: parent name is sent after configuration so this receive
 		// ensures we don't race.
 		Eventually(parentNameC, "2s").Should(Receive(Equal("eth0")))
-		vxlanMgrV6.routeMgr.OnDataDeviceUpdate("eth0")
+		vxlanMgrV6.routeMgr.OnParentDeviceUpdate("eth0")
 
 		Expect(rt.currentRoutes["eth0"]).To(HaveLen(0))
 		err = vxlanMgrV6.CompleteDeferredWork()

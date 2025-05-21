@@ -44,9 +44,9 @@ type routeManager struct {
 	ippoolType           proto.IPPoolType
 
 	// Device information
-	dataDevice     string
-	dataDeviceLock sync.Mutex
-	dataDeviceAddr string
+	parentDevice     string
+	parentDeviceLock sync.Mutex
+	parentDeviceAddr string
 
 	tunnelDevice    string
 	tunnelDeviceMTU int
@@ -214,17 +214,17 @@ func (m *routeManager) triggerRouteUpdate() {
 	m.routesDirty = true
 }
 
-func (m *routeManager) updateDataIfaceAddr(addr string) {
-	m.dataDeviceLock.Lock()
-	defer m.dataDeviceLock.Unlock()
-	m.dataDeviceAddr = addr
+func (m *routeManager) updateParentIfaceAddr(addr string) {
+	m.parentDeviceLock.Lock()
+	defer m.parentDeviceLock.Unlock()
+	m.parentDeviceAddr = addr
 	m.tunnelChangedC <- struct{}{}
 }
 
-func (m *routeManager) dataIfaceAddr() string {
-	m.dataDeviceLock.Lock()
-	defer m.dataDeviceLock.Unlock()
-	return m.dataDeviceAddr
+func (m *routeManager) parentIfaceAddr() string {
+	m.parentDeviceLock.Lock()
+	defer m.parentDeviceLock.Unlock()
+	return m.parentDeviceAddr
 }
 
 func (m *routeManager) vxlanEnabled() bool {
@@ -286,11 +286,11 @@ func (m *routeManager) deleteRoute(dst string) {
 }
 
 func (m *routeManager) CompleteDeferredWork() error {
-	if m.dataDevice == "" {
-		// Background goroutine hasn't sent us the data interface name yet,
-		// but we can look it up synchronously.  OnDataDeviceUpdate will handle
+	if m.parentDevice == "" {
+		// Background goroutine hasn't sent us the parent interface name yet,
+		// but we can look it up synchronously.  OnParentDeviceUpdate will handle
 		// any duplicate update when it arrives.
-		dataIface, err := m.detectDataIface()
+		parentIface, err := m.detectParentIface()
 		if err != nil {
 			// If we can't look up the parent interface then we're in trouble.
 			// It likely means that our VTEP is missing or conflicting.  We
@@ -306,9 +306,10 @@ func (m *routeManager) CompleteDeferredWork() error {
 			// dataplane would stay untouched until the conflict was resolved.
 			// With only a single RouteTable, we need a different fallback.
 			m.logCtx.WithError(err).Error(
-				"Failed to find data device. Missing/conflicting local information? route programming is likely to fail.")
+				"Failed to find parent device. Missing/conflicting local information?" +
+					"route programming is likely to fail.")
 		} else {
-			m.OnDataDeviceUpdate(dataIface.Attrs().Name)
+			m.OnParentDeviceUpdate(parentIface.Attrs().Name)
 			m.routesDirty = true
 		}
 	}
@@ -320,18 +321,18 @@ func (m *routeManager) CompleteDeferredWork() error {
 	return nil
 }
 
-func (m *routeManager) OnDataDeviceUpdate(name string) {
+func (m *routeManager) OnParentDeviceUpdate(name string) {
 	if name == "" {
-		m.logCtx.Warn("Empty data interface name? Ignoring.")
+		m.logCtx.Warn("Empty parent interface name? Ignoring.")
 	}
-	if name == m.dataDevice {
+	if name == m.parentDevice {
 		return
 	}
-	if m.dataDevice != "" {
+	if m.parentDevice != "" {
 		// We're changing parent interface, remove the old routes.
-		m.routeTable.SetRoutes(m.routeClassSameSubnet, m.dataDevice, nil)
+		m.routeTable.SetRoutes(m.routeClassSameSubnet, m.parentDevice, nil)
 	}
-	m.dataDevice = name
+	m.parentDevice = name
 	m.routesDirty = true
 }
 
@@ -352,7 +353,7 @@ func (m *routeManager) updateRoutes() {
 			continue
 		}
 
-		if noEncapRoute := noEncapRoute(m.dataDevice, cidr, r, m.routeProtocol); noEncapRoute != nil {
+		if noEncapRoute := noEncapRoute(m.parentDevice, cidr, r, m.routeProtocol); noEncapRoute != nil {
 			// We've got everything we need to program this route as a no-encap route.
 			noEncapRoutes = append(noEncapRoutes, *noEncapRoute)
 			logCtx.WithField("route", r).Debug("Destination in same subnet, using no-encap route.")
@@ -371,14 +372,14 @@ func (m *routeManager) updateRoutes() {
 	m.logCtx.WithField("routes", bhRoutes).Debug("Route manager setting blackhole routes")
 	m.routeTable.SetRoutes(routetable.RouteClassIPAMBlockDrop, routetable.InterfaceNone, bhRoutes)
 
-	if m.dataDevice != "" {
+	if m.parentDevice != "" {
 		m.logCtx.WithFields(logrus.Fields{
-			"noEncapDevice": m.dataDevice,
-			"routes":        noEncapRoutes,
+			"parentDevice": m.parentDevice,
+			"routes":       noEncapRoutes,
 		}).Debug("Route manager sending unencapsulated L3 updates")
-		m.routeTable.SetRoutes(m.routeClassSameSubnet, m.dataDevice, noEncapRoutes)
+		m.routeTable.SetRoutes(m.routeClassSameSubnet, m.parentDevice, noEncapRoutes)
 	} else {
-		m.logCtx.Debug("Route manager not sending unencapsulated L3 updates, no data interface.")
+		m.logCtx.Debug("Route manager not sending unencapsulated L3 updates, no parent interface.")
 	}
 }
 
@@ -424,13 +425,13 @@ func noEncapRoute(ifaceName string, cidr ip.CIDR, r *proto.RouteUpdate, proto ne
 	return &noEncapRoute
 }
 
-func (m *routeManager) detectDataIface() (netlink.Link, error) {
-	dataAddr := m.dataIfaceAddr()
-	if dataAddr == "" {
-		return nil, fmt.Errorf("local data interface not yet known")
+func (m *routeManager) detectParentIface() (netlink.Link, error) {
+	parentAddr := m.parentIfaceAddr()
+	if parentAddr == "" {
+		return nil, fmt.Errorf("parent interface not yet known")
 	}
 
-	m.logCtx.WithField("address", dataAddr).Debug("Getting data interface")
+	m.logCtx.WithField("address", parentAddr).Debug("Getting parent interface")
 	links, err := m.nlHandle.LinkList()
 	if err != nil {
 		return nil, err
@@ -447,13 +448,13 @@ func (m *routeManager) detectDataIface() (netlink.Link, error) {
 			return nil, err
 		}
 		for _, addr := range addrs {
-			if addr.IPNet.IP.String() == dataAddr {
-				m.logCtx.Debugf("Found data interface: %s", link)
+			if addr.IPNet.IP.String() == parentAddr {
+				m.logCtx.Debugf("Found parent interface: %s", link)
 				return link, nil
 			}
 		}
 	}
-	return nil, fmt.Errorf("Unable to find data interface with address %s", dataAddr)
+	return nil, fmt.Errorf("Unable to find parent interface with address %s", parentAddr)
 }
 
 // KeepDeviceInSync runs in a loop and checks that the device is still correctly configured, and updates it if necessary.
@@ -462,7 +463,7 @@ func (m *routeManager) KeepDeviceInSync(
 	mtu int,
 	xsumBroken bool,
 	wait time.Duration,
-	dataIfaceC chan string,
+	parentIfaceC chan string,
 	getDevice func(netlink.Link) (netlink.Link, string, error),
 ) {
 	m.logCtx.WithFields(logrus.Fields{
@@ -472,7 +473,7 @@ func (m *routeManager) KeepDeviceInSync(
 		"wait":       wait,
 	}).Info("Tunnel device thread started.")
 	logNextSuccess := true
-	dataIface := ""
+	parentIface := ""
 
 	sleepMonitoringChans := func(maxDuration time.Duration) {
 		timer := time.NewTimer(maxDuration)
@@ -487,22 +488,22 @@ func (m *routeManager) KeepDeviceInSync(
 	}
 
 	for ctx.Err() == nil {
-		if m.dataIfaceAddr() == "" {
+		if m.parentIfaceAddr() == "" {
 			m.logCtx.Debug("Missing local information, retrying...")
 			sleepMonitoringChans(10 * time.Second)
 			continue
 		}
 
-		dataDevice, err := m.detectDataIface()
+		parentDevice, err := m.detectParentIface()
 		if err != nil {
-			m.logCtx.WithError(err).Warn("Failed to find data device, retrying...")
+			m.logCtx.WithError(err).Warn("Failed to find parent device, retrying...")
 			sleepMonitoringChans(1 * time.Second)
 			continue
 		}
 
-		link, addr, err := getDevice(dataDevice)
+		link, addr, err := getDevice(parentDevice)
 		if err != nil {
-			m.logCtx.WithError(err).Warn("Failed to find data device, retrying...")
+			m.logCtx.WithError(err).Warn("Failed to get tunnel device, retrying...")
 			sleepMonitoringChans(1 * time.Second)
 			continue
 		}
@@ -516,14 +517,14 @@ func (m *routeManager) KeepDeviceInSync(
 			continue
 		}
 
-		newDataIface := dataDevice.Attrs().Name
-		if newDataIface != dataIface {
+		newParentIface := parentDevice.Attrs().Name
+		if newParentIface != parentIface {
 			// Send a message back to the main loop to tell it to update the
 			// routing tables.
-			m.logCtx.Infof("data device changed from %q to %q", dataIface, newDataIface)
+			m.logCtx.Infof("parent device changed from %q to %q", parentIface, newParentIface)
 			select {
-			case dataIfaceC <- newDataIface:
-				dataIface = newDataIface
+			case parentIfaceC <- newParentIface:
+				parentIface = newParentIface
 			case <-m.tunnelChangedC:
 				m.logCtx.Info("Tunnel changed; restarting configuration.")
 				continue
