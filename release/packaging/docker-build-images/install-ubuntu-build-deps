@@ -1,31 +1,32 @@
-#!/usr/bin/env bash
+#!/bin/bash
 
-# shellcheck disable=SC1091
-
-set -x # Print commands as they're run
+set -u # Error on unset variables
 set -e # Exit immediately if a command returns non-zero
+
+export DEBIAN_FRONTEND=noninteractive
 
 apt-get -q update
 
-DEBIAN_FRONTEND=noninteractive apt-get install -y -q \
-    build-essential \
-    debhelper \
-    devscripts \
-    dh-python \
-    git \
-    libdatrie1 \
-    libdbus-1-dev \
-    libgmp-dev \
-    libidn11-dev \
-    libnetfilter-conntrack-dev \
-    libpcap-dev \
-    libyajl2 \
-    m4 \
-    nettle-dev \
-    python-all \
-    python-setuptools \
-    python3-all \
-    python3-setuptools \
+packages=(
+    build-essential
+    debhelper
+    devscripts
+    dh-python
+    git
+    libdatrie1
+    libdbus-1-dev
+    libgmp-dev
+    libidn11-dev
+    libnetfilter-conntrack-dev
+    libpcap-dev
+    libyajl2
+    m4
+    nettle-dev
+    python3-all
+    python3-setuptools
     texinfo
+)
+
+apt-get install -y -q "${packages[@]}"
 
 apt-get clean -y
