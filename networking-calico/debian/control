@@ -1,8 +1,8 @@
 Source: networking-calico
 Section: net
 Priority: optional
-Maintainer: Neil Jerram <neil@projectcalico.org>
-Build-Depends: debhelper (>= 8.0.0), base-files (>= 11.1~) | dh-systemd, dh-python, python3-all, python3-setuptools
+Maintainer: Project Calico Maintainers <maintainers@projectcalico.org>
+Build-Depends: debhelper-compat (= 12), dh-python, python3-all, python3-setuptools
 Standards-Version: 3.9.4
 
 Package: calico-compute

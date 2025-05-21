@@ -1,6 +1,6 @@
-FROM ubuntu:focal
+FROM ppc64le/ubuntu:noble
 LABEL org.opencontainers.image.authors="Daniel Fox <dan.fox@tigera.io>"
-ENV STREAM=focal
+ENV STREAM=noble
 
 RUN \
     --mount=type=cache,target=/var/cache/apt/archives \
