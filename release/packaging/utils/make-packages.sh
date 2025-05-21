@@ -58,7 +58,7 @@ for package_type in "$@"; do
                 if ${release}; then
                         changelog_message="${NAME} v${debver} (from Git commit ${sha})."
                 else
-                        changelog_message=" Development snapshot (from Git commit ${sha})."
+                        changelog_message="Development snapshot (from Git commit ${sha})."
                 fi
                 rm -f debian/changelog debian/changelog.dch
                 dch --controlmaint --create --package "${PKG_NAME}" -v "${DEB_EPOCH}${debver}-$series" "${changelog_message}"
