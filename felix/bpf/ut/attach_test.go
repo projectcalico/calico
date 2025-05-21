@@ -823,21 +823,22 @@ func TestAttachWithMultipleWorkloadUpdate(t *testing.T) {
 func TestRepeatedAttach(t *testing.T) {
 	RegisterTestingT(t)
 
-	iface, veth := createVeth()
+	iface := createVethName("workloadep1")
 	defer func() {
-		deleteLink(veth)
+		deleteLink(iface)
 	}()
 
+	ifaceName := iface.Attrs().Name
 	ap := &tc.AttachPoint{
 		AttachPoint: bpf.AttachPoint{
-			Iface: iface,
+			Iface: ifaceName,
 			Hook:  hook.Ingress,
 		},
-		HostIPv4: net.IPv4(8, 8, 8, 8),
-		IntfIPv4: net.IPv4(7, 7, 7, 7),
+		HostIPv4: net.IPv4(1, 2, 3, 4),
+		IntfIPv4: net.IPv4(1, 6, 6, 6),
 	}
 
-	_, err := tc.EnsureQdisc(iface)
+	_, err := tc.EnsureQdisc(ifaceName)
 	Expect(err).NotTo(HaveOccurred(), "failed to create qdisc")
 	res, err := ap.AttachProgram()
 	Expect(err).NotTo(HaveOccurred(), "failed to attach preamble")
@@ -853,6 +854,52 @@ func TestRepeatedAttach(t *testing.T) {
 		Expect(tcRes.Prio()).To(Equal(prio))
 		Expect(tcRes.Handle()).To(Equal(handle))
 	}
+	// We have a BPF program attached to ingress hook and nothing on the egress hook.
+	// Now when there is a workload update, ingress program must be replaced and new program
+	// must be attached to egress.
+	bpfmaps, err := bpfmap.CreateBPFMaps(false)
+	Expect(err).NotTo(HaveOccurred())
+
+	bpfEpMgr, err := newBPFTestEpMgr(
+		&linux.Config{
+			Hostname:              "uthost",
+			BPFLogLevel:           "off",
+			BPFDataIfacePattern:   regexp.MustCompile("^hostep[12]"),
+			VXLANMTU:              1000,
+			VXLANPort:             1234,
+			BPFNodePortDSREnabled: false,
+			RulesConfig: rules.Config{
+				EndpointToHostAction: "RETURN",
+			},
+			BPFExtToServiceConnmark: 0,
+			FeatureGates: map[string]string{
+				"BPFConnectTimeLoadBalancingWorkaround": "enabled",
+			},
+			BPFPolicyDebugEnabled: true,
+		},
+		bpfmaps,
+		regexp.MustCompile("^workloadep[123]"),
+	)
+	Expect(err).NotTo(HaveOccurred())
+	bpfEpMgr.OnUpdate(&proto.HostMetadataUpdate{Hostname: "uthost", Ipv4Addr: "1.2.3.4"})
+	bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("workloadep1", ifacemonitor.StateUp, iface.Attrs().Index))
+	bpfEpMgr.OnUpdate(linux.NewIfaceAddrsUpdate("workloadep1", "1.6.6.6"))
+	bpfEpMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
+		Id: &proto.WorkloadEndpointID{
+			OrchestratorId: "k8s",
+			WorkloadId:     "workloadep1",
+			EndpointId:     "workloadep1",
+		},
+		Endpoint: &proto.WorkloadEndpoint{Name: "workloadep1"},
+	})
+	err = bpfEpMgr.CompleteDeferredWork()
+	Expect(err).NotTo(HaveOccurred())
+
+	// we update the state only after both ingress and egress qdiscs are same.
+	valid, newPrio, newHandle := bpfEpMgr.GetIfaceQDiscInfo("workloadep1")
+	Expect(valid).To(BeTrue())
+	Expect(newPrio).To(Equal(prio))
+	Expect(newHandle).To(Equal(handle))
 }
 
 func TestLogFilters(t *testing.T) {
