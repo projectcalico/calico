@@ -108,11 +108,8 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 				EndpointToHostAction: "RETURN",
 			},
 			BPFExtToServiceConnmark: 0,
-			FeatureGates: map[string]string{
-				"BPFConnectTimeLoadBalancingWorkaround": "enabled",
-			},
-			BPFPolicyDebugEnabled: true,
-			BPFIpv6Enabled:        ipv6Enabled,
+			BPFPolicyDebugEnabled:   true,
+			BPFIpv6Enabled:          ipv6Enabled,
 		},
 		bpfmaps,
 		regexp.MustCompile("^workloadep[0123]"),
@@ -557,10 +554,7 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 					EndpointToHostAction: "RETURN",
 				},
 				BPFExtToServiceConnmark: 0,
-				FeatureGates: map[string]string{
-					"BPFConnectTimeLoadBalancingWorkaround": "enabled",
-				},
-				BPFPolicyDebugEnabled: true,
+				BPFPolicyDebugEnabled:   true,
 			},
 			bpfmaps,
 			regexp.MustCompile("^workloadep[123]"),
@@ -686,10 +680,7 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 					EndpointToHostAction: "RETURN",
 				},
 				BPFExtToServiceConnmark: 0,
-				FeatureGates: map[string]string{
-					"BPFConnectTimeLoadBalancingWorkaround": "enabled",
-				},
-				BPFPolicyDebugEnabled: true,
+				BPFPolicyDebugEnabled:   true,
 			},
 			bpfmaps,
 			regexp.MustCompile("^workloadep[123]"),
@@ -746,10 +737,7 @@ func TestAttachWithMultipleWorkloadUpdate(t *testing.T) {
 				EndpointToHostAction: "RETURN",
 			},
 			BPFExtToServiceConnmark: 0,
-			FeatureGates: map[string]string{
-				"BPFConnectTimeLoadBalancingWorkaround": "enabled",
-			},
-			BPFPolicyDebugEnabled: true,
+			BPFPolicyDebugEnabled:   true,
 		},
 		bpfmaps,
 		regexp.MustCompile("^workloadep[123]"),
@@ -872,10 +860,7 @@ func TestRepeatedAttach(t *testing.T) {
 				EndpointToHostAction: "RETURN",
 			},
 			BPFExtToServiceConnmark: 0,
-			FeatureGates: map[string]string{
-				"BPFConnectTimeLoadBalancingWorkaround": "enabled",
-			},
-			BPFPolicyDebugEnabled: true,
+			BPFPolicyDebugEnabled:   true,
 		},
 		bpfmaps,
 		regexp.MustCompile("^workloadep[123]"),
@@ -921,11 +906,8 @@ func TestLogFilters(t *testing.T) {
 			EndpointToHostAction: "RETURN",
 		},
 		BPFExtToServiceConnmark: 0,
-		FeatureGates: map[string]string{
-			"BPFConnectTimeLoadBalancingWorkaround": "enabled",
-		},
-		BPFPolicyDebugEnabled: true,
-		BPFLogFilters:         map[string]string{"hostep1": "tcp"},
+		BPFPolicyDebugEnabled:   true,
+		BPFLogFilters:           map[string]string{"hostep1": "tcp"},
 	}
 
 	bpfEpMgr, err := newBPFTestEpMgr(
