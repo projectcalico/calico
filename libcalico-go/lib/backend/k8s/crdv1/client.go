@@ -36,11 +36,11 @@ import (
 	adminpolicyclient "sigs.k8s.io/network-policy-api/pkg/client/clientset/versioned/typed/apis/v1alpha1"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
+	calischeme "github.com/projectcalico/calico/libcalico-go/lib/apis/crd.projectcalico.org/v1/scheme"
 	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/resources"
-	calischeme "github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/scheme"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
@@ -84,7 +84,7 @@ func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 		return nil, err
 	}
 
-	crdClientV3, err := buildCRDClientV3(*config)
+	crdClientV1, err := buildCRDClientV1(*config)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to build V1 CRD client: %v", err)
 	}
@@ -96,7 +96,7 @@ func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 
 	kubeClient := &KubeClient{
 		ClientSet:             cs,
-		crdClientV1:           crdClientV3,
+		crdClientV1:           crdClientV1,
 		k8sAdminPolicyClient:  k8sAdminPolicyClient,
 		disableNodePoll:       ca.K8sDisableNodePoll,
 		clientsByResourceKind: make(map[string]resources.K8sResourceClient),
@@ -109,25 +109,25 @@ func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 		reflect.TypeOf(model.ResourceKey{}),
 		reflect.TypeOf(model.ResourceListOptions{}),
 		apiv3.KindIPPool,
-		resources.NewIPPoolClient(cs, crdClientV3),
+		resources.NewIPPoolClient(cs, crdClientV1),
 	)
 	kubeClient.registerResourceClient(
 		reflect.TypeOf(model.ResourceKey{}),
 		reflect.TypeOf(model.ResourceListOptions{}),
 		apiv3.KindIPReservation,
-		resources.NewIPReservationClient(cs, crdClientV3),
+		resources.NewIPReservationClient(cs, crdClientV1),
 	)
 	kubeClient.registerResourceClient(
 		reflect.TypeOf(model.ResourceKey{}),
 		reflect.TypeOf(model.ResourceListOptions{}),
 		apiv3.KindGlobalNetworkPolicy,
-		resources.NewGlobalNetworkPolicyClient(cs, crdClientV3),
+		resources.NewGlobalNetworkPolicyClient(cs, crdClientV1),
 	)
 	kubeClient.registerResourceClient(
 		reflect.TypeOf(model.ResourceKey{}),
 		reflect.TypeOf(model.ResourceListOptions{}),
 		apiv3.KindStagedGlobalNetworkPolicy,
-		resources.NewStagedGlobalNetworkPolicyClient(cs, crdClientV3),
+		resources.NewStagedGlobalNetworkPolicyClient(cs, crdClientV1),
 	)
 	kubeClient.registerResourceClient(
 		reflect.TypeOf(model.ResourceKey{}),
@@ -145,19 +145,19 @@ func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 		reflect.TypeOf(model.ResourceKey{}),
 		reflect.TypeOf(model.ResourceListOptions{}),
 		apiv3.KindGlobalNetworkSet,
-		resources.NewGlobalNetworkSetClient(cs, crdClientV3),
+		resources.NewGlobalNetworkSetClient(cs, crdClientV1),
 	)
 	kubeClient.registerResourceClient(
 		reflect.TypeOf(model.ResourceKey{}),
 		reflect.TypeOf(model.ResourceListOptions{}),
 		apiv3.KindNetworkPolicy,
-		resources.NewNetworkPolicyClient(cs, crdClientV3),
+		resources.NewNetworkPolicyClient(cs, crdClientV1),
 	)
 	kubeClient.registerResourceClient(
 		reflect.TypeOf(model.ResourceKey{}),
 		reflect.TypeOf(model.ResourceListOptions{}),
 		apiv3.KindStagedNetworkPolicy,
-		resources.NewStagedNetworkPolicyClient(cs, crdClientV3),
+		resources.NewStagedNetworkPolicyClient(cs, crdClientV1),
 	)
 	kubeClient.registerResourceClient(
 		reflect.TypeOf(model.ResourceKey{}),
@@ -169,7 +169,7 @@ func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 		reflect.TypeOf(model.ResourceKey{}),
 		reflect.TypeOf(model.ResourceListOptions{}),
 		apiv3.KindStagedKubernetesNetworkPolicy,
-		resources.NewStagedKubernetesNetworkPolicyClient(cs, crdClientV3),
+		resources.NewStagedKubernetesNetworkPolicyClient(cs, crdClientV1),
 	)
 	kubeClient.registerResourceClient(
 		reflect.TypeOf(model.ResourceKey{}),
@@ -181,37 +181,37 @@ func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 		reflect.TypeOf(model.ResourceKey{}),
 		reflect.TypeOf(model.ResourceListOptions{}),
 		apiv3.KindNetworkSet,
-		resources.NewNetworkSetClient(cs, crdClientV3),
+		resources.NewNetworkSetClient(cs, crdClientV1),
 	)
 	kubeClient.registerResourceClient(
 		reflect.TypeOf(model.ResourceKey{}),
 		reflect.TypeOf(model.ResourceListOptions{}),
 		apiv3.KindTier,
-		resources.NewTierClient(cs, crdClientV3),
+		resources.NewTierClient(cs, crdClientV1),
 	)
 	kubeClient.registerResourceClient(
 		reflect.TypeOf(model.ResourceKey{}),
 		reflect.TypeOf(model.ResourceListOptions{}),
 		apiv3.KindBGPPeer,
-		resources.NewBGPPeerClient(cs, crdClientV3),
+		resources.NewBGPPeerClient(cs, crdClientV1),
 	)
 	kubeClient.registerResourceClient(
 		reflect.TypeOf(model.ResourceKey{}),
 		reflect.TypeOf(model.ResourceListOptions{}),
 		apiv3.KindBGPConfiguration,
-		resources.NewBGPConfigClient(cs, crdClientV3),
+		resources.NewBGPConfigClient(cs, crdClientV1),
 	)
 	kubeClient.registerResourceClient(
 		reflect.TypeOf(model.ResourceKey{}),
 		reflect.TypeOf(model.ResourceListOptions{}),
 		apiv3.KindFelixConfiguration,
-		resources.NewFelixConfigClient(cs, crdClientV3),
+		resources.NewFelixConfigClient(cs, crdClientV1),
 	)
 	kubeClient.registerResourceClient(
 		reflect.TypeOf(model.ResourceKey{}),
 		reflect.TypeOf(model.ResourceListOptions{}),
 		apiv3.KindClusterInformation,
-		resources.NewClusterInfoClient(cs, crdClientV3),
+		resources.NewClusterInfoClient(cs, crdClientV1),
 	)
 	kubeClient.registerResourceClient(
 		reflect.TypeOf(model.ResourceKey{}),
@@ -229,7 +229,7 @@ func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 		reflect.TypeOf(model.ResourceKey{}),
 		reflect.TypeOf(model.ResourceListOptions{}),
 		apiv3.KindHostEndpoint,
-		resources.NewHostEndpointClient(cs, crdClientV3),
+		resources.NewHostEndpointClient(cs, crdClientV1),
 	)
 	kubeClient.registerResourceClient(
 		reflect.TypeOf(model.ResourceKey{}),
@@ -241,13 +241,13 @@ func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 		reflect.TypeOf(model.ResourceKey{}),
 		reflect.TypeOf(model.ResourceListOptions{}),
 		apiv3.KindKubeControllersConfiguration,
-		resources.NewKubeControllersConfigClient(cs, crdClientV3),
+		resources.NewKubeControllersConfigClient(cs, crdClientV1),
 	)
 	kubeClient.registerResourceClient(
 		reflect.TypeOf(model.ResourceKey{}),
 		reflect.TypeOf(model.ResourceListOptions{}),
 		apiv3.KindCalicoNodeStatus,
-		resources.NewCalicoNodeStatusClient(cs, crdClientV3),
+		resources.NewCalicoNodeStatusClient(cs, crdClientV1),
 	)
 	kubeClient.registerResourceClient(
 		reflect.TypeOf(model.ResourceKey{}),
@@ -259,19 +259,19 @@ func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 		reflect.TypeOf(model.ResourceKey{}),
 		reflect.TypeOf(model.ResourceListOptions{}),
 		libapiv3.KindIPAMConfig,
-		resources.NewIPAMConfigClient(cs, crdClientV3),
+		resources.NewIPAMConfigClient(cs, crdClientV1),
 	)
 	kubeClient.registerResourceClient(
 		reflect.TypeOf(model.ResourceKey{}),
 		reflect.TypeOf(model.ResourceListOptions{}),
 		libapiv3.KindBlockAffinity,
-		resources.NewBlockAffinityClient(cs, crdClientV3),
+		resources.NewBlockAffinityClient(cs, crdClientV1),
 	)
 	kubeClient.registerResourceClient(
 		reflect.TypeOf(model.ResourceKey{}),
 		reflect.TypeOf(model.ResourceListOptions{}),
 		apiv3.KindBGPFilter,
-		resources.NewBGPFilterClient(cs, crdClientV3),
+		resources.NewBGPFilterClient(cs, crdClientV1),
 	)
 
 	if !ca.K8sUsePodCIDR {
@@ -281,25 +281,25 @@ func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 			reflect.TypeOf(model.BlockAffinityKey{}),
 			reflect.TypeOf(model.BlockAffinityListOptions{}),
 			libapiv3.KindBlockAffinity,
-			resources.NewBlockAffinityClient(cs, crdClientV3),
+			resources.NewBlockAffinityClient(cs, crdClientV1),
 		)
 		kubeClient.registerResourceClient(
 			reflect.TypeOf(model.BlockKey{}),
 			reflect.TypeOf(model.BlockListOptions{}),
 			libapiv3.KindIPAMBlock,
-			resources.NewIPAMBlockClient(cs, crdClientV3),
+			resources.NewIPAMBlockClient(cs, crdClientV1),
 		)
 		kubeClient.registerResourceClient(
 			reflect.TypeOf(model.IPAMHandleKey{}),
 			reflect.TypeOf(model.IPAMHandleListOptions{}),
 			libapiv3.KindIPAMHandle,
-			resources.NewIPAMHandleClient(cs, crdClientV3),
+			resources.NewIPAMHandleClient(cs, crdClientV1),
 		)
 		kubeClient.registerResourceClient(
 			reflect.TypeOf(model.IPAMConfigKey{}),
 			nil,
 			libapiv3.KindIPAMConfig,
-			resources.NewIPAMConfigClient(cs, crdClientV3),
+			resources.NewIPAMConfigClient(cs, crdClientV1),
 		)
 	}
 
@@ -541,25 +541,6 @@ func (c *KubeClient) Close() error {
 // buildK8SAdminPolicyClient builds a RESTClient configured to interact (Baseline) Admin Network Policy.
 func buildK8SAdminPolicyClient(cfg *rest.Config) (*adminpolicyclient.PolicyV1alpha1Client, error) {
 	return adminpolicyclient.NewForConfig(cfg)
-}
-
-func buildCRDClientV3(cfg rest.Config) (*rest.RESTClient, error) {
-	cfg.GroupVersion = &schema.GroupVersion{
-		Group:   "projectcalico.org",
-		Version: "v3",
-	}
-	cfg.APIPath = "/apis"
-	cfg.ContentType = runtime.ContentTypeJSON
-	cfg.NegotiatedSerializer = serializer.WithoutConversionCodecFactory{CodecFactory: scheme.Codecs}
-
-	cli, err := rest.RESTClientFor(&cfg)
-	if err != nil {
-		return nil, err
-	}
-
-	calischeme.AddCalicoResourcesToScheme()
-
-	return cli, nil
 }
 
 // buildCRDClientV1 builds a RESTClient configured to interact with Calico CustomResourceDefinitions

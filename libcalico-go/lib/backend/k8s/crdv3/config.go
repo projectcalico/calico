@@ -4,13 +4,32 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/projectcalico/api/pkg/client/clientset_generated/clientset/scheme"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/resources"
 	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 )
+
+func v3RESTClient(cfg *rest.Config) (*rest.RESTClient, error) {
+	cfg.GroupVersion = &schema.GroupVersion{
+		Group:   "projectcalico.org",
+		Version: "v3",
+	}
+	cfg.APIPath = "/apis"
+	cfg.ContentType = runtime.ContentTypeJSON
+	cfg.NegotiatedSerializer = serializer.WithoutConversionCodecFactory{CodecFactory: scheme.Codecs}
+
+	cli, err := rest.RESTClientFor(cfg)
+	if err != nil {
+		return nil, err
+	}
+	return cli, nil
+}
 
 func restConfig(ca *apiconfig.CalicoAPIConfigSpec) (*rest.Config, error) {
 	// Use the kubernetes client code to load the kubeconfig file and combine it with the overrides.
