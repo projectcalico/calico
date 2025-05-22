@@ -128,7 +128,7 @@ var _ = testutils.E2eDatastoreDescribe("BGPFilter tests", testutils.DatastoreAll
 						Spec:       spec2,
 					}, options.SetOptions{})
 					Expect(outError).To(HaveOccurred())
-					Expect(outError.Error()).To(Equal("resource already exists: BGPFilter(" + name1 + ")"))
+					Expect(outError.Error()).To(ContainSubstring("resource already exists: BGPFilter(" + name1 + ") with error:"))
 
 					By("Getting BGPFilter (name1) and comparing the output against spec1")
 					res, outError := c.BGPFilter().Get(ctx, name1, options.GetOptions{})
