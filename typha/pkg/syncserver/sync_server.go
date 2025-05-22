@@ -346,7 +346,11 @@ func (s *Server) serve(cxt context.Context) {
 				"keyFile":  s.config.KeyFile,
 			}).WithError(tlsErr).Panic("Failed to load certificate and key")
 		}
-		tlsConfig := calicotls.NewTLSConfig()
+		var tlsConfig *tls.Config
+		tlsConfig, err = calicotls.NewTLSConfig()
+		if err != nil {
+			logCxt.WithError(err).Panic("Failed to create TLS Config")
+		}
 		tlsConfig.Certificates = []tls.Certificate{cert}
 
 		// Arrange for server to verify the clients' certificates.

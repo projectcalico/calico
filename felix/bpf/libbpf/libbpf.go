@@ -24,7 +24,7 @@ import (
 
 	"golang.org/x/sys/unix"
 
-	"github.com/projectcalico/calico/felix/bpf/bpfutils"
+	"github.com/projectcalico/calico/felix/bpf/utils"
 )
 
 // #cgo CFLAGS: -I${SRCDIR}/../../bpf-gpl/libbpf/src -I${SRCDIR}/../../bpf-gpl/libbpf/include/uapi -I${SRCDIR}/../../bpf-gpl -Werror
@@ -112,7 +112,7 @@ func (m *Map) IsJumpMap() bool {
 }
 
 func OpenObject(filename string) (*Obj, error) {
-	bpfutils.IncreaseLockedMemoryQuota()
+	utils.IncreaseLockedMemoryQuota()
 	cFilename := C.CString(filename)
 	defer C.free(unsafe.Pointer(cFilename))
 	obj, err := C.bpf_obj_open(cFilename)
@@ -195,7 +195,7 @@ func DetachCTLBProgramsLegacy(cgroup string) error {
 }
 
 // AttachClassifier return the program id and pref and handle of the qdisc
-func (o *Obj) AttachClassifier(secName, ifName string, ingress bool, prio int) (int, int, int, error) {
+func (o *Obj) AttachClassifier(secName, ifName string, ingress bool, prio, handle int) (int, int, int, error) {
 	cSecName := C.CString(secName)
 	cIfName := C.CString(ifName)
 	defer C.free(unsafe.Pointer(cSecName))
@@ -205,7 +205,7 @@ func (o *Obj) AttachClassifier(secName, ifName string, ingress bool, prio int) (
 		return -1, -1, -1, err
 	}
 
-	ret, err := C.bpf_tc_program_attach(o.obj, cSecName, C.int(ifIndex), C.bool(ingress), C.int(prio))
+	ret, err := C.bpf_tc_program_attach(o.obj, cSecName, C.int(ifIndex), C.bool(ingress), C.int(prio), C.int(handle))
 	if err != nil {
 		return -1, -1, -1, fmt.Errorf("error attaching tc program %w", err)
 	}
@@ -503,6 +503,7 @@ func (t *TcGlobalData) Set(m *Map) error {
 		C.ushort(t.Profiling),
 		C.uint(t.NatIn),
 		C.uint(t.NatOut),
+		C.uint(t.OverlayTunnelID),
 		C.uint(t.LogFilterJmp),
 		&cJumps[0], // it is safe because we hold the reference here until we return.
 		&cJumpsV6[0],

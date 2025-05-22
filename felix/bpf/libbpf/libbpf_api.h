@@ -114,12 +114,16 @@ out:
         return err;
 }
 
-struct bpf_tc_opts bpf_tc_program_attach(struct bpf_object *obj, char *secName, int ifIndex, bool ingress, int prio)
+struct bpf_tc_opts bpf_tc_program_attach(struct bpf_object *obj, char *secName, int ifIndex, bool ingress, int prio, int handle)
 {
 	DECLARE_LIBBPF_OPTS(bpf_tc_hook, hook,
 			.attach_point = ingress ? BPF_TC_INGRESS : BPF_TC_EGRESS,
 			);
 	DECLARE_LIBBPF_OPTS(bpf_tc_opts, attach, .priority=prio,);
+	if (prio) {
+		attach.handle = handle;
+		attach.flags = BPF_TC_F_REPLACE;
+	}
 
 	attach.prog_fd = bpf_program__fd(bpf_object__find_program_by_name(obj, secName));
 	if (attach.prog_fd < 0) {
@@ -220,6 +224,7 @@ void bpf_tc_set_globals(struct bpf_map *map,
 			ushort profiling,
 			uint natin,
 			uint natout,
+			uint overlay_tunnel_id,
 			uint log_filter_jmp,
 			uint *jumps,
 			uint *jumps6)
@@ -235,6 +240,7 @@ void bpf_tc_set_globals(struct bpf_map *map,
 		.profiling = profiling,
 		.natin_idx = natin,
 		.natout_idx = natout,
+		.overlay_tunnel_id = overlay_tunnel_id,
 		.log_filter_jmp = log_filter_jmp,
 	};
 

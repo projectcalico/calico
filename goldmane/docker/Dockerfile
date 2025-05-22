@@ -15,6 +15,14 @@ LABEL org.opencontainers.image.vendor="Project Calico"
 LABEL org.opencontainers.image.version="${GIT_VERSION}"
 LABEL org.opencontainers.image.licenses="Apache-2.0"
 
+LABEL description="Goldmane is a flow aggregation service."
+LABEL maintainer="maintainers@tigera.io"
+LABEL name="Goldmane"
+LABEL release=1
+LABEL summary="Goldmane is a flow aggregation service."
+LABEL vendor="Project Calico"
+LABEL version="${GIT_VERSION}"
+
 USER 10001:10001
 
 CMD ["/goldmane"]

@@ -74,6 +74,14 @@ LABEL org.opencontainers.image.vendor="Project Calico"
 LABEL org.opencontainers.image.version="${GIT_VERSION}"
 LABEL org.opencontainers.image.licenses="Apache-2.0"
 
+LABEL description="Whisker provides a UI to view flows."
+LABEL maintainer="maintainers@tigera.io"
+LABEL name="Whisker"
+LABEL release=1
+LABEL summary="Whisker provides a UI to view flows."
+LABEL vendor="Project Calico"
+LABEL version="${GIT_VERSION}"
+
 COPY --from=source / /
 
 USER 10001:10001

@@ -317,8 +317,6 @@ static CALI_BPF_INLINE void calico_tc_process_ct_lookup(struct cali_tc_ctx *ctx)
 			 ct_result_rc(ctx->state->ct_result.rc) == CALI_CT_ESTABLISHED_BYPASS) &&
 			ctx->state->ct_result.flags & CALI_CT_FLAG_VIA_NAT_IF) {
 		CALI_DEBUG("should route via bpfnatout");
-		ctx->fwd.mark |= CALI_SKB_MARK_TO_NAT_IFACE_OUT;
-		/* bpfnatout need to process the packet */
 		ct_result_set_rc(ctx->state->ct_result.rc, CALI_CT_ESTABLISHED);
 	}
 

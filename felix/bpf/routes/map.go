@@ -82,6 +82,7 @@ const (
 	FlagNoDSR           Flags = 0x80
 	FlagBlackHoleDrop   Flags = 0x100
 	FlagBlackHoleReject Flags = 0x200
+	FlagVXLAN           Flags = 0x400
 	FlagVMWorkload      Flags = 0x800
 
 	FlagsUnknown            Flags = 0

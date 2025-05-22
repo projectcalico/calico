@@ -23,10 +23,12 @@ import (
 	. "github.com/onsi/gomega"
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s"
 	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
@@ -403,6 +405,34 @@ var _ = testutils.E2eDatastoreDescribe("GlobalNetworkPolicy tests", testutils.Da
 		Entry("GlobalNetworkPolicy without default tier prefix", "netpol", "default.netpol"),
 		Entry("GlobalNetworkPolicy with default tier prefix", "default.netpol", "netpol"),
 	)
+
+	Describe("GlobalNetworkPolicy without name on the projectcalico.org annotation", func() {
+		It("Should return the name without default prefix", func() {
+			if config.Spec.DatastoreType == apiconfig.Kubernetes {
+				config, _, err := k8s.CreateKubernetesClientset(&config.Spec)
+				Expect(err).NotTo(HaveOccurred())
+				config.ContentType = "application/json"
+				cli, err := ctrlclient.New(config, ctrlclient.Options{})
+				Expect(err).NotTo(HaveOccurred())
+
+				// Create v1 crd with empty metadata annotation name
+				annotations := map[string]string{}
+				annotations["projectcalico.org/metadata"] = "{}"
+				policy := &apiv3.GlobalNetworkPolicy{
+					ObjectMeta: metav1.ObjectMeta{
+						Annotations: annotations,
+						Name:        "default.prefix-test-policy"},
+					Spec: apiv3.GlobalNetworkPolicySpec{},
+				}
+				err = cli.Create(context.Background(), policy)
+				Expect(err).NotTo(HaveOccurred())
+
+				// We should be able to get it without the default. prefix
+				_, err = c.GlobalNetworkPolicies().Get(ctx, "prefix-test-policy", options.GetOptions{})
+				Expect(err).ToNot(HaveOccurred())
+			}
+		})
+	})
 
 	DescribeTable("GlobalNetworkPolicy name validation tests",
 		func(policyName string, tier string, expectError bool) {
