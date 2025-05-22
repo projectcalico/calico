@@ -100,11 +100,6 @@ func newIPIPManagerWithSims(
 	nlHandle netlinkHandle,
 ) *ipipManager {
 
-	if ipVersion != 4 {
-		logrus.Errorf("IPIP manager only supports IPv4")
-		return nil
-	}
-
 	m := &ipipManager{
 		ipsetsDataplane: ipsetsDataplane,
 		ipSetMetadata: ipsets.IPSetMetadata{
@@ -148,8 +143,8 @@ func newIPIPManagerWithSims(
 
 func (m *ipipManager) OnUpdate(protoBufMsg interface{}) {
 	switch msg := protoBufMsg.(type) {
-	case *proto.HostMetadataUpdate:
-		m.logCtx.WithField("hostname", msg.Hostname).Debug("Host update/create")
+	/*case *proto.HostMetadataUpdate:
+		m.logCtx.WithField("marmar hostname", msg.Hostname).Debug("Host update/create")
 		if msg.Hostname == m.hostname {
 			m.routeMgr.updateParentIfaceAddr(msg.Ipv4Addr)
 		}
@@ -157,7 +152,23 @@ func (m *ipipManager) OnUpdate(protoBufMsg interface{}) {
 		m.ipSetDirty = true
 		m.maybeUpdateRoutes()
 	case *proto.HostMetadataRemove:
-		m.logCtx.WithField("hostname", msg.Hostname).Debug("Host removed")
+		m.logCtx.WithField("marmar hostname", msg.Hostname).Debug("Host removed")
+		if msg.Hostname == m.hostname {
+			m.routeMgr.updateParentIfaceAddr("")
+		}
+		delete(m.activeHostnameToIP, msg.Hostname)
+		m.ipSetDirty = true
+		m.maybeUpdateRoutes()*/
+	case *proto.HostMetadataV4V6Update:
+		m.logCtx.WithField("marma1 hostname", msg.Hostname).Debug("Host update/create")
+		if msg.Hostname == m.hostname {
+			m.routeMgr.updateParentIfaceAddr(msg.Ipv4Addr)
+		}
+		m.activeHostnameToIP[msg.Hostname] = msg.Ipv4Addr
+		m.ipSetDirty = true
+		m.maybeUpdateRoutes()
+	case *proto.HostMetadataV4V6Remove:
+		m.logCtx.WithField("marmar1 hostname", msg.Hostname).Debug("Host removed")
 		if msg.Hostname == m.hostname {
 			m.routeMgr.updateParentIfaceAddr("")
 		}
@@ -165,6 +176,7 @@ func (m *ipipManager) OnUpdate(protoBufMsg interface{}) {
 		m.ipSetDirty = true
 		m.maybeUpdateRoutes()
 	default:
+		logrus.Infof("nina %#v", msg)
 		if m.dpConfig.ProgramRoutes {
 			m.routeMgr.OnUpdate(msg)
 		}
