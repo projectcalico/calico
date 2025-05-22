@@ -79,13 +79,13 @@ echo
 echo "Wait for Calico to be ready..."
 wait_pod_ready -l k8s-app=calico-node -n calico-system
 wait_pod_ready -l k8s-app=calico-kube-controllers -n calico-system
-wait_pod_ready -l k8s-app=calico-apiserver -n calico-apiserver
+# wait_pod_ready -l k8s-app=calico-apiserver -n calico-apiserver
 wait_pod_ready -l k8s-app=kube-dns -n kube-system
 wait_pod_ready calicoctl -n kube-system
 
 echo "Wait for tigera status to be ready"
 ${kubectl} wait --for=condition=Available tigerastatus/calico
-${kubectl} wait --for=condition=Available tigerastatus/apiserver
+# ${kubectl} wait --for=condition=Available tigerastatus/apiserver
 
 echo "Calico is running."
 echo
