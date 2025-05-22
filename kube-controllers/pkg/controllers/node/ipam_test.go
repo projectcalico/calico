@@ -1,4 +1,4 @@
-// Copyright (c) 2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2021-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,7 +22,6 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/informers"
@@ -31,6 +30,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 
 	"github.com/projectcalico/calico/kube-controllers/pkg/config"
+	"github.com/projectcalico/calico/lib/std/log"
 	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
@@ -1752,7 +1752,7 @@ var _ = Describe("IPAM controller UTs", func() {
 
 				}
 				allBlocks = append(allBlocks, createBlock(nodePods, nodeName, blockCIDR))
-				logrus.WithField("nodeNum", nodeNum).WithField("blockCIDR", blockCIDR).Info("[TEST] Created node + block")
+				log.WithField("nodeNum", nodeNum).WithField("blockCIDR", blockCIDR).Info("[TEST] Created node + block")
 			}
 
 			// Create all the pods. This loop consumes the vast majority of the time this test takes to run.
@@ -1763,7 +1763,7 @@ var _ = Describe("IPAM controller UTs", func() {
 				Expect(err).NotTo(HaveOccurred())
 				var gotPod *v1.Pod
 				Eventually(pods).WithTimeout(time.Second).Should(Receive(&gotPod))
-				logrus.WithField("pod", p.Name).Info("[TEST] Created pod")
+				log.WithField("pod", p.Name).Info("[TEST] Created pod")
 			}
 
 			By("Sending updates for all blocks")

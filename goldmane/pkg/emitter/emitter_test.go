@@ -38,7 +38,7 @@ import (
 	"github.com/projectcalico/calico/goldmane/pkg/storage"
 	"github.com/projectcalico/calico/goldmane/pkg/types"
 	"github.com/projectcalico/calico/goldmane/proto"
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 var emt *emitter.Emitter
@@ -46,9 +46,9 @@ var emt *emitter.Emitter
 var configMapKey = ktypes.NamespacedName{Name: "flow-emitter-state", Namespace: "calico-system"}
 
 func setupTest(t *testing.T, opts ...emitter.Option) func() {
-	// Hook logrus into testing.T
+	// Hook log into testing.T
 	utils.ConfigureLogging("DEBUG")
-	logCancel := logutils.RedirectLogrusToTestingT(t)
+	logCancel := log.RedirectToTestingT(t)
 
 	// Run the emitter.
 	ctx, cancel := context.WithCancel(context.Background())

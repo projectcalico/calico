@@ -5,12 +5,10 @@ import (
 	"errors"
 	"time"
 
-	"github.com/sirupsen/logrus"
-
 	"github.com/projectcalico/calico/goldmane/pkg/storage"
 	"github.com/projectcalico/calico/goldmane/proto"
 	"github.com/projectcalico/calico/lib/std/chanutil"
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 type Stream interface {
@@ -34,7 +32,7 @@ type stream struct {
 	cancel context.CancelFunc
 
 	// rl is used to rate limit log messages that may happen frequently.
-	rl *logutils.RateLimitedLogger
+	rl *log.RateLimitedLogger
 }
 
 // Close signals to the stream manager that this stream is done and should be closed.
@@ -71,18 +69,18 @@ func (s *stream) run() {
 	for {
 		select {
 		case <-s.ctx.Done():
-			logrus.WithField("id", s.ID).Debug("Stream context done")
+			log.WithField("id", s.ID).Debug("Stream context done")
 			return
 		case b, ok := <-s.in:
 			if !ok {
-				logrus.WithField("id", s.ID).Debug("Stream input channel closed")
+				log.WithField("id", s.ID).Debug("Stream input channel closed")
 				return
 			}
 
 			b.Iter(func(f storage.FlowBuilder) bool {
 				if err := chanutil.WriteWithDeadline(s.ctx, s.out, f, 60*time.Second); err != nil {
 					// If we hit an error, indicate that we should stop iteration.
-					s.rl.WithFields(logrus.Fields{"id": s.ID}).WithError(err).Debug("Error writing flow to stream output")
+					s.rl.WithFields(log.Fields{"id": s.ID}).WithError(err).Debug("Error writing flow to stream output")
 					return true
 				}
 				// If we didn't hit an error, continue iteration.
@@ -96,7 +94,7 @@ func (s *stream) run() {
 // Note that emission of the individual Flow objects to the Stream's output channel is asynchronous.
 func (s *stream) receive(b storage.FlowProvider) {
 	// It's important that we don't block here, as this is called from the main loop.
-	logrus.WithFields(logrus.Fields{"id": s.ID}).Debug("Sending FlowProvider to stream")
+	log.WithFields(log.Fields{"id": s.ID}).Debug("Sending FlowProvider to stream")
 
 	// Send the flow to the output channel. If the channel is full, wait for a bit before giving up.
 	if err := chanutil.WriteWithDeadline(s.ctx, s.in, b, 1*time.Second); err != nil {
