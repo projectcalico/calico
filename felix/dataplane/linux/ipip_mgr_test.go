@@ -80,7 +80,7 @@ var _ = Describe("RouteManager for ipip pools", func() {
 	})
 
 	It("should configure tunnel properly", func() {
-		ipipMgr.OnUpdate(&proto.HostMetadataUpdate{
+		ipipMgr.OnUpdate(&proto.HostMetadataV4V6Update{
 			Hostname: "node1",
 			Ipv4Addr: "10.0.0.1",
 		})
@@ -153,7 +153,7 @@ var _ = Describe("RouteManager for ipip pools", func() {
 		Expect(ipSets.AddOrReplaceCalled).To(BeTrue())
 
 		By("adding host1")
-		ipipMgr.OnUpdate(&proto.HostMetadataUpdate{
+		ipipMgr.OnUpdate(&proto.HostMetadataV4V6Update{
 			Hostname: "host1",
 			Ipv4Addr: "10.0.0.1",
 		})
@@ -162,7 +162,7 @@ var _ = Describe("RouteManager for ipip pools", func() {
 		Expect(allHostsSet()).To(Equal(set.From("10.0.0.1", externalCIDR)))
 
 		By("adding host2")
-		ipipMgr.OnUpdate(&proto.HostMetadataUpdate{
+		ipipMgr.OnUpdate(&proto.HostMetadataV4V6Update{
 			Hostname: "host2",
 			Ipv4Addr: "10.0.0.2",
 		})
@@ -171,7 +171,7 @@ var _ = Describe("RouteManager for ipip pools", func() {
 		Expect(allHostsSet()).To(Equal(set.From("10.0.0.1", "10.0.0.2", externalCIDR)))
 
 		By("testing tolerance for duplicate ip")
-		ipipMgr.OnUpdate(&proto.HostMetadataUpdate{
+		ipipMgr.OnUpdate(&proto.HostMetadataV4V6Update{
 			Hostname: "host3",
 			Ipv4Addr: "10.0.0.2",
 		})
@@ -196,7 +196,7 @@ var _ = Describe("RouteManager for ipip pools", func() {
 		Expect(allHostsSet()).To(Equal(set.From("10.0.0.1", externalCIDR)))
 
 		By("adding/removing a duplicate IP in one batch")
-		ipipMgr.OnUpdate(&proto.HostMetadataUpdate{
+		ipipMgr.OnUpdate(&proto.HostMetadataV4V6Update{
 			Hostname: "host2",
 			Ipv4Addr: "10.0.0.1",
 		})
@@ -208,7 +208,7 @@ var _ = Describe("RouteManager for ipip pools", func() {
 		Expect(allHostsSet()).To(Equal(set.From("10.0.0.1", externalCIDR)))
 
 		By("changing ip of host1")
-		ipipMgr.OnUpdate(&proto.HostMetadataUpdate{
+		ipipMgr.OnUpdate(&proto.HostMetadataV4V6Update{
 			Hostname: "host1",
 			Ipv4Addr: "10.0.0.2",
 		})
@@ -225,13 +225,89 @@ var _ = Describe("RouteManager for ipip pools", func() {
 	})
 
 	It("successfully adds a route to the noEncap interface", func() {
-		ipipMgr.OnUpdate(&proto.HostMetadataUpdate{
+		ipipMgr.OnUpdate(&proto.HostMetadataV4V6Update{
 			Hostname: "node1",
 			Ipv4Addr: "10.0.0.1",
 		})
-		ipipMgr.OnUpdate(&proto.HostMetadataUpdate{
+		ipipMgr.OnUpdate(&proto.HostMetadataV4V6Update{
 			Hostname: "node2",
 			Ipv4Addr: "10.0.1.1",
+		})
+
+		ipipMgr.routeMgr.OnParentDeviceUpdate("eth0")
+
+		Expect(ipipMgr.routeMgr.parentDeviceAddr).NotTo(BeZero())
+		Expect(ipipMgr.routeMgr.parentDevice).NotTo(BeEmpty())
+		noEncapDev, err := ipipMgr.routeMgr.detectParentIface()
+		Expect(err).NotTo(HaveOccurred())
+		Expect(noEncapDev).NotTo(BeNil())
+
+		link, addr, err := ipipMgr.device(noEncapDev)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(link).NotTo(BeNil())
+		Expect(addr).NotTo(BeZero())
+
+		err = ipipMgr.routeMgr.configureTunnelDevice(link, addr, 50, false)
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(noEncapDev).NotTo(BeNil())
+		Expect(err).NotTo(HaveOccurred())
+
+		ipipMgr.OnUpdate(&proto.RouteUpdate{
+			Types:       proto.RouteType_REMOTE_WORKLOAD,
+			IpPoolType:  proto.IPPoolType_IPIP,
+			Dst:         "192.168.0.3/26",
+			DstNodeName: "node2",
+			DstNodeIp:   "10.0.1.1",
+			SameSubnet:  true,
+		})
+
+		ipipMgr.OnUpdate(&proto.RouteUpdate{
+			Types:       proto.RouteType_REMOTE_WORKLOAD,
+			IpPoolType:  proto.IPPoolType_IPIP,
+			Dst:         "192.168.0.2/26",
+			DstNodeName: "node2",
+			DstNodeIp:   "10.0.1.1",
+		})
+
+		ipipMgr.OnUpdate(&proto.RouteUpdate{
+			Types:       proto.RouteType_LOCAL_WORKLOAD,
+			IpPoolType:  proto.IPPoolType_IPIP,
+			Dst:         "192.168.0.100/26",
+			DstNodeName: "node1",
+			DstNodeIp:   "10.0.0.1",
+			SameSubnet:  true,
+		})
+
+		// Borrowed /32 should not be programmed as blackhole.
+		ipipMgr.OnUpdate(&proto.RouteUpdate{
+			Types:       proto.RouteType_LOCAL_WORKLOAD,
+			IpPoolType:  proto.IPPoolType_IPIP,
+			Dst:         "192.168.0.10/32",
+			DstNodeName: "node1",
+			DstNodeIp:   "10.0.0.7",
+			SameSubnet:  true,
+		})
+
+		Expect(rt.currentRoutes[dataplanedefs.IPIPIfaceName]).To(HaveLen(0))
+		Expect(rt.currentRoutes[routetable.InterfaceNone]).To(HaveLen(0))
+
+		err = ipipMgr.CompleteDeferredWork()
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(rt.currentRoutes[dataplanedefs.IPIPIfaceName]).To(HaveLen(1))
+		Expect(rt.currentRoutes[routetable.InterfaceNone]).To(HaveLen(1))
+		Expect(rt.currentRoutes["eth0"]).NotTo(BeNil())
+	})
+
+	It("successfully adds an IPv6 route to the noEncap interface", func() {
+		ipipMgr.OnUpdate(&proto.HostMetadataV4V6Update{
+			Hostname: "node1",
+			Ipv4Addr: "dead:beef::1",
+		})
+		ipipMgr.OnUpdate(&proto.HostMetadataV4V6Update{
+			Hostname: "node2",
+			Ipv4Addr: "dead:beef::2",
 		})
 
 		ipipMgr.routeMgr.OnParentDeviceUpdate("eth0")
@@ -307,7 +383,7 @@ var _ = Describe("RouteManager for ipip pools", func() {
 		go ipipMgr.KeepIPIPDeviceInSync(ctx, 1400, false, 1*time.Second, dataDeviceC)
 
 		By("Sending another node's route.")
-		ipipMgr.OnUpdate(&proto.HostMetadataUpdate{
+		ipipMgr.OnUpdate(&proto.HostMetadataV4V6Update{
 			Hostname: "node2",
 			Ipv4Addr: "10.0.0.2",
 		})
@@ -327,7 +403,7 @@ var _ = Describe("RouteManager for ipip pools", func() {
 		Expect(rt.currentRoutes[dataplanedefs.IPIPIfaceName]).To(HaveLen(1))
 
 		By("Sending another local node update.")
-		ipipMgr.OnUpdate(&proto.HostMetadataUpdate{
+		ipipMgr.OnUpdate(&proto.HostMetadataV4V6Update{
 			Hostname: "node1",
 			Ipv4Addr: "10.0.0.1",
 		})
