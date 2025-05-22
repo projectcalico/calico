@@ -47,7 +47,7 @@ import (
 	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
-	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/crdv1"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/syncersv1/dedupebuffer"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/syncersv1/felixsyncer"
@@ -283,7 +283,7 @@ configRetry:
 
 		// Try to get a Kubernetes client.  This is needed for discovering Typha and for the BPF mode of the dataplane.
 		k8sClientSet = nil
-		if kc, ok := backendClient.(*k8s.KubeClient); ok {
+		if kc, ok := backendClient.(*crdv1.KubeClient); ok {
 			// Opportunistically share the k8s client with the datastore driver.  This is the best option since
 			// it reduces the number of connections and it lets us piggy-back on the datastore driver's config.
 			log.Info("Using Kubernetes datastore driver, sharing Kubernetes client with datastore driver.")
