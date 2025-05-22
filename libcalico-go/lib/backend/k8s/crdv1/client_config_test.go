@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package k8s
+package crdv1
 
 import (
 	. "github.com/onsi/ginkgo"
@@ -21,7 +21,6 @@ import (
 )
 
 var _ = Describe("CreateKubernetesClientset fillLoadingRulesFromKubeConfigSpec", func() {
-
 	When("There are multiple Kubeconfig files specified", func() {
 		It("Should fill Precedence instead of ExplicitPath", func() {
 			loadingRules := clientcmd.ClientConfigLoadingRules{}
@@ -41,5 +40,4 @@ var _ = Describe("CreateKubernetesClientset fillLoadingRulesFromKubeConfigSpec",
 			Expect(loadingRules.Precedence).To(BeEmpty())
 		})
 	})
-
 })

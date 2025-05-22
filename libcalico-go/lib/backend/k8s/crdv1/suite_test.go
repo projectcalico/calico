@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package k8s_test
+package crdv1_test
 
 import (
 	"testing"
@@ -27,6 +27,6 @@ import (
 func TestModel(t *testing.T) {
 	testutils.HookLogrusForGinkgo()
 	RegisterFailHandler(Fail)
-	junitReporter := reporters.NewJUnitReporter("../../../report/kdd_suite.xml")
-	RunSpecsWithDefaultAndCustomReporters(t, "KDD Suite", []Reporter{junitReporter})
+	junitReporter := reporters.NewJUnitReporter("../../../../report/kdd_suite.xml")
+	RunSpecsWithDefaultAndCustomReporters(t, "crdv1 backend suite", []Reporter{junitReporter})
 }
