@@ -54,6 +54,12 @@ build: gen-files examples
 gen-files .generate_files: lint-cache-dir clean-generated
 	# Generate CRDs without descriptions
 	$(DOCKER_RUN) $(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) controller-gen crd:allowDangerousTypes=true,crdVersions=v1,deprecatedV1beta1CompatibilityPreserveUnknownFields=false,maxDescLen=0 paths=./pkg/apis/... output:crd:dir=config/crd/'
+	# Remove the first yaml separator line.
+	$(DOCKER_RUN) $(CALICO_BUILD) sh -c 'find ./config/crd -name "*.yaml" | xargs sed -i 1d'
+	# Run prettier to fix indentation
+	docker run --rm --user $(id -u):$(id -g) -v $(CURDIR)/config/crd/:/work/config/crd/ tmknom/prettier --write --parser=yaml /work
+	# Patch in manual tweaks to the generated CRDs.
+	patch -p2 < patches/0001-Add-nullable-to-IPAM-block-allocations-field.patch
 
 	# Generate defaults
 	$(DOCKER_RUN) $(CALICO_BUILD) \
