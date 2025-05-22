@@ -165,6 +165,7 @@ skip_redir_ifindex:
 
 			int err = bpf_skb_set_tunnel_key(ctx->skb, &key, size, flags);
 			CALI_DEBUG("bpf_skb_set_tunnel_key %d nh " IP_FMT, err, &dest_rt->next_hop);
+			ctx->fwd.mark |= CALI_SKB_MARK_TUNNEL_KEY_SET;
 
 			rc = bpf_redirect(state->ct_result.ifindex_fwd, 0);
 			if (rc == TC_ACT_REDIRECT) {
@@ -174,7 +175,8 @@ skip_redir_ifindex:
 			}
 		}
 	} else if (CALI_F_VXLAN && CALI_F_TO_HEP) {
-		if (!(ctx->skb->mark & CALI_SKB_MARK_SEEN) || (ctx->fwd.mark & CALI_SKB_MARK_FROM_NAT_IFACE_OUT)) {
+		if (!(ctx->skb->mark & CALI_SKB_MARK_SEEN) ||
+			!skb_mark_equals(ctx->skb, CALI_SKB_MARK_TUNNEL_KEY_SET, CALI_SKB_MARK_TUNNEL_KEY_SET)) {
 			/* packet to vxlan from the host, needs to set tunnel key. Either
 			 * it wasn't seen or it was routed via the bpfnat device because
 			 * its destination was a service and CTLB is disabled
@@ -207,6 +209,7 @@ skip_redir_ifindex:
 
 			int err = bpf_skb_set_tunnel_key(ctx->skb, &key, size, flags);
 			CALI_DEBUG("bpf_skb_set_tunnel_key %d nh " IP_FMT, err, &dest_rt->next_hop);
+			ctx->fwd.mark |= CALI_SKB_MARK_TUNNEL_KEY_SET;
 		}
 	}
 
