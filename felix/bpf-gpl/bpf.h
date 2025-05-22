@@ -204,10 +204,10 @@ enum calico_skb_mark {
 	 * know that and we have resolved NAT etc.
 	 */
 	CALI_SKB_MARK_RELATED_RESOLVED        = 0x21000000,
-	/* CALI_SKB_MARK_TO_NAT_IFACE_OUT signals to routing that this packet should to
-	 * to the bpfnatout interface.
+	/* CALI_SKB_MARK_TUNNEL_KEY_SET indicates to tunnel device, that the key
+	 * is already set. If not, it needs to set it itself.
 	 */
-	CALI_SKB_MARK_TO_NAT_IFACE_OUT        = 0x41000000,
+	CALI_SKB_MARK_TUNNEL_KEY_SET        = 0x41000000,
 	/* CALI_SKB_MARK_FROM_NAT_IFACE_OUT signals to the next hop that the packet passed
 	 * through bpfnatout so that it can set its conntrack correctly.
 	 */
