@@ -24,7 +24,7 @@ import (
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/constants"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
-	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/crdv1"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 )
 
@@ -79,7 +79,7 @@ func GetClients(cf string) (kubeClient *kubernetes.Clientset, calicoClient clien
 
 	// Get a kube-client. If this is a kdd cluster, we can pull this from the backend.
 	// Otherwise, we need to build one ourselves.
-	if kc, ok := bc.(*k8s.KubeClient); ok {
+	if kc, ok := bc.(*crdv1.KubeClient); ok {
 		// Pull from the kdd client.
 		kubeClient = kc.ClientSet
 	}

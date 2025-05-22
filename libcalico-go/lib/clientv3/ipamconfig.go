@@ -30,7 +30,7 @@ type IPAMConfigInterface interface {
 	Update(ctx context.Context, res *libapiv3.IPAMConfiguration, opts options.SetOptions) (*libapiv3.IPAMConfiguration, error)
 	Delete(ctx context.Context, name string, opts options.DeleteOptions) (*libapiv3.IPAMConfiguration, error)
 	Get(ctx context.Context, name string, opts options.GetOptions) (*libapiv3.IPAMConfiguration, error)
-	List(ctx context.Context, opts options.ListOptions) (*libapiv3.IPAMConfigList, error)
+	List(ctx context.Context, opts options.ListOptions) (*libapiv3.IPAMConfigurationList, error)
 	Watch(ctx context.Context, opts options.ListOptions) (watch.Interface, error)
 }
 
@@ -98,8 +98,8 @@ func (r IPAMConfigs) Get(ctx context.Context, name string, opts options.GetOptio
 }
 
 // List returns the list of IPAMConfig objects that match the supplied options.
-func (r IPAMConfigs) List(ctx context.Context, opts options.ListOptions) (*libapiv3.IPAMConfigList, error) {
-	res := &libapiv3.IPAMConfigList{}
+func (r IPAMConfigs) List(ctx context.Context, opts options.ListOptions) (*libapiv3.IPAMConfigurationList, error) {
+	res := &libapiv3.IPAMConfigurationList{}
 	if err := r.client.resources.List(ctx, opts, libapiv3.KindIPAMConfig, libapiv3.KindIPAMConfigList, res); err != nil {
 		return nil, err
 	}

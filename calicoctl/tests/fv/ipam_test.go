@@ -33,7 +33,7 @@ import (
 	. "github.com/projectcalico/calico/calicoctl/tests/fv/utils"
 	libapi "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
-	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/crdv1"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
@@ -322,7 +322,7 @@ func createNodeForLocalhost(t *testing.T, ctx context.Context, client clientv3.I
 	}
 	bc := client.(accessor).Backend()
 	nodeName, err := os.Hostname()
-	if k8sClient, ok := bc.(*k8s.KubeClient); ok {
+	if k8sClient, ok := bc.(*crdv1.KubeClient); ok {
 		t.Log("Creating Kubernetes Node")
 		cs := k8sClient.ClientSet
 		node := &corev1.Node{

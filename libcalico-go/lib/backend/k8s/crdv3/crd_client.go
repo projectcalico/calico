@@ -3,12 +3,12 @@ package crdv3
 import (
 	"context"
 
+	"k8s.io/apimachinery/pkg/types"
+	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
+
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/resources"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
-	"k8s.io/apimachinery/pkg/types"
-
-	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 func NewCRDClient(c ctrlclient.Client) resources.K8sResourceClient {

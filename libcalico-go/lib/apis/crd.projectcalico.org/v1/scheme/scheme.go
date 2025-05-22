@@ -78,7 +78,7 @@ func AddCalicoResourcesToScheme() {
 					&libapiv3.IPAMHandle{},
 					&libapiv3.IPAMHandleList{},
 					&libapiv3.IPAMConfiguration{},
-					&libapiv3.IPAMConfigList{},
+					&libapiv3.IPAMConfigurationList{},
 					&apiv3.KubeControllersConfiguration{},
 					&apiv3.KubeControllersConfigurationList{},
 					&apiv3.CalicoNodeStatus{},

@@ -58,7 +58,7 @@ func NewIPAMConfigurationStorage(opts Options) (registry.DryRunnableStorage, fac
 		aapiType:          reflect.TypeOf(aapi.IPAMConfiguration{}),
 		aapiListType:      reflect.TypeOf(aapi.IPAMConfigurationList{}),
 		libCalicoType:     reflect.TypeOf(libapi.IPAMConfiguration{}),
-		libCalicoListType: reflect.TypeOf(libapi.IPAMConfigList{}),
+		libCalicoListType: reflect.TypeOf(libapi.IPAMConfigurationList{}),
 		isNamespaced:      false,
 		create:            createFn,
 		update:            updateFn,
@@ -106,7 +106,7 @@ func (gc IPAMConfigConverter) convertToAAPI(libcalicoObject resourceObject, aapi
 }
 
 func (gc IPAMConfigConverter) convertToAAPIList(libcalicoListObject resourceListObject, aapiListObj runtime.Object, pred storage.SelectionPredicate) {
-	lcgIPAMConfigList := libcalicoListObject.(*libapi.IPAMConfigList)
+	lcgIPAMConfigList := libcalicoListObject.(*libapi.IPAMConfigurationList)
 	aapiIPAMConfigList := aapiListObj.(*aapi.IPAMConfigurationList)
 	if libcalicoListObject == nil {
 		aapiIPAMConfigList.Items = []aapi.IPAMConfiguration{}

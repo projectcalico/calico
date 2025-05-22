@@ -5,14 +5,15 @@ import (
 	"strings"
 
 	"github.com/projectcalico/api/pkg/client/clientset_generated/clientset/scheme"
-	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
-	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/resources"
-	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+
+	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/resources"
+	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
 )
 
 func v3RESTClient(cfg *rest.Config) (*rest.RESTClient, error) {

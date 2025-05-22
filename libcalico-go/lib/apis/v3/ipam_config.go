@@ -54,8 +54,8 @@ type IPAMConfigurationSpec struct {
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// IPAMConfigList contains a list of IPAMConfig resources.
-type IPAMConfigList struct {
+// IPAMConfigurationList contains a list of IPAMConfig resources.
+type IPAMConfigurationList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata"`
 	Items           []IPAMConfiguration `json:"items"`
@@ -74,8 +74,8 @@ func NewIPAMConfig() *IPAMConfiguration {
 
 // NewIPAMConfigList creates a new (zeroed) IPAMConfigList struct with the TypeMetadata initialised to the current
 // version.
-func NewIPAMConfigList() *IPAMConfigList {
-	return &IPAMConfigList{
+func NewIPAMConfigList() *IPAMConfigurationList {
+	return &IPAMConfigurationList{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       KindIPAMConfigList,
 			APIVersion: apiv3.GroupVersionCurrent,

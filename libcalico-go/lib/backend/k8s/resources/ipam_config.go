@@ -43,12 +43,12 @@ func NewIPAMConfigClient(c kubernetes.Interface, r rest.Interface) K8sResourceCl
 			name:            IPAMConfigCRDName,
 			resource:        IPAMConfigResourceName,
 			description:     "Calico IPAM configuration",
-			k8sResourceType: reflect.TypeOf(libapiv3.IPAMConfig{}),
+			k8sResourceType: reflect.TypeOf(libapiv3.IPAMConfiguration{}),
 			k8sResourceTypeMeta: metav1.TypeMeta{
 				Kind:       libapiv3.KindIPAMConfig,
 				APIVersion: apiv3.GroupVersionCurrent,
 			},
-			k8sListType:  reflect.TypeOf(libapiv3.IPAMConfigList{}),
+			k8sListType:  reflect.TypeOf(libapiv3.IPAMConfigurationList{}),
 			resourceKind: libapiv3.KindIPAMConfig,
 		},
 	}
@@ -66,7 +66,7 @@ type ipamConfigClient struct {
 // toV1 converts the given v3 CRD KVPair into a v1 model representation
 // which can be passed to the IPAM code.
 func (c ipamConfigClient) toV1(kvpv3 *model.KVPair) (*model.KVPair, error) {
-	v3obj := kvpv3.Value.(*libapiv3.IPAMConfig)
+	v3obj := kvpv3.Value.(*libapiv3.IPAMConfiguration)
 
 	return &model.KVPair{
 		Key: model.IPAMConfigKey{},
@@ -76,7 +76,7 @@ func (c ipamConfigClient) toV1(kvpv3 *model.KVPair) (*model.KVPair, error) {
 			MaxBlocksPerHost:   v3obj.Spec.MaxBlocksPerHost,
 		},
 		Revision: kvpv3.Revision,
-		UID:      &kvpv3.Value.(*libapiv3.IPAMConfig).UID,
+		UID:      &kvpv3.Value.(*libapiv3.IPAMConfiguration).UID,
 	}, nil
 }
 
@@ -95,13 +95,13 @@ func (c ipamConfigClient) toV3(kvpv1 *model.KVPair) *model.KVPair {
 			Name: model.IPAMConfigGlobalName,
 			Kind: libapiv3.KindIPAMConfig,
 		},
-		Value: &libapiv3.IPAMConfig{
+		Value: &libapiv3.IPAMConfiguration{
 			TypeMeta: metav1.TypeMeta{
 				Kind:       libapiv3.KindIPAMConfig,
 				APIVersion: "crd.projectcalico.org/v1",
 			},
 			ObjectMeta: m,
-			Spec: libapiv3.IPAMConfigSpec{
+			Spec: libapiv3.IPAMConfigurationSpec{
 				StrictAffinity:     v1obj.StrictAffinity,
 				AutoAllocateBlocks: v1obj.AutoAllocateBlocks,
 				MaxBlocksPerHost:   v1obj.MaxBlocksPerHost,
@@ -113,7 +113,7 @@ func (c ipamConfigClient) toV3(kvpv1 *model.KVPair) *model.KVPair {
 
 // There's two possible kV formats to be passed to backend ipamConfig.
 // 1. Libcalico-go IPAM passes a v1 model.IPAMConfig directly. [libcalico-go/lib/ipam/ipam.go]
-// 2. Calico-apiserver storage passes a kv with libapiv3.IPAMConfig
+// 2. Calico-apiserver storage passes a kv with libapiv3.IPAMConfiguration
 
 // isV1Key return if the Key is in v1 format.
 func isV1Key(key model.Key) bool {

@@ -78,8 +78,8 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/projectcalico/calico/libcalico-go/lib/apis/v3.IPAMBlock":                schema_libcalico_go_lib_apis_v3_IPAMBlock(ref),
 		"github.com/projectcalico/calico/libcalico-go/lib/apis/v3.IPAMBlockList":            schema_libcalico_go_lib_apis_v3_IPAMBlockList(ref),
 		"github.com/projectcalico/calico/libcalico-go/lib/apis/v3.IPAMBlockSpec":            schema_libcalico_go_lib_apis_v3_IPAMBlockSpec(ref),
-		"github.com/projectcalico/calico/libcalico-go/lib/apis/v3.IPAMConfigList":           schema_libcalico_go_lib_apis_v3_IPAMConfigList(ref),
 		"github.com/projectcalico/calico/libcalico-go/lib/apis/v3.IPAMConfiguration":        schema_libcalico_go_lib_apis_v3_IPAMConfiguration(ref),
+		"github.com/projectcalico/calico/libcalico-go/lib/apis/v3.IPAMConfigurationList":    schema_libcalico_go_lib_apis_v3_IPAMConfigurationList(ref),
 		"github.com/projectcalico/calico/libcalico-go/lib/apis/v3.IPAMConfigurationSpec":    schema_libcalico_go_lib_apis_v3_IPAMConfigurationSpec(ref),
 		"github.com/projectcalico/calico/libcalico-go/lib/apis/v3.IPAMHandle":               schema_libcalico_go_lib_apis_v3_IPAMHandle(ref),
 		"github.com/projectcalico/calico/libcalico-go/lib/apis/v3.IPAMHandleList":           schema_libcalico_go_lib_apis_v3_IPAMHandleList(ref),
@@ -2453,11 +2453,54 @@ func schema_libcalico_go_lib_apis_v3_IPAMBlockSpec(ref common.ReferenceCallback)
 	}
 }
 
-func schema_libcalico_go_lib_apis_v3_IPAMConfigList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_libcalico_go_lib_apis_v3_IPAMConfiguration(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Description: "IPAMConfigList contains a list of IPAMConfig resources.",
+				Description: "IPAMConfiguration contains information about a block for IP address assignment.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Standard object's metadata.",
+							Default:     map[string]interface{}{},
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+						},
+					},
+					"spec": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Specification of the IPAMConfig.",
+							Default:     map[string]interface{}{},
+							Ref:         ref("github.com/projectcalico/calico/libcalico-go/lib/apis/v3.IPAMConfigurationSpec"),
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"github.com/projectcalico/calico/libcalico-go/lib/apis/v3.IPAMConfigurationSpec", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+	}
+}
+
+func schema_libcalico_go_lib_apis_v3_IPAMConfigurationList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "IPAMConfigurationList contains a list of IPAMConfig resources.",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"kind": {
@@ -2499,49 +2542,6 @@ func schema_libcalico_go_lib_apis_v3_IPAMConfigList(ref common.ReferenceCallback
 		},
 		Dependencies: []string{
 			"github.com/projectcalico/calico/libcalico-go/lib/apis/v3.IPAMConfiguration", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
-	}
-}
-
-func schema_libcalico_go_lib_apis_v3_IPAMConfiguration(ref common.ReferenceCallback) common.OpenAPIDefinition {
-	return common.OpenAPIDefinition{
-		Schema: spec.Schema{
-			SchemaProps: spec.SchemaProps{
-				Description: "IPAMConfiguration contains information about a block for IP address assignment.",
-				Type:        []string{"object"},
-				Properties: map[string]spec.Schema{
-					"kind": {
-						SchemaProps: spec.SchemaProps{
-							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
-							Type:        []string{"string"},
-							Format:      "",
-						},
-					},
-					"apiVersion": {
-						SchemaProps: spec.SchemaProps{
-							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
-							Type:        []string{"string"},
-							Format:      "",
-						},
-					},
-					"metadata": {
-						SchemaProps: spec.SchemaProps{
-							Description: "Standard object's metadata.",
-							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
-						},
-					},
-					"spec": {
-						SchemaProps: spec.SchemaProps{
-							Description: "Specification of the IPAMConfig.",
-							Default:     map[string]interface{}{},
-							Ref:         ref("github.com/projectcalico/calico/libcalico-go/lib/apis/v3.IPAMConfigurationSpec"),
-						},
-					},
-				},
-			},
-		},
-		Dependencies: []string{
-			"github.com/projectcalico/calico/libcalico-go/lib/apis/v3.IPAMConfigurationSpec", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
 	}
 }
 

@@ -37,7 +37,7 @@ import (
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/loadbalancer"
 	apiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
-	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/crdv1"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
@@ -100,7 +100,7 @@ Description:
 	// Get a kube-client. If this is a kdd cluster, we can pull this from the backend.
 	// Otherwise, we need to build one ourselves.
 	var kubeClient *kubernetes.Clientset
-	if kc, ok := bc.(*k8s.KubeClient); ok {
+	if kc, ok := bc.(*crdv1.KubeClient); ok {
 		// Pull from the kdd client.
 		kubeClient = kc.ClientSet
 	} else {
@@ -144,7 +144,8 @@ func NewIPAMChecker(k8sClient kubernetes.Interface,
 	showAllIPs bool,
 	showProblemIPs bool,
 	outFile string,
-	version string) *IPAMChecker {
+	version string,
+) *IPAMChecker {
 	return &IPAMChecker{
 		allocations:       map[string][]*Allocation{},
 		allocationsByNode: map[string][]*Allocation{},
@@ -510,7 +511,7 @@ func (c *IPAMChecker) printReport() {
 		LeakedHandles:       c.leakedHandles,
 	}
 	bytes, _ := json.MarshalIndent(r, "", "  ")
-	_ = os.WriteFile(c.outFile, bytes, 0777)
+	_ = os.WriteFile(c.outFile, bytes, 0o777)
 }
 
 // recordAllocation takes a block and ordinal within that block and updates

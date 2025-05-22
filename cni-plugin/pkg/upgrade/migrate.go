@@ -31,7 +31,7 @@ import (
 	"github.com/projectcalico/calico/cni-plugin/internal/pkg/utils"
 	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
-	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/crdv1"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
@@ -44,12 +44,10 @@ const (
 	ipAllocPath = "/var/lib/cni/networks/k8s-pod-network"
 )
 
-var (
-	binariesToDisable = []string{
-		"/host/opt/cni/bin/calico",
-		"/host/opt/cni/bin/host-local",
-	}
-)
+var binariesToDisable = []string{
+	"/host/opt/cni/bin/calico",
+	"/host/opt/cni/bin/host-local",
+}
 
 type accessor interface {
 	Backend() bapi.Client
@@ -57,7 +55,7 @@ type accessor interface {
 
 func Migrate(ctxt context.Context, c client.Interface, nodename string) error {
 	// k8sClient directly calls the k8s apiserver.
-	k8sClient := c.(accessor).Backend().(*k8s.KubeClient).ClientSet
+	k8sClient := c.(accessor).Backend().(*crdv1.KubeClient).ClientSet
 
 	// Check to see if the system is still using host-local
 	// by checking the existence of the path.
