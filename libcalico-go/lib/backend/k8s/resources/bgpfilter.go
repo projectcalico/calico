@@ -25,7 +25,7 @@ import (
 
 const (
 	BGPFilterResourceName = "BGPFilters"
-	BGPFilterCRDName      = "BGPFilters.projectcalico.org"
+	BGPFilterCRDName      = "BGPFilters.crd.projectcalico.org"
 )
 
 func NewBGPFilterClient(c kubernetes.Interface, r rest.Interface) K8sResourceClient {

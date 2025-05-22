@@ -31,8 +31,8 @@ import (
 )
 
 const (
-	IPAMConfigResourceName = "IPAMConfigurations"
-	IPAMConfigCRDName      = "ipamconfigurations.projectcalico.org"
+	IPAMConfigResourceName = "IPAMConfigs"
+	IPAMConfigCRDName      = "ipamconfigs.crd.projectcalico.org"
 )
 
 func NewIPAMConfigClient(c kubernetes.Interface, r rest.Interface) K8sResourceClient {
@@ -43,7 +43,7 @@ func NewIPAMConfigClient(c kubernetes.Interface, r rest.Interface) K8sResourceCl
 			name:            IPAMConfigCRDName,
 			resource:        IPAMConfigResourceName,
 			description:     "Calico IPAM configuration",
-			k8sResourceType: reflect.TypeOf(libapiv3.IPAMConfiguration{}),
+			k8sResourceType: reflect.TypeOf(libapiv3.IPAMConfig{}),
 			k8sResourceTypeMeta: metav1.TypeMeta{
 				Kind:       libapiv3.KindIPAMConfig,
 				APIVersion: apiv3.GroupVersionCurrent,
@@ -66,7 +66,7 @@ type ipamConfigClient struct {
 // toV1 converts the given v3 CRD KVPair into a v1 model representation
 // which can be passed to the IPAM code.
 func (c ipamConfigClient) toV1(kvpv3 *model.KVPair) (*model.KVPair, error) {
-	v3obj := kvpv3.Value.(*libapiv3.IPAMConfiguration)
+	v3obj := kvpv3.Value.(*libapiv3.IPAMConfig)
 
 	return &model.KVPair{
 		Key: model.IPAMConfigKey{},
@@ -76,7 +76,7 @@ func (c ipamConfigClient) toV1(kvpv3 *model.KVPair) (*model.KVPair, error) {
 			MaxBlocksPerHost:   v3obj.Spec.MaxBlocksPerHost,
 		},
 		Revision: kvpv3.Revision,
-		UID:      &kvpv3.Value.(*libapiv3.IPAMConfiguration).UID,
+		UID:      &kvpv3.Value.(*libapiv3.IPAMConfig).UID,
 	}, nil
 }
 
@@ -95,13 +95,13 @@ func (c ipamConfigClient) toV3(kvpv1 *model.KVPair) *model.KVPair {
 			Name: model.IPAMConfigGlobalName,
 			Kind: libapiv3.KindIPAMConfig,
 		},
-		Value: &libapiv3.IPAMConfiguration{
+		Value: &libapiv3.IPAMConfig{
 			TypeMeta: metav1.TypeMeta{
 				Kind:       libapiv3.KindIPAMConfig,
-				APIVersion: apiv3.GroupVersionCurrent,
+				APIVersion: "crd.projectcalico.org/v1",
 			},
 			ObjectMeta: m,
-			Spec: libapiv3.IPAMConfigurationSpec{
+			Spec: libapiv3.IPAMConfigSpec{
 				StrictAffinity:     v1obj.StrictAffinity,
 				AutoAllocateBlocks: v1obj.AutoAllocateBlocks,
 				MaxBlocksPerHost:   v1obj.MaxBlocksPerHost,

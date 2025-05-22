@@ -35,7 +35,7 @@ import (
 
 const (
 	IPAMHandleResourceName = "IPAMHandles"
-	IPAMHandleCRDName      = "ipamhandles.projectcalico.org"
+	IPAMHandleCRDName      = "ipamhandles.crd.projectcalico.org"
 )
 
 func NewIPAMHandleClient(c kubernetes.Interface, r rest.Interface) K8sResourceClient {
@@ -109,7 +109,7 @@ func (c *ipamHandleClient) toV3(kvpv1 *model.KVPair) *model.KVPair {
 		Value: &libapiv3.IPAMHandle{
 			TypeMeta: metav1.TypeMeta{
 				Kind:       libapiv3.KindIPAMHandle,
-				APIVersion: "projectcalico.org/v3",
+				APIVersion: "crd.projectcalico.org/v1",
 			},
 			ObjectMeta: metav1.ObjectMeta{
 				Name:            name,

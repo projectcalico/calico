@@ -25,7 +25,7 @@ import (
 
 const (
 	CalicoNodeStatusResourceName = "CalicoNodeStatuses"
-	CalicoNodeStatusCRDName      = "CalicoNodeStatuses.projectcalico.org"
+	CalicoNodeStatusCRDName      = "CalicoNodeStatuses.crd.projectcalico.org"
 )
 
 func NewCalicoNodeStatusClient(c kubernetes.Interface, r rest.Interface) K8sResourceClient {

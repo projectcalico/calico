@@ -25,7 +25,7 @@ import (
 
 const (
 	HostEndpointResourceName = "HostEndpoints"
-	HostEndpointCRDName      = "hostendpoints.projectcalico.org"
+	HostEndpointCRDName      = "hostendpoints.crd.projectcalico.org"
 )
 
 func NewHostEndpointClient(c kubernetes.Interface, r rest.Interface) K8sResourceClient {

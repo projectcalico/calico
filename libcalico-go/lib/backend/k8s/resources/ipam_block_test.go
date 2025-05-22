@@ -37,8 +37,8 @@ var _ = Describe("ipamBlockClient tests with fake REST client", func() {
 		fakeREST = &fake.RESTClient{
 			NegotiatedSerializer: serializer.WithoutConversionCodecFactory{CodecFactory: scheme.Codecs},
 			GroupVersion: schema.GroupVersion{
-				Group:   "projectcalico.org",
-				Version: "v3",
+				Group:   "crd.projectcalico.org",
+				Version: "v1",
 			},
 			VersionedAPIPath: "/apis",
 		}

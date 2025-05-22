@@ -25,7 +25,7 @@ import (
 
 const (
 	IPReservationResourceName = "IPReservations"
-	IPReservationCRDName      = "ipreservations.projectcalico.org"
+	IPReservationCRDName      = "ipreservations.crd.projectcalico.org"
 )
 
 func NewIPReservationClient(c kubernetes.Interface, r rest.Interface) K8sResourceClient {

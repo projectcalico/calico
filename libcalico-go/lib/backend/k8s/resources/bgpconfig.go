@@ -25,7 +25,7 @@ import (
 
 const (
 	BGPConfigResourceName = "BGPConfigurations"
-	BGPConfigCRDName      = "bgpconfigurations.projectcalico.org"
+	BGPConfigCRDName      = "bgpconfigurations.crd.projectcalico.org"
 )
 
 func NewBGPConfigClient(c kubernetes.Interface, r rest.Interface) K8sResourceClient {

@@ -25,7 +25,7 @@ import (
 
 const (
 	GlobalNetworkSetResourceName = "GlobalNetworkSets"
-	GlobalNetworkSetCRDName      = "globalnetworksets.projectcalico.org"
+	GlobalNetworkSetCRDName      = "globalnetworksets.crd.projectcalico.org"
 )
 
 func NewGlobalNetworkSetClient(c kubernetes.Interface, r rest.Interface) K8sResourceClient {

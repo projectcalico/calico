@@ -25,7 +25,7 @@ import (
 
 const (
 	GlobalNetworkPolicyResourceName = "GlobalNetworkPolicies"
-	GlobalNetworkPolicyCRDName      = "globalnetworkpolicies.projectcalico.org"
+	GlobalNetworkPolicyCRDName      = "globalnetworkpolicies.crd.projectcalico.org"
 )
 
 func NewGlobalNetworkPolicyClient(c kubernetes.Interface, r rest.Interface) K8sResourceClient {

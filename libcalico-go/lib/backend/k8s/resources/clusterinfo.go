@@ -25,7 +25,7 @@ import (
 
 const (
 	ClusterInfoResourceName = "ClusterInformations"
-	ClusterInfoCRDName      = "clusterinformations.projectcalico.org"
+	ClusterInfoCRDName      = "clusterinformations.crd.projectcalico.org"
 )
 
 func NewClusterInfoClient(c kubernetes.Interface, r rest.Interface) K8sResourceClient {

@@ -27,7 +27,7 @@ import (
 
 const (
 	KubeControllersConfigResourceName = "KubeControllersConfigurations"
-	KubeControllersConfigCRDName      = "kubecontrollersconfigurations.projectcalico.org"
+	KubeControllersConfigCRDName      = "kubecontrollersconfigurations.crd.projectcalico.org"
 )
 
 func NewKubeControllersConfigClient(c kubernetes.Interface, r rest.Interface) K8sResourceClient {

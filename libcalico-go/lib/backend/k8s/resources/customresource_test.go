@@ -28,7 +28,7 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest/fake"
 
-	calischeme "github.com/projectcalico/calico/libcalico-go/lib/apis/crd.projectcalico.org/v1/scheme"
+	calischeme "github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/scheme"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
 )
@@ -247,8 +247,8 @@ var _ = Describe("Custom resource conversion methods (tested using namespaced Ne
 		fakeREST = &fake.RESTClient{
 			NegotiatedSerializer: serializer.WithoutConversionCodecFactory{CodecFactory: scheme.Codecs},
 			GroupVersion: schema.GroupVersion{
-				Group:   "projectcalico.org",
-				Version: "v3",
+				Group:   "crd.projectcalico.org",
+				Version: "v1",
 			},
 			VersionedAPIPath: "/apis",
 		}

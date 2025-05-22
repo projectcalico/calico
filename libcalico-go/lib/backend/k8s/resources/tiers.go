@@ -28,7 +28,7 @@ import (
 
 const (
 	TierResourceName = "Tiers"
-	TierCRDName      = "tiers.projectcalico.org"
+	TierCRDName      = "tiers.crd.projectcalico.org"
 )
 
 func NewTierClient(c kubernetes.Interface, r rest.Interface) K8sResourceClient {
