@@ -132,9 +132,9 @@ struct calico_maglev_key {
 
 // 65537 * 100 gives a large lookup table for up to 100 services. -Alex
 #ifdef IPVER6
-CALI_MAP_NAMED(cali_v6_maglev_vip_be, cali_maglev_vip_be,,
+CALI_MAP_NAMED(cali_v6_mag_be, cali_mag_be,,
 #else
-CALI_MAP_NAMED(cali_v4_maglev_vip_be, cali_maglev_vip_be,,
+CALI_MAP_NAMED(cali_v4_mag_be, cali_mag_be,,
 #endif
 		BPF_MAP_TYPE_HASH,
 		struct calico_maglev_key, struct calico_nat_dest,
