@@ -134,9 +134,9 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 		err = bpfEpMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
 
-		programsCount := 13
+		programsCount := 14
 		if ipv6Enabled {
-			programsCount = 25
+			programsCount = 27
 		}
 		Expect(programs.Count()).To(Equal(programsCount))
 		at := programs.Programs()
@@ -190,7 +190,7 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 			bpfEpMgr.OnUpdate(&proto.HostMetadataV6Update{Hostname: "uthost", Ipv6Addr: "1::4"})
 			err = bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
-			Expect(programs.Count()).To(Equal(50))
+			Expect(programs.Count()).To(Equal(52))
 
 			Expect(at).To(HaveKey(hook.AttachType{
 				Hook:       hook.Ingress,
@@ -328,10 +328,10 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 		err := bpfEpMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
 
-		programCount := 13
+		programCount := 14
 		jumpMapLen := 2
 		if ipv6Enabled {
-			programCount = 50
+			programCount = 52
 			jumpMapLen = 8
 		}
 		Expect(programs.Count()).To(Equal(programCount))
@@ -349,9 +349,9 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 		err = bpfEpMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
 
-		programsCount := 25
+		programsCount := 27
 		if ipv6Enabled {
-			programsCount = 50
+			programsCount = 52
 		}
 		Expect(programs.Count()).To(Equal(programsCount))
 
@@ -419,11 +419,11 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 		err := bpfEpMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
 
-		programsCount := 25
+		programsCount := 27
 		jumpMapLen := 6
 
 		if ipv6Enabled {
-			programsCount = 50
+			programsCount = 52
 			jumpMapLen = 16
 		}
 		Expect(programs.Count()).To(Equal(programsCount))
@@ -584,10 +584,10 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 		err = oldProgs.Open()
 		Expect(err).NotTo(HaveOccurred())
 		pm := jumpMapDump(oldProgs)
-		programsCount := 25
+		programsCount := 27
 		oldPoliciesCount := 4
 		if ipv6Enabled {
-			programsCount = 50
+			programsCount = 52
 			oldPoliciesCount = 12
 		}
 		Expect(pm).To(HaveLen(programsCount))
@@ -623,9 +623,9 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 		err = bpfEpMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
 
-		Expect(programs.Count()).To(Equal(25))
+		Expect(programs.Count()).To(Equal(27))
 		pm = jumpMapDump(commonMaps.ProgramsMap)
-		Expect(pm).To(HaveLen(25))
+		Expect(pm).To(HaveLen(27))
 
 		pm = jumpMapDump(commonMaps.JumpMap)
 		// We remember the state from above
