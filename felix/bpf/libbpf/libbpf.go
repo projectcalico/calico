@@ -33,16 +33,6 @@ import (
 // #include "libbpf_api.h"
 import "C"
 
-const (
-	PROG_TYPE_CGROUP_INET4_CONNECT = iota
-	PROG_TYPE_CGROUP_INET4_SENDMSG
-	PROG_TYPE_CGROUP_INET4_RECVMSG
-	PROG_TYPE_CGROUP_INET6_CONNECT
-	PROG_TYPE_CGROUP_INET6_SENDMSG
-	PROG_TYPE_CGROUP_INET6_RECVMSG
-	PROG_TYPE_MAX
-)
-
 type Obj struct {
 	obj *C.struct_bpf_object
 }
@@ -185,8 +175,14 @@ func DetachCTLBProgramsLegacy(cgroup string) error {
 	defer f.Close()
 	fd := int(f.Fd())
 
-	for i := PROG_TYPE_CGROUP_INET4_CONNECT; i < PROG_TYPE_MAX; i++ {
-		_, perr := C.bpf_ctlb_detach_legacy(C.int(fd), C.int(i))
+	attachTypes := []int{C.BPF_CGROUP_INET4_CONNECT,
+		C.BPF_CGROUP_UDP4_SENDMSG,
+		C.BPF_CGROUP_UDP4_RECVMSG,
+		C.BPF_CGROUP_INET6_CONNECT,
+		C.BPF_CGROUP_UDP6_SENDMSG,
+		C.BPF_CGROUP_UDP6_RECVMSG}
+	for _, attachType := range attachTypes {
+		_, perr := C.bpf_ctlb_detach_legacy(C.int(fd), C.int(attachType))
 		if perr != nil {
 			err = errors.Join(err, perr)
 		}
@@ -331,16 +327,16 @@ func (l *Link) Close() error {
 }
 
 func (l *Link) Pin(path string) error {
-	if l.link != nil {
-		cPath := C.CString(path)
-		defer C.free(unsafe.Pointer(cPath))
-		errno := C.bpf_link__pin(l.link, cPath)
-		if errno != 0 {
-			return fmt.Errorf("faild to pin link to %s: %w", path, syscall.Errno(errno))
-		}
-		return nil
+	if l.link == nil {
+		return fmt.Errorf("link nil")
 	}
-	return fmt.Errorf("link nil")
+	cPath := C.CString(path)
+	defer C.free(unsafe.Pointer(cPath))
+	errno := C.bpf_link__pin(l.link, cPath)
+	if errno != 0 {
+		return fmt.Errorf("failed to pin link to %s: %w", path, syscall.Errno(errno))
+	}
+	return nil
 }
 
 func OpenLink(path string) (*Link, error) {
