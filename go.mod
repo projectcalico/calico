@@ -88,6 +88,7 @@ require (
 	go.etcd.io/etcd/client/v2 v2.305.21
 	go.etcd.io/etcd/client/v3 v3.5.21
 	golang.org/x/crypto v0.38.0
+	golang.org/x/mod v0.24.0
 	golang.org/x/net v0.40.0
 	golang.org/x/oauth2 v0.30.0
 	golang.org/x/sync v0.14.0
@@ -332,7 +333,7 @@ require (
 	gopkg.in/evanphx/json-patch.v4 v4.12.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7 // indirect
-	gopkg.in/yaml.v3 v3.0.1 // indirect
+	gopkg.in/yaml.v3 v3.0.1
 	k8s.io/cloud-provider v0.32.4 // indirect
 	k8s.io/component-helpers v0.32.4 // indirect
 	k8s.io/controller-manager v0.32.4 // indirect
