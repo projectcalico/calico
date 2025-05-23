@@ -117,6 +117,10 @@ type QoSControls struct {
 	EgressBandwidth       int64 `json:"egressBandwidth,omitempty"`
 	IngressBurst          int64 `json:"ingressBurst,omitempty"`
 	EgressBurst           int64 `json:"egressBurst,omitempty"`
+	IngressPeakrate       int64 `json:"ingressPeakrate,omitempty"`
+	EgressPeakrate        int64 `json:"egressPeakrate,omitempty"`
+	IngressMinburst       int64 `json:"ingressMinburst,omitempty"`
+	EgressMinburst        int64 `json:"egressMinburst,omitempty"`
 	IngressPacketRate     int64 `json:"ingressPacketRate,omitempty"`
 	EgressPacketRate      int64 `json:"egressPacketRate,omitempty"`
 	IngressMaxConnections int64 `json:"ingressMaxConnections,omitempty"`
