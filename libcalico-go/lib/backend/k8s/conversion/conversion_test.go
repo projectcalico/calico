@@ -1285,7 +1285,7 @@ var _ = Describe("Test Pod conversion", func() {
 			IngressBandwidth:      1000,
 			EgressBandwidth:       1000000000000000,
 			IngressBurst:          1000,
-			EgressBurst:           4294967296,
+			EgressBurst:           34359738360,
 			IngressPeakrate:       1000,
 			EgressPeakrate:        1000000000000000,
 			IngressMinburst:       1000,
