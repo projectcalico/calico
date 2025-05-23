@@ -22,7 +22,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/bpf"
@@ -65,7 +64,7 @@ func RemoveConnectTimeLoadBalancer(cgroupv2 string) error {
 
 	bpfMount, err := utils.MaybeMountBPFfs()
 	if err != nil {
-		return errors.Wrap(err, "Failed to mount bpffs")
+		return fmt.Errorf("failed to mount bpffs: %w", err)
 	}
 
 	pinDir := path.Join(bpfMount, bpfdefs.CtlbPinDir)
@@ -116,7 +115,7 @@ func detachCtlbPrograms(pinDir, cgroupv2 string) error {
 func detachLegacyCtlb(cgroupv2 string) error {
 	cgroupPath, err := ensureCgroupPath(cgroupv2)
 	if err != nil {
-		return errors.Wrap(err, "failed to set-up cgroupv2")
+		return fmt.Errorf("failed to set-up cgroupv2: %w", err)
 	}
 	return libbpf.DetachCTLBProgramsLegacy(cgroupPath)
 }
@@ -162,8 +161,7 @@ func attachProgram(name, ipver, bpfMount, cgroupPath string, udpNotSeen time.Dur
 			return fmt.Errorf("failed to attach program %s: %w", progName, err)
 		}
 		link = nil
-	}
-	if link != nil {
+	} else if link != nil {
 		defer link.Close()
 		err := link.Pin(progPinPath)
 		if err != nil {
@@ -205,7 +203,7 @@ func installCTLB(ipv4Enabled, ipv6Enabled bool, cgroupv2 string, logLevel string
 
 	cgroupPath, err := ensureCgroupPath(cgroupv2)
 	if err != nil {
-		return errors.Wrap(err, "failed to set-up cgroupv2")
+		return fmt.Errorf("failed to set-up cgroupv2: %w", err)
 	}
 
 	ctlbProgsMap := newProgramsMap()
@@ -334,7 +332,7 @@ func ensureCgroupPath(cgroupv2 string) (string, error) {
 		err = os.MkdirAll(cgroupPath, 0766)
 		if err != nil {
 			log.WithError(err).Error("Failed to make cgroup")
-			return "", errors.Wrap(err, "failed to create cgroup")
+			return "", fmt.Errorf("failed to create cgroup: %w", err)
 		}
 	}
 	return cgroupPath, nil

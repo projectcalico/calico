@@ -90,14 +90,9 @@ int bpf_attach_type(int type) {
 	return -1;
 }
 
-int bpf_ctlb_detach_legacy(int target_fd, int prog_type) {
+int bpf_ctlb_detach_legacy(int target_fd, int attach_type) {
 	int err;
-	int attach_type = bpf_attach_type(prog_type);
 	__u32 attach_flags, prog_cnt, prog_id;
-	if (attach_type == -1) {
-		err = EINVAL;
-		goto out;
-	}
 
 	err = bpf_prog_query(target_fd, attach_type, 0, &attach_flags, &prog_id, &prog_cnt);
 	if (err) {
