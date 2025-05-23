@@ -73,7 +73,7 @@ func DetachClassifier(ifindex, handle, pref int, ingress bool) error {
 	panic("LIBBPF syscall stub")
 }
 
-func (o *Obj) AttachClassifier(secName, ifName string, ingress bool, prio int) (int, int, int, error) {
+func (o *Obj) AttachClassifier(secName, ifName string, ingress bool, prio, handle int) (int, int, int, error) {
 	panic("LIBBPF syscall stub")
 }
 
