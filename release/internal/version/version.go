@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/Masterminds/semver/v3"
@@ -139,6 +140,36 @@ func (v *Version) NextBranchVersion() Version {
 		}
 	}
 	return New(ver.IncMinor().String())
+}
+
+// NextReleaseVersion returns the next version for a release in the current branch.
+// If the version is a EP1 version, it will increment the EP version.
+// If the version is a EP2 version, it will increment to GA version.
+// If the version is a GA version, it will increment the patch version.
+//
+// For example, for version "v3.15.0-1.0", the next release version is "v3.15.0-1.1".
+// For version "v3.15.0-2.0", the next release version is "v3.15.1".
+// For version "v3.15.0", the next release version is "v3.15.1".
+// For version "v3.15.0-1.0-1-g1a2b3c4d5e67", the next release version is "v3.15.0-1.1".
+func (v *Version) NextReleaseVersion() (Version, error) {
+	ver := v.Semver()
+	ep, epVer := IsEarlyPreviewVersion(ver)
+	if ep {
+		if epVer == 1 {
+			// EP 1 = increment EP version i.e vX.Y.Z-1.0 to vX.Y.Z-1.1
+			parts := strings.Split(ver.Prerelease(), ".")
+			minorEPver, err := strconv.Atoi(strings.Split(parts[1], "-")[0])
+			if err != nil {
+				logrus.WithError(err).Error("Failed to parse minor EP version")
+				return "", err
+			}
+			return New(fmt.Sprintf("v%d.%d.0-1.%d", ver.Major(), ver.Minor(), minorEPver+1)), nil
+		}
+		// EP 2 - increment to GA version i.e vX.Y.Z-2.0 to vX.Y.1
+		return New(fmt.Sprintf("v%d.%d.1", ver.Major(), ver.Minor())), nil
+	}
+	// GA versions - increment patch version i.e vX.Y.Z to vX.Y.Z+1
+	return New(ver.IncPatch().String()), nil
 }
 
 // IsEarlyPreviewVersion handles the logic for determining if a version is an early preview (EP) version.

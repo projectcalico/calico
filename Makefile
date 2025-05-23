@@ -248,18 +248,8 @@ update-pins: update-go-build-pin update-calico-base-pin
 ###############################################################################
 # Post-release validation
 ###############################################################################
-POSTRELEASE_IMAGE=calico/postrelease
-POSTRELEASE_IMAGE_CREATED=.calico.postrelease.created
-$(POSTRELEASE_IMAGE_CREATED):
-	cd hack/postrelease && docker build -t $(POSTRELEASE_IMAGE) .
-	touch $@
+bin/gotestsum:
+	@GOBIN=$(REPO_ROOT)/bin go install gotest.tools/gotestsum@$(GOTESTSUM_VERSION)
 
-postrelease-checks: $(POSTRELEASE_IMAGE_CREATED)
-	$(DOCKER_RUN) \
-		-v /var/run/docker.sock:/var/run/docker.sock \
-		-e VERSION=$(VERSION) \
-		-e FLANNEL_VERSION=$(FLANNEL_VERSION) \
-		-e VPP_VERSION=$(VPP_VERSION) \
-		-e OPERATOR_VERSION=$(OPERATOR_VERSION) \
-		$(POSTRELEASE_IMAGE) \
-		sh -c "nosetests hack/postrelease -e "$(EXCLUDE_REGEX)" -s -v --with-xunit --xunit-file='postrelease-checks.xml' --with-timer $(EXTRA_NOSE_ARGS)"
+postrelease-checks: release/bin/release bin/gotestsum
+	@release/bin/release release validate
