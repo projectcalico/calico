@@ -40,8 +40,8 @@ import (
 
 // Global configuration for releases.
 var (
-	// Default defaultRegistries to which all release images are pushed.
-	defaultRegistries = []string{
+	// Default DefaultRegistries to which all release images are pushed.
+	DefaultRegistries = []string{
 		"docker.io/calico",
 		"quay.io/calico",
 		"gcr.io/projectcalico-org",
@@ -120,7 +120,7 @@ func NewManager(opts ...Option) *CalicoManager {
 		publishImages:    true,
 		publishTag:       true,
 		publishGithub:    true,
-		imageRegistries:  defaultRegistries,
+		imageRegistries:  DefaultRegistries,
 		operatorRegistry: operator.DefaultRegistry,
 		operatorImage:    operator.DefaultImage,
 	}
@@ -625,7 +625,7 @@ func (r *CalicoManager) releasePrereqs() error {
 
 	// If we are releasing to projectcalico/calico, make sure we are releasing to the default registries.
 	if r.githubOrg == utils.ProjectCalicoOrg && r.repo == utils.CalicoRepoName {
-		if !reflect.DeepEqual(r.imageRegistries, defaultRegistries) {
+		if !reflect.DeepEqual(r.imageRegistries, DefaultRegistries) {
 			return fmt.Errorf("image registries cannot be different from default registries for a release")
 		}
 	}
@@ -653,7 +653,7 @@ func (r *CalicoManager) checkHashreleaseImagesPublished() ([]registry.Component,
 
 	for name, component := range r.imageComponents {
 		go func(name string, component registry.Component, ch chan imageExistsResult) {
-			exists, err := registry.CheckComponentImage(component)
+			exists, err := registry.CheckImage(component.String())
 			resultsCh <- imageExistsResult{
 				name:   name,
 				image:  component.String(),
@@ -913,7 +913,7 @@ func (r *CalicoManager) generateManifests() error {
 	env = append(env, fmt.Sprintf("OPERATOR_VERSION=%s", r.operatorVersion))
 	env = append(env, fmt.Sprintf("OPERATOR_REGISTRY=%s", r.operatorRegistry))
 	env = append(env, fmt.Sprintf("OPERATOR_IMAGE=%s", r.operatorImage))
-	if !slices.Equal(r.imageRegistries, defaultRegistries) {
+	if !slices.Equal(r.imageRegistries, DefaultRegistries) {
 		env = append(env, fmt.Sprintf("REGISTRY=%s", r.imageRegistries[0]))
 	}
 	if err := r.makeInDirectoryIgnoreOutput(r.repoRoot, "gen-manifests", env...); err != nil {
