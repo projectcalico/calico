@@ -35,6 +35,7 @@ CALI_MAP(cali_v4_frgfwd, 2, BPF_MAP_TYPE_LRU_HASH, struct frags4_fwd_key, __u32,
 struct frags4_fwd_key {
 	ipv4_addr_t src;
 	ipv4_addr_t dst;
+	__u32 ifindex; /* The stream of fragments may be crossing multiple devices */
 	__u16 id;
 	__u16 __pad;
 };
@@ -214,12 +215,15 @@ static CALI_BPF_INLINE void frags4_record_ct(struct cali_tc_ctx *ctx)
 	struct frags4_fwd_key k = {
 		.src = ip_hdr(ctx)->saddr,
 		.dst = ip_hdr(ctx)->daddr,
+		.ifindex = ctx->skb->ifindex,
 		.id = ip_hdr(ctx)->id,
 	};
 
 	__u32 v = 0;
 
 	cali_v4_frgfwd_update_elem(&k, &v, 0);
+	CALI_DEBUG("IP FRAG: created ct from " IP_FMT " to " IP_FMT,
+			debug_ip(ctx->state->ip_src), debug_ip(ctx->state->ip_dst));
 }
 
 static CALI_BPF_INLINE void frags4_remove_ct(struct cali_tc_ctx *ctx)
@@ -227,10 +231,13 @@ static CALI_BPF_INLINE void frags4_remove_ct(struct cali_tc_ctx *ctx)
 	struct frags4_fwd_key k = {
 		.src = ip_hdr(ctx)->saddr,
 		.dst = ip_hdr(ctx)->daddr,
+		.ifindex = ctx->skb->ifindex,
 		.id = ip_hdr(ctx)->id,
 	};
 
 	cali_v4_frgfwd_delete_elem(&k);
+	CALI_DEBUG("IP FRAG: killed ct from " IP_FMT " to " IP_FMT,
+			debug_ip(ctx->state->ip_src), debug_ip(ctx->state->ip_dst));
 }
 
 static CALI_BPF_INLINE bool frags4_lookup_ct(struct cali_tc_ctx *ctx)
@@ -238,9 +245,12 @@ static CALI_BPF_INLINE bool frags4_lookup_ct(struct cali_tc_ctx *ctx)
 	struct frags4_fwd_key k = {
 		.src = ip_hdr(ctx)->saddr,
 		.dst = ip_hdr(ctx)->daddr,
+		.ifindex = ctx->skb->ifindex,
 		.id = ip_hdr(ctx)->id,
 	};
 
+	CALI_DEBUG("IP FRAG: lookup ct from " IP_FMT " to " IP_FMT,
+			debug_ip(ctx->state->ip_src), debug_ip(ctx->state->ip_dst));
 	return cali_v4_frgfwd_lookup_elem(&k) != NULL;
 }
 

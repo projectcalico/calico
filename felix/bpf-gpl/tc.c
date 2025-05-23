@@ -203,7 +203,7 @@ int calico_tc_main(struct __sk_buff *skb)
 	}
 
 #ifndef IPVER6
-	if (CALI_F_TO_HOST && ip_is_frag(ip_hdr(ctx))) {
+	if (CALI_F_FROM_HEP && ip_is_frag(ip_hdr(ctx))) {
 		CALI_JUMP_TO(ctx, PROG_INDEX_IP_FRAG);
 		goto deny;
 	}
@@ -270,7 +270,7 @@ static CALI_BPF_INLINE int pre_policy_processing(struct cali_tc_ctx *ctx)
 	}
 
 #ifndef IPVER6
-	if (CALI_F_FROM_HOST && ip_is_frag(ip_hdr(ctx)) && !ip_is_first_frag(ip_hdr(ctx))) {
+	if ((CALI_F_FROM_HOST || CALI_F_FROM_WEP) && ip_is_frag(ip_hdr(ctx)) && !ip_is_first_frag(ip_hdr(ctx))) {
 		if (frags4_lookup_ct(ctx)) {
 			if (ip_is_last_frag(ip_hdr(ctx))) {
 				frags4_remove_ct(ctx);
@@ -1290,7 +1290,7 @@ int calico_tc_skb_accepted_entrypoint(struct __sk_buff *skb)
 	}
 
 #ifndef IPVER6
-	if (CALI_F_FROM_HOST && ip_is_first_frag(ip_hdr(ctx))) {
+	if ((CALI_F_FROM_HOST || CALI_F_FROM_WEP) && ip_is_first_frag(ip_hdr(ctx))) {
 		frags4_record_ct(ctx);
 	}
 #endif
