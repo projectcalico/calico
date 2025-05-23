@@ -1,5 +1,4 @@
-// Package openstack contains functionality for calculating and validating openstack package releases
-package openstack
+package postrelease
 
 import (
 	"bytes"
@@ -7,6 +6,7 @@ import (
 	"html/template"
 	"net/http"
 	"strings"
+	"testing"
 )
 
 // PackageRevision represents a package with all its various permutations
@@ -63,55 +63,55 @@ var urlTemplates = map[string]map[string]string{
 	},
 }
 
-var dnsmasqVersion = "2.79_calico1-2"
-
 var (
 	ubuntuTemplate  = `{{ .BaseURL }}/{{ .Component }}_{{ .Version }}-{{ .OSVersion }}_{{ .Arch }}.deb`
 	rhelTemplate    = `{{ .BaseURL }}/{{ .Component }}-{{ .Version }}.{{ .OSVersion }}.{{ .Arch }}.rpm`
 	dnsmasqTemplate = `{{ .BaseURL }}/{{ .Component }}-{{ .Version }}.{{ .OSVersion }}.2.{{ .Arch }}.rpm`
 )
 
-var rhelVersions = [...]string{
-	"el7",
-}
+var (
+	dnsmasqVersion = "2.79_calico1-2"
+	rhelVersions   = [...]string{
+		"el7",
+	}
+	rpmArches = [...]string{
+		"x86_64",
+	}
+	ubuntuVersions = [...]string{
+		"focal",
+		"jammy",
+	}
+)
 
-var rpmArches = [...]string{
-	"x86_64",
-}
+var (
+	rpmComponents = [...]rhelComponent{
+		// 'Native' components built for their specific architecture
+		{Name: "calico-common", Native: true},
+		{Name: "calico-felix", Native: true},
+		{Name: "felix-debuginfo", Native: true},
 
-var ubuntuVersions = [...]string{
-	"focal",
-	"jammy",
-}
+		// dnsmasq-related components
+		{Name: "dnsmasq", Native: true},
+		{Name: "dnsmasq-debuginfo", Native: true},
+		{Name: "dnsmasq-utils", Native: true},
 
-var rpmComponents = [...]rhelComponent{
-	// 'Native' components built for their specific architecture
-	{Name: "calico-common", Native: true},
-	{Name: "calico-felix", Native: true},
-	{Name: "felix-debuginfo", Native: true},
-
-	// dnsmasq-related components
-	{Name: "dnsmasq", Native: true},
-	{Name: "dnsmasq-debuginfo", Native: true},
-	{Name: "dnsmasq-utils", Native: true},
-
-	// Non-native components (i.e. 'noarch')
-	{Name: "calico-compute", Native: false},
-	{Name: "calico-control", Native: false},
-	{Name: "calico-dhcp-agent", Native: false},
-	{Name: "networking-calico", Native: false},
-}
-
-var ubuntuComponents = [...]ubuntuComponent{
-	// Components filed under 'networking-calico' on the PPA
-	{Name: "calico-compute", ComponentName: "networking-calico"},
-	{Name: "calico-control", ComponentName: "networking-calico"},
-	{Name: "calico-dhcp-agent", ComponentName: "networking-calico"},
-	{Name: "networking-calico", ComponentName: "networking-calico"},
-	// Components filed under 'felix' on the PPA
-	{Name: "calico-common", ComponentName: "felix"},
-	{Name: "calico-felix", ComponentName: "felix"},
-}
+		// Non-native components (i.e. 'noarch')
+		{Name: "calico-compute", Native: false},
+		{Name: "calico-control", Native: false},
+		{Name: "calico-dhcp-agent", Native: false},
+		{Name: "networking-calico", Native: false},
+	}
+	ubuntuComponents = [...]ubuntuComponent{
+		// Components filed under 'networking-calico' on the PPA
+		{Name: "calico-compute", ComponentName: "networking-calico"},
+		{Name: "calico-control", ComponentName: "networking-calico"},
+		{Name: "calico-dhcp-agent", ComponentName: "networking-calico"},
+		{Name: "networking-calico", ComponentName: "networking-calico"},
+		// Components filed under 'felix' on the PPA
+		{Name: "calico-common", ComponentName: "felix"},
+		{Name: "calico-felix", ComponentName: "felix"},
+	}
+)
 
 // GetPackages calculates and returns the expected packages for a given calico release
 func GetPackages(releaseStream string) map[string][]PackageRevision {
@@ -187,4 +187,23 @@ func GetPackages(releaseStream string) map[string][]PackageRevision {
 	}
 
 	return packageList
+}
+
+func TestOpenStackPackages(t *testing.T) {
+	packageList := GetPackages(releaseVersion)
+	for packagePlatform, packageObjList := range packageList {
+		for _, packageObj := range packageObjList {
+			testName := fmt.Sprintf("%s/%s/%s/%s %s", packagePlatform, packageObj.OSVersion, packageObj.Arch, packageObj.Component, packageObj.Version)
+			t.Run(testName, func(t *testing.T) {
+				t.Parallel()
+				resp, err := packageObj.Head()
+				if err != nil {
+					t.Fatalf("error occurred while getting package %s: %v", packageObj.URL(), err)
+				}
+				if resp.StatusCode != 200 {
+					t.Fatalf("failed to get package %s: server returned %s", packageObj.URL(), resp.Status)
+				}
+			})
+		}
+	}
 }
