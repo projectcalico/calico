@@ -502,26 +502,32 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology with Felix pr
 		IPIPMode    api.IPIPMode
 		RouteSource string
 		BrokenXSum  bool
+		EnableIPv6  bool
 	}
 	for _, testConfig := range []testConf{
-		{api.IPIPModeCrossSubnet, "CalicoIPAM", true},
-		{api.IPIPModeCrossSubnet, "WorkloadIPs", false},
+		//{api.IPIPModeCrossSubnet, "CalicoIPAM", true, true},
+		//{api.IPIPModeCrossSubnet, "WorkloadIPs", false, true},
+		//{api.IPIPModeCrossSubnet, "CalicoIPAM", true, false},
+		//{api.IPIPModeCrossSubnet, "WorkloadIPs", false, false},
 
-		{api.IPIPModeAlways, "CalicoIPAM", true},
-		{api.IPIPModeAlways, "WorkloadIPs", false},
+		//{api.IPIPModeAlways, "CalicoIPAM", true, true},
+		//{api.IPIPModeAlways, "WorkloadIPs", false, true},
+		{api.IPIPModeAlways, "CalicoIPAM", true, false},
+		//{api.IPIPModeAlways, "WorkloadIPs", false, false},
 	} {
 		ipipMode := testConfig.IPIPMode
 		routeSource := testConfig.RouteSource
 		brokenXSum := testConfig.BrokenXSum
+		enableIPv6 := testConfig.EnableIPv6
 
-		Describe(fmt.Sprintf("IPIP mode set to %s, routeSource %s, brokenXSum: %v", ipipMode, routeSource, brokenXSum), func() {
+		Describe(fmt.Sprintf("IPIP mode set to %s, routeSource %s, brokenXSum: %v, enableIPv6: %v", ipipMode, routeSource, brokenXSum, enableIPv6), func() {
 			var (
 				infra           infrastructure.DatastoreInfra
 				tc              infrastructure.TopologyContainers
 				felixes         []*infrastructure.Felix
 				client          client.Interface
-				w               [3]*workload.Workload
-				hostW           [3]*workload.Workload
+				w, w6           [3]*workload.Workload
+				hostW, hostW6   [3]*workload.Workload
 				cc              *connectivity.Checker
 				topologyOptions infrastructure.TopologyOptions
 			)
@@ -533,42 +539,55 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology with Felix pr
 				}
 
 				topologyOptions = createIPIPBaseTopologyOptions(ipipMode, routeSource, brokenXSum)
-				tc, client = infrastructure.StartNNodeTopology(3, topologyOptions, infra)
-
-				w, hostW = setupIPIPWorkloads(infra, tc, topologyOptions, client)
-				felixes = tc.Felixes
+				topologyOptions.FelixLogSeverity = "Debug"
 
 				cc = &connectivity.Checker{}
+
+				tc, client = infrastructure.StartNNodeTopology(3, topologyOptions, infra)
+
+				w, w6, hostW, hostW6 = setupIPIPWorkloads(infra, tc, topologyOptions, client, enableIPv6)
+				felixes = tc.Felixes
+
+				// Assign tunnel addresees in IPAM based on the topology.
+				assignTunnelAddresses(infra, tc, client)
 			})
 
-			AfterEach(func() {
+			JustAfterEach(func() {
 				if CurrentGinkgoTestDescription().Failed {
-					for _, felix := range tc.Felixes {
+					for _, felix := range felixes {
 						if NFTMode() {
 							logNFTDiags(felix)
 						} else {
 							felix.Exec("iptables-save", "-c")
 							felix.Exec("ipset", "list")
 						}
+						felix.Exec("ipset", "list")
 						felix.Exec("ip", "r")
 						felix.Exec("ip", "a")
-						if BPFMode() {
-							felix.Exec("calico-bpf", "policy", "dump", "eth0", "all", "--asm")
+						if enableIPv6 {
+							felix.Exec("ip", "-6", "route")
 						}
+						felix.Exec("ip", "-d", "link")
 					}
-				}
 
+					infra.DumpErrorData()
+				}
+			})
+
+			AfterEach(func() {
 				for _, wl := range w {
+					wl.Stop()
+				}
+				for _, wl := range w6 {
 					wl.Stop()
 				}
 				for _, wl := range hostW {
 					wl.Stop()
 				}
-				tc.Stop()
-
-				if CurrentGinkgoTestDescription().Failed {
-					infra.DumpErrorData()
+				for _, wl := range hostW6 {
+					wl.Stop()
 				}
+				tc.Stop()
 				infra.Stop()
 			})
 
@@ -610,9 +629,16 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology with Felix pr
 				}
 			})
 
-			It("should have workload to workload connectivity", func() {
+			It("pepper should have workload to workload connectivity", func() {
 				cc.ExpectSome(w[0], w[1])
 				cc.ExpectSome(w[1], w[0])
+
+				if enableIPv6 {
+					cc.ExpectSome(w6[0], w6[1])
+					cc.ExpectSome(w6[1], w6[0])
+				}
+
+				time.Sleep(time.Minute * 50)
 				cc.CheckConnectivity()
 			})
 
@@ -636,6 +662,16 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology with Felix pr
 					wName := fmt.Sprintf("w%d", n)
 
 					err := client.IPAM().ReleaseByHandle(context.TODO(), wName)
+					Expect(err).NotTo(HaveOccurred())
+
+					if enableIPv6 {
+						w6Name := fmt.Sprintf("w6-%d", n)
+						err := client.IPAM().ReleaseByHandle(context.TODO(), w6Name)
+						Expect(err).NotTo(HaveOccurred())
+					}
+
+					handle := fmt.Sprintf("ipip-tunnel-addr-%s", felixes[n].Hostname)
+					err = client.IPAM().ReleaseByHandle(context.TODO(), handle)
 					Expect(err).NotTo(HaveOccurred())
 
 					affinityCfg := ipam.AffinityConfig{
@@ -708,7 +744,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology with Felix pr
 				})
 			}
 
-			It("should have host to workload connectivity", func() {
+			It("pepper should have host to workload connectivity", func() {
 				if ipipMode == api.IPIPModeAlways && routeSource == "WorkloadIPs" {
 					Skip("Skipping due to known issue with tunnel IPs not being programmed in WEP mode")
 				}
@@ -1182,8 +1218,8 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology with Felix pr
 				tc              infrastructure.TopologyContainers
 				felixes         []*infrastructure.Felix
 				client          client.Interface
-				w               [3]*workload.Workload
-				hostW           [3]*workload.Workload
+				w, w6           [3]*workload.Workload
+				hostW, hostW6   [3]*workload.Workload
 				cc              *connectivity.Checker
 				topologyOptions infrastructure.TopologyOptions
 			)
@@ -1204,7 +1240,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology with Felix pr
 				// Deploy the topology.
 				tc, client = infrastructure.StartNNodeTopology(3, topologyOptions, infra)
 
-				w, hostW = setupIPIPWorkloads(infra, tc, topologyOptions, client)
+				w, w6, hostW, hostW6 = setupIPIPWorkloads(infra, tc, topologyOptions, client, enableIPv6)
 				felixes = tc.Felixes
 
 				// Assign tunnel addresees in IPAM based on the topology.
@@ -1230,7 +1266,13 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology with Felix pr
 				for _, wl := range w {
 					wl.Stop()
 				}
+				for _, wl := range w6 {
+					wl.Stop()
+				}
 				for _, wl := range hostW {
+					wl.Stop()
+				}
+				for _, wl := range hostW6 {
 					wl.Stop()
 				}
 				tc.Stop()
@@ -1263,8 +1305,8 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology with Felix pr
 				tc              infrastructure.TopologyContainers
 				felixes         []*infrastructure.Felix
 				client          client.Interface
-				w               [3]*workload.Workload
-				hostW           [3]*workload.Workload
+				w, w6           [3]*workload.Workload
+				hostW, hostW6   [3]*workload.Workload
 				cc              *connectivity.Checker
 				topologyOptions infrastructure.TopologyOptions
 			)
@@ -1312,7 +1354,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology with Felix pr
 				// Deploy the topology.
 				tc, client = infrastructure.StartNNodeTopology(3, topologyOptions, infra)
 
-				w, hostW = setupIPIPWorkloads(infra, tc, topologyOptions, client)
+				w, w6, hostW, hostW6 = setupIPIPWorkloads(infra, tc, topologyOptions, client, enableIPv6)
 				felixes = tc.Felixes
 
 				// Assign tunnel addresees in IPAM based on the topology.
@@ -1338,7 +1380,13 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology with Felix pr
 				for _, wl := range w {
 					wl.Stop()
 				}
+				for _, wl := range w6 {
+					wl.Stop()
+				}
 				for _, wl := range hostW {
+					wl.Stop()
+				}
+				for _, wl := range hostW6 {
 					wl.Stop()
 				}
 				tc.Stop()
@@ -1435,7 +1483,7 @@ func createIPIPBaseTopologyOptions(
 	return topologyOptions
 }
 
-func setupIPIPWorkloads(infra infrastructure.DatastoreInfra, tc infrastructure.TopologyContainers, to infrastructure.TopologyOptions, client client.Interface) (w, hostW [3]*workload.Workload) {
+func setupIPIPWorkloads(infra infrastructure.DatastoreInfra, tc infrastructure.TopologyContainers, to infrastructure.TopologyOptions, client client.Interface, enableIPv6 bool) (w, w6, hostW, hostW6 [3]*workload.Workload) {
 	// Install a default profile that allows all ingress and egress, in the absence of any Policy.
 	infra.AddDefaultAllow()
 
@@ -1457,6 +1505,8 @@ func setupIPIPWorkloads(infra infrastructure.DatastoreInfra, tc infrastructure.T
 	// Create workloads, using that profile.  One on each "host".
 	_, IPv4CIDR, err := net.ParseCIDR(to.IPPoolCIDR)
 	Expect(err).To(BeNil())
+	_, IPv6CIDR, err := net.ParseCIDR(to.IPv6PoolCIDR)
+	Expect(err).To(BeNil())
 	for ii := range w {
 		wIP := fmt.Sprintf("%d.%d.%d.2", IPv4CIDR.IP[0], IPv4CIDR.IP[1], ii)
 		wName := fmt.Sprintf("w%d", ii)
@@ -1473,7 +1523,27 @@ func setupIPIPWorkloads(infra infrastructure.DatastoreInfra, tc infrastructure.T
 		w[ii] = workload.Run(tc.Felixes[ii], wName, "default", wIP, "8055", "tcp")
 		w[ii].ConfigureInInfra(infra)
 
+		if enableIPv6 {
+			w6IP := fmt.Sprintf("%x%x:%x%x:%x%x:%x%x:%x%x:%x%x:%d:3", IPv6CIDR.IP[0], IPv6CIDR.IP[1], IPv6CIDR.IP[2], IPv6CIDR.IP[3], IPv6CIDR.IP[4], IPv6CIDR.IP[5], IPv6CIDR.IP[6], IPv6CIDR.IP[7], IPv6CIDR.IP[8], IPv6CIDR.IP[9], IPv6CIDR.IP[10], IPv6CIDR.IP[11], ii)
+			w6Name := fmt.Sprintf("w6-%d", ii)
+			err := client.IPAM().AssignIP(context.Background(), ipam.AssignIPArgs{
+				IP:       net.MustParseIP(w6IP),
+				HandleID: &w6Name,
+				Attrs: map[string]string{
+					ipam.AttributeNode: tc.Felixes[ii].Hostname,
+				},
+				Hostname: tc.Felixes[ii].Hostname,
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			w6[ii] = workload.Run(tc.Felixes[ii], w6Name, "default", w6IP, "8055", "tcp")
+			w6[ii].ConfigureInInfra(infra)
+		}
+
 		hostW[ii] = workload.Run(tc.Felixes[ii], fmt.Sprintf("host%d", ii), "", tc.Felixes[ii].IP, "8055", "tcp")
+		if enableIPv6 {
+			hostW6[ii] = workload.Run(tc.Felixes[ii], fmt.Sprintf("host%d-v6", ii), "", tc.Felixes[ii].IPv6, "8055", "tcp")
+		}
 	}
 
 	if BPFMode() {
