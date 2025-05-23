@@ -562,7 +562,7 @@ blocks:
             - ./.semaphore/publish-artifacts
             - test-results publish /home/semaphore/calico/felix/report/fv_suite.xml --name "felix-fv-${SEMAPHORE_JOB_INDEX}" || true
             - test-results publish /home/semaphore/calico/felix/report/fv_nft_suite.xml --name "felix-fv-nft-${SEMAPHORE_JOB_INDEX}" || true
-  - name: "Felix: BPF UT/FV tests on new kernel"
+  - name: "Felix: BPF UT/FV tests on Ubuntu 24.04"
     run:
       when: "false or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/cni-plugin/pkg/dataplane/linux/dataplane_linux.go'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
     dependencies:
@@ -580,6 +580,7 @@ blocks:
           - export NUM_FV_BATCHES=8
           - export RUN_UT=true
           - export FV_FOCUS=BPF-SAFE
+          - export IMAGE=ubuntu-2404-noble-amd64-v20250502a
           - mkdir artifacts
           - ./.semaphore/create-test-vms ${VM_PREFIX}
       jobs:
@@ -596,7 +597,7 @@ blocks:
             - ./.semaphore/clean-up-vms ${VM_PREFIX}
       secrets:
         - name: google-service-account-for-gce
-  - name: "Felix: BPF UT/FV tests on new kernel (nftables)"
+  - name: "Felix: BPF UT/FV tests on Ubuntu 22.04 (nftables)"
     run:
       when: "false or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/cni-plugin/pkg/dataplane/linux/dataplane_linux.go'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
     dependencies:
@@ -612,7 +613,7 @@ blocks:
           - echo VM_PREFIX=${VM_PREFIX}
           - export REPO_NAME=$(basename $(pwd))
           - export NUM_FV_BATCHES=4
-          - export RUN_UT=false
+          - export RUN_UT=true
           - export FV_FOCUS='_BPF_.*ct=true'
           - mkdir artifacts
           - ./.semaphore/create-test-vms ${VM_PREFIX}
