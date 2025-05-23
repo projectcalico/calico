@@ -588,14 +588,17 @@ var _ = infrastructure.DatastoreDescribe(
 // first interval's rate (in order to verify peakrate configuration)
 // and possibly an error.
 func parseIperfJsonOutput(output string) (float64, float64, error) {
+	var rate, peakrate float64
 	perf := iperfReport{}
 	err := json.Unmarshal([]byte(output), &perf)
 	if err != nil {
 		return 0.0, 0.0, fmt.Errorf("failed to unmarshal iperf data: %w", err)
 	}
-
-	rate := perf.End.SumReceived.BitsPerSecond
-	peakrate := perf.Intervals[0].Sum.BitsPerSecond
+	rate = perf.End.SumReceived.BitsPerSecond
+	if len(perf.Intervals) > 0 {
+		peakrate = perf.Intervals[0].Sum.BitsPerSecond
+	}
+	logrus.WithFields(logrus.Fields{"rate": rate, "peakrate": peakrate, "perf": perf}).Infof("Finished parseIperfJsonOutput")
 	return rate, peakrate, nil
 }
 
