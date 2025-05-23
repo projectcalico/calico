@@ -50,6 +50,7 @@ clean:
 
 ci-preflight-checks:
 	$(MAKE) check-go-mod
+	$(MAKE) verify-go-mods
 	$(MAKE) check-dockerfiles
 	$(MAKE) check-language
 	$(MAKE) generate
