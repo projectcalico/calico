@@ -804,7 +804,7 @@ func TestRepeatedAttach(t *testing.T) {
 	bpfmaps, err := bpfmap.CreateBPFMaps(false)
 	Expect(err).NotTo(HaveOccurred())
 
-	bpfEpMgr, err := newBPFTestEpMgr(
+	bpfEpMgr, err := linux.NewTestEpMgr(
 		&linux.Config{
 			Hostname:              "uthost",
 			BPFLogLevel:           "off",
