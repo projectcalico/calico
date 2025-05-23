@@ -66,6 +66,17 @@ const backendKeyV6Size = 8
 //	};
 const backendValueV6Size = 20
 
+//	struct calico_maglev_key {
+//		ipv46_addr_t vip;
+//		__u16 port;
+//		__u8 proto;
+//		__u8 pad;
+//		__u32 ordinal; // should always be a value of [0..M], where M is a very large prime number. -Alex
+//	};
+const maglevBackendKeyV6Size = 24
+
+const maglevBackendValueV6Size = backendValueV6Size
+
 // (sizeof(addr) + sizeof(port) + sizeof(proto)) in bits
 const ZeroCIDRV6PrefixLen = (16 + 2 + 1) * 8
 
@@ -243,6 +254,19 @@ var BackendMapV6Parameters = maps.MapParameters{
 
 func BackendMapV6() maps.MapWithExistsCheck {
 	return maps.NewPinnedMap(BackendMapV6Parameters)
+}
+
+var MaglevBackendMapV6Parameters = maps.MapParameters{
+	Type:       "hash",
+	KeySize:    maglevBackendKeyV6Size,
+	ValueSize:  maglevBackendValueV6Size,
+	MaxEntries: 65537 * 100,
+	Name:       "cali_v6_mag_be",
+	Flags:      unix.BPF_F_NO_PREALLOC,
+}
+
+func MaglevMapV6() maps.MapWithExistsCheck {
+	return maps.NewPinnedMap(MaglevBackendMapV6Parameters)
 }
 
 // NATMapMem represents FrontendMap loaded into memory
