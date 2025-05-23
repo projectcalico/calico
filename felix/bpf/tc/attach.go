@@ -390,7 +390,7 @@ func findFilterPriority(progsToClean []attachedProg) (int, int) {
 			continue
 		}
 
-		handle64, err := strconv.ParseInt(p.handle[2:], 16, 64)
+		handle64, err := strconv.ParseInt(p.handle[2:], 16, 32)
 		if err != nil {
 			continue
 		}
