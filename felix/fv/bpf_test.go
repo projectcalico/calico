@@ -692,7 +692,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 			if testOpts.bpfLogLevel == "debug" && testOpts.protocol == "udp" && !testOpts.ipv6 {
 				It("udp should have connectivity after a service is recreated", func() {
-					clusterIP := "10.101.0.111"
+					clusterIP := "10.101.123.1"
 
 					tcpdump := w[0].AttachTCPDump()
 					tcpdump.SetLogEnabled(true)
