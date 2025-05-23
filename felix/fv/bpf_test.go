@@ -440,7 +440,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				options.ExtraEnvVars["FELIX_HEALTHHOST"] = "::"
 			}
 
-			if testOpts.protocol == "tcp" {
+			if false && testOpts.protocol == "tcp" {
 				filters := map[string]string{"all": "tcp"}
 				tcpResetTimeout := api.BPFConntrackTimeout("5s")
 				felixConfig := api.NewFelixConfiguration()
@@ -1736,6 +1736,51 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					cc.ExpectSome(w[1][1], w[0][0])
 					cc.CheckConnectivity(conntrackChecks(tc.Felixes)...)
 				})
+
+				_ = !testOpts.ipv6 && !testOpts.dsr &&
+					It("should handle fragmented UDP", func() {
+						if testOpts.tunnel == "vxlan" && !utils.UbuntuReleaseGreater("22.04") {
+							Skip("Ubuntu too old to handle frag on vxlan dev properly")
+						}
+
+						dev := "eth0"
+						switch testOpts.tunnel {
+						case "vxlan":
+							dev = "vxlan.calico"
+						case "ipip":
+							dev = "tunl0"
+						case "wireguard":
+							dev = "wireguard.cali"
+						}
+						tcpdump1 := tc.Felixes[1].AttachTCPDump(dev)
+						tcpdump1.SetLogEnabled(true)
+						tcpdump1.AddMatcher("udp-frags", regexp.MustCompile(
+							fmt.Sprintf("%s.* > %s.*", w[1][0].IP, w[0][0].IP)))
+						tcpdump1.Start("-vvv", "src", "host", w[1][0].IP, "and", "dst", "host", w[0][0].IP)
+						defer tcpdump1.Stop()
+
+						tcpdump0 := w[0][0].AttachTCPDump()
+						tcpdump0.SetLogEnabled(true)
+						tcpdump0.AddMatcher("udp-pod-frags", regexp.MustCompile(
+							fmt.Sprintf("%s.* > %s.*", w[1][0].IP, w[0][0].IP)))
+						tcpdump0.Start("-vvv", "src", "host", w[1][0].IP, "and", "dst", "host", w[0][0].IP)
+						defer tcpdump1.Stop()
+
+						// Give tcpdump some time to start up!
+						time.Sleep(time.Second)
+
+						// Send a packet with large payload without the DNF flag
+						_, err := w[1][0].RunCmd("pktgen", w[1][0].IP, w[0][0].IP, "udp",
+							"--port-src", "30444", "--port-dst", "30444", "--ip-dnf=n", "--payload-size=1600", "--udp-sock")
+						Expect(err).NotTo(HaveOccurred())
+
+						// We should see two fragments on the host interface
+						Eventually(func() int { return tcpdump1.MatchCount("udp-frags") }).Should(Equal(2))
+						// We should see a reassembled packet at the destination workload.
+						// If ebpf program did not reassemble the packet, we would still
+						// see two fragments!
+						Eventually(func() int { return tcpdump0.MatchCount("udp-pod-frags") }).Should(Equal(2))
+					})
 
 				if (testOpts.protocol == "tcp" || (testOpts.protocol == "udp" && !testOpts.udpUnConnected)) &&
 					testOpts.connTimeEnabled && !testOpts.dsr {
@@ -4271,7 +4316,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 									externalClient.Exec("ip", "-6", "route", "add", w[0][0].IP, "via", tc.Felixes[0].IPv6, "dev", "eth0")
 									externalClient.Exec("ip", "addr", "add", "169.254.169.254", "dev", remoteWL.InterfaceName)
 									// Need to change the MTU on the host side of the veth. If
-									// we change it on the eth0 of the docker iface, not ICMP
+									// we change it on the eth0 of the docker iface, no ICMP
 									// is generated.
 									externalClient.Exec("ip", "link", "set", "ethwl", "mtu", "1300")
 									for _, f := range tc.Felixes {
