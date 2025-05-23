@@ -1739,6 +1739,10 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 				_ = !testOpts.ipv6 && !testOpts.dsr &&
 					It("should handle fragmented UDP", func() {
+						if testOpts.tunnel == "vxlan" && !utils.UbuntuReleaseGreater("22.04") {
+							Skip("Ubuntu too old to handle frag on vxlan dev properly")
+						}
+
 						dev := "eth0"
 						switch testOpts.tunnel {
 						case "vxlan":
