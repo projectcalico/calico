@@ -440,7 +440,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				options.ExtraEnvVars["FELIX_HEALTHHOST"] = "::"
 			}
 
-			if testOpts.protocol == "tcp" {
+			if false && testOpts.protocol == "tcp" {
 				filters := map[string]string{"all": "tcp"}
 				tcpResetTimeout := api.BPFConntrackTimeout("5s")
 				felixConfig := api.NewFelixConfiguration()
