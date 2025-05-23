@@ -205,6 +205,7 @@ type Config struct {
 	BPFPSNATPorts                      numorstring.Port  `config:"portrange;20000:29999"`
 	BPFMapSizeNATFrontend              int               `config:"int;65536;non-zero"`
 	BPFMapSizeNATBackend               int               `config:"int;262144;non-zero"`
+	BPFMapSizeMaglevBackend            int               `config:"int;6553700;non-zero"`
 	BPFMapSizeNATAffinity              int               `config:"int;65536;non-zero"`
 	BPFMapSizeRoute                    int               `config:"int;262144;non-zero"`
 	BPFMapSizeConntrack                int               `config:"int;512000;non-zero"`

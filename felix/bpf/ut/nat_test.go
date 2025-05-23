@@ -36,6 +36,25 @@ import (
 	"github.com/projectcalico/calico/felix/proto"
 )
 
+func TestMaglevTable(t *testing.T) {
+	RegisterTestingT(t)
+
+	maglevMap := nat.MaglevMap()
+	err := maglevMap.EnsureExists()
+	Expect(err).NotTo(HaveOccurred())
+
+	key := nat.NewMaglevBackendKey(net.ParseIP("169.172.9.1"), 80, uint8(layers.IPProtocolUDP), 0)
+	val := nat.NewNATBackendValue(net.ParseIP("192.168.1.1"), 8080)
+	err = maglevMap.Update(key.AsBytes(), val.AsBytes())
+	Expect(err).NotTo(HaveOccurred())
+
+	m, err := nat.LoadMaglevMap(maglevMap)
+	Expect(err).NotTo(HaveOccurred())
+
+	Expect(m).To(HaveKey(key))
+	Expect(m[key]).To(BeEquivalentTo(val))
+}
+
 func TestNATPodPodXNode(t *testing.T) {
 	RegisterTestingT(t)
 
