@@ -24,7 +24,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 
 	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
@@ -33,6 +32,7 @@ import (
 	"github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/routetable"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 type routeManager struct {
@@ -67,7 +67,7 @@ type routeManager struct {
 	routeProtocol netlink.RouteProtocol
 
 	// Log context
-	logCtx     *logrus.Entry
+	logCtx     log.Entry
 	opRecorder logutils.OpRecorder
 
 	// In dual-stack setup in ebpf mode, for the sake of simplicity, we still
@@ -102,7 +102,7 @@ func newRouteManager(
 		nlHandle:        nlHandle,
 		routeProtocol:   calculateRouteProtocol(dpConfig),
 		opRecorder:      opRecorder,
-		logCtx: logrus.WithFields(logrus.Fields{
+		logCtx: log.WithFields(log.Fields{
 			"ipVersion":     ipVersion,
 			"tunnel device": tunnelDevice,
 		}),
@@ -253,7 +253,7 @@ func (m *routeManager) routeIsLocalBlock(msg *proto.RouteUpdate) bool {
 	// Check the valid suffix depending on IP version.
 	cidr, err := ip.CIDRFromString(msg.Dst)
 	if err != nil {
-		logrus.WithError(err).WithField("msg", msg).
+		log.WithError(err).WithField("msg", msg).
 			Warning("Unable to parse destination into a CIDR. Treating block as external.")
 	}
 	// Ignore exact routes, i.e. /32 (ipv4) or /128 (ipv6) routes in any case for two reasons:
@@ -272,14 +272,14 @@ func (m *routeManager) routeIsLocalBlock(msg *proto.RouteUpdate) bool {
 func (m *routeManager) deleteRoute(dst string) {
 	_, exists := m.routesByDest[dst]
 	if exists {
-		logrus.Debug("deleting route dst ", dst)
+		log.Debug("deleting route dst ", dst)
 		// In case the route changes type to one we no longer care about...
 		delete(m.routesByDest, dst)
 		m.routesDirty = true
 	}
 
 	if _, exists := m.localIPAMBlocks[dst]; exists {
-		logrus.Debug("deleting local ipam dst ", dst)
+		log.Debug("deleting local ipam dst ", dst)
 		delete(m.localIPAMBlocks, dst)
 		m.routesDirty = true
 	}
@@ -373,7 +373,7 @@ func (m *routeManager) updateRoutes() {
 	m.routeTable.SetRoutes(routetable.RouteClassIPAMBlockDrop, routetable.InterfaceNone, bhRoutes)
 
 	if m.parentDevice != "" {
-		m.logCtx.WithFields(logrus.Fields{
+		m.logCtx.WithFields(log.Fields{
 			"parentDevice": m.parentDevice,
 			"routes":       noEncapRoutes,
 		}).Debug("Route manager sending unencapsulated L3 updates")
@@ -392,7 +392,7 @@ func blackholeRoutes(localIPAMBlocks map[string]*proto.RouteUpdate, proto netlin
 	for dst := range localIPAMBlocks {
 		cidr, err := ip.CIDRFromString(dst)
 		if err != nil {
-			logrus.WithError(err).Warning(
+			log.WithError(err).Warning(
 				"Error processing IPAM block CIDR: ", dst,
 			)
 			continue
@@ -466,7 +466,7 @@ func (m *routeManager) KeepDeviceInSync(
 	parentIfaceC chan string,
 	getDevice func(netlink.Link) (netlink.Link, string, error),
 ) {
-	m.logCtx.WithFields(logrus.Fields{
+	m.logCtx.WithFields(log.Fields{
 		"device":     m.tunnelDevice,
 		"mtu":        mtu,
 		"xsumBroken": xsumBroken,
@@ -481,9 +481,9 @@ func (m *routeManager) KeepDeviceInSync(
 		select {
 		case <-timer.C:
 		case <-ctx.Done():
-			logrus.Debug("Sleep returning early: context finished.")
+			log.Debug("Sleep returning early: context finished.")
 		case <-m.tunnelChangedC:
-			logrus.Debug("Sleep returning early: tunnel changed.")
+			log.Debug("Sleep returning early: tunnel changed.")
 		}
 	}
 
@@ -548,7 +548,7 @@ func (m *routeManager) configureTunnelDevice(
 	if newLink == nil {
 		return fmt.Errorf("no tunnel link provided")
 	}
-	logCtx := m.logCtx.WithFields(logrus.Fields{
+	logCtx := m.logCtx.WithFields(log.Fields{
 		"mtu":        mtu,
 		"tunnelAddr": addr,
 	})
@@ -587,13 +587,13 @@ func (m *routeManager) configureTunnelDevice(
 		// already. Check for mismatched configuration. If they don't match, recreate the device.
 		if incompat := vxlanLinksIncompat(newLink, link); incompat != "" {
 			// Existing device doesn't match desired configuration - delete it and recreate.
-			logrus.Warningf("%q exists with incompatible configuration: %v; recreating device", m.tunnelDevice, incompat)
+			log.Warningf("%q exists with incompatible configuration: %v; recreating device", m.tunnelDevice, incompat)
 			if err = m.nlHandle.LinkDel(link); err != nil {
 				return fmt.Errorf("failed to delete interface: %v", err)
 			}
 			if err = m.nlHandle.LinkAdd(newLink); err != nil {
 				if err == syscall.EEXIST {
-					logrus.Warnf("Failed to create VXLAN device. Another device with this VNI may already exist")
+					log.Warnf("Failed to create VXLAN device. Another device with this VNI may already exist")
 				}
 				return fmt.Errorf("failed to create vxlan interface: %v", err)
 			}
@@ -608,7 +608,7 @@ func (m *routeManager) configureTunnelDevice(
 	attrs := link.Attrs()
 	oldMTU := attrs.MTU
 	if mtu != 0 && oldMTU != mtu {
-		m.logCtx.WithFields(logrus.Fields{"old": oldMTU, "new": mtu}).Info("Tunnel device MTU needs to be updated")
+		m.logCtx.WithFields(log.Fields{"old": oldMTU, "new": mtu}).Info("Tunnel device MTU needs to be updated")
 		if err := m.nlHandle.LinkSetMTU(link, mtu); err != nil {
 			m.logCtx.WithError(err).Warn("Failed to set tunnel device MTU")
 		} else {
@@ -667,7 +667,7 @@ func (m *routeManager) ensureAddressOnLink(ipStr string, link netlink.Link) erro
 			addrPresent = true
 			continue
 		}
-		m.logCtx.WithFields(logrus.Fields{
+		m.logCtx.WithFields(log.Fields{
 			"address": existing,
 			"link":    link.Attrs().Name,
 		}).Warn("Removing unwanted IP from tunnel device")
@@ -678,7 +678,7 @@ func (m *routeManager) ensureAddressOnLink(ipStr string, link netlink.Link) erro
 
 	// Actually add the desired address to the interface if needed.
 	if !addrPresent {
-		m.logCtx.WithFields(logrus.Fields{"address": addr}).Info("Assigning address to tunnel device")
+		m.logCtx.WithFields(log.Fields{"address": addr}).Info("Assigning address to tunnel device")
 		if err := m.nlHandle.AddrAdd(link, &addr); err != nil {
 			return fmt.Errorf("failed to add IP address")
 		}

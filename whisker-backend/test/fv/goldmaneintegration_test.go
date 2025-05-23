@@ -24,7 +24,6 @@ import (
 	"time"
 
 	. "github.com/onsi/gomega"
-	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/goldmane/pkg/client"
 	gmdaemon "github.com/projectcalico/calico/goldmane/pkg/daemon"
@@ -32,6 +31,7 @@ import (
 	"github.com/projectcalico/calico/goldmane/proto"
 	"github.com/projectcalico/calico/lib/httpmachinery/pkg/apiutil"
 	"github.com/projectcalico/calico/lib/std/chanutil"
+	"github.com/projectcalico/calico/lib/std/log"
 	jsontestutil "github.com/projectcalico/calico/lib/std/testutils/json"
 	"github.com/projectcalico/calico/whisker-backend/cmd/app"
 	whiskerv1 "github.com/projectcalico/calico/whisker-backend/pkg/apis/v1"
@@ -42,11 +42,12 @@ import (
 func TestGoldmaneIntegration_FlowWatching(t *testing.T) {
 	var wg sync.WaitGroup
 	defer func() {
-		logrus.Info("Waiting for goroutines to finish...")
+		log.Info("Waiting for goroutines to finish...")
 		wg.Wait()
-		logrus.Info("Finished waiting for goroutines to finish.")
+		log.Info("Finished waiting for goroutines to finish.")
 	}()
 
+	log.Info("Starting test...")
 	ctx, teardown := setup(t)
 	defer teardown()
 
@@ -149,9 +150,9 @@ func TestGoldmaneIntegration_FlowWatching(t *testing.T) {
 func TestGoldmaneIntegration_FilterHints(t *testing.T) {
 	var wg sync.WaitGroup
 	defer func() {
-		logrus.Info("Waiting for goroutines to finish...")
+		log.Info("Waiting for goroutines to finish...")
 		wg.Wait()
-		logrus.Info("Finished waiting for goroutines to finish.")
+		log.Info("Finished waiting for goroutines to finish.")
 	}()
 
 	ctx, teardown := setup(t)

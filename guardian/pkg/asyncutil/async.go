@@ -20,9 +20,8 @@ import (
 	"io"
 	"sync"
 
-	"github.com/sirupsen/logrus"
-
 	"github.com/projectcalico/calico/lib/std/chanutil"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // CommandExecutor executes commands sent using the Send channel asynchronously. The result is sent back on the <-chan Result[R}
@@ -142,13 +141,13 @@ func (executor *commandExecutor[C, R]) loop(shutdownCtx context.Context) {
 		executor.backlog = append(executor.backlog, chanutil.ReadAllNonBlocking(executor.cmdChan)...)
 
 		if len(executor.backlog) > 0 {
-			logrus.Debug("Returning errors for outstanding commands due to shutdown...")
+			log.Debug("Returning errors for outstanding commands due to shutdown...")
 			for _, cmd := range executor.backlog {
 				cmd.ReturnError(context.Canceled)
 			}
-			logrus.Debug("Finished returning errors for outstanding commands.")
+			log.Debug("Finished returning errors for outstanding commands.")
 		} else {
-			logrus.Debug("No outstanding commands, shutting down..")
+			log.Debug("No outstanding commands, shutting down..")
 		}
 
 		close(executor.drainAndBacklogSig)
@@ -160,25 +159,25 @@ func (executor *commandExecutor[C, R]) loop(shutdownCtx context.Context) {
 	for {
 		select {
 		case <-shutdownCtx.Done():
-			logrus.Debug("Shutdown signal received, shutting executor down...")
+			log.Debug("Shutdown signal received, shutting executor down...")
 			return
 		case cmd := <-executor.cmdChan:
-			logrus.Debugf("Received command.")
+			log.Debugf("Received command.")
 			if !executor.backLogCommands {
-				logrus.Debugf("Executing command immediately..")
+				log.Debugf("Executing command immediately..")
 				executor.executeCommand(ctx, cmd)
 			} else {
-				logrus.Debugf("Backlog commands set, adding command to backlog (current backlog size: %d).", len(executor.backlog))
+				log.Debugf("Backlog commands set, adding command to backlog (current backlog size: %d).", len(executor.backlog))
 				executor.backlog = append(executor.backlog, cmd)
 			}
 		case cmd := <-executor.backlogChan:
-			logrus.Debugf("Received backlog command (current backlog size: %d).", len(executor.backlog))
+			log.Debugf("Received backlog command (current backlog size: %d).", len(executor.backlog))
 			if len(executor.backlog) > 50 {
-				logrus.Warn("Backlog size exceeded has exceed 50.")
+				log.Warn("Backlog size exceeded has exceed 50.")
 			}
 			executor.backlog = append(executor.backlog, cmd)
 		case signal := <-executor.drainAndBacklogSig:
-			logrus.Debugf("Received requeue signal.")
+			log.Debugf("Received requeue signal.")
 			executor.backLogCommands = true
 			stopCommands()
 			draining = make(chan struct{})
@@ -186,30 +185,30 @@ func (executor *commandExecutor[C, R]) loop(shutdownCtx context.Context) {
 				defer close(signal)
 				defer close(draining)
 
-				logrus.Debug("Waiting for inflight commands to finish...")
+				log.Debug("Waiting for inflight commands to finish...")
 				executor.inflightCmds.Wait()
 				// Clear the error buffer, as we don't want to return any errors when we resume accepting commands.
 				executor.errBuff.Clear()
-				logrus.Debug("Inflight commands finished, notifying listeners.")
+				log.Debug("Inflight commands finished, notifying listeners.")
 			}()
 		case <-executor.resumeBackloggedSig:
-			logrus.Debugf("Received resume signal.")
+			log.Debugf("Received resume signal.")
 			if draining != nil {
-				logrus.Debug("Waiting for drain to finish...")
+				log.Debug("Waiting for drain to finish...")
 				// If the draining channel is not nil and hasn't been closed then we're still draining. We need to
 				// delay resuming so the backlog can be written too.
 				if _, read := chanutil.ReadNonBlocking(draining); !read {
-					logrus.Debug("delay resume signal not set, setting it.")
+					log.Debug("delay resume signal not set, setting it.")
 					delayResume = draining
 					continue
 				}
-				logrus.Debug("delay resume signal already set.")
+				log.Debug("delay resume signal already set.")
 			}
 
 			// Handle the backlog before resuming execution.
 			ctx, stopCommands = executor.execBacklog(shutdownCtx)
 		case <-delayResume:
-			logrus.Debug("Delay resume signal received, handling backlog.")
+			log.Debug("Delay resume signal received, handling backlog.")
 
 			// Handle the backlog before resuming execution.
 			ctx, stopCommands = executor.execBacklog(shutdownCtx)
@@ -221,7 +220,7 @@ func (executor *commandExecutor[C, R]) loop(shutdownCtx context.Context) {
 }
 
 func (executor *commandExecutor[C, R]) drainBacklogChannel() {
-	logrus.Debugf("Backlog size: %d, adding to backlog.", len(executor.backlog))
+	log.Debugf("Backlog size: %d, adding to backlog.", len(executor.backlog))
 	executor.backlog = append(executor.backlog, chanutil.ReadAllNonBlocking(executor.backlogChan)...)
 }
 
@@ -248,7 +247,7 @@ func (executor *commandExecutor[C, R]) executeCommand(ctx context.Context, req C
 		defer executor.inflightCmds.Done()
 		result, err := executor.command(ctx, req.Get())
 		if err != nil {
-			logrus.WithError(err).Debug("Error executing command")
+			log.WithError(err).Debug("Error executing command")
 			executor.errBuff.Write(err)
 			if errors.Is(err, io.EOF) || errors.Is(err, context.Canceled) {
 				executor.backlogChan <- req

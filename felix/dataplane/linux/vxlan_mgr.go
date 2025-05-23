@@ -22,7 +22,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 
 	bpfutils "github.com/projectcalico/calico/felix/bpf/utils"
@@ -35,6 +34,7 @@ import (
 	"github.com/projectcalico/calico/felix/routetable"
 	"github.com/projectcalico/calico/felix/rules"
 	"github.com/projectcalico/calico/felix/vxlanfdb"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 type vxlanManager struct {
@@ -66,7 +66,7 @@ type vxlanManager struct {
 	dpConfig          Config
 
 	// Log context
-	logCtx     *logrus.Entry
+	logCtx     log.Entry
 	opRecorder logutils.OpRecorder
 }
 
@@ -138,7 +138,7 @@ func newVXLANManagerWithShims(
 		externalNodeCIDRs: dpConfig.ExternalNodesCidrs,
 		vtepsDirty:        true,
 		dpConfig:          dpConfig,
-		logCtx: logrus.WithFields(logrus.Fields{
+		logCtx: log.WithFields(log.Fields{
 			"ipVersion": ipVersion,
 			"device":    deviceName,
 		}),

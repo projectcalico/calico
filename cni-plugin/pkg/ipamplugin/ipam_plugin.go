@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2015-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -31,22 +31,21 @@ import (
 	cniSpecVersion "github.com/containernetworking/cni/pkg/version"
 	"github.com/gofrs/flock"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/cni-plugin/internal/pkg/utils"
 	"github.com/projectcalico/calico/cni-plugin/pkg/types"
 	"github.com/projectcalico/calico/cni-plugin/pkg/upgrade"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 
 func Main(version string) {
 	// Set up logging formatting.
-	logutils.ConfigureFormatter("ipam")
+	log.ConfigureFormatter("ipam")
 
 	// Display the version on "-v", otherwise just delegate to the skel code.
 	// Use a new flag set so as not to conflict with existing libraries which use "flag"
@@ -67,15 +66,15 @@ func Main(version string) {
 
 	// Migration logic
 	if *upgradeFlag {
-		logrus.Info("migrating from host-local to calico-ipam...")
+		log.Info("migrating from host-local to calico-ipam...")
 		ctxt := context.Background()
 
 		// nodename associates IPs to this node.
 		nodename := os.Getenv("KUBERNETES_NODE_NAME")
 		if nodename == "" {
-			logrus.Fatal("KUBERNETES_NODE_NAME not specified, refusing to migrate...")
+			log.Fatal("KUBERNETES_NODE_NAME not specified, refusing to migrate...")
 		}
-		logCtxt := logrus.WithField("node", nodename)
+		logCtxt := log.WithField("node", nodename)
 
 		// calicoClient makes IPAM calls.
 		cfg, err := apiconfig.LoadClientConfig("")
@@ -144,7 +143,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 	handleID := utils.GetHandleID(conf.Name, args.ContainerID, epIDs.WEPName)
 
-	logger := logrus.WithFields(logrus.Fields{
+	logger := log.WithFields(log.Fields{
 		"Workload":    epIDs.WEPName,
 		"ContainerID": epIDs.ContainerID,
 		"HandleID":    handleID,
@@ -239,7 +238,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 		if conf.WindowsUseSingleNetwork {
 			// When running in single-network mode (for kube-proxy compatibility), limit the
 			// number of blocks we're allowed to create.
-			logrus.Info("Running in single-HNS-network mode, limiting number of IPAM blocks to 1.")
+			log.Info("Running in single-HNS-network mode, limiting number of IPAM blocks to 1.")
 			maxBlocks = 1
 		}
 		assignArgs := ipam.AutoAssignArgs{
@@ -296,7 +295,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 				}
 				_, _, err := calicoClient.IPAM().ReleaseIPs(ctx, v6IPs...)
 				if err != nil {
-					logrus.Errorf("Error releasing IPv6 addresses %+v on IPv4 address assignment failure: %s", v6IPs, err)
+					log.Errorf("Error releasing IPv6 addresses %+v on IPv4 address assignment failure: %s", v6IPs, err)
 				}
 			}
 		}
@@ -312,7 +311,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 				}
 				_, _, err := calicoClient.IPAM().ReleaseIPs(ctx, v4IPs...)
 				if err != nil {
-					logrus.Errorf("Error releasing IPv4 addresses %+v on IPv6 address assignment failure: %s", v4IPs, err)
+					log.Errorf("Error releasing IPv4 addresses %+v on IPv6 address assignment failure: %s", v4IPs, err)
 				}
 			}
 		}
@@ -337,7 +336,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 			})
 		}
 
-		logger.WithFields(logrus.Fields{"result.IPs": r.IPs}).Debug("IPAM Result")
+		logger.WithFields(log.Fields{"result.IPs": r.IPs}).Debug("IPAM Result")
 	}
 
 	// Print result to stdout, in the format defined by the requested cniVersion.
@@ -350,28 +349,28 @@ type unlockFn func()
 // (for example permissions or missing directory) then it returns immediately.  Returns a function that unlocks the
 // lock again (or a no-op function if acquiring the lock failed).
 func acquireIPAMLockBestEffort(path string) unlockFn {
-	logrus.Info("About to acquire host-wide IPAM lock.")
+	log.Info("About to acquire host-wide IPAM lock.")
 	if path == "" {
 		path = ipamLockPath
 	}
 	err := os.MkdirAll(filepath.Dir(path), 0o777)
 	if err != nil {
-		logrus.WithError(err).Error("Failed to make directory for IPAM lock")
+		log.WithError(err).Error("Failed to make directory for IPAM lock")
 		// Fall through, still a slight chance the file is there for us to access.
 	}
 	ipamLock := flock.New(path)
 	err = ipamLock.Lock()
 	if err != nil {
-		logrus.WithError(err).Error("Failed to grab IPAM lock, may contend for datastore updates")
+		log.WithError(err).Error("Failed to grab IPAM lock, may contend for datastore updates")
 		return func() {}
 	}
-	logrus.Info("Acquired host-wide IPAM lock.")
+	log.Info("Acquired host-wide IPAM lock.")
 	return func() {
 		err := ipamLock.Unlock()
 		if err != nil {
-			logrus.WithError(err).Warn("Failed to release IPAM lock; ignoring because process is about to exit.")
+			log.WithError(err).Warn("Failed to release IPAM lock; ignoring because process is about to exit.")
 		} else {
-			logrus.Info("Released host-wide IPAM lock.")
+			log.Info("Released host-wide IPAM lock.")
 		}
 	}
 }
@@ -403,7 +402,7 @@ func cmdDel(args *skel.CmdArgs) error {
 	}
 
 	handleID := utils.GetHandleID(conf.Name, args.ContainerID, epIDs.WEPName)
-	logger := logrus.WithFields(logrus.Fields{
+	logger := log.WithFields(log.Fields{
 		"Workload":    epIDs.WEPName,
 		"ContainerID": epIDs.ContainerID,
 		"HandleID":    handleID,

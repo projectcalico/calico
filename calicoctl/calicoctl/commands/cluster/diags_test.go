@@ -21,19 +21,18 @@ import (
 	"testing"
 
 	. "github.com/onsi/gomega"
-	"github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 func init() {
-	logutils.ConfigureFormatter("test")
+	log.ConfigureFormatter("test")
 }
 
 func TestDiags(t *testing.T) {
 	RegisterTestingT(t)
 	test := func(invocation string, expectedErr error, expectedOutput string, expectedOpts *diagOpts) {
-		logrus.Infof("Test case: %v", invocation)
+		log.Infof("Test case: %v", invocation)
 		output := ""
 		opts := (*diagOpts)(nil)
 		err := diagsTestable(

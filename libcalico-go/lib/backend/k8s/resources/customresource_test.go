@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,7 +20,6 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
@@ -28,6 +27,7 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest/fake"
 
+	"github.com/projectcalico/calico/lib/std/log"
 	calischeme "github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/scheme"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
@@ -268,7 +268,7 @@ var _ = Describe("Custom resource conversion methods (tested using namespaced Ne
 
 		// But we should be able to check the request...
 		url := fakeREST.Req.URL
-		logrus.Debug("URL: ", url)
+		log.Debug("URL: ", url)
 		Expect(url.Path).To(Equal("/apis/namespaces/mynamespace/networksets/mynetset"))
 	})
 
@@ -283,7 +283,7 @@ var _ = Describe("Custom resource conversion methods (tested using namespaced Ne
 
 		// But we should be able to check the request...
 		url := fakeREST.Req.URL
-		logrus.Debug("URL: ", url)
+		log.Debug("URL: ", url)
 		Expect(url.Path).To(Equal("/apis/networksets"))
 		Expect(url.Query()).NotTo(HaveKey("metadata.name"))
 	})
@@ -301,7 +301,7 @@ var _ = Describe("Custom resource conversion methods (tested using namespaced Ne
 
 		// But we should be able to check the request...
 		url := fakeREST.Req.URL
-		logrus.Debug("URL: ", url)
+		log.Debug("URL: ", url)
 		Expect(url.Path).To(Equal("/apis/namespaces/mynamespace/networksets"))
 		Expect(url.Query().Get("fieldSelector")).To(Equal("metadata.name=foo"))
 	})

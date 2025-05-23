@@ -26,10 +26,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/sirupsen/logrus"
-
 	calicotls "github.com/projectcalico/calico/crypto/pkg/tls"
 	"github.com/projectcalico/calico/goldmane/pkg/internal/utils"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 const ContentTypeMultilineJSON = "application/x-ndjson"
@@ -72,7 +71,7 @@ func newHTTPClient(caCert, clientKey, clientCert, serverName string) (*http.Clie
 			return nil, fmt.Errorf("error load cert key pair for emitter client: %s", err)
 		}
 		httpTransport.TLSClientConfig.Certificates = []tls.Certificate{clientCert}
-		logrus.Info("Using provided client certificates for mTLS")
+		log.Info("Using provided client certificates for mTLS")
 	}
 	return &http.Client{
 		Transport: httpTransport,
@@ -95,10 +94,10 @@ func newEmitterClient(url, caCert, clientKey, clientCert, serverName string) (*e
 		// Start a goroutine to read from the channel and update the client.
 		go func() {
 			for range updChan {
-				logrus.Info("Reloading client after certificate change")
+				log.Info("Reloading client after certificate change")
 				client, err = newHTTPClient(caCert, clientKey, clientCert, serverName)
 				if err != nil {
-					logrus.WithError(err).Error("Failed to reload client after certificate change")
+					log.WithError(err).Error("Failed to reload client after certificate change")
 					continue
 				}
 				ec.setClient(client)
@@ -143,6 +142,6 @@ func (e *emitterClient) Post(body io.Reader) error {
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("unexpected status code: %s", resp.Status)
 	}
-	logrus.WithField("body", resp.Body).Debug("Successfully posted flows")
+	log.WithField("body", resp.Body).Debug("Successfully posted flows")
 	return nil
 }

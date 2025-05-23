@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2024-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,7 +20,6 @@ import (
 	"time"
 
 	. "github.com/onsi/gomega"
-	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
 
@@ -28,12 +27,11 @@ import (
 	"github.com/projectcalico/calico/felix/ifacemonitor"
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/netlinkshim/mocknetlink"
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 func init() {
-	logrus.SetFormatter(&logutils.Formatter{})
-	logrus.SetLevel(logrus.DebugLevel)
+	log.SetLevel(log.DebugLevel)
 }
 
 const (
@@ -160,7 +158,7 @@ func TestVXLANFDB_LinkCreatedAfterSetup(t *testing.T) {
 // TestVXLANFDB_IPv6 mainline test for IPv6.
 func TestVXLANFDB_IPv6(t *testing.T) {
 	RegisterTestingT(t)
-	logutils.ConfigureLoggingForTestingT(t)
+	log.ConfigureLoggingForTestingT(t)
 
 	dataplane := mocknetlink.New()
 	fdb := New(
@@ -740,7 +738,7 @@ func TestVXLANFDB_TransientNetlinkErrors(t *testing.T) {
 
 func setup(t *testing.T) (*mocknetlink.MockNetlinkDataplane, *VXLANFDB) {
 	RegisterTestingT(t)
-	logutils.ConfigureLoggingForTestingT(t)
+	log.ConfigureLoggingForTestingT(t)
 
 	dataplane := mocknetlink.New()
 	fdb := New(
