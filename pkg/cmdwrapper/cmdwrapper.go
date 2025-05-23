@@ -21,8 +21,7 @@ import (
 	"sync"
 	"syscall"
 
-	"github.com/sirupsen/logrus"
-
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/typha/pkg/config"
 	"github.com/projectcalico/calico/typha/pkg/logutils"
 )
@@ -42,7 +41,7 @@ func Run() {
 		DebugDisableLogDropping: true,
 	})
 	if len(os.Args) < 2 {
-		logrus.Fatalf("Invalid invocation of command wrapper, expected: %s <wrapped command>", os.Args[0])
+		log.Fatalf("Invalid invocation of command wrapper, expected: %s <wrapped command>", os.Args[0])
 	}
 	prog := os.Args[1]
 	args := os.Args[2:]
@@ -53,13 +52,13 @@ func Run() {
 	signal.Notify(c)
 
 	for {
-		logrus.Infof("Starting %s", prog)
+		log.Infof("Starting %s", prog)
 		cmd := exec.Command(prog, args...)
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 		err := cmd.Start()
 		if err != nil {
-			logrus.WithError(err).Fatalf("Failed to start %s", prog)
+			log.WithError(err).Fatalf("Failed to start %s", prog)
 		}
 
 		var wg sync.WaitGroup
@@ -77,7 +76,7 @@ func Run() {
 					}
 					err = cmd.Process.Signal(s)
 					if err != nil {
-						logrus.WithError(err).Error("Failed so send signal to wrapped command process")
+						log.WithError(err).Error("Failed so send signal to wrapped command process")
 					}
 				case <-stop:
 					return
@@ -92,15 +91,15 @@ func Run() {
 				// If the exitcode is the expected restart code then start our loop over
 				// again to re-run the command we're wrapping.
 				if ee.ExitCode() == RestartReturnCode {
-					logrus.Infof("Received exit status %d, restarting %s", ee.ExitCode(), prog)
+					log.Infof("Received exit status %d, restarting %s", ee.ExitCode(), prog)
 					continue
 				}
-				logrus.Infof("Received exit status %d", ee.ExitCode())
+				log.Infof("Received exit status %d", ee.ExitCode())
 				// Exit with the same exit status of the wrapped command so the code is returned
 				// to whatever is running us.
 				os.Exit(ee.ExitCode())
 			}
-			logrus.WithError(cmdWaitErr).Errorf("Failed to wait for %s to finish", prog)
+			log.WithError(cmdWaitErr).Errorf("Failed to wait for %s to finish", prog)
 		}
 
 		// If the wrapped command exited successfully then we should do the same.

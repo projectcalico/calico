@@ -22,8 +22,6 @@ import (
 	"sync"
 	"time"
 
-	log "github.com/sirupsen/logrus"
-
 	"github.com/projectcalico/calico/felix/calc"
 	"github.com/projectcalico/calico/felix/collector/types"
 	"github.com/projectcalico/calico/felix/collector/types/tuple"
@@ -31,6 +29,7 @@ import (
 	"github.com/projectcalico/calico/felix/nfnetlink"
 	"github.com/projectcalico/calico/felix/nfnetlink/nfnl"
 	"github.com/projectcalico/calico/felix/rules"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // NFLogReader consumes NFLog data and converts them to a format used by collector.

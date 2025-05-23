@@ -21,7 +21,6 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 
 	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
@@ -32,6 +31,7 @@ import (
 	"github.com/projectcalico/calico/felix/routetable"
 	"github.com/projectcalico/calico/felix/rules"
 	"github.com/projectcalico/calico/felix/vxlanfdb"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 type mockVXLANDataplane struct {
@@ -115,7 +115,7 @@ type mockVXLANFDB struct {
 }
 
 func (t *mockVXLANFDB) SetVTEPs(targets []vxlanfdb.VTEP) {
-	logrus.WithFields(logrus.Fields{
+	log.WithFields(log.Fields{
 		"targets": targets,
 	}).Debug("SetVTEPs")
 	t.currentVTEPs = targets

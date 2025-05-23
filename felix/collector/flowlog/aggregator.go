@@ -20,11 +20,11 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
-	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/collector/types/metric"
 	logutil "github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/felix/rules"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // AggregationKind determines the flow log key

@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2024-2025 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,10 +19,9 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/sirupsen/logrus"
 	cli "github.com/urfave/cli/v2"
 
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/utils"
 )
@@ -64,10 +63,10 @@ func Commands(cfg *Config) []*cli.Command {
 func main() {
 	cfg, err := loadConfig()
 	if err != nil {
-		logrus.WithError(err).Fatal("Failed to load configuration")
+		log.WithError(err).Fatal("Failed to load configuration")
 	}
 
-	logutils.ConfigureFormatter("release")
+	log.ConfigureFormatter("release")
 
 	app := &cli.App{
 		Name:                 "release",
@@ -79,6 +78,6 @@ func main() {
 
 	// Run the app.
 	if err := app.Run(os.Args); err != nil {
-		logrus.WithError(err).Fatal("Error running app")
+		log.WithError(err).Fatal("Error running app")
 	}
 }

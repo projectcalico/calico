@@ -1,4 +1,4 @@
-// Copyright (c) 2022 Tigera, Inc. All rights reserved.
+// Copyright (c) 2022-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,8 +24,8 @@ import (
 
 	"github.com/golang/snappy"
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/multireadbuf"
 	"github.com/projectcalico/calico/typha/pkg/promutils"
 	"github.com/projectcalico/calico/typha/pkg/snapcache"
@@ -64,7 +64,7 @@ func init() {
 
 type SnappySnapshotCache struct {
 	snapValidityTimeout time.Duration
-	logCtx              *logrus.Entry
+	logCtx              log.Entry
 
 	cache BreadcrumbProvider
 
@@ -91,7 +91,7 @@ func NewSnappySnapCache(
 		snapValidityTimeout: snapValidityTimeout,
 		writeTimeout:        writeTimeout,
 		cache:               cache,
-		logCtx: logrus.WithFields(logrus.Fields{
+		logCtx: log.WithFields(log.Fields{
 			"thread": "snapshotter",
 			"syncer": syncerName,
 		}),
@@ -240,7 +240,7 @@ type snapshot struct {
 	buf   *multireadbuf.MultiReaderSingleWriterBuffer
 }
 
-func (s *snapshot) sendToClient(ctx context.Context, logCtx *logrus.Entry, w io.Writer, conn WriteDeadlineSetter, writeTimeout time.Duration) error {
+func (s *snapshot) sendToClient(ctx context.Context, logCtx log.Entry, w io.Writer, conn WriteDeadlineSetter, writeTimeout time.Duration) error {
 	var currentWriteDeadline time.Time
 	reader := s.buf.Reader()
 	var totalBytesSent int64
@@ -264,7 +264,7 @@ func (s *snapshot) sendToClient(ctx context.Context, logCtx *logrus.Entry, w io.
 				// very large then we might have written a big chunk of it but simply not had enough time to
 				// complete.  Only give up if we see no progress at all.
 				logCtx.WithFields(
-					logrus.Fields{
+					log.Fields{
 						"sentThisWrite": n,
 						"sentTotal":     totalBytesSent,
 					}).Info("Transferred part of snapshot to client before write timed out.  Trying next write before giving up...")

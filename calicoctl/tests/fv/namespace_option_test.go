@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019-2025 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,15 +22,15 @@ import (
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	. "github.com/projectcalico/calico/calicoctl/tests/fv/utils"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
 func init() {
 	// Set up logging formatting.
-	logutils.ConfigureFormatter("test")
+	log.ConfigureFormatter("test")
 }
 
 func TestMultiOption(t *testing.T) {

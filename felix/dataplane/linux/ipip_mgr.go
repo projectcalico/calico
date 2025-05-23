@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 
 	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
@@ -30,6 +29,7 @@ import (
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/routetable"
 	"github.com/projectcalico/calico/felix/rules"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // ipipManager manages the all-hosts IP set, which is used by some rules in our static chains
@@ -63,7 +63,7 @@ type ipipManager struct {
 	dpConfig          Config
 
 	// Log context
-	logCtx     *logrus.Entry
+	logCtx     log.Entry
 	opRecorder logutils.OpRecorder
 }
 
@@ -101,7 +101,7 @@ func newIPIPManagerWithSims(
 ) *ipipManager {
 
 	if ipVersion != 4 {
-		logrus.Errorf("IPIP manager only supports IPv4")
+		log.Errorf("IPIP manager only supports IPv4")
 		return nil
 	}
 
@@ -121,7 +121,7 @@ func newIPIPManagerWithSims(
 		ipSetDirty:         true,
 		dpConfig:           dpConfig,
 		routeProtocol:      calculateRouteProtocol(dpConfig),
-		logCtx: logrus.WithFields(logrus.Fields{
+		logCtx: log.WithFields(log.Fields{
 			"ipVersion":    ipVersion,
 			"tunnelDevice": tunnelDevice,
 		}),

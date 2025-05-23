@@ -27,11 +27,11 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/fv/connectivity"
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
 	"github.com/projectcalico/calico/felix/fv/workload"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 )
@@ -114,11 +114,11 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ routing table tests", []api
 				defer GinkgoRecover()
 				defer wg.Done()
 				for ctx.Err() == nil {
-					logrus.Debug("Flapping interface")
+					log.Debug("Flapping interface")
 					w[0][0].RenameInterface(w[0][0].InterfaceName, "somename")
 					time.Sleep(1 * time.Millisecond)
 					_ = tc.Felixes[0].ExecMayFail("ip", "r", "del", w[0][0].IP)
-					logrus.Debug("Un-flapping interface")
+					log.Debug("Un-flapping interface")
 					w[0][0].RenameInterface("somename", w[0][0].InterfaceName)
 					time.Sleep(1 * time.Millisecond)
 				}
@@ -145,10 +145,10 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ routing table tests", []api
 				defer GinkgoRecover()
 				defer wg.Done()
 				for ctx.Err() == nil {
-					logrus.Debug("Flapping interface")
+					log.Debug("Flapping interface")
 					tc.Felixes[0].Exec("ip", "link", "set", "dev", w[0][0].InterfaceName, "down")
 					time.Sleep(10 * time.Millisecond)
-					logrus.Debug("Un-flapping interface")
+					log.Debug("Un-flapping interface")
 					tc.Felixes[0].Exec("ip", "link", "set", "dev", w[0][0].InterfaceName, "up")
 					time.Sleep(100 * time.Millisecond)
 				}

@@ -1,4 +1,4 @@
-// Copyright (c) 2018-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2018-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,12 +21,12 @@ import (
 
 	"github.com/containernetworking/cni/pkg/skel"
 	cniv1 "github.com/containernetworking/cni/pkg/types/100"
-	"github.com/sirupsen/logrus"
 	"golang.org/x/sys/windows/registry"
 
 	"github.com/projectcalico/calico/cni-plugin/internal/pkg/utils/cri"
 	"github.com/projectcalico/calico/cni-plugin/pkg/dataplane/windows"
 	"github.com/projectcalico/calico/cni-plugin/pkg/types"
+	"github.com/projectcalico/calico/lib/std/log"
 	api "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	calicoclient "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 )
@@ -90,7 +90,7 @@ func maintainWepDeletionTimestamps(timeout int) error {
 		// Create calico key if not exists.
 		err := ensureCalicoKey()
 		if err != nil {
-			logrus.Errorf("Failed to ensure Calico registry key. err: %v", err)
+			log.Errorf("Failed to ensure Calico registry key. err: %v", err)
 			return err
 		}
 		calicoK, err := registry.OpenKey(registry.LOCAL_MACHINE, CalicoRegistryKey, registry.CREATE_SUB_KEY)
@@ -125,9 +125,9 @@ func maintainWepDeletionTimestamps(timeout int) error {
 			return err
 		}
 
-		logrus.WithField("id", id).Debugf("Maintainer get timestamp for pod deletion [%s]", val)
+		log.WithField("id", id).Debugf("Maintainer get timestamp for pod deletion [%s]", val)
 		if time.Since(t) > (time.Second * time.Duration(timeout)) {
-			logrus.WithField("id", id).Debugf("Found old pod deletion timestamp [%s] with timeout %d seconds, cleaning it up.", val, timeout)
+			log.WithField("id", id).Debugf("Found old pod deletion timestamp [%s] with timeout %d seconds, cleaning it up.", val, timeout)
 			err := k.DeleteValue(id)
 			if err != nil {
 				return err
@@ -150,7 +150,7 @@ func CheckWepJustDeleted(containerID string, timeout int) (bool, error) {
 
 	val, _, err := k.GetStringValue(containerID)
 	if err == registry.ErrNotExist {
-		logrus.WithField("id", containerID).Infof("No timestamp for pod deletion")
+		log.WithField("id", containerID).Infof("No timestamp for pod deletion")
 		return false, nil
 	}
 
@@ -160,9 +160,9 @@ func CheckWepJustDeleted(containerID string, timeout int) (bool, error) {
 		return true, err
 	}
 
-	logrus.WithField("id", containerID).Infof("Get timestamp for pod deletion [%s]", val)
+	log.WithField("id", containerID).Infof("Get timestamp for pod deletion [%s]", val)
 	if time.Since(t) < (time.Second * time.Duration(timeout)) {
-		logrus.WithField("id", containerID).Infof("timestamp for pod deletion [%s] within %d seconds", val, timeout)
+		log.WithField("id", containerID).Infof("timestamp for pod deletion [%s] within %d seconds", val, timeout)
 		return true, nil
 	}
 
@@ -185,7 +185,7 @@ func RegisterDeletedWep(containerID string) error {
 	for retry < 30 {
 		val, _, err := k.GetStringValue(containerID)
 		if err == nil {
-			logrus.WithField("id", containerID).Infof("Saved timestamp for pod deletion [%s]", val)
+			log.WithField("id", containerID).Infof("Saved timestamp for pod deletion [%s]", val)
 			return nil
 		}
 		time.Sleep(100 * time.Millisecond)
@@ -202,7 +202,7 @@ func CheckForSpuriousDockerAdd(args *skel.CmdArgs,
 	conf types.NetConf,
 	epIDs WEPIdentifiers,
 	endpoint *api.WorkloadEndpoint,
-	logger *logrus.Entry) (*cniv1.Result, error) {
+	logger log.Entry) (*cniv1.Result, error) {
 	var err error
 	var result *cniv1.Result
 

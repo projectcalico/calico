@@ -18,7 +18,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/sirupsen/logrus"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 func NewRetryController(w func() time.Duration, r, s func()) *RetryController {
@@ -49,7 +49,7 @@ type RetryController struct {
 func (c *RetryController) ScheduleRetry() {
 	// We keep at most one retry pending.
 	if c.pending() {
-		logrus.Debug("Retry is already pending")
+		log.Debug("Retry is already pending")
 		return
 	}
 
@@ -63,9 +63,9 @@ func (c *RetryController) Success() {
 
 func (c *RetryController) scheduledRetry(wait time.Duration) {
 	// Wait the retry duration, then kick the channel.
-	logrus.WithField("wait", wait).Info("Scheduling retry")
+	log.WithField("wait", wait).Info("Scheduling retry")
 	<-time.After(wait)
-	logrus.Debug("Scheduled retry popped")
+	log.Debug("Scheduled retry popped")
 	c.clear()
 	c.retryFn()
 }

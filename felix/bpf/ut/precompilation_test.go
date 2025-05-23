@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,13 +22,13 @@ import (
 	"testing"
 
 	. "github.com/onsi/gomega"
-	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 
 	"github.com/projectcalico/calico/felix/bpf/bpfdefs"
 	"github.com/projectcalico/calico/felix/bpf/hook"
 	"github.com/projectcalico/calico/felix/bpf/libbpf"
 	"github.com/projectcalico/calico/felix/bpf/utils"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 func checkBTFEnabled() []bool {
