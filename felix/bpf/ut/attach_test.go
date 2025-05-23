@@ -20,11 +20,13 @@ import (
 	"io/fs"
 	"net"
 	"os"
+	"os/exec"
 	"path"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
@@ -36,6 +38,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/ifstate"
 	"github.com/projectcalico/calico/felix/bpf/jump"
 	"github.com/projectcalico/calico/felix/bpf/maps"
+	"github.com/projectcalico/calico/felix/bpf/nat"
 	"github.com/projectcalico/calico/felix/bpf/tc"
 	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
 	"github.com/projectcalico/calico/felix/calc"
@@ -885,6 +888,82 @@ func TestRepeatedAttach(t *testing.T) {
 	Expect(valid).To(BeTrue())
 	Expect(newPrio).To(Equal(prio))
 	Expect(newHandle).To(Equal(handle))
+}
+
+func TestCTLBAttachLegacy(t *testing.T) {
+	RegisterTestingT(t)
+	err := nat.InstallConnectTimeLoadBalancerLegacy(true, false, "", "debug", 60*time.Second, false)
+	Expect(err).NotTo(HaveOccurred())
+
+	checkPinPath := func(pinPath string, mustExist bool) {
+		_, err := os.Stat(pinPath)
+		if mustExist {
+			Expect(err).NotTo(HaveOccurred())
+		} else {
+			Expect(err).To(HaveOccurred())
+		}
+	}
+
+	checkPinPath("/sys/fs/bpf/ctlb/calico_connect_v4", false)
+	checkPinPath("/sys/fs/bpf/ctlb/calico_connect_v46", false)
+	checkPinPath("/sys/fs/bpf/ctlb/calico_sendmsg_v4", false)
+	checkPinPath("/sys/fs/bpf/ctlb/calico_sendmsg_v46", false)
+	checkPinPath("/sys/fs/bpf/ctlb/calico_recvmsg_v4", false)
+	checkPinPath("/sys/fs/bpf/ctlb/calico_recvmsg_v46", false)
+
+	cmd := exec.Command("bpftool", "cgroup", "show", "/run/calico/cgroup")
+	out, err := cmd.Output()
+	Expect(err).NotTo(HaveOccurred())
+	Expect(string(out)).Should(ContainSubstring("calico_connect_v4"))
+
+	err = nat.RemoveConnectTimeLoadBalancer("")
+	Expect(err).NotTo(HaveOccurred())
+
+	cmd = exec.Command("bpftool", "cgroup", "show", "/run/calico/cgroup")
+	out, err = cmd.Output()
+	Expect(err).NotTo(HaveOccurred())
+	Expect(string(out)).ShouldNot(ContainSubstring("calico_connect_v4"))
+}
+
+func TestCTLBAttach(t *testing.T) {
+	RegisterTestingT(t)
+	err := nat.InstallConnectTimeLoadBalancer(true, false, "", "debug", 60*time.Second, false)
+	Expect(err).NotTo(HaveOccurred())
+
+	checkPinPath := func(pinPath string, mustExist bool) {
+		_, err := os.Stat(pinPath)
+		if mustExist {
+			Expect(err).NotTo(HaveOccurred())
+		} else {
+			Expect(err).To(HaveOccurred())
+		}
+	}
+
+	checkPinPath("/sys/fs/bpf/ctlb/calico_connect_v4", true)
+	checkPinPath("/sys/fs/bpf/ctlb/calico_connect_v46", true)
+	checkPinPath("/sys/fs/bpf/ctlb/calico_sendmsg_v4", true)
+	checkPinPath("/sys/fs/bpf/ctlb/calico_sendmsg_v46", true)
+	checkPinPath("/sys/fs/bpf/ctlb/calico_recvmsg_v4", true)
+	checkPinPath("/sys/fs/bpf/ctlb/calico_recvmsg_v46", true)
+
+	cmd := exec.Command("bpftool", "cgroup", "show", "/run/calico/cgroup")
+	out, err := cmd.Output()
+	Expect(err).NotTo(HaveOccurred())
+	Expect(string(out)).Should(ContainSubstring("calico_connect_v4"))
+
+	err = nat.RemoveConnectTimeLoadBalancer("")
+	Expect(err).NotTo(HaveOccurred())
+	checkPinPath("/sys/fs/bpf/ctlb/calico_connect_v4", false)
+	checkPinPath("/sys/fs/bpf/ctlb/calico_connect_v46", false)
+	checkPinPath("/sys/fs/bpf/ctlb/calico_sendmsg_v4", false)
+	checkPinPath("/sys/fs/bpf/ctlb/calico_sendmsg_v46", false)
+	checkPinPath("/sys/fs/bpf/ctlb/calico_recvmsg_v4", false)
+	checkPinPath("/sys/fs/bpf/ctlb/calico_recvmsg_v46", false)
+
+	cmd = exec.Command("bpftool", "cgroup", "show", "/run/calico/cgroup")
+	out, err = cmd.Output()
+	Expect(err).NotTo(HaveOccurred())
+	Expect(string(out)).ShouldNot(ContainSubstring("calico_connect_v4"))
 }
 
 func TestLogFilters(t *testing.T) {
