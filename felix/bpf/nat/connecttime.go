@@ -15,16 +15,13 @@
 package nat
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 	"path"
-	"strconv"
+	"path/filepath"
 	"strings"
 	"time"
 
-	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/bpf"
@@ -34,13 +31,6 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/bpf/utils"
 )
-
-type cgroupProgs struct {
-	ID          int    `json:"id"`
-	AttachType  string `json:"attach_type"`
-	AttachFlags string `json:"attach_flags"`
-	Name        string `json:"name"`
-}
 
 const (
 	ProgIndexCTLBConnectV6 = iota
@@ -72,48 +62,62 @@ func RemoveConnectTimeLoadBalancer(cgroupv2 string) error {
 		return nil
 	}
 
-	cgroupPath, err := ensureCgroupPath(cgroupv2)
+	bpfMount, err := utils.MaybeMountBPFfs()
 	if err != nil {
-		return errors.Wrap(err, "failed to set-up cgroupv2")
+		return fmt.Errorf("failed to mount bpffs: %w", err)
 	}
 
-	cmd := exec.Command("bpftool", "-j", "-p", "cgroup", "show", cgroupPath)
-	log.WithField("args", cmd.Args).Info("Running bpftool to look up programs attached to cgroup")
-	out, err := cmd.Output()
-	if err != nil || strings.TrimSpace(string(out)) == "" {
-		log.WithError(err).WithField("output", string(out)).Info(
-			"Failed to list BPF programs.  Assuming not supported/nothing to clean up.")
+	pinDir := path.Join(bpfMount, bpfdefs.CtlbPinDir)
+	defer bpf.CleanUpCalicoPins(pinDir)
+	ctlbProgsMap := newProgramsMap()
+	defer os.Remove(ctlbProgsMap.Path())
+
+	if err := detachCtlbPrograms(pinDir, cgroupv2); err != nil {
 		return err
 	}
+	bpf.CleanUpCalicoPins(pinDir)
+	return nil
+}
 
-	var progs []cgroupProgs
-
-	err = json.Unmarshal(out, &progs)
-	if err != nil {
-		log.WithError(err).WithField("output", string(out)).Error("BPF program list not json.")
-		return err
-	}
-
-	for _, p := range progs {
-		if !strings.HasPrefix(p.Name, "cali_") {
-			continue
-		}
-
-		cmd = exec.Command("bpftool", "cgroup", "detach", cgroupPath, p.AttachType, "id", strconv.Itoa(p.ID))
-		log.WithField("args", cmd.Args).Info("Running bpftool to detach program")
-		out, err = cmd.CombinedOutput()
+func detachCtlbPrograms(pinDir, cgroupv2 string) error {
+	numLinksDetached := 0
+	err := filepath.Walk(pinDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
-			log.WithError(err).WithField("output", string(out)).Error(
-				"Failed to detach connect-time load balancing program.")
 			return err
 		}
+		if strings.HasPrefix(info.Name(), "cali_") || strings.HasPrefix(info.Name(), "calico_") {
+			numLinksDetached++
+			log.WithField("path", path).Debug("Detaching pinned link")
+			link, err := libbpf.OpenLink(path)
+			if err != nil {
+				log.WithField("path", path).Error("Error opening link")
+				return err
+			}
+			defer link.Close()
+			err = link.Detach()
+			if err != nil {
+				log.WithField("path", path).Error("Error detaching link")
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil && !os.IsNotExist(err) {
+		log.WithError(err).Error("error detaching link")
+		return err
 	}
-
-	bpf.CleanUpCalicoPins("/sys/fs/bpf/calico_connect4")
-	ctlbProgsMap := newProgramsMap()
-	os.Remove(ctlbProgsMap.Path())
-
+	if numLinksDetached == 0 {
+		return detachLegacyCtlb(cgroupv2)
+	}
 	return nil
+}
+
+func detachLegacyCtlb(cgroupv2 string) error {
+	cgroupPath, err := ensureCgroupPath(cgroupv2)
+	if err != nil {
+		return fmt.Errorf("failed to set-up cgroupv2: %w", err)
+	}
+	return libbpf.DetachCTLBProgramsLegacy(cgroupPath)
 }
 
 func loadProgram(logLevel, ipver string, udpNotSeen time.Duration, excludeUDP bool) (*libbpf.Obj, error) {
@@ -125,21 +129,46 @@ func loadProgram(logLevel, ipver string, udpNotSeen time.Duration, excludeUDP bo
 	return obj, nil
 }
 
-func attachProgram(name, ipver, bpfMount, cgroupPath string, udpNotSeen time.Duration, excludeUDP bool, obj *libbpf.Obj) error {
-
-	progPinDir := path.Join(bpfMount, "calico_connect4")
-	_ = os.RemoveAll(progPinDir)
-
+func attachProgram(name, ipver, bpfMount, cgroupPath string, udpNotSeen time.Duration, excludeUDP bool, obj *libbpf.Obj, legacy bool) error {
 	progName := "calico_" + name + "_v" + ipver
-
-	// N.B. no need to remember the link since we are never going to detach
-	// these programs unless Felix restarts.
-	if _, err := obj.AttachCGroup(cgroupPath, progName); err != nil {
-		return fmt.Errorf("failed to attach program %s: %w", progName, err)
+	progPinPath := path.Join(bpfMount, progName)
+	if _, err := os.Stat(progPinPath); err == nil {
+		link, err := libbpf.OpenLink(progPinPath)
+		if err != nil {
+			return fmt.Errorf("error opening link %s : %w", progPinPath, err)
+		}
+		defer link.Close()
+		if err := link.Update(obj, progName); err != nil {
+			return fmt.Errorf("error updating program %s : %w", progName, err)
+		}
+		return nil
 	}
 
-	log.WithFields(log.Fields{"program": progName, "cgroup": cgroupPath}).Info("Loaded cgroup program")
+	// Used only for UT to test legacy way to attach.
+	if legacy {
+		err := obj.AttachCGroupLegacy(cgroupPath, progName)
+		if err != nil {
+			return fmt.Errorf("failed to attach program %s: %w", progName, err)
+		}
+		return nil
+	}
 
+	// Tries non-legacy and fallsback to legacy if non-legacy fails.
+	link, err := obj.AttachCGroup(cgroupPath, progName)
+	if err != nil {
+		err = obj.AttachCGroupLegacy(cgroupPath, progName)
+		if err != nil {
+			return fmt.Errorf("failed to attach program %s: %w", progName, err)
+		}
+		link = nil
+	} else if link != nil {
+		defer link.Close()
+		err := link.Pin(progPinPath)
+		if err != nil {
+			return fmt.Errorf("failed to pin program %s:%w", progName, err)
+		}
+	}
+	log.WithFields(log.Fields{"program": progName, "cgroup": cgroupPath}).Info("Loaded cgroup program")
 	return nil
 }
 
@@ -159,17 +188,22 @@ func updateCTLBJumpMap(jumpMap maps.Map, obj *libbpf.Obj) error {
 	return nil
 }
 
-func InstallConnectTimeLoadBalancer(ipv4Enabled, ipv6Enabled bool, cgroupv2 string, logLevel string, udpNotSeen time.Duration, excludeUDP bool) error {
-
+func installCTLB(ipv4Enabled, ipv6Enabled bool, cgroupv2 string, logLevel string, udpNotSeen time.Duration, excludeUDP, legacy bool) error {
 	bpfMount, err := utils.MaybeMountBPFfs()
 	if err != nil {
 		log.WithError(err).Error("Failed to mount bpffs, unable to do connect-time load balancing")
 		return err
 	}
 
+	pinDir := path.Join(bpfMount, bpfdefs.CtlbPinDir)
+	if err = os.MkdirAll(pinDir, 0700); err != nil {
+		log.WithError(err).Error("Failed to create pin dir, unable to do connect-time load balancing")
+		return err
+	}
+
 	cgroupPath, err := ensureCgroupPath(cgroupv2)
 	if err != nil {
-		return errors.Wrap(err, "failed to set-up cgroupv2")
+		return fmt.Errorf("failed to set-up cgroupv2: %w", err)
 	}
 
 	ctlbProgsMap := newProgramsMap()
@@ -188,32 +222,32 @@ func InstallConnectTimeLoadBalancer(ipv4Enabled, ipv6Enabled bool, cgroupv2 stri
 			return err
 		}
 		defer v46Obj.Close()
-		err = attachProgram("connect", "4", bpfMount, cgroupPath, udpNotSeen, excludeUDP, v4Obj)
+		err = attachProgram("connect", "4", pinDir, cgroupPath, udpNotSeen, excludeUDP, v4Obj, legacy)
 		if err != nil {
 			return err
 		}
-		err = attachProgram("connect", "46", bpfMount, cgroupPath, udpNotSeen, excludeUDP, v46Obj)
+		err = attachProgram("connect", "46", pinDir, cgroupPath, udpNotSeen, excludeUDP, v46Obj, legacy)
 		if err != nil {
 			return err
 		}
 
 		if !excludeUDP {
-			err = attachProgram("sendmsg", "4", bpfMount, cgroupPath, udpNotSeen, false, v4Obj)
+			err = attachProgram("sendmsg", "4", pinDir, cgroupPath, udpNotSeen, false, v4Obj, legacy)
 			if err != nil {
 				return err
 			}
 
-			err = attachProgram("recvmsg", "4", bpfMount, cgroupPath, udpNotSeen, false, v4Obj)
+			err = attachProgram("recvmsg", "4", pinDir, cgroupPath, udpNotSeen, false, v4Obj, legacy)
 			if err != nil {
 				return err
 			}
 
-			err = attachProgram("sendmsg", "46", bpfMount, cgroupPath, udpNotSeen, false, v46Obj)
+			err = attachProgram("sendmsg", "46", pinDir, cgroupPath, udpNotSeen, false, v46Obj, legacy)
 			if err != nil {
 				return err
 			}
 
-			err = attachProgram("recvmsg", "46", bpfMount, cgroupPath, udpNotSeen, false, v46Obj)
+			err = attachProgram("recvmsg", "46", pinDir, cgroupPath, udpNotSeen, false, v46Obj, legacy)
 			if err != nil {
 				return err
 			}
@@ -241,18 +275,18 @@ func InstallConnectTimeLoadBalancer(ipv4Enabled, ipv6Enabled bool, cgroupv2 stri
 				return err
 			}
 		} else {
-			err = attachProgram("connect", "6", bpfMount, cgroupPath, udpNotSeen, excludeUDP, v6Obj)
+			err = attachProgram("connect", "6", bpfMount, cgroupPath, udpNotSeen, excludeUDP, v6Obj, legacy)
 			if err != nil {
 				return err
 			}
 
 			if !excludeUDP {
-				err = attachProgram("sendmsg", "6", bpfMount, cgroupPath, udpNotSeen, false, v6Obj)
+				err = attachProgram("sendmsg", "6", bpfMount, cgroupPath, udpNotSeen, false, v6Obj, legacy)
 				if err != nil {
 					return err
 				}
 
-				err = attachProgram("recvmsg", "6", bpfMount, cgroupPath, udpNotSeen, false, v6Obj)
+				err = attachProgram("recvmsg", "6", bpfMount, cgroupPath, udpNotSeen, false, v6Obj, legacy)
 				if err != nil {
 					return err
 				}
@@ -260,6 +294,14 @@ func InstallConnectTimeLoadBalancer(ipv4Enabled, ipv6Enabled bool, cgroupv2 stri
 		}
 	}
 	return nil
+}
+
+func InstallConnectTimeLoadBalancer(ipv4Enabled, ipv6Enabled bool, cgroupv2 string, logLevel string, udpNotSeen time.Duration, excludeUDP bool) error {
+	return installCTLB(ipv4Enabled, ipv6Enabled, cgroupv2, logLevel, udpNotSeen, excludeUDP, false)
+}
+
+func InstallConnectTimeLoadBalancerLegacy(ipv4Enabled, ipv6Enabled bool, cgroupv2 string, logLevel string, udpNotSeen time.Duration, excludeUDP bool) error {
+	return installCTLB(ipv4Enabled, ipv6Enabled, cgroupv2, logLevel, udpNotSeen, excludeUDP, true)
 }
 
 func ProgFileName(logLevel string, ipver string) string {
@@ -290,7 +332,7 @@ func ensureCgroupPath(cgroupv2 string) (string, error) {
 		err = os.MkdirAll(cgroupPath, 0766)
 		if err != nil {
 			log.WithError(err).Error("Failed to make cgroup")
-			return "", errors.Wrap(err, "failed to create cgroup")
+			return "", fmt.Errorf("failed to create cgroup: %w", err)
 		}
 	}
 	return cgroupPath, nil
