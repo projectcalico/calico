@@ -17,6 +17,7 @@ package tc
 import (
 	"errors"
 	"fmt"
+	"math"
 	"net"
 	"os/exec"
 	"path"
@@ -368,23 +369,23 @@ func RemoveQdisc(ifaceName string) error {
 	return libbpf.RemoveQDisc(ifaceName)
 }
 
-func findFilterPriority(progsToClean []attachedProg) (int, int) {
+func findFilterPriority(progsToClean []attachedProg) (int, uint32) {
 	prio := 0
-	handle := 0
+	handle := uint32(0)
 	for _, p := range progsToClean {
 		pref, err := strconv.Atoi(p.pref)
 		if err != nil {
 			continue
 		}
 
-		handle64, err := strconv.ParseInt(p.handle[2:], 16, 64)
-		if err != nil {
+		handle64, err := strconv.ParseUint(p.handle[2:], 16, 32)
+		if err != nil || (handle64 < 0 || handle64 > math.MaxUint32) {
 			continue
 		}
 
 		if pref > prio {
 			prio = pref
-			handle = int(handle64)
+			handle = uint32(handle64)
 		}
 	}
 	return prio, handle
