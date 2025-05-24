@@ -17,7 +17,6 @@ package tc
 import (
 	"errors"
 	"fmt"
-	"math"
 	"net"
 	"os/exec"
 	"path"
@@ -393,7 +392,7 @@ func findFilterPriority(progsToClean []attachedProg) (int, uint32) {
 		}
 
 		handle64, err := strconv.ParseUint(p.handle[2:], 16, 32)
-		if err != nil || (handle64 < 0 || handle64 > math.MaxUint32) {
+		if err != nil {
 			continue
 		}
 
