@@ -37,6 +37,10 @@ static CALI_BPF_INLINE int forward_or_drop(struct cali_tc_ctx *ctx)
 		goto deny;
 	}
 
+	if (ctx->state->flags & CALI_ST_SKIP_REDIR_ONCE) {
+		goto skip_fib;
+	}
+
 	if (rc == CALI_RES_REDIR_BACK) {
 		int redir_flags = 0;
 		if  (CALI_F_FROM_HOST) {

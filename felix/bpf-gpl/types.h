@@ -156,6 +156,8 @@ enum cali_state_flags {
 	CALI_ST_LOG_PACKET        = 0x400,
 	/* CALI_ST_SKIP_REDIR_PEER is set when the packet is destined to a local VM workload */
 	CALI_ST_SKIP_REDIR_PEER	  = 0x800,
+	/* CALI_ST_SKIP_REDIR_ONCE skips redirection once for this particular packet */
+	CALI_ST_SKIP_REDIR_ONCE   = 0x1000,
 };
 
 struct fwd {
