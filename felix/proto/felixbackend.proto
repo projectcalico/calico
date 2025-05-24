@@ -422,10 +422,14 @@ message QoSControls {
   int64 EgressPacketRate      = 6;
   int64 IngressMaxConnections = 7;
   int64 EgressMaxConnections  = 8;
+  int64 IngressPeakrate       = 9;
+  int64 EgressPeakrate        = 10;
+  int64 IngressMinburst       = 11;
+  int64 EgressMinburst        = 12;
 }
 
 message LocalBGPPeer {
-  string bgp_peer_name = 1;   
+  string bgp_peer_name = 1;
 }
 
 message WorkloadEndpointRemove {

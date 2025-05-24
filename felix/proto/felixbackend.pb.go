@@ -3208,6 +3208,10 @@ type QoSControls struct {
 	EgressPacketRate      int64                  `protobuf:"varint,6,opt,name=EgressPacketRate,proto3" json:"EgressPacketRate,omitempty"`
 	IngressMaxConnections int64                  `protobuf:"varint,7,opt,name=IngressMaxConnections,proto3" json:"IngressMaxConnections,omitempty"`
 	EgressMaxConnections  int64                  `protobuf:"varint,8,opt,name=EgressMaxConnections,proto3" json:"EgressMaxConnections,omitempty"`
+	IngressPeakrate       int64                  `protobuf:"varint,9,opt,name=IngressPeakrate,proto3" json:"IngressPeakrate,omitempty"`
+	EgressPeakrate        int64                  `protobuf:"varint,10,opt,name=EgressPeakrate,proto3" json:"EgressPeakrate,omitempty"`
+	IngressMinburst       int64                  `protobuf:"varint,11,opt,name=IngressMinburst,proto3" json:"IngressMinburst,omitempty"`
+	EgressMinburst        int64                  `protobuf:"varint,12,opt,name=EgressMinburst,proto3" json:"EgressMinburst,omitempty"`
 	unknownFields         protoimpl.UnknownFields
 	sizeCache             protoimpl.SizeCache
 }
@@ -3294,6 +3298,34 @@ func (x *QoSControls) GetIngressMaxConnections() int64 {
 func (x *QoSControls) GetEgressMaxConnections() int64 {
 	if x != nil {
 		return x.EgressMaxConnections
+	}
+	return 0
+}
+
+func (x *QoSControls) GetIngressPeakrate() int64 {
+	if x != nil {
+		return x.IngressPeakrate
+	}
+	return 0
+}
+
+func (x *QoSControls) GetEgressPeakrate() int64 {
+	if x != nil {
+		return x.EgressPeakrate
+	}
+	return 0
+}
+
+func (x *QoSControls) GetIngressMinburst() int64 {
+	if x != nil {
+		return x.IngressMinburst
+	}
+	return 0
+}
+
+func (x *QoSControls) GetEgressMinburst() int64 {
+	if x != nil {
+		return x.EgressMinburst
 	}
 	return 0
 }
@@ -6489,7 +6521,7 @@ const file_felixbackend_proto_rawDesc = "" +
 	"\x04type\x18\x0e \x01(\x0e2\x13.felix.WorkloadTypeR\x04type\x1a>\n" +
 	"\x10AnnotationsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xed\x02\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x91\x04\n" +
 	"\vQoSControls\x12*\n" +
 	"\x10IngressBandwidth\x18\x01 \x01(\x03R\x10IngressBandwidth\x12(\n" +
 	"\x0fEgressBandwidth\x18\x02 \x01(\x03R\x0fEgressBandwidth\x12\"\n" +
@@ -6498,7 +6530,12 @@ const file_felixbackend_proto_rawDesc = "" +
 	"\x11IngressPacketRate\x18\x05 \x01(\x03R\x11IngressPacketRate\x12*\n" +
 	"\x10EgressPacketRate\x18\x06 \x01(\x03R\x10EgressPacketRate\x124\n" +
 	"\x15IngressMaxConnections\x18\a \x01(\x03R\x15IngressMaxConnections\x122\n" +
-	"\x14EgressMaxConnections\x18\b \x01(\x03R\x14EgressMaxConnections\"2\n" +
+	"\x14EgressMaxConnections\x18\b \x01(\x03R\x14EgressMaxConnections\x12(\n" +
+	"\x0fIngressPeakrate\x18\t \x01(\x03R\x0fIngressPeakrate\x12&\n" +
+	"\x0eEgressPeakrate\x18\n" +
+	" \x01(\x03R\x0eEgressPeakrate\x12(\n" +
+	"\x0fIngressMinburst\x18\v \x01(\x03R\x0fIngressMinburst\x12&\n" +
+	"\x0eEgressMinburst\x18\f \x01(\x03R\x0eEgressMinburst\"2\n" +
 	"\fLocalBGPPeer\x12\"\n" +
 	"\rbgp_peer_name\x18\x01 \x01(\tR\vbgpPeerName\"C\n" +
 	"\x16WorkloadEndpointRemove\x12)\n" +
