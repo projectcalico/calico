@@ -21,6 +21,7 @@ import (
 	cniv1 "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/plugins/pkg/ns"
 	cnitestutils "github.com/containernetworking/plugins/pkg/testutils"
+	"github.com/mcuadros/go-version"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
@@ -2581,7 +2582,9 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			// The MAC address will be different, since we create a new veth.
 			Expect(len(resultSecondAdd.Interfaces)).Should(Equal(len(result.Interfaces)))
 			for i := range resultSecondAdd.Interfaces {
-				Expect(resultSecondAdd.Interfaces[i].Mac).ShouldNot(Equal(result.Interfaces[i].Mac))
+				if resultSecondAdd.Interfaces[i].Mac != "" {
+					Expect(resultSecondAdd.Interfaces[i].Mac).ShouldNot(Equal(result.Interfaces[i].Mac))
+				}
 				resultSecondAdd.Interfaces[i].Mac = ""
 				result.Interfaces[i].Mac = ""
 			}
@@ -3394,6 +3397,178 @@ var _ = Describe("Kubernetes CNI tests", func() {
 
 			_, _, _, _, _, _, err := testutils.CreateContainer(netconf, name, testutils.K8S_TEST_NS, "")
 			Expect(err).To(HaveOccurred())
+		})
+	})
+
+	Context("When CNI ADD success, return all interfaces", func() {
+		var nc types.NetConf
+		var netconf string
+		var ipPool4CIDR *net.IPNet
+		var ipPool6CIDR *net.IPNet
+		var ipPool4 = "50.80.0.0/16"
+		var ipPool6 = "fd80:50::/96"
+		var clientset *kubernetes.Clientset
+		var testNS = testutils.K8S_TEST_NS
+
+		BeforeEach(func() {
+			if version.Compare(cniVersion, "0.3.0", "<") {
+				Skip("Skipping test because of CNI version < 0.3.0")
+			}
+			// Build the network config for this set of tests.
+			nc = types.NetConf{
+				CNIVersion:           cniVersion,
+				Name:                 "calico-uts",
+				Type:                 "calico",
+				EtcdEndpoints:        fmt.Sprintf("http://%s:2379", os.Getenv("ETCD_IP")),
+				DatastoreType:        os.Getenv("DATASTORE_TYPE"),
+				Kubernetes:           types.Kubernetes{Kubeconfig: "/home/user/certs/kubeconfig"},
+				Policy:               types.Policy{PolicyType: "k8s"},
+				NodenameFileOptional: true,
+				LogLevel:             "debug",
+				Nodename:             testNodeName,
+			}
+			nc.IPAM.Type = "calico-ipam"
+			ncb, err := json.Marshal(nc)
+			Expect(err).NotTo(HaveOccurred())
+			netconf = string(ncb)
+
+			// Create clients.
+			clientset = getKubernetesClient()
+
+			// Make sure the namespace exists.
+			ensureNamespace(clientset, testutils.K8S_TEST_NS)
+
+			_, ipPool4CIDR, err = net.ParseCIDR(ipPool4)
+			Expect(err).NotTo(HaveOccurred())
+
+			_, ipPool6CIDR, err = net.ParseCIDR(ipPool6)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Create a new IP Pool.
+			testutils.MustCreateNewIPPool(calicoClient, ipPool4, false, false, true)
+			testutils.MustCreateNewIPPool(calicoClient, ipPool6, false, false, true)
+
+		})
+
+		AfterEach(func() {
+			// Delete pod
+			ensurePodDeleted(clientset, testNS, testPodName)
+
+			// Delete the IP Pool.
+			testutils.MustDeleteIPPool(calicoClient, ipPool4)
+			testutils.MustDeleteIPPool(calicoClient, ipPool6)
+		})
+
+		It("should allocate IPv4 only", func() {
+			// Now create a K8s pod passing in an IP pool.
+			ensurePodCreated(clientset, testNS, &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: testPodName,
+					Annotations: map[string]string{
+						"cni.projectcalico.org/ipv4pools": "[\"50.80.0.0/16\"]",
+					},
+				},
+				Spec: v1.PodSpec{
+					Containers: []v1.Container{{
+						Name:  testPodName,
+						Image: "ignore",
+					}},
+					NodeName: testNodeName,
+				},
+			})
+
+			// Run the CNI plugin.
+			_, result, _, contAddresses, _, contNs, err := testutils.CreateContainer(netconf, testPodName, testNS, "")
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(len(contAddresses)).Should(Equal(1))
+
+			for _, ip := range contAddresses {
+				podIP := ip.IP
+				if podIP.To4() != nil {
+					Expect(ipPool4CIDR.Contains(podIP)).Should(BeTrue())
+				} else {
+					Expect(ipPool6CIDR.Contains(podIP)).Should(BeTrue())
+				}
+			}
+
+			interfaces := result.Interfaces
+
+			Expect(len(interfaces)).Should(Equal(2))
+			Expect(len(result.IPs)).Should(Equal(1))
+
+			for _, ip := range result.IPs {
+				interfaceIndex := ip.Interface
+				Expect(interfaceIndex).ShouldNot(BeNil())
+				iface := interfaces[*interfaceIndex]
+				Expect(iface).ShouldNot(BeNil())
+				Expect(iface.Name).Should(Equal("eth0"))
+				Expect(iface.Mac).ShouldNot(BeEmpty())
+				Expect(iface.Sandbox).ShouldNot(BeEmpty())
+			}
+
+			// Delete the container.
+			_, err = testutils.DeleteContainer(netconf, contNs.Path(), testPodName, testNS)
+			Expect(err).ShouldNot(HaveOccurred())
+		})
+
+		It("should allocate IPv4 and IPv6 addresses and handle dual stack", func() {
+			// Now create a K8s pod passing in an IP pool.
+			ensurePodCreated(clientset, testNS, &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: testPodName,
+					Annotations: map[string]string{
+						"cni.projectcalico.org/ipv4pools": "[\"50.80.0.0/16\"]",
+						"cni.projectcalico.org/ipv6pools": "[\"fd80:50::/96\"]",
+					},
+				},
+				Spec: v1.PodSpec{
+					Containers: []v1.Container{{
+						Name:  testPodName,
+						Image: "ignore",
+					}},
+					NodeName: testNodeName,
+				},
+			})
+			assignIpv6 := "true"
+			nc.IPAM.AssignIpv6 = &assignIpv6
+			ncb, err := json.Marshal(nc)
+			Expect(err).NotTo(HaveOccurred())
+			netconf = string(ncb)
+
+			// Run the CNI plugin.
+			_, result, _, contAddresses, _, contNs, err := testutils.CreateContainer(netconf, testPodName, testNS, "")
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(len(contAddresses)).Should(Equal(2))
+
+			for _, ip := range contAddresses {
+				podIP := ip.IP
+				if podIP.To4() != nil {
+					Expect(ipPool4CIDR.Contains(podIP)).Should(BeTrue())
+				} else {
+					Expect(ipPool6CIDR.Contains(podIP)).Should(BeTrue())
+				}
+			}
+
+			interfaces := result.Interfaces
+
+			Expect(len(interfaces)).Should(Equal(2))
+			Expect(len(result.IPs)).Should(Equal(2))
+
+			for _, ip := range result.IPs {
+				interfaceIndex := ip.Interface
+				Expect(interfaceIndex).ShouldNot(BeNil())
+				iface := interfaces[*interfaceIndex]
+				Expect(iface).ShouldNot(BeNil())
+				Expect(iface.Name).Should(Equal("eth0"))
+				Expect(iface.Mac).ShouldNot(BeEmpty())
+				Expect(iface.Sandbox).ShouldNot(BeEmpty())
+			}
+
+			// Delete the container.
+			_, err = testutils.DeleteContainer(netconf, contNs.Path(), testPodName, testNS)
+			Expect(err).ShouldNot(HaveOccurred())
 		})
 	})
 })
