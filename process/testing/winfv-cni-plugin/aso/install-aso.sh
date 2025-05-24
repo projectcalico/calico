@@ -76,5 +76,16 @@ EOF
 
 # Wait for ASO deployments
 echo "Wait for ASO controller manager to be ready (up to 2m) ..."
-${KUBECTL} wait --for=condition=available --timeout=2m -n azureserviceoperator-system deployment azureserviceoperator-controller-manager
+if !${KUBECTL} wait --for=condition=available --timeout=2m -n azureserviceoperator-system deployment azureserviceoperator-controller-manager; then
+  echo "Failed to install ASO controller manager"
+  # Stop for debug
+  echo "Check for pause file..."
+  while [ -f /home/semaphore/pause-for-debug ];
+  do
+    echo "#"
+    sleep 30
+  done
+  exit 1
+fi  
+
 echo "ASO installed and the controller manager is ready."
