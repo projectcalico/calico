@@ -19,6 +19,7 @@ static CALI_BPF_INLINE int try_redirect_to_peer(struct cali_tc_ctx *ctx)
 			!(ctx->state->ct_result.flags & CALI_CT_FLAG_SKIP_REDIR_PEER)) {
 		int rc = bpf_redirect_peer(state->ct_result.ifindex_fwd, 0);
 		if (rc == TC_ACT_REDIRECT) {
+			counter_inc(ctx, CALI_REDIRECT_PEER);
 			CALI_DEBUG("Redirect to peer interface (%d) succeeded.", state->ct_result.ifindex_fwd);
 			return rc;
 		}
@@ -59,6 +60,7 @@ static CALI_BPF_INLINE int forward_or_drop(struct cali_tc_ctx *ctx)
 
 		rc = bpf_redirect(ctx->skb->ifindex, redir_flags);
 		if (rc == TC_ACT_REDIRECT) {
+			counter_inc(ctx, CALI_REDIRECT);
 			CALI_DEBUG("Redirect to the same interface (%d) succeeded.", ctx->skb->ifindex);
 			goto skip_fib;
 		}
@@ -97,6 +99,7 @@ static CALI_BPF_INLINE int forward_or_drop(struct cali_tc_ctx *ctx)
 
 		rc = bpf_redirect(iface, 0);
 		if (rc == TC_ACT_REDIRECT) {
+			counter_inc(ctx, CALI_REDIRECT);
 			CALI_DEBUG("Redirect directly to interface (%d) succeeded.", iface);
 			goto skip_fib;
 		}
@@ -169,6 +172,7 @@ skip_redir_ifindex:
 
 			rc = bpf_redirect(state->ct_result.ifindex_fwd, 0);
 			if (rc == TC_ACT_REDIRECT) {
+				counter_inc(ctx, CALI_REDIRECT);
 				CALI_DEBUG("Redirect to dev %d without fib lookup",
 						state->ct_result.ifindex_fwd);
 				goto skip_fib;
@@ -254,6 +258,7 @@ try_fib_external:
 #endif
 				rc = bpf_redirect_neigh(state->ct_result.ifindex_fwd, &nh_params, sizeof(nh_params), 0);
 				if (rc == TC_ACT_REDIRECT) {
+					counter_inc(ctx, CALI_REDIRECT_NEIGH);
 					CALI_DEBUG("Redirect to workload dev %d without fib lookup",
 							state->ct_result.ifindex_fwd);
 					goto no_fib_redirect;
@@ -262,6 +267,7 @@ try_fib_external:
 			}
 			rc = bpf_redirect_neigh(state->ct_result.ifindex_fwd, NULL, 0, 0);
 			if (rc == TC_ACT_REDIRECT) {
+				counter_inc(ctx, CALI_REDIRECT_NEIGH);
 				CALI_DEBUG("Redirect to dev %d without fib lookup", state->ct_result.ifindex_fwd);
 				goto no_fib_redirect;
 			}
