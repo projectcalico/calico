@@ -15,6 +15,7 @@
 package libbpf
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"syscall"
@@ -166,6 +167,29 @@ func DetachClassifier(ifindex, handle, pref int, ingress bool) error {
 	return err
 }
 
+func DetachCTLBProgramsLegacy(cgroup string) error {
+	f, err := os.OpenFile(cgroup, os.O_RDONLY, 0)
+	if err != nil {
+		return fmt.Errorf("failed to join cgroup %s: %w", cgroup, err)
+	}
+	defer f.Close()
+	fd := int(f.Fd())
+
+	attachTypes := []int{C.BPF_CGROUP_INET4_CONNECT,
+		C.BPF_CGROUP_UDP4_SENDMSG,
+		C.BPF_CGROUP_UDP4_RECVMSG,
+		C.BPF_CGROUP_INET6_CONNECT,
+		C.BPF_CGROUP_UDP6_SENDMSG,
+		C.BPF_CGROUP_UDP6_RECVMSG}
+	for _, attachType := range attachTypes {
+		_, perr := C.bpf_ctlb_detach_legacy(C.int(fd), C.int(attachType))
+		if perr != nil {
+			err = errors.Join(err, perr)
+		}
+	}
+	return err
+}
+
 // AttachClassifier return the program id and pref and handle of the qdisc
 func (o *Obj) AttachClassifier(secName, ifName string, ingress bool, prio, handle int) (int, int, int, error) {
 	cSecName := C.CString(secName)
@@ -302,6 +326,48 @@ func (l *Link) Close() error {
 	return fmt.Errorf("link nil")
 }
 
+func (l *Link) Pin(path string) error {
+	if l.link == nil {
+		return fmt.Errorf("link nil")
+	}
+	cPath := C.CString(path)
+	defer C.free(unsafe.Pointer(cPath))
+	errno := C.bpf_link__pin(l.link, cPath)
+	if errno != 0 {
+		return fmt.Errorf("failed to pin link to %s: %w", path, syscall.Errno(errno))
+	}
+	return nil
+}
+
+func OpenLink(path string) (*Link, error) {
+	cPath := C.CString(path)
+	defer C.free(unsafe.Pointer(cPath))
+	link, err := C.bpf_link_open(cPath)
+	if err != nil {
+		return nil, fmt.Errorf("error opening link %w", err)
+	}
+	return &Link{link: link}, nil
+}
+
+func (l *Link) Detach() error {
+	errno := C.bpf_link__detach(l.link)
+	if errno != 0 {
+		return fmt.Errorf("failed to detach link %w", syscall.Errno(errno))
+	}
+	return nil
+}
+
+func (l *Link) Update(obj *Obj, progName string) error {
+	cProgName := C.CString(progName)
+	defer C.free(unsafe.Pointer(cProgName))
+
+	_, err := C.bpf_update_link(l.link, obj.obj, cProgName)
+	if err != nil {
+		return fmt.Errorf("error updating link %w", err)
+	}
+	return nil
+}
+
 func CreateQDisc(ifName string) error {
 	cIfName := C.CString(ifName)
 	defer C.free(unsafe.Pointer(cIfName))
@@ -364,15 +430,28 @@ func (o *Obj) AttachCGroup(cgroup, progName string) (*Link, error) {
 
 	link, err := C.bpf_program_attach_cgroup(o.obj, C.int(fd), cProgName)
 	if err != nil {
-		link = nil
-		_, err2 := C.bpf_program_attach_cgroup_legacy(o.obj, C.int(fd), cProgName)
-		if err2 != nil {
-			return nil, fmt.Errorf("failed to attach %s to cgroup %s (legacy try %s): %w",
-				progName, cgroup, err2, err)
-		}
+		return nil, fmt.Errorf("failed to attach %s to cgroup %s : %w",
+			progName, cgroup, err)
 	}
-
 	return &Link{link: link}, nil
+}
+
+func (o *Obj) AttachCGroupLegacy(cgroup, progName string) error {
+	cProgName := C.CString(progName)
+	defer C.free(unsafe.Pointer(cProgName))
+
+	f, err := os.OpenFile(cgroup, os.O_RDONLY, 0)
+	if err != nil {
+		return fmt.Errorf("failed to join cgroup %s: %w", cgroup, err)
+	}
+	defer f.Close()
+	fd := int(f.Fd())
+	_, err = C.bpf_program_attach_cgroup_legacy(o.obj, C.int(fd), cProgName)
+	if err != nil {
+		return fmt.Errorf("failed to attach %s to cgroup %s (legacy try): %w",
+			progName, cgroup, err)
+	}
+	return nil
 }
 
 const (
