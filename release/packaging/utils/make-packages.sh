@@ -51,9 +51,6 @@ for package_type in "$@"; do
         debver=${FORCE_VERSION_DEB:-$(git_version_to_deb "${version}")}
         debver=$(strip_v "${debver}")
 
-        # Current time in Debian changelog format; e.g. Wed, 02
-        # Mar 2016 14:08:51 +0000.
-        timestamp=$(date "+%a, %d %b %Y %H:%M:%S %z")
         for series in focal jammy noble; do
                 if ${release}; then
                         changelog_message="${NAME} v${debver} (from Git commit ${sha})."
@@ -116,7 +113,7 @@ EOF
             fi
             echo
 
-        } | sed -i '/^%changelog/ r /dev/stdin' ${rpm_spec}
+        } | sed -i '/^%changelog/ r /dev/stdin' "${rpm_spec}"
         fi
 
         elversions=7
@@ -126,7 +123,7 @@ EOF
         [ -n "$imageid" ] && ${DOCKER_RUN_RM} -e "EL_VERSION=el${elversion}" \
             -e FORCE_VERSION="${FORCE_VERSION}" \
             -e RPM_TAR_ARGS="${RPM_TAR_ARGS}" \
-            $imageid /rpm/build-rpms
+            "$imageid" /rpm/build-rpms
         done
 
         cat <<-EOF

@@ -1,8 +1,0 @@
-FROM ubuntu:noble
-LABEL org.opencontainers.image.authors="Daniel Fox <dan.fox@tigera.io>"
-ENV STREAM=noble
-
-COPY install-ubuntu-build-deps install-ubuntu-build-deps
-RUN ./install-ubuntu-build-deps
-
-WORKDIR /code

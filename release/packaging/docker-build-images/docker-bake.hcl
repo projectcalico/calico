@@ -6,6 +6,11 @@ variable "ARCH" {
     default = "amd64"
 }
 
+# The default Ubuntu stream
+variable "STREAM" {
+    default = "noble"
+}
+
 variable "UID" {
     default = 1000
 }
@@ -23,30 +28,25 @@ group "default" {
     targets = ["ubuntu", "centos"]
 }
 
-# All ubuntu images
-group "ubuntu" {
-  targets = ["focal", "jammy", "noble"]
-}
-
 # All centos images
 group "centos" {
     targets = ["centos7"]
 }
 
-# Ubuntu builds
-target "focal" {
-  dockerfile = "ubuntu-focal-build.Dockerfile.${ARCH}"
-  tags = ["calico-build/focal"]
-}
+# All Ubuntu builds - in one big matrix, using one Dockerfile
+target "ubuntu" {
+  name = "ubuntu-${STREAM}-${ARCH}"
+  dockerfile = "ubuntu.Dockerfile"
+  matrix = {
+    STREAM = ["focal", "jammy", "noble"]
+    ARCH = ["amd64"]
+  }
+  args = {
+    STREAM = STREAM
+    ARCH = ARCH
 
-target "jammy" {
-  dockerfile = "ubuntu-jammy-build.Dockerfile.${ARCH}"
-  tags = ["calico-build/jammy"]
-}
-
-target "noble" {
-  dockerfile = "ubuntu-noble-build.Dockerfile.${ARCH}"
-  tags = ["calico-build/noble"]
+  }
+  tags = ["calico-build/${STREAM}"]
 }
 
 # CentOS builds
