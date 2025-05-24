@@ -61,6 +61,27 @@ var _ = DescribeTable("CIDR list parameter parsing",
 	Entry("Mix of IP and CIDRs", "1.1.1.1/24, 2.2.2.2", []string{"1.1.1.0/24", "2.2.2.2/32"}, true),
 )
 
+var _ = DescribeTable("Port list parameter parsing",
+	func(raw string, expected []config.ProtoPort, expectSuccess bool) {
+		p := config.PortListParam{config.Metadata{
+			Name: "PortLists",
+		}}
+		actual, err := p.Parse(raw)
+		if expectSuccess {
+			Expect(err).To(BeNil())
+			Expect(actual).To(Equal(expected))
+		} else {
+			Expect(err).To(BeNil())
+		}
+	},
+	Entry("Empty", "", nil, true),
+	Entry("Empty", "[]", nil, true),
+	Entry("PortList", "tcp:22,udp:1.1.1.1:22,3033", []config.ProtoPort{
+		{Protocol: "tcp", Port: 22, Net: ""},
+		{Protocol: "udp", Port: 22, Net: "1.1.1.1/32"},
+		{Protocol: "tcp", Port: 3033, Net: ""}}, true),
+)
+
 var _ = DescribeTable("KeyValue list parameter parsing",
 	func(raw string, expected map[string]string) {
 		p := config.KeyValueListParam{config.Metadata{
