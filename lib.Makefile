@@ -676,6 +676,12 @@ fix-changed go-fmt-changed goimports-changed:
 fix-all go-fmt-all goimports-all:
 	$(DOCKER_RUN) $(CALICO_BUILD) $(REPO_DIR)/hack/format-all-files.sh
 
+GOMODDER=$(REPO_DIR)/hack/cmd/gomodder/main.go
+
+.PHONY: verify-go-mods
+verify-go-mods:
+	$(DOCKER_RUN) $(CALICO_BUILD) go run $(GOMODDER)
+
 .PHONY: pre-commit
 pre-commit:
 	$(DOCKER_RUN) $(CALICO_BUILD) git-hooks/pre-commit-in-container
