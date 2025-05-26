@@ -9,13 +9,17 @@ import (
 
 // This server is for testing purposes only to see if the tls config is affected by our build commands as expected.
 func main() {
+	tlsConfig, err := tls.NewTLSConfig()
+	if err != nil {
+		panic(fmt.Errorf("failed to create TLS Config: %w", err))
+	}
 	server := http.Server{
 		Addr:      ":8083",
 		Handler:   fipsHandler{},
-		TLSConfig: tls.NewTLSConfig(),
+		TLSConfig: tlsConfig,
 	}
 
-	err := server.ListenAndServeTLS("tmp/tls.crt", "tmp/tls.key")
+	err = server.ListenAndServeTLS("tmp/tls.crt", "tmp/tls.key")
 	if err != nil {
 		panic(err)
 	}

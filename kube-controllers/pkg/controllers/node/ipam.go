@@ -68,6 +68,9 @@ var (
 const (
 	// Used to label an allocation that does not have its node attribute set.
 	unknownNodeLabel = "unknown_node"
+
+	// key for ratelimited sync retries.
+	retryKey = "ipamSyncRetry"
 )
 
 func init() {
@@ -119,17 +122,35 @@ func NewIPAMController(cfg config.NodeControllerConfig, c client.Interface, cs k
 	if cfg.LeakGracePeriod != nil {
 		leakGracePeriod = &cfg.LeakGracePeriod.Duration
 	}
+
+	syncChan := make(chan interface{}, 1)
+
+	// Create a rate limited that compares two distinct limiters and uses the max. This rate limiter is used
+	// only to control the retry rate of whole IPAM sync executions.
+	rl := workqueue.NewTypedMaxOfRateLimiter(
+		// Exponential backoff, starting at 5ms and max of 30s.
+		workqueue.NewTypedItemExponentialFailureRateLimiter[any](5*time.Millisecond, 30*time.Second),
+		// A bucket limiter, bursting to 100 with a limit of 10 per second.
+		&workqueue.TypedBucketRateLimiter[any]{Limiter: rate.NewLimiter(rate.Limit(10), 100)},
+	)
+
+	// Retry controller takes the rate limiter as input and schedules events to the channel
+	// when the desired duration has passed.
+	retryController := utils.NewRetryController(
+		// Use the ratelimiter above to calculate when retries should occur.
+		func() time.Duration { return rl.When(retryKey) },
+		// Kick the sync channel when the retry timer pops.
+		func() { kick(syncChan) },
+		// Clear the ratelimiter on success.
+		func() { rl.Forget(retryKey) },
+	)
+
 	return &IPAMController{
 		client:    c,
 		clientset: cs,
 		config:    cfg,
-		rl: workqueue.NewTypedMaxOfRateLimiter(
-			workqueue.NewTypedItemExponentialFailureRateLimiter[any](5*time.Millisecond, 30*time.Second),
-			// 10 qps, 100 bucket size.  This is only for retry speed and its only the overall factor (not per item)
-			&workqueue.TypedBucketRateLimiter[any]{Limiter: rate.NewLimiter(rate.Limit(10), 100)},
-		),
 
-		syncChan: make(chan interface{}, 1),
+		syncChan: syncChan,
 
 		podLister:  v1lister.NewPodLister(pi),
 		nodeLister: v1lister.NewNodeLister(ni),
@@ -158,11 +179,13 @@ func NewIPAMController(cfg config.NodeControllerConfig, c client.Interface, cs k
 
 		// For unit testing purposes.
 		pauseRequestChannel: make(chan pauseRequest),
+
+		// Retries.
+		retryController: retryController,
 	}
 }
 
 type IPAMController struct {
-	rl         workqueue.TypedRateLimiter[any]
 	client     client.Interface
 	clientset  kubernetes.Interface
 	podLister  v1lister.PodLister
@@ -224,6 +247,9 @@ type IPAMController struct {
 
 	// fullSyncRequired marks whether or not a full scan of IPAM data is required on the next sync.
 	fullSyncRequired bool
+
+	// retryController manages retries and backoff of full IPAM syncs.
+	retryController *utils.RetryController
 }
 
 func (c *IPAMController) Start(stop chan struct{}) {
@@ -284,11 +310,12 @@ func (c *IPAMController) acceptScheduleRequests(stopCh <-chan struct{}) {
 	}
 	t := time.NewTicker(period)
 	log.Infof("Will run periodic IPAM sync every %s", period)
+
 	for {
 		// Wait until something wakes us up, or we are stopped.
 		select {
 		case <-c.nodeDeletionChan:
-			logEntry := log.WithFields(log.Fields{"controller": "Ipam", "type": "nodeDeletion"})
+			logEntry := log.WithFields(log.Fields{"controller": "ipam", "type": "nodeDeletion"})
 			utils.ProcessBatch(c.nodeDeletionChan, struct{}{}, nil, logEntry)
 
 			// When one or more nodes are deleted, trigger a full sync to ensure that we release
@@ -296,11 +323,12 @@ func (c *IPAMController) acceptScheduleRequests(stopCh <-chan struct{}) {
 			c.fullScanNextSync("Batch node deletion")
 			kick(c.syncChan)
 		case pod := <-c.podDeletionChan:
-			logEntry := log.WithFields(log.Fields{"controller": "Ipam", "type": "podDeletion"})
+			logEntry := log.WithFields(log.Fields{"controller": "ipam", "type": "podDeletion"})
 			utils.ProcessBatch(c.podDeletionChan, pod, c.allocationState.markDirtyPodDeleted, logEntry)
 			kick(c.syncChan)
 		case upd := <-c.syncerUpdates:
-			c.handleUpdate(upd)
+			logEntry := log.WithFields(log.Fields{"controller": "ipam", "type": "syncerUpdate"})
+			utils.ProcessBatch(c.syncerUpdates, upd, c.handleUpdate, logEntry)
 			kick(c.syncChan)
 		case <-t.C:
 			// Periodic IPAM sync, queue a full scan of the IPAM data.
@@ -317,10 +345,13 @@ func (c *IPAMController) acceptScheduleRequests(stopCh <-chan struct{}) {
 			log.Debug("Triggered IPAM sync")
 			err := c.syncIPAM()
 			if err != nil {
-				// We can kick ourselves on error for a retry. We have rate limiting
-				// built into the cleanup code.
+				// For errors, tell the retry controller to schedule a retry. It will ensure at most
+				// one retry is queued at a time, and also manage backoff.
 				log.WithError(err).Warn("error syncing IPAM data")
-				kick(c.syncChan)
+				c.retryController.ScheduleRetry()
+			} else {
+				// Mark sync as a success.
+				c.retryController.Success()
 			}
 
 			// Update prometheus metrics.
@@ -752,6 +783,8 @@ func (c *IPAMController) releaseUnusedBlocks() error {
 // - There are no longer any IP allocations on the node, OR
 // - The remaining IP allocations on the node are all determined to be leaked IP addresses.
 func (c *IPAMController) checkAllocations() ([]string, error) {
+	defer logIfSlow(time.Now(), "Allocation scan complete")
+
 	// For each node present in IPAM, if it doesn't exist in the Kubernetes API then we
 	// should consider it a candidate for cleanup.
 	nodesToCheck := map[string]map[string]*allocation{}
@@ -1013,6 +1046,8 @@ func (c *IPAMController) allocationIsValid(a *allocation, preferCache bool) bool
 }
 
 func (c *IPAMController) syncIPAM() error {
+	defer logIfSlow(time.Now(), "IPAM sync complete")
+
 	if !c.datastoreReady {
 		log.Warn("datastore is locked, skipping ipam sync")
 		return nil
@@ -1050,42 +1085,37 @@ func (c *IPAMController) syncIPAM() error {
 	// Delete any nodes that we determined can be removed in checkAllocations. These
 	// nodes are no longer in the Kubernetes API, and have no valid allocations, so can be cleaned up entirely
 	// from Calico IPAM.
-	var storedErr error
-	if len(nodesToRelease) > 0 {
-		log.WithField("num", len(nodesToRelease)).Info("Found a batch of nodes to release")
-	}
-	for _, cnode := range nodesToRelease {
-		logc := log.WithField("node", cnode)
-
-		// Potentially rate limit node cleanup.
-		rlKey := rateLimiterItemKey{Type: RateLimitCalicoDelete, Name: cnode}
-		time.Sleep(c.rl.When(rlKey))
-		logc.Info("Cleaning up IPAM affinities for deleted node")
-		if err := c.cleanupNode(cnode); err != nil {
-			// Store the error, but continue. Storing the error ensures we'll retry.
-			logc.WithError(err).Warnf("Error cleaning up node")
-			storedErr = err
-			continue
-		}
-		c.rl.Forget(rlKey)
-	}
-	if storedErr != nil {
-		return storedErr
+	if err = c.releaseNodes(nodesToRelease); err != nil {
+		return err
 	}
 
 	c.allocationState.syncComplete()
 	log.Debug("IPAM sync completed")
+
+	// If there is still dirty state, then we need to do another pass.
+	if len(c.confirmedLeaks) > 0 {
+		log.WithField("num", len(c.confirmedLeaks)).Info("Confirmed leaks still exist, scheduling another pass")
+		kick(c.syncChan)
+	}
 	return nil
 }
 
 // garbageCollectKnownLeaks checks all known allocations and garbage collects any confirmed leaks.
 func (c *IPAMController) garbageCollectKnownLeaks() error {
+	defer logIfSlow(time.Now(), "Leak GC complete")
+
+	// limit the number of concurrent IPs we attempt to release at once.
+	maxBatchSize := 10000
+
+	var opts []ipam.ReleaseOptions
+	leaks := map[string]*allocation{}
 	for id, a := range c.confirmedLeaks {
 		logc := log.WithFields(a.fields())
 
-		// Final check that the allocation is leaked, this time ignoring our cache
-		// to make sure we're working with up-to-date information.
-		if c.allocationIsValid(a, false) {
+		// Final check that the allocation is leaked. We prefer the cache when the hosting node has been
+		// deleted, as we're reasonably confident this is a leak. Otherwise, we go to the API server directly for extra confidence
+		// that the Pod is actually gone.
+		if c.allocationIsValid(a, a.knode == "") {
 			logc.Info("Leaked IP has been resurrected after querying latest state")
 			delete(c.confirmedLeaks, id)
 			a.markValid()
@@ -1098,25 +1128,80 @@ func (c *IPAMController) garbageCollectKnownLeaks() error {
 			continue
 		}
 
-		logc.Info("Garbage collecting leaked IP address")
-		unallocated, err := c.client.IPAM().ReleaseIPs(context.TODO(), a.ReleaseOptions())
-		if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok || len(unallocated) == 1 {
-			logc.WithField("handle", a.handle).Debug("IP already released")
-			continue
-		} else if err != nil {
-			logc.WithError(err).WithField("handle", a.handle).Warning("Failed to release leaked IP")
-			return err
+		opts = append(opts, a.ReleaseOptions())
+		leaks[a.ReleaseOptions().Address] = a
+
+		if len(opts) >= maxBatchSize {
+			break
 		}
+	}
+
+	if len(opts) == 0 {
+		// Nothing to do.
+		return nil
+	}
+
+	// By releasing multiple IPs at once, we can reduce the number of API calls the underlying IPAM code needs to make
+	// in order to release the IPs. This is especially apparent when there are multple IP addresses from the same block
+	// that must be released, as they can all be released in a single API call to update the block.
+	log.WithField("num", len(opts)).Info("Garbage collecting leaked IP addresses")
+	_, releasedOpts, err := c.client.IPAM().ReleaseIPs(context.TODO(), opts...)
+
+	// First, go through the returned options and update allocation state. These are the IPs that were successfully
+	// released, or were unallocated to begin with. In either case, we can mark them as released.
+	for _, opt := range releasedOpts {
+		// Find the allocation that matches these release options.
+		a, ok := leaks[opt.Address]
+		if !ok {
+			log.WithField("opt", opt).Fatalf("BUG: unable to find allocation for release options: %+v", leaks)
+		}
+		logc := log.WithFields(a.fields())
 
 		// No longer a leak. Remove it here so we're not dependent on receiving
 		// the update from the syncer (which we will do eventually, this is just cleaner).
 		c.allocationState.release(a)
-
 		c.incrementReclamationMetric(a.block, a.node())
+		delete(c.confirmedLeaks, a.id())
 
-		delete(c.confirmedLeaks, id)
+		logc.Info("Successfully garbage collected leaked IP address")
+		delete(leaks, opt.Address)
+	}
+
+	// Note any leaks that we couldn't release.
+	for _, a := range leaks {
+		logc := log.WithFields(a.fields())
+		logc.Warn("Leaked IP address was not successfully garbage collected")
+	}
+
+	// Check the error.
+	if err != nil {
+		if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok {
+			log.WithError(err).Warn("Failed to garbage collect one or more leaked IP addresses")
+			return err
+		}
 	}
 	return nil
+}
+
+func (c *IPAMController) releaseNodes(nodes []string) error {
+	if len(nodes) == 0 {
+		return nil
+	}
+
+	log.WithField("num", len(nodes)).Info("Found a batch of nodes to release")
+	var storedErr error
+	for _, cnode := range nodes {
+		logc := log.WithField("node", cnode)
+
+		// Potentially rate limit node cleanup.
+		logc.Info("Cleaning up IPAM affinities for deleted node")
+		if err := c.cleanupNode(cnode); err != nil {
+			// Store the error, but continue. Storing the error ensures we'll retry.
+			logc.WithError(err).Warnf("Error cleaning up node")
+			storedErr = err
+		}
+	}
+	return storedErr
 }
 
 func (c *IPAMController) cleanupNode(cnode string) error {
@@ -1367,5 +1452,11 @@ func (c *IPAMController) pause() func() {
 	<-pauseConfirmed
 	return func() {
 		doneChan <- struct{}{}
+	}
+}
+
+func logIfSlow(start time.Time, msg string) {
+	if dur := time.Since(start); dur > 5*time.Second {
+		log.WithField("duration", dur).Info(msg)
 	}
 }

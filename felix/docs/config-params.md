@@ -892,6 +892,22 @@ is leaving the network. By default the address used is an address on the interfa
 | `FelixConfiguration` schema | String. |
 | Default value (YAML) | none |
 
+### `NATOutgoingExclusions` (config file) / `natOutgoingExclusions` (YAML)
+
+When a IP pool setting `natOutgoing` is true, packets sent from Calico networked containers in this IP pool to destinations will be masqueraded.
+Configure which type of destinations is excluded from being masqueraded.
+- IPPoolsOnly: destinations outside of this IP pool will be masqueraded.
+- IPPoolsAndHostIPs: destinations outside of this IP pool and all hosts will be masqueraded.
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_NATOutgoingExclusions` |
+| Encoding (env var/config file) | One of: <code>IPPoolsAndHostIPs</code>, <code>IPPoolsOnly</code> (case insensitive) |
+| Default value (above encoding) | `IPPoolsOnly` |
+| `FelixConfiguration` field | `natOutgoingExclusions` (YAML) `NATOutgoingExclusions` (Go API) |
+| `FelixConfiguration` schema | One of: <code>"IPPoolsAndHostIPs"</code>, <code>"IPPoolsOnly"</code>. |
+| Default value (YAML) | `IPPoolsOnly` |
+
 ### `NATPortRange` (config file) / `natPortRange` (YAML)
 
 Specifies the range of ports that is used for port mapping when doing outgoing NAT. When unset the default behavior of the
@@ -946,6 +962,20 @@ like Application layer policy.
 | `FelixConfiguration` field | `policySyncPathPrefix` (YAML) `PolicySyncPathPrefix` (Go API) |
 | `FelixConfiguration` schema | String. |
 | Default value (YAML) | none |
+
+### `ProgramRoutes` (config file) / `programRoutes` (YAML)
+
+Specifies whether Felix should program IPIP or unencapsulated routes instead of BIRD.
+Felix always programs VXLAN routes.
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_ProgramRoutes` |
+| Encoding (env var/config file) | One of: <code>Disabled</code>, <code>Enabled</code> (case insensitive) |
+| Default value (above encoding) | `Disabled` |
+| `FelixConfiguration` field | `programRoutes` (YAML) `ProgramRoutes` (Go API) |
+| `FelixConfiguration` schema | One of: <code>"Disabled"</code>, <code>"Enabled"</code>. |
+| Default value (YAML) | `Disabled` |
 
 ### `RemoveExternalRoutes` (config file) / `removeExternalRoutes` (YAML)
 

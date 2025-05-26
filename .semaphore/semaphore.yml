@@ -562,7 +562,7 @@ blocks:
             - ./.semaphore/publish-artifacts
             - test-results publish /home/semaphore/calico/felix/report/fv_suite.xml --name "felix-fv-${SEMAPHORE_JOB_INDEX}" || true
             - test-results publish /home/semaphore/calico/felix/report/fv_nft_suite.xml --name "felix-fv-nft-${SEMAPHORE_JOB_INDEX}" || true
-  - name: "Felix: BPF UT/FV tests on new kernel"
+  - name: "Felix: BPF UT/FV tests on Ubuntu 24.04"
     run:
       when: "false or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/cni-plugin/pkg/dataplane/linux/dataplane_linux.go'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
     dependencies:
@@ -580,6 +580,7 @@ blocks:
           - export NUM_FV_BATCHES=8
           - export RUN_UT=true
           - export FV_FOCUS=BPF-SAFE
+          - export IMAGE=ubuntu-2404-noble-amd64-v20250502a
           - mkdir artifacts
           - ./.semaphore/create-test-vms ${VM_PREFIX}
       jobs:
@@ -596,7 +597,7 @@ blocks:
             - ./.semaphore/clean-up-vms ${VM_PREFIX}
       secrets:
         - name: google-service-account-for-gce
-  - name: "Felix: BPF UT/FV tests on new kernel (nftables)"
+  - name: "Felix: BPF UT/FV tests on Ubuntu 22.04 (nftables)"
     run:
       when: "false or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/cni-plugin/pkg/dataplane/linux/dataplane_linux.go'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
     dependencies:
@@ -612,7 +613,7 @@ blocks:
           - echo VM_PREFIX=${VM_PREFIX}
           - export REPO_NAME=$(basename $(pwd))
           - export NUM_FV_BATCHES=4
-          - export RUN_UT=false
+          - export RUN_UT=true
           - export FV_FOCUS='_BPF_.*ct=true'
           - mkdir artifacts
           - ./.semaphore/create-test-vms ${VM_PREFIX}
@@ -709,6 +710,21 @@ blocks:
           - cd libcalico-go
       jobs:
         - name: "libcalico-go: tests"
+          commands:
+            - ../.semaphore/run-and-monitor make-ci.log make ci
+  - name: lib
+    run:
+      when: "false or change_in(['/lib/'])"
+    execution_time_limit:
+      minutes: 30
+    dependencies:
+      - Prerequisites
+    task:
+      prologue:
+        commands:
+          - cd lib
+      jobs:
+        - name: make ci
           commands:
             - ../.semaphore/run-and-monitor make-ci.log make ci
   - name: "Node: Build"
@@ -814,6 +830,19 @@ blocks:
           commands:
             - ../.semaphore/run-and-monitor ci.log make ci
             - test-results publish ./report/*.xml --name "pod2daemon-ut-tests" || true
+  - name: "Tools (hack directory)"
+    run:
+      when: "false or change_in(['/*', '/hack/', '/api/', '/libcalico-go/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+    dependencies:
+      - Prerequisites
+    task:
+      prologue:
+        commands:
+          - cd hack
+      jobs:
+        - name: "Tools (hack directory)"
+          commands:
+            - ../.semaphore/run-and-monitor make-ci.log make ci
   - name: Typha
     run:
       when: "false or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/hack/test/certs/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
@@ -934,6 +963,15 @@ blocks:
             # this was causing the DevStack setup to fail, because pip doesn't know how to uninstall
             # or replace the existing version.  Happily we do know that, so let's do it upfront here.
             - sudo apt-get remove -y python3-wrapt || true
+            # Install all the packages that would trigger an initramfs update using a workaround
+            # for limited /boot partition space in the ubuntu2004 image
+            - sudo apt update
+            - sudo rsync -av /boot/ /boot2/
+            - sudo mount --bind /boot2 /boot
+            - sudo apt install -y cryptsetup lsscsi open-iscsi thin-provisioning-tools
+            - sudo umount /boot
+            - sudo rsync -av /boot2/ /boot/ --exclude "*.new" --exclude "*.dpkg-bak" --delete --inplace
+            - sudo rm -rf /boot2/
             - git checkout -b devstack-test
             - export LIBVIRT_TYPE=qemu
             - export UPPER_CONSTRAINTS_FILE=https://releases.openstack.org/constraints/upper/yoga

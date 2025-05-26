@@ -26,13 +26,16 @@ sub-image-%:
 
 # Build whisker-backend image.
 whisker-backend calico/whisker-backend: $(IMAGE_BUILD_MARKER)
-$(IMAGE_BUILD_MARKER): bin/whisker-backend-$(ARCH)
+$(IMAGE_BUILD_MARKER): bin/whisker-backend-$(ARCH) bin/LICENSE
 	$(DOCKER_BUILD) --build-arg TARGETARCH=$(ARCH) -t whisker-backend:latest-$(ARCH) -f docker/Dockerfile .
 	$(MAKE) retag-build-images-with-registries BUILD_IMAGES=$(BUILD_IMAGES) VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@
 
 bin/whisker-backend-$(ARCH): $(shell find . -name '*.go') $(shell find ../lib/. -name '*.go')
 	$(call build_binary, $(PACKAGE_NAME)/cmd/, $@)
+
+bin/LICENSE: ../LICENSE.md
+	cp ../LICENSE.md $@
 
 # Build the testserver image.
 .PHONY: testserver

@@ -31,10 +31,12 @@ type IPSetsDataplane interface {
 	GetTypeOf(setID string) (ipsets.IPSetType, error)
 	GetDesiredMembers(setID string) (set.Set[string], error)
 	QueueResync()
-	ApplyUpdates()
+	ApplyUpdates(listener UpdateListener)
 	ApplyDeletions() (reschedule bool)
 	SetFilter(neededIPSets set.Set[string])
 }
+
+type UpdateListener = ipsets.UpdateListener
 
 // Except for domain IP sets, IPSetsManager simply passes through IP set updates from the datastore
 // to the ipsets.IPSets dataplane layer.  For domain IP sets - which hereafter we'll just call
