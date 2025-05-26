@@ -16,7 +16,6 @@ package intdataplane
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -32,14 +31,7 @@ import (
 	"github.com/projectcalico/calico/felix/rules"
 )
 
-// ipipManager manages the all-hosts IP set, which is used by some rules in our static chains
-// when IPIP is enabled. It doesn't actually program the rules, because they are part of the
-// top-level static chains.
-//
-// ipipManager also takes care of the configuration of the IPIP tunnel device, and programming IPIP routes by using
-// route manager. Route updates are only sent to the route manager when Felix is reponsible for programming routes.
-// If BIRD is in charge of IPIP routes, ipipManager is only responsible for configuration of the IPIP tunnel device.
-type ipipManager struct {
+type noEncapManager struct {
 	// Our dependencies.
 	hostname      string
 	ipVersion     uint8
@@ -66,7 +58,7 @@ type ipipManager struct {
 	opRecorder logutils.OpRecorder
 }
 
-func newIPIPManager(
+func newNoEncapManager(
 	ipsetsDataplane dpsets.IPSetsDataplane,
 	mainRouteTable routetable.Interface,
 	tunnelDevice string,
@@ -74,9 +66,9 @@ func newIPIPManager(
 	mtu int,
 	dpConfig Config,
 	opRecorder logutils.OpRecorder,
-) *ipipManager {
+) *noEncapManager {
 	nlHandle, _ := netlinkshim.NewRealNetlink()
-	return newIPIPManagerWithSims(
+	return newNoEncapManagerWithSims(
 		ipsetsDataplane,
 		mainRouteTable,
 		tunnelDevice,
@@ -88,7 +80,7 @@ func newIPIPManager(
 	)
 }
 
-func newIPIPManagerWithSims(
+func newNoEncapManagerWithSims(
 	ipsetsDataplane dpsets.IPSetsDataplane,
 	mainRouteTable routetable.Interface,
 	tunnelDevice string,
@@ -97,14 +89,14 @@ func newIPIPManagerWithSims(
 	dpConfig Config,
 	opRecorder logutils.OpRecorder,
 	nlHandle netlinkHandle,
-) *ipipManager {
+) *noEncapManager {
 
 	if ipVersion != 4 {
 		logrus.Errorf("IPIP manager only supports IPv4")
 		return nil
 	}
 
-	m := &ipipManager{
+	m := &noEncapManager{
 		ipsetsDataplane: ipsetsDataplane,
 		ipSetMetadata: ipsets.IPSetMetadata{
 			MaxSize: dpConfig.MaxIPSetSize,
@@ -127,7 +119,7 @@ func newIPIPManagerWithSims(
 		opRecorder: opRecorder,
 		routeMgr: newRouteManager(
 			mainRouteTable,
-			proto.IPPoolType_IPIP,
+			proto.IPPoolType_NO_ENCAP,
 			tunnelDevice,
 			ipVersion,
 			mtu,
@@ -137,15 +129,15 @@ func newIPIPManagerWithSims(
 		),
 	}
 
-	m.routeMgr.routeClassTunnel = routetable.RouteClassIPIPTunnel
-	m.routeMgr.routeClassSameSubnet = routetable.RouteClassIPIPSameSubnet
+	m.routeMgr.routeClassTunnel = routetable.RouteClassNoEncap
+	m.routeMgr.routeClassSameSubnet = routetable.RouteClassNoEncap
 	m.routeMgr.setTunnelRouteFunc(m.route)
 
 	m.maybeUpdateRoutes()
 	return m
 }
 
-func (m *ipipManager) OnUpdate(protoBufMsg interface{}) {
+func (m *noEncapManager) OnUpdate(protoBufMsg interface{}) {
 	switch msg := protoBufMsg.(type) {
 	case *proto.HostMetadataUpdate:
 		m.logCtx.WithField("hostname", msg.Hostname).Debug("Host update/create")
@@ -170,14 +162,14 @@ func (m *ipipManager) OnUpdate(protoBufMsg interface{}) {
 	}
 }
 
-func (m *ipipManager) maybeUpdateRoutes() {
+func (m *noEncapManager) maybeUpdateRoutes() {
 	// Only update routes if only Felix is responsible for programming IPIP routes.
 	if m.dpConfig.ProgramRoutes {
 		m.routeMgr.triggerRouteUpdate()
 	}
 }
 
-func (m *ipipManager) CompleteDeferredWork() error {
+func (m *noEncapManager) CompleteDeferredWork() error {
 	if m.ipSetDirty {
 		m.updateAllHostsIPSet()
 		m.ipSetDirty = false
@@ -189,7 +181,7 @@ func (m *ipipManager) CompleteDeferredWork() error {
 	return nil
 }
 
-func (m *ipipManager) updateAllHostsIPSet() {
+func (m *noEncapManager) updateAllHostsIPSet() {
 	// For simplicity (and on the assumption that host add/removes are rare) rewrite
 	// the whole IP set whenever we get a change. To replace this with delta handling
 	// would require reference counting the IPs because it's possible for two hosts
@@ -204,24 +196,11 @@ func (m *ipipManager) updateAllHostsIPSet() {
 	m.ipsetsDataplane.AddOrReplaceIPSet(m.ipSetMetadata, members)
 }
 
-func (m *ipipManager) route(cidr ip.CIDR, r *proto.RouteUpdate) *routetable.Target {
-	// Extract the gateway addr for this route based on its remote address.
-	remoteAddr, ok := m.activeHostnameToIP[r.DstNodeName]
-	if !ok {
-		// When the local address arrives, it'll mark routes as dirty so this loop will execute again.
-		return nil
-	}
-
-	return &routetable.Target{
-		Type:     routetable.TargetTypeOnLink,
-		CIDR:     cidr,
-		GW:       ip.FromString(remoteAddr),
-		Protocol: m.routeProtocol,
-		MTU:      m.dpConfig.IPIPMTU,
-	}
+func (m *noEncapManager) route(cidr ip.CIDR, r *proto.RouteUpdate) *routetable.Target {
+	return nil
 }
 
-func (m *ipipManager) KeepIPIPDeviceInSync(
+func (m *noEncapManager) KeepDeviceInSync(
 	ctx context.Context,
 	mtu int,
 	xsumBroken bool,
@@ -231,16 +210,6 @@ func (m *ipipManager) KeepIPIPDeviceInSync(
 	m.routeMgr.KeepDeviceInSync(ctx, mtu, xsumBroken, wait, parentIfaceC, m.device)
 }
 
-func (m *ipipManager) device(_ netlink.Link) (netlink.Link, string, error) {
-	la := netlink.NewLinkAttrs()
-	la.Name = m.tunnelDevice
-	ipip := &netlink.Iptun{
-		LinkAttrs: la,
-	}
-	address := m.dpConfig.RulesConfig.IPIPTunnelAddress
-
-	if len(address) == 0 {
-		return nil, "", fmt.Errorf("Address is not set")
-	}
-	return ipip, address.String(), nil
+func (m *noEncapManager) device(_ netlink.Link) (netlink.Link, string, error) {
+	return nil, "", nil
 }

@@ -322,7 +322,7 @@ var _ = Describe("RouteManager for ipip pools", func() {
 
 		err := ipipMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
-		Expect(ipipMgr.routesDirty).To(BeFalse())
+		Expect(ipipMgr.routeMgr.routesDirty).To(BeFalse())
 		Expect(rt.currentRoutes["eth0"]).To(HaveLen(0))
 		Expect(rt.currentRoutes[dataplanedefs.IPIPIfaceName]).To(HaveLen(1))
 
@@ -345,7 +345,7 @@ var _ = Describe("RouteManager for ipip pools", func() {
 		err = ipipMgr.CompleteDeferredWork()
 
 		Expect(err).NotTo(HaveOccurred())
-		Expect(ipipMgr.routesDirty).To(BeFalse())
+		Expect(ipipMgr.routeMgr.routesDirty).To(BeFalse())
 		Expect(rt.currentRoutes["eth0"]).To(HaveLen(1))
 		Expect(rt.currentRoutes[dataplanedefs.IPIPIfaceName]).To(HaveLen(0))
 	})
