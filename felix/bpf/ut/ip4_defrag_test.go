@@ -26,6 +26,8 @@ import (
 func TestIP4Defrag(t *testing.T) {
 	RegisterTestingT(t)
 
+	cleanUpMaps()
+
 	bpfIfaceName = "DEFR"
 	defer func() { bpfIfaceName = "" }()
 
@@ -102,6 +104,7 @@ func TestIP4Defrag(t *testing.T) {
 
 	pktFullR := gopacket.NewPacket(pktFull.Bytes(), layers.LayerTypeEthernet, gopacket.Default)
 
+	skbMark = 0
 	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
 		bytes := pkt0.Bytes()
 		copy(bytes[40:42], pktFull.Bytes()[40:42]) // patch in the udp csum for the entire packet
@@ -112,6 +115,7 @@ func TestIP4Defrag(t *testing.T) {
 		Expect(res.Retval).To(Equal(resTC_ACT_SHOT))
 	})
 
+	skbMark = 0
 	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(pkt1.Bytes())
 		Expect(err).NotTo(HaveOccurred())
@@ -120,6 +124,7 @@ func TestIP4Defrag(t *testing.T) {
 		Expect(res.Retval).To(Equal(resTC_ACT_SHOT))
 	})
 
+	skbMark = 0
 	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(pkt3.Bytes())
 		Expect(err).NotTo(HaveOccurred())
@@ -128,6 +133,7 @@ func TestIP4Defrag(t *testing.T) {
 		Expect(res.Retval).To(Equal(resTC_ACT_SHOT))
 	})
 
+	skbMark = 0
 	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(pkt2.Bytes())
 		Expect(err).NotTo(HaveOccurred())
