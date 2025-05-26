@@ -49,7 +49,6 @@ type noEncapManager struct {
 	ipSetMetadata      ipsets.IPSetMetadata
 
 	// Indicates if configuration has changed since the last apply.
-	routesDirty       bool
 	ipSetDirty        bool
 	externalNodeCIDRs []string
 	dpConfig          Config

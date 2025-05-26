@@ -57,7 +57,6 @@ type ipipManager struct {
 	ipSetMetadata      ipsets.IPSetMetadata
 
 	// Indicates if configuration has changed since the last apply.
-	routesDirty       bool
 	ipSetDirty        bool
 	externalNodeCIDRs []string
 	dpConfig          Config
@@ -209,7 +208,7 @@ func (m *ipipManager) route(cidr ip.CIDR, r *proto.RouteUpdate) *routetable.Targ
 	// Extract the gateway addr for this route based on its remote address.
 	remoteAddr, ok := m.activeHostnameToIP[r.DstNodeName]
 	if !ok {
-		// When the local address arrives, it'll set routesDirty=true so this loop will execute again.
+		// When the local address arrives, it'll mark routes as dirty so this loop will execute again.
 		return nil
 	}
 
