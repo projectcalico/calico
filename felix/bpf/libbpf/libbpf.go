@@ -191,7 +191,7 @@ func DetachCTLBProgramsLegacy(cgroup string) error {
 }
 
 // AttachClassifier return the program id and pref and handle of the qdisc
-func (o *Obj) AttachClassifier(secName, ifName string, ingress bool, prio, handle int) (int, int, int, error) {
+func (o *Obj) AttachClassifier(secName, ifName string, ingress bool, prio int, handle uint32) (int, int, int, error) {
 	cSecName := C.CString(secName)
 	cIfName := C.CString(ifName)
 	defer C.free(unsafe.Pointer(cSecName))
@@ -201,7 +201,7 @@ func (o *Obj) AttachClassifier(secName, ifName string, ingress bool, prio, handl
 		return -1, -1, -1, err
 	}
 
-	ret, err := C.bpf_tc_program_attach(o.obj, cSecName, C.int(ifIndex), C.bool(ingress), C.int(prio), C.int(handle))
+	ret, err := C.bpf_tc_program_attach(o.obj, cSecName, C.int(ifIndex), C.bool(ingress), C.int(prio), C.uint(handle))
 	if err != nil {
 		return -1, -1, -1, fmt.Errorf("error attaching tc program %w", err)
 	}

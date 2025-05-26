@@ -109,7 +109,7 @@ out:
         return err;
 }
 
-struct bpf_tc_opts bpf_tc_program_attach(struct bpf_object *obj, char *secName, int ifIndex, bool ingress, int prio, int handle)
+struct bpf_tc_opts bpf_tc_program_attach(struct bpf_object *obj, char *secName, int ifIndex, bool ingress, int prio, uint handle)
 {
 	DECLARE_LIBBPF_OPTS(bpf_tc_hook, hook,
 			.attach_point = ingress ? BPF_TC_INGRESS : BPF_TC_EGRESS,
