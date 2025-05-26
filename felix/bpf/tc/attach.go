@@ -67,7 +67,6 @@ type AttachPoint struct {
 	RedirectPeer         bool
 	FlowLogsEnabled      bool
 }
-
 var ErrDeviceNotFound = errors.New("device not found")
 var ErrInterrupted = errors.New("dump interrupted")
 var prefHandleRe = regexp.MustCompile(`pref ([^ ]+) .* handle ([^ ]+)`)
@@ -106,8 +105,25 @@ func (ar AttachResult) Handle() int {
 	return ar.handle
 }
 
+func (ap *AttachPoint) attachTCXProgram() (bpf.AttachResult, error) {
+	logCxt := log.WithField("attachPoint", ap)
+	binaryToLoad := path.Join(bpfdefs.ObjectDir, fmt.Sprintf("tcx_%s_preamble.o", ap.Hook))
+	obj, err := ap.loadObject(binaryToLoad)
+	if err != nil {
+		logCxt.Warn("Failed to load program")
+		return nil, fmt.Errorf("object %w", err)
+	}
+	defer obj.Close()
+	_, err = obj.AttachTCX("cali_tc_preamble", ap.Iface)
+	if err != nil {
+		return nil, err
+	}
+	return AttachResult{}, nil
+}
+
 // AttachProgram attaches a BPF program from a file to the TC attach point
 func (ap *AttachPoint) AttachProgram() (bpf.AttachResult, error) {
+	return ap.attachTCXProgram()
 	logCxt := log.WithField("attachPoint", ap)
 
 	// By now the attach type specific generic set of programs is loaded and we

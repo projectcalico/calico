@@ -56,9 +56,10 @@ var _ = infrastructure.DatastoreDescribe(
 
 		BeforeEach(func() {
 			infra = getInfra()
+			/*
 			if BPFMode() {
 				Skip("Skipping QoS control tests on BPF mode.")
-			}
+			}*/
 			topt = infrastructure.DefaultTopologyOptions()
 			tc, _ = infrastructure.StartNNodeTopology(2, topt, infra)
 
@@ -74,6 +75,9 @@ var _ = infrastructure.DatastoreDescribe(
 			// Wait until routes are present
 			Eventually(tc.Felixes[0].ExecOutputFn("ip", "r", "get", "10.65.0.2"), "20s").Should(ContainSubstring(w[0].InterfaceName))
 			Eventually(tc.Felixes[1].ExecOutputFn("ip", "r", "get", "10.65.1.2"), "20s").Should(ContainSubstring(w[1].InterfaceName))
+			if BPFMode() {
+				ensureAllNodesBPFProgramsAttached(tc.Felixes)
+			}
 		})
 
 		AfterEach(func() {

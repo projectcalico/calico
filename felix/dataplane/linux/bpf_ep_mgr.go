@@ -3566,6 +3566,7 @@ func (m *bpfEndpointManager) ensureBPFDevices() error {
 }
 
 func (m *bpfEndpointManager) ensureQdisc(iface string) (bool, error) {
+	return true, nil
 	return tc.EnsureQdisc(iface)
 }
 
