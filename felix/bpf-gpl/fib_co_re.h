@@ -128,7 +128,7 @@ skip_redir_ifindex:
 				.family = 2, /* AF_INET */
 #endif
 				.tot_len = 0,
-				.ifindex = CALI_F_TO_HOST ? ctx->skb->ingress_ifindex : ctx->skb->ifindex,
+				.ifindex = ctx->skb->ifindex,
 				.l4_protocol = state->ip_proto,
 			};
 #ifdef IPVER6
@@ -275,7 +275,7 @@ try_fib_external:
 			.family = 2, /* AF_INET */
 #endif
 			.tot_len = 0,
-			.ifindex = CALI_F_TO_HOST ? ctx->skb->ingress_ifindex : ctx->skb->ifindex,
+			.ifindex = ctx->skb->ifindex,
 			.l4_protocol = state->ip_proto,
 		};
 

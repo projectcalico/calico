@@ -59,7 +59,7 @@ func TestAllowFromWorkloadExitHost(t *testing.T) {
 	runBpfTest(t, "calico_from_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(pktBytes)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+		Expect(res.Retval).To(Equal(resTC_ACT_REDIRECT))
 
 		ct, err := conntrack.LoadMapMem(ctMap)
 		Expect(err).NotTo(HaveOccurred())
@@ -124,7 +124,7 @@ func TestSkipRedirectPeerHostToVMWorkload(t *testing.T) {
 	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(pktBytes)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+		Expect(res.Retval).To(Equal(resTC_ACT_REDIRECT))
 
 		ct, err := conntrack.LoadMapMem(ctMap)
 		Expect(err).NotTo(HaveOccurred())
@@ -175,7 +175,7 @@ func TestAllowEnterHostToWorkload(t *testing.T) {
 	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(pktBytes)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+		Expect(res.Retval).To(Equal(resTC_ACT_REDIRECT))
 
 		ct, err := conntrack.LoadMapMem(ctMap)
 		Expect(err).NotTo(HaveOccurred())
@@ -242,7 +242,7 @@ func TestAllowWorkloadToWorkload(t *testing.T) {
 	runBpfTest(t, "calico_from_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(pktBytes)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+		Expect(res.Retval).To(Equal(resTC_ACT_REDIRECT))
 
 		ct, err := conntrack.LoadMapMem(ctMap)
 		Expect(err).NotTo(HaveOccurred())
@@ -337,7 +337,7 @@ func TestAllowFromHostExitHost(t *testing.T) {
 		respPkt := udpResponseRaw(pktBytes)
 		res, err := bpfrun(respPkt)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+		Expect(res.Retval).To(Equal(resTC_ACT_REDIRECT))
 
 		dumpCTMap(ctMap)
 
