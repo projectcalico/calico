@@ -221,14 +221,14 @@ func (m *ipipManager) route(cidr ip.CIDR, r *proto.RouteUpdate) *routetable.Targ
 	}
 }
 
-func (m *ipipManager) KeepIPIPDeviceInSync(
+func (m *ipipManager) keepIPIPDeviceInSync(
 	ctx context.Context,
 	mtu int,
 	xsumBroken bool,
 	wait time.Duration,
 	parentIfaceC chan string,
 ) {
-	m.routeMgr.KeepDeviceInSync(ctx, mtu, xsumBroken, wait, parentIfaceC, m.device)
+	m.routeMgr.keepDeviceInSync(ctx, mtu, xsumBroken, wait, parentIfaceC, m.device)
 }
 
 func (m *ipipManager) device(_ netlink.Link) (netlink.Link, string, error) {

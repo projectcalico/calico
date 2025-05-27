@@ -458,7 +458,7 @@ func (m *routeManager) detectParentIface() (netlink.Link, error) {
 }
 
 // KeepDeviceInSync runs in a loop and checks that the device is still correctly configured, and updates it if necessary.
-func (m *routeManager) KeepDeviceInSync(
+func (m *routeManager) keepDeviceInSync(
 	ctx context.Context,
 	mtu int,
 	xsumBroken bool,

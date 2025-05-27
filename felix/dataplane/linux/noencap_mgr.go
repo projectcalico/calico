@@ -39,8 +39,7 @@ type noEncapManager struct {
 	routeMgr      *routeManager
 
 	// Device information
-	tunnelDevice    string
-	tunnelDeviceMTU int
+	mtu int
 
 	// activeHostnameToIP maps hostname to string IP address. We don't bother to parse into
 	// net.IPs because we're going to pass them directly to the IPSet API.
@@ -61,7 +60,6 @@ type noEncapManager struct {
 func newNoEncapManager(
 	ipsetsDataplane dpsets.IPSetsDataplane,
 	mainRouteTable routetable.Interface,
-	tunnelDevice string,
 	ipVersion uint8,
 	mtu int,
 	dpConfig Config,
@@ -71,7 +69,6 @@ func newNoEncapManager(
 	return newNoEncapManagerWithSims(
 		ipsetsDataplane,
 		mainRouteTable,
-		tunnelDevice,
 		ipVersion,
 		mtu,
 		dpConfig,
@@ -83,7 +80,6 @@ func newNoEncapManager(
 func newNoEncapManagerWithSims(
 	ipsetsDataplane dpsets.IPSetsDataplane,
 	mainRouteTable routetable.Interface,
-	tunnelDevice string,
 	ipVersion uint8,
 	mtu int,
 	dpConfig Config,
@@ -92,7 +88,7 @@ func newNoEncapManagerWithSims(
 ) *noEncapManager {
 
 	if ipVersion != 4 {
-		logrus.Errorf("IPIP manager only supports IPv4")
+		logrus.Errorf("NoEncap manager only supports IPv4")
 		return nil
 	}
 
@@ -105,22 +101,20 @@ func newNoEncapManagerWithSims(
 		},
 		activeHostnameToIP: map[string]string{},
 		hostname:           dpConfig.Hostname,
-		tunnelDevice:       tunnelDevice,
-		tunnelDeviceMTU:    mtu,
+		mtu:                mtu,
 		ipVersion:          ipVersion,
 		externalNodeCIDRs:  dpConfig.ExternalNodesCidrs,
 		ipSetDirty:         true,
 		dpConfig:           dpConfig,
 		routeProtocol:      calculateRouteProtocol(dpConfig),
 		logCtx: logrus.WithFields(logrus.Fields{
-			"ipVersion":    ipVersion,
-			"tunnelDevice": tunnelDevice,
+			"ipVersion": ipVersion,
 		}),
 		opRecorder: opRecorder,
 		routeMgr: newRouteManager(
 			mainRouteTable,
 			proto.IPPoolType_NO_ENCAP,
-			tunnelDevice,
+			"",
 			ipVersion,
 			mtu,
 			dpConfig,
@@ -133,7 +127,7 @@ func newNoEncapManagerWithSims(
 	m.routeMgr.routeClassSameSubnet = routetable.RouteClassNoEncap
 	m.routeMgr.setTunnelRouteFunc(m.route)
 
-	m.maybeUpdateRoutes()
+	m.routeMgr.triggerRouteUpdate()
 	return m
 }
 
@@ -146,7 +140,7 @@ func (m *noEncapManager) OnUpdate(protoBufMsg interface{}) {
 		}
 		m.activeHostnameToIP[msg.Hostname] = msg.Ipv4Addr
 		m.ipSetDirty = true
-		m.maybeUpdateRoutes()
+		m.routeMgr.triggerRouteUpdate()
 	case *proto.HostMetadataRemove:
 		m.logCtx.WithField("hostname", msg.Hostname).Debug("Host removed")
 		if msg.Hostname == m.hostname {
@@ -154,18 +148,11 @@ func (m *noEncapManager) OnUpdate(protoBufMsg interface{}) {
 		}
 		delete(m.activeHostnameToIP, msg.Hostname)
 		m.ipSetDirty = true
-		m.maybeUpdateRoutes()
+		m.routeMgr.triggerRouteUpdate()
 	default:
 		if m.dpConfig.ProgramRoutes {
 			m.routeMgr.OnUpdate(msg)
 		}
-	}
-}
-
-func (m *noEncapManager) maybeUpdateRoutes() {
-	// Only update routes if only Felix is responsible for programming IPIP routes.
-	if m.dpConfig.ProgramRoutes {
-		m.routeMgr.triggerRouteUpdate()
 	}
 }
 
@@ -200,14 +187,11 @@ func (m *noEncapManager) route(cidr ip.CIDR, r *proto.RouteUpdate) *routetable.T
 	return nil
 }
 
-func (m *noEncapManager) KeepDeviceInSync(
-	ctx context.Context,
-	mtu int,
-	xsumBroken bool,
-	wait time.Duration,
-	parentIfaceC chan string,
-) {
-	m.routeMgr.KeepDeviceInSync(ctx, mtu, xsumBroken, wait, parentIfaceC, m.device)
+func (m *noEncapManager) monitorParentDevice(ctx context.Context, wait time.Duration, parentIfaceC chan string) {
+	// NoEncap manager does not need to configure any interface. It expects the parent interface to be up and configured.
+	// However, it needs to monitor the parent interface to update routes. For this, we can use route manager
+	// keepDeviceInSync method without providing any device to configure.
+	m.routeMgr.keepDeviceInSync(ctx, m.mtu, false, wait, parentIfaceC, m.device)
 }
 
 func (m *noEncapManager) device(_ netlink.Link) (netlink.Link, string, error) {

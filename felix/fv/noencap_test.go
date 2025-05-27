@@ -27,7 +27,6 @@ import (
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 
-	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
 	"github.com/projectcalico/calico/felix/fv/connectivity"
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
 	"github.com/projectcalico/calico/felix/fv/utils"
@@ -38,7 +37,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
-var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ pepper no overlay topology with Felix programming routes before adding host IPs to IP sets", []apiconfig.DatastoreType{apiconfig.EtcdV3, apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
+var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ no overlay topology with Felix programming routes before adding host IPs to IP sets", []apiconfig.DatastoreType{apiconfig.EtcdV3, apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
 	type testConf struct {
 		IPIPMode    api.IPIPMode
 		RouteSource string
@@ -46,13 +45,13 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ pepper no overlay topology 
 	}
 	for _, testConfig := range []testConf{
 		{api.IPIPModeNever, "CalicoIPAM", false},
-		//{api.IPIPModeNever, "WorkloadIPs", false},
+		{api.IPIPModeNever, "WorkloadIPs", false},
 	} {
 		ipipMode := testConfig.IPIPMode
 		routeSource := testConfig.RouteSource
 		brokenXSum := testConfig.BrokenXSum
 
-		Describe(fmt.Sprintf("IPIP mode set to %s, routeSource %s, brokenXSum: %v", ipipMode, routeSource, brokenXSum), func() {
+		Describe(fmt.Sprintf("NoEncap mode set to %s, routeSource %s, brokenXSum: %v", ipipMode, routeSource, brokenXSum), func() {
 			var (
 				infra           infrastructure.DatastoreInfra
 				tc              infrastructure.TopologyContainers
@@ -111,36 +110,13 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ pepper no overlay topology 
 				infra.Stop()
 			})
 
-			if brokenXSum {
-				It("should disable checksum offload", func() {
-					Eventually(func() string {
-						out, err := felixes[0].ExecOutput("ethtool", "-k", dataplanedefs.IPIPIfaceName)
-						if err != nil {
-							return fmt.Sprintf("ERROR: %v", err)
-						}
-						return out
-					}, "10s", "100ms").Should(ContainSubstring("tx-checksumming: off"))
-				})
-			} else {
-				It("should not disable checksum offload", func() {
-					Eventually(func() string {
-						out, err := felixes[0].ExecOutput("ethtool", "-k", dataplanedefs.IPIPIfaceName)
-						if err != nil {
-							return fmt.Sprintf("ERROR: %v", err)
-						}
-						return out
-					}, "10s", "100ms").Should(ContainSubstring("tx-checksumming: on"))
-				})
-			}
-
-			It("pepper1 should have workload to workload connectivity", func() {
+			It("should have workload to workload connectivity", func() {
 				cc.ExpectSome(w[0], w[1])
 				cc.ExpectSome(w[1], w[0])
-				//time.Sleep(time.Minute * 60)
 				cc.CheckConnectivity()
 			})
 
-			It("pepper2 should have some blackhole routes installed", func() {
+			It("should have some blackhole routes installed", func() {
 				if routeSource == "WorkloadIPs" {
 					Skip("not applicable for workload ips")
 					return
@@ -467,7 +443,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ pepper no overlay topology 
 					_, err = client.Nodes().Update(ctx, node, options.SetOptions{})
 				})
 
-				It("pepperx should have no connectivity from third felix and expected number of IPs in allow list", func() {
+				It("should have no connectivity from third felix and expected number of IPs in allow list", func() {
 					if BPFMode() {
 						Eventually(func() int {
 							return strings.Count(felixes[0].BPFRoutes(), "host")

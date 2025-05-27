@@ -1435,24 +1435,18 @@ func createIPIPBaseTopologyOptions(
 	return topologyOptions
 }
 
-func setupIPIPWorkloads(infra infrastructure.DatastoreInfra, tc infrastructure.TopologyContainers, to infrastructure.TopologyOptions, client client.Interface) (w, hostW [3]*workload.Workload) {
+func setupIPIPWorkloads(
+	infra infrastructure.DatastoreInfra,
+	tc infrastructure.TopologyContainers,
+	to infrastructure.TopologyOptions,
+	client client.Interface,
+) (w, hostW [3]*workload.Workload) {
 	// Install a default profile that allows all ingress and egress, in the absence of any Policy.
 	infra.AddDefaultAllow()
 
-	// Wait until the ipip device appears; it is created when felix inserts the ipip module
-	// into the kernel.
-	Eventually(func() error {
-		links, err := netlink.LinkList()
-		if err != nil {
-			return err
-		}
-		for _, link := range links {
-			if link.Attrs().Name == "tunl0" {
-				return nil
-			}
-		}
-		return errors.New("tunl0 wasn't auto-created")
-	}).Should(BeNil())
+	if to.IPIPMode != api.IPIPModeNever {
+		waitForIPIPDevice()
+	}
 
 	// Create workloads, using that profile.  One on each "host".
 	_, IPv4CIDR, err := net.ParseCIDR(to.IPPoolCIDR)
@@ -1481,4 +1475,21 @@ func setupIPIPWorkloads(infra infrastructure.DatastoreInfra, tc infrastructure.T
 	}
 
 	return
+}
+
+func waitForIPIPDevice() {
+	// Wait until the ipip device appears; it is created when felix inserts the ipip module
+	// into the kernel.
+	Eventually(func() error {
+		links, err := netlink.LinkList()
+		if err != nil {
+			return err
+		}
+		for _, link := range links {
+			if link.Attrs().Name == "tunl0" {
+				return nil
+			}
+		}
+		return errors.New("tunl0 wasn't auto-created")
+	}).Should(BeNil())
 }

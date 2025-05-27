@@ -304,7 +304,7 @@ var _ = Describe("RouteManager for ipip pools", func() {
 		dataDeviceC := make(chan string)
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
-		go ipipMgr.KeepIPIPDeviceInSync(ctx, 1400, false, 1*time.Second, dataDeviceC)
+		go ipipMgr.keepIPIPDeviceInSync(ctx, 1400, false, 1*time.Second, dataDeviceC)
 
 		By("Sending another node's route.")
 		ipipMgr.OnUpdate(&proto.HostMetadataUpdate{

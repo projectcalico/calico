@@ -679,17 +679,14 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		dp.noEncapManager = newNoEncapManager(
 			ipSetsV4,
 			routeTableV4,
-			"",
 			4,
 			config.hostMTU,
 			config,
 			dp.loopSummarizer,
 		)
 		dp.noEncapParentIfaceC = make(chan string, 1)
-		go dp.noEncapManager.KeepDeviceInSync(
+		go dp.noEncapManager.monitorParentDevice(
 			context.Background(),
-			config.hostMTU,
-			dataplaneFeatures.ChecksumOffloadBroken,
 			time.Second*10,
 			dp.noEncapParentIfaceC,
 		)
@@ -719,7 +716,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		if config.BPFEnabled && bpfutils.BTFEnabled {
 			vxlanMTU = 0
 		}
-		go dp.vxlanManager.KeepVXLANDeviceInSync(
+		go dp.vxlanManager.keepVXLANDeviceInSync(
 			context.Background(),
 			vxlanMTU,
 			dataplaneFeatures.ChecksumOffloadBroken,
@@ -1109,7 +1106,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			dp.loopSummarizer,
 		)
 		dp.ipipParentIfaceC = make(chan string, 1)
-		go dp.ipipManager.KeepIPIPDeviceInSync(
+		go dp.ipipManager.keepIPIPDeviceInSync(
 			context.Background(),
 			config.IPIPMTU,
 			dataplaneFeatures.ChecksumOffloadBroken,
@@ -1223,7 +1220,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			if config.BPFEnabled && bpfutils.BTFEnabled {
 				vxlanMTU = 0
 			}
-			go dp.vxlanManagerV6.KeepVXLANDeviceInSync(
+			go dp.vxlanManagerV6.keepVXLANDeviceInSync(
 				context.Background(),
 				vxlanMTU,
 				dataplaneFeatures.ChecksumOffloadBroken,
