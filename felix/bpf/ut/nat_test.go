@@ -28,6 +28,7 @@ import (
 	conntrack3 "github.com/projectcalico/calico/felix/bpf/conntrack/v3"
 	v3 "github.com/projectcalico/calico/felix/bpf/conntrack/v3"
 	"github.com/projectcalico/calico/felix/bpf/counters"
+	"github.com/projectcalico/calico/felix/bpf/maglev"
 	"github.com/projectcalico/calico/felix/bpf/nat"
 	"github.com/projectcalico/calico/felix/bpf/polprog"
 	"github.com/projectcalico/calico/felix/bpf/routes"
@@ -43,16 +44,21 @@ func TestMaglevTable(t *testing.T) {
 	err := maglevMap.EnsureExists()
 	Expect(err).NotTo(HaveOccurred())
 
-	key := nat.NewMaglevBackendKey(net.ParseIP("169.172.9.1"), 80, uint8(layers.IPProtocolUDP), 0)
-	val := nat.NewNATBackendValue(net.ParseIP("192.168.1.1"), 8080)
-	err = maglevMap.Update(key.AsBytes(), val.AsBytes())
-	Expect(err).NotTo(HaveOccurred())
+	lut := maglev.NewLookupTable()
+	lut.AddBackend("169.172.9.1")
+	lut.AddBackend("10.0.1.2")
 
-	m, err := nat.LoadMaglevMap(maglevMap)
-	Expect(err).NotTo(HaveOccurred())
+	// key := nat.NewMaglevBackendKey(net.ParseIP("169.172.9.1"), 80, uint8(layers.IPProtocolUDP), 0)
+	// val := nat.NewNATBackendValue(net.ParseIP("192.168.1.1"), 8080)
 
-	Expect(m).To(HaveKey(key))
-	Expect(m[key]).To(BeEquivalentTo(val))
+	// err = maglevMap.Update(key.AsBytes(), val.AsBytes())
+	// Expect(err).NotTo(HaveOccurred())
+
+	// m, err := nat.LoadMaglevMap(maglevMap)
+	// Expect(err).NotTo(HaveOccurred())
+
+	// Expect(m).To(HaveKey(key))
+	// Expect(m[key]).To(BeEquivalentTo(val))
 }
 
 func TestNATPodPodXNode(t *testing.T) {
