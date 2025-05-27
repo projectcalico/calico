@@ -298,10 +298,6 @@ func (m *mockDataplane) ruleMatchID(dir rules.RuleDir, action string, owner rule
 	return h.Sum64()
 }
 
-func (m *mockDataplane) queryClassifier(ifindex, handle, prio int, ingress bool) (int, error) {
-	return 0, nil
-}
-
 var (
 	fdCounterLock sync.Mutex
 	fdCounter     = uint32(1234)
