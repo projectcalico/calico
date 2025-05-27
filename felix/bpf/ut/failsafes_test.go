@@ -253,6 +253,9 @@ func TestFailsafes(t *testing.T) {
 			result := "TC_ACT_SHOT"
 			if test.Allowed {
 				result = "TC_ACT_UNSPEC"
+				if prog == "calico_from_host_ep" {
+					result = "TC_ACT_REDIRECT"
+				}
 			}
 
 			runBpfTest(t, prog, test.Rules, func(bpfrun bpfProgRunFn) {

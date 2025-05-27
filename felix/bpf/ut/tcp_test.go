@@ -58,7 +58,7 @@ func TestTCPRecycleClosedConn(t *testing.T) {
 	runBpfTest(t, "calico_from_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(synPkt)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+		Expect(res.Retval).To(Equal(resTC_ACT_REDIRECT))
 		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
 		fmt.Printf("pktR = %+v\n", pktR)
 	})
@@ -96,7 +96,7 @@ func TestTCPRecycleClosedConn(t *testing.T) {
 	runBpfTest(t, "calico_from_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(synPkt)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+		Expect(res.Retval).To(Equal(resTC_ACT_REDIRECT))
 		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
 		fmt.Printf("pktR = %+v\n", pktR)
 	})
@@ -160,7 +160,7 @@ func TestTCPRecycleClosedConnNAT(t *testing.T) {
 	runBpfTest(t, "calico_from_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(synPkt)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+		Expect(res.Retval).To(Equal(resTC_ACT_REDIRECT))
 		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
 		fmt.Printf("pktR = %+v\n", pktR)
 	})
@@ -200,7 +200,7 @@ func TestTCPRecycleClosedConnNAT(t *testing.T) {
 	runBpfTest(t, "calico_from_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(synPkt)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+		Expect(res.Retval).To(Equal(resTC_ACT_REDIRECT))
 		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
 		fmt.Printf("pktR = %+v\n", pktR)
 	})
