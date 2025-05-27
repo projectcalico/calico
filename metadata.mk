@@ -20,6 +20,7 @@ HELM_VERSION=v3.11.3
 KINDEST_NODE_VERSION=v1.31.4
 KIND_VERSION=v0.25.0
 GITHUB_CLI_VERSION=2.26.0
+GOTESTSUM_VERSION=v1.12.2
 
 # Configuration for Semaphore/Github integration.  This needs to be set
 # differently for a forked repo.
