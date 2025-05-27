@@ -304,7 +304,7 @@ var _ = Describe("RouteManager for ipip pools", func() {
 		dataDeviceC := make(chan string)
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
-		go ipipMgr.KeepIPIPDeviceInSync(ctx, 1400, false, 1*time.Second, dataDeviceC)
+		go ipipMgr.keepIPIPDeviceInSync(ctx, 1400, false, 1*time.Second, dataDeviceC)
 
 		By("Sending another node's route.")
 		ipipMgr.OnUpdate(&proto.HostMetadataUpdate{
@@ -322,7 +322,7 @@ var _ = Describe("RouteManager for ipip pools", func() {
 
 		err := ipipMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
-		Expect(ipipMgr.routesDirty).To(BeFalse())
+		Expect(ipipMgr.routeMgr.routesDirty).To(BeFalse())
 		Expect(rt.currentRoutes["eth0"]).To(HaveLen(0))
 		Expect(rt.currentRoutes[dataplanedefs.IPIPIfaceName]).To(HaveLen(1))
 
@@ -345,7 +345,7 @@ var _ = Describe("RouteManager for ipip pools", func() {
 		err = ipipMgr.CompleteDeferredWork()
 
 		Expect(err).NotTo(HaveOccurred())
-		Expect(ipipMgr.routesDirty).To(BeFalse())
+		Expect(ipipMgr.routeMgr.routesDirty).To(BeFalse())
 		Expect(rt.currentRoutes["eth0"]).To(HaveLen(1))
 		Expect(rt.currentRoutes[dataplanedefs.IPIPIfaceName]).To(HaveLen(0))
 	})
