@@ -330,6 +330,9 @@ type InternalDataplane struct {
 	ipipParentIfaceC chan string
 	ipipManager      *ipipManager
 
+	noEncapManager      *noEncapManager
+	noEncapParentIfaceC chan string
+
 	vxlanParentIfaceC   chan string
 	vxlanParentIfaceCV6 chan string
 	vxlanManager        *vxlanManager
@@ -667,6 +670,27 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		dp.mainRouteTables = append(dp.mainRouteTables, routeTableV6)
 	}
 
+	// If no overlay is enabled, and Felix is responsible for programming routes, starts a manager to
+	// program no encapsulation routes.
+	if config.ProgramRoutes &&
+		!config.RulesConfig.VXLANEnabled && !config.RulesConfig.IPIPEnabled && !config.RulesConfig.WireguardEnabled {
+		log.Info("No encapsulation enabled, starting thread to keep no encapsulation routes in sync.")
+		// Add a manager to keep the all-hosts IP set up to date.
+		dp.noEncapManager = newNoEncapManager(
+			routeTableV4,
+			4,
+			config,
+			dp.loopSummarizer,
+		)
+		dp.noEncapParentIfaceC = make(chan string, 1)
+		go dp.noEncapManager.monitorParentDevice(
+			context.Background(),
+			time.Second*10,
+			dp.noEncapParentIfaceC,
+		)
+		dp.RegisterManager(dp.noEncapManager)
+	}
+
 	if config.RulesConfig.VXLANEnabled {
 		var fdbOpts []vxlanfdb.Option
 		if config.BPFEnabled && bpfutils.BTFEnabled {
@@ -690,7 +714,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		if config.BPFEnabled && bpfutils.BTFEnabled {
 			vxlanMTU = 0
 		}
-		go dp.vxlanManager.KeepVXLANDeviceInSync(
+		go dp.vxlanManager.keepVXLANDeviceInSync(
 			context.Background(),
 			vxlanMTU,
 			dataplaneFeatures.ChecksumOffloadBroken,
@@ -1080,7 +1104,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			dp.loopSummarizer,
 		)
 		dp.ipipParentIfaceC = make(chan string, 1)
-		go dp.ipipManager.KeepIPIPDeviceInSync(
+		go dp.ipipManager.keepIPIPDeviceInSync(
 			context.Background(),
 			config.IPIPMTU,
 			dataplaneFeatures.ChecksumOffloadBroken,
@@ -1194,7 +1218,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			if config.BPFEnabled && bpfutils.BTFEnabled {
 				vxlanMTU = 0
 			}
-			go dp.vxlanManagerV6.KeepVXLANDeviceInSync(
+			go dp.vxlanManagerV6.keepVXLANDeviceInSync(
 				context.Background(),
 				vxlanMTU,
 				dataplaneFeatures.ChecksumOffloadBroken,
@@ -2155,6 +2179,8 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 			d.onIfaceMonitorMessage(ifaceUpdate)
 		case name := <-d.ipipParentIfaceC:
 			d.ipipManager.routeMgr.OnParentDeviceUpdate(name)
+		case name := <-d.noEncapParentIfaceC:
+			d.noEncapManager.routeMgr.OnParentDeviceUpdate(name)
 		case name := <-d.vxlanParentIfaceC:
 			d.vxlanManager.routeMgr.OnParentDeviceUpdate(name)
 		case name := <-d.vxlanParentIfaceCV6:
