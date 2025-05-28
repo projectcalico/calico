@@ -16,12 +16,18 @@ package main
 
 import (
 	"fmt"
+	"io"
+	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 
 	"github.com/sirupsen/logrus"
 	cli "github.com/urfave/cli/v2"
 
 	"github.com/projectcalico/calico/release/internal/outputs"
+	"github.com/projectcalico/calico/release/internal/pinnedversion"
+	"github.com/projectcalico/calico/release/internal/utils"
 	"github.com/projectcalico/calico/release/internal/version"
 	"github.com/projectcalico/calico/release/pkg/manager/calico"
 	"github.com/projectcalico/calico/release/pkg/manager/operator"
@@ -148,6 +154,9 @@ func releaseSubCommands(cfg *Config) []*cli.Command {
 
 		// Publish a release to the public.
 		releasePublicSubCommands(cfg),
+
+		// Post-release validation.
+		releaseValidationSubCommand(cfg),
 	}
 }
 
@@ -215,4 +224,115 @@ func releasePublishFlags() []cli.Flag {
 		githubTokenFlag,
 		skipValidationFlag)
 	return f
+}
+
+func releaseValidationSubCommand(cfg *Config) *cli.Command {
+	return &cli.Command{
+		Name:  "validate",
+		Usage: "Post-release validation",
+		Flags: []cli.Flag{
+			orgFlag,
+			repoFlag,
+			repoRemoteFlag,
+			releaseBranchPrefixFlag,
+			githubTokenFlag,
+		},
+		Action: func(c *cli.Context) error {
+			configureLogging("postrelease-validation.log")
+
+			ver, operatorVer, err := version.VersionsFromManifests(cfg.RepoRootDir)
+			if err != nil {
+				return err
+			}
+
+			pinnedCfg := pinnedversion.CalicoReleaseVersions{
+				Dir:                 cfg.TmpDir,
+				ProductVersion:      ver.FormattedString(),
+				ReleaseBranchPrefix: c.String(releaseBranchPrefixFlag.Name),
+				OperatorVersion:     operatorVer.FormattedString(),
+				OperatorCfg: pinnedversion.OperatorConfig{
+					Image:    operator.DefaultImage,
+					Registry: operator.DefaultRegistry,
+				},
+			}
+			if _, err := pinnedCfg.GenerateFile(); err != nil {
+				return fmt.Errorf("failed to generate pinned version file: %w", err)
+			}
+			images, err := pinnedCfg.ImageList()
+			if err != nil {
+				return fmt.Errorf("failed to get image list: %w", err)
+			}
+			flannelVer, err := pinnedCfg.FlannelVersion()
+			if err != nil {
+				return fmt.Errorf("failed to get flannel version: %w", err)
+			}
+
+			postreleaseDir := filepath.Join(cfg.RepoRootDir, utils.ReleaseFolderName, "pkg", "postrelease")
+			args := []string{
+				"--format=testname",
+				"--", "-v", "./...",
+				fmt.Sprintf("-release-version=%s", ver.FormattedString()),
+				fmt.Sprintf("-operator-version=%s", operatorVer.FormattedString()),
+				fmt.Sprintf("-flannel-version=%s", flannelVer),
+				fmt.Sprintf("-github-org=%s", c.String(orgFlag.Name)),
+				fmt.Sprintf("-github-repo=%s", c.String(repoFlag.Name)),
+				fmt.Sprintf("-github-repo-remote=%s", c.String(repoRemoteFlag.Name)),
+				fmt.Sprintf("-images=%s", strings.Join(images, " ")),
+			}
+			if c.String(githubTokenFlag.Name) != "" {
+				args = append(args, fmt.Sprintf("-github-token=%s", c.String(githubTokenFlag.Name)))
+			}
+
+			cmd := exec.Command(filepath.Join(cfg.RepoRootDir, "bin", "gotestsum"), args...)
+			cmd.Dir = postreleaseDir
+			var errb strings.Builder
+			if logrus.IsLevelEnabled(logrus.DebugLevel) {
+				// If debug level is enabled, also write to stdout.
+				cmd.Stdout = io.MultiWriter(os.Stdout, logrus.StandardLogger().Out)
+				cmd.Stderr = io.MultiWriter(os.Stderr, &errb)
+			} else {
+				// Otherwise, just capture the output to return.
+				cmd.Stdout = io.MultiWriter(logrus.StandardLogger().Out)
+				cmd.Stderr = io.MultiWriter(&errb)
+			}
+			logTestCmdSecure(postreleaseDir, "gotestsum", args)
+			err = cmd.Run()
+			if err != nil {
+				err = fmt.Errorf("%s: %s", err, strings.TrimSpace(errb.String()))
+			}
+			return err
+		},
+	}
+}
+
+func logTestCmdSecure(dir, name string, args []string) {
+	var sb strings.Builder
+	replacementStr := "********"
+	i := 0
+	for i < len(args) {
+		arg := args[i]
+		sb.WriteString(" ")
+
+		lowerArg := strings.ToLower(arg)
+		if strings.Contains(lowerArg, "token") || strings.Contains(lowerArg, "password") {
+			if strings.Contains(lowerArg, "=") {
+				parts := strings.Split(arg, "=")
+				sb.WriteString(parts[0])
+				sb.WriteString("=")
+				sb.WriteString(replacementStr)
+			} else if i+1 < len(args) {
+				sb.WriteString(arg)
+				sb.WriteString(" ")
+				sb.WriteString(replacementStr)
+				i++
+			}
+		} else {
+			sb.WriteString(arg)
+		}
+		i++
+	}
+	logrus.WithFields(logrus.Fields{
+		"cmd": name + sb.String(),
+		"dir": dir,
+	}).Info("Running tests")
 }

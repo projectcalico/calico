@@ -27,6 +27,7 @@ import (
 
 	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
 	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
+	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/routetable"
@@ -34,12 +35,12 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
-var _ = Describe("RouteManager for ipip pools", func() {
+var _ = Describe("IPIPManager", func() {
 	var (
 		ipipMgr   *ipipManager
 		rt        *mockRouteTable
 		ipSets    *dpsets.MockIPSets
-		dataplane *mockIPIPDataplane
+		dataplane *mockTunnelDataplane
 	)
 
 	const (
@@ -56,7 +57,7 @@ var _ = Describe("RouteManager for ipip pools", func() {
 		la.Name = "eth0"
 		opRecorder := logutils.NewSummarizer("test")
 
-		dataplane = &mockIPIPDataplane{
+		dataplane = &mockTunnelDataplane{
 			links:          []netlink.Link{&mockLink{attrs: la}},
 			tunnelLinkName: dataplanedefs.IPIPIfaceName,
 		}
@@ -82,7 +83,7 @@ var _ = Describe("RouteManager for ipip pools", func() {
 	It("should configure tunnel properly", func() {
 		ipipMgr.OnUpdate(&proto.HostMetadataUpdate{
 			Hostname: "node1",
-			Ipv4Addr: "10.0.0.1",
+			Ipv4Addr: "172.0.0.2",
 		})
 		ipipMgr.routeMgr.OnParentDeviceUpdate("eth0")
 
@@ -227,11 +228,11 @@ var _ = Describe("RouteManager for ipip pools", func() {
 	It("successfully adds a route to the noEncap interface", func() {
 		ipipMgr.OnUpdate(&proto.HostMetadataUpdate{
 			Hostname: "node1",
-			Ipv4Addr: "10.0.0.1",
+			Ipv4Addr: "172.0.0.2",
 		})
 		ipipMgr.OnUpdate(&proto.HostMetadataUpdate{
 			Hostname: "node2",
-			Ipv4Addr: "10.0.1.1",
+			Ipv4Addr: "172.0.2.2",
 		})
 
 		ipipMgr.routeMgr.OnParentDeviceUpdate("eth0")
@@ -258,7 +259,7 @@ var _ = Describe("RouteManager for ipip pools", func() {
 			IpPoolType:  proto.IPPoolType_IPIP,
 			Dst:         "192.168.0.3/26",
 			DstNodeName: "node2",
-			DstNodeIp:   "10.0.1.1",
+			DstNodeIp:   "172.0.2.2",
 			SameSubnet:  true,
 		})
 
@@ -267,7 +268,7 @@ var _ = Describe("RouteManager for ipip pools", func() {
 			IpPoolType:  proto.IPPoolType_IPIP,
 			Dst:         "192.168.0.2/26",
 			DstNodeName: "node2",
-			DstNodeIp:   "10.0.1.1",
+			DstNodeIp:   "172.0.2.2",
 		})
 
 		ipipMgr.OnUpdate(&proto.RouteUpdate{
@@ -275,7 +276,7 @@ var _ = Describe("RouteManager for ipip pools", func() {
 			IpPoolType:  proto.IPPoolType_IPIP,
 			Dst:         "192.168.0.100/26",
 			DstNodeName: "node1",
-			DstNodeIp:   "10.0.0.1",
+			DstNodeIp:   "172.0.0.2",
 			SameSubnet:  true,
 		})
 
@@ -285,7 +286,7 @@ var _ = Describe("RouteManager for ipip pools", func() {
 			IpPoolType:  proto.IPPoolType_IPIP,
 			Dst:         "192.168.0.10/32",
 			DstNodeName: "node1",
-			DstNodeIp:   "10.0.0.7",
+			DstNodeIp:   "172.0.0.2",
 			SameSubnet:  true,
 		})
 
@@ -314,7 +315,7 @@ var _ = Describe("RouteManager for ipip pools", func() {
 		ipipMgr.OnUpdate(&proto.RouteUpdate{
 			Types:       proto.RouteType_REMOTE_WORKLOAD,
 			IpPoolType:  proto.IPPoolType_IPIP,
-			Dst:         "172.0.0.1/26",
+			Dst:         "192.168.10.0/26",
 			DstNodeName: "node2",
 			DstNodeIp:   "10.0.0.2",
 			SameSubnet:  true,
@@ -329,7 +330,7 @@ var _ = Describe("RouteManager for ipip pools", func() {
 		By("Sending another local node update.")
 		ipipMgr.OnUpdate(&proto.HostMetadataUpdate{
 			Hostname: "node1",
-			Ipv4Addr: "10.0.0.1",
+			Ipv4Addr: "172.0.0.2",
 		})
 		localAddr := ipipMgr.routeMgr.parentIfaceAddr()
 		Expect(localAddr).NotTo(BeNil())
@@ -349,6 +350,52 @@ var _ = Describe("RouteManager for ipip pools", func() {
 		Expect(rt.currentRoutes["eth0"]).To(HaveLen(1))
 		Expect(rt.currentRoutes[dataplanedefs.IPIPIfaceName]).To(HaveLen(0))
 	})
+
+	It("should program routes for remote endpoints with borrowed IP addresses", func() {
+		By("Sending host updates")
+		ipipMgr.OnUpdate(&proto.HostMetadataUpdate{
+			Hostname: "node1",
+			Ipv4Addr: "172.0.0.2",
+		})
+		ipipMgr.OnUpdate(&proto.HostMetadataUpdate{
+			Hostname: "node2",
+			Ipv4Addr: "172.0.2.2",
+		})
+
+		By("Sending a borrowed tunnel IP address")
+		ipipMgr.OnUpdate(&proto.RouteUpdate{
+			Types:       proto.RouteType_REMOTE_TUNNEL,
+			IpPoolType:  proto.IPPoolType_IPIP,
+			Dst:         "10.0.1.1/32",
+			DstNodeName: "node2",
+			DstNodeIp:   "172.0.2.2",
+			Borrowed:    true,
+		})
+
+		err := ipipMgr.CompleteDeferredWork()
+		Expect(err).NotTo(HaveOccurred())
+
+		// Expect a directly connected route to the borrowed IP.
+		Expect(rt.currentRoutes[dataplanedefs.IPIPIfaceName]).To(HaveLen(1))
+		Expect(rt.currentRoutes[dataplanedefs.IPIPIfaceName][0]).To(Equal(
+			routetable.Target{
+				Type:     "onlink",
+				CIDR:     ip.MustParseCIDROrIP("10.0.1.1/32"),
+				GW:       ip.FromString("172.0.2.2"),
+				Protocol: 80,
+			}))
+
+		// Delete the route.
+		ipipMgr.OnUpdate(&proto.RouteRemove{
+			Dst: "10.0.1.1/32",
+		})
+
+		err = ipipMgr.CompleteDeferredWork()
+		Expect(err).NotTo(HaveOccurred())
+
+		// Expect no routes.
+		Expect(rt.currentRoutes[dataplanedefs.IPIPIfaceName]).To(HaveLen(0))
+	})
 })
 
 var (
@@ -356,8 +403,8 @@ var (
 	mockFailure = errors.New("mock failure")
 )
 
-type mockIPIPDataplane struct {
-	tunnelLink      *mockLink
+type mockTunnelDataplane struct {
+	tunnelLink      netlink.Link
 	tunnelLinkAttrs *netlink.LinkAttrs
 	tunnelLinkName  string
 	addrs           []netlink.Addr
@@ -370,17 +417,18 @@ type mockIPIPDataplane struct {
 	NumCalls    int
 	ErrorAtCall int
 
-	links []netlink.Link
+	ipVersion uint8
+	links     []netlink.Link
 }
 
-func (d *mockIPIPDataplane) ResetCalls() {
+func (d *mockTunnelDataplane) ResetCalls() {
 	d.LinkAddCalled = false
 	d.LinkSetMTUCalled = false
 	d.LinkSetUpCalled = false
 	d.AddrUpdated = false
 }
 
-func (d *mockIPIPDataplane) incCallCount() error {
+func (d *mockTunnelDataplane) incCallCount() error {
 	d.NumCalls += 1
 	if d.NumCalls == d.ErrorAtCall {
 		logrus.Warn("Simulating an error due to call count")
@@ -389,7 +437,7 @@ func (d *mockIPIPDataplane) incCallCount() error {
 	return nil
 }
 
-func (d *mockIPIPDataplane) LinkByName(name string) (netlink.Link, error) {
+func (d *mockTunnelDataplane) LinkByName(name string) (netlink.Link, error) {
 	logrus.WithField("name", name).Info("LinkByName called")
 
 	if err := d.incCallCount(); err != nil {
@@ -403,7 +451,7 @@ func (d *mockIPIPDataplane) LinkByName(name string) (netlink.Link, error) {
 	return d.tunnelLink, nil
 }
 
-func (d *mockIPIPDataplane) LinkSetMTU(link netlink.Link, mtu int) error {
+func (d *mockTunnelDataplane) LinkSetMTU(link netlink.Link, mtu int) error {
 	d.LinkSetMTUCalled = true
 	if err := d.incCallCount(); err != nil {
 		return err
@@ -413,7 +461,7 @@ func (d *mockIPIPDataplane) LinkSetMTU(link netlink.Link, mtu int) error {
 	return nil
 }
 
-func (d *mockIPIPDataplane) LinkSetUp(link netlink.Link) error {
+func (d *mockTunnelDataplane) LinkSetUp(link netlink.Link) error {
 	d.LinkSetUpCalled = true
 	if err := d.incCallCount(); err != nil {
 		return err
@@ -423,7 +471,7 @@ func (d *mockIPIPDataplane) LinkSetUp(link netlink.Link) error {
 	return nil
 }
 
-func (d *mockIPIPDataplane) AddrList(link netlink.Link, family int) ([]netlink.Addr, error) {
+func (d *mockTunnelDataplane) AddrList(link netlink.Link, family int) ([]netlink.Addr, error) {
 	if err := d.incCallCount(); err != nil {
 		return nil, err
 	}
@@ -431,16 +479,23 @@ func (d *mockIPIPDataplane) AddrList(link netlink.Link, family int) ([]netlink.A
 	name := link.Attrs().Name
 	Expect(name).Should(BeElementOf(d.tunnelLinkName, "eth0"))
 	if name == "eth0" {
+		if d.ipVersion == 6 {
+			return []netlink.Addr{{
+				IPNet: &net.IPNet{
+					IP: net.ParseIP("fc00:10:96::2"),
+				}},
+			}, nil
+		}
 		return []netlink.Addr{{
 			IPNet: &net.IPNet{
-				IP: net.IPv4(10, 0, 0, 1),
+				IP: net.IPv4(172, 0, 0, 2),
 			}},
 		}, nil
 	}
 	return d.addrs, nil
 }
 
-func (d *mockIPIPDataplane) AddrAdd(link netlink.Link, addr *netlink.Addr) error {
+func (d *mockTunnelDataplane) AddrAdd(link netlink.Link, addr *netlink.Addr) error {
 	d.AddrUpdated = true
 	if err := d.incCallCount(); err != nil {
 		return err
@@ -450,7 +505,7 @@ func (d *mockIPIPDataplane) AddrAdd(link netlink.Link, addr *netlink.Addr) error
 	return nil
 }
 
-func (d *mockIPIPDataplane) AddrDel(link netlink.Link, addr *netlink.Addr) error {
+func (d *mockTunnelDataplane) AddrDel(link netlink.Link, addr *netlink.Addr) error {
 	d.AddrUpdated = true
 	if err := d.incCallCount(); err != nil {
 		return err
@@ -461,11 +516,11 @@ func (d *mockIPIPDataplane) AddrDel(link netlink.Link, addr *netlink.Addr) error
 	return nil
 }
 
-func (d *mockIPIPDataplane) LinkList() ([]netlink.Link, error) {
+func (d *mockTunnelDataplane) LinkList() ([]netlink.Link, error) {
 	return d.links, nil
 }
 
-func (d *mockIPIPDataplane) LinkAdd(l netlink.Link) error {
+func (d *mockTunnelDataplane) LinkAdd(l netlink.Link) error {
 	d.LinkAddCalled = true
 	if err := d.incCallCount(); err != nil {
 		return err
@@ -473,15 +528,13 @@ func (d *mockIPIPDataplane) LinkAdd(l netlink.Link) error {
 	Expect(l.Attrs().Name).To(Equal(d.tunnelLinkName))
 	if d.tunnelLink == nil {
 		logrus.Info("Creating tunnel link")
-		link := &mockLink{}
-		link.attrs.Name = d.tunnelLinkName
-		d.tunnelLinkAttrs = &link.attrs
-		d.tunnelLink = link
+		d.tunnelLinkAttrs = l.Attrs()
+		d.tunnelLink = l
 	}
 	return nil
 }
 
-func (d *mockIPIPDataplane) LinkDel(_ netlink.Link) error {
+func (d *mockTunnelDataplane) LinkDel(_ netlink.Link) error {
 	return nil
 }
 
