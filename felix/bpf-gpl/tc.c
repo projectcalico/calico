@@ -792,6 +792,7 @@ static CALI_BPF_INLINE enum do_nat_res do_nat(struct cali_tc_ctx *ctx,
 				 */
 				rt = cali_rt_lookup(&STATE->post_nat_ip_dst);
 				if (!rt) {
+					CALI_DEBUG("missing rt found for " IP_FMT, debug_ip(STATE->post_nat_ip_dst));
 					deny_reason(ctx, CALI_REASON_RT_UNKNOWN);
 					goto deny;
 				}
