@@ -30,7 +30,7 @@ for series in focal jammy noble; do
     # anyway by Launchpad.)
     sources_url="https://ppa.launchpadcontent.net/project-calico/${REPO_NAME}/ubuntu/dists/${series}/main/source/Sources.gz"
     if curl -fs -I "${sources_url}" > /dev/null; then
-        existing_packages=$(curl -fsSL "${sources_url}" | zcat | awk '/^Package:/{printf("%s_", $2);} /^Version:/{sub(/^2:/,"", $2); print $2;}')
+        existing_packages=$(curl -fsSL "${sources_url}" | zcat | awk '/^Package:/{printf("%s_", $2);} /^Version:/{sub(/^[0-9]:/,"", $2); print $2;}')
         mapfile -t existing_packages <<< "${existing_packages}"
         for existing_package in "${existing_packages[@]}"; do
             # echo "Launchpad has sources for ${existing_package} already, marking to skip" | ts "[check ${series} ${existing_package}]"
