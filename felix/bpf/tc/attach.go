@@ -101,7 +101,7 @@ func (ap *AttachPoint) AttachProgram() error {
 
 	/* XXX we should remember the tag of the program and skip the rest if the tag is
 	* still the same */
-	progsAttached, err := ap.ListAttachedPrograms(true)
+	progsAttached, err := ListAttachedPrograms(ap.Iface, ap.Hook.String(), true)
 	if err != nil {
 		return err
 	}
@@ -124,7 +124,7 @@ func (ap *AttachPoint) AttachProgram() error {
 }
 
 func (ap *AttachPoint) DetachProgram() error {
-	progsToClean, err := ap.ListAttachedPrograms(true)
+	progsToClean, err := ListAttachedPrograms(ap.Iface, ap.Hook.String(), true)
 	if err != nil {
 		return err
 	}
@@ -213,8 +213,8 @@ type attachedProg struct {
 	Handle uint32
 }
 
-func (ap *AttachPoint) ListAttachedPrograms(includeLegacy bool) ([]attachedProg, error) {
-	out, err := ExecTC("filter", "show", "dev", ap.Iface, ap.Hook.String())
+func ListAttachedPrograms(iface, hook string, includeLegacy bool) ([]attachedProg, error) {
+	out, err := ExecTC("filter", "show", "dev", iface, hook)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list tc filters on interface: %w", err)
 	}
@@ -287,7 +287,7 @@ func (ap *AttachPoint) IsAttached() (bool, error) {
 	if !hasQ {
 		return false, nil
 	}
-	progs, err := ap.ListAttachedPrograms(false)
+	progs, err := ListAttachedPrograms(ap.Iface, ap.Hook.String(), false)
 	if err != nil {
 		return false, err
 	}

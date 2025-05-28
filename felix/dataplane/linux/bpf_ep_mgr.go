@@ -2292,6 +2292,18 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 
 	v4Readiness := state.v4Readiness
 	v6Readiness := state.v6Readiness
+
+	if v4Readiness == ifaceIsReady || v6Readiness == ifaceIsReady {
+		if tcProgs, err := tc.ListAttachedPrograms(ifaceName, hook.Ingress.String(), false); err != nil || len(tcProgs) == 0 {
+			v4Readiness = ifaceNotReady
+			v6Readiness = ifaceNotReady
+		}
+		if tcProgs, err := tc.ListAttachedPrograms(ifaceName, hook.Egress.String(), false); err != nil || len(tcProgs) == 0 {
+			v4Readiness = ifaceNotReady
+			v6Readiness = ifaceNotReady
+		}
+	}
+
 	ap := m.calculateTCAttachPoint(ifaceName)
 
 	if err := m.wepStateFillJumps(ap, &state); err != nil {

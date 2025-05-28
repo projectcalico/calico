@@ -764,19 +764,11 @@ func TestAttachWithMultipleWorkloadUpdate(t *testing.T) {
 	err = bpfEpMgr.CompleteDeferredWork()
 	Expect(err).NotTo(HaveOccurred())
 
-	ap := &tc.AttachPoint{
-		AttachPoint: bpf.AttachPoint{
-			Iface: "workloadep1",
-			Hook:  hook.Ingress,
-		},
-	}
-
-	ingressProg, err := ap.ListAttachedPrograms(true)
+	ingressProg, err := tc.ListAttachedPrograms("workloadep1", hook.Ingress.String(), true)
 	Expect(err).NotTo(HaveOccurred())
 	Expect(len(ingressProg)).To(Equal(1))
 
-	ap.AttachPoint.Hook = hook.Egress
-	egressProg, err := ap.ListAttachedPrograms(true)
+	egressProg, err := tc.ListAttachedPrograms("workloadep1", hook.Egress.String(), true)
 	Expect(err).NotTo(HaveOccurred())
 	Expect(len(egressProg)).To(Equal(1))
 
@@ -816,13 +808,11 @@ func TestAttachWithMultipleWorkloadUpdate(t *testing.T) {
 		err = bpfEpMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
 	}
-	ap.AttachPoint.Hook = hook.Ingress
-	ingProg, err := ap.ListAttachedPrograms(true)
+	ingProg, err := tc.ListAttachedPrograms("workloadep1", hook.Ingress.String(), true)
 	Expect(err).NotTo(HaveOccurred())
 	Expect(len(ingProg)).To(Equal(1))
 
-	ap.AttachPoint.Hook = hook.Egress
-	egrProg, err := ap.ListAttachedPrograms(true)
+	egrProg, err := tc.ListAttachedPrograms("workloadep1", hook.Egress.String(), true)
 	Expect(err).NotTo(HaveOccurred())
 	Expect(len(egrProg)).To(Equal(1))
 
@@ -832,7 +822,6 @@ func TestAttachWithMultipleWorkloadUpdate(t *testing.T) {
 	Expect(egressProg[0].Handle).To(Equal(egrProg[0].Handle))
 	Expect(ingProg[0].Pref).To(Equal(egrProg[0].Pref))
 	Expect(ingProg[0].Handle).To(Equal(egrProg[0].Handle))
-
 }
 
 // This test verifies if the tc program gets replaced
@@ -859,7 +848,7 @@ func TestRepeatedAttach(t *testing.T) {
 	Expect(err).NotTo(HaveOccurred(), "failed to create qdisc")
 	err = ap.AttachProgram()
 	Expect(err).NotTo(HaveOccurred(), "failed to attach preamble")
-	ingressProg, err := ap.ListAttachedPrograms(true)
+	ingressProg, err := tc.ListAttachedPrograms(ap.Iface, ap.Hook.String(), true)
 	Expect(err).NotTo(HaveOccurred())
 	Expect(len(ingressProg)).To(Equal(1))
 	for i := 0; i < 3; i++ {
@@ -867,7 +856,7 @@ func TestRepeatedAttach(t *testing.T) {
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("failed to attach preamble : %d", i))
 	}
 
-	ingProg, err := ap.ListAttachedPrograms(true)
+	ingProg, err := tc.ListAttachedPrograms(ap.Iface, ap.Hook.String(), true)
 	Expect(err).NotTo(HaveOccurred())
 	Expect(len(ingProg)).To(Equal(1))
 
@@ -911,12 +900,11 @@ func TestRepeatedAttach(t *testing.T) {
 	err = bpfEpMgr.CompleteDeferredWork()
 	Expect(err).NotTo(HaveOccurred())
 
-	ingProg, err = ap.ListAttachedPrograms(true)
+	ingProg, err = tc.ListAttachedPrograms(ap.Iface, hook.Ingress.String(), true)
 	Expect(err).NotTo(HaveOccurred())
 	Expect(len(ingProg)).To(Equal(1))
 
-	ap.AttachPoint.Hook = hook.Egress
-	egrProg, err := ap.ListAttachedPrograms(true)
+	egrProg, err := tc.ListAttachedPrograms(ap.Iface, hook.Egress.String(), true)
 	Expect(err).NotTo(HaveOccurred())
 	Expect(len(egrProg)).To(Equal(1))
 
