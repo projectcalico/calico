@@ -34,81 +34,6 @@ import (
 	"github.com/projectcalico/calico/felix/vxlanfdb"
 )
 
-type mockVXLANDataplane struct {
-	links     []netlink.Link
-	ipVersion uint8
-}
-
-func (m *mockVXLANDataplane) LinkByName(name string) (netlink.Link, error) {
-	la := netlink.NewLinkAttrs()
-	la.Name = "vxlan"
-	link := &netlink.Vxlan{
-		LinkAttrs:    la,
-		VxlanId:      1,
-		Port:         20,
-		VtepDevIndex: 2,
-		SrcAddr:      ip.FromString("172.0.0.2").AsNetIP(),
-	}
-
-	la.Name = "vxlan-v6"
-	if m.ipVersion == 6 {
-		link = &netlink.Vxlan{
-			LinkAttrs:    la,
-			VxlanId:      1,
-			Port:         20,
-			VtepDevIndex: 2,
-			SrcAddr:      ip.FromString("fc00:10:96::2").AsNetIP(),
-		}
-	}
-
-	return link, nil
-}
-
-func (m *mockVXLANDataplane) LinkSetMTU(link netlink.Link, mtu int) error {
-	return nil
-}
-
-func (m *mockVXLANDataplane) LinkSetUp(link netlink.Link) error {
-	return nil
-}
-
-func (m *mockVXLANDataplane) AddrList(link netlink.Link, family int) ([]netlink.Addr, error) {
-	l := []netlink.Addr{{
-		IPNet: &net.IPNet{
-			IP: net.IPv4(172, 0, 0, 2),
-		},
-	}}
-
-	if m.ipVersion == 6 {
-		l = []netlink.Addr{{
-			IPNet: &net.IPNet{
-				IP: net.ParseIP("fc00:10:96::2"),
-			},
-		}}
-	}
-	return l, nil
-}
-
-func (m *mockVXLANDataplane) AddrAdd(link netlink.Link, addr *netlink.Addr) error {
-	return nil
-}
-
-func (m *mockVXLANDataplane) AddrDel(link netlink.Link, addr *netlink.Addr) error {
-	return nil
-}
-
-func (m *mockVXLANDataplane) LinkList() ([]netlink.Link, error) {
-	return m.links, nil
-}
-
-func (m *mockVXLANDataplane) LinkAdd(netlink.Link) error {
-	return nil
-}
-
-func (m *mockVXLANDataplane) LinkDel(netlink.Link) error {
-	return nil
-}
-
 type mockVXLANFDB struct {
 	setVTEPsCalls int
 	currentVTEPs  []vxlanfdb.VTEP
@@ -158,9 +83,10 @@ var _ = Describe("VXLANManager", func() {
 			4444,
 			dpConfig,
 			opRecorder,
-			&mockVXLANDataplane{
-				links:     []netlink.Link{&mockLink{attrs: la}},
-				ipVersion: 4,
+			&mockTunnelDataplane{
+				links:          []netlink.Link{&mockLink{attrs: la}},
+				tunnelLinkName: dataplanedefs.VXLANIfaceNameV4,
+				ipVersion:      4,
 			},
 		)
 
@@ -182,9 +108,10 @@ var _ = Describe("VXLANManager", func() {
 			6666,
 			dpConfigV6,
 			opRecorder,
-			&mockVXLANDataplane{
-				links:     []netlink.Link{&mockLink{attrs: la}},
-				ipVersion: 6,
+			&mockTunnelDataplane{
+				links:          []netlink.Link{&mockLink{attrs: la}},
+				tunnelLinkName: dataplanedefs.VXLANIfaceNameV6,
+				ipVersion:      6,
 			},
 		)
 	})
@@ -518,7 +445,7 @@ var _ = Describe("VXLANManager", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Expect no routes.
-		Expect(rt.currentRoutes["vxlan.calico"]).To(HaveLen(0))
+		Expect(rt.currentRoutes[dataplanedefs.VXLANIfaceNameV4]).To(HaveLen(0))
 	})
 
 	It("IPv6: should program directly connected routes for remote VTEPs with borrowed IP addresses", func() {
@@ -552,6 +479,6 @@ var _ = Describe("VXLANManager", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Expect no routes.
-		Expect(rt.currentRoutes["vxlan.calico"]).To(HaveLen(0))
+		Expect(rt.currentRoutes[dataplanedefs.VXLANIfaceNameV6]).To(HaveLen(0))
 	})
 })
