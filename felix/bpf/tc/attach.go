@@ -89,26 +89,8 @@ func (ap *AttachPoint) loadObject(file string) (*libbpf.Obj, error) {
 	return obj, nil
 }
 
-type AttachResult struct {
-	progId int
-	prio   int
-	handle int
-}
-
-func (ar AttachResult) ProgID() int {
-	return ar.progId
-}
-
-func (ar AttachResult) Prio() int {
-	return ar.prio
-}
-
-func (ar AttachResult) Handle() int {
-	return ar.handle
-}
-
 // AttachProgram attaches a BPF program from a file to the TC attach point
-func (ap *AttachPoint) AttachProgram() (bpf.AttachResult, error) {
+func (ap *AttachPoint) AttachProgram() error {
 	logCxt := log.WithField("attachPoint", ap)
 
 	// By now the attach type specific generic set of programs is loaded and we
@@ -116,34 +98,33 @@ func (ap *AttachPoint) AttachProgram() (bpf.AttachResult, error) {
 	// configuration further to the selected set of programs.
 
 	binaryToLoad := path.Join(bpfdefs.ObjectDir, "tc_preamble.o")
-	var res AttachResult
 
 	/* XXX we should remember the tag of the program and skip the rest if the tag is
 	* still the same */
-	progsAttached, err := ap.listAttachedPrograms(true)
+	progsAttached, err := ListAttachedPrograms(ap.Iface, ap.Hook.String(), true)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	prio, handle := findFilterPriority(progsAttached)
 	obj, err := ap.loadObject(binaryToLoad)
 	if err != nil {
 		logCxt.Warn("Failed to load program")
-		return nil, fmt.Errorf("object %w", err)
+		return fmt.Errorf("object %w", err)
 	}
 	defer obj.Close()
 
-	res.progId, res.prio, res.handle, err = obj.AttachClassifier("cali_tc_preamble", ap.Iface, ap.Hook == hook.Ingress, prio, handle)
+	err = obj.AttachClassifier("cali_tc_preamble", ap.Iface, ap.Hook == hook.Ingress, prio, handle)
 	if err != nil {
 		logCxt.Warnf("Failed to attach to TC section cali_tc_preamble")
-		return nil, err
+		return err
 	}
 	logCxt.Info("Program attached to TC.")
-	return res, nil
+	return nil
 }
 
 func (ap *AttachPoint) DetachProgram() error {
-	progsToClean, err := ap.listAttachedPrograms(true)
+	progsToClean, err := ListAttachedPrograms(ap.Iface, ap.Hook.String(), true)
 	if err != nil {
 		return err
 	}
@@ -156,7 +137,7 @@ func (ap *AttachPoint) detachPrograms(progsToClean []attachedProg) error {
 	for _, p := range progsToClean {
 		log.WithField("prog", p).Debug("Cleaning up old calico program")
 		attemptCleanup := func() error {
-			_, err := ExecTC("filter", "del", "dev", ap.Iface, ap.Hook.String(), "pref", p.pref, "handle", p.handle, "bpf")
+			_, err := ExecTC("filter", "del", "dev", ap.Iface, ap.Hook.String(), "pref", fmt.Sprintf("%d", p.Pref), "handle", fmt.Sprintf("0x%x", p.Handle), "bpf")
 			return err
 		}
 		err := attemptCleanup()
@@ -228,12 +209,12 @@ func isDumpInterrupted(err error) bool {
 }
 
 type attachedProg struct {
-	pref   string
-	handle string
+	Pref   int
+	Handle uint32
 }
 
-func (ap *AttachPoint) listAttachedPrograms(includeLegacy bool) ([]attachedProg, error) {
-	out, err := ExecTC("filter", "show", "dev", ap.Iface, ap.Hook.String())
+func ListAttachedPrograms(iface, hook string, includeLegacy bool) ([]attachedProg, error) {
+	out, err := ExecTC("filter", "show", "dev", iface, hook)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list tc filters on interface: %w", err)
 	}
@@ -246,9 +227,17 @@ func (ap *AttachPoint) listAttachedPrograms(includeLegacy bool) ([]attachedProg,
 		}
 		// find the pref and the handle
 		if sm := prefHandleRe.FindStringSubmatch(line); len(sm) > 0 {
+			pref, err := strconv.Atoi(sm[1])
+			if err != nil {
+				continue
+			}
+			handle64, err := strconv.ParseUint(sm[2][2:], 16, 32)
+			if err != nil {
+				continue
+			}
 			p := attachedProg{
-				pref:   sm[1],
-				handle: sm[2],
+				Pref:   pref,
+				Handle: uint32(handle64),
 			}
 			log.WithField("prog", p).Debug("Found old calico program")
 			progsAttached = append(progsAttached, p)
@@ -298,7 +287,7 @@ func (ap *AttachPoint) IsAttached() (bool, error) {
 	if !hasQ {
 		return false, nil
 	}
-	progs, err := ap.listAttachedPrograms(false)
+	progs, err := ListAttachedPrograms(ap.Iface, ap.Hook.String(), false)
 	if err != nil {
 		return false, err
 	}
@@ -372,19 +361,9 @@ func findFilterPriority(progsToClean []attachedProg) (int, uint32) {
 	prio := 0
 	handle := uint32(0)
 	for _, p := range progsToClean {
-		pref, err := strconv.Atoi(p.pref)
-		if err != nil {
-			continue
-		}
-
-		handle64, err := strconv.ParseUint(p.handle[2:], 16, 32)
-		if err != nil {
-			continue
-		}
-
-		if pref > prio {
-			prio = pref
-			handle = uint32(handle64)
+		if p.Pref > prio {
+			prio = p.Pref
+			handle = p.Handle
 		}
 	}
 	return prio, handle
