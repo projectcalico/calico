@@ -33,7 +33,6 @@ type noEncapManager struct {
 	hostname  string
 	ipVersion uint8
 	routeMgr  *routeManager
-	dpConfig  Config
 
 	// Log context
 	logCtx     *logrus.Entry
@@ -72,7 +71,6 @@ func newNoEncapManagerWithSims(
 	m := &noEncapManager{
 		hostname:  dpConfig.Hostname,
 		ipVersion: ipVersion,
-		dpConfig:  dpConfig,
 		logCtx: logrus.WithFields(logrus.Fields{
 			"ipVersion": ipVersion,
 		}),
