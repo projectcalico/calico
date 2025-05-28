@@ -38,7 +38,7 @@ for series in focal jammy noble; do
         done
     fi
 
-    # Loop through our `changes` files (one each for felix and networking-calico, ideally),
+    # Loop through our `changes` files, one each for each source package we're uploading
     # sign them, and then upload the file via dput.
     #
     # Another modernization that we probably don't need - use `find` to list files, delimit on nulls,
