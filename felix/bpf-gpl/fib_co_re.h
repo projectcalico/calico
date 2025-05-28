@@ -42,7 +42,6 @@ static CALI_BPF_INLINE void fib_error_log(struct cali_tc_ctx *ctx,int rc)
 static CALI_BPF_INLINE int forward_or_drop(struct cali_tc_ctx *ctx)
 {
 	int rc = ctx->fwd.res;
-	enum calico_reason reason = ctx->fwd.reason;
 	struct cali_tc_state *state = ctx->state;
 
 	if (rc == TC_ACT_SHOT) {
@@ -362,7 +361,7 @@ try_fib_external:
 #endif
 
 			if (!fib_approve(ctx, fib_params(ctx)->ifindex)) {
-				reason = CALI_REASON_WEP_NOT_READY;
+				ctx->fwd.reason = CALI_REASON_WEP_NOT_READY;
 				goto deny;
 			}
 
@@ -512,7 +511,7 @@ allow:
 
 		if (rc ==  TC_ACT_SHOT) {
 			CALI_INFO("Final result=DENY (%d). Program execution time: %lluns",
-					reason, prog_end_time-state->prog_start_time);
+					ctx->fwd.reason, prog_end_time-state->prog_start_time);
 		} else {
 			if (CALI_F_VXLAN && CALI_F_TO_HOST) {
 				bpf_skb_change_type(ctx->skb, PACKET_HOST);
