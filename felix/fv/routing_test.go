@@ -478,7 +478,10 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 							expectedNumRoutes = 0
 						}
 						if BPFMode() {
-							if ipipMode != api.IPIPModeNever {
+							if ipipMode == api.IPIPModeNever {
+								// one host routes per node
+								expectedNumRoutes = len(felixes)
+							} else {
 								// one host and one host tunnel routes per node
 								expectedNumRoutes = len(felixes) * 2
 							}
@@ -516,7 +519,10 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 						expectedNumRoutes = 0
 					}
 					if BPFMode() {
-						if ipipMode != api.IPIPModeNever {
+						if ipipMode == api.IPIPModeNever {
+							// one host routes per node
+							expectedNumRoutes = (len(felixes) - 1)
+						} else {
 							// one host and one host tunnel routes per node
 							expectedNumRoutes = (len(felixes) - 1) * 2
 						}
