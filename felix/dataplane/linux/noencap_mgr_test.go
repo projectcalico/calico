@@ -15,24 +15,22 @@
 package intdataplane
 
 import (
-	"net"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/vishvananda/netlink"
 
 	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
+	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/routetable"
-	"github.com/projectcalico/calico/felix/rules"
 )
 
 var _ = Describe("NoEncap Manager", func() {
 	var (
 		noencapMgr *noEncapManager
 		rt         *mockRouteTable
-		dataplane  *mockIPIPDataplane
+		dataplane  *mockTunnelDataplane
 	)
 
 	const (
@@ -48,7 +46,7 @@ var _ = Describe("NoEncap Manager", func() {
 		la.Name = "eth0"
 		opRecorder := logutils.NewSummarizer("test")
 
-		dataplane = &mockIPIPDataplane{
+		dataplane = &mockTunnelDataplane{
 			links:          []netlink.Link{&mockLink{attrs: la}},
 			tunnelLinkName: dataplanedefs.IPIPIfaceName,
 		}
@@ -56,12 +54,7 @@ var _ = Describe("NoEncap Manager", func() {
 			rt,
 			4,
 			Config{
-				MaxIPSetSize:       1024,
-				Hostname:           "node1",
-				ExternalNodesCidrs: []string{"10.10.10.0/24"},
-				RulesConfig: rules.Config{
-					IPIPTunnelAddress: net.ParseIP("192.168.0.1"),
-				},
+				Hostname:            "node1",
 				ProgramRoutes:       true,
 				DeviceRouteProtocol: dataplanedefs.DefaultRouteProto,
 			},
@@ -73,11 +66,11 @@ var _ = Describe("NoEncap Manager", func() {
 	It("successfully adds a route to the noEncap interface", func() {
 		noencapMgr.OnUpdate(&proto.HostMetadataUpdate{
 			Hostname: "node1",
-			Ipv4Addr: "10.0.0.1",
+			Ipv4Addr: "172.0.0.2",
 		})
 		noencapMgr.OnUpdate(&proto.HostMetadataUpdate{
 			Hostname: "node2",
-			Ipv4Addr: "10.0.1.1",
+			Ipv4Addr: "172.0.2.2",
 		})
 
 		noencapMgr.routeMgr.OnParentDeviceUpdate("eth0")
@@ -101,16 +94,8 @@ var _ = Describe("NoEncap Manager", func() {
 			IpPoolType:  proto.IPPoolType_NO_ENCAP,
 			Dst:         "192.168.0.3/26",
 			DstNodeName: "node2",
-			DstNodeIp:   "10.0.1.1",
+			DstNodeIp:   "172.0.2.2",
 			SameSubnet:  true,
-		})
-
-		noencapMgr.OnUpdate(&proto.RouteUpdate{
-			Types:       proto.RouteType_REMOTE_WORKLOAD,
-			IpPoolType:  proto.IPPoolType_NO_ENCAP,
-			Dst:         "192.168.0.2/26",
-			DstNodeName: "node2",
-			DstNodeIp:   "10.0.1.1",
 		})
 
 		noencapMgr.OnUpdate(&proto.RouteUpdate{
@@ -118,7 +103,7 @@ var _ = Describe("NoEncap Manager", func() {
 			IpPoolType:  proto.IPPoolType_NO_ENCAP,
 			Dst:         "192.168.0.100/26",
 			DstNodeName: "node1",
-			DstNodeIp:   "10.0.0.1",
+			DstNodeIp:   "172.0.0.2",
 			SameSubnet:  true,
 		})
 
@@ -128,7 +113,7 @@ var _ = Describe("NoEncap Manager", func() {
 			IpPoolType:  proto.IPPoolType_NO_ENCAP,
 			Dst:         "192.168.0.10/32",
 			DstNodeName: "node1",
-			DstNodeIp:   "10.0.0.7",
+			DstNodeIp:   "172.0.0.2",
 			SameSubnet:  true,
 		})
 
@@ -140,6 +125,13 @@ var _ = Describe("NoEncap Manager", func() {
 
 		Expect(rt.currentRoutes[dataplanedefs.IPIPIfaceName]).To(HaveLen(0))
 		Expect(rt.currentRoutes[routetable.InterfaceNone]).To(HaveLen(1))
-		Expect(rt.currentRoutes["eth0"]).NotTo(BeNil())
+		Expect(rt.currentRoutes["eth0"]).To(HaveLen(1))
+		Expect(rt.currentRoutes["eth0"][0]).To(Equal(
+			routetable.Target{
+				Type:     "noencap",
+				CIDR:     ip.MustParseCIDROrIP("192.168.0.0/26"),
+				GW:       ip.FromString("172.0.2.2"),
+				Protocol: 80,
+			}))
 	})
 })
