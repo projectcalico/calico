@@ -298,7 +298,7 @@ func (c *IPAMChecker) checkIPAM(ctx context.Context) error {
 					}
 				}
 			}
-			fmt.Printf("Found %d service load balancer.\n", lengthLoadBalancer)
+			fmt.Printf("Found %d service load balancer(s).\n", lengthLoadBalancer)
 		}
 		fmt.Println()
 	}
