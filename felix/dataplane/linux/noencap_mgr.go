@@ -30,11 +30,10 @@ import (
 
 type noEncapManager struct {
 	// Our dependencies.
-	hostname      string
-	ipVersion     uint8
-	routeProtocol netlink.RouteProtocol
-	routeMgr      *routeManager
-	dpConfig      Config
+	hostname  string
+	ipVersion uint8
+	routeMgr  *routeManager
+	dpConfig  Config
 
 	// Log context
 	logCtx     *logrus.Entry
@@ -71,10 +70,9 @@ func newNoEncapManagerWithSims(
 	}
 
 	m := &noEncapManager{
-		hostname:      dpConfig.Hostname,
-		ipVersion:     ipVersion,
-		dpConfig:      dpConfig,
-		routeProtocol: calculateRouteProtocol(dpConfig),
+		hostname:  dpConfig.Hostname,
+		ipVersion: ipVersion,
+		dpConfig:  dpConfig,
 		logCtx: logrus.WithFields(logrus.Fields{
 			"ipVersion": ipVersion,
 		}),
