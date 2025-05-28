@@ -471,15 +471,21 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 				// Simulate having a host send VXLAN traffic from an unknown source, should get blocked.
 				BeforeEach(func() {
 					for _, f := range felixes {
+						// one host route per node
+						expectedNumRoutes := len(felixes)
 						if BPFMode() {
+							if ipipMode != api.IPIPModeNever {
+								// one host and one host tunnel routes per node
+								expectedNumRoutes = len(felixes) * 2
+							}
 							Eventually(func() int {
 								return strings.Count(f.BPFRoutes(), "host")
-							}).Should(Equal(len(felixes)*2),
-								"Expected one host and one host tunneled route per node")
+							}).Should(Equal(expectedNumRoutes),
+								fmt.Sprintf("Expected %v route per node, not: %v", expectedNumRoutes, f.BPFRoutes()))
 						} else if NFTMode() {
-							Eventually(f.NFTSetSizeFn("cali40all-hosts-net"), "10s", "200ms").Should(Equal(len(felixes)))
+							Eventually(f.NFTSetSizeFn("cali40all-hosts-net"), "10s", "200ms").Should(Equal(expectedNumRoutes))
 						} else {
-							Eventually(f.IPSetSizeFn("cali40all-hosts-net"), "10s", "200ms").Should(Equal(len(felixes)))
+							Eventually(f.IPSetSizeFn("cali40all-hosts-net"), "10s", "200ms").Should(Equal(expectedNumRoutes))
 						}
 					}
 
