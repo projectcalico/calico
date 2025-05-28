@@ -24,13 +24,13 @@ execute_test_suite() {
     rm $LOGPATH/rendered/*.cfg || true
 
     if [ "$DATASTORE_TYPE" = kubernetes ]; then
-        #run_extra_test test_node_mesh_bgp_password
-        #run_extra_test test_bgp_password_deadlock
-        #run_extra_test test_bgp_ttl_security
-        #run_extra_test test_bgp_ignored_interfaces
-        #run_extra_test test_bgp_reachable_by
-        #run_extra_test test_bgp_filters
-        #run_extra_test test_bgp_local_bgp_peer
+        run_extra_test test_node_mesh_bgp_password
+        run_extra_test test_bgp_password_deadlock
+        run_extra_test test_bgp_ttl_security
+        run_extra_test test_bgp_ignored_interfaces
+        run_extra_test test_bgp_reachable_by
+        run_extra_test test_bgp_filters
+        run_extra_test test_bgp_local_bgp_peer
         run_extra_test test_bgp_next_hop_mode
     fi
 
@@ -4661,8 +4661,8 @@ metadata:
   name: external-route-reflector-b-ipv4
 spec:
   peerIP: 10.225.0.5
-  asNumber: 65515
-  nextHopMode: Self
+  asNumber: 64512    # iBGP peer
+  nextHopMode: Self  # next hop self for an iBGP peer
 ---
 apiVersion: projectcalico.org/v3
 kind: BGPPeer
@@ -4679,7 +4679,7 @@ metadata:
   name: external-route-reflector-b-ipv6
 spec:
   peerIP: ffee::11
-  asNumber: 65515
+  asNumber: 64512
   nextHopMode: Self
 EOF
 
@@ -4780,8 +4780,8 @@ metadata:
   name: external-route-reflector-b-ipv4
 spec:
   peerIP: 10.225.0.5
-  asNumber: 65515
-  nextHopMode: Self
+  asNumber: 64512    # iBGP peer
+  nextHopMode: Self  # next hop self for an iBGP peer
   nodeSelector: route-reflector == 'true'
 ---
 apiVersion: projectcalico.org/v3
@@ -4800,7 +4800,7 @@ metadata:
   name: external-route-reflector-b-ipv6
 spec:
   peerIP: ffee::11
-  asNumber: 65515
+  asNumber: 64512
   nextHopMode: Self
   nodeSelector: route-reflector == 'true'
 EOF
