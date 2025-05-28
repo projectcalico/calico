@@ -179,6 +179,7 @@ type bpfDataplane interface {
 	loadDefaultPolicies() error
 	loadTCLogFilter(ap *tc.AttachPoint) (fileDescriptor, int, error)
 	interfaceByIndex(int) (*net.Interface, error)
+	queryClassifier(string, string) bool
 	getIfaceLink(string) (netlink.Link, error)
 }
 
@@ -2229,6 +2230,14 @@ func (m *bpfEndpointManager) dataIfaceStateFillJumps(ap *tc.AttachPoint, xdpMode
 	return nil
 }
 
+func (m *bpfEndpointManager) queryClassifier(ifaceName, tcHook string) bool {
+	tcProgs, err := tc.ListAttachedPrograms(ifaceName, tcHook, false)
+	if err != nil || len(tcProgs) == 0 {
+		return false
+	}
+	return true
+}
+
 func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState, error) {
 	startTime := time.Now()
 
@@ -2294,11 +2303,11 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 	v6Readiness := state.v6Readiness
 
 	if v4Readiness == ifaceIsReady || v6Readiness == ifaceIsReady {
-		if tcProgs, err := tc.ListAttachedPrograms(ifaceName, hook.Ingress.String(), false); err != nil || len(tcProgs) == 0 {
+		if !m.dp.queryClassifier(ifaceName, hook.Ingress.String()) {
 			v4Readiness = ifaceNotReady
 			v6Readiness = ifaceNotReady
 		}
-		if tcProgs, err := tc.ListAttachedPrograms(ifaceName, hook.Egress.String(), false); err != nil || len(tcProgs) == 0 {
+		if !m.dp.queryClassifier(ifaceName, hook.Egress.String()) {
 			v4Readiness = ifaceNotReady
 			v6Readiness = ifaceNotReady
 		}

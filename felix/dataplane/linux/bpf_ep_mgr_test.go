@@ -298,6 +298,10 @@ func (m *mockDataplane) ruleMatchID(dir rules.RuleDir, action string, owner rule
 	return h.Sum64()
 }
 
+func (m *mockDataplane) queryClassifier(ifaceName, tcHook string) bool {
+	return true
+}
+
 var (
 	fdCounterLock sync.Mutex
 	fdCounter     = uint32(1234)
