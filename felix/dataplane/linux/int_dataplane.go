@@ -680,7 +680,6 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			ipSetsV4,
 			routeTableV4,
 			4,
-			config.hostMTU,
 			config,
 			dp.loopSummarizer,
 		)

@@ -60,7 +60,6 @@ var _ = Describe("NoEncap Manager", func() {
 		noencapMgr = newNoEncapManagerWithSims(
 			ipSets, rt,
 			4,
-			1400,
 			Config{
 				MaxIPSetSize:       1024,
 				Hostname:           "node1",

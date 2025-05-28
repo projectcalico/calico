@@ -38,9 +38,6 @@ type noEncapManager struct {
 	routeProtocol netlink.RouteProtocol
 	routeMgr      *routeManager
 
-	// Device information
-	mtu int
-
 	// activeHostnameToIP maps hostname to string IP address. We don't bother to parse into
 	// net.IPs because we're going to pass them directly to the IPSet API.
 	activeHostnameToIP map[string]string
@@ -61,7 +58,6 @@ func newNoEncapManager(
 	ipsetsDataplane dpsets.IPSetsDataplane,
 	mainRouteTable routetable.Interface,
 	ipVersion uint8,
-	mtu int,
 	dpConfig Config,
 	opRecorder logutils.OpRecorder,
 ) *noEncapManager {
@@ -70,7 +66,6 @@ func newNoEncapManager(
 		ipsetsDataplane,
 		mainRouteTable,
 		ipVersion,
-		mtu,
 		dpConfig,
 		opRecorder,
 		nlHandle,
@@ -81,7 +76,6 @@ func newNoEncapManagerWithSims(
 	ipsetsDataplane dpsets.IPSetsDataplane,
 	mainRouteTable routetable.Interface,
 	ipVersion uint8,
-	mtu int,
 	dpConfig Config,
 	opRecorder logutils.OpRecorder,
 	nlHandle netlinkHandle,
@@ -101,7 +95,6 @@ func newNoEncapManagerWithSims(
 		},
 		activeHostnameToIP: map[string]string{},
 		hostname:           dpConfig.Hostname,
-		mtu:                mtu,
 		ipVersion:          ipVersion,
 		externalNodeCIDRs:  dpConfig.ExternalNodesCidrs,
 		ipSetDirty:         true,
@@ -116,7 +109,7 @@ func newNoEncapManagerWithSims(
 			proto.IPPoolType_NO_ENCAP,
 			"",
 			ipVersion,
-			mtu,
+			0,
 			dpConfig,
 			opRecorder,
 			nlHandle,
@@ -191,7 +184,7 @@ func (m *noEncapManager) monitorParentDevice(ctx context.Context, wait time.Dura
 	// NoEncap manager does not need to configure any interface. It expects the parent interface to be up and configured.
 	// However, it needs to monitor the parent interface to update routes. For this, we can use route manager
 	// keepDeviceInSync method without providing any device to configure.
-	m.routeMgr.keepDeviceInSync(ctx, m.mtu, false, wait, parentIfaceC, m.device)
+	m.routeMgr.keepDeviceInSync(ctx, 0, false, wait, parentIfaceC, m.device)
 }
 
 func (m *noEncapManager) device(_ netlink.Link) (netlink.Link, string, error) {
