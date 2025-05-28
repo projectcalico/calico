@@ -144,6 +144,9 @@ type NetConf struct {
 	// Options below here are deprecated.
 	EtcdAuthority string `json:"etcd_authority"`
 	Hostname      string `json:"hostname"`
+
+	// RequireMTUFile specifies whether mtu file is required to execute the cni-plugin
+	RequireMTUFile bool `json:"require_mtu_file,omitempty"`
 }
 
 // Runtime Config is provided by kubernetes
