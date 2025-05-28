@@ -285,17 +285,21 @@ func (c *IPAMChecker) checkIPAM(ctx context.Context) error {
 			return err
 		}
 
-		var lengthLoadBalancer int
-		for _, svc := range services.Items {
-			if svc.Spec.Type == corev1.ServiceTypeLoadBalancer &&
-				loadbalancer.IsCalicoManagedLoadBalancer(&svc, kubeControllerConfig.Spec.Controllers.LoadBalancer.AssignIPs) {
-				lengthLoadBalancer++
-				for _, ingress := range svc.Status.LoadBalancer.Ingress {
-					c.recordInUseIP(ingress.IP, svc, svc.Name)
+		if kubeControllerConfig.Spec.Controllers.LoadBalancer == nil {
+			fmt.Println("No configuration for LoadBalancer kubecontroller found, skipping service check")
+		} else {
+			var lengthLoadBalancer int
+			for _, svc := range services.Items {
+				if svc.Spec.Type == corev1.ServiceTypeLoadBalancer &&
+					loadbalancer.IsCalicoManagedLoadBalancer(&svc, kubeControllerConfig.Spec.Controllers.LoadBalancer.AssignIPs) {
+					lengthLoadBalancer++
+					for _, ingress := range svc.Status.LoadBalancer.Ingress {
+						c.recordInUseIP(ingress.IP, svc, svc.Name)
+					}
 				}
 			}
+			fmt.Printf("Found %d service load balancer(s).\n", lengthLoadBalancer)
 		}
-		fmt.Printf("Found %d service load balancer.\n", lengthLoadBalancer)
 		fmt.Println()
 	}
 
