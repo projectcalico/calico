@@ -473,6 +473,10 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 					for _, f := range felixes {
 						// one host route per node
 						expectedNumRoutes := len(felixes)
+						if ipipMode == api.IPIPModeNever {
+							// No encap routing does not update all hosts ipset.
+							expectedNumRoutes = 0
+						}
 						if BPFMode() {
 							if ipipMode != api.IPIPModeNever {
 								// one host and one host tunnel routes per node
@@ -507,6 +511,10 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 				It("should have no connectivity from third felix and expected number of IPs in allow list", func() {
 					// one host route per node
 					expectedNumRoutes := len(felixes) - 1
+					if ipipMode == api.IPIPModeNever {
+						// No encap routing does not update all hosts ipset.
+						expectedNumRoutes = 0
+					}
 					if BPFMode() {
 						if ipipMode != api.IPIPModeNever {
 							// one host and one host tunnel routes per node

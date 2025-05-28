@@ -19,23 +19,19 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 
-	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
 	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
 	"github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/routetable"
 	"github.com/projectcalico/calico/felix/rules"
-	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
 var _ = Describe("NoEncap Manager", func() {
 	var (
 		noencapMgr *noEncapManager
 		rt         *mockRouteTable
-		ipSets     *dpsets.MockIPSets
 		dataplane  *mockIPIPDataplane
 	)
 
@@ -44,7 +40,6 @@ var _ = Describe("NoEncap Manager", func() {
 	)
 
 	BeforeEach(func() {
-		ipSets = dpsets.NewMockIPSets()
 		rt = &mockRouteTable{
 			currentRoutes: map[string][]routetable.Target{},
 		}
@@ -58,7 +53,7 @@ var _ = Describe("NoEncap Manager", func() {
 			tunnelLinkName: dataplanedefs.IPIPIfaceName,
 		}
 		noencapMgr = newNoEncapManagerWithSims(
-			ipSets, rt,
+			rt,
 			4,
 			Config{
 				MaxIPSetSize:       1024,
@@ -73,91 +68,6 @@ var _ = Describe("NoEncap Manager", func() {
 			opRecorder,
 			dataplane,
 		)
-	})
-
-	allHostsSet := func() set.Set[string] {
-		logrus.Info(ipSets.Members)
-		Expect(ipSets.Members).To(HaveLen(1))
-		return ipSets.Members["all-hosts-net"]
-	}
-
-	It("should handle IPSet updates correctly", func() {
-		By("checking the the IP set is not created until first call to CompleteDeferredWork()")
-		Expect(ipSets.AddOrReplaceCalled).To(BeFalse())
-		err := noencapMgr.CompleteDeferredWork()
-		Expect(err).ToNot(HaveOccurred())
-		Expect(ipSets.AddOrReplaceCalled).To(BeTrue())
-
-		By("adding host1")
-		noencapMgr.OnUpdate(&proto.HostMetadataUpdate{
-			Hostname: "host1",
-			Ipv4Addr: "10.0.0.1",
-		})
-		err = noencapMgr.CompleteDeferredWork()
-		Expect(err).ToNot(HaveOccurred())
-		Expect(allHostsSet()).To(Equal(set.From("10.0.0.1", externalCIDR)))
-
-		By("adding host2")
-		noencapMgr.OnUpdate(&proto.HostMetadataUpdate{
-			Hostname: "host2",
-			Ipv4Addr: "10.0.0.2",
-		})
-		err = noencapMgr.CompleteDeferredWork()
-		Expect(err).ToNot(HaveOccurred())
-		Expect(allHostsSet()).To(Equal(set.From("10.0.0.1", "10.0.0.2", externalCIDR)))
-
-		By("testing tolerance for duplicate ip")
-		noencapMgr.OnUpdate(&proto.HostMetadataUpdate{
-			Hostname: "host3",
-			Ipv4Addr: "10.0.0.2",
-		})
-		err = noencapMgr.CompleteDeferredWork()
-		Expect(err).ToNot(HaveOccurred())
-		Expect(allHostsSet()).To(Equal(set.From("10.0.0.1", "10.0.0.2", externalCIDR)))
-
-		By("removing the duplicate ip should keep the ip")
-		noencapMgr.OnUpdate(&proto.HostMetadataRemove{
-			Hostname: "host3",
-		})
-		err = noencapMgr.CompleteDeferredWork()
-		Expect(err).ToNot(HaveOccurred())
-		Expect(allHostsSet()).To(Equal(set.From("10.0.0.1", "10.0.0.2", externalCIDR)))
-
-		By("removing the initial copy of ip")
-		noencapMgr.OnUpdate(&proto.HostMetadataRemove{
-			Hostname: "host2",
-		})
-		err = noencapMgr.CompleteDeferredWork()
-		Expect(err).ToNot(HaveOccurred())
-		Expect(allHostsSet()).To(Equal(set.From("10.0.0.1", externalCIDR)))
-
-		By("adding/removing a duplicate IP in one batch")
-		noencapMgr.OnUpdate(&proto.HostMetadataUpdate{
-			Hostname: "host2",
-			Ipv4Addr: "10.0.0.1",
-		})
-		noencapMgr.OnUpdate(&proto.HostMetadataRemove{
-			Hostname: "host2",
-		})
-		err = noencapMgr.CompleteDeferredWork()
-		Expect(err).ToNot(HaveOccurred())
-		Expect(allHostsSet()).To(Equal(set.From("10.0.0.1", externalCIDR)))
-
-		By("changing ip of host1")
-		noencapMgr.OnUpdate(&proto.HostMetadataUpdate{
-			Hostname: "host1",
-			Ipv4Addr: "10.0.0.2",
-		})
-		err = noencapMgr.CompleteDeferredWork()
-		Expect(err).ToNot(HaveOccurred())
-		Expect(allHostsSet()).To(Equal(set.From("10.0.0.2", externalCIDR)))
-
-		By("sending a no-op batch")
-		ipSets.AddOrReplaceCalled = false
-		err = noencapMgr.CompleteDeferredWork()
-		Expect(err).ToNot(HaveOccurred())
-		Expect(ipSets.AddOrReplaceCalled).To(BeFalse())
-		Expect(allHostsSet()).To(Equal(set.From("10.0.0.2", externalCIDR)))
 	})
 
 	It("successfully adds a route to the noEncap interface", func() {
