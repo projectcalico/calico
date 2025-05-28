@@ -293,14 +293,14 @@ func (m *vxlanManager) route(cidr ip.CIDR, r *proto.RouteUpdate) *routetable.Tar
 	}
 }
 
-func (m *vxlanManager) KeepVXLANDeviceInSync(
+func (m *vxlanManager) keepVXLANDeviceInSync(
 	ctx context.Context,
 	mtu int,
 	xsumBroken bool,
 	wait time.Duration,
 	parentIfaceC chan string,
 ) {
-	m.routeMgr.KeepDeviceInSync(ctx, mtu, xsumBroken, wait, parentIfaceC, m.device)
+	m.routeMgr.keepDeviceInSync(ctx, mtu, xsumBroken, wait, parentIfaceC, m.device)
 }
 
 func (m *vxlanManager) device(parent netlink.Link) (netlink.Link, string, error) {
