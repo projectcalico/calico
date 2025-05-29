@@ -141,6 +141,7 @@ const (
 
 type attachPoint interface {
 	IfaceName() string
+	IfaceIndex() int
 	HookName() hook.Hook
 	IsAttached() (bool, error)
 	AttachProgram() error
@@ -2249,12 +2250,14 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 		state      bpfInterfaceState
 		endpointID *types.WorkloadEndpointID
 		ifaceUp    bool
+		ifindex    int
 	)
 
 	// Other threads might be filling in jump map FDs in the map so take the lock.
 	m.ifacesLock.Lock()
 	m.withIface(ifaceName, func(iface *bpfInterface) (forceDirty bool) {
 		ifaceUp = iface.info.ifaceIsUp()
+		ifindex = iface.info.ifIndex
 		endpointID = iface.info.endpointID
 		state = iface.dpState
 		return false
@@ -2413,11 +2416,11 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 }
 
 func (m *bpfEndpointManager) ensureProgramAttached(ap attachPoint) error {
-	err := ap.AttachProgram()
-	if err != nil {
+	if err := counters.EnsureExists(m.commonMaps.CountersMap, ap.IfaceIndex(), ap.HookName()); err != nil {
 		return err
 	}
-	return nil
+
+	return ap.AttachProgram()
 }
 
 // applyPolicy actually applies the policy to the given workload.

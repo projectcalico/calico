@@ -77,6 +77,10 @@ func (ap *AttachPoint) PolicyJmp(ipFamily proto.IPVersion) int {
 	return ap.PolicyIdxV4
 }
 
+func (ap *AttachPoint) IfaceIndex() int {
+	return ap.IfIndex
+}
+
 // AlreadyAttachedProg checks that the program we are going to attach has the
 // same parameters as what we remembered about the currently attached.
 func AlreadyAttachedProg(a AttachPointInfo, object string, id int) (bool, error) {

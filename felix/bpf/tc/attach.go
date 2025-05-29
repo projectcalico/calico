@@ -28,7 +28,6 @@ import (
 
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/bpfdefs"
-	"github.com/projectcalico/calico/felix/bpf/counters"
 	"github.com/projectcalico/calico/felix/bpf/hook"
 	"github.com/projectcalico/calico/felix/bpf/libbpf"
 	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
@@ -114,16 +113,6 @@ func (ap *AttachPoint) AttachProgram() error {
 		return fmt.Errorf("object %w", err)
 	}
 	defer obj.Close()
-
-	m := counters.Map()
-	if err := m.Open(); err != nil {
-		return nil, err
-	}
-	defer m.Close()
-
-	if err := counters.EnsureExists(m, ap.IfIndex, ap.HookName()); err != nil {
-		return nil, err
-	}
 
 	err = obj.AttachClassifier("cali_tc_preamble", ap.Iface, ap.Hook == hook.Ingress, prio, handle)
 	if err != nil {
