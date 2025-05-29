@@ -429,7 +429,8 @@ func GetTBFValues(rateBitsPerSec, burstBits, peakrateBitsPerSec uint64, minburst
 
 	var peakrateBytesPerSec uint64
 
-	// If peakrate is defined, calculate its limit and use the smallest limit of the two.
+	// If peakrate is defined, calculate its limit (using the same method as above but with peakrate and minburst values)´
+	// and use the smallest limit of the two.
 	// See https://github.com/iproute2/iproute2/blob/866e1d107b7de68ca1fcd1d4d5ffecf9d96bff30/tc/q_tbf.c#L202
 	// to see where the tc command does the same thing.
 	if peakrateBitsPerSec != 0 {
