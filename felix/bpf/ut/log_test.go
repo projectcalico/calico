@@ -30,6 +30,8 @@ import (
 func TestLog(t *testing.T) {
 	RegisterTestingT(t)
 
+	cleanUpMaps()
+
 	defer resetBPFMaps()
 	bpfIfaceName = "LOG"
 	defer func() { bpfIfaceName = "" }()
