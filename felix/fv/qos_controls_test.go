@@ -20,7 +20,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"reflect"
 	"regexp"
 	"strings"
 	"time"
@@ -319,11 +318,14 @@ var _ = infrastructure.DatastoreDescribe(
 				Expect(err).NotTo(HaveOccurred())
 
 				By("Running iperf3 client on workload 1 with no packet rate limits")
+				baselineRate, _, err := retryIperfClient(w[1], 5, 5*time.Second, "-c", w[0].IP, "-O5", "-M1000", "-J")
+				Expect(err).NotTo(HaveOccurred())
+				logrus.Infof("iperf client rate with no packet rate limit (bps): %v", baselineRate)
 				// Expect the baseline rate to be much greater (>=10x) the bandwidth that we
 				// would get with the packet rate we are going to configure just below (1000 byte
 				// packets * 8 bits/byte * 100 packets/s = 800000 bps). In practice we see several
 				// Gbps here.
-				eventuallyIperfClientExpectedBW(w[1], 5, 5*time.Second, fmt.Sprintf("-c %s -O5 -M1000 -J", w[0].IP), ">=", 800000.0*10)
+				Expect(baselineRate).To(BeNumerically(">=", 800000.0*10))
 
 				By("Setting 100 packets/s limit for ingress on workload 0 (iperf3 server)")
 				w[0].WorkloadEndpoint.Spec.QoSControls = &api.QoSControls{
@@ -346,8 +348,11 @@ var _ = infrastructure.DatastoreDescribe(
 				}
 
 				By("Running iperf3 client on workload 1 with packet rate limit for ingress on workload 0")
+				ingressLimitedRate, _, err := retryIperfClient(w[1], 5, 5*time.Second, "-c", w[0].IP, "-O5", "-M1000", "-J")
+				Expect(err).NotTo(HaveOccurred())
+				logrus.Infof("iperf client rate with ingress packet rate limit on server (bps): %v", ingressLimitedRate)
 				// Expect the limited rate to be below an estimated desired rate (1000 byte packets * 8 bits/byte * 100 packets/s = 800000 bps), with a 20% margin
-				eventuallyIperfClientExpectedBW(w[1], 5, 5*time.Second, fmt.Sprintf("-c %s -O5 -M1000 -J", w[0].IP), "<=", 800000.0*1.2)
+				Expect(ingressLimitedRate).To(BeNumerically("<=", 800000.0*1.2))
 
 				By("Removing all limits from workload 0")
 				w[0].WorkloadEndpoint.Spec.QoSControls = nil
@@ -388,8 +393,11 @@ var _ = infrastructure.DatastoreDescribe(
 				}
 
 				By("Running iperf3 client on workload 1 with packet rate limit for egress on workload 1")
+				egressLimitedRate, _, err := retryIperfClient(w[1], 5, 5*time.Second, "-c", w[0].IP, "-O5", "-M1000", "-J")
+				Expect(err).NotTo(HaveOccurred())
+				logrus.Infof("iperf client rate with egress packet rate limit on client (bps): %v", egressLimitedRate)
 				// Expect the limited rate to be below an estimated desired rate (1000 byte packets * 8 bits/byte * 100 packets/s = 800000 bps) , with a 20% margin
-				eventuallyIperfClientExpectedBW(w[1], 5, 5*time.Second, fmt.Sprintf("-c %s -O5 -M1000 -J", w[0].IP), "<=", 800000.0*1.2)
+				Expect(egressLimitedRate).To(BeNumerically("<=", 800000.0*1.2))
 
 				By("Removing all limits from workload 1")
 				w[1].WorkloadEndpoint.Spec.QoSControls = nil
@@ -587,9 +595,6 @@ func parseIperfJsonOutput(output string) (float64, float64, error) {
 	if err != nil {
 		return 0.0, 0.0, fmt.Errorf("failed to unmarshal iperf data: %w", err)
 	}
-	if reflect.DeepEqual(perf, iperfReport{}) {
-		return 0.0, 0.0, fmt.Errorf("iperf data is empty: %+v", perf)
-	}
 	// iperf3 reports the result of its 10-second run in perf.End, but it also reports results for every 1-second interval in perf.Intervals[] (even those ignored for the sum calculation with the '-O' argument)
 	rate = perf.End.SumReceived.BitsPerSecond
 	// Use the first 1-second interval reported rate to verify peakrate controls
@@ -618,7 +623,7 @@ func retryIperfClient(w *workload.Workload, retryNum int, retryInterval time.Dur
 			continue
 		}
 		rate, peakrate, err = parseIperfJsonOutput(out)
-		if err != nil {
+		if err != nil || rate == 0 || peakrate == 0 {
 			time.Sleep(retryInterval)
 			continue
 		}
@@ -630,14 +635,4 @@ func retryIperfClient(w *workload.Workload, retryNum int, retryInterval time.Dur
 	}
 
 	return rate, peakrate, nil
-}
-
-func eventuallyIperfClientExpectedBW(w *workload.Workload, retryNum int, retryInterval time.Duration, args string, op string, expectedBW float64) {
-	tryExpectedBW := func() float64 {
-		rate, _, err := retryIperfClient(w, retryNum, retryInterval, args)
-		Expect(err).NotTo(HaveOccurred())
-		return rate
-	}
-
-	Eventually(tryExpectedBW).Should(BeNumerically(op, expectedBW))
 }
