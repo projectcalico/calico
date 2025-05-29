@@ -35,18 +35,17 @@ const (
 
 func NewIPPoolClient(c kubernetes.Interface, r rest.Interface) K8sResourceClient {
 	return &customK8sResourceClient{
-		clientSet:       c,
 		restClient:      r,
 		name:            IPPoolCRDName,
 		resource:        IPPoolResourceName,
 		description:     "Calico IP Pools",
 		k8sResourceType: reflect.TypeOf(apiv3.IPPool{}),
-		k8sResourceTypeMeta: metav1.TypeMeta{
+		typeMeta: metav1.TypeMeta{
 			Kind:       apiv3.KindIPPool,
 			APIVersion: apiv3.GroupVersionCurrent,
 		},
 		k8sListType:      reflect.TypeOf(apiv3.IPPoolList{}),
-		resourceKind:     apiv3.KindIPPool,
+		kind:             apiv3.KindIPPool,
 		versionconverter: IPPoolv1v3Converter{},
 	}
 }

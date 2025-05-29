@@ -30,17 +30,16 @@ const (
 
 func NewFelixConfigClient(c kubernetes.Interface, r rest.Interface) K8sResourceClient {
 	return &customK8sResourceClient{
-		clientSet:       c,
 		restClient:      r,
 		name:            FelixConfigCRDName,
 		resource:        FelixConfigResourceName,
 		description:     "Calico Felix Configuration",
 		k8sResourceType: reflect.TypeOf(apiv3.FelixConfiguration{}),
-		k8sResourceTypeMeta: metav1.TypeMeta{
+		typeMeta: metav1.TypeMeta{
 			Kind:       apiv3.KindFelixConfiguration,
 			APIVersion: apiv3.GroupVersionCurrent,
 		},
-		k8sListType:  reflect.TypeOf(apiv3.FelixConfigurationList{}),
-		resourceKind: apiv3.KindFelixConfiguration,
+		k8sListType: reflect.TypeOf(apiv3.FelixConfigurationList{}),
+		kind:        apiv3.KindFelixConfiguration,
 	}
 }

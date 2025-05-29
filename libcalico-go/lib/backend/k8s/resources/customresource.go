@@ -28,7 +28,6 @@ import (
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/kubernetes"
 	scheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
@@ -43,7 +42,6 @@ import (
 // mechanism for a 1:1 mapping between a Calico Resource and an equivalent Kubernetes
 // custom resource type.
 type customK8sResourceClient struct {
-	clientSet  kubernetes.Interface
 	restClient rest.Interface
 
 	// Name of the CRD. Not used.
@@ -60,17 +58,15 @@ type customK8sResourceClient struct {
 	k8sResourceType reflect.Type
 	k8sListType     reflect.Type
 
-	// k8sResourceTypeMeta is the TypeMeta to set for all resources
-	// returned by this client. It is used to set the GroupVersion.
-	k8sResourceTypeMeta metav1.TypeMeta
+	// typeMeta is the TypeMeta to set for all resources returned by this client. It is used to set the GroupVersion.
+	typeMeta metav1.TypeMeta
 
 	// Whether or not the CRD managed by this is namespaced. Used for generating
 	// Kubernetes API call endpoints.
 	namespaced bool
 
-	// resourceKind is the kind to set for TypeMeta.Kind for all resources
-	// returned by this client.
-	resourceKind string
+	// kind is the Kind to set for TypeMeta.Kind for all resources returned by this client.
+	kind string
 
 	// versionConverter is an optional hook to convert the returned data from the CRD
 	// from one format to another before returning it to the caller.
@@ -78,6 +74,10 @@ type customK8sResourceClient struct {
 
 	// validator used to validate resources.
 	validator Validator
+
+	// noTransform indicates that the KVPair should be written as-is to the API server. This
+	// is used when we are writing directly to projectcalico.org/v3 CRDs.
+	noTransform bool
 }
 
 // VersionConverter converts v1 or v3 k8s resources into v3 resources.
@@ -277,13 +277,18 @@ func (c *customK8sResourceClient) Delete(ctx context.Context, k model.Key, revis
 
 	opts := &metav1.DeleteOptions{}
 	if uid != nil {
-		// The UID in the v3 resources is a translation of the UID in the CR. Translate it
-		// before passing as a precondition.
-		uid, err := conversion.ConvertUID(*uid)
-		if err != nil {
-			return nil, err
+		if !c.noTransform {
+			// The UID in the v3 resources is a translation of the UID in the CR. Translate it
+			// before passing as a precondition.
+			uid, err := conversion.ConvertUID(*uid)
+			if err != nil {
+				return nil, err
+			}
+			opts.Preconditions = &metav1.Preconditions{UID: &uid}
+		} else {
+			// If no transform is required, then we can pass the UID as-is.
+			opts.Preconditions = &metav1.Preconditions{UID: uid}
 		}
-		opts.Preconditions = &metav1.Preconditions{UID: &uid}
 	}
 
 	// Delete the resource using the name.
@@ -373,13 +378,14 @@ func (c *customK8sResourceClient) List(ctx context.Context, list model.ListInter
 			Resource(c.resource).
 			VersionedParams(&opts, scheme.ParameterCodec)
 
-		// If the prefix is specified, look for the resources with the label
-		// of prefix.
+		// If the prefix is specified, look for the resources with the label of prefix.
 		if resList.Prefix {
 			// The prefix has a trailing "." character, remove it, since it is not valid for k8s labels
 			if !strings.HasSuffix(resList.Name, ".") {
 				return nil, errors.New("internal error: custom resource list invoked for a prefix not in the form '<tier>.'")
 			}
+
+			// TODO: We will need a way to ensure that the tier label is set on the resources. e.g., a mutating webhook.
 			name := resList.Name[:len(resList.Name)-1]
 			if name == "default" {
 				req = req.VersionedParams(&metav1.ListOptions{
@@ -473,7 +479,7 @@ func (c *customK8sResourceClient) keyToName(k model.Key) (string, error) {
 func (c *customK8sResourceClient) nameToKey(name string) (model.Key, error) {
 	return model.ResourceKey{
 		Name: name,
-		Kind: c.resourceKind,
+		Kind: c.kind,
 	}, nil
 }
 
@@ -489,20 +495,23 @@ func (c *customK8sResourceClient) convertResourceToKVPair(r Resource) (*model.KV
 		}
 	}
 
-	gvk := c.k8sResourceTypeMeta.GetObjectKind().GroupVersionKind()
-	gvk.Kind = c.resourceKind
+	gvk := c.typeMeta.GetObjectKind().GroupVersionKind()
+	gvk.Kind = c.kind
 	r.GetObjectKind().SetGroupVersionKind(gvk)
 	kvp := &model.KVPair{
 		Key: model.ResourceKey{
 			Name:      r.GetObjectMeta().GetName(),
 			Namespace: r.GetObjectMeta().GetNamespace(),
-			Kind:      c.resourceKind,
+			Kind:      c.kind,
 		},
 		Revision: r.GetObjectMeta().GetResourceVersion(),
 	}
 
-	if err := ConvertK8sResourceToCalicoResource(r); err != nil {
-		return kvp, err
+	if !c.noTransform {
+		// Convert the resource from crd.projectcalico.org/v1 to projectcalico.org/v3.
+		if err := ConvertK8sResourceToCalicoResource(r); err != nil {
+			return kvp, err
+		}
 	}
 
 	kvp.Value = r
@@ -512,19 +521,32 @@ func (c *customK8sResourceClient) convertResourceToKVPair(r Resource) (*model.KV
 func (c *customK8sResourceClient) convertKVPairToResource(kvp *model.KVPair) (Resource, error) {
 	resource := kvp.Value.(Resource)
 	resource.GetObjectMeta().SetResourceVersion(kvp.Revision)
-	resOut, err := ConvertCalicoResourceToK8sResource(resource)
-	if err != nil {
-		return resOut, err
+
+	var resOut Resource
+	if c.noTransform {
+		// Use the input resource as-is, no transformation needed.
+		resOut = resource
+	} else {
+		// Perform the transform from projectcalico.org/v3 to crd.projectcalico.org/v1
+		resOut, err := ConvertCalicoResourceToK8sResource(resource)
+		if err != nil {
+			return resOut, err
+		}
 	}
 
 	return resOut, nil
 }
 
 func (c *customK8sResourceClient) defaultPolicyName(name string) string {
-	if c.resourceKind == apiv3.KindGlobalNetworkPolicy ||
-		c.resourceKind == apiv3.KindNetworkPolicy ||
-		c.resourceKind == apiv3.KindStagedGlobalNetworkPolicy ||
-		c.resourceKind == apiv3.KindStagedNetworkPolicy {
+	if c.noTransform {
+		// Configured to write directly to projectcalico.org/v3 CRDs, so no transformation needed.
+		return name
+	}
+
+	if c.kind == apiv3.KindGlobalNetworkPolicy ||
+		c.kind == apiv3.KindNetworkPolicy ||
+		c.kind == apiv3.KindStagedGlobalNetworkPolicy ||
+		c.kind == apiv3.KindStagedNetworkPolicy {
 		// Policies in default tier are stored in the backend with the default prefix, if the prefix is not present we prefix it now
 		name = names.TieredPolicyName(name)
 	}

@@ -35,12 +35,12 @@ func NewStagedKubernetesNetworkPolicyClient(c *kubernetes.Clientset, r *rest.RES
 		resource:        StagedKubernetesNetworkPolicyResourceName,
 		description:     "Calico Staged Kubernetes Network Policies",
 		k8sResourceType: reflect.TypeOf(apiv3.StagedKubernetesNetworkPolicy{}),
-		k8sResourceTypeMeta: metav1.TypeMeta{
+		typeMeta: metav1.TypeMeta{
 			Kind:       apiv3.KindStagedKubernetesNetworkPolicy,
 			APIVersion: apiv3.GroupVersionCurrent,
 		},
-		k8sListType:  reflect.TypeOf(apiv3.StagedKubernetesNetworkPolicyList{}),
-		resourceKind: apiv3.KindStagedKubernetesNetworkPolicy,
-		namespaced:   true,
+		k8sListType: reflect.TypeOf(apiv3.StagedKubernetesNetworkPolicyList{}),
+		kind:        apiv3.KindStagedKubernetesNetworkPolicy,
+		namespaced:  true,
 	}
 }

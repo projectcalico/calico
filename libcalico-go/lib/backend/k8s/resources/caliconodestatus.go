@@ -30,17 +30,16 @@ const (
 
 func NewCalicoNodeStatusClient(c kubernetes.Interface, r rest.Interface) K8sResourceClient {
 	return &customK8sResourceClient{
-		clientSet:       c,
 		restClient:      r,
 		name:            CalicoNodeStatusCRDName,
 		resource:        CalicoNodeStatusResourceName,
 		description:     "CalicoNodeStatus",
 		k8sResourceType: reflect.TypeOf(apiv3.CalicoNodeStatus{}),
-		k8sResourceTypeMeta: metav1.TypeMeta{
+		typeMeta: metav1.TypeMeta{
 			Kind:       apiv3.KindCalicoNodeStatus,
 			APIVersion: apiv3.GroupVersionCurrent,
 		},
-		k8sListType:  reflect.TypeOf(apiv3.CalicoNodeStatusList{}),
-		resourceKind: apiv3.KindCalicoNodeStatus,
+		k8sListType: reflect.TypeOf(apiv3.CalicoNodeStatusList{}),
+		kind:        apiv3.KindCalicoNodeStatus,
 	}
 }

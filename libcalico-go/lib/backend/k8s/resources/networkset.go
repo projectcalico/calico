@@ -30,18 +30,17 @@ const (
 
 func NewNetworkSetClient(c kubernetes.Interface, r rest.Interface) K8sResourceClient {
 	return &customK8sResourceClient{
-		clientSet:       c,
 		restClient:      r,
 		name:            NetworkSetCRDName,
 		resource:        NetworkSetResourceName,
 		description:     "Calico Network Sets",
 		k8sResourceType: reflect.TypeOf(apiv3.NetworkSet{}),
-		k8sResourceTypeMeta: metav1.TypeMeta{
+		typeMeta: metav1.TypeMeta{
 			Kind:       apiv3.KindNetworkSet,
 			APIVersion: apiv3.GroupVersionCurrent,
 		},
-		k8sListType:  reflect.TypeOf(apiv3.NetworkSetList{}),
-		resourceKind: apiv3.KindNetworkSet,
-		namespaced:   true,
+		k8sListType: reflect.TypeOf(apiv3.NetworkSetList{}),
+		kind:        apiv3.KindNetworkSet,
+		namespaced:  true,
 	}
 }

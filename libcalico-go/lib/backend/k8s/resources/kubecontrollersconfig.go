@@ -32,19 +32,18 @@ const (
 
 func NewKubeControllersConfigClient(c kubernetes.Interface, r rest.Interface) K8sResourceClient {
 	return &customK8sResourceClient{
-		clientSet:       c,
 		restClient:      r,
 		name:            KubeControllersConfigCRDName,
 		resource:        KubeControllersConfigResourceName,
 		description:     "Calico Kubernetes Controllers Configuration",
 		k8sResourceType: reflect.TypeOf(apiv3.KubeControllersConfiguration{}),
-		k8sResourceTypeMeta: metav1.TypeMeta{
+		typeMeta: metav1.TypeMeta{
 			Kind:       apiv3.KindKubeControllersConfiguration,
 			APIVersion: apiv3.GroupVersionCurrent,
 		},
-		k8sListType:  reflect.TypeOf(apiv3.KubeControllersConfigurationList{}),
-		resourceKind: apiv3.KindKubeControllersConfiguration,
-		validator:    kubeControllersConfigValidator{},
+		k8sListType: reflect.TypeOf(apiv3.KubeControllersConfigurationList{}),
+		kind:        apiv3.KindKubeControllersConfiguration,
+		validator:   kubeControllersConfigValidator{},
 	}
 }
 

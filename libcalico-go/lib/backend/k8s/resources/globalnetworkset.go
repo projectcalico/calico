@@ -30,17 +30,16 @@ const (
 
 func NewGlobalNetworkSetClient(c kubernetes.Interface, r rest.Interface) K8sResourceClient {
 	return &customK8sResourceClient{
-		clientSet:       c,
 		restClient:      r,
 		name:            GlobalNetworkSetCRDName,
 		resource:        GlobalNetworkSetResourceName,
 		description:     "Calico Global Network Sets",
 		k8sResourceType: reflect.TypeOf(apiv3.GlobalNetworkSet{}),
-		k8sResourceTypeMeta: metav1.TypeMeta{
+		typeMeta: metav1.TypeMeta{
 			Kind:       apiv3.KindGlobalNetworkSet,
 			APIVersion: apiv3.GroupVersionCurrent,
 		},
-		k8sListType:  reflect.TypeOf(apiv3.GlobalNetworkSetList{}),
-		resourceKind: apiv3.KindGlobalNetworkSet,
+		k8sListType: reflect.TypeOf(apiv3.GlobalNetworkSetList{}),
+		kind:        apiv3.KindGlobalNetworkSet,
 	}
 }

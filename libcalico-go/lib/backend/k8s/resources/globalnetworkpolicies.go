@@ -30,17 +30,16 @@ const (
 
 func NewGlobalNetworkPolicyClient(c kubernetes.Interface, r rest.Interface) K8sResourceClient {
 	return &customK8sResourceClient{
-		clientSet:       c,
 		restClient:      r,
 		name:            GlobalNetworkPolicyCRDName,
 		resource:        GlobalNetworkPolicyResourceName,
 		description:     "Calico Global Network Policies",
 		k8sResourceType: reflect.TypeOf(apiv3.GlobalNetworkPolicy{}),
-		k8sResourceTypeMeta: metav1.TypeMeta{
+		typeMeta: metav1.TypeMeta{
 			Kind:       apiv3.KindGlobalNetworkPolicy,
 			APIVersion: apiv3.GroupVersionCurrent,
 		},
-		k8sListType:  reflect.TypeOf(apiv3.GlobalNetworkPolicyList{}),
-		resourceKind: apiv3.KindGlobalNetworkPolicy,
+		k8sListType: reflect.TypeOf(apiv3.GlobalNetworkPolicyList{}),
+		kind:        apiv3.KindGlobalNetworkPolicy,
 	}
 }

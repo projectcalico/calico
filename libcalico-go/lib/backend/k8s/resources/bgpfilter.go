@@ -30,17 +30,16 @@ const (
 
 func NewBGPFilterClient(c kubernetes.Interface, r rest.Interface) K8sResourceClient {
 	return &customK8sResourceClient{
-		clientSet:       c,
 		restClient:      r,
 		name:            BGPFilterCRDName,
 		resource:        BGPFilterResourceName,
 		description:     "BGPFilter",
 		k8sResourceType: reflect.TypeOf(apiv3.BGPFilter{}),
-		k8sResourceTypeMeta: metav1.TypeMeta{
+		typeMeta: metav1.TypeMeta{
 			Kind:       apiv3.KindBGPFilter,
 			APIVersion: apiv3.GroupVersionCurrent,
 		},
-		k8sListType:  reflect.TypeOf(apiv3.BGPFilterList{}),
-		resourceKind: apiv3.KindBGPFilter,
+		k8sListType: reflect.TypeOf(apiv3.BGPFilterList{}),
+		kind:        apiv3.KindBGPFilter,
 	}
 }

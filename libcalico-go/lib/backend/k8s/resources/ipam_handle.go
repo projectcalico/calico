@@ -41,18 +41,17 @@ const (
 func NewIPAMHandleClient(c kubernetes.Interface, r rest.Interface) K8sResourceClient {
 	// Create a resource client which manages k8s CRDs.
 	rc := customK8sResourceClient{
-		clientSet:       c,
 		restClient:      r,
 		name:            IPAMHandleCRDName,
 		resource:        IPAMHandleResourceName,
 		description:     "Calico IPAM handles",
 		k8sResourceType: reflect.TypeOf(libapiv3.IPAMHandle{}),
-		k8sResourceTypeMeta: metav1.TypeMeta{
+		typeMeta: metav1.TypeMeta{
 			Kind:       libapiv3.KindIPAMHandle,
 			APIVersion: apiv3.GroupVersionCurrent,
 		},
-		k8sListType:  reflect.TypeOf(libapiv3.IPAMHandleList{}),
-		resourceKind: libapiv3.KindIPAMHandle,
+		k8sListType: reflect.TypeOf(libapiv3.IPAMHandleList{}),
+		kind:        libapiv3.KindIPAMHandle,
 	}
 
 	return &ipamHandleClient{rc: rc}

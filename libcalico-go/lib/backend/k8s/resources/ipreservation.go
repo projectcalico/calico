@@ -30,17 +30,16 @@ const (
 
 func NewIPReservationClient(c kubernetes.Interface, r rest.Interface) K8sResourceClient {
 	return &customK8sResourceClient{
-		clientSet:       c,
 		restClient:      r,
 		name:            IPReservationCRDName,
 		resource:        IPReservationResourceName,
 		description:     "Calico IP Reservations",
 		k8sResourceType: reflect.TypeOf(apiv3.IPReservation{}),
-		k8sResourceTypeMeta: metav1.TypeMeta{
+		typeMeta: metav1.TypeMeta{
 			Kind:       apiv3.KindIPReservation,
 			APIVersion: apiv3.GroupVersionCurrent,
 		},
-		k8sListType:  reflect.TypeOf(apiv3.IPReservationList{}),
-		resourceKind: apiv3.KindIPReservation,
+		k8sListType: reflect.TypeOf(apiv3.IPReservationList{}),
+		kind:        apiv3.KindIPReservation,
 	}
 }

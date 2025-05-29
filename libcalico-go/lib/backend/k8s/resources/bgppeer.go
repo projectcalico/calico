@@ -30,17 +30,16 @@ const (
 
 func NewBGPPeerClient(c kubernetes.Interface, r rest.Interface) K8sResourceClient {
 	return &customK8sResourceClient{
-		clientSet:       c,
 		restClient:      r,
 		name:            BGPPeerCRDName,
 		resource:        BGPPeerResourceName,
 		description:     "Calico BGP Peers",
 		k8sResourceType: reflect.TypeOf(apiv3.BGPPeer{}),
-		k8sResourceTypeMeta: metav1.TypeMeta{
+		typeMeta: metav1.TypeMeta{
 			Kind:       apiv3.KindBGPPeer,
 			APIVersion: apiv3.GroupVersionCurrent,
 		},
-		k8sListType:  reflect.TypeOf(apiv3.BGPPeerList{}),
-		resourceKind: apiv3.KindBGPPeer,
+		k8sListType: reflect.TypeOf(apiv3.BGPPeerList{}),
+		kind:        apiv3.KindBGPPeer,
 	}
 }

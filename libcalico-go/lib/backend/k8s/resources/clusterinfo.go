@@ -30,17 +30,16 @@ const (
 
 func NewClusterInfoClient(c kubernetes.Interface, r rest.Interface) K8sResourceClient {
 	return &customK8sResourceClient{
-		clientSet:       c,
 		restClient:      r,
 		name:            ClusterInfoCRDName,
 		resource:        ClusterInfoResourceName,
 		description:     "Calico Cluster Information",
 		k8sResourceType: reflect.TypeOf(apiv3.ClusterInformation{}),
-		k8sResourceTypeMeta: metav1.TypeMeta{
+		typeMeta: metav1.TypeMeta{
 			Kind:       apiv3.KindClusterInformation,
 			APIVersion: apiv3.GroupVersionCurrent,
 		},
-		k8sListType:  reflect.TypeOf(apiv3.ClusterInformationList{}),
-		resourceKind: apiv3.KindClusterInformation,
+		k8sListType: reflect.TypeOf(apiv3.ClusterInformationList{}),
+		kind:        apiv3.KindClusterInformation,
 	}
 }

@@ -38,18 +38,17 @@ const (
 func NewIPAMConfigClient(c kubernetes.Interface, r rest.Interface) K8sResourceClient {
 	return &ipamConfigClient{
 		rc: customK8sResourceClient{
-			clientSet:       c,
 			restClient:      r,
 			name:            IPAMConfigCRDName,
 			resource:        IPAMConfigResourceName,
 			description:     "Calico IPAM configuration",
 			k8sResourceType: reflect.TypeOf(libapiv3.IPAMConfiguration{}),
-			k8sResourceTypeMeta: metav1.TypeMeta{
+			typeMeta: metav1.TypeMeta{
 				Kind:       libapiv3.KindIPAMConfig,
 				APIVersion: apiv3.GroupVersionCurrent,
 			},
-			k8sListType:  reflect.TypeOf(libapiv3.IPAMConfigurationList{}),
-			resourceKind: libapiv3.KindIPAMConfig,
+			k8sListType: reflect.TypeOf(libapiv3.IPAMConfigurationList{}),
+			kind:        libapiv3.KindIPAMConfig,
 		},
 	}
 }

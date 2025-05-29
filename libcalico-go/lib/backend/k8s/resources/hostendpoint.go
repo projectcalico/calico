@@ -30,17 +30,16 @@ const (
 
 func NewHostEndpointClient(c kubernetes.Interface, r rest.Interface) K8sResourceClient {
 	return &customK8sResourceClient{
-		clientSet:       c,
 		restClient:      r,
 		name:            HostEndpointCRDName,
 		resource:        HostEndpointResourceName,
 		description:     "Calico HostEndpoints",
 		k8sResourceType: reflect.TypeOf(apiv3.HostEndpoint{}),
-		k8sResourceTypeMeta: metav1.TypeMeta{
+		typeMeta: metav1.TypeMeta{
 			Kind:       apiv3.KindHostEndpoint,
 			APIVersion: apiv3.GroupVersionCurrent,
 		},
-		k8sListType:  reflect.TypeOf(apiv3.HostEndpointList{}),
-		resourceKind: apiv3.KindHostEndpoint,
+		k8sListType: reflect.TypeOf(apiv3.HostEndpointList{}),
+		kind:        apiv3.KindHostEndpoint,
 	}
 }

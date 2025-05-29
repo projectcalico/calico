@@ -47,18 +47,17 @@ const (
 func NewBlockAffinityClient(c kubernetes.Interface, r rest.Interface) K8sResourceClient {
 	// Create a resource client which manages k8s CRDs.
 	rc := customK8sResourceClient{
-		clientSet:       c,
 		restClient:      r,
 		name:            BlockAffinityCRDName,
 		resource:        BlockAffinityResourceName,
 		description:     "Calico IPAM block affinities",
 		k8sResourceType: reflect.TypeOf(libapiv3.BlockAffinity{}),
-		k8sResourceTypeMeta: metav1.TypeMeta{
+		typeMeta: metav1.TypeMeta{
 			Kind:       libapiv3.KindBlockAffinity,
 			APIVersion: apiv3.GroupVersionCurrent,
 		},
-		k8sListType:  reflect.TypeOf(libapiv3.BlockAffinityList{}),
-		resourceKind: libapiv3.KindBlockAffinity,
+		k8sListType: reflect.TypeOf(libapiv3.BlockAffinityList{}),
+		kind:        libapiv3.KindBlockAffinity,
 	}
 
 	return &blockAffinityClient{rc: rc}

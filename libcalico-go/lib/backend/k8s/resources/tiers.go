@@ -33,18 +33,17 @@ const (
 
 func NewTierClient(c kubernetes.Interface, r rest.Interface) K8sResourceClient {
 	return &customK8sResourceClient{
-		clientSet:       c,
 		restClient:      r,
 		name:            TierCRDName,
 		resource:        TierResourceName,
 		description:     "Calico Tiers",
 		k8sResourceType: reflect.TypeOf(apiv3.Tier{}),
-		k8sResourceTypeMeta: metav1.TypeMeta{
+		typeMeta: metav1.TypeMeta{
 			Kind:       apiv3.KindTier,
 			APIVersion: apiv3.GroupVersionCurrent,
 		},
 		k8sListType:      reflect.TypeOf(apiv3.TierList{}),
-		resourceKind:     apiv3.KindTier,
+		kind:             apiv3.KindTier,
 		versionconverter: tierv1v3Converter{},
 	}
 }
