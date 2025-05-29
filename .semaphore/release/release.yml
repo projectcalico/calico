@@ -26,6 +26,7 @@ blocks:
           - ssh-add /home/semaphore/.keys/git_ssh_rsa
           # Checkout the code and unshallow it.
           - checkout
+          - git remote set-branches origin "*"
           - retry git fetch --quiet --unshallow
           # Log in to container registries needed for release.
           - echo $DOCKER_TOKEN | docker login --username "$DOCKER_USER" --password-stdin
