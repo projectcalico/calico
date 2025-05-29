@@ -177,7 +177,21 @@ func (rw blockReaderWriter) getPendingAffinity(ctx context.Context, affinityCfg 
 		Key:   model.BlockAffinityKey{Host: affinityCfg.Host, AffinityType: string(affinityCfg.AffinityType), CIDR: subnet},
 		Value: &model.BlockAffinity{State: model.StatePending},
 	}
-	aff, err := rw.client.Create(ctx, &obj)
+	aff, err := rw.queryAffinity(ctx, affinityCfg, subnet, "")
+	if err == nil {
+		logCtx.Info("Got existing affinity")
+		if aff.Value.(*model.BlockAffinity).State != model.StateConfirmed {
+			logCtx.Infof("Marking existing affinity with current state %s as pending", aff.Value.(*model.BlockAffinity).State)
+			aff.Value.(*model.BlockAffinity).State = model.StatePending
+			return rw.updateAffinity(ctx, aff)
+		}
+		logCtx.Info("Existing affinity is already confirmed")
+		return aff, nil
+	} else if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok {
+		logCtx.WithError(err).Error("Failed to query affinity")
+		return nil, err
+	}
+	aff, err = rw.client.Create(ctx, &obj)
 	if err != nil {
 		if _, ok := err.(cerrors.ErrorResourceAlreadyExists); !ok {
 			logCtx.WithError(err).Error("Failed to claim affinity")
