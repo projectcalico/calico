@@ -77,6 +77,8 @@ func newNoEncapManagerWithSims(
 		opRecorder: opRecorder,
 		routeMgr: newRouteManager(
 			mainRouteTable,
+			routetable.RouteClassNoEncap,
+			routetable.RouteClassNoEncap,
 			proto.IPPoolType_NO_ENCAP,
 			"",
 			ipVersion,
@@ -87,10 +89,7 @@ func newNoEncapManagerWithSims(
 		),
 	}
 
-	m.routeMgr.routeClassTunnel = routetable.RouteClassNoEncap
-	m.routeMgr.routeClassSameSubnet = routetable.RouteClassNoEncap
-	m.routeMgr.setTunnelRouteFunc(m.route)
-
+	m.routeMgr.setTunnelRouteFunc(m.tunnelRoute)
 	m.routeMgr.triggerRouteUpdate()
 	return m
 }
@@ -118,7 +117,7 @@ func (m *noEncapManager) CompleteDeferredWork() error {
 	return m.routeMgr.CompleteDeferredWork()
 }
 
-func (m *noEncapManager) route(cidr ip.CIDR, r *proto.RouteUpdate) *routetable.Target {
+func (m *noEncapManager) tunnelRoute(cidr ip.CIDR, r *proto.RouteUpdate) *routetable.Target {
 	return nil
 }
 
