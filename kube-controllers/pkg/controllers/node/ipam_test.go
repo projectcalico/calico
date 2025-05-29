@@ -31,6 +31,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 
 	"github.com/projectcalico/calico/kube-controllers/pkg/config"
+	"github.com/projectcalico/calico/kube-controllers/pkg/converter"
 	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
@@ -92,6 +93,17 @@ func assertConsistentState(c *IPAMController) {
 		}
 		ExpectWithOffset(1, c.blocksByNode).To(HaveKey(node), fmt.Sprintf("Node %s not present in blocksByNode", node))
 	}
+}
+
+// createPod is a helper to create Pod objects that ensures we execute the transformer functionality as part of UTs.
+func createPod(ctx context.Context, cs kubernetes.Interface, p *v1.Pod) (*v1.Pod, error) {
+	t := converter.PodTransformer(true)
+	a, err := t(p)
+	if err != nil {
+		return nil, err
+	}
+	transformed := a.(*v1.Pod)
+	return cs.CoreV1().Pods(transformed.Namespace).Create(ctx, transformed, metav1.CreateOptions{})
 }
 
 var _ = Describe("IPAM controller UTs", func() {
@@ -769,7 +781,7 @@ var _ = Describe("IPAM controller UTs", func() {
 		pod.Name = "test-pod"
 		pod.Namespace = "test-namespace"
 		pod.Spec.NodeName = "kname"
-		_, err = cs.CoreV1().Pods(pod.Namespace).Create(context.TODO(), &pod, metav1.CreateOptions{})
+		_, err = createPod(context.TODO(), cs, &pod)
 		Expect(err).NotTo(HaveOccurred())
 		var gotPod *v1.Pod
 		Eventually(pods).WithTimeout(time.Second).Should(Receive(&gotPod))
@@ -939,7 +951,7 @@ var _ = Describe("IPAM controller UTs", func() {
 		pod.Spec.NodeName = "kname"
 		pod.Status.PodIP = "10.0.0.0"
 		pod.Status.PodIPs = []v1.PodIP{{IP: "10.0.0.0"}}
-		_, err = cs.CoreV1().Pods(pod.Namespace).Create(context.TODO(), &pod, metav1.CreateOptions{})
+		_, err = createPod(context.TODO(), cs, &pod)
 		Expect(err).NotTo(HaveOccurred())
 		var gotPod *v1.Pod
 		Eventually(pods).WithTimeout(time.Second).Should(Receive(&gotPod))
@@ -1181,7 +1193,7 @@ var _ = Describe("IPAM controller UTs", func() {
 		pod.Name = "test-pod"
 		pod.Namespace = "test-namespace"
 		pod.Spec.NodeName = "kname"
-		_, err = cs.CoreV1().Pods(pod.Namespace).Create(context.TODO(), &pod, metav1.CreateOptions{})
+		_, err = createPod(context.TODO(), cs, &pod)
 		Expect(err).NotTo(HaveOccurred())
 		var gotPod *v1.Pod
 		Eventually(pods).WithTimeout(time.Second).Should(Receive(&gotPod))
@@ -1291,7 +1303,7 @@ var _ = Describe("IPAM controller UTs", func() {
 		pod.Name = "test-pod"
 		pod.Namespace = "test-namespace"
 		pod.Spec.NodeName = "kname"
-		_, err = cs.CoreV1().Pods(pod.Namespace).Create(context.TODO(), &pod, metav1.CreateOptions{})
+		_, err = createPod(context.TODO(), cs, &pod)
 		Expect(err).NotTo(HaveOccurred())
 		var gotPod *v1.Pod
 		Eventually(pods).WithTimeout(time.Second).Should(Receive(&gotPod))
@@ -1404,7 +1416,7 @@ var _ = Describe("IPAM controller UTs", func() {
 		pod.Name = "test-pod"
 		pod.Namespace = "test-namespace"
 		pod.Spec.NodeName = "kname"
-		_, err = cs.CoreV1().Pods(pod.Namespace).Create(context.TODO(), &pod, metav1.CreateOptions{})
+		_, err = createPod(context.TODO(), cs, &pod)
 		Expect(err).NotTo(HaveOccurred())
 		var gotPod *v1.Pod
 		Eventually(pods).WithTimeout(time.Second).Should(Receive(&gotPod))
@@ -1622,7 +1634,7 @@ var _ = Describe("IPAM controller UTs", func() {
 
 			// Create some pods in the API, across two different nodes.
 			for _, p := range append(podsNode1, podsNode2...) {
-				_, err := cs.CoreV1().Pods(p.Namespace).Create(context.TODO(), &p, metav1.CreateOptions{})
+				_, err := createPod(context.TODO(), cs, &p)
 				Expect(err).NotTo(HaveOccurred())
 				var gotPod *v1.Pod
 				Eventually(pods).WithTimeout(time.Second).Should(Receive(&gotPod))
@@ -1759,7 +1771,7 @@ var _ = Describe("IPAM controller UTs", func() {
 			// It would be great to parallelize this, but it's not possible to create pods in parallel  with
 			// the current fake client.
 			for _, p := range allPods {
-				_, err := cs.CoreV1().Pods(p.Namespace).Create(context.TODO(), &p, metav1.CreateOptions{})
+				_, err := createPod(context.TODO(), cs, &p)
 				Expect(err).NotTo(HaveOccurred())
 				var gotPod *v1.Pod
 				Eventually(pods).WithTimeout(time.Second).Should(Receive(&gotPod))
