@@ -47,8 +47,9 @@ var (
 	defaultBurst = resource.MustParse("4Gi")                            // 512 Mi bytes
 	maxBurst     = resource.MustParse(strconv.Itoa(math.MaxUint32 * 8)) // 34359738360, approx. 4Gi bytes
 	// Peakrate in bits per second
-	minPeakrate = resource.MustParse("1k")
-	maxPeakrate = resource.MustParse("1P")
+	// Peakrate should always be greater than bandwidth, so we make the min and max slightly higher than those
+	minPeakrate = resource.MustParse("1.01k")
+	maxPeakrate = resource.MustParse("1.01P")
 	// Minburst in bytes (not bits because it is typically the MTU)
 	minMinburst = resource.MustParse("1k")
 	maxMinburst = resource.MustParse("100M")
