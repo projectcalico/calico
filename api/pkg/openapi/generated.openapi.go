@@ -3397,6 +3397,13 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							Format:      "",
 						},
 					},
+					"bpfAttachType": {
+						SchemaProps: spec.SchemaProps{
+							Description: "BPFAttachType in BPF mode, controls the attach type for the BPF Programs. [Default: TCX]",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 					"flowLogsFlushInterval": {
 						SchemaProps: spec.SchemaProps{
 							Description: "FlowLogsFlushInterval configures the interval at which Felix exports flow logs.",

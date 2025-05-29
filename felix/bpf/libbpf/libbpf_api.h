@@ -132,9 +132,7 @@ struct bpf_tc_opts bpf_tc_program_attach(struct bpf_object *obj, char *secName, 
 
 struct bpf_link* bpf_tcx_program_attach(struct bpf_object *obj, char *secName, int ifIndex)
 {
-	DECLARE_LIBBPF_OPTS(bpf_tcx_opts, attach, 
-			.relative_id = 1,
-			.flags = BPF_F_AFTER);
+	DECLARE_LIBBPF_OPTS(bpf_tcx_opts, attach); 
 	struct bpf_program *prog = bpf_object__find_program_by_name(obj, secName);
 	if (!prog) {
 		errno = ENOENT;

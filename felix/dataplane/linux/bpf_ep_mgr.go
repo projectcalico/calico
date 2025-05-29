@@ -375,6 +375,7 @@ type bpfEndpointManager struct {
 
 	bpfPolicyDebugEnabled bool
 	bpfRedirectToPeer     string
+	bpfAttachType         string
 
 	routeTableV4     *routetable.ClassView
 	routeTableV6     *routetable.ClassView
@@ -585,6 +586,12 @@ func NewBPFEndpointManager(
 		m.hostNetworkedNATMode = hostNetworkedNATEnabled
 	}
 
+	if config.BPFAttachType == string(apiv3.BPFAttachOptionTCX) {
+		if !tc.IsTcxSupported() {
+			log.Infof("TCX is not supported. Falling back to Tc")
+			m.bpfAttachType = string(apiv3.BPFAttachOptionTC)
+		}
+	}
 	m.v4 = newBPFEndpointManagerDataplane(proto.IPVersion_IPV4, bpfmaps.V4, iptablesFilterTableV4, ipSetIDAllocV4, m)
 
 	if m.ipv6Enabled {
@@ -2936,6 +2943,7 @@ func (m *bpfEndpointManager) calculateTCAttachPoint(ifaceName string) *tc.Attach
 	ap.TunnelMTU = uint16(m.vxlanMTU)
 	ap.Profiling = m.profiling
 	ap.OverlayTunnelID = m.overlayTunnelID
+	ap.AttachType = m.bpfAttachType
 
 	switch m.rpfEnforceOption {
 	case "Strict":
@@ -3570,7 +3578,9 @@ func (m *bpfEndpointManager) ensureBPFDevices() error {
 }
 
 func (m *bpfEndpointManager) ensureQdisc(iface string) (bool, error) {
-	return true, nil
+	if m.bpfAttachType == string(apiv3.BPFAttachOptionTCX) {
+		return true, nil
+	}
 	return tc.EnsureQdisc(iface)
 }
 

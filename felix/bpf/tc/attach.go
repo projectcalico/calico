@@ -24,7 +24,9 @@ import (
 	"strconv"
 	"strings"
 
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
+	"github.com/vishvananda/netlink"
 
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/bpfdefs"
@@ -67,7 +69,9 @@ type AttachPoint struct {
 	RedirectPeer         bool
 	FlowLogsEnabled      bool
 	OverlayTunnelID      uint32
+	AttachType           string
 }
+
 var ErrDeviceNotFound = errors.New("device not found")
 var ErrInterrupted = errors.New("dump interrupted")
 var prefHandleRe = regexp.MustCompile(`pref ([^ ]+) .* handle ([^ ]+)`)
@@ -106,25 +110,41 @@ func (ar AttachResult) Handle() int {
 	return ar.handle
 }
 
-func (ap *AttachPoint) attachTCXProgram() (bpf.AttachResult, error) {
+func (ap *AttachPoint) attachTCXProgram() error {
 	logCxt := log.WithField("attachPoint", ap)
 	binaryToLoad := path.Join(bpfdefs.ObjectDir, fmt.Sprintf("tcx_%s_preamble.o", ap.Hook))
 	obj, err := ap.loadObject(binaryToLoad)
 	if err != nil {
 		logCxt.Warn("Failed to load program")
-		return nil, fmt.Errorf("object %w", err)
+		return fmt.Errorf("object %w", err)
 	}
 	defer obj.Close()
-	_, err = obj.AttachTCX("cali_tc_preamble", ap.Iface)
+	link, err = obj.AttachTCX("cali_tc_preamble", ap.Iface)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	return AttachResult{}, nil
+	defer link.Close()
+	progPinPath := path.Join(bpfdefs.GlobalPinDir, fmt.Sprintf("%s_%s", ap.Iface, ap.Hook))
+	err := link.Pin(progPinPath)
+	if err != nil {
+		return fmt.Errorf("error pinning link %w", err)
+	}
+	return nil
 }
 
 // AttachProgram attaches a BPF program from a file to the TC attach point
 func (ap *AttachPoint) AttachProgram() (bpf.AttachResult, error) {
-	return ap.attachTCXProgram()
+	if ap.AttachType == string(apiv3.BPFAttachOptionTCX) {
+		res, err := ap.attachTCXProgram()
+		if err != nil {
+			return res, fmt.Errorf("error attaching tcx program %s:%s:%w", ap.Iface, ap.Hook, err)
+		}
+		err = RemoveQdisc(ap.Iface)
+		if err != nil {
+			log.Errorf("error removing clsact qdisc from %s:%w", ap.Iface, err)
+		}
+		return res, nil
+	}
 	logCxt := log.WithField("attachPoint", ap)
 
 	// By now the attach type specific generic set of programs is loaded and we
@@ -494,4 +514,32 @@ func (ap *AttachPoint) Configure() *libbpf.TcGlobalData {
 	globalData.IfaceName = string(in)
 
 	return globalData
+}
+
+func IsTcxSupported() bool {
+	name := "testTcx"
+	la := netlink.NewLinkAttrs()
+	la.Name = name
+	la.Flags = net.FlagUp
+	var veth netlink.Link = &netlink.Veth{
+		LinkAttrs: la,
+		PeerName:  name + "b",
+	}
+	err := netlink.LinkAdd(veth)
+	if err != nil {
+		return false
+	}
+
+	defer netlink.LinkDel(veth)
+	binaryToLoad := path.Join(bpfdefs.ObjectDir, "tcx_test.o")
+	obj, err := bpf.LoadObject(binaryToLoad, &libbpf.TcGlobalData{})
+	if err != nil {
+		return false
+	}
+	defer obj.Close()
+	_, err = obj.AttachTCX("cali_tcx_test", name)
+	if err != nil {
+		return false
+	}
+	return true
 }

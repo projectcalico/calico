@@ -63,6 +63,7 @@ OBJS:=$(shell ./list-objs)
 OBJS+=bin/tc_preamble.o
 OBJS+=bin/tcx_ingress_preamble.o
 OBJS+=bin/tcx_egress_preamble.o
+OBJS+=bin/tcx_test.o
 OBJS+=bin/xdp_preamble.o
 OBJS+=bin/policy_default.o
 C_FILES:=tc_preamble.c tc.c connect_balancer.c connect_balancer_v46.c connect_balancer_v6.c xdp_preamble.c xdp.c policy_default.c
@@ -108,6 +109,9 @@ tcx_ingress_preamble.ll: tc_preamble.c tc_preamble.d
 tcx_egress_preamble.ll: tc_preamble.c tc_preamble.d
 	$(CC) $(CFLAGS) -DCALI_TCX_EGRESS -c $< -o $@
 
+tcx_test.ll: tcx_test.c tcx_test.d
+	$(CC) $(CFLAGS) -c $< -o $@
+
 xdp_preamble.ll: xdp_preamble.c xdp_preamble.d
 	$(CC) $(CFLAGS) -DCALI_COMPILE_FLAGS=64 -c $< -o $@
 
@@ -149,6 +153,8 @@ bin/tc_preamble.o: tc_preamble.ll | bin
 bin/tcx_ingress_preamble.o: tcx_ingress_preamble.ll | bin
 	$(LINK)
 bin/tcx_egress_preamble.o: tcx_egress_preamble.ll | bin
+	$(LINK)
+bin/tcx_test.o: tcx_test.ll | bin
 	$(LINK)
 bin/xdp_preamble.o: xdp_preamble.ll | bin
 	$(LINK)
