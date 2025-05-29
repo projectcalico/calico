@@ -47,7 +47,10 @@ func NewIPAMHandleClient(r rest.Interface, v3 bool) K8sResourceClient {
 	}
 
 	// TODO: CASEY
-	return &ipamHandleClient{rc: rc}
+	return &ipamHandleClient{
+		rc: rc,
+		v3: v3,
+	}
 }
 
 // affinityHandleClient implements the api.Client interface for IPAMHandle objects. It
@@ -57,6 +60,7 @@ func NewIPAMHandleClient(r rest.Interface, v3 bool) K8sResourceClient {
 // kubernetes CRDs.
 type ipamHandleClient struct {
 	rc customResourceClient
+	v3 bool
 }
 
 func (c *ipamHandleClient) toV1(kvpv3 *model.KVPair) *model.KVPair {
@@ -93,6 +97,12 @@ func (c *ipamHandleClient) toV3(kvpv1 *model.KVPair) *model.KVPair {
 		uid = *kvpv1.UID
 	}
 
+	apiVersion := "crd.projectcalico.org/v1"
+	if c.v3 {
+		// If this is a v3 resource, then we need to use the v3 API version.
+		apiVersion = "projectcalico.org/v3"
+	}
+
 	return &model.KVPair{
 		Key: model.ResourceKey{
 			Name: name,
@@ -101,7 +111,7 @@ func (c *ipamHandleClient) toV3(kvpv1 *model.KVPair) *model.KVPair {
 		Value: &libapiv3.IPAMHandle{
 			TypeMeta: metav1.TypeMeta{
 				Kind:       libapiv3.KindIPAMHandle,
-				APIVersion: "crd.projectcalico.org/v1",
+				APIVersion: apiVersion,
 			},
 			ObjectMeta: metav1.ObjectMeta{
 				Name:            name,

@@ -29,20 +29,27 @@ import (
 )
 
 const (
-	IPAMConfigResourceName = "IPAMConfigs"
+	IPAMConfigResourceName   = "IPAMConfigs"
+	IPAMConfigResourceNameV3 = "IPAMConfigurations"
 )
 
 func NewIPAMConfigClient(r rest.Interface, v3 bool) K8sResourceClient {
+	resource := IPAMConfigResourceName
+	if v3 {
+		resource = IPAMConfigResourceNameV3
+	}
+
 	// TODO: CASEY
 	return &ipamConfigClient{
 		rc: customResourceClient{
 			restClient:      r,
-			resource:        IPAMConfigResourceName,
+			resource:        resource,
 			k8sResourceType: reflect.TypeOf(libapiv3.IPAMConfiguration{}),
 			k8sListType:     reflect.TypeOf(libapiv3.IPAMConfigurationList{}),
 			kind:            libapiv3.KindIPAMConfig,
 			noTransform:     v3,
 		},
+		v3: v3,
 	}
 }
 
@@ -53,6 +60,7 @@ func NewIPAMConfigClient(r rest.Interface, v3 bool) K8sResourceClient {
 // kubernetes CRDs.
 type ipamConfigClient struct {
 	rc customResourceClient
+	v3 bool
 }
 
 // toV1 converts the given v3 CRD KVPair into a v1 model representation
@@ -81,6 +89,12 @@ func (c ipamConfigClient) toV3(kvpv1 *model.KVPair) *model.KVPair {
 	m.SetName(model.IPAMConfigGlobalName)
 	m.SetResourceVersion(kvpv1.Revision)
 
+	apiVersion := "crd.projectcalico.org/v1"
+	if c.v3 {
+		// If this is a v3 resource, then we need to use the v3 API version.
+		apiVersion = "projectcalico.org/v3"
+	}
+
 	v1obj := kvpv1.Value.(*model.IPAMConfig)
 	return &model.KVPair{
 		Key: model.ResourceKey{
@@ -90,7 +104,7 @@ func (c ipamConfigClient) toV3(kvpv1 *model.KVPair) *model.KVPair {
 		Value: &libapiv3.IPAMConfiguration{
 			TypeMeta: metav1.TypeMeta{
 				Kind:       libapiv3.KindIPAMConfig,
-				APIVersion: "crd.projectcalico.org/v1",
+				APIVersion: apiVersion,
 			},
 			ObjectMeta: m,
 			Spec: libapiv3.IPAMConfigurationSpec{

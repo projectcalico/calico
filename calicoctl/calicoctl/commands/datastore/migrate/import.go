@@ -38,7 +38,7 @@ import (
 	lcconfig "github.com/projectcalico/calico/libcalico-go/config"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
-	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/crdv1"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	calicoErrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
@@ -363,7 +363,7 @@ func updateV3Resources(cfg *apiconfig.CalicoAPIConfig, data []byte) error {
 func importCRDs(cfg *apiconfig.CalicoAPIConfig) error {
 	// Start a kube client
 	// Create the correct config for the clientset
-	config, _, err := crdv1.CreateKubernetesClientset(&cfg.Spec)
+	config, _, err := k8s.CreateKubernetesClientset(&cfg.Spec)
 	if err != nil {
 		return err
 	}

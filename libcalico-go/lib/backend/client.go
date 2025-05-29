@@ -22,7 +22,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/etcdv3"
-	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/crdv3"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s"
 )
 
 // NewClient creates a new backend datastore client.
@@ -32,8 +32,7 @@ func NewClient(config apiconfig.CalicoAPIConfig) (c bapi.Client, err error) {
 	case apiconfig.EtcdV3:
 		c, err = etcdv3.NewEtcdV3Client(&config.Spec.EtcdConfig)
 	case apiconfig.Kubernetes:
-		// c, err = crdv1.NewKubeClient(&config.Spec)
-		c, err = crdv3.NewClient(&config.Spec)
+		c, err = k8s.NewKubeClient(&config.Spec)
 	default:
 		err = fmt.Errorf("unknown datastore type: %v",
 			config.Spec.DatastoreType)

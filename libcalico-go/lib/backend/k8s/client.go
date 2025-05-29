@@ -49,9 +49,9 @@ var (
 	resourceListType = reflect.TypeOf(model.ResourceListOptions{})
 )
 
-type kubeClient struct {
+type KubeClient struct {
 	// Main Kubernetes clients.
-	clientSet *kubernetes.Clientset
+	ClientSet *kubernetes.Clientset
 
 	// Contains methods for converting Kubernetes resources to Calico resources.
 	converter conversion.Converter
@@ -85,8 +85,8 @@ func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 		return nil, fmt.Errorf("failed to build AdminNetworkPolicy client: %v", err)
 	}
 
-	c := &kubeClient{
-		clientSet:             cs,
+	c := &KubeClient{
+		ClientSet:             cs,
 		clientsByResourceKind: make(map[string]resources.K8sResourceClient),
 		clientsByKeyType:      make(map[reflect.Type]resources.K8sResourceClient),
 		clientsByListType:     make(map[reflect.Type]resources.K8sResourceClient),
@@ -403,7 +403,7 @@ func CreateKubernetesClientset(ca *apiconfig.CalicoAPIConfigSpec) (*rest.Config,
 // registerResourceClient registers a specific resource client with the associated
 // key and list types (and for v3 resources with the resource kind - since these share
 // a common key and list type).
-func (c *kubeClient) registerResourceClient(keyType, listType reflect.Type, resourceKind string, client resources.K8sResourceClient) {
+func (c *KubeClient) registerResourceClient(keyType, listType reflect.Type, resourceKind string, client resources.K8sResourceClient) {
 	if keyType == resourceKeyType {
 		c.clientsByResourceKind[resourceKind] = client
 	} else {
@@ -413,12 +413,12 @@ func (c *kubeClient) registerResourceClient(keyType, listType reflect.Type, reso
 }
 
 // getResourceClientFromKey returns the appropriate resource client for the v3 resource kind.
-func (c *kubeClient) GetResourceClientFromResourceKind(kind string) resources.K8sResourceClient {
+func (c *KubeClient) GetResourceClientFromResourceKind(kind string) resources.K8sResourceClient {
 	return c.clientsByResourceKind[kind]
 }
 
 // getResourceClientFromKey returns the appropriate resource client for the key.
-func (c *kubeClient) getResourceClientFromKey(key model.Key) resources.K8sResourceClient {
+func (c *KubeClient) getResourceClientFromKey(key model.Key) resources.K8sResourceClient {
 	kt := reflect.TypeOf(key)
 	if kt == resourceKeyType {
 		return c.clientsByResourceKind[key.(model.ResourceKey).Kind]
@@ -428,7 +428,7 @@ func (c *kubeClient) getResourceClientFromKey(key model.Key) resources.K8sResour
 }
 
 // getResourceClientFromList returns the appropriate resource client for the list.
-func (c *kubeClient) getResourceClientFromList(list model.ListInterface) resources.K8sResourceClient {
+func (c *KubeClient) getResourceClientFromList(list model.ListInterface) resources.K8sResourceClient {
 	lt := reflect.TypeOf(list)
 	if lt == resourceListType {
 		return c.clientsByResourceKind[list.(model.ResourceListOptions).Kind]
@@ -437,12 +437,12 @@ func (c *kubeClient) getResourceClientFromList(list model.ListInterface) resourc
 	}
 }
 
-func (c *kubeClient) EnsureInitialized() error {
+func (c *KubeClient) EnsureInitialized() error {
 	return nil
 }
 
 // Remove Calico-creatable data from the datastore.  This is purely used for the test framework.
-func (c *kubeClient) Clean() error {
+func (c *KubeClient) Clean() error {
 	log.Warning("Cleaning KDD of all Calico-creatable data")
 	kinds := []string{
 		apiv3.KindBGPConfiguration,
@@ -519,7 +519,7 @@ func (c *kubeClient) Clean() error {
 }
 
 // Close the underlying client
-func (c *kubeClient) Close() error {
+func (c *KubeClient) Close() error {
 	log.Debugf("Closing client - NOOP")
 	return nil
 }
@@ -552,7 +552,7 @@ func restClient(cfg rest.Config, v3 bool) (*rest.RESTClient, error) {
 }
 
 // Create an entry in the datastore.  This errors if the entry already exists.
-func (c *kubeClient) Create(ctx context.Context, d *model.KVPair) (*model.KVPair, error) {
+func (c *KubeClient) Create(ctx context.Context, d *model.KVPair) (*model.KVPair, error) {
 	log.Debugf("Performing 'Create' for %+v", d)
 	client := c.getResourceClientFromKey(d.Key)
 	if client == nil {
@@ -567,7 +567,7 @@ func (c *kubeClient) Create(ctx context.Context, d *model.KVPair) (*model.KVPair
 
 // Update an existing entry in the datastore.  This errors if the entry does
 // not exist.
-func (c *kubeClient) Update(ctx context.Context, d *model.KVPair) (*model.KVPair, error) {
+func (c *KubeClient) Update(ctx context.Context, d *model.KVPair) (*model.KVPair, error) {
 	log.Debugf("Performing 'Update' for %+v", d)
 	client := c.getResourceClientFromKey(d.Key)
 	if client == nil {
@@ -583,7 +583,7 @@ func (c *kubeClient) Update(ctx context.Context, d *model.KVPair) (*model.KVPair
 // Set an existing entry in the datastore.  This ignores whether an entry already
 // exists.  This is not exposed in the main client - but we keep here for the backend
 // API.
-func (c *kubeClient) Apply(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
+func (c *KubeClient) Apply(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
 	logContext := log.WithFields(log.Fields{
 		"Key":   kvp.Key,
 		"Value": kvp.Value,
@@ -614,7 +614,7 @@ func (c *kubeClient) Apply(ctx context.Context, kvp *model.KVPair) (*model.KVPai
 }
 
 // Delete an entry in the datastore.
-func (c *kubeClient) DeleteKVP(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
+func (c *KubeClient) DeleteKVP(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
 	log.Debugf("Performing 'DeleteKVP' for %+v", kvp.Key)
 	client := c.getResourceClientFromKey(kvp.Key)
 	if client == nil {
@@ -628,7 +628,7 @@ func (c *kubeClient) DeleteKVP(ctx context.Context, kvp *model.KVPair) (*model.K
 }
 
 // Delete an entry in the datastore by key.
-func (c *kubeClient) Delete(ctx context.Context, k model.Key, revision string) (*model.KVPair, error) {
+func (c *KubeClient) Delete(ctx context.Context, k model.Key, revision string) (*model.KVPair, error) {
 	log.Debugf("Performing 'Delete' for %+v", k)
 	client := c.getResourceClientFromKey(k)
 	if client == nil {
@@ -642,7 +642,7 @@ func (c *kubeClient) Delete(ctx context.Context, k model.Key, revision string) (
 }
 
 // Get an entry from the datastore.  This errors if the entry does not exist.
-func (c *kubeClient) Get(ctx context.Context, k model.Key, revision string) (*model.KVPair, error) {
+func (c *KubeClient) Get(ctx context.Context, k model.Key, revision string) (*model.KVPair, error) {
 	log.Debugf("Performing 'Get' for %+v %v", k, revision)
 	client := c.getResourceClientFromKey(k)
 	if client == nil {
@@ -657,7 +657,7 @@ func (c *kubeClient) Get(ctx context.Context, k model.Key, revision string) (*mo
 
 // List entries in the datastore.  This may return an empty list if there are
 // no entries matching the request in the ListInterface.
-func (c *kubeClient) List(ctx context.Context, l model.ListInterface, revision string) (*model.KVPairList, error) {
+func (c *KubeClient) List(ctx context.Context, l model.ListInterface, revision string) (*model.KVPairList, error) {
 	log.Debugf("Performing 'List' for %+v %v", l, reflect.TypeOf(l))
 	client := c.getResourceClientFromList(l)
 	if client == nil {
@@ -671,7 +671,7 @@ func (c *kubeClient) List(ctx context.Context, l model.ListInterface, revision s
 }
 
 // Watch starts a watch on a particular resource type.
-func (c *kubeClient) Watch(ctx context.Context, l model.ListInterface, options api.WatchOptions) (api.WatchInterface, error) {
+func (c *KubeClient) Watch(ctx context.Context, l model.ListInterface, options api.WatchOptions) (api.WatchInterface, error) {
 	log.Debugf("Performing 'Watch' for %+v %v", l, reflect.TypeOf(l))
 	client := c.getResourceClientFromList(l)
 	if client == nil {

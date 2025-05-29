@@ -49,8 +49,10 @@ func NewIPAMBlockClient(r rest.Interface, v3 bool) K8sResourceClient {
 		noTransform:     v3,
 	}
 
-	// TODO: CASEY
-	return &ipamBlockClient{rc: rc}
+	return &ipamBlockClient{
+		rc: rc,
+		v3: v3,
+	}
 }
 
 // ipamBlockClient implements the api.Client interface for IPAMBlocks. It handles the translation between
@@ -59,10 +61,11 @@ func NewIPAMBlockClient(r rest.Interface, v3 bool) K8sResourceClient {
 // the covers to perform CRUD operations on kubernetes CRDs.
 type ipamBlockClient struct {
 	rc customResourceClient
+	v3 bool
 }
 
 func (c *ipamBlockClient) Create(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
-	nkvp := IPAMBlockV1toV3(kvp)
+	nkvp := c.IPAMBlockV1toV3(kvp)
 	b, err := c.rc.Create(ctx, nkvp)
 	if err != nil {
 		return nil, err
@@ -75,7 +78,7 @@ func (c *ipamBlockClient) Create(ctx context.Context, kvp *model.KVPair) (*model
 }
 
 func (c *ipamBlockClient) Update(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
-	nkvp := IPAMBlockV1toV3(kvp)
+	nkvp := c.IPAMBlockV1toV3(kvp)
 	b, err := c.rc.Update(ctx, nkvp)
 	if err != nil {
 		return nil, err
@@ -225,7 +228,7 @@ func IPAMBlockV3toV1(kvpv3 *model.KVPair) (*model.KVPair, error) {
 	}, nil
 }
 
-func IPAMBlockV1toV3(kvpv1 *model.KVPair) *model.KVPair {
+func (c *ipamBlockClient) IPAMBlockV1toV3(kvpv1 *model.KVPair) *model.KVPair {
 	name, cidr := parseKey(kvpv1.Key)
 
 	ab := kvpv1.Value.(*model.AllocationBlock)
@@ -239,6 +242,12 @@ func IPAMBlockV1toV3(kvpv1 *model.KVPair) *model.KVPair {
 		})
 	}
 
+	apiVersion := "crd.projectcalico.org/v1"
+	if c.v3 {
+		// If this is a v3 resource, then we need to use the v3 API version.
+		apiVersion = "projectcalico.org/v3"
+	}
+
 	return &model.KVPair{
 		Key: model.ResourceKey{
 			Name: name,
@@ -247,7 +256,7 @@ func IPAMBlockV1toV3(kvpv1 *model.KVPair) *model.KVPair {
 		Value: &libapiv3.IPAMBlock{
 			TypeMeta: metav1.TypeMeta{
 				Kind:       libapiv3.KindIPAMBlock,
-				APIVersion: "crd.projectcalico.org/v1",
+				APIVersion: apiVersion,
 			},
 			ObjectMeta: metav1.ObjectMeta{
 				Name:            name,
