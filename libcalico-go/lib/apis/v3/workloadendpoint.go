@@ -113,12 +113,22 @@ type WorkloadEndpointList struct {
 }
 
 type QoSControls struct {
-	IngressBandwidth      int64 `json:"ingressBandwidth,omitempty"`
-	EgressBandwidth       int64 `json:"egressBandwidth,omitempty"`
-	IngressBurst          int64 `json:"ingressBurst,omitempty"`
-	EgressBurst           int64 `json:"egressBurst,omitempty"`
-	IngressPacketRate     int64 `json:"ingressPacketRate,omitempty"`
-	EgressPacketRate      int64 `json:"egressPacketRate,omitempty"`
+	// Bandwidth in bits per second
+	IngressBandwidth int64 `json:"ingressBandwidth,omitempty"`
+	EgressBandwidth  int64 `json:"egressBandwidth,omitempty"`
+	// Burst size in bits
+	IngressBurst int64 `json:"ingressBurst,omitempty"`
+	EgressBurst  int64 `json:"egressBurst,omitempty"`
+	// Peakrate in bits per second
+	IngressPeakrate int64 `json:"ingressPeakrate,omitempty"`
+	EgressPeakrate  int64 `json:"egressPeakrate,omitempty"`
+	// Minburst in bytes (not bits because it is typically the MTU)
+	IngressMinburst int64 `json:"ingressMinburst,omitempty"`
+	EgressMinburst  int64 `json:"egressMinburst,omitempty"`
+	// Packet rate in packets per second
+	IngressPacketRate int64 `json:"ingressPacketRate,omitempty"`
+	EgressPacketRate  int64 `json:"egressPacketRate,omitempty"`
+	// Maximum number of connections (absolute number of connections, no unit)
 	IngressMaxConnections int64 `json:"ingressMaxConnections,omitempty"`
 	EgressMaxConnections  int64 `json:"egressMaxConnections,omitempty"`
 }
