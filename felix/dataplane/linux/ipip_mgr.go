@@ -127,6 +127,8 @@ func newIPIPManagerWithSims(
 		opRecorder: opRecorder,
 		routeMgr: newRouteManager(
 			mainRouteTable,
+			routetable.RouteClassIPIPTunnel,
+			routetable.RouteClassIPIPSameSubnet,
 			proto.IPPoolType_IPIP,
 			tunnelDevice,
 			ipVersion,
@@ -137,10 +139,7 @@ func newIPIPManagerWithSims(
 		),
 	}
 
-	m.routeMgr.routeClassTunnel = routetable.RouteClassIPIPTunnel
-	m.routeMgr.routeClassSameSubnet = routetable.RouteClassIPIPSameSubnet
 	m.routeMgr.setTunnelRouteFunc(m.route)
-
 	m.maybeUpdateRoutes()
 	return m
 }

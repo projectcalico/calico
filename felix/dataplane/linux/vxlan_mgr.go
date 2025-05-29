@@ -145,6 +145,8 @@ func newVXLANManagerWithShims(
 		opRecorder: opRecorder,
 		routeMgr: newRouteManager(
 			mainRouteTable,
+			routetable.RouteClassVXLANTunnel,
+			routetable.RouteClassVXLANSameSubnet,
 			proto.IPPoolType_VXLAN,
 			deviceName,
 			ipVersion,
@@ -155,15 +157,12 @@ func newVXLANManagerWithShims(
 		),
 	}
 
-	m.routeMgr.routeClassTunnel = routetable.RouteClassVXLANTunnel
-	m.routeMgr.routeClassSameSubnet = routetable.RouteClassVXLANSameSubnet
-	m.routeMgr.setTunnelRouteFunc(m.route)
-	m.routeMgr.triggerRouteUpdate()
-
 	for _, o := range opts {
 		o(m)
 	}
 
+	m.routeMgr.setTunnelRouteFunc(m.route)
+	m.routeMgr.triggerRouteUpdate()
 	return m
 }
 
@@ -278,7 +277,7 @@ func (m *vxlanManager) route(cidr ip.CIDR, r *proto.RouteUpdate) *routetable.Tar
 	// Extract the gateway addr for this route based on its remote VTEP.
 	vtep, ok := m.vtepsByNode[r.DstNodeName]
 	if !ok {
-		// When the VTEP arrives, it'll set routesDirty=true so this loop will execute again.
+		// When the VTEP arrives, it'll mark routes as dirsty so this loop will execute again.
 		return nil
 	}
 	vtepAddr := vtep.Ipv4Addr
