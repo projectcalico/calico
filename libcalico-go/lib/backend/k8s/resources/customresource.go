@@ -22,6 +22,7 @@ import (
 	"strings"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	v1scheme "github.com/projectcalico/calico/libcalico-go/lib/apis/crd.projectcalico.org/v1/scheme"
 	log "github.com/sirupsen/logrus"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -38,28 +39,19 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
 )
 
-// customK8sResourceClient implements the K8sResourceClient interface and provides a generic
+// customResourceClient implements the K8sResourceClient interface and provides a generic
 // mechanism for a 1:1 mapping between a Calico Resource and an equivalent Kubernetes
 // custom resource type.
-type customK8sResourceClient struct {
+type customResourceClient struct {
 	restClient rest.Interface
-
-	// Name of the CRD. Not used.
-	name string
 
 	// resource is the kind of the CRD managed by this client, used as part of the
 	// endpoint generated for Kubernetes API calls.
 	resource string
 
-	// CRD description. Not used.
-	description string
-
 	// Types used to generate the returned structs.
 	k8sResourceType reflect.Type
 	k8sListType     reflect.Type
-
-	// typeMeta is the TypeMeta to set for all resources returned by this client. It is used to set the GroupVersion.
-	typeMeta metav1.TypeMeta
 
 	// Whether or not the CRD managed by this is namespaced. Used for generating
 	// Kubernetes API call endpoints.
@@ -76,7 +68,8 @@ type customK8sResourceClient struct {
 	validator Validator
 
 	// noTransform indicates that the KVPair should be written as-is to the API server. This
-	// is used when we are writing directly to projectcalico.org/v3 CRDs.
+	// is used when we are writing directly to projectcalico.org/v3 CRDs. The default value of "false"
+	// indicates that the KVPair should be transformed from v3 to crd.projectcalico.org/v1 before writing to the API server.
 	noTransform bool
 }
 
@@ -92,7 +85,7 @@ type Validator interface {
 }
 
 // Create creates a new Custom K8s Resource instance in the k8s API from the supplied KVPair.
-func (c *customK8sResourceClient) Create(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
+func (c *customResourceClient) Create(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
 	logContext := log.WithFields(log.Fields{
 		"Key":      kvp.Key,
 		"Value":    kvp.Value,
@@ -141,7 +134,7 @@ func (c *customK8sResourceClient) Create(ctx context.Context, kvp *model.KVPair)
 }
 
 // Update updates an existing Custom K8s Resource instance in the k8s API from the supplied KVPair.
-func (c *customK8sResourceClient) Update(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
+func (c *customResourceClient) Update(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
 	logContext := log.WithFields(log.Fields{
 		"Key":      kvp.Key,
 		"Value":    kvp.Value,
@@ -198,7 +191,7 @@ func (c *customK8sResourceClient) Update(ctx context.Context, kvp *model.KVPair)
 }
 
 // UpdateStatus updates status section of an existing Custom K8s Resource instance in the k8s API from the supplied KVPair.
-func (c *customK8sResourceClient) UpdateStatus(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
+func (c *customResourceClient) UpdateStatus(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
 	logContext := log.WithFields(log.Fields{
 		"Key":             kvp.Key,
 		"Value":           kvp.Value,
@@ -248,12 +241,12 @@ func (c *customK8sResourceClient) UpdateStatus(ctx context.Context, kvp *model.K
 	return kvp, nil
 }
 
-func (c *customK8sResourceClient) DeleteKVP(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
+func (c *customResourceClient) DeleteKVP(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
 	return c.Delete(ctx, kvp.Key, kvp.Revision, kvp.UID)
 }
 
 // Delete deletes an existing Custom K8s Resource instance in the k8s API using the supplied KVPair.
-func (c *customK8sResourceClient) Delete(ctx context.Context, k model.Key, revision string, uid *types.UID) (*model.KVPair, error) {
+func (c *customResourceClient) Delete(ctx context.Context, k model.Key, revision string, uid *types.UID) (*model.KVPair, error) {
 	logContext := log.WithFields(log.Fields{
 		"Key":      k,
 		"Resource": c.resource,
@@ -309,7 +302,7 @@ func (c *customK8sResourceClient) Delete(ctx context.Context, k model.Key, revis
 }
 
 // Get gets an existing Custom K8s Resource instance in the k8s API using the supplied Key.
-func (c *customK8sResourceClient) Get(ctx context.Context, key model.Key, revision string) (*model.KVPair, error) {
+func (c *customResourceClient) Get(ctx context.Context, key model.Key, revision string) (*model.KVPair, error) {
 	logContext := log.WithFields(log.Fields{
 		"Key":      key,
 		"Resource": c.resource,
@@ -344,7 +337,7 @@ func (c *customK8sResourceClient) Get(ctx context.Context, key model.Key, revisi
 
 // List lists configured Custom K8s Resource instances in the k8s API matching the
 // supplied ListInterface. It will use list paging if necessary to reduce the load on the Kubernetes API server.
-func (c *customK8sResourceClient) List(ctx context.Context, list model.ListInterface, revision string) (*model.KVPairList, error) {
+func (c *customResourceClient) List(ctx context.Context, list model.ListInterface, revision string) (*model.KVPairList, error) {
 	logContext := log.WithFields(log.Fields{
 		"ListInterface": list,
 		"Resource":      c.resource,
@@ -422,7 +415,7 @@ func (c *customK8sResourceClient) List(ctx context.Context, list model.ListInter
 	return pagedList(ctx, logContext, revision, list, convertFunc, listFunc)
 }
 
-func (c *customK8sResourceClient) Watch(ctx context.Context, list model.ListInterface, options api.WatchOptions) (api.WatchInterface, error) {
+func (c *customResourceClient) Watch(ctx context.Context, list model.ListInterface, options api.WatchOptions) (api.WatchInterface, error) {
 	rlo, ok := list.(model.ResourceListOptions)
 	if !ok {
 		return nil, fmt.Errorf("ListInterface is not a ResourceListOptions: %s", list)
@@ -454,11 +447,11 @@ func (c *customK8sResourceClient) Watch(ctx context.Context, list model.ListInte
 
 // EnsureInitialized is a no-op since the CRD should be
 // initialized in advance.
-func (c *customK8sResourceClient) EnsureInitialized() error {
+func (c *customResourceClient) EnsureInitialized() error {
 	return nil
 }
 
-func (c *customK8sResourceClient) listInterfaceToKey(l model.ListInterface) model.Key {
+func (c *customResourceClient) listInterfaceToKey(l model.ListInterface) model.Key {
 	pl := l.(model.ResourceListOptions)
 	key := model.ResourceKey{Name: pl.Name, Kind: pl.Kind}
 
@@ -472,18 +465,35 @@ func (c *customK8sResourceClient) listInterfaceToKey(l model.ListInterface) mode
 	return nil
 }
 
-func (c *customK8sResourceClient) keyToName(k model.Key) (string, error) {
+func (c *customResourceClient) keyToName(k model.Key) (string, error) {
 	return k.(model.ResourceKey).Name, nil
 }
 
-func (c *customK8sResourceClient) nameToKey(name string) (model.Key, error) {
+func (c *customResourceClient) nameToKey(name string) (model.Key, error) {
 	return model.ResourceKey{
 		Name: name,
 		Kind: c.kind,
 	}, nil
 }
 
-func (c *customK8sResourceClient) convertResourceToKVPair(r Resource) (*model.KVPair, error) {
+// TODO: Don't instantiate a new TypeMeta for every call.
+func (c *customResourceClient) typeMeta() *metav1.TypeMeta {
+	return &metav1.TypeMeta{
+		Kind:       c.kind,
+		APIVersion: c.apiVersion(),
+	}
+}
+
+func (c *customResourceClient) apiVersion() string {
+	if c.noTransform {
+		// If no transform is required, then we are writing directly to projectcalico.org/v3 CRDs.
+		return apiv3.GroupVersionCurrent
+	}
+	// If transform is required, then we are writing to crd.projectcalico.org/v1 CRDs.
+	return v1scheme.GroupVersion
+}
+
+func (c *customResourceClient) convertResourceToKVPair(r Resource) (*model.KVPair, error) {
 	var err error
 
 	// If the resource has a VersionConverter defined then pass the resource through
@@ -495,7 +505,7 @@ func (c *customK8sResourceClient) convertResourceToKVPair(r Resource) (*model.KV
 		}
 	}
 
-	gvk := c.typeMeta.GetObjectKind().GroupVersionKind()
+	gvk := c.typeMeta().GetObjectKind().GroupVersionKind()
 	gvk.Kind = c.kind
 	r.GetObjectKind().SetGroupVersionKind(gvk)
 	kvp := &model.KVPair{
@@ -518,7 +528,7 @@ func (c *customK8sResourceClient) convertResourceToKVPair(r Resource) (*model.KV
 	return kvp, nil
 }
 
-func (c *customK8sResourceClient) convertKVPairToResource(kvp *model.KVPair) (Resource, error) {
+func (c *customResourceClient) convertKVPairToResource(kvp *model.KVPair) (Resource, error) {
 	resource := kvp.Value.(Resource)
 	resource.GetObjectMeta().SetResourceVersion(kvp.Revision)
 
@@ -537,7 +547,7 @@ func (c *customK8sResourceClient) convertKVPairToResource(kvp *model.KVPair) (Re
 	return resOut, nil
 }
 
-func (c *customK8sResourceClient) defaultPolicyName(name string) string {
+func (c *customResourceClient) defaultPolicyName(name string) string {
 	if c.noTransform {
 		// Configured to write directly to projectcalico.org/v3 CRDs, so no transformation needed.
 		return name

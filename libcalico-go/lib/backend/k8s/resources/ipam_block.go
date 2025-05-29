@@ -19,12 +19,10 @@ import (
 	"fmt"
 	"reflect"
 
-	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
 
@@ -38,25 +36,20 @@ import (
 
 const (
 	IPAMBlockResourceName = "IPAMBlocks"
-	IPAMBlockCRDName      = "ipamblocks.crd.projectcalico.org"
 )
 
-func NewIPAMBlockClient(c kubernetes.Interface, r rest.Interface) K8sResourceClient {
+func NewIPAMBlockClient(r rest.Interface, v3 bool) K8sResourceClient {
 	// Create a resource client which manages k8s CRDs.
-	rc := customK8sResourceClient{
+	rc := customResourceClient{
 		restClient:      r,
-		name:            IPAMBlockCRDName,
 		resource:        IPAMBlockResourceName,
-		description:     "Calico IPAM blocks",
 		k8sResourceType: reflect.TypeOf(libapiv3.IPAMBlock{}),
-		typeMeta: metav1.TypeMeta{
-			Kind:       libapiv3.KindIPAMBlock,
-			APIVersion: apiv3.GroupVersionCurrent,
-		},
-		k8sListType: reflect.TypeOf(libapiv3.IPAMBlockList{}),
-		kind:        libapiv3.KindIPAMBlock,
+		k8sListType:     reflect.TypeOf(libapiv3.IPAMBlockList{}),
+		kind:            libapiv3.KindIPAMBlock,
+		noTransform:     v3,
 	}
 
+	// TODO: CASEY
 	return &ipamBlockClient{rc: rc}
 }
 
@@ -65,7 +58,7 @@ func NewIPAMBlockClient(c kubernetes.Interface, r rest.Interface) K8sResourceCli
 // to actually store the data in the Kubernetes API. It uses a customK8sResourceClient under
 // the covers to perform CRUD operations on kubernetes CRDs.
 type ipamBlockClient struct {
-	rc customK8sResourceClient
+	rc customResourceClient
 }
 
 func (c *ipamBlockClient) Create(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {

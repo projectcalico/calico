@@ -20,11 +20,9 @@ import (
 	"reflect"
 	"strings"
 
-	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 
 	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
@@ -35,25 +33,20 @@ import (
 
 const (
 	IPAMHandleResourceName = "IPAMHandles"
-	IPAMHandleCRDName      = "ipamhandles.crd.projectcalico.org"
 )
 
-func NewIPAMHandleClient(c kubernetes.Interface, r rest.Interface) K8sResourceClient {
+func NewIPAMHandleClient(r rest.Interface, v3 bool) K8sResourceClient {
 	// Create a resource client which manages k8s CRDs.
-	rc := customK8sResourceClient{
+	rc := customResourceClient{
 		restClient:      r,
-		name:            IPAMHandleCRDName,
 		resource:        IPAMHandleResourceName,
-		description:     "Calico IPAM handles",
 		k8sResourceType: reflect.TypeOf(libapiv3.IPAMHandle{}),
-		typeMeta: metav1.TypeMeta{
-			Kind:       libapiv3.KindIPAMHandle,
-			APIVersion: apiv3.GroupVersionCurrent,
-		},
-		k8sListType: reflect.TypeOf(libapiv3.IPAMHandleList{}),
-		kind:        libapiv3.KindIPAMHandle,
+		k8sListType:     reflect.TypeOf(libapiv3.IPAMHandleList{}),
+		kind:            libapiv3.KindIPAMHandle,
+		noTransform:     v3,
 	}
 
+	// TODO: CASEY
 	return &ipamHandleClient{rc: rc}
 }
 
@@ -63,7 +56,7 @@ func NewIPAMHandleClient(c kubernetes.Interface, r rest.Interface) K8sResourceCl
 // It uses a customK8sResourceClient under the covers to perform CRUD operations on
 // kubernetes CRDs.
 type ipamHandleClient struct {
-	rc customK8sResourceClient
+	rc customResourceClient
 }
 
 func (c *ipamHandleClient) toV1(kvpv3 *model.KVPair) *model.KVPair {

@@ -40,7 +40,7 @@ func init() {
 
 var _ = Describe("Custom resource conversion methods (tested using BGPPeer)", func() {
 	// Create an empty client since we are only testing conversion functions.
-	client := NewBGPPeerClient(nil, nil).(*customK8sResourceClient)
+	client := NewBGPPeerClient(nil, nil).(*customResourceClient)
 
 	// Define some useful test data.
 	listIncomplete := model.ResourceListOptions{}
@@ -240,7 +240,7 @@ var _ = Describe("Custom resource conversion methods (tested using BGPPeer)", fu
 })
 
 var _ = Describe("Custom resource conversion methods (tested using namespaced NetworkSet)", func() {
-	var client *customK8sResourceClient
+	var client *customResourceClient
 	var fakeREST *fake.RESTClient
 
 	BeforeEach(func() {
@@ -252,7 +252,7 @@ var _ = Describe("Custom resource conversion methods (tested using namespaced Ne
 			},
 			VersionedAPIPath: "/apis",
 		}
-		client = NewNetworkSetClient(nil, fakeREST).(*customK8sResourceClient)
+		client = NewNetworkSetClient(nil, fakeREST).(*customResourceClient)
 	})
 
 	It("should get by name", func() {

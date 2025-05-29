@@ -18,28 +18,20 @@ import (
 	"reflect"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 )
 
 const (
 	BGPPeerResourceName = "BGPPeers"
-	BGPPeerCRDName      = "bgppeers.crd.projectcalico.org"
 )
 
-func NewBGPPeerClient(c kubernetes.Interface, r rest.Interface) K8sResourceClient {
-	return &customK8sResourceClient{
+func NewBGPPeerClient(r rest.Interface, v3 bool) K8sResourceClient {
+	return &customResourceClient{
 		restClient:      r,
-		name:            BGPPeerCRDName,
 		resource:        BGPPeerResourceName,
-		description:     "Calico BGP Peers",
 		k8sResourceType: reflect.TypeOf(apiv3.BGPPeer{}),
-		typeMeta: metav1.TypeMeta{
-			Kind:       apiv3.KindBGPPeer,
-			APIVersion: apiv3.GroupVersionCurrent,
-		},
-		k8sListType: reflect.TypeOf(apiv3.BGPPeerList{}),
-		kind:        apiv3.KindBGPPeer,
+		k8sListType:     reflect.TypeOf(apiv3.BGPPeerList{}),
+		kind:            apiv3.KindBGPPeer,
+		noTransform:     v3,
 	}
 }

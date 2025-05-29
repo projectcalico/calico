@@ -22,12 +22,10 @@ import (
 	"reflect"
 	"strconv"
 
-	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
 
@@ -41,25 +39,20 @@ import (
 
 const (
 	BlockAffinityResourceName = "BlockAffinities"
-	BlockAffinityCRDName      = "blockaffinities.crd.projectcalico.org"
 )
 
-func NewBlockAffinityClient(c kubernetes.Interface, r rest.Interface) K8sResourceClient {
+func NewBlockAffinityClient(r rest.Interface, v3 bool) K8sResourceClient {
 	// Create a resource client which manages k8s CRDs.
-	rc := customK8sResourceClient{
+	rc := customResourceClient{
 		restClient:      r,
-		name:            BlockAffinityCRDName,
 		resource:        BlockAffinityResourceName,
-		description:     "Calico IPAM block affinities",
 		k8sResourceType: reflect.TypeOf(libapiv3.BlockAffinity{}),
-		typeMeta: metav1.TypeMeta{
-			Kind:       libapiv3.KindBlockAffinity,
-			APIVersion: apiv3.GroupVersionCurrent,
-		},
-		k8sListType: reflect.TypeOf(libapiv3.BlockAffinityList{}),
-		kind:        libapiv3.KindBlockAffinity,
+		k8sListType:     reflect.TypeOf(libapiv3.BlockAffinityList{}),
+		kind:            libapiv3.KindBlockAffinity,
+		noTransform:     v3,
 	}
 
+	// TODO: CASEY
 	return &blockAffinityClient{rc: rc}
 }
 
@@ -69,7 +62,7 @@ func NewBlockAffinityClient(c kubernetes.Interface, r rest.Interface) K8sResourc
 // It uses a customK8sResourceClient under the covers to perform CRUD operations on
 // kubernetes CRDs.
 type blockAffinityClient struct {
-	rc customK8sResourceClient
+	rc customResourceClient
 }
 
 // toV1 converts the given v3 CRD KVPair into a v1 model representation

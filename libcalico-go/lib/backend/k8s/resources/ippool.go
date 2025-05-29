@@ -19,8 +19,6 @@ import (
 	"reflect"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/encap"
@@ -30,23 +28,17 @@ import (
 
 const (
 	IPPoolResourceName = "IPPools"
-	IPPoolCRDName      = "ippools.crd.projectcalico.org"
 )
 
-func NewIPPoolClient(c kubernetes.Interface, r rest.Interface) K8sResourceClient {
-	return &customK8sResourceClient{
-		restClient:      r,
-		name:            IPPoolCRDName,
-		resource:        IPPoolResourceName,
-		description:     "Calico IP Pools",
-		k8sResourceType: reflect.TypeOf(apiv3.IPPool{}),
-		typeMeta: metav1.TypeMeta{
-			Kind:       apiv3.KindIPPool,
-			APIVersion: apiv3.GroupVersionCurrent,
-		},
+func NewIPPoolClient(r rest.Interface, v3 bool) K8sResourceClient {
+	return &customResourceClient{
+		restClient:       r,
+		resource:         IPPoolResourceName,
+		k8sResourceType:  reflect.TypeOf(apiv3.IPPool{}),
 		k8sListType:      reflect.TypeOf(apiv3.IPPoolList{}),
 		kind:             apiv3.KindIPPool,
 		versionconverter: IPPoolv1v3Converter{},
+		noTransform:      v3,
 	}
 }
 

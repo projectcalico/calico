@@ -18,11 +18,9 @@ import (
 	"context"
 	"reflect"
 
-	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 
 	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
@@ -32,23 +30,18 @@ import (
 
 const (
 	IPAMConfigResourceName = "IPAMConfigs"
-	IPAMConfigCRDName      = "ipamconfigs.crd.projectcalico.org"
 )
 
-func NewIPAMConfigClient(c kubernetes.Interface, r rest.Interface) K8sResourceClient {
+func NewIPAMConfigClient(r rest.Interface, v3 bool) K8sResourceClient {
+	// TODO: CASEY
 	return &ipamConfigClient{
-		rc: customK8sResourceClient{
+		rc: customResourceClient{
 			restClient:      r,
-			name:            IPAMConfigCRDName,
 			resource:        IPAMConfigResourceName,
-			description:     "Calico IPAM configuration",
 			k8sResourceType: reflect.TypeOf(libapiv3.IPAMConfiguration{}),
-			typeMeta: metav1.TypeMeta{
-				Kind:       libapiv3.KindIPAMConfig,
-				APIVersion: apiv3.GroupVersionCurrent,
-			},
-			k8sListType: reflect.TypeOf(libapiv3.IPAMConfigurationList{}),
-			kind:        libapiv3.KindIPAMConfig,
+			k8sListType:     reflect.TypeOf(libapiv3.IPAMConfigurationList{}),
+			kind:            libapiv3.KindIPAMConfig,
+			noTransform:     v3,
 		},
 	}
 }
@@ -59,7 +52,7 @@ func NewIPAMConfigClient(c kubernetes.Interface, r rest.Interface) K8sResourceCl
 // It uses a customK8sResourceClient under the covers to perform CRUD operations on
 // kubernetes CRDs.
 type ipamConfigClient struct {
-	rc customK8sResourceClient
+	rc customResourceClient
 }
 
 // toV1 converts the given v3 CRD KVPair into a v1 model representation
