@@ -73,7 +73,7 @@ func DetachClassifier(ifindex, handle, pref int, ingress bool) error {
 	panic("LIBBPF syscall stub")
 }
 
-func (o *Obj) AttachClassifier(secName, ifName string, ingress bool, prio, handle int) (int, int, int, error) {
+func (o *Obj) AttachClassifier(secName, ifName string, ingress bool, prio int, handle uint32) error {
 	panic("LIBBPF syscall stub")
 }
 
@@ -90,6 +90,14 @@ func GetXDPProgramID(ifName string) (int, error) {
 }
 
 func (o *Obj) AttachCGroup(_, _ string) (*Link, error) {
+	panic("LIBBPF syscall stub")
+}
+
+func (o *Obj) AttachCGroupLegacy(_, _ string) error {
+	panic("LIBBPF syscall stub")
+}
+
+func (o *Obj) UpdateLink(_, _ string) error {
 	panic("LIBBPF syscall stub")
 }
 
@@ -114,6 +122,34 @@ func CreateQDisc(ifName string) error {
 }
 
 func RemoveQDisc(ifName string) error {
+	panic("LIBBPF syscall stub")
+}
+
+func DetachLink(_ string) error {
+	panic("LIBBPF syscall stub")
+}
+
+func (l *Link) Pin(_ string) error {
+	panic("LIBBPF syscall stub")
+}
+
+func (l *Link) Update(obj *Obj, progName string) error {
+	panic("LIBBPF syscall stub")
+}
+
+func (l *Link) Close() error {
+	panic("LIBBPF syscall stub")
+}
+
+func OpenLink(path string) (*Link, error) {
+	panic("LIBBPF syscall stub")
+}
+
+func (l *Link) Detach() error {
+	panic("LIBBPF syscall stub")
+}
+
+func DetachCTLBProgramsLegacy(_ string) error {
 	panic("LIBBPF syscall stub")
 }
 

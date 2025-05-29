@@ -1,6 +1,6 @@
 FROM ppc64le/centos:7
-MAINTAINER Daniel Fox <dan.fox@tigera.io>
-ENV STREAM el7
+LABEL org.opencontainers.image.authors="Daniel Fox <dan.fox@tigera.io>"
+ENV STREAM=el7
 
 ARG UID
 ARG GID
