@@ -46,9 +46,10 @@ func Run(ctx context.Context, cfg config.Config, proxyTargets []server.Target) {
 		server.WithProxyTargets(proxyTargets),
 		server.WithConnectionRetryAttempts(cfg.ConnectionRetryAttempts),
 		server.WithConnectionRetryInterval(cfg.ConnectionRetryInterval),
+		server.WithListenPort(cfg.ListenPort),
 	}
 
-	tlsConfig, cert, err := cfg.TLSConfig()
+	tlsConfig, cert, err := cfg.TLSConfigProvider().TLSConfig()
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to create tls config")
 	}

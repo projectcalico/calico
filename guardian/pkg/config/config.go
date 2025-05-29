@@ -33,7 +33,6 @@ import (
 	"golang.org/x/net/http/httpproxy"
 
 	calicotls "github.com/projectcalico/calico/crypto/pkg/tls"
-	"github.com/projectcalico/calico/lib/std/cryptoutils"
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 )
 
@@ -47,8 +46,14 @@ const (
 	EnvConfigPrefix = "GUARDIAN"
 )
 
+type TLSConfigProvider interface {
+	TLSConfig() (*tls.Config, *tls.Certificate, error)
+}
+
 // Config is the struct to parse the env configuration into.
 type Config struct {
+	tlsConfigProvider TLSConfigProvider
+
 	LogLevel      string `default:"INFO"`
 	CertPath      string `default:"/certs" split_words:"true" json:"-"`
 	VoltronCAType string `default:"Tigera" split_words:"true"`
@@ -87,6 +92,10 @@ type Config struct {
 	ListenPort string `default:"8080" split_words:"true"`
 }
 
+func (cfg *Config) SetTLSConfigProvider(provider TLSConfigProvider) {
+	cfg.tlsConfigProvider = provider
+}
+
 func newConfig() (*Config, error) {
 	cfg := &Config{}
 	if err := envconfig.Process(EnvConfigPrefix, cfg); err != nil {
@@ -106,59 +115,79 @@ func (cfg *Config) String() string {
 	return string(data)
 }
 
-func (cfg *Config) TLSConfig() (*tls.Config, *tls.Certificate, error) {
-	certPath := fmt.Sprintf("%s/managed-cluster.crt", cfg.CertPath)
-	keyPath := fmt.Sprintf("%s/managed-cluster.key", cfg.CertPath)
+type TLSConfigProviderFunc func() (*tls.Config, *tls.Certificate, error)
 
-	pemCert, err := os.ReadFile(certPath)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to load tunnel cert from path %s: %w", certPath, err)
+func (f TLSConfigProviderFunc) TLSConfig() (*tls.Config, *tls.Certificate, error) {
+	return f()
+}
+
+func (cfg *Config) TLSConfigProvider() TLSConfigProvider {
+	if cfg.tlsConfigProvider == nil {
+		cfg.tlsConfigProvider = TLSConfigProviderFunc(func() (*tls.Config, *tls.Certificate, error) {
+			certPath := fmt.Sprintf("%s/managed-cluster.crt", cfg.CertPath)
+			keyPath := fmt.Sprintf("%s/managed-cluster.key", cfg.CertPath)
+
+			pemCert, err := os.ReadFile(certPath)
+			if err != nil {
+				return nil, nil, fmt.Errorf("failed to load tunnel cert from path %s: %w", certPath, err)
+			}
+			pemKey, err := os.ReadFile(keyPath)
+			if err != nil {
+				return nil, nil, fmt.Errorf("failed to load tunnel key from path %s: %w", certPath, err)
+			}
+
+			cert, err := tls.X509KeyPair(pemCert, pemKey)
+			if err != nil {
+				return nil, nil, fmt.Errorf("failed to create X509 key pair: %w", err)
+			}
+
+			tlsConfig, err := calicotls.NewTLSConfig()
+			if err != nil {
+				return nil, nil, fmt.Errorf("failed to create TLS Config: %w", err)
+			}
+			tlsConfig.Certificates = []tls.Certificate{cert}
+			tlsConfig.RootCAs = x509.NewCertPool()
+
+			if strings.ToLower(cfg.VoltronCAType) != "public" {
+				rootCAPath := fmt.Sprintf("%s/management-cluster.crt", cfg.CertPath)
+				pemServerCrt, err := os.ReadFile(rootCAPath)
+				if err != nil {
+					return nil, nil, fmt.Errorf("failed to read server cert from path %s: %w", rootCAPath, err)
+				}
+
+				certDERBlock, _ := pem.Decode(pemServerCrt)
+				if certDERBlock == nil || certDERBlock.Type != "CERTIFICATE" {
+					return nil, nil, errors.New("cannot decode pem block for server certificate")
+				}
+
+				ca, err := x509.ParseCertificate(certDERBlock.Bytes)
+				if err != nil {
+					return nil, nil, fmt.Errorf("cannot decode pem block for server certificate: %w", err)
+				}
+
+				tlsConfig.RootCAs.AddCert(ca)
+
+				if len(ca.DNSNames) != 1 {
+					return nil, nil, fmt.Errorf("expected a single DNS name registered on the certificate: %w", err)
+				}
+
+				tlsConfig.ServerName = ca.DNSNames[0]
+
+				logrus.Debug("expecting TLS server name: ", tlsConfig.ServerName)
+			} else {
+				u, err := url.Parse(cfg.VoltronURL)
+				if err != nil {
+					return nil, nil, fmt.Errorf("failed to parse voltron url %s: %w", cfg.VoltronURL, err)
+				}
+
+				tlsConfig.ServerName = u.Hostname()
+			}
+
+			return tlsConfig, &cert, nil
+		})
 	}
-	pemKey, err := os.ReadFile(keyPath)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to load tunnel key from path %s: %w", certPath, err)
-	}
 
-	cert, err := tls.X509KeyPair(pemCert, pemKey)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to create X509 key pair: %w", err)
-	}
-	tlsConfig, err := calicotls.NewTLSConfig()
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to create TLS Config: %w", err)
-	}
-	tlsConfig.Certificates = []tls.Certificate{cert}
-
-	rootCA := x509.NewCertPool()
-	if strings.ToLower(cfg.VoltronCAType) != "public" {
-		rootCAPath := fmt.Sprintf("%s/management-cluster.crt", cfg.CertPath)
-		pemServerCrt, err := os.ReadFile(rootCAPath)
-		if err != nil {
-			return nil, nil, fmt.Errorf("failed to read server cert from path %s: %w", rootCAPath, err)
-		}
-
-		if ok := rootCA.AppendCertsFromPEM(pemServerCrt); !ok {
-			return nil, nil, fmt.Errorf("failed to append the server cert to cert pool: %w", err)
-		}
-
-		serverName, err := extractServerName(pemServerCrt)
-		if err != nil {
-			return nil, nil, err
-		}
-		logrus.Debug("expecting TLS server name: ", serverName)
-		tlsConfig.ServerName = serverName
-	} else {
-		u, err := url.Parse(cfg.VoltronURL)
-		if err != nil {
-			return nil, nil, fmt.Errorf("failed to parse voltron url %s: %w", cfg.VoltronURL, err)
-		}
-
-		tlsConfig.ServerName = u.Hostname()
-	}
-
-	tlsConfig.RootCAs = rootCA
-
-	return tlsConfig, &cert, nil
+	return cfg.tlsConfigProvider
 }
 
 func (cfg *Config) configureLogging() {
@@ -174,38 +203,6 @@ func (cfg *Config) configureLogging() {
 	}
 
 	logrus.SetLevel(level)
-}
-
-func (cfg *Config) Cert() (string, *x509.CertPool, error) {
-	if strings.ToLower(cfg.VoltronCAType) == "public" {
-		// leave the ca cert pool as a nil pointer which will cause the tls dialer to load certs from the system.
-		logrus.Info("Using system certs.")
-		// in this case, the serverName will match the remote address
-		// we need to strip the ports
-		return strings.Split(cfg.VoltronURL, ":")[0], nil, nil
-	} else {
-		certPath := fmt.Sprintf("%s/management-cluster.crt", cfg.CertPath)
-		certBytes, err := os.ReadFile(certPath)
-		if err != nil {
-			return "", nil, fmt.Errorf("failed to read server cert: %w", err)
-		}
-
-		cert, err := cryptoutils.ParseCertificateBytes(certBytes)
-		if err != nil {
-			return "", nil, fmt.Errorf("cannot decode pem block for server certificate: %w", err)
-		}
-		if len(cert.DNSNames) != 1 {
-			return "", nil, errors.New("expected a single DNS name registered on the certificate")
-		}
-		serverName := cert.DNSNames[0]
-
-		ca := x509.NewCertPool()
-		if ok := ca.AppendCertsFromPEM(certBytes); !ok {
-			return "", nil, errors.New("failed to append the certificate to ca pool")
-		}
-
-		return serverName, ca, nil
-	}
 }
 
 // GetHTTPProxyURL resolves the proxy URL that should be used for the tunnel target. It respects HTTPS_PROXY and NO_PROXY
@@ -241,20 +238,4 @@ func (cfg *Config) GetHTTPProxyURL() (*url.URL, error) {
 	}
 
 	return proxyURL, nil
-}
-
-func extractServerName(pemServerCrt []byte) (string, error) {
-	certDERBlock, _ := pem.Decode(pemServerCrt)
-	if certDERBlock == nil || certDERBlock.Type != "CERTIFICATE" {
-		return "", errors.New("cannot decode pem block for server certificate")
-	}
-
-	cert, err := x509.ParseCertificate(certDERBlock.Bytes)
-	if err != nil {
-		return "", fmt.Errorf("cannot decode pem block for server certificate: %w", err)
-	}
-	if len(cert.DNSNames) != 1 {
-		return "", fmt.Errorf("expected a single DNS name registered on the certificate: %w", err)
-	}
-	return cert.DNSNames[0], nil
 }
