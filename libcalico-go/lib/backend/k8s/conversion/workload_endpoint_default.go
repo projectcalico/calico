@@ -39,17 +39,23 @@ import (
 )
 
 var (
-	minBandwidth      = resource.MustParse("1k")
-	maxBandwidth      = resource.MustParse("1P")
-	minBurst          = resource.MustParse("1k")
-	defaultBurst      = resource.MustParse("4Gi")                            // 512 Mi bytes
-	maxBurst          = resource.MustParse(strconv.Itoa(math.MaxUint32 * 8)) // 34359738360, approx. 4Gi bytes
-	minPeakrate       = resource.MustParse("1k")
-	maxPeakrate       = resource.MustParse("1P")
-	minMinburst       = resource.MustParse("1k")
-	maxMinburst       = resource.MustParse("100M")
-	minPacketRate     = resource.MustParse("10")
-	maxPacketRate     = resource.MustParse("1T")
+	// Bandwidth in bits per second
+	minBandwidth = resource.MustParse("1k")
+	maxBandwidth = resource.MustParse("1P")
+	// Burst sizes in bits
+	minBurst     = resource.MustParse("1k")
+	defaultBurst = resource.MustParse("4Gi")                            // 512 Mi bytes
+	maxBurst     = resource.MustParse(strconv.Itoa(math.MaxUint32 * 8)) // 34359738360, approx. 4Gi bytes
+	// Peakrate in bits per second
+	minPeakrate = resource.MustParse("1k")
+	maxPeakrate = resource.MustParse("1P")
+	// Minburst in bytes (not bits because it is typically the MTU)
+	minMinburst = resource.MustParse("1k")
+	maxMinburst = resource.MustParse("100M")
+	// Packet rate in packets per second
+	minPacketRate = resource.MustParse("10")
+	maxPacketRate = resource.MustParse("1T")
+	// Maximum number of connections (absolute number of connections, no unit)
 	minNumConnections = resource.MustParse("1")
 	maxNumConnections = resource.MustParse("100G")
 )
@@ -450,13 +456,13 @@ func handleQoSControlsAnnotations(annotations map[string]string) (*libapiv3.QoSC
 		qosControls.EgressBurst = 0
 	}
 
-	// if peakrate is configured, bandwidth must be configured
-	if qosControls.IngressPeakrate != 0 && qosControls.IngressBandwidth == 0 {
-		errs = append(errs, fmt.Errorf("ingress bandwidth must be specified when ingress peakrate is specified"))
+	// if peakrate is configured, bandwidth must be configured and peakrate must be greater than bandwidth
+	if qosControls.IngressPeakrate != 0 && (qosControls.IngressBandwidth == 0 || qosControls.IngressBandwidth >= qosControls.IngressPeakrate) {
+		errs = append(errs, fmt.Errorf("ingress peakrate must be greater than ingress bandwidth when specified"))
 		qosControls.IngressPeakrate = 0
 	}
-	if qosControls.EgressPeakrate != 0 && qosControls.EgressBandwidth == 0 {
-		errs = append(errs, fmt.Errorf("egress bandwidth must be specified when egress peakrate is specified"))
+	if qosControls.EgressPeakrate != 0 && (qosControls.EgressBandwidth == 0 || qosControls.EgressBandwidth >= qosControls.EgressPeakrate) {
+		errs = append(errs, fmt.Errorf("egress peakrate must be greater than egress bandwidth when specified"))
 		qosControls.EgressPeakrate = 0
 	}
 
