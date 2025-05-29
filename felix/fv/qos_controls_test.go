@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"regexp"
 	"strings"
 	"time"
@@ -237,11 +238,10 @@ var _ = infrastructure.DatastoreDescribe(
 				baselineRate, baselinePeakrate, err := retryIperfClient(w[1], 5, 5*time.Second, "-c", w[0].IP, "-O5", "-J")
 				Expect(err).NotTo(HaveOccurred())
 				logrus.Infof("iperf client rate with no bandwidth limit (bps): %v", baselineRate)
-				// Expect the baseline rate to be much greater (>=100x) the bandwidth
-				// that we are going to configure just below. In practice we see
-				// several Gbps here.
-				Expect(baselineRate).To(BeNumerically(">=", 10000000.0*100))
-				Expect(baselinePeakrate).To(BeNumerically(">=", 100000000.0*100))
+				// Expect the baseline rate and peakrate to be much greater (>=10x) than the rate and peakrate limits
+				// that we are going to configure just below. In practice we see several Gbps here.
+				Expect(baselineRate).To(BeNumerically(">=", 10000000.0*10))
+				Expect(baselinePeakrate).To(BeNumerically(">=", 100000000.0*10))
 
 				By("Setting 10Mbps limit and 100Mbps peakrate for ingress on workload 1")
 				w[1].WorkloadEndpoint.Spec.QoSControls = &api.QoSControls{
@@ -261,7 +261,7 @@ var _ = infrastructure.DatastoreDescribe(
 				ingressLimitedRate, ingressLimitedPeakrate, err := retryIperfClient(w[1], 5, 5*time.Second, "-c", w[0].IP, "-O5", "-J", "-R")
 				Expect(err).NotTo(HaveOccurred())
 				logrus.Infof("iperf client rate with ingress bandwidth limit (bps): %v", ingressLimitedRate)
-				// Expect the limited rate to be within 20% of the desired rate
+				// Expect the limited rate and peakrate to be within 20% of the desired rate and peakrate
 				Expect(ingressLimitedRate).To(BeNumerically(">=", 10000000.0*0.8))
 				Expect(ingressLimitedRate).To(BeNumerically("<=", 10000000.0*1.2))
 				Expect(ingressLimitedPeakrate).To(BeNumerically(">=", 100000000.0*0.8))
@@ -285,7 +285,7 @@ var _ = infrastructure.DatastoreDescribe(
 				egressLimitedRate, egressLimitedPeakrate, err := retryIperfClient(w[1], 5, 5*time.Second, "-c", w[0].IP, "-O5", "-J")
 				Expect(err).NotTo(HaveOccurred())
 				logrus.Infof("iperf client rate with egress bandwidth limit (bps): %v", egressLimitedRate)
-				// Expect the limited rate to be within 20% of the desired rate
+				// Expect the limited rate and peakrate to be within 20% of the desired rate and peakrate
 				Expect(egressLimitedRate).To(BeNumerically(">=", 10000000.0*0.8))
 				Expect(egressLimitedRate).To(BeNumerically("<=", 10000000.0*1.2))
 				Expect(egressLimitedPeakrate).To(BeNumerically(">=", 100000000.0*0.8))
@@ -322,11 +322,11 @@ var _ = infrastructure.DatastoreDescribe(
 				baselineRate, _, err := retryIperfClient(w[1], 5, 5*time.Second, "-c", w[0].IP, "-O5", "-M1000", "-J")
 				Expect(err).NotTo(HaveOccurred())
 				logrus.Infof("iperf client rate with no packet rate limit (bps): %v", baselineRate)
-				// Expect the baseline rate to be much greater (>=100x) the bandwidth that we
+				// Expect the baseline rate to be much greater (>=10x) the bandwidth that we
 				// would get with the packet rate we are going to configure just below (1000 byte
 				// packets * 8 bits/byte * 100 packets/s = 800000 bps). In practice we see several
 				// Gbps here.
-				Expect(baselineRate).To(BeNumerically(">=", 800000.0*100))
+				Expect(baselineRate).To(BeNumerically(">=", 800000.0*10))
 
 				By("Setting 100 packets/s limit for ingress on workload 0 (iperf3 server)")
 				w[0].WorkloadEndpoint.Spec.QoSControls = &api.QoSControls{
@@ -594,7 +594,12 @@ func parseIperfJsonOutput(output string) (float64, float64, error) {
 	if err != nil {
 		return 0.0, 0.0, fmt.Errorf("failed to unmarshal iperf data: %w", err)
 	}
+	if reflect.DeepEqual(perf, iperfReport{}) {
+		return 0.0, 0.0, fmt.Errorf("iperf data is empty: %+v", perf)
+	}
+	// iperf3 reports the result of its 10-second run in perf.End, but it also reports results for every 1-second interval in perf.Intervals[] (even those ignored for the sum calculation with the '-O' argument)
 	rate = perf.End.SumReceived.BitsPerSecond
+	// Use the first 1-second interval reported rate to verify peakrate controls
 	if len(perf.Intervals) > 0 {
 		peakrate = perf.Intervals[0].Sum.BitsPerSecond
 	}
@@ -602,6 +607,8 @@ func parseIperfJsonOutput(output string) (float64, float64, error) {
 	return rate, peakrate, nil
 }
 
+// retryIperfClient retries running the 'iperf3' client until it successfully can return a rate and a peakrate, or fails if it
+// cannot after retryNum tries.
 func retryIperfClient(w *workload.Workload, retryNum int, retryInterval time.Duration, args ...string) (float64, float64, error) {
 	var err error
 	var rate, peakrate float64

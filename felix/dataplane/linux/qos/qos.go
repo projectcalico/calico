@@ -47,6 +47,7 @@ package qos
 import (
 	"errors"
 	"fmt"
+	"math"
 	"net"
 	"strings"
 	"syscall"
@@ -159,7 +160,8 @@ func ReadIngressQdisc(intf string) (*TokenBucketState, error) {
 	tbs := &TokenBucketState{}
 	for _, qdisc := range qdiscs {
 		tbf, isTbf := qdisc.(*netlink.Tbf)
-		// TBF info may be split in multiple netlink messages, loop through them to populate TokenBucketState
+		// TBF info may be split in multiple netlink route attributes, loop through them to populate TokenBucketState
+		// See https://github.com/vishvananda/netlink/blob/17daef607c6442d47b0565343cf8a69f985a4cb7/qdisc_linux.go#L180-L195
 		if isTbf {
 			if tbf.Rate > 0 {
 				tbs.Rate = tbf.Rate
@@ -415,27 +417,27 @@ func GetTBFValues(rateBitsPerSec, burstBits, peakrateBitsPerSec uint64, minburst
 	burstBytes := burstBits / 8
 
 	// Time (in usec) it takes to transmit the burst size at the given rate
-	timeToBurstUsec := uint32(float64(burstBytes) * float64(1000000) / float64(rateBytesPerSec))
+	timeToBurstUsec := uint32(min(float64(burstBytes)*float64(1000000)/float64(rateBytesPerSec), math.MaxUint32))
 
 	// Buffer size needed to accumulate burst data in-between network scheduler ticks, obtained by multiplying timeToBurstUsec by the number of usec per tick of the network scheduler
-	bufferBytes := uint32(float64(timeToBurstUsec) * float64(netlink.TickInUsec()))
+	bufferBytes := uint32(min(float64(timeToBurstUsec)*float64(netlink.TickInUsec()), math.MaxUint32))
 
 	latencyUsec := float64(latencyMillis * 1000)
 
 	// Limit for the token bucket, obtained by multiplying the rate (in bytes per sec) by the latency (in sec), then adding the buffer size (in bytes)
-	limitBytes := uint32(float64(rateBytesPerSec)*latencyUsec/float64(1000000)) + bufferBytes
+	limitBytes := uint32(min(float64(rateBytesPerSec)*latencyUsec/float64(1000000)+float64(bufferBytes), math.MaxUint32))
 
 	var peakrateBytesPerSec uint64
 
 	// If peakrate is defined, calculate its limit and use the smallest limit of the two.
 	// See https://github.com/iproute2/iproute2/blob/866e1d107b7de68ca1fcd1d4d5ffecf9d96bff30/tc/q_tbf.c#L202
-	// for more details.
+	// to see where the tc command does the same thing.
 	if peakrateBitsPerSec != 0 {
 		peakrateBytesPerSec = peakrateBitsPerSec / 8
 
-		minburstTimeToBurstUsec := uint32(float64(minburstBytes) * float64(1000000) / float64(peakrateBytesPerSec))
-		minburstBufferBytes := uint32(float64(minburstTimeToBurstUsec) * float64(netlink.TickInUsec()))
-		peakrateLimitBytes := uint32(float64(peakrateBytesPerSec)*latencyUsec/float64(1000000)) + minburstBufferBytes
+		minburstTimeToBurstUsec := uint32(min(float64(minburstBytes)*float64(1000000)/float64(peakrateBytesPerSec), math.MaxUint32))
+		minburstBufferBytes := uint32(min(float64(minburstTimeToBurstUsec)*float64(netlink.TickInUsec()), math.MaxUint32))
+		peakrateLimitBytes := uint32(min(float64(peakrateBytesPerSec)*latencyUsec/float64(1000000)+float64(minburstBufferBytes), math.MaxUint32))
 		if peakrateLimitBytes < limitBytes {
 			limitBytes = peakrateLimitBytes
 		}
@@ -451,11 +453,8 @@ func GetTBFValues(rateBitsPerSec, burstBits, peakrateBitsPerSec uint64, minburst
 }
 
 func makeTBF(tbs *TokenBucketState, workloadDevice netlink.Link) (*netlink.Tbf, error) {
-	if tbs == nil {
-		return nil, fmt.Errorf("invalid TokenBucketState %+v, verify bandwidth and burst configuration", tbs)
-	}
-	if tbs.Limit <= 0 || tbs.Rate <= 0 || tbs.Buffer <= 0 || (tbs.Peakrate == 0 && tbs.Minburst != 0) {
-		return nil, fmt.Errorf("invalid value(s) for TokenBucketState %+v, limit: %v, rate %v, buffer %v, peakrate %v, minburst %v, verify bandwidth, burst, peakrate and minburst configuration", tbs, tbs.Limit, tbs.Rate, tbs.Buffer, tbs.Peakrate, tbs.Minburst)
+	if tbs == nil || tbs.Limit <= 0 || tbs.Rate <= 0 || tbs.Buffer <= 0 || (tbs.Peakrate == 0 && tbs.Minburst != 0) {
+		return nil, fmt.Errorf("invalid value(s) for TokenBucketState %+v, verify bandwidth, burst, peakrate and minburst configuration", tbs)
 	}
 
 	// If Peakrate is configured and Minburst is configured to less than the interface MTU, set it to this minimum value
