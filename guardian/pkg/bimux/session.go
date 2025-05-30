@@ -51,9 +51,9 @@ func newClientSession(s *yamux.Session) *ClientSession {
 type ServerSession[T any] struct {
 	session
 
-	verificationInfo *T
+	identity *T
 }
 
-func newServerSideSession[T any](mux *yamux.Session, info *T) *ServerSession[T] {
-	return &ServerSession[T]{verificationInfo: info, session: session{mux: mux}}
+func newServerSideSession[T any](mux *yamux.Session, identity *T) *ServerSession[T] {
+	return &ServerSession[T]{identity: identity, session: session{mux: mux}}
 }

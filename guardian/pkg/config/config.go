@@ -90,6 +90,9 @@ type Config struct {
 	Listen     bool   `default:"true"`
 	ListenHost string `default:"" split_words:"true"`
 	ListenPort string `default:"8080" split_words:"true"`
+
+	ProxyURL       *url.URL
+	ProxyTLSConfig *tls.Config
 }
 
 func (cfg *Config) SetTLSConfigProvider(provider TLSConfigProvider) {
@@ -98,9 +101,41 @@ func (cfg *Config) SetTLSConfigProvider(provider TLSConfigProvider) {
 
 func newConfig() (*Config, error) {
 	cfg := &Config{}
+
 	if err := envconfig.Process(EnvConfigPrefix, cfg); err != nil {
 		return nil, err
 	}
+
+	targetURL := &url.URL{
+		// The scheme should be HTTPS, as we are establishing an mTLS session with the target.
+		Scheme: "https",
+
+		// We expect `target` to be of the form host:port.
+		Host: cfg.VoltronURL,
+	}
+
+	proxyURL, err := httpproxy.FromEnvironment().ProxyFunc()(targetURL)
+	if err != nil {
+		return nil, err
+	}
+
+	if proxyURL == nil {
+		return nil, nil
+	}
+
+	// Validate the URL scheme.
+	if proxyURL.Scheme != "http" && proxyURL.Scheme != "https" {
+		return nil, fmt.Errorf("proxy URL had invalid scheme (%s) - must be http or https", proxyURL.Scheme)
+	}
+
+	// Update the host if we can infer a port number.
+	if proxyURL.Port() == "" && proxyURL.Scheme == "http" {
+		proxyURL.Host = net.JoinHostPort(proxyURL.Host, "80")
+	} else if proxyURL.Port() == "" && proxyURL.Scheme == "https" {
+		proxyURL.Host = net.JoinHostPort(proxyURL.Host, "443")
+	}
+
+	cfg.ProxyURL = proxyURL
 
 	cfg.configureLogging()
 
@@ -203,39 +238,4 @@ func (cfg *Config) configureLogging() {
 	}
 
 	logrus.SetLevel(level)
-}
-
-// GetHTTPProxyURL resolves the proxy URL that should be used for the tunnel target. It respects HTTPS_PROXY and NO_PROXY
-// environment variables (case-insensitive).
-func (cfg *Config) GetHTTPProxyURL() (*url.URL, error) {
-	targetURL := &url.URL{
-		// The scheme should be HTTPS, as we are establishing an mTLS session with the target.
-		Scheme: "https",
-
-		// We expect `target` to be of the form host:port.
-		Host: cfg.VoltronURL,
-	}
-
-	proxyURL, err := httpproxy.FromEnvironment().ProxyFunc()(targetURL)
-	if err != nil {
-		return nil, err
-	}
-
-	if proxyURL == nil {
-		return nil, nil
-	}
-
-	// Validate the URL scheme.
-	if proxyURL.Scheme != "http" && proxyURL.Scheme != "https" {
-		return nil, fmt.Errorf("proxy URL had invalid scheme (%s) - must be http or https", proxyURL.Scheme)
-	}
-
-	// Update the host if we can infer a port number.
-	if proxyURL.Port() == "" && proxyURL.Scheme == "http" {
-		proxyURL.Host = net.JoinHostPort(proxyURL.Host, "80")
-	} else if proxyURL.Port() == "" && proxyURL.Scheme == "https" {
-		proxyURL.Host = net.JoinHostPort(proxyURL.Host, "443")
-	}
-
-	return proxyURL, nil
 }

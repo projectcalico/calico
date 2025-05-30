@@ -15,6 +15,7 @@
 package bimux
 
 import (
+	"crypto/tls"
 	"errors"
 	"net/url"
 	"time"
@@ -58,6 +59,16 @@ func WithDialerHTTPProxyURL(httpProxyURL *url.URL) DialerOption {
 			return errors.New("WithHTTPProxyURL: TLS dialer is required to use HTTP proxy")
 		}
 		dialer.httpProxyURL = httpProxyURL
+		return nil
+	}
+}
+
+func WithDialerHTTPProxyTLSConfig(tlsConfig *tls.Config) DialerOption {
+	return func(dialer *sessionDialer) error {
+		if dialer.tlsConfig == nil {
+			return errors.New("WithHTTPProxyURL: TLS dialer is required to use HTTP proxy")
+		}
+		dialer.proxyTLSConfig = tlsConfig
 		return nil
 	}
 }

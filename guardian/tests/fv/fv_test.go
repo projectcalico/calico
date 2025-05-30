@@ -5,6 +5,9 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
+	"github.com/elazarl/goproxy"
+	"io"
+	"log"
 	"net/http"
 	"testing"
 	"time"
@@ -28,45 +31,66 @@ func init() {
 	}
 }
 
-var http2Transport *http2.Transport
-
-func upstreamTLSConfig(tlsCert tls.Certificate, ca cryptoutils.CA) *tls.Config {
-	tlsCfg, err := calicotls.NewTLSConfig()
-	Expect(err).ShouldNot(HaveOccurred())
-
-	tlsCfg.ClientAuth = tls.RequireAndVerifyClientCert
-	tlsCfg.ClientCAs = x509.NewCertPool()
-	Expect(ca.AddToCertPool(tlsCfg.ClientCAs)).ShouldNot(HaveOccurred())
-
-	tlsCfg.Certificates = []tls.Certificate{tlsCert}
-	return tlsCfg
-}
-
-func startDaemon(ctx context.Context, clientCert *tls.Certificate, serverCA cryptoutils.CA, targets []server.Target) chan struct{} {
-	cfg := config.Config{
+var (
+	http2Transport *http2.Transport
+	voltronURL     = "localhost:8443"
+	defaultCfg     = config.Config{
 		LogLevel:                "DEBUG",
 		TunnelDialRetryAttempts: -1,
 		TunnelDialRetryInterval: 100 * time.Millisecond,
 		TunnelDialTimeout:       5 * time.Second,
-		VoltronURL:              "localhost:8443",
+		VoltronURL:              voltronURL,
 		KeepAliveEnable:         true,
 		KeepAliveInterval:       1000000,
 	}
+)
 
-	cfg.SetTLSConfigProvider(tlsConfigProvider(*clientCert, serverCA))
-
-	daemonDoneSig := make(chan struct{})
-	go func() {
-		defer close(daemonDoneSig)
-
-		daemon.Run(ctx, cfg, targets)
-	}()
-
-	return daemonDoneSig
+type certStorage struct {
 }
 
-func TestRequestsFromUpstreamToDownstream(t *testing.T) {
+func TestInboundRequests(t *testing.T) {
 	setup(t)
+	proxyCA, err := cryptoutils.NewCA("ca-signer", cryptoutils.WithDNSNames("localhost"))
+	Expect(err).ShouldNot(HaveOccurred())
+
+	proxyCert, err := proxyCA.CreateTLSCertificate("test-managed-cluster",
+		cryptoutils.WithDNSNames("localhost"),
+		cryptoutils.WithKeyUsages(x509.KeyUsageKeyEncipherment, x509.KeyUsageDigitalSignature),
+		cryptoutils.WithExtKeyUsages(x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth),
+	)
+	Expect(err).ShouldNot(HaveOccurred())
+
+	clientCA, clientCert := createTLSConfigTLSConfig()
+	serverCA, serverCert := createTLSConfigTLSConfig()
+
+	httpProxy := goproxy.NewProxyHttpServer()
+	httpProxy.OnRequest().HandleConnect(goproxy.FuncHttpsHandler(func(host string, ctx *goproxy.ProxyCtx) (*goproxy.ConnectAction, string) {
+		return goproxy.OkConnect, host
+	}))
+
+	rootCA := x509.NewCertPool()
+	Expect(clientCA.AddToCertPool(rootCA)).ShouldNot(HaveOccurred())
+	proxyServer := &http.Server{
+		Addr:    ":3128",
+		Handler: httpProxy,
+		TLSConfig: &tls.Config{
+			ServerName:   "foo",
+			Certificates: []tls.Certificate{*proxyCert},
+			RootCAs:      rootCA,
+		},
+	}
+
+	go func() {
+		if err := proxyServer.ListenAndServeTLS("", ""); err != nil {
+			panic(err)
+		}
+	}()
+
+	// Ensure the proxy does not try to dial through to the configured proxy (i.e. itself)
+	httpProxy.ConnectDial = nil
+
+	// Silence warnings from connections being closed. The proxy server lib only accepts the unstructured std logger.
+	httpProxy.Logger = log.New(io.Discard, "", log.LstdFlags)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -74,69 +98,106 @@ func TestRequestsFromUpstreamToDownstream(t *testing.T) {
 	testSrvAddr := "localhost:8999"
 	startTestService(testSrvAddr)
 
-	clientCA, clientCert := createTLSConfigTLSConfig()
-	serverCA, serverCert := createTLSConfigTLSConfig()
+	tt := []struct {
+		description string
+		cfg         func(cfg config.Config) config.Config
+	}{
+		{
+			description: "proxy disabled",
+		},
+		{
+			description: "Proxy enabled",
+			cfg: func(cfg config.Config) config.Config {
+				cfg.ProxyURL = MustParseURL("https://localhost:3128")
+				rootCA := x509.NewCertPool()
+				Expect(proxyCA.AddToCertPool(rootCA)).ShouldNot(HaveOccurred())
+				tlsCfg, err := calicotls.NewTLSConfig()
+				Expect(err).ShouldNot(HaveOccurred())
+				tlsCfg.Certificates = []tls.Certificate{*proxyCert}
+				tlsCfg.RootCAs = rootCA
+				cfg.ProxyTLSConfig = tlsCfg
 
-	daemonDoneSig := startDaemon(ctx, clientCert, serverCA, []server.Target{
-		{Path: "/", Dest: MustParseURL("https://" + testSrvAddr), AllowInsecureTLS: true},
-	})
+				return cfg
+			},
+		},
+	}
 
-	authenticator := &connAuthenticator{}
-	sessionListener, err := bimux.NewSessionListener(":8443", upstreamTLSConfig(*serverCert, clientCA), authenticator)
-	Expect(err).ShouldNot(HaveOccurred())
+	for _, tc := range tt {
+		t.Run(tc.description, func(t *testing.T) {
+			cfg := defaultCfg
+			if tc.cfg != nil {
+				cfg = tc.cfg(cfg)
+			}
 
-	ch, err := sessionListener.Listen(ctx)
-	Expect(err).ShouldNot(HaveOccurred())
-	session := <-ch
+			cfg.SetTLSConfigProvider(tlsConfigProvider(*clientCert, serverCA, proxyCA))
 
-	req, err := http.NewRequest(http.MethodGet, "https://"+testSrvAddr+"/foobar", nil)
-	Expect(err).ShouldNot(HaveOccurred())
+			daemonDoneSig := make(chan struct{})
+			go func() {
+				defer close(daemonDoneSig)
 
-	resp, err := sendToMuxRequest(session, req)
-	Expect(err).ShouldNot(HaveOccurred())
-	Expect(resp.StatusCode).Should(Equal(http.StatusOK))
-	defer resp.Body.Close()
+				daemon.Run(ctx, cfg, []server.Target{
+					{Path: "/", Dest: MustParseURL("https://" + testSrvAddr), AllowInsecureTLS: true},
+				})
+			}()
 
-	var rspObj testServerResponse
-	Expect(json.NewDecoder(resp.Body).Decode(&rspObj)).ShouldNot(HaveOccurred())
-	Expect(rspObj.Message).Should(Equal("hello from the other side."))
+			authenticator := &connAuthenticator{}
+			sessionListener, err := bimux.NewSessionListener(":8443", upstreamTLSConfig(*serverCert, clientCA), authenticator)
+			Expect(err).ShouldNot(HaveOccurred())
 
-	// Close the mux and allow guardian to try to reconnect, as we want to test that we can still use the tunnel after
-	// reconnecting.
-	t.Log("test that the guardian continuously tries to reconnect to the upstream server when the connection is closed")
-	authenticator.rejectConnections = true   // Reject all connection requests from guardian
-	authenticator.connectionRequestCount = 0 // Reset the request connect
-	_ = session.Close()
+			ch, err := sessionListener.Listen(ctx)
+			Expect(err).ShouldNot(HaveOccurred())
+			session := <-ch
 
-	// Wait for guardian to try connecting at least 5 times to ensure the reconnection logic retries frequently based on
-	// the configuration. The interval is set to 100 ms, so it should take any longer than 5 seconds for 5 attempts.
-	Eventually(func() int { return authenticator.connectionRequestCount }, "5s").Should(BeNumerically(">=", 5))
+			req, err := http.NewRequest(http.MethodGet, "https://"+testSrvAddr+"/foobar", nil)
+			Expect(err).ShouldNot(HaveOccurred())
 
-	// Allow guardian to reconnect to the upstream server.
-	authenticator.rejectConnections = false
+			resp, err := sendToMuxRequest(session, req)
+			Expect(err).ShouldNot(HaveOccurred())
+			Expect(resp.StatusCode).Should(Equal(http.StatusOK))
+			defer resp.Body.Close()
 
-	// Send a request to the upstream server and ensure it works after reconnecting.
-	req, err = http.NewRequest(http.MethodGet, "https://localhost:8999/foobar", nil)
-	Expect(err).ShouldNot(HaveOccurred())
+			var rspObj testServerResponse
+			Expect(json.NewDecoder(resp.Body).Decode(&rspObj)).ShouldNot(HaveOccurred())
+			Expect(rspObj.Message).Should(Equal("hello from the other side."))
 
-	session = <-ch
-	Expect(session).ShouldNot(BeNil())
-	resp, err = sendToMuxRequest(session, req)
-	Expect(err).ShouldNot(HaveOccurred())
-	Expect(resp.StatusCode).Should(Equal(http.StatusOK))
+			// Close the mux and allow guardian to try to reconnect, as we want to test that we can still use the tunnel after
+			// reconnecting.
+			t.Log("test that the guardian continuously tries to reconnect to the upstream server when the connection is closed")
+			authenticator.rejectConnections = true   // Reject all connection requests from guardian
+			authenticator.connectionRequestCount = 0 // Reset the request connect
+			_ = session.Close()
 
-	defer resp.Body.Close()
+			// Wait for guardian to try connecting at least 5 times to ensure the reconnection logic retries frequently based on
+			// the configuration. The interval is set to 100 ms, so it should take any longer than 5 seconds for 5 attempts.
+			Eventually(func() int { return authenticator.connectionRequestCount }, "5s").Should(BeNumerically(">=", 5))
 
-	rspObj = testServerResponse{}
-	Expect(json.NewDecoder(resp.Body).Decode(&rspObj)).ShouldNot(HaveOccurred())
-	Expect(rspObj.Message).Should(Equal("hello from the other side."))
+			// Allow guardian to reconnect to the upstream server.
+			authenticator.rejectConnections = false
 
-	cancel()
-	<-sessionListener.WaitForShutdown()
-	<-daemonDoneSig
+			// Send a request to the upstream server and ensure it works after reconnecting.
+			req, err = http.NewRequest(http.MethodGet, "https://localhost:8999/foobar", nil)
+			Expect(err).ShouldNot(HaveOccurred())
+
+			session = <-ch
+			Expect(session).ShouldNot(BeNil())
+			resp, err = sendToMuxRequest(session, req)
+			Expect(err).ShouldNot(HaveOccurred())
+			Expect(resp.StatusCode).Should(Equal(http.StatusOK))
+
+			defer resp.Body.Close()
+
+			rspObj = testServerResponse{}
+			Expect(json.NewDecoder(resp.Body).Decode(&rspObj)).ShouldNot(HaveOccurred())
+			Expect(rspObj.Message).Should(Equal("hello from the other side."))
+
+			cancel()
+			<-sessionListener.WaitForShutdown()
+			<-daemonDoneSig
+		})
+	}
 }
 
-func TestRequestsFromDownstreamToUpstream(t *testing.T) {
+func TestOutboundRequests(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -145,7 +206,7 @@ func TestRequestsFromDownstreamToUpstream(t *testing.T) {
 	clientCA, clientCert := createTLSConfigTLSConfig()
 	serverCA, serverCert := createTLSConfigTLSConfig()
 
-	daemonDoneSig := startDaemon(ctx, clientCert, serverCA, []server.Target{})
+	daemonDoneSig := startDaemon(ctx, clientCert, serverCA, defaultCfg, []server.Target{})
 
 	tlsCfg := upstreamTLSConfig(*serverCert, clientCA)
 
@@ -238,4 +299,30 @@ func createTLSConfigTLSConfig() (cryptoutils.CA, *tls.Certificate) {
 	Expect(err).ShouldNot(HaveOccurred())
 
 	return ca, certificate
+}
+
+func upstreamTLSConfig(tlsCert tls.Certificate, ca cryptoutils.CA) *tls.Config {
+	tlsCfg, err := calicotls.NewTLSConfig()
+	Expect(err).ShouldNot(HaveOccurred())
+
+	tlsCfg.ClientAuth = tls.RequireAndVerifyClientCert
+	tlsCfg.ClientCAs = x509.NewCertPool()
+	tlsCfg.InsecureSkipVerify = true
+	Expect(ca.AddToCertPool(tlsCfg.ClientCAs)).ShouldNot(HaveOccurred())
+
+	tlsCfg.Certificates = []tls.Certificate{tlsCert}
+	return tlsCfg
+}
+
+func startDaemon(ctx context.Context, clientCert *tls.Certificate, serverCA cryptoutils.CA, cfg config.Config, targets []server.Target) chan struct{} {
+	cfg.SetTLSConfigProvider(tlsConfigProvider(*clientCert, serverCA))
+
+	daemonDoneSig := make(chan struct{})
+	go func() {
+		defer close(daemonDoneSig)
+
+		daemon.Run(ctx, cfg, targets)
+	}()
+
+	return daemonDoneSig
 }

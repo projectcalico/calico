@@ -50,7 +50,7 @@ func sendToMuxRequest(mux bimux.Session, req *http.Request) (*http.Response, err
 	return http2Conn.RoundTrip(req)
 }
 
-func tlsConfigProvider(tlsCert tls.Certificate, ca cryptoutils.CA) config.TLSConfigProviderFunc {
+func tlsConfigProvider(tlsCert tls.Certificate, ca cryptoutils.CA, extraCAs ...cryptoutils.CA) config.TLSConfigProviderFunc {
 	return func() (*tls.Config, *tls.Certificate, error) {
 		tlsConfig, err := calicotls.NewTLSConfig()
 		Expect(err).ShouldNot(HaveOccurred())
@@ -60,6 +60,9 @@ func tlsConfigProvider(tlsCert tls.Certificate, ca cryptoutils.CA) config.TLSCon
 		tlsConfig.ServerName = ca.Certificate().DNSNames[0]
 
 		Expect(ca.AddToCertPool(tlsConfig.RootCAs)).ShouldNot(HaveOccurred())
+		for _, extraCA := range extraCAs {
+			Expect(extraCA.AddToCertPool(tlsConfig.RootCAs)).ShouldNot(HaveOccurred())
+		}
 		return tlsConfig, &tlsCert, nil
 	}
 }

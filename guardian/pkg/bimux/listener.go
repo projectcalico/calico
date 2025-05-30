@@ -36,6 +36,7 @@ func NewDefaultSessionListener(addr string, tlsCfg *tls.Config) (SessionListener
 }
 
 func NewSessionListener[T any](addr string, tlsCfg *tls.Config, verifier ConnectionAuthenticator[T]) (SessionListener[T], error) {
+	tlsCfg.InsecureSkipVerify = true
 	return &sessionListener[T]{
 		addr:         addr,
 		tlsCfg:       tlsCfg,
@@ -80,9 +81,9 @@ func (mg *sessionListener[T]) Listen(ctx context.Context) (<-chan *ServerSession
 			cfg.EnableKeepAlive = true
 			cfg.KeepAliveInterval = 10000
 
-			var info *T
+			var identity *T
 			if mg.connVerifier != nil {
-				info, err = mg.connVerifier.Authenticate(conn)
+				identity, err = mg.connVerifier.Authenticate(conn)
 				if err != nil {
 					log.WithError(err).Debugf("Terminating connection, verification failed.")
 					_ = conn.Close()
@@ -97,7 +98,7 @@ func (mg *sessionListener[T]) Listen(ctx context.Context) (<-chan *ServerSession
 				panic(err)
 			}
 
-			err = chanutil.Write(ctx, sessionChan, newServerSideSession(mux, info))
+			err = chanutil.Write(ctx, sessionChan, newServerSideSession(mux, identity))
 			if err != nil {
 				log.WithError(err).Debugf("Failed to write to session channel")
 				return

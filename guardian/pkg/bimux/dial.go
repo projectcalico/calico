@@ -17,7 +17,6 @@ import (
 	"github.com/hashicorp/yamux"
 	"github.com/sirupsen/logrus"
 
-	calicoTLS "github.com/projectcalico/calico/crypto/pkg/tls"
 	"github.com/projectcalico/calico/guardian/pkg/cryptoutils"
 	"github.com/projectcalico/calico/lib/std/chanutil"
 	"github.com/projectcalico/calico/lib/std/clock"
@@ -50,7 +49,8 @@ type sessionDialer struct {
 	keepAliveInterval time.Duration
 
 	// If set, the default tunnel dialer will issue an HTTP CONNECT to this URL to establish a TCP pass-through connection to Voltron.
-	httpProxyURL *url.URL
+	httpProxyURL   *url.URL
+	proxyTLSConfig *tls.Config
 }
 
 func NewSessionDialer(addr string, tlsConfig *tls.Config, opts ...DialerOption) (SessionDialer, error) {
@@ -62,6 +62,7 @@ func NewSessionDialer(addr string, tlsConfig *tls.Config, opts ...DialerOption) 
 		timeout:           defaultDialTimeout,
 		keepAliveEnable:   defaultKeepAlive,
 		keepAliveInterval: defaultKeepAliveInterval,
+		proxyTLSConfig:    tlsConfig,
 	}
 
 	for _, opt := range opts {
@@ -124,12 +125,7 @@ func (d *sessionDialer) dialTLS() (net.Conn, error) {
 	if d.httpProxyURL != nil {
 		// mTLS will be negotiated over a TCP connection to the proxy, which performs TCP passthrough to the target.
 		logrus.Infof("Dialing to %s via HTTP proxy at %s", d.addr, d.httpProxyURL)
-		var tlsConfig *tls.Config
-		tlsConfig, err = calicoTLS.NewTLSConfig()
-		if err != nil {
-			return nil, fmt.Errorf("failed to create TLS Config: %w", err)
-		}
-		c, err = tlsDialViaHTTPProxy(dialer, d.addr, d.httpProxyURL, d.tlsConfig, tlsConfig)
+		c, err = tlsDialViaHTTPProxy(dialer, d.addr, d.httpProxyURL, d.tlsConfig, d.proxyTLSConfig)
 		if err != nil {
 			return nil, fmt.Errorf("TLS dial via HTTP proxy failed: %w", err)
 		}

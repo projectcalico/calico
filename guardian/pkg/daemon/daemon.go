@@ -38,11 +38,11 @@ func Run(ctx context.Context, cfg config.Config, proxyTargets []server.Target) {
 		bimux.WithDialerKeepAliveSettings(cfg.KeepAliveEnable, time.Duration(cfg.KeepAliveInterval)*time.Millisecond),
 	}
 
-	proxyURL, err := cfg.GetHTTPProxyURL()
-	if err != nil {
-		logrus.WithError(err).Fatal("Failed to resolve proxy URL.")
-	} else if proxyURL != nil {
-		dialOpts = append(dialOpts, bimux.WithDialerHTTPProxyURL(proxyURL))
+	if cfg.ProxyURL != nil {
+		dialOpts = append(dialOpts, bimux.WithDialerHTTPProxyURL(cfg.ProxyURL))
+		if cfg.ProxyTLSConfig != nil {
+			dialOpts = append(dialOpts, bimux.WithDialerHTTPProxyTLSConfig(cfg.ProxyTLSConfig))
+		}
 	}
 
 	tlsConfig, cert, err := cfg.TLSConfigProvider().TLSConfig()
