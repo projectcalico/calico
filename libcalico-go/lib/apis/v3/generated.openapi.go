@@ -3187,7 +3187,7 @@ func schema_libcalico_go_lib_apis_v3_QoSControls(ref common.ReferenceCallback) c
 					},
 					"egressMaxConnections": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Egress aximum number of connections (absolute number of connections, no unit)",
+							Description: "Egress maximum number of connections (absolute number of connections, no unit)",
 							Type:        []string{"integer"},
 							Format:      "int64",
 						},
