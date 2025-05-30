@@ -15,12 +15,14 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"path/filepath"
 
 	"github.com/sirupsen/logrus"
 	cli "github.com/urfave/cli/v2"
 
+	"github.com/projectcalico/calico/release/internal/ci"
 	"github.com/projectcalico/calico/release/internal/hashreleaseserver"
 	"github.com/projectcalico/calico/release/internal/imagescanner"
 	"github.com/projectcalico/calico/release/internal/outputs"
@@ -61,6 +63,10 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 
 				// Validate flags.
 				if err := validateHashreleaseBuildFlags(c); err != nil {
+					return err
+				}
+
+				if err := validateCIBuildRequirements(c, cfg.RepoRootDir); err != nil {
 					return err
 				}
 
@@ -306,6 +312,9 @@ func validateHashreleaseBuildFlags(c *cli.Context) error {
 			return fmt.Errorf("missing hashrelease server configuration, must set %s, %s, %s, %s, and %s",
 				sshHostFlag, sshUserFlag, sshKeyFlag, sshPortFlag, sshKnownHostsFlag)
 		}
+		if c.String(ciTokenFlag.Name) == "" {
+			return fmt.Errorf("%s API token must be set when running on CI, either set \"SEMAPHORE_API_TOKEN\" or use %s flag", semaphoreCI, ciTokenFlag.Name)
+		}
 	} else {
 		// If building images, log a warning if no registry is specified.
 		if c.Bool(buildHashreleaseImageFlag.Name) && len(c.StringSlice(registryFlag.Name)) == 0 {
@@ -380,4 +389,25 @@ func imageScanningAPIConfig(c *cli.Context) *imagescanner.Config {
 		Token:   c.String(imageScannerTokenFlag.Name),
 		Scanner: c.String(imageScannerSelectFlag.Name),
 	}
+}
+
+func validateCIBuildRequirements(c *cli.Context, repoRootDir string) error {
+	if !c.Bool(ciFlag.Name) {
+		return nil
+	}
+	if c.Bool(buildImagesFlag.Name) {
+		logrus.Info("Building images in hashrelease, skipping images promotions check...")
+		return nil
+	}
+	orgURL := c.String(ciBaseURLFlag.Name)
+	token := c.String(ciTokenFlag.Name)
+	pipelineID := c.String(ciPipelineIDFlag.Name)
+	promotionsDone, err := ci.EvaluateImagePromotions(repoRootDir, orgURL, pipelineID, token)
+	if err != nil {
+		return err
+	}
+	if !promotionsDone {
+		return errors.New("images promotions are not done, wait for all images promotions to pass before publishing the hashrelease")
+	}
+	return nil
 }
