@@ -103,12 +103,12 @@ func Run() {
 		log.Info("Skipping datastore connection test")
 	}
 
-	if cfg.Spec.DatastoreType == apiconfig.Kubernetes {
-		if err := ensureKDDMigrated(cfg, cli); err != nil {
-			log.WithError(err).Errorf("Unable to ensure datastore is migrated.")
-			utils.Terminate()
-		}
-	}
+	// if cfg.Spec.DatastoreType == apiconfig.Kubernetes {
+	// 	if err := ensureKDDMigrated(cfg, cli); err != nil {
+	// 		log.WithError(err).Errorf("Unable to ensure datastore is migrated.")
+	// 		utils.Terminate()
+	// 	}
+	// }
 
 	// Query the current Node resources.  We update our node resource with
 	// updated IP data and use the full list of nodes for validation.

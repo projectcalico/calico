@@ -25,6 +25,7 @@ const (
 
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:resource:scope=Cluster
 
 // GlobalNetworkPolicyList is a list of Policy objects.
 type GlobalNetworkPolicyList struct {
@@ -37,6 +38,7 @@ type GlobalNetworkPolicyList struct {
 // +genclient
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:resource:scope=Cluster
 
 type GlobalNetworkPolicy struct {
 	metav1.TypeMeta   `json:",inline"`
