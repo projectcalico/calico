@@ -72,8 +72,8 @@ var _ = Describe("IPIPManager", func() {
 				RulesConfig: rules.Config{
 					IPIPTunnelAddress: net.ParseIP("192.168.0.1"),
 				},
-				ProgramRoutes:       true,
-				DeviceRouteProtocol: dataplanedefs.DefaultRouteProto,
+				ProgramClusterRoutes: true,
+				DeviceRouteProtocol:  dataplanedefs.DefaultRouteProto,
 			},
 			opRecorder,
 			dataplane,

@@ -1391,8 +1391,8 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 		*out = new(bool)
 		**out = **in
 	}
-	if in.ProgramRoutes != nil {
-		in, out := &in.ProgramRoutes, &out.ProgramRoutes
+	if in.ProgramClusterRoutes != nil {
+		in, out := &in.ProgramClusterRoutes, &out.ProgramClusterRoutes
 		*out = new(string)
 		**out = **in
 	}
