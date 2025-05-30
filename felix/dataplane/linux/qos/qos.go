@@ -157,31 +157,14 @@ func ReadIngressQdisc(intf string) (*TokenBucketState, error) {
 		return nil, fmt.Errorf("Failed to list qdiscs on link %s: %w", intf, err)
 	}
 
-	tbs := &TokenBucketState{}
 	for _, qdisc := range qdiscs {
 		tbf, isTbf := qdisc.(*netlink.Tbf)
-		// TBF info may be split in multiple netlink route attributes, loop through them to populate TokenBucketState
-		// See https://github.com/vishvananda/netlink/blob/17daef607c6442d47b0565343cf8a69f985a4cb7/qdisc_linux.go#L180-L195
 		if isTbf {
-			if tbf.Rate > 0 {
-				tbs.Rate = tbf.Rate
-			}
-			if tbf.Buffer > 0 {
-				tbs.Buffer = tbf.Buffer
-			}
-			if tbf.Limit > 0 {
-				tbs.Limit = tbf.Limit
-			}
-			if tbf.Peakrate > 0 {
-				tbs.Peakrate = tbf.Peakrate
-			}
-			if tbf.Minburst > 0 {
-				tbs.Minburst = tbf.Minburst
-			}
+			return &TokenBucketState{Rate: tbf.Rate, Buffer: tbf.Buffer, Limit: tbf.Limit, Peakrate: tbf.Peakrate, Minburst: tbf.Minburst}, nil
 		}
 	}
 
-	return tbs, nil
+	return nil, nil
 }
 
 func ReadEgressQdisc(intf string) (*TokenBucketState, error) {
