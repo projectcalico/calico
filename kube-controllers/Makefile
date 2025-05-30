@@ -137,7 +137,7 @@ ut fv: $(TEST_BINARIES)
 		   ETCD_IMAGE=$(ETCD_IMAGE) \
 		   CONTAINER_NAME=$(KUBE_CONTROLLERS_IMAGE):latest-$(ARCH) \
 		   MIGRATION_CONTAINER_NAME=$(FLANNEL_MIGRATION_IMAGE):latest-$(ARCH) \
-		   CRDS=$(CURDIR)/../libcalico-go/config/crd \
+		   CRDS=$(CURDIR)/../api/config/crd \
 		   CERTS_PATH=$(CERTS_PATH) \
 		   ./run-uts $(WHAT)
 

@@ -22,6 +22,8 @@ type Interface interface {
 	CalicoNodeStatuses() CalicoNodeStatusInformer
 	// ClusterInformations returns a ClusterInformationInformer.
 	ClusterInformations() ClusterInformationInformer
+	// ClusterInformationLists returns a ClusterInformationListInformer.
+	ClusterInformationLists() ClusterInformationListInformer
 	// FelixConfigurations returns a FelixConfigurationInformer.
 	FelixConfigurations() FelixConfigurationInformer
 	// GlobalNetworkPolicies returns a GlobalNetworkPolicyInformer.
@@ -30,8 +32,12 @@ type Interface interface {
 	GlobalNetworkSets() GlobalNetworkSetInformer
 	// HostEndpoints returns a HostEndpointInformer.
 	HostEndpoints() HostEndpointInformer
+	// IPAMBlocks returns a IPAMBlockInformer.
+	IPAMBlocks() IPAMBlockInformer
 	// IPAMConfigurations returns a IPAMConfigurationInformer.
 	IPAMConfigurations() IPAMConfigurationInformer
+	// IPAMHandles returns a IPAMHandleInformer.
+	IPAMHandles() IPAMHandleInformer
 	// IPPools returns a IPPoolInformer.
 	IPPools() IPPoolInformer
 	// IPReservations returns a IPReservationInformer.
@@ -95,6 +101,11 @@ func (v *version) ClusterInformations() ClusterInformationInformer {
 	return &clusterInformationInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
 }
 
+// ClusterInformationLists returns a ClusterInformationListInformer.
+func (v *version) ClusterInformationLists() ClusterInformationListInformer {
+	return &clusterInformationListInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
+}
+
 // FelixConfigurations returns a FelixConfigurationInformer.
 func (v *version) FelixConfigurations() FelixConfigurationInformer {
 	return &felixConfigurationInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
@@ -115,9 +126,19 @@ func (v *version) HostEndpoints() HostEndpointInformer {
 	return &hostEndpointInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
 }
 
+// IPAMBlocks returns a IPAMBlockInformer.
+func (v *version) IPAMBlocks() IPAMBlockInformer {
+	return &iPAMBlockInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+}
+
 // IPAMConfigurations returns a IPAMConfigurationInformer.
 func (v *version) IPAMConfigurations() IPAMConfigurationInformer {
 	return &iPAMConfigurationInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
+}
+
+// IPAMHandles returns a IPAMHandleInformer.
+func (v *version) IPAMHandles() IPAMHandleInformer {
+	return &iPAMHandleInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }
 
 // IPPools returns a IPPoolInformer.

@@ -51,6 +51,8 @@ func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Projectcalico().V3().CalicoNodeStatuses().Informer()}, nil
 	case v3.SchemeGroupVersion.WithResource("clusterinformations"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Projectcalico().V3().ClusterInformations().Informer()}, nil
+	case v3.SchemeGroupVersion.WithResource("clusterinformationlists"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Projectcalico().V3().ClusterInformationLists().Informer()}, nil
 	case v3.SchemeGroupVersion.WithResource("felixconfigurations"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Projectcalico().V3().FelixConfigurations().Informer()}, nil
 	case v3.SchemeGroupVersion.WithResource("globalnetworkpolicies"):
@@ -59,8 +61,12 @@ func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Projectcalico().V3().GlobalNetworkSets().Informer()}, nil
 	case v3.SchemeGroupVersion.WithResource("hostendpoints"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Projectcalico().V3().HostEndpoints().Informer()}, nil
+	case v3.SchemeGroupVersion.WithResource("ipamblocks"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Projectcalico().V3().IPAMBlocks().Informer()}, nil
 	case v3.SchemeGroupVersion.WithResource("ipamconfigurations"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Projectcalico().V3().IPAMConfigurations().Informer()}, nil
+	case v3.SchemeGroupVersion.WithResource("ipamhandles"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Projectcalico().V3().IPAMHandles().Informer()}, nil
 	case v3.SchemeGroupVersion.WithResource("ippools"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Projectcalico().V3().IPPools().Informer()}, nil
 	case v3.SchemeGroupVersion.WithResource("ipreservations"):

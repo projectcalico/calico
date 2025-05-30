@@ -16,41 +16,50 @@ package resources
 
 import (
 	"context"
+	"fmt"
 	"reflect"
 
-	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 )
 
 const (
-	IPAMConfigResourceName = "IPAMConfigs"
-	IPAMConfigCRDName      = "ipamconfigs.crd.projectcalico.org"
+	IPAMConfigResourceName   = "IPAMConfigs"
+	IPAMConfigResourceNameV3 = "IPAMConfigurations"
 )
 
-func NewIPAMConfigClient(c kubernetes.Interface, r rest.Interface) K8sResourceClient {
+func NewIPAMConfigClient(r rest.Interface, useV3 bool) K8sResourceClient {
+	resource := IPAMConfigResourceName
+	if useV3 {
+		resource = IPAMConfigResourceNameV3
+	}
+
+	rc := customResourceClient{
+		restClient:      r,
+		resource:        resource,
+		k8sResourceType: reflect.TypeOf(libapiv3.IPAMConfiguration{}),
+		k8sListType:     reflect.TypeOf(libapiv3.IPAMConfigurationList{}),
+		kind:            libapiv3.KindIPAMConfig,
+		noTransform:     useV3,
+	}
+
+	if useV3 {
+		// If this is a v3 resource, then we need to use the v3 API types, as they differ.
+		rc.k8sResourceType = reflect.TypeOf(v3.IPAMConfiguration{})
+		rc.k8sListType = reflect.TypeOf(v3.IPAMConfigurationList{})
+	}
+
+	// TODO: CASEY
 	return &ipamConfigClient{
-		rc: customK8sResourceClient{
-			clientSet:       c,
-			restClient:      r,
-			name:            IPAMConfigCRDName,
-			resource:        IPAMConfigResourceName,
-			description:     "Calico IPAM configuration",
-			k8sResourceType: reflect.TypeOf(libapiv3.IPAMConfig{}),
-			k8sResourceTypeMeta: metav1.TypeMeta{
-				Kind:       libapiv3.KindIPAMConfig,
-				APIVersion: apiv3.GroupVersionCurrent,
-			},
-			k8sListType:  reflect.TypeOf(libapiv3.IPAMConfigList{}),
-			resourceKind: libapiv3.KindIPAMConfig,
-		},
+		rc: rc,
+		v3: useV3,
 	}
 }
 
@@ -60,24 +69,40 @@ func NewIPAMConfigClient(c kubernetes.Interface, r rest.Interface) K8sResourceCl
 // It uses a customK8sResourceClient under the covers to perform CRUD operations on
 // kubernetes CRDs.
 type ipamConfigClient struct {
-	rc customK8sResourceClient
+	rc customResourceClient
+	v3 bool
 }
 
 // toV1 converts the given v3 CRD KVPair into a v1 model representation
 // which can be passed to the IPAM code.
 func (c ipamConfigClient) toV1(kvpv3 *model.KVPair) (*model.KVPair, error) {
-	v3obj := kvpv3.Value.(*libapiv3.IPAMConfig)
-
-	return &model.KVPair{
-		Key: model.IPAMConfigKey{},
-		Value: &model.IPAMConfig{
-			StrictAffinity:     v3obj.Spec.StrictAffinity,
-			AutoAllocateBlocks: v3obj.Spec.AutoAllocateBlocks,
-			MaxBlocksPerHost:   v3obj.Spec.MaxBlocksPerHost,
-		},
-		Revision: kvpv3.Revision,
-		UID:      &kvpv3.Value.(*libapiv3.IPAMConfig).UID,
-	}, nil
+	switch kvpv3.Value.(type) {
+	case *libapiv3.IPAMConfiguration:
+		v3obj := kvpv3.Value.(*libapiv3.IPAMConfiguration)
+		return &model.KVPair{
+			Key: model.IPAMConfigKey{},
+			Value: &model.IPAMConfig{
+				StrictAffinity:     v3obj.Spec.StrictAffinity,
+				AutoAllocateBlocks: v3obj.Spec.AutoAllocateBlocks,
+				MaxBlocksPerHost:   v3obj.Spec.MaxBlocksPerHost,
+			},
+			Revision: kvpv3.Revision,
+			UID:      &kvpv3.Value.(*libapiv3.IPAMConfiguration).UID,
+		}, nil
+	case *v3.IPAMConfiguration:
+		v3obj := kvpv3.Value.(*v3.IPAMConfiguration)
+		return &model.KVPair{
+			Key: model.IPAMConfigKey{},
+			Value: &model.IPAMConfig{
+				StrictAffinity:     v3obj.Spec.StrictAffinity,
+				AutoAllocateBlocks: v3obj.Spec.AutoAllocateBlocks,
+				MaxBlocksPerHost:   int(v3obj.Spec.MaxBlocksPerHost),
+			},
+			Revision: kvpv3.Revision,
+			UID:      &v3obj.UID,
+		}, nil
+	}
+	return nil, fmt.Errorf("invalid type for IPAMConfig KVPair: %T", kvpv3.Value)
 }
 
 // For the first point, toV3 takes the given v1 KVPair and converts it into a v3 representation, suitable
@@ -89,31 +114,60 @@ func (c ipamConfigClient) toV3(kvpv1 *model.KVPair) *model.KVPair {
 	m.SetName(model.IPAMConfigGlobalName)
 	m.SetResourceVersion(kvpv1.Revision)
 
-	v1obj := kvpv1.Value.(*model.IPAMConfig)
-	return &model.KVPair{
-		Key: model.ResourceKey{
-			Name: model.IPAMConfigGlobalName,
-			Kind: libapiv3.KindIPAMConfig,
-		},
-		Value: &libapiv3.IPAMConfig{
-			TypeMeta: metav1.TypeMeta{
-				Kind:       libapiv3.KindIPAMConfig,
-				APIVersion: "crd.projectcalico.org/v1",
+	apiVersion := "crd.projectcalico.org/v1"
+	if c.v3 {
+		// If this is a v3 resource, then we need to use the v3 API version.
+		apiVersion = "projectcalico.org/v3"
+	}
+
+	if c.v3 {
+		v1obj := kvpv1.Value.(*model.IPAMConfig)
+		return &model.KVPair{
+			Key: model.ResourceKey{
+				Name: model.IPAMConfigGlobalName,
+				Kind: libapiv3.KindIPAMConfig,
 			},
-			ObjectMeta: m,
-			Spec: libapiv3.IPAMConfigSpec{
-				StrictAffinity:     v1obj.StrictAffinity,
-				AutoAllocateBlocks: v1obj.AutoAllocateBlocks,
-				MaxBlocksPerHost:   v1obj.MaxBlocksPerHost,
+			Value: &v3.IPAMConfiguration{
+				TypeMeta: metav1.TypeMeta{
+					Kind:       libapiv3.KindIPAMConfig,
+					APIVersion: apiVersion,
+				},
+				ObjectMeta: m,
+				Spec: v3.IPAMConfigurationSpec{
+					StrictAffinity:     v1obj.StrictAffinity,
+					AutoAllocateBlocks: v1obj.AutoAllocateBlocks,
+					MaxBlocksPerHost:   int32(v1obj.MaxBlocksPerHost),
+				},
 			},
-		},
-		Revision: kvpv1.Revision,
+			Revision: kvpv1.Revision,
+		}
+	} else {
+		v1obj := kvpv1.Value.(*model.IPAMConfig)
+		return &model.KVPair{
+			Key: model.ResourceKey{
+				Name: model.IPAMConfigGlobalName,
+				Kind: libapiv3.KindIPAMConfig,
+			},
+			Value: &libapiv3.IPAMConfiguration{
+				TypeMeta: metav1.TypeMeta{
+					Kind:       libapiv3.KindIPAMConfig,
+					APIVersion: apiVersion,
+				},
+				ObjectMeta: m,
+				Spec: libapiv3.IPAMConfigurationSpec{
+					StrictAffinity:     v1obj.StrictAffinity,
+					AutoAllocateBlocks: v1obj.AutoAllocateBlocks,
+					MaxBlocksPerHost:   v1obj.MaxBlocksPerHost,
+				},
+			},
+			Revision: kvpv1.Revision,
+		}
 	}
 }
 
 // There's two possible kV formats to be passed to backend ipamConfig.
 // 1. Libcalico-go IPAM passes a v1 model.IPAMConfig directly. [libcalico-go/lib/ipam/ipam.go]
-// 2. Calico-apiserver storage passes a kv with libapiv3.IPAMConfig
+// 2. Calico-apiserver storage passes a kv with libapiv3.IPAMConfiguration
 
 // isV1Key return if the Key is in v1 format.
 func isV1Key(key model.Key) bool {

@@ -16,6 +16,8 @@ type CalicoNodeStatusExpansion interface{}
 
 type ClusterInformationExpansion interface{}
 
+type ClusterInformationListExpansion interface{}
+
 type FelixConfigurationExpansion interface{}
 
 type GlobalNetworkPolicyExpansion interface{}
@@ -24,7 +26,11 @@ type GlobalNetworkSetExpansion interface{}
 
 type HostEndpointExpansion interface{}
 
+type IPAMBlockExpansion interface{}
+
 type IPAMConfigurationExpansion interface{}
+
+type IPAMHandleExpansion interface{}
 
 type IPPoolExpansion interface{}
 
