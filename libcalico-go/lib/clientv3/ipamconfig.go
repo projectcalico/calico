@@ -55,7 +55,7 @@ func (r IPAMConfigs) Create(ctx context.Context, res *libapiv3.IPAMConfiguration
 		return nil, err
 	}
 
-	out, err := r.client.resources.Create(ctx, opts, libapiv3.KindIPAMConfig, res)
+	out, err := r.client.resources.Create(ctx, opts, libapiv3.KindIPAMConfiguration, res)
 	if out != nil {
 		return out.(*libapiv3.IPAMConfiguration), err
 	}
@@ -71,7 +71,7 @@ func (r IPAMConfigs) Update(ctx context.Context, res *libapiv3.IPAMConfiguration
 		return nil, err
 	}
 
-	out, err := r.client.resources.Update(ctx, opts, libapiv3.KindIPAMConfig, res)
+	out, err := r.client.resources.Update(ctx, opts, libapiv3.KindIPAMConfiguration, res)
 	if out != nil {
 		return out.(*libapiv3.IPAMConfiguration), err
 	}
@@ -80,7 +80,7 @@ func (r IPAMConfigs) Update(ctx context.Context, res *libapiv3.IPAMConfiguration
 
 // Delete takes name of the IPAMConfig and deletes it. Returns an error if one occurs.
 func (r IPAMConfigs) Delete(ctx context.Context, name string, opts options.DeleteOptions) (*libapiv3.IPAMConfiguration, error) {
-	out, err := r.client.resources.Delete(ctx, opts, libapiv3.KindIPAMConfig, noNamespace, name)
+	out, err := r.client.resources.Delete(ctx, opts, libapiv3.KindIPAMConfiguration, noNamespace, name)
 	if out != nil {
 		return out.(*libapiv3.IPAMConfiguration), err
 	}
@@ -90,7 +90,7 @@ func (r IPAMConfigs) Delete(ctx context.Context, name string, opts options.Delet
 // Get takes name of the IPAMConfig, and returns the corresponding IPAMConfig object,
 // and an error if there is any.
 func (r IPAMConfigs) Get(ctx context.Context, name string, opts options.GetOptions) (*libapiv3.IPAMConfiguration, error) {
-	out, err := r.client.resources.Get(ctx, opts, libapiv3.KindIPAMConfig, noNamespace, name)
+	out, err := r.client.resources.Get(ctx, opts, libapiv3.KindIPAMConfiguration, noNamespace, name)
 	if out != nil {
 		return out.(*libapiv3.IPAMConfiguration), err
 	}
@@ -100,7 +100,7 @@ func (r IPAMConfigs) Get(ctx context.Context, name string, opts options.GetOptio
 // List returns the list of IPAMConfig objects that match the supplied options.
 func (r IPAMConfigs) List(ctx context.Context, opts options.ListOptions) (*libapiv3.IPAMConfigurationList, error) {
 	res := &libapiv3.IPAMConfigurationList{}
-	if err := r.client.resources.List(ctx, opts, libapiv3.KindIPAMConfig, libapiv3.KindIPAMConfigList, res); err != nil {
+	if err := r.client.resources.List(ctx, opts, libapiv3.KindIPAMConfiguration, libapiv3.KindIPAMConfigurationList, res); err != nil {
 		return nil, err
 	}
 	return res, nil
@@ -109,5 +109,5 @@ func (r IPAMConfigs) List(ctx context.Context, opts options.ListOptions) (*libap
 // Watch returns a watch.Interface that watches the IPAMConfigs that match the
 // supplied options.
 func (r IPAMConfigs) Watch(ctx context.Context, opts options.ListOptions) (watch.Interface, error) {
-	return r.client.resources.Watch(ctx, opts, libapiv3.KindIPAMConfig, nil)
+	return r.client.resources.Watch(ctx, opts, libapiv3.KindIPAMConfiguration, nil)
 }

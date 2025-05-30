@@ -20,8 +20,14 @@ import (
 )
 
 const (
-	KindIPAMConfig       = "IPAMConfiguration"
-	KindIPAMConfigList   = "IPAMConfigurationList"
+	// The projectcalico.org/v3 API uses IPAMConfiguration as the kind.
+	KindIPAMConfiguration     = "IPAMConfiguration"
+	KindIPAMConfigurationList = "IPAMConfigurationList"
+
+	// The crd.projectcalico.org/v1 internal API uses IPAMConfig as the kind.
+	KindIPAMConfig     = "IPAMConfig"
+	KindIPAMConfigList = "IPAMConfigList"
+
 	GlobalIPAMConfigName = "default"
 )
 
@@ -66,7 +72,7 @@ type IPAMConfigurationList struct {
 func NewIPAMConfig() *IPAMConfiguration {
 	return &IPAMConfiguration{
 		TypeMeta: metav1.TypeMeta{
-			Kind:       KindIPAMConfig,
+			Kind:       KindIPAMConfiguration,
 			APIVersion: apiv3.GroupVersionCurrent,
 		},
 	}
@@ -77,7 +83,7 @@ func NewIPAMConfig() *IPAMConfiguration {
 func NewIPAMConfigList() *IPAMConfigurationList {
 	return &IPAMConfigurationList{
 		TypeMeta: metav1.TypeMeta{
-			Kind:       KindIPAMConfigList,
+			Kind:       KindIPAMConfigurationList,
 			APIVersion: apiv3.GroupVersionCurrent,
 		},
 	}

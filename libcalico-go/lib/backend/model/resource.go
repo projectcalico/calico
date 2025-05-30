@@ -182,7 +182,7 @@ func init() {
 		reflect.TypeOf(libapiv3.WorkloadEndpoint{}),
 	)
 	registerResourceInfo(
-		libapiv3.KindIPAMConfig,
+		libapiv3.KindIPAMConfiguration,
 		"ipamconfigs",
 		reflect.TypeOf(libapiv3.IPAMConfiguration{}),
 	)

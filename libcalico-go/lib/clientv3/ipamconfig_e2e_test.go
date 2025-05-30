@@ -97,7 +97,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAMConfig tests", testutils.DatastoreAl
 				Spec:       spec1,
 			}, options.SetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
-			Expect(res1).To(MatchResource(libapiv3.KindIPAMConfig, testutils.ExpectNoNamespace, name, spec1))
+			Expect(res1).To(MatchResource(libapiv3.KindIPAMConfiguration, testutils.ExpectNoNamespace, name, spec1))
 			Expect(res1.GroupVersionKind()).To(Equal(schema.GroupVersionKind{Group: "projectcalico.org", Version: "v3", Kind: "IPAMConfig"}))
 
 			By("Attempting to create the same IPAMConfig but with spec2")
@@ -111,7 +111,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAMConfig tests", testutils.DatastoreAl
 			By("Getting IPAMConfig and comparing the output against spec1")
 			res, outError := c.IPAMConfig().Get(ctx, name, options.GetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
-			Expect(res).To(MatchResource(libapiv3.KindIPAMConfig, testutils.ExpectNoNamespace, name, spec1))
+			Expect(res).To(MatchResource(libapiv3.KindIPAMConfiguration, testutils.ExpectNoNamespace, name, spec1))
 			Expect(res.ResourceVersion).To(Equal(res1.ResourceVersion))
 			Expect(res.GroupVersionKind()).To(Equal(schema.GroupVersionKind{Group: "projectcalico.org", Version: "v3", Kind: "IPAMConfig"}))
 
@@ -119,7 +119,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAMConfig tests", testutils.DatastoreAl
 			res1.Spec = spec2
 			res1, outError = c.IPAMConfig().Update(ctx, res1, options.SetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
-			Expect(res1).To(MatchResource(libapiv3.KindIPAMConfig, testutils.ExpectNoNamespace, name, spec2))
+			Expect(res1).To(MatchResource(libapiv3.KindIPAMConfiguration, testutils.ExpectNoNamespace, name, spec2))
 
 			By("Attempting to update the IPAMConfig without a Creation Timestamp")
 			res, outError = c.IPAMConfig().Update(ctx, &libapiv3.IPAMConfiguration{
@@ -142,7 +142,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAMConfig tests", testutils.DatastoreAl
 			By("Deleting IPAMConfig with the new resource version")
 			dres, outError := c.IPAMConfig().Delete(ctx, name, options.DeleteOptions{})
 			Expect(outError).NotTo(HaveOccurred())
-			Expect(dres).To(testutils.MatchResource(libapiv3.KindIPAMConfig, testutils.ExpectNoNamespace, name, spec2))
+			Expect(dres).To(testutils.MatchResource(libapiv3.KindIPAMConfiguration, testutils.ExpectNoNamespace, name, spec2))
 
 			By("Listing IPAMConfig and expecting error")
 			l, outError := c.IPAMConfig().List(ctx, options.ListOptions{})

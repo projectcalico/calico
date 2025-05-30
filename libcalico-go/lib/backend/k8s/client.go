@@ -199,7 +199,7 @@ func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 	c.registerResourceClient(
 		reflect.TypeOf(model.ResourceKey{}),
 		reflect.TypeOf(model.ResourceListOptions{}),
-		libapiv3.KindIPAMConfig,
+		libapiv3.KindIPAMConfiguration,
 		resources.NewIPAMConfigClient(restClient, v3),
 	)
 	c.registerResourceClient(
@@ -289,6 +289,7 @@ func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 			libapiv3.KindIPAMHandle,
 			resources.NewIPAMHandleClient(restClient, v3),
 		)
+
 		c.registerResourceClient(
 			reflect.TypeOf(model.IPAMConfigKey{}),
 			nil,
@@ -462,7 +463,7 @@ func (c *KubeClient) Clean() error {
 		apiv3.KindIPReservation,
 		apiv3.KindHostEndpoint,
 		apiv3.KindKubeControllersConfiguration,
-		libapiv3.KindIPAMConfig,
+		libapiv3.KindIPAMConfiguration,
 		libapiv3.KindBlockAffinity,
 		apiv3.KindBGPFilter,
 	}

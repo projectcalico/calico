@@ -79,7 +79,7 @@ func (gc IPAMConfigConverter) convertToLibcalico(aapiObj runtime.Object) resourc
 	lcgIPAMConfig := &libapi.IPAMConfiguration{}
 	lcgIPAMConfig.TypeMeta = aapiIPAMConfig.TypeMeta
 	lcgIPAMConfig.ObjectMeta = aapiIPAMConfig.ObjectMeta
-	lcgIPAMConfig.Kind = libapi.KindIPAMConfig
+	lcgIPAMConfig.Kind = libapi.KindIPAMConfiguration
 	lcgIPAMConfig.APIVersion = aapi.GroupVersionCurrent
 	lcgIPAMConfig.Spec.StrictAffinity = aapiIPAMConfig.Spec.StrictAffinity
 	lcgIPAMConfig.Spec.MaxBlocksPerHost = int(aapiIPAMConfig.Spec.MaxBlocksPerHost)

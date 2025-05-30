@@ -46,7 +46,7 @@ func NewIPAMConfigClient(r rest.Interface, useV3 bool) K8sResourceClient {
 		resource:        resource,
 		k8sResourceType: reflect.TypeOf(libapiv3.IPAMConfiguration{}),
 		k8sListType:     reflect.TypeOf(libapiv3.IPAMConfigurationList{}),
-		kind:            libapiv3.KindIPAMConfig,
+		kind:            libapiv3.KindIPAMConfiguration,
 		noTransform:     useV3,
 	}
 
@@ -125,11 +125,11 @@ func (c ipamConfigClient) toV3(kvpv1 *model.KVPair) *model.KVPair {
 		return &model.KVPair{
 			Key: model.ResourceKey{
 				Name: model.IPAMConfigGlobalName,
-				Kind: libapiv3.KindIPAMConfig,
+				Kind: libapiv3.KindIPAMConfiguration,
 			},
 			Value: &v3.IPAMConfiguration{
 				TypeMeta: metav1.TypeMeta{
-					Kind:       libapiv3.KindIPAMConfig,
+					Kind:       libapiv3.KindIPAMConfiguration,
 					APIVersion: apiVersion,
 				},
 				ObjectMeta: m,
@@ -146,11 +146,11 @@ func (c ipamConfigClient) toV3(kvpv1 *model.KVPair) *model.KVPair {
 		return &model.KVPair{
 			Key: model.ResourceKey{
 				Name: model.IPAMConfigGlobalName,
-				Kind: libapiv3.KindIPAMConfig,
+				Kind: libapiv3.KindIPAMConfiguration,
 			},
 			Value: &libapiv3.IPAMConfiguration{
 				TypeMeta: metav1.TypeMeta{
-					Kind:       libapiv3.KindIPAMConfig,
+					Kind:       libapiv3.KindIPAMConfiguration,
 					APIVersion: apiVersion,
 				},
 				ObjectMeta: m,
@@ -241,7 +241,7 @@ func (c *ipamConfigClient) DeleteKVP(ctx context.Context, kvp *model.KVPair) (*m
 func (c *ipamConfigClient) deleteV1(ctx context.Context, key model.Key, revision string, uid *types.UID) (*model.KVPair, error) {
 	k := model.ResourceKey{
 		Name: model.IPAMConfigGlobalName,
-		Kind: libapiv3.KindIPAMConfig,
+		Kind: libapiv3.KindIPAMConfiguration,
 	}
 	kvp, err := c.rc.Delete(ctx, k, revision, uid)
 	if err != nil {
@@ -271,7 +271,7 @@ func (c *ipamConfigClient) Delete(ctx context.Context, key model.Key, revision s
 func (c *ipamConfigClient) getV1(ctx context.Context, key model.Key, revision string) (*model.KVPair, error) {
 	k := model.ResourceKey{
 		Name: model.IPAMConfigGlobalName,
-		Kind: libapiv3.KindIPAMConfig,
+		Kind: libapiv3.KindIPAMConfiguration,
 	}
 	kvp, err := c.rc.Get(ctx, k, revision)
 	if err != nil {
