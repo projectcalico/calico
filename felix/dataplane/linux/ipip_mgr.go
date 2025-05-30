@@ -163,7 +163,7 @@ func (m *ipipManager) OnUpdate(protoBufMsg interface{}) {
 		m.ipSetDirty = true
 		m.maybeUpdateRoutes()
 	default:
-		if m.dpConfig.ProgramRoutes {
+		if m.dpConfig.ProgramClusterRoutes {
 			m.routeMgr.OnUpdate(msg)
 		}
 	}
@@ -171,7 +171,7 @@ func (m *ipipManager) OnUpdate(protoBufMsg interface{}) {
 
 func (m *ipipManager) maybeUpdateRoutes() {
 	// Only update routes if only Felix is responsible for programming IPIP routes.
-	if m.dpConfig.ProgramRoutes {
+	if m.dpConfig.ProgramClusterRoutes {
 		m.routeMgr.triggerRouteUpdate()
 	}
 }
@@ -182,7 +182,7 @@ func (m *ipipManager) CompleteDeferredWork() error {
 		m.ipSetDirty = false
 	}
 
-	if m.dpConfig.ProgramRoutes {
+	if m.dpConfig.ProgramClusterRoutes {
 		return m.routeMgr.CompleteDeferredWork()
 	}
 	return nil
