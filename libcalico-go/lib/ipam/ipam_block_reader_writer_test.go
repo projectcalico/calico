@@ -1049,7 +1049,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 
 			// If running in KDD mode, extract the k8s clientset.
 			if config.Spec.DatastoreType == "kubernetes" {
-				kc = bc.(*crdv1.KubeClient).ClientSet
+				kc = bc.(*k8s.KubeClient).ClientSet
 			}
 
 			// Configure a BRW with a real datastore client.

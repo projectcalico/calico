@@ -23,8 +23,6 @@ const (
 	KindClusterInformationList = "ClusterInformationList"
 )
 
-// +genclient
-// +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // ClusterInformationList is a list of ClusterInformation objects.

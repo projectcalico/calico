@@ -16,8 +16,6 @@ type CalicoNodeStatusExpansion interface{}
 
 type ClusterInformationExpansion interface{}
 
-type ClusterInformationListExpansion interface{}
-
 type FelixConfigurationExpansion interface{}
 
 type GlobalNetworkPolicyExpansion interface{}
