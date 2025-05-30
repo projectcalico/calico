@@ -485,6 +485,8 @@ func handleQoSControlsAnnotations(annotations map[string]string) (*libapiv3.QoSC
 		qosControls.EgressBurst = defaultBurst.Value()
 	}
 
+	// default minburst values are configured in felix/dataplane/linux/qos/qos.go because they depend on the interface MTU
+
 	// return nil if no control is configured
 	if (*qosControls == libapiv3.QoSControls{}) {
 		qosControls = nil
