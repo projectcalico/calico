@@ -136,7 +136,7 @@ type QoSControls struct {
 	EgressPacketRate int64 `json:"egressPacketRate,omitempty"`
 	// Ingress maximum number of connections (absolute number of connections, no unit)
 	IngressMaxConnections int64 `json:"ingressMaxConnections,omitempty"`
-	// Egress aximum number of connections (absolute number of connections, no unit)
+	// Egress maximum number of connections (absolute number of connections, no unit)
 	EgressMaxConnections int64 `json:"egressMaxConnections,omitempty"`
 }
 
