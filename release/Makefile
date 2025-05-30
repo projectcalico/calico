@@ -21,8 +21,10 @@ bin/release: $(shell find . -name "*.go")
 	@mkdir -p bin && \
 	$(call build_binary, ./cmd, bin/release)
 
+POSTRELEASE_TEST_PACKAGE		:= $(PACKAGE_NAME)/pkg/postrelease
+UNIT_TEST_PACKAGES	:= $(shell go list ./... | grep -v $(POSTRELEASE_TEST_PACKAGE))
 ut:
-	$(DOCKER_GO_BUILD) go test ./... -v -cover -count 1
+	$(DOCKER_GO_BUILD) go test $(UNIT_TEST_PACKAGES) -v -cover -count 1
 
 ###############################################################################
 # CI/CD

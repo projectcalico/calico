@@ -45,6 +45,7 @@ import (
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/pod"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/serviceaccount"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/utils"
+	"github.com/projectcalico/calico/kube-controllers/pkg/converter"
 	"github.com/projectcalico/calico/kube-controllers/pkg/status"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
@@ -483,6 +484,12 @@ func (cc *controllerControl) InitControllers(ctx context.Context, cfg config.Run
 		loadBalancerController := loadbalancer.NewLoadBalancerController(k8sClientset, calicoClient, *cfg.Controllers.LoadBalancer, serviceInformer, dataFeed)
 		cc.controllers["LoadBalancer"] = loadBalancerController
 		cc.registerInformers(serviceInformer)
+	}
+
+	// We don't need the full Pod object. In order to reduce memory usage, add a transform that only
+	// includes the fields we need.
+	if err := podInformer.SetTransform(converter.PodTransformer(cfg.Controllers.WorkloadEndpoint != nil)); err != nil {
+		log.WithError(err).Fatal("Failed to set transform on pod informer")
 	}
 }
 

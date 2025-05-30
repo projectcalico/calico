@@ -32,15 +32,15 @@ var ImageMap = map[string]string{
 	"csi-node-driver-registrar": "calico/node-driver-registrar",
 }
 
-func CheckComponentImage(component Component) (bool, error) {
-	ref, err := name.ParseReference(component.String())
+func CheckImage(image string) (bool, error) {
+	ref, err := name.ParseReference(image)
 	if err != nil {
-		return false, fmt.Errorf("failed to parse image reference for %s: %w", component.String(), err)
+		return false, fmt.Errorf("failed to parse image reference for %s: %w", image, err)
 	}
 
 	_, err = remote.Head(ref, remote.WithAuthFromKeychain(authn.DefaultKeychain))
 	if err != nil {
-		return false, fmt.Errorf("failed to get image descriptor for %s: %w", component.String(), err)
+		return false, fmt.Errorf("failed to get image descriptor for %s: %w", image, err)
 	}
 	return true, nil
 }

@@ -20,6 +20,7 @@ HELM_VERSION=v3.11.3
 KINDEST_NODE_VERSION=v1.31.4
 KIND_VERSION=v0.25.0
 GITHUB_CLI_VERSION=2.26.0
+GOTESTSUM_VERSION=v1.12.2
 
 # Configuration for Semaphore/Github integration.  This needs to be set
 # differently for a forked repo.
@@ -66,3 +67,6 @@ BPFTOOL_IMAGE=calico/bpftool:v7.5.0
 
 # The operator branch corresponding to this branch.
 OPERATOR_BRANCH=casey-v3-crds
+
+# quay.io expiry time for hashrelease/dev images
+QUAY_EXPIRE_DAYS=90

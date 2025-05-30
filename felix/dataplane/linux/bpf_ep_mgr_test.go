@@ -122,19 +122,17 @@ func (m *mockDataplane) loadDefaultPolicies() error {
 	return nil
 }
 
-func (m *mockDataplane) ensureProgramAttached(ap attachPoint) (qDiscInfo, error) {
+func (m *mockDataplane) ensureProgramAttached(ap attachPoint) error {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 	key := ap.IfaceName() + ":" + ap.HookName().String()
 	m.numAttaches[key] = m.numAttaches[key] + 1
-	return qDiscInfo{valid: true, prio: 49152, handle: 1}, nil
+	return nil
 }
 
 func (m *mockDataplane) ensureProgramLoaded(ap attachPoint, ipFamily proto.IPVersion) error {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
-
-	// var res tc.AttachResult // we don't care about the values
 
 	if apxdp, ok := ap.(*xdp.AttachPoint); ok {
 		apxdp.HookLayoutV4 = hook.Layout{
@@ -300,8 +298,8 @@ func (m *mockDataplane) ruleMatchID(dir rules.RuleDir, action string, owner rule
 	return h.Sum64()
 }
 
-func (m *mockDataplane) queryClassifier(ifindex, handle, prio int, ingress bool) (int, error) {
-	return 0, nil
+func (m *mockDataplane) queryClassifier(ifaceName, tcHook string) bool {
+	return true
 }
 
 var (

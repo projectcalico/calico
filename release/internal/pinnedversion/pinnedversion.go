@@ -76,10 +76,10 @@ func (c OperatorConfig) GitBranch() (string, error) {
 // PinnedVersion represents an entry in pinned version file.
 type PinnedVersion struct {
 	Title          string                        `yaml:"title"`
-	ManifestURL    string                        `yaml:"manifest_url"`
+	ManifestURL    string                        `yaml:"manifest_url,omitempty"`
 	ReleaseName    string                        `yaml:"release_name,omitempty"`
-	Note           string                        `yaml:"note"`
-	Hash           string                        `yaml:"full_hash"`
+	Note           string                        `yaml:"note,omitempty"`
+	Hash           string                        `yaml:"full_hash,omitempty"`
 	TigeraOperator registry.Component            `yaml:"tigera-operator"`
 	Components     map[string]registry.Component `yaml:"components"`
 }
@@ -96,6 +96,9 @@ type calicoTemplateData struct {
 }
 
 func (d *calicoTemplateData) ReleaseURL() string {
+	if d.ReleaseName == "" || d.BaseDomain == "" {
+		return ""
+	}
 	return fmt.Sprintf("https://%s.%s", d.ReleaseName, d.BaseDomain)
 }
 

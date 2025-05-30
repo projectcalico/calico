@@ -21,6 +21,8 @@ vm_name=$1
 project=unique-caldron-775
 zone=europe-west3-c
 
+: ${IMAGE:=ubuntu-2204-jammy-v20250312}
+
 gcloud config set project $project
 gcloud auth activate-service-account --key-file=$HOME/secrets/secret.google-service-account-key.json
 
@@ -28,7 +30,7 @@ function create-vm() {
   gcloud --quiet compute instances create "${vm_name}" \
            --zone=${zone} \
            --machine-type=n4-standard-4 \
-           --image=ubuntu-2204-jammy-v20250312 \
+           --image=${IMAGE} \
            --image-project=ubuntu-os-cloud \
            --boot-disk-size=20GB \
            --boot-disk-type=hyperdisk-balanced && \
