@@ -184,7 +184,7 @@ func init() {
 	registerResourceInfo(
 		libapiv3.KindIPAMConfig,
 		"ipamconfigs",
-		reflect.TypeOf(libapiv3.IPAMConfig{}),
+		reflect.TypeOf(libapiv3.IPAMConfiguration{}),
 	)
 	registerResourceInfo(
 		apiv3.KindKubeControllersConfiguration,
