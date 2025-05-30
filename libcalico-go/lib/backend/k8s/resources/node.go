@@ -147,6 +147,9 @@ func (c *nodeClient) List(ctx context.Context, list model.ListInterface, revisio
 			// Filtering to a single node.
 			opts.FieldSelector = fields.OneTermEqualSelector("metadata.name", nl.Name).String()
 		}
+		if nl.LabelSelector != "" {
+			opts.LabelSelector = nl.LabelSelector
+		}
 		nodes, err := c.clientSet.CoreV1().Nodes().List(ctx, opts)
 		if err != nil {
 			return nil, err
