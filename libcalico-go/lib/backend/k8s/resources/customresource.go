@@ -32,7 +32,6 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
 
-	v1scheme "github.com/projectcalico/calico/libcalico-go/lib/apis/crd.projectcalico.org/v1/scheme"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
@@ -479,18 +478,12 @@ func (c *customResourceClient) nameToKey(name string) (model.Key, error) {
 // TODO: Don't instantiate a new TypeMeta for every call.
 func (c *customResourceClient) typeMeta() *metav1.TypeMeta {
 	return &metav1.TypeMeta{
+		// apiVersion is the API group and version for the resources returned by this client.
+		// Note that this is not necessarily the same as the API version used in the Kubernetes API. For example,
+		// CRs may be stored using crd.projectcalico.org/v1, but returned to callers with projectcalico.org/v3.
+		APIVersion: apiv3.GroupVersionCurrent,
 		Kind:       c.kind,
-		APIVersion: c.apiVersion(),
 	}
-}
-
-func (c *customResourceClient) apiVersion() string {
-	if c.noTransform {
-		// If no transform is required, then we are writing directly to projectcalico.org/v3 CRDs.
-		return apiv3.GroupVersionCurrent
-	}
-	// If transform is required, then we are writing to crd.projectcalico.org/v1 CRDs.
-	return v1scheme.GroupVersion
 }
 
 func (c *customResourceClient) convertResourceToKVPair(r Resource) (*model.KVPair, error) {
@@ -532,19 +525,13 @@ func (c *customResourceClient) convertKVPairToResource(kvp *model.KVPair) (Resou
 	resource := kvp.Value.(Resource)
 	resource.GetObjectMeta().SetResourceVersion(kvp.Revision)
 
-	var resOut Resource
 	if c.noTransform {
 		// Use the input resource as-is, no transformation needed.
-		resOut = resource
+		return resource, nil
 	} else {
 		// Perform the transform from projectcalico.org/v3 to crd.projectcalico.org/v1
-		resOut, err := ConvertCalicoResourceToK8sResource(resource)
-		if err != nil {
-			return resOut, err
-		}
+		return ConvertCalicoResourceToK8sResource(resource)
 	}
-
-	return resOut, nil
 }
 
 func (c *customResourceClient) defaultPolicyName(name string) string {
