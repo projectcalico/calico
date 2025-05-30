@@ -15,6 +15,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"path/filepath"
 
@@ -395,18 +396,18 @@ func validateCIBuildRequirements(c *cli.Context, repoRootDir string) error {
 		return nil
 	}
 	if c.Bool(buildImagesFlag.Name) {
-		logrus.Debug("Building images, skipping images promotions check...")
+		logrus.Info("Building images in hashrelease, skipping images promotions check...")
 		return nil
 	}
 	orgURL := c.String(ciBaseURLFlag.Name)
 	token := c.String(ciTokenFlag.Name)
 	pipelineID := c.String(ciPipelineIDFlag.Name)
-	promotionsDone, err := ci.ImagePromotionsDone(repoRootDir, orgURL, pipelineID, token)
+	promotionsDone, err := ci.EvaluateImagePromotions(repoRootDir, orgURL, pipelineID, token)
 	if err != nil {
-		return fmt.Errorf("failed to check if images promotions are done: %v", err)
+		return err
 	}
 	if !promotionsDone {
-		return fmt.Errorf("images promotions are not done, wait for all images promotions to pass before publishing the hashrelease")
+		return errors.New("images promotions are not done, wait for all images promotions to pass before publishing the hashrelease")
 	}
 	return nil
 }

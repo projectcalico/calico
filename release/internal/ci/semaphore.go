@@ -2,9 +2,9 @@ package ci
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
-	"strconv"
 	"strings"
 
 	"github.com/sirupsen/logrus"
@@ -64,7 +64,8 @@ func fetchImagePromotions(orgURL, pipelineID, token string) ([]promotion, error)
 
 	imagesPromotionsMap := make(map[string]promotion)
 	for _, p := range promotions {
-		if strings.HasPrefix(strings.ToLower(p.Name), "push ") {
+		if (strings.HasPrefix(strings.ToLower(p.Name), "push ") || strings.HasPrefix(strings.ToLower(p.Name), "publish ")) &&
+			strings.HasPrefix(strings.ToLower(p.Name), "push ") {
 			if currentP, ok := imagesPromotionsMap[p.Name]; ok {
 				// If the promotion is already in the map,
 				// only if the staus for the promotion in the map is not passed.
@@ -138,7 +139,45 @@ func fetchParentPipelineID(orgURL, pipelineID, token string) (string, error) {
 	return p.Pipeline.PromotionOf, err
 }
 
-// ImagePromotionsDone checks if all the promotion pipelines have passed.
+func retrieveExpectedPromotions(repoRootDir string) ([]string, error) {
+	promotionsFile := fmt.Sprintf("%s/.semaphore/semaphore.yml.d/03-promotions.yml", repoRootDir)
+	expectPromotions, err := command.Run("grep", []string{"-Po", `"name: \K(((P|p)ush|(P|p)ublish).*images.*)"`, promotionsFile})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get expected image promotions from %s: %s", promotionsFile, err.Error())
+	}
+	return strings.Split(expectPromotions, "\n"), nil
+}
+
+func getDistinctImagePromotions(promotions []promotion, orgURL, token string) (map[string]pipeline, error) {
+	promotionsSet := make(map[string]pipeline)
+	for _, promotion := range promotions {
+		name := strings.ToLower(promotion.Name)
+		// If the promotion already exists, this means that it has been triggered more than once.
+		if currP, ok := promotionsSet[name]; ok {
+			if currP.Result == passed {
+				continue // If the current promotion is already passed, skip checking the duplicate.
+			}
+			newP, err := getPipelineResult(orgURL, promotion.PipelineID, token)
+			if err != nil {
+				return nil, fmt.Errorf("unable to get %q pipeline details: %s", promotion.Name, err.Error())
+			}
+			// If the new promotion is passed, update the current promotion.
+			if newP.Result == passed {
+				promotionsSet[name] = *newP
+			}
+		} else {
+			// If the promotion does not exist, add it to the set.
+			pipelineResult, err := getPipelineResult(orgURL, promotion.PipelineID, token)
+			if err != nil {
+				return nil, fmt.Errorf("unable to get %q pipeline details: %s", promotion.Name, err.Error())
+			}
+			promotionsSet[name] = *pipelineResult
+		}
+	}
+	return promotionsSet, nil
+}
+
+// EvaluateImagePromotions checks if all the image publishing promotion pipelines have passed.
 //
 // As it is checking in the hashrelease pipeline, it tries to get the pipeline that triggered the hashrelease promotion.
 // If the pipeline that triggered the hashrelease promotion is not found,
@@ -146,18 +185,19 @@ func fetchParentPipelineID(orgURL, pipelineID, token string) (string, error) {
 // In this case, it skips the image promotions check.
 //
 // Once the pipeline that triggered the hashrelease promotion is found, it checks if all the expected image promotions have passed.
-// Since the API only return promotions that have been triggered, it is possible that some promotions are not triggered.
-// This is why it checks that the number of promotions is equal or greater than the expected number from the semaphore.yml.
-func ImagePromotionsDone(repoRootDir, orgURL, pipelineID, token string) (bool, error) {
-	expectPromotionCountStr, err := command.Run("grep", []string{"-c", `"name: Push "`, fmt.Sprintf("%s/.semaphore/semaphore.yml.d/03-promotions.yml", repoRootDir)})
+// Since Semaphore API only return promotions that have been triggered,
+// it is possible that some promotions are not triggered. It is also possible that the same promotion is triggered multiple times.
+// This is why it checks against the image promotions in the semaphore.yml.
+// For promotion pipelines that are triggered multiple times, it only considers the first one that has passed.
+func EvaluateImagePromotions(repoRootDir, orgURL, pipelineID, token string) (bool, error) {
+	expectedPromotions, err := retrieveExpectedPromotions(repoRootDir)
 	if err != nil {
-		return false, fmt.Errorf("failed to get expected image promotions")
+		return false, err
 	}
-	expectedPromotionCount, err := strconv.Atoi(expectPromotionCountStr)
-	if err != nil {
-		return false, fmt.Errorf("unable to convert expected promotions to int")
+	expectedPromotionCount := len(expectedPromotions)
+	if expectedPromotionCount == 0 {
+		return false, fmt.Errorf("no expected image promotions found in %s", repoRootDir)
 	}
-	logrus.WithField("count", expectedPromotionCount).Debug("expected number of image promotions")
 	parentPipelineID, err := fetchParentPipelineID(orgURL, pipelineID, token)
 	if err != nil {
 		return false, err
@@ -171,27 +211,43 @@ func ImagePromotionsDone(repoRootDir, orgURL, pipelineID, token string) (bool, e
 	if err != nil {
 		return false, err
 	}
-	promotionsCount := len(promotions)
-	logrus.WithFields(logrus.Fields{
-		"expected": expectedPromotionCount,
-		"actual":   promotionsCount,
-	}).Debug("number of image promotions")
-	if promotionsCount < expectedPromotionCount {
-		return false, fmt.Errorf("number of promotions do not match: expected %d, got %d", expectedPromotionCount, promotionsCount)
+
+	// actualUniquePromotions is used to ensure that there are no duplicate promotions.
+	// It contains the names of the promotions in lowercase and their pipeline details.
+	actualUniquePromotions, err := getDistinctImagePromotions(promotions, orgURL, token)
+	if err != nil {
+		return false, err
 	}
-	for _, promotion := range promotions {
-		if promotion.Status != passed {
-			logrus.WithField("promotion", promotion.Name).Error("triggering promotion failed")
-			return false, fmt.Errorf("triggering %q promotion failed, cannot check pipeline result", promotion.Name)
-		}
-		pipeline, err := getPipelineResult(orgURL, promotion.PipelineID, token)
-		if err != nil {
-			return false, fmt.Errorf("unable to get %q pipeline details", promotion.Name)
-		}
-		if pipeline.Result != passed {
-			logrus.WithField("promotion", promotion.Name).Error("promotion failed")
-			return false, fmt.Errorf("%q promotion failed", promotion.Name)
+	// If there are no promotions, return an error.
+	if len(actualUniquePromotions) == 0 {
+		return false, fmt.Errorf("no image promotions found for in pipeline %s, wait till all image promotions are completed", parentPipelineID)
+	}
+
+	var missingPromotions, failedPromotions []string
+
+	for _, p := range expectedPromotions {
+		p = strings.ToLower(p)
+		if pipeline, ok := actualUniquePromotions[p]; !ok {
+			missingPromotions = append(missingPromotions, p)
+		} else if pipeline.Result != passed {
+			failedPromotions = append(failedPromotions, p)
 		}
 	}
+
+	if len(missingPromotions) > 0 || len(failedPromotions) > 0 {
+		errMsg := "image promotions check failed: "
+		if len(missingPromotions) > 0 {
+			errMsg += fmt.Sprintf("missing: %v", strings.Join(missingPromotions, ", "))
+			if len(failedPromotions) > 0 {
+				errMsg += ", "
+			}
+		}
+		if len(failedPromotions) > 0 {
+			errMsg += fmt.Sprintf("failed: %v", strings.Join(failedPromotions, ", "))
+		}
+		logrus.Error(errMsg)
+		return false, errors.New(errMsg)
+	}
+
 	return true, nil
 }
