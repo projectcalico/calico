@@ -330,7 +330,7 @@ var _ = infrastructure.DatastoreDescribe(
 				By("Setting 100 packets/s limit for ingress on workload 0 (iperf3 server)")
 				w[0].WorkloadEndpoint.Spec.QoSControls = &api.QoSControls{
 					IngressPacketRate:  100,
-					IngressPacketBurst: 200,
+					IngressPacketBurst: 4,
 				}
 				w[0].UpdateInInfra(infra)
 				Eventually(tc.Felixes[0].ExecOutputFn("ip", "r", "get", "10.65.0.2"), "10s").Should(ContainSubstring(w[0].InterfaceName))
@@ -343,9 +343,9 @@ var _ = infrastructure.DatastoreDescribe(
 					Consistently(getRules(0), "10s", "1s").ShouldNot(MatchRegexp(`(?s)chain filter-cali-fw-` + w[0].InterfaceName + ` {[^}]*limit rate over \d+/second burst \d+ packets drop`))
 				} else {
 					// ingress config should be present
-					Eventually(getRules(0), "10s", "1s").Should(And(MatchRegexp(`-A cali-tw-`+regexp.QuoteMeta(w[0].InterfaceName)+` .*-m limit --limit `+regexp.QuoteMeta("100/sec")+` --limit-burst `+regexp.QuoteMeta("200")+` -j MARK --set-xmark 0x\d+\/0x\d+`), MatchRegexp(`-A cali-tw-`+regexp.QuoteMeta(w[0].InterfaceName)+` .*-m mark ! --mark 0x\d+\/0x\d+ -j DROP`)))
+					Eventually(getRules(0), "10s", "1s").Should(And(MatchRegexp(`-A cali-tw-`+regexp.QuoteMeta(w[0].InterfaceName)+` .*-m limit --limit `+regexp.QuoteMeta("100/sec")+` --limit-burst `+regexp.QuoteMeta("4")+` -j MARK --set-xmark 0x\d+\/0x\d+`), MatchRegexp(`-A cali-tw-`+regexp.QuoteMeta(w[0].InterfaceName)+` .*-m mark ! --mark 0x\d+\/0x\d+ -j DROP`)))
 					// egress config should not be present
-					Consistently(getRules(0), "10s", "1s").ShouldNot(Or(MatchRegexp(`-A cali-fw-`+regexp.QuoteMeta(w[0].InterfaceName)+` .*-m limit --limit `+regexp.QuoteMeta("100/sec")+` --limit-burst `+regexp.QuoteMeta("200")+` -j MARK --set-xmark 0x\d+\/0x\d+`), MatchRegexp(`-A cali-fw-`+regexp.QuoteMeta(w[0].InterfaceName)+` .*-m mark ! --mark 0x\d+\/0x\d+ -j DROP`)))
+					Consistently(getRules(0), "10s", "1s").ShouldNot(Or(MatchRegexp(`-A cali-fw-`+regexp.QuoteMeta(w[0].InterfaceName)+` .*-m limit --limit `+regexp.QuoteMeta("100/sec")+` --limit-burst `+regexp.QuoteMeta("4")+` -j MARK --set-xmark 0x\d+\/0x\d+`), MatchRegexp(`-A cali-fw-`+regexp.QuoteMeta(w[0].InterfaceName)+` .*-m mark ! --mark 0x\d+\/0x\d+ -j DROP`)))
 				}
 
 				By("Running iperf3 client on workload 1 with packet rate limit for ingress on workload 0")
@@ -368,15 +368,15 @@ var _ = infrastructure.DatastoreDescribe(
 					Consistently(getRules(0), "10s", "1s").ShouldNot(MatchRegexp(`(?s)chain filter-cali-fw-` + w[0].InterfaceName + ` {[^}]*limit rate over \d+/second burst \d+ packets drop`))
 				} else {
 					// ingress config should not be present
-					Eventually(getRules(0), "10s", "1s").ShouldNot(Or(MatchRegexp(`-A cali-tw-`+regexp.QuoteMeta(w[0].InterfaceName)+` .*-m limit --limit `+regexp.QuoteMeta("100/sec")+` --limit-burst `+regexp.QuoteMeta("300")+` -j MARK --set-xmark 0x\d+\/0x\d+`), MatchRegexp(`-A cali-tw-`+regexp.QuoteMeta(w[0].InterfaceName)+` .*-m mark ! --mark 0x\d+\/0x\d+ -j DROP`)))
+					Eventually(getRules(0), "10s", "1s").ShouldNot(Or(MatchRegexp(`-A cali-tw-`+regexp.QuoteMeta(w[0].InterfaceName)+` .*-m limit --limit `+regexp.QuoteMeta("100/sec")+` --limit-burst `+regexp.QuoteMeta("4")+` -j MARK --set-xmark 0x\d+\/0x\d+`), MatchRegexp(`-A cali-tw-`+regexp.QuoteMeta(w[0].InterfaceName)+` .*-m mark ! --mark 0x\d+\/0x\d+ -j DROP`)))
 					// egress config should not be present
-					Consistently(getRules(0), "10s", "1s").ShouldNot(Or(MatchRegexp(`-A cali-fw-`+regexp.QuoteMeta(w[0].InterfaceName)+` .*-m limit --limit `+regexp.QuoteMeta("100/sec")+` --limit-burst `+regexp.QuoteMeta("300")+` -j MARK --set-xmark 0x\d+\/0x\d+`), MatchRegexp(`-A cali-fw-`+regexp.QuoteMeta(w[0].InterfaceName)+` .*-m mark ! --mark 0x\d+\/0x\d+ -j DROP`)))
+					Consistently(getRules(0), "10s", "1s").ShouldNot(Or(MatchRegexp(`-A cali-fw-`+regexp.QuoteMeta(w[0].InterfaceName)+` .*-m limit --limit `+regexp.QuoteMeta("100/sec")+` --limit-burst `+regexp.QuoteMeta("4")+` -j MARK --set-xmark 0x\d+\/0x\d+`), MatchRegexp(`-A cali-fw-`+regexp.QuoteMeta(w[0].InterfaceName)+` .*-m mark ! --mark 0x\d+\/0x\d+ -j DROP`)))
 				}
 
 				By("Setting 100kpps limit for egress on workload 1 (iperf3 client)")
 				w[1].WorkloadEndpoint.Spec.QoSControls = &api.QoSControls{
 					EgressPacketRate:  100,
-					EgressPacketBurst: 300,
+					EgressPacketBurst: 4,
 				}
 				w[1].UpdateInInfra(infra)
 				Eventually(tc.Felixes[1].ExecOutputFn("ip", "r", "get", "10.65.1.2"), "10s").Should(ContainSubstring(w[1].InterfaceName))
@@ -389,9 +389,9 @@ var _ = infrastructure.DatastoreDescribe(
 					Eventually(getRules(1), "10s", "1s").Should(MatchRegexp(`(?s)chain filter-cali-fw-` + w[1].InterfaceName + ` {[^}]*limit rate over \d+/second burst \d+ packets drop`))
 				} else {
 					// ingress config should not be present
-					Eventually(getRules(1), "10s", "1s").ShouldNot(Or(MatchRegexp(`-A cali-tw-`+regexp.QuoteMeta(w[1].InterfaceName)+` .*-m limit --limit `+regexp.QuoteMeta("100/sec")+` --limit-burst `+regexp.QuoteMeta("300")+` -j MARK --set-xmark 0x\d+\/0x\d+`), MatchRegexp(`-A cali-tw-`+regexp.QuoteMeta(w[1].InterfaceName)+` .*-m mark ! --mark 0x\d+\/0x\d+ -j DROP`)))
+					Eventually(getRules(1), "10s", "1s").ShouldNot(Or(MatchRegexp(`-A cali-tw-`+regexp.QuoteMeta(w[1].InterfaceName)+` .*-m limit --limit `+regexp.QuoteMeta("100/sec")+` --limit-burst `+regexp.QuoteMeta("4")+` -j MARK --set-xmark 0x\d+\/0x\d+`), MatchRegexp(`-A cali-tw-`+regexp.QuoteMeta(w[1].InterfaceName)+` .*-m mark ! --mark 0x\d+\/0x\d+ -j DROP`)))
 					// egress config should be present
-					Eventually(getRules(1), "10s", "1s").Should(And(MatchRegexp(`-A cali-fw-`+regexp.QuoteMeta(w[1].InterfaceName)+` .*-m limit --limit `+regexp.QuoteMeta("100/sec")+` --limit-burst `+regexp.QuoteMeta("300")+` -j MARK --set-xmark 0x\d+\/0x\d+`), MatchRegexp(`-A cali-fw-`+regexp.QuoteMeta(w[1].InterfaceName)+` .*-m mark ! --mark 0x\d+\/0x\d+ -j DROP`)))
+					Eventually(getRules(1), "10s", "1s").Should(And(MatchRegexp(`-A cali-fw-`+regexp.QuoteMeta(w[1].InterfaceName)+` .*-m limit --limit `+regexp.QuoteMeta("100/sec")+` --limit-burst `+regexp.QuoteMeta("4")+` -j MARK --set-xmark 0x\d+\/0x\d+`), MatchRegexp(`-A cali-fw-`+regexp.QuoteMeta(w[1].InterfaceName)+` .*-m mark ! --mark 0x\d+\/0x\d+ -j DROP`)))
 				}
 
 				By("Running iperf3 client on workload 1 with packet rate limit for egress on workload 1")
@@ -414,9 +414,9 @@ var _ = infrastructure.DatastoreDescribe(
 					Eventually(getRules(1), "10s", "1s").ShouldNot(MatchRegexp(`(?s)chain filter-cali-fw-` + w[1].InterfaceName + ` {[^}]*limit rate over \d+/second burst \d+ packets drop`))
 				} else {
 					// ingress config should not be present
-					Consistently(getRules(1), "10s", "1s").ShouldNot(Or(MatchRegexp(`-A cali-tw-`+regexp.QuoteMeta(w[1].InterfaceName)+` .*-m limit --limit `+regexp.QuoteMeta("100/sec")+` --limit-burst `+regexp.QuoteMeta("300")+` -j MARK --set-xmark 0x\d+\/0x\d+`), MatchRegexp(`-A cali-tw-`+regexp.QuoteMeta(w[1].InterfaceName)+` .*-m mark ! --mark 0x\d+/0x\d+ -j DROP`)))
+					Consistently(getRules(1), "10s", "1s").ShouldNot(Or(MatchRegexp(`-A cali-tw-`+regexp.QuoteMeta(w[1].InterfaceName)+` .*-m limit --limit `+regexp.QuoteMeta("100/sec")+` --limit-burst `+regexp.QuoteMeta("4")+` -j MARK --set-xmark 0x\d+\/0x\d+`), MatchRegexp(`-A cali-tw-`+regexp.QuoteMeta(w[1].InterfaceName)+` .*-m mark ! --mark 0x\d+/0x\d+ -j DROP`)))
 					// egress config should not be present
-					Eventually(getRules(1), "10s", "1s").ShouldNot(Or(MatchRegexp(`-A cali-fw-`+regexp.QuoteMeta(w[1].InterfaceName)+` .*-m limit --limit `+regexp.QuoteMeta("100/sec")+` --limit-burst `+regexp.QuoteMeta("300")+` -j MARK --set-xmark 0x\d+\/0x\d+`), MatchRegexp(`-A cali-fw-`+regexp.QuoteMeta(w[1].InterfaceName)+` .*-m mark ! --mark 0x\d+\/0x\d+ -j DROP`)))
+					Eventually(getRules(1), "10s", "1s").ShouldNot(Or(MatchRegexp(`-A cali-fw-`+regexp.QuoteMeta(w[1].InterfaceName)+` .*-m limit --limit `+regexp.QuoteMeta("100/sec")+` --limit-burst `+regexp.QuoteMeta("4")+` -j MARK --set-xmark 0x\d+\/0x\d+`), MatchRegexp(`-A cali-fw-`+regexp.QuoteMeta(w[1].InterfaceName)+` .*-m mark ! --mark 0x\d+\/0x\d+ -j DROP`)))
 				}
 
 				By("Killing and cleaning up iperf3 server process")
