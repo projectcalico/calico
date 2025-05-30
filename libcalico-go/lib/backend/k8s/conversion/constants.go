@@ -61,6 +61,8 @@ const (
 	AnnotationQoSEgressMinburst        = "qos.projectcalico.org/egressMinburst"
 	AnnotationQoSIngressPacketRate     = "qos.projectcalico.org/ingressPacketRate"
 	AnnotationQoSEgressPacketRate      = "qos.projectcalico.org/egressPacketRate"
+	AnnotationQoSIngressPacketBurst    = "qos.projectcalico.org/ingressPacketBurst"
+	AnnotationQoSEgressPacketBurst     = "qos.projectcalico.org/egressPacketBurst"
 	AnnotationQoSIngressMaxConnections = "qos.projectcalico.org/ingressMaxConnections"
 	AnnotationQoSEgressMaxConnections  = "qos.projectcalico.org/egressMaxConnections"
 )
