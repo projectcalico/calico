@@ -15,60 +15,55 @@
 package server
 
 import (
+	"context"
+
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 
-	"github.com/projectcalico/calico/goldmane/pkg/aggregator"
+	"github.com/projectcalico/calico/goldmane/pkg/goldmane"
 	"github.com/projectcalico/calico/goldmane/proto"
 )
 
-func NewFlowServiceServer(aggr *aggregator.LogAggregator) *FlowServiceServer {
-	return &FlowServiceServer{
-		aggr: aggr,
+func NewFlowsServer(aggr *goldmane.Goldmane) *FlowsServer {
+	return &FlowsServer{
+		gm: aggr,
 	}
 }
 
-type FlowServiceServer struct {
-	proto.UnimplementedFlowServiceServer
+type FlowsServer struct {
+	proto.UnimplementedFlowsServer
 
-	aggr *aggregator.LogAggregator
+	gm *goldmane.Goldmane
 }
 
-func (s *FlowServiceServer) RegisterWith(srv *grpc.Server) {
+func (s *FlowsServer) RegisterWith(srv *grpc.Server) {
 	// Register the server with the gRPC server.
-	proto.RegisterFlowServiceServer(srv, s)
+	proto.RegisterFlowsServer(srv, s)
 	logrus.Info("Registered FlowAPI Server")
 }
 
-func (s *FlowServiceServer) List(req *proto.FlowListRequest, server proto.FlowService_ListServer) error {
-	// Get flows.
-	flows, err := s.aggr.List(req)
-	if err != nil {
-		return err
-	}
-
-	// Send flows.
-	for _, flow := range flows {
-		if err := server.Send(flow); err != nil {
-			return err
-		}
-	}
-	return nil
+func (s *FlowsServer) List(ctx context.Context, req *proto.FlowListRequest) (*proto.FlowListResult, error) {
+	return s.gm.List(req)
 }
 
-func (s *FlowServiceServer) Stream(req *proto.FlowStreamRequest, server proto.FlowService_StreamServer) error {
+func (s *FlowsServer) Stream(req *proto.FlowStreamRequest, server proto.Flows_StreamServer) error {
 	// Get a new Stream from the aggregator.
-	stream, err := s.aggr.Stream(req)
+	stream, err := s.gm.Stream(req)
 	if err != nil {
 		return err
 	}
 	defer stream.Close()
 
+	// Share memory for each flow result.
+	result := &proto.FlowResult{Flow: &proto.Flow{}}
+
 	for {
 		select {
 		case flow := <-stream.Flows():
-			if err := server.Send(flow); err != nil {
-				return err
+			if flow.BuildInto(req.Filter, result) {
+				if err := server.Send(result); err != nil {
+					return err
+				}
 			}
 		case <-server.Context().Done():
 			return server.Context().Err()
@@ -76,15 +71,6 @@ func (s *FlowServiceServer) Stream(req *proto.FlowStreamRequest, server proto.Fl
 	}
 }
 
-func (f *FlowServiceServer) FilterHints(req *proto.FilterHintsRequest, srv proto.FlowService_FilterHintsServer) error {
-	hints, err := f.aggr.Hints(req)
-	if err != nil {
-		return err
-	}
-	for _, hint := range hints {
-		if err := srv.Send(hint); err != nil {
-			return err
-		}
-	}
-	return nil
+func (s *FlowsServer) FilterHints(ctx context.Context, req *proto.FilterHintsRequest) (*proto.FilterHintsResult, error) {
+	return s.gm.Hints(req)
 }

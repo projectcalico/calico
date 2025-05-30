@@ -1,47 +1,120 @@
-import { OmniFilterOption } from '@/libs/tigera/ui-components/components/common/OmniFilter/types';
+import { useInfiniteFilterQuery } from '@/features/flowLogs/api';
+import { OmniFilterOption as ListOmniFilterOption } from '@/libs/tigera/ui-components/components/common/OmniFilter/types';
 import {
-    OmniFilterData,
+    ListOmniFilterParam,
+    ListOmniFilterData,
     OmniFilterParam,
+    ListOmniFiltersData,
     SelectedOmniFilterData,
     SelectedOmniFilterOptions,
+    ListOmniFilterKeys,
 } from '@/utils/omniFilter';
+import React from 'react';
 
-export const useSelectedOmniFilters = (
+export const useSelectedListOmniFilters = (
     urlFilterParams: Record<OmniFilterParam, string[]>,
-    omniFilterData: OmniFilterData,
+    omniFilterData: ListOmniFiltersData,
     selectedOmniFilterData: SelectedOmniFilterData,
-) =>
-    Object.keys(urlFilterParams as Record<OmniFilterParam, string[]>).reduce(
-        (accumulator, current) => {
-            const filterId: OmniFilterParam = current as OmniFilterParam;
-
-            const selectedFilters = urlFilterParams[filterId].map(
-                (selectedValue) => {
-                    let selectedOption = selectedOmniFilterData?.[
-                        filterId
-                    ]?.filters?.find(
-                        (data: OmniFilterOption) =>
-                            data.value === selectedValue,
-                    );
-
-                    if (selectedOption) {
-                        return selectedOption;
-                    }
-
-                    selectedOption = omniFilterData[filterId]?.filters?.find(
-                        (selectOption) => selectOption.value === selectedValue,
-                    ) ?? {
-                        label: selectedValue,
-                        value: selectedValue,
-                    };
-
-                    return selectedOption;
-                },
-            );
-
-            accumulator[filterId] = selectedFilters;
-
-            return accumulator;
-        },
-        {} as SelectedOmniFilterOptions,
+) => {
+    const urlFilterValueKeys = Object.keys(urlFilterParams).filter(
+        (key) => ListOmniFilterKeys[key as ListOmniFilterParam],
     );
+
+    return urlFilterValueKeys.reduce((accumulator, current) => {
+        const filterId = current as ListOmniFilterParam;
+
+        const selectedFilters = urlFilterParams[filterId].map(
+            (selectedValue) => {
+                let selectedOption = selectedOmniFilterData?.[
+                    filterId
+                ]?.filters?.find(
+                    (data: ListOmniFilterOption) =>
+                        data.value === selectedValue,
+                );
+
+                if (selectedOption) {
+                    return selectedOption;
+                }
+
+                selectedOption = omniFilterData[filterId]?.filters?.find(
+                    (selectOption) => selectOption.value === selectedValue,
+                ) ?? {
+                    label: selectedValue,
+                    value: selectedValue,
+                };
+
+                return selectedOption;
+            },
+        );
+
+        accumulator[filterId] = selectedFilters;
+
+        return accumulator;
+    }, {} as SelectedOmniFilterOptions);
+};
+
+export const useOmniFilterQuery = (
+    filterParam: ListOmniFilterParam,
+): {
+    data: ListOmniFilterData;
+    fetchData: (query: string | null) => void;
+} => {
+    const [filterQuery, setFilterQuery] = React.useState<string | null>(null);
+    const { data, fetchNextPage, isLoading, isFetchingNextPage, refetch } =
+        useInfiniteFilterQuery(filterParam, filterQuery);
+
+    const fetchData = (query: string | null) => {
+        if (query === null) {
+            fetchNextPage();
+        } else if (query === filterQuery) {
+            refetch();
+        } else {
+            setFilterQuery(query);
+        }
+    };
+
+    const filters: ListOmniFilterOption[] | null =
+        data?.pages.flatMap(({ items }) => items) ?? null;
+
+    return {
+        data: {
+            filters,
+            isLoading: isLoading || isFetchingNextPage,
+            total: data?.pages[0]?.total ?? 0,
+        },
+        fetchData,
+    };
+};
+
+export const useOmniFilterData = (): [
+    ListOmniFiltersData,
+    (filterParam: ListOmniFilterParam, query: string | null) => void,
+] => {
+    const dataQueries = {
+        policy: useOmniFilterQuery(ListOmniFilterKeys.policy),
+        source_namespace: useOmniFilterQuery(
+            ListOmniFilterKeys.source_namespace,
+        ),
+        dest_namespace: useOmniFilterQuery(ListOmniFilterKeys.dest_namespace),
+        source_name: useOmniFilterQuery(ListOmniFilterKeys.source_name),
+        dest_name: useOmniFilterQuery(ListOmniFilterKeys.dest_name),
+    };
+
+    const fetchData = (
+        filterParam: ListOmniFilterParam,
+        query: string | null,
+    ) => {
+        dataQueries[filterParam].fetchData(query);
+    };
+
+    return [
+        {
+            policy: dataQueries.policy.data,
+            source_namespace: dataQueries.source_namespace.data,
+            dest_namespace: dataQueries.dest_namespace.data,
+            source_name: dataQueries.source_name.data,
+            dest_name: dataQueries.dest_name.data,
+        },
+        fetchData,
+    ];
+};

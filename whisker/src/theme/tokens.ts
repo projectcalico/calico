@@ -131,6 +131,10 @@ const semanticTokens = {
         _light: 'tigeraGrey.200',
         _dark: 'tigeraGrey.1000',
     },
+    'tigera-color-outline-on-surface-container-high': {
+        _light: 'tigeraGrey.200',
+        _dark: 'tigeraGrey.600',
+    },
 };
 
 export default {

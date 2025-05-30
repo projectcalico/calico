@@ -10,7 +10,11 @@ export const objToQueryStr = (queryObject: QueryObject) => {
         for (const key in queryObject) {
             const value = queryObject[key];
 
-            if (value === null || value === undefined) {
+            if (
+                value === null ||
+                value === undefined ||
+                (typeof value === 'string' && value.trim().length === 0)
+            ) {
                 continue;
             }
 

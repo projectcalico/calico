@@ -61,6 +61,7 @@ type Builder struct {
 	maxJumpsPerProgram int
 	numRulesInProgram  int
 	xdp                bool
+	flowLogsEnabled    bool
 }
 
 type ipSetIDProvider interface {
@@ -170,10 +171,8 @@ type Rule struct {
 }
 
 type Policy struct {
-	Name      string
-	Rules     []Rule
-	NoMatchID RuleMatchID
-	Staged    bool
+	Name  string
+	Rules []Rule
 }
 
 type Tier struct {
@@ -505,7 +504,7 @@ func (p *Builder) writeTiers(tiers []Tier, destLeg matchLeg, allowLabel string) 
 		if action == TierEndUndef {
 			action = TierEndDeny
 		}
-		p.b.AddCommentF("End of tier %s", tier.Name)
+		p.b.AddCommentF("End of tier %s: %s", tier.Name, tier.EndAction)
 		log.Debugf("End of tier %d %q: %s", p.tierID, tier.Name, action)
 		p.writeRule(Rule{
 			Rule:    &proto.Rule{},
@@ -530,20 +529,6 @@ func (p *Builder) writeProfiles(profiles []Policy, noProfileMatchID uint64, allo
 }
 
 func (p *Builder) writePolicyRules(policy Policy, actionLabels map[string]string, destLeg matchLeg) {
-	endOfPolicyLabel := fmt.Sprintf("end_of_policy_%d", p.policyID)
-
-	if policy.Staged {
-		// When a pass or allow rule matches in a staged policy then we want to skip
-		// the rest of the rules in the staged policy and continue processing the next
-		// policy in the same tier.  Note: don't modify the caller's map here!
-		actionLabels = map[string]string{
-			"pass":      endOfPolicyLabel,
-			"next-tier": endOfPolicyLabel,
-			"allow":     endOfPolicyLabel,
-			"deny":      endOfPolicyLabel,
-		}
-	}
-
 	for ruleIdx, rule := range policy.Rules {
 		log.Debugf("Start of rule %d", ruleIdx)
 		p.b.AddCommentF("Start of rule %s", rule)
@@ -556,12 +541,6 @@ func (p *Builder) writePolicyRules(policy Policy, actionLabels map[string]string
 		p.writeRule(rule, actionLabels[action], destLeg)
 		log.Debugf("End of rule %d", ruleIdx)
 		p.b.AddCommentF("End of rule %s", rule.RuleId)
-	}
-
-	if policy.Staged {
-		log.Debugf("NoMatch policy ID 0x%x", policy.NoMatchID)
-		p.writeRecordRuleID(policy.NoMatchID, endOfPolicyLabel)
-		p.b.LabelNextInsn(endOfPolicyLabel)
 	}
 }
 
@@ -771,8 +750,9 @@ func (p *Builder) writeEndOfRule(rule Rule, actionLabel string) {
 		// If all the match criteria are met, we fall through to the end of the rule
 		// so all that's left to do is to jump to the relevant action.
 		// TODO log and log-and-xxx actions
-		p.writeRecordRuleHit(rule, actionLabel)
-
+		if p.flowLogsEnabled || p.policyDebugEnabled {
+			p.writeRecordRuleHit(rule, actionLabel)
+		}
 		p.b.Jump(actionLabel)
 	}
 
@@ -1288,6 +1268,12 @@ func WithPolicyMapIndexAndStride(entryPointIdx, stride int) Option {
 func WithIPv6() Option {
 	return func(p *Builder) {
 		p.forIPv6 = true
+	}
+}
+
+func WithFlowLogs() Option {
+	return func(p *Builder) {
+		p.flowLogsEnabled = true
 	}
 }
 

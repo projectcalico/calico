@@ -1478,11 +1478,11 @@ func newIPPoolErrorAccessor(err error) *ipPoolErrorAccessor {
 	return &ipPoolErrorAccessor{err}
 }
 
-func (i *ipPoolErrorAccessor) GetEnabledPools(ipVersion int) ([]api.IPPool, error) {
+func (i *ipPoolErrorAccessor) GetEnabledPools(ctx context.Context, ipVersion int) ([]api.IPPool, error) {
 	return nil, i.err
 }
 
-func (i *ipPoolErrorAccessor) GetAllPools() ([]api.IPPool, error) {
+func (i *ipPoolErrorAccessor) GetAllPools(ctx context.Context) ([]api.IPPool, error) {
 	return nil, i.err
 }
 
@@ -1597,6 +1597,10 @@ func (c shimClient) BlockAffinities() client.BlockAffinityInterface {
 
 func (c shimClient) EnsureInitialized(ctx context.Context, calicoVersion, clusterType string) error {
 	return nil
+}
+
+func (c shimClient) Close() error {
+	return c.client.Close()
 }
 
 func (c shimClient) Tiers() client.TierInterface {

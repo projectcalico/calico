@@ -16,6 +16,7 @@ package calc
 
 import (
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"net"
 	"runtime"
@@ -27,6 +28,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/config"
+	"github.com/projectcalico/calico/lib/std/uniquelabels"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
@@ -35,35 +37,50 @@ import (
 
 const numNamespaces = 100
 
-func BenchmarkInitialSnapshot200Local250kTotal10000TagPols(b *testing.B) {
-	benchInitialSnap(b, 250_000, 200, 10000, 0)
+func BenchmarkSnapshot200Local250kTotal10000TagPols(b *testing.B) {
+	benchInitialSnap(b, 250_000, 200, 0, 10000, 0)
 }
 
-func BenchmarkInitialSnapshot200Local10kTotal1000NetsetPols(b *testing.B) {
-	benchInitialSnap(b, 10000, 200, 0, 1000)
+func BenchmarkSnapshot200Local10kTotal1000NetsetPols(b *testing.B) {
+	benchInitialSnap(b, 10000, 200, 0, 0, 1000)
 }
 
-func BenchmarkInitialSnapshot200Local10kTotal10000NetsetPols(b *testing.B) {
-	benchInitialSnap(b, 10000, 200, 0, 10000)
+func BenchmarkSnapshot200Local10kTotal10000NetsetPols(b *testing.B) {
+	benchInitialSnap(b, 10000, 200, 0, 0, 10000)
 }
 
-var (
-	keepAlive any
-	_         = keepAlive
-)
+func BenchmarkSnapshotThenDeleteLocal200Local250kTotal10000TagPols(b *testing.B) {
+	benchInitialSnap(b, 250_000, 200, 200, 10000, 0)
+}
 
-func benchInitialSnap(b *testing.B, numEndpoints int, numLocalEndpoints int, numTagPols int, netSetsAndPols int) {
+func BenchmarkSnapshotThenDeleteLocal200Local10kTotal1000NetsetPols(b *testing.B) {
+	benchInitialSnap(b, 10000, 200, 200, 0, 1000)
+}
+
+func BenchmarkSnapshotThenDeleteLocal200Local10kTotal10000NetsetPols(b *testing.B) {
+	benchInitialSnap(b, 10000, 200, 200, 0, 10000)
+}
+
+func benchInitialSnap(
+	b *testing.B,
+	numEndpoints int,
+	numLocalEndpoints int,
+	numLocalEndpointsToDelete int,
+	numTagPols int,
+	netSetsAndPols int,
+) {
 	RegisterTestingT(b)
 	defer logrus.SetLevel(logrus.GetLevel())
 	logrus.SetLevel(logrus.ErrorLevel)
 
 	epUpdates := makeEndpointUpdates(numEndpoints, "remotehost")
 	localUpdates := makeEndpointUpdates(numLocalEndpoints, "localhost")
-	localDeletes := makeEndpointDeletes(numLocalEndpoints, "localhost")
+	localDeletes := makeEndpointDeletes(numLocalEndpointsToDelete, "localhost")
 	polUpdates := makeTagPolicies(numTagPols)
 	profUpdates := makeNamespaceUpdates(numNamespaces)
 	netSetUpdates := makeNetSetAndPolUpdates(netSetsAndPols)
 
+	var cg *CalcGraph
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		b.StopTimer()
@@ -77,8 +94,7 @@ func benchInitialSnap(b *testing.B, numEndpoints int, numLocalEndpoints int, num
 		es.Callback = func(message interface{}) {
 			numMessages++
 		}
-		cg := NewCalculationGraph(es, nil, conf, func() {})
-		keepAlive = cg // Keep CG alive after run so that memory profile shows its usage
+		cg = NewCalculationGraph(es, nil, conf, func() {})
 
 		logrus.SetLevel(logrus.WarnLevel)
 		b.StartTimer()
@@ -92,7 +108,7 @@ func benchInitialSnap(b *testing.B, numEndpoints int, numLocalEndpoints int, num
 		cg.AllUpdDispatcher.OnDatamodelStatus(api.InSync)
 
 		cg.Flush()
-		Expect(es.pendingEndpointTierUpdates).To(HaveLen(numLocalEndpoints))
+		Expect(es.pendingEndpointUpdates).To(HaveLen(numLocalEndpoints))
 		b.ReportMetric(float64(len(es.pendingAddedIPSets)), "IPSets")
 		b.ReportMetric(float64(len(es.pendingPolicyUpdates)), "Policies")
 		es.Flush()
@@ -104,6 +120,19 @@ func benchInitialSnap(b *testing.B, numEndpoints int, numLocalEndpoints int, num
 		b.ReportMetric(float64(time.Since(startTime).Seconds()), "s")
 		b.ReportMetric(float64(numMessages), "Msgs")
 	}
+	b.StopTimer()
+
+	// Add the size of the heap to the benchmark output.  Trigger a GC and then
+	// sleep to allow any runtime.Cleanup()s to finish.
+	runtime.GC()
+	time.Sleep(time.Second)
+	// Read the stats.
+	var m runtime.MemStats
+	runtime.ReadMemStats(&m)
+	b.ReportMetric(float64(m.HeapAlloc)/(1024*1024), "HeapAllocMB")
+
+	// Make sure the CalcGraph doesn't get GCed before we collect stats.
+	runtime.KeepAlive(cg)
 }
 
 // These trivial functions are broken out so that, when CPU profiling, each
@@ -140,9 +169,9 @@ func makeNetSetAndPolUpdates(num int) []api.Update {
 		name := fmt.Sprintf("network-set-%d", i)
 		netset := &model.NetworkSet{
 			Nets: generateNetSetIPs(),
-			Labels: map[string]string{
+			Labels: uniquelabels.Make(map[string]string{
 				"network-set-name": name,
-			},
+			}),
 		}
 		updates = append(updates, api.Update{
 			KVPair: model.KVPair{
@@ -338,12 +367,25 @@ var markerLabels = []string{
 
 var labelSeed int
 
-func generateLabels() map[string]string {
+func generateLabels() uniquelabels.Map {
 	labelSeed++
 	labels := map[string]string{}
 	for _, n := range []int{10, 11, 20, 30, 40} {
 		labels[fmt.Sprintf("one-in-%d", n)] = fmt.Sprintf("value-%d", labelSeed%n)
 	}
-	labels[markerLabels[labelSeed%len(markerLabels)]] = "true"
-	return labels
+	labels[markerLabels[(labelSeed)%len(markerLabels)]] = "true"
+
+	// Round trip through JSON; this makes every string unique, simulating
+	// what happens when we decode strings for real in felix.
+	buf, err := json.Marshal(labels)
+	if err != nil {
+		panic(err)
+	}
+	labels = nil
+	err = json.Unmarshal(buf, &labels)
+	if err != nil {
+		panic(err)
+	}
+
+	return uniquelabels.Make(labels)
 }

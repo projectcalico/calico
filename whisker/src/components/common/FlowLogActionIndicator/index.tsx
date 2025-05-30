@@ -3,10 +3,10 @@ import { FlowLogAction } from '../../../types/render';
 import { StatusIndicator } from '@/libs/tigera/ui-components/components/common';
 
 const ActionColorMap: Record<FlowLogAction, string> = {
-    allow: 'tigeraGreen.900',
-    deny: 'tigeraRed.1000',
-    pass: 'tigeraGrey.400',
-    log: 'tigeraGrey.400',
+    Allow: 'tigeraGreen.900',
+    Deny: 'tigeraRed.1000',
+    Pass: 'tigeraGrey.400',
+    Log: 'tigeraGrey.400',
 };
 
 type FlowLogActionIndicatorProps = {

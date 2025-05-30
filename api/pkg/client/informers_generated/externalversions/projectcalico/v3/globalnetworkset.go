@@ -5,13 +5,13 @@
 package v3
 
 import (
-	"context"
+	context "context"
 	time "time"
 
-	projectcalicov3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	apisprojectcalicov3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	clientset "github.com/projectcalico/api/pkg/client/clientset_generated/clientset"
 	internalinterfaces "github.com/projectcalico/api/pkg/client/informers_generated/externalversions/internalinterfaces"
-	v3 "github.com/projectcalico/api/pkg/client/listers_generated/projectcalico/v3"
+	projectcalicov3 "github.com/projectcalico/api/pkg/client/listers_generated/projectcalico/v3"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	watch "k8s.io/apimachinery/pkg/watch"
@@ -22,7 +22,7 @@ import (
 // GlobalNetworkSets.
 type GlobalNetworkSetInformer interface {
 	Informer() cache.SharedIndexInformer
-	Lister() v3.GlobalNetworkSetLister
+	Lister() projectcalicov3.GlobalNetworkSetLister
 }
 
 type globalNetworkSetInformer struct {
@@ -56,7 +56,7 @@ func NewFilteredGlobalNetworkSetInformer(client clientset.Interface, resyncPerio
 				return client.ProjectcalicoV3().GlobalNetworkSets().Watch(context.TODO(), options)
 			},
 		},
-		&projectcalicov3.GlobalNetworkSet{},
+		&apisprojectcalicov3.GlobalNetworkSet{},
 		resyncPeriod,
 		indexers,
 	)
@@ -67,9 +67,9 @@ func (f *globalNetworkSetInformer) defaultInformer(client clientset.Interface, r
 }
 
 func (f *globalNetworkSetInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&projectcalicov3.GlobalNetworkSet{}, f.defaultInformer)
+	return f.factory.InformerFor(&apisprojectcalicov3.GlobalNetworkSet{}, f.defaultInformer)
 }
 
-func (f *globalNetworkSetInformer) Lister() v3.GlobalNetworkSetLister {
-	return v3.NewGlobalNetworkSetLister(f.Informer().GetIndexer())
+func (f *globalNetworkSetInformer) Lister() projectcalicov3.GlobalNetworkSetLister {
+	return projectcalicov3.NewGlobalNetworkSetLister(f.Informer().GetIndexer())
 }

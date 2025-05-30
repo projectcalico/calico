@@ -14,6 +14,8 @@
 package ipam
 
 import (
+	"context"
+
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
@@ -23,9 +25,9 @@ import (
 // Interface used to access the enabled IPPools.
 type PoolAccessorInterface interface {
 	// Returns a list of enabled pools sorted in alphanumeric name order.
-	GetEnabledPools(ipVersion int) ([]v3.IPPool, error)
+	GetEnabledPools(ctx context.Context, ipVersion int) ([]v3.IPPool, error)
 	// Returns a list of all pools sorted in alphanumeric name order.
-	GetAllPools() ([]v3.IPPool, error)
+	GetAllPools(ctx context.Context) ([]v3.IPPool, error)
 }
 
 // SelectsNode determines whether or not the IPPool's nodeSelector

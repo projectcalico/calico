@@ -2,6 +2,11 @@ include ../metadata.mk
 
 PACKAGE_NAME = github.com/projectcalico/calico/whisker
 IMAGE_BUILD_MARKER = whisker_container-$(ARCH).created
+EXCLUDEARCH        ?=ppc64le s390x
+
+# Configure variables used by ci/cd common targets from lib.Makefile.
+BUILD_IMAGES=whisker
+BUILD_IMAGE_NAME=node:22.15
 
 ###############################################################################
 # include ../lib.Makefile
@@ -10,12 +15,6 @@ IMAGE_BUILD_MARKER = whisker_container-$(ARCH).created
 ###############################################################################
 include ../lib.Makefile
 
-# Configure variables used by ci/cd common targets from lib.Makefile.
-BUILD_IMAGES=whisker
-
-BUILD_IMAGE_NAME=node:20.17
-QEMU_IMAGE ?= calico/qemu-user-static:latest
-
 DOCKER_RUN_RM:=docker run --rm \
 	--env CYPRESS_CACHE_FOLDER=/code/.cache/Cypress \
 	--env NPM_TOKEN=${NPM_TOKEN} \
@@ -23,10 +22,14 @@ DOCKER_RUN_RM:=docker run --rm \
 	-v $${PWD}:/code \
 	-w /code
 
-$(IMAGE_BUILD_MARKER): build
-	$(DOCKER_BUILD) --build-arg QEMU_IMAGE=$(QEMU_IMAGE) -t whisker:latest-$(ARCH) -f docker-image/Dockerfile.nginx .
+$(IMAGE_BUILD_MARKER): register build bin/LICENSE
+	$(DOCKER_BUILD) --build-arg BIN_DIR=bin -t whisker:latest-$(ARCH) -f docker-image/Dockerfile .
 	$(MAKE) retag-build-images-with-registries BUILD_IMAGES=$(BUILD_IMAGES) VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@
+
+bin/LICENSE: ../LICENSE.md
+	@mkdir -p bin
+	cp ../LICENSE.md $@
 
 .PHONY: image build
 image: $(IMAGE_BUILD_MARKER)
@@ -54,3 +57,25 @@ lint: install
 	$(DOCKER_RUN_RM) -e NODE_OPTIONS=--max_old_space_size=8192 -e CNX_APP_VERSION=$(GIT_VERSION) $(BUILD_IMAGE_NAME) yarn lint --quiet
 
 ci: install format lint yarn-test
+
+.PHONY: clean
+clean:
+	rm -rf bin dist node_modules *.created *.published
+
+###############################################################################
+# Release
+###############################################################################
+## Deploys images to registry
+cd: image-all cd-common
+
+release-build: .release-$(VERSION).created
+.release-$(VERSION).created:
+	$(MAKE) clean image-all RELEASE=true
+	$(MAKE) retag-build-images-with-registries RELEASE=true IMAGETAG=$(VERSION)
+	$(MAKE) retag-build-images-with-registries RELEASE=true IMAGETAG=latest
+	touch $@
+
+release-publish: release-prereqs .release-$(VERSION).published
+.release-$(VERSION).published:
+	$(MAKE) push-images-to-registries push-manifests IMAGETAG=$(VERSION) RELEASE=$(RELEASE) CONFIRM=$(CONFIRM)
+	touch $@

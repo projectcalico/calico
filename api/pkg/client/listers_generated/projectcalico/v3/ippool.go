@@ -5,10 +5,10 @@
 package v3
 
 import (
-	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/client-go/listers"
-	"k8s.io/client-go/tools/cache"
+	projectcalicov3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	labels "k8s.io/apimachinery/pkg/labels"
+	listers "k8s.io/client-go/listers"
+	cache "k8s.io/client-go/tools/cache"
 )
 
 // IPPoolLister helps list IPPools.
@@ -16,19 +16,19 @@ import (
 type IPPoolLister interface {
 	// List lists all IPPools in the indexer.
 	// Objects returned here must be treated as read-only.
-	List(selector labels.Selector) (ret []*v3.IPPool, err error)
+	List(selector labels.Selector) (ret []*projectcalicov3.IPPool, err error)
 	// Get retrieves the IPPool from the index for a given name.
 	// Objects returned here must be treated as read-only.
-	Get(name string) (*v3.IPPool, error)
+	Get(name string) (*projectcalicov3.IPPool, error)
 	IPPoolListerExpansion
 }
 
 // iPPoolLister implements the IPPoolLister interface.
 type iPPoolLister struct {
-	listers.ResourceIndexer[*v3.IPPool]
+	listers.ResourceIndexer[*projectcalicov3.IPPool]
 }
 
 // NewIPPoolLister returns a new IPPoolLister.
 func NewIPPoolLister(indexer cache.Indexer) IPPoolLister {
-	return &iPPoolLister{listers.New[*v3.IPPool](indexer, v3.Resource("ippool"))}
+	return &iPPoolLister{listers.New[*projectcalicov3.IPPool](indexer, projectcalicov3.Resource("ippool"))}
 }

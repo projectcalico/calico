@@ -112,7 +112,7 @@ var _ = Describe("kube-controllers IPAM FV tests (etcd mode)", func() {
 	// does not match the Calico node name in etcd.
 	It("should properly garbage collect IP addresses for mismatched node names", func() {
 		// Run controller.
-		nodeController = testutils.RunNodeController(apiconfig.EtcdV3, etcd.IP, kconfigFile.Name(), false)
+		nodeController = testutils.RunNodeController(apiconfig.EtcdV3, etcd.IP, kconfigFile.Name())
 
 		// Create a kubernetes node.
 		kn := &v1.Node{ObjectMeta: metav1.ObjectMeta{Name: kNodeName}}
@@ -120,7 +120,7 @@ var _ = Describe("kube-controllers IPAM FV tests (etcd mode)", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Create a Calico node with a reference to it.
-		cn := calicoNode(c, cNodeName, kNodeName, map[string]string{})
+		cn := calicoNode(cNodeName, kNodeName, map[string]string{})
 		_, err = c.Nodes().Create(context.Background(), cn, options.SetOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
@@ -160,7 +160,7 @@ var _ = Describe("kube-controllers IPAM FV tests (etcd mode)", func() {
 
 	It("should never garbage collect IP addresses that do not belong to Kubernetes pods", func() {
 		// Run controller.
-		nodeController = testutils.RunNodeController(apiconfig.EtcdV3, etcd.IP, kconfigFile.Name(), false)
+		nodeController = testutils.RunNodeController(apiconfig.EtcdV3, etcd.IP, kconfigFile.Name())
 
 		// Use the same name for k8s and Calico node.
 		commonNodeName := "common-node-name"
@@ -172,7 +172,7 @@ var _ = Describe("kube-controllers IPAM FV tests (etcd mode)", func() {
 
 		// Create a Calico node without a node reference. Be extra tricky, by naming the calico node the
 		// same name as the Kubernetes node. This makes sure we're really using the orchRef properly.
-		cn := calicoNode(c, commonNodeName, "", map[string]string{})
+		cn := calicoNode(commonNodeName, "", map[string]string{})
 		_, err = c.Nodes().Create(context.Background(), cn, options.SetOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
@@ -227,7 +227,7 @@ var _ = Describe("kube-controllers IPAM FV tests (etcd mode)", func() {
 
 	It("should garbage collect IP addresses if there is no Calico node, even if there happens to be a Kubernetes node", func() {
 		// Run controller.
-		nodeController = testutils.RunNodeController(apiconfig.EtcdV3, etcd.IP, kconfigFile.Name(), false)
+		nodeController = testutils.RunNodeController(apiconfig.EtcdV3, etcd.IP, kconfigFile.Name())
 
 		// Create a kubernetes node.
 		commonNodeName := "common-node-name"
@@ -259,7 +259,7 @@ var _ = Describe("kube-controllers IPAM FV tests (etcd mode)", func() {
 
 	It("should garbage collect IP addresses if there is no Calico node AND no Kubernetes node", func() {
 		// Run controller.
-		nodeController = testutils.RunNodeController(apiconfig.EtcdV3, etcd.IP, kconfigFile.Name(), false)
+		nodeController = testutils.RunNodeController(apiconfig.EtcdV3, etcd.IP, kconfigFile.Name())
 
 		// Allocate an IP address on a node that doesn't exist.
 		commonNodeName := "common-node-name"

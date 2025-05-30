@@ -1,4 +1,13 @@
 export default {
+    sizes: {
+        lg: {
+            tablist: {
+                button: {
+                    fontSize: 'sm',
+                },
+            },
+        },
+    },
     baseStyle: {
         tablist: {
             backgroundColor: 'tigera-color-surface',

@@ -19,6 +19,18 @@ DOCKER_RUN := mkdir -p ./.go-pkg-cache bin $(GOMOD_CACHE) && \
 		-v $(CURDIR)/.go-pkg-cache:/go-cache:rw \
 		-w /go/src/$(PACKAGE_NAME)
 
+.PHONY: update-file-copyrights
+update-file-copyrights:
+ifndef BASE_BRANCH
+	$(error BASE_BRANCH is not defined. Please set BASE_BRANCH to the target branch (e.g., 'main'))
+endif
+	# Update outdated copyrights for updated files.
+	YEAR=$$(date +%Y); git diff --diff-filter=d --name-only $(BASE_BRANCH) | xargs sed -i "/Copyright (c) $$YEAR Tigera/!s/Copyright (c) \([0-9]\{4\}\)\(-[0-9]\{4\}\)\{0,1\} Tigera/Copyright (c) \1-$$YEAR Tigera/"
+	# Add copyright to new files that don't have it.
+	YEAR=$$(date +%Y); \
+	git diff --name-only --diff-filter=A $(BASE_BRANCH) | grep '\.go$$' | \
+	xargs -I {} sh -c 'if ! grep -q "Copyright (c)" "{}"; then sed "s/YEAR/'$$YEAR'/g" hack/copyright.template | (cat -; echo; cat "{}") > temp && mv temp "{}"; fi'
+
 clean:
 	$(MAKE) -C api clean
 	$(MAKE) -C apiserver clean
@@ -37,17 +49,36 @@ clean:
 	rm -rf ./bin
 
 ci-preflight-checks:
+	$(MAKE) check-go-mod
 	$(MAKE) check-dockerfiles
 	$(MAKE) check-language
 	$(MAKE) generate
 	$(MAKE) fix-all
+	$(MAKE) check-ocp-no-crds
+	$(MAKE) yaml-lint
 	$(MAKE) check-dirty
+	$(MAKE) go-vet
+
+check-go-mod:
+	$(DOCKER_GO_BUILD) ./hack/check-go-mod.sh
+
+go-vet:
+	# Go vet will check that libbpf headers can be found; make sure they're available.
+	$(MAKE) -C felix clone-libbpf
+	$(DOCKER_GO_BUILD) go vet ./...
 
 check-dockerfiles:
 	./hack/check-dockerfiles.sh
 
 check-language:
 	./hack/check-language.sh
+
+check-ocp-no-crds:
+	@echo "Checking for files in manifests/ocp with CustomResourceDefinitions"
+	@CRD_FILES_IN_OCP_DIR=$$(grep "^kind: CustomResourceDefinition" manifests/ocp/* -l || true); if [ ! -z "$$CRD_FILES_IN_OCP_DIR" ]; then echo "ERROR: manifests/ocp should not have any CustomResourceDefinitions, these files should be removed:"; echo "$$CRD_FILES_IN_OCP_DIR"; exit 1; fi
+
+yaml-lint:
+	@docker run --rm $$(tty -s && echo "-it" || echo) -v $(PWD):/data cytopia/yamllint:latest .
 
 protobuf:
 	$(MAKE) -C app-policy protobuf
@@ -65,8 +96,9 @@ generate:
 	$(MAKE) -C felix gen-files
 	$(MAKE) -C goldmane gen-files
 	$(MAKE) gen-manifests
+	$(MAKE) fix-changed
 
-gen-manifests: bin/helm
+gen-manifests: bin/helm bin/yq
 	cd ./manifests && \
 		OPERATOR_VERSION=$(OPERATOR_VERSION) \
 		CALICO_VERSION=$(CALICO_VERSION) \
@@ -78,7 +110,8 @@ get-operator-crds: var-require-all-OPERATOR_BRANCH
 	@echo === Pulling new operator CRDs from branch $(OPERATOR_BRANCH) ===
 	@echo ================================================================
 	cd ./charts/tigera-operator/crds/ && \
-	for file in operator.tigera.io_*.yaml; do echo "downloading $$file from operator repo" && curl -fsSL https://raw.githubusercontent.com/tigera/operator/$(OPERATOR_BRANCH)/pkg/crds/operator/$${file%_crd.yaml}.yaml -o $${file}; done
+	for file in operator.tigera.io_*.yaml; do echo "downloading $$file from operator repo" && curl -fsSL https://raw.githubusercontent.com/tigera/operator/$(OPERATOR_BRANCH)/pkg/crds/operator/$${file} -o $${file}; done
+	$(MAKE) fix-changed
 
 gen-semaphore-yaml:
 	cd .semaphore && ./generate-semaphore-yaml.sh
@@ -137,6 +170,13 @@ release/bin/release: $(shell find ./release -type f -name '*.go')
 bin/ghr:
 	$(DOCKER_RUN) -e GOBIN=/go/src/$(PACKAGE_NAME)/bin/ $(CALICO_BUILD) go install github.com/tcnksm/ghr@$(GHR_VERSION)
 
+# Install GitHub CLI
+bin/gh:
+	curl -sSL -o bin/gh.tgz https://github.com/cli/cli/releases/download/v$(GITHUB_CLI_VERSION)/gh_$(GITHUB_CLI_VERSION)_linux_amd64.tar.gz
+	tar -zxvf bin/gh.tgz -C bin/ gh_$(GITHUB_CLI_VERSION)_linux_amd64/bin/gh --strip-components=2
+	chmod +x $@
+	rm bin/gh.tgz
+
 # Build a release.
 release: release/bin/release
 	@release/bin/release release build
@@ -144,6 +184,9 @@ release: release/bin/release
 # Publish an already built release.
 release-publish: release/bin/release bin/ghr
 	@release/bin/release release publish
+
+release-public: bin/gh release/bin/release
+	@release/bin/release release public
 
 # Create a release branch.
 create-release-branch: release/bin/release
@@ -176,7 +219,7 @@ helm-index:
 
 # Creates the tar file used for installing Calico on OpenShift.
 bin/ocp.tgz: manifests/ocp/ bin/yq
-	tar czvf $@ -C manifests/ ocp
+	tar czvf $@ --exclude='.gitattributes' -C manifests/ ocp
 
 ## Generates release notes for the given version.
 .PHONY: release-notes
@@ -200,23 +243,13 @@ endif
 		python:3 \
 		bash -c '/usr/local/bin/python release/get-contributors.py >> /code/AUTHORS.md'
 
-update-pins: update-go-build-pin
+update-pins: update-go-build-pin update-calico-base-pin
 
 ###############################################################################
 # Post-release validation
 ###############################################################################
-POSTRELEASE_IMAGE=calico/postrelease
-POSTRELEASE_IMAGE_CREATED=.calico.postrelease.created
-$(POSTRELEASE_IMAGE_CREATED):
-	cd hack/postrelease && docker build -t $(POSTRELEASE_IMAGE) .
-	touch $@
+bin/gotestsum:
+	@GOBIN=$(REPO_ROOT)/bin go install gotest.tools/gotestsum@$(GOTESTSUM_VERSION)
 
-postrelease-checks: $(POSTRELEASE_IMAGE_CREATED)
-	$(DOCKER_RUN) \
-		-v /var/run/docker.sock:/var/run/docker.sock \
-		-e VERSION=$(VERSION) \
-		-e FLANNEL_VERSION=$(FLANNEL_VERSION) \
-		-e VPP_VERSION=$(VPP_VERSION) \
-		-e OPERATOR_VERSION=$(OPERATOR_VERSION) \
-		$(POSTRELEASE_IMAGE) \
-		sh -c "nosetests hack/postrelease -e "$(EXCLUDE_REGEX)" -s -v --with-xunit --xunit-file='postrelease-checks.xml' --with-timer $(EXTRA_NOSE_ARGS)"
+postrelease-checks: release/bin/release bin/gotestsum
+	@release/bin/release release validate

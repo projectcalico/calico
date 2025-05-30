@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2024-2025 Tigera, Inc. All rights reserved.
 
 package calico
 
@@ -175,7 +175,7 @@ func TestTierUnconditionalDelete(t *testing.T) {
 
 	for i, tt := range tests {
 		out := &v3.Tier{} // reset
-		err := store.Delete(ctx, tt.key, out, nil, nil, nil)
+		err := store.Delete(ctx, tt.key, out, nil, nil, nil, storage.DeleteOptions{})
 		if tt.expectNotFoundErr {
 			if err == nil || !storage.IsNotFound(err) {
 				t.Errorf("#%d: expecting not found error, but get: %s", i, err)
@@ -210,7 +210,7 @@ func TestTierConditionalDelete(t *testing.T) {
 
 	for i, tt := range tests {
 		out := &v3.Tier{}
-		err := store.Delete(ctx, key, out, tt.precondition, nil, nil)
+		err := store.Delete(ctx, key, out, tt.precondition, nil, nil, storage.DeleteOptions{})
 		if tt.expectInvalidObjErr {
 			if err == nil || !storage.IsInvalidObj(err) {
 				t.Errorf("#%d: expecting invalid UID error, but get: %s", i, err)

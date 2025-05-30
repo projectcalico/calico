@@ -132,15 +132,18 @@ sub-image-fips-%:
 	$(MAKE) image FIPS=true ARCH=$*
 
 $(DIKASTES_IMAGE): $(CONTAINER_MARKER)
-$(CONTAINER_CREATED): register Dockerfile $(BINDIR)/dikastes-$(ARCH) $(BINDIR)/healthz-$(ARCH)
+$(CONTAINER_CREATED): register Dockerfile $(BINDIR)/dikastes-$(ARCH) $(BINDIR)/healthz-$(ARCH) bin/LICENSE
 	$(DOCKER_BUILD) --build-arg BIN_DIR=$(BINDIR) -t $(DIKASTES_IMAGE):latest-$(ARCH) -f Dockerfile .
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@
 
-$(CONTAINER_FIPS_CREATED): register Dockerfile $(BINDIR)/dikastes-$(ARCH) $(BINDIR)/healthz-$(ARCH)
+$(CONTAINER_FIPS_CREATED): register Dockerfile $(BINDIR)/dikastes-$(ARCH) $(BINDIR)/healthz-$(ARCH) bin/LICENSE
 	$(DOCKER_BUILD) --build-arg BIN_DIR=$(BINDIR) -t $(DIKASTES_IMAGE):latest-fips-$(ARCH) -f Dockerfile .
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest-fips LATEST_IMAGE_TAG=latest-fips
 	touch $@
+
+bin/LICENSE: ../LICENSE.md
+	cp ../LICENSE.md $@
 ###############################################################################
 # UTs
 ###############################################################################

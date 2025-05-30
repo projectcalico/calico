@@ -1,11 +1,12 @@
-import { FlowLog } from '@/types/api';
+import { FlowLog } from '@/types/render';
 import FlowLogDetails from '..';
 import { render, screen } from '@/test-utils/helper';
 
 const flowLog: FlowLog = {
+    id: '1',
     start_time: new Date(),
     end_time: new Date(),
-    action: 'allow',
+    action: 'Allow',
     source_name: 'prometheus-calico-node-prometheus-0',
     source_namespace: 'tigera-prometheus',
     source_labels:
@@ -21,6 +22,32 @@ const flowLog: FlowLog = {
     packets_out: '6',
     bytes_in: '1286',
     bytes_out: '640',
+    policies: {
+        enforced: [
+            {
+                kind: '',
+                name: '',
+                namespace: '',
+                tier: '',
+                action: '',
+                policy_index: 0,
+                rule_index: 0,
+                trigger: null,
+            },
+        ],
+        pending: [
+            {
+                kind: '',
+                name: '',
+                namespace: '',
+                tier: '',
+                action: '',
+                policy_index: 0,
+                rule_index: 0,
+                trigger: null,
+            },
+        ],
+    },
 };
 
 describe('FlowLogDetails', () => {

@@ -5,6 +5,7 @@ import CalicoWhiskerIcon from './CalicoWhiskerIcon';
 import ArrowRightIcon from './ArrowRightIcon';
 import PlayIcon from './PlayIcon';
 import PauseIcon from './PauseIcon';
+import DndIcon from './DndIcon';
 
 export {
     CalicoCatIcon,
@@ -14,4 +15,5 @@ export {
     ArrowRightIcon,
     PlayIcon,
     PauseIcon,
+    DndIcon,
 };

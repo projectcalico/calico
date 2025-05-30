@@ -5,13 +5,13 @@
 package v3
 
 import (
-	"context"
+	context "context"
 	time "time"
 
-	projectcalicov3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	apisprojectcalicov3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	clientset "github.com/projectcalico/api/pkg/client/clientset_generated/clientset"
 	internalinterfaces "github.com/projectcalico/api/pkg/client/informers_generated/externalversions/internalinterfaces"
-	v3 "github.com/projectcalico/api/pkg/client/listers_generated/projectcalico/v3"
+	projectcalicov3 "github.com/projectcalico/api/pkg/client/listers_generated/projectcalico/v3"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	watch "k8s.io/apimachinery/pkg/watch"
@@ -22,7 +22,7 @@ import (
 // KubeControllersConfigurations.
 type KubeControllersConfigurationInformer interface {
 	Informer() cache.SharedIndexInformer
-	Lister() v3.KubeControllersConfigurationLister
+	Lister() projectcalicov3.KubeControllersConfigurationLister
 }
 
 type kubeControllersConfigurationInformer struct {
@@ -56,7 +56,7 @@ func NewFilteredKubeControllersConfigurationInformer(client clientset.Interface,
 				return client.ProjectcalicoV3().KubeControllersConfigurations().Watch(context.TODO(), options)
 			},
 		},
-		&projectcalicov3.KubeControllersConfiguration{},
+		&apisprojectcalicov3.KubeControllersConfiguration{},
 		resyncPeriod,
 		indexers,
 	)
@@ -67,9 +67,9 @@ func (f *kubeControllersConfigurationInformer) defaultInformer(client clientset.
 }
 
 func (f *kubeControllersConfigurationInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&projectcalicov3.KubeControllersConfiguration{}, f.defaultInformer)
+	return f.factory.InformerFor(&apisprojectcalicov3.KubeControllersConfiguration{}, f.defaultInformer)
 }
 
-func (f *kubeControllersConfigurationInformer) Lister() v3.KubeControllersConfigurationLister {
-	return v3.NewKubeControllersConfigurationLister(f.Informer().GetIndexer())
+func (f *kubeControllersConfigurationInformer) Lister() projectcalicov3.KubeControllersConfigurationLister {
+	return projectcalicov3.NewKubeControllersConfigurationLister(f.Informer().GetIndexer())
 }

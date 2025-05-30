@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"hash/fnv"
 	"net"
 	"os"
 	"os/exec"
@@ -40,6 +41,7 @@ import (
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sync/semaphore"
@@ -71,7 +73,6 @@ import (
 	"github.com/projectcalico/calico/felix/idalloc"
 	"github.com/projectcalico/calico/felix/ifacemonitor"
 	"github.com/projectcalico/calico/felix/ip"
-	"github.com/projectcalico/calico/felix/ipsets"
 	"github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/routetable"
@@ -142,7 +143,7 @@ type attachPoint interface {
 	IfaceName() string
 	HookName() hook.Hook
 	IsAttached() (bool, error)
-	AttachProgram() (bpf.AttachResult, error)
+	AttachProgram() error
 	DetachProgram() error
 	Log() *log.Entry
 	LogVal() string
@@ -162,11 +163,12 @@ type fileDescriptor interface {
 
 type bpfDataplane interface {
 	ensureStarted()
-	ensureProgramAttached(attachPoint) (qDiscInfo, error)
+	ensureProgramAttached(attachPoint) error
 	ensureProgramLoaded(ap attachPoint, ipFamily proto.IPVersion) error
 	ensureNoProgram(attachPoint) error
 	ensureQdisc(iface string) (bool, error)
 	ensureBPFDevices() error
+	configureBPFDevices() error
 	updatePolicyProgram(rules polprog.Rules, polDir string, ap attachPoint, ipFamily proto.IPVersion) error
 	removePolicyProgram(ap attachPoint, ipFamily proto.IPVersion) error
 	setAcceptLocal(iface string, val bool) error
@@ -177,7 +179,7 @@ type bpfDataplane interface {
 	loadDefaultPolicies() error
 	loadTCLogFilter(ap *tc.AttachPoint) (fileDescriptor, int, error)
 	interfaceByIndex(int) (*net.Interface, error)
-	queryClassifier(int, int, int, bool) (int, error)
+	queryClassifier(string, string) bool
 	getIfaceLink(string) (netlink.Link, error)
 }
 
@@ -252,7 +254,6 @@ type bpfInterfaceState struct {
 	filterIdx   [hook.Count]int
 	v4Readiness ifaceReadiness
 	v6Readiness ifaceReadiness
-	qdisc       qDiscInfo
 }
 
 type bpfInterfaceJumpIndices struct {
@@ -261,12 +262,6 @@ type bpfInterfaceJumpIndices struct {
 
 func (d *bpfInterfaceJumpIndices) clearJumps() {
 	d.policyIdx = [hook.Count]int{-1, -1, -1}
-}
-
-type qDiscInfo struct {
-	valid  bool
-	prio   int
-	handle int
 }
 
 type hostNetworkedNATMode int
@@ -389,6 +384,9 @@ type bpfEndpointManager struct {
 	natOutIdx   int
 	bpfIfaceMTU int
 
+	overlayTunnelID uint32
+
+	// Flow logs related fields.
 	lookupsCache *calc.LookupsCache
 
 	v4 *bpfEndpointManagerDataplane
@@ -424,47 +422,9 @@ type bpfAllowChainRenderer interface {
 type ManagerWithHEPUpdate interface {
 	Manager
 	OnHEPUpdate(hostIfaceToEpMap map[string]*proto.HostEndpoint)
-	GetIfaceQDiscInfo(ifaceName string) (bool, int, int)
 }
 
-func NewTestEpMgr(
-	config *Config,
-	bpfmaps *bpfmap.Maps,
-	workloadIfaceRegex *regexp.Regexp,
-) (ManagerWithHEPUpdate, error) {
-	return newBPFEndpointManager(nil, config, bpfmaps, true, workloadIfaceRegex, idalloc.New(), idalloc.New(),
-		rules.NewRenderer(rules.Config{
-			BPFEnabled:             true,
-			IPIPEnabled:            true,
-			IPIPTunnelAddress:      nil,
-			IPSetConfigV4:          ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil),
-			IPSetConfigV6:          ipsets.NewIPVersionConfig(ipsets.IPFamilyV6, "cali", nil, nil),
-			MarkAccept:             0x8,
-			MarkPass:               0x10,
-			MarkScratch0:           0x20,
-			MarkScratch1:           0x40,
-			MarkDrop:               0x80,
-			MarkEndpoint:           0xff00,
-			MarkNonCaliEndpoint:    0x0100,
-			KubeIPVSSupportEnabled: true,
-			WorkloadIfacePrefixes:  []string{"cali", "tap"},
-			VXLANPort:              4789,
-			VXLANVNI:               4096,
-		}),
-		generictables.NewNoopTable(),
-		generictables.NewNoopTable(),
-		nil,
-		logutils.NewSummarizer("test"),
-		&routetable.DummyTable{},
-		&routetable.DummyTable{},
-		calc.NewLookupsCache(),
-		nil,
-		nil,
-		1500,
-	)
-}
-
-func newBPFEndpointManager(
+func NewBPFEndpointManager(
 	dp bpfDataplane,
 	config *Config,
 	bpfmaps *bpfmap.Maps,
@@ -510,6 +470,7 @@ func newBPFEndpointManager(
 		epToHostAction:          config.RulesConfig.EndpointToHostAction,
 		vxlanMTU:                config.VXLANMTU,
 		vxlanPort:               uint16(config.VXLANPort),
+		overlayTunnelID:         uint32(config.RulesConfig.VXLANVNI),
 		wgPort:                  uint16(config.Wireguard.ListeningPort),
 		wg6Port:                 uint16(config.Wireguard.ListeningPortV6),
 		dsrEnabled:              config.BPFNodePortDSREnabled,
@@ -797,11 +758,6 @@ func (m *bpfEndpointManager) withIface(ifaceName string, fn func(iface *bpfInter
 	m.dirtyIfaceNames.Add(ifaceName)
 }
 
-func (m *bpfEndpointManager) GetIfaceQDiscInfo(ifaceName string) (bool, int, int) {
-	qdisc := m.nameToIface[ifaceName].dpState.qdisc
-	return qdisc.valid, qdisc.prio, qdisc.handle
-}
-
 func (m *bpfEndpointManager) updateHostIP(ipAddr string, ipFamily int) {
 	ip, _, err := net.ParseCIDR(ipAddr)
 	if err != nil {
@@ -809,8 +765,14 @@ func (m *bpfEndpointManager) updateHostIP(ipAddr string, ipFamily int) {
 	}
 	if ip != nil {
 		if ipFamily == 4 {
+			if m.v4.hostIP.Equal(ip) {
+				return
+			}
 			m.v4.hostIP = ip
 		} else {
+			if m.v6.hostIP.Equal(ip) {
+				return
+			}
 			m.v6.hostIP = ip
 		}
 		// Should be safe without the lock since there shouldn't be any active background threads
@@ -893,7 +855,7 @@ func (m *bpfEndpointManager) OnUpdate(msg interface{}) {
 }
 
 func (m *bpfEndpointManager) onRouteUpdate(update *proto.RouteUpdate) {
-	if update.Type == proto.RouteType_LOCAL_TUNNEL {
+	if update.Types&proto.RouteType_LOCAL_TUNNEL == proto.RouteType_LOCAL_TUNNEL {
 		ip, _, err := net.ParseCIDR(update.Dst)
 		if err != nil {
 			log.WithField("local tunnel cidr", update.Dst).WithError(err).Warn("not parsable")
@@ -1024,6 +986,18 @@ func (m *bpfEndpointManager) getIfTypeFlags(name string, ifaceType IfaceType) ui
 	return flags
 }
 
+func (m *bpfEndpointManager) addIgnoredHostIfaceToIfState(name string, ifIndex int) {
+	k := ifstate.NewKey(uint32(ifIndex))
+	flags := ifstate.FlgNotManaged
+	v := ifstate.NewValue(flags, name, -1, -1, -1, -1, -1, -1, -1, -1)
+	m.ifStateMap.Desired().Set(k, v)
+}
+
+func (m *bpfEndpointManager) deleteIgnoredHostIfaceFromIfState(ifIndex int) {
+	k := ifstate.NewKey(uint32(ifIndex))
+	m.ifStateMap.Desired().Delete(k)
+}
+
 func (m *bpfEndpointManager) updateIfaceStateMap(name string, iface *bpfInterface) {
 	k := ifstate.NewKey(uint32(iface.info.ifIndex))
 	if iface.info.ifaceIsUp() {
@@ -1134,7 +1108,25 @@ func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceStateUpdate) {
 					delete(m.initAttaches, update.Name)
 				}
 			}
+			if update.Name == dataplanedefs.BPFInDev {
+				m.ifacesLock.Lock()
+				if err := m.reconcileBPFDevices(dataplanedefs.BPFInDev); err != nil {
+					log.WithError(err).Fatal("Failed to configure BPF devices")
+				}
+				m.ifacesLock.Unlock()
+			}
 		}
+
+		// Add host interface not managed by calico to the ifstate map,
+		// so that packets from workload are not dropped.
+		if update.Name != dataplanedefs.BPFInDev {
+			if update.State == ifacemonitor.StateNotPresent {
+				m.deleteIgnoredHostIfaceFromIfState(update.Index)
+			} else {
+				m.addIgnoredHostIfaceToIfState(update.Name, update.Index)
+			}
+		}
+
 		if m.initUnknownIfaces != nil {
 			m.initUnknownIfaces.Add(update.Name)
 		}
@@ -1188,8 +1180,10 @@ func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceStateUpdate) {
 			// We require host interfaces to be in non-strict RPF mode so that
 			// packets can return straight to host for services bypassing CTLB.
 			switch update.Name {
-			case dataplanedefs.BPFInDev, dataplanedefs.BPFOutDev:
-				// do nothing
+			case dataplanedefs.BPFOutDev:
+				if err := m.reconcileBPFDevices(update.Name); err != nil {
+					log.WithError(err).Fatal("Failed to configure BPF devices")
+				}
 			default:
 				if m.v4 != nil {
 					if err := m.dp.setRPFilter(update.Name, 2); err != nil {
@@ -1224,7 +1218,6 @@ func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceStateUpdate) {
 			iface.info.ifIndex = 0
 			iface.info.masterIfIndex = 0
 			iface.info.ifaceType = 0
-			iface.dpState.qdisc = qDiscInfo{}
 		}
 		return true // Force interface to be marked dirty in case we missed a transition during a resync.
 	})
@@ -1803,7 +1796,7 @@ func (m *bpfEndpointManager) doApplyPolicyToDataIface(iface, masterIface string,
 		ingressAP := mergeAttachPoints(ingressAP4, ingressAP6)
 		if ingressAP != nil {
 			m.loadFilterProgram(ingressAP)
-			_, ingressErr = m.dp.ensureProgramAttached(ingressAP)
+			ingressErr = m.dp.ensureProgramAttached(ingressAP)
 		}
 	}()
 
@@ -1814,7 +1807,7 @@ func (m *bpfEndpointManager) doApplyPolicyToDataIface(iface, masterIface string,
 		xdpAP := mergeAttachPoints(xdpAP4, xdpAP6)
 		if xdpAP != nil {
 			if hepPtr != nil && len(hepPtr.UntrackedTiers) == 1 {
-				_, xdpErr = m.dp.ensureProgramAttached(xdpAP)
+				xdpErr = m.dp.ensureProgramAttached(xdpAP)
 			} else {
 				xdpErr = m.dp.ensureNoProgram(xdpAP)
 			}
@@ -1825,7 +1818,7 @@ func (m *bpfEndpointManager) doApplyPolicyToDataIface(iface, masterIface string,
 	egressAP := mergeAttachPoints(egressAP4, egressAP6)
 	if egressAP != nil {
 		m.loadFilterProgram(egressAP)
-		_, err = m.dp.ensureProgramAttached(egressAP)
+		err = m.dp.ensureProgramAttached(egressAP)
 	}
 
 	parallelWG.Wait()
@@ -2237,8 +2230,12 @@ func (m *bpfEndpointManager) dataIfaceStateFillJumps(ap *tc.AttachPoint, xdpMode
 	return nil
 }
 
-func (m *bpfEndpointManager) queryClassifier(ifindex, handle, prio int, ingress bool) (int, error) {
-	return libbpf.QueryClassifier(ifindex, handle, prio, ingress)
+func (m *bpfEndpointManager) queryClassifier(ifaceName, tcHook string) bool {
+	tcProgs, err := tc.ListAttachedPrograms(ifaceName, tcHook, false)
+	if err != nil || len(tcProgs) == 0 {
+		return false
+	}
+	return true
 }
 
 func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState, error) {
@@ -2248,14 +2245,12 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 		state      bpfInterfaceState
 		endpointID *types.WorkloadEndpointID
 		ifaceUp    bool
-		ifindex    int
 	)
 
 	// Other threads might be filling in jump map FDs in the map so take the lock.
 	m.ifacesLock.Lock()
 	m.withIface(ifaceName, func(iface *bpfInterface) (forceDirty bool) {
 		ifaceUp = iface.info.ifaceIsUp()
-		ifindex = iface.info.ifIndex
 		endpointID = iface.info.endpointID
 		state = iface.dpState
 		return false
@@ -2292,13 +2287,12 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 	}
 
 	var (
-		ingressErr, egressErr     error
-		err4, err6                error
-		ingressQdisc, egressQdisc qDiscInfo
-		ingressAP4, egressAP4     *tc.AttachPoint
-		ingressAP6, egressAP6     *tc.AttachPoint
-		wg                        sync.WaitGroup
-		wep                       *proto.WorkloadEndpoint
+		ingressErr, egressErr error
+		err4, err6            error
+		ingressAP4, egressAP4 *tc.AttachPoint
+		ingressAP6, egressAP6 *tc.AttachPoint
+		wg                    sync.WaitGroup
+		wep                   *proto.WorkloadEndpoint
 	)
 
 	if endpointID != nil {
@@ -2307,12 +2301,13 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 
 	v4Readiness := state.v4Readiness
 	v6Readiness := state.v6Readiness
+
 	if v4Readiness == ifaceIsReady || v6Readiness == ifaceIsReady {
-		if _, err := m.dp.queryClassifier(ifindex, state.qdisc.handle, state.qdisc.prio, true); err != nil {
+		if !m.dp.queryClassifier(ifaceName, hook.Ingress.String()) {
 			v4Readiness = ifaceNotReady
 			v6Readiness = ifaceNotReady
 		}
-		if _, err := m.dp.queryClassifier(ifindex, state.qdisc.handle, state.qdisc.prio, false); err != nil {
+		if !m.dp.queryClassifier(ifaceName, hook.Egress.String()) {
 			v4Readiness = ifaceNotReady
 			v6Readiness = ifaceNotReady
 		}
@@ -2354,13 +2349,13 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 			ingressAP := mergeAttachPoints(ingressAP4, ingressAP6)
 			if ingressAP != nil {
 				m.loadFilterProgram(ingressAP)
-				ingressQdisc, ingressErr = m.dp.ensureProgramAttached(ingressAP)
+				ingressErr = m.dp.ensureProgramAttached(ingressAP)
 			}
 		}()
 		egressAP := mergeAttachPoints(egressAP4, egressAP6)
 		if egressAP != nil {
 			m.loadFilterProgram(egressAP)
-			egressQdisc, egressErr = m.dp.ensureProgramAttached(egressAP)
+			egressErr = m.dp.ensureProgramAttached(egressAP)
 		}
 		wg.Wait()
 	}
@@ -2371,15 +2366,6 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 
 	if egressErr != nil {
 		return state, egressErr
-	}
-
-	if egressQdisc != ingressQdisc {
-		return state, fmt.Errorf("ingress qdisc info (%v) does not equal egress qdisc info (%v)",
-			ingressQdisc, egressQdisc)
-	}
-
-	if attachPreamble {
-		state.qdisc = ingressQdisc
 	}
 
 	if err4 != nil && err6 != nil {
@@ -2421,18 +2407,12 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 	return state, nil
 }
 
-func (m *bpfEndpointManager) ensureProgramAttached(ap attachPoint) (qDiscInfo, error) {
-	var qdisc qDiscInfo
-	res, err := ap.AttachProgram()
+func (m *bpfEndpointManager) ensureProgramAttached(ap attachPoint) error {
+	err := ap.AttachProgram()
 	if err != nil {
-		return qdisc, err
+		return err
 	}
-	if tcRes, ok := res.(tc.AttachResult); ok {
-		qdisc.valid = true
-		qdisc.prio = tcRes.Prio()
-		qdisc.handle = tcRes.Handle()
-	}
-	return qdisc, nil
+	return nil
 }
 
 // applyPolicy actually applies the policy to the given workload.
@@ -2757,7 +2737,6 @@ func (d *bpfEndpointManagerDataplane) attachDataIfaceProgram(
 	if ep != nil {
 		rules := polprog.Rules{
 			ForHostInterface: true,
-			NoProfileMatchID: m.profileNoMatchID(polDirection.RuleDir()),
 		}
 		m.addHostPolicy(&rules, ep, polDirection)
 		if err := m.updatePolicyProgramFn(rules, polDirection.RuleDir().String(), ap, d.ipFamily); err != nil {
@@ -2867,6 +2846,9 @@ func (m *bpfEndpointManager) getEndpointType(ifaceName string) tcdefs.EndpointTy
 	m.ifacesLock.Unlock()
 	switch ifaceType {
 	case IfaceTypeData, IfaceTypeVXLAN, IfaceTypeBond, IfaceTypeBondSlave:
+		if ifaceName == "vxlan.calico" || ifaceName == "vxlan-v6.calico" {
+			return tcdefs.EpTypeVXLAN
+		}
 		if ifaceName == "lo" {
 			return tcdefs.EpTypeLO
 		}
@@ -2880,7 +2862,7 @@ func (m *bpfEndpointManager) getEndpointType(ifaceName string) tcdefs.EndpointTy
 		if m.features.IPIPDeviceIsL3 {
 			return tcdefs.EpTypeL3Device
 		}
-		return tcdefs.EpTypeTunnel
+		return tcdefs.EpTypeIPIP
 	default:
 		log.Panicf("Unsupported ifaceName %v", ifaceName)
 
@@ -2909,7 +2891,7 @@ func (m *bpfEndpointManager) calculateTCAttachPoint(ifaceName string) *tc.Attach
 		ap.RedirectPeer = true
 		if m.bpfRedirectToPeer == "Disabled" {
 			ap.RedirectPeer = false
-		} else if (ap.Type == tcdefs.EpTypeTunnel || ap.Type == tcdefs.EpTypeL3Device) && m.bpfRedirectToPeer == "L2Only" {
+		} else if (ap.Type == tcdefs.EpTypeIPIP || ap.Type == tcdefs.EpTypeL3Device) && m.bpfRedirectToPeer == "L2Only" {
 			ap.RedirectPeer = false
 		}
 	} else {
@@ -2926,6 +2908,7 @@ func (m *bpfEndpointManager) calculateTCAttachPoint(ifaceName string) *tc.Attach
 	ap.PSNATEnd = m.psnatPorts.MaxPort
 	ap.TunnelMTU = uint16(m.vxlanMTU)
 	ap.Profiling = m.profiling
+	ap.OverlayTunnelID = m.overlayTunnelID
 
 	switch m.rpfEnforceOption {
 	case "Strict":
@@ -2964,6 +2947,10 @@ func (d *bpfEndpointManagerDataplane) configureTCAttachPoint(policyDirection Pol
 		}
 	}
 
+	if d.mgr.FlowLogsEnabled() {
+		ap.FlowLogsEnabled = true
+	}
+
 	var toOrFrom tcdefs.ToOrFromEp
 	if ap.Hook == hook.Ingress {
 		toOrFrom = tcdefs.FromEp
@@ -3000,11 +2987,11 @@ func (m *bpfEndpointManager) extractTiers(tiers []*proto.TierInfo, direction Pol
 			}
 
 			for i, polName := range directionalPols {
-				staged := model.PolicyIsStaged(polName)
-
-				if !staged {
-					stagedOnly = false
+				if model.PolicyIsStaged(polName) {
+					logrus.Debugf("Skipping staged policy %v", polName)
+					continue
 				}
+				stagedOnly = false
 
 				pol := m.policies[types.PolicyID{Tier: tier.Name, Name: polName}]
 				if pol == nil {
@@ -3018,13 +3005,8 @@ func (m *bpfEndpointManager) extractTiers(tiers []*proto.TierInfo, direction Pol
 					prules = pol.OutboundRules
 				}
 				policy := polprog.Policy{
-					Name:   polName,
-					Rules:  make([]polprog.Rule, len(prules)),
-					Staged: staged,
-				}
-
-				if staged {
-					policy.NoMatchID = m.policyNoMatchID(dir, polName)
+					Name:  polName,
+					Rules: make([]polprog.Rule, len(prules)),
 				}
 
 				for ri, r := range prules {
@@ -3088,7 +3070,6 @@ func (m *bpfEndpointManager) extractRules(tiers []*proto.TierInfo, profileNames 
 	// traffic is dropped.
 	r.Tiers = m.extractTiers(tiers, direction, EndTierDrop)
 	r.Profiles = m.extractProfiles(profileNames, direction)
-	r.NoProfileMatchID = m.profileNoMatchID(direction.RuleDir())
 	return r
 }
 
@@ -3099,7 +3080,13 @@ func strToByte64(s string) [64]byte {
 }
 
 func (m *bpfEndpointManager) ruleMatchIDFromNFLOGPrefix(nflogPrefix string) polprog.RuleMatchID {
-	return m.lookupsCache.GetID64FromNFLOGPrefix(strToByte64(nflogPrefix))
+	if m.FlowLogsEnabled() {
+		return m.lookupsCache.GetID64FromNFLOGPrefix(strToByte64(nflogPrefix))
+	}
+	// Lookup cache is not available, so generate an ID out of provided prefix.
+	h := fnv.New64a()
+	h.Write([]byte(nflogPrefix))
+	return h.Sum64()
 }
 
 func (m *bpfEndpointManager) endOfTierPassID(dir rules.RuleDir, tier string) polprog.RuleMatchID {
@@ -3110,14 +3097,6 @@ func (m *bpfEndpointManager) endOfTierDropID(dir rules.RuleDir, tier string) pol
 	return m.ruleMatchIDFromNFLOGPrefix(rules.CalculateEndOfTierDropNFLOGPrefixStr(dir, tier))
 }
 
-func (m *bpfEndpointManager) policyNoMatchID(dir rules.RuleDir, policy string) polprog.RuleMatchID {
-	return m.ruleMatchIDFromNFLOGPrefix(rules.CalculateNoMatchPolicyNFLOGPrefixStr(dir, policy))
-}
-
-func (m *bpfEndpointManager) profileNoMatchID(dir rules.RuleDir) polprog.RuleMatchID {
-	return m.ruleMatchIDFromNFLOGPrefix(rules.CalculateNoMatchProfileNFLOGPrefixStr(dir))
-}
-
 func (m *bpfEndpointManager) isWorkloadIface(iface string) bool {
 	return m.workloadIfaceRegex.MatchString(iface)
 }
@@ -3125,6 +3104,10 @@ func (m *bpfEndpointManager) isWorkloadIface(iface string) bool {
 func (m *bpfEndpointManager) isDataIface(iface string) bool {
 	return m.dataIfaceRegex.MatchString(iface) ||
 		(m.hostNetworkedNATMode != hostNetworkedNATDisabled && (iface == dataplanedefs.BPFOutDev || iface == "lo"))
+}
+
+func (m *bpfEndpointManager) FlowLogsEnabled() bool {
+	return m.lookupsCache != nil
 }
 
 func (m *bpfEndpointManager) isL3Iface(iface string) bool {
@@ -3290,6 +3273,9 @@ func (m *bpfEndpointManager) OnHEPUpdate(hostIfaceToEpMap map[string]*proto.Host
 }
 
 func (m *bpfEndpointManager) addHEPToIndexes(ifaceName string, ep *proto.HostEndpoint) {
+	if ep == nil {
+		return
+	}
 	for _, tiers := range [][]*proto.TierInfo{ep.Tiers, ep.UntrackedTiers, ep.PreDnatTiers, ep.ForwardTiers} {
 		for _, t := range tiers {
 			m.addPolicyToEPMappings(t.Name, t.IngressPolicies, ifaceName)
@@ -3300,7 +3286,10 @@ func (m *bpfEndpointManager) addHEPToIndexes(ifaceName string, ep *proto.HostEnd
 }
 
 func (m *bpfEndpointManager) removeHEPFromIndexes(ifaceName string, ep *proto.HostEndpoint) {
-	for _, tiers := range [][]*proto.TierInfo{ep.GetTiers(), ep.GetUntrackedTiers(), ep.GetPreDnatTiers(), ep.GetForwardTiers()} {
+	if ep == nil {
+		return
+	}
+	for _, tiers := range [][]*proto.TierInfo{ep.Tiers, ep.UntrackedTiers, ep.PreDnatTiers, ep.ForwardTiers} {
 		for _, t := range tiers {
 			m.removePolicyToEPMappings(t.Name, t.IngressPolicies, ifaceName)
 			m.removePolicyToEPMappings(t.Name, t.EgressPolicies, ifaceName)
@@ -3366,59 +3355,35 @@ func (m *bpfEndpointManager) ensureStarted() {
 	}
 }
 
-func (m *bpfEndpointManager) ensureBPFDevices() error {
+func (m *bpfEndpointManager) reconcileBPFDevices(iface string) error {
 	if m.hostNetworkedNATMode == hostNetworkedNATDisabled {
 		return nil
 	}
 
-	var bpfout, bpfin netlink.Link
+	vethPeer := dataplanedefs.BPFInDev
+	if iface == dataplanedefs.BPFInDev {
+		vethPeer = dataplanedefs.BPFOutDev
+	}
 
+	// Wait for both bpfin.cali and bpfout.cali to become oper UP
+	// before configuring arp and rp_filter.
+	intf, ok := m.nameToIface[vethPeer]
+	if !ok || !intf.info.ifaceIsUp() {
+		return nil
+	}
+	return m.dp.configureBPFDevices()
+}
+
+func (m *bpfEndpointManager) configureBPFDevices() error {
 	bpfin, err := netlink.LinkByName(dataplanedefs.BPFInDev)
 	if err != nil {
-		la := netlink.NewLinkAttrs()
-		la.Name = dataplanedefs.BPFInDev
-		la.MTU = m.bpfIfaceMTU
-		nat := &netlink.Veth{
-			LinkAttrs: la,
-			PeerName:  dataplanedefs.BPFOutDev,
-		}
-		if err := netlink.LinkAdd(nat); err != nil {
-			return fmt.Errorf("failed to add %s: %w", dataplanedefs.BPFInDev, err)
-		}
-		bpfin, err = netlink.LinkByName(dataplanedefs.BPFInDev)
-		if err != nil {
-			return fmt.Errorf("missing %s after add: %w", dataplanedefs.BPFInDev, err)
-		}
+		return fmt.Errorf("missing %s after add: %w", dataplanedefs.BPFInDev, err)
 	}
 
-	if state := bpfin.Attrs().OperState; state != netlink.OperUp {
-		log.WithField("state", state).Info(dataplanedefs.BPFInDev)
-		if err := netlink.LinkSetUp(bpfin); err != nil {
-			return fmt.Errorf("failed to set %s up: %w", dataplanedefs.BPFInDev, err)
-		}
-	}
-	bpfout, err = netlink.LinkByName(dataplanedefs.BPFOutDev)
+	bpfout, err := netlink.LinkByName(dataplanedefs.BPFOutDev)
 	if err != nil {
 		return fmt.Errorf("missing %s after add: %w", dataplanedefs.BPFOutDev, err)
 	}
-	if state := bpfout.Attrs().OperState; state != netlink.OperUp {
-		log.WithField("state", state).Info(dataplanedefs.BPFOutDev)
-		if err := netlink.LinkSetUp(bpfout); err != nil {
-			return fmt.Errorf("failed to set %s up: %w", dataplanedefs.BPFOutDev, err)
-		}
-	}
-
-	err = netlink.LinkSetMTU(bpfin, m.bpfIfaceMTU)
-	if err != nil {
-		return fmt.Errorf("failed to set MTU to %d on %s: %w", m.bpfIfaceMTU, dataplanedefs.BPFInDev, err)
-	}
-	err = netlink.LinkSetMTU(bpfout, m.bpfIfaceMTU)
-	if err != nil {
-		return fmt.Errorf("failed to set MTU to %d on %s: %w", m.bpfIfaceMTU, dataplanedefs.BPFOutDev, err)
-	}
-
-	m.natInIdx = bpfin.Attrs().Index
-	m.natOutIdx = bpfout.Attrs().Index
 
 	if m.v6 != nil {
 		anyV6, _ := ip.CIDRFromString("::/128")
@@ -3481,13 +3446,72 @@ func (m *bpfEndpointManager) ensureBPFDevices() error {
 	log.Infof("Updated neigh for %s (arp %v)", dataplanedefs.BPFOutDev, arp)
 
 	if m.v4 != nil {
-		if err := configureInterface(dataplanedefs.BPFInDev, 4, "0", writeProcSys); err != nil {
+		if err := configureProcSysForInterface(dataplanedefs.BPFInDev, 4, "0", writeProcSys); err != nil {
 			return fmt.Errorf("failed to configure %s parameters: %w", dataplanedefs.BPFOutDev, err)
 		}
-		if err := configureInterface(dataplanedefs.BPFOutDev, 4, "0", writeProcSys); err != nil {
+		if err := configureProcSysForInterface(dataplanedefs.BPFOutDev, 4, "0", writeProcSys); err != nil {
 			return fmt.Errorf("failed to configure %s parameters: %w", dataplanedefs.BPFOutDev, err)
 		}
 	}
+
+	return nil
+}
+
+func (m *bpfEndpointManager) ensureBPFDevices() error {
+	if m.hostNetworkedNATMode == hostNetworkedNATDisabled {
+		return nil
+	}
+
+	var bpfout, bpfin netlink.Link
+
+	bpfin, err := netlink.LinkByName(dataplanedefs.BPFInDev)
+	if err != nil {
+		la := netlink.NewLinkAttrs()
+		la.Name = dataplanedefs.BPFInDev
+		la.MTU = m.bpfIfaceMTU
+		nat := &netlink.Veth{
+			LinkAttrs: la,
+			PeerName:  dataplanedefs.BPFOutDev,
+		}
+		if err := netlink.LinkAdd(nat); err != nil {
+			return fmt.Errorf("failed to add %s: %w", dataplanedefs.BPFInDev, err)
+		}
+		bpfin, err = netlink.LinkByName(dataplanedefs.BPFInDev)
+		if err != nil {
+			return fmt.Errorf("missing %s after add: %w", dataplanedefs.BPFInDev, err)
+		}
+	}
+
+	if state := bpfin.Attrs().OperState; state != netlink.OperUp {
+		log.WithField("state", state).Info(dataplanedefs.BPFInDev)
+		if err := netlink.LinkSetUp(bpfin); err != nil {
+			return fmt.Errorf("failed to set %s up: %w", dataplanedefs.BPFInDev, err)
+		}
+	}
+
+	bpfout, err = netlink.LinkByName(dataplanedefs.BPFOutDev)
+	if err != nil {
+		return fmt.Errorf("missing %s after add: %w", dataplanedefs.BPFOutDev, err)
+	}
+	if state := bpfout.Attrs().OperState; state != netlink.OperUp {
+		log.WithField("state", state).Info(dataplanedefs.BPFOutDev)
+		if err := netlink.LinkSetUp(bpfout); err != nil {
+			return fmt.Errorf("failed to set %s up: %w", dataplanedefs.BPFOutDev, err)
+		}
+	}
+
+	err = netlink.LinkSetMTU(bpfin, m.bpfIfaceMTU)
+	if err != nil {
+		return fmt.Errorf("failed to set MTU to %d on %s: %w", m.bpfIfaceMTU, dataplanedefs.BPFInDev, err)
+	}
+
+	err = netlink.LinkSetMTU(bpfout, m.bpfIfaceMTU)
+	if err != nil {
+		return fmt.Errorf("failed to set MTU to %d on %s: %w", m.bpfIfaceMTU, dataplanedefs.BPFOutDev, err)
+	}
+
+	m.natInIdx = bpfin.Attrs().Index
+	m.natOutIdx = bpfout.Attrs().Index
 
 	_, err = m.ensureQdisc(dataplanedefs.BPFInDev)
 	if err != nil {
@@ -3800,6 +3824,10 @@ func (m *bpfEndpointManager) loadPolicyProgram(
 		opts = append(opts, polprog.WithIPv6())
 		ipsetsMapFD = m.v6.IpsetsMap.MapFD()
 		ipSetIDAlloc = m.v6.ipSetIDAlloc
+	}
+
+	if m.FlowLogsEnabled() {
+		opts = append(opts, polprog.WithFlowLogs())
 	}
 
 	pg := polprog.NewBuilder(
@@ -4362,9 +4390,11 @@ func (trees bpfIfaceTrees) addIfaceWithChild(intf *bpfIfaceNode, childIdx int) {
 	} else {
 		// If the child interface is not in the tree, add a new interface with
 		// childIdx as a child of intf.
-		intf.children[childIdx] = &bpfIfaceNode{index: childIdx,
+		intf.children[childIdx] = &bpfIfaceNode{
+			index:       childIdx,
 			parentIface: intf,
-			children:    make(map[int]*bpfIfaceNode)}
+			children:    make(map[int]*bpfIfaceNode),
+		}
 	}
 	trees[intf.index] = intf
 }
@@ -4372,10 +4402,12 @@ func (trees bpfIfaceTrees) addIfaceWithChild(intf *bpfIfaceNode, childIdx int) {
 // addHostIface adds host interface to hostIfaceTrees tree.
 func (trees bpfIfaceTrees) addIface(link netlink.Link) {
 	attrs := link.Attrs()
-	intf := &bpfIfaceNode{name: attrs.Name,
+	intf := &bpfIfaceNode{
+		name:        attrs.Name,
 		index:       attrs.Index,
 		masterIndex: attrs.MasterIndex,
-		children:    make(map[int]*bpfIfaceNode)}
+		children:    make(map[int]*bpfIfaceNode),
+	}
 
 	if attrs.MasterIndex == 0 && attrs.ParentIndex == 0 {
 		trees.addIfaceStandAlone(intf)

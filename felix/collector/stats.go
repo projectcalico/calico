@@ -17,7 +17,6 @@ package collector
 import (
 	"errors"
 	"fmt"
-	"net"
 	"strings"
 	"time"
 
@@ -25,7 +24,6 @@ import (
 	"k8s.io/kubernetes/pkg/proxy"
 
 	"github.com/projectcalico/calico/felix/calc"
-	"github.com/projectcalico/calico/felix/collector/types/boundedset"
 	"github.com/projectcalico/calico/felix/collector/types/counter"
 	"github.com/projectcalico/calico/felix/collector/types/metric"
 	"github.com/projectcalico/calico/felix/collector/types/tuple"
@@ -136,9 +134,9 @@ func (t *RuleTrace) Path() []*calc.RuleID {
 		}
 
 		if model.PolicyIsStaged(r.Name) {
-			// This is a staged policy. If the rule is an implicit drop then we only include it if the end-of-tier
+			// This is a staged policy. If the rule is an implicitly applied the tier action then we only include it if the end-of-tier
 			// pass action has also been hit.
-			if r.IsImplicitDropRule() {
+			if r.IsTierDefaultActionRule() {
 				finalIdx := endOfTierIndex()
 				if t.path[finalIdx] == nil || !t.path[finalIdx].IsEndOfTierPass() {
 					// This is an implicit drop, but there is no end of tier pass - we do not need to add this entry.
@@ -261,7 +259,6 @@ func (t *RuleTrace) addRuleID(rid *calc.RuleID, matchIdx, numPkts, numBytes int)
 		t.pktsCtr.Increase(numPkts)
 		t.bytesCtr.Increase(numBytes)
 		t.verdictIdx = matchIdx
-		t.lastMatchIdx = 0
 	}
 
 	// Set the last match index.
@@ -317,14 +314,11 @@ func (t *RuleTrace) maybeResizePath(matchIdx int) {
 type Data struct {
 	Tuple tuple.Tuple
 
-	origSourceIPs       *boundedset.BoundedSet
-	OrigSourceIPsActive bool
-
 	// Contains endpoint information corresponding to source and
 	// destination endpoints. Either of these values can be nil
 	// if we don't have information about the endpoint.
-	SrcEp *calc.EndpointData
-	DstEp *calc.EndpointData
+	SrcEp calc.EndpointData
+	DstEp calc.EndpointData
 
 	// Pre-DNAT information used to lookup the service information.
 	IsDNAT      bool
@@ -353,6 +347,10 @@ type Data struct {
 	IngressRuleTrace RuleTrace
 	EgressRuleTrace  RuleTrace
 
+	// These contain the pending rule hits for the tuple.
+	IngressPendingRuleIDs []*calc.RuleID
+	EgressPendingRuleIDs  []*calc.RuleID
+
 	updatedAt     time.Duration
 	ruleUpdatedAt time.Duration
 
@@ -362,11 +360,10 @@ type Data struct {
 	Expired              bool
 }
 
-func NewData(tuple tuple.Tuple, srcEp, dstEp *calc.EndpointData, maxOriginalIPsSize int) *Data {
+func NewData(tuple tuple.Tuple, srcEp, dstEp calc.EndpointData) *Data {
 	now := monotime.Now()
 	d := &Data{
 		Tuple:         tuple,
-		origSourceIPs: boundedset.New(maxOriginalIPsSize),
 		updatedAt:     now,
 		ruleUpdatedAt: now,
 		dirty:         true,
@@ -382,16 +379,14 @@ func (d *Data) String() string {
 	var (
 		srcName, dstName string
 		dstSvcName       string
-		osi              []net.IP
-		osiTc            int
 	)
 	if d.SrcEp != nil {
-		srcName = utils.EndpointName(d.SrcEp.Key)
+		srcName = utils.EndpointName(d.SrcEp.Key())
 	} else {
 		srcName = utils.UnknownEndpoint
 	}
 	if d.DstEp != nil {
-		dstName = utils.EndpointName(d.DstEp.Key)
+		dstName = utils.EndpointName(d.DstEp.Key())
 	} else {
 		dstName = utils.UnknownEndpoint
 	}
@@ -400,20 +395,15 @@ func (d *Data) String() string {
 	} else {
 		dstSvcName = utils.UnknownEndpoint
 	}
-	if d.origSourceIPs != nil {
-		osi = d.origSourceIPs.ToIPSlice()
-		osiTc = d.origSourceIPs.TotalCount()
-	}
 	return fmt.Sprintf(
 		"tuple={%v}, srcEp={%v} dstEp={%v}, dstSvc={%v}, connTrackCtr={packets=%v bytes=%v}, "+
-			"connTrackCtrReverse={packets=%v bytes=%v}, updatedAt=%v ingressRuleTrace={%v} egressRuleTrace={%v}, "+
-			"expired=%v, reported=%v isDNAT=%v preDNATAddr=%v preDNATPort=%v isConnection=%+v "+
-			"origSourceIPs={ips=%v totalCount=%v}",
+			"connTrackCtrReverse={packets=%v bytes=%v}, updatedAt=%v "+
+			"ingressRuleTrace={%v} egressRuleTrace={%v}, ingressPendingRuleIDs={%v} egressPendingRuleIDs={%v},"+
+			"expired=%v, reported=%v isDNAT=%v preDNATAddr=%v preDNATPort=%v isConnection=%+v",
 		&(d.Tuple), srcName, dstName, dstSvcName, d.conntrackPktsCtr.Absolute(), d.conntrackBytesCtr.Absolute(),
 		d.conntrackPktsCtrReverse.Absolute(), d.conntrackBytesCtrReverse.Absolute(),
-		d.updatedAt, d.IngressRuleTrace, d.EgressRuleTrace,
+		d.updatedAt, d.IngressRuleTrace, d.EgressRuleTrace, d.IngressPendingRuleIDs, d.EgressPendingRuleIDs,
 		d.Expired, d.Reported, d.IsDNAT, d.PreDNATAddr, d.PreDNATPort, d.IsConnection,
-		osi, osiTc,
 	)
 }
 
@@ -505,8 +495,8 @@ func (d *Data) SetExpired() {
 // For such cases we make an exception in this logic
 func (d *Data) VerdictFound() bool {
 	// We expect at least one of the source or dest to be a local endpoint.
-	srcIsLocal := d.SrcEp != nil && d.SrcEp.IsLocal
-	dstIsLocal := d.DstEp != nil && d.DstEp.IsLocal
+	srcIsLocal := d.SrcEp != nil && d.SrcEp.IsLocal()
+	dstIsLocal := d.DstEp != nil && d.DstEp.IsLocal()
 
 	if d.IsProxied {
 		// This is a proxied flow, we'll see both legs but we only expect a verdict for one of them
@@ -578,28 +568,6 @@ func (d *Data) ReplaceRuleID(ruleID *calc.RuleID, matchIdx, numPkts, numBytes in
 	d.touch()
 	d.setDirtyFlag()
 }
-func (d *Data) AddOriginalSourceIPs(bs *boundedset.BoundedSet) {
-	d.origSourceIPs.Combine(bs)
-	d.OrigSourceIPsActive = true
-	d.IsConnection = true
-	d.touch()
-	d.setDirtyFlag()
-}
-
-func (d *Data) OriginalSourceIps() []net.IP {
-	return d.origSourceIPs.ToIPSlice()
-}
-
-func (d *Data) IncreaseNumUniqueOriginalSourceIPs(deltaNum int) {
-	d.origSourceIPs.IncreaseTotalCount(deltaNum)
-	d.IsConnection = true
-	d.touch()
-	d.setDirtyFlag()
-}
-
-func (d *Data) NumUniqueOriginalSourceIPs() int {
-	return d.origSourceIPs.TotalCount()
-}
 
 func (d *Data) PreDNATTuple() (tuple.Tuple, error) {
 	if !d.IsDNAT {
@@ -624,6 +592,7 @@ func (d *Data) MetricUpdateIngressConn(ut metric.UpdateType) metric.Update {
 		DstService:      metricDstServiceInfo,
 		RuleIDs:         d.IngressRuleTrace.Path(),
 		HasDenyRule:     d.IngressRuleTrace.HasDenyRule(),
+		PendingRuleIDs:  d.IngressPendingRuleIDs,
 		IsConnection:    d.IsConnection,
 		InMetric: metric.Value{
 			DeltaPackets: d.conntrackPktsCtr.Delta(),
@@ -653,6 +622,7 @@ func (d *Data) MetricUpdateEgressConn(ut metric.UpdateType) metric.Update {
 		DstService:      metricDstServiceInfo,
 		RuleIDs:         d.EgressRuleTrace.Path(),
 		HasDenyRule:     d.EgressRuleTrace.HasDenyRule(),
+		PendingRuleIDs:  d.EgressPendingRuleIDs,
 		IsConnection:    d.IsConnection,
 		InMetric: metric.Value{
 			DeltaPackets: d.conntrackPktsCtrReverse.Delta(),
@@ -683,6 +653,7 @@ func (d *Data) MetricUpdateIngressNoConn(ut metric.UpdateType) metric.Update {
 		DstService:      metricDstServiceInfo,
 		RuleIDs:         d.IngressRuleTrace.Path(),
 		HasDenyRule:     d.IngressRuleTrace.HasDenyRule(),
+		PendingRuleIDs:  d.IngressPendingRuleIDs,
 		IsConnection:    d.IsConnection,
 		InMetric: metric.Value{
 			DeltaPackets: d.IngressRuleTrace.pktsCtr.Delta(),
@@ -709,6 +680,7 @@ func (d *Data) MetricUpdateEgressNoConn(ut metric.UpdateType) metric.Update {
 		DstService:      metricDstServiceInfo,
 		RuleIDs:         d.EgressRuleTrace.Path(),
 		HasDenyRule:     d.EgressRuleTrace.HasDenyRule(),
+		PendingRuleIDs:  d.EgressPendingRuleIDs,
 		IsConnection:    d.IsConnection,
 		OutMetric: metric.Value{
 			DeltaPackets: d.EgressRuleTrace.pktsCtr.Delta(),
@@ -716,37 +688,4 @@ func (d *Data) MetricUpdateEgressNoConn(ut metric.UpdateType) metric.Update {
 		},
 	}
 	return metricUpdate
-}
-
-// metricUpdateOrigSourceIPs creates a metric update for HTTP Data (original source ips).
-func (d *Data) MetricUpdateOrigSourceIPs(ut metric.UpdateType) metric.Update {
-	// We send Original Source IP updates as standalone metric updates.
-	// If however we can't find out the rule trace then we also include
-	// an unknown rule ID that the rest of the  metric pipeline uses to
-	// extract action and direction.
-	var unknownRuleID *calc.RuleID
-	if !d.IngressRuleTrace.FoundVerdict() {
-		unknownRuleID = calc.NewRuleID(calc.UnknownStr, calc.UnknownStr, calc.UnknownStr, calc.RuleIDIndexUnknown, rules.RuleDirIngress, rules.RuleActionAllow)
-	}
-
-	metricDstServiceInfo := metric.ServiceInfo{
-		ServicePortName: d.DstSvc,
-		PortNum:         d.PreDNATPort,
-	}
-
-	mu := metric.Update{
-		UpdateType:      ut,
-		Tuple:           d.Tuple,
-		NatOutgoingPort: d.NatOutgoingPort,
-		SrcEp:           d.SrcEp,
-		DstEp:           d.DstEp,
-		DstService:      metricDstServiceInfo,
-		OrigSourceIPs:   d.origSourceIPs.Copy(),
-		RuleIDs:         d.IngressRuleTrace.Path(),
-		HasDenyRule:     d.IngressRuleTrace.HasDenyRule(),
-		UnknownRuleID:   unknownRuleID,
-		IsConnection:    d.IsConnection,
-	}
-	d.origSourceIPs.Reset()
-	return mu
 }

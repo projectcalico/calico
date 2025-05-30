@@ -748,8 +748,10 @@ func init() {
 		Entry("should reject an invalid LogSeveritySys value 'Critical'", api.FelixConfigurationSpec{LogSeveritySys: "Critical"}, false),
 		Entry("should accept a valid LogSeverityScreen value 'Fatal'", api.FelixConfigurationSpec{LogSeverityScreen: "Fatal"}, true),
 		Entry("should accept a valid LogSeverityScreen value 'Warning'", api.FelixConfigurationSpec{LogSeverityScreen: "Warning"}, true),
+		Entry("should accept a valid LogSeverityScreen value 'Trace'", api.FelixConfigurationSpec{LogSeverityScreen: "Trace"}, true),
 		Entry("should accept a valid LogSeverityFile value 'Debug'", api.FelixConfigurationSpec{LogSeverityFile: "Debug"}, true),
 		Entry("should accept a valid LogSeveritySys value 'Info'", api.FelixConfigurationSpec{LogSeveritySys: "Info"}, true),
+		Entry("should accept a valid LogSeveritySys value 'Trace'", api.FelixConfigurationSpec{LogSeveritySys: "Trace"}, true),
 
 		Entry("should accept a valid IptablesNATOutgoingInterfaceFilter value 'cali-123'", api.FelixConfigurationSpec{IptablesNATOutgoingInterfaceFilter: "cali-123"}, true),
 		Entry("should reject an invalid IptablesNATOutgoingInterfaceFilter value 'cali@123'", api.FelixConfigurationSpec{IptablesNATOutgoingInterfaceFilter: "cali@123"}, false),
@@ -1952,6 +1954,19 @@ func init() {
 			NodeSelector: "has(mylabel)",
 			PeerSelector: "has(mylabel)",
 		}, true),
+		Entry("should reject BGPPeerSpec with LocalWorkloadSelector and empty ASNumber", api.BGPPeerSpec{
+			LocalWorkloadSelector: "has(labelone)",
+		}, false),
+		Entry("should reject BGPPeerSpec with both LocalWorkloadSelector and PeerSelector", api.BGPPeerSpec{
+			LocalWorkloadSelector: "has(labelone)",
+			PeerSelector:          "has(labeltwo)",
+			ASNumber:              as61234,
+		}, false),
+		Entry("should reject BGPPeerSpec with both LocalWorkloadSelector and PeerIP", api.BGPPeerSpec{
+			LocalWorkloadSelector: "has(labelone)",
+			PeerIP:                ipv4_1,
+			ASNumber:              as61234,
+		}, false),
 		Entry("should reject BGPPeer with ReachableBy but without PeerIP", api.BGPPeerSpec{
 			ReachableBy: ipv4_2,
 		}, false),
@@ -3415,6 +3430,12 @@ func init() {
 		Entry("should accept valid host endpoint auto create",
 			api.NodeControllerConfig{HostEndpoint: &api.AutoHostEndpointConfig{AutoCreate: "Enabled"}}, true,
 		),
+		Entry("should not accept invalid host endpoint createDefaultAutoHostEndpoint",
+			api.NodeControllerConfig{HostEndpoint: &api.AutoHostEndpointConfig{CreateDefaultHostEndpoint: "Totally"}}, false,
+		),
+		Entry("should accept valid host endpoint createDefaultAutoHostEndpoint",
+			api.NodeControllerConfig{HostEndpoint: &api.AutoHostEndpointConfig{CreateDefaultHostEndpoint: "Enabled"}}, true,
+		),
 		Entry("should accept empty host endpoint auto create",
 			api.NodeControllerConfig{HostEndpoint: &api.AutoHostEndpointConfig{}}, true,
 		),
@@ -3438,6 +3459,41 @@ func init() {
 		),
 		Entry("should not accept invalid assignIPs value for LoadBalancer config",
 			api.LoadBalancerControllerConfig{AssignIPs: "incorrect-value"}, false,
+		),
+		Entry("should not accept template with incorrect name",
+			api.Template{
+				GenerateName: "test$set",
+			}, false,
+		),
+		Entry("should accept template with valid name",
+			api.Template{
+				GenerateName: "validname",
+			}, true,
+		),
+		Entry("should allow a valid nodeSelector",
+			api.Template{
+				NodeSelector: `foo == "bar"`,
+			}, true,
+		),
+		Entry("should disallow a invalid nodeSelector",
+			api.Template{
+				NodeSelector: "this is not valid selector syntax",
+			}, false,
+		),
+		Entry("should allow a valid CIDR",
+			api.Template{
+				InterfaceCIDRs: []string{"10.0.1.0/24", "10.0.10.0/32"},
+			}, true,
+		),
+		Entry("should reject empty CIDR",
+			api.Template{
+				InterfaceCIDRs: []string{},
+			}, true,
+		),
+		Entry("should reject invalid CIDR",
+			api.Template{
+				InterfaceCIDRs: []string{"not a real cidr"},
+			}, false,
 		),
 
 		// BGP Communities validation in BGPConfigurationSpec
@@ -3510,6 +3566,16 @@ func init() {
 			Communities:          []api.Community{{Name: "community-test", Value: "101:5695"}},
 			PrefixAdvertisements: []api.PrefixAdvertisement{{CIDR: "2001:4860::/128", Communities: []string{"community-test", "8988:202"}}},
 		}, true),
+		Entry("should accept IPv4 and IPv6 in LocalWorkloadPeeringIPV4 and LocalWorkloadPeeringIPV6", api.BGPConfigurationSpec{
+			LocalWorkloadPeeringIPV4: ipv4_1,
+			LocalWorkloadPeeringIPV6: ipv6_1,
+		}, true),
+		Entry("should not accept an invalid IPv4 in LocalWorkloadPeeringIPV4", api.BGPConfigurationSpec{
+			LocalWorkloadPeeringIPV4: bad_ipv4_1,
+		}, false),
+		Entry("should not accept an invalid IPv6 in LocalWorkloadPeeringIPV6", api.BGPConfigurationSpec{
+			LocalWorkloadPeeringIPV6: bad_ipv6_1,
+		}, false),
 
 		// Block Affinities validation in BlockAffinitySpec
 		Entry("should accept non-deleted block affinities", libapiv3.BlockAffinitySpec{

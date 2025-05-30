@@ -103,8 +103,8 @@ type bpfRouteManager struct {
 }
 
 func newBPFRouteManager(config *Config, maps *bpfmap.IPMaps, ipFamily proto.IPVersion,
-	opReporter logutils.OpRecorder) *bpfRouteManager {
-
+	opReporter logutils.OpRecorder,
+) *bpfRouteManager {
 	// Record the external node CIDRs and pre-mark them as dirty.  These can only change with a config update,
 	// which would restart Felix.
 	extCIDRs := set.New[ip.CIDR]()
@@ -324,8 +324,18 @@ func (m *bpfRouteManager) calculateRoute(cidr ip.CIDR) routes.ValueInterface {
 
 	var route routes.ValueInterface
 
-	switch cgRoute.GetType() {
-	case proto.RouteType_LOCAL_WORKLOAD:
+	rts := cgRoute.GetTypes()
+	if rts&proto.RouteType_REMOTE_TUNNEL == proto.RouteType_REMOTE_TUNNEL {
+		// Handle RouteType_REMOTE_TUNNEL first as borrowed IPs are going to
+		// have RouteType_LOCAL_WORKLOAD as as well.
+		flags |= routes.FlagsRemoteTunneledHost
+		switch cgRoute.IpPoolType {
+		case proto.IPPoolType_VXLAN:
+			flags |= routes.FlagVXLAN
+		}
+		nodeIP := net.ParseIP(cgRoute.DstNodeIp)
+		route = m.bpfOps.NewValueWithNextHop(flags, ip.FromNetIP(nodeIP))
+	} else if rts&proto.RouteType_LOCAL_WORKLOAD == proto.RouteType_LOCAL_WORKLOAD && !cgRoute.Borrowed /* not ours */ {
 		if !cgRoute.LocalWorkload {
 			// Just the local IPAM block, not an actual workload.
 			return nil
@@ -350,6 +360,9 @@ func (m *bpfRouteManager) calculateRoute(cidr ip.CIDR) routes.ValueInterface {
 				pWepID := types.WorkloadEndpointIDToProto(wepID)
 				if wepScore > bestWepScore || wepScore == bestWepScore && pWepID.String() > bestWepID.String() {
 					flags |= routes.FlagsLocalWorkload
+					if wep.GetType() == proto.WorkloadType_VM {
+						flags |= routes.FlagVMWorkload
+					}
 					route = m.bpfOps.NewValueWithIfIndex(flags, ifaceIdx)
 					bestWepID = pWepID
 					bestWepScore = wepScore
@@ -357,23 +370,7 @@ func (m *bpfRouteManager) calculateRoute(cidr ip.CIDR) routes.ValueInterface {
 				return nil
 			})
 		}
-	case proto.RouteType_REMOTE_WORKLOAD:
-		flags |= routes.FlagsRemoteWorkload
-		if m.wgEnabled {
-			flags |= routes.FlagTunneled
-		}
-		switch cgRoute.IpPoolType {
-		case proto.IPPoolType_VXLAN, proto.IPPoolType_IPIP:
-			flags |= routes.FlagTunneled
-		}
-		if cgRoute.DstNodeIp == "" {
-			log.WithField("node", cgRoute.DstNodeName).Debug(
-				"Can't program route for remote workload, don't know its node's IP")
-			return nil
-		}
-		nodeIP := net.ParseIP(cgRoute.DstNodeIp)
-		route = m.bpfOps.NewValueWithNextHop(flags, ip.FromNetIP(nodeIP))
-	case proto.RouteType_REMOTE_HOST:
+	} else if rts&proto.RouteType_REMOTE_HOST == proto.RouteType_REMOTE_HOST {
 		flags |= routes.FlagsRemoteHost
 		if cgRoute.DstNodeIp == "" {
 			// This may legally happen in dual-stack installation when IPv6 is enabled,
@@ -386,14 +383,29 @@ func (m *bpfRouteManager) calculateRoute(cidr ip.CIDR) routes.ValueInterface {
 		}
 		nodeIP := net.ParseIP(cgRoute.DstNodeIp)
 		route = m.bpfOps.NewValueWithNextHop(flags, ip.FromNetIP(nodeIP))
-	case proto.RouteType_REMOTE_TUNNEL:
-		flags |= routes.FlagsRemoteTunneledHost
-		route = m.bpfOps.NewValueWithNextHop(flags, cidr.Addr())
-	case proto.RouteType_LOCAL_HOST:
+	} else if rts&proto.RouteType_LOCAL_HOST == proto.RouteType_LOCAL_HOST {
 		// It may be a localhost IP that is not assigned to a device like an
 		// k8s ExternalIP. Route resolver knew that it was assigned to our
 		// hostname.
 		flags |= routes.FlagsLocalHost
+	} else if rts&proto.RouteType_REMOTE_WORKLOAD == proto.RouteType_REMOTE_WORKLOAD {
+		flags |= routes.FlagsRemoteWorkload
+		if m.wgEnabled {
+			flags |= routes.FlagTunneled
+		}
+		switch cgRoute.IpPoolType {
+		case proto.IPPoolType_VXLAN:
+			flags |= routes.FlagTunneled | routes.FlagVXLAN
+		case proto.IPPoolType_IPIP:
+			flags |= routes.FlagTunneled
+		}
+		if cgRoute.DstNodeIp == "" {
+			log.WithField("node", cgRoute.DstNodeName).Debug(
+				"Can't program route for remote workload, don't know its node's IP")
+			return nil
+		}
+		nodeIP := net.ParseIP(cgRoute.DstNodeIp)
+		route = m.bpfOps.NewValueWithNextHop(flags, ip.FromNetIP(nodeIP))
 	}
 
 	if route == nil && flags != 0 {
@@ -403,7 +415,6 @@ func (m *bpfRouteManager) calculateRoute(cidr ip.CIDR) routes.ValueInterface {
 }
 
 func (m *bpfRouteManager) applyUpdates() (numDels uint, numAdds uint) {
-
 	debug := log.GetLevel() >= log.DebugLevel
 
 	m.dirtyRoutes.Iter(func(key routes.KeyInterface) error {
@@ -595,7 +606,7 @@ func (m *bpfRouteManager) onRouteUpdate(update *proto.RouteUpdate) {
 	}
 
 	// For now don't handle the local tunnel addresses, which were previously not being included in the route updates.
-	if update.Type == proto.RouteType_LOCAL_TUNNEL {
+	if update.Types&proto.RouteType_LOCAL_TUNNEL == proto.RouteType_LOCAL_TUNNEL {
 		m.onRouteRemove(&proto.RouteRemove{Dst: update.Dst})
 		return
 	}
@@ -676,7 +687,7 @@ func (m *bpfRouteManager) onBGPConfigUpdate(update *proto.GlobalBGPConfigUpdate)
 			continue
 		}
 
-		m.cidrToRoute[cidr] = &proto.RouteUpdate{Type: proto.RouteType_CIDR_INFO}
+		m.cidrToRoute[cidr] = &proto.RouteUpdate{Types: proto.RouteType_CIDR_INFO}
 		if m.svcLoopPrevention != "Disabled" {
 			m.dirtyCIDRs.Add(cidr)
 		}

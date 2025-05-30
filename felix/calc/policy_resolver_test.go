@@ -19,6 +19,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
+	"github.com/projectcalico/calico/lib/std/uniquelabels"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 )
@@ -79,7 +80,7 @@ type policyResolverRecorder struct {
 	updates []policyResolverUpdate
 }
 
-func (p *policyResolverRecorder) OnEndpointTierUpdate(endpointKey model.Key, endpoint interface{}, filteredTiers []TierInfo) {
+func (p *policyResolverRecorder) OnEndpointTierUpdate(endpointKey model.EndpointKey, endpoint model.Endpoint, peerData *EndpointBGPPeer, filteredTiers []TierInfo) {
 	p.updates = append(p.updates, policyResolverUpdate{
 		Key:      endpointKey,
 		Endpoint: endpoint,
@@ -152,7 +153,10 @@ func TestPolicyResolver_OnPolicyMatch(t *testing.T) {
 				},
 			},
 		}},
-	}, cmp.AllowUnexported(PolKV{})); d != "" {
+	},
+		cmp.AllowUnexported(PolKV{}),
+		cmp.Comparer(func(a, b uniquelabels.Map) bool { return a.Equals(b) }),
+	); d != "" {
 		t.Error("Incorrect update:", d)
 	}
 }

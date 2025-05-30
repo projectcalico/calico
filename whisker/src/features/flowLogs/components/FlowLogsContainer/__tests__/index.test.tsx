@@ -1,4 +1,4 @@
-import { render } from '@/test-utils/helper';
+import { render, screen } from '@/test-utils/helper';
 import FlowLogsContainer from '..';
 import { useOutletContext } from 'react-router-dom';
 import { useFlowLogs } from '../../../api';
@@ -13,6 +13,10 @@ jest.mock('../../../api', () => ({
 }));
 
 jest.mock('../../FlowLogsList', () => jest.fn());
+
+jest.mock('../../../hooks', () => ({
+    useFlowLogsHeightOffset: jest.fn().mockReturnValue(1),
+}));
 
 describe('FlowLogsContainer', () => {
     it.skip('should call useFlowLogs with denied query params', () => {
@@ -45,8 +49,21 @@ describe('FlowLogsContainer', () => {
                 error: undefined,
                 flowLogs: [],
                 isLoading: false,
+                heightOffset: 1,
             }),
             undefined,
         );
+    });
+
+    it('should render a loading skeleton', () => {
+        jest.mocked(useOutletContext).mockReturnValue({
+            isFetching: true,
+        });
+
+        render(<FlowLogsContainer />);
+
+        expect(
+            screen.getByTestId('flow-logs-loading-skeleton'),
+        ).toBeInTheDocument();
     });
 });

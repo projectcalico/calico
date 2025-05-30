@@ -1,4 +1,4 @@
-// Copyright (c) 2018-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2018-2025 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,66 +16,150 @@ package checker
 
 import (
 	"context"
+	"fmt"
+	"os"
 
 	core_v2 "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	authz_v2 "github.com/envoyproxy/go-control-plane/envoy/service/auth/v2"
+	authz_v2alpha "github.com/envoyproxy/go-control-plane/envoy/service/auth/v2alpha"
 	authz "github.com/envoyproxy/go-control-plane/envoy/service/auth/v3"
 	type_v2 "github.com/envoyproxy/go-control-plane/envoy/type"
 	_type "github.com/envoyproxy/go-control-plane/envoy/type/v3"
 	log "github.com/sirupsen/logrus"
+	"google.golang.org/genproto/googleapis/rpc/code"
 	"google.golang.org/genproto/googleapis/rpc/status"
+	"google.golang.org/grpc"
 
 	"github.com/projectcalico/calico/app-policy/policystore"
 )
 
 type authServer struct {
-	stores <-chan *policystore.PolicyStore
-	Store  *policystore.PolicyStore
+	Store            policystore.PolicyStoreManager
+	checkProviders   []CheckProvider
+	subscriptionType string
 }
 
+type AuthServerOption func(*authServer)
+
 // NewServer creates a new authServer and returns a pointer to it.
-func NewServer(ctx context.Context, stores <-chan *policystore.PolicyStore) *authServer {
-	s := &authServer{stores, nil}
-	go s.updateStores(ctx)
+func NewServer(
+	ctx context.Context,
+	storeManager policystore.PolicyStoreManager,
+	opts ...AuthServerOption,
+) *authServer {
+	s := &authServer{Store: storeManager}
+	for _, o := range opts {
+		o(s)
+	}
 	return s
+}
+
+func WithSubscriptionType(s string) AuthServerOption {
+	return func(as *authServer) {
+		as.subscriptionType = s
+	}
+}
+
+func WithRegisteredCheckProvider(c CheckProvider) AuthServerOption {
+	log.Info("registering check provider: ", c.Name())
+	return func(as *authServer) {
+		// don't re-register providers that are already registered
+		for _, p := range as.checkProviders {
+			if c.Name() == p.Name() {
+				log.Warn("encountered attempt to register already-registered check provider")
+				return
+			}
+		}
+		as.checkProviders = append(as.checkProviders, c)
+	}
+}
+
+func (as *authServer) RegisterGRPCServices(gs *grpc.Server) {
+	authz.RegisterAuthorizationServer(gs, as)
+
+	authz_v2.RegisterAuthorizationServer(gs, as.V2Compat())
+	authz_v2alpha.RegisterAuthorizationServer(gs, as.V2Compat())
 }
 
 // Check applies the currently loaded policy to a network request and renders a policy decision.
 func (as *authServer) Check(ctx context.Context, req *authz.CheckRequest) (*authz.CheckResponse, error) {
-	log.WithFields(log.Fields{
-		"context":         ctx,
-		"Req.Method":      req.GetAttributes().GetRequest().GetHttp().GetMethod(),
-		"Req.Path":        req.GetAttributes().GetRequest().GetHttp().GetPath(),
-		"Req.Protocol":    req.GetAttributes().GetRequest().GetHttp().GetProtocol(),
-		"Req.Source":      req.GetAttributes().GetSource(),
-		"Req.Destination": req.GetAttributes().GetDestination(),
-	}).Debug("Check start")
-	resp := authz.CheckResponse{Status: &status.Status{Code: INTERNAL}}
-	var st status.Status
+	hostname, _ := os.Hostname()
+	logCtx := log.WithContext(ctx).WithField("hostname", hostname)
+	if logCtx.Logger.IsLevelEnabled(log.DebugLevel) {
+		logCtx.Debug("Check start: ", req.Attributes.String())
+	}
 
+	resp := &authz.CheckResponse{Status: &status.Status{Code: INTERNAL}}
+	var err error
 	// Ensure that we only access as.Store once per Check call. The authServer can be updated to point to a different
 	// store asynchronously with this call, so we use a local variable to reference the PolicyStore for the duration of
 	// this call for consistency.
 	store := as.Store
-	if store == nil {
-		log.Warn("Check request before synchronized to Policy, failing.")
-		resp.Status.Code = UNAVAILABLE
-		return &resp, nil
+	logCtx.Debugf("attempting store read at %p", store)
+	store.DoWithReadLock(func(ps *policystore.PolicyStore) {
+		if ps == nil {
+			panic("bug: policyStore is nil and shouldn't happen.. ever")
+		}
+
+		var unknownChecks int
+	T:
+		for _, checkProvider := range as.checkProviders {
+			checkName := checkProvider.Name()
+			logCtx.Debugf("checking request with provider %s", checkName)
+
+			// Check if provider is enabled in case is TPROXY or
+			// sidecar
+			if !checkProvider.EnabledForRequest(ps, req) {
+				continue
+			}
+
+			resp, err = checkProvider.Check(ps, req)
+			if err != nil {
+				msg := fmt.Sprintf("check provider %s failed with error %v", checkName, err)
+				logCtx.Error(msg)
+				resp = &authz.CheckResponse{Status: &status.Status{
+					Code:    INTERNAL,
+					Message: msg,
+				}}
+				break T
+			}
+
+			switch v := resp.Status.Code; v {
+			case OK:
+				// current check passes but we may need to go through all the other checks
+				logCtx.Debugf("request passes %s check", checkName)
+				continue T
+			case UNKNOWN:
+				// check provider tried to process result, but there's no clear decision; or
+				// check provider is requesting to continue to next check
+				logCtx.Debugf("request returned unknown for %s check", checkName)
+				unknownChecks++
+				continue T
+			default:
+				logCtx.Errorf("request denied by %s with status %s", checkName, code.Code(v).String())
+				break T
+			}
+		}
+		logCtx.Debugf(
+			"All checks complete. final response is: %s",
+			code.Code(resp.Status.Code),
+		)
+
+		// all checks returned unknown
+		if unknownChecks == len(as.checkProviders) {
+			resp.Status.Code = UNKNOWN
+		}
+	})
+
+	if logCtx.Logger.IsLevelEnabled(log.DebugLevel) {
+		logCtx.WithFields(log.Fields{
+			"code": code.Code(resp.Status.Code),
+			"msg":  resp.Status.Message,
+		}).Debug("Check complete: ", req.String())
 	}
-	store.Read(func(ps *policystore.PolicyStore) { st = checkStore(ps, store.Endpoint, req) })
-	resp.Status = &st
-	log.WithFields(log.Fields{
-		"Req.Method":               req.GetAttributes().GetRequest().GetHttp().GetMethod(),
-		"Req.Path":                 req.GetAttributes().GetRequest().GetHttp().GetPath(),
-		"Req.Protocol":             req.GetAttributes().GetRequest().GetHttp().GetProtocol(),
-		"Req.Source":               req.GetAttributes().GetSource(),
-		"Req.Destination":          req.GetAttributes().GetDestination(),
-		"Response.Status":          resp.GetStatus(),
-		"Response.HttpResponse":    resp.GetHttpResponse(),
-		"Response.DynamicMetadata": resp.GetDynamicMetadata,
-	}).Debug("Check complete")
-	return &resp, nil
+
+	return resp, nil
 }
 
 func (as *authServer) V2Compat() *authServerV2 {
@@ -208,20 +292,5 @@ func headersV2Compat(hdrs []*core.HeaderValueOption) []*core_v2.HeaderValueOptio
 func httpStatusV2Compat(s *_type.HttpStatus) *type_v2.HttpStatus {
 	return &type_v2.HttpStatus{
 		Code: type_v2.StatusCode(s.Code),
-	}
-}
-
-// updateStores pulls PolicyStores off the channel and assigns them.
-func (as *authServer) updateStores(ctx context.Context) {
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		// Variable assignment is atomic, so this is threadsafe as long as each check call accesses authServer.Store
-		// only once.
-		case as.Store = <-as.stores:
-			log.Info("Switching to new in-sync policy store.")
-			continue
-		}
 	}
 }

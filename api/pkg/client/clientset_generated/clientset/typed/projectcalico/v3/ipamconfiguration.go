@@ -5,9 +5,9 @@
 package v3
 
 import (
-	"context"
+	context "context"
 
-	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	projectcalicov3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	scheme "github.com/projectcalico/api/pkg/client/clientset_generated/clientset/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"
@@ -23,31 +23,32 @@ type IPAMConfigurationsGetter interface {
 
 // IPAMConfigurationInterface has methods to work with IPAMConfiguration resources.
 type IPAMConfigurationInterface interface {
-	Create(ctx context.Context, iPAMConfiguration *v3.IPAMConfiguration, opts v1.CreateOptions) (*v3.IPAMConfiguration, error)
-	Update(ctx context.Context, iPAMConfiguration *v3.IPAMConfiguration, opts v1.UpdateOptions) (*v3.IPAMConfiguration, error)
+	Create(ctx context.Context, iPAMConfiguration *projectcalicov3.IPAMConfiguration, opts v1.CreateOptions) (*projectcalicov3.IPAMConfiguration, error)
+	Update(ctx context.Context, iPAMConfiguration *projectcalicov3.IPAMConfiguration, opts v1.UpdateOptions) (*projectcalicov3.IPAMConfiguration, error)
 	Delete(ctx context.Context, name string, opts v1.DeleteOptions) error
 	DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error
-	Get(ctx context.Context, name string, opts v1.GetOptions) (*v3.IPAMConfiguration, error)
-	List(ctx context.Context, opts v1.ListOptions) (*v3.IPAMConfigurationList, error)
+	Get(ctx context.Context, name string, opts v1.GetOptions) (*projectcalicov3.IPAMConfiguration, error)
+	List(ctx context.Context, opts v1.ListOptions) (*projectcalicov3.IPAMConfigurationList, error)
 	Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error)
-	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v3.IPAMConfiguration, err error)
+	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *projectcalicov3.IPAMConfiguration, err error)
 	IPAMConfigurationExpansion
 }
 
 // iPAMConfigurations implements IPAMConfigurationInterface
 type iPAMConfigurations struct {
-	*gentype.ClientWithList[*v3.IPAMConfiguration, *v3.IPAMConfigurationList]
+	*gentype.ClientWithList[*projectcalicov3.IPAMConfiguration, *projectcalicov3.IPAMConfigurationList]
 }
 
 // newIPAMConfigurations returns a IPAMConfigurations
 func newIPAMConfigurations(c *ProjectcalicoV3Client) *iPAMConfigurations {
 	return &iPAMConfigurations{
-		gentype.NewClientWithList[*v3.IPAMConfiguration, *v3.IPAMConfigurationList](
+		gentype.NewClientWithList[*projectcalicov3.IPAMConfiguration, *projectcalicov3.IPAMConfigurationList](
 			"ipamconfigurations",
 			c.RESTClient(),
 			scheme.ParameterCodec,
 			"",
-			func() *v3.IPAMConfiguration { return &v3.IPAMConfiguration{} },
-			func() *v3.IPAMConfigurationList { return &v3.IPAMConfigurationList{} }),
+			func() *projectcalicov3.IPAMConfiguration { return &projectcalicov3.IPAMConfiguration{} },
+			func() *projectcalicov3.IPAMConfigurationList { return &projectcalicov3.IPAMConfigurationList{} },
+		),
 	}
 }

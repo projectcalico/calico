@@ -11,8 +11,6 @@ include ../lib.Makefile
 
 ###############################################################################
 
-LDFLAGS=-X $(PACKAGE_NAME)/pkg/buildinfo.GitVersion=$(GIT_DESCRIPTION)
-
 # All go files.
 SRC_FILES:=$(shell find . -name '*.go' -not -path "./vendor/*" )
 
@@ -58,6 +56,7 @@ test-kdd: bin/confd-$(ARCH) bin/kubectl bin/bird bin/bird6 bin/calico-node bin/c
 		-v $(CURDIR)/bin:/calico/bin/ \
 		-v $(CURDIR)/etc/calico:/etc/calico/ \
 		-v $(CURDIR)/../:/go/src/github.com/projectcalico/calico:rw \
+		-v /var/run/calico/endpoint-status \
 		-e GOPATH=/go \
 		-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
 		-e FELIX_TYPHAADDR=127.0.0.1:5473 \
@@ -91,6 +90,7 @@ test-etcd: bin/confd-$(ARCH) bin/etcdctl bin/bird bin/bird6 bin/calico-node bin/
 		-v $(CURDIR)/bin:/calico/bin/ \
 		-v $(CURDIR)/etc/calico:/etc/calico/ \
 		-v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
+		-v /var/run/calico/endpoint-status \
 		-e GOPATH=/go \
 		-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
 		-e UPDATE_EXPECTED_DATA=$(UPDATE_EXPECTED_DATA) \

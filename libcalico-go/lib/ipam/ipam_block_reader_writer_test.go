@@ -118,6 +118,10 @@ func (c *fakeClient) EnsureInitialized() error {
 	panic("should not be called")
 }
 
+func (c *fakeClient) Close() error {
+	return nil
+}
+
 func (c *fakeClient) Clean() error {
 	panic("should not be called")
 }

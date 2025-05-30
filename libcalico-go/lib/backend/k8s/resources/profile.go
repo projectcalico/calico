@@ -457,6 +457,13 @@ func (pw *profileWatcher) processProfileEvents() {
 		switch e.Type {
 		case api.WatchModified, api.WatchAdded:
 			value = e.New.Value
+		case api.WatchBookmark:
+			if isNsEvent {
+				pw.k8sNSRev = e.New.Revision
+			} else {
+				pw.k8sSARev = e.New.Revision
+			}
+			e.New.Revision = pw.JoinProfileRevisions(pw.k8sNSRev, pw.k8sSARev)
 		case api.WatchDeleted:
 			value = e.Old.Value
 		}
@@ -477,7 +484,7 @@ func (pw *profileWatcher) processProfileEvents() {
 				}
 				oma.GetObjectMeta().SetResourceVersion(pw.JoinProfileRevisions(pw.k8sNSRev, pw.k8sSARev))
 			}
-		} else if e.Error == nil {
+		} else if e.Error == nil && e.Type != api.WatchBookmark {
 			log.WithField("event", e).Warning("Event without error or value")
 		}
 

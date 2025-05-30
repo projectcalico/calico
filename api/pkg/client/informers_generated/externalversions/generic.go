@@ -5,7 +5,7 @@
 package externalversions
 
 import (
-	"fmt"
+	fmt "fmt"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"

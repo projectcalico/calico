@@ -1,0 +1,13 @@
+- name: Mock node
+  run:
+    when: "${FORCE_RUN} or change_in(['/*', '/test-tools/mocknode/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+  dependencies:
+    - Prerequisites
+  task:
+    prologue:
+      commands:
+        - cd test-tools/mocknode
+    jobs:
+      - name: Mock node
+        commands:
+          - ../../.semaphore/run-and-monitor make-ci.log make ci

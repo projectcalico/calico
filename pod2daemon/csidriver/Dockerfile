@@ -1,4 +1,4 @@
-# Copyright (c) 2022 Tigera, Inc. All rights reserved.
+# Copyright (c) 2022-2025 Tigera, Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,6 +13,7 @@
 # limitations under the License.
 
 ARG CALICO_BASE
+
 FROM scratch AS source
 
 ARG BIN_DIR
@@ -24,13 +25,13 @@ FROM ${CALICO_BASE}
 
 ARG GIT_VERSION=unknown
 
-LABEL description="Calico CSI driver to setup secure connections from Kubernetes pods to local daemons"
-LABEL maintainer="maintainers@tigera.io"
-LABEL name="Calico CSI Driver"
-LABEL release="1"
-LABEL summary="Calico CSI driver to setup secure connections from Kubernetes pods to local daemons"
-LABEL vendor="Project Calico"
-LABEL version=${GIT_VERSION}
+LABEL org.opencontainers.image.description="Calico CSI driver to setup secure connections from Kubernetes pods to local daemons"
+LABEL org.opencontainers.image.authors="maintainers@tigera.io"
+LABEL org.opencontainers.image.source="https://github.com/projectcalico/calico"
+LABEL org.opencontainers.image.title="Calico CSI Driver"
+LABEL org.opencontainers.image.vendor="Project Calico"
+LABEL org.opencontainers.image.version="${GIT_VERSION}"
+LABEL org.opencontainers.image.licenses="Apache-2.0"
 
 COPY --from=source / /
 

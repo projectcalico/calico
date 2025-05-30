@@ -146,7 +146,7 @@ func TestPolicyVerdictEvents(t *testing.T) {
 				res, err := bpfrun(pktBytes)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(res.Retval).To(Equal(tcRes))
-			})
+			}, withFlowLogs())
 
 			var evnt events.Event
 			done := make(chan struct{})

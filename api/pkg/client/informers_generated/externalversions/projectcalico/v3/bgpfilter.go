@@ -5,13 +5,13 @@
 package v3
 
 import (
-	"context"
+	context "context"
 	time "time"
 
-	projectcalicov3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	apisprojectcalicov3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	clientset "github.com/projectcalico/api/pkg/client/clientset_generated/clientset"
 	internalinterfaces "github.com/projectcalico/api/pkg/client/informers_generated/externalversions/internalinterfaces"
-	v3 "github.com/projectcalico/api/pkg/client/listers_generated/projectcalico/v3"
+	projectcalicov3 "github.com/projectcalico/api/pkg/client/listers_generated/projectcalico/v3"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	watch "k8s.io/apimachinery/pkg/watch"
@@ -22,7 +22,7 @@ import (
 // BGPFilters.
 type BGPFilterInformer interface {
 	Informer() cache.SharedIndexInformer
-	Lister() v3.BGPFilterLister
+	Lister() projectcalicov3.BGPFilterLister
 }
 
 type bGPFilterInformer struct {
@@ -56,7 +56,7 @@ func NewFilteredBGPFilterInformer(client clientset.Interface, resyncPeriod time.
 				return client.ProjectcalicoV3().BGPFilters().Watch(context.TODO(), options)
 			},
 		},
-		&projectcalicov3.BGPFilter{},
+		&apisprojectcalicov3.BGPFilter{},
 		resyncPeriod,
 		indexers,
 	)
@@ -67,9 +67,9 @@ func (f *bGPFilterInformer) defaultInformer(client clientset.Interface, resyncPe
 }
 
 func (f *bGPFilterInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&projectcalicov3.BGPFilter{}, f.defaultInformer)
+	return f.factory.InformerFor(&apisprojectcalicov3.BGPFilter{}, f.defaultInformer)
 }
 
-func (f *bGPFilterInformer) Lister() v3.BGPFilterLister {
-	return v3.NewBGPFilterLister(f.Informer().GetIndexer())
+func (f *bGPFilterInformer) Lister() projectcalicov3.BGPFilterLister {
+	return projectcalicov3.NewBGPFilterLister(f.Informer().GetIndexer())
 }

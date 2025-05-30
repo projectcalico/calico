@@ -8,7 +8,6 @@ spec:
   node: kube-master
 
 ---
-
 kind: BGPConfiguration
 apiVersion: projectcalico.org/v3
 metadata:
@@ -17,7 +16,6 @@ spec:
   listenPort: 500
 
 ---
-
 kind: IPPool
 apiVersion: projectcalico.org/v3
 metadata:

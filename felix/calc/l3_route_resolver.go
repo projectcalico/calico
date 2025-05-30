@@ -742,7 +742,6 @@ func (c *L3RouteResolver) flush() {
 		}
 
 		rt := &proto.RouteUpdate{
-			Type:       proto.RouteType_CIDR_INFO,
 			IpPoolType: proto.IPPoolType_NONE,
 			Dst:        cidr.String(),
 		}
@@ -778,10 +777,10 @@ func (c *L3RouteResolver) flush() {
 				rt.DstNodeName = ri.Blocks[0].NodeName
 				if rt.DstNodeName == c.myNodeName {
 					logCxt.Debug("Local workload route.")
-					rt.Type = proto.RouteType_LOCAL_WORKLOAD
+					rt.Types |= proto.RouteType_LOCAL_WORKLOAD
 				} else {
 					logCxt.Debug("Remote workload route.")
-					rt.Type = proto.RouteType_REMOTE_WORKLOAD
+					rt.Types |= proto.RouteType_REMOTE_WORKLOAD
 				}
 			}
 			if len(ri.Host.NodeNames) > 0 {
@@ -789,10 +788,10 @@ func (c *L3RouteResolver) flush() {
 
 				if rt.DstNodeName == c.myNodeName {
 					logCxt.Debug("Local host route.")
-					rt.Type = proto.RouteType_LOCAL_HOST
+					rt.Types |= proto.RouteType_LOCAL_HOST
 				} else {
 					logCxt.Debug("Remote host route.")
-					rt.Type = proto.RouteType_REMOTE_HOST
+					rt.Types |= proto.RouteType_REMOTE_HOST
 				}
 			}
 
@@ -810,18 +809,18 @@ func (c *L3RouteResolver) flush() {
 				if ri.Refs[0].RefType == RefTypeWEP {
 					// This is not a tunnel ref, so must be a workload.
 					if ri.Refs[0].NodeName == c.myNodeName {
-						rt.Type = proto.RouteType_LOCAL_WORKLOAD
 						rt.LocalWorkload = true
+						rt.Types |= proto.RouteType_LOCAL_WORKLOAD
 					} else {
-						rt.Type = proto.RouteType_REMOTE_WORKLOAD
+						rt.Types |= proto.RouteType_REMOTE_WORKLOAD
 					}
 				} else {
 					// This is a tunnel ref, set type and also store the tunnel type in the route. It is possible for
 					// multiple tunnels to have the same IP, so collate all tunnel types on the same node.
 					if ri.Refs[0].NodeName == c.myNodeName {
-						rt.Type = proto.RouteType_LOCAL_TUNNEL
+						rt.Types |= proto.RouteType_LOCAL_TUNNEL
 					} else {
-						rt.Type = proto.RouteType_REMOTE_TUNNEL
+						rt.Types |= proto.RouteType_REMOTE_TUNNEL
 					}
 
 					rt.TunnelType = &proto.TunnelType{}

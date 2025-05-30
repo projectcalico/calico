@@ -1,17 +1,32 @@
-import { ChakraProvider } from '@chakra-ui/react';
+import { AppLayout, ChakraProvider } from '@/components';
 import {
-    createBrowserRouter,
+    AppErrorBoundary,
+    FlowLogsErrorBoundary,
+} from '@/components/core/ErrorBoundary';
+import { FlowLogsContainer } from '@/features/flowLogs/components';
+import { FlowLogsPage } from '@/pages';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
+import React from 'react';
+import {
     Navigate,
     RouteObject,
     RouterProvider,
+    createBrowserRouter,
 } from 'react-router-dom';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { AppLayout } from '@/components';
-import { FlowLogsPage } from '@/pages';
-import { theme } from '@/theme';
-import { FlowLogsContainer } from '@/features/flowLogs/components';
+import AppConfigProvider from '@/context/AppConfig';
+import PromoBannerProvider from './context/PromoBanner';
+import { useBuildInfo } from './hooks';
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+    defaultOptions: {
+        queries: {
+            refetchOnWindowFocus: false,
+            refetchOnMount: false,
+            retry: 1,
+        },
+    },
+});
 
 export const routes: RouteObject[] = [
     {
@@ -25,27 +40,41 @@ export const routes: RouteObject[] = [
                         path: '',
                         element: <FlowLogsContainer />,
                     },
-                    // {
-                    //     path: 'denied-flows',
-                    //     element: <FlowLogsContainer />,
-                    // },
+                    {
+                        path: 'denied-flows',
+                        element: <FlowLogsContainer />,
+                    },
                 ],
+                ErrorBoundary: FlowLogsErrorBoundary,
             },
             {
                 path: '*',
                 element: <Navigate to='flow-logs' />,
             },
         ],
+        ErrorBoundary: AppErrorBoundary,
     },
 ];
 
 const router = createBrowserRouter(routes);
 
+const Providers: React.FC<React.PropsWithChildren> = ({ children }) => (
+    <AppConfigProvider>
+        <PromoBannerProvider>{children}</PromoBannerProvider>
+    </AppConfigProvider>
+);
+
 const App: React.FC = () => {
+    useBuildInfo();
+
     return (
-        <ChakraProvider theme={theme}>
+        <ChakraProvider>
             <QueryClientProvider client={queryClient}>
-                <RouterProvider router={router} />
+                <Providers>
+                    <RouterProvider router={router} />
+                </Providers>
+
+                <ReactQueryDevtools initialIsOpen={false} />
             </QueryClientProvider>
         </ChakraProvider>
     );

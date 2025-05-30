@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -33,21 +33,19 @@ import (
 
 const (
 	RateLimitK8s          = "k8s"
-	RateLimitCalicoCreate = "calico-create"
 	RateLimitCalicoList   = "calico-list"
-	RateLimitCalicoUpdate = "calico-update"
 	RateLimitCalicoDelete = "calico-delete"
 	nodeLabelAnnotation   = "projectcalico.org/kube-labels"
 	hepCreatedLabelKey    = "projectcalico.org/created-by"
 	hepCreatedLabelValue  = "calico-kube-controllers"
+	timer                 = 5 * time.Minute
 )
-
-var retrySleepTime = 100 * time.Millisecond
 
 // NodeController implements the Controller interface.  It is responsible for monitoring
 // kubernetes nodes and responding to delete events by removing them from the Calico datastore.
 type NodeController struct {
 	ctx context.Context
+	cfg config.NodeControllerConfig
 
 	// For syncing node objects from the k8s API.
 	nodeInformer cache.SharedIndexInformer
@@ -59,7 +57,9 @@ type NodeController struct {
 	dataFeed     *utils.DataFeed
 
 	// Sub-controllers
-	ipamCtrl *IPAMController
+	ipamCtrl               *IPAMController
+	hostEndpointController *autoHostEndpointController
+	nodeLabelController    *nodeLabelController
 }
 
 // NewNodeController Constructor for NodeController
@@ -72,6 +72,7 @@ func NewNodeController(ctx context.Context,
 ) controller.Controller {
 	nc := &NodeController{
 		ctx:          ctx,
+		cfg:          cfg,
 		calicoClient: calicoClient,
 		k8sClientset: k8sClientset,
 		dataFeed:     dataFeed,
@@ -120,21 +121,16 @@ func NewNodeController(ctx context.Context,
 	// Create the Auto HostEndpoint sub-controller and register it to receive data.
 	// We always launch this controller, even if auto-HEPs are disabled, since the controller
 	// is responsible for cleaning up after itself in case it was previously enabled.
-	autoHEPController := NewAutoHEPController(cfg, calicoClient)
-	autoHEPController.RegisterWith(nc.dataFeed)
+	nc.hostEndpointController = NewAutoHEPController(cfg, calicoClient)
+	nc.hostEndpointController.RegisterWith(nc.dataFeed)
 
 	if cfg.SyncLabels {
 		// Note that the configuration code has already handled disabling this if
 		// we are in KDD mode.
 
 		// Create Label-sync controller and register it to receive data.
-		nodeLabelCtrl := NewNodeLabelController(calicoClient)
-		nodeLabelCtrl.RegisterWith(nc.dataFeed)
-
-		// Hook the node label controller into the node informer so we are notified
-		// when Kubernetes node labels change.
-		nodeHandlers.AddFunc = func(obj interface{}) { nodeLabelCtrl.OnKubernetesNodeUpdate(obj) }
-		nodeHandlers.UpdateFunc = func(_, obj interface{}) { nodeLabelCtrl.OnKubernetesNodeUpdate(obj) }
+		nc.nodeLabelController = NewNodeLabelController(calicoClient, nodeInformer)
+		nc.nodeLabelController.RegisterWith(nc.dataFeed)
 	}
 
 	// Set the handlers on the informers.
@@ -187,6 +183,11 @@ func (c *NodeController) Run(stopCh chan struct{}) {
 
 	// We're in-sync. Start the sub-controllers.
 	c.ipamCtrl.Start(stopCh)
+	c.hostEndpointController.Start(stopCh)
+
+	if c.cfg.SyncLabels {
+		c.nodeLabelController.Start(stopCh)
+	}
 
 	<-stopCh
 	log.Info("Stopping Node controller")

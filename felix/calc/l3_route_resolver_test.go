@@ -138,7 +138,7 @@ var _ = Describe("L3RouteResolver", func() {
 			})
 
 			rt := (<-eventBuf).(*proto.RouteUpdate)
-			Expect(rt.Type).To(Equal(proto.RouteType_REMOTE_WORKLOAD))
+			Expect(rt.Types).To(Equal(proto.RouteType_REMOTE_WORKLOAD))
 			Expect(rt.SameSubnet).NotTo(BeTrue())
 		})
 	})

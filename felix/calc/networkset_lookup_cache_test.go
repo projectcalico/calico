@@ -22,6 +22,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	. "github.com/projectcalico/calico/felix/calc"
+	"github.com/projectcalico/calico/lib/std/uniquelabels"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 )
@@ -45,7 +46,7 @@ var _ = Describe("NetworkSetLookupsCache IP tests", func() {
 			ec.OnUpdate(update)
 			ed, ok := ec.GetNetworkSetFromIP(addrB)
 			Expect(ok).To(BeTrue(), c)
-			Expect(ed.Key).To(Equal(key))
+			Expect(ed.Key()).To(Equal(key))
 
 			update = api.Update{
 				KVPair: model.KVPair{
@@ -83,9 +84,9 @@ var _ = Describe("NetworkSetLookupsCache IP tests", func() {
 			ed, ok := ec.GetNetworkSetFromIP(addrB)
 			if exists {
 				Expect(ok).To(BeTrue(), name+"\n"+ec.DumpNetworksets())
-				Expect(ed.Key).To(Equal(key), ec.DumpNetworksets())
+				Expect(ed.Key()).To(Equal(key), ec.DumpNetworksets())
 				if labels != nil {
-					Expect(ed.Networkset.(*model.NetworkSet).Labels).To(Equal(labels), ec.DumpNetworksets())
+					Expect(ed.Labels()).To(Equal(uniquelabels.Make(labels)), ec.DumpNetworksets())
 				}
 			} else {
 				Expect(ok).To(BeFalse(), name+".\n"+ec.DumpNetworksets())
@@ -206,7 +207,7 @@ var _ = Describe("NetworkSetLookupsCache IP tests", func() {
 			ed, ok := ec.GetNetworkSetFromIP(addrB)
 			if exists {
 				Expect(ok).To(BeTrue(), name+"\n"+ec.DumpNetworksets())
-				Expect(ed.Key).To(Equal(key))
+				Expect(ed.Key()).To(Equal(key))
 			} else {
 				Expect(ok).To(BeFalse(), name+".\n"+ec.DumpNetworksets())
 			}

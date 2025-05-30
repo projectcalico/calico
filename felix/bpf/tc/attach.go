@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -31,6 +31,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/hook"
 	"github.com/projectcalico/calico/felix/bpf/libbpf"
 	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
+	"github.com/projectcalico/calico/felix/dataplane/linux/qos"
 )
 
 type AttachPoint struct {
@@ -64,6 +65,8 @@ type AttachPoint struct {
 	NATout               uint32
 	UDPOnly              bool
 	RedirectPeer         bool
+	FlowLogsEnabled      bool
+	OverlayTunnelID      uint32
 }
 
 var ErrDeviceNotFound = errors.New("device not found")
@@ -86,26 +89,8 @@ func (ap *AttachPoint) loadObject(file string) (*libbpf.Obj, error) {
 	return obj, nil
 }
 
-type AttachResult struct {
-	progId int
-	prio   int
-	handle int
-}
-
-func (ar AttachResult) ProgID() int {
-	return ar.progId
-}
-
-func (ar AttachResult) Prio() int {
-	return ar.prio
-}
-
-func (ar AttachResult) Handle() int {
-	return ar.handle
-}
-
 // AttachProgram attaches a BPF program from a file to the TC attach point
-func (ap *AttachPoint) AttachProgram() (bpf.AttachResult, error) {
+func (ap *AttachPoint) AttachProgram() error {
 	logCxt := log.WithField("attachPoint", ap)
 
 	// By now the attach type specific generic set of programs is loaded and we
@@ -113,39 +98,33 @@ func (ap *AttachPoint) AttachProgram() (bpf.AttachResult, error) {
 	// configuration further to the selected set of programs.
 
 	binaryToLoad := path.Join(bpfdefs.ObjectDir, "tc_preamble.o")
-	var res AttachResult
 
 	/* XXX we should remember the tag of the program and skip the rest if the tag is
 	* still the same */
-	progsToClean, err := ap.listAttachedPrograms(true)
+	progsAttached, err := ListAttachedPrograms(ap.Iface, ap.Hook.String(), true)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	prio := findFilterPriority(progsToClean)
+	prio, handle := findFilterPriority(progsAttached)
 	obj, err := ap.loadObject(binaryToLoad)
 	if err != nil {
 		logCxt.Warn("Failed to load program")
-		return nil, fmt.Errorf("object %w", err)
+		return fmt.Errorf("object %w", err)
 	}
 	defer obj.Close()
 
-	res.progId, res.prio, res.handle, err = obj.AttachClassifier("cali_tc_preamble", ap.Iface, ap.Hook == hook.Ingress, prio)
+	err = obj.AttachClassifier("cali_tc_preamble", ap.Iface, ap.Hook == hook.Ingress, prio, handle)
 	if err != nil {
 		logCxt.Warnf("Failed to attach to TC section cali_tc_preamble")
-		return nil, err
+		return err
 	}
 	logCxt.Info("Program attached to TC.")
-
-	if err := ap.detachPrograms(progsToClean); err != nil {
-		return nil, err
-	}
-
-	return res, nil
+	return nil
 }
 
 func (ap *AttachPoint) DetachProgram() error {
-	progsToClean, err := ap.listAttachedPrograms(true)
+	progsToClean, err := ListAttachedPrograms(ap.Iface, ap.Hook.String(), true)
 	if err != nil {
 		return err
 	}
@@ -158,7 +137,7 @@ func (ap *AttachPoint) detachPrograms(progsToClean []attachedProg) error {
 	for _, p := range progsToClean {
 		log.WithField("prog", p).Debug("Cleaning up old calico program")
 		attemptCleanup := func() error {
-			_, err := ExecTC("filter", "del", "dev", ap.Iface, ap.Hook.String(), "pref", p.pref, "handle", p.handle, "bpf")
+			_, err := ExecTC("filter", "del", "dev", ap.Iface, ap.Hook.String(), "pref", fmt.Sprintf("%d", p.Pref), "handle", fmt.Sprintf("0x%x", p.Handle), "bpf")
 			return err
 		}
 		err := attemptCleanup()
@@ -230,33 +209,41 @@ func isDumpInterrupted(err error) bool {
 }
 
 type attachedProg struct {
-	pref   string
-	handle string
+	Pref   int
+	Handle uint32
 }
 
-func (ap *AttachPoint) listAttachedPrograms(includeLegacy bool) ([]attachedProg, error) {
-	out, err := ExecTC("filter", "show", "dev", ap.Iface, ap.Hook.String())
+func ListAttachedPrograms(iface, hook string, includeLegacy bool) ([]attachedProg, error) {
+	out, err := ExecTC("filter", "show", "dev", iface, hook)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list tc filters on interface: %w", err)
 	}
 	// Lines look like this; the section name always includes calico.
 	// filter protocol all pref 49152 bpf chain 0 handle 0x1 to_hep_no_log.o:[calico_to_host_ep] direct-action not_in_hw id 821 tag ee402594f8f85ac3 jited
-	var progsToClean []attachedProg
+	var progsAttached []attachedProg
 	for _, line := range strings.Split(string(out), "\n") {
 		if !strings.Contains(line, "cali_tc_preambl") && (!includeLegacy || !strings.Contains(line, "calico")) {
 			continue
 		}
 		// find the pref and the handle
 		if sm := prefHandleRe.FindStringSubmatch(line); len(sm) > 0 {
+			pref, err := strconv.Atoi(sm[1])
+			if err != nil {
+				continue
+			}
+			handle64, err := strconv.ParseUint(sm[2][2:], 16, 32)
+			if err != nil {
+				continue
+			}
 			p := attachedProg{
-				pref:   sm[1],
-				handle: sm[2],
+				Pref:   pref,
+				Handle: uint32(handle64),
 			}
 			log.WithField("prog", p).Debug("Found old calico program")
-			progsToClean = append(progsToClean, p)
+			progsAttached = append(progsAttached, p)
 		}
 	}
-	return progsToClean, nil
+	return progsAttached, nil
 }
 
 // ProgramName returns the name of the program associated with this AttachPoint
@@ -300,7 +287,7 @@ func (ap *AttachPoint) IsAttached() (bool, error) {
 	if !hasQ {
 		return false, nil
 	}
-	progs, err := ap.listAttachedPrograms(false)
+	progs, err := ListAttachedPrograms(ap.Iface, ap.Hook.String(), false)
 	if err != nil {
 		return false, err
 	}
@@ -317,7 +304,25 @@ func EnsureQdisc(ifaceName string) (bool, error) {
 		log.WithField("iface", ifaceName).Debug("Already have a clsact qdisc on this interface")
 		return true, nil
 	}
-	return false, libbpf.CreateQDisc(ifaceName)
+
+	// Clean up QoS config as it is currently not suppored by the BPF dataplane
+	// and should be removed when transitioning from iptables or nftables to BPF.
+	var errs []error
+	err = qos.RemoveIngressQdisc(ifaceName)
+	if err != nil {
+		errs = append(errs, fmt.Errorf("error removing QoS ingress qdisc from interface %s: %w", ifaceName, err))
+	}
+	err = qos.RemoveEgressQdisc(ifaceName)
+	if err != nil {
+		errs = append(errs, fmt.Errorf("error removing QoS egress qdisc from interface %s: %w", ifaceName, err))
+	}
+
+	err = libbpf.CreateQDisc(ifaceName)
+	if err != nil {
+		errs = append(errs, fmt.Errorf("error creating qdisc on interface %s: %w", ifaceName, err))
+	}
+
+	return false, errors.Join(errs...)
 }
 
 func HasQdisc(ifaceName string) (bool, error) {
@@ -352,19 +357,16 @@ func RemoveQdisc(ifaceName string) error {
 	return libbpf.RemoveQDisc(ifaceName)
 }
 
-func findFilterPriority(progsToClean []attachedProg) int {
+func findFilterPriority(progsToClean []attachedProg) (int, uint32) {
 	prio := 0
+	handle := uint32(0)
 	for _, p := range progsToClean {
-		pref, err := strconv.Atoi(p.pref)
-		if err != nil {
-			continue
-		}
-
-		if pref > prio {
-			prio = pref
+		if p.Pref > prio {
+			prio = p.Pref
+			handle = p.Handle
 		}
 	}
-	return prio
+	return prio, handle
 }
 
 func (ap *AttachPoint) Config() string {
@@ -417,6 +419,10 @@ func (ap *AttachPoint) Configure() *libbpf.TcGlobalData {
 
 	if ap.RedirectPeer {
 		globalData.Flags |= libbpf.GlobalsRedirectPeer
+	}
+
+	if ap.FlowLogsEnabled {
+		globalData.Flags |= libbpf.GlobalsFlowLogsEnabled
 	}
 
 	globalData.HostTunnelIPv4 = globalData.HostIPv4

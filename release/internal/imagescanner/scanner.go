@@ -89,6 +89,9 @@ func (i *Scanner) Scan(productCode string, images []string, stream string, relea
 	query.Add("scanner_select", i.config.Scanner)
 	query.Add("project_name", productCode)
 	query.Add("project_version", stream)
+	if !release {
+		query.Add("upload", "daily")
+	}
 	req.URL.RawQuery = query.Encode()
 	logrus.WithFields(logrus.Fields{
 		"images":      images,
@@ -114,21 +117,18 @@ func (i *Scanner) Scan(productCode string, images []string, stream string, relea
 			return err
 		}
 	}
-	switch resp.StatusCode {
-	case http.StatusOK:
-		logrus.Info("Image scan request sent successfully")
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		logrus.WithField("status", resp.StatusCode).Info("Image scan request sent successfully")
 		return nil
-	case http.StatusLocked:
+	} else if resp.StatusCode == http.StatusLocked {
 		logrus.WithField("status", resp.StatusCode).Error("Image scan service is currently processing another request")
 		return fmt.Errorf("image scan service is currently processing another request")
-	default:
-		if resp.StatusCode >= 500 {
-			logrus.WithField("status", resp.StatusCode).Error("Image scan service is currently unavailable")
-			return fmt.Errorf("image scan service is currently unavailable")
-		}
-		logrus.WithField("status", resp.StatusCode).Error("Failed to send request to image scanner")
-		return fmt.Errorf("failed to send request to image scanner")
+	} else if resp.StatusCode >= 500 {
+		logrus.WithField("status", resp.StatusCode).Error("Image scan service is currently unavailable")
+		return fmt.Errorf("image scan service is currently unavailable")
 	}
+	logrus.WithField("status", resp.StatusCode).Error("Failed to send request to image scanner")
+	return fmt.Errorf("failed to send request to image scanner")
 }
 
 // writeScanResultToFile writes the image scan result to a file.

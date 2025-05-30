@@ -15,7 +15,20 @@ installation:
   # Example: --set installation.imagePullSecrets[0].name=my-existing-secret
   imagePullSecrets: []
 
+  # Disable CSI driver by default.
+  kubeletVolumePluginPath: "None"
+
+# apiServer configures the Calico API server, needed for interacting with
+# the projectcalico.org/v3 suite of APIs.
 apiServer:
+  enabled: true
+
+# goldmane configures the Calico Goldmane flow aggregator.
+goldmane:
+  enabled: true
+
+# whisker configures the Calico Whisker observability UI.
+whisker:
   enabled: true
 
 defaultFelixConfiguration:
@@ -32,6 +45,10 @@ certs:
     commonName:
     caBundle:
 
+# Whether or not the tigera/operator should manange CustomResourceDefinitions
+# needed to run itself and Calico. If disabled, you must manage these resources out-of-band.
+manageCRDs: true
+
 # Resource requests and limits for the tigera/operator pod.
 resources: {}
 
@@ -40,10 +57,10 @@ additionalLabels: {}
 
 # Tolerations for the tigera/operator pod.
 tolerations:
-- effect: NoExecute
-  operator: Exists
-- effect: NoSchedule
-  operator: Exists
+  - effect: NoExecute
+    operator: Exists
+  - effect: NoSchedule
+    operator: Exists
 
 # NodeSelector for the tigera/operator pod.
 nodeSelector:
@@ -61,16 +78,16 @@ podAnnotations: {}
 # Custom labels for the tigera/operator pod.
 podLabels: {}
 
+# Custom DNS configuration for the tigera/operator pod.
+dnsConfig: {}
 # Image and registry configuration for the tigera/operator pod.
 tigeraOperator:
   image: tigera/operator
   version: master
   registry: quay.io
 calicoctl:
-  image: docker.io/calico/ctl
+  image: quay.io/calico/ctl
   tag: master
-
-kubeletVolumePluginPath: /var/lib/kubelet
 
 # Optionally configure the host and port used to access the Kubernetes API server.
 kubernetesServiceEndpoint:

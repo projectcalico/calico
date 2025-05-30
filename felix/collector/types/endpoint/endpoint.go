@@ -22,6 +22,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/calc"
 	"github.com/projectcalico/calico/felix/collector/utils"
+	"github.com/projectcalico/calico/lib/std/uniquelabels"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 )
 
@@ -51,29 +52,20 @@ type Metadata struct {
 	AggregatedName string `json:"aggregated_name"`
 }
 
-func GetLabels(ed *calc.EndpointData) map[string]string {
-	labels := map[string]string{}
-	if ed == nil {
-		return labels
+func GetLabels(ed calc.EndpointData) uniquelabels.Map {
+	var labels uniquelabels.Map
+	if ed != nil {
+		labels = ed.Labels()
 	}
-
-	var v map[string]string
-	switch ed.Key.(type) {
-	case model.WorkloadEndpointKey:
-		v = ed.Endpoint.(*model.WorkloadEndpoint).Labels
-	case model.HostEndpointKey:
-		v = ed.Endpoint.(*model.HostEndpoint).Labels
-	case model.NetworkSetKey:
-		v = ed.Networkset.(*model.NetworkSet).Labels
-	}
-
-	if v != nil {
-		labels = v
+	if labels.IsNil() {
+		// Explicitly don't want to return nil so that we can tell if the
+		// field is populated.
+		labels = uniquelabels.Empty
 	}
 	return labels
 }
 
-func GetMetadata(ed *calc.EndpointData, ip [16]byte) (Metadata, error) {
+func GetMetadata(ed calc.EndpointData, ip [16]byte) (Metadata, error) {
 	var em Metadata
 	if ed == nil {
 		return Metadata{
@@ -84,16 +76,17 @@ func GetMetadata(ed *calc.EndpointData, ip [16]byte) (Metadata, error) {
 		}, nil
 	}
 
-	switch k := ed.Key.(type) {
+	key := ed.Key()
+	switch k := key.(type) {
 	case model.WorkloadEndpointKey:
 		ns, name, err := deconstructNamespaceAndNameFromWepName(k.WorkloadID)
 		if err != nil {
 			return Metadata{}, err
 		}
-		v := ed.Endpoint.(*model.WorkloadEndpoint)
 		var aggName string
-		if v.GenerateName != "" {
-			aggName = fmt.Sprintf("%s*", v.GenerateName)
+		gn := ed.GenerateName()
+		if gn != "" {
+			aggName = gn + "*"
 		} else {
 			aggName = name
 		}
@@ -120,7 +113,7 @@ func GetMetadata(ed *calc.EndpointData, ip [16]byte) (Metadata, error) {
 			Name:           name,
 		}
 	default:
-		return Metadata{}, fmt.Errorf("Unknown key %#v of type %v", ed.Key, reflect.TypeOf(ed.Key))
+		return Metadata{}, fmt.Errorf("Unknown key %#v of type %v", key, reflect.TypeOf(key))
 	}
 
 	return em, nil

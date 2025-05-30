@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -121,12 +121,24 @@ type Client interface {
 	// Clean removes Calico data from the backend datastore.  Used for test purposes.
 	Clean() error
 
-	// Close the client.
-	//Close()
+	// Close attempts to close any connections to the datastore.  Using the
+	// client after calling this method may result in undefined behavior.
+	Close() error
+}
+
+// StatusClient extends Client, is the interface to the backend datastore.
+type StatusClient interface {
+	Client
+
+	// UpdateStatus modifies the status section of the existing object specified in the KVPair.
+	// On success, returns a KVPair for the object with revision information filled-in.
+	// If the input KVPair has revision information then the update only succeeds if the revision is still current.
+	UpdateStatus(ctx context.Context, object *model.KVPair) (*model.KVPair, error)
 }
 
 type WatchOptions struct {
-	Revision string
+	Revision            string
+	AllowWatchBookmarks bool
 }
 
 type Syncer interface {
@@ -158,6 +170,14 @@ type SyncerCallbacks interface {
 // parse a particular key or value.
 type SyncerParseFailCallbacks interface {
 	ParseFailed(rawKey string, rawValue string)
+}
+
+// SyncFailCallbacks is an optional interface that can be
+// implemented by a syncer callback. Callbacks that support it can report
+// a failure to sync with a remote cluster backend.
+type SyncFailCallbacks interface {
+	// TODO: Should also add a Connected callback to handle when a connection is available again.
+	SyncFailed(err error)
 }
 
 // Update from the Syncer.  A KV pair plus extra metadata.
@@ -200,6 +220,7 @@ const (
 	WatchModified WatchEventType = "MODIFIED"
 	WatchDeleted  WatchEventType = "DELETED"
 	WatchError    WatchEventType = "ERROR"
+	WatchBookmark WatchEventType = "BOOKMARK"
 )
 
 // Event represents a single event to a watched resource.
@@ -217,6 +238,34 @@ type WatchEvent struct {
 
 	// The error, if EventType is Error.
 	Error error
+}
+
+func (w WatchEvent) String() string {
+	switch w.Type {
+	case WatchAdded:
+		if w.New == nil {
+			break // Malformed event, but still want to be able to print it!
+		}
+		return fmt.Sprintf("Added:%v@%v", w.New.Key, w.New.Revision)
+	case WatchModified:
+		if w.New == nil {
+			break
+		}
+		return fmt.Sprintf("Modified:%v@%v", w.New.Key, w.New.Revision)
+	case WatchDeleted:
+		if w.Old == nil {
+			break
+		}
+		return fmt.Sprintf("Deleted:%v@%v", w.Old.Key, w.Old.Revision)
+	case WatchBookmark:
+		if w.New == nil {
+			break
+		}
+		return fmt.Sprintf("Bookmark:%v", w.New.Revision)
+	case WatchError:
+		return fmt.Sprintf("Error:%v", w.Error)
+	}
+	return fmt.Sprintf("WatchEvent{Type: %s, Old: %v, New: %v, Error: %v}", w.Type, w.Old, w.New, w.Error)
 }
 
 // FakeWatcher is inspired by apimachinery (watch) FakeWatcher

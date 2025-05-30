@@ -24,13 +24,14 @@ import (
 	"github.com/projectcalico/calico/felix/config"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/types"
+	"github.com/projectcalico/calico/lib/std/uniquelabels"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 
 var _ = DescribeTable("ModelWorkloadEndpointToProto",
 	func(in model.WorkloadEndpoint, expected *proto.WorkloadEndpoint) {
-		out := calc.ModelWorkloadEndpointToProto(&in, []*proto.TierInfo{})
+		out := calc.ModelWorkloadEndpointToProto(&in, nil, []*proto.TierInfo{})
 		Expect(out).To(Equal(expected))
 	},
 	Entry("workload endpoint with NAT", model.WorkloadEndpoint{
@@ -47,6 +48,7 @@ var _ = DescribeTable("ModelWorkloadEndpointToProto",
 			},
 		},
 		IPv6NAT: []model.IPNAT{},
+		Labels:  uniquelabels.Make(map[string]string{"kubevirt.io": "virt-launcher"}),
 	}, &proto.WorkloadEndpoint{
 		State:      "up",
 		Name:       "bill",
@@ -63,6 +65,7 @@ var _ = DescribeTable("ModelWorkloadEndpointToProto",
 		},
 		Ipv6Nat:                    []*proto.NatInfo{},
 		AllowSpoofedSourcePrefixes: []string{},
+		Type:                       proto.WorkloadType_VM,
 	}),
 	Entry("workload endpoint with source IP spoofing configured", model.WorkloadEndpoint{
 		State:                      "up",
@@ -77,6 +80,7 @@ var _ = DescribeTable("ModelWorkloadEndpointToProto",
 		Ipv4Nat:                    []*proto.NatInfo{},
 		Ipv6Nat:                    []*proto.NatInfo{},
 		AllowSpoofedSourcePrefixes: []string{"8.8.8.8/32"},
+		Type:                       proto.WorkloadType_REGULAR,
 	}),
 	Entry("workload endpoint with QoSControls", model.WorkloadEndpoint{
 		State:      "up",
@@ -210,9 +214,9 @@ var _ = DescribeTable("ModelHostEndpointToProto",
 			Name:              "eth0",
 			ExpectedIPv4Addrs: []net.IP{mustParseIP("10.28.0.13"), mustParseIP("10.28.0.14")},
 			ExpectedIPv6Addrs: []net.IP{mustParseIP("dead::beef"), mustParseIP("dead::bee5")},
-			Labels: map[string]string{
+			Labels: uniquelabels.Make(map[string]string{
 				"a": "b",
-			},
+			}),
 			ProfileIDs: []string{"prof1"},
 		},
 		[]*proto.TierInfo{{Name: "a", IngressPolicies: []string{"b", "c"}}},
@@ -233,9 +237,9 @@ var _ = DescribeTable("ModelHostEndpointToProto",
 			Name:              "eth0",
 			ExpectedIPv4Addrs: []net.IP{mustParseIP("10.28.0.13"), mustParseIP("10.28.0.14")},
 			ExpectedIPv6Addrs: []net.IP{mustParseIP("dead::beef"), mustParseIP("dead::bee5")},
-			Labels: map[string]string{
+			Labels: uniquelabels.Make(map[string]string{
 				"a": "b",
-			},
+			}),
 			ProfileIDs: []string{"prof1"},
 		},
 		[]*proto.TierInfo{{Name: "a", IngressPolicies: []string{"b"}}},

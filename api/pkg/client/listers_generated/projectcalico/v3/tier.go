@@ -5,10 +5,10 @@
 package v3
 
 import (
-	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/client-go/listers"
-	"k8s.io/client-go/tools/cache"
+	projectcalicov3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	labels "k8s.io/apimachinery/pkg/labels"
+	listers "k8s.io/client-go/listers"
+	cache "k8s.io/client-go/tools/cache"
 )
 
 // TierLister helps list Tiers.
@@ -16,19 +16,19 @@ import (
 type TierLister interface {
 	// List lists all Tiers in the indexer.
 	// Objects returned here must be treated as read-only.
-	List(selector labels.Selector) (ret []*v3.Tier, err error)
+	List(selector labels.Selector) (ret []*projectcalicov3.Tier, err error)
 	// Get retrieves the Tier from the index for a given name.
 	// Objects returned here must be treated as read-only.
-	Get(name string) (*v3.Tier, error)
+	Get(name string) (*projectcalicov3.Tier, error)
 	TierListerExpansion
 }
 
 // tierLister implements the TierLister interface.
 type tierLister struct {
-	listers.ResourceIndexer[*v3.Tier]
+	listers.ResourceIndexer[*projectcalicov3.Tier]
 }
 
 // NewTierLister returns a new TierLister.
 func NewTierLister(indexer cache.Indexer) TierLister {
-	return &tierLister{listers.New[*v3.Tier](indexer, v3.Resource("tier"))}
+	return &tierLister{listers.New[*projectcalicov3.Tier](indexer, projectcalicov3.Resource("tier"))}
 }

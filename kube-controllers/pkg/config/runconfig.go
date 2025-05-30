@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -11,6 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 package config
 
 import (
@@ -35,43 +36,10 @@ import (
 
 var title = cases.Title(language.English)
 
-// Export for testing purposes
-var DefaultKCC *v3.KubeControllersConfiguration
-
-const datastoreBackoff = time.Second
-
-func init() {
-	DefaultKCC = v3.NewKubeControllersConfiguration()
-	DefaultKCC.Name = "default"
-	DefaultKCC.Spec = v3.KubeControllersConfigurationSpec{
-		LogSeverityScreen:      "Info",
-		HealthChecks:           v3.Enabled,
-		EtcdV3CompactionPeriod: &v1.Duration{Duration: time.Minute * 10},
-		Controllers: v3.ControllersConfig{
-			Node: &v3.NodeControllerConfig{
-				ReconcilerPeriod: &v1.Duration{Duration: time.Minute * 5},
-				SyncLabels:       v3.Enabled,
-				HostEndpoint:     nil,
-				LeakGracePeriod:  &v1.Duration{Duration: time.Minute * 15},
-			},
-			Policy: &v3.PolicyControllerConfig{
-				ReconcilerPeriod: &v1.Duration{Duration: time.Minute * 5},
-			},
-			WorkloadEndpoint: &v3.WorkloadEndpointControllerConfig{
-				ReconcilerPeriod: &v1.Duration{Duration: time.Minute * 5},
-			},
-			ServiceAccount: &v3.ServiceAccountControllerConfig{
-				ReconcilerPeriod: &v1.Duration{Duration: time.Minute * 5},
-			},
-			Namespace: &v3.NamespaceControllerConfig{
-				ReconcilerPeriod: &v1.Duration{Duration: time.Minute * 5},
-			},
-			LoadBalancer: &v3.LoadBalancerControllerConfig{
-				AssignIPs: v3.AllServices,
-			},
-		},
-	}
-}
+const (
+	datastoreBackoff                 = time.Second
+	defaultKubeControllersConfigName = "default"
+)
 
 // RunConfig represents the configuration for all controllers and includes
 // merged information from environment variables (Config) and the Calico
@@ -100,8 +68,8 @@ type GenericControllerConfig struct {
 }
 
 type NodeControllerConfig struct {
-	SyncLabels        bool
-	AutoHostEndpoints bool
+	SyncLabels             bool
+	AutoHostEndpointConfig *AutoHostEndpointConfig
 
 	// Should the Node controller delete Calico nodes?  Generally, this is
 	// true for etcdv3 datastores.
@@ -110,6 +78,19 @@ type NodeControllerConfig struct {
 	// The grace period used by the controller to determine if an IP address is leaked.
 	// Set to 0 to disable IP address garbage collection.
 	LeakGracePeriod *v1.Duration
+}
+
+type AutoHostEndpointConfig struct {
+	AutoCreate                bool
+	CreateDefaultHostEndpoint v3.DefaultHostEndpointMode
+	Templates                 []AutoHostEndpointTemplate
+}
+
+type AutoHostEndpointTemplate struct {
+	GenerateName   string
+	InterfaceCIDRs []string
+	Labels         map[string]string
+	NodeSelector   string
 }
 
 type LoadBalancerControllerConfig struct {
@@ -125,6 +106,45 @@ type RunConfigController struct {
 // of day, and updates whenever the config changes.
 func (r *RunConfigController) ConfigChan() <-chan RunConfig {
 	return r.out
+}
+
+// NewDefaultKubeControllersConfig returns the default kcc with all default values prefilled
+func NewDefaultKubeControllersConfig() *v3.KubeControllersConfiguration {
+	kubeControllersConfig := v3.NewKubeControllersConfiguration()
+	kubeControllersConfig.Name = defaultKubeControllersConfigName
+	kubeControllersConfig.Spec = v3.KubeControllersConfigurationSpec{
+		LogSeverityScreen:      "Info",
+		HealthChecks:           v3.Enabled,
+		EtcdV3CompactionPeriod: &v1.Duration{Duration: time.Minute * 10},
+		Controllers: v3.ControllersConfig{
+			Node: &v3.NodeControllerConfig{
+				ReconcilerPeriod: &v1.Duration{Duration: time.Minute * 5},
+				SyncLabels:       v3.Enabled,
+				HostEndpoint: &v3.AutoHostEndpointConfig{
+					AutoCreate:                v3.Disabled,
+					CreateDefaultHostEndpoint: v3.DefaultHostEndpointsEnabled,
+				},
+				LeakGracePeriod: &v1.Duration{Duration: time.Minute * 15},
+			},
+			Policy: &v3.PolicyControllerConfig{
+				ReconcilerPeriod: &v1.Duration{Duration: time.Minute * 5},
+			},
+			WorkloadEndpoint: &v3.WorkloadEndpointControllerConfig{
+				ReconcilerPeriod: &v1.Duration{Duration: time.Minute * 5},
+			},
+			ServiceAccount: &v3.ServiceAccountControllerConfig{
+				ReconcilerPeriod: &v1.Duration{Duration: time.Minute * 5},
+			},
+			Namespace: &v3.NamespaceControllerConfig{
+				ReconcilerPeriod: &v1.Duration{Duration: time.Minute * 5},
+			},
+			LoadBalancer: &v3.LoadBalancerControllerConfig{
+				AssignIPs: v3.AllServices,
+			},
+		},
+	}
+
+	return kubeControllersConfig
 }
 
 // NewRunConfigController creates the RunConfigController.  The controller connects
@@ -195,7 +215,7 @@ MAINLOOP:
 		// With the snapshot updated, get a list of
 		// kubecontrollersconfigurations so we can watch on its resource
 		// version.
-		kccList, err := client.List(ctx, options.ListOptions{Name: "default"})
+		kccList, err := client.List(ctx, options.ListOptions{Name: defaultKubeControllersConfigName})
 		if err != nil {
 			log.WithError(err).Warn("unable to list KubeControllersConfiguration(default)")
 			snapshot = nil
@@ -235,7 +255,7 @@ MAINLOOP:
 			case watch.Added, watch.Modified:
 				// New snapshot
 				newKCC := e.Object.(*v3.KubeControllersConfiguration)
-				if newKCC.Name != "default" {
+				if newKCC.Name != defaultKubeControllersConfigName {
 					// Some non-default object got into the datastore --- calicoctl should
 					// prevent this, but an admin with datastore access might not know better.
 					// Ignore it
@@ -272,7 +292,7 @@ MAINLOOP:
 				if e.Previous != nil {
 					oldKCC := e.Previous.(*v3.KubeControllersConfiguration)
 					// Ignore any object that's not named default
-					if oldKCC.Name == "default" {
+					if oldKCC.Name == defaultKubeControllersConfigName {
 						// do a full resync, which will recreate a default object
 						// if one doesn't exist
 						snapshot = nil
@@ -289,10 +309,11 @@ MAINLOOP:
 // getOrCreateSnapshot gets the current KubeControllersConfig from the datastore,
 // or creates and returns a default if it doesn't exist
 func getOrCreateSnapshot(ctx context.Context, kcc clientv3.KubeControllersConfigurationInterface) (*v3.KubeControllersConfiguration, error) {
-	snapshot, err := kcc.Get(ctx, "default", options.GetOptions{})
+	snapshot, err := kcc.Get(ctx, defaultKubeControllersConfigName, options.GetOptions{})
 	// If the default doesn't exist, we'll create it.
 	if _, ok := err.(errors.ErrorResourceDoesNotExist); ok {
-		snapshot = DefaultKCC.DeepCopy()
+		kubeControllersConfig := NewDefaultKubeControllersConfig()
+		snapshot = kubeControllersConfig.DeepCopy()
 		var err2 error
 		snapshot, err2 = kcc.Create(ctx, snapshot, options.SetOptions{})
 		if err2 != nil {
@@ -385,19 +406,73 @@ func mergeAutoHostEndpoints(envVars map[string]string, status *v3.KubeController
 	if p {
 		status.EnvironmentVars[EnvAutoHostEndpoints] = v
 		if strings.ToLower(v) == "enabled" {
-			rc.Node.AutoHostEndpoints = true
+			rc.Node.AutoHostEndpointConfig = &AutoHostEndpointConfig{
+				AutoCreate:                true,
+				CreateDefaultHostEndpoint: v3.DefaultHostEndpointsEnabled,
+			}
 		} else if strings.ToLower(v) != "disabled" {
 			log.WithField(EnvAutoHostEndpoints, v).Fatal("invalid environment variable value")
 		}
 	} else {
-		if ac.Node != nil && ac.Node.HostEndpoint != nil && ac.Node.HostEndpoint.AutoCreate == v3.Enabled {
-			rc.Node.AutoHostEndpoints = true
+		if ac.Node != nil && ac.Node.HostEndpoint != nil {
+			rc.Node.AutoHostEndpointConfig = &AutoHostEndpointConfig{}
+			if ac.Node.HostEndpoint.AutoCreate == v3.Enabled {
+				rc.Node.AutoHostEndpointConfig.AutoCreate = true
+			} else {
+				rc.Node.AutoHostEndpointConfig.AutoCreate = false
+			}
+
+			rc.Node.AutoHostEndpointConfig.CreateDefaultHostEndpoint = ac.Node.HostEndpoint.CreateDefaultHostEndpoint
+
+			var templates []AutoHostEndpointTemplate
+			for _, template := range ac.Node.HostEndpoint.Templates {
+				rcTemplate := AutoHostEndpointTemplate{
+					GenerateName:   template.GenerateName,
+					InterfaceCIDRs: template.InterfaceCIDRs,
+					NodeSelector:   template.NodeSelector,
+					Labels:         template.Labels,
+				}
+
+				templates = append(templates, rcTemplate)
+			}
+			rc.Node.AutoHostEndpointConfig.Templates = templates
 		}
 	}
-	if rc.Node.AutoHostEndpoints {
-		sc.Node.HostEndpoint = &v3.AutoHostEndpointConfig{AutoCreate: v3.Enabled}
+
+	if rc.Node.AutoHostEndpointConfig == nil {
+		rc.Node.AutoHostEndpointConfig = &AutoHostEndpointConfig{
+			AutoCreate:                false,
+			CreateDefaultHostEndpoint: v3.DefaultHostEndpointsEnabled,
+		}
 	} else {
-		sc.Node.HostEndpoint = &v3.AutoHostEndpointConfig{AutoCreate: v3.Disabled}
+		sc.Node.HostEndpoint = &v3.AutoHostEndpointConfig{}
+		if rc.Node.AutoHostEndpointConfig.AutoCreate {
+			sc.Node.HostEndpoint.AutoCreate = v3.Enabled
+		} else {
+			sc.Node.HostEndpoint.AutoCreate = v3.Disabled
+		}
+
+		if rc.Node.AutoHostEndpointConfig.CreateDefaultHostEndpoint == "" {
+			rc.Node.AutoHostEndpointConfig.CreateDefaultHostEndpoint = v3.DefaultHostEndpointsEnabled
+		}
+
+		sc.Node.HostEndpoint.CreateDefaultHostEndpoint = rc.Node.AutoHostEndpointConfig.CreateDefaultHostEndpoint
+
+		if rc.Node.AutoHostEndpointConfig.Templates != nil {
+			var templates []v3.Template
+			for template := range rc.Node.AutoHostEndpointConfig.Templates {
+				rcTemplate := (rc.Node.AutoHostEndpointConfig.Templates)[template]
+				scTemplate := v3.Template{
+					GenerateName:   rcTemplate.GenerateName,
+					InterfaceCIDRs: rcTemplate.InterfaceCIDRs,
+					NodeSelector:   rcTemplate.NodeSelector,
+					Labels:         rcTemplate.Labels,
+				}
+
+				templates = append(templates, scTemplate)
+			}
+			sc.Node.HostEndpoint.Templates = templates
+		}
 	}
 }
 

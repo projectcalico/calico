@@ -35,6 +35,7 @@ import (
 type EtcdDatastoreInfra struct {
 	etcdContainer *containers.Container
 	bpfLog        *containers.Container
+	client        client.Interface
 
 	Endpoint    string
 	BadEndpoint string
@@ -87,7 +88,10 @@ func (eds *EtcdDatastoreInfra) GetBadEndpointDockerArgs() []string {
 }
 
 func (eds *EtcdDatastoreInfra) GetCalicoClient() client.Interface {
-	return utils.GetEtcdClient(eds.etcdContainer.IP)
+	if eds.client == nil {
+		eds.client = utils.GetEtcdClient(eds.etcdContainer.IP)
+	}
+	return eds.client
 }
 
 func (eds *EtcdDatastoreInfra) GetClusterGUID() string {
@@ -100,9 +104,9 @@ func (eds *EtcdDatastoreInfra) GetClusterGUID() string {
 	return ci.Spec.ClusterGUID
 }
 
-func (eds *EtcdDatastoreInfra) SetExpectedIPIPTunnelAddr(felix *Felix, cidr *net.IPNet, idx int, needBGP bool) {
+func (eds *EtcdDatastoreInfra) SetExpectedIPIPTunnelAddr(felix *Felix, ip string, needBGP bool) {
 	if needBGP {
-		felix.ExpectedIPIPTunnelAddr = fmt.Sprintf("%d.%d.%d.1", cidr.IP[0], cidr.IP[1], idx)
+		felix.ExpectedIPIPTunnelAddr = ip
 		felix.ExtraSourceIPs = append(felix.ExtraSourceIPs, felix.ExpectedIPIPTunnelAddr)
 	}
 }
@@ -178,6 +182,10 @@ func (eds *EtcdDatastoreInfra) RemoveWorkload(ns string, name string) error {
 	return err
 }
 
+func (eds *EtcdDatastoreInfra) UpdateWorkload(wep *libapi.WorkloadEndpoint) (*libapi.WorkloadEndpoint, error) {
+	return eds.GetCalicoClient().WorkloadEndpoints().Update(utils.Ctx, wep, options.SetOptions{})
+}
+
 func (eds *EtcdDatastoreInfra) AddAllowToDatastore(selector string) error {
 	// Create a policy to allow egress from the host so that we don't cut off Felix's datastore connection
 	// when we enable the host endpoint.
@@ -217,5 +225,7 @@ func (eds *EtcdDatastoreInfra) Stop() {
 	eds.bpfLog.StopLogs()
 	eds.etcdContainer.StopLogs()
 	eds.bpfLog.Stop()
+	err := eds.client.Close()
+	log.WithError(err).Warn("Client Close() returned an error.  Ignoring.")
 	eds.etcdContainer.Stop()
 }

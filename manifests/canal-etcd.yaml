@@ -266,6 +266,23 @@ rules:
     verbs:
       - get
 ---
+# Source: calico/templates/tier-getter.yaml
+# Implements the necessary permissions for the kube-controller-manager to interact with
+# Tiers and Tiered Policies for GC.
+#
+# https://github.com/tigera/operator/blob/v1.37.0/pkg/render/apiserver.go#L1505-L1545
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: calico-tier-getter
+rules:
+  - apiGroups:
+      - "projectcalico.org"
+    resources:
+      - "tiers"
+    verbs:
+      - "get"
+---
 # Source: calico/templates/calico-kube-controllers-rbac.yaml
 kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
@@ -276,9 +293,9 @@ roleRef:
   kind: ClusterRole
   name: calico-kube-controllers
 subjects:
-- kind: ServiceAccount
-  name: calico-kube-controllers
-  namespace: kube-system
+  - kind: ServiceAccount
+    name: calico-kube-controllers
+    namespace: kube-system
 ---
 # Source: calico/templates/calico-node-rbac.yaml
 # Bind the flannel ClusterRole to the canal ServiceAccount.
@@ -291,9 +308,9 @@ roleRef:
   kind: ClusterRole
   name: flannel
 subjects:
-- kind: ServiceAccount
-  name: canal
-  namespace: kube-system
+  - kind: ServiceAccount
+    name: canal
+    namespace: kube-system
 ---
 # Source: calico/templates/calico-node-rbac.yaml
 apiVersion: rbac.authorization.k8s.io/v1
@@ -305,9 +322,9 @@ roleRef:
   kind: ClusterRole
   name: calico-node
 subjects:
-- kind: ServiceAccount
-  name: canal
-  namespace: kube-system
+  - kind: ServiceAccount
+    name: canal
+    namespace: kube-system
 ---
 # Source: calico/templates/calico-node-rbac.yaml
 apiVersion: rbac.authorization.k8s.io/v1
@@ -319,9 +336,9 @@ roleRef:
   kind: ClusterRole
   name: calico-cni-plugin
 subjects:
-- kind: ServiceAccount
-  name: calico-cni-plugin
-  namespace: kube-system
+  - kind: ServiceAccount
+    name: calico-cni-plugin
+    namespace: kube-system
 ---
 # Source: calico/templates/calico-node.yaml
 apiVersion: rbac.authorization.k8s.io/v1
@@ -333,9 +350,23 @@ roleRef:
   kind: ClusterRole
   name: canal
 subjects:
-- kind: ServiceAccount
-  name: canal-node
-  namespace: kube-system
+  - kind: ServiceAccount
+    name: canal-node
+    namespace: kube-system
+---
+# Source: calico/templates/tier-getter.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: calico-tier-getter
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: calico-tier-getter
+subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: User
+    name: system:kube-controller-manager
 ---
 # Source: calico/templates/calico-node.yaml
 # This manifest installs the canal-node container, as well
@@ -385,14 +416,14 @@ spec:
         # This container installs the CNI binaries
         # and CNI network config file on each node.
         - name: install-cni
-          image: docker.io/calico/cni:master
+          image: quay.io/calico/cni:master
           imagePullPolicy: IfNotPresent
           command: ["/opt/cni/bin/install"]
           envFrom:
-          - configMapRef:
-              # Allow KUBERNETES_SERVICE_HOST and KUBERNETES_SERVICE_PORT to be overridden for eBPF mode.
-              name: kubernetes-services-endpoint
-              optional: true
+            - configMapRef:
+                # Allow KUBERNETES_SERVICE_HOST and KUBERNETES_SERVICE_PORT to be overridden for eBPF mode.
+                name: kubernetes-services-endpoint
+                optional: true
           env:
             # Set the serviceaccount name to use for the Calico CNI plugin.
             # We use canal-node instead of calico-node when using flannel networking.
@@ -455,7 +486,7 @@ spec:
         # i.e. bpf at /sys/fs/bpf and cgroup2 at /run/calico/cgroup. Calico-node initialisation is executed
         # in best effort fashion, i.e. no failure for errors, to not disrupt pod creation in iptable mode.
         - name: "mount-bpffs"
-          image: docker.io/calico/node:master
+          image: quay.io/calico/node:master
           imagePullPolicy: IfNotPresent
           command: ["calico-node", "-init", "-best-effort"]
           volumeMounts:
@@ -481,13 +512,13 @@ spec:
         # container programs network policy and routes on each
         # host.
         - name: calico-node
-          image: docker.io/calico/node:master
+          image: quay.io/calico/node:master
           imagePullPolicy: IfNotPresent
           envFrom:
-          - configMapRef:
-              # Allow KUBERNETES_SERVICE_HOST and KUBERNETES_SERVICE_PORT to be overridden for eBPF mode.
-              name: kubernetes-services-endpoint
-              optional: true
+            - configMapRef:
+                # Allow KUBERNETES_SERVICE_HOST and KUBERNETES_SERVICE_PORT to be overridden for eBPF mode.
+                name: kubernetes-services-endpoint
+                optional: true
           env:
             # The location of the etcd cluster.
             - name: ETCD_ENDPOINTS
@@ -561,13 +592,13 @@ spec:
             preStop:
               exec:
                 command:
-                - /bin/calico-node
-                - -shutdown
+                  - /bin/calico-node
+                  - -shutdown
           livenessProbe:
             exec:
               command:
-              - /bin/calico-node
-              - -felix-live
+                - /bin/calico-node
+                - -felix-live
             periodSeconds: 10
             initialDelaySeconds: 10
             failureThreshold: 6
@@ -610,7 +641,7 @@ spec:
         # Runs the flannel daemon to enable vxlan networking between
         # container hosts.
         - name: flannel
-          image: docker.io/flannel/flannel:v0.24.4
+          image: quay.io/flannel/flannel:v0.24.4
           imagePullPolicy: IfNotPresent
           env:
             # The location of the etcd cluster.
@@ -783,7 +814,7 @@ spec:
       hostNetwork: true
       containers:
         - name: calico-kube-controllers
-          image: docker.io/calico/kube-controllers:master
+          image: quay.io/calico/kube-controllers:master
           imagePullPolicy: IfNotPresent
           env:
             # The location of the etcd cluster.
@@ -820,8 +851,8 @@ spec:
           livenessProbe:
             exec:
               command:
-              - /usr/bin/check-status
-              - -l
+                - /usr/bin/check-status
+                - -l
             periodSeconds: 10
             initialDelaySeconds: 10
             failureThreshold: 6
@@ -829,8 +860,8 @@ spec:
           readinessProbe:
             exec:
               command:
-              - /usr/bin/check-status
-              - -r
+                - /usr/bin/check-status
+                - -r
             periodSeconds: 10
           securityContext:
             runAsNonRoot: true
@@ -866,15 +897,15 @@ spec:
         - name: configure-flannel
           image: quay.io/coreos/etcd:v3.5.1
           command:
-          - "etcdctl"
-          # Uncomment the following lines if using TLS to etcd.
-          # - "--cert-file=/calico-secrets/etcd-cert"
-          # - "--key-file=/calico-secrets/etcd-key"
-          # - "--ca-file=/calico-secrets/etcd-ca"
-          - "--no-sync"
-          - "set"
-          - "/coreos.com/network/config"
-          - '{ "Network": "10.244.0.0/16", "Backend": {"Type": "vxlan"} }'
+            - "etcdctl"
+            # Uncomment the following lines if using TLS to etcd.
+            # - "--cert-file=/calico-secrets/etcd-cert"
+            # - "--key-file=/calico-secrets/etcd-key"
+            # - "--ca-file=/calico-secrets/etcd-ca"
+            - "--no-sync"
+            - "set"
+            - "/coreos.com/network/config"
+            - '{ "Network": "10.244.0.0/16", "Backend": {"Type": "vxlan"} }'
           env:
             # The location of the etcd cluster.
             - name: ETCDCTL_PEERS

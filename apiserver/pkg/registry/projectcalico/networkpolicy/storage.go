@@ -17,6 +17,7 @@ package networkpolicy
 import (
 	"context"
 
+	"github.com/google/uuid"
 	calico "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metainternalversion "k8s.io/apimachinery/pkg/apis/meta/internalversion"
@@ -38,8 +39,9 @@ import (
 type REST struct {
 	*genericregistry.Store
 	rbac.CalicoResourceLister
-	authorizer authorizer.TierAuthorizer
-	shortNames []string
+	authorizer   authorizer.TierAuthorizer
+	watchManager *util.WatchManager
+	shortNames   []string
 }
 
 // EmptyObject returns an empty instance
@@ -56,7 +58,7 @@ func NewList() runtime.Object {
 }
 
 // NewREST returns a RESTStorage object that will work against API services.
-func NewREST(scheme *runtime.Scheme, opts server.Options, calicoResourceLister rbac.CalicoResourceLister) (*REST, error) {
+func NewREST(scheme *runtime.Scheme, opts server.Options, calicoResourceLister rbac.CalicoResourceLister, watchManager *util.WatchManager) (*REST, error) {
 	strategy := NewStrategy(scheme)
 
 	prefix := "/" + opts.ResourcePrefix()
@@ -102,7 +104,7 @@ func NewREST(scheme *runtime.Scheme, opts server.Options, calicoResourceLister r
 		DestroyFunc: dFunc,
 	}
 
-	return &REST{store, calicoResourceLister, authorizer.NewTierAuthorizer(opts.Authorizer), opts.ShortNames}, nil
+	return &REST{store, calicoResourceLister, authorizer.NewTierAuthorizer(opts.Authorizer), watchManager, opts.ShortNames}, nil
 }
 
 func (r *REST) List(ctx context.Context, options *metainternalversion.ListOptions) (runtime.Object, error) {
@@ -164,7 +166,20 @@ func (r *REST) Watch(ctx context.Context, options *metainternalversion.ListOptio
 		return nil, err
 	}
 
-	return r.Store.Watch(ctx, options)
+	w, err := r.Store.Watch(ctx, options)
+	if err != nil {
+		return nil, err
+	}
+
+	record := util.WatchRecord{
+		ID:    uuid.New().String(),
+		Kind:  calico.KindNetworkPolicy,
+		Watch: w,
+		Ctx:   ctx,
+	}
+	r.watchManager.AddWatch(record)
+
+	return w, nil
 }
 
 func (r *REST) ShortNames() []string {

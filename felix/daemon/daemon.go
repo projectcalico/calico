@@ -33,7 +33,6 @@ import (
 	log "github.com/sirupsen/logrus"
 	"k8s.io/client-go/kubernetes"
 
-	"github.com/projectcalico/calico/felix/buildinfo"
 	"github.com/projectcalico/calico/felix/calc"
 	"github.com/projectcalico/calico/felix/collector"
 	"github.com/projectcalico/calico/felix/config"
@@ -64,6 +63,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
+	"github.com/projectcalico/calico/pkg/buildinfo"
 	"github.com/projectcalico/calico/pod2daemon/binder"
 	"github.com/projectcalico/calico/typha/pkg/discovery"
 	"github.com/projectcalico/calico/typha/pkg/syncclient"
@@ -117,14 +117,14 @@ func Run(configFile string, gitVersion string, buildDate string, gitRevision str
 
 	ctx := context.Background()
 
-	if len(buildinfo.GitVersion) == 0 && len(gitVersion) != 0 {
-		buildinfo.GitVersion = gitVersion
+	if len(buildinfo.Version) == 0 && len(gitVersion) != 0 {
+		buildinfo.Version = gitVersion
 		buildinfo.BuildDate = buildDate
 		buildinfo.GitRevision = gitRevision
 	}
 
 	buildInfoLogCxt := log.WithFields(log.Fields{
-		"version":    buildinfo.GitVersion,
+		"version":    buildinfo.Version,
 		"builddate":  buildinfo.BuildDate,
 		"gitcommit":  buildinfo.GitRevision,
 		"GOMAXPROCS": runtime.GOMAXPROCS(0),
@@ -394,12 +394,14 @@ configRetry:
 	var lookupsCache *calc.LookupsCache
 	var dpStatsCollector collector.Collector
 
-	// Initialzed the lookup cache here and pass it along to both the calc_graph
-	// as well as dataplane driver, which actually uses this for lookups.
-	lookupsCache = calc.NewLookupsCache()
+	if configParams.FlowLogsEnabled() {
+		// Initialzed the lookup cache here and pass it along to both the calc_graph
+		// as well as dataplane driver, which actually uses this for lookups.
+		lookupsCache = calc.NewLookupsCache()
 
-	// Start the stats collector which also depends on the lookups cache.
-	dpStatsCollector = collector.New(configParams, lookupsCache, healthAggregator)
+		// Start the stats collector which also depends on the lookups cache.
+		dpStatsCollector = collector.New(configParams, lookupsCache, healthAggregator)
+	}
 
 	// Configure Windows firewall rules if appropriate
 	winutils.MaybeConfigureWindowsFirewallRules(configParams.WindowsManageFirewallRules, configParams.PrometheusMetricsEnabled, configParams.PrometheusMetricsPort)
@@ -491,6 +493,17 @@ configRetry:
 	}
 
 	if dpStatsCollector != nil {
+		if apiv3.FlowLogsPolicyEvaluationModeType(configParams.FlowLogsPolicyEvaluationMode) == apiv3.FlowLogsPolicyEvaluationModeContinuous {
+			// Fork the calculation graph for dataplane updates that will be sent to the Collector.
+			toCollectorDataplaneSync := make(chan interface{})
+			// The DataplaneInfoReader wraps and sends the dataplane updates to the Collector.
+			dpir := collector.NewDataplaneInfoReader(toCollectorDataplaneSync)
+			dpStatsCollector.SetDataplaneInfoReader(dpir)
+			log.Info("DataplaneInfoReader added to collector")
+
+			calcGraphClientChannels = append(calcGraphClientChannels, toCollectorDataplaneSync)
+		}
+
 		// Everybody who wanted to tweak the dpStatsCollector had a go, we can start it now!
 		if err := dpStatsCollector.Start(); err != nil {
 			// XXX we should panic once all dataplanes expect the collector to run.
@@ -521,7 +534,7 @@ configRetry:
 		log.Info("Connecting to Typha.")
 		typhaConnection = syncclient.New(
 			typhaDiscoverer,
-			buildinfo.GitVersion,
+			buildinfo.Version,
 			configParams.FelixHostname,
 			fmt.Sprintf("Revision: %s; Build date: %s",
 				buildinfo.GitRevision, buildinfo.BuildDate),
@@ -910,7 +923,6 @@ var ErrNotReady = errors.New("datastore is not ready or has not been initialised
 func loadConfigFromDatastore(
 	ctx context.Context, client bapi.Client, cfg apiconfig.CalicoAPIConfig, hostname string,
 ) (globalConfig, hostConfig map[string]string, err error) {
-
 	// The configuration is split over 3 different resource types and 4 different resource
 	// instances in the v3 data model:
 	// -  ClusterInformation (global): name "default"
@@ -1381,7 +1393,6 @@ func (fc *DataplaneConnector) handleConfigUpdate(msg *proto.ConfigUpdate) {
 		newConfigCopy = fc.config.Copy()
 		return err
 	}()
-
 	if err != nil {
 		// This shouldn't happen since the config update was _generated_ by the Config object held
 		// by the calculation graph.

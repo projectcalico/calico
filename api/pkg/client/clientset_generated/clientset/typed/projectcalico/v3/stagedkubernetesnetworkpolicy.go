@@ -5,9 +5,9 @@
 package v3
 
 import (
-	"context"
+	context "context"
 
-	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	projectcalicov3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	scheme "github.com/projectcalico/api/pkg/client/clientset_generated/clientset/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"
@@ -23,31 +23,36 @@ type StagedKubernetesNetworkPoliciesGetter interface {
 
 // StagedKubernetesNetworkPolicyInterface has methods to work with StagedKubernetesNetworkPolicy resources.
 type StagedKubernetesNetworkPolicyInterface interface {
-	Create(ctx context.Context, stagedKubernetesNetworkPolicy *v3.StagedKubernetesNetworkPolicy, opts v1.CreateOptions) (*v3.StagedKubernetesNetworkPolicy, error)
-	Update(ctx context.Context, stagedKubernetesNetworkPolicy *v3.StagedKubernetesNetworkPolicy, opts v1.UpdateOptions) (*v3.StagedKubernetesNetworkPolicy, error)
+	Create(ctx context.Context, stagedKubernetesNetworkPolicy *projectcalicov3.StagedKubernetesNetworkPolicy, opts v1.CreateOptions) (*projectcalicov3.StagedKubernetesNetworkPolicy, error)
+	Update(ctx context.Context, stagedKubernetesNetworkPolicy *projectcalicov3.StagedKubernetesNetworkPolicy, opts v1.UpdateOptions) (*projectcalicov3.StagedKubernetesNetworkPolicy, error)
 	Delete(ctx context.Context, name string, opts v1.DeleteOptions) error
 	DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error
-	Get(ctx context.Context, name string, opts v1.GetOptions) (*v3.StagedKubernetesNetworkPolicy, error)
-	List(ctx context.Context, opts v1.ListOptions) (*v3.StagedKubernetesNetworkPolicyList, error)
+	Get(ctx context.Context, name string, opts v1.GetOptions) (*projectcalicov3.StagedKubernetesNetworkPolicy, error)
+	List(ctx context.Context, opts v1.ListOptions) (*projectcalicov3.StagedKubernetesNetworkPolicyList, error)
 	Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error)
-	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v3.StagedKubernetesNetworkPolicy, err error)
+	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *projectcalicov3.StagedKubernetesNetworkPolicy, err error)
 	StagedKubernetesNetworkPolicyExpansion
 }
 
 // stagedKubernetesNetworkPolicies implements StagedKubernetesNetworkPolicyInterface
 type stagedKubernetesNetworkPolicies struct {
-	*gentype.ClientWithList[*v3.StagedKubernetesNetworkPolicy, *v3.StagedKubernetesNetworkPolicyList]
+	*gentype.ClientWithList[*projectcalicov3.StagedKubernetesNetworkPolicy, *projectcalicov3.StagedKubernetesNetworkPolicyList]
 }
 
 // newStagedKubernetesNetworkPolicies returns a StagedKubernetesNetworkPolicies
 func newStagedKubernetesNetworkPolicies(c *ProjectcalicoV3Client, namespace string) *stagedKubernetesNetworkPolicies {
 	return &stagedKubernetesNetworkPolicies{
-		gentype.NewClientWithList[*v3.StagedKubernetesNetworkPolicy, *v3.StagedKubernetesNetworkPolicyList](
+		gentype.NewClientWithList[*projectcalicov3.StagedKubernetesNetworkPolicy, *projectcalicov3.StagedKubernetesNetworkPolicyList](
 			"stagedkubernetesnetworkpolicies",
 			c.RESTClient(),
 			scheme.ParameterCodec,
 			namespace,
-			func() *v3.StagedKubernetesNetworkPolicy { return &v3.StagedKubernetesNetworkPolicy{} },
-			func() *v3.StagedKubernetesNetworkPolicyList { return &v3.StagedKubernetesNetworkPolicyList{} }),
+			func() *projectcalicov3.StagedKubernetesNetworkPolicy {
+				return &projectcalicov3.StagedKubernetesNetworkPolicy{}
+			},
+			func() *projectcalicov3.StagedKubernetesNetworkPolicyList {
+				return &projectcalicov3.StagedKubernetesNetworkPolicyList{}
+			},
+		),
 	}
 }

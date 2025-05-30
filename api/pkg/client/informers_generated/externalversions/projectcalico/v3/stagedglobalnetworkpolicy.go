@@ -5,13 +5,13 @@
 package v3
 
 import (
-	"context"
+	context "context"
 	time "time"
 
-	projectcalicov3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	apisprojectcalicov3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	clientset "github.com/projectcalico/api/pkg/client/clientset_generated/clientset"
 	internalinterfaces "github.com/projectcalico/api/pkg/client/informers_generated/externalversions/internalinterfaces"
-	v3 "github.com/projectcalico/api/pkg/client/listers_generated/projectcalico/v3"
+	projectcalicov3 "github.com/projectcalico/api/pkg/client/listers_generated/projectcalico/v3"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	watch "k8s.io/apimachinery/pkg/watch"
@@ -22,7 +22,7 @@ import (
 // StagedGlobalNetworkPolicies.
 type StagedGlobalNetworkPolicyInformer interface {
 	Informer() cache.SharedIndexInformer
-	Lister() v3.StagedGlobalNetworkPolicyLister
+	Lister() projectcalicov3.StagedGlobalNetworkPolicyLister
 }
 
 type stagedGlobalNetworkPolicyInformer struct {
@@ -56,7 +56,7 @@ func NewFilteredStagedGlobalNetworkPolicyInformer(client clientset.Interface, re
 				return client.ProjectcalicoV3().StagedGlobalNetworkPolicies().Watch(context.TODO(), options)
 			},
 		},
-		&projectcalicov3.StagedGlobalNetworkPolicy{},
+		&apisprojectcalicov3.StagedGlobalNetworkPolicy{},
 		resyncPeriod,
 		indexers,
 	)
@@ -67,9 +67,9 @@ func (f *stagedGlobalNetworkPolicyInformer) defaultInformer(client clientset.Int
 }
 
 func (f *stagedGlobalNetworkPolicyInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&projectcalicov3.StagedGlobalNetworkPolicy{}, f.defaultInformer)
+	return f.factory.InformerFor(&apisprojectcalicov3.StagedGlobalNetworkPolicy{}, f.defaultInformer)
 }
 
-func (f *stagedGlobalNetworkPolicyInformer) Lister() v3.StagedGlobalNetworkPolicyLister {
-	return v3.NewStagedGlobalNetworkPolicyLister(f.Informer().GetIndexer())
+func (f *stagedGlobalNetworkPolicyInformer) Lister() projectcalicov3.StagedGlobalNetworkPolicyLister {
+	return projectcalicov3.NewStagedGlobalNetworkPolicyLister(f.Informer().GetIndexer())
 }

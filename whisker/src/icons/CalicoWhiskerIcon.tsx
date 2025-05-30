@@ -1,6 +1,6 @@
 import { createIcon } from '@chakra-ui/icons';
 
-const CalicoCatIcon = createIcon({
+const CalicoWhiskerIcon = createIcon({
     displayName: 'CalicoWhiskerIcon',
     viewBox: '0 0 14 19',
     path: (
@@ -27,4 +27,4 @@ const CalicoCatIcon = createIcon({
     ),
 });
 
-export default CalicoCatIcon;
+export default CalicoWhiskerIcon;

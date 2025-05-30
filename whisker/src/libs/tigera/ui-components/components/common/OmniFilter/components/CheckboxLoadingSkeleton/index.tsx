@@ -2,6 +2,7 @@ import {
     Flex,
     FlexProps,
     Skeleton,
+    useColorModeValue,
     useMultiStyleConfig,
 } from '@chakra-ui/react';
 import React from 'react';
@@ -35,11 +36,23 @@ const CheckboxLoadingSkeleton: React.FC<CheckboxLoadingSkeletonProps> = ({
         'CheckboxLoadingSkeleton',
         rest,
     );
+    const startColor = useColorModeValue('tigeraGrey.50', 'tigeraGrey.1000');
+    const endColor = useColorModeValue('tigeraGrey.400', 'tigeraGrey.600');
 
     return (
         <Flex sx={componentStyles.container} {...rest}>
-            <Skeleton sx={componentStyles.checkbox} />
-            <Skeleton sx={componentStyles.label} />
+            <Skeleton
+                sx={componentStyles.checkbox}
+                startColor={startColor}
+                endColor={endColor}
+                speed={0.9}
+            />
+            <Skeleton
+                sx={componentStyles.label}
+                startColor={startColor}
+                endColor={endColor}
+                speed={0.9}
+            />
         </Flex>
     );
 };

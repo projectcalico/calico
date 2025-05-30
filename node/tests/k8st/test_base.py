@@ -47,9 +47,15 @@ class TestBase(TestCase):
         logger.info("")
 
     def tearDown(self):
+        errors = []
         for cleanup in reversed(self.cleanups):
-            cleanup()
+            try:
+                cleanup()
+            except Exception as e:
+                errors.append(e)
         super(TestBase, self).tearDown()
+        if errors:
+            raise Exception("Errors during cleanup: %s" % errors)
 
     def add_cleanup(self, cleanup):
         self.cleanups.append(cleanup)
@@ -241,7 +247,7 @@ class TestBase(TestCase):
         # Wait until the DaemonSet reports that all nodes have been updated.
         while True:
             time.sleep(10)
-            node_ds = api.read_namespaced_daemon_set_status("calico-node", "kube-system")
+            node_ds = api.read_namespaced_daemon_set_status("calico-node", "calico-system")
             logger.info("%d/%d nodes updated",
                       node_ds.status.updated_number_scheduled,
                       node_ds.status.desired_number_scheduled)
@@ -255,7 +261,7 @@ class TestBase(TestCase):
     def get_calico_node_pod(self, nodeName):
         """Get the calico-node pod name for a given kind node"""
         def fn():
-            calicoPod = kubectl("-n kube-system get pods -o wide | grep calico-node | grep '%s '| cut -d' ' -f1" % nodeName)
+            calicoPod = kubectl("-n calico-system get pods -o wide | grep calico-node | grep '%s '| cut -d' ' -f1" % nodeName)
             if calicoPod is None:
                 raise Exception('calicoPod is None')
             return calicoPod.strip()
@@ -345,6 +351,7 @@ EOF
         self.name = name
         self.ns = ns
         self._ip = None
+        self._ipv6 = None
         self._hostip = None
         self._nodename = None
 
@@ -368,6 +375,19 @@ EOF
                 break
             time.sleep(0.1)
         return self._ip
+
+    @property
+    def ipv6(self):
+        start_time = time.time()
+        while not self._ipv6:
+            assert time.time() - start_time < 30, "Pod failed to get IP address within 30s"
+            ips = run("kubectl get po %s -n %s -o=jsonpath='{.status.podIPs[*].ip}'" % (self.name, self.ns)).strip().split(" ")
+            for ip in ips:
+                if ":" in ip:
+                    self._ipv6 = ip
+                    break
+            time.sleep(0.1)
+        return self._ipv6
 
     @property
     def hostip(self):

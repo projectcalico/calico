@@ -129,7 +129,7 @@ int calico_tc_main(struct __sk_buff *skb)
 		if (xdp2tc_get_metadata(skb) & CALI_META_ACCEPTED_BY_XDP) {
 			CALI_LOG_IF(CALI_LOG_LEVEL_INFO,
 					"Final result=ALLOW (%d). Accepted by XDP.", CALI_REASON_ACCEPTED_BY_XDP);
-			skb->mark = CALI_SKB_MARK_BYPASS;
+			skb->mark = CALI_SKB_MARK_BYPASS_XDP;
 			return TC_ACT_UNSPEC;
 		}
 	}
@@ -317,8 +317,6 @@ static CALI_BPF_INLINE void calico_tc_process_ct_lookup(struct cali_tc_ctx *ctx)
 			 ct_result_rc(ctx->state->ct_result.rc) == CALI_CT_ESTABLISHED_BYPASS) &&
 			ctx->state->ct_result.flags & CALI_CT_FLAG_VIA_NAT_IF) {
 		CALI_DEBUG("should route via bpfnatout");
-		ctx->fwd.mark |= CALI_SKB_MARK_TO_NAT_IFACE_OUT;
-		/* bpfnatout need to process the packet */
 		ct_result_set_rc(ctx->state->ct_result.rc, CALI_CT_ESTABLISHED);
 	}
 
@@ -606,16 +604,20 @@ syn_force_policy:
 			goto skip_policy;
 		}
 		ctx->state->flags |= CALI_ST_DEST_IS_HOST;
-	} else if (CALI_F_FROM_HEP && !ctx->nat_dest && !cali_rt_is_local(dest_rt)) {
-		/* Disable FIB, let the packet go through the host after it is
-		 * policed. It is ingress into the system and we got a packet, which is
-		 * not for this host, and it wasn't resolved as a service and it is not
-		 * for a local workload either. But we hit a route so it may be some L2
-		 * broadcast, we do not quite know. Let the host route it or dump it.
-		 *
-		 * https://github.com/projectcalico/calico/issues/8918
-		 */
-		ctx->state->flags |= CALI_ST_SKIP_FIB;
+	} else if (CALI_F_FROM_HEP) {
+		if (cali_rt_flags_local_workload_vm(dest_rt->flags)) {
+			ctx->state->flags |= CALI_ST_SKIP_REDIR_PEER;
+		} else if (!ctx->nat_dest && !cali_rt_is_local(dest_rt)) {
+			/* Disable FIB, let the packet go through the host after it is
+			 * policed. It is ingress into the system and we got a packet, which is
+			 * not for this host, and it wasn't resolved as a service and it is not
+			 * for a local workload either. But we hit a route so it may be some L2
+			 * broadcast, we do not quite know. Let the host route it or dump it.
+			 *
+			 * https://github.com/projectcalico/calico/issues/8918
+			 */
+			ctx->state->flags |= CALI_ST_SKIP_FIB;
+		}
 	}
 
 	if (CALI_F_TO_HEP && ctx->nat_dest && !skb_seen(ctx->skb) && !(ctx->state->flags & CALI_ST_HOST_PSNAT)) {
@@ -1175,7 +1177,7 @@ allow:
 		} else if (!r || cali_rt_flags_remote_workload(r->flags)) {
 			/* If there is no route, treat it as a remote NP BE */
 			if (CALI_F_LO || CALI_F_MAIN) {
-				state->ct_result.ifindex_fwd = NATIN_IFACE  ;
+				state->ct_result.ifindex_fwd = NATIN_IFACE;
 				CALI_DEBUG("NP remote WL " IP_FMT ":%d on LO or main HEP",
 						debug_ip(state->post_nat_ip_dst), state->post_nat_dport);
 				ctx->state->flags |= CALI_ST_CT_NP_LOOP;
@@ -1247,8 +1249,10 @@ int calico_tc_skb_accepted_entrypoint(struct __sk_buff *skb)
 	}
 
 	if (!policy_skipped) {
-		event_flow_log(ctx);
-		CALI_DEBUG("Flow log event generated for ALLOW\n");
+		if (FLOWLOGS_ENABLED) {
+			event_flow_log(ctx);
+			CALI_DEBUG("Flow log event generated for ALLOW\n");
+		}
 		update_rule_counters(ctx);
 		skb_log(ctx, true);
 	}
@@ -1333,6 +1337,9 @@ int calico_tc_skb_new_flow_entrypoint(struct __sk_buff *skb)
 	}
 	if (CALI_F_TO_HOST && state->flags & CALI_ST_SKIP_FIB) {
 		ct_ctx_nat->flags |= CALI_CT_FLAG_SKIP_FIB;
+	}
+	if (CALI_F_FROM_HEP && state->flags & CALI_ST_SKIP_REDIR_PEER) {
+		ct_ctx_nat->flags |= CALI_CT_FLAG_SKIP_REDIR_PEER;
 	}
 	if (CALI_F_TO_WEP) {
 		if (!(ctx->skb->mark & CALI_SKB_MARK_SEEN)) {
@@ -2009,8 +2016,10 @@ int calico_tc_skb_drop(struct __sk_buff *skb)
 		}
 	}
 
-	event_flow_log(ctx);
-	CALI_DEBUG("Flow log event generated for DENY/DROP\n");
+	if (FLOWLOGS_ENABLED) {
+		event_flow_log(ctx);
+		CALI_DEBUG("Flow log event generated for DENY/DROP\n");
+	}
 	goto deny;
 
 allow:

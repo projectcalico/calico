@@ -1,4 +1,4 @@
-import { FlowLog } from '@/types/api';
+import { FlowLog } from '@/types/render';
 import FlowLogsList from '..';
 import { fireEvent, render, screen } from '@/test-utils/helper';
 
@@ -6,9 +6,10 @@ jest.mock('../../FlowLogDetails', () => () => 'Mock FlowLogDetails');
 
 const flowLogs: FlowLog[] = [
     {
+        id: '1',
         start_time: new Date(),
         end_time: new Date(),
-        action: 'allow',
+        action: 'Allow',
         source_name: 'fake-source-name',
         source_namespace: 'tigera-prometheus',
         source_labels:
@@ -24,12 +25,46 @@ const flowLogs: FlowLog[] = [
         packets_out: '6',
         bytes_in: '1286',
         bytes_out: '640',
+        policies: {
+            enforced: [
+                {
+                    kind: '',
+                    name: '',
+                    namespace: '',
+                    tier: '',
+                    action: '',
+                    policy_index: 0,
+                    rule_index: 0,
+                    trigger: null,
+                },
+            ],
+            pending: [
+                {
+                    kind: '',
+                    name: '',
+                    namespace: '',
+                    tier: '',
+                    action: '',
+                    policy_index: 0,
+                    rule_index: 0,
+                    trigger: null,
+                },
+            ],
+        },
     },
 ];
 
+const defaultProps = {
+    onRowClicked: jest.fn(),
+    onSortClicked: jest.fn(),
+    maxStartTime: 0,
+    flowLogs: [],
+    heightOffset: 0,
+};
+
 describe('FlowLogsList', () => {
     it('should render the expanded content', () => {
-        render(<FlowLogsList flowLogs={flowLogs} />);
+        render(<FlowLogsList {...defaultProps} flowLogs={flowLogs} />);
 
         fireEvent.click(screen.getByText('fake-source-name'));
 
@@ -37,7 +72,7 @@ describe('FlowLogsList', () => {
     });
 
     it('should render a loading skeleton', () => {
-        render(<FlowLogsList isLoading={true} />);
+        render(<FlowLogsList isLoading={true} {...defaultProps} />);
 
         expect(
             screen.getByTestId('flow-logs-loading-skeleton'),
@@ -45,7 +80,7 @@ describe('FlowLogsList', () => {
     });
 
     it('should render an error message', () => {
-        render(<FlowLogsList error={{ data: {} }} />);
+        render(<FlowLogsList error={{ data: {} }} {...defaultProps} />);
 
         expect(
             screen.getByText('Could not display any flow logs at this time'),

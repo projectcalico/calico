@@ -27,6 +27,7 @@ import (
 	"github.com/projectcalico/calico/felix/multidict"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/types"
+	"github.com/projectcalico/calico/lib/std/uniquelabels"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
@@ -38,6 +39,13 @@ type configInterface interface {
 	UpdateFrom(map[string]string, config.Source) (changed bool, err error)
 	RawValues() map[string]string
 	ToConfigUpdate() *proto.ConfigUpdate
+}
+
+// EndpointUpdate contains information about updates applied to the endpoint.
+type endpointUpdate struct {
+	endpoint interface{}
+	peerData *EndpointBGPPeer
+	tierInfo []TierInfo
 }
 
 // EventSequencer buffers and coalesces updates from the calculation graph then flushes them
@@ -56,8 +64,7 @@ type EventSequencer struct {
 	pendingProfileUpdates        map[model.ProfileRulesKey]*ParsedRules
 	pendingProfileDeletes        set.Set[model.ProfileRulesKey]
 	pendingEncapUpdate           *config.Encapsulation
-	pendingEndpointUpdates       map[model.Key]interface{}
-	pendingEndpointTierUpdates   map[model.Key][]TierInfo
+	pendingEndpointUpdates       map[model.Key]endpointUpdate
 	pendingEndpointDeletes       set.Set[model.Key]
 	pendingHostIPUpdates         map[string]*net.IP
 	pendingHostIPDeletes         set.Set[string]
@@ -138,8 +145,7 @@ func NewEventSequencer(conf configInterface) *EventSequencer {
 		pendingPolicyDeletes:         set.New[model.PolicyKey](),
 		pendingProfileUpdates:        map[model.ProfileRulesKey]*ParsedRules{},
 		pendingProfileDeletes:        set.New[model.ProfileRulesKey](),
-		pendingEndpointUpdates:       map[model.Key]interface{}{},
-		pendingEndpointTierUpdates:   map[model.Key][]TierInfo{},
+		pendingEndpointUpdates:       map[model.Key]endpointUpdate{},
 		pendingEndpointDeletes:       set.New[model.Key](),
 		pendingHostIPUpdates:         map[string]*net.IP{},
 		pendingHostIPDeletes:         set.New[string](),
@@ -390,7 +396,7 @@ func (buf *EventSequencer) flushProfileDeletes() {
 	})
 }
 
-func ModelWorkloadEndpointToProto(ep *model.WorkloadEndpoint, tiers []*proto.TierInfo) *proto.WorkloadEndpoint {
+func ModelWorkloadEndpointToProto(ep *model.WorkloadEndpoint, peerData *EndpointBGPPeer, tiers []*proto.TierInfo) *proto.WorkloadEndpoint {
 	mac := ""
 	if ep.Mac != nil {
 		mac = ep.Mac.String()
@@ -408,6 +414,19 @@ func ModelWorkloadEndpointToProto(ep *model.WorkloadEndpoint, tiers []*proto.Tie
 			EgressMaxConnections:  ep.QoSControls.EgressMaxConnections,
 		}
 	}
+
+	var localBGPPeer *proto.LocalBGPPeer
+	if peerData != nil {
+		localBGPPeer = &proto.LocalBGPPeer{
+			BgpPeerName: peerData.v3PeerName,
+		}
+	}
+
+	epType := proto.WorkloadType_REGULAR
+	if isVMWorkload(ep.Labels) {
+		epType = proto.WorkloadType_VM
+	}
+
 	return &proto.WorkloadEndpoint{
 		State:                      ep.State,
 		Name:                       ep.Name,
@@ -421,6 +440,8 @@ func ModelWorkloadEndpointToProto(ep *model.WorkloadEndpoint, tiers []*proto.Tie
 		AllowSpoofedSourcePrefixes: netsToStrings(ep.AllowSpoofedSourcePrefixes),
 		Annotations:                ep.Annotations,
 		QosControls:                qosControls,
+		LocalBgpPeer:               localBGPPeer,
+		Type:                       epType,
 	}
 }
 
@@ -437,39 +458,45 @@ func ModelHostEndpointToProto(ep *model.HostEndpoint, tiers, untrackedTiers, pre
 	}
 }
 
-func (buf *EventSequencer) OnEndpointTierUpdate(key model.Key,
-	endpoint interface{},
+func (buf *EventSequencer) OnEndpointTierUpdate(endpointKey model.EndpointKey,
+	endpoint model.Endpoint,
+	peerData *EndpointBGPPeer,
 	filteredTiers []TierInfo,
 ) {
 	if endpoint == nil {
 		// Deletion. Squash any queued updates.
-		delete(buf.pendingEndpointUpdates, key)
-		delete(buf.pendingEndpointTierUpdates, key)
-		if buf.sentEndpoints.Contains(key) {
+		delete(buf.pendingEndpointUpdates, endpointKey)
+		if buf.sentEndpoints.Contains(endpointKey) {
 			// We'd previously sent an update, so we need to send a deletion.
-			buf.pendingEndpointDeletes.Add(key)
+			buf.pendingEndpointDeletes.Add(endpointKey)
 		}
 	} else {
 		// Update.
-		buf.pendingEndpointDeletes.Discard(key)
-		buf.pendingEndpointUpdates[key] = endpoint
-		buf.pendingEndpointTierUpdates[key] = filteredTiers
+		buf.pendingEndpointDeletes.Discard(endpointKey)
+		buf.pendingEndpointUpdates[endpointKey] = endpointUpdate{
+			endpoint: endpoint,
+			peerData: peerData,
+			tierInfo: filteredTiers,
+		}
 	}
 }
 
 func (buf *EventSequencer) flushEndpointTierUpdates() {
-	for key, endpoint := range buf.pendingEndpointUpdates {
-		tiers, untrackedTiers, preDNATTiers, forwardTiers := tierInfoToProtoTierInfo(buf.pendingEndpointTierUpdates[key])
+	for key, endpointUpdate := range buf.pendingEndpointUpdates {
+		endpoint := endpointUpdate.endpoint
+
+		tiers, untrackedTiers, preDNATTiers, forwardTiers := tierInfoToProtoTierInfo(endpointUpdate.tierInfo)
 		switch key := key.(type) {
 		case model.WorkloadEndpointKey:
 			wlep := endpoint.(*model.WorkloadEndpoint)
+
 			buf.Callback(&proto.WorkloadEndpointUpdate{
 				Id: &proto.WorkloadEndpointID{
 					OrchestratorId: key.OrchestratorID,
 					WorkloadId:     key.WorkloadID,
 					EndpointId:     key.EndpointID,
 				},
-				Endpoint: ModelWorkloadEndpointToProto(wlep, tiers),
+				Endpoint: ModelWorkloadEndpointToProto(wlep, endpointUpdate.peerData, tiers),
 			})
 		case model.HostEndpointKey:
 			hep := endpoint.(*model.HostEndpoint)
@@ -484,7 +511,6 @@ func (buf *EventSequencer) flushEndpointTierUpdates() {
 		buf.sentEndpoints.Add(key)
 		// And clean up the pending buffer.
 		delete(buf.pendingEndpointUpdates, key)
-		delete(buf.pendingEndpointTierUpdates, key)
 	}
 }
 
@@ -1014,6 +1040,8 @@ func (buf *EventSequencer) OnGlobalBGPConfigUpdate(cfg *v3.BGPConfiguration) {
 			}
 			buf.pendingGlobalBGPConfig.ServiceLoadbalancerCidrs = append(buf.pendingGlobalBGPConfig.ServiceLoadbalancerCidrs, block.CIDR)
 		}
+		buf.pendingGlobalBGPConfig.LocalWorkloadPeeringIpV4 = cfg.Spec.LocalWorkloadPeeringIPV4
+		buf.pendingGlobalBGPConfig.LocalWorkloadPeeringIpV6 = cfg.Spec.LocalWorkloadPeeringIPV6
 	}
 }
 
@@ -1244,4 +1272,13 @@ func natsToProtoNatInfo(nats []model.IPNAT) []*proto.NatInfo {
 		}
 	}
 	return protoNats
+}
+
+func isVMWorkload(labels uniquelabels.Map) bool {
+	if val, ok := labels.GetString("kubevirt.io"); ok {
+		if val == "virt-launcher" {
+			return true
+		}
+	}
+	return false
 }

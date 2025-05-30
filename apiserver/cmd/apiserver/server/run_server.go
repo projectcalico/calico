@@ -77,7 +77,7 @@ func RunServer(opts *CalicoServerOptions, server *apiserver.ProjectCalicoServer)
 			logrus.Error("Unable to watch the extension auth ConfigMap: ", err)
 		}
 		if changed {
-			logrus.Debug("Detected change in extension-apiserver-authentication ConfigMap, exiting so apiserver can be restarted")
+			logrus.Info("Detected change in extension-apiserver-authentication ConfigMap, exiting so apiserver can be restarted")
 			cancel()
 		}
 	}()
@@ -87,8 +87,10 @@ func RunServer(opts *CalicoServerOptions, server *apiserver.ProjectCalicoServer)
 
 		// Start the Calico resource handler and shared informers and wait for sync before starting other components.
 		server.CalicoResourceLister.Start()
+		server.WatchManager.Start()
 		server.SharedInformerFactory.Start(ctx.Done())
 		server.CalicoResourceLister.WaitForCacheSync(ctx.Done())
+		server.WatchManager.WaitForCacheSync(ctx.Done())
 		server.SharedInformerFactory.WaitForCacheSync(ctx.Done())
 
 		if opts.PrintSwagger {

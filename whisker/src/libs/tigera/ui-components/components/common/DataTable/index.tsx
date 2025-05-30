@@ -12,6 +12,7 @@ import ResizableBody, {
     getTableStateReducer,
     checkedTableColumn,
     expandoTableColumn,
+    VirtualizedRow,
 } from './ResizableBody';
 import { useCheckedTable } from './hooks';
 
@@ -28,4 +29,4 @@ export {
     Table,
     SORT_DIRECTION,
 };
-export type { ServerSorting };
+export type { ServerSorting, VirtualizedRow };

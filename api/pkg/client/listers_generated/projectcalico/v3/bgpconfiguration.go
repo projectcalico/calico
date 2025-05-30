@@ -5,10 +5,10 @@
 package v3
 
 import (
-	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/client-go/listers"
-	"k8s.io/client-go/tools/cache"
+	projectcalicov3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	labels "k8s.io/apimachinery/pkg/labels"
+	listers "k8s.io/client-go/listers"
+	cache "k8s.io/client-go/tools/cache"
 )
 
 // BGPConfigurationLister helps list BGPConfigurations.
@@ -16,19 +16,19 @@ import (
 type BGPConfigurationLister interface {
 	// List lists all BGPConfigurations in the indexer.
 	// Objects returned here must be treated as read-only.
-	List(selector labels.Selector) (ret []*v3.BGPConfiguration, err error)
+	List(selector labels.Selector) (ret []*projectcalicov3.BGPConfiguration, err error)
 	// Get retrieves the BGPConfiguration from the index for a given name.
 	// Objects returned here must be treated as read-only.
-	Get(name string) (*v3.BGPConfiguration, error)
+	Get(name string) (*projectcalicov3.BGPConfiguration, error)
 	BGPConfigurationListerExpansion
 }
 
 // bGPConfigurationLister implements the BGPConfigurationLister interface.
 type bGPConfigurationLister struct {
-	listers.ResourceIndexer[*v3.BGPConfiguration]
+	listers.ResourceIndexer[*projectcalicov3.BGPConfiguration]
 }
 
 // NewBGPConfigurationLister returns a new BGPConfigurationLister.
 func NewBGPConfigurationLister(indexer cache.Indexer) BGPConfigurationLister {
-	return &bGPConfigurationLister{listers.New[*v3.BGPConfiguration](indexer, v3.Resource("bgpconfiguration"))}
+	return &bGPConfigurationLister{listers.New[*projectcalicov3.BGPConfiguration](indexer, projectcalicov3.Resource("bgpconfiguration"))}
 }

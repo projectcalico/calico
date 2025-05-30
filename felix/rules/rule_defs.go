@@ -274,6 +274,7 @@ type RuleRenderer interface {
 		adminUp bool,
 		tiers []TierPolicyGroups,
 		profileIDs []string,
+		qosControls *proto.QoSControls,
 	) []*generictables.Chain
 	PolicyGroupToIptablesChains(group *PolicyGroup) []*generictables.Chain
 
@@ -315,7 +316,7 @@ type RuleRenderer interface {
 
 	PolicyToIptablesChains(policyID *types.PolicyID, policy *proto.Policy, ipVersion uint8) []*generictables.Chain
 	ProfileToIptablesChains(profileID *types.ProfileID, policy *proto.Profile, ipVersion uint8) (inbound, outbound *generictables.Chain)
-	ProtoRuleToIptablesRules(pRule *proto.Rule, ipVersion uint8, owner RuleOwnerType, dir RuleDir, idx int, name string, untracked, staged bool) []generictables.Rule
+	ProtoRuleToIptablesRules(pRule *proto.Rule, ipVersion uint8, owner RuleOwnerType, dir RuleDir, idx int, name string, untracked bool) []generictables.Rule
 
 	MakeNatOutgoingRule(protocol string, action generictables.Action, ipVersion uint8) generictables.Rule
 	NATOutgoingChain(active bool, ipVersion uint8) *generictables.Chain
@@ -433,11 +434,13 @@ type Config struct {
 	IptablesNATOutgoingInterfaceFilter string
 
 	NATOutgoingAddress             net.IP
+	NATOutgoingExclusions          string
 	BPFEnabled                     bool
 	BPFForceTrackPacketsFromIfaces []string
 	ServiceLoopPrevention          string
 
-	NFTables bool
+	NFTables        bool
+	FlowLogsEnabled bool
 }
 
 var unusedBitsInBPFMode = map[string]bool{

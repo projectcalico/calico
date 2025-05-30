@@ -15,87 +15,87 @@ type FakeProjectcalicoV3 struct {
 }
 
 func (c *FakeProjectcalicoV3) BGPConfigurations() v3.BGPConfigurationInterface {
-	return &FakeBGPConfigurations{c}
+	return newFakeBGPConfigurations(c)
 }
 
 func (c *FakeProjectcalicoV3) BGPFilters() v3.BGPFilterInterface {
-	return &FakeBGPFilters{c}
+	return newFakeBGPFilters(c)
 }
 
 func (c *FakeProjectcalicoV3) BGPPeers() v3.BGPPeerInterface {
-	return &FakeBGPPeers{c}
+	return newFakeBGPPeers(c)
 }
 
 func (c *FakeProjectcalicoV3) BlockAffinities() v3.BlockAffinityInterface {
-	return &FakeBlockAffinities{c}
+	return newFakeBlockAffinities(c)
 }
 
 func (c *FakeProjectcalicoV3) CalicoNodeStatuses() v3.CalicoNodeStatusInterface {
-	return &FakeCalicoNodeStatuses{c}
+	return newFakeCalicoNodeStatuses(c)
 }
 
 func (c *FakeProjectcalicoV3) ClusterInformations() v3.ClusterInformationInterface {
-	return &FakeClusterInformations{c}
+	return newFakeClusterInformations(c)
 }
 
 func (c *FakeProjectcalicoV3) FelixConfigurations() v3.FelixConfigurationInterface {
-	return &FakeFelixConfigurations{c}
+	return newFakeFelixConfigurations(c)
 }
 
 func (c *FakeProjectcalicoV3) GlobalNetworkPolicies() v3.GlobalNetworkPolicyInterface {
-	return &FakeGlobalNetworkPolicies{c}
+	return newFakeGlobalNetworkPolicies(c)
 }
 
 func (c *FakeProjectcalicoV3) GlobalNetworkSets() v3.GlobalNetworkSetInterface {
-	return &FakeGlobalNetworkSets{c}
+	return newFakeGlobalNetworkSets(c)
 }
 
 func (c *FakeProjectcalicoV3) HostEndpoints() v3.HostEndpointInterface {
-	return &FakeHostEndpoints{c}
+	return newFakeHostEndpoints(c)
 }
 
 func (c *FakeProjectcalicoV3) IPAMConfigurations() v3.IPAMConfigurationInterface {
-	return &FakeIPAMConfigurations{c}
+	return newFakeIPAMConfigurations(c)
 }
 
 func (c *FakeProjectcalicoV3) IPPools() v3.IPPoolInterface {
-	return &FakeIPPools{c}
+	return newFakeIPPools(c)
 }
 
 func (c *FakeProjectcalicoV3) IPReservations() v3.IPReservationInterface {
-	return &FakeIPReservations{c}
+	return newFakeIPReservations(c)
 }
 
 func (c *FakeProjectcalicoV3) KubeControllersConfigurations() v3.KubeControllersConfigurationInterface {
-	return &FakeKubeControllersConfigurations{c}
+	return newFakeKubeControllersConfigurations(c)
 }
 
 func (c *FakeProjectcalicoV3) NetworkPolicies(namespace string) v3.NetworkPolicyInterface {
-	return &FakeNetworkPolicies{c, namespace}
+	return newFakeNetworkPolicies(c, namespace)
 }
 
 func (c *FakeProjectcalicoV3) NetworkSets(namespace string) v3.NetworkSetInterface {
-	return &FakeNetworkSets{c, namespace}
+	return newFakeNetworkSets(c, namespace)
 }
 
 func (c *FakeProjectcalicoV3) Profiles() v3.ProfileInterface {
-	return &FakeProfiles{c}
+	return newFakeProfiles(c)
 }
 
 func (c *FakeProjectcalicoV3) StagedGlobalNetworkPolicies() v3.StagedGlobalNetworkPolicyInterface {
-	return &FakeStagedGlobalNetworkPolicies{c}
+	return newFakeStagedGlobalNetworkPolicies(c)
 }
 
 func (c *FakeProjectcalicoV3) StagedKubernetesNetworkPolicies(namespace string) v3.StagedKubernetesNetworkPolicyInterface {
-	return &FakeStagedKubernetesNetworkPolicies{c, namespace}
+	return newFakeStagedKubernetesNetworkPolicies(c, namespace)
 }
 
 func (c *FakeProjectcalicoV3) StagedNetworkPolicies(namespace string) v3.StagedNetworkPolicyInterface {
-	return &FakeStagedNetworkPolicies{c, namespace}
+	return newFakeStagedNetworkPolicies(c, namespace)
 }
 
 func (c *FakeProjectcalicoV3) Tiers() v3.TierInterface {
-	return &FakeTiers{c}
+	return newFakeTiers(c)
 }
 
 // RESTClient returns a RESTClient that is used to communicate

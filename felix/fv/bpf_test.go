@@ -44,6 +44,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
+	"github.com/projectcalico/calico/felix/bpf/conntrack/timeouts"
 	"github.com/projectcalico/calico/felix/bpf/ifstate"
 	"github.com/projectcalico/calico/felix/bpf/ipsets"
 	"github.com/projectcalico/calico/felix/bpf/maps"
@@ -92,6 +93,7 @@ var (
 	_ = describeBPFTests(withTunnel("wireguard"), withProto("tcp"), withConnTimeLoadBalancingEnabled())
 	_ = describeBPFTests(withTunnel("vxlan"), withProto("tcp"), withConntrackCleanupMode("BPFProgram"))
 	_ = describeBPFTests(withTunnel("vxlan"), withProto("tcp"), withConnTimeLoadBalancingEnabled())
+	_ = describeBPFTests(withTunnel("vxlan"), withProto("tcp"), withConnTimeLoadBalancingEnabled(), withIPFamily(6))
 )
 
 // Run a stripe of tests with BPF logging disabled since the compiler tends to optimise the code differently
@@ -375,17 +377,19 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			options.NATOutgoingEnabled = true
 			options.AutoHEPsEnabled = true
 			// override IPIP being enabled by default
-			options.IPIPEnabled = false
-			options.IPIPRoutesEnabled = false
+			options.IPIPMode = api.IPIPModeNever
+			options.SimulateBIRDRoutes = false
 			switch testOpts.tunnel {
 			case "none":
-				// nothing
+				// Enable adding simulated routes.
+				options.SimulateBIRDRoutes = true
 			case "ipip":
-				options.IPIPEnabled = true
-				options.IPIPRoutesEnabled = true
+				// IPIP is not supported in IPv6. We need to mimic routes in FVs.
+				options.IPIPMode = api.IPIPModeAlways
+				options.SimulateBIRDRoutes = true
 			case "vxlan":
 				options.VXLANMode = api.VXLANModeAlways
-				options.VXLANStrategy = infrastructure.NewDefaultVXLANStrategy(options.IPPoolCIDR, options.IPv6PoolCIDR)
+				options.VXLANStrategy = infrastructure.NewDefaultTunnelStrategy(options.IPPoolCIDR, options.IPv6PoolCIDR)
 			case "wireguard":
 				if testOpts.ipv6 {
 					// Allocate tunnel address for Wireguard.
@@ -508,10 +512,12 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							felix.Exec("iptables-save", "-c")
 						}
 						felix.Exec("ip", "link")
+						felix.Exec("ip", "-d", "link", "show", "vxlan.calico")
 						felix.Exec("ip", "addr")
 						felix.Exec("ip", "rule")
 						felix.Exec("ip", "route")
 						felix.Exec("ip", "neigh")
+						felix.Exec("bridge", "fdb", "show", "dev", "vxlan.calico")
 						felix.Exec("arp")
 						felix.Exec("calico-bpf", "ipsets", "dump")
 						felix.Exec("calico-bpf", "routes", "dump")
@@ -680,6 +686,92 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 						Eventually(panicC, "5s", "100ms").Should(BeClosed())
 					})
+				})
+			}
+
+			if testOpts.bpfLogLevel == "debug" && testOpts.protocol == "udp" && !testOpts.ipv6 {
+				It("udp should have connectivity after a service is recreated", func() {
+					clusterIP := "10.101.0.111"
+
+					tcpdump := w[0].AttachTCPDump()
+					tcpdump.SetLogEnabled(true)
+					tcpdump.AddMatcher("udp-be",
+						regexp.MustCompile(fmt.Sprintf("%s\\.12345 > %s\\.8055: \\[udp sum ok\\] UDP", w[1].IP, w[0].IP)))
+					tcpdump.Start("-vvv", "udp")
+					defer tcpdump.Stop()
+
+					// Just to create the wrong normal entry to the service
+					_, err := w[1].RunCmd("pktgen", w[1].IP, clusterIP, "udp",
+						"--port-src", "12345", "--port-dst", "80")
+					Expect(err).NotTo(HaveOccurred())
+
+					// Make sure we got normal conntrack to service
+					ct := dumpCTMapsAny(4, tc.Felixes[0])
+					k1 := conntrack.NewKey(17, net.ParseIP(w[1].IP), 12345, net.ParseIP(clusterIP), 80)
+					k2 := conntrack.NewKey(17, net.ParseIP(clusterIP), 80, net.ParseIP(w[1].IP), 12345)
+
+					if v, ok := ct[k1]; ok {
+						Expect(v.Type() == conntrack.TypeNormal)
+					} else if v, ok := ct[k2]; ok {
+						Expect(v.Type() == conntrack.TypeNormal)
+					} else {
+						Fail("No TypeNormal ct entry")
+					}
+
+					// Make sure the packet did not reach the backend (yet)
+					Consistently(func() int { return tcpdump.MatchCount("udp-be") }, "1s").
+						Should(BeNumerically("==", 0))
+
+					testSvc := k8sService("svc-no-backends", clusterIP, w[0], 80, 8055, 0, testOpts.protocol)
+					testSvcNamespace := testSvc.ObjectMeta.Namespace
+					k8sClient := infra.(*infrastructure.K8sDatastoreInfra).K8sClient
+					_, err = k8sClient.CoreV1().Services(testSvcNamespace).Create(context.Background(),
+						testSvc, metav1.CreateOptions{})
+					Expect(err).NotTo(HaveOccurred())
+
+					ip := testSvc.Spec.ClusterIP
+					port := uint16(testSvc.Spec.Ports[0].Port)
+					natK := nat.NewNATKey(net.ParseIP(ip), port, 17)
+
+					Eventually(func() bool {
+						natmaps, _ := dumpNATMapsAny(4, tc.Felixes[0])
+						if _, ok := natmaps[natK]; !ok {
+							return false
+						}
+						return true
+					}, "5s").Should(BeTrue(), "service NAT key didn't show up")
+
+					// Make sure that despite the wrong ct entry to start with,
+					// packets eventually go through.
+					Eventually(func() int {
+						_, err := w[1].RunCmd("pktgen", w[1].IP, clusterIP, "udp",
+							"--port-src", "12345", "--port-dst", "80")
+						Expect(err).NotTo(HaveOccurred())
+						return tcpdump.MatchCount("udp-be")
+					}, (timeouts.ScanPeriod + 5*time.Second).String(), "1s").
+						Should(BeNumerically(">=", 1)) // tcpdump may not get a packet and then get 2...
+
+					// Check that the service is properly NATted
+					ct = dumpCTMapsAny(4, tc.Felixes[0])
+
+					if v, ok := ct[k1]; ok {
+						Expect(v.Type() == conntrack.TypeNATForward)
+					} else if v, ok := ct[k2]; ok {
+						Expect(v.Type() == conntrack.TypeNATForward)
+					} else {
+						Fail("No TypeNATForward ct entry")
+					}
+
+					k1 = conntrack.NewKey(17, net.ParseIP(w[1].IP), 12345, net.ParseIP(w[0].IP), 8055)
+					k2 = conntrack.NewKey(17, net.ParseIP(w[0].IP), 8055, net.ParseIP(w[1].IP), 12345)
+
+					if v, ok := ct[k1]; ok {
+						Expect(v.Type() == conntrack.TypeNATReverse)
+					} else if v, ok := ct[k2]; ok {
+						Expect(v.Type() == conntrack.TypeNATReverse)
+					} else {
+						Fail("No TypeNATReverse ct entry")
+					}
 				})
 			}
 
@@ -1382,7 +1474,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				})
 			}
 
-			It("should have correct routes", func() {
+			_ = !testOpts.ipv6 && It("should have correct routes", func() {
 				tunnelAddr := ""
 				tunnelAddrFelix1 := ""
 				tunnelAddrFelix2 := ""
@@ -3873,7 +3965,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 									// increasing.
 									start := time.Now()
 									prevCount := pc.PongCount()
-									for time.Since(start) < 2*conntrack.ScanPeriod {
+									for time.Since(start) < 2*timeouts.ScanPeriod {
 										time.Sleep(time.Second)
 										newCount := pc.PongCount()
 										Expect(prevCount).Should(
@@ -3945,7 +4037,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 									// it is alive by checking that the number of PONGs keeps
 									// increasing. The ct entry may not be old enough in the first
 									// iteration yet.
-									time.Sleep(3 * conntrack.ScanPeriod)
+									time.Sleep(3 * timeouts.ScanPeriod)
 									prevCount := pc.PongCount()
 
 									// Try log enough to see a ping-pong
@@ -4714,7 +4806,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			})
 		})
 
-		Describe("with BPF disabled to begin with", func() {
+		_ = testOpts.tunnel != "vxlan" && Describe("with BPF disabled to begin with", func() {
 			var pc *PersistentConnection
 
 			BeforeEach(func() {
@@ -4870,6 +4962,92 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				AfterEach(func() {
 					extWorkload.Stop()
 				})
+			})
+		})
+
+		Context("With host interface not managed by calico", func() {
+			BeforeEach(func() {
+				setupCluster()
+				poolName := infrastructure.DefaultIPPoolName
+				if testOpts.ipv6 {
+					poolName = infrastructure.DefaultIPv6PoolName
+				}
+				pool, err := calicoClient.IPPools().Get(context.TODO(), poolName, options2.GetOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				pool.Spec.NATOutgoing = false
+				pool, err = calicoClient.IPPools().Update(context.TODO(), pool, options2.SetOptions{})
+				Expect(err).NotTo(HaveOccurred())
+
+				pol := api.NewGlobalNetworkPolicy()
+				pol.Name = "allow-all"
+				pol.Spec.Ingress = []api.Rule{{Action: api.Allow}}
+				pol.Spec.Egress = []api.Rule{{Action: api.Allow}}
+				pol.Spec.Selector = "all()"
+
+				pol = createPolicy(pol)
+
+			})
+
+			if testOpts.protocol == "udp" || testOpts.tunnel == "ipip" || testOpts.ipv6 {
+				return
+			}
+			It("should allow traffic from workload to this host device", func() {
+
+				var (
+					test30            *workload.Workload
+					test30IP          string
+					test30ExtIP       string
+					test30Route, mask string
+				)
+				if testOpts.ipv6 {
+					test30IP = "fd00::3001"
+					test30ExtIP = "1000::0030"
+					test30Route = "fd00::3000/120"
+					mask = "128"
+				} else {
+					test30IP = "192.168.30.1"
+					test30ExtIP = "10.0.0.30"
+					test30Route = "192.168.30.0/24"
+					mask = "32"
+				}
+
+				test30 = &workload.Workload{
+					Name:          "test30",
+					C:             tc.Felixes[1].Container,
+					IP:            test30IP,
+					Ports:         "57005", // 0xdead
+					Protocol:      testOpts.protocol,
+					InterfaceName: "test30",
+					MTU:           1500, // Need to match host MTU or felix will restart.
+				}
+				err := test30.Start()
+				Expect(err).NotTo(HaveOccurred())
+				// assign address to test30 and add route to the .30 network
+				if testOpts.ipv6 {
+					tc.Felixes[1].Exec("ip", "-6", "route", "add", test30Route, "dev", "test30")
+					tc.Felixes[1].Exec("ip", "-6", "addr", "add", test30ExtIP+"/"+mask, "dev", "test30")
+					_, err = test30.RunCmd("ip", "-6", "route", "add", test30ExtIP+"/"+mask, "dev", "eth0")
+					Expect(err).NotTo(HaveOccurred())
+					// Add a route to the test workload to the fake external
+					// client emulated by the test-workload
+					_, err = test30.RunCmd("ip", "-6", "route", "add", w[1][1].IP+"/"+mask, "via", test30ExtIP)
+					Expect(err).NotTo(HaveOccurred())
+
+				} else {
+					tc.Felixes[1].Exec("ip", "route", "add", test30Route, "dev", "test30")
+					tc.Felixes[1].Exec("ip", "addr", "add", test30ExtIP+"/"+mask, "dev", "test30")
+					_, err = test30.RunCmd("ip", "route", "add", test30ExtIP+"/"+mask, "dev", "eth0")
+					Expect(err).NotTo(HaveOccurred())
+					// Add a route to the test workload to the fake external
+					// client emulated by the test-workload
+					_, err = test30.RunCmd("ip", "route", "add", w[1][1].IP+"/"+mask, "via", test30ExtIP)
+					Expect(err).NotTo(HaveOccurred())
+
+				}
+
+				cc.ResetExpectations()
+				cc.ExpectSome(w[1][1], TargetIP(test30.IP), 0xdead)
+				cc.CheckConnectivity()
 			})
 		})
 
@@ -5432,9 +5610,6 @@ func ensureBPFProgramsAttachedOffset(offset int, felix *infrastructure.Felix, if
 	}
 	if felix.ExpectedVXLANTunnelAddr != "" {
 		expectedIfaces = append(expectedIfaces, "vxlan.calico")
-	}
-	if felix.ExpectedVXLANV6TunnelAddr != "" {
-		expectedIfaces = append(expectedIfaces, "vxlan-v6.calico")
 	}
 	if felix.ExpectedWireguardTunnelAddr != "" {
 		expectedIfaces = append(expectedIfaces, "wireguard.cali")

@@ -41,6 +41,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/bpfmap"
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
 	bpfconntrack "github.com/projectcalico/calico/felix/bpf/conntrack"
+	bpftimeouts "github.com/projectcalico/calico/felix/bpf/conntrack/timeouts"
 	"github.com/projectcalico/calico/felix/bpf/events"
 	"github.com/projectcalico/calico/felix/bpf/failsafes"
 	bpfifstate "github.com/projectcalico/calico/felix/bpf/ifstate"
@@ -55,6 +56,7 @@ import (
 	bpfutils "github.com/projectcalico/calico/felix/bpf/utils"
 	"github.com/projectcalico/calico/felix/calc"
 	"github.com/projectcalico/calico/felix/collector"
+	collectortypes "github.com/projectcalico/calico/felix/collector/types"
 	"github.com/projectcalico/calico/felix/config"
 	felixconfig "github.com/projectcalico/calico/felix/config"
 	"github.com/projectcalico/calico/felix/dataplane/common"
@@ -69,6 +71,7 @@ import (
 	"github.com/projectcalico/calico/felix/iptables/cmdshim"
 	"github.com/projectcalico/calico/felix/jitter"
 	"github.com/projectcalico/calico/felix/labelindex"
+	"github.com/projectcalico/calico/felix/linkaddrs"
 	"github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/felix/netlinkshim"
 	"github.com/projectcalico/calico/felix/nftables"
@@ -108,9 +111,15 @@ var (
 		Name: "felix_int_dataplane_messages",
 		Help: "Number dataplane messages by type.",
 	}, []string{"type"})
+	gaugeInitialResyncApplyTime = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "felix_int_dataplane_initial_resync_time_seconds",
+		Help: "Time in seconds that it took to do the initial resync with " +
+			"the dataplane and bring the dataplane into sync for the first time.",
+	})
 	summaryApplyTime = cprometheus.NewSummary(prometheus.SummaryOpts{
 		Name: "felix_int_dataplane_apply_time_seconds",
-		Help: "Time in seconds that it took to apply a dataplane update.",
+		Help: "Time in seconds for each incremental update to the dataplane " +
+			"(after the initial resync).",
 	})
 	summaryBatchSize = cprometheus.NewSummary(prometheus.SummaryOpts{
 		Name: "felix_int_dataplane_msg_batch_size",
@@ -136,6 +145,7 @@ var (
 
 func init() {
 	prometheus.MustRegister(countDataplaneSyncErrors)
+	prometheus.MustRegister(gaugeInitialResyncApplyTime)
 	prometheus.MustRegister(summaryApplyTime)
 	prometheus.MustRegister(countMessages)
 	prometheus.MustRegister(summaryBatchSize)
@@ -164,6 +174,7 @@ type Config struct {
 	DeviceRouteSourceAddressIPv6   net.IP
 	DeviceRouteProtocol            netlink.RouteProtocol
 	RemoveExternalRoutes           bool
+	ProgramRoutes                  bool
 	IPForwarding                   string
 	TableRefreshInterval           time.Duration
 	IptablesPostWriteCheckInterval time.Duration
@@ -212,7 +223,7 @@ type Config struct {
 	XDPEnabled                         bool
 	XDPAllowGeneric                    bool
 	BPFConntrackCleanupMode            apiv3.BPFConntrackMode
-	BPFConntrackTimeouts               bpfconntrack.Timeouts
+	BPFConntrackTimeouts               bpftimeouts.Timeouts
 	BPFCgroupV2                        string
 	BPFConnTimeLBEnabled               bool
 	BPFConnTimeLB                      string
@@ -243,11 +254,11 @@ type Config struct {
 	KubeProxyMinSyncPeriod     time.Duration
 	SidecarAccelerationEnabled bool
 
-	FlowLogsFileIncludeService bool
-	NfNetlinkBufSize           int
-
-	// Optional stats collector
-	Collector collector.Collector
+	// Flow logs related fields.
+	NfNetlinkBufSize int
+	Collector        collector.Collector
+	LookupsCache     *calc.LookupsCache
+	FlowLogsEnabled  bool
 
 	ServiceLoopPrevention string
 
@@ -265,8 +276,6 @@ type Config struct {
 	RouteSource string
 
 	KubernetesProvider config.Provider
-
-	LookupsCache *calc.LookupsCache
 }
 
 type UpdateBatchResolver interface {
@@ -318,13 +327,16 @@ type InternalDataplane struct {
 	filterTables    []generictables.Table
 	ipSets          []dpsets.IPSetsDataplane
 
-	ipipManager *ipipManager
+	ipipParentIfaceC chan string
+	ipipManager      *ipipManager
 
-	vxlanManager   *vxlanManager
-	vxlanParentC   chan string
-	vxlanManagerV6 *vxlanManager
-	vxlanParentCV6 chan string
-	vxlanFDBs      []*vxlanfdb.VXLANFDB
+	vxlanParentIfaceC   chan string
+	vxlanParentIfaceCV6 chan string
+	vxlanManager        *vxlanManager
+	vxlanManagerV6      *vxlanManager
+	vxlanFDBs           []*vxlanfdb.VXLANFDB
+
+	linkAddrsManagers []*linkaddrs.LinkAddrsManager
 
 	wireguardManager   *wireguardManager
 	wireguardManagerV6 *wireguardManager
@@ -656,7 +668,11 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	}
 
 	if config.RulesConfig.VXLANEnabled {
-		vxlanFDB := vxlanfdb.New(netlink.FAMILY_V4, dataplanedefs.VXLANIfaceNameV4, featureDetector, config.NetlinkTimeout)
+		var fdbOpts []vxlanfdb.Option
+		if config.BPFEnabled && bpfutils.BTFEnabled {
+			fdbOpts = append(fdbOpts, vxlanfdb.WithNeighUpdatesOnly())
+		}
+		vxlanFDB := vxlanfdb.New(netlink.FAMILY_V4, dataplanedefs.VXLANIfaceNameV4, featureDetector, config.NetlinkTimeout, fdbOpts...)
 		dp.vxlanFDBs = append(dp.vxlanFDBs, vxlanFDB)
 
 		dp.vxlanManager = newVXLANManager(
@@ -664,12 +680,23 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			routeTableV4,
 			vxlanFDB,
 			dataplanedefs.VXLANIfaceNameV4,
+			4,
+			config.VXLANMTU,
 			config,
 			dp.loopSummarizer,
-			4,
 		)
-		dp.vxlanParentC = make(chan string, 1)
-		go dp.vxlanManager.KeepVXLANDeviceInSync(context.Background(), config.VXLANMTU, dataplaneFeatures.ChecksumOffloadBroken, 10*time.Second, dp.vxlanParentC)
+		dp.vxlanParentIfaceC = make(chan string, 1)
+		vxlanMTU := config.VXLANMTU
+		if config.BPFEnabled && bpfutils.BTFEnabled {
+			vxlanMTU = 0
+		}
+		go dp.vxlanManager.keepVXLANDeviceInSync(
+			context.Background(),
+			vxlanMTU,
+			dataplaneFeatures.ChecksumOffloadBroken,
+			10*time.Second,
+			dp.vxlanParentIfaceC,
+		)
 		dp.RegisterManager(dp.vxlanManager)
 	} else {
 		// Start a cleanup goroutine not to block felix if it needs to retry
@@ -833,13 +860,12 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		bpfEvnt            events.Events
 		bpfEventPoller     *bpfEventPoller
 
-		collectorPacketInfoReader    collector.PacketInfoReader
-		collectorConntrackInfoReader collector.ConntrackInfoReader
+		collectorPacketInfoReader    collectortypes.PacketInfoReader
+		collectorConntrackInfoReader collectortypes.ConntrackInfoReader
 	)
 
-	// Initialisation needed for bpf. This condition should not be merged with the next one, since more
-	// stuff is done in enterprise.
-	if config.BPFEnabled {
+	// Initialisation needed for bpf.
+	if config.BPFEnabled && config.FlowLogsEnabled {
 		var err error
 		// convert buffer size to bytes.
 		ringSize := config.BPFExportBufferSizeMB * 1024 * 1024
@@ -882,11 +908,14 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 				"- BPFHostNetworkedNAT is disabled.")
 		}
 
-		config.LookupsCache.EnableID64()
+		if config.LookupsCache != nil {
+			config.LookupsCache.EnableID64()
+		}
+
 		// Forwarding into an IPIP tunnel fails silently because IPIP tunnels are L3 devices and support for
 		// L3 devices in BPF is not available yet.  Disable the FIB lookup in that case.
 		fibLookupEnabled := !config.RulesConfig.IPIPEnabled
-		bpfEndpointManager, err = newBPFEndpointManager(
+		bpfEndpointManager, err = NewBPFEndpointManager(
 			nil,
 			&config,
 			bpfMaps,
@@ -1006,10 +1035,13 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		log.Info("conntrackScanner started")
 	}
 
-	var nftMaps nftables.MapsDataplane
+	var filterMaps nftables.MapsDataplane
 	if config.RulesConfig.NFTables {
-		nftMaps = nftablesV4RootTable
+		filterMaps = filterTableV4.(nftables.MapsDataplane)
 	}
+
+	linkAddrsManagerV4 := linkaddrs.New(4, config.RulesConfig.WorkloadIfacePrefixes, featureDetector, config.NetlinkTimeout)
+	dp.linkAddrsManagers = append(dp.linkAddrsManagers, linkAddrsManagerV4)
 
 	epManager := newEndpointManager(
 		rawTableV4,
@@ -1023,12 +1055,13 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		config.RulesConfig.WorkloadIfacePrefixes,
 		dp.endpointStatusCombiner.OnEndpointStatusUpdate,
 		string(defaultRPFilter),
-		nftMaps,
+		filterMaps,
 		config.BPFEnabled,
 		bpfEndpointManager,
 		callbacks,
 		config.FloatingIPsEnabled,
 		config.RulesConfig.NFTables,
+		linkAddrsManagerV4,
 	)
 	dp.RegisterManager(epManager)
 	dp.endpointsSourceV4 = epManager
@@ -1037,9 +1070,24 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	if config.RulesConfig.IPIPEnabled {
 		log.Info("IPIP enabled, starting thread to keep tunnel configuration in sync.")
 		// Add a manager to keep the all-hosts IP set up to date.
-		dp.ipipManager = newIPIPManager(ipSetsV4, config.MaxIPSetSize, config.ExternalNodesCidrs)
-		go dp.ipipManager.KeepIPIPDeviceInSync(config.IPIPMTU, config.RulesConfig.IPIPTunnelAddress, dataplaneFeatures.ChecksumOffloadBroken)
-		dp.RegisterManager(dp.ipipManager) // IPv4-only
+		dp.ipipManager = newIPIPManager(
+			ipSetsV4,
+			routeTableV4,
+			dataplanedefs.IPIPIfaceName,
+			4,
+			config.IPIPMTU,
+			config,
+			dp.loopSummarizer,
+		)
+		dp.ipipParentIfaceC = make(chan string, 1)
+		go dp.ipipManager.keepIPIPDeviceInSync(
+			context.Background(),
+			config.IPIPMTU,
+			dataplaneFeatures.ChecksumOffloadBroken,
+			time.Second*10,
+			dp.ipipParentIfaceC,
+		)
+		dp.RegisterManager(dp.ipipManager)
 	} else {
 		// Only clean up IPIP addresses if IPIP is implicitly disabled (no IPIP pools and not explicitly set in FelixConfig)
 		if config.RulesConfig.FelixConfigIPIPEnabled == nil {
@@ -1112,20 +1160,47 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		dp.filterTables = append(dp.filterTables, filterTableV6)
 
 		if config.RulesConfig.VXLANEnabledV6 {
-			vxlanFDBV6 := vxlanfdb.New(netlink.FAMILY_V6, dataplanedefs.VXLANIfaceNameV6, featureDetector, config.NetlinkTimeout)
+			vxlanName := dataplanedefs.VXLANIfaceNameV6
+
+			var (
+				fdbOpts     []vxlanfdb.Option
+				vxlanMgrOps []vxlanMgrOption
+			)
+			if config.BPFEnabled && bpfutils.BTFEnabled {
+				// BPF mode uses the same device for both V4 and V6
+				vxlanName = dataplanedefs.VXLANIfaceNameV4
+				if dp.vxlanManager != nil {
+					vxlanMgrOps = append(vxlanMgrOps, vxlanMgrWithDualStack())
+				}
+				fdbOpts = append(fdbOpts, vxlanfdb.WithNeighUpdatesOnly())
+				go cleanUpVXLANDevice(dataplanedefs.VXLANIfaceNameV6)
+			}
+			vxlanFDBV6 := vxlanfdb.New(netlink.FAMILY_V6, vxlanName, featureDetector, config.NetlinkTimeout, fdbOpts...)
 			dp.vxlanFDBs = append(dp.vxlanFDBs, vxlanFDBV6)
 
 			dp.vxlanManagerV6 = newVXLANManager(
 				ipSetsV6,
 				routeTableV6,
 				vxlanFDBV6,
-				dataplanedefs.VXLANIfaceNameV6,
+				vxlanName,
+				6,
+				config.VXLANMTUV6,
 				config,
 				dp.loopSummarizer,
-				6,
+				vxlanMgrOps...,
 			)
-			dp.vxlanParentCV6 = make(chan string, 1)
-			go dp.vxlanManagerV6.KeepVXLANDeviceInSync(context.Background(), config.VXLANMTUV6, dataplaneFeatures.ChecksumOffloadBroken, 10*time.Second, dp.vxlanParentCV6)
+			dp.vxlanParentIfaceCV6 = make(chan string, 1)
+			vxlanMTU := config.VXLANMTUV6
+			if config.BPFEnabled && bpfutils.BTFEnabled {
+				vxlanMTU = 0
+			}
+			go dp.vxlanManagerV6.keepVXLANDeviceInSync(
+				context.Background(),
+				vxlanMTU,
+				dataplaneFeatures.ChecksumOffloadBroken,
+				10*time.Second,
+				dp.vxlanParentIfaceCV6,
+			)
 			dp.RegisterManager(dp.vxlanManagerV6)
 		} else {
 			// Start a cleanup goroutine not to block felix if it needs to retry
@@ -1145,10 +1220,13 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			dp.RegisterManager(newRawEgressPolicyManager(rawTableV6, ruleRenderer, 6, ipSetsV6.SetFilter, config.RulesConfig.NFTables))
 		}
 
-		var nftMapsV6 nftables.MapsDataplane
+		var filterMapsV6 nftables.MapsDataplane
 		if config.RulesConfig.NFTables {
-			nftMapsV6 = nftablesV6RootTable
+			filterMapsV6 = filterTableV6.(nftables.MapsDataplane)
 		}
+
+		linkAddrsManagerV6 := linkaddrs.New(6, config.RulesConfig.WorkloadIfacePrefixes, featureDetector, config.NetlinkTimeout)
+		dp.linkAddrsManagers = append(dp.linkAddrsManagers, linkAddrsManagerV6)
 
 		dp.RegisterManager(newEndpointManager(
 			rawTableV6,
@@ -1162,12 +1240,13 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			config.RulesConfig.WorkloadIfacePrefixes,
 			dp.endpointStatusCombiner.OnEndpointStatusUpdate,
 			"",
-			nftMapsV6,
+			filterMapsV6,
 			config.BPFEnabled,
 			nil,
 			callbacks,
 			config.FloatingIPsEnabled,
 			config.RulesConfig.NFTables,
+			linkAddrsManagerV6,
 		))
 		dp.RegisterManager(newFloatingIPManager(natTableV6, ruleRenderer, 6, config.FloatingIPsEnabled))
 		dp.RegisterManager(newMasqManager(ipSetsV6, natTableV6, ruleRenderer, config.MaxIPSetSize, 6))
@@ -1230,7 +1309,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		if !config.BPFEnabled {
 			log.Debug("Stats collection is required, create nflog reader")
 			nflogrd := collector.NewNFLogReader(config.LookupsCache, 1, 2,
-				config.NfNetlinkBufSize, config.FlowLogsFileIncludeService)
+				config.NfNetlinkBufSize, true)
 			collectorPacketInfoReader = nflogrd
 			log.Debug("Stats collection is required, create conntrack reader")
 			ctrd := collector.NewNetLinkConntrackReader(felixconfig.DefaultConntrackPollingInterval)
@@ -1411,7 +1490,7 @@ cleanupRetry:
 		if i > 0 {
 			log.Debugf("Retrying %v/%v times", i, maxCleanupRetries)
 		}
-		link, err := netlink.LinkByName("tunl0")
+		link, err := netlink.LinkByName(dataplanedefs.IPIPIfaceName)
 		if err != nil {
 			if _, ok := err.(netlink.LinkNotFoundError); ok {
 				log.Debug("IPIP disabled and no IPIP device found")
@@ -2074,10 +2153,12 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 			d.onDatastoreMessage(msg)
 		case ifaceUpdate := <-d.ifaceUpdates:
 			d.onIfaceMonitorMessage(ifaceUpdate)
-		case name := <-d.vxlanParentC:
-			d.vxlanManager.OnParentNameUpdate(name)
-		case name := <-d.vxlanParentCV6:
-			d.vxlanManagerV6.OnParentNameUpdate(name)
+		case name := <-d.ipipParentIfaceC:
+			d.ipipManager.routeMgr.OnParentDeviceUpdate(name)
+		case name := <-d.vxlanParentIfaceC:
+			d.vxlanManager.routeMgr.OnParentDeviceUpdate(name)
+		case name := <-d.vxlanParentIfaceCV6:
+			d.vxlanManagerV6.routeMgr.OnParentDeviceUpdate(name)
 		case <-ipSetsRefreshC:
 			log.Debug("Refreshing IP sets state")
 			d.forceIPSetsRefresh = true
@@ -2122,10 +2203,7 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 				}
 				// Actually apply the changes to the dataplane.
 				d.apply()
-
-				// Record stats.
 				applyTime := time.Since(applyStart)
-				summaryApplyTime.Observe(applyTime.Seconds())
 
 				if d.dataplaneNeedsSync {
 					// Dataplane is still dirty, record an error.
@@ -2147,6 +2225,12 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 					if d.config.PostInSyncCallback != nil {
 						d.config.PostInSyncCallback()
 					}
+					// Record a dedicated stat for the initial resync.
+					gaugeInitialResyncApplyTime.Set(applyTime.Seconds())
+				} else {
+					// Don't record the initial resync in the summary stat. On
+					// a quiet cluster it can skew the stat for a long time.
+					summaryApplyTime.Observe(applyTime.Seconds())
 				}
 				d.reportHealth()
 			} else {
@@ -2441,7 +2525,7 @@ func (d *InternalDataplane) apply() {
 	for _, ipSets := range d.ipSets {
 		ipSetsWG.Add(1)
 		go func(ipSets dpsets.IPSetsDataplane) {
-			ipSets.ApplyUpdates()
+			ipSets.ApplyUpdates(nil)
 			d.reportHealth()
 			ipSetsWG.Done()
 		}(ipSets)
@@ -2458,6 +2542,15 @@ func (d *InternalDataplane) apply() {
 				log.WithError(err).Warn("Failed to synchronize VXLAN FDB entries, will retry...")
 				d.dataplaneNeedsSync = true
 			}
+		}
+	}
+
+	// Update any linkAddrs entries.
+	for _, la := range d.linkAddrsManagers {
+		err := la.Apply()
+		if err != nil {
+			log.WithError(err).Warn("Failed to synchronize link addr entries, will retry...")
+			d.dataplaneNeedsSync = true
 		}
 	}
 

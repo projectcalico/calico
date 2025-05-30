@@ -30,13 +30,13 @@ import (
 	. "github.com/onsi/gomega"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
-	"github.com/projectcalico/calico/felix/bpf/conntrack"
 	"github.com/projectcalico/calico/felix/collector/flowlog"
+	"github.com/projectcalico/calico/felix/collector/local"
 	"github.com/projectcalico/calico/felix/collector/types/endpoint"
 	"github.com/projectcalico/calico/felix/collector/types/tuple"
 	"github.com/projectcalico/calico/felix/fv/connectivity"
+	"github.com/projectcalico/calico/felix/fv/flowlogs"
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
-	"github.com/projectcalico/calico/felix/fv/metrics"
 	"github.com/projectcalico/calico/felix/fv/utils"
 	"github.com/projectcalico/calico/felix/fv/workload"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
@@ -79,14 +79,10 @@ import (
 //	wl-client-4
 //	      ns-IP
 
-const (
-	localGoldmaneServer = "unix:///var/log/calico/flowlogs/goldmane.sock"
-)
-
 // Flow logs have little to do with the backend, and these tests are relatively slow, so
 // better to run with one backend only.  etcdv3 is easier because we create a fresh
 // datastore for every test and so don't need to worry about cleaning resources up.
-var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ flow log goldmane tests", []apiconfig.DatastoreType{apiconfig.EtcdV3}, func(getInfra infrastructure.InfraFactory) {
+var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log tests", []apiconfig.DatastoreType{apiconfig.EtcdV3}, func(getInfra infrastructure.InfraFactory) {
 	bpfEnabled := os.Getenv("FELIX_FV_ENABLE_BPF") == "true"
 
 	var (
@@ -102,14 +98,14 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ flow log goldmane tests", [
 
 	BeforeEach(func() {
 		infra = getInfra()
+		opts.FelixLogSeverity = "Debug"
 		opts = infrastructure.DefaultTopologyOptions()
-		opts.IPIPEnabled = false
-		opts.FlowLogSource = infrastructure.FlowLogSourceGoldmane
+		opts.IPIPMode = api.IPIPModeNever
+		opts.FlowLogSource = infrastructure.FlowLogSourceLocalSocket
 
-		opts.ExtraEnvVars["FELIX_BPFCONNTRACKTIMEOUTS"] = "TCPFinsSeen=30s"
 		opts.ExtraEnvVars["FELIX_FLOWLOGSCOLLECTORDEBUGTRACE"] = "true"
 		opts.ExtraEnvVars["FELIX_FLOWLOGSFLUSHINTERVAL"] = "2"
-		opts.ExtraEnvVars["FELIX_FLOWLOGSGOLDMANESERVER"] = localGoldmaneServer
+		opts.ExtraEnvVars["FELIX_FLOWLOGSGOLDMANESERVER"] = local.SocketAddress
 	})
 
 	JustBeforeEach(func() {
@@ -302,14 +298,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ flow log goldmane tests", [
 			tc.Felixes[ii].Exec("conntrack", "-L")
 		}
 
-		if bpfEnabled {
-			// Make sure that conntrack scanning ticks at least once
-			time.Sleep(3 * conntrack.ScanPeriod)
-		} else {
-			// Allow 6 seconds for the containers.Felix to poll conntrack.  (This is conntrack polling time plus 20%, which gives us
-			// 10% leeway over the polling jitter of 10%)
-			time.Sleep(6 * time.Second)
-		}
+		flowlogs.WaitForConntrackScan(bpfEnabled)
 
 		// Delete conntrack state so that we don't keep seeing 0-metric copies of the logs.  This will allow the flows
 		// to expire quickly.
@@ -343,23 +332,21 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ flow log goldmane tests", [
 		// flow logs.
 		Eventually(func() error {
 			wepPort := 8055
-			flowTester := metrics.NewFlowTester(metrics.FlowTesterOptions{
-				ExpectLabels:         true,
-				ExpectPolicies:       true,
-				MatchLabels:          false,
-				MatchPolicies:        true,
-				Includes:             []metrics.IncludeFilter{metrics.IncludeByDestPort(wepPort)},
-				CheckNumFlowsStarted: true,
-				CheckFlowsCompleted:  true,
+			flowTester := flowlogs.NewFlowTester(flowlogs.FlowTesterOptions{
+				ExpectLabels:           true,
+				ExpectEnforcedPolicies: true,
+				MatchEnforcedPolicies:  true,
+				MatchLabels:            false,
+				Includes:               []flowlogs.IncludeFilter{flowlogs.IncludeByDestPort(wepPort)},
+				CheckNumFlowsStarted:   true,
 			})
 
 			err := flowTester.PopulateFromFlowLogs(tc.Felixes[0])
 			if err != nil {
-				return fmt.Errorf("error populating flow logs from Felix[1]: %s", err)
+				return fmt.Errorf("error populating flow logs from Felix[0]: %s", err)
 			}
 
-			zeroAddr := [16]byte{}
-			aggrTuple := tuple.Make(zeroAddr, zeroAddr, 6, metrics.SourcePortIsNotIncluded, wepPort)
+			aggrTuple := tuple.Make(flowlog.EmptyIP, flowlog.EmptyIP, 6, flowlogs.SourcePortIsNotIncluded, wepPort)
 
 			host1_wl_Meta := endpoint.Metadata{
 				Type:           "wep",
@@ -373,12 +360,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ flow log goldmane tests", [
 				Name:           flowlog.FieldNotIncluded,
 				AggregatedName: "wl-host2-*",
 			}
-			noService := flowlog.FlowService{
-				Namespace: flowlog.FieldNotIncluded,
-				Name:      flowlog.FieldNotIncluded,
-				PortName:  flowlog.FieldNotIncluded,
-				PortNum:   0,
-			}
 
 			// Now we tick off each FlowMeta that we expect, and check that
 			// the log(s) for each one are present and as expected.
@@ -388,11 +369,11 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ flow log goldmane tests", [
 						Tuple:      aggrTuple,
 						SrcMeta:    host1_wl_Meta,
 						DstMeta:    host2_wl_Meta,
-						DstService: noService,
+						DstService: flowlog.EmptyService,
 						Action:     "allow",
 						Reporter:   "src",
 					},
-					FlowAllPolicySet: flowlog.FlowPolicySet{
+					FlowEnforcedPolicySet: flowlog.FlowPolicySet{
 						"0|__PROFILE__|__PROFILE__.default|allow|0": {},
 					},
 					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
@@ -409,17 +390,18 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ flow log goldmane tests", [
 				AggregatedName: tc.Felixes[1].Hostname,
 			}
 
+			// This entry is different in Enterprise implemenatation due to differences of HEP flowlogs.
 			flowTester.CheckFlow(
 				flowlog.FlowLog{
 					FlowMeta: flowlog.FlowMeta{
 						Tuple:      aggrTuple,
 						SrcMeta:    host1_wl_Meta,
 						DstMeta:    hep1_Meta,
-						DstService: noService,
+						DstService: flowlog.EmptyService,
 						Action:     "allow",
 						Reporter:   "src",
 					},
-					FlowAllPolicySet: flowlog.FlowPolicySet{
+					FlowEnforcedPolicySet: flowlog.FlowPolicySet{
 						"0|__PROFILE__|__PROFILE__.default|allow|0": {},
 					},
 					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
@@ -444,11 +426,11 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ flow log goldmane tests", [
 						Tuple:      aggrTuple,
 						SrcMeta:    host1_wl_Meta,
 						DstMeta:    host2_wl_Meta,
-						DstService: noService,
+						DstService: flowlog.EmptyService,
 						Action:     "allow",
 						Reporter:   "dst",
 					},
-					FlowAllPolicySet: flowlog.FlowPolicySet{
+					FlowEnforcedPolicySet: flowlog.FlowPolicySet{
 						"0|__PROFILE__|__PROFILE__.default|allow|0": {},
 					},
 					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
@@ -463,32 +445,12 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ flow log goldmane tests", [
 					FlowMeta: flowlog.FlowMeta{
 						Tuple:      aggrTuple,
 						SrcMeta:    host1_wl_Meta,
-						DstMeta:    hep1_Meta,
-						DstService: noService,
-						Action:     "allow",
-						Reporter:   "dst",
-					},
-					FlowAllPolicySet: flowlog.FlowPolicySet{
-						"0|default|default.gnp-1|allow|0": {},
-					},
-					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
-						FlowReportedStats: flowlog.FlowReportedStats{
-							NumFlowsStarted: 3,
-						},
-					},
-				})
-
-			flowTester.CheckFlow(
-				flowlog.FlowLog{
-					FlowMeta: flowlog.FlowMeta{
-						Tuple:      aggrTuple,
-						SrcMeta:    host1_wl_Meta,
 						DstMeta:    host2_wl_Meta,
-						DstService: noService,
+						DstService: flowlog.EmptyService,
 						Action:     "deny",
 						Reporter:   "dst",
 					},
-					FlowAllPolicySet: flowlog.FlowPolicySet{
+					FlowEnforcedPolicySet: flowlog.FlowPolicySet{
 						"0|default|default/default.np-1|deny|0": {},
 					},
 					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
@@ -505,17 +467,18 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ flow log goldmane tests", [
 				AggregatedName: "ns-1",
 			}
 
+			// The following entries are not available in Enterprise implemenatation due to differences of HEP flowlogs.
 			flowTester.CheckFlow(
 				flowlog.FlowLog{
 					FlowMeta: flowlog.FlowMeta{
 						Tuple:      aggrTuple,
 						SrcMeta:    host2_wl_Meta,
 						DstMeta:    ns_meta,
-						DstService: noService,
+						DstService: flowlog.EmptyService,
 						Action:     "allow",
 						Reporter:   "src",
 					},
-					FlowAllPolicySet: flowlog.FlowPolicySet{
+					FlowEnforcedPolicySet: flowlog.FlowPolicySet{
 						"0|__PROFILE__|__PROFILE__.default|allow|0": {},
 					},
 					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
@@ -590,7 +553,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ flow log goldmane tests", [
 	})
 })
 
-var _ = infrastructure.DatastoreDescribe("ipv6 flow log goldmane tests", []apiconfig.DatastoreType{apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
+var _ = infrastructure.DatastoreDescribe("goldmane flow log ipv6 tests", []apiconfig.DatastoreType{apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
 	var (
 		infra  infrastructure.DatastoreInfra
 		tc     infrastructure.TopologyContainers
@@ -610,17 +573,17 @@ var _ = infrastructure.DatastoreDescribe("ipv6 flow log goldmane tests", []apico
 
 		infra = getInfra(iOpts...)
 		opts := infrastructure.DefaultTopologyOptions()
-		opts.FlowLogSource = infrastructure.FlowLogSourceGoldmane
+		opts.FlowLogSource = infrastructure.FlowLogSourceLocalSocket
 
 		opts.EnableIPv6 = true
-		opts.IPIPEnabled = false
+		opts.IPIPMode = api.IPIPModeNever
+		opts.SimulateBIRDRoutes = true
 		opts.NATOutgoingEnabled = true
 		opts.AutoHEPsEnabled = false
-		opts.IPIPRoutesEnabled = false
 		opts.ExtraEnvVars["FELIX_FLOWLOGSFLUSHINTERVAL"] = "2"
 		opts.ExtraEnvVars["FELIX_IPV6SUPPORT"] = "true"
 		opts.ExtraEnvVars["FELIX_DefaultEndpointToHostAction"] = "RETURN"
-		opts.ExtraEnvVars["FELIX_FLOWLOGSGOLDMANESERVER"] = localGoldmaneServer
+		opts.ExtraEnvVars["FELIX_FLOWLOGSGOLDMANESERVER"] = local.SocketAddress
 
 		tc, client = infrastructure.StartNNodeTopology(2, opts, infra)
 
@@ -719,7 +682,6 @@ var _ = infrastructure.DatastoreDescribe("ipv6 flow log goldmane tests", []apico
 			Eventually(rulesProgrammed, "10s", "1s").Should(BeTrue(),
 				"Expected iptables rules to appear on the correct felix instances")
 		} else {
-			//time.Sleep(time.Minute * 20)
 			Eventually(func() bool {
 				return bpfCheckIfPolicyProgrammed(tc.Felixes[0], w[0][0].InterfaceName, "egress", "default.gnp-1", "allow", true)
 			}, "15s", "200ms").Should(BeTrue())
@@ -796,6 +758,176 @@ var _ = infrastructure.DatastoreDescribe("ipv6 flow log goldmane tests", []apico
 			}
 		}
 		Expect(numExpectedFlows).Should(Equal(2))
+	})
+})
+
+var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane local server tests", []apiconfig.DatastoreType{apiconfig.EtcdV3}, func(getInfra infrastructure.InfraFactory) {
+	bpfEnabled := os.Getenv("FELIX_FV_ENABLE_BPF") == "true"
+
+	var (
+		infra   infrastructure.DatastoreInfra
+		tc      infrastructure.TopologyContainers
+		opts    infrastructure.TopologyOptions
+		wlHost1 [2]*workload.Workload
+		wlHost2 [2]*workload.Workload
+		cc      *connectivity.Checker
+	)
+
+	BeforeEach(func() {
+		infra = getInfra()
+		opts.FelixLogSeverity = "Debug"
+		opts = infrastructure.DefaultTopologyOptions()
+		opts.IPIPMode = api.IPIPModeNever
+		opts.FlowLogSource = infrastructure.FlowLogSourceLocalSocket
+		opts.DelayFelixStart = true
+
+		opts.ExtraEnvVars["FELIX_FLOWLOGSCOLLECTORDEBUGTRACE"] = "true"
+		opts.ExtraEnvVars["FELIX_FLOWLOGSFLUSHINTERVAL"] = "2"
+		opts.ExtraEnvVars["FELIX_FLOWLOGSLOCALREPORTER"] = "Enabled"
+
+		numNodes := 2
+		tc, _ = infrastructure.StartNNodeTopology(numNodes, opts, infra)
+
+		// Install a default profile that allows all ingress and egress, in the absence of any Policy.
+		infra.AddDefaultAllow()
+
+		// Create workloads on host 1.
+		for ii := range wlHost1 {
+			wIP := fmt.Sprintf("10.65.0.%d", ii)
+			wName := fmt.Sprintf("wl-host1-%d", ii)
+			wlHost1[ii] = workload.Run(tc.Felixes[0], wName, "default", wIP, "8055", "tcp")
+			wlHost1[ii].WorkloadEndpoint.GenerateName = "wl-host1-"
+			wlHost1[ii].ConfigureInInfra(infra)
+		}
+
+		// Create workloads on host 2.
+		for ii := range wlHost2 {
+			wIP := fmt.Sprintf("10.65.1.%d", ii)
+			wName := fmt.Sprintf("wl-host2-%d", ii)
+			wlHost2[ii] = workload.Run(tc.Felixes[1], wName, "default", wIP, "8055", "tcp")
+			wlHost2[ii].WorkloadEndpoint.GenerateName = "wl-host2-"
+			wlHost2[ii].ConfigureInInfra(infra)
+		}
+
+		// Describe the connectivity that we now expect.
+		cc = &connectivity.Checker{}
+		for _, source := range wlHost1 {
+			// Workloads on host 1 can connect to the first workload on host 2.
+			cc.ExpectSome(source, wlHost2[0])
+			// But not the second.
+			cc.ExpectSome(source, wlHost2[1])
+		}
+
+		// Delete conntrack state so that we don't keep seeing 0-metric copies of the logs.  This will allow the flows
+		// to expire quickly.
+		for ii := range tc.Felixes {
+			tc.Felixes[ii].Exec("conntrack", "-F")
+		}
+		for ii := range tc.Felixes {
+			tc.Felixes[ii].Exec("conntrack", "-L")
+		}
+	})
+
+	readFlowlogs := func() bool {
+		for _, felix := range tc.Felixes {
+			flogs, err := felix.FlowLogs()
+			return err == nil && len(flogs) > 0
+		}
+		return false
+	}
+
+	nodeSocketExists := func() bool {
+		for _, felix := range tc.Felixes {
+			_, err := os.Stat(felix.FlowServerAddress())
+			return err == nil
+		}
+		return false
+	}
+
+	It("should connect and get some flow logs", func() {
+		// No goldmane node server must exist.
+		Eventually(nodeSocketExists, "15s", "3s").Should(BeFalse())
+		Consistently(nodeSocketExists, "10s", "2s").Should(BeFalse())
+
+		for _, felix := range tc.Felixes {
+			felix.TriggerDelayedStart()
+		}
+
+		// After Felix start, goldmane node server must exist.
+		Eventually(nodeSocketExists, "15s", "3s").Should(BeTrue())
+		Consistently(nodeSocketExists, "10s", "2s").Should(BeTrue())
+
+		// Do 1 rounds of connectivity checking.
+		cc.CheckConnectivity()
+		for ii := range tc.Felixes {
+			tc.Felixes[ii].Exec("conntrack", "-L")
+		}
+
+		flowlogs.WaitForConntrackScan(bpfEnabled)
+
+		Eventually(readFlowlogs, "15s", "3s").Should(BeTrue())
+		Consistently(readFlowlogs, "10s", "2s").Should(BeTrue())
+
+		for _, felix := range tc.Felixes {
+			felix.FlowServerStop()
+		}
+
+		// After stoping goldmane node server, socket file must be cleaned up.
+		Eventually(nodeSocketExists, "15s", "3s").Should(BeFalse())
+		Consistently(nodeSocketExists, "10s", "2s").Should(BeFalse())
+
+		// ... and reading flowlogs must return no flowlog.
+		Eventually(readFlowlogs, "15s", "3s").Should(BeFalse())
+		Consistently(readFlowlogs, "10s", "2s").Should(BeFalse())
+	})
+
+	AfterEach(func() {
+		if CurrentGinkgoTestDescription().Failed {
+			for _, felix := range tc.Felixes {
+				logNFTDiags(felix)
+				felix.Exec("iptables-save", "-c")
+				felix.Exec("ipset", "list")
+				felix.Exec("ip", "r")
+				felix.Exec("ip", "a")
+			}
+			if bpfEnabled {
+				for _, felix := range tc.Felixes {
+					felix.Exec("calico-bpf", "ipsets", "dump")
+					felix.Exec("calico-bpf", "routes", "dump")
+					felix.Exec("calico-bpf", "nat", "dump")
+					felix.Exec("calico-bpf", "nat", "aff")
+					felix.Exec("calico-bpf", "conntrack", "dump")
+					felix.Exec("calico-bpf", "arp", "dump")
+					felix.Exec("calico-bpf", "counters", "dump")
+					felix.Exec("calico-bpf", "ifstate", "dump")
+					felix.Exec("calico-bpf", "policy", "dump", "eth0", "all")
+				}
+				for _, w := range wlHost1 {
+					tc.Felixes[0].Exec("calico-bpf", "policy", "dump", w.InterfaceName, "all")
+				}
+				for _, w := range wlHost1 {
+					tc.Felixes[1].Exec("calico-bpf", "policy", "dump", w.InterfaceName, "all")
+				}
+			}
+		}
+
+		for _, wl := range wlHost1 {
+			wl.Stop()
+		}
+		for _, wl := range wlHost2 {
+			wl.Stop()
+		}
+		for _, felix := range tc.Felixes {
+			if bpfEnabled {
+				felix.Exec("calico-bpf", "connect-time", "clean")
+			}
+			felix.Stop()
+		}
+
+		if CurrentGinkgoTestDescription().Failed {
+			infra.DumpErrorData()
+		}
+		infra.Stop()
 	})
 })
 

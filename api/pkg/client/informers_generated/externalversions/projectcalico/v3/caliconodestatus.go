@@ -5,13 +5,13 @@
 package v3
 
 import (
-	"context"
+	context "context"
 	time "time"
 
-	projectcalicov3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	apisprojectcalicov3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	clientset "github.com/projectcalico/api/pkg/client/clientset_generated/clientset"
 	internalinterfaces "github.com/projectcalico/api/pkg/client/informers_generated/externalversions/internalinterfaces"
-	v3 "github.com/projectcalico/api/pkg/client/listers_generated/projectcalico/v3"
+	projectcalicov3 "github.com/projectcalico/api/pkg/client/listers_generated/projectcalico/v3"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	watch "k8s.io/apimachinery/pkg/watch"
@@ -22,7 +22,7 @@ import (
 // CalicoNodeStatuses.
 type CalicoNodeStatusInformer interface {
 	Informer() cache.SharedIndexInformer
-	Lister() v3.CalicoNodeStatusLister
+	Lister() projectcalicov3.CalicoNodeStatusLister
 }
 
 type calicoNodeStatusInformer struct {
@@ -56,7 +56,7 @@ func NewFilteredCalicoNodeStatusInformer(client clientset.Interface, resyncPerio
 				return client.ProjectcalicoV3().CalicoNodeStatuses().Watch(context.TODO(), options)
 			},
 		},
-		&projectcalicov3.CalicoNodeStatus{},
+		&apisprojectcalicov3.CalicoNodeStatus{},
 		resyncPeriod,
 		indexers,
 	)
@@ -67,9 +67,9 @@ func (f *calicoNodeStatusInformer) defaultInformer(client clientset.Interface, r
 }
 
 func (f *calicoNodeStatusInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&projectcalicov3.CalicoNodeStatus{}, f.defaultInformer)
+	return f.factory.InformerFor(&apisprojectcalicov3.CalicoNodeStatus{}, f.defaultInformer)
 }
 
-func (f *calicoNodeStatusInformer) Lister() v3.CalicoNodeStatusLister {
-	return v3.NewCalicoNodeStatusLister(f.Informer().GetIndexer())
+func (f *calicoNodeStatusInformer) Lister() projectcalicov3.CalicoNodeStatusLister {
+	return projectcalicov3.NewCalicoNodeStatusLister(f.Informer().GetIndexer())
 }

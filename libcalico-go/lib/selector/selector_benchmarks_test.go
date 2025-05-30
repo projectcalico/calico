@@ -22,7 +22,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/selector/parser"
 )
 
-var sel Selector
+var sel *Selector
 
 func BenchmarkParse(b *testing.B) {
 	logrus.SetLevel(logrus.InfoLevel)

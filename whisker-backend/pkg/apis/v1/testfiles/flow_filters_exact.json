@@ -1,0 +1,59 @@
+{
+  "source_names": [
+    {
+      "value": "src-name",
+      "type": "Exact"
+    }
+  ],
+  "source_namespaces": [
+    {
+      "value": "src-namespace",
+      "type": "Exact"
+    }
+  ],
+  "dest_names": [
+    {
+      "value": "dest-name",
+      "type": "Exact"
+    }
+  ],
+  "dest_namespaces": [
+    {
+      "value": "dest-namespace",
+      "type": "Exact"
+    }
+  ],
+  "protocols": [
+    {
+      "value": "tcp",
+      "type": "Exact"
+    }
+  ],
+  "dest_ports": [
+    {
+      "value": 8080,
+      "type": "Exact"
+    }
+  ],
+  "actions": [
+    "Deny", "Pass"
+  ],
+  "policies": [
+    {
+      "kind": "CalicoNetworkPolicy",
+      "tier": {
+        "value": "default-tier",
+        "type": "Exact"
+      },
+      "name": {
+        "value": "name",
+        "type": "Exact"
+      },
+      "namespace": {
+        "value": "namespace",
+        "type": "Exact"
+      },
+      "action": "Deny"
+    }
+  ]
+}

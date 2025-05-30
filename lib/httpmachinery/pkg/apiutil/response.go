@@ -22,35 +22,106 @@ import (
 	"github.com/projectcalico/calico/lib/httpmachinery/pkg/header"
 )
 
+type ResponseWriter interface {
+	WriteResponse(apicontext.Context, int, http.ResponseWriter) error
+}
+
+type baseResponse struct {
+	status int
+	errMsg string
+}
+
+func (r baseResponse) Status() int {
+	return r.status
+}
+
 type ErrorResponse struct {
 	Error string `json:"error"`
 }
 
+// List represents a generic list response. It includes the total number of items that would have been returned if
+// limits / offsets weren't applied.
 type List[E any] struct {
-	Total int `json:"total"`
-	Items []E `json:"items"`
+	// Total is the total number of items that would have been returned if limits and offsets weren't applied.
+	Meta  ListMeta `json:"total"`
+	Items []E      `json:"items"`
 }
 
+type ListMeta struct {
+	TotalPages int `json:"totalPages"`
+}
+
+// ListResponse implements the ResponseWriter and writes the response as a list with a total number of items that would
+// have been returned if limits / offsets weren't applied.
+type ListResponse[E any] struct {
+	baseResponse
+	rsp List[E]
+}
+
+func NewListResponse[E any]() ListResponse[E] {
+	return ListResponse[E]{}
+}
+
+func (l ListResponse[E]) SetStatus(status int) ListResponse[E] {
+	l.status = status
+	return l
+}
+
+func (l ListResponse[E]) SetError(err string) ListResponse[E] {
+	l.errMsg = err
+	return l
+}
+
+func (l ListResponse[E]) SetMeta(meta ListMeta) ListResponse[E] {
+	l.rsp.Meta = meta
+	return l
+}
+
+func (l ListResponse[E]) SetItems(items []E) ListResponse[E] {
+	l.rsp.Items = items
+	return l
+}
+
+// ResponseWriter returns a ResponseWriter to write the https response as a list. Currently, the response is written
+// as a json list.
+func (l ListResponse[E]) ResponseWriter() ResponseWriter {
+	if l.errMsg != "" {
+		return &jsonErrorResponseWriter{l.errMsg}
+	}
+
+	return &jsonListResponseWriter[E]{items: l.rsp}
+}
+
+// ListOrStreamResponse implements the ResponseWriter and writes the response as either a stream or a list, depending
+// on whether SendStream or SendList was called.
 type ListOrStreamResponse[E any] struct {
-	status         int
+	baseResponse
 	responseWriter ResponseWriter
 }
 
-func NewListOrStreamResponse[E any](status int) ListOrStreamResponse[E] {
-	return ListOrStreamResponse[E]{
-		status: status,
-	}
+func NewListOrStreamResponse[E any]() ListOrStreamResponse[E] {
+	return ListOrStreamResponse[E]{}
+}
+
+func (rsp ListOrStreamResponse[E]) SetStatus(status int) ListOrStreamResponse[E] {
+	rsp.status = status
+	return rsp
+}
+
+func (rsp ListOrStreamResponse[E]) SetError(err string) ListOrStreamResponse[E] {
+	rsp.errMsg = err
+	return rsp
 }
 
 // SendList sets the ListOrStreamResponse to send back a list with the given total and items.
 //
 // If this is called, it is not valid to call this again or to call SendStream, those actions will result in a panic.
-func (rsp ListOrStreamResponse[E]) SendList(total int, items []E) ListOrStreamResponse[E] {
+func (rsp ListOrStreamResponse[E]) SendList(meta ListMeta, items []E) ListOrStreamResponse[E] {
 	if rsp.responseWriter != nil {
 		panic("response writer already set")
 	}
 
-	rsp.responseWriter = &jsonListResponseWriter[E]{items: List[E]{Total: total, Items: items}}
+	rsp.responseWriter = &jsonListResponseWriter[E]{items: List[E]{Meta: meta, Items: items}}
 	return rsp
 }
 
@@ -67,26 +138,12 @@ func (rsp ListOrStreamResponse[E]) SendStream(itr iter.Seq[E]) ListOrStreamRespo
 	return rsp
 }
 
-func (rsp ListOrStreamResponse[E]) SetError(msg string) ListOrStreamResponse[E] {
-	rsp.responseWriter = &jsonErrorResponseWriter{msg}
-	return rsp
-}
-
-func (rsp ListOrStreamResponse[E]) SetStatus(status int) ListOrStreamResponse[E] {
-	rsp.status = status
-	return rsp
-}
-
 func (rsp ListOrStreamResponse[E]) ResponseWriter() ResponseWriter {
+	if err := rsp.errMsg; err != "" {
+		return &jsonErrorResponseWriter{err}
+	}
+
 	return rsp.responseWriter
-}
-
-func (rsp ListOrStreamResponse[E]) Status() int {
-	return rsp.status
-}
-
-type ResponseWriter interface {
-	WriteResponse(apicontext.Context, int, http.ResponseWriter) error
 }
 
 // eventStreamResponseWriter is used to respond with a server side event stream.

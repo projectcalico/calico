@@ -16,6 +16,7 @@ package clientv3
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
@@ -77,13 +78,10 @@ func (r stagedNetworkPolicies) Create(ctx context.Context, res *apiv3.StagedNetw
 	if err := validator.Validate(res); err != nil {
 		return nil, err
 	}
-
-	// Properly prefix the name
-	backendPolicyName, err := names.BackendTieredPolicyName(res.GetObjectMeta().GetName(), res.Spec.Tier)
+	err := names.ValidateTieredPolicyName(res.Name, tier)
 	if err != nil {
 		return nil, err
 	}
-	res.GetObjectMeta().SetName(backendPolicyName)
 
 	// Add tier labels to policy for lookup.
 	if tier != "default" {
@@ -131,13 +129,10 @@ func (r stagedNetworkPolicies) Update(ctx context.Context, res *apiv3.StagedNetw
 	if err := validator.Validate(res); err != nil {
 		return nil, err
 	}
-
-	// Properly prefix the name
-	backendPolicyName, err := names.BackendTieredPolicyName(res.GetObjectMeta().GetName(), res.Spec.Tier)
+	err := names.ValidateTieredPolicyName(res.Name, res.Spec.Tier)
 	if err != nil {
 		return nil, err
 	}
-	res.GetObjectMeta().SetName(backendPolicyName)
 
 	// Add tier labels to policy for lookup.
 	tier := names.TierOrDefault(res.Spec.Tier)
@@ -169,8 +164,7 @@ func (r stagedNetworkPolicies) Delete(ctx context.Context, namespace, name strin
 		}
 	}
 
-	backendPolicyName := names.TieredPolicyName(name)
-	out, err := r.client.resources.Delete(ctx, opts, apiv3.KindStagedNetworkPolicy, namespace, backendPolicyName)
+	out, err := r.client.resources.Delete(ctx, opts, apiv3.KindStagedNetworkPolicy, namespace, name)
 	if out != nil {
 		// Add the tier labels if necessary
 		out.GetObjectMeta().SetLabels(defaultTierLabelIfMissing(out.GetObjectMeta().GetLabels()))
@@ -182,8 +176,7 @@ func (r stagedNetworkPolicies) Delete(ctx context.Context, namespace, name strin
 // Get takes name of the StagedNetworkPolicy, and returns the corresponding StagedNetworkPolicy object,
 // and an error if there is any.
 func (r stagedNetworkPolicies) Get(ctx context.Context, namespace, name string, opts options.GetOptions) (*apiv3.StagedNetworkPolicy, error) {
-	backendPolicyName := names.TieredPolicyName(name)
-	out, err := r.client.resources.Get(ctx, opts, apiv3.KindStagedNetworkPolicy, namespace, backendPolicyName)
+	out, err := r.client.resources.Get(ctx, opts, apiv3.KindStagedNetworkPolicy, namespace, name)
 	if out != nil {
 		// Add the tier labels if necessary
 		out.GetObjectMeta().SetLabels(defaultTierLabelIfMissing(out.GetObjectMeta().GetLabels()))
@@ -197,6 +190,9 @@ func (r stagedNetworkPolicies) Get(ctx context.Context, namespace, name string, 
 				return resOut, tierErr
 			}
 			resOut.Spec.Tier = tier
+		}
+		if resOut.Name != name {
+			return nil, fmt.Errorf("resource not found GlobalNetworkPolicy(%s)", name)
 		}
 		return resOut, err
 	}

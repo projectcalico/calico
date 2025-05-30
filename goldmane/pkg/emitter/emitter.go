@@ -26,17 +26,19 @@ import (
 	"golang.org/x/time/rate"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/types"
+	apitypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/workqueue"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/projectcalico/calico/goldmane/pkg/aggregator"
-	"github.com/projectcalico/calico/goldmane/pkg/aggregator/bucketing"
+	"github.com/projectcalico/calico/goldmane/pkg/storage"
+	"github.com/projectcalico/calico/goldmane/pkg/types"
+	"github.com/projectcalico/calico/libcalico-go/lib/health"
 )
 
 var (
 	maxRetries   = 15
-	configMapKey = types.NamespacedName{Name: "flow-emitter-state", Namespace: "calico-system"}
+	configMapKey = apitypes.NamespacedName{Name: "flow-emitter-state", Namespace: "calico-system"}
+	healthName   = "emitter"
 )
 
 // Emitter is a type that emits aggregated Flow objects to an HTTP endpoint.
@@ -52,9 +54,12 @@ type Emitter struct {
 	clientCert string
 	serverName string
 
+	// For health checking.
+	health *health.HealthAggregator
+
 	// Use a rate limited workqueue to manage bucket emission.
 	buckets *bucketCache
-	q       workqueue.TypedRateLimitingInterface[bucketKey]
+	queue   workqueue.TypedRateLimitingInterface[bucketKey]
 
 	// Track the latest timestamp of emitted flows. This helps us avoid emitting the same flow multiple times
 	// on restart.
@@ -62,12 +67,12 @@ type Emitter struct {
 }
 
 // Make sure Emitter implements the Receiver interface to be able to receive aggregated Flows.
-var _ aggregator.Sink = &Emitter{}
+var _ storage.Sink = &Emitter{}
 
 func NewEmitter(opts ...Option) *Emitter {
 	e := &Emitter{
 		buckets: newBucketCache(),
-		q: workqueue.NewTypedRateLimitingQueue(
+		queue: workqueue.NewTypedRateLimitingQueue(
 			workqueue.NewTypedMaxOfRateLimiter(
 				workqueue.NewTypedItemExponentialFailureRateLimiter[bucketKey](1*time.Second, 30*time.Second),
 				&workqueue.TypedBucketRateLimiter[bucketKey]{Limiter: rate.NewLimiter(rate.Limit(10), 100)},
@@ -92,27 +97,51 @@ func NewEmitter(opts ...Option) *Emitter {
 	return e
 }
 
-func (e *Emitter) Run(stopCh chan struct{}) {
+func (e *Emitter) Run(ctx context.Context) {
 	// Start by loading any state cached in our configmap, which will allow us to better pick up where we left off
 	// in the event of a restart.
 	if err := e.loadCachedState(); err != nil {
 		logrus.Errorf("Error loading cached state: %v", err)
 	}
 
+	done := make(chan struct{})
+	defer close(done)
+
+	// Shutdown the emitter if the context was cancelled
+	go func() {
+		defer e.queue.ShutDown()
+		select {
+		case <-ctx.Done():
+			logrus.Info("Context cancelled, shutting down emitter.")
+		case <-done:
+			logrus.Info("Emitter shutting down.")
+		}
+	}()
+
+	if e.health != nil {
+		// Register the emitter with the health aggregator. We don't use a timeout here, since the work of the
+		// emitter is fully reactive to the workqueue.
+		e.health.RegisterReporter(healthName, &health.HealthReport{Live: true, Ready: true}, 0)
+
+		// Report that we're live and ready. Note that we will never mark ourselves as not ready after this point, since
+		// doing so would remove this pod from Service load balancing and thus prevent it from receiving any more flows.
+		e.reportHealth(&health.HealthReport{Live: true, Ready: true})
+	}
+
 	// This is the main loop for the emitter. It listens for new batches of flows to emit and emits them.
 	for {
 		// Get pending work from the queue.
-		key, quit := e.q.Get()
+		key, quit := e.queue.Get()
 		if quit {
-			logrus.WithField("cm", configMapKey).Info("Emitter shutting down.")
+			logrus.Info("Emitter queue completed")
 			return
 		}
-		e.q.Done(key)
+		e.queue.Done(key)
 
 		bucket, ok := e.buckets.get(key)
 		if !ok {
 			logrus.WithField("bucket", key).Error("Bucket not found in cache.")
-			e.q.Forget(key)
+			e.queue.Forget(key)
 			continue
 		}
 
@@ -125,22 +154,35 @@ func (e *Emitter) Run(stopCh chan struct{}) {
 
 		// Success. Remove the bucket from our internal map, and
 		// clear it from the workqueue.
+		if retries := e.queue.NumRequeues(key); retries > 0 {
+			logrus.WithFields(logrus.Fields{
+				"bucket":  key,
+				"retries": retries,
+			}).Info("Successfully emitted flows after retries.")
+		}
 		e.forget(key)
+		e.reportHealth(&health.HealthReport{Live: true, Ready: true})
 	}
 }
 
-func (e *Emitter) Receive(bucket *bucketing.FlowCollection) {
+func (e *Emitter) reportHealth(report *health.HealthReport) {
+	if e.health != nil {
+		e.health.Report(healthName, report)
+	}
+}
+
+func (e *Emitter) Receive(bucket *storage.FlowCollection) {
 	// Add the bucket to our internal map so we can retry it if needed.
 	// We'll remove it from the map once it's successfully emitted.
 	k := bucketKey{startTime: bucket.StartTime, endTime: bucket.EndTime}
 	e.buckets.add(k, bucket)
-	e.q.Add(k)
+	e.queue.Add(k)
 }
 
 func (e *Emitter) retry(k bucketKey) {
-	if e.q.NumRequeues(k) < maxRetries {
+	if e.queue.NumRequeues(k) < maxRetries {
 		logrus.WithField("bucket", k).Debug("Queueing retry for bucket.")
-		e.q.AddRateLimited(k)
+		e.queue.AddRateLimited(k)
 	} else {
 		logrus.WithField("bucket", k).Error("Max retries exceeded, dropping bucket.")
 		e.forget(k)
@@ -152,10 +194,10 @@ func (e *Emitter) retry(k bucketKey) {
 // maximum number of retries.
 func (e *Emitter) forget(k bucketKey) {
 	e.buckets.remove(k)
-	e.q.Forget(k)
+	e.queue.Forget(k)
 }
 
-func (e *Emitter) emit(bucket *bucketing.FlowCollection) error {
+func (e *Emitter) emit(bucket *storage.FlowCollection) error {
 	// Check if we have already emitted this batch. If it pre-dates
 	// the latest timestamp we've emitted, skip it. This can happen, for example, on restart when
 	// we learn already emitted flows from the cache.
@@ -183,7 +225,7 @@ func (e *Emitter) emit(bucket *bucketing.FlowCollection) error {
 	return nil
 }
 
-func (e *Emitter) collectionToReader(bucket *bucketing.FlowCollection) (*bytes.Reader, error) {
+func (e *Emitter) collectionToReader(bucket *storage.FlowCollection) (*bytes.Reader, error) {
 	body := []byte{}
 	for _, flow := range bucket.Flows {
 		if len(body) != 0 {
@@ -191,7 +233,9 @@ func (e *Emitter) collectionToReader(bucket *bucketing.FlowCollection) (*bytes.R
 			body = append(body, []byte("\n")...)
 		}
 
-		flowJSON, err := json.Marshal(flow)
+		// Convert to public format.
+		f := types.FlowToProto(&flow)
+		flowJSON, err := json.Marshal(f)
 		if err != nil {
 			return nil, fmt.Errorf("Error marshalling flow: %v", err)
 		}

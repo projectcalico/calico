@@ -9,8 +9,6 @@ KUBE_MOCK_NODE_MANIFEST?=mock-node.yaml
 # e.g., <registry>/<name>:<tag>
 CALICOCTL_IMAGE       ?=ctl
 BUILD_IMAGES          ?=$(CALICOCTL_IMAGE)
-RELEASE_BRANCH_PREFIX ?= release
-DEV_TAG_SUFFIX        ?= 0.dev
 
 # Remove any excluded architectures since for calicoctl we want to build everything.
 EXCLUDEARCH?=
@@ -29,13 +27,6 @@ CTL_CONTAINER_CREATED=$(CALICOCTL_DIR)/.calico_ctl.created-$(ARCH)
 SRC_FILES=$(shell find $(CALICOCTL_DIR) -name '*.go') $(shell find ../libcalico-go -name '*.go')
 
 TEST_CONTAINER_NAME ?= calico/test
-
-CALICOCTL_GIT_REVISION?=$(shell git rev-parse --short HEAD)
-
-LDFLAGS=-X $(PACKAGE_NAME)/calicoctl/commands.VERSION=$(GIT_VERSION) \
-	-X $(PACKAGE_NAME)/calicoctl/commands.GIT_REVISION=$(CALICOCTL_GIT_REVISION) \
-	-X $(PACKAGE_NAME)/calicoctl/commands/common.VERSION=$(GIT_VERSION) \
-	-X main.VERSION=$(GIT_VERSION)
 
 .PHONY: clean
 ## Clean enough that a new release build will be clean
@@ -85,6 +76,7 @@ bin/calicoctl-windows-amd64.exe: bin/calicoctl-windows-amd64
 image: $(CALICOCTL_IMAGE)
 $(CALICOCTL_IMAGE): $(CTL_CONTAINER_CREATED)
 $(CTL_CONTAINER_CREATED): Dockerfile bin/calicoctl-linux-$(ARCH)
+	cp ../LICENSE.md bin/LICENSE
 	$(DOCKER_BUILD) -t $(CALICOCTL_IMAGE):latest-$(ARCH) -f Dockerfile .
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@

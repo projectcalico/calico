@@ -164,7 +164,7 @@ func (pc *PolicyLookupsCache) updatePolicyRulesNFLOGPrefixes(key model.PolicyKey
 	}
 	pc.tierRefs[key.Tier] = count + 1
 
-	namespace, tier, name, err := deconstructPolicyName(key.Name)
+	namespace, tier, name, err := names.DeconstructPolicyName(key.Name)
 	if err != nil {
 		log.WithError(err).Error("Unable to parse policy name")
 		return
@@ -186,7 +186,7 @@ func (pc *PolicyLookupsCache) updatePolicyRulesNFLOGPrefixes(key model.PolicyKey
 
 // removePolicyRulesNFLOGPrefixes removes the prefix to RuleID maps for a policy.
 func (pc *PolicyLookupsCache) removePolicyRulesNFLOGPrefixes(key model.PolicyKey) {
-	// If this is the last entry for the tier, remove the default deny entries for the tier.
+	// If this is the last entry for the tier, remove the default action entries for the tier.
 	// Increment the reference count so that we don't keep adding tiers.
 	count := pc.tierRefs[key.Tier]
 	if count == 1 {
@@ -273,21 +273,22 @@ func (pc *PolicyLookupsCache) updateRulesNFLOGPrefixes(
 		newPrefixes.Add(prefix)
 	}
 
-	// If this is a staged policy then we also add ingress/egress lookups for no-match. These actually map
-	// to the end-of-tier drop associated with that policy since that is how they will be reported by the
-	// collector. The collector will only report these stats if we hit the end-of-tier pass indicating that
-	// the tier contains only staged policies.
+	// If this is a staged policy then we also add ingress/egress lookups for no-match. These
+	// actually map to the end-of-tier defaultActions associated with that policy since that is how
+	// they will be reported by the collector. The collector will only report these stats if we hit
+	// the end-of-tier pass indicating that the tier contains only staged policies.
 	if model.PolicyIsStaged(v1Name) {
 		prefix := rules.CalculateNoMatchPolicyNFLOGPrefixStr(rules.RuleDirIngress, v1Name)
 		pc.addNFLogPrefixEntry(
 			prefix,
-			NewRuleID(tier, name, namespace, RuleIDIndexImplicitDrop, rules.RuleDirIngress, rules.RuleActionDeny),
+			NewRuleID(tier, name, namespace, RuleIndexTierDefaultAction, rules.RuleDirIngress, rules.RuleActionDeny),
 		)
 		newPrefixes.Add(prefix)
+
 		prefix = rules.CalculateNoMatchPolicyNFLOGPrefixStr(rules.RuleDirEgress, v1Name)
 		pc.addNFLogPrefixEntry(
 			prefix,
-			NewRuleID(tier, name, namespace, RuleIDIndexImplicitDrop, rules.RuleDirEgress, rules.RuleActionDeny),
+			NewRuleID(tier, name, namespace, RuleIndexTierDefaultAction, rules.RuleDirEgress, rules.RuleActionDeny),
 		)
 		newPrefixes.Add(prefix)
 	}
@@ -362,10 +363,10 @@ const (
 	NoMatchNameStr     = "__NO_MATCH__"
 	UnknownStr         = "__UNKNOWN__"
 
-	// Special rule index that specifies that a policy has selected traffic that
-	// has implicitly denied traffic.
-	RuleIDIndexImplicitDrop int = -1
-	RuleIDIndexUnknown      int = -2
+	// Special rule index that specifies that a policy has selected traffic that has applied the
+	//  tier default action on traffic.
+	RuleIndexTierDefaultAction int = -1
+	RuleIDIndexUnknown         int = -2
 )
 
 type PolicyID struct {
@@ -446,8 +447,8 @@ func (r *RuleID) IsEndOfTierPass() bool {
 	return len(r.Name) == 0 && r.Action == rules.RuleActionPass
 }
 
-func (r *RuleID) IsImplicitDropRule() bool {
-	return r.Index == RuleIDIndexImplicitDrop
+func (r *RuleID) IsTierDefaultActionRule() bool {
+	return r.Index == RuleIndexTierDefaultAction
 }
 
 // TierString returns either the Tier name or the Profile indication string.
@@ -564,61 +565,6 @@ func (r *RuleID) GetFlowLogPolicyName() string {
 		return ""
 	}
 	return r.fpName
-}
-
-// deconstructPolicyName deconstructs the v1 policy name that is constructed by the SyncerUpdateProcessors in
-// libcalico-go and extracts the v3 fields: namespace, tier, name.
-//
-// The v1 policy name is of the format:
-// -  <namespace>/<tier>.<name> for a namespaced NetworkPolicies
-// -  <tier>.<name> for GlobalNetworkPolicies.
-// -  <namespace>/knp.default.<name> for a k8s NetworkPolicies
-// and for the staged counterparts, respectively:
-// -  <namespace>/staged:<tier>.<name>
-// -  staged:<tier>.<name>
-// -  <namespace>/staged:knp.default.<name>
-//
-// The namespace is returned blank for GlobalNetworkPolicies.
-// For k8s network policies, the tier is always "default" and the name will be returned including the
-// knp.default prefix.
-//
-// Staged policies will have the simplified name prefixed with "staged:", eg:
-// - <namespace>/staged:<tier>.<name>      => Name=staged:<name>, Namespace=<namespace>, Tier=<tier>
-// - staged:<tier>.<name>                  => Name=staged:<name>, Namespace=<namespace>, Tier=<tier>
-// - <namespace>/staged:knp.default.<name> => Name=staged:knp.default.<name>, Namespace=<name>, Tier=default
-func deconstructPolicyName(name string) (string, string, string, error) {
-	var namespace string
-
-	// Split the name to extract the namespace.
-	parts := strings.Split(name, "/")
-	switch len(parts) {
-	case 1: // GlobalNetworkPolicy
-		name = parts[0]
-	case 2: // NetworkPolicy (Calico or Kubernetes)
-		namespace = parts[0]
-		name = parts[1]
-	default:
-		return "", "", "", fmt.Errorf("could not parse policy %s", name)
-	}
-
-	// Remove the staged prefix if present so we can extract the tier.
-	var stagedPrefix string
-	if model.PolicyIsStaged(name) {
-		stagedPrefix = model.PolicyNamePrefixStaged
-		name = name[len(model.PolicyNamePrefixStaged):]
-	}
-
-	// If the policy name starts with "knp.default" then this is a kubernetes network policy.
-	if strings.HasPrefix(name, "knp.default.") {
-		return namespace, "default", stagedPrefix + name, nil
-	}
-
-	// This is a non-kubernetes policy, so extract the tier name from the policy name.
-	if parts = strings.SplitN(name, ".", 2); len(parts) == 2 {
-		return namespace, parts[0], stagedPrefix + parts[1], nil
-	}
-
-	return "", "", "", fmt.Errorf("could not parse policy %s", name)
 }
 
 // Dump returns the contents of important structures in the LookupManager used for

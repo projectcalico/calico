@@ -41,10 +41,11 @@ const (
 	operatorComponentsFileName = "pinned_components.yml"
 )
 
-var noImageComponents = []string{
+var excludedComponents = []string{
 	utils.Calico,
 	"calico/api",
 	"networking-calico",
+	"flannel",
 }
 
 type PinnedVersions interface {
@@ -75,10 +76,10 @@ func (c OperatorConfig) GitBranch() (string, error) {
 // PinnedVersion represents an entry in pinned version file.
 type PinnedVersion struct {
 	Title          string                        `yaml:"title"`
-	ManifestURL    string                        `yaml:"manifest_url"`
+	ManifestURL    string                        `yaml:"manifest_url,omitempty"`
 	ReleaseName    string                        `yaml:"release_name,omitempty"`
-	Note           string                        `yaml:"note"`
-	Hash           string                        `yaml:"full_hash"`
+	Note           string                        `yaml:"note,omitempty"`
+	Hash           string                        `yaml:"full_hash,omitempty"`
 	TigeraOperator registry.Component            `yaml:"tigera-operator"`
 	Components     map[string]registry.Component `yaml:"components"`
 }
@@ -95,6 +96,9 @@ type calicoTemplateData struct {
 }
 
 func (d *calicoTemplateData) ReleaseURL() string {
+	if d.ReleaseName == "" || d.BaseDomain == "" {
+		return ""
+	}
 	return fmt.Sprintf("https://%s.%s", d.ReleaseName, d.BaseDomain)
 }
 
@@ -273,7 +277,7 @@ func RetrieveImageComponents(outputDir string) (map[string]registry.Component, e
 	components[initImage.Image] = operator.InitImage()
 	for name, component := range components {
 		// Remove components that do not produce images.
-		if utils.Contains(noImageComponents, name) {
+		if utils.Contains(excludedComponents, name) {
 			delete(components, name)
 			continue
 		}

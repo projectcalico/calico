@@ -24,10 +24,12 @@ import (
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
@@ -347,7 +349,7 @@ var _ = testutils.E2eDatastoreDescribe("StagedNetworkPolicy tests", testutils.Da
 		Entry("Two fully populated PolicySpecs in the default tier",
 			"default",
 			namespace1, namespace2,
-			name1, name2,
+			"default."+name1, "default."+name2,
 			spec1, spec2,
 			ingressEgress, ingressEgress,
 		),
@@ -355,7 +357,7 @@ var _ = testutils.E2eDatastoreDescribe("StagedNetworkPolicy tests", testutils.Da
 		Entry("Ingress-only and egress-only policies",
 			"default",
 			namespace1, namespace2,
-			name1, name2,
+			"default."+name1, "default."+name2,
 			ingressSpec1, egressSpec2,
 			ingress, egress,
 		),
@@ -363,10 +365,139 @@ var _ = testutils.E2eDatastoreDescribe("StagedNetworkPolicy tests", testutils.Da
 		Entry("Policies with explicit ingress and egress Types",
 			"default",
 			namespace1, namespace2,
-			name1, name2,
+			"default."+name1, "default."+name2,
 			ingressTypesSpec1, egressTypesSpec2,
 			ingress, egress,
 		),
+	)
+
+	DescribeTable("StagedNetworkPolicy default tier name test",
+		func(policyName string, incorrectPrefixPolicyName string) {
+			namespace := "default"
+			By("Getting the policy before it was created")
+			_, err := c.StagedNetworkPolicies().Get(ctx, namespace, policyName, options.GetOptions{})
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("resource does not exist: StagedNetworkPolicy(" + namespace + "/" + policyName + ") with error:"))
+
+			By("Updating the policy before it was created")
+			_, err = c.StagedNetworkPolicies().Update(ctx,
+				&apiv3.StagedNetworkPolicy{
+					ObjectMeta: metav1.ObjectMeta{Name: policyName, Namespace: namespace, ResourceVersion: "1234", CreationTimestamp: metav1.Now(), UID: uid},
+				}, options.SetOptions{})
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("resource does not exist: StagedNetworkPolicy(" + namespace + "/" + policyName + ") with error:"))
+
+			By("Creating the policy")
+			returnedPolicy, err := c.StagedNetworkPolicies().Create(ctx,
+				&apiv3.StagedNetworkPolicy{
+					ObjectMeta: metav1.ObjectMeta{Name: policyName, Namespace: namespace},
+				}, options.SetOptions{})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(returnedPolicy.Name).To(Equal(policyName))
+
+			By("Creating the policy with incorrect prefix name")
+			_, err = c.StagedNetworkPolicies().Create(ctx,
+				&apiv3.StagedNetworkPolicy{
+					ObjectMeta: metav1.ObjectMeta{Name: incorrectPrefixPolicyName, Namespace: namespace},
+				}, options.SetOptions{})
+			Expect(err).To(HaveOccurred())
+
+			By("Getting the policy")
+			returnedPolicy, err = c.StagedNetworkPolicies().Get(ctx, namespace, policyName, options.GetOptions{})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(returnedPolicy.Name).To(Equal(policyName))
+
+			By("Updating the policy")
+			returnedPolicy, err = c.StagedNetworkPolicies().Update(ctx, returnedPolicy, options.SetOptions{})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(returnedPolicy.Name).To(Equal(policyName))
+
+			By("Getting the policy with incorrect prefix")
+			_, err = c.StagedNetworkPolicies().Get(ctx, namespace, incorrectPrefixPolicyName, options.GetOptions{})
+			Expect(err).To(HaveOccurred())
+
+			By("Updating the policy with incorrect prefix")
+			_, err = c.StagedNetworkPolicies().Update(ctx, &apiv3.StagedNetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: incorrectPrefixPolicyName, ResourceVersion: "1234", CreationTimestamp: metav1.Now(), UID: uid},
+				Spec:       spec1,
+			}, options.SetOptions{})
+			Expect(err).To(HaveOccurred())
+
+			By("Deleting policy")
+			returnedPolicy, err = c.StagedNetworkPolicies().Delete(ctx, namespace, policyName, options.DeleteOptions{})
+			Expect(returnedPolicy.Name).To(Equal(policyName))
+			Expect(err).ToNot(HaveOccurred())
+		},
+		Entry("StagedNetworkPolicy without default tier prefix", "netpol", "default.netpol"),
+		Entry("StagedNetworkPolicy with default tier prefix", "default.netpol", "netpol"),
+	)
+
+	Describe("StagedNetworkPolicy without name on the projectcalico.org annotation", func() {
+		It("Should return the name without default prefix", func() {
+			if config.Spec.DatastoreType == apiconfig.Kubernetes {
+				config, _, err := k8s.CreateKubernetesClientset(&config.Spec)
+				Expect(err).NotTo(HaveOccurred())
+				config.ContentType = "application/json"
+				cli, err := ctrlclient.New(config, ctrlclient.Options{})
+				Expect(err).NotTo(HaveOccurred())
+
+				// Create v1 crd with empty metadata annotation name
+				annotations := map[string]string{}
+				annotations["projectcalico.org/metadata"] = "{}"
+				policy := &apiv3.StagedNetworkPolicy{
+					ObjectMeta: metav1.ObjectMeta{
+						Annotations: annotations,
+						Name:        "default.prefix-test-policy",
+						Namespace:   "default",
+					},
+					Spec: apiv3.StagedNetworkPolicySpec{},
+				}
+				err = cli.Create(context.Background(), policy)
+				Expect(err).NotTo(HaveOccurred())
+
+				// We should be able to get it without the default. prefix
+				_, err = c.StagedNetworkPolicies().Get(ctx, "default", "prefix-test-policy", options.GetOptions{})
+				Expect(err).ToNot(HaveOccurred())
+			}
+		})
+	})
+
+	DescribeTable("StagedNetworkPolicy name validation tests",
+		func(policyName string, tier string, expectError bool) {
+			namespace := "default"
+
+			if tier != "default" {
+				// Create the tier if required before running other tiered policy tests.
+				tierSpec := apiv3.TierSpec{Order: &tierOrder}
+				By("Creating the tier")
+				_, resErr := c.Tiers().Create(ctx, &apiv3.Tier{
+					ObjectMeta: metav1.ObjectMeta{Name: tier},
+					Spec:       tierSpec,
+				}, options.SetOptions{})
+				Expect(resErr).NotTo(HaveOccurred())
+			}
+
+			_, err := c.StagedNetworkPolicies().Create(ctx,
+				&apiv3.StagedNetworkPolicy{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      policyName,
+						Namespace: namespace},
+					Spec: apiv3.StagedNetworkPolicySpec{
+						Tier: tier,
+					},
+				}, options.SetOptions{})
+
+			if expectError {
+				Expect(err).To(HaveOccurred())
+			} else {
+				Expect(err).ToNot(HaveOccurred())
+			}
+		},
+		Entry("StagedNetworkPolicy in default tier without prefix", "netpol", "default", false),
+		Entry("StagedNetworkPolicy in default tier with prefix", "default.netpol", "default", false),
+		Entry("StagedNetworkPolicy in custom tier with correct prefix", "tier1.netpol", "tier1", false),
+		Entry("StagedNetworkPolicy in custom tier without prefix", "netpol", "tier1", true),
+		Entry("StagedNetworkPolicy in custom tier with incorrect prefix", "tier1.netpol", "tier2", true),
 	)
 
 	Describe("StagedNetworkPolicy watch functionality", func() {

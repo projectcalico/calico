@@ -1,4 +1,4 @@
-import AppHeader from './layout/AppHeader';
+import ChakraProvider from './core/ChakraProvider';
 import AppLayout from './layout/AppLayout';
 
-export { AppHeader, AppLayout };
+export { AppLayout, ChakraProvider };

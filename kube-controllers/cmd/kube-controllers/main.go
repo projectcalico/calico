@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -45,17 +45,18 @@ import (
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/pod"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/serviceaccount"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/utils"
+	"github.com/projectcalico/calico/kube-controllers/pkg/converter"
 	"github.com/projectcalico/calico/kube-controllers/pkg/status"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/debugserver"
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
+	"github.com/projectcalico/calico/pkg/buildinfo"
+	"github.com/projectcalico/calico/pkg/cmdwrapper"
 )
 
-// VERSION is filled out during the build process (using git describe output)
 var (
-	VERSION    string
 	version    bool
 	statusFile string
 )
@@ -79,7 +80,7 @@ func init() {
 func main() {
 	flag.Parse()
 	if version {
-		fmt.Println(VERSION)
+		buildinfo.PrintVersion()
 		os.Exit(0)
 	}
 
@@ -151,7 +152,7 @@ func main() {
 		informers:   make([]cache.SharedIndexInformer, 0),
 	}
 
-	dataFeed := utils.NewDataFeed(calicoClient)
+	dataFeed := utils.NewDataFeed(calicoClient, cfg.DatastoreType)
 
 	var runCfg config.RunConfig
 	// flannelmigration doesn't use the datastore config API
@@ -189,7 +190,7 @@ func main() {
 		controllerCtrl.InitControllers(ctx, runCfg, k8sClientset, calicoClient, dataFeed)
 	}
 
-	if cfg.DatastoreType == "etcdv3" {
+	if cfg.DatastoreType == utils.Etcdv3 {
 		// If configured to do so, start an etcdv3 compaction.
 		go startCompactor(ctx, runCfg.EtcdV3CompactionPeriod)
 	}
@@ -230,6 +231,7 @@ func main() {
 	//       but many of our controllers are based on cache.ResourceCache which
 	//       runs forever once it is started.  It needs to be enhanced to respect
 	//       the stop channel passed to the controllers.
+	os.Exit(cmdwrapper.RestartReturnCode)
 }
 
 // Run the controller health checks.
@@ -333,7 +335,17 @@ func startCompactor(ctx context.Context, interval time.Duration) {
 // getClients builds and returns Kubernetes and Calico clients.
 func getClients(kubeconfig string) (*kubernetes.Clientset, client.Interface, error) {
 	// Get Calico client
-	calicoClient, err := client.NewFromEnv()
+	config, err := apiconfig.LoadClientConfigFromEnvironment()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// Increase the client QPS on the Calico client.
+	// - For one, this client is shared across a number of different controllers, so will need a higher request count.
+	// - Secondly, the IPAM GC controller can potentially generate a very large number of requests.
+	config.Spec.K8sClientQPS = 500
+
+	calicoClient, err := client.New(*config)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to build Calico client: %s", err)
 	}
@@ -344,6 +356,11 @@ func getClients(kubeconfig string) (*kubernetes.Clientset, client.Interface, err
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to build kubernetes client config: %s", err)
 	}
+
+	// Increase the QPS of the Kubernetes client as well. This is also used heavily by the IPAM GC controller
+	// in some circumstances.
+	k8sconfig.QPS = 100
+	k8sconfig.Burst = 200
 
 	// Get Kubernetes clientset
 	k8sClientset, err := kubernetes.NewForConfig(k8sconfig)
@@ -397,7 +414,10 @@ func newEtcdV3Client() (*clientv3.Client, error) {
 		return nil, err
 	}
 
-	baseTLSConfig := tls.NewTLSConfig()
+	baseTLSConfig, err := tls.NewTLSConfig()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create TLS Config: %w", err)
+	}
 	tlsClient.MaxVersion = baseTLSConfig.MaxVersion
 	tlsClient.MinVersion = baseTLSConfig.MinVersion
 	tlsClient.CipherSuites = baseTLSConfig.CipherSuites
@@ -464,6 +484,12 @@ func (cc *controllerControl) InitControllers(ctx context.Context, cfg config.Run
 		loadBalancerController := loadbalancer.NewLoadBalancerController(k8sClientset, calicoClient, *cfg.Controllers.LoadBalancer, serviceInformer, dataFeed)
 		cc.controllers["LoadBalancer"] = loadBalancerController
 		cc.registerInformers(serviceInformer)
+	}
+
+	// We don't need the full Pod object. In order to reduce memory usage, add a transform that only
+	// includes the fields we need.
+	if err := podInformer.SetTransform(converter.PodTransformer(cfg.Controllers.WorkloadEndpoint != nil)); err != nil {
+		log.WithError(err).Fatal("Failed to set transform on pod informer")
 	}
 }
 

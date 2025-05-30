@@ -16,19 +16,18 @@ package flowlog
 
 import (
 	"fmt"
-	"net"
 	"reflect"
 	"time"
 
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/calc"
-	"github.com/projectcalico/calico/felix/collector/types/boundedset"
 	"github.com/projectcalico/calico/felix/collector/types/endpoint"
 	"github.com/projectcalico/calico/felix/collector/types/metric"
 	"github.com/projectcalico/calico/felix/collector/types/tuple"
 	"github.com/projectcalico/calico/felix/collector/utils"
 	logutil "github.com/projectcalico/calico/felix/logutils"
+	"github.com/projectcalico/calico/lib/std/uniquelabels"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 )
@@ -42,11 +41,10 @@ type empty struct{}
 var emptyValue = empty{}
 
 var (
-	emptyService = FlowService{"-", "-", "-", 0}
-	emptyIP      = [16]byte{}
+	EmptyService = FlowService{"-", "-", "-", 0}
+	EmptyIP      = [16]byte{}
 
 	rlog1 = logutils.NewRateLimitedLogger()
-	rlog2 = logutils.NewRateLimitedLogger()
 )
 
 type (
@@ -92,7 +90,7 @@ func newFlowMeta(mu metric.Update, includeService bool) (FlowMeta, error) {
 	if includeService {
 		f.DstService = getService(mu.DstService)
 	} else {
-		f.DstService = emptyService
+		f.DstService = EmptyService
 	}
 
 	lastRuleID := mu.GetLastRuleID()
@@ -112,9 +110,9 @@ func newFlowMetaWithPrefixNameAggregation(mu metric.Update, includeService bool)
 	if err != nil {
 		return FlowMeta{}, err
 	}
-	f.Tuple.Src = emptyIP
+	f.Tuple.Src = EmptyIP
 	f.Tuple.L4Src = unsetIntField
-	f.Tuple.Dst = emptyIP
+	f.Tuple.Dst = EmptyIP
 	f.SrcMeta.Name = FieldNotIncluded
 	f.DstMeta.Name = FieldNotIncluded
 	return f, nil
@@ -126,9 +124,7 @@ func NewFlowMeta(mu metric.Update, _ AggregationKind, includeService bool) (Flow
 
 type FlowSpec struct {
 	FlowStatsByProcess
-	flowExtrasRef
 	FlowLabels
-	FlowAllPolicySets
 	FlowEnforcedPolicySets
 	FlowPendingPolicySet
 
@@ -137,16 +133,14 @@ type FlowSpec struct {
 	resetAggrData bool
 }
 
-func NewFlowSpec(mu *metric.Update, maxOriginalIPsSize int, displayDebugTraceLogs bool, natOutgoingPortLimit int) *FlowSpec {
+func NewFlowSpec(mu *metric.Update, displayDebugTraceLogs bool) *FlowSpec {
 	// NewFlowStatsByProcess potentially needs to update fields in mu *metric.Update hence passing it by pointer
 	// TODO: reconsider/refactor the inner functions called in NewFlowStatsByProcess to avoid above scenario
 	return &FlowSpec{
 		FlowLabels:             NewFlowLabels(*mu),
-		FlowAllPolicySets:      NewFlowAllPolicySets(*mu),
 		FlowEnforcedPolicySets: NewFlowEnforcedPolicySets(*mu),
 		FlowPendingPolicySet:   NewFlowPendingPolicySet(*mu),
-		FlowStatsByProcess:     NewFlowStatsByProcess(mu, displayDebugTraceLogs, natOutgoingPortLimit),
-		flowExtrasRef:          NewFlowExtrasRef(*mu, maxOriginalIPsSize),
+		FlowStatsByProcess:     NewFlowStatsByProcess(mu, displayDebugTraceLogs),
 	}
 }
 
@@ -165,42 +159,25 @@ func (f *FlowSpec) ToFlowLogs(fm FlowMeta, startTime, endTime time.Time, include
 			EndTime:                  endTime,
 			FlowProcessReportedStats: stat,
 		}
-		if f.flowExtrasRef.originalSourceIPs != nil {
-			fe := FlowExtras{
-				OriginalSourceIPs:    f.flowExtrasRef.originalSourceIPs.ToIPSlice(),
-				NumOriginalSourceIPs: f.flowExtrasRef.originalSourceIPs.TotalCount(),
-			}
-			fl.FlowExtras = fe
-		}
 
 		if includeLabels {
 			fl.FlowLabels = f.FlowLabels
 		}
 
 		if !includePolicies {
-			fl.FlowAllPolicySet = nil
 			fl.FlowEnforcedPolicySet = nil
 			fl.FlowPendingPolicySet = nil
 			flogs = append(flogs, fl)
 		} else {
-			if len(f.FlowAllPolicySets) > 1 {
+			if len(f.FlowEnforcedPolicySets) > 1 {
 				rlog1.WithField("FlowLog", fl).Warning("Flow was split into multiple flow logs since multiple policy sets were observed for the same flow. Possible causes: policy updates during log aggregation or NFLOG buffer overruns.")
 			}
-			allAndEnforcedPolicySetLengthsEqual := len(f.FlowAllPolicySets) == len(f.FlowEnforcedPolicySets)
-			if !allAndEnforcedPolicySetLengthsEqual {
-				rlog2.WithField("FlowLog", fl).Warning("Flow has different number of all and enforced policy sets. This should not happen. Only the all_policy traces will be included in the flow logs.")
-			}
-			// Create a flow log for each all_policies set, include the corresponding
+			// Create a flow log for each enforced_policies set, include the corresponding
 			// enforced and pending.
-			for i, ps := range f.FlowAllPolicySets {
+			for _, ps := range f.FlowEnforcedPolicySets {
 				cpfl := *fl
-				cpfl.FlowAllPolicySet = ps
-				// The enforced policy set should always be the same length as the all policy set.
-				// If they do not, then we can't guarantee that the pairings will be printed
-				// correctly, so only include the all_policies.
-				if allAndEnforcedPolicySetLengthsEqual {
-					cpfl.FlowEnforcedPolicySet = f.FlowEnforcedPolicySets[i]
-				}
+				cpfl.FlowEnforcedPolicySet = ps
+
 				// The pending policy is calculated once per flush interval. The latest pending
 				// policy will replace the previous one. The same pending policy will be depicted
 				// across all flow logs.
@@ -216,17 +193,14 @@ func (f *FlowSpec) ToFlowLogs(fm FlowMeta, startTime, endTime time.Time, include
 func (f *FlowSpec) AggregateMetricUpdate(mu *metric.Update) {
 	if f.resetAggrData {
 		// Reset the aggregated data from this metric update.
-		f.FlowAllPolicySets = nil
 		f.FlowEnforcedPolicySets = nil
 		f.FlowPendingPolicySet = nil
-		f.FlowLabels.SrcLabels = nil
-		f.FlowLabels.DstLabels = nil
+		f.FlowLabels.SrcLabels = uniquelabels.Nil
+		f.FlowLabels.DstLabels = uniquelabels.Nil
 		f.resetAggrData = false
 	}
 	f.aggregateFlowLabels(*mu)
-	f.aggregateFlowAllPolicySets(*mu)
 	f.aggregateFlowEnforcedPolicySets(*mu)
-	f.aggregateFlowExtrasRef(*mu)
 	f.aggregateFlowStatsByProcess(mu)
 
 	f.replaceFlowPendingPolicySet(*mu)
@@ -257,7 +231,6 @@ func (f *FlowSpec) MergeWith(mu metric.Update, other *FlowSpec) {
 // flows.
 func (f *FlowSpec) Reset() {
 	f.FlowStatsByProcess.reset()
-	f.flowExtrasRef.reset()
 
 	// Set the reset flag. We'll reset the aggregated data on the next metric update - that way we don't completely
 	// zero out the labels and policies if there is no traffic for an export interval.
@@ -277,8 +250,8 @@ func (f *FlowSpec) GarbageCollect() int {
 }
 
 type FlowLabels struct {
-	SrcLabels map[string]string
-	DstLabels map[string]string
+	SrcLabels uniquelabels.Map
+	DstLabels uniquelabels.Map
 }
 
 func NewFlowLabels(mu metric.Update) FlowLabels {
@@ -293,16 +266,16 @@ func (f *FlowLabels) aggregateFlowLabels(mu metric.Update) {
 	dstLabels := endpoint.GetLabels(mu.DstEp)
 
 	// The flow labels are reset on calibration, so either copy the labels or intersect them.
-	if f.SrcLabels == nil {
+	if f.SrcLabels.IsNil() {
 		f.SrcLabels = srcLabels
 	} else {
-		f.SrcLabels = utils.IntersectLabels(srcLabels, f.SrcLabels)
+		f.SrcLabels = utils.IntersectAndFilterLabels(srcLabels, f.SrcLabels)
 	}
 
-	if f.DstLabels == nil {
+	if f.DstLabels.IsNil() {
 		f.DstLabels = dstLabels
 	} else {
-		f.DstLabels = utils.IntersectLabels(dstLabels, f.DstLabels)
+		f.DstLabels = utils.IntersectAndFilterLabels(dstLabels, f.DstLabels)
 	}
 }
 
@@ -350,17 +323,6 @@ func (fpl *FlowPolicySets) aggregateFlowPolicySets(ruleIDs []*calc.RuleID, inclu
 	*fpl = append(*fpl, fp)
 }
 
-// FlowAllPolicySets keeps track of all policy traces associated with a flow.
-type FlowAllPolicySets FlowPolicySets
-
-func NewFlowAllPolicySets(mu metric.Update) FlowAllPolicySets {
-	return FlowAllPolicySets(NewFlowPolicySets(mu.RuleIDs, true))
-}
-
-func (fpl *FlowAllPolicySets) aggregateFlowAllPolicySets(mu metric.Update) {
-	(*FlowPolicySets)(fpl).aggregateFlowPolicySets(mu.RuleIDs, true)
-}
-
 // FlowEnforcedPolicySets keeps track of enforced policy traces associated with a flow.
 type FlowEnforcedPolicySets FlowPolicySets
 
@@ -381,38 +343,6 @@ func NewFlowPendingPolicySet(mu metric.Update) FlowPendingPolicySet {
 
 func (fpl *FlowPendingPolicySet) replaceFlowPendingPolicySet(mu metric.Update) {
 	*fpl = NewFlowPendingPolicySet(mu)
-}
-
-type flowExtrasRef struct {
-	originalSourceIPs *boundedset.BoundedSet
-}
-
-func NewFlowExtrasRef(mu metric.Update, maxOriginalIPsSize int) flowExtrasRef {
-	var osip *boundedset.BoundedSet
-	if mu.OrigSourceIPs != nil {
-		osip = boundedset.NewFromSliceWithTotalCount(maxOriginalIPsSize, mu.OrigSourceIPs.ToIPSlice(), mu.OrigSourceIPs.TotalCount())
-	} else {
-		osip = boundedset.New(maxOriginalIPsSize)
-	}
-	return flowExtrasRef{originalSourceIPs: osip}
-}
-
-func (fer *flowExtrasRef) aggregateFlowExtrasRef(mu metric.Update) {
-	if mu.OrigSourceIPs != nil {
-		fer.originalSourceIPs.Combine(mu.OrigSourceIPs)
-	}
-}
-
-func (fer *flowExtrasRef) reset() {
-	if fer.originalSourceIPs != nil {
-		fer.originalSourceIPs.Reset()
-	}
-}
-
-// FlowExtras contains some additional useful information for flows.
-type FlowExtras struct {
-	OriginalSourceIPs    []net.IP `json:"originalSourceIPs"`
-	NumOriginalSourceIPs int      `json:"numOriginalSourceIPs"`
 }
 
 // flowReferences are internal only stats used for computing numbers of flows
@@ -543,7 +473,6 @@ type FlowStatsByProcess struct {
 	// statsByProcessName stores aggregated flow statistics grouped by a process name.
 	statsByProcessName    map[string]*FlowStats
 	displayDebugTraceLogs bool
-	natOutgoingPortLimit  int
 	// TODO(doublek): Track the most significant stats and show them as part
 	// of the flows that are included in the process limit. Current processNames
 	// only tracks insertion order.
@@ -552,12 +481,10 @@ type FlowStatsByProcess struct {
 func NewFlowStatsByProcess(
 	mu *metric.Update,
 	displayDebugTraceLogs bool,
-	natOutgoingPortLimit int,
 ) FlowStatsByProcess {
 	f := FlowStatsByProcess{
 		displayDebugTraceLogs: displayDebugTraceLogs,
 		statsByProcessName:    make(map[string]*FlowStats),
-		natOutgoingPortLimit:  natOutgoingPortLimit,
 	}
 	f.aggregateFlowStatsByProcess(mu)
 	return f
@@ -625,7 +552,6 @@ func (f *FlowStatsByProcess) toFlowProcessReportedStats() []FlowProcessReportedS
 	if stats, ok := f.statsByProcessName[FieldNotIncluded]; ok {
 		s := FlowProcessReportedStats{
 			FlowReportedStats: stats.FlowReportedStats,
-			NatOutgoingPorts:  f.getNatOutGoingPortsFromStats(stats),
 		}
 		reportedStats = append(reportedStats, s)
 	} else {
@@ -634,38 +560,8 @@ func (f *FlowStatsByProcess) toFlowProcessReportedStats() []FlowProcessReportedS
 	return reportedStats
 }
 
-func (f *FlowStatsByProcess) getNatOutGoingPortsFromStats(stats *FlowStats) []int {
-	var natOutGoingPorts []int
-
-	numNatOutgoingPorts := 0
-	for _, value := range stats.flowsRefsActive {
-		if numNatOutgoingPorts >= f.natOutgoingPortLimit {
-			break
-		}
-
-		if value != 0 {
-			natOutGoingPorts = append(natOutGoingPorts, value)
-			numNatOutgoingPorts++
-		}
-	}
-
-	for _, value := range stats.flowsCompletedRefs {
-		if numNatOutgoingPorts >= f.natOutgoingPortLimit {
-			break
-		}
-
-		if value != 0 {
-			natOutGoingPorts = append(natOutGoingPorts, value)
-			numNatOutgoingPorts++
-		}
-	}
-
-	return natOutGoingPorts
-}
-
 // FlowProcessReportedStats contains FlowReportedStats along with process information.
 type FlowProcessReportedStats struct {
-	NatOutgoingPorts []int
 	FlowReportedStats
 }
 
@@ -675,8 +571,7 @@ type FlowLog struct {
 	StartTime, EndTime time.Time
 	FlowMeta
 	FlowLabels
-	FlowExtras
 	FlowProcessReportedStats
 
-	FlowAllPolicySet, FlowEnforcedPolicySet, FlowPendingPolicySet FlowPolicySet
+	FlowEnforcedPolicySet, FlowPendingPolicySet FlowPolicySet
 }

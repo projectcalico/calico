@@ -167,6 +167,8 @@ func (_ *mockCollector) Start() error { return nil }
 
 func (_ *mockCollector) RegisterMetricsReporter(types.Reporter) {}
 
-func (_ *mockCollector) SetPacketInfoReader(collector.PacketInfoReader) {}
+func (_ *mockCollector) SetDataplaneInfoReader(types.DataplaneInfoReader) {}
 
-func (_ *mockCollector) SetConntrackInfoReader(collector.ConntrackInfoReader) {}
+func (_ *mockCollector) SetPacketInfoReader(types.PacketInfoReader) {}
+
+func (_ *mockCollector) SetConntrackInfoReader(types.ConntrackInfoReader) {}

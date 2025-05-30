@@ -1,6 +1,6 @@
-import { useCheckedTable } from '..';
-import { act } from 'react-dom/test-utils';
 import { render, screen } from '@/test-utils/helper';
+import { act } from 'react-dom/test-utils';
+import { useCheckedTable } from '..';
 
 let checkedTableData: any;
 

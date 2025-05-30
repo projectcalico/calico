@@ -84,7 +84,7 @@ endif
 # This is only needed when running non-native binaries.
 register:
 ifneq ($(BUILDARCH),$(ARCH))
-	docker run --rm --privileged multiarch/qemu-user-static:register || true
+	docker run --privileged --rm tonistiigi/binfmt --install all || true
 endif
 
 # If this is a release, also tag and push additional images.
@@ -199,7 +199,8 @@ ifeq ($(BUILDARCH),amd64)
 	# *-amd64 tagged images for etcd are not available until v3.5.0
 	ETCD_IMAGE = quay.io/coreos/etcd:$(ETCD_VERSION)
 endif
-UBI_IMAGE ?= registry.access.redhat.com/ubi8/ubi-minimal:$(UBI_VERSION)
+
+UBI_IMAGE ?= registry.access.redhat.com/ubi9/ubi-minimal:latest
 
 ifeq ($(GIT_USE_SSH),true)
 	GIT_CONFIG_SSH ?= git config --global url."ssh://git@github.com/".insteadOf "https://github.com/";
@@ -221,6 +222,20 @@ GIT_DESCRIPTION=$(shell git describe --tags --dirty --always --abbrev=12 || echo
 # Calculate a timestamp for any build artifacts.
 ifneq ($(OS),Windows_NT)
 DATE:=$(shell date -u +'%FT%T%z')
+endif
+
+# Common linker flags.
+#
+# We use -X to insert the version information into the placeholder variables
+# in the buildinfo package.
+LDFLAGS=-X github.com/projectcalico/calico/pkg/buildinfo.Version=$(GIT_DESCRIPTION) \
+	-X github.com/projectcalico/calico/pkg/buildinfo.BuildDate=$(DATE) \
+	-X github.com/projectcalico/calico/pkg/buildinfo.GitRevision=$(GIT_COMMIT)
+
+# We use -B to insert a build ID note into the executable, without which, the
+# RPM build tools complain.
+ifneq ($(BUILDOS),darwin)
+	LDFLAGS+=-B 0x$(BUILD_ID)
 endif
 
 # Figure out the users UID/GID.  These are needed to run docker containers
@@ -254,8 +269,12 @@ endif
 
 EXTRA_DOCKER_ARGS += -v $(GOMOD_CACHE):/go/pkg/mod:rw
 
-# Define go architecture flags to support arm variants
+# Define go architecture flags
 GOARCH_FLAGS :=-e GOARCH=$(ARCH)
+
+ifeq ($(ARCH),amd64)
+GOARCH_FLAGS += -e GOAMD64=v2
+endif
 
 # Location of certificates used in UTs.
 REPO_ROOT := $(shell git rev-parse --show-toplevel)
@@ -265,10 +284,8 @@ CERTS_PATH := $(REPO_ROOT)/hack/test/certs
 ifdef USE_UBI_AS_CALICO_BASE
 CALICO_BASE ?= $(UBI_IMAGE)
 else
-CALICO_BASE ?= calico/base
+CALICO_BASE ?= calico/base:$(CALICO_BASE_VER)
 endif
-
-QEMU_IMAGE ?= calico/qemu-user-static:latest
 
 ifndef NO_DOCKER_PULL
 DOCKER_PULL = --pull
@@ -278,13 +295,12 @@ endif
 
 # DOCKER_BUILD is the base build command used for building all images.
 DOCKER_BUILD=docker buildx build --load --platform=linux/$(ARCH) $(DOCKER_PULL)\
-	     --build-arg QEMU_IMAGE=$(QEMU_IMAGE) \
-	     --build-arg UBI_IMAGE=$(UBI_IMAGE) \
-	     --build-arg GIT_VERSION=$(GIT_VERSION) \
-	     --build-arg CALICO_BASE=$(CALICO_BASE) \
-	     --build-arg BPFTOOL_IMAGE=$(BPFTOOL_IMAGE)
+	--build-arg UBI_IMAGE=$(UBI_IMAGE) \
+	--build-arg GIT_VERSION=$(GIT_VERSION) \
+	--build-arg CALICO_BASE=$(CALICO_BASE) \
+	--build-arg BPFTOOL_IMAGE=$(BPFTOOL_IMAGE)
 
-DOCKER_RUN := mkdir -p ../.go-pkg-cache bin $(GOMOD_CACHE) && \
+DOCKER_RUN := mkdir -p $(REPO_ROOT)/.go-pkg-cache bin $(GOMOD_CACHE) && \
 	docker run --rm \
 		--net=host \
 		--init \
@@ -296,6 +312,7 @@ DOCKER_RUN := mkdir -p ../.go-pkg-cache bin $(GOMOD_CACHE) && \
 		-e OS=$(BUILDOS) \
 		-e GOOS=$(BUILDOS) \
 		-e GOFLAGS=$(GOFLAGS) \
+		-e ACK_GINKGO_DEPRECATIONS=1.16.5 \
 		-v $(REPO_ROOT):/go/src/github.com/projectcalico/calico:rw \
 		-v $(REPO_ROOT)/.go-pkg-cache:/go-cache:rw \
 		-w /go/src/$(PACKAGE_NAME)
@@ -358,12 +375,12 @@ define get_go_build_version
 	$(shell git ls-remote --tags --refs --sort=-version:refname $(GO_BUILD_REPO) | head -n 1 | awk -F '/' '{print $$NF}')
 endef
 
-# update_go_build updates the GO_BUILD_VER in metadata.mk or Makefile.
+# update_go_build_pin updates the GO_BUILD_VER in metadata.mk or Makefile.
 # for annotated git tags, we need to remove the trailing `^{}`.
 # for the obsoleted vx.y go-build version, we need to remove the leading `v` for bash string comparison to work properly.
 define update_go_build_pin
 	$(eval new_ver := $(subst ^{},,$(call get_go_build_version)))
-	$(eval old_ver := $(subst v,,$(shell grep -E "^GO_BUILD_VER" $(1) | cut -d'=' -f2 | xargs)))
+	$(eval old_ver := $(shell grep -E "^GO_BUILD_VER" $(1) | cut -d'=' -f2 | xargs | sed 's/^v//'))
 
 	@echo "current GO_BUILD_VER=$(old_ver)"
 	@echo "latest GO_BUILD_VER=$(new_ver)"
@@ -374,6 +391,23 @@ define update_go_build_pin
 			echo "GO_BUILD_VER is updated to $(new_ver)"; \
 		else \
 			echo "no need to update GO_BUILD_VER"; \
+		fi'
+endef
+
+# update_calico_base_pin updates the CALICO_BASE_VER in metadata.mk.
+define update_calico_base_pin
+	$(eval new_ver := $(shell curl -s "https://hub.docker.com/v2/repositories/calico/base/tags/?page_size=100" | jq -r '.results[].name' | grep -E "^ubi9-[0-9]+$$" | sort -r | head -n 1))
+	$(eval old_ver := $(shell grep -E "^CALICO_BASE_VER" $(1) | cut -d'=' -f2 | xargs))
+
+	@echo "current CALICO_BASE_VER=$(old_ver)"
+	@echo "latest CALICO_BASE_VER=$(new_ver)"
+
+	bash -c '\
+		if [[ "$(new_ver)" > "$(old_ver)" ]]; then \
+			sed -i "s/^CALICO_BASE_VER[[:space:]]*=.*/CALICO_BASE_VER=$(new_ver)/" $(1); \
+			echo "CALICO_BASE_VER is updated to $(new_ver)"; \
+		else \
+			echo "no need to update CALICO_BASE_VER"; \
 		fi'
 endef
 
@@ -436,6 +470,9 @@ replace-cni-pin:
 update-go-build-pin:
 	$(call update_go_build_pin,$(GIT_GO_BUILD_UPDATE_COMMIT_FILE))
 
+update-calico-base-pin:
+	$(call update_calico_base_pin,$(GIT_GO_BUILD_UPDATE_COMMIT_FILE))
+
 git-status:
 	git status --porcelain
 
@@ -469,18 +506,31 @@ CRANE_CMD         = docker run -t --entrypoint /bin/sh -v $(DOCKER_CONFIG):/root
                     $(double_quote)crane
 endif
 
+ifdef LOCAL_PYTHON
+PYTHON3_CMD       = python3
+else
+PYTHON3_CMD       = docker run --rm -e QUAY_API_TOKEN -v $(REPO_ROOT):$(REPO_ROOT) -w $(REPO_ROOT) python:3.13 python3.13
+endif
+
 GIT_CMD           = git
 DOCKER_CMD        = docker
 
+
+# RELEASE_PY3 is for Python invocations used for releasing,
+# where we want to be able to DRY_RUN them.
 ifdef CONFIRM
 CRANE         = $(CRANE_CMD)
 GIT           = $(GIT_CMD)
 DOCKER        = $(DOCKER_CMD)
+RELEASE_PY3   = $(PYTHON3_CMD)
 else
-CRANE         = echo [DRY RUN] $(CRANE_CMD)
-GIT           = echo [DRY RUN] $(GIT_CMD)
-DOCKER        = echo [DRY RUN] $(DOCKER_CMD)
+CRANE         = @echo [DRY RUN] $(CRANE_CMD)
+GIT           = @echo [DRY RUN] $(GIT_CMD)
+DOCKER        = @echo [DRY RUN] $(DOCKER_CMD)
+RELEASE_PY3   = @echo [DRY RUN] $(PYTHON3_CMD)
 endif
+
+QUAY_SET_EXPIRY_SCRIPT = $(REPO_ROOT)/hack/set_quay_expiry.py
 
 commit-and-push-pr:
 	$(GIT) add $(GIT_COMMIT_FILES)
@@ -889,8 +939,22 @@ push-images-to-registry-%:
 
 # push-image-to-registry-% pushes the build / arch images specified by $* and VALIDARCHES to the registry
 # specified by REGISTRY.
+#
+# We also build a list of all of the iamges we're going to be pushing and then, once we're done, we set the expiry
+# on those images, either adding an expiry for normal pushes or removing it for releases, if we're pushing to quay.io
+# that is.
 push-image-to-registry-%:
-	$(MAKE) -j6 $(addprefix push-image-arch-to-registry-,$(VALIDARCHES)) BUILD_IMAGE=$(call unescapefs,$*)
+	$(eval BUILD_IMAGE=$(call unescapefs,$*))
+	$(eval EXPIRY_IMAGES_LIST=$(REGISTRY)/$(BUILD_IMAGE):$(IMAGETAG) $(addprefix $(REGISTRY)/$(BUILD_IMAGE):$(IMAGETAG)-,$(VALIDARCHES)))
+
+	$(MAKE) -j6 $(addprefix push-image-arch-to-registry-,$(VALIDARCHES)) BUILD_IMAGE=$(BUILD_IMAGE)
+
+ifeq ($(findstring quay.io,$(REGISTRY)),quay.io)
+	$(if $(RELEASE), \
+		-$(RELEASE_PY3) $(QUAY_SET_EXPIRY_SCRIPT) remove $(EXPIRY_IMAGES_LIST), \
+		-$(RELEASE_PY3) $(QUAY_SET_EXPIRY_SCRIPT) add --expiry-days=$(QUAY_EXPIRE_DAYS) $(EXPIRY_IMAGES_LIST) \
+	)
+endif
 
 # push-image-arch-to-registry-% pushes the build / arch image specified by $* and BUILD_IMAGE to the registry
 # specified by REGISTRY.
@@ -1278,7 +1342,9 @@ $(REPO_ROOT)/.$(KIND_NAME).created: $(KUBECTL) $(KIND)
 	touch $@
 
 kind-cluster-destroy: $(KIND) $(KUBECTL)
-	-$(KUBECTL) --kubeconfig=$(KIND_KUBECONFIG) drain kind-control-plane kind-worker kind-worker2 kind-worker3 --ignore-daemonsets --force
+	# We need to drain the cluster gracefully when shutting down to avoid a netdev unregister error from the kernel.
+	# This requires we execute CNI del on pods with pod networking.
+	-$(KUBECTL) --kubeconfig=$(KIND_KUBECONFIG) drain kind-control-plane kind-worker kind-worker2 kind-worker3 --ignore-daemonsets --force --timeout=10m
 	-$(KIND) delete cluster --name $(KIND_NAME)
 	rm -f $(KIND_KUBECONFIG)
 	rm -f $(REPO_ROOT)/.$(KIND_NAME).created
@@ -1539,6 +1605,7 @@ release-windows-with-tag: var-require-one-of-CONFIRM-DRYRUN var-require-all-IMAG
 			$(DOCKER_MANIFEST) annotate --os windows --arch amd64 --os-version $${version} $${manifest_image} $${image}; \
 		done; \
 		$(DOCKER_MANIFEST) push --purge $${manifest_image}; \
+		$(RELEASE_PY3) $(QUAY_SET_EXPIRY_SCRIPT) add --expiry-days=$(QUAY_EXPIRE_DAYS) $${manifest_image} $${all_images} || true; \
 	done;
 
 release-windows: var-require-one-of-CONFIRM-DRYRUN var-require-all-DEV_REGISTRIES-WINDOWS_IMAGE var-require-one-of-VERSION-BRANCH_NAME

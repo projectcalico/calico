@@ -81,7 +81,7 @@ static CALI_BPF_INLINE __u32 xdp2tc_get_metadata(struct __sk_buff *skb) {
 		goto no_metadata;
 	}
 
-	CALI_LOG_IF(CALI_LOG_LEVEL_DEBUG, "Received metadata from XDP: %d", metadata->flags);
+	CALI_LOG_IF(CALI_LOG_LEVEL_DEBUG, "Received metadata from XDP: 0x%x", metadata->flags);
 	goto metadata_ok;
 #else
 	struct cali_tc_ctx ctx = {

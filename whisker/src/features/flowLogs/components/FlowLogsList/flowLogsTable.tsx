@@ -1,10 +1,12 @@
-import { CellProps } from 'react-table';
+import { CellProps, Row } from 'react-table';
 import { DataTable } from '@/libs/tigera/ui-components/components/common';
-import { FlowLog } from '@/types/api';
+import { FlowLog } from '@/types/render';
 import FlowLogActionIndicator from '@/components/common/FlowLogActionIndicator';
+import { AddIcon } from '@chakra-ui/icons';
+import { Button, Icon, Tooltip } from '@chakra-ui/react';
 
-export const getTableColumns = () => [
-    DataTable.expandoTableColumn,
+export const getTableColumns = (onColumnCustomizerOpen: () => void) => [
+    { ...DataTable.expandoTableColumn, disableReordering: true, checked: true },
     {
         Header: 'start_time',
         width: 40,
@@ -15,6 +17,10 @@ export const getTableColumns = () => [
 
             return new Date(start_time).toLocaleTimeString();
         },
+        checked: true,
+        sortType: (rowA: Row<FlowLog>, rowB: Row<FlowLog>) =>
+            rowA.original.start_time.getTime() -
+            rowB.original.start_time.getTime(),
     },
     {
         Header: 'end_time',
@@ -26,6 +32,9 @@ export const getTableColumns = () => [
 
             return new Date(end_time).toLocaleTimeString();
         },
+        checked: true,
+        sortType: (rowA: Row<FlowLog>, rowB: Row<FlowLog>) =>
+            rowA.original.end_time.getTime() - rowB.original.end_time.getTime(),
     },
     {
         Header: 'action',
@@ -37,41 +46,71 @@ export const getTableColumns = () => [
 
             return <FlowLogActionIndicator action={action} />;
         },
-    },
-    {
-        Header: 'source_name',
-        width: 100,
-        minWidth: 50,
-        accessor: 'source_name',
+        checked: true,
     },
     {
         Header: 'source_namespace',
         width: 70,
         minWidth: 30,
         accessor: 'source_namespace',
+        checked: true,
     },
     {
-        Header: 'dest_name',
+        Header: 'source_name',
         width: 100,
         minWidth: 50,
-        accessor: 'dest_name',
+        accessor: 'source_name',
+        checked: true,
     },
     {
         Header: 'dest_namespace',
         width: 70,
         minWidth: 30,
         accessor: 'dest_namespace',
+        checked: true,
+    },
+    {
+        Header: 'dest_name',
+        width: 100,
+        minWidth: 50,
+        accessor: 'dest_name',
+        checked: true,
     },
     {
         Header: 'protocol',
         width: 40,
         minWidth: 20,
         accessor: 'protocol',
+        checked: true,
     },
     {
         Header: 'dest_port',
         width: 40,
         minWidth: 20,
         accessor: 'dest_port',
+        checked: true,
+    },
+    {
+        Header: (
+            <Tooltip label='Customize columns' hasArrow placement='top'>
+                <Button
+                    variant={'solid'}
+                    borderRadius={0}
+                    mr='0'
+                    onClick={() => {
+                        onColumnCustomizerOpen();
+                    }}
+                    minHeight='36px'
+                >
+                    <Icon as={AddIcon} />
+                </Button>
+            </Tooltip>
+        ),
+        disableSortBy: true,
+        maxWidth: 45,
+        accessor: 'customizer_header',
+        disableResizing: true,
+        disableReordering: true,
+        checked: true,
     },
 ];

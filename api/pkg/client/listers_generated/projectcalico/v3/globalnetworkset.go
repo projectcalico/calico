@@ -5,10 +5,10 @@
 package v3
 
 import (
-	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/client-go/listers"
-	"k8s.io/client-go/tools/cache"
+	projectcalicov3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	labels "k8s.io/apimachinery/pkg/labels"
+	listers "k8s.io/client-go/listers"
+	cache "k8s.io/client-go/tools/cache"
 )
 
 // GlobalNetworkSetLister helps list GlobalNetworkSets.
@@ -16,19 +16,19 @@ import (
 type GlobalNetworkSetLister interface {
 	// List lists all GlobalNetworkSets in the indexer.
 	// Objects returned here must be treated as read-only.
-	List(selector labels.Selector) (ret []*v3.GlobalNetworkSet, err error)
+	List(selector labels.Selector) (ret []*projectcalicov3.GlobalNetworkSet, err error)
 	// Get retrieves the GlobalNetworkSet from the index for a given name.
 	// Objects returned here must be treated as read-only.
-	Get(name string) (*v3.GlobalNetworkSet, error)
+	Get(name string) (*projectcalicov3.GlobalNetworkSet, error)
 	GlobalNetworkSetListerExpansion
 }
 
 // globalNetworkSetLister implements the GlobalNetworkSetLister interface.
 type globalNetworkSetLister struct {
-	listers.ResourceIndexer[*v3.GlobalNetworkSet]
+	listers.ResourceIndexer[*projectcalicov3.GlobalNetworkSet]
 }
 
 // NewGlobalNetworkSetLister returns a new GlobalNetworkSetLister.
 func NewGlobalNetworkSetLister(indexer cache.Indexer) GlobalNetworkSetLister {
-	return &globalNetworkSetLister{listers.New[*v3.GlobalNetworkSet](indexer, v3.Resource("globalnetworkset"))}
+	return &globalNetworkSetLister{listers.New[*projectcalicov3.GlobalNetworkSet](indexer, projectcalicov3.Resource("globalnetworkset"))}
 }

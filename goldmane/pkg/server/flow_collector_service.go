@@ -16,18 +16,49 @@ package server
 
 import (
 	"io"
+	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/peer"
 
 	"github.com/projectcalico/calico/goldmane/pkg/client"
 	"github.com/projectcalico/calico/goldmane/pkg/internal/flowcache"
+	"github.com/projectcalico/calico/goldmane/pkg/types"
 	"github.com/projectcalico/calico/goldmane/proto"
 )
 
+var (
+	labels = []string{"source"}
+
+	receivedFlowCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "goldmane_collector_received_flows",
+		Help: "Total number of flows received by Goldmane aggregator.",
+	}, labels)
+
+	flowProcessLatency = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Name: "goldmane_collector_flow_process_latency",
+		Help: "Histogram measuring the time taken to ingest a flow.",
+	}, labels)
+
+	numClients = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "goldmane_collector_num_clients",
+		Help: "Number of clients connected to the flow collector.",
+	})
+)
+
+func init() {
+	prometheus.MustRegister(receivedFlowCounter)
+	prometheus.MustRegister(flowProcessLatency)
+}
+
 type Sink interface {
-	Receive(*proto.FlowUpdate)
+	Receive(*types.Flow)
+}
+
+type FlowCollectorService interface {
+	RegisterWith(*grpc.Server)
 }
 
 // NewFlowCollector returns a new push collector, which handles incoming flow streams from nodes in the cluster.
@@ -64,6 +95,10 @@ func (p *flowCollectorService) Connect(srv proto.FlowCollector_ConnectServer) er
 }
 
 func (p *flowCollectorService) handleClient(srv proto.FlowCollector_ConnectServer) error {
+	// Track the number of clients connected to the collector.
+	numClients.Inc()
+	defer numClients.Dec()
+
 	scope := "unknown"
 	pr, ok := peer.FromContext(srv.Context())
 	if ok {
@@ -78,6 +113,7 @@ func (p *flowCollectorService) handleClient(srv proto.FlowCollector_ConnectServe
 	}()
 
 	for {
+		logCtx.Debug("Waiting for flows from client")
 		upd, err := srv.Recv()
 		if err == io.EOF {
 			logCtx.Info("Client closed connection")
@@ -87,20 +123,28 @@ func (p *flowCollectorService) handleClient(srv proto.FlowCollector_ConnectServe
 			logCtx.WithError(err).Error("Failed to receive flow")
 			return err
 		}
+		receivedFlowCounter.WithLabelValues(scope).Inc()
+		start := time.Now()
+
+		// Convert to minified types.Flow object.
+		flow := types.ProtoToFlow(upd.Flow)
 
 		// Skip flows that we have already received from this node. This is a simple deduplication
 		// mechanism to avoid processing the same flow if the connection is reset for some reason.
 		// Should this happen, the client will resend all its flows and we must ensure we don't process
 		// the same flow twice.
-		if !p.deduplicator.Has(upd.Flow, scope) {
+		if !p.deduplicator.Has(flow, scope) {
 
 			// Add it to the deduplicator, scoped to the client's address (i.e., per-node).
 			// The cache will automatically time out this flow in the background when it is no longer
 			// relevant.
-			p.deduplicator.Add(upd.Flow, scope)
+			p.deduplicator.Add(flow, scope)
 
 			// Send the flow to the configured Sink.
-			p.sink.Receive(upd)
+			logCtx.Debug("Sending Flow to sink")
+			p.sink.Receive(flow)
+		} else {
+			logCtx.Debug("Skipping already learned flow")
 		}
 		num++
 
@@ -109,5 +153,7 @@ func (p *flowCollectorService) handleClient(srv proto.FlowCollector_ConnectServe
 			logCtx.WithError(err).Error("Failed to send receipt")
 			return err
 		}
+
+		flowProcessLatency.WithLabelValues(scope).Observe(time.Since(start).Seconds())
 	}
 }

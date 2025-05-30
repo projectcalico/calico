@@ -14,6 +14,7 @@ import ResizableHeader from '../ResizableHeader';
 import { getTableStateReducer } from '../ResizableBody/index';
 import { SystemStyleObject } from '@chakra-ui/react';
 import { has } from 'lodash';
+import { VirtualisationProps } from '../ResizableBody/components/VirtualizedTableRow';
 
 export type ColumnSortEvent = {
     id: string;
@@ -61,7 +62,9 @@ export interface TableProps {
     memoizedColumnsGenerator?: any;
     isSelectable?: boolean;
     onSort?: (column: ColumnSortEvent) => void;
+    onSortClicked?: () => void;
     initialState?: TableState;
+    virtualisationProps?: VirtualisationProps;
 }
 
 const Table: React.FC<React.PropsWithChildren<TableProps>> = ({
@@ -93,7 +96,9 @@ const Table: React.FC<React.PropsWithChildren<TableProps>> = ({
     noResultsStyles,
     isSelectable,
     onSort,
+    onSortClicked,
     initialState,
+    virtualisationProps,
     ...rest
 }) => {
     const hasItems = items && items.length > 0;
@@ -198,6 +203,7 @@ const Table: React.FC<React.PropsWithChildren<TableProps>> = ({
                 isAllChecked={isAllChecked}
                 onAllChecked={onAllChecked}
                 onSortCustomHandler={onSort}
+                onSortClicked={onSortClicked}
             />
 
             {items && !isFetching && (
@@ -214,6 +220,7 @@ const Table: React.FC<React.PropsWithChildren<TableProps>> = ({
                     data-testid='roles-list-table-body'
                     onRowChecked={onRowChecked}
                     checkedRows={checkedRows}
+                    virtualisationProps={virtualisationProps}
                     {...rest}
                 />
             )}

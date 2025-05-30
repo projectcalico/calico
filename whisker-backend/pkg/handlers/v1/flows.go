@@ -17,8 +17,8 @@ package v1
 import (
 	"io"
 	"net/http"
-	"strings"
-	"time"
+
+	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/goldmane/pkg/client"
 	"github.com/projectcalico/calico/goldmane/proto"
@@ -28,10 +28,10 @@ import (
 )
 
 type flowsHdlr struct {
-	flowCli client.FlowServiceClient
+	flowCli client.FlowsClient
 }
 
-func NewFlows(cli client.FlowServiceClient) *flowsHdlr {
+func NewFlows(cli client.FlowsClient) *flowsHdlr {
 	return &flowsHdlr{cli}
 }
 
@@ -42,6 +42,11 @@ func (hdlr *flowsHdlr) APIs() []apiutil.Endpoint {
 			Path:    whiskerv1.FlowsPath,
 			Handler: apiutil.NewJSONListOrEventStreamHandler(hdlr.ListOrStream),
 		},
+		{
+			Method:  http.MethodGet,
+			Path:    whiskerv1.FlowsFilterHintsPath,
+			Handler: apiutil.NewJSONListHandler(hdlr.ListFilterHints),
+		},
 	}
 }
 
@@ -50,27 +55,36 @@ func (hdlr *flowsHdlr) ListOrStream(ctx apictx.Context, params whiskerv1.ListFlo
 	logger := ctx.Logger()
 	logger.Debug("List flows called.")
 
-	// TODO Apply filters.
+	logrus.WithField("filter", params.Filters).Debug("Applying filters.")
+
+	filter := toProtoFilter(params.Filters)
 	if params.Watch {
 		logger.Debug("Watch is set, streaming flows...")
 		// TODO figure out how we're going to handle errors.
-		flowStream, err := hdlr.flowCli.Stream(ctx, &proto.FlowStreamRequest{})
-		if err != nil {
-			logger.WithError(err).Error("failed to stream flows")
-			return apiutil.NewListOrStreamResponse[whiskerv1.FlowResponse](http.StatusInternalServerError).SetError("Internal Server Error")
+		flowReq := &proto.FlowStreamRequest{
+			Filter:       filter,
+			StartTimeGte: params.StartTimeGte,
 		}
 
-		return apiutil.NewListOrStreamResponse[whiskerv1.FlowResponse](http.StatusOK).
+		flowStream, err := hdlr.flowCli.Stream(ctx, flowReq)
+		if err != nil {
+			logger.WithError(err).Error("failed to stream flows")
+			return apiutil.NewListOrStreamResponse[whiskerv1.FlowResponse]().SetStatus(http.StatusInternalServerError).SetError("Internal Server Error")
+		}
+
+		return apiutil.NewListOrStreamResponse[whiskerv1.FlowResponse]().SetStatus(http.StatusOK).
 			SendStream(func(yield func(flow whiskerv1.FlowResponse) bool) {
 				for {
 					flow, err := flowStream.Recv()
 					if err == io.EOF {
+						logger.Debug("EOF received, breaking stream.")
 						return
 					} else if err != nil {
 						logger.WithError(err).Error("Failed to stream flows.")
 						break
 					}
 
+					logrus.WithField("flow", flow).Debug("Received flow from stream.")
 					if !yield(protoToFlow(flow.Flow)) {
 						return
 					}
@@ -78,28 +92,18 @@ func (hdlr *flowsHdlr) ListOrStream(ctx apictx.Context, params whiskerv1.ListFlo
 			})
 	} else {
 		logger.Debug("Watch not set, will return a list of flows.")
-		flowReq := &proto.FlowListRequest{}
-		if !params.StartTimeGt.IsZero() {
-			flowReq.StartTimeGt = params.StartTimeGt.Unix()
+
+		flowReq := &proto.FlowListRequest{
+			SortBy:       toProtoSortByOptions(params.SortBy),
+			Filter:       filter,
+			StartTimeGte: params.StartTimeGte,
+			StartTimeLt:  params.StartTimeLt,
 		}
 
-		if !params.StartTimeLt.IsZero() {
-			flowReq.StartTimeLt = params.StartTimeLt.Unix()
-		}
-
-		if params.SortBy != whiskerv1.ListFlowsSortByDefault {
-			// TODO figure out if we should panic or something if there's a mismatch between the sort by types.
-			// TODO This wouldn't be a bad thing to do, since the params.SortBy value can't contain invalid values (the request
-			// TODO fails if it does).
-			switch params.SortBy {
-			case whiskerv1.ListFlowsSortByDest:
-				flowReq.SortBy = []*proto.SortOption{{SortBy: proto.SortBy_DestName}}
-			}
-		}
-		flows, err := hdlr.flowCli.List(ctx, flowReq)
+		meta, flows, err := hdlr.flowCli.List(ctx, flowReq)
 		if err != nil {
 			logger.WithError(err).Error("failed to list flows")
-			return apiutil.NewListOrStreamResponse[whiskerv1.FlowResponse](http.StatusInternalServerError).SetError("Internal Server Error")
+			return apiutil.NewListOrStreamResponse[whiskerv1.FlowResponse]().SetStatus(http.StatusInternalServerError).SetError("Internal Server Error")
 		}
 
 		var rspFlows []whiskerv1.FlowResponse
@@ -107,31 +111,45 @@ func (hdlr *flowsHdlr) ListOrStream(ctx apictx.Context, params whiskerv1.ListFlo
 			rspFlows = append(rspFlows, protoToFlow(flow.Flow))
 		}
 
-		// TODO Use the total in the goldmane response when goldmane starts sending the number of items back.
-		return apiutil.NewListOrStreamResponse[whiskerv1.FlowResponse](http.StatusOK).SendList(len(rspFlows), rspFlows)
+		return apiutil.NewListOrStreamResponse[whiskerv1.FlowResponse]().SetStatus(http.StatusOK).
+			SendList(apiutil.ListMeta{TotalPages: int(meta.TotalPages)}, rspFlows)
 	}
 }
 
-func protoToFlow(flow *proto.Flow) whiskerv1.FlowResponse {
-	return whiskerv1.FlowResponse{
-		StartTime: time.Unix(flow.StartTime, 0),
-		EndTime:   time.Unix(flow.EndTime, 0),
-		Action:    flow.Key.Action,
+// ListFilterHints returns a list of filter hints. This provides filter values for various filters that will produce
+// results (i.e. there are actually flows the match a filter with the returned values).
+func (hdlr *flowsHdlr) ListFilterHints(ctx apictx.Context, params whiskerv1.FlowFilterHintsRequest) apiutil.ListResponse[whiskerv1.FlowFilterHintResponse] {
+	logger := ctx.Logger()
+	logger.Debug("ListFilterHints called.")
 
-		SourceName:      flow.Key.SourceName,
-		SourceNamespace: flow.Key.SourceNamespace,
-		SourceLabels:    strings.Join(flow.SourceLabels, " | "),
-
-		DestName:      flow.Key.DestName,
-		DestNamespace: flow.Key.DestNamespace,
-		DestLabels:    strings.Join(flow.DestLabels, " | "),
-
-		Protocol:   flow.Key.Proto,
-		DestPort:   flow.Key.DestPort,
-		Reporter:   flow.Key.Reporter,
-		PacketsIn:  flow.PacketsIn,
-		PacketsOut: flow.PacketsOut,
-		BytesIn:    flow.BytesIn,
-		BytesOut:   flow.PacketsIn,
+	req := &proto.FilterHintsRequest{
+		PageSize: int64(params.PageSize),
+		Page:     int64(params.Page),
+		Type:     params.Type.AsProto(),
+		Filter:   toProtoFilter(params.Filters),
 	}
+
+	hintsMeta, gmhints, err := hdlr.flowCli.FilterHints(ctx, req)
+	if err != nil {
+		logger.WithError(err).Error("failed to list filter hints")
+		return apiutil.NewListResponse[whiskerv1.FlowFilterHintResponse]().
+			SetStatus(http.StatusInternalServerError).
+			SetError("Internal Server Error")
+	}
+
+	hints := make([]whiskerv1.FlowFilterHintResponse, len(gmhints))
+	for i, hint := range gmhints {
+		switch params.Type.AsProto() {
+		case proto.FilterType_FilterTypeSourceNamespace, proto.FilterType_FilterTypeDestNamespace:
+			hint.Value = protoToNamespace(hint.Value)
+		case proto.FilterType_FilterTypeSourceName, proto.FilterType_FilterTypeDestName:
+			hint.Value = protoToName(hint.Value)
+		}
+		hints[i] = whiskerv1.FlowFilterHintResponse{Value: hint.Value}
+	}
+
+	return apiutil.NewListResponse[whiskerv1.FlowFilterHintResponse]().
+		SetStatus(http.StatusOK).
+		SetMeta(apiutil.ListMeta{TotalPages: int(hintsMeta.TotalPages)}).
+		SetItems(hints)
 }

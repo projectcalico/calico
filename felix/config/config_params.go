@@ -188,7 +188,7 @@ type Config struct {
 	BPFLogLevel                        string            `config:"oneof(off,info,debug);off;non-zero"`
 	BPFConntrackLogLevel               string            `config:"oneof(off,debug);off;non-zero"`
 	BPFConntrackCleanupMode            string            `config:"oneof(Auto,Userspace,BPFProgram);Auto"`
-	BPFConntrackTimeouts               map[string]string `config:"keyvaluelist;CreationGracePeriod=10s,TCPPreEstablished=20s,TCPEstablished=1h,TCPFinsSeen=Auto,TCPResetSeen=40s,UDPLastSeen=60s,GenericIPLastSeen=10m,ICMPLastSeen=5s"`
+	BPFConntrackTimeouts               map[string]string `config:"keyvaluelist;CreationGracePeriod=10s,TCPSynSent=20s,TCPEstablished=1h,TCPFinsSeen=Auto,TCPResetSeen=40s,UDPTimeout=60s,GenericTimeout=10m,ICMPTimeout=5s"`
 	BPFLogFilters                      map[string]string `config:"keyvaluelist;;"`
 	BPFCTLBLogFilter                   string            `config:"oneof(all);;"`
 	BPFDataIfacePattern                *regexp.Regexp    `config:"regexp;^((en|wl|ww|sl|ib)[Popsx].*|(eth|wlan|wwan|bond).*)"`
@@ -297,6 +297,7 @@ type Config struct {
 	DeviceRouteSourceAddressIPv6       net.IP            `config:"ipv6;"`
 	DeviceRouteProtocol                int               `config:"int;3"`
 	RemoveExternalRoutes               bool              `config:"bool;true"`
+	ProgramRoutes                      string            `config:"oneof(Enabled,Disabled);Disabled"`
 	IPForwarding                       string            `config:"oneof(Enabled,Disabled);Enabled"`
 	IptablesRefreshInterval            time.Duration     `config:"seconds;180"`
 	IptablesPostWriteCheckIntervalSecs time.Duration     `config:"seconds;5"`
@@ -330,9 +331,9 @@ type Config struct {
 
 	LogFilePath string `config:"file;/var/log/calico/felix.log;die-on-fail"`
 
-	LogSeverityFile   string `config:"oneof(DEBUG,INFO,WARNING,ERROR,FATAL);INFO"`
-	LogSeverityScreen string `config:"oneof(DEBUG,INFO,WARNING,ERROR,FATAL);INFO"`
-	LogSeveritySys    string `config:"oneof(DEBUG,INFO,WARNING,ERROR,FATAL);INFO"`
+	LogSeverityFile   string `config:"oneof(TRACE,DEBUG,INFO,WARNING,ERROR,FATAL);INFO"`
+	LogSeverityScreen string `config:"oneof(TRACE,DEBUG,INFO,WARNING,ERROR,FATAL);INFO"`
+	LogSeveritySys    string `config:"oneof(TRACE,DEBUG,INFO,WARNING,ERROR,FATAL);INFO"`
 	// LogDebugFilenameRegex controls which source code files have their Debug log output included in the logs.
 	// Only logs from files with names that match the given regular expression are included.  The filter only applies
 	// to Debug level logs.
@@ -406,16 +407,16 @@ type Config struct {
 	FailsafeInboundHostPorts  []ProtoPort `config:"port-list;tcp:22,udp:68,tcp:179,tcp:2379,tcp:2380,tcp:5473,tcp:6443,tcp:6666,tcp:6667;die-on-fail"`
 	FailsafeOutboundHostPorts []ProtoPort `config:"port-list;udp:53,udp:67,tcp:179,tcp:2379,tcp:2380,tcp:5473,tcp:6443,tcp:6666,tcp:6667;die-on-fail"`
 
-	NfNetlinkBufSize int `config:"int;65536"`
+	FlowLogsFlushInterval        time.Duration `config:"seconds;300"`
+	FlowLogsCollectorDebugTrace  bool          `config:"bool;false"`
+	FlowLogsGoldmaneServer       string        `config:"string;"`
+	FlowLogsLocalReporter        string        `config:"oneof(Enabled,Disabled);Disabled"`
+	FlowLogsPolicyEvaluationMode string        `config:"oneof(None,Continuous);Continuous"`
 
-	FlowLogsFlushInterval          time.Duration `config:"seconds;300"`
-	FlowLogsMaxOriginalIPsIncluded int           `config:"int;50"`
-	FlowLogsCollectorDebugTrace    bool          `config:"bool;false"`
-	FlowLogsGoldmaneServer         string        `config:"string;"`
-
-	KubeNodePortRanges []numorstring.Port `config:"portrange-list;30000:32767"`
-	NATPortRange       numorstring.Port   `config:"portrange;"`
-	NATOutgoingAddress net.IP             `config:"ipv4;"`
+	KubeNodePortRanges    []numorstring.Port `config:"portrange-list;30000:32767"`
+	NATPortRange          numorstring.Port   `config:"portrange;"`
+	NATOutgoingAddress    net.IP             `config:"ipv4;"`
+	NATOutgoingExclusions string             `config:"oneof(IPPoolsOnly,IPPoolsAndHostIPs);IPPoolsOnly"`
 
 	UsageReportingEnabled          bool          `config:"bool;true"`
 	UsageReportingInitialDelaySecs time.Duration `config:"seconds;300"`
@@ -535,6 +536,19 @@ func (config *Config) TableRefreshInterval() time.Duration {
 		return config.NftablesRefreshInterval
 	}
 	return config.IptablesRefreshInterval
+}
+
+func (config *Config) FlowLogsLocalReporterEnabled() bool {
+	return config.FlowLogsLocalReporter == "Enabled"
+}
+
+func (config *Config) FlowLogsEnabled() bool {
+	return config.FlowLogsGoldmaneServer != "" ||
+		config.FlowLogsLocalReporterEnabled()
+}
+
+func (config *Config) ProgramRoutesEnabled() bool {
+	return config.ProgramRoutes == "Enabled"
 }
 
 // Copy makes a copy of the object.  Internal state is deep copied but config parameters are only shallow copied.
@@ -1265,11 +1279,10 @@ type Param interface {
 
 func FromConfigUpdate(msg *proto.ConfigUpdate) *Config {
 	p := New()
-	// It doesn't have very great meaning for this standalone
-	// config object, but we use DatastorePerHost here, as the
-	// source, because proto.ConfigUpdate is formed by merging
-	// global and per-host datastore configuration fields.
-	_, _ = p.UpdateFrom(msg.Config, DatastorePerHost)
+	_, err := p.UpdateFromConfigUpdate(msg)
+	if err != nil {
+		log.WithError(err).Panic("Failed to convert ConfigUpdate back to Config.")
+	}
 	return p
 }
 

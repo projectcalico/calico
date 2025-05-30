@@ -1,5 +1,5 @@
 // Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
-//
+
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -15,14 +15,11 @@
 package flowlog
 
 import (
-	"net"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/calico/felix/calc"
-	"github.com/projectcalico/calico/felix/collector/types/boundedset"
 	"github.com/projectcalico/calico/felix/collector/types/metric"
 	"github.com/projectcalico/calico/felix/rules"
 )
@@ -55,99 +52,6 @@ func consists(actual, expected []FlowProcessReportedStats) bool {
 	}
 	return count == len(expected)
 }
-
-var _ = Describe("Flow log types tests", func() {
-	Context("FlowExtraRef from metric Update", func() {
-		It("generates the correct flowExtrasRef", func() {
-			By("Extracting the correct information")
-			fe := NewFlowExtrasRef(muWithOrigSourceIPs, testMaxBoundedSetSize)
-			expectedFlowExtraRef := flowExtrasRef{
-				originalSourceIPs: boundedset.NewFromSlice(testMaxBoundedSetSize, []net.IP{net.ParseIP("1.0.0.1")}),
-			}
-			Expect(fe.originalSourceIPs.ToIPSlice()).Should(ConsistOf(expectedFlowExtraRef.originalSourceIPs.ToIPSlice()))
-			Expect(fe.originalSourceIPs.TotalCount()).Should(Equal(expectedFlowExtraRef.originalSourceIPs.TotalCount()))
-			Expect(fe.originalSourceIPs.TotalCountDelta()).Should(Equal(expectedFlowExtraRef.originalSourceIPs.TotalCountDelta()))
-
-			By("aggregating the metric update")
-			fe.aggregateFlowExtrasRef(muWithMultipleOrigSourceIPs)
-			expectedFlowExtraRef = flowExtrasRef{
-				originalSourceIPs: boundedset.NewFromSlice(testMaxBoundedSetSize, []net.IP{net.ParseIP("1.0.0.1"), net.ParseIP("2.0.0.2")}),
-			}
-			Expect(fe.originalSourceIPs.ToIPSlice()).Should(ConsistOf(expectedFlowExtraRef.originalSourceIPs.ToIPSlice()))
-			Expect(fe.originalSourceIPs.TotalCount()).Should(Equal(expectedFlowExtraRef.originalSourceIPs.TotalCount()))
-			Expect(fe.originalSourceIPs.TotalCountDelta()).Should(Equal(expectedFlowExtraRef.originalSourceIPs.TotalCountDelta()))
-		})
-	})
-
-	Context("FlowStatsByProcess from metric Update", func() {
-		It("stores the correct FlowStatsByProcess with including process information is disabled", func() {
-			By("Extracting the correct information")
-			fsp := NewFlowStatsByProcess(&muWithEndpointMeta, false, 3)
-			Expect(fsp.statsByProcessName).Should(HaveLen(1))
-			Expect(fsp.statsByProcessName).Should(HaveKey("-"))
-			expectedReportedStats := []FlowProcessReportedStats{
-				FlowProcessReportedStats{
-					FlowReportedStats: FlowReportedStats{
-						PacketsIn:         1,
-						PacketsOut:        0,
-						BytesIn:           20,
-						BytesOut:          0,
-						NumFlows:          1,
-						NumFlowsStarted:   1,
-						NumFlowsCompleted: 0,
-					},
-				},
-			}
-			Expect(fsp.getActiveFlowsCount()).Should(Equal(1))
-			Expect(consists(fsp.toFlowProcessReportedStats(), expectedReportedStats)).Should(Equal(true))
-
-			By("aggregating the metric update")
-			fsp.aggregateFlowStatsByProcess(&muWithEndpointMetaWithService)
-			Expect(fsp.statsByProcessName).Should(HaveLen(1))
-			Expect(fsp.statsByProcessName).Should(HaveKey("-"))
-			expectedReportedStats = []FlowProcessReportedStats{
-				FlowProcessReportedStats{
-					FlowReportedStats: FlowReportedStats{
-						PacketsIn:         2,
-						PacketsOut:        0,
-						BytesIn:           40,
-						BytesOut:          0,
-						NumFlows:          1,
-						NumFlowsStarted:   1,
-						NumFlowsCompleted: 0,
-					},
-				},
-			}
-			Expect(fsp.getActiveFlowsCount()).Should(Equal(1))
-			Expect(consists(fsp.toFlowProcessReportedStats(), expectedReportedStats)).Should(Equal(true))
-
-			By("aggregating the metric update with update type expire")
-			fsp.aggregateFlowStatsByProcess(&muWithEndpointMetaExpire)
-			Expect(fsp.statsByProcessName).Should(HaveLen(1))
-			Expect(fsp.statsByProcessName).Should(HaveKey("-"))
-			expectedReportedStats = []FlowProcessReportedStats{
-				FlowProcessReportedStats{
-					FlowReportedStats: FlowReportedStats{
-						PacketsIn:         2,
-						PacketsOut:        0,
-						BytesIn:           40,
-						BytesOut:          0,
-						NumFlows:          1,
-						NumFlowsStarted:   1,
-						NumFlowsCompleted: 1,
-					},
-				},
-			}
-			Expect(fsp.getActiveFlowsCount()).Should(Equal(0))
-			Expect(consists(fsp.toFlowProcessReportedStats(), expectedReportedStats)).Should(Equal(true))
-
-			By("cleaning up the stats for the process name")
-			remainingActiveFlowsCount := fsp.gc()
-			Expect(remainingActiveFlowsCount).Should(Equal(0))
-			Expect(fsp.statsByProcessName).Should(HaveLen(0))
-		})
-	})
-})
 
 type TraceAndMetrics struct {
 	Traces         []FlowPolicySet
@@ -192,7 +96,6 @@ var _ = Describe("FlowPolicySets", func() {
 			Expect(len(flowlogs)).Should(Equal(len(expected.Traces)))
 
 			for i := 0; i < len(flowlogs); i++ {
-				Expect(flowlogs[i].FlowAllPolicySet).Should(Equal(expected.Traces[i]))
 				Expect(flowlogs[i].FlowEnforcedPolicySet).Should(Equal(expected.EnforcedTraces[i]))
 				Expect(flowlogs[i].FlowPendingPolicySet).Should(Equal(expected.PendingTrace))
 				Expect(flowlogs[i].FlowProcessReportedStats.PacketsOut).Should(Equal(expected.Packets))

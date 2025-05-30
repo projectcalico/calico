@@ -19,9 +19,9 @@ import (
 	"reflect"
 	"regexp"
 
-	"github.com/projectcalico/api/pkg/lib/numorstring"
 	log "github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/lib/std/uniquelabels"
 	v3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
@@ -36,6 +36,12 @@ type WorkloadEndpointKey struct {
 	OrchestratorID string `json:"-"`
 	WorkloadID     string `json:"-"`
 	EndpointID     string `json:"-"`
+}
+
+func (key WorkloadEndpointKey) WorkloadOrHostEndpointKey() {}
+
+func (key WorkloadEndpointKey) Host() string {
+	return key.Hostname
 }
 
 func (key WorkloadEndpointKey) defaultPath() (string, error) {
@@ -83,6 +89,8 @@ func (key WorkloadEndpointKey) String() string {
 	return fmt.Sprintf("WorkloadEndpoint(node=%s, orchestrator=%s, workload=%s, name=%s)",
 		key.Hostname, key.OrchestratorID, key.WorkloadID, key.EndpointID)
 }
+
+var _ EndpointKey = WorkloadEndpointKey{}
 
 type WorkloadEndpointListOptions struct {
 	Hostname       string
@@ -157,7 +165,7 @@ type WorkloadEndpoint struct {
 	IPv6Nets                   []net.IPNet       `json:"ipv6_nets"`
 	IPv4NAT                    []IPNAT           `json:"ipv4_nat,omitempty"`
 	IPv6NAT                    []IPNAT           `json:"ipv6_nat,omitempty"`
-	Labels                     map[string]string `json:"labels,omitempty"`
+	Labels                     uniquelabels.Map  `json:"labels,omitempty"`
 	IPv4Gateway                *net.IP           `json:"ipv4_gateway,omitempty" validate:"omitempty,ipv4"`
 	IPv6Gateway                *net.IP           `json:"ipv6_gateway,omitempty" validate:"omitempty,ipv6"`
 	Ports                      []EndpointPort    `json:"ports,omitempty" validate:"dive"`
@@ -167,11 +175,21 @@ type WorkloadEndpoint struct {
 	QoSControls                *QoSControls      `json:"qosControls,omitempty"`
 }
 
-type EndpointPort struct {
-	Name     string               `json:"name" validate:"name"`
-	Protocol numorstring.Protocol `json:"protocol"`
-	Port     uint16               `json:"port" validate:"gt=0"`
+func (e *WorkloadEndpoint) WorkloadOrHostEndpoint() {}
+
+func (e *WorkloadEndpoint) GetLabels() uniquelabels.Map {
+	return e.Labels
 }
+
+func (e *WorkloadEndpoint) GetProfileIDs() []string {
+	return e.ProfileIDs
+}
+
+func (e *WorkloadEndpoint) GetPorts() []EndpointPort {
+	return e.Ports
+}
+
+var _ Endpoint = (*WorkloadEndpoint)(nil)
 
 // IPNat contains a single NAT mapping for a WorkloadEndpoint resource.
 type IPNAT struct {

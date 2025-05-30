@@ -21,11 +21,16 @@ bin/release: $(shell find . -name "*.go")
 	@mkdir -p bin && \
 	$(call build_binary, ./cmd, bin/release)
 
+POSTRELEASE_TEST_PACKAGE		:= $(PACKAGE_NAME)/pkg/postrelease
+UNIT_TEST_PACKAGES	:= $(shell go list ./... | grep -v $(POSTRELEASE_TEST_PACKAGE))
+ut:
+	$(DOCKER_GO_BUILD) go test $(UNIT_TEST_PACKAGES) -v -cover -count 1
+
 ###############################################################################
 # CI/CD
 ###############################################################################
 .PHONY: ci
-ci: static-checks
+ci: static-checks ut
 
 ###############################################################################
 # Hashrelease
@@ -38,6 +43,9 @@ hashrelease-build: bin/release var-require-all-GITHUB_TOKEN
 
 hashrelease-publish: bin/release var-require-all-GITHUB_TOKEN
 	@bin/release hashrelease publish
+
+hashrelease-svr-gc: bin/release
+	@bin/release hashrelease garbage-collect
 
 ###############################################################################
 # Release

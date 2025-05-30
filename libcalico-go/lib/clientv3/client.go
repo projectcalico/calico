@@ -199,26 +199,34 @@ type poolAccessor struct {
 	client *client
 }
 
-func (p poolAccessor) GetEnabledPools(ipVersion int) ([]v3.IPPool, error) {
-	return p.getPools(func(pool *v3.IPPool) bool {
-		if pool.Spec.Disabled {
-			log.Debugf("Skipping disabled IP pool (%s)", pool.Name)
-			return false
-		}
-		if _, cidr, err := net.ParseCIDR(pool.Spec.CIDR); err == nil && cidr.Version() == ipVersion {
-			log.Debugf("Adding pool (%s) to the IPPool list", cidr.String())
-			return true
-		} else if err != nil {
-			log.Warnf("Failed to parse the IPPool: %s. Ignoring that IPPool", pool.Spec.CIDR)
-		} else {
-			log.Debugf("Ignoring IPPool: %s. IP version is different.", pool.Spec.CIDR)
-		}
+func filterIPPool(pool *v3.IPPool, ipVersion int) bool {
+	if !pool.DeletionTimestamp.IsZero() {
+		log.Debugf("Skipping deleting IP pool (%s)", pool.Name)
 		return false
+	}
+	if pool.Spec.Disabled {
+		log.Debugf("Skipping disabled IP pool (%s)", pool.Name)
+		return false
+	}
+	if _, cidr, err := net.ParseCIDR(pool.Spec.CIDR); err == nil && cidr.Version() == ipVersion {
+		log.Debugf("Adding pool (%s) to the IPPool list", cidr.String())
+		return true
+	} else if err != nil {
+		log.Warnf("Failed to parse the IPPool: %s. Ignoring that IPPool", pool.Spec.CIDR)
+	} else {
+		log.Debugf("Ignoring IPPool: %s. IP version is different.", pool.Spec.CIDR)
+	}
+	return false
+}
+
+func (p poolAccessor) GetEnabledPools(ctx context.Context, ipVersion int) ([]v3.IPPool, error) {
+	return p.getPools(ctx, func(pool *v3.IPPool) bool {
+		return filterIPPool(pool, ipVersion)
 	})
 }
 
-func (p poolAccessor) getPools(filter func(pool *v3.IPPool) bool) ([]v3.IPPool, error) {
-	pools, err := p.client.IPPools().List(context.Background(), options.ListOptions{})
+func (p poolAccessor) getPools(ctx context.Context, filter func(pool *v3.IPPool) bool) ([]v3.IPPool, error) {
+	pools, err := p.client.IPPools().List(ctx, options.ListOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -232,8 +240,8 @@ func (p poolAccessor) getPools(filter func(pool *v3.IPPool) bool) ([]v3.IPPool, 
 	return filtered, nil
 }
 
-func (p poolAccessor) GetAllPools() ([]v3.IPPool, error) {
-	return p.getPools(func(pool *v3.IPPool) bool {
+func (p poolAccessor) GetAllPools(ctx context.Context) ([]v3.IPPool, error) {
+	return p.getPools(ctx, func(pool *v3.IPPool) bool {
 		return true
 	})
 }
@@ -288,6 +296,10 @@ func (c client) EnsureInitialized(ctx context.Context, calicoVersion, clusterTyp
 	}
 
 	return nil
+}
+
+func (c client) Close() error {
+	return c.backend.Close()
 }
 
 const globalClusterInfoName = "default"

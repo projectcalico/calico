@@ -5,13 +5,13 @@
 package v3
 
 import (
-	"context"
+	context "context"
 	time "time"
 
-	projectcalicov3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	apisprojectcalicov3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	clientset "github.com/projectcalico/api/pkg/client/clientset_generated/clientset"
 	internalinterfaces "github.com/projectcalico/api/pkg/client/informers_generated/externalversions/internalinterfaces"
-	v3 "github.com/projectcalico/api/pkg/client/listers_generated/projectcalico/v3"
+	projectcalicov3 "github.com/projectcalico/api/pkg/client/listers_generated/projectcalico/v3"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	watch "k8s.io/apimachinery/pkg/watch"
@@ -22,7 +22,7 @@ import (
 // StagedNetworkPolicies.
 type StagedNetworkPolicyInformer interface {
 	Informer() cache.SharedIndexInformer
-	Lister() v3.StagedNetworkPolicyLister
+	Lister() projectcalicov3.StagedNetworkPolicyLister
 }
 
 type stagedNetworkPolicyInformer struct {
@@ -57,7 +57,7 @@ func NewFilteredStagedNetworkPolicyInformer(client clientset.Interface, namespac
 				return client.ProjectcalicoV3().StagedNetworkPolicies(namespace).Watch(context.TODO(), options)
 			},
 		},
-		&projectcalicov3.StagedNetworkPolicy{},
+		&apisprojectcalicov3.StagedNetworkPolicy{},
 		resyncPeriod,
 		indexers,
 	)
@@ -68,9 +68,9 @@ func (f *stagedNetworkPolicyInformer) defaultInformer(client clientset.Interface
 }
 
 func (f *stagedNetworkPolicyInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&projectcalicov3.StagedNetworkPolicy{}, f.defaultInformer)
+	return f.factory.InformerFor(&apisprojectcalicov3.StagedNetworkPolicy{}, f.defaultInformer)
 }
 
-func (f *stagedNetworkPolicyInformer) Lister() v3.StagedNetworkPolicyLister {
-	return v3.NewStagedNetworkPolicyLister(f.Informer().GetIndexer())
+func (f *stagedNetworkPolicyInformer) Lister() projectcalicov3.StagedNetworkPolicyLister {
+	return projectcalicov3.NewStagedNetworkPolicyLister(f.Informer().GetIndexer())
 }

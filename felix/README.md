@@ -175,6 +175,87 @@ Ginkgo will re-run tests as files are modified and saved.
 - If you want to run specific test(s) add **F** letter to the test(s) or test(s) context names, or you can add `-ginkgo.focus="{name of the test}"` attribute to the *Program Arguments* in the IDE Runtime configuration    
 - Click **Debug** button next to the IDE Test configuration that you created before
 
+## How can I debug the Felix FV tests using VS Code?
+
+- Create a **Launch Configuration** in VS Code.
+
+  - Open **VS Code** on your system.
+
+  - Open your **calico** project.
+
+  - Ensure you have the **Go extension** installed in VS Code.
+
+  - Create `.vscode/launch.json` file (if not already created).
+
+  - Modify the `.vscode/launch.json` file to include the following configuration:
+
+    ```json
+    {
+      "version": "0.2.0",
+      "configurations": [
+          {
+              "name": "Debug Felix FV Tests",
+              "type": "go",
+              "request": "launch",
+              "mode": "test",
+              "program": "${workspaceFolder}/felix/fv",
+              "env": {
+                  "GOFLAGS": "-tags=fvtests"
+              },
+              "args": [
+                  "-test.v",
+                  "-ginkgo.v"
+              ],
+              "buildFlags": "-tags=fvtests",
+              "cwd": "${workspaceFolder}/felix/fv",
+              "preLaunchTask": "Build and Prepare Felix",
+              "console": "integratedTerminal"
+          }
+      ]
+    }
+    ```
+
+  - Save the `launch.json` file.
+
+  - Add a **PreLaunch Task** to build and prepare Felix.
+
+    - Open the `.vscode/tasks.json` file (create one if it does not exist).
+
+      - Add the following task:
+
+        ```json
+        {
+          "version": "2.0.0",
+          "tasks": [
+              {
+                  "label": "Build and Prepare Felix",
+                  "type": "shell",
+                  "command": "/bin/bash",
+                  "args": [
+                      "-lc",
+                      "cd ${workspaceFolder}/felix && make build-fv-env"
+                  ],
+                  "group": {
+                      "kind": "build",
+                      "isDefault": true
+                  }
+              }
+          ]
+        }
+        ```
+
+    - Save the `tasks.json` file.
+
+- If you want to run specific test(s), add the **F** letter to the test(s) or test(s) context names, or use the `-ginkgo.focus="{name of the test}"` argument in the **args** section of the `launch.json` configuration.
+
+- Start Debugging:
+  - Set breakpoints in your code where needed.
+  - Go to the **Run and Debug** panel.
+  - Select **Debug Felix FV Tests** from the dropdown.
+  - Click **Start Debugging** (`F5`).
+
+This setup allows you to debug the Felix FV tests using VS Code with Ginkgo and Go tool configurations.
+
 ## How do I build packages/run Felix?
 
 ### Docker

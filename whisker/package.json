@@ -1,7 +1,7 @@
 {
     "name": "oss-ui",
     "private": true,
-    "version": "0.0.1",
+    "version": "0.0.2",
     "type": "module",
     "scripts": {
         "start": "rsbuild dev",
@@ -15,25 +15,30 @@
         "test": "jest",
         "test:update": "jest -u",
         "test:cov": "jest --coverage",
-        "verify": "yarn format && yarn lint --quiet && yarn test:cov --silent",
-        "postinstall": "husky"
+        "verify": "yarn format && yarn lint --quiet && yarn test:cov --silent && yarn build",
+        "postinstall": "husky",
+        "patch": "yarn version --no-git-tag-version --new-version patch"
     },
     "dependencies": {
         "@chakra-ui/icons": "^2.2.4",
         "@chakra-ui/react": "^2.8.2",
         "@emotion/react": "^11.11.1",
         "@emotion/styled": "^11.11.0",
+        "@hello-pangea/dnd": "^18.0.1",
         "@tanstack/react-query": "^5.64.2",
         "@types/react-table": "^7.7.9",
         "chakra-react-select": "^4.10.1",
         "framer-motion": "^10.12.16",
         "lodash": "^4.17.21",
+        "motion": "^12.4.10",
         "react": "^19.0.0",
         "react-dom": "^19.0.0",
+        "react-hook-form": "^7.54.2",
         "react-json-view-lite": "^1.2.0",
         "react-router-dom": "6.28.2",
         "react-table": "^7.7.0",
-        "react-window": "^1.8.6"
+        "react-window": "^1.8.6",
+        "uuid": "^11.1.0"
     },
     "devDependencies": {
         "@eslint/js": "^9.15.0",
@@ -42,6 +47,7 @@
         "@rsbuild/plugin-type-check": "^1.1.0",
         "@swc/core": "^1.10.1",
         "@swc/jest": "^0.2.37",
+        "@tanstack/react-query-devtools": "^5.66.9",
         "@testing-library/dom": "^10.4.0",
         "@testing-library/jest-dom": "^6.6.3",
         "@testing-library/react": "^16.1.0",

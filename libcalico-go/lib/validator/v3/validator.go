@@ -93,7 +93,7 @@ var (
 	vxlanModeRegex          = regexp.MustCompile("^(Always|CrossSubnet|Never)$")
 	assignmentModeRegex     = regexp.MustCompile("^(Automatic|Manual)$")
 	assignIPsRegex          = regexp.MustCompile("^(AllServices|RequestedServicesOnly)$")
-	logLevelRegex           = regexp.MustCompile("^(Debug|Info|Warning|Error|Fatal)$")
+	logLevelRegex           = regexp.MustCompile("^(Trace|Debug|Info|Warning|Error|Fatal)$")
 	bpfLogLevelRegex        = regexp.MustCompile("^(Debug|Info|Off)$")
 	bpfServiceModeRegex     = regexp.MustCompile("^(Tunnel|DSR)$")
 	bpfCTLBRegex            = regexp.MustCompile("^(Disabled|Enabled|TCP)$")
@@ -208,6 +208,7 @@ func init() {
 	registerFieldValidator("keyValueList", validateKeyValueList)
 	registerFieldValidator("prometheusHost", validatePrometheusHost)
 	registerFieldValidator("ipType", validateIPType)
+	registerFieldValidator("createDefaultHostEndpoint", validateCreateDefaultHostEndpoint)
 
 	registerFieldValidator("sourceAddress", RegexValidator("SourceAddress", SourceAddressRegex))
 	registerFieldValidator("regexp", validateRegexp)
@@ -229,6 +230,8 @@ func init() {
 	registerFieldValidator("netv4", validateIPv4Network)
 	registerFieldValidator("netv6", validateIPv6Network)
 	registerFieldValidator("net", validateIPNetwork)
+	registerFieldValidator("ipv4", validateIPv4)
+	registerFieldValidator("ipv6", validateIPv6)
 
 	// Override the default CIDR validator.  Validates an arbitrary CIDR (does not
 	// need to be correctly masked).  Also accepts an IP address without a mask.
@@ -476,6 +479,11 @@ func validateAssignIPs(fl validator.FieldLevel) bool {
 	s := fl.Field().String()
 	log.Debugf("Validate Assign IPs: %s", s)
 	return assignIPsRegex.MatchString(s)
+}
+
+func validateCreateDefaultHostEndpoint(fl validator.FieldLevel) bool {
+	s := api.DefaultHostEndpointMode(fl.Field().String())
+	return s == api.DefaultHostEndpointsEnabled || s == api.DefaultHostEndpointsDisabled
 }
 
 func RegexValidator(desc string, rx *regexp.Regexp) func(fl validator.FieldLevel) bool {
@@ -760,6 +768,22 @@ func validateCIDRs(fl validator.FieldLevel) bool {
 		}
 	}
 	return true
+}
+
+func validateIPv4(fl validator.FieldLevel) bool {
+	n := fl.Field().String()
+	log.Debugf("Validate IPv4: %s", n)
+	parsedIP := net.ParseIP(n)
+	// Check if parsing was successful and if it is an IPv4 address.
+	return parsedIP != nil && parsedIP.To4() != nil
+}
+
+func validateIPv6(fl validator.FieldLevel) bool {
+	n := fl.Field().String()
+	log.Debugf("Validate IPv6: %s", n)
+	parsedIP := net.ParseIP(n)
+	// Check if parsing was successful and if it is NOT an IPv4 address.
+	return parsedIP != nil && parsedIP.To4() == nil
 }
 
 // validateKeyValueList validates the field is a comma separated list of key=value pairs.
@@ -1423,6 +1447,18 @@ func validateBGPPeerSpec(structLevel validator.StructLevel) {
 	if uint32(ps.ASNumber) != 0 && ps.PeerSelector != "" {
 		structLevel.ReportError(reflect.ValueOf(ps.ASNumber), "ASNumber", "",
 			reason("ASNumber field must be empty when PeerSelector is specified"), "")
+	}
+	if uint32(ps.ASNumber) == 0 && ps.LocalWorkloadSelector != "" {
+		structLevel.ReportError(reflect.ValueOf(ps.ASNumber), "ASNumber", "",
+			reason("ASNumber field must NOT be empty when LocalWorkloadSelector is specified"), "")
+	}
+	if ps.PeerIP != "" && ps.LocalWorkloadSelector != "" {
+		structLevel.ReportError(reflect.ValueOf(ps.PeerIP), "PeerIP", "",
+			reason("PeerIP field must be empty when LocalWorkloadSelector is specified"), "")
+	}
+	if ps.PeerSelector != "" && ps.LocalWorkloadSelector != "" {
+		structLevel.ReportError(reflect.ValueOf(ps.PeerIP), "PeerSelector", "",
+			reason("PeerSelector field must be empty when LocalWorkloadSelector is specified"), "")
 	}
 	ok, msg := validateReachableBy(ps.ReachableBy, ps.PeerIP)
 	if !ok {

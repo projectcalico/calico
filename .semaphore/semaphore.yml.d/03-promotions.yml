@@ -31,6 +31,10 @@ promotions:
     pipeline_file: push-images/node.yml
     auto_promote:
       when: "branch =~ 'master|release-'"
+  - name: Push mock calico-node images
+    pipeline_file: push-images/mock-node.yml
+    auto_promote:
+      when: "branch =~ 'master|release-'"
   - name: Push cni-plugin images
     pipeline_file: push-images/cni-plugin.yml
     auto_promote:
@@ -53,6 +57,22 @@ promotions:
       when: "branch =~ 'master|release-'"
   - name: Push Goldmane images
     pipeline_file: push-images/goldmane.yml
+    auto_promote:
+      when: "branch =~ 'master|release-'"
+  - name: Push Whisker images
+    pipeline_file: push-images/whisker.yml
+    auto_promote:
+      when: "branch =~ 'master|release-'"
+  - name: Push Whisker Backend images
+    pipeline_file: push-images/whisker-backend.yml
+    auto_promote:
+      when: "branch =~ 'master|release-'"
+  - name: Push Guardian images
+    pipeline_file: push-images/guardian.yml
+    auto_promote:
+      when: "branch =~ 'master|release-'"
+  - name: Push Envoy images
+    pipeline_file: push-images/envoy.yml
     auto_promote:
       when: "branch =~ 'master|release-'"
   - name: Publish openstack packages

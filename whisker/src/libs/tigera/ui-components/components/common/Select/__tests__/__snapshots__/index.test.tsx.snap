@@ -76,7 +76,7 @@ exports[`<Select/> it renders SelectIconOption with iconUrl 1`] = `
     >
       <img
         class="chakra-image css-4n3cc1"
-        src="https://www.mockurl.com/image.png"
+        src="fake-url"
       />
       <span
         class="css-1v4xcoh"

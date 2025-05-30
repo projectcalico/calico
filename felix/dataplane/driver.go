@@ -36,7 +36,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/aws"
 	"github.com/projectcalico/calico/felix/bpf"
-	"github.com/projectcalico/calico/felix/bpf/conntrack"
+	bpfconntrack "github.com/projectcalico/calico/felix/bpf/conntrack/timeouts"
 	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
 	"github.com/projectcalico/calico/felix/calc"
 	"github.com/projectcalico/calico/felix/collector"
@@ -50,6 +50,7 @@ import (
 	"github.com/projectcalico/calico/felix/iptables"
 	"github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/felix/markbits"
+	"github.com/projectcalico/calico/felix/nfnetlink"
 	"github.com/projectcalico/calico/felix/nftables"
 	"github.com/projectcalico/calico/felix/rules"
 	"github.com/projectcalico/calico/felix/wireguard"
@@ -217,6 +218,7 @@ func StartDataplaneDriver(
 				NetlinkTimeout:    configParams.NetlinkTimeoutSecs,
 			},
 			RulesConfig: rules.Config{
+				FlowLogsEnabled:       configParams.FlowLogsEnabled(),
 				NFTables:              configParams.NFTablesMode == "Enabled",
 				WorkloadIfacePrefixes: configParams.InterfacePrefixes(),
 
@@ -286,6 +288,7 @@ func StartDataplaneDriver(
 				NATPortRange:                       configParams.NATPortRange,
 				IptablesNATOutgoingInterfaceFilter: configParams.IptablesNATOutgoingInterfaceFilter,
 				NATOutgoingAddress:                 configParams.NATOutgoingAddress,
+				NATOutgoingExclusions:              configParams.NATOutgoingExclusions,
 				BPFEnabled:                         configParams.BPFEnabled,
 				BPFForceTrackPacketsFromIfaces:     replaceWildcards(configParams.NFTablesMode == "Enabled", configParams.BPFForceTrackPacketsFromIfaces),
 				ServiceLoopPrevention:              configParams.ServiceLoopPrevention,
@@ -321,6 +324,7 @@ func StartDataplaneDriver(
 			DeviceRouteSourceAddressIPv6:   configParams.DeviceRouteSourceAddressIPv6,
 			DeviceRouteProtocol:            netlink.RouteProtocol(configParams.DeviceRouteProtocol),
 			RemoveExternalRoutes:           configParams.RemoveExternalRoutes,
+			ProgramRoutes:                  configParams.ProgramRoutesEnabled(),
 			IPForwarding:                   configParams.IPForwarding,
 			IPSetsRefreshInterval:          configParams.IpsetsRefreshInterval,
 			IptablesPostWriteCheckInterval: configParams.IptablesPostWriteCheckIntervalSecs,
@@ -389,12 +393,12 @@ func StartDataplaneDriver(
 			BPFExportBufferSizeMB:              configParams.BPFExportBufferSizeMB,
 			XDPEnabled:                         configParams.XDPEnabled,
 			XDPAllowGeneric:                    configParams.GenericXDPEnabled,
-			BPFConntrackTimeouts:               conntrack.GetTimeouts(configParams.BPFConntrackTimeouts),
+			BPFConntrackTimeouts:               bpfconntrack.GetTimeouts(configParams.BPFConntrackTimeouts),
 			BPFConntrackCleanupMode:            apiv3.BPFConntrackMode(configParams.BPFConntrackCleanupMode),
 			RouteTableManager:                  routeTableIndexAllocator,
 			MTUIfacePattern:                    configParams.MTUIfacePattern,
 			BPFExcludeCIDRsFromNAT:             configParams.BPFExcludeCIDRsFromNAT,
-			NfNetlinkBufSize:                   configParams.NfNetlinkBufSize,
+			NfNetlinkBufSize:                   nfnetlink.DefaultNfNetlinkBufSize,
 			BPFRedirectToPeer:                  configParams.BPFRedirectToPeer,
 			BPFProfiling:                       configParams.BPFProfiling,
 			ServiceLoopPrevention:              configParams.ServiceLoopPrevention,
@@ -409,6 +413,7 @@ func StartDataplaneDriver(
 			KubernetesProvider: configParams.KubernetesProvider(),
 			Collector:          collector,
 			LookupsCache:       lc,
+			FlowLogsEnabled:    configParams.FlowLogsEnabled(),
 		}
 
 		if configParams.BPFExternalServiceMode == "dsr" {

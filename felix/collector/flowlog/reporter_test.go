@@ -28,6 +28,7 @@ import (
 	"github.com/projectcalico/calico/felix/collector/types"
 	"github.com/projectcalico/calico/felix/collector/types/endpoint"
 	"github.com/projectcalico/calico/felix/collector/types/tuple"
+	"github.com/projectcalico/calico/lib/std/uniquelabels"
 	"github.com/projectcalico/calico/libcalico-go/lib/health"
 )
 
@@ -36,7 +37,6 @@ var (
 	logStreamName = "test-stream"
 	flushInterval = 500 * time.Millisecond
 	includeLabels = false
-	noService     = FlowService{Namespace: "-", Name: "-", PortName: "-", PortNum: 0}
 )
 
 var (
@@ -288,7 +288,7 @@ func (m *mockTicker) Done() chan bool {
 	return m.stop
 }
 
-func newExpectedFlowLog(t tuple.Tuple, nf, nfs, nfc int, a Action, fr ReporterType, pi, po, bi, bo int, srcMeta, dstMeta endpoint.Metadata, dstService FlowService, srcLabels, dstLabels map[string]string, fap, fep, fpp FlowPolicySet, fe FlowExtras) FlowLog {
+func newExpectedFlowLog(t tuple.Tuple, nf, nfs, nfc int, a Action, fr ReporterType, pi, po, bi, bo int, srcMeta, dstMeta endpoint.Metadata, dstService FlowService, srcLabels, dstLabels map[string]string, fep, fpp FlowPolicySet) FlowLog {
 	return FlowLog{
 		FlowMeta: FlowMeta{
 			Tuple:      t,
@@ -299,13 +299,11 @@ func newExpectedFlowLog(t tuple.Tuple, nf, nfs, nfc int, a Action, fr ReporterTy
 			DstService: dstService,
 		},
 		FlowLabels: FlowLabels{
-			SrcLabels: srcLabels,
-			DstLabels: dstLabels,
+			SrcLabels: uniquelabels.Make(srcLabels),
+			DstLabels: uniquelabels.Make(dstLabels),
 		},
-		FlowAllPolicySet:      fap,
 		FlowEnforcedPolicySet: fep,
 		FlowPendingPolicySet:  fpp,
-		FlowExtras:            fe,
 		FlowProcessReportedStats: FlowProcessReportedStats{
 			FlowReportedStats: FlowReportedStats{
 				NumFlows:          nf,

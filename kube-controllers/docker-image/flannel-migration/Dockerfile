@@ -13,13 +13,8 @@
 # limitations under the License.
 
 ARG CALICO_BASE
-ARG QEMU_IMAGE
-
-FROM ${QEMU_IMAGE} AS qemu
 
 FROM alpine:3 AS builder
-
-COPY --from=qemu /usr/bin/qemu-*-static /usr/bin/
 
 # Make sure the status file is owned by our user.
 RUN mkdir /status
@@ -32,7 +27,7 @@ ARG TARGETARCH
 
 COPY --from=builder /status /status/
 
-COPY LICENSE /licenses/LICENSE
+COPY ${BIN_DIR}/LICENSE /licenses/LICENSE
 
 COPY ${BIN_DIR}/kubectl-${TARGETARCH} /usr/bin/kubectl
 COPY ${BIN_DIR}/kube-controllers-linux-${TARGETARCH} /usr/bin/kube-controllers
@@ -42,13 +37,13 @@ FROM ${CALICO_BASE}
 
 ARG GIT_VERSION=unknown
 
-LABEL description="Calico Flannel migration controller updates a flannel cluster to Calico"
-LABEL maintainer="maintainers@tigera.io"
-LABEL name="Calico Flannel migration controller"
-LABEL release="1"
-LABEL summary="Calico Flannel migration controller updates a flannel cluster to Calico"
-LABEL vendor="Project Calico"
-LABEL version=${GIT_VERSION}
+LABEL org.opencontainers.image.description="Calico Flannel migration controller updates a flannel cluster to Calico"
+LABEL org.opencontainers.image.authors="maintainers@tigera.io"
+LABEL org.opencontainers.image.source="https://github.com/projectcalico/calico"
+LABEL org.opencontainers.image.title="Calico Flannel migration controller"
+LABEL org.opencontainers.image.vendor="Project Calico"
+LABEL org.opencontainers.image.version="${GIT_VERSION}"
+LABEL org.opencontainers.image.licenses="Apache-2.0"
 
 COPY --from=source / /
 

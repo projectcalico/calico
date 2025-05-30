@@ -9,7 +9,7 @@ exports[`<ResizableBody/> can render sort disabled columns 1`] = `
       class="css-1wzx962"
     >
       <div
-        class="css-pqv3b8"
+        class="css-1jbx7hn"
       >
         <div
           class="css-ah6f5b"
@@ -76,7 +76,7 @@ exports[`<ResizableBody/> it renders 1`] = `
       class="css-1wzx962"
     >
       <div
-        class="css-pqv3b8"
+        class="css-1jbx7hn"
       >
         <div
           class="css-ah6f5b"
@@ -153,7 +153,7 @@ exports[`<ResizableBody/> it renders and sorting ascending works 1`] = `
       class="css-1wzx962"
     >
       <div
-        class="css-pqv3b8"
+        class="css-1jbx7hn"
       >
         <div
           class="css-ah6f5b"
@@ -230,7 +230,7 @@ exports[`<ResizableBody/> it renders and sorting desc works 1`] = `
       class="css-1wzx962"
     >
       <div
-        class="css-pqv3b8"
+        class="css-1jbx7hn"
       >
         <div
           class="css-ah6f5b"
@@ -307,7 +307,7 @@ exports[`<ResizableBody/> it renders as fixed header and resizing works 1`] = `
       class="css-kqwrs4"
     >
       <div
-        class="css-pqv3b8"
+        class="css-1jbx7hn"
       >
         <div
           class="css-z4yjoo"

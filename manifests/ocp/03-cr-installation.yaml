@@ -1,0 +1,20 @@
+# This section includes Calico installation configuration.
+apiVersion: operator.tigera.io/v1
+kind: Installation
+metadata:
+  name: default
+spec:
+  # Configures Calico networking using the eBPF dataplane. If you want to change the dataplane
+  # to iptables, you should set the linuxDataplane parameter below to "Iptables" and set the
+  # deployKubeProxy parameter to true in the cluster-network-operator.yaml file.
+  calicoNetwork:
+    linuxDataplane: BPF
+  variant: Calico
+
+  # List of image pull secrets to use when installing images from a container registry.
+  # If specified, secrets must be created in the `tigera-operator` namespace.
+  #imagePullSecrets:
+  #  - name: calico-pull-secret
+
+  # Registry to use for pulling Calico images.
+  # registry: <my-registry>

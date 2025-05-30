@@ -13,13 +13,8 @@
 # limitations under the License.
 
 ARG CALICO_BASE
-ARG QEMU_IMAGE
-
-FROM ${QEMU_IMAGE} AS qemu
 
 FROM alpine:3 AS builder
-
-COPY --from=qemu /usr/bin/qemu-*-static /usr/bin/
 
 RUN mkdir -p /var/run/dikastes
 
@@ -28,7 +23,7 @@ FROM scratch AS source
 ARG BIN_DIR
 ARG TARGETARCH
 
-COPY LICENSE /licenses/LICENSE
+COPY bin/LICENSE /licenses/LICENSE
 
 # Typical Linux systems start numbering human users at 1000, reserving 1-999
 # for services, so we pick 999 to be least likely to overlap.
@@ -44,13 +39,13 @@ FROM ${CALICO_BASE}
 
 ARG GIT_VERSION=unknown
 
-LABEL description="Calico Dikastes enables Application Layer Policy"
-LABEL maintainer="maintainers@tigera.io"
-LABEL name="Calico Dikastes"
-LABEL release="1"
-LABEL summary="Calico Dikastes enables Application Layer Policy"
-LABEL vendor="Project Calico"
-LABEL version=${GIT_VERSION}
+LABEL org.opencontainers.image.description="Calico Dikastes enables Application Layer Policy"
+LABEL org.opencontainers.image.authors="maintainers@tigera.io"
+LABEL org.opencontainers.image.source="https://github.com/projectcalico/calico"
+LABEL org.opencontainers.image.title="Calico Dikastes"
+LABEL org.opencontainers.image.vendor="Project Calico"
+LABEL org.opencontainers.image.version="${GIT_VERSION}"
+LABEL org.opencontainers.image.licenses="Apache-2.0"
 
 COPY --from=source / /
 

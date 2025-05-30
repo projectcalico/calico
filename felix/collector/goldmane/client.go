@@ -16,19 +16,23 @@ package goldmane
 
 import (
 	"context"
+	"fmt"
+	"sort"
+	"strings"
 	"sync"
 	"time"
+	"unique"
 
 	"github.com/sirupsen/logrus"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 
 	"github.com/projectcalico/calico/felix/collector/flowlog"
 	"github.com/projectcalico/calico/felix/collector/types/endpoint"
 	"github.com/projectcalico/calico/felix/collector/types/tuple"
 	"github.com/projectcalico/calico/felix/collector/utils"
 	"github.com/projectcalico/calico/goldmane/pkg/client"
+	"github.com/projectcalico/calico/goldmane/pkg/types"
 	"github.com/projectcalico/calico/goldmane/proto"
+	"github.com/projectcalico/calico/lib/std/uniquelabels"
 )
 
 type GoldmaneReporter struct {
@@ -37,22 +41,22 @@ type GoldmaneReporter struct {
 	once    sync.Once
 }
 
-func NewReporter(addr string) *GoldmaneReporter {
+func NewReporter(addr, cert, key, ca string) (*GoldmaneReporter, error) {
+	cli, err := client.NewFlowClient(addr, cert, key, ca)
+	if err != nil {
+		return nil, err
+	}
 	return &GoldmaneReporter{
 		address: addr,
-		client:  client.NewFlowClient(addr),
-	}
+		client:  cli,
+	}, nil
 }
 
 func (g *GoldmaneReporter) Start() error {
 	var err error
 	g.once.Do(func() {
-		var grpcClient *grpc.ClientConn
-		grpcClient, err = grpc.NewClient(g.address, grpc.WithTransportCredentials(insecure.NewCredentials()))
-		if err != nil {
-			return
-		}
-		go g.client.Run(context.Background(), grpcClient)
+		// We don't wait for the initial connection to start so we don't block the caller.
+		g.client.Connect(context.Background())
 	})
 	return err
 }
@@ -64,7 +68,7 @@ func (g *GoldmaneReporter) Report(logSlice any) error {
 			logrus.WithField("num", len(logs)).Debug("Dispatching flow logs to goldmane")
 		}
 		for _, l := range logs {
-			g.client.Push(convertFlowlogToGoldmane(l))
+			g.client.Push(ConvertFlowlogToGoldmane(l))
 		}
 	default:
 		logrus.Panic("Unexpected kind of log dispatcher")
@@ -72,8 +76,75 @@ func (g *GoldmaneReporter) Report(logSlice any) error {
 	return nil
 }
 
-func convertFlowlogToGoldmane(fl *flowlog.FlowLog) *proto.Flow {
-	return &proto.Flow{
+func convertType(t endpoint.Type) proto.EndpointType {
+	var pt proto.EndpointType
+	switch t {
+	case endpoint.Wep:
+		pt = proto.EndpointType_WorkloadEndpoint
+	case endpoint.Hep:
+		pt = proto.EndpointType_HostEndpoint
+	case endpoint.Ns:
+		pt = proto.EndpointType_NetworkSet
+	case endpoint.Net:
+		pt = proto.EndpointType_Network
+	default:
+		logrus.WithField("type", t).Warn("Unexpected endpoint type")
+	}
+	return pt
+}
+
+func convertReporter(r flowlog.ReporterType) proto.Reporter {
+	switch r {
+	case flowlog.ReporterSrc:
+		return proto.Reporter_Src
+	case flowlog.ReporterDst:
+		return proto.Reporter_Dst
+	}
+	logrus.WithField("reporter", r).Fatal("BUG: Unexpected reporter")
+	return proto.Reporter_Dst
+}
+
+func convertAction(a flowlog.Action) proto.Action {
+	switch a {
+	case flowlog.ActionAllow:
+		return proto.Action_Allow
+	case flowlog.ActionDeny:
+		return proto.Action_Deny
+	default:
+		logrus.WithField("action", a).Fatal("BUG: Unexpected action")
+	}
+	return proto.Action_ActionUnspecified
+}
+
+func ConvertFlowlogToGoldmane(fl *flowlog.FlowLog) *types.Flow {
+	return &types.Flow{
+		Key: types.NewFlowKey(
+			&types.FlowKeySource{
+				SourceName:      fl.SrcMeta.AggregatedName,
+				SourceNamespace: fl.SrcMeta.Namespace,
+				SourceType:      convertType(fl.SrcMeta.Type),
+			},
+			&types.FlowKeyDestination{
+				DestName:             fl.DstMeta.AggregatedName,
+				DestNamespace:        fl.DstMeta.Namespace,
+				DestType:             convertType(fl.DstMeta.Type),
+				DestPort:             int64(fl.Tuple.L4Dst),
+				DestServiceName:      fl.DstService.Name,
+				DestServiceNamespace: fl.DstService.Namespace,
+				DestServicePortName:  fl.DstService.PortName,
+				DestServicePort:      int64(fl.DstService.PortNum),
+			},
+			&types.FlowKeyMeta{
+				Proto:    utils.ProtoToString(fl.Tuple.Proto),
+				Reporter: convertReporter(fl.Reporter),
+				Action:   convertAction(fl.Action),
+			},
+			&proto.PolicyTrace{
+				EnforcedPolicies: toPolicyHits(fl.FlowEnforcedPolicySet),
+				PendingPolicies:  toPolicyHits(fl.FlowPendingPolicySet),
+			},
+		),
+
 		StartTime: fl.StartTime.Unix(),
 		EndTime:   fl.StartTime.Unix(),
 
@@ -87,32 +158,6 @@ func convertFlowlogToGoldmane(fl *flowlog.FlowLog) *proto.Flow {
 
 		SourceLabels: ensureLabels(fl.SrcLabels),
 		DestLabels:   ensureLabels(fl.DstLabels),
-
-		Key: &proto.FlowKey{
-			SourceName:      fl.SrcMeta.AggregatedName,
-			SourceNamespace: fl.SrcMeta.Namespace,
-			SourceType:      string(fl.SrcMeta.Type),
-
-			DestName:      fl.DstMeta.AggregatedName,
-			DestNamespace: fl.DstMeta.Namespace,
-			DestType:      string(fl.DstMeta.Type),
-			DestPort:      int64(fl.Tuple.L4Dst),
-
-			DestServiceName:      fl.DstService.Name,
-			DestServiceNamespace: fl.DstService.Namespace,
-			DestServicePortName:  fl.DstService.PortName,
-			DestServicePort:      int64(fl.DstService.PortNum),
-
-			Proto:    utils.ProtoToString(fl.Tuple.Proto),
-			Reporter: string(fl.Reporter),
-			Action:   string(fl.Action),
-			Policies: &proto.PolicyTrace{
-				// TODO: Right now, Goldmane only supports Pending/Enforced policies, but
-				// Felix uses AllPolicies. Use EnforcedPolicies as the transmission
-				// mechanism for now, until Felix is updated to use Pending/Enforced.
-				EnforcedPolicies: toPolicyHits(fl.FlowAllPolicySet),
-			},
-		},
 	}
 }
 
@@ -131,20 +176,47 @@ func ConvertGoldmaneToFlowlog(gl *proto.Flow) flowlog.FlowLog {
 
 	fl.SrcLabels = ensureFlowLogLabels(gl.SourceLabels)
 	fl.DstLabels = ensureFlowLogLabels(gl.DestLabels)
-	fl.FlowAllPolicySet = toFlowPolicySet(gl.Key.Policies.EnforcedPolicies)
+	fl.FlowEnforcedPolicySet = toFlowPolicySet(gl.Key.Policies.EnforcedPolicies)
+	fl.FlowPendingPolicySet = toFlowPolicySet(gl.Key.Policies.PendingPolicies)
 
 	fl.SrcMeta = endpoint.Metadata{
-		Type:           endpoint.Type(gl.Key.SourceType),
 		Namespace:      gl.Key.SourceNamespace,
 		Name:           flowlog.FieldNotIncluded,
 		AggregatedName: gl.Key.SourceName,
 	}
+
+	switch gl.Key.SourceType {
+	case proto.EndpointType_WorkloadEndpoint:
+		fl.SrcMeta.Type = endpoint.Wep
+	case proto.EndpointType_HostEndpoint:
+		fl.SrcMeta.Type = endpoint.Hep
+	case proto.EndpointType_NetworkSet:
+		fl.SrcMeta.Type = endpoint.Ns
+	case proto.EndpointType_Network:
+		fl.SrcMeta.Type = endpoint.Net
+	default:
+		panic(fmt.Sprintf("Unexpected source type: %v", gl.Key.SourceType))
+	}
+
 	fl.DstMeta = endpoint.Metadata{
-		Type:           endpoint.Type(gl.Key.DestType),
 		Namespace:      gl.Key.DestNamespace,
 		Name:           flowlog.FieldNotIncluded,
 		AggregatedName: gl.Key.DestName,
 	}
+
+	switch gl.Key.DestType {
+	case proto.EndpointType_WorkloadEndpoint:
+		fl.DstMeta.Type = endpoint.Wep
+	case proto.EndpointType_HostEndpoint:
+		fl.DstMeta.Type = endpoint.Hep
+	case proto.EndpointType_NetworkSet:
+		fl.DstMeta.Type = endpoint.Ns
+	case proto.EndpointType_Network:
+		fl.DstMeta.Type = endpoint.Net
+	default:
+		panic(fmt.Sprintf("Unexpected destination type: %v", gl.Key.DestType))
+	}
+
 	fl.DstService = flowlog.FlowService{
 		Namespace: gl.Key.DestServiceNamespace,
 		Name:      gl.Key.DestServiceName,
@@ -155,8 +227,24 @@ func ConvertGoldmaneToFlowlog(gl *proto.Flow) flowlog.FlowLog {
 		Proto: utils.StringToProto(gl.Key.Proto),
 		L4Dst: int(gl.Key.DestPort),
 	}
-	fl.Reporter = flowlog.ReporterType(gl.Key.Reporter)
-	fl.Action = flowlog.Action(gl.Key.Action)
+
+	switch gl.Key.Reporter {
+	case proto.Reporter_Src:
+		fl.Reporter = flowlog.ReporterSrc
+	case proto.Reporter_Dst:
+		fl.Reporter = flowlog.ReporterDst
+	default:
+		panic(fmt.Sprintf("Unexpected reporter: %v", gl.Key.Reporter))
+	}
+
+	switch gl.Key.Action {
+	case proto.Action_Allow:
+		fl.Action = flowlog.ActionAllow
+	case proto.Action_Deny:
+		fl.Action = flowlog.ActionDeny
+	default:
+		panic(fmt.Sprintf("Unexpected action: %v", gl.Key.Action))
+	}
 	return fl
 }
 
@@ -181,21 +269,27 @@ func toFlowPolicySet(policies []*proto.PolicyHit) flowlog.FlowPolicySet {
 
 	policySet := make(flowlog.FlowPolicySet)
 	for _, pol := range policies {
-		policySet[pol.ToString()] = struct{}{}
+		if s, err := pol.ToString(); err != nil {
+			logrus.WithError(err).WithField("policy", pol).Error("Failed to convert policy hit to string")
+		} else {
+			policySet[s] = struct{}{}
+		}
 	}
 	return policySet
 }
 
-func ensureLabels(labels map[string]string) []string {
-	if labels == nil {
-		return nil
+func ensureLabels(labels uniquelabels.Map) unique.Handle[string] {
+	if labels.IsNil() {
+		return unique.Make("")
 	}
-	return utils.FlattenLabels(labels)
+	flat := utils.FlattenLabels(labels.RecomputeOriginalMap())
+	sort.Strings(flat)
+	return unique.Make(strings.Join(flat, ","))
 }
 
-func ensureFlowLogLabels(lables []string) map[string]string {
+func ensureFlowLogLabels(lables []string) uniquelabels.Map {
 	if lables == nil {
-		return map[string]string{}
+		return uniquelabels.Empty
 	}
-	return utils.UnflattenLabels(lables)
+	return uniquelabels.Make(utils.UnflattenLabels(lables))
 }
