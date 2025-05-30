@@ -126,3 +126,6 @@ test_connection 6
 # make changes to the cluster. Some of our tests modify calico/node, etc.
 # We should remove this once we fix up those tests.
 ${kubectl} scale deployment -n tigera-operator tigera-operator --replicas=0
+
+# TODO: Remove crd.projectcalico.org/v1 resources.
+${kubectl} delete -f ../libcalico-go/config/crd/
