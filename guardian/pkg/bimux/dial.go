@@ -32,21 +32,10 @@ const (
 	defaultSessionBacklog    = 1000
 )
 
+type ClientSessionResponse = chanutil.Response[*ClientSession]
+
 type SessionDialer interface {
-	Dial(ctx context.Context) (<-chan *ClientSideSession, error)
-}
-
-type ClientSideSession struct {
-	session *yamux.Session
-	err     error
-}
-
-func (session *ClientSideSession) IsClosed() bool {
-	return session.session.IsClosed()
-}
-
-func (session *ClientSideSession) WaitForClose() {
-	session.session.CloseChan()
+	Dial(ctx context.Context) (<-chan ClientSessionResponse, error)
 }
 
 type sessionDialer struct {
@@ -64,7 +53,7 @@ type sessionDialer struct {
 	httpProxyURL *url.URL
 }
 
-func NewTLSSessionDialer(addr string, tlsConfig *tls.Config, opts ...DialerOption) (SessionDialer, error) {
+func NewSessionDialer(addr string, tlsConfig *tls.Config, opts ...DialerOption) (SessionDialer, error) {
 	d := &sessionDialer{
 		addr:              addr,
 		tlsConfig:         tlsConfig,
@@ -84,22 +73,19 @@ func NewTLSSessionDialer(addr string, tlsConfig *tls.Config, opts ...DialerOptio
 	return d, nil
 }
 
-func (d *sessionDialer) Dial(ctx context.Context) (<-chan *ClientSideSession, error) {
-	var dialFunc func() (net.Conn, error)
-	if d.tlsConfig == nil {
-		dialFunc = func() (net.Conn, error) { return net.Dial("tcp", d.addr) }
-	} else {
-		dialFunc = d.dialTLS
-	}
-
-	ch := make(chan *ClientSideSession)
+func (d *sessionDialer) Dial(ctx context.Context) (<-chan ClientSessionResponse, error) {
+	// The channel size is 0 to ensure callers are blocked until the dial is complete.
+	responseCh := make(chan ClientSessionResponse)
 
 	go func() {
-		defer close(ch)
-
-		conn, err := dialRetry(ctx, dialFunc, d.retryAttempts, d.retryInterval)
+		defer close(responseCh)
+		logrus.Debug("Dialing")
+		conn, err := d.dialRetry(ctx)
 		if err != nil {
-			ch <- &ClientSideSession{err: err}
+			logrus.WithError(err).Debug("Failed to dial.")
+
+			responseCh <- chanutil.Response[*ClientSession]{Err: err}
+			return
 		}
 
 		config := yamux.DefaultConfig()
@@ -107,15 +93,18 @@ func (d *sessionDialer) Dial(ctx context.Context) (<-chan *ClientSideSession, er
 		config.EnableKeepAlive = d.keepAliveEnable
 		config.KeepAliveInterval = d.keepAliveInterval
 		config.LogOutput = &logrusWriter{logrus.WithField("component", "tunnel-yamux")}
-		session, err := yamux.Client(conn, config)
+
+		mux, err := yamux.Client(conn, config)
 		if err != nil {
+			// An error signifies here signifies that the configuration is bad. Since this is a static configuration,
+			// it is a developer error.
 			panic(err)
 		}
 
-		ch <- &ClientSideSession{session: session}
+		responseCh <- ClientSessionResponse{Value: newClientSession(mux)}
 	}()
 
-	return ch, nil
+	return responseCh, nil
 }
 func newDialer(timeout time.Duration) *net.Dialer {
 	// We need to explicitly set the timeout as it seems it's possible for this to hang indefinitely if we don't.
@@ -213,11 +202,11 @@ func tlsDialViaHTTPProxy(d *net.Dialer, destination string, proxyTargetURL *url.
 	return mtlsC, nil
 }
 
-func dialRetry(ctx context.Context, connFunc func() (net.Conn, error), retryAttempts int, retryInterval time.Duration) (net.Conn, error) {
+func (d *sessionDialer) dialRetry(ctx context.Context) (net.Conn, error) {
 	for i := 0; ; i++ {
-		conn, err := connFunc()
+		conn, err := d.dialTLS()
 		if err != nil {
-			if retryAttempts > -1 && i > retryAttempts {
+			if d.retryAttempts > -1 && i > d.retryAttempts {
 				return nil, err
 			}
 
@@ -225,10 +214,10 @@ func dialRetry(ctx context.Context, connFunc func() (net.Conn, error), retryAtte
 			if errors.Is(err, &xerr) {
 				logrus.WithError(err).Infof("TLS dial failed: %s. fingerprint='%s' issuerCommonName='%s' subjectCommonName='%s'", xerr.Error(), cryptoutils.GenerateFingerprint(xerr.Cert), xerr.Cert.Issuer.CommonName, xerr.Cert.Subject.CommonName)
 			} else {
-				logrus.WithError(err).Infof("TLS dial attempt %d failed, will retry in %s", i, retryInterval.String())
+				logrus.WithError(err).Infof("TLS dial attempt %d failed, will retry in %s", i, d.retryInterval.String())
 			}
 
-			if _, err := chanutil.Read(ctx, clock.After(retryInterval)); err != nil {
+			if _, err := chanutil.Read(ctx, clock.After(d.retryInterval)); err != nil {
 				if errors.Is(err, context.Canceled) {
 					return nil, err
 				}

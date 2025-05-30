@@ -14,42 +14,23 @@
 
 package server
 
-import (
-	"time"
-)
+// InboundProxyServerOption is a common format for New() options
+type InboundProxyServerOption func(service *inboundProxyServer) error
 
-// Option is a common format for New() options
-type Option func(*server) error
-
-// WithProxyTargets sets the proxying targets, can be used multiple times to add
+// WithProxyTargets sets the proxying targets. This can be called multiple times to add
 // to a union of target.
-func WithProxyTargets(tgts []Target) Option {
-	return func(c *server) error {
+func WithProxyTargets(tgts []Target) InboundProxyServerOption {
+	return func(c *inboundProxyServer) error {
 		c.targets = append(c.targets, tgts...)
 		return nil
 	}
 }
 
-// WithConnectionRetryAttempts sets the number of times the client should retry opening or accepting a connection over
-// the tunnel before failing permanently.
-func WithConnectionRetryAttempts(connRetryAttempts int) Option {
-	return func(c *server) error {
-		c.connRetryAttempts = connRetryAttempts
-		return nil
-	}
-}
+// OutboundProxyServerOption is a common format for New() options
+type OutboundProxyServerOption func(service *outboundProxyServer) error
 
-// WithConnectionRetryInterval sets the interval that the client should wait before retrying to open or accept a connection
-// over the tunnel after failing.
-func WithConnectionRetryInterval(connRetryInterval time.Duration) Option {
-	return func(c *server) error {
-		c.connRetryInterval = connRetryInterval
-		return nil
-	}
-}
-
-func WithListenPort(port string) Option {
-	return func(c *server) error {
+func WithListenPort(port string) OutboundProxyServerOption {
+	return func(c *outboundProxyServer) error {
 		c.listenPort = port
 		return nil
 	}
