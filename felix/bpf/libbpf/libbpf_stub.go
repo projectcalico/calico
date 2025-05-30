@@ -150,7 +150,7 @@ func (l *Link) Detach() error {
 	panic("LIBBPF syscall stub")
 }
 
-func DetachCTLBProgramsLegacy(_ string) error {
+func DetachCTLBProgramsLegacy(_ bool, _ string) error {
 	panic("LIBBPF syscall stub")
 }
 
