@@ -808,7 +808,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		dp.RegisterManager(newPolicyManager(rawTableV4, mangleTableV4, filterTableV4, ruleRenderer, 4, config.RulesConfig.NFTables))
 
 		// Clean up any leftover BPF state.
-		err := bpfnat.RemoveConnectTimeLoadBalancer("")
+		err := bpfnat.RemoveConnectTimeLoadBalancer(true, "")
 		if err != nil {
 			log.WithError(err).Info("Failed to remove BPF connect-time load balancer, ignoring.")
 		}
@@ -982,7 +982,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			log.Infof("Connect time load balancer enabled: %s", config.BPFConnTimeLB)
 		} else {
 			// Deactivate the connect-time load balancer.
-			err = nat.RemoveConnectTimeLoadBalancer(config.BPFCgroupV2)
+			err = nat.RemoveConnectTimeLoadBalancer(true, config.BPFCgroupV2)
 			if err != nil {
 				log.WithError(err).Warn("Failed to detach connect-time load balancer. Ignoring.")
 			}

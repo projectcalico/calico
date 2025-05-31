@@ -167,26 +167,44 @@ func DetachClassifier(ifindex, handle, pref int, ingress bool) error {
 	return err
 }
 
-func DetachCTLBProgramsLegacy(cgroup string) error {
+func DetachCTLBProgramsLegacy(ipv4Enabled bool, cgroup string) error {
+	attachTypes := []int{C.BPF_CGROUP_INET6_CONNECT,
+		C.BPF_CGROUP_UDP6_SENDMSG,
+		C.BPF_CGROUP_UDP6_RECVMSG,
+	}
+	v4AttachTypes := []int{C.BPF_CGROUP_INET4_CONNECT,
+		C.BPF_CGROUP_UDP4_SENDMSG,
+		C.BPF_CGROUP_UDP4_RECVMSG,
+	}
+	if ipv4Enabled {
+		attachTypes = append(attachTypes, v4AttachTypes...)
+	}
+	var err error
+	for _, attachType := range attachTypes {
+		perr := detachCTLBProgramLegacy(cgroup, attachType)
+		if perr != nil {
+			err = errors.Join(err, perr)
+		}
+	}
+	return err
+}
+
+func detachCTLBProgramLegacy(cgroup string, attachType int) error {
 	f, err := os.OpenFile(cgroup, os.O_RDONLY, 0)
 	if err != nil {
 		return fmt.Errorf("failed to join cgroup %s: %w", cgroup, err)
 	}
 	defer f.Close()
 	fd := int(f.Fd())
-
-	attachTypes := []int{C.BPF_CGROUP_INET4_CONNECT,
-		C.BPF_CGROUP_UDP4_SENDMSG,
-		C.BPF_CGROUP_UDP4_RECVMSG,
-		C.BPF_CGROUP_INET6_CONNECT,
-		C.BPF_CGROUP_UDP6_SENDMSG,
-		C.BPF_CGROUP_UDP6_RECVMSG}
-	for _, attachType := range attachTypes {
-		_, perr := C.bpf_ctlb_detach_legacy(C.int(fd), C.int(attachType))
-		if perr != nil {
-			err = errors.Join(err, perr)
-		}
+	progFd, err := C.bpf_ctlb_get_prog_fd(C.int(fd), C.int(attachType))
+	if errors.Is(err, unix.EBADF) {
+		return nil
 	}
+	if err != nil {
+		return fmt.Errorf("error querying cgroup %d : %w", attachType, err)
+	}
+	defer unix.Close(int(progFd))
+	_, err = C.bpf_ctlb_detach_legacy(C.int(progFd), C.int(fd), C.int(attachType))
 	return err
 }
 
