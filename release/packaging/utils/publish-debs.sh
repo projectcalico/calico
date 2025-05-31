@@ -11,20 +11,9 @@ rootdir=$(git rev-parse --show-toplevel)
 keydir=$(mktemp -t -d calico-publish-debs.XXXXXX)
 cp -a "$SECRET_KEY" "${keydir}/key"
 
-# Sign all source packages.
-if [ -t 0 ]; then
-    # STDIN is a terminal, so whoever is running this code can provide a pass phrase for
-    # their GPG key.  Pass STDIN through to the Docker container, to enable that.
-    interactive=-ti
-else
-    # STDIN is not a terminal - probably we're running in our CI system.  We mustn't pass
-    # -ti to docker-run, and $SECRET_KEY must not require a pass phrase.
-    interactive=
-fi
-
 for series in focal jammy noble; do
-    echo "Processing uploads for ${series}"
     echo
+    echo "Processing uploads for ${series}"
     # Get the packages and versions that already exist in the PPA, so we can avoid
     # uploading the same package and version as already exist.  (As they would be rejected
     # anyway by Launchpad.)
@@ -47,17 +36,18 @@ for series in focal jammy noble; do
     find "${outputdir}" -name "*-${series}_source.changes" -print0 | while read -r -d $'\0' changes_file; do
         filename=$(basename "${changes_file}")
         package_name="${filename%%_*}"
-        if test -f "${outputdir}/${existing_package}_source.ppa.upload"; then
+        base_ppa_file_path=$(basename ${changes_file} .changes)
+        if test -f "${outputdir}/${base_ppa_file_path}.upload"; then
             echo "Upload was already completed, skipping" | ts "[upload ${series} ${package_name}]"
-        elif test -f "${outputdir}/${existing_package}_source.ppa.previously-uploaded"; then
+        elif test -f "${outputdir}/${base_ppa_file_path}.previously-uploaded"; then
             echo "Launchpad already has this source package, skipping" | ts "[upload ${series} ${package_name}]"
         else
             # Ensure we sign our source packages
-            docker run --rm ${interactive} \
+            docker run --rm \
                 -v "${rootdir}:/code" \
                 -v "${keydir}:/keydir" \
                 -w /code/release/packaging/output calico-build/${series} \
-                /bin/sh -c "gpg --quiet --import --batch < /keydir/key && debsign -k'*@' --no-re-sign ${filename}" | ts  "[sign ${series} ${package_name}]"
+                /bin/sh -c "gpg --quiet --import --batch /keydir/key && debsign -k'*@' --no-re-sign ${filename}" | ts  "[sign ${series} ${package_name}]"
 
             # Upload the packages to Launchpad via dput
             docker run --rm \
