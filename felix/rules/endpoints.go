@@ -460,12 +460,12 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 		if dir == RuleDirIngress {
 			// Add ingress packet rate limit rules if applicable
 			if qosControls.IngressPacketRate != 0 {
-				logrus.WithFields(logrus.Fields{"IngressPacketRate": qosControls.IngressPacketRate, "mark": markLimitPacketRate}).Debug("Rendering ingress packet rate limit rules")
+				logrus.WithFields(logrus.Fields{"IngressPacketRate": qosControls.IngressPacketRate, "IngressPacketBurst": qosControls.IngressPacketBurst, "mark": markLimitPacketRate}).Debug("Rendering ingress packet rate limit rules")
 				if r.NFTables {
 					rules = append(rules,
 						generictables.Rule{
 							Match:   r.NewMatch(),
-							Action:  r.LimitPacketRate(qosControls.IngressPacketRate, markLimitPacketRate),
+							Action:  r.LimitPacketRate(qosControls.IngressPacketRate, qosControls.IngressPacketBurst, markLimitPacketRate),
 							Comment: []string{"Drop packets over ingress packet rate limit"},
 						},
 					)
@@ -478,7 +478,7 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 						},
 						generictables.Rule{
 							Match:   r.NewMatch(),
-							Action:  r.LimitPacketRate(qosControls.IngressPacketRate, markLimitPacketRate),
+							Action:  r.LimitPacketRate(qosControls.IngressPacketRate, qosControls.IngressPacketBurst, markLimitPacketRate),
 							Comment: []string{"Mark packets within ingress packet rate limit"},
 						},
 						generictables.Rule{
@@ -498,12 +498,12 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 		if dir == RuleDirEgress {
 			// Add egress packet rate limit rules if applicable
 			if qosControls.EgressPacketRate != 0 {
-				logrus.WithFields(logrus.Fields{"EgressPacketRate": qosControls.EgressPacketRate, "mark": markLimitPacketRate}).Debug("Rendering egress packet rate limit rules")
+				logrus.WithFields(logrus.Fields{"EgressPacketRate": qosControls.EgressPacketRate, "EgressPacketBurst": qosControls.EgressPacketBurst, "mark": markLimitPacketRate}).Debug("Rendering egress packet rate limit rules")
 				if r.NFTables {
 					rules = append(rules,
 						generictables.Rule{
 							Match:   r.NewMatch(),
-							Action:  r.LimitPacketRate(qosControls.EgressPacketRate, markLimitPacketRate),
+							Action:  r.LimitPacketRate(qosControls.EgressPacketRate, qosControls.EgressPacketBurst, markLimitPacketRate),
 							Comment: []string{"Drop packets over egress packet rate limit"},
 						},
 					)
@@ -516,7 +516,7 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 						},
 						generictables.Rule{
 							Match:   r.NewMatch(),
-							Action:  r.LimitPacketRate(qosControls.EgressPacketRate, markLimitPacketRate),
+							Action:  r.LimitPacketRate(qosControls.EgressPacketRate, qosControls.EgressPacketBurst, markLimitPacketRate),
 							Comment: []string{"Mark packets within egress packet rate limit"},
 						},
 						generictables.Rule{

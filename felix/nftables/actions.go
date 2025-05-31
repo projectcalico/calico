@@ -118,9 +118,10 @@ func (a *actionSet) Nflog(group uint16, prefix string, size int) generictables.A
 	}
 }
 
-func (a *actionSet) LimitPacketRate(rate int64, mark uint32) generictables.Action {
+func (a *actionSet) LimitPacketRate(rate, burst int64, mark uint32) generictables.Action {
 	return LimitPacketRateAction{
-		Rate: rate,
+		Rate:  rate,
+		Burst: burst,
 		// Mark is not used on nftables mode
 	}
 }
@@ -456,7 +457,8 @@ func (n NflogAction) String() string {
 }
 
 type LimitPacketRateAction struct {
-	Rate int64
+	Rate  int64
+	Burst int64
 	// Mark is not used on nftables mode
 	TypeLimitPacketRate struct{}
 }
@@ -465,11 +467,14 @@ func (a LimitPacketRateAction) ToFragment(features *environment.Features) string
 	if a.Rate < 0 {
 		logrus.WithField("rate", a.Rate).Panic("Invalid rate")
 	}
-	return fmt.Sprintf("limit rate over %d/second drop", a.Rate)
+	if a.Burst < 1 {
+		logrus.WithField("burst", a.Burst).Panic("Invalid burst")
+	}
+	return fmt.Sprintf("limit rate over %d/second burst %d packets drop", a.Rate, a.Burst)
 }
 
 func (a LimitPacketRateAction) String() string {
-	return fmt.Sprintf("LimitPacketRate:%d/s", a.Rate)
+	return fmt.Sprintf("LimitPacketRate:%d/s,burst:%d", a.Rate, a.Burst)
 }
 
 type LimitNumConnectionsAction struct {
@@ -493,5 +498,5 @@ func (a LimitNumConnectionsAction) ToFragment(features *environment.Features) st
 }
 
 func (a LimitNumConnectionsAction) String() string {
-	return fmt.Sprintf("LimitNumConnectionsAction:%d, rejectWith:%s", a.Num, a.RejectWith)
+	return fmt.Sprintf("LimitNumConnectionsAction:%d,rejectWith:%s", a.Num, a.RejectWith)
 }
