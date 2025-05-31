@@ -602,9 +602,9 @@ bin/calico-felix.exe: $(SRC_FILES)
 docs/calc.pdf: docs/calc.dot
 	cd docs/ && dot -Tpdf calc.dot -o calc.pdf
 
-CONFIG_PARAM_DEPS := cmd/calico-felix-docgen/*.go config/*.go ../api/pkg/apis/projectcalico/v3/felixconfig.go ../libcalico-go/config/*.go ../libcalico-go/config/crd/crd.projectcalico.org_felixconfigurations.yaml
+CONFIG_PARAM_DEPS := cmd/calico-felix-docgen/*.go config/*.go ../api/pkg/apis/projectcalico/v3/felixconfig.go ../libcalico-go/config/*.go ../api/config/crd/crd.projectcalico.org_felixconfigurations.yaml
 
-../libcalico-go/config/crd/crd.projectcalico.org_felixconfigurations.yaml: ../api/pkg/apis/projectcalico/v3/felixconfig.go
+../api/config/crd/crd.projectcalico.org_felixconfigurations.yaml: ../api/pkg/apis/projectcalico/v3/felixconfig.go
 	$(MAKE) -C ../libcalico-go gen-crds
 
 docs/config-params.json: $(CONFIG_PARAM_DEPS)
