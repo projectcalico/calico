@@ -99,18 +99,6 @@ var _ = Describe("Endpoints", func() {
 		var renderer RuleRenderer
 		var epMarkMapper EndpointMarkMapper
 
-		dropVXLANRule := generictables.Rule{
-			Match: Match().ProtocolNum(ProtoUDP).
-				DestPorts(uint16(VXLANPort)),
-			Action:  denyAction,
-			Comment: []string{fmt.Sprintf("%s VXLAN encapped packets originating in workloads", denyActionString)},
-		}
-		dropIPIPRule := generictables.Rule{
-			Match:   Match().ProtocolNum(ProtoIPIP),
-			Action:  denyAction,
-			Comment: []string{fmt.Sprintf("%s IPinIP encapped packets originating in workloads", denyActionString)},
-		}
-
 		Context("with normal config", func() {
 			BeforeEach(func() {
 				rrConfigNormalMangleReturn.FlowLogsEnabled = false
@@ -134,11 +122,7 @@ var _ = Describe("Endpoints", func() {
 							conntrackAcceptRule(),
 							conntrackDenyRule(denyAction),
 							clearMarkRule(),
-							{
-								Match:   Match(),
-								Action:  denyAction,
-								Comment: []string{fmt.Sprintf("%s if no profiles matched", denyActionString)},
-							},
+							noProfiletMatchedRule(denyAction, denyActionString),
 						},
 					},
 					{
@@ -148,13 +132,9 @@ var _ = Describe("Endpoints", func() {
 							conntrackAcceptRule(),
 							conntrackDenyRule(denyAction),
 							clearMarkRule(),
-							dropVXLANRule,
-							dropIPIPRule,
-							{
-								Match:   Match(),
-								Action:  denyAction,
-								Comment: []string{fmt.Sprintf("%s if no profiles matched", denyActionString)},
-							},
+							dropVXLANRule(VXLANPort, denyAction, denyActionString),
+							dropIPIPRule(denyAction, denyActionString),
+							noProfiletMatchedRule(denyAction, denyActionString),
 						},
 					},
 					{
@@ -180,21 +160,13 @@ var _ = Describe("Endpoints", func() {
 					{
 						Name: "cali-tw-cali1234",
 						Rules: []generictables.Rule{
-							{
-								Match:   Match(),
-								Action:  denyAction,
-								Comment: []string{"Endpoint admin disabled"},
-							},
+							endpointAdminDisabledRule(denyAction),
 						},
 					},
 					{
 						Name: "cali-fw-cali1234",
 						Rules: []generictables.Rule{
-							{
-								Match:   Match(),
-								Action:  denyAction,
-								Comment: []string{"Endpoint admin disabled"},
-							},
+							endpointAdminDisabledRule(denyAction),
 						},
 					},
 					{
@@ -230,48 +202,16 @@ var _ = Describe("Endpoints", func() {
 							conntrackDenyRule(denyAction),
 							clearMarkRule(),
 							startOfTierDefault(),
-							{
-								Match:  Match().MarkClear(0x10),
-								Action: JumpAction{Target: "cali-pi-default/ai"},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if policy accepted"},
-							},
-							{
-								Match:  Match().MarkClear(0x10),
-								Action: JumpAction{Target: "cali-pi-default/bi"},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if policy accepted"},
-							},
+							matchPolicyIngress("default", "ai"),
+							policyAcceptedRule(),
+							matchPolicyIngress("default", "bi"),
+							policyAcceptedRule(),
 							defaultTierDefaultDropRule(denyAction, denyActionString),
-							{
-								Match:  Match(),
-								Action: JumpAction{Target: "cali-pri-prof1"},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if profile accepted"},
-							},
-							{
-								Match:  Match(),
-								Action: JumpAction{Target: "cali-pri-prof2"},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if profile accepted"},
-							},
-							{
-								Match:   Match(),
-								Action:  denyAction,
-								Comment: []string{fmt.Sprintf("%s if no profiles matched", denyActionString)},
-							},
+							matchProfileIngress("prof1"),
+							profileAcceptedRule(),
+							matchProfileIngress("prof2"),
+							profileAcceptedRule(),
+							noProfiletMatchedRule(denyAction, denyActionString),
 						},
 					},
 					{
@@ -281,51 +221,19 @@ var _ = Describe("Endpoints", func() {
 							conntrackAcceptRule(),
 							conntrackDenyRule(denyAction),
 							clearMarkRule(),
-							dropVXLANRule,
-							dropIPIPRule,
+							dropVXLANRule(VXLANPort, denyAction, denyActionString),
+							dropIPIPRule(denyAction, denyActionString),
 							startOfTierDefault(),
-							{
-								Match:  Match().MarkClear(0x10),
-								Action: JumpAction{Target: "cali-po-default/ae"},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if policy accepted"},
-							},
-							{
-								Match:  Match().MarkClear(0x10),
-								Action: JumpAction{Target: "cali-po-default/be"},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if policy accepted"},
-							},
+							matchPolicyEgress("default", "ae"),
+							policyAcceptedRule(),
+							matchPolicyEgress("default", "be"),
+							policyAcceptedRule(),
 							defaultTierDefaultDropRule(denyAction, denyActionString),
-							{
-								Match:  Match(),
-								Action: JumpAction{Target: "cali-pro-prof1"},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if profile accepted"},
-							},
-							{
-								Match:  Match(),
-								Action: JumpAction{Target: "cali-pro-prof2"},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if profile accepted"},
-							},
-							{
-								Match:   Match(),
-								Action:  denyAction,
-								Comment: []string{fmt.Sprintf("%s if no profiles matched", denyActionString)},
-							},
+							matchProfileEgress("prof1"),
+							profileAcceptedRule(),
+							matchProfileEgress("prof2"),
+							profileAcceptedRule(),
+							noProfiletMatchedRule(denyAction, denyActionString),
 						},
 					},
 					{
@@ -394,48 +302,16 @@ var _ = Describe("Endpoints", func() {
 							conntrackDenyRule(denyAction),
 							clearMarkRule(),
 							startOfTierDefault(),
-							{
-								Match:  Match().MarkClear(0x10),
-								Action: JumpAction{Target: polGrpInABC.ChainName()},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if policy accepted"},
-							},
-							{
-								Match:  Match().MarkClear(0x10),
-								Action: JumpAction{Target: polGrpInEF.ChainName()},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if policy accepted"},
-							},
+							jumpToPolicyGroup(polGrpInABC.ChainName(), 0x10),
+							policyAcceptedRule(),
+							jumpToPolicyGroup(polGrpInEF.ChainName(), 0x10),
+							policyAcceptedRule(),
 							defaultTierDefaultDropRule(denyAction, denyActionString),
-							{
-								Match:  Match(),
-								Action: JumpAction{Target: "cali-pri-prof1"},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if profile accepted"},
-							},
-							{
-								Match:  Match(),
-								Action: JumpAction{Target: "cali-pri-prof2"},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if profile accepted"},
-							},
-							{
-								Match:   Match(),
-								Action:  denyAction,
-								Comment: []string{fmt.Sprintf("%s if no profiles matched", denyActionString)},
-							},
+							matchProfileIngress("prof1"),
+							profileAcceptedRule(),
+							matchProfileIngress("prof2"),
+							profileAcceptedRule(),
+							noProfiletMatchedRule(denyAction, denyActionString),
 						},
 					},
 					{
@@ -445,51 +321,19 @@ var _ = Describe("Endpoints", func() {
 							conntrackAcceptRule(),
 							conntrackDenyRule(denyAction),
 							clearMarkRule(),
-							dropVXLANRule,
-							dropIPIPRule,
+							dropVXLANRule(VXLANPort, denyAction, denyActionString),
+							dropIPIPRule(denyAction, denyActionString),
 							startOfTierDefault(),
-							{
-								Match:  Match().MarkClear(0x10),
-								Action: JumpAction{Target: polGrpOutAB.ChainName()},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if policy accepted"},
-							},
-							{
-								Match:  Match().MarkClear(0x10),
-								Action: JumpAction{Target: polGrpOutDE.ChainName()},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if policy accepted"},
-							},
+							jumpToPolicyGroup(polGrpOutAB.ChainName(), 0x10),
+							policyAcceptedRule(),
+							jumpToPolicyGroup(polGrpOutDE.ChainName(), 0x10),
+							policyAcceptedRule(),
 							defaultTierDefaultDropRule(denyAction, denyActionString),
-							{
-								Match:  Match(),
-								Action: JumpAction{Target: "cali-pro-prof1"},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if profile accepted"},
-							},
-							{
-								Match:  Match(),
-								Action: JumpAction{Target: "cali-pro-prof2"},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if profile accepted"},
-							},
-							{
-								Match:   Match(),
-								Action:  denyAction,
-								Comment: []string{fmt.Sprintf("%s if no profiles matched", denyActionString)},
-							},
+							matchProfileEgress("prof1"),
+							profileAcceptedRule(),
+							matchProfileEgress("prof2"),
+							profileAcceptedRule(),
+							noProfiletMatchedRule(denyAction, denyActionString),
 						},
 					},
 					{
@@ -525,39 +369,14 @@ var _ = Describe("Endpoints", func() {
 							conntrackDenyRule(denyAction),
 							clearMarkRule(),
 							startOfTierDefault(),
-							{
-								Match:  Match().MarkClear(0x10),
-								Action: JumpAction{Target: "cali-pi-default/bi"},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if policy accepted"},
-							},
+							matchPolicyIngress("default", "bi"),
+							policyAcceptedRule(),
 							defaultTierDefaultDropRule(denyAction, denyActionString),
-							{
-								Match:  Match(),
-								Action: JumpAction{Target: "cali-pri-prof1"},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if profile accepted"},
-							},
-							{
-								Match:  Match(),
-								Action: JumpAction{Target: "cali-pri-prof2"},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if profile accepted"},
-							},
-							{
-								Match:   Match(),
-								Action:  denyAction,
-								Comment: []string{fmt.Sprintf("%s if no profiles matched", denyActionString)},
-							},
+							matchProfileIngress("prof1"),
+							profileAcceptedRule(),
+							matchProfileIngress("prof2"),
+							profileAcceptedRule(),
+							noProfiletMatchedRule(denyAction, denyActionString),
 						},
 					},
 					{
@@ -567,42 +386,17 @@ var _ = Describe("Endpoints", func() {
 							conntrackAcceptRule(),
 							conntrackDenyRule(denyAction),
 							clearMarkRule(),
-							dropVXLANRule,
-							dropIPIPRule,
+							dropVXLANRule(VXLANPort, denyAction, denyActionString),
+							dropIPIPRule(denyAction, denyActionString),
 							startOfTierDefault(),
-							{
-								Match:  Match().MarkClear(0x10),
-								Action: JumpAction{Target: "cali-po-default/ae"},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if policy accepted"},
-							},
+							matchPolicyEgress("default", "ae"),
+							policyAcceptedRule(),
 							defaultTierDefaultDropRule(denyAction, denyActionString),
-							{
-								Match:  Match(),
-								Action: JumpAction{Target: "cali-pro-prof1"},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if profile accepted"},
-							},
-							{
-								Match:  Match(),
-								Action: JumpAction{Target: "cali-pro-prof2"},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if profile accepted"},
-							},
-							{
-								Match:   Match(),
-								Action:  denyAction,
-								Comment: []string{fmt.Sprintf("%s if no profiles matched", denyActionString)},
-							},
+							matchProfileEgress("prof1"),
+							profileAcceptedRule(),
+							matchProfileEgress("prof2"),
+							profileAcceptedRule(),
+							noProfiletMatchedRule(denyAction, denyActionString),
 						},
 					},
 					{
@@ -638,29 +432,11 @@ var _ = Describe("Endpoints", func() {
 							conntrackDenyRule(denyAction),
 							clearMarkRule(),
 							startOfTierDefault(),
-							{
-								Match:  Match(),
-								Action: JumpAction{Target: "cali-pri-prof1"},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if profile accepted"},
-							},
-							{
-								Match:  Match(),
-								Action: JumpAction{Target: "cali-pri-prof2"},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if profile accepted"},
-							},
-							{
-								Match:   Match(),
-								Action:  denyAction,
-								Comment: []string{fmt.Sprintf("%s if no profiles matched", denyActionString)},
-							},
+							matchProfileIngress("prof1"),
+							profileAcceptedRule(),
+							matchProfileIngress("prof2"),
+							profileAcceptedRule(),
+							noProfiletMatchedRule(denyAction, denyActionString),
 						},
 					},
 					{
@@ -670,32 +446,14 @@ var _ = Describe("Endpoints", func() {
 							conntrackAcceptRule(),
 							conntrackDenyRule(denyAction),
 							clearMarkRule(),
-							dropVXLANRule,
-							dropIPIPRule,
+							dropVXLANRule(VXLANPort, denyAction, denyActionString),
+							dropIPIPRule(denyAction, denyActionString),
 							startOfTierDefault(),
-							{
-								Match:  Match(),
-								Action: JumpAction{Target: "cali-pro-prof1"},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if profile accepted"},
-							},
-							{
-								Match:  Match(),
-								Action: JumpAction{Target: "cali-pro-prof2"},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if profile accepted"},
-							},
-							{
-								Match:   Match(),
-								Action:  denyAction,
-								Comment: []string{fmt.Sprintf("%s if no profiles matched", denyActionString)},
-							},
+							matchProfileEgress("prof1"),
+							profileAcceptedRule(),
+							matchProfileEgress("prof2"),
+							profileAcceptedRule(),
+							noProfiletMatchedRule(denyAction, denyActionString),
 						},
 					},
 					{
@@ -743,29 +501,11 @@ var _ = Describe("Endpoints", func() {
 							conntrackDenyRule(denyAction),
 							clearMarkRule(),
 							startOfTierDefault(),
-							{
-								Match:  Match(),
-								Action: JumpAction{Target: "cali-pri-prof1"},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if profile accepted"},
-							},
-							{
-								Match:  Match(),
-								Action: JumpAction{Target: "cali-pri-prof2"},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if profile accepted"},
-							},
-							{
-								Match:   Match(),
-								Action:  denyAction,
-								Comment: []string{fmt.Sprintf("%s if no profiles matched", denyActionString)},
-							},
+							matchProfileIngress("prof1"),
+							profileAcceptedRule(),
+							matchProfileIngress("prof2"),
+							profileAcceptedRule(),
+							noProfiletMatchedRule(denyAction, denyActionString),
 						},
 					},
 					{
@@ -775,32 +515,14 @@ var _ = Describe("Endpoints", func() {
 							conntrackAcceptRule(),
 							conntrackDenyRule(denyAction),
 							clearMarkRule(),
-							dropVXLANRule,
-							dropIPIPRule,
+							dropVXLANRule(VXLANPort, denyAction, denyActionString),
+							dropIPIPRule(denyAction, denyActionString),
 							startOfTierDefault(),
-							{
-								Match:  Match(),
-								Action: JumpAction{Target: "cali-pro-prof1"},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if profile accepted"},
-							},
-							{
-								Match:  Match(),
-								Action: JumpAction{Target: "cali-pro-prof2"},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if profile accepted"},
-							},
-							{
-								Match:   Match(),
-								Action:  denyAction,
-								Comment: []string{fmt.Sprintf("%s if no profiles matched", denyActionString)},
-							},
+							matchProfileEgress("prof1"),
+							profileAcceptedRule(),
+							matchProfileEgress("prof2"),
+							profileAcceptedRule(),
+							noProfiletMatchedRule(denyAction, denyActionString),
 						},
 					},
 					{
@@ -837,47 +559,15 @@ var _ = Describe("Endpoints", func() {
 							conntrackDenyRule(denyAction),
 							clearMarkRule(),
 							startOfTierDefault(),
-							{
-								Match:  Match().MarkClear(0x10),
-								Action: JumpAction{Target: "cali-pi-default/ai"},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if policy accepted"},
-							},
-							{
-								Match:  Match().MarkClear(0x10),
-								Action: JumpAction{Target: "cali-pi-default/bi"},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if policy accepted"},
-							},
-							{
-								Match:  Match(),
-								Action: JumpAction{Target: "cali-pri-prof1"},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if profile accepted"},
-							},
-							{
-								Match:  Match(),
-								Action: JumpAction{Target: "cali-pri-prof2"},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if profile accepted"},
-							},
-							{
-								Match:   Match(),
-								Action:  denyAction,
-								Comment: []string{fmt.Sprintf("%s if no profiles matched", denyActionString)},
-							},
+							matchPolicyIngress("default", "ai"),
+							policyAcceptedRule(),
+							matchPolicyIngress("default", "bi"),
+							policyAcceptedRule(),
+							matchProfileIngress("prof1"),
+							profileAcceptedRule(),
+							matchProfileIngress("prof2"),
+							profileAcceptedRule(),
+							noProfiletMatchedRule(denyAction, denyActionString),
 						},
 					},
 					{
@@ -887,50 +577,18 @@ var _ = Describe("Endpoints", func() {
 							conntrackAcceptRule(),
 							conntrackDenyRule(denyAction),
 							clearMarkRule(),
-							dropVXLANRule,
-							dropIPIPRule,
+							dropVXLANRule(VXLANPort, denyAction, denyActionString),
+							dropIPIPRule(denyAction, denyActionString),
 							startOfTierDefault(),
-							{
-								Match:  Match().MarkClear(0x10),
-								Action: JumpAction{Target: "cali-po-default/ae"},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if policy accepted"},
-							},
-							{
-								Match:  Match().MarkClear(0x10),
-								Action: JumpAction{Target: "cali-po-default/be"},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if policy accepted"},
-							},
-							{
-								Match:  Match(),
-								Action: JumpAction{Target: "cali-pro-prof1"},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if profile accepted"},
-							},
-							{
-								Match:  Match(),
-								Action: JumpAction{Target: "cali-pro-prof2"},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if profile accepted"},
-							},
-							{
-								Match:   Match(),
-								Action:  denyAction,
-								Comment: []string{fmt.Sprintf("%s if no profiles matched", denyActionString)},
-							},
+							matchPolicyEgress("default", "ae"),
+							policyAcceptedRule(),
+							matchPolicyEgress("default", "be"),
+							policyAcceptedRule(),
+							matchProfileEgress("prof1"),
+							profileAcceptedRule(),
+							matchProfileEgress("prof2"),
+							profileAcceptedRule(),
+							noProfiletMatchedRule(denyAction, denyActionString),
 						},
 					},
 					{
@@ -968,54 +626,19 @@ var _ = Describe("Endpoints", func() {
 							conntrackAcceptRule(),
 							conntrackDenyRule(denyAction),
 							// Host endpoints get extra failsafe rules.
-							{
-								Match:  Match(),
-								Action: JumpAction{Target: "cali-failsafe-out"},
-							},
+							failSafeEgress(),
 							clearMarkRule(),
 							startOfTierDefault(),
-							{
-								Match:  Match().MarkClear(0x10),
-								Action: JumpAction{Target: "cali-po-default/ae"},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if policy accepted"},
-							},
-							{
-								Match:  Match().MarkClear(0x10),
-								Action: JumpAction{Target: "cali-po-default/be"},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if policy accepted"},
-							},
+							matchPolicyEgress("default", "ae"),
+							policyAcceptedRule(),
+							matchPolicyEgress("default", "be"),
+							policyAcceptedRule(),
 							defaultTierDefaultDropRule(denyAction, denyActionString),
-							{
-								Match:  Match(),
-								Action: JumpAction{Target: "cali-pro-prof1"},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if profile accepted"},
-							},
-							{
-								Match:  Match(),
-								Action: JumpAction{Target: "cali-pro-prof2"},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if profile accepted"},
-							},
-							{
-								Match:   Match(),
-								Action:  denyAction,
-								Comment: []string{fmt.Sprintf("%s if no profiles matched", denyActionString)},
-							},
+							matchProfileEgress("prof1"),
+							profileAcceptedRule(),
+							matchProfileEgress("prof2"),
+							profileAcceptedRule(),
+							noProfiletMatchedRule(denyAction, denyActionString),
 						},
 					},
 					{
@@ -1025,54 +648,19 @@ var _ = Describe("Endpoints", func() {
 							conntrackAcceptRule(),
 							conntrackDenyRule(denyAction),
 							// Host endpoints get extra failsafe rules.
-							{
-								Match:  Match(),
-								Action: JumpAction{Target: "cali-failsafe-in"},
-							},
+							failSafeIngress(),
 							clearMarkRule(),
 							startOfTierDefault(),
-							{
-								Match:  Match().MarkClear(0x10),
-								Action: JumpAction{Target: "cali-pi-default/ai"},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if policy accepted"},
-							},
-							{
-								Match:  Match().MarkClear(0x10),
-								Action: JumpAction{Target: "cali-pi-default/bi"},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if policy accepted"},
-							},
+							matchPolicyIngress("default", "ai"),
+							policyAcceptedRule(),
+							matchPolicyIngress("default", "bi"),
+							policyAcceptedRule(),
 							defaultTierDefaultDropRule(denyAction, denyActionString),
-							{
-								Match:  Match(),
-								Action: JumpAction{Target: "cali-pri-prof1"},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if profile accepted"},
-							},
-							{
-								Match:  Match(),
-								Action: JumpAction{Target: "cali-pri-prof2"},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if profile accepted"},
-							},
-							{
-								Match:   Match(),
-								Action:  denyAction,
-								Comment: []string{fmt.Sprintf("%s if no profiles matched", denyActionString)},
-							},
+							matchProfileIngress("prof1"),
+							profileAcceptedRule(),
+							matchProfileIngress("prof2"),
+							profileAcceptedRule(),
+							noProfiletMatchedRule(denyAction, denyActionString),
 						},
 					},
 					{
@@ -1083,24 +671,10 @@ var _ = Describe("Endpoints", func() {
 							conntrackDenyRule(denyAction),
 							clearMarkRule(),
 							startOfTierDefault(),
-							{
-								Match:  Match().MarkClear(0x10),
-								Action: JumpAction{Target: "cali-po-default/afe"},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if policy accepted"},
-							},
-							{
-								Match:  Match().MarkClear(0x10),
-								Action: JumpAction{Target: "cali-po-default/bfe"},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if policy accepted"},
-							},
+							matchPolicyEgress("default", "afe"),
+							policyAcceptedRule(),
+							matchPolicyEgress("default", "bfe"),
+							policyAcceptedRule(),
 							defaultTierDefaultDropRule(denyAction, denyActionString),
 						},
 					},
@@ -1112,24 +686,10 @@ var _ = Describe("Endpoints", func() {
 							conntrackDenyRule(denyAction),
 							clearMarkRule(),
 							startOfTierDefault(),
-							{
-								Match:  Match().MarkClear(0x10),
-								Action: JumpAction{Target: "cali-pi-default/afi"},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if policy accepted"},
-							},
-							{
-								Match:  Match().MarkClear(0x10),
-								Action: JumpAction{Target: "cali-pi-default/bfi"},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if policy accepted"},
-							},
+							matchPolicyIngress("default", "afi"),
+							policyAcceptedRule(),
+							matchPolicyIngress("default", "bfi"),
+							policyAcceptedRule(),
 							defaultTierDefaultDropRule(denyAction, denyActionString),
 						},
 					},
@@ -1158,26 +718,13 @@ var _ = Describe("Endpoints", func() {
 						Name: "cali-th-eth0",
 						Rules: []generictables.Rule{
 							// Host endpoints get extra failsafe rules.
-							{
-								Match:  Match(),
-								Action: JumpAction{Target: "cali-failsafe-out"},
-							},
+							failSafeEgress(),
 							clearMarkRule(),
 							startOfTierDefault(),
-							{
-								Match:  Match().MarkClear(0x10),
-								Action: JumpAction{Target: "cali-po-default/c"},
-							},
+							matchPolicyEgress("default", "c"),
 							// Extra NOTRACK action before returning in raw table.
-							{
-								Match:  Match().MarkSingleBitSet(0x8),
-								Action: NoTrackAction{},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if policy accepted"},
-							},
+							untrackedRule(),
+							policyAcceptedRule(),
 							// No drop actions or profiles in raw table.
 						},
 					},
@@ -1185,26 +732,13 @@ var _ = Describe("Endpoints", func() {
 						Name: "cali-fh-eth0",
 						Rules: []generictables.Rule{
 							// Host endpoints get extra failsafe rules.
-							{
-								Match:  Match(),
-								Action: JumpAction{Target: "cali-failsafe-in"},
-							},
+							failSafeIngress(),
 							clearMarkRule(),
 							startOfTierDefault(),
-							{
-								Match:  Match().MarkClear(0x10),
-								Action: JumpAction{Target: "cali-pi-default/c"},
-							},
+							matchPolicyIngress("default", "c"),
 							// Extra NOTRACK action before returning in raw table.
-							{
-								Match:  Match().MarkSingleBitSet(0x8),
-								Action: NoTrackAction{},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if policy accepted"},
-							},
+							untrackedRule(),
+							policyAcceptedRule(),
 							// No drop actions or profiles in raw table.
 						},
 					},
@@ -1233,21 +767,11 @@ var _ = Describe("Endpoints", func() {
 							},
 							conntrackDenyRule(denyAction),
 							// Host endpoints get extra failsafe rules.
-							{
-								Match:  Match(),
-								Action: JumpAction{Target: "cali-failsafe-in"},
-							},
+							failSafeIngress(),
 							clearMarkRule(),
 							startOfTierDefault(),
-							{
-								Match:  Match().MarkClear(0x10),
-								Action: JumpAction{Target: "cali-pi-default/c"},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if policy accepted"},
-							},
+							matchPolicyIngress("default", "c"),
+							policyAcceptedRule(),
 							// No drop actions or profiles in raw table.
 						},
 					},
@@ -1293,11 +817,7 @@ var _ = Describe("Endpoints", func() {
 							conntrackAcceptRule(),
 							conntrackDenyRule(denyAction),
 							clearMarkRule(),
-							{
-								Match:   Match(),
-								Action:  denyAction,
-								Comment: []string{fmt.Sprintf("%s if no profiles matched", denyActionString)},
-							},
+							noProfiletMatchedRule(denyAction, denyActionString),
 						},
 					},
 					{
@@ -1328,13 +848,9 @@ var _ = Describe("Endpoints", func() {
 							conntrackAcceptRule(),
 							conntrackDenyRule(denyAction),
 							clearMarkRule(),
-							dropVXLANRule,
-							dropIPIPRule,
-							{
-								Match:   Match(),
-								Action:  denyAction,
-								Comment: []string{fmt.Sprintf("%s if no profiles matched", denyActionString)},
-							},
+							dropVXLANRule(VXLANPort, denyAction, denyActionString),
+							dropIPIPRule(denyAction, denyActionString),
+							noProfiletMatchedRule(denyAction, denyActionString),
 						},
 					},
 					{
@@ -1374,11 +890,7 @@ var _ = Describe("Endpoints", func() {
 								Comment: []string{"Reject connections over ingress connection limit"},
 							},
 							clearMarkRule(),
-							{
-								Match:   Match(),
-								Action:  denyAction,
-								Comment: []string{fmt.Sprintf("%s if no profiles matched", denyActionString)},
-							},
+							noProfiletMatchedRule(denyAction, denyActionString),
 						},
 					},
 					{
@@ -1395,13 +907,9 @@ var _ = Describe("Endpoints", func() {
 								Comment: []string{"Reject connections over egress connection limit"},
 							},
 							clearMarkRule(),
-							dropVXLANRule,
-							dropIPIPRule,
-							{
-								Match:   Match(),
-								Action:  denyAction,
-								Comment: []string{fmt.Sprintf("%s if no profiles matched", denyActionString)},
-							},
+							dropVXLANRule(VXLANPort, denyAction, denyActionString),
+							dropIPIPRule(denyAction, denyActionString),
+							noProfiletMatchedRule(denyAction, denyActionString),
 						},
 					},
 					{
@@ -1440,11 +948,7 @@ var _ = Describe("Endpoints", func() {
 							conntrackDenyRule(denyAction),
 							clearMarkRule(),
 							nflogProfileIngress(),
-							{
-								Match:   Match(),
-								Action:  denyAction,
-								Comment: []string{fmt.Sprintf("%s if no profiles matched", denyActionString)},
-							},
+							noProfiletMatchedRule(denyAction, denyActionString),
 						},
 					},
 					{
@@ -1454,14 +958,10 @@ var _ = Describe("Endpoints", func() {
 							conntrackAcceptRule(),
 							conntrackDenyRule(denyAction),
 							clearMarkRule(),
-							dropVXLANRule,
-							dropIPIPRule,
+							dropVXLANRule(VXLANPort, denyAction, denyActionString),
+							dropIPIPRule(denyAction, denyActionString),
 							nflogProfileEgress(),
-							{
-								Match:   Match(),
-								Action:  denyAction,
-								Comment: []string{fmt.Sprintf("%s if no profiles matched", denyActionString)},
-							},
+							noProfiletMatchedRule(denyAction, denyActionString),
 						},
 					},
 					{
@@ -1487,21 +987,13 @@ var _ = Describe("Endpoints", func() {
 					{
 						Name: "cali-tw-cali1234",
 						Rules: []generictables.Rule{
-							{
-								Match:   Match(),
-								Action:  denyAction,
-								Comment: []string{"Endpoint admin disabled"},
-							},
+							endpointAdminDisabledRule(denyAction),
 						},
 					},
 					{
 						Name: "cali-fw-cali1234",
 						Rules: []generictables.Rule{
-							{
-								Match:   Match(),
-								Action:  denyAction,
-								Comment: []string{"Endpoint admin disabled"},
-							},
+							endpointAdminDisabledRule(denyAction),
 						},
 					},
 					{
@@ -1537,50 +1029,18 @@ var _ = Describe("Endpoints", func() {
 							conntrackDenyRule(denyAction),
 							clearMarkRule(),
 							startOfTierDefault(),
-							{
-								Match:  Match().MarkClear(0x10),
-								Action: JumpAction{Target: "cali-pi-default/ai"},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if policy accepted"},
-							},
-							{
-								Match:  Match().MarkClear(0x10),
-								Action: JumpAction{Target: "cali-pi-default/bi"},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if policy accepted"},
-							},
+							matchPolicyIngress("default", "ai"),
+							policyAcceptedRule(),
+							matchPolicyIngress("default", "bi"),
+							policyAcceptedRule(),
 							nflogDefaultTierIngress(),
 							defaultTierDefaultDropRule(denyAction, denyActionString),
-							{
-								Match:  Match(),
-								Action: JumpAction{Target: "cali-pri-prof1"},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if profile accepted"},
-							},
-							{
-								Match:  Match(),
-								Action: JumpAction{Target: "cali-pri-prof2"},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if profile accepted"},
-							},
+							matchProfileIngress("prof1"),
+							profileAcceptedRule(),
+							matchProfileIngress("prof2"),
+							profileAcceptedRule(),
 							nflogProfileIngress(),
-							{
-								Match:   Match(),
-								Action:  denyAction,
-								Comment: []string{fmt.Sprintf("%s if no profiles matched", denyActionString)},
-							},
+							noProfiletMatchedRule(denyAction, denyActionString),
 						},
 					},
 					{
@@ -1590,53 +1050,21 @@ var _ = Describe("Endpoints", func() {
 							conntrackAcceptRule(),
 							conntrackDenyRule(denyAction),
 							clearMarkRule(),
-							dropVXLANRule,
-							dropIPIPRule,
+							dropVXLANRule(VXLANPort, denyAction, denyActionString),
+							dropIPIPRule(denyAction, denyActionString),
 							startOfTierDefault(),
-							{
-								Match:  Match().MarkClear(0x10),
-								Action: JumpAction{Target: "cali-po-default/ae"},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if policy accepted"},
-							},
-							{
-								Match:  Match().MarkClear(0x10),
-								Action: JumpAction{Target: "cali-po-default/be"},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if policy accepted"},
-							},
+							matchPolicyEgress("default", "ae"),
+							policyAcceptedRule(),
+							matchPolicyEgress("default", "be"),
+							policyAcceptedRule(),
 							nflogDefaultTierEgress(),
 							defaultTierDefaultDropRule(denyAction, denyActionString),
-							{
-								Match:  Match(),
-								Action: JumpAction{Target: "cali-pro-prof1"},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if profile accepted"},
-							},
-							{
-								Match:  Match(),
-								Action: JumpAction{Target: "cali-pro-prof2"},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if profile accepted"},
-							},
+							matchProfileEgress("prof1"),
+							profileAcceptedRule(),
+							matchProfileEgress("prof2"),
+							profileAcceptedRule(),
 							nflogProfileEgress(),
-							{
-								Match:   Match(),
-								Action:  denyAction,
-								Comment: []string{fmt.Sprintf("%s if no profiles matched", denyActionString)},
-							},
+							noProfiletMatchedRule(denyAction, denyActionString),
 						},
 					},
 					{
@@ -1705,50 +1133,18 @@ var _ = Describe("Endpoints", func() {
 							conntrackDenyRule(denyAction),
 							clearMarkRule(),
 							startOfTierDefault(),
-							{
-								Match:  Match().MarkClear(0x10),
-								Action: JumpAction{Target: polGrpInABC.ChainName()},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if policy accepted"},
-							},
-							{
-								Match:  Match().MarkClear(0x10),
-								Action: JumpAction{Target: polGrpInEF.ChainName()},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if policy accepted"},
-							},
+							jumpToPolicyGroup(polGrpInABC.ChainName(), 0x10),
+							policyAcceptedRule(),
+							jumpToPolicyGroup(polGrpInEF.ChainName(), 0x10),
+							policyAcceptedRule(),
 							nflogDefaultTierIngress(),
 							defaultTierDefaultDropRule(denyAction, denyActionString),
-							{
-								Match:  Match(),
-								Action: JumpAction{Target: "cali-pri-prof1"},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if profile accepted"},
-							},
-							{
-								Match:  Match(),
-								Action: JumpAction{Target: "cali-pri-prof2"},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if profile accepted"},
-							},
+							matchProfileIngress("prof1"),
+							profileAcceptedRule(),
+							matchProfileIngress("prof2"),
+							profileAcceptedRule(),
 							nflogProfileIngress(),
-							{
-								Match:   Match(),
-								Action:  denyAction,
-								Comment: []string{fmt.Sprintf("%s if no profiles matched", denyActionString)},
-							},
+							noProfiletMatchedRule(denyAction, denyActionString),
 						},
 					},
 					{
@@ -1758,53 +1154,21 @@ var _ = Describe("Endpoints", func() {
 							conntrackAcceptRule(),
 							conntrackDenyRule(denyAction),
 							clearMarkRule(),
-							dropVXLANRule,
-							dropIPIPRule,
+							dropVXLANRule(VXLANPort, denyAction, denyActionString),
+							dropIPIPRule(denyAction, denyActionString),
 							startOfTierDefault(),
-							{
-								Match:  Match().MarkClear(0x10),
-								Action: JumpAction{Target: polGrpOutAB.ChainName()},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if policy accepted"},
-							},
-							{
-								Match:  Match().MarkClear(0x10),
-								Action: JumpAction{Target: polGrpOutDE.ChainName()},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if policy accepted"},
-							},
+							jumpToPolicyGroup(polGrpOutAB.ChainName(), 0x10),
+							policyAcceptedRule(),
+							jumpToPolicyGroup(polGrpOutDE.ChainName(), 0x10),
+							policyAcceptedRule(),
 							nflogDefaultTierEgress(),
 							defaultTierDefaultDropRule(denyAction, denyActionString),
-							{
-								Match:  Match(),
-								Action: JumpAction{Target: "cali-pro-prof1"},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if profile accepted"},
-							},
-							{
-								Match:  Match(),
-								Action: JumpAction{Target: "cali-pro-prof2"},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if profile accepted"},
-							},
+							matchProfileEgress("prof1"),
+							profileAcceptedRule(),
+							matchProfileEgress("prof2"),
+							profileAcceptedRule(),
 							nflogProfileEgress(),
-							{
-								Match:   Match(),
-								Action:  denyAction,
-								Comment: []string{fmt.Sprintf("%s if no profiles matched", denyActionString)},
-							},
+							noProfiletMatchedRule(denyAction, denyActionString),
 						},
 					},
 					{
@@ -1840,41 +1204,16 @@ var _ = Describe("Endpoints", func() {
 							conntrackDenyRule(denyAction),
 							clearMarkRule(),
 							startOfTierDefault(),
-							{
-								Match:  Match().MarkClear(0x10),
-								Action: JumpAction{Target: "cali-pi-default/bi"},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if policy accepted"},
-							},
+							matchPolicyIngress("default", "bi"),
+							policyAcceptedRule(),
 							nflogDefaultTierIngress(),
 							defaultTierDefaultDropRule(denyAction, denyActionString),
-							{
-								Match:  Match(),
-								Action: JumpAction{Target: "cali-pri-prof1"},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if profile accepted"},
-							},
-							{
-								Match:  Match(),
-								Action: JumpAction{Target: "cali-pri-prof2"},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if profile accepted"},
-							},
+							matchProfileIngress("prof1"),
+							profileAcceptedRule(),
+							matchProfileIngress("prof2"),
+							profileAcceptedRule(),
 							nflogProfileIngress(),
-							{
-								Match:   Match(),
-								Action:  denyAction,
-								Comment: []string{fmt.Sprintf("%s if no profiles matched", denyActionString)},
-							},
+							noProfiletMatchedRule(denyAction, denyActionString),
 						},
 					},
 					{
@@ -1884,44 +1223,19 @@ var _ = Describe("Endpoints", func() {
 							conntrackAcceptRule(),
 							conntrackDenyRule(denyAction),
 							clearMarkRule(),
-							dropVXLANRule,
-							dropIPIPRule,
+							dropVXLANRule(VXLANPort, denyAction, denyActionString),
+							dropIPIPRule(denyAction, denyActionString),
 							startOfTierDefault(),
-							{
-								Match:  Match().MarkClear(0x10),
-								Action: JumpAction{Target: "cali-po-default/ae"},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if policy accepted"},
-							},
+							matchPolicyEgress("default", "ae"),
+							policyAcceptedRule(),
 							nflogDefaultTierEgress(),
 							defaultTierDefaultDropRule(denyAction, denyActionString),
-							{
-								Match:  Match(),
-								Action: JumpAction{Target: "cali-pro-prof1"},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if profile accepted"},
-							},
-							{
-								Match:  Match(),
-								Action: JumpAction{Target: "cali-pro-prof2"},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if profile accepted"},
-							},
+							matchProfileEgress("prof1"),
+							profileAcceptedRule(),
+							matchProfileEgress("prof2"),
+							profileAcceptedRule(),
 							nflogProfileEgress(),
-							{
-								Match:   Match(),
-								Action:  denyAction,
-								Comment: []string{fmt.Sprintf("%s if no profiles matched", denyActionString)},
-							},
+							noProfiletMatchedRule(denyAction, denyActionString),
 						},
 					},
 					{
@@ -1958,30 +1272,12 @@ var _ = Describe("Endpoints", func() {
 							clearMarkRule(),
 							startOfTierDefault(),
 							nflogDefaultTierIngressWithPassAction(),
-							{
-								Match:  Match(),
-								Action: JumpAction{Target: "cali-pri-prof1"},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if profile accepted"},
-							},
-							{
-								Match:  Match(),
-								Action: JumpAction{Target: "cali-pri-prof2"},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if profile accepted"},
-							},
+							matchProfileIngress("prof1"),
+							profileAcceptedRule(),
+							matchProfileIngress("prof2"),
+							profileAcceptedRule(),
 							nflogProfileIngress(),
-							{
-								Match:   Match(),
-								Action:  denyAction,
-								Comment: []string{fmt.Sprintf("%s if no profiles matched", denyActionString)},
-							},
+							noProfiletMatchedRule(denyAction, denyActionString),
 						},
 					},
 					{
@@ -1991,34 +1287,16 @@ var _ = Describe("Endpoints", func() {
 							conntrackAcceptRule(),
 							conntrackDenyRule(denyAction),
 							clearMarkRule(),
-							dropVXLANRule,
-							dropIPIPRule,
+							dropVXLANRule(VXLANPort, denyAction, denyActionString),
+							dropIPIPRule(denyAction, denyActionString),
 							startOfTierDefault(),
 							nflogDefaultTierEgressWithPassAction(),
-							{
-								Match:  Match(),
-								Action: JumpAction{Target: "cali-pro-prof1"},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if profile accepted"},
-							},
-							{
-								Match:  Match(),
-								Action: JumpAction{Target: "cali-pro-prof2"},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if profile accepted"},
-							},
+							matchProfileEgress("prof1"),
+							profileAcceptedRule(),
+							matchProfileEgress("prof2"),
+							profileAcceptedRule(),
 							nflogProfileEgress(),
-							{
-								Match:   Match(),
-								Action:  denyAction,
-								Comment: []string{fmt.Sprintf("%s if no profiles matched", denyActionString)},
-							},
+							noProfiletMatchedRule(denyAction, denyActionString),
 						},
 					},
 					{
@@ -2067,30 +1345,12 @@ var _ = Describe("Endpoints", func() {
 							clearMarkRule(),
 							startOfTierDefault(),
 							nflogDefaultTierIngressWithPassAction(),
-							{
-								Match:  Match(),
-								Action: JumpAction{Target: "cali-pri-prof1"},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if profile accepted"},
-							},
-							{
-								Match:  Match(),
-								Action: JumpAction{Target: "cali-pri-prof2"},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if profile accepted"},
-							},
+							matchProfileIngress("prof1"),
+							profileAcceptedRule(),
+							matchProfileIngress("prof2"),
+							profileAcceptedRule(),
 							nflogProfileIngress(),
-							{
-								Match:   Match(),
-								Action:  denyAction,
-								Comment: []string{fmt.Sprintf("%s if no profiles matched", denyActionString)},
-							},
+							noProfiletMatchedRule(denyAction, denyActionString),
 						},
 					},
 					{
@@ -2100,34 +1360,16 @@ var _ = Describe("Endpoints", func() {
 							conntrackAcceptRule(),
 							conntrackDenyRule(denyAction),
 							clearMarkRule(),
-							dropVXLANRule,
-							dropIPIPRule,
+							dropVXLANRule(VXLANPort, denyAction, denyActionString),
+							dropIPIPRule(denyAction, denyActionString),
 							startOfTierDefault(),
 							nflogDefaultTierEgressWithPassAction(),
-							{
-								Match:  Match(),
-								Action: JumpAction{Target: "cali-pro-prof1"},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if profile accepted"},
-							},
-							{
-								Match:  Match(),
-								Action: JumpAction{Target: "cali-pro-prof2"},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if profile accepted"},
-							},
+							matchProfileEgress("prof1"),
+							profileAcceptedRule(),
+							matchProfileEgress("prof2"),
+							profileAcceptedRule(),
 							nflogProfileEgress(),
-							{
-								Match:   Match(),
-								Action:  denyAction,
-								Comment: []string{fmt.Sprintf("%s if no profiles matched", denyActionString)},
-							},
+							noProfiletMatchedRule(denyAction, denyActionString),
 						},
 					},
 					{
@@ -2164,49 +1406,17 @@ var _ = Describe("Endpoints", func() {
 							conntrackDenyRule(denyAction),
 							clearMarkRule(),
 							startOfTierDefault(),
-							{
-								Match:  Match().MarkClear(0x10),
-								Action: JumpAction{Target: "cali-pi-default/ai"},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if policy accepted"},
-							},
-							{
-								Match:  Match().MarkClear(0x10),
-								Action: JumpAction{Target: "cali-pi-default/bi"},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if policy accepted"},
-							},
+							matchPolicyIngress("default", "ai"),
+							policyAcceptedRule(),
+							matchPolicyIngress("default", "bi"),
+							policyAcceptedRule(),
 							nflogDefaultTierIngressWithPassAction(),
-							{
-								Match:  Match(),
-								Action: JumpAction{Target: "cali-pri-prof1"},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if profile accepted"},
-							},
-							{
-								Match:  Match(),
-								Action: JumpAction{Target: "cali-pri-prof2"},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if profile accepted"},
-							},
+							matchProfileIngress("prof1"),
+							profileAcceptedRule(),
+							matchProfileIngress("prof2"),
+							profileAcceptedRule(),
 							nflogProfileIngress(),
-							{
-								Match:   Match(),
-								Action:  denyAction,
-								Comment: []string{fmt.Sprintf("%s if no profiles matched", denyActionString)},
-							},
+							noProfiletMatchedRule(denyAction, denyActionString),
 						},
 					},
 					{
@@ -2216,52 +1426,20 @@ var _ = Describe("Endpoints", func() {
 							conntrackAcceptRule(),
 							conntrackDenyRule(denyAction),
 							clearMarkRule(),
-							dropVXLANRule,
-							dropIPIPRule,
+							dropVXLANRule(VXLANPort, denyAction, denyActionString),
+							dropIPIPRule(denyAction, denyActionString),
 							startOfTierDefault(),
-							{
-								Match:  Match().MarkClear(0x10),
-								Action: JumpAction{Target: "cali-po-default/ae"},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if policy accepted"},
-							},
-							{
-								Match:  Match().MarkClear(0x10),
-								Action: JumpAction{Target: "cali-po-default/be"},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if policy accepted"},
-							},
+							matchPolicyEgress("default", "ae"),
+							policyAcceptedRule(),
+							matchPolicyEgress("default", "be"),
+							policyAcceptedRule(),
 							nflogDefaultTierEgressWithPassAction(),
-							{
-								Match:  Match(),
-								Action: JumpAction{Target: "cali-pro-prof1"},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if profile accepted"},
-							},
-							{
-								Match:  Match(),
-								Action: JumpAction{Target: "cali-pro-prof2"},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if profile accepted"},
-							},
+							matchProfileEgress("prof1"),
+							profileAcceptedRule(),
+							matchProfileEgress("prof2"),
+							profileAcceptedRule(),
 							nflogProfileEgress(),
-							{
-								Match:   Match(),
-								Action:  denyAction,
-								Comment: []string{fmt.Sprintf("%s if no profiles matched", denyActionString)},
-							},
+							noProfiletMatchedRule(denyAction, denyActionString),
 						},
 					},
 					{
@@ -2299,56 +1477,21 @@ var _ = Describe("Endpoints", func() {
 							conntrackAcceptRule(),
 							conntrackDenyRule(denyAction),
 							// Host endpoints get extra failsafe rules.
-							{
-								Match:  Match(),
-								Action: JumpAction{Target: "cali-failsafe-out"},
-							},
+							failSafeEgress(),
 							clearMarkRule(),
 							startOfTierDefault(),
-							{
-								Match:  Match().MarkClear(0x10),
-								Action: JumpAction{Target: "cali-po-default/ae"},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if policy accepted"},
-							},
-							{
-								Match:  Match().MarkClear(0x10),
-								Action: JumpAction{Target: "cali-po-default/be"},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if policy accepted"},
-							},
+							matchPolicyEgress("default", "ae"),
+							policyAcceptedRule(),
+							matchPolicyEgress("default", "be"),
+							policyAcceptedRule(),
 							nflogDefaultTierEgress(),
 							defaultTierDefaultDropRule(denyAction, denyActionString),
-							{
-								Match:  Match(),
-								Action: JumpAction{Target: "cali-pro-prof1"},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if profile accepted"},
-							},
-							{
-								Match:  Match(),
-								Action: JumpAction{Target: "cali-pro-prof2"},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if profile accepted"},
-							},
+							matchProfileEgress("prof1"),
+							profileAcceptedRule(),
+							matchProfileEgress("prof2"),
+							profileAcceptedRule(),
 							nflogProfileEgress(),
-							{
-								Match:   Match(),
-								Action:  denyAction,
-								Comment: []string{fmt.Sprintf("%s if no profiles matched", denyActionString)},
-							},
+							noProfiletMatchedRule(denyAction, denyActionString),
 						},
 					},
 					{
@@ -2358,56 +1501,21 @@ var _ = Describe("Endpoints", func() {
 							conntrackAcceptRule(),
 							conntrackDenyRule(denyAction),
 							// Host endpoints get extra failsafe rules.
-							{
-								Match:  Match(),
-								Action: JumpAction{Target: "cali-failsafe-in"},
-							},
+							failSafeIngress(),
 							clearMarkRule(),
 							startOfTierDefault(),
-							{
-								Match:  Match().MarkClear(0x10),
-								Action: JumpAction{Target: "cali-pi-default/ai"},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if policy accepted"},
-							},
-							{
-								Match:  Match().MarkClear(0x10),
-								Action: JumpAction{Target: "cali-pi-default/bi"},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if policy accepted"},
-							},
+							matchPolicyIngress("default", "ai"),
+							policyAcceptedRule(),
+							matchPolicyIngress("default", "bi"),
+							policyAcceptedRule(),
 							nflogDefaultTierIngress(),
 							defaultTierDefaultDropRule(denyAction, denyActionString),
-							{
-								Match:  Match(),
-								Action: JumpAction{Target: "cali-pri-prof1"},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if profile accepted"},
-							},
-							{
-								Match:  Match(),
-								Action: JumpAction{Target: "cali-pri-prof2"},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if profile accepted"},
-							},
+							matchProfileIngress("prof1"),
+							profileAcceptedRule(),
+							matchProfileIngress("prof2"),
+							profileAcceptedRule(),
 							nflogProfileIngress(),
-							{
-								Match:   Match(),
-								Action:  denyAction,
-								Comment: []string{fmt.Sprintf("%s if no profiles matched", denyActionString)},
-							},
+							noProfiletMatchedRule(denyAction, denyActionString),
 						},
 					},
 					{
@@ -2418,24 +1526,10 @@ var _ = Describe("Endpoints", func() {
 							conntrackDenyRule(denyAction),
 							clearMarkRule(),
 							startOfTierDefault(),
-							{
-								Match:  Match().MarkClear(0x10),
-								Action: JumpAction{Target: "cali-po-default/afe"},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if policy accepted"},
-							},
-							{
-								Match:  Match().MarkClear(0x10),
-								Action: JumpAction{Target: "cali-po-default/bfe"},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if policy accepted"},
-							},
+							jumpToPolicyGroup("cali-po-default/afe", 0x10),
+							policyAcceptedRule(),
+							jumpToPolicyGroup("cali-po-default/bfe", 0x10),
+							policyAcceptedRule(),
 							nflogDefaultTierEgress(),
 							defaultTierDefaultDropRule(denyAction, denyActionString),
 						},
@@ -2448,24 +1542,10 @@ var _ = Describe("Endpoints", func() {
 							conntrackDenyRule(denyAction),
 							clearMarkRule(),
 							startOfTierDefault(),
-							{
-								Match:  Match().MarkClear(0x10),
-								Action: JumpAction{Target: "cali-pi-default/afi"},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if policy accepted"},
-							},
-							{
-								Match:  Match().MarkClear(0x10),
-								Action: JumpAction{Target: "cali-pi-default/bfi"},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if policy accepted"},
-							},
+							matchPolicyIngress("default", "afi"),
+							policyAcceptedRule(),
+							matchPolicyIngress("default", "bfi"),
+							policyAcceptedRule(),
 							nflogDefaultTierIngress(),
 							defaultTierDefaultDropRule(denyAction, denyActionString),
 						},
@@ -2495,26 +1575,13 @@ var _ = Describe("Endpoints", func() {
 						Name: "cali-th-eth0",
 						Rules: []generictables.Rule{
 							// Host endpoints get extra failsafe rules.
-							{
-								Match:  Match(),
-								Action: JumpAction{Target: "cali-failsafe-out"},
-							},
+							failSafeEgress(),
 							clearMarkRule(),
 							startOfTierDefault(),
-							{
-								Match:  Match().MarkClear(0x10),
-								Action: JumpAction{Target: "cali-po-default/c"},
-							},
+							matchPolicyEgress("default", "c"),
 							// Extra NOTRACK action before returning in raw table.
-							{
-								Match:  Match().MarkSingleBitSet(0x8),
-								Action: NoTrackAction{},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if policy accepted"},
-							},
+							untrackedRule(),
+							policyAcceptedRule(),
 							// No drop actions or profiles in raw table.
 						},
 					},
@@ -2522,26 +1589,13 @@ var _ = Describe("Endpoints", func() {
 						Name: "cali-fh-eth0",
 						Rules: []generictables.Rule{
 							// Host endpoints get extra failsafe rules.
-							{
-								Match:  Match(),
-								Action: JumpAction{Target: "cali-failsafe-in"},
-							},
+							failSafeIngress(),
 							clearMarkRule(),
 							startOfTierDefault(),
-							{
-								Match:  Match().MarkClear(0x10),
-								Action: JumpAction{Target: "cali-pi-default/c"},
-							},
+							matchPolicyIngress("default", "c"),
 							// Extra NOTRACK action before returning in raw table.
-							{
-								Match:  Match().MarkSingleBitSet(0x8),
-								Action: NoTrackAction{},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if policy accepted"},
-							},
+							untrackedRule(),
+							policyAcceptedRule(),
 							// No drop actions or profiles in raw table.
 						},
 					},
@@ -2570,21 +1624,11 @@ var _ = Describe("Endpoints", func() {
 							},
 							conntrackDenyRule(denyAction),
 							// Host endpoints get extra failsafe rules.
-							{
-								Match:  Match(),
-								Action: JumpAction{Target: "cali-failsafe-in"},
-							},
+							failSafeIngress(),
 							clearMarkRule(),
 							startOfTierDefault(),
-							{
-								Match:  Match().MarkClear(0x10),
-								Action: JumpAction{Target: "cali-pi-default/c"},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if policy accepted"},
-							},
+							matchPolicyIngress("default", "c"),
+							policyAcceptedRule(),
 							// No drop actions or profiles in raw table.
 						},
 					},
@@ -2622,11 +1666,7 @@ var _ = Describe("Endpoints", func() {
 								Action: ReturnAction{},
 							},
 							clearMarkRule(),
-							{
-								Match:   Match(),
-								Action:  denyAction,
-								Comment: []string{fmt.Sprintf("%s if no profiles matched", denyActionString)},
-							},
+							noProfiletMatchedRule(denyAction, denyActionString),
 						},
 					},
 					{
@@ -2642,13 +1682,9 @@ var _ = Describe("Endpoints", func() {
 								Action: ReturnAction{},
 							},
 							clearMarkRule(),
-							dropVXLANRule,
-							dropIPIPRule,
-							{
-								Match:   Match(),
-								Action:  denyAction,
-								Comment: []string{fmt.Sprintf("%s if no profiles matched", denyActionString)},
-							},
+							dropVXLANRule(VXLANPort, denyAction, denyActionString),
+							dropIPIPRule(denyAction, denyActionString),
+							noProfiletMatchedRule(denyAction, denyActionString),
 						},
 					},
 					{
@@ -2675,26 +1711,13 @@ var _ = Describe("Endpoints", func() {
 						Name: "cali-fh-eth0",
 						Rules: []generictables.Rule{
 							// conntrack rules.
-							{
-								Match:  Match().ConntrackState("RELATED,ESTABLISHED"),
-								Action: AcceptAction{},
-							},
+							conntrackAcceptRule(),
 							// Host endpoints get extra failsafe rules.
-							{
-								Match:  Match(),
-								Action: JumpAction{Target: "cali-failsafe-in"},
-							},
+							failSafeIngress(),
 							clearMarkRule(),
 							startOfTierDefault(),
-							{
-								Match:  Match().MarkClear(0x10),
-								Action: JumpAction{Target: "cali-pi-default/c"},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if policy accepted"},
-							},
+							matchPolicyIngress("default", "c"),
+							policyAcceptedRule(),
 							// No drop actions or profiles in raw table.
 						},
 					},
@@ -2733,11 +1756,7 @@ var _ = Describe("Endpoints", func() {
 							},
 							clearMarkRule(),
 							nflogProfileIngress(),
-							{
-								Match:   Match(),
-								Action:  denyAction,
-								Comment: []string{fmt.Sprintf("%s if no profiles matched", denyActionString)},
-							},
+							noProfiletMatchedRule(denyAction, denyActionString),
 						},
 					},
 					{
@@ -2753,14 +1772,10 @@ var _ = Describe("Endpoints", func() {
 								Action: ReturnAction{},
 							},
 							clearMarkRule(),
-							dropVXLANRule,
-							dropIPIPRule,
+							dropVXLANRule(VXLANPort, denyAction, denyActionString),
+							dropIPIPRule(denyAction, denyActionString),
 							nflogProfileEgress(),
-							{
-								Match:   Match(),
-								Action:  denyAction,
-								Comment: []string{fmt.Sprintf("%s if no profiles matched", denyActionString)},
-							},
+							noProfiletMatchedRule(denyAction, denyActionString),
 						},
 					},
 					{
@@ -2787,26 +1802,13 @@ var _ = Describe("Endpoints", func() {
 						Name: "cali-fh-eth0",
 						Rules: []generictables.Rule{
 							// conntrack rules.
-							{
-								Match:  Match().ConntrackState("RELATED,ESTABLISHED"),
-								Action: AcceptAction{},
-							},
+							conntrackAcceptRule(),
 							// Host endpoints get extra failsafe rules.
-							{
-								Match:  Match(),
-								Action: JumpAction{Target: "cali-failsafe-in"},
-							},
+							failSafeIngress(),
 							clearMarkRule(),
 							startOfTierDefault(),
-							{
-								Match:  Match().MarkClear(0x10),
-								Action: JumpAction{Target: "cali-pi-default/c"},
-							},
-							{
-								Match:   Match().MarkSingleBitSet(0x8),
-								Action:  ReturnAction{},
-								Comment: []string{"Return if policy accepted"},
-							},
+							matchPolicyIngress("default", "c"),
+							policyAcceptedRule(),
 							// No drop actions or profiles in raw table.
 						},
 					},
@@ -2836,11 +1838,7 @@ var _ = Describe("Endpoints", func() {
 								conntrackAcceptRule(),
 								conntrackDenyRule(denyAction),
 								clearMarkRule(),
-								{
-									Match:   Match(),
-									Action:  denyAction,
-									Comment: []string{fmt.Sprintf("%s if no profiles matched", denyActionString)},
-								},
+								noProfiletMatchedRule(denyAction, denyActionString),
 							},
 						},
 						{
@@ -2850,12 +1848,8 @@ var _ = Describe("Endpoints", func() {
 								conntrackAcceptRule(),
 								conntrackDenyRule(denyAction),
 								clearMarkRule(),
-								dropIPIPRule,
-								{
-									Match:   Match(),
-									Action:  denyAction,
-									Comment: []string{fmt.Sprintf("%s if no profiles matched", denyActionString)},
-								},
+								dropIPIPRule(denyAction, denyActionString),
+								noProfiletMatchedRule(denyAction, denyActionString),
 							},
 						},
 						{
@@ -2891,11 +1885,7 @@ var _ = Describe("Endpoints", func() {
 								conntrackDenyRule(denyAction),
 								clearMarkRule(),
 								nflogProfileIngress(),
-								{
-									Match:   Match(),
-									Action:  denyAction,
-									Comment: []string{fmt.Sprintf("%s if no profiles matched", denyActionString)},
-								},
+								noProfiletMatchedRule(denyAction, denyActionString),
 							},
 						},
 						{
@@ -2905,13 +1895,9 @@ var _ = Describe("Endpoints", func() {
 								conntrackAcceptRule(),
 								conntrackDenyRule(denyAction),
 								clearMarkRule(),
-								dropIPIPRule,
+								dropIPIPRule(denyAction, denyActionString),
 								nflogProfileEgress(),
-								{
-									Match:   Match(),
-									Action:  denyAction,
-									Comment: []string{fmt.Sprintf("%s if no profiles matched", denyActionString)},
-								},
+								noProfiletMatchedRule(denyAction, denyActionString),
 							},
 						},
 						{
@@ -2950,11 +1936,7 @@ var _ = Describe("Endpoints", func() {
 								conntrackAcceptRule(),
 								conntrackDenyRule(denyAction),
 								clearMarkRule(),
-								{
-									Match:   Match(),
-									Action:  denyAction,
-									Comment: []string{fmt.Sprintf("%s if no profiles matched", denyActionString)},
-								},
+								noProfiletMatchedRule(denyAction, denyActionString),
 							},
 						},
 						{
@@ -2964,12 +1946,8 @@ var _ = Describe("Endpoints", func() {
 								conntrackAcceptRule(),
 								conntrackDenyRule(denyAction),
 								clearMarkRule(),
-								dropVXLANRule,
-								{
-									Match:   Match(),
-									Action:  denyAction,
-									Comment: []string{fmt.Sprintf("%s if no profiles matched", denyActionString)},
-								},
+								dropVXLANRule(VXLANPort, denyAction, denyActionString),
+								noProfiletMatchedRule(denyAction, denyActionString),
 							},
 						},
 						{
@@ -3008,11 +1986,7 @@ var _ = Describe("Endpoints", func() {
 								conntrackDenyRule(denyAction),
 								clearMarkRule(),
 								nflogProfileIngress(),
-								{
-									Match:   Match(),
-									Action:  denyAction,
-									Comment: []string{fmt.Sprintf("%s if no profiles matched", denyActionString)},
-								},
+								noProfiletMatchedRule(denyAction, denyActionString),
 							},
 						},
 						{
@@ -3022,13 +1996,9 @@ var _ = Describe("Endpoints", func() {
 								conntrackAcceptRule(),
 								conntrackDenyRule(denyAction),
 								clearMarkRule(),
-								dropVXLANRule,
+								dropVXLANRule(VXLANPort, denyAction, denyActionString),
 								nflogProfileEgress(),
-								{
-									Match:   Match(),
-									Action:  denyAction,
-									Comment: []string{fmt.Sprintf("%s if no profiles matched", denyActionString)},
-								},
+								noProfiletMatchedRule(denyAction, denyActionString),
 							},
 						},
 						{
@@ -3067,11 +2037,7 @@ var _ = Describe("Endpoints", func() {
 								conntrackAcceptRule(),
 								conntrackDenyRule(denyAction),
 								clearMarkRule(),
-								{
-									Match:   Match(),
-									Action:  denyAction,
-									Comment: []string{fmt.Sprintf("%s if no profiles matched", denyActionString)},
-								},
+								noProfiletMatchedRule(denyAction, denyActionString),
 							},
 						},
 						{
@@ -3081,11 +2047,7 @@ var _ = Describe("Endpoints", func() {
 								conntrackAcceptRule(),
 								conntrackDenyRule(denyAction),
 								clearMarkRule(),
-								{
-									Match:   Match(),
-									Action:  denyAction,
-									Comment: []string{fmt.Sprintf("%s if no profiles matched", denyActionString)},
-								},
+								noProfiletMatchedRule(denyAction, denyActionString),
 							},
 						},
 						{
@@ -3122,11 +2084,7 @@ var _ = Describe("Endpoints", func() {
 								conntrackDenyRule(denyAction),
 								clearMarkRule(),
 								nflogProfileIngress(),
-								{
-									Match:   Match(),
-									Action:  denyAction,
-									Comment: []string{fmt.Sprintf("%s if no profiles matched", denyActionString)},
-								},
+								noProfiletMatchedRule(denyAction, denyActionString),
 							},
 						},
 						{
@@ -3137,11 +2095,7 @@ var _ = Describe("Endpoints", func() {
 								conntrackDenyRule(denyAction),
 								clearMarkRule(),
 								nflogProfileEgress(),
-								{
-									Match:   Match(),
-									Action:  denyAction,
-									Comment: []string{fmt.Sprintf("%s if no profiles matched", denyActionString)},
-								},
+								noProfiletMatchedRule(denyAction, denyActionString),
 							},
 						},
 						{
@@ -3318,10 +2272,7 @@ var _ = table.DescribeTable("PolicyGroup chains",
 			Selector:    "all()",
 		},
 		[]generictables.Rule{
-			{
-				Match:  Match(),
-				Action: JumpAction{Target: "cali-pi-default/a"},
-			},
+			jumpToPolicyGroup("cali-pi-default/a", 0),
 		},
 	),
 	polGroupEntry(
@@ -3332,14 +2283,8 @@ var _ = table.DescribeTable("PolicyGroup chains",
 			Selector:    "all()",
 		},
 		[]generictables.Rule{
-			{
-				Match:  Match(),
-				Action: JumpAction{Target: "cali-pi-default/a"},
-			},
-			{
-				Match:  Match().MarkClear(0x18),
-				Action: JumpAction{Target: "cali-pi-default/b"},
-			},
+			jumpToPolicyGroup("cali-pi-default/a", 0),
+			jumpToPolicyGroup("cali-pi-default/b", 0x18),
 		},
 	),
 	polGroupEntry(
@@ -3350,18 +2295,9 @@ var _ = table.DescribeTable("PolicyGroup chains",
 			Selector:    "all()",
 		},
 		[]generictables.Rule{
-			{
-				Match:  Match(),
-				Action: JumpAction{Target: "cali-pi-default/a"},
-			},
-			{
-				Match:  Match().MarkClear(0x18),
-				Action: JumpAction{Target: "cali-pi-default/b"},
-			},
-			{
-				Match:  Match().MarkClear(0x18),
-				Action: JumpAction{Target: "cali-pi-default/c"},
-			},
+			jumpToPolicyGroup("cali-pi-default/a", 0),
+			jumpToPolicyGroup("cali-pi-default/b", 0x18),
+			jumpToPolicyGroup("cali-pi-default/c", 0x18),
 		},
 	),
 	polGroupEntry(
@@ -3372,22 +2308,10 @@ var _ = table.DescribeTable("PolicyGroup chains",
 			Selector:    "all()",
 		},
 		[]generictables.Rule{
-			{
-				Match:  Match(),
-				Action: JumpAction{Target: "cali-pi-default/a"},
-			},
-			{
-				Match:  Match().MarkClear(0x18),
-				Action: JumpAction{Target: "cali-pi-default/b"},
-			},
-			{
-				Match:  Match().MarkClear(0x18),
-				Action: JumpAction{Target: "cali-pi-default/c"},
-			},
-			{
-				Match:  Match().MarkClear(0x18),
-				Action: JumpAction{Target: "cali-pi-default/d"},
-			},
+			jumpToPolicyGroup("cali-pi-default/a", 0),
+			jumpToPolicyGroup("cali-pi-default/b", 0x18),
+			jumpToPolicyGroup("cali-pi-default/c", 0x18),
+			jumpToPolicyGroup("cali-pi-default/d", 0x18),
 		},
 	),
 	polGroupEntry(
@@ -3398,26 +2322,11 @@ var _ = table.DescribeTable("PolicyGroup chains",
 			Selector:    "all()",
 		},
 		[]generictables.Rule{
-			{
-				Match:  Match(),
-				Action: JumpAction{Target: "cali-pi-default/a"},
-			},
-			{
-				Match:  Match().MarkClear(0x18),
-				Action: JumpAction{Target: "cali-pi-default/b"},
-			},
-			{
-				Match:  Match().MarkClear(0x18),
-				Action: JumpAction{Target: "cali-pi-default/c"},
-			},
-			{
-				Match:  Match().MarkClear(0x18),
-				Action: JumpAction{Target: "cali-pi-default/d"},
-			},
-			{
-				Match:  Match().MarkClear(0x18),
-				Action: JumpAction{Target: "cali-pi-default/e"},
-			},
+			jumpToPolicyGroup("cali-pi-default/a", 0),
+			jumpToPolicyGroup("cali-pi-default/b", 0x18),
+			jumpToPolicyGroup("cali-pi-default/c", 0x18),
+			jumpToPolicyGroup("cali-pi-default/d", 0x18),
+			jumpToPolicyGroup("cali-pi-default/e", 0x18),
 		},
 	),
 	polGroupEntry(
@@ -3428,26 +2337,11 @@ var _ = table.DescribeTable("PolicyGroup chains",
 			Selector:    "all()",
 		},
 		[]generictables.Rule{
-			{
-				Match:  Match(),
-				Action: JumpAction{Target: "cali-pi-default/a"},
-			},
-			{
-				Match:  Match().MarkClear(0x18),
-				Action: JumpAction{Target: "cali-pi-default/b"},
-			},
-			{
-				Match:  Match().MarkClear(0x18),
-				Action: JumpAction{Target: "cali-pi-default/c"},
-			},
-			{
-				Match:  Match().MarkClear(0x18),
-				Action: JumpAction{Target: "cali-pi-default/d"},
-			},
-			{
-				Match:  Match().MarkClear(0x18),
-				Action: JumpAction{Target: "cali-pi-default/e"},
-			},
+			jumpToPolicyGroup("cali-pi-default/a", 0),
+			jumpToPolicyGroup("cali-pi-default/b", 0x18),
+			jumpToPolicyGroup("cali-pi-default/c", 0x18),
+			jumpToPolicyGroup("cali-pi-default/d", 0x18),
+			jumpToPolicyGroup("cali-pi-default/e", 0x18),
 			{
 				// Only get a return action every 5 rules and only if it's
 				// not the last action.
@@ -3455,10 +2349,7 @@ var _ = table.DescribeTable("PolicyGroup chains",
 				Action:  ReturnAction{},
 				Comment: []string{"Return on verdict"},
 			},
-			{
-				Match:  Match(),
-				Action: JumpAction{Target: "cali-pi-default/f"},
-			},
+			jumpToPolicyGroup("cali-pi-default/f", 0),
 		},
 	),
 	polGroupEntry(
@@ -3469,39 +2360,18 @@ var _ = table.DescribeTable("PolicyGroup chains",
 			Selector:    "all()",
 		},
 		[]generictables.Rule{
-			{
-				Match:  Match(),
-				Action: JumpAction{Target: "cali-po-default/a"},
-			},
-			{
-				Match:  Match().MarkClear(0x18),
-				Action: JumpAction{Target: "cali-po-default/b"},
-			},
-			{
-				Match:  Match().MarkClear(0x18),
-				Action: JumpAction{Target: "cali-po-default/c"},
-			},
-			{
-				Match:  Match().MarkClear(0x18),
-				Action: JumpAction{Target: "cali-po-default/d"},
-			},
-			{
-				Match:  Match().MarkClear(0x18),
-				Action: JumpAction{Target: "cali-po-default/e"},
-			},
+			jumpToPolicyGroup("cali-po-default/a", 0),
+			jumpToPolicyGroup("cali-po-default/b", 0x18),
+			jumpToPolicyGroup("cali-po-default/c", 0x18),
+			jumpToPolicyGroup("cali-po-default/d", 0x18),
+			jumpToPolicyGroup("cali-po-default/e", 0x18),
 			{
 				Match:   Match().MarkNotClear(0x18),
 				Action:  ReturnAction{},
 				Comment: []string{"Return on verdict"},
 			},
-			{
-				Match:  Match(),
-				Action: JumpAction{Target: "cali-po-default/f"},
-			},
-			{
-				Match:  Match().MarkClear(0x18),
-				Action: JumpAction{Target: "cali-po-default/g"},
-			},
+			jumpToPolicyGroup("cali-po-default/f", 0),
+			jumpToPolicyGroup("cali-po-default/g", 0x18),
 		},
 	),
 	polGroupEntry(
@@ -3514,39 +2384,18 @@ var _ = table.DescribeTable("PolicyGroup chains",
 		[]generictables.Rule{
 			// Match criteria and return rules get skipped until we hit the
 			// first non-staged policy.
-			{
-				Match:  Match(),
-				Action: JumpAction{Target: "cali-po-default/c"},
-			},
-			{
-				Match:  Match().MarkClear(0x18),
-				Action: JumpAction{Target: "cali-po-default/d"},
-			},
-			{
-				Match:  Match().MarkClear(0x18),
-				Action: JumpAction{Target: "cali-po-default/e"},
-			},
-			{
-				Match:  Match().MarkClear(0x18),
-				Action: JumpAction{Target: "cali-po-default/f"},
-			},
-			{
-				Match:  Match().MarkClear(0x18),
-				Action: JumpAction{Target: "cali-po-default/g"},
-			},
+			jumpToPolicyGroup("cali-po-default/c", 0),
+			jumpToPolicyGroup("cali-po-default/d", 0x18),
+			jumpToPolicyGroup("cali-po-default/e", 0x18),
+			jumpToPolicyGroup("cali-po-default/f", 0x18),
+			jumpToPolicyGroup("cali-po-default/g", 0x18),
 			{
 				Match:   Match().MarkNotClear(0x18),
 				Action:  ReturnAction{},
 				Comment: []string{"Return on verdict"},
 			},
-			{
-				Match:  Match(),
-				Action: JumpAction{Target: "cali-po-default/h"},
-			},
-			{
-				Match:  Match().MarkClear(0x18),
-				Action: JumpAction{Target: "cali-po-default/i"},
-			},
+			jumpToPolicyGroup("cali-po-default/h", 0),
+			jumpToPolicyGroup("cali-po-default/i", 0x18),
 		},
 	),
 	polGroupEntry(
@@ -3559,18 +2408,9 @@ var _ = table.DescribeTable("PolicyGroup chains",
 		[]generictables.Rule{
 			// Match criteria and return rules get skipped until we hit the
 			// first non-staged policy.
-			{
-				Match:  Match(),
-				Action: JumpAction{Target: "cali-po-default/d"},
-			},
-			{
-				Match:  Match().MarkClear(0x18),
-				Action: JumpAction{Target: "cali-po-default/f"},
-			},
-			{
-				Match:  Match().MarkClear(0x18),
-				Action: JumpAction{Target: "cali-po-default/g"},
-			},
+			jumpToPolicyGroup("cali-po-default/d", 0),
+			jumpToPolicyGroup("cali-po-default/f", 0x18),
+			jumpToPolicyGroup("cali-po-default/g", 0x18),
 		},
 	),
 	polGroupEntry(
@@ -3583,14 +2423,8 @@ var _ = table.DescribeTable("PolicyGroup chains",
 		[]generictables.Rule{
 			// Match criteria and return rules get skipped until we hit the
 			// first non-staged policy.
-			{
-				Match:  Match(),
-				Action: JumpAction{Target: "cali-po-default/f"},
-			},
-			{
-				Match:  Match().MarkClear(0x18),
-				Action: JumpAction{Target: "cali-po-default/g"},
-			},
+			jumpToPolicyGroup("cali-po-default/f", 0),
+			jumpToPolicyGroup("cali-po-default/g", 0x18),
 		},
 	),
 )
@@ -3686,5 +2520,116 @@ func tierDefaultActionRule(
 			tier,
 			actionStr,
 		)},
+	}
+}
+
+func matchPolicy(target string) generictables.Rule {
+	return generictables.Rule{
+		Match:  Match().MarkClear(0x10),
+		Action: JumpAction{Target: target},
+	}
+}
+
+func matchPolicyIngress(tier, name string) generictables.Rule {
+	return matchPolicy(fmt.Sprintf("cali-pi-%v/%v", tier, name))
+}
+
+func matchPolicyEgress(tier, name string) generictables.Rule {
+	return matchPolicy(fmt.Sprintf("cali-po-%v/%v", tier, name))
+}
+
+func matchProfile(target string) generictables.Rule {
+	return generictables.Rule{
+		Match:  Match(),
+		Action: JumpAction{Target: target},
+	}
+}
+
+func matchProfileIngress(name string) generictables.Rule {
+	return matchProfile(fmt.Sprintf("cali-pri-%v", name))
+}
+
+func matchProfileEgress(name string) generictables.Rule {
+	return matchProfile(fmt.Sprintf("cali-pro-%v", name))
+}
+
+func noProfiletMatchedRule(action generictables.Action, actionStr string) generictables.Rule {
+	return generictables.Rule{
+		Match:   Match(),
+		Action:  action,
+		Comment: []string{fmt.Sprintf("%s if no profiles matched", actionStr)},
+	}
+}
+
+func profileAcceptedRule() generictables.Rule {
+	return generictables.Rule{
+		Match:   Match().MarkSingleBitSet(0x8),
+		Action:  ReturnAction{},
+		Comment: []string{"Return if profile accepted"},
+	}
+}
+
+func policyAcceptedRule() generictables.Rule {
+	return generictables.Rule{
+		Match:   Match().MarkSingleBitSet(0x8),
+		Action:  ReturnAction{},
+		Comment: []string{"Return if policy accepted"},
+	}
+}
+
+func failSafeIngress() generictables.Rule {
+	return generictables.Rule{
+		Match:  Match(),
+		Action: JumpAction{Target: "cali-failsafe-in"},
+	}
+}
+
+func failSafeEgress() generictables.Rule {
+	return generictables.Rule{
+		Match:  Match(),
+		Action: JumpAction{Target: "cali-failsafe-out"},
+	}
+}
+
+func endpointAdminDisabledRule(denyAction generictables.Action) generictables.Rule {
+	return generictables.Rule{
+		Match:   Match(),
+		Action:  denyAction,
+		Comment: []string{"Endpoint admin disabled"},
+	}
+}
+
+func untrackedRule() generictables.Rule {
+	return generictables.Rule{
+		Match:  Match().MarkSingleBitSet(0x8),
+		Action: NoTrackAction{},
+	}
+}
+
+func jumpToPolicyGroup(target string, clearMark uint32) generictables.Rule {
+	match := Match()
+	if clearMark != 0 {
+		match = Match().MarkClear(clearMark)
+	}
+	return generictables.Rule{
+		Match:  match,
+		Action: JumpAction{Target: target},
+	}
+}
+
+func dropIPIPRule(action generictables.Action, actionStr string) generictables.Rule {
+	return generictables.Rule{
+		Match:   Match().ProtocolNum(ProtoIPIP),
+		Action:  action,
+		Comment: []string{fmt.Sprintf("%s IPinIP encapped packets originating in workloads", actionStr)},
+	}
+}
+
+func dropVXLANRule(port int, action generictables.Action, actionStr string) generictables.Rule {
+	return generictables.Rule{
+		Match: Match().ProtocolNum(ProtoUDP).
+			DestPorts(uint16(port)),
+		Action:  action,
+		Comment: []string{fmt.Sprintf("%s VXLAN encapped packets originating in workloads", actionStr)},
 	}
 }
