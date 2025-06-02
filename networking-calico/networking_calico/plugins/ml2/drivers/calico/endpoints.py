@@ -339,15 +339,9 @@ class WorkloadEndpointSyncer(ResourceSyncer):
                 LOG.debug("BW rule = %r", r)
                 direction = r.get('direction', 'egress')
                 if r['max_kbps'] != 0:
-                    if direction == "egress":
-                        qos['egressBandwidth'] = r['max_kbps'] * 1000
-                    else:
-                        qos['ingressBandwidth'] = r['max_kbps'] * 1000
+                    qos[direction+'Bandwidth'] = r['max_kbps'] * 1000
                 if r['max_burst_kbps'] != 0:
-                    if direction == "egress":
-                        qos['egressBurst'] = r['max_burst_kbps'] * 1000
-                    else:
-                        qos['ingressBurst'] = r['max_burst_kbps'] * 1000
+                    qos[direction+'Peakrate'] = r['max_burst_kbps'] * 1000
 
             rules = context.session.query(
                 qos_models.QosPacketRateLimitRule
@@ -358,15 +352,20 @@ class WorkloadEndpointSyncer(ResourceSyncer):
                 LOG.debug("PR rule = %r", r)
                 direction = r.get('direction', 'egress')
                 if r['max_kpps'] != 0:
-                    if direction == "egress":
-                        qos['egressPacketRate'] = r['max_kpps'] * 1000
-                    else:
-                        qos['ingressPacketRate'] = r['max_kpps'] * 1000
+                    qos[direction+'PacketRate'] = r['max_kpps'] * 1000
 
         if cfg.CONF.calico.max_ingress_connections_per_port != 0:
             qos['ingressMaxConnections'] = cfg.CONF.calico.max_ingress_connections_per_port
         if cfg.CONF.calico.max_egress_connections_per_port != 0:
             qos['egressMaxConnections'] = cfg.CONF.calico.max_egress_connections_per_port
+        if cfg.CONF.calico.ingress_burst_kbits != 0:
+            qos['ingressBurst'] = cfg.CONF.calico.ingress_burst_kbits * 1000
+        if cfg.CONF.calico.egress_burst_kbits != 0:
+            qos['egressBurst'] = cfg.CONF.calico.egress_burst_kbits * 1000
+        if cfg.CONF.calico.ingress_minburst_bytes != 0:
+            qos['ingressMinburst'] = cfg.CONF.calico.ingress_minburst_bytes
+        if cfg.CONF.calico.egress_minburst_bytes != 0:
+            qos['egressMinburst'] = cfg.CONF.calico.egress_minburst_bytes
 
         port_extra.qos = qos
 
