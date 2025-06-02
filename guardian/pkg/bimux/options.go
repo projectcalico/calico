@@ -16,16 +16,15 @@ package bimux
 
 import (
 	"crypto/tls"
-	"errors"
 	"net/url"
 	"time"
 )
 
-type DialerOption func(*sessionDialer) error
+type DialerOption func(*dialConfig) error
 
 // WithDialerKeepAliveSettings sets the Keep Alive settings for the tunnel.
 func WithDialerKeepAliveSettings(enable bool, intervalDuration time.Duration) DialerOption {
-	return func(dialer *sessionDialer) error {
+	return func(dialer *dialConfig) error {
 		dialer.keepAliveEnable = enable
 		dialer.keepAliveInterval = intervalDuration
 		return nil
@@ -33,41 +32,35 @@ func WithDialerKeepAliveSettings(enable bool, intervalDuration time.Duration) Di
 }
 
 func WithDialerTimeout(dialTimeout time.Duration) DialerOption {
-	return func(dialer *sessionDialer) error {
+	return func(dialer *dialConfig) error {
 		dialer.timeout = dialTimeout
 		return nil
 	}
 }
 
 func WithDialerRetryAttempts(retryAttempts int) DialerOption {
-	return func(dialer *sessionDialer) error {
+	return func(dialer *dialConfig) error {
 		dialer.retryAttempts = retryAttempts
 		return nil
 	}
 }
 
 func WithDialerRetryInterval(retryInterval time.Duration) DialerOption {
-	return func(dialer *sessionDialer) error {
+	return func(dialer *dialConfig) error {
 		dialer.retryInterval = retryInterval
 		return nil
 	}
 }
 
 func WithDialerHTTPProxyURL(httpProxyURL *url.URL) DialerOption {
-	return func(dialer *sessionDialer) error {
-		if dialer.tlsConfig == nil {
-			return errors.New("WithHTTPProxyURL: TLS dialer is required to use HTTP proxy")
-		}
+	return func(dialer *dialConfig) error {
 		dialer.httpProxyURL = httpProxyURL
 		return nil
 	}
 }
 
 func WithDialerHTTPProxyTLSConfig(tlsConfig *tls.Config) DialerOption {
-	return func(dialer *sessionDialer) error {
-		if dialer.tlsConfig == nil {
-			return errors.New("WithHTTPProxyURL: TLS dialer is required to use HTTP proxy")
-		}
+	return func(dialer *dialConfig) error {
 		dialer.proxyTLSConfig = tlsConfig
 		return nil
 	}

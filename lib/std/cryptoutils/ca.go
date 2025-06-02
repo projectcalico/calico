@@ -14,7 +14,9 @@ const (
 
 type CA interface {
 	CreateTLSCertificate(name string, opts ...CertificateOption) (*tls.Certificate, error)
+	MustCreateTLSCertificate(name string, opts ...CertificateOption) *tls.Certificate
 	Certificate() *x509.Certificate
+	MustAddToCertPool(pool *x509.CertPool) *x509.CertPool
 	AddToCertPool(pool *x509.CertPool) error
 }
 
@@ -38,6 +40,15 @@ func NewCA(name string, opts ...CertificateOption) (CA, error) {
 		cert: cert,
 		key:  privateKey,
 	}, nil
+}
+
+func MustGetNewCA(name string, opts ...CertificateOption) CA {
+	ca, err := NewCA(name, opts...)
+	if err != nil {
+		panic(err)
+	}
+
+	return ca
 }
 
 func (ca *certificateAuthority) CreateTLSCertificate(name string, opts ...CertificateOption) (*tls.Certificate, error) {
@@ -67,6 +78,15 @@ func (ca *certificateAuthority) CreateTLSCertificate(name string, opts ...Certif
 	return &tlsCert, nil
 }
 
+func (ca *certificateAuthority) MustCreateTLSCertificate(name string, opts ...CertificateOption) *tls.Certificate {
+	tlsCert, err := ca.CreateTLSCertificate(name, opts...)
+	if err != nil {
+		panic(err)
+	}
+
+	return tlsCert
+}
+
 func (ca *certificateAuthority) Certificate() *x509.Certificate {
 	return ca.cert
 }
@@ -75,6 +95,11 @@ func (ca *certificateAuthority) AddToCertPool(pool *x509.CertPool) error {
 	pool.AddCert(ca.cert)
 
 	return nil
+}
+
+func (ca *certificateAuthority) MustAddToCertPool(pool *x509.CertPool) *x509.CertPool {
+	pool.AddCert(ca.cert)
+	return pool
 }
 
 func (ca *certificateAuthority) WriteCertificates(w io.Writer) error {

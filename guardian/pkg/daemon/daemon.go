@@ -30,7 +30,7 @@ import (
 func Run(ctx context.Context, cfg config.Config, proxyTargets []server.Target) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-
+	
 	dialOpts := []bimux.DialerOption{
 		bimux.WithDialerRetryInterval(cfg.TunnelDialRetryInterval),
 		bimux.WithDialerTimeout(cfg.TunnelDialTimeout),
@@ -72,19 +72,8 @@ func Run(ctx context.Context, cfg config.Config, proxyTargets []server.Target) {
 		logrus.WithError(err).Fatal("Failed to create inbound proxy server.")
 	}
 
-	health, err := server.NewHealth()
-	if err != nil {
-		logrus.WithError(err).Fatal("Failed to create health server")
-	}
-
-	go func() {
-		// Health checks start, meaning everything before has worked.
-		if err = health.ListenAndServeHTTP(); err != nil {
-			logrus.WithError(err).Fatal("Health exited with error")
-		}
-	}()
-
 	var wg sync.WaitGroup
+
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -96,9 +85,6 @@ func Run(ctx context.Context, cfg config.Config, proxyTargets []server.Target) {
 		if err := inboundProxyServer.ListenAndProxy(ctx, *cert); err != nil {
 			logrus.WithError(err).Warn("Inbound proxy server exited.")
 		}
-
-		// Wait for the server to shut down properly before exiting.
-		<-inboundProxyServer.WaitForShutdown()
 	}()
 
 	// Allow for proxying requests from the cluster to outside it.
@@ -120,17 +106,31 @@ func Run(ctx context.Context, cfg config.Config, proxyTargets []server.Target) {
 
 			if err := outboundProxyServer.ListenAndProxy(ctx); err != nil {
 				logrus.WithError(err).Warn("proxy tunnel exited with an error")
-				cancel()
 			}
-			// Wait for the server to shut down properly before exiting.
-			<-outboundProxyServer.WaitForShutdown()
 		}()
 	}
+
+	health, err := server.NewHealth()
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to create health server")
+	}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		// If the outboundProxyServer exits, then we need to shut down the daemon. Cancelling the context ensures the
+		// other services exit and that the daemon isn't stuck waiting for the other services to exit.
+		defer cancel()
+
+		// Health checks start, meaning everything before has worked.
+		if err = health.Start(ctx); err != nil {
+			logrus.WithError(err).Warn("Health exited with error")
+		}
+	}()
 
 	wg.Wait()
 
 	// Wait for the session pool to close before exiting.
 	<-sessionPool.WaitForClose()
 
-	logrus.Info("Daemon exiting")
+	logrus.Info("Daemon exiting.")
 }
