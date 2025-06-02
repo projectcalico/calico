@@ -33,10 +33,25 @@ for series in focal jammy noble; do
     # Another modernization that we probably don't need - use `find` to list files, delimit on nulls,
     # have bash read each entry null-delimited (-d), with escaped backslashes (-r), into $changes_file
     # so that we don't have to worry about spaces in filenames destroying our script.
+    #
+    # Relevant filenames look like this:
+    #
+    #   <packagename>_<version>-<ubuntu_release>_source.changes
+    #       The changes file; we pass this to `dput` so it knows what to upload
+    #
+    #   <packagename>_<version>-<ubuntu_release>_source.ppa.upload
+    #       The .ppa.upload file is created by `dput` when we successfully complete an upload
+    #
+    #   <packagename>_<version>-<ubuntu_release>_source.ppa.previously-uploaded
+    #       The .ppa.previously-uploaded file is created by us if launchpad already has this
+    #       file. Emulates the function of the above file for our purposes, but lets us
+    #       distingush between "we just completed this upload" vs "we uploaded this at
+    #       some point previously"
+    #
     find "${outputdir}" -name "*-${series}_source.changes" -print0 | while read -r -d $'\0' changes_file; do
         filename=$(basename "${changes_file}")
         package_name="${filename%%_*}"
-        base_ppa_file_path=$(basename ${changes_file} .changes)
+        base_ppa_file_path="$(basename "${changes_file}" .changes).ppa"
         if test -f "${outputdir}/${base_ppa_file_path}.upload"; then
             echo "Upload was already completed, skipping" | ts "[upload ${series} ${package_name}]"
         elif test -f "${outputdir}/${base_ppa_file_path}.previously-uploaded"; then
