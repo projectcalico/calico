@@ -37,6 +37,10 @@ type Result[V any] struct {
 	err   error
 }
 
+func NewResultError[V any](err error) Result[V] {
+	return Result[V]{err: err}
+}
+
 func (r Result[V]) Result() (V, error) {
 	return r.value, r.err
 }
