@@ -146,7 +146,7 @@ skip_redir_ifindex:
 			}
 			rc = bpf_redirect_neigh(state->ct_result.ifindex_fwd, NULL, 0, 0);
 			if (rc == TC_ACT_REDIRECT) {
-				CALI_DEBUG("Redirect to dev %d without fib lookup", state->ct_result.ifindex_fwd);
+				CALI_DEBUG("Redirect to host dev %d without fib lookup", state->ct_result.ifindex_fwd);
 				goto no_fib_redirect;
 			}
 			CALI_DEBUG("Fall through to full FIB lookup rc %d", rc);
