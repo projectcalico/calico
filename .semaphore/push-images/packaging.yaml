@@ -29,7 +29,7 @@ global_job_config:
       # Note that this override is for the docker containers we're building,
       # and not the VM that we're running on right now
       - export UBUNTU_REPO_OVERRIDE=ftp.uni-stuttgart.de
-      - install-package --no-install-recommends devscripts moreutils patchelf
+      - sudo apt-get install -y --no-install-recommends devscripts moreutils patchelf
 
 blocks:
   - name: "Publish openstack packages"
