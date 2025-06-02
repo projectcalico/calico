@@ -1339,6 +1339,8 @@ $(REPO_ROOT)/.$(KIND_NAME).created: $(KUBECTL) $(KIND)
 	# Wait for controller manager to be running and healthy, then create Calico CRDs.
 	while ! KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) get serviceaccount default; do echo "Waiting for default serviceaccount to be created..."; sleep 2; done
 	while ! KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) create -f $(REPO_ROOT)/api/config/crd; do echo "Waiting for CRDs to be created"; sleep 2; done
+	while ! KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) create -f $(REPO_ROOT)/libcalico-go/config/crd/policy.networking.k8s.io_adminnetworkpolicies.yaml; do echo "Waiting for CRDs to be created"; sleep 2; done
+	while ! KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) create -f $(REPO_ROOT)/libcalico-go/config/crd/policy.networking.k8s.io_baselineadminnetworkpolicies.yaml; do echo "Waiting for CRDs to be created"; sleep 2; done
 	touch $@
 
 kind-cluster-destroy: $(KIND) $(KUBECTL)
