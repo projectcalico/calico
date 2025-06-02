@@ -21,48 +21,55 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/guardian/pkg/bimux"
 	"github.com/projectcalico/calico/guardian/pkg/config"
 	"github.com/projectcalico/calico/guardian/pkg/server"
-	"github.com/projectcalico/calico/guardian/pkg/tunnel"
 )
 
 // Run starts the daemon, which configures and starts the services needed for guardian to run.
 func Run(ctx context.Context, cfg config.Config, proxyTargets []server.Target) {
-	tunnelDialOpts := []tunnel.DialerOption{
-		tunnel.WithDialerRetryInterval(cfg.TunnelDialRetryInterval),
-		tunnel.WithDialerTimeout(cfg.TunnelDialTimeout),
-		tunnel.WithDialerRetryAttempts(cfg.TunnelDialRetryAttempts),
-		tunnel.WithDialerKeepAliveSettings(cfg.KeepAliveEnable, time.Duration(cfg.KeepAliveInterval)*time.Millisecond),
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	dialOpts := []bimux.DialerOption{
+		bimux.WithDialerRetryInterval(cfg.TunnelDialRetryInterval),
+		bimux.WithDialerTimeout(cfg.TunnelDialTimeout),
+		bimux.WithDialerRetryAttempts(cfg.TunnelDialRetryAttempts),
+		bimux.WithDialerKeepAliveSettings(cfg.KeepAliveEnable, time.Duration(cfg.KeepAliveInterval)*time.Millisecond),
 	}
 
-	proxyURL, err := cfg.GetHTTPProxyURL()
-	if err != nil {
-		logrus.WithError(err).Fatal("Failed to resolve proxy URL.")
-	} else if proxyURL != nil {
-		tunnelDialOpts = append(tunnelDialOpts, tunnel.WithDialerHTTPProxyURL(proxyURL))
+	if cfg.ProxyURL != nil {
+		dialOpts = append(dialOpts, bimux.WithDialerHTTPProxyURL(cfg.ProxyURL))
+		if cfg.ProxyTLSConfig != nil {
+			dialOpts = append(dialOpts, bimux.WithDialerHTTPProxyTLSConfig(cfg.ProxyTLSConfig))
+		}
 	}
 
-	srvOpts := []server.Option{
-		server.WithProxyTargets(proxyTargets),
-		server.WithConnectionRetryAttempts(cfg.ConnectionRetryAttempts),
-		server.WithConnectionRetryInterval(cfg.ConnectionRetryInterval),
-	}
-
-	tlsConfig, cert, err := cfg.TLSConfig()
+	tlsConfig, cert, err := cfg.TLSConfigProvider().TLSConfig()
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to create tls config")
 	}
 
 	logrus.Infof("Using server name %s", tlsConfig.ServerName)
 
-	dialer, err := tunnel.NewTLSSessionDialer(cfg.VoltronURL, tlsConfig, tunnelDialOpts...)
+	sessionDialer, err := bimux.NewSessionDialer(
+		cfg.VoltronURL,
+		tlsConfig,
+		dialOpts...,
+	)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to create session dialer.")
 	}
 
-	srv, err := server.New(ctx, cert, dialer, srvOpts...)
+	sessionPool := bimux.NewSessionPool(sessionDialer)
+	sessionPool.Start(ctx)
+
+	inboundProxyServer, err := server.NewInboundProxyServer(
+		sessionPool,
+		server.WithProxyTargets(proxyTargets),
+	)
 	if err != nil {
-		logrus.WithError(err).Fatal("Failed to create server")
+		logrus.WithError(err).Fatal("Failed to create inbound proxy server.")
 	}
 
 	health, err := server.NewHealth()
@@ -81,25 +88,49 @@ func Run(ctx context.Context, cfg config.Config, proxyTargets []server.Target) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
+		// If the inboundProxyServer exits, then we need to shut down the daemon. Cancelling the context ensures the
+		// other services exit and that the daemon isn't stuck waiting for the other services to exit.
+		defer cancel()
+
 		// Allow requests to come down from the management cluster.
-		if err := srv.ListenAndServeManagementCluster(); err != nil {
-			logrus.WithError(err).Warn("Serving the tunnel exited.")
+		if err := inboundProxyServer.ListenAndProxy(ctx, *cert); err != nil {
+			logrus.WithError(err).Warn("Inbound proxy server exited.")
 		}
+
+		// Wait for the server to shut down properly before exiting.
+		<-inboundProxyServer.WaitForShutdown()
 	}()
 
-	// Allow requests from the cluster to be sent up to the management cluster.
+	// Allow for proxying requests from the cluster to outside it.
 	if cfg.Listen {
+		outboundProxyServer, err := server.NewOutboundProxyServer(
+			sessionPool,
+			server.WithListenPort(cfg.ListenPort),
+		)
+		if err != nil {
+			logrus.WithError(err).Warn("Failed to create outbound proxy server.")
+		}
+
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
+			// If the outboundProxyServer exits, then we need to shut down the daemon. Cancelling the context ensures the
+			// other services exit and that the daemon isn't stuck waiting for the other services to exit.
+			defer cancel()
 
-			if err := srv.ListenAndServeCluster(); err != nil {
+			if err := outboundProxyServer.ListenAndProxy(ctx); err != nil {
 				logrus.WithError(err).Warn("proxy tunnel exited with an error")
+				cancel()
 			}
+			// Wait for the server to shut down properly before exiting.
+			<-outboundProxyServer.WaitForShutdown()
 		}()
 	}
 
-	if err := srv.WaitForShutdown(); err != nil {
-		logrus.WithError(err).Fatal("proxy tunnel exited with an error")
-	}
+	wg.Wait()
+
+	// Wait for the session pool to close before exiting.
+	<-sessionPool.WaitForClose()
+
+	logrus.Info("Daemon exiting")
 }
