@@ -738,10 +738,22 @@ configRetry:
 		gaugeHost.Set(1)
 		prometheus.MustRegister(gaugeHost)
 		dp.ConfigurePrometheusMetrics(configParams)
-		go metricsserver.ServePrometheusMetricsForever(
-			configParams.PrometheusMetricsHost,
-			configParams.PrometheusMetricsPort,
-		)
+		if configParams.MetricsTLSEnabled == true {
+			go metricsserver.ServePrometheusMetricsHTTPS(
+				configParams.PrometheusMetricsHost,
+				configParams.PrometheusMetricsPort,
+				configParams.MetricsTLSCertFile,
+				configParams.MetricsTLSPrivateKeyFile,
+				configParams.MetricsTLSMinVersion,
+				configParams.MetricsClientAuthType,
+				configParams.MetricsTLSCACertFile,
+			)
+		} else {
+			go metricsserver.ServePrometheusMetricsHTTP(
+				configParams.PrometheusMetricsHost,
+				configParams.PrometheusMetricsPort,
+			)
+		}
 	}
 
 	// Register signal handlers to dump memory/CPU profiles.

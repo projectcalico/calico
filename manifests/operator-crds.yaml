@@ -30236,6 +30236,36 @@ spec:
                     not 'None'), is used to set up a NAT rule, from 169.254.169.254:80 to MetadataAddr:MetadataPort.
                     In most cases this should not need to be changed [Default: 8775].
                   type: integer
+                metricsClientAuthType:
+                  description: |-
+                    MetricsClientAuthType specifies the client authentication type for the /metrics endpoint.
+                    This determines how the server validates client certificates. Default is "NoClientCert".
+                  type: string
+                metricsTLSCACertFile:
+                  description: |-
+                    MetricsTLSCACertFile defines the absolute path to the TLS CA certificate file used for securing the /metrics endpoint.
+                    This certificate must be valid and accessible by the calico-node process.
+                  type: string
+                metricsTLSCertFile:
+                  description: |-
+                    MetricsTLSCertFile defines the absolute path to the TLS certificate file used for securing the /metrics endpoint.
+                    This certificate must be valid and accessible by the calico-node process.
+                  type: string
+                metricsTLSEnabled:
+                  description: |-
+                    MetricsTLSEnabled specifies whether TLS encryption is enabled for the /metrics endpoint.
+                    If set to true, the metrics server will only be accessible over HTTPS. Default is false.
+                  type: boolean
+                metricsTLSMinVersion:
+                  description: |-
+                    MetricsTLSMinVersion specifies the minimum TLS version allowed for the /metrics endpoint.
+                    This ensures that only secure versions of TLS are used. Default is "1.3".
+                  type: string
+                metricsTLSPrivateKeyFile:
+                  description: |-
+                    MetricsTLSPrivateKeyFile defines the absolute path to the private key file corresponding to the TLS certificate
+                    used for securing the /metrics endpoint. The private key must be valid and accessible by the calico-node process.
+                  type: string
                 mtuIfacePattern:
                   description: |-
                     MTUIfacePattern is a regular expression that controls which interfaces Felix should scan in order
