@@ -2871,6 +2871,48 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							Format:      "",
 						},
 					},
+					"metricsTLSEnabled": {
+						SchemaProps: spec.SchemaProps{
+							Description: "MetricsTLSEnabled specifies whether TLS encryption is enabled for the /metrics endpoint. If set to true, the metrics server will only be accessible over HTTPS. Default is false.",
+							Type:        []string{"boolean"},
+							Format:      "",
+						},
+					},
+					"metricsTLSCACertFile": {
+						SchemaProps: spec.SchemaProps{
+							Description: "MetricsTLSCACertFile defines the absolute path to the TLS CA certificate file used for securing the /metrics endpoint. This certificate must be valid and accessible by the calico-node process.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metricsTLSCertFile": {
+						SchemaProps: spec.SchemaProps{
+							Description: "MetricsTLSCertFile defines the absolute path to the TLS certificate file used for securing the /metrics endpoint. This certificate must be valid and accessible by the calico-node process.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metricsTLSPrivateKeyFile": {
+						SchemaProps: spec.SchemaProps{
+							Description: "MetricsTLSPrivateKeyFile defines the absolute path to the private key file corresponding to the TLS certificate used for securing the /metrics endpoint. The private key must be valid and accessible by the calico-node process.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metricsClientAuthType": {
+						SchemaProps: spec.SchemaProps{
+							Description: "MetricsClientAuthType specifies the client authentication type for the /metrics endpoint. This determines how the server validates client certificates. Default is \"NoClientCert\".",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metricsTLSMinVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "MetricsTLSMinVersion specifies the minimum TLS version allowed for the /metrics endpoint. This ensures that only secure versions of TLS are used. Default is \"1.3\".",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 					"failsafeInboundHostPorts": {
 						SchemaProps: spec.SchemaProps{
 							Description: "FailsafeInboundHostPorts is a list of ProtoPort struct objects including UDP/TCP/SCTP ports and CIDRs that Felix will allow incoming traffic to host endpoints on irrespective of the security policy. This is useful to avoid accidentally cutting off a host with incorrect configuration. For backwards compatibility, if the protocol is not specified, it defaults to \"tcp\". If a CIDR is not specified, it will allow traffic from all addresses. To disable all inbound host ports, use the value \"[]\". The default value allows ssh access, DHCP, BGP, etcd and the Kubernetes API. [Default: tcp:22, udp:68, tcp:179, tcp:2379, tcp:2380, tcp:5473, tcp:6443, tcp:6666, tcp:6667 ]",

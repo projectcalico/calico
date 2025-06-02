@@ -890,6 +890,90 @@ This should not match workload interfaces (usually named cali...).
 | `FelixConfiguration` schema | String. |
 | Default value (YAML) | `^((en\|wl\|ww\|sl\|ib)[Pcopsvx].*\|(eth\|wlan\|wwan).*)` |
 
+### `MetricsClientAuthType` (config file) / `metricsClientAuthType` (YAML)
+
+Specifies the client authentication type for the /metrics endpoint.
+This determines how the server validates client certificates. Default is "NoClientCert".
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_MetricsClientAuthType` |
+| Encoding (env var/config file) | One of: <code>NoClientCert</code>, <code>RequireAndVerifyClientCert</code>, <code>VerifyClientCertIfGiven</code> (case insensitive) |
+| Default value (above encoding) | `NoClientCert` |
+| `FelixConfiguration` field | `metricsClientAuthType` (YAML) `MetricsClientAuthType` (Go API) |
+| `FelixConfiguration` schema | String. |
+| Default value (YAML) | `NoClientCert` |
+
+### `MetricsTLSCACertFile` (config file) / `metricsTLSCACertFile` (YAML)
+
+Defines the absolute path to the TLS CA certificate file used for securing the /metrics endpoint.
+This certificate must be valid and accessible by the calico-node process.
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_MetricsTLSCACertFile` |
+| Encoding (env var/config file) | String |
+| Default value (above encoding) | none |
+| `FelixConfiguration` field | `metricsTLSCACertFile` (YAML) `MetricsTLSCACertFile` (Go API) |
+| `FelixConfiguration` schema | String. |
+| Default value (YAML) | none |
+
+### `MetricsTLSCertFile` (config file) / `metricsTLSCertFile` (YAML)
+
+Defines the absolute path to the TLS certificate file used for securing the /metrics endpoint.
+This certificate must be valid and accessible by the calico-node process.
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_MetricsTLSCertFile` |
+| Encoding (env var/config file) | String |
+| Default value (above encoding) | none |
+| `FelixConfiguration` field | `metricsTLSCertFile` (YAML) `MetricsTLSCertFile` (Go API) |
+| `FelixConfiguration` schema | String. |
+| Default value (YAML) | none |
+
+### `MetricsTLSEnabled` (config file) / `metricsTLSEnabled` (YAML)
+
+Specifies whether TLS encryption is enabled for the /metrics endpoint.
+If set to true, the metrics server will only be accessible over HTTPS. Default is false.
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_MetricsTLSEnabled` |
+| Encoding (env var/config file) | Boolean: <code>true</code>, <code>1</code>, <code>yes</code>, <code>y</code>, <code>t</code> accepted as True; <code>false</code>, <code>0</code>, <code>no</code>, <code>n</code>, <code>f</code> accepted (case insensitively) as False. |
+| Default value (above encoding) | `false` |
+| `FelixConfiguration` field | `metricsTLSEnabled` (YAML) `MetricsTLSEnabled` (Go API) |
+| `FelixConfiguration` schema | Boolean. |
+| Default value (YAML) | `false` |
+
+### `MetricsTLSMinVersion` (config file) / `metricsTLSMinVersion` (YAML)
+
+Specifies the minimum TLS version allowed for the /metrics endpoint.
+This ensures that only secure versions of TLS are used. Default is "1.3".
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_MetricsTLSMinVersion` |
+| Encoding (env var/config file) | One of: <code>TLS12</code>, <code>TLS13</code> (case insensitive) |
+| Default value (above encoding) | `TLS13` |
+| `FelixConfiguration` field | `metricsTLSMinVersion` (YAML) `MetricsTLSMinVersion` (Go API) |
+| `FelixConfiguration` schema | String. |
+| Default value (YAML) | `TLS13` |
+
+### `MetricsTLSPrivateKeyFile` (config file) / `metricsTLSPrivateKeyFile` (YAML)
+
+Defines the absolute path to the private key file corresponding to the TLS certificate
+used for securing the /metrics endpoint. The private key must be valid and accessible by the calico-node process.
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_MetricsTLSPrivateKeyFile` |
+| Encoding (env var/config file) | String |
+| Default value (above encoding) | none |
+| `FelixConfiguration` field | `metricsTLSPrivateKeyFile` (YAML) `MetricsTLSPrivateKeyFile` (Go API) |
+| `FelixConfiguration` schema | String. |
+| Default value (YAML) | none |
+
 ### `NATOutgoingAddress` (config file) / `natOutgoingAddress` (YAML)
 
 Specifies an address to use when performing source NAT for traffic in a natOutgoing pool that
