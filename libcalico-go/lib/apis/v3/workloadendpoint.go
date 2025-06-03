@@ -112,15 +112,34 @@ type WorkloadEndpointList struct {
 	Items           []WorkloadEndpoint `json:"items"`
 }
 
+// QoSControls contains QoS limits configuration.
 type QoSControls struct {
-	IngressBandwidth      int64 `json:"ingressBandwidth,omitempty"`
-	EgressBandwidth       int64 `json:"egressBandwidth,omitempty"`
-	IngressBurst          int64 `json:"ingressBurst,omitempty"`
-	EgressBurst           int64 `json:"egressBurst,omitempty"`
-	IngressPacketRate     int64 `json:"ingressPacketRate,omitempty"`
-	EgressPacketRate      int64 `json:"egressPacketRate,omitempty"`
+	// Ingress bandwidth rate limit in bits per second
+	IngressBandwidth int64 `json:"ingressBandwidth,omitempty"`
+	// Egress bandwidth rate limit in bits per second
+	EgressBandwidth int64 `json:"egressBandwidth,omitempty"`
+	// Ingress bandwidth burst size in bits
+	IngressBurst int64 `json:"ingressBurst,omitempty"`
+	// Egress bandwidth burst size in bits
+	EgressBurst int64 `json:"egressBurst,omitempty"`
+	// Ingress bandwidth peakrate limit in bits per second
+	IngressPeakrate int64 `json:"ingressPeakrate,omitempty"`
+	// Egress bandwidth peakrate limit in bits per second
+	EgressPeakrate int64 `json:"egressPeakrate,omitempty"`
+	// Ingress bandwidth minburst size in bytes (not bits because it is typically the MTU)
+	IngressMinburst int64 `json:"ingressMinburst,omitempty"`
+	// Egress bandwidth minburst size in bytes (not bits because it is typically the MTU)
+	EgressMinburst int64 `json:"egressMinburst,omitempty"`
+
+	// Ingress packet rate limit in packets per second
+	IngressPacketRate int64 `json:"ingressPacketRate,omitempty"`
+	// Egress packet rate limit in packets per second
+	EgressPacketRate int64 `json:"egressPacketRate,omitempty"`
+
+	// Ingress maximum number of connections (absolute number of connections, no unit)
 	IngressMaxConnections int64 `json:"ingressMaxConnections,omitempty"`
-	EgressMaxConnections  int64 `json:"egressMaxConnections,omitempty"`
+	// Egress maximum number of connections (absolute number of connections, no unit)
+	EgressMaxConnections int64 `json:"egressMaxConnections,omitempty"`
 }
 
 // NewWorkloadEndpoint creates a new (zeroed) WorkloadEndpoint struct with the TypeMetadata initialised to the current
