@@ -49,11 +49,11 @@ import (
 __attribute__((constructor)) void set_namespaces(void) {
 	// open /initproc/ns/cgroup, which is equivalent to /proc/1/ns/cgroup on host.
 	// Then run setns syscall to change the cgroup namespace to this value.
-	setns(open("/initproc/ns/cgroup", O_RDONLY, 0), CLONE_NEWCGROUP);
+	setns(open("/nodeproc/1/ns/cgroup", O_RDONLY, 0), CLONE_NEWCGROUP);
 
-	// open /initproc/ns/mnt, which is equivalent to /proc/1/ns/mnt on host.
+	// open /nodeproc/1/ns/mnt, which is equivalent to /proc/1/ns/mnt on host.
 	// Then run setns syscall to change the mount namespace to this value.
-	setns(open("/initproc/ns/mnt", O_RDONLY, 0), CLONE_NEWNS);
+	setns(open("/nodeproc/1/ns/mnt", O_RDONLY, 0), CLONE_NEWNS);
 } */
 import "C"
 
