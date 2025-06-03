@@ -98,17 +98,25 @@ func MTUFromFile(filename string, conf types.NetConf) (int, error) {
 	if filename == "" {
 		filename = MTUFilePath
 	}
+
 	data, err := os.ReadFile(filename)
-	if err != nil {
-		if os.IsNotExist(err) && conf.RequireMTUFile {
-			// File doesn't exist, fail explicitly so it can retry and ensure the file is created.
+	if err == nil {
+		return strconv.Atoi(strings.TrimSpace(string(data)))
+	}
+
+	// Handle file not existing case
+	if os.IsNotExist(err) {
+		if conf.RequireMTUFile {
 			logrus.WithField("filename", filename).WithError(err).Errorf("File does not exist")
 			return 0, err
 		}
-		logrus.WithError(err).Errorf("Failed to read %s", filename)
-		return 0, err
+		logrus.WithField("filename", filename).WithError(err).Errorf("File does not exist, skipping the error since RequireMTUFile is false")
+		return 0, nil
 	}
-	return strconv.Atoi(strings.TrimSpace(string(data)))
+
+	// Handle other errors
+	logrus.WithError(err).Errorf("Failed to read %s", filename)
+	return 0, err
 }
 
 // CreateOrUpdate creates the WorkloadEndpoint if ResourceVersion is not specified,
