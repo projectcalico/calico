@@ -3180,14 +3180,14 @@ func schema_libcalico_go_lib_apis_v3_QoSControls(ref common.ReferenceCallback) c
 					},
 					"ingressPacketBurst": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Ingress packet burst size in number of packets",
+							Description: "Ingress packet rate burst size in number of packets",
 							Type:        []string{"integer"},
 							Format:      "int64",
 						},
 					},
 					"egressPacketBurst": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Egress packet burst size in number of packets",
+							Description: "Egress packet rate burst size in number of packets",
 							Type:        []string{"integer"},
 							Format:      "int64",
 						},
