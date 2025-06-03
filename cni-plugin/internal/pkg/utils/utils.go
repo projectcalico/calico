@@ -94,6 +94,9 @@ func nodenameFromFile(filename string) string {
 
 // MTUFromFile reads the /var/lib/calico/mtu file if it exists and
 // returns the MTU within.
+// If the file does not exist and RequireMTUFile is false, it returns 0 and nil.
+// If the file does not exist and RequireMTUFile is true, it returns 0 and an error.
+// If there are other errors reading the file, it returns 0 and the error.
 func MTUFromFile(filename string, conf types.NetConf) (int, error) {
 	if filename == "" {
 		filename = MTUFilePath
