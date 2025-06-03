@@ -14,7 +14,7 @@ tox-%: upper-constraints-%.txt
 	$(MAKE) tox PIP_CONSTRAINT=/code/upper-constraints-$*.txt
 
 upper-constraints-yoga.txt:
-	curl -L https://releases.openstack.org/constraints/upper/yoga -o $@
+	curl -fsSL https://releases.openstack.org/constraints/upper/yoga -o $@
 
 upper-constraints-caracal.txt:
-	curl -L https://raw.githubusercontent.com/openstack/requirements/refs/heads/stable/2024.1/upper-constraints.txt -o $@
+	curl -fsSL https://raw.githubusercontent.com/openstack/requirements/refs/heads/stable/2024.1/upper-constraints.txt -o $@
