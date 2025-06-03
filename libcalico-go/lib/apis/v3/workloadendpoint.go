@@ -112,28 +112,30 @@ type WorkloadEndpointList struct {
 	Items           []WorkloadEndpoint `json:"items"`
 }
 
-// QoSControls contains all QoS-related configuration.
+// QoSControls contains QoS limits configuration.
 type QoSControls struct {
-	// Ingress bandwidth in bits per second
+	// Ingress bandwidth rate limit in bits per second
 	IngressBandwidth int64 `json:"ingressBandwidth,omitempty"`
-	// Egress bandwidth in bits per second
+	// Egress bandwidth rate limit in bits per second
 	EgressBandwidth int64 `json:"egressBandwidth,omitempty"`
-	// Ingress burst size in bits
+	// Ingress bandwidth burst size in bits
 	IngressBurst int64 `json:"ingressBurst,omitempty"`
-	// Egress burst size in bits
+	// Egress bandwidth burst size in bits
 	EgressBurst int64 `json:"egressBurst,omitempty"`
-	// Ingress peakrate in bits per second
+	// Ingress bandwidth peakrate limit in bits per second
 	IngressPeakrate int64 `json:"ingressPeakrate,omitempty"`
-	// Egress peakrate in bits per second
+	// Egress bandwidth peakrate limit in bits per second
 	EgressPeakrate int64 `json:"egressPeakrate,omitempty"`
-	// Ingress minburst in bytes (not bits because it is typically the MTU)
+	// Ingress bandwidth minburst size in bytes (not bits because it is typically the MTU)
 	IngressMinburst int64 `json:"ingressMinburst,omitempty"`
-	// Egress minburst in bytes (not bits because it is typically the MTU)
+	// Egress bandwidth minburst size in bytes (not bits because it is typically the MTU)
 	EgressMinburst int64 `json:"egressMinburst,omitempty"`
-	// Ingress packet rate in packets per second
+
+	// Ingress packet rate limit in packets per second
 	IngressPacketRate int64 `json:"ingressPacketRate,omitempty"`
-	// Egress packet rate in packets per second
+	// Egress packet rate limit in packets per second
 	EgressPacketRate int64 `json:"egressPacketRate,omitempty"`
+
 	// Ingress maximum number of connections (absolute number of connections, no unit)
 	IngressMaxConnections int64 `json:"ingressMaxConnections,omitempty"`
 	// Egress maximum number of connections (absolute number of connections, no unit)

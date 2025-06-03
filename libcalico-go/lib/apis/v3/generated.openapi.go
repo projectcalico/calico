@@ -3105,75 +3105,75 @@ func schema_libcalico_go_lib_apis_v3_QoSControls(ref common.ReferenceCallback) c
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Description: "QoSControls contains all QoS-related configuration.",
+				Description: "QoSControls contains QoS limits configuration.",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"ingressBandwidth": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Ingress bandwidth in bits per second",
+							Description: "Ingress bandwidth rate limit in bits per second",
 							Type:        []string{"integer"},
 							Format:      "int64",
 						},
 					},
 					"egressBandwidth": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Egress bandwidth in bits per second",
+							Description: "Egress bandwidth rate limit in bits per second",
 							Type:        []string{"integer"},
 							Format:      "int64",
 						},
 					},
 					"ingressBurst": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Ingress burst size in bits",
+							Description: "Ingress bandwidth burst size in bits",
 							Type:        []string{"integer"},
 							Format:      "int64",
 						},
 					},
 					"egressBurst": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Egress burst size in bits",
+							Description: "Egress bandwidth burst size in bits",
 							Type:        []string{"integer"},
 							Format:      "int64",
 						},
 					},
 					"ingressPeakrate": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Ingress peakrate in bits per second",
+							Description: "Ingress bandwidth peakrate limit in bits per second",
 							Type:        []string{"integer"},
 							Format:      "int64",
 						},
 					},
 					"egressPeakrate": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Egress peakrate in bits per second",
+							Description: "Egress bandwidth peakrate limit in bits per second",
 							Type:        []string{"integer"},
 							Format:      "int64",
 						},
 					},
 					"ingressMinburst": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Ingress minburst in bytes (not bits because it is typically the MTU)",
+							Description: "Ingress bandwidth minburst size in bytes (not bits because it is typically the MTU)",
 							Type:        []string{"integer"},
 							Format:      "int64",
 						},
 					},
 					"egressMinburst": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Egress minburst in bytes (not bits because it is typically the MTU)",
+							Description: "Egress bandwidth minburst size in bytes (not bits because it is typically the MTU)",
 							Type:        []string{"integer"},
 							Format:      "int64",
 						},
 					},
 					"ingressPacketRate": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Ingress packet rate in packets per second",
+							Description: "Ingress packet rate limit in packets per second",
 							Type:        []string{"integer"},
 							Format:      "int64",
 						},
 					},
 					"egressPacketRate": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Egress packet rate in packets per second",
+							Description: "Egress packet rate limit in packets per second",
 							Type:        []string{"integer"},
 							Format:      "int64",
 						},
