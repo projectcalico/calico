@@ -65,7 +65,7 @@ class TestFVEtcdutils(unittest.TestCase):
             "/usr/local/bin/etcd",
             "--advertise-client-urls", "http://127.0.0.1:2379",
             "--listen-client-urls", "http://0.0.0.0:2379"
-        ])
+        ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         self.etcd_server_running = True
 
     def wait_etcd_ready(self):
