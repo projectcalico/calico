@@ -49,7 +49,8 @@ RUN apt-get update && apt-get install -y \
     hping3 \
     libpcap0.8 \
     tcpdump \
-    iperf3
+    iperf3 \
+    iperf
 
 RUN apt-get install --no-install-recommends -y wireguard-tools
 
