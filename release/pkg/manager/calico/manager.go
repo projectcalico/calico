@@ -17,6 +17,7 @@ package calico
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -632,6 +633,17 @@ type imageExistsResult struct {
 	err    error
 }
 
+func (r *CalicoManager) componentImages() map[string]string {
+	components := map[string]string{}
+	for name, component := range r.imageComponents {
+		if component.Registry == "" {
+			component.Registry = r.imageRegistries[0]
+		}
+		components[name] = component.String()
+	}
+	return components
+}
+
 // checkHashreleaseImagesPublished checks that the images required for the hashrelease exist in the specified registries.
 func (r *CalicoManager) checkHashreleaseImagesPublished() ([]registry.Component, error) {
 	logrus.Info("Checking images required for hashrelease have already been published")
@@ -643,16 +655,16 @@ func (r *CalicoManager) checkHashreleaseImagesPublished() ([]registry.Component,
 
 	resultsCh := make(chan imageExistsResult, numOfComponents)
 
-	for name, component := range r.imageComponents {
-		go func(name string, component registry.Component, ch chan imageExistsResult) {
-			exists, err := registry.CheckImage(component.String())
+	for name, image := range r.componentImages() {
+		go func(name string, image string, ch chan imageExistsResult) {
+			exists, err := registry.CheckImage(image)
 			resultsCh <- imageExistsResult{
 				name:   name,
-				image:  component.String(),
+				image:  image,
 				exists: exists,
 				err:    err,
 			}
-		}(name, component, resultsCh)
+		}(name, image, resultsCh)
 	}
 
 	var resultsErr error
@@ -696,12 +708,8 @@ func (r *CalicoManager) hashreleasePrereqs() error {
 
 	if r.imageScanning {
 		logrus.Info("Sending images to ISS")
-		imageList := []string{}
-		for _, component := range r.imageComponents {
-			imageList = append(imageList, component.String())
-		}
 		imageScanner := imagescanner.New(r.imageScanningConfig)
-		err := imageScanner.Scan(r.productCode, imageList, r.hashrelease.Stream, false, r.tmpDir)
+		err := imageScanner.Scan(r.productCode, slices.Collect(maps.Values(r.componentImages())), r.hashrelease.Stream, false, r.tmpDir)
 		if err != nil {
 			// Error is logged and ignored as this is not considered a fatal error
 			logrus.WithError(err).Error("Failed to scan images")
