@@ -464,10 +464,12 @@ type LimitPacketRateAction struct {
 }
 
 func (a LimitPacketRateAction) ToFragment(features *environment.Features) string {
-	if a.Rate < 0 {
+	// Rate and Burst are limited to XT_LIMIT_SCALE (10k)
+	// See https://github.com/torvalds/linux/blob/16b70698aa3ae7888826d0c84567c72241cf6713/include/uapi/linux/netfilter/xt_limit.h#L8
+	if a.Rate < 0 || a.Rate > 10000 {
 		logrus.WithField("rate", a.Rate).Panic("Invalid rate")
 	}
-	if a.Burst < 1 {
+	if a.Burst < 1 || a.Burst > 10000 {
 		logrus.WithField("burst", a.Burst).Panic("Invalid burst")
 	}
 	return fmt.Sprintf("limit rate over %d/second burst %d packets drop", a.Rate, a.Burst)

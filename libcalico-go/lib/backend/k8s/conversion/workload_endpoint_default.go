@@ -54,8 +54,8 @@ var (
 	minMinburst = resource.MustParse("1k")
 	maxMinburst = resource.MustParse("100M")
 	// Packet rate in packets per second
-	minPacketRate = resource.MustParse("10")
-	maxPacketRate = resource.MustParse("1T")
+	minPacketRate = resource.MustParse("1")
+	maxPacketRate = resource.MustParse("10k")
 	// Packet burst sizes in number of packets
 	minPacketBurst     = resource.MustParse("1")
 	defaultPacketBurst = resource.MustParse("5")
