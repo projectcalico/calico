@@ -1301,7 +1301,7 @@ var _ = Describe("Test Pod conversion", func() {
 			IngressPacketBurst:    1,
 			EgressPacketBurst:     10000,
 			IngressMaxConnections: 1,
-			EgressMaxConnections:  100000000000,
+			EgressMaxConnections:  4294967295,
 		}
 		Expect(wep.Value.(*libapiv3.WorkloadEndpoint).Spec.QoSControls).To(BeEquivalentTo(expectedQoSControls))
 	})

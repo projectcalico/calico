@@ -16,6 +16,7 @@ package iptables
 
 import (
 	"fmt"
+	"math"
 
 	"github.com/sirupsen/logrus"
 
@@ -458,7 +459,9 @@ type LimitNumConnectionsAction struct {
 }
 
 func (a LimitNumConnectionsAction) ToFragment(features *environment.Features) string {
-	if a.Num < 0 {
+	// The connection limit is an uint32 (maximum value 4294967295).
+	// See https://github.com/torvalds/linux/blob/16b70698aa3ae7888826d0c84567c72241cf6713/include/uapi/linux/netfilter/xt_connlimit.h#L25
+	if a.Num < 0 || a.Num > math.MaxUint32 {
 		logrus.WithField("rate", a.Num).Panic("Invalid limit")
 	}
 	// '-m tcp --tcp-flags FIN,SYN,RST,ACK SYN' is equivalent to '--syn' but the long form is shown on the output of 'iptables-*-save', so use the long form too for consistency

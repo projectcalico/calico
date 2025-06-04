@@ -16,6 +16,7 @@ package nftables
 
 import (
 	"fmt"
+	"math"
 	"strings"
 
 	"github.com/sirupsen/logrus"
@@ -493,7 +494,9 @@ func (a LimitNumConnectionsAction) ToFragment(features *environment.Features) st
 	default:
 		logrus.WithField("reject-with", a.RejectWith).Panic("Unknown reject-with value")
 	}
-	if a.Num < 0 {
+	// The connection limit is an uint32 (maximum value 4294967295).
+	// See https://github.com/torvalds/linux/blob/16b70698aa3ae7888826d0c84567c72241cf6713/include/uapi/linux/netfilter/xt_connlimit.h#L25
+	if a.Num < 0 || a.Num > math.MaxUint32 {
 		logrus.WithField("rate", a.Num).Panic("Invalid limit")
 	}
 	return fmt.Sprintf("ct count over %d reject with %s", a.Num, rejectWith)
