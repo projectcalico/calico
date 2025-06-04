@@ -524,7 +524,7 @@ var _ = DescribeTable("Config parsing",
 	Entry("BPFForceTrackPacketsFromIfaces Multiple invalid entries", "BPFForceTrackPacketsFromIfaces", "cali-123,cali@123", []string{"docker+"}),
 
 	Entry("RequireMTUFile valid", "RequireMTUFile", "true", true),
-	Entry("RequireMTUFile valid", "RequireMTUFile", "y", true,
+	Entry("RequireMTUFile valid", "RequireMTUFile", "y", true),
 	Entry("RequireMTUFile valid", "RequireMTUFile", "True", true),
 )
 
