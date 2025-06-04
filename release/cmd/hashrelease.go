@@ -110,6 +110,8 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 					}
 				}
 
+				productRegistriesFromFlag := c.StringSlice(registryFlag.Name)
+
 				// Build the operator
 				operatorOpts := []operator.Option{
 					operator.WithOperatorDirectory(operatorDir),
@@ -121,6 +123,12 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 					operator.WithVersion(data.OperatorVersion()),
 					operator.WithCalicoDirectory(cfg.RepoRootDir),
 					operator.WithTempDirectory(cfg.TmpDir),
+				}
+				if reg := c.String(operatorRegistryFlag.Name); reg != "" {
+					operatorOpts = append(operatorOpts, operator.WithRegistry(reg))
+				}
+				if len(productRegistriesFromFlag) > 0 {
+					operatorOpts = append(operatorOpts, operator.WithProductRegistry(productRegistriesFromFlag[0]))
 				}
 				if !c.Bool(skipOperatorFlag.Name) {
 					o := operator.NewManager(operatorOpts...)
@@ -147,10 +155,9 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 					calico.WithRepoRemote(c.String(repoRemoteFlag.Name)),
 					calico.WithArchitectures(c.StringSlice(archFlag.Name)),
 				}
-				if reg := c.StringSlice(registryFlag.Name); len(reg) > 0 {
-					opts = append(opts, calico.WithImageRegistries(reg))
+				if len(productRegistriesFromFlag) > 0 {
+					opts = append(opts, calico.WithImageRegistries(productRegistriesFromFlag))
 				}
-
 				r := calico.NewManager(opts...)
 				if err := r.Build(); err != nil {
 					return err
