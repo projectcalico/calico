@@ -490,6 +490,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		LookPathOverride: config.LookPathOverride,
 		OnStillAlive:     dp.reportHealth,
 		OpRecorder:       dp.loopSummarizer,
+		Disabled:         !config.RulesConfig.NFTables,
 	}
 
 	if config.BPFEnabled && config.BPFKubeProxyIptablesCleanupEnabled {
@@ -544,6 +545,10 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	var mangleTableV4, natTableV4, rawTableV4, filterTableV4 generictables.Table
 	var ipSetsV4 dpsets.IPSetsDataplane
 
+	// Track tables that should be cleaned up. For example, in nftables mode we should clean up any Calico
+	// rules in iptables, and vice-versa.
+	var cleanupTables []generictables.Table
+
 	if config.RulesConfig.NFTables {
 		// Create the underlying table.
 		nftablesV4RootTable = nftables.NewTable(
@@ -562,6 +567,43 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 		// We use the root table for IP sets as well.
 		ipSetsV4 = nftablesV4RootTable
+
+		// Add iptables tables to the cleanup list if we are in nftables mode.
+		iptablesLock = dummyLock{}
+		cleanupTables = append(cleanupTables, iptables.NewTable(
+			"mangle",
+			4,
+			rules.RuleHashPrefix,
+			iptablesLock,
+			featureDetector,
+			iptablesOptions,
+		),
+
+			iptables.NewTable(
+				"nat",
+				4,
+				rules.RuleHashPrefix,
+				iptablesLock,
+				featureDetector,
+				iptablesNATOptions,
+			),
+			iptables.NewTable(
+				"raw",
+				4,
+				rules.RuleHashPrefix,
+				iptablesLock,
+				featureDetector,
+				iptablesOptions,
+			),
+			iptables.NewTable(
+				"filter",
+				4,
+				rules.RuleHashPrefix,
+				iptablesLock,
+				featureDetector,
+				iptablesOptions,
+			),
+		)
 	} else {
 		// iptables mode
 		mangleTableV4 = iptables.NewTable(
@@ -599,6 +641,15 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 		ipSetsConfigV4 := config.RulesConfig.IPSetConfigV4
 		ipSetsV4 = ipsets.NewIPSets(ipSetsConfigV4, dp.loopSummarizer)
+
+		// Add nftables tables to the cleanup list if we are in iptables mode.
+		cleanupTables = append(cleanupTables, nftables.NewTable(
+			"calico",
+			4,
+			rules.RuleHashPrefix,
+			featureDetector,
+			nftablesOptions,
+		))
 	}
 
 	dp.natTables = append(dp.natTables, natTableV4)
@@ -1282,6 +1333,9 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		dp.allTables = append(dp.allTables, dp.filterTables...)
 		dp.allTables = append(dp.allTables, dp.rawTables...)
 	}
+
+	// Include cleanup tables in allTables so that they are cleaned up.
+	dp.allTables = append(dp.allTables, cleanupTables...)
 
 	// Register that we will report liveness and readiness.
 	if config.HealthAggregator != nil {
@@ -2590,7 +2644,7 @@ func (d *InternalDataplane) apply() {
 	// Wait for the IP sets update to finish.  We can't update iptables until it has.
 	ipSetsWG.Wait()
 
-	// Update iptables, this should sever any references to now-unused IP sets.
+	// Update tables, this should sever any references to now-unused IP sets.
 	var reschedDelayMutex sync.Mutex
 	var reschedDelay time.Duration
 	var iptablesWG sync.WaitGroup
