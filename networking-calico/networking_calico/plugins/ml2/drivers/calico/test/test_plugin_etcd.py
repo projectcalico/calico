@@ -934,6 +934,7 @@ class TestPluginEtcdBase(_TestEtcdBase):
         # Expected changes
         ep_hello_value_v3['spec']['qosControls'] = {
             'egressBandwidth': 10000000,
+            'egressBurst': 4294967296,
         }
         expected_writes = {
             ep_hello_key_v3: ep_hello_value_v3,
@@ -954,12 +955,9 @@ class TestPluginEtcdBase(_TestEtcdBase):
         # Expected changes
         ep_hello_value_v3['spec']['qosControls'] = {
             'egressBandwidth': 10000000,
+            'egressBurst': 41000,
             'ingressMaxConnections': 10,
             'egressMaxConnections': 20,
-            'ingressBurst': 31000,
-            'egressBurst': 41000,
-            'ingressMinburst': 1651,
-            'egressMinburst': 1761,
         }
         expected_writes = {
             ep_hello_key_v3: ep_hello_value_v3,
@@ -976,17 +974,17 @@ class TestPluginEtcdBase(_TestEtcdBase):
         # Expected changes
         ep_hello_value_v3['spec']['qosControls'] = {
             'ingressBandwidth': 1000,
-            'egressBandwidth': 3000,
+            'ingressBurst': 31000,
             'ingressPeakrate': 2000,
+            'ingressMinburst': 1651,
+            'egressBandwidth': 3000,
+            'egressBurst': 41000,
             'egressPeakrate': 4000,
+            'egressMinburst': 1761,
             'ingressPacketRate': 5000,
             'egressPacketRate': 6000,
             'ingressMaxConnections': 10,
             'egressMaxConnections': 20,
-            'ingressBurst': 31000,
-            'egressBurst': 41000,
-            'ingressMinburst': 1651,
-            'egressMinburst': 1761,
         }
         expected_writes = {
             ep_hello_key_v3: ep_hello_value_v3,
@@ -1016,6 +1014,7 @@ class TestPluginEtcdBase(_TestEtcdBase):
         # Expected changes
         ep_hello_value_v3['spec']['qosControls'] = {
             'egressBandwidth': 10000000,
+            'egressBurst': 4294967296,
         }
         expected_writes = {
             ep_hello_key_v3: ep_hello_value_v3,
