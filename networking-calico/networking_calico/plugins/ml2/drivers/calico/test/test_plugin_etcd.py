@@ -943,7 +943,8 @@ class TestPluginEtcdBase(_TestEtcdBase):
         self.assertEtcdWrites(expected_writes)
         self.assertEtcdDeletes(set())
 
-        # Add configuration for max connections.
+        # Add configuration for QoS settings that are not represented on the
+        # Neutron API.
         lib.m_compat.cfg.CONF.calico.max_ingress_connections_per_port = 10
         lib.m_compat.cfg.CONF.calico.max_egress_connections_per_port = 20
         lib.m_compat.cfg.CONF.calico.ingress_burst_kbits = 31
