@@ -17,4 +17,4 @@ upper-constraints-yoga.txt:
 	curl -fsSL --retry 5 https://releases.openstack.org/constraints/upper/yoga -o $@
 
 upper-constraints-caracal.txt:
-	curl -fsSL https://raw.githubusercontent.com/openstack/requirements/refs/heads/stable/2024.1/upper-constraints.txt -o $@
+	curl -fsSL --retry 5 https://raw.githubusercontent.com/openstack/requirements/refs/heads/stable/2024.1/upper-constraints.txt -o $@
