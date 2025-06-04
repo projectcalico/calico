@@ -242,7 +242,15 @@ func NewGoldmane(opts ...Option) *Goldmane {
 	return a
 }
 
-func (a *Goldmane) Run(startTime int64) {
+// Run starts Goldmane - it returns a channel that can be used by the caller to wait
+// for Goldmane to be ready to process requests. The channel will be closed when Goldmane is ready.
+func (a *Goldmane) Run(startTime int64) <-chan struct{} {
+	ready := make(chan struct{})
+	go a.run(startTime, ready)
+	return ready
+}
+
+func (a *Goldmane) run(startTime int64, ready chan<- struct{}) {
 	// Initialize the buckets.
 	opts := []storage.BucketRingOption{
 		storage.WithBucketsToAggregate(a.bucketsToAggregate),
@@ -275,6 +283,9 @@ func (a *Goldmane) Run(startTime int64) {
 
 	// Schedule the first rollover one aggregation period from now.
 	rolloverCh := a.rolloverFunc(a.bucketDuration)
+
+	// Indicate that we're ready to process requests.
+	close(ready)
 
 	for {
 		select {
