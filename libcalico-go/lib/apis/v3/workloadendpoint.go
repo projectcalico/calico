@@ -135,6 +135,10 @@ type QoSControls struct {
 	IngressPacketRate int64 `json:"ingressPacketRate,omitempty"`
 	// Egress packet rate limit in packets per second
 	EgressPacketRate int64 `json:"egressPacketRate,omitempty"`
+	// Ingress packet rate burst size in number of packets
+	IngressPacketBurst int64 `json:"ingressPacketBurst,omitempty"`
+	// Egress packet rate burst size in number of packets
+	EgressPacketBurst int64 `json:"egressPacketBurst,omitempty"`
 
 	// Ingress maximum number of connections (absolute number of connections, no unit)
 	IngressMaxConnections int64 `json:"ingressMaxConnections,omitempty"`
