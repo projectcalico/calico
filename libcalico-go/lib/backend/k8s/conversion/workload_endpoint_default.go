@@ -19,7 +19,9 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"math"
 	"os"
+	"strconv"
 	"strings"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
@@ -37,11 +39,24 @@ import (
 )
 
 var (
-	minBandwidth      = resource.MustParse("1k")
-	maxBandwidth      = resource.MustParse("1P")
-	maxBurst          = resource.MustParse("4Gi")
-	minPacketRate     = resource.MustParse("10")
-	maxPacketRate     = resource.MustParse("1T")
+	// Bandwidth in bits per second
+	minBandwidth = resource.MustParse("1k")
+	maxBandwidth = resource.MustParse("1P")
+	// Burst sizes in bits
+	minBurst     = resource.MustParse("1k")
+	defaultBurst = resource.MustParse("4Gi")                            // 512 Mi bytes
+	maxBurst     = resource.MustParse(strconv.Itoa(math.MaxUint32 * 8)) // 34359738360, approx. 4Gi bytes
+	// Peakrate in bits per second
+	// Peakrate should always be greater than bandwidth, so we make the min and max slightly higher than those
+	minPeakrate = resource.MustParse("1.01k")
+	maxPeakrate = resource.MustParse("1.01P")
+	// Minburst in bytes (not bits because it is typically the MTU)
+	minMinburst = resource.MustParse("1k")
+	maxMinburst = resource.MustParse("100M")
+	// Packet rate in packets per second
+	minPacketRate = resource.MustParse("10")
+	maxPacketRate = resource.MustParse("1T")
+	// Maximum number of connections (absolute number of connections, no unit)
 	minNumConnections = resource.MustParse("1")
 	maxNumConnections = resource.MustParse("100G")
 )
@@ -354,18 +369,50 @@ func handleQoSControlsAnnotations(annotations map[string]string) (*libapiv3.QoSC
 
 	// calico burst annotations
 	if str, found := annotations[AnnotationQoSIngressBurst]; found {
-		ingressBurst, err := parseAndValidateQty(str, *resource.NewQuantity(qosControls.IngressBandwidth, resource.DecimalSI), maxBurst)
+		ingressBurst, err := parseAndValidateQty(str, minBurst, maxBurst)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("error parsing ingress burst annotation: %w", err))
 		}
 		qosControls.IngressBurst = ingressBurst
 	}
 	if str, found := annotations[AnnotationQoSEgressBurst]; found {
-		egressBurst, err := parseAndValidateQty(str, *resource.NewQuantity(qosControls.EgressBandwidth, resource.DecimalSI), maxBurst)
+		egressBurst, err := parseAndValidateQty(str, minBurst, maxBurst)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("error parsing egress burst annotation: %w", err))
 		}
 		qosControls.EgressBurst = egressBurst
+	}
+
+	// calico peakrate annotations
+	if str, found := annotations[AnnotationQoSIngressPeakrate]; found {
+		ingressPeakrate, err := parseAndValidateQty(str, minPeakrate, maxPeakrate)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("error parsing ingress peakrate annotation: %w", err))
+		}
+		qosControls.IngressPeakrate = ingressPeakrate
+	}
+	if str, found := annotations[AnnotationQoSEgressPeakrate]; found {
+		egressPeakrate, err := parseAndValidateQty(str, minPeakrate, maxPeakrate)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("error parsing egress peakrate annotation: %w", err))
+		}
+		qosControls.EgressPeakrate = egressPeakrate
+	}
+
+	// calico minburst/mtu annotations
+	if str, found := annotations[AnnotationQoSIngressMinburst]; found {
+		ingressMinburst, err := parseAndValidateQty(str, minMinburst, maxMinburst)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("error parsing ingress minburst annotation: %w", err))
+		}
+		qosControls.IngressMinburst = ingressMinburst
+	}
+	if str, found := annotations[AnnotationQoSEgressMinburst]; found {
+		egressMinburst, err := parseAndValidateQty(str, minMinburst, maxMinburst)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("error parsing egress minburst annotation: %w", err))
+		}
+		qosControls.EgressMinburst = egressMinburst
 	}
 
 	// calico packet rate annotations
@@ -410,13 +457,35 @@ func handleQoSControlsAnnotations(annotations map[string]string) (*libapiv3.QoSC
 		qosControls.EgressBurst = 0
 	}
 
+	// if peakrate is configured, bandwidth must be configured and peakrate must be greater than bandwidth
+	if qosControls.IngressPeakrate != 0 && (qosControls.IngressBandwidth == 0 || qosControls.IngressBandwidth >= qosControls.IngressPeakrate) {
+		errs = append(errs, fmt.Errorf("ingress peakrate must be greater than ingress bandwidth when specified"))
+		qosControls.IngressPeakrate = 0
+	}
+	if qosControls.EgressPeakrate != 0 && (qosControls.EgressBandwidth == 0 || qosControls.EgressBandwidth >= qosControls.EgressPeakrate) {
+		errs = append(errs, fmt.Errorf("egress peakrate must be greater than egress bandwidth when specified"))
+		qosControls.EgressPeakrate = 0
+	}
+
+	// if minburst is configured, peakrate must be configured
+	if qosControls.IngressMinburst != 0 && qosControls.IngressPeakrate == 0 {
+		errs = append(errs, fmt.Errorf("ingress peakrate must be specified when ingress minburst is specified"))
+		qosControls.IngressMinburst = 0
+	}
+	if qosControls.EgressMinburst != 0 && qosControls.EgressPeakrate == 0 {
+		errs = append(errs, fmt.Errorf("egress peakrate must be specified when egress minburst is specified"))
+		qosControls.EgressMinburst = 0
+	}
+
 	// default burst values if bandwidth is configured
 	if qosControls.IngressBandwidth != 0 && qosControls.IngressBurst == 0 {
-		qosControls.IngressBurst = maxBurst.Value()
+		qosControls.IngressBurst = defaultBurst.Value()
 	}
 	if qosControls.EgressBandwidth != 0 && qosControls.EgressBurst == 0 {
-		qosControls.EgressBurst = maxBurst.Value()
+		qosControls.EgressBurst = defaultBurst.Value()
 	}
+
+	// default minburst values are configured in felix/dataplane/linux/qos/qos.go because they depend on the interface MTU
 
 	// return nil if no control is configured
 	if (*qosControls == libapiv3.QoSControls{}) {

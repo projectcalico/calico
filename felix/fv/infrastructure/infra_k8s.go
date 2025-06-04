@@ -1337,6 +1337,16 @@ func updatePodLabelsAndAnnotations(wep *libapi.WorkloadEndpoint, pod *v1.Pod) *v
 		} else {
 			delete(pod.Annotations, conversion.AnnotationQoSIngressBurst)
 		}
+		if wep.Spec.QoSControls.IngressPeakrate != 0 {
+			pod.Annotations[conversion.AnnotationQoSIngressPeakrate] = resource.NewQuantity(wep.Spec.QoSControls.IngressPeakrate, resource.DecimalSI).String()
+		} else {
+			delete(pod.Annotations, conversion.AnnotationQoSIngressPeakrate)
+		}
+		if wep.Spec.QoSControls.IngressMinburst != 0 {
+			pod.Annotations[conversion.AnnotationQoSIngressMinburst] = resource.NewQuantity(wep.Spec.QoSControls.IngressMinburst, resource.DecimalSI).String()
+		} else {
+			delete(pod.Annotations, conversion.AnnotationQoSIngressMinburst)
+		}
 		if wep.Spec.QoSControls.EgressBandwidth != 0 {
 			pod.Annotations[conversion.AnnotationQoSEgressBandwidth] = resource.NewQuantity(wep.Spec.QoSControls.EgressBandwidth, resource.DecimalSI).String()
 		} else {
@@ -1346,6 +1356,16 @@ func updatePodLabelsAndAnnotations(wep *libapi.WorkloadEndpoint, pod *v1.Pod) *v
 			pod.Annotations[conversion.AnnotationQoSEgressBurst] = resource.NewQuantity(wep.Spec.QoSControls.EgressBurst, resource.DecimalSI).String()
 		} else {
 			delete(pod.Annotations, conversion.AnnotationQoSEgressBurst)
+		}
+		if wep.Spec.QoSControls.EgressPeakrate != 0 {
+			pod.Annotations[conversion.AnnotationQoSEgressPeakrate] = resource.NewQuantity(wep.Spec.QoSControls.EgressPeakrate, resource.DecimalSI).String()
+		} else {
+			delete(pod.Annotations, conversion.AnnotationQoSEgressPeakrate)
+		}
+		if wep.Spec.QoSControls.EgressMinburst != 0 {
+			pod.Annotations[conversion.AnnotationQoSEgressMinburst] = resource.NewQuantity(wep.Spec.QoSControls.EgressMinburst, resource.DecimalSI).String()
+		} else {
+			delete(pod.Annotations, conversion.AnnotationQoSEgressMinburst)
 		}
 		if wep.Spec.QoSControls.IngressPacketRate != 0 {
 			pod.Annotations[conversion.AnnotationQoSIngressPacketRate] = resource.NewQuantity(wep.Spec.QoSControls.IngressPacketRate, resource.DecimalSI).String()
@@ -1371,8 +1391,12 @@ func updatePodLabelsAndAnnotations(wep *libapi.WorkloadEndpoint, pod *v1.Pod) *v
 	} else if pod.Annotations != nil {
 		delete(pod.Annotations, conversion.AnnotationQoSIngressBandwidth)
 		delete(pod.Annotations, conversion.AnnotationQoSIngressBurst)
+		delete(pod.Annotations, conversion.AnnotationQoSIngressPeakrate)
+		delete(pod.Annotations, conversion.AnnotationQoSIngressMinburst)
 		delete(pod.Annotations, conversion.AnnotationQoSEgressBandwidth)
 		delete(pod.Annotations, conversion.AnnotationQoSEgressBurst)
+		delete(pod.Annotations, conversion.AnnotationQoSEgressPeakrate)
+		delete(pod.Annotations, conversion.AnnotationQoSEgressMinburst)
 		delete(pod.Annotations, conversion.AnnotationQoSIngressPacketRate)
 		delete(pod.Annotations, conversion.AnnotationQoSEgressPacketRate)
 		delete(pod.Annotations, conversion.AnnotationQoSIngressMaxConnections)
