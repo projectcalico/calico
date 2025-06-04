@@ -426,6 +426,8 @@ message QoSControls {
   int64 EgressPeakrate        = 10;
   int64 IngressMinburst       = 11;
   int64 EgressMinburst        = 12;
+  int64 IngressPacketBurst    = 13;
+  int64 EgressPacketBurst     = 14;
 }
 
 message LocalBGPPeer {
