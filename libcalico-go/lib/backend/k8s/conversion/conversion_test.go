@@ -1265,7 +1265,7 @@ var _ = Describe("Test Pod conversion", func() {
 					"qos.projectcalico.org/egressPeakrate":        "50P",
 					"qos.projectcalico.org/ingressMinburst":       "7",
 					"qos.projectcalico.org/egressMinburst":        "8Gi",
-					"qos.projectcalico.org/ingressPacketRate":     "5",
+					"qos.projectcalico.org/ingressPacketRate":     "0",
 					"qos.projectcalico.org/egressPacketRate":      "60P",
 					"qos.projectcalico.org/ingressPacketBurst":    "0",
 					"qos.projectcalico.org/egressPacketBurst":     "70P",
