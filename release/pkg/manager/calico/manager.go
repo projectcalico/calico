@@ -40,15 +40,8 @@ import (
 
 // Global configuration for releases.
 var (
-	// Default DefaultRegistries to which all release images are pushed.
-	DefaultRegistries = []string{
-		"docker.io/calico",
-		"quay.io/calico",
-		"gcr.io/projectcalico-org",
-		"eu.gcr.io/projectcalico-org",
-		"asia.gcr.io/projectcalico-org",
-		"us.gcr.io/projectcalico-org",
-	}
+	// Default defaultRegistries to which all release images are pushed.
+	defaultRegistries = registry.DefaultCalicoRegistries
 
 	// Directories that publish images.
 	imageReleaseDirs = []string{
@@ -120,7 +113,7 @@ func NewManager(opts ...Option) *CalicoManager {
 		publishImages:    true,
 		publishTag:       true,
 		publishGithub:    true,
-		imageRegistries:  DefaultRegistries,
+		imageRegistries:  defaultRegistries,
 		operatorRegistry: operator.DefaultRegistry,
 		operatorImage:    operator.DefaultImage,
 	}
@@ -625,7 +618,7 @@ func (r *CalicoManager) releasePrereqs() error {
 
 	// If we are releasing to projectcalico/calico, make sure we are releasing to the default registries.
 	if r.githubOrg == utils.ProjectCalicoOrg && r.repo == utils.CalicoRepoName {
-		if !reflect.DeepEqual(r.imageRegistries, DefaultRegistries) {
+		if !reflect.DeepEqual(r.imageRegistries, defaultRegistries) {
 			return fmt.Errorf("image registries cannot be different from default registries for a release")
 		}
 	}
@@ -913,7 +906,7 @@ func (r *CalicoManager) generateManifests() error {
 	env = append(env, fmt.Sprintf("OPERATOR_VERSION=%s", r.operatorVersion))
 	env = append(env, fmt.Sprintf("OPERATOR_REGISTRY=%s", r.operatorRegistry))
 	env = append(env, fmt.Sprintf("OPERATOR_IMAGE=%s", r.operatorImage))
-	if !slices.Equal(r.imageRegistries, DefaultRegistries) {
+	if !slices.Equal(r.imageRegistries, defaultRegistries) {
 		env = append(env, fmt.Sprintf("REGISTRY=%s", r.imageRegistries[0]))
 	}
 	if err := r.makeInDirectoryIgnoreOutput(r.repoRoot, "gen-manifests", env...); err != nil {
