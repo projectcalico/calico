@@ -1,6 +1,6 @@
 module github.com/projectcalico/calico
 
-go 1.23.9
+go 1.23.8
 
 require (
 	github.com/BurntSushi/toml v1.3.2
