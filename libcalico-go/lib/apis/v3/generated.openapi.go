@@ -3178,6 +3178,20 @@ func schema_libcalico_go_lib_apis_v3_QoSControls(ref common.ReferenceCallback) c
 							Format:      "int64",
 						},
 					},
+					"ingressPacketBurst": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Ingress packet rate burst size in number of packets",
+							Type:        []string{"integer"},
+							Format:      "int64",
+						},
+					},
+					"egressPacketBurst": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Egress packet rate burst size in number of packets",
+							Type:        []string{"integer"},
+							Format:      "int64",
+						},
+					},
 					"ingressMaxConnections": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Ingress maximum number of connections (absolute number of connections, no unit)",

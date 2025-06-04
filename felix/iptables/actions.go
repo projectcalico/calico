@@ -105,10 +105,11 @@ func (s *actionFactory) Nflog(group uint16, prefix string, size int) generictabl
 	}
 }
 
-func (a *actionFactory) LimitPacketRate(rate int64, mark uint32) generictables.Action {
+func (a *actionFactory) LimitPacketRate(rate, burst int64, mark uint32) generictables.Action {
 	return LimitPacketRateAction{
-		Rate: rate,
-		Mark: mark,
+		Rate:  rate,
+		Burst: burst,
+		Mark:  mark,
 	}
 }
 
@@ -426,6 +427,7 @@ func (c SetConnMarkAction) String() string {
 
 type LimitPacketRateAction struct {
 	Rate                int64
+	Burst               int64
 	Mark                uint32
 	TypeLimitPacketRate struct{}
 }
@@ -434,14 +436,19 @@ func (a LimitPacketRateAction) ToFragment(features *environment.Features) string
 	if a.Mark == 0 {
 		logrus.WithField("mark", a.Mark).Panic("Invalid mark")
 	}
-	if a.Rate < 0 {
+	// Rate and Burst are limited to XT_LIMIT_SCALE (10k)
+	// See https://github.com/torvalds/linux/blob/16b70698aa3ae7888826d0c84567c72241cf6713/include/uapi/linux/netfilter/xt_limit.h#L8
+	if a.Rate < 0 || a.Rate > 10000 {
 		logrus.WithField("rate", a.Rate).Panic("Invalid rate")
 	}
-	return fmt.Sprintf("-m limit --limit %d/sec --jump MARK --set-mark %#x/%#x", a.Rate, a.Mark, a.Mark)
+	if a.Burst < 1 || a.Burst > 10000 {
+		logrus.WithField("burst", a.Burst).Panic("Invalid burst")
+	}
+	return fmt.Sprintf("-m limit --limit %d/sec --limit-burst %d --jump MARK --set-mark %#x/%#x", a.Rate, a.Burst, a.Mark, a.Mark)
 }
 
 func (a LimitPacketRateAction) String() string {
-	return fmt.Sprintf("LimitPacketRate:%d/s", a.Rate)
+	return fmt.Sprintf("LimitPacketRate:%d/s,burst:%d", a.Rate, a.Burst)
 }
 
 type LimitNumConnectionsAction struct {
@@ -459,5 +466,5 @@ func (a LimitNumConnectionsAction) ToFragment(features *environment.Features) st
 }
 
 func (a LimitNumConnectionsAction) String() string {
-	return fmt.Sprintf("LimitNumConnectionsAction:%d, rejectWith:%s", a.Num, a.RejectWith)
+	return fmt.Sprintf("LimitNumConnectionsAction:%d,rejectWith:%s", a.Num, a.RejectWith)
 }
