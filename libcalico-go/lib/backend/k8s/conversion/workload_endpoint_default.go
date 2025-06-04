@@ -54,6 +54,8 @@ var (
 	minMinburst = resource.MustParse("1k")
 	maxMinburst = resource.MustParse("100M")
 	// Packet rate in packets per second
+	// Packet rate and packet burst are limited to XT_LIMIT_SCALE (10k)
+	// See https://github.com/torvalds/linux/blob/16b70698aa3ae7888826d0c84567c72241cf6713/include/uapi/linux/netfilter/xt_limit.h#L8
 	minPacketRate = resource.MustParse("1")
 	maxPacketRate = resource.MustParse("10k")
 	// Packet burst sizes in number of packets
@@ -62,7 +64,9 @@ var (
 	maxPacketBurst     = resource.MustParse("10k")
 	// Maximum number of connections (absolute number of connections, no unit)
 	minNumConnections = resource.MustParse("1")
-	maxNumConnections = resource.MustParse("100G")
+	// The connection limit is an uint32 (maximum value 4294967295).
+	// See https://github.com/torvalds/linux/blob/16b70698aa3ae7888826d0c84567c72241cf6713/include/uapi/linux/netfilter/xt_connlimit.h#L25
+	maxNumConnections = resource.MustParse(strconv.Itoa(math.MaxUint32))
 )
 
 type defaultWorkloadEndpointConverter struct{}
