@@ -87,11 +87,18 @@ func (c *streamCache) remove(id string) {
 	delete(c.streams, id)
 }
 
-func (c *streamCache) get(id string) (*stream, bool) {
+// sendToStream directs the given flow provider to the stream with the given ID if it exists.
+// It does this atomically, to ensure the input channel isn't closed.
+// Note that writing to a stream can theoretically block, but this is expected to be exceedingly rare.
+func (c *streamCache) sendToStream(id string, p storage.FlowProvider) {
 	c.Lock()
 	defer c.Unlock()
 	s, ok := c.streams[id]
-	return s, ok
+	if !ok {
+		logrus.WithField("id", id).Warn("Send to unknown stream")
+		return
+	}
+	s.receive(p)
 }
 
 func (c *streamCache) size() int {
@@ -175,10 +182,7 @@ func (m *streamManager) Register(req *proto.FlowStreamRequest, size int) chan St
 func (m *streamManager) Receive(b storage.FlowProvider, id string) {
 	if id != "" {
 		// An explicit ID was given. Send to the stream with that ID.
-		s, ok := m.streams.get(id)
-		if ok {
-			s.receive(b)
-		}
+		m.streams.sendToStream(id, b)
 		return
 	}
 
