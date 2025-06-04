@@ -59,8 +59,8 @@ SHARED_OPTS = [
     # |-----------------------+-----------------------+----------------------------------|
     # | IngressBandwidth      | max_kbps * 1000       |                                  |
     # | EgressBandwidth       | max_kbps * 1000       |                                  |
-    # | IngressBurst          |                       | ingress_burst_kbits * 1000       |
-    # | EgressBurst           |                       | egress_burst_kbits * 1000        |
+    # | IngressBurst          |                       | ingress_burst_bits               |
+    # | EgressBurst           |                       | egress_burst_bits                |
     # | IngressPeakrate       | max_burst_kbps * 1000 |                                  |
     # | EgressPeakrate        | max_burst_kbps * 1000 |                                  |
     # | IngressMinburst       |                       | ingress_minburst_bytes           |
@@ -74,9 +74,9 @@ SHARED_OPTS = [
                help="If non-zero, a maximum number of ingress connections to impose on each port."),
     cfg.IntOpt('max_egress_connections_per_port', default=0,
                help="If non-zero, a maximum number of egress connections to impose on each port."),
-    cfg.IntOpt('ingress_burst_kbits', default=0,
+    cfg.IntOpt('ingress_burst_bits', default=4294967296,
                help="If non-zero, configures the maximum allowed burst at peakrate, in the ingress direction."),
-    cfg.IntOpt('egress_burst_kbits', default=0,
+    cfg.IntOpt('egress_burst_bits', default=4294967296,
                help="If non-zero, configures the maximum allowed burst at peakrate, in the egress direction."),
     cfg.IntOpt('ingress_minburst_bytes', default=0,
                help="If non-zero, configures the minimum burst size for peakrate data, in the ingress direction."),
