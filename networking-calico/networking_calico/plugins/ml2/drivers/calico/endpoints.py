@@ -336,7 +336,7 @@ class WorkloadEndpointSyncer(ResourceSyncer):
         MINMAX_BW_MINBURST = (1000, 10**8)
         DEFAULT_BW_BURST = 4294967296
 
-        MINMAX_PACKET_RATE = (10, 10**12)
+        MINMAX_PACKET_RATE = (1, 10**4)
 
         MINMAX_CONNECTIONS = (1, 10**11)
 
