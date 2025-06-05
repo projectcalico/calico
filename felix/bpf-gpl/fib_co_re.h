@@ -124,6 +124,7 @@ skip_redir_ifindex:
 		}
 
 		if (state->ct_result.ifindex_fwd == CT_INVALID_IFINDEX) {
+			CALI_DEBUG("ifindex_fwd is CT_INVALID_IFINDEX, doing FIB lookup");
 			*fib_params(ctx) = (struct bpf_fib_lookup) {
 #ifdef IPVER6
 				.family = 10, /* AF_INET6 */
@@ -268,7 +269,7 @@ try_fib_external:
 			rc = bpf_redirect_neigh(state->ct_result.ifindex_fwd, NULL, 0, 0);
 			if (rc == TC_ACT_REDIRECT) {
 				counter_inc(ctx, CALI_REDIRECT_NEIGH);
-				CALI_DEBUG("Redirect to dev %d without fib lookup", state->ct_result.ifindex_fwd);
+				CALI_DEBUG("Redirect to host dev %d without fib lookup", state->ct_result.ifindex_fwd);
 				goto no_fib_redirect;
 			}
 			CALI_DEBUG("Fall through to full FIB lookup rc %d", rc);
