@@ -183,30 +183,14 @@ func ReadEgressQdisc(intf string) (*TokenBucketState, error) {
 		return nil, fmt.Errorf("Failed to list qdiscs on link %s: %w", ifbDeviceName, err)
 	}
 
-	tbs := &TokenBucketState{}
 	for _, qdisc := range qdiscs {
 		tbf, isTbf := qdisc.(*netlink.Tbf)
-		// TBF info may be split in multiple netlink messages, loop through them to populate TokenBucketState
 		if isTbf {
-			if tbf.Rate > 0 {
-				tbs.Rate = tbf.Rate
-			}
-			if tbf.Buffer > 0 {
-				tbs.Buffer = tbf.Buffer
-			}
-			if tbf.Limit > 0 {
-				tbs.Limit = tbf.Limit
-			}
-			if tbf.Peakrate > 0 {
-				tbs.Peakrate = tbf.Peakrate
-			}
-			if tbf.Minburst > 0 {
-				tbs.Minburst = tbf.Minburst
-			}
+			return &TokenBucketState{Rate: tbf.Rate, Buffer: tbf.Buffer, Limit: tbf.Limit, Peakrate: tbf.Peakrate, Minburst: tbf.Minburst}, nil
 		}
 	}
 
-	return tbs, nil
+	return nil, nil
 }
 
 const maxIfbDeviceLength = 15
