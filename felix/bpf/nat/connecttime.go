@@ -56,7 +56,7 @@ func newProgramsMap() maps.Map {
 	return maps.NewPinnedMap(ProgramsMapParameters)
 }
 
-func RemoveConnectTimeLoadBalancer(cgroupv2 string) error {
+func RemoveConnectTimeLoadBalancer(ipv4Enabled bool, cgroupv2 string) error {
 	if os.Getenv("FELIX_DebugSkipCTLBCleanup") == "true" {
 		log.Info("FV special case: skipping CTLB cleanup")
 		return nil
@@ -70,16 +70,26 @@ func RemoveConnectTimeLoadBalancer(cgroupv2 string) error {
 	pinDir := path.Join(bpfMount, bpfdefs.CtlbPinDir)
 	defer bpf.CleanUpCalicoPins(pinDir)
 	ctlbProgsMap := newProgramsMap()
-	defer os.Remove(ctlbProgsMap.Path())
+	if err := ctlbProgsMap.EnsureExists(); err != nil {
+		return fmt.Errorf("failed to create ctlb jump map: %w", err)
+	}
+	for _, index := range ctlbProgToIndex {
+		err := ctlbProgsMap.Delete(jump.Key(index))
+		if err != nil && !os.IsNotExist(err) {
+			log.Errorf("failed to delete the ctlb jump map entry: %s", err)
+		}
+	}
+	ctlbProgsMap.Close()
+	os.Remove(ctlbProgsMap.Path())
 
-	if err := detachCtlbPrograms(pinDir, cgroupv2); err != nil {
+	if err := detachCtlbPrograms(ipv4Enabled, pinDir, cgroupv2); err != nil {
 		return err
 	}
 	bpf.CleanUpCalicoPins(pinDir)
 	return nil
 }
 
-func detachCtlbPrograms(pinDir, cgroupv2 string) error {
+func detachCtlbPrograms(ipv4Enabled bool, pinDir, cgroupv2 string) error {
 	numLinksDetached := 0
 	err := filepath.Walk(pinDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -107,17 +117,17 @@ func detachCtlbPrograms(pinDir, cgroupv2 string) error {
 		return err
 	}
 	if numLinksDetached == 0 {
-		return detachLegacyCtlb(cgroupv2)
+		return detachLegacyCtlb(ipv4Enabled, cgroupv2)
 	}
 	return nil
 }
 
-func detachLegacyCtlb(cgroupv2 string) error {
+func detachLegacyCtlb(ipv4Enabled bool, cgroupv2 string) error {
 	cgroupPath, err := ensureCgroupPath(cgroupv2)
 	if err != nil {
 		return fmt.Errorf("failed to set-up cgroupv2: %w", err)
 	}
-	return libbpf.DetachCTLBProgramsLegacy(cgroupPath)
+	return libbpf.DetachCTLBProgramsLegacy(ipv4Enabled, cgroupPath)
 }
 
 func loadProgram(logLevel, ipver string, udpNotSeen time.Duration, excludeUDP bool) (*libbpf.Obj, error) {
@@ -275,18 +285,18 @@ func installCTLB(ipv4Enabled, ipv6Enabled bool, cgroupv2 string, logLevel string
 				return err
 			}
 		} else {
-			err = attachProgram("connect", "6", bpfMount, cgroupPath, udpNotSeen, excludeUDP, v6Obj, legacy)
+			err = attachProgram("connect", "6", pinDir, cgroupPath, udpNotSeen, excludeUDP, v6Obj, legacy)
 			if err != nil {
 				return err
 			}
 
 			if !excludeUDP {
-				err = attachProgram("sendmsg", "6", bpfMount, cgroupPath, udpNotSeen, false, v6Obj, legacy)
+				err = attachProgram("sendmsg", "6", pinDir, cgroupPath, udpNotSeen, false, v6Obj, legacy)
 				if err != nil {
 					return err
 				}
 
-				err = attachProgram("recvmsg", "6", bpfMount, cgroupPath, udpNotSeen, false, v6Obj, legacy)
+				err = attachProgram("recvmsg", "6", pinDir, cgroupPath, udpNotSeen, false, v6Obj, legacy)
 				if err != nil {
 					return err
 				}
