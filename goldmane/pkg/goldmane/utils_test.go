@@ -16,11 +16,11 @@ package goldmane_test
 
 import (
 	"sync"
-	"time"
 
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/goldmane/pkg/storage"
+	"github.com/projectcalico/calico/lib/std/time"
 )
 
 // testSink implements the Sink interface for testing.
@@ -73,7 +73,7 @@ func (r *rolloverController) After(_ time.Duration) <-chan time.Time {
 	return r.ch
 }
 
-// rollover triggers a rollover without advancing the internal clock. Clock manipulation is left to the caller.
+// rollover triggers a rollover without advancing the internal time. Clock manipulation is left to the caller.
 func (r *rolloverController) rollover() {
 	r.ch <- r.clock.Now()
 
@@ -81,10 +81,10 @@ func (r *rolloverController) rollover() {
 	time.Sleep(10 * time.Millisecond)
 }
 
-// rolloverAndAdvanceClock triggers n rollovers, advancing the internal clock by the aggregation window each time.
+// rolloverAndAdvanceClock triggers n rollovers, advancing the internal time by the aggregation window each time.
 // Note: rollover is asyncrhonous with the test code, so the caller should use Eventually() for any subsequent assertions.
 func (r *rolloverController) rolloverAndAdvanceClock(n int) {
-	logrus.Infof("[TEST] Rollover and advance clock %d times", n)
+	logrus.Infof("[TEST] Rollover and advance time %d times", n)
 	for range n {
 		r.ch <- r.clock.Now()
 		r.clock.Advance(time.Duration(r.aggregationWindowSecs) * time.Second)
@@ -99,7 +99,7 @@ func newClock(t int64) *clock {
 	return &clock{t: t}
 }
 
-// clock is a helper structure for tests that need control over time.
+// time is a helper structure for tests that need control over time.
 type clock struct {
 	sync.Mutex
 	t int64
