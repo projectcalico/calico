@@ -262,7 +262,11 @@ sub-image-fips-%:
 	$(MAKE) image FIPS=true ARCH=$*
 
 image $(NODE_IMAGE): register $(NODE_CONTAINER_MARKER)
+<<<<<<< HEAD
 $(NODE_CONTAINER_CREATED): $(REMOTE_DEPS) ./Dockerfile.$(ARCH) $(NODE_CONTAINER_BINARY) $(INCLUDED_SOURCE) $(NODE_CONTAINER_FILES) $(TOOLS_MOUNTNS_BINARY)
+=======
+$(NODE_CONTAINER_CREATED): $(REMOTE_DEPS) ./Dockerfile.$(ARCH) $(NODE_CONTAINER_BINARY) $(INCLUDED_SOURCE) $(NODE_CONTAINER_FILES) $(TOOLS_MOUNTNS_BINARY) dist/LICENSE
+>>>>>>> - Address review comments - Add comments clarifying examples and units used - Remove unrelated Makefile line change - Other improvements: - Cap to math.MaxUint32 when casting to uint32 - Retry iperf client when json report is empty - Add validation for when peakrate is smaller than bandwidth
 	$(DOCKER_BUILD) --network=host --build-arg BIN_DIR=$(NODE_CONTAINER_BIN_DIR) --build-arg BIRD_IMAGE=$(BIRD_IMAGE) --build-arg GIT_VERSION=$(GIT_VERSION) -t $(NODE_IMAGE):latest-$(ARCH) -f ./Dockerfile.$(ARCH) .
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@
