@@ -45,6 +45,7 @@ type KubeProxy struct {
 	hostname    string
 	frontendMap maps.MapWithExistsCheck
 	backendMap  maps.MapWithExistsCheck
+	maglevMap   maps.MapWithExistsCheck
 	affinityMap maps.Map
 	ctMap       maps.Map
 	rt          *RTCache
@@ -65,6 +66,7 @@ func StartKubeProxy(k8s kubernetes.Interface, hostname string,
 		hostname:    hostname,
 		frontendMap: bpfMaps.FrontendMap.(maps.MapWithExistsCheck),
 		backendMap:  bpfMaps.BackendMap.(maps.MapWithExistsCheck),
+		maglevMap:   bpfMaps.MaglevBackendMap.(maps.MapWithExistsCheck),
 		affinityMap: bpfMaps.AffinityMap,
 		ctMap:       bpfMaps.CtMap,
 		opts:        opts,
@@ -131,7 +133,7 @@ func (kp *KubeProxy) run(hostIPs []net.IP) error {
 		withLocalNP = append(withLocalNP, podNPIPV6)
 	}
 
-	syncer, err := NewSyncer(kp.ipFamily, withLocalNP, kp.frontendMap, kp.backendMap, kp.affinityMap,
+	syncer, err := NewSyncer(kp.ipFamily, withLocalNP, kp.frontendMap, kp.backendMap, kp.maglevMap, kp.affinityMap,
 		kp.rt, kp.excludedCIDRs)
 	if err != nil {
 		return errors.WithMessage(err, "new bpf syncer")
@@ -154,7 +156,7 @@ func (kp *KubeProxy) start() error {
 		withLocalNP = append(withLocalNP, podNPIPV6)
 	}
 
-	syncer, err := NewSyncer(kp.ipFamily, withLocalNP, kp.frontendMap, kp.backendMap, kp.affinityMap, kp.rt, kp.excludedCIDRs)
+	syncer, err := NewSyncer(kp.ipFamily, withLocalNP, kp.frontendMap, kp.backendMap, kp.maglevMap, kp.affinityMap, kp.rt, kp.excludedCIDRs)
 	if err != nil {
 		return errors.WithMessage(err, "new bpf syncer")
 	}

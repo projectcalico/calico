@@ -399,6 +399,11 @@ type MaglevBackendKeyInterface interface {
 	Port() uint16
 	Protocol() uint8
 	Ordinal() uint32
+	AsBytes() []byte
+}
+
+func NewMaglevBackendKeyIntf(addr net.IP, port uint16, proto uint8, ordinal uint32) MaglevBackendKeyInterface {
+	return NewMaglevBackendKey(addr, port, proto, uint32(ordinal))
 }
 
 func (k MaglevBackendKey) VIP() net.IP {
@@ -419,6 +424,20 @@ func (k MaglevBackendKey) Ordinal() uint32 {
 
 func (k MaglevBackendKey) AsBytes() []byte {
 	return k[:]
+}
+
+func (k MaglevBackendKey) String() string {
+	addr := k.VIP()
+	port := k.Port()
+	proto := k.Protocol()
+	ord := k.Ordinal()
+	return fmt.Sprintf("%s:%d/%d, %d", addr, port, proto, ord)
+}
+
+func MaglevBackendKeyFromBytes(b []byte) MaglevBackendKeyInterface {
+	var k MaglevBackendKey
+	copy(k[:], b)
+	return k
 }
 
 var _ MaglevBackendKeyInterface = MaglevBackendKey{}
