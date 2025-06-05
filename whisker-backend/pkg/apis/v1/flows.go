@@ -20,10 +20,10 @@ import (
 	"maps"
 	"slices"
 	"strings"
-	"time"
 
 	"github.com/projectcalico/calico/goldmane/proto"
 	"github.com/projectcalico/calico/lib/httpmachinery/pkg/codec"
+	"github.com/projectcalico/calico/lib/std/time"
 )
 
 const (
