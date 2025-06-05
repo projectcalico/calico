@@ -1323,6 +1323,7 @@ func dumpMaglevMap(maglevMap maps.Map) {
 	m, err := nat.LoadMaglevMap(maglevMap)
 	Expect(err).NotTo(HaveOccurred())
 	for k, v := range m {
+
 		fmt.Printf("%s: %s\n", k, v)
 	}
 }
