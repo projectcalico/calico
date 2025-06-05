@@ -168,7 +168,7 @@ type QoSControls struct {
 	// applied if non-zero.  When non-zero, must be between 1 and 4294967295.
 	IngressMaxConnections int64 `json:"ingressMaxConnections,omitempty"`
 	// Egress maximum number of connections (absolute number of connections, no unit).  Only
-	// applied if non-zero.  When non-zero, must be between 1 and 10^11 (100G).
+	// applied if non-zero.  When non-zero, must be between 1 and 4294967295.
 	EgressMaxConnections int64 `json:"egressMaxConnections,omitempty"`
 }
 
