@@ -24,6 +24,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/ip"
+	"github.com/sirupsen/logrus"
 )
 
 //	struct calico_nat_v4_key {
@@ -76,6 +77,63 @@ const backendValueV6Size = 20
 const maglevBackendKeyV6Size = 24
 
 const maglevBackendValueV6Size = backendValueV6Size
+
+type MaglevBackendKeyV6 [maglevBackendKeyV6Size]byte
+
+func NewMaglevBackendKeyV6(addr net.IP, port uint16, proto uint8, ordinal uint32) MaglevBackendKeyV6 {
+	// TODO ADAPT TO V6
+	var k MaglevBackendKeyV6
+	addr = addr.To16()
+	if len(addr) != 16 {
+		logrus.WithField("ip", addr).Panic("Bad IP")
+	}
+	copy(k[:16], addr)
+
+	binary.LittleEndian.PutUint16(k[16:18], port)
+	k[18] = proto
+	k[19] = 0
+	binary.LittleEndian.PutUint32(k[20:24], ordinal)
+
+	return k
+}
+
+func NewMaglevBackendKeyV6Intf(addr net.IP, port uint16, protocol uint8, ordinal uint32) MaglevBackendKeyInterface {
+	return NewMaglevBackendKeyV6(addr, port, protocol, ordinal)
+}
+
+func (k MaglevBackendKeyV6) VIP() net.IP {
+	return k[0:16]
+}
+
+func (k MaglevBackendKeyV6) Port() uint16 {
+	return binary.LittleEndian.Uint16(k[16:18])
+}
+
+func (k MaglevBackendKeyV6) Protocol() uint8 {
+	return k[18]
+}
+
+func (k MaglevBackendKeyV6) Ordinal() uint32 {
+	return binary.LittleEndian.Uint32(k[20:24])
+}
+
+func (k MaglevBackendKeyV6) AsBytes() []byte {
+	return k[:]
+}
+
+func (k MaglevBackendKeyV6) String() string {
+	addr := k.VIP()
+	port := k.Port()
+	proto := k.Protocol()
+	ord := k.Ordinal()
+	return fmt.Sprintf("%s:%d/%d, %d", addr, port, proto, ord)
+}
+
+func MaglevBackendKeyV6FromBytes(b []byte) MaglevBackendKeyInterface {
+	var k MaglevBackendKeyV6
+	copy(k[:], b)
+	return k
+}
 
 // (sizeof(addr) + sizeof(port) + sizeof(proto)) in bits
 const ZeroCIDRV6PrefixLen = (16 + 2 + 1) * 8
