@@ -75,20 +75,30 @@ func (c *streamCache) remove(id string) {
 	c.Lock()
 	defer c.Unlock()
 	s, ok := c.streams[id]
-	if ok {
-		// Close the stream's output channel. It is important that we do this here while holding the lock,
-		// allowing an atomic closure and removal from the cache. This ensures that no other goroutine
-		// can access the stream after its output channel is closed.
-		close(s.out)
-		delete(c.streams, id)
+	if !ok {
+		logrus.WithField("id", id).Warn("Asked to close unknown stream")
+		return
 	}
+
+	// Close the stream's output channel. It is important that we do this here while holding the lock,
+	// allowing an atomic closure and removal from the cache. This ensures that no other goroutine
+	// can access the stream after its output channel is closed.
+	close(s.out)
+	delete(c.streams, id)
 }
 
-func (c *streamCache) get(id string) (*stream, bool) {
+// sendToStream directs the given flow provider to the stream with the given ID if it exists.
+// It does this atomically, to ensure the input channel isn't closed.
+// Note that writing to a stream can theoretically block, but this is expected to be exceedingly rare.
+func (c *streamCache) sendToStream(id string, p storage.FlowBuilder) {
 	c.Lock()
 	defer c.Unlock()
 	s, ok := c.streams[id]
-	return s, ok
+	if !ok {
+		logrus.WithField("id", id).Warn("Send to unknown stream")
+		return
+	}
+	s.receive(p)
 }
 
 func (c *streamCache) size() int {
@@ -173,10 +183,7 @@ func (m *streamManager) Register(req *proto.FlowStreamRequest, size int) chan St
 func (m *streamManager) Receive(b storage.FlowBuilder, id string) {
 	if id != "" {
 		// An explicit ID was given. Send to the stream with that ID.
-		s, ok := m.streams.get(id)
-		if ok {
-			s.receive(b)
-		}
+		m.streams.sendToStream(id, b)
 		return
 	}
 
@@ -236,13 +243,7 @@ func (m *streamManager) register(req *streamRequest) *stream {
 
 // unregister removes a stream from the stream manager.
 func (m *streamManager) unregister(id string) {
-	_, ok := m.streams.get(id)
-	if !ok {
-		logrus.WithField("id", id).Warn("Asked to close unknown stream")
-		return
-	}
 	logrus.WithField("id", id).Debug("Closing stream")
-
 	m.streams.remove(id)
 	numStreams.Set(float64(m.streams.size()))
 	logrus.WithField("id", id).Debug("Stream closed")
