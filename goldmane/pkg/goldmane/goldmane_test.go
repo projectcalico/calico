@@ -84,8 +84,8 @@ func TestList(t *testing.T) {
 	}
 	defer setupTest(t, opts...)()
 
-	// Start the goldmane.
-	go gm.Run(now)
+	// Start goldmane.
+	<-gm.Run(now)
 
 	// Ingest a flow log.
 	fl := &proto.Flow{
@@ -284,7 +284,7 @@ func TestLabelMerge(t *testing.T) {
 		goldmane.WithNowFunc(c.Now),
 	}
 	defer setupTest(t, opts...)()
-	go gm.Run(c.Now().Unix())
+	<-gm.Run(c.Now().Unix())
 
 	// Create 10 flows, each with one common label and one unique label.
 	// All other fields are the same.
@@ -336,7 +336,7 @@ func TestRotation(t *testing.T) {
 		goldmane.WithNowFunc(c.Now),
 	}
 	defer setupTest(t, opts...)()
-	go gm.Run(now)
+	<-gm.Run(now)
 
 	// Create a Flow. This test relies on an understanding of the underlying bucket ring:
 	// - The index contains two extra buckets, one currently filling, and one in the future.
@@ -422,7 +422,7 @@ func TestManyFlows(t *testing.T) {
 		goldmane.WithNowFunc(c.Now),
 	}
 	defer setupTest(t, opts...)()
-	go gm.Run(now)
+	<-gm.Run(now)
 
 	// Create 20k flows and send them as fast as we can. See how Goldmane handles it.
 	fl := &proto.Flow{
@@ -472,7 +472,7 @@ func TestPagination(t *testing.T) {
 		goldmane.WithNowFunc(c.Now),
 	}
 	defer setupTest(t, opts...)()
-	go gm.Run(now)
+	<-gm.Run(now)
 
 	// Create 30 different flows.
 	for i := range 30 {
@@ -662,7 +662,7 @@ func TestTimeRanges(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			defer setupTest(t, opts...)()
-			go gm.Run(now)
+			<-gm.Run(now)
 
 			// Create flows.
 			prepareFlows()
@@ -753,7 +753,7 @@ func TestSink(t *testing.T) {
 
 		// Start Goldmane, and rollover to trigger an emission.
 		// We shouldn't see any buckets pushed to the sink, as we haven't sent any flows.
-		go gm.Run(now)
+		<-gm.Run(now)
 
 		// Set the sink. Setting the Sink is asynchronous and triggers a check for flow emission - as such,
 		// we need to wait for this to complete before we can start sending flows.
@@ -889,7 +889,7 @@ func TestSink(t *testing.T) {
 
 		// Start Goldmane, and rollover to trigger an emission.
 		// We shouldn't see any buckets pushed to the sink, as we haven't sent any flows.
-		go gm.Run(now)
+		<-gm.Run(now)
 
 		// Set the sink. Setting the Sink is asynchronous and triggers a check for flow emission - as such,
 		// we need to wait for this to complete before we can start sending flows.
@@ -956,7 +956,7 @@ func TestSink(t *testing.T) {
 
 		// Start Goldmane, and rollover to trigger an emission.
 		// We shouldn't see any buckets pushed to the sink, as we haven't sent any flows.
-		go gm.Run(now)
+		<-gm.Run(now)
 
 		// Load up Goldmane with Flow data across a widge range of buckets, spanning
 		// multiple emission windows.
@@ -1039,7 +1039,7 @@ func TestBucketDrift(t *testing.T) {
 	//
 	// From there, we can expect Goldmane to notice that it has missed time somehow and accelerate the scheduling of the next rollover
 	// in order to compensate.
-	go gm.Run(c.Now().Unix())
+	<-gm.Run(c.Now().Unix())
 
 	// We want to simulate a rollover that happens 3 seconds late for the scheduled rollover.
 	rt := int64(initialNow + aggregationWindowSecs + 3)
@@ -1094,8 +1094,8 @@ func TestStreams(t *testing.T) {
 		}
 		defer setupTest(t, opts...)()
 
-		// Start the goldmane.
-		go gm.Run(c.Now().Unix())
+		// Start goldmane.
+		<-gm.Run(c.Now().Unix())
 
 		// Insert some random historical flow data from the past over the
 		// time range of now-10 to now-5.
@@ -1202,8 +1202,8 @@ func TestStreams(t *testing.T) {
 		}
 		defer setupTest(t, opts...)()
 
-		// Start the goldmane.
-		go gm.Run(c.Now().Unix())
+		// Start goldmane.
+		<-gm.Run(c.Now().Unix())
 
 		// Create a flow that will span multiple time buckets.
 		newestStart := c.Now().Unix() - 2
@@ -1281,7 +1281,7 @@ func TestStreams(t *testing.T) {
 		defer setupTest(t, opts...)()
 
 		// Start Goldmane.
-		go gm.Run(c.Now().Unix())
+		<-gm.Run(c.Now().Unix())
 
 		// Create a flow that will span multiple time buckets, with the
 		// newest start time falling at Now().
@@ -1380,7 +1380,7 @@ func TestSortOrder(t *testing.T) {
 				goldmane.WithNowFunc(c.Now),
 			}
 			defer setupTest(t, opts...)()
-			go gm.Run(c.Now().Unix())
+			<-gm.Run(c.Now().Unix())
 
 			// Create a bunch of random flows.
 			for range 100 {
@@ -1649,7 +1649,7 @@ func TestFilter(t *testing.T) {
 				goldmane.WithNowFunc(c.Now),
 			}
 			defer setupTest(t, opts...)()
-			go gm.Run(c.Now().Unix())
+			<-gm.Run(c.Now().Unix())
 
 			// Create 10 flows, with a mix of fields to filter on.
 			for i := range 10 {
@@ -1788,7 +1788,7 @@ func TestFilterHints(t *testing.T) {
 				goldmane.WithNowFunc(c.Now),
 			}
 			defer setupTest(t, opts...)()
-			go gm.Run(c.Now().Unix())
+			<-gm.Run(c.Now().Unix())
 
 			// Create 10 flows, with a mix of fields to filter on.
 			for i := range 10 {
@@ -1860,7 +1860,7 @@ func TestFilterHints(t *testing.T) {
 				goldmane.WithNowFunc(c.Now),
 			}
 			defer setupTest(t, opts...)()
-			go gm.Run(c.Now().Unix())
+			<-gm.Run(c.Now().Unix())
 
 			// Create 10 flows, with a mix of fields to filter on.
 			for i := range 10 {
@@ -1967,7 +1967,7 @@ func TestStatistics(t *testing.T) {
 				goldmane.WithNowFunc(c.Now),
 			}
 			defer setupTest(t, opts...)()
-			go gm.Run(c.Now().Unix())
+			<-gm.Run(c.Now().Unix())
 
 			// Create some flows.
 			flows := createFlows(numFlows, mutateUniquePolicyName)
@@ -2099,7 +2099,7 @@ func TestStatistics(t *testing.T) {
 				goldmane.WithNowFunc(c.Now),
 			}
 			defer setupTest(t, opts...)()
-			go gm.Run(c.Now().Unix())
+			<-gm.Run(c.Now().Unix())
 
 			// Create some flows.
 			_ = createFlows(numFlows, mutateUniquePolicyName)
@@ -2152,7 +2152,7 @@ func TestStatistics(t *testing.T) {
 				goldmane.WithNowFunc(c.Now),
 			}
 			defer setupTest(t, opts...)()
-			go gm.Run(c.Now().Unix())
+			<-gm.Run(c.Now().Unix())
 
 			// Create some flows, mutating the first policy hit in each to be an EndOfTier hit.
 			mutateEndOftier := func(fl *proto.Flow, i int) {
@@ -2220,7 +2220,7 @@ func TestStatistics(t *testing.T) {
 				goldmane.WithNowFunc(c.Now),
 			}
 			defer setupTest(t, opts...)()
-			go gm.Run(c.Now().Unix())
+			<-gm.Run(c.Now().Unix())
 
 			// Create some flows, mutating the first policy hit in each to be an EndOfTier hit.
 			mutateEndOftier := func(fl *proto.Flow, i int) {
@@ -2278,7 +2278,7 @@ func TestStatistics(t *testing.T) {
 				goldmane.WithNowFunc(c.Now),
 			}
 			defer setupTest(t, opts...)()
-			go gm.Run(c.Now().Unix())
+			<-gm.Run(c.Now().Unix())
 
 			// Create some flows.
 			_ = createFlows(numFlows, mutateUniquePolicyName)
