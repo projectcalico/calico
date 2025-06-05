@@ -154,13 +154,21 @@ type QoSControls struct {
 	EgressMinburst int64 `json:"egressMinburst,omitempty"`
 
 	// Ingress packet rate limit in packets per second.  Only applied if non-zero.  When
-	// non-zero, must be between 1 and 10^4 (10k).
+	// non-zero:
+	//
+	// - IngressPacketRate must be between 1 and 10^4 (10k).
+	//
+	// - IngressPacketBurst must be between 1 and 10^4 (10k).  If specified as 0, it is
+	//   defaulted to 5.
+	//
 	IngressPacketRate int64 `json:"ingressPacketRate,omitempty"`
-	// Egress packet rate limit in packets per second.  Only applied if non-zero.  When
-	// non-zero, must be between 1 and 10^4 (10k).
-	EgressPacketRate int64 `json:"egressPacketRate,omitempty"`
 	// Ingress packet rate burst size in number of packets
 	IngressPacketBurst int64 `json:"ingressPacketBurst,omitempty"`
+
+	// Egress packet rate limit in packets per second.  Only applied if non-zero.  The same
+	// detail applies here as for egress packet rate, except using the corresponding Egress
+	// fields.
+	EgressPacketRate int64 `json:"egressPacketRate,omitempty"`
 	// Egress packet rate burst size in number of packets
 	EgressPacketBurst int64 `json:"egressPacketBurst,omitempty"`
 
