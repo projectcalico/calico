@@ -70,7 +70,17 @@ func RemoveConnectTimeLoadBalancer(ipv4Enabled bool, cgroupv2 string) error {
 	pinDir := path.Join(bpfMount, bpfdefs.CtlbPinDir)
 	defer bpf.CleanUpCalicoPins(pinDir)
 	ctlbProgsMap := newProgramsMap()
-	defer os.Remove(ctlbProgsMap.Path())
+	if err := ctlbProgsMap.EnsureExists(); err != nil {
+		return fmt.Errorf("failed to create ctlb jump map: %w", err)
+	}
+	for _, index := range ctlbProgToIndex {
+		err := ctlbProgsMap.Delete(jump.Key(index))
+		if err != nil && !os.IsNotExist(err) {
+			log.Errorf("failed to delete the ctlb jump map entry: %s", err)
+		}
+	}
+	ctlbProgsMap.Close()
+	os.Remove(ctlbProgsMap.Path())
 
 	if err := detachCtlbPrograms(ipv4Enabled, pinDir, cgroupv2); err != nil {
 		return err
