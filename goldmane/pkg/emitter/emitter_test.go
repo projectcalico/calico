@@ -23,7 +23,6 @@ import (
 	"net/http/httptest"
 	"sync"
 	"testing"
-	"time"
 	"unique"
 
 	"github.com/stretchr/testify/require"
@@ -38,6 +37,7 @@ import (
 	"github.com/projectcalico/calico/goldmane/pkg/storage"
 	"github.com/projectcalico/calico/goldmane/pkg/types"
 	"github.com/projectcalico/calico/goldmane/proto"
+	"github.com/projectcalico/calico/lib/std/clock"
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 )
 
@@ -166,7 +166,7 @@ func TestEmitterMainline(t *testing.T) {
 		mu.Lock()
 		defer mu.Unlock()
 		return numBucketsEmitted == 1
-	}, 5*time.Second, 500*time.Millisecond)
+	}, 5*clock.Second, 500*clock.Millisecond)
 
 	// Verify that the emitter saved its state in a configmap.
 	cm := &corev1.ConfigMap{}
@@ -279,12 +279,12 @@ func TestEmitterRetry(t *testing.T) {
 		mu.Lock()
 		defer mu.Unlock()
 		return numRequests >= 2
-	}, 5*time.Second, 500*time.Millisecond, "Didn't retry the request?")
+	}, 5*clock.Second, 500*clock.Millisecond, "Didn't retry the request?")
 	require.Eventually(t, func() bool {
 		mu.Lock()
 		defer mu.Unlock()
 		return numBucketsEmitted == 1
-	}, 5*time.Second, 500*time.Millisecond, "Didn't emit the flow?")
+	}, 5*clock.Second, 500*clock.Millisecond, "Didn't emit the flow?")
 }
 
 // TestStaleBuckets tests that the emitter can properly skip emission of buckets that predate its latest
@@ -423,7 +423,7 @@ func TestStaleBuckets(t *testing.T) {
 
 	// The emitter should skip emitting the bucket, and the flow should not be sent to the server.
 	// Wait a couple of seconds to confirm.
-	time.Sleep(2 * time.Second)
+	clock.Sleep(2 * clock.Second)
 
 	// The timestamp should not be updated.
 	err = kcli.Get(context.Background(), configMapKey, cm)
@@ -440,7 +440,7 @@ func TestStaleBuckets(t *testing.T) {
 		mu.Lock()
 		defer mu.Unlock()
 		return numBucketsEmitted == 1
-	}, 5*time.Second, 500*time.Millisecond)
+	}, 5*clock.Second, 500*clock.Millisecond)
 
 	// The timestamp should be updated.
 	err = kcli.Get(context.Background(), configMapKey, cm)

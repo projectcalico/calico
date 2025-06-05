@@ -17,7 +17,8 @@ package chanutil
 import (
 	"context"
 	"errors"
-	"time"
+
+	"github.com/projectcalico/calico/lib/std/clock"
 )
 
 var (
@@ -58,7 +59,7 @@ func ReadNonBlocking[E any](ch <-chan E) (E, bool) {
 //
 // The same thing could be done with Read using context.Deadline but it requires managing more contexts and cancel functions,
 // which can be tedious when managing multiple channels in this manner.
-func ReadWithDeadline[E any](ctx context.Context, ch <-chan E, duration time.Duration) (E, error) {
+func ReadWithDeadline[E any](ctx context.Context, ch <-chan E, duration clock.Duration) (E, error) {
 	var def E
 
 	select {
@@ -69,7 +70,7 @@ func ReadWithDeadline[E any](ctx context.Context, ch <-chan E, duration time.Dur
 			return def, ErrChannelClosed
 		}
 		return v, nil
-	case <-time.After(duration):
+	case <-clock.After(duration):
 		return def, ErrDeadlineExceeded
 	}
 }
@@ -118,13 +119,13 @@ func WriteNonBlocking[E any](ch chan<- E, v E) bool {
 //
 // The same thing could be done with Write using context.Deadline but it requires managing more contexts and cancel functions,
 // which can be tedious when managing multiple channels in this manner.
-func WriteWithDeadline[E any](ctx context.Context, ch chan E, v E, duration time.Duration) error {
+func WriteWithDeadline[E any](ctx context.Context, ch chan E, v E, duration clock.Duration) error {
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
 	case ch <- v:
 		return nil
-	case <-time.After(duration):
+	case <-clock.After(duration):
 		return ErrDeadlineExceeded
 	}
 }

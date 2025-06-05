@@ -16,15 +16,14 @@ package v1_test
 
 import (
 	"context"
+	. "github.com/onsi/gomega"
+	"github.com/projectcalico/calico/lib/std/clock"
+	"github.com/stretchr/testify/mock"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
-	"time"
-
-	. "github.com/onsi/gomega"
-	"github.com/stretchr/testify/mock"
 
 	climocks "github.com/projectcalico/calico/goldmane/pkg/client/mocks"
 	"github.com/projectcalico/calico/goldmane/proto"
@@ -82,7 +81,7 @@ func TestListFlows(t *testing.T) {
 	Expect(rsp.Status()).Should(Equal(http.StatusOK))
 	recorder := httptest.NewRecorder()
 	Expect(rsp.ResponseWriter().WriteResponse(sc.apiCtx, http.StatusOK, recorder)).ShouldNot(HaveOccurred())
-	zerotime := time.Unix(0, 0)
+	zerotime := clock.Unix(0, 0)
 	flows := testutil.MustUnmarshal[apiutil.List[whiskerv1.FlowResponse]](t, recorder.Body.Bytes())
 	for i, flow := range flows.Items {
 		flow.StartTime = zerotime
@@ -153,7 +152,7 @@ func TestWatchFlows(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	Expect(rsp.ResponseWriter().WriteResponse(sc.apiCtx, http.StatusOK, recorder)).ShouldNot(HaveOccurred())
 
-	zerotime := time.Unix(0, 0)
+	zerotime := clock.Unix(0, 0)
 	var flows []whiskerv1.FlowResponse
 	for _, data := range strings.Split(recorder.Body.String(), "\n\n") {
 		if len(data) == 0 {
@@ -187,7 +186,7 @@ func TestWatchFlowsParameterConversion(t *testing.T) {
 
 	var req *proto.FlowStreamRequest
 
-	now := time.Now()
+	now := clock.Now()
 	tt := []struct {
 		description       string
 		params            whiskerv1.ListFlowsParams
@@ -264,7 +263,7 @@ func TestListFlowsParameterConversion(t *testing.T) {
 
 	var req *proto.FlowListRequest
 
-	now := time.Now()
+	now := clock.Now()
 	tt := []struct {
 		description       string
 		params            whiskerv1.ListFlowsParams

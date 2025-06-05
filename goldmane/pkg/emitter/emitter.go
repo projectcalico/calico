@@ -20,7 +20,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
-	"time"
 
 	"github.com/sirupsen/logrus"
 	"golang.org/x/time/rate"
@@ -32,6 +31,7 @@ import (
 
 	"github.com/projectcalico/calico/goldmane/pkg/storage"
 	"github.com/projectcalico/calico/goldmane/pkg/types"
+	"github.com/projectcalico/calico/lib/std/clock"
 	"github.com/projectcalico/calico/libcalico-go/lib/health"
 )
 
@@ -74,7 +74,7 @@ func NewEmitter(opts ...Option) *Emitter {
 		buckets: newBucketCache(),
 		queue: workqueue.NewTypedRateLimitingQueue(
 			workqueue.NewTypedMaxOfRateLimiter(
-				workqueue.NewTypedItemExponentialFailureRateLimiter[bucketKey](1*time.Second, 30*time.Second),
+				workqueue.NewTypedItemExponentialFailureRateLimiter[bucketKey](1*clock.Second, 30*clock.Second),
 				&workqueue.TypedBucketRateLimiter[bucketKey]{Limiter: rate.NewLimiter(rate.Limit(10), 100)},
 			)),
 	}
@@ -255,7 +255,7 @@ func (e *Emitter) saveState() error {
 	}
 
 	// Query the latest configmap.
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 15*clock.Second)
 	defer cancel()
 	cm := &corev1.ConfigMap{}
 	if err := e.kcli.Get(ctx, configMapKey, cm); err != nil && !errors.IsNotFound(err) {
@@ -296,7 +296,7 @@ func (e *Emitter) loadCachedState() error {
 	}
 
 	// Query the latest configmap.
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 15*clock.Second)
 	defer cancel()
 
 	cm := &corev1.ConfigMap{}

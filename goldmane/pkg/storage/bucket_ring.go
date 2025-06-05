@@ -18,12 +18,12 @@ import (
 	"errors"
 	"fmt"
 	"sort"
-	"time"
 
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/goldmane/pkg/types"
 	"github.com/projectcalico/calico/goldmane/proto"
+	"github.com/projectcalico/calico/lib/std/clock"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -38,7 +38,7 @@ type BucketRing struct {
 	interval  int
 
 	// nowFunc allows overriding the current time, used in tests.
-	nowFunc func() time.Time
+	nowFunc func() clock.Time
 
 	// indices allow for quick handling of flow queries sorted by various methods.
 	indices map[proto.SortBy]Index[string]
@@ -98,7 +98,7 @@ func NewBucketRing(n, interval int, now int64, opts ...BucketRingOption) *Bucket
 
 	logrus.WithFields(logrus.Fields{
 		"num":        n,
-		"bucketSize": time.Duration(interval) * time.Second,
+		"bucketSize": clock.Duration(interval) * clock.Second,
 	}).Debug("Initializing aggregation buckets")
 
 	// Determine the latest bucket start time. To account for some amount of clock drift,
@@ -108,14 +108,14 @@ func NewBucketRing(n, interval int, now int64, opts ...BucketRingOption) *Bucket
 
 	// Initialize an empty bucket into each slot in the ring.
 	for i := range n {
-		ring.buckets[i] = NewAggregationBucket(time.Unix(0, 0), time.Unix(0, 0))
+		ring.buckets[i] = NewAggregationBucket(clock.Unix(0, 0), clock.Unix(0, 0))
 	}
 
 	// Seed the buckets with the correct state. To do this, we'll initialize the first bucket
 	// to be the oldest bucket and then roll over the buckets until we have populated the entire ring. This
 	// is an easy way to ensure that the buckets are in the correct state.
-	oldestBucketStart := time.Unix(newestBucketStart-int64(interval*n), 0)
-	oldestBucketEnd := time.Unix(oldestBucketStart.Unix()+int64(interval), 0)
+	oldestBucketStart := clock.Unix(newestBucketStart-int64(interval*n), 0)
+	oldestBucketEnd := clock.Unix(oldestBucketStart.Unix()+int64(interval), 0)
 	ring.buckets[0] = NewAggregationBucket(oldestBucketStart, oldestBucketEnd)
 	for range n {
 		ring.Rollover(nil)
@@ -263,7 +263,7 @@ func (r *BucketRing) FilterHints(req *proto.FilterHintsRequest) ([]string, *type
 func (r *BucketRing) Rollover(sink Sink) int64 {
 	start := r.nowFunc()
 	defer func() {
-		if r.nowFunc().Sub(start) > 1*time.Second {
+		if r.nowFunc().Sub(start) > 1*clock.Second {
 			logrus.WithField("duration", r.nowFunc().Sub(start)).Warn("Rollover took >1s")
 		}
 	}()
@@ -679,7 +679,7 @@ func (r *BucketRing) Statistics(req *proto.StatisticsRequest) ([]*proto.Statisti
 
 // flushToStreams sends the flows in the current streaming bucket to the stream receiver.
 func (r *BucketRing) flushToStreams() {
-	start := time.Now()
+	start := clock.Now()
 
 	if r.streams == nil {
 		logrus.Warn("No stream receiver configured, not sending flows to streams")
@@ -692,9 +692,9 @@ func (r *BucketRing) flushToStreams() {
 	logrus.WithFields(bucket.Fields()).Debug("Flushing bucket to stream manager")
 	r.streamBucket(bucket, r.streams)
 
-	if time.Since(start) > 1*time.Second {
+	if clock.Since(start) > 1*clock.Second {
 		logrus.WithFields(logrus.Fields{
-			"duration":    time.Since(start),
+			"duration":    clock.Since(start),
 			"numInBucket": bucket.Flows.Len(),
 		}).Info("Flushing streams > 1s")
 	}

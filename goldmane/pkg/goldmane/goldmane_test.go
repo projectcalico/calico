@@ -19,7 +19,6 @@ import (
 	"strings"
 	"sync"
 	"testing"
-	"time"
 
 	. "github.com/onsi/gomega"
 	"github.com/sirupsen/logrus"
@@ -33,20 +32,21 @@ import (
 	"github.com/projectcalico/calico/goldmane/pkg/testutils"
 	"github.com/projectcalico/calico/goldmane/pkg/types"
 	"github.com/projectcalico/calico/goldmane/proto"
+	"github.com/projectcalico/calico/lib/std/clock"
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 )
 
 var (
-	waitTimeout = 5 * time.Second
-	retryTime   = 25 * time.Millisecond
+	waitTimeout = 5 * clock.Second
+	retryTime   = 25 * clock.Millisecond
 )
 
 var (
 	gm *goldmane.Goldmane
-	c  *clock
+	c  *mockClock
 )
 
-// initialNow is time.Now() at the start of the test. This must be
+// initialNow is clock.Now() at the start of the test. This must be
 // large enough that initialNow - numBuckets * aggregationWindowSecs is positive.
 const initialNow = 1000
 
@@ -80,7 +80,7 @@ func TestList(t *testing.T) {
 	c := newClock(initialNow)
 	now := c.Now().Unix()
 	opts := []goldmane.Option{
-		goldmane.WithRolloverTime(1 * time.Second),
+		goldmane.WithRolloverTime(1 * clock.Second),
 		goldmane.WithNowFunc(c.Now),
 	}
 	defer setupTest(t, opts...)()
@@ -210,7 +210,7 @@ func TestList(t *testing.T) {
 	Expect(flows[0].Id).To(Equal(id))
 
 	// Wait for Goldmane to rollover.
-	time.Sleep(1001 * time.Millisecond)
+	clock.Sleep(1001 * clock.Millisecond)
 
 	// Send another flow log.
 	gm.Receive(types.ProtoToFlow(fl))
@@ -275,12 +275,12 @@ func TestLabelMerge(t *testing.T) {
 	// Create a clock and rollover controller.
 	c := newClock(initialNow)
 	roller := &rolloverController{
-		ch:                    make(chan time.Time),
+		ch:                    make(chan clock.Time),
 		aggregationWindowSecs: 1,
 		clock:                 c,
 	}
 	opts := []goldmane.Option{
-		goldmane.WithRolloverTime(1 * time.Second),
+		goldmane.WithRolloverTime(1 * clock.Second),
 		goldmane.WithRolloverFunc(roller.After),
 		goldmane.WithNowFunc(c.Now),
 	}
@@ -327,12 +327,12 @@ func TestRotation(t *testing.T) {
 	c := newClock(initialNow)
 	now := c.Now().Unix()
 	roller := &rolloverController{
-		ch:                    make(chan time.Time),
+		ch:                    make(chan clock.Time),
 		aggregationWindowSecs: 1,
 		clock:                 c,
 	}
 	opts := []goldmane.Option{
-		goldmane.WithRolloverTime(1 * time.Second),
+		goldmane.WithRolloverTime(1 * clock.Second),
 		goldmane.WithRolloverFunc(roller.After),
 		goldmane.WithNowFunc(c.Now),
 	}
@@ -412,14 +412,14 @@ func TestRotation(t *testing.T) {
 		results, _ = gm.List(&proto.FlowListRequest{})
 		flows = results.Flows
 		return len(flows)
-	}, 1*time.Second, retryTime).Should(Equal(0), "Flow did not rotate out")
+	}, 1*clock.Second, retryTime).Should(Equal(0), "Flow did not rotate out")
 }
 
 func TestManyFlows(t *testing.T) {
 	c := newClock(initialNow)
 	now := c.Now().Unix()
 	opts := []goldmane.Option{
-		goldmane.WithRolloverTime(1 * time.Second),
+		goldmane.WithRolloverTime(1 * clock.Second),
 		goldmane.WithNowFunc(c.Now),
 	}
 	defer setupTest(t, opts...)()
@@ -469,7 +469,7 @@ func TestPagination(t *testing.T) {
 	c := newClock(initialNow)
 	now := c.Now().Unix()
 	opts := []goldmane.Option{
-		goldmane.WithRolloverTime(1 * time.Second),
+		goldmane.WithRolloverTime(1 * clock.Second),
 		goldmane.WithNowFunc(c.Now),
 	}
 	defer setupTest(t, opts...)()
@@ -570,7 +570,7 @@ func TestTimeRanges(t *testing.T) {
 	c := newClock(initialNow)
 	now := c.Now().Unix()
 	opts := []goldmane.Option{
-		goldmane.WithRolloverTime(1 * time.Second),
+		goldmane.WithRolloverTime(1 * clock.Second),
 		goldmane.WithNowFunc(c.Now),
 	}
 	prepareFlows := func() {
@@ -722,7 +722,7 @@ func TestTimeRanges(t *testing.T) {
 						require.Len(t, results.Flows, 0)
 					}
 
-					time.Sleep(10 * time.Millisecond)
+					clock.Sleep(10 * clock.Millisecond)
 				}
 			}
 		})
@@ -737,14 +737,14 @@ func TestSink(t *testing.T) {
 		// Configure Goldmane with a test sink.
 		sink := newTestSink()
 		roller := &rolloverController{
-			ch:                    make(chan time.Time),
+			ch:                    make(chan clock.Time),
 			aggregationWindowSecs: 1,
 			clock:                 c,
 		}
 		pushIndex := 10
 		bucketsToCombine := 20
 		opts := []goldmane.Option{
-			goldmane.WithRolloverTime(1 * time.Second),
+			goldmane.WithRolloverTime(1 * clock.Second),
 			goldmane.WithRolloverFunc(roller.After),
 			goldmane.WithNowFunc(c.Now),
 			goldmane.WithBucketsToCombine(bucketsToCombine),
@@ -819,7 +819,7 @@ func TestSink(t *testing.T) {
 		}
 
 		// Wait for all flows to be received.
-		time.Sleep(10 * time.Millisecond)
+		clock.Sleep(10 * clock.Millisecond)
 
 		// Rollover until we trigger the next emission. The flows we added above
 		// won't appear in this emission, since they are in the first 5 buckets which
@@ -873,14 +873,14 @@ func TestSink(t *testing.T) {
 		// Configure Goldmane with a test sink.
 		sink := newTestSink()
 		roller := &rolloverController{
-			ch:                    make(chan time.Time),
+			ch:                    make(chan clock.Time),
 			aggregationWindowSecs: 1,
 			clock:                 c,
 		}
 		pushIndex := 10
 		bucketsToCombine := 20
 		opts := []goldmane.Option{
-			goldmane.WithRolloverTime(1 * time.Second),
+			goldmane.WithRolloverTime(1 * clock.Second),
 			goldmane.WithRolloverFunc(roller.After),
 			goldmane.WithNowFunc(c.Now),
 			goldmane.WithBucketsToCombine(bucketsToCombine),
@@ -940,14 +940,14 @@ func TestSink(t *testing.T) {
 		// Configure Goldmane with a test sink.
 		sink := newTestSink()
 		roller := &rolloverController{
-			ch:                    make(chan time.Time),
+			ch:                    make(chan clock.Time),
 			aggregationWindowSecs: 1,
 			clock:                 c,
 		}
 		pushIndex := 10
 		bucketsToCombine := 20
 		opts := []goldmane.Option{
-			goldmane.WithRolloverTime(1 * time.Second),
+			goldmane.WithRolloverTime(1 * clock.Second),
 			goldmane.WithRolloverFunc(roller.After),
 			goldmane.WithNowFunc(c.Now),
 			goldmane.WithBucketsToCombine(bucketsToCombine),
@@ -982,7 +982,7 @@ func TestSink(t *testing.T) {
 		roller.rolloverAndAdvanceClock(1)
 		Consistently(func() int {
 			return sink.len()
-		}, 1*time.Second, retryTime).Should(Equal(0), "Unexpected bucket pushed to sink")
+		}, 1*clock.Second, retryTime).Should(Equal(0), "Unexpected bucket pushed to sink")
 
 		// Set the sink. Setting the Sink is asynchronous and triggers a check for flow emission - as such,
 		// we need to wait for this to complete before we can start sending flows.
@@ -996,14 +996,14 @@ func TestSink(t *testing.T) {
 }
 
 // TestBucketDrift makes sure that Goldmane is able to account for its internal array of
-// aggregation buckets slowly drifting with respect to time.Now(). This can happen due to the time taken to process
+// aggregation buckets slowly drifting with respect to clock.Now(). This can happen due to the time taken to process
 // other operations on the shared main goroutine, and is accounted for by adjusting the the next rollover time.
 func TestBucketDrift(t *testing.T) {
 	// Create a clock and rollover controller.
 	c := newClock(initialNow)
 	aggregationWindowSecs := 10
 	roller := &rolloverController{
-		ch:                    make(chan time.Time),
+		ch:                    make(chan clock.Time),
 		aggregationWindowSecs: int64(aggregationWindowSecs),
 		clock:                 c,
 	}
@@ -1011,20 +1011,20 @@ func TestBucketDrift(t *testing.T) {
 	// Track the scheduled rollover time. We need a mutex to prevent data races, as
 	// this is being accessed from multiple goroutines.
 	mu := sync.Mutex{}
-	var rolloverScheduledAt time.Duration
-	rolloverFunc := func(d time.Duration) <-chan time.Time {
+	var rolloverScheduledAt clock.Duration
+	rolloverFunc := func(d clock.Duration) <-chan clock.Time {
 		mu.Lock()
 		defer mu.Unlock()
 		rolloverScheduledAt = d
 		return roller.After(d)
 	}
-	getScheduledAt := func() time.Duration {
+	getScheduledAt := func() clock.Duration {
 		mu.Lock()
 		defer mu.Unlock()
 		return rolloverScheduledAt
 	}
 	opts := []goldmane.Option{
-		goldmane.WithRolloverTime(time.Duration(aggregationWindowSecs) * time.Second),
+		goldmane.WithRolloverTime(clock.Duration(aggregationWindowSecs) * clock.Second),
 		goldmane.WithRolloverFunc(rolloverFunc),
 		goldmane.WithNowFunc(c.Now),
 	}
@@ -1044,7 +1044,7 @@ func TestBucketDrift(t *testing.T) {
 
 	// We want to simulate a rollover that happens 3 seconds late for the scheduled rollover.
 	rt := int64(initialNow + aggregationWindowSecs + 3)
-	c.Set(time.Unix(rt, 0))
+	c.Set(clock.Unix(rt, 0))
 	roller.rollover()
 
 	// Assert that the rollover function was called with an expedited reschedule time of 7 seconds, compared to the
@@ -1053,7 +1053,7 @@ func TestBucketDrift(t *testing.T) {
 
 	// Advance the clock to the expected time of the next rollover.
 	nextRollover := int64(initialNow + 2*aggregationWindowSecs)
-	c.Set(time.Unix(nextRollover, 0))
+	c.Set(clock.Unix(nextRollover, 0))
 
 	// Trigger another rollover. This time, Goldmane should have caught up, so the rollover should be scheduled
 	// at the expected time of one aggregation window in the future (10s).
@@ -1064,7 +1064,7 @@ func TestBucketDrift(t *testing.T) {
 	// Now let's try the other dirction - simulate a rollover that happens 4 seconds early.
 	// We expect the next rollover to occur at 1030, so trigger one at 1026.
 	earlyRt := int64(initialNow + 3*aggregationWindowSecs - 4)
-	c.Set(time.Unix(earlyRt, 0))
+	c.Set(clock.Unix(earlyRt, 0))
 	roller.rollover()
 
 	// Goldmane should notice that it's ahead of schedule and delay the next rollover by 4 seconds.
@@ -1074,9 +1074,9 @@ func TestBucketDrift(t *testing.T) {
 	// The next bucket should start at 1040, so trigger a rollover at 1055.
 	// This should trigger an immediate rollover.
 	lateRt := int64(initialNow + 5*aggregationWindowSecs + 5)
-	c.Set(time.Unix(lateRt, 0))
+	c.Set(clock.Unix(lateRt, 0))
 	roller.rollover()
-	require.Equal(t, 10*time.Millisecond, getScheduledAt(), "Immediate rollover should have been scheduled for 10ms")
+	require.Equal(t, 10*clock.Millisecond, getScheduledAt(), "Immediate rollover should have been scheduled for 10ms")
 }
 
 func TestStreams(t *testing.T) {
@@ -1084,12 +1084,12 @@ func TestStreams(t *testing.T) {
 		// Create a clock and rollover controller.
 		c := newClock(initialNow)
 		roller := &rolloverController{
-			ch:                    make(chan time.Time),
+			ch:                    make(chan clock.Time),
 			aggregationWindowSecs: 1,
 			clock:                 c,
 		}
 		opts := []goldmane.Option{
-			goldmane.WithRolloverTime(1 * time.Second),
+			goldmane.WithRolloverTime(1 * clock.Second),
 			goldmane.WithRolloverFunc(roller.After),
 			goldmane.WithNowFunc(c.Now),
 		}
@@ -1132,7 +1132,7 @@ func TestStreams(t *testing.T) {
 		defer stream2.Close()
 
 		// Expect nothing on the first stream, since it's starting from the present.
-		Consistently(stream.Flows(), 1*time.Second, retryTime).ShouldNot(Receive())
+		Consistently(stream.Flows(), 1*clock.Second, retryTime).ShouldNot(Receive())
 
 		// Expect three historical flows on the second stream: now-5, now-6, now-7.
 		// We should receive them in time order, and should NOT receive now-8 or now-9.
@@ -1145,7 +1145,7 @@ func TestStreams(t *testing.T) {
 		}
 
 		// We shouldn't receive any more flows.
-		Consistently(stream2.Flows(), 1*time.Second, retryTime).ShouldNot(Receive(), "Expected no more flows")
+		Consistently(stream2.Flows(), 1*clock.Second, retryTime).ShouldNot(Receive(), "Expected no more flows")
 
 		// Ingest some new flow data.
 		fl := testutils.NewRandomFlow(c.Now().Unix() - 1)
@@ -1180,8 +1180,8 @@ func TestStreams(t *testing.T) {
 		ExpectFlowsEqual(t, fl, flow2.Flow)
 
 		// Expect no other flows.
-		Consistently(stream.Flows(), 1*time.Second, retryTime).ShouldNot(Receive())
-		Consistently(stream2.Flows(), 1*time.Second, retryTime).ShouldNot(Receive())
+		Consistently(stream.Flows(), 1*clock.Second, retryTime).ShouldNot(Receive())
+		Consistently(stream2.Flows(), 1*clock.Second, retryTime).ShouldNot(Receive())
 	})
 
 	// This tests that the stream endpoint produces the correct results when a stream is started
@@ -1192,12 +1192,12 @@ func TestStreams(t *testing.T) {
 		// Create a clock and rollover controller.
 		c := newClock(initialNow)
 		roller := &rolloverController{
-			ch:                    make(chan time.Time),
+			ch:                    make(chan clock.Time),
 			aggregationWindowSecs: 1,
 			clock:                 c,
 		}
 		opts := []goldmane.Option{
-			goldmane.WithRolloverTime(1 * time.Second),
+			goldmane.WithRolloverTime(1 * clock.Second),
 			goldmane.WithRolloverFunc(roller.After),
 			goldmane.WithNowFunc(c.Now),
 		}
@@ -1270,12 +1270,12 @@ func TestStreams(t *testing.T) {
 		// Create a clock and rollover controller.
 		c := newClock(initialNow)
 		roller := &rolloverController{
-			ch:                    make(chan time.Time),
+			ch:                    make(chan clock.Time),
 			aggregationWindowSecs: 1,
 			clock:                 c,
 		}
 		opts := []goldmane.Option{
-			goldmane.WithRolloverTime(1 * time.Second),
+			goldmane.WithRolloverTime(1 * clock.Second),
 			goldmane.WithRolloverFunc(roller.After),
 			goldmane.WithNowFunc(c.Now),
 		}
@@ -1352,12 +1352,12 @@ func TestStreams(t *testing.T) {
 		// Create a clock and rollover controller.
 		c := newClock(initialNow)
 		roller := &rolloverController{
-			ch:                    make(chan time.Time),
+			ch:                    make(chan clock.Time),
 			aggregationWindowSecs: 1,
 			clock:                 c,
 		}
 		opts := []goldmane.Option{
-			goldmane.WithRolloverTime(1 * time.Second),
+			goldmane.WithRolloverTime(1 * clock.Second),
 			goldmane.WithRolloverFunc(roller.After),
 			goldmane.WithNowFunc(c.Now),
 		}
@@ -1392,12 +1392,12 @@ func TestStreams(t *testing.T) {
 		// Create a clock and rollover controller.
 		c := newClock(initialNow)
 		roller := &rolloverController{
-			ch:                    make(chan time.Time),
+			ch:                    make(chan clock.Time),
 			aggregationWindowSecs: 1,
 			clock:                 c,
 		}
 		opts := []goldmane.Option{
-			goldmane.WithRolloverTime(1 * time.Second),
+			goldmane.WithRolloverTime(1 * clock.Second),
 			goldmane.WithRolloverFunc(roller.After),
 			goldmane.WithNowFunc(c.Now),
 		}
@@ -1454,12 +1454,12 @@ func TestSortOrder(t *testing.T) {
 			// Create a clock and rollover controller.
 			c := newClock(initialNow)
 			roller := &rolloverController{
-				ch:                    make(chan time.Time),
+				ch:                    make(chan clock.Time),
 				aggregationWindowSecs: 1,
 				clock:                 c,
 			}
 			opts := []goldmane.Option{
-				goldmane.WithRolloverTime(1 * time.Second),
+				goldmane.WithRolloverTime(1 * clock.Second),
 				goldmane.WithRolloverFunc(roller.After),
 				goldmane.WithNowFunc(c.Now),
 			}
@@ -1723,12 +1723,12 @@ func TestFilter(t *testing.T) {
 			// Create a clock and rollover controller.
 			c := newClock(initialNow)
 			roller := &rolloverController{
-				ch:                    make(chan time.Time),
+				ch:                    make(chan clock.Time),
 				aggregationWindowSecs: 1,
 				clock:                 c,
 			}
 			opts := []goldmane.Option{
-				goldmane.WithRolloverTime(1 * time.Second),
+				goldmane.WithRolloverTime(1 * clock.Second),
 				goldmane.WithRolloverFunc(roller.After),
 				goldmane.WithNowFunc(c.Now),
 			}
@@ -1780,7 +1780,7 @@ func TestFilter(t *testing.T) {
 					results, _ = gm.List(tc.req)
 					flows = results.Flows
 					return len(flows)
-				}, 1*time.Second, retryTime).Should(Equal(0))
+				}, 1*clock.Second, retryTime).Should(Equal(0))
 				return
 			} else {
 				var err error
@@ -1862,12 +1862,12 @@ func TestFilterHints(t *testing.T) {
 			// Create a clock and rollover controller.
 			c := newClock(initialNow)
 			roller := &rolloverController{
-				ch:                    make(chan time.Time),
+				ch:                    make(chan clock.Time),
 				aggregationWindowSecs: 1,
 				clock:                 c,
 			}
 			opts := []goldmane.Option{
-				goldmane.WithRolloverTime(1 * time.Second),
+				goldmane.WithRolloverTime(1 * clock.Second),
 				goldmane.WithRolloverFunc(roller.After),
 				goldmane.WithNowFunc(c.Now),
 			}
@@ -1934,12 +1934,12 @@ func TestFilterHints(t *testing.T) {
 			// Create a clock and rollover controller.
 			c := newClock(initialNow)
 			roller := &rolloverController{
-				ch:                    make(chan time.Time),
+				ch:                    make(chan clock.Time),
 				aggregationWindowSecs: 1,
 				clock:                 c,
 			}
 			opts := []goldmane.Option{
-				goldmane.WithRolloverTime(1 * time.Second),
+				goldmane.WithRolloverTime(1 * clock.Second),
 				goldmane.WithRolloverFunc(roller.After),
 				goldmane.WithNowFunc(c.Now),
 			}
@@ -2041,12 +2041,12 @@ func TestStatistics(t *testing.T) {
 			// Create a clock and rollover controller.
 			c := newClock(initialNow)
 			roller = &rolloverController{
-				ch:                    make(chan time.Time),
+				ch:                    make(chan clock.Time),
 				aggregationWindowSecs: 1,
 				clock:                 c,
 			}
 			opts := []goldmane.Option{
-				goldmane.WithRolloverTime(1 * time.Second),
+				goldmane.WithRolloverTime(1 * clock.Second),
 				goldmane.WithRolloverFunc(roller.After),
 				goldmane.WithNowFunc(c.Now),
 			}
@@ -2173,12 +2173,12 @@ func TestStatistics(t *testing.T) {
 			// Create a clock and rollover controller.
 			c := newClock(initialNow)
 			roller = &rolloverController{
-				ch:                    make(chan time.Time),
+				ch:                    make(chan clock.Time),
 				aggregationWindowSecs: 1,
 				clock:                 c,
 			}
 			opts := []goldmane.Option{
-				goldmane.WithRolloverTime(1 * time.Second),
+				goldmane.WithRolloverTime(1 * clock.Second),
 				goldmane.WithRolloverFunc(roller.After),
 				goldmane.WithNowFunc(c.Now),
 			}
@@ -2226,12 +2226,12 @@ func TestStatistics(t *testing.T) {
 			// Create a clock and rollover controller.
 			c := newClock(initialNow)
 			roller = &rolloverController{
-				ch:                    make(chan time.Time),
+				ch:                    make(chan clock.Time),
 				aggregationWindowSecs: 1,
 				clock:                 c,
 			}
 			opts := []goldmane.Option{
-				goldmane.WithRolloverTime(1 * time.Second),
+				goldmane.WithRolloverTime(1 * clock.Second),
 				goldmane.WithRolloverFunc(roller.After),
 				goldmane.WithNowFunc(c.Now),
 			}
@@ -2294,12 +2294,12 @@ func TestStatistics(t *testing.T) {
 			// Create a clock and rollover controller.
 			c := newClock(initialNow)
 			roller = &rolloverController{
-				ch:                    make(chan time.Time),
+				ch:                    make(chan clock.Time),
 				aggregationWindowSecs: 1,
 				clock:                 c,
 			}
 			opts := []goldmane.Option{
-				goldmane.WithRolloverTime(1 * time.Second),
+				goldmane.WithRolloverTime(1 * clock.Second),
 				goldmane.WithRolloverFunc(roller.After),
 				goldmane.WithNowFunc(c.Now),
 			}
@@ -2352,12 +2352,12 @@ func TestStatistics(t *testing.T) {
 			// Create a clock and rollover controller.
 			c := newClock(initialNow)
 			roller = &rolloverController{
-				ch:                    make(chan time.Time),
+				ch:                    make(chan clock.Time),
 				aggregationWindowSecs: 1,
 				clock:                 c,
 			}
 			opts := []goldmane.Option{
-				goldmane.WithRolloverTime(1 * time.Second),
+				goldmane.WithRolloverTime(1 * clock.Second),
 				goldmane.WithRolloverFunc(roller.After),
 				goldmane.WithNowFunc(c.Now),
 			}

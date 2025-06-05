@@ -16,9 +16,9 @@ package flowcache
 
 import (
 	"sync"
-	"time"
 
 	"github.com/projectcalico/calico/goldmane/pkg/types"
+	"github.com/projectcalico/calico/lib/std/clock"
 )
 
 // cacheKey wraps the canonical FlowKey type with a start and end time, as well as a scope (typically
@@ -33,17 +33,17 @@ type cacheKey struct {
 
 type expiringCacheEntry struct {
 	Flow     *types.Flow
-	ExpireAt time.Time
+	ExpireAt clock.Time
 }
 
 // ExpiringFlowCache implements a cache of flow entries that expire after a configurable duration.
 type ExpiringFlowCache struct {
 	sync.Mutex
 	flows    map[cacheKey]*expiringCacheEntry
-	duration time.Duration
+	duration clock.Duration
 }
 
-func NewExpiringFlowCache(d time.Duration) *ExpiringFlowCache {
+func NewExpiringFlowCache(d clock.Duration) *ExpiringFlowCache {
 	return &ExpiringFlowCache{
 		flows:    make(map[cacheKey]*expiringCacheEntry),
 		duration: d,
@@ -61,7 +61,7 @@ func (c *ExpiringFlowCache) Add(f *types.Flow, scope string) {
 	defer c.Unlock()
 	c.flows[key] = &expiringCacheEntry{
 		Flow:     f,
-		ExpireAt: time.Now().Add(c.duration),
+		ExpireAt: clock.Now().Add(c.duration),
 	}
 }
 
@@ -89,9 +89,9 @@ func (c *ExpiringFlowCache) Iter(f func(f *types.Flow) error) error {
 	return nil
 }
 
-func (c *ExpiringFlowCache) Run(interval time.Duration) {
+func (c *ExpiringFlowCache) Run(interval clock.Duration) {
 	for {
-		<-time.After(interval)
+		<-clock.After(interval)
 		c.DeleteExpired()
 	}
 }
@@ -100,7 +100,7 @@ func (c *ExpiringFlowCache) DeleteExpired() {
 	c.Lock()
 	defer c.Unlock()
 
-	now := time.Now()
+	now := clock.Now()
 	for k, v := range c.flows {
 		if v.ExpireAt.Before(now) {
 			delete(c.flows, k)

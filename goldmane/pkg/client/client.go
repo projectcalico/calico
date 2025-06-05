@@ -16,7 +16,6 @@ package client
 
 import (
 	"context"
-	"time"
 
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
@@ -25,11 +24,12 @@ import (
 	"github.com/projectcalico/calico/goldmane/pkg/internal/flowcache"
 	"github.com/projectcalico/calico/goldmane/pkg/types"
 	"github.com/projectcalico/calico/goldmane/proto"
+	"github.com/projectcalico/calico/lib/std/clock"
 )
 
 const (
-	FlowCacheExpiry  = 5 * time.Minute
-	FlowCacheCleanup = 30 * time.Second
+	FlowCacheExpiry  = 5 * clock.Minute
+	FlowCacheCleanup = 30 * clock.Second
 )
 
 // NewFlowClient creates a new client to the goldmane grpc API. It creates the initial grpcClient connection to verify
@@ -156,7 +156,7 @@ func (c *FlowClient) connect(ctx context.Context) (grpc.BidiStreamingClient[prot
 	cli := proto.NewFlowCollectorClient(c.grpcCliConn)
 
 	// Create a backoff helper.
-	b := newBackoff(1*time.Second, 10*time.Second)
+	b := newBackoff(1*clock.Second, 10*clock.Second)
 
 	for {
 		// Check if the parent context has been canceled.
@@ -233,7 +233,7 @@ func (c *FlowClient) Close() {
 }
 
 // backoff is a small helper to implement exponential backoff.
-func newBackoff(base, maxBackoff time.Duration) *backoff {
+func newBackoff(base, maxBackoff clock.Duration) *backoff {
 	return &backoff{
 		base:       base,
 		interval:   base,
@@ -242,14 +242,14 @@ func newBackoff(base, maxBackoff time.Duration) *backoff {
 }
 
 type backoff struct {
-	base       time.Duration
-	interval   time.Duration
-	maxBackoff time.Duration
+	base       clock.Duration
+	interval   clock.Duration
+	maxBackoff clock.Duration
 }
 
 func (b *backoff) Wait() {
 	logrus.WithField("duration", b.interval).Info("Waiting before next connection attempt")
-	time.Sleep(b.interval)
+	clock.Sleep(b.interval)
 	b.interval *= 2
 	if b.interval > b.maxBackoff {
 		b.interval = b.maxBackoff

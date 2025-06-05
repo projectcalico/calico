@@ -18,13 +18,13 @@ import (
 	"context"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/projectcalico/calico/goldmane/pkg/testutils"
 	"github.com/projectcalico/calico/goldmane/pkg/types"
+	"github.com/projectcalico/calico/lib/std/clock"
 )
 
-var now = time.Now()
+var now = clock.Now()
 
 func addFlows(b *AggregationBucket, cache *diachronicCache, n int) {
 	for range n {
@@ -65,10 +65,10 @@ func setup(t *testing.T) (context.Context, *diachronicCache, *AggregationBucket,
 	diachronics := &diachronicCache{d: make(map[types.FlowKey]*DiachronicFlow)}
 
 	var cancel context.CancelFunc
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*clock.Second)
 
 	// Create a new Bucket for the test.
-	b := NewAggregationBucket(now, now.Add(15*time.Second))
+	b := NewAggregationBucket(now, now.Add(15*clock.Second))
 	b.lookupFlow = diachronics.get
 
 	return ctx, diachronics, b, func() { cancel() }
@@ -142,7 +142,7 @@ func TestConcurrentAccess(t *testing.T) {
 		}
 
 		// We should be able to reset the bucket.
-		b.Reset(time.Now().Unix(), time.Now().Add(15*time.Second).Unix())
+		b.Reset(clock.Now().Unix(), clock.Now().Add(15*clock.Second).Unix())
 	})
 }
 

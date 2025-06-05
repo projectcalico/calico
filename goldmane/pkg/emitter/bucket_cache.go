@@ -16,11 +16,11 @@ package emitter
 
 import (
 	"sync"
-	"time"
 
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/goldmane/pkg/storage"
+	"github.com/projectcalico/calico/lib/std/clock"
 )
 
 type bucketKey struct {
@@ -32,13 +32,13 @@ type bucketKey struct {
 type bucketCache struct {
 	sync.Mutex
 	buckets    map[bucketKey]*storage.FlowCollection
-	timestamps map[bucketKey]time.Time
+	timestamps map[bucketKey]clock.Time
 }
 
 func newBucketCache() *bucketCache {
 	return &bucketCache{
 		buckets:    map[bucketKey]*storage.FlowCollection{},
-		timestamps: map[bucketKey]time.Time{},
+		timestamps: map[bucketKey]clock.Time{},
 	}
 }
 
@@ -52,7 +52,7 @@ func (b *bucketCache) add(k bucketKey, bucket *storage.FlowCollection) {
 		return
 	}
 	b.buckets[k] = bucket
-	b.timestamps[k] = time.Now()
+	b.timestamps[k] = clock.Now()
 }
 
 func (b *bucketCache) get(k bucketKey) (*storage.FlowCollection, bool) {

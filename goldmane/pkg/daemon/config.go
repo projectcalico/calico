@@ -18,13 +18,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"time"
 
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/goldmane/pkg/goldmane"
 	"github.com/projectcalico/calico/goldmane/pkg/internal/utils"
 	"github.com/projectcalico/calico/goldmane/pkg/storage"
+	"github.com/projectcalico/calico/lib/std/clock"
 )
 
 type goldmaneFileConfig struct {
@@ -46,7 +46,7 @@ func newSinkManager(agg *goldmane.Goldmane, sink storage.Sink, path string) (*si
 	onUpdate := make(chan struct{}, 1)
 
 	// Watch for changes to the input file.
-	watchFn, err := utils.WatchFilesFn(onUpdate, 30*time.Second, path)
+	watchFn, err := utils.WatchFilesFn(onUpdate, 30*clock.Second, path)
 	if err != nil {
 		return nil, err
 	}
