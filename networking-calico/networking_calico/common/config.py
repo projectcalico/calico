@@ -17,6 +17,8 @@ from networking_calico import datamodel_v2
 from networking_calico import datamodel_v3
 
 
+DEFAULT_BW_BURST = 4294967296
+
 SHARED_OPTS = [
     # etcd connection information.
     cfg.StrOpt('etcd_host', default='127.0.0.1',
@@ -48,12 +50,40 @@ SHARED_OPTS = [
                help="When in a multi-region OpenStack deployment, a unique "
                     "name for the region that this node (controller or "
                     "compute) belongs to."),
-    # Max connection options, in advance of max connection support being added
-    # properly to the Neutron API.
+
+    # Options for QoS parameters that are supported on the Calico
+    # WorkloadEndpoint resource but not (yet) represented on the Neutron API.
+    #
+    # The complete mapping between OpenStack-level config/API and the Calico
+    # WorkloadEndpoint.QoSControls is as follows.
+    #
+    # | QoSControls field     | Neutron API field     | Config field                     |
+    # |-----------------------+-----------------------+----------------------------------|
+    # | IngressBandwidth      | max_kbps * 1000       |                                  |
+    # | EgressBandwidth       | max_kbps * 1000       |                                  |
+    # | IngressBurst          |                       | ingress_burst_bits               |
+    # | EgressBurst           |                       | egress_burst_bits                |
+    # | IngressPeakrate       | max_burst_kbps * 1000 |                                  |
+    # | EgressPeakrate        | max_burst_kbps * 1000 |                                  |
+    # | IngressMinburst       |                       | ingress_minburst_bytes           |
+    # | EgressMinburst        |                       | egress_minburst_bytes            |
+    # | IngressPacketRate     | max_kpps * 1000       |                                  |
+    # | EgressPacketRate      | max_kpps * 1000       |                                  |
+    # | IngressMaxConnections |                       | max_ingress_connections_per_port |
+    # | EgressMaxConnections  |                       | max_egress_connections_per_port  |
+    #
     cfg.IntOpt('max_ingress_connections_per_port', default=0,
                help="If non-zero, a maximum number of ingress connections to impose on each port."),
     cfg.IntOpt('max_egress_connections_per_port', default=0,
                help="If non-zero, a maximum number of egress connections to impose on each port."),
+    cfg.IntOpt('ingress_burst_bits', default=DEFAULT_BW_BURST,
+               help="If non-zero, configures the maximum allowed burst at peakrate, in the ingress direction."),
+    cfg.IntOpt('egress_burst_bits', default=DEFAULT_BW_BURST,
+               help="If non-zero, configures the maximum allowed burst at peakrate, in the egress direction."),
+    cfg.IntOpt('ingress_minburst_bytes', default=0,
+               help="If non-zero, configures the minimum burst size for peakrate data, in the ingress direction."),
+    cfg.IntOpt('egress_minburst_bytes', default=0,
+               help="If non-zero, configures the minimum burst size for peakrate data, in the egress direction."),
 ]
 
 
