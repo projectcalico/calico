@@ -380,16 +380,16 @@ class WorkloadEndpointSyncer(ResourceSyncer):
             qos['egressMaxConnections'] = cap(cfg.CONF.calico.max_egress_connections_per_port, MINMAX_CONNECTIONS)
 
         if 'ingressBandwidth' in qos:
-            if cfg.CONF.calico.ingress_burst_kbits != 0:
-                qos['ingressBurst'] = cap(cfg.CONF.calico.ingress_burst_kbits * 1000, MINMAX_BW_BURST)
+            if cfg.CONF.calico.ingress_burst_bits != 0:
+                qos['ingressBurst'] = cap(cfg.CONF.calico.ingress_burst_bits, MINMAX_BW_BURST)
             else:
                 qos['ingressBurst'] = calico_config.DEFAULT_BW_BURST
             if cfg.CONF.calico.ingress_minburst_bytes != 0 and 'ingressPeakrate' in qos:
                 qos['ingressMinburst'] = cap(cfg.CONF.calico.ingress_minburst_bytes, MINMAX_BW_MINBURST)
 
         if 'egressBandwidth' in qos:
-            if cfg.CONF.calico.egress_burst_kbits != 0:
-                qos['egressBurst'] = cap(cfg.CONF.calico.egress_burst_kbits * 1000, MINMAX_BW_BURST)
+            if cfg.CONF.calico.egress_burst_bits != 0:
+                qos['egressBurst'] = cap(cfg.CONF.calico.egress_burst_bits, MINMAX_BW_BURST)
             else:
                 qos['egressBurst'] = calico_config.DEFAULT_BW_BURST
             if cfg.CONF.calico.egress_minburst_bytes != 0 and 'egressPeakrate' in qos:
