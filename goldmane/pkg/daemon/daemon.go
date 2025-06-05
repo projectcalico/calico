@@ -191,8 +191,8 @@ func Run(ctx context.Context, cfg Config) {
 	collector.RegisterWith(grpcServer)
 	go collector.Run()
 
-	// Start Goldmane.
-	go gm.Run(storage.GetStartTime(int(cfg.AggregationWindow.Seconds())))
+	// Start Goldmane, waiting for it to be ready to receive requests before continuing.
+	<-gm.Run(storage.GetStartTime(int(cfg.AggregationWindow.Seconds())))
 
 	// Start a flow server, serving from Goldmane.
 	flowServer := server.NewFlowsServer(gm)
