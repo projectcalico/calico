@@ -114,35 +114,61 @@ type WorkloadEndpointList struct {
 
 // QoSControls contains QoS limits configuration.
 type QoSControls struct {
+	// Ingress bandwidth controls.  These are only applied if IngressBandwidth != 0.  In that
+	// case:
+	//
+	// - IngressBandwidth must be between 1000 (1k) and 10^15 (1P).
+	//
+	// - IngressBurst must be between 1000 (1k) and 34359738360 (32Gi - 8).  If specified as 0,
+	//   it is defaulted to 4294967296 (4Gi).
+	//
+	// - IngressPeakrate may be 0 if it is acceptable for bursts to be transmitted at line rate.
+	//   In that case IngressMinburst should also be 0.  But if IngressPeakrate != 0:
+	//
+	//   - IngressPeakrate must be between 1010 (1.01k) and 1.01 x 10^15 (1.01P).
+	//
+	//   - IngressMinburst must either be 0 - in which case Calico will use the MTU of the
+	//     relevant workload interface as the minimum burst size - or be between 1000 (1k) and
+	//     10^8 (100M).
+	//
 	// Ingress bandwidth rate limit in bits per second
 	IngressBandwidth int64 `json:"ingressBandwidth,omitempty"`
-	// Egress bandwidth rate limit in bits per second
-	EgressBandwidth int64 `json:"egressBandwidth,omitempty"`
 	// Ingress bandwidth burst size in bits
 	IngressBurst int64 `json:"ingressBurst,omitempty"`
-	// Egress bandwidth burst size in bits
-	EgressBurst int64 `json:"egressBurst,omitempty"`
 	// Ingress bandwidth peakrate limit in bits per second
 	IngressPeakrate int64 `json:"ingressPeakrate,omitempty"`
-	// Egress bandwidth peakrate limit in bits per second
-	EgressPeakrate int64 `json:"egressPeakrate,omitempty"`
 	// Ingress bandwidth minburst size in bytes (not bits because it is typically the MTU)
 	IngressMinburst int64 `json:"ingressMinburst,omitempty"`
+
+	// Egress bandwidth controls.  These are only applied if EgressBandwidth != 0.  The same
+	// detail applies here as for ingress bandwidth, except using the corresponding Egress
+	// fields.
+	//
+	// Egress bandwidth rate limit in bits per second
+	EgressBandwidth int64 `json:"egressBandwidth,omitempty"`
+	// Egress bandwidth burst size in bits
+	EgressBurst int64 `json:"egressBurst,omitempty"`
+	// Egress bandwidth peakrate limit in bits per second
+	EgressPeakrate int64 `json:"egressPeakrate,omitempty"`
 	// Egress bandwidth minburst size in bytes (not bits because it is typically the MTU)
 	EgressMinburst int64 `json:"egressMinburst,omitempty"`
 
-	// Ingress packet rate limit in packets per second
+	// Ingress packet rate limit in packets per second.  Only applied if non-zero.  When
+	// non-zero, must be between 1 and 10^4 (10k).
 	IngressPacketRate int64 `json:"ingressPacketRate,omitempty"`
-	// Egress packet rate limit in packets per second
+	// Egress packet rate limit in packets per second.  Only applied if non-zero.  When
+	// non-zero, must be between 1 and 10^4 (10k).
 	EgressPacketRate int64 `json:"egressPacketRate,omitempty"`
 	// Ingress packet rate burst size in number of packets
 	IngressPacketBurst int64 `json:"ingressPacketBurst,omitempty"`
 	// Egress packet rate burst size in number of packets
 	EgressPacketBurst int64 `json:"egressPacketBurst,omitempty"`
 
-	// Ingress maximum number of connections (absolute number of connections, no unit)
+	// Ingress maximum number of connections (absolute number of connections, no unit).  Only
+	// applied if non-zero.  When non-zero, must be between 1 and 10^11 (100G).
 	IngressMaxConnections int64 `json:"ingressMaxConnections,omitempty"`
-	// Egress maximum number of connections (absolute number of connections, no unit)
+	// Egress maximum number of connections (absolute number of connections, no unit).  Only
+	// applied if non-zero.  When non-zero, must be between 1 and 10^11 (100G).
 	EgressMaxConnections int64 `json:"egressMaxConnections,omitempty"`
 }
 
