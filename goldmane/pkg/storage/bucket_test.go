@@ -18,10 +18,10 @@ import (
 	"context"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/projectcalico/calico/goldmane/pkg/testutils"
 	"github.com/projectcalico/calico/goldmane/pkg/types"
+	"github.com/projectcalico/calico/lib/std/time"
 )
 
 var now = time.Now()

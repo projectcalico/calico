@@ -19,7 +19,6 @@ import (
 	"strings"
 	"sync"
 	"testing"
-	"time"
 
 	. "github.com/onsi/gomega"
 	"github.com/sirupsen/logrus"
@@ -33,6 +32,7 @@ import (
 	"github.com/projectcalico/calico/goldmane/pkg/testutils"
 	"github.com/projectcalico/calico/goldmane/pkg/types"
 	"github.com/projectcalico/calico/goldmane/proto"
+	"github.com/projectcalico/calico/lib/std/time"
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 )
 
@@ -43,7 +43,7 @@ var (
 
 var (
 	gm *goldmane.Goldmane
-	c  *clock
+	c  *mockClock
 )
 
 // initialNow is time.Now() at the start of the test. This must be
@@ -272,7 +272,7 @@ func TestList(t *testing.T) {
 }
 
 func TestLabelMerge(t *testing.T) {
-	// Create a clock and rollover controller.
+	// Create a time and rollover controller.
 	c := newClock(initialNow)
 	roller := &rolloverController{
 		ch:                    make(chan time.Time),
@@ -323,7 +323,7 @@ func TestLabelMerge(t *testing.T) {
 
 // TestRotation tests that Goldmane correctly rotates out old flows.
 func TestRotation(t *testing.T) {
-	// Create a clock and rollover controller.
+	// Create a time and rollover controller.
 	c := newClock(initialNow)
 	now := c.Now().Unix()
 	roller := &rolloverController{
@@ -999,7 +999,7 @@ func TestSink(t *testing.T) {
 // aggregation buckets slowly drifting with respect to time.Now(). This can happen due to the time taken to process
 // other operations on the shared main goroutine, and is accounted for by adjusting the the next rollover time.
 func TestBucketDrift(t *testing.T) {
-	// Create a clock and rollover controller.
+	// Create a time and rollover controller.
 	c := newClock(initialNow)
 	aggregationWindowSecs := 10
 	roller := &rolloverController{
@@ -1032,7 +1032,7 @@ func TestBucketDrift(t *testing.T) {
 
 	// This can get a bit confusing, so let's walk through it:
 	//
-	// - Goldmane maintains an internal array of buckets. The most recent bucket actually starts one aggregation window in the future, to handle clock skew between nodes.
+	// - Goldmane maintains an internal array of buckets. The most recent bucket actually starts one aggregation window in the future, to handle time skew between nodes.
 	// - For this test, we want to simulate a rollover that happens slightly late.
 	// - Now() is mocked to 1000, With an aggregation window of 10s. So buckets[head] will cover 1010-1020, bucket[head-1] will cover 1000-1010.
 	// - Normally, a rollover would occur at 1010, adding a new bucket[head] covering 1020-1030.
@@ -1051,7 +1051,7 @@ func TestBucketDrift(t *testing.T) {
 	// expected rollover interval of 10 seconds.
 	require.Equal(t, 7, int(getScheduledAt().Seconds()), "Expedited rollover should have been scheduled at 7s")
 
-	// Advance the clock to the expected time of the next rollover.
+	// Advance the time to the expected time of the next rollover.
 	nextRollover := int64(initialNow + 2*aggregationWindowSecs)
 	c.Set(time.Unix(nextRollover, 0))
 
@@ -1081,7 +1081,7 @@ func TestBucketDrift(t *testing.T) {
 
 func TestStreams(t *testing.T) {
 	t.Run("Basic", func(t *testing.T) {
-		// Create a clock and rollover controller.
+		// Create a time and rollover controller.
 		c := newClock(initialNow)
 		roller := &rolloverController{
 			ch:                    make(chan time.Time),
@@ -1189,7 +1189,7 @@ func TestStreams(t *testing.T) {
 	//
 	// We expect the stream to return an update for each bucket.
 	t.Run("SameFlowOverTime", func(t *testing.T) {
-		// Create a clock and rollover controller.
+		// Create a time and rollover controller.
 		c := newClock(initialNow)
 		roller := &rolloverController{
 			ch:                    make(chan time.Time),
@@ -1267,7 +1267,7 @@ func TestStreams(t *testing.T) {
 	// This test verifies the behavior of stream backfill, by ensuring that the correct flows are emitted.
 	// It then performs a rollover, and verifies that no duplicates are emitted.
 	t.Run("Backfill and rollover", func(t *testing.T) {
-		// Create a clock and rollover controller.
+		// Create a time and rollover controller.
 		c := newClock(initialNow)
 		roller := &rolloverController{
 			ch:                    make(chan time.Time),
@@ -1349,7 +1349,7 @@ func TestStreams(t *testing.T) {
 	})
 
 	t.Run("Stream cancellation", func(t *testing.T) {
-		// Create a clock and rollover controller.
+		// Create a time and rollover controller.
 		c := newClock(initialNow)
 		roller := &rolloverController{
 			ch:                    make(chan time.Time),
@@ -1389,7 +1389,7 @@ func TestStreams(t *testing.T) {
 	})
 
 	t.Run("Concurrent streams", func(t *testing.T) {
-		// Create a clock and rollover controller.
+		// Create a time and rollover controller.
 		c := newClock(initialNow)
 		roller := &rolloverController{
 			ch:                    make(chan time.Time),
@@ -1451,7 +1451,7 @@ func TestSortOrder(t *testing.T) {
 	// Run each test.
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			// Create a clock and rollover controller.
+			// Create a time and rollover controller.
 			c := newClock(initialNow)
 			roller := &rolloverController{
 				ch:                    make(chan time.Time),
@@ -1720,7 +1720,7 @@ func TestFilter(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			// Create a clock and rollover controller.
+			// Create a time and rollover controller.
 			c := newClock(initialNow)
 			roller := &rolloverController{
 				ch:                    make(chan time.Time),
@@ -1859,7 +1859,7 @@ func TestFilterHints(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			// Create a clock and rollover controller.
+			// Create a time and rollover controller.
 			c := newClock(initialNow)
 			roller := &rolloverController{
 				ch:                    make(chan time.Time),
@@ -1931,7 +1931,7 @@ func TestFilterHints(t *testing.T) {
 
 	for _, tc := range eotTests {
 		t.Run(tc.name, func(t *testing.T) {
-			// Create a clock and rollover controller.
+			// Create a time and rollover controller.
 			c := newClock(initialNow)
 			roller := &rolloverController{
 				ch:                    make(chan time.Time),
@@ -2038,7 +2038,7 @@ func TestStatistics(t *testing.T) {
 		statType := proto.StatisticType(statVal)
 
 		t.Run(fmt.Sprintf("GroupBy_Policy %s", statName), func(t *testing.T) {
-			// Create a clock and rollover controller.
+			// Create a time and rollover controller.
 			c := newClock(initialNow)
 			roller = &rolloverController{
 				ch:                    make(chan time.Time),
@@ -2170,7 +2170,7 @@ func TestStatistics(t *testing.T) {
 		// This test verifies that time-series data is consistent with aggregated data by
 		// querying both and comparing the results.
 		t.Run(fmt.Sprintf("Time-series consistency %s", statName), func(t *testing.T) {
-			// Create a clock and rollover controller.
+			// Create a time and rollover controller.
 			c := newClock(initialNow)
 			roller = &rolloverController{
 				ch:                    make(chan time.Time),
@@ -2223,7 +2223,7 @@ func TestStatistics(t *testing.T) {
 		})
 
 		t.Run(fmt.Sprintf("EndOfTier per-policy statistics %s", statName), func(t *testing.T) {
-			// Create a clock and rollover controller.
+			// Create a time and rollover controller.
 			c := newClock(initialNow)
 			roller = &rolloverController{
 				ch:                    make(chan time.Time),
@@ -2291,7 +2291,7 @@ func TestStatistics(t *testing.T) {
 		})
 
 		t.Run(fmt.Sprintf("EndOfTier per-rule statistics %s", statName), func(t *testing.T) {
-			// Create a clock and rollover controller.
+			// Create a time and rollover controller.
 			c := newClock(initialNow)
 			roller = &rolloverController{
 				ch:                    make(chan time.Time),
@@ -2349,7 +2349,7 @@ func TestStatistics(t *testing.T) {
 		})
 
 		t.Run(fmt.Sprintf("GroupBy_PolicyRule %s", statName), func(t *testing.T) {
-			// Create a clock and rollover controller.
+			// Create a time and rollover controller.
 			c := newClock(initialNow)
 			roller = &rolloverController{
 				ch:                    make(chan time.Time),
