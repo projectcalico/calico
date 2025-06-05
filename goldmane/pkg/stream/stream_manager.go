@@ -75,19 +75,22 @@ func (c *streamCache) remove(id string) {
 	c.Lock()
 	defer c.Unlock()
 	s, ok := c.streams[id]
-	if ok {
-		// Close the stream's output channel. It is important that we do this here while holding the lock,
-		// allowing an atomic closure and removal from the cache. This ensures that no other goroutine
-		// can access the stream after its output channel is closed.
-		close(s.out)
-		delete(c.streams, id)
+	if !ok {
+		logrus.WithField("id", id).Warn("Asked to close unknown stream")
+		return
 	}
+
+	// Close the stream's output channel. It is important that we do this here while holding the lock,
+	// allowing an atomic closure and removal from the cache. This ensures that no other goroutine
+	// can access the stream after its output channel is closed.
+	close(s.out)
+	delete(c.streams, id)
 }
 
 // sendToStream directs the given flow provider to the stream with the given ID if it exists.
 // It does this atomically, to ensure the input channel isn't closed.
 // Note that writing to a stream can theoretically block, but this is expected to be exceedingly rare.
-func (c *streamCache) sendToStream(id string, p storage.FlowProvider) {
+func (c *streamCache) sendToStream(id string, p storage.FlowBuilder) {
 	c.Lock()
 	defer c.Unlock()
 	s, ok := c.streams[id]
@@ -240,13 +243,7 @@ func (m *streamManager) register(req *streamRequest) *stream {
 
 // unregister removes a stream from the stream manager.
 func (m *streamManager) unregister(id string) {
-	_, ok := m.streams.get(id)
-	if !ok {
-		logrus.WithField("id", id).Warn("Asked to close unknown stream")
-		return
-	}
 	logrus.WithField("id", id).Debug("Closing stream")
-
 	m.streams.remove(id)
 	numStreams.Set(float64(m.streams.size()))
 	logrus.WithField("id", id).Debug("Stream closed")
