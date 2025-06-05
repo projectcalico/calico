@@ -19,6 +19,7 @@ package fv_test
 import (
 	"context"
 	"fmt"
+	"regexp"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -176,6 +177,18 @@ func describeBPFMultiHomedTests() bool {
 			})
 			Expect(err).NotTo(HaveOccurred())
 
+			dump20 := Felix.AttachTCPDump("eth20")
+			dump20.SetLogEnabled(true)
+			dump20.AddMatcher("eth20-egress", regexp.MustCompile("10.65.0.2.30444 > 10.65.1.3.30444: UDP"))
+			dump20.Start("-v", "udp", "and", "dst", "host", "10.65.1.3")
+			defer dump20.Stop()
+
+			dump30 := Felix.AttachTCPDump("eth30")
+			dump30.SetLogEnabled(true)
+			dump30.AddMatcher("eth30-ingress", regexp.MustCompile("10.65.1.3.30444 > 10.65.0.2.30444: UDP"))
+			dump30.Start("-v", "udp", "and", "dst", "host", "10.65.0.2")
+			defer dump30.Stop()
+
 			By("Sending packet from the workload via eth20")
 			_, err = w.RunCmd("pktgen", w.IP, "10.65.1.3", "udp", "--ip-id", "1",
 				"--port-src", "30444", "--port-dst", "30444")
@@ -196,7 +209,8 @@ func describeBPFMultiHomedTests() bool {
 				"--port-src", "30444", "--port-dst", "30444")
 			Expect(err).NotTo(HaveOccurred())
 
-			Fail("XXX")
+			Eventually(dump20.MatchCountFn("eth20-egress"), "5s", "330ms").Should(BeNumerically("==", 2))
+			Eventually(dump30.MatchCountFn("eth30-ingress"), "5s", "330ms").Should(BeNumerically("==", 2))
 		})
 	})
 }
