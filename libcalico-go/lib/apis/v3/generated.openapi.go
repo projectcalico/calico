@@ -3166,14 +3166,7 @@ func schema_libcalico_go_lib_apis_v3_QoSControls(ref common.ReferenceCallback) c
 					},
 					"ingressPacketRate": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Ingress packet rate limit in packets per second.  Only applied if non-zero.  When non-zero, must be between 1 and 10^4 (10k).",
-							Type:        []string{"integer"},
-							Format:      "int64",
-						},
-					},
-					"egressPacketRate": {
-						SchemaProps: spec.SchemaProps{
-							Description: "Egress packet rate limit in packets per second.  Only applied if non-zero.  When non-zero, must be between 1 and 10^4 (10k).",
+							Description: "Ingress packet rate limit in packets per second.  Only applied if non-zero.  When non-zero:\n\n- IngressPacketRate must be between 1 and 10^4 (10k).\n\n- IngressPacketBurst must be between 1 and 10^4 (10k).  If specified as 0, it is\n  defaulted to 5.",
 							Type:        []string{"integer"},
 							Format:      "int64",
 						},
@@ -3181,6 +3174,13 @@ func schema_libcalico_go_lib_apis_v3_QoSControls(ref common.ReferenceCallback) c
 					"ingressPacketBurst": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Ingress packet rate burst size in number of packets",
+							Type:        []string{"integer"},
+							Format:      "int64",
+						},
+					},
+					"egressPacketRate": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Egress packet rate limit in packets per second.  Only applied if non-zero.  The same detail applies here as for egress packet rate, except using the corresponding Egress fields.",
 							Type:        []string{"integer"},
 							Format:      "int64",
 						},
