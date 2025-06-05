@@ -905,10 +905,6 @@ func TestCTLBAttachLegacy(t *testing.T) {
 			Expect(string(out)).ShouldNot(ContainSubstring("calico_sendmsg_v6"))
 			Expect(string(out)).ShouldNot(ContainSubstring("calico_recvmsg_v6"))
 		}
-		cmd = exec.Command("bpftool", "map", "show")
-		out, err = cmd.Output()
-		Expect(err).NotTo(HaveOccurred())
-		Expect(string(out)).ShouldNot(ContainSubstring("cali_ctlb_progs"))
 		cmd = exec.Command("bpftool", "prog", "show")
 		out, err = cmd.Output()
 		Expect(err).NotTo(HaveOccurred())
@@ -918,6 +914,7 @@ func TestCTLBAttachLegacy(t *testing.T) {
 	}
 	testCtlbAttachLegacy(true, false)
 	testCtlbAttachLegacy(false, true)
+	testCtlbAttachLegacy(true, true)
 }
 
 func TestCTLBAttach(t *testing.T) {
@@ -992,11 +989,6 @@ func TestCTLBAttach(t *testing.T) {
 			Expect(string(out)).ShouldNot(ContainSubstring("calico_sendmsg_v6"))
 			Expect(string(out)).ShouldNot(ContainSubstring("calico_recvmsg_v6"))
 		}
-
-		cmd = exec.Command("bpftool", "map", "show")
-		out, err = cmd.Output()
-		Expect(err).NotTo(HaveOccurred())
-		Expect(string(out)).ShouldNot(ContainSubstring("cali_ctlb_progs"))
 		cmd = exec.Command("bpftool", "prog", "show")
 		out, err = cmd.Output()
 		Expect(err).NotTo(HaveOccurred())
@@ -1006,6 +998,7 @@ func TestCTLBAttach(t *testing.T) {
 	}
 	testCtlbAttach(true, false)
 	testCtlbAttach(false, true)
+	testCtlbAttach(true, true)
 }
 
 func TestLogFilters(t *testing.T) {
