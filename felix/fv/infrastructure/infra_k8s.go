@@ -1377,6 +1377,16 @@ func updatePodLabelsAndAnnotations(wep *libapi.WorkloadEndpoint, pod *v1.Pod) *v
 		} else {
 			delete(pod.Annotations, conversion.AnnotationQoSEgressPacketRate)
 		}
+		if wep.Spec.QoSControls.IngressPacketBurst != 0 {
+			pod.Annotations[conversion.AnnotationQoSIngressPacketBurst] = resource.NewQuantity(wep.Spec.QoSControls.IngressPacketBurst, resource.DecimalSI).String()
+		} else {
+			delete(pod.Annotations, conversion.AnnotationQoSIngressPacketBurst)
+		}
+		if wep.Spec.QoSControls.EgressPacketBurst != 0 {
+			pod.Annotations[conversion.AnnotationQoSEgressPacketBurst] = resource.NewQuantity(wep.Spec.QoSControls.EgressPacketBurst, resource.DecimalSI).String()
+		} else {
+			delete(pod.Annotations, conversion.AnnotationQoSEgressPacketBurst)
+		}
 		if wep.Spec.QoSControls.IngressMaxConnections != 0 {
 			pod.Annotations[conversion.AnnotationQoSIngressMaxConnections] = resource.NewQuantity(wep.Spec.QoSControls.IngressMaxConnections, resource.DecimalSI).String()
 		} else {
@@ -1399,6 +1409,8 @@ func updatePodLabelsAndAnnotations(wep *libapi.WorkloadEndpoint, pod *v1.Pod) *v
 		delete(pod.Annotations, conversion.AnnotationQoSEgressMinburst)
 		delete(pod.Annotations, conversion.AnnotationQoSIngressPacketRate)
 		delete(pod.Annotations, conversion.AnnotationQoSEgressPacketRate)
+		delete(pod.Annotations, conversion.AnnotationQoSIngressPacketBurst)
+		delete(pod.Annotations, conversion.AnnotationQoSEgressPacketBurst)
 		delete(pod.Annotations, conversion.AnnotationQoSIngressMaxConnections)
 		delete(pod.Annotations, conversion.AnnotationQoSEgressMaxConnections)
 

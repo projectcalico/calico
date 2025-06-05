@@ -54,11 +54,19 @@ var (
 	minMinburst = resource.MustParse("1k")
 	maxMinburst = resource.MustParse("100M")
 	// Packet rate in packets per second
-	minPacketRate = resource.MustParse("10")
-	maxPacketRate = resource.MustParse("1T")
+	// Packet rate and packet burst are limited to XT_LIMIT_SCALE (10k)
+	// See https://github.com/torvalds/linux/blob/16b70698aa3ae7888826d0c84567c72241cf6713/include/uapi/linux/netfilter/xt_limit.h#L8
+	minPacketRate = resource.MustParse("1")
+	maxPacketRate = resource.MustParse("10k")
+	// Packet burst sizes in number of packets
+	minPacketBurst     = resource.MustParse("1")
+	defaultPacketBurst = resource.MustParse("5")
+	maxPacketBurst     = resource.MustParse("10k")
 	// Maximum number of connections (absolute number of connections, no unit)
 	minNumConnections = resource.MustParse("1")
-	maxNumConnections = resource.MustParse("100G")
+	// The connection limit is an uint32 (maximum value 4294967295).
+	// See https://github.com/torvalds/linux/blob/16b70698aa3ae7888826d0c84567c72241cf6713/include/uapi/linux/netfilter/xt_connlimit.h#L25
+	maxNumConnections = resource.MustParse(strconv.Itoa(math.MaxUint32))
 )
 
 type defaultWorkloadEndpointConverter struct{}
@@ -431,6 +439,22 @@ func handleQoSControlsAnnotations(annotations map[string]string) (*libapiv3.QoSC
 		qosControls.EgressPacketRate = egressPacketRate
 	}
 
+	// calico packet burst annotations
+	if str, found := annotations[AnnotationQoSIngressPacketBurst]; found {
+		ingressPacketBurst, err := parseAndValidateQty(str, minPacketBurst, maxPacketBurst)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("error parsing ingress packet rate annotation: %w", err))
+		}
+		qosControls.IngressPacketBurst = ingressPacketBurst
+	}
+	if str, found := annotations[AnnotationQoSEgressPacketBurst]; found {
+		egressPacketBurst, err := parseAndValidateQty(str, minPacketBurst, maxPacketBurst)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("error parsing egress packet rate annotation: %w", err))
+		}
+		qosControls.EgressPacketBurst = egressPacketBurst
+	}
+
 	// calico number of connections annotations
 	if str, found := annotations[AnnotationQoSIngressMaxConnections]; found {
 		ingressMaxConnections, err := parseAndValidateQty(str, minNumConnections, maxNumConnections)
@@ -477,6 +501,16 @@ func handleQoSControlsAnnotations(annotations map[string]string) (*libapiv3.QoSC
 		qosControls.EgressMinburst = 0
 	}
 
+	// if packet burst is configured, packet rate must be configured
+	if qosControls.IngressPacketBurst != 0 && qosControls.IngressPacketRate == 0 {
+		errs = append(errs, fmt.Errorf("ingress packet rate must be specified when ingress packet burst is specified"))
+		qosControls.IngressPacketBurst = 0
+	}
+	if qosControls.EgressPacketBurst != 0 && qosControls.EgressPacketRate == 0 {
+		errs = append(errs, fmt.Errorf("egress packet rate must be specified when egress packet burst is specified"))
+		qosControls.EgressPacketBurst = 0
+	}
+
 	// default burst values if bandwidth is configured
 	if qosControls.IngressBandwidth != 0 && qosControls.IngressBurst == 0 {
 		qosControls.IngressBurst = defaultBurst.Value()
@@ -486,6 +520,14 @@ func handleQoSControlsAnnotations(annotations map[string]string) (*libapiv3.QoSC
 	}
 
 	// default minburst values are configured in felix/dataplane/linux/qos/qos.go because they depend on the interface MTU
+
+	// default packet burst values if packet rate is configured
+	if qosControls.IngressPacketRate != 0 && qosControls.IngressPacketBurst == 0 {
+		qosControls.IngressPacketBurst = defaultPacketBurst.Value()
+	}
+	if qosControls.EgressPacketRate != 0 && qosControls.EgressPacketBurst == 0 {
+		qosControls.EgressPacketBurst = defaultPacketBurst.Value()
+	}
 
 	// return nil if no control is configured
 	if (*qosControls == libapiv3.QoSControls{}) {
