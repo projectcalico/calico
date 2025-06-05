@@ -338,7 +338,7 @@ class WorkloadEndpointSyncer(ResourceSyncer):
 
         MINMAX_PACKET_RATE = (1, 10**4)
 
-        MINMAX_CONNECTIONS = (1, 10**11)
+        MINMAX_CONNECTIONS = (1, 4294967295)
 
         def cap(setting, minmax):
             (min, max) = minmax
