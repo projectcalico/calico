@@ -3166,14 +3166,14 @@ func schema_libcalico_go_lib_apis_v3_QoSControls(ref common.ReferenceCallback) c
 					},
 					"ingressPacketRate": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Ingress packet rate limit in packets per second.  Only applied if non-zero.  When non-zero, must be between 10 and 10^12 (1T).",
+							Description: "Ingress packet rate limit in packets per second.  Only applied if non-zero.  When non-zero, must be between 1 and 10^4 (10k).",
 							Type:        []string{"integer"},
 							Format:      "int64",
 						},
 					},
 					"egressPacketRate": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Egress packet rate limit in packets per second.  Only applied if non-zero.  When non-zero, must be between 10 and 10^12 (1T).",
+							Description: "Egress packet rate limit in packets per second.  Only applied if non-zero.  When non-zero, must be between 1 and 10^4 (10k).",
 							Type:        []string{"integer"},
 							Format:      "int64",
 						},
@@ -3194,14 +3194,14 @@ func schema_libcalico_go_lib_apis_v3_QoSControls(ref common.ReferenceCallback) c
 					},
 					"ingressMaxConnections": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Ingress maximum number of connections (absolute number of connections, no unit).  Only applied if non-zero.  When non-zero, must be between 1 and 10^11 (100G).",
+							Description: "Ingress maximum number of connections (absolute number of connections, no unit).  Only applied if non-zero.  When non-zero, must be between 1 and 4294967295.",
 							Type:        []string{"integer"},
 							Format:      "int64",
 						},
 					},
 					"egressMaxConnections": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Egress maximum number of connections (absolute number of connections, no unit).  Only applied if non-zero.  When non-zero, must be between 1 and 10^11 (100G).",
+							Description: "Egress maximum number of connections (absolute number of connections, no unit).  Only applied if non-zero.  When non-zero, must be between 1 and 4294967295.",
 							Type:        []string{"integer"},
 							Format:      "int64",
 						},
