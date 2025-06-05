@@ -16,7 +16,6 @@ package client
 
 import (
 	"context"
-	"time"
 
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
@@ -25,6 +24,7 @@ import (
 	"github.com/projectcalico/calico/goldmane/pkg/internal/flowcache"
 	"github.com/projectcalico/calico/goldmane/pkg/types"
 	"github.com/projectcalico/calico/goldmane/proto"
+	"github.com/projectcalico/calico/lib/std/time"
 )
 
 const (

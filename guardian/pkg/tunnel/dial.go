@@ -26,7 +26,6 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
-	"time"
 
 	"github.com/hashicorp/yamux"
 	"github.com/sirupsen/logrus"
@@ -34,7 +33,7 @@ import (
 	calicoTLS "github.com/projectcalico/calico/crypto/pkg/tls"
 	"github.com/projectcalico/calico/guardian/pkg/cryptoutils"
 	"github.com/projectcalico/calico/lib/std/chanutil"
-	"github.com/projectcalico/calico/lib/std/clock"
+	"github.com/projectcalico/calico/lib/std/time"
 )
 
 const (
@@ -227,7 +226,7 @@ func dialRetry(ctx context.Context, connFunc func() (net.Conn, error), retryAtte
 				logrus.WithError(err).Infof("TLS dial attempt %d failed, will retry in %s", i, retryInterval.String())
 			}
 
-			if _, err := chanutil.Read(ctx, clock.After(retryInterval)); err != nil {
+			if _, err := chanutil.Read(ctx, time.After(retryInterval)); err != nil {
 				if errors.Is(err, context.Canceled) {
 					return nil, err
 				}
