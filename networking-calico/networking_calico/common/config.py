@@ -12,12 +12,13 @@
 
 import re
 
-from networking_calico.compat import cfg
 from networking_calico import datamodel_v2
 from networking_calico import datamodel_v3
+from networking_calico.compat import cfg
 
 
 DEFAULT_BW_BURST = 4294967296
+DEFAULT_PR_BURST = 5
 
 SHARED_OPTS = [
     # etcd connection information.
@@ -69,9 +70,14 @@ SHARED_OPTS = [
     # | EgressMinburst        |                       | egress_minburst_bytes            |
     # | IngressPacketRate     | max_kpps * 1000       |                                  |
     # | EgressPacketRate      | max_kpps * 1000       |                                  |
+    # | IngressPacketBurst    |                       | ingress_burst_packets            |
+    # | EgressPacketBurst     |                       | egress_burst_packets             |
+    # |  (not implemented)    | max_burst_kpps        |                                  |
     # | IngressMaxConnections |                       | max_ingress_connections_per_port |
     # | EgressMaxConnections  |                       | max_egress_connections_per_port  |
     #
+    # Note, max_burst_kpps is not currently implemented, because we have not
+    # yet found a reasonable way to do that.
     cfg.IntOpt('max_ingress_connections_per_port', default=0,
                help="If non-zero, a maximum number of ingress connections to impose on each port."),
     cfg.IntOpt('max_egress_connections_per_port', default=0,
@@ -84,6 +90,10 @@ SHARED_OPTS = [
                help="If non-zero, configures the minimum burst size for peakrate data, in the ingress direction."),
     cfg.IntOpt('egress_minburst_bytes', default=0,
                help="If non-zero, configures the minimum burst size for peakrate data, in the egress direction."),
+    cfg.IntOpt('ingress_burst_packets', default=DEFAULT_PR_BURST,
+               help="If non-zero, configures the maximum allowed packet rule burst, in the ingress direction."),
+    cfg.IntOpt('egress_burst_packets', default=DEFAULT_PR_BURST,
+               help="If non-zero, configures the maximum allowed packet rule burst, in the egress direction."),
 ]
 
 
