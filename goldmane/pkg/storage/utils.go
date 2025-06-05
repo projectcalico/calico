@@ -15,11 +15,10 @@
 package storage
 
 import (
-	"time"
-
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/goldmane/pkg/types"
+	"github.com/projectcalico/calico/lib/std/time"
 )
 
 func GetStartTime(interval int) int64 {

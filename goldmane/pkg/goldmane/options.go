@@ -15,8 +15,7 @@
 package goldmane
 
 import (
-	"time"
-
+	"github.com/projectcalico/calico/lib/std/time"
 	"github.com/projectcalico/calico/libcalico-go/lib/health"
 )
 
