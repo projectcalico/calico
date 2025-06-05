@@ -20,7 +20,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
-	"time"
 
 	"github.com/sirupsen/logrus"
 	"golang.org/x/time/rate"
@@ -32,6 +31,7 @@ import (
 
 	"github.com/projectcalico/calico/goldmane/pkg/storage"
 	"github.com/projectcalico/calico/goldmane/pkg/types"
+	"github.com/projectcalico/calico/lib/std/time"
 	"github.com/projectcalico/calico/libcalico-go/lib/health"
 )
 
