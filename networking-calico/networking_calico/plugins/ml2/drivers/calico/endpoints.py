@@ -336,6 +336,7 @@ class WorkloadEndpointSyncer(ResourceSyncer):
         MINMAX_BW_MINBURST = (1000, 10**8)
 
         MINMAX_PACKET_RATE = (1, 10**4)
+        MINMAX_PR_BURST = (1, 10**4)
 
         MINMAX_CONNECTIONS = (1, 4294967295)
 
@@ -394,6 +395,18 @@ class WorkloadEndpointSyncer(ResourceSyncer):
                 qos['egressBurst'] = calico_config.DEFAULT_BW_BURST
             if cfg.CONF.calico.egress_minburst_bytes != 0 and 'egressPeakrate' in qos:
                 qos['egressMinburst'] = cap(cfg.CONF.calico.egress_minburst_bytes, MINMAX_BW_MINBURST)
+
+        if 'ingressPacketRate' in qos:
+            if cfg.CONF.calico.ingress_burst_packets != 0:
+                qos['ingressPacketBurst'] = cap(cfg.CONF.calico.ingress_burst_packets, MINMAX_PR_BURST)
+            else:
+                qos['ingressPacketBurst'] = calico_config.DEFAULT_PR_BURST
+
+        if 'egressPacketRate' in qos:
+            if cfg.CONF.calico.egress_burst_packets != 0:
+                qos['egressPacketBurst'] = cap(cfg.CONF.calico.egress_burst_packets, MINMAX_PR_BURST)
+            else:
+                qos['egressPacketBurst'] = calico_config.DEFAULT_PR_BURST
 
         port_extra.qos = qos
 
