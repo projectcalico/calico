@@ -16,7 +16,6 @@ package server
 
 import (
 	"io"
-	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
@@ -27,6 +26,7 @@ import (
 	"github.com/projectcalico/calico/goldmane/pkg/internal/flowcache"
 	"github.com/projectcalico/calico/goldmane/pkg/types"
 	"github.com/projectcalico/calico/goldmane/proto"
+	"github.com/projectcalico/calico/lib/std/time"
 )
 
 var (

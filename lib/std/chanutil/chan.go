@@ -17,7 +17,8 @@ package chanutil
 import (
 	"context"
 	"errors"
-	"time"
+
+	"github.com/projectcalico/calico/lib/std/time"
 )
 
 var (

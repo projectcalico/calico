@@ -15,9 +15,9 @@
 package storage
 
 import (
-	"time"
-
 	"github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/calico/lib/std/time"
 )
 
 type BucketRingOption func(*BucketRing)
