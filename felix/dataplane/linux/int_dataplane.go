@@ -519,7 +519,9 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 	dataplaneFeatures := featureDetector.GetFeatures()
 	var iptablesLock sync.Locker
-	if !config.RulesConfig.NFTables {
+	if config.RulesConfig.NFTables {
+		iptablesLock = dummyLock{}
+	} else {
 		if dataplaneFeatures.RestoreSupportsLock {
 			log.Debug("Calico implementation of iptables lock disabled (because detected version of " +
 				"iptables-restore will use its own implementation).")
@@ -541,115 +543,54 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		}
 	}
 
+	// iptables and nftables implementations.
+	var mangleTableV4NFT, natTableV4NFT, rawTableV4NFT, filterTableV4NFT generictables.Table
+	var mangleTableV4IPT, natTableV4IPT, rawTableV4IPT, filterTableV4IPT generictables.Table
 	var nftablesV4RootTable *nftables.NftablesTable
+
+	// Create nftables Table implementations.
+	nftablesV4RootTable = nftables.NewTable("calico", 4, rules.RuleHashPrefix, featureDetector, nftablesOptions)
+	mangleTableV4NFT = nftables.NewTableLayer("mangle", nftablesV4RootTable)
+	natTableV4NFT = nftables.NewTableLayer("nat", nftablesV4RootTable)
+	rawTableV4NFT = nftables.NewTableLayer("raw", nftablesV4RootTable)
+	filterTableV4NFT = nftables.NewTableLayer("filter", nftablesV4RootTable)
+
+	// Create iptables table implementations.
+	mangleTableV4IPT = iptables.NewTable("mangle", 4, rules.RuleHashPrefix, iptablesLock, featureDetector, iptablesOptions)
+	natTableV4IPT = iptables.NewTable("nat", 4, rules.RuleHashPrefix, iptablesLock, featureDetector, iptablesNATOptions)
+	rawTableV4IPT = iptables.NewTable("raw", 4, rules.RuleHashPrefix, iptablesLock, featureDetector, iptablesOptions)
+	filterTableV4IPT = iptables.NewTable("filter", 4, rules.RuleHashPrefix, iptablesLock, featureDetector, iptablesOptions)
+
+	// Based on configuration, some of the above tables should be active and others not.
 	var mangleTableV4, natTableV4, rawTableV4, filterTableV4 generictables.Table
 	var ipSetsV4 dpsets.IPSetsDataplane
-
-	// Track tables that should be cleaned up. For example, in nftables mode we should clean up any Calico
-	// rules in iptables, and vice-versa.
 	var cleanupTables []generictables.Table
-
 	if config.RulesConfig.NFTables {
-		// Create the underlying table.
-		nftablesV4RootTable = nftables.NewTable(
-			"calico",
-			4,
-			rules.RuleHashPrefix,
-			featureDetector,
-			nftablesOptions,
-		)
-
-		// Now, create layers on top of the root table.
-		mangleTableV4 = nftables.NewTableLayer("mangle", nftablesV4RootTable)
-		natTableV4 = nftables.NewTableLayer("nat", nftablesV4RootTable)
-		rawTableV4 = nftables.NewTableLayer("raw", nftablesV4RootTable)
-		filterTableV4 = nftables.NewTableLayer("filter", nftablesV4RootTable)
-
-		// We use the root table for IP sets as well.
+		// Enable nftables.
+		mangleTableV4 = mangleTableV4NFT
+		natTableV4 = natTableV4NFT
+		rawTableV4 = rawTableV4NFT
+		filterTableV4 = filterTableV4NFT
 		ipSetsV4 = nftablesV4RootTable
 
-		// Add iptables tables to the cleanup list if we are in nftables mode.
-		iptablesLock = dummyLock{}
-		cleanupTables = append(cleanupTables, iptables.NewTable(
-			"mangle",
-			4,
-			rules.RuleHashPrefix,
-			iptablesLock,
-			featureDetector,
-			iptablesOptions,
-		),
-
-			iptables.NewTable(
-				"nat",
-				4,
-				rules.RuleHashPrefix,
-				iptablesLock,
-				featureDetector,
-				iptablesNATOptions,
-			),
-			iptables.NewTable(
-				"raw",
-				4,
-				rules.RuleHashPrefix,
-				iptablesLock,
-				featureDetector,
-				iptablesOptions,
-			),
-			iptables.NewTable(
-				"filter",
-				4,
-				rules.RuleHashPrefix,
-				iptablesLock,
-				featureDetector,
-				iptablesOptions,
-			),
+		// Cleanup iptables.
+		cleanupTables = append(cleanupTables,
+			mangleTableV4IPT,
+			natTableV4IPT,
+			rawTableV4IPT,
+			filterTableV4IPT,
 		)
 	} else {
-		// iptables mode
-		mangleTableV4 = iptables.NewTable(
-			"mangle",
-			4,
-			rules.RuleHashPrefix,
-			iptablesLock,
-			featureDetector,
-			iptablesOptions,
-		)
-		natTableV4 = iptables.NewTable(
-			"nat",
-			4,
-			rules.RuleHashPrefix,
-			iptablesLock,
-			featureDetector,
-			iptablesNATOptions,
-		)
-		rawTableV4 = iptables.NewTable(
-			"raw",
-			4,
-			rules.RuleHashPrefix,
-			iptablesLock,
-			featureDetector,
-			iptablesOptions,
-		)
-		filterTableV4 = iptables.NewTable(
-			"filter",
-			4,
-			rules.RuleHashPrefix,
-			iptablesLock,
-			featureDetector,
-			iptablesOptions,
-		)
+		// Enable iptables.
+		mangleTableV4 = mangleTableV4IPT
+		natTableV4 = natTableV4IPT
+		rawTableV4 = rawTableV4IPT
+		filterTableV4 = filterTableV4IPT
+		ipSetsV4 = ipsets.NewIPSets(config.RulesConfig.IPSetConfigV4, dp.loopSummarizer)
 
-		ipSetsConfigV4 := config.RulesConfig.IPSetConfigV4
-		ipSetsV4 = ipsets.NewIPSets(ipSetsConfigV4, dp.loopSummarizer)
-
-		// Add nftables tables to the cleanup list if we are in iptables mode.
-		cleanupTables = append(cleanupTables, nftables.NewTable(
-			"calico",
-			4,
-			rules.RuleHashPrefix,
-			featureDetector,
-			nftablesOptions,
-		))
+		// Cleanup nftables - we can simply add the root table here, since
+		// all the other tables are layers on top of it.
+		cleanupTables = append(cleanupTables, nftablesV4RootTable)
 	}
 
 	dp.natTables = append(dp.natTables, natTableV4)
@@ -822,27 +763,23 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	ipsetsManager := dpsets.NewIPSetsManager("ipv4", ipSetsV4, config.MaxIPSetSize)
 	ipsetsManagerV6 := dpsets.NewIPSetsManager("ipv6", nil, config.MaxIPSetSize)
 
-	var mangleTableV6, natTableV6, rawTableV6, filterTableV6 generictables.Table
+	// iptables / nftables specific filter Table implementations for IPv6.
+	var filterTableV6NFT, filterTableV6IPT generictables.Table
 	var nftablesV6RootTable *nftables.NftablesTable
 
+	// Create nftables Table implementations for IPv6.
+	nftablesV6RootTable = nftables.NewTable("calico", 6, rules.RuleHashPrefix, featureDetector, nftablesOptions)
+	filterTableV6NFT = nftables.NewTableLayer("filter", nftablesV6RootTable)
+
+	// Create iptables Table implementations for IPv6.
+	filterTableV6IPT = iptables.NewTable("filter", 6, rules.RuleHashPrefix, iptablesLock, featureDetector, iptablesOptions)
+
+	// Select the correct table implementation based on whether we're using nftables or iptables.
+	var filterTableV6 generictables.Table
 	if config.RulesConfig.NFTables {
-		nftablesV6RootTable = nftables.NewTable(
-			"calico",
-			6,
-			rules.RuleHashPrefix,
-			featureDetector,
-			nftablesOptions,
-		)
-		filterTableV6 = nftables.NewTableLayer("filter", nftablesV6RootTable)
+		filterTableV6 = filterTableV6NFT
 	} else {
-		filterTableV6 = iptables.NewTable(
-			"filter",
-			6,
-			rules.RuleHashPrefix,
-			iptablesLock,
-			featureDetector,
-			iptablesOptions,
-		)
+		filterTableV6 = filterTableV6IPT
 	}
 
 	dp.RegisterManager(ipsetsManager)
@@ -1167,41 +1104,47 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	dp.RegisterManager(newServiceLoopManager(filterTableV4, ruleRenderer, 4))
 
 	if config.IPv6Enabled {
-		ipSetsConfigV6 := config.RulesConfig.IPSetConfigV6
+		// Build out both iptables and nftables implementations for IPv6.
+		var mangleTableV6NFT, natTableV6NFT, rawTableV6NFT generictables.Table
+		var mangleTableV6IPT, natTableV6IPT, rawTableV6IPT generictables.Table
+
+		// Define nftables table implementations for IPv6.
+		mangleTableV6NFT = nftables.NewTableLayer("mangle", nftablesV6RootTable)
+		natTableV6NFT = nftables.NewTableLayer("nat", nftablesV6RootTable)
+		rawTableV6NFT = nftables.NewTableLayer("raw", nftablesV6RootTable)
+
+		// Define iptables table implementations for IPv6.
+		mangleTableV6IPT = iptables.NewTable("mangle", 6, rules.RuleHashPrefix, iptablesLock, featureDetector, iptablesOptions)
+		natTableV6IPT = iptables.NewTable("nat", 6, rules.RuleHashPrefix, iptablesLock, featureDetector, iptablesNATOptions)
+		rawTableV6IPT = iptables.NewTable("raw", 6, rules.RuleHashPrefix, iptablesLock, featureDetector, iptablesOptions)
+
+		// Select the correct table implementation based on whether we're using nftables or iptables.
+		var mangleTableV6, natTableV6, rawTableV6 generictables.Table
 		var ipSetsV6 dpsets.IPSetsDataplane
-
 		if config.RulesConfig.NFTables {
-			mangleTableV6 = nftables.NewTableLayer("mangle", nftablesV6RootTable)
-			natTableV6 = nftables.NewTableLayer("nat", nftablesV6RootTable)
-			rawTableV6 = nftables.NewTableLayer("raw", nftablesV6RootTable)
-
+			// Enable nftables.
+			mangleTableV6 = mangleTableV6NFT
+			natTableV6 = natTableV6NFT
+			rawTableV6 = rawTableV6NFT
 			ipSetsV6 = nftablesV6RootTable
+
+			// Cleanup iptables.
+			cleanupTables = append(cleanupTables,
+				mangleTableV6IPT,
+				natTableV6IPT,
+				rawTableV6IPT,
+				filterTableV6IPT,
+			)
 		} else {
-			mangleTableV6 = iptables.NewTable(
-				"mangle",
-				6,
-				rules.RuleHashPrefix,
-				iptablesLock,
-				featureDetector,
-				iptablesOptions,
-			)
-			natTableV6 = iptables.NewTable(
-				"nat",
-				6,
-				rules.RuleHashPrefix,
-				iptablesLock,
-				featureDetector,
-				iptablesNATOptions,
-			)
-			rawTableV6 = iptables.NewTable(
-				"raw",
-				6,
-				rules.RuleHashPrefix,
-				iptablesLock,
-				featureDetector,
-				iptablesOptions,
-			)
-			ipSetsV6 = ipsets.NewIPSets(ipSetsConfigV6, dp.loopSummarizer)
+			// Enable iptables.
+			mangleTableV6 = mangleTableV6IPT
+			natTableV6 = natTableV6IPT
+			rawTableV6 = rawTableV6IPT
+			ipSetsV6 = ipsets.NewIPSets(config.RulesConfig.IPSetConfigV6, dp.loopSummarizer)
+
+			// Cleanup nftables - we can simply add the root table here, Since
+			// all the other tables are layers on top of it.
+			cleanupTables = append(cleanupTables, nftablesV6RootTable)
 		}
 
 		dp.ipSets = append(dp.ipSets, ipSetsV6)
