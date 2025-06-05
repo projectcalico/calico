@@ -15,11 +15,10 @@
 package storage
 
 import (
-	"time"
-
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/goldmane/pkg/types"
+	"github.com/projectcalico/calico/lib/std/clock"
 )
 
 func GetStartTime(interval int) int64 {
@@ -28,13 +27,13 @@ func GetStartTime(interval int) int64 {
 	// then the start time should be a multiple of 30s.
 	var startTime int64
 	for {
-		startTime = time.Now().Unix() + int64(interval)
+		startTime = clock.Now().Unix() + int64(interval)
 		if startTime%int64(interval) == 0 {
 			// We found a multiple - break out of the loop.
 			break
 		}
 		logrus.WithField("start_time", startTime).Debug("Waiting for start time to align to interval")
-		time.Sleep(1 * time.Second)
+		clock.Sleep(1 * clock.Second)
 	}
 	return startTime
 }

@@ -7,7 +7,6 @@ import (
 	"os"
 	"sync"
 	"testing"
-	"time"
 
 	. "github.com/onsi/gomega"
 	"github.com/sirupsen/logrus"
@@ -20,6 +19,7 @@ import (
 	"github.com/projectcalico/calico/goldmane/pkg/testutils"
 	"github.com/projectcalico/calico/goldmane/pkg/types"
 	"github.com/projectcalico/calico/goldmane/proto"
+	"github.com/projectcalico/calico/lib/std/clock"
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 )
 
@@ -130,7 +130,7 @@ func TestFlowCollection(t *testing.T) {
 	defer setupTest(t, StartServer)()
 
 	// Connect to the server. The entire test should complete within 5 seconds.
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*clock.Second)
 	defer cancel()
 	connected := cli.Connect(ctx)
 	select {
@@ -145,7 +145,7 @@ func TestFlowCollection(t *testing.T) {
 	cli.Push(types.ProtoToFlow(flow))
 
 	// Expect that it shows up in the Sink.
-	require.Eventually(t, sink.flowReceivedFn(flow), 1*time.Second, 100*time.Millisecond, "Flow did not show up in sink")
+	require.Eventually(t, sink.flowReceivedFn(flow), 1*clock.Second, 100*clock.Millisecond, "Flow did not show up in sink")
 }
 
 // TestResyncOnConnect verifies that the client resends all flows that it is aware of when it reconnects to the server.
@@ -161,20 +161,20 @@ func TestResyncOnConnect(t *testing.T) {
 	}
 
 	// Connect to the server. The entire test should complete within 5 seconds.
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*clock.Second)
 	defer cancel()
 
 	// We don't expect to connect on the first go, since the server is down.
 	_ = cli.Connect(ctx)
 
 	// The sink should not receive the flow yet, since the server is down.
-	require.Never(t, sink.flowReceivedFn(flows[0]), 1*time.Second, 100*time.Millisecond, "Flow should not have been received yet")
+	require.Never(t, sink.flowReceivedFn(flows[0]), 1*clock.Second, 100*clock.Millisecond, "Flow should not have been received yet")
 
 	// Start a server, and expect the client to connect and send the flow.
 	defer setupServer(t)()
 
 	// We expect the client to reconnect and send the buffered flow.
 	for _, flow := range flows {
-		require.Eventually(t, sink.flowReceivedFn(flow), 5*time.Second, 100*time.Millisecond, "Flow did not show up in sink")
+		require.Eventually(t, sink.flowReceivedFn(flow), 5*clock.Second, 100*clock.Millisecond, "Flow did not show up in sink")
 	}
 }

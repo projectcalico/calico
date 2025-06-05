@@ -3,13 +3,13 @@ package stream
 import (
 	"context"
 	"errors"
-	"time"
 
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/goldmane/pkg/storage"
 	"github.com/projectcalico/calico/goldmane/proto"
 	"github.com/projectcalico/calico/lib/std/chanutil"
+	"github.com/projectcalico/calico/lib/std/clock"
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 )
 
@@ -80,7 +80,7 @@ func (s *stream) run() {
 			}
 
 			b.Iter(func(f storage.FlowBuilder) bool {
-				if err := chanutil.WriteWithDeadline(s.ctx, s.out, f, 60*time.Second); err != nil {
+				if err := chanutil.WriteWithDeadline(s.ctx, s.out, f, 60*clock.Second); err != nil {
 					// If we hit an error, indicate that we should stop iteration.
 					s.rl.WithFields(logrus.Fields{"id": s.ID}).WithError(err).Debug("Error writing flow to stream output")
 					return true
@@ -99,7 +99,7 @@ func (s *stream) receive(b storage.FlowProvider) {
 	logrus.WithFields(logrus.Fields{"id": s.ID}).Debug("Sending FlowProvider to stream")
 
 	// Send the flow to the output channel. If the channel is full, wait for a bit before giving up.
-	if err := chanutil.WriteWithDeadline(s.ctx, s.in, b, 1*time.Second); err != nil {
+	if err := chanutil.WriteWithDeadline(s.ctx, s.in, b, 1*clock.Second); err != nil {
 		if !errors.Is(err, context.Canceled) {
 			s.rl.WithField("id", s.ID).WithError(err).Error("error writing flow provider to stream input")
 		}

@@ -21,7 +21,6 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"time"
 
 	"github.com/kelseyhightower/envconfig"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -37,6 +36,7 @@ import (
 	"github.com/projectcalico/calico/goldmane/pkg/internal/utils"
 	"github.com/projectcalico/calico/goldmane/pkg/server"
 	"github.com/projectcalico/calico/goldmane/pkg/storage"
+	"github.com/projectcalico/calico/lib/std/clock"
 	"github.com/projectcalico/calico/libcalico-go/lib/debugserver"
 	"github.com/projectcalico/calico/libcalico-go/lib/health"
 )
@@ -74,7 +74,7 @@ type Config struct {
 
 	// AggregationWindow is the size in seconds of each bucket used when aggregating flows received
 	// from each node in the cluster.
-	AggregationWindow time.Duration `json:"aggregation_window" envconfig:"AGGREGATION_WINDOW" default:"15s"`
+	AggregationWindow clock.Duration `json:"aggregation_window" envconfig:"AGGREGATION_WINDOW" default:"15s"`
 
 	// EmitAfterSeconds is the number of seconds from flow receipt to wait before a flow becomes eligible to be
 	// pushed to the emitter. Increasing this value will increase the latency of emitted flows, while a smaller
@@ -86,7 +86,7 @@ type Config struct {
 	// EmitterAggregationWindow is the duration of time across which flows are aggregated before being pushed to the emitter.
 	// This must be a multiple of the aggregation window.
 	// Emitted flows will be aggregated from "now-EmitAfterSeconds-EmitterAggregationWindow" to "now-EmitAfterSeconds"
-	EmitterAggregationWindow time.Duration `json:"emitter_aggregation_window" envconfig:"EMITTER_AGGREGATION_WINDOW" default:"5m"`
+	EmitterAggregationWindow clock.Duration `json:"emitter_aggregation_window" envconfig:"EMITTER_AGGREGATION_WINDOW" default:"5m"`
 
 	// ProfilePort is the port to listen on for serving pprof profiles. By default, this is disabled.
 	ProfilePort int `json:"profile_port" envconfig:"PROFILE_PORT" default:"0"`

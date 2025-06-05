@@ -15,8 +15,8 @@
 package goldmane_test
 
 import (
+	"github.com/projectcalico/calico/lib/std/clock"
 	"sync"
-	"time"
 
 	"github.com/sirupsen/logrus"
 
@@ -64,12 +64,12 @@ func (t *testSink) bucket(idx int) *storage.FlowCollection {
 
 // rolloverController is a helper struct to control when rollovers occur.
 type rolloverController struct {
-	ch                    chan time.Time
-	clock                 *clock
+	ch                    chan clock.Time
+	clock                 *mockClock
 	aggregationWindowSecs int64
 }
 
-func (r *rolloverController) After(_ time.Duration) <-chan time.Time {
+func (r *rolloverController) After(_ clock.Duration) <-chan clock.Time {
 	return r.ch
 }
 
@@ -78,7 +78,7 @@ func (r *rolloverController) rollover() {
 	r.ch <- r.clock.Now()
 
 	// Wait for rollover to complete.
-	time.Sleep(10 * time.Millisecond)
+	clock.Sleep(10 * clock.Millisecond)
 }
 
 // rolloverAndAdvanceClock triggers n rollovers, advancing the internal clock by the aggregation window each time.
@@ -87,7 +87,7 @@ func (r *rolloverController) rolloverAndAdvanceClock(n int) {
 	logrus.Infof("[TEST] Rollover and advance clock %d times", n)
 	for range n {
 		r.ch <- r.clock.Now()
-		r.clock.Advance(time.Duration(r.aggregationWindowSecs) * time.Second)
+		r.clock.Advance(clock.Duration(r.aggregationWindowSecs) * clock.Second)
 	}
 }
 
@@ -95,29 +95,29 @@ func (r *rolloverController) now() int64 {
 	return r.clock.Now().Unix()
 }
 
-func newClock(t int64) *clock {
-	return &clock{t: t}
+func newClock(t int64) *mockClock {
+	return &mockClock{t: t}
 }
 
 // clock is a helper structure for tests that need control over time.
-type clock struct {
+type mockClock struct {
 	sync.Mutex
 	t int64
 }
 
-func (c *clock) Now() time.Time {
+func (c *mockClock) Now() clock.Time {
 	c.Lock()
 	defer c.Unlock()
-	return time.Unix(c.t, 0)
+	return clock.Unix(c.t, 0)
 }
 
-func (c *clock) Advance(d time.Duration) {
+func (c *mockClock) Advance(d clock.Duration) {
 	c.Lock()
 	defer c.Unlock()
 	c.t += int64(d.Seconds())
 }
 
-func (c *clock) Set(t time.Time) {
+func (c *mockClock) Set(t clock.Time) {
 	c.Lock()
 	defer c.Unlock()
 

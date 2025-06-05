@@ -17,13 +17,12 @@ package v1
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/projectcalico/calico/goldmane/proto"
+	"github.com/projectcalico/calico/lib/httpmachinery/pkg/codec"
+	"github.com/projectcalico/calico/lib/std/clock"
 	"maps"
 	"slices"
 	"strings"
-	"time"
-
-	"github.com/projectcalico/calico/goldmane/proto"
-	"github.com/projectcalico/calico/lib/httpmachinery/pkg/codec"
 )
 
 const (
@@ -236,8 +235,8 @@ type PolicyMatch struct {
 }
 
 type FlowResponse struct {
-	StartTime       time.Time   `json:"start_time"`
-	EndTime         time.Time   `json:"end_time"`
+	StartTime       clock.Time  `json:"start_time"`
+	EndTime         clock.Time  `json:"end_time"`
 	Action          Action      `json:"action"`
 	SourceName      string      `json:"source_name"`
 	SourceNamespace string      `json:"source_namespace"`

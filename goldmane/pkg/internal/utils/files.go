@@ -20,11 +20,11 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"time"
 
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/lib/std/chanutil"
+	"github.com/projectcalico/calico/lib/std/clock"
 )
 
 // WatchFilesFn builds a closure that can be used to monitor the given files and send an update
@@ -33,7 +33,7 @@ import (
 // Note that we don't use fsnotify or a similar library here - the way that file projection in Kubernetes works relies on
 // a number of temporary files being created, copied, and removed, which can pose problems for some file watching libraries.
 // We generally don't need immediate updates on file changes, so we poll the files at a regular interval instead.
-func WatchFilesFn(updChan chan struct{}, interval time.Duration, files ...string) (func(context.Context), error) {
+func WatchFilesFn(updChan chan struct{}, interval clock.Duration, files ...string) (func(context.Context), error) {
 	cached := map[string]string{}
 
 	for _, file := range files {
@@ -99,7 +99,7 @@ func WatchFilesFn(updChan chan struct{}, interval time.Duration, files ...string
 				}
 			}
 
-			<-time.After(interval)
+			<-clock.After(interval)
 		}
 	}, nil
 }

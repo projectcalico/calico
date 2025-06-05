@@ -16,17 +16,17 @@ package v1_test
 
 import (
 	"testing"
-	"time"
 
 	. "github.com/onsi/gomega"
 	"github.com/sirupsen/logrus"
 
 	apicontextmocks "github.com/projectcalico/calico/lib/httpmachinery/pkg/context/mocks"
+	"github.com/projectcalico/calico/lib/std/clock"
 )
 
 type scaffold struct {
 	apiCtx   *apicontextmocks.Context
-	zeroTime time.Time
+	zeroTime clock.Time
 }
 
 func setupTest(t *testing.T) scaffold {
@@ -35,7 +35,7 @@ func setupTest(t *testing.T) scaffold {
 	ctx := new(apicontextmocks.Context)
 	ctx.On("Logger").Return(logrus.NewEntry(logrus.StandardLogger()), "")
 
-	zeroTime, err := time.Parse(time.RFC3339, "1970-01-01T00:00:00Z")
+	zeroTime, err := clock.Parse(clock.RFC3339, "1970-01-01T00:00:00Z")
 	Expect(err).ShouldNot(HaveOccurred())
 
 	return scaffold{

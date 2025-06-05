@@ -15,8 +15,7 @@
 package goldmane
 
 import (
-	"time"
-
+	"github.com/projectcalico/calico/lib/std/clock"
 	"github.com/projectcalico/calico/libcalico-go/lib/health"
 )
 
@@ -24,14 +23,14 @@ type Option func(*Goldmane)
 
 // WithRolloverTime sets the rollover time for the aggregator. This configures the bucket size used
 // to aggregate flows across nodes in the cluster.
-func WithRolloverTime(rollover time.Duration) Option {
+func WithRolloverTime(rollover clock.Duration) Option {
 	return func(a *Goldmane) {
 		a.bucketDuration = rollover
 	}
 }
 
 // WithRolloverFunc allows manual control over the rollover timer, used in tests.
-func WithRolloverFunc(f func(time.Duration) <-chan time.Time) Option {
+func WithRolloverFunc(f func(clock.Duration) <-chan clock.Time) Option {
 	return func(a *Goldmane) {
 		a.rolloverFunc = f
 	}
@@ -52,7 +51,7 @@ func WithPushIndex(index int) Option {
 	}
 }
 
-func WithNowFunc(f func() time.Time) Option {
+func WithNowFunc(f func() clock.Time) Option {
 	return func(a *Goldmane) {
 		a.nowFunc = f
 	}

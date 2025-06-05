@@ -17,7 +17,6 @@ package goldmane
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
@@ -27,6 +26,7 @@ import (
 	"github.com/projectcalico/calico/goldmane/pkg/types"
 	"github.com/projectcalico/calico/goldmane/proto"
 	"github.com/projectcalico/calico/lib/std/chanutil"
+	"github.com/projectcalico/calico/lib/std/clock"
 	"github.com/projectcalico/calico/libcalico-go/lib/health"
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 	cprometheus "github.com/projectcalico/calico/libcalico-go/lib/prometheus"
@@ -148,7 +148,7 @@ type Goldmane struct {
 	flowStore *storage.BucketRing
 
 	// bucketDuration is the time duration of each aggregation bucket.
-	bucketDuration time.Duration
+	bucketDuration clock.Duration
 
 	// Used to trigger goroutine shutdown.
 	done chan struct{}
@@ -157,8 +157,8 @@ type Goldmane struct {
 	sink storage.Sink
 
 	// rolloverFunc allows manual control over the rollover timer, used in tests.
-	// In production, this will be time.After.
-	rolloverFunc func(time.Duration) <-chan time.Time
+	// In production, this will be clock.After.
+	rolloverFunc func(clock.Duration) <-chan clock.Time
 
 	// bucketsToAggregate is the number of internal buckets to aggregate when pushing flows to the sink.
 	// This can be used to reduce the number of distinct flows that are sent to the sink, at the expense of
@@ -177,7 +177,7 @@ type Goldmane struct {
 	pushIndex int
 
 	// nowFunc allows overriding the current time, used in tests.
-	nowFunc func() time.Time
+	nowFunc func() clock.Time
 
 	// health is the health aggregator to use for health checks.
 	health *health.HealthAggregator
@@ -195,20 +195,20 @@ type Goldmane struct {
 func NewGoldmane(opts ...Option) *Goldmane {
 	// Establish default aggregator configuration. Options can be used to override these.
 	a := &Goldmane{
-		bucketDuration:      15 * time.Second,
+		bucketDuration:      15 * clock.Second,
 		done:                make(chan struct{}),
 		listRequests:        make(chan listRequest),
 		filterHintsRequests: make(chan filterHintsRequest),
 		sinkChan:            make(chan *sinkRequest, 10),
 		recvChan:            make(chan *types.Flow, channelDepth),
-		rolloverFunc:        time.After,
+		rolloverFunc:        clock.After,
 		bucketsToAggregate:  20,
 		pushIndex:           30,
-		nowFunc:             time.Now,
+		nowFunc:             clock.Now,
 		streams:             stream.NewStreamManager(),
 		rl: logutils.NewRateLimitedLogger(
 			logutils.OptBurst(1),
-			logutils.OptInterval(15*time.Second),
+			logutils.OptInterval(15*clock.Second),
 		),
 	}
 
@@ -221,13 +221,13 @@ func NewGoldmane(opts ...Option) *Goldmane {
 	if a.sink != nil {
 		logrus.WithFields(logrus.Fields{
 			// This is the soonest we will possible emit a flow as part of an aggregation.
-			"emissionWindowLeftBound": time.Duration(a.pushIndex-a.bucketsToAggregate) * a.bucketDuration,
+			"emissionWindowLeftBound": clock.Duration(a.pushIndex-a.bucketsToAggregate) * a.bucketDuration,
 
 			// This is the latest we will emit a flow as part of an aggregation.
-			"emissionWindowRightBound": time.Duration(a.pushIndex) * a.bucketDuration,
+			"emissionWindowRightBound": clock.Duration(a.pushIndex) * a.bucketDuration,
 
 			// This is the total time window that we will aggregate over when generating emitted flows.
-			"emissionWindow": time.Duration(a.bucketsToAggregate) * a.bucketDuration,
+			"emissionWindow": clock.Duration(a.bucketsToAggregate) * a.bucketDuration,
 		}).Info("Emission of aggregated flows configured")
 	}
 
@@ -236,7 +236,7 @@ func NewGoldmane(opts ...Option) *Goldmane {
 		"bucketSize": a.bucketDuration,
 
 		// This is the total amount of history that we will keep in memory.
-		"totalHistory": time.Duration(numBuckets) * a.bucketDuration,
+		"totalHistory": clock.Duration(numBuckets) * a.bucketDuration,
 	}).Info("Keeping bucketed flow history in memory")
 
 	return a
@@ -321,7 +321,7 @@ func (a *Goldmane) SetSink(s storage.Sink) chan struct{} {
 
 // Receive is used to send a flow update to the aggregator.
 func (a *Goldmane) Receive(f *types.Flow) {
-	if err := chanutil.WriteWithDeadline(context.Background(), a.recvChan, f, 5*time.Second); err != nil {
+	if err := chanutil.WriteWithDeadline(context.Background(), a.recvChan, f, 5*clock.Second); err != nil {
 		numDroppedFlows.Inc()
 		a.rl.Warn("Aggregator receive channel full, dropping flow(s)")
 	}
@@ -409,10 +409,10 @@ func (a *Goldmane) backfill(stream stream.Stream) {
 	}
 
 	// Measure the time it takes to backfill the stream.
-	start := time.Now()
+	start := clock.Now()
 	defer func() {
-		logrus.WithField("id", stream.ID()).WithField("duration", time.Since(start)).Debug("Backfill complete")
-		backfillLatency.Observe(float64(time.Since(start).Milliseconds()))
+		logrus.WithField("id", stream.ID()).WithField("duration", clock.Since(start)).Debug("Backfill complete")
+		backfillLatency.Observe(float64(clock.Since(start).Milliseconds()))
 	}()
 	a.flowStore.Backfill(a.streams, stream.ID(), stream.StartTimeGte())
 }
@@ -514,10 +514,10 @@ func (a *Goldmane) Stop() {
 	close(a.done)
 }
 
-func (a *Goldmane) rollover() time.Duration {
-	start := time.Now()
+func (a *Goldmane) rollover() clock.Duration {
+	start := clock.Now()
 	defer func() {
-		rolloverDuration.Observe(float64(time.Since(start).Milliseconds()))
+		rolloverDuration.Observe(float64(clock.Since(start).Milliseconds()))
 	}()
 
 	// Report readiness.
@@ -535,7 +535,7 @@ func (a *Goldmane) rollover() time.Duration {
 	// calculate the difference between then and now.
 	//
 	// The next bucket should start at the end time of the current bucket, and be one interval ahead of Now().
-	nextBucketStart := time.Unix(newBucketStart, 0)
+	nextBucketStart := clock.Unix(newBucketStart, 0)
 	now := a.nowFunc()
 
 	// If the next bucket start time is in the past, we've fallen behind and need to catch up.
@@ -547,7 +547,7 @@ func (a *Goldmane) rollover() time.Duration {
 		}).Warn("Falling behind, scheduling immediate rollover")
 		// We don't actually use 0 time, as it could starve the main routine. Use a small amount of delay.
 		rolloverLatency.Observe(float64(10))
-		return 10 * time.Millisecond
+		return 10 * clock.Millisecond
 	}
 
 	// The time until the next rollover is the difference between the next bucket start time and now.
@@ -586,7 +586,7 @@ func (a *Goldmane) handleFlowBatch(first *types.Flow) {
 }
 
 func (a *Goldmane) indexFlow(flow *types.Flow) {
-	flowStart := time.Now()
+	flowStart := clock.Now()
 	logrus.WithField("flow", flow).Debug("Received Flow")
 
 	// Increment the received flow counter.
@@ -596,5 +596,5 @@ func (a *Goldmane) indexFlow(flow *types.Flow) {
 	a.flowStore.AddFlow(flow)
 
 	// Record time taken to process the flow.
-	flowIndexLatency.Observe(float64(time.Since(flowStart).Milliseconds()))
+	flowIndexLatency.Observe(float64(clock.Since(flowStart).Milliseconds()))
 }

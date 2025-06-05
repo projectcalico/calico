@@ -9,7 +9,6 @@ import (
 	"os"
 	"sync"
 	"testing"
-	"time"
 
 	. "github.com/onsi/gomega"
 	"github.com/sirupsen/logrus"
@@ -21,6 +20,7 @@ import (
 	"github.com/projectcalico/calico/goldmane/pkg/testutils"
 	"github.com/projectcalico/calico/goldmane/pkg/types"
 	"github.com/projectcalico/calico/goldmane/proto"
+	"github.com/projectcalico/calico/lib/std/clock"
 	"github.com/projectcalico/calico/lib/std/cryptoutils"
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 )
@@ -43,7 +43,7 @@ func daemonSetup(t *testing.T, cfg daemon.Config) func() {
 
 	// The context acts as a global timeout for the test to make sure we don't hang.
 	var cancel context.CancelFunc
-	ctx, cancel = context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel = context.WithTimeout(context.Background(), 30*clock.Second)
 
 	// Create TLS credentials for Goldmane.
 	cert, key := createKeyCertPair(os.TempDir())
@@ -127,9 +127,9 @@ func TestDaemonCanary(t *testing.T) {
 	cfg := daemon.Config{
 		LogLevel:                 "debug",
 		Port:                     8988,
-		AggregationWindow:        time.Second * 1,
+		AggregationWindow:        clock.Second * 1,
 		EmitAfterSeconds:         2,
-		EmitterAggregationWindow: time.Second * 2,
+		EmitterAggregationWindow: clock.Second * 2,
 	}
 	defer daemonSetup(t, cfg)()
 
@@ -148,7 +148,7 @@ func TestDaemonCanary(t *testing.T) {
 	Eventually(func() error {
 		_, _, err = cli.List(ctx, nil)
 		return err
-	}, 5*time.Second, 1*time.Second).Should(Succeed())
+	}, 5*clock.Second, 1*clock.Second).Should(Succeed())
 }
 
 // TestFlows tests that we can ingest flows, that they show up in List reqeusts, and that they
@@ -157,9 +157,9 @@ func TestFlows(t *testing.T) {
 	cfg := daemon.Config{
 		LogLevel:                 "debug",
 		Port:                     8988,
-		AggregationWindow:        time.Second * 1,
+		AggregationWindow:        clock.Second * 1,
 		EmitAfterSeconds:         2,
-		EmitterAggregationWindow: time.Second * 2,
+		EmitterAggregationWindow: clock.Second * 2,
 	}
 	defer daemonSetup(t, cfg)()
 
@@ -180,7 +180,7 @@ func TestFlows(t *testing.T) {
 
 	connected := pusher.Connect(ctx)
 	require.NoError(t, err)
-	Eventually(connected, 5*time.Second, 100*time.Millisecond).Should(BeClosed())
+	Eventually(connected, 5*clock.Second, 100*clock.Millisecond).Should(BeClosed())
 
 	// Start a goroutine to continuously send flows.
 	go func(ctx context.Context) {
@@ -189,9 +189,9 @@ func TestFlows(t *testing.T) {
 				pusher.Close()
 				return
 			}
-			f := testutils.NewRandomFlow(time.Now().Unix())
+			f := testutils.NewRandomFlow(clock.Now().Unix())
 			pusher.Push(types.ProtoToFlow(f))
-			time.Sleep(1 * time.Millisecond)
+			clock.Sleep(1 * clock.Millisecond)
 		}
 	}(ctx)
 
@@ -206,12 +206,12 @@ func TestFlows(t *testing.T) {
 			return fmt.Errorf("no flows returned")
 		}
 		return nil
-	}, 5*time.Second, 1*time.Second).Should(Succeed())
+	}, 5*clock.Second, 1*clock.Second).Should(Succeed())
 
 	// We should eventually see flows emitted.
 	// Sincse we only emit after 2 seconds with an emitter aggregation window of 2 seconds, we
 	// should see at least one flow emitted after 4 seconds. We'll wait for 10 seconds to be sure.
-	Eventually(emitted.Count, 10*time.Second, 1*time.Second).Should(BeNumerically(">", 0))
+	Eventually(emitted.Count, 10*clock.Second, 1*clock.Second).Should(BeNumerically(">", 0))
 
 	// We should be able to see flows emitted in the stream as well.
 	streams := []proto.Flows_StreamClient{}
@@ -236,9 +236,9 @@ func TestHints(t *testing.T) {
 	cfg := daemon.Config{
 		LogLevel:                 "debug",
 		Port:                     8988,
-		AggregationWindow:        time.Second * 1,
+		AggregationWindow:        clock.Second * 1,
 		EmitAfterSeconds:         2,
-		EmitterAggregationWindow: time.Second * 2,
+		EmitterAggregationWindow: clock.Second * 2,
 	}
 	defer daemonSetup(t, cfg)()
 
@@ -259,7 +259,7 @@ func TestHints(t *testing.T) {
 
 	connected := pusher.Connect(ctx)
 	require.NoError(t, err)
-	Eventually(connected, 5*time.Second, 100*time.Millisecond).Should(BeClosed())
+	Eventually(connected, 5*clock.Second, 100*clock.Millisecond).Should(BeClosed())
 
 	// Start a goroutine to continuously send flows.
 	go func(ctx context.Context) {
@@ -268,9 +268,9 @@ func TestHints(t *testing.T) {
 				pusher.Close()
 				return
 			}
-			f := testutils.NewRandomFlow(time.Now().Unix())
+			f := testutils.NewRandomFlow(clock.Now().Unix())
 			pusher.Push(types.ProtoToFlow(f))
-			time.Sleep(100 * time.Millisecond)
+			clock.Sleep(100 * clock.Millisecond)
 		}
 	}(ctx)
 
@@ -288,16 +288,16 @@ func TestHints(t *testing.T) {
 			return fmt.Errorf("no hints returned")
 		}
 		return nil
-	}, 5*time.Second, 1*time.Second).Should(Succeed())
+	}, 5*clock.Second, 1*clock.Second).Should(Succeed())
 }
 
 func TestStatistics(t *testing.T) {
 	cfg := daemon.Config{
 		LogLevel:                 "debug",
 		Port:                     8988,
-		AggregationWindow:        time.Second * 1,
+		AggregationWindow:        clock.Second * 1,
 		EmitAfterSeconds:         2,
-		EmitterAggregationWindow: time.Second * 2,
+		EmitterAggregationWindow: clock.Second * 2,
 	}
 	defer daemonSetup(t, cfg)()
 
@@ -321,7 +321,7 @@ func TestStatistics(t *testing.T) {
 			return fmt.Errorf("statistics returned non-empty result")
 		}
 		return nil
-	}, 5*time.Second, 1*time.Second).Should(Succeed())
+	}, 5*clock.Second, 1*clock.Second).Should(Succeed())
 
 	// Create some flow data.
 	pusher, err := client.NewFlowClient(goldmaneURL, clientCert, clientKey, clientCA)
@@ -329,7 +329,7 @@ func TestStatistics(t *testing.T) {
 
 	connected := pusher.Connect(ctx)
 	require.NoError(t, err)
-	Eventually(connected, 5*time.Second, 100*time.Millisecond).Should(BeClosed())
+	Eventually(connected, 5*clock.Second, 100*clock.Millisecond).Should(BeClosed())
 
 	go func(ctx context.Context) {
 		for {
@@ -337,9 +337,9 @@ func TestStatistics(t *testing.T) {
 				pusher.Close()
 				return
 			}
-			f := testutils.NewRandomFlow(time.Now().Unix())
+			f := testutils.NewRandomFlow(clock.Now().Unix())
 			pusher.Push(types.ProtoToFlow(f))
-			time.Sleep(100 * time.Millisecond)
+			clock.Sleep(100 * clock.Millisecond)
 		}
 	}(ctx)
 
@@ -356,5 +356,5 @@ func TestStatistics(t *testing.T) {
 			return fmt.Errorf("statistics returned empty")
 		}
 		return nil
-	}, 5*time.Second, 1*time.Second).Should(Succeed())
+	}, 5*clock.Second, 1*clock.Second).Should(Succeed())
 }

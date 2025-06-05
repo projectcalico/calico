@@ -20,7 +20,6 @@ import (
 	"math/rand/v2"
 	"os"
 	"sync"
-	"time"
 
 	"github.com/sirupsen/logrus"
 	goproto "google.golang.org/protobuf/proto"
@@ -28,6 +27,7 @@ import (
 	"github.com/projectcalico/calico/goldmane/pkg/client"
 	"github.com/projectcalico/calico/goldmane/pkg/types"
 	"github.com/projectcalico/calico/goldmane/proto"
+	"github.com/projectcalico/calico/lib/std/clock"
 )
 
 const (
@@ -141,8 +141,8 @@ func (t *flowGenerator) generateFlogs() {
 func (t *flowGenerator) flowGenWorker(numPairs int) {
 	// Start by backfilling a full hour of flows. Typically, flow data is largely consistent over time, so
 	// we will start by building some flow pairs and then sending those same flows every 15s until the end of the hour.
-	startTime := time.Now().UTC().Add(-45 * time.Minute)
-	endTime := startTime.Add(15 * time.Second)
+	startTime := clock.Now().UTC().Add(-45 * clock.Minute)
+	endTime := startTime.Add(15 * clock.Second)
 
 	flowPairs := [][]*proto.Flow{}
 	for range numPairs {
@@ -164,15 +164,15 @@ func (t *flowGenerator) flowGenWorker(numPairs int) {
 				flog.StartTime = startTime.Unix()
 				flog.EndTime = endTime.Unix()
 				t.outChan <- flog
-				time.Sleep(5 * time.Millisecond)
+				clock.Sleep(5 * clock.Millisecond)
 			}
 		}
 
 		// Update start and end times.
 		startTime = endTime
-		endTime = endTime.Add(15 * time.Second)
+		endTime = endTime.Add(15 * clock.Second)
 
-		if endTime.After(time.Now().UTC()) {
+		if endTime.After(clock.Now().UTC()) {
 			break
 		}
 	}
@@ -182,8 +182,8 @@ func (t *flowGenerator) flowGenWorker(numPairs int) {
 	// We can now start generating new flows every 15s.
 	logrus.Info("Starting to generate new flows")
 	for {
-		endTime = time.Now().UTC()
-		startTime = endTime.Add(-15 * time.Second)
+		endTime = clock.Now().UTC()
+		startTime = endTime.Add(-15 * clock.Second)
 
 		for _, pair := range flowPairs {
 			for _, flog := range pair {
@@ -193,7 +193,7 @@ func (t *flowGenerator) flowGenWorker(numPairs int) {
 			}
 		}
 
-		time.Sleep(15 * time.Second)
+		clock.Sleep(15 * clock.Second)
 	}
 }
 

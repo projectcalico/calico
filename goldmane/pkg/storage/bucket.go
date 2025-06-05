@@ -16,12 +16,12 @@ package storage
 
 import (
 	"sync"
-	"time"
 
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/goldmane/pkg/types"
 	"github.com/projectcalico/calico/goldmane/proto"
+	"github.com/projectcalico/calico/lib/std/clock"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -89,7 +89,7 @@ func (b *AggregationBucket) AddFlow(flow *types.Flow) {
 	b.stats.AddFlow(flow)
 }
 
-func NewAggregationBucket(start, end time.Time) *AggregationBucket {
+func NewAggregationBucket(start, end clock.Time) *AggregationBucket {
 	return &AggregationBucket{
 		StartTime: start.Unix(),
 		EndTime:   end.Unix(),

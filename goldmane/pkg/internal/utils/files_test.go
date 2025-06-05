@@ -17,12 +17,12 @@ import (
 	"context"
 	"os"
 	"testing"
-	"time"
 
 	. "github.com/onsi/gomega"
 	"github.com/stretchr/testify/require"
 
 	"github.com/projectcalico/calico/goldmane/pkg/internal/utils"
+	"github.com/projectcalico/calico/lib/std/clock"
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 )
 
@@ -39,34 +39,34 @@ func TestFileWatcher(t *testing.T) {
 
 	// Create a file watcher.
 	updChan := make(chan struct{}, 1)
-	watchFn, err := utils.WatchFilesFn(updChan, 250*time.Millisecond, f.Name())
+	watchFn, err := utils.WatchFilesFn(updChan, 250*clock.Millisecond, f.Name())
 	require.NoError(t, err)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*clock.Second)
 	defer cancel()
 
 	go watchFn(ctx)
 
-	Consistently(updChan, 1*time.Second, 10*time.Millisecond).ShouldNot(Receive())
+	Consistently(updChan, 1*clock.Second, 10*clock.Millisecond).ShouldNot(Receive())
 
 	// Write to the file, triggering an update.
 	_, err = f.WriteString("test")
 	require.NoError(t, err)
 
-	Eventually(updChan, 5*time.Second, 10*time.Millisecond).Should(Receive())
-	Consistently(updChan, 1*time.Second, 10*time.Millisecond).ShouldNot(Receive())
+	Eventually(updChan, 5*clock.Second, 10*clock.Millisecond).Should(Receive())
+	Consistently(updChan, 1*clock.Second, 10*clock.Millisecond).ShouldNot(Receive())
 
 	// Write to the file again, triggering another update.
 	_, err = f.WriteString("test")
 	require.NoError(t, err)
 
-	Eventually(updChan, 5*time.Second, 10*time.Millisecond).Should(Receive())
+	Eventually(updChan, 5*clock.Second, 10*clock.Millisecond).Should(Receive())
 
 	// Delete the file. We should get an update.
 	err = os.Remove(f.Name())
 	require.NoError(t, err)
 
-	Eventually(updChan, 5*time.Second, 10*time.Millisecond).Should(Receive())
+	Eventually(updChan, 5*clock.Second, 10*clock.Millisecond).Should(Receive())
 
 	// Recreate the file. We should get an update.
 	f2, err := os.Create(f.Name())
@@ -74,5 +74,5 @@ func TestFileWatcher(t *testing.T) {
 	defer f2.Close()
 	_, err = f2.WriteString("test")
 	require.NoError(t, err)
-	Eventually(updChan, 5*time.Second, 10*time.Millisecond).Should(Receive())
+	Eventually(updChan, 5*clock.Second, 10*clock.Millisecond).Should(Receive())
 }

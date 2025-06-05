@@ -15,9 +15,9 @@
 package storage
 
 import (
-	"time"
-
 	"github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/calico/lib/std/clock"
 )
 
 type BucketRingOption func(*BucketRing)
@@ -42,7 +42,7 @@ func WithStreamReceiver(sm Receiver) BucketRingOption {
 	}
 }
 
-func WithNowFunc(nowFunc func() time.Time) BucketRingOption {
+func WithNowFunc(nowFunc func() clock.Time) BucketRingOption {
 	return func(r *BucketRing) {
 		logrus.WithField("nowFunc", nowFunc).Debug("Setting now function")
 		r.nowFunc = nowFunc

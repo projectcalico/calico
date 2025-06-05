@@ -24,12 +24,12 @@ import (
 	"net/http"
 	"os"
 	"sync"
-	"time"
 
 	"github.com/sirupsen/logrus"
 
 	calicotls "github.com/projectcalico/calico/crypto/pkg/tls"
 	"github.com/projectcalico/calico/goldmane/pkg/internal/utils"
+	"github.com/projectcalico/calico/lib/std/clock"
 )
 
 const ContentTypeMultilineJSON = "application/x-ndjson"
@@ -59,7 +59,7 @@ func newHTTPClient(caCert, clientKey, clientCert, serverName string) (*http.Clie
 	// Note: this is not the same as the request timeout, which is handled via the
 	// provided context on a per-request basis.
 	dialWithTimeout := func(network, addr string) (net.Conn, error) {
-		return net.DialTimeout(network, addr, 10*time.Second)
+		return net.DialTimeout(network, addr, 10*clock.Second)
 	}
 	httpTransport := &http.Transport{
 		Dial:            dialWithTimeout,
@@ -107,7 +107,7 @@ func newEmitterClient(url, caCert, clientKey, clientCert, serverName string) (*e
 
 		// Start a goroutine to watch for changes to the CA cert file and feed
 		// them into the update channel.
-		monitorFn, err := utils.WatchFilesFn(updChan, 30*time.Second, caCert, clientCert, clientKey)
+		monitorFn, err := utils.WatchFilesFn(updChan, 30*clock.Second, caCert, clientCert, clientKey)
 		if err != nil {
 			return nil, fmt.Errorf("error setting up CA cert file watcher: %s", err)
 		}

@@ -16,15 +16,15 @@ package fv
 
 import (
 	"fmt"
+	. "github.com/onsi/gomega"
+	"github.com/projectcalico/calico/lib/std/clock"
+	"github.com/sirupsen/logrus"
 	"io"
 	"net/http"
 	"os"
 	"sync"
 	"testing"
 	"time"
-
-	. "github.com/onsi/gomega"
-	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/goldmane/pkg/client"
 	gmdaemon "github.com/projectcalico/calico/goldmane/pkg/daemon"
@@ -38,111 +38,124 @@ import (
 	wconfig "github.com/projectcalico/calico/whisker-backend/pkg/config"
 )
 
+const initialNow = 1000
+
 // This is a simple integration test to ensure that whisker and goldmane interact correctly for streaming flows.
 func TestGoldmaneIntegration_FlowWatching(t *testing.T) {
-	var wg sync.WaitGroup
-	defer func() {
-		logrus.Info("Waiting for goroutines to finish...")
-		wg.Wait()
-		logrus.Info("Finished waiting for goroutines to finish.")
-	}()
+	// We need to use a controlled clock for this test as timing with goldmane needs to be precise. Sporadic behavior
+	// can occur because of the timing for pushing a flow and how the stream pushing works.
+	controlledClock := clock.NewControlledClock(initialNow)
+	_ = clock.DoWithClock(controlledClock, func() error {
+		var wg sync.WaitGroup
+		defer func() {
+			logrus.Info("Waiting for goroutines to finish...")
+			wg.Wait()
+			logrus.Info("Finished waiting for goroutines to finish.")
+		}()
 
-	ctx, teardown := setup(t)
-	defer teardown()
+		ctx, teardown := setup(t)
+		defer teardown()
 
-	tmpDir := os.TempDir()
+		tmpDir := os.TempDir()
 
-	// Generate a self-signed certificate for Goldmane.
-	certFile, keyFile := createKeyCertPair(tmpDir)
-	defer certFile.Close()
-	defer keyFile.Close()
+		// Generate a self-signed certificate for Goldmane.
+		certFile, keyFile := createKeyCertPair(tmpDir)
+		defer certFile.Close()
+		defer keyFile.Close()
 
-	// Generate a self-signed certificate for Whisker and the client to use.
-	clientCertFile, clientKeyFile := createKeyCertPair(tmpDir)
-	defer certFile.Close()
-	defer keyFile.Close()
-	aggrWindow := time.Second * 5
-	cfg := gmdaemon.Config{
-		LogLevel:          "debug",
-		Port:              5444,
-		AggregationWindow: aggrWindow,
-		ServerCertPath:    certFile.Name(),
-		ServerKeyPath:     keyFile.Name(),
-		CACertPath:        clientCertFile.Name(),
-	}
+		// Generate a self-signed certificate for Whisker and the client to use.
+		clientCertFile, clientKeyFile := createKeyCertPair(tmpDir)
+		defer certFile.Close()
+		defer keyFile.Close()
+		aggrWindow := clock.Second * 5
+		cfg := gmdaemon.Config{
+			LogLevel:          "debug",
+			Port:              5444,
+			AggregationWindow: aggrWindow,
+			ServerCertPath:    certFile.Name(),
+			ServerKeyPath:     keyFile.Name(),
+			CACertPath:        clientCertFile.Name(),
+		}
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		gmdaemon.Run(ctx, cfg)
-	}()
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			gmdaemon.Run(ctx, cfg)
+		}()
 
-	whiskerCfg := &wconfig.Config{
-		Port:         "8080",
-		LogLevel:     "debug",
-		GoldmaneHost: "localhost:5444",
-		CACertPath:   certFile.Name(),
-		TLSCertPath:  clientCertFile.Name(),
-		TLSKeyPath:   clientKeyFile.Name(),
-	}
-	whiskerCfg.ConfigureLogging()
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		app.Run(ctx, whiskerCfg)
-	}()
+		// We want to actually wait 5 seconds, not use our fake clock for this.
+		time.Sleep(clock.Second * 5)
 
-	cli, err := client.NewFlowClient("localhost:5444", clientCertFile.Name(), clientKeyFile.Name(), certFile.Name())
-	Expect(err).ShouldNot(HaveOccurred())
-	defer cli.Close()
+		whiskerCfg := &wconfig.Config{
+			Port:         "8080",
+			LogLevel:     "debug",
+			GoldmaneHost: "localhost:5444",
+			CACertPath:   certFile.Name(),
+			TLSCertPath:  clientCertFile.Name(),
+			TLSKeyPath:   clientKeyFile.Name(),
+		}
+		whiskerCfg.ConfigureLogging()
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			app.Run(ctx, whiskerCfg)
+		}()
 
-	// Wait for initial connection
-	_, err = chanutil.ReadWithDeadline(ctx, cli.Connect(ctx), time.Minute*20)
-	Expect(err).Should(Equal(chanutil.ErrChannelClosed))
+		cli, err := client.NewFlowClient("localhost:5444", clientCertFile.Name(), clientKeyFile.Name(), certFile.Name())
+		Expect(err).ShouldNot(HaveOccurred())
+		defer cli.Close()
 
-	req, err := http.NewRequest(http.MethodGet, "http://localhost:8080/flows", nil)
-	Expect(err).ShouldNot(HaveOccurred())
+		// Wait for initial connection
+		_, err = chanutil.ReadWithDeadline(ctx, cli.Connect(ctx), clock.Minute*20)
+		Expect(err).Should(Equal(chanutil.ErrChannelClosed))
 
-	query := req.URL.Query()
-	query.Set("filters", jsontestutil.MustMarshal(t, whiskerv1.Filters{
-		SourceNames: whiskerv1.FilterMatches[string]{{V: "test-source-2"}},
-	}))
-	query.Set("watch", "true")
-	req.URL.RawQuery = query.Encode()
-	req.Header.Set("Accept", "text/event-stream")
+		time.Sleep(clock.Second * 5)
 
-	resp, err := http.DefaultClient.Do(req)
-	Expect(err).ShouldNot(HaveOccurred())
+		req, err := http.NewRequest(http.MethodGet, "http://localhost:8080/flows", nil)
+		Expect(err).ShouldNot(HaveOccurred())
 
-	go func() {
-		<-ctx.Done()
-		resp.Body.Close()
-	}()
+		query := req.URL.Query()
+		query.Set("filters", jsontestutil.MustMarshal(t, whiskerv1.Filters{
+			SourceNames: whiskerv1.FilterMatches[string]{{V: "test-source-2"}},
+		}))
+		query.Set("watch", "true")
+		req.URL.RawQuery = query.Encode()
+		req.Header.Set("Accept", "text/event-stream")
 
-	Expect(resp.StatusCode).Should(Equal(http.StatusOK))
+		resp, err := http.DefaultClient.Do(req)
+		Expect(err).ShouldNot(HaveOccurred())
 
-	scanner := newSSEScanner[whiskerv1.FlowResponse](t, resp.Body)
+		go func() {
+			<-ctx.Done()
+			resp.Body.Close()
+		}()
 
-	// Wait for the clock to align with one second past the interval to ensure the flow ends up in the latest bucket.
-	// This fixes a flake where we might push the flow at the rollover interval and streaming flows won't pick up the
-	// uploaded flow.
-	waitForClockIntervalAlignment(aggrWindow + 1)
+		Expect(resp.StatusCode).Should(Equal(http.StatusOK))
 
-	cli.Push(types.ProtoToFlow(&proto.Flow{
-		Key: &proto.FlowKey{
-			SourceName:      "test-source-2",
-			SourceNamespace: "test-namespace-3",
-			Action:          proto.Action_Deny,
-		},
-		StartTime: time.Now().Add(-1 * time.Second).Unix(),
-		EndTime:   time.Now().Unix(),
-	}))
+		scanner := newSSEScanner[whiskerv1.FlowResponse](t, resp.Body)
 
-	obj, err := chanutil.ReadWithDeadline(ctx, scanner, time.Second*30)
-	Expect(err).ShouldNot(HaveOccurred())
+		cli.Push(types.ProtoToFlow(&proto.Flow{
+			Key: &proto.FlowKey{
+				SourceName:      "test-source-2",
+				SourceNamespace: "test-namespace-3",
+				Action:          proto.Action_Deny,
+			},
+			StartTime: clock.Now().Add(1 * clock.Second).Unix(),
+			EndTime:   clock.Now().Unix(),
+		}))
 
-	Expect(obj.Err).ShouldNot(HaveOccurred())
-	Expect(obj.Obj.Action).Should(Equal(whiskerv1.Action(proto.Action_Deny)))
+		time.Sleep(clock.Second * 2)
+
+		controlledClock.Advance(clock.Second * 5)
+
+		obj, err := chanutil.ReadWithDeadline(ctx, scanner, clock.Second*30)
+		Expect(err).ShouldNot(HaveOccurred())
+
+		Expect(obj.Err).ShouldNot(HaveOccurred())
+		Expect(obj.Obj.Action).Should(Equal(whiskerv1.Action(proto.Action_Deny)))
+
+		return nil
+	})
 }
 
 // This is a simple integration test to ensure whisker and goldmane interact correctly for getting filter hints.
@@ -169,7 +182,7 @@ func TestGoldmaneIntegration_FilterHints(t *testing.T) {
 	defer certFile.Close()
 	defer keyFile.Close()
 
-	aggrWindow := time.Second * 5
+	aggrWindow := clock.Second * 5
 	cfg := gmdaemon.Config{
 		LogLevel:          "debug",
 		Port:              5444,
@@ -201,26 +214,25 @@ func TestGoldmaneIntegration_FilterHints(t *testing.T) {
 		app.Run(ctx, whiskerCfg)
 	}()
 
+	// We want to actually wait 5 seconds, not use our fake clock for this.
+	time.Sleep(clock.Second * 5)
+
 	cli, err := client.NewFlowClient("localhost:5444", clientCertFile.Name(), clientKeyFile.Name(), certFile.Name())
 	Expect(err).ShouldNot(HaveOccurred())
 	defer cli.Close()
 
 	// Wait for initial connection
-	_, err = chanutil.ReadWithDeadline(ctx, cli.Connect(ctx), time.Minute*20)
+	_, err = chanutil.ReadWithDeadline(ctx, cli.Connect(ctx), clock.Minute*20)
 	Expect(err).Should(Equal(chanutil.ErrChannelClosed))
 
-	// Wait for the clock to align with one second past the interval to ensure the flow ends up in the latest bucket.
-	// This fixes a flake where we might push the flow at the rollover interval and streaming flows won't pick up the
-	// uploaded flow.
-	waitForClockIntervalAlignment(aggrWindow + 1)
 	cli.Push(types.ProtoToFlow(&proto.Flow{
 		Key: &proto.FlowKey{
 			SourceName:      "test-source-2",
 			SourceNamespace: "test-namespace-3",
 			Action:          proto.Action_Deny,
 		},
-		StartTime: time.Now().Add(-1 * time.Second).Unix(),
-		EndTime:   time.Now().Unix(),
+		StartTime: clock.Now().Add(-1 * clock.Second).Unix(),
+		EndTime:   clock.Now().Unix(),
 	}))
 
 	cli.Push(types.ProtoToFlow(&proto.Flow{
@@ -229,8 +241,8 @@ func TestGoldmaneIntegration_FilterHints(t *testing.T) {
 			SourceNamespace: "test-namespace-3",
 			Action:          proto.Action_Deny,
 		},
-		StartTime: time.Now().Add(-1 * time.Second).Unix(),
-		EndTime:   time.Now().Unix(),
+		StartTime: clock.Now().Add(-1 * clock.Second).Unix(),
+		EndTime:   clock.Now().Unix(),
 	}))
 
 	cli.Push(types.ProtoToFlow(&proto.Flow{
@@ -239,8 +251,8 @@ func TestGoldmaneIntegration_FilterHints(t *testing.T) {
 			SourceNamespace: "test-namespace-4",
 			Action:          proto.Action_Deny,
 		},
-		StartTime: time.Now().Add(-1 * time.Second).Unix(),
-		EndTime:   time.Now().Unix(),
+		StartTime: clock.Now().Add(-1 * clock.Second).Unix(),
+		EndTime:   clock.Now().Unix(),
 	}))
 
 	req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("http://localhost:8080/%s", whiskerv1.FlowsFilterHintsPath), nil)
@@ -252,8 +264,6 @@ func TestGoldmaneIntegration_FilterHints(t *testing.T) {
 		SourceNamespaces: whiskerv1.FilterMatches[string]{{V: "test-namespace", Type: whiskerv1.MatchType(proto.MatchType_Fuzzy)}},
 	}))
 	req.URL.RawQuery = query.Encode()
-
-	time.Sleep(time.Second * 5)
 
 	resp, err := http.DefaultClient.Do(req)
 	Expect(err).ShouldNot(HaveOccurred())

@@ -16,7 +16,6 @@ package server
 
 import (
 	"io"
-	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
@@ -27,6 +26,7 @@ import (
 	"github.com/projectcalico/calico/goldmane/pkg/internal/flowcache"
 	"github.com/projectcalico/calico/goldmane/pkg/types"
 	"github.com/projectcalico/calico/goldmane/proto"
+	"github.com/projectcalico/calico/lib/std/clock"
 )
 
 var (
@@ -124,7 +124,7 @@ func (p *flowCollectorService) handleClient(srv proto.FlowCollector_ConnectServe
 			return err
 		}
 		receivedFlowCounter.WithLabelValues(scope).Inc()
-		start := time.Now()
+		start := clock.Now()
 
 		// Convert to minified types.Flow object.
 		flow := types.ProtoToFlow(upd.Flow)
@@ -154,6 +154,6 @@ func (p *flowCollectorService) handleClient(srv proto.FlowCollector_ConnectServe
 			return err
 		}
 
-		flowProcessLatency.WithLabelValues(scope).Observe(time.Since(start).Seconds())
+		flowProcessLatency.WithLabelValues(scope).Observe(clock.Since(start).Seconds())
 	}
 }

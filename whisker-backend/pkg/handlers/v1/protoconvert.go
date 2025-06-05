@@ -15,11 +15,10 @@
 package v1
 
 import (
-	"strings"
-	"time"
-
 	"github.com/projectcalico/calico/goldmane/proto"
+	"github.com/projectcalico/calico/lib/std/clock"
 	whiskerv1 "github.com/projectcalico/calico/whisker-backend/pkg/apis/v1"
+	"strings"
 )
 
 const (
@@ -140,8 +139,8 @@ func protoToPolicyHit(policyHit *proto.PolicyHit) *whiskerv1.PolicyHit {
 
 func protoToFlow(flow *proto.Flow) whiskerv1.FlowResponse {
 	return whiskerv1.FlowResponse{
-		StartTime: time.Unix(flow.StartTime, 0),
-		EndTime:   time.Unix(flow.EndTime, 0),
+		StartTime: clock.Unix(flow.StartTime, 0),
+		EndTime:   clock.Unix(flow.EndTime, 0),
 		Action:    whiskerv1.Action(flow.Key.Action),
 
 		SourceName:      protoToName(flow.Key.SourceName),

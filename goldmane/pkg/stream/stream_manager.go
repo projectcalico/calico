@@ -3,7 +3,6 @@ package stream
 import (
 	"context"
 	"sync"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/prometheus/client_golang/prometheus"
@@ -12,6 +11,7 @@ import (
 	"github.com/projectcalico/calico/goldmane/pkg/storage"
 	"github.com/projectcalico/calico/goldmane/proto"
 	"github.com/projectcalico/calico/lib/std/chanutil"
+	"github.com/projectcalico/calico/lib/std/clock"
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 )
 
@@ -53,7 +53,7 @@ func NewStreamManager() *streamManager {
 		maxStreams:       maxStreams,
 		rl: logutils.NewRateLimitedLogger(
 			logutils.OptBurst(1),
-			logutils.OptInterval(15*time.Second),
+			logutils.OptInterval(15*clock.Second),
 		),
 	}
 }
@@ -187,7 +187,7 @@ func (m *streamManager) Receive(b storage.FlowProvider, id string) {
 	}
 
 	// No ID was given - send to all streams.
-	if err := chanutil.WriteWithDeadline(context.TODO(), m.in, b, 30*time.Second); err != nil {
+	if err := chanutil.WriteWithDeadline(context.TODO(), m.in, b, 30*clock.Second); err != nil {
 		m.rl.WithError(err).Error("stream manager failed to handle flow(s), dropping")
 	}
 }
@@ -230,7 +230,7 @@ func (m *streamManager) register(req *streamRequest) *stream {
 		cancel: cancel,
 		rl: logutils.NewRateLimitedLogger(
 			logutils.OptBurst(1),
-			logutils.OptInterval(15*time.Second),
+			logutils.OptInterval(15*clock.Second),
 		),
 	}
 	go stream.run()
