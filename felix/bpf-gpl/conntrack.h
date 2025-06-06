@@ -1007,27 +1007,40 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 						src_to_dst->ifindex, ifindex);
 			}
 
-			bool rpf_passed = false;
+			int rpf_passed = RPF_RES_FAIL;
 			if (same_if || ret_from_tun || CALI_F_NAT_IF || CALI_F_LO) {
 				/* Do not worry about packets returning from the same direction as
 				 * the outgoing packets.
 				 *
 				 * Do not check if packets are returning from the NP vxlan tunnel.
 				 */
-				rpf_passed = true;
+				rpf_passed = RPF_RES_STRICT;
 			} else if (CALI_F_HEP) {
 				rpf_passed = hep_rpf_check(ctx);
 			} else {
 				rpf_passed = wep_rpf_check(ctx, cali_rt_lookup(&ctx->state->ip_src));
 			}
-			if (!rpf_passed) {
+
+			switch (rpf_passed) {
+			case RPF_RES_FAIL:
 				ct_result_set_flag(result.rc, CT_RES_RPF_FAILED);
 				src_to_dst->ifindex = CT_INVALID_IFINDEX;
 				CALI_CT_DEBUG("CT RPF failed invalidating ifindex");
-			} else if (!related) {
-				CALI_CT_DEBUG("Updating ifindex from %d to %d",
-						src_to_dst->ifindex, ifindex);
-				src_to_dst->ifindex = ifindex;
+				break;
+			case RPF_RES_STRICT:
+				if (!related) {
+					CALI_CT_DEBUG("Updating ifindex from %d to %d",
+							src_to_dst->ifindex, ifindex);
+					src_to_dst->ifindex = ifindex;
+				}
+				break;
+			case RPF_RES_LOOSE:
+				if (!related) {
+					CALI_CT_DEBUG("Packet from unexpected ingress dev - rpf loose - reset ifindex",
+							src_to_dst->ifindex, ifindex);
+					src_to_dst->ifindex = CT_INVALID_IFINDEX;
+				}
+				break;
 			}
 		} else if (src_to_dst->ifindex != CT_INVALID_IFINDEX) {
 			/* if the devices do not match, we got here without bypassing the
