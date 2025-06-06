@@ -9,35 +9,39 @@
 #include "skb.h"
 #include "routes.h"
 
-static CALI_BPF_INLINE bool wep_rpf_check(struct cali_tc_ctx *ctx, struct cali_rt *r)
+#define RPF_RES_FAIL	0
+#define RPF_RES_STRICT	1
+#define RPF_RES_LOOSE	2
+
+static CALI_BPF_INLINE int wep_rpf_check(struct cali_tc_ctx *ctx, struct cali_rt *r)
 {
         CALI_DEBUG("Workload RPF check src=" IP_FMT " skb iface=%d.",
                         debug_ip(ctx->state->ip_src), ctx->skb->ifindex);
         if (!r) {
                 CALI_INFO("Workload RPF fail: missing route.");
-                return false;
+                return RPF_RES_FAIL;
         }
 #ifdef IPVER6
 	if (ctx->state->ip_proto == IPPROTO_ICMPV6) {
-		return true;
+		return RPF_RES_STRICT;
 	}
 #endif
         if (!cali_rt_flags_local_workload(r->flags)) {
                 CALI_INFO("Workload RPF fail: not a local workload.");
-                return false;
+                return RPF_RES_FAIL;
         }
         if (r->if_index != ctx->skb->ifindex) {
                 CALI_INFO("Workload RPF fail skb iface (%d) != route iface (%d)",
                                 ctx->skb->ifindex, r->if_index);
-                return false;
+                return RPF_RES_FAIL;
         }
 
-        return true;
+        return RPF_RES_STRICT;
 }
 
-static CALI_BPF_INLINE bool hep_rpf_check(struct cali_tc_ctx *ctx)
+static CALI_BPF_INLINE int hep_rpf_check(struct cali_tc_ctx *ctx)
 {
-	bool ret = false;
+	int ret = RPF_RES_FAIL;
 	bool strict;
 #ifdef IPVER6
 	bool linkLocal = false;
@@ -86,7 +90,9 @@ static CALI_BPF_INLINE bool hep_rpf_check(struct cali_tc_ctx *ctx)
 		case BPF_FIB_LKUP_RET_SUCCESS:
 		case BPF_FIB_LKUP_RET_NO_NEIGH:
 			if (strict) {
-				ret = ctx->skb->ingress_ifindex == fib_params.ifindex;
+				if (ctx->skb->ingress_ifindex == fib_params.ifindex) {
+					ret = RPF_RES_STRICT;
+				}
 #ifdef IPVER6
 #ifdef VERIFIER_IS_COOL
 				CALI_DEBUG("Host RPF check skb strict if %d", fib_params.ifindex);
@@ -96,7 +102,11 @@ static CALI_BPF_INLINE bool hep_rpf_check(struct cali_tc_ctx *ctx)
 						debug_ip(ctx->state->ip_src), fib_params.ifindex);
 #endif
 			} else {
-				ret = fib_params.ifindex != CT_INVALID_IFINDEX;
+				if (ctx->skb->ingress_ifindex == fib_params.ifindex) {
+					ret = RPF_RES_STRICT;
+				} else if (fib_params.ifindex != CT_INVALID_IFINDEX) {
+					ret = RPF_RES_LOOSE;
+				}
 #ifdef IPVER6
 #ifdef VERIFIER_IS_COOL
 				CALI_DEBUG("Host RPF check skb loose if %d", fib_params.ifindex);
@@ -110,7 +120,7 @@ static CALI_BPF_INLINE bool hep_rpf_check(struct cali_tc_ctx *ctx)
 #ifdef IPVER6
 		case BPF_FIB_LKUP_RET_NOT_FWDED:
 			if (linkLocal) {
-				ret = true;
+				ret = RPF_RES_STRICT;
 			}
 			break;
 #endif
