@@ -327,6 +327,59 @@ func MaglevMapV6() maps.MapWithExistsCheck {
 	return maps.NewPinnedMap(MaglevBackendMapV6Parameters)
 }
 
+type MaglevMapMemV6 map[MaglevBackendKeyV6]BackendValueV6
+
+func (m MaglevMapMemV6) Equal(cmp MaglevMapMemV6) bool {
+	if len(m) != len(cmp) {
+		return false
+	}
+
+	for k, v := range m {
+		if v2, ok := cmp[k]; !ok || v != v2 {
+			return false
+		}
+	}
+
+	return true
+}
+
+// LoadMaglevMap loads the maglev NAT map into a go map or returns an error
+func LoadMaglevMapV6(m maps.Map) (MaglevMapMemV6, error) {
+	ret := make(MaglevMapMemV6)
+
+	if err := m.Open(); err != nil {
+		return nil, err
+	}
+
+	iterFn := MaglevMapMemV6Iter(ret)
+
+	err := m.Iter(func(k, v []byte) maps.IteratorAction {
+		iterFn(k, v)
+		return maps.IterNone
+	})
+	if err != nil {
+		ret = nil
+	}
+
+	return ret, err
+}
+
+// MaglevMapMemIter returns maps.MapIter that loads the provided MaglevMapMem
+func MaglevMapMemV6Iter(m MaglevMapMemV6) func(k, v []byte) {
+	ks := len(MaglevBackendKeyV6{})
+	vs := len(BackendValueV6{})
+
+	return func(k, v []byte) {
+		var key MaglevBackendKeyV6
+		copy(key[:ks], k[:ks])
+
+		var val BackendValueV6
+		copy(val[:vs], v[:vs])
+
+		m[key] = val
+	}
+}
+
 // NATMapMem represents FrontendMap loaded into memory
 type MapMemV6 map[FrontendKeyV6]FrontendValueV6
 
