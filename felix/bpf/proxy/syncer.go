@@ -430,7 +430,7 @@ func (s *Syncer) applySvc(skey svcKey, sinfo Service, eps []k8sp.Endpoint) error
 		return err
 	}
 
-	s.updateMaglevService(skey, sinfo, id, eps)
+	s.updateMaglevService(skey, sinfo, eps)
 
 	s.newSvcMap[skey] = svcInfo{
 		id:         id,
@@ -849,7 +849,11 @@ func newDefaultMaglev() *maglev.ConsistentHash {
 	return maglev.NewConsistentHash(maglev.WithHash(fnv.New32(), fnv.New32()))
 }
 
-func (s *Syncer) updateMaglevService(skey svcKey, sinfo Service, id uint32, eps []k8sp.Endpoint) error {
+func (s *Syncer) updateMaglevService(skey svcKey, sinfo Service, eps []k8sp.Endpoint) error {
+	if len(eps) == 0 || eps == nil {
+		return nil
+	}
+
 	// ALEX TODO loadbalancer IP awareness.
 	vip := sinfo.ClusterIP()
 	port := uint16(sinfo.Port())
@@ -862,24 +866,23 @@ func (s *Syncer) updateMaglevService(skey svcKey, sinfo Service, id uint32, eps 
 	}
 	s.maglevHashMap[skey] = consistentHash
 
-	s.writeMaglevSvcBackends(vip, port, proto, consistentHash.Generate())
+	n := time.Now()
+	lut := consistentHash.Generate()
+	s.writeMaglevSvcBackends(vip, port, proto, lut)
+	dt := time.Since(n)
+	log.WithFields(log.Fields{
+		"lut": lut,
+	}).Infof("Wrote maglev service '%s' backends (%d) in %fs", skey.sname, len(eps), dt.Seconds())
 
 	return nil
 }
 
 func (s *Syncer) writeMaglevSvcBackends(vip net.IP, port uint16, protocol uint8, lut []k8sp.Endpoint) {
-	if log.GetLevel() >= log.DebugLevel {
-		log.WithFields(log.Fields{
-			"svcVIP": vip,
-			"LUT":    lut,
-		}).Debug("Writing Maglev LUT (RIP to your terminal buffer).")
+	for i, b := range lut {
+		mKey := s.newMaglevBackendKey(vip, port, protocol, uint32(i))
+		mVal := s.newBackendValue(net.ParseIP(b.IP()), uint16(b.Port()))
+		s.bpfMaglevEps.Desired().Set(mKey, mVal)
 	}
-
-	// for i, b := range lut {
-	// 	mKey := s.newMaglevBackendKey(vip, port, protocol, uint32(i))
-	// 	mVal := s.newBackendValue(net.ParseIP(b.IP()), uint16(b.Port()))
-	// 	s.bpfMaglevEps.Desired().Set(mKey, mVal)
-	// }
 }
 
 func (s *Syncer) writeSvcBackend(svcID uint32, idx uint32, ep k8sp.Endpoint) error {
