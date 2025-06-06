@@ -28,14 +28,28 @@ static CALI_BPF_INLINE int try_redirect_to_peer(struct cali_tc_ctx *ctx)
 	return TC_ACT_UNSPEC;
 }
 
+static CALI_BPF_INLINE void fib_error_log(struct cali_tc_ctx *ctx,int rc)
+{
+	if (rc < 0) {
+		CALI_DEBUG("FIB lookup failed (bad input): %d.", rc);
+		rc = TC_ACT_UNSPEC;
+	} else {
+		CALI_DEBUG("FIB lookup failed (FIB problem): %d.", rc);
+		rc = TC_ACT_UNSPEC;
+	}
+}
+
 static CALI_BPF_INLINE int forward_or_drop(struct cali_tc_ctx *ctx)
 {
 	int rc = ctx->fwd.res;
-	enum calico_reason reason = ctx->fwd.reason;
 	struct cali_tc_state *state = ctx->state;
 
 	if (rc == TC_ACT_SHOT) {
 		goto deny;
+	}
+
+	if (ctx->state->flags & CALI_ST_SKIP_REDIR_ONCE) {
+		goto skip_fib;
 	}
 
 	if (rc == CALI_RES_REDIR_BACK) {
@@ -318,6 +332,27 @@ try_fib_external:
 		rc = bpf_fib_lookup(ctx->skb, fib_params(ctx), sizeof(struct bpf_fib_lookup),
 				ctx->fwd.fib_flags | BPF_FIB_LOOKUP_SKIP_NEIGH);
 		switch (rc) {
+		case BPF_FIB_LKUP_RET_FRAG_NEEDED:
+			/* We are not asking for an MTU check, but we may still get
+			 * BPF_FIB_LKUP_RET_FRAG_NEEDED if the device is not yet UP
+			 * despite the mtu being larger than the packet
+			 * https://github.com/torvalds/linux/blob/3349ada3cffdbe4579872a004360daa31938f683/include/linux/netdevice.h#L4242
+			 * This happens on wireguard device in FV test, but the device accepts
+			 * forwarded packets. It should be just a start up issue and not a
+			 * real issue in production.
+			 *
+			 * The irony is that if we did ask for MTU check, we would not get
+			 * BPF_FIB_LKUP_RET_NO_NEIGH and all would proceed as expected.
+			 * But we do not want to ask for an MTU check for various reason
+			 * related to us growing the packets ourselves.
+			 * https://github.com/projectcalico/calico/commit/78c85f96b2aa4ae76acfaa04bb8823c2ad76f9bd
+			 */
+			CALI_DEBUG("mtu_result %d dev %d", fib_params(ctx)->mtu_result, fib_params(ctx)->ifindex);
+			if (!skb_is_gso(ctx->skb) && fib_params(ctx)->mtu_result < bpf_htons(ctx->state->ip_size)) {
+				fib_error_log(ctx, rc);
+				rc = TC_ACT_UNSPEC;
+				break;
+			}
 		case 0:
 		case BPF_FIB_LKUP_RET_NO_NEIGH:
 #ifdef IPVER6
@@ -327,7 +362,7 @@ try_fib_external:
 #endif
 
 			if (!fib_approve(ctx, fib_params(ctx)->ifindex)) {
-				reason = CALI_REASON_WEP_NOT_READY;
+				ctx->fwd.reason = CALI_REASON_WEP_NOT_READY;
 				goto deny;
 			}
 
@@ -344,15 +379,8 @@ try_fib_external:
 			rc = bpf_redirect_neigh(fib_params(ctx)->ifindex, &nh_params, sizeof(nh_params), 0);
 			break;
 		default:
-			if (rc < 0) {
-				CALI_DEBUG("FIB lookup failed (bad input): %d.", rc);
-				rc = TC_ACT_UNSPEC;
-			} else {
-				CALI_DEBUG("FIB lookup failed (FIB problem): %d.", rc);
-				rc = TC_ACT_UNSPEC;
-			}
-
-			break;
+			fib_error_log(ctx, rc);
+			rc = TC_ACT_UNSPEC;
 		}
 
 no_fib_redirect:
@@ -484,7 +512,7 @@ allow:
 
 		if (rc ==  TC_ACT_SHOT) {
 			CALI_INFO("Final result=DENY (%d). Program execution time: %lluns",
-					reason, prog_end_time-state->prog_start_time);
+					ctx->fwd.reason, prog_end_time-state->prog_start_time);
 		} else {
 			if (CALI_F_VXLAN && CALI_F_TO_HOST) {
 				bpf_skb_change_type(ctx->skb, PACKET_HOST);

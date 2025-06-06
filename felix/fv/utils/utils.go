@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -294,4 +295,51 @@ func GetSysArch() string {
 		arch = "amd64"
 	}
 	return arch
+}
+
+func GetUbuntuRelease() string {
+	// The full shell command pipeline
+	cmdString := "lsb_release -r | awk '{print $2}'"
+
+	// Execute the command using /bin/sh -c to interpret the pipe
+	cmd := exec.Command("/bin/sh", "-c", cmdString)
+
+	// Run the command and capture its standard output
+	output, err := cmd.Output()
+	if err != nil {
+		// Handle potential errors, e.g., command not found, permission issues, non-zero exit code
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			fmt.Printf("Error: Command exited with non-zero status: %d\n", exitErr.ExitCode())
+			fmt.Printf("Stderr: %s\n", exitErr.Stderr)
+		} else {
+			fmt.Printf("Error: Failed to execute command: %v\n", err)
+		}
+		return "" // Return an empty string on error
+	}
+
+	// Convert the output (byte slice) to a string and trim whitespace
+	versionString := strings.TrimSpace(string(output))
+	return versionString
+}
+
+func UbuntuReleaseGreater(release string) bool {
+	currentReleaseStr := GetUbuntuRelease()
+	if currentReleaseStr == "" {
+		fmt.Println("Could not get current Ubuntu release for comparison.")
+		return false
+	}
+
+	currentRelease, err := strconv.ParseFloat(currentReleaseStr, 64)
+	if err != nil {
+		fmt.Printf("Error parsing current Ubuntu release '%s' to float: %v\n", currentReleaseStr, err)
+		return false
+	}
+
+	compareRelease, err := strconv.ParseFloat(release, 64)
+	if err != nil {
+		fmt.Printf("Error parsing provided release '%s' to float: %v\n", release, err)
+		return false
+	}
+
+	return currentRelease > compareRelease
 }

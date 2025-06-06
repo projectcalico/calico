@@ -40,6 +40,7 @@ const (
 	SubProgTCHostCtConflict
 	SubProgIcmpInnerNat
 	SubProgNewFlow
+	SubProgIPFrag
 	SubProgTCMainDebug
 
 	SubProgXDPMain    = SubProgTCMain
@@ -57,6 +58,7 @@ var tcSubProgNames = []string{
 	"calico_tc_host_ct_conflict",
 	"calico_tc_skb_icmp_inner_nat",
 	"calico_tc_skb_new_flow_entrypoint",
+	"calico_tc_skb_ipv4_frag",
 }
 
 var xdpSubProgNames = []string{
@@ -203,6 +205,10 @@ func (pm *ProgramsMap) newLayout(at AttachType, obj *libbpf.Obj) (Layout, error)
 		}
 
 		if SubProg(idx) == SubProgTCHostCtConflict && !at.hasHostConflictProg() {
+			continue
+		}
+
+		if SubProg(idx) == SubProgIPFrag && !at.hasIPDefrag() {
 			continue
 		}
 

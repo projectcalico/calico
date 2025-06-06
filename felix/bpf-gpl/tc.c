@@ -56,6 +56,10 @@
 #include "bpf_helpers.h"
 #include "rule_counters.h"
 
+#ifndef IPVER6
+#include "ip_v4_fragment.h"
+#endif
+
 #define HAS_HOST_CONFLICT_PROG CALI_F_TO_HEP
 
 /* calico_tc_main is the main function used in all of the tc programs.  It is specialised
@@ -197,11 +201,25 @@ int calico_tc_main(struct __sk_buff *skb)
 		ctx->fwd.res = TC_ACT_SHOT;
 		goto finalize;
 	}
+
+#ifndef IPVER6
+	if (CALI_F_FROM_HEP && ip_is_frag(ip_hdr(ctx))) {
+		CALI_JUMP_TO(ctx, PROG_INDEX_IP_FRAG);
+		goto deny;
+	}
+#endif
+
 	return pre_policy_processing(ctx);
 
 allow:
 finalize:
 	return forward_or_drop(ctx);
+
+#ifndef IPVER6
+deny:
+	ctx->fwd.res = TC_ACT_SHOT;
+	goto finalize;
+#endif
 }
 
 static CALI_BPF_INLINE int pre_policy_processing(struct cali_tc_ctx *ctx)
@@ -250,6 +268,20 @@ static CALI_BPF_INLINE int pre_policy_processing(struct cali_tc_ctx *ctx)
 			goto allow;
 		}
 	}
+
+#ifndef IPVER6
+	if ((CALI_F_FROM_HOST || CALI_F_FROM_WEP) && ip_is_frag(ip_hdr(ctx)) && !ip_is_first_frag(ip_hdr(ctx))) {
+		if (frags4_lookup_ct(ctx)) {
+			if (ip_is_last_frag(ip_hdr(ctx))) {
+				frags4_remove_ct(ctx);
+			}
+			goto allow;
+		}
+
+		deny_reason(ctx, CALI_REASON_FRAG_REORDER);
+		goto deny;
+	}
+#endif
 
 	ctx->state->pol_rc = CALI_POL_NO_MATCH;
 
@@ -760,6 +792,7 @@ static CALI_BPF_INLINE enum do_nat_res do_nat(struct cali_tc_ctx *ctx,
 				 */
 				rt = cali_rt_lookup(&STATE->post_nat_ip_dst);
 				if (!rt) {
+					CALI_DEBUG("missing rt found for " IP_FMT, debug_ip(STATE->post_nat_ip_dst));
 					deny_reason(ctx, CALI_REASON_RT_UNKNOWN);
 					goto deny;
 				}
@@ -1257,6 +1290,12 @@ int calico_tc_skb_accepted_entrypoint(struct __sk_buff *skb)
 		skb_log(ctx, true);
 	}
 
+#ifndef IPVER6
+	if ((CALI_F_FROM_HOST || CALI_F_FROM_WEP) && ip_is_first_frag(ip_hdr(ctx))) {
+		frags4_record_ct(ctx);
+	}
+#endif
+
 	ctx->fwd = calico_tc_skb_accepted(ctx);
 	return forward_or_drop(ctx);
 
@@ -1338,7 +1377,7 @@ int calico_tc_skb_new_flow_entrypoint(struct __sk_buff *skb)
 	if (CALI_F_TO_HOST && state->flags & CALI_ST_SKIP_FIB) {
 		ct_ctx_nat->flags |= CALI_CT_FLAG_SKIP_FIB;
 	}
-	if (CALI_F_FROM_HEP && state->flags & CALI_ST_SKIP_REDIR_PEER) {
+	if (state->flags & CALI_ST_SKIP_REDIR_PEER) {
 		ct_ctx_nat->flags |= CALI_CT_FLAG_SKIP_REDIR_PEER;
 	}
 	if (CALI_F_TO_WEP) {
@@ -1679,7 +1718,7 @@ icmp_ttl_exceeded:
 	state->icmp_type = ICMPV6_TIME_EXCEED;
 	state->icmp_code = ICMPV6_EXC_HOPLIMIT;
 #else
-	if (ip_frag_no(ip_hdr(ctx))) {
+	if (ip_is_frag(ip_hdr(ctx))) {
 		goto deny;
 	}
 	state->icmp_type = ICMP_TIME_EXCEEDED;
@@ -2035,3 +2074,47 @@ deny:
 	CALI_DEBUG("DENY due to policy");
 	return TC_ACT_SHOT;
 }
+
+#ifndef IPVER6
+SEC("tc")
+int calico_tc_skb_ipv4_frag(struct __sk_buff *skb)
+{
+	/* Initialise the context, which is stored on the stack, and the state, which
+	 * we use to pass data from one program to the next via tail calls. */
+	DECLARE_TC_CTX(_ctx,
+		.skb = skb,
+		.fwd = {
+			.res = TC_ACT_UNSPEC,
+			.reason = CALI_REASON_UNKNOWN,
+		},
+	);
+	struct cali_tc_ctx *ctx = &_ctx;
+
+	CALI_DEBUG("Entering calico_tc_skb_ipv4_frag");
+	CALI_DEBUG("iphdr_offset %d ihl %d", skb_iphdr_offset(ctx), ctx->ipheader_len);
+
+	if (skb_refresh_validate_ptrs(ctx, UDP_SIZE)) {
+		deny_reason(ctx, CALI_REASON_SHORT);
+		CALI_DEBUG("Too short");
+		goto deny;
+	}
+
+	tc_state_fill_from_iphdr_v4(ctx);
+
+	if (!frags4_handle(ctx)) {
+		deny_reason(ctx, CALI_REASON_FRAG_WAIT);
+		goto deny;
+	}
+	/* force it through stack to trigger any further necessary fragmentation */
+	ctx->state->flags |= CALI_ST_SKIP_REDIR_ONCE;
+
+	return pre_policy_processing(ctx);
+
+finalize:
+	return forward_or_drop(ctx);
+
+deny:
+	ctx->fwd.res = TC_ACT_SHOT;
+	goto finalize;
+}
+#endif /* !IPVER6 */

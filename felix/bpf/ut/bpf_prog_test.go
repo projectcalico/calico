@@ -45,6 +45,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/failsafes"
 	"github.com/projectcalico/calico/felix/bpf/hook"
 	"github.com/projectcalico/calico/felix/bpf/ifstate"
+	"github.com/projectcalico/calico/felix/bpf/ipfrags"
 	"github.com/projectcalico/calico/felix/bpf/ipsets"
 	"github.com/projectcalico/calico/felix/bpf/jump"
 	"github.com/projectcalico/calico/felix/bpf/libbpf"
@@ -211,6 +212,7 @@ var tcJumpMapIndexes = map[string][]int{
 		tcdefs.ProgIndexHostCtConflict,
 		tcdefs.ProgIndexIcmpInnerNat,
 		tcdefs.ProgIndexNewFlow,
+		tcdefs.ProgIndexIPFrag,
 	},
 	"IPv4 debug": []int{
 		tcdefs.ProgIndexMainDebug,
@@ -221,6 +223,7 @@ var tcJumpMapIndexes = map[string][]int{
 		tcdefs.ProgIndexHostCtConflictDebug,
 		tcdefs.ProgIndexIcmpInnerNatDebug,
 		tcdefs.ProgIndexNewFlowDebug,
+		tcdefs.ProgIndexIPFragDebug,
 	},
 	"IPv6": []int{
 		tcdefs.ProgIndexMain,
@@ -579,12 +582,12 @@ func bpftool(args ...string) ([]byte, error) {
 var (
 	mapInitOnce sync.Once
 
-	natMap, natBEMap, ctMap, rtMap, ipsMap, testStateMap, affinityMap, arpMap, fsafeMap     maps.Map
-	natMapV6, natBEMapV6, ctMapV6, rtMapV6, ipsMapV6, affinityMapV6, arpMapV6, fsafeMapV6   maps.Map
-	stateMap, countersMap, ifstateMap, progMap, progMapXDP, policyJumpMap, policyJumpMapXDP maps.Map
-	perfMap                                                                                 maps.Map
-	profilingMap                                                                            maps.Map
-	allMaps                                                                                 []maps.Map
+	natMap, natBEMap, ctMap, rtMap, ipsMap, testStateMap, affinityMap, arpMap, fsafeMap, ipfragsMap maps.Map
+	natMapV6, natBEMapV6, ctMapV6, rtMapV6, ipsMapV6, affinityMapV6, arpMapV6, fsafeMapV6           maps.Map
+	stateMap, countersMap, ifstateMap, progMap, progMapXDP, policyJumpMap, policyJumpMapXDP         maps.Map
+	perfMap                                                                                         maps.Map
+	profilingMap, ipfragsMapTmp                                                                     maps.Map
+	allMaps                                                                                         []maps.Map
 )
 
 func initMapsOnce() {
@@ -608,6 +611,8 @@ func initMapsOnce() {
 		fsafeMap = failsafes.Map()
 		fsafeMapV6 = failsafes.MapV6()
 		countersMap = counters.Map()
+		ipfragsMap = ipfrags.Map()
+		ipfragsMapTmp = ipfrags.MapTmp()
 		ifstateMap = ifstate.Map()
 		policyJumpMap = jump.Map()
 		policyJumpMapXDP = jump.XDPMap()
@@ -617,7 +622,7 @@ func initMapsOnce() {
 
 		allMaps = []maps.Map{natMap, natBEMap, natMapV6, natBEMapV6, ctMap, ctMapV6, rtMap, rtMapV6, ipsMap, ipsMapV6,
 			stateMap, testStateMap, affinityMap, affinityMapV6, arpMap, arpMapV6, fsafeMap, fsafeMapV6,
-			countersMap, ifstateMap, profilingMap,
+			countersMap, ipfragsMap, ipfragsMapTmp, ifstateMap, profilingMap,
 			policyJumpMap, policyJumpMapXDP}
 		for _, m := range allMaps {
 			err := m.EnsureExists()
@@ -642,7 +647,7 @@ func cleanUpMaps() {
 	defer log.SetLevel(logLevel)
 
 	for _, m := range allMaps {
-		if m == stateMap || m == testStateMap || m == progMap || m == countersMap {
+		if m == stateMap || m == testStateMap || m == progMap || m == countersMap || m == ipfragsMapTmp {
 			continue // Can't clean up array maps
 		}
 		log.WithField("map", m.GetName()).Info("Cleaning")
