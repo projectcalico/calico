@@ -546,10 +546,9 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	// iptables and nftables implementations.
 	var mangleTableV4NFT, natTableV4NFT, rawTableV4NFT, filterTableV4NFT generictables.Table
 	var mangleTableV4IPT, natTableV4IPT, rawTableV4IPT, filterTableV4IPT generictables.Table
-	var nftablesV4RootTable *nftables.NftablesTable
 
 	// Create nftables Table implementations.
-	nftablesV4RootTable = nftables.NewTable("calico", 4, rules.RuleHashPrefix, featureDetector, nftablesOptions)
+	nftablesV4RootTable := nftables.NewTable("calico", 4, rules.RuleHashPrefix, featureDetector, nftablesOptions)
 	mangleTableV4NFT = nftables.NewTableLayer("mangle", nftablesV4RootTable)
 	natTableV4NFT = nftables.NewTableLayer("nat", nftablesV4RootTable)
 	rawTableV4NFT = nftables.NewTableLayer("raw", nftablesV4RootTable)
@@ -765,10 +764,9 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 	// iptables / nftables specific filter Table implementations for IPv6.
 	var filterTableV6NFT, filterTableV6IPT generictables.Table
-	var nftablesV6RootTable *nftables.NftablesTable
 
 	// Create nftables Table implementations for IPv6.
-	nftablesV6RootTable = nftables.NewTable("calico", 6, rules.RuleHashPrefix, featureDetector, nftablesOptions)
+	nftablesV6RootTable := nftables.NewTable("calico", 6, rules.RuleHashPrefix, featureDetector, nftablesOptions)
 	filterTableV6NFT = nftables.NewTableLayer("filter", nftablesV6RootTable)
 
 	// Create iptables Table implementations for IPv6.
