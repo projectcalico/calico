@@ -22,12 +22,11 @@ import (
 	"reflect"
 	"strconv"
 
-	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
 
@@ -41,27 +40,31 @@ import (
 
 const (
 	BlockAffinityResourceName = "BlockAffinities"
-	BlockAffinityCRDName      = "blockaffinities.crd.projectcalico.org"
 )
 
-func NewBlockAffinityClient(c kubernetes.Interface, r rest.Interface) K8sResourceClient {
+func NewBlockAffinityClient(r rest.Interface, useV3 bool) K8sResourceClient {
 	// Create a resource client which manages k8s CRDs.
-	rc := customK8sResourceClient{
-		clientSet:       c,
+	rc := customResourceClient{
 		restClient:      r,
-		name:            BlockAffinityCRDName,
 		resource:        BlockAffinityResourceName,
-		description:     "Calico IPAM block affinities",
 		k8sResourceType: reflect.TypeOf(libapiv3.BlockAffinity{}),
-		k8sResourceTypeMeta: metav1.TypeMeta{
-			Kind:       libapiv3.KindBlockAffinity,
-			APIVersion: apiv3.GroupVersionCurrent,
-		},
-		k8sListType:  reflect.TypeOf(libapiv3.BlockAffinityList{}),
-		resourceKind: libapiv3.KindBlockAffinity,
+		k8sListType:     reflect.TypeOf(libapiv3.BlockAffinityList{}),
+		kind:            libapiv3.KindBlockAffinity,
+		noTransform:     useV3,
 	}
 
-	return &blockAffinityClient{rc: rc}
+	if useV3 {
+		// If this is a v3 resource, then we need to use the v3 API types, as they
+		// differ.
+		rc.k8sResourceType = reflect.TypeOf(v3.BlockAffinity{})
+		rc.k8sListType = reflect.TypeOf(v3.BlockAffinityList{})
+	}
+
+	// TODO: CASEY
+	return &blockAffinityClient{
+		rc: rc,
+		v3: useV3,
+	}
 }
 
 // blockAffinityClient implements the api.Client interface for BlockAffinity objects. It
@@ -70,43 +73,72 @@ func NewBlockAffinityClient(c kubernetes.Interface, r rest.Interface) K8sResourc
 // It uses a customK8sResourceClient under the covers to perform CRUD operations on
 // kubernetes CRDs.
 type blockAffinityClient struct {
-	rc customK8sResourceClient
+	rc customResourceClient
+	v3 bool
 }
 
 // toV1 converts the given v3 CRD KVPair into a v1 model representation
 // which can be passed to the IPAM code.
 func (c *blockAffinityClient) toV1(kvpv3 *model.KVPair) (*model.KVPair, error) {
-	// Parse the CIDR into a struct.
-	_, cidr, err := net.ParseCIDR(kvpv3.Value.(*libapiv3.BlockAffinity).Spec.CIDR)
-	if err != nil {
-		log.WithField("cidr", cidr).WithError(err).Error("failed to parse cidr")
-		return nil, err
-	}
-	state := model.BlockAffinityState(kvpv3.Value.(*libapiv3.BlockAffinity).Spec.State)
-
-	// Determine deleted status.
-	deletedString := kvpv3.Value.(*libapiv3.BlockAffinity).Spec.Deleted
-	del := false
-	if deletedString != "" {
-		del, err = strconv.ParseBool(deletedString)
+	if c.v3 {
+		// Parse the CIDR into a struct.
+		_, cidr, err := net.ParseCIDR(kvpv3.Value.(*v3.BlockAffinity).Spec.CIDR)
 		if err != nil {
-			return nil, fmt.Errorf("Failed to parse deleted value as bool: %s", err)
+			log.WithField("cidr", cidr).WithError(err).Error("failed to parse cidr")
+			return nil, err
 		}
-	}
+		state := model.BlockAffinityState(kvpv3.Value.(*v3.BlockAffinity).Spec.State)
 
-	return &model.KVPair{
-		Key: model.BlockAffinityKey{
-			CIDR:         *cidr,
-			AffinityType: kvpv3.Value.(*libapiv3.BlockAffinity).Spec.Type,
-			Host:         kvpv3.Value.(*libapiv3.BlockAffinity).Spec.Node,
-		},
-		Value: &model.BlockAffinity{
-			State:   state,
-			Deleted: del,
-		},
-		Revision: kvpv3.Revision,
-		UID:      &kvpv3.Value.(*libapiv3.BlockAffinity).UID,
-	}, nil
+		// Determine deleted status.
+		del := kvpv3.Value.(*v3.BlockAffinity).Spec.Deleted
+
+		return &model.KVPair{
+			Key: model.BlockAffinityKey{
+				CIDR:         *cidr,
+				AffinityType: kvpv3.Value.(*v3.BlockAffinity).Spec.Type,
+				Host:         kvpv3.Value.(*v3.BlockAffinity).Spec.Node,
+			},
+			Value: &model.BlockAffinity{
+				State:   state,
+				Deleted: del,
+			},
+			Revision: kvpv3.Revision,
+			UID:      &kvpv3.Value.(*v3.BlockAffinity).UID,
+		}, nil
+
+	} else {
+		// Parse the CIDR into a struct.
+		_, cidr, err := net.ParseCIDR(kvpv3.Value.(*libapiv3.BlockAffinity).Spec.CIDR)
+		if err != nil {
+			log.WithField("cidr", cidr).WithError(err).Error("failed to parse cidr")
+			return nil, err
+		}
+		state := model.BlockAffinityState(kvpv3.Value.(*libapiv3.BlockAffinity).Spec.State)
+
+		// Determine deleted status.
+		deletedString := kvpv3.Value.(*libapiv3.BlockAffinity).Spec.Deleted
+		del := false
+		if deletedString != "" {
+			del, err = strconv.ParseBool(deletedString)
+			if err != nil {
+				return nil, fmt.Errorf("Failed to parse deleted value as bool: %s", err)
+			}
+		}
+
+		return &model.KVPair{
+			Key: model.BlockAffinityKey{
+				CIDR:         *cidr,
+				AffinityType: kvpv3.Value.(*libapiv3.BlockAffinity).Spec.Type,
+				Host:         kvpv3.Value.(*libapiv3.BlockAffinity).Spec.Node,
+			},
+			Value: &model.BlockAffinity{
+				State:   state,
+				Deleted: del,
+			},
+			Revision: kvpv3.Revision,
+			UID:      &kvpv3.Value.(*libapiv3.BlockAffinity).UID,
+		}, nil
+	}
 }
 
 // parseKey parses the given model.Key, returning a suitable name, CIDR
@@ -140,12 +172,36 @@ func (c *blockAffinityClient) parseKey(k model.Key) (name, cidr, host, affinityT
 func (c *blockAffinityClient) toV3(kvpv1 *model.KVPair) *model.KVPair {
 	name, cidr, host, affinityType := c.parseKey(kvpv1.Key)
 	state := kvpv1.Value.(*model.BlockAffinity).State
-	return &model.KVPair{
+
+	kvp := &model.KVPair{
 		Key: model.ResourceKey{
 			Name: name,
 			Kind: libapiv3.KindBlockAffinity,
 		},
-		Value: &libapiv3.BlockAffinity{
+		Revision: kvpv1.Revision,
+	}
+
+	if c.v3 {
+		// If this is a v3 resource, then we need to use the v3 API version.
+		kvp.Value = &v3.BlockAffinity{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       libapiv3.KindBlockAffinity,
+				APIVersion: "projectcalico.org/v3",
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:            name,
+				ResourceVersion: kvpv1.Revision,
+			},
+			Spec: v3.BlockAffinitySpec{
+				State:   v3.BlockAffinityState(state),
+				Node:    host,
+				Type:    affinityType,
+				CIDR:    cidr,
+				Deleted: kvpv1.Value.(*model.BlockAffinity).Deleted,
+			},
+		}
+	} else {
+		kvp.Value = &libapiv3.BlockAffinity{
 			TypeMeta: metav1.TypeMeta{
 				Kind:       libapiv3.KindBlockAffinity,
 				APIVersion: "crd.projectcalico.org/v1",
@@ -161,9 +217,10 @@ func (c *blockAffinityClient) toV3(kvpv1 *model.KVPair) *model.KVPair {
 				CIDR:    cidr,
 				Deleted: fmt.Sprintf("%t", kvpv1.Value.(*model.BlockAffinity).Deleted),
 			},
-		},
-		Revision: kvpv1.Revision,
+		}
 	}
+
+	return kvp
 }
 
 // isV1BlockAffinityKey checks if the key is in the v1 format.
