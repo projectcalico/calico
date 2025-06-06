@@ -19,7 +19,7 @@ kubeControllers:
   image: kube-controllers
   registry: quay.io/calico
 flannel:
-  image: quay.io/flannel/flannel
+  image: docker.io/flannel/flannel
   tag: v0.24.4
 flannelMigration:
   image: flannel-migration
