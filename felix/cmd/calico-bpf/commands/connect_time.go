@@ -30,7 +30,7 @@ var ctCleanupCmd = &cobra.Command{
 	Use:   "clean",
 	Short: "removes connect-time BPF programs",
 	Run: func(cmd *cobra.Command, args []string) {
-		if err := nat.RemoveConnectTimeLoadBalancer(""); err != nil {
+		if err := nat.RemoveConnectTimeLoadBalancer(true, ""); err != nil {
 			log.WithError(err).Error("Failed to clean up connect-time load balancer.")
 		}
 	},
