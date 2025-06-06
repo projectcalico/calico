@@ -72,41 +72,27 @@ int bpf_update_link(struct bpf_link *link, struct bpf_object *obj, char *progNam
 	return err;
 }
 
-int bpf_attach_type(int type) {
-	switch (type) {
-		case 0:
-			return BPF_CGROUP_INET4_CONNECT;
-		case 1:
-			return BPF_CGROUP_UDP4_SENDMSG;
-		case 2:
-			return BPF_CGROUP_UDP4_RECVMSG;
-		case 3:
-			return BPF_CGROUP_INET6_CONNECT;
-		case 4:
-			return BPF_CGROUP_UDP6_SENDMSG;
-		case 5:
-			return BPF_CGROUP_UDP6_RECVMSG;
-	}
-	return -1;
-}
+int bpf_ctlb_get_prog_fd(int target_fd, int attach_type) {
+       int err;
+        __u32 attach_flags, prog_cnt, prog_id;
 
-int bpf_ctlb_detach_legacy(int target_fd, int attach_type) {
-	int err;
-	__u32 attach_flags, prog_cnt, prog_id;
-
-	err = bpf_prog_query(target_fd, attach_type, 0, &attach_flags, &prog_id, &prog_cnt);
-	if (err) {
-		goto out;
-	}
-	int prog_fd = bpf_prog_get_fd_by_id(prog_id);
-	if (prog_fd < 0) {
-		err = -prog_fd;
-		goto out;
-	}
-	err = bpf_prog_detach2(prog_fd, target_fd, attach_type);
+        err = bpf_prog_query(target_fd, attach_type, 0, &attach_flags, &prog_id, &prog_cnt);
+        if (err) {
+                goto out;
+        }
+        int prog_fd = bpf_prog_get_fd_by_id(prog_id);
+        if (prog_fd < 0) {
+                err = -prog_fd;
+                goto out;
+        }
 out:
         set_errno(err);
-        return err;
+        return prog_fd;
+}
+
+
+void bpf_ctlb_detach_legacy(int prog_fd, int target_fd, int attach_type) {
+        set_errno(bpf_prog_detach2(prog_fd, target_fd, attach_type));
 }
 
 void bpf_tc_program_attach(struct bpf_object *obj, char *secName, int ifIndex, bool ingress, int prio, uint handle)
@@ -357,7 +343,7 @@ out:
 	return link;
 }
 
-int bpf_program_attach_cgroup_legacy(struct bpf_object *obj, int cgroup_fd, char *name)
+void bpf_program_attach_cgroup_legacy(struct bpf_object *obj, int cgroup_fd, char *name)
 {
 	int err = 0, prog_fd;
 	struct bpf_program *prog;
@@ -379,7 +365,6 @@ int bpf_program_attach_cgroup_legacy(struct bpf_object *obj, int cgroup_fd, char
 
 out:
 	set_errno(err);
-	return err;
 }
 
 void bpf_ctlb_set_globals(struct bpf_map *map, uint udp_not_seen_timeo, bool exclude_udp)

@@ -57,7 +57,6 @@ type ipipManager struct {
 	ipSetMetadata      ipsets.IPSetMetadata
 
 	// Indicates if configuration has changed since the last apply.
-	routesDirty       bool
 	ipSetDirty        bool
 	externalNodeCIDRs []string
 	dpConfig          Config
@@ -128,6 +127,8 @@ func newIPIPManagerWithSims(
 		opRecorder: opRecorder,
 		routeMgr: newRouteManager(
 			mainRouteTable,
+			routetable.RouteClassIPIPTunnel,
+			routetable.RouteClassIPIPSameSubnet,
 			proto.IPPoolType_IPIP,
 			tunnelDevice,
 			ipVersion,
@@ -138,10 +139,7 @@ func newIPIPManagerWithSims(
 		),
 	}
 
-	m.routeMgr.routeClassTunnel = routetable.RouteClassIPIPTunnel
-	m.routeMgr.routeClassSameSubnet = routetable.RouteClassIPIPSameSubnet
 	m.routeMgr.setTunnelRouteFunc(m.route)
-
 	m.maybeUpdateRoutes()
 	return m
 }
@@ -165,7 +163,7 @@ func (m *ipipManager) OnUpdate(protoBufMsg interface{}) {
 		m.ipSetDirty = true
 		m.maybeUpdateRoutes()
 	default:
-		if m.dpConfig.ProgramRoutes {
+		if m.dpConfig.ProgramClusterRoutes {
 			m.routeMgr.OnUpdate(msg)
 		}
 	}
@@ -173,7 +171,7 @@ func (m *ipipManager) OnUpdate(protoBufMsg interface{}) {
 
 func (m *ipipManager) maybeUpdateRoutes() {
 	// Only update routes if only Felix is responsible for programming IPIP routes.
-	if m.dpConfig.ProgramRoutes {
+	if m.dpConfig.ProgramClusterRoutes {
 		m.routeMgr.triggerRouteUpdate()
 	}
 }
@@ -184,7 +182,7 @@ func (m *ipipManager) CompleteDeferredWork() error {
 		m.ipSetDirty = false
 	}
 
-	if m.dpConfig.ProgramRoutes {
+	if m.dpConfig.ProgramClusterRoutes {
 		return m.routeMgr.CompleteDeferredWork()
 	}
 	return nil
@@ -209,7 +207,7 @@ func (m *ipipManager) route(cidr ip.CIDR, r *proto.RouteUpdate) *routetable.Targ
 	// Extract the gateway addr for this route based on its remote address.
 	remoteAddr, ok := m.activeHostnameToIP[r.DstNodeName]
 	if !ok {
-		// When the local address arrives, it'll set routesDirty=true so this loop will execute again.
+		// When the local address arrives, it'll mark routes as dirty so this loop will execute again.
 		return nil
 	}
 
@@ -222,14 +220,14 @@ func (m *ipipManager) route(cidr ip.CIDR, r *proto.RouteUpdate) *routetable.Targ
 	}
 }
 
-func (m *ipipManager) KeepIPIPDeviceInSync(
+func (m *ipipManager) keepIPIPDeviceInSync(
 	ctx context.Context,
 	mtu int,
 	xsumBroken bool,
 	wait time.Duration,
 	parentIfaceC chan string,
 ) {
-	m.routeMgr.KeepDeviceInSync(ctx, mtu, xsumBroken, wait, parentIfaceC, m.device)
+	m.routeMgr.keepDeviceInSync(ctx, mtu, xsumBroken, wait, parentIfaceC, m.device)
 }
 
 func (m *ipipManager) device(_ netlink.Link) (netlink.Link, string, error) {

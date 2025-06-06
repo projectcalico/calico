@@ -40,6 +40,7 @@ import (
 	"github.com/projectcalico/calico/app-policy/proto"
 	"github.com/projectcalico/calico/app-policy/syncher"
 	"github.com/projectcalico/calico/app-policy/uds"
+	"github.com/projectcalico/calico/pkg/buildinfo"
 )
 
 const usage = `Dikastes - the decider.
@@ -56,10 +57,8 @@ Options:
   -d --dial <target>     Target to dial. [default: localhost:50051]
   --debug                Log at Debug level.`
 
-var VERSION string
-
 func main() {
-	arguments, err := docopt.ParseArgs(usage, nil, VERSION)
+	arguments, err := docopt.ParseArgs(usage, nil, buildinfo.Version)
 	if err != nil {
 		println(usage)
 		return
@@ -96,7 +95,7 @@ func runServer(arguments map[string]interface{}) {
 		}).Fatal("Unable to listen.")
 	}
 	defer lis.Close()
-	err = os.Chmod(filePath, 0777) // Anyone on system can connect.
+	err = os.Chmod(filePath, 0o777) // Anyone on system can connect.
 	if err != nil {
 		log.Fatal("Unable to set write permission on socket.")
 	}

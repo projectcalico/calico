@@ -174,7 +174,7 @@ type Config struct {
 	DeviceRouteSourceAddressIPv6   net.IP
 	DeviceRouteProtocol            netlink.RouteProtocol
 	RemoveExternalRoutes           bool
-	ProgramRoutes                  bool
+	ProgramClusterRoutes           bool
 	IPForwarding                   string
 	TableRefreshInterval           time.Duration
 	IptablesPostWriteCheckInterval time.Duration
@@ -690,7 +690,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		if config.BPFEnabled && bpfutils.BTFEnabled {
 			vxlanMTU = 0
 		}
-		go dp.vxlanManager.KeepVXLANDeviceInSync(
+		go dp.vxlanManager.keepVXLANDeviceInSync(
 			context.Background(),
 			vxlanMTU,
 			dataplaneFeatures.ChecksumOffloadBroken,
@@ -808,7 +808,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		dp.RegisterManager(newPolicyManager(rawTableV4, mangleTableV4, filterTableV4, ruleRenderer, 4, config.RulesConfig.NFTables))
 
 		// Clean up any leftover BPF state.
-		err := bpfnat.RemoveConnectTimeLoadBalancer("")
+		err := bpfnat.RemoveConnectTimeLoadBalancer(true, "")
 		if err != nil {
 			log.WithError(err).Info("Failed to remove BPF connect-time load balancer, ignoring.")
 		}
@@ -982,7 +982,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			log.Infof("Connect time load balancer enabled: %s", config.BPFConnTimeLB)
 		} else {
 			// Deactivate the connect-time load balancer.
-			err = nat.RemoveConnectTimeLoadBalancer(config.BPFCgroupV2)
+			err = nat.RemoveConnectTimeLoadBalancer(true, config.BPFCgroupV2)
 			if err != nil {
 				log.WithError(err).Warn("Failed to detach connect-time load balancer. Ignoring.")
 			}
@@ -1080,7 +1080,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			dp.loopSummarizer,
 		)
 		dp.ipipParentIfaceC = make(chan string, 1)
-		go dp.ipipManager.KeepIPIPDeviceInSync(
+		go dp.ipipManager.keepIPIPDeviceInSync(
 			context.Background(),
 			config.IPIPMTU,
 			dataplaneFeatures.ChecksumOffloadBroken,
@@ -1194,7 +1194,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			if config.BPFEnabled && bpfutils.BTFEnabled {
 				vxlanMTU = 0
 			}
-			go dp.vxlanManagerV6.KeepVXLANDeviceInSync(
+			go dp.vxlanManagerV6.keepVXLANDeviceInSync(
 				context.Background(),
 				vxlanMTU,
 				dataplaneFeatures.ChecksumOffloadBroken,

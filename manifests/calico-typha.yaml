@@ -1707,9 +1707,9 @@ spec:
                     PolicySyncPathPrefix is used to by Felix to communicate policy changes to external services,
                     like Application layer policy. [Default: Empty]
                   type: string
-                programRoutes:
+                programClusterRoutes:
                   description: |-
-                    ProgramRoutes specifies whether Felix should program IPIP or unencapsulated routes instead of BIRD.
+                    ProgramClusterRoutes specifies whether Felix should program IPIP routes instead of BIRD.
                     Felix always programs VXLAN routes. [Default: Disabled]
                   enum:
                     - Enabled

@@ -20,11 +20,11 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"time"
 
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/lib/std/chanutil"
+	"github.com/projectcalico/calico/lib/std/time"
 )
 
 // WatchFilesFn builds a closure that can be used to monitor the given files and send an update

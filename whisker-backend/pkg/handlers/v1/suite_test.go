@@ -16,12 +16,12 @@ package v1_test
 
 import (
 	"testing"
-	"time"
 
 	. "github.com/onsi/gomega"
 	"github.com/sirupsen/logrus"
 
 	apicontextmocks "github.com/projectcalico/calico/lib/httpmachinery/pkg/context/mocks"
+	"github.com/projectcalico/calico/lib/std/time"
 )
 
 type scaffold struct {

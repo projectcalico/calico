@@ -50,7 +50,7 @@ type routeManager struct {
 
 	tunnelDevice    string
 	tunnelDeviceMTU int
-	tunnelRoutes    func(ip.CIDR, *proto.RouteUpdate) *routetable.Target
+	tunnelRouteFn   func(ip.CIDR, *proto.RouteUpdate) *routetable.Target
 
 	// Hold pending updates.
 	routesByDest    map[string]*proto.RouteUpdate
@@ -80,6 +80,8 @@ type routeManager struct {
 
 func newRouteManager(
 	mainRouteTable routetable.Interface,
+	routeClassTunnel routetable.RouteClass,
+	routeClassSameSubnet routetable.RouteClass,
 	ippoolType proto.IPPoolType,
 	tunnelDevice string,
 	ipVersion uint8,
@@ -89,19 +91,21 @@ func newRouteManager(
 	nlHandle netlinkHandle,
 ) *routeManager {
 	return &routeManager{
-		hostname:        dpConfig.Hostname,
-		routeTable:      mainRouteTable,
-		routesByDest:    map[string]*proto.RouteUpdate{},
-		localIPAMBlocks: map[string]*proto.RouteUpdate{},
-		tunnelChangedC:  make(chan struct{}, 1),
-		tunnelDevice:    tunnelDevice,
-		tunnelDeviceMTU: mtu,
-		ipVersion:       ipVersion,
-		ippoolType:      ippoolType,
-		dpConfig:        dpConfig,
-		nlHandle:        nlHandle,
-		routeProtocol:   calculateRouteProtocol(dpConfig),
-		opRecorder:      opRecorder,
+		hostname:             dpConfig.Hostname,
+		routeTable:           mainRouteTable,
+		routeClassTunnel:     routeClassTunnel,
+		routeClassSameSubnet: routeClassSameSubnet,
+		routesByDest:         map[string]*proto.RouteUpdate{},
+		localIPAMBlocks:      map[string]*proto.RouteUpdate{},
+		tunnelChangedC:       make(chan struct{}, 1),
+		tunnelDevice:         tunnelDevice,
+		tunnelDeviceMTU:      mtu,
+		ipVersion:            ipVersion,
+		ippoolType:           ippoolType,
+		dpConfig:             dpConfig,
+		nlHandle:             nlHandle,
+		routeProtocol:        calculateRouteProtocol(dpConfig),
+		opRecorder:           opRecorder,
 		logCtx: logrus.WithFields(logrus.Fields{
 			"ipVersion":     ipVersion,
 			"tunnel device": tunnelDevice,
@@ -357,7 +361,7 @@ func (m *routeManager) updateRoutes() {
 			// We've got everything we need to program this route as a no-encap route.
 			noEncapRoutes = append(noEncapRoutes, *noEncapRoute)
 			logCtx.WithField("route", r).Debug("Destination in same subnet, using no-encap route.")
-		} else if tunnelRoute := m.tunnelRoutes(cidr, r); tunnelRoute != nil {
+		} else if tunnelRoute := m.tunnelRouteFn(cidr, r); tunnelRoute != nil {
 			tunnelRoutes = append(tunnelRoutes, *tunnelRoute)
 			logCtx.WithField("route", tunnelRoute).Debug("adding tunnel route to list for addition")
 		} else {
@@ -384,7 +388,7 @@ func (m *routeManager) updateRoutes() {
 }
 
 func (m *routeManager) setTunnelRouteFunc(fn func(ip.CIDR, *proto.RouteUpdate) *routetable.Target) {
-	m.tunnelRoutes = fn
+	m.tunnelRouteFn = fn
 }
 
 func blackholeRoutes(localIPAMBlocks map[string]*proto.RouteUpdate, proto netlink.RouteProtocol) []routetable.Target {
@@ -458,7 +462,7 @@ func (m *routeManager) detectParentIface() (netlink.Link, error) {
 }
 
 // KeepDeviceInSync runs in a loop and checks that the device is still correctly configured, and updates it if necessary.
-func (m *routeManager) KeepDeviceInSync(
+func (m *routeManager) keepDeviceInSync(
 	ctx context.Context,
 	mtu int,
 	xsumBroken bool,
