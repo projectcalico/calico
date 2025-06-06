@@ -35,6 +35,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/util/wait"
 
+	apisprojectcalicov3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/calico/cni-plugin/internal/pkg/utils/cri"
 	"github.com/projectcalico/calico/cni-plugin/internal/pkg/utils/winpol"
 	"github.com/projectcalico/calico/cni-plugin/pkg/types"
@@ -166,7 +167,7 @@ func (d *windowsDataplane) DoNetworking(
 
 	// We need to know the IPAM pools to program the correct NAT exclusion list.  Look those up
 	// before we take the global lock.
-	allIPAMPools, natOutgoing, err := lookupIPAMPools(ctx, podIP, calicoClient)
+	allIPAMPools, natOutgoing, natOutgoingExclusions, err := lookupIPAMPools(ctx, podIP, calicoClient)
 	if err != nil {
 		d.logger.WithError(err).Error("Failed to look up IPAM pools")
 		return "", "", err
@@ -202,7 +203,7 @@ func (d *windowsDataplane) DoNetworking(
 	}
 
 	// Create endpoint for container
-	hnsEndpointCont, hcsEndpoint, err := d.createAndAttachContainerEP(args, hnsNetwork, subNet, allIPAMPools, natOutgoing, result, n)
+	hnsEndpointCont, hcsEndpoint, err := d.createAndAttachContainerEP(args, hnsNetwork, subNet, allIPAMPools, natOutgoing, natOutgoingExclusions, result, n)
 	if err != nil {
 		epName := hns.ConstructEndpointName(args.ContainerID, args.Netns, n.Name)
 		d.logger.Errorf("Unable to create container hns endpoint %s", epName)
@@ -269,6 +270,7 @@ func lookupIPAMPools(
 ) (
 	cidrs []*net.IPNet,
 	natOutgoing bool,
+	natOutgoingExclusions *apisprojectcalicov3.NATOutgoingExclusionsType,
 	err error,
 ) {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
@@ -291,6 +293,10 @@ func lookupIPAMPools(
 			natOutgoing = p.Spec.NATOutgoing
 		}
 	}
+
+	felixConfiguration, err := calicoClient.FelixConfigurations().Get(ctx, "default", options.GetOptions{})
+	natOutgoingExclusions = felixConfiguration.Spec.NATOutgoingExclusions
+
 	return
 }
 
@@ -681,6 +687,7 @@ func (d *windowsDataplane) createAndAttachContainerEP(args *skel.CmdArgs,
 	affineBlockSubnet *net.IPNet,
 	allIPAMPools []*net.IPNet,
 	natOutgoing bool,
+	natOutgoingExclusions *apisprojectcalicov3.NATOutgoingExclusionsType,
 	result *cniv1.Result,
 	n *hns.NetConf) (*hcsshim.HNSEndpoint, *hcn.HostComputeEndpoint, error) {
 
@@ -697,6 +704,17 @@ func (d *windowsDataplane) createAndAttachContainerEP(args *skel.CmdArgs,
 	if len(mgmtIP) == 0 {
 		// We just checked the management IP so we shouldn't lose it again.
 		return nil, nil, fmt.Errorf("HNS network lost its management IP")
+	}
+
+	if natOutgoing && *natOutgoingExclusions == apisprojectcalicov3.NATOutgoingExclusionsIPPoolsAndHostIPs {
+		d.logger.Debug("Looking up management subnet to add outgoing NAT exclusion.")
+		mgmtNet, err := lookupManagementAddr(mgmtIP, d.logger)
+		if err != nil {
+			return nil, nil, err
+		}
+		natExclusions = make([]*net.IPNet, len(allIPAMPools)+1)
+		copy(natExclusions, allIPAMPools)
+		natExclusions[len(natExclusions)-1] = mgmtNet
 	}
 
 	v1pols, v2pols, err := winpol.CalculateEndpointPolicies(n, natExclusions, natOutgoing, mgmtIP, d.logger)
