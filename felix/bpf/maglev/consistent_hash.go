@@ -44,8 +44,7 @@ type ConsistentHash struct {
 	h1, h2 hash.Hash
 
 	// Lexicographically orders the backends by name.
-	backendNames []string
-
+	backendNames   []string
 	backendsByName map[string]backend
 }
 
@@ -125,6 +124,10 @@ func (ch *ConsistentHash) RemoveBackend(kep k8sp.Endpoint) {
 
 // Generate sorts the list of backends and then generates a Maglev LUT.
 func (ch *ConsistentHash) Generate() []k8sp.Endpoint {
+	if len(ch.backendNames) == 0 {
+		return nil
+	}
+
 	slices.Sort(ch.backendNames)
 	logrus.WithField("backends", ch.backendNames).Info("sorted backend names")
 
@@ -132,9 +135,6 @@ func (ch *ConsistentHash) Generate() []k8sp.Endpoint {
 	next := make([]int, len(ch.backendNames))
 	// The final lookup-table to hash against.
 	lut := make([]k8sp.Endpoint, ch.m)
-	defer func() {
-		logrus.WithField("lut", lut).Info("Halting generation")
-	}()
 
 	// In total, we go to M iterations of the inner loop.
 	// Can't rely on the outer-loop condition to break at the right time,
@@ -144,7 +144,6 @@ populate:
 	for {
 		for i, backend := range ch.backendNames {
 			prefs := ch.backendsByName[backend].permutation
-			logrus.WithFields(logrus.Fields{"permutation": prefs, "backend": backend}).Info("Got preference list for backend")
 			choice := prefs[next[i]]
 			for lut[choice] != nil {
 				next[i]++
