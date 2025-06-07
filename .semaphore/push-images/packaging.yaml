@@ -26,8 +26,13 @@ global_job_config:
       - export SECRET_KEY=$HOME/secrets/marvin.txt
       - export GCLOUD_ARGS='--zone us-east1-c --project tigera-wp-tcp-redirect'
       - export HOST=ubuntu@binaries-projectcalico-org
-      - sudo apt-get update -y
-      - sudo apt-get install -y moreutils patchelf
+      # Note that this override is for the docker containers we're building,
+      # and not the VM that we're running on right now
+      - export UBUNTU_REPO_OVERRIDE=ftp.uni-stuttgart.de
+      # install-package is a Semaphore-specific script that has a few benefits,
+      # notably being much faster because it uses Semaphore's cache to fetch
+      # files from.
+      - install-package --no-install-recommends devscripts moreutils patchelf
 
 blocks:
   - name: "Publish openstack packages"

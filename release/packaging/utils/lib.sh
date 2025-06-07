@@ -1,3 +1,4 @@
+#!/bin/bash
 # Library of functions for Calico process and release automation.
 
 # Get the root directory of the Git repository that we are in.
@@ -21,29 +22,25 @@ function git_auto_version {
     # If VERSION is defined and there is a tag here (at HEAD) that
     # matches VERSION, ensure that we use that tag even if there are
     # other tags on the same commit.
-    if [ "${VERSION}" -a "`git tag -l $VERSION --points-at HEAD`" = $VERSION ]; then
-	echo ${VERSION}
-	return
+    if [ -v VERSION ] && git tag -l "${VERSION}" --points-at HEAD| grep -q .; then
+        echo "${VERSION}"
+        return
     fi
-
     # Get the last tag, and the number of commits since that tag.
-    last_tag=`git_last_tag`
-    commits_since=`git cherry -v ${last_tag} | wc -l`
-    sha=`git_commit_id`
-    timestamp=`date -u '+%Y%m%d%H%M%S+0000'`
+    last_tag=$(git_last_tag)
+    commits_since=$(git cherry -v "${last_tag}" | wc -l)
 
     # Generate corresponding PEP 440 version number.
     # Note that PEP 440 only allows [N!]N(.N)*[{a|b|rc}N][.postN][.devN]
     # https://packaging.python.org/en/latest/specifications/version-specifiers/#version-specifiers
-    if test ${commits_since} -eq 0; then
+    if test "${commits_since}" -eq 0; then
 	# There are no commits since the last tag.
 	version=${last_tag}
     else
 	version=${last_tag}.post${commits_since}
     fi
 
-    echo $version | sed 's/-0.dev/rc/'
-
+    echo "${version/-0.dev/rc0}"
 }
 
 # Get the current Git commit ID.
@@ -52,14 +49,15 @@ function git_commit_id {
 }
 
 function strip_v {
-	echo $1 | sed 's/^v//'
+	echo "${1/#v/}"
 }
 
 function git_version_to_deb {
-    # Our mainline development tags now look like 'v3.14.0-0.dev'.
-    # For the Debian package version, translate that to v3.14.0~0.dev,
-    # because it's logically _before_ v3.14.0.
-    echo $1 | sed 's/\([0-9]\)-0.dev/\1~0.dev/'
+    # Our mainline development tags now look like 'v3.31.0-0.dev',
+    # but git_auto_version changes them to 'v3.31.0rc.post267'
+    # For the Debian package version, translate that to v3.31.0~rc.post267,
+    # because it's logically _before_ v3.31.0.
+    echo "${1/rc*/~&}"
 }
 
 function git_version_to_rpm {
@@ -140,15 +138,15 @@ rpmdir=/usr/share/nginx/html/rpm
 
 function ensure_repo_exists {
     reponame=$1
-    $ssh_host -- mkdir -p $rpmdir/$reponame
+    $ssh_host -- mkdir -p "$rpmdir/$reponame"
 }
 
 function copy_rpms_to_host {
     reponame=$1
-    rootdir=`git_repo_root`
+    rootdir=$(git_repo_root)
     shopt -s nullglob
     for arch in src noarch x86_64; do
-	set -- `find ${rootdir}/release/packaging/output/dist/rpms-el7 -name "*.$arch.rpm"`
+	set -- $(find ${rootdir}/release/packaging/output/dist/rpms-el7 -name "*.$arch.rpm")
 	if test $# -gt 0; then
 	    $ssh_host -- mkdir -p $rpmdir/$reponame/$arch/
 	    $scp_host "$@" ${HOST}:$rpmdir/$reponame/$arch/
