@@ -1,14 +1,14 @@
 package maglev
 
 import (
-	"github.com/sirupsen/logrus"
-	"golang.org/x/exp/slices"
-	k8sp "k8s.io/kubernetes/pkg/proxy"
-
 	"bytes"
 	"encoding/binary"
 	"fmt"
 	"hash"
+
+	"github.com/sirupsen/logrus"
+	"golang.org/x/exp/slices"
+	k8sp "k8s.io/kubernetes/pkg/proxy"
 )
 
 // M is a prime number much larger than any backend set we expect to have.

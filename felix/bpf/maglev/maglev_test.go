@@ -4,11 +4,11 @@ import (
 	"hash/fnv"
 	"time"
 
-	types "github.com/projectcalico/calico/felix/bpf/maglev/test"
-	"github.com/sirupsen/logrus"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/sirupsen/logrus"
+
+	types "github.com/projectcalico/calico/felix/bpf/maglev/test"
 )
 
 var testM = 71

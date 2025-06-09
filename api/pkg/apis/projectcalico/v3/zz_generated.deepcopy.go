@@ -1590,6 +1590,11 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 		*out = new(int)
 		**out = **in
 	}
+	if in.BPFMapSizeMaglevBackend != nil {
+		in, out := &in.BPFMapSizeMaglevBackend, &out.BPFMapSizeMaglevBackend
+		*out = new(int)
+		**out = **in
+	}
 	if in.BPFHostConntrackBypass != nil {
 		in, out := &in.BPFHostConntrackBypass, &out.BPFHostConntrackBypass
 		*out = new(bool)
