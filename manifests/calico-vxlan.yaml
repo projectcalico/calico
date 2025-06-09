@@ -487,6 +487,7 @@ spec:
   preserveUnknownFields: false
   scope: Cluster
   versions:
+<<<<<<< HEAD
   - name: v1
     schema:
       openAPIV3Schema:
@@ -518,6 +519,41 @@ spec:
               filters:
                 description: The ordered set of BGPFilters applied on this BGP peer.
                 items:
+=======
+    - name: v1
+      schema:
+        openAPIV3Schema:
+          properties:
+            apiVersion:
+              type: string
+            kind:
+              type: string
+            metadata:
+              type: object
+            spec:
+              properties:
+                NextHopMode:
+                  allOf:
+                    - enum:
+                        - Auto
+                        - Self
+                        - Keep
+                    - enum:
+                        - Auto
+                        - Self
+                        - Keep
+                  type: string
+                asNumber:
+                  format: int32
+                  type: integer
+                filters:
+                  items:
+                    type: string
+                  type: array
+                keepOriginalNextHop:
+                  type: boolean
+                localWorkloadSelector:
+>>>>>>> 67d616607 (Add NextHopMode to BGPPeer API (#10471))
                   type: string
                 type: array
               keepOriginalNextHop:
