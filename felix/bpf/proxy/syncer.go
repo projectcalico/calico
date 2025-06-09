@@ -705,11 +705,6 @@ func (s *Syncer) apply(state DPSyncerState) error {
 	if err != nil {
 		return err
 	}
-	// err = s.bpfMaglevEps.ApplyUpdatesOnly()
-	// if err != nil {
-	// 	return err
-	// }
-	// Update the frontends, after this is done we should be handling packets correctly.
 	err = s.bpfSvcs.ApplyUpdatesOnly()
 	if err != nil {
 		return err
@@ -719,10 +714,10 @@ func (s *Syncer) apply(state DPSyncerState) error {
 	if err != nil {
 		return err
 	}
-	// err = s.bpfMaglevEps.ApplyDeletionsOnly()
-	// if err != nil {
-	// 	return err
-	// }
+	err = s.bpfMaglevEps.ApplyAllChanges()
+	if err != nil {
+		return err
+	}
 
 	log.Info("new state written")
 
