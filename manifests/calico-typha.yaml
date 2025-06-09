@@ -414,6 +414,9 @@ spec:
                 asNumber:
                   format: int32
                   type: integer
+                localASNumber:
+                  format: int32
+                  type: integer
                 filters:
                   items:
                     type: string
