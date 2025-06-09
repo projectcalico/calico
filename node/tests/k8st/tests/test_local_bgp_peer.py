@@ -16,6 +16,7 @@ import os
 import random
 import subprocess
 import time
+import enum
 
 from tests.k8st.test_base import TestBase, Pod
 from tests.k8st.utils.utils import start_external_node_with_bgp, \
@@ -23,7 +24,11 @@ from tests.k8st.utils.utils import start_external_node_with_bgp, \
 
 _log = logging.getLogger(__name__)
 
-bird_conf_tor = """
+class TopologyMode(enum.Enum):
+    RR = "rr"
+    MESH = "mesh"
+
+bird_conf_tor_mesh = """
 # Template for all BGP clients
 template bgp bgp_template {
   debug { states };
@@ -64,11 +69,46 @@ protocol bgp Mesh_with_node_3 from bgp_template {
 }
 """
 
+bird_conf_tor_rr = """
+# Template for all BGP clients
+template bgp bgp_template {
+  debug { states };
+  description "Connection to BGP peer";
+  local as 63000;
+  multihop;
+  gateway recursive; # This should be the default, but just in case.
+  import all;        # Import all routes, since we don't know what the upstream
+                     # topology is and therefore have to trust the ToR/RR.
+  export all;
+  source address ip@local;  # The local address we use for the TCP connection
+  add paths on;
+  graceful restart;  # See comment in kernel section about graceful restart.
+  connect delay time 2;
+  connect retry time 5;
+  error wait time 5,30;
+}
+
+# ------------- RR -------------
+protocol bgp RR_with_master_node from bgp_template {
+  neighbor %s as 64512;
+  passive on;
+}
+"""
+
 
 class _TestLocalBGPPeer(TestBase):
+    def set_topology(self, value):
+        self.topology = value
 
     def setUp(self):
         super(_TestLocalBGPPeer, self).setUp()
+
+        if self.topology == TopologyMode.MESH:
+          _log.info("Topology MESH")
+        elif self.topology == TopologyMode.RR:
+          _log.info("Topology RR")
+        else:
+          _log.exception("Topology unknown")
 
         # Create bgp test namespace
         self.ns = "bgp-test-" + hex(random.randint(0, 0xffffffff))
@@ -276,7 +316,10 @@ spec:
         run("rm peers.conf")
 
     def get_bird_conf_tor(self):
-        return bird_conf_tor % (self.ips[0], self.ips[1], self.ips[2], self.ips[3])
+        if self.topology == TopologyMode.MESH:
+          return bird_conf_tor_mesh % (self.ips[0], self.ips[1], self.ips[2], self.ips[3])
+        if self.topology == TopologyMode.RR:
+          return bird_conf_tor_rr % self.ips[0]
 
     def get_bird_config_workload(self, as_number_child, router_id, child_ip, child_block, local_workload_peer_ip,
                                  as_number_parent):
@@ -363,6 +406,10 @@ class TestLocalBGPPeer(_TestLocalBGPPeer):
     #
     # - A global peer is created to select red pods as local bgp peers.
     #   A node specific peer is created to select the blue pod on kind-worker2 node.
+
+    def setUp(self):
+        self.set_topology(TopologyMode.MESH)
+        super(TestLocalBGPPeer, self).setUp() 
 
     # Given a pod, check if should have BGP connections with the host.
     def assert_bgp_established(self, pod):
