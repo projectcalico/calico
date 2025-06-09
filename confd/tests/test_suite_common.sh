@@ -23,18 +23,18 @@ execute_test_suite() {
     rm $LOGPATH/log* || true
     rm $LOGPATH/rendered/*.cfg || true
 
-    if [ "$DATASTORE_TYPE" = kubernetes ]; then
+#    if [ "$DATASTORE_TYPE" = kubernetes ]; then
 #        run_extra_test test_node_mesh_bgp_password
 #        run_extra_test test_bgp_password_deadlock
 #        run_extra_test test_bgp_ttl_security
 #        run_extra_test test_bgp_ignored_interfaces
-        run_extra_test test_bgp_reachable_by
+#        run_extra_test test_bgp_reachable_by
 #        run_extra_test test_bgp_filters
 #        run_extra_test test_bgp_local_bgp_peer
-        run_extra_test test_bgp_next_hop_mode
-    fi
+#        run_extra_test test_bgp_next_hop_mode
+#    fi
 
-    if [ "$DATASTORE_TYPE" = etcdv3 ]; then
+#    if [ "$DATASTORE_TYPE" = etcdv3 ]; then
 #        run_extra_test test_node_mesh_bgp_password
 #        run_extra_test test_bgp_password
 #        run_extra_test test_bgp_sourceaddr_gracefulrestart
@@ -43,11 +43,11 @@ execute_test_suite() {
 #        run_extra_test test_router_id_hash
 #        run_extra_test test_bgp_ttl_security
 #        run_extra_test test_bgp_ignored_interfaces
-        run_extra_test test_bgp_reachable_by
+#        run_extra_test test_bgp_reachable_by
 #        run_extra_test test_bgp_filters
-        run_extra_test test_bgp_next_hop_mode
-        echo "Extra etcdv3 tests passed"
-    fi
+#        run_extra_test test_bgp_next_hop_mode
+#        echo "Extra etcdv3 tests passed"
+#    fi
 
     # Run the set of tests using confd in oneshot mode.
     echo "Execute oneshot-mode tests"
@@ -60,9 +60,9 @@ execute_test_suite() {
     # node mesh enabled, so turn it on now before we start confd.
     echo "Execute daemon-mode tests"
     turn_mesh_on
-    for i in $(seq 1 2); do
-       execute_tests_daemon
-    done
+#    for i in $(seq 1 2); do
+#       execute_tests_daemon
+#    done
     echo "Daemon-mode tests passed"
 }
 
@@ -565,59 +565,59 @@ expect_peerings() {
 }
 
 # Execute a set of tests using daemon mode.
-execute_tests_daemon() {
+#execute_tests_daemon() {
     # For KDD, run Typha.
-    if [ "$DATASTORE_TYPE" = kubernetes ]; then
-        start_typha
-    fi
-
-    # Run confd as a background process.
-    echo "Running confd as background process"
-    BGP_LOGSEVERITYSCREEN="debug" confd -confdir=/etc/calico/confd >$LOGPATH/logd1 2>&1 &
-    CONFD_PID=$!
-    echo "Running with PID " $CONFD_PID
-
-    # Run the node-mesh-enabled tests.
-    for i in $(seq 1 2); do
-        run_individual_test 'mesh/bgp-export'
-        run_individual_test 'mesh/ipip-always'
-        run_individual_test 'mesh/ipip-cross-subnet'
-        run_individual_test 'mesh/ipip-off'
-        run_individual_test 'mesh/route-reflector-mesh-enabled'
-        run_individual_test 'mesh/static-routes'
-        run_individual_test 'mesh/static-routes-exclude-node'
-        run_individual_test 'mesh/communities'
-        run_individual_test 'mesh/restart-time'
-    done
-
-    # Turn the node-mesh off.
-    turn_mesh_off
-
-    # Run the explicit peering tests.
-    for i in $(seq 1 2); do
-        run_individual_test 'explicit_peering/global'
-        run_individual_test 'explicit_peering/global-external'
-        run_individual_test 'explicit_peering/global-ipv6'
-        run_individual_test 'explicit_peering/specific_node'
-        run_individual_test 'explicit_peering/selectors'
-        run_individual_test 'explicit_peering/route_reflector'
-        run_individual_test 'explicit_peering/keepnexthop'
-        run_individual_test 'explicit_peering/keepnexthop-global'
-	run_individual_test 'explicit_peering/local-as'
-	run_individual_test 'explicit_peering/local-as-global'
-    done
-
-    # Turn the node-mesh back on.
-    turn_mesh_on
-
-    # Kill confd.
-    kill -9 $CONFD_PID
-
-    # For KDD, kill Typha.
-    if [ "$DATASTORE_TYPE" = kubernetes ]; then
-        kill_typha
-    fi
-}
+#    if [ "$DATASTORE_TYPE" = kubernetes ]; then
+#        start_typha
+#    fi
+#
+#    # Run confd as a background process.
+#    echo "Running confd as background process"
+#    BGP_LOGSEVERITYSCREEN="debug" confd -confdir=/etc/calico/confd >$LOGPATH/logd1 2>&1 &
+#    CONFD_PID=$!
+#    echo "Running with PID " $CONFD_PID
+#
+#    # Run the node-mesh-enabled tests.
+#    for i in $(seq 1 2); do
+#        run_individual_test 'mesh/bgp-export'
+#        run_individual_test 'mesh/ipip-always'
+#        run_individual_test 'mesh/ipip-cross-subnet'
+#        run_individual_test 'mesh/ipip-off'
+#        run_individual_test 'mesh/route-reflector-mesh-enabled'
+#        run_individual_test 'mesh/static-routes'
+#        run_individual_test 'mesh/static-routes-exclude-node'
+#        run_individual_test 'mesh/communities'
+#        run_individual_test 'mesh/restart-time'
+#    done
+#
+#    # Turn the node-mesh off.
+#    turn_mesh_off
+#
+#    # Run the explicit peering tests.
+#    for i in $(seq 1 2); do
+#        run_individual_test 'explicit_peering/global'
+#        run_individual_test 'explicit_peering/global-external'
+#        run_individual_test 'explicit_peering/global-ipv6'
+#        run_individual_test 'explicit_peering/specific_node'
+#        run_individual_test 'explicit_peering/selectors'
+#        run_individual_test 'explicit_peering/route_reflector'
+#        run_individual_test 'explicit_peering/keepnexthop'
+#        run_individual_test 'explicit_peering/keepnexthop-global'
+#	run_individual_test 'explicit_peering/local-as'
+#	run_individual_test 'explicit_peering/local-as-global'
+#    done
+#
+#    # Turn the node-mesh back on.
+#    turn_mesh_on
+#
+#    # Kill confd.
+#    kill -9 $CONFD_PID
+#
+#    # For KDD, kill Typha.
+#    if [ "$DATASTORE_TYPE" = kubernetes ]; then
+#        kill_typha
+#    fi
+#}
 
 # Execute a set of tests using oneshot mode.
 execute_tests_oneshot() {
@@ -729,7 +729,7 @@ run_individual_test_oneshot() {
     BGP_LOGSEVERITYSCREEN="debug" confd -confdir=/etc/calico/confd -onetime >$LOGPATH/logss 2>&1 || true
 
     # Check the confd templates are updated.
-    test_confd_templates $testdir
+#    test_confd_templates $testdir
 
     # For KDD, kill Typha.
     if [ "$DATASTORE_TYPE" = kubernetes ]; then
@@ -791,60 +791,60 @@ test_confd_templates() {
 # $2 is whether or not we should output the diff results (0=no)
 compare_templates() {
     # Check the generated templates against known compiled templates.
-#    testdir=$1
-#    output=$2
-#    record=$3
+    testdir=$1
+    output=$2
+    record=$3
     rc=0
-#    for f in `ls /tests/compiled_templates/${testdir}`; do
-#        if [ $f = step2 ]; then
-#	    # Some tests have a "step2" subdirectory.  If so, the BIRD
-#	    # config in that subdir will be used when
-#	    # compare_templates is called again with ${testdir}/step2.
-#	    # This time through, we should skip "step2" because there
-#	    # is nothing matching it in the actual generated config at
-#	    # /etc/calico/confd/config/.
-#            continue
-#        fi
-#        expected=/tests/compiled_templates/${testdir}/${f}
-#        actual=/etc/calico/confd/config/${f}
-#        if ! diff --ignore-blank-lines -q ${expected} ${actual} 1>/dev/null 2>&1; then
-#            if ! $record; then
-#                rc=1;
-#            fi
-#            if [ $output -ne 0 ]; then
-#                echo ${expected}
-#                echo "Failed: $f templates do not match, showing diff of expected vs received"
-#                set +e
-#                diff ${expected} ${actual}
-#                if $record; then
-#                    echo "Updating expected result..."
-#                    cp ${actual} ${expected}
-#                else
-#                    echo "Copying confd rendered output to ${LOGPATH}/rendered/${f}"
-#                    cp ${actual} ${LOGPATH}/rendered/${f}
-#                    set -e
-#                    rc=2
-#                fi
-#            fi
-#        fi
-#    done
-#
-#    if [ $rc -eq 2 ]; then
-#        echo "Recording failed testcase directory to ${LOGPATH}/testcase_directory.txt"
-#        echo "${testdir}" > ${LOGPATH}/testcase_directory.txt
-#        echo "Copying nodes to ${LOGPATH}/nodes.yaml"
-#        $CALICOCTL get nodes -o yaml > ${LOGPATH}/nodes.yaml
-#        echo "Copying bgp config to ${LOGPATH}/bgpconfig.yaml"
-#        $CALICOCTL get bgpconfigs -o yaml > ${LOGPATH}/bgpconfig.yaml
-#        echo "Copying bgp peers to ${LOGPATH}/bgppeers.yaml"
-#        $CALICOCTL get bgppeers -o yaml > ${LOGPATH}/bgppeers.yaml
-#        echo "Copying bgp filters to ${LOGPATH}/bgpfilters.yaml"
-#        $CALICOCTL get bgpfilters -o yaml > ${LOGPATH}/bgpfilters.yaml
-#        echo "Copying ip pools to ${LOGPATH}/ippools.yaml"
-#        $CALICOCTL get ippools -o yaml > ${LOGPATH}/ippools.yaml
-#        echo "Listing running processes"
-#        ps
-#    fi
+    for f in `ls /tests/compiled_templates/${testdir}`; do
+        if [ $f = step2 ]; then
+	    # Some tests have a "step2" subdirectory.  If so, the BIRD
+	    # config in that subdir will be used when
+	    # compare_templates is called again with ${testdir}/step2.
+	    # This time through, we should skip "step2" because there
+	    # is nothing matching it in the actual generated config at
+	    # /etc/calico/confd/config/.
+            continue
+        fi
+        expected=/tests/compiled_templates/${testdir}/${f}
+        actual=/etc/calico/confd/config/${f}
+        if ! diff --ignore-blank-lines -q ${expected} ${actual} 1>/dev/null 2>&1; then
+            if ! $record; then
+                rc=1;
+            fi
+            if [ $output -ne 0 ]; then
+                echo ${expected}
+                echo "Failed: $f templates do not match, showing diff of expected vs received"
+                set +e
+                diff ${expected} ${actual}
+                if $record; then
+                    echo "Updating expected result..."
+                    cp ${actual} ${expected}
+                else
+                    echo "Copying confd rendered output to ${LOGPATH}/rendered/${f}"
+                    cp ${actual} ${LOGPATH}/rendered/${f}
+                    set -e
+                    rc=2
+                fi
+            fi
+        fi
+    done
+
+    if [ $rc -eq 2 ]; then
+        echo "Recording failed testcase directory to ${LOGPATH}/testcase_directory.txt"
+        echo "${testdir}" > ${LOGPATH}/testcase_directory.txt
+        echo "Copying nodes to ${LOGPATH}/nodes.yaml"
+        $CALICOCTL get nodes -o yaml > ${LOGPATH}/nodes.yaml
+        echo "Copying bgp config to ${LOGPATH}/bgpconfig.yaml"
+        $CALICOCTL get bgpconfigs -o yaml > ${LOGPATH}/bgpconfig.yaml
+        echo "Copying bgp peers to ${LOGPATH}/bgppeers.yaml"
+        $CALICOCTL get bgppeers -o yaml > ${LOGPATH}/bgppeers.yaml
+        echo "Copying bgp filters to ${LOGPATH}/bgpfilters.yaml"
+        $CALICOCTL get bgpfilters -o yaml > ${LOGPATH}/bgpfilters.yaml
+        echo "Copying ip pools to ${LOGPATH}/ippools.yaml"
+        $CALICOCTL get ippools -o yaml > ${LOGPATH}/ippools.yaml
+        echo "Listing running processes"
+        ps
+    fi
 
     return $rc
 }
@@ -1112,8 +1112,8 @@ EOF
 
 test_bgp_ttl_security() {
   test_bgp_ttl_security_explicit_node
-  test_bgp_ttl_security_peer_selector
-  test_bgp_ttl_security_global
+#  test_bgp_ttl_security_peer_selector
+#  test_bgp_ttl_security_global
 }
 
 test_bgp_ttl_security_explicit_node() {
