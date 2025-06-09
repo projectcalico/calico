@@ -76,7 +76,7 @@ func newIPIPManager(
 	opRecorder logutils.OpRecorder,
 ) *ipipManager {
 	nlHandle, _ := netlinkshim.NewRealNetlink()
-	return newIPIPManagerWithSims(
+	return newIPIPManagerWithShims(
 		ipsetsDataplane,
 		mainRouteTable,
 		tunnelDevice,
@@ -88,7 +88,7 @@ func newIPIPManager(
 	)
 }
 
-func newIPIPManagerWithSims(
+func newIPIPManagerWithShims(
 	ipsetsDataplane dpsets.IPSetsDataplane,
 	mainRouteTable routetable.Interface,
 	tunnelDevice string,
