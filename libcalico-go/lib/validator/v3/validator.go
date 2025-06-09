@@ -1467,7 +1467,7 @@ func validateBGPPeerSpec(structLevel validator.StructLevel) {
 	}
 	if ps.KeepOriginalNextHop && ps.NextHopMode != nil {
 		structLevel.ReportError(reflect.ValueOf(ps.PeerIP), "KeepOriginalNextHop", "",
-			reason("The KeepOriginalNextHop field is deprecated. It must not be set to true when NextHopMod is configured."), "")
+			reason("The KeepOriginalNextHop field is deprecated. It must not be set to true when NextHopMode is configured."), "")
 	}
 }
 
