@@ -142,6 +142,7 @@ template bgp bgp_template {
 {{- $node_as_num := getv $as_key}}
 {{- template "LOGGING"}}
   description "Connection to BGP peer";
+  local as {{$node_as_num}};
   gateway recursive; # This should be the default, but just in case.
   add paths on;
   graceful restart;  # See comment in kernel section about graceful restart.
@@ -234,7 +235,6 @@ protocol bgp Global_{{$id}} from bgp_template {
   ttl security off;
   multihop;
 {{- end }}
-  local as {{$data.local_as_num}};
   neighbor {{$data.ip}} {{if $data.port }}port {{ $data.port }} {{end}}as {{$data.as_num}};
 {{- if eq $data.source_addr "UseNodeIP"}}
   source address {{$node_ip}};  # The local address we use for the TCP connection
