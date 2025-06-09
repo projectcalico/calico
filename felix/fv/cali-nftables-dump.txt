@@ -1,0 +1,230 @@
+table ip calico {
+	set cali40this-host {
+		type ipv4_addr
+		elements = { 10.128.0.212, 127.0.0.0,
+			     127.0.0.1, 192.168.122.1 }
+	}
+
+	set cali40all-ipam-pools {
+		type ipv4_addr
+		flags interval
+		elements = { 192.168.0.0/16 }
+	}
+
+	set cali40masq-ipam-pools {
+		type ipv4_addr
+		flags interval
+		elements = { 192.168.0.0/16 }
+	}
+
+	set cali40all-vxlan-net {
+		type ipv4_addr
+		flags interval
+		elements = { 10.128.0.208, 10.128.0.211,
+			     10.128.0.213 }
+	}
+
+	map filter-cali-from-wl-dispatch {
+		type ifname : verdict
+	}
+
+	map filter-cali-to-wl-dispatch {
+		type ifname : verdict
+	}
+
+	chain mangle-PREROUTING {
+		type filter hook prerouting priority mangle; policy accept;
+		counter packets 12452 bytes 162863955 jump mangle-cali-PREROUTING comment "cali:jmRVmI9bNZO24-SX;"
+	}
+
+	chain mangle-FORWARD {
+		type filter hook forward priority mangle; policy accept;
+	}
+
+	chain mangle-POSTROUTING {
+		type filter hook postrouting priority mangle; policy accept;
+		counter packets 5577 bytes 702000 jump mangle-cali-POSTROUTING comment "cali:JB8QlG6bRG3vqMJh;"
+	}
+
+	chain raw-OUTPUT {
+		type filter hook output priority raw; policy accept;
+		counter packets 5577 bytes 702000 jump raw-cali-OUTPUT comment "cali:VPZUYaZDz-FnULU0;"
+	}
+
+	chain filter-FORWARD {
+		type filter hook forward priority filter; policy accept;
+		counter packets 0 bytes 0 jump filter-cali-FORWARD comment "cali:dpfqBgJrpRwlrqw1;"
+		meta mark & 0x00010000 == 0x00010000 counter packets 0 bytes 0 accept comment "cali:yp7iNUYNEhDmKF6E; Policy explicitly accepted packet."
+		counter packets 0 bytes 0 meta mark set meta mark | 0x00010000 comment "cali:fXaqbwKfGHq5dvHP;"
+	}
+
+	chain nat-PREROUTING {
+		type nat hook prerouting priority dstnat; policy accept;
+		counter packets 125 bytes 5764 jump nat-cali-PREROUTING comment "cali:8sk3stC_vMHYORJg;"
+	}
+
+	chain nat-POSTROUTING {
+		type nat hook postrouting priority srcnat + 10; policy accept;
+		counter packets 767 bytes 85112 jump nat-cali-POSTROUTING comment "cali:z057H0Z77Fcko47w;"
+	}
+
+	chain mangle-INPUT {
+		type filter hook input priority mangle; policy accept;
+	}
+
+	chain mangle-OUTPUT {
+		type route hook output priority mangle; policy accept;
+	}
+
+	chain raw-PREROUTING {
+		type filter hook prerouting priority raw; policy accept;
+		counter packets 12452 bytes 162863955 jump raw-cali-PREROUTING comment "cali:K8JBn-S_RLieKm3n;"
+	}
+
+	chain filter-INPUT {
+		type filter hook input priority filter; policy accept;
+		counter packets 12452 bytes 162863955 jump filter-cali-INPUT comment "cali:H0S9z2pOh43UL0cc;"
+	}
+
+	chain filter-OUTPUT {
+		type filter hook output priority filter; policy accept;
+		counter packets 5577 bytes 702000 jump filter-cali-OUTPUT comment "cali:cxN7yDysHHPQSuUC;"
+	}
+
+	chain nat-INPUT {
+		type nat hook input priority -100; policy accept;
+	}
+
+	chain nat-OUTPUT {
+		type nat hook output priority 110; policy accept;
+		counter packets 767 bytes 85112 jump nat-cali-OUTPUT comment "cali:MUvsO-9-Ry3DQcZV;"
+	}
+
+	chain raw-cali-rpf-skip {
+	}
+
+	chain raw-cali-from-host-endpoint {
+	}
+
+	chain filter-cali-from-wl-dispatch {
+		iifname vmap @filter-cali-from-wl-dispatch comment "cali:Lui9n9_J-BlSLUtk;"
+		counter packets 0 bytes 0 drop comment "cali:KMISEjprqaGFiicp; Unknown interface"
+	}
+
+	chain filter-cali-to-wl-dispatch {
+		oifname vmap @filter-cali-to-wl-dispatch comment "cali:ljtHSLJQhigspPd1;"
+		counter packets 0 bytes 0 drop comment "cali:zeZtiiPDsE6BwqUG; Unknown interface"
+	}
+
+	chain filter-cali-to-hep-forward {
+	}
+
+	chain filter-cali-cidr-block {
+	}
+
+	chain nat-cali-nat-outgoing {
+		ip saddr @cali40masq-ipam-pools ip daddr != @cali40all-ipam-pools counter packets 0 bytes 0 masquerade fully-random comment "cali:JjuWIaIfSLZi41Xk;"
+	}
+
+	chain mangle-cali-PREROUTING {
+		ct state established,related counter packets 11595 bytes 162769835 accept comment "cali:hRS28YpQh4sf7lSw;"
+		meta mark & 0x00010000 == 0x00010000 counter packets 0 bytes 0 accept comment "cali:IwtMN-rc3DmNzBzY;"
+		counter packets 857 bytes 94120 jump mangle-cali-from-host-endpoint comment "cali:3IqyhzcAvEfc5ghM;"
+		meta mark & 0x00010000 == 0x00010000 counter packets 0 bytes 0 accept comment "cali:pt2vpkSdeEEZuFJW; Host endpoint policy accepted packet."
+	}
+
+	chain raw-cali-PREROUTING {
+		counter packets 12452 bytes 162863955 meta mark set meta mark & 0xffe4ffff comment "cali:_m5XxTROnUC3kwU9;"
+		udp dport 4789 counter packets 69 bytes 14902 notrack comment "cali:KSSCpT-T9DVdO0Iq;"
+		iifname "cali*" counter packets 0 bytes 0 meta mark set meta mark | 0x00080000 comment "cali:MfbbuIABLCdEyuDF;"
+		meta mark & 0x00080000 == 0x00080000 counter packets 0 bytes 0 jump raw-cali-rpf-skip comment "cali:WkruAv78Jz9mDykg;"
+		meta mark & 0x00080000 == 0x00080000 fib saddr . mark . iif oif 0 counter packets 0 bytes 0 drop comment "cali:-AqscjC9Vg6h2HXv;"
+		meta mark & 0x00080000 == 0x00000000 counter packets 12452 bytes 162863955 jump raw-cali-from-host-endpoint comment "cali:s5qWstZtZZWDC7hD;"
+		meta mark & 0x00010000 == 0x00010000 counter packets 0 bytes 0 accept comment "cali:el99SHzsxDHcC0i6;"
+	}
+
+	chain filter-cali-FORWARD {
+		counter packets 0 bytes 0 meta mark set meta mark & 0xffe5ffff comment "cali:DjLNGAdnReheqqCp;"
+		meta mark & 0x00010000 == 0x00000000 counter packets 0 bytes 0 jump filter-cali-from-hep-forward comment "cali:nYRf9HAGIu4qv2zI;"
+		iifname "cali*" counter packets 0 bytes 0 jump filter-cali-from-wl-dispatch comment "cali:otxs2Q4D05BNLIsQ;"
+		oifname "cali*" counter packets 0 bytes 0 jump filter-cali-to-wl-dispatch comment "cali:j573pOiV4ETpv7o4;"
+		counter packets 0 bytes 0 jump filter-cali-to-hep-forward comment "cali:spaMQnRTjqphyAAs;"
+		counter packets 0 bytes 0 jump filter-cali-cidr-block comment "cali:gPO_isDuaIy0xfd5;"
+	}
+
+	chain filter-cali-wl-to-host {
+		counter packets 0 bytes 0 jump filter-cali-from-wl-dispatch comment "cali:Ny8jNeS1ncqmgkwL;"
+		counter packets 0 bytes 0 accept comment "cali:m-f8F_F3sZQBn4vu; Configured DefaultEndpointToHostAction"
+	}
+
+	chain nat-cali-PREROUTING {
+		counter packets 125 bytes 5764 jump nat-cali-fip-dnat comment "cali:4l5hoyVny05ifNh_;"
+	}
+
+	chain nat-cali-POSTROUTING {
+		counter packets 767 bytes 85112 jump nat-cali-fip-snat comment "cali:tyzVzs_JgnIisxS6;"
+		counter packets 767 bytes 85112 jump nat-cali-nat-outgoing comment "cali:_Ye9aC74uuE93XON;"
+		oifname "vxlan.calico" fib saddr . oif type != local fib saddr type local counter packets 0 bytes 0 masquerade fully-random comment "cali:2Er8attV1nLNdKXr;"
+	}
+
+	chain mangle-cali-to-host-endpoint {
+	}
+
+	chain raw-cali-OUTPUT {
+		counter packets 5577 bytes 702000 meta mark set meta mark & 0xffe4ffff comment "cali:e2BVX_cHZ6ITRbRX;"
+		counter packets 5577 bytes 702000 jump raw-cali-to-host-endpoint comment "cali:VWMOize4AGqDOd8U;"
+		udp dport 4789 counter packets 72 bytes 12544 notrack comment "cali:27f-hiVuGN6Hixm2;"
+		meta mark & 0x00010000 == 0x00010000 counter packets 0 bytes 0 accept comment "cali:C_dtFa4FZl3n3guC;"
+	}
+
+	chain filter-cali-from-hep-forward {
+	}
+
+	chain filter-cali-INPUT {
+		udp dport 4789 ip saddr @cali40all-vxlan-net fib daddr type local counter packets 69 bytes 14902 accept comment "cali:Gtn781KKHXqD1ZWy; Allow IPv4 VXLAN packets from allowed hosts"
+		udp dport 4789 fib daddr type local counter packets 0 bytes 0 drop comment "cali:uwBdMK7MloVtOKLK; Drop IPv4 VXLAN packets from non-allowed hosts"
+		iifname "cali*" counter packets 0 bytes 0 goto filter-cali-wl-to-host comment "cali:bQPg3nrC7bqqlzEy;"
+		meta mark & 0x00010000 == 0x00010000 counter packets 0 bytes 0 accept comment "cali:y9q5TVbyVOp08Pbf;"
+		counter packets 12383 bytes 162849053 meta mark set meta mark & 0xffe4ffff comment "cali:g94iaS8uaXhlEYN1;"
+		counter packets 12383 bytes 162849053 jump filter-cali-from-host-endpoint comment "cali:r1yiSr9IJXTbVonm;"
+		meta mark & 0x00010000 == 0x00010000 counter packets 0 bytes 0 accept comment "cali:Bw-drvME99fwv09t; Host endpoint policy accepted packet."
+	}
+
+	chain filter-cali-from-host-endpoint {
+	}
+
+	chain nat-cali-fip-snat {
+	}
+
+	chain nat-cali-OUTPUT {
+		counter packets 767 bytes 85112 jump nat-cali-fip-dnat comment "cali:delU-zntVHn7bNcr;"
+	}
+
+	chain mangle-cali-from-host-endpoint {
+	}
+
+	chain mangle-cali-POSTROUTING {
+		meta mark & 0x00010000 == 0x00010000 counter packets 0 bytes 0 return comment "cali:mS7Pbp4wnbne4NEE;"
+		counter packets 5577 bytes 702000 meta mark set meta mark & 0xffe4ffff comment "cali:BC0Ti2X7IhbvY97T;"
+		ct status dnat counter packets 409 bytes 63048 jump mangle-cali-to-host-endpoint comment "cali:QNi0wuz0doF36FlX;"
+		meta mark & 0x00010000 == 0x00010000 counter packets 0 bytes 0 return comment "cali:aleSM6VBsY-WKEx_; Host endpoint policy accepted packet."
+	}
+
+	chain raw-cali-to-host-endpoint {
+	}
+
+	chain filter-cali-OUTPUT {
+		meta mark & 0x00010000 == 0x00010000 counter packets 0 bytes 0 accept comment "cali:98uiW9xxCe92G9L3;"
+		oifname "cali*" counter packets 0 bytes 0 return comment "cali:XeexzRpdwsnmqftJ;"
+		udp dport 4789 fib saddr type local ip daddr @cali40all-vxlan-net counter packets 72 bytes 12544 accept comment "cali:gAwQMXeaURLLhMud; Allow IPv4 VXLAN packets to other allowed hosts"
+		counter packets 5505 bytes 689456 meta mark set meta mark & 0xffe4ffff comment "cali:aLINYsbhdLorP87H;"
+		ct status != dnat counter packets 5504 bytes 689404 jump filter-cali-to-host-endpoint comment "cali:lcOFavYL6gslb8h_;"
+		meta mark & 0x00010000 == 0x00010000 counter packets 0 bytes 0 accept comment "cali:VV3w_F7Dkj1IHDev; Host endpoint policy accepted packet."
+	}
+
+	chain filter-cali-to-host-endpoint {
+	}
+
+	chain nat-cali-fip-dnat {
+	}
+}
