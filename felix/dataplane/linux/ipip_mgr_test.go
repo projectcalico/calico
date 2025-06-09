@@ -61,7 +61,7 @@ var _ = Describe("IPIPManager", func() {
 			links:          []netlink.Link{&mockLink{attrs: la}},
 			tunnelLinkName: dataplanedefs.IPIPIfaceName,
 		}
-		ipipMgr = newIPIPManagerWithSims(
+		ipipMgr = newIPIPManagerWithShims(
 			ipSets, rt, dataplanedefs.IPIPIfaceName,
 			4,
 			1400,
