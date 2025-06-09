@@ -51,6 +51,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/bpf/nat"
 	"github.com/projectcalico/calico/felix/bpf/proxy"
+	"github.com/projectcalico/calico/felix/bpf/maglev"
 	. "github.com/projectcalico/calico/felix/fv/connectivity"
 	"github.com/projectcalico/calico/felix/fv/containers"
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
@@ -1378,25 +1379,11 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						Create(context.Background(), fakeEps, metav1.CreateOptions{})
 					Expect(err).NotTo(HaveOccurred())
 
-					var natK nat.FrontendKeyInterface
-					if testOpts.ipv6 {
-						natK = nat.NewNATKeyV6(net.ParseIP(clusterIP), 11666, 6)
-					} else {
-						natK = nat.NewNATKey(net.ParseIP(clusterIP), 11666, 6)
-					}
-
 					Eventually(func(g Gomega) {
-						natmap, natbe, _ := dumpNATMapsAny(family, tc.Felixes[0])
-						g.Expect(natmap).To(HaveKey(natK))
-						g.Expect(natmap[natK].Count()).To(Equal(uint32(3)))
-						svc := natmap[natK]
-						bckID := svc.ID()
-						g.Expect(natbe).To(HaveKey(nat.NewNATBackendKey(bckID, 0)))
-						g.Expect(natbe).To(HaveKey(nat.NewNATBackendKey(bckID, 1)))
-						g.Expect(natbe).To(HaveKey(nat.NewNATBackendKey(bckID, 2)))
-						g.Expect(natbe).NotTo(HaveKey(nat.NewNATBackendKey(bckID, 3)))
-					}, "5s").Should(Succeed(), "service or backends didn't show up")
+						_, _, maglevs := dumpNATMapsAny(family, tc.Felixes[0])
+						g.Expect(maglevs).To(HaveLen(2 * maglev.M))
 
+					}, "5s").Should(Succeed(), "maglev backends didn't show up")
 				})
 
 				It("should cleanup after we disable eBPF", func() {
