@@ -79,6 +79,31 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ iptables cleanup tests", []
 		})
 	})
 
+	Describe("switching from iptables -> nftables", func() {
+		BeforeEach(func() {
+			if !NFTMode() {
+				Skip("This test is only relevant in nftables mode")
+			}
+
+			// Install some iptables rules that we expect to be cleaned up.
+			err := tc.Felixes[0].CopyFileIntoContainer("cali-iptables-dump.txt", "/iptables-dump.txt")
+			Expect(err).ToNot(HaveOccurred(), "Failed to copy iptables dump into felix container")
+			Eventually(func() error {
+				// Can fail if felix is trying to do a concurrent update.  Just keep trying...
+				return tc.Felixes[0].ExecMayFail("iptables-restore", "/iptables-dump.txt")
+			}, "5s", "100ms").ShouldNot(HaveOccurred())
+		})
+
+		It("should clean up iptables rules when running in nftables mode", func() {
+			// There should be no cali chains left in iptables after Felix has run.
+			Eventually(func() string {
+				out, err := tc.Felixes[0].ExecOutput("iptables-save")
+				Expect(err).NotTo(HaveOccurred())
+				return out
+			}, "5s").ShouldNot(ContainSubstring("cali-"))
+		})
+	})
+
 	JustAfterEach(func() {
 		if CurrentGinkgoTestDescription().Failed {
 			tc.Felixes[0].Exec("iptables-save", "-c")
