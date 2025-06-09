@@ -1238,7 +1238,7 @@ func schema_pkg_apis_projectcalico_v3_BGPPeerSpec(ref common.ReferenceCallback) 
 					},
 					"localASNumber": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Calico AS Number is being assigned to the peer.",
+							Description: "The optional Local AS Number to use when peering with this remote peer. If not specified, the node’s default ASN will be used.",
 							Type:        []string{"integer"},
 							Format:      "int64",
 						},

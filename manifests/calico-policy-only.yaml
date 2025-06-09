@@ -413,15 +413,15 @@ spec:
                 asNumber:
                   format: int32
                   type: integer
-                localASNumber:
-                  format: int32
-                  type: integer
                 filters:
                   items:
                     type: string
                   type: array
                 keepOriginalNextHop:
                   type: boolean
+                localASNumber:
+                  format: int32
+                  type: integer
                 localWorkloadSelector:
                   type: string
                 maxRestartTime:
