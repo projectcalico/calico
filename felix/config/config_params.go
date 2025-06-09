@@ -297,7 +297,7 @@ type Config struct {
 	DeviceRouteSourceAddressIPv6       net.IP            `config:"ipv6;"`
 	DeviceRouteProtocol                int               `config:"int;3"`
 	RemoveExternalRoutes               bool              `config:"bool;true"`
-	ProgramRoutes                      string            `config:"oneof(Enabled,Disabled);Disabled"`
+	ProgramClusterRoutes               string            `config:"oneof(Enabled,Disabled);Disabled"`
 	IPForwarding                       string            `config:"oneof(Enabled,Disabled);Enabled"`
 	IptablesRefreshInterval            time.Duration     `config:"seconds;180"`
 	IptablesPostWriteCheckIntervalSecs time.Duration     `config:"seconds;5"`
@@ -547,8 +547,8 @@ func (config *Config) FlowLogsEnabled() bool {
 		config.FlowLogsLocalReporterEnabled()
 }
 
-func (config *Config) ProgramRoutesEnabled() bool {
-	return config.ProgramRoutes == "Enabled"
+func (config *Config) ProgramClusterRoutesEnabled() bool {
+	return config.ProgramClusterRoutes == "Enabled"
 }
 
 // Copy makes a copy of the object.  Internal state is deep copied but config parameters are only shallow copied.

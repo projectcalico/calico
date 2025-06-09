@@ -476,8 +476,11 @@ func setupAndRun(logger testLogger, loglevel, section string, rules *polprog.Rul
 	}
 
 	if !topts.xdp {
+		_ = counters.EnsureExists(countersMap, 1, hook.Ingress)
+		_ = counters.EnsureExists(countersMap, 1, hook.Egress)
 		runFn(bpfFsDir + "/cali_tc_preamble")
 	} else {
+		_ = counters.EnsureExists(countersMap, 1, hook.XDP)
 		runFn(bpfFsDir + "/cali_xdp_preamble")
 	}
 }
@@ -1094,6 +1097,9 @@ func runBpfUnitTest(t *testing.T, source string, testFn func(bpfProgRunFn), opts
 	defer obj.Close()
 
 	ctxIn := make([]byte, 18*4)
+
+	_ = counters.EnsureExists(countersMap, 1, hook.Ingress)
+	_ = counters.EnsureExists(countersMap, 1, hook.Egress)
 
 	runTest := func() {
 		testFn(func(dataIn []byte) (bpfRunResult, error) {

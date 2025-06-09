@@ -1,0 +1,4 @@
+requireExplicitDirectDependencies: true
+allowedDirectDependencies:
+  - github.com/sirupsen/logrus
+  - github.com/snowzach/rotatefilehook

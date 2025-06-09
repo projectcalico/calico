@@ -514,10 +514,10 @@ type FelixConfigurationSpec struct {
 	// use a distinct protocol (in addition to setting this field to false).
 	RemoveExternalRoutes *bool `json:"removeExternalRoutes,omitempty"`
 
-	// ProgramRoutes specifies whether Felix should program IPIP or unencapsulated routes instead of BIRD.
+	// ProgramClusterRoutes specifies whether Felix should program IPIP routes instead of BIRD.
 	// Felix always programs VXLAN routes. [Default: Disabled]
 	// +kubebuilder:validation:Enum=Enabled;Disabled
-	ProgramRoutes *string `json:"programRoutes,omitempty"`
+	ProgramClusterRoutes *string `json:"programClusterRoutes,omitempty"`
 
 	// IPForwarding controls whether Felix sets the host sysctls to enable IP forwarding.  IP forwarding is required
 	// when using Calico for workload networking.  This should be disabled only on hosts where Calico is used solely for

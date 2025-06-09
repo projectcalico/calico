@@ -141,6 +141,7 @@ const (
 
 type attachPoint interface {
 	IfaceName() string
+	IfaceIndex() int
 	HookName() hook.Hook
 	IsAttached() (bool, error)
 	AttachProgram() error
@@ -1722,14 +1723,16 @@ func (m *bpfEndpointManager) reportHealth(ready bool, detail string) {
 
 func (m *bpfEndpointManager) doApplyPolicyToDataIface(iface, masterIface string, xdpMode XDPMode) (bpfInterfaceState, error) {
 	var (
-		err   error
-		up    bool
-		state bpfInterfaceState
+		err     error
+		up      bool
+		ifIndex int
+		state   bpfInterfaceState
 	)
 
 	m.ifacesLock.Lock()
 	m.withIface(iface, func(iface *bpfInterface) bool {
 		up = iface.info.ifaceIsUp()
+		ifIndex = iface.info.ifIndex
 		state = iface.dpState
 		return false
 	})
@@ -1764,9 +1767,11 @@ func (m *bpfEndpointManager) doApplyPolicyToDataIface(iface, masterIface string,
 	if err := m.dataIfaceStateFillJumps(tcAttachPoint, xdpMode, &state); err != nil {
 		return state, err
 	}
+	tcAttachPoint.IfIndex = ifIndex
 
 	xdpAttachPoint := &xdp.AttachPoint{
 		AttachPoint: bpf.AttachPoint{
+			IfIndex:  ifIndex,
 			Hook:     hook.XDP,
 			Iface:    iface,
 			LogLevel: m.bpfLogLevel,
@@ -2245,12 +2250,14 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 		state      bpfInterfaceState
 		endpointID *types.WorkloadEndpointID
 		ifaceUp    bool
+		ifindex    int
 	)
 
 	// Other threads might be filling in jump map FDs in the map so take the lock.
 	m.ifacesLock.Lock()
 	m.withIface(ifaceName, func(iface *bpfInterface) (forceDirty bool) {
 		ifaceUp = iface.info.ifaceIsUp()
+		ifindex = iface.info.ifIndex
 		endpointID = iface.info.endpointID
 		state = iface.dpState
 		return false
@@ -2314,6 +2321,7 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 	}
 
 	ap := m.calculateTCAttachPoint(ifaceName)
+	ap.IfIndex = ifindex
 
 	if err := m.wepStateFillJumps(ap, &state); err != nil {
 		return state, err
@@ -2408,11 +2416,11 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 }
 
 func (m *bpfEndpointManager) ensureProgramAttached(ap attachPoint) error {
-	err := ap.AttachProgram()
-	if err != nil {
+	if err := counters.EnsureExists(m.commonMaps.CountersMap, ap.IfaceIndex(), ap.HookName()); err != nil {
 		return err
 	}
-	return nil
+
+	return ap.AttachProgram()
 }
 
 // applyPolicy actually applies the policy to the given workload.
