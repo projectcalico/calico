@@ -3830,9 +3830,10 @@ func TestMaglevTable(t *testing.T) {
 	Expect(len(m)).To(Equal(len(programmed)))
 
 	keys := make([]nat.MaglevBackendKey, len(m))
-	for k, _ := range m {
+	for k := range m {
 		keys[k.Ordinal()] = k
 	}
+
 	for _, k := range keys {
 		fmt.Printf("%v: %s\n", k, m[k])
 	}
