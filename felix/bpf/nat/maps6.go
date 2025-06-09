@@ -20,11 +20,11 @@ import (
 	"net"
 	"time"
 
+	"github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 
 	"github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/ip"
-	"github.com/sirupsen/logrus"
 )
 
 //	struct calico_nat_v4_key {
