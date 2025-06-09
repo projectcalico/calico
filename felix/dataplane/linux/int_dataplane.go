@@ -36,6 +36,7 @@ import (
 	"golang.org/x/sys/unix"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 	"k8s.io/client-go/kubernetes"
+	"sigs.k8s.io/knftables"
 
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/bpfmap"
@@ -276,6 +277,9 @@ type Config struct {
 	RouteSource string
 
 	KubernetesProvider config.Provider
+
+	// For testing purposes - allows unit tests to mock out the creation of the nftables dataplane.
+	NewNftablesDataplane func(knftables.Family, string) (knftables.Interface, error)
 }
 
 type UpdateBatchResolver interface {
@@ -491,6 +495,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		OnStillAlive:     dp.reportHealth,
 		OpRecorder:       dp.loopSummarizer,
 		Disabled:         !config.RulesConfig.NFTables,
+		NewDataplane:     config.NewNftablesDataplane,
 	}
 
 	if config.BPFEnabled && config.BPFKubeProxyIptablesCleanupEnabled {

@@ -20,6 +20,7 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"sigs.k8s.io/knftables"
 
 	"github.com/projectcalico/calico/felix/collector"
 	"github.com/projectcalico/calico/felix/collector/types"
@@ -102,6 +103,12 @@ var _ = Describe("Constructor test", func() {
 			Wireguard: wireguard.Config{
 				EncryptHostTraffic: wireguardEncryptHostTraffic,
 			},
+
+			// Mock out the creation of the nftables interface - it's unused in these tests,
+			// and we don't want to depend on the kernel version or the presence of nftables.
+			NewNftablesDataplane: func(knftables.Family, string) (knftables.Interface, error) {
+				return nil, nil
+			},
 		}
 	})
 
@@ -122,13 +129,12 @@ var _ = Describe("Constructor test", func() {
 	})
 
 	Context("with collector", func() {
-
 		BeforeEach(func() {
 			col = &mockCollector{}
 		})
 
 		It("should be constructable", func() {
-			var dp = intdataplane.NewIntDataplaneDriver(dpConfig)
+			dp := intdataplane.NewIntDataplaneDriver(dpConfig)
 			Expect(dp).ToNot(BeNil())
 		})
 	})
