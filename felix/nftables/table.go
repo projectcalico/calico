@@ -377,6 +377,8 @@ func NewTable(
 		gaugeNumRules:  gaugeNumRules.WithLabelValues(fmt.Sprintf("%d", ipVersion)),
 		opReporter:     options.OpRecorder,
 
+		disabled: options.Disabled,
+
 		contextTimeout: defaultTimeout,
 	}
 	table.MapsDataplane = NewMaps(
@@ -392,6 +394,8 @@ func NewTable(
 	} else {
 		table.onStillAlive = func() {}
 	}
+
+	logrus.Infof("Created nftables table %s for IP version %d. Disabled? %t", name, ipVersion, options.Disabled)
 
 	return table
 }
@@ -866,11 +870,17 @@ func (t *NftablesTable) applyUpdates() error {
 	// Start a new nftables transaction.
 	tx := t.nft.NewTransaction()
 
+	t.logCxt.Info("Applying updates to nftables table")
 	if t.disabled {
 		// We can simply delete the table and return.
 		t.logCxt.Debug("Table is disabled, deleting all chains and maps")
 		tx.Delete(&knftables.Table{})
 		if err := t.runTransaction(tx); err != nil {
+			// If the table does not exist, we can ignore the error.
+			if knftables.IsNotFound(err) {
+				t.logCxt.Debug("Table does not exist, nothing to delete")
+				return nil
+			}
 			return fmt.Errorf("failed to delete table: %w", err)
 		}
 		t.logCxt.Debug("Table deleted successfully")
