@@ -27,9 +27,10 @@ import (
 )
 
 var protocolMapL4 = map[int32]string{
-	1:  "icmp",
-	6:  "tcp",
-	17: "udp",
+	1:   "icmp",
+	6:   "tcp",
+	17:  "udp",
+	132: "sctp",
 }
 
 type namespaceMatch struct {

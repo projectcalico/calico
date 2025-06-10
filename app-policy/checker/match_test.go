@@ -520,6 +520,60 @@ func TestMatchL4Protocol(t *testing.T) {
 	Expect(match("testns", rule, reqCache)).To(BeFalse())
 	req.GetAttributes().GetDestination().Address = nil
 	rule.NotProtocol = nil
+
+	// With Protocol=1 rule.
+	rule.Protocol = &proto.Protocol{
+		NumberOrName: &proto.Protocol_Number{
+			Number: 1,
+		},
+	}
+	Expect(matchL4Protocol(rule, 1)).To(BeTrue())
+	rule.Protocol = nil
+
+	// With Protocol=ICMP rule.
+	rule.Protocol = &proto.Protocol{
+		NumberOrName: &proto.Protocol_Name{
+			Name: "ICMP",
+		},
+	}
+	Expect(matchL4Protocol(rule, 1)).To(BeTrue())
+	rule.Protocol = nil
+
+	// With Protocol=132 rule.
+	rule.Protocol = &proto.Protocol{
+		NumberOrName: &proto.Protocol_Number{
+			Number: 132,
+		},
+	}
+	Expect(matchL4Protocol(rule, 132)).To(BeTrue())
+	rule.Protocol = nil
+
+	// With Protocol=SCTP rule.
+	rule.Protocol = &proto.Protocol{
+		NumberOrName: &proto.Protocol_Name{
+			Name: "SCTP",
+		},
+	}
+	Expect(matchL4Protocol(rule, 132)).To(BeTrue())
+	rule.Protocol = nil
+
+	// With an unsupported protocol.
+	rule.Protocol = &proto.Protocol{
+		NumberOrName: &proto.Protocol_Number{
+			Number: 99,
+		},
+	}
+	Expect(matchL4Protocol(rule, 99)).To(BeFalse())
+	rule.Protocol = nil
+
+	// With an unsupported protocol name.
+	rule.Protocol = &proto.Protocol{
+		NumberOrName: &proto.Protocol_Name{
+			Name: "protoX",
+		},
+	}
+	Expect(matchL4Protocol(rule, 99)).To(BeFalse())
+	rule.Protocol = nil
 }
 
 func TestMatchNet(t *testing.T) {
