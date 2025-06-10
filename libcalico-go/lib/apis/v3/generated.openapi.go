@@ -3105,54 +3105,105 @@ func schema_libcalico_go_lib_apis_v3_QoSControls(ref common.ReferenceCallback) c
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Type: []string{"object"},
+				Description: "QoSControls contains QoS limits configuration.",
+				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"ingressBandwidth": {
 						SchemaProps: spec.SchemaProps{
-							Type:   []string{"integer"},
-							Format: "int64",
-						},
-					},
-					"egressBandwidth": {
-						SchemaProps: spec.SchemaProps{
-							Type:   []string{"integer"},
-							Format: "int64",
+							Description: "Ingress bandwidth controls.  These are only applied if IngressBandwidth != 0.  In that case:\n\n- IngressBandwidth must be between 1000 (1k) and 10^15 (1P).\n\n- IngressBurst must be between 1000 (1k) and 34359738360 (32Gi - 8).  If specified as 0,\n  it is defaulted to 4294967296 (4Gi).\n\n- IngressPeakrate may be 0 if it is acceptable for bursts to be transmitted at line rate.\n  In that case IngressMinburst should also be 0.  But if IngressPeakrate != 0:\n\n  - IngressPeakrate must be between 1010 (1.01k) and 1.01 x 10^15 (1.01P).\n\n  - IngressMinburst must either be 0 - in which case Calico will use the MTU of the\n    relevant workload interface as the minimum burst size - or be between 1000 (1k) and\n    10^8 (100M).\n\nIngress bandwidth rate limit in bits per second",
+							Type:        []string{"integer"},
+							Format:      "int64",
 						},
 					},
 					"ingressBurst": {
 						SchemaProps: spec.SchemaProps{
-							Type:   []string{"integer"},
-							Format: "int64",
+							Description: "Ingress bandwidth burst size in bits",
+							Type:        []string{"integer"},
+							Format:      "int64",
+						},
+					},
+					"ingressPeakrate": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Ingress bandwidth peakrate limit in bits per second",
+							Type:        []string{"integer"},
+							Format:      "int64",
+						},
+					},
+					"ingressMinburst": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Ingress bandwidth minburst size in bytes (not bits because it is typically the MTU)",
+							Type:        []string{"integer"},
+							Format:      "int64",
+						},
+					},
+					"egressBandwidth": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Egress bandwidth controls.  These are only applied if EgressBandwidth != 0.  The same detail applies here as for ingress bandwidth, except using the corresponding Egress fields.\n\nEgress bandwidth rate limit in bits per second",
+							Type:        []string{"integer"},
+							Format:      "int64",
 						},
 					},
 					"egressBurst": {
 						SchemaProps: spec.SchemaProps{
-							Type:   []string{"integer"},
-							Format: "int64",
+							Description: "Egress bandwidth burst size in bits",
+							Type:        []string{"integer"},
+							Format:      "int64",
+						},
+					},
+					"egressPeakrate": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Egress bandwidth peakrate limit in bits per second",
+							Type:        []string{"integer"},
+							Format:      "int64",
+						},
+					},
+					"egressMinburst": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Egress bandwidth minburst size in bytes (not bits because it is typically the MTU)",
+							Type:        []string{"integer"},
+							Format:      "int64",
 						},
 					},
 					"ingressPacketRate": {
 						SchemaProps: spec.SchemaProps{
-							Type:   []string{"integer"},
-							Format: "int64",
+							Description: "Ingress packet rate limit in packets per second.  Only applied if non-zero.  When non-zero:\n\n- IngressPacketRate must be between 1 and 10^4 (10k).\n\n- IngressPacketBurst must be between 1 and 10^4 (10k).  If specified as 0, it is\n  defaulted to 5.",
+							Type:        []string{"integer"},
+							Format:      "int64",
+						},
+					},
+					"ingressPacketBurst": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Ingress packet rate burst size in number of packets",
+							Type:        []string{"integer"},
+							Format:      "int64",
 						},
 					},
 					"egressPacketRate": {
 						SchemaProps: spec.SchemaProps{
-							Type:   []string{"integer"},
-							Format: "int64",
+							Description: "Egress packet rate limit in packets per second.  Only applied if non-zero.  The same detail applies here as for egress packet rate, except using the corresponding Egress fields.",
+							Type:        []string{"integer"},
+							Format:      "int64",
+						},
+					},
+					"egressPacketBurst": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Egress packet rate burst size in number of packets",
+							Type:        []string{"integer"},
+							Format:      "int64",
 						},
 					},
 					"ingressMaxConnections": {
 						SchemaProps: spec.SchemaProps{
-							Type:   []string{"integer"},
-							Format: "int64",
+							Description: "Ingress maximum number of connections (absolute number of connections, no unit).  Only applied if non-zero.  When non-zero, must be between 1 and 4294967295.",
+							Type:        []string{"integer"},
+							Format:      "int64",
 						},
 					},
 					"egressMaxConnections": {
 						SchemaProps: spec.SchemaProps{
-							Type:   []string{"integer"},
-							Format: "int64",
+							Description: "Egress maximum number of connections (absolute number of connections, no unit).  Only applied if non-zero.  When non-zero, must be between 1 and 4294967295.",
+							Type:        []string{"integer"},
+							Format:      "int64",
 						},
 					},
 				},

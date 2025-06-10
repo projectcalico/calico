@@ -2389,7 +2389,7 @@ func LoadObject(file string, data libbpf.GlobalData, mapsToBePinned ...string) (
 			}
 		}
 
-		log.Debugf("Pinning map %s k %d v %d", mapName, m.KeySize(), m.ValueSize())
+		log.Debugf("Pinning file %s map %s k %d v %d", file, mapName, m.KeySize(), m.ValueSize())
 		pinDir := MapPinDir()
 		// If mapsToBePinned is not specified, pin all the maps.
 		if len(mapsToBePinned) == 0 {

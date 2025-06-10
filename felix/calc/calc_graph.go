@@ -399,7 +399,7 @@ func NewCalculationGraph(
 	cg.hostIPPassthru = hostIPPassthru
 
 	if conf.BPFEnabled || conf.Encapsulation.VXLANEnabled || conf.Encapsulation.VXLANEnabledV6 ||
-		conf.WireguardEnabled || conf.WireguardEnabledV6 || conf.ProgramRoutesEnabled() {
+		conf.WireguardEnabled || conf.WireguardEnabledV6 || conf.ProgramClusterRoutesEnabled() {
 		// Calculate simple node-ownership routes.
 		//        ...
 		//     Dispatcher (all updates)

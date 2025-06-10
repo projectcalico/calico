@@ -10,6 +10,7 @@ FROM --platform=linux/${ARCH} ubuntu:${STREAM}
 ARG STREAM
 ARG ARCH
 
+ARG UBUNTU_REPO_OVERRIDE
 # We don't really need this but here we are
 LABEL org.opencontainers.image.authors="Daniel Fox <dan.fox@tigera.io>"
 

@@ -19,16 +19,15 @@ import (
 	"errors"
 	"io"
 	"testing"
-	"time"
 
 	. "github.com/onsi/gomega"
 	"github.com/stretchr/testify/mock"
 
 	netmocks "github.com/projectcalico/calico/guardian/pkg/thirdpartymocks/net"
-	mockclock "github.com/projectcalico/calico/guardian/pkg/thirdpartymocks/std/clock"
+	mocktime "github.com/projectcalico/calico/guardian/pkg/thirdpartymocks/std/time"
 	"github.com/projectcalico/calico/guardian/pkg/tunnel"
 	tunmocks "github.com/projectcalico/calico/guardian/pkg/tunnel/mocks"
-	"github.com/projectcalico/calico/lib/std/clock"
+	"github.com/projectcalico/calico/lib/std/time"
 )
 
 func TestTunnelOpenConnection(t *testing.T) {
@@ -78,7 +77,7 @@ func TestTunnelOpenConnection(t *testing.T) {
 			tun, err := tunnel.NewTunnel(mockDialer)
 			Expect(err).NotTo(HaveOccurred())
 
-			ctx, cancel := context.WithDeadline(context.Background(), clock.Now().Add(time.Second*30))
+			ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(time.Second*30))
 			defer func() {
 				cancel()
 				<-tun.WaitForClose()
@@ -170,14 +169,14 @@ func TestTunnelAcceptConnection(t *testing.T) {
 func TestTunnel_DialRetry(t *testing.T) {
 	setupTest(t)
 
-	mockClock := new(mockclock.Clock)
+	mockClock := new(mocktime.Clock)
 
 	livenessTickerChan := make(chan time.Time)
 	timerChan := make(chan time.Time, 1)
 	defer close(livenessTickerChan)
 	defer close(timerChan)
 
-	mockTimer := new(mockclock.Timer)
+	mockTimer := new(mocktime.Timer)
 
 	mockTimer.On("Chan").
 		Run(func(mock.Arguments) { timerChan <- time.Now() }).
@@ -197,7 +196,7 @@ func TestTunnel_DialRetry(t *testing.T) {
 
 	mockDialer.On("Dial", mock.Anything).Return(mockSession, nil).Times(5)
 
-	_ = clock.DoWithClock(mockClock, func() error {
+	_ = time.DoWithClock(mockClock, func() error {
 		tun, err := tunnel.NewTunnel(mockDialer)
 		Expect(err).NotTo(HaveOccurred())
 
