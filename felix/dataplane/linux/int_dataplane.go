@@ -569,6 +569,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	var mangleTableV4, natTableV4, rawTableV4, filterTableV4 generictables.Table
 	var ipSetsV4 dpsets.IPSetsDataplane
 	var cleanupTables []generictables.Table
+	var cleanupIPSets []dpsets.IPSetsDataplane
 	if config.RulesConfig.NFTables {
 		// Enable nftables.
 		mangleTableV4 = mangleTableV4NFT
@@ -584,6 +585,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			rawTableV4IPT,
 			filterTableV4IPT,
 		)
+		cleanupIPSets = append(cleanupIPSets, ipsets.NewIPSets(config.RulesConfig.IPSetConfigV4, dp.loopSummarizer))
 	} else {
 		// Enable iptables.
 		mangleTableV4 = mangleTableV4IPT
@@ -592,8 +594,8 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		filterTableV4 = filterTableV4IPT
 		ipSetsV4 = ipsets.NewIPSets(config.RulesConfig.IPSetConfigV4, dp.loopSummarizer)
 
-		// Cleanup nftables - we can simply add the root table here, since
-		// all the other tables are layers on top of it.
+		// Cleanup nftables - we can simply add the root table here, Since
+		// all the other tables / ipsets / maps are handled by the root table.
 		cleanupTables = append(cleanupTables, nftablesV4RootTable)
 	}
 
@@ -1138,6 +1140,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 				rawTableV6IPT,
 				filterTableV6IPT,
 			)
+			cleanupIPSets = append(cleanupIPSets, ipsets.NewIPSets(config.RulesConfig.IPSetConfigV6, dp.loopSummarizer))
 		} else {
 			// Enable iptables.
 			mangleTableV6 = mangleTableV6IPT
@@ -1146,7 +1149,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			ipSetsV6 = ipsets.NewIPSets(config.RulesConfig.IPSetConfigV6, dp.loopSummarizer)
 
 			// Cleanup nftables - we can simply add the root table here, Since
-			// all the other tables are layers on top of it.
+			// all the other tables / ipsets / maps are handled by the root table.
 			cleanupTables = append(cleanupTables, nftablesV6RootTable)
 		}
 
@@ -1282,6 +1285,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 	// Include cleanup tables in allTables so that they are cleaned up.
 	dp.allTables = append(dp.allTables, cleanupTables...)
+	dp.ipSets = append(dp.ipSets, cleanupIPSets...)
 
 	// Register that we will report liveness and readiness.
 	if config.HealthAggregator != nil {

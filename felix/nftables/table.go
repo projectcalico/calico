@@ -414,6 +414,10 @@ func (n *NftablesTable) IPVersion() uint8 {
 // also AppendRules, which can be used to record additional rules that are
 // always appended.
 func (t *NftablesTable) InsertOrAppendRules(chainName string, rules []generictables.Rule) {
+	if t.disabled {
+		logrus.WithField("chainName", chainName).Panic("BUG: Attempted to insert rules into a disabled table")
+	}
+
 	t.logCxt.WithField("chainName", chainName).Debug("Updating rule insertions")
 	oldRules := t.chainToInsertedRules[chainName]
 	t.chainToInsertedRules[chainName] = rules
@@ -437,6 +441,10 @@ func (t *NftablesTable) InsertOrAppendRules(chainName string, rules []generictab
 // If chain insert mode is "append", these rules are appended after any
 // rules added with InsertOrAppendRules.
 func (t *NftablesTable) AppendRules(chainName string, rules []generictables.Rule) {
+	if t.disabled {
+		logrus.WithField("chainName", chainName).Panic("BUG: Attempted to append rules into a disabled table")
+	}
+
 	t.logCxt.WithField("chainName", chainName).Debug("Updating rule appends")
 	oldRules := t.chainToAppendedRules[chainName]
 	t.chainToAppendedRules[chainName] = rules
@@ -457,6 +465,10 @@ func (t *NftablesTable) UpdateChains(chains []*generictables.Chain) {
 }
 
 func (t *NftablesTable) UpdateChain(chain *generictables.Chain) {
+	if t.disabled {
+		logrus.WithField("chainName", chain.Name).Panic("BUG: Attempted to update chain in a disabled table")
+	}
+
 	t.logCxt.WithField("chainName", chain.Name).Debug("Adding chain to available set.")
 	oldNumRules := 0
 
@@ -871,22 +883,6 @@ func (t *NftablesTable) applyUpdates() error {
 	// Start a new nftables transaction.
 	tx := t.nft.NewTransaction()
 
-	if t.disabled {
-		// We can simply delete the table and return.
-		t.logCxt.Debug("Table is disabled, deleting all chains and maps")
-		tx.Delete(&knftables.Table{})
-		if err := t.runTransaction(tx); err != nil {
-			// If the table does not exist, we can ignore the error.
-			if knftables.IsNotFound(err) {
-				t.logCxt.Debug("Table does not exist, nothing to delete")
-				return nil
-			}
-			return fmt.Errorf("failed to delete table: %w", err)
-		}
-		t.logCxt.Debug("Table deleted successfully")
-		return nil
-	}
-
 	// Get the set of map updates we need to make. We'll interleave these with the chain updates.
 	// in the correct order. Namely:
 	// - Create any new maps.
@@ -894,8 +890,8 @@ func (t *NftablesTable) applyUpdates() error {
 	// - Add elements to maps.
 	mapUpdates := t.MapsDataplane.MapUpdates()
 
-	// If we don't see any chains, then we need to create it.
-	if len(t.chainToDataplaneHashes) == 0 {
+	if !t.disabled && len(t.chainToDataplaneHashes) == 0 {
+		// Table is enabled, but doesn't exist in the dataplane yet.
 		tx.Add(&knftables.Table{})
 	}
 
@@ -910,13 +906,15 @@ func (t *NftablesTable) applyUpdates() error {
 		tx.Delete(mapElement)
 	}
 
-	// Also make sure our base chains exist.
-	for _, c := range baseChains {
-		// Make a copy.
-		baseChain := c
-		if _, ok := t.chainToDataplaneHashes[baseChain.Name]; !ok {
-			// Chain doesn't exist in dataplane, mark it for creation.
-			tx.Add(&baseChain)
+	if !t.disabled {
+		// Also make sure our base chains exist.
+		for _, c := range baseChains {
+			// Make a copy.
+			baseChain := c
+			if _, ok := t.chainToDataplaneHashes[baseChain.Name]; !ok {
+				// Chain doesn't exist in dataplane, mark it for creation.
+				tx.Add(&baseChain)
+			}
 		}
 	}
 
@@ -1086,6 +1084,11 @@ func (t *NftablesTable) applyUpdates() error {
 		tx.Delete(m)
 	}
 
+	if t.disabled && len(t.chainToDataplaneHashes) != 0 {
+		// Table is disabled, but exists in the dataplane - delete it.
+		tx.Delete(&knftables.Table{})
+	}
+
 	if tx.NumOperations() == 0 {
 		t.logCxt.Debug("Update ended up being no-op, skipping call to nftables.")
 	} else {
@@ -1184,6 +1187,11 @@ func (t *NftablesTable) CheckRulesPresent(chain string, rules []generictables.Ru
 // other rules. This is primarily useful when bootstrapping and we cannot wait
 // until we have the full state.
 func (t *NftablesTable) InsertRulesNow(chain string, rules []generictables.Rule) error {
+	if t.disabled {
+		// We should never be inserting rules when the table is disabled.
+		logrus.WithField("chain", chain).Panic("BUG: InsertRulesNow called on disabled table.")
+	}
+
 	features := t.featureDetector.GetFeatures()
 	hashes := CalculateRuleHashes(chain, rules, features)
 
