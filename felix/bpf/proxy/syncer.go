@@ -844,9 +844,10 @@ func newDefaultMaglev() *maglev.ConsistentHash {
 	return maglev.NewConsistentHash(maglev.WithHash(fnv.New32(), fnv.New32()))
 }
 
-func (s *Syncer) updateMaglevService(skey svcKey, sinfo Service, eps []k8sp.Endpoint) error {
+func (s *Syncer) updateMaglevService(skey svcKey, sinfo Service, eps []k8sp.Endpoint) {
 	if len(eps) == 0 || eps == nil {
-		return nil
+		log.WithFields(log.Fields{"service": skey, "name": sinfo.String()}).Info("Skipping maglev service update for empty endpoint list")
+		return
 	}
 
 	// ALEX TODO loadbalancer IP awareness.
@@ -868,8 +869,6 @@ func (s *Syncer) updateMaglevService(skey svcKey, sinfo Service, eps []k8sp.Endp
 	log.WithFields(log.Fields{
 		"lut": lut,
 	}).Infof("Wrote maglev service '%s' backends (%d) in %fs", skey.sname, len(eps), dt.Seconds())
-
-	return nil
 }
 
 func (s *Syncer) writeMaglevSvcBackends(vip net.IP, port uint16, protocol uint8, lut []k8sp.Endpoint) {
