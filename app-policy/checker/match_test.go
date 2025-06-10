@@ -528,6 +528,7 @@ func TestMatchL4Protocol(t *testing.T) {
 		},
 	}
 	Expect(matchL4Protocol(rule, 1)).To(BeTrue())
+	Expect(matchL4Protocol(rule, 100)).To(BeFalse())
 	rule.Protocol = nil
 
 	// With Protocol=ICMP rule.
@@ -537,15 +538,17 @@ func TestMatchL4Protocol(t *testing.T) {
 		},
 	}
 	Expect(matchL4Protocol(rule, 1)).To(BeTrue())
+	Expect(matchL4Protocol(rule, 99)).To(BeFalse())
 	rule.Protocol = nil
 
-	// With Protocol=132 rule.
+	// With Protocol=132 (SCTP) rule.
 	rule.Protocol = &proto.Protocol{
 		NumberOrName: &proto.Protocol_Number{
 			Number: 132,
 		},
 	}
 	Expect(matchL4Protocol(rule, 132)).To(BeTrue())
+	Expect(matchL4Protocol(rule, 110)).To(BeFalse())
 	rule.Protocol = nil
 
 	// With Protocol=SCTP rule.
@@ -555,6 +558,47 @@ func TestMatchL4Protocol(t *testing.T) {
 		},
 	}
 	Expect(matchL4Protocol(rule, 132)).To(BeTrue())
+	Expect(matchL4Protocol(rule, 120)).To(BeFalse())
+	rule.Protocol = nil
+
+	// With Protocol=58 (ICMPv6) rule.
+	rule.Protocol = &proto.Protocol{
+		NumberOrName: &proto.Protocol_Number{
+			Number: 58,
+		},
+	}
+	Expect(matchL4Protocol(rule, 58)).To(BeTrue())
+	Expect(matchL4Protocol(rule, 60)).To(BeFalse())
+	rule.Protocol = nil
+
+	// With Protocol=ICMPv6 rule.
+	rule.Protocol = &proto.Protocol{
+		NumberOrName: &proto.Protocol_Name{
+			Name: "ICMPv6",
+		},
+	}
+	Expect(matchL4Protocol(rule, 58)).To(BeTrue())
+	Expect(matchL4Protocol(rule, 40)).To(BeFalse())
+	rule.Protocol = nil
+
+	// With Protocol=136 (UDPLite) rule.
+	rule.Protocol = &proto.Protocol{
+		NumberOrName: &proto.Protocol_Number{
+			Number: 136,
+		},
+	}
+	Expect(matchL4Protocol(rule, 136)).To(BeTrue())
+	Expect(matchL4Protocol(rule, 60)).To(BeFalse())
+	rule.Protocol = nil
+
+	// With Protocol=ICMPv6 rule.
+	rule.Protocol = &proto.Protocol{
+		NumberOrName: &proto.Protocol_Name{
+			Name: "UDPLite",
+		},
+	}
+	Expect(matchL4Protocol(rule, 136)).To(BeTrue())
+	Expect(matchL4Protocol(rule, 80)).To(BeFalse())
 	rule.Protocol = nil
 
 	// With an unsupported protocol.
@@ -563,17 +607,20 @@ func TestMatchL4Protocol(t *testing.T) {
 			Number: 99,
 		},
 	}
-	Expect(matchL4Protocol(rule, 99)).To(BeFalse())
+	Expect(matchL4Protocol(rule, 99)).To(BeTrue())
+	Expect(matchL4Protocol(rule, 80)).To(BeFalse())
 	rule.Protocol = nil
 
-	// With an unsupported protocol name.
+	// With a randome protocol name.
 	rule.Protocol = &proto.Protocol{
 		NumberOrName: &proto.Protocol_Name{
 			Name: "protoX",
 		},
 	}
 	Expect(matchL4Protocol(rule, 99)).To(BeFalse())
-	rule.Protocol = nil
+	Expect(matchL4Protocol(rule, 0)).To(BeFalse())
+	Expect(matchL4Protocol(rule, 300)).To(BeFalse())
+	Expect(matchL4Protocol(rule, -30)).To(BeFalse())
 }
 
 func TestMatchNet(t *testing.T) {
