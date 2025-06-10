@@ -75,7 +75,8 @@ var _ = Describe("MTUFromFile", func() {
 			Expect(err).NotTo(HaveOccurred())
 			defer os.Remove(file.Name())
 
-			os.Chmod(file.Name(), 0o000) // Remove all permissions
+			err = os.Chmod(file.Name(), 0o000) // Remove all permissions
+			Expect(err).NotTo(HaveOccurred())
 			file.Close()
 
 			// Call the function and check the result
