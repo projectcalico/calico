@@ -61,7 +61,7 @@ static CALI_BPF_INLINE bool frags4_try_assemble(struct cali_tc_ctx *ctx)
 
 		if (!v) {
 			CALI_DEBUG("Missing IP fragment at offset %d", k.offset);
-			goto out;
+			return false;
 		}
 
 		tot_len += v->len;
@@ -73,7 +73,7 @@ static CALI_BPF_INLINE bool frags4_try_assemble(struct cali_tc_ctx *ctx)
 		k.offset += v->len;
 	}
 
-	goto out;
+	return false;
 
 assemble:
 	CALI_DEBUG("IP FRAG: Found all fragments!");
@@ -166,6 +166,10 @@ static CALI_BPF_INLINE bool frags4_handle(struct cali_tc_ctx *ctx)
 	int r_off = skb_l4hdr_offset(ctx);
 	bool more_frags = bpf_ntohs(ip_hdr(ctx)->frag_off) & 0x2000;
 
+	/* When we get a fragment, it may be large than the storage in the map.
+	 * We may need to break it into multiple fragments to be able to store
+	 * it.
+	 */
 	for (i = 0; i < 10; i++) {
 		int sz = MAX_FRAG;
 		if (r_off + sz >= ctx->skb->len) {
