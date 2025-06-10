@@ -173,6 +173,10 @@ type NftablesTable struct {
 	ipVersion uint8
 	nft       knftables.Interface
 
+	// When true, the table will not program any rules or chains and insted functions
+	// solely to clean up any existing rules and chains that may be programmed.
+	disabled bool
+
 	// For rendering rules and chains.
 	render NFTRenderer
 
@@ -253,6 +257,10 @@ type TableOptions struct {
 	// NewDataplane is an optional function to override the creation of the knftables client,
 	// used for testing.
 	NewDataplane func(knftables.Family, string) (knftables.Interface, error)
+
+	// Disabled can be set to true when running in iptables mode, triggering a cleanup
+	// of any Calico nftables content.
+	Disabled bool
 
 	RefreshInterval time.Duration
 
@@ -368,6 +376,8 @@ func NewTable(
 		gaugeNumChains: gaugeNumChains.WithLabelValues(fmt.Sprintf("%d", ipVersion)),
 		gaugeNumRules:  gaugeNumRules.WithLabelValues(fmt.Sprintf("%d", ipVersion)),
 		opReporter:     options.OpRecorder,
+
+		disabled: options.Disabled,
 
 		contextTimeout: defaultTimeout,
 	}
@@ -857,6 +867,22 @@ func (t *NftablesTable) applyUpdates() error {
 
 	// Start a new nftables transaction.
 	tx := t.nft.NewTransaction()
+
+	if t.disabled {
+		// We can simply delete the table and return.
+		t.logCxt.Debug("Table is disabled, deleting all chains and maps")
+		tx.Delete(&knftables.Table{})
+		if err := t.runTransaction(tx); err != nil {
+			// If the table does not exist, we can ignore the error.
+			if knftables.IsNotFound(err) {
+				t.logCxt.Debug("Table does not exist, nothing to delete")
+				return nil
+			}
+			return fmt.Errorf("failed to delete table: %w", err)
+		}
+		t.logCxt.Debug("Table deleted successfully")
+		return nil
+	}
 
 	// Get the set of map updates we need to make. We'll interleave these with the chain updates.
 	// in the correct order. Namely:
