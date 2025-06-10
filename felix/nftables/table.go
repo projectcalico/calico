@@ -299,17 +299,20 @@ func NewTable(
 	dirtyBaseChains := set.New[string]()
 	refcounts := map[string]int{}
 
-	for _, baseChain := range baseChains {
-		inserts[baseChain.Name] = []generictables.Rule{}
-		appends[baseChain.Name] = []generictables.Rule{}
-		chainNameToChain[baseChain.Name] = &generictables.Chain{
-			Name:  baseChain.Name,
-			Rules: []generictables.Rule{},
-		}
-		dirtyBaseChains.Add(baseChain.Name)
+	if !options.Disabled {
+		// Only add the base chains if the table is enabled.
+		for _, baseChain := range baseChains {
+			inserts[baseChain.Name] = []generictables.Rule{}
+			appends[baseChain.Name] = []generictables.Rule{}
+			chainNameToChain[baseChain.Name] = &generictables.Chain{
+				Name:  baseChain.Name,
+				Rules: []generictables.Rule{},
+			}
+			dirtyBaseChains.Add(baseChain.Name)
 
-		// Base chains are referred to by definition.
-		refcounts[baseChain.Name] += 1
+			// Base chains are referred to by definition.
+			refcounts[baseChain.Name] += 1
+		}
 	}
 
 	// Allow override of exec.Command() and time.Sleep() for test purposes.
