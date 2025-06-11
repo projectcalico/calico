@@ -84,7 +84,7 @@ endif
 # This is only needed when running non-native binaries.
 register:
 ifneq ($(BUILDARCH),$(ARCH))
-	docker run --rm --privileged multiarch/qemu-user-static:register || true
+	docker run --rm --privileged tonistiigi/binfmt --install all
 endif
 
 # If this is a release, also tag and push additional images.
