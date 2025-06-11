@@ -58,9 +58,10 @@ const (
 
 // Handle a few keys that we need to default if not specified.
 var globalDefaults = map[string]string{
-	"/calico/bgp/v1/global/as_num":    "64512",
-	"/calico/bgp/v1/global/node_mesh": `{"enabled": true}`,
-	globalLogging:                     "info",
+	"/calico/bgp/v1/global/as_num":       "64512",
+	"/calico/bgp/v1/global/local_as_num": "65000",
+	"/calico/bgp/v1/global/node_mesh":    `{"enabled": true}`,
+	globalLogging:                        "info",
 }
 
 var (
@@ -476,6 +477,7 @@ func (c *client) inSync() bool {
 type bgpPeer struct {
 	PeerIP          cnet.IP              `json:"ip"`
 	ASNum           numorstring.ASNumber `json:"as_num,string"`
+	LocalASNum      numorstring.ASNumber `json:"local_as_num,string"`
 	RRClusterID     string               `json:"rr_cluster_id"`
 	Password        *string              `json:"password"`
 	SourceAddr      string               `json:"source_addr"`
@@ -649,6 +651,7 @@ func (c *client) updatePeersV1() {
 				peers = append(peers, &bgpPeer{
 					PeerIP:          *ip,
 					ASNum:           v3res.Spec.ASNumber,
+					LocalASNum:      v3res.Spec.LocalASNumber,
 					SourceAddr:      string(v3res.Spec.SourceAddress),
 					Port:            port,
 					KeepNextHop:     keepOriginalNextHop,
@@ -871,6 +874,7 @@ func (c *client) localBGPPeerDataAsBGPPeers(localBGPPeerData localBGPPeerData, v
 		peer.PeerIP = *ip
 		peer.Filters = v3Peer.Spec.Filters
 		peer.ASNum = v3Peer.Spec.ASNumber
+		peer.LocalASNum = v3Peer.Spec.LocalASNumber
 		peer.SourceAddr = "None"
 		peer.PassiveMode = true
 		peer.LocalBGPPeer = true
