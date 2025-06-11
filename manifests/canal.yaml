@@ -1775,6 +1775,11 @@ spec:
                     status reports. [Default: 90s]"
                   pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
                   type: string
+                requireMTUFile:
+                  description: |-
+                    RequireMTUFile specifies whether mtu file is required to start the felix.
+                    Optional as to keep the same as previous behavior. [Default: false]
+                  type: boolean
                 routeRefreshInterval:
                   description: |-
                     RouteRefreshInterval is the period at which Felix re-checks the routes
