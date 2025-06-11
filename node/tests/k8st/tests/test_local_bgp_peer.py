@@ -139,7 +139,7 @@ class _TestLocalBGPPeer(TestBase):
 apiVersion: projectcalico.org/v3
 kind: BGPFilter
 metadata:
-  name: export-to-tor
+  name: export-child-cluster-cidr
 spec:
   exportV4:
   - action: Accept
@@ -152,7 +152,7 @@ spec:
     cidr: ca11:c0::/32
     source: RemotePeers
 """)
-        self.add_cleanup(lambda: calicoctl("delete bgpfilter export-to-tor", allow_fail=True))
+        self.add_cleanup(lambda: calicoctl("delete bgpfilter export-child-cluster-cidr", allow_fail=True))
 
         if self.topology == TopologyMode.MESH:
           # Establish BGPPeer from cluster nodes to tor
@@ -165,7 +165,7 @@ spec:
   peerIP: %s
   asNumber: 63000
   filters:
-  - export-to-tor
+  - export-child-cluster-cidr
 EOF
 """ % self.external_node_ip)
           self.add_cleanup(lambda: calicoctl("delete bgppeer node-tor-peer", allow_fail=True))
@@ -184,6 +184,9 @@ metadata:
 spec:
   nodeSelector: all()
   peerSelector: kubernetes.io/hostname == 'kind-control-plane'
+  nextHopMode: Self
+  filters:
+  - export-child-cluster-cidr
 """)
           self.add_cleanup(lambda: calicoctl("delete bgppeer peer-with-rr", allow_fail=True))
 
@@ -198,8 +201,7 @@ spec:
   peerIP: %s
   asNumber: 63000
   filters:
-  - export-to-tor
-  nextHopMode: Self          
+  - export-child-cluster-cidr          
 EOF
 """ % self.external_node_ip)
           self.add_cleanup(lambda: calicoctl("delete bgppeer rr-tor-peer", allow_fail=True))
@@ -466,7 +468,7 @@ class TestLocalBGPPeerRR(_TestLocalBGPPeer):
         Runs the tests for local bgp peers
         """
 
-        stop_for_debug()
+        # stop_for_debug()
 
         # Assert bgp sessions has been established to the following local workloads.
         # red pods on kind-worker and kind-worker2. blue pod on kind-worker2.
@@ -509,8 +511,21 @@ class TestLocalBGPPeerRR(_TestLocalBGPPeer):
           self.assertRegexpMatches(output, "10\.123\.1\.0/26.*via %s on .*Mesh_with_node_2.*AS65401" % (self.ips[2],))
           self.assertRegexpMatches(output, "10\.123\.3\.0/26.*via %s on .*Mesh_with_node_2.*AS65401" % (self.ips[2],))
 
+        if self.topology == TopologyMode.RR:
+          # Check that the ToR hears about all the routes from master node.
+          # 10.123.3.0/26      via 172.18.0.3 on eth0 [RR_with_master_node 14:48:19] * (100/0) [AS65401i]
+          # 10.123.0.0/26      via 172.18.0.3 on eth0 [RR_with_master_node 14:48:18] * (100/0) [AS65401i]
+          # 10.123.1.0/26      via 172.18.0.3 on eth0 [RR_with_master_node 14:48:19] * (100/0) [AS65401i]
+          output = run("docker exec kind-node-tor birdcl show route")
+          self.assertRegexpMatches(output, "10\.123\.0\.0/26.*via %s on .*RR_with_master_node.*AS65401" % (self.ips[0],))
+          self.assertRegexpMatches(output, "10\.123\.1\.0/26.*via %s on .*RR_with_master_node.*AS65401" % (self.ips[0],))
+          self.assertRegexpMatches(output, "10\.123\.3\.0/26.*via %s on .*RR_with_master_node.*AS65401" % (self.ips[0],))
+        
         # Check connectivity from ToR to workload.
         self.red_pod_0_0.execute("ip addr add 10.123.0.1 dev lo")
+
+        stop_for_debug()
+
         output = run("docker exec kind-node-tor ping -c3 10.123.0.1")
         self.assertRegexpMatches(output, "3 packets transmitted, 3 packets received")
 
