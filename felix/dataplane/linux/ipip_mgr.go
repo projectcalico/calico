@@ -139,7 +139,7 @@ func newIPIPManagerWithShims(
 		),
 	}
 
-	m.routeMgr.setTunnelRouteFunc(m.route)
+	m.routeMgr.setTunnelRouteFunc(m.tunnelRoute)
 	m.maybeUpdateRoutes()
 	return m
 }
@@ -203,7 +203,7 @@ func (m *ipipManager) updateAllHostsIPSet() {
 	m.ipsetsDataplane.AddOrReplaceIPSet(m.ipSetMetadata, members)
 }
 
-func (m *ipipManager) route(cidr ip.CIDR, r *proto.RouteUpdate) *routetable.Target {
+func (m *ipipManager) tunnelRoute(cidr ip.CIDR, r *proto.RouteUpdate) *routetable.Target {
 	// Extract the gateway addr for this route based on its remote address.
 	remoteAddr, ok := m.activeHostnameToIP[r.DstNodeName]
 	if !ok {
