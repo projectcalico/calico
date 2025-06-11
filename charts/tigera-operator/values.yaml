@@ -61,11 +61,11 @@ podLabels: {}
 # Image and registry configuration for the tigera/operator pod.
 tigeraOperator:
   image: tigera/operator
-  version: v1.34.10
+  version: v1.34.13
   registry: quay.io
 calicoctl:
   image: docker.io/calico/ctl
-  tag: v3.28.4
+  tag: v3.28.5
 
 kubeletVolumePluginPath: /var/lib/kubelet
 
