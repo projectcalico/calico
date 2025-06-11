@@ -672,7 +672,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 	// If no overlay is enabled, and Felix is responsible for programming routes, starts a manager to
 	// program no encapsulation routes.
-	if config.ProgramRoutes &&
+	if config.ProgramClusterRoutes &&
 		!config.RulesConfig.VXLANEnabled && !config.RulesConfig.IPIPEnabled && !config.RulesConfig.WireguardEnabled {
 		log.Info("No encapsulation enabled, starting thread to keep no encapsulation routes in sync.")
 		// Add a manager to keep the all-hosts IP set up to date.

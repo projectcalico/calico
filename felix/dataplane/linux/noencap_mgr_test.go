@@ -54,9 +54,9 @@ var _ = Describe("NoEncap Manager", func() {
 			rt,
 			4,
 			Config{
-				Hostname:            "node1",
-				ProgramRoutes:       true,
-				DeviceRouteProtocol: dataplanedefs.DefaultRouteProto,
+				Hostname:             "node1",
+				ProgramClusterRoutes: true,
+				DeviceRouteProtocol:  dataplanedefs.DefaultRouteProto,
 			},
 			opRecorder,
 			dataplane,
