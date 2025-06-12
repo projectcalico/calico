@@ -200,6 +200,7 @@ spec:
   nodeSelector: kubernetes.io/hostname == 'kind-control-plane'
   peerIP: %s
   asNumber: 63000
+  nextHopMode: Keep
   filters:
   - export-child-cluster-cidr          
 EOF
@@ -447,7 +448,6 @@ protocol bgp from_workload_to_local_host from bgp_template {
         """
         Runs the tests for local bgp peers
         """
-
         # stop_for_debug()
 
         # Assert bgp sessions has been established to the following local workloads.
@@ -493,16 +493,18 @@ protocol bgp from_workload_to_local_host from bgp_template {
 
         if self.topology == TopologyMode.RR:
           # Check that the ToR hears about all the routes from master node.
-          # 10.123.3.0/26      via 172.18.0.3 on eth0 [RR_with_master_node 14:48:19] * (100/0) [AS65401i]
-          # 10.123.0.0/26      via 172.18.0.3 on eth0 [RR_with_master_node 14:48:18] * (100/0) [AS65401i]
-          # 10.123.1.0/26      via 172.18.0.3 on eth0 [RR_with_master_node 14:48:19] * (100/0) [AS65401i]
+          # Note that `nextHopMode: Keep` is specified for `rr-tor-peer`, ToR sees routes with original next hop.
+          # 10.123.3.0/26      via 172.18.0.5 on eth0 [RR_with_master_node 09:46:12 from 172.18.0.3] * (100/0) [AS65401i]
+          # 10.123.0.0/26      via 172.18.0.2 on eth0 [RR_with_master_node 09:46:10 from 172.18.0.3] * (100/0) [AS65401i]
+          # 10.123.1.0/26      via 172.18.0.5 on eth0 [RR_with_master_node 09:46:12 from 172.18.0.3] * (100/0) [AS65401i]
           output = run("docker exec kind-node-tor birdcl show route")
-          self.assertRegexpMatches(output, "10\.123\.0\.0/26.*via %s on .*RR_with_master_node.*AS65401" % (self.ips[0],))
-          self.assertRegexpMatches(output, "10\.123\.1\.0/26.*via %s on .*RR_with_master_node.*AS65401" % (self.ips[0],))
-          self.assertRegexpMatches(output, "10\.123\.3\.0/26.*via %s on .*RR_with_master_node.*AS65401" % (self.ips[0],))
+          self.assertRegexpMatches(output, "10\.123\.0\.0/26.*via %s on .*RR_with_master_node.*AS65401" % (self.ips[1],))
+          self.assertRegexpMatches(output, "10\.123\.1\.0/26.*via %s on .*RR_with_master_node.*AS65401" % (self.ips[2],))
+          self.assertRegexpMatches(output, "10\.123\.3\.0/26.*via %s on .*RR_with_master_node.*AS65401" % (self.ips[2],))
         
         # Check connectivity from ToR to workload.
         self.red_pod_0_0.execute("ip addr add 10.123.0.1 dev lo")
+        stop_for_debug()
 
         output = run("docker exec kind-node-tor ping -c3 10.123.0.1")
         self.assertRegexpMatches(output, "3 packets transmitted, 3 packets received")
@@ -526,7 +528,6 @@ class TestLocalBGPPeerRR(_TestLocalBGPPeer):
     def setUp(self):
         self.set_topology(TopologyMode.RR)
         super(TestLocalBGPPeerRR, self).setUp() 
-
 
 class TestLocalBGPPeerMesh(_TestLocalBGPPeer):
 
