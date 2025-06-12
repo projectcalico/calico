@@ -47,7 +47,7 @@ certs:
 
 # Whether or not the tigera/operator should manange CustomResourceDefinitions
 # needed to run itself and Calico. If disabled, you must manage these resources out-of-band.
-manageCRDs: false
+manageCRDs: true
 
 # Resource requests and limits for the tigera/operator pod.
 resources: {}

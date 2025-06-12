@@ -787,7 +787,8 @@ blocks:
   - name: "Node: kind-cluster tests"
     run:
       when: "false or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/confd/', '/bird/', '/pod2daemon/', '/node/', '/hack/test/certs/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
-    dependencies: []
+    dependencies:
+      - Prerequisites
     task:
       prologue:
         commands:
