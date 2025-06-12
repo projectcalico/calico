@@ -24,6 +24,7 @@ const (
 // +genclient
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:resource:scope=Cluster
 
 // Tier contains a set of policies that are applied to packets.  Multiple tiers may
 // be created and each tier is applied in the order specified in the tier specification.

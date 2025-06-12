@@ -25,6 +25,7 @@ const (
 
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:resource:scope=Cluster
 
 // IPReservationList contains a list of IPReservation resources.
 type IPReservationList struct {
@@ -37,6 +38,7 @@ type IPReservationList struct {
 // +genclient
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:resource:scope=Cluster
 
 // IPReservation allows certain IP addresses to be reserved (i.e. prevented from being allocated) by Calico
 // IPAM.  Reservations only block new allocations, they do not cause existing IP allocations to be released.
