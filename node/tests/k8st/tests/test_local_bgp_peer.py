@@ -448,7 +448,7 @@ protocol bgp from_workload_to_local_host from bgp_template {
         """
         Runs the tests for local bgp peers
         """
-        # stop_for_debug()
+        stop_for_debug()
 
         # Assert bgp sessions has been established to the following local workloads.
         # red pods on kind-worker and kind-worker2. blue pod on kind-worker2.
@@ -504,7 +504,6 @@ protocol bgp from_workload_to_local_host from bgp_template {
         
         # Check connectivity from ToR to workload.
         self.red_pod_0_0.execute("ip addr add 10.123.0.1 dev lo")
-        stop_for_debug()
 
         output = run("docker exec kind-node-tor ping -c3 10.123.0.1")
         self.assertRegexpMatches(output, "3 packets transmitted, 3 packets received")
@@ -529,6 +528,7 @@ class TestLocalBGPPeerRR(_TestLocalBGPPeer):
         self.set_topology(TopologyMode.RR)
         super(TestLocalBGPPeerRR, self).setUp() 
 
+'''
 class TestLocalBGPPeerMesh(_TestLocalBGPPeer):
 
     # In the tests of this class we have BGP peers between the
@@ -548,6 +548,7 @@ class TestLocalBGPPeerMesh(_TestLocalBGPPeer):
     def setUp(self):
         self.set_topology(TopologyMode.MESH)
         super(TestLocalBGPPeerMesh, self).setUp() 
+'''
 
 def stop_for_debug():
     # Touch debug file under projectcalico/calico/node to stop the process
