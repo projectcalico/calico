@@ -143,7 +143,6 @@ type attachPoint interface {
 	IfaceName() string
 	IfaceIndex() int
 	HookName() hook.Hook
-	IsAttached() (bool, error)
 	AttachProgram() error
 	DetachProgram() error
 	Log() *log.Entry
@@ -561,10 +560,6 @@ func NewBPFEndpointManager(
 		bpf.XDPDriver,
 		bpf.XDPGeneric,
 	}
-
-	// Clean all the files under /var/run/calico/bpf/prog to remove any information from the
-	// previous execution of the bpf dataplane, and make sure the directory exists.
-	bpf.CleanAttachedProgDir()
 
 	// Normally this endpoint manager uses its own dataplane implementation, but we have an
 	// indirection here so that UT can simulate the dataplane and test how it's called.
@@ -1093,12 +1088,6 @@ func (m *bpfEndpointManager) cleanupOldAttach(iface string, ai bpf.EPAttachInfo)
 
 func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceStateUpdate) {
 	log.Debugf("Interface update for %v, state %v", update.Name, update.State)
-
-	if update.State == ifacemonitor.StateNotPresent {
-		if err := bpf.ForgetIfaceAttachedProg(update.Name); err != nil {
-			log.WithError(err).Errorf("Error in removing interface %s json file. err=%v", update.Name, err)
-		}
-	}
 
 	if !m.isDataIface(update.Name) && !m.isWorkloadIface(update.Name) && !m.isL3Iface(update.Name) {
 		if update.State == ifacemonitor.StateUp {
