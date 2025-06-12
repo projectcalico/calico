@@ -15,98 +15,108 @@
 package cryptoutils
 
 import (
+	"crypto"
 	"crypto/rand"
-	"crypto/rsa"
+	"crypto/tls"
 	"crypto/x509"
-	"encoding/pem"
+	"crypto/x509/pkix"
 	"errors"
-	"fmt"
-	"math/big"
+	"github.com/projectcalico/calico/lib/std/clock"
 	"time"
 )
 
-type CertificateOptions func(*x509.Certificate) error
-
-func WithDNSNames(dnsNames ...string) CertificateOptions {
-	return func(c *x509.Certificate) error {
-		c.DNSNames = dnsNames
-		return nil
-	}
+type CertificateChainWithPrivateKey struct {
+	certs []*x509.Certificate
+	key   crypto.PrivateKey
 }
 
-func WithExtKeyUsages(keyUsages ...x509.ExtKeyUsage) CertificateOptions {
-	return func(c *x509.Certificate) error {
-		c.ExtKeyUsage = keyUsages
-		return nil
-	}
+type certificateTemplate struct {
+	*x509.Certificate
+	ca *certificateAuthority
 }
 
-func GenerateSelfSignedCert(opts ...CertificateOptions) ([]byte, []byte, error) {
-	// Generate private key
-	priv, err := rsa.GenerateKey(rand.Reader, 2048)
+func CreateSelfSignedCertificate(name string, opts ...CertificateOption) (*x509.Certificate, crypto.PrivateKey, error) {
+	publicKey, privateKey, publicKeyHash, err := newKeyPairWithHash()
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to generate private key: %w", err)
+		return nil, nil, err
 	}
 
-	// Create certificate template
-	template := x509.Certificate{
-		SerialNumber:          big.NewInt(1),
-		NotBefore:             time.Now(),
-		NotAfter:              time.Now().Add(24 * time.Hour), // Certificate valid for 24 hours
-		KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
-		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
-		BasicConstraintsValid: true,
+	subject := pkix.Name{CommonName: name}
+
+	// AuthorityKeyId and SubjectKeyId need to match for a self-signed CA
+	authorityKeyId := publicKeyHash
+	subjectKeyId := publicKeyHash
+
+	template := &certificateTemplate{
+		Certificate: &x509.Certificate{
+			Subject: subject,
+
+			SignatureAlgorithm: x509.SHA256WithRSA,
+
+			NotBefore: clock.Now().Add(-1 * time.Second),
+			NotAfter:  clock.Now().Add(DefaultCertificateLifetime),
+
+			SerialNumber: randomSerialNumber(),
+
+			BasicConstraintsValid: true,
+
+			AuthorityKeyId: authorityKeyId,
+			SubjectKeyId:   subjectKeyId,
+		},
 	}
 
 	for _, opt := range opts {
-		if err := opt(&template); err != nil {
-			return nil, nil, fmt.Errorf("failed to apply certificate options: %w", err)
+		if err := opt(template); err != nil {
+			return nil, nil, err
 		}
 	}
 
-	// Self-sign the certificate
-	certDER, err := x509.CreateCertificate(rand.Reader, &template, &template, &priv.PublicKey, priv)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to create certificate: %w", err)
+	parent := template.Certificate
+	signerPrivateKey := privateKey
+	if template.ca != nil {
+		parent = template.ca.cert
+		signerPrivateKey = template.ca.key
 	}
 
-	// Encode the certificate to PEM format
-	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER})
+	derBytes, err := x509.CreateCertificate(rand.Reader, template.Certificate, parent, publicKey, signerPrivateKey)
+	if err != nil {
+		return nil, nil, err
+	}
 
-	// Encode the private key to PEM format
-	keyDER := x509.MarshalPKCS1PrivateKey(priv)
-	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: keyDER})
+	certs, err := x509.ParseCertificates(derBytes)
+	if err != nil {
+		return nil, nil, err
+	}
 
-	return certPEM, keyPEM, nil
+	if len(certs) != 1 {
+		return nil, nil, errors.New("expected a single certificate")
+	}
+
+	return certs[0], privateKey, err
 }
 
-// ExtractServerNameFromCertBytes decodes the cert bytes as a certificate and pulls out
-func ExtractServerNameFromCertBytes(certBytes []byte) (string, error) {
-	certDERBlock, _ := pem.Decode(certBytes)
-	if certDERBlock == nil || certDERBlock.Type != "CERTIFICATE" {
-		return "", errors.New("cannot decode pem block for server certificate")
-	}
-
-	cert, err := x509.ParseCertificate(certDERBlock.Bytes)
-	if err != nil {
-		return "", fmt.Errorf("cannot decode pem block for server certificate: %w", err)
-	}
-	if len(cert.DNSNames) != 1 {
-		return "", fmt.Errorf("expected a single DNS name registered on the certificate: %w", err)
-	}
-	return cert.DNSNames[0], nil
+func (chain *CertificateChainWithPrivateKey) EncodeCertificates() ([]byte, error) {
+	return encodeCertificates(chain.certs...)
 }
 
-func ParseCertificateBytes(certBytes []byte) (*x509.Certificate, error) {
-	certDERBlock, _ := pem.Decode(certBytes)
-	if certDERBlock == nil || certDERBlock.Type != "CERTIFICATE" {
-		return nil, errors.New("cannot decode pem block for server certificate")
-	}
+func (chain *CertificateChainWithPrivateKey) GetCertificates() []*x509.Certificate {
+	return chain.certs
+}
 
-	cert, err := x509.ParseCertificate(certDERBlock.Bytes)
+func (chain *CertificateChainWithPrivateKey) EncodePrivateKey() ([]byte, error) {
+	return encodeKey(chain.key)
+}
+
+func (chain *CertificateChainWithPrivateKey) GenerateTLSCertificate() (tls.Certificate, error) {
+	certPem, err := chain.EncodeCertificates()
 	if err != nil {
-		return nil, fmt.Errorf("cannot decode pem block for server certificate: %w", err)
+		return tls.Certificate{}, err
 	}
 
-	return cert, nil
+	keyPem, err := chain.EncodePrivateKey()
+	if err != nil {
+		return tls.Certificate{}, err
+	}
+
+	return tls.X509KeyPair(certPem, keyPem)
 }

@@ -15,6 +15,7 @@
 package server
 
 import (
+	"context"
 	"net/http"
 
 	log "github.com/sirupsen/logrus"
@@ -48,8 +49,17 @@ func NewHealth() (*Health, error) {
 	return health, nil
 }
 
-// ListenAndServeHTTP starts to listen and serve HTTP requests
-func (h *Health) ListenAndServeHTTP() error {
+// Start starts to listen and serve HTTP requests.
+func (h *Health) Start(ctx context.Context) error {
 	log.Infof("Starting Health server at %s", h.http.Addr)
+	go func() {
+		<-ctx.Done()
+		log.Info("Health server shutting down")
+		_ = h.Shutdown(ctx)
+	}()
 	return h.http.ListenAndServe()
+}
+
+func (h *Health) Shutdown(ctx context.Context) error {
+	return h.http.Shutdown(ctx)
 }
