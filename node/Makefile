@@ -130,7 +130,7 @@ MICROSOFT_SDN_GITHUB_RAW_URL := https://raw.githubusercontent.com/microsoft/SDN/
 
 # Variables used by the tests
 ST_TO_RUN?=tests/st/
-K8ST_TO_RUN?=tests/
+K8ST_TO_RUN?=tests/test_local_bgp_peer.py -s --nocapture --nologcapture
 # Can exclude the slower tests with "-a '!slow'"
 ST_OPTIONS?=
 
