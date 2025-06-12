@@ -361,7 +361,7 @@ var _ = Describe("Node status FV tests", func() {
 
 		// Update actual state and sleep to wait reporter to encounter and resolve conflict
 		mock.setLastBootTime(BootTimeSecond)
-		time.Sleep(10 * time.Second)
+		time.Sleep(6 * time.Second)
 
 		// Make sure status was updated after all, i.e. conflict was resolved by reporter on its own
 		latest := getCurrentStatus()
