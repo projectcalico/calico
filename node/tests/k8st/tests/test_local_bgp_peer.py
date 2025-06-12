@@ -528,7 +528,6 @@ class TestLocalBGPPeerRR(_TestLocalBGPPeer):
         self.set_topology(TopologyMode.RR)
         super(TestLocalBGPPeerRR, self).setUp() 
 
-'''
 class TestLocalBGPPeerMesh(_TestLocalBGPPeer):
 
     # In the tests of this class we have BGP peers between the
@@ -548,7 +547,6 @@ class TestLocalBGPPeerMesh(_TestLocalBGPPeer):
     def setUp(self):
         self.set_topology(TopologyMode.MESH)
         super(TestLocalBGPPeerMesh, self).setUp() 
-'''
 
 def stop_for_debug():
     # Touch debug file under projectcalico/calico/node to stop the process
