@@ -326,9 +326,6 @@ protocol bgp Local_Workload_{{$id}} from bgp_template {
   ttl security off;
   multihop;
 {{- end }}
-{{- if $data.local_as_num}}
-  local as {{$data.local_as_num}};
-{{- end }}
   neighbor {{$data.ip}} {{if $data.port }}port {{ $data.port }} {{end}}as {{$data.as_num}};
 {{- if eq $data.source_addr "UseNodeIP"}}
   source address {{$node_ip6}};  # The local address we use for the TCP connection
@@ -415,9 +412,6 @@ protocol bgp Node_{{$id}} from bgp_template {
   ttl security off;
   multihop;
 {{- end }}
-{{- if $data.local_as_num}}
-  local as {{$data.local_as_num}};
-{{- end }}
   neighbor {{$data.ip}} {{if $data.port }}port {{ $data.port }} {{end}}as {{$data.as_num}};
 {{- if eq $data.source_addr "UseNodeIP"}}
   source address {{$node_ip6}};  # The local address we use for the TCP connection
@@ -502,9 +496,6 @@ protocol bgp Local_Workload_{{$id}} from bgp_template {
 {{- else }}
   ttl security off;
   multihop;
-{{- end }}
-{{- if $data.local_as_num}}
-  local as {{$data.local_as_num}};
 {{- end }}
   neighbor {{$data.ip}} {{if $data.port }}port {{ $data.port }} {{end}}as {{$data.as_num}};
 {{- if eq $data.source_addr "UseNodeIP"}}

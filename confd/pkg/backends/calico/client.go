@@ -475,23 +475,23 @@ func (c *client) inSync() bool {
 }
 
 type bgpPeer struct {
-	PeerIP          cnet.IP              `json:"ip"`
-	ASNum           numorstring.ASNumber `json:"as_num,string"`
-	LocalASNum      numorstring.ASNumber `json:"local_as_num,string"`
-	RRClusterID     string               `json:"rr_cluster_id"`
-	Password        *string              `json:"password"`
-	SourceAddr      string               `json:"source_addr"`
-	Port            uint16               `json:"port"`
-	KeepNextHop     bool                 `json:"keep_next_hop"`
-	RestartTime     string               `json:"restart_time"`
-	CalicoNode      bool                 `json:"calico_node"`
-	NumAllowLocalAS int32                `json:"num_allow_local_as"`
-	TTLSecurity     uint8                `json:"ttl_security"`
-	ReachableBy     string               `json:"reachable_by"`
-	Filters         []string             `json:"filters"`
-	PassiveMode     bool                 `json:"passive_mode"`
-	LocalBGPPeer    bool                 `json:"local_bgp_peer"`
-	NextHopMode     string               `json:"next_hop_mode"`
+	PeerIP          cnet.IP               `json:"ip"`
+	ASNum           numorstring.ASNumber  `json:"as_num,string"`
+	LocalASNum      *numorstring.ASNumber `json:"local_as_num,string"`
+	RRClusterID     string                `json:"rr_cluster_id"`
+	Password        *string               `json:"password"`
+	SourceAddr      string                `json:"source_addr"`
+	Port            uint16                `json:"port"`
+	KeepNextHop     bool                  `json:"keep_next_hop"`
+	RestartTime     string                `json:"restart_time"`
+	CalicoNode      bool                  `json:"calico_node"`
+	NumAllowLocalAS int32                 `json:"num_allow_local_as"`
+	TTLSecurity     uint8                 `json:"ttl_security"`
+	ReachableBy     string                `json:"reachable_by"`
+	Filters         []string              `json:"filters"`
+	PassiveMode     bool                  `json:"passive_mode"`
+	LocalBGPPeer    bool                  `json:"local_bgp_peer"`
+	NextHopMode     string                `json:"next_hop_mode"`
 }
 
 type bgpPrefix struct {

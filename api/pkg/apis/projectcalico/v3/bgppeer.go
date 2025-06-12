@@ -74,7 +74,7 @@ type BGPPeerSpec struct {
 	// The optional Local AS Number to use when peering with this remote peer.
 	// If not specified, the node’s default ASN will be used.
 	// +optional
-	LocalASNumber numorstring.ASNumber `json:"localASNumber,omitempty"`
+	LocalASNumber *numorstring.ASNumber `json:"localASNumber,omitempty"`
 
 	// Selector for the remote nodes to peer with.  When this is set, the PeerIP and
 	// ASNumber fields must be empty.  For each peering between the local node and
