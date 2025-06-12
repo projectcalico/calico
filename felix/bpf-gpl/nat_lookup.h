@@ -217,11 +217,11 @@ static CALI_BPF_INLINE struct calico_nat_dest* calico_nat_lookup(ipv46_addr_t *i
 
 skip_affinity:
 
-    nat_lv2_key.id = nat_lv1_val->id;
-    nat_lv2_key.ordinal = bpf_get_prandom_u32();
-    nat_lv2_key.ordinal %= count;
+	nat_lv2_key.id = nat_lv1_val->id;
+	nat_lv2_key.ordinal = bpf_get_prandom_u32();
+	nat_lv2_key.ordinal %= count;
 
-	if (!(nat_lv2_val = cali_nat_be_lookup_elem(&nat_lv2_key)))  {
+	if (!(nat_lv2_val = cali_nat_be_lookup_elem(&nat_lv2_key))) {
 		CALI_DEBUG("NAT: backend miss");
 		*res = NAT_NO_BACKEND;
 		return NULL;
