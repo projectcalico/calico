@@ -681,7 +681,7 @@ func TestMatchL4Protocol(t *testing.T) {
 	Expect(matchL4Protocol(rule, 80)).To(BeTrue())
 	rule.NotProtocol = nil
 
-	// With an randome protocol.
+	// With an random protocol.
 	rule.Protocol = &proto.Protocol{
 		NumberOrName: &proto.Protocol_Number{
 			Number: 99,
