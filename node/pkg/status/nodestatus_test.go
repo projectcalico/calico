@@ -347,7 +347,7 @@ var _ = Describe("Node status FV tests", func() {
 		var err error
 		var firstStatus *apiv3.CalicoNodeStatus
 		Eventually(func() metav1.Time {
-			firstStatus, err = c.CalicoNodeStatus().Get(context.Background(), name, options.GetOptions{})
+			firstStatus = getCurrentStatus()
 			Expect(err).NotTo(HaveOccurred())
 			return firstStatus.Status.LastUpdated
 		}, 2*time.Second, 500*time.Millisecond).Should(Not(BeZero()))
@@ -359,13 +359,13 @@ var _ = Describe("Node status FV tests", func() {
 		_, err = c.CalicoNodeStatus().Update(context.Background(), secondStatus, options.SetOptions{})
 		Expect(err).To(Not(HaveOccurred()))
 
-		// Update actual state and sleep to wait reporter to encounter and resolve conflict
+		// Update actual state and wait reporter to resolve conflict and update status
 		mock.setLastBootTime(BootTimeSecond)
-		time.Sleep(6 * time.Second)
-
-		// Make sure status was updated after all, i.e. conflict was resolved by reporter on its own
-		latest := getCurrentStatus()
-		Expect(latest.Status.LastUpdated).NotTo(Equal(firstStatus.Status.LastUpdated))
+		Eventually(func() metav1.Time {
+			latestStatus := getCurrentStatus()
+			Expect(err).NotTo(HaveOccurred())
+			return latestStatus.Status.LastUpdated
+		}, 10*time.Second, 500*time.Millisecond).Should(Not(Equal(firstStatus.Status.LastUpdated)))
 	})
 })
 
