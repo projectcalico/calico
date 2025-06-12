@@ -194,12 +194,12 @@ func cmdAdd(args *skel.CmdArgs) (err error) {
 	}
 
 	// Determine MTU to use.
-	if mtu, err := utils.MTUFromFile("/var/lib/calico/mtu"); err != nil {
+	if mtu, err := utils.MTUFromFile(utils.MTUFilePath, conf); err != nil {
 		return fmt.Errorf("failed to read MTU file: %s", err)
 	} else if conf.MTU == 0 && mtu != 0 {
 		// No MTU specified in config, but an MTU file was found on disk.
 		// Use the value from the file.
-		logrus.WithField("mtu", mtu).Debug("Using MTU from /var/lib/calico/mtu")
+		logrus.WithFields(logrus.Fields{"mtu": mtu, "MTUFilePath": utils.MTUFilePath}).Debug("Using MTU from MTUFilePath")
 		conf.MTU = mtu
 	}
 	if conf.NumQueues <= 0 {
