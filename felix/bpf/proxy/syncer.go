@@ -562,6 +562,7 @@ func (s *Syncer) applyDerived(
 
 	skey = getSvcKey(sname, getSvcKeyExtra(t, sinfo.ClusterIP()))
 	flags := uint32(0)
+	flags |= nat.NATFlgNatMaglev
 
 	switch t {
 	case svcTypeNodePort, svcTypeLoadBalancer, svcTypeNodePortRemote:
@@ -817,6 +818,7 @@ func (s *Syncer) updateService(skey svcKey, sinfo Service, id uint32, eps []k8sp
 	}
 
 	flags := uint32(0)
+	flags |= nat.NATFlgNatMaglev
 	if sinfo.InternalPolicyLocal() {
 		flags |= nat.NATFlgInternalLocal
 	}

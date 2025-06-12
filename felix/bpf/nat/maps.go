@@ -206,6 +206,7 @@ const (
 	NATFlgExternalLocal = 0x1
 	NATFlgInternalLocal = 0x2
 	NATFlgExclude       = 0x4
+	NATFlgNatMaglev     = 0x8
 )
 
 var flgTostr = map[int]string{
