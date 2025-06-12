@@ -16,28 +16,6 @@
 
 #include "jhash.h"
 
-static inline void calico_nat_gen_maglev_key(struct calico_maglev_key *maglev_key,
-		ipv46_addr_t *ip_src, ipv46_addr_t *ip_dst,
-		__u8 ip_proto,__u16 sport, __u16 dport) {
-
-	__u32 calico_nat_maglev_tuple_hash;
-
-#ifdef IPVER6
-	calico_nat_maglev_tuple_hash = jhash_2words(ip_src->a, ip_src->b, 0xDEAD);
-	calico_nat_maglev_tuple_hash |= jhash_2words(ip_src->c, ip_src->d, 0xBEEF);
-	calico_nat_maglev_tuple_hash |= jhash_2words(ip_dst->a, ip_dst->b, 0xCA71);
-	calico_nat_maglev_tuple_hash |= jhash_2words(ip_dst->c, ip_dst->d, 0xC000);
-#else
-	calico_nat_maglev_tuple_hash = jhash_2words(*ip_src, sport, 0xDEAD);
-	calico_nat_maglev_tuple_hash |= jhash_2words(*ip_dst, dport, 0xBEEF);
-#endif
-	calico_nat_maglev_tuple_hash |= jhash_1word((__u32)ip_proto, 0xCA71);
-	maglev_key->ordinal = calico_nat_maglev_tuple_hash % 65537;
-	maglev_key->vip = *ip_dst;
-	maglev_key->port = dport;
-	maglev_key->proto = ip_proto;
-}
-
 static CALI_BPF_INLINE struct calico_nat_dest* calico_nat_lookup(ipv46_addr_t *ip_src,
 								 ipv46_addr_t *ip_dst,
 								 __u8 ip_proto,
@@ -59,9 +37,11 @@ static CALI_BPF_INLINE struct calico_nat_dest* calico_nat_lookup(ipv46_addr_t *i
 		.saddr = *ip_src,
 	};
 	struct calico_nat_value *nat_lv1_val;
+	struct calico_nat_secondary_key nat_lv2_key;
 	struct calico_nat_dest *nat_lv2_val;
 	struct calico_nat_affinity_key affkey = {};
 	struct calico_maglev_key maglev_key;
+	struct calico_nat_dest *maglev_val;
 	__u64 now = 0;
 
 	nat_lv1_val = cali_nat_fe_lookup_elem(&nat_key);
@@ -143,11 +123,6 @@ static CALI_BPF_INLINE struct calico_nat_dest* calico_nat_lookup(ipv46_addr_t *i
 		return NULL;
 	}
 
-	if (nat_lv1_val->flags & NAT_FLG_NAT_MAGLEV) {
-		calico_nat_gen_maglev_key(&maglev_key, ip_src, ip_dst, ip_proto, sport, dport);
-		CALI_DEBUG("MAGLEV: generated hash for packet 5-tuple, would index into LUT at: %d", maglev_key.ordinal);
-	}
-
 	if (from_tun) {
 		count = nat_lv1_val->local;
 	} else if (nat_lv1_val->flags & (NAT_FLG_INTERNAL_LOCAL | NAT_FLG_EXTERNAL_LOCAL)) {
@@ -180,6 +155,32 @@ static CALI_BPF_INLINE struct calico_nat_dest* calico_nat_lookup(ipv46_addr_t *i
 
 	if (nat_lv1_val->affinity_timeo == 0 && !affinity_always_timeo) {
 		goto skip_affinity;
+	}
+
+	if (nat_lv1_val->flags & NAT_FLG_NAT_MAGLEV) {
+		__u32 calico_nat_maglev_tuple_hash;
+
+#ifdef IPVER6
+		calico_nat_maglev_tuple_hash = jhash_2words(ip_src->a, ip_src->b, 0xDEAD);
+		calico_nat_maglev_tuple_hash |= jhash_2words(ip_src->c, ip_src->d, 0xBEEF);
+		calico_nat_maglev_tuple_hash |= jhash_2words(ip_dst->a, ip_dst->b, 0xCA71);
+		calico_nat_maglev_tuple_hash |= jhash_2words(ip_dst->c, ip_dst->d, 0xC000);
+#else
+		calico_nat_maglev_tuple_hash = jhash_2words(*ip_src, sport, 0xDEAD);
+		calico_nat_maglev_tuple_hash |= jhash_2words(*ip_dst, dport, 0xBEEF);
+#endif
+		calico_nat_maglev_tuple_hash |= jhash_1word((__u32)ip_proto, 0xCA71);
+		maglev_key.ordinal = calico_nat_maglev_tuple_hash % 65537;
+		maglev_key.vip = *ip_dst;
+		maglev_key.port = dport;
+		maglev_key.proto = ip_proto;
+		maglev_val = cali_mag_be_lookup_elem(&maglev_key);
+		if (maglev_val) {
+			CALI_DEBUG("MAGLEV: picked maglev backend " IP_FMT ":%d", debug_ip(maglev_val->addr), maglev_val->port);
+			return maglev_val;
+		} else {
+			CALI_DEBUG("MAGLEV: no backend for vip " IP_FMT ":%d", debug_ip(*ip_dst), sport);
+		}
 	}
 
 	ipv46_addr_t dst = *ip_dst;
@@ -215,7 +216,12 @@ static CALI_BPF_INLINE struct calico_nat_dest* calico_nat_lookup(ipv46_addr_t *i
 	/* To be k8s conformant, fall through to pick a random backend. */
 
 skip_affinity:
-	if (!(nat_lv2_val = cali_mag_be_lookup_elem(&maglev_key))) {
+
+    nat_lv2_key.id = nat_lv1_val->id;
+    nat_lv2_key.ordinal = bpf_get_prandom_u32();
+    nat_lv2_key.ordinal %= count;
+
+	if (!(nat_lv2_val = cali_nat_be_lookup_elem(&nat_lv2_key)))  {
 		CALI_DEBUG("NAT: backend miss");
 		*res = NAT_NO_BACKEND;
 		return NULL;
