@@ -28,6 +28,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/conntrack/cttestdata"
 	"github.com/projectcalico/calico/felix/bpf/conntrack/timeouts"
 	v2 "github.com/projectcalico/calico/felix/bpf/conntrack/v2"
+	v3 "github.com/projectcalico/calico/felix/bpf/conntrack/v3"
 	"github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/bpf/mock"
 	"github.com/projectcalico/calico/felix/timeshim/mocktime"
@@ -226,25 +227,30 @@ var _ = Describe("BPF Conntrack StaleNATScanner", func() {
 
 var _ = Describe("BPF Conntrack upgrade entries", func() {
 	k2 := v2.NewKey(1, net.ParseIP("10.0.0.1"), 0, net.ParseIP("10.0.0.2"), 0)
-	k3 := conntrack.NewKey(1, net.ParseIP("10.0.0.1"), 0, net.ParseIP("10.0.0.2"), 0)
+	k3 := v3.NewKey(1, net.ParseIP("10.0.0.1"), 0, net.ParseIP("10.0.0.2"), 0)
+	k4 := conntrack.NewKey(1, net.ParseIP("10.0.0.1"), 0, net.ParseIP("10.0.0.2"), 0)
 
 	v2Normal := v2.NewValueNormal(cttestdata.Now-1, cttestdata.Now-1, 0, v2.Leg{Seqno: 1000, SynSeen: true, Ifindex: 200}, v2.Leg{Seqno: 1001, RstSeen: true, Ifindex: 201})
-	v3Normal := conntrack.NewValueNormal(cttestdata.Now-1, 0, conntrack.Leg{Seqno: 1000, SynSeen: true, Ifindex: 200}, conntrack.Leg{Seqno: 1001, RstSeen: true, Ifindex: 201})
+	v3Normal := v3.NewValueNormal(cttestdata.Now-1, 0, v3.Leg{Seqno: 1000, SynSeen: true, Ifindex: 200}, v3.Leg{Seqno: 1001, RstSeen: true, Ifindex: 201})
+	v4Normal := conntrack.NewValueNormal(cttestdata.Now-1, 0, conntrack.Leg{Seqno: 1000, SynSeen: true, Ifindex: 200}, conntrack.Leg{Seqno: 1001, RstSeen: true, Ifindex: 201})
 
 	v2NatReverse := v2.NewValueNATReverse(cttestdata.Now-1, cttestdata.Now-1, 0, v2.Leg{Seqno: 1000, SynSeen: true, Ifindex: 200}, v2.Leg{Seqno: 1001, RstSeen: true, Ifindex: 201}, net.IPv4(1, 2, 3, 4), net.IPv4(5, 6, 7, 8), 1234)
-	v3NatReverse := conntrack.NewValueNATReverse(cttestdata.Now-1, 0, conntrack.Leg{Seqno: 1000, SynSeen: true, Ifindex: 200}, conntrack.Leg{Seqno: 1001, RstSeen: true, Ifindex: 201}, net.IPv4(1, 2, 3, 4), net.IPv4(5, 6, 7, 8), 1234)
+	v3NatReverse := v3.NewValueNATReverse(cttestdata.Now-1, 0, v3.Leg{Seqno: 1000, SynSeen: true, Ifindex: 200}, v3.Leg{Seqno: 1001, RstSeen: true, Ifindex: 201}, net.IPv4(1, 2, 3, 4), net.IPv4(5, 6, 7, 8), 1234)
+	v4NatReverse := conntrack.NewValueNATReverse(cttestdata.Now-1, 0, conntrack.Leg{Seqno: 1000, SynSeen: true, Ifindex: 200}, conntrack.Leg{Seqno: 1001, RstSeen: true, Ifindex: 201}, net.IPv4(1, 2, 3, 4), net.IPv4(5, 6, 7, 8), 1234)
 
 	v2NatRevSnat := v2.NewValueNATReverseSNAT(cttestdata.Now-1, cttestdata.Now-1, 0, v2.Leg{Seqno: 1000, SynSeen: true, Ifindex: 200}, v2.Leg{Seqno: 1001, RstSeen: true, Ifindex: 201}, net.IPv4(1, 2, 3, 4), net.IPv4(5, 6, 7, 8), net.IPv4(9, 10, 11, 12), 1234)
-	v3NatRevSnat := conntrack.NewValueNATReverseSNAT(cttestdata.Now-1, 0, conntrack.Leg{Seqno: 1000, SynSeen: true, Ifindex: 200}, conntrack.Leg{Seqno: 1001, RstSeen: true, Ifindex: 201}, net.IPv4(1, 2, 3, 4), net.IPv4(5, 6, 7, 8), net.IPv4(9, 10, 11, 12), 1234)
+	v3NatRevSnat := v3.NewValueNATReverseSNAT(cttestdata.Now-1, 0, v3.Leg{Seqno: 1000, SynSeen: true, Ifindex: 200}, v3.Leg{Seqno: 1001, RstSeen: true, Ifindex: 201}, net.IPv4(1, 2, 3, 4), net.IPv4(5, 6, 7, 8), net.IPv4(9, 10, 11, 12), 1234)
+	v4NatRevSnat := conntrack.NewValueNATReverseSNAT(cttestdata.Now-1, 0, conntrack.Leg{Seqno: 1000, SynSeen: true, Ifindex: 200}, conntrack.Leg{Seqno: 1001, RstSeen: true, Ifindex: 201}, net.IPv4(1, 2, 3, 4), net.IPv4(5, 6, 7, 8), net.IPv4(9, 10, 11, 12), 1234)
 
 	v2NatFwd := v2.NewValueNATForward(cttestdata.Now-1, cttestdata.Now-1, 0, v2.NewKey(3, net.ParseIP("20.0.0.1"), 0, net.ParseIP("20.0.0.2"), 0))
-	v3NatFwd := conntrack.NewValueNATForward(cttestdata.Now-1, 0, conntrack.NewKey(3, net.ParseIP("20.0.0.1"), 0, net.ParseIP("20.0.0.2"), 0))
+	v3NatFwd := v3.NewValueNATForward(cttestdata.Now-1, 0, v3.NewKey(3, net.ParseIP("20.0.0.1"), 0, net.ParseIP("20.0.0.2"), 0))
+	v4NatFwd := conntrack.NewValueNATForward(cttestdata.Now-1, 0, conntrack.NewKey(3, net.ParseIP("20.0.0.1"), 0, net.ParseIP("20.0.0.2"), 0))
 	DescribeTable("upgrade entries",
-		func(k2 v2.Key, v2 v2.Value, k3 conntrack.Key, v3 conntrack.Value) {
-			upgradedKey := k2.Upgrade()
-			upgradedValue := v2.Upgrade()
-			Expect(upgradedKey.AsBytes()).To(Equal(k3.AsBytes()))
-			Expect(upgradedValue.AsBytes()[8:]).To(Equal(v3.AsBytes()[8:])) // Create is not copied over into RSTSeen
+		func(k, v, expectedKey, expectedValue maps.Upgradable) {
+			upgradedKey := k.Upgrade()
+			upgradedValue := v.Upgrade()
+			Expect(upgradedKey.AsBytes()).To(Equal(expectedKey.AsBytes()))
+			Expect(upgradedValue.AsBytes()[8:]).To(Equal(expectedValue.AsBytes()[8:])) // Create is not copied over into RSTSeen
 		},
 		Entry("conntrack normal entry",
 			k2, v2Normal, k3, v3Normal,
@@ -257,6 +263,18 @@ var _ = Describe("BPF Conntrack upgrade entries", func() {
 		),
 		Entry("conntrack nat rev entry",
 			k2, v2NatFwd, k3, v3NatFwd,
+		),
+		Entry("conntrack normal entry",
+			k3, v3Normal, k4, v4Normal,
+		),
+		Entry("conntrack nat rev entry",
+			k3, v3NatReverse, k4, v4NatReverse,
+		),
+		Entry("conntrack nat rev entry",
+			k3, v3NatRevSnat, k4, v4NatRevSnat,
+		),
+		Entry("conntrack nat rev entry",
+			k3, v3NatFwd, k4, v4NatFwd,
 		),
 	)
 })

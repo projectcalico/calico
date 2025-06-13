@@ -4674,31 +4674,14 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							cc.CheckConnectivity(conntrackChecks(tc.Felixes)...)
 						})
 
-						By("checking pod-pod connectivity fails", func() {
-							cc.ResetExpectations()
-							cc.Expect(None, w[0][1], w[0][0])
-							cc.Expect(None, w[1][0], w[0][0])
-							cc.Expect(None, w[1][1], w[0][0])
-							cc.CheckConnectivity()
-						})
-
-						By("cleaning up the CT maps", func() {
-							if testOpts.ipv6 {
-								_, err := tc.Felixes[0].ExecOutput("calico-bpf", "-6", "conntrack", "clean")
-								Expect(err).NotTo(HaveOccurred())
-							} else {
-								_, err := tc.Felixes[0].ExecOutput("calico-bpf", "conntrack", "clean")
-								Expect(err).NotTo(HaveOccurred())
-							}
-						})
-
-						By("checking pod-pod connectivity works again", func() {
+						By("checking pod-pod connectivity works as ctmap is now LRU hash", func() {
 							cc.ResetExpectations()
 							cc.Expect(Some, w[0][1], w[0][0])
 							cc.Expect(Some, w[1][0], w[0][0])
 							cc.Expect(Some, w[1][1], w[0][0])
-							cc.CheckConnectivity(conntrackChecks(tc.Felixes)...)
+							cc.CheckConnectivity()
 						})
+
 					})
 				})
 			})
