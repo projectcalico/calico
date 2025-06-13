@@ -616,7 +616,7 @@ func (cmd *conntrackFillCmd) Run(c *cobra.Command, _ []string) {
 	log.SetLevel(log.WarnLevel)
 
 	i := 1
-	for ;i <= ctMap.Size(); i++ {
+	for ; i <= ctMap.Size(); i++ {
 		portA := uint16(i >> 16)
 		portB := uint16(i & 0xffff)
 
