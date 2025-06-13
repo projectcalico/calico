@@ -16,6 +16,7 @@ package ut_test
 
 import (
 	"fmt"
+	"hash/fnv"
 	"net"
 	"testing"
 
@@ -28,6 +29,8 @@ import (
 	conntrack3 "github.com/projectcalico/calico/felix/bpf/conntrack/v3"
 	v3 "github.com/projectcalico/calico/felix/bpf/conntrack/v3"
 	"github.com/projectcalico/calico/felix/bpf/counters"
+	"github.com/projectcalico/calico/felix/bpf/maglev"
+	maglevtypes "github.com/projectcalico/calico/felix/bpf/maglev/test"
 	"github.com/projectcalico/calico/felix/bpf/nat"
 	"github.com/projectcalico/calico/felix/bpf/polprog"
 	"github.com/projectcalico/calico/felix/bpf/routes"
@@ -3710,5 +3713,60 @@ func TestNATNodePortV6(t *testing.T) {
 
 			checkVxlan(pktR)
 		}, withHostNetworked(), withIPv6())
+	}
+}
+
+func TestMaglevTable(t *testing.T) {
+	RegisterTestingT(t)
+
+	maglevMap := nat.MaglevMap()
+	err := maglevMap.EnsureExists()
+	Expect(err).NotTo(HaveOccurred())
+
+	svcIP := net.ParseIP("169.172.9.1")
+	svcPort := uint16(80)
+	backendPort := uint16(8080)
+	svcProto := uint8(layers.IPProtocolUDP)
+
+	mg := maglev.NewConsistentHash(maglev.WithHash(fnv.New32(), fnv.New32()), maglev.WithPreferenceLength(31))
+	programmed := make(map[nat.MaglevBackendKey]nat.BackendValue)
+
+	backends := make(map[string]maglevtypes.MockEndpoint)
+	for _, b := range []string{"192.168.1.1", "192.168.1.2", "192.168.1.3", "192.168.1.4", "192.168.1.5"} {
+		backend := maglevtypes.MockEndpoint{
+			Ip:  b,
+			Prt: backendPort,
+		}
+		mg.AddBackend(backend)
+		backends[backend.String()] = backend
+	}
+
+	lut := mg.Generate()
+	for i, b := range lut {
+		Expect(backends).To(HaveKey(b.String()))
+		expectedBackend := backends[b.String()]
+		Expect(expectedBackend.Ip).To(Equal(b.IP()))
+		Expect(expectedBackend.Port()).To(Equal(b.Port()))
+
+		backendIP := net.ParseIP(b.IP())
+		key := nat.NewMaglevBackendKey(svcIP, svcPort, svcProto, uint32(i))
+		val := nat.NewNATBackendValue(backendIP, uint16(backendPort))
+		err := maglevMap.Update(key.AsBytes(), val.AsBytes())
+		Expect(err).NotTo(HaveOccurred())
+
+		programmed[key] = val
+	}
+
+	m, err := nat.LoadMaglevMap(maglevMap)
+	Expect(err).NotTo(HaveOccurred())
+	Expect(len(m)).To(Equal(len(programmed)))
+
+	keys := make([]nat.MaglevBackendKey, len(m))
+	for k := range m {
+		keys[k.Ordinal()] = k
+	}
+
+	for _, k := range keys {
+		fmt.Printf("%v: %s\n", k, m[k])
 	}
 }
