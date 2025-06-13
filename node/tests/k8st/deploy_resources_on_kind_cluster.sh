@@ -76,6 +76,7 @@ echo "Install calicoctl as a pod"
 ${kubectl} apply -f $TEST_DIR/infra/calicoctl.yaml
 echo
 
+echo "FIXME kind st CI..."
 echo "Wait for Calico to be ready..."
 wait_pod_ready -l k8s-app=calico-node -n calico-system
 wait_pod_ready -l k8s-app=calico-kube-controllers -n calico-system
