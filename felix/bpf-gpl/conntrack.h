@@ -1034,10 +1034,11 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 					src_to_dst->ifindex = ifindex;
 				}
 				break;
+			case RPF_RES_DISABLED:
 			case RPF_RES_LOOSE:
 				if (!related) {
-					CALI_CT_DEBUG("Packet from unexpected ingress dev - rpf loose - reset ifindex",
-							src_to_dst->ifindex, ifindex);
+					CALI_CT_DEBUG("Packet from unexpected ingress dev - rpf loose or disabled "
+							"- reset ifindex", src_to_dst->ifindex, ifindex);
 					src_to_dst->ifindex = CT_INVALID_IFINDEX;
 				}
 				break;

@@ -449,7 +449,7 @@ syn_force_policy:
 
 			ctx->state->ip_proto != IPPROTO_ICMPV6 &&
 #endif
-			!hep_rpf_check(ctx)) {
+			(hep_rpf_check(ctx) == RPF_RES_FAIL)) {
 			goto deny;
 		}
 	}
@@ -471,7 +471,7 @@ syn_force_policy:
 		) {
 		struct cali_rt *r = cali_rt_lookup(&ctx->state->ip_src);
 		/* Do RPF check since it's our responsibility to police that. */
-		if (!wep_rpf_check(ctx, r)) {
+		if (wep_rpf_check(ctx, r) == RPF_RES_FAIL) {
 			goto deny;
 		}
 
