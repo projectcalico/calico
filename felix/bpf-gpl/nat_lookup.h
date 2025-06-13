@@ -129,7 +129,6 @@ static CALI_BPF_INLINE struct calico_nat_dest* calico_nat_lookup(ipv46_addr_t *i
 		bool local_traffic = true;
 
 		if (CALI_F_FROM_HEP) {
-			// TODO ALEX is this RPF?
 			struct cali_rt *rt = cali_rt_lookup(ip_src);
 
 			if (!rt || (!cali_rt_is_host(rt) && !cali_rt_is_workload(rt))) {
@@ -216,7 +215,6 @@ static CALI_BPF_INLINE struct calico_nat_dest* calico_nat_lookup(ipv46_addr_t *i
 	/* To be k8s conformant, fall through to pick a random backend. */
 
 skip_affinity:
-
 	nat_lv2_key.id = nat_lv1_val->id;
 	nat_lv2_key.ordinal = bpf_get_prandom_u32();
 	nat_lv2_key.ordinal %= count;
@@ -226,6 +224,7 @@ skip_affinity:
 		*res = NAT_NO_BACKEND;
 		return NULL;
 	}
+
 	CALI_DEBUG("NAT: backend selected " IP_FMT ":%d", debug_ip(nat_lv2_val->addr), nat_lv2_val->port);
 
 	if (nat_lv1_val->affinity_timeo != 0 || affinity_always_timeo) {
