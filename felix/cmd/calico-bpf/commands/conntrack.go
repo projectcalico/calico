@@ -25,8 +25,8 @@ import (
 	"github.com/docopt/docopt-go"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
-	"golang.org/x/sys/unix"
 
+	//"golang.org/x/sys/unix"
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
 	v2 "github.com/projectcalico/calico/felix/bpf/conntrack/v2"
@@ -573,7 +573,7 @@ func newConntrackFillCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Command.Flags().IntVarP((&cmd.version), "ver", "v", 3, "conntrack map version")
+	cmd.Command.Flags().IntVarP((&cmd.version), "ver", "v", 4, "conntrack map version")
 	cmd.Command.Args = cmd.Args
 	cmd.Command.Run = cmd.Run
 
@@ -615,30 +615,22 @@ func (cmd *conntrackFillCmd) Run(c *cobra.Command, _ []string) {
 	loglevel := log.GetLevel()
 	log.SetLevel(log.WarnLevel)
 
-	for i := 1; ; i++ {
-		var err error
+	i := 1
+	for ;i <= ctMap.Size(); i++ {
 		portA := uint16(i >> 16)
 		portB := uint16(i & 0xffff)
 
+		key = conntrack.NewKey(proto, ipA, portA, ipB, portB)
 		if cmd.ipv6 {
-			key := conntrack.NewKeyV6(proto, ipA, portA, ipB, portB)
-			if err = ctMap.Update(key[:], cmd.val); err == nil {
-				continue
-			}
-		} else {
-			key := conntrack.NewKey(proto, ipA, portA, ipB, portB)
-			if err = ctMap.Update(key[:], cmd.val); err == nil {
-				continue
-			}
+			key = conntrack.NewKeyV6(proto, ipA, portA, ipB, portB)
 		}
 
-		log.SetLevel(loglevel)
-		log.Infof("Written %d entries", i-1)
-		if err == unix.E2BIG {
-			return
+		if err := ctMap.Update(key.AsBytes(), cmd.val); err != nil {
+			log.WithError(err).Fatal("Failed to update ConntrackMap")
 		}
-		log.WithError(err).Fatal("Failed to update ConntrackMap")
 	}
+	log.SetLevel(loglevel)
+	log.Infof("Written %d entries", i-1)
 }
 
 type conntrackStatsCmd struct {
