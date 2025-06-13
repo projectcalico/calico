@@ -14,6 +14,11 @@ git clone --depth=1 https://github.com/${REPO} -b ${BRANCH} operator
 
 # Modify the versions that are in-use to match our locally built images.
 pushd operator
+
+# Work around an issue by pinning to an older commit.
+git fetch origin 3ba1a569902629ed777a086f26d82c7f88e89031
+git checkout 3ba1a569902629ed777a086f26d82c7f88e89031
+
 make build/_output/bin/gen-versions
 build/_output/bin/gen-versions -os-versions=../calico_versions.yml > pkg/components/calico.go
 
