@@ -720,7 +720,8 @@ var _ = Describe("BPF Syncer", func() {
 			local := svcs.m[k]
 			Expect(local.Count()).To(Equal(uint32(3)))
 			Expect(local.LocalCount()).To(Equal(uint32(1)))
-			Expect(local.Flags()).To(Equal(uint32(nat.NATFlgInternalLocal | nat.NATFlgExternalLocal)))
+			// TODO ALEX REMOVE FORCED MAGLEV FLAG
+			Expect(local.Flags()).To(Equal(uint32(nat.NATFlgNatMaglev | nat.NATFlgInternalLocal | nat.NATFlgExternalLocal)))
 
 			k = nat.NewNATKey(net.IPv4(10, 0, 0, 2), 2222, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP))
 			Expect(svcs.m).To(HaveKey(k))
@@ -921,14 +922,14 @@ var _ = Describe("BPF Syncer", func() {
 			Expect(val1.Count()).To(Equal(uint32(4)))
 			Expect(val1.LocalCount()).To(Equal(uint32(2)))
 			// ClusterIP only reflects internal traffic policy, not the external one
-			Expect(val1.Flags()).To(Equal(uint32(nat.NATFlgInternalLocal)))
+			Expect(val1.Flags()).To(Equal(uint32(nat.NATFlgNatMaglev | nat.NATFlgInternalLocal)))
 
 			val2, ok := svcs.m[nat.NewNATKey(net.IPv4(192, 168, 0, 1), 4444, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP))]
 			Expect(ok).To(BeTrue())
 			Expect(val2.ID()).To(Equal(val1.ID()))
 			Expect(val2.Count()).To(Equal(uint32(4)))
 			Expect(val2.LocalCount()).To(Equal(uint32(2)))
-			Expect(val2.Flags()).To(Equal(uint32(nat.NATFlgInternalLocal | nat.NATFlgExternalLocal)))
+			Expect(val2.Flags()).To(Equal(uint32(nat.NATFlgNatMaglev | nat.NATFlgInternalLocal | nat.NATFlgExternalLocal)))
 
 			val3, ok := svcs.m[nat.NewNATKey(net.IPv4(10, 123, 0, 1), 4444, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP))]
 			Expect(ok).To(BeTrue())
