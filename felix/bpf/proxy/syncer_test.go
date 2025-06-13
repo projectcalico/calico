@@ -720,7 +720,8 @@ var _ = Describe("BPF Syncer", func() {
 			local := svcs.m[k]
 			Expect(local.Count()).To(Equal(uint32(3)))
 			Expect(local.LocalCount()).To(Equal(uint32(1)))
-			Expect(local.Flags()).To(Equal(uint32(nat.NATFlgInternalLocal | nat.NATFlgExternalLocal)))
+			// TODO ALEX REMOVE FORCED MAGLEV FLAG
+			Expect(local.Flags()).To(Equal(uint32(nat.NATFlgInternalLocal | nat.NATFlgExternalLocal | nat.NATFlgNatMaglev)))
 
 			k = nat.NewNATKey(net.IPv4(10, 0, 0, 2), 2222, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP))
 			Expect(svcs.m).To(HaveKey(k))
