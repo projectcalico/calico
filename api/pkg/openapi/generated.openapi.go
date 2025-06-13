@@ -1250,7 +1250,7 @@ func schema_pkg_apis_projectcalico_v3_BGPPeerSpec(ref common.ReferenceCallback) 
 							Format:      "",
 						},
 					},
-					"NextHopMode": {
+					"nextHopMode": {
 						SchemaProps: spec.SchemaProps{
 							Description: "NextHopMode defines the method of calculating the next hop attribute for received routes. This replaces and expands the deprecated KeepOriginalNextHop field. Users should use this setting to control the next hop attribute for a BGP peer. When this is set, the value of the KeepOriginalNextHop field is ignored. if neither keepOriginalNextHop or nextHopMode is specified, BGP's default behaviour is used. Set it to “Auto” to apply BGP’s default behaviour. Set it to \"Self\" to configure \"next hop self;\" in \"bird.cfg\". Set it to \"Keep\" to configure \"next hop keep;\" in \"bird.cfg\".",
 							Type:        []string{"string"},
