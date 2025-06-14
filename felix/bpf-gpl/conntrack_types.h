@@ -157,13 +157,13 @@ struct ct_create_ctx {
 };
 
 #ifdef IPVER6
-CALI_MAP_NAMED(cali_v6_ct, cali_ct, 3,
+CALI_MAP_NAMED(cali_v6_ct, cali_ct, 4,
 #else
-CALI_MAP_NAMED(cali_v4_ct, cali_ct, 3,
+CALI_MAP_NAMED(cali_v4_ct, cali_ct, 4,
 #endif
-		BPF_MAP_TYPE_HASH,
+		BPF_MAP_TYPE_LRU_HASH,
 		struct calico_ct_key, struct calico_ct_value,
-		512000, BPF_F_NO_PREALLOC)
+		512000, 0)
 
 enum calico_ct_result_type {
 	/* CALI_CT_NEW means that the packet is not part of a known conntrack flow.
