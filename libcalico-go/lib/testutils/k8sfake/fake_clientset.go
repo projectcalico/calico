@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package resources
+package k8sfake
 
 import (
 	"reflect"
@@ -35,9 +35,9 @@ type FakeClientSetWithListRevAndFiltering struct {
 	CurrentListRevisionByType  map[string]string
 }
 
-func NewFakeClientSetWithListRevAndFiltering() *FakeClientSetWithListRevAndFiltering {
+func NewFakeClientSetWithListRevAndFiltering(objs ...runtime.Object) *FakeClientSetWithListRevAndFiltering {
 	clientset := &FakeClientSetWithListRevAndFiltering{
-		Clientset:                  fake.NewSimpleClientset(),
+		Clientset:                  fake.NewSimpleClientset(objs...),
 		DefaultCurrentListRevision: "123",
 		CurrentListRevisionByType:  map[string]string{},
 	}

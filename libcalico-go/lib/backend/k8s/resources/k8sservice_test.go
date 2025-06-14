@@ -23,14 +23,15 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
+	"github.com/projectcalico/calico/libcalico-go/lib/testutils/k8sfake"
 )
 
 var _ = Describe("Service tests with fake clientSet", func() {
-	var clientSet *FakeClientSetWithListRevAndFiltering
+	var clientSet *k8sfake.FakeClientSetWithListRevAndFiltering
 	var client *serviceClient
 
 	BeforeEach(func() {
-		clientSet = NewFakeClientSetWithListRevAndFiltering()
+		clientSet = k8sfake.NewFakeClientSetWithListRevAndFiltering()
 		client = NewServiceClient(clientSet).(*serviceClient)
 
 		service, err := clientSet.CoreV1().Services("some-ns").Create(context.TODO(), &k8sapi.Service{
