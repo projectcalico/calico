@@ -144,6 +144,23 @@ func (h *ServerHarness) Stop() {
 	h.Server.Finished.Wait()
 	log.Info("Done waiting for server to shut down")
 	h.cacheCancel()
+	timeout := time.After(5 * time.Second)
+	select {
+	case <-h.BGPCache.Done:
+	case <-timeout:
+		log.Error("Timed out waiting for BGPCache to shut down")
+	}
+	select {
+	case <-h.FelixCache.Done:
+	case <-timeout:
+		log.Error("Timed out waiting for FelixCache to shut down")
+	}
+
+	select {
+	case <-h.Decoupler.Done:
+	case <-timeout:
+		log.Error("Timed out waiting for Decoupler to shut down")
+	}
 }
 
 func (h *ServerHarness) CreateNoOpClient(id interface{}, syncType syncproto.SyncerType) *ClientState {
@@ -192,9 +209,8 @@ func (h *ServerHarness) ExpectAllClientsToReachState(status api.SyncStatus, kvs 
 }
 
 func (h *ServerHarness) createClient(id interface{}, options syncclient.Options, callbacks api.SyncerCallbacks) *ClientState {
-	serverAddr := fmt.Sprintf("127.0.0.1:%d", h.Server.Port())
 	client := syncclient.New(
-		discovery.New(discovery.WithAddrOverride(serverAddr)),
+		discovery.New(discovery.WithAddrOverride(h.Addr())),
 		"test-version",
 		fmt.Sprintf("test-host-%v", id),
 		"test-info",
