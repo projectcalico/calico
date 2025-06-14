@@ -17,11 +17,10 @@ package tc
 import (
 	"encoding/json"
 	"os/exec"
-	"regexp"
-	"strconv"
 	"strings"
 
 	log "github.com/sirupsen/logrus"
+	"github.com/vishvananda/netlink"
 
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/bpfdefs"
@@ -93,70 +92,42 @@ func CleanUpProgramsAndPins() {
 
 	// Find all the interfaces with a clsact qdisc and examine the attached filters to see if any belong to
 	// us.
-	calicoIfaces := set.New[string]()
-	for _, iface := range ifacesWithClsact() {
-		for _, dir := range []string{"ingress", "egress"} {
-			tc := exec.Command("tc", "filter", "show", dir, "dev", iface)
-			out, err := tc.Output()
+	qdiscs, err := netlink.QdiscList(nil)
+	if err != nil {
+		log.WithError(err).Info("Failed to list qdiscs for cleanup")
+	}
+	for _, qdisc := range qdiscs {
+		_, isClsact := qdisc.(*netlink.Clsact)
+		if !isClsact {
+			continue
+		}
+		link, err := netlink.LinkByIndex(qdisc.Attrs().LinkIndex)
+		if err != nil {
+			log.WithError(err).WithField("iface", link.Attrs().Name).Info(
+				"Failed to remove BPF qdisc from interface, maybe interface is gone?")
+		}
+		for _, parent := range []uint32{netlink.HANDLE_MIN_INGRESS, netlink.HANDLE_MIN_EGRESS} {
+			filters, err := netlink.FilterList(link, parent)
 			if err != nil {
-				log.WithError(err).Debugf("Cleanup failed for interface %s; ignoring", iface)
+				log.WithError(err).WithFields(log.Fields{"iface": link.Attrs().Name, "parent": parent}).Info(
+					"Failed to list filters on interface for cleanup")
 			}
-			for _, id := range findBPFProgIDs(out) {
-				if calicoProgIDs.Contains(id) {
-					log.Infof("Found calico program on interface %s", iface)
-					calicoIfaces.Add(iface)
+			for _, filter := range filters {
+				bpfFilter, ok := filter.(*netlink.BpfFilter)
+				if !ok {
+					continue
+				}
+				if calicoProgIDs.Contains(bpfFilter.Id) {
+					log.Infof("Found calico program on interface %s", link.Attrs().Name)
+					err := netlink.QdiscDel(qdisc)
+					if err != nil {
+						log.WithError(err).WithField("iface", link.Attrs().Name).Info(
+							"Failed to remove BPF qdisc from interface, maybe interface is gone?")
+					}
 				}
 			}
 		}
 	}
 
-	calicoIfaces.Iter(func(iface string) error {
-		cmd := exec.Command("tc", "qdisc", "del", "dev", iface, "clsact")
-		err = cmd.Run()
-		if err != nil {
-			log.WithError(err).WithField("iface", iface).Info(
-				"Failed to remove BPF program from interface, maybe interface has gone?")
-		}
-		return nil
-	})
-
 	bpf.CleanUpCalicoPins(bpfdefs.DefaultBPFfsPath)
-}
-
-var tcFiltRegex = regexp.MustCompile(`filter .*? bpf .*? id (\d+)`)
-var tcQdiscRegex = regexp.MustCompile(`qdisc clsact .*? dev ([^ ]+)`)
-
-func ifacesWithClsact() []string {
-	tc := exec.Command("tc", "qdisc", "list")
-	out, err := tc.Output()
-	if err != nil {
-		log.WithError(err).Warn("Failed to run tc.")
-		return nil
-	}
-	// Example line:
-	// qdisc clsact ffff: dev cali866cd63afec parent ffff:fff1
-	result := findClsactQdiscs(out)
-	return result
-}
-
-func findClsactQdiscs(tcOutput []byte) []string {
-	matches := tcQdiscRegex.FindAllSubmatch(tcOutput, -1)
-	var result []string
-	for _, m := range matches {
-		result = append(result, string(m[1]))
-	}
-	return result
-}
-
-func findBPFProgIDs(tcOutput []byte) []int {
-	matches := tcFiltRegex.FindAllSubmatch(tcOutput, -1)
-	var result []int
-	for _, m := range matches {
-		id, err := strconv.Atoi(string(m[1]))
-		if err != nil {
-			log.WithError(err).Panic("Bug: failed to parse ID from regex.")
-		}
-		result = append(result, id)
-	}
-	return result
 }
