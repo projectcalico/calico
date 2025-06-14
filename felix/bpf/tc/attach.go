@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"net"
 	"path"
-	"regexp"
 	"strings"
 
 	log "github.com/sirupsen/logrus"
@@ -70,7 +69,6 @@ type AttachPoint struct {
 
 var ErrDeviceNotFound = errors.New("device not found")
 var ErrInterrupted = errors.New("dump interrupted")
-var prefHandleRe = regexp.MustCompile(`pref ([^ ]+) .* handle ([^ ]+)`)
 
 func (ap *AttachPoint) Log() *log.Entry {
 	return log.WithFields(log.Fields{
