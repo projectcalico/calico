@@ -27,6 +27,10 @@ import (
 // New creates a new tunnel IP allocation v1 Syncer.  An optional node name may be supplied.  If set, the syncer only
 // watches the specified node rather than all nodes.
 func New(client api.Client, callbacks api.SyncerCallbacks, node string) api.Syncer {
+	return NewFromProvider(watchersyncer.NewWatcherCacheFactory(client), callbacks, node)
+}
+
+func NewFromProvider(watcherCacheProvider watchersyncer.WatcherCacheProvider, callbacks api.SyncerCallbacks, node string) api.Syncer {
 	resourceTypes := []watchersyncer.ResourceType{
 		{
 			ListInterface:   model.ResourceListOptions{Kind: apiv3.KindIPPool},
@@ -37,5 +41,5 @@ func New(client api.Client, callbacks api.SyncerCallbacks, node string) api.Sync
 		},
 	}
 
-	return watchersyncer.New(client, resourceTypes, callbacks)
+	return watchersyncer.NewFromProvider(watcherCacheProvider, resourceTypes, callbacks)
 }
