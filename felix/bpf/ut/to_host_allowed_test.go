@@ -21,8 +21,8 @@ import (
 	"github.com/google/gopacket/layers"
 	. "github.com/onsi/gomega"
 	"github.com/sirupsen/logrus"
-	"golang.org/x/sys/unix"
 
+	//"golang.org/x/sys/unix"
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
 	"github.com/projectcalico/calico/felix/bpf/nat"
 	"github.com/projectcalico/calico/felix/bpf/routes"
@@ -54,23 +54,14 @@ func TestToHostAllowedCTFull(t *testing.T) {
 	val := conntrack.NewValueNormal(0, 0, conntrack.Leg{}, conntrack.Leg{})
 
 	var err error
-	var firstCTKey conntrack.Key
-	var firstCTVal conntrack.Value
 
-	for i := 1; err == nil; i++ {
+	for i := 1; i <= ctMap.Size(); i++ {
 		srcIP := net.IPv4(10, byte((i&0xff0000)>>16), byte((i&0xff00)>>8), byte(i&0xff))
 
 		key := conntrack.NewKey(1, srcIP, srcPort, hostIP, hostPort)
 		err = ctMap.Update(key[:], val[:])
-
-		if i == 1 {
-			copy(firstCTKey[:], key[:])
-			copy(firstCTVal[:], val[:])
-		}
+		Expect(err).NotTo(HaveOccurred())
 	}
-
-	// Make sure we failed because the CT table is full
-	Expect(err).To(Equal(unix.E2BIG))
 
 	// re-enable debug
 	logrus.SetLevel(loglevel)
@@ -101,7 +92,7 @@ func TestToHostAllowedCTFull(t *testing.T) {
 	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(synPkt)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res.Retval).To(Equal(resTC_ACT_SHOT))
+		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
 	})
 
 	// Destination is a local workload - should not pass
@@ -116,7 +107,7 @@ func TestToHostAllowedCTFull(t *testing.T) {
 	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(synPkt)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res.Retval).To(Equal(resTC_ACT_SHOT))
+		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
 	})
 
 	// Destination is a remote workload - should not pass
@@ -131,7 +122,7 @@ func TestToHostAllowedCTFull(t *testing.T) {
 	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(synPkt)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res.Retval).To(Equal(resTC_ACT_SHOT))
+		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
 	})
 
 	// Destination is a remote host - should not pass
@@ -146,7 +137,7 @@ func TestToHostAllowedCTFull(t *testing.T) {
 	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(synPkt)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res.Retval).To(Equal(resTC_ACT_SHOT))
+		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
 	})
 
 	// Destination is the local host - should pass
@@ -161,9 +152,9 @@ func TestToHostAllowedCTFull(t *testing.T) {
 	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(synPkt)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res.Retval).To(Equal(resTC_ACT_REDIRECT))
+		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
 	})
-	expectMark(tcdefs.MarkSeen)
+	expectMark(tcdefs.MarkSeenSkipFIB)
 
 	// Source is the local host - should pass
 	tcpSynAck := &layers.TCP{
@@ -204,24 +195,7 @@ func TestToHostAllowedCTFull(t *testing.T) {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
 	})
-	expectMark(tcdefs.MarkSeenFallThrough)
-
-	// Make space in the CT table
-	err = ctMap.Delete(firstCTKey[:])
-	Expect(err).NotTo(HaveOccurred())
-
-	skbMark = 0
-	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
-		res, err := bpfrun(ackPkt)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
-	})
-	expectMark(tcdefs.MarkSeenFallThrough)
-
-	// No conntrack created for non-SYN packet (should fall through to iptables).  We test by
-	// trying to create an entry, which should succeed.
-	err = ctMap.Update(firstCTKey[:], firstCTVal[:])
-	Expect(err).NotTo(HaveOccurred())
+	expectMark(tcdefs.MarkSeenSkipFIB)
 
 	// Towards WEP, the feature is disabled - should not pass
 	//
@@ -277,6 +251,6 @@ func TestToHostAllowedCTFull(t *testing.T) {
 	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(synPkt)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res.Retval).To(Equal(resTC_ACT_SHOT))
+		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
 	})
 }

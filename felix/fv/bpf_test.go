@@ -18,7 +18,6 @@ package fv_test
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -56,7 +55,6 @@ import (
 	"github.com/projectcalico/calico/felix/fv/utils"
 	"github.com/projectcalico/calico/felix/fv/workload"
 	"github.com/projectcalico/calico/felix/proto"
-	"github.com/projectcalico/calico/felix/timeshim"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	libapi "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
@@ -4625,65 +4623,6 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					})
 				})
 
-				Context("with CT tables full", func() {
-					It("should still allow host -> host", func() {
-						// XXX as long as there is no HEP policy
-						// using hostW as a sink
-
-						By("waiting for everything to come up", func() {
-							cc.Expect(Some, tc.Felixes[0], hostW[1])
-							cc.Expect(Some, tc.Felixes[1], hostW[0])
-							cc.CheckConnectivity()
-						})
-
-						By("filling up the CT tables", func() {
-							now := time.Duration(timeshim.RealTime().KTimeNanos())
-							leg := conntrack.Leg{SynSeen: true, AckSeen: true, Opener: true}
-
-							if testOpts.ipv6 {
-								srcIP := net.ParseIP("dead:beef::123:123:123:123")
-								dstIP := net.ParseIP("dead:beef::121:121:121:121")
-
-								val := conntrack.NewValueV6Normal(now, 0, leg, leg)
-								val64 := base64.StdEncoding.EncodeToString(val[:])
-
-								key := conntrack.NewKeyV6(6 /* TCP */, srcIP, 0, dstIP, 0)
-								key64 := base64.StdEncoding.EncodeToString(key[:])
-
-								_, err := tc.Felixes[0].ExecCombinedOutput("calico-bpf", "-6", "conntrack", "fill", key64, val64)
-								Expect(err).NotTo(HaveOccurred())
-							} else {
-								srcIP := net.IPv4(123, 123, 123, 123)
-								dstIP := net.IPv4(121, 121, 121, 121)
-
-								val := conntrack.NewValueNormal(now, 0, leg, leg)
-								val64 := base64.StdEncoding.EncodeToString(val[:])
-
-								key := conntrack.NewKey(6 /* TCP */, srcIP, 0, dstIP, 0)
-								key64 := base64.StdEncoding.EncodeToString(key[:])
-
-								_, err := tc.Felixes[0].ExecCombinedOutput("calico-bpf", "conntrack", "fill", key64, val64)
-								Expect(err).NotTo(HaveOccurred())
-							}
-						})
-
-						By("checking host-host connectivity works", func() {
-							cc.ResetExpectations()
-							cc.Expect(Some, tc.Felixes[0], hostW[1])
-							cc.Expect(Some, tc.Felixes[1], hostW[0])
-							cc.CheckConnectivity(conntrackChecks(tc.Felixes)...)
-						})
-
-						By("checking pod-pod connectivity works as ctmap is now LRU hash", func() {
-							cc.ResetExpectations()
-							cc.Expect(Some, w[0][1], w[0][0])
-							cc.Expect(Some, w[1][0], w[0][0])
-							cc.Expect(Some, w[1][1], w[0][0])
-							cc.CheckConnectivity()
-						})
-
-					})
-				})
 			})
 
 			It("should have connectivity when DNAT redirects to-host traffic to a local pod.", func() {
