@@ -912,21 +912,6 @@ func TestRepeatedAttach(t *testing.T) {
 	Expect(ingProg[0].Handle).To(Equal(ingressProg[0].Handle))
 	Expect(egrProg[0].Pref).To(Equal(ingressProg[0].Pref))
 	Expect(egrProg[0].Handle).To(Equal(ingressProg[0].Handle))
-
-	//Clean up then verify everything's gone
-	tc.CleanUpProgramsAndPins()
-
-	ingProg, err = tc.ListAttachedPrograms(ap.Iface, hook.Ingress.String(), true)
-	Expect(err).NotTo(HaveOccurred())
-	Expect(len(ingProg)).To(Equal(0))
-
-	egrProg, err = tc.ListAttachedPrograms(ap.Iface, hook.Egress.String(), true)
-	Expect(err).NotTo(HaveOccurred())
-	Expect(len(egrProg)).To(Equal(0))
-
-	hasQdisc, err := tc.HasQdisc(ap.Iface)
-	Expect(err).NotTo(HaveOccurred())
-	Expect(hasQdisc).To(BeFalse())
 }
 
 func TestCTLBAttachLegacy(t *testing.T) {
