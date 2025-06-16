@@ -336,7 +336,7 @@ var _ = Describe("Node status FV tests", func() {
 		defer r.Stop()
 
 		// Create a node status request with update period of 5 seconds, notify reporter
-		be.Clean()
+		Expect(be.Clean()).NotTo(HaveOccurred())
 		createCalicoNodeStatus(c, nodeName, name, 5)
 		r.OnUpdates([]api.Update{
 			{KVPair: model.KVPair{Key: model.ResourceKey{Name: name}, Value: getCurrentStatus()}},
@@ -344,11 +344,9 @@ var _ = Describe("Node status FV tests", func() {
 		r.OnStatusUpdated(api.InSync)
 
 		// Wait for first immediate status update
-		var err error
 		var firstStatus *apiv3.CalicoNodeStatus
 		Eventually(func() metav1.Time {
 			firstStatus = getCurrentStatus()
-			Expect(err).NotTo(HaveOccurred())
 			return firstStatus.Status.LastUpdated
 		}, 2*time.Second, 500*time.Millisecond).Should(Not(BeZero()))
 
@@ -362,9 +360,7 @@ var _ = Describe("Node status FV tests", func() {
 		// Update actual state and wait reporter to resolve conflict and update status
 		mock.setLastBootTime(BootTimeSecond)
 		Eventually(func() metav1.Time {
-			latestStatus := getCurrentStatus()
-			Expect(err).NotTo(HaveOccurred())
-			return latestStatus.Status.LastUpdated
+			return getCurrentStatus().Status.LastUpdated
 		}, 10*time.Second, 500*time.Millisecond).Should(Not(Equal(firstStatus.Status.LastUpdated)))
 	})
 })
