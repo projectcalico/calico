@@ -550,44 +550,52 @@ func matchNotNet(dir string, nets []string, ip net.IP) bool {
 	return true
 }
 
+var stringToProto = map[string]int32{
+	"icmp":    1,
+	"icmpv6":  58,
+	"tcp":     6,
+	"udp":     17,
+	"udplite": 136,
+	"sctp":    132,
+}
+
 // matchL4Protocol checks if the L4 protocol matches the rule. It returns true if the protocol
 // matches, false otherwise.
 func matchL4Protocol(rule *proto.Rule, protocol int32) bool {
-	p, ok := protocolMapL4[protocol]
-	if !ok {
+	// Protocol is a 8-bit field.
+	if protocol > 255 || protocol < 1 {
 		log.WithFields(log.Fields{
 			"protocol": protocol,
 		}).Warn("Unsupported L4 protocol")
 		return false
 	}
-	// Convert to lowercase.
-	protocolStr := strings.ToLower(p)
 	if log.IsLevelEnabled(log.DebugLevel) {
 		log.WithFields(log.Fields{
 			"isProtocol":      rule.GetProtocol(),
 			"isNotProtocol":   rule.GetNotProtocol(),
-			"requestProtocol": protocolStr,
+			"requestProtocol": protocol,
 		}).Debug("Matching L4 protocol")
 	}
 
-	checkStringInRuleProtocol := func(p *proto.Protocol, s string, defaultResult bool) bool {
+	checkStringInRuleProtocol := func(p *proto.Protocol, pNumber int32, defaultResult bool) bool {
 		if p == nil {
 			return defaultResult
 		}
 
-		// Check if given protocol string matches what is specified in rule.
-		// Note we compare names in lowercase.
+		// Check if given protocol matches what is specified in rule.
+		var protoNumber int32
 		if name := p.GetName(); name != "" {
-			return strings.ToLower(name) == s
+			var ok bool
+			protoNumber, ok = stringToProto[strings.ToLower(name)]
+			if !ok {
+				return false
+			}
+		} else {
+			protoNumber = p.GetNumber()
 		}
-
-		if name, ok := protocolMapL4[p.GetNumber()]; ok {
-			return name == s
-		}
-
-		return false
+		return protoNumber == pNumber
 	}
 
-	return checkStringInRuleProtocol(rule.GetProtocol(), protocolStr, true) &&
-		!checkStringInRuleProtocol(rule.GetNotProtocol(), protocolStr, false)
+	return checkStringInRuleProtocol(rule.GetProtocol(), protocol, true) &&
+		!checkStringInRuleProtocol(rule.GetNotProtocol(), protocol, false)
 }
