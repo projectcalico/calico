@@ -83,6 +83,8 @@ func init() {
 	validWireguardPortOrRulePriority := 12345
 	invalidWireguardPortOrRulePriority := 99999
 
+	nextHopMode := api.NextHopMode("Auto")
+
 	var awsCheckEnable, awsCheckDisable, awsCheckDoNothing,
 		awsCheckbadVal, awsCheckenable api.AWSSrcDstCheckOption
 
@@ -1966,6 +1968,10 @@ func init() {
 			LocalWorkloadSelector: "has(labelone)",
 			PeerIP:                ipv4_1,
 			ASNumber:              as61234,
+		}, false),
+		Entry("should reject BGPPeerSpec with both positive KeepOriginalNextHop and non-empty NextHopMode", api.BGPPeerSpec{
+			KeepOriginalNextHop: true,
+			NextHopMode:         &nextHopMode,
 		}, false),
 		Entry("should reject BGPPeer with ReachableBy but without PeerIP", api.BGPPeerSpec{
 			ReachableBy: ipv4_2,
