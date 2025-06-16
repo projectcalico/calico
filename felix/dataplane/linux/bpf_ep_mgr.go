@@ -508,6 +508,7 @@ func NewBPFEndpointManager(
 		healthAggregator: healthAggregator,
 		features:         dataplanefeatures,
 		profiling:        config.BPFProfiling,
+		bpfAttachType:    config.BPFAttachType,
 	}
 
 	specialInterfaces := []string{"egress.calico"}
@@ -574,7 +575,7 @@ func NewBPFEndpointManager(
 		m.hostNetworkedNATMode = hostNetworkedNATEnabled
 	}
 
-	if config.BPFAttachType == string(apiv3.BPFAttachOptionTCX) {
+	if m.bpfAttachType == string(apiv3.BPFAttachOptionTCX) {
 		if !tc.IsTcxSupported() {
 			log.Infof("TCX is not supported. Falling back to Tc")
 			m.bpfAttachType = string(apiv3.BPFAttachOptionTC)

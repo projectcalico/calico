@@ -167,6 +167,30 @@ func DetachClassifier(ifindex, handle, pref int, ingress bool) error {
 	return err
 }
 
+func ProgQueryTcx(ifindex int, ingress bool) ([64]uint32, [64]uint32, uint32, error) {
+	attachType := C.BPF_TCX_EGRESS
+	if ingress {
+		attachType = C.BPF_TCX_INGRESS
+	}
+	return progQuery(ifindex, attachType)
+}
+
+func progQuery(ifindex, attachType int) ([64]uint32, [64]uint32, uint32, error) {
+	var progIds, attachFlags [64]uint32
+	progCnt := uint32(64)
+	_, err := C.bpf_program_query(C.int(ifindex), C.int(attachType), 0,
+		(*C.uint)(unsafe.Pointer(&attachFlags[0])),
+		(*C.uint)(unsafe.Pointer(&progIds[0])),
+		(*C.uint)(unsafe.Pointer(&progCnt)))
+	return progIds, attachFlags, progCnt, err
+}
+
+func ProgName(id uint32) (string, error) {
+	buf := make([]byte, C.BPF_OBJ_NAME_LEN)
+	_, err := C.bpf_get_prog_name(C.uint(id), (*C.char)(unsafe.Pointer(&buf[0])))
+	return string(buf), err
+}
+
 func DetachCTLBProgramsLegacy(ipv4Enabled bool, cgroup string) error {
 	attachTypes := []int{C.BPF_CGROUP_INET6_CONNECT,
 		C.BPF_CGROUP_UDP6_SENDMSG,
