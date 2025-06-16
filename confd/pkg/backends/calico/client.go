@@ -476,6 +476,7 @@ func (c *client) inSync() bool {
 type bgpPeer struct {
 	PeerIP          cnet.IP              `json:"ip"`
 	ASNum           numorstring.ASNumber `json:"as_num,string"`
+	LocalASNum      numorstring.ASNumber `json:"local_as_num,string"`
 	RRClusterID     string               `json:"rr_cluster_id"`
 	Password        *string              `json:"password"`
 	SourceAddr      string               `json:"source_addr"`
@@ -645,10 +646,18 @@ func (c *client) updatePeersV1() {
 					reachableBy = v3res.Spec.ReachableBy
 				}
 
+				var localASN numorstring.ASNumber
+				log.Info("!!!local as number: %v", v3res.Spec.LocalASNumber)
+				if v3res.Spec.LocalASNumber != nil {
+					localASN = *v3res.Spec.LocalASNumber
+					log.Info("local as number: %v", localASN.String())
+				}
+
 				keepOriginalNextHop, nextHopMode := getNextHopMode(v3res)
 				peers = append(peers, &bgpPeer{
 					PeerIP:          *ip,
 					ASNum:           v3res.Spec.ASNumber,
+					LocalASNum:      localASN,
 					SourceAddr:      string(v3res.Spec.SourceAddress),
 					Port:            port,
 					KeepNextHop:     keepOriginalNextHop,
@@ -814,7 +823,7 @@ func (c *client) nodesWithIPPortAndAS(ip string, asNum numorstring.ASNumber, por
 	nodeNames := []string{}
 
 	for _, nodeName := range c.nodeLabelManager.listNodes() {
-		nodeIPv4, nodeIPv6, nodeAS, _ := c.nodeToBGPFields(nodeName)
+		nodeIPv4, nodeIPv6, nodeAS, _, _ := c.nodeToBGPFields(nodeName)
 		if (nodeIPv4 != ip) && (nodeIPv6 != ip) {
 			continue
 		}
@@ -837,12 +846,13 @@ func (c *client) nodesWithIPPortAndAS(ip string, asNum numorstring.ASNumber, por
 	return nodeNames
 }
 
-func (c *client) nodeToBGPFields(nodeName string) (string, string, string, string) {
+func (c *client) nodeToBGPFields(nodeName string) (string, string, string, string, string) {
 	ipv4Key, _ := model.KeyToDefaultPath(model.NodeBGPConfigKey{Nodename: nodeName, Name: "ip_addr_v4"})
 	ipv6Key, _ := model.KeyToDefaultPath(model.NodeBGPConfigKey{Nodename: nodeName, Name: "ip_addr_v6"})
 	asKey, _ := model.KeyToDefaultPath(model.NodeBGPConfigKey{Nodename: nodeName, Name: "as_num"})
+	localAsKey, _ := model.KeyToDefaultPath(model.NodeBGPConfigKey{Nodename: nodeName, Name: "local_as_num"})
 	rrKey, _ := model.KeyToDefaultPath(model.NodeBGPConfigKey{Nodename: nodeName, Name: "rr_cluster_id"})
-	return c.cache[ipv4Key], c.cache[ipv6Key], c.cache[asKey], c.cache[rrKey]
+	return c.cache[ipv4Key], c.cache[ipv6Key], c.cache[asKey], c.cache[localAsKey], c.cache[rrKey]
 }
 
 func (c *client) globalAS() string {
@@ -868,6 +878,9 @@ func (c *client) localBGPPeerDataAsBGPPeers(localBGPPeerData localBGPPeerData, v
 			log.Warningf("Couldn't parse %v %v for workload %v", version, ipStr, workloadName)
 			continue
 		}
+		if v3Peer.Spec.LocalASNumber != nil {
+			peer.LocalASNum = *v3Peer.Spec.LocalASNumber
+		}
 		peer.PeerIP = *ip
 		peer.Filters = v3Peer.Spec.Filters
 		peer.ASNum = v3Peer.Spec.ASNumber
@@ -880,7 +893,7 @@ func (c *client) localBGPPeerDataAsBGPPeers(localBGPPeerData localBGPPeerData, v
 }
 
 func (c *client) nodeAsBGPPeers(nodeName string, v4 bool, v6 bool, v3Peer *apiv3.BGPPeer) (peers []*bgpPeer) {
-	ipv4Str, ipv6Str, asNum, rrClusterID := c.nodeToBGPFields(nodeName)
+	ipv4Str, ipv6Str, asNum, localAsNum, rrClusterID := c.nodeToBGPFields(nodeName)
 	versions := map[string]string{}
 	if v4 {
 		versions["IPv4"] = ipv4Str
@@ -932,6 +945,10 @@ func (c *client) nodeAsBGPPeers(nodeName string, v4 bool, v6 bool, v3Peer *apiv3
 			if err != nil {
 				log.WithError(err).Warningf("Problem parsing global AS number %v for node %v", asNum, nodeName)
 			}
+		}
+
+		if localAsNum != "" {
+			peer.LocalASNum, err = numorstring.ASNumberFromString(localAsNum)
 		}
 		peer.RRClusterID = rrClusterID
 
@@ -1008,7 +1025,7 @@ func (c *client) onUpdates(updates []api.Update, needUpdatePeersV1 bool) {
 				log.Debugf("KVP: %#v", kvp)
 				if kvp.Value == nil {
 					// Remove node's IPs from our node IP cache
-					nodeIPv4, nodeIPv6, _, _ := c.nodeToBGPFields(v3key.Name)
+					nodeIPv4, nodeIPv6, _, _, _ := c.nodeToBGPFields(v3key.Name)
 					delete(c.nodeIPs, nodeIPv4)
 					delete(c.nodeIPs, nodeIPv6)
 
@@ -1019,7 +1036,7 @@ func (c *client) onUpdates(updates []api.Update, needUpdatePeersV1 bool) {
 					}
 				} else {
 					// Check if the node already has IPs in our node IP cache.
-					oldNodeIPv4, oldNodeIPv6, _, _ := c.nodeToBGPFields(v3key.Name)
+					oldNodeIPv4, oldNodeIPv6, _, _, _ := c.nodeToBGPFields(v3key.Name)
 
 					// Add/update our information on the node in our cache
 					if c.updateCache(u.UpdateType, kvp) {
@@ -1028,7 +1045,7 @@ func (c *client) onUpdates(updates []api.Update, needUpdatePeersV1 bool) {
 					}
 
 					// Add the node IPs to our node IP cache.
-					nodeIPv4, nodeIPv6, _, _ := c.nodeToBGPFields(v3key.Name)
+					nodeIPv4, nodeIPv6, _, _, _ := c.nodeToBGPFields(v3key.Name)
 					if oldNodeIPv4 != "" && oldNodeIPv4 != nodeIPv4 {
 						// IPv4 address is updated, remove the old IPv4 address.
 						delete(c.nodeIPs, oldNodeIPv4)
