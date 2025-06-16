@@ -279,21 +279,6 @@ func (ap *AttachPoint) ProgramID() (int, error) {
 	return -1, fmt.Errorf("Couldn't find 'id <ID> in 'tc filter' command out=\n%v err=%w", string(out), ErrNoTC)
 }
 
-func (ap *AttachPoint) IsAttached() (bool, error) {
-	hasQ, err := HasQdisc(ap.Iface)
-	if err != nil {
-		return false, err
-	}
-	if !hasQ {
-		return false, nil
-	}
-	progs, err := ListAttachedPrograms(ap.Iface, ap.Hook.String(), false)
-	if err != nil {
-		return false, err
-	}
-	return len(progs) > 0, nil
-}
-
 // EnsureQdisc makes sure that qdisc is attached to the given interface
 func EnsureQdisc(ifaceName string) (bool, error) {
 	hasQdisc, err := HasQdisc(ifaceName)
@@ -345,15 +330,6 @@ func RemoveQdisc(ifaceName string) error {
 	if !hasQdisc {
 		return nil
 	}
-
-	// Remove the json files of the programs attached to the interface for both directions
-	if err = bpf.ForgetAttachedProg(ifaceName, hook.Ingress); err != nil {
-		return fmt.Errorf("Failed to remove runtime json file of ingress direction: %w", err)
-	}
-	if err = bpf.ForgetAttachedProg(ifaceName, hook.Egress); err != nil {
-		return fmt.Errorf("Failed to remove runtime json file of egress direction: %w", err)
-	}
-
 	return libbpf.RemoveQDisc(ifaceName)
 }
 
