@@ -476,6 +476,7 @@ func (c *client) inSync() bool {
 type bgpPeer struct {
 	PeerIP          cnet.IP              `json:"ip"`
 	ASNum           numorstring.ASNumber `json:"as_num,string"`
+	LocalASNum      numorstring.ASNumber `json:"local_as_num,string"`
 	RRClusterID     string               `json:"rr_cluster_id"`
 	Password        *string              `json:"password"`
 	SourceAddr      string               `json:"source_addr"`
@@ -645,10 +646,18 @@ func (c *client) updatePeersV1() {
 					reachableBy = v3res.Spec.ReachableBy
 				}
 
+				var localASN numorstring.ASNumber
+				log.Info("!!!local as number: %v", v3res.Spec.LocalASNumber)
+				if v3res.Spec.LocalASNumber != nil {
+					localASN = *v3res.Spec.LocalASNumber
+					log.Info("local as number: %v", localASN.String())
+				}
+
 				keepOriginalNextHop, nextHopMode := getNextHopMode(v3res)
 				peers = append(peers, &bgpPeer{
 					PeerIP:          *ip,
 					ASNum:           v3res.Spec.ASNumber,
+					LocalASNum:      localASN,
 					SourceAddr:      string(v3res.Spec.SourceAddress),
 					Port:            port,
 					KeepNextHop:     keepOriginalNextHop,
