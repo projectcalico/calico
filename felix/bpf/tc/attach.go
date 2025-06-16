@@ -18,13 +18,11 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"os/exec"
 	"path"
-	"regexp"
-	"strconv"
 	"strings"
 
 	log "github.com/sirupsen/logrus"
+	"github.com/vishvananda/netlink"
 
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/bpfdefs"
@@ -71,7 +69,6 @@ type AttachPoint struct {
 
 var ErrDeviceNotFound = errors.New("device not found")
 var ErrInterrupted = errors.New("dump interrupted")
-var prefHandleRe = regexp.MustCompile(`pref ([^ ]+) .* handle ([^ ]+)`)
 
 func (ap *AttachPoint) Log() *log.Entry {
 	return log.WithFields(log.Fields{
@@ -137,12 +134,15 @@ func (ap *AttachPoint) detachPrograms(progsToClean []attachedProg) error {
 	for _, p := range progsToClean {
 		log.WithField("prog", p).Debug("Cleaning up old calico program")
 		attemptCleanup := func() error {
-			_, err := ExecTC("filter", "del", "dev", ap.Iface, ap.Hook.String(), "pref", fmt.Sprintf("%d", p.Pref), "handle", fmt.Sprintf("0x%x", p.Handle), "bpf")
+			if p.Filter == nil {
+				return fmt.Errorf("calico program %+v: Filter is 'nil'", p)
+			}
+			err := netlink.FilterDel(*p.Filter)
 			return err
 		}
 		err := attemptCleanup()
 		if errors.Is(err, ErrInterrupted) {
-			// This happens if the interface is deleted in the middle of calling tc.
+			// This happens if the interface is deleted in the middle of deleting the filter.
 			log.Debug("First cleanup hit 'Dump was interrupted', retrying (once).")
 			err = attemptCleanup()
 		}
@@ -162,121 +162,53 @@ func (ap *AttachPoint) detachPrograms(progsToClean []attachedProg) error {
 	return nil
 }
 
-func ExecTC(args ...string) (out string, err error) {
-	tcCmd := exec.Command("tc", args...)
-	outBytes, err := tcCmd.Output()
-	if err != nil {
-		if isCannotFindDevice(err) {
-			err = ErrDeviceNotFound
-		} else if isDumpInterrupted(err) {
-			err = ErrInterrupted
-		} else if err2, ok := err.(*exec.ExitError); ok {
-			err = fmt.Errorf("failed to execute tc %v: rc=%v stderr=%v (%w)",
-				args, err2.ExitCode(), string(err2.Stderr), err)
-		} else {
-			err = fmt.Errorf("failed to execute tc %v: %w", args, err)
-		}
-	}
-	out = string(outBytes)
-	return
-}
-
-func isCannotFindDevice(err error) bool {
-	if errors.Is(err, ErrDeviceNotFound) {
-		return true
-	}
-	if err, ok := err.(*exec.ExitError); ok {
-		stderr := string(err.Stderr)
-		if strings.Contains(stderr, "Cannot find device") ||
-			strings.Contains(stderr, "No such device") {
-			return true
-		}
-	}
-	return false
-}
-
-func isDumpInterrupted(err error) bool {
-	if errors.Is(err, ErrInterrupted) {
-		return true
-	}
-	if err, ok := err.(*exec.ExitError); ok {
-		stderr := string(err.Stderr)
-		if strings.Contains(stderr, "Dump was interrupted") {
-			return true
-		}
-	}
-	return false
-}
-
 type attachedProg struct {
 	Pref   int
 	Handle uint32
+	Filter *netlink.Filter
 }
 
 func ListAttachedPrograms(iface, hook string, includeLegacy bool) ([]attachedProg, error) {
-	out, err := ExecTC("filter", "show", "dev", iface, hook)
+	link, err := netlink.LinkByName(iface)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list tc filters on interface: %w", err)
+		return nil, fmt.Errorf("failed to get host device %s: %w", iface, err)
 	}
-	// Lines look like this; the section name always includes calico.
-	// filter protocol all pref 49152 bpf chain 0 handle 0x1 to_hep_no_log.o:[calico_to_host_ep] direct-action not_in_hw id 821 tag ee402594f8f85ac3 jited
+	var parent uint32
+	switch hook {
+	case "ingress":
+		parent = netlink.HANDLE_MIN_INGRESS
+	case "egress":
+		parent = netlink.HANDLE_MIN_EGRESS
+	default:
+		return nil, fmt.Errorf("failed to parse hook '%s'", hook)
+	}
+	filters, err := netlink.FilterList(link, parent)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list filters on dev %s: %w", iface, err)
+	}
 	var progsAttached []attachedProg
-	for _, line := range strings.Split(string(out), "\n") {
-		if !strings.Contains(line, "cali_tc_preambl") && (!includeLegacy || !strings.Contains(line, "calico")) {
+	for _, filter := range filters {
+		bpfFilter, ok := filter.(*netlink.BpfFilter)
+		if !ok {
 			continue
 		}
-		// find the pref and the handle
-		if sm := prefHandleRe.FindStringSubmatch(line); len(sm) > 0 {
-			pref, err := strconv.Atoi(sm[1])
-			if err != nil {
-				continue
-			}
-			handle64, err := strconv.ParseUint(sm[2][2:], 16, 32)
-			if err != nil {
-				continue
-			}
+		if strings.Contains(bpfFilter.Name, "cali_tc_preambl") || (includeLegacy && strings.Contains(bpfFilter.Name, "calico")) {
 			p := attachedProg{
-				Pref:   pref,
-				Handle: uint32(handle64),
+				Pref:   int(bpfFilter.Attrs().Priority),
+				Handle: bpfFilter.Attrs().Handle,
+				Filter: &filter,
 			}
 			log.WithField("prog", p).Debug("Found old calico program")
 			progsAttached = append(progsAttached, p)
 		}
 	}
+
 	return progsAttached, nil
 }
 
 // ProgramName returns the name of the program associated with this AttachPoint
 func (ap *AttachPoint) ProgramName() string {
 	return tcdefs.SectionName(ap.Type, ap.ToOrFrom)
-}
-
-var ErrNoTC = errors.New("no TC program attached")
-
-// TODO: we should try to not get the program ID via 'tc' binary and rather
-// we should use libbpf to obtain it.
-func (ap *AttachPoint) ProgramID() (int, error) {
-	out, err := ExecTC("filter", "show", "dev", ap.IfaceName(), ap.Hook.String())
-	if err != nil {
-		return -1, fmt.Errorf("Failed to check interface %s program ID: %w", ap.Iface, err)
-	}
-
-	s := strings.Fields(string(out))
-	for i := range s {
-		// Example of output:
-		//
-		// filter protocol all pref 49152 bpf chain 0
-		// filter protocol all pref 49152 bpf chain 0 handle 0x1 calico_from_hos:[61] direct-action not_in_hw id 61 tag 4add0302745d594c jited
-		if s[i] == "id" && len(s) > i+1 {
-			progID, err := strconv.Atoi(s[i+1])
-			if err != nil {
-				return -1, fmt.Errorf("Couldn't parse ID in 'tc filter' command err=%w out=\n%v", err, string(out))
-			}
-
-			return progID, nil
-		}
-	}
-	return -1, fmt.Errorf("Couldn't find 'id <ID> in 'tc filter' command out=\n%v err=%w", string(out), ErrNoTC)
 }
 
 // EnsureQdisc makes sure that qdisc is attached to the given interface
@@ -311,13 +243,23 @@ func EnsureQdisc(ifaceName string) (bool, error) {
 }
 
 func HasQdisc(ifaceName string) (bool, error) {
-	out, err := ExecTC("qdisc", "show", "dev", ifaceName, "clsact")
+	link, err := netlink.LinkByName(ifaceName)
 	if err != nil {
-		return false, fmt.Errorf("failed to check if interface '%s' has qdisc: %w", ifaceName, err)
+		return false, fmt.Errorf("Failed to get link for interface '%s': %w", ifaceName, err)
 	}
-	if strings.Contains(out, "qdisc clsact") {
-		return true, nil
+
+	qdiscs, err := netlink.QdiscList(link)
+	if err != nil {
+		return false, fmt.Errorf("Failed to list qdiscs for interface '%s': %w", ifaceName, err)
 	}
+
+	for _, qdisc := range qdiscs {
+		_, isClsact := qdisc.(*netlink.Clsact)
+		if isClsact {
+			return true, nil
+		}
+	}
+
 	return false, nil
 }
 
