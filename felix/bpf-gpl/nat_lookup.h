@@ -177,8 +177,6 @@ static CALI_BPF_INLINE struct calico_nat_dest* calico_nat_lookup(ipv46_addr_t *i
 		if (maglev_val) {
 			CALI_DEBUG("MAGLEV: picked maglev backend " IP_FMT ":%d", debug_ip(maglev_val->addr), maglev_val->port);
 			return maglev_val;
-		} else {
-			CALI_DEBUG("MAGLEV: no backend for vip " IP_FMT ":%d", debug_ip(*ip_dst), sport);
 		}
 	}
 
