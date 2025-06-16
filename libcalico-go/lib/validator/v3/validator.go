@@ -1319,6 +1319,8 @@ func validateRule(structLevel validator.StructLevel) {
 
 	scanNets := func(nets []string, fieldName string) {
 		var v4, v6 bool
+		isNegatedField := strings.Contains(fieldName, "NotNets")
+		
 		for _, n := range nets {
 			_, cidr, err := cnet.ParseCIDR(n)
 			if err != nil {
@@ -1327,6 +1329,15 @@ func validateRule(structLevel validator.StructLevel) {
 			} else {
 				v4 = v4 || cidr.Version() == 4
 				v6 = v6 || cidr.Version() == 6
+				
+				// Check for universal CIDR in negated context, which creates logical contradictions
+				if isNegatedField {
+					if (cidr.Version() == 4 && n == "0.0.0.0/0") ||
+					   (cidr.Version() == 6 && n == "::/0") {
+						structLevel.ReportError(reflect.ValueOf(n), fieldName,
+							"", reason("universal CIDR in negation creates logical contradiction (matches no traffic)"), "")
+					}
+				}
 			}
 		}
 		if rule.IPVersion != nil && ((v4 && *rule.IPVersion != 4) || (v6 && *rule.IPVersion != 6)) {
