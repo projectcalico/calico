@@ -324,7 +324,7 @@ var _ = infrastructure.DatastoreDescribe(
 				logrus.Infof("iperf client rate with no packet rate limit (bps): %v", baselineRate)
 				// Expect the baseline rate to be much greater than the bandwidth that we
 				// would get with the packet rate limit we are going to configure just below (within
-				// 20% of the requested 100Mbit/sec.
+				// 20% of the requested 100Mbit/sec).
 				Expect(baselineRate).To(BeNumerically(">=", 100*1e6*0.8))
 
 				By("Setting 100 packets/s limit for ingress on workload 0 (iperf2 server)")
