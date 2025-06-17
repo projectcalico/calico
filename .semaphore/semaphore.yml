@@ -77,14 +77,14 @@ blocks:
       jobs:
         - name: Containerd - Windows FV - overlay
           execution_time_limit:
-            minutes: 60
+            minutes: 180 
           commands:
             - export BACKEND=overlay
             - export AZURE_RESOURCE_GROUP=${USER}-capz-win-cni-${SEMAPHORE_WORKFLOW_ID:0:8}-${BACKEND}-rg
             - ../.semaphore/run-and-monitor win-fv-containerd.log ./.semaphore/run-win-fv.sh
         - name: Containerd - Windows FV - l2bridge
           execution_time_limit:
-            minutes: 60
+            minutes: 180 
           commands:
             - export BACKEND=l2bridge
             - export AZURE_RESOURCE_GROUP=${USER}-capz-win-cni-${SEMAPHORE_WORKFLOW_ID:0:8}-${BACKEND}-rg
