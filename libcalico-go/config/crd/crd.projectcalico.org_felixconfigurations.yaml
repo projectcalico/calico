@@ -68,7 +68,6 @@ spec:
                     - enum:
                         - TC
                         - TCX
-                        - TCX
                   description: |-
                     BPFAttachType in BPF mode, controls the attach type for the BPF Programs.
                     [Default: TCX]

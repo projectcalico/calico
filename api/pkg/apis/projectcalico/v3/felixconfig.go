@@ -853,7 +853,7 @@ type FelixConfigurationSpec struct {
 
 	// BPFAttachType in BPF mode, controls the attach type for the BPF Programs.
 	// [Default: TCX]
-	//+kubebuilder:validation:Enum=TC;TCX;TCX
+	//+kubebuilder:validation:Enum=TC;TCX
 	BPFAttachType *BPFAttachOption `json:"bpfAttachType,omitempty" validate:"omitempty,oneof=TC TCX"`
 
 	// FlowLogsFlushInterval configures the interval at which Felix exports flow logs.

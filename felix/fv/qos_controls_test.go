@@ -177,9 +177,9 @@ var _ = infrastructure.DatastoreDescribe(
 		BeforeEach(func() {
 			infra = getInfra()
 			/*
-			if BPFMode() {
-				Skip("Skipping QoS control tests on BPF mode.")
-			}*/
+				if BPFMode() {
+					Skip("Skipping QoS control tests on BPF mode.")
+				}*/
 			topt = infrastructure.DefaultTopologyOptions()
 			tc, _ = infrastructure.StartNNodeTopology(2, topt, infra)
 
