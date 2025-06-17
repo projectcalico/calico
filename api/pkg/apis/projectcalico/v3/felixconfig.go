@@ -72,6 +72,14 @@ const (
 	AWSSrcDstCheckOptionDisable   AWSSrcDstCheckOption = "Disable"
 )
 
+// +kubebuilder:validation:Enum=TC;TCX
+type BPFAttachOption string
+
+const (
+	BPFAttachOptionTC  BPFAttachOption = "TC"
+	BPFAttachOptionTCX BPFAttachOption = "TCX"
+)
+
 // +kubebuilder:validation:Enum=Enabled;Disabled
 type FloatingIPType string
 
@@ -842,6 +850,11 @@ type FelixConfigurationSpec struct {
 	// Use Enabled with caution. [Default: L2Only]
 	//+kubebuilder:validation:Enum=Enabled;Disabled;L2Only
 	BPFRedirectToPeer string `json:"bpfRedirectToPeer,omitempty"`
+
+	// BPFAttachType in BPF mode, controls the attach type for the BPF Programs.
+	// [Default: TCX]
+	//+kubebuilder:validation:Enum=TC;TCX
+	BPFAttachType *BPFAttachOption `json:"bpfAttachType,omitempty" validate:"omitempty,oneof=TC TCX"`
 
 	// FlowLogsFlushInterval configures the interval at which Felix exports flow logs.
 	// +kubebuilder:validation:Type=string

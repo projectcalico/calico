@@ -250,6 +250,7 @@ type Config struct {
 	BPFExcludeCIDRsFromNAT             []string
 	BPFExportBufferSizeMB              int
 	BPFRedirectToPeer                  string
+	BPFAttachType                      string
 
 	BPFProfiling               string
 	KubeProxyMinSyncPeriod     time.Duration
