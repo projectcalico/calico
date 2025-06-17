@@ -111,14 +111,14 @@ func (i *Scanner) Scan(productCode string, images []string, stream string, relea
 		logrus.WithError(err).Error("Failed to send request to image scanner")
 		return err
 	}
-	if outputDir != "" {
-		if err := writeScanResultToFile(resp, outputDir); err != nil {
-			logrus.WithError(err).Error("Failed to write image scan result to file")
-			return err
-		}
-	}
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
 		logrus.WithField("status", resp.StatusCode).Info("Image scan request sent successfully")
+		if outputDir != "" {
+			if err := writeScanResultToFile(resp, outputDir); err != nil {
+				logrus.WithError(err).Error("Failed to write image scan result to file")
+				return err
+			}
+		}
 		return nil
 	} else if resp.StatusCode == http.StatusLocked {
 		logrus.WithField("status", resp.StatusCode).Error("Image scan service is currently processing another request")

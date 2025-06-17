@@ -298,17 +298,6 @@ spec:
               type: object
             spec:
               properties:
-                NextHopMode:
-                  allOf:
-                    - enum:
-                        - Auto
-                        - Self
-                        - Keep
-                    - enum:
-                        - Auto
-                        - Self
-                        - Keep
-                  type: string
                 asNumber:
                   format: int32
                   type: integer
@@ -321,6 +310,17 @@ spec:
                 localWorkloadSelector:
                   type: string
                 maxRestartTime:
+                  type: string
+                nextHopMode:
+                  allOf:
+                    - enum:
+                        - Auto
+                        - Self
+                        - Keep
+                    - enum:
+                        - Auto
+                        - Self
+                        - Keep
                   type: string
                 node:
                   type: string

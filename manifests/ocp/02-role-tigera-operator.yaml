@@ -25,9 +25,7 @@ rules:
     verbs:
       - update
     resourceNames:
-      - adminnetworkpolicies.policy.networking.k8s.io
       - apiservers.operator.tigera.io
-      - baselineadminnetworkpolicies.policy.networking.k8s.io
       - gatewayapis.operator.tigera.io
       - imagesets.operator.tigera.io
       - installations.operator.tigera.io
@@ -57,6 +55,17 @@ rules:
       - whiskers.operator.tigera.io
       - goldmanes.operator.tigera.io
       - managementclusterconnections.operator.tigera.io
+  # We need update and delete access for ANP/BANP CRDs to set owner refs when assuming control of pre-existing CRDs, for example on OCP.
+  - apiGroups:
+      - apiextensions.k8s.io
+    resources:
+      - customresourcedefinitions
+    verbs:
+      - update
+      - delete
+    resourceNames:
+      - adminnetworkpolicies.policy.networking.k8s.io
+      - baselineadminnetworkpolicies.policy.networking.k8s.io
   - apiGroups:
       - ""
     resources:

@@ -7,7 +7,7 @@
 
 #include "bpf.h"
 
-#define MAX_COUNTERS_SIZE 20
+#define MAX_COUNTERS_SIZE 22
 
 typedef __u64 counters_t[MAX_COUNTERS_SIZE];
 
@@ -24,6 +24,10 @@ CALI_MAP(cali_counters, 3,
 		BPF_MAP_TYPE_PERCPU_HASH,
 		struct counters_key, counters_t, 20000,
 		0)
+
+CALI_MAP(cali_counters_scratch, 2,
+		BPF_MAP_TYPE_PERCPU_ARRAY,
+		__u32, counters_t, 1, 0)
 
 static CALI_BPF_INLINE counters_t *counters_get(int ifindex)
 {
