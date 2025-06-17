@@ -250,6 +250,7 @@ type Config struct {
 	BPFExcludeCIDRsFromNAT             []string
 	BPFExportBufferSizeMB              int
 	BPFRedirectToPeer                  string
+	BPFAttachType                      string
 
 	BPFProfiling               string
 	KubeProxyMinSyncPeriod     time.Duration
@@ -419,6 +420,7 @@ const (
 )
 
 func NewIntDataplaneDriver(config Config) *InternalDataplane {
+	log.Infof("Sridhar ", config.BPFAttachType)
 	if config.BPFLogLevel == "info" {
 		config.BPFLogLevel = "off"
 	}
