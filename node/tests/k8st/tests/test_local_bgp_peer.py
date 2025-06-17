@@ -130,7 +130,7 @@ class _TestLocalBGPPeer(TestBase):
 
         # Enable debug logging on BGP and set endpointStatusPathPrefix
         self.update_ds_env("calico-node",
-                           "calico-system",
+                           "kube-system",
                            {"BGP_LOGSEVERITYSCREEN": "debug",
                             "FELIX_EndpointStatusPathPrefix": "/var/run/calico"})
 
@@ -467,17 +467,17 @@ protocol bgp from_workload_to_local_host from bgp_template {
         calico_node_w1 = calico_node_pod_name(self.red_pod_0_0.nodename)
         # Expect a single route like this for worker 1.
         # 10.123.0.0/26      via 192.168.162.157 on calicef4c701383 [Local_Workload_192_168_162_157 15:11:46] * (100/0) [AS65401i]
-        output = run("kubectl exec -t %s -n calico-system -- birdcl show route" % calico_node_w1)
+        output = run("kubectl exec -t %s -n kube-system -- birdcl show route" % calico_node_w1)
         self.assertRegexpMatches(output, "10\.123\.0\.0/26.*via .* on cali.*Local_Workload_.*AS65401")
-        output = run("kubectl exec -t %s -n calico-system -- birdcl6 show route" % calico_node_w1)
+        output = run("kubectl exec -t %s -n kube-system -- birdcl6 show route" % calico_node_w1)
         self.assertRegexpMatches(output, "ca11:c0::/96.*via .* on cali.*Local_Workload_.*AS65401")
 
         # Worker 2 should have 2 routes of each version, one for each child.
         calico_node_w2 = calico_node_pod_name(self.red_pod_1_0.nodename)
-        output = run("kubectl exec -t %s -n calico-system -- birdcl show route" % calico_node_w2)
+        output = run("kubectl exec -t %s -n kube-system -- birdcl show route" % calico_node_w2)
         self.assertRegexpMatches(output, "10\.123\.1\.0/26.*via .* on cali.*Local_Workload_.*AS65401")
         self.assertRegexpMatches(output, "10\.123\.3\.0/26.*via .* on cali.*Local_Workload_.*AS65401")
-        output = run("kubectl exec -t %s -n calico-system -- birdcl6 show route" % calico_node_w2)
+        output = run("kubectl exec -t %s -n kube-system -- birdcl6 show route" % calico_node_w2)
         self.assertRegexpMatches(output, "ca11:c0:1::/96.*via .* on cali.*Local_Workload_.*AS65401")
         self.assertRegexpMatches(output, "ca11:c0:3::/96.*via .* on cali.*Local_Workload_.*AS65401")
 
