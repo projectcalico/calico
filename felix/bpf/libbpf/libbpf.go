@@ -402,7 +402,7 @@ func OpenLink(path string) (*Link, error) {
 	defer C.free(unsafe.Pointer(cPath))
 	link, err := C.bpf_link_open(cPath)
 	if err != nil {
-		return nil, fmt.Errorf("error opening link %w", err)
+		return nil, err
 	}
 	return &Link{link: link}, nil
 }
