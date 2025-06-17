@@ -201,18 +201,18 @@ class TestBase(TestCase):
         logger.debug("Additional Service created. status='%s'" % str(api_response.status))
 
     def wait_until_exists(self, name, resource_type, ns="default"):
-        retry_until_success(kubectl, function_args=["get %s %s -n%s" %
+        retry_until_success(kubectl, function_args=["get %s %s -n %s" %
                                                     (resource_type, name, ns)])
 
     def delete_and_confirm(self, name, resource_type, ns="default"):
         try:
-            kubectl("delete %s %s -n%s" % (resource_type, name, ns))
+            kubectl("delete %s %s -n %s" % (resource_type, name, ns))
         except subprocess.CalledProcessError:
             pass
 
         def is_it_gone_yet(res_name, res_type):
             try:
-                kubectl("get %s %s -n%s" % (res_type, res_name, ns),
+                kubectl("get %s %s -n %s" % (res_type, res_name, ns),
                         logerr=False)
                 raise self.StillThere
             except subprocess.CalledProcessError:
