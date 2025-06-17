@@ -51,10 +51,11 @@ var _ = Describe("BPF Syncer", func() {
 		aff       *mockAffinityMap
 		ct        *mock.Map
 
-		s        *proxy.Syncer
-		connScan *conntrack.Scanner
-		state    proxy.DPSyncerState
-		rt       *proxy.RTCache
+		s           *proxy.Syncer
+		syncerMutex sync.Mutex
+		connScan    *conntrack.Scanner
+		state       proxy.DPSyncerState
+		rt          *proxy.RTCache
 	)
 
 	nodeIPs := []net.IP{net.IPv4(192, 168, 0, 1), net.IPv4(10, 123, 0, 1)}
@@ -64,6 +65,12 @@ var _ = Describe("BPF Syncer", func() {
 			Namespace: "default",
 			Name:      "test-service",
 		},
+	}
+
+	applySyncer := func(m *sync.Mutex, s *proxy.Syncer, state proxy.DPSyncerState) error {
+		m.Lock()
+		defer m.Unlock()
+		return s.Apply(state)
 	}
 
 	BeforeEach(func() {
@@ -690,7 +697,7 @@ var _ = Describe("BPF Syncer", func() {
 			s.SetTriggerFn(func() {
 				go func() {
 					logrus.Info("Syncer triggered")
-					err := s.Apply(state)
+					err := applySyncer(&syncerMutex, s, state)
 					logrus.WithError(err).Info("Syncer result")
 				}()
 			})
@@ -838,7 +845,7 @@ var _ = Describe("BPF Syncer", func() {
 					ip.FromString("10.123.0.113").(ip.V4Addr)),
 			)
 
-			err := s.Apply(state)
+			err := applySyncer(&syncerMutex, s, state)
 			Expect(err).NotTo(HaveOccurred())
 
 			checkAfterResync = func() {
