@@ -420,7 +420,6 @@ const (
 )
 
 func NewIntDataplaneDriver(config Config) *InternalDataplane {
-	log.Infof("Sridhar ", config.BPFAttachType)
 	if config.BPFLogLevel == "info" {
 		config.BPFLogLevel = "off"
 	}

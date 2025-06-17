@@ -135,7 +135,7 @@ func (ap *AttachPoint) AttachProgram() error {
 		// those programs as well.
 		err = ap.detachTcProgram()
 		if err != nil {
-			log.Errorf("error removing old tc program from %s:%w", ap.Iface, err)
+			log.Errorf("error removing old tc program from %s:%s", ap.Iface, err)
 		}
 		logCxt.Info("Program attached to TCX.")
 		return nil
@@ -209,11 +209,11 @@ func (ap *AttachPoint) detachTcProgram() error {
 func (ap *AttachPoint) DetachProgram() error {
 	err := ap.detachTcxProgram()
 	if err != nil {
-		log.Warnf("error detaching tcx program from %s hook %s : %w", ap.Iface, ap.Hook, err)
+		log.Warnf("error detaching tcx program from %s hook %s : %s", ap.Iface, ap.Hook, err)
 	}
 	err = ap.detachTcProgram()
 	if err != nil {
-		log.Warnf("error detaching tc program from %s hook %s : %w", ap.Iface, ap.Hook, err)
+		log.Warnf("error detaching tc program from %s hook %s : %s", ap.Iface, ap.Hook, err)
 	}
 	return nil
 }
@@ -255,6 +255,26 @@ type attachedProg struct {
 	Pref   int
 	Handle uint32
 	Filter *netlink.Filter
+}
+
+func ListAttachedTcxPrograms(iface, attachHook string) ([]string, error) {
+	link, err := netlink.LinkByName(iface)
+	if err != nil {
+		return nil, fmt.Errorf("error getting link for %s:%w", iface, err)
+	}
+	progId, _, progCnt, err := libbpf.ProgQueryTcx(link.Attrs().Index, attachHook == hook.Ingress.String())
+	if err != nil {
+		return nil, fmt.Errorf("error querying program for %s:%s:%w", iface, attachHook, err)
+	}
+	progNames := []string{}
+	for i := range progCnt {
+		name, err := libbpf.ProgName(progId[i])
+		if err != nil {
+			continue
+		}
+		progNames = append(progNames, name)
+	}
+	return progNames, nil
 }
 
 func ListAttachedPrograms(iface, hook string, includeLegacy bool) ([]attachedProg, error) {
@@ -480,7 +500,12 @@ func IsTcxSupported() bool {
 		return false
 	}
 
-	defer netlink.LinkDel(veth)
+	defer func() {
+		if err := netlink.LinkDel(veth); err != nil {
+			log.Warnf("failed delete veth interface testTcx %s", err)
+		}
+	}()
+
 	binaryToLoad := path.Join(bpfdefs.ObjectDir, "tcx_test.o")
 	obj, err := bpf.LoadObject(binaryToLoad, &libbpf.TcGlobalData{})
 	if err != nil {
@@ -488,8 +513,5 @@ func IsTcxSupported() bool {
 	}
 	defer obj.Close()
 	_, err = obj.AttachTCX("cali_tcx_test", name)
-	if err != nil {
-		return false
-	}
-	return true
+	return err == nil
 }
