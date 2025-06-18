@@ -25,9 +25,8 @@ import (
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/clientmgr"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
+	"github.com/projectcalico/calico/pkg/buildinfo"
 )
-
-var VERSION string
 
 func CheckVersionMismatch(configArg, allowMismatchArg interface{}) error {
 	if allowMismatch, _ := allowMismatchArg.(bool); allowMismatch {
@@ -72,10 +71,10 @@ func CheckVersionMismatch(configArg, allowMismatchArg interface{}) error {
 
 	clusterv = strings.Split(strings.TrimPrefix(clusterv, "v"), "-")[0]
 
-	clientv := strings.Split(strings.TrimPrefix(VERSION, "v"), "-")[0]
+	clientv := strings.Split(strings.TrimPrefix(buildinfo.Version, "v"), "-")[0]
 
 	if clusterv != clientv {
-		return fmt.Errorf("Version mismatch.\nClient Version:   %s\nCluster Version:  %s\nUse --allow-version-mismatch to override.\n", VERSION, clusterv)
+		return fmt.Errorf("Version mismatch.\nClient Version:   %s\nCluster Version:  %s\nUse --allow-version-mismatch to override.\n", buildinfo.Version, clusterv)
 	}
 
 	return nil
