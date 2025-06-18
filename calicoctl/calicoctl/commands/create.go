@@ -101,7 +101,7 @@ Description:
 	log.Infof("results: %+v", results)
 
 	if results.FileInvalid {
-		return fmt.Errorf("Failed to execute command!!!!!: %v", results.Err)
+		return fmt.Errorf("Failed to execute command: %v", results.Err)
 	} else if results.NumResources == 0 {
 		// No resources specified. If there is an associated error use that, otherwise print message with no error.
 		if results.Err != nil {
