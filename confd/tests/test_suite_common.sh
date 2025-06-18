@@ -60,9 +60,9 @@ execute_test_suite() {
     # node mesh enabled, so turn it on now before we start confd.
     echo "Execute daemon-mode tests"
     turn_mesh_on
-#    for i in $(seq 1 2); do
-#       execute_tests_daemon
-#    done
+    for i in $(seq 1 2); do
+       execute_tests_daemon
+    done
     echo "Daemon-mode tests passed"
 }
 
@@ -135,7 +135,6 @@ spec:
   nodeSelector: has(node)
   peerIP: 10.24.0.2
   asNumber: 64512
-  localASNumber: 65000
   password:
     secretKeyRef:
       name: my-secrets-1
@@ -149,7 +148,6 @@ spec:
   nodeSelector: has(node)
   peerIP: 10.24.0.3
   asNumber: 64512
-  localASNumber: 65000
   password:
     secretKeyRef:
       name: my-secrets-1
@@ -163,7 +161,6 @@ spec:
   node: node1
   peerIP: 10.24.10.10
   asNumber: 64512
-  localASNumber: 65000
   password:
     secretKeyRef:
       name: my-secrets-2
@@ -333,7 +330,6 @@ spec:
   node: node$ii
   peerIP: 10.24.0.2
   asNumber: 64512
-  localASNumber: 65000
   password:
     secretKeyRef:
       name: my-secrets-1
@@ -551,7 +547,7 @@ expect_peerings() {
     while sleep 1; do
         grep "protocol bgp" /etc/calico/confd/config/bird.cfg
         count=`grep "protocol bgp" /etc/calico/confd/config/bird.cfg | wc -l`
-        if [ true ]; then
+        if [ "$count" = "$expected_count" ]; then
             break
         fi
         let 'attempts += 1'
@@ -565,59 +561,60 @@ expect_peerings() {
 }
 
 # Execute a set of tests using daemon mode.
-#execute_tests_daemon() {
-    # For KDD, run Typha.
-#    if [ "$DATASTORE_TYPE" = kubernetes ]; then
-#        start_typha
-#    fi
-#
-#    # Run confd as a background process.
-#    echo "Running confd as background process"
-#    BGP_LOGSEVERITYSCREEN="debug" confd -confdir=/etc/calico/confd >$LOGPATH/logd1 2>&1 &
-#    CONFD_PID=$!
-#    echo "Running with PID " $CONFD_PID
-#
-#    # Run the node-mesh-enabled tests.
-#    for i in $(seq 1 2); do
-#        run_individual_test 'mesh/bgp-export'
-#        run_individual_test 'mesh/ipip-always'
-#        run_individual_test 'mesh/ipip-cross-subnet'
-#        run_individual_test 'mesh/ipip-off'
-#        run_individual_test 'mesh/route-reflector-mesh-enabled'
-#        run_individual_test 'mesh/static-routes'
-#        run_individual_test 'mesh/static-routes-exclude-node'
-#        run_individual_test 'mesh/communities'
-#        run_individual_test 'mesh/restart-time'
-#    done
-#
-#    # Turn the node-mesh off.
-#    turn_mesh_off
-#
-#    # Run the explicit peering tests.
-#    for i in $(seq 1 2); do
-#        run_individual_test 'explicit_peering/global'
-#        run_individual_test 'explicit_peering/global-external'
-#        run_individual_test 'explicit_peering/global-ipv6'
-#        run_individual_test 'explicit_peering/specific_node'
-#        run_individual_test 'explicit_peering/selectors'
-#        run_individual_test 'explicit_peering/route_reflector'
-#        run_individual_test 'explicit_peering/keepnexthop'
-#        run_individual_test 'explicit_peering/keepnexthop-global'
-#	run_individual_test 'explicit_peering/local-as'
-#	run_individual_test 'explicit_peering/local-as-global'
-#    done
+execute_tests_daemon() {
+#     For KDD, run Typha.
+    if [ "$DATASTORE_TYPE" = kubernetes ]; then
+        start_typha
+    fi
+
+    # Run confd as a background process.
+    echo "Running confd as background process"
+    BGP_LOGSEVERITYSCREEN="debug" confd -confdir=/etc/calico/confd >$LOGPATH/logd1 2>&1 &
+    CONFD_PID=$!
+    echo "Running with PID " $CONFD_PID
+
+    # Run the node-mesh-enabled tests.
+    for i in $(seq 1 2); do
+      run_individual_test 'mesh/bgp-export'
+      run_individual_test 'mesh/ipip-always'
+      run_individual_test 'mesh/ipip-cross-subnet'
+      run_individual_test 'mesh/ipip-off'
+      run_individual_test 'mesh/route-reflector-mesh-enabled'
+      run_individual_test 'mesh/static-routes'
+      run_individual_test 'mesh/static-routes-exclude-node'
+      run_individual_test 'mesh/communities'
+      run_individual_test 'mesh/restart-time'
+    done
+
+    # Turn the node-mesh off.
+    turn_mesh_off
+
+    # Run the explicit peering tests.
+    for i in $(seq 1 2); do
+      run_individual_test 'explicit_peering/global'
+      run_individual_test 'explicit_peering/global-external'
+      run_individual_test 'explicit_peering/global-ipv6'
+      run_individual_test 'explicit_peering/specific_node'
+      run_individual_test 'explicit_peering/selectors'
+      run_individual_test 'explicit_peering/route_reflector'
+      run_individual_test 'explicit_peering/keepnexthop'
+      run_individual_test 'explicit_peering/keepnexthop-global'
+	    run_individual_test 'explicit_peering/local-as'
+	    run_individual_test 'explicit_peering/local-as-ipv6'
+	    run_individual_test 'explicit_peering/local-as-global'
+    done
 #
 #    # Turn the node-mesh back on.
-#    turn_mesh_on
-#
-#    # Kill confd.
-#    kill -9 $CONFD_PID
-#
+    turn_mesh_on
+
+#     Kill confd.
+    kill -9 $CONFD_PID
+
 #    # For KDD, kill Typha.
-#    if [ "$DATASTORE_TYPE" = kubernetes ]; then
-#        kill_typha
-#    fi
-#}
+    if [ "$DATASTORE_TYPE" = kubernetes ]; then
+        kill_typha
+    fi
+}
 
 # Execute a set of tests using oneshot mode.
 execute_tests_oneshot() {
@@ -1112,8 +1109,8 @@ EOF
 
 test_bgp_ttl_security() {
   test_bgp_ttl_security_explicit_node
-#  test_bgp_ttl_security_peer_selector
-#  test_bgp_ttl_security_global
+  test_bgp_ttl_security_peer_selector
+  test_bgp_ttl_security_global
 }
 
 test_bgp_ttl_security_explicit_node() {
@@ -1170,7 +1167,6 @@ spec:
   node: kube-master
   peerIP: 10.192.0.3
   asNumber: 64517
-  localASNumber: 65000
   ttlSecurity: 1
 ---
 kind: BGPPeer
@@ -1181,7 +1177,6 @@ spec:
   node: kube-master
   peerIP: 10.192.0.4
   asNumber: 64517
-  localASNumber: 65000
   ttlSecurity: 2
 EOF
 
@@ -1445,7 +1440,7 @@ EOF
 
 test_bgp_reachable_by() {
   test_bgp_reachable_by_for_global_peers
-#  test_bgp_reachable_by_for_route_reflectors
+  test_bgp_reachable_by_for_route_reflectors
 }
 
 test_bgp_reachable_by_for_global_peers() {
@@ -1500,7 +1495,6 @@ metadata:
 spec:
   peerIP: 10.225.0.4
   asNumber: 65515
-  localASNumber: 65000
   reachableBy: 10.224.0.1
   keepOriginalNextHop: true
 ---
@@ -1511,7 +1505,6 @@ metadata:
 spec:
   peerIP: 10.225.0.5
   asNumber: 65515
-  localASNumber: 65000
   reachableBy: 10.224.0.1
   keepOriginalNextHop: true
 ---
@@ -1522,7 +1515,6 @@ metadata:
 spec:
   peerIP: ffee::10
   asNumber: 65515
-  localASNumber: 65000
   reachableBy: ffee::1:1
   keepOriginalNextHop: true
 ---
@@ -1533,7 +1525,6 @@ metadata:
 spec:
   peerIP: ffee::11
   asNumber: 65515
-  localASNumber: 65000
   reachableBy: ffee::1:1
   keepOriginalNextHop: true
 EOF
@@ -1626,7 +1617,6 @@ metadata:
 spec:
   peerIP: 10.225.0.4
   asNumber: 65515
-  localASNumber: 65000
   reachableBy: 10.224.0.1
   keepOriginalNextHop: true
   nodeSelector: route-reflector == 'true'
@@ -1638,7 +1628,6 @@ metadata:
 spec:
   peerIP: 10.225.0.5
   asNumber: 65515
-  localASNumber: 65000
   reachableBy: 10.224.0.1
   keepOriginalNextHop: true
   nodeSelector: route-reflector == 'true'
@@ -1650,7 +1639,6 @@ metadata:
 spec:
   peerIP: ffee::10
   asNumber: 65515
-  localASNumber: 65000
   reachableBy: ffee::1:1
   keepOriginalNextHop: true
   nodeSelector: route-reflector == 'true'
@@ -1662,7 +1650,6 @@ metadata:
 spec:
   peerIP: ffee::11
   asNumber: 65515
-  localASNumber: 65000
   reachableBy: ffee::1:1
   keepOriginalNextHop: true
   nodeSelector: route-reflector == 'true'
@@ -1994,7 +1981,6 @@ spec:
   node: kube-master
   peerIP: 10.192.0.3
   asNumber: 64517
-  localASNumber: 65000
   filters:
     - test-filter-1
 ---
@@ -2006,7 +1992,6 @@ spec:
   node: kube-master
   peerIP: 2001::103
   asNumber: 64517
-  localASNumber: 65000
   filters:
     - test-filter-1
 ---
@@ -2018,7 +2003,6 @@ spec:
   node: kube-master
   peerIP: 10.192.0.4
   asNumber: 64517
-  localASNumber: 65000
   filters:
     - test-filter-2
 ---
@@ -2030,7 +2014,6 @@ spec:
   node: kube-master
   peerIP: 2001::104
   asNumber: 64517
-  localASNumber: 65000
   filters:
     - test-filter-2
 EOF
@@ -2405,7 +2388,6 @@ metadata:
 spec:
   peerIP: 10.192.0.3
   asNumber: 64517
-  localASNumber: 65000
   filters:
     - test-filter-1
     - test-filter-2
@@ -2417,7 +2399,6 @@ metadata:
 spec:
   peerIP: 2001::103
   asNumber: 64517
-  localASNumber: 65000
   filters:
     - test-filter-1
     - test-filter-2
@@ -2429,7 +2410,6 @@ metadata:
 spec:
   peerIP: 10.192.0.4
   asNumber: 64517
-  localASNumber: 65000
   filters:
     - test-filter-1
     - test-filter-2
@@ -2441,7 +2421,6 @@ metadata:
 spec:
   peerIP: 2001::104
   asNumber: 64517
-  localASNumber: 65000
   filters:
     - test-filter-1
     - test-filter-2
@@ -3422,7 +3401,6 @@ spec:
   node: kube-master
   peerIP: 10.192.0.3
   asNumber: 64517
-  localASNumber: 65000
   filters:
     - import-only-filter-1
 ---
@@ -3434,7 +3412,6 @@ spec:
   node: kube-master
   peerIP: 2001::103
   asNumber: 64517
-  localASNumber: 65000
   filters:
     - import-only-filter-1
 ---
@@ -3446,7 +3423,6 @@ spec:
   node: kube-master
   peerIP: 10.192.0.4
   asNumber: 64517
-  localASNumber: 65000
   filters:
     - import-only-filter-2
 ---
@@ -3458,7 +3434,6 @@ spec:
   node: kube-master
   peerIP: 2001::104
   asNumber: 64517
-  localASNumber: 65000
   filters:
     - import-only-filter-2
 EOF
@@ -3717,7 +3692,6 @@ spec:
   node: kube-master
   peerIP: 10.192.0.3
   asNumber: 64517
-  localASNumber: 65000
   filters:
     - export-only-filter-1
 ---
@@ -3729,7 +3703,6 @@ spec:
   node: kube-master
   peerIP: 2001::103
   asNumber: 64517
-  localASNumber: 65000
   filters:
     - export-only-filter-1
 ---
@@ -3741,7 +3714,6 @@ spec:
   node: kube-master
   peerIP: 10.192.0.4
   asNumber: 64517
-  localASNumber: 65000
   filters:
     - export-only-filter-2
 ---
@@ -3753,7 +3725,6 @@ spec:
   node: kube-master
   peerIP: 2001::104
   asNumber: 64517
-  localASNumber: 65000
   filters:
     - export-only-filter-2
 EOF
@@ -4012,7 +3983,6 @@ spec:
   node: kube-master
   peerIP: 10.192.0.3
   asNumber: 64517
-  localASNumber: 65000
   filters:
     - test-filter-1
 ---
@@ -4024,7 +3994,6 @@ spec:
   node: kube-master
   peerIP: 2001::103
   asNumber: 64517
-  localASNumber: 65000
 ---
 kind: BGPPeer
 apiVersion: projectcalico.org/v3
@@ -4034,7 +4003,6 @@ spec:
   node: kube-master
   peerIP: 10.192.0.4
   asNumber: 64517
-  localASNumber: 65000
   filters:
     - test-filter-2
 ---
@@ -4046,7 +4014,6 @@ spec:
   node: kube-master
   peerIP: 2001::104
   asNumber: 64517
-  localASNumber: 65000
 EOF
 
     test_confd_templates bgpfilter/v4_only/explicit_peer
@@ -4301,7 +4268,6 @@ spec:
   node: kube-master
   peerIP: 10.192.0.3
   asNumber: 64517
-  localASNumber: 65000
 ---
 kind: BGPPeer
 apiVersion: projectcalico.org/v3
@@ -4311,7 +4277,6 @@ spec:
   node: kube-master
   peerIP: 2001::103
   asNumber: 64517
-  localASNumber: 65000
   filters:
     - test-filter-1
 ---
@@ -4323,7 +4288,6 @@ spec:
   node: kube-master
   peerIP: 10.192.0.4
   asNumber: 64517
-  localASNumber: 65000
 ---
 kind: BGPPeer
 apiVersion: projectcalico.org/v3
@@ -4333,7 +4297,6 @@ spec:
   node: kube-master
   peerIP: 2001::104
   asNumber: 64517
-  localASNumber: 65000
   filters:
     - test-filter-2
 EOF
@@ -4572,7 +4535,6 @@ metadata:
 spec:
   localWorkloadSelector: app == 'calico-bird-0'
   asNumber: 64518
-  localASNumber: 65000
   filters:
     - import-only-filter
 ---
@@ -4584,7 +4546,6 @@ spec:
   localWorkloadSelector: app == 'calico-bird-0'
   node: kube-master
   asNumber: 64517
-  localASNumber: 65000
   filters:
     - import-only-filter
 EOF

@@ -143,6 +143,7 @@ template bgp bgp_template {
 {{- $node_as_num := getv $as_key}}
 {{- template "LOGGING"}}
   description "Connection to BGP peer";
+  local as {{$node_as_num}};
   gateway recursive; # This should be the default, but just in case.
   add paths on;
   graceful restart;  # See comment in kernel section about graceful restart.
