@@ -16,8 +16,10 @@ package hashreleaseserver
 
 import (
 	"bytes"
-	_ "embed"
+	"context"
+	"errors"
 	"fmt"
+	"io"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -25,7 +27,10 @@ import (
 	"strings"
 	"time"
 
+	"cloud.google.com/go/storage"
 	"github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/calico/release/internal/command"
 )
 
 const (
@@ -34,6 +39,8 @@ const (
 
 	// BaseDomain is the base URL of the hashrelease
 	BaseDomain = "docs.eng.tigera.net"
+
+	releaseLibFileName = "all-releases"
 )
 
 type Hashrelease struct {
@@ -76,6 +83,54 @@ func (h *Hashrelease) URL() string {
 	return fmt.Sprintf("https://%s.%s", h.Name, BaseDomain)
 }
 
+// PublishHashrelease uploads the hashrelease to the server.
+func Publish(h *Hashrelease, cfg *Config) error {
+	srcDir := strings.TrimSuffix(h.Source, "/") + "/"
+	logrus.WithFields(logrus.Fields{
+		"hashrelease": h.Name,
+		"srcDir":      srcDir,
+	}).Info("Publishing hashrelease")
+
+	var publishErr error
+	// publish to hashrelease server VM
+	if _, err := command.Run("rsync",
+		[]string{
+			"--stats", "-az", "--delete",
+			fmt.Sprintf("--rsh=%s", cfg.RSHCommand()), srcDir,
+			fmt.Sprintf("%s:%s/%s", cfg.HostString(), RemoteDocsPath(cfg.User), h.Name),
+		}); err != nil {
+		logrus.WithError(err).Error("Failed to publish hashrelease to hashrelease server VM")
+		publishErr = err
+	}
+	// publish to cloud storage
+	if err := command.GcloudStorageRsync(
+		srcDir,
+		fmt.Sprintf("gcs://%s/%s", cfg.BucketName, h.Name),
+		"--delete-unmatched-destination-objects",
+	); err != nil {
+		// If publishing to cloud storage fails, we only log the error
+		// as it is currently not critical to the operation of the hashrelease server.
+		logrus.WithError(err).Error("Failed to publish hashrelease to cloud storage")
+	}
+	if publishErr != nil {
+		return fmt.Errorf("failed to publish hashrelease %s: %w", h.Name, publishErr)
+	}
+
+	// add the hashrelease to the library
+	if err := AddToHashreleaseLibrary(*h, cfg); err != nil {
+		logrus.WithError(err).Error("Failed to add hashrelease to library")
+		return err
+	}
+
+	// set the hashrelease as the latest for the stream
+	if err := SetHashreleaseAsLatest(*h, h.Stream, cfg); err != nil {
+		// We don't want to fail the publish if we can't set it as latest, but we should log the error
+		logrus.WithError(err).Error("Failed to set hashrelease as latest")
+	}
+
+	return nil
+}
+
 func RemoteDocsPath(user string) string {
 	path := "files"
 	if user != "root" {
@@ -85,7 +140,7 @@ func RemoteDocsPath(user string) string {
 }
 
 func remoteReleasesLibraryPath(user string) string {
-	return filepath.Join(RemoteDocsPath(user), "all-releases")
+	return filepath.Join(RemoteDocsPath(user), releaseLibFileName)
 }
 
 func HasHashrelease(hash string, cfg *Config) (bool, error) {
@@ -106,18 +161,92 @@ func HasHashrelease(hash string, cfg *Config) (bool, error) {
 
 // SetHashreleaseAsLatest sets the hashrelease as the latest for the stream
 func SetHashreleaseAsLatest(rel Hashrelease, productCode string, cfg *Config) error {
-	logrus.Debugf("Updating latest hashrelease for %s stream to %s", rel.Stream, rel.Name)
-	if _, err := runSSHCommand(cfg, fmt.Sprintf(`echo "%s/" > %s/latest-%s/%s.txt`, rel.URL(), RemoteDocsPath(cfg.User), productCode, rel.Stream)); err != nil {
+	logrus.WithFields(logrus.Fields{
+		"hashrelease": rel.Name,
+		"stream":      rel.Stream,
+		"productCode": productCode,
+	}).Debug("Setting hashrelease as latest for stream")
+	var allErr error
+	content := rel.URL() + "/"
+	relFilePath := fmt.Sprintf("latest-%s/%s.txt", productCode, rel.Stream)
+	if _, err := runSSHCommand(cfg, fmt.Sprintf(`echo "%s" > %s/%s`, content, RemoteDocsPath(cfg.User), relFilePath)); err != nil {
 		logrus.WithError(err).Error("Failed to update latest hashrelease and hashrelease library")
-		return err
+		allErr = errors.Join(allErr, err)
+	}
+	// Try to write to the latest hashrelease file in the bucket
+	// For now we do not fail the operation if we can't write to the bucket
+	// as it is currently not critical to the operation of the hashrelease server
+	bucket, err := cfg.Bucket()
+	if err != nil {
+		// For now if we can't get the bucket, do not fail the operation
+		logrus.WithError(err).Error("Failed to get bucket for hashrelease server")
+		return allErr
+	}
+	if err := updateBucketTextFile(bucket, relFilePath, content, false); err != nil {
+		logrus.WithError(err).Errorf("Failed to write to latest hashrelease file for %s %s in bucket", productCode, rel.Stream)
 	}
 	return nil
 }
 
 func AddToHashreleaseLibrary(rel Hashrelease, cfg *Config) error {
 	logrus.WithField("hashrelease", rel.Name).WithField("hash", rel.Hash).Debug("Adding hashrelease to library")
-	if _, err := runSSHCommand(cfg, fmt.Sprintf(`echo "%s - %s " >> %s`, rel.Hash, rel.Note, remoteReleasesLibraryPath(cfg.User))); err != nil {
+	var allErr error
+	content := fmt.Sprintf("%s - %s ", rel.Hash, rel.Note)
+	if _, err := runSSHCommand(cfg, fmt.Sprintf(`echo "%s" >> %s`, content, remoteReleasesLibraryPath(cfg.User))); err != nil {
 		logrus.WithError(err).Error("Failed to update latest hashrelease and hashrelease library")
+		allErr = errors.Join(allErr, err)
+	}
+	// Try to write to the hashrelease library in the bucket
+	// For now we do not fail the operation if we can't write to the bucket
+	// as it is currently not critical to the operation of the hashrelease server
+	// and there is a job that runs periodically sync files from the VM to the bucket
+	bucket, err := cfg.Bucket()
+	if err != nil {
+		// For now if we can't get the bucket, do not fail the operation
+		logrus.WithError(err).Error("Failed to get bucket for hashrelease server")
+		return allErr
+	}
+	if err := updateBucketTextFile(bucket, releaseLibFileName, content, true); err != nil {
+		logrus.WithError(err).Error("Failed to write to hashrelease library in bucket")
+	}
+	return nil
+}
+
+func updateBucketTextFile(bucket *storage.BucketHandle, filePath, content string, appendContent bool) error {
+	ctx := context.Background()
+	obj := bucket.Object(filePath)
+	w := obj.NewWriter(ctx)
+	w.ContentType = "text/plain"
+	w.Metadata = map[string]string{
+		"updated-by": "hashreleaseserver",
+		"updated-at": time.Now().Format(time.RFC3339),
+	}
+	// If the file already exists and we are not appending, we will overwrite it
+	updatedContent := content
+	if appendContent {
+		// If we are appending, we need to read the existing content first
+		existingReader, err := obj.NewReader(ctx)
+		if err != nil {
+			if !errors.Is(err, storage.ErrObjectNotExist) {
+				logrus.WithError(err).Errorf("Failed to read existing content from bucket: %s", filePath)
+				return err
+			}
+		} else {
+			defer existingReader.Close()
+			existingContent, err := io.ReadAll(existingReader)
+			if err != nil {
+				logrus.WithError(err).Errorf("Failed to read existing content from bucket: %s", filePath)
+				return err
+			}
+			updatedContent = strings.TrimRight(string(existingContent), "\n") + "\n" + content + "\n"
+		}
+	}
+	if _, err := w.Write([]byte(updatedContent)); err != nil {
+		logrus.WithError(err).Errorf("Failed to write content to bucket: %s", filePath)
+		return err
+	}
+	if err := w.Close(); err != nil {
+		logrus.WithError(err).Errorf("Failed to close writer for bucket: %s", filePath)
 		return err
 	}
 	return nil
