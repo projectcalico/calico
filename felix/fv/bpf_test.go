@@ -18,7 +18,6 @@ package fv_test
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -56,7 +55,6 @@ import (
 	"github.com/projectcalico/calico/felix/fv/utils"
 	"github.com/projectcalico/calico/felix/fv/workload"
 	"github.com/projectcalico/calico/felix/proto"
-	"github.com/projectcalico/calico/felix/timeshim"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	libapi "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
@@ -71,14 +69,14 @@ import (
 //     connection-time program.  This is a bit of a broken test but it's better than nothing since all felix nodes
 //     should be programming the same NAT mappings.
 var (
-	_ = describeBPFTests(withProto("tcp"), withConnTimeLoadBalancingEnabled(), withNonProtocolDependentTests(), withConntrackCleanupMode("Userspace"))
+	_ = describeBPFTests(withProto("tcp"), withConnTimeLoadBalancingEnabled(), withNonProtocolDependentTests())
 	_ = describeBPFTests(withProto("udp"), withConnTimeLoadBalancingEnabled())
 	_ = describeBPFTests(withProto("tcp"), withConnTimeLoadBalancingEnabled(), withNonProtocolDependentTests(), withIPFamily(6))
 	_ = describeBPFTests(withProto("udp"), withConnTimeLoadBalancingEnabled(), withIPFamily(6))
 	_ = describeBPFTests(withProto("udp"), withConnTimeLoadBalancingEnabled(), withUDPUnConnected())
-	_ = describeBPFTests(withProto("tcp"), withConntrackCleanupMode("BPFProgram"))
-	_ = describeBPFTests(withProto("tcp"), withIPFamily(6), withConntrackCleanupMode("BPFProgram"))
-	_ = describeBPFTests(withProto("udp"), withConntrackCleanupMode("Userspace"))
+	_ = describeBPFTests(withProto("tcp"))
+	_ = describeBPFTests(withProto("tcp"), withIPFamily(6))
+	_ = describeBPFTests(withProto("udp"))
 	_ = describeBPFTests(withProto("udp"), withUDPUnConnected())
 	_ = describeBPFTests(withProto("udp"), withUDPConnectedRecvMsg(), withConnTimeLoadBalancingEnabled())
 	_ = describeBPFTests(withTunnel("ipip"), withProto("tcp"), withConnTimeLoadBalancingEnabled())
@@ -87,11 +85,11 @@ var (
 	_ = describeBPFTests(withTunnel("ipip"), withProto("udp"))
 	_ = describeBPFTests(withProto("tcp"), withDSR())
 	_ = describeBPFTests(withProto("udp"), withDSR())
-	_ = describeBPFTests(withTunnel("ipip"), withProto("tcp"), withDSR(), withConntrackCleanupMode("BPFProgram"))
-	_ = describeBPFTests(withTunnel("ipip"), withProto("udp"), withDSR(), withConntrackCleanupMode("Userspace"))
-	_ = describeBPFTests(withTunnel("wireguard"), withProto("tcp"), withConntrackCleanupMode("Userspace"))
+	_ = describeBPFTests(withTunnel("ipip"), withProto("tcp"), withDSR())
+	_ = describeBPFTests(withTunnel("ipip"), withProto("udp"), withDSR())
+	_ = describeBPFTests(withTunnel("wireguard"), withProto("tcp"))
 	_ = describeBPFTests(withTunnel("wireguard"), withProto("tcp"), withConnTimeLoadBalancingEnabled())
-	_ = describeBPFTests(withTunnel("vxlan"), withProto("tcp"), withConntrackCleanupMode("BPFProgram"))
+	_ = describeBPFTests(withTunnel("vxlan"), withProto("tcp"))
 	_ = describeBPFTests(withTunnel("vxlan"), withProto("tcp"), withConnTimeLoadBalancingEnabled())
 	_ = describeBPFTests(withTunnel("vxlan"), withProto("tcp"), withConnTimeLoadBalancingEnabled(), withIPFamily(6))
 )
@@ -103,16 +101,15 @@ var _ = describeBPFTests(withProto("tcp"),
 	withBPFLogLevel("info"))
 
 type bpfTestOptions struct {
-	conntrackCleanupMode string
-	connTimeEnabled      bool
-	protocol             string
-	udpUnConnected       bool
-	bpfLogLevel          string
-	tunnel               string
-	dsr                  bool
-	udpConnRecvMsg       bool
-	nonProtoTests        bool
-	ipv6                 bool
+	connTimeEnabled bool
+	protocol        string
+	udpUnConnected  bool
+	bpfLogLevel     string
+	tunnel          string
+	dsr             bool
+	udpConnRecvMsg  bool
+	nonProtoTests   bool
+	ipv6            bool
 }
 
 type bpfTestOpt func(opts *bpfTestOptions)
@@ -130,12 +127,6 @@ func withIPFamily(family int) bpfTestOpt {
 func withProto(proto string) bpfTestOpt {
 	return func(opts *bpfTestOptions) {
 		opts.protocol = proto
-	}
-}
-
-func withConntrackCleanupMode(m string) bpfTestOpt {
-	return func(opts *bpfTestOptions) {
-		opts.conntrackCleanupMode = m
 	}
 }
 
@@ -277,9 +268,8 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 	}
 
 	testOpts := bpfTestOptions{
-		bpfLogLevel:          "debug",
-		tunnel:               "none",
-		conntrackCleanupMode: "Auto",
+		bpfLogLevel: "debug",
+		tunnel:      "none",
 	}
 	for _, o := range opts {
 		o(&testOpts)
@@ -301,10 +291,10 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 		family = "ipv6"
 	}
 
-	desc := fmt.Sprintf("_BPF_ _BPF-SAFE_ BPF tests (%s %s%s, ct=%v, log=%s, tunnel=%s, dsr=%v, cleaner=%v)",
+	desc := fmt.Sprintf("_BPF_ _BPF-SAFE_ BPF tests (%s %s%s, ct=%v, log=%s, tunnel=%s, dsr=%v)",
 		family,
 		testOpts.protocol, protoExt, testOpts.connTimeEnabled,
-		testOpts.bpfLogLevel, testOpts.tunnel, testOpts.dsr, testOpts.conntrackCleanupMode,
+		testOpts.bpfLogLevel, testOpts.tunnel, testOpts.dsr,
 	)
 	return infrastructure.DatastoreDescribe(desc, []apiconfig.DatastoreType{apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
 		var (
@@ -410,7 +400,6 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				options.DelayFelixStart = true
 				options.TriggerDelayedFelixStart = true
 			}
-			options.ExtraEnvVars["FELIX_BPFConntrackCleanupMode"] = testOpts.conntrackCleanupMode
 			options.ExtraEnvVars["FELIX_BPFMapSizeConntrackScaling"] = "Disabled"
 			options.ExtraEnvVars["FELIX_BPFLogLevel"] = fmt.Sprint(testOpts.bpfLogLevel)
 			options.ExtraEnvVars["FELIX_BPFConntrackLogLevel"] = fmt.Sprint(testOpts.bpfLogLevel)
@@ -4022,9 +4011,8 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								})
 							})
 
-							// Run the test only once for each conntrackCleanupMode
 							_ = testIfTCP && !testOpts.ipv6 && testOpts.bpfLogLevel == "debug" && !testOpts.dsr &&
-								testOpts.conntrackCleanupMode != "Auto" && testOpts.tunnel != "vxlan" &&
+								testOpts.tunnel != "vxlan" &&
 								It("tcp should survive spurious RST", func() {
 									externalClient.Exec("ip", "route", "add", w[0][0].IP, "via", felixIP(0))
 									pc := &PersistentConnection{
@@ -4670,82 +4658,6 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					})
 				})
 
-				Context("with CT tables full", func() {
-					It("should still allow host -> host", func() {
-						// XXX as long as there is no HEP policy
-						// using hostW as a sink
-
-						By("waiting for everything to come up", func() {
-							cc.Expect(Some, tc.Felixes[0], hostW[1])
-							cc.Expect(Some, tc.Felixes[1], hostW[0])
-							cc.CheckConnectivity()
-						})
-
-						By("filling up the CT tables", func() {
-							now := time.Duration(timeshim.RealTime().KTimeNanos())
-							leg := conntrack.Leg{SynSeen: true, AckSeen: true, Opener: true}
-
-							if testOpts.ipv6 {
-								srcIP := net.ParseIP("dead:beef::123:123:123:123")
-								dstIP := net.ParseIP("dead:beef::121:121:121:121")
-
-								val := conntrack.NewValueV6Normal(now, 0, leg, leg)
-								val64 := base64.StdEncoding.EncodeToString(val[:])
-
-								key := conntrack.NewKeyV6(6 /* TCP */, srcIP, 0, dstIP, 0)
-								key64 := base64.StdEncoding.EncodeToString(key[:])
-
-								_, err := tc.Felixes[0].ExecCombinedOutput("calico-bpf", "-6", "conntrack", "fill", key64, val64)
-								Expect(err).NotTo(HaveOccurred())
-							} else {
-								srcIP := net.IPv4(123, 123, 123, 123)
-								dstIP := net.IPv4(121, 121, 121, 121)
-
-								val := conntrack.NewValueNormal(now, 0, leg, leg)
-								val64 := base64.StdEncoding.EncodeToString(val[:])
-
-								key := conntrack.NewKey(6 /* TCP */, srcIP, 0, dstIP, 0)
-								key64 := base64.StdEncoding.EncodeToString(key[:])
-
-								_, err := tc.Felixes[0].ExecCombinedOutput("calico-bpf", "conntrack", "fill", key64, val64)
-								Expect(err).NotTo(HaveOccurred())
-							}
-						})
-
-						By("checking host-host connectivity works", func() {
-							cc.ResetExpectations()
-							cc.Expect(Some, tc.Felixes[0], hostW[1])
-							cc.Expect(Some, tc.Felixes[1], hostW[0])
-							cc.CheckConnectivity(conntrackChecks(tc.Felixes)...)
-						})
-
-						By("checking pod-pod connectivity fails", func() {
-							cc.ResetExpectations()
-							cc.Expect(None, w[0][1], w[0][0])
-							cc.Expect(None, w[1][0], w[0][0])
-							cc.Expect(None, w[1][1], w[0][0])
-							cc.CheckConnectivity()
-						})
-
-						By("cleaning up the CT maps", func() {
-							if testOpts.ipv6 {
-								_, err := tc.Felixes[0].ExecOutput("calico-bpf", "-6", "conntrack", "clean")
-								Expect(err).NotTo(HaveOccurred())
-							} else {
-								_, err := tc.Felixes[0].ExecOutput("calico-bpf", "conntrack", "clean")
-								Expect(err).NotTo(HaveOccurred())
-							}
-						})
-
-						By("checking pod-pod connectivity works again", func() {
-							cc.ResetExpectations()
-							cc.Expect(Some, w[0][1], w[0][0])
-							cc.Expect(Some, w[1][0], w[0][0])
-							cc.Expect(Some, w[1][1], w[0][0])
-							cc.CheckConnectivity(conntrackChecks(tc.Felixes)...)
-						})
-					})
-				})
 			})
 
 			It("should have connectivity when DNAT redirects to-host traffic to a local pod.", func() {
