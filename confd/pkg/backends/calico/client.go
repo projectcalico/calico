@@ -476,6 +476,7 @@ func (c *client) inSync() bool {
 type bgpPeer struct {
 	PeerIP          cnet.IP              `json:"ip"`
 	ASNum           numorstring.ASNumber `json:"as_num,string"`
+	LocalASNum      numorstring.ASNumber `json:"local_as_num,string"`
 	RRClusterID     string               `json:"rr_cluster_id"`
 	Password        *string              `json:"password"`
 	SourceAddr      string               `json:"source_addr"`
@@ -645,10 +646,18 @@ func (c *client) updatePeersV1() {
 					reachableBy = v3res.Spec.ReachableBy
 				}
 
+				var localASN numorstring.ASNumber
+				log.Info("!!!local as number: %v", v3res.Spec.LocalASNumber)
+				if v3res.Spec.LocalASNumber != nil {
+					localASN = *v3res.Spec.LocalASNumber
+					log.Info("local as number: %v", localASN.String())
+				}
+
 				keepOriginalNextHop, nextHopMode := getNextHopMode(v3res)
 				peers = append(peers, &bgpPeer{
 					PeerIP:          *ip,
 					ASNum:           v3res.Spec.ASNumber,
+					LocalASNum:      localASN,
 					SourceAddr:      string(v3res.Spec.SourceAddress),
 					Port:            port,
 					KeepNextHop:     keepOriginalNextHop,
@@ -868,6 +877,9 @@ func (c *client) localBGPPeerDataAsBGPPeers(localBGPPeerData localBGPPeerData, v
 			log.Warningf("Couldn't parse %v %v for workload %v", version, ipStr, workloadName)
 			continue
 		}
+		if v3Peer.Spec.LocalASNumber != nil {
+			peer.LocalASNum = *v3Peer.Spec.LocalASNumber
+		}
 		peer.PeerIP = *ip
 		peer.Filters = v3Peer.Spec.Filters
 		peer.ASNum = v3Peer.Spec.ASNumber
@@ -932,6 +944,10 @@ func (c *client) nodeAsBGPPeers(nodeName string, v4 bool, v6 bool, v3Peer *apiv3
 			if err != nil {
 				log.WithError(err).Warningf("Problem parsing global AS number %v for node %v", asNum, nodeName)
 			}
+		}
+
+		if v3Peer.Spec.LocalASNumber != nil {
+			peer.LocalASNum = *v3Peer.Spec.LocalASNumber
 		}
 		peer.RRClusterID = rrClusterID
 
@@ -1946,6 +1962,9 @@ func (c *client) setPeerConfigFieldsFromV3Resource(peers []*bgpPeer, v3res *apiv
 
 	for _, peer := range peers {
 		peer.Password = password
+		if v3res.Spec.LocalASNumber != nil {
+			peer.LocalASNum = *v3res.Spec.LocalASNumber
+		}
 		peer.SourceAddr = withDefault(string(v3res.Spec.SourceAddress), string(apiv3.SourceAddressUseNodeIP))
 		if v3res.Spec.MaxRestartTime != nil {
 			peer.RestartTime = fmt.Sprintf("%v", int(math.Round(v3res.Spec.MaxRestartTime.Duration.Seconds())))
