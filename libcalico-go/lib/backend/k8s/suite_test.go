@@ -28,5 +28,5 @@ func TestModel(t *testing.T) {
 	testutils.HookLogrusForGinkgo()
 	RegisterFailHandler(Fail)
 	junitReporter := reporters.NewJUnitReporter("../../../report/kdd_suite.xml")
-	RunSpecsWithDefaultAndCustomReporters(t, "KDD Suite", []Reporter{junitReporter})
+	RunSpecsWithDefaultAndCustomReporters(t, "k8s backend suite", []Reporter{junitReporter})
 }

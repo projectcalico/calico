@@ -20,11 +20,9 @@ import (
 	"reflect"
 	"strings"
 
-	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 
 	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
@@ -35,27 +33,24 @@ import (
 
 const (
 	IPAMHandleResourceName = "IPAMHandles"
-	IPAMHandleCRDName      = "ipamhandles.crd.projectcalico.org"
 )
 
-func NewIPAMHandleClient(c kubernetes.Interface, r rest.Interface) K8sResourceClient {
+func NewIPAMHandleClient(r rest.Interface, v3 bool) K8sResourceClient {
 	// Create a resource client which manages k8s CRDs.
-	rc := customK8sResourceClient{
-		clientSet:       c,
+	rc := customResourceClient{
 		restClient:      r,
-		name:            IPAMHandleCRDName,
 		resource:        IPAMHandleResourceName,
-		description:     "Calico IPAM handles",
 		k8sResourceType: reflect.TypeOf(libapiv3.IPAMHandle{}),
-		k8sResourceTypeMeta: metav1.TypeMeta{
-			Kind:       libapiv3.KindIPAMHandle,
-			APIVersion: apiv3.GroupVersionCurrent,
-		},
-		k8sListType:  reflect.TypeOf(libapiv3.IPAMHandleList{}),
-		resourceKind: libapiv3.KindIPAMHandle,
+		k8sListType:     reflect.TypeOf(libapiv3.IPAMHandleList{}),
+		kind:            libapiv3.KindIPAMHandle,
+		noTransform:     v3,
 	}
 
-	return &ipamHandleClient{rc: rc}
+	// TODO: CASEY
+	return &ipamHandleClient{
+		rc: rc,
+		v3: v3,
+	}
 }
 
 // affinityHandleClient implements the api.Client interface for IPAMHandle objects. It
@@ -64,7 +59,8 @@ func NewIPAMHandleClient(c kubernetes.Interface, r rest.Interface) K8sResourceCl
 // It uses a customK8sResourceClient under the covers to perform CRUD operations on
 // kubernetes CRDs.
 type ipamHandleClient struct {
-	rc customK8sResourceClient
+	rc customResourceClient
+	v3 bool
 }
 
 func (c *ipamHandleClient) toV1(kvpv3 *model.KVPair) *model.KVPair {
@@ -101,6 +97,12 @@ func (c *ipamHandleClient) toV3(kvpv1 *model.KVPair) *model.KVPair {
 		uid = *kvpv1.UID
 	}
 
+	apiVersion := "crd.projectcalico.org/v1"
+	if c.v3 {
+		// If this is a v3 resource, then we need to use the v3 API version.
+		apiVersion = "projectcalico.org/v3"
+	}
+
 	return &model.KVPair{
 		Key: model.ResourceKey{
 			Name: name,
@@ -109,7 +111,7 @@ func (c *ipamHandleClient) toV3(kvpv1 *model.KVPair) *model.KVPair {
 		Value: &libapiv3.IPAMHandle{
 			TypeMeta: metav1.TypeMeta{
 				Kind:       libapiv3.KindIPAMHandle,
-				APIVersion: "crd.projectcalico.org/v1",
+				APIVersion: apiVersion,
 			},
 			ObjectMeta: metav1.ObjectMeta{
 				Name:            name,
