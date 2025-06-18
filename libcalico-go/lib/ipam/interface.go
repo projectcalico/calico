@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -41,7 +41,7 @@ type Interface interface {
 
 	// ReleaseIPs releases any of the given IP addresses that are currently assigned,
 	// so that they are available to be used in another assignment.
-	ReleaseIPs(ctx context.Context, ips ...ReleaseOptions) ([]cnet.IP, error)
+	ReleaseIPs(ctx context.Context, ips ...ReleaseOptions) ([]cnet.IP, []ReleaseOptions, error)
 
 	// GetAssignmentAttributes returns the attributes stored with the given IP address
 	// upon assignment, as well as the handle used for assignment (if any).

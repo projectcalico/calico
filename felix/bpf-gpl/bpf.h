@@ -204,10 +204,10 @@ enum calico_skb_mark {
 	 * know that and we have resolved NAT etc.
 	 */
 	CALI_SKB_MARK_RELATED_RESOLVED        = 0x21000000,
-	/* CALI_SKB_MARK_TO_NAT_IFACE_OUT signals to routing that this packet should to
-	 * to the bpfnatout interface.
+	/* CALI_SKB_MARK_TUNNEL_KEY_SET indicates to tunnel device, that the key
+	 * is already set. If not, it needs to set it itself.
 	 */
-	CALI_SKB_MARK_TO_NAT_IFACE_OUT        = 0x41000000,
+	CALI_SKB_MARK_TUNNEL_KEY_SET        = 0x41000000,
 	/* CALI_SKB_MARK_FROM_NAT_IFACE_OUT signals to the next hop that the packet passed
 	 * through bpfnatout so that it can set its conntrack correctly.
 	 */
@@ -242,6 +242,7 @@ static CALI_BPF_INLINE __attribute__((noreturn)) void bpf_exit(int rc) {
 #define debug_ip(ip) (bpf_htonl((ip).d))
 #endif
 #define ip_is_dnf(ip) (true)
+#define ip_is_frag(ip) (false)
 
 #else
 
@@ -253,7 +254,9 @@ static CALI_BPF_INLINE __attribute__((noreturn)) void bpf_exit(int rc) {
 #endif
 
 #define ip_is_dnf(ip) ((ip)->frag_off & bpf_htons(0x4000))
-#define ip_frag_no(ip) ((ip)->frag_off & bpf_htons(0x1fff))
+#define ip_is_frag(ip) ((ip)->frag_off & bpf_htons(0x3fff))
+#define ip_is_first_frag(ip) (((ip)->frag_off & bpf_htons(0x3fff)) == bpf_htons(0x2000))
+#define ip_is_last_frag(ip) (!((ip)->frag_off & bpf_htons(0x2000)))
 #endif
 
 #ifndef IP_FMT
@@ -316,6 +319,7 @@ extern const volatile struct cali_tc_preamble_globals __globals;
 #define WG_PORT		CALI_CONFIGURABLE(wg_port)
 #define NATIN_IFACE	CALI_CONFIGURABLE(natin_idx)
 #define PROFILING	CALI_CONFIGURABLE(profiling)
+#define OVERLAY_TUNNEL_ID CALI_CONFIGURABLE(overlay_tunnel_id)
 
 #define FLOWLOGS_ENABLED (GLOBAL_FLAGS & CALI_GLOBALS_FLOWLOGS_ENABLED)
 

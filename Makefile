@@ -19,6 +19,18 @@ DOCKER_RUN := mkdir -p ./.go-pkg-cache bin $(GOMOD_CACHE) && \
 		-v $(CURDIR)/.go-pkg-cache:/go-cache:rw \
 		-w /go/src/$(PACKAGE_NAME)
 
+.PHONY: update-file-copyrights
+update-file-copyrights:
+ifndef BASE_BRANCH
+	$(error BASE_BRANCH is not defined. Please set BASE_BRANCH to the target branch (e.g., 'main'))
+endif
+	# Update outdated copyrights for updated files.
+	YEAR=$$(date +%Y); git diff --diff-filter=d --name-only $(BASE_BRANCH) | xargs sed -i "/Copyright (c) $$YEAR Tigera/!s/Copyright (c) \([0-9]\{4\}\)\(-[0-9]\{4\}\)\{0,1\} Tigera/Copyright (c) \1-$$YEAR Tigera/"
+	# Add copyright to new files that don't have it.
+	YEAR=$$(date +%Y); \
+	git diff --name-only --diff-filter=A $(BASE_BRANCH) | grep '\.go$$' | \
+	xargs -I {} sh -c 'if ! grep -q "Copyright (c)" "{}"; then sed "s/YEAR/'$$YEAR'/g" hack/copyright.template | (cat -; echo; cat "{}") > temp && mv temp "{}"; fi'
+
 clean:
 	$(MAKE) -C api clean
 	$(MAKE) -C apiserver clean
@@ -38,6 +50,7 @@ clean:
 
 ci-preflight-checks:
 	$(MAKE) check-go-mod
+	$(MAKE) verify-go-mods
 	$(MAKE) check-dockerfiles
 	$(MAKE) check-language
 	$(MAKE) generate
@@ -45,9 +58,15 @@ ci-preflight-checks:
 	$(MAKE) check-ocp-no-crds
 	$(MAKE) yaml-lint
 	$(MAKE) check-dirty
+	$(MAKE) go-vet
 
 check-go-mod:
 	$(DOCKER_GO_BUILD) ./hack/check-go-mod.sh
+
+go-vet:
+	# Go vet will check that libbpf headers can be found; make sure they're available.
+	$(MAKE) -C felix clone-libbpf
+	$(DOCKER_GO_BUILD) go vet ./...
 
 check-dockerfiles:
 	./hack/check-dockerfiles.sh
@@ -230,18 +249,8 @@ update-pins: update-go-build-pin update-calico-base-pin
 ###############################################################################
 # Post-release validation
 ###############################################################################
-POSTRELEASE_IMAGE=calico/postrelease
-POSTRELEASE_IMAGE_CREATED=.calico.postrelease.created
-$(POSTRELEASE_IMAGE_CREATED):
-	cd hack/postrelease && docker build -t $(POSTRELEASE_IMAGE) .
-	touch $@
+bin/gotestsum:
+	@GOBIN=$(REPO_ROOT)/bin go install gotest.tools/gotestsum@$(GOTESTSUM_VERSION)
 
-postrelease-checks: $(POSTRELEASE_IMAGE_CREATED)
-	$(DOCKER_RUN) \
-		-v /var/run/docker.sock:/var/run/docker.sock \
-		-e VERSION=$(VERSION) \
-		-e FLANNEL_VERSION=$(FLANNEL_VERSION) \
-		-e VPP_VERSION=$(VPP_VERSION) \
-		-e OPERATOR_VERSION=$(OPERATOR_VERSION) \
-		$(POSTRELEASE_IMAGE) \
-		sh -c "nosetests hack/postrelease -e "$(EXCLUDE_REGEX)" -s -v --with-xunit --xunit-file='postrelease-checks.xml' --with-timer $(EXTRA_NOSE_ARGS)"
+postrelease-checks: release/bin/release bin/gotestsum
+	@release/bin/release release validate

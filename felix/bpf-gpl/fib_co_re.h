@@ -7,14 +7,49 @@
 
 #include "profiling.h"
 
+#include <linux/if_packet.h>
+
+static CALI_BPF_INLINE int try_redirect_to_peer(struct cali_tc_ctx *ctx)
+{
+	struct cali_tc_state *state = ctx->state;
+	bool redirect_peer = GLOBAL_FLAGS & CALI_GLOBALS_REDIRECT_PEER;
+
+	if (redirect_peer && ct_result_rc(state->ct_result.rc) == CALI_CT_ESTABLISHED_BYPASS &&
+			state->ct_result.ifindex_fwd != CT_INVALID_IFINDEX  &&
+			!(ctx->state->ct_result.flags & CALI_CT_FLAG_SKIP_REDIR_PEER)) {
+		int rc = bpf_redirect_peer(state->ct_result.ifindex_fwd, 0);
+		if (rc == TC_ACT_REDIRECT) {
+			counter_inc(ctx, CALI_REDIRECT_PEER);
+			CALI_DEBUG("Redirect to peer interface (%d) succeeded.", state->ct_result.ifindex_fwd);
+			return rc;
+		}
+	}
+
+	return TC_ACT_UNSPEC;
+}
+
+static CALI_BPF_INLINE void fib_error_log(struct cali_tc_ctx *ctx,int rc)
+{
+	if (rc < 0) {
+		CALI_DEBUG("FIB lookup failed (bad input): %d.", rc);
+		rc = TC_ACT_UNSPEC;
+	} else {
+		CALI_DEBUG("FIB lookup failed (FIB problem): %d.", rc);
+		rc = TC_ACT_UNSPEC;
+	}
+}
+
 static CALI_BPF_INLINE int forward_or_drop(struct cali_tc_ctx *ctx)
 {
 	int rc = ctx->fwd.res;
-	enum calico_reason reason = ctx->fwd.reason;
 	struct cali_tc_state *state = ctx->state;
 
 	if (rc == TC_ACT_SHOT) {
 		goto deny;
+	}
+
+	if (ctx->state->flags & CALI_ST_SKIP_REDIR_ONCE) {
+		goto skip_fib;
 	}
 
 	if (rc == CALI_RES_REDIR_BACK) {
@@ -39,6 +74,7 @@ static CALI_BPF_INLINE int forward_or_drop(struct cali_tc_ctx *ctx)
 
 		rc = bpf_redirect(ctx->skb->ifindex, redir_flags);
 		if (rc == TC_ACT_REDIRECT) {
+			counter_inc(ctx, CALI_REDIRECT);
 			CALI_DEBUG("Redirect to the same interface (%d) succeeded.", ctx->skb->ifindex);
 			goto skip_fib;
 		}
@@ -77,6 +113,7 @@ static CALI_BPF_INLINE int forward_or_drop(struct cali_tc_ctx *ctx)
 
 		rc = bpf_redirect(iface, 0);
 		if (rc == TC_ACT_REDIRECT) {
+			counter_inc(ctx, CALI_REDIRECT);
 			CALI_DEBUG("Redirect directly to interface (%d) succeeded.", iface);
 			goto skip_fib;
 		}
@@ -86,18 +123,116 @@ skip_redir_ifindex:
 		/* fall through to FIB if enabled or the IP stack, don't give up yet. */
 		rc = TC_ACT_UNSPEC;
 	} else if (CALI_F_FROM_HEP && bpf_core_enum_value_exists(enum bpf_func_id, BPF_FUNC_redirect_peer)) {
-		bool redirect_peer = GLOBAL_FLAGS & CALI_GLOBALS_REDIRECT_PEER;
+		if ((rc = try_redirect_to_peer(ctx)) == TC_ACT_REDIRECT) {
+			goto skip_fib;
+		}
+	} else if (CALI_F_FROM_WEP && fwd_fib(&ctx->fwd)) {
+		struct cali_rt *dest_rt = cali_rt_lookup(&ctx->state->ip_dst);
+		if (dest_rt == NULL) {
+			CALI_DEBUG("No route for " IP_FMT " to forward from WEP", &ctx->state->ip_dst);
+			goto try_fib_external;
+		}
 
-		if (redirect_peer && ct_result_rc(state->ct_result.rc) == CALI_CT_ESTABLISHED_BYPASS &&
-			state->ct_result.ifindex_fwd != CT_INVALID_IFINDEX) {
-			rc = bpf_redirect_peer(state->ct_result.ifindex_fwd, 0);
+		if (cali_rt_flags_local_host(dest_rt->flags)) {
+			goto skip_fib;
+		}
+
+		if (state->ct_result.ifindex_fwd == CT_INVALID_IFINDEX) {
+			CALI_DEBUG("ifindex_fwd is CT_INVALID_IFINDEX, doing FIB lookup");
+			*fib_params(ctx) = (struct bpf_fib_lookup) {
+#ifdef IPVER6
+				.family = 10, /* AF_INET6 */
+#else
+				.family = 2, /* AF_INET */
+#endif
+				.tot_len = 0,
+				.ifindex = ctx->skb->ifindex,
+				.l4_protocol = state->ip_proto,
+			};
+#ifdef IPVER6
+			ipv6_addr_t_to_be32_4_ip(fib_params(ctx)->ipv6_src, &state->ip_src);
+			ipv6_addr_t_to_be32_4_ip(fib_params(ctx)->ipv6_dst, &state->ip_dst);
+#else
+			fib_params(ctx)->ipv4_src = state->ip_src;
+			fib_params(ctx)->ipv4_dst = state->ip_dst;
+#endif
+
+			rc = bpf_fib_lookup(ctx->skb, fib_params(ctx), sizeof(struct bpf_fib_lookup), 0);
+			state->ct_result.ifindex_fwd = fib_params(ctx)->ifindex;
+		}
+
+		if (cali_rt_flags_local_workload(dest_rt->flags)) {
+			if ((rc = try_redirect_to_peer(ctx)) == TC_ACT_REDIRECT) {
+				goto skip_fib;
+			}
+		} else if (cali_rt_is_vxlan(dest_rt) && !(cali_rt_is_same_subnet(dest_rt))) {
+			struct bpf_tunnel_key key = {
+				.tunnel_id = OVERLAY_TUNNEL_ID,
+			};
+			__u64 flags = 0;
+			__u32 size = 0;
+#ifdef IPVER6
+			ipv6_addr_t_to_be32_4_ip(key.remote_ipv6, &dest_rt->next_hop);
+			flags |= BPF_F_TUNINFO_IPV6;
+			size = offsetof(struct bpf_tunnel_key, local_ipv6);
+#else
+			key.remote_ipv4 = bpf_htonl(dest_rt->next_hop);
+			flags |= BPF_F_ZERO_CSUM_TX;
+			size = offsetof(struct bpf_tunnel_key, local_ipv4);
+#endif
+
+			int err = bpf_skb_set_tunnel_key(ctx->skb, &key, size, flags);
+			CALI_DEBUG("bpf_skb_set_tunnel_key %d nh " IP_FMT, err, &dest_rt->next_hop);
+			ctx->fwd.mark |= CALI_SKB_MARK_TUNNEL_KEY_SET;
+
+			rc = bpf_redirect(state->ct_result.ifindex_fwd, 0);
 			if (rc == TC_ACT_REDIRECT) {
-				CALI_DEBUG("Redirect to peer interface (%d) succeeded.", state->ct_result.ifindex_fwd);
+				counter_inc(ctx, CALI_REDIRECT);
+				CALI_DEBUG("Redirect to dev %d without fib lookup",
+						state->ct_result.ifindex_fwd);
 				goto skip_fib;
 			}
 		}
+	} else if (CALI_F_VXLAN && CALI_F_TO_HEP) {
+		if (!(ctx->skb->mark & CALI_SKB_MARK_SEEN) ||
+			!skb_mark_equals(ctx->skb, CALI_SKB_MARK_TUNNEL_KEY_SET, CALI_SKB_MARK_TUNNEL_KEY_SET)) {
+			/* packet to vxlan from the host, needs to set tunnel key. Either
+			 * it wasn't seen or it was routed via the bpfnat device because
+			 * its destination was a service and CTLB is disabled
+			 */
+			struct cali_rt *dest_rt = cali_rt_lookup(&ctx->state->ip_dst);
+			if (dest_rt == NULL) {
+				CALI_DEBUG("No route for " IP_FMT " at vxlan device", &ctx->state->ip_dst);
+				goto deny;
+			}
+			if (!cali_rt_is_vxlan(dest_rt)) {
+				CALI_DEBUG("Not a vxlan route for " IP_FMT " at vxlan device", &ctx->state->ip_dst);
+				goto deny;
+			}
+
+			struct bpf_tunnel_key key = {
+				.tunnel_id = OVERLAY_TUNNEL_ID,
+			};
+
+			__u64 flags = 0;
+			__u32 size = 0;
+#ifdef IPVER6
+			ipv6_addr_t_to_be32_4_ip(key.remote_ipv6, &dest_rt->next_hop);
+			flags |= BPF_F_TUNINFO_IPV6;
+			size = offsetof(struct bpf_tunnel_key, local_ipv6);
+#else
+			key.remote_ipv4 = bpf_htonl(dest_rt->next_hop);
+			flags |= BPF_F_ZERO_CSUM_TX;
+			size = offsetof(struct bpf_tunnel_key, local_ipv4);
+#endif
+
+			int err = bpf_skb_set_tunnel_key(ctx->skb, &key, size, flags);
+			CALI_DEBUG("bpf_skb_set_tunnel_key %d nh " IP_FMT, err, &dest_rt->next_hop);
+			ctx->fwd.mark |= CALI_SKB_MARK_TUNNEL_KEY_SET;
+		}
 	}
 
+try_fib_external:
 #if CALI_FIB_ENABLED
 	/* Only do FIB for packets to be turned around at a HEP on HEP egress. */
 	if (CALI_F_TO_HEP && !(ctx->state->flags & CALI_ST_CT_NP_LOOP)) {
@@ -138,6 +273,7 @@ skip_redir_ifindex:
 #endif
 				rc = bpf_redirect_neigh(state->ct_result.ifindex_fwd, &nh_params, sizeof(nh_params), 0);
 				if (rc == TC_ACT_REDIRECT) {
+					counter_inc(ctx, CALI_REDIRECT_NEIGH);
 					CALI_DEBUG("Redirect to workload dev %d without fib lookup",
 							state->ct_result.ifindex_fwd);
 					goto no_fib_redirect;
@@ -146,7 +282,8 @@ skip_redir_ifindex:
 			}
 			rc = bpf_redirect_neigh(state->ct_result.ifindex_fwd, NULL, 0, 0);
 			if (rc == TC_ACT_REDIRECT) {
-				CALI_DEBUG("Redirect to dev %d without fib lookup", state->ct_result.ifindex_fwd);
+				counter_inc(ctx, CALI_REDIRECT_NEIGH);
+				CALI_DEBUG("Redirect to host dev %d without fib lookup", state->ct_result.ifindex_fwd);
 				goto no_fib_redirect;
 			}
 			CALI_DEBUG("Fall through to full FIB lookup rc %d", rc);
@@ -159,7 +296,7 @@ skip_redir_ifindex:
 			.family = 2, /* AF_INET */
 #endif
 			.tot_len = 0,
-			.ifindex = CALI_F_TO_HOST ? ctx->skb->ingress_ifindex : ctx->skb->ifindex,
+			.ifindex = ctx->skb->ifindex,
 			.l4_protocol = state->ip_proto,
 		};
 
@@ -195,6 +332,27 @@ skip_redir_ifindex:
 		rc = bpf_fib_lookup(ctx->skb, fib_params(ctx), sizeof(struct bpf_fib_lookup),
 				ctx->fwd.fib_flags | BPF_FIB_LOOKUP_SKIP_NEIGH);
 		switch (rc) {
+		case BPF_FIB_LKUP_RET_FRAG_NEEDED:
+			/* We are not asking for an MTU check, but we may still get
+			 * BPF_FIB_LKUP_RET_FRAG_NEEDED if the device is not yet UP
+			 * despite the mtu being larger than the packet
+			 * https://github.com/torvalds/linux/blob/3349ada3cffdbe4579872a004360daa31938f683/include/linux/netdevice.h#L4242
+			 * This happens on wireguard device in FV test, but the device accepts
+			 * forwarded packets. It should be just a start up issue and not a
+			 * real issue in production.
+			 *
+			 * The irony is that if we did ask for MTU check, we would not get
+			 * BPF_FIB_LKUP_RET_NO_NEIGH and all would proceed as expected.
+			 * But we do not want to ask for an MTU check for various reason
+			 * related to us growing the packets ourselves.
+			 * https://github.com/projectcalico/calico/commit/78c85f96b2aa4ae76acfaa04bb8823c2ad76f9bd
+			 */
+			CALI_DEBUG("mtu_result %d dev %d", fib_params(ctx)->mtu_result, fib_params(ctx)->ifindex);
+			if (!skb_is_gso(ctx->skb) && fib_params(ctx)->mtu_result < bpf_htons(ctx->state->ip_size)) {
+				fib_error_log(ctx, rc);
+				rc = TC_ACT_UNSPEC;
+				break;
+			}
 		case 0:
 		case BPF_FIB_LKUP_RET_NO_NEIGH:
 #ifdef IPVER6
@@ -204,7 +362,7 @@ skip_redir_ifindex:
 #endif
 
 			if (!fib_approve(ctx, fib_params(ctx)->ifindex)) {
-				reason = CALI_REASON_WEP_NOT_READY;
+				ctx->fwd.reason = CALI_REASON_WEP_NOT_READY;
 				goto deny;
 			}
 
@@ -221,15 +379,8 @@ skip_redir_ifindex:
 			rc = bpf_redirect_neigh(fib_params(ctx)->ifindex, &nh_params, sizeof(nh_params), 0);
 			break;
 		default:
-			if (rc < 0) {
-				CALI_DEBUG("FIB lookup failed (bad input): %d.", rc);
-				rc = TC_ACT_UNSPEC;
-			} else {
-				CALI_DEBUG("FIB lookup failed (FIB problem): %d.", rc);
-				rc = TC_ACT_UNSPEC;
-			}
-
-			break;
+			fib_error_log(ctx, rc);
+			rc = TC_ACT_UNSPEC;
 		}
 
 no_fib_redirect:
@@ -361,8 +512,11 @@ allow:
 
 		if (rc ==  TC_ACT_SHOT) {
 			CALI_INFO("Final result=DENY (%d). Program execution time: %lluns",
-					reason, prog_end_time-state->prog_start_time);
+					ctx->fwd.reason, prog_end_time-state->prog_start_time);
 		} else {
+			if (CALI_F_VXLAN && CALI_F_TO_HOST) {
+				bpf_skb_change_type(ctx->skb, PACKET_HOST);
+			}
 			CALI_INFO("Final result=ALLOW rc %d. Program execution time: %lluns",
 					rc, prog_end_time-state->prog_start_time);
 		}

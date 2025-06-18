@@ -224,6 +224,20 @@ ifneq ($(OS),Windows_NT)
 DATE:=$(shell date -u +'%FT%T%z')
 endif
 
+# Common linker flags.
+#
+# We use -X to insert the version information into the placeholder variables
+# in the buildinfo package.
+LDFLAGS=-X github.com/projectcalico/calico/pkg/buildinfo.Version=$(GIT_DESCRIPTION) \
+	-X github.com/projectcalico/calico/pkg/buildinfo.BuildDate=$(DATE) \
+	-X github.com/projectcalico/calico/pkg/buildinfo.GitRevision=$(GIT_COMMIT)
+
+# We use -B to insert a build ID note into the executable, without which, the
+# RPM build tools complain.
+ifneq ($(BUILDOS),darwin)
+	LDFLAGS+=-B 0x$(BUILD_ID)
+endif
+
 # Figure out the users UID/GID.  These are needed to run docker containers
 # as the current user and ensure that files built inside containers are
 # owned by the current user.
@@ -298,6 +312,7 @@ DOCKER_RUN := mkdir -p $(REPO_ROOT)/.go-pkg-cache bin $(GOMOD_CACHE) && \
 		-e OS=$(BUILDOS) \
 		-e GOOS=$(BUILDOS) \
 		-e GOFLAGS=$(GOFLAGS) \
+		-e ACK_GINKGO_DEPRECATIONS=1.16.5 \
 		-v $(REPO_ROOT):/go/src/github.com/projectcalico/calico:rw \
 		-v $(REPO_ROOT)/.go-pkg-cache:/go-cache:rw \
 		-w /go/src/$(PACKAGE_NAME)
@@ -491,18 +506,31 @@ CRANE_CMD         = docker run -t --entrypoint /bin/sh -v $(DOCKER_CONFIG):/root
                     $(double_quote)crane
 endif
 
+ifdef LOCAL_PYTHON
+PYTHON3_CMD       = python3
+else
+PYTHON3_CMD       = docker run --rm -e QUAY_API_TOKEN -v $(REPO_ROOT):$(REPO_ROOT) -w $(REPO_ROOT) python:3.13 python3.13
+endif
+
 GIT_CMD           = git
 DOCKER_CMD        = docker
 
+
+# RELEASE_PY3 is for Python invocations used for releasing,
+# where we want to be able to DRY_RUN them.
 ifdef CONFIRM
 CRANE         = $(CRANE_CMD)
 GIT           = $(GIT_CMD)
 DOCKER        = $(DOCKER_CMD)
+RELEASE_PY3   = $(PYTHON3_CMD)
 else
-CRANE         = echo [DRY RUN] $(CRANE_CMD)
-GIT           = echo [DRY RUN] $(GIT_CMD)
-DOCKER        = echo [DRY RUN] $(DOCKER_CMD)
+CRANE         = @echo [DRY RUN] $(CRANE_CMD)
+GIT           = @echo [DRY RUN] $(GIT_CMD)
+DOCKER        = @echo [DRY RUN] $(DOCKER_CMD)
+RELEASE_PY3   = @echo [DRY RUN] $(PYTHON3_CMD)
 endif
+
+QUAY_SET_EXPIRY_SCRIPT = $(REPO_ROOT)/hack/set_quay_expiry.py
 
 commit-and-push-pr:
 	$(GIT) add $(GIT_COMMIT_FILES)
@@ -647,6 +675,12 @@ fix-changed go-fmt-changed goimports-changed:
 .PHONY: fix-all go-fmt-all goimports-all
 fix-all go-fmt-all goimports-all:
 	$(DOCKER_RUN) $(CALICO_BUILD) $(REPO_DIR)/hack/format-all-files.sh
+
+GOMODDER=$(REPO_DIR)/hack/cmd/gomodder/main.go
+
+.PHONY: verify-go-mods
+verify-go-mods:
+	$(DOCKER_RUN) $(CALICO_BUILD) go run $(GOMODDER)
 
 .PHONY: pre-commit
 pre-commit:
@@ -911,8 +945,22 @@ push-images-to-registry-%:
 
 # push-image-to-registry-% pushes the build / arch images specified by $* and VALIDARCHES to the registry
 # specified by REGISTRY.
+#
+# We also build a list of all of the iamges we're going to be pushing and then, once we're done, we set the expiry
+# on those images, either adding an expiry for normal pushes or removing it for releases, if we're pushing to quay.io
+# that is.
 push-image-to-registry-%:
-	$(MAKE) -j6 $(addprefix push-image-arch-to-registry-,$(VALIDARCHES)) BUILD_IMAGE=$(call unescapefs,$*)
+	$(eval BUILD_IMAGE=$(call unescapefs,$*))
+	$(eval EXPIRY_IMAGES_LIST=$(REGISTRY)/$(BUILD_IMAGE):$(IMAGETAG) $(addprefix $(REGISTRY)/$(BUILD_IMAGE):$(IMAGETAG)-,$(VALIDARCHES)))
+
+	$(MAKE) -j6 $(addprefix push-image-arch-to-registry-,$(VALIDARCHES)) BUILD_IMAGE=$(BUILD_IMAGE)
+
+ifeq ($(findstring quay.io,$(REGISTRY)),quay.io)
+	$(if $(RELEASE), \
+		-$(RELEASE_PY3) $(QUAY_SET_EXPIRY_SCRIPT) remove $(EXPIRY_IMAGES_LIST), \
+		-$(RELEASE_PY3) $(QUAY_SET_EXPIRY_SCRIPT) add --expiry-days=$(QUAY_EXPIRE_DAYS) $(EXPIRY_IMAGES_LIST) \
+	)
+endif
 
 # push-image-arch-to-registry-% pushes the build / arch image specified by $* and BUILD_IMAGE to the registry
 # specified by REGISTRY.
@@ -1563,6 +1611,7 @@ release-windows-with-tag: var-require-one-of-CONFIRM-DRYRUN var-require-all-IMAG
 			$(DOCKER_MANIFEST) annotate --os windows --arch amd64 --os-version $${version} $${manifest_image} $${image}; \
 		done; \
 		$(DOCKER_MANIFEST) push --purge $${manifest_image}; \
+		$(RELEASE_PY3) $(QUAY_SET_EXPIRY_SCRIPT) add --expiry-days=$(QUAY_EXPIRE_DAYS) $${manifest_image} $${all_images} || true; \
 	done;
 
 release-windows: var-require-one-of-CONFIRM-DRYRUN var-require-all-DEV_REGISTRIES-WINDOWS_IMAGE var-require-one-of-VERSION-BRANCH_NAME

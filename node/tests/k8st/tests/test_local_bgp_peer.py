@@ -16,6 +16,7 @@ import os
 import random
 import subprocess
 import time
+import enum
 
 from tests.k8st.test_base import TestBase, Pod
 from tests.k8st.utils.utils import start_external_node_with_bgp, \
@@ -23,7 +24,11 @@ from tests.k8st.utils.utils import start_external_node_with_bgp, \
 
 _log = logging.getLogger(__name__)
 
-bird_conf_tor = """
+class TopologyMode(enum.Enum):
+    RR = "rr"
+    MESH = "mesh"
+
+bird_conf_tor_mesh = """
 # Template for all BGP clients
 template bgp bgp_template {
   debug { states };
@@ -64,11 +69,46 @@ protocol bgp Mesh_with_node_3 from bgp_template {
 }
 """
 
+bird_conf_tor_rr = """
+# Template for all BGP clients
+template bgp bgp_template {
+  debug { states };
+  description "Connection to BGP peer";
+  local as 63000;
+  multihop;
+  gateway recursive; # This should be the default, but just in case.
+  import all;        # Import all routes, since we don't know what the upstream
+                     # topology is and therefore have to trust the ToR/RR.
+  export all;
+  source address ip@local;  # The local address we use for the TCP connection
+  add paths on;
+  graceful restart;  # See comment in kernel section about graceful restart.
+  connect delay time 2;
+  connect retry time 5;
+  error wait time 5,30;
+}
+
+# ------------- RR -------------
+protocol bgp RR_with_master_node from bgp_template {
+  neighbor %s as 64512;
+  passive on;
+}
+"""
+
 
 class _TestLocalBGPPeer(TestBase):
+    def set_topology(self, value):
+        self.topology = value
 
     def setUp(self):
         super(_TestLocalBGPPeer, self).setUp()
+
+        if self.topology == TopologyMode.MESH:
+          _log.info("Topology MESH")
+        elif self.topology == TopologyMode.RR:
+          _log.info("Topology RR")
+        else:
+          _log.exception("Topology unknown")
 
         # Create bgp test namespace
         self.ns = "bgp-test-" + hex(random.randint(0, 0xffffffff))
@@ -99,7 +139,7 @@ class _TestLocalBGPPeer(TestBase):
 apiVersion: projectcalico.org/v3
 kind: BGPFilter
 metadata:
-  name: export-to-tor
+  name: export-child-cluster-cidr
 spec:
   exportV4:
   - action: Accept
@@ -112,10 +152,11 @@ spec:
     cidr: ca11:c0::/32
     source: RemotePeers
 """)
-        self.add_cleanup(lambda: calicoctl("delete bgpfilter export-to-tor", allow_fail=True))
+        self.add_cleanup(lambda: calicoctl("delete bgpfilter export-child-cluster-cidr", allow_fail=True))
 
-        # Establish BGPPeer from cluster nodes to tor
-        kubectl("""apply -f - << EOF
+        if self.topology == TopologyMode.MESH:
+          # Establish BGPPeer from cluster nodes to tor
+          kubectl("""apply -f - << EOF
 apiVersion: projectcalico.org/v3
 kind: BGPPeer
 metadata:
@@ -124,10 +165,48 @@ spec:
   peerIP: %s
   asNumber: 63000
   filters:
-  - export-to-tor
+  - export-child-cluster-cidr
 EOF
 """ % self.external_node_ip)
-        self.add_cleanup(lambda: calicoctl("delete bgppeer node-tor-peer", allow_fail=True))
+          self.add_cleanup(lambda: calicoctl("delete bgppeer node-tor-peer", allow_fail=True))
+
+        if self.topology == TopologyMode.RR:
+          # Configure kind-control-plane to be a route reflector (rr)
+          kubectl("annotate node kind-control-plane projectcalico.org/RouteReflectorClusterID=244.0.0.1")
+          self.add_cleanup(lambda: kubectl("annotate node kind-control-plane projectcalico.org/RouteReflectorClusterID-"))
+
+          # Configure other nodes to peer with rr
+          kubectl("""apply -f - << EOF
+kind: BGPPeer
+apiVersion: projectcalico.org/v3
+metadata:
+  name: peer-with-rr
+spec:
+  nodeSelector: all()
+  peerSelector: kubernetes.io/hostname == 'kind-control-plane'
+  nextHopMode: Self
+  filters:
+  - export-child-cluster-cidr
+""")
+          self.add_cleanup(lambda: calicoctl("delete bgppeer peer-with-rr", allow_fail=True))
+
+          # Establish BGPPeer from rr to tor
+          kubectl("""apply -f - << EOF
+apiVersion: projectcalico.org/v3
+kind: BGPPeer
+metadata:
+  name: rr-tor-peer
+spec:
+  nodeSelector: kubernetes.io/hostname == 'kind-control-plane'
+  peerIP: %s
+  asNumber: 63000
+  nextHopMode: Keep
+  filters:
+  - export-child-cluster-cidr          
+EOF
+""" % self.external_node_ip)
+          self.add_cleanup(lambda: calicoctl("delete bgppeer rr-tor-peer", allow_fail=True))
+
 
         # Create three pods. Name format : color-pod-host-sequence number
         # kind-worker node starts from nodes[1]
@@ -146,7 +225,7 @@ EOF
             self.setup_workload_pod_v4(p, block_v4)
             self.setup_workload_pod_v6(p, block_v6)
 
-        # Establish BGPPeer from cluster nodes to node-tor
+        # Define localWorkloadPeeringIP and turn off nodeToNodeMesh
         kubectl("""apply -f - << EOF
 apiVersion: projectcalico.org/v3
 kind: BGPConfiguration
@@ -276,7 +355,10 @@ spec:
         run("rm peers.conf")
 
     def get_bird_conf_tor(self):
-        return bird_conf_tor % (self.ips[0], self.ips[1], self.ips[2], self.ips[3])
+        if self.topology == TopologyMode.MESH:
+          return bird_conf_tor_mesh % (self.ips[0], self.ips[1], self.ips[2], self.ips[3])
+        if self.topology == TopologyMode.RR:
+          return bird_conf_tor_rr % self.ips[0]
 
     def get_bird_config_workload(self, as_number_child, router_id, child_ip, child_block, local_workload_peer_ip,
                                  as_number_parent):
@@ -346,24 +428,7 @@ protocol bgp from_workload_to_local_host from bgp_template {
   neighbor %s as %s;
 }
 """ % (router_id, child_block,  child_block, child_ip, as_number_child, local_workload_peer_ip, as_number_parent)
-
-
-class TestLocalBGPPeer(_TestLocalBGPPeer):
-
-    # In the tests of this class we have BGP peers between the
-    # cluster nodes (kind-control-plane, kind-worker, kind-worker2, kind-worker3) with ASNumber 64512
-    # and the external node (kind-node-tor ASNumber 63000). We test BGP connections between local
-    # workload peers (ASNumber 65401) and the cluster nodes.
-    #
-    # - The full mesh between the cluster nodes is turned off by
-    #   nodeToNodeMeshEnabled: false.
-    #
-    # - Two pods (red & blue) are deployed on kind-worker node and two pods (red & blue)
-    #   are deployed on kind-worker2 node.
-    #
-    # - A global peer is created to select red pods as local bgp peers.
-    #   A node specific peer is created to select the blue pod on kind-worker2 node.
-
+    
     # Given a pod, check if should have BGP connections with the host.
     def assert_bgp_established(self, pod):
         output = run("kubectl exec -t %s -n %s -- birdcl show protocols" % (pod.name, pod.ns))
@@ -383,7 +448,6 @@ class TestLocalBGPPeer(_TestLocalBGPPeer):
         """
         Runs the tests for local bgp peers
         """
-
         stop_for_debug()
 
         # Assert bgp sessions has been established to the following local workloads.
@@ -417,20 +481,72 @@ class TestLocalBGPPeer(_TestLocalBGPPeer):
         self.assertRegexpMatches(output, "ca11:c0:1::/96.*via .* on cali.*Local_Workload_.*AS65401")
         self.assertRegexpMatches(output, "ca11:c0:3::/96.*via .* on cali.*Local_Workload_.*AS65401")
 
-        # Check that the ToR hears about all the routes.
-        # 10.123.0.0/26      via 172.18.0.3 on eth0 [Mesh_with_node_1 17:19:12] * (100/0) [AS65401i]
-        # 10.123.1.0/26      via 172.18.0.2 on eth0 [Mesh_with_node_2 17:19:11] * (100/0) [AS65401i]
-        # 10.123.3.0/26      via 172.18.0.2 on eth0 [Mesh_with_node_2 17:19:09] * (100/0) [AS65401i]
-        output = run("docker exec kind-node-tor birdcl show route")
-        self.assertRegexpMatches(output, "10\.123\.0\.0/26.*via %s on .*Mesh_with_node_1.*AS65401" % (self.ips[1],))
-        self.assertRegexpMatches(output, "10\.123\.1\.0/26.*via %s on .*Mesh_with_node_2.*AS65401" % (self.ips[2],))
-        self.assertRegexpMatches(output, "10\.123\.3\.0/26.*via %s on .*Mesh_with_node_2.*AS65401" % (self.ips[2],))
+        if self.topology == TopologyMode.MESH:
+          # Check that the ToR hears about all the routes.
+          # 10.123.0.0/26      via 172.18.0.3 on eth0 [Mesh_with_node_1 17:19:12] * (100/0) [AS65401i]
+          # 10.123.1.0/26      via 172.18.0.2 on eth0 [Mesh_with_node_2 17:19:11] * (100/0) [AS65401i]
+          # 10.123.3.0/26      via 172.18.0.2 on eth0 [Mesh_with_node_2 17:19:09] * (100/0) [AS65401i]
+          output = run("docker exec kind-node-tor birdcl show route")
+          self.assertRegexpMatches(output, "10\.123\.0\.0/26.*via %s on .*Mesh_with_node_1.*AS65401" % (self.ips[1],))
+          self.assertRegexpMatches(output, "10\.123\.1\.0/26.*via %s on .*Mesh_with_node_2.*AS65401" % (self.ips[2],))
+          self.assertRegexpMatches(output, "10\.123\.3\.0/26.*via %s on .*Mesh_with_node_2.*AS65401" % (self.ips[2],))
 
+        if self.topology == TopologyMode.RR:
+          # Check that the ToR hears about all the routes from master node.
+          # Note that `nextHopMode: Keep` is specified for `rr-tor-peer`, ToR sees routes with original next hop.
+          # 10.123.3.0/26      via 172.18.0.5 on eth0 [RR_with_master_node 09:46:12 from 172.18.0.3] * (100/0) [AS65401i]
+          # 10.123.0.0/26      via 172.18.0.2 on eth0 [RR_with_master_node 09:46:10 from 172.18.0.3] * (100/0) [AS65401i]
+          # 10.123.1.0/26      via 172.18.0.5 on eth0 [RR_with_master_node 09:46:12 from 172.18.0.3] * (100/0) [AS65401i]
+          output = run("docker exec kind-node-tor birdcl show route")
+          self.assertRegexpMatches(output, "10\.123\.0\.0/26.*via %s on .*RR_with_master_node.*AS65401" % (self.ips[1],))
+          self.assertRegexpMatches(output, "10\.123\.1\.0/26.*via %s on .*RR_with_master_node.*AS65401" % (self.ips[2],))
+          self.assertRegexpMatches(output, "10\.123\.3\.0/26.*via %s on .*RR_with_master_node.*AS65401" % (self.ips[2],))
+        
         # Check connectivity from ToR to workload.
         self.red_pod_0_0.execute("ip addr add 10.123.0.1 dev lo")
+
         output = run("docker exec kind-node-tor ping -c3 10.123.0.1")
         self.assertRegexpMatches(output, "3 packets transmitted, 3 packets received")
 
+class TestLocalBGPPeerRR(_TestLocalBGPPeer):
+
+    # In the tests of this class we have BGP peers between the
+    # cluster nodes (kind-control-plane, kind-worker, kind-worker2, kind-worker3, kind-control-plane acting as a RR) with ASNumber 64512
+    # and the external node (kind-node-tor ASNumber 63000). We test BGP connections between local
+    # workload peers (ASNumber 65401) and the cluster nodes.
+    #
+    # - The full mesh between the cluster nodes is turned off by
+    #   nodeToNodeMeshEnabled: false.
+    #
+    # - Two pods (red & blue) are deployed on kind-worker node and two pods (red & blue)
+    #   are deployed on kind-worker2 node.
+    #
+    # - A global peer is created to select red pods as local bgp peers.
+    #   A node specific peer is created to select the blue pod on kind-worker2 node.
+
+    def setUp(self):
+        self.set_topology(TopologyMode.RR)
+        super(TestLocalBGPPeerRR, self).setUp() 
+
+class TestLocalBGPPeerMesh(_TestLocalBGPPeer):
+
+    # In the tests of this class we have BGP peers between the
+    # cluster nodes (kind-control-plane, kind-worker, kind-worker2, kind-worker3) with ASNumber 64512
+    # and the external node (kind-node-tor ASNumber 63000). We test BGP connections between local
+    # workload peers (ASNumber 65401) and the cluster nodes.
+    #
+    # - The full mesh between the cluster nodes is turned off by
+    #   nodeToNodeMeshEnabled: false.
+    #
+    # - Two pods (red & blue) are deployed on kind-worker node and two pods (red & blue)
+    #   are deployed on kind-worker2 node.
+    #
+    # - A global peer is created to select red pods as local bgp peers.
+    #   A node specific peer is created to select the blue pod on kind-worker2 node.
+
+    def setUp(self):
+        self.set_topology(TopologyMode.MESH)
+        super(TestLocalBGPPeerMesh, self).setUp() 
 
 def stop_for_debug():
     # Touch debug file under projectcalico/calico/node to stop the process

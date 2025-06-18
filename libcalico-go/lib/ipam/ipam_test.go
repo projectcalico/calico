@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2025 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -310,9 +310,10 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 				}
 				Expect(err).NotTo(HaveOccurred())
 				Expect(len(v4IP)).To(Equal(1))
-				out, err := ic.ReleaseIPs(context.Background(), v4IP...)
+				out, rel, err := ic.ReleaseIPs(context.Background(), v4IP...)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(len(out)).To(Equal(0))
+				Expect(len(rel)).To(Equal(1))
 			})
 
 			Expect(runtime.Seconds()).Should(BeNumerically("<", 5))
@@ -376,9 +377,10 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 
 				// Release the IP address using the sequence number and handle. This simulates what kube-controllers will do, and
 				// should result in a conflict error being returned.
-				u, err := ic.ReleaseIPs(context.TODO(), ReleaseOptions{Address: ip.IP.String(), SequenceNumber: &seq, Handle: handle})
+				u, rel, err := ic.ReleaseIPs(context.TODO(), ReleaseOptions{Address: ip.IP.String(), SequenceNumber: &seq, Handle: handle})
 				Expect(err).To(HaveOccurred())
 				Expect(len(u)).To(Equal(0))
+				Expect(len(rel)).To(Equal(0))
 
 				// Requery the block in order to get information about the allocation necessary to safely release. This time,
 				// we won't race and will successfully release.
@@ -391,9 +393,10 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 				Expect(seq).To(Equal(uint64(expectedSeqNum)))
 
 				// Release the IP using the correct sequence number.
-				u, err = ic.ReleaseIPs(context.TODO(), ReleaseOptions{Address: ip.IP.String(), SequenceNumber: &seq, Handle: handle})
+				u, rel, err = ic.ReleaseIPs(context.TODO(), ReleaseOptions{Address: ip.IP.String(), SequenceNumber: &seq, Handle: handle})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(len(u)).To(Equal(0))
+				Expect(len(rel)).To(Equal(1))
 				expectedSeqNum += 2
 			}
 		})
@@ -457,9 +460,10 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 
 			// Release the IP address using the sequence number and handle. This simulates what kube-controllers will do, and
 			// should result in a conflict error being returned.
-			u, err := ic.ReleaseIPs(context.TODO(), ReleaseOptions{Address: ip.IP.String(), SequenceNumber: &seq, Handle: handle})
+			u, rel, err := ic.ReleaseIPs(context.TODO(), ReleaseOptions{Address: ip.IP.String(), SequenceNumber: &seq, Handle: handle})
 			Expect(err).To(HaveOccurred())
 			Expect(len(u)).To(Equal(0))
+			Expect(len(rel)).To(Equal(0))
 
 			// Requery the block in order to get information about the allocation necessary to safely release. This time,
 			// we won't race and will successfully release.
@@ -471,9 +475,10 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			seq = blocks.KVPairs[0].Value.(*model.AllocationBlock).GetSequenceNumberForOrdinal(ordinal)
 
 			// Release the IP using the correct sequence number.
-			u, err = ic.ReleaseIPs(context.TODO(), ReleaseOptions{Address: ip.IP.String(), SequenceNumber: &seq, Handle: handle})
+			u, rel, err = ic.ReleaseIPs(context.TODO(), ReleaseOptions{Address: ip.IP.String(), SequenceNumber: &seq, Handle: handle})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(len(u)).To(Equal(0))
+			Expect(len(rel)).To(Equal(1))
 		})
 
 		It("should release a multitude of IPs in different blocks", func() {
@@ -526,9 +531,10 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			// Release them all. This should complete within a minute easily.
 			ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 			defer cancel()
-			unalloc, err := ic.ReleaseIPs(ctx, buildReleaseOptions(ips...)...)
+			unalloc, rel, err := ic.ReleaseIPs(ctx, buildReleaseOptions(ips...)...)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(len(unalloc)).To(Equal(0))
+			Expect(len(rel)).To(Equal(len(ips)))
 		})
 	})
 
@@ -918,7 +924,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 		It("Should release with sentinel IP duplicated in the request args", func() {
 			// Releasing the same IP multiple times in a single request
 			// should be handled gracefully by the IPAM Block allocator
-			_, releaseErr := ic.ReleaseIPs(context.Background(),
+			_, _, releaseErr := ic.ReleaseIPs(context.Background(),
 				ReleaseOptions{Address: sentinelIP.String()},
 				ReleaseOptions{Address: sentinelIP.String()},
 			)
@@ -1690,8 +1696,9 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			}
 
 			// Release one of the IPs.
-			unallocated, err := ic.ReleaseIPs(context.Background(), buildReleaseOptions(v4IPs[0:1]...)...)
+			unallocated, rel, err := ic.ReleaseIPs(context.Background(), buildReleaseOptions(v4IPs[0:1]...)...)
 			Expect(len(unallocated)).To(Equal(0))
+			Expect(len(rel)).To(Equal(1))
 			Expect(err).NotTo(HaveOccurred())
 
 			// Should still have one affine block to this host.
@@ -1702,8 +1709,9 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			applyPool(pool1.String(), true, `foo != "bar"`)
 
 			// Release another one of the IPs.
-			unallocated, err = ic.ReleaseIPs(context.Background(), buildReleaseOptions(v4IPs[1:2]...)...)
+			unallocated, rel, err = ic.ReleaseIPs(context.Background(), buildReleaseOptions(v4IPs[1:2]...)...)
 			Expect(len(unallocated)).To(Equal(0))
+			Expect(len(rel)).To(Equal(1))
 			Expect(err).NotTo(HaveOccurred())
 
 			// The block still have an affinity to this host.
@@ -1716,8 +1724,9 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			Expect(len(out.KVPairs)).To(Equal(1))
 
 			// Release the last IP.
-			unallocated, err = ic.ReleaseIPs(context.Background(), buildReleaseOptions(v4IPs[2:3]...)...)
+			unallocated, rel, err = ic.ReleaseIPs(context.Background(), buildReleaseOptions(v4IPs[2:3]...)...)
 			Expect(len(unallocated)).To(Equal(0))
+			Expect(len(rel)).To(Equal(1))
 			Expect(err).NotTo(HaveOccurred())
 
 			// The block now has no affinity, and no IPs, so it should be deleted.
@@ -1919,8 +1928,9 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			}
 
 			// Release all IPs.
-			unallocated, err := ic.ReleaseIPs(context.Background(), buildReleaseOptions(v4IPs...)...)
+			unallocated, rel, err := ic.ReleaseIPs(context.Background(), buildReleaseOptions(v4IPs...)...)
 			Expect(len(unallocated)).To(Equal(0))
+			Expect(len(rel)).To(Equal(len(v4IPs)))
 			Expect(err).NotTo(HaveOccurred())
 
 			// Change the selector for the IP pool so that it no longer matches node1.
@@ -2006,8 +2016,9 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			}
 
 			// Release all IPs.
-			unallocated, err := ic.ReleaseIPs(context.Background(), buildReleaseOptions(v4IPs...)...)
+			unallocated, rel, err := ic.ReleaseIPs(context.Background(), buildReleaseOptions(v4IPs...)...)
 			Expect(len(unallocated)).To(Equal(0))
+			Expect(len(rel)).To(Equal(len(v4IPs)))
 			Expect(err).NotTo(HaveOccurred())
 
 			// The block should still have an affinity to this host.
@@ -2120,8 +2131,9 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			}
 
 			// Release all IPs.
-			unallocated, err := ic.ReleaseIPs(context.Background(), buildReleaseOptions(v4IPs...)...)
+			unallocated, rel, err := ic.ReleaseIPs(context.Background(), buildReleaseOptions(v4IPs...)...)
 			Expect(len(unallocated)).To(Equal(0))
+			Expect(len(rel)).To(Equal(len(v4IPs)))
 			Expect(err).NotTo(HaveOccurred())
 
 			// The block should still have an affinity to this host.
@@ -3043,7 +3055,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 
 			// Release IPs using the given options.
 			for _, r := range ipsToRelease {
-				_, err := ic.ReleaseIPs(context.Background(), r.Options)
+				_, _, err := ic.ReleaseIPs(context.Background(), r.Options)
 				if r.Error {
 					Expect(err).To(HaveOccurred())
 				} else {
@@ -3112,7 +3124,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 				inIPs = inIPs[1:]
 			}
 
-			unallocatedIPs, outErr := ic.ReleaseIPs(context.Background(), buildReleaseOptions(inIPs...)...)
+			unallocatedIPs, _, outErr := ic.ReleaseIPs(context.Background(), buildReleaseOptions(inIPs...)...)
 			if outErr != nil {
 				log.Println(outErr)
 			}

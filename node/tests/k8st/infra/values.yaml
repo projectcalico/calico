@@ -27,10 +27,13 @@ apiServer:
             kubernetes.io/hostname: kind-control-plane
 
 goldmane:
-  enabled: false
+  enabled: true
 
 whisker:
-  enabled: false
+  enabled: true
+
+# CRDs are installed by `make kind-cluster-create` in lib.Makefile ($(KUBECTL) create -f $(REPO_ROOT)/libcalico-go/config/crd;)
+manageCRDs: false
 
 # Configuration for the tigera operator
 tigeraOperator:

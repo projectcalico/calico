@@ -1245,8 +1245,15 @@ func schema_pkg_apis_projectcalico_v3_BGPPeerSpec(ref common.ReferenceCallback) 
 					},
 					"keepOriginalNextHop": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Option to keep the original nexthop field when routes are sent to a BGP Peer. Setting \"true\" configures the selected BGP Peers node to use the \"next hop keep;\" instead of \"next hop self;\"(default) in the specific branch of the Node on \"bird.cfg\".",
+							Description: "Option to keep the original nexthop field when routes are sent to a BGP Peer. Setting \"true\" configures the selected BGP Peers node to use the \"next hop keep;\" instead of \"next hop self;\"(default) in the specific branch of the Node on \"bird.cfg\". Note: that this field is deprecated. Users should use the NextHopMode field to control the next hop attribute for a BGP peer.",
 							Type:        []string{"boolean"},
+							Format:      "",
+						},
+					},
+					"nextHopMode": {
+						SchemaProps: spec.SchemaProps{
+							Description: "NextHopMode defines the method of calculating the next hop attribute for received routes. This replaces and expands the deprecated KeepOriginalNextHop field. Users should use this setting to control the next hop attribute for a BGP peer. When this is set, the value of the KeepOriginalNextHop field is ignored. if neither keepOriginalNextHop or nextHopMode is specified, BGP's default behaviour is used. Set it to “Auto” to apply BGP’s default behaviour. Set it to \"Self\" to configure \"next hop self;\" in \"bird.cfg\". Set it to \"Keep\" to configure \"next hop keep;\" in \"bird.cfg\".",
+							Type:        []string{"string"},
 							Format:      "",
 						},
 					},
@@ -2913,6 +2920,13 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							Format:      "",
 						},
 					},
+					"natOutgoingExclusions": {
+						SchemaProps: spec.SchemaProps{
+							Description: "When a IP pool setting `natOutgoing` is true, packets sent from Calico networked containers in this IP pool to destinations will be masqueraded. Configure which type of destinations is excluded from being masqueraded. - IPPoolsOnly: destinations outside of this IP pool will be masqueraded. - IPPoolsAndHostIPs: destinations outside of this IP pool and all hosts will be masqueraded. [Default: IPPoolsOnly]",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 					"deviceRouteSourceAddress": {
 						SchemaProps: spec.SchemaProps{
 							Description: "DeviceRouteSourceAddress IPv4 address to set as the source hint for routes programmed by Felix. When not set the source address for local traffic from host to workload will be determined by the kernel.",
@@ -2938,6 +2952,13 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 						SchemaProps: spec.SchemaProps{
 							Description: "RemoveExternalRoutes Controls whether Felix will remove unexpected routes to workload interfaces. Felix will always clean up expected routes that use the configured DeviceRouteProtocol.  To add your own routes, you must use a distinct protocol (in addition to setting this field to false).",
 							Type:        []string{"boolean"},
+							Format:      "",
+						},
+					},
+					"programClusterRoutes": {
+						SchemaProps: spec.SchemaProps{
+							Description: "ProgramClusterRoutes specifies whether Felix should program IPIP routes instead of BIRD. Felix always programs VXLAN routes. [Default: Disabled]",
+							Type:        []string{"string"},
 							Format:      "",
 						},
 					},

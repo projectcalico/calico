@@ -26,7 +26,6 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
-	"time"
 
 	"github.com/hashicorp/yamux"
 	"github.com/sirupsen/logrus"
@@ -34,7 +33,7 @@ import (
 	calicoTLS "github.com/projectcalico/calico/crypto/pkg/tls"
 	"github.com/projectcalico/calico/guardian/pkg/cryptoutils"
 	"github.com/projectcalico/calico/lib/std/chanutil"
-	"github.com/projectcalico/calico/lib/std/clock"
+	"github.com/projectcalico/calico/lib/std/time"
 )
 
 const (
@@ -127,7 +126,12 @@ func (d *sessionDialer) dialTLS() (net.Conn, error) {
 	if d.httpProxyURL != nil {
 		// mTLS will be negotiated over a TCP connection to the proxy, which performs TCP passthrough to the target.
 		logrus.Infof("Dialing to %s via HTTP proxy at %s", d.addr, d.httpProxyURL)
-		c, err = tlsDialViaHTTPProxy(dialer, d.addr, d.httpProxyURL, d.tlsConfig, calicoTLS.NewTLSConfig())
+		var tlsConfig *tls.Config
+		tlsConfig, err = calicoTLS.NewTLSConfig()
+		if err != nil {
+			return nil, fmt.Errorf("failed to create TLS Config: %w", err)
+		}
+		c, err = tlsDialViaHTTPProxy(dialer, d.addr, d.httpProxyURL, d.tlsConfig, tlsConfig)
 		if err != nil {
 			return nil, fmt.Errorf("TLS dial via HTTP proxy failed: %w", err)
 		}
@@ -222,7 +226,7 @@ func dialRetry(ctx context.Context, connFunc func() (net.Conn, error), retryAtte
 				logrus.WithError(err).Infof("TLS dial attempt %d failed, will retry in %s", i, retryInterval.String())
 			}
 
-			if _, err := chanutil.Read(ctx, clock.After(retryInterval)); err != nil {
+			if _, err := chanutil.Read(ctx, time.After(retryInterval)); err != nil {
 				if errors.Is(err, context.Canceled) {
 					return nil, err
 				}

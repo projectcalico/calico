@@ -30,7 +30,6 @@ import (
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/confd/pkg/buildinfo"
 	"github.com/projectcalico/calico/confd/pkg/config"
 	logutils "github.com/projectcalico/calico/confd/pkg/log"
 	"github.com/projectcalico/calico/confd/pkg/resource/template"
@@ -46,6 +45,7 @@ import (
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
+	"github.com/projectcalico/calico/pkg/buildinfo"
 	"github.com/projectcalico/calico/typha/pkg/syncclientutils"
 	"github.com/projectcalico/calico/typha/pkg/syncproto"
 )
@@ -242,7 +242,7 @@ func NewCalicoClient(confdConfig *config.Config) (*client, error) {
 	c.nodeV1Processor = updateprocessors.NewBGPNodeUpdateProcessor(clientCfg.Spec.K8sUsePodCIDR)
 	if syncclientutils.MustStartSyncerClientIfTyphaConfigured(
 		&confdConfig.Typha, syncproto.SyncerTypeBGP,
-		buildinfo.GitVersion, template.NodeName, fmt.Sprintf("confd %s", buildinfo.GitVersion),
+		buildinfo.Version, template.NodeName, fmt.Sprintf("confd %s", buildinfo.Version),
 		c,
 	) {
 		log.Debug("Using typha syncclient")
@@ -489,6 +489,7 @@ type bgpPeer struct {
 	Filters         []string             `json:"filters"`
 	PassiveMode     bool                 `json:"passive_mode"`
 	LocalBGPPeer    bool                 `json:"local_bgp_peer"`
+	NextHopMode     string               `json:"next_hop_mode"`
 }
 
 type bgpPrefix struct {
@@ -644,12 +645,14 @@ func (c *client) updatePeersV1() {
 					reachableBy = v3res.Spec.ReachableBy
 				}
 
+				keepOriginalNextHop, nextHopMode := getNextHopMode(v3res)
 				peers = append(peers, &bgpPeer{
 					PeerIP:          *ip,
 					ASNum:           v3res.Spec.ASNumber,
 					SourceAddr:      string(v3res.Spec.SourceAddress),
 					Port:            port,
-					KeepNextHop:     v3res.Spec.KeepOriginalNextHop,
+					KeepNextHop:     keepOriginalNextHop,
+					NextHopMode:     nextHopMode,
 					CalicoNode:      isCalicoNode,
 					TTLSecurity:     ttlSecurityHopCount,
 					Filters:         v3res.Spec.Filters,
@@ -771,6 +774,19 @@ func (c *client) updatePeersV1() {
 		c.peeringCache[k] = newValue
 		c.keyUpdated(k)
 	}
+}
+
+func getNextHopMode(v3res *apiv3.BGPPeer) (bool, string) {
+	var nextHopMode string
+	var keepOriginalNextHop bool
+	if v3res.Spec.NextHopMode != nil {
+		// Ignore KeepOriginalNextHopMode if NextHopMode is not nil.
+		nextHopMode = string(*v3res.Spec.NextHopMode)
+	} else {
+		keepOriginalNextHop = v3res.Spec.KeepOriginalNextHop
+	}
+
+	return keepOriginalNextHop, nextHopMode
 }
 
 func parseIPPort(ipPort string) (string, uint16) {
@@ -918,6 +934,11 @@ func (c *client) nodeAsBGPPeers(nodeName string, v4 bool, v6 bool, v3Peer *apiv3
 			}
 		}
 		peer.RRClusterID = rrClusterID
+
+		keepOriginalNextHop, nextHopMode := getNextHopMode(v3Peer)
+		peer.KeepNextHop = keepOriginalNextHop
+		peer.NextHopMode = nextHopMode
+
 		peers = append(peers, peer)
 	}
 	return

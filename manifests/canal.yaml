@@ -414,6 +414,17 @@ spec:
                   type: string
                 maxRestartTime:
                   type: string
+                nextHopMode:
+                  allOf:
+                    - enum:
+                        - Auto
+                        - Self
+                        - Keep
+                    - enum:
+                        - Auto
+                        - Self
+                        - Keep
+                  type: string
                 node:
                   type: string
                 nodeSelector:
@@ -1629,6 +1640,17 @@ spec:
                     is leaving the network. By default the address used is an address on the interface the traffic is leaving on
                     (i.e. it uses the iptables MASQUERADE target).
                   type: string
+                natOutgoingExclusions:
+                  description: |-
+                    When a IP pool setting `natOutgoing` is true, packets sent from Calico networked containers in this IP pool to destinations will be masqueraded.
+                    Configure which type of destinations is excluded from being masqueraded.
+                    - IPPoolsOnly: destinations outside of this IP pool will be masqueraded.
+                    - IPPoolsAndHostIPs: destinations outside of this IP pool and all hosts will be masqueraded.
+                    [Default: IPPoolsOnly]
+                  enum:
+                    - IPPoolsOnly
+                    - IPPoolsAndHostIPs
+                  type: string
                 natPortRange:
                   anyOf:
                     - type: integer
@@ -1696,6 +1718,14 @@ spec:
                   description: |-
                     PolicySyncPathPrefix is used to by Felix to communicate policy changes to external services,
                     like Application layer policy. [Default: Empty]
+                  type: string
+                programClusterRoutes:
+                  description: |-
+                    ProgramClusterRoutes specifies whether Felix should program IPIP routes instead of BIRD.
+                    Felix always programs VXLAN routes. [Default: Disabled]
+                  enum:
+                    - Enabled
+                    - Disabled
                   type: string
                 prometheusGoMetricsEnabled:
                   description: |-
@@ -7151,7 +7181,7 @@ spec:
         # This container runs flannel using the kube-subnet-mgr backend
         # for allocating subnets.
         - name: kube-flannel
-          image: quay.io/flannel/flannel:v0.24.4
+          image: docker.io/flannel/flannel:v0.24.4
           imagePullPolicy: IfNotPresent
           command: ["/opt/bin/flanneld", "--ip-masq", "--kube-subnet-mgr"]
           securityContext:

@@ -142,11 +142,6 @@ NODE_CONTAINER_FILES=$(shell find ./filesystem -type f)
 # Calculate a timestamp for any build artefacts.
 DATE:=$(shell date -u +'%FT%T%z')
 
-LDFLAGS= -X $(PACKAGE_NAME)/pkg/lifecycle/startup.VERSION=$(GIT_VERSION) \
-	-X $(PACKAGE_NAME)/buildinfo.GitVersion=$(GIT_DESCRIPTION) \
-	-X $(PACKAGE_NAME)/buildinfo.BuildDate=$(DATE) \
-	-X $(PACKAGE_NAME)/buildinfo.GitRevision=$(GIT_COMMIT)
-
 # Source golang files on which compiling the calico-node binary depends.
 SRC_FILES=$(shell find ./pkg -name '*.go') \
 	  $(shell find ./cmd -name '*.go') \
@@ -262,13 +257,17 @@ sub-image-%:
 sub-image-fips-%:
 	$(MAKE) image FIPS=true ARCH=$*
 
+dist/LICENSE: ../LICENSE.md
+	mkdir -p dist
+	cp ../LICENSE.md $@
+
 image $(NODE_IMAGE): register $(NODE_CONTAINER_MARKER)
-$(NODE_CONTAINER_CREATED): $(REMOTE_DEPS) ./Dockerfile.$(ARCH) $(NODE_CONTAINER_BINARY) $(INCLUDED_SOURCE) $(NODE_CONTAINER_FILES) $(TOOLS_MOUNTNS_BINARY)
+$(NODE_CONTAINER_CREATED): $(REMOTE_DEPS) ./Dockerfile.$(ARCH) $(NODE_CONTAINER_BINARY) $(INCLUDED_SOURCE) $(NODE_CONTAINER_FILES) $(TOOLS_MOUNTNS_BINARY) dist/LICENSE
 	$(DOCKER_BUILD) --network=host --build-arg BIN_DIR=$(NODE_CONTAINER_BIN_DIR) --build-arg BIRD_IMAGE=$(BIRD_IMAGE) --build-arg GIT_VERSION=$(GIT_VERSION) -t $(NODE_IMAGE):latest-$(ARCH) -f ./Dockerfile.$(ARCH) .
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@
 
-$(NODE_CONTAINER_FIPS_CREATED): $(REMOTE_DEPS) ./Dockerfile.$(ARCH) $(NODE_CONTAINER_BINARY) $(INCLUDED_SOURCE) $(NODE_CONTAINER_FILES) $(TOOLS_MOUNTNS_BINARY)
+$(NODE_CONTAINER_FIPS_CREATED): $(REMOTE_DEPS) ./Dockerfile.$(ARCH) $(NODE_CONTAINER_BINARY) $(INCLUDED_SOURCE) $(NODE_CONTAINER_FILES) $(TOOLS_MOUNTNS_BINARY) dist/LICENSE
 	$(DOCKER_BUILD) --network=host --build-arg BIN_DIR=$(NODE_CONTAINER_BIN_DIR) --build-arg BIRD_IMAGE=$(BIRD_IMAGE) --build-arg GIT_VERSION=$(GIT_VERSION) -t $(NODE_IMAGE):latest-fips-$(ARCH) -f ./Dockerfile.$(ARCH) .
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest-fips LATEST_IMAGE_TAG=latest-fips
 	touch $@
@@ -292,7 +291,19 @@ $(FELIX_GPL_SOURCE): .felix-gpl-source.created
 ###############################################################################
 # FV Tests
 ###############################################################################
-K8ST_IMAGE_TARS=calico-node.tar calico-typha.tar calico-apiserver.tar calico-cni.tar pod2daemon.tar csi.tar node-driver-registrar.tar calicoctl.tar kube-controllers.tar operator.tar
+K8ST_IMAGE_TARS=calico-node.tar \
+	calico-typha.tar \
+	calico-apiserver.tar \
+	calico-cni.tar \
+	pod2daemon.tar \
+	csi.tar \
+	node-driver-registrar.tar \
+	calicoctl.tar \
+	kube-controllers.tar \
+	operator.tar \
+	whisker.tar \
+	whisker-backend.tar \
+	goldmane.tar
 
 ifeq ($(SEMAPHORE_GIT_REF_TYPE), pull-request)
 # Determine the tests to run using the test spider tool, which emits a list of impacted packages.
@@ -308,6 +319,7 @@ ut fv: run-k8s-apiserver
 	-v $(CERTS_PATH):/home/user/certs \
 	-e KUBECONFIG=/go/src/github.com/projectcalico/calico/hack/test/certs/kubeconfig \
 	-e ETCD_ENDPOINTS=http://$(LOCAL_IP_ENV):2379 \
+	-e GINKGO_ARGS="$(GINKGO_ARGS)" \
 	$(CALICO_BUILD) ./run-uts $(WHAT)
 
 ###############################################################################
@@ -396,6 +408,21 @@ kube-controllers.tar: ../go.mod $(shell find ../kube-controllers -name '*.go') $
 	make -C ../kube-controllers image
 	docker tag calico/kube-controllers:latest-$(ARCH) calico/kube-controllers:$(TEST_BUILD_TAG)
 	docker save --output $@ calico/kube-controllers:$(TEST_BUILD_TAG)
+
+goldmane.tar: ../go.mod $(shell find ../goldmane -name '*.go')
+	make -C ../goldmane image
+	docker tag calico/goldmane:latest-$(ARCH) calico/goldmane:$(TEST_BUILD_TAG)
+	docker save --output $@ calico/goldmane:$(TEST_BUILD_TAG)
+
+whisker.tar: ../go.mod $(shell find ../whisker)
+	make -C ../whisker image
+	docker tag calico/whisker:latest-$(ARCH) calico/whisker:$(TEST_BUILD_TAG)
+	docker save --output $@ calico/whisker:$(TEST_BUILD_TAG)
+
+whisker-backend.tar: ../go.mod $(shell find ../whisker-backend -name '*.go')
+	make -C ../whisker-backend image
+	docker tag calico/whisker-backend:latest-$(ARCH) calico/whisker-backend:$(TEST_BUILD_TAG)
+	docker save --output $@ calico/whisker-backend:$(TEST_BUILD_TAG)
 
 load-container-images: $(K8ST_IMAGE_TARS) $(KUBECTL)
 	# Load the latest tar files onto the currently running kind cluster.
@@ -597,6 +624,7 @@ $(WINDOWS_INSTALL_SCRIPT):
 # recognized.
 WINDOWS_IMAGE_REQS := \
 	Dockerfile-windows \
+	dist/LICENSE \
 	$(WINDOWS_BINARY) \
 	$(WINDOWS_ARCHIVE_ROOT)/libs/hns/hns.psm1 \
 	$(WINDOWS_ARCHIVE_ROOT)/libs/calico/calico.psm1 \

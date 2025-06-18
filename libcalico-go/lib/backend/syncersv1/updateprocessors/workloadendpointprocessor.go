@@ -23,6 +23,7 @@ import (
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/lib/std/uniquelabels"
 	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
@@ -172,7 +173,7 @@ func convertWorkloadEndpointV2ToV1Value(val interface{}) (interface{}, error) {
 		IPv6Nets:                   ipv6Nets,
 		IPv4NAT:                    ipv4NAT,
 		IPv6NAT:                    ipv6NAT,
-		Labels:                     labels,
+		Labels:                     uniquelabels.Make(labels),
 		IPv4Gateway:                ipv4Gateway,
 		IPv6Gateway:                ipv6Gateway,
 		Ports:                      ports,

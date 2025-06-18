@@ -20,11 +20,13 @@ import (
 	"io/fs"
 	"net"
 	"os"
+	"os/exec"
 	"path"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
@@ -36,6 +38,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/ifstate"
 	"github.com/projectcalico/calico/felix/bpf/jump"
 	"github.com/projectcalico/calico/felix/bpf/maps"
+	"github.com/projectcalico/calico/felix/bpf/nat"
 	"github.com/projectcalico/calico/felix/bpf/tc"
 	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
 	"github.com/projectcalico/calico/felix/calc"
@@ -108,11 +111,8 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 				EndpointToHostAction: "RETURN",
 			},
 			BPFExtToServiceConnmark: 0,
-			FeatureGates: map[string]string{
-				"BPFConnectTimeLoadBalancingWorkaround": "enabled",
-			},
-			BPFPolicyDebugEnabled: true,
-			BPFIpv6Enabled:        ipv6Enabled,
+			BPFPolicyDebugEnabled:   true,
+			BPFIpv6Enabled:          ipv6Enabled,
 		},
 		bpfmaps,
 		regexp.MustCompile("^workloadep[0123]"),
@@ -137,9 +137,9 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 		err = bpfEpMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
 
-		programsCount := 13
+		programsCount := 14
 		if ipv6Enabled {
-			programsCount = 25
+			programsCount = 27
 		}
 		Expect(programs.Count()).To(Equal(programsCount))
 		at := programs.Programs()
@@ -193,7 +193,7 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 			bpfEpMgr.OnUpdate(&proto.HostMetadataV6Update{Hostname: "uthost", Ipv6Addr: "1::4"})
 			err = bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
-			Expect(programs.Count()).To(Equal(50))
+			Expect(programs.Count()).To(Equal(52))
 
 			Expect(at).To(HaveKey(hook.AttachType{
 				Hook:       hook.Ingress,
@@ -331,10 +331,10 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 		err := bpfEpMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
 
-		programCount := 13
+		programCount := 14
 		jumpMapLen := 2
 		if ipv6Enabled {
-			programCount = 50
+			programCount = 52
 			jumpMapLen = 8
 		}
 		Expect(programs.Count()).To(Equal(programCount))
@@ -352,9 +352,9 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 		err = bpfEpMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
 
-		programsCount := 25
+		programsCount := 27
 		if ipv6Enabled {
-			programsCount = 50
+			programsCount = 52
 		}
 		Expect(programs.Count()).To(Equal(programsCount))
 
@@ -422,11 +422,11 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 		err := bpfEpMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
 
-		programsCount := 25
+		programsCount := 27
 		jumpMapLen := 6
 
 		if ipv6Enabled {
-			programsCount = 50
+			programsCount = 52
 			jumpMapLen = 16
 		}
 		Expect(programs.Count()).To(Equal(programsCount))
@@ -557,10 +557,7 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 					EndpointToHostAction: "RETURN",
 				},
 				BPFExtToServiceConnmark: 0,
-				FeatureGates: map[string]string{
-					"BPFConnectTimeLoadBalancingWorkaround": "enabled",
-				},
-				BPFPolicyDebugEnabled: true,
+				BPFPolicyDebugEnabled:   true,
 			},
 			bpfmaps,
 			regexp.MustCompile("^workloadep[123]"),
@@ -590,10 +587,10 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 		err = oldProgs.Open()
 		Expect(err).NotTo(HaveOccurred())
 		pm := jumpMapDump(oldProgs)
-		programsCount := 25
+		programsCount := 27
 		oldPoliciesCount := 4
 		if ipv6Enabled {
-			programsCount = 50
+			programsCount = 52
 			oldPoliciesCount = 12
 		}
 		Expect(pm).To(HaveLen(programsCount))
@@ -629,9 +626,9 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 		err = bpfEpMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
 
-		Expect(programs.Count()).To(Equal(25))
+		Expect(programs.Count()).To(Equal(27))
 		pm = jumpMapDump(commonMaps.ProgramsMap)
-		Expect(pm).To(HaveLen(25))
+		Expect(pm).To(HaveLen(27))
 
 		pm = jumpMapDump(commonMaps.JumpMap)
 		// We remember the state from above
@@ -686,10 +683,7 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 					EndpointToHostAction: "RETURN",
 				},
 				BPFExtToServiceConnmark: 0,
-				FeatureGates: map[string]string{
-					"BPFConnectTimeLoadBalancingWorkaround": "enabled",
-				},
-				BPFPolicyDebugEnabled: true,
+				BPFPolicyDebugEnabled:   true,
 			},
 			bpfmaps,
 			regexp.MustCompile("^workloadep[123]"),
@@ -746,10 +740,7 @@ func TestAttachWithMultipleWorkloadUpdate(t *testing.T) {
 				EndpointToHostAction: "RETURN",
 			},
 			BPFExtToServiceConnmark: 0,
-			FeatureGates: map[string]string{
-				"BPFConnectTimeLoadBalancingWorkaround": "enabled",
-			},
-			BPFPolicyDebugEnabled: true,
+			BPFPolicyDebugEnabled:   true,
 		},
 		bpfmaps,
 		regexp.MustCompile("^workloadep[123]"),
@@ -773,10 +764,16 @@ func TestAttachWithMultipleWorkloadUpdate(t *testing.T) {
 	err = bpfEpMgr.CompleteDeferredWork()
 	Expect(err).NotTo(HaveOccurred())
 
-	valid, firstPrio, firstHandle := bpfEpMgr.GetIfaceQDiscInfo("workloadep1")
-	Expect(valid).To(BeTrue())
-	Expect(firstPrio).To(BeNumerically(">", 0))
-	Expect(firstHandle).To(BeNumerically(">", 0))
+	ingressProg, err := tc.ListAttachedPrograms("workloadep1", hook.Ingress.String(), true)
+	Expect(err).NotTo(HaveOccurred())
+	Expect(len(ingressProg)).To(Equal(1))
+
+	egressProg, err := tc.ListAttachedPrograms("workloadep1", hook.Egress.String(), true)
+	Expect(err).NotTo(HaveOccurred())
+	Expect(len(egressProg)).To(Equal(1))
+
+	Expect(ingressProg[0].Pref).To(Equal(egressProg[0].Pref))
+	Expect(ingressProg[0].Handle).To(Equal(egressProg[0].Handle))
 
 	at := programs.Programs()
 	Expect(at).To(HaveKey(hook.AttachType{
@@ -810,53 +807,266 @@ func TestAttachWithMultipleWorkloadUpdate(t *testing.T) {
 		})
 		err = bpfEpMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
-		valid, prio, handle := bpfEpMgr.GetIfaceQDiscInfo("workloadep1")
-		Expect(valid).To(BeTrue())
-		Expect(prio).To(Equal(firstPrio))
-		Expect(handle).To(Equal(firstHandle))
 	}
+	ingProg, err := tc.ListAttachedPrograms("workloadep1", hook.Ingress.String(), true)
+	Expect(err).NotTo(HaveOccurred())
+	Expect(len(ingProg)).To(Equal(1))
 
+	egrProg, err := tc.ListAttachedPrograms("workloadep1", hook.Egress.String(), true)
+	Expect(err).NotTo(HaveOccurred())
+	Expect(len(egrProg)).To(Equal(1))
+
+	Expect(ingressProg[0].Pref).To(Equal(ingProg[0].Pref))
+	Expect(ingressProg[0].Handle).To(Equal(ingProg[0].Handle))
+	Expect(egressProg[0].Pref).To(Equal(egrProg[0].Pref))
+	Expect(egressProg[0].Handle).To(Equal(egrProg[0].Handle))
+	Expect(ingProg[0].Pref).To(Equal(egrProg[0].Pref))
+	Expect(ingProg[0].Handle).To(Equal(egrProg[0].Handle))
 }
 
-// This test verifies that we use the same tc priority but toggle between
-// handles when repeatedly attaching the preamble program.
+// This test verifies if the tc program gets replaced
+// and thus returns the same handle and priority.
 func TestRepeatedAttach(t *testing.T) {
 	RegisterTestingT(t)
 
-	iface, veth := createVeth()
+	iface := createVethName("workloadep1")
 	defer func() {
-		deleteLink(veth)
+		deleteLink(iface)
 	}()
 
+	ifaceName := iface.Attrs().Name
 	ap := &tc.AttachPoint{
 		AttachPoint: bpf.AttachPoint{
-			Iface: iface,
+			Iface: ifaceName,
 			Hook:  hook.Ingress,
 		},
-		HostIPv4: net.IPv4(8, 8, 8, 8),
-		IntfIPv4: net.IPv4(7, 7, 7, 7),
+		HostIPv4: net.IPv4(1, 2, 3, 4),
+		IntfIPv4: net.IPv4(1, 6, 6, 6),
 	}
 
-	_, err := tc.EnsureQdisc(iface)
+	_, err := tc.EnsureQdisc(ifaceName)
 	Expect(err).NotTo(HaveOccurred(), "failed to create qdisc")
-	res, err := ap.AttachProgram()
+	err = ap.AttachProgram()
 	Expect(err).NotTo(HaveOccurred(), "failed to attach preamble")
-	tcRes, ok := res.(tc.AttachResult)
-	Expect(ok).To(BeTrue())
-	prio := tcRes.Prio()
-	handle := tcRes.Handle()
+	ingressProg, err := tc.ListAttachedPrograms(ap.Iface, ap.Hook.String(), true)
+	Expect(err).NotTo(HaveOccurred())
+	Expect(len(ingressProg)).To(Equal(1))
 	for i := 0; i < 3; i++ {
-		res, err = ap.AttachProgram()
+		err = ap.AttachProgram()
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("failed to attach preamble : %d", i))
-		tcRes, ok = res.(tc.AttachResult)
-		Expect(ok).To(BeTrue())
-		Expect(tcRes.Prio()).To(Equal(prio))
-		if i%2 == 0 {
-			Expect(tcRes.Handle()).To(Equal(handle + 1))
-		} else {
-			Expect(tcRes.Handle()).To(Equal(handle))
-		}
 	}
+
+	ingProg, err := tc.ListAttachedPrograms(ap.Iface, ap.Hook.String(), true)
+	Expect(err).NotTo(HaveOccurred())
+	Expect(len(ingProg)).To(Equal(1))
+
+	Expect(ingProg[0].Pref).To(Equal(ingressProg[0].Pref))
+	Expect(ingProg[0].Handle).To(Equal(ingressProg[0].Handle))
+	// We have a BPF program attached to ingress hook and nothing on the egress hook.
+	// Now when there is a workload update, ingress program must be replaced and new program
+	// must be attached to egress.
+	bpfmaps, err := bpfmap.CreateBPFMaps(false)
+	Expect(err).NotTo(HaveOccurred())
+
+	bpfEpMgr, err := newBPFTestEpMgr(
+		&linux.Config{
+			Hostname:              "uthost",
+			BPFLogLevel:           "off",
+			BPFDataIfacePattern:   regexp.MustCompile("^hostep[12]"),
+			VXLANMTU:              1000,
+			VXLANPort:             1234,
+			BPFNodePortDSREnabled: false,
+			RulesConfig: rules.Config{
+				EndpointToHostAction: "RETURN",
+			},
+			BPFExtToServiceConnmark: 0,
+			BPFPolicyDebugEnabled:   true,
+		},
+		bpfmaps,
+		regexp.MustCompile("^workloadep[123]"),
+	)
+	Expect(err).NotTo(HaveOccurred())
+	bpfEpMgr.OnUpdate(&proto.HostMetadataUpdate{Hostname: "uthost", Ipv4Addr: "1.2.3.4"})
+	bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("workloadep1", ifacemonitor.StateUp, iface.Attrs().Index))
+	bpfEpMgr.OnUpdate(linux.NewIfaceAddrsUpdate("workloadep1", "1.6.6.6"))
+	bpfEpMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
+		Id: &proto.WorkloadEndpointID{
+			OrchestratorId: "k8s",
+			WorkloadId:     "workloadep1",
+			EndpointId:     "workloadep1",
+		},
+		Endpoint: &proto.WorkloadEndpoint{Name: "workloadep1"},
+	})
+	err = bpfEpMgr.CompleteDeferredWork()
+	Expect(err).NotTo(HaveOccurred())
+
+	ingProg, err = tc.ListAttachedPrograms(ap.Iface, hook.Ingress.String(), true)
+	Expect(err).NotTo(HaveOccurred())
+	Expect(len(ingProg)).To(Equal(1))
+
+	egrProg, err := tc.ListAttachedPrograms(ap.Iface, hook.Egress.String(), true)
+	Expect(err).NotTo(HaveOccurred())
+	Expect(len(egrProg)).To(Equal(1))
+
+	Expect(ingProg[0].Pref).To(Equal(ingressProg[0].Pref))
+	Expect(ingProg[0].Handle).To(Equal(ingressProg[0].Handle))
+	Expect(egrProg[0].Pref).To(Equal(ingressProg[0].Pref))
+	Expect(egrProg[0].Handle).To(Equal(ingressProg[0].Handle))
+}
+
+func TestCTLBAttachLegacy(t *testing.T) {
+	RegisterTestingT(t)
+
+	testCtlbAttachLegacy := func(v4, v6 bool) {
+		err := nat.InstallConnectTimeLoadBalancerLegacy(v4, v6, "", "debug", 60*time.Second, false)
+		Expect(err).NotTo(HaveOccurred())
+
+		checkPinPath := func(pinPath string, mustExist bool) {
+			_, err := os.Stat(pinPath)
+			if mustExist {
+				Expect(err).NotTo(HaveOccurred())
+			} else {
+				Expect(err).To(HaveOccurred())
+			}
+		}
+
+		checkPinPath("/sys/fs/bpf/ctlb/calico_connect_v4", false)
+		checkPinPath("/sys/fs/bpf/ctlb/calico_connect_v46", false)
+		checkPinPath("/sys/fs/bpf/ctlb/calico_sendmsg_v4", false)
+		checkPinPath("/sys/fs/bpf/ctlb/calico_sendmsg_v46", false)
+		checkPinPath("/sys/fs/bpf/ctlb/calico_recvmsg_v4", false)
+		checkPinPath("/sys/fs/bpf/ctlb/calico_recvmsg_v46", false)
+		checkPinPath("/sys/fs/bpf/ctlb/calico_connect_v6", false)
+		checkPinPath("/sys/fs/bpf/ctlb/calico_sendmsg_v6", false)
+		checkPinPath("/sys/fs/bpf/ctlb/calico_recvmsg_v6", false)
+
+		cmd := exec.Command("bpftool", "cgroup", "show", "/run/calico/cgroup")
+		out, err := cmd.Output()
+		Expect(err).NotTo(HaveOccurred())
+		if v4 {
+			Expect(string(out)).Should(ContainSubstring("calico_connect_v4"))
+			Expect(string(out)).Should(ContainSubstring("calico_sendmsg_v4"))
+			Expect(string(out)).Should(ContainSubstring("calico_recvmsg_v4"))
+			Expect(string(out)).Should(ContainSubstring("calico_connect_v46"))
+			Expect(string(out)).Should(ContainSubstring("calico_sendmsg_v46"))
+			Expect(string(out)).Should(ContainSubstring("calico_recvmsg_v46"))
+		} else if v6 {
+			Expect(string(out)).Should(ContainSubstring("calico_connect_v6"))
+			Expect(string(out)).Should(ContainSubstring("calico_sendmsg_v6"))
+			Expect(string(out)).Should(ContainSubstring("calico_recvmsg_v6"))
+		}
+		err = nat.RemoveConnectTimeLoadBalancer(v4, "")
+		Expect(err).NotTo(HaveOccurred())
+
+		cmd = exec.Command("bpftool", "cgroup", "show", "/run/calico/cgroup")
+		out, err = cmd.Output()
+		Expect(err).NotTo(HaveOccurred())
+		if v4 {
+			Expect(string(out)).ShouldNot(ContainSubstring("calico_connect_v4"))
+			Expect(string(out)).ShouldNot(ContainSubstring("calico_sendmsg_v4"))
+			Expect(string(out)).ShouldNot(ContainSubstring("calico_recvmsg_v4"))
+			Expect(string(out)).ShouldNot(ContainSubstring("calico_connect_v46"))
+			Expect(string(out)).ShouldNot(ContainSubstring("calico_sendmsg_v46"))
+			Expect(string(out)).ShouldNot(ContainSubstring("calico_recvmsg_v46"))
+		} else if v6 {
+			Expect(string(out)).ShouldNot(ContainSubstring("calico_connect_v6"))
+			Expect(string(out)).ShouldNot(ContainSubstring("calico_sendmsg_v6"))
+			Expect(string(out)).ShouldNot(ContainSubstring("calico_recvmsg_v6"))
+		}
+		cmd = exec.Command("bpftool", "prog", "show")
+		out, err = cmd.Output()
+		Expect(err).NotTo(HaveOccurred())
+		Expect(string(out)).ShouldNot(ContainSubstring("calico_connect"))
+		Expect(string(out)).ShouldNot(ContainSubstring("calico_send"))
+		Expect(string(out)).ShouldNot(ContainSubstring("calico_recv"))
+	}
+	testCtlbAttachLegacy(true, false)
+	testCtlbAttachLegacy(false, true)
+	testCtlbAttachLegacy(true, true)
+}
+
+func TestCTLBAttach(t *testing.T) {
+	RegisterTestingT(t)
+	testCtlbAttach := func(v4, v6 bool) {
+		err := nat.InstallConnectTimeLoadBalancer(v4, v6, "", "debug", 60*time.Second, false)
+		Expect(err).NotTo(HaveOccurred())
+
+		checkPinPath := func(pinPath string, mustExist bool) {
+			_, err := os.Stat(pinPath)
+			if mustExist {
+				Expect(err).NotTo(HaveOccurred())
+			} else {
+				Expect(err).To(HaveOccurred())
+			}
+		}
+		if v4 {
+			checkPinPath("/sys/fs/bpf/ctlb/calico_connect_v4", true)
+			checkPinPath("/sys/fs/bpf/ctlb/calico_connect_v46", true)
+			checkPinPath("/sys/fs/bpf/ctlb/calico_sendmsg_v4", true)
+			checkPinPath("/sys/fs/bpf/ctlb/calico_sendmsg_v46", true)
+			checkPinPath("/sys/fs/bpf/ctlb/calico_recvmsg_v4", true)
+			checkPinPath("/sys/fs/bpf/ctlb/calico_recvmsg_v46", true)
+		} else if v6 {
+			checkPinPath("/sys/fs/bpf/ctlb/calico_connect_v6", true)
+			checkPinPath("/sys/fs/bpf/ctlb/calico_sendmsg_v6", true)
+			checkPinPath("/sys/fs/bpf/ctlb/calico_recvmsg_v6", true)
+		}
+
+		cmd := exec.Command("bpftool", "cgroup", "show", "/run/calico/cgroup")
+		out, err := cmd.Output()
+		Expect(err).NotTo(HaveOccurred())
+		if v4 {
+			Expect(string(out)).Should(ContainSubstring("calico_connect_v4"))
+			Expect(string(out)).Should(ContainSubstring("calico_sendmsg_v4"))
+			Expect(string(out)).Should(ContainSubstring("calico_recvmsg_v4"))
+			Expect(string(out)).Should(ContainSubstring("calico_connect_v46"))
+			Expect(string(out)).Should(ContainSubstring("calico_sendmsg_v46"))
+			Expect(string(out)).Should(ContainSubstring("calico_recvmsg_v46"))
+		} else if v6 {
+			Expect(string(out)).Should(ContainSubstring("calico_connect_v6"))
+			Expect(string(out)).Should(ContainSubstring("calico_sendmsg_v6"))
+			Expect(string(out)).Should(ContainSubstring("calico_recvmsg_v6"))
+		}
+		err = nat.RemoveConnectTimeLoadBalancer(v4, "")
+		Expect(err).NotTo(HaveOccurred())
+		if v4 {
+			checkPinPath("/sys/fs/bpf/ctlb/calico_connect_v4", false)
+			checkPinPath("/sys/fs/bpf/ctlb/calico_connect_v46", false)
+			checkPinPath("/sys/fs/bpf/ctlb/calico_sendmsg_v4", false)
+			checkPinPath("/sys/fs/bpf/ctlb/calico_sendmsg_v46", false)
+			checkPinPath("/sys/fs/bpf/ctlb/calico_recvmsg_v4", false)
+			checkPinPath("/sys/fs/bpf/ctlb/calico_recvmsg_v46", false)
+		} else if v6 {
+			checkPinPath("/sys/fs/bpf/ctlb/calico_connect_v6", false)
+			checkPinPath("/sys/fs/bpf/ctlb/calico_sendmsg_v6", false)
+			checkPinPath("/sys/fs/bpf/ctlb/calico_recvmsg_v6", false)
+		}
+
+		cmd = exec.Command("bpftool", "cgroup", "show", "/run/calico/cgroup")
+		out, err = cmd.Output()
+		Expect(err).NotTo(HaveOccurred())
+		if v4 {
+			Expect(string(out)).ShouldNot(ContainSubstring("calico_connect_v4"))
+			Expect(string(out)).ShouldNot(ContainSubstring("calico_sendmsg_v4"))
+			Expect(string(out)).ShouldNot(ContainSubstring("calico_recvmsg_v4"))
+			Expect(string(out)).ShouldNot(ContainSubstring("calico_connect_v46"))
+			Expect(string(out)).ShouldNot(ContainSubstring("calico_sendmsg_v46"))
+			Expect(string(out)).ShouldNot(ContainSubstring("calico_recvmsg_v46"))
+		} else if v6 {
+			Expect(string(out)).ShouldNot(ContainSubstring("calico_connect_v6"))
+			Expect(string(out)).ShouldNot(ContainSubstring("calico_sendmsg_v6"))
+			Expect(string(out)).ShouldNot(ContainSubstring("calico_recvmsg_v6"))
+		}
+		cmd = exec.Command("bpftool", "prog", "show")
+		out, err = cmd.Output()
+		Expect(err).NotTo(HaveOccurred())
+		Expect(string(out)).ShouldNot(ContainSubstring("calico_connect"))
+		Expect(string(out)).ShouldNot(ContainSubstring("calico_send"))
+		Expect(string(out)).ShouldNot(ContainSubstring("calico_recv"))
+	}
+	testCtlbAttach(true, false)
+	testCtlbAttach(false, true)
+	testCtlbAttach(true, true)
 }
 
 func TestLogFilters(t *testing.T) {
@@ -878,11 +1088,8 @@ func TestLogFilters(t *testing.T) {
 			EndpointToHostAction: "RETURN",
 		},
 		BPFExtToServiceConnmark: 0,
-		FeatureGates: map[string]string{
-			"BPFConnectTimeLoadBalancingWorkaround": "enabled",
-		},
-		BPFPolicyDebugEnabled: true,
-		BPFLogFilters:         map[string]string{"hostep1": "tcp"},
+		BPFPolicyDebugEnabled:   true,
+		BPFLogFilters:           map[string]string{"hostep1": "tcp"},
 	}
 
 	bpfEpMgr, err := newBPFTestEpMgr(
@@ -997,7 +1204,7 @@ func BenchmarkAttachProgram(b *testing.B) {
 		IntfIPv4: net.IPv4(1, 1, 1, 1),
 	}
 
-	_, err = ap.AttachProgram()
+	err = ap.AttachProgram()
 	Expect(err).NotTo(HaveOccurred())
 
 	logLevel := log.GetLevel()
@@ -1007,7 +1214,7 @@ func BenchmarkAttachProgram(b *testing.B) {
 	b.StartTimer()
 
 	for n := 0; n < b.N; n++ {
-		_, err := ap.AttachProgram()
+		err := ap.AttachProgram()
 		if err != nil {
 			b.Fatalf("AttachProgram failed: %s", err)
 		}

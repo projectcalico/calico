@@ -141,9 +141,9 @@ const (
 
 type attachPoint interface {
 	IfaceName() string
+	IfaceIndex() int
 	HookName() hook.Hook
-	IsAttached() (bool, error)
-	AttachProgram() (bpf.AttachResult, error)
+	AttachProgram() error
 	DetachProgram() error
 	Log() *log.Entry
 	LogVal() string
@@ -163,7 +163,7 @@ type fileDescriptor interface {
 
 type bpfDataplane interface {
 	ensureStarted()
-	ensureProgramAttached(attachPoint) (qDiscInfo, error)
+	ensureProgramAttached(attachPoint) error
 	ensureProgramLoaded(ap attachPoint, ipFamily proto.IPVersion) error
 	ensureNoProgram(attachPoint) error
 	ensureQdisc(iface string) (bool, error)
@@ -179,7 +179,7 @@ type bpfDataplane interface {
 	loadDefaultPolicies() error
 	loadTCLogFilter(ap *tc.AttachPoint) (fileDescriptor, int, error)
 	interfaceByIndex(int) (*net.Interface, error)
-	queryClassifier(int, int, int, bool) (int, error)
+	queryClassifier(string, string) bool
 	getIfaceLink(string) (netlink.Link, error)
 }
 
@@ -254,7 +254,6 @@ type bpfInterfaceState struct {
 	filterIdx   [hook.Count]int
 	v4Readiness ifaceReadiness
 	v6Readiness ifaceReadiness
-	qdisc       qDiscInfo
 }
 
 type bpfInterfaceJumpIndices struct {
@@ -263,12 +262,6 @@ type bpfInterfaceJumpIndices struct {
 
 func (d *bpfInterfaceJumpIndices) clearJumps() {
 	d.policyIdx = [hook.Count]int{-1, -1, -1}
-}
-
-type qDiscInfo struct {
-	valid  bool
-	prio   int
-	handle int
 }
 
 type hostNetworkedNATMode int
@@ -391,6 +384,8 @@ type bpfEndpointManager struct {
 	natOutIdx   int
 	bpfIfaceMTU int
 
+	overlayTunnelID uint32
+
 	// Flow logs related fields.
 	lookupsCache *calc.LookupsCache
 
@@ -427,7 +422,6 @@ type bpfAllowChainRenderer interface {
 type ManagerWithHEPUpdate interface {
 	Manager
 	OnHEPUpdate(hostIfaceToEpMap map[string]*proto.HostEndpoint)
-	GetIfaceQDiscInfo(ifaceName string) (bool, int, int)
 }
 
 func NewBPFEndpointManager(
@@ -476,6 +470,7 @@ func NewBPFEndpointManager(
 		epToHostAction:          config.RulesConfig.EndpointToHostAction,
 		vxlanMTU:                config.VXLANMTU,
 		vxlanPort:               uint16(config.VXLANPort),
+		overlayTunnelID:         uint32(config.RulesConfig.VXLANVNI),
 		wgPort:                  uint16(config.Wireguard.ListeningPort),
 		wg6Port:                 uint16(config.Wireguard.ListeningPortV6),
 		dsrEnabled:              config.BPFNodePortDSREnabled,
@@ -565,10 +560,6 @@ func NewBPFEndpointManager(
 		bpf.XDPDriver,
 		bpf.XDPGeneric,
 	}
-
-	// Clean all the files under /var/run/calico/bpf/prog to remove any information from the
-	// previous execution of the bpf dataplane, and make sure the directory exists.
-	bpf.CleanAttachedProgDir()
 
 	// Normally this endpoint manager uses its own dataplane implementation, but we have an
 	// indirection here so that UT can simulate the dataplane and test how it's called.
@@ -761,11 +752,6 @@ func (m *bpfEndpointManager) withIface(ifaceName string, fn func(iface *bpfInter
 
 	logCtx.Debug("Marking iface dirty.")
 	m.dirtyIfaceNames.Add(ifaceName)
-}
-
-func (m *bpfEndpointManager) GetIfaceQDiscInfo(ifaceName string) (bool, int, int) {
-	qdisc := m.nameToIface[ifaceName].dpState.qdisc
-	return qdisc.valid, qdisc.prio, qdisc.handle
 }
 
 func (m *bpfEndpointManager) updateHostIP(ipAddr string, ipFamily int) {
@@ -1103,12 +1089,6 @@ func (m *bpfEndpointManager) cleanupOldAttach(iface string, ai bpf.EPAttachInfo)
 func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceStateUpdate) {
 	log.Debugf("Interface update for %v, state %v", update.Name, update.State)
 
-	if update.State == ifacemonitor.StateNotPresent {
-		if err := bpf.ForgetIfaceAttachedProg(update.Name); err != nil {
-			log.WithError(err).Errorf("Error in removing interface %s json file. err=%v", update.Name, err)
-		}
-	}
-
 	if !m.isDataIface(update.Name) && !m.isWorkloadIface(update.Name) && !m.isL3Iface(update.Name) {
 		if update.State == ifacemonitor.StateUp {
 			if ai, ok := m.initAttaches[update.Name]; ok {
@@ -1228,7 +1208,6 @@ func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceStateUpdate) {
 			iface.info.ifIndex = 0
 			iface.info.masterIfIndex = 0
 			iface.info.ifaceType = 0
-			iface.dpState.qdisc = qDiscInfo{}
 		}
 		return true // Force interface to be marked dirty in case we missed a transition during a resync.
 	})
@@ -1733,14 +1712,16 @@ func (m *bpfEndpointManager) reportHealth(ready bool, detail string) {
 
 func (m *bpfEndpointManager) doApplyPolicyToDataIface(iface, masterIface string, xdpMode XDPMode) (bpfInterfaceState, error) {
 	var (
-		err   error
-		up    bool
-		state bpfInterfaceState
+		err     error
+		up      bool
+		ifIndex int
+		state   bpfInterfaceState
 	)
 
 	m.ifacesLock.Lock()
 	m.withIface(iface, func(iface *bpfInterface) bool {
 		up = iface.info.ifaceIsUp()
+		ifIndex = iface.info.ifIndex
 		state = iface.dpState
 		return false
 	})
@@ -1775,9 +1756,11 @@ func (m *bpfEndpointManager) doApplyPolicyToDataIface(iface, masterIface string,
 	if err := m.dataIfaceStateFillJumps(tcAttachPoint, xdpMode, &state); err != nil {
 		return state, err
 	}
+	tcAttachPoint.IfIndex = ifIndex
 
 	xdpAttachPoint := &xdp.AttachPoint{
 		AttachPoint: bpf.AttachPoint{
+			IfIndex:  ifIndex,
 			Hook:     hook.XDP,
 			Iface:    iface,
 			LogLevel: m.bpfLogLevel,
@@ -1807,7 +1790,7 @@ func (m *bpfEndpointManager) doApplyPolicyToDataIface(iface, masterIface string,
 		ingressAP := mergeAttachPoints(ingressAP4, ingressAP6)
 		if ingressAP != nil {
 			m.loadFilterProgram(ingressAP)
-			_, ingressErr = m.dp.ensureProgramAttached(ingressAP)
+			ingressErr = m.dp.ensureProgramAttached(ingressAP)
 		}
 	}()
 
@@ -1818,7 +1801,7 @@ func (m *bpfEndpointManager) doApplyPolicyToDataIface(iface, masterIface string,
 		xdpAP := mergeAttachPoints(xdpAP4, xdpAP6)
 		if xdpAP != nil {
 			if hepPtr != nil && len(hepPtr.UntrackedTiers) == 1 {
-				_, xdpErr = m.dp.ensureProgramAttached(xdpAP)
+				xdpErr = m.dp.ensureProgramAttached(xdpAP)
 			} else {
 				xdpErr = m.dp.ensureNoProgram(xdpAP)
 			}
@@ -1829,7 +1812,7 @@ func (m *bpfEndpointManager) doApplyPolicyToDataIface(iface, masterIface string,
 	egressAP := mergeAttachPoints(egressAP4, egressAP6)
 	if egressAP != nil {
 		m.loadFilterProgram(egressAP)
-		_, err = m.dp.ensureProgramAttached(egressAP)
+		err = m.dp.ensureProgramAttached(egressAP)
 	}
 
 	parallelWG.Wait()
@@ -2241,8 +2224,12 @@ func (m *bpfEndpointManager) dataIfaceStateFillJumps(ap *tc.AttachPoint, xdpMode
 	return nil
 }
 
-func (m *bpfEndpointManager) queryClassifier(ifindex, handle, prio int, ingress bool) (int, error) {
-	return libbpf.QueryClassifier(ifindex, handle, prio, ingress)
+func (m *bpfEndpointManager) queryClassifier(ifaceName, tcHook string) bool {
+	tcProgs, err := tc.ListAttachedPrograms(ifaceName, tcHook, false)
+	if err != nil || len(tcProgs) == 0 {
+		return false
+	}
+	return true
 }
 
 func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState, error) {
@@ -2296,13 +2283,12 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 	}
 
 	var (
-		ingressErr, egressErr     error
-		err4, err6                error
-		ingressQdisc, egressQdisc qDiscInfo
-		ingressAP4, egressAP4     *tc.AttachPoint
-		ingressAP6, egressAP6     *tc.AttachPoint
-		wg                        sync.WaitGroup
-		wep                       *proto.WorkloadEndpoint
+		ingressErr, egressErr error
+		err4, err6            error
+		ingressAP4, egressAP4 *tc.AttachPoint
+		ingressAP6, egressAP6 *tc.AttachPoint
+		wg                    sync.WaitGroup
+		wep                   *proto.WorkloadEndpoint
 	)
 
 	if endpointID != nil {
@@ -2311,18 +2297,20 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 
 	v4Readiness := state.v4Readiness
 	v6Readiness := state.v6Readiness
+
 	if v4Readiness == ifaceIsReady || v6Readiness == ifaceIsReady {
-		if _, err := m.dp.queryClassifier(ifindex, state.qdisc.handle, state.qdisc.prio, true); err != nil {
+		if !m.dp.queryClassifier(ifaceName, hook.Ingress.String()) {
 			v4Readiness = ifaceNotReady
 			v6Readiness = ifaceNotReady
 		}
-		if _, err := m.dp.queryClassifier(ifindex, state.qdisc.handle, state.qdisc.prio, false); err != nil {
+		if !m.dp.queryClassifier(ifaceName, hook.Egress.String()) {
 			v4Readiness = ifaceNotReady
 			v6Readiness = ifaceNotReady
 		}
 	}
 
 	ap := m.calculateTCAttachPoint(ifaceName)
+	ap.IfIndex = ifindex
 
 	if err := m.wepStateFillJumps(ap, &state); err != nil {
 		return state, err
@@ -2358,13 +2346,13 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 			ingressAP := mergeAttachPoints(ingressAP4, ingressAP6)
 			if ingressAP != nil {
 				m.loadFilterProgram(ingressAP)
-				ingressQdisc, ingressErr = m.dp.ensureProgramAttached(ingressAP)
+				ingressErr = m.dp.ensureProgramAttached(ingressAP)
 			}
 		}()
 		egressAP := mergeAttachPoints(egressAP4, egressAP6)
 		if egressAP != nil {
 			m.loadFilterProgram(egressAP)
-			egressQdisc, egressErr = m.dp.ensureProgramAttached(egressAP)
+			egressErr = m.dp.ensureProgramAttached(egressAP)
 		}
 		wg.Wait()
 	}
@@ -2375,15 +2363,6 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 
 	if egressErr != nil {
 		return state, egressErr
-	}
-
-	if egressQdisc != ingressQdisc {
-		return state, fmt.Errorf("ingress qdisc info (%v) does not equal egress qdisc info (%v)",
-			ingressQdisc, egressQdisc)
-	}
-
-	if attachPreamble {
-		state.qdisc = ingressQdisc
 	}
 
 	if err4 != nil && err6 != nil {
@@ -2425,18 +2404,12 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 	return state, nil
 }
 
-func (m *bpfEndpointManager) ensureProgramAttached(ap attachPoint) (qDiscInfo, error) {
-	var qdisc qDiscInfo
-	res, err := ap.AttachProgram()
-	if err != nil {
-		return qdisc, err
+func (m *bpfEndpointManager) ensureProgramAttached(ap attachPoint) error {
+	if err := counters.EnsureExists(m.commonMaps.CountersMap, ap.IfaceIndex(), ap.HookName()); err != nil {
+		return err
 	}
-	if tcRes, ok := res.(tc.AttachResult); ok {
-		qdisc.valid = true
-		qdisc.prio = tcRes.Prio()
-		qdisc.handle = tcRes.Handle()
-	}
-	return qdisc, nil
+
+	return ap.AttachProgram()
 }
 
 // applyPolicy actually applies the policy to the given workload.
@@ -2932,6 +2905,7 @@ func (m *bpfEndpointManager) calculateTCAttachPoint(ifaceName string) *tc.Attach
 	ap.PSNATEnd = m.psnatPorts.MaxPort
 	ap.TunnelMTU = uint16(m.vxlanMTU)
 	ap.Profiling = m.profiling
+	ap.OverlayTunnelID = m.overlayTunnelID
 
 	switch m.rpfEnforceOption {
 	case "Strict":

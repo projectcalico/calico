@@ -17,6 +17,7 @@ package calico
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -41,14 +42,7 @@ import (
 // Global configuration for releases.
 var (
 	// Default defaultRegistries to which all release images are pushed.
-	defaultRegistries = []string{
-		"docker.io/calico",
-		"quay.io/calico",
-		"gcr.io/projectcalico-org",
-		"eu.gcr.io/projectcalico-org",
-		"asia.gcr.io/projectcalico-org",
-		"us.gcr.io/projectcalico-org",
-	}
+	defaultRegistries = registry.DefaultCalicoRegistries
 
 	// Directories that publish images.
 	imageReleaseDirs = []string{
@@ -89,6 +83,7 @@ var (
 		"envoy-gateway",
 		"envoy-proxy",
 		"envoy-ratelimit",
+		"guardian",
 		"key-cert-provisioner",
 		"kube-controllers",
 		"node",
@@ -97,6 +92,8 @@ var (
 		"test-signer",
 		"typha",
 		"goldmane",
+		"whisker",
+		"whisker-backend",
 	}
 	windowsImages = []string{
 		"cni-windows",
@@ -637,6 +634,17 @@ type imageExistsResult struct {
 	err    error
 }
 
+func (r *CalicoManager) componentImages() map[string]string {
+	components := map[string]string{}
+	for name, component := range r.imageComponents {
+		if component.Registry == "" {
+			component.Registry = r.imageRegistries[0]
+		}
+		components[name] = component.String()
+	}
+	return components
+}
+
 // checkHashreleaseImagesPublished checks that the images required for the hashrelease exist in the specified registries.
 func (r *CalicoManager) checkHashreleaseImagesPublished() ([]registry.Component, error) {
 	logrus.Info("Checking images required for hashrelease have already been published")
@@ -648,29 +656,32 @@ func (r *CalicoManager) checkHashreleaseImagesPublished() ([]registry.Component,
 
 	resultsCh := make(chan imageExistsResult, numOfComponents)
 
-	for name, component := range r.imageComponents {
-		go func(name string, component registry.Component, ch chan imageExistsResult) {
-			exists, err := registry.ImageExists(component.ImageRef())
+	for name, image := range r.componentImages() {
+		go func(name string, image string, ch chan imageExistsResult) {
+			exists, err := registry.CheckImage(image)
 			resultsCh <- imageExistsResult{
 				name:   name,
-				image:  component.String(),
+				image:  image,
 				exists: exists,
 				err:    err,
 			}
-		}(name, component, resultsCh)
+		}(name, image, resultsCh)
 	}
 
 	var resultsErr error
-	missingImages := []registry.Component{}
+	unavailableImages := []registry.Component{}
 	for range r.imageComponents {
 		result := <-resultsCh
 		if result.err != nil {
-			resultsErr = errors.Join(resultsErr, fmt.Errorf("error checking %s exists: %s", result.image, result.err.Error()))
+			unavailableImages = append(unavailableImages, r.imageComponents[result.name])
 		} else if !result.exists {
-			missingImages = append(missingImages, r.imageComponents[result.name])
+			unavailableImages = append(unavailableImages, r.imageComponents[result.name])
 		}
 	}
-	return missingImages, resultsErr
+	if len(unavailableImages) > 0 {
+		resultsErr = fmt.Errorf("unable to validate all images: %d images failed to validate", len(unavailableImages))
+	}
+	return unavailableImages, resultsErr
 }
 
 // Check that the environment has the necessary prereqs for publishing hashrelease
@@ -698,12 +709,8 @@ func (r *CalicoManager) hashreleasePrereqs() error {
 
 	if r.imageScanning {
 		logrus.Info("Sending images to ISS")
-		imageList := []string{}
-		for _, component := range r.imageComponents {
-			imageList = append(imageList, component.String())
-		}
 		imageScanner := imagescanner.New(r.imageScanningConfig)
-		err := imageScanner.Scan(r.productCode, imageList, r.hashrelease.Stream, false, r.tmpDir)
+		err := imageScanner.Scan(r.productCode, slices.Collect(maps.Values(r.componentImages())), r.hashrelease.Stream, false, r.tmpDir)
 		if err != nil {
 			// Error is logged and ignored as this is not considered a fatal error
 			logrus.WithError(err).Error("Failed to scan images")
@@ -716,6 +723,7 @@ func (r *CalicoManager) hashreleasePrereqs() error {
 // Check that the images exists with the correct version.
 func (r *CalicoManager) assertImageVersions() error {
 	logrus.Info("Checking built images exists with the correct version")
+	buildInfoVersionRegex := regexp.MustCompile(`(?m)^Version:\s+(.*)$`)
 	for _, img := range images {
 		switch img {
 		case "apiserver":
@@ -725,7 +733,7 @@ func (r *CalicoManager) assertImageVersions() error {
 				if err != nil {
 					logrus.WithError(err).WithField("image", img).Warn("error getting version from image")
 				}
-				if !strings.Contains(out, r.calicoVersion) {
+				if len(buildInfoVersionRegex.FindStringSubmatch(out)) == 0 {
 					return fmt.Errorf("version does not match for image %s/%s:%s", reg, img, r.calicoVersion)
 				}
 			}
@@ -740,7 +748,7 @@ func (r *CalicoManager) assertImageVersions() error {
 					}
 				}
 			}
-		case "csi":
+		case "csi", "dikastes", "envoy-gateway", "envoy-proxy", "envoy-ratelimit", "goldmane", "node-driver-registrar", "pod2daemon-flexvol", "whisker", "whisker-backend":
 			for _, reg := range r.imageRegistries {
 				out, err := r.runner.Run("docker", []string{"inspect", `--format='{{ index .Config.Labels "org.opencontainers.image.version" }}'`, fmt.Sprintf("%s/%s:%s", reg, img, r.calicoVersion)}, nil)
 				if err != nil {
@@ -758,23 +766,14 @@ func (r *CalicoManager) assertImageVersions() error {
 					return fmt.Errorf("version does not match for image %s/%s:%s", reg, img, r.calicoVersion)
 				}
 			}
-		case "dikastes":
-			for _, reg := range r.imageRegistries {
-				out, err := r.runner.Run("docker", []string{"inspect", `--format='{{ index .Config.Labels "org.opencontainers.image.version" }}'`, fmt.Sprintf("%s/%s:%s", reg, img, r.calicoVersion)}, nil)
-				if err != nil {
-					return fmt.Errorf("failed to run get version from %s image: %s", img, err)
-				} else if !strings.Contains(out, r.calicoVersion) {
-					return fmt.Errorf("version does not match for image %s/%s:%s", reg, img, r.calicoVersion)
-				}
-			}
-		case "key-cert-provisioner":
-			// key-cert-provisioner does not have version information in the image.
-		case "kube-controllers":
+		case "key-cert-provisioner", "test-signer":
+			// key-cert-provisioner images do not have version information.
+		case "guardian", "kube-controllers":
 			for _, reg := range r.imageRegistries {
 				out, err := r.runner.Run("docker", []string{"run", "--rm", fmt.Sprintf("%s/%s:%s", reg, img, r.calicoVersion), "--version"}, nil)
 				if err != nil {
 					return fmt.Errorf("failed to run get version from %s image: %s", img, err)
-				} else if !strings.Contains(out, r.calicoVersion) {
+				} else if len(buildInfoVersionRegex.FindStringSubmatch(out)) == 0 {
 					return fmt.Errorf("version does not match for image %s/%s:%s", reg, img, r.calicoVersion)
 				}
 			}
@@ -783,30 +782,10 @@ func (r *CalicoManager) assertImageVersions() error {
 				out, err := r.runner.Run("docker", []string{"run", "--rm", fmt.Sprintf("%s/%s:%s", reg, img, r.calicoVersion), "versions"}, nil)
 				if err != nil {
 					return fmt.Errorf("failed to run get version from %s image: %s", img, err)
-				} else if !strings.Contains(out, r.calicoVersion) {
+				} else if len(buildInfoVersionRegex.FindStringSubmatch(out)) == 0 {
 					return fmt.Errorf("version does not match for image %s/%s:%s", reg, img, r.calicoVersion)
 				}
 			}
-		case "node-driver-registrar":
-			for _, reg := range r.imageRegistries {
-				out, err := r.runner.Run("docker", []string{"inspect", `--format='{{ index .Config.Labels "org.opencontainers.image.version" }}'`, fmt.Sprintf("%s/%s:%s", reg, img, r.calicoVersion)}, nil)
-				if err != nil {
-					return fmt.Errorf("failed to run get version from %s image: %s", img, err)
-				} else if !strings.Contains(out, r.calicoVersion) {
-					return fmt.Errorf("version does not match for image %s/%s:%s", reg, img, r.calicoVersion)
-				}
-			}
-		case "pod2daemon-flexvol":
-			for _, reg := range r.imageRegistries {
-				out, err := r.runner.Run("docker", []string{"inspect", `--format='{{ index .Config.Labels "org.opencontainers.image.version" }}'`, fmt.Sprintf("%s/%s:%s", reg, img, r.calicoVersion)}, nil)
-				if err != nil {
-					return fmt.Errorf("failed to run get version from %s image: %s", img, err)
-				} else if !strings.Contains(out, r.calicoVersion) {
-					return fmt.Errorf("version does not match for image %s/%s:%s", reg, img, r.calicoVersion)
-				}
-			}
-		case "test-signer":
-			// test-signer does not have version information in the image.
 		case "typha":
 			for _, reg := range r.imageRegistries {
 				out, err := r.runner.Run("docker", []string{"run", "--rm", fmt.Sprintf("%s/%s:%s", reg, img, r.calicoVersion), "calico-typha", "--version"}, nil)
@@ -816,10 +795,6 @@ func (r *CalicoManager) assertImageVersions() error {
 					return fmt.Errorf("version does not match for image %s/%s:%s", reg, img, r.calicoVersion)
 				}
 			}
-		case "goldmane":
-			// goldmane does not have version information in the image.
-		case "envoy-gateway", "envoy-proxy", "envoy-ratelimit":
-			// Envoy images do not have version information.
 		default:
 			return fmt.Errorf("unknown image: %s, update assertion to include validating image", img)
 		}

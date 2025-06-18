@@ -22,6 +22,7 @@ import (
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 
+	"github.com/projectcalico/calico/lib/std/uniquelabels"
 	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
@@ -105,10 +106,10 @@ var _ = Describe("Test the WorkloadEndpoint update processor", func() {
 				State: "active",
 				Name:  iface1,
 				Ports: []model.EndpointPort{},
-				Labels: map[string]string{
+				Labels: uniquelabels.Make(map[string]string{
 					"projectcalico.org/namespace":    ns1,
 					"projectcalico.org/orchestrator": oid1,
-				},
+				}),
 				IPv4Nets: []cnet.IPNet{expectedIPv4Net},
 			},
 			Revision: "abcde",
@@ -170,11 +171,11 @@ var _ = Describe("Test the WorkloadEndpoint update processor", func() {
 					ProfileIDs: []string{"testProfile"},
 					IPv4Nets:   []cnet.IPNet{expectedIPv4Net},
 					IPv4NAT:    []model.IPNAT{expectedIPv4NAT},
-					Labels: map[string]string{
+					Labels: uniquelabels.Make(map[string]string{
 						"testLabel":                      "label",
 						"projectcalico.org/namespace":    ns2,
 						"projectcalico.org/orchestrator": oid2,
-					},
+					}),
 					IPv4Gateway: expectedIPv4Gateway,
 					IPv6Gateway: expectedIPv6Gateway,
 					Ports: []model.EndpointPort{
@@ -353,11 +354,11 @@ var _ = Describe("Test the WorkloadEndpoint update processor", func() {
 				State: "active",
 				Name:  iface1,
 				Ports: []model.EndpointPort{},
-				Labels: map[string]string{
+				Labels: uniquelabels.Make(map[string]string{
 					"projectcalico.org/namespace":    ns1,
 					"projectcalico.org/orchestrator": oid1,
 					"k1":                             "v1",
-				},
+				}),
 				IPv4Nets: []cnet.IPNet{expectedIPv4Net},
 			},
 			Revision: "abcde",
@@ -397,12 +398,12 @@ var _ = Describe("Test the WorkloadEndpoint update processor", func() {
 				State: "active",
 				Name:  iface1,
 				Ports: []model.EndpointPort{},
-				Labels: map[string]string{
+				Labels: uniquelabels.Make(map[string]string{
 					"projectcalico.org/namespace":      ns1,
 					"projectcalico.org/orchestrator":   oid1,
 					"k1":                               "v1",
 					"projectcalico.org/serviceaccount": "test-serviceaccount-name",
-				},
+				}),
 				IPv4Nets: []cnet.IPNet{expectedIPv4Net},
 			},
 			Revision: "abcde",
@@ -429,10 +430,16 @@ var _ = Describe("Test the WorkloadEndpoint update processor", func() {
 			EgressBandwidth:       2000000,
 			IngressBurst:          3000000,
 			EgressBurst:           4000000,
-			IngressPacketRate:     5000000,
-			EgressPacketRate:      6000000,
-			IngressMaxConnections: 7000000,
-			EgressMaxConnections:  8000000,
+			IngressPeakrate:       5000000,
+			EgressPeakrate:        6000000,
+			IngressMinburst:       7000000,
+			EgressMinburst:        8000000,
+			IngressPacketRate:     9000000,
+			EgressPacketRate:      10000000,
+			IngressPacketBurst:    11000000,
+			EgressPacketBurst:     12000000,
+			IngressMaxConnections: 13000000,
+			EgressMaxConnections:  14000000,
 		}
 
 		kvps, err := up.Process(&model.KVPair{
@@ -451,20 +458,26 @@ var _ = Describe("Test the WorkloadEndpoint update processor", func() {
 				State: "active",
 				Name:  iface1,
 				Ports: []model.EndpointPort{},
-				Labels: map[string]string{
+				Labels: uniquelabels.Make(map[string]string{
 					"projectcalico.org/namespace":    ns1,
 					"projectcalico.org/orchestrator": oid1,
-				},
+				}),
 				IPv4Nets: []cnet.IPNet{expectedIPv4Net},
 				QoSControls: &model.QoSControls{
 					IngressBandwidth:      1000000,
 					EgressBandwidth:       2000000,
 					IngressBurst:          3000000,
 					EgressBurst:           4000000,
-					IngressPacketRate:     5000000,
-					EgressPacketRate:      6000000,
-					IngressMaxConnections: 7000000,
-					EgressMaxConnections:  8000000,
+					IngressPeakrate:       5000000,
+					EgressPeakrate:        6000000,
+					IngressMinburst:       7000000,
+					EgressMinburst:        8000000,
+					IngressPacketRate:     9000000,
+					EgressPacketRate:      10000000,
+					IngressPacketBurst:    11000000,
+					EgressPacketBurst:     12000000,
+					IngressMaxConnections: 13000000,
+					EgressMaxConnections:  14000000,
 				},
 			},
 			Revision: "abcde",
