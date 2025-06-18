@@ -358,10 +358,17 @@ func hashreleasePublishFlags() []cli.Flag {
 
 // validateHashreleasePublishFlags checks that the flags are set correctly for the hashrelease publish command.
 func validateHashreleasePublishFlags(c *cli.Context) error {
-	// If publishing the hashrelease, then the hashrelease server configuration must be set.
-	if c.Bool(publishHashreleaseFlag.Name) && !hashreleaseServerConfig(c).Valid() {
-		return fmt.Errorf("missing hashrelease server configuration, must set %s, %s, %s, %s, and %s",
-			sshHostFlag, sshUserFlag, sshKeyFlag, sshPortFlag, sshKnownHostsFlag)
+	// If publishing the hashrelease
+	//  check that hashrelease server configuration is set.
+	//  Do not allow publishing hashrelease as latest if built locally.
+	if c.Bool(publishHashreleaseFlag.Name) {
+		if !hashreleaseServerConfig(c).Valid() {
+			return fmt.Errorf("missing hashrelease server configuration, must set --%s, --%s, --%s, --%s",
+				sshHostFlag.Name, sshUserFlag.Name, sshKeyFlag.Name, sshPortFlag.Name)
+		}
+		if c.Bool(latestFlag.Name) && !c.Bool(ciFlag.Name) {
+			return fmt.Errorf("cannot set hashrelease as latest when building locally, use --%s=false instead", latestFlag.Name)
+		}
 	}
 
 	// If using a custom registry, do not allow setting the hashrelease as latest.
@@ -386,11 +393,13 @@ func ciJobURL(c *cli.Context) string {
 
 func hashreleaseServerConfig(c *cli.Context) *hashreleaseserver.Config {
 	return &hashreleaseserver.Config{
-		Host:       c.String(sshHostFlag.Name),
-		User:       c.String(sshUserFlag.Name),
-		Key:        c.String(sshKeyFlag.Name),
-		Port:       c.String(sshPortFlag.Name),
-		KnownHosts: c.String(sshKnownHostsFlag.Name),
+		Host:            c.String(sshHostFlag.Name),
+		User:            c.String(sshUserFlag.Name),
+		Key:             c.String(sshKeyFlag.Name),
+		Port:            c.String(sshPortFlag.Name),
+		KnownHosts:      c.String(sshKnownHostsFlag.Name),
+		BucketName:      c.String(hashreleaseServerBucketFlag.Name),
+		CredentialsFile: c.String(hashreleaseServerCredentialsFlag.Name),
 	}
 }
 
