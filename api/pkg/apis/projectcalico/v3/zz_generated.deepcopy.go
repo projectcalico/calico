@@ -1752,6 +1752,11 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 		*out = new(int)
 		**out = **in
 	}
+	if in.RequireMTUFile != nil {
+		in, out := &in.RequireMTUFile, &out.RequireMTUFile
+		*out = new(bool)
+		**out = **in
+	}
 	return
 }
 

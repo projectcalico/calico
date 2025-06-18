@@ -549,9 +549,9 @@ var _ = Describe("Kubernetes CNI tests", func() {
 
 				err = os.MkdirAll("/var/lib/calico", os.ModePerm)
 				Expect(err).NotTo(HaveOccurred())
-				err = os.WriteFile("/var/lib/calico/mtu", []byte("3000"), 0644)
+				err = os.WriteFile(utils.MTUFilePath, []byte("3000"), 0644)
 				Expect(err).NotTo(HaveOccurred())
-				defer os.Remove("/var/lib/calico/mtu")
+				defer os.Remove(utils.MTUFilePath)
 
 				// Create a K8s pod/container
 				name1 := fmt.Sprintf("mtutest%d", rand.Uint32())
