@@ -636,7 +636,10 @@ type FelixConfigurationSpec struct {
 	// BPFConntrackCleanupMode controls how BPF conntrack entries are cleaned up.  `Auto` will use a BPF program if supported,
 	// falling back to userspace if not.  `Userspace` will always use the userspace cleanup code.  `BPFProgram` will
 	// always use the BPF program (failing if not supported).
-	// [Default: Auto]
+	//
+	///To be deprecated in future versions as conntrack map type changed to
+	// lru_hash and userspace cleanup is the only mode that is supported.
+	// [Default: Userspace]
 	BPFConntrackCleanupMode *BPFConntrackMode `json:"bpfConntrackMode,omitempty" validate:"omitempty,oneof=Auto Userspace BPFProgram"`
 
 	// BPFConntrackTimers overrides the default values for the specified conntrack timer if
