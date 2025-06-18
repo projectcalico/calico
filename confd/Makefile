@@ -95,7 +95,7 @@ test-etcd: bin/confd-$(ARCH) bin/etcdctl bin/bird bin/bird6 bin/calico-node bin/
 		-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
 		-e UPDATE_EXPECTED_DATA=$(UPDATE_EXPECTED_DATA) \
 		$(CALICO_BUILD) /tests/test_suite_etcd.sh
-	-git clean -fx etc/calico/confd
+		-git clean -fx etc/calico/confd
 
 .PHONY: ut
 ## Run the fast set of unit tests in a container.
