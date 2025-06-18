@@ -890,7 +890,6 @@ spec:
   node: node1
   peerIP: 172.17.0.6
   asNumber: 64512
-  localASNumber: 65000
 EOF
 
     # Expect a "direct" peering.
@@ -906,7 +905,6 @@ spec:
   node: node1
   peerIP: 172.17.0.6
   asNumber: 64512
-  localASNumber: 65000
   sourceAddress: None
 EOF
 
@@ -923,7 +921,6 @@ spec:
   node: node1
   peerIP: 172.17.0.6
   asNumber: 64512
-  localASNumber: 65000
   sourceAddress: None
   maxRestartTime: 10s
 EOF

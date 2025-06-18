@@ -4,8 +4,10 @@ metadata:
   name: bgppeer-1
 spec:
   peerIP: 10.192.0.3
-  asNumber: 64566
+  asNumber: 64512
+  localASNumber: 65002
   node: kube-master
+  numAllowedLocalASNumbers: 1
 
 ---
 kind: BGPPeer
@@ -15,6 +17,7 @@ metadata:
 spec:
   peerIP: 10.192.0.4
   asNumber: 64566
+  localASNumber: 65001
   node: kube-master
 
 ---
