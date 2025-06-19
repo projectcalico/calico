@@ -15,11 +15,15 @@
 package operator
 
 import (
+	_ "embed"
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
+	"text/template"
+	"time"
 
 	"github.com/sirupsen/logrus"
 
@@ -29,6 +33,13 @@ import (
 	"github.com/projectcalico/calico/release/internal/utils"
 	"github.com/projectcalico/calico/release/internal/version"
 	"github.com/projectcalico/calico/release/pkg/manager/branch"
+)
+
+var (
+	//go:embed template/images.go.gotmpl
+	componentImagesFileTemplate string
+
+	componentImagesFilePath = filepath.Join("pkg", "components", "images.go")
 )
 
 const (
@@ -63,6 +74,12 @@ type OperatorManager struct {
 
 	// outputDir is the absolute path to the output directory
 	outputDir string
+
+	// productRegistry is the registry to use for product images
+	registry string
+
+	// productRegistry is the registry to use for product images
+	productRegistry string
 
 	// origin remote repository
 	remote string
@@ -101,10 +118,12 @@ type OperatorManager struct {
 
 func NewManager(opts ...Option) *OperatorManager {
 	o := &OperatorManager{
-		runner:   &command.RealCommandRunner{},
-		docker:   registry.MustDockerRunner(),
-		validate: true,
-		publish:  true,
+		runner:          &command.RealCommandRunner{},
+		docker:          registry.MustDockerRunner(),
+		registry:        DefaultRegistry,
+		productRegistry: registry.DefaultCalicoRegistries[0],
+		validate:        true,
+		publish:         true,
 	}
 	for _, opt := range opts {
 		if err := opt(o); err != nil {
@@ -113,6 +132,34 @@ func NewManager(opts ...Option) *OperatorManager {
 	}
 
 	return o
+}
+
+// modifyComponentsImagesFile overwrites the pkg/components/images.go file
+// with the contents of the embedded file to ensure that operator has the right registries.
+// This is ONLY used by hashreleases because the operator uses the images.go file to determine the registry.
+func (o *OperatorManager) modifyComponentsImagesFile() error {
+	destFilePath := filepath.Join(o.dir, componentImagesFilePath)
+	dest, err := os.OpenFile(destFilePath, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0o644)
+	if err != nil {
+		logrus.WithError(err).Errorf("Failed to open file %s", destFilePath)
+		return err
+	}
+	defer dest.Close()
+	tmpl, err := template.New("pkg/components/images.go").Parse(componentImagesFileTemplate)
+	if err != nil {
+		logrus.WithError(err).Errorf("Failed to parse template to overwrite %s file", destFilePath)
+		return err
+	}
+
+	if err := tmpl.Execute(dest, map[string]string{
+		"Registry":        o.registry,
+		"ProductRegistry": o.productRegistry,
+		"Year":            time.Now().Format("2006"),
+	}); err != nil {
+		logrus.WithError(err).Errorf("Failed to write to file %s", destFilePath)
+		return err
+	}
+	return nil
 }
 
 func (o *OperatorManager) Build() error {
@@ -133,6 +180,9 @@ func (o *OperatorManager) Build() error {
 			logrus.WithError(err).Error("Failed to reset repository")
 		}
 	}()
+	if err := o.modifyComponentsImagesFile(); err != nil {
+		return err
+	}
 	env := os.Environ()
 	env = append(env, fmt.Sprintf("OS_VERSIONS=%s", componentsVersionPath))
 	env = append(env, fmt.Sprintf("COMMON_VERSIONS=%s", componentsVersionPath))

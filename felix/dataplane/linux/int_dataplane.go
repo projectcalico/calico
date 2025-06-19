@@ -274,6 +274,7 @@ type Config struct {
 	// Populated with the smallest host MTU based on auto-detection.
 	hostMTU         int
 	MTUIfacePattern *regexp.Regexp
+	RequireMTUFile  bool
 
 	RouteSource string
 
@@ -442,6 +443,11 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	ConfigureDefaultMTUs(hostMTU, &config)
 	podMTU := determinePodMTU(config)
 	if err := writeMTUFile(podMTU); err != nil {
+		// Fail early if RequireMTUFile is true
+		if config.RequireMTUFile {
+			log.WithError(err).Error("Failed to write MTU file shutting, down")
+			return nil
+		}
 		log.WithError(err).Error("Failed to write MTU file, pod MTU may not be properly set")
 	}
 
