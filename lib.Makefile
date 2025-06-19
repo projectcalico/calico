@@ -644,7 +644,7 @@ REPO_DIR=$(shell if [ -e hack/format-changed-files.sh ]; then echo '.'; else ech
 # Format changed files only.
 fix-changed go-fmt-changed goimports-changed:
 	$(DOCKER_RUN) -e release_prefix=$(RELEASE_BRANCH_PREFIX)-v \
-	              -e git_repo_slug=$(GIT_REPO_SLUG) $(CALICO_BUILD) $(REPO_DIR)/hack/format-changed-files.sh
+	              -e git_repo_slug=$(GIT_REPO_SLUG) -e CI $(CALICO_BUILD) $(REPO_DIR)/hack/format-changed-files.sh
 
 .PHONY: fix-all go-fmt-all goimports-all
 fix-all go-fmt-all goimports-all:
