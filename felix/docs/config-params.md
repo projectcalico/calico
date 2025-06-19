@@ -1438,6 +1438,20 @@ Controls the interval at which Felix periodically refreshes the nftables rules.
 
 ## <a id="dataplane-ebpf">Dataplane: eBPF
 
+### `BPFAttachType` (config file) / `bpfAttachType` (YAML)
+
+In BPF mode, controls the attach type for the BPF Programs.
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_BPFAttachType` |
+| Encoding (env var/config file) | One of: <code>TCX</code>, <code>TC</code> (case insensitive) |
+| Default value (above encoding) | `TCX` |
+| `FelixConfiguration` field | `bpfAttachType` (YAML) `BPFAttachType` (Go API) |
+| `FelixConfiguration` schema | `string` |
+| Default value (YAML) | `TCX` |
+| Notes | Required. | 
+
 ### `BPFCTLBLogFilter` (config file) / `bpfCTLBLogFilter` (YAML)
 
 Specifies, what is logged by connect time load balancer when BPFLogLevel is
