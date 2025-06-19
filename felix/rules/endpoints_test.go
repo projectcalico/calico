@@ -108,28 +108,32 @@ var _ = Describe("Endpoints", func() {
 			})
 
 			It("should render a minimal workload endpoint", func() {
+				toWlRules := []generictables.Rule{
+					// conntrack rules.
+					conntrackAcceptRule(),
+					conntrackDenyRule(denyAction),
+					clearMarkRule(),
+					noProfiletMatchedRule(denyAction, denyActionString),
+				}
+
+				fromWlRules := []generictables.Rule{
+					// conntrack rules.
+					conntrackAcceptRule(),
+					conntrackDenyRule(denyAction),
+					clearMarkRule(),
+					dropVXLANRule(VXLANPort, denyAction, denyActionString),
+					dropIPIPRule(denyAction, denyActionString),
+					noProfiletMatchedRule(denyAction, denyActionString),
+				}
+
 				expectdRules := trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
 					{
-						Name: "cali-tw-cali1234",
-						Rules: []generictables.Rule{
-							// conntrack rules.
-							conntrackAcceptRule(),
-							conntrackDenyRule(denyAction),
-							clearMarkRule(),
-							noProfiletMatchedRule(denyAction, denyActionString),
-						},
+						Name:  "cali-tw-cali1234",
+						Rules: toWlRules,
 					},
 					{
-						Name: "cali-fw-cali1234",
-						Rules: []generictables.Rule{
-							// conntrack rules.
-							conntrackAcceptRule(),
-							conntrackDenyRule(denyAction),
-							clearMarkRule(),
-							dropVXLANRule(VXLANPort, denyAction, denyActionString),
-							dropIPIPRule(denyAction, denyActionString),
-							noProfiletMatchedRule(denyAction, denyActionString),
-						},
+						Name:  "cali-fw-cali1234",
+						Rules: fromWlRules,
 					},
 					{
 						Name: "cali-sm-cali1234",
@@ -151,18 +155,18 @@ var _ = Describe("Endpoints", func() {
 			})
 
 			It("should render a disabled workload endpoint", func() {
+				commonRule := []generictables.Rule{
+					endpointAdminDisabledRule(denyAction),
+				}
+
 				expectdRules := trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
 					{
-						Name: "cali-tw-cali1234",
-						Rules: []generictables.Rule{
-							endpointAdminDisabledRule(denyAction),
-						},
+						Name:  "cali-tw-cali1234",
+						Rules: commonRule,
 					},
 					{
-						Name: "cali-fw-cali1234",
-						Rules: []generictables.Rule{
-							endpointAdminDisabledRule(denyAction),
-						},
+						Name:  "cali-fw-cali1234",
+						Rules: commonRule,
 					},
 					{
 						Name: "cali-sm-cali1234",
@@ -184,48 +188,51 @@ var _ = Describe("Endpoints", func() {
 			})
 
 			It("should render a fully-loaded workload endpoint", func() {
+				toWlRules := []generictables.Rule{
+					// conntrack rules.
+					conntrackAcceptRule(),
+					conntrackDenyRule(denyAction),
+					clearMarkRule(),
+					startOfTierDefault(),
+					matchPolicyIngress("default", "ai"),
+					policyAcceptedRule(),
+					matchPolicyIngress("default", "bi"),
+					policyAcceptedRule(),
+					defaultTierDefaultDropRule(denyAction, denyActionString),
+					matchProfileIngress("prof1"),
+					profileAcceptedRule(),
+					matchProfileIngress("prof2"),
+					profileAcceptedRule(),
+					noProfiletMatchedRule(denyAction, denyActionString),
+				}
+				fromWlRules := []generictables.Rule{
+					// conntrack rules.
+					conntrackAcceptRule(),
+					conntrackDenyRule(denyAction),
+					clearMarkRule(),
+					dropVXLANRule(VXLANPort, denyAction, denyActionString),
+					dropIPIPRule(denyAction, denyActionString),
+					startOfTierDefault(),
+					matchPolicyEgress("default", "ae"),
+					policyAcceptedRule(),
+					matchPolicyEgress("default", "be"),
+					policyAcceptedRule(),
+					defaultTierDefaultDropRule(denyAction, denyActionString),
+					matchProfileEgress("prof1"),
+					profileAcceptedRule(),
+					matchProfileEgress("prof2"),
+					profileAcceptedRule(),
+					noProfiletMatchedRule(denyAction, denyActionString),
+				}
+
 				expectdRules := trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
 					{
-						Name: "cali-tw-cali1234",
-						Rules: []generictables.Rule{
-							// conntrack rules.
-							conntrackAcceptRule(),
-							conntrackDenyRule(denyAction),
-							clearMarkRule(),
-							startOfTierDefault(),
-							matchPolicyIngress("default", "ai"),
-							policyAcceptedRule(),
-							matchPolicyIngress("default", "bi"),
-							policyAcceptedRule(),
-							defaultTierDefaultDropRule(denyAction, denyActionString),
-							matchProfileIngress("prof1"),
-							profileAcceptedRule(),
-							matchProfileIngress("prof2"),
-							profileAcceptedRule(),
-							noProfiletMatchedRule(denyAction, denyActionString),
-						},
+						Name:  "cali-tw-cali1234",
+						Rules: toWlRules,
 					},
 					{
-						Name: "cali-fw-cali1234",
-						Rules: []generictables.Rule{
-							// conntrack rules.
-							conntrackAcceptRule(),
-							conntrackDenyRule(denyAction),
-							clearMarkRule(),
-							dropVXLANRule(VXLANPort, denyAction, denyActionString),
-							dropIPIPRule(denyAction, denyActionString),
-							startOfTierDefault(),
-							matchPolicyEgress("default", "ae"),
-							policyAcceptedRule(),
-							matchPolicyEgress("default", "be"),
-							policyAcceptedRule(),
-							defaultTierDefaultDropRule(denyAction, denyActionString),
-							matchProfileEgress("prof1"),
-							profileAcceptedRule(),
-							matchProfileEgress("prof2"),
-							profileAcceptedRule(),
-							noProfiletMatchedRule(denyAction, denyActionString),
-						},
+						Name:  "cali-fw-cali1234",
+						Rules: fromWlRules,
 					},
 					{
 						Name: "cali-sm-cali1234",
@@ -277,48 +284,52 @@ var _ = Describe("Endpoints", func() {
 					Selector:    "someLabel == 'bar'",
 				}
 
+				toWlRules := []generictables.Rule{
+					// conntrack rules.
+					conntrackAcceptRule(),
+					conntrackDenyRule(denyAction),
+					clearMarkRule(),
+					startOfTierDefault(),
+					jumpToPolicyGroup(polGrpInABC.ChainName(), 0x10),
+					policyAcceptedRule(),
+					jumpToPolicyGroup(polGrpInEF.ChainName(), 0x10),
+					policyAcceptedRule(),
+					defaultTierDefaultDropRule(denyAction, denyActionString),
+					matchProfileIngress("prof1"),
+					profileAcceptedRule(),
+					matchProfileIngress("prof2"),
+					profileAcceptedRule(),
+					noProfiletMatchedRule(denyAction, denyActionString),
+				}
+
+				fromWlRules := []generictables.Rule{
+					// conntrack rules.
+					conntrackAcceptRule(),
+					conntrackDenyRule(denyAction),
+					clearMarkRule(),
+					dropVXLANRule(VXLANPort, denyAction, denyActionString),
+					dropIPIPRule(denyAction, denyActionString),
+					startOfTierDefault(),
+					jumpToPolicyGroup(polGrpOutAB.ChainName(), 0x10),
+					policyAcceptedRule(),
+					jumpToPolicyGroup(polGrpOutDE.ChainName(), 0x10),
+					policyAcceptedRule(),
+					defaultTierDefaultDropRule(denyAction, denyActionString),
+					matchProfileEgress("prof1"),
+					profileAcceptedRule(),
+					matchProfileEgress("prof2"),
+					profileAcceptedRule(),
+					noProfiletMatchedRule(denyAction, denyActionString),
+				}
+
 				expectdRules := trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
 					{
-						Name: "cali-tw-cali1234",
-						Rules: []generictables.Rule{
-							// conntrack rules.
-							conntrackAcceptRule(),
-							conntrackDenyRule(denyAction),
-							clearMarkRule(),
-							startOfTierDefault(),
-							jumpToPolicyGroup(polGrpInABC.ChainName(), 0x10),
-							policyAcceptedRule(),
-							jumpToPolicyGroup(polGrpInEF.ChainName(), 0x10),
-							policyAcceptedRule(),
-							defaultTierDefaultDropRule(denyAction, denyActionString),
-							matchProfileIngress("prof1"),
-							profileAcceptedRule(),
-							matchProfileIngress("prof2"),
-							profileAcceptedRule(),
-							noProfiletMatchedRule(denyAction, denyActionString),
-						},
+						Name:  "cali-tw-cali1234",
+						Rules: toWlRules,
 					},
 					{
-						Name: "cali-fw-cali1234",
-						Rules: []generictables.Rule{
-							// conntrack rules.
-							conntrackAcceptRule(),
-							conntrackDenyRule(denyAction),
-							clearMarkRule(),
-							dropVXLANRule(VXLANPort, denyAction, denyActionString),
-							dropIPIPRule(denyAction, denyActionString),
-							startOfTierDefault(),
-							jumpToPolicyGroup(polGrpOutAB.ChainName(), 0x10),
-							policyAcceptedRule(),
-							jumpToPolicyGroup(polGrpOutDE.ChainName(), 0x10),
-							policyAcceptedRule(),
-							defaultTierDefaultDropRule(denyAction, denyActionString),
-							matchProfileEgress("prof1"),
-							profileAcceptedRule(),
-							matchProfileEgress("prof2"),
-							profileAcceptedRule(),
-							noProfiletMatchedRule(denyAction, denyActionString),
-						},
+						Name:  "cali-fw-cali1234",
+						Rules: fromWlRules,
 					},
 					{
 						Name: "cali-sm-cali1234",
