@@ -581,6 +581,8 @@ blocks:
           - export RUN_UT=true
           - export FV_FOCUS=BPF-SAFE
           - export IMAGE=ubuntu-2404-noble-amd64-v20250502a
+          - export UBUNTU_VERSION=noble
+          - export DOCKER_VERSION=5:27.5.1-1~ubuntu.24.04~noble
           - mkdir artifacts
           - ./.semaphore/create-test-vms ${VM_PREFIX}
       jobs:
