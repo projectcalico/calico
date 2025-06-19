@@ -21,16 +21,13 @@ import (
 	"github.com/google/gopacket/layers"
 	. "github.com/onsi/gomega"
 	"github.com/sirupsen/logrus"
-	"golang.org/x/sys/unix"
 
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
-	"github.com/projectcalico/calico/felix/bpf/nat"
 	"github.com/projectcalico/calico/felix/bpf/routes"
-	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
 	"github.com/projectcalico/calico/felix/ip"
 )
 
-func TestToHostAllowedCTFull(t *testing.T) {
+func TestConnectionAllowedCTFull(t *testing.T) {
 	RegisterTestingT(t)
 
 	resetBPFMaps()
@@ -54,23 +51,14 @@ func TestToHostAllowedCTFull(t *testing.T) {
 	val := conntrack.NewValueNormal(0, 0, conntrack.Leg{}, conntrack.Leg{})
 
 	var err error
-	var firstCTKey conntrack.Key
-	var firstCTVal conntrack.Value
 
-	for i := 1; err == nil; i++ {
+	for i := 1; i <= ctMap.Size(); i++ {
 		srcIP := net.IPv4(10, byte((i&0xff0000)>>16), byte((i&0xff00)>>8), byte(i&0xff))
 
 		key := conntrack.NewKey(1, srcIP, srcPort, hostIP, hostPort)
 		err = ctMap.Update(key[:], val[:])
-
-		if i == 1 {
-			copy(firstCTKey[:], key[:])
-			copy(firstCTVal[:], val[:])
-		}
+		Expect(err).NotTo(HaveOccurred())
 	}
-
-	// Make sure we failed because the CT table is full
-	Expect(err).To(Equal(unix.E2BIG))
 
 	// re-enable debug
 	logrus.SetLevel(loglevel)
@@ -93,18 +81,16 @@ func TestToHostAllowedCTFull(t *testing.T) {
 	defer resetRTMap(rtMap)
 	defer func() { bpfIfaceName = "" }()
 
-	// Not NAT programmed
-
-	// No route - should not pass
+	// With lru, we will able to create the entry and the packet must be allowed.
 	bpfIfaceName = "ctNO"
 	skbMark = 0
 	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(synPkt)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res.Retval).To(Equal(resTC_ACT_SHOT))
+		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
 	})
 
-	// Destination is a local workload - should not pass
+	// Destination is a local workload - should pass
 	err = rtMap.Update(
 		routes.NewKey(ip.CIDRFromIPNet(&destCIDR).(ip.V4CIDR)).AsBytes(),
 		routes.NewValue(routes.FlagsLocalWorkload|routes.FlagInIPAMPool).AsBytes(),
@@ -116,167 +102,7 @@ func TestToHostAllowedCTFull(t *testing.T) {
 	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(synPkt)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res.Retval).To(Equal(resTC_ACT_SHOT))
-	})
-
-	// Destination is a remote workload - should not pass
-	err = rtMap.Update(
-		routes.NewKey(ip.CIDRFromIPNet(&destCIDR).(ip.V4CIDR)).AsBytes(),
-		routes.NewValue(routes.FlagsRemoteWorkload|routes.FlagInIPAMPool).AsBytes(),
-	)
-	Expect(err).NotTo(HaveOccurred())
-
-	bpfIfaceName = "ctRW"
-	skbMark = 0
-	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
-		res, err := bpfrun(synPkt)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(res.Retval).To(Equal(resTC_ACT_SHOT))
-	})
-
-	// Destination is a remote host - should not pass
-	err = rtMap.Update(
-		routes.NewKey(ip.CIDRFromIPNet(&destCIDR).(ip.V4CIDR)).AsBytes(),
-		routes.NewValue(routes.FlagsRemoteHost).AsBytes(),
-	)
-	Expect(err).NotTo(HaveOccurred())
-
-	bpfIfaceName = "ctRH"
-	skbMark = 0
-	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
-		res, err := bpfrun(synPkt)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(res.Retval).To(Equal(resTC_ACT_SHOT))
-	})
-
-	// Destination is the local host - should pass
-	err = rtMap.Update(
-		routes.NewKey(ip.CIDRFromIPNet(&destCIDR).(ip.V4CIDR)).AsBytes(),
-		routes.NewValue(routes.FlagsLocalHost).AsBytes(),
-	)
-	Expect(err).NotTo(HaveOccurred())
-
-	bpfIfaceName = "ctLH"
-	skbMark = 0
-	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
-		res, err := bpfrun(synPkt)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(res.Retval).To(Equal(resTC_ACT_REDIRECT))
-	})
-	expectMark(tcdefs.MarkSeen)
-
-	// Source is the local host - should pass
-	tcpSynAck := &layers.TCP{
-		SrcPort:    7890,
-		DstPort:    54321,
-		SYN:        true,
-		ACK:        true,
-		DataOffset: 5,
-	}
-
-	ipv4Ret := *ipv4
-	ipv4Ret.SrcIP, ipv4Ret.DstIP = ipv4Ret.DstIP, ipv4Ret.SrcIP
-
-	_, _, _, _, synAckPkt, err := testPacketV4(nil, &ipv4Ret, tcpSynAck, nil)
-	Expect(err).NotTo(HaveOccurred())
-
-	skbMark = tcdefs.MarkSeen
-	runBpfTest(t, "calico_to_host_ep", nil, func(bpfrun bpfProgRunFn) {
-		res, err := bpfrun(synAckPkt)
-		Expect(err).NotTo(HaveOccurred())
 		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
 	})
 
-	// Non-SYN packet
-	tcpAck := &layers.TCP{
-		SrcPort:    54321,
-		DstPort:    7890,
-		ACK:        true,
-		DataOffset: 5,
-	}
-
-	_, _, _, _, ackPkt, err := testPacketV4(nil, nil, tcpAck, nil)
-	Expect(err).NotTo(HaveOccurred())
-
-	skbMark = 0
-	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
-		res, err := bpfrun(ackPkt)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
-	})
-	expectMark(tcdefs.MarkSeenFallThrough)
-
-	// Make space in the CT table
-	err = ctMap.Delete(firstCTKey[:])
-	Expect(err).NotTo(HaveOccurred())
-
-	skbMark = 0
-	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
-		res, err := bpfrun(ackPkt)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
-	})
-	expectMark(tcdefs.MarkSeenFallThrough)
-
-	// No conntrack created for non-SYN packet (should fall through to iptables).  We test by
-	// trying to create an entry, which should succeed.
-	err = ctMap.Update(firstCTKey[:], firstCTVal[:])
-	Expect(err).NotTo(HaveOccurred())
-
-	// Towards WEP, the feature is disabled - should not pass
-	//
-	// Such a packet would not make it here anyway due to routing.
-	skbMark = tcdefs.MarkSeen
-	runBpfTest(t, "calico_to_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
-		res, err := bpfrun(synPkt)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(res.Retval).To(Equal(resTC_ACT_SHOT))
-	})
-
-	// It we hit NAT, the feature is disabled - should not pass
-	//
-	// Create NAT entry
-	err = natMap.Update(
-		nat.NewNATKey(ipv4.DstIP, uint16(tcpSyn.DstPort), uint8(ipv4.Protocol)).AsBytes(),
-		nat.NewNATValue(0, 1, 0, 0).AsBytes(),
-	)
-	Expect(err).NotTo(HaveOccurred())
-
-	natIP := net.IPv4(8, 8, 8, 8)
-	natPort := uint16(666)
-
-	err = natBEMap.Update(
-		nat.NewNATBackendKey(0, 0).AsBytes(),
-		nat.NewNATBackendValue(natIP, natPort).AsBytes(),
-	)
-	Expect(err).NotTo(HaveOccurred())
-
-	// Setup routing to allow NAT on HEP (encap)
-	node2wCIDR := net.IPNet{
-		IP:   natIP,
-		Mask: net.IPv4Mask(255, 255, 255, 0),
-	}
-
-	err = rtMap.Update(
-		routes.NewKey(ip.CIDRFromIPNet(&node2wCIDR).(ip.V4CIDR)).AsBytes(),
-		routes.NewValueWithNextHop(routes.FlagsRemoteWorkload, ip.FromNetIP(node2ip).(ip.V4Addr)).AsBytes(),
-	)
-	Expect(err).NotTo(HaveOccurred())
-	err = rtMap.Update(
-		routes.NewKey(ip.CIDRFromIPNet(&node1CIDR).(ip.V4CIDR)).AsBytes(),
-		routes.NewValue(routes.FlagsLocalHost).AsBytes(),
-	)
-	Expect(err).NotTo(HaveOccurred())
-	err = rtMap.Update(
-		routes.NewKey(ip.CIDRFromIPNet(&node2CIDR).(ip.V4CIDR)).AsBytes(),
-		routes.NewValue(routes.FlagsRemoteHost).AsBytes(),
-	)
-	Expect(err).NotTo(HaveOccurred())
-
-	skbMark = 0
-	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
-		res, err := bpfrun(synPkt)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(res.Retval).To(Equal(resTC_ACT_SHOT))
-	})
 }
