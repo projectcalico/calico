@@ -206,3 +206,15 @@ func (t *CTCleanupGlobalData) Set(m *Map) error {
 func (t *CTLBGlobalData) Set(m *Map) error {
 	panic("LIBBPF syscall stub")
 }
+
+func ProgQueryTcx(ifindex int, ingress bool) ([64]uint32, [64]uint32, uint32, error) {
+	panic("LIBBPF syscall stub")
+}
+
+func ProgName(id uint32) (string, error) {
+	panic("LIBBPF syscall stub")
+}
+
+func (o *Obj) AttachTCX(secName, ifName string) (*Link, error) {
+	panic("LIBBPF syscall stub")
+}
