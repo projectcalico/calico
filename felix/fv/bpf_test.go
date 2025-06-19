@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"path"
 	"regexp"
 	"sort"
 	"strconv"
@@ -43,6 +44,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/projectcalico/calico/felix/bpf"
+	"github.com/projectcalico/calico/felix/bpf/bpfdefs"
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
 	"github.com/projectcalico/calico/felix/bpf/conntrack/timeouts"
 	"github.com/projectcalico/calico/felix/bpf/ifstate"
@@ -1017,7 +1019,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						if os.Getenv("FELIX_FV_BPFATTACHTYPE") == "TC" {
 							tc.Felixes[0].Exec("tc", "filter", "del", "ingress", "dev", w[0].InterfaceName)
 						} else {
-							tc.Felixes[0].Exec("rm", "-rf", fmt.Sprintf("/sys/fs/bpf/tc/globals/%s_ingress", w[0].InterfaceName))
+							tc.Felixes[0].Exec("rm", "-rf", path.Join(bpfdefs.TcxPinDir, fmt.Sprintf("%s_ingress", w[0].InterfaceName)))
 						}
 
 						// Removing the ingress program should break connectivity due to the lack of "seen" mark.
@@ -1039,7 +1041,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								fmt.Sprintf("from wep not loaded for %s", w[0].InterfaceName))
 						} else {
 							Eventually(func() string {
-								out, _ := tc.Felixes[0].ExecOutput("stat", fmt.Sprintf("/sys/fs/bpf/tc/globals/%s_ingress", w[0].InterfaceName))
+								out, _ := tc.Felixes[0].ExecOutput("stat", path.Join(bpfdefs.TcxPinDir, fmt.Sprintf("%s_ingress", w[0].InterfaceName)))
 								return out
 							}, "5s", "200ms").ShouldNot(ContainSubstring("No such file or directory"),
 								fmt.Sprintf("from wep not loaded for %s", w[0].InterfaceName))
@@ -1049,7 +1051,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						if os.Getenv("FELIX_FV_BPFATTACHTYPE") == "TC" {
 							tc.Felixes[0].Exec("tc", "filter", "del", "egress", "dev", w[0].InterfaceName)
 						} else {
-							tc.Felixes[0].Exec("rm", "-rf", fmt.Sprintf("/sys/fs/bpf/tc/globals/%s_egress", w[0].InterfaceName))
+							tc.Felixes[0].Exec("rm", "-rf", path.Join(bpfdefs.TcxPinDir, fmt.Sprintf("%s_egress", w[0].InterfaceName)))
 						}
 						// Removing the egress program doesn't stop traffic.
 
@@ -1065,7 +1067,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								fmt.Sprintf("to wep not loaded for %s", w[0].InterfaceName))
 						} else {
 							Eventually(func() string {
-								out, _ := tc.Felixes[0].ExecOutput("stat", fmt.Sprintf("/sys/fs/bpf/tc/globals/%s_egress", w[0].InterfaceName))
+								out, _ := tc.Felixes[0].ExecOutput("stat", path.Join(bpfdefs.TcxPinDir, fmt.Sprintf("%s_egress", w[0].InterfaceName)))
 								return out
 							}, "5s", "200ms").ShouldNot(ContainSubstring("No such file or directory"),
 								fmt.Sprintf("from wep not loaded for %s", w[0].InterfaceName))

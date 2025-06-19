@@ -177,7 +177,7 @@ func (ap *AttachPoint) AttachProgram() error {
 }
 
 func (ap *AttachPoint) progPinPath() string {
-	return path.Join(bpfdefs.GlobalPinDir, fmt.Sprintf("%s_%s", strings.Replace(ap.Iface, ".", "", -1), ap.Hook))
+	return path.Join(bpfdefs.TcxPinDir, fmt.Sprintf("%s_%s", strings.Replace(ap.Iface, ".", "", -1), ap.Hook))
 }
 
 func (ap *AttachPoint) detachTcxProgram() error {
