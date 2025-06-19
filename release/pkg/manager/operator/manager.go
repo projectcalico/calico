@@ -43,7 +43,7 @@ var (
 )
 
 const (
-	DefaultImage               = "tigera/operator"
+	DefaultImage               = registry.TigeraOperatorImage
 	DefaultOrg                 = utils.TigeraOrg
 	DefaultRepoName            = "operator"
 	DefaultRemote              = utils.DefaultRemote
