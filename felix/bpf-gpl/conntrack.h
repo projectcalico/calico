@@ -719,6 +719,9 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 		CALI_CT_DEBUG("Hit! NAT FWD entry, doing secondary lookup.");
 		tracking_v = cali_ct_lookup_elem(&v->nat_rev_key);
 		if (!tracking_v) {
+			// The secondary entry might have been deleted because of LRU.
+			// Hence it is better to delete the fwd entry.
+			cali_ct_delete_elem(&k);
 			CALI_CT_DEBUG("Miss when looking for secondary entry.");
 			goto out_lookup_fail;
 		}

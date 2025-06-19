@@ -2754,8 +2754,8 @@
           "Required": false,
           "OnParseFailure": "ReplaceWithDefault",
           "AllowedConfigSources": "All",
-          "Description": "Controls how BPF conntrack entries are cleaned up. `Auto` will use a BPF program if supported,\nfalling back to userspace if not. `Userspace` will always use the userspace cleanup code. `BPFProgram` will\nalways use the BPF program (failing if not supported).",
-          "DescriptionHTML": "<p>Controls how BPF conntrack entries are cleaned up. <code>Auto</code> will use a BPF program if supported,\nfalling back to userspace if not. <code>Userspace</code> will always use the userspace cleanup code. <code>BPFProgram</code> will\nalways use the BPF program (failing if not supported).</p>",
+          "Description": "Controls how BPF conntrack entries are cleaned up. `Auto` will use a BPF program if supported,\nfalling back to userspace if not. `Userspace` will always use the userspace cleanup code. `BPFProgram` will\nalways use the BPF program (failing if not supported).\n\n/To be deprecated in future versions as conntrack map type changed to\nlru_hash and userspace cleanup is the only mode that is supported.",
+          "DescriptionHTML": "<p>Controls how BPF conntrack entries are cleaned up. <code>Auto</code> will use a BPF program if supported,\nfalling back to userspace if not. <code>Userspace</code> will always use the userspace cleanup code. <code>BPFProgram</code> will\nalways use the BPF program (failing if not supported).</p>\n<p>/To be deprecated in future versions as conntrack map type changed to\nlru_hash and userspace cleanup is the only mode that is supported.</p>",
           "UserEditable": true,
           "GoType": "*v3.BPFConntrackMode"
         },

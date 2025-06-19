@@ -1494,6 +1494,9 @@ Controls how BPF conntrack entries are cleaned up. `Auto` will use a BPF program
 falling back to userspace if not. `Userspace` will always use the userspace cleanup code. `BPFProgram` will
 always use the BPF program (failing if not supported).
 
+/To be deprecated in future versions as conntrack map type changed to
+lru_hash and userspace cleanup is the only mode that is supported.
+
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_BPFConntrackCleanupMode` |
