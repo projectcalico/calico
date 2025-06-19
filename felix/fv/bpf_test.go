@@ -621,6 +621,18 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				pol.Spec.Selector = "all()"
 
 				pol = createPolicy(pol)
+				Eventually(func() bool {
+					return bpfCheckIfPolicyProgrammed(tc.Felixes[0], w[0].InterfaceName, "ingress", "default.policy-1", "allow", true)
+				}, "2s", "200ms").Should(BeTrue())
+				Eventually(func() bool {
+					return bpfCheckIfPolicyProgrammed(tc.Felixes[0], w[0].InterfaceName, "egress", "default.policy-1", "allow", true)
+				}, "2s", "200ms").Should(BeTrue())
+				Eventually(func() bool {
+					return bpfCheckIfPolicyProgrammed(tc.Felixes[0], w[1].InterfaceName, "ingress", "default.policy-1", "allow", true)
+				}, "2s", "200ms").Should(BeTrue())
+				Eventually(func() bool {
+					return bpfCheckIfPolicyProgrammed(tc.Felixes[0], w[1].InterfaceName, "egress", "default.policy-1", "allow", true)
+				}, "2s", "200ms").Should(BeTrue())
 			})
 
 			if testOpts.bpfLogLevel == "debug" && testOpts.protocol == "tcp" {
