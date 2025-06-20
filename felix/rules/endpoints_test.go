@@ -2658,12 +2658,6 @@ func withProfiles(profiles ...string) ruleBuilderOpt {
 	}
 }
 
-func withEndOfTierPass() ruleBuilderOpt {
-	return func(r *ruleBuilder) {
-		r.endOfTierPass = true
-	}
-}
-
 type ruleBuilder struct {
 	egress           bool
 	denyAction       generictables.Action
@@ -2676,8 +2670,6 @@ type ruleBuilder struct {
 	policyGroups []string
 	policies     []string
 	profiles     []string
-
-	endOfTierPass bool
 }
 
 func newRuleBuilder(opts ...ruleBuilderOpt) *ruleBuilder {
