@@ -1512,29 +1512,6 @@ func dropVXLANRule(port int, action generictables.Action, actionStr string) gene
 	}
 }
 
-func initialRules(
-	denyAction generictables.Action,
-	denyActionString string,
-	dropVXLAN, dropIPIP bool,
-	vxlanPort int,
-) []generictables.Rule {
-	rules := []generictables.Rule{
-		// conntrack rules.
-		conntrackAcceptRule(),
-		conntrackDenyRule(denyAction),
-		clearMarkRule(),
-	}
-
-	if dropVXLAN {
-		rules = append(rules, dropVXLANRule(vxlanPort, denyAction, denyActionString))
-	}
-	if dropIPIP {
-		rules = append(rules, dropIPIPRule(denyAction, denyActionString))
-	}
-
-	return rules
-}
-
 func qosControlIngressRules(rate, burst int64) []generictables.Rule {
 	return qosControlRules("ingress", rate, burst)
 }
