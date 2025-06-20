@@ -143,10 +143,10 @@ func (r *reporter) RequestUpdate(request *apiv3.CalicoNodeStatus) {
 	r.ch <- request
 }
 
-// Return if the current status of the reporter has the same spec with
+// Return if the current status of the reporter has the same or newer spec with
 // the status passed in.
-func (r *reporter) HasSameSpec(status *apiv3.CalicoNodeStatus) bool {
-	return reflect.DeepEqual(r.status.Spec, status.Spec)
+func (r *reporter) HasSameOrNewerSpec(status *apiv3.CalicoNodeStatus) bool {
+	return r.status.Generation >= status.Generation
 }
 
 // ReportStatus call reportStatus function.
@@ -226,9 +226,25 @@ func (r *reporter) reportStatus() error {
 		updatedResource, err = r.client.CalicoNodeStatus().Update(ctx, &status, options.SetOptions{})
 		if err != nil {
 			if _, ok := err.(cerrors.ErrorResourceUpdateConflict); ok {
-				r.logCtx.Warn("Node status resource update conflict - we are behind syncer update")
+				r.logCtx.Warn("Node status resource update conflict, trying to catch-up with current resource")
 
-				// Just return and wait for syncer update to go through.
+				// it is required for reporter to try to catch up with current resource,
+				// because syncer may fail to notify updates in some edge cases and thus
+				// reporter will be stuck in conflict, and only reporter knows about it
+				currentResource, err := r.client.CalicoNodeStatus().Get(ctx, status.Name, options.GetOptions{})
+				if err != nil {
+					r.logCtx.WithError(err).Warn("Failed to catch-up with latest resource changes")
+					return nil
+				}
+
+				// send updated resource to reporter itself, but avoid blocking
+				select {
+				case r.ch <- currentResource:
+				default:
+					r.logCtx.Debug("Too much pending updates, skipping resource catch-up")
+				}
+
+				// Just return and wait for syncer (or catch-up) update to go through.
 				return nil
 			}
 

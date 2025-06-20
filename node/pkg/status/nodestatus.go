@@ -288,8 +288,8 @@ func (r *NodeStatusReporter) processPendingUpdates() {
 				r.reporter[name] = reporter
 			} else {
 				// updated resource.
-				// Check if it has the same spec with the current status being handled by the reporter.
-				if r.reporter[name].HasSameSpec(data) {
+				// Check if it has the same or newer spec with the current status being handled by the reporter.
+				if r.reporter[name].HasSameOrNewerSpec(data) {
 					// we don't need to do anything. It is possible we get here
 					// because the resource has been updated by the reporter itself.
 					log.Debugf("Anticipated resource update: %s. Do nothing.", name)
