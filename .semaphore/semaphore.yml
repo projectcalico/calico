@@ -89,8 +89,6 @@ blocks:
             - export BACKEND=l2bridge
             - export AZURE_RESOURCE_GROUP=${USER}-capz-win-cni-${SEMAPHORE_WORKFLOW_ID:0:8}-${BACKEND}-rg
             - ../.semaphore/run-and-monitor win-fv-containerd.log ./.semaphore/run-win-fv.sh
-          commands:
-            - ../.semaphore/run-and-monitor ci.log make ci
 after_pipeline:
   task:
     jobs:

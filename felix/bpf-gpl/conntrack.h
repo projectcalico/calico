@@ -719,6 +719,9 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 		CALI_CT_DEBUG("Hit! NAT FWD entry, doing secondary lookup.");
 		tracking_v = cali_ct_lookup_elem(&v->nat_rev_key);
 		if (!tracking_v) {
+			// The secondary entry might have been deleted because of LRU.
+			// Hence it is better to delete the fwd entry.
+			cali_ct_delete_elem(&k);
 			CALI_CT_DEBUG("Miss when looking for secondary entry.");
 			goto out_lookup_fail;
 		}
@@ -1034,10 +1037,11 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 					src_to_dst->ifindex = ifindex;
 				}
 				break;
+			case RPF_RES_DISABLED:
 			case RPF_RES_LOOSE:
 				if (!related) {
-					CALI_CT_DEBUG("Packet from unexpected ingress dev - rpf loose - reset ifindex",
-							src_to_dst->ifindex, ifindex);
+					CALI_CT_DEBUG("Packet from unexpected ingress dev - rpf loose or disabled "
+							"- reset ifindex", src_to_dst->ifindex, ifindex);
 					src_to_dst->ifindex = CT_INVALID_IFINDEX;
 				}
 				break;
