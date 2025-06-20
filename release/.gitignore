@@ -1,4 +1,5 @@
-coverage.txt
+coverage.out
 output/
+report/
 tmp/
 *.log
