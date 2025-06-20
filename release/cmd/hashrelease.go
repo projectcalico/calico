@@ -266,8 +266,7 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 					// as it is not an error that should stop the hashrelease process.
 					if err != nil {
 						logrus.WithError(err).Warn("Failed to retrieve image scan result URL")
-					}
-					if url == "" {
+					} else if url == "" {
 						logrus.Warn("Image scan result URL is empty")
 					}
 					hashrel.ImageScanResultURL = url
