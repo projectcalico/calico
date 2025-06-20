@@ -799,17 +799,15 @@ func endpointRulesTests(flowLogsEnabled bool) func() {
 				})
 
 				It("should render host endpoint mangle chains with pre-DNAT policies", func() {
-					fromHostRules := []generictables.Rule{
-						// conntrack rules.
-						conntrackAcceptRule(),
-						// Host endpoints get extra failsafe rules.
-						failSafeIngress(),
-						clearMarkRule(),
-						startOfTierDefault(),
-						matchPolicyIngress("default", "c"),
-						policyAcceptedRule(),
-						// No drop actions or profiles in raw table.
-					}
+					fromHostRules := newRuleBuilder(
+						withFlowLogs(flowLogsEnabled),
+						withDenyAction(denyAction),
+						withDenyActionString(denyActionString),
+						withPolicies("c"),
+						forHostEndpoint(),
+						withPreDNATPolicies(),
+						withInvalidCTStateDisabled(),
+					).build()
 
 					expected := []*generictables.Chain{
 						{
@@ -1293,188 +1291,6 @@ func polGroupEntry(group PolicyGroup, rules []generictables.Rule) table.TableEnt
 	)
 }
 
-func conntrackRulesWithInvalidStateDisabled() []generictables.Rule {
-	return []generictables.Rule{
-		{
-			Match:  Match().ConntrackState("RELATED,ESTABLISHED"),
-			Action: SetMarkAction{Mark: 0x8},
-		},
-		{
-			Match:  Match().ConntrackState("RELATED,ESTABLISHED"),
-			Action: ReturnAction{},
-		},
-	}
-}
-
-func conntrackAcceptRule() generictables.Rule {
-	return generictables.Rule{
-		Match:  Match().ConntrackState("RELATED,ESTABLISHED"),
-		Action: AcceptAction{},
-	}
-}
-
-func conntrackDenyRule(denyAction generictables.Action) generictables.Rule {
-	return generictables.Rule{
-		Match:  Match().ConntrackState("INVALID"),
-		Action: denyAction,
-	}
-}
-
-func clearMarkRule() generictables.Rule {
-	return generictables.Rule{
-		Match:  Match(),
-		Action: ClearMarkAction{Mark: 0x18},
-	}
-}
-
-func nflogActionProfile(group int, prefix string) generictables.Rule {
-	return generictables.Rule{
-		Match:  Match(),
-		Action: NflogAction{Group: uint16(group), Prefix: prefix},
-	}
-}
-
-func nflogProfileIngress() generictables.Rule {
-	return nflogActionProfile(1, "DRI")
-}
-
-func nflogProfileEgress() generictables.Rule {
-	return nflogActionProfile(2, "DRE")
-}
-
-func nflogActionDefaultTier(group int, prefix string) generictables.Rule {
-	return generictables.Rule{
-		Match:  Match().MarkClear(0x10),
-		Action: NflogAction{Group: uint16(group), Prefix: prefix},
-	}
-}
-
-func nflogDefaultTierIngress() generictables.Rule {
-	return nflogActionDefaultTier(1, "DPI|default")
-}
-
-func nflogDefaultTierEgress() generictables.Rule {
-	return nflogActionDefaultTier(2, "DPE|default")
-}
-
-func nflogDefaultTierIngressWithPassAction() generictables.Rule {
-	return nflogActionDefaultTier(1, "PPI|default")
-}
-
-func nflogDefaultTierEgressWithPassAction() generictables.Rule {
-	return nflogActionDefaultTier(2, "PPE|default")
-}
-
-func startOfTierDefault() generictables.Rule {
-	return generictables.Rule{
-		Comment: []string{"Start of tier default"},
-		Match:   Match(),
-		Action:  ClearMarkAction{Mark: 0x10},
-	}
-}
-
-func defaultTierDefaultDropRule(action generictables.Action, actionStr string) generictables.Rule {
-	return tierDefaultActionRule(action, actionStr, "default")
-}
-
-func tierDefaultActionRule(
-	action generictables.Action,
-	actionStr string,
-	tier string,
-) generictables.Rule {
-	return generictables.Rule{
-		Match:  Match().MarkClear(0x10),
-		Action: action,
-		Comment: []string{fmt.Sprintf("End of tier %s. %s if no policies passed packet",
-			tier,
-			actionStr,
-		)},
-	}
-}
-
-func matchPolicy(target string) generictables.Rule {
-	return generictables.Rule{
-		Match:  Match().MarkClear(0x10),
-		Action: JumpAction{Target: target},
-	}
-}
-
-func matchPolicyIngress(tier, name string) generictables.Rule {
-	return matchPolicy(fmt.Sprintf("cali-pi-%v/%v", tier, name))
-}
-
-func matchPolicyEgress(tier, name string) generictables.Rule {
-	return matchPolicy(fmt.Sprintf("cali-po-%v/%v", tier, name))
-}
-
-func matchProfile(target string) generictables.Rule {
-	return generictables.Rule{
-		Match:  Match(),
-		Action: JumpAction{Target: target},
-	}
-}
-
-func matchProfileIngress(name string) generictables.Rule {
-	return matchProfile(fmt.Sprintf("cali-pri-%v", name))
-}
-
-func matchProfileEgress(name string) generictables.Rule {
-	return matchProfile(fmt.Sprintf("cali-pro-%v", name))
-}
-
-func noProfiletMatchedRule(action generictables.Action, actionStr string) generictables.Rule {
-	return generictables.Rule{
-		Match:   Match(),
-		Action:  action,
-		Comment: []string{fmt.Sprintf("%s if no profiles matched", actionStr)},
-	}
-}
-
-func profileAcceptedRule() generictables.Rule {
-	return generictables.Rule{
-		Match:   Match().MarkSingleBitSet(0x8),
-		Action:  ReturnAction{},
-		Comment: []string{"Return if profile accepted"},
-	}
-}
-
-func policyAcceptedRule() generictables.Rule {
-	return generictables.Rule{
-		Match:   Match().MarkSingleBitSet(0x8),
-		Action:  ReturnAction{},
-		Comment: []string{"Return if policy accepted"},
-	}
-}
-
-func failSafeIngress() generictables.Rule {
-	return generictables.Rule{
-		Match:  Match(),
-		Action: JumpAction{Target: "cali-failsafe-in"},
-	}
-}
-
-func failSafeEgress() generictables.Rule {
-	return generictables.Rule{
-		Match:  Match(),
-		Action: JumpAction{Target: "cali-failsafe-out"},
-	}
-}
-
-func endpointAdminDisabledRule(denyAction generictables.Action) generictables.Rule {
-	return generictables.Rule{
-		Match:   Match(),
-		Action:  denyAction,
-		Comment: []string{"Endpoint admin disabled"},
-	}
-}
-
-func untrackedRule() generictables.Rule {
-	return generictables.Rule{
-		Match:  Match().MarkSingleBitSet(0x8),
-		Action: NoTrackAction{},
-	}
-}
-
 func jumpToPolicyGroup(target string, clearMark uint32) generictables.Rule {
 	match := Match()
 	if clearMark != 0 {
@@ -1483,73 +1299,6 @@ func jumpToPolicyGroup(target string, clearMark uint32) generictables.Rule {
 	return generictables.Rule{
 		Match:  match,
 		Action: JumpAction{Target: target},
-	}
-}
-
-func setEndpointMarkRules(mark, mask uint32) []generictables.Rule {
-	return []generictables.Rule{
-		{
-			Match:  Match(),
-			Action: SetMaskedMarkAction{Mark: mark, Mask: 0xff00},
-		},
-	}
-}
-
-func dropIPIPRule(action generictables.Action, actionStr string) generictables.Rule {
-	return generictables.Rule{
-		Match:   Match().ProtocolNum(ProtoIPIP),
-		Action:  action,
-		Comment: []string{fmt.Sprintf("%s IPinIP encapped packets originating in workloads", actionStr)},
-	}
-}
-
-func dropVXLANRule(port int, action generictables.Action, actionStr string) generictables.Rule {
-	return generictables.Rule{
-		Match: Match().ProtocolNum(ProtoUDP).
-			DestPorts(uint16(port)),
-		Action:  action,
-		Comment: []string{fmt.Sprintf("%s VXLAN encapped packets originating in workloads", actionStr)},
-	}
-}
-
-func qosControlIngressRules(rate, burst int64) []generictables.Rule {
-	return qosControlRules("ingress", rate, burst)
-}
-
-func qosControlEgressRules(rate, burst int64) []generictables.Rule {
-	return qosControlRules("egress", rate, burst)
-}
-
-func qosControlRules(direction string, rate, burst int64) []generictables.Rule {
-	return []generictables.Rule{
-		{
-			Match:   Match(),
-			Action:  ClearMarkAction{Mark: 0x20},
-			Comment: []string{fmt.Sprintf("Clear %v packet rate limit mark", direction)},
-		},
-		{
-			Match:   Match(),
-			Action:  LimitPacketRateAction{Rate: rate, Burst: burst, Mark: 0x20},
-			Comment: []string{fmt.Sprintf("Mark packets within %v packet rate limit", direction)},
-		},
-		{
-			Match:   Match().NotMarkMatchesWithMask(0x20, 0x20),
-			Action:  DropAction{},
-			Comment: []string{fmt.Sprintf("Drop packets over %v packet rate limit", direction)},
-		},
-		{
-			Match:   Match(),
-			Action:  ClearMarkAction{Mark: 0x20},
-			Comment: []string{fmt.Sprintf("Clear %v packet rate limit mark", direction)},
-		},
-	}
-}
-
-func qosMaxConnectionRule(conn int64, dir string) generictables.Rule {
-	return generictables.Rule{
-		Match:   Match(),
-		Action:  LimitNumConnectionsAction{Num: conn, RejectWith: generictables.RejectWithTCPReset},
-		Comment: []string{fmt.Sprintf("Reject connections over %v connection limit", dir)},
 	}
 }
 
@@ -1668,6 +1417,7 @@ type ruleBuilder struct {
 
 	invalidCTStateDisabled bool
 	egress                 bool
+	direction              string
 	denyAction             generictables.Action
 	denyActionString       string
 
@@ -1694,6 +1444,11 @@ func newRuleBuilder(opts ...ruleBuilderOpt) *ruleBuilder {
 	for _, o := range opts {
 		o(b)
 	}
+
+	b.direction = "ingress"
+	if b.egress {
+		b.direction = "egress"
+	}
 	return b
 }
 
@@ -1701,53 +1456,53 @@ func (r *ruleBuilder) build() []generictables.Rule {
 	var rules []generictables.Rule
 
 	if r.qosControlsEnabled {
-		if r.egress {
-			rules = append(rules, qosControlEgressRules(r.qosRate, r.qosburst)...)
-		} else {
-			rules = append(rules, qosControlIngressRules(r.qosRate, r.qosburst)...)
-		}
+		rules = append(rules, r.qosControlRules(r.qosRate, r.qosburst)...)
 	}
 
 	if !r.forUntrack {
-		if r.invalidCTStateDisabled || (r.forHostEndpoint && r.forPreDNAT) {
-			rules = append(rules, conntrackRulesWithInvalidStateDisabled()...)
-		} else {
-			rules = append(rules, conntrackAcceptRule())
-		}
-
-		if !r.invalidCTStateDisabled {
-			rules = append(rules, conntrackDenyRule(r.denyAction))
-		}
+		rules = append(rules, r.conntrackRules()...)
 	}
 
 	if r.qosMaxConn > 0 {
-		dir := "ingress"
-		if r.egress {
-			dir = "egress"
-		}
-		rules = append(rules, qosMaxConnectionRule(r.qosMaxConn, dir))
+		rules = append(rules, r.qosMaxConnectionRule(r.qosMaxConn))
 	}
 
 	// Host endpoints get extra failsafe rules.
 	if r.forHostEndpoint && !r.forForward {
-		if r.egress {
-			rules = append(rules, failSafeEgress())
-		} else {
-			rules = append(rules, failSafeIngress())
-		}
+		rules = append(rules, r.failSafeRule())
 	}
 
-	rules = append(rules, clearMarkRule())
+	// Clean marks.
+	rules = append(rules, generictables.Rule{
+		Match:  Match(),
+		Action: ClearMarkAction{Mark: 0x18},
+	})
 
 	if r.dropVXLAN {
-		rules = append(rules, dropVXLANRule(r.vxlanPort, r.denyAction, r.denyActionString))
+		rules = append(rules, generictables.Rule{
+			Match: Match().ProtocolNum(ProtoUDP).
+				DestPorts(uint16(r.vxlanPort)),
+			Action:  r.denyAction,
+			Comment: []string{fmt.Sprintf("%s VXLAN encapped packets originating in workloads", r.denyActionString)},
+		})
 	}
+
 	if r.dropIPIP {
-		rules = append(rules, dropIPIPRule(r.denyAction, r.denyActionString))
+		rules = append(rules, generictables.Rule{
+			Match:   Match().ProtocolNum(ProtoIPIP),
+			Action:  r.denyAction,
+			Comment: []string{fmt.Sprintf("%s IPinIP encapped packets originating in workloads", r.denyActionString)},
+		})
 	}
 
 	if len(r.policies) != 0 || len(r.policyGroups) != 0 {
-		rules = append(rules, startOfTierDefault())
+		rules = append(rules,
+			generictables.Rule{
+				Comment: []string{"Start of tier default"},
+				Match:   Match(),
+				Action:  ClearMarkAction{Mark: 0x10},
+			},
+		)
 	}
 
 	var endOfTierDrop bool
@@ -1769,18 +1524,13 @@ func (r *ruleBuilder) build() []generictables.Rule {
 			continue
 		}
 		endOfTierDrop = true
-		if r.egress {
-			rules = append(rules,
-				matchPolicyEgress("default", p),
-			)
-		} else {
-			rules = append(rules,
-				matchPolicyIngress("default", p),
-			)
-		}
+		rules = append(rules, r.matchPolicy("default", p))
 		if r.forHostEndpoint && r.forUntrack {
 			// Extra NOTRACK action before returning in raw table.
-			rules = append(rules, untrackedRule())
+			rules = append(rules, generictables.Rule{
+				Match:  Match().MarkSingleBitSet(0x8),
+				Action: NoTrackAction{},
+			})
 		}
 		rules = append(rules, policyAcceptedRule())
 	}
@@ -1795,23 +1545,18 @@ func (r *ruleBuilder) build() []generictables.Rule {
 	}
 
 	if len(r.policies) != 0 || len(r.policyGroups) != 0 {
+		if r.flowLogsEnabled {
+			rules = append(rules, r.nflogAction(endOfTierDrop, false))
+		}
 		if endOfTierDrop {
-			if r.flowLogsEnabled {
-				if r.egress {
-					rules = append(rules, nflogDefaultTierEgress())
-				} else {
-					rules = append(rules, nflogDefaultTierIngress())
-				}
-			}
-			rules = append(rules, defaultTierDefaultDropRule(r.denyAction, r.denyActionString))
-		} else {
-			if r.flowLogsEnabled {
-				if r.egress {
-					rules = append(rules, nflogDefaultTierEgressWithPassAction())
-				} else {
-					rules = append(rules, nflogDefaultTierIngressWithPassAction())
-				}
-			}
+			rules = append(rules,
+				generictables.Rule{
+					Match:  Match().MarkClear(0x10),
+					Action: r.denyAction,
+					Comment: []string{fmt.Sprintf("End of tier default. %s if no policies passed packet",
+						r.denyActionString,
+					)},
+				})
 		}
 	}
 
@@ -1820,27 +1565,198 @@ func (r *ruleBuilder) build() []generictables.Rule {
 	}
 
 	for _, p := range r.profiles {
-		if r.egress {
-			rules = append(rules,
-				matchProfileEgress(p),
-				profileAcceptedRule(),
-			)
-		} else {
-			rules = append(rules,
-				matchProfileIngress(p),
-				profileAcceptedRule(),
-			)
-		}
+		rules = append(rules,
+			r.matchProfile(p),
+			generictables.Rule{
+				Match:   Match().MarkSingleBitSet(0x8),
+				Action:  ReturnAction{},
+				Comment: []string{"Return if profile accepted"},
+			},
+		)
 	}
 
 	if r.flowLogsEnabled {
-		if r.egress {
-			rules = append(rules, nflogProfileEgress())
-		} else {
-			rules = append(rules, nflogProfileIngress())
-		}
+		rules = append(rules, r.nflogAction(true, true))
 	}
-	rules = append(rules, noProfiletMatchedRule(r.denyAction, r.denyActionString))
+	rules = append(rules,
+		generictables.Rule{
+			Match:   Match(),
+			Action:  r.denyAction,
+			Comment: []string{fmt.Sprintf("%s if no profiles matched", r.denyActionString)},
+		},
+	)
 
 	return rules
+}
+
+func (b *ruleBuilder) conntrackRules() []generictables.Rule {
+	var rules []generictables.Rule
+	if b.invalidCTStateDisabled && b.forHostEndpoint && b.forPreDNAT {
+		rules = append(rules, conntrackAcceptRule())
+		return rules
+	}
+
+	if b.invalidCTStateDisabled || (b.forHostEndpoint && b.forPreDNAT) {
+		rules = append(rules, conntrackRulesWithInvalidStateDisabled()...)
+	} else {
+		rules = append(rules, conntrackAcceptRule())
+	}
+
+	if !b.invalidCTStateDisabled {
+		rules = append(rules, generictables.Rule{
+			Match:  Match().ConntrackState("INVALID"),
+			Action: b.denyAction,
+		})
+	}
+	return rules
+}
+
+func conntrackRulesWithInvalidStateDisabled() []generictables.Rule {
+	return []generictables.Rule{
+		{
+			Match:  Match().ConntrackState("RELATED,ESTABLISHED"),
+			Action: SetMarkAction{Mark: 0x8},
+		},
+		{
+			Match:  Match().ConntrackState("RELATED,ESTABLISHED"),
+			Action: ReturnAction{},
+		},
+	}
+}
+
+func conntrackAcceptRule() generictables.Rule {
+	return generictables.Rule{
+		Match:  Match().ConntrackState("RELATED,ESTABLISHED"),
+		Action: AcceptAction{},
+	}
+}
+
+func (b *ruleBuilder) qosControlRules(rate, burst int64) []generictables.Rule {
+	return []generictables.Rule{
+		{
+			Match:   Match(),
+			Action:  ClearMarkAction{Mark: 0x20},
+			Comment: []string{fmt.Sprintf("Clear %v packet rate limit mark", b.direction)},
+		},
+		{
+			Match:   Match(),
+			Action:  LimitPacketRateAction{Rate: rate, Burst: burst, Mark: 0x20},
+			Comment: []string{fmt.Sprintf("Mark packets within %v packet rate limit", b.direction)},
+		},
+		{
+			Match:   Match().NotMarkMatchesWithMask(0x20, 0x20),
+			Action:  DropAction{},
+			Comment: []string{fmt.Sprintf("Drop packets over %v packet rate limit", b.direction)},
+		},
+		{
+			Match:   Match(),
+			Action:  ClearMarkAction{Mark: 0x20},
+			Comment: []string{fmt.Sprintf("Clear %v packet rate limit mark", b.direction)},
+		},
+	}
+}
+
+func (b *ruleBuilder) qosMaxConnectionRule(conn int64) generictables.Rule {
+	return generictables.Rule{
+		Match:   Match(),
+		Action:  LimitNumConnectionsAction{Num: conn, RejectWith: generictables.RejectWithTCPReset},
+		Comment: []string{fmt.Sprintf("Reject connections over %v connection limit", b.direction)},
+	}
+}
+
+func (b *ruleBuilder) failSafeRule() generictables.Rule {
+	if b.egress {
+		return generictables.Rule{
+			Match:  Match(),
+			Action: JumpAction{Target: "cali-failsafe-out"},
+		}
+	} else {
+		return generictables.Rule{
+			Match:  Match(),
+			Action: JumpAction{Target: "cali-failsafe-in"},
+		}
+	}
+}
+
+func (b *ruleBuilder) nflogAction(dropAction, forProfile bool) generictables.Rule {
+	group := 1
+	dir := "I" // Ingress
+	if b.egress {
+		group = 2
+		dir = "E" // Egress
+	}
+	action := "D" // Drop
+	if !dropAction {
+		action = "P" // Pass
+	}
+	kind := "P" // Policy
+	if forProfile {
+		kind = "R" // Profile
+	}
+
+	var prefix string
+	if forProfile {
+		prefix = fmt.Sprintf("%v%v%v", action, kind, dir)
+	} else {
+		prefix = fmt.Sprintf("%v%v%v|default", action, kind, dir)
+	}
+
+	var match generictables.MatchCriteria
+	if forProfile {
+		match = Match()
+	} else {
+		match = Match().MarkClear(0x10)
+	}
+
+	return generictables.Rule{
+		Match:  match,
+		Action: NflogAction{Group: uint16(group), Prefix: prefix},
+	}
+}
+
+func (b *ruleBuilder) matchPolicy(tier, name string) generictables.Rule {
+	target := fmt.Sprintf("cali-pi-%v/%v", tier, name)
+	if b.egress {
+		target = fmt.Sprintf("cali-po-%v/%v", tier, name)
+	}
+	return generictables.Rule{
+		Match:  Match().MarkClear(0x10),
+		Action: JumpAction{Target: target},
+	}
+}
+
+func (b *ruleBuilder) matchProfile(name string) generictables.Rule {
+	target := fmt.Sprintf("cali-pri-%v", name)
+	if b.egress {
+		target = fmt.Sprintf("cali-pro-%v", name)
+	}
+	return generictables.Rule{
+		Match:  Match(),
+		Action: JumpAction{Target: target},
+	}
+}
+
+func policyAcceptedRule() generictables.Rule {
+	return generictables.Rule{
+		Match:   Match().MarkSingleBitSet(0x8),
+		Action:  ReturnAction{},
+		Comment: []string{"Return if policy accepted"},
+	}
+}
+
+func endpointAdminDisabledRule(denyAction generictables.Action) generictables.Rule {
+	return generictables.Rule{
+		Match:   Match(),
+		Action:  denyAction,
+		Comment: []string{"Endpoint admin disabled"},
+	}
+}
+
+func setEndpointMarkRules(mark, mask uint32) []generictables.Rule {
+	return []generictables.Rule{
+		{
+			Match:  Match(),
+			Action: SetMaskedMarkAction{Mark: mark, Mask: 0xff00},
+		},
+	}
 }
