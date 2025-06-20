@@ -25,8 +25,8 @@ import (
 	"github.com/docopt/docopt-go"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
-	"golang.org/x/sys/unix"
 
+	//"golang.org/x/sys/unix"
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
 	v2 "github.com/projectcalico/calico/felix/bpf/conntrack/v2"
@@ -39,7 +39,6 @@ func init() {
 	conntrackCmd.AddCommand(newConntrackRemoveCmd())
 	conntrackCmd.AddCommand(newConntrackCleanCmd())
 	conntrackCmd.AddCommand(newConntrackWriteCmd())
-	conntrackCmd.AddCommand(newConntrackFillCmd())
 	conntrackCmd.AddCommand(newConntrackCreateCmd())
 	conntrackCmd.AddCommand(newConntrackStatsCmd())
 	rootCmd.AddCommand(conntrackCmd)
@@ -555,89 +554,6 @@ func (cmd *conntrackWriteCmd) Run(c *cobra.Command, _ []string) {
 
 	if err := ctMap.Update(cmd.key, cmd.val); err != nil {
 		log.WithError(err).Error("Failed to update ConntrackMap")
-	}
-}
-
-type conntrackFillCmd struct {
-	conntrackWriteCmd
-}
-
-func newConntrackFillCmd() *cobra.Command {
-	cmd := &conntrackFillCmd{
-		conntrackWriteCmd: conntrackWriteCmd{
-			Command: &cobra.Command{
-				Use: "fill <key> <value>",
-				Short: "Fills the table with a key-value pair, each encoded in base64. " +
-					"The prot-ip1-ip2 in the key are used as a start, ports are generated.",
-			},
-		},
-	}
-
-	cmd.Command.Flags().IntVarP((&cmd.version), "ver", "v", 3, "conntrack map version")
-	cmd.Command.Args = cmd.Args
-	cmd.Command.Run = cmd.Run
-
-	return cmd.Command
-}
-
-func (cmd *conntrackFillCmd) Run(c *cobra.Command, _ []string) {
-	var (
-		key   conntrack.KeyInterface
-		ctMap maps.Map
-		ctErr error
-	)
-
-	cmd.ipv6 = ipv6 != nil && *ipv6
-
-	if cmd.ipv6 {
-		var k conntrack.KeyV6
-		copy(k[:], cmd.key)
-		key = k
-	} else {
-		var k conntrack.Key
-		copy(k[:], cmd.key)
-		key = k
-	}
-
-	ipA := key.AddrA()
-	ipB := key.AddrB()
-	proto := key.Proto()
-
-	if ctMap, ctErr = GetCTMap(cmd.version, cmd.ipv6); ctErr != nil {
-		log.WithError(ctErr).Fatal("Failed to get ConntrackMap")
-	}
-
-	if err := ctMap.Open(); err != nil {
-		log.WithError(err).Error("Failed to access ConntrackMap")
-	}
-
-	// Disable debug if set while writing
-	loglevel := log.GetLevel()
-	log.SetLevel(log.WarnLevel)
-
-	for i := 1; ; i++ {
-		var err error
-		portA := uint16(i >> 16)
-		portB := uint16(i & 0xffff)
-
-		if cmd.ipv6 {
-			key := conntrack.NewKeyV6(proto, ipA, portA, ipB, portB)
-			if err = ctMap.Update(key[:], cmd.val); err == nil {
-				continue
-			}
-		} else {
-			key := conntrack.NewKey(proto, ipA, portA, ipB, portB)
-			if err = ctMap.Update(key[:], cmd.val); err == nil {
-				continue
-			}
-		}
-
-		log.SetLevel(loglevel)
-		log.Infof("Written %d entries", i-1)
-		if err == unix.E2BIG {
-			return
-		}
-		log.WithError(err).Fatal("Failed to update ConntrackMap")
 	}
 }
 
