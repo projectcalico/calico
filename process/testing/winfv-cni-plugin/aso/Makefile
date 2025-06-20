@@ -40,6 +40,7 @@ create-vmss: $(VMSS_MARKER)
 $(VMSS_MARKER): $(BINDIR)/kubectl $(BINDIR)/gomplate
 	@echo "Creating azure resources include vmss-linux and vmss-windows ..."
 	./vmss.sh create
+	./vmss.sh confirm-ssh
 	./vmss.sh show
 	touch $@
 
