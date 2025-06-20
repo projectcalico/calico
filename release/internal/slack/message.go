@@ -18,7 +18,7 @@ import (
 	"bytes"
 	_ "embed"
 	"fmt"
-	"html/template"
+	"text/template"
 
 	"github.com/sirupsen/logrus"
 	"github.com/slack-go/slack"
