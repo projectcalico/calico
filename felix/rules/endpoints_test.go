@@ -1467,7 +1467,7 @@ func (r *ruleBuilder) build() []generictables.Rule {
 		rules = append(rules, r.qosMaxConnectionRule(r.qosMaxConn))
 	}
 
-	// Host endpoints get extra failsafe rules.
+	// Host endpoints get extra failsafe rules except for forward policies.
 	if r.forHostEndpoint && !r.forForward {
 		rules = append(rules, r.failSafeRule())
 	}
@@ -1591,23 +1591,29 @@ func (r *ruleBuilder) build() []generictables.Rule {
 
 func (b *ruleBuilder) conntrackRules() []generictables.Rule {
 	var rules []generictables.Rule
-	if b.invalidCTStateDisabled && b.forHostEndpoint && b.forPreDNAT {
-		rules = append(rules, conntrackAcceptRule())
+
+	// For PreDNAT policies.
+	if b.forHostEndpoint && b.forPreDNAT {
+		if b.invalidCTStateDisabled {
+			rules = append(rules, conntrackAcceptRule())
+			return rules
+		}
+
+		rules = append(rules, conntrackRulesWithInvalidStateDisabled()...)
+		rules = append(rules, b.conntrackDenyInvalidConnections())
 		return rules
 	}
 
-	if b.invalidCTStateDisabled || (b.forHostEndpoint && b.forPreDNAT) {
+	// For normal policies
+	if b.invalidCTStateDisabled {
 		rules = append(rules, conntrackRulesWithInvalidStateDisabled()...)
 	} else {
-		rules = append(rules, conntrackAcceptRule())
+		rules = append(rules,
+			conntrackAcceptRule(),
+			b.conntrackDenyInvalidConnections(),
+		)
 	}
 
-	if !b.invalidCTStateDisabled {
-		rules = append(rules, generictables.Rule{
-			Match:  Match().ConntrackState("INVALID"),
-			Action: b.denyAction,
-		})
-	}
 	return rules
 }
 
@@ -1628,6 +1634,13 @@ func conntrackAcceptRule() generictables.Rule {
 	return generictables.Rule{
 		Match:  Match().ConntrackState("RELATED,ESTABLISHED"),
 		Action: AcceptAction{},
+	}
+}
+
+func (b *ruleBuilder) conntrackDenyInvalidConnections() generictables.Rule {
+	return generictables.Rule{
+		Match:  Match().ConntrackState("INVALID"),
+		Action: b.denyAction,
 	}
 }
 
