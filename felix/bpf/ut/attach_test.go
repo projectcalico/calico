@@ -1167,8 +1167,8 @@ func TestAttachTcx(t *testing.T) {
 	Expect(err).NotTo(HaveOccurred())
 	hasQdisc, err = tc.HasQdisc("workloadep0")
 	Expect(err).NotTo(HaveOccurred())
-	// switching from tcx to tc doesn't remove qdisc as there can be 3rd party tc programs.
-	Expect(hasQdisc).To(BeTrue())
+	// switching from tcx to tc removes the qdisc.
+	Expect(hasQdisc).To(BeFalse())
 	progs, err = tc.ListAttachedPrograms("workloadep0", hook.Ingress.String(), true)
 	Expect(err).NotTo(HaveOccurred())
 	Expect(len(progs)).To(Equal(0))

@@ -130,12 +130,10 @@ func (ap *AttachPoint) AttachProgram() error {
 		if err != nil {
 			return fmt.Errorf("error attaching tcx program %s:%s:%w", ap.Iface, ap.Hook, err)
 		}
-		// Just detach the old calico tc program and don't remove the qdisc.
-		// In case, if there are any other 3rd party tc programs, removing the qdisc will remove
-		// those programs as well.
-		err = ap.detachTcProgram()
+		// Remove the clsact qdisc so that it removes any existing tc programs from the previous runs.
+		err = RemoveQdisc(ap.Iface)
 		if err != nil {
-			log.Errorf("error removing old tc program from %s:%s", ap.Iface, err)
+			log.Errorf("error removing qdisc from %s:%s", ap.Iface, err)
 		}
 		logCxt.Info("Program attached to TCX.")
 		return nil
