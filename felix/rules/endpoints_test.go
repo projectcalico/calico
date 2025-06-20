@@ -108,19 +108,18 @@ var _ = Describe("Endpoints", func() {
 			})
 
 			It("should render a minimal workload endpoint", func() {
-				toWlBuilder := newRuleBuilder(
+				toWlRules := newRuleBuilder(
 					withDenyAction(denyAction),
 					withDenyActionString(denyActionString),
-				)
-				toWlRules := toWlBuilder.build()
+				).build()
 
-				fromWlBuilder := newRuleBuilder(
+				fromWlRules := newRuleBuilder(
 					withDenyAction(denyAction),
 					withDenyActionString(denyActionString),
 					withDropIPIP(),
 					withDropVXLAN(VXLANPort),
-				)
-				fromWlRules := fromWlBuilder.build()
+					withEgress(),
+				).build()
 
 				expected := trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
 					{
@@ -174,15 +173,14 @@ var _ = Describe("Endpoints", func() {
 			})
 
 			It("should render a fully-loaded workload endpoint", func() {
-				toWlBuilder := newRuleBuilder(
+				toWlRules := newRuleBuilder(
 					withDenyAction(denyAction),
 					withDenyActionString(denyActionString),
 					withPolicies("ai", "bi"),
 					withProfiles("prof1", "prof2"),
-				)
-				toWlRules := toWlBuilder.build()
+				).build()
 
-				fromWlBuilder := newRuleBuilder(
+				fromWlRules := newRuleBuilder(
 					withDenyAction(denyAction),
 					withDenyActionString(denyActionString),
 					withDropIPIP(),
@@ -190,8 +188,7 @@ var _ = Describe("Endpoints", func() {
 					withEgress(),
 					withPolicies("ae", "be"),
 					withProfiles("prof1", "prof2"),
-				)
-				fromWlRules := fromWlBuilder.build()
+				).build()
 
 				expected := trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
 					{
@@ -247,15 +244,14 @@ var _ = Describe("Endpoints", func() {
 					Selector:    "someLabel == 'bar'",
 				}
 
-				toWlBuilder := newRuleBuilder(
+				toWlRules := newRuleBuilder(
 					withDenyAction(denyAction),
 					withDenyActionString(denyActionString),
 					withPolicyGroups(polGrpInABC.ChainName(), polGrpInEF.ChainName()),
 					withProfiles("prof1", "prof2"),
-				)
-				toWlRules := toWlBuilder.build()
+				).build()
 
-				fromWlBuilder := newRuleBuilder(
+				fromWlRules := newRuleBuilder(
 					withDenyAction(denyAction),
 					withDenyActionString(denyActionString),
 					withEgress(),
@@ -263,8 +259,7 @@ var _ = Describe("Endpoints", func() {
 					withProfiles("prof1", "prof2"),
 					withDropIPIP(),
 					withDropVXLAN(VXLANPort),
-				)
-				fromWlRules := fromWlBuilder.build()
+				).build()
 
 				expected := trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
 					{
@@ -304,15 +299,14 @@ var _ = Describe("Endpoints", func() {
 			})
 
 			It("should render a fully-loaded workload endpoint - one staged policy, one enforced", func() {
-				toWlBuilder := newRuleBuilder(
+				toWlRules := newRuleBuilder(
 					withDenyAction(denyAction),
 					withDenyActionString(denyActionString),
 					withPolicies("staged:ai", "bi"),
 					withProfiles("prof1", "prof2"),
-				)
-				toWlRules := toWlBuilder.build()
+				).build()
 
-				fromWlBuilder := newRuleBuilder(
+				fromWlRules := newRuleBuilder(
 					withDenyAction(denyAction),
 					withDenyActionString(denyActionString),
 					withEgress(),
@@ -320,8 +314,7 @@ var _ = Describe("Endpoints", func() {
 					withProfiles("prof1", "prof2"),
 					withDropIPIP(),
 					withDropVXLAN(VXLANPort),
-				)
-				fromWlRules := fromWlBuilder.build()
+				).build()
 
 				expected := trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
 					{
@@ -352,15 +345,14 @@ var _ = Describe("Endpoints", func() {
 			})
 
 			It("should render a fully-loaded workload endpoint - both staged, end-of-tier action is pass", func() {
-				toWlBuilder := newRuleBuilder(
+				toWlRules := newRuleBuilder(
 					withDenyAction(denyAction),
 					withDenyActionString(denyActionString),
 					withPolicies("staged:ai", "staged:bi"),
 					withProfiles("prof1", "prof2"),
-				)
-				toWlRules := toWlBuilder.build()
+				).build()
 
-				fromWlBuilder := newRuleBuilder(
+				fromWlRules := newRuleBuilder(
 					withDenyAction(denyAction),
 					withDenyActionString(denyActionString),
 					withEgress(),
@@ -368,8 +360,7 @@ var _ = Describe("Endpoints", func() {
 					withProfiles("prof1", "prof2"),
 					withDropIPIP(),
 					withDropVXLAN(VXLANPort),
-				)
-				fromWlRules := fromWlBuilder.build()
+				).build()
 
 				expected := trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
 					{
@@ -400,15 +391,14 @@ var _ = Describe("Endpoints", func() {
 			})
 
 			It("should render a fully-loaded workload endpoint - staged policy group, end-of-tier pass", func() {
-				toWlBuilder := newRuleBuilder(
+				toWlRules := newRuleBuilder(
 					withDenyAction(denyAction),
 					withDenyActionString(denyActionString),
 					withPolicyGroups("staged:ai", "staged:bi"),
 					withProfiles("prof1", "prof2"),
-				)
-				toWlRules := toWlBuilder.build()
+				).build()
 
-				fromWlBuilder := newRuleBuilder(
+				fromWlRules := newRuleBuilder(
 					withDenyAction(denyAction),
 					withDenyActionString(denyActionString),
 					withEgress(),
@@ -416,8 +406,7 @@ var _ = Describe("Endpoints", func() {
 					withProfiles("prof1", "prof2"),
 					withDropIPIP(),
 					withDropVXLAN(VXLANPort),
-				)
-				fromWlRules := fromWlBuilder.build()
+				).build()
 
 				expected := trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
 					{
@@ -461,16 +450,15 @@ var _ = Describe("Endpoints", func() {
 			})
 
 			It("should render a fully-loaded workload endpoint with tier DefaultAction is Pass", func() {
-				toWlBuilder := newRuleBuilder(
+				toWlRules := newRuleBuilder(
 					withDenyAction(denyAction),
 					withDenyActionString(denyActionString),
 					withPolicies("ai", "bi"),
 					withProfiles("prof1", "prof2"),
 					withTierPassAction(),
-				)
-				toWlRules := toWlBuilder.build()
+				).build()
 
-				fromWlBuilder := newRuleBuilder(
+				fromWlRules := newRuleBuilder(
 					withDenyAction(denyAction),
 					withDenyActionString(denyActionString),
 					withEgress(),
@@ -479,8 +467,7 @@ var _ = Describe("Endpoints", func() {
 					withDropIPIP(),
 					withDropVXLAN(VXLANPort),
 					withTierPassAction(),
-				)
-				fromWlRules := fromWlBuilder.build()
+				).build()
 
 				expected := trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
 					{
@@ -694,24 +681,22 @@ var _ = Describe("Endpoints", func() {
 			})
 
 			It("should render a workload endpoint with packet rate limiting QoSControls", func() {
-				toWlRules := qosControlIngressRules(2000, 4000)
-				toWlRules = append(toWlRules,
-					conntrackAcceptRule(), // conntrack rules.
-					conntrackDenyRule(denyAction),
-					clearMarkRule(),
-					noProfiletMatchedRule(denyAction, denyActionString),
+				toWlBuilder := newRuleBuilder(
+					withDenyAction(denyAction),
+					withDenyActionString(denyActionString),
+					withQoSControls(2000, 4000),
 				)
+				toWlRules := toWlBuilder.build()
 
-				fromWlRules := qosControlEgressRules(1000, 2000)
-				fromWlRules = append(fromWlRules,
-					// conntrack rules.
-					conntrackAcceptRule(),
-					conntrackDenyRule(denyAction),
-					clearMarkRule(),
-					dropVXLANRule(VXLANPort, denyAction, denyActionString),
-					dropIPIPRule(denyAction, denyActionString),
-					noProfiletMatchedRule(denyAction, denyActionString),
+				fromWlBuilder := newRuleBuilder(
+					withDenyAction(denyAction),
+					withDenyActionString(denyActionString),
+					withEgress(),
+					withDropIPIP(),
+					withDropVXLAN(VXLANPort),
+					withQoSControls(1000, 2000),
 				)
+				fromWlRules := fromWlBuilder.build()
 
 				expected := []*generictables.Chain{
 					{
@@ -742,36 +727,20 @@ var _ = Describe("Endpoints", func() {
 			})
 
 			It("should render a workload endpoint with connection limiting QoSControls", func() {
-				toWlRules := []generictables.Rule{
-					// conntrack rules.
-					conntrackAcceptRule(),
-					conntrackDenyRule(denyAction),
-					// ingress max connection rules
-					{
-						Match:  Match(),
-						Action: LimitNumConnectionsAction{Num: 20, RejectWith: generictables.RejectWithTCPReset},
+				toWlRules := newRuleBuilder(
+					withDenyAction(denyAction),
+					withDenyActionString(denyActionString),
+					withQoSConnection(20),
+				).build()
 
-						Comment: []string{"Reject connections over ingress connection limit"},
-					},
-					clearMarkRule(),
-					noProfiletMatchedRule(denyAction, denyActionString),
-				}
-				fromWlRules := []generictables.Rule{
-					// conntrack rules.
-					conntrackAcceptRule(),
-					conntrackDenyRule(denyAction),
-					// egress max connection rules
-					{
-						Match:  Match(),
-						Action: LimitNumConnectionsAction{Num: 10, RejectWith: generictables.RejectWithTCPReset},
-
-						Comment: []string{"Reject connections over egress connection limit"},
-					},
-					clearMarkRule(),
-					dropVXLANRule(VXLANPort, denyAction, denyActionString),
-					dropIPIPRule(denyAction, denyActionString),
-					noProfiletMatchedRule(denyAction, denyActionString),
-				}
+				fromWlRules := newRuleBuilder(
+					withDenyAction(denyAction),
+					withDenyActionString(denyActionString),
+					withEgress(),
+					withDropIPIP(),
+					withDropVXLAN(VXLANPort),
+					withQoSConnection(10),
+				).build()
 
 				expected := trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
 					{
@@ -809,24 +778,20 @@ var _ = Describe("Endpoints", func() {
 			})
 
 			It("should render a minimal workload endpoint", func() {
-				toWlRules := []generictables.Rule{
-					// conntrack rules.
-					conntrackAcceptRule(),
-					conntrackDenyRule(denyAction),
-					clearMarkRule(),
-					nflogProfileIngress(),
-					noProfiletMatchedRule(denyAction, denyActionString),
-				}
-				fromWlRules := []generictables.Rule{
-					// conntrack rules.
-					conntrackAcceptRule(),
-					conntrackDenyRule(denyAction),
-					clearMarkRule(),
-					dropVXLANRule(VXLANPort, denyAction, denyActionString),
-					dropIPIPRule(denyAction, denyActionString),
-					nflogProfileEgress(),
-					noProfiletMatchedRule(denyAction, denyActionString),
-				}
+				toWlRules := newRuleBuilder(
+					withDenyAction(denyAction),
+					withDenyActionString(denyActionString),
+					withFlowLogs(),
+				).build()
+
+				fromWlRules := newRuleBuilder(
+					withDenyAction(denyAction),
+					withDenyActionString(denyActionString),
+					withDropIPIP(),
+					withDropVXLAN(VXLANPort),
+					withEgress(),
+					withFlowLogs(),
+				).build()
 
 				expected := trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
 					{
@@ -881,46 +846,24 @@ var _ = Describe("Endpoints", func() {
 			})
 
 			It("should render a fully-loaded workload endpoint", func() {
-				toWlRules := []generictables.Rule{
-					// conntrack rules.
-					conntrackAcceptRule(),
-					conntrackDenyRule(denyAction),
-					clearMarkRule(),
-					startOfTierDefault(),
-					matchPolicyIngress("default", "ai"),
-					policyAcceptedRule(),
-					matchPolicyIngress("default", "bi"),
-					policyAcceptedRule(),
-					nflogDefaultTierIngress(),
-					defaultTierDefaultDropRule(denyAction, denyActionString),
-					matchProfileIngress("prof1"),
-					profileAcceptedRule(),
-					matchProfileIngress("prof2"),
-					profileAcceptedRule(),
-					nflogProfileIngress(),
-					noProfiletMatchedRule(denyAction, denyActionString),
-				}
-				fromWlRules := []generictables.Rule{
-					// conntrack rules.
-					conntrackAcceptRule(),
-					conntrackDenyRule(denyAction),
-					clearMarkRule(),
-					dropVXLANRule(VXLANPort, denyAction, denyActionString),
-					dropIPIPRule(denyAction, denyActionString),
-					startOfTierDefault(),
-					matchPolicyEgress("default", "ae"),
-					policyAcceptedRule(),
-					matchPolicyEgress("default", "be"),
-					policyAcceptedRule(),
-					nflogDefaultTierEgress(),
-					defaultTierDefaultDropRule(denyAction, denyActionString),
-					matchProfileEgress("prof1"),
-					profileAcceptedRule(),
-					matchProfileEgress("prof2"),
-					profileAcceptedRule(),
-					nflogProfileEgress(),
-					noProfiletMatchedRule(denyAction, denyActionString),
-				}
+				toWlRules := newRuleBuilder(
+					withDenyAction(denyAction),
+					withDenyActionString(denyActionString),
+					withPolicies("ai", "bi"),
+					withProfiles("prof1", "prof2"),
+					withFlowLogs(),
+				).build()
+
+				fromWlRules := newRuleBuilder(
+					withDenyAction(denyAction),
+					withDenyActionString(denyActionString),
+					withDropIPIP(),
+					withDropVXLAN(VXLANPort),
+					withEgress(),
+					withPolicies("ae", "be"),
+					withProfiles("prof1", "prof2"),
+					withFlowLogs(),
+				).build()
 
 				expected := trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
 					{
@@ -976,46 +919,24 @@ var _ = Describe("Endpoints", func() {
 					Selector:    "someLabel == 'bar'",
 				}
 
-				toWlRules := []generictables.Rule{
-					// conntrack rules.
-					conntrackAcceptRule(),
-					conntrackDenyRule(denyAction),
-					clearMarkRule(),
-					startOfTierDefault(),
-					jumpToPolicyGroup(polGrpInABC.ChainName(), 0x10),
-					policyAcceptedRule(),
-					jumpToPolicyGroup(polGrpInEF.ChainName(), 0x10),
-					policyAcceptedRule(),
-					nflogDefaultTierIngress(),
-					defaultTierDefaultDropRule(denyAction, denyActionString),
-					matchProfileIngress("prof1"),
-					profileAcceptedRule(),
-					matchProfileIngress("prof2"),
-					profileAcceptedRule(),
-					nflogProfileIngress(),
-					noProfiletMatchedRule(denyAction, denyActionString),
-				}
-				fromWlRules := []generictables.Rule{
-					// conntrack rules.
-					conntrackAcceptRule(),
-					conntrackDenyRule(denyAction),
-					clearMarkRule(),
-					dropVXLANRule(VXLANPort, denyAction, denyActionString),
-					dropIPIPRule(denyAction, denyActionString),
-					startOfTierDefault(),
-					jumpToPolicyGroup(polGrpOutAB.ChainName(), 0x10),
-					policyAcceptedRule(),
-					jumpToPolicyGroup(polGrpOutDE.ChainName(), 0x10),
-					policyAcceptedRule(),
-					nflogDefaultTierEgress(),
-					defaultTierDefaultDropRule(denyAction, denyActionString),
-					matchProfileEgress("prof1"),
-					profileAcceptedRule(),
-					matchProfileEgress("prof2"),
-					profileAcceptedRule(),
-					nflogProfileEgress(),
-					noProfiletMatchedRule(denyAction, denyActionString),
-				}
+				toWlRules := newRuleBuilder(
+					withDenyAction(denyAction),
+					withDenyActionString(denyActionString),
+					withPolicyGroups(polGrpInABC.ChainName(), polGrpInEF.ChainName()),
+					withProfiles("prof1", "prof2"),
+					withFlowLogs(),
+				).build()
+
+				fromWlRules := newRuleBuilder(
+					withDenyAction(denyAction),
+					withDenyActionString(denyActionString),
+					withEgress(),
+					withPolicyGroups(polGrpOutAB.ChainName(), polGrpOutDE.ChainName()),
+					withProfiles("prof1", "prof2"),
+					withDropIPIP(),
+					withDropVXLAN(VXLANPort),
+					withFlowLogs(),
+				).build()
 
 				expected := trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
 					{
@@ -1055,42 +976,24 @@ var _ = Describe("Endpoints", func() {
 			})
 
 			It("should render a fully-loaded workload endpoint - one staged policy, one enforced", func() {
-				toWlRules := []generictables.Rule{
-					// conntrack rules.
-					conntrackAcceptRule(),
-					conntrackDenyRule(denyAction),
-					clearMarkRule(),
-					startOfTierDefault(),
-					matchPolicyIngress("default", "bi"),
-					policyAcceptedRule(),
-					nflogDefaultTierIngress(),
-					defaultTierDefaultDropRule(denyAction, denyActionString),
-					matchProfileIngress("prof1"),
-					profileAcceptedRule(),
-					matchProfileIngress("prof2"),
-					profileAcceptedRule(),
-					nflogProfileIngress(),
-					noProfiletMatchedRule(denyAction, denyActionString),
-				}
-				fromWlRules := []generictables.Rule{
-					// conntrack rules.
-					conntrackAcceptRule(),
-					conntrackDenyRule(denyAction),
-					clearMarkRule(),
-					dropVXLANRule(VXLANPort, denyAction, denyActionString),
-					dropIPIPRule(denyAction, denyActionString),
-					startOfTierDefault(),
-					matchPolicyEgress("default", "ae"),
-					policyAcceptedRule(),
-					nflogDefaultTierEgress(),
-					defaultTierDefaultDropRule(denyAction, denyActionString),
-					matchProfileEgress("prof1"),
-					profileAcceptedRule(),
-					matchProfileEgress("prof2"),
-					profileAcceptedRule(),
-					nflogProfileEgress(),
-					noProfiletMatchedRule(denyAction, denyActionString),
-				}
+				toWlRules := newRuleBuilder(
+					withDenyAction(denyAction),
+					withDenyActionString(denyActionString),
+					withPolicies("staged:ai", "bi"),
+					withProfiles("prof1", "prof2"),
+					withFlowLogs(),
+				).build()
+
+				fromWlRules := newRuleBuilder(
+					withDenyAction(denyAction),
+					withDenyActionString(denyActionString),
+					withEgress(),
+					withPolicies("ae", "staged:be"),
+					withProfiles("prof1", "prof2"),
+					withDropIPIP(),
+					withDropVXLAN(VXLANPort),
+					withFlowLogs(),
+				).build()
 
 				expected := trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
 					{
@@ -1121,36 +1024,24 @@ var _ = Describe("Endpoints", func() {
 			})
 
 			It("should render a fully-loaded workload endpoint - both staged, end-of-tier action is pass", func() {
-				toWlRules := []generictables.Rule{
-					// conntrack rules.
-					conntrackAcceptRule(),
-					conntrackDenyRule(denyAction),
-					clearMarkRule(),
-					startOfTierDefault(),
-					nflogDefaultTierIngressWithPassAction(),
-					matchProfileIngress("prof1"),
-					profileAcceptedRule(),
-					matchProfileIngress("prof2"),
-					profileAcceptedRule(),
-					nflogProfileIngress(),
-					noProfiletMatchedRule(denyAction, denyActionString),
-				}
-				fromWlRules := []generictables.Rule{
-					// conntrack rules.
-					conntrackAcceptRule(),
-					conntrackDenyRule(denyAction),
-					clearMarkRule(),
-					dropVXLANRule(VXLANPort, denyAction, denyActionString),
-					dropIPIPRule(denyAction, denyActionString),
-					startOfTierDefault(),
-					nflogDefaultTierEgressWithPassAction(),
-					matchProfileEgress("prof1"),
-					profileAcceptedRule(),
-					matchProfileEgress("prof2"),
-					profileAcceptedRule(),
-					nflogProfileEgress(),
-					noProfiletMatchedRule(denyAction, denyActionString),
-				}
+				toWlRules := newRuleBuilder(
+					withDenyAction(denyAction),
+					withDenyActionString(denyActionString),
+					withPolicies("staged:ai", "staged:bi"),
+					withProfiles("prof1", "prof2"),
+					withFlowLogs(),
+				).build()
+
+				fromWlRules := newRuleBuilder(
+					withDenyAction(denyAction),
+					withDenyActionString(denyActionString),
+					withEgress(),
+					withPolicies("staged:ae", "staged:be"),
+					withProfiles("prof1", "prof2"),
+					withDropIPIP(),
+					withDropVXLAN(VXLANPort),
+					withFlowLogs(),
+				).build()
 
 				expected := trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
 					{
@@ -1181,36 +1072,24 @@ var _ = Describe("Endpoints", func() {
 			})
 
 			It("should render a fully-loaded workload endpoint - staged policy group, end-of-tier pass", func() {
-				toWlRules := []generictables.Rule{
-					// conntrack rules.
-					conntrackAcceptRule(),
-					conntrackDenyRule(denyAction),
-					clearMarkRule(),
-					startOfTierDefault(),
-					nflogDefaultTierIngressWithPassAction(),
-					matchProfileIngress("prof1"),
-					profileAcceptedRule(),
-					matchProfileIngress("prof2"),
-					profileAcceptedRule(),
-					nflogProfileIngress(),
-					noProfiletMatchedRule(denyAction, denyActionString),
-				}
-				fromWlRules := []generictables.Rule{
-					// conntrack rules.
-					conntrackAcceptRule(),
-					conntrackDenyRule(denyAction),
-					clearMarkRule(),
-					dropVXLANRule(VXLANPort, denyAction, denyActionString),
-					dropIPIPRule(denyAction, denyActionString),
-					startOfTierDefault(),
-					nflogDefaultTierEgressWithPassAction(),
-					matchProfileEgress("prof1"),
-					profileAcceptedRule(),
-					matchProfileEgress("prof2"),
-					profileAcceptedRule(),
-					nflogProfileEgress(),
-					noProfiletMatchedRule(denyAction, denyActionString),
-				}
+				toWlRules := newRuleBuilder(
+					withDenyAction(denyAction),
+					withDenyActionString(denyActionString),
+					withPolicyGroups("staged:ai", "staged:bi"),
+					withProfiles("prof1", "prof2"),
+					withFlowLogs(),
+				).build()
+
+				fromWlRules := newRuleBuilder(
+					withDenyAction(denyAction),
+					withDenyActionString(denyActionString),
+					withEgress(),
+					withPolicies("staged:ae", "staged:be"),
+					withProfiles("prof1", "prof2"),
+					withDropIPIP(),
+					withDropVXLAN(VXLANPort),
+					withFlowLogs(),
+				).build()
 
 				expected := trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
 					{
@@ -1253,44 +1132,26 @@ var _ = Describe("Endpoints", func() {
 			})
 
 			It("should render a fully-loaded workload endpoint with tier DefaultAction is Pass", func() {
-				toWlRules := []generictables.Rule{
-					// conntrack rules.
-					conntrackAcceptRule(),
-					conntrackDenyRule(denyAction),
-					clearMarkRule(),
-					startOfTierDefault(),
-					matchPolicyIngress("default", "ai"),
-					policyAcceptedRule(),
-					matchPolicyIngress("default", "bi"),
-					policyAcceptedRule(),
-					nflogDefaultTierIngressWithPassAction(),
-					matchProfileIngress("prof1"),
-					profileAcceptedRule(),
-					matchProfileIngress("prof2"),
-					profileAcceptedRule(),
-					nflogProfileIngress(),
-					noProfiletMatchedRule(denyAction, denyActionString),
-				}
-				fromWlRules := []generictables.Rule{
-					// conntrack rules.
-					conntrackAcceptRule(),
-					conntrackDenyRule(denyAction),
-					clearMarkRule(),
-					dropVXLANRule(VXLANPort, denyAction, denyActionString),
-					dropIPIPRule(denyAction, denyActionString),
-					startOfTierDefault(),
-					matchPolicyEgress("default", "ae"),
-					policyAcceptedRule(),
-					matchPolicyEgress("default", "be"),
-					policyAcceptedRule(),
-					nflogDefaultTierEgressWithPassAction(),
-					matchProfileEgress("prof1"),
-					profileAcceptedRule(),
-					matchProfileEgress("prof2"),
-					profileAcceptedRule(),
-					nflogProfileEgress(),
-					noProfiletMatchedRule(denyAction, denyActionString),
-				}
+				toWlRules := newRuleBuilder(
+					withDenyAction(denyAction),
+					withDenyActionString(denyActionString),
+					withPolicies("ai", "bi"),
+					withProfiles("prof1", "prof2"),
+					withTierPassAction(),
+					withFlowLogs(),
+				).build()
+
+				fromWlRules := newRuleBuilder(
+					withDenyAction(denyAction),
+					withDenyActionString(denyActionString),
+					withEgress(),
+					withPolicies("ae", "be"),
+					withProfiles("prof1", "prof2"),
+					withDropIPIP(),
+					withDropVXLAN(VXLANPort),
+					withTierPassAction(),
+					withFlowLogs(),
+				).build()
 
 				expected := trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
 					{
@@ -1522,34 +1383,20 @@ var _ = Describe("Endpoints", func() {
 			})
 
 			It("should render a minimal workload endpoint", func() {
-				toWlRules := []generictables.Rule{
-					// conntrack rules.
-					{
-						Match:  Match().ConntrackState("RELATED,ESTABLISHED"),
-						Action: SetMarkAction{Mark: 0x8},
-					},
-					{
-						Match:  Match().ConntrackState("RELATED,ESTABLISHED"),
-						Action: ReturnAction{},
-					},
-					clearMarkRule(),
-					noProfiletMatchedRule(denyAction, denyActionString),
-				}
-				fromWlRules := []generictables.Rule{
-					// conntrack rules.
-					{
-						Match:  Match().ConntrackState("RELATED,ESTABLISHED"),
-						Action: SetMarkAction{Mark: 0x8},
-					},
-					{
-						Match:  Match().ConntrackState("RELATED,ESTABLISHED"),
-						Action: ReturnAction{},
-					},
-					clearMarkRule(),
-					dropVXLANRule(VXLANPort, denyAction, denyActionString),
-					dropIPIPRule(denyAction, denyActionString),
-					noProfiletMatchedRule(denyAction, denyActionString),
-				}
+				toWlRules := newRuleBuilder(
+					withDenyAction(denyAction),
+					withDenyActionString(denyActionString),
+					withInvalidCTStateDisabled(),
+				).build()
+
+				fromWlRules := newRuleBuilder(
+					withDenyAction(denyAction),
+					withDenyActionString(denyActionString),
+					withInvalidCTStateDisabled(),
+					withEgress(),
+					withDropIPIP(),
+					withDropVXLAN(VXLANPort),
+				).build()
 
 				expected := trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
 					{
@@ -1705,21 +1552,17 @@ var _ = Describe("Endpoints", func() {
 					epMarkMapper = NewEndpointMarkMapper(rrConfigNormalMangleReturn.MarkEndpoint,
 						rrConfigNormalMangleReturn.MarkNonCaliEndpoint)
 
-					toWlRules := []generictables.Rule{
-						// conntrack rules.
-						conntrackAcceptRule(),
-						conntrackDenyRule(denyAction),
-						clearMarkRule(),
-						noProfiletMatchedRule(denyAction, denyActionString),
-					}
-					fromWlRules := []generictables.Rule{
-						// conntrack rules.
-						conntrackAcceptRule(),
-						conntrackDenyRule(denyAction),
-						clearMarkRule(),
-						dropIPIPRule(denyAction, denyActionString),
-						noProfiletMatchedRule(denyAction, denyActionString),
-					}
+					toWlRules := newRuleBuilder(
+						withDenyAction(denyAction),
+						withDenyActionString(denyActionString),
+					).build()
+
+					fromWlRules := newRuleBuilder(
+						withDenyAction(denyAction),
+						withDenyActionString(denyActionString),
+						withDropIPIP(),
+						withEgress(),
+					).build()
 
 					expected := trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
 						{
@@ -1751,23 +1594,19 @@ var _ = Describe("Endpoints", func() {
 					epMarkMapper = NewEndpointMarkMapper(rrConfigNormalMangleReturn.MarkEndpoint,
 						rrConfigNormalMangleReturn.MarkNonCaliEndpoint)
 
-					toWlRules := []generictables.Rule{
-						// conntrack rules.
-						conntrackAcceptRule(),
-						conntrackDenyRule(denyAction),
-						clearMarkRule(),
-						nflogProfileIngress(),
-						noProfiletMatchedRule(denyAction, denyActionString),
-					}
-					fromWlRules := []generictables.Rule{
-						// conntrack rules.
-						conntrackAcceptRule(),
-						conntrackDenyRule(denyAction),
-						clearMarkRule(),
-						dropIPIPRule(denyAction, denyActionString),
-						nflogProfileEgress(),
-						noProfiletMatchedRule(denyAction, denyActionString),
-					}
+					toWlRules := newRuleBuilder(
+						withDenyAction(denyAction),
+						withDenyActionString(denyActionString),
+						withFlowLogs(),
+					).build()
+
+					fromWlRules := newRuleBuilder(
+						withDenyAction(denyAction),
+						withDenyActionString(denyActionString),
+						withDropIPIP(),
+						withEgress(),
+						withFlowLogs(),
+					).build()
 
 					expected := trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
 						{
@@ -1810,21 +1649,17 @@ var _ = Describe("Endpoints", func() {
 						nil,
 					)
 
-					toWlRules := []generictables.Rule{
-						// conntrack rules.
-						conntrackAcceptRule(),
-						conntrackDenyRule(denyAction),
-						clearMarkRule(),
-						noProfiletMatchedRule(denyAction, denyActionString),
-					}
-					fromWlRules := []generictables.Rule{
-						// conntrack rules.
-						conntrackAcceptRule(),
-						conntrackDenyRule(denyAction),
-						clearMarkRule(),
-						dropVXLANRule(VXLANPort, denyAction, denyActionString),
-						noProfiletMatchedRule(denyAction, denyActionString),
-					}
+					toWlRules := newRuleBuilder(
+						withDenyAction(denyAction),
+						withDenyActionString(denyActionString),
+					).build()
+
+					fromWlRules := newRuleBuilder(
+						withDenyAction(denyAction),
+						withDenyActionString(denyActionString),
+						withDropVXLAN(VXLANPort),
+						withEgress(),
+					).build()
 
 					expected := trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
 						{
@@ -1858,23 +1693,19 @@ var _ = Describe("Endpoints", func() {
 						nil,
 					)
 
-					toWlRules := []generictables.Rule{
-						// conntrack rules.
-						conntrackAcceptRule(),
-						conntrackDenyRule(denyAction),
-						clearMarkRule(),
-						nflogProfileIngress(),
-						noProfiletMatchedRule(denyAction, denyActionString),
-					}
-					fromWlRules := []generictables.Rule{
-						// conntrack rules.
-						conntrackAcceptRule(),
-						conntrackDenyRule(denyAction),
-						clearMarkRule(),
-						dropVXLANRule(VXLANPort, denyAction, denyActionString),
-						nflogProfileEgress(),
-						noProfiletMatchedRule(denyAction, denyActionString),
-					}
+					toWlRules := newRuleBuilder(
+						withDenyAction(denyAction),
+						withDenyActionString(denyActionString),
+						withFlowLogs(),
+					).build()
+
+					fromWlRules := newRuleBuilder(
+						withDenyAction(denyAction),
+						withDenyActionString(denyActionString),
+						withDropVXLAN(VXLANPort),
+						withEgress(),
+						withFlowLogs(),
+					).build()
 
 					expected := trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
 						{
@@ -1903,20 +1734,16 @@ var _ = Describe("Endpoints", func() {
 					epMarkMapper = NewEndpointMarkMapper(rrConfigNormalMangleReturn.MarkEndpoint,
 						rrConfigNormalMangleReturn.MarkNonCaliEndpoint)
 
-					toWlRules := []generictables.Rule{
-						// conntrack rules.
-						conntrackAcceptRule(),
-						conntrackDenyRule(denyAction),
-						clearMarkRule(),
-						noProfiletMatchedRule(denyAction, denyActionString),
-					}
-					fromWlRules := []generictables.Rule{
-						// conntrack rules.
-						conntrackAcceptRule(),
-						conntrackDenyRule(denyAction),
-						clearMarkRule(),
-						noProfiletMatchedRule(denyAction, denyActionString),
-					}
+					toWlRules := newRuleBuilder(
+						withDenyAction(denyAction),
+						withDenyActionString(denyActionString),
+					).build()
+
+					fromWlRules := newRuleBuilder(
+						withDenyAction(denyAction),
+						withDenyActionString(denyActionString),
+						withEgress(),
+					).build()
 
 					expected := trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
 						{
@@ -1950,22 +1777,18 @@ var _ = Describe("Endpoints", func() {
 					epMarkMapper = NewEndpointMarkMapper(rrConfigNormalMangleReturn.MarkEndpoint,
 						rrConfigNormalMangleReturn.MarkNonCaliEndpoint)
 
-					toWlRules := []generictables.Rule{
-						// conntrack rules.
-						conntrackAcceptRule(),
-						conntrackDenyRule(denyAction),
-						clearMarkRule(),
-						nflogProfileIngress(),
-						noProfiletMatchedRule(denyAction, denyActionString),
-					}
-					fromWlRules := []generictables.Rule{
-						// conntrack rules.
-						conntrackAcceptRule(),
-						conntrackDenyRule(denyAction),
-						clearMarkRule(),
-						nflogProfileEgress(),
-						noProfiletMatchedRule(denyAction, denyActionString),
-					}
+					toWlRules := newRuleBuilder(
+						withDenyAction(denyAction),
+						withDenyActionString(denyActionString),
+						withFlowLogs(),
+					).build()
+
+					fromWlRules := newRuleBuilder(
+						withDenyAction(denyAction),
+						withDenyActionString(denyActionString),
+						withEgress(),
+						withFlowLogs(),
+					).build()
 
 					expected := trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
 						{
@@ -2318,6 +2141,19 @@ func polGroupEntry(group PolicyGroup, rules []generictables.Rule) table.TableEnt
 	)
 }
 
+func conntrackRulesWithInvalidStateDisabled() []generictables.Rule {
+	return []generictables.Rule{
+		{
+			Match:  Match().ConntrackState("RELATED,ESTABLISHED"),
+			Action: SetMarkAction{Mark: 0x8},
+		},
+		{
+			Match:  Match().ConntrackState("RELATED,ESTABLISHED"),
+			Action: ReturnAction{},
+		},
+	}
+}
+
 func conntrackAcceptRule() generictables.Rule {
 	return generictables.Rule{
 		Match:  Match().ConntrackState("RELATED,ESTABLISHED"),
@@ -2580,6 +2416,14 @@ func qosControlRules(direction string, rate, burst int64) []generictables.Rule {
 	}
 }
 
+func qosMaxConnectionRule(conn int64, dir string) generictables.Rule {
+	return generictables.Rule{
+		Match:   Match(),
+		Action:  LimitNumConnectionsAction{Num: conn, RejectWith: generictables.RejectWithTCPReset},
+		Comment: []string{fmt.Sprintf("Reject connections over %v connection limit", dir)},
+	}
+}
+
 type ruleBuilderOpt func(*ruleBuilder)
 
 func withEgress() ruleBuilderOpt {
@@ -2643,10 +2487,37 @@ func withTierPassAction() ruleBuilderOpt {
 	}
 }
 
+func withQoSControls(rate, burst int64) ruleBuilderOpt {
+	return func(r *ruleBuilder) {
+		r.qosControlsEnabled = true
+		r.qosRate = rate
+		r.qosburst = burst
+	}
+}
+
+func withQoSConnection(maxConn int64) ruleBuilderOpt {
+	return func(r *ruleBuilder) {
+		r.qosMaxConn = maxConn
+	}
+}
+
+func withFlowLogs() ruleBuilderOpt {
+	return func(r *ruleBuilder) {
+		r.flowLogsEnabled = true
+	}
+}
+
+func withInvalidCTStateDisabled() ruleBuilderOpt {
+	return func(r *ruleBuilder) {
+		r.invalidCTStateDisabled = true
+	}
+}
+
 type ruleBuilder struct {
-	egress           bool
-	denyAction       generictables.Action
-	denyActionString string
+	invalidCTStateDisabled bool
+	egress                 bool
+	denyAction             generictables.Action
+	denyActionString       string
 
 	dropIPIP  bool
 	dropVXLAN bool
@@ -2657,6 +2528,13 @@ type ruleBuilder struct {
 	profiles     []string
 
 	tierPassAction bool
+
+	qosControlsEnabled bool
+	qosRate            int64
+	qosburst           int64
+	qosMaxConn         int64
+
+	flowLogsEnabled bool
 }
 
 func newRuleBuilder(opts ...ruleBuilderOpt) *ruleBuilder {
@@ -2668,12 +2546,31 @@ func newRuleBuilder(opts ...ruleBuilderOpt) *ruleBuilder {
 }
 
 func (r *ruleBuilder) build() []generictables.Rule {
-	rules := []generictables.Rule{
-		// conntrack rules.
-		conntrackAcceptRule(),
-		conntrackDenyRule(r.denyAction),
-		clearMarkRule(),
+	var rules []generictables.Rule
+
+	if r.qosControlsEnabled {
+		if r.egress {
+			rules = append(rules, qosControlEgressRules(r.qosRate, r.qosburst)...)
+		} else {
+			rules = append(rules, qosControlIngressRules(r.qosRate, r.qosburst)...)
+		}
 	}
+
+	if r.invalidCTStateDisabled {
+		rules = append(rules, conntrackRulesWithInvalidStateDisabled()...)
+	} else {
+		rules = append(rules, conntrackAcceptRule(), conntrackDenyRule(r.denyAction))
+	}
+
+	if r.qosMaxConn > 0 {
+		dir := "ingress"
+		if r.egress {
+			dir = "egress"
+		}
+		rules = append(rules, qosMaxConnectionRule(r.qosMaxConn, dir))
+	}
+
+	rules = append(rules, clearMarkRule())
 
 	if r.dropVXLAN {
 		rules = append(rules, dropVXLANRule(r.vxlanPort, r.denyAction, r.denyActionString))
@@ -2722,9 +2619,25 @@ func (r *ruleBuilder) build() []generictables.Rule {
 		endOfTierDrop = false
 	}
 
-	if (len(r.policies) != 0 || len(r.policyGroups) != 0) &&
-		endOfTierDrop {
-		rules = append(rules, defaultTierDefaultDropRule(r.denyAction, r.denyActionString))
+	if len(r.policies) != 0 || len(r.policyGroups) != 0 {
+		if endOfTierDrop {
+			if r.flowLogsEnabled {
+				if r.egress {
+					rules = append(rules, nflogDefaultTierEgress())
+				} else {
+					rules = append(rules, nflogDefaultTierIngress())
+				}
+			}
+			rules = append(rules, defaultTierDefaultDropRule(r.denyAction, r.denyActionString))
+		} else {
+			if r.flowLogsEnabled {
+				if r.egress {
+					rules = append(rules, nflogDefaultTierEgressWithPassAction())
+				} else {
+					rules = append(rules, nflogDefaultTierIngressWithPassAction())
+				}
+			}
+		}
 	}
 
 	for _, p := range r.profiles {
@@ -2741,6 +2654,13 @@ func (r *ruleBuilder) build() []generictables.Rule {
 		}
 	}
 
+	if r.flowLogsEnabled {
+		if r.egress {
+			rules = append(rules, nflogProfileEgress())
+		} else {
+			rules = append(rules, nflogProfileIngress())
+		}
+	}
 	rules = append(rules, noProfiletMatchedRule(r.denyAction, r.denyActionString))
 
 	return rules
