@@ -36,1627 +36,94 @@ func init() {
 	format.MaxLength = 0
 }
 
-var _ = Describe("Endpoints", func() {
-	const (
-		ProtoUDP          = 17
-		ProtoIPIP         = 4
-		VXLANPort         = 4789
-		EgressIPVXLANPort = 4790
-		VXLANVNI          = 4096
-	)
-
-	for _, trueOrFalse := range []bool{true, false} {
-		var denyAction generictables.Action
-		denyAction = DropAction{}
-		denyActionCommand := "DROP"
-		denyActionString := "Drop"
-		if trueOrFalse {
-			denyAction = RejectAction{}
-			denyActionCommand = "REJECT"
-			denyActionString = "Reject"
-		}
-
-		kubeIPVSEnabled := trueOrFalse
-		rrConfigNormalMangleReturn := Config{
-			IPIPEnabled:            true,
-			IPIPTunnelAddress:      nil,
-			IPSetConfigV4:          ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil),
-			IPSetConfigV6:          ipsets.NewIPVersionConfig(ipsets.IPFamilyV6, "cali", nil, nil),
-			MarkAccept:             0x8,
-			MarkPass:               0x10,
-			MarkScratch0:           0x20,
-			MarkScratch1:           0x40,
-			MarkDrop:               0x80,
-			MarkEndpoint:           0xff00,
-			MarkNonCaliEndpoint:    0x0100,
-			KubeIPVSSupportEnabled: kubeIPVSEnabled,
-			MangleAllowAction:      "RETURN",
-			FilterDenyAction:       denyActionCommand,
-			VXLANPort:              4789,
-			VXLANVNI:               4096,
-		}
-
-		rrConfigConntrackDisabledReturnAction := Config{
-			IPIPEnabled:             true,
-			IPIPTunnelAddress:       nil,
-			IPSetConfigV4:           ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil),
-			IPSetConfigV6:           ipsets.NewIPVersionConfig(ipsets.IPFamilyV6, "cali", nil, nil),
-			MarkAccept:              0x8,
-			MarkPass:                0x10,
-			MarkScratch0:            0x20,
-			MarkScratch1:            0x40,
-			MarkDrop:                0x80,
-			MarkEndpoint:            0xff00,
-			MarkNonCaliEndpoint:     0x0100,
-			KubeIPVSSupportEnabled:  kubeIPVSEnabled,
-			DisableConntrackInvalid: true,
-			FilterAllowAction:       "RETURN",
-			FilterDenyAction:        denyActionCommand,
-			VXLANPort:               4789,
-			VXLANVNI:                4096,
-		}
-
-		var renderer RuleRenderer
-		var epMarkMapper EndpointMarkMapper
-
-		Context("with normal config", func() {
-			BeforeEach(func() {
-				rrConfigNormalMangleReturn.FlowLogsEnabled = false
-				renderer = NewRenderer(rrConfigNormalMangleReturn)
-				epMarkMapper = NewEndpointMarkMapper(rrConfigNormalMangleReturn.MarkEndpoint,
-					rrConfigNormalMangleReturn.MarkNonCaliEndpoint)
-			})
-
-			It("should render a minimal workload endpoint", func() {
-				toWlRules := newRuleBuilder(
-					withDenyAction(denyAction),
-					withDenyActionString(denyActionString),
-				).build()
-
-				fromWlRules := newRuleBuilder(
-					withDenyAction(denyAction),
-					withDenyActionString(denyActionString),
-					withDropIPIP(),
-					withDropVXLAN(VXLANPort),
-					withEgress(),
-				).build()
-
-				expected := trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
-					{
-						Name:  "cali-tw-cali1234",
-						Rules: toWlRules,
-					},
-					{
-						Name:  "cali-fw-cali1234",
-						Rules: fromWlRules,
-					},
-					{
-						Name:  "cali-sm-cali1234",
-						Rules: setEndpointMarkRules(0xd400, 0xff00),
-					},
-				})
-				Expect(renderer.WorkloadEndpointToIptablesChains(
-					"cali1234", epMarkMapper,
-					true,
-					nil,
-					nil,
-					nil,
-				)).To(Equal(expected))
-			})
-
-			It("should render a disabled workload endpoint", func() {
-				commonRule := []generictables.Rule{
-					endpointAdminDisabledRule(denyAction),
-				}
-
-				expected := trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
-					{
-						Name:  "cali-tw-cali1234",
-						Rules: commonRule,
-					},
-					{
-						Name:  "cali-fw-cali1234",
-						Rules: commonRule,
-					},
-					{
-						Name:  "cali-sm-cali1234",
-						Rules: setEndpointMarkRules(0xd400, 0xff00),
-					},
-				})
-				Expect(renderer.WorkloadEndpointToIptablesChains(
-					"cali1234", epMarkMapper,
-					false,
-					nil,
-					nil,
-					nil,
-				)).To(Equal(expected))
-			})
-
-			It("should render a fully-loaded workload endpoint", func() {
-				toWlRules := newRuleBuilder(
-					withDenyAction(denyAction),
-					withDenyActionString(denyActionString),
-					withPolicies("ai", "bi"),
-					withProfiles("prof1", "prof2"),
-				).build()
-
-				fromWlRules := newRuleBuilder(
-					withDenyAction(denyAction),
-					withDenyActionString(denyActionString),
-					withDropIPIP(),
-					withDropVXLAN(VXLANPort),
-					withEgress(),
-					withPolicies("ae", "be"),
-					withProfiles("prof1", "prof2"),
-				).build()
-
-				expected := trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
-					{
-						Name:  "cali-tw-cali1234",
-						Rules: toWlRules,
-					},
-					{
-						Name:  "cali-fw-cali1234",
-						Rules: fromWlRules,
-					},
-					{
-						Name:  "cali-sm-cali1234",
-						Rules: setEndpointMarkRules(0xd400, 0xff00),
-					},
-				})
-				Expect(renderer.WorkloadEndpointToIptablesChains(
-					"cali1234",
-					epMarkMapper,
-					true,
-					tiersToSinglePolGroups([]*proto.TierInfo{{
-						Name:            "default",
-						IngressPolicies: []string{"ai", "bi"},
-						EgressPolicies:  []string{"ae", "be"},
-					}}),
-					[]string{"prof1", "prof2"},
-					nil,
-				)).To(Equal(expected))
-			})
-
-			It("should render a workload endpoint with policy groups", func() {
-				polGrpInABC := &PolicyGroup{
-					Tier:        "default",
-					Direction:   PolicyDirectionInbound,
-					PolicyNames: []string{"a", "b", "c"},
-					Selector:    "all()",
-				}
-				polGrpInEF := &PolicyGroup{
-					Tier:        "default",
-					Direction:   PolicyDirectionInbound,
-					PolicyNames: []string{"e", "f"},
-					Selector:    "someLabel == 'bar'",
-				}
-				polGrpOutAB := &PolicyGroup{
-					Tier:        "default",
-					Direction:   PolicyDirectionOutbound,
-					PolicyNames: []string{"a", "b"},
-					Selector:    "all()",
-				}
-				polGrpOutDE := &PolicyGroup{
-					Tier:        "default",
-					Direction:   PolicyDirectionOutbound,
-					PolicyNames: []string{"d", "e"},
-					Selector:    "someLabel == 'bar'",
-				}
-
-				toWlRules := newRuleBuilder(
-					withDenyAction(denyAction),
-					withDenyActionString(denyActionString),
-					withPolicyGroups(polGrpInABC.ChainName(), polGrpInEF.ChainName()),
-					withProfiles("prof1", "prof2"),
-				).build()
-
-				fromWlRules := newRuleBuilder(
-					withDenyAction(denyAction),
-					withDenyActionString(denyActionString),
-					withEgress(),
-					withPolicyGroups(polGrpOutAB.ChainName(), polGrpOutDE.ChainName()),
-					withProfiles("prof1", "prof2"),
-					withDropIPIP(),
-					withDropVXLAN(VXLANPort),
-				).build()
-
-				expected := trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
-					{
-						Name:  "cali-tw-cali1234",
-						Rules: toWlRules,
-					},
-					{
-						Name:  "cali-fw-cali1234",
-						Rules: fromWlRules,
-					},
-					{
-						Name:  "cali-sm-cali1234",
-						Rules: setEndpointMarkRules(0xd400, 0xff00),
-					},
-				})
-
-				Expect(renderer.WorkloadEndpointToIptablesChains(
-					"cali1234",
-					epMarkMapper,
-					true,
-					[]TierPolicyGroups{
-						{
-							Name: "default",
-							IngressPolicies: []*PolicyGroup{
-								polGrpInABC,
-								polGrpInEF,
-							},
-							EgressPolicies: []*PolicyGroup{
-								polGrpOutAB,
-								polGrpOutDE,
-							},
-						},
-					},
-					[]string{"prof1", "prof2"},
-					nil,
-				)).To(Equal(expected))
-			})
-
-			It("should render a fully-loaded workload endpoint - one staged policy, one enforced", func() {
-				toWlRules := newRuleBuilder(
-					withDenyAction(denyAction),
-					withDenyActionString(denyActionString),
-					withPolicies("staged:ai", "bi"),
-					withProfiles("prof1", "prof2"),
-				).build()
-
-				fromWlRules := newRuleBuilder(
-					withDenyAction(denyAction),
-					withDenyActionString(denyActionString),
-					withEgress(),
-					withPolicies("ae", "staged:be"),
-					withProfiles("prof1", "prof2"),
-					withDropIPIP(),
-					withDropVXLAN(VXLANPort),
-				).build()
-
-				expected := trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
-					{
-						Name:  "cali-tw-cali1234",
-						Rules: toWlRules,
-					},
-					{
-						Name:  "cali-fw-cali1234",
-						Rules: fromWlRules,
-					},
-					{
-						Name:  "cali-sm-cali1234",
-						Rules: setEndpointMarkRules(0xd400, 0xff00),
-					},
-				})
-				Expect(renderer.WorkloadEndpointToIptablesChains(
-					"cali1234",
-					epMarkMapper,
-					true,
-					tiersToSinglePolGroups([]*proto.TierInfo{{
-						Name:            "default",
-						IngressPolicies: []string{"staged:ai", "bi"},
-						EgressPolicies:  []string{"ae", "staged:be"},
-					}}),
-					[]string{"prof1", "prof2"},
-					nil,
-				)).To(Equal(expected))
-			})
-
-			It("should render a fully-loaded workload endpoint - both staged, end-of-tier action is pass", func() {
-				toWlRules := newRuleBuilder(
-					withDenyAction(denyAction),
-					withDenyActionString(denyActionString),
-					withPolicies("staged:ai", "staged:bi"),
-					withProfiles("prof1", "prof2"),
-				).build()
-
-				fromWlRules := newRuleBuilder(
-					withDenyAction(denyAction),
-					withDenyActionString(denyActionString),
-					withEgress(),
-					withPolicies("staged:ae", "staged:be"),
-					withProfiles("prof1", "prof2"),
-					withDropIPIP(),
-					withDropVXLAN(VXLANPort),
-				).build()
-
-				expected := trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
-					{
-						Name:  "cali-tw-cali1234",
-						Rules: toWlRules,
-					},
-					{
-						Name:  "cali-fw-cali1234",
-						Rules: fromWlRules,
-					},
-					{
-						Name:  "cali-sm-cali1234",
-						Rules: setEndpointMarkRules(0xd400, 0xff00),
-					},
-				})
-				Expect(renderer.WorkloadEndpointToIptablesChains(
-					"cali1234",
-					epMarkMapper,
-					true,
-					tiersToSinglePolGroups([]*proto.TierInfo{{
-						Name:            "default",
-						IngressPolicies: []string{"staged:ai", "staged:bi"},
-						EgressPolicies:  []string{"staged:ae", "staged:be"},
-					}}),
-					[]string{"prof1", "prof2"},
-					nil,
-				)).To(Equal(expected))
-			})
-
-			It("should render a fully-loaded workload endpoint - staged policy group, end-of-tier pass", func() {
-				toWlRules := newRuleBuilder(
-					withDenyAction(denyAction),
-					withDenyActionString(denyActionString),
-					withPolicyGroups("staged:ai", "staged:bi"),
-					withProfiles("prof1", "prof2"),
-				).build()
-
-				fromWlRules := newRuleBuilder(
-					withDenyAction(denyAction),
-					withDenyActionString(denyActionString),
-					withEgress(),
-					withPolicies("staged:ae", "staged:be"),
-					withProfiles("prof1", "prof2"),
-					withDropIPIP(),
-					withDropVXLAN(VXLANPort),
-				).build()
-
-				expected := trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
-					{
-						Name:  "cali-tw-cali1234",
-						Rules: toWlRules,
-					},
-					{
-						Name:  "cali-fw-cali1234",
-						Rules: fromWlRules,
-					},
-					{
-						Name:  "cali-sm-cali1234",
-						Rules: setEndpointMarkRules(0xd400, 0xff00),
-					},
-				})
-
-				Expect(renderer.WorkloadEndpointToIptablesChains(
-					"cali1234",
-					epMarkMapper,
-					true,
-					[]TierPolicyGroups{
-						{
-							Name: "default",
-							IngressPolicies: []*PolicyGroup{{
-								Tier:        "default",
-								Direction:   PolicyDirectionInbound,
-								PolicyNames: []string{"staged:ai", "staged:bi"},
-								Selector:    "all()",
-							}},
-							EgressPolicies: []*PolicyGroup{{
-								Tier:        "default",
-								Direction:   PolicyDirectionOutbound,
-								PolicyNames: []string{"staged:ae", "staged:be"},
-								Selector:    "all()",
-							}},
-						},
-					},
-					[]string{"prof1", "prof2"},
-					nil,
-				)).To(Equal(expected))
-			})
-
-			It("should render a fully-loaded workload endpoint with tier DefaultAction is Pass", func() {
-				toWlRules := newRuleBuilder(
-					withDenyAction(denyAction),
-					withDenyActionString(denyActionString),
-					withPolicies("ai", "bi"),
-					withProfiles("prof1", "prof2"),
-					withTierPassAction(),
-				).build()
-
-				fromWlRules := newRuleBuilder(
-					withDenyAction(denyAction),
-					withDenyActionString(denyActionString),
-					withEgress(),
-					withPolicies("ae", "be"),
-					withProfiles("prof1", "prof2"),
-					withDropIPIP(),
-					withDropVXLAN(VXLANPort),
-					withTierPassAction(),
-				).build()
-
-				expected := trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
-					{
-						Name:  "cali-tw-cali1234",
-						Rules: toWlRules,
-					},
-					{
-						Name:  "cali-fw-cali1234",
-						Rules: fromWlRules,
-					},
-					{
-						Name:  "cali-sm-cali1234",
-						Rules: setEndpointMarkRules(0xd400, 0xff00),
-					},
-				})
-				Expect(renderer.WorkloadEndpointToIptablesChains(
-					"cali1234",
-					epMarkMapper,
-					true,
-					tiersToSinglePolGroups([]*proto.TierInfo{{
-						Name:            "default",
-						DefaultAction:   "Pass",
-						IngressPolicies: []string{"ai", "bi"},
-						EgressPolicies:  []string{"ae", "be"},
-					}}),
-					[]string{"prof1", "prof2"},
-					nil,
-				)).To(Equal(expected))
-			})
-
-			It("should render a host endpoint", func() {
-				actual := renderer.HostEndpointToFilterChains("eth0",
-					tiersToSinglePolGroups([]*proto.TierInfo{{
-						Name:            "default",
-						IngressPolicies: []string{"ai", "bi"},
-						EgressPolicies:  []string{"ae", "be"},
-					}}),
-					tiersToSinglePolGroups([]*proto.TierInfo{{
-						Name:            "default",
-						IngressPolicies: []string{"afi", "bfi"},
-						EgressPolicies:  []string{"afe", "bfe"},
-					}}),
-					epMarkMapper,
-					[]string{"prof1", "prof2"},
-				)
-				toHostRules := []generictables.Rule{
-					// conntrack rules.
-					conntrackAcceptRule(),
-					conntrackDenyRule(denyAction),
-					// Host endpoints get extra failsafe rules.
-					failSafeEgress(),
-					clearMarkRule(),
-					startOfTierDefault(),
-					matchPolicyEgress("default", "ae"),
-					policyAcceptedRule(),
-					matchPolicyEgress("default", "be"),
-					policyAcceptedRule(),
-					defaultTierDefaultDropRule(denyAction, denyActionString),
-					matchProfileEgress("prof1"),
-					profileAcceptedRule(),
-					matchProfileEgress("prof2"),
-					profileAcceptedRule(),
-					noProfiletMatchedRule(denyAction, denyActionString),
-				}
-				fromHostRules := []generictables.Rule{
-					// conntrack rules.
-					conntrackAcceptRule(),
-					conntrackDenyRule(denyAction),
-					// Host endpoints get extra failsafe rules.
-					failSafeIngress(),
-					clearMarkRule(),
-					startOfTierDefault(),
-					matchPolicyIngress("default", "ai"),
-					policyAcceptedRule(),
-					matchPolicyIngress("default", "bi"),
-					policyAcceptedRule(),
-					defaultTierDefaultDropRule(denyAction, denyActionString),
-					matchProfileIngress("prof1"),
-					profileAcceptedRule(),
-					matchProfileIngress("prof2"),
-					profileAcceptedRule(),
-					noProfiletMatchedRule(denyAction, denyActionString),
-				}
-
-				toHostFWRules := []generictables.Rule{
-					// conntrack rules.
-					conntrackAcceptRule(),
-					conntrackDenyRule(denyAction),
-					clearMarkRule(),
-					startOfTierDefault(),
-					matchPolicyEgress("default", "afe"),
-					policyAcceptedRule(),
-					matchPolicyEgress("default", "bfe"),
-					policyAcceptedRule(),
-					defaultTierDefaultDropRule(denyAction, denyActionString),
-				}
-				fromHostFWRUles := []generictables.Rule{
-					// conntrack rules.
-					conntrackAcceptRule(),
-					conntrackDenyRule(denyAction),
-					clearMarkRule(),
-					startOfTierDefault(),
-					matchPolicyIngress("default", "afi"),
-					policyAcceptedRule(),
-					matchPolicyIngress("default", "bfi"),
-					policyAcceptedRule(),
-					defaultTierDefaultDropRule(denyAction, denyActionString),
-				}
-
-				expected := trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
-					{
-						Name:  "cali-th-eth0",
-						Rules: toHostRules,
-					},
-					{
-						Name:  "cali-fh-eth0",
-						Rules: fromHostRules,
-					},
-					{
-						Name:  "cali-thfw-eth0",
-						Rules: toHostFWRules,
-					},
-					{
-						Name:  "cali-fhfw-eth0",
-						Rules: fromHostFWRUles,
-					},
-					{
-						Name:  "cali-sm-eth0",
-						Rules: setEndpointMarkRules(0xa200, 0xff00),
-					},
-				})
-				Expect(actual).To(Equal(expected), cmp.Diff(actual, expected))
-			})
-
-			It("should render host endpoint raw chains with untracked policies", func() {
-				toHostRules := []generictables.Rule{
-					// Host endpoints get extra failsafe rules.
-					failSafeEgress(),
-					clearMarkRule(),
-					startOfTierDefault(),
-					matchPolicyEgress("default", "c"),
-					// Extra NOTRACK action before returning in raw table.
-					untrackedRule(),
-					policyAcceptedRule(),
-					// No drop actions or profiles in raw table.
-				}
-				fromHostRules := []generictables.Rule{
-					// Host endpoints get extra failsafe rules.
-					failSafeIngress(),
-					clearMarkRule(),
-					startOfTierDefault(),
-					matchPolicyIngress("default", "c"),
-					// Extra NOTRACK action before returning in raw table.
-					untrackedRule(),
-					policyAcceptedRule(),
-					// No drop actions or profiles in raw table.
-				}
-
-				expected := []*generictables.Chain{
-					{
-						Name:  "cali-th-eth0",
-						Rules: toHostRules,
-					},
-					{
-						Name:  "cali-fh-eth0",
-						Rules: fromHostRules,
-					},
-				}
-				Expect(renderer.HostEndpointToRawChains("eth0",
-					tiersToSinglePolGroups([]*proto.TierInfo{{
-						Name:            "default",
-						IngressPolicies: []string{"c"},
-						EgressPolicies:  []string{"c"},
-					}}),
-				)).To(Equal(expected))
-			})
-
-			It("should render host endpoint mangle chains with pre-DNAT policies", func() {
-				fromHostRules := []generictables.Rule{
-					// conntrack rules.
-					{
-						Match:  Match().ConntrackState("RELATED,ESTABLISHED"),
-						Action: SetMarkAction{Mark: 0x8},
-					},
-					{
-						Match:  Match().ConntrackState("RELATED,ESTABLISHED"),
-						Action: ReturnAction{},
-					},
-					conntrackDenyRule(denyAction),
-					// Host endpoints get extra failsafe rules.
-					failSafeIngress(),
-					clearMarkRule(),
-					startOfTierDefault(),
-					matchPolicyIngress("default", "c"),
-					policyAcceptedRule(),
-					// No drop actions or profiles in raw table.
-				}
-				expected := []*generictables.Chain{
-					{
-						Name:  "cali-fh-eth0",
-						Rules: fromHostRules,
-					},
-				}
-				Expect(renderer.HostEndpointToMangleIngressChains(
-					"eth0",
-					tiersToSinglePolGroups([]*proto.TierInfo{{
-						Name:            "default",
-						IngressPolicies: []string{"c"},
-					}}),
-				)).To(Equal(expected))
-			})
-
-			It("should render a workload endpoint with packet rate limiting QoSControls", func() {
-				toWlBuilder := newRuleBuilder(
-					withDenyAction(denyAction),
-					withDenyActionString(denyActionString),
-					withQoSControls(2000, 4000),
-				)
-				toWlRules := toWlBuilder.build()
-
-				fromWlBuilder := newRuleBuilder(
-					withDenyAction(denyAction),
-					withDenyActionString(denyActionString),
-					withEgress(),
-					withDropIPIP(),
-					withDropVXLAN(VXLANPort),
-					withQoSControls(1000, 2000),
-				)
-				fromWlRules := fromWlBuilder.build()
-
-				expected := []*generictables.Chain{
-					{
-						Name:  "cali-tw-cali1234",
-						Rules: toWlRules,
-					},
-					{
-						Name:  "cali-fw-cali1234",
-						Rules: fromWlRules,
-					},
-					{
-						Name:  "cali-sm-cali1234",
-						Rules: setEndpointMarkRules(0xd400, 0xff00),
-					},
-				}
-				Expect(renderer.WorkloadEndpointToIptablesChains(
-					"cali1234", epMarkMapper,
-					true,
-					nil,
-					nil,
-					&proto.QoSControls{
-						EgressPacketRate:   1000,
-						IngressPacketRate:  2000,
-						EgressPacketBurst:  2000,
-						IngressPacketBurst: 4000,
-					},
-				)).To(Equal(trimSMChain(kubeIPVSEnabled, expected)))
-			})
-
-			It("should render a workload endpoint with connection limiting QoSControls", func() {
-				toWlRules := newRuleBuilder(
-					withDenyAction(denyAction),
-					withDenyActionString(denyActionString),
-					withQoSConnection(20),
-				).build()
-
-				fromWlRules := newRuleBuilder(
-					withDenyAction(denyAction),
-					withDenyActionString(denyActionString),
-					withEgress(),
-					withDropIPIP(),
-					withDropVXLAN(VXLANPort),
-					withQoSConnection(10),
-				).build()
-
-				expected := trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
-					{
-						Name:  "cali-tw-cali1234",
-						Rules: toWlRules,
-					},
-					{
-						Name:  "cali-fw-cali1234",
-						Rules: fromWlRules,
-					},
-					{
-						Name:  "cali-sm-cali1234",
-						Rules: setEndpointMarkRules(0xd400, 0xff00),
-					},
-				})
-				Expect(renderer.WorkloadEndpointToIptablesChains(
-					"cali1234", epMarkMapper,
-					true,
-					nil,
-					nil,
-					&proto.QoSControls{
-						EgressMaxConnections:  10,
-						IngressMaxConnections: 20,
-					},
-				)).To(Equal(expected))
-			})
-		})
-
-		Context("with normal config and flow logs enabled", func() {
-			BeforeEach(func() {
-				rrConfigNormalMangleReturn.FlowLogsEnabled = true
-				renderer = NewRenderer(rrConfigNormalMangleReturn)
-				epMarkMapper = NewEndpointMarkMapper(rrConfigNormalMangleReturn.MarkEndpoint,
-					rrConfigNormalMangleReturn.MarkNonCaliEndpoint)
-			})
-
-			It("should render a minimal workload endpoint", func() {
-				toWlRules := newRuleBuilder(
-					withDenyAction(denyAction),
-					withDenyActionString(denyActionString),
-					withFlowLogs(),
-				).build()
-
-				fromWlRules := newRuleBuilder(
-					withDenyAction(denyAction),
-					withDenyActionString(denyActionString),
-					withDropIPIP(),
-					withDropVXLAN(VXLANPort),
-					withEgress(),
-					withFlowLogs(),
-				).build()
-
-				expected := trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
-					{
-						Name:  "cali-tw-cali1234",
-						Rules: toWlRules,
-					},
-					{
-						Name:  "cali-fw-cali1234",
-						Rules: fromWlRules,
-					},
-					{
-						Name:  "cali-sm-cali1234",
-						Rules: setEndpointMarkRules(0xd400, 0xff00),
-					},
-				})
-
-				Expect(renderer.WorkloadEndpointToIptablesChains(
-					"cali1234", epMarkMapper,
-					true,
-					nil,
-					nil,
-					nil)).To(Equal(expected))
-			})
-
-			It("should render a disabled workload endpoint", func() {
-				commonRules := []generictables.Rule{
-					endpointAdminDisabledRule(denyAction),
-				}
-
-				expected := trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
-					{
-						Name:  "cali-tw-cali1234",
-						Rules: commonRules,
-					},
-					{
-						Name:  "cali-fw-cali1234",
-						Rules: commonRules,
-					},
-					{
-						Name:  "cali-sm-cali1234",
-						Rules: setEndpointMarkRules(0xd400, 0xff00),
-					},
-				})
-
-				Expect(renderer.WorkloadEndpointToIptablesChains(
-					"cali1234", epMarkMapper,
-					false,
-					nil,
-					nil,
-					nil,
-				)).To(Equal(expected))
-			})
-
-			It("should render a fully-loaded workload endpoint", func() {
-				toWlRules := newRuleBuilder(
-					withDenyAction(denyAction),
-					withDenyActionString(denyActionString),
-					withPolicies("ai", "bi"),
-					withProfiles("prof1", "prof2"),
-					withFlowLogs(),
-				).build()
-
-				fromWlRules := newRuleBuilder(
-					withDenyAction(denyAction),
-					withDenyActionString(denyActionString),
-					withDropIPIP(),
-					withDropVXLAN(VXLANPort),
-					withEgress(),
-					withPolicies("ae", "be"),
-					withProfiles("prof1", "prof2"),
-					withFlowLogs(),
-				).build()
-
-				expected := trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
-					{
-						Name:  "cali-tw-cali1234",
-						Rules: toWlRules,
-					},
-					{
-						Name:  "cali-fw-cali1234",
-						Rules: fromWlRules,
-					},
-					{
-						Name:  "cali-sm-cali1234",
-						Rules: setEndpointMarkRules(0xd400, 0xff00),
-					},
-				})
-				Expect(renderer.WorkloadEndpointToIptablesChains(
-					"cali1234",
-					epMarkMapper,
-					true,
-					tiersToSinglePolGroups([]*proto.TierInfo{{
-						Name:            "default",
-						IngressPolicies: []string{"ai", "bi"},
-						EgressPolicies:  []string{"ae", "be"},
-					}}),
-					[]string{"prof1", "prof2"},
-					nil,
-				)).To(Equal(expected))
-			})
-
-			It("should render a workload endpoint with policy groups", func() {
-				polGrpInABC := &PolicyGroup{
-					Tier:        "default",
-					Direction:   PolicyDirectionInbound,
-					PolicyNames: []string{"a", "b", "c"},
-					Selector:    "all()",
-				}
-				polGrpInEF := &PolicyGroup{
-					Tier:        "default",
-					Direction:   PolicyDirectionInbound,
-					PolicyNames: []string{"e", "f"},
-					Selector:    "someLabel == 'bar'",
-				}
-				polGrpOutAB := &PolicyGroup{
-					Tier:        "default",
-					Direction:   PolicyDirectionOutbound,
-					PolicyNames: []string{"a", "b"},
-					Selector:    "all()",
-				}
-				polGrpOutDE := &PolicyGroup{
-					Tier:        "default",
-					Direction:   PolicyDirectionOutbound,
-					PolicyNames: []string{"d", "e"},
-					Selector:    "someLabel == 'bar'",
-				}
-
-				toWlRules := newRuleBuilder(
-					withDenyAction(denyAction),
-					withDenyActionString(denyActionString),
-					withPolicyGroups(polGrpInABC.ChainName(), polGrpInEF.ChainName()),
-					withProfiles("prof1", "prof2"),
-					withFlowLogs(),
-				).build()
-
-				fromWlRules := newRuleBuilder(
-					withDenyAction(denyAction),
-					withDenyActionString(denyActionString),
-					withEgress(),
-					withPolicyGroups(polGrpOutAB.ChainName(), polGrpOutDE.ChainName()),
-					withProfiles("prof1", "prof2"),
-					withDropIPIP(),
-					withDropVXLAN(VXLANPort),
-					withFlowLogs(),
-				).build()
-
-				expected := trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
-					{
-						Name:  "cali-tw-cali1234",
-						Rules: toWlRules,
-					},
-					{
-						Name:  "cali-fw-cali1234",
-						Rules: fromWlRules,
-					},
-					{
-						Name:  "cali-sm-cali1234",
-						Rules: setEndpointMarkRules(0xd400, 0xff00),
-					},
-				})
-
-				Expect(renderer.WorkloadEndpointToIptablesChains(
-					"cali1234",
-					epMarkMapper,
-					true,
-					[]TierPolicyGroups{
-						{
-							Name: "default",
-							IngressPolicies: []*PolicyGroup{
-								polGrpInABC,
-								polGrpInEF,
-							},
-							EgressPolicies: []*PolicyGroup{
-								polGrpOutAB,
-								polGrpOutDE,
-							},
-						},
-					},
-					[]string{"prof1", "prof2"},
-					nil,
-				)).To(Equal(expected))
-			})
-
-			It("should render a fully-loaded workload endpoint - one staged policy, one enforced", func() {
-				toWlRules := newRuleBuilder(
-					withDenyAction(denyAction),
-					withDenyActionString(denyActionString),
-					withPolicies("staged:ai", "bi"),
-					withProfiles("prof1", "prof2"),
-					withFlowLogs(),
-				).build()
-
-				fromWlRules := newRuleBuilder(
-					withDenyAction(denyAction),
-					withDenyActionString(denyActionString),
-					withEgress(),
-					withPolicies("ae", "staged:be"),
-					withProfiles("prof1", "prof2"),
-					withDropIPIP(),
-					withDropVXLAN(VXLANPort),
-					withFlowLogs(),
-				).build()
-
-				expected := trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
-					{
-						Name:  "cali-tw-cali1234",
-						Rules: toWlRules,
-					},
-					{
-						Name:  "cali-fw-cali1234",
-						Rules: fromWlRules,
-					},
-					{
-						Name:  "cali-sm-cali1234",
-						Rules: setEndpointMarkRules(0xd400, 0xff00),
-					},
-				})
-				Expect(renderer.WorkloadEndpointToIptablesChains(
-					"cali1234",
-					epMarkMapper,
-					true,
-					tiersToSinglePolGroups([]*proto.TierInfo{{
-						Name:            "default",
-						IngressPolicies: []string{"staged:ai", "bi"},
-						EgressPolicies:  []string{"ae", "staged:be"},
-					}}),
-					[]string{"prof1", "prof2"},
-					nil,
-				)).To(Equal(expected))
-			})
-
-			It("should render a fully-loaded workload endpoint - both staged, end-of-tier action is pass", func() {
-				toWlRules := newRuleBuilder(
-					withDenyAction(denyAction),
-					withDenyActionString(denyActionString),
-					withPolicies("staged:ai", "staged:bi"),
-					withProfiles("prof1", "prof2"),
-					withFlowLogs(),
-				).build()
-
-				fromWlRules := newRuleBuilder(
-					withDenyAction(denyAction),
-					withDenyActionString(denyActionString),
-					withEgress(),
-					withPolicies("staged:ae", "staged:be"),
-					withProfiles("prof1", "prof2"),
-					withDropIPIP(),
-					withDropVXLAN(VXLANPort),
-					withFlowLogs(),
-				).build()
-
-				expected := trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
-					{
-						Name:  "cali-tw-cali1234",
-						Rules: toWlRules,
-					},
-					{
-						Name:  "cali-fw-cali1234",
-						Rules: fromWlRules,
-					},
-					{
-						Name:  "cali-sm-cali1234",
-						Rules: setEndpointMarkRules(0xd400, 0xff00),
-					},
-				})
-				Expect(renderer.WorkloadEndpointToIptablesChains(
-					"cali1234",
-					epMarkMapper,
-					true,
-					tiersToSinglePolGroups([]*proto.TierInfo{{
-						Name:            "default",
-						IngressPolicies: []string{"staged:ai", "staged:bi"},
-						EgressPolicies:  []string{"staged:ae", "staged:be"},
-					}}),
-					[]string{"prof1", "prof2"},
-					nil,
-				)).To(Equal(expected))
-			})
-
-			It("should render a fully-loaded workload endpoint - staged policy group, end-of-tier pass", func() {
-				toWlRules := newRuleBuilder(
-					withDenyAction(denyAction),
-					withDenyActionString(denyActionString),
-					withPolicyGroups("staged:ai", "staged:bi"),
-					withProfiles("prof1", "prof2"),
-					withFlowLogs(),
-				).build()
-
-				fromWlRules := newRuleBuilder(
-					withDenyAction(denyAction),
-					withDenyActionString(denyActionString),
-					withEgress(),
-					withPolicies("staged:ae", "staged:be"),
-					withProfiles("prof1", "prof2"),
-					withDropIPIP(),
-					withDropVXLAN(VXLANPort),
-					withFlowLogs(),
-				).build()
-
-				expected := trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
-					{
-						Name:  "cali-tw-cali1234",
-						Rules: toWlRules,
-					},
-					{
-						Name:  "cali-fw-cali1234",
-						Rules: fromWlRules,
-					},
-					{
-						Name:  "cali-sm-cali1234",
-						Rules: setEndpointMarkRules(0xd400, 0xff00),
-					},
-				})
-				Expect(renderer.WorkloadEndpointToIptablesChains(
-					"cali1234",
-					epMarkMapper,
-					true,
-					[]TierPolicyGroups{
-						{
-							Name: "default",
-							IngressPolicies: []*PolicyGroup{{
-								Tier:        "default",
-								Direction:   PolicyDirectionInbound,
-								PolicyNames: []string{"staged:ai", "staged:bi"},
-								Selector:    "all()",
-							}},
-							EgressPolicies: []*PolicyGroup{{
-								Tier:        "default",
-								Direction:   PolicyDirectionOutbound,
-								PolicyNames: []string{"staged:ae", "staged:be"},
-								Selector:    "all()",
-							}},
-						},
-					},
-					[]string{"prof1", "prof2"},
-					nil,
-				)).To(Equal(expected))
-			})
-
-			It("should render a fully-loaded workload endpoint with tier DefaultAction is Pass", func() {
-				toWlRules := newRuleBuilder(
-					withDenyAction(denyAction),
-					withDenyActionString(denyActionString),
-					withPolicies("ai", "bi"),
-					withProfiles("prof1", "prof2"),
-					withTierPassAction(),
-					withFlowLogs(),
-				).build()
-
-				fromWlRules := newRuleBuilder(
-					withDenyAction(denyAction),
-					withDenyActionString(denyActionString),
-					withEgress(),
-					withPolicies("ae", "be"),
-					withProfiles("prof1", "prof2"),
-					withDropIPIP(),
-					withDropVXLAN(VXLANPort),
-					withTierPassAction(),
-					withFlowLogs(),
-				).build()
-
-				expected := trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
-					{
-						Name:  "cali-tw-cali1234",
-						Rules: toWlRules,
-					},
-					{
-						Name:  "cali-fw-cali1234",
-						Rules: fromWlRules,
-					},
-					{
-						Name:  "cali-sm-cali1234",
-						Rules: setEndpointMarkRules(0xd400, 0xff00),
-					},
-				})
-				Expect(renderer.WorkloadEndpointToIptablesChains(
-					"cali1234",
-					epMarkMapper,
-					true,
-					tiersToSinglePolGroups([]*proto.TierInfo{{
-						Name:            "default",
-						DefaultAction:   "Pass",
-						IngressPolicies: []string{"ai", "bi"},
-						EgressPolicies:  []string{"ae", "be"},
-					}}),
-					[]string{"prof1", "prof2"},
-					nil,
-				)).To(Equal(expected))
-			})
-
-			It("should render a host endpoint", func() {
-				actual := renderer.HostEndpointToFilterChains("eth0",
-					tiersToSinglePolGroups([]*proto.TierInfo{{
-						Name:            "default",
-						IngressPolicies: []string{"ai", "bi"},
-						EgressPolicies:  []string{"ae", "be"},
-					}}),
-					tiersToSinglePolGroups([]*proto.TierInfo{{
-						Name:            "default",
-						IngressPolicies: []string{"afi", "bfi"},
-						EgressPolicies:  []string{"afe", "bfe"},
-					}}),
-					epMarkMapper,
-					[]string{"prof1", "prof2"},
-				)
-
-				toHostRules := []generictables.Rule{
-					// conntrack rules.
-					conntrackAcceptRule(),
-					conntrackDenyRule(denyAction),
-					// Host endpoints get extra failsafe rules.
-					failSafeEgress(),
-					clearMarkRule(),
-					startOfTierDefault(),
-					matchPolicyEgress("default", "ae"),
-					policyAcceptedRule(),
-					matchPolicyEgress("default", "be"),
-					policyAcceptedRule(),
-					nflogDefaultTierEgress(),
-					defaultTierDefaultDropRule(denyAction, denyActionString),
-					matchProfileEgress("prof1"),
-					profileAcceptedRule(),
-					matchProfileEgress("prof2"),
-					profileAcceptedRule(),
-					nflogProfileEgress(),
-					noProfiletMatchedRule(denyAction, denyActionString),
-				}
-				fromHostRules := []generictables.Rule{
-					// conntrack rules.
-					conntrackAcceptRule(),
-					conntrackDenyRule(denyAction),
-					// Host endpoints get extra failsafe rules.
-					failSafeIngress(),
-					clearMarkRule(),
-					startOfTierDefault(),
-					matchPolicyIngress("default", "ai"),
-					policyAcceptedRule(),
-					matchPolicyIngress("default", "bi"),
-					policyAcceptedRule(),
-					nflogDefaultTierIngress(),
-					defaultTierDefaultDropRule(denyAction, denyActionString),
-					matchProfileIngress("prof1"),
-					profileAcceptedRule(),
-					matchProfileIngress("prof2"),
-					profileAcceptedRule(),
-					nflogProfileIngress(),
-					noProfiletMatchedRule(denyAction, denyActionString),
-				}
-
-				toHostFWRules := []generictables.Rule{
-					// conntrack rules.
-					conntrackAcceptRule(),
-					conntrackDenyRule(denyAction),
-					clearMarkRule(),
-					startOfTierDefault(),
-					jumpToPolicyGroup("cali-po-default/afe", 0x10),
-					policyAcceptedRule(),
-					jumpToPolicyGroup("cali-po-default/bfe", 0x10),
-					policyAcceptedRule(),
-					nflogDefaultTierEgress(),
-					defaultTierDefaultDropRule(denyAction, denyActionString),
-				}
-
-				fromHostFWRules := []generictables.Rule{
-					// conntrack rules.
-					conntrackAcceptRule(),
-					conntrackDenyRule(denyAction),
-					clearMarkRule(),
-					startOfTierDefault(),
-					matchPolicyIngress("default", "afi"),
-					policyAcceptedRule(),
-					matchPolicyIngress("default", "bfi"),
-					policyAcceptedRule(),
-					nflogDefaultTierIngress(),
-					defaultTierDefaultDropRule(denyAction, denyActionString),
-				}
-
-				expected := trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
-					{
-						Name:  "cali-th-eth0",
-						Rules: toHostRules,
-					},
-					{
-						Name:  "cali-fh-eth0",
-						Rules: fromHostRules,
-					},
-					{
-						Name:  "cali-thfw-eth0",
-						Rules: toHostFWRules,
-					},
-					{
-						Name:  "cali-fhfw-eth0",
-						Rules: fromHostFWRules,
-					},
-					{
-						Name:  "cali-sm-eth0",
-						Rules: setEndpointMarkRules(0xa200, 0xff00),
-					},
-				})
-				Expect(actual).To(Equal(expected), cmp.Diff(actual, expected))
-			})
-
-			It("should render host endpoint raw chains with untracked policies", func() {
-				toHostRules := []generictables.Rule{
-					// Host endpoints get extra failsafe rules.
-					failSafeEgress(),
-					clearMarkRule(),
-					startOfTierDefault(),
-					matchPolicyEgress("default", "c"),
-					// Extra NOTRACK action before returning in raw table.
-					untrackedRule(),
-					policyAcceptedRule(),
-					// No drop actions or profiles in raw table.
-				}
-				fromHostRules := []generictables.Rule{
-					// Host endpoints get extra failsafe rules.
-					failSafeIngress(),
-					clearMarkRule(),
-					startOfTierDefault(),
-					matchPolicyIngress("default", "c"),
-					// Extra NOTRACK action before returning in raw table.
-					untrackedRule(),
-					policyAcceptedRule(),
-					// No drop actions or profiles in raw table.
-				}
-
-				expected := []*generictables.Chain{
-					{
-						Name:  "cali-th-eth0",
-						Rules: toHostRules,
-					},
-					{
-						Name:  "cali-fh-eth0",
-						Rules: fromHostRules,
-					},
-				}
-				Expect(renderer.HostEndpointToRawChains("eth0",
-					tiersToSinglePolGroups([]*proto.TierInfo{{
-						Name:            "default",
-						IngressPolicies: []string{"c"},
-						EgressPolicies:  []string{"c"},
-					}}),
-				)).To(Equal(expected))
-			})
-
-			It("should render host endpoint mangle chains with pre-DNAT policies", func() {
-				fromHostRules := []generictables.Rule{
-					// conntrack rules.
-					{
-						Match:  Match().ConntrackState("RELATED,ESTABLISHED"),
-						Action: SetMarkAction{Mark: 0x8},
-					},
-					{
-						Match:  Match().ConntrackState("RELATED,ESTABLISHED"),
-						Action: ReturnAction{},
-					},
-					conntrackDenyRule(denyAction),
-					// Host endpoints get extra failsafe rules.
-					failSafeIngress(),
-					clearMarkRule(),
-					startOfTierDefault(),
-					matchPolicyIngress("default", "c"),
-					policyAcceptedRule(),
-					// No drop actions or profiles in raw table.
-				}
-
-				expected := []*generictables.Chain{
-					{
-						Name:  "cali-fh-eth0",
-						Rules: fromHostRules,
-					},
-				}
-				Expect(renderer.HostEndpointToMangleIngressChains(
-					"eth0",
-					tiersToSinglePolGroups([]*proto.TierInfo{{
-						Name:            "default",
-						IngressPolicies: []string{"c"},
-					}}),
-				)).To(Equal(expected))
-			})
-		})
-
-		Describe("with ctstate=INVALID disabled", func() {
-			BeforeEach(func() {
-				rrConfigConntrackDisabledReturnAction.FlowLogsEnabled = false
-				renderer = NewRenderer(rrConfigConntrackDisabledReturnAction)
-				epMarkMapper = NewEndpointMarkMapper(rrConfigConntrackDisabledReturnAction.MarkEndpoint,
-					rrConfigConntrackDisabledReturnAction.MarkNonCaliEndpoint)
-			})
-
-			It("should render a minimal workload endpoint", func() {
-				toWlRules := newRuleBuilder(
-					withDenyAction(denyAction),
-					withDenyActionString(denyActionString),
-					withInvalidCTStateDisabled(),
-				).build()
-
-				fromWlRules := newRuleBuilder(
-					withDenyAction(denyAction),
-					withDenyActionString(denyActionString),
-					withInvalidCTStateDisabled(),
-					withEgress(),
-					withDropIPIP(),
-					withDropVXLAN(VXLANPort),
-				).build()
-
-				expected := trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
-					{
-						Name:  "cali-tw-cali1234",
-						Rules: toWlRules,
-					},
-					{
-						Name:  "cali-fw-cali1234",
-						Rules: fromWlRules,
-					},
-					{
-						Name:  "cali-sm-cali1234",
-						Rules: setEndpointMarkRules(0xd400, 0xff00),
-					},
-				})
-				Expect(renderer.WorkloadEndpointToIptablesChains(
-					"cali1234",
-					epMarkMapper,
-					true,
-					nil,
-					nil,
-					nil,
-				)).To(Equal(expected))
-			})
-
-			It("should render host endpoint mangle chains with pre-DNAT policies", func() {
-				fromHostRules := []generictables.Rule{
-					// conntrack rules.
-					conntrackAcceptRule(),
-					// Host endpoints get extra failsafe rules.
-					failSafeIngress(),
-					clearMarkRule(),
-					startOfTierDefault(),
-					matchPolicyIngress("default", "c"),
-					policyAcceptedRule(),
-					// No drop actions or profiles in raw table.
-				}
-
-				expected := []*generictables.Chain{
-					{
-						Name:  "cali-fh-eth0",
-						Rules: fromHostRules,
-					},
-				}
-				Expect(renderer.HostEndpointToMangleIngressChains(
-					"eth0",
-					tiersToSinglePolGroups([]*proto.TierInfo{{
-						Name:            "default",
-						IngressPolicies: []string{"c"},
-					}}),
-				)).To(Equal(expected))
-			})
-		})
-
-		Describe("with ctstate=INVALID disabled and flow logs enabled", func() {
-			BeforeEach(func() {
-				rrConfigConntrackDisabledReturnAction.FlowLogsEnabled = true
-				renderer = NewRenderer(rrConfigConntrackDisabledReturnAction)
-				epMarkMapper = NewEndpointMarkMapper(rrConfigConntrackDisabledReturnAction.MarkEndpoint,
-					rrConfigConntrackDisabledReturnAction.MarkNonCaliEndpoint)
-			})
-
-			It("should render a minimal workload endpoint", func() {
-				toWlRules := []generictables.Rule{
-					// conntrack rules.
-					{
-						Match:  Match().ConntrackState("RELATED,ESTABLISHED"),
-						Action: SetMarkAction{Mark: 0x8},
-					},
-					{
-						Match:  Match().ConntrackState("RELATED,ESTABLISHED"),
-						Action: ReturnAction{},
-					},
-					clearMarkRule(),
-					nflogProfileIngress(),
-					noProfiletMatchedRule(denyAction, denyActionString),
-				}
-				fromWlRules := []generictables.Rule{
-					// conntrack rules.
-					{
-						Match:  Match().ConntrackState("RELATED,ESTABLISHED"),
-						Action: SetMarkAction{Mark: 0x8},
-					},
-					{
-						Match:  Match().ConntrackState("RELATED,ESTABLISHED"),
-						Action: ReturnAction{},
-					},
-					clearMarkRule(),
-					dropVXLANRule(VXLANPort, denyAction, denyActionString),
-					dropIPIPRule(denyAction, denyActionString),
-					nflogProfileEgress(),
-					noProfiletMatchedRule(denyAction, denyActionString),
-				}
-
-				expected := trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
-					{
-						Name:  "cali-tw-cali1234",
-						Rules: toWlRules,
-					},
-					{
-						Name:  "cali-fw-cali1234",
-						Rules: fromWlRules,
-					},
-					{
-						Name:  "cali-sm-cali1234",
-						Rules: setEndpointMarkRules(0xd400, 0xff00),
-					},
-				})
-				Expect(renderer.WorkloadEndpointToIptablesChains(
-					"cali1234",
-					epMarkMapper,
-					true,
-					nil,
-					nil,
-					nil,
-				)).To(Equal(expected))
-			})
-
-			It("should render host endpoint mangle chains with pre-DNAT policies", func() {
-				fromHostRules := []generictables.Rule{
-					// conntrack rules.
-					conntrackAcceptRule(),
-					// Host endpoints get extra failsafe rules.
-					failSafeIngress(),
-					clearMarkRule(),
-					startOfTierDefault(),
-					matchPolicyIngress("default", "c"),
-					policyAcceptedRule(),
-					// No drop actions or profiles in raw table.
-				}
-				expected := []*generictables.Chain{
-					{
-						Name:  "cali-fh-eth0",
-						Rules: fromHostRules,
-					},
-				}
-				Expect(renderer.HostEndpointToMangleIngressChains(
-					"eth0",
-					tiersToSinglePolGroups([]*proto.TierInfo{{
-						Name:            "default",
-						IngressPolicies: []string{"c"},
-					}}),
-				)).To(Equal(expected))
-			})
-		})
-
-		Describe("Disabling adding drop encap rules", func() {
-			Context("VXLAN allowed, IPIP dropped", func() {
-				It("should render a minimal workload endpoint without VXLAN drop encap rule and with IPIP drop encap rule", func() {
-					rrConfigNormalMangleReturn.FlowLogsEnabled = false
-					rrConfigNormalMangleReturn.AllowVXLANPacketsFromWorkloads = true
+var _ = Describe("Endpoints", endpointRulesTests(false))
+var _ = Describe("Endpoints with flowlogs", endpointRulesTests(true))
+
+func endpointRulesTests(flowLogsEnabled bool) func() {
+	return func() {
+		const (
+			ProtoUDP          = 17
+			ProtoIPIP         = 4
+			VXLANPort         = 4789
+			EgressIPVXLANPort = 4790
+			VXLANVNI          = 4096
+		)
+
+		for _, trueOrFalse := range []bool{true, false} {
+			var denyAction generictables.Action
+			denyAction = DropAction{}
+			denyActionCommand := "DROP"
+			denyActionString := "Drop"
+			if trueOrFalse {
+				denyAction = RejectAction{}
+				denyActionCommand = "REJECT"
+				denyActionString = "Reject"
+			}
+
+			kubeIPVSEnabled := trueOrFalse
+			rrConfigNormalMangleReturn := Config{
+				FlowLogsEnabled:        flowLogsEnabled,
+				IPIPEnabled:            true,
+				IPIPTunnelAddress:      nil,
+				IPSetConfigV4:          ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil),
+				IPSetConfigV6:          ipsets.NewIPVersionConfig(ipsets.IPFamilyV6, "cali", nil, nil),
+				MarkAccept:             0x8,
+				MarkPass:               0x10,
+				MarkScratch0:           0x20,
+				MarkScratch1:           0x40,
+				MarkDrop:               0x80,
+				MarkEndpoint:           0xff00,
+				MarkNonCaliEndpoint:    0x0100,
+				KubeIPVSSupportEnabled: kubeIPVSEnabled,
+				MangleAllowAction:      "RETURN",
+				FilterDenyAction:       denyActionCommand,
+				VXLANPort:              4789,
+				VXLANVNI:               4096,
+			}
+
+			rrConfigConntrackDisabledReturnAction := Config{
+				FlowLogsEnabled:         flowLogsEnabled,
+				IPIPEnabled:             true,
+				IPIPTunnelAddress:       nil,
+				IPSetConfigV4:           ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil),
+				IPSetConfigV6:           ipsets.NewIPVersionConfig(ipsets.IPFamilyV6, "cali", nil, nil),
+				MarkAccept:              0x8,
+				MarkPass:                0x10,
+				MarkScratch0:            0x20,
+				MarkScratch1:            0x40,
+				MarkDrop:                0x80,
+				MarkEndpoint:            0xff00,
+				MarkNonCaliEndpoint:     0x0100,
+				KubeIPVSSupportEnabled:  kubeIPVSEnabled,
+				DisableConntrackInvalid: true,
+				FilterAllowAction:       "RETURN",
+				FilterDenyAction:        denyActionCommand,
+				VXLANPort:               4789,
+				VXLANVNI:                4096,
+			}
+
+			var renderer RuleRenderer
+			var epMarkMapper EndpointMarkMapper
+
+			Context("with normal config", func() {
+				BeforeEach(func() {
 					renderer = NewRenderer(rrConfigNormalMangleReturn)
 					epMarkMapper = NewEndpointMarkMapper(rrConfigNormalMangleReturn.MarkEndpoint,
 						rrConfigNormalMangleReturn.MarkNonCaliEndpoint)
+				})
 
+				It("should render a minimal workload endpoint", func() {
 					toWlRules := newRuleBuilder(
+						withFlowLogs(flowLogsEnabled),
 						withDenyAction(denyAction),
 						withDenyActionString(denyActionString),
 					).build()
 
 					fromWlRules := newRuleBuilder(
+						withFlowLogs(flowLogsEnabled),
 						withDenyAction(denyAction),
 						withDenyActionString(denyActionString),
 						withDropIPIP(),
-						withEgress(),
-					).build()
-
-					expected := trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
-						{
-							Name:  "cali-tw-cali1234",
-							Rules: toWlRules,
-						},
-						{
-							Name:  "cali-fw-cali1234",
-							Rules: fromWlRules,
-						},
-						{
-							Name:  "cali-sm-cali1234",
-							Rules: setEndpointMarkRules(0xd400, 0xff00),
-						},
-					})
-					Expect(renderer.WorkloadEndpointToIptablesChains(
-						"cali1234", epMarkMapper,
-						true,
-						nil,
-						nil,
-						nil,
-					)).To(Equal(expected))
-				})
-
-				It("should render a minimal workload endpoint without VXLAN drop encap rule and with IPIP drop encap rule with flowlogs", func() {
-					rrConfigNormalMangleReturn.FlowLogsEnabled = true
-					rrConfigNormalMangleReturn.AllowVXLANPacketsFromWorkloads = true
-					renderer = NewRenderer(rrConfigNormalMangleReturn)
-					epMarkMapper = NewEndpointMarkMapper(rrConfigNormalMangleReturn.MarkEndpoint,
-						rrConfigNormalMangleReturn.MarkNonCaliEndpoint)
-
-					toWlRules := newRuleBuilder(
-						withDenyAction(denyAction),
-						withDenyActionString(denyActionString),
-						withFlowLogs(),
-					).build()
-
-					fromWlRules := newRuleBuilder(
-						withDenyAction(denyAction),
-						withDenyActionString(denyActionString),
-						withDropIPIP(),
-						withEgress(),
-						withFlowLogs(),
-					).build()
-
-					expected := trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
-						{
-							Name:  "cali-tw-cali1234",
-							Rules: toWlRules,
-						},
-						{
-							Name:  "cali-fw-cali1234",
-							Rules: fromWlRules,
-						},
-						{
-							Name:  "cali-sm-cali1234",
-							Rules: setEndpointMarkRules(0xd400, 0xff00),
-						},
-					})
-
-					Expect(renderer.WorkloadEndpointToIptablesChains(
-						"cali1234", epMarkMapper,
-						true,
-						nil,
-						nil,
-						nil,
-					)).To(Equal(expected))
-				})
-			})
-
-			Context("VXLAN dropped, IPIP allowed", func() {
-				It("should render a minimal workload endpoint with VXLAN drop encap rule and without IPIP drop encap rule", func() {
-					rrConfigNormalMangleReturn.FlowLogsEnabled = false
-					rrConfigNormalMangleReturn.AllowIPIPPacketsFromWorkloads = true
-					renderer = NewRenderer(rrConfigNormalMangleReturn)
-					epMarkMapper = NewEndpointMarkMapper(rrConfigNormalMangleReturn.MarkEndpoint,
-						rrConfigNormalMangleReturn.MarkNonCaliEndpoint)
-
-					actual := renderer.WorkloadEndpointToIptablesChains(
-						"cali1234", epMarkMapper,
-						true,
-						nil,
-						nil,
-						nil,
-					)
-
-					toWlRules := newRuleBuilder(
-						withDenyAction(denyAction),
-						withDenyActionString(denyActionString),
-					).build()
-
-					fromWlRules := newRuleBuilder(
-						withDenyAction(denyAction),
-						withDenyActionString(denyActionString),
 						withDropVXLAN(VXLANPort),
 						withEgress(),
 					).build()
@@ -1675,36 +142,61 @@ var _ = Describe("Endpoints", func() {
 							Rules: setEndpointMarkRules(0xd400, 0xff00),
 						},
 					})
-					Expect(actual).To(Equal(expected), cmp.Diff(actual, expected))
-				})
-
-				It("should render a minimal workload endpoint with VXLAN drop encap rule and without IPIP drop encap rule with flowlogs", func() {
-					rrConfigNormalMangleReturn.FlowLogsEnabled = true
-					rrConfigNormalMangleReturn.AllowIPIPPacketsFromWorkloads = true
-					renderer = NewRenderer(rrConfigNormalMangleReturn)
-					epMarkMapper = NewEndpointMarkMapper(rrConfigNormalMangleReturn.MarkEndpoint,
-						rrConfigNormalMangleReturn.MarkNonCaliEndpoint)
-
-					actual := renderer.WorkloadEndpointToIptablesChains(
+					Expect(renderer.WorkloadEndpointToIptablesChains(
 						"cali1234", epMarkMapper,
 						true,
 						nil,
 						nil,
 						nil,
-					)
+					)).To(Equal(expected))
+				})
 
+				It("should render a disabled workload endpoint", func() {
+					commonRule := []generictables.Rule{
+						endpointAdminDisabledRule(denyAction),
+					}
+
+					expected := trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
+						{
+							Name:  "cali-tw-cali1234",
+							Rules: commonRule,
+						},
+						{
+							Name:  "cali-fw-cali1234",
+							Rules: commonRule,
+						},
+						{
+							Name:  "cali-sm-cali1234",
+							Rules: setEndpointMarkRules(0xd400, 0xff00),
+						},
+					})
+					Expect(renderer.WorkloadEndpointToIptablesChains(
+						"cali1234", epMarkMapper,
+						false,
+						nil,
+						nil,
+						nil,
+					)).To(Equal(expected))
+				})
+
+				It("should render a fully-loaded workload endpoint", func() {
 					toWlRules := newRuleBuilder(
+						withFlowLogs(flowLogsEnabled),
 						withDenyAction(denyAction),
 						withDenyActionString(denyActionString),
-						withFlowLogs(),
+						withPolicies("ai", "bi"),
+						withProfiles("prof1", "prof2"),
 					).build()
 
 					fromWlRules := newRuleBuilder(
+						withFlowLogs(flowLogsEnabled),
 						withDenyAction(denyAction),
 						withDenyActionString(denyActionString),
+						withDropIPIP(),
 						withDropVXLAN(VXLANPort),
 						withEgress(),
-						withFlowLogs(),
+						withPolicies("ae", "be"),
+						withProfiles("prof1", "prof2"),
 					).build()
 
 					expected := trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
@@ -1719,30 +211,515 @@ var _ = Describe("Endpoints", func() {
 						{
 							Name:  "cali-sm-cali1234",
 							Rules: setEndpointMarkRules(0xd400, 0xff00),
+						},
+					})
+					Expect(renderer.WorkloadEndpointToIptablesChains(
+						"cali1234",
+						epMarkMapper,
+						true,
+						tiersToSinglePolGroups([]*proto.TierInfo{{
+							Name:            "default",
+							IngressPolicies: []string{"ai", "bi"},
+							EgressPolicies:  []string{"ae", "be"},
+						}}),
+						[]string{"prof1", "prof2"},
+						nil,
+					)).To(Equal(expected))
+				})
+
+				It("should render a workload endpoint with policy groups", func() {
+					polGrpInABC := &PolicyGroup{
+						Tier:        "default",
+						Direction:   PolicyDirectionInbound,
+						PolicyNames: []string{"a", "b", "c"},
+						Selector:    "all()",
+					}
+					polGrpInEF := &PolicyGroup{
+						Tier:        "default",
+						Direction:   PolicyDirectionInbound,
+						PolicyNames: []string{"e", "f"},
+						Selector:    "someLabel == 'bar'",
+					}
+					polGrpOutAB := &PolicyGroup{
+						Tier:        "default",
+						Direction:   PolicyDirectionOutbound,
+						PolicyNames: []string{"a", "b"},
+						Selector:    "all()",
+					}
+					polGrpOutDE := &PolicyGroup{
+						Tier:        "default",
+						Direction:   PolicyDirectionOutbound,
+						PolicyNames: []string{"d", "e"},
+						Selector:    "someLabel == 'bar'",
+					}
+
+					toWlRules := newRuleBuilder(
+						withFlowLogs(flowLogsEnabled),
+						withDenyAction(denyAction),
+						withDenyActionString(denyActionString),
+						withPolicyGroups(polGrpInABC.ChainName(), polGrpInEF.ChainName()),
+						withProfiles("prof1", "prof2"),
+					).build()
+
+					fromWlRules := newRuleBuilder(
+						withFlowLogs(flowLogsEnabled),
+						withDenyAction(denyAction),
+						withDenyActionString(denyActionString),
+						withEgress(),
+						withPolicyGroups(polGrpOutAB.ChainName(), polGrpOutDE.ChainName()),
+						withProfiles("prof1", "prof2"),
+						withDropIPIP(),
+						withDropVXLAN(VXLANPort),
+					).build()
+
+					expected := trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
+						{
+							Name:  "cali-tw-cali1234",
+							Rules: toWlRules,
+						},
+						{
+							Name:  "cali-fw-cali1234",
+							Rules: fromWlRules,
+						},
+						{
+							Name:  "cali-sm-cali1234",
+							Rules: setEndpointMarkRules(0xd400, 0xff00),
+						},
+					})
+
+					Expect(renderer.WorkloadEndpointToIptablesChains(
+						"cali1234",
+						epMarkMapper,
+						true,
+						[]TierPolicyGroups{
+							{
+								Name: "default",
+								IngressPolicies: []*PolicyGroup{
+									polGrpInABC,
+									polGrpInEF,
+								},
+								EgressPolicies: []*PolicyGroup{
+									polGrpOutAB,
+									polGrpOutDE,
+								},
+							},
+						},
+						[]string{"prof1", "prof2"},
+						nil,
+					)).To(Equal(expected))
+				})
+
+				It("should render a fully-loaded workload endpoint - one staged policy, one enforced", func() {
+					toWlRules := newRuleBuilder(
+						withFlowLogs(flowLogsEnabled),
+						withDenyAction(denyAction),
+						withDenyActionString(denyActionString),
+						withPolicies("staged:ai", "bi"),
+						withProfiles("prof1", "prof2"),
+					).build()
+
+					fromWlRules := newRuleBuilder(
+						withFlowLogs(flowLogsEnabled),
+						withDenyAction(denyAction),
+						withDenyActionString(denyActionString),
+						withEgress(),
+						withPolicies("ae", "staged:be"),
+						withProfiles("prof1", "prof2"),
+						withDropIPIP(),
+						withDropVXLAN(VXLANPort),
+					).build()
+
+					expected := trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
+						{
+							Name:  "cali-tw-cali1234",
+							Rules: toWlRules,
+						},
+						{
+							Name:  "cali-fw-cali1234",
+							Rules: fromWlRules,
+						},
+						{
+							Name:  "cali-sm-cali1234",
+							Rules: setEndpointMarkRules(0xd400, 0xff00),
+						},
+					})
+					Expect(renderer.WorkloadEndpointToIptablesChains(
+						"cali1234",
+						epMarkMapper,
+						true,
+						tiersToSinglePolGroups([]*proto.TierInfo{{
+							Name:            "default",
+							IngressPolicies: []string{"staged:ai", "bi"},
+							EgressPolicies:  []string{"ae", "staged:be"},
+						}}),
+						[]string{"prof1", "prof2"},
+						nil,
+					)).To(Equal(expected))
+				})
+
+				It("should render a fully-loaded workload endpoint - both staged, end-of-tier action is pass", func() {
+					toWlRules := newRuleBuilder(
+						withFlowLogs(flowLogsEnabled),
+						withDenyAction(denyAction),
+						withDenyActionString(denyActionString),
+						withPolicies("staged:ai", "staged:bi"),
+						withProfiles("prof1", "prof2"),
+					).build()
+
+					fromWlRules := newRuleBuilder(
+						withFlowLogs(flowLogsEnabled),
+						withDenyAction(denyAction),
+						withDenyActionString(denyActionString),
+						withEgress(),
+						withPolicies("staged:ae", "staged:be"),
+						withProfiles("prof1", "prof2"),
+						withDropIPIP(),
+						withDropVXLAN(VXLANPort),
+					).build()
+
+					expected := trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
+						{
+							Name:  "cali-tw-cali1234",
+							Rules: toWlRules,
+						},
+						{
+							Name:  "cali-fw-cali1234",
+							Rules: fromWlRules,
+						},
+						{
+							Name:  "cali-sm-cali1234",
+							Rules: setEndpointMarkRules(0xd400, 0xff00),
+						},
+					})
+					Expect(renderer.WorkloadEndpointToIptablesChains(
+						"cali1234",
+						epMarkMapper,
+						true,
+						tiersToSinglePolGroups([]*proto.TierInfo{{
+							Name:            "default",
+							IngressPolicies: []string{"staged:ai", "staged:bi"},
+							EgressPolicies:  []string{"staged:ae", "staged:be"},
+						}}),
+						[]string{"prof1", "prof2"},
+						nil,
+					)).To(Equal(expected))
+				})
+
+				It("should render a fully-loaded workload endpoint - staged policy group, end-of-tier pass", func() {
+					toWlRules := newRuleBuilder(
+						withFlowLogs(flowLogsEnabled),
+						withDenyAction(denyAction),
+						withDenyActionString(denyActionString),
+						withPolicyGroups("staged:ai", "staged:bi"),
+						withProfiles("prof1", "prof2"),
+					).build()
+
+					fromWlRules := newRuleBuilder(
+						withFlowLogs(flowLogsEnabled),
+						withDenyAction(denyAction),
+						withDenyActionString(denyActionString),
+						withEgress(),
+						withPolicies("staged:ae", "staged:be"),
+						withProfiles("prof1", "prof2"),
+						withDropIPIP(),
+						withDropVXLAN(VXLANPort),
+					).build()
+
+					expected := trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
+						{
+							Name:  "cali-tw-cali1234",
+							Rules: toWlRules,
+						},
+						{
+							Name:  "cali-fw-cali1234",
+							Rules: fromWlRules,
+						},
+						{
+							Name:  "cali-sm-cali1234",
+							Rules: setEndpointMarkRules(0xd400, 0xff00),
+						},
+					})
+
+					Expect(renderer.WorkloadEndpointToIptablesChains(
+						"cali1234",
+						epMarkMapper,
+						true,
+						[]TierPolicyGroups{
+							{
+								Name: "default",
+								IngressPolicies: []*PolicyGroup{{
+									Tier:        "default",
+									Direction:   PolicyDirectionInbound,
+									PolicyNames: []string{"staged:ai", "staged:bi"},
+									Selector:    "all()",
+								}},
+								EgressPolicies: []*PolicyGroup{{
+									Tier:        "default",
+									Direction:   PolicyDirectionOutbound,
+									PolicyNames: []string{"staged:ae", "staged:be"},
+									Selector:    "all()",
+								}},
+							},
+						},
+						[]string{"prof1", "prof2"},
+						nil,
+					)).To(Equal(expected))
+				})
+
+				It("should render a fully-loaded workload endpoint with tier DefaultAction is Pass", func() {
+					toWlRules := newRuleBuilder(
+						withFlowLogs(flowLogsEnabled),
+						withDenyAction(denyAction),
+						withDenyActionString(denyActionString),
+						withPolicies("ai", "bi"),
+						withProfiles("prof1", "prof2"),
+						withTierPassAction(),
+					).build()
+
+					fromWlRules := newRuleBuilder(
+						withFlowLogs(flowLogsEnabled),
+						withDenyAction(denyAction),
+						withDenyActionString(denyActionString),
+						withEgress(),
+						withPolicies("ae", "be"),
+						withProfiles("prof1", "prof2"),
+						withDropIPIP(),
+						withDropVXLAN(VXLANPort),
+						withTierPassAction(),
+					).build()
+
+					expected := trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
+						{
+							Name:  "cali-tw-cali1234",
+							Rules: toWlRules,
+						},
+						{
+							Name:  "cali-fw-cali1234",
+							Rules: fromWlRules,
+						},
+						{
+							Name:  "cali-sm-cali1234",
+							Rules: setEndpointMarkRules(0xd400, 0xff00),
+						},
+					})
+					Expect(renderer.WorkloadEndpointToIptablesChains(
+						"cali1234",
+						epMarkMapper,
+						true,
+						tiersToSinglePolGroups([]*proto.TierInfo{{
+							Name:            "default",
+							DefaultAction:   "Pass",
+							IngressPolicies: []string{"ai", "bi"},
+							EgressPolicies:  []string{"ae", "be"},
+						}}),
+						[]string{"prof1", "prof2"},
+						nil,
+					)).To(Equal(expected))
+				})
+
+				It("should render a host endpoint", func() {
+					actual := renderer.HostEndpointToFilterChains("eth0",
+						tiersToSinglePolGroups([]*proto.TierInfo{{
+							Name:            "default",
+							IngressPolicies: []string{"ai", "bi"},
+							EgressPolicies:  []string{"ae", "be"},
+						}}),
+						tiersToSinglePolGroups([]*proto.TierInfo{{
+							Name:            "default",
+							IngressPolicies: []string{"afi", "bfi"},
+							EgressPolicies:  []string{"afe", "bfe"},
+						}}),
+						epMarkMapper,
+						[]string{"prof1", "prof2"},
+					)
+					toHostRules := newRuleBuilder(
+						withFlowLogs(flowLogsEnabled),
+						withDenyAction(denyAction),
+						withDenyActionString(denyActionString),
+						withPolicies("ae", "be"),
+						withProfiles("prof1", "prof2"),
+						forHostEndpoint(),
+						withEgress(),
+					).build()
+
+					fromHostRules := newRuleBuilder(
+						withFlowLogs(flowLogsEnabled),
+						withDenyAction(denyAction),
+						withDenyActionString(denyActionString),
+						withPolicies("ai", "bi"),
+						withProfiles("prof1", "prof2"),
+						forHostEndpoint(),
+					).build()
+
+					toHostFWRules := newRuleBuilder(
+						withFlowLogs(flowLogsEnabled),
+						withDenyAction(denyAction),
+						withDenyActionString(denyActionString),
+						withPolicies("afe", "bfe"),
+						withForwardPolicies(),
+						withEgress(),
+						forHostEndpoint(),
+					).build()
+
+					fromHostFWRules := newRuleBuilder(
+						withFlowLogs(flowLogsEnabled),
+						withDenyAction(denyAction),
+						withDenyActionString(denyActionString),
+						withPolicies("afi", "bfi"),
+						withForwardPolicies(),
+						forHostEndpoint(),
+					).build()
+
+					expected := trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
+						{
+							Name:  "cali-th-eth0",
+							Rules: toHostRules,
+						},
+						{
+							Name:  "cali-fh-eth0",
+							Rules: fromHostRules,
+						},
+						{
+							Name:  "cali-thfw-eth0",
+							Rules: toHostFWRules,
+						},
+						{
+							Name:  "cali-fhfw-eth0",
+							Rules: fromHostFWRules,
+						},
+						{
+							Name:  "cali-sm-eth0",
+							Rules: setEndpointMarkRules(0xa200, 0xff00),
 						},
 					})
 					Expect(actual).To(Equal(expected), cmp.Diff(actual, expected))
 				})
-			})
 
-			Context("VXLAN and IPIP allowed", func() {
-				It("should render a minimal workload endpoint without both VXLAN and IPIP drop encap rule", func() {
-					rrConfigNormalMangleReturn.FlowLogsEnabled = false
-					rrConfigNormalMangleReturn.AllowVXLANPacketsFromWorkloads = true
-					rrConfigNormalMangleReturn.AllowIPIPPacketsFromWorkloads = true
-					renderer = NewRenderer(rrConfigNormalMangleReturn)
-					epMarkMapper = NewEndpointMarkMapper(rrConfigNormalMangleReturn.MarkEndpoint,
-						rrConfigNormalMangleReturn.MarkNonCaliEndpoint)
-
-					toWlRules := newRuleBuilder(
+				It("should render host endpoint raw chains with untracked policies", func() {
+					toHostRules := newRuleBuilder(
+						withFlowLogs(flowLogsEnabled),
 						withDenyAction(denyAction),
 						withDenyActionString(denyActionString),
+						withPolicies("c"),
+						forHostEndpoint(),
+						withUntrackedPolicies(),
+						withEgress(),
+					).build()
+
+					fromHostRules := newRuleBuilder(
+						withFlowLogs(flowLogsEnabled),
+						withDenyAction(denyAction),
+						withDenyActionString(denyActionString),
+						withPolicies("c"),
+						forHostEndpoint(),
+						withUntrackedPolicies(),
+					).build()
+
+					expected := []*generictables.Chain{
+						{
+							Name:  "cali-th-eth0",
+							Rules: toHostRules,
+						},
+						{
+							Name:  "cali-fh-eth0",
+							Rules: fromHostRules,
+						},
+					}
+					Expect(renderer.HostEndpointToRawChains("eth0",
+						tiersToSinglePolGroups([]*proto.TierInfo{{
+							Name:            "default",
+							IngressPolicies: []string{"c"},
+							EgressPolicies:  []string{"c"},
+						}}),
+					)).To(Equal(expected))
+				})
+
+				It("should render host endpoint mangle chains with pre-DNAT policies", func() {
+					fromHostRules := newRuleBuilder(
+						withFlowLogs(flowLogsEnabled),
+						withDenyAction(denyAction),
+						withDenyActionString(denyActionString),
+						withPolicies("c"),
+						forHostEndpoint(),
+						withPreDNATPolicies(),
+					).build()
+					expected := []*generictables.Chain{
+						{
+							Name:  "cali-fh-eth0",
+							Rules: fromHostRules,
+						},
+					}
+					Expect(renderer.HostEndpointToMangleIngressChains(
+						"eth0",
+						tiersToSinglePolGroups([]*proto.TierInfo{{
+							Name:            "default",
+							IngressPolicies: []string{"c"},
+						}}),
+					)).To(Equal(expected))
+				})
+
+				It("should render a workload endpoint with packet rate limiting QoSControls", func() {
+					toWlRules := newRuleBuilder(
+						withFlowLogs(flowLogsEnabled),
+						withDenyAction(denyAction),
+						withDenyActionString(denyActionString),
+						withQoSControls(2000, 4000),
 					).build()
 
 					fromWlRules := newRuleBuilder(
+						withFlowLogs(flowLogsEnabled),
 						withDenyAction(denyAction),
 						withDenyActionString(denyActionString),
 						withEgress(),
+						withDropIPIP(),
+						withDropVXLAN(VXLANPort),
+						withQoSControls(1000, 2000),
+					).build()
+
+					expected := []*generictables.Chain{
+						{
+							Name:  "cali-tw-cali1234",
+							Rules: toWlRules,
+						},
+						{
+							Name:  "cali-fw-cali1234",
+							Rules: fromWlRules,
+						},
+						{
+							Name:  "cali-sm-cali1234",
+							Rules: setEndpointMarkRules(0xd400, 0xff00),
+						},
+					}
+					Expect(renderer.WorkloadEndpointToIptablesChains(
+						"cali1234", epMarkMapper,
+						true,
+						nil,
+						nil,
+						&proto.QoSControls{
+							EgressPacketRate:   1000,
+							IngressPacketRate:  2000,
+							EgressPacketBurst:  2000,
+							IngressPacketBurst: 4000,
+						},
+					)).To(Equal(trimSMChain(kubeIPVSEnabled, expected)))
+				})
+
+				It("should render a workload endpoint with connection limiting QoSControls", func() {
+					toWlRules := newRuleBuilder(
+						withFlowLogs(flowLogsEnabled),
+						withDenyAction(denyAction),
+						withDenyActionString(denyActionString),
+						withQoSConnection(20),
+					).build()
+
+					fromWlRules := newRuleBuilder(
+						withFlowLogs(flowLogsEnabled),
+						withDenyAction(denyAction),
+						withDenyActionString(denyActionString),
+						withEgress(),
+						withDropIPIP(),
+						withDropVXLAN(VXLANPort),
+						withQoSConnection(10),
 					).build()
 
 					expected := trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
@@ -1759,35 +736,42 @@ var _ = Describe("Endpoints", func() {
 							Rules: setEndpointMarkRules(0xd400, 0xff00),
 						},
 					})
-
 					Expect(renderer.WorkloadEndpointToIptablesChains(
 						"cali1234", epMarkMapper,
 						true,
 						nil,
 						nil,
-						nil,
+						&proto.QoSControls{
+							EgressMaxConnections:  10,
+							IngressMaxConnections: 20,
+						},
 					)).To(Equal(expected))
 				})
+			})
 
-				It("should render a minimal workload endpoint without both VXLAN and IPIP drop encap rule with flowlogs", func() {
-					rrConfigNormalMangleReturn.FlowLogsEnabled = true
-					rrConfigNormalMangleReturn.AllowVXLANPacketsFromWorkloads = true
-					rrConfigNormalMangleReturn.AllowIPIPPacketsFromWorkloads = true
-					renderer = NewRenderer(rrConfigNormalMangleReturn)
-					epMarkMapper = NewEndpointMarkMapper(rrConfigNormalMangleReturn.MarkEndpoint,
-						rrConfigNormalMangleReturn.MarkNonCaliEndpoint)
+			Describe("with ctstate=INVALID disabled", func() {
+				BeforeEach(func() {
+					renderer = NewRenderer(rrConfigConntrackDisabledReturnAction)
+					epMarkMapper = NewEndpointMarkMapper(rrConfigConntrackDisabledReturnAction.MarkEndpoint,
+						rrConfigConntrackDisabledReturnAction.MarkNonCaliEndpoint)
+				})
 
+				It("should render a minimal workload endpoint", func() {
 					toWlRules := newRuleBuilder(
+						withFlowLogs(flowLogsEnabled),
 						withDenyAction(denyAction),
 						withDenyActionString(denyActionString),
-						withFlowLogs(),
+						withInvalidCTStateDisabled(),
 					).build()
 
 					fromWlRules := newRuleBuilder(
+						withFlowLogs(flowLogsEnabled),
 						withDenyAction(denyAction),
 						withDenyActionString(denyActionString),
+						withInvalidCTStateDisabled(),
 						withEgress(),
-						withFlowLogs(),
+						withDropIPIP(),
+						withDropVXLAN(VXLANPort),
 					).build()
 
 					expected := trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
@@ -1804,23 +788,191 @@ var _ = Describe("Endpoints", func() {
 							Rules: setEndpointMarkRules(0xd400, 0xff00),
 						},
 					})
-
 					Expect(renderer.WorkloadEndpointToIptablesChains(
-						"cali1234", epMarkMapper,
+						"cali1234",
+						epMarkMapper,
 						true,
 						nil,
 						nil,
 						nil,
 					)).To(Equal(expected))
 				})
+
+				It("should render host endpoint mangle chains with pre-DNAT policies", func() {
+					fromHostRules := []generictables.Rule{
+						// conntrack rules.
+						conntrackAcceptRule(),
+						// Host endpoints get extra failsafe rules.
+						failSafeIngress(),
+						clearMarkRule(),
+						startOfTierDefault(),
+						matchPolicyIngress("default", "c"),
+						policyAcceptedRule(),
+						// No drop actions or profiles in raw table.
+					}
+
+					expected := []*generictables.Chain{
+						{
+							Name:  "cali-fh-eth0",
+							Rules: fromHostRules,
+						},
+					}
+					Expect(renderer.HostEndpointToMangleIngressChains(
+						"eth0",
+						tiersToSinglePolGroups([]*proto.TierInfo{{
+							Name:            "default",
+							IngressPolicies: []string{"c"},
+						}}),
+					)).To(Equal(expected))
+				})
 			})
-			AfterEach(func() {
-				rrConfigNormalMangleReturn.AllowIPIPPacketsFromWorkloads = false
-				rrConfigNormalMangleReturn.AllowVXLANPacketsFromWorkloads = false
+
+			Describe("Disabling adding drop encap rules", func() {
+				Context("VXLAN allowed, IPIP dropped", func() {
+					It("should render a minimal workload endpoint without VXLAN drop encap rule and with IPIP drop encap rule", func() {
+						rrConfigNormalMangleReturn.AllowVXLANPacketsFromWorkloads = true
+						renderer = NewRenderer(rrConfigNormalMangleReturn)
+						epMarkMapper = NewEndpointMarkMapper(rrConfigNormalMangleReturn.MarkEndpoint,
+							rrConfigNormalMangleReturn.MarkNonCaliEndpoint)
+
+						toWlRules := newRuleBuilder(
+							withFlowLogs(flowLogsEnabled),
+							withDenyAction(denyAction),
+							withDenyActionString(denyActionString),
+						).build()
+
+						fromWlRules := newRuleBuilder(
+							withFlowLogs(flowLogsEnabled),
+							withDenyAction(denyAction),
+							withDenyActionString(denyActionString),
+							withDropIPIP(),
+							withEgress(),
+						).build()
+
+						expected := trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
+							{
+								Name:  "cali-tw-cali1234",
+								Rules: toWlRules,
+							},
+							{
+								Name:  "cali-fw-cali1234",
+								Rules: fromWlRules,
+							},
+							{
+								Name:  "cali-sm-cali1234",
+								Rules: setEndpointMarkRules(0xd400, 0xff00),
+							},
+						})
+						Expect(renderer.WorkloadEndpointToIptablesChains(
+							"cali1234", epMarkMapper,
+							true,
+							nil,
+							nil,
+							nil,
+						)).To(Equal(expected))
+					})
+				})
+
+				Context("VXLAN dropped, IPIP allowed", func() {
+					It("should render a minimal workload endpoint with VXLAN drop encap rule and without IPIP drop encap rule", func() {
+						rrConfigNormalMangleReturn.AllowIPIPPacketsFromWorkloads = true
+						renderer = NewRenderer(rrConfigNormalMangleReturn)
+						epMarkMapper = NewEndpointMarkMapper(rrConfigNormalMangleReturn.MarkEndpoint,
+							rrConfigNormalMangleReturn.MarkNonCaliEndpoint)
+
+						actual := renderer.WorkloadEndpointToIptablesChains(
+							"cali1234", epMarkMapper,
+							true,
+							nil,
+							nil,
+							nil,
+						)
+
+						toWlRules := newRuleBuilder(
+							withFlowLogs(flowLogsEnabled),
+							withDenyAction(denyAction),
+							withDenyActionString(denyActionString),
+						).build()
+
+						fromWlRules := newRuleBuilder(
+							withFlowLogs(flowLogsEnabled),
+							withDenyAction(denyAction),
+							withDenyActionString(denyActionString),
+							withDropVXLAN(VXLANPort),
+							withEgress(),
+						).build()
+
+						expected := trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
+							{
+								Name:  "cali-tw-cali1234",
+								Rules: toWlRules,
+							},
+							{
+								Name:  "cali-fw-cali1234",
+								Rules: fromWlRules,
+							},
+							{
+								Name:  "cali-sm-cali1234",
+								Rules: setEndpointMarkRules(0xd400, 0xff00),
+							},
+						})
+						Expect(actual).To(Equal(expected), cmp.Diff(actual, expected))
+					})
+				})
+
+				Context("VXLAN and IPIP allowed", func() {
+					It("should render a minimal workload endpoint without both VXLAN and IPIP drop encap rule", func() {
+						rrConfigNormalMangleReturn.AllowVXLANPacketsFromWorkloads = true
+						rrConfigNormalMangleReturn.AllowIPIPPacketsFromWorkloads = true
+						renderer = NewRenderer(rrConfigNormalMangleReturn)
+						epMarkMapper = NewEndpointMarkMapper(rrConfigNormalMangleReturn.MarkEndpoint,
+							rrConfigNormalMangleReturn.MarkNonCaliEndpoint)
+
+						toWlRules := newRuleBuilder(
+							withFlowLogs(flowLogsEnabled),
+							withDenyAction(denyAction),
+							withDenyActionString(denyActionString),
+						).build()
+
+						fromWlRules := newRuleBuilder(
+							withFlowLogs(flowLogsEnabled),
+							withDenyAction(denyAction),
+							withDenyActionString(denyActionString),
+							withEgress(),
+						).build()
+
+						expected := trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
+							{
+								Name:  "cali-tw-cali1234",
+								Rules: toWlRules,
+							},
+							{
+								Name:  "cali-fw-cali1234",
+								Rules: fromWlRules,
+							},
+							{
+								Name:  "cali-sm-cali1234",
+								Rules: setEndpointMarkRules(0xd400, 0xff00),
+							},
+						})
+
+						Expect(renderer.WorkloadEndpointToIptablesChains(
+							"cali1234", epMarkMapper,
+							true,
+							nil,
+							nil,
+							nil,
+						)).To(Equal(expected))
+					})
+				})
+				AfterEach(func() {
+					rrConfigNormalMangleReturn.AllowIPIPPacketsFromWorkloads = false
+					rrConfigNormalMangleReturn.AllowVXLANPacketsFromWorkloads = false
+				})
 			})
-		})
+		}
 	}
-})
+}
 
 func trimSMChain(ipvsEnable bool, chains []*generictables.Chain) []*generictables.Chain {
 	result := []*generictables.Chain{}
@@ -2459,25 +1611,19 @@ func withDropVXLAN(vxlanPort int) ruleBuilderOpt {
 
 func withPolicies(policies ...string) ruleBuilderOpt {
 	return func(r *ruleBuilder) {
-		for _, p := range policies {
-			r.policies = append(r.policies, p)
-		}
+		r.policies = append(r.policies, policies...)
 	}
 }
 
 func withPolicyGroups(groups ...string) ruleBuilderOpt {
 	return func(r *ruleBuilder) {
-		for _, g := range groups {
-			r.policyGroups = append(r.policyGroups, g)
-		}
+		r.policyGroups = append(r.policyGroups, groups...)
 	}
 }
 
 func withProfiles(profiles ...string) ruleBuilderOpt {
 	return func(r *ruleBuilder) {
-		for _, p := range profiles {
-			r.profiles = append(r.profiles, p)
-		}
+		r.profiles = append(r.profiles, profiles...)
 	}
 }
 
@@ -2501,9 +1647,9 @@ func withQoSConnection(maxConn int64) ruleBuilderOpt {
 	}
 }
 
-func withFlowLogs() ruleBuilderOpt {
+func withFlowLogs(flowLogsEnabled bool) ruleBuilderOpt {
 	return func(r *ruleBuilder) {
-		r.flowLogsEnabled = true
+		r.flowLogsEnabled = flowLogsEnabled
 	}
 }
 
@@ -2513,7 +1659,36 @@ func withInvalidCTStateDisabled() ruleBuilderOpt {
 	}
 }
 
+func forHostEndpoint() ruleBuilderOpt {
+	return func(r *ruleBuilder) {
+		r.forHostEndpoint = true
+	}
+}
+
+func withForwardPolicies() ruleBuilderOpt {
+	return func(r *ruleBuilder) {
+		r.forForward = true
+	}
+}
+
+func withUntrackedPolicies() ruleBuilderOpt {
+	return func(r *ruleBuilder) {
+		r.forUntrack = true
+	}
+}
+
+func withPreDNATPolicies() ruleBuilderOpt {
+	return func(r *ruleBuilder) {
+		r.forPreDNAT = true
+	}
+}
+
 type ruleBuilder struct {
+	forHostEndpoint bool
+	forForward      bool
+	forUntrack      bool
+	forPreDNAT      bool
+
 	invalidCTStateDisabled bool
 	egress                 bool
 	denyAction             generictables.Action
@@ -2556,10 +1731,16 @@ func (r *ruleBuilder) build() []generictables.Rule {
 		}
 	}
 
-	if r.invalidCTStateDisabled {
-		rules = append(rules, conntrackRulesWithInvalidStateDisabled()...)
-	} else {
-		rules = append(rules, conntrackAcceptRule(), conntrackDenyRule(r.denyAction))
+	if !r.forUntrack {
+		if r.invalidCTStateDisabled || (r.forHostEndpoint && r.forPreDNAT) {
+			rules = append(rules, conntrackRulesWithInvalidStateDisabled()...)
+		} else {
+			rules = append(rules, conntrackAcceptRule())
+		}
+
+		if !r.invalidCTStateDisabled {
+			rules = append(rules, conntrackDenyRule(r.denyAction))
+		}
 	}
 
 	if r.qosMaxConn > 0 {
@@ -2568,6 +1749,15 @@ func (r *ruleBuilder) build() []generictables.Rule {
 			dir = "egress"
 		}
 		rules = append(rules, qosMaxConnectionRule(r.qosMaxConn, dir))
+	}
+
+	// Host endpoints get extra failsafe rules.
+	if r.forHostEndpoint && !r.forForward {
+		if r.egress {
+			rules = append(rules, failSafeEgress())
+		} else {
+			rules = append(rules, failSafeIngress())
+		}
 	}
 
 	rules = append(rules, clearMarkRule())
@@ -2605,14 +1795,22 @@ func (r *ruleBuilder) build() []generictables.Rule {
 		if r.egress {
 			rules = append(rules,
 				matchPolicyEgress("default", p),
-				policyAcceptedRule(),
 			)
 		} else {
 			rules = append(rules,
 				matchPolicyIngress("default", p),
-				policyAcceptedRule(),
 			)
 		}
+		if r.forHostEndpoint && r.forUntrack {
+			// Extra NOTRACK action before returning in raw table.
+			rules = append(rules, untrackedRule())
+		}
+		rules = append(rules, policyAcceptedRule())
+	}
+
+	if r.forHostEndpoint && (r.forUntrack || r.forPreDNAT) {
+		// No drop actions or profiles in raw table.
+		return rules
 	}
 
 	if r.tierPassAction {
@@ -2638,6 +1836,10 @@ func (r *ruleBuilder) build() []generictables.Rule {
 				}
 			}
 		}
+	}
+
+	if r.forForward {
+		return rules
 	}
 
 	for _, p := range r.profiles {
