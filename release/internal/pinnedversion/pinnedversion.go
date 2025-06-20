@@ -309,6 +309,7 @@ func normalizeComponent(name string, c registry.Component) registry.Component {
 	if img == "" {
 		img = name
 	}
+	c.Image = img
 	if strings.HasPrefix(img, calicoImageNamespace) {
 		c.Image = strings.TrimPrefix(img, calicoImageNamespace)
 	}
