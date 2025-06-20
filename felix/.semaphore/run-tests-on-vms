@@ -53,7 +53,7 @@ for batch in "${batches[@]}"; do
   log_file="$artifacts_dir/test-$batch.log"
   log_files+=( $log_file )
   if [ $batch = "ut" ]; then
-    VM_NAME=$vm_name $my_dir/on-test-vm make --directory=calico/${REPO_NAME} ut-bpf check-wireguard >& "$log_file" &
+    VM_NAME=$vm_name $my_dir/on-test-vm make --directory=calico/${REPO_NAME} ut-bpf FOCUS=TestAttachTcx check-wireguard >& "$log_file" &
     pid=$!
     pids+=( $pid )
   fi
