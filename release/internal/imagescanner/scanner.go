@@ -169,8 +169,8 @@ func RetrieveResultURL(outputDir string) (string, error) {
 		logrus.WithError(err).Error("Failed to unmarshal image scan result")
 		return "", err
 	}
-	if link, ok := result["results_link"].(string); ok {
-		return link, nil
+	if link, ok := result["results_link"]; ok {
+		return link.(string), nil
 	}
 	return "", fmt.Errorf("no results link found in image scan result")
 }
