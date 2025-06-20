@@ -453,4 +453,14 @@ var (
 		Usage: "Publish the hashrelease as the latest hashrelease",
 		Value: true,
 	}
+	hashreleaseServerCredentialsFlag = &cli.StringFlag{
+		Name:    "hashrelease-server-credentials",
+		Usage:   "The absolute path to the credentials file for the hashrelease server",
+		EnvVars: []string{"HASHRELEASE_SERVER_CREDENTIALS"},
+	}
+	hashreleaseServerBucketFlag = &cli.StringFlag{
+		Name:    "hashrelease-server-bucket",
+		Usage:   "The bucket name for the hashrelease server",
+		EnvVars: []string{"HASHRELEASE_SERVER_BUCKET"},
+	}
 )
