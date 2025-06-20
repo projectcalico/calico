@@ -56,10 +56,6 @@ for batch in "${batches[@]}"; do
     VM_NAME=$vm_name $my_dir/on-test-vm make --directory=calico/${REPO_NAME} ut-bpf check-wireguard >& "$log_file" &
     pid=$!
     pids+=( $pid )
-  else
-    VM_NAME=$vm_name ./.semaphore/on-test-vm make --directory=calico/${REPO_NAME} fv-bpf FELIX_FV_NFTABLES="$FELIX_FV_NFTABLES" GINKGO_FOCUS="${FV_FOCUS}" FV_NUM_BATCHES=$num_fv_batches FV_BATCHES_TO_RUN="$batch" >& "$log_file" &
-    pid=$!
-    pids+=( $pid )
   fi
 
   prefix="[batch=${batch} pid=${pid}]"
