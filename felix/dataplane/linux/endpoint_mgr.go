@@ -901,7 +901,8 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 		m.localBGPPeerIP = m.newLocalBGPPeerIP
 		log.WithFields(log.Fields{
 			"oldIP": m.localBGPPeerIP,
-			"newIP": m.newLocalBGPPeerIP}).Debug("local BGP peer IP updated.")
+			"newIP": m.newLocalBGPPeerIP,
+		}).Debug("local BGP peer IP updated.")
 		// Reconfigure the interfaces of all active workload endpoints.
 		for ifaceName := range m.activeWlIfaceNameToID {
 			m.wlIfaceNamesToReconfigure.Add(ifaceName)
@@ -1518,7 +1519,11 @@ func (m *endpointManager) configureInterface(name string) error {
 			if err2 != nil {
 				log.WithError(err2).Error("Error checking if interface exists")
 			}
-			log.WithError(err).WithField("ifaceName", name).Warnf("Could not set accept_ra")
+			if m.ipVersion == 6 {
+				log.WithError(err).WithField("ifaceName", name).Warn("Could not set accept_ra")
+			} else {
+				log.WithError(err).WithField("ifaceName", name).Debug("Could not set accept_ra")
+			}
 		}
 	}
 
