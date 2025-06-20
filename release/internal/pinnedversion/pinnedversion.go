@@ -41,6 +41,8 @@ const (
 	operatorComponentsFileName = "pinned_components.yml"
 )
 
+const calicoImageNamespace = "calico/"
+
 var excludedComponents = []string{
 	utils.Calico,
 	"calico/api",
@@ -200,6 +202,9 @@ func GenerateOperatorComponents(srcDir, outputDir string) (registry.OperatorComp
 	if err != nil {
 		return op, "", err
 	}
+	for name, component := range pinnedVersion.Components {
+		pinnedVersion.Components[name] = normalizeComponent(name, component)
+	}
 	operatorComponentsFilePath := filepath.Join(srcDir, operatorComponentsFileName)
 	operatorComponentsFile, err := os.Create(operatorComponentsFilePath)
 	if err != nil {
@@ -281,13 +286,7 @@ func RetrieveImageComponents(outputDir string) (map[string]registry.Component, e
 			delete(components, name)
 			continue
 		}
-		img := registry.ImageMap[name]
-		if img != "" {
-			component.Image = img
-		} else if component.Image == "" {
-			component.Image = name
-		}
-		components[name] = component
+		components[name] = normalizeComponent(name, component)
 	}
 	return components, nil
 }
@@ -299,4 +298,20 @@ func RetrieveVersions(outputDir string) (version.Versions, error) {
 	}
 
 	return version.NewHashreleaseVersions(version.New(pinnedVersion.Title), pinnedVersion.TigeraOperator.Version), nil
+}
+
+// normalizeComponent normalizes the component image name.
+// It checks if the image is in the registry.ImageMap and replaces it with the mapped value.
+// If the image is not found in the map, it sets it to the name of the component.
+// The image is also stripped of the calico namespace prefix if it exists.
+func normalizeComponent(name string, c registry.Component) registry.Component {
+	img := registry.ImageMap[c.Image]
+	if img == "" {
+		img = name
+	}
+	c.Image = img
+	if strings.HasPrefix(img, calicoImageNamespace) {
+		c.Image = strings.TrimPrefix(img, calicoImageNamespace)
+	}
+	return c
 }
