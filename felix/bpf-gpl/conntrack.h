@@ -689,6 +689,12 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 			result.rc = CALI_CT_MID_FLOW_MISS;
 			return result;
 		}
+		if (/*check is maglev*/1) {
+			// Caught a mid-flow Maglev packet started on another node.
+			// Send to policy.
+			CALI_CT_DEBUG("Miss for mid-flow Maglev TCP. Will attempt load-balancing...");
+			goto out_lookup_fail;
+		}
 		CALI_CT_DEBUG("Miss.");
 		if (related) {
 			goto out_invalid;

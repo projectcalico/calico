@@ -171,6 +171,7 @@ func runBenchmarkServiceUpdate(b *testing.B, svcCnt, epCnt int, mockMaps bool, o
 			&mock.DummyMap{},
 			&mock.DummyMap{},
 			&mock.DummyMap{},
+			&mock.DummyMap{},
 			NewRTCache(),
 			nil,
 		)
@@ -185,6 +186,7 @@ func runBenchmarkServiceUpdate(b *testing.B, svcCnt, epCnt int, mockMaps bool, o
 
 		syncer, err = NewSyncer(4,
 			[]net.IP{net.IPv4(1, 1, 1, 1)},
+			&mock.DummyMap{},
 			&mock.DummyMap{},
 			&mock.DummyMap{},
 			&mock.DummyMap{},
