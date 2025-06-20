@@ -184,7 +184,7 @@ case $1 in
   info)
     show_connections
     ;;
-  comfirm-ssh)
+  confirm-ssh)
     confirm-nodes-ssh
     ;;
   *)
