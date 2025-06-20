@@ -145,8 +145,11 @@ function retry-ssh() {
 }
 
 function confirm-nodes-ssh() {
-  retry-ssh ./ssh-node-linux.sh
-  retry-ssh ./ssh-node-windows.sh
+  retry-ssh "${MASTER_CONNECT_COMMAND} ls /"
+  retry-ssh "${WINDOWS_CONNECT_COMMAND} ls /"
+  sleep 30
+  retry-ssh "${MASTER_CONNECT_COMMAND} ls /"
+  retry-ssh "${WINDOWS_CONNECT_COMMAND} ls /"
 }
 
 function parse_options() {
