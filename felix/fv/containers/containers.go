@@ -873,12 +873,19 @@ func (c *Container) NumIPSets() int {
 // programs are listed (i.e. the type that we use).
 func (c *Container) NumTCBPFProgs(ifaceName string) int {
 	var total int
-	for _, dir := range []string{"ingress", "egress"} {
-		out, err := c.ExecOutput("tc", "filter", "show", "dev", ifaceName, dir)
+	if os.Getenv("FELIX_FV_BPFATTACHTYPE") == "TC" {
+		for _, dir := range []string{"ingress", "egress"} {
+			out, err := c.ExecOutput("tc", "filter", "show", "dev", ifaceName, dir)
+			Expect(err).NotTo(HaveOccurred())
+			count := strings.Count(out, "direct-action")
+			log.Debugf("Output from tc filter show for %s, dir=%s: %q (count=%d)", c.Name, dir, out, count)
+			total += count
+		}
+	} else {
+		out, err := c.ExecOutput("bpftool", "net", "show")
 		Expect(err).NotTo(HaveOccurred())
-		count := strings.Count(out, "direct-action")
-		log.Debugf("Output from tc filter show for %s, dir=%s: %q (count=%d)", c.Name, dir, out, count)
-		total += count
+		total = strings.Count(out, ifaceName)
+
 	}
 	return total
 }

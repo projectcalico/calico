@@ -21,7 +21,15 @@ const volatile struct cali_tc_preamble_globals __globals;
 #define JUMP(idx) globals->data.jumps[JUMP_IDX(idx)]
 #define JUMP_DEBUG(idx) globals->data.jumps[JUMP_IDX_DEBUG(idx)]
 
-SEC("tc")
+#if defined(CALI_TCX_INGRESS)
+#define SECTION_NAME "tcx/ingress"
+#elif defined(CALI_TCX_EGRESS)
+#define SECTION_NAME "tcx/egress"
+#else
+#define SECTION_NAME "tc"
+#endif
+
+SEC(SECTION_NAME)
 int  cali_tc_preamble(struct __sk_buff *skb)
 {
 	volatile struct cali_tc_globals *globals = state_get_globals_tc();
