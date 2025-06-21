@@ -24,11 +24,15 @@ import (
 
 // New creates a new CalicoNodeStatus v1 Syncer.
 func New(client api.Client, callbacks api.SyncerCallbacks) api.Syncer {
+	return NewFromProvider(watchersyncer.NewWatcherCacheFactory(client), callbacks)
+}
+
+func NewFromProvider(watcherCacheProvider watchersyncer.WatcherCacheProvider, callbacks api.SyncerCallbacks) api.Syncer {
 	resourceTypes := []watchersyncer.ResourceType{
 		{
 			ListInterface: model.ResourceListOptions{Kind: apiv3.KindCalicoNodeStatus},
 		},
 	}
 
-	return watchersyncer.New(client, resourceTypes, callbacks)
+	return watchersyncer.NewFromProvider(watcherCacheProvider, resourceTypes, callbacks)
 }
