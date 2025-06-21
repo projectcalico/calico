@@ -96,7 +96,7 @@ func TestScannerScan(t *testing.T) {
 			}
 			defer r.Body.Close()
 			w.Header().Set("Content-Type", "application/json")
-			w.Write([]byte(`{"results_link": "http://example.com/results"}`))
+			_, _ = w.Write([]byte(`{"results_link": "http://example.com/results"}`))
 		}))
 		defer mockServer.Close()
 		scanner := New(Config{
@@ -141,7 +141,7 @@ func TestScannerScan(t *testing.T) {
 			}
 			defer r.Body.Close()
 			w.Header().Set("Content-Type", "application/json")
-			w.Write([]byte(`{"results_link": "http://example.com/results"}`))
+			_, _ = w.Write([]byte(`{"results_link": "http://example.com/results"}`))
 		}))
 		defer mockServer.Close()
 		scanner := New(Config{
@@ -170,7 +170,7 @@ func TestScannerScan(t *testing.T) {
 		mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusCreated)
 			w.Header().Set("Content-Type", "application/json")
-			w.Write([]byte(`{"results_link": "http://example.com/results"}`))
+			_, _ = w.Write([]byte(`{"results_link": "http://example.com/results"}`))
 		}))
 		defer mockServer.Close()
 		scanner := New(Config{
