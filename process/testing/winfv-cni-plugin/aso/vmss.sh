@@ -147,6 +147,7 @@ function retry-ssh() {
 function confirm-nodes-ssh() {
   retry-ssh "${MASTER_CONNECT_COMMAND} echo"
   retry-ssh "${WINDOWS_CONNECT_COMMAND} -Command 'echo'"
+  echo "sleep 30 seconds..."
   sleep 30
   retry-ssh "${MASTER_CONNECT_COMMAND} echo"
   retry-ssh "${WINDOWS_CONNECT_COMMAND} -Command 'echo'"
