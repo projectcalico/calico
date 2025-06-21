@@ -22,6 +22,7 @@ import (
 	"reflect"
 	"regexp"
 	"strings"
+	"time"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
@@ -37,6 +38,7 @@ import (
 	"github.com/projectcalico/calico/felix/routetable"
 	"github.com/projectcalico/calico/felix/rules"
 	"github.com/projectcalico/calico/felix/types"
+	lclogutils "github.com/projectcalico/calico/libcalico-go/lib/logutils"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -218,6 +220,9 @@ type endpointManager struct {
 	callbacks              endpointManagerCallbacks
 	bpfEnabled             bool
 	bpfEndpointManager     hepListener
+
+	// Rate-limited logger, currently used for QoS validation errors
+	rateLimitedLogger *lclogutils.RateLimitedLogger
 }
 
 type EndpointStatusUpdateCallback func(ipVersion uint8, id interface{}, status string, extraInfo interface{})
@@ -371,6 +376,9 @@ func newEndpointManagerWithShims(
 		callbacks:              newEndpointManagerCallbacks(callbacks, ipVersion),
 
 		linkAddrsMgr: linkAddrsMgr,
+
+		// Rate-limit logging to one message every 5 minutes
+		rateLimitedLogger: lclogutils.NewRateLimitedLogger(lclogutils.OptInterval(5 * time.Minute)),
 	}
 
 	return epManager
@@ -692,10 +700,10 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 		if !m.bpfEnabled {
 			// QoS state should be removed before the workload itself is removed
 			if oldWorkload != nil {
-				logCxt.Info("Deleting QoS bandwidth state if present")
+				logCxt.Debug("Deleting QoS bandwidth state if present")
 				err := m.maybeUpdateQoSBandwidth(oldWorkload, nil)
 				if err != nil {
-					logCxt.WithError(err).WithField("workload", oldWorkload).Debug("Error deleting QoS bandwidth state, workload may have been already removed.")
+					m.rateLimitedLogger.WithFields(logCxt.Data).WithError(err).WithField("workload", oldWorkload).Warn("Error deleting QoS bandwidth state, workload may have been already removed.")
 				}
 			}
 		}
@@ -840,10 +848,10 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 				delete(m.pendingWlEpUpdates, id)
 
 				if !m.bpfEnabled {
-					logCxt.Info("Updating QoS bandwidth state if changed")
+					logCxt.Debug("Updating QoS bandwidth state if changed")
 					err := m.maybeUpdateQoSBandwidth(oldWorkload, workload)
 					if err != nil {
-						logCxt.WithError(err).WithFields(log.Fields{"oldWorkload": oldWorkload, "newWorkload": workload}).Debug("Error updating QoS bandwidth state")
+						m.rateLimitedLogger.WithFields(logCxt.Data).WithError(err).WithFields(log.Fields{"oldWorkload": oldWorkload, "newWorkload": workload}).Warn("Error updating QoS bandwidth state")
 					}
 				}
 
