@@ -50,6 +50,7 @@ const (
 	Modified EventType = "MODIFIED"
 	Deleted  EventType = "DELETED"
 	Error    EventType = "ERROR"
+	Bookmark EventType = "BOOKMARK"
 
 	DefaultChanSize int32 = 100
 )
