@@ -1335,7 +1335,7 @@ func validateRule(structLevel validator.StructLevel) {
 					if (cidr.Version() == 4 && n == "0.0.0.0/0") ||
 					   (cidr.Version() == 6 && n == "::/0") {
 						structLevel.ReportError(reflect.ValueOf(n), fieldName,
-							"", reason("universal CIDR in negation creates logical contradiction (matches no traffic)"), "")
+							"", reason("catch-all CIDR in negation creates logical contradiction (matches no traffic)"), "")
 					}
 				}
 			}
