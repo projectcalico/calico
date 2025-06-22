@@ -155,7 +155,8 @@ func filterNetsAndValidateNegation(mixedCIDRs []string, ipVersion uint8, isNegat
 		return nil, false
 	}
 	wantV6 := ipVersion == 6
-	filteredAll = true  // Start assuming all will be filtered out
+        // Start assuming all will be filtered out
+	filteredAll = true
 	
 	for _, net := range mixedCIDRs {
 		isV6 := strings.Contains(net, ":")
