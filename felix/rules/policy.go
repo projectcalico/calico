@@ -131,14 +131,13 @@ func filterNets(mixedCIDRs []string, ipVersion uint8, isNegated bool) (filtered 
 	}
 	wantV6 := ipVersion == 6
 	filteredAll = true
-	
 	for _, net := range mixedCIDRs {
 		isV6 := strings.Contains(net, ":")
 		if isV6 != wantV6 {
 			continue
 		}
-		
-		// Check for universal CIDR in negated context, which creates logical contradictions
+
+		// Check for catch-all CIDR in negated context, which creates logical contradictions
 		if isNegated && isCatchAllCIDR(net, ipVersion) {
 			logrus.WithFields(logrus.Fields{
 				"cidr":      net,
@@ -148,12 +147,11 @@ func filterNets(mixedCIDRs []string, ipVersion uint8, isNegated bool) (filtered 
 			// Return filteredAll=true to indicate the entire rule should be dropped
 			return nil, true
 		}
-		
+
 		filtered = append(filtered, net)
 		// Found at least one valid CIDR of the right IP version
 		filteredAll = false
 	}
-	
 	return
 }
 

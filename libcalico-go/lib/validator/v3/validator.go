@@ -1320,7 +1320,6 @@ func validateRule(structLevel validator.StructLevel) {
 	scanNets := func(nets []string, fieldName string) {
 		var v4, v6 bool
 		isNegatedField := fieldName == "Source.NotNets" || fieldName == "Destination.NotNets"
-
 		for _, n := range nets {
 			_, cidr, err := cnet.ParseCIDR(n)
 			if err != nil {
