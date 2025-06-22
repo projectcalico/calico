@@ -142,15 +142,10 @@ func filterNets(mixedCIDRs []string, ipVersion uint8) (filtered []string, filter
 	return
 }
 
-// isUniversalCIDR returns true if the CIDR represents "all addresses" for the given IP version.
+// isCatchAllCIDR returns true if the CIDR represents "all addresses" for the given IP version.
 // This is used to detect problematic negated matches that would create logical contradictions.
-func isUniversalCIDR(cidr string, ipVersion uint8) bool {
-	if ipVersion == 4 {
-		return cidr == "0.0.0.0/0"
-	} else if ipVersion == 6 {
-		return cidr == "::/0"
-	}
-	return false
+func isCatchAllCIDR(cidr string, ipVersion uint8) bool {
+	return (ipVersion == 4 &&  cidr == "0.0.0.0/0") || (ipVersion == 6 && cidr == "::/0")
 }
 
 // filterNetsAndValidateNegation filters CIDRs by IP version and validates that negated universal
