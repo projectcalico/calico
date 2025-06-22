@@ -1333,7 +1333,7 @@ func validateRule(structLevel validator.StructLevel) {
 				// Check for universal CIDR in negated context, which creates logical contradictions
 				if isNegatedField {
 					if (cidr.Version() == 4 && n == "0.0.0.0/0") ||
-					   (cidr.Version() == 6 && n == "::/0") {
+						   (cidr.Version() == 6 && n == "::/0") {
 						structLevel.ReportError(reflect.ValueOf(n), fieldName,
 							"", reason("catch-all CIDR in negation creates logical contradiction (matches no traffic)"), "")
 					}
