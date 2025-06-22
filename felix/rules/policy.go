@@ -149,7 +149,6 @@ func filterNets(mixedCIDRs []string, ipVersion uint8, isNegated bool) (filtered 
 		}
 
 		filtered = append(filtered, net)
-		// Found at least one valid CIDR of the right IP version
 		filteredAll = false
 	}
 	return
@@ -158,9 +157,8 @@ func filterNets(mixedCIDRs []string, ipVersion uint8, isNegated bool) (filtered 
 // isCatchAllCIDR returns true if the CIDR represents "all addresses" for the given IP version.
 // This is used to detect problematic negated matches that would create logical contradictions.
 func isCatchAllCIDR(cidr string, ipVersion uint8) bool {
-	return (ipVersion == 4 &&  cidr == "0.0.0.0/0") || (ipVersion == 6 && cidr == "::/0")
+	return (ipVersion == 4 && cidr == "0.0.0.0/0") || (ipVersion == 6 && cidr == "::/0")
 }
-
 
 // FilterRuleToIPVersion: If the rule applies to the given IP version, returns a copy of the rule
 // excluding the CIDRs that are not of the given IP version. If the rule does not apply to the
