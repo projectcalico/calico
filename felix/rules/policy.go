@@ -169,7 +169,7 @@ func filterNetsAndValidateNegation(mixedCIDRs []string, ipVersion uint8, isNegat
 				"cidr":      net,
 				"ipVersion": ipVersion,
 				"negated":   isNegated,
-			}).Warn("Filtering out rule with negated universal CIDR to prevent iptables logical contradiction")
+			}).Warn("Ignoring rule with negated catch-all CIDR to prevent iptables logical contradiction")
 			// Return filteredAll=true to indicate the entire rule should be dropped
 			return nil, true
 		}
