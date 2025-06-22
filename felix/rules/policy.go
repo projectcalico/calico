@@ -175,7 +175,8 @@ func filterNetsAndValidateNegation(mixedCIDRs []string, ipVersion uint8, isNegat
 		}
 		
 		filtered = append(filtered, net)
-		filteredAll = false  // Found at least one valid CIDR of the right IP version
+                // Found at least one valid CIDR of the right IP version
+		filteredAll = false 
 	}
 	
 	return
