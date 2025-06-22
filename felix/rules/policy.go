@@ -125,37 +125,11 @@ func (r *DefaultRuleRenderer) ProtoRulesToIptablesRules(
 	return rules
 }
 
-func filterNets(mixedCIDRs []string, ipVersion uint8) (filtered []string, filteredAll bool) {
+func filterNets(mixedCIDRs []string, ipVersion uint8, isNegated bool) (filtered []string, filteredAll bool) {
 	if len(mixedCIDRs) == 0 {
 		return nil, false
 	}
 	wantV6 := ipVersion == 6
-	filteredAll = true
-	for _, net := range mixedCIDRs {
-		isV6 := strings.Contains(net, ":")
-		if isV6 != wantV6 {
-			continue
-		}
-		filtered = append(filtered, net)
-		filteredAll = false
-	}
-	return
-}
-
-// isCatchAllCIDR returns true if the CIDR represents "all addresses" for the given IP version.
-// This is used to detect problematic negated matches that would create logical contradictions.
-func isCatchAllCIDR(cidr string, ipVersion uint8) bool {
-	return (ipVersion == 4 &&  cidr == "0.0.0.0/0") || (ipVersion == 6 && cidr == "::/0")
-}
-
-// filterNetsAndValidateNegation filters CIDRs by IP version and validates that negated universal
-// CIDRs are not present, which would create logical contradictions in iptables rules.
-func filterNetsAndValidateNegation(mixedCIDRs []string, ipVersion uint8, isNegated bool) (filtered []string, filteredAll bool) {
-	if len(mixedCIDRs) == 0 {
-		return nil, false
-	}
-	wantV6 := ipVersion == 6
-        // Start assuming all will be filtered out
 	filteredAll = true
 	
 	for _, net := range mixedCIDRs {
@@ -165,7 +139,7 @@ func filterNetsAndValidateNegation(mixedCIDRs []string, ipVersion uint8, isNegat
 		}
 		
 		// Check for universal CIDR in negated context, which creates logical contradictions
-		if isNegated && isUniversalCIDR(net, ipVersion) {
+		if isNegated && isCatchAllCIDR(net, ipVersion) {
 			logrus.WithFields(logrus.Fields{
 				"cidr":      net,
 				"ipVersion": ipVersion,
@@ -176,12 +150,19 @@ func filterNetsAndValidateNegation(mixedCIDRs []string, ipVersion uint8, isNegat
 		}
 		
 		filtered = append(filtered, net)
-                // Found at least one valid CIDR of the right IP version
-		filteredAll = false 
+		// Found at least one valid CIDR of the right IP version
+		filteredAll = false
 	}
 	
 	return
 }
+
+// isCatchAllCIDR returns true if the CIDR represents "all addresses" for the given IP version.
+// This is used to detect problematic negated matches that would create logical contradictions.
+func isCatchAllCIDR(cidr string, ipVersion uint8) bool {
+	return (ipVersion == 4 &&  cidr == "0.0.0.0/0") || (ipVersion == 6 && cidr == "::/0")
+}
+
 
 // FilterRuleToIPVersion: If the rule applies to the given IP version, returns a copy of the rule
 // excluding the CIDRs that are not of the given IP version. If the rule does not apply to the
@@ -215,19 +196,19 @@ func FilterRuleToIPVersion(ipVersion uint8, pRule *proto.Rule) *proto.Rule {
 		return nil
 	}
 
-	ruleCopy.SrcNet, filteredAll = filterNets(pRule.SrcNet, ipVersion)
+	ruleCopy.SrcNet, filteredAll = filterNets(pRule.SrcNet, ipVersion, false)
 	if filteredAll {
 		return nil
 	}
-	ruleCopy.NotSrcNet, filteredAll = filterNetsAndValidateNegation(pRule.NotSrcNet, ipVersion, true)
+	ruleCopy.NotSrcNet, filteredAll = filterNets(pRule.NotSrcNet, ipVersion, true)
 	if filteredAll {
 		return nil
 	}
-	ruleCopy.DstNet, filteredAll = filterNets(pRule.DstNet, ipVersion)
+	ruleCopy.DstNet, filteredAll = filterNets(pRule.DstNet, ipVersion, false)
 	if filteredAll {
 		return nil
 	}
-	ruleCopy.NotDstNet, filteredAll = filterNetsAndValidateNegation(pRule.NotDstNet, ipVersion, true)
+	ruleCopy.NotDstNet, filteredAll = filterNets(pRule.NotDstNet, ipVersion, true)
 	if filteredAll {
 		return nil
 	}
