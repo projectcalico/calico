@@ -62,7 +62,7 @@ type QoSPolicySpec struct {
 	// NamespaceSelector is an optional field for an expression used to select a pod based on namespaces.
 	NamespaceSelector string `json:"namespaceSelector,omitempty" validate:"selector"`
 
-	// The ordered set of Egress Gateway Policies to define how traffic exit a cluster
+	// The set of QoS Policies
 	Egress []QoSRule `json:"egress,omitempty" validate:"required"`
 }
 
