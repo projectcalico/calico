@@ -76,6 +76,7 @@ RUN rpm -i ${IPSET_SOURCERPM_URL} && \
 # get it from the debian repos as the official website doesn't support https
 RUN curl -sfL https://ftp.debian.org/debian/pool/main/r/runit/runit_${RUNIT_VER}.orig.tar.gz | tar xz -C /root && \
     cd /root/admin/runit-${RUNIT_VER} && \
+    sed -i '208s/0744/0644/' src/svlogd.c && sed -i '285s/0744/0644/' src/svlogd.c && sed -i '375s/0744/0644/' src/svlogd.c && \
     package/compile
 
 FROM registry.access.redhat.com/ubi8/ubi-minimal:latest AS ubi
