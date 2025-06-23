@@ -152,18 +152,20 @@ func endpointRulesTests(flowLogsEnabled bool) func() {
 				})
 
 				It("should render a disabled workload endpoint", func() {
-					commonRule := []generictables.Rule{
-						endpointAdminDisabledRule(denyAction),
-					}
+					rules := newRuleBuilder(
+						withDenyAction(denyAction),
+						withFlowLogs(flowLogsEnabled),
+						withDisabledEndpoint(),
+					).build()
 
 					expected := trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
 						{
 							Name:  "cali-tw-cali1234",
-							Rules: commonRule,
+							Rules: rules,
 						},
 						{
 							Name:  "cali-fw-cali1234",
-							Rules: commonRule,
+							Rules: rules,
 						},
 						{
 							Name:  "cali-sm-cali1234",
@@ -1385,12 +1387,6 @@ func withInvalidCTStateDisabled() ruleBuilderOpt {
 	}
 }
 
-func forHostEndpoint() ruleBuilderOpt {
-	return func(r *ruleBuilder) {
-		r.forHostEndpoint = true
-	}
-}
-
 func withForwardPolicies() ruleBuilderOpt {
 	return func(r *ruleBuilder) {
 		r.forForward = true
@@ -1409,7 +1405,21 @@ func withPreDNATPolicies() ruleBuilderOpt {
 	}
 }
 
+func withDisabledEndpoint() ruleBuilderOpt {
+	return func(r *ruleBuilder) {
+		r.disabled = true
+	}
+}
+
+func forHostEndpoint() ruleBuilderOpt {
+	return func(r *ruleBuilder) {
+		r.forHostEndpoint = true
+	}
+}
+
 type ruleBuilder struct {
+	disabled bool
+
 	forHostEndpoint bool
 	forForward      bool
 	forUntrack      bool
@@ -1454,6 +1464,14 @@ func newRuleBuilder(opts ...ruleBuilderOpt) *ruleBuilder {
 
 func (r *ruleBuilder) build() []generictables.Rule {
 	var rules []generictables.Rule
+
+	if r.disabled {
+		return []generictables.Rule{{
+			Match:   Match(),
+			Action:  r.denyAction,
+			Comment: []string{"Endpoint admin disabled"},
+		}}
+	}
 
 	if r.qosControlsEnabled {
 		rules = append(rules, r.qosControlRules(r.qosRate, r.qosburst)...)
@@ -1754,14 +1772,6 @@ func policyAcceptedRule() generictables.Rule {
 		Match:   Match().MarkSingleBitSet(0x8),
 		Action:  ReturnAction{},
 		Comment: []string{"Return if policy accepted"},
-	}
-}
-
-func endpointAdminDisabledRule(denyAction generictables.Action) generictables.Rule {
-	return generictables.Rule{
-		Match:   Match(),
-		Action:  denyAction,
-		Comment: []string{"Endpoint admin disabled"},
 	}
 }
 
