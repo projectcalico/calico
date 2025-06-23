@@ -53,6 +53,7 @@ function delete_azure_crds() {
 
 function show_connections() {
   # Wait for vmss deployments
+  echo; echo "show_connections started..."
   echo "Wait for vmss-linux to be ready ..."
   ${KUBECTL} wait --for=condition=Ready --timeout=8m -n winfv virtualmachinescalesets vmss-linux
   LINUX_INSTANCE_ID=$(az vmss list-instances --name vmss-linux --resource-group $AZURE_RESOURCE_GROUP --query "[0].instanceId" | sed 's/"//g')
@@ -112,6 +113,56 @@ EOF
 chmod +x ./scp-from-windows.sh
 
   pause-for-debug
+  echo "show_connections done."; echo
+}
+
+function retry-ssh() {
+  local SSH_CMD=$1
+  local RETRY_INTERVAL=30         # Seconds between retries
+  local MAX_DURATION=300
+
+  # Tracking time
+  START_TIME=$(date +%s)
+
+  while true; do
+    echo "Attempting $SSH_CMD..."
+    if $SSH_CMD; then
+        echo "SSH command succeeded."
+        return 0
+    else
+        echo "SSH command failed. Running show_connections and retrying in $RETRY_INTERVAL seconds..."
+        show_connections  # Replace with your actual command or function
+    fi
+
+    sleep $RETRY_INTERVAL
+
+    CURRENT_TIME=$(date +%s)
+    ELAPSED_TIME=$((CURRENT_TIME - START_TIME))
+
+    if [ $ELAPSED_TIME -ge $MAX_DURATION ]; then
+        echo "Timeout reached after $((MAX_DURATION / 60)) minutes. Giving up."
+        exit 1
+    fi
+  done
+}
+
+# Azure may assign a different public IP to a VM even after it is marked as ready.
+# This function attempts to SSH into the VM multiple times to ensure it is accessible.
+function confirm-nodes-ssh() {
+  echo;echo "confirm nodes can be accessed by ssh..."
+  show_connections
+  retry-ssh "${MASTER_CONNECT_COMMAND} echo"
+  retry-ssh "${WINDOWS_CONNECT_COMMAND} -Command 'echo'"
+
+  # Azure may assign another public IP to the VM.
+  # So even the first batch of SSHes works, the ip could be updated later.
+  # Sleep and retry.
+  echo "sleep 30 seconds..."
+  sleep 30
+  show_connections
+  retry-ssh "${MASTER_CONNECT_COMMAND} echo"
+  retry-ssh "${WINDOWS_CONNECT_COMMAND} -Command 'echo'"
+  echo "VMs can be accessed by ssh.";echo
 }
 
 function parse_options() {
@@ -149,8 +200,11 @@ case $1 in
   info)
     show_connections
     ;;
+  confirm-ssh)
+    confirm-nodes-ssh
+    ;;
   *)
-    echo "vmss.sh [create|info]"
+    echo "vmss.sh [create|info|confirm-ssh]"
     ;;
 esac
 
