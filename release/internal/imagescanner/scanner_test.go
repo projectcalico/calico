@@ -32,36 +32,36 @@ import (
 
 func TestConfigValid(t *testing.T) {
 	tests := []struct {
-		name     string
-		config   Config
-		expected bool
+		name          string
+		config        Config
+		expectSuccess bool
 	}{
 		{
-			name:     "valid config",
-			config:   Config{APIURL: "http://example.com", Token: "token", Scanner: "scanner"},
-			expected: true,
+			name:          "valid config",
+			config:        Config{APIURL: "http://example.com", Token: "token", Scanner: "scanner"},
+			expectSuccess: true,
 		},
 		{
-			name:     "missing API URL",
-			config:   Config{Token: "token", Scanner: "scanner"},
-			expected: false,
+			name:          "missing API URL",
+			config:        Config{Token: "token", Scanner: "scanner"},
+			expectSuccess: false,
 		},
 		{
-			name:     "missing token",
-			config:   Config{APIURL: "http://example.com", Scanner: "scanner"},
-			expected: false,
+			name:          "missing token",
+			config:        Config{APIURL: "http://example.com", Scanner: "scanner"},
+			expectSuccess: false,
 		},
 		{
-			name:     "missing scanner",
-			config:   Config{APIURL: "http://example.com", Token: "token"},
-			expected: false,
+			name:          "missing scanner",
+			config:        Config{APIURL: "http://example.com", Token: "token"},
+			expectSuccess: false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := tt.config.Valid(); got != tt.expected {
-				t.Errorf("Config.Valid() = %v, want %v", got, tt.expected)
+			if got := tt.config.Valid(); got != tt.expectSuccess {
+				t.Errorf("Config.Valid() = %v, want %v", got, tt.expectSuccess)
 			}
 		})
 	}

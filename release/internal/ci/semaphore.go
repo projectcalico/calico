@@ -36,13 +36,13 @@ type pipelineDetails struct {
 }
 
 func fetchImagePromotions(orgURL, pipelineID, token string) ([]promotion, error) {
-	url, err := url.JoinPath(orgURL, "promotions")
+	promotionsURL, err := url.JoinPath(orgURL, "promotions")
 	if err != nil {
 		return nil, fmt.Errorf("failed to get promotions URL: %s", err.Error())
 	}
-	req, err := http.NewRequest("GET", url, nil)
+	req, err := http.NewRequest("GET", promotionsURL, nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create %s request: %s", url, err.Error())
+		return nil, fmt.Errorf("failed to create %s request: %s", promotionsURL, err.Error())
 	}
 	req.Header.Set("Authorization", fmt.Sprintf("Token %s", token))
 	q := req.URL.Query()
@@ -79,13 +79,13 @@ func fetchImagePromotions(orgURL, pipelineID, token string) ([]promotion, error)
 }
 
 func getPipelineResult(orgURL, pipelineID, token string) (*pipeline, error) {
-	url, err := url.JoinPath(orgURL, "pipelines", pipelineID)
+	pipelineURL, err := url.JoinPath(orgURL, "pipelines", pipelineID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get pipeline URL: %s", err.Error())
 	}
-	req, err := http.NewRequest("GET", url, nil)
+	req, err := http.NewRequest("GET", pipelineURL, nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create %s request: %s", url, err.Error())
+		return nil, fmt.Errorf("failed to create %s request: %s", pipelineURL, err.Error())
 	}
 	req.Header.Set("Authorization", fmt.Sprintf("Token %s", token))
 
@@ -109,13 +109,13 @@ func getPipelineResult(orgURL, pipelineID, token string) (*pipeline, error) {
 }
 
 func fetchParentPipelineID(orgURL, pipelineID, token string) (string, error) {
-	url, err := url.JoinPath(orgURL, "pipelines", pipelineID)
+	pipelineURL, err := url.JoinPath(orgURL, "pipelines", pipelineID)
 	if err != nil {
 		return "", fmt.Errorf("failed to get pipeline URL: %s", err.Error())
 	}
-	req, err := http.NewRequest("GET", url, nil)
+	req, err := http.NewRequest("GET", pipelineURL, nil)
 	if err != nil {
-		return "", fmt.Errorf("failed to create %s request: %s", url, err.Error())
+		return "", fmt.Errorf("failed to create %s request: %s", pipelineURL, err.Error())
 	}
 	req.Header.Set("Authorization", fmt.Sprintf("Token %s", token))
 
@@ -171,7 +171,7 @@ func getDistinctImagePromotions(promotions []promotion, orgURL, token string) (m
 		} else {
 			if promotion.Status != passed {
 				// If the promotion is not passed, skip checking for pipeline result and mark as failure.
-				logrus.WithField("promotion", name).Warnf("%q promotion did not passed, marking as failed", name)
+				logrus.WithField("promotion", name).Warnf("%q promotion did not pass, marking as failed", name)
 				promotionsSet[name] = pipeline{
 					Result: failed,
 				}
