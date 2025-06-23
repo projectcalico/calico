@@ -53,7 +53,7 @@ function delete_azure_crds() {
 
 function show_connections() {
   # Wait for vmss deployments
-  echo; echo "show_connections started..."; echo
+  echo; echo "show_connections started...";
   echo "Wait for vmss-linux to be ready ..."
   ${KUBECTL} wait --for=condition=Ready --timeout=8m -n winfv virtualmachinescalesets vmss-linux
   LINUX_INSTANCE_ID=$(az vmss list-instances --name vmss-linux --resource-group $AZURE_RESOURCE_GROUP --query "[0].instanceId" | sed 's/"//g')
@@ -119,7 +119,7 @@ chmod +x ./scp-from-windows.sh
 function retry-ssh() {
   local SSH_CMD=$1
   local RETRY_INTERVAL=30         # Seconds between retries
-  local MAX_DURATION=300          # Maximum wait time in seconds (5 minutes)
+  local MAX_DURATION=300
 
   # Tracking time
   START_TIME=$(date +%s)
@@ -128,7 +128,7 @@ function retry-ssh() {
     echo "Attempting $SSH_CMD..."
     if $SSH_CMD; then
         echo "SSH command succeeded."
-        exit 0
+        return 0
     else
         echo "SSH command failed. Running show_connections and retrying in $RETRY_INTERVAL seconds..."
         show_connections  # Replace with your actual command or function
