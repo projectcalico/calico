@@ -154,7 +154,7 @@ function confirm-nodes-ssh() {
   retry-ssh "${MASTER_CONNECT_COMMAND} echo"
   retry-ssh "${WINDOWS_CONNECT_COMMAND} -Command 'echo'"
 
-  # Azure may assigned another public ip to the VM.
+  # Azure may assign another public IP to the VM.
   # So even the first batch of SSHes works, the ip could be updated later.
   # Sleep and retry.
   echo "sleep 30 seconds..."
