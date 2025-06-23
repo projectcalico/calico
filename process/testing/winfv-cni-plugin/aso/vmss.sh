@@ -153,8 +153,13 @@ function confirm-nodes-ssh() {
   show_connections
   retry-ssh "${MASTER_CONNECT_COMMAND} echo"
   retry-ssh "${WINDOWS_CONNECT_COMMAND} -Command 'echo'"
+
+  # Azure may assigned another public ip to the VM.
+  # So even the first batch of SSHes works, the ip could be updated later.
+  # Sleep and retry.
   echo "sleep 30 seconds..."
   sleep 30
+  show_connections
   retry-ssh "${MASTER_CONNECT_COMMAND} echo"
   retry-ssh "${WINDOWS_CONNECT_COMMAND} -Command 'echo'"
   echo "VMs can be accessed by ssh.";echo
