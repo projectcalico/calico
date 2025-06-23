@@ -53,6 +53,7 @@ function delete_azure_crds() {
 
 function show_connections() {
   # Wait for vmss deployments
+  echo; echo "show_connections started..."; echo
   echo "Wait for vmss-linux to be ready ..."
   ${KUBECTL} wait --for=condition=Ready --timeout=8m -n winfv virtualmachinescalesets vmss-linux
   LINUX_INSTANCE_ID=$(az vmss list-instances --name vmss-linux --resource-group $AZURE_RESOURCE_GROUP --query "[0].instanceId" | sed 's/"//g')
@@ -112,6 +113,7 @@ EOF
 chmod +x ./scp-from-windows.sh
 
   pause-for-debug
+  echo "show_connections done."; echo
 }
 
 function retry-ssh() {
@@ -145,6 +147,8 @@ function retry-ssh() {
 }
 
 function confirm-nodes-ssh() {
+  echo "confirm nodes can be accessed by ssh..."
+  show_connections
   retry-ssh "${MASTER_CONNECT_COMMAND} echo"
   retry-ssh "${WINDOWS_CONNECT_COMMAND} -Command 'echo'"
   echo "sleep 30 seconds..."
