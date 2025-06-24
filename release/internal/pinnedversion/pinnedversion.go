@@ -301,13 +301,13 @@ func RetrieveVersions(outputDir string) (version.Versions, error) {
 }
 
 // normalizeComponent normalizes the component image name.
-// It checks if the image is in the registry.ImageMap and replaces it with the mapped value.
-// If the image is not found in the map, it sets it to the name of the component.
-// The image is also stripped of the calico namespace prefix if it exists.
-func normalizeComponent(name string, c registry.Component) registry.Component {
-	img := registry.ImageMap[c.Image]
+// It checks if the component name is in the registry.ImageMap and replaces it with the mapped value.
+// If the image name is not found in the map, it sets it to the component name.
+// The image name is also stripped of the calico namespace prefix.
+func normalizeComponent(componentName string, c registry.Component) registry.Component {
+	img := registry.ImageMap[componentName]
 	if img == "" {
-		img = name
+		img = componentName
 	}
 	c.Image = img
 	if strings.HasPrefix(img, calicoImageNamespace) {
