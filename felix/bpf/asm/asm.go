@@ -695,6 +695,9 @@ func (b *Block) addInsnWithOffsetFixup(insn Insn, targetLabel string) {
 }
 
 func (b *Block) maybeWriteTrampoline(nextInsn Insn) {
+	if !b.trampolinesEnabled {
+		return
+	}
 	if len(b.insns)-b.lastTrampolineAddr < trampolineInterval {
 		return
 	}
