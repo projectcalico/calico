@@ -22,6 +22,7 @@ FROM ppc64le/alpine:3.18
 
 ARG ARCH=ppc64le
 ARG GIT_VERSION
+ARG RUNIT_VER=2.1.2
 
 # Set the minimum required Docker API version.
 ENV DOCKER_API_VERSION 1.21
@@ -39,7 +40,18 @@ LABEL org.opencontainers.image.version="${GIT_VERSION}"
 LABEL org.opencontainers.image.licenses="Apache-2.0"
 
 # Install remaining runtime deps required for felix from the global repository
-RUN apk add --no-cache bash ip6tables ipset iputils iproute2 conntrack-tools runit file ca-certificates
+RUN apk add --no-cache bash ip6tables ipset iputils iproute2 conntrack-tools tar curl patch file ca-certificates make gcc musl-dev
+
+# Copy the patch that adjusts svlogd log file permissions from 0744 to 0644.
+# This file is used in the next step to apply the patch during the build process.
+COPY patches/svlogd_use_0644_permission_instead_of_0744.patch /svlogd_use_0644_permission_instead_of_0744.patch
+
+# Download and extract runit sources, apply the permissions patch to svlogd, and compile it.
+# This is necessary because we need to patch svlogd before using it.
+RUN curl -sfL https://ftp.debian.org/debian/pool/main/r/runit/runit_${RUNIT_VER}.orig.tar.gz | tar xz -C /root && \
+    cd /root/admin/runit-${RUNIT_VER} && \
+    patch -p1 < /svlogd_use_0644_permission_instead_of_0744.patch && \
+    package/compile
 
 # Copy our bird binaries in
 COPY --from=bird /bird* /bin/
