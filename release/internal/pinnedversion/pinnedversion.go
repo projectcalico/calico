@@ -153,10 +153,6 @@ func (p *CalicoPinnedVersions) GenerateFile() (version.Versions, error) {
 		return nil, err
 	}
 	versionData := version.NewHashreleaseVersions(version.New(productVer), operatorVer)
-	tmpl, err := template.New("pinnedversion").Parse(calicoTemplate)
-	if err != nil {
-		return nil, err
-	}
 	tmplData := &calicoTemplateData{
 		ReleaseName:    releaseName,
 		BaseDomain:     hashreleaseserver.BaseDomain,
@@ -171,13 +167,7 @@ func (p *CalicoPinnedVersions) GenerateFile() (version.Versions, error) {
 			releaseName, time.Now().Format(time.RFC1123), productBranch, operatorBranch),
 		ReleaseBranch: versionData.ReleaseBranch(p.ReleaseBranchPrefix),
 	}
-	logrus.WithField("file", pinnedVersionPath).Info("Generating pinned version file")
-	pinnedVersionFile, err := os.Create(pinnedVersionPath)
-	if err != nil {
-		return nil, err
-	}
-	defer pinnedVersionFile.Close()
-	if err := tmpl.Execute(pinnedVersionFile, tmplData); err != nil {
+	if err := generatePinnedVersionFile(tmplData, p.Dir); err != nil {
 		return nil, err
 	}
 
@@ -194,6 +184,25 @@ func (p *CalicoPinnedVersions) GenerateFile() (version.Versions, error) {
 	return versionData, nil
 }
 
+func generatePinnedVersionFile(data *calicoTemplateData, outputDir string) error {
+	tmpl, err := template.New("pinnedversion").Parse(calicoTemplate)
+	if err != nil {
+		return fmt.Errorf("failed to parse template: %w", err)
+	}
+	pinnedVersionPath := PinnedVersionFilePath(outputDir)
+	logrus.WithField("file", pinnedVersionPath).Info("Creating pinned version file")
+	pinnedVersionFile, err := os.Create(pinnedVersionPath)
+	if err != nil {
+		return fmt.Errorf("failed to create pinned version file: %w", err)
+	}
+	defer pinnedVersionFile.Close()
+	if err := tmpl.Execute(pinnedVersionFile, data); err != nil {
+		return fmt.Errorf("failed to execute template: %w", err)
+	}
+	logrus.WithField("file", pinnedVersionPath).Info("Pinned version file generated successfully")
+	return nil
+}
+
 // GenerateOperatorComponents generates the components-version.yaml for operator.
 // It also copies the generated file to the output directory if provided.
 func GenerateOperatorComponents(srcDir, outputDir string) (registry.OperatorComponent, string, error) {
@@ -205,6 +214,7 @@ func GenerateOperatorComponents(srcDir, outputDir string) (registry.OperatorComp
 	for name, component := range pinnedVersion.Components {
 		pinnedVersion.Components[name] = normalizeComponent(name, component)
 	}
+	logrus.Info("Generating operator components file")
 	operatorComponentsFilePath := filepath.Join(srcDir, operatorComponentsFileName)
 	operatorComponentsFile, err := os.Create(operatorComponentsFilePath)
 	if err != nil {
@@ -220,6 +230,7 @@ func GenerateOperatorComponents(srcDir, outputDir string) (registry.OperatorComp
 		}
 	}
 	op.Component = pinnedVersion.TigeraOperator
+	logrus.WithField("file", operatorComponentsFilePath).Info("Operator components file generated successfully")
 	return op, operatorComponentsFilePath, nil
 }
 
@@ -276,10 +287,6 @@ func RetrieveImageComponents(outputDir string) (map[string]registry.Component, e
 		return nil, err
 	}
 	components := pinnedVersion.Components
-	operator := registry.OperatorComponent{Component: pinnedVersion.TigeraOperator}
-	components[operator.Image] = operator.Component
-	initImage := operator.InitImage()
-	components[initImage.Image] = operator.InitImage()
 	for name, component := range components {
 		// Remove components that do not produce images.
 		if utils.Contains(excludedComponents, name) {
@@ -288,6 +295,10 @@ func RetrieveImageComponents(outputDir string) (map[string]registry.Component, e
 		}
 		components[name] = normalizeComponent(name, component)
 	}
+	operator := registry.OperatorComponent{Component: pinnedVersion.TigeraOperator}
+	components[operator.Image] = operator.Component
+	initImage := operator.InitImage()
+	components[initImage.Image] = operator.InitImage()
 	return components, nil
 }
 
@@ -301,13 +312,13 @@ func RetrieveVersions(outputDir string) (version.Versions, error) {
 }
 
 // normalizeComponent normalizes the component image name.
-// It checks if the image is in the registry.ImageMap and replaces it with the mapped value.
-// If the image is not found in the map, it sets it to the name of the component.
-// The image is also stripped of the calico namespace prefix if it exists.
-func normalizeComponent(name string, c registry.Component) registry.Component {
-	img := registry.ImageMap[c.Image]
+// It checks if the component name is in the registry.ImageMap and replaces it with the mapped value.
+// If the image name is not found in the map, it sets it to the component name.
+// The image name is also stripped of the calico namespace prefix.
+func normalizeComponent(componentName string, c registry.Component) registry.Component {
+	img := registry.ImageMap[componentName]
 	if img == "" {
-		img = name
+		img = componentName
 	}
 	c.Image = img
 	if strings.HasPrefix(img, calicoImageNamespace) {
