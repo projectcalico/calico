@@ -7,6 +7,7 @@ require (
 	github.com/Masterminds/semver/v3 v3.3.1
 	github.com/Microsoft/hcsshim v0.12.9
 	github.com/apparentlymart/go-cidr v1.1.0
+	github.com/approvals/go-approval-tests v1.5.1
 	github.com/aws/aws-sdk-go-v2 v1.36.3
 	github.com/aws/aws-sdk-go-v2/config v1.29.14
 	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.16.30
