@@ -9,8 +9,8 @@ CALICO_BASE_VER=ubi9-1749156995
 # Env var to ACK Ginkgo deprecation warnings, may need updating with go-build.
 ACK_GINKGO=ACK_GINKGO_DEPRECATIONS=1.16.5
 
-# Version of Kubernetes to use for tests, bitnami/kubectl, and kubectl binary release.
-K8S_VERSION=v1.32.4
+# Version of Kubernetes to use for tests, rancher/kubectl, and kubectl binary release.
+K8S_VERSION=v1.32.6
 
 # Version of various tools used in the build and tests.
 COREDNS_VERSION=1.5.2
