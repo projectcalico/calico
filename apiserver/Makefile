@@ -128,27 +128,13 @@ hack-lib:
 	curl -s --fail $(GITHUB_TEST_INTEGRATION_URI)/etcd.sh -o hack/lib/etcd.sh
 
 ## Run a local kubernetes server with API in a container.
-run-kubernetes-server: run-k8s-controller-manager
-	#Create a Node in the API for the tests to use.
-	docker run \
-		--net=host \
-		--rm \
-		-v  $(CURDIR):/manifests \
-		-v $(CERTS_PATH):/home/user/certs \
-		bitnami/kubectl:$(subst v,,$(K8S_VERSION)) \
-		--kubeconfig=/home/user/certs/kubeconfig \
-		apply -f /manifests/test/mock-node.yaml
+run-kubernetes-server: run-k8s-controller-manager $(KUBECTL)
+	# Create a Node in the API for the tests to use.
+	$(KUBECTL) --kubeconfig=/home/user/certs/kubeconfig apply -f /manifests/test/mock-node.yaml
 
 	# Create Namespaces required by namespaced Calico `NetworkPolicy`
 	# tests from the manifests namespaces.yaml.
-	docker run \
-		--net=host \
-		--rm \
-		-v  $(CURDIR):/manifests \
-		-v $(CERTS_PATH):/home/user/certs \
-		bitnami/kubectl:$(subst v,,$(K8S_VERSION)) \
-		--kubeconfig=/home/user/certs/kubeconfig \
-		apply -f /manifests/test/namespaces.yaml
+	$(KUBECTL) --kubeconfig=/home/user/certs/kubeconfig apply -f /manifests/test/namespaces.yaml
 
 ## Stop the local kubernetes server
 stop-kubernetes-server: stop-k8s-controller-manager
