@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
+	"path/filepath"
 	"strings"
 
 	"github.com/sirupsen/logrus"
@@ -12,7 +14,10 @@ import (
 	"github.com/projectcalico/calico/release/internal/command"
 )
 
-const passed = "passed"
+const (
+	passed = "passed"
+	failed = "failed"
+)
 
 type promotion struct {
 	Status     string `json:"status"`
@@ -21,6 +26,7 @@ type promotion struct {
 }
 
 type pipeline struct {
+	PipelineID  string `json:"ppl_id"`
 	Result      string `json:"result"`
 	PromotionOf string `json:"promotion_of"`
 }
@@ -29,17 +35,14 @@ type pipelineDetails struct {
 	Pipeline pipeline `json:"pipeline"`
 }
 
-func apiURL(orgURL, path string) string {
-	orgURL = strings.TrimPrefix(orgURL, "/")
-	path = strings.TrimSuffix(path, "/")
-	return fmt.Sprintf("%s/api/v1alpha/%s", orgURL, path)
-}
-
 func fetchImagePromotions(orgURL, pipelineID, token string) ([]promotion, error) {
-	url := apiURL(orgURL, "/promotions")
-	req, err := http.NewRequest("GET", url, nil)
+	promotionsURL, err := url.JoinPath(orgURL, "promotions")
 	if err != nil {
-		return nil, fmt.Errorf("failed to create %s request: %s", url, err.Error())
+		return nil, fmt.Errorf("failed to get promotions URL: %s", err.Error())
+	}
+	req, err := http.NewRequest("GET", promotionsURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create %s request: %s", promotionsURL, err.Error())
 	}
 	req.Header.Set("Authorization", fmt.Sprintf("Token %s", token))
 	q := req.URL.Query()
@@ -62,34 +65,27 @@ func fetchImagePromotions(orgURL, pipelineID, token string) ([]promotion, error)
 		return nil, fmt.Errorf("failed to parse promotions: %s", err.Error())
 	}
 
-	imagesPromotionsMap := make(map[string]promotion)
+	logrus.WithField("promotions", promotions).Debug("fetched promotions")
+
+	imagePromotions := make([]promotion, 0)
 	for _, p := range promotions {
-		if (strings.HasPrefix(strings.ToLower(p.Name), "push ") || strings.HasPrefix(strings.ToLower(p.Name), "publish ")) &&
-			strings.HasPrefix(strings.ToLower(p.Name), "push ") {
-			if currentP, ok := imagesPromotionsMap[p.Name]; ok {
-				// If the promotion is already in the map,
-				// only if the staus for the promotion in the map is not passed.
-				if currentP.Status != passed {
-					imagesPromotionsMap[p.Name] = p
-				}
-			} else {
-				imagesPromotionsMap[p.Name] = p
-			}
+		name := strings.ToLower(p.Name)
+		// If the promotion is not related to pushing/publishing images, skip it.
+		if strings.HasSuffix(name, " images") && (strings.HasPrefix(name, "push ") || strings.HasPrefix(name, "publish ")) {
+			imagePromotions = append(imagePromotions, p)
 		}
 	}
-
-	imagesPromotions := make([]promotion, 0, len(imagesPromotionsMap))
-	for _, p := range imagesPromotionsMap {
-		imagesPromotions = append(imagesPromotions, p)
-	}
-	return imagesPromotions, nil
+	return imagePromotions, nil
 }
 
 func getPipelineResult(orgURL, pipelineID, token string) (*pipeline, error) {
-	url := apiURL(orgURL, fmt.Sprintf("/pipelines/%s", pipelineID))
-	req, err := http.NewRequest("GET", url, nil)
+	pipelineURL, err := url.JoinPath(orgURL, "pipelines", pipelineID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create %s request: %s", url, err.Error())
+		return nil, fmt.Errorf("failed to get pipeline URL: %s", err.Error())
+	}
+	req, err := http.NewRequest("GET", pipelineURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create %s request: %s", pipelineURL, err.Error())
 	}
 	req.Header.Set("Authorization", fmt.Sprintf("Token %s", token))
 
@@ -113,10 +109,13 @@ func getPipelineResult(orgURL, pipelineID, token string) (*pipeline, error) {
 }
 
 func fetchParentPipelineID(orgURL, pipelineID, token string) (string, error) {
-	url := apiURL(orgURL, fmt.Sprintf("/pipelines/%s", pipelineID))
-	req, err := http.NewRequest("GET", url, nil)
+	pipelineURL, err := url.JoinPath(orgURL, "pipelines", pipelineID)
 	if err != nil {
-		return "", fmt.Errorf("failed to create %s request: %s", url, err.Error())
+		return "", fmt.Errorf("failed to get pipeline URL: %s", err.Error())
+	}
+	req, err := http.NewRequest("GET", pipelineURL, nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to create %s request: %s", pipelineURL, err.Error())
 	}
 	req.Header.Set("Authorization", fmt.Sprintf("Token %s", token))
 
@@ -140,12 +139,16 @@ func fetchParentPipelineID(orgURL, pipelineID, token string) (string, error) {
 }
 
 func retrieveExpectedPromotions(repoRootDir string) ([]string, error) {
-	promotionsFile := fmt.Sprintf("%s/.semaphore/semaphore.yml.d/03-promotions.yml", repoRootDir)
-	expectPromotions, err := command.Run("grep", []string{"-Po", `"name: \K(((P|p)ush|(P|p)ublish).*images.*)"`, promotionsFile})
+	promotionsFile := filepath.Join(repoRootDir, ".semaphore/semaphore.yml.d/03-promotions.yml")
+	expectPromotions, err := command.Run("grep", []string{"-Po", `name:\K(.*images.*)`, promotionsFile})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get expected image promotions from %s: %s", promotionsFile, err.Error())
 	}
-	return strings.Split(expectPromotions, "\n"), nil
+	list := strings.Split(expectPromotions, "\n")
+	for i, p := range list {
+		list[i] = strings.TrimSpace(p)
+	}
+	return list, nil
 }
 
 func getDistinctImagePromotions(promotions []promotion, orgURL, token string) (map[string]pipeline, error) {
@@ -166,6 +169,14 @@ func getDistinctImagePromotions(promotions []promotion, orgURL, token string) (m
 				promotionsSet[name] = *newP
 			}
 		} else {
+			if promotion.Status != passed {
+				// If the promotion is not passed, skip checking for pipeline result and mark as failure.
+				logrus.WithField("promotion", name).Warnf("%q promotion did not pass, marking as failed", name)
+				promotionsSet[name] = pipeline{
+					Result: failed,
+				}
+				continue
+			}
 			// If the promotion does not exist, add it to the set.
 			pipelineResult, err := getPipelineResult(orgURL, promotion.PipelineID, token)
 			if err != nil {
