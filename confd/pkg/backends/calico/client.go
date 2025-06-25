@@ -647,10 +647,8 @@ func (c *client) updatePeersV1() {
 				}
 
 				var localASN numorstring.ASNumber
-				log.Info("!!!local as number: %v", v3res.Spec.LocalASNumber)
 				if v3res.Spec.LocalASNumber != nil {
 					localASN = *v3res.Spec.LocalASNumber
-					log.Info("local as number: %v", localASN.String())
 				}
 
 				keepOriginalNextHop, nextHopMode := getNextHopMode(v3res)
