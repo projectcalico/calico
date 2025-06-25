@@ -62,6 +62,7 @@ type Builder struct {
 	numRulesInProgram  int
 	xdp                bool
 	flowLogsEnabled    bool
+	trampolineStride   int
 }
 
 type ipSetIDProvider interface {
@@ -229,6 +230,7 @@ const (
 func (p *Builder) Instructions(rules Rules) ([]Insns, error) {
 	p.xdp = rules.ForXDP
 	p.b = NewBlock(p.policyDebugEnabled)
+	p.b.SetTrampolineStride(p.trampolineStride)
 	p.blocks = append(p.blocks, p.b)
 	p.writeProgramHeader()
 
@@ -1274,6 +1276,12 @@ func WithIPv6() Option {
 func WithFlowLogs() Option {
 	return func(p *Builder) {
 		p.flowLogsEnabled = true
+	}
+}
+
+func WithTrampolineStride(s int) Option {
+	return func(p *Builder) {
+		p.trampolineStride = s
 	}
 }
 
