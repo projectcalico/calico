@@ -35,8 +35,20 @@ type pipelineDetails struct {
 	Pipeline pipeline `json:"pipeline"`
 }
 
+func buildRequestURL(orgURL string, path ...string) (string, error) {
+	if orgURL == "" {
+		return "", errors.New("organization URL is empty")
+	}
+	path = append([]string{"api", "v1alpha"}, path...)
+	u, err := url.JoinPath(orgURL, path...)
+	if err != nil {
+		return "", fmt.Errorf("failed to construct API URL: %s", err.Error())
+	}
+	return u, nil
+}
+
 func fetchImagePromotions(orgURL, pipelineID, token string) ([]promotion, error) {
-	promotionsURL, err := url.JoinPath(orgURL, "promotions")
+	promotionsURL, err := buildRequestURL(orgURL, "promotions")
 	if err != nil {
 		return nil, fmt.Errorf("failed to get promotions URL: %s", err.Error())
 	}
@@ -79,7 +91,7 @@ func fetchImagePromotions(orgURL, pipelineID, token string) ([]promotion, error)
 }
 
 func getPipelineResult(orgURL, pipelineID, token string) (*pipeline, error) {
-	pipelineURL, err := url.JoinPath(orgURL, "pipelines", pipelineID)
+	pipelineURL, err := buildRequestURL(orgURL, "pipelines", pipelineID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get pipeline URL: %s", err.Error())
 	}
@@ -109,7 +121,7 @@ func getPipelineResult(orgURL, pipelineID, token string) (*pipeline, error) {
 }
 
 func fetchParentPipelineID(orgURL, pipelineID, token string) (string, error) {
-	pipelineURL, err := url.JoinPath(orgURL, "pipelines", pipelineID)
+	pipelineURL, err := buildRequestURL(orgURL, "pipelines", pipelineID)
 	if err != nil {
 		return "", fmt.Errorf("failed to get pipeline URL: %s", err.Error())
 	}
