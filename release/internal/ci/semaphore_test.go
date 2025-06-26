@@ -248,7 +248,7 @@ func TestGetParentPipelineID(t *testing.T) {
 			}
 		}))
 		defer mockServer.Close()
-		pipeline, err := fetchParentPipelineID(mockServer.URL, "pipeline-1", "test-token")
+		pipeline, err := getParentPipelineID(mockServer.URL, "pipeline-1", "test-token")
 		if err != nil {
 			t.Fatalf("failed to get pipeline details: %v", err)
 		}
@@ -270,7 +270,7 @@ func TestGetParentPipelineID(t *testing.T) {
 			}
 		}))
 		defer mockServer.Close()
-		pipeline, err := fetchParentPipelineID(mockServer.URL, "pipeline-1", "test-token")
+		pipeline, err := getParentPipelineID(mockServer.URL, "pipeline-1", "test-token")
 		if err != nil {
 			t.Fatalf("failed to get pipeline details: %v", err)
 		}
