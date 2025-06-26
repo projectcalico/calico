@@ -147,7 +147,7 @@ func retrieveExpectedPromotions(repoRootDir string) ([]string, error) {
 	return list, nil
 }
 
-func getDistinctImagePromotions(promotions []promotion, orgURL, token string) (map[string]pipeline, error) {
+func gatherUniquePromotionPipelines(promotions []promotion, orgURL, token string) (map[string]pipeline, error) {
 	promotionsSet := make(map[string]pipeline)
 	for _, promotion := range promotions {
 		name := strings.ToLower(promotion.Name)
@@ -165,6 +165,7 @@ func getDistinctImagePromotions(promotions []promotion, orgURL, token string) (m
 				promotionsSet[name] = *newP
 			}
 		} else {
+			// Promotion does not exist in the set, check its status.
 			if promotion.Status != passed {
 				// If the promotion is not passed, skip checking for pipeline result and mark as failure.
 				logrus.WithField("promotion", name).Warnf("%q promotion did not pass, marking as failed", name)
@@ -173,7 +174,7 @@ func getDistinctImagePromotions(promotions []promotion, orgURL, token string) (m
 				}
 				continue
 			}
-			// If the promotion does not exist, add it to the set.
+			// Add the promotion pipeline to the set
 			pipelineResult, err := getPipelineResult(orgURL, promotion.PipelineID, token)
 			if err != nil {
 				return nil, fmt.Errorf("unable to get %q pipeline details: %w", promotion.Name, err)
@@ -214,14 +215,14 @@ func EvaluateImagePromotions(repoRootDir, orgURL, pipelineID, token string) (boo
 		return true, nil
 	}
 	logrus.WithField("pipeline_id", parentPipelineID).Debug("found pipeline that triggered image promotions")
-	promotions, err := fetchImagePromotions(orgURL, pipelineID, token)
+	promotions, err := fetchImagePromotions(orgURL, parentPipelineID, token)
 	if err != nil {
 		return false, err
 	}
 
 	// actualUniquePromotions is used to ensure that there are no duplicate promotions.
 	// It contains the names of the promotions in lowercase and their pipeline details.
-	actualUniquePromotions, err := getDistinctImagePromotions(promotions, orgURL, token)
+	actualUniquePromotions, err := gatherUniquePromotionPipelines(promotions, orgURL, token)
 	if err != nil {
 		return false, err
 	}
