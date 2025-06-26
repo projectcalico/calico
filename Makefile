@@ -52,6 +52,7 @@ ci-preflight-checks:
 	$(MAKE) check-go-mod
 	$(MAKE) verify-go-mods
 	$(MAKE) check-dockerfiles
+	$(MAKE) check-images-availability
 	$(MAKE) check-language
 	$(MAKE) generate
 	$(MAKE) fix-all
@@ -70,6 +71,12 @@ go-vet:
 
 check-dockerfiles:
 	./hack/check-dockerfiles.sh
+
+
+check-images-availability: bin/yq
+	cd ./manifests && \
+		OPERATOR_VERSION=$(OPERATOR_VERSION) \
+		./check-images-availability.sh
 
 check-language:
 	./hack/check-language.sh
