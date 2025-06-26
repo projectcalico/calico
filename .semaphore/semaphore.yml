@@ -122,6 +122,15 @@ blocks:
         - name: Pre-flight checks
           commands:
             - make ci-preflight-checks
+      secrets:
+        - name: gcp-registry-pusher-service-account
+      prologue:
+        commands:
+          - export GOOGLE_APPLICATION_CREDENTIALS_GCR=$HOME/secrets/gcp-registry-pusher-service-account.json
+          - echo "🔐 Authenticating to GCR using $GOOGLE_APPLICATION_CREDENTIALS_GCR"
+          - gcloud auth activate-service-account --key-file="${GOOGLE_APPLICATION_CREDENTIALS_GCR}"
+          - cat "${GOOGLE_APPLICATION_CREDENTIALS_GCR}" | docker login -u _json_key --password-stdin https://gcr.io
+
   - name: apiserver
     run:
       when: "false or change_in(['/*', '/libcalico-go/', '/api/', '/apiserver/', '/hack/test/certs/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
