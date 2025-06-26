@@ -118,6 +118,8 @@ blocks:
   - name: Prerequisites
     dependencies: []
     task:
+      secrets:
+        - name: gcp-tigera-dev-service-account
       jobs:
         - name: Pre-flight checks
           commands:
