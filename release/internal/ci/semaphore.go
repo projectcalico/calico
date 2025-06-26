@@ -214,7 +214,7 @@ func EvaluateImagePromotions(repoRootDir, orgURL, pipelineID, token string) (boo
 		return true, nil
 	}
 	logrus.WithField("pipeline_id", parentPipelineID).Debug("found pipeline that triggered image promotions")
-	promotions, err := fetchImagePromotions(orgURL, pipelineID, token)
+	promotions, err := fetchImagePromotions(orgURL, parentPipelineID, token)
 	if err != nil {
 		return false, err
 	}
