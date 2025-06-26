@@ -37,7 +37,6 @@ clean:
 	rm -rf ./bin
 
 ci-preflight-checks:
-	$(MAKE) unshallow-ci-repository
 	$(MAKE) check-go-mod
 	$(MAKE) check-dockerfiles
 	$(MAKE) check-language
@@ -45,15 +44,6 @@ ci-preflight-checks:
 	$(MAKE) fix-all
 	$(MAKE) check-ocp-no-crds
 	$(MAKE) check-dirty
-
-unshallow-ci-repository:
-ifdef CI
-	$(info Running in CI; unshallowing the repository to ensure we have all tags and branches)
-	git config set remote.origin.fetch '+refs/heads/*:refs/remotes/origin/*'
-	git fetch --all --quiet
-else
-	$(info Not running in CI; skipping unshallowing the repository)
-endif
 
 check-go-mod:
 	$(DOCKER_GO_BUILD) ./hack/check-go-mod.sh
