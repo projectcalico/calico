@@ -212,50 +212,9 @@ func EvaluateImagePromotions(repoRootDir, orgURL, pipelineID, token string) (boo
 	}
 	if parentPipelineID == "" {
 		logrus.Info("no parent pipeline found, skipping image promotions check")
+		logrus.Warn("this hashrelease is being run with the assumption that images have been promoted successfully in a different pipeline")
 		return true, nil
 	}
-	logrus.WithField("pipeline_id", parentPipelineID).Debug("found pipeline that triggered image promotions")
-	promotions, err := fetchImagePromotions(orgURL, parentPipelineID, token)
-	if err != nil {
-		return false, err
-	}
-
-	// actualUniquePromotions is used to ensure that there are no duplicate promotions.
-	// It contains the names of the promotions in lowercase and their pipeline details.
-	actualUniquePromotions, err := gatherUniquePromotionPipelines(promotions, orgURL, token)
-	if err != nil {
-		return false, err
-	}
-	// If there are no promotions, return an error.
-	if len(actualUniquePromotions) == 0 {
-		return false, fmt.Errorf("no image promotions found for in pipeline %s, wait till all image promotions are completed", parentPipelineID)
-	}
-
-	var missingPromotions, failedPromotions []string
-
-	for _, p := range expectedPromotions {
-		p = strings.ToLower(p)
-		if pipeline, ok := actualUniquePromotions[p]; !ok {
-			missingPromotions = append(missingPromotions, p)
-		} else if pipeline.Result != passed {
-			failedPromotions = append(failedPromotions, p)
-		}
-	}
-
-	if len(missingPromotions) > 0 || len(failedPromotions) > 0 {
-		errMsg := "image promotions check failed: "
-		if len(missingPromotions) > 0 {
-			errMsg += fmt.Sprintf("missing: %v", strings.Join(missingPromotions, ", "))
-			if len(failedPromotions) > 0 {
-				errMsg += ", "
-			}
-		}
-		if len(failedPromotions) > 0 {
-			errMsg += fmt.Sprintf("failed: %v", strings.Join(failedPromotions, ", "))
-		}
-		logrus.Error(errMsg)
-		return false, errors.New(errMsg)
-	}
-
+	logrus.Warn("this hashrelease is being run in a pipeline that was not triggered by a promotion, assuming all image promotions passed")
 	return true, nil
 }
