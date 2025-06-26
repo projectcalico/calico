@@ -87,7 +87,7 @@ func initBPFNetwork(serviceAddr, endpointAddrs string) (*bpfmap.Maps, error) {
 
 	endpointIPPorts, err := parseCommaSeparatedIPPorts(endpointAddrs)
 	if err != nil {
-		logrus.WithError(err).Error("Failed to parse kubernetes service address (IP:Port).")
+		logrus.WithError(err).Error("Failed to parse kubernetes endpoints addresses (IP:Port).")
 		return nil, err
 	}
 
