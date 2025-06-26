@@ -314,7 +314,7 @@ func TestGetDistintImagePromotions(t *testing.T) {
 		}))
 		defer mockServer.Close()
 		promotions := []promotion{}
-		distinctPromotions, err := getDistinctImagePromotions(promotions, mockServer.URL, "test-token")
+		distinctPromotions, err := gatherUniquePromotionPipelines(promotions, mockServer.URL, "test-token")
 		if err != nil {
 			t.Fatal("failed to get distinct promotions:", err)
 		}
@@ -351,7 +351,7 @@ func TestGetDistintImagePromotions(t *testing.T) {
 				Name:       "Publish B images",
 			},
 		}
-		distinctPromotions, err := getDistinctImagePromotions(promotions, mockServer.URL, "test-token")
+		distinctPromotions, err := gatherUniquePromotionPipelines(promotions, mockServer.URL, "test-token")
 		if err != nil {
 			t.Fatal("failed to get distinct promotions:", err)
 		}
@@ -396,7 +396,7 @@ func TestGetDistintImagePromotions(t *testing.T) {
 				Name:       "Publish B images",
 			},
 		}
-		distinctPromotions, err := getDistinctImagePromotions(promotions, mockServer.URL, "test-token")
+		distinctPromotions, err := gatherUniquePromotionPipelines(promotions, mockServer.URL, "test-token")
 		if err != nil {
 			t.Fatal("failed to get distinct promotions:", err)
 		}
@@ -446,7 +446,7 @@ func TestGetDistintImagePromotions(t *testing.T) {
 				Name:       "Publish B images",
 			},
 		}
-		distinctPromotions, err := getDistinctImagePromotions(promotions, mockServer.URL, "test-token")
+		distinctPromotions, err := gatherUniquePromotionPipelines(promotions, mockServer.URL, "test-token")
 		if err != nil {
 			t.Fatal("failed to get distinct promotions:", err)
 		}
@@ -496,7 +496,7 @@ func TestGetDistintImagePromotions(t *testing.T) {
 				Name:       "Publish B images",
 			},
 		}
-		distinctPromotions, err := getDistinctImagePromotions(promotions, mockServer.URL, "test-token")
+		distinctPromotions, err := gatherUniquePromotionPipelines(promotions, mockServer.URL, "test-token")
 		if err != nil {
 			t.Fatal("failed to get distinct promotions:", err)
 		}
