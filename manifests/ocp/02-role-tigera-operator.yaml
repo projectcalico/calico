@@ -296,6 +296,9 @@ rules:
       - mutatingwebhookconfigurations
     verbs:
       - delete
+      - get
+      - list
+      - watch
   # Needed for operator lock
   - apiGroups:
       - coordination.k8s.io
