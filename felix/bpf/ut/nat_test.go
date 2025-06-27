@@ -3712,3 +3712,53 @@ func TestNATNodePortV6(t *testing.T) {
 		}, withHostNetworked(), withIPv6())
 	}
 }
+
+// TestNATOutExcludeHosts tests the NATOutgoingExclusions option in FelixConfig. When
+// it's set to 'IPPoolsAndHostIPs', the CALI_GLOBALS_NATOUTGOING_EXCLUDE_HOSTS global
+// flag will be set and packets to any hosts should not be SNAT'ed.
+func TestNATOutExcludeHosts(t *testing.T) {
+	RegisterTestingT(t)
+	_, ipv4, l4, _, pktBytes, err := testPacketUDPDefault()
+	Expect(err).NotTo(HaveOccurred())
+	udp := l4.(*layers.UDP)
+
+	hostIP = node1ip
+	// Insert a reverse route for the source workload (flagged in IP pool and NAT-outgoing).
+	rtKey := routes.NewKey(srcV4CIDR).AsBytes()
+	rtVal := routes.NewValueWithIfIndex(routes.FlagsLocalWorkload|routes.FlagInIPAMPool|routes.FlagNATOutgoing, 1).AsBytes()
+
+	err = rtMap.Update(rtKey, rtVal)
+	Expect(err).NotTo(HaveOccurred())
+	// Insert a route for the dest ip (flagged as remote host).
+	rtKey = routes.NewKey(dstV4CIDR).AsBytes()
+	rtVal = routes.NewValue(routes.FlagsRemoteHost).AsBytes()
+
+	err = rtMap.Update(rtKey, rtVal)
+	Expect(err).NotTo(HaveOccurred())
+	defer resetRTMap(rtMap)
+	_ = conntrack.NewKey(uint8(ipv4.Protocol),
+		ipv4.SrcIP, uint16(udp.SrcPort), ipv4.DstIP, uint16(udp.DstPort))
+
+	// Run the program without the "exclude hosts" config. Expect SNAT to happen.
+	skbMark = 0
+	runBpfTest(t, "calico_from_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+		res, err := bpfrun(pktBytes)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+	})
+	expectMark(tcdefs.MarkSeenNATOutgoing)
+
+	// Run the program with the "exclude hosts" config. Expect no SNAT to happen (and a redirect
+	// to host to happen as well).
+	resetCTMap(ctMap)
+	skbMark = 0
+	runBpfTest(t, "calico_from_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+		res, err := bpfrun(pktBytes)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.Retval).To(Equal(resTC_ACT_REDIRECT))
+	}, withNATOutExcludeHosts())
+	expectMark(tcdefs.MarkSeen)
+
+	// Clean up.
+	resetCTMap(ctMap)
+}
