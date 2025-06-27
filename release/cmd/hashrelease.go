@@ -366,8 +366,9 @@ func validateHashreleasePublishFlags(c *cli.Context) error {
 	if c.Bool(publishHashreleaseFlag.Name) {
 		//  check that hashrelease server configuration is set.
 		if !hashreleaseServerConfig(c).Valid() {
-			return fmt.Errorf("missing hashrelease server configuration, must set --%s, --%s, --%s, --%s",
-				sshHostFlag.Name, sshUserFlag.Name, sshKeyFlag.Name, sshPortFlag.Name)
+			return fmt.Errorf("missing hashrelease server configuration, ensure %s, %s, %s, %s %s, %s and %s are set",
+				sshHostFlag, sshUserFlag, sshKeyFlag, sshPortFlag, sshKnownHostsFlag,
+				hashreleaseServerBucketFlag, hashreleaseServerCredentialsFlag)
 		}
 		if c.Bool(latestFlag.Name) {
 			// If using a custom registry, do not allow setting the hashrelease as latest.
