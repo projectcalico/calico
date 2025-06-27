@@ -35,20 +35,22 @@ global_job_config:
       - install-package --no-install-recommends devscripts moreutils patchelf
 
 blocks:
+  # This promotion is only _automatic_ for the master branch.  For other
+  # branches, and PRs, it is available but not automatic.  This means a
+  # developer can trigger the building and publishing of release branch and
+  # pre-merge packages by clicking the "Publish openstack packages" button in
+  # the Semaphore UI.  When building from the master branch, packages are
+  # published to the "master" PPA.  When building from any other branch,
+  # packages are published to the "testing" PPA.  When building from a PR,
+  # packages are published to the "pr-${SEMAPHORE_GIT_PR_NUMBER}" PPA, and that
+  # PPA must have been created manually first.  PRs requiring packaging must
+  # use a branch on github.com/projectcalico/calico, instead of on a fork repo,
+  # because packaging requires secrets that we do not (and should not!) expose
+  # to fork PRs.
   - name: "Publish openstack packages"
-    skip:
-      # Only run on branches, not PRs.
-      #
-      # This promotion is only _automatic_ for the master branch.  For other
-      # branches, it is an available promotion, but not automatic.  This makes
-      # it easy for a developer to trigger the building and publishing of
-      # release branch packages, simply by clicking the "Publish openstack
-      # packages" button in the Semaphore UI.  When building from the master
-      # branch, packages are published to the "master" PPA.  When building from
-      # any other branch, packages are published to the "testing" PPA.
-      when: "branch !~ '.+'"
     task:
       jobs:
         - name: "packages"
           commands:
             - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C release/packaging release-publish VERSION=$SEMAPHORE_GIT_BRANCH; fi
+            - if [ -n "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C release/packaging release-publish VERSION=pr-$SEMAPHORE_GIT_PR_NUMBER; fi
