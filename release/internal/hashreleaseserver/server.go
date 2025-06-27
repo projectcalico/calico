@@ -265,7 +265,11 @@ func updateBucketTextFile(bucket *storage.BucketHandle, filePath, content string
 		"updated-by": "hashreleaseserver",
 		"updated-at": time.Now().Format(time.RFC3339),
 	}
-	defer w.Close()
+	defer func() {
+		if err := w.Close(); err != nil {
+			logrus.WithError(err).Errorf("Failed to close writer for bucket: %s", filePath)
+		}
+	}()
 	// If the file already exists and we are not appending, we will overwrite it
 	updatedContent := content
 	if appendContent {
