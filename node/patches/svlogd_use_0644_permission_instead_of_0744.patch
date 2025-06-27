@@ -1,0 +1,37 @@
+Subject: [PATCH] use_0644_permission_instead_of_0744
+---
+Index: src/svlogd.c
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/svlogd.c b/src/svlogd.c
+--- a/src/svlogd.c	(revision 142186093dafb75d90ae4aab4a06e2f32bcd74d5)
++++ b/src/svlogd.c	(date 1750721596815)
+@@ -205,7 +205,7 @@
+   f[26] ='s'; f[27] =0;
+   while (rename(ld->fnsave, f) == -1)
+     pause2("unable to rename processed", ld->name);
+-  while (chmod(f, 0744) == -1)
++  while (chmod(f, 0644) == -1)
+     pause2("unable to set mode of processed", ld->name);
+   ld->fnsave[26] ='u';
+   if (unlink(ld->fnsave) == -1)
+@@ -282,7 +282,7 @@
+     buffer_flush(&ld->b);
+     while (fsync(ld->fdcur) == -1)
+       pause2("unable to fsync current logfile", ld->name);
+-    while (fchmod(ld->fdcur, 0744) == -1)
++    while (fchmod(ld->fdcur, 0644) == -1)
+       pause2("unable to set mode of current", ld->name);
+     close(ld->fdcur);
+     if (verbose) {
+@@ -372,7 +372,7 @@
+   buffer_flush(&ld->b);
+   while (fsync(ld->fdcur) == -1)
+     pause2("unable to fsync current logfile", ld->name);
+-  while (fchmod(ld->fdcur, 0744) == -1)
++  while (fchmod(ld->fdcur, 0644) == -1)
+     pause2("unable to set mode of current", ld->name);
+   close(ld->fdcur);
+   ld->fdcur =-1;

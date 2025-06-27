@@ -72,10 +72,15 @@ RUN rpm -i ${IPSET_SOURCERPM_URL} && \
     yum-builddep -y --spec /root/rpmbuild/SPECS/ipset.spec && \
     rpmbuild -bb /root/rpmbuild/SPECS/ipset.spec
 
+# Copy the patch that adjusts svlogd log file permissions from 0744 to 0644.
+# This file is used in the next step to apply the patch during the build process.
+COPY patches/svlogd_use_0644_permission_instead_of_0744.patch /svlogd_use_0644_permission_instead_of_0744.patch
+
 # runit is not available in ubi or AlmaLinux repos so build it.
 # get it from the debian repos as the official website doesn't support https
 RUN curl -sfL https://ftp.debian.org/debian/pool/main/r/runit/runit_${RUNIT_VER}.orig.tar.gz | tar xz -C /root && \
     cd /root/admin/runit-${RUNIT_VER} && \
+    patch -p1 < /svlogd_use_0644_permission_instead_of_0744.patch && \
     package/compile
 
 FROM registry.access.redhat.com/ubi8/ubi-minimal:latest AS ubi
