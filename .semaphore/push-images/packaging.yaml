@@ -43,7 +43,10 @@ blocks:
   # published to the "master" PPA.  When building from any other branch,
   # packages are published to the "testing" PPA.  When building from a PR,
   # packages are published to the "pr-${SEMAPHORE_GIT_PR_NUMBER}" PPA, and that
-  # PPA must have been created manually first.
+  # PPA must have been created manually first.  PRs requiring packaging must
+  # use a branch on github.com/projectcalico/calico, instead of on a fork repo,
+  # because packaging requires secrets that we do not (and should not!) expose
+  # to fork PRs.
   - name: "Publish openstack packages"
     task:
       jobs:
