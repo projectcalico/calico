@@ -15,10 +15,11 @@
 package tasks
 
 import (
+	"github.com/sirupsen/logrus"
+
 	"github.com/projectcalico/calico/release/internal/hashreleaseserver"
 	"github.com/projectcalico/calico/release/internal/slack"
 	"github.com/projectcalico/calico/release/internal/utils"
-	"github.com/sirupsen/logrus"
 )
 
 var product = utils.ProductName
