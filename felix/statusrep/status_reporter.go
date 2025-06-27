@@ -24,7 +24,6 @@ import (
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/errors"
-	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
 type EndpointStatusReporter struct {
@@ -34,14 +33,18 @@ type EndpointStatusReporter struct {
 	stop               chan bool
 	datastore          datastore
 	epStatusIDToStatus map[model.Key]string
-	queuedDirtyIDs     set.Set[model.Key]
-	activeDirtyIDs     set.Set[model.Key]
 	reportingDelay     time.Duration
 	resyncInterval     time.Duration
 	resyncTicker       stoppable
 	resyncTickerC      <-chan time.Time
 	rateLimitTicker    stoppable
 	rateLimitTickerC   <-chan time.Time
+	pendingUpdates     []*pendingUpdate
+}
+
+type pendingUpdate struct {
+	statID model.Key
+	status string
 }
 
 func NewEndpointStatusReporter(hostname string,
@@ -87,8 +90,6 @@ func newEndpointStatusReporterWithTickerChans(hostname string,
 		datastore:          datastore,
 		stop:               make(chan bool),
 		epStatusIDToStatus: make(map[model.Key]string),
-		queuedDirtyIDs:     set.New[model.Key](),
-		activeDirtyIDs:     set.New[model.Key](),
 		resyncTicker:       resyncTicker,
 		resyncTickerC:      resyncTickerChan,
 		rateLimitTicker:    rateLimitTicker,
@@ -183,17 +184,11 @@ loop:
 				log.Panicf("Unexpected message: %#v", msg)
 			}
 			if esr.epStatusIDToStatus[statID] != status {
+				esr.pendingUpdates = append(esr.pendingUpdates, &pendingUpdate{statID: statID, status: status})
 				if status != "" {
 					esr.epStatusIDToStatus[statID] = status
 				} else {
 					delete(esr.epStatusIDToStatus, statID)
-				}
-				if !esr.activeDirtyIDs.Contains(statID) &&
-					!esr.queuedDirtyIDs.Contains(statID) {
-					// Add the update into the queued set so that
-					// we delay its initial update.  That prevent
-					// flapping at start of day.
-					esr.queuedDirtyIDs.Add(statID)
 				}
 			}
 		}
@@ -209,43 +204,21 @@ loop:
 		}
 
 		if updatesAllowed {
-			if esr.activeDirtyIDs.Len() > 0 {
-				// Not throttled and there's at least one update
-				// pending.  Choose an arbitrary update from the dirty
-				// set.
-				log.WithField("numDirtyEndpoints", esr.activeDirtyIDs.Len()).Debug(
-					"Unthrottled and updates pending")
-				var statID model.Key
-				esr.activeDirtyIDs.Iter(func(item model.Key) error {
-					statID = item
-					return set.StopIteration
-				})
-				// Then try to write the update to the datastore.
+			log.Debugf("Unthrottled, %v update(s) pending", len(esr.pendingUpdates))
+			if len(esr.pendingUpdates) > 0 {
+				// Try to write the next update to the datastore.
 				// Note: the update could be a deletion, in which case
-				// the read from the cache will return nil.
-				err := esr.writeEndpointStatus(ctx, statID,
-					esr.epStatusIDToStatus[statID])
+				// pu.status is empty.
+				pu := esr.pendingUpdates[0]
+				err := esr.writeEndpointStatus(ctx, pu.statID, pu.status)
 				if err != nil {
 					log.WithError(err).Warn(
 						"Failed to write endpoint status; is datastore up?")
 				} else {
-					// Success, remove the status from the dirty set.
-					log.WithField("statID", statID).Debug("Write successful")
-					esr.activeDirtyIDs.Discard(statID)
+					// Success.
+					log.Debugf("Write successful: %v -> %#v", pu.statID, pu.status)
+					esr.pendingUpdates = esr.pendingUpdates[1:]
 				}
-			}
-			if esr.queuedDirtyIDs.Len() > 0 {
-				// Now copy the queued statuses to the main dirty set.
-				// Doing this after the attempt to write above means that
-				// endpoints always spend at least one interval in the
-				// queued set.
-				log.WithField("numQueuedUpdates", esr.queuedDirtyIDs.Len()).Debug(
-					"Copying queued set to dirty set")
-				esr.queuedDirtyIDs.Iter(func(item model.Key) error {
-					esr.activeDirtyIDs.Add(item)
-					return nil
-				})
-				esr.queuedDirtyIDs = set.New[model.Key]()
 			}
 		}
 	}
@@ -265,10 +238,13 @@ func (esr *EndpointStatusReporter) attemptResync(ctx context.Context) {
 		log.WithError(err).Errorf("Failed to load workload endpoint statuses")
 		kvs = nil // Skip the following loop and try host endpoints.
 	}
+	queueUpdate := func(key model.Key) {
+		esr.pendingUpdates = append(esr.pendingUpdates, &pendingUpdate{statID: key, status: esr.epStatusIDToStatus[key]})
+	}
 	for _, kv := range kvs {
 		if kv.Value == nil {
 			// Parse error, needs refresh.
-			esr.activeDirtyIDs.Add(kv.Key)
+			queueUpdate(kv.Key)
 		} else {
 			status := kv.Value.(*model.WorkloadEndpointStatus).Status
 			if status != esr.epStatusIDToStatus[kv.Key] {
@@ -277,7 +253,7 @@ func (esr *EndpointStatusReporter) attemptResync(ctx context.Context) {
 					"datastoreState": status,
 					"desiredState":   esr.epStatusIDToStatus[kv.Key],
 				}).Info("Found out-of-sync workload endpoint status")
-				esr.activeDirtyIDs.Add(kv.Key)
+				queueUpdate(kv.Key)
 			}
 		}
 	}
@@ -295,7 +271,7 @@ func (esr *EndpointStatusReporter) attemptResync(ctx context.Context) {
 	for _, kv := range kvs {
 		if kv.Value == nil {
 			// Parse error, needs refresh.
-			esr.activeDirtyIDs.Add(kv.Key)
+			queueUpdate(kv.Key)
 		} else {
 			status := kv.Value.(*model.HostEndpointStatus).Status
 			if status != esr.epStatusIDToStatus[kv.Key] {
@@ -304,7 +280,7 @@ func (esr *EndpointStatusReporter) attemptResync(ctx context.Context) {
 					"datastoreState": status,
 					"desiredState":   esr.epStatusIDToStatus[kv.Key],
 				}).Infof("Found out-of-sync host endpoint status")
-				esr.activeDirtyIDs.Add(kv.Key)
+				queueUpdate(kv.Key)
 			}
 		}
 	}
