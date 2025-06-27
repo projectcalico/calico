@@ -60,6 +60,18 @@ spec:
                     - Enable
                     - Disable
                   type: string
+                bpfAttachType:
+                  allOf:
+                    - enum:
+                        - TC
+                        - TCX
+                    - enum:
+                        - TC
+                        - TCX
+                  description: |-
+                    BPFAttachType in BPF mode, controls the attach type for the BPF Programs.
+                    [Default: TCX]
+                  type: string
                 bpfCTLBLogFilter:
                   description: |-
                     BPFCTLBLogFilter specifies, what is logged by connect time load balancer when BPFLogLevel is

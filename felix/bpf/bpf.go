@@ -2257,6 +2257,7 @@ func MapPinDir() string {
 type TcList []struct {
 	DevName string `json:"devname"`
 	ID      int    `json:"id"`
+	ProgID  int    `json:"prog_id"`
 	Name    string `json:"name"`
 	Kind    string `json:"kind"`
 }
@@ -2298,7 +2299,6 @@ func ListTcXDPAttachedProgs(dev ...string) (TcList, XDPList, error) {
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to parse list of attached BPF programs: %w\n%s", err, out)
 	}
-
 	return attached[0].TC, attached[0].XDP, nil
 }
 
