@@ -58,8 +58,8 @@ for package_type in "$@"; do
                         changelog_message="Development snapshot (from Git commit ${sha})."
                 fi
                 rm -f debian/changelog debian/changelog.dch
-                dch --controlmaint --create --package "${PKG_NAME}" -v "${DEB_EPOCH}${debver}-$series" "${changelog_message}"
-                dch --controlmaint --release ""
+                dch --controlmaint --distribution $series --create --package "${PKG_NAME}" -v "${DEB_EPOCH}${debver}-$series" "${changelog_message}"
+                dch --controlmaint --distribution $series --release ""
 
             excludes="${DPKG_EXCL:--I}"
 
