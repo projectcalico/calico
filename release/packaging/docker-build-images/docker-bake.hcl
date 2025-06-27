@@ -19,6 +19,10 @@ variable "GID" {
     default = 1000
 }
 
+variable "UBUNTU_REPO_OVERRIDE" {
+    default = ""
+}
+
 # Define groups for the builds we want to be able to do
 
 # This is the default rule if you don't specify one. It'll build
@@ -44,7 +48,7 @@ target "ubuntu" {
   args = {
     STREAM = STREAM
     ARCH = ARCH
-
+    UBUNTU_REPO_OVERRIDE = UBUNTU_REPO_OVERRIDE
   }
   tags = ["calico-build/${STREAM}"]
 }

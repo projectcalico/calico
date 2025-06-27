@@ -324,7 +324,7 @@ func StartDataplaneDriver(
 			DeviceRouteSourceAddressIPv6:   configParams.DeviceRouteSourceAddressIPv6,
 			DeviceRouteProtocol:            netlink.RouteProtocol(configParams.DeviceRouteProtocol),
 			RemoveExternalRoutes:           configParams.RemoveExternalRoutes,
-			ProgramRoutes:                  configParams.ProgramRoutesEnabled(),
+			ProgramClusterRoutes:           configParams.ProgramClusterRoutesEnabled(),
 			IPForwarding:                   configParams.IPForwarding,
 			IPSetsRefreshInterval:          configParams.IpsetsRefreshInterval,
 			IptablesPostWriteCheckInterval: configParams.IptablesPostWriteCheckIntervalSecs,
@@ -414,6 +414,8 @@ func StartDataplaneDriver(
 			Collector:          collector,
 			LookupsCache:       lc,
 			FlowLogsEnabled:    configParams.FlowLogsEnabled(),
+
+			RequireMTUFile: configParams.RequireMTUFile,
 		}
 
 		if configParams.BPFExternalServiceMode == "dsr" {

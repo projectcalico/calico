@@ -413,6 +413,17 @@ spec:
                   type: string
                 maxRestartTime:
                   type: string
+                nextHopMode:
+                  allOf:
+                    - enum:
+                        - Auto
+                        - Self
+                        - Keep
+                    - enum:
+                        - Auto
+                        - Self
+                        - Keep
+                  type: string
                 node:
                   type: string
                 nodeSelector:
@@ -812,7 +823,10 @@ spec:
                     BPFConntrackCleanupMode controls how BPF conntrack entries are cleaned up.  `Auto` will use a BPF program if supported,
                     falling back to userspace if not.  `Userspace` will always use the userspace cleanup code.  `BPFProgram` will
                     always use the BPF program (failing if not supported).
-                    [Default: Auto]
+
+                    /To be deprecated in future versions as conntrack map type changed to
+                    lru_hash and userspace cleanup is the only mode that is supported.
+                    [Default: Userspace]
                   enum:
                     - Auto
                     - Userspace
@@ -1707,9 +1721,9 @@ spec:
                     PolicySyncPathPrefix is used to by Felix to communicate policy changes to external services,
                     like Application layer policy. [Default: Empty]
                   type: string
-                programRoutes:
+                programClusterRoutes:
                   description: |-
-                    ProgramRoutes specifies whether Felix should program IPIP or unencapsulated routes instead of BIRD.
+                    ProgramClusterRoutes specifies whether Felix should program IPIP routes instead of BIRD.
                     Felix always programs VXLAN routes. [Default: Disabled]
                   enum:
                     - Enabled
@@ -1763,6 +1777,11 @@ spec:
                     status reports. [Default: 90s]"
                   pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
                   type: string
+                requireMTUFile:
+                  description: |-
+                    RequireMTUFile specifies whether mtu file is required to start the felix.
+                    Optional as to keep the same as previous behavior. [Default: false]
+                  type: boolean
                 routeRefreshInterval:
                   description: |-
                     RouteRefreshInterval is the period at which Felix re-checks the routes

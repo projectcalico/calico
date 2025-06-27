@@ -581,6 +581,8 @@ blocks:
           - export RUN_UT=true
           - export FV_FOCUS=BPF-SAFE
           - export IMAGE=ubuntu-2404-noble-amd64-v20250502a
+          - export UBUNTU_VERSION=noble
+          - export DOCKER_VERSION=5:27.5.1-1~ubuntu.24.04~noble
           - mkdir artifacts
           - ./.semaphore/create-test-vms ${VM_PREFIX}
       jobs:
@@ -1002,7 +1004,6 @@ blocks:
       jobs:
         - name: "Unit and FV tests (tox) on Caracal"
           commands:
-            - export UPPER_CONSTRAINTS_FILE=https://raw.githubusercontent.com/openstack/requirements/refs/heads/stable/2024.1/upper-constraints.txt
             - ../.semaphore/run-and-monitor tox.log make tox-caracal
         - name: "Mainline ST (DevStack + Tempest) on Caracal"
           commands:
@@ -1052,6 +1053,7 @@ blocks:
         - name: ci
           commands:
             - ../.semaphore/run-and-monitor release-ci.log make ci
+            - test-results publish --name "release-tool-ut-tests" ./report/*.xml || true
         - name: build binary
           commands:
             - ../.semaphore/run-and-monitor release-build.log make build

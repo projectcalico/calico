@@ -194,12 +194,12 @@ func cmdAdd(args *skel.CmdArgs) (err error) {
 	}
 
 	// Determine MTU to use.
-	if mtu, err := utils.MTUFromFile("/var/lib/calico/mtu"); err != nil {
+	if mtu, err := utils.MTUFromFile(utils.MTUFilePath, conf); err != nil {
 		return fmt.Errorf("failed to read MTU file: %s", err)
 	} else if conf.MTU == 0 && mtu != 0 {
 		// No MTU specified in config, but an MTU file was found on disk.
 		// Use the value from the file.
-		logrus.WithField("mtu", mtu).Debug("Using MTU from /var/lib/calico/mtu")
+		logrus.WithFields(logrus.Fields{"mtu": mtu, "MTUFilePath": utils.MTUFilePath}).Debug("Using MTU from MTUFilePath")
 		conf.MTU = mtu
 	}
 	if conf.NumQueues <= 0 {
@@ -508,12 +508,21 @@ func cmdAdd(args *skel.CmdArgs) (err error) {
 		logger.WithField("endpoint", endpoint).Info("Wrote endpoint to datastore")
 
 		// Add the interface created above to the CNI result.
-		result.Interfaces = append(result.Interfaces, &cniv1.Interface{
-			Name:    endpoint.Spec.InterfaceName,
+		hostInterface := &cniv1.Interface{
+			Name: endpoint.Spec.InterfaceName,
+		}
+		contInterface := &cniv1.Interface{
+			Name:    args.IfName,
 			Mac:     endpoint.Spec.MAC,
 			Mtu:     conf.MTU,
 			Sandbox: args.Netns,
-		})
+		}
+
+		result.Interfaces = append(result.Interfaces, hostInterface, contInterface)
+
+		for _, ip := range result.IPs {
+			ip.Interface = cniv1.Int(1)
+		}
 	}
 
 	// Handle profile creation - this is only done if there isn't a specific policy handler.

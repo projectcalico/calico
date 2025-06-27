@@ -141,8 +141,8 @@ const (
 
 type attachPoint interface {
 	IfaceName() string
+	IfaceIndex() int
 	HookName() hook.Hook
-	IsAttached() (bool, error)
 	AttachProgram() error
 	DetachProgram() error
 	Log() *log.Entry
@@ -560,10 +560,6 @@ func NewBPFEndpointManager(
 		bpf.XDPDriver,
 		bpf.XDPGeneric,
 	}
-
-	// Clean all the files under /var/run/calico/bpf/prog to remove any information from the
-	// previous execution of the bpf dataplane, and make sure the directory exists.
-	bpf.CleanAttachedProgDir()
 
 	// Normally this endpoint manager uses its own dataplane implementation, but we have an
 	// indirection here so that UT can simulate the dataplane and test how it's called.
@@ -1092,12 +1088,6 @@ func (m *bpfEndpointManager) cleanupOldAttach(iface string, ai bpf.EPAttachInfo)
 
 func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceStateUpdate) {
 	log.Debugf("Interface update for %v, state %v", update.Name, update.State)
-
-	if update.State == ifacemonitor.StateNotPresent {
-		if err := bpf.ForgetIfaceAttachedProg(update.Name); err != nil {
-			log.WithError(err).Errorf("Error in removing interface %s json file. err=%v", update.Name, err)
-		}
-	}
 
 	if !m.isDataIface(update.Name) && !m.isWorkloadIface(update.Name) && !m.isL3Iface(update.Name) {
 		if update.State == ifacemonitor.StateUp {
@@ -1722,14 +1712,16 @@ func (m *bpfEndpointManager) reportHealth(ready bool, detail string) {
 
 func (m *bpfEndpointManager) doApplyPolicyToDataIface(iface, masterIface string, xdpMode XDPMode) (bpfInterfaceState, error) {
 	var (
-		err   error
-		up    bool
-		state bpfInterfaceState
+		err     error
+		up      bool
+		ifIndex int
+		state   bpfInterfaceState
 	)
 
 	m.ifacesLock.Lock()
 	m.withIface(iface, func(iface *bpfInterface) bool {
 		up = iface.info.ifaceIsUp()
+		ifIndex = iface.info.ifIndex
 		state = iface.dpState
 		return false
 	})
@@ -1764,9 +1756,11 @@ func (m *bpfEndpointManager) doApplyPolicyToDataIface(iface, masterIface string,
 	if err := m.dataIfaceStateFillJumps(tcAttachPoint, xdpMode, &state); err != nil {
 		return state, err
 	}
+	tcAttachPoint.IfIndex = ifIndex
 
 	xdpAttachPoint := &xdp.AttachPoint{
 		AttachPoint: bpf.AttachPoint{
+			IfIndex:  ifIndex,
 			Hook:     hook.XDP,
 			Iface:    iface,
 			LogLevel: m.bpfLogLevel,
@@ -2245,12 +2239,14 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 		state      bpfInterfaceState
 		endpointID *types.WorkloadEndpointID
 		ifaceUp    bool
+		ifindex    int
 	)
 
 	// Other threads might be filling in jump map FDs in the map so take the lock.
 	m.ifacesLock.Lock()
 	m.withIface(ifaceName, func(iface *bpfInterface) (forceDirty bool) {
 		ifaceUp = iface.info.ifaceIsUp()
+		ifindex = iface.info.ifIndex
 		endpointID = iface.info.endpointID
 		state = iface.dpState
 		return false
@@ -2314,6 +2310,7 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 	}
 
 	ap := m.calculateTCAttachPoint(ifaceName)
+	ap.IfIndex = ifindex
 
 	if err := m.wepStateFillJumps(ap, &state); err != nil {
 		return state, err
@@ -2408,11 +2405,11 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 }
 
 func (m *bpfEndpointManager) ensureProgramAttached(ap attachPoint) error {
-	err := ap.AttachProgram()
-	if err != nil {
+	if err := counters.EnsureExists(m.commonMaps.CountersMap, ap.IfaceIndex(), ap.HookName()); err != nil {
 		return err
 	}
-	return nil
+
+	return ap.AttachProgram()
 }
 
 // applyPolicy actually applies the policy to the given workload.

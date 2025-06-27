@@ -76,7 +76,7 @@ func newIPIPManager(
 	opRecorder logutils.OpRecorder,
 ) *ipipManager {
 	nlHandle, _ := netlinkshim.NewRealNetlink()
-	return newIPIPManagerWithSims(
+	return newIPIPManagerWithShims(
 		ipsetsDataplane,
 		mainRouteTable,
 		tunnelDevice,
@@ -88,7 +88,7 @@ func newIPIPManager(
 	)
 }
 
-func newIPIPManagerWithSims(
+func newIPIPManagerWithShims(
 	ipsetsDataplane dpsets.IPSetsDataplane,
 	mainRouteTable routetable.Interface,
 	tunnelDevice string,
@@ -163,7 +163,7 @@ func (m *ipipManager) OnUpdate(protoBufMsg interface{}) {
 		m.ipSetDirty = true
 		m.maybeUpdateRoutes()
 	default:
-		if m.dpConfig.ProgramRoutes {
+		if m.dpConfig.ProgramClusterRoutes {
 			m.routeMgr.OnUpdate(msg)
 		}
 	}
@@ -171,7 +171,7 @@ func (m *ipipManager) OnUpdate(protoBufMsg interface{}) {
 
 func (m *ipipManager) maybeUpdateRoutes() {
 	// Only update routes if only Felix is responsible for programming IPIP routes.
-	if m.dpConfig.ProgramRoutes {
+	if m.dpConfig.ProgramClusterRoutes {
 		m.routeMgr.triggerRouteUpdate()
 	}
 }
@@ -182,7 +182,7 @@ func (m *ipipManager) CompleteDeferredWork() error {
 		m.ipSetDirty = false
 	}
 
-	if m.dpConfig.ProgramRoutes {
+	if m.dpConfig.ProgramClusterRoutes {
 		return m.routeMgr.CompleteDeferredWork()
 	}
 	return nil

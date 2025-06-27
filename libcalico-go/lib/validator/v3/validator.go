@@ -1465,6 +1465,10 @@ func validateBGPPeerSpec(structLevel validator.StructLevel) {
 		structLevel.ReportError(reflect.ValueOf(ps.ReachableBy), "ReachableBy", "",
 			reason(msg), "")
 	}
+	if ps.KeepOriginalNextHop && ps.NextHopMode != nil {
+		structLevel.ReportError(reflect.ValueOf(ps.PeerIP), "KeepOriginalNextHop", "",
+			reason("The KeepOriginalNextHop field is deprecated. It must not be set to true when NextHopMode is configured."), "")
+	}
 }
 
 func validateReachableBy(reachableBy, peerIP string) (bool, string) {
