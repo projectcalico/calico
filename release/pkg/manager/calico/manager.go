@@ -910,10 +910,10 @@ func (r *CalicoManager) collectGithubArtifacts() error {
 // generateManifests re-generates manifests using the specified calico and operator versions.
 func (r *CalicoManager) generateManifests() error {
 	env := os.Environ()
-	env = append(env, fmt.Sprintf("CALICO_VERSION=%s", r.calicoVersion))
+	env = append(env, fmt.Sprintf("PRODUCT_VERSION=%s", r.calicoVersion))
 	env = append(env, fmt.Sprintf("OPERATOR_VERSION=%s", r.operatorVersion))
-	env = append(env, fmt.Sprintf("OPERATOR_REGISTRY=%s", r.operatorRegistry))
-	env = append(env, fmt.Sprintf("OPERATOR_IMAGE=%s", r.operatorImage))
+	env = append(env, fmt.Sprintf("OPERATOR_REGISTRY_OVERRIDE=%s", r.operatorRegistry))
+	env = append(env, fmt.Sprintf("OPERATOR_IMAGE_OVERRIDE=%s", r.operatorImage))
 	if !slices.Equal(r.imageRegistries, defaultRegistries) {
 		env = append(env, fmt.Sprintf("REGISTRY=%s", r.imageRegistries[0]))
 	}
