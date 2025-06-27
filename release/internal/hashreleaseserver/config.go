@@ -20,6 +20,7 @@ import (
 	"strings"
 
 	"cloud.google.com/go/storage"
+	"github.com/sirupsen/logrus"
 	"google.golang.org/api/option"
 )
 
@@ -70,6 +71,9 @@ func (s *Config) Address() string {
 }
 
 func (s *Config) Valid() bool {
+	if s.KnownHosts == "" {
+		logrus.Warn("KnownHosts is not set, will use default")
+	}
 	sshValid := s.Host != "" && s.User != "" && s.Key != "" && s.Port != ""
 	gcsAccessValid := s.BucketName != "" && s.CredentialsFile != ""
 	return sshValid && gcsAccessValid

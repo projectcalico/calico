@@ -15,6 +15,7 @@
 package hashreleaseserver
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"errors"
@@ -171,8 +172,36 @@ func HasHashrelease(hash string, cfg *Config) (bool, error) {
 			logrus.WithError(err).Info("Hashrelease does not already exist on server")
 			return false, nil
 		} else {
-			logrus.WithError(err).Error("Failed to check hashrelease library")
-			return false, err
+			// Some other error occurred, log it and check the bucket hashrelease library
+			logrus.WithError(err).Error("Failed to check hashrelease on server, checking bucket instead")
+			bucket, err := cfg.Bucket()
+			if err != nil {
+				logrus.WithError(err).Error("Failed to get bucket handler for hashrelease server")
+				return false, fmt.Errorf("failed to get bucket handler for hashrelease server: %w", err)
+			}
+			reader, err := bucket.Object(releaseLibFileName).NewReader(context.Background())
+			if err != nil {
+				if errors.Is(err, storage.ErrObjectNotExist) {
+					logrus.Debug("Hashrelease library does not exist")
+					return false, nil // No hashreleases published yet
+				}
+				logrus.WithError(err).Error("Failed to read hashrelease library from bucket")
+				return false, fmt.Errorf("failed to read hashrelease library from bucket: %w", err)
+			}
+			defer reader.Close()
+			scanner := bufio.NewScanner(reader)
+			for scanner.Scan() {
+				line := scanner.Text()
+				if strings.Contains(line, hash) {
+					logrus.WithField("hash", hash).Debug("Found hashrelease in library")
+					return true, nil
+				}
+			}
+			if err := scanner.Err(); err != nil {
+				logrus.WithError(err).Error("Failed to scan hashrelease library")
+				return false, fmt.Errorf("failed to scan hashrelease library: %w", err)
+			}
+			return false, nil
 		}
 	}
 	return strings.Contains(out, hash), nil

@@ -450,9 +450,10 @@ var (
 		Value: true,
 	}
 	latestFlag = &cli.BoolFlag{
-		Name:  "latest",
-		Usage: "Publish the hashrelease as the latest hashrelease",
-		Value: true,
+		Name:    "latest",
+		Usage:   "Publish the hashrelease as the latest hashrelease",
+		EnvVars: []string{"LATEST"},
+		Value:   true,
 	}
 	hashreleaseServerCredentialsFlag = &cli.StringFlag{
 		Name:    "hashrelease-server-credentials",

@@ -9,11 +9,12 @@ import (
 const gcloudBinaryName = "gcloud"
 
 func GcloudStorageRsync(src, dest string, additionalFlags ...string) error {
+	recursive := strings.HasSuffix(src, "/")
 	args := []string{
 		"storage", "rsync",
 		strings.TrimSuffix(src, "/"), dest,
 	}
-	if strings.HasSuffix(src, "/") {
+	if recursive {
 		args = append(args, "--recursive")
 	}
 	if len(additionalFlags) > 0 {
