@@ -20,7 +20,6 @@ import (
 	"strings"
 
 	"cloud.google.com/go/storage"
-	"github.com/sirupsen/logrus"
 	"google.golang.org/api/option"
 )
 
@@ -71,12 +70,9 @@ func (s *Config) Address() string {
 }
 
 func (s *Config) Valid() bool {
-	// Only warn if the bucket name or credentials file is not set,
-	// as these are not currently critical for hashreleases yet
-	if s.BucketName == "" || s.CredentialsFile == "" {
-		logrus.Warn("GCS bucket name or credentials file is not set, this will impact access to GCS")
-	}
-	return s.Host != "" && s.User != "" && s.Key != "" && s.Port != ""
+	sshValid := s.Host != "" && s.User != "" && s.Key != "" && s.Port != ""
+	gcsAccessValid := s.BucketName != "" && s.CredentialsFile != ""
+	return sshValid && gcsAccessValid
 }
 
 func (s *Config) Bucket() (*storage.BucketHandle, error) {

@@ -6,9 +6,9 @@ import (
 
 func TestConfigValid(t *testing.T) {
 	for _, tc := range []struct {
-		name     string
-		config   Config
-		expected bool
+		name          string
+		config        Config
+		expectedValid bool
 	}{
 		{
 			name: "all fields set",
@@ -21,7 +21,7 @@ func TestConfigValid(t *testing.T) {
 				CredentialsFile: "/path/to/credentials.json",
 				BucketName:      "bucket-name",
 			},
-			expected: true,
+			expectedValid: true,
 		},
 		{
 			name: "known hosts not set",
@@ -33,7 +33,7 @@ func TestConfigValid(t *testing.T) {
 				CredentialsFile: "/path/to/credentials.json",
 				BucketName:      "bucket-name",
 			},
-			expected: true,
+			expectedValid: true,
 		},
 		{
 			name: "missing GCS credentials",
@@ -43,12 +43,20 @@ func TestConfigValid(t *testing.T) {
 				Key:  "/path/to/key",
 				Port: "22",
 			},
-			expected: true,
+			expectedValid: false,
+		},
+		{
+			name: "missing SSH credentials",
+			config: Config{
+				CredentialsFile: "/path/to/credentials.json",
+				BucketName:      "bucket-name",
+			},
+			expectedValid: false,
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := tc.config.Valid(); got != tc.expected {
-				t.Errorf("Config.Valid() = %v, want %v", got, tc.expected)
+			if got := tc.config.Valid(); got != tc.expectedValid {
+				t.Errorf("Config.Valid() = %v, want %v", got, tc.expectedValid)
 			}
 		})
 	}

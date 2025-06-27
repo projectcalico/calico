@@ -409,6 +409,7 @@ var (
 	hashreleaseServerFlags = []cli.Flag{
 		sshHostFlag, sshUserFlag, sshKeyFlag, sshPortFlag,
 		sshKnownHostsFlag,
+		hashreleaseServerCredentialsFlag, hashreleaseServerBucketFlag,
 	}
 	sshHostFlag = &cli.StringFlag{
 		Name:    "server-ssh-host",
