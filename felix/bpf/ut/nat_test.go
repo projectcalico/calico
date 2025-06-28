@@ -3718,6 +3718,20 @@ func TestNATNodePortV6(t *testing.T) {
 // flag will be set and packets to any hosts should not be SNAT'ed.
 func TestNATOutExcludeHosts(t *testing.T) {
 	RegisterTestingT(t)
+
+	// Reset NAT maps.
+	natMap := nat.FrontendMap()
+	err := natMap.EnsureExists()
+	Expect(err).NotTo(HaveOccurred())
+	resetMap(natMap)
+	defer resetMap(natMap)
+
+	natBEMap := nat.BackendMap()
+	err = natBEMap.EnsureExists()
+	Expect(err).NotTo(HaveOccurred())
+	resetMap(natBEMap)
+	defer resetMap(natBEMap)
+
 	_, ipv4, l4, _, pktBytes, err := testPacketUDPDefault()
 	Expect(err).NotTo(HaveOccurred())
 	udp := l4.(*layers.UDP)
@@ -3727,6 +3741,11 @@ func TestNATOutExcludeHosts(t *testing.T) {
 	rtKey := routes.NewKey(srcV4CIDR).AsBytes()
 	rtVal := routes.NewValueWithIfIndex(routes.FlagsLocalWorkload|routes.FlagInIPAMPool|routes.FlagNATOutgoing, 1).AsBytes()
 
+	rtMap := routes.Map()
+	err = rtMap.EnsureExists()
+	Expect(err).NotTo(HaveOccurred())
+	resetRTMap(rtMap)
+	defer resetRTMap(rtMap)
 	err = rtMap.Update(rtKey, rtVal)
 	Expect(err).NotTo(HaveOccurred())
 	// Insert a route for the dest ip (flagged as remote host).
@@ -3735,9 +3754,14 @@ func TestNATOutExcludeHosts(t *testing.T) {
 
 	err = rtMap.Update(rtKey, rtVal)
 	Expect(err).NotTo(HaveOccurred())
-	defer resetRTMap(rtMap)
 	_ = conntrack.NewKey(uint8(ipv4.Protocol),
 		ipv4.SrcIP, uint16(udp.SrcPort), ipv4.DstIP, uint16(udp.DstPort))
+
+	ctMap := conntrack.Map()
+	err = ctMap.EnsureExists()
+	Expect(err).NotTo(HaveOccurred())
+	resetCTMap(ctMap)
+	defer resetCTMap(ctMap)
 
 	// Run the program without the "exclude hosts" config. Expect SNAT to happen.
 	skbMark = 0
@@ -3758,7 +3782,4 @@ func TestNATOutExcludeHosts(t *testing.T) {
 		Expect(res.Retval).To(Equal(resTC_ACT_REDIRECT))
 	}, withNATOutExcludeHosts())
 	expectMark(tcdefs.MarkSeen)
-
-	// Clean up.
-	resetCTMap(ctMap)
 }
