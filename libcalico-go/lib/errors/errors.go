@@ -96,7 +96,7 @@ func (e ErrorResourceAlreadyExists) Unwrap() error {
 }
 
 func (e ErrorResourceAlreadyExists) Error() string {
-	return fmt.Sprintf("resource already exists: %v", e.Identifier)
+	return fmt.Sprintf("resource already exists: %v with error: %v", e.Identifier, e.Err)
 }
 
 // Error indicating a problem connecting to the backend.
