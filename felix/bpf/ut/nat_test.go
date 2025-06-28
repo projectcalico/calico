@@ -3732,9 +3732,8 @@ func TestNATOutExcludeHosts(t *testing.T) {
 	resetMap(natBEMap)
 	defer resetMap(natBEMap)
 
-	_, ipv4, l4, _, pktBytes, err := testPacketUDPDefault()
+	_, _, _, _, pktBytes, err := testPacketUDPDefault()
 	Expect(err).NotTo(HaveOccurred())
-	udp := l4.(*layers.UDP)
 
 	hostIP = node1ip
 	// Insert a reverse route for the source workload (flagged in IP pool and NAT-outgoing).
@@ -3754,8 +3753,6 @@ func TestNATOutExcludeHosts(t *testing.T) {
 
 	err = rtMap.Update(rtKey, rtVal)
 	Expect(err).NotTo(HaveOccurred())
-	_ = conntrack.NewKey(uint8(ipv4.Protocol),
-		ipv4.SrcIP, uint16(udp.SrcPort), ipv4.DstIP, uint16(udp.DstPort))
 
 	ctMap := conntrack.Map()
 	err = ctMap.EnsureExists()
