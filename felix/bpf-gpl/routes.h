@@ -86,6 +86,7 @@ static CALI_BPF_INLINE enum cali_rt_flags cali_rt_lookup_flags(ipv46_addr_t *add
 #define cali_rt_is_blackhole_reject(rt) ((rt)->flags & CALI_RT_BLACKHOLE_REJECT)
 #define cali_rt_is_in_pool(rt) ((rt)->flags & CALI_RT_IN_POOL)
 
+#define cali_rt_flags_local(t) (((t) & CALI_RT_LOCAL) == CALI_RT_LOCAL)
 #define cali_rt_flags_host(t) (((t) & CALI_RT_HOST) == CALI_RT_HOST)
 #define cali_rt_flags_local_host(t) (((t) & (CALI_RT_LOCAL | CALI_RT_HOST)) == (CALI_RT_LOCAL | CALI_RT_HOST))
 #define cali_rt_flags_local_workload(t) (((t) & CALI_RT_LOCAL) && ((t) & CALI_RT_WORKLOAD))
@@ -123,9 +124,10 @@ static CALI_BPF_INLINE bool rt_addr_is_local_tunneled_host(ipv46_addr_t *addr)
 static CALI_BPF_INLINE bool rt_flags_should_perform_nat_outgoing(enum cali_rt_flags flags, bool exclude_hosts)
 {
     if cali_rt_flags_is_in_pool(flags) return false;
-    if cali_rt_flags_local_host(flags) return false;
-    if (cali_rt_flags_host(flags) && exclude_hosts) return false;
-
+    if cali_rt_flags_host(flags) {
+        if cali_rt_flags_local(flags) return false;
+        if (exclude_hosts) return false;
+    }
     return true;
 }
 #endif /* __CALI_ROUTES_H__ */
