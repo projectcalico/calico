@@ -788,6 +788,9 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 				if topts.flowLogsEnabled {
 					globals.Flags |= libbpf.GlobalsFlowLogsEnabled
 				}
+				if topts.natOutExcludeHosts {
+					globals.Flags |= libbpf.GlobalsNATOutgoingExcludeHosts
+				}
 				if topts.ipv6 {
 					copy(globals.HostTunnelIPv6[:], node1tunIPV6.To16())
 					copy(globals.HostIPv6[:], hostIP.To16())
@@ -1127,18 +1130,19 @@ func runBpfUnitTest(t *testing.T, source string, testFn func(bpfProgRunFn), opts
 }
 
 type testOpts struct {
-	description     string
-	subtests        bool
-	logLevel        log.Level
-	xdp             bool
-	psnaStart       uint32
-	psnatEnd        uint32
-	hostNetworked   bool
-	fromHost        bool
-	progLog         string
-	ipv6            bool
-	objname         string
-	flowLogsEnabled bool
+	description        string
+	subtests           bool
+	logLevel           log.Level
+	xdp                bool
+	psnaStart          uint32
+	psnatEnd           uint32
+	hostNetworked      bool
+	fromHost           bool
+	progLog            string
+	ipv6               bool
+	objname            string
+	flowLogsEnabled    bool
+	natOutExcludeHosts bool
 }
 
 type testOption func(opts *testOpts)
@@ -1191,6 +1195,12 @@ func withIPv6() testOption {
 func withFlowLogs() testOption {
 	return func(o *testOpts) {
 		o.flowLogsEnabled = true
+	}
+}
+
+func withNATOutExcludeHosts() testOption {
+	return func(o *testOpts) {
+		o.natOutExcludeHosts = true
 	}
 }
 
