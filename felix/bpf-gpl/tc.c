@@ -512,7 +512,13 @@ syn_force_policy:
 			if (rt) {
 				flags = rt->flags;
 			}
-			if (!(flags & CALI_RT_IN_POOL) && !cali_rt_flags_local_host(flags)) {
+            // Don't perform SNAT if either:
+            // - packet is destined to an address in the same IP pool;
+            // - packet is destined to local host; or
+            // - packet is destined to a host and the CALI_GLOBALS_NATOUTGOING_EXCLUDE_HOSTS global flag is set
+			if (!(flags & CALI_RT_IN_POOL) &&
+                    !cali_rt_flags_local_host(flags) &&
+                    !(cali_rt_flags_host(flags) && (GLOBAL_FLAGS & CALI_GLOBALS_NATOUTGOING_EXCLUDE_HOSTS))) {
 				CALI_DEBUG("Source is in NAT-outgoing pool "
 					   "but dest is not, need to SNAT.");
 				ctx->state->flags |= CALI_ST_NAT_OUTGOING;
