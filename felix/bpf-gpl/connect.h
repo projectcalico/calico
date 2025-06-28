@@ -25,7 +25,7 @@ static CALI_BPF_INLINE int do_nat_common(struct bpf_sock_addr *ctx, __u8 proto, 
 	__u16 dport_he = (__u16)(bpf_ntohl(ctx->user_port)>>16);
 	struct calico_nat_dest *nat_dest;
 	ipv46_addr_t voidip = VOID_IP;
-	nat_dest = calico_nat_lookup(&voidip, dst, proto, dport_he, false, &res,
+	nat_dest = calico_nat_lookup(&voidip, dst, proto, 0 /*TODO ALEX*/, dport_he, false, &res,
 			proto == IPPROTO_UDP && !connect ? CTLB_UDP_NOT_SEEN_TIMEO : 0, /* enforce affinity UDP */
 			proto == IPPROTO_UDP && !connect /* update affinity timer */);
 	if (!nat_dest) {
