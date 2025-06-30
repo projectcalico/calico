@@ -551,8 +551,6 @@ func (cmd *conntrackWriteCmd) Run(c *cobra.Command, _ []string) {
 		log.WithError(err).Error("Failed to access ConntrackMap")
 	}
 
-	log.SetLevel(log.InfoLevel)
-	log.Infof("Sridhar write command %v:%v", cmd.key, cmd.val)
 	if err := ctMap.Update(cmd.key, cmd.val); err != nil {
 		log.WithError(err).Error("Failed to update ConntrackMap")
 	}
