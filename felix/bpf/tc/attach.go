@@ -135,7 +135,7 @@ func (ap *AttachPoint) AttachProgram() error {
 		if err != nil {
 			log.Errorf("error removing qdisc from %s:%s", ap.Iface, err)
 		}
-		logCxt.Info("Program attached to TCX.")
+		logCxt.Info("Program attached to tcx.")
 		return nil
 	}
 
@@ -165,7 +165,7 @@ func (ap *AttachPoint) AttachProgram() error {
 		logCxt.Warnf("Failed to attach to TC section cali_tc_preamble")
 		return err
 	}
-	logCxt.Info("Program attached to TC.")
+	logCxt.Info("Program attached to tc.")
 	// Remove any tcx program.
 	err = ap.detachTcxProgram()
 	if err != nil {

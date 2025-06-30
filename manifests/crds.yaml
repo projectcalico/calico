@@ -686,11 +686,13 @@ spec:
                         - TC
                         - TCX
                     - enum:
-                        - TC
-                        - TCX
+                        - tc
+                        - tcx
                   description: |-
-                    BPFAttachType in BPF mode, controls the attach type for the BPF Programs.
-                    [Default: TCX]
+                    BPFAttachType controls how are the BPF programs at the network interfaces attached.
+                    By default `tcx` is used where available to enable easier coexistence with 3rd party programs.
+                    `tc` can force the legacy method of attaching via a qdisc. `tcx` falls back to `tc` if `tcx` is not available.
+                    [Default: tcx]
                   type: string
                 bpfCTLBLogFilter:
                   description: |-

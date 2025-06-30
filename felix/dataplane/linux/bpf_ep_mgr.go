@@ -577,7 +577,7 @@ func NewBPFEndpointManager(
 
 	if m.bpfAttachType == string(apiv3.BPFAttachOptionTCX) {
 		if !tc.IsTcxSupported() {
-			log.Infof("TCX is not supported. Falling back to Tc")
+			log.Infof("tcx is not supported. Falling back to tc")
 			m.bpfAttachType = string(apiv3.BPFAttachOptionTC)
 		}
 	}

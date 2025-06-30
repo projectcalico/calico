@@ -625,7 +625,7 @@ blocks:
             - name: FELIX_FV_NFTABLES
               value: "Enabled"
             - name: FELIX_FV_BPFATTACHTYPE
-              value: "TC"
+              value: "tc"
           execution_time_limit:
             minutes: 180
           commands:

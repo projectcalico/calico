@@ -23,7 +23,7 @@ const (
 	GlobalPinDir = DefaultBPFfsPath + "/tc/globals/"
 	ObjectDir    = "/usr/lib/calico/bpf"
 	CtlbPinDir   = "ctlb"
-	TcxPinDir    = GlobalPinDir + "/tcx"
+	TcxPinDir    = DefaultBPFfsPath + "/tcx"
 )
 
 func GetCgroupV2Path() string {
