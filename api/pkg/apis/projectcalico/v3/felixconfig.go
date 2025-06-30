@@ -854,7 +854,7 @@ type FelixConfigurationSpec struct {
 	//+kubebuilder:validation:Enum=Enabled;Disabled;L2Only
 	BPFRedirectToPeer string `json:"bpfRedirectToPeer,omitempty"`
 
-	// BPFAttachType in BPF mode, controls the attach type for the BPF Programs.
+	// BPFAttachType controls how are the BPF programs at the network interfaces attached. By default `tcx` is used where available to enable easier coexistence with 3rd party programs. `tc` can force the legacy method of attaching via a qdisc. `tcx` falls back to `tc` if `tcx` is not available.
 	// [Default: TCX]
 	//+kubebuilder:validation:Enum=TC;TCX
 	BPFAttachType *BPFAttachOption `json:"bpfAttachType,omitempty" validate:"omitempty,oneof=TC TCX"`
