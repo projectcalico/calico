@@ -46,6 +46,9 @@ type Config struct {
 
 	// etcdv3 or kubernetes
 	DatastoreType string `default:"etcdv3" split_words:"true"`
+
+	// LoadBalancerClass to use for load balancer controller
+	LoadBalancerClass string `default:"calico" split_words:"false"`
 }
 
 // Parse parses envconfig and stores in Config struct

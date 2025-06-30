@@ -168,7 +168,8 @@ type NamespaceControllerConfig struct {
 }
 
 type LoadBalancerControllerConfig struct {
-	AssignIPs AssignIPs `json:"assignIPs,omitempty" validate:"omitempty,assignIPs"`
+	AssignIPs        AssignIPs `json:"assignIPs,omitempty" validate:"omitempty,assignIPs"`
+	LoadBalanceClass string    `json:"loadBalanceClass,omitempty" validate:"omitempty"`
 }
 
 type AssignIPs string
@@ -176,6 +177,10 @@ type AssignIPs string
 const (
 	AllServices           AssignIPs = "AllServices"
 	RequestedServicesOnly AssignIPs = "RequestedServicesOnly"
+)
+
+const (
+	DefaultLoadBalancerClass string = "calico"
 )
 
 // KubeControllersConfigurationStatus represents the status of the configuration. It's useful for admins to

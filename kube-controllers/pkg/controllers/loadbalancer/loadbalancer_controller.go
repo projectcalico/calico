@@ -353,7 +353,7 @@ func (c *loadBalancerController) syncIPAM() {
 	}
 
 	for _, svc := range services {
-		if IsCalicoManagedLoadBalancer(svc, c.cfg.AssignIPs) {
+		if IsCalicoManagedLoadBalancer(svc, c.cfg.AssignIPs, c.cfg.LoadBalanceClass) {
 			svcKey, err := serviceKeyFromService(svc)
 			if err != nil {
 				log.WithError(err).Error("Error getting service object from service")
@@ -424,7 +424,7 @@ func (c *loadBalancerController) syncService(svcKey serviceKey) {
 		return
 	}
 
-	if !IsCalicoManagedLoadBalancer(svc, c.cfg.AssignIPs) {
+	if !IsCalicoManagedLoadBalancer(svc, c.cfg.AssignIPs, c.cfg.LoadBalanceClass) {
 		if c.allocationTracker.ipsByService[svcKey] == nil {
 			// not managed by Calico, and no IP for the service is in our IPAM storage. It's safe to return
 			return
@@ -780,8 +780,12 @@ func (c *loadBalancerController) resolvePools(poolIDs []string, isv4 bool) ([]cn
 // IsCalicoManagedLoadBalancer returns if Calico should try to assign IP address for the LoadBalancer
 // We assign IPs only if the loadBalancer controller assignIP is set to AllService
 // or in RequestedOnlyServices if the service has calico annotation
-func IsCalicoManagedLoadBalancer(svc *v1.Service, assignIPs api.AssignIPs) bool {
+func IsCalicoManagedLoadBalancer(svc *v1.Service, assignIPs api.AssignIPs, loadBalancerClass string) bool {
 	if svc.Spec.Type != v1.ServiceTypeLoadBalancer {
+		return false
+	}
+
+	if svc.Spec.LoadBalancerClass != nil && *svc.Spec.LoadBalancerClass != loadBalancerClass {
 		return false
 	}
 

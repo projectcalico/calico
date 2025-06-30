@@ -4914,6 +4914,12 @@ func schema_pkg_apis_projectcalico_v3_LoadBalancerControllerConfig(ref common.Re
 							Format: "",
 						},
 					},
+					"loadBalanceClass": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
 				},
 			},
 		},

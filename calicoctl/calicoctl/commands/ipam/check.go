@@ -291,7 +291,7 @@ func (c *IPAMChecker) checkIPAM(ctx context.Context) error {
 			var lengthLoadBalancer int
 			for _, svc := range services.Items {
 				if svc.Spec.Type == corev1.ServiceTypeLoadBalancer &&
-					loadbalancer.IsCalicoManagedLoadBalancer(&svc, kubeControllerConfig.Spec.Controllers.LoadBalancer.AssignIPs) {
+					loadbalancer.IsCalicoManagedLoadBalancer(&svc, kubeControllerConfig.Spec.Controllers.LoadBalancer.AssignIPs, kubeControllerConfig.Spec.Controllers.LoadBalancer.LoadBalanceClass) {
 					lengthLoadBalancer++
 					for _, ingress := range svc.Status.LoadBalancer.Ingress {
 						c.recordInUseIP(ingress.IP, svc, svc.Name)

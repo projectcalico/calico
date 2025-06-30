@@ -94,6 +94,8 @@ type AutoHostEndpointTemplate struct {
 }
 
 type LoadBalancerControllerConfig struct {
+	// LoadBalanceClass is the class of LoadBalancer to be managed by the controller
+	LoadBalanceClass string
 	// AssignIPs indicates if LoadBalancer controller will auto-assign all ip addresses or only if asked to do so via annotation
 	AssignIPs v3.AssignIPs
 }
@@ -139,7 +141,8 @@ func NewDefaultKubeControllersConfig() *v3.KubeControllersConfiguration {
 				ReconcilerPeriod: &v1.Duration{Duration: time.Minute * 5},
 			},
 			LoadBalancer: &v3.LoadBalancerControllerConfig{
-				AssignIPs: v3.AllServices,
+				AssignIPs:        v3.AllServices,
+				LoadBalanceClass: v3.DefaultLoadBalancerClass,
 			},
 		},
 	}
@@ -389,7 +392,9 @@ func mergeConfig(envVars map[string]string, envCfg Config, apiCfg v3.KubeControl
 	if rc.LoadBalancer != nil {
 		if apiCfg.Controllers.LoadBalancer != nil {
 			rc.LoadBalancer.AssignIPs = apiCfg.Controllers.LoadBalancer.AssignIPs
+			rc.LoadBalancer.LoadBalanceClass = apiCfg.Controllers.LoadBalancer.LoadBalanceClass
 			status.RunningConfig.Controllers.LoadBalancer.AssignIPs = apiCfg.Controllers.LoadBalancer.AssignIPs
+			status.RunningConfig.Controllers.LoadBalancer.LoadBalanceClass = apiCfg.Controllers.LoadBalancer.LoadBalanceClass
 		}
 	}
 

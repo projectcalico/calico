@@ -47,10 +47,12 @@ var _ = Describe("LoadBalancer controller UTs", func() {
 	ipFamilyPolicySingleStack := v1.IPFamilyPolicySingleStack
 	ipFamilyPolicyDualStack := v1.IPFamilyPolicyRequireDualStack
 
+	loadBalancerClass := "calico"
 	svc := v1.Service{
 		Spec: v1.ServiceSpec{
-			Type:           v1.ServiceTypeLoadBalancer,
-			IPFamilyPolicy: &ipFamilyPolicySingleStack,
+			Type:              v1.ServiceTypeLoadBalancer,
+			IPFamilyPolicy:    &ipFamilyPolicySingleStack,
+			LoadBalancerClass: &loadBalancerClass,
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-service",
@@ -145,38 +147,41 @@ var _ = Describe("LoadBalancer controller UTs", func() {
 	})
 
 	It("should determine if service is managed by Calico", func() {
-		managed := IsCalicoManagedLoadBalancer(&svc, apiv3.RequestedServicesOnly)
+		managed := IsCalicoManagedLoadBalancer(&svc, apiv3.RequestedServicesOnly, "")
 		Expect(managed).To(BeFalse())
 
-		managed = IsCalicoManagedLoadBalancer(&svc, apiv3.AllServices)
+		managed = IsCalicoManagedLoadBalancer(&svc, apiv3.AllServices, "unknown-class")
+		Expect(managed).To(BeFalse())
+
+		managed = IsCalicoManagedLoadBalancer(&svc, apiv3.AllServices, loadBalancerClass)
 		Expect(managed).To(BeTrue())
 
 		svc.Annotations = map[string]string{
 			annotationIPv4Pools: "poolv4",
 		}
-		managed = IsCalicoManagedLoadBalancer(&svc, apiv3.RequestedServicesOnly)
+		managed = IsCalicoManagedLoadBalancer(&svc, apiv3.RequestedServicesOnly, loadBalancerClass)
 		Expect(managed).To(BeTrue())
 
 		svc.Annotations = map[string]string{
 			annotationIPv6Pools: "poolv6",
 		}
-		managed = IsCalicoManagedLoadBalancer(&svc, apiv3.RequestedServicesOnly)
+		managed = IsCalicoManagedLoadBalancer(&svc, apiv3.RequestedServicesOnly, loadBalancerClass)
 		Expect(managed).To(BeTrue())
 
 		svc.Annotations = map[string]string{
 			annotationLoadBalancerIP: "1.1.1.1",
 		}
-		managed = IsCalicoManagedLoadBalancer(&svc, apiv3.RequestedServicesOnly)
+		managed = IsCalicoManagedLoadBalancer(&svc, apiv3.RequestedServicesOnly, loadBalancerClass)
 		Expect(managed).To(BeTrue())
 
 		svc.Annotations = map[string]string{}
 
 		svc.Spec.Type = v1.ServiceTypeClusterIP
-		managed = IsCalicoManagedLoadBalancer(&svc, apiv3.AllServices)
+		managed = IsCalicoManagedLoadBalancer(&svc, apiv3.AllServices, loadBalancerClass)
 		Expect(managed).To(BeFalse())
 
 		svc.Spec.Type = v1.ServiceTypeNodePort
-		managed = IsCalicoManagedLoadBalancer(&svc, apiv3.AllServices)
+		managed = IsCalicoManagedLoadBalancer(&svc, apiv3.AllServices, loadBalancerClass)
 		Expect(managed).To(BeFalse())
 	})
 
