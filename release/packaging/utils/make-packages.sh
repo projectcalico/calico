@@ -59,7 +59,7 @@ for package_type in "$@"; do
                 fi
                 rm -f debian/changelog debian/changelog.dch
                 dch --controlmaint --create --package "${PKG_NAME}" -v "${DEB_EPOCH}${debver}-$series" "${changelog_message}"
-                dch --controlmaint --release ""
+                dch --controlmaint --release --distribution $series ""
 
             excludes="${DPKG_EXCL:--I}"
 
