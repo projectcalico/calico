@@ -29,6 +29,7 @@ Depends:
  ipset,
  libpcap0.8,
  net-tools,
+ nftables,
  ${misc:Depends},
  ${shlibs:Depends}
 Description: Project Calico virtual networking for cloud data centers.
