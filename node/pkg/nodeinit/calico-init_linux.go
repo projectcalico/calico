@@ -33,7 +33,6 @@ import (
 
 	"github.com/projectcalico/calico/felix/bpf/bpfdefs"
 	"github.com/projectcalico/calico/felix/bpf/bpfmap"
-	"github.com/projectcalico/calico/felix/bpf/maps"
 	bpfnat "github.com/projectcalico/calico/felix/bpf/nat"
 	"github.com/projectcalico/calico/node/pkg/lifecycle/startup"
 )
@@ -81,13 +80,11 @@ func initBPFNetwork(serviceAddr, endpointAddrs string) (*bpfmap.Maps, error) {
 
 	serviceIPPort, err := parseIPPort(serviceAddr)
 	if err != nil {
-		logrus.WithError(err).Error("Failed to parse kubernetes service address (IP:Port).")
 		return nil, err
 	}
 
 	endpointIPPorts, err := parseCommaSeparatedIPPorts(endpointAddrs)
 	if err != nil {
-		logrus.WithError(err).Error("Failed to parse kubernetes endpoints addresses (IP:Port).")
 		return nil, err
 	}
 
@@ -99,32 +96,35 @@ func initBPFNetwork(serviceAddr, endpointAddrs string) (*bpfmap.Maps, error) {
 		return nil, err
 	}
 
-	var natMap maps.Map
+	id := uint32(0)
 	if serviceIPPort.IsIPv4 {
-		natMap = bpfMaps.V4.FrontendMap
-	} else {
-		natMap = bpfMaps.V6.FrontendMap
-	}
-	natMap.Update(
-		bpfnat.NewNATKey(serviceIPPort.IP, serviceIPPort.Port, uint8(layers.IPProtocolTCP)).AsBytes(),
-		bpfnat.NewNATValue(0, 1, 0, 0).AsBytes(),
-	)
+		bpfMaps.V4.FrontendMap.Update(
+			bpfnat.NewNATKey(serviceIPPort.IP, serviceIPPort.Port, uint8(layers.IPProtocolTCP)).AsBytes(),
+			bpfnat.NewNATValue(id, uint32(len(endpointIPPorts)), 0, 0).AsBytes(),
+		)
 
-	var natBEMap maps.Map
+	} else {
+		bpfMaps.V6.FrontendMap.Update(
+			bpfnat.NewNATKeyV6(serviceIPPort.IP, serviceIPPort.Port, uint8(layers.IPProtocolTCP)).AsBytes(),
+			bpfnat.NewNATValueV6(id, uint32(len(endpointIPPorts)), 0, 0).AsBytes(),
+		)
+
+	}
 
 	for index, endpoint := range endpointIPPorts {
 		if endpoint.IsIPv4 {
-			natBEMap = bpfMaps.V4.BackendMap
+			bpfMaps.V4.BackendMap.Update(
+				bpfnat.NewNATBackendKey(id, uint32(index)).AsBytes(),
+				bpfnat.NewNATBackendValue(endpoint.IP, endpoint.Port).AsBytes(),
+			)
 		} else {
-			natBEMap = bpfMaps.V6.BackendMap
+			bpfMaps.V6.BackendMap.Update(
+				bpfnat.NewNATBackendKeyV6(id, uint32(index)).AsBytes(),
+				bpfnat.NewNATBackendValueV6(endpoint.IP, endpoint.Port).AsBytes(),
+			)
 		}
-
-		natBEMap.Update(
-			bpfnat.NewNATBackendKey(uint32(index), 0).AsBytes(),
-			bpfnat.NewNATBackendValue(endpoint.IP, endpoint.Port).AsBytes(),
-		)
 	}
-	logrus.Info("Included kubernetes service and endpoints in the Nat Maps.")
+	logrus.Infof("Included kubernetes service (%s) and endpoints (%s) in the Nat Maps.", serviceAddr, endpointAddrs)
 
 	// Activate the connect-time load balancer.
 	err = bpfnat.InstallConnectTimeLoadBalancer(hasIPv4, hasIPv6, "", "debug", 60*time.Second, true)
@@ -174,7 +174,7 @@ func parseCommaSeparatedIPPorts(input string) ([]IPPort, error) {
 		entry = strings.TrimSpace(entry)
 		ipPort, err := parseIPPort(entry)
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse entry %q: %v", entry, err)
+			return nil, fmt.Errorf("failed to parse entry %s: %v", entry, err)
 		}
 		results = append(results, ipPort)
 	}
