@@ -1,6 +1,7 @@
 global_job_config:
   secrets:
     - name: docker-hub
+    - name: oss-release-secrets
   prologue:
     commands:
       - checkout
@@ -10,6 +11,8 @@ global_job_config:
       # unshallow it for GIT_VERSION:=$(shell git describe --tags --dirty --always)
       - retry git fetch --unshallow
       - echo $DOCKERHUB_PASSWORD | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+#      - export GOOGLE_APPLICATION_CREDENTIALS=$HOME/secrets/gcr-credentials.json
+#      - gcloud auth activate-service-account --key-file=${GOOGLE_APPLICATION_CREDENTIALS}
   epilogue:
     commands:
       - cd "$REPO_DIR"
