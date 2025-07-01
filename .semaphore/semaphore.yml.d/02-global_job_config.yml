@@ -1,6 +1,7 @@
 global_job_config:
   secrets:
     - name: docker-hub
+    - name: gcp-registry-pusher-service-account
   prologue:
     commands:
       - checkout
