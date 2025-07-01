@@ -558,12 +558,16 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	var mangleTableV4NFT, natTableV4NFT, rawTableV4NFT, filterTableV4NFT generictables.Table
 	var mangleTableV4IPT, natTableV4IPT, rawTableV4IPT, filterTableV4IPT generictables.Table
 
-	// Create nftables Table implementations.
-	nftablesV4RootTable := nftables.NewTable("calico", 4, rules.RuleHashPrefix, featureDetector, nftablesOptions)
-	mangleTableV4NFT = nftables.NewTableLayer("mangle", nftablesV4RootTable)
-	natTableV4NFT = nftables.NewTableLayer("nat", nftablesV4RootTable)
-	rawTableV4NFT = nftables.NewTableLayer("raw", nftablesV4RootTable)
-	filterTableV4NFT = nftables.NewTableLayer("filter", nftablesV4RootTable)
+	// This is required when nftables mode is configured; but also useful for cleanup in other modes.
+	nftablesV4RootTable := nftables.NewTable("calico", 4, rules.RuleHashPrefix, featureDetector, nftablesOptions, config.RulesConfig.NFTables)
+
+	if config.RulesConfig.NFTables {
+		// Create nftables Table implementations.
+		mangleTableV4NFT = nftables.NewTableLayer("mangle", nftablesV4RootTable)
+		natTableV4NFT = nftables.NewTableLayer("nat", nftablesV4RootTable)
+		rawTableV4NFT = nftables.NewTableLayer("raw", nftablesV4RootTable)
+		filterTableV4NFT = nftables.NewTableLayer("filter", nftablesV4RootTable)
+	}
 
 	// Create iptables table implementations.
 	mangleTableV4IPT = iptables.NewTable("mangle", 4, rules.RuleHashPrefix, iptablesLock, featureDetector, iptablesOptions)
@@ -600,9 +604,11 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		filterTableV4 = filterTableV4IPT
 		ipSetsV4 = ipsets.NewIPSets(config.RulesConfig.IPSetConfigV4, dp.loopSummarizer)
 
-		// Cleanup nftables - we can simply add the root table here, Since
-		// all the other tables / ipsets / maps are handled by the root table.
-		cleanupTables = append(cleanupTables, nftablesV4RootTable)
+		if nftablesV4RootTable != nil {
+			// Cleanup nftables - we can simply add the root table here, Since
+			// all the other tables / ipsets / maps are handled by the root table.
+			cleanupTables = append(cleanupTables, nftablesV4RootTable)
+		}
 	}
 
 	dp.natTables = append(dp.natTables, natTableV4)
@@ -779,7 +785,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	var filterTableV6NFT, filterTableV6IPT generictables.Table
 
 	// Create nftables Table implementations for IPv6.
-	nftablesV6RootTable := nftables.NewTable("calico", 6, rules.RuleHashPrefix, featureDetector, nftablesOptions)
+	nftablesV6RootTable := nftables.NewTable("calico", 6, rules.RuleHashPrefix, featureDetector, nftablesOptions, config.RulesConfig.NFTables)
 	filterTableV6NFT = nftables.NewTableLayer("filter", nftablesV6RootTable)
 
 	// Create iptables Table implementations for IPv6.
@@ -1119,10 +1125,12 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		var mangleTableV6NFT, natTableV6NFT, rawTableV6NFT generictables.Table
 		var mangleTableV6IPT, natTableV6IPT, rawTableV6IPT generictables.Table
 
-		// Define nftables table implementations for IPv6.
-		mangleTableV6NFT = nftables.NewTableLayer("mangle", nftablesV6RootTable)
-		natTableV6NFT = nftables.NewTableLayer("nat", nftablesV6RootTable)
-		rawTableV6NFT = nftables.NewTableLayer("raw", nftablesV6RootTable)
+		if config.RulesConfig.NFTables {
+			// Define nftables table implementations for IPv6.
+			mangleTableV6NFT = nftables.NewTableLayer("mangle", nftablesV6RootTable)
+			natTableV6NFT = nftables.NewTableLayer("nat", nftablesV6RootTable)
+			rawTableV6NFT = nftables.NewTableLayer("raw", nftablesV6RootTable)
+		}
 
 		// Define iptables table implementations for IPv6.
 		mangleTableV6IPT = iptables.NewTable("mangle", 6, rules.RuleHashPrefix, iptablesLock, featureDetector, iptablesOptions)
@@ -1154,9 +1162,11 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			rawTableV6 = rawTableV6IPT
 			ipSetsV6 = ipsets.NewIPSets(config.RulesConfig.IPSetConfigV6, dp.loopSummarizer)
 
-			// Cleanup nftables - we can simply add the root table here, Since
-			// all the other tables / ipsets / maps are handled by the root table.
-			cleanupTables = append(cleanupTables, nftablesV6RootTable)
+			if nftablesV6RootTable != nil {
+				// Cleanup nftables - we can simply add the root table here, Since
+				// all the other tables / ipsets / maps are handled by the root table.
+				cleanupTables = append(cleanupTables, nftablesV6RootTable)
+			}
 		}
 
 		dp.ipSets = append(dp.ipSets, ipSetsV6)
