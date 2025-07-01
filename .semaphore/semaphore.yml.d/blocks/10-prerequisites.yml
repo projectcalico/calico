@@ -5,3 +5,6 @@
       - name: Pre-flight checks
         commands:
           - make ci-preflight-checks
+          - make check-images-availability
+    secrets:
+      - name: gcp-registry-pusher-service-account
