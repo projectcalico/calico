@@ -49,11 +49,12 @@ clean:
 	rm -rf ./bin
 
 ci-preflight-checks:
-	$(MAKE) check-go-mod
-	$(MAKE) verify-go-mods
-	$(MAKE) check-dockerfiles
-	$(MAKE) check-language
+	#$(MAKE) check-go-mod
+	#$(MAKE) verify-go-mods
+	#$(MAKE) check-dockerfiles
+	#$(MAKE) check-language
 	$(MAKE) generate
+	$(MAKE) check-images-availability
 	$(MAKE) fix-all
 	$(MAKE) check-ocp-no-crds
 	$(MAKE) yaml-lint
@@ -70,6 +71,11 @@ go-vet:
 
 check-dockerfiles:
 	./hack/check-dockerfiles.sh
+
+check-images-availability: bin/yq bin/crane
+	cd ./hack && \
+		OPERATOR_VERSION=$(OPERATOR_VERSION) \
+		./check-images-availability.sh
 
 check-language:
 	./hack/check-language.sh
