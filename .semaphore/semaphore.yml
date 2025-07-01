@@ -122,6 +122,9 @@ blocks:
         - name: Pre-flight checks
           commands:
             - make ci-preflight-checks
+            - make check-images-availability
+      secrets:
+        - name: gcp-registry-pusher-service-account
   - name: apiserver
     run:
       when: "false or change_in(['/*', '/libcalico-go/', '/api/', '/apiserver/', '/hack/test/certs/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
