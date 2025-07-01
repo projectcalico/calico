@@ -5,3 +5,14 @@
       - name: Pre-flight checks
         commands:
           - make ci-preflight-checks
+    secrets:
+      - name: oss-release-secrets
+    prologue:
+      commands:
+        - export GOOGLE_APPLICATION_CREDENTIALS=$HOME/secrets/gcr-credentials.json
+        - echo "🔐 Authenticating to GCR using GOOGLE_APPLICATION_CREDENTIALS"
+        - echo "🔐 Authenticating to GCR using GOOGLE_APPLICATION_CREDENTIALS"
+        - echo "🔐 Authenticating to GCR using GOOGLE_APPLICATION_CREDENTIALS"
+        - echo "🔐 Authenticating to GCR using GOOGLE_APPLICATION_CREDENTIALS"
+        - echo "🔐 Authenticating to GCR using GOOGLE_APPLICATION_CREDENTIALS"
+        - gcloud auth activate-service-account --key-file=${GOOGLE_APPLICATION_CREDENTIALS}
