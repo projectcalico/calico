@@ -174,6 +174,14 @@ func (s *Scanner) Scan() {
 		return
 	}
 
+	conntrackCounterSweeps.Inc()
+	conntrackGaugeUsed.Set(float64(used))
+	conntrackGaugeCleaned.Set(float64(cleaned))
+	conntrackGaugeSweepDuration.Set(float64(time.Since(start)))
+	if !s.autoScale {
+		return
+	}
+
 	newLiveEntries := int(used - cleaned)
 	if s.liveEntries > newLiveEntries {
 		s.higherCount++
@@ -185,10 +193,6 @@ func (s *Scanner) Scan() {
 	full := float64(newLiveEntries) / float64(s.maxEntries)
 	log.Debugf("full %f, total %d, totalDeleted %d", full, used, cleaned)
 
-	conntrackCounterSweeps.Inc()
-	conntrackGaugeUsed.Set(float64(used))
-	conntrackGaugeCleaned.Set(float64(cleaned))
-	conntrackGaugeSweepDuration.Set(float64(time.Since(start)))
 	// If the ct map keeps filling up and gets over 85% full or if it hits 90%
 	// no matter what, resize the map.
 	if s.higherCount >= 3 && full > 0.85 || full > 0.90 {
