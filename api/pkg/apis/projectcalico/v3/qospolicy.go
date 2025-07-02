@@ -90,7 +90,11 @@ type QoSRule struct {
 }
 
 type QoSAction struct {
-	Mark *int `json:"mark,omitempty" validate:"omitempty,gte=0,lte=255"`
+	// Mark is an optional field that states what DSCP value must be set on the selected traffic.
+	// The value can be either an integer between 0 and 63 (inclusive) or one of the following string values:
+	// "DF", "EF", "AF11", "AF12", "AF13", "AF21", "AF22", "AF23", "AF31", "AF32", "AF33", "AF41", "AF42", "AF43",
+	// "CS0", "CS1", "CS2", "CS3", "CS4", "CS5", "CS6".
+	Mark *numorstring.DSCP `json:"mark,omitempty" validate:"omitempty,gte=0,lte=63"`
 }
 
 // New QoSPolicy creates a new (zeroed) QoSPolicy struct with the TypeMetadata
