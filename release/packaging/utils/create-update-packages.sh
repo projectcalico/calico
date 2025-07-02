@@ -66,6 +66,8 @@ function require_version {
 	: ${REPO_NAME:=master}
     elif [[ $VERSION =~ ^release-v ]]; then
 	: ${REPO_NAME:=testing}
+    elif [[ $VERSION =~ ^pr-[0-9]+$ ]]; then
+	: ${REPO_NAME:=${VERSION}}
     elif [[ $VERSION =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)(-python2)?$ ]]; then
 	MAJOR=${BASH_REMATCH[1]}
 	MINOR=${BASH_REMATCH[2]}
