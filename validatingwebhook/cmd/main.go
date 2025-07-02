@@ -23,11 +23,15 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/projectcalico/api/pkg/client/clientset_generated/clientset/scheme"
 	"github.com/projectcalico/calico/crypto/pkg/tls"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+	admissionv1 "k8s.io/api/admission/v1"
+	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/component-base/cli"
 
 	v1 "k8s.io/api/admission/v1"
@@ -35,11 +39,21 @@ import (
 )
 
 var (
-	certFile     string
-	keyFile      string
-	port         int
-	sidecarImage string
+	certFile string
+	keyFile  string
+	port     int
 )
+
+var (
+	scheme = runtime.NewScheme()
+	codecs = serializer.NewCodecFactory(scheme)
+)
+
+func addToScheme(scheme *runtime.Scheme) {
+	utilruntime.Must(corev1.AddToScheme(scheme))
+	utilruntime.Must(admissionv1.AddToScheme(scheme))
+	utilruntime.Must(admissionregistrationv1.AddToScheme(scheme))
+}
 
 // CmdWebhook is used by agnhost Cobra.
 var CmdWebhook = &cobra.Command{
@@ -53,6 +67,9 @@ in the Kubernetes cluster to register remote webhook admission controllers.`,
 }
 
 func main() {
+	logrus.SetLevel(logrus.InfoLevel)
+	logrus.SetOutput(os.Stdout)
+
 	rootCmd := &cobra.Command{
 		Use: "webhook",
 	}
@@ -62,13 +79,12 @@ func main() {
 }
 
 func init() {
+	addToScheme(scheme)
 	CmdWebhook.Flags().StringVar(&certFile, "tls-cert-file", "", "File containing the default x509 Certificate for HTTPS. (CA cert, if any, concatenated after server cert).")
 	CmdWebhook.Flags().StringVar(&keyFile, "tls-private-key-file", "", "File containing the default x509 private key matching --tls-cert-file.")
 	CmdWebhook.Flags().IntVar(&port, "port", 443, "Secure port that the webhook listens on")
-	CmdWebhook.Flags().StringVar(&sidecarImage, "sidecar-image", "", "Image to be used as the injected sidecar")
 }
 
-// admitv1beta1Func handles a v1 admission
 type admitv1Func func(v1.AdmissionReview) *v1.AdmissionResponse
 
 // admitHandler is a handler, for both validators and mutators, that supports multiple admission review versions
@@ -99,8 +115,7 @@ func serve(w http.ResponseWriter, r *http.Request, admit admitHandler) {
 
 	logrus.Info(fmt.Sprintf("handling request: %s", body))
 
-	f := serializer.NewCodecFactory(scheme.Scheme)
-	deserializer := f.UniversalDeserializer()
+	deserializer := codecs.UniversalDeserializer()
 	obj, gvk, err := deserializer.Decode(body, nil, nil)
 	if err != nil {
 		msg := fmt.Sprintf("Request could not be decoded: %v", err)
@@ -152,7 +167,14 @@ func handleValidate(ar v1.AdmissionReview) *v1.AdmissionResponse {
 	// TODO: Hook into validation logic here.
 
 	// If validation passes, return an allowed response
-	return &v1.AdmissionResponse{Allowed: false}
+	return &v1.AdmissionResponse{
+		Allowed: false,
+		Result: &metav1.Status{
+			Status:  metav1.StatusFailure,
+			Message: "Validation failed. This is a placeholder message.",
+			Reason:  metav1.StatusReasonInvalid,
+		},
+	}
 }
 
 func hook(cmd *cobra.Command, args []string) {
@@ -161,7 +183,7 @@ func hook(cmd *cobra.Command, args []string) {
 		logrus.WithError(err).Fatal("Failed to create TLS config")
 	}
 
-	http.HandleFunc("/validate", validate)
+	http.HandleFunc("/", validate)
 	http.HandleFunc("/readyz", func(w http.ResponseWriter, req *http.Request) { w.Write([]byte("ok")) })
 	server := &http.Server{
 		Addr:      fmt.Sprintf(":%d", port),
