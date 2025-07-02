@@ -192,7 +192,8 @@ protobuf proto/felixbackend.pb.go: proto/felixbackend.proto
 # We pre-build lots of different variants of the TC programs, defer to the script.
 BPF_GPL_O_FILES:=$(addprefix bpf-gpl/,$(shell bpf-gpl/list-objs))
 BPF_GPL_O_FILES+=bpf-gpl/bin/tc_preamble.o \
-		 bpf-gpl/bin/xdp_preamble.o bpf-gpl/bin/policy_default.o
+		 bpf-gpl/bin/xdp_preamble.o bpf-gpl/bin/policy_default.o \
+		 bpf-gpl/bin/tcx_test.o
 
 # There's a one-to-one mapping from UT C files to objects and the same for the apache programs..
 BPF_GPL_UT_O_FILES:=$(BPF_GPL_UT_C_FILES:.c=.o) $(addprefix bpf-gpl/,$(shell bpf-gpl/list-ut-objs))
