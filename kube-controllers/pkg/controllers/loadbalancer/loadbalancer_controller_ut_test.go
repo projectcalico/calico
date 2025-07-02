@@ -151,6 +151,24 @@ var _ = Describe("LoadBalancer controller UTs", func() {
 		managed = IsCalicoManagedLoadBalancer(&svc, apiv3.AllServices)
 		Expect(managed).To(BeTrue())
 
+		loadBalancerClass := "not-calico"
+		svc.Spec.LoadBalancerClass = &loadBalancerClass
+		managed = IsCalicoManagedLoadBalancer(&svc, apiv3.AllServices)
+		Expect(managed).To(BeFalse())
+
+		managed = IsCalicoManagedLoadBalancer(&svc, apiv3.RequestedServicesOnly)
+		Expect(managed).To(BeFalse())
+
+		loadBalancerClass = "calico"
+		svc.Spec.LoadBalancerClass = &loadBalancerClass
+		managed = IsCalicoManagedLoadBalancer(&svc, apiv3.AllServices)
+		Expect(managed).To(BeTrue())
+
+		managed = IsCalicoManagedLoadBalancer(&svc, apiv3.RequestedServicesOnly)
+		Expect(managed).To(BeTrue())
+
+		svc.Spec.LoadBalancerClass = nil
+
 		svc.Annotations = map[string]string{
 			annotationIPv4Pools: "poolv4",
 		}
