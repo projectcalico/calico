@@ -77,7 +77,7 @@ ${kubectl} apply -f $TEST_DIR/infra/calicoctl.yaml
 echo
 
 echo "Wait for Calico to be ready..."
-for app in calico-node calico-kube-controllers calico-apiserver calico-typha whisker goldmane; do
+for app in calico-node calico-kube-controllers calico-typha whisker goldmane; do
   wait_pod_ready -n calico-system -l k8s-app="$app"
 done
 wait_pod_ready -l k8s-app=kube-dns -n kube-system
@@ -85,7 +85,7 @@ wait_pod_ready calicoctl -n kube-system
 
 echo "Wait for tigera status to be ready"
 ${kubectl} wait --for=condition=Available tigerastatus/calico
-${kubectl} wait --for=condition=Available tigerastatus/apiserver
+# ${kubectl} wait --for=condition=Available tigerastatus/apiserver
 
 echo "Calico is running."
 echo
@@ -126,3 +126,6 @@ test_connection 6
 # make changes to the cluster. Some of our tests modify calico/node, etc.
 # We should remove this once we fix up those tests.
 ${kubectl} scale deployment -n tigera-operator tigera-operator --replicas=0
+
+# TODO: Remove crd.projectcalico.org/v1 resources.
+${kubectl} delete -f ../libcalico-go/config/crd/
