@@ -37,37 +37,38 @@ import (
 type AttachPoint struct {
 	bpf.AttachPoint
 
-	LogFilter            string
-	LogFilterIdx         int
-	Type                 tcdefs.EndpointType
-	ToOrFrom             tcdefs.ToOrFromEp
-	HookLayoutV4         hook.Layout
-	HookLayoutV6         hook.Layout
-	HostIPv4             net.IP
-	HostIPv6             net.IP
-	HostTunnelIPv4       net.IP
-	HostTunnelIPv6       net.IP
-	IntfIPv4             net.IP
-	IntfIPv6             net.IP
-	FIB                  bool
-	ToHostDrop           bool
-	DSR                  bool
-	DSROptoutCIDRs       bool
-	TunnelMTU            uint16
-	VXLANPort            uint16
-	WgPort               uint16
-	Wg6Port              uint16
-	ExtToServiceConnmark uint32
-	PSNATStart           uint16
-	PSNATEnd             uint16
-	RPFEnforceOption     uint8
-	NATin                uint32
-	NATout               uint32
-	UDPOnly              bool
-	RedirectPeer         bool
-	FlowLogsEnabled      bool
-	OverlayTunnelID      uint32
-	AttachType           string
+	LogFilter               string
+	LogFilterIdx            int
+	Type                    tcdefs.EndpointType
+	ToOrFrom                tcdefs.ToOrFromEp
+	HookLayoutV4            hook.Layout
+	HookLayoutV6            hook.Layout
+	HostIPv4                net.IP
+	HostIPv6                net.IP
+	HostTunnelIPv4          net.IP
+	HostTunnelIPv6          net.IP
+	IntfIPv4                net.IP
+	IntfIPv6                net.IP
+	FIB                     bool
+	ToHostDrop              bool
+	DSR                     bool
+	DSROptoutCIDRs          bool
+	TunnelMTU               uint16
+	VXLANPort               uint16
+	WgPort                  uint16
+	Wg6Port                 uint16
+	ExtToServiceConnmark    uint32
+	PSNATStart              uint16
+	PSNATEnd                uint16
+	RPFEnforceOption        uint8
+	NATin                   uint32
+	NATout                  uint32
+	NATOutgoingExcludeHosts bool
+	UDPOnly                 bool
+	RedirectPeer            bool
+	FlowLogsEnabled         bool
+	OverlayTunnelID         uint32
+	AttachType              string
 }
 
 var ErrDeviceNotFound = errors.New("device not found")
@@ -448,6 +449,10 @@ func (ap *AttachPoint) Configure() *libbpf.TcGlobalData {
 
 	if ap.FlowLogsEnabled {
 		globalData.Flags |= libbpf.GlobalsFlowLogsEnabled
+	}
+
+	if ap.NATOutgoingExcludeHosts {
+		globalData.Flags |= libbpf.GlobalsNATOutgoingExcludeHosts
 	}
 
 	globalData.HostTunnelIPv4 = globalData.HostIPv4

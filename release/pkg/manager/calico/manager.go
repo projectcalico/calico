@@ -402,9 +402,9 @@ func (r *CalicoManager) PreHashreleaseValidate() error {
 }
 
 func (r *CalicoManager) checkCodeGeneration() error {
-	if err := r.makeInDirectoryIgnoreOutput(r.repoRoot, "generate get-operator-crds check-dirty"); err != nil {
+	if err := r.makeInDirectoryIgnoreOutput(r.repoRoot, "get-operator-crds generate check-dirty"); err != nil {
 		logrus.WithError(err).Error("Failed to check code generation")
-		return fmt.Errorf("code generation error, try 'make generate get-operator-crds' to fix")
+		return fmt.Errorf("code generation error, try 'make get-operator-crds generate' to fix")
 	}
 	return nil
 }
@@ -528,28 +528,13 @@ func (r *CalicoManager) publishToHashreleaseServer() error {
 		logrus.Info("Skipping publishing to hashrelease server")
 		return nil
 	}
-	logrus.WithField("note", r.hashrelease.Note).Info("Publishing hashrelease")
-	dir := r.hashrelease.Source + "/"
-	if _, err := r.runner.Run("rsync",
-		[]string{
-			"--stats", "-az", "--delete",
-			fmt.Sprintf("--rsh=%s", r.hashreleaseConfig.RSHCommand()), dir,
-			fmt.Sprintf("%s:%s/%s", r.hashreleaseConfig.HostString(), hashreleaseserver.RemoteDocsPath(r.hashreleaseConfig.User), r.hashrelease.Name),
-		}, nil); err != nil {
-		logrus.WithError(err).Error("Failed to publish hashrelease")
-		return err
-	}
-	if err := hashreleaseserver.AddToHashreleaseLibrary(r.hashrelease, &r.hashreleaseConfig); err != nil {
-		logrus.WithError(err).Error("Failed to add hashrelease to library")
-		return err
-	}
-	if r.hashrelease.Latest {
-		if err := hashreleaseserver.SetHashreleaseAsLatest(r.hashrelease, r.productCode, &r.hashreleaseConfig); err != nil {
-			logrus.WithError(err).Error("Failed to set hashrelease as latest")
-			return err
-		}
-	}
-	return nil
+	logrus.WithFields(logrus.Fields{
+		"version": r.calicoVersion,
+		"name":    r.hashrelease.Name,
+		"note":    r.hashrelease.Note,
+	}).Info("Publishing hashrelease")
+
+	return hashreleaseserver.Publish(&r.hashrelease, &r.hashreleaseConfig)
 }
 
 func (r *CalicoManager) PublishRelease() error {
