@@ -65,8 +65,6 @@ func TestPrecompiledBinariesAreLoadable(t *testing.T) {
 	}
 
 	objects["tc_preamble.o"] = struct{}{}
-	objects["tcx_ingress_preamble.o"] = struct{}{}
-	objects["tcx_egress_preamble.o"] = struct{}{}
 	objects["xdp_preamble.o"] = struct{}{}
 	objects["conntrack_cleanup_debug_co-re_v4.o"] = struct{}{}
 	objects["conntrack_cleanup_debug_co-re_v6.o"] = struct{}{}

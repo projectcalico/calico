@@ -181,11 +181,11 @@ func (ap *AttachPoint) progPinPath() string {
 
 func (ap *AttachPoint) detachTcxProgram() error {
 	progPinPath := ap.progPinPath()
+	if _, err := os.Stat(progPinPath); os.IsNotExist(err) {
+		return nil
+	}
 	link, err := libbpf.OpenLink(progPinPath)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return nil
-		}
 		return fmt.Errorf("error opening link %s:%w", progPinPath, err)
 	}
 	defer link.Close()
