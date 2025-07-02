@@ -35,6 +35,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -366,8 +367,9 @@ type bpfEndpointManager struct {
 	// Service routes
 	hostNetworkedNATMode hostNetworkedNATMode
 
-	bpfPolicyDebugEnabled bool
-	bpfRedirectToPeer     string
+	bpfPolicyDebugEnabled  bool
+	bpfRedirectToPeer      string
+	policyTrampolineStride atomic.Int32
 
 	routeTableV4     *routetable.ClassView
 	routeTableV6     *routetable.ClassView
@@ -512,6 +514,8 @@ func NewBPFEndpointManager(
 		features:         dataplanefeatures,
 		profiling:        config.BPFProfiling,
 	}
+
+	m.policyTrampolineStride.Store(int32(asm.TrampolineStrideDefault))
 
 	specialInterfaces := []string{"egress.calico"}
 	if config.RulesConfig.IPIPEnabled {
@@ -3913,16 +3917,42 @@ func (m *bpfEndpointManager) doUpdatePolicyProgram(
 		stride = jump.XDPMaxEntryPoints
 	}
 	opts = append(opts, polprog.WithPolicyMapIndexAndStride(polJumpMapIdx, stride))
-	progFDs, insns, err := m.loadPolicyProgramFn(
-		progName,
-		ipFamily,
-		rules,
-		staticProgsMap,
-		polProgsMap,
-		opts...,
+
+	tstrideOrig := int(m.policyTrampolineStride.Load())
+	tstride := tstrideOrig
+
+	var (
+		progFDs []fileDescriptor
+		insns   []asm.Insns
 	)
-	if err != nil {
-		return nil, err
+
+	for {
+		var err error
+
+		options := append(opts, polprog.WithTrampolineStride(tstride))
+		progFDs, insns, err = m.loadPolicyProgramFn(
+			progName,
+			ipFamily,
+			rules,
+			staticProgsMap,
+			polProgsMap,
+			options...,
+		)
+		if err != nil {
+			if errors.Is(err, unix.ERANGE) && tstride >= 1000 {
+				tstride -= tstride / 4
+				continue
+			} else {
+				return nil, err
+			}
+		} else {
+			break
+		}
+	}
+
+	if tstride < tstrideOrig {
+		m.policyTrampolineStride.Store(int32(tstride))
+		log.Warnf("Reducing policy program trampoline stride to %d", tstride)
 	}
 
 	defer func() {
