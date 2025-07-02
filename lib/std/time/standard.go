@@ -1,4 +1,4 @@
-package clock
+package time
 
 import "time"
 
@@ -30,6 +30,13 @@ func (std *stdClock) NewTimer(d Duration) Timer {
 
 func (std *stdClock) NewTicker(d Duration) Ticker {
 	return &stdTicker{Ticker: time.NewTicker(d)}
+}
+func (std *stdClock) Sleep(d Duration) {
+	time.Sleep(d)
+}
+
+func (std *stdClock) Unix(sec int64, nsec int64) Time {
+	return time.Unix(sec, nsec)
 }
 
 type stdTicker struct {

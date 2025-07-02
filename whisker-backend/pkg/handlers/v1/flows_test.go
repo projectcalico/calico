@@ -21,7 +21,6 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
-	"time"
 
 	. "github.com/onsi/gomega"
 	"github.com/stretchr/testify/mock"
@@ -32,6 +31,7 @@ import (
 	"github.com/projectcalico/calico/lib/httpmachinery/pkg/apiutil"
 	"github.com/projectcalico/calico/lib/httpmachinery/pkg/testutil"
 	"github.com/projectcalico/calico/lib/std/ptr"
+	"github.com/projectcalico/calico/lib/std/time"
 	whiskerv1 "github.com/projectcalico/calico/whisker-backend/pkg/apis/v1"
 	hdlrv1 "github.com/projectcalico/calico/whisker-backend/pkg/handlers/v1"
 )

@@ -1285,8 +1285,15 @@ func schema_pkg_apis_projectcalico_v3_BGPPeerSpec(ref common.ReferenceCallback) 
 					},
 					"keepOriginalNextHop": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Option to keep the original nexthop field when routes are sent to a BGP Peer. Setting \"true\" configures the selected BGP Peers node to use the \"next hop keep;\" instead of \"next hop self;\"(default) in the specific branch of the Node on \"bird.cfg\".",
+							Description: "Option to keep the original nexthop field when routes are sent to a BGP Peer. Setting \"true\" configures the selected BGP Peers node to use the \"next hop keep;\" instead of \"next hop self;\"(default) in the specific branch of the Node on \"bird.cfg\". Note: that this field is deprecated. Users should use the NextHopMode field to control the next hop attribute for a BGP peer.",
 							Type:        []string{"boolean"},
+							Format:      "",
+						},
+					},
+					"nextHopMode": {
+						SchemaProps: spec.SchemaProps{
+							Description: "NextHopMode defines the method of calculating the next hop attribute for received routes. This replaces and expands the deprecated KeepOriginalNextHop field. Users should use this setting to control the next hop attribute for a BGP peer. When this is set, the value of the KeepOriginalNextHop field is ignored. if neither keepOriginalNextHop or nextHopMode is specified, BGP's default behaviour is used. Set it to “Auto” to apply BGP’s default behaviour. Set it to \"Self\" to configure \"next hop self;\" in \"bird.cfg\". Set it to \"Keep\" to configure \"next hop keep;\" in \"bird.cfg\".",
+							Type:        []string{"string"},
 							Format:      "",
 						},
 					},
@@ -2995,9 +3002,9 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							Format:      "",
 						},
 					},
-					"programRoutes": {
+					"programClusterRoutes": {
 						SchemaProps: spec.SchemaProps{
-							Description: "ProgramRoutes specifies whether Felix should program IPIP or unencapsulated routes instead of BIRD. Felix always programs VXLAN routes. [Default: Disabled]",
+							Description: "ProgramClusterRoutes specifies whether Felix should program IPIP routes instead of BIRD. Felix always programs VXLAN routes. [Default: Disabled]",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -3171,7 +3178,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					},
 					"bpfConntrackMode": {
 						SchemaProps: spec.SchemaProps{
-							Description: "BPFConntrackCleanupMode controls how BPF conntrack entries are cleaned up.  `Auto` will use a BPF program if supported, falling back to userspace if not.  `Userspace` will always use the userspace cleanup code.  `BPFProgram` will always use the BPF program (failing if not supported). [Default: Auto]",
+							Description: "BPFConntrackCleanupMode controls how BPF conntrack entries are cleaned up.  `Auto` will use a BPF program if supported, falling back to userspace if not.  `Userspace` will always use the userspace cleanup code.  `BPFProgram` will always use the BPF program (failing if not supported).\n\n/To be deprecated in future versions as conntrack map type changed to lru_hash and userspace cleanup is the only mode that is supported. [Default: Userspace]",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -3656,6 +3663,13 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							Description: "GoMaxProcs sets the maximum number of CPUs that the Go runtime will use concurrently.  A value of -1 means \"use the system default\"; typically the number of real CPUs on the system.\n\nthis setting is overridden by the GOMAXPROCS environment variable.\n\n[Default: -1]",
 							Type:        []string{"integer"},
 							Format:      "int32",
+						},
+					},
+					"requireMTUFile": {
+						SchemaProps: spec.SchemaProps{
+							Description: "RequireMTUFile specifies whether mtu file is required to start the felix. Optional as to keep the same as previous behavior. [Default: false]",
+							Type:        []string{"boolean"},
+							Format:      "",
 						},
 					},
 				},

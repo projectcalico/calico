@@ -93,7 +93,7 @@ var (
 	sideServIdx = 0
 )
 
-const defaultMTU = 1450
+const defaultMTU = 1440 /* wiregueard mtu */
 
 func (w *Workload) Stop() {
 	if w == nil {

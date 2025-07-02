@@ -963,17 +963,17 @@ like Application layer policy.
 | `FelixConfiguration` schema | String. |
 | Default value (YAML) | none |
 
-### `ProgramRoutes` (config file) / `programRoutes` (YAML)
+### `ProgramClusterRoutes` (config file) / `programClusterRoutes` (YAML)
 
-Specifies whether Felix should program IPIP or unencapsulated routes instead of BIRD.
+Specifies whether Felix should program IPIP routes instead of BIRD.
 Felix always programs VXLAN routes.
 
 | Detail |   |
 | --- | --- |
-| Environment variable | `FELIX_ProgramRoutes` |
+| Environment variable | `FELIX_ProgramClusterRoutes` |
 | Encoding (env var/config file) | One of: <code>Disabled</code>, <code>Enabled</code> (case insensitive) |
 | Default value (above encoding) | `Disabled` |
-| `FelixConfiguration` field | `programRoutes` (YAML) `ProgramRoutes` (Go API) |
+| `FelixConfiguration` field | `programClusterRoutes` (YAML) `ProgramClusterRoutes` (Go API) |
 | `FelixConfiguration` schema | One of: <code>"Disabled"</code>, <code>"Enabled"</code>. |
 | Default value (YAML) | `Disabled` |
 
@@ -991,6 +991,20 @@ use a distinct protocol (in addition to setting this field to false).
 | `FelixConfiguration` field | `removeExternalRoutes` (YAML) `RemoveExternalRoutes` (Go API) |
 | `FelixConfiguration` schema | Boolean. |
 | Default value (YAML) | `true` |
+
+### `RequireMTUFile` (config file) / `requireMTUFile` (YAML)
+
+Specifies whether mtu file is required to start the felix.
+Optional as to keep the same as previous behavior.
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_RequireMTUFile` |
+| Encoding (env var/config file) | Boolean: <code>true</code>, <code>1</code>, <code>yes</code>, <code>y</code>, <code>t</code> accepted as True; <code>false</code>, <code>0</code>, <code>no</code>, <code>n</code>, <code>f</code> accepted (case insensitively) as False. |
+| Default value (above encoding) | `false` |
+| `FelixConfiguration` field | `requireMTUFile` (YAML) `RequireMTUFile` (Go API) |
+| `FelixConfiguration` schema | Boolean. |
+| Default value (YAML) | `false` |
 
 ### `RouteRefreshInterval` (config file) / `routeRefreshInterval` (YAML)
 
@@ -1479,6 +1493,9 @@ Deprecated: Use BPFConnectTimeLoadBalancing.
 Controls how BPF conntrack entries are cleaned up. `Auto` will use a BPF program if supported,
 falling back to userspace if not. `Userspace` will always use the userspace cleanup code. `BPFProgram` will
 always use the BPF program (failing if not supported).
+
+/To be deprecated in future versions as conntrack map type changed to
+lru_hash and userspace cleanup is the only mode that is supported.
 
 | Detail |   |
 | --- | --- |
