@@ -518,21 +518,13 @@ func (r *CalicoManager) publishToHashreleaseServer() error {
 		logrus.Info("Skipping publishing to hashrelease server")
 		return nil
 	}
-	logrus.WithField("note", r.hashrelease.Note).Info("Publishing hashrelease")
-	dir := r.hashrelease.Source + "/"
-	if _, err := r.runner.Run("rsync",
-		[]string{
-			"--stats", "-az", "--delete",
-			fmt.Sprintf("--rsh=%s", r.hashreleaseConfig.RSHCommand()), dir,
-			fmt.Sprintf("%s:%s/%s", r.hashreleaseConfig.HostString(), hashreleaseserver.RemoteDocsPath(r.hashreleaseConfig.User), r.hashrelease.Name),
-		}, nil); err != nil {
-		logrus.WithError(err).Error("Failed to publish hashrelease")
-		return err
-	}
-	if r.hashrelease.Latest {
-		return hashreleaseserver.SetHashreleaseAsLatest(r.hashrelease, r.productCode, &r.hashreleaseConfig)
-	}
-	return nil
+	logrus.WithFields(logrus.Fields{
+		"version": r.calicoVersion,
+		"name":    r.hashrelease.Name,
+		"note":    r.hashrelease.Note,
+	}).Info("Publishing hashrelease")
+
+	return hashreleaseserver.Publish(&r.hashrelease, &r.hashreleaseConfig)
 }
 
 func (r *CalicoManager) PublishRelease() error {
