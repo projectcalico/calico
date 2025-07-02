@@ -72,6 +72,10 @@ var hostEPDown = model.HostEndpointStatus{
 	Status: "down",
 }
 
+var hostEPUp = model.HostEndpointStatus{
+	Status: "up",
+}
+
 var wlID = types.WorkloadEndpointID{
 	OrchestratorId: "orch",
 	WorkloadId:     "updatedWL",
@@ -187,47 +191,75 @@ var _ = Describe("Status", func() {
 					return datastore.workloadsListed
 				}).Should(BeTrue())
 			}, 1)
-			It("should coalesce flapping workload EP updates", func() {
-				epUpdates <- &wlEPUpdateUp
-				epUpdates <- &wlEPUpdateUp
-				epUpdates <- &wlEPUpdateDown
-				epUpdates <- &wlEPUpdateUp
-				epUpdates <- &wlEPUpdateDown
+			It("should not coalesce flapping workload EP updates", func() {
+				epUpdates <- &wlEPUpdateUp   // tick #1
+				epUpdates <- &wlEPUpdateUp   // no change, ignored
+				epUpdates <- &wlEPUpdateDown // tick #2
+				epUpdates <- &wlEPUpdateUp   // tick #3
+				epUpdates <- &wlEPUpdateDown // tick #4
 				rateLimitTickerChan <- time.Now()
 				rateLimitTickerChan <- time.Now()
 				Eventually(datastore.snapshot).Should(Equal(map[model.Key]interface{}{
 					updatedWlEPKey: wlEPDown,
 				}))
+				rateLimitTickerChan <- time.Now()
+				Eventually(datastore.snapshot).Should(Equal(map[model.Key]interface{}{
+					updatedWlEPKey: wlEPUp,
+				}))
+				rateLimitTickerChan <- time.Now()
+				Eventually(datastore.snapshot).Should(Equal(map[model.Key]interface{}{
+					updatedWlEPKey: wlEPDown,
+				}))
 			})
-			It("should coalesce flapping workload EP create/deletes", func() {
-				epUpdates <- &wlEPUpdateUp
-				epUpdates <- &wlEPUpdateUp
-				epUpdates <- &wlEPRemove
-				epUpdates <- &wlEPUpdateUp
-				epUpdates <- &wlEPRemove
+			It("should not coalesce flapping workload EP create/deletes", func() {
+				epUpdates <- &wlEPUpdateUp // tick #1
+				epUpdates <- &wlEPUpdateUp // no change, ignored
+				epUpdates <- &wlEPRemove   // tick #2
+				epUpdates <- &wlEPUpdateUp // tick #3
+				epUpdates <- &wlEPRemove   // tick #4
 				rateLimitTickerChan <- time.Now()
 				rateLimitTickerChan <- time.Now()
 				Eventually(datastore.snapshot).Should(BeEmpty())
+				rateLimitTickerChan <- time.Now()
+				Eventually(datastore.snapshot).Should(Equal(map[model.Key]interface{}{
+					updatedWlEPKey: wlEPUp,
+				}))
+				rateLimitTickerChan <- time.Now()
+				Eventually(datastore.snapshot).Should(BeEmpty())
 			})
-			It("should coalesce flapping host EP updates", func() {
-				epUpdates <- &hostEPUpdateUp
-				epUpdates <- &hostEPUpdateUp
-				epUpdates <- &hostEPUpdateDown
-				epUpdates <- &hostEPUpdateUp
-				epUpdates <- &hostEPUpdateDown
+			It("should not coalesce flapping host EP updates", func() {
+				epUpdates <- &hostEPUpdateUp   // tick #1
+				epUpdates <- &hostEPUpdateUp   // no change, ignored
+				epUpdates <- &hostEPUpdateDown // tick #2
+				epUpdates <- &hostEPUpdateUp   // tick #3
+				epUpdates <- &hostEPUpdateDown // tick #4
 				rateLimitTickerChan <- time.Now()
 				rateLimitTickerChan <- time.Now()
 				Eventually(datastore.snapshot).Should(Equal(map[model.Key]interface{}{
 					updatedHostEPKey: hostEPDown,
 				}))
-			})
-			It("should coalesce flapping host EP create/deletes", func() {
-				epUpdates <- &hostEPUpdateUp
-				epUpdates <- &hostEPUpdateUp
-				epUpdates <- &hostEPRemove
-				epUpdates <- &hostEPUpdateUp
-				epUpdates <- &hostEPRemove
 				rateLimitTickerChan <- time.Now()
+				Eventually(datastore.snapshot).Should(Equal(map[model.Key]interface{}{
+					updatedHostEPKey: hostEPUp,
+				}))
+				rateLimitTickerChan <- time.Now()
+				Eventually(datastore.snapshot).Should(Equal(map[model.Key]interface{}{
+					updatedHostEPKey: hostEPDown,
+				}))
+			})
+			It("should not coalesce flapping host EP create/deletes", func() {
+				epUpdates <- &hostEPUpdateUp // tick #1
+				epUpdates <- &hostEPUpdateUp // no change, ignored
+				epUpdates <- &hostEPRemove   // tick #2
+				epUpdates <- &hostEPUpdateUp // tick #3
+				epUpdates <- &hostEPRemove   // tick #4
+				rateLimitTickerChan <- time.Now()
+				rateLimitTickerChan <- time.Now()
+				Eventually(datastore.snapshot).Should(BeEmpty())
+				rateLimitTickerChan <- time.Now()
+				Eventually(datastore.snapshot).Should(Equal(map[model.Key]interface{}{
+					updatedHostEPKey: hostEPUp,
+				}))
 				rateLimitTickerChan <- time.Now()
 				Eventually(datastore.snapshot).Should(BeEmpty())
 			})
@@ -241,7 +273,6 @@ var _ = Describe("Status", func() {
 				})
 				It("should retry write", func() {
 					epUpdates <- &wlEPUpdateUp
-					rateLimitTickerChan <- time.Now() // Copies queued to active
 					rateLimitTickerChan <- time.Now() // Tries first write
 					rateLimitTickerChan <- time.Now() // Tries second write
 					time.Sleep(20 * time.Millisecond)
@@ -259,7 +290,6 @@ var _ = Describe("Status", func() {
 				})
 				It("should report status with that region", func() {
 					epUpdates <- &wlEPUpdateUp
-					rateLimitTickerChan <- time.Now() // Copies queued to active
 					rateLimitTickerChan <- time.Now() // Tries first write
 					Eventually(datastore.snapshot).Should(Equal(map[model.Key]interface{}{
 						updatedWlEPKeyRegion: wlEPUp,
