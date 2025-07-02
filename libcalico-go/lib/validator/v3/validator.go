@@ -249,7 +249,7 @@ func init() {
 	registerStructValidator(validate, validateICMPFields, api.ICMPFields{})
 	registerStructValidator(validate, validateIPPoolSpec, api.IPPoolSpec{})
 	registerStructValidator(validate, validateNodeSpec, libapi.NodeSpec{})
-	registerStructValidator(validate, validateIPAMConfigSpec, libapi.IPAMConfigSpec{})
+	registerStructValidator(validate, validateIPAMConfigSpec, libapi.IPAMConfigurationSpec{})
 	registerStructValidator(validate, validateObjectMeta, metav1.ObjectMeta{})
 	registerStructValidator(validate, validateTier, api.Tier{})
 	registerStructValidator(validate, validateHTTPRule, api.HTTPMatch{})
@@ -1414,7 +1414,7 @@ func validateEntityRule(structLevel validator.StructLevel) {
 }
 
 func validateIPAMConfigSpec(structLevel validator.StructLevel) {
-	ics := structLevel.Current().Interface().(libapi.IPAMConfigSpec)
+	ics := structLevel.Current().Interface().(libapi.IPAMConfigurationSpec)
 
 	if ics.MaxBlocksPerHost < 0 {
 		structLevel.ReportError(reflect.ValueOf(ics.MaxBlocksPerHost), "MaxBlocksPerHost", "",

@@ -162,7 +162,7 @@ EOF
         """Patch BGPFilters in a BGPPeer"""
         filterStr = "\"" + "\", \"".join(filters) + "\"" if len(filters) > 0 else ""
         patchStr = "{\"spec\": {\"filters\": [%s]}}" % filterStr
-        kubectl("patch bgppeer %s --patch '%s'" % (peer, patchStr))
+        kubectl("patch --type merge bgppeer %s --patch '%s'" % (peer, patchStr))
 
 
     def _test_bgp_filter_basic(self, ipv4, ipv6):
