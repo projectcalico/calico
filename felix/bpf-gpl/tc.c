@@ -435,7 +435,8 @@ static CALI_BPF_INLINE void calico_tc_process_ct_lookup(struct cali_tc_ctx *ctx)
 	if (CALI_F_TO_HOST || (CALI_F_FROM_HOST && !skb_seen(ctx->skb) && !ctx->nat_dest /* no sport conflict */)) {
 		ctx->nat_dest = calico_nat_lookup_tc(ctx,
 						     &ctx->state->ip_src, &ctx->state->ip_dst,
-						     ctx->state->ip_proto, ctx->state->dport,
+						     ctx->state->ip_proto,
+							 ctx->state->sport, ctx->state->dport,
 						     !ip_void(ctx->state->tun_ip), &nat_res);
 	}
 
