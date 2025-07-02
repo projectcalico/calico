@@ -61,6 +61,10 @@ func (o *Obj) FirstMap() (*Map, error) {
 	panic("LIBBPF syscall stub")
 }
 
+func (o *Obj) SetAttachTypeTcx(progName string, ingress bool) error {
+	panic("LIBBPF syscall stub")
+}
+
 func (m *Map) NextMap() (*Map, error) {
 	panic("LIBBPF syscall stub")
 }

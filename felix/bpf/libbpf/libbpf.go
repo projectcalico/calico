@@ -167,6 +167,21 @@ func DetachClassifier(ifindex, handle, pref int, ingress bool) error {
 	return err
 }
 
+func (o *Obj) SetAttachTypeTcx(progName string, ingress bool) error {
+	attachType := C.BPF_TCX_EGRESS
+	if ingress {
+		attachType = C.BPF_TCX_INGRESS
+	}
+	return o.setAttachType(progName, attachType)
+}
+
+func (o *Obj) setAttachType(progName string, attachType int) error {
+	cProgName := C.CString(progName)
+	defer C.free(unsafe.Pointer(cProgName))
+	_, err := C.bpf_set_attach_type(o.obj, cProgName, C.int(attachType))
+	return err
+}
+
 func ProgQueryTcx(ifindex int, ingress bool) ([64]uint32, [64]uint32, uint32, error) {
 	attachType := C.BPF_TCX_EGRESS
 	if ingress {

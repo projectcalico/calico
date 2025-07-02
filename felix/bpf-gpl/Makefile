@@ -61,8 +61,6 @@ UT_OBJS+=ut/ip_parse_test_v6.o
 
 OBJS:=$(shell ./list-objs)
 OBJS+=bin/tc_preamble.o
-OBJS+=bin/tcx_ingress_preamble.o
-OBJS+=bin/tcx_egress_preamble.o
 OBJS+=bin/tcx_test.o
 OBJS+=bin/xdp_preamble.o
 OBJS+=bin/policy_default.o
@@ -102,12 +100,6 @@ ut/icmp6_port_unreachable.ll: CFLAGS += -DIPVER6
 
 tc_preamble.ll: tc_preamble.c tc_preamble.d
 	$(CC) $(CFLAGS) -c $< -o $@
-
-tcx_ingress_preamble.ll: tc_preamble.c tc_preamble.d
-	$(CC) $(CFLAGS) -DCALI_TCX_INGRESS -c $< -o $@
-
-tcx_egress_preamble.ll: tc_preamble.c tc_preamble.d
-	$(CC) $(CFLAGS) -DCALI_TCX_EGRESS -c $< -o $@
 
 tcx_test.ll: tcx_test.c tcx_test.d
 	$(CC) $(CFLAGS) -c $< -o $@
@@ -149,10 +141,6 @@ xdp_v6.d: xdp.c
 
 LINK=$(LD) -march=bpf -filetype=obj -o $@ $<
 bin/tc_preamble.o: tc_preamble.ll | bin
-	$(LINK)
-bin/tcx_ingress_preamble.o: tcx_ingress_preamble.ll | bin
-	$(LINK)
-bin/tcx_egress_preamble.o: tcx_egress_preamble.ll | bin
 	$(LINK)
 bin/tcx_test.o: tcx_test.ll | bin
 	$(LINK)

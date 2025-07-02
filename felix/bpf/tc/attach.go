@@ -81,18 +81,19 @@ func (ap *AttachPoint) Log() *log.Entry {
 	})
 }
 
-func (ap *AttachPoint) loadObject(file string) (*libbpf.Obj, error) {
-	obj, err := bpf.LoadObject(file, ap.Configure())
+func (ap *AttachPoint) loadObject(file string, configurator bpf.ObjectConfigurator) (*libbpf.Obj, error) {
+	obj, err := bpf.LoadObjectWithOptions(file, ap.Configure(), configurator)
 	if err != nil {
 		return nil, fmt.Errorf("error loading %s: %w", file, err)
 	}
 	return obj, nil
 }
 
-func (ap *AttachPoint) attachTCXProgram() error {
+func (ap *AttachPoint) attachTCXProgram(binaryToLoad string) error {
 	logCxt := log.WithField("attachPoint", ap)
-	binaryToLoad := path.Join(bpfdefs.ObjectDir, fmt.Sprintf("tcx_%s_preamble.o", ap.Hook))
-	obj, err := ap.loadObject(binaryToLoad)
+	obj, err := ap.loadObject(binaryToLoad, func(obj *libbpf.Obj) error {
+		return obj.SetAttachTypeTcx("cali_tc_preamble", ap.Hook == hook.Ingress)
+	})
 	if err != nil {
 		logCxt.Warn("Failed to load program")
 		return fmt.Errorf("object %w", err)
@@ -125,8 +126,13 @@ func (ap *AttachPoint) attachTCXProgram() error {
 // AttachProgram attaches a BPF program from a file to the TC attach point
 func (ap *AttachPoint) AttachProgram() error {
 	logCxt := log.WithField("attachPoint", ap)
+	// By now the attach type specific generic set of programs is loaded and we
+	// only need to load and configure the preamble that will pass the
+	// configuration further to the selected set of programs.
+
+	binaryToLoad := path.Join(bpfdefs.ObjectDir, "tc_preamble.o")
 	if ap.AttachType == string(apiv3.BPFAttachOptionTCX) {
-		err := ap.attachTCXProgram()
+		err := ap.attachTCXProgram(binaryToLoad)
 		if err != nil {
 			return fmt.Errorf("error attaching tcx program %s:%s:%w", ap.Iface, ap.Hook, err)
 		}
@@ -139,12 +145,6 @@ func (ap *AttachPoint) AttachProgram() error {
 		return nil
 	}
 
-	// By now the attach type specific generic set of programs is loaded and we
-	// only need to load and configure the preamble that will pass the
-	// configuration further to the selected set of programs.
-
-	binaryToLoad := path.Join(bpfdefs.ObjectDir, "tc_preamble.o")
-
 	/* XXX we should remember the tag of the program and skip the rest if the tag is
 	* still the same */
 	progsAttached, err := ListAttachedPrograms(ap.Iface, ap.Hook.String(), true)
@@ -153,7 +153,7 @@ func (ap *AttachPoint) AttachProgram() error {
 	}
 
 	prio, handle := findFilterPriority(progsAttached)
-	obj, err := ap.loadObject(binaryToLoad)
+	obj, err := ap.loadObject(binaryToLoad, nil)
 	if err != nil {
 		logCxt.Warn("Failed to load program")
 		return fmt.Errorf("object %w", err)

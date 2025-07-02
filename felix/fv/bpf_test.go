@@ -797,7 +797,6 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					options.AutoHEPsEnabled = false
 				})
 				It("should allow traffic from workload to host", func() {
-					time.Sleep(0 * time.Second)
 					cc.Expect(Some, w[1], hostW)
 					cc.Expect(Some, hostW, w[0])
 					cc.CheckConnectivity(conntrackChecks(tc.Felixes)...)

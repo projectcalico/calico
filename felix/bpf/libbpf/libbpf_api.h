@@ -50,6 +50,20 @@ int bpf_program_fd(struct bpf_object *obj, char *secname)
 	return fd;
 }
 
+void bpf_set_attach_type(struct bpf_object *obj, char *progName, int attach_type)
+{
+	struct bpf_program *prog = bpf_object__find_program_by_name(obj, progName);
+        if (prog == NULL) {
+                errno = ENOENT;
+                return;
+        }
+	int ret =  bpf_program__set_expected_attach_type(prog, attach_type);
+	if (ret) {
+		set_errno(ret);
+	}
+	return;
+}
+
 void bpf_get_prog_name(uint prog_id, char *prog_name) {
 	struct bpf_prog_info info = {};
         int prog_fd = bpf_prog_get_fd_by_id(prog_id);
