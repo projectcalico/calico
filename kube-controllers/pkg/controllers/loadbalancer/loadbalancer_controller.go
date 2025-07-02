@@ -801,6 +801,11 @@ func IsCalicoManagedLoadBalancer(svc *v1.Service, assignIPs api.AssignIPs) bool 
 		if svc.Annotations[annotationIPv4Pools] != "" ||
 			svc.Annotations[annotationIPv6Pools] != "" ||
 			svc.Annotations[annotationLoadBalancerIP] != "" {
+
+			if svc.Spec.LoadBalancerClass != nil && *svc.Spec.LoadBalancerClass != calicoLoadBalancerClass {
+				log.WithFields(log.Fields{"svc": svc.Name, "ns": svc.Namespace}).Warn("calico LoadBalancer annotation set with spec.LoadBalancerClass != calico is not supported")
+				return false
+			}
 			return true
 		}
 	}
