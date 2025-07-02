@@ -45,7 +45,7 @@ spec:
               properties:
                 apiServerDeployment:
                   description: |-
-                    APIServerDeployment configures the calico-apiserver (or tigera-apiserver in Enterprise) Deployment. If
+                    APIServerDeployment configures the calico-apiserver Deployment. If
                     used in conjunction with ControlPlaneNodeSelector or ControlPlaneTolerations, then these overrides
                     take precedence.
                   properties:
