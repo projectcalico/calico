@@ -1,19 +1,6 @@
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: calico-apiserver
-  annotations:
-    openshift.io/node-selector: ""
-  labels:
-    name: calico-apiserver
-    security.openshift.io/scc.podSecurityLabelSync: "false"
-    pod-security.kubernetes.io/audit: restricted
-    pod-security.kubernetes.io/enforce: restricted
-    pod-security.kubernetes.io/warn: restricted
----
-apiVersion: v1
-kind: Namespace
-metadata:
   name: calico-system
   annotations:
     openshift.io/node-selector: ""
@@ -339,6 +326,7 @@ rules:
       - projectcalico.org
     resources:
       - ipamconfigurations
+      - clusterinformations
     verbs:
       - get
       - list
@@ -380,6 +368,9 @@ rules:
       - mutatingwebhookconfigurations
     verbs:
       - delete
+      - get
+      - list
+      - watch
   # Needed for operator lock
   - apiGroups:
       - coordination.k8s.io

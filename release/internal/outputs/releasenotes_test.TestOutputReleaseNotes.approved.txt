@@ -1,0 +1,12 @@
+[Date]
+
+#### Headline feature 1
+
+#### Headline feature 2
+
+#### Bug fixes
+
+#### Other changes
+
+- This is a test release note. [calico 123](https://github.com/projectcalico/calico/pull/123) (@)
+- Another test release note. [calico 456](https://github.com/projectcalico/calico/pull/456) (@)

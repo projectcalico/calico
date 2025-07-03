@@ -127,3 +127,17 @@ func WithVersion(version string) Option {
 		return nil
 	}
 }
+
+func WithRegistry(registry string) Option {
+	return func(o *OperatorManager) error {
+		o.registry = registry
+		return nil
+	}
+}
+
+func WithProductRegistry(registry string) Option {
+	return func(o *OperatorManager) error {
+		o.productRegistry = registry
+		return nil
+	}
+}

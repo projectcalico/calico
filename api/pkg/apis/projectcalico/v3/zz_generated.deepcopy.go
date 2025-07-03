@@ -1633,6 +1633,11 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 		*out = new(FlowLogsPolicyEvaluationModeType)
 		**out = **in
 	}
+	if in.BPFAttachType != nil {
+		in, out := &in.BPFAttachType, &out.BPFAttachType
+		*out = new(BPFAttachOption)
+		**out = **in
+	}
 	if in.FlowLogsFlushInterval != nil {
 		in, out := &in.FlowLogsFlushInterval, &out.FlowLogsFlushInterval
 		*out = new(v1.Duration)
@@ -1750,6 +1755,11 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 	if in.GoMaxProcs != nil {
 		in, out := &in.GoMaxProcs, &out.GoMaxProcs
 		*out = new(int)
+		**out = **in
+	}
+	if in.RequireMTUFile != nil {
+		in, out := &in.RequireMTUFile, &out.RequireMTUFile
+		*out = new(bool)
 		**out = **in
 	}
 	return

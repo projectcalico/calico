@@ -13,6 +13,7 @@
       - name: ci
         commands:
           - ../.semaphore/run-and-monitor release-ci.log make ci
+          - test-results publish --name "release-tool-ut-tests" ./report/*.xml || true
       - name: build binary
         commands:
           - ../.semaphore/run-and-monitor release-build.log make build

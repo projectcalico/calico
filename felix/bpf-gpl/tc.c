@@ -479,7 +479,7 @@ syn_force_policy:
 
 			ctx->state->ip_proto != IPPROTO_ICMPV6 &&
 #endif
-			!hep_rpf_check(ctx)) {
+			(hep_rpf_check(ctx) == RPF_RES_FAIL)) {
 			goto deny;
 		}
 	}
@@ -501,7 +501,7 @@ syn_force_policy:
 		) {
 		struct cali_rt *r = cali_rt_lookup(&ctx->state->ip_src);
 		/* Do RPF check since it's our responsibility to police that. */
-		if (!wep_rpf_check(ctx, r)) {
+		if (wep_rpf_check(ctx, r) == RPF_RES_FAIL) {
 			goto deny;
 		}
 
@@ -512,9 +512,9 @@ syn_force_policy:
 			if (rt) {
 				flags = rt->flags;
 			}
-			if (!(flags & CALI_RT_IN_POOL) && !cali_rt_flags_local_host(flags)) {
-				CALI_DEBUG("Source is in NAT-outgoing pool "
-					   "but dest is not, need to SNAT.");
+			bool exclude_hosts = (GLOBAL_FLAGS & CALI_GLOBALS_NATOUTGOING_EXCLUDE_HOSTS);
+			if (rt_flags_should_perform_nat_outgoing(flags, exclude_hosts)) {
+				CALI_DEBUG("Source is in NAT-outgoing pool but dest is not, need to SNAT.");
 				ctx->state->flags |= CALI_ST_NAT_OUTGOING;
 			}
 		}
