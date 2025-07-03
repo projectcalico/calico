@@ -1,0 +1,8 @@
+- name: Check images availability
+  dependencies:
+    - Prerequisites
+  task:
+    jobs:
+      - name: Check images availability
+        commands:
+          - make check-images-availability

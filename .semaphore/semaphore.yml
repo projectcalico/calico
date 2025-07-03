@@ -112,6 +112,14 @@ promotions:
     auto_promote:
       when: "branch =~ 'master|release-.*'"
 blocks:
+  - name: Check images availability
+    dependencies:
+      - Prerequisites
+    task:
+      jobs:
+        - name: Check images availability
+          commands:
+            - make check-images-availability
   - name: Prerequisites
     dependencies: []
     task:
