@@ -38,6 +38,8 @@ type NetworkSetExpansion interface{}
 
 type ProfileExpansion interface{}
 
+type QoSPolicyExpansion interface{}
+
 type StagedGlobalNetworkPolicyExpansion interface{}
 
 type StagedKubernetesNetworkPolicyExpansion interface{}

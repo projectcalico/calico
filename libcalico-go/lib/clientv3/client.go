@@ -65,7 +65,6 @@ func New(config apiconfig.CalicoAPIConfig) (Interface, error) {
 
 // NewFromEnv loads the config from ENV variables and returns a connected client.
 func NewFromEnv() (Interface, error) {
-
 	config, err := apiconfig.LoadClientConfigFromEnvironment()
 	if err != nil {
 		return nil, err
@@ -142,6 +141,11 @@ func (c client) WorkloadEndpoints() WorkloadEndpointInterface {
 // BGPPeers returns an interface for managing BGP peer resources.
 func (c client) BGPPeers() BGPPeerInterface {
 	return bgpPeers{client: c}
+}
+
+// QoSPolicies returns an interface for managing QoS policy resources.
+func (c client) QoSPolicies() QoSPolicyInterface {
+	return qosPolicies{client: c}
 }
 
 // Tiers returns an interface for managing tier resources.
