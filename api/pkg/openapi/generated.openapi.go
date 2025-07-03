@@ -3404,6 +3404,13 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							Format:      "",
 						},
 					},
+					"bpfAttachType": {
+						SchemaProps: spec.SchemaProps{
+							Description: "BPFAttachType controls how are the BPF programs at the network interfaces attached. By default `tcx` is used where available to enable easier coexistence with 3rd party programs. `tc` can force the legacy method of attaching via a qdisc. `tcx` falls back to `tc` if `tcx` is not available. [Default: tcx]",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 					"flowLogsFlushInterval": {
 						SchemaProps: spec.SchemaProps{
 							Description: "FlowLogsFlushInterval configures the interval at which Felix exports flow logs.",

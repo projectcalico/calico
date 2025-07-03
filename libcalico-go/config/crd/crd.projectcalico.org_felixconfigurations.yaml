@@ -60,6 +60,20 @@ spec:
                     - Enable
                     - Disable
                   type: string
+                bpfAttachType:
+                  allOf:
+                    - enum:
+                        - TC
+                        - TCX
+                    - enum:
+                        - tc
+                        - tcx
+                  description: |-
+                    BPFAttachType controls how are the BPF programs at the network interfaces attached.
+                    By default `tcx` is used where available to enable easier coexistence with 3rd party programs.
+                    `tc` can force the legacy method of attaching via a qdisc. `tcx` falls back to `tc` if `tcx` is not available.
+                    [Default: tcx]
+                  type: string
                 bpfCTLBLogFilter:
                   description: |-
                     BPFCTLBLogFilter specifies, what is logged by connect time load balancer when BPFLogLevel is
