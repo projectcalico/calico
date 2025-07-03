@@ -67,6 +67,11 @@ func AllResourcePlurals() []string {
 
 func init() {
 	registerResourceInfo(
+		apiv3.KindQoSPolicy,
+		"qospolicies",
+		reflect.TypeOf(apiv3.QoSPolicy{}),
+	)
+	registerResourceInfo(
 		apiv3.KindBGPPeer,
 		"bgppeers",
 		reflect.TypeOf(apiv3.BGPPeer{}),
