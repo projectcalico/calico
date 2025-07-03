@@ -1,6 +1,7 @@
 - name: Check images availability
-  dependencies:
-    - Prerequisites
+  run:
+    when: "${FORCE_RUN} or change_in(['/charts/', '/manifests/'])"
+  dependencies: []
   task:
     jobs:
       - name: Check images availability
