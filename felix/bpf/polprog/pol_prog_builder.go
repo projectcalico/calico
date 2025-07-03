@@ -1197,6 +1197,7 @@ func (p *Builder) maybeSplitProgram() bool {
 	// Now start the new program...
 	p.numRulesInProgram = 0
 	p.b = NewBlock(p.policyDebugEnabled)
+	p.b.SetTrampolineStride(p.trampolineStride)
 	p.blocks = append(p.blocks, p.b)
 	// Header initialises the long-lived registers.
 	p.b.AddCommentF(fmt.Sprintf("##### Start of program %d #####", len(p.blocks)-1))
