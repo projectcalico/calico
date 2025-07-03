@@ -42,14 +42,20 @@ type Iterator struct {
 	// then the pointers we write to the bpf_attr union could end up being stale (since
 	// the union is opaque to the garbage collector).
 
-	// keyBeforeNextBatch is either nil at start of day or points to a buffer containing
-	// the key to pass to bpf_map_load_multi.
-	keyBeforeNextBatch unsafe.Pointer
+	// This is a u32 in kernel value and we only need to pass a pointer to where
+	// the kernel can store the next token to pass to bpf_map_lookup_batch as
+	// batch_out and then receive it back as batch_in.
+	token uint32
 
 	// keys points to a buffer containing up to IteratorNumKeys keys
-	keys unsafe.Pointer
+	keysBuff    unsafe.Pointer
+	keysBufSize int
 	// values points to a buffer containing up to IteratorNumKeys values
-	values unsafe.Pointer
+	valuesBuff    unsafe.Pointer
+	valuesBufSize int
+
+	keys   []byte
+	values []byte
 
 	// valueStride is the step through the values buffer.  I.e. the size of the value
 	// rounded up for alignment.
