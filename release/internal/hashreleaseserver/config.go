@@ -16,7 +16,9 @@ package hashreleaseserver
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 
 	"cloud.google.com/go/storage"
@@ -88,4 +90,21 @@ func (s *Config) Bucket() (*storage.BucketHandle, error) {
 		s.gcsClient = cli
 	}
 	return s.gcsClient.Bucket(s.BucketName), nil
+}
+
+func (s *Config) credentialsAccount() (string, error) {
+	// return the email address of the service account used for GCS access
+	data, err := os.ReadFile(s.CredentialsFile)
+	if err != nil {
+		return "", fmt.Errorf("failed to read credentials file: %w", err)
+	}
+	var creds map[string]interface{}
+	if err := json.Unmarshal(data, &creds); err != nil {
+		return "", fmt.Errorf("failed to unmarshal credentials file: %w", err)
+	}
+	email, ok := creds["client_email"].(string)
+	if !ok {
+		return "", fmt.Errorf("client_email not found in credentials file")
+	}
+	return email, nil
 }
