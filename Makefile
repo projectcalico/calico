@@ -50,6 +50,7 @@ clean:
 
 ci-preflight-checks:
 	$(MAKE) check-go-mod
+	$(MAKE) check-images-availability
 	$(MAKE) verify-go-mods
 	$(MAKE) check-dockerfiles
 	$(MAKE) check-language
@@ -70,6 +71,12 @@ go-vet:
 
 check-dockerfiles:
 	./hack/check-dockerfiles.sh
+
+check-images-availability: bin/yq bin/crane
+	cd ./hack && \
+		OPERATOR_VERSION=$(OPERATOR_VERSION) \
+		CALICO_VERSION=$(CALICO_VERSION) \
+		./check-images-availability.sh
 
 check-language:
 	./hack/check-language.sh
