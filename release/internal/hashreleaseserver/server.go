@@ -86,7 +86,7 @@ func (h *Hashrelease) URL() string {
 // 2. It adds the hashrelease to the hashrelease library on the server and cloud storage.
 //
 // 3. It sets it as the latest for its product stream if specified.
-func Publish(h *Hashrelease, cfg *Config) error {
+func Publish(productCode string, h *Hashrelease, cfg *Config) error {
 	srcDir := strings.TrimSuffix(h.Source, "/") + "/"
 	logrus.WithFields(logrus.Fields{
 		"hashrelease": h.Name,
@@ -106,7 +106,7 @@ func Publish(h *Hashrelease, cfg *Config) error {
 	}
 
 	if h.Latest {
-		if err := setHashreleaseAsLatest(*h, h.Stream, cfg); err != nil {
+		if err := setHashreleaseAsLatest(*h, productCode, cfg); err != nil {
 			// We don't want to fail the publish if we can't set it as latest, but we should log the error
 			logrus.WithError(err).Error("failed to set hashrelease as latest")
 		}
@@ -133,12 +133,22 @@ func publishFiles(h *Hashrelease, cfg *Config) error {
 		allErr = errors.Join(allErr, fmt.Errorf("failed to publish hashrelease %s via SSH: %w", h.Name, err))
 	}
 	// publish to cloud storage
+	account, err := cfg.credentialsAccount()
+	if err != nil {
+		logrus.WithError(err).Error("Failed to get credentials email for hashrelease server")
+		return errors.Join(allErr, fmt.Errorf("failed to get credentials email for hashrelease server: %w", err))
+	}
 	logrus.WithField("hashrelease", h.Name).Debug("Publishing hashrelease to cloud storage")
-	if err := command.GcloudStorageRsync(
-		h.Source,
-		fmt.Sprintf("gs://%s/%s", cfg.BucketName, h.Name),
+	args := []string{
+		"storage", "rsync",
+		h.Source, fmt.Sprintf("gs://%s/%s", cfg.BucketName, h.Name),
 		"--recursive", "--delete-unmatched-destination-objects",
-	); err != nil {
+		fmt.Sprintf("--account=%s", account),
+	}
+	if logrus.IsLevelEnabled(logrus.DebugLevel) {
+		args = append(args, "--verbosity=debug")
+	}
+	if _, err := command.Run("gcloud", args); err != nil {
 		logrus.WithError(err).Error("Failed to publish hashrelease to bucket")
 		return errors.Join(allErr, fmt.Errorf("failed to publish hashrelease %s to bucket: %w", h.Name, err))
 	}
@@ -208,12 +218,12 @@ func setHashreleaseAsLatest(rel Hashrelease, productCode string, cfg *Config) er
 		"hashrelease": rel.Name,
 		"stream":      rel.Stream,
 		"productCode": productCode,
-	}).Debug("Setting hashrelease as latest for stream")
+	}).Info("Setting hashrelease as latest for stream")
 	var allErr error
 	content := rel.URL() + "/"
-	relFilePath := fmt.Sprintf("latest-%s/%s.txt", productCode, rel.Stream)
-	if _, err := runSSHCommand(cfg, fmt.Sprintf(`echo "%s" > %s/%s`, content, RemoteDocsPath(cfg.User), relFilePath)); err != nil {
-		logrus.WithError(err).Error("Failed to update latest hashrelease and hashrelease library")
+	relFilePath := filepath.Join("latest-"+productCode, rel.Stream+".txt")
+	if _, err := runSSHCommand(cfg, fmt.Sprintf(`echo "%s" > %s`, content, filepath.Join(RemoteDocsPath(cfg.User), relFilePath))); err != nil {
+		logrus.WithError(err).Error("Failed to update latest hashrelease via SSH")
 		allErr = errors.Join(allErr, err)
 	}
 	// Try to write to the latest hashrelease file in the bucket
@@ -230,7 +240,7 @@ func setHashreleaseAsLatest(rel Hashrelease, productCode string, cfg *Config) er
 }
 
 func addToHashreleaseLibrary(rel Hashrelease, cfg *Config) error {
-	logrus.WithField("hashrelease", rel.Name).WithField("hash", rel.Hash).Debug("Adding hashrelease to library")
+	logrus.WithField("hashrelease", rel.Name).WithField("hash", rel.Hash).Info("Adding hashrelease to library")
 	var allErr error
 	content := fmt.Sprintf("%s - %s ", rel.Hash, rel.Note)
 	if _, err := runSSHCommand(cfg, fmt.Sprintf(`echo "%s" >> %s`, content, remoteReleasesLibraryPath(cfg.User))); err != nil {

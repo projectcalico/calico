@@ -524,7 +524,7 @@ func (r *CalicoManager) publishToHashreleaseServer() error {
 		"note":    r.hashrelease.Note,
 	}).Info("Publishing hashrelease")
 
-	return hashreleaseserver.Publish(&r.hashrelease, &r.hashreleaseConfig)
+	return hashreleaseserver.Publish(r.productCode, &r.hashrelease, &r.hashreleaseConfig)
 }
 
 func (r *CalicoManager) PublishRelease() error {
