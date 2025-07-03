@@ -8,6 +8,50 @@ import (
 	"github.com/projectcalico/calico/release/internal/command"
 )
 
+func TestBuildRequestURL(t *testing.T) {
+	for name, tc := range map[string]struct {
+		orgURL  string
+		path    []string
+		want    string
+		wantErr string
+	}{
+		"default": {
+			orgURL: "https://example.com/",
+			path:   []string{"promotions"},
+			want:   "https://example.com/api/v1alpha/promotions",
+		},
+		"no org": {
+			path:    []string{"pipelines", "12345"},
+			wantErr: "organization URL is empty",
+		},
+		"no path": {
+			orgURL: "https://example.com",
+			want:   "https://example.com/api/v1alpha",
+		},
+		"multiple path segments": {
+			orgURL: "https://example.com",
+			path:   []string{"pipelines", "12345"},
+			want:   "https://example.com/api/v1alpha/pipelines/12345",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			got, err := buildRequestURL(tc.orgURL, tc.path...)
+			if (err != nil) && tc.wantErr == "" {
+				t.Errorf("buildRequestURL() error = %v", err)
+				return
+			} else if err != nil && tc.wantErr != "" {
+				if err.Error() != tc.wantErr {
+					t.Errorf("buildRequestURL() error = %v, want %v", err.Error(), tc.wantErr)
+				}
+				return
+			}
+			if got != tc.want {
+				t.Errorf("buildRequestURL() = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestFetchImagePromotions(t *testing.T) {
 	t.Run("default", func(t *testing.T) {
 		mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -204,7 +248,7 @@ func TestGetParentPipelineID(t *testing.T) {
 			}
 		}))
 		defer mockServer.Close()
-		pipeline, err := fetchParentPipelineID(mockServer.URL, "pipeline-1", "test-token")
+		pipeline, err := getParentPipelineID(mockServer.URL, "pipeline-1", "test-token")
 		if err != nil {
 			t.Fatalf("failed to get pipeline details: %v", err)
 		}
@@ -226,7 +270,7 @@ func TestGetParentPipelineID(t *testing.T) {
 			}
 		}))
 		defer mockServer.Close()
-		pipeline, err := fetchParentPipelineID(mockServer.URL, "pipeline-1", "test-token")
+		pipeline, err := getParentPipelineID(mockServer.URL, "pipeline-1", "test-token")
 		if err != nil {
 			t.Fatalf("failed to get pipeline details: %v", err)
 		}
@@ -270,7 +314,7 @@ func TestGetDistintImagePromotions(t *testing.T) {
 		}))
 		defer mockServer.Close()
 		promotions := []promotion{}
-		distinctPromotions, err := getDistinctImagePromotions(promotions, mockServer.URL, "test-token")
+		distinctPromotions, err := gatherUniquePromotionPipelines(promotions, mockServer.URL, "test-token")
 		if err != nil {
 			t.Fatal("failed to get distinct promotions:", err)
 		}
@@ -307,7 +351,7 @@ func TestGetDistintImagePromotions(t *testing.T) {
 				Name:       "Publish B images",
 			},
 		}
-		distinctPromotions, err := getDistinctImagePromotions(promotions, mockServer.URL, "test-token")
+		distinctPromotions, err := gatherUniquePromotionPipelines(promotions, mockServer.URL, "test-token")
 		if err != nil {
 			t.Fatal("failed to get distinct promotions:", err)
 		}
@@ -352,7 +396,7 @@ func TestGetDistintImagePromotions(t *testing.T) {
 				Name:       "Publish B images",
 			},
 		}
-		distinctPromotions, err := getDistinctImagePromotions(promotions, mockServer.URL, "test-token")
+		distinctPromotions, err := gatherUniquePromotionPipelines(promotions, mockServer.URL, "test-token")
 		if err != nil {
 			t.Fatal("failed to get distinct promotions:", err)
 		}
@@ -402,7 +446,7 @@ func TestGetDistintImagePromotions(t *testing.T) {
 				Name:       "Publish B images",
 			},
 		}
-		distinctPromotions, err := getDistinctImagePromotions(promotions, mockServer.URL, "test-token")
+		distinctPromotions, err := gatherUniquePromotionPipelines(promotions, mockServer.URL, "test-token")
 		if err != nil {
 			t.Fatal("failed to get distinct promotions:", err)
 		}
@@ -452,7 +496,7 @@ func TestGetDistintImagePromotions(t *testing.T) {
 				Name:       "Publish B images",
 			},
 		}
-		distinctPromotions, err := getDistinctImagePromotions(promotions, mockServer.URL, "test-token")
+		distinctPromotions, err := gatherUniquePromotionPipelines(promotions, mockServer.URL, "test-token")
 		if err != nil {
 			t.Fatal("failed to get distinct promotions:", err)
 		}

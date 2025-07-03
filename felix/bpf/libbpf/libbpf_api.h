@@ -50,6 +50,36 @@ int bpf_program_fd(struct bpf_object *obj, char *secname)
 	return fd;
 }
 
+void bpf_set_attach_type(struct bpf_object *obj, char *progName, uint attach_type)
+{
+	struct bpf_program *prog = bpf_object__find_program_by_name(obj, progName);
+        if (prog == NULL) {
+                errno = ENOENT;
+                return;
+        }
+	int ret =  bpf_program__set_expected_attach_type(prog, attach_type);
+	if (ret) {
+		set_errno(ret);
+	}
+	return;
+}
+
+void bpf_get_prog_name(uint prog_id, char *prog_name) {
+	struct bpf_prog_info info = {};
+        int prog_fd = bpf_prog_get_fd_by_id(prog_id);
+        if (prog_fd < 0) {
+		set_errno(-prog_fd);
+		return;
+        }
+	int len = sizeof(info);
+	int err = bpf_prog_get_info_by_fd(prog_fd, &info, &len);
+	if (err) {
+		set_errno(err);
+		return;
+	}
+	memcpy(prog_name, info.name, strlen(info.name));
+}
+
 struct bpf_link *bpf_link_open(char *path) {
 	struct bpf_link *link = bpf_link__open(path);
 	int err = libbpf_get_error(link);
@@ -95,6 +125,10 @@ void bpf_ctlb_detach_legacy(int prog_fd, int target_fd, int attach_type) {
         set_errno(bpf_prog_detach2(prog_fd, target_fd, attach_type));
 }
 
+int bpf_program_query(int ifindex, int attach_type, int flags, uint *attach_flags, uint *prog_ids, uint *prog_cnt) {
+	return bpf_prog_query(ifindex, attach_type, 0, attach_flags, prog_ids, prog_cnt);
+}
+
 void bpf_tc_program_attach(struct bpf_object *obj, char *secName, int ifIndex, bool ingress, int prio, uint handle)
 {
 	DECLARE_LIBBPF_OPTS(bpf_tc_hook, hook,
@@ -113,6 +147,23 @@ void bpf_tc_program_attach(struct bpf_object *obj, char *secName, int ifIndex, b
 	}
 	hook.ifindex = ifIndex;
 	set_errno(bpf_tc_attach(&hook, &attach));
+}
+
+struct bpf_link* bpf_tcx_program_attach(struct bpf_object *obj, char *secName, int ifIndex)
+{
+	DECLARE_LIBBPF_OPTS(bpf_tcx_opts, attach); 
+	struct bpf_program *prog = bpf_object__find_program_by_name(obj, secName);
+	if (!prog) {
+		errno = ENOENT;
+		return NULL;
+	}
+	struct bpf_link *link =  bpf_program__attach_tcx(prog, ifIndex, &attach);
+	int err = libbpf_get_error(link);
+        if (err) {
+                link = NULL;
+        }
+        set_errno(err);
+        return link;
 }
 
 void bpf_tc_program_detach(int ifindex, int handle, int pref, bool ingress)

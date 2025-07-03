@@ -368,6 +368,7 @@ type bpfEndpointManager struct {
 
 	bpfPolicyDebugEnabled bool
 	bpfRedirectToPeer     string
+	bpfAttachType         string
 
 	routeTableV4     *routetable.ClassView
 	routeTableV6     *routetable.ClassView
@@ -385,6 +386,8 @@ type bpfEndpointManager struct {
 	bpfIfaceMTU int
 
 	overlayTunnelID uint32
+
+	natOutgoingExclusions string
 
 	// Flow logs related fields.
 	lookupsCache *calc.LookupsCache
@@ -504,9 +507,12 @@ func NewBPFEndpointManager(
 		polNameToMatchIDs:      map[string]set.Set[polprog.RuleMatchID]{},
 		dirtyRules:             set.New[polprog.RuleMatchID](),
 
+		natOutgoingExclusions: config.RulesConfig.NATOutgoingExclusions,
+
 		healthAggregator: healthAggregator,
 		features:         dataplanefeatures,
 		profiling:        config.BPFProfiling,
+		bpfAttachType:    config.BPFAttachType,
 	}
 
 	specialInterfaces := []string{"egress.calico"}
@@ -573,6 +579,12 @@ func NewBPFEndpointManager(
 		m.hostNetworkedNATMode = hostNetworkedNATEnabled
 	}
 
+	if m.bpfAttachType == string(apiv3.BPFAttachOptionTCX) {
+		if !tc.IsTcxSupported() {
+			log.Infof("tcx is not supported. Falling back to tc")
+			m.bpfAttachType = string(apiv3.BPFAttachOptionTC)
+		}
+	}
 	m.v4 = newBPFEndpointManagerDataplane(proto.IPVersion_IPV4, bpfmaps.V4, iptablesFilterTableV4, ipSetIDAllocV4, m)
 
 	if m.ipv6Enabled {
@@ -2895,6 +2907,10 @@ func (m *bpfEndpointManager) calculateTCAttachPoint(ifaceName string) *tc.Attach
 		ap.ExtToServiceConnmark = uint32(m.bpfExtToServiceConnmark)
 	}
 
+	if m.natOutgoingExclusions == string(apiv3.NATOutgoingExclusionsIPPoolsAndHostIPs) {
+		ap.NATOutgoingExcludeHosts = true
+	}
+
 	ap.ToHostDrop = (m.epToHostAction == "DROP")
 	ap.FIB = m.fibLookupEnabled
 	ap.DSR = m.dsrEnabled
@@ -2906,6 +2922,7 @@ func (m *bpfEndpointManager) calculateTCAttachPoint(ifaceName string) *tc.Attach
 	ap.TunnelMTU = uint16(m.vxlanMTU)
 	ap.Profiling = m.profiling
 	ap.OverlayTunnelID = m.overlayTunnelID
+	ap.AttachType = m.bpfAttachType
 
 	switch m.rpfEnforceOption {
 	case "Strict":
@@ -3540,6 +3557,9 @@ func (m *bpfEndpointManager) ensureBPFDevices() error {
 }
 
 func (m *bpfEndpointManager) ensureQdisc(iface string) (bool, error) {
+	if m.bpfAttachType == string(apiv3.BPFAttachOptionTCX) {
+		return true, nil
+	}
 	return tc.EnsureQdisc(iface)
 }
 

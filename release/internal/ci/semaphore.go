@@ -15,6 +15,11 @@ import (
 )
 
 const (
+	apiPath    = "/api"
+	apiVersion = "v1alpha"
+)
+
+const (
 	passed = "passed"
 	failed = "failed"
 )
@@ -35,14 +40,26 @@ type pipelineDetails struct {
 	Pipeline pipeline `json:"pipeline"`
 }
 
-func fetchImagePromotions(orgURL, pipelineID, token string) ([]promotion, error) {
-	promotionsURL, err := url.JoinPath(orgURL, "promotions")
+func buildRequestURL(orgURL string, path ...string) (string, error) {
+	if orgURL == "" {
+		return "", errors.New("organization URL is empty")
+	}
+	path = append([]string{apiPath, apiVersion}, path...)
+	u, err := url.JoinPath(orgURL, path...)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get promotions URL: %s", err.Error())
+		return "", fmt.Errorf("failed to construct API URL: %w", err)
+	}
+	return u, nil
+}
+
+func fetchImagePromotions(orgURL, pipelineID, token string) ([]promotion, error) {
+	promotionsURL, err := buildRequestURL(orgURL, "promotions")
+	if err != nil {
+		return nil, fmt.Errorf("failed to create promotions request URL: %w", err)
 	}
 	req, err := http.NewRequest("GET", promotionsURL, nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create %s request: %s", promotionsURL, err.Error())
+		return nil, fmt.Errorf("failed to create request to %s: %w", promotionsURL, err)
 	}
 	req.Header.Set("Authorization", fmt.Sprintf("Token %s", token))
 	q := req.URL.Query()
@@ -53,7 +70,7 @@ func fetchImagePromotions(orgURL, pipelineID, token string) ([]promotion, error)
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to request promotions: %s", err.Error())
+		return nil, fmt.Errorf("failed to request promotions: %w", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
@@ -62,7 +79,7 @@ func fetchImagePromotions(orgURL, pipelineID, token string) ([]promotion, error)
 
 	var promotions []promotion
 	if err := json.NewDecoder(resp.Body).Decode(&promotions); err != nil {
-		return nil, fmt.Errorf("failed to parse promotions: %s", err.Error())
+		return nil, fmt.Errorf("failed to decode response to promotions: %w", err)
 	}
 
 	logrus.WithField("promotions", promotions).Debug("fetched promotions")
@@ -79,13 +96,13 @@ func fetchImagePromotions(orgURL, pipelineID, token string) ([]promotion, error)
 }
 
 func getPipelineResult(orgURL, pipelineID, token string) (*pipeline, error) {
-	pipelineURL, err := url.JoinPath(orgURL, "pipelines", pipelineID)
+	pipelineURL, err := buildRequestURL(orgURL, "pipelines", pipelineID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get pipeline URL: %s", err.Error())
+		return nil, fmt.Errorf("failed to get pipeline request URL: %w", err)
 	}
 	req, err := http.NewRequest("GET", pipelineURL, nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create %s request: %s", pipelineURL, err.Error())
+		return nil, fmt.Errorf("failed to create request to %s: %w", pipelineURL, err)
 	}
 	req.Header.Set("Authorization", fmt.Sprintf("Token %s", token))
 
@@ -93,7 +110,7 @@ func getPipelineResult(orgURL, pipelineID, token string) (*pipeline, error) {
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to request pipeline details: %s", err.Error())
+		return nil, fmt.Errorf("failed to request pipeline details: %w", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
@@ -102,47 +119,26 @@ func getPipelineResult(orgURL, pipelineID, token string) (*pipeline, error) {
 
 	var p pipelineDetails
 	if err := json.NewDecoder(resp.Body).Decode(&p); err != nil {
-		return nil, fmt.Errorf("failed to parse pipeline: %s", err.Error())
+		return nil, fmt.Errorf("failed to decode response to pipeline details: %w", err)
 	}
 
-	return &p.Pipeline, err
+	return &p.Pipeline, nil
 }
 
-func fetchParentPipelineID(orgURL, pipelineID, token string) (string, error) {
-	pipelineURL, err := url.JoinPath(orgURL, "pipelines", pipelineID)
+func getParentPipelineID(orgURL, pipelineID, token string) (string, error) {
+	p, err := getPipelineResult(orgURL, pipelineID, token)
 	if err != nil {
-		return "", fmt.Errorf("failed to get pipeline URL: %s", err.Error())
-	}
-	req, err := http.NewRequest("GET", pipelineURL, nil)
-	if err != nil {
-		return "", fmt.Errorf("failed to create %s request: %s", pipelineURL, err.Error())
-	}
-	req.Header.Set("Authorization", fmt.Sprintf("Token %s", token))
-
-	logrus.WithField("url", req.URL.String()).Debug("get pipeline details")
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("failed to request pipeline details: %s", err.Error())
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("failed to fetch pipeline details")
+		return "", fmt.Errorf("failed to get pipeline details for %s: %w", pipelineID, err)
 	}
 
-	var p pipelineDetails
-	if err := json.NewDecoder(resp.Body).Decode(&p); err != nil {
-		return "", fmt.Errorf("failed to parse pipeline: %s", err.Error())
-	}
-
-	return p.Pipeline.PromotionOf, err
+	return p.PromotionOf, nil
 }
 
 func retrieveExpectedPromotions(repoRootDir string) ([]string, error) {
 	promotionsFile := filepath.Join(repoRootDir, ".semaphore/semaphore.yml.d/03-promotions.yml")
 	expectPromotions, err := command.Run("grep", []string{"-Po", `name:\K(.*images.*)`, promotionsFile})
 	if err != nil {
-		return nil, fmt.Errorf("failed to get expected image promotions from %s: %s", promotionsFile, err.Error())
+		return nil, fmt.Errorf("failed to get expected image promotions from %s: %w", promotionsFile, err)
 	}
 	list := strings.Split(expectPromotions, "\n")
 	for i, p := range list {
@@ -151,7 +147,7 @@ func retrieveExpectedPromotions(repoRootDir string) ([]string, error) {
 	return list, nil
 }
 
-func getDistinctImagePromotions(promotions []promotion, orgURL, token string) (map[string]pipeline, error) {
+func gatherUniquePromotionPipelines(promotions []promotion, orgURL, token string) (map[string]pipeline, error) {
 	promotionsSet := make(map[string]pipeline)
 	for _, promotion := range promotions {
 		name := strings.ToLower(promotion.Name)
@@ -162,13 +158,14 @@ func getDistinctImagePromotions(promotions []promotion, orgURL, token string) (m
 			}
 			newP, err := getPipelineResult(orgURL, promotion.PipelineID, token)
 			if err != nil {
-				return nil, fmt.Errorf("unable to get %q pipeline details: %s", promotion.Name, err.Error())
+				return nil, fmt.Errorf("unable to get %q pipeline details: %w", promotion.Name, err)
 			}
 			// If the new promotion is passed, update the current promotion.
 			if newP.Result == passed {
 				promotionsSet[name] = *newP
 			}
 		} else {
+			// Promotion does not exist in the set, check its status.
 			if promotion.Status != passed {
 				// If the promotion is not passed, skip checking for pipeline result and mark as failure.
 				logrus.WithField("promotion", name).Warnf("%q promotion did not pass, marking as failed", name)
@@ -177,10 +174,10 @@ func getDistinctImagePromotions(promotions []promotion, orgURL, token string) (m
 				}
 				continue
 			}
-			// If the promotion does not exist, add it to the set.
+			// Add the promotion pipeline to the set
 			pipelineResult, err := getPipelineResult(orgURL, promotion.PipelineID, token)
 			if err != nil {
-				return nil, fmt.Errorf("unable to get %q pipeline details: %s", promotion.Name, err.Error())
+				return nil, fmt.Errorf("unable to get %q pipeline details: %w", promotion.Name, err)
 			}
 			promotionsSet[name] = *pipelineResult
 		}
@@ -209,56 +206,15 @@ func EvaluateImagePromotions(repoRootDir, orgURL, pipelineID, token string) (boo
 	if expectedPromotionCount == 0 {
 		return false, fmt.Errorf("no expected image promotions found in %s", repoRootDir)
 	}
-	parentPipelineID, err := fetchParentPipelineID(orgURL, pipelineID, token)
+	parentPipelineID, err := getParentPipelineID(orgURL, pipelineID, token)
 	if err != nil {
 		return false, err
 	}
 	if parentPipelineID == "" {
 		logrus.Info("no parent pipeline found, skipping image promotions check")
+		logrus.Warn("this hashrelease is being run with the assumption that images have been promoted successfully in a different pipeline")
 		return true, nil
 	}
-	logrus.WithField("pipeline_id", parentPipelineID).Debug("found pipeline that triggered image promotions")
-	promotions, err := fetchImagePromotions(orgURL, pipelineID, token)
-	if err != nil {
-		return false, err
-	}
-
-	// actualUniquePromotions is used to ensure that there are no duplicate promotions.
-	// It contains the names of the promotions in lowercase and their pipeline details.
-	actualUniquePromotions, err := getDistinctImagePromotions(promotions, orgURL, token)
-	if err != nil {
-		return false, err
-	}
-	// If there are no promotions, return an error.
-	if len(actualUniquePromotions) == 0 {
-		return false, fmt.Errorf("no image promotions found for in pipeline %s, wait till all image promotions are completed", parentPipelineID)
-	}
-
-	var missingPromotions, failedPromotions []string
-
-	for _, p := range expectedPromotions {
-		p = strings.ToLower(p)
-		if pipeline, ok := actualUniquePromotions[p]; !ok {
-			missingPromotions = append(missingPromotions, p)
-		} else if pipeline.Result != passed {
-			failedPromotions = append(failedPromotions, p)
-		}
-	}
-
-	if len(missingPromotions) > 0 || len(failedPromotions) > 0 {
-		errMsg := "image promotions check failed: "
-		if len(missingPromotions) > 0 {
-			errMsg += fmt.Sprintf("missing: %v", strings.Join(missingPromotions, ", "))
-			if len(failedPromotions) > 0 {
-				errMsg += ", "
-			}
-		}
-		if len(failedPromotions) > 0 {
-			errMsg += fmt.Sprintf("failed: %v", strings.Join(failedPromotions, ", "))
-		}
-		logrus.Error(errMsg)
-		return false, errors.New(errMsg)
-	}
-
+	logrus.Warn("this hashrelease is being run in a pipeline that was not triggered by a promotion, assuming all image promotions passed")
 	return true, nil
 }

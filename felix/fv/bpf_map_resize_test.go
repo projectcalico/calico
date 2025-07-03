@@ -21,6 +21,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"os"
+	"regexp"
 	"strings"
 	"time"
 
@@ -35,6 +37,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/routes"
 	"github.com/projectcalico/calico/felix/fv/connectivity"
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
+	"github.com/projectcalico/calico/felix/fv/utils"
 	"github.com/projectcalico/calico/felix/fv/workload"
 	"github.com/projectcalico/calico/felix/timeshim"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
@@ -162,6 +165,131 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test configurable
 	})
 })
 
+var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf conntrack table dynamic resize", []apiconfig.DatastoreType{apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
+
+	if !BPFMode() {
+		// Non-BPF run.
+		return
+	}
+
+	var (
+		infra infrastructure.DatastoreInfra
+		tc    infrastructure.TopologyContainers
+
+		w  [2]*workload.Workload
+		pc *connectivity.PersistentConnection
+	)
+
+	BeforeEach(func() {
+		infra = getInfra()
+		opts := infrastructure.DefaultTopologyOptions()
+		opts.ExtraEnvVars["FELIX_BPFMapSizeConntrack"] = "10000"
+		opts.ExtraEnvVars["FELIX_debugDisableLogDropping"] = "true"
+		opts.FelixLogSeverity = "Debug"
+		tc, _ = infrastructure.StartNNodeTopology(1, opts, infra)
+
+		infra.AddDefaultAllow()
+
+		for i := range w {
+			w[i] = workload.Run(
+				tc.Felixes[0],
+				fmt.Sprintf("w%d", i),
+				"default",
+				fmt.Sprintf("10.65.0.%d", i+2),
+				"8055",
+				"tcp",
+			)
+			w[i].ConfigureInInfra(infra)
+		}
+	})
+
+	AfterEach(func() {
+		if CurrentGinkgoTestDescription().Failed {
+			infra.DumpErrorData()
+		}
+		for _, wl := range w {
+			wl.Stop()
+		}
+		tc.Stop()
+		infra.Stop()
+	})
+
+	It("should resize ct map when it is full", func() {
+		// make sure that connctivity is already established
+		cc := &connectivity.Checker{}
+		cc.Expect(connectivity.Some, w[0], w[1])
+		cc.CheckConnectivity()
+
+		By("Starting permanent connection")
+		pc = w[0].StartPersistentConnection(w[1].IP, 8055, workload.PersistentConnectionOpts{
+			MonitorConnectivity: true,
+		})
+		defer pc.Stop()
+
+		expectPongs := func() {
+			EventuallyWithOffset(1, pc.SinceLastPong, "5s").Should(
+				BeNumerically("<", time.Second),
+				"Expected to see pong responses on the connection but didn't receive any")
+		}
+
+		expectPongs()
+
+		now := time.Duration(timeshim.RealTime().KTimeNanos())
+		leg := conntrack.Leg{SynSeen: true, AckSeen: true, Opener: true}
+
+		srcIP := net.IPv4(123, 123, 123, 123)
+		dstIP := net.IPv4(121, 121, 121, 121)
+
+		val := formatBytesWithPrefix(conntrack.NewValueNormal(now, 0, leg, leg).AsBytes())
+		c := tc.Felixes[0].WatchStdoutFor(regexp.MustCompile(".*Overriding bpfMapSizeConntrack \\(10000\\) with map size growth \\(20000\\)"))
+
+		line := ""
+		// Program 10k tcp ct entries into map. This is done in batches of 2k.
+		for i := 1; i <= 10000; i++ {
+			sport := uint16(i)
+			dport := uint16(i & 0xffff)
+			key := formatBytesWithPrefix(conntrack.NewKey(6 /* UDP */, srcIP, sport, dstIP, dport).AsBytes())
+			args := []string{"map", "update", "pinned", conntrack.Map().Path()}
+			args = append(args, "key")
+			args = append(args, key...)
+			args = append(args, []string{"value", "hex"}...)
+			args = append(args, val...)
+			output := strings.Join(args, " ")
+			if line == "" {
+				line = output
+			} else {
+				line = line + "\n" + output
+			}
+			if i%2000 == 0 {
+				err := os.WriteFile("/tmp/data_in", []byte(line), 0644)
+				Expect(err).NotTo(HaveOccurred())
+				utils.Run("docker", "cp", "/tmp/data_in", fmt.Sprintf("%s:/tmp/data_in", tc.Felixes[0].Name))
+				line = ""
+				_, err = tc.Felixes[0].ExecOutput("bpftool", "batch", "file", "/tmp/data_in")
+				Expect(err).NotTo(HaveOccurred())
+			}
+		}
+
+		defer os.Remove("/tmp/data_in")
+		Eventually(func() bool {
+			select {
+			case _, ok := <-c:
+				if !ok {
+					return true
+				}
+				return false
+			default:
+				return false
+			}
+		}, "60s", "1s").Should(BeTrue())
+
+		expectPongs()
+
+		err := tc.Felixes[0].ExecMayFail("calico-bpf", "conntrack", "dump", "--raw")
+		Expect(err).NotTo(HaveOccurred())
+	})
+})
+
 func getMapSizeFn(felix *infrastructure.Felix, m maps.Map) func() (int, error) {
 	return func() (int, error) {
 		return getMapSize(felix, m)
@@ -191,4 +319,20 @@ func showBpfMap(felix *infrastructure.Felix, m maps.Map) (map[string]interface{}
 		return nil, err
 	}
 	return data, nil
+}
+
+func formatBytesWithPrefix(data []byte) []string {
+	// Create a slice of strings to hold each formatted byte.
+	// Pre-allocating the slice with the correct capacity is more efficient.
+	parts := make([]string, len(data))
+
+	// Loop over the input data slice.
+	for i, b := range data {
+		// For each byte, format it into the "0xHH" string format
+		// and place it in our parts slice.
+		parts[i] = fmt.Sprintf("0x%02x", b)
+	}
+
+	// Join all the parts together with a single space as the separator.
+	return parts
 }

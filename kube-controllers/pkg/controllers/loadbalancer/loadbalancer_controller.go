@@ -51,6 +51,7 @@ const (
 	annotationIPv4Pools      = "projectcalico.org/ipv4pools"
 	annotationIPv6Pools      = "projectcalico.org/ipv6pools"
 	annotationLoadBalancerIP = "projectcalico.org/loadBalancerIPs"
+	calicoLoadBalancerClass  = "calico"
 	timer                    = 5 * time.Minute
 )
 
@@ -786,13 +787,27 @@ func IsCalicoManagedLoadBalancer(svc *v1.Service, assignIPs api.AssignIPs) bool 
 	}
 
 	if assignIPs == api.AllServices {
+		if svc.Spec.LoadBalancerClass != nil && *svc.Spec.LoadBalancerClass != calicoLoadBalancerClass {
+			return false
+		}
 		return true
 	}
 
-	if svc.Annotations[annotationIPv4Pools] != "" ||
-		svc.Annotations[annotationIPv6Pools] != "" ||
-		svc.Annotations[annotationLoadBalancerIP] != "" {
-		return true
+	if assignIPs == api.RequestedServicesOnly {
+		if svc.Spec.LoadBalancerClass != nil && *svc.Spec.LoadBalancerClass == calicoLoadBalancerClass {
+			return true
+		}
+
+		if svc.Annotations[annotationIPv4Pools] != "" ||
+			svc.Annotations[annotationIPv6Pools] != "" ||
+			svc.Annotations[annotationLoadBalancerIP] != "" {
+
+			if svc.Spec.LoadBalancerClass != nil && *svc.Spec.LoadBalancerClass != calicoLoadBalancerClass {
+				log.WithFields(log.Fields{"svc": svc.Name, "ns": svc.Namespace}).Warn("calico LoadBalancer annotation set with spec.LoadBalancerClass != calico is not supported")
+				return false
+			}
+			return true
+		}
 	}
 	return false
 }

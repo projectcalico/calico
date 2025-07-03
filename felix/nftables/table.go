@@ -286,6 +286,7 @@ func NewTable(
 	hashPrefix string,
 	featureDetector environment.FeatureDetectorIface,
 	options TableOptions,
+	required bool,
 ) *NftablesTable {
 	// Match the chain names that we program dynamically, which all start with "cali",
 	// as well as the base chains that we program which start with "nat", "filter", "mangle", "raw".
@@ -343,7 +344,12 @@ func NewTable(
 	}
 	nft, err := options.NewDataplane(nftFamily, name)
 	if err != nil {
-		log.WithError(err).Panic("Failed to create knftables client")
+		if required {
+			log.WithError(err).Panic("Failed to create knftables client")
+		} else {
+			log.WithError(err).Info("Failed to create knftables client")
+			return nil
+		}
 	}
 	ipv := ipsets.NewIPVersionConfig(ipsetFamily, ipsets.IPSetNamePrefix, nil, nil)
 
