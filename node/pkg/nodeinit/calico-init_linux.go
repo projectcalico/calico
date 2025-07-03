@@ -98,28 +98,49 @@ func initBPFNetwork(serviceAddr, endpointAddrs string) (*bpfmap.Maps, error) {
 	id := uint32(0)
 	for _, service := range servicesIPPort {
 		if service.IsIPv4 {
-			bpfMaps.V4.FrontendMap.Update(
+			err = bpfMaps.V4.FrontendMap.Update(
 				bpfnat.NewNATKey(service.IP, service.Port, uint8(layers.IPProtocolTCP)).AsBytes(),
 				bpfnat.NewNATValue(id, uint32(countIPv4), 0, 0).AsBytes(),
 			)
+			if err != nil {
+				logrus.WithError(err).Error("Failed to add IPv4 set entry in the frontend map.")
+				return nil, err
+			}
+			// Add the endpoints to the backend map.
+			for index, endpoint := range endpointsIPPort {
+				if endpoint.IsIPv4 {
+					err = bpfMaps.V4.BackendMap.Update(
+						bpfnat.NewNATBackendKey(id, uint32(index)).AsBytes(),
+						bpfnat.NewNATBackendValue(endpoint.IP, endpoint.Port).AsBytes(),
+					)
+					if err != nil {
+						logrus.WithError(err).Error("Failed to add IPv4 set entry in the backend map.")
+						return nil, err
+					}
+				}
+			}
 		} else {
-			bpfMaps.V6.FrontendMap.Update(
+			err = bpfMaps.V6.FrontendMap.Update(
 				bpfnat.NewNATKeyV6(service.IP, service.Port, uint8(layers.IPProtocolTCP)).AsBytes(),
 				bpfnat.NewNATValueV6(id, uint32(countIPv6), 0, 0).AsBytes(),
 			)
-		}
-	}
-	for index, endpoint := range endpointsIPPort {
-		if endpoint.IsIPv4 {
-			bpfMaps.V4.BackendMap.Update(
-				bpfnat.NewNATBackendKey(id, uint32(index)).AsBytes(),
-				bpfnat.NewNATBackendValue(endpoint.IP, endpoint.Port).AsBytes(),
-			)
-		} else {
-			bpfMaps.V6.BackendMap.Update(
-				bpfnat.NewNATBackendKeyV6(id, uint32(index)).AsBytes(),
-				bpfnat.NewNATBackendValueV6(endpoint.IP, endpoint.Port).AsBytes(),
-			)
+			if err != nil {
+				logrus.WithError(err).Error("Failed to add IPv6 set entry in the frontend map.")
+				return nil, err
+			}
+			// Add the endpoints to the backend map.
+			for index, endpoint := range endpointsIPPort {
+				if !endpoint.IsIPv4 {
+					err = bpfMaps.V6.BackendMap.Update(
+						bpfnat.NewNATBackendKeyV6(id, uint32(index)).AsBytes(),
+						bpfnat.NewNATBackendValueV6(endpoint.IP, endpoint.Port).AsBytes(),
+					)
+					if err != nil {
+						logrus.WithError(err).Error("Failed to add IPv6 set entry in the backend map.")
+						return nil, err
+					}
+				}
+			}
 		}
 	}
 	logrus.Infof("Included kubernetes service (%s) and endpoints (%s) in the Nat Maps.", serviceAddr, endpointAddrs)
