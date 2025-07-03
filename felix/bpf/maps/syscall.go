@@ -17,6 +17,7 @@
 package maps
 
 import (
+	"errors"
 	"runtime"
 	"unsafe"
 
@@ -24,6 +25,7 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+// #cgo CFLAGS: -I${SRCDIR}/../../bpf-gpl/libbpf/src -I${SRCDIR}/../../bpf-gpl/libbpf/include/uapi -I${SRCDIR}/../../bpf-gpl -Werror
 // #include "syscall.h"
 import "C"
 
@@ -182,7 +184,7 @@ func DeleteMapEntryIfExists(mapFD FD, k []byte) error {
 }
 
 // Batch size established by trial and error; 8-32 seemed to be the sweet spot for the conntrack map.
-const IteratorNumKeys = 16
+const IteratorNumKeys = 1024
 
 // align64 rounds up the given size to the nearest 8-bytes.
 func align64(size int) int {
@@ -201,22 +203,24 @@ func NewIterator(mapFD FD, keySize, valueSize, maxEntries int) (*Iterator, error
 	keyStride := align64(keySize)
 	valueStride := align64(valueSize)
 
-	keysBufSize := (C.size_t)(keyStride * IteratorNumKeys)
-	valueBufSize := (C.size_t)(valueStride * IteratorNumKeys)
-
 	m := &Iterator{
-		mapFD:       mapFD,
-		maxEntries:  maxEntries,
-		keySize:     keySize,
-		valueSize:   valueSize,
-		keyStride:   keyStride,
-		valueStride: valueStride,
-		keys:        C.malloc(keysBufSize),
-		values:      C.malloc(valueBufSize),
+		mapFD:         mapFD,
+		maxEntries:    maxEntries,
+		keySize:       keySize,
+		valueSize:     valueSize,
+		keyStride:     keyStride,
+		valueStride:   valueStride,
+		keysBufSize:   keyStride * IteratorNumKeys,
+		valuesBufSize: valueStride * IteratorNumKeys,
 	}
 
-	C.memset(m.keys, 0, (C.size_t)(keysBufSize))
-	C.memset(m.values, 0, (C.size_t)(valueBufSize))
+	m.keysBuff = C.malloc(C.size_t(m.keysBufSize))
+	m.valuesBuff = C.malloc(C.size_t(m.valuesBufSize))
+
+	// XXX either unecessary or should also clean the buffers before every
+	// iteration
+	C.memset(m.keysBuff, 0, (C.size_t)(m.keysBufSize))
+	C.memset(m.valuesBuff, 0, (C.size_t)(m.valuesBufSize))
 
 	// Make sure the C buffers are cleaned up.
 	runtime.SetFinalizer(m, func(m *Iterator) {
@@ -235,35 +239,41 @@ func NewIterator(mapFD FD, keySize, valueSize, maxEntries int) (*Iterator, error
 // keys than the maximum size of the map.
 func (m *Iterator) Next() (k, v []byte, err error) {
 	if m.numEntriesLoaded == m.entryIdx {
-		// Need to load a new batch of KVs from the kernel.
-		var count C.int
-		rc := C.bpf_maps_map_load_multi(C.uint(m.mapFD), m.keyBeforeNextBatch, IteratorNumKeys,
-			C.int(m.keyStride), m.keys, C.int(m.valueStride), m.values)
-		if rc < 0 {
-			err = unix.Errno(-rc)
-			return
-		}
-		count = rc
-		if count == 0 {
-			// No error but no keys either.  We're done.
-			err = ErrIterationFinished
-			return
+		token := m.token
+
+		tokenIn := unsafe.Pointer(&token)
+		if m.numEntriesVisited == 0 {
+			tokenIn = nil
 		}
 
-		m.numEntriesLoaded = int(count)
-		m.entryIdx = 0
-		if m.keyBeforeNextBatch == nil {
-			m.keyBeforeNextBatch = C.malloc((C.size_t)(m.keySize))
+		count := IteratorNumKeys
+		_, err = C.bpf_map_batch_lookup(C.int(m.mapFD), tokenIn, unsafe.Pointer(&token), m.keysBuff, m.valuesBuff,
+			(*C.__u32)(unsafe.Pointer(&count)), 0)
+		if err != nil {
+			if errors.Is(err, unix.ENOENT) {
+				if count == 0 {
+					err = ErrIterationFinished
+					return
+				} else {
+					err = nil
+				}
+			} else {
+				return
+			}
 		}
-		C.memcpy(m.keyBeforeNextBatch,
-			unsafe.Pointer(uintptr(m.keys)+uintptr(m.keyStride*(m.numEntriesLoaded-1))), (C.size_t)(m.keySize))
+
+		m.token = token
+
+		m.entryIdx = 0
+		m.numEntriesLoaded = count
+		b := C.GoBytes(m.keysBuff, C.int(m.keysBufSize))
+		m.keys = b[:count*m.keySize]
+		b = C.GoBytes(m.valuesBuff, C.int(m.valuesBufSize))
+		m.values = b[:count*m.valueSize]
 	}
 
-	currentKeyPtr := (*byte)(unsafe.Pointer(uintptr(m.keys) + uintptr(m.keyStride*(m.entryIdx))))
-	currentValPtr := (*byte)(unsafe.Pointer(uintptr(m.values) + uintptr(m.valueStride*(m.entryIdx))))
-
-	k = unsafe.Slice(currentKeyPtr, m.keySize)
-	v = unsafe.Slice(currentValPtr, m.valueSize)
+	k = m.keys[m.entryIdx*m.keySize : (m.entryIdx+1)*m.keySize]
+	v = m.values[m.entryIdx*m.valueSize : (m.entryIdx+1)*m.valueSize]
 
 	m.entryIdx++
 	m.numEntriesVisited++
@@ -278,11 +288,9 @@ func (m *Iterator) Next() (k, v []byte, err error) {
 }
 
 func (m *Iterator) Close() error {
-	C.free(m.keyBeforeNextBatch)
-	m.keyBeforeNextBatch = nil
-	C.free(m.keys)
+	C.free(m.keysBuff)
 	m.keys = nil
-	C.free(m.values)
+	C.free(m.valuesBuff)
 	m.values = nil
 
 	// Don't need the finalizer anymore.
