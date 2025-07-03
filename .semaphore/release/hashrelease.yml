@@ -32,7 +32,8 @@ global_job_config:
       # Log in to container registries needed for release.
       - echo $DOCKER_TOKEN | docker login --username "$DOCKER_USER" --password-stdin
       - echo $QUAY_TOKEN | docker login --username "$QUAY_USER" --password-stdin quay.io
-      # Credentials for accessing gcloud, needed to push images to gcr
+      # Credentials for accessing gcloud
+      - gcloud auth activate-service-account --key-file=${HASHRELEASE_SERVER_CREDENTIALS}
       - export GOOGLE_APPLICATION_CREDENTIALS=$HOME/secrets/gcr-credentials.json
       - gcloud auth activate-service-account --key-file=${GOOGLE_APPLICATION_CREDENTIALS}
       # Manually log in to GCR until we can test the gcr credentials helper
