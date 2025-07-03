@@ -1332,7 +1332,8 @@ func validateRule(structLevel validator.StructLevel) {
 				// Check for catch-all CIDR in negated context, which creates logical contradictions
 				if isNegatedField {
 					if (cidr.Version() == 4 && n == "0.0.0.0/0") ||
-						(cidr.Version() == 6 && n == "::/0") {
+						(cidr.Version() == 6 && cidr.Mask.String() == cnet.MustParseCIDR("::/0").Mask.String() &&
+							cidr.IP.Equal(cnet.MustParseCIDR("::/0").IP)) {
 						structLevel.ReportError(reflect.ValueOf(n), fieldName,
 							"", reason("catch-all CIDR in negation creates logical contradiction (matches no traffic)"), "")
 					}
