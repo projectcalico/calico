@@ -16,7 +16,6 @@ auto_cancel:
 global_job_config:
   secrets:
     - name: docker-hub
-    - name: oss-release-secrets
   prologue:
     commands:
       - checkout
@@ -116,23 +115,10 @@ blocks:
   - name: Prerequisites
     dependencies: []
     task:
-      secrets:
-        - name: oss-release-secrets
       jobs:
         - name: Pre-flight checks
           commands:
             - make ci-preflight-checks
-      prologue:
-        commands:
-          - export GOOGLE_APPLICATION_CREDENTIALS=$HOME/secrets/gcr-credentials.json
-          - echo "🔐 Authenticating to GCR using GOOGLE_APPLICATION_CREDENTIALS"
-          - gcloud auth activate-service-account --key-file=${GOOGLE_APPLICATION_CREDENTIALS}
-          # Manually log in to GCR until we can test the gcr credentials helper
-          - cat ${GOOGLE_APPLICATION_CREDENTIALS} | docker login -u _json_key --password-stdin https://gcr.io
-          - cat ${GOOGLE_APPLICATION_CREDENTIALS} | docker login -u _json_key --password-stdin https://eu.gcr.io
-          - cat ${GOOGLE_APPLICATION_CREDENTIALS} | docker login -u _json_key --password-stdin https://asia.gcr.io
-          - cat ${GOOGLE_APPLICATION_CREDENTIALS} | docker login -u _json_key --password-stdin https://us.gcr.io
-
   - name: apiserver
     run:
       when: "false or change_in(['/*', '/libcalico-go/', '/api/', '/apiserver/', '/hack/test/certs/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"

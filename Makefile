@@ -75,6 +75,7 @@ check-dockerfiles:
 check-images-availability: bin/yq bin/crane
 	cd ./hack && \
 		OPERATOR_VERSION=$(OPERATOR_VERSION) \
+		CALICO_VERSION=$(CALICO_VERSION) \
 		./check-images-availability.sh
 
 check-language:

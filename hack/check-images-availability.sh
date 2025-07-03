@@ -6,6 +6,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Use provided CRANE or fallback to ../bin/crane (relative to hack/)
 CRANE="${CRANE:-../bin/crane}"
+CALICO_VERSION="${CALICO_VERSION:-}"
+OPERATOR_VERSION="${OPERATOR_VERSION:-}"
 
 if [ ! -x "$CRANE" ]; then
   echo "❌ Error: crane not found or not executable at: $CRANE" >&2
@@ -14,18 +16,63 @@ if [ ! -x "$CRANE" ]; then
 fi
 
 #########################################
+# Print versions if provided
+#########################################
+if [[ -n "$CALICO_VERSION" ]]; then
+  echo "🔧 CALICO_VERSION provided: $CALICO_VERSION"
+else
+  echo "ℹ️  CALICO_VERSION not provided; using tags from manifest as-is"
+fi
+
+if [[ -n "$OPERATOR_VERSION" ]]; then
+  echo "🔧 OPERATOR_VERSION provided: $OPERATOR_VERSION"
+else
+  echo "ℹ️  OPERATOR_VERSION not provided"
+fi
+
+#########################################
 # Step 1: Extract from manifests
 #########################################
 manifest_dir="${SCRIPT_DIR}/../manifests"
-manifest_images=$(
-  grep -rhoE 'image:\s*["'\''"]?[a-z0-9.-]+\.[a-z0-9.-]+/[a-z0-9._/-]+:[a-zA-Z0-9._-]+' "$manifest_dir" \
+
+manifest_images_raw=$(
+  grep -rhoE 'image:\s*["'\''"]?[a-z0-9./_-]+:[a-zA-Z0-9._-]+' "$manifest_dir" \
   | sed -E 's/image:\s*["'\''"]?//' \
-  | grep -v -- '-fips' \
-  | sort -u
+  | grep -v -- '-fips'
+)
+
+# Step 1.1: Normalize and adjust image paths
+manifest_images=$(
+  while IFS= read -r image; do
+    base="${image%%:*}"
+    tag="${image##*:}"
+
+    if [[ "$base" == *.*/* ]]; then
+      # Fully qualified (has domain), e.g., quay.io/calico/node
+      if [[ "$base" == */calico/* && -n "$CALICO_VERSION" ]]; then
+        echo "${base}:${CALICO_VERSION}"
+      else
+        echo "${base}:${tag}"
+      fi
+    elif [[ "$base" == calico/* ]]; then
+      # Implicit quay.io for calico/*
+      if [[ -n "$CALICO_VERSION" ]]; then
+        echo "quay.io/${base}:${CALICO_VERSION}"
+      else
+        echo "quay.io/${base}:${tag}"
+      fi
+    elif [[ "$base" != */* ]]; then
+      # Single name like 'busybox'
+      echo "docker.io/${base}:${tag}"
+    else
+      # Everything else
+      echo "docker.io/${base}:${tag}"
+    fi
+  done <<< "$manifest_images_raw" | sort -u
 )
 
 count=$(echo "$manifest_images" | wc -l)
-echo "📦 Total unique images from manifests (excluding -fips): ${count}"
+echo "📦 Total unique normalized images (excluding -fips): ${count}"
 
 #########################################
 # Step 2: Check availability with retries
