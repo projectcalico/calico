@@ -167,18 +167,10 @@ func DetachClassifier(ifindex, handle, pref int, ingress bool) error {
 	return err
 }
 
-func (o *Obj) SetAttachTypeTcx(progName string, ingress bool) error {
-	attachType := C.BPF_TCX_EGRESS
-	if ingress {
-		attachType = C.BPF_TCX_INGRESS
-	}
-	return o.setAttachType(progName, attachType)
-}
-
-func (o *Obj) setAttachType(progName string, attachType int) error {
+func (o *Obj) SetAttachType(progName string, attachType uint32) error {
 	cProgName := C.CString(progName)
 	defer C.free(unsafe.Pointer(cProgName))
-	_, err := C.bpf_set_attach_type(o.obj, cProgName, C.int(attachType))
+	_, err := C.bpf_set_attach_type(o.obj, cProgName, C.uint(attachType))
 	return err
 }
 
@@ -536,6 +528,9 @@ const (
 	GlobalsRedirectPeer            uint32 = C.CALI_GLOBALS_REDIRECT_PEER
 	GlobalsFlowLogsEnabled         uint32 = C.CALI_GLOBALS_FLOWLOGS_ENABLED
 	GlobalsNATOutgoingExcludeHosts uint32 = C.CALI_GLOBALS_NATOUTGOING_EXCLUDE_HOSTS
+
+	AttachTypeTcxIngress uint32 = C.BPF_TCX_INGRESS
+	AttachTypeTcxEgress  uint32 = C.BPF_TCX_EGRESS
 )
 
 func (t *TcGlobalData) Set(m *Map) error {

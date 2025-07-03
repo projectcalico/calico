@@ -93,7 +93,11 @@ func (ap *AttachPoint) loadObject(file string, configurator bpf.ObjectConfigurat
 func (ap *AttachPoint) attachTCXProgram(binaryToLoad string) error {
 	logCxt := log.WithField("attachPoint", ap)
 	obj, err := ap.loadObject(binaryToLoad, func(obj *libbpf.Obj) error {
-		return obj.SetAttachTypeTcx("cali_tc_preamble", ap.Hook == hook.Ingress)
+		attachType := libbpf.AttachTypeTcxEgress
+		if ap.Hook == hook.Ingress {
+			attachType = libbpf.AttachTypeTcxIngress
+		}
+		return obj.SetAttachType("cali_tc_preamble", attachType)
 	})
 	if err != nil {
 		logCxt.Warn("Failed to load program")
