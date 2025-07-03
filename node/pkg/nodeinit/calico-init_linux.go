@@ -20,16 +20,28 @@ package nodeinit
 import (
 	"bufio"
 	"fmt"
+	"net"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"syscall"
+	"time"
 
+	"github.com/google/gopacket/layers"
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/bpf/bpfdefs"
+	"github.com/projectcalico/calico/felix/bpf/bpfmap"
+	bpfnat "github.com/projectcalico/calico/felix/bpf/nat"
 	"github.com/projectcalico/calico/node/pkg/lifecycle/startup"
 )
+
+type IPPort struct {
+	IP     net.IP
+	Port   uint16
+	IsIPv4 bool
+}
 
 func Run(bestEffort bool) {
 	// Check $CALICO_STARTUP_LOGLEVEL to capture early log statements
@@ -50,6 +62,156 @@ func Run(bestEffort bool) {
 			os.Exit(3)
 		}
 	}
+	serviceAddr := os.Getenv("KUBERNETES_SERVICE_HOST_PORT")
+	endpointAddrs := os.Getenv("KUBERNETES_APISERVER_ENDPOINTS")
+	if serviceAddr != "" && endpointAddrs != "" {
+		_, err = initBPFNetwork(serviceAddr, endpointAddrs)
+		if err != nil {
+			logrus.WithError(err).Error("Failed to initialize BPF network.")
+			if !bestEffort {
+				os.Exit(4)
+			}
+		}
+	}
+}
+
+func initBPFNetwork(serviceAddr, endpointAddrs string) (*bpfmap.Maps, error) {
+	logrus.Info("Initializing BPF network.")
+
+	servicesIPPort, err := parseCommaSeparatedIPPorts(serviceAddr)
+	if err != nil {
+		return nil, err
+	}
+	endpointsIPPort, err := parseCommaSeparatedIPPorts(endpointAddrs)
+	if err != nil {
+		return nil, err
+	}
+
+	countIPv4, countIPv6 := countIPv4AndIPv6(append(endpointsIPPort, servicesIPPort...))
+
+	bpfMaps, err := bpfmap.CreateBPFMaps(countIPv6 > 0)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to create bpf maps.")
+		return nil, err
+	}
+
+	id := uint32(0)
+	for _, service := range servicesIPPort {
+		if service.IsIPv4 {
+			err = bpfMaps.V4.FrontendMap.Update(
+				bpfnat.NewNATKey(service.IP, service.Port, uint8(layers.IPProtocolTCP)).AsBytes(),
+				bpfnat.NewNATValue(id, uint32(countIPv4), 0, 0).AsBytes(),
+			)
+			if err != nil {
+				logrus.WithError(err).Error("Failed to add IPv4 set entry in the frontend map.")
+				return nil, err
+			}
+			// Add the endpoints to the backend map.
+			for index, endpoint := range endpointsIPPort {
+				if endpoint.IsIPv4 {
+					err = bpfMaps.V4.BackendMap.Update(
+						bpfnat.NewNATBackendKey(id, uint32(index)).AsBytes(),
+						bpfnat.NewNATBackendValue(endpoint.IP, endpoint.Port).AsBytes(),
+					)
+					if err != nil {
+						logrus.WithError(err).Error("Failed to add IPv4 set entry in the backend map.")
+						return nil, err
+					}
+				}
+			}
+		} else {
+			err = bpfMaps.V6.FrontendMap.Update(
+				bpfnat.NewNATKeyV6(service.IP, service.Port, uint8(layers.IPProtocolTCP)).AsBytes(),
+				bpfnat.NewNATValueV6(id, uint32(countIPv6), 0, 0).AsBytes(),
+			)
+			if err != nil {
+				logrus.WithError(err).Error("Failed to add IPv6 set entry in the frontend map.")
+				return nil, err
+			}
+			// Add the endpoints to the backend map.
+			for index, endpoint := range endpointsIPPort {
+				if !endpoint.IsIPv4 {
+					err = bpfMaps.V6.BackendMap.Update(
+						bpfnat.NewNATBackendKeyV6(id, uint32(index)).AsBytes(),
+						bpfnat.NewNATBackendValueV6(endpoint.IP, endpoint.Port).AsBytes(),
+					)
+					if err != nil {
+						logrus.WithError(err).Error("Failed to add IPv6 set entry in the backend map.")
+						return nil, err
+					}
+				}
+			}
+		}
+	}
+	logrus.Infof("Included kubernetes service (%s) and endpoints (%s) in the Nat Maps.", serviceAddr, endpointAddrs)
+
+	// Activate the connect-time load balancer.
+	err = bpfnat.InstallConnectTimeLoadBalancer(countIPv4 > 0, countIPv6 > 0, "", "debug", 60*time.Second, true)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to attach connect-time load balancer.")
+		return nil, err
+	}
+	logrus.Info("Connect-time load balancer enabled.")
+
+	return bpfMaps, nil
+}
+
+// parseIPPort parses a string in the format "IP:Port" (IPv4 or IPv6).
+func parseIPPort(addr string) (IPPort, error) {
+	host, portStr, err := net.SplitHostPort(addr)
+	if err != nil {
+		return IPPort{}, fmt.Errorf("invalid address format: %v", err)
+	}
+
+	ip := net.ParseIP(host)
+	if ip == nil {
+		return IPPort{}, fmt.Errorf("invalid IP address: %s", host)
+	}
+
+	portInt, err := strconv.Atoi(portStr)
+	if err != nil || portInt < 0 || portInt > 65535 {
+		return IPPort{}, fmt.Errorf("invalid port: %s", portStr)
+	}
+
+	return IPPort{
+		IP:     ip,
+		Port:   uint16(portInt),
+		IsIPv4: ip.To4() != nil,
+	}, nil
+}
+
+// parseCommaSeparatedIPPorts parses a comma-separated list of "IP:Port" strings.
+func parseCommaSeparatedIPPorts(input string) ([]IPPort, error) {
+	if strings.TrimSpace(input) == "" {
+		return nil, fmt.Errorf("input string is empty")
+	}
+
+	entries := strings.Split(input, ",")
+	results := make([]IPPort, 0, len(entries))
+
+	for _, entry := range entries {
+		entry = strings.TrimSpace(entry)
+		ipPort, err := parseIPPort(entry)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse entry %s: %v", entry, err)
+		}
+		results = append(results, ipPort)
+	}
+
+	return results, nil
+}
+
+// countIPv4AndIPv6 returns the number of IPv4 and IPv6 addresses in the given slice.
+func countIPv4AndIPv6(addrs []IPPort) (int, int) {
+	var countIPv4, countIPv6 int
+	for _, addr := range addrs {
+		if addr.IsIPv4 {
+			countIPv4++
+		} else {
+			countIPv6++
+		}
+	}
+	return countIPv4, countIPv6
 }
 
 func ensureBPFFilesystem() error {
