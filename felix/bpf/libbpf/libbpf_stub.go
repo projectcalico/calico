@@ -178,6 +178,8 @@ const (
 	GlobalsRedirectPeer            uint32 = 12345
 	GlobalsFlowLogsEnabled         uint32 = 12345
 	GlobalsNATOutgoingExcludeHosts uint32 = 12345
+	AttachTypeTcxIngress           uint32 = 12345
+	AttachTypeTcxEgress            uint32 = 12345
 )
 
 func (m *Map) SetSize(size int) error {
