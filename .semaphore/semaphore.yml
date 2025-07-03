@@ -114,7 +114,7 @@ promotions:
 blocks:
   - name: Check images availability
     run:
-      when: "false or change_in(['/charts/', '/manifests/')"
+      when: "false or change_in(['/charts/', '/manifests/'])"
     dependencies: []
     task:
       jobs:
