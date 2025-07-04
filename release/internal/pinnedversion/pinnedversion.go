@@ -257,6 +257,15 @@ func RetrievePinnedOperator(outputDir string) (registry.OperatorComponent, error
 	}, nil
 }
 
+func LoadHashreleaseVersions(outputDir string) (version.Versions, error) {
+	pinnedVersion, err := retrievePinnedVersion(outputDir)
+	if err != nil {
+		return nil, err
+	}
+	versions := version.NewHashreleaseVersions(version.New(pinnedVersion.Title), pinnedVersion.TigeraOperator.Version)
+	return versions, nil
+}
+
 // LoadHashrelease loads the hashrelease from the pinned version file.
 func LoadHashrelease(repoRootDir, outputDir, hashreleaseSrcBaseDir string, latest bool) (*hashreleaseserver.Hashrelease, error) {
 	productBranch, err := utils.GitBranch(repoRootDir)
