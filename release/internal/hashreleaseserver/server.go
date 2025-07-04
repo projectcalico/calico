@@ -92,10 +92,9 @@ func (h *Hashrelease) URL() string {
 //
 // 3. It sets it as the latest for its product stream if specified.
 func Publish(productCode string, h *Hashrelease, cfg *Config) error {
-	srcDir := strings.TrimSuffix(h.Source, "/") + "/"
 	logrus.WithFields(logrus.Fields{
 		"hashrelease": h.Name,
-		"srcDir":      srcDir,
+		"srcDir":      h.Source,
 		"latest":      h.Latest,
 	}).Info("Publishing hashrelease")
 
@@ -124,14 +123,18 @@ func publishFiles(h *Hashrelease, cfg *Config) error {
 	logrus.WithFields(logrus.Fields{
 		"hashrelease": h.Name,
 		"srcDir":      h.Source,
-	}).Info("Publishing hashrelease")
+	}).Info("Publishing hashrelease files")
 	var allErr error
 	// publish to the server via SSH
-	logrus.WithField("hashrelease", h.Name).Debug("Publishing hashrelease via SSH")
+	srcDir := strings.TrimSuffix(h.Source, "/") + "/"
+	logrus.WithFields(logrus.Fields{
+		"hashrelease": h.Name,
+		"srcDir":      srcDir,
+	}).Debug("Publishing hashrelease via SSH")
 	if _, err := command.Run("rsync",
 		[]string{
 			"--stats", "-az", "--delete",
-			fmt.Sprintf("--rsh=%s", cfg.RSHCommand()), h.Source,
+			fmt.Sprintf("--rsh=%s", cfg.RSHCommand()), srcDir,
 			fmt.Sprintf("%s:%s/%s", cfg.HostString(), RemoteDocsPath(cfg.User), h.Name),
 		}); err != nil {
 		logrus.WithError(err).Error("Failed to publish hashrelease via SSH")
