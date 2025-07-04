@@ -87,66 +87,57 @@ func initBPFNetwork(serviceAddr, endpointAddrs string) (*bpfmap.Maps, error) {
 		return nil, err
 	}
 
-	countIPv4, countIPv6 := countIPv4AndIPv6(append(endpointsIPPort, servicesIPPort...))
+	hasIPv4, hasIPv6 := hasIPv4AndIPv6(servicesIPPort)
 
-	bpfMaps, err := bpfmap.CreateBPFMaps(countIPv6 > 0)
+	bpfMaps, err := bpfmap.CreateBPFMaps(hasIPv6)
 	if err != nil {
 		logrus.WithError(err).Error("Failed to create bpf maps.")
 		return nil, err
 	}
 
 	id := uint32(0)
+	countIPv4, countIPv6 := 0, 0
+	for index, endpoint := range endpointsIPPort {
+		if endpoint.IsIPv4 {
+			err = bpfMaps.V4.BackendMap.Update(
+				bpfnat.NewNATBackendKey(id, uint32(index)).AsBytes(),
+				bpfnat.NewNATBackendValue(endpoint.IP, endpoint.Port).AsBytes(),
+			)
+			countIPv4++
+		} else {
+			err = bpfMaps.V6.BackendMap.Update(
+				bpfnat.NewNATBackendKeyV6(id, uint32(index)).AsBytes(),
+				bpfnat.NewNATBackendValueV6(endpoint.IP, endpoint.Port).AsBytes(),
+			)
+			countIPv6++
+		}
+		if err != nil {
+			logrus.WithError(err).Error("Failed to add IP set entry in the backend map.")
+			return nil, err
+		}
+	}
+
 	for _, service := range servicesIPPort {
 		if service.IsIPv4 {
 			err = bpfMaps.V4.FrontendMap.Update(
 				bpfnat.NewNATKey(service.IP, service.Port, uint8(layers.IPProtocolTCP)).AsBytes(),
 				bpfnat.NewNATValue(id, uint32(countIPv4), 0, 0).AsBytes(),
 			)
-			if err != nil {
-				logrus.WithError(err).Error("Failed to add IPv4 set entry in the frontend map.")
-				return nil, err
-			}
-			// Add the endpoints to the backend map.
-			for index, endpoint := range endpointsIPPort {
-				if endpoint.IsIPv4 {
-					err = bpfMaps.V4.BackendMap.Update(
-						bpfnat.NewNATBackendKey(id, uint32(index)).AsBytes(),
-						bpfnat.NewNATBackendValue(endpoint.IP, endpoint.Port).AsBytes(),
-					)
-					if err != nil {
-						logrus.WithError(err).Error("Failed to add IPv4 set entry in the backend map.")
-						return nil, err
-					}
-				}
-			}
 		} else {
 			err = bpfMaps.V6.FrontendMap.Update(
 				bpfnat.NewNATKeyV6(service.IP, service.Port, uint8(layers.IPProtocolTCP)).AsBytes(),
 				bpfnat.NewNATValueV6(id, uint32(countIPv6), 0, 0).AsBytes(),
 			)
-			if err != nil {
-				logrus.WithError(err).Error("Failed to add IPv6 set entry in the frontend map.")
-				return nil, err
-			}
-			// Add the endpoints to the backend map.
-			for index, endpoint := range endpointsIPPort {
-				if !endpoint.IsIPv4 {
-					err = bpfMaps.V6.BackendMap.Update(
-						bpfnat.NewNATBackendKeyV6(id, uint32(index)).AsBytes(),
-						bpfnat.NewNATBackendValueV6(endpoint.IP, endpoint.Port).AsBytes(),
-					)
-					if err != nil {
-						logrus.WithError(err).Error("Failed to add IPv6 set entry in the backend map.")
-						return nil, err
-					}
-				}
-			}
+		}
+		if err != nil {
+			logrus.WithError(err).Error("Failed to add IP set entry in the frontend map.")
+			return nil, err
 		}
 	}
 	logrus.Infof("Included kubernetes service (%s) and endpoints (%s) in the Nat Maps.", serviceAddr, endpointAddrs)
 
 	// Activate the connect-time load balancer.
-	err = bpfnat.InstallConnectTimeLoadBalancer(countIPv4 > 0, countIPv6 > 0, "", "debug", 60*time.Second, true)
+	err = bpfnat.InstallConnectTimeLoadBalancer(hasIPv4, hasIPv6, "", "debug", 60*time.Second, true)
 	if err != nil {
 		logrus.WithError(err).Error("Failed to attach connect-time load balancer.")
 		return nil, err
@@ -201,17 +192,21 @@ func parseCommaSeparatedIPPorts(input string) ([]IPPort, error) {
 	return results, nil
 }
 
-// countIPv4AndIPv6 returns the number of IPv4 and IPv6 addresses in the given slice.
-func countIPv4AndIPv6(addrs []IPPort) (int, int) {
-	var countIPv4, countIPv6 int
+// hasIPv4AndIPv6 checks if the IPPort slice contains at least one IPv4 and/or IPv6 address.
+func hasIPv4AndIPv6(addrs []IPPort) (bool, bool) {
+	var hasIPv4, hasIPv6 bool
 	for _, addr := range addrs {
 		if addr.IsIPv4 {
-			countIPv4++
+			hasIPv4 = true
 		} else {
-			countIPv6++
+			hasIPv6 = true
+		}
+		// Early return if both are found
+		if hasIPv4 && hasIPv6 {
+			return hasIPv4, hasIPv6
 		}
 	}
-	return countIPv4, countIPv6
+	return hasIPv4, hasIPv6
 }
 
 func ensureBPFFilesystem() error {
