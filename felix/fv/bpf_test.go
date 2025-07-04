@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"path"
 	"regexp"
 	"sort"
 	"strconv"
@@ -42,6 +43,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/projectcalico/calico/felix/bpf"
+	"github.com/projectcalico/calico/felix/bpf/bpfdefs"
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
 	"github.com/projectcalico/calico/felix/bpf/conntrack/timeouts"
 	"github.com/projectcalico/calico/felix/bpf/ifstate"
@@ -1014,7 +1016,11 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						cc.ResetExpectations()
 
 						By("handling ingress program removal")
-						tc.Felixes[0].Exec("tc", "filter", "del", "ingress", "dev", w[0].InterfaceName)
+						if os.Getenv("FELIX_FV_BPFATTACHTYPE") == "TC" {
+							tc.Felixes[0].Exec("tc", "filter", "del", "ingress", "dev", w[0].InterfaceName)
+						} else {
+							tc.Felixes[0].Exec("rm", "-rf", path.Join(bpfdefs.TcxPinDir, fmt.Sprintf("%s_ingress", w[0].InterfaceName)))
+						}
 
 						// Removing the ingress program should break connectivity due to the lack of "seen" mark.
 						cc.Expect(None, w[0], w[1])
@@ -1027,45 +1033,67 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						cc.CheckConnectivity()
 
 						// Check the program is put back.
-						Eventually(func() string {
-							out, _ := tc.Felixes[0].ExecOutput("tc", "filter", "show", "ingress", "dev", w[0].InterfaceName)
-							return out
-						}, "5s", "200ms").Should(ContainSubstring("cali_tc_preambl"),
-							fmt.Sprintf("from wep not loaded for %s", w[0].InterfaceName))
+						if os.Getenv("FELIX_FV_BPFATTACHTYPE") == "TC" {
+							Eventually(func() string {
+								out, _ := tc.Felixes[0].ExecOutput("tc", "filter", "show", "ingress", "dev", w[0].InterfaceName)
+								return out
+							}, "5s", "200ms").Should(ContainSubstring("cali_tc_preambl"),
+								fmt.Sprintf("from wep not loaded for %s", w[0].InterfaceName))
+						} else {
+							Eventually(func() string {
+								out, _ := tc.Felixes[0].ExecOutput("stat", path.Join(bpfdefs.TcxPinDir, fmt.Sprintf("%s_ingress", w[0].InterfaceName)))
+								return out
+							}, "5s", "200ms").ShouldNot(ContainSubstring("No such file or directory"),
+								fmt.Sprintf("from wep not loaded for %s", w[0].InterfaceName))
+						}
 
 						By("handling egress program removal")
-						tc.Felixes[0].Exec("tc", "filter", "del", "egress", "dev", w[0].InterfaceName)
+						if os.Getenv("FELIX_FV_BPFATTACHTYPE") == "TC" {
+							tc.Felixes[0].Exec("tc", "filter", "del", "egress", "dev", w[0].InterfaceName)
+						} else {
+							tc.Felixes[0].Exec("rm", "-rf", path.Join(bpfdefs.TcxPinDir, fmt.Sprintf("%s_egress", w[0].InterfaceName)))
+						}
 						// Removing the egress program doesn't stop traffic.
 
 						// Trigger felix to recover.
 						trigger()
 
 						// Check the program is put back.
-						Eventually(func() string {
-							out, _ := tc.Felixes[0].ExecOutput("tc", "filter", "show", "egress", "dev", w[0].InterfaceName)
-							return out
-						}, "5s", "200ms").Should(ContainSubstring("cali_tc_preambl"),
-							fmt.Sprintf("to wep not loaded for %s", w[0].InterfaceName))
+						if os.Getenv("FELIX_FV_BPFATTACHTYPE") == "TC" {
+							Eventually(func() string {
+								out, _ := tc.Felixes[0].ExecOutput("tc", "filter", "show", "egress", "dev", w[0].InterfaceName)
+								return out
+							}, "5s", "200ms").Should(ContainSubstring("cali_tc_preambl"),
+								fmt.Sprintf("to wep not loaded for %s", w[0].InterfaceName))
+						} else {
+							Eventually(func() string {
+								out, _ := tc.Felixes[0].ExecOutput("stat", path.Join(bpfdefs.TcxPinDir, fmt.Sprintf("%s_egress", w[0].InterfaceName)))
+								return out
+							}, "5s", "200ms").ShouldNot(ContainSubstring("No such file or directory"),
+								fmt.Sprintf("from wep not loaded for %s", w[0].InterfaceName))
+						}
 						cc.CheckConnectivity()
 
-						By("Handling qdisc removal")
-						tc.Felixes[0].Exec("tc", "qdisc", "delete", "dev", w[0].InterfaceName, "clsact")
+						if os.Getenv("FELIX_FV_BPFATTACHTYPE") == "TC" {
+							By("Handling qdisc removal")
+							tc.Felixes[0].Exec("tc", "qdisc", "delete", "dev", w[0].InterfaceName, "clsact")
 
-						// Trigger felix to recover.
-						trigger()
+							// Trigger felix to recover.
+							trigger()
 
-						// Check programs are put back.
-						Eventually(func() string {
-							out, _ := tc.Felixes[0].ExecOutput("tc", "filter", "show", "ingress", "dev", w[0].InterfaceName)
-							return out
-						}, "5s", "200ms").Should(ContainSubstring("cali_tc_preambl"),
-							fmt.Sprintf("from wep not loaded for %s", w[0].InterfaceName))
-						Eventually(func() string {
-							out, _ := tc.Felixes[0].ExecOutput("tc", "filter", "show", "egress", "dev", w[0].InterfaceName)
-							return out
-						}, "5s", "200ms").Should(ContainSubstring("cali_tc_preambl"),
-							fmt.Sprintf("to wep not loaded for %s", w[0].InterfaceName))
-						cc.CheckConnectivity()
+							// Check programs are put back.
+							Eventually(func() string {
+								out, _ := tc.Felixes[0].ExecOutput("tc", "filter", "show", "ingress", "dev", w[0].InterfaceName)
+								return out
+							}, "5s", "200ms").Should(ContainSubstring("cali_tc_preambl"),
+								fmt.Sprintf("from wep not loaded for %s", w[0].InterfaceName))
+							Eventually(func() string {
+								out, _ := tc.Felixes[0].ExecOutput("tc", "filter", "show", "egress", "dev", w[0].InterfaceName)
+								return out
+							}, "5s", "200ms").Should(ContainSubstring("cali_tc_preambl"),
+								fmt.Sprintf("to wep not loaded for %s", w[0].InterfaceName))
+							cc.CheckConnectivity()
+						}
 						cc.ResetExpectations()
 
 						// Add a policy to block traffic.

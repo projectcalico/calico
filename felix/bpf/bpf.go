@@ -2257,6 +2257,7 @@ func MapPinDir() string {
 type TcList []struct {
 	DevName string `json:"devname"`
 	ID      int    `json:"id"`
+	ProgID  int    `json:"prog_id"`
 	Name    string `json:"name"`
 	Kind    string `json:"kind"`
 }
@@ -2298,7 +2299,6 @@ func ListTcXDPAttachedProgs(dev ...string) (TcList, XDPList, error) {
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to parse list of attached BPF programs: %w\n%s", err, out)
 	}
-
 	return attached[0].TC, attached[0].XDP, nil
 }
 
@@ -2351,10 +2351,22 @@ func IterPerCpuMapCmdOutput(output []byte, f func(k, v []byte)) error {
 	return nil
 }
 
+type ObjectConfigurator func(obj *libbpf.Obj) error
+
 func LoadObject(file string, data libbpf.GlobalData, mapsToBePinned ...string) (*libbpf.Obj, error) {
+	return LoadObjectWithOptions(file, data, nil, mapsToBePinned...)
+}
+
+func LoadObjectWithOptions(file string, data libbpf.GlobalData, configurator ObjectConfigurator, mapsToBePinned ...string) (*libbpf.Obj, error) {
 	obj, err := libbpf.OpenObject(file)
 	if err != nil {
 		return nil, err
+	}
+
+	if configurator != nil {
+		if err := configurator(obj); err != nil {
+			return nil, err
+		}
 	}
 
 	success := false

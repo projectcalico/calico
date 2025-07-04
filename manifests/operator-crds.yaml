@@ -45,7 +45,7 @@ spec:
               properties:
                 apiServerDeployment:
                   description: |-
-                    APIServerDeployment configures the calico-apiserver (or tigera-apiserver in Enterprise) Deployment. If
+                    APIServerDeployment configures the calico-apiserver Deployment. If
                     used in conjunction with ControlPlaneNodeSelector or ControlPlaneTolerations, then these overrides
                     take precedence.
                   properties:
@@ -29173,6 +29173,20 @@ spec:
                     - DoNothing
                     - Enable
                     - Disable
+                  type: string
+                bpfAttachType:
+                  allOf:
+                    - enum:
+                        - TC
+                        - TCX
+                    - enum:
+                        - tc
+                        - tcx
+                  description: |-
+                    BPFAttachType controls how are the BPF programs at the network interfaces attached.
+                    By default `tcx` is used where available to enable easier coexistence with 3rd party programs.
+                    `tc` can force the legacy method of attaching via a qdisc. `tcx` falls back to `tc` if `tcx` is not available.
+                    [Default: tcx]
                   type: string
                 bpfCTLBLogFilter:
                   description: |-

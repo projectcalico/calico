@@ -18,9 +18,11 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"os"
 	"path"
 	"strings"
 
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 
@@ -35,36 +37,38 @@ import (
 type AttachPoint struct {
 	bpf.AttachPoint
 
-	LogFilter            string
-	LogFilterIdx         int
-	Type                 tcdefs.EndpointType
-	ToOrFrom             tcdefs.ToOrFromEp
-	HookLayoutV4         hook.Layout
-	HookLayoutV6         hook.Layout
-	HostIPv4             net.IP
-	HostIPv6             net.IP
-	HostTunnelIPv4       net.IP
-	HostTunnelIPv6       net.IP
-	IntfIPv4             net.IP
-	IntfIPv6             net.IP
-	FIB                  bool
-	ToHostDrop           bool
-	DSR                  bool
-	DSROptoutCIDRs       bool
-	TunnelMTU            uint16
-	VXLANPort            uint16
-	WgPort               uint16
-	Wg6Port              uint16
-	ExtToServiceConnmark uint32
-	PSNATStart           uint16
-	PSNATEnd             uint16
-	RPFEnforceOption     uint8
-	NATin                uint32
-	NATout               uint32
-	UDPOnly              bool
-	RedirectPeer         bool
-	FlowLogsEnabled      bool
-	OverlayTunnelID      uint32
+	LogFilter               string
+	LogFilterIdx            int
+	Type                    tcdefs.EndpointType
+	ToOrFrom                tcdefs.ToOrFromEp
+	HookLayoutV4            hook.Layout
+	HookLayoutV6            hook.Layout
+	HostIPv4                net.IP
+	HostIPv6                net.IP
+	HostTunnelIPv4          net.IP
+	HostTunnelIPv6          net.IP
+	IntfIPv4                net.IP
+	IntfIPv6                net.IP
+	FIB                     bool
+	ToHostDrop              bool
+	DSR                     bool
+	DSROptoutCIDRs          bool
+	TunnelMTU               uint16
+	VXLANPort               uint16
+	WgPort                  uint16
+	Wg6Port                 uint16
+	ExtToServiceConnmark    uint32
+	PSNATStart              uint16
+	PSNATEnd                uint16
+	RPFEnforceOption        uint8
+	NATin                   uint32
+	NATout                  uint32
+	NATOutgoingExcludeHosts bool
+	UDPOnly                 bool
+	RedirectPeer            bool
+	FlowLogsEnabled         bool
+	OverlayTunnelID         uint32
+	AttachType              string
 }
 
 var ErrDeviceNotFound = errors.New("device not found")
@@ -78,23 +82,73 @@ func (ap *AttachPoint) Log() *log.Entry {
 	})
 }
 
-func (ap *AttachPoint) loadObject(file string) (*libbpf.Obj, error) {
-	obj, err := bpf.LoadObject(file, ap.Configure())
+func (ap *AttachPoint) loadObject(file string, configurator bpf.ObjectConfigurator) (*libbpf.Obj, error) {
+	obj, err := bpf.LoadObjectWithOptions(file, ap.Configure(), configurator)
 	if err != nil {
 		return nil, fmt.Errorf("error loading %s: %w", file, err)
 	}
 	return obj, nil
 }
 
+func (ap *AttachPoint) attachTCXProgram(binaryToLoad string) error {
+	logCxt := log.WithField("attachPoint", ap)
+	obj, err := ap.loadObject(binaryToLoad, func(obj *libbpf.Obj) error {
+		attachType := libbpf.AttachTypeTcxEgress
+		if ap.Hook == hook.Ingress {
+			attachType = libbpf.AttachTypeTcxIngress
+		}
+		return obj.SetAttachType("cali_tc_preamble", attachType)
+	})
+	if err != nil {
+		logCxt.Warn("Failed to load program")
+		return fmt.Errorf("object %w", err)
+	}
+	defer obj.Close()
+	progPinPath := ap.progPinPath()
+	if _, err := os.Stat(progPinPath); err == nil {
+		link, err := libbpf.OpenLink(progPinPath)
+		if err != nil {
+			return fmt.Errorf("error opening link %s : %w", progPinPath, err)
+		}
+		defer link.Close()
+		if err := link.Update(obj, "cali_tc_preamble"); err != nil {
+			return fmt.Errorf("error updating program %s : %w", progPinPath, err)
+		}
+		return nil
+	}
+	link, err := obj.AttachTCX("cali_tc_preamble", ap.Iface)
+	if err != nil {
+		return err
+	}
+	defer link.Close()
+	err = link.Pin(progPinPath)
+	if err != nil {
+		return fmt.Errorf("error pinning link %w", err)
+	}
+	return nil
+}
+
 // AttachProgram attaches a BPF program from a file to the TC attach point
 func (ap *AttachPoint) AttachProgram() error {
 	logCxt := log.WithField("attachPoint", ap)
-
 	// By now the attach type specific generic set of programs is loaded and we
 	// only need to load and configure the preamble that will pass the
 	// configuration further to the selected set of programs.
 
 	binaryToLoad := path.Join(bpfdefs.ObjectDir, "tc_preamble.o")
+	if ap.AttachType == string(apiv3.BPFAttachOptionTCX) {
+		err := ap.attachTCXProgram(binaryToLoad)
+		if err != nil {
+			return fmt.Errorf("error attaching tcx program %s:%s:%w", ap.Iface, ap.Hook, err)
+		}
+		// Remove the clsact qdisc so that it removes any existing tc programs from the previous runs.
+		err = RemoveQdisc(ap.Iface)
+		if err != nil {
+			log.Errorf("error removing qdisc from %s:%s", ap.Iface, err)
+		}
+		logCxt.Info("Program attached to tcx.")
+		return nil
+	}
 
 	/* XXX we should remember the tag of the program and skip the rest if the tag is
 	* still the same */
@@ -104,7 +158,7 @@ func (ap *AttachPoint) AttachProgram() error {
 	}
 
 	prio, handle := findFilterPriority(progsAttached)
-	obj, err := ap.loadObject(binaryToLoad)
+	obj, err := ap.loadObject(binaryToLoad, nil)
 	if err != nil {
 		logCxt.Warn("Failed to load program")
 		return fmt.Errorf("object %w", err)
@@ -116,17 +170,55 @@ func (ap *AttachPoint) AttachProgram() error {
 		logCxt.Warnf("Failed to attach to TC section cali_tc_preamble")
 		return err
 	}
-	logCxt.Info("Program attached to TC.")
+	logCxt.Info("Program attached to tc.")
+	// Remove any tcx program.
+	err = ap.detachTcxProgram()
+	if err != nil {
+		logCxt.Warnf("error removing tcx program from %s", err)
+	}
 	return nil
 }
 
-func (ap *AttachPoint) DetachProgram() error {
+func (ap *AttachPoint) progPinPath() string {
+	return path.Join(bpfdefs.TcxPinDir, fmt.Sprintf("%s_%s", strings.Replace(ap.Iface, ".", "", -1), ap.Hook))
+}
+
+func (ap *AttachPoint) detachTcxProgram() error {
+	progPinPath := ap.progPinPath()
+	if _, err := os.Stat(progPinPath); os.IsNotExist(err) {
+		return nil
+	}
+	link, err := libbpf.OpenLink(progPinPath)
+	if err != nil {
+		return fmt.Errorf("error opening link %s:%w", progPinPath, err)
+	}
+	defer link.Close()
+	err = link.Detach()
+	if err != nil {
+		return fmt.Errorf("error detaching link %s:%w", progPinPath, err)
+	}
+	os.Remove(progPinPath)
+	return nil
+}
+
+func (ap *AttachPoint) detachTcProgram() error {
 	progsToClean, err := ListAttachedPrograms(ap.Iface, ap.Hook.String(), true)
 	if err != nil {
 		return err
 	}
-
 	return ap.detachPrograms(progsToClean)
+}
+
+func (ap *AttachPoint) DetachProgram() error {
+	err := ap.detachTcxProgram()
+	if err != nil {
+		log.Warnf("error detaching tcx program from %s hook %s : %s", ap.Iface, ap.Hook, err)
+	}
+	err = ap.detachTcProgram()
+	if err != nil {
+		log.Warnf("error detaching tc program from %s hook %s : %s", ap.Iface, ap.Hook, err)
+	}
+	return nil
 }
 
 func (ap *AttachPoint) detachPrograms(progsToClean []attachedProg) error {
@@ -166,6 +258,26 @@ type attachedProg struct {
 	Pref   int
 	Handle uint32
 	Filter *netlink.Filter
+}
+
+func ListAttachedTcxPrograms(iface, attachHook string) ([]string, error) {
+	link, err := netlink.LinkByName(iface)
+	if err != nil {
+		return nil, fmt.Errorf("error getting link for %s:%w", iface, err)
+	}
+	progId, _, progCnt, err := libbpf.ProgQueryTcx(link.Attrs().Index, attachHook == hook.Ingress.String())
+	if err != nil {
+		return nil, fmt.Errorf("error querying program for %s:%s:%w", iface, attachHook, err)
+	}
+	progNames := []string{}
+	for i := range progCnt {
+		name, err := libbpf.ProgName(progId[i])
+		if err != nil {
+			continue
+		}
+		progNames = append(progNames, name)
+	}
+	return progNames, nil
 }
 
 func ListAttachedPrograms(iface, hook string, includeLegacy bool) ([]attachedProg, error) {
@@ -343,6 +455,10 @@ func (ap *AttachPoint) Configure() *libbpf.TcGlobalData {
 		globalData.Flags |= libbpf.GlobalsFlowLogsEnabled
 	}
 
+	if ap.NATOutgoingExcludeHosts {
+		globalData.Flags |= libbpf.GlobalsNATOutgoingExcludeHosts
+	}
+
 	globalData.HostTunnelIPv4 = globalData.HostIPv4
 	globalData.HostTunnelIPv6 = globalData.HostIPv6
 
@@ -375,4 +491,34 @@ func (ap *AttachPoint) Configure() *libbpf.TcGlobalData {
 	globalData.IfaceName = string(in)
 
 	return globalData
+}
+
+func IsTcxSupported() bool {
+	name := "testTcx"
+	la := netlink.NewLinkAttrs()
+	la.Name = name
+	la.Flags = net.FlagUp
+	var veth netlink.Link = &netlink.Veth{
+		LinkAttrs: la,
+		PeerName:  name + "b",
+	}
+	err := netlink.LinkAdd(veth)
+	if err != nil {
+		return false
+	}
+
+	defer func() {
+		if err := netlink.LinkDel(veth); err != nil {
+			log.Warnf("failed delete veth interface testTcx %s", err)
+		}
+	}()
+
+	binaryToLoad := path.Join(bpfdefs.ObjectDir, "tcx_test.o")
+	obj, err := bpf.LoadObject(binaryToLoad, &libbpf.TcGlobalData{})
+	if err != nil {
+		return false
+	}
+	defer obj.Close()
+	_, err = obj.AttachTCX("cali_tcx_test", name)
+	return err == nil
 }
