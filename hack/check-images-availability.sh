@@ -7,7 +7,6 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Use provided CRANE or fallback to ../bin/crane (relative to hack/)
 CRANE="${CRANE:-../bin/crane}"
 CALICO_VERSION="${CALICO_VERSION:-}"
-OPERATOR_VERSION="${OPERATOR_VERSION:-}"
 
 if [ ! -x "$CRANE" ]; then
   echo "❌ Error: crane not found or not executable at: $CRANE" >&2
@@ -19,15 +18,9 @@ fi
 # Print versions if provided
 #########################################
 if [[ -n "$CALICO_VERSION" ]]; then
-  echo "🔧 CALICO_VERSION provided: $CALICO_VERSION"
+  echo "CALICO_VERSION provided: $CALICO_VERSION"
 else
-  echo "ℹ️  CALICO_VERSION not provided; using tags from manifest as-is"
-fi
-
-if [[ -n "$OPERATOR_VERSION" ]]; then
-  echo "🔧 OPERATOR_VERSION provided: $OPERATOR_VERSION"
-else
-  echo "ℹ️  OPERATOR_VERSION not provided"
+  echo "CALICO_VERSION not provided; using tags from manifest as-is"
 fi
 
 #########################################
@@ -72,7 +65,7 @@ manifest_images=$(
 )
 
 count=$(echo "$manifest_images" | wc -l)
-echo "📦 Total unique normalized images (excluding -fips): ${count}"
+echo "Total unique images (excluding -fips): ${count}"
 
 #########################################
 # Step 2: Check availability with retries
@@ -88,9 +81,9 @@ while IFS= read -r image; do
       success=1
       break
     else
-      echo "⚠️  Attempt $attempt failed for: $image"
+      echo "Attempt $attempt failed for: $image"
       if [ "$attempt" -eq 3 ]; then
-        echo "🔍 Used crane at: $(realpath "$CRANE" 2>/dev/null || echo '<unresolvable>')"
+        echo "Used crane at: $(realpath "$CRANE" 2>/dev/null || echo '<unresolvable>')"
       fi
       sleep 3
     fi
