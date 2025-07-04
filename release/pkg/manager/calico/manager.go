@@ -282,7 +282,7 @@ func (r *CalicoManager) Build() error {
 		}()
 	}
 
-	if err = r.buildContainerImages(); err != nil {
+	if err = r.BuildContainerImages(); err != nil {
 		return err
 	}
 
@@ -983,7 +983,7 @@ func (r *CalicoManager) buildReleaseTar(ver string, targetDir string) error {
 	return nil
 }
 
-func (r *CalicoManager) buildContainerImages() error {
+func (r *CalicoManager) BuildContainerImages() error {
 	if !r.buildImages {
 		logrus.Info("Skip building container images")
 		return nil
