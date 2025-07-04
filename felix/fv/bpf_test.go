@@ -2140,7 +2140,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						)
 						cc.CheckConnectivity()
 
-						Eventually(func() int { return tcpdump.MatchCount("unreach") }).
+						Eventually(func() int { return tcpdump.MatchCount("unreach") }, "5s", "300ms").
 							Should(BeNumerically(">", 0))
 						// XXX
 						// Expect(tcpdump.MatchCount("bad csum")).To(Equal(0))
