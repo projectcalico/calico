@@ -35,7 +35,6 @@ import (
 	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/internal/utils"
 	"github.com/projectcalico/calico/release/internal/version"
-	errr "github.com/projectcalico/calico/release/pkg/errors"
 	"github.com/projectcalico/calico/release/pkg/manager/operator"
 )
 
@@ -528,28 +527,13 @@ func (r *CalicoManager) publishToHashreleaseServer() error {
 		logrus.Info("Skipping publishing to hashrelease server")
 		return nil
 	}
-	logrus.WithField("note", r.hashrelease.Note).Info("Publishing hashrelease")
-	dir := r.hashrelease.Source + "/"
-	if _, err := r.runner.Run("rsync",
-		[]string{
-			"--stats", "-az", "--delete",
-			fmt.Sprintf("--rsh=%s", r.hashreleaseConfig.RSHCommand()), dir,
-			fmt.Sprintf("%s:%s/%s", r.hashreleaseConfig.HostString(), hashreleaseserver.RemoteDocsPath(r.hashreleaseConfig.User), r.hashrelease.Name),
-		}, nil); err != nil {
-		logrus.WithError(err).Error("Failed to publish hashrelease")
-		return err
-	}
-	if err := hashreleaseserver.AddToHashreleaseLibrary(r.hashrelease, &r.hashreleaseConfig); err != nil {
-		logrus.WithError(err).Error("Failed to add hashrelease to library")
-		return err
-	}
-	if r.hashrelease.Latest {
-		if err := hashreleaseserver.SetHashreleaseAsLatest(r.hashrelease, r.productCode, &r.hashreleaseConfig); err != nil {
-			logrus.WithError(err).Error("Failed to set hashrelease as latest")
-			return err
-		}
-	}
-	return nil
+	logrus.WithFields(logrus.Fields{
+		"version": r.calicoVersion,
+		"name":    r.hashrelease.Name,
+		"note":    r.hashrelease.Note,
+	}).Info("Publishing hashrelease")
+
+	return hashreleaseserver.Publish(r.productCode, &r.hashrelease, &r.hashreleaseConfig)
 }
 
 func (r *CalicoManager) PublishRelease() error {
@@ -646,17 +630,18 @@ func (r *CalicoManager) componentImages() map[string]string {
 }
 
 // checkHashreleaseImagesPublished checks that the images required for the hashrelease exist in the specified registries.
-func (r *CalicoManager) checkHashreleaseImagesPublished() ([]registry.Component, error) {
+func (r *CalicoManager) checkHashreleaseImagesPublished() error {
 	logrus.Info("Checking images required for hashrelease have already been published")
-	numOfComponents := len(r.imageComponents)
+	componentImages := r.componentImages()
+	numOfComponents := len(componentImages)
 	if numOfComponents == 0 {
 		logrus.Error("No images to check")
-		return nil, fmt.Errorf("no images to check")
+		return fmt.Errorf("no images to check")
 	}
 
 	resultsCh := make(chan imageExistsResult, numOfComponents)
 
-	for name, image := range r.componentImages() {
+	for name, image := range componentImages {
 		go func(name string, image string, ch chan imageExistsResult) {
 			exists, err := registry.CheckImage(image)
 			resultsCh <- imageExistsResult{
@@ -669,19 +654,19 @@ func (r *CalicoManager) checkHashreleaseImagesPublished() ([]registry.Component,
 	}
 
 	var resultsErr error
-	unavailableImages := []registry.Component{}
-	for range r.imageComponents {
+	missingImages := []string{}
+	for range componentImages {
 		result := <-resultsCh
 		if result.err != nil {
-			unavailableImages = append(unavailableImages, r.imageComponents[result.name])
+			resultsErr = errors.Join(resultsErr, fmt.Errorf("error checking %s: %w", result.image, result.err))
 		} else if !result.exists {
-			unavailableImages = append(unavailableImages, r.imageComponents[result.name])
+			missingImages = append(missingImages, result.image)
 		}
 	}
-	if len(unavailableImages) > 0 {
-		resultsErr = fmt.Errorf("unable to validate all images: %d images failed to validate", len(unavailableImages))
+	if len(missingImages) > 0 {
+		return errors.Join(fmt.Errorf("the following images required for hashrelease have not been published: %s", strings.Join(missingImages, ", ")), resultsErr)
 	}
-	return unavailableImages, resultsErr
+	return resultsErr
 }
 
 // Check that the environment has the necessary prereqs for publishing hashrelease
@@ -695,14 +680,8 @@ func (r *CalicoManager) hashreleasePrereqs() error {
 	if r.publishImages {
 		return r.assertImageVersions()
 	} else {
-		missingImages, err := r.checkHashreleaseImagesPublished()
-		if err != nil {
-			return fmt.Errorf("errors checking images: %s", err)
-		} else if len(missingImages) > 0 {
-			return errr.ErrHashreleaseMissingImages{
-				Hashrelease:   r.hashrelease,
-				MissingImages: missingImages,
-			}
+		if err := r.checkHashreleaseImagesPublished(); err != nil {
+			return err
 		}
 		logrus.Info("All images required for hashrelease have been published")
 	}
@@ -910,10 +889,10 @@ func (r *CalicoManager) collectGithubArtifacts() error {
 // generateManifests re-generates manifests using the specified calico and operator versions.
 func (r *CalicoManager) generateManifests() error {
 	env := os.Environ()
-	env = append(env, fmt.Sprintf("CALICO_VERSION=%s", r.calicoVersion))
+	env = append(env, fmt.Sprintf("PRODUCT_VERSION=%s", r.calicoVersion))
 	env = append(env, fmt.Sprintf("OPERATOR_VERSION=%s", r.operatorVersion))
-	env = append(env, fmt.Sprintf("OPERATOR_REGISTRY=%s", r.operatorRegistry))
-	env = append(env, fmt.Sprintf("OPERATOR_IMAGE=%s", r.operatorImage))
+	env = append(env, fmt.Sprintf("OPERATOR_REGISTRY_OVERRIDE=%s", r.operatorRegistry))
+	env = append(env, fmt.Sprintf("OPERATOR_IMAGE_OVERRIDE=%s", r.operatorImage))
 	if !slices.Equal(r.imageRegistries, defaultRegistries) {
 		env = append(env, fmt.Sprintf("REGISTRY=%s", r.imageRegistries[0]))
 	}
