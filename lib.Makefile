@@ -1249,6 +1249,25 @@ bin/yq:
 	tar -zxvf $(TMP)/yq4.tar.gz -C $(TMP)
 	mv $(TMP)/yq_linux_$(BUILDARCH) bin/yq
 
+# This setup is used to download and install the 'crane' binary into the local bin/ directory.
+# The binary will be placed at: ./bin/crane
+# Normalize architecture for go-containerregistry filenames
+CRANE_BUILDARCH := $(shell uname -m | sed 's/amd64/x86_64/;s/x86_64/x86_64/;s/aarch64/arm64/')
+ifeq ($(CRANE_BUILDARCH),)
+  $(error Unsupported or unknown architecture: $(shell uname -m))
+endif
+CRANE_VERSION := v0.20.6
+CRANE_FILENAME := go-containerregistry_Linux_$(CRANE_BUILDARCH).tar.gz
+CRANE_URL := https://github.com/google/go-containerregistry/releases/download/$(CRANE_VERSION)/$(CRANE_FILENAME)
+
+# Install crane binary into bin/
+bin/crane:
+	mkdir -p bin
+	$(eval TMP := $(shell mktemp -d))
+	curl -sSfL --retry 5 -o $(TMP)/crane.tar.gz $(CRANE_URL)
+	tar -xzf $(TMP)/crane.tar.gz -C $(TMP) crane
+	mv $(TMP)/crane bin/crane
+
 ###############################################################################
 # Common functions for launching a local Kubernetes control plane.
 ###############################################################################
