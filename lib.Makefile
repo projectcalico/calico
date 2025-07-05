@@ -1256,7 +1256,6 @@ CRANE_BUILDARCH := $(shell uname -m | sed 's/amd64/x86_64/;s/x86_64/x86_64/;s/aa
 ifeq ($(CRANE_BUILDARCH),)
   $(error Unsupported or unknown architecture: $(shell uname -m))
 endif
-CRANE_VERSION := v0.20.6
 CRANE_FILENAME := go-containerregistry_Linux_$(CRANE_BUILDARCH).tar.gz
 CRANE_URL := https://github.com/google/go-containerregistry/releases/download/$(CRANE_VERSION)/$(CRANE_FILENAME)
 

@@ -1,4 +1,20 @@
 #!/bin/bash
+
+# Copyright (c) 2022 Tigera, Inc. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+
 set -euo pipefail
 
 # Resolve script directory
@@ -6,7 +22,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Use provided CRANE or fallback to ../bin/crane (relative to hack/)
 CRANE="${CRANE:-../bin/crane}"
-CALICO_VERSION="${CALICO_VERSION:-}"
+YQ="${YQ:-${SCRIPT_DIR}/../bin/yq}"
 
 if [ ! -x "$CRANE" ]; then
   echo "Error: crane not found or not executable at: $CRANE" >&2
@@ -15,13 +31,16 @@ if [ ! -x "$CRANE" ]; then
 fi
 
 #########################################
-# Print versions if provided
+# Get registry and version info
 #########################################
-if [[ -n "$CALICO_VERSION" ]]; then
-  echo "CALICO_VERSION provided: $CALICO_VERSION"
-else
-  echo "CALICO_VERSION not provided; using tags from manifest as-is"
-fi
+defaultRegistry="$($YQ .node.registry < "$SCRIPT_DIR/../charts/calico/values.yaml" | cut -d'/' -f1)"
+REGISTRY="${REGISTRY:-$defaultRegistry}"
+
+defaultCalicoVersion="$($YQ .version < "$SCRIPT_DIR/../charts/calico/values.yaml")"
+CALICO_VERSION="${PRODUCT_VERSION:-$defaultCalicoVersion}"
+
+echo "Using REGISTRY: $REGISTRY"
+echo "Using CALICO_VERSION: $CALICO_VERSION"
 
 #########################################
 # Step 1: Extract from manifests
@@ -42,17 +61,17 @@ manifest_images=$(
 
     if [[ "$base" == *.*/* ]]; then
       # Fully qualified (has domain), e.g., quay.io/calico/node
-      if [[ "$base" == */calico/* && -n "$CALICO_VERSION" ]]; then
+      if [[ "$base" == *calico/* && -n "$CALICO_VERSION" ]]; then
         echo "${base}:${CALICO_VERSION}"
       else
         echo "${base}:${tag}"
       fi
     elif [[ "$base" == calico/* ]]; then
-      # Implicit quay.io for calico/*
+      # Implicit registry for calico/*
       if [[ -n "$CALICO_VERSION" ]]; then
-        echo "quay.io/${base}:${CALICO_VERSION}"
+        echo "${REGISTRY}/calico/${base##*/}:${CALICO_VERSION}"
       else
-        echo "quay.io/${base}:${tag}"
+        echo "${REGISTRY}/calico/${base##*/}:${tag}"
       fi
     elif [[ "$base" != */* ]]; then
       # Single name like 'busybox'
