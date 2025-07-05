@@ -61,6 +61,10 @@ func (o *Obj) FirstMap() (*Map, error) {
 	panic("LIBBPF syscall stub")
 }
 
+func (o *Obj) SetAttachType(progName string, attachType uint32) error {
+	panic("LIBBPF syscall stub")
+}
+
 func (m *Map) NextMap() (*Map, error) {
 	panic("LIBBPF syscall stub")
 }
@@ -166,13 +170,16 @@ func (m *Map) IsMapInternal() bool {
 }
 
 const (
-	GlobalsIPv6Enabled      uint32 = 1
-	GlobalsRPFOptionEnabled uint32 = 16
-	GlobalsRPFOptionStrict  uint32 = 32
-	GlobalsNoDSRCidrs       uint32 = 12345
-	GlobalsLoUDPOnly        uint32 = 12345
-	GlobalsRedirectPeer     uint32 = 12345
-	GlobalsFlowLogsEnabled  uint32 = 12345
+	GlobalsIPv6Enabled             uint32 = 1
+	GlobalsRPFOptionEnabled        uint32 = 16
+	GlobalsRPFOptionStrict         uint32 = 32
+	GlobalsNoDSRCidrs              uint32 = 12345
+	GlobalsLoUDPOnly               uint32 = 12345
+	GlobalsRedirectPeer            uint32 = 12345
+	GlobalsFlowLogsEnabled         uint32 = 12345
+	GlobalsNATOutgoingExcludeHosts uint32 = 12345
+	AttachTypeTcxIngress           uint32 = 12345
+	AttachTypeTcxEgress            uint32 = 12345
 )
 
 func (m *Map) SetSize(size int) error {
@@ -204,5 +211,17 @@ func (t *CTCleanupGlobalData) Set(m *Map) error {
 }
 
 func (t *CTLBGlobalData) Set(m *Map) error {
+	panic("LIBBPF syscall stub")
+}
+
+func ProgQueryTcx(ifindex int, ingress bool) ([64]uint32, [64]uint32, uint32, error) {
+	panic("LIBBPF syscall stub")
+}
+
+func ProgName(id uint32) (string, error) {
+	panic("LIBBPF syscall stub")
+}
+
+func (o *Obj) AttachTCX(secName, ifName string) (*Link, error) {
 	panic("LIBBPF syscall stub")
 }

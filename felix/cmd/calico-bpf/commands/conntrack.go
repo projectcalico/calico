@@ -26,11 +26,10 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 
-	//"golang.org/x/sys/unix"
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
 	v2 "github.com/projectcalico/calico/felix/bpf/conntrack/v2"
-	v3 "github.com/projectcalico/calico/felix/bpf/conntrack/v3"
+	v4 "github.com/projectcalico/calico/felix/bpf/conntrack/v4"
 	"github.com/projectcalico/calico/felix/bpf/maps"
 )
 
@@ -74,7 +73,7 @@ func newConntrackDumpCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Command.Flags().IntVarP((&cmd.version), "ver", "v", 3, "version to dump from")
+	cmd.Command.Flags().IntVarP((&cmd.version), "ver", "v", 4, "version to dump from")
 	cmd.Command.Flags().BoolVar((&cmd.raw), "raw", false, "dump the raw conntrack table as is. For version < 3 it is always raw")
 	cmd.Command.Args = cmd.Args
 	cmd.Command.Run = cmd.Run
@@ -174,7 +173,7 @@ func (cmd *conntrackDumpCmd) prettyDump(k conntrack.KeyInterface, v conntrack.Va
 
 	switch v.Type() {
 	case conntrack.TypeNormal:
-		if v.Flags()&v3.FlagSrcDstBA != 0 {
+		if v.Flags()&v4.FlagSrcDstBA != 0 {
 			cmd.Printf("%s %s:%d -> %s:%d ", protoStr(k.Proto()), k.AddrB(), k.PortB(), k.AddrA(), k.PortA())
 		} else {
 			cmd.Printf("%s %s:%d -> %s:%d ", protoStr(k.Proto()), k.AddrA(), k.PortA(), k.AddrB(), k.PortB())
@@ -182,7 +181,7 @@ func (cmd *conntrackDumpCmd) prettyDump(k conntrack.KeyInterface, v conntrack.Va
 	case conntrack.TypeNATForward:
 		return
 	case conntrack.TypeNATReverse:
-		if v.Flags()&v3.FlagSrcDstBA != 0 {
+		if v.Flags()&v4.FlagSrcDstBA != 0 {
 			cmd.Printf("%s %s:%d -> %s:%d -> %s:%d ",
 				protoStr(k.Proto()), k.AddrB(), k.PortB(), d.OrigDst, d.OrigPort, k.AddrA(), k.PortA())
 		} else {
@@ -195,7 +194,7 @@ func (cmd *conntrackDumpCmd) prettyDump(k conntrack.KeyInterface, v conntrack.Va
 		}
 	}
 
-	if v.Flags()&v3.FlagHostPSNAT != 0 {
+	if v.Flags()&v4.FlagHostPSNAT != 0 {
 		cmd.Printf("source port changed from %d ", d.OrigSPort)
 	}
 
@@ -305,7 +304,7 @@ func newConntrackRemoveCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Command.Flags().IntVarP((&cmd.version), "ver", "v", 3, "version to remove from")
+	cmd.Command.Flags().IntVarP((&cmd.version), "ver", "v", 4, "version to remove from")
 	cmd.Command.Args = cmd.Args
 	cmd.Command.Run = cmd.Run
 
@@ -399,7 +398,7 @@ func newConntrackCleanCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Command.Flags().IntVarP((&cmd.version), "ver", "v", 3, "conntrack version to clean")
+	cmd.Command.Flags().IntVarP((&cmd.version), "ver", "v", 4, "conntrack version to clean")
 	cmd.Command.Args = cmd.Args
 	cmd.Command.Run = cmd.Run
 
@@ -447,7 +446,7 @@ func newConntrackCreateCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Command.Flags().IntVarP((&cmd.version), "ver", "v", 3, "conntrack version to create")
+	cmd.Command.Flags().IntVarP((&cmd.version), "ver", "v", 4, "conntrack version to create")
 	cmd.Command.Args = cmd.Args
 	cmd.Command.Run = cmd.Run
 
@@ -482,7 +481,7 @@ func newConntrackWriteCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Command.Flags().IntVarP((&cmd.version), "ver", "v", 3, "conntrack map version")
+	cmd.Command.Flags().IntVarP((&cmd.version), "ver", "v", 4, "conntrack map version")
 	cmd.Command.Args = cmd.Args
 	cmd.Command.Run = cmd.Run
 
@@ -581,7 +580,7 @@ func newConntrackStatsCmd() *cobra.Command {
 		protos: make(map[int]int),
 	}
 
-	cmd.Command.Flags().IntVarP((&cmd.version), "ver", "v", 3, "conntrack map version")
+	cmd.Command.Flags().IntVarP((&cmd.version), "ver", "v", 4, "conntrack map version")
 
 	cmd.Command.Args = cmd.Args
 	cmd.Command.Run = cmd.Run

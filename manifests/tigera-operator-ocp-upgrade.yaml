@@ -326,6 +326,7 @@ rules:
       - projectcalico.org
     resources:
       - ipamconfigurations
+      - clusterinformations
     verbs:
       - get
       - list
@@ -367,6 +368,9 @@ rules:
       - mutatingwebhookconfigurations
     verbs:
       - delete
+      - get
+      - list
+      - watch
   # Needed for operator lock
   - apiGroups:
       - coordination.k8s.io
