@@ -311,6 +311,10 @@ func (c *WorkloadEndpointClient) List(
 			opts.FieldSelector = fields.OneTermEqualSelector("metadata.name", wepID.Pod).String()
 		}
 
+		if l.LabelSelector != "" {
+			opts.LabelSelector = l.LabelSelector
+		}
+
 		podList, err := c.clientSet.CoreV1().Pods(l.Namespace).List(ctx, opts)
 		if err != nil {
 			return nil, err
