@@ -33,6 +33,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/bpf/bpfdefs"
 	"github.com/projectcalico/calico/felix/bpf/bpfmap"
+	"github.com/projectcalico/calico/felix/bpf/maps"
 	bpfnat "github.com/projectcalico/calico/felix/bpf/nat"
 	"github.com/projectcalico/calico/node/pkg/lifecycle/startup"
 )
@@ -62,7 +63,7 @@ func Run(bestEffort bool) {
 			os.Exit(3)
 		}
 	}
-	serviceAddr := os.Getenv("KUBERNETES_SERVICE_HOST_PORT")
+	serviceAddr := os.Getenv("KUBERNETES_SERVICE_IPS_PORTS")
 	endpointAddrs := os.Getenv("KUBERNETES_APISERVER_ENDPOINTS")
 	if serviceAddr != "" && endpointAddrs != "" {
 		_, err = initBPFNetwork(serviceAddr, endpointAddrs)
@@ -97,18 +98,12 @@ func initBPFNetwork(serviceAddr, endpointAddrs string) (*bpfmap.Maps, error) {
 
 	id := uint32(0)
 	countIPv4, countIPv6 := 0, 0
-	for index, endpoint := range endpointsIPPort {
+	for _, endpoint := range endpointsIPPort {
 		if endpoint.IsIPv4 {
-			err = bpfMaps.V4.BackendMap.Update(
-				bpfnat.NewNATBackendKey(id, uint32(index)).AsBytes(),
-				bpfnat.NewNATBackendValue(endpoint.IP, endpoint.Port).AsBytes(),
-			)
+			err = updateBackendMap(bpfMaps.V4.BackendMap, bpfnat.NewNATBackendKey, bpfnat.NewNATBackendValueIntf, endpoint, id, uint32(countIPv4))
 			countIPv4++
 		} else {
-			err = bpfMaps.V6.BackendMap.Update(
-				bpfnat.NewNATBackendKeyV6(id, uint32(index)).AsBytes(),
-				bpfnat.NewNATBackendValueV6(endpoint.IP, endpoint.Port).AsBytes(),
-			)
+			err = updateBackendMap(bpfMaps.V6.BackendMap, bpfnat.NewNATBackendKeyV6, bpfnat.NewNATBackendValueV6Intf, endpoint, id, uint32(countIPv6))
 			countIPv6++
 		}
 		if err != nil {
@@ -119,15 +114,9 @@ func initBPFNetwork(serviceAddr, endpointAddrs string) (*bpfmap.Maps, error) {
 
 	for _, service := range servicesIPPort {
 		if service.IsIPv4 {
-			err = bpfMaps.V4.FrontendMap.Update(
-				bpfnat.NewNATKey(service.IP, service.Port, uint8(layers.IPProtocolTCP)).AsBytes(),
-				bpfnat.NewNATValue(id, uint32(countIPv4), 0, 0).AsBytes(),
-			)
+			err = updateFrontendMap(bpfMaps.V4.FrontendMap, bpfnat.NewNATKeyIntf, bpfnat.NewNATValue, service, id, uint32(countIPv4))
 		} else {
-			err = bpfMaps.V6.FrontendMap.Update(
-				bpfnat.NewNATKeyV6(service.IP, service.Port, uint8(layers.IPProtocolTCP)).AsBytes(),
-				bpfnat.NewNATValueV6(id, uint32(countIPv6), 0, 0).AsBytes(),
-			)
+			err = updateFrontendMap(bpfMaps.V6.FrontendMap, bpfnat.NewNATKeyV6Intf, bpfnat.NewNATValueV6, service, id, uint32(countIPv6))
 		}
 		if err != nil {
 			logrus.WithError(err).Error("Failed to add IP set entry in the frontend map.")
@@ -145,6 +134,20 @@ func initBPFNetwork(serviceAddr, endpointAddrs string) (*bpfmap.Maps, error) {
 	logrus.Info("Connect-time load balancer enabled.")
 
 	return bpfMaps, nil
+}
+
+func updateBackendMap(backendMap maps.Map, newNATKeyFn func(uint32, uint32) bpfnat.BackendKey, newNATValueFn func(net.IP, uint16) bpfnat.BackendValueInterface, endpoint IPPort, id uint32, ordinal uint32) error {
+	return backendMap.Update(
+		newNATKeyFn(id, ordinal).AsBytes(),
+		newNATValueFn(endpoint.IP, endpoint.Port).AsBytes(),
+	)
+}
+
+func updateFrontendMap(frontendMap maps.Map, newNATKeyFn func(net.IP, uint16, uint8) bpfnat.FrontendKeyInterface, newNATValueFn func(uint32, uint32, uint32, uint32) bpfnat.FrontendValue, service IPPort, id uint32, count uint32) error {
+	return frontendMap.Update(
+		newNATKeyFn(service.IP, service.Port, uint8(layers.IPProtocolTCP)).AsBytes(),
+		newNATValueFn(id, count, 0, 0).AsBytes(),
+	)
 }
 
 // parseIPPort parses a string in the format "IP:Port" (IPv4 or IPv6).
