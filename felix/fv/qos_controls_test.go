@@ -219,7 +219,7 @@ var _ = infrastructure.DatastoreDescribe(
 
 		Context("With bandwidth limits", func() {
 			BeforeEach(func() {
-				if BPFMode() && BPFAttachType() == "TC" {
+				if BPFMode() && BPFAttachType() == "tc" {
 					Skip("Skipping QoS control bandwidth tests on BPF TC attach mode.")
 				}
 			})
