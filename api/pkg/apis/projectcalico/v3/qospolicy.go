@@ -83,18 +83,48 @@ type QoSRule struct {
 	Protocol *numorstring.Protocol `json:"protocol,omitempty" validate:"omitempty"`
 
 	// Destination contains the match criteria that apply to destination entity.
-	Destination EntityRule `json:"destination,omitempty" validate:"omitempty"`
+	Destination QoSEntityRule `json:"destination,omitempty" validate:"omitempty"`
 
 	// Metadata contains additional information for this rule
 	Metadata *RuleMetadata `json:"metadata,omitempty" validate:"omitempty"`
 }
 
+// A QoSEntityRule is a sub-component of a Rule comprising the match criteria specific
+// to a particular entity (that is destination).
+//
+// A destination QoSEntityRule matches the destination endpoint and terminating traffic.
+type QoSEntityRule struct {
+	// Nets is an optional field that restricts the rule to only apply to traffic that
+	// terminates at IP addresses in any of the given subnets.
+	Nets []string `json:"nets,omitempty" validate:"omitempty,dive,net"`
+
+	// Selector is an optional field that contains a selector expression (see Policy for
+	// sample syntax).  Only traffic that terminates at endpoints matching the selector will be matched.
+	Selector string `json:"selector,omitempty" validate:"omitempty,selector"`
+
+	// NamespaceSelector is an optional field that contains a selector expression. Only traffic
+	// that terminates at endpoints within the selected namespaces will be
+	// matched. When both NamespaceSelector and another selector are defined on the same rule, then only
+	// workload endpoints that are matched by both selectors will be selected by the rule.
+	//
+	// An empty NamespaceSelector implies the Selector applies to workload endpoints across all namespaces.
+	NamespaceSelector string `json:"namespaceSelector,omitempty" validate:"omitempty,selector"`
+
+	// Ports is an optional field that restricts the rule to only apply to traffic that has a
+	// destination port that matches one of these ranges/values. This value is a
+	// list of integers or strings that represent ranges of ports.
+	//
+	// Since only some protocols have ports, if any ports are specified it requires the
+	// Protocol match in the Rule to be set to "TCP" or "UDP".
+	Ports []numorstring.Port `json:"ports,omitempty" validate:"omitempty,dive"`
+}
+
 type QoSAction struct {
-	// Mark is an optional field that states what DSCP value must be set on the selected traffic.
+	// DSCP is an optional field that states what DSCP value must be set on the selected traffic.
 	// The value can be either an integer between 0 and 63 (inclusive) or one of the following string values:
 	// "DF", "EF", "AF11", "AF12", "AF13", "AF21", "AF22", "AF23", "AF31", "AF32", "AF33", "AF41", "AF42", "AF43",
 	// "CS0", "CS1", "CS2", "CS3", "CS4", "CS5", "CS6".
-	Mark *numorstring.DSCP `json:"mark,omitempty" validate:"omitempty"`
+	DSCP *numorstring.DSCP `json:"dscp,omitempty" validate:"omitempty"`
 }
 
 // New QoSPolicy creates a new (zeroed) QoSPolicy struct with the TypeMetadata

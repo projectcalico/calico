@@ -101,6 +101,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.ProfileSpec":                        schema_pkg_apis_projectcalico_v3_ProfileSpec(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.ProtoPort":                          schema_pkg_apis_projectcalico_v3_ProtoPort(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.QoSAction":                          schema_pkg_apis_projectcalico_v3_QoSAction(ref),
+		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.QoSEntityRule":                      schema_pkg_apis_projectcalico_v3_QoSEntityRule(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.QoSPolicy":                          schema_pkg_apis_projectcalico_v3_QoSPolicy(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.QoSPolicyList":                      schema_pkg_apis_projectcalico_v3_QoSPolicyList(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.QoSPolicySpec":                      schema_pkg_apis_projectcalico_v3_QoSPolicySpec(ref),
@@ -5536,9 +5537,9 @@ func schema_pkg_apis_projectcalico_v3_QoSAction(ref common.ReferenceCallback) co
 			SchemaProps: spec.SchemaProps{
 				Type: []string{"object"},
 				Properties: map[string]spec.Schema{
-					"mark": {
+					"dscp": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Mark is an optional field that states what DSCP value must be set on the selected traffic. The value can be either an integer between 0 and 63 (inclusive) or one of the following string values: \"DF\", \"EF\", \"AF11\", \"AF12\", \"AF13\", \"AF21\", \"AF22\", \"AF23\", \"AF31\", \"AF32\", \"AF33\", \"AF41\", \"AF42\", \"AF43\", \"CS0\", \"CS1\", \"CS2\", \"CS3\", \"CS4\", \"CS5\", \"CS6\".",
+							Description: "DSCP is an optional field that states what DSCP value must be set on the selected traffic. The value can be either an integer between 0 and 63 (inclusive) or one of the following string values: \"DF\", \"EF\", \"AF11\", \"AF12\", \"AF13\", \"AF21\", \"AF22\", \"AF23\", \"AF31\", \"AF32\", \"AF33\", \"AF41\", \"AF42\", \"AF43\", \"CS0\", \"CS1\", \"CS2\", \"CS3\", \"CS4\", \"CS5\", \"CS6\".",
 							Ref:         ref("github.com/projectcalico/api/pkg/lib/numorstring.DSCP"),
 						},
 					},
@@ -5547,6 +5548,63 @@ func schema_pkg_apis_projectcalico_v3_QoSAction(ref common.ReferenceCallback) co
 		},
 		Dependencies: []string{
 			"github.com/projectcalico/api/pkg/lib/numorstring.DSCP"},
+	}
+}
+
+func schema_pkg_apis_projectcalico_v3_QoSEntityRule(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "A QoSEntityRule is a sub-component of a Rule comprising the match criteria specific to a particular entity (that is destination).\n\nA destination QoSEntityRule matches the destination endpoint and terminating traffic.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"nets": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Nets is an optional field that restricts the rule to only apply to traffic that terminates at IP addresses in any of the given subnets.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: "",
+										Type:    []string{"string"},
+										Format:  "",
+									},
+								},
+							},
+						},
+					},
+					"selector": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Selector is an optional field that contains a selector expression (see Policy for sample syntax).  Only traffic that terminates at endpoints matching the selector will be matched.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"namespaceSelector": {
+						SchemaProps: spec.SchemaProps{
+							Description: "NamespaceSelector is an optional field that contains a selector expression. Only traffic that terminates at endpoints within the selected namespaces will be matched. When both NamespaceSelector and another selector are defined on the same rule, then only workload endpoints that are matched by both selectors will be selected by the rule.\n\nAn empty NamespaceSelector implies the Selector applies to workload endpoints across all namespaces.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"ports": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Ports is an optional field that restricts the rule to only apply to traffic that has a destination port that matches one of these ranges/values. This value is a list of integers or strings that represent ranges of ports.\n\nSince only some protocols have ports, if any ports are specified it requires the Protocol match in the Rule to be set to \"TCP\" or \"UDP\".",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref("github.com/projectcalico/api/pkg/lib/numorstring.Port"),
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"github.com/projectcalico/api/pkg/lib/numorstring.Port"},
 	}
 }
 
@@ -5719,7 +5777,7 @@ func schema_pkg_apis_projectcalico_v3_QoSRule(ref common.ReferenceCallback) comm
 						SchemaProps: spec.SchemaProps{
 							Description: "Destination contains the match criteria that apply to destination entity.",
 							Default:     map[string]interface{}{},
-							Ref:         ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.EntityRule"),
+							Ref:         ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.QoSEntityRule"),
 						},
 					},
 					"metadata": {
@@ -5733,7 +5791,7 @@ func schema_pkg_apis_projectcalico_v3_QoSRule(ref common.ReferenceCallback) comm
 			},
 		},
 		Dependencies: []string{
-			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.EntityRule", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.QoSAction", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.RuleMetadata", "github.com/projectcalico/api/pkg/lib/numorstring.Protocol"},
+			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.QoSAction", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.QoSEntityRule", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.RuleMetadata", "github.com/projectcalico/api/pkg/lib/numorstring.Protocol"},
 	}
 }
 

@@ -3360,7 +3360,7 @@ spec:
                     properties:
                       action:
                         properties:
-                          mark:
+                          dscp:
                             properties:
                               numVal:
                                 type: integer
@@ -3382,20 +3382,6 @@ spec:
                             items:
                               type: string
                             type: array
-                          notNets:
-                            items:
-                              type: string
-                            type: array
-                          notPorts:
-                            items:
-                              anyOf:
-                                - type: integer
-                                - type: string
-                              pattern: ^.*
-                              x-kubernetes-int-or-string: true
-                            type: array
-                          notSelector:
-                            type: string
                           ports:
                             items:
                               anyOf:
@@ -3406,22 +3392,6 @@ spec:
                             type: array
                           selector:
                             type: string
-                          serviceAccounts:
-                            properties:
-                              names:
-                                items:
-                                  type: string
-                                type: array
-                              selector:
-                                type: string
-                            type: object
-                          services:
-                            properties:
-                              name:
-                                type: string
-                              namespace:
-                                type: string
-                            type: object
                         type: object
                       ipVersion:
                         type: integer
