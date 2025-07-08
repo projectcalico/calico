@@ -28,6 +28,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/calico/felix/dataplane/common"
 	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/generictables"
@@ -867,6 +868,7 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 				"1",
 				nil,
 				false,
+				string(apiv3.BPFAttachOptionTCX),
 				hepListener,
 				common.NewCallbacks(),
 				true,
