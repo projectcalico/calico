@@ -259,6 +259,10 @@ func BPFMode() bool {
 	return os.Getenv("FELIX_FV_ENABLE_BPF") == "true"
 }
 
+func BPFAttachType() string {
+	return strings.ToLower(os.Getenv("FELIX_FV_BPFATTACHTYPE"))
+}
+
 func BPFIPv6Support() bool {
 	return false
 }
@@ -1016,7 +1020,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						cc.ResetExpectations()
 
 						By("handling ingress program removal")
-						if os.Getenv("FELIX_FV_BPFATTACHTYPE") == "TC" {
+						if BPFAttachType() == "tc" {
 							tc.Felixes[0].Exec("tc", "filter", "del", "ingress", "dev", w[0].InterfaceName)
 						} else {
 							tc.Felixes[0].Exec("rm", "-rf", path.Join(bpfdefs.TcxPinDir, fmt.Sprintf("%s_ingress", w[0].InterfaceName)))
@@ -1033,7 +1037,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						cc.CheckConnectivity()
 
 						// Check the program is put back.
-						if os.Getenv("FELIX_FV_BPFATTACHTYPE") == "TC" {
+						if BPFAttachType() == "tc" {
 							Eventually(func() string {
 								out, _ := tc.Felixes[0].ExecOutput("tc", "filter", "show", "ingress", "dev", w[0].InterfaceName)
 								return out
@@ -1048,7 +1052,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						}
 
 						By("handling egress program removal")
-						if os.Getenv("FELIX_FV_BPFATTACHTYPE") == "TC" {
+						if BPFAttachType() == "tc" {
 							tc.Felixes[0].Exec("tc", "filter", "del", "egress", "dev", w[0].InterfaceName)
 						} else {
 							tc.Felixes[0].Exec("rm", "-rf", path.Join(bpfdefs.TcxPinDir, fmt.Sprintf("%s_egress", w[0].InterfaceName)))
@@ -1059,7 +1063,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						trigger()
 
 						// Check the program is put back.
-						if os.Getenv("FELIX_FV_BPFATTACHTYPE") == "TC" {
+						if BPFAttachType() == "tc" {
 							Eventually(func() string {
 								out, _ := tc.Felixes[0].ExecOutput("tc", "filter", "show", "egress", "dev", w[0].InterfaceName)
 								return out
@@ -1074,7 +1078,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						}
 						cc.CheckConnectivity()
 
-						if os.Getenv("FELIX_FV_BPFATTACHTYPE") == "TC" {
+						if BPFAttachType() == "tc" {
 							By("Handling qdisc removal")
 							tc.Felixes[0].Exec("tc", "qdisc", "delete", "dev", w[0].InterfaceName, "clsact")
 
