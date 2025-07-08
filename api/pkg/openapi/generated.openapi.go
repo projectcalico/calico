@@ -100,6 +100,12 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.ProfileList":                        schema_pkg_apis_projectcalico_v3_ProfileList(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.ProfileSpec":                        schema_pkg_apis_projectcalico_v3_ProfileSpec(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.ProtoPort":                          schema_pkg_apis_projectcalico_v3_ProtoPort(ref),
+		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.QoSAction":                          schema_pkg_apis_projectcalico_v3_QoSAction(ref),
+		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.QoSEntityRule":                      schema_pkg_apis_projectcalico_v3_QoSEntityRule(ref),
+		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.QoSPolicy":                          schema_pkg_apis_projectcalico_v3_QoSPolicy(ref),
+		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.QoSPolicyList":                      schema_pkg_apis_projectcalico_v3_QoSPolicyList(ref),
+		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.QoSPolicySpec":                      schema_pkg_apis_projectcalico_v3_QoSPolicySpec(ref),
+		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.QoSRule":                            schema_pkg_apis_projectcalico_v3_QoSRule(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.RouteTableIDRange":                  schema_pkg_apis_projectcalico_v3_RouteTableIDRange(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.RouteTableRange":                    schema_pkg_apis_projectcalico_v3_RouteTableRange(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.Rule":                               schema_pkg_apis_projectcalico_v3_Rule(ref),
@@ -124,6 +130,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.TierList":                           schema_pkg_apis_projectcalico_v3_TierList(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.TierSpec":                           schema_pkg_apis_projectcalico_v3_TierSpec(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.WorkloadEndpointControllerConfig":   schema_pkg_apis_projectcalico_v3_WorkloadEndpointControllerConfig(ref),
+		"github.com/projectcalico/api/pkg/lib/numorstring.DSCP":                                     schema_api_pkg_lib_numorstring_DSCP(ref),
 		"github.com/projectcalico/api/pkg/lib/numorstring.Port":                                     schema_api_pkg_lib_numorstring_Port(ref),
 		"github.com/projectcalico/api/pkg/lib/numorstring.Protocol":                                 schema_api_pkg_lib_numorstring_Protocol(ref),
 		"github.com/projectcalico/api/pkg/lib/numorstring.Uint8OrString":                            schema_api_pkg_lib_numorstring_Uint8OrString(ref),
@@ -5531,6 +5538,270 @@ func schema_pkg_apis_projectcalico_v3_ProtoPort(ref common.ReferenceCallback) co
 	}
 }
 
+func schema_pkg_apis_projectcalico_v3_QoSAction(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"dscp": {
+						SchemaProps: spec.SchemaProps{
+							Description: "DSCP is an optional field that states what DSCP value must be set on the selected traffic. The value can be either an integer between 0 and 63 (inclusive) or one of the following string values: \"DF\", \"EF\", \"AF11\", \"AF12\", \"AF13\", \"AF21\", \"AF22\", \"AF23\", \"AF31\", \"AF32\", \"AF33\", \"AF41\", \"AF42\", \"AF43\", \"CS0\", \"CS1\", \"CS2\", \"CS3\", \"CS4\", \"CS5\", \"CS6\".",
+							Ref:         ref("github.com/projectcalico/api/pkg/lib/numorstring.DSCP"),
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"github.com/projectcalico/api/pkg/lib/numorstring.DSCP"},
+	}
+}
+
+func schema_pkg_apis_projectcalico_v3_QoSEntityRule(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "A QoSEntityRule is a sub-component of a Rule comprising the match criteria specific to a particular entity (that is destination).\n\nA destination QoSEntityRule matches the destination endpoint and terminating traffic.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"nets": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Nets is an optional field that restricts the rule to only apply to traffic that terminates at IP addresses in any of the given subnets.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: "",
+										Type:    []string{"string"},
+										Format:  "",
+									},
+								},
+							},
+						},
+					},
+					"selector": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Selector is an optional field that contains a selector expression (see Policy for sample syntax).  Only traffic that terminates at endpoints matching the selector will be matched.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"namespaceSelector": {
+						SchemaProps: spec.SchemaProps{
+							Description: "NamespaceSelector is an optional field that contains a selector expression. Only traffic that terminates at endpoints within the selected namespaces will be matched. When both NamespaceSelector and another selector are defined on the same rule, then only workload endpoints that are matched by both selectors will be selected by the rule.\n\nAn empty NamespaceSelector implies the Selector applies to workload endpoints across all namespaces.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"ports": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Ports is an optional field that restricts the rule to only apply to traffic that has a destination port that matches one of these ranges/values. This value is a list of integers or strings that represent ranges of ports.\n\nSince only some protocols have ports, if any ports are specified it requires the Protocol match in the Rule to be set to \"TCP\" or \"UDP\".",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref("github.com/projectcalico/api/pkg/lib/numorstring.Port"),
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"github.com/projectcalico/api/pkg/lib/numorstring.Port"},
+	}
+}
+
+func schema_pkg_apis_projectcalico_v3_QoSPolicy(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+						},
+					},
+					"spec": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.QoSPolicySpec"),
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.QoSPolicySpec", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+	}
+}
+
+func schema_pkg_apis_projectcalico_v3_QoSPolicyList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "QoSPolicyList is a list of QoSPolicy resources.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+						},
+					},
+					"items": {
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.QoSPolicy"),
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"items"},
+			},
+		},
+		Dependencies: []string{
+			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.QoSPolicy", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+	}
+}
+
+func schema_pkg_apis_projectcalico_v3_QoSPolicySpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "QoSPolicySpec contains the specification of QoS policies.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"order": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Order is an optional field that specifies the order in which the policy is applied. Policies with higher \"order\" are applied after those with lower order within the same tier. If the order is omitted, it may be considered to be \"infinite\" - i.e. the policy will be applied last. Policies with identical order will be applied in alphanumerical order based on the Policy \"Name\".",
+							Type:        []string{"number"},
+							Format:      "double",
+						},
+					},
+					"selector": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The selector is an expression used to pick out the endpoints that the policy should be applied to.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"namespaceSelector": {
+						SchemaProps: spec.SchemaProps{
+							Description: "NamespaceSelector is an optional field for an expression used to select a pod based on namespaces.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"egress": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The set of QoS Policies",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.QoSRule"),
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.QoSRule"},
+	}
+}
+
+func schema_pkg_apis_projectcalico_v3_QoSRule(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "QoSRule defines a QoS rule",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"action": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.QoSAction"),
+						},
+					},
+					"ipVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "IPVersion is an optional field that restricts the rule to only match a specific IP version.",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+					"protocol": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Protocol is an optional field that restricts the rule to only apply to traffic of a specific IP protocol. Required if any of the EntityRules contain Ports (because ports only apply to certain protocols).\n\nMust be one of these string values: \"TCP\", \"UDP\", \"ICMP\", \"ICMPv6\", \"SCTP\", \"UDPLite\" or an integer in the range 1-255.",
+							Ref:         ref("github.com/projectcalico/api/pkg/lib/numorstring.Protocol"),
+						},
+					},
+					"destination": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Destination contains the match criteria that apply to destination entity.",
+							Default:     map[string]interface{}{},
+							Ref:         ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.QoSEntityRule"),
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Metadata contains additional information for this rule",
+							Ref:         ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.RuleMetadata"),
+						},
+					},
+				},
+				Required: []string{"action"},
+			},
+		},
+		Dependencies: []string{
+			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.QoSAction", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.QoSEntityRule", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.RuleMetadata", "github.com/projectcalico/api/pkg/lib/numorstring.Protocol"},
+	}
+}
+
 func schema_pkg_apis_projectcalico_v3_RouteTableIDRange(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
@@ -6615,6 +6886,17 @@ func schema_pkg_apis_projectcalico_v3_WorkloadEndpointControllerConfig(ref commo
 		},
 		Dependencies: []string{
 			"k8s.io/apimachinery/pkg/apis/meta/v1.Duration"},
+	}
+}
+
+func schema_api_pkg_lib_numorstring_DSCP(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type:   numorstring.DSCP{}.OpenAPISchemaType(),
+				Format: numorstring.DSCP{}.OpenAPISchemaFormat(),
+			},
+		},
 	}
 }
 

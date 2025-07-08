@@ -41,6 +41,7 @@ import (
 	calicopolicy "github.com/projectcalico/calico/apiserver/pkg/registry/projectcalico/networkpolicy"
 	caliconetworkset "github.com/projectcalico/calico/apiserver/pkg/registry/projectcalico/networkset"
 	calicoprofile "github.com/projectcalico/calico/apiserver/pkg/registry/projectcalico/profile"
+	calicoqospolicy "github.com/projectcalico/calico/apiserver/pkg/registry/projectcalico/qospolicy"
 	"github.com/projectcalico/calico/apiserver/pkg/registry/projectcalico/server"
 	calicostagedgpolicy "github.com/projectcalico/calico/apiserver/pkg/registry/projectcalico/stagedglobalnetworkpolicy"
 	calicostagedk8spolicy "github.com/projectcalico/calico/apiserver/pkg/registry/projectcalico/stagedkubernetesnetworkpolicy"
@@ -527,6 +528,28 @@ func (p RESTStorageProvider) NewV3Storage(
 		[]string{"blockaffinity", "affinity", "affinities"},
 	)
 
+	qosPolicyRESTOptions, err := restOptionsGetter.GetRESTOptions(calico.Resource("qospolicies"), nil)
+	if err != nil {
+		return nil, err
+	}
+	qosPolicyOpts := server.NewOptions(
+		etcd.Options{
+			RESTOptions:   qosPolicyRESTOptions,
+			Capacity:      1000,
+			ObjectType:    calicoqospolicy.EmptyObject(),
+			ScopeStrategy: calicoqospolicy.NewStrategy(scheme),
+			NewListFunc:   calicoqospolicy.NewList,
+			GetAttrsFunc:  calicoqospolicy.GetAttrs,
+			Trigger:       nil,
+		},
+		calicostorage.Options{
+			RESTOptions: blockAffinityRESTOptions,
+		},
+		p.StorageType,
+		authorizer,
+		[]string{"qospolicy", "qospolicies", "qosp"},
+	)
+
 	storage := map[string]rest.Storage{}
 	storage["tiers"] = rESTInPeace(calicotier.NewREST(scheme, *tierOpts))
 	storage["networkpolicies"] = rESTInPeace(calicopolicy.NewREST(scheme, *policyOpts, calicoLister, watchManager))
@@ -548,6 +571,7 @@ func (p RESTStorageProvider) NewV3Storage(
 	storage["caliconodestatuses"] = rESTInPeace(caliconodestatus.NewREST(scheme, *caliconodestatusOpts))
 	storage["ipamconfigurations"] = rESTInPeace(calicoipamconfig.NewREST(scheme, *ipamconfigOpts))
 	storage["blockaffinities"] = rESTInPeace(calicoblockaffinity.NewREST(scheme, *blockAffinityOpts))
+	storage["qospolicies"] = rESTInPeace(calicoqospolicy.NewREST(scheme, *qosPolicyOpts))
 
 	kubeControllersConfigsStorage, kubeControllersConfigsStatusStorage, err := calicokubecontrollersconfig.NewREST(scheme, *kubeControllersConfigsOpts)
 	if err != nil {
