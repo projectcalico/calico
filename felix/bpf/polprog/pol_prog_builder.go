@@ -1216,6 +1216,10 @@ func (p *Builder) maybeSplitProgram() bool {
 	return true
 }
 
+func (p *Builder) TrampolineStride() int {
+	return p.trampolineStride
+}
+
 func SubProgramJumpIdx(polProgIdx, subProgIdx, stride int) int {
 	return polProgIdx + subProgIdx*stride
 }
