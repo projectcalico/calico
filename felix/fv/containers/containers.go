@@ -873,7 +873,7 @@ func (c *Container) NumIPSets() int {
 // programs are listed (i.e. the type that we use).
 func (c *Container) NumTCBPFProgs(ifaceName string) int {
 	var total int
-	if os.Getenv("FELIX_FV_BPFATTACHTYPE") == "TC" {
+	if strings.ToLower(os.Getenv("FELIX_FV_BPFATTACHTYPE")) == "tc" {
 		for _, dir := range []string{"ingress", "egress"} {
 			out, err := c.ExecOutput("tc", "filter", "show", "dev", ifaceName, dir)
 			Expect(err).NotTo(HaveOccurred())

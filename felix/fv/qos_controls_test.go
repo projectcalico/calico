@@ -176,9 +176,6 @@ var _ = infrastructure.DatastoreDescribe(
 
 		BeforeEach(func() {
 			infra = getInfra()
-			if BPFMode() {
-				Skip("Skipping QoS control tests on BPF mode.")
-			}
 			topt = infrastructure.DefaultTopologyOptions()
 			tc, _ = infrastructure.StartNNodeTopology(2, topt, infra)
 
@@ -221,6 +218,11 @@ var _ = infrastructure.DatastoreDescribe(
 		}
 
 		Context("With bandwidth limits", func() {
+			BeforeEach(func() {
+				if BPFMode() && BPFAttachType() == "tc" {
+					Skip("Skipping QoS control bandwidth tests on BPF TC attach mode.")
+				}
+			})
 			getQdisc := func() string {
 				out, err := tc.Felixes[1].ExecOutput("tc", "qdisc")
 				logrus.Infof("tc qdisc output:\n%v", out)
@@ -312,6 +314,11 @@ var _ = infrastructure.DatastoreDescribe(
 		})
 
 		Context("With packet rate limits", func() {
+			BeforeEach(func() {
+				if BPFMode() {
+					Skip("Skipping QoS control packet rate tests on BPF mode.")
+				}
+			})
 			It("should limit packet rate correctly", func() {
 				By("Starting iperf2 server on workload 0")
 				serverCmd := w[0].ExecCommand("iperf", "-s", "-u", "-i1")
@@ -449,6 +456,11 @@ var _ = infrastructure.DatastoreDescribe(
 		})
 
 		Context("With connection limits", func() {
+			BeforeEach(func() {
+				if BPFMode() {
+					Skip("Skipping QoS control connection limit tests on BPF mode.")
+				}
+			})
 			tryConnect := func(w *workload.Workload, ip string, port int, opts workload.PersistentConnectionOpts) func() error {
 				return func() error {
 					logrus.Info("Trying to start connection")
