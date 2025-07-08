@@ -18,9 +18,17 @@ import (
 	"errors"
 	"fmt"
 
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+
+	"github.com/projectcalico/calico/felix/bpf/tc"
 	"github.com/projectcalico/calico/felix/dataplane/linux/qos"
 	"github.com/projectcalico/calico/felix/proto"
 )
+
+// Bandwidth QoS controls are supported on iptables and nftables modes, and on BPF mode if 'tcx' attach mode is used.
+func (m *endpointManager) isQoSBandwidthSupported() bool {
+	return !m.bpfEnabled || (m.bpfEnabled && m.bpfAttachType == string(apiv3.BPFAttachOptionTCX) && tc.IsTcxSupported())
+}
 
 func (m *endpointManager) maybeUpdateQoSBandwidth(old, new *proto.WorkloadEndpoint) error {
 	var errs []error

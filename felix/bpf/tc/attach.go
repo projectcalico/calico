@@ -21,6 +21,7 @@ import (
 	"os"
 	"path"
 	"strings"
+	"sync"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
@@ -493,7 +494,7 @@ func (ap *AttachPoint) Configure() *libbpf.TcGlobalData {
 	return globalData
 }
 
-func IsTcxSupported() bool {
+var IsTcxSupported = sync.OnceValue(func() bool {
 	name := "testTcx"
 	la := netlink.NewLinkAttrs()
 	la.Name = name
@@ -521,4 +522,4 @@ func IsTcxSupported() bool {
 	defer obj.Close()
 	_, err = obj.AttachTCX("cali_tcx_test", name)
 	return err == nil
-}
+})
