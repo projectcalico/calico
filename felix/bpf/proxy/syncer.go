@@ -429,9 +429,6 @@ func (s *Syncer) applySvc(skey svcKey, sinfo Service, eps []k8sp.Endpoint) error
 	if err != nil {
 		return err
 	}
-
-	s.updateMaglevService(skey, sinfo, eps)
-
 	s.newSvcMap[skey] = svcInfo{
 		id:         id,
 		count:      count,
@@ -623,7 +620,6 @@ func (s *Syncer) apply(state DPSyncerState) error {
 	for sname, sinfo := range state.SvcMap {
 		svc := sinfo.(Service)
 		hintsAnnotation := svc.HintsAnnotation()
-
 		log.WithField("service", sname).Debug("Applying service")
 		skey := getSvcKey(sname, "")
 
@@ -818,9 +814,13 @@ func (s *Syncer) updateService(skey svcKey, sinfo Service, id uint32, eps []k8sp
 	}
 
 	flags := uint32(0)
-	flags |= nat.NATFlgNatMaglev
 	if sinfo.InternalPolicyLocal() {
 		flags |= nat.NATFlgInternalLocal
+	}
+
+	if sinfo.UseConsistentHashing() {
+		flags |= nat.NATFlgNatMaglev
+		s.writeMaglevBackends(skey, sinfo, eps)
 	}
 
 	if err := s.writeSvc(sinfo, id, cnt, local, flags); err != nil {
@@ -846,7 +846,7 @@ func newDefaultMaglev() *maglev.ConsistentHash {
 	return maglev.NewConsistentHash(maglev.WithHash(fnv.New32(), fnv.New32()))
 }
 
-func (s *Syncer) updateMaglevService(skey svcKey, sinfo Service, eps []k8sp.Endpoint) {
+func (s *Syncer) writeMaglevBackends(skey svcKey, sinfo Service, eps []k8sp.Endpoint) {
 	if len(eps) == 0 || eps == nil {
 		log.WithFields(log.Fields{"service": skey, "name": sinfo.String()}).Info("Skipping maglev service update for empty endpoint list")
 		return
