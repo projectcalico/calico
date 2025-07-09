@@ -538,6 +538,20 @@ func (r *CalicoManager) PublishRelease() error {
 		return fmt.Errorf("failed to publish container images: %s", err)
 	}
 
+	if r.imageScanning {
+		logrus.Info("Sending images to ISS")
+		imageList := []string{}
+		for _, component := range r.imageComponents {
+			imageList = append(imageList, component.String())
+		}
+		imageScanner := imagescanner.New(r.imageScanningConfig)
+		err := imageScanner.Scan(r.productCode, imageList, r.hashrelease.Stream, false, r.tmpDir)
+		if err != nil {
+			// Error is logged and ignored as this is not considered a fatal error
+			logrus.WithError(err).Error("Failed to scan images")
+		}
+	}
+
 	if r.isHashRelease {
 		if err := r.publishToHashreleaseServer(); err != nil {
 			return fmt.Errorf("failed to publish hashrelease: %s", err)
@@ -639,20 +653,6 @@ func (r *CalicoManager) hashreleasePrereqs() error {
 			}
 		}
 		logrus.Info("All images required for hashrelease have been published")
-	}
-
-	if r.imageScanning {
-		logrus.Info("Sending images to ISS")
-		imageList := []string{}
-		for _, component := range r.imageComponents {
-			imageList = append(imageList, component.String())
-		}
-		imageScanner := imagescanner.New(r.imageScanningConfig)
-		err := imageScanner.Scan(r.productCode, imageList, r.hashrelease.Stream, false, r.tmpDir)
-		if err != nil {
-			// Error is logged and ignored as this is not considered a fatal error
-			logrus.WithError(err).Error("Failed to scan images")
-		}
 	}
 
 	return nil
