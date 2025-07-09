@@ -20,9 +20,10 @@ import (
 	"os"
 	"path/filepath"
 
+	"context"
+
 	"github.com/sirupsen/logrus"
 	cli "github.com/urfave/cli/v3"
-	"golang.org/x/net/context"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 	"github.com/projectcalico/calico/release/internal/command"
