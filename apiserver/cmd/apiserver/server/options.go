@@ -25,6 +25,8 @@ import (
 	"os"
 	"time"
 
+	"k8s.io/apiserver/pkg/authorization/union"
+
 	"github.com/projectcalico/api/pkg/openapi"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/pflag"
@@ -151,6 +153,11 @@ func (o *CalicoServerOptions) Config() (*apiserver.Config, error) {
 		if err := o.RecommendedOptions.Authorization.ApplyTo(&serverConfig.Authorization); err != nil {
 			return nil, err
 		}
+		// Add an authorizer that allows the kube-controller-manager user to access all resources.
+		serverConfig.Authorization.Authorizer = union.New(
+			NewAllowUser([]string{kubeControllerManagerUser}),
+			serverConfig.Authorization.Authorizer)
+
 	} else {
 		// Validating Admission Policy is generally available in k8s 1.30 [1].
 		// The admission plugin "ValidatingAdmissionPolicy" fails to initialize due to
