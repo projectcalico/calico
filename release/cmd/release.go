@@ -12,9 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Package main is the entrypoint for the release tool; this file contains release management code
 package main
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -23,7 +25,7 @@ import (
 	"strings"
 
 	"github.com/sirupsen/logrus"
-	cli "github.com/urfave/cli/v2"
+	cli "github.com/urfave/cli/v3"
 
 	"github.com/projectcalico/calico/release/internal/outputs"
 	"github.com/projectcalico/calico/release/internal/pinnedversion"
@@ -41,10 +43,10 @@ func releaseOutputDir(repoRootDir, version string) string {
 // The release command suite is used to build and publish official releases.
 func releaseCommand(cfg *Config) *cli.Command {
 	return &cli.Command{
-		Name:        "release",
-		Aliases:     []string{"rel"},
-		Usage:       "Build and publish official releases.",
-		Subcommands: releaseSubCommands(cfg),
+		Name:     "release",
+		Aliases:  []string{"rel"},
+		Usage:    "Build and publish official releases.",
+		Commands: releaseSubCommands(cfg),
 	}
 }
 
@@ -55,7 +57,7 @@ func releaseSubCommands(cfg *Config) []*cli.Command {
 			Name:  "generate-release-notes",
 			Usage: "Generate release notes for the next release",
 			Flags: []cli.Flag{orgFlag, devTagSuffixFlag, githubTokenFlag},
-			Action: func(c *cli.Context) error {
+			Action: func(_ context.Context, c *cli.Command) error {
 				configureLogging("release-notes.log")
 
 				// Determine the versions to use for the release.
@@ -81,7 +83,7 @@ func releaseSubCommands(cfg *Config) []*cli.Command {
 			Name:  "build",
 			Usage: "Build an official release",
 			Flags: releaseBuildFlags(),
-			Action: func(c *cli.Context) error {
+			Action: func(_ context.Context, c *cli.Command) error {
 				configureLogging("release-build.log")
 
 				// Determine the versions to use for the release.
@@ -124,7 +126,7 @@ func releaseSubCommands(cfg *Config) []*cli.Command {
 			Name:  "publish",
 			Usage: "Publish a pre-built release",
 			Flags: releasePublishFlags(),
-			Action: func(c *cli.Context) error {
+			Action: func(_ context.Context, c *cli.Command) error {
 				configureLogging("release-publish.log")
 
 				ver, operatorVer, err := version.VersionsFromManifests(cfg.RepoRootDir)
@@ -172,7 +174,7 @@ func releasePublicSubCommands(cfg *Config) *cli.Command {
 			operatorRepoFlag,
 			operatorRepoRemoteFlag,
 		},
-		Action: func(c *cli.Context) error {
+		Action: func(_ context.Context, c *cli.Command) error {
 			configureLogging("release-public.log")
 			ver, operatorVer, err := version.VersionsFromManifests(cfg.RepoRootDir)
 			if err != nil {
@@ -237,7 +239,7 @@ func releaseValidationSubCommand(cfg *Config) *cli.Command {
 			releaseBranchPrefixFlag,
 			githubTokenFlag,
 		},
-		Action: func(c *cli.Context) error {
+		Action: func(_ context.Context, c *cli.Command) error {
 			configureLogging("postrelease-validation.log")
 
 			ver, operatorVer, err := version.VersionsFromManifests(cfg.RepoRootDir)

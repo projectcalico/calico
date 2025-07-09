@@ -12,13 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Package main is the entrypoint for the release tool; this file contains branch management code
 package main
 
 import (
+	"context"
 	"fmt"
 	"path/filepath"
 
-	cli "github.com/urfave/cli/v2"
+	cli "github.com/urfave/cli/v3"
 
 	"github.com/projectcalico/calico/release/internal/utils"
 	"github.com/projectcalico/calico/release/pkg/manager/branch"
@@ -28,10 +30,10 @@ import (
 // The branch command suite is used to manage branches.
 func branchCommand(cfg *Config) *cli.Command {
 	return &cli.Command{
-		Name:        "branch",
-		Aliases:     []string{"br"},
-		Usage:       "Manage branches.",
-		Subcommands: branchSubCommands(cfg),
+		Name:     "branch",
+		Aliases:  []string{"br"},
+		Usage:    "Manage branches.",
+		Commands: branchSubCommands(cfg),
 	}
 }
 
@@ -51,7 +53,7 @@ func branchSubCommands(cfg *Config) []*cli.Command {
 				publishBranchFlag,
 				skipValidationFlag,
 			},
-			Action: func(c *cli.Context) error {
+			Action: func(_ context.Context, c *cli.Command) error {
 				configureLogging("branch-cut.log")
 
 				m := branch.NewManager(
@@ -77,7 +79,7 @@ func branchSubCommands(cfg *Config) []*cli.Command {
 				publishBranchFlag,
 				skipValidationFlag,
 			),
-			Action: func(c *cli.Context) error {
+			Action: func(_ context.Context, c *cli.Command) error {
 				configureLogging("branch-cut-operator.log")
 
 				// Clone the operator repository
