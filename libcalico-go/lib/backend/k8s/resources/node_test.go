@@ -26,6 +26,7 @@ import (
 	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
+	"github.com/projectcalico/calico/libcalico-go/lib/testutils/k8sfake"
 )
 
 var _ = Describe("Test Node conversion", func() {
@@ -612,11 +613,11 @@ var _ = Describe("Test Node conversion", func() {
 })
 
 var _ = Describe("Node tests with fake clientSet", func() {
-	var clientSet *FakeClientSetWithListRevAndFiltering
+	var clientSet *k8sfake.FakeClientSetWithListRevAndFiltering
 	var client *nodeClient
 
 	BeforeEach(func() {
-		clientSet = NewFakeClientSetWithListRevAndFiltering()
+		clientSet = k8sfake.NewFakeClientSetWithListRevAndFiltering()
 		client = NewNodeClient(clientSet, false).(*nodeClient)
 
 		node, err := clientSet.CoreV1().Nodes().Create(context.TODO(), &k8sapi.Node{
