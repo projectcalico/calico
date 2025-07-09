@@ -23,6 +23,7 @@ import (
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	. "github.com/onsi/gomega"
+	. "github.com/onsi/ginkgo"
 
 	"github.com/projectcalico/calico/felix/bpf/arp"
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
@@ -3799,6 +3800,7 @@ func TestMaglevTable(t *testing.T) {
 	mg := maglev.NewConsistentHash(maglev.WithHash(fnv.New32(), fnv.New32()), maglev.WithPreferenceLength(31))
 	programmed := make(map[nat.MaglevBackendKey]nat.BackendValue)
 
+	By("Creating creating 5 Maglev backends")
 	backends := make(map[string]maglevtypes.MockEndpoint)
 	for _, b := range []string{"192.168.1.1", "192.168.1.2", "192.168.1.3", "192.168.1.4", "192.168.1.5"} {
 		backend := maglevtypes.MockEndpoint{
@@ -3809,6 +3811,7 @@ func TestMaglevTable(t *testing.T) {
 		backends[backend.String()] = backend
 	}
 
+	By("Generating a Maglev LUT")
 	lut := mg.Generate()
 	for i, b := range lut {
 		Expect(backends).To(HaveKey(b.String()))
@@ -3825,6 +3828,7 @@ func TestMaglevTable(t *testing.T) {
 		programmed[key] = val
 	}
 
+	By("Reading back the BPF map")
 	m, err := nat.LoadMaglevMap(maglevMap)
 	Expect(err).NotTo(HaveOccurred())
 	Expect(len(m)).To(Equal(len(programmed)))
