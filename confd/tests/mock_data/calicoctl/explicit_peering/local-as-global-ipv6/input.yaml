@@ -6,7 +6,6 @@ spec:
   nodeToNodeMeshEnabled: false
   logSeverityScreen: Debug
   asNumber: 64567
-  listenPort: 150
 
 ---
 kind: BGPPeer
@@ -14,7 +13,7 @@ apiVersion: projectcalico.org/v3
 metadata:
   name: bgppeer-1
 spec:
-  peerIP: 10.192.0.3
+  peerIP: 2001::102
   asNumber: 64567
   sourceAddress: None
 
@@ -24,20 +23,9 @@ apiVersion: projectcalico.org/v3
 metadata:
   name: bgppeer-2
 spec:
-  peerIP: 10.192.0.1:166
-  asNumber: 64567
-  localASNumber: 65002
-
----
-kind: BGPPeer
-apiVersion: projectcalico.org/v3
-metadata:
-  name: bgppeer-3
-spec:
-  peerIP: 10.192.0.1
+  peerIP: 2001::104
   asNumber: 64567
   localASNumber: 65001
-  numAllowedLocalASNumbers: 1
 
 ---
 kind: Node
@@ -47,6 +35,7 @@ metadata:
 spec:
   bgp:
     ipv4Address: 10.192.0.2/16
+    ipv6Address: "2001::103/64"
 
 ---
 kind: Node
@@ -56,6 +45,7 @@ metadata:
 spec:
   bgp:
     ipv4Address: 10.192.0.3/16
+    ipv6Address: "2001::102/64"
 
 ---
 kind: Node
@@ -65,6 +55,7 @@ metadata:
 spec:
   bgp:
     ipv4Address: 10.192.0.1/16
+    ipv6Address: "2001::104/64"
 
 ---
 kind: IPPool
@@ -74,4 +65,15 @@ metadata:
 spec:
   cidr: 192.168.0.0/16
   ipipMode: Always
+  natOutgoing: true
+
+---
+kind: IPPool
+apiVersion: projectcalico.org/v3
+metadata:
+  name: ippool-2
+spec:
+  cidr: 2002::/64
+  ipipMode: Never
+  vxlanMode: Never
   natOutgoing: true
