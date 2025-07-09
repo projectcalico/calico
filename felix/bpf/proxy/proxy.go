@@ -388,16 +388,23 @@ const (
 	ReapTerminatingUDPImmediatelly = "TerminatingImmediately"
 
 	ExcludeServiceAnnotation = "projectcalico.org/natExcludeService"
+	LoadBalancingAlgorithm   = "projectcalico.org/loadbalancingAlgorithm"
+)
+
+var (
+	LoadBalancingAlgorithmConsistentHash = "ConsistentHash"
 )
 
 type ServiceAnnotations interface {
 	ReapTerminatingUDP() bool
 	ExcludeService() bool
+	UseConsistentHashing() bool
 }
 
 type servicePortAnnotations struct {
-	reapTerminatingUDP bool
-	excludeService     bool
+	reapTerminatingUDP   bool
+	excludeService       bool
+	useConsistentHashing bool
 }
 
 func (s *servicePortAnnotations) ReapTerminatingUDP() bool {
@@ -406,6 +413,10 @@ func (s *servicePortAnnotations) ReapTerminatingUDP() bool {
 
 func (s *servicePortAnnotations) ExcludeService() bool {
 	return s.excludeService
+}
+
+func (s *servicePortAnnotations) UseConsistentHashing() bool {
+	return s.useConsistentHashing
 }
 
 type servicePort struct {
@@ -427,6 +438,10 @@ func makeServiceInfo(_ *v1.ServicePort, s *v1.Service, baseSvc *k8sp.BaseService
 		if v, ok := s.ObjectMeta.Annotations[ReapTerminatingUDPAnnotation]; ok && strings.EqualFold(v, ReapTerminatingUDPImmediatelly) {
 			svc.reapTerminatingUDP = true
 		}
+	}
+
+	if a, ok := s.ObjectMeta.Annotations[LoadBalancingAlgorithm]; ok && strings.EqualFold(a, LoadBalancingAlgorithmConsistentHash) {
+		svc.useConsistentHashing = true
 	}
 
 out:
