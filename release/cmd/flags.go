@@ -314,7 +314,7 @@ var (
 				if c.Bool(ciFlag.Name) {
 					return fmt.Errorf("Slack token and channel are required in CI environment")
 				}
-				logrus.Warnf("This command may require sending Slack notifications, ensuure %s and %s flags are set", slackTokenFlag.Name, slackChannelFlag.Name)
+				logrus.Warnf("This command may require sending Slack notifications, ensure %s and %s flags are set", slackTokenFlag.Name, slackChannelFlag.Name)
 			}
 			return nil
 		},
@@ -439,7 +439,7 @@ var (
 		Sources: cli.EnvVars("DOCS_KNOWN_HOSTS"),
 	}
 	maxHashreleasesFlag = &cli.IntFlag{
-		Name:    "maxiumum",
+		Name:    "maximum",
 		Aliases: []string{"max"},
 		Usage:   "The maximum number of hashreleases to keep on the hashrelease server",
 		Value:   hashreleaseserver.DefaultMax,

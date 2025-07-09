@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package main is the entrypoint for the release tool; this file contains the intitialization code for the cli
+// Package main is the entrypoint for the release tool; this file contains the initialization code for the cli
 package main
 
 import (
