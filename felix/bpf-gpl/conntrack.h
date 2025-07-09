@@ -581,15 +581,6 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 	};
 	struct ct_lookup_ctx *ct_ctx = &ct_lookup_ctx;
 
-	struct calico_maglev_key mg_lookup_key = {
-		.vip = STATE->ip_dst,
-		.port = STATE->dport,
-		.proto = STATE->ip_proto,
-		.ordinal = 0,
-	};
-	struct calico_nat_dest *has_maglev_entry;
-	has_maglev_entry = cali_mag_be_lookup_elem(&mg_lookup_key);
-
 	switch (STATE->ip_proto) {
 	case IPPROTO_TCP:
 		if (skb_refresh_validate_ptrs(ctx, TCP_SIZE)) {
@@ -691,12 +682,6 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 			return result;
 		}
 		if (CALI_F_TO_HOST) {
-			// Miss for a mid-flow packet towards te host.
-			// First check if this is a maglev packet to be picked up.
-			if (has_maglev_entry) {
-				CALI_CT_DEBUG("BPF CT Miss for mid-flow maglev-related packet")
-				goto out_lookup_fail
-			}
 			if (proto_orig == IPPROTO_TCP) {
 				// Miss for a mid-flow TCP packet towards the host.  This may be part of a
 				// connection that predates the BPF program so we need to let it fall through
