@@ -61,7 +61,7 @@ require (
 	github.com/onsi/gomega v1.32.0
 	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/pkg/errors v0.9.1
-	github.com/projectcalico/api v0.0.0-20241106234619-d6b63b533e68
+	github.com/projectcalico/api v0.0.0-20250326193936-759a4c3213d1
 	github.com/projectcalico/go-json v0.0.0-20161128004156-6219dc7339ba
 	github.com/projectcalico/go-yaml-wrapper v0.0.0-20191112210931-090425220c54
 	github.com/prometheus/client_golang v1.18.0
