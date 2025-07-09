@@ -217,6 +217,8 @@ skip_affinity:
 	nat_lv2_key.ordinal = bpf_get_prandom_u32();
 	nat_lv2_key.ordinal %= count;
 
+	CALI_DEBUG("NAT: 1st level hit; id=%d ordinal=%d", nat_lv2_key.id, nat_lv2_key.ordinal);
+
 	if (!(nat_lv2_val = cali_nat_be_lookup_elem(&nat_lv2_key))) {
 		CALI_DEBUG("NAT: backend miss");
 		*res = NAT_NO_BACKEND;
