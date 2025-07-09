@@ -1989,6 +1989,10 @@ func TestMapIterWithDeleteLastOfBatch(t *testing.T) {
 func TestJumpMap(t *testing.T) {
 	RegisterTestingT(t)
 
+	progMap = hook.NewProgramsMap()
+	err := progMap.EnsureExists()
+	Expect(err).NotTo(HaveOccurred())
+
 	jumpMapFD := progMap.MapFD()
 	pg := polprog.NewBuilder(idalloc.New(), ipsMap.MapFD(), stateMap.MapFD(), jumpMapFD, policyJumpMap.MapFD(),
 		polprog.WithAllowDenyJumps(tcdefs.ProgIndexAllowed, tcdefs.ProgIndexDrop))
