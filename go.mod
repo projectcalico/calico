@@ -282,20 +282,20 @@ require (
 	gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7 // indirect
 	gopkg.in/warnings.v0 v0.1.2 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	k8s.io/cloud-provider v0.30.12 // indirect
+	k8s.io/cloud-provider v0.30.14 // indirect
 	k8s.io/component-helpers v0.30.14 // indirect
 	k8s.io/controller-manager v0.30.14 // indirect
 	k8s.io/cri-api v0.30.14 // indirect
-	k8s.io/csi-translation-lib v0.30.12 // indirect
-	k8s.io/dynamic-resource-allocation v0.30.12 // indirect
+	k8s.io/csi-translation-lib v0.30.14 // indirect
+	k8s.io/dynamic-resource-allocation v0.30.14 // indirect
 	k8s.io/gengo/v2 v2.0.0-20240228010128-51d4e06bde70 // indirect
 	k8s.io/kms v0.30.14 // indirect
-	k8s.io/kube-scheduler v0.30.12 // indirect
-	k8s.io/kubectl v0.30.12 // indirect
-	k8s.io/kubelet v0.30.12 // indirect
-	k8s.io/legacy-cloud-providers v0.30.12 // indirect
-	k8s.io/mount-utils v0.30.12 // indirect
-	k8s.io/pod-security-admission v0.30.12 // indirect
+	k8s.io/kube-scheduler v0.30.14 // indirect
+	k8s.io/kubectl v0.30.14 // indirect
+	k8s.io/kubelet v0.30.14 // indirect
+	k8s.io/legacy-cloud-providers v0.30.14 // indirect
+	k8s.io/mount-utils v0.30.14 // indirect
+	k8s.io/pod-security-admission v0.30.14 // indirect
 	sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.29.0 // indirect
 	sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.4.1 // indirect
@@ -329,9 +329,9 @@ replace (
 	// Need replacements for all the k8s subsidiary projects that are pulled in indirectly because
 	// the kubernets repo pulls them in via a replacement to its own vendored copies, which doesn't work for
 	// transient imports.
-	k8s.io/kubernetes => k8s.io/kubernetes v1.30.12
-	k8s.io/legacy-cloud-providers => k8s.io/legacy-cloud-providers v0.30.12
-	k8s.io/metrics => k8s.io/metrics v0.30.12
+	k8s.io/kubernetes => k8s.io/kubernetes v1.30.14
+	k8s.io/legacy-cloud-providers => k8s.io/legacy-cloud-providers v0.30.14
+	k8s.io/metrics => k8s.io/metrics v0.30.14
 	k8s.io/mount-utils => k8s.io/mount-utils v0.30.14
 	k8s.io/pod-security-admission => k8s.io/pod-security-admission v0.30.14
 	k8s.io/sample-apiserver => k8s.io/sample-apiserver v0.30.14
