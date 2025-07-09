@@ -6428,6 +6428,13 @@ func schema_pkg_apis_projectcalico_v3_Template(ref common.ReferenceCallback) com
 							},
 						},
 					},
+					"interfaceSelector": {
+						SchemaProps: spec.SchemaProps{
+							Description: "InterfaceSelector contains regex string to match Node interfaceName to HostEndpoint",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 					"labels": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Labels adds the specified labels to the generated AutoHostEndpoint, labels from node with the same name will be overwritten by values from the template label",
