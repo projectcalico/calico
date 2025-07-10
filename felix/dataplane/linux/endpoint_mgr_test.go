@@ -1856,9 +1856,9 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 						})
 						applyUpdates(epMgr)
 					})
-					It("should report the interface in error", func() {
+					It("should report the interface as down", func() {
 						Expect(statusReportRec.currentState).To(Equal(map[interface{}]string{
-							types.ProtoToWorkloadEndpointID(&wlEPID1): "error",
+							types.ProtoToWorkloadEndpointID(&wlEPID1): "down",
 						}))
 					})
 				})
