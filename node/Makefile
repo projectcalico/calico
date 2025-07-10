@@ -315,6 +315,7 @@ endif
 
 ## Run the ginkgo tests.
 ut fv: run-k8s-apiserver
+	$(MAKE) -C ../felix libbpf
 	$(DOCKER_RUN) \
 	-v $(CERTS_PATH):/home/user/certs \
 	-e KUBECONFIG=/go/src/github.com/projectcalico/calico/hack/test/certs/kubeconfig \
