@@ -1286,11 +1286,7 @@ var _ = table.DescribeTable("PolicyGroup chains",
 )
 
 func polGroupEntry(group PolicyGroup, rules []generictables.Rule) table.TableEntry {
-	return table.Entry(
-		fmt.Sprintf("%v", group),
-		group,
-		rules,
-	)
+	return table.Entry(fmt.Sprintf("%v", group), group, rules)
 }
 
 func jumpToPolicyGroup(target string, clearMark uint32) generictables.Rule {
@@ -1462,32 +1458,35 @@ func newRuleBuilder(opts ...ruleBuilderOpt) *ruleBuilder {
 	return b
 }
 
-func (r *ruleBuilder) build() []generictables.Rule {
+func (b *ruleBuilder) build() []generictables.Rule {
 	var rules []generictables.Rule
-
-	if r.disabled {
+	if b.disabled {
 		return []generictables.Rule{{
 			Match:   Match(),
-			Action:  r.denyAction,
+			Action:  b.denyAction,
 			Comment: []string{"Endpoint admin disabled"},
 		}}
 	}
+	// Add rules only if endpoint is not disabled.
 
-	if r.qosControlsEnabled {
-		rules = append(rules, r.qosControlRules(r.qosRate, r.qosburst)...)
+	// Initially, add QoS control rules.
+	if b.qosControlsEnabled {
+		rules = append(rules, b.qosControlRules(b.qosRate, b.qosburst)...)
 	}
 
-	if !r.forUntrack {
-		rules = append(rules, r.conntrackRules()...)
+	// Add connection tracking rules, unless building rules for host endpoints with untracked policies.
+	if !b.forUntrack {
+		rules = append(rules, b.conntrackRules()...)
 	}
 
-	if r.qosMaxConn > 0 {
-		rules = append(rules, r.qosMaxConnectionRule(r.qosMaxConn))
+	// Add the rest of QoS control, i.e. max connection rules.
+	if b.qosMaxConn > 0 {
+		rules = append(rules, b.qosMaxConnectionRule(b.qosMaxConn))
 	}
 
 	// Host endpoints get extra failsafe rules except for forward policies.
-	if r.forHostEndpoint && !r.forForward {
-		rules = append(rules, r.failSafeRule())
+	if b.forHostEndpoint && !b.forForward {
+		rules = append(rules, b.failSafeRule())
 	}
 
 	// Clean marks.
@@ -1496,114 +1495,35 @@ func (r *ruleBuilder) build() []generictables.Rule {
 		Action: ClearMarkAction{Mark: 0x18},
 	})
 
-	if r.dropVXLAN {
+	// Drop VXLAN traffic originating from workloads, if not allowed.
+	if b.dropVXLAN {
 		rules = append(rules, generictables.Rule{
 			Match: Match().ProtocolNum(ProtoUDP).
-				DestPorts(uint16(r.vxlanPort)),
-			Action:  r.denyAction,
-			Comment: []string{fmt.Sprintf("%s VXLAN encapped packets originating in workloads", r.denyActionString)},
+				DestPorts(uint16(b.vxlanPort)),
+			Action:  b.denyAction,
+			Comment: []string{fmt.Sprintf("%s VXLAN encapped packets originating in workloads", b.denyActionString)},
 		})
 	}
 
-	if r.dropIPIP {
+	// Drop IPIP traffic originating from workloads, if not allowed.
+	if b.dropIPIP {
 		rules = append(rules, generictables.Rule{
 			Match:   Match().ProtocolNum(ProtoIPIP),
-			Action:  r.denyAction,
-			Comment: []string{fmt.Sprintf("%s IPinIP encapped packets originating in workloads", r.denyActionString)},
+			Action:  b.denyAction,
+			Comment: []string{fmt.Sprintf("%s IPinIP encapped packets originating in workloads", b.denyActionString)},
 		})
 	}
 
-	if len(r.policies) != 0 || len(r.policyGroups) != 0 {
-		rules = append(rules,
-			generictables.Rule{
-				Comment: []string{"Start of tier default"},
-				Match:   Match(),
-				Action:  ClearMarkAction{Mark: 0x10},
-			},
-		)
-	}
+	// Add rules for policies.
+	rules = append(rules, b.matchPolicies()...)
 
-	var endOfTierDrop bool
-	for _, g := range r.policyGroups {
-		if strings.Contains(g, "staged:") {
-			// Skip staged policies.
-			continue
-		}
-		endOfTierDrop = true
-		rules = append(rules,
-			jumpToPolicyGroup(g, 0x10),
-			policyAcceptedRule(),
-		)
-	}
-
-	for _, p := range r.policies {
-		if strings.Contains(p, "staged:") {
-			// Skip staged policies.
-			continue
-		}
-		endOfTierDrop = true
-		rules = append(rules, r.matchPolicy("default", p))
-		if r.forHostEndpoint && r.forUntrack {
-			// Extra NOTRACK action before returning in raw table.
-			rules = append(rules, generictables.Rule{
-				Match:  Match().MarkSingleBitSet(0x8),
-				Action: NoTrackAction{},
-			})
-		}
-		rules = append(rules, policyAcceptedRule())
-	}
-
-	if r.forHostEndpoint && (r.forUntrack || r.forPreDNAT) {
-		// No drop actions or profiles in raw table.
+	// For host endpoints, profiles are only added for normal policies.
+	if b.forHostEndpoint && (b.forForward || b.forUntrack || b.forPreDNAT) {
 		return rules
 	}
 
-	if r.tierPassAction {
-		endOfTierDrop = false
-	}
-
-	if len(r.policies) != 0 || len(r.policyGroups) != 0 {
-		if r.flowLogsEnabled {
-			rules = append(rules, r.nflogAction(endOfTierDrop, false))
-		}
-		if endOfTierDrop {
-			rules = append(rules,
-				generictables.Rule{
-					Match:  Match().MarkClear(0x10),
-					Action: r.denyAction,
-					Comment: []string{fmt.Sprintf("End of tier default. %s if no policies passed packet",
-						r.denyActionString,
-					)},
-				})
-		}
-	}
-
-	if r.forForward {
-		return rules
-	}
-
-	for _, p := range r.profiles {
-		rules = append(rules,
-			r.matchProfile(p),
-			generictables.Rule{
-				Match:   Match().MarkSingleBitSet(0x8),
-				Action:  ReturnAction{},
-				Comment: []string{"Return if profile accepted"},
-			},
-		)
-	}
-
-	if r.flowLogsEnabled {
-		rules = append(rules, r.nflogAction(true, true))
-	}
-	rules = append(rules,
-		generictables.Rule{
-			Match:   Match(),
-			Action:  r.denyAction,
-			Comment: []string{fmt.Sprintf("%s if no profiles matched", r.denyActionString)},
-		},
-	)
-
+	// Add rules for profiles.
+	rules = append(rules, b.matchProfiles()...)
 	return rules
 }
 
@@ -1745,29 +1665,122 @@ func (b *ruleBuilder) nflogAction(dropAction, forProfile bool) generictables.Rul
 	}
 }
 
-func (b *ruleBuilder) matchPolicy(tier, name string) generictables.Rule {
-	target := fmt.Sprintf("cali-pi-%v/%v", tier, name)
-	if b.egress {
-		target = fmt.Sprintf("cali-po-%v/%v", tier, name)
+func (b *ruleBuilder) matchPolicies() []generictables.Rule {
+	var rules []generictables.Rule
+
+	// No policy or policy group defined.
+	if len(b.policies) == 0 && len(b.policyGroups) == 0 {
+		return rules
 	}
-	return generictables.Rule{
-		Match:  Match().MarkClear(0x10),
-		Action: JumpAction{Target: target},
+
+	// In these tests, all policies are in the default tier.
+	// Add start of tier rule, for the default tier.
+	rules = append(rules,
+		generictables.Rule{
+			Comment: []string{"Start of tier default"},
+			Match:   Match(),
+			Action:  ClearMarkAction{Mark: 0x10},
+		},
+	)
+
+	var endOfTierDrop bool
+	// Add rules for policy groups.
+	for _, g := range b.policyGroups {
+		if strings.Contains(g, "staged:") {
+			// Skip staged policies.
+			continue
+		}
+		endOfTierDrop = true
+		rules = append(rules,
+			jumpToPolicyGroup(g, 0x10),
+			returnIfAccepted(),
+		)
 	}
+
+	// Add rules for policies.
+	for _, p := range b.policies {
+		if strings.Contains(p, "staged:") {
+			// Skip staged policies.
+			continue
+		}
+		endOfTierDrop = true
+		target := fmt.Sprintf("cali-pi-default/%v", p)
+		if b.egress {
+			target = fmt.Sprintf("cali-po-default/%v", p)
+		}
+		rules = append(rules, generictables.Rule{
+			Match:  Match().MarkClear(0x10),
+			Action: JumpAction{Target: target},
+		})
+
+		if b.forHostEndpoint && b.forUntrack {
+			// Extra NOTRACK action before returning in raw table.
+			rules = append(rules, generictables.Rule{
+				Match:  Match().MarkSingleBitSet(0x8),
+				Action: NoTrackAction{},
+			})
+		}
+		rules = append(rules, returnIfAccepted())
+	}
+
+	// No drop actions or profiles in raw table.
+	if b.forHostEndpoint && (b.forUntrack || b.forPreDNAT) {
+		return rules
+	}
+
+	if b.tierPassAction {
+		endOfTierDrop = false
+	}
+
+	if b.flowLogsEnabled {
+		rules = append(rules, b.nflogAction(endOfTierDrop, false))
+	}
+	if endOfTierDrop {
+		rules = append(rules,
+			generictables.Rule{
+				Match:  Match().MarkClear(0x10),
+				Action: b.denyAction,
+				Comment: []string{fmt.Sprintf("End of tier default. %s if no policies passed packet",
+					b.denyActionString,
+				)},
+			})
+	}
+	return rules
 }
 
-func (b *ruleBuilder) matchProfile(name string) generictables.Rule {
-	target := fmt.Sprintf("cali-pri-%v", name)
-	if b.egress {
-		target = fmt.Sprintf("cali-pro-%v", name)
+func (b *ruleBuilder) matchProfiles() []generictables.Rule {
+	var rules []generictables.Rule
+	for _, p := range b.profiles {
+		target := fmt.Sprintf("cali-pri-%v", p)
+		if b.egress {
+			target = fmt.Sprintf("cali-pro-%v", p)
+		}
+		rules = append(rules,
+			generictables.Rule{
+				Match:  Match(),
+				Action: JumpAction{Target: target},
+			},
+			generictables.Rule{
+				Match:   Match().MarkSingleBitSet(0x8),
+				Action:  ReturnAction{},
+				Comment: []string{"Return if profile accepted"},
+			},
+		)
 	}
-	return generictables.Rule{
-		Match:  Match(),
-		Action: JumpAction{Target: target},
+	if b.flowLogsEnabled {
+		rules = append(rules, b.nflogAction(true, true))
 	}
+	rules = append(rules,
+		generictables.Rule{
+			Match:   Match(),
+			Action:  b.denyAction,
+			Comment: []string{fmt.Sprintf("%s if no profiles matched", b.denyActionString)},
+		},
+	)
+	return rules
 }
 
-func policyAcceptedRule() generictables.Rule {
+func returnIfAccepted() generictables.Rule {
 	return generictables.Rule{
 		Match:   Match().MarkSingleBitSet(0x8),
 		Action:  ReturnAction{},
