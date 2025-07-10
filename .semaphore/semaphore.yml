@@ -112,6 +112,15 @@ promotions:
     auto_promote:
       when: "branch =~ 'master|release-.*'"
 blocks:
+  - name: Check images availability
+    run:
+      when: "false or change_in(['/charts/', '/manifests/'])"
+    dependencies: []
+    task:
+      jobs:
+        - name: Check images availability
+          commands:
+            - make check-images-availability
   - name: Prerequisites
     dependencies: []
     task:
