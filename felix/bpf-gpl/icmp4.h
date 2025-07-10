@@ -84,18 +84,15 @@ static CALI_BPF_INLINE int icmp_v4_reply(struct cali_tc_ctx *ctx,
 
 	ctx->ipheader_len = 20;
 
-#ifdef CALI_PARANOID
-	/* XXX verify that ip_orig.daddr is always the node's IP
-	 *
-	 * we only call this function because of NodePort encap
-	 */
-	if (ip_orig.daddr != HOST_IP) {
-		CALI_DEBUG("ICMP v4 reply: ip_orig.daddr != HOST_IP 0x%x", ip_orig.daddr);
+	struct cali_rt *r = cali_rt_lookup(&ip_orig.daddr);
+	if (r && cali_rt_flags_local_host(r->flags)) {
+		CALI_DEBUG("ICMP v4 reply: from orig dst host IP " IP_FMT, &ip_orig.daddr);
+		ip_hdr(ctx)->saddr = ip_orig.daddr;
+	} else {
+		/* use the host IP of the program that handles the packet */
+		CALI_DEBUG("ICMP v4 reply: from IP of the intf " IP_FMT, &INTF_IP);
+		ip_hdr(ctx)->saddr = INTF_IP;
 	}
-#endif
-
-	/* use the host IP of the program that handles the packet */
-	ip_hdr(ctx)->saddr = INTF_IP;
 	ip_hdr(ctx)->daddr = ip_orig.saddr;
 
 	struct icmphdr *icmp = ((void *)ip_hdr(ctx)) + IP_SIZE;
