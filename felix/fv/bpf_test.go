@@ -46,9 +46,9 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/bpfdefs"
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
 	"github.com/projectcalico/calico/felix/bpf/conntrack/timeouts"
+	"github.com/projectcalico/calico/felix/bpf/consistenthash"
 	"github.com/projectcalico/calico/felix/bpf/ifstate"
 	"github.com/projectcalico/calico/felix/bpf/ipsets"
-	"github.com/projectcalico/calico/felix/bpf/maglev"
 	"github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/bpf/nat"
 	"github.com/projectcalico/calico/felix/bpf/proxy"
@@ -1287,7 +1287,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					}, "5s").Should(Succeed(), "NAT did not get updated properly")
 				})
 
-				It("Maglevs (verb)", func() {
+				It("writes ConsistentHash-enabled services to the map", func() {
 					By("Creating a fake service with fake endpoint")
 
 					clusterIP := "10.101.0.254"
@@ -1380,10 +1380,10 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					Expect(err).NotTo(HaveOccurred())
 
 					Eventually(func(g Gomega) {
-						_, _, maglevs := dumpNATMapsAny(family, tc.Felixes[0])
-						g.Expect(maglevs).To(HaveLen(2 * maglev.M))
+						_, _, chs := dumpNATMapsAny(family, tc.Felixes[0])
+						g.Expect(chs).To(HaveLen(2 * consistenthash.M))
 
-					}, "5s").Should(Succeed(), "maglev backends didn't show up")
+					}, "5s").Should(Succeed(), "ConsistentHash backends didn't show up")
 				})
 
 				It("should cleanup after we disable eBPF", func() {
@@ -5466,10 +5466,10 @@ func objectMetaV1(name string) metav1.ObjectMeta {
 	}
 }
 
-func dumpNATmaps(felixes []*infrastructure.Felix) ([]nat.MapMem, []nat.BackendMapMem, []nat.MaglevMapMem) {
+func dumpNATmaps(felixes []*infrastructure.Felix) ([]nat.MapMem, []nat.BackendMapMem, []nat.ConsistentHashMapMem) {
 	bpfsvcs := make([]nat.MapMem, len(felixes))
 	bpfeps := make([]nat.BackendMapMem, len(felixes))
-	bpfmagleveps := make([]nat.MaglevMapMem, len(felixes))
+	bpfcheps := make([]nat.ConsistentHashMapMem, len(felixes))
 
 	// Felixes are independent, we can dump the maps  concurrently
 	var wg sync.WaitGroup
@@ -5479,23 +5479,23 @@ func dumpNATmaps(felixes []*infrastructure.Felix) ([]nat.MapMem, []nat.BackendMa
 		go func(i int) {
 			defer wg.Done()
 			defer GinkgoRecover()
-			bpfsvcs[i], bpfeps[i], bpfmagleveps[i] = dumpNATMaps(felixes[i])
+			bpfsvcs[i], bpfeps[i], bpfcheps[i] = dumpNATMaps(felixes[i])
 		}(i)
 	}
 
 	wg.Wait()
 
-	return bpfsvcs, bpfeps, bpfmagleveps
+	return bpfsvcs, bpfeps, bpfcheps
 }
 
 func dumpNATmapsAny(family int, felixes []*infrastructure.Felix) (
 	[]map[nat.FrontendKeyInterface]nat.FrontendValue,
 	[]map[nat.BackendKey]nat.BackendValueInterface,
-	[]map[nat.MaglevBackendKeyInterface]nat.BackendValueInterface,
+	[]map[nat.ConsistentHashBackendKeyInterface]nat.BackendValueInterface,
 ) {
 	bpfsvcs := make([]map[nat.FrontendKeyInterface]nat.FrontendValue, len(felixes))
 	bpfeps := make([]map[nat.BackendKey]nat.BackendValueInterface, len(felixes))
-	bpfmagleveps := make([]map[nat.MaglevBackendKeyInterface]nat.BackendValueInterface, len(felixes))
+	bpfcheps := make([]map[nat.ConsistentHashBackendKeyInterface]nat.BackendValueInterface, len(felixes))
 
 	// Felixes are independent, we can dump the maps  concurrently
 	var wg sync.WaitGroup
@@ -5505,19 +5505,19 @@ func dumpNATmapsAny(family int, felixes []*infrastructure.Felix) (
 		go func(i int) {
 			defer wg.Done()
 			defer GinkgoRecover()
-			bpfsvcs[i], bpfeps[i], bpfmagleveps[i] = dumpNATMapsAny(family, felixes[i])
+			bpfsvcs[i], bpfeps[i], bpfcheps[i] = dumpNATMapsAny(family, felixes[i])
 		}(i)
 	}
 
 	wg.Wait()
 
-	return bpfsvcs, bpfeps, bpfmagleveps
+	return bpfsvcs, bpfeps, bpfcheps
 }
 
-func dumpNATmapsV6(felixes []*infrastructure.Felix) ([]nat.MapMemV6, []nat.BackendMapMemV6, []nat.MaglevMapMemV6) {
+func dumpNATmapsV6(felixes []*infrastructure.Felix) ([]nat.MapMemV6, []nat.BackendMapMemV6, []nat.ConsistentHashMapMemV6) {
 	bpfsvcs := make([]nat.MapMemV6, len(felixes))
 	bpfeps := make([]nat.BackendMapMemV6, len(felixes))
-	magleveps := make([]nat.MaglevMapMemV6, len(felixes))
+	cheps := make([]nat.ConsistentHashMapMemV6, len(felixes))
 
 	// Felixes are independent, we can dump the maps  concurrently
 	var wg sync.WaitGroup
@@ -5527,31 +5527,31 @@ func dumpNATmapsV6(felixes []*infrastructure.Felix) ([]nat.MapMemV6, []nat.Backe
 		go func(i int) {
 			defer wg.Done()
 			defer GinkgoRecover()
-			bpfsvcs[i], bpfeps[i], magleveps[i] = dumpNATMapsV6(felixes[i])
+			bpfsvcs[i], bpfeps[i], cheps[i] = dumpNATMapsV6(felixes[i])
 		}(i)
 	}
 
 	wg.Wait()
 
-	return bpfsvcs, bpfeps, magleveps
+	return bpfsvcs, bpfeps, cheps
 }
 
-func dumpNATMaps(felix *infrastructure.Felix) (nat.MapMem, nat.BackendMapMem, nat.MaglevMapMem) {
-	return dumpNATMap(felix), dumpEPMap(felix), dumpMaglevEPMap(felix)
+func dumpNATMaps(felix *infrastructure.Felix) (nat.MapMem, nat.BackendMapMem, nat.ConsistentHashMapMem) {
+	return dumpNATMap(felix), dumpEPMap(felix), dumpConsistentHashEPMap(felix)
 }
 
-func dumpNATMapsV6(felix *infrastructure.Felix) (nat.MapMemV6, nat.BackendMapMemV6, nat.MaglevMapMemV6) {
-	return dumpNATMapV6(felix), dumpEPMapV6(felix), dumpMaglevEPMapV6(felix)
+func dumpNATMapsV6(felix *infrastructure.Felix) (nat.MapMemV6, nat.BackendMapMemV6, nat.ConsistentHashMapMemV6) {
+	return dumpNATMapV6(felix), dumpEPMapV6(felix), dumpConsistentHashEPMapV6(felix)
 }
 
 func dumpNATMapsAny(family int, felix *infrastructure.Felix) (
 	map[nat.FrontendKeyInterface]nat.FrontendValue,
 	map[nat.BackendKey]nat.BackendValueInterface,
-	map[nat.MaglevBackendKeyInterface]nat.BackendValueInterface,
+	map[nat.ConsistentHashBackendKeyInterface]nat.BackendValueInterface,
 ) {
 	f := make(map[nat.FrontendKeyInterface]nat.FrontendValue)
 	b := make(map[nat.BackendKey]nat.BackendValueInterface)
-	m := make(map[nat.MaglevBackendKeyInterface]nat.BackendValueInterface)
+	m := make(map[nat.ConsistentHashBackendKeyInterface]nat.BackendValueInterface)
 
 	if family == 6 {
 		f6, b6, m6 := dumpNATMapsV6(felix)
@@ -5630,17 +5630,17 @@ func dumpEPMap(felix *infrastructure.Felix) nat.BackendMapMem {
 	return m
 }
 
-func dumpMaglevEPMap(felix *infrastructure.Felix) nat.MaglevMapMem {
-	bm := nat.MaglevMap()
-	m := make(nat.MaglevMapMem)
-	dumpBPFMap(felix, bm, nat.MaglevMapMemIter(m))
+func dumpConsistentHashEPMap(felix *infrastructure.Felix) nat.ConsistentHashMapMem {
+	bm := nat.ConsistentHashMap()
+	m := make(nat.ConsistentHashMapMem)
+	dumpBPFMap(felix, bm, nat.ConsistentHashMapMemIter(m))
 	return m
 }
 
-func dumpMaglevEPMapV6(felix *infrastructure.Felix) nat.MaglevMapMemV6 {
-	bm := nat.MaglevMapV6()
-	m := make(nat.MaglevMapMemV6)
-	dumpBPFMap(felix, bm, nat.MaglevMapMemV6Iter(m))
+func dumpConsistentHashEPMapV6(felix *infrastructure.Felix) nat.ConsistentHashMapMemV6 {
+	bm := nat.ConsistentHashMapV6()
+	m := make(nat.ConsistentHashMapMemV6)
+	dumpBPFMap(felix, bm, nat.ConsistentHashMapMemV6Iter(m))
 	return m
 }
 
@@ -5799,9 +5799,11 @@ func k8sService(name, clusterIP string, w *workload.Workload, port,
 		svcType = v1.ServiceTypeNodePort
 	}
 
+	meta := objectMetaV1(name)
+	meta.Annotations["projectcalico.org/loadbalancingAlgorithm"] = "ConsistentHash"
 	return &v1.Service{
 		TypeMeta:   typeMetaV1("Service"),
-		ObjectMeta: objectMetaV1(name),
+		ObjectMeta: meta,
 		Spec: v1.ServiceSpec{
 			ClusterIP: clusterIP,
 			Type:      svcType,

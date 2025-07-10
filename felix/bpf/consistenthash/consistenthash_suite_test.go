@@ -1,4 +1,4 @@
-package maglev
+package consistenthash
 
 import (
 	"testing"
@@ -7,7 +7,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-func TestMaglev(t *testing.T) {
+func TestConsistentHash(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "BPF Maglev Suite")
+	RunSpecs(t, "BPF ConsistentHash Suite")
 }

@@ -22,16 +22,16 @@ import (
 
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
-	. "github.com/onsi/gomega"
 	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/calico/felix/bpf/arp"
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
 	conntrack3 "github.com/projectcalico/calico/felix/bpf/conntrack/v3"
 	v3 "github.com/projectcalico/calico/felix/bpf/conntrack/v3"
+	"github.com/projectcalico/calico/felix/bpf/consistenthash"
+	chtypes "github.com/projectcalico/calico/felix/bpf/consistenthash/test"
 	"github.com/projectcalico/calico/felix/bpf/counters"
-	"github.com/projectcalico/calico/felix/bpf/maglev"
-	maglevtypes "github.com/projectcalico/calico/felix/bpf/maglev/test"
 	"github.com/projectcalico/calico/felix/bpf/nat"
 	"github.com/projectcalico/calico/felix/bpf/polprog"
 	"github.com/projectcalico/calico/felix/bpf/routes"
@@ -3785,11 +3785,11 @@ func TestNATOutExcludeHosts(t *testing.T) {
 	expectMark(tcdefs.MarkSeen)
 }
 
-func TestMaglevTable(t *testing.T) {
+func TestConsistentHashTable(t *testing.T) {
 	RegisterTestingT(t)
 
-	maglevMap := nat.MaglevMap()
-	err := maglevMap.EnsureExists()
+	chMap := nat.ConsistentHashMap()
+	err := chMap.EnsureExists()
 	Expect(err).NotTo(HaveOccurred())
 
 	svcIP := net.ParseIP("169.172.9.1")
@@ -3797,13 +3797,13 @@ func TestMaglevTable(t *testing.T) {
 	backendPort := uint16(8080)
 	svcProto := uint8(layers.IPProtocolUDP)
 
-	mg := maglev.NewConsistentHash(maglev.WithHash(fnv.New32(), fnv.New32()), maglev.WithPreferenceLength(31))
-	programmed := make(map[nat.MaglevBackendKey]nat.BackendValue)
+	mg := consistenthash.New(consistenthash.WithHash(fnv.New32(), fnv.New32()), consistenthash.WithPreferenceLength(31))
+	programmed := make(map[nat.ConsistentHashBackendKey]nat.BackendValue)
 
-	By("Creating creating 5 Maglev backends")
-	backends := make(map[string]maglevtypes.MockEndpoint)
+	By("Creating creating 5 ConsistentHash-enabled backends")
+	backends := make(map[string]chtypes.MockEndpoint)
 	for _, b := range []string{"192.168.1.1", "192.168.1.2", "192.168.1.3", "192.168.1.4", "192.168.1.5"} {
-		backend := maglevtypes.MockEndpoint{
+		backend := chtypes.MockEndpoint{
 			Ip:  b,
 			Prt: backendPort,
 		}
@@ -3811,7 +3811,7 @@ func TestMaglevTable(t *testing.T) {
 		backends[backend.String()] = backend
 	}
 
-	By("Generating a Maglev LUT")
+	By("Generating a ConsistentHash LUT")
 	lut := mg.Generate()
 	for i, b := range lut {
 		Expect(backends).To(HaveKey(b.String()))
@@ -3820,20 +3820,20 @@ func TestMaglevTable(t *testing.T) {
 		Expect(expectedBackend.Port()).To(Equal(b.Port()))
 
 		backendIP := net.ParseIP(b.IP())
-		key := nat.NewMaglevBackendKey(svcIP, svcPort, svcProto, uint32(i))
+		key := nat.NewConsistentHashBackendKey(svcIP, svcPort, svcProto, uint32(i))
 		val := nat.NewNATBackendValue(backendIP, uint16(backendPort))
-		err := maglevMap.Update(key.AsBytes(), val.AsBytes())
+		err := chMap.Update(key.AsBytes(), val.AsBytes())
 		Expect(err).NotTo(HaveOccurred())
 
 		programmed[key] = val
 	}
 
 	By("Reading back the BPF map")
-	m, err := nat.LoadMaglevMap(maglevMap)
+	m, err := nat.LoadConsistentHashMap(chMap)
 	Expect(err).NotTo(HaveOccurred())
 	Expect(len(m)).To(Equal(len(programmed)))
 
-	keys := make([]nat.MaglevBackendKey, len(m))
+	keys := make([]nat.ConsistentHashBackendKey, len(m))
 	for k := range m {
 		keys[k.Ordinal()] = k
 	}

@@ -40,8 +40,8 @@ static CALI_BPF_INLINE struct calico_nat_dest* calico_nat_lookup(ipv46_addr_t *i
 	struct calico_nat_secondary_key nat_lv2_key;
 	struct calico_nat_dest *nat_lv2_val;
 	struct calico_nat_affinity_key affkey = {};
-	struct calico_maglev_key maglev_key;
-	struct calico_nat_dest *maglev_val;
+	struct calico_ch_key ch_key;
+	struct calico_nat_dest *ch_val;
 	__u64 now = 0;
 
 	nat_lv1_val = cali_nat_fe_lookup_elem(&nat_key);
@@ -156,27 +156,27 @@ static CALI_BPF_INLINE struct calico_nat_dest* calico_nat_lookup(ipv46_addr_t *i
 		goto skip_affinity;
 	}
 
-	if (nat_lv1_val->flags & NAT_FLG_NAT_MAGLEV) {
-		__u32 calico_nat_maglev_tuple_hash;
+	if (nat_lv1_val->flags & NAT_FLG_NAT_CONSISTENTHASH) {
+		__u32 calico_nat_ch_tuple_hash;
 
 #ifdef IPVER6
-		calico_nat_maglev_tuple_hash = jhash_2words(ip_src->a, ip_src->b, 0xDEAD);
-		calico_nat_maglev_tuple_hash |= jhash_2words(ip_src->c, ip_src->d, 0xBEEF);
-		calico_nat_maglev_tuple_hash |= jhash_2words(ip_dst->a, ip_dst->b, 0xCA71);
-		calico_nat_maglev_tuple_hash |= jhash_2words(ip_dst->c, ip_dst->d, 0xC000);
+		calico_nat_ch_tuple_hash = jhash_2words(ip_src->a, ip_src->b, 0xDEAD);
+		calico_nat_ch_tuple_hash |= jhash_2words(ip_src->c, ip_src->d, 0xBEEF);
+		calico_nat_ch_tuple_hash |= jhash_2words(ip_dst->a, ip_dst->b, 0xCA71);
+		calico_nat_ch_tuple_hash |= jhash_2words(ip_dst->c, ip_dst->d, 0xC000);
 #else
-		calico_nat_maglev_tuple_hash = jhash_2words(*ip_src, sport, 0xDEAD);
-		calico_nat_maglev_tuple_hash |= jhash_2words(*ip_dst, dport, 0xBEEF);
+		calico_nat_ch_tuple_hash = jhash_2words(*ip_src, sport, 0xDEAD);
+		calico_nat_ch_tuple_hash |= jhash_2words(*ip_dst, dport, 0xBEEF);
 #endif
-		calico_nat_maglev_tuple_hash |= jhash_1word((__u32)ip_proto, 0xCA71);
-		maglev_key.ordinal = calico_nat_maglev_tuple_hash % 65537;
-		maglev_key.vip = *ip_dst;
-		maglev_key.port = dport;
-		maglev_key.proto = ip_proto;
-		maglev_val = cali_mag_be_lookup_elem(&maglev_key);
-		if (maglev_val) {
-			CALI_DEBUG("MAGLEV: picked maglev backend " IP_FMT ":%d", debug_ip(maglev_val->addr), maglev_val->port);
-			return maglev_val;
+		calico_nat_ch_tuple_hash |= jhash_1word((__u32)ip_proto, 0xCA71);
+		ch_key.ordinal = calico_nat_ch_tuple_hash % 65537;
+		ch_key.vip = *ip_dst;
+		ch_key.port = dport;
+		ch_key.proto = ip_proto;
+		ch_val = cali_ch_lookup_elem(&ch_key);
+		if (ch_val) {
+			CALI_DEBUG("CONSISTENTHASH: picked CH backend " IP_FMT ":%d", debug_ip(ch_val->addr), ch_val->port);
+			return ch_val;
 		}
 	}
 

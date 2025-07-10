@@ -1,4 +1,4 @@
-package maglev
+package consistenthash
 
 import (
 	"bytes"
@@ -16,7 +16,7 @@ const M = 1009
 
 type ConsistentHashOpt func(*ConsistentHash)
 
-// WithHash returns an option that sets the maglev hash function.
+// WithHash returns an option that sets the ConsistentHash hashing function.
 func WithHash(hash1, hash2 hash.Hash) func(*ConsistentHash) {
 	return func(c *ConsistentHash) {
 		c.h1 = hash1
@@ -33,13 +33,13 @@ func WithPreferenceLength(m int) func(*ConsistentHash) {
 	}
 }
 
-// ConsistentHash implements Maglev consistent hashing:
+// ConsistentHash implements ConsistentHash consistent hashing:
 //   - For each configured backend, generates a preference-list
 //     of LUT positions it would like to occupy.
-//   - Constructs a Maglev backend LUT to be hashed-into with packet 5-tuples.
+//   - Constructs a ConsistentHash backend LUT to be hashed-into with packet 5-tuples.
 type ConsistentHash struct {
 	// m is a prime number.
-	// Defaults to maglev.M
+	// Defaults to ConsistentHash.M
 	m      int
 	h1, h2 hash.Hash
 
@@ -53,8 +53,8 @@ type backend struct {
 	endpoint    k8sp.Endpoint
 }
 
-// NewConsistentHash returns a maglev hashing module.
-func NewConsistentHash(o ...ConsistentHashOpt) *ConsistentHash {
+// New returns a backend-hashing module.
+func New(o ...ConsistentHashOpt) *ConsistentHash {
 	c := &ConsistentHash{m: M}
 	c.backendNames = make([]string, 0)
 	c.backendsByName = make(map[string]backend)
@@ -64,7 +64,7 @@ func NewConsistentHash(o ...ConsistentHashOpt) *ConsistentHash {
 	}
 
 	if c.h1 == nil || c.h2 == nil {
-		panic("nil hashing function for maglev")
+		panic("nil hashing function for ConsistentHash")
 	}
 
 	return c
@@ -122,7 +122,7 @@ func (ch *ConsistentHash) RemoveBackend(kep k8sp.Endpoint) {
 	}
 }
 
-// Generate sorts the list of backends and then generates a Maglev LUT.
+// Generate sorts the list of backends and then generates a ConsistentHash LUT.
 func (ch *ConsistentHash) Generate() []k8sp.Endpoint {
 	if len(ch.backendNames) == 0 {
 		return nil

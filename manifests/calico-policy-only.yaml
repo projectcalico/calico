@@ -1072,6 +1072,11 @@ spec:
                     after cleanups. [Default: DoubleIfFull]
                   pattern: ^(?i)(Disabled|DoubleIfFull)?$
                   type: string
+                bpfMapSizeConsistentHash:
+                  description: |-
+                    BPFMapSizeConsistentHash sets the size of the ConsistentHash map. The map must be large enough to hold
+                    1009 entries for each ConsistentHash-enabled service address.
+                  type: integer
                 bpfMapSizeIPSets:
                   description: |-
                     BPFMapSizeIPSets sets the size for ipsets map.  The IP sets map must be large enough to hold an entry
@@ -1082,11 +1087,6 @@ spec:
                   description: |-
                     BPFMapSizeIfState sets the size for ifstate map.  The ifstate map must be large enough to hold an entry
                     for each device (host + workloads) on a host.
-                  type: integer
-                bpfMapSizeMaglevBackend:
-                  description: |-
-                    BPFMapSizeMaglevBackend sets the size of the Maglev backends map. The map must be large enough to hold
-                    1009 entries for each maglev-load-balanced service address.
                   type: integer
                 bpfMapSizeNATAffinity:
                   description: |-

@@ -1595,8 +1595,8 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 		*out = new(int)
 		**out = **in
 	}
-	if in.BPFMapSizeMaglevBackend != nil {
-		in, out := &in.BPFMapSizeMaglevBackend, &out.BPFMapSizeMaglevBackend
+	if in.BPFMapSizeConsistentHash != nil {
+		in, out := &in.BPFMapSizeConsistentHash, &out.BPFMapSizeConsistentHash
 		*out = new(int)
 		**out = **in
 	}
