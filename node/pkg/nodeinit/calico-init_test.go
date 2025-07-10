@@ -31,14 +31,19 @@ func TestIPPortParsing(t *testing.T) {
 		{"", nil, true},
 		{
 			"1.1.1.1:443",
-			[]IPPort{IPPort{net.IPv4(1, 1, 1, 1), 443, true}},
+			[]IPPort{{net.ParseIP("1.1.1.1"), 443, true}},
+			false,
+		},
+		{
+			"[2001:db8::1]:6443",
+			[]IPPort{{net.ParseIP("2001:db8::1"), 6443, false}},
 			false,
 		},
 		{
 			"192.168.0.1:6443,[2001:db8::1]:6443",
 			[]IPPort{
-				IPPort{net.ParseIP("192.168.0.1"), 6443, true},
-				IPPort{net.ParseIP("2001:db8::1"), 6443, false},
+				{net.ParseIP("192.168.0.1"), 6443, true},
+				{net.ParseIP("2001:db8::1"), 6443, false},
 			},
 			false,
 		},
