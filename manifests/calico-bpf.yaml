@@ -3381,8 +3381,6 @@ spec:
                         type: object
                       destination:
                         properties:
-                          namespaceSelector:
-                            type: string
                           nets:
                             items:
                               type: string
@@ -3395,8 +3393,6 @@ spec:
                               pattern: ^.*
                               x-kubernetes-int-or-string: true
                             type: array
-                          selector:
-                            type: string
                         type: object
                       ipVersion:
                         type: integer

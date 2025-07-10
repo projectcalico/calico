@@ -98,18 +98,6 @@ type QoSEntityRule struct {
 	// terminates at IP addresses in any of the given subnets.
 	Nets []string `json:"nets,omitempty" validate:"omitempty,dive,net"`
 
-	// Selector is an optional field that contains a selector expression (see Policy for
-	// sample syntax).  Only traffic that terminates at endpoints matching the selector will be matched.
-	Selector string `json:"selector,omitempty" validate:"omitempty,selector"`
-
-	// NamespaceSelector is an optional field that contains a selector expression. Only traffic
-	// that terminates at endpoints within the selected namespaces will be
-	// matched. When both NamespaceSelector and another selector are defined on the same rule, then only
-	// workload endpoints that are matched by both selectors will be selected by the rule.
-	//
-	// An empty NamespaceSelector implies the Selector applies to workload endpoints across all namespaces.
-	NamespaceSelector string `json:"namespaceSelector,omitempty" validate:"omitempty,selector"`
-
 	// Ports is an optional field that restricts the rule to only apply to traffic that has a
 	// destination port that matches one of these ranges/values. This value is a
 	// list of integers or strings that represent ranges of ports.

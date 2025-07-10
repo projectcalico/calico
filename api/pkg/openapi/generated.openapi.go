@@ -5573,20 +5573,6 @@ func schema_pkg_apis_projectcalico_v3_QoSEntityRule(ref common.ReferenceCallback
 							},
 						},
 					},
-					"selector": {
-						SchemaProps: spec.SchemaProps{
-							Description: "Selector is an optional field that contains a selector expression (see Policy for sample syntax).  Only traffic that terminates at endpoints matching the selector will be matched.",
-							Type:        []string{"string"},
-							Format:      "",
-						},
-					},
-					"namespaceSelector": {
-						SchemaProps: spec.SchemaProps{
-							Description: "NamespaceSelector is an optional field that contains a selector expression. Only traffic that terminates at endpoints within the selected namespaces will be matched. When both NamespaceSelector and another selector are defined on the same rule, then only workload endpoints that are matched by both selectors will be selected by the rule.\n\nAn empty NamespaceSelector implies the Selector applies to workload endpoints across all namespaces.",
-							Type:        []string{"string"},
-							Format:      "",
-						},
-					},
 					"ports": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Ports is an optional field that restricts the rule to only apply to traffic that has a destination port that matches one of these ranges/values. This value is a list of integers or strings that represent ranges of ports.\n\nSince only some protocols have ports, if any ports are specified it requires the Protocol match in the Rule to be set to \"TCP\" or \"UDP\".",
