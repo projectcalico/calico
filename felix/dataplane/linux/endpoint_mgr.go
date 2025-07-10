@@ -619,7 +619,7 @@ func (m *endpointManager) calculateWorkloadEndpointStatus(id types.WorkloadEndpo
 	var status string
 	if known {
 		if failed {
-			status = "error"
+			status = "down"
 		} else if operUp && adminUp {
 			status = "up"
 		} else {
