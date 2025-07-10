@@ -34,22 +34,21 @@ var (
 		Name: "felix_bpf_conntrack_sweeps",
 		Help: "Number of contrack table sweeps made so far",
 	})
-	conntrackGaugeUsed = prometheus.NewGauge(prometheus.GaugeOpts{
+	conntrackGaugeUsed = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "felix_bpf_conntrack_used",
-		Help: "Number of used entries visited during a conntrack table sweep",
-	})
-	conntrackGaugeCleaned = prometheus.NewGauge(prometheus.GaugeOpts{
+		Help: "Number of entries seen in the conntrack table at the last GC sweep, grouped by type.",
+	}, []string{"type"})
+	conntrackGaugeCleaned = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "felix_bpf_conntrack_cleaned",
-		Help: "Number of entries cleaned during a conntrack table sweep",
-	})
-	conntrackCounterCleaned = prometheus.NewGauge(prometheus.GaugeOpts{
-		Name: "felix_bpf_conntrack_cleaned_total",
-		Help: "Total number of entries cleaned during conntrack table sweeps, " +
-			"incremented for each clean individualy",
-	})
+		Help: "Cumulative number of entries deleted from the conntrack table, grouped by type.",
+	}, []string{"type"})
 	conntrackGaugeSweepDuration = prometheus.NewGauge(prometheus.GaugeOpts{
 		Name: "felix_bpf_conntrack_sweep_duration",
 		Help: "Conntrack sweep execution time (ns)",
+	})
+	conntrackGuageMapSize = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "felix_bpf_conntrack_map_size",
+		Help: "Size of the conntrack map (total capacity).",
 	})
 )
 
@@ -57,8 +56,8 @@ func init() {
 	prometheus.MustRegister(conntrackCounterSweeps)
 	prometheus.MustRegister(conntrackGaugeUsed)
 	prometheus.MustRegister(conntrackGaugeCleaned)
-	prometheus.MustRegister(conntrackCounterCleaned)
 	prometheus.MustRegister(conntrackGaugeSweepDuration)
+	prometheus.MustRegister(conntrackGuageMapSize)
 }
 
 // ScanVerdict represents the set of values returned by EntryScan
@@ -69,6 +68,27 @@ const (
 	ScanVerdictOK ScanVerdict = iota
 	// ScanVerdictDelete means entry should be deleted
 	ScanVerdictDelete
+)
+
+type CounterType int
+
+const (
+	// SeenNormal represents connections seen in the normal (forward) direction.
+	SeenNormal CounterType = iota
+	// SeenNATForward represents connections seen in the forward NAT direction.
+	SeenNATForward
+	// SeenNATReverse represents connections seen in the reverse NAT direction.
+	SeenNATReverse
+	// DeletedNormal represents normal connections that have been deleted.
+	DeletedNormal
+	// DeletedNATForward represents forward NAT connections that have been deleted.
+	DeletedNATForward
+	// DeletedNATReverse represents reverse NAT connections that have been deleted.
+	DeletedNATReverse
+
+	// numCounters is an unexported constant that holds the total number of counter types.
+	// This is a useful trick to automatically size the array.
+	numCounters
 )
 
 // EntryGet is a function prototype provided to EntryScanner in case it needs to
@@ -104,6 +124,7 @@ type Scanner struct {
 	maxEntries                   int
 	autoScale                    bool
 	configChangedRestartCallback func()
+	counters                     [numCounters]uint64
 
 	wg       sync.WaitGroup
 	stopCh   chan struct{}
@@ -130,6 +151,44 @@ func NewScanner(ctMap maps.Map, kfb func([]byte) KeyInterface, vfb func([]byte) 
 	}
 }
 
+func (s *Scanner) incrementSeenCounters(ctType uint8) {
+	switch ctType {
+	case TypeNormal:
+		s.counters[SeenNormal]++
+	case TypeNATForward:
+		s.counters[SeenNATForward]++
+	case TypeNATReverse:
+		s.counters[SeenNATReverse]++
+	default:
+		return
+	}
+}
+
+func (s *Scanner) incrementDeletedCounters(ctType uint8) {
+	switch ctType {
+	case TypeNormal:
+		s.counters[DeletedNormal]++
+	case TypeNATForward:
+		s.counters[DeletedNATForward]++
+	case TypeNATReverse:
+		s.counters[DeletedNATReverse]++
+	default:
+		return
+	}
+}
+
+func (s *Scanner) totalUsed() uint64 {
+	return s.counters[SeenNormal] + s.counters[SeenNATForward] + s.counters[SeenNATReverse]
+}
+
+func (s *Scanner) totalDeleted() uint64 {
+	return s.counters[DeletedNormal] + s.counters[DeletedNATForward] + s.counters[DeletedNATReverse]
+}
+
+func (s *Scanner) resetCounters() {
+	s.counters = [numCounters]uint64{}
+}
+
 // Scan executes a scanning iteration
 func (s *Scanner) Scan() {
 	s.iterStart()
@@ -139,16 +198,12 @@ func (s *Scanner) Scan() {
 
 	debug := log.GetLevel() >= log.DebugLevel
 
-	used := 0
-	cleaned := 0
-
 	log.Debug("Starting conntrack scanner iteration")
 	err := s.ctMap.Iter(func(k, v []byte) maps.IteratorAction {
 		ctKey := s.keyFromBytes(k)
 		ctVal := s.valueFromBytes(v)
 
-		used++
-		conntrackCounterCleaned.Inc()
+		s.incrementSeenCounters(ctVal.Type())
 
 		if debug {
 			log.WithFields(log.Fields{
@@ -162,7 +217,7 @@ func (s *Scanner) Scan() {
 				if debug {
 					log.Debug("Deleting conntrack entry.")
 				}
-				cleaned++
+				s.incrementDeletedCounters(ctVal.Type())
 				return maps.IterDelete
 			}
 		}
@@ -174,10 +229,23 @@ func (s *Scanner) Scan() {
 		return
 	}
 
+	used := s.totalUsed()
+	cleaned := s.totalDeleted()
+
+	// Update counters
 	conntrackCounterSweeps.Inc()
-	conntrackGaugeUsed.Set(float64(used))
-	conntrackGaugeCleaned.Set(float64(cleaned))
 	conntrackGaugeSweepDuration.Set(float64(time.Since(start)))
+	conntrackGaugeUsed.WithLabelValues("total").Set(float64(used))
+	conntrackGaugeUsed.WithLabelValues("normal").Set(float64(s.counters[SeenNormal]))
+	conntrackGaugeUsed.WithLabelValues("nat_forward").Set(float64(s.counters[SeenNATForward]))
+	conntrackGaugeUsed.WithLabelValues("nat_reverse").Set(float64(s.counters[SeenNATReverse]))
+
+	conntrackGaugeCleaned.WithLabelValues("total").Add(float64(cleaned))
+	conntrackGaugeCleaned.WithLabelValues("normal").Add(float64(s.counters[DeletedNormal]))
+	conntrackGaugeCleaned.WithLabelValues("nat_forward").Add(float64(s.counters[DeletedNATForward]))
+	conntrackGaugeCleaned.WithLabelValues("nat_reverse").Add(float64(s.counters[DeletedNATReverse]))
+	conntrackGuageMapSize.Set(float64(s.maxEntries))
+
 	if !s.autoScale {
 		return
 	}
@@ -262,6 +330,7 @@ func (s *Scanner) Start() {
 
 func (s *Scanner) iterStart() {
 	log.Debug("Calling IterationStart on all scanners")
+	s.resetCounters()
 	for _, scanner := range s.scanners {
 		if synced, ok := scanner.(EntryScannerSynced); ok {
 			synced.IterationStart()
