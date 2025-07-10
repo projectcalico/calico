@@ -184,6 +184,18 @@ var ruleTestData = []TableEntry{
 		"-m multiport ! --destination-ports 10:12,20:30,8080"),
 }
 
+// Test data for rules that should be filtered out (return no iptables rules)
+var filteredRuleTestData = []TableEntry{
+	Entry("Negated catch-all IPv4 source net (should be filtered out)", 4,
+		&proto.Rule{NotSrcNet: []string{"0.0.0.0/0"}}),
+	Entry("Negated catch-all IPv6 source net (should be filtered out)", 6,
+		&proto.Rule{NotSrcNet: []string{"::/0"}}),
+	Entry("Negated catch-all IPv4 destination net (should be filtered out)", 4,
+		&proto.Rule{NotDstNet: []string{"0.0.0.0/0"}}),
+	Entry("Negated catch-all IPv6 destination net (should be filtered out)", 6,
+		&proto.Rule{NotDstNet: []string{"::/0"}}),
+}
+
 var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 	rrConfigNormal := Config{
 		IPIPEnabled:       true,
@@ -1970,6 +1982,35 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 			Expect(rules).To(BeEmpty())
 		})
 	})
+})
+
+var _ = Describe("Filtered rules (negated catch-all CIDR validation)", func() {
+	rrConfigNormal := Config{
+		IPIPEnabled:       true,
+		IPIPTunnelAddress: nil,
+		IPSetConfigV4:     ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil),
+		IPSetConfigV6:     ipsets.NewIPVersionConfig(ipsets.IPFamilyV6, "cali", nil, nil),
+		MarkAccept:        0x80,
+		MarkPass:          0x100,
+		MarkScratch0:      0x200,
+		MarkScratch1:      0x400,
+		MarkDrop:          0x800,
+		MarkEndpoint:      0xff000,
+		LogPrefix:         "calico-packet",
+	}
+
+	DescribeTable(
+		"Rules with catch-all negated CIDRs should be filtered out",
+		func(ipVer int, in *proto.Rule) {
+			rrConfigNormal.FlowLogsEnabled = false
+			renderer := NewRenderer(rrConfigNormal)
+			rules := renderer.ProtoRuleToIptablesRules(in, uint8(ipVer),
+				RuleOwnerTypePolicy, RuleDirIngress, 0, "default.foo", false)
+			// Rules with catch-all negated CIDRs should be completely filtered out
+			Expect(len(rules)).To(Equal(0))
+		},
+		filteredRuleTestData...,
+	)
 })
 
 var _ = DescribeTable("Port split tests",
