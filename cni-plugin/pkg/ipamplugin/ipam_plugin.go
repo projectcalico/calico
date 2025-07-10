@@ -166,8 +166,6 @@ func cmdAdd(args *skel.CmdArgs) error {
 	}
 
 	ctx := context.Background()
-	ctx, cancel := context.WithTimeout(ctx, 90*time.Second)
-	defer cancel()
 
 	r := &cniv1.Result{}
 	if ipamArgs.IP != nil {
@@ -183,6 +181,12 @@ func cmdAdd(args *skel.CmdArgs) error {
 		assignIPWithLock := func() error {
 			unlock := acquireIPAMLockBestEffort(conf.IPAMLockFile)
 			defer unlock()
+
+			// Only start the timeout after we get the lock. When there's a
+			// thundering herd of new pods, acquiring the lock can take a while.
+			ctx, cancel := context.WithTimeout(ctx, 90*time.Second)
+			defer cancel()
+
 			return calicoClient.IPAM().AssignIP(ctx, assignArgs)
 		}
 		err := assignIPWithLock()
@@ -224,12 +228,14 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 		logger.Infof("Calico CNI IPAM request count IPv4=%d IPv6=%d", num4, num6)
 
-		v4pools, err := utils.ResolvePools(ctx, calicoClient, conf.IPAM.IPv4Pools, true)
+		rctx, cancel := context.WithTimeout(ctx, 90*time.Second)
+		defer cancel()
+		v4pools, err := utils.ResolvePools(rctx, calicoClient, conf.IPAM.IPv4Pools, true)
 		if err != nil {
 			return err
 		}
 
-		v6pools, err := utils.ResolvePools(ctx, calicoClient, conf.IPAM.IPv6Pools, false)
+		v6pools, err := utils.ResolvePools(rctx, calicoClient, conf.IPAM.IPv6Pools, false)
 		if err != nil {
 			return err
 		}
@@ -263,16 +269,22 @@ func cmdAdd(args *skel.CmdArgs) error {
 			assignArgs.HostReservedAttrIPv4s = rsvdAttrWindows
 		}
 		logger.WithField("assignArgs", assignArgs).Info("Auto assigning IP")
-		autoAssignWithLock := func(calicoClient client.Interface, ctx context.Context, assignArgs ipam.AutoAssignArgs) (*ipam.IPAMAssignments, *ipam.IPAMAssignments, error) {
+		autoAssignWithLock := func(calicoClient client.Interface, assignArgs ipam.AutoAssignArgs) (*ipam.IPAMAssignments, *ipam.IPAMAssignments, error) {
 			// Acquire a best-effort host-wide lock to prevent multiple copies of the CNI plugin trying to assign
 			// concurrently. AutoAssign is concurrency safe already but serialising the CNI plugins means that
 			// we only attempt one IPAM claim at a time on the host's active IPAM block.  This reduces the load
 			// on the API server by a factor of the number of concurrent requests.
 			unlock := acquireIPAMLockBestEffort(conf.IPAMLockFile)
 			defer unlock()
+
+			// Only start the timeout after we get the lock. When there's a
+			// thundering herd of new pods, acquiring the lock can take a while.
+			ctx, cancel := context.WithTimeout(ctx, 90*time.Second)
+			defer cancel()
+
 			return calicoClient.IPAM().AutoAssign(ctx, assignArgs)
 		}
-		v4Assignments, v6Assignments, err := autoAssignWithLock(calicoClient, ctx, assignArgs)
+		v4Assignments, v6Assignments, err := autoAssignWithLock(calicoClient, assignArgs)
 		var v4ips, v6ips []cnet.IPNet
 		if v4Assignments != nil {
 			v4ips = v4Assignments.IPs
@@ -294,7 +306,11 @@ func cmdAdd(args *skel.CmdArgs) error {
 				for _, v6 := range v6Assignments.IPs {
 					v6IPs = append(v6IPs, ipam.ReleaseOptions{Address: v6.IP.String()})
 				}
-				_, _, err := calicoClient.IPAM().ReleaseIPs(ctx, v6IPs...)
+
+				// Fresh timeout for cleanup.
+				cleanupCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+				defer cancel()
+				_, _, err := calicoClient.IPAM().ReleaseIPs(cleanupCtx, v6IPs...)
 				if err != nil {
 					logrus.Errorf("Error releasing IPv6 addresses %+v on IPv4 address assignment failure: %s", v6IPs, err)
 				}
@@ -310,7 +326,11 @@ func cmdAdd(args *skel.CmdArgs) error {
 				for _, v4 := range v4Assignments.IPs {
 					v4IPs = append(v4IPs, ipam.ReleaseOptions{Address: v4.IP.String()})
 				}
-				_, _, err := calicoClient.IPAM().ReleaseIPs(ctx, v4IPs...)
+
+				// Fresh timeout for cleanup.
+				cleanupCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+				defer cancel()
+				_, _, err := calicoClient.IPAM().ReleaseIPs(cleanupCtx, v4IPs...)
 				if err != nil {
 					logrus.Errorf("Error releasing IPv4 addresses %+v on IPv6 address assignment failure: %s", v4IPs, err)
 				}
