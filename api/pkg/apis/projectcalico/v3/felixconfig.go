@@ -803,9 +803,9 @@ type FelixConfigurationSpec struct {
 	// for each device (host + workloads) on a host.
 	BPFMapSizeIfState *int `json:"bpfMapSizeIfState,omitempty"`
 
-	// BPFMapSizeMaglevBackend sets the size of the Maglev backends map. The map must be large enough to hold
-	// 1009 entries for each maglev-load-balanced service address.
-	BPFMapSizeMaglevBackend *int `json:"bpfMapSizeMaglevBackend,omitempty"`
+	// BPFMapSizeConsistentHash sets the size of the ConsistentHash map. The map must be large enough to hold
+	// 1009 entries for each ConsistentHash-enabled service address.
+	BPFMapSizeConsistentHash *int `json:"bpfMapSizeConsistentHash,omitempty"`
 
 	// BPFHostConntrackBypass Controls whether to bypass Linux conntrack in BPF mode for
 	// workloads and services. [Default: true - bypass Linux conntrack]
