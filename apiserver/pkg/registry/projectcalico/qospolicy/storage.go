@@ -41,12 +41,12 @@ func (r *REST) Categories() []string {
 
 // EmptyObject returns an empty instance
 func EmptyObject() runtime.Object {
-	return &calico.BGPPeer{}
+	return &calico.QoSPolicy{}
 }
 
 // NewList returns a new shell of a binding list
 func NewList() runtime.Object {
-	return &calico.BGPPeerList{}
+	return &calico.QoSPolicyList{}
 }
 
 // NewREST returns a RESTStorage object that will work against API services.
@@ -71,8 +71,8 @@ func NewREST(scheme *runtime.Scheme, opts server.Options) (*REST, error) {
 		prefix,
 		keyFunc,
 		strategy,
-		func() runtime.Object { return &calico.BGPPeer{} },
-		func() runtime.Object { return &calico.BGPPeerList{} },
+		func() runtime.Object { return &calico.QoSPolicy{} },
+		func() runtime.Object { return &calico.QoSPolicyList{} },
 		GetAttrs,
 		nil,
 		nil,
@@ -81,12 +81,12 @@ func NewREST(scheme *runtime.Scheme, opts server.Options) (*REST, error) {
 		return nil, err
 	}
 	store := &genericregistry.Store{
-		NewFunc:     func() runtime.Object { return &calico.BGPPeer{} },
-		NewListFunc: func() runtime.Object { return &calico.BGPPeerList{} },
+		NewFunc:     func() runtime.Object { return &calico.QoSPolicy{} },
+		NewListFunc: func() runtime.Object { return &calico.QoSPolicyList{} },
 		KeyRootFunc: opts.KeyRootFunc(false),
 		KeyFunc:     opts.KeyFunc(false),
 		ObjectNameFunc: func(obj runtime.Object) (string, error) {
-			return obj.(*calico.BGPPeer).Name, nil
+			return obj.(*calico.QoSPolicy).Name, nil
 		},
 		PredicateFunc:            MatchQoSPolicy,
 		DefaultQualifiedResource: calico.Resource("qospolicies"),

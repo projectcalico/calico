@@ -19,8 +19,14 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/projectcalico/api/pkg/lib/numorstring"
 	"github.com/projectcalico/calico/libcalico-go/lib/errors"
+	"github.com/projectcalico/calico/libcalico-go/lib/net"
 	log "github.com/sirupsen/logrus"
+)
+
+var (
+	typeQoSPolicy = reflect.TypeOf(QoSPolicy{})
 )
 
 type QoSPolicyKey struct {
@@ -80,39 +86,75 @@ func (options QoSPolicyListOptions) KeyFromDefaultPath(path string) Key {
 }
 
 type QoSPolicy struct {
-	Order         *float64          `json:"order,omitempty" validate:"omitempty"`
-	InboundRules  []Rule            `json:"inbound_rules,omitempty" validate:"omitempty,dive"`
-	OutboundRules []Rule            `json:"outbound_rules,omitempty" validate:"omitempty,dive"`
-	Selector      string            `json:"selector" validate:"selector"`
-	Annotations   map[string]string `json:"annotations,omitempty"`
-	Types         []string          `json:"types,omitempty"`
+	Order         *float64  `json:"order,omitempty" validate:"omitempty"`
+	Selector      string    `json:"selector" validate:"selector"`
+	OutboundRules []QoSRule `json:"outbound_rules,omitempty" validate:"omitempty,dive"`
 }
 
-func (p Policy) String() string {
+func (q QoSPolicy) String() string {
 	parts := make([]string, 0)
-	if p.Order != nil {
-		parts = append(parts, fmt.Sprintf("order:%v", *p.Order))
+	if q.Order != nil {
+		parts = append(parts, fmt.Sprintf("order:%v", *q.Order))
 	}
-	parts = append(parts, fmt.Sprintf("selector:%#v", p.Selector))
-	inRules := make([]string, len(p.InboundRules))
-	for ii, rule := range p.InboundRules {
-		inRules[ii] = rule.String()
-	}
-	parts = append(parts, fmt.Sprintf("inbound:%v", strings.Join(inRules, ";")))
-	outRules := make([]string, len(p.OutboundRules))
-	for ii, rule := range p.OutboundRules {
+	parts = append(parts, fmt.Sprintf("selector:%#v", q.Selector))
+	outRules := make([]string, len(q.OutboundRules))
+	for ii, rule := range q.OutboundRules {
 		outRules[ii] = rule.String()
 	}
 	parts = append(parts, fmt.Sprintf("outbound:%v", strings.Join(outRules, ";")))
-	parts = append(parts, fmt.Sprintf("untracked:%v", p.DoNotTrack))
-	parts = append(parts, fmt.Sprintf("pre_dnat:%v", p.PreDNAT))
-	parts = append(parts, fmt.Sprintf("apply_on_forward:%v", p.ApplyOnForward))
-	parts = append(parts, fmt.Sprintf("types:%v", strings.Join(p.Types, ";")))
-	if len(p.PerformanceHints) > 0 {
-		parts = append(parts, fmt.Sprintf("performance_hints:%v", p.PerformanceHints))
-	}
-	if p.StagedAction != nil {
-		parts = append(parts, fmt.Sprintf("staged_action:%v", p.StagedAction))
-	}
 	return strings.Join(parts, ",")
+}
+
+type QoSRule struct {
+	Action string `json:"action,omitempty"`
+
+	IPVersion *int `json:"ip_version,omitempty" validate:"omitempty,ipVersion"`
+
+	Protocol *numorstring.Protocol `json:"protocol,omitempty" validate:"omitempty"`
+	DstNet   *net.IPNet            `json:"dst_net,omitempty" validate:"omitempty"`
+	DstNets  []*net.IPNet          `json:"dst_nets,omitempty" validate:"omitempty"`
+	DstPorts []numorstring.Port    `json:"dst_ports,omitempty" validate:"omitempty,dive"`
+	Metadata *RuleMetadata         `json:"metadata,omitempty" validate:"omitempty"`
+}
+
+func (r QoSRule) String() string {
+	parts := make([]string, 0)
+	// Action.
+	if r.Action != "" {
+		parts = append(parts, r.Action)
+	} else {
+		parts = append(parts, "-")
+	}
+
+	// Global packet attributes that don't depend on direction.
+	if r.Protocol != nil {
+		parts = append(parts, r.Protocol.String())
+	}
+
+	{
+		// Destination attributes. New block ensures that fromParts goes out-of-scope before
+		// we calculate toParts.  This prevents copy/paste errors.
+		toParts := make([]string, 0)
+		if len(r.DstPorts) > 0 {
+			DstPorts := make([]string, len(r.DstPorts))
+			for ii, port := range r.DstPorts {
+				DstPorts[ii] = port.String()
+			}
+			toParts = append(toParts, "ports", strings.Join(DstPorts, ","))
+		}
+		dstNets := r.AllDstNets()
+		if len(dstNets) != 0 {
+			toParts = append(toParts, "cidr", joinNets(dstNets))
+		}
+		if len(toParts) > 0 {
+			parts = append(parts, "to")
+			parts = append(parts, toParts...)
+		}
+	}
+
+	return strings.Join(parts, " ")
+}
+
+func (r QoSRule) AllDstNets() []*net.IPNet {
+	return combineNets(r.DstNet, r.DstNets)
 }
