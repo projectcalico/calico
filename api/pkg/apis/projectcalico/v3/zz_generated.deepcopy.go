@@ -1595,6 +1595,11 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 		*out = new(int)
 		**out = **in
 	}
+	if in.BPFMapSizeConsistentHash != nil {
+		in, out := &in.BPFMapSizeConsistentHash, &out.BPFMapSizeConsistentHash
+		*out = new(int)
+		**out = **in
+	}
 	if in.BPFHostConntrackBypass != nil {
 		in, out := &in.BPFHostConntrackBypass, &out.BPFHostConntrackBypass
 		*out = new(bool)

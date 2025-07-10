@@ -16,17 +16,21 @@ package ut_test
 
 import (
 	"fmt"
+	"hash/fnv"
 	"net"
 	"testing"
 
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
+	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/calico/felix/bpf/arp"
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
 	conntrack3 "github.com/projectcalico/calico/felix/bpf/conntrack/v3"
 	v3 "github.com/projectcalico/calico/felix/bpf/conntrack/v3"
+	"github.com/projectcalico/calico/felix/bpf/consistenthash"
+	chtypes "github.com/projectcalico/calico/felix/bpf/consistenthash/test"
 	"github.com/projectcalico/calico/felix/bpf/counters"
 	"github.com/projectcalico/calico/felix/bpf/nat"
 	"github.com/projectcalico/calico/felix/bpf/polprog"
@@ -3779,4 +3783,62 @@ func TestNATOutExcludeHosts(t *testing.T) {
 		Expect(res.Retval).To(Equal(resTC_ACT_REDIRECT))
 	}, withNATOutExcludeHosts())
 	expectMark(tcdefs.MarkSeen)
+}
+
+func TestConsistentHashTable(t *testing.T) {
+	RegisterTestingT(t)
+
+	chMap := nat.ConsistentHashMap()
+	err := chMap.EnsureExists()
+	Expect(err).NotTo(HaveOccurred())
+
+	svcIP := net.ParseIP("169.172.9.1")
+	svcPort := uint16(80)
+	backendPort := uint16(8080)
+	svcProto := uint8(layers.IPProtocolUDP)
+
+	mg := consistenthash.New(consistenthash.WithHash(fnv.New32(), fnv.New32()), consistenthash.WithPreferenceLength(31))
+	programmed := make(map[nat.ConsistentHashBackendKey]nat.BackendValue)
+
+	By("Creating creating 5 ConsistentHash-enabled backends")
+	backends := make(map[string]chtypes.MockEndpoint)
+	for _, b := range []string{"192.168.1.1", "192.168.1.2", "192.168.1.3", "192.168.1.4", "192.168.1.5"} {
+		backend := chtypes.MockEndpoint{
+			Ip:  b,
+			Prt: backendPort,
+		}
+		mg.AddBackend(backend)
+		backends[backend.String()] = backend
+	}
+
+	By("Generating a ConsistentHash LUT")
+	lut := mg.Generate()
+	for i, b := range lut {
+		Expect(backends).To(HaveKey(b.String()))
+		expectedBackend := backends[b.String()]
+		Expect(expectedBackend.Ip).To(Equal(b.IP()))
+		Expect(expectedBackend.Port()).To(Equal(b.Port()))
+
+		backendIP := net.ParseIP(b.IP())
+		key := nat.NewConsistentHashBackendKey(svcIP, svcPort, svcProto, uint32(i))
+		val := nat.NewNATBackendValue(backendIP, uint16(backendPort))
+		err := chMap.Update(key.AsBytes(), val.AsBytes())
+		Expect(err).NotTo(HaveOccurred())
+
+		programmed[key] = val
+	}
+
+	By("Reading back the BPF map")
+	m, err := nat.LoadConsistentHashMap(chMap)
+	Expect(err).NotTo(HaveOccurred())
+	Expect(len(m)).To(Equal(len(programmed)))
+
+	keys := make([]nat.ConsistentHashBackendKey, len(m))
+	for k := range m {
+		keys[k.Ordinal()] = k
+	}
+
+	for _, k := range keys {
+		fmt.Printf("%v: %s\n", k, m[k])
+	}
 }

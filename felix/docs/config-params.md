@@ -1899,6 +1899,21 @@ after cleanups.
 | Default value (YAML) | `DoubleIfFull` |
 | Notes | Required. | 
 
+### `BPFMapSizeConsistentHash` (config file) / `bpfMapSizeConsistentHash` (YAML)
+
+Sets the size of the ConsistentHash map. The map must be large enough to hold
+1009 entries for each ConsistentHash-enabled service address.
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_BPFMapSizeConsistentHash` |
+| Encoding (env var/config file) | Integer |
+| Default value (above encoding) | `1009500` |
+| `FelixConfiguration` field | `bpfMapSizeConsistentHash` (YAML) `BPFMapSizeConsistentHash` (Go API) |
+| `FelixConfiguration` schema | Integer |
+| Default value (YAML) | `1009500` |
+| Notes | Required. | 
+
 ### `BPFMapSizeIPSets` (config file) / `bpfMapSizeIPSets` (YAML)
 
 Sets the size for ipsets map. The IP sets map must be large enough to hold an entry

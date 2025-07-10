@@ -87,6 +87,7 @@ var _ = Describe("BPF service type change", func() {
 	bpfMaps := &bpfmap.IPMaps{}
 	bpfMaps.FrontendMap = newMockNATMap()
 	bpfMaps.BackendMap = newMockNATBackendMap()
+	bpfMaps.ConsistentHashMap = newMockConsistentHashMap()
 	bpfMaps.AffinityMap = newMockAffinityMap()
 	bpfMaps.CtMap = mock.NewMockMap(conntrack.MapParams)
 	front := bpfMaps.FrontendMap.(*mockNATMap)

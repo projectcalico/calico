@@ -33,22 +33,26 @@ func init() {
 	maps.SetSize(AffinityMapParameters.VersionedName(), AffinityMapParameters.MaxEntries)
 	maps.SetSize(SendRecvMsgMapParameters.VersionedName(), SendRecvMsgMapParameters.MaxEntries)
 	maps.SetSize(CTNATsMapParameters.VersionedName(), CTNATsMapParameters.MaxEntries)
+	maps.SetSize(ConsistentHashMapParameters.VersionedName(), ConsistentHashMapParameters.MaxEntries)
 
 	maps.SetSize(FrontendMapV6Parameters.VersionedName(), FrontendMapV6Parameters.MaxEntries)
 	maps.SetSize(BackendMapV6Parameters.VersionedName(), BackendMapV6Parameters.MaxEntries)
 	maps.SetSize(AffinityMapV6Parameters.VersionedName(), AffinityMapV6Parameters.MaxEntries)
 	maps.SetSize(SendRecvMsgMapV6Parameters.VersionedName(), SendRecvMsgMapV6Parameters.MaxEntries)
 	maps.SetSize(CTNATsMapV6Parameters.VersionedName(), CTNATsMapV6Parameters.MaxEntries)
+	maps.SetSize(ConsistentHashMapV6Parameters.VersionedName(), ConsistentHashMapV6Parameters.MaxEntries)
 }
 
-func SetMapSizes(fsize, bsize, asize int) {
+func SetMapSizes(fsize, bsize, asize, msize int) {
 	maps.SetSize(FrontendMapParameters.VersionedName(), fsize)
 	maps.SetSize(BackendMapParameters.VersionedName(), bsize)
 	maps.SetSize(AffinityMapParameters.VersionedName(), asize)
+	maps.SetSize(ConsistentHashMapParameters.VersionedName(), msize)
 
 	maps.SetSize(FrontendMapV6Parameters.VersionedName(), fsize)
 	maps.SetSize(BackendMapV6Parameters.VersionedName(), bsize)
 	maps.SetSize(AffinityMapV6Parameters.VersionedName(), asize)
+	maps.SetSize(ConsistentHashMapV6Parameters.VersionedName(), msize)
 }
 
 //	struct calico_nat_v4_key {
@@ -199,9 +203,10 @@ func FrontendKeyFromBytes(b []byte) FrontendKeyInterface {
 }
 
 const (
-	NATFlgExternalLocal = 0x1
-	NATFlgInternalLocal = 0x2
-	NATFlgExclude       = 0x4
+	NATFlgExternalLocal     = 0x1
+	NATFlgInternalLocal     = 0x2
+	NATFlgExclude           = 0x4
+	NATFlgNatConsistentHash = 0x8
 )
 
 var flgTostr = map[int]string{
@@ -361,6 +366,150 @@ func BackendValueFromBytes(b []byte) BackendValueInterface {
 	var v BackendValue
 	copy(v[:], b)
 	return v
+}
+
+//	struct calico_ch_key {
+//		ipv46_addr_t vip; (be32)
+//		__u16 port;
+//		__u8 proto;
+//		__u8 pad;
+//		__u32 ordinal; // should always be a value of [0..M], where M is a very large prime number. -Alex
+//	};
+const consistentHashBackendKeySize = 12
+
+type ConsistentHashBackendKey [consistentHashBackendKeySize]byte
+
+func NewConsistentHashBackendKey(addr net.IP, port uint16, proto uint8, ordinal uint32) ConsistentHashBackendKey {
+	var k ConsistentHashBackendKey
+	addr = addr.To4()
+	if len(addr) != 4 {
+		log.WithField("ip", addr).Panic("Bad IP")
+	}
+	copy(k[:4], addr)
+
+	binary.LittleEndian.PutUint16(k[4:6], port)
+	k[6] = proto
+	k[7] = 0
+	binary.LittleEndian.PutUint32(k[8:12], ordinal)
+
+	return k
+}
+
+type ConsistentHashBackendKeyInterface interface {
+	VIP() net.IP
+	Port() uint16
+	Protocol() uint8
+	Ordinal() uint32
+	AsBytes() []byte
+}
+
+func NewConsistentHashBackendKeyIntf(addr net.IP, port uint16, proto uint8, ordinal uint32) ConsistentHashBackendKeyInterface {
+	return NewConsistentHashBackendKey(addr, port, proto, uint32(ordinal))
+}
+
+func (k ConsistentHashBackendKey) VIP() net.IP {
+	return k[0:4]
+}
+
+func (k ConsistentHashBackendKey) Port() uint16 {
+	return binary.LittleEndian.Uint16(k[4:6])
+}
+
+func (k ConsistentHashBackendKey) Protocol() uint8 {
+	return k[6]
+}
+
+func (k ConsistentHashBackendKey) Ordinal() uint32 {
+	return binary.LittleEndian.Uint32(k[8:12])
+}
+
+func (k ConsistentHashBackendKey) AsBytes() []byte {
+	return k[:]
+}
+
+func (k ConsistentHashBackendKey) String() string {
+	addr := k.VIP()
+	port := k.Port()
+	proto := k.Protocol()
+	ord := k.Ordinal()
+	return fmt.Sprintf("%s:%d/%d, %d", addr, port, proto, ord)
+}
+
+func ConsistentHashBackendKeyFromBytes(b []byte) ConsistentHashBackendKeyInterface {
+	var k ConsistentHashBackendKey
+	copy(k[:], b)
+	return k
+}
+
+var _ ConsistentHashBackendKeyInterface = ConsistentHashBackendKey{}
+
+const consistentHashBackendValueSize = backendValueSize
+
+var ConsistentHashMapParameters = maps.MapParameters{
+	Type:       "hash",
+	KeySize:    consistentHashBackendKeySize,
+	ValueSize:  consistentHashBackendValueSize,
+	MaxEntries: 65537 * 100,
+	Name:       "cali_v4_ch_be",
+	Flags:      unix.BPF_F_NO_PREALLOC,
+}
+
+func ConsistentHashMap() maps.MapWithExistsCheck {
+	return maps.NewPinnedMap(ConsistentHashMapParameters)
+}
+
+type ConsistentHashMapMem map[ConsistentHashBackendKey]BackendValue
+
+// Equal implements the comparable interface.
+func (m ConsistentHashMapMem) Equal(cmp ConsistentHashMapMem) bool {
+	if len(m) != len(cmp) {
+		return false
+	}
+
+	for k, v := range m {
+		if v2, ok := cmp[k]; !ok || v != v2 {
+			return false
+		}
+	}
+
+	return true
+}
+
+// LoadConsistentHashMap loads the ConsistentHash NAT map into a go map or returns an error
+func LoadConsistentHashMap(m maps.Map) (ConsistentHashMapMem, error) {
+	ret := make(ConsistentHashMapMem)
+
+	if err := m.Open(); err != nil {
+		return nil, err
+	}
+
+	iterFn := ConsistentHashMapMemIter(ret)
+
+	err := m.Iter(func(k, v []byte) maps.IteratorAction {
+		iterFn(k, v)
+		return maps.IterNone
+	})
+	if err != nil {
+		ret = nil
+	}
+
+	return ret, err
+}
+
+// ConsistentHashMapMemIter returns maps.MapIter that loads the provided ConsistentHashMapMem
+func ConsistentHashMapMemIter(m ConsistentHashMapMem) func(k, v []byte) {
+	ks := len(ConsistentHashBackendKey{})
+	vs := len(BackendValue{})
+
+	return func(k, v []byte) {
+		var key ConsistentHashBackendKey
+		copy(key[:ks], k[:ks])
+
+		var val BackendValue
+		copy(val[:vs], v[:vs])
+
+		m[key] = val
+	}
 }
 
 var FrontendMapParameters = maps.MapParameters{
