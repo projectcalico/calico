@@ -18,8 +18,9 @@ static CALI_BPF_INLINE int icmp_v6_reply(struct cali_tc_ctx *ctx,
 		return -1;
 	}
 
-	ipv6_addr_t orig_src;
+	ipv6_addr_t orig_src, orig_dst;
 	ipv6hdr_ip_to_ipv6_addr_t(&orig_src, &ip_hdr(ctx)->saddr);
+	ipv6hdr_ip_to_ipv6_addr_t(&orig_dst, &ip_hdr(ctx)->daddr);
 
 	/* Trim the packet to the desired length. ICMPv6 requires to keep as
 	 * much of the packet as fits in the minimal guaranteed MTU.
@@ -76,7 +77,15 @@ static CALI_BPF_INLINE int icmp_v6_reply(struct cali_tc_ctx *ctx,
 	ctx->ipheader_len = IP_SIZE;
 
 	/* use the host IP of the program that handles the packet */
-	ipv6_addr_t_to_ipv6hdr_ip(&ip_hdr(ctx)->saddr, (ipv6_addr_t *)&INTF_IP);
+	struct cali_rt *r = cali_rt_lookup(&orig_dst);
+	if (r && cali_rt_flags_local_host(r->flags)) {
+		CALI_DEBUG("ICMP v6 reply: from orig dst host IP " IP_FMT, &orig_dst);
+		ipv6_addr_t_to_ipv6hdr_ip(&ip_hdr(ctx)->saddr, &orig_dst);
+	} else {
+		/* use the host IP of the program that handles the packet */
+		CALI_DEBUG("ICMP v6 reply: from IP of the intf " IP_FMT, &INTF_IP);
+		ipv6_addr_t_to_ipv6hdr_ip(&ip_hdr(ctx)->saddr, (ipv6_addr_t *)&INTF_IP);
+	}
 	ipv6_addr_t_to_ipv6hdr_ip(&ip_hdr(ctx)->daddr, &orig_src);
 
 	struct icmp6hdr *icmp = ((void *)ip_hdr(ctx)) + IP_SIZE;
