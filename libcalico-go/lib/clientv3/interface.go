@@ -31,6 +31,7 @@ type Interface interface {
 	NetworkSetsClient
 	HostEndpointsClient
 	WorkloadEndpointsClient
+	QoSPoliciesClient
 	BGPPeersClient
 	BGPFilterClient
 	IPAMClient
@@ -116,6 +117,11 @@ type WorkloadEndpointsClient interface {
 type BGPPeersClient interface {
 	// BGPPeers returns an interface for managing BGP peer resources.
 	BGPPeers() BGPPeerInterface
+}
+
+type QoSPoliciesClient interface {
+	// QoSPolicies returns an interface for managing QoS policy resources.
+	QoSPolicies() QoSPolicyInterface
 }
 
 type IPAMClient interface {
