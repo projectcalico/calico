@@ -644,14 +644,14 @@ func (i *IPAMAssignments) PartialFulfillmentError() error {
 	if len(i.IPs) < i.NumRequested {
 		var b strings.Builder
 
-		fmt.Fprintf(&b, "Assigned %d out of %d requested IPv%d addresses", len(i.IPs), i.NumRequested, i.IPVersion)
+		_, _ = fmt.Fprintf(&b, "Assigned %d out of %d requested IPv%d addresses", len(i.IPs), i.NumRequested, i.IPVersion)
 
 		for _, m := range i.Msgs {
-			fmt.Fprintf(&b, "; %v", m)
+			_, _ = fmt.Fprintf(&b, "; %v", m)
 		}
 
 		if i.HostReservedAttr != nil {
-			fmt.Fprintf(&b, "; HostReservedAttr: %v", i.HostReservedAttr.Handle)
+			_, _ = fmt.Fprintf(&b, "; HostReservedAttr: %v", i.HostReservedAttr.Handle)
 		}
 
 		return errors.New(b.String())
@@ -964,7 +964,11 @@ func (c ipamClient) AssignIP(ctx context.Context, args AssignIPArgs) error {
 
 		// Increment handle.
 		if args.HandleID != nil {
-			c.incrementHandle(ctx, *args.HandleID, blockCIDR, 1)
+			err := c.incrementHandle(ctx, *args.HandleID, blockCIDR, 1)
+			if err != nil {
+				log.WithError(err).Warn("Failed to increment handle")
+				return fmt.Errorf("failed to increment handle: %w", err)
+			}
 		}
 
 		// Update the block using the original KVPair to do a CAS.  No need to
@@ -979,9 +983,12 @@ func (c ipamClient) AssignIP(ctx context.Context, args AssignIPArgs) error {
 
 			log.WithError(err).Warningf("Update failed on block %s", block.CIDR.String())
 			if args.HandleID != nil {
-				if err := c.decrementHandle(ctx, *args.HandleID, blockCIDR, 1, nil); err != nil {
+				// Extend timeout for the cleanup, if needed.
+				cleanupCtx, cancel := contextForCleanup(ctx)
+				if err := c.decrementHandle(cleanupCtx, *args.HandleID, blockCIDR, 1, nil); err != nil {
 					log.WithError(err).Warn("Failed to decrement handle")
 				}
+				cancel()
 			}
 			return err
 		}
@@ -1244,7 +1251,11 @@ func (c ipamClient) assignFromExistingBlock(ctx context.Context, block *model.KV
 	// Increment handle count.
 	if handleID != nil {
 		logCtx.Debug("Incrementing handle")
-		c.incrementHandle(ctx, *handleID, blockCIDR, num)
+		err := c.incrementHandle(ctx, *handleID, blockCIDR, num)
+		if err != nil {
+			log.WithError(err).Warn("Failed to increment handle")
+			return nil, fmt.Errorf("failed to increment handle: %w", err)
+		}
 	}
 
 	// Update the block using CAS by passing back the original
@@ -1256,14 +1267,27 @@ func (c ipamClient) assignFromExistingBlock(ctx context.Context, block *model.KV
 		logCtx.WithError(err).Infof("Failed to update block")
 		if handleID != nil {
 			logCtx.Debug("Decrementing handle since we failed to allocate IP(s)")
-			if err := c.decrementHandle(ctx, *handleID, blockCIDR, num, nil); err != nil {
+			// Extend timeout for the cleanup, if needed.
+			cleanupCtx, cancel := contextForCleanup(ctx)
+			if err := c.decrementHandle(cleanupCtx, *handleID, blockCIDR, num, nil); err != nil {
 				logCtx.WithError(err).Warnf("Failed to decrement handle")
 			}
+			cancel()
 		}
 		return nil, err
 	}
 	logCtx.Infof("Successfully claimed IPs: %v", ips)
 	return ips, nil
+}
+
+// contextForCleanup returns a derived context with at least 30s remaining before the deadline.
+func contextForCleanup(ctx context.Context) (context.Context, context.CancelFunc) {
+	deadline, ok := ctx.Deadline()
+	if ok && time.Until(deadline) < 30*time.Second {
+		// Less than 30 seconds remaining, so extend the context deadline.
+		return context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
+	}
+	return context.WithCancel(ctx)
 }
 
 // ClaimAffinity makes a best effort to claim affinity to the given host for all blocks
@@ -1838,15 +1862,13 @@ func (c ipamClient) decrementHandle(ctx context.Context, handleID string, blockC
 		if handle.empty() {
 			log.Debugf("Deleting handle: %s", handleID)
 			if err = c.blockReaderWriter.deleteHandle(ctx, obj); err != nil {
-				if err != nil {
-					if _, ok := err.(cerrors.ErrorResourceUpdateConflict); ok {
-						// Update conflict - retry.
-						continue
-					} else if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok {
-						return err
-					}
-					// Already deleted.
+				if _, ok := err.(cerrors.ErrorResourceUpdateConflict); ok {
+					// Update conflict - retry.
+					continue
+				} else if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok {
+					return err
 				}
+				// Already deleted.
 			}
 		} else {
 			log.Debugf("Updating handle: %s", handleID)
