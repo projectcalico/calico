@@ -48,6 +48,8 @@ function error_exit {
 
 function require_commands {
     check_bin ts || error_exit "This script requires the 'ts' command from the 'moreutils' package."
+    check_bin dch || error_exit "This script requires the 'dch' command from the 'devscripts' package."
+    check_bin patchelf || error_exit "This script requires the 'patchelf' command from the 'patchelf' package."
 }
 
 function require_version {
