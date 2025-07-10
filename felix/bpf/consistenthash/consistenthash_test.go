@@ -1,4 +1,4 @@
-package maglev
+package consistenthash
 
 import (
 	"hash/fnv"
@@ -8,14 +8,14 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/sirupsen/logrus"
 
-	types "github.com/projectcalico/calico/felix/bpf/maglev/test"
+	types "github.com/projectcalico/calico/felix/bpf/consistenthash/test"
 )
 
 var testM = 71
 
-var _ = Describe("BPF maglev UTs", func() {
-	newDefaultMaglevmaglev := func() *ConsistentHash {
-		return NewConsistentHash(
+var _ = Describe("BPF ConsistentHash UTs", func() {
+	newDefaultConsistentHash := func() *ConsistentHash {
+		return New(
 			WithHash(fnv.New32(), fnv.New32()),
 			// A big prime would cause this test's duration to balloon.
 			WithPreferenceLength(testM))
@@ -40,7 +40,7 @@ var _ = Describe("BPF maglev UTs", func() {
 		var mag *ConsistentHash
 
 		BeforeEach(func() {
-			mag = newDefaultMaglevmaglev()
+			mag = newDefaultConsistentHash()
 		})
 
 		It("generate valid permutations", func() {
@@ -67,7 +67,7 @@ var _ = Describe("BPF maglev UTs", func() {
 		})
 
 		It("should generate the same permutations for the same backend", func() {
-			otherMag := newDefaultMaglevmaglev()
+			otherMag := newDefaultConsistentHash()
 			for _, b := range []string{"backend1", "backend2"} {
 				e0 := addBackend(mag, b, uint16(8080))
 				e1 := addBackend(otherMag, b, uint16(8080))
