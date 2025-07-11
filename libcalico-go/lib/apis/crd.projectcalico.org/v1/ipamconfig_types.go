@@ -28,5 +28,5 @@ import (
 type IPAMConfig struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
-	Spec              v3.IPAMConfigSpec `json:"spec,omitempty"`
+	Spec              v3.IPAMConfigurationSpec `json:"spec,omitempty"`
 }

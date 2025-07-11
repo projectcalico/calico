@@ -25,6 +25,7 @@ const (
 
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:resource:scope=Cluster
 
 // GlobalNetworkSetList is a list of NetworkSet objects.
 type GlobalNetworkSetList struct {
@@ -37,6 +38,7 @@ type GlobalNetworkSetList struct {
 // +genclient
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:resource:scope=Cluster
 
 type GlobalNetworkSet struct {
 	metav1.TypeMeta   `json:",inline"`
