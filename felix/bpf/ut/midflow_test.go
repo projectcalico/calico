@@ -20,12 +20,11 @@ import (
 
 	"github.com/google/gopacket/layers"
 	. "github.com/onsi/gomega"
+
+	//tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
 	"github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/felix/bpf/conntrack"
-	"github.com/projectcalico/calico/felix/bpf/consistenthash"
-	"github.com/projectcalico/calico/felix/bpf/routes"
-	"github.com/projectcalico/calico/felix/ip"
+	"github.com/projectcalico/calico/felix/bpf/nat"
 )
 
 func TestMidflowFailoverNoConntrack(t *testing.T) {
@@ -37,7 +36,6 @@ func TestMidflowFailoverNoConntrack(t *testing.T) {
 	// on this machine.
 	hostIP := net.IPv4(1, 1, 1, 1)
 	hostPort := uint16(666)
-	srcPort := uint16(12345)
 
 	defer func() {
 		// Disable debug while cleaning up the maps
@@ -50,61 +48,44 @@ func TestMidflowFailoverNoConntrack(t *testing.T) {
 	logrus.SetLevel(logrus.WarnLevel)
 	defer logrus.SetLevel(loglevel)
 
-	
-
-	//val := conntrack.NewValueNormal(0, 0, conntrack.Leg{}, conntrack.Leg{})
-
-	//for i := 1; i <= ctMap.Size(); i++ {
-		//srcIP := net.IPv4(10, byte((i&0xff0000)>>16), byte((i&0xff00)>>8), byte(i&0xff))
-
-		//key := conntrack.NewKey(1, srcIP, srcPort, hostIP, hostPort)
-		//err = ctMap.Update(key[:], val[:])
-		//Expect(err).NotTo(HaveOccurred())
-	//}
+	var svcKey nat.FrontendKeyInterface = nat.NewNATKey(hostIP, hostPort, 6)
+	var svcVal nat.FrontendValue = nat.NewNATValue(123, 1, 0, 0)
+	err = natMap.Update(svcKey.AsBytes(), svcVal.AsBytes())
+	Expect(err).NotTo(HaveOccurred())
 
 	// re-enable debug
 	logrus.SetLevel(loglevel)
 
-	tcp := &layers.TCP{
-		SrcPort:    54321,
-		DstPort:    7890,
-		SYN:        false,
-		DataOffset: 5,
-	}
-
-	_, ipv4, _, _, nonSynPkt, err := testPacketV4(nil, nil, tcp, nil)
+	_, _, _, _, packetBytes, err := testPacketV4(
+		nil,
+		&layers.IPv4{
+			Version:  4,
+			IHL:      5,
+			TTL:      64,
+			Flags:    layers.IPv4DontFragment,
+			SrcIP:    net.IPv4(1, 2, 3, 4),
+			DstIP:    net.IPv4(1, 1, 1, 1),
+			Protocol: layers.IPProtocolTCP,
+		},
+		&layers.TCP{
+			SrcPort:    54321,
+			DstPort:    7890,
+			SYN:        false,
+			DataOffset: 5,
+		},
+		nil)
 	Expect(err).NotTo(HaveOccurred())
-
-	destCIDR := net.IPNet{
-		IP:   ipv4.DstIP,
-		Mask: net.IPv4Mask(255, 255, 255, 255),
-	}
 
 	defer resetRTMap(rtMap)
 	defer func() { bpfIfaceName = "" }()
 
 	// With lru, we will able to create the entry and the packet must be allowed.
-	bpfIfaceName = "ctNO"
-	skbMark = 0
+	bpfIfaceName = "mf00"
+	//skbMark = tcdefs.MarkSeen
 	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
-		res, err := bpfrun(nonSynPkt)
+		// Destination is a local workload - should pass
+		res, err := bpfrun(packetBytes)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
 	})
-
-	// Destination is a local workload - should pass
-	err = rtMap.Update(
-		routes.NewKey(ip.CIDRFromIPNet(&destCIDR).(ip.V4CIDR)).AsBytes(),
-		routes.NewValue(routes.FlagsLocalWorkload|routes.FlagInIPAMPool).AsBytes(),
-	)
-	Expect(err).NotTo(HaveOccurred())
-
-	bpfIfaceName = "ctLW"
-	skbMark = 0
-	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
-		res, err := bpfrun(nonSynPkt)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
-	})
-
 }
