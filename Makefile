@@ -104,6 +104,7 @@ generate:
 	$(MAKE) -C goldmane gen-files
 	$(MAKE) gen-manifests
 	$(MAKE) fix-changed
+	$(MAKE) get-operator-crds
 
 gen-manifests: bin/helm bin/yq
 	cd ./manifests && \
