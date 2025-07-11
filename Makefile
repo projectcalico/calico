@@ -102,9 +102,9 @@ generate:
 	$(MAKE) -C libcalico-go gen-files
 	$(MAKE) -C felix gen-files
 	$(MAKE) -C goldmane gen-files
+	$(MAKE) get-operator-crds
 	$(MAKE) gen-manifests
 	$(MAKE) fix-changed
-	$(MAKE) get-operator-crds
 
 gen-manifests: bin/helm bin/yq
 	cd ./manifests && \
