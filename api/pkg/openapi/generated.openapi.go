@@ -3325,6 +3325,13 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							Format:      "int32",
 						},
 					},
+					"bpfMapSizeConsistentHash": {
+						SchemaProps: spec.SchemaProps{
+							Description: "BPFMapSizeConsistentHash sets the size of the ConsistentHash map. The map must be large enough to hold 1009 entries for each ConsistentHash-enabled service address.",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
 					"bpfHostConntrackBypass": {
 						SchemaProps: spec.SchemaProps{
 							Description: "BPFHostConntrackBypass Controls whether to bypass Linux conntrack in BPF mode for workloads and services. [Default: true - bypass Linux conntrack]",

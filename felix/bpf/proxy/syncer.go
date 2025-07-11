@@ -17,6 +17,7 @@ package proxy
 import (
 	"context"
 	"fmt"
+	"hash/fnv"
 	"net"
 	"reflect"
 	"strings"
@@ -29,6 +30,7 @@ import (
 	k8sp "k8s.io/kubernetes/pkg/proxy"
 
 	"github.com/projectcalico/calico/felix/bpf"
+	"github.com/projectcalico/calico/felix/bpf/consistenthash"
 	"github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/bpf/nat"
 	"github.com/projectcalico/calico/felix/bpf/routes"
@@ -114,9 +116,10 @@ type stickyFrontend struct {
 type Syncer struct {
 	ipFamily int
 
-	bpfSvcs *cachingmap.CachingMap[nat.FrontendKeyInterface, nat.FrontendValue]
-	bpfEps  *cachingmap.CachingMap[nat.BackendKey, nat.BackendValueInterface]
-	bpfAff  maps.Map
+	bpfSvcs              *cachingmap.CachingMap[nat.FrontendKeyInterface, nat.FrontendValue]
+	bpfEps               *cachingmap.CachingMap[nat.BackendKey, nat.BackendValueInterface]
+	bpfConsistentHashEps *cachingmap.CachingMap[nat.ConsistentHashBackendKeyInterface, nat.BackendValueInterface]
+	bpfAff               maps.Map
 
 	nextSvcID uint32
 
@@ -126,10 +129,12 @@ type Syncer struct {
 	// new maps are valid during the Apply()'s runtime to provide easy access
 	// to updating them. They become prev at the end of it to be compared
 	// against in the next iteration
-	newSvcMap  map[svcKey]svcInfo
-	newEpsMap  k8sp.EndpointsMap
-	prevSvcMap map[svcKey]svcInfo
-	prevEpsMap k8sp.EndpointsMap
+	newSvcMap         map[svcKey]svcInfo
+	newEpsMap         k8sp.EndpointsMap
+	prevSvcMap        map[svcKey]svcInfo
+	prevEpsMap        k8sp.EndpointsMap
+	consistentHashMap map[svcKey]*consistenthash.ConsistentHash
+
 	// active Maps contain all active svcs endpoints at the end of an iteration
 	activeSvcsMap map[ipPortProto]uint32
 	activeEpsMap  map[uint32]map[ipPort]struct{}
@@ -156,6 +161,7 @@ type Syncer struct {
 	newFrontendKey         func(addr net.IP, port uint16, protocol uint8) nat.FrontendKeyInterface
 	newFrontendKeySrc      func(addr net.IP, port uint16, protocol uint8, cidr ip.CIDR) nat.FrontendKeyInterface
 	newBackendValue        func(addr net.IP, port uint16) nat.BackendValueInterface
+	newConsistentHashKey   func(addr net.IP, port uint16, protocol uint8, ordinal uint32) nat.ConsistentHashBackendKeyInterface
 	affinityKeyFromBytes   func([]byte) nat.AffinityKeyInterface
 	affinityValueFromBytes func([]byte) nat.AffinityValueInterface
 
@@ -211,20 +217,21 @@ func uniqueIPs(ips []net.IP) []net.IP {
 
 // NewSyncer returns a new Syncer
 func NewSyncer(family int, nodePortIPs []net.IP,
-	frontendMap maps.MapWithExistsCheck, backendMap maps.MapWithExistsCheck,
+	frontendMap, backendMap, consistentHashMap maps.MapWithExistsCheck,
 	affmap maps.Map, rt Routes,
 	excludedCIDRs *ip.CIDRTrie,
 ) (*Syncer, error) {
 
 	s := &Syncer{
-		ipFamily:      family,
-		bpfAff:        affmap,
-		rt:            rt,
-		nodePortIPs:   uniqueIPs(nodePortIPs),
-		prevSvcMap:    make(map[svcKey]svcInfo),
-		prevEpsMap:    make(k8sp.EndpointsMap),
-		stop:          make(chan struct{}),
-		excludedCIDRs: excludedCIDRs,
+		ipFamily:          family,
+		bpfAff:            affmap,
+		rt:                rt,
+		nodePortIPs:       uniqueIPs(nodePortIPs),
+		prevSvcMap:        make(map[svcKey]svcInfo),
+		prevEpsMap:        make(k8sp.EndpointsMap),
+		stop:              make(chan struct{}),
+		excludedCIDRs:     excludedCIDRs,
+		consistentHashMap: make(map[svcKey]*consistenthash.ConsistentHash),
 	}
 
 	switch family {
@@ -237,9 +244,14 @@ func NewSyncer(family int, nodePortIPs []net.IP,
 			maps.NewTypedMap[nat.BackendKey, nat.BackendValueInterface](
 				backendMap, nat.BackendKeyFromBytes, nat.BackendValueFromBytes,
 			))
+		s.bpfConsistentHashEps = cachingmap.New[nat.ConsistentHashBackendKeyInterface, nat.BackendValueInterface](consistentHashMap.GetName(),
+			maps.NewTypedMap[nat.ConsistentHashBackendKeyInterface, nat.BackendValueInterface](
+				consistentHashMap, nat.ConsistentHashBackendKeyFromBytes, nat.BackendValueFromBytes,
+			))
 		s.newFrontendKey = nat.NewNATKeyIntf
 		s.newFrontendKeySrc = nat.NewNATKeySrcIntf
 		s.newBackendValue = nat.NewNATBackendValueIntf
+		s.newConsistentHashKey = nat.NewConsistentHashBackendKeyIntf
 		s.affinityKeyFromBytes = nat.AffinityKeyIntfFromBytes
 		s.affinityValueFromBytes = nat.AffinityValueIntfFromBytes
 	case 6:
@@ -251,9 +263,14 @@ func NewSyncer(family int, nodePortIPs []net.IP,
 			maps.NewTypedMap[nat.BackendKey, nat.BackendValueInterface](
 				backendMap, nat.BackendKeyFromBytes, nat.BackendValueV6FromBytes,
 			))
+		s.bpfConsistentHashEps = cachingmap.New[nat.ConsistentHashBackendKeyInterface, nat.BackendValueInterface](consistentHashMap.GetName(),
+			maps.NewTypedMap[nat.ConsistentHashBackendKeyInterface, nat.BackendValueInterface](
+				consistentHashMap, nat.ConsistentHashBackendKeyV6FromBytes, nat.BackendValueV6FromBytes,
+			))
 		s.newFrontendKey = nat.NewNATKeyV6Intf
 		s.newFrontendKeySrc = nat.NewNATKeyV6SrcIntf
 		s.newBackendValue = nat.NewNATBackendValueV6Intf
+		s.newConsistentHashKey = nat.NewConsistentHashBackendKeyV6Intf
 		s.affinityKeyFromBytes = nat.AffinityKeyV6IntfFromBytes
 		s.affinityValueFromBytes = nat.AffinityValueV6IntfFromBytes
 	default:
@@ -269,6 +286,10 @@ func (s *Syncer) loadOrigs() error {
 		return err
 	}
 	err = s.bpfSvcs.LoadCacheFromDataplane()
+	if err != nil {
+		return err
+	}
+	err = s.bpfConsistentHashEps.LoadCacheFromDataplane()
 	if err != nil {
 		return err
 	}
@@ -408,7 +429,6 @@ func (s *Syncer) applySvc(skey svcKey, sinfo Service, eps []k8sp.Endpoint) error
 	if err != nil {
 		return err
 	}
-
 	s.newSvcMap[skey] = svcInfo{
 		id:         id,
 		count:      count,
@@ -539,6 +559,7 @@ func (s *Syncer) applyDerived(
 
 	skey = getSvcKey(sname, getSvcKeyExtra(t, sinfo.ClusterIP()))
 	flags := uint32(0)
+	flags |= nat.NATFlgNatConsistentHash
 
 	switch t {
 	case svcTypeNodePort, svcTypeLoadBalancer, svcTypeNodePortRemote:
@@ -593,12 +614,12 @@ func (s *Syncer) apply(state DPSyncerState) error {
 	// let CachingMap calculate deltas...
 	s.bpfSvcs.Desired().DeleteAll()
 	s.bpfEps.Desired().DeleteAll()
+	s.bpfConsistentHashEps.Desired().DeleteAll()
 
 	// insert or update existing services
 	for sname, sinfo := range state.SvcMap {
 		svc := sinfo.(Service)
 		hintsAnnotation := svc.HintsAnnotation()
-
 		log.WithField("service", sname).Debug("Applying service")
 		skey := getSvcKey(sname, "")
 
@@ -681,13 +702,16 @@ func (s *Syncer) apply(state DPSyncerState) error {
 	if err != nil {
 		return err
 	}
-	// Update the frontends, after this is done we should be handling packets correctly.
 	err = s.bpfSvcs.ApplyUpdatesOnly()
 	if err != nil {
 		return err
 	}
 	// Remove any unused backends.
 	err = s.bpfEps.ApplyDeletionsOnly()
+	if err != nil {
+		return err
+	}
+	err = s.bpfConsistentHashEps.ApplyAllChanges()
 	if err != nil {
 		return err
 	}
@@ -747,7 +771,6 @@ func (s *Syncer) Apply(state DPSyncerState) error {
 
 func (s *Syncer) updateService(skey svcKey, sinfo Service, id uint32, eps []k8sp.Endpoint) (int, int, error) {
 	cpEps := make([]k8sp.Endpoint, 0, len(eps))
-
 	cnt := 0
 	local := 0
 
@@ -795,6 +818,11 @@ func (s *Syncer) updateService(skey svcKey, sinfo Service, id uint32, eps []k8sp
 		flags |= nat.NATFlgInternalLocal
 	}
 
+	if sinfo.UseConsistentHashing() {
+		flags |= nat.NATFlgNatConsistentHash
+		s.writeConsistentHashBackends(skey, sinfo, eps)
+	}
+
 	if err := s.writeSvc(sinfo, id, cnt, local, flags); err != nil {
 		return 0, 0, err
 	}
@@ -812,6 +840,45 @@ func (s *Syncer) updateService(skey svcKey, sinfo Service, id uint32, eps []k8sp
 	}
 
 	return cnt, local, nil
+}
+
+func newDefaultConsistentHash() *consistenthash.ConsistentHash {
+	return consistenthash.New(consistenthash.WithHash(fnv.New32(), fnv.New32()))
+}
+
+func (s *Syncer) writeConsistentHashBackends(skey svcKey, sinfo Service, eps []k8sp.Endpoint) {
+	if len(eps) == 0 || eps == nil {
+		log.WithFields(log.Fields{"service": skey, "name": sinfo.String()}).Info("Skipping ConsistentHash-enabled service update for empty endpoint list")
+		return
+	}
+
+	// ALEX TODO loadbalancer IP awareness.
+	vip := sinfo.ClusterIP()
+	port := uint16(sinfo.Port())
+	proto := ProtoV1ToIntPanic(sinfo.Protocol())
+	consistentHash := newDefaultConsistentHash()
+	for _, ep := range eps {
+		if ep.IsReady() {
+			consistentHash.AddBackend(ep)
+		}
+	}
+	s.consistentHashMap[skey] = consistentHash
+
+	n := time.Now()
+	lut := consistentHash.Generate()
+	s.writeConsistentHashSvcBackends(vip, port, proto, lut)
+	dt := time.Since(n)
+	log.WithFields(log.Fields{
+		"lut": lut,
+	}).Infof("Wrote ConsistentHash-enabled service '%s' backends (%d) in %fs", skey.sname, len(eps), dt.Seconds())
+}
+
+func (s *Syncer) writeConsistentHashSvcBackends(vip net.IP, port uint16, protocol uint8, lut []k8sp.Endpoint) {
+	for i, b := range lut {
+		mKey := s.newConsistentHashKey(vip, port, protocol, uint32(i))
+		mVal := s.newBackendValue(net.ParseIP(b.IP()), uint16(b.Port()))
+		s.bpfConsistentHashEps.Desired().Set(mKey, mVal)
+	}
 }
 
 func (s *Syncer) writeSvcBackend(svcID uint32, idx uint32, ep k8sp.Endpoint) error {
