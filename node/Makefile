@@ -314,7 +314,7 @@ WHAT=$(shell find . -name "*_test.go" | xargs dirname | sort -u)
 endif
 
 ## Run the ginkgo tests.
-ut fv: run-k8s-apiserver
+ut fv: $(LIBBPF_A) run-k8s-apiserver
 	$(DOCKER_RUN) \
 	-v $(CERTS_PATH):/home/user/certs \
 	-e KUBECONFIG=/go/src/github.com/projectcalico/calico/hack/test/certs/kubeconfig \
