@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Package main is the entrypoint for the release tool; this file contains shared functionality
 package main
 
 import (
@@ -22,7 +23,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"github.com/snowzach/rotatefilehook"
-	cli "github.com/urfave/cli/v2"
+	cli "github.com/urfave/cli/v3"
 
 	"github.com/projectcalico/calico/release/internal/slack"
 	"github.com/projectcalico/calico/release/internal/utils"
@@ -78,7 +79,7 @@ func configureLogging(filename string) {
 }
 
 // slackConfig returns a config for slack based on the CLI context.
-func slackConfig(c *cli.Context) *slack.Config {
+func slackConfig(c *cli.Command) *slack.Config {
 	return &slack.Config{
 		Token:   c.String(slackTokenFlag.Name),
 		Channel: c.String(slackChannelFlag.Name),
