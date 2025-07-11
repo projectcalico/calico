@@ -1208,6 +1208,10 @@ func assignTunnelAddresses(infra infrastructure.DatastoreInfra, tc infrastructur
 }
 
 func setupWorkloads(infra infrastructure.DatastoreInfra, tc infrastructure.TopologyContainers, to infrastructure.TopologyOptions, client client.Interface, enableIPv6 bool) (w, w6, hostW, hostW6 [3]*workload.Workload) {
+	return setupWorkloadsWithOffset(infra, tc, to, client, enableIPv6, 0)
+}
+
+func setupWorkloadsWithOffset(infra infrastructure.DatastoreInfra, tc infrastructure.TopologyContainers, to infrastructure.TopologyOptions, client client.Interface, enableIPv6 bool, offset int) (w, w6, hostW, hostW6 [3]*workload.Workload) {
 	// Install a default profile that allows all ingress and egress, in the absence of any Policy.
 	infra.AddDefaultAllow()
 
@@ -1248,7 +1252,7 @@ func setupWorkloads(infra infrastructure.DatastoreInfra, tc infrastructure.Topol
 	_, IPv6CIDR, err := net.ParseCIDR(to.IPv6PoolCIDR)
 	Expect(err).To(BeNil())
 	for ii := range w {
-		wIP := fmt.Sprintf("%d.%d.%d.2", IPv4CIDR.IP[0], IPv4CIDR.IP[1], ii)
+		wIP := fmt.Sprintf("%d.%d.%d.2", IPv4CIDR.IP[0], IPv4CIDR.IP[1], ii+offset)
 		wName := fmt.Sprintf("w%d", ii)
 		err := client.IPAM().AssignIP(context.Background(), ipam.AssignIPArgs{
 			IP:       net.MustParseIP(wIP),
@@ -1264,7 +1268,7 @@ func setupWorkloads(infra infrastructure.DatastoreInfra, tc infrastructure.Topol
 		w[ii].ConfigureInInfra(infra)
 
 		if enableIPv6 {
-			w6IP := fmt.Sprintf("%x%x:%x%x:%x%x:%x%x:%x%x:%x%x:%d:3", IPv6CIDR.IP[0], IPv6CIDR.IP[1], IPv6CIDR.IP[2], IPv6CIDR.IP[3], IPv6CIDR.IP[4], IPv6CIDR.IP[5], IPv6CIDR.IP[6], IPv6CIDR.IP[7], IPv6CIDR.IP[8], IPv6CIDR.IP[9], IPv6CIDR.IP[10], IPv6CIDR.IP[11], ii)
+			w6IP := fmt.Sprintf("%x%x:%x%x:%x%x:%x%x:%x%x:%x%x:%d:3", IPv6CIDR.IP[0], IPv6CIDR.IP[1], IPv6CIDR.IP[2], IPv6CIDR.IP[3], IPv6CIDR.IP[4], IPv6CIDR.IP[5], IPv6CIDR.IP[6], IPv6CIDR.IP[7], IPv6CIDR.IP[8], IPv6CIDR.IP[9], IPv6CIDR.IP[10], IPv6CIDR.IP[11], ii+offset)
 			w6Name := fmt.Sprintf("w6-%d", ii)
 			err := client.IPAM().AssignIP(context.Background(), ipam.AssignIPArgs{
 				IP:       net.MustParseIP(w6IP),
