@@ -15,11 +15,10 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
-
-	"context"
 
 	"github.com/sirupsen/logrus"
 	cli "github.com/urfave/cli/v3"
