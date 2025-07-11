@@ -992,6 +992,20 @@ use a distinct protocol (in addition to setting this field to false).
 | `FelixConfiguration` schema | Boolean. |
 | Default value (YAML) | `true` |
 
+### `RequireMTUFile` (config file) / `requireMTUFile` (YAML)
+
+Specifies whether mtu file is required to start the felix.
+Optional as to keep the same as previous behavior.
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_RequireMTUFile` |
+| Encoding (env var/config file) | Boolean: <code>true</code>, <code>1</code>, <code>yes</code>, <code>y</code>, <code>t</code> accepted as True; <code>false</code>, <code>0</code>, <code>no</code>, <code>n</code>, <code>f</code> accepted (case insensitively) as False. |
+| Default value (above encoding) | `false` |
+| `FelixConfiguration` field | `requireMTUFile` (YAML) `RequireMTUFile` (Go API) |
+| `FelixConfiguration` schema | Boolean. |
+| Default value (YAML) | `false` |
+
 ### `RouteRefreshInterval` (config file) / `routeRefreshInterval` (YAML)
 
 The period at which Felix re-checks the routes
@@ -1424,6 +1438,22 @@ Controls the interval at which Felix periodically refreshes the nftables rules.
 
 ## <a id="dataplane-ebpf">Dataplane: eBPF
 
+### `BPFAttachType` (config file) / `bpfAttachType` (YAML)
+
+Controls how are the BPF programs at the network interfaces attached.
+By default `tcx` is used where available to enable easier coexistence with 3rd party programs.
+`tc` can force the legacy method of attaching via a qdisc. `tcx` falls back to `tc` if `tcx` is not available.
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_BPFAttachType` |
+| Encoding (env var/config file) | One of: <code>tc</code>, <code>tcx</code> (case insensitive) |
+| Default value (above encoding) | `tcx` |
+| `FelixConfiguration` field | `bpfAttachType` (YAML) `BPFAttachType` (Go API) |
+| `FelixConfiguration` schema | `string` |
+| Default value (YAML) | `tcx` |
+| Notes | Required. | 
+
 ### `BPFCTLBLogFilter` (config file) / `bpfCTLBLogFilter` (YAML)
 
 Specifies, what is logged by connect time load balancer when BPFLogLevel is
@@ -1479,6 +1509,9 @@ Deprecated: Use BPFConnectTimeLoadBalancing.
 Controls how BPF conntrack entries are cleaned up. `Auto` will use a BPF program if supported,
 falling back to userspace if not. `Userspace` will always use the userspace cleanup code. `BPFProgram` will
 always use the BPF program (failing if not supported).
+
+/To be deprecated in future versions as conntrack map type changed to
+lru_hash and userspace cleanup is the only mode that is supported.
 
 | Detail |   |
 | --- | --- |

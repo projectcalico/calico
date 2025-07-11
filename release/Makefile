@@ -15,7 +15,7 @@ build: bin/release
 
 clean:
 	@rm -rf ./bin
-	@rm -rf ./output ./_output ./tmp ./*.log
+	@rm -rf ./output ./_output ./report ./tmp ./*.log
 
 bin/release: $(shell find . -name "*.go")
 	@mkdir -p bin && \
@@ -23,8 +23,15 @@ bin/release: $(shell find . -name "*.go")
 
 POSTRELEASE_TEST_PACKAGE		:= $(PACKAGE_NAME)/pkg/postrelease
 UNIT_TEST_PACKAGES	:= $(shell go list ./... | grep -v $(POSTRELEASE_TEST_PACKAGE))
-ut:
-	$(DOCKER_GO_BUILD) go test $(UNIT_TEST_PACKAGES) -v -cover -count 1
+ut: bin/gotestsum
+	@mkdir -p report
+	@$(DOCKER_GO_BUILD) gotestsum --junitfile report/unit-tests.xml \
+		-- -coverprofile=report/coverage.out $(UNIT_TEST_PACKAGES)
+
+GOTESTSUM_VERSION := v1.12.1
+bin/gotestsum:
+	@mkdir -p bin
+	@$(DOCKER_GO_BUILD) go install gotest.tools/gotestsum@$(GOTESTSUM_VERSION)
 
 ###############################################################################
 # CI/CD

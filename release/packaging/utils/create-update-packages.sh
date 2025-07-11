@@ -48,6 +48,8 @@ function error_exit {
 
 function require_commands {
     check_bin ts || error_exit "This script requires the 'ts' command from the 'moreutils' package."
+    check_bin dch || error_exit "This script requires the 'dch' command from the 'devscripts' package."
+    check_bin patchelf || error_exit "This script requires the 'patchelf' command from the 'patchelf' package."
 }
 
 function require_version {
@@ -64,6 +66,8 @@ function require_version {
 	: ${REPO_NAME:=master}
     elif [[ $VERSION =~ ^release-v ]]; then
 	: ${REPO_NAME:=testing}
+    elif [[ $VERSION =~ ^pr-[0-9]+$ ]]; then
+	: ${REPO_NAME:=${VERSION}}
     elif [[ $VERSION =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)(-python2)?$ ]]; then
 	MAJOR=${BASH_REMATCH[1]}
 	MINOR=${BASH_REMATCH[2]}
@@ -181,7 +185,7 @@ function do_net_cal {
     pushd "${rootdir}/networking-calico"
     PKG_NAME=networking-calico \
 	    NAME=networking-calico \
-	    DEB_EPOCH=2: \
+	    DEB_EPOCH=3: \
 	    "${rootdir}/release/packaging/utils/make-packages.sh" deb rpm
     # Packages are produced in rootDir/ - move them to the output dir.
     find ../ -type f -name 'networking-calico_*-*' -exec mv '{}' "$outputDir" \;
@@ -212,7 +216,7 @@ function do_felix {
 	    NAME=Felix \
 	    RPM_TAR_ARGS='--exclude=bin/calico-felix-* --exclude=.gitignore --exclude=*.d --exclude=*.ll --exclude=.go-pkg-cache --exclude=vendor --exclude=report' \
 	    DPKG_EXCL="-I'bin/calico-felix-*' -I.git -I.gitignore -I'*.d' -I'*.ll' -I.go-pkg-cache -I.git -Ivendor -Ireport" \
-	    DEB_EPOCH=2: \
+	    DEB_EPOCH=3: \
 	    "${rootdir}/release/packaging/utils/make-packages.sh" rpm deb
 
     # Packages are produced in rootDir/ - move them to the output dir.

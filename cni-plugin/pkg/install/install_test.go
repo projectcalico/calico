@@ -32,7 +32,8 @@ var expectedDefaultConfig string = `{
       "mtu": 1500,
       "ipam": {"type": "calico-ipam"},
       "policy": {"type": "k8s"},
-      "kubernetes": {"kubeconfig": "/etc/cni/net.d/calico-kubeconfig"}
+      "kubernetes": {"kubeconfig": "/etc/cni/net.d/calico-kubeconfig"},
+      "require_mtu_file": false
     },
     {
       "type": "portmap",

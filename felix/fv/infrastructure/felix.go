@@ -226,6 +226,11 @@ func RunFelix(infra DatastoreInfra, id int, options TopologyOptions) *Felix {
 		envVars["FELIX_NFTABLESMODE"] = "Enabled"
 	}
 
+	if strings.ToLower(os.Getenv("FELIX_FV_BPFATTACHTYPE")) == "tc" {
+		logrus.Info("Enabling TC with env var")
+		envVars["FELIX_BPFATTACHTYPE"] = "tc"
+	}
+
 	if options.DelayFelixStart {
 		envVars["DELAY_FELIX_START"] = "true"
 	}

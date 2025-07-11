@@ -400,6 +400,7 @@ func StartDataplaneDriver(
 			BPFExcludeCIDRsFromNAT:             configParams.BPFExcludeCIDRsFromNAT,
 			NfNetlinkBufSize:                   nfnetlink.DefaultNfNetlinkBufSize,
 			BPFRedirectToPeer:                  configParams.BPFRedirectToPeer,
+			BPFAttachType:                      configParams.BPFAttachType,
 			BPFProfiling:                       configParams.BPFProfiling,
 			ServiceLoopPrevention:              configParams.ServiceLoopPrevention,
 
@@ -414,6 +415,8 @@ func StartDataplaneDriver(
 			Collector:          collector,
 			LookupsCache:       lc,
 			FlowLogsEnabled:    configParams.FlowLogsEnabled(),
+
+			RequireMTUFile: configParams.RequireMTUFile,
 		}
 
 		if configParams.BPFExternalServiceMode == "dsr" {

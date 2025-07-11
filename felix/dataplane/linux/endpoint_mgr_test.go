@@ -25,6 +25,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/format"
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 
@@ -867,6 +868,7 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 				"1",
 				nil,
 				false,
+				string(apiv3.BPFAttachOptionTCX),
 				hepListener,
 				common.NewCallbacks(),
 				true,
@@ -1854,9 +1856,9 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 						})
 						applyUpdates(epMgr)
 					})
-					It("should report the interface in error", func() {
+					It("should report the interface as down", func() {
 						Expect(statusReportRec.currentState).To(Equal(map[interface{}]string{
-							types.ProtoToWorkloadEndpointID(&wlEPID1): "error",
+							types.ProtoToWorkloadEndpointID(&wlEPID1): "down",
 						}))
 					})
 				})

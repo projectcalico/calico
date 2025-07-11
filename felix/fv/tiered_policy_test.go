@@ -364,6 +364,9 @@ var _ = infrastructure.DatastoreDescribe("connectivity tests and flow logs with 
 			return strings.Contains(out0, "End of tier tier1: deny") &&
 				strings.Contains(out1, "End of tier tier1: deny")
 		}
+		if BPFMode() {
+			ensureAllNodesBPFProgramsAttached(tc.Felixes)
+		}
 	}
 
 	createBaseConnectivityChecker := func() *connectivity.Checker {

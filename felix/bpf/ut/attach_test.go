@@ -29,6 +29,7 @@ import (
 	"time"
 
 	. "github.com/onsi/gomega"
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/bpf"
@@ -1067,6 +1068,113 @@ func TestCTLBAttach(t *testing.T) {
 	testCtlbAttach(true, false)
 	testCtlbAttach(false, true)
 	testCtlbAttach(true, true)
+}
+
+func TestAttachTcx(t *testing.T) {
+	RegisterTestingT(t)
+	bpfmaps, err := bpfmap.CreateBPFMaps(false)
+	Expect(err).NotTo(HaveOccurred())
+
+	loglevel := "off"
+	bpfEpMgr, err := newBPFTestEpMgr(
+		&linux.Config{
+			Hostname:              "uthost",
+			BPFLogLevel:           loglevel,
+			BPFDataIfacePattern:   regexp.MustCompile("^hostep[12]"),
+			VXLANMTU:              1000,
+			VXLANPort:             1234,
+			BPFNodePortDSREnabled: false,
+			RulesConfig: rules.Config{
+				EndpointToHostAction: "RETURN",
+			},
+			BPFExtToServiceConnmark: 0,
+			BPFPolicyDebugEnabled:   true,
+			BPFAttachType:           string(apiv3.BPFAttachOptionTCX),
+		},
+		bpfmaps,
+		regexp.MustCompile("^workloadep[0123]"),
+	)
+	Expect(err).NotTo(HaveOccurred())
+
+	workload0 := createVethName("workloadep0")
+	defer deleteLink(workload0)
+
+	bpfEpMgr.OnUpdate(&proto.HostMetadataUpdate{Hostname: "uthost", Ipv4Addr: "1.2.3.4"})
+	bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("workloadep0", ifacemonitor.StateUp, workload0.Attrs().Index))
+	bpfEpMgr.OnUpdate(linux.NewIfaceAddrsUpdate("workloadep0", "1.6.6.6"))
+	bpfEpMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
+		Id: &proto.WorkloadEndpointID{
+			OrchestratorId: "k8s",
+			WorkloadId:     "workloadep0",
+			EndpointId:     "workloadep0",
+		},
+		Endpoint: &proto.WorkloadEndpoint{Name: "workloadep0"},
+	})
+	err = bpfEpMgr.CompleteDeferredWork()
+	Expect(err).NotTo(HaveOccurred())
+	// Ensure there is no qdisc.
+	hasQdisc, err := tc.HasQdisc("workloadep0")
+	Expect(err).NotTo(HaveOccurred())
+	Expect(hasQdisc).To(BeFalse())
+	// Check if there are no tc programs.
+	progs, err := tc.ListAttachedPrograms("workloadep0", hook.Ingress.String(), true)
+	Expect(err).NotTo(HaveOccurred())
+	Expect(len(progs)).To(Equal(0))
+	progs, err = tc.ListAttachedPrograms("workloadep0", hook.Egress.String(), true)
+	Expect(err).NotTo(HaveOccurred())
+	Expect(len(progs)).To(Equal(0))
+
+	_, err = os.Stat(bpfdefs.TcxPinDir + "/workloadep0_ingress")
+	Expect(err).NotTo(HaveOccurred())
+	_, err = os.Stat(bpfdefs.TcxPinDir + "/workloadep0_egress")
+	Expect(err).NotTo(HaveOccurred())
+	tcxProgs, err := tc.ListAttachedTcxPrograms("workloadep0", "ingress")
+	Expect(err).NotTo(HaveOccurred())
+	Expect(len(tcxProgs)).To(Equal(1))
+	// Now attach Tc program.
+	ap := &tc.AttachPoint{
+		AttachPoint: bpf.AttachPoint{
+			Iface: "workloadep0",
+			Hook:  hook.Ingress,
+		},
+		HostIPv4:   net.IPv4(1, 2, 3, 4),
+		IntfIPv4:   net.IPv4(1, 6, 6, 6),
+		AttachType: string(apiv3.BPFAttachOptionTC),
+	}
+
+	_, err = tc.EnsureQdisc("workloadep0")
+	Expect(err).NotTo(HaveOccurred())
+	err = ap.AttachProgram()
+	Expect(err).NotTo(HaveOccurred())
+	progs, err = tc.ListAttachedPrograms("workloadep0", hook.Ingress.String(), true)
+	Expect(err).NotTo(HaveOccurred())
+	Expect(len(progs)).To(Equal(1))
+	_, err = os.Stat(bpfdefs.TcxPinDir + "/workloadep0_ingress")
+	Expect(err).To(HaveOccurred())
+	tcxProgs, err = tc.ListAttachedTcxPrograms("workloadep0", "ingress")
+	Expect(err).NotTo(HaveOccurred())
+	Expect(len(tcxProgs)).To(Equal(0))
+	// Now attach TCx again
+	bpfEpMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
+		Id: &proto.WorkloadEndpointID{
+			OrchestratorId: "k8s",
+			WorkloadId:     "workloadep0",
+			EndpointId:     "workloadep0",
+		},
+		Endpoint: &proto.WorkloadEndpoint{Name: "workloadep0"},
+	})
+	err = bpfEpMgr.CompleteDeferredWork()
+	Expect(err).NotTo(HaveOccurred())
+	hasQdisc, err = tc.HasQdisc("workloadep0")
+	Expect(err).NotTo(HaveOccurred())
+	// switching from tcx to tc removes the qdisc.
+	Expect(hasQdisc).To(BeFalse())
+	progs, err = tc.ListAttachedPrograms("workloadep0", hook.Ingress.String(), true)
+	Expect(err).NotTo(HaveOccurred())
+	Expect(len(progs)).To(Equal(0))
+	tcxProgs, err = tc.ListAttachedTcxPrograms("workloadep0", "ingress")
+	Expect(err).NotTo(HaveOccurred())
+	Expect(len(tcxProgs)).To(Equal(1))
 }
 
 func TestLogFilters(t *testing.T) {

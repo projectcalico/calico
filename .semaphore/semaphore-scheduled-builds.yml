@@ -41,9 +41,6 @@ promotions:
     pipeline_file: cleanup.yml
     auto_promote:
       when: "result = 'stopped'"
-  # Rerun failed jobs
-  - name: Rerun failed jobs
-    pipeline_file: rerun_failed_jobs.yml
   # Have separate promotions for publishing images so we can re-run
   # them individually if they fail, and so we can run them in parallel.
   - name: Push apiserver images
@@ -115,6 +112,15 @@ promotions:
     auto_promote:
       when: "branch =~ 'master|release-.*'"
 blocks:
+  - name: Check images availability
+    run:
+      when: "true or change_in(['/charts/', '/manifests/'])"
+    dependencies: []
+    task:
+      jobs:
+        - name: Check images availability
+          commands:
+            - make check-images-availability
   - name: Prerequisites
     dependencies: []
     task:
@@ -581,6 +587,8 @@ blocks:
           - export RUN_UT=true
           - export FV_FOCUS=BPF-SAFE
           - export IMAGE=ubuntu-2404-noble-amd64-v20250502a
+          - export UBUNTU_VERSION=noble
+          - export DOCKER_VERSION=5:27.5.1-1~ubuntu.24.04~noble
           - mkdir artifacts
           - ./.semaphore/create-test-vms ${VM_PREFIX}
       jobs:
@@ -622,6 +630,8 @@ blocks:
           env_vars:
             - name: FELIX_FV_NFTABLES
               value: "Enabled"
+            - name: FELIX_FV_BPFATTACHTYPE
+              value: "tc"
           execution_time_limit:
             minutes: 180
           commands:
@@ -1051,6 +1061,7 @@ blocks:
         - name: ci
           commands:
             - ../.semaphore/run-and-monitor release-ci.log make ci
+            - test-results publish --name "release-tool-ut-tests" ./report/*.xml || true
         - name: build binary
           commands:
             - ../.semaphore/run-and-monitor release-build.log make build

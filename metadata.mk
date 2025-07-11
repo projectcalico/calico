@@ -9,8 +9,8 @@ CALICO_BASE_VER=ubi9-1749156995
 # Env var to ACK Ginkgo deprecation warnings, may need updating with go-build.
 ACK_GINKGO=ACK_GINKGO_DEPRECATIONS=1.16.5
 
-# Version of Kubernetes to use for tests, bitnami/kubectl, and kubectl binary release.
-K8S_VERSION=v1.32.4
+# Version of Kubernetes to use for tests, rancher/kubectl, and kubectl binary release.
+K8S_VERSION=v1.32.6
 
 # Version of various tools used in the build and tests.
 COREDNS_VERSION=1.5.2
@@ -21,6 +21,7 @@ KINDEST_NODE_VERSION=v1.31.4
 KIND_VERSION=v0.25.0
 GITHUB_CLI_VERSION=2.26.0
 GOTESTSUM_VERSION=v1.12.2
+CRANE_VERSION := v0.20.6
 
 # Configuration for Semaphore/Github integration.  This needs to be set
 # differently for a forked repo.
