@@ -433,7 +433,7 @@ var (
 		Sources: cli.EnvVars("DOCS_PORT"),
 	}
 	sshKnownHostsFlag = &cli.StringFlag{
-		Name: "sever-ssh-known-hosts",
+		Name: "server-ssh-known-hosts",
 		Usage: "The known_hosts file is the absolute path to the known_hosts file " +
 			"to use for the user host key database instead of ~/.ssh/known_hosts",
 		Sources: cli.EnvVars("DOCS_KNOWN_HOSTS"),
