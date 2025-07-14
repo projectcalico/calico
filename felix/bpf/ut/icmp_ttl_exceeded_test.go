@@ -44,7 +44,7 @@ func TestICMPttlExceeded(t *testing.T) {
 		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
 		fmt.Printf("pktR = %+v\n", pktR)
 
-		checkICMPttlExceeded(pktR, ipv4)
+		checkICMPttlExceeded(pktR, ipv4.SrcIP, intfIP)
 	})
 
 }
@@ -84,7 +84,7 @@ func TestICMPttlExceededFromHEP(t *testing.T) {
 		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
 		fmt.Printf("pktR = %+v\n", pktR)
 
-		checkICMPttlExceeded(pktR, ipv4)
+		checkICMPttlExceeded(pktR, ipv4.SrcIP, ipv4.DstIP)
 	})
 	expectMark(tcdefs.MarkSeenBypassForward)
 
@@ -107,19 +107,19 @@ func TestICMPttlExceededFromHEP(t *testing.T) {
 		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
 		fmt.Printf("pktR = %+v\n", pktR)
 
-		checkICMPttlExceeded(pktR, ipv4)
+		checkICMPttlExceeded(pktR, ipv4.SrcIP, intfIP)
 	})
 	expectMark(tcdefs.MarkSeenBypassForward)
 }
 
-func checkICMPttlExceeded(pktR gopacket.Packet, ipv4 *layers.IPv4) {
+func checkICMPttlExceeded(pktR gopacket.Packet, src, dst net.IP) {
 	ipv4L := pktR.Layer(layers.LayerTypeIPv4)
 	Expect(ipv4L).NotTo(BeNil())
 	ipv4R := ipv4L.(*layers.IPv4)
 
 	Expect(ipv4R.Protocol).To(Equal(layers.IPProtocolICMPv4))
-	Expect(ipv4R.SrcIP.String()).To(Equal(intfIP.String()))
-	Expect(ipv4R.DstIP).To(Equal(ipv4.SrcIP))
+	Expect(ipv4R.SrcIP.String()).To(Equal(dst.String()))
+	Expect(ipv4R.DstIP).To(Equal(src))
 
 	icmpL := pktR.Layer(layers.LayerTypeICMPv4)
 	Expect(ipv4L).NotTo(BeNil())
