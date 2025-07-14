@@ -1056,6 +1056,34 @@ var _ = Describe("UT for CIDR returned by IP address autodetection k8s-internal-
 	})
 })
 
+var _ = Describe("UT for node interface autodetection", func() {
+	DescribeTable("Test interface is correctly set on Node",
+		func(node *libapi.Node, k8sNode *v1.Node, items []EnvItem) {
+			for _, item := range items {
+				os.Setenv(item.key, item.value)
+			}
+
+			mockGetInterface := func([]string, []string, ...int) ([]autodetection.Interface, error) {
+				return []autodetection.Interface{
+					{Name: "eth1", Cidrs: []net.IPNet{net.MustParseCIDR("192.168.1.10/24"), net.MustParseCIDR("2001:db8:85a3:8d3:1319:8a2e:370:7348/128")}},
+				}, nil
+			}
+
+			_, err := configureIPsAndSubnets(node, k8sNode, mockGetInterface)
+			Expect(err).ToNot(HaveOccurred())
+
+			Expect(node.Spec.Interfaces).To(Equal([]libapi.NodeInterface{{
+				Name:      "eth1",
+				Addresses: []string{"192.168.1.10", "2001:db8:85a3:8d3:1319:8a2e:370:7348"},
+			}}))
+
+			os.Unsetenv("IP")
+		},
+
+		Entry("Test with \"IP\" env = autodetect. k8snode = nil", &libapi.Node{}, nil, []EnvItem{{"IP", "autodetect"}}),
+	)
+})
+
 var _ = Describe("FV tests against K8s API server.", func() {
 	It("should not throw an error when multiple Nodes configure the same global CRD value.", func() {
 		ctx := context.Background()
