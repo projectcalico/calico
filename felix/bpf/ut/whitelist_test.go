@@ -93,7 +93,7 @@ func TestAllowFromWorkloadExitHost(t *testing.T) {
 	})
 }
 
-func TestSkipRedirectPeerHostToVMWorkload(t *testing.T) {
+func TestSkipIngressRedirect(t *testing.T) {
 	RegisterTestingT(t)
 
 	bpfIfaceName = "HWvwl"
@@ -106,6 +106,7 @@ func TestSkipRedirectPeerHostToVMWorkload(t *testing.T) {
 	err = ctMap.EnsureExists()
 	Expect(err).NotTo(HaveOccurred())
 	resetCTMap(ctMap) // ensure it is clean
+	defer resetCTMap(ctMap)
 
 	hostIP = node1ip
 	// Insert a reverse route for the source workload.
@@ -114,7 +115,7 @@ func TestSkipRedirectPeerHostToVMWorkload(t *testing.T) {
 	err = rtMap.Update(rtKey, rtVal)
 	Expect(err).NotTo(HaveOccurred())
 	rtKey = routes.NewKey(dstV4CIDR).AsBytes()
-	rtVal = routes.NewValueWithIfIndex(routes.FlagsLocalWorkload|routes.FlagVMWorkload|routes.FlagInIPAMPool, 1).AsBytes()
+	rtVal = routes.NewValueWithIfIndex(routes.FlagsLocalWorkload|routes.FlagSkipIngressRedir|routes.FlagInIPAMPool, 1).AsBytes()
 	err = rtMap.Update(rtKey, rtVal)
 	Expect(err).NotTo(HaveOccurred())
 	defer resetRTMap(rtMap)
@@ -134,7 +135,39 @@ func TestSkipRedirectPeerHostToVMWorkload(t *testing.T) {
 
 		// Approved by HEP
 		Expect(ctr.Data().A2B.Approved).To(BeTrue())
-		// NOt approved by WEP yet
+		// Not approved by WEP yet
+		Expect(ctr.Data().B2A.Approved).NotTo(BeTrue())
+		Expect(ctr.Flags() & v3.FlagNoRedirPeer).To(Equal(v3.FlagNoRedirPeer))
+	})
+
+	// Reset route map and add reverse route from local workload with skip ingress redirect flag
+	resetRTMap(rtMap)
+	rtKey = routes.NewKey(srcV4CIDR).AsBytes()
+	rtVal = routes.NewValueWithIfIndex(routes.FlagsLocalWorkload|routes.FlagSkipIngressRedir|routes.FlagInIPAMPool, 1).AsBytes()
+	err = rtMap.Update(rtKey, rtVal)
+	Expect(err).NotTo(HaveOccurred())
+	rtKey = routes.NewKey(dstV4CIDR).AsBytes()
+	rtVal = routes.NewValueWithIfIndex(routes.FlagsLocalWorkload|routes.FlagInIPAMPool, 1).AsBytes()
+	err = rtMap.Update(rtKey, rtVal)
+	Expect(err).NotTo(HaveOccurred())
+
+	resetCTMap(ctMap)
+
+	skbMark = 0
+	runBpfTest(t, "calico_from_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+		res, err := bpfrun(pktBytes)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.Retval).To(Equal(resTC_ACT_REDIRECT))
+
+		ct, err := conntrack.LoadMapMem(ctMap)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(ct).Should(HaveKey(ctKey))
+
+		ctr := ct[ctKey]
+
+		// Approved by src WEP
+		Expect(ctr.Data().A2B.Approved).To(BeTrue())
+		// Not approved by dst WEP yet
 		Expect(ctr.Data().B2A.Approved).NotTo(BeTrue())
 		Expect(ctr.Flags() & v3.FlagNoRedirPeer).To(Equal(v3.FlagNoRedirPeer))
 	})
@@ -185,7 +218,7 @@ func TestAllowEnterHostToWorkload(t *testing.T) {
 
 		// Approved by HEP
 		Expect(ctr.Data().A2B.Approved).To(BeTrue())
-		// NOt approved by WEP yet
+		// Not approved by WEP yet
 		Expect(ctr.Data().B2A.Approved).NotTo(BeTrue())
 	})
 
@@ -409,7 +442,7 @@ func TestAllowEnterHostToWorkloadV6(t *testing.T) {
 
 		// Approved by HEP
 		Expect(ctr.Data().A2B.Approved).To(BeTrue())
-		// NOt approved by WEP yet
+		// Not approved by WEP yet
 		Expect(ctr.Data().B2A.Approved).NotTo(BeTrue())
 	}, withIPv6())
 

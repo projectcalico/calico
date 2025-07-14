@@ -72,18 +72,18 @@ func (k Key) AsBytes() []byte {
 type Flags uint32
 
 const (
-	FlagInIPAMPool      Flags = 0x01
-	FlagNATOutgoing     Flags = 0x02
-	FlagWorkload        Flags = 0x04
-	FlagLocal           Flags = 0x08
-	FlagHost            Flags = 0x10
-	FlagSameSubnet      Flags = 0x20
-	FlagTunneled        Flags = 0x40
-	FlagNoDSR           Flags = 0x80
-	FlagBlackHoleDrop   Flags = 0x100
-	FlagBlackHoleReject Flags = 0x200
-	FlagVXLAN           Flags = 0x400
-	FlagVMWorkload      Flags = 0x800
+	FlagInIPAMPool       Flags = 0x01
+	FlagNATOutgoing      Flags = 0x02
+	FlagWorkload         Flags = 0x04
+	FlagLocal            Flags = 0x08
+	FlagHost             Flags = 0x10
+	FlagSameSubnet       Flags = 0x20
+	FlagTunneled         Flags = 0x40
+	FlagNoDSR            Flags = 0x80
+	FlagBlackHoleDrop    Flags = 0x100
+	FlagBlackHoleReject  Flags = 0x200
+	FlagVXLAN            Flags = 0x400
+	FlagSkipIngressRedir Flags = 0x800
 
 	FlagsUnknown            Flags = 0
 	FlagsRemoteWorkload           = FlagWorkload
@@ -170,8 +170,8 @@ func (v Value) String() string {
 		parts = append(parts, "tunneled")
 	}
 
-	if typeFlags&FlagVMWorkload != 0 {
-		parts = append(parts, "vm")
+	if typeFlags&FlagSkipIngressRedir != 0 {
+		parts = append(parts, "skip-ingress-redir")
 	}
 
 	if typeFlags&FlagLocal != 0 && typeFlags&FlagWorkload != 0 {
