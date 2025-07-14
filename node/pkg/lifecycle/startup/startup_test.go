@@ -988,7 +988,7 @@ var _ = Describe("UT for Node IP assignment and conflict checking.", func() {
 				os.Setenv(item.key, item.value)
 			}
 
-			mockGetInterface := func([]string, []string, int) ([]autodetection.Interface, error) {
+			mockGetInterface := func([]string, []string, ...int) ([]autodetection.Interface, error) {
 				return []autodetection.Interface{}, nil
 			}
 
@@ -1016,7 +1016,7 @@ var _ = Describe("UT for autodetection method k8s-internal-ip", func() {
 				os.Setenv(item.key, item.value)
 			}
 
-			mockGetInterface := func([]string, []string, int) ([]autodetection.Interface, error) {
+			mockGetInterface := func([]string, []string, ...int) ([]autodetection.Interface, error) {
 				return []autodetection.Interface{
 					{Name: "eth1", Cidrs: []net.IPNet{net.MustParseCIDR("192.168.1.10/24"), net.MustParseCIDR("2001:db8:85a3:8d3:1319:8a2e:370:7348/128")}},
 				}, nil
@@ -1040,7 +1040,7 @@ var _ = Describe("UT for CIDR returned by IP address autodetection k8s-internal-
 	It("Verify that CIDR value returned using autodetection method k8s-internal-ip is not masked", func() {
 		expectedV4Cidr := "192.168.1.10/24"
 		expectedV6Cidr := "2001:db8:85a3:8d3:1319:8a2e:370:7348/64"
-		mockGetInterface := func([]string, []string, int) ([]autodetection.Interface, error) {
+		mockGetInterface := func([]string, []string, ...int) ([]autodetection.Interface, error) {
 			return []autodetection.Interface{
 				{Name: "eth1", Cidrs: []net.IPNet{net.MustParseCIDR(expectedV4Cidr), net.MustParseCIDR("2001:db8:85a3:8d3:1319:8a2e:370:7348/64")}},
 			}, nil
@@ -1264,7 +1264,7 @@ var _ = Describe("UTs for monitor-addresses option", func() {
 
 var _ = Describe("UT for IP and IP6", func() {
 	DescribeTable("env IP is defined", func(ipv4Env string, version int, exceptValue string) {
-		ipv4MockInterfaces := func([]string, []string, int) ([]autodetection.Interface, error) {
+		ipv4MockInterfaces := func([]string, []string, ...int) ([]autodetection.Interface, error) {
 			return []autodetection.Interface{
 				{Name: "eth1", Cidrs: []net.IPNet{net.MustParseCIDR("1.2.3.4/24")}},
 			}, nil
@@ -1278,7 +1278,7 @@ var _ = Describe("UT for IP and IP6", func() {
 	)
 
 	_ = DescribeTable("env IP6 is defined", func(ipv6Env string, version int, exceptValue string) {
-		ipv6MockInterfaces := func([]string, []string, int) ([]autodetection.Interface, error) {
+		ipv6MockInterfaces := func([]string, []string, ...int) ([]autodetection.Interface, error) {
 			return []autodetection.Interface{
 				{Name: "eth1", Cidrs: []net.IPNet{net.MustParseCIDR("1:2:3:4::5/120")}},
 			}, nil
