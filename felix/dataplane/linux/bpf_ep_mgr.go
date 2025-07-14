@@ -2327,6 +2327,9 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 
 	ap := m.calculateTCAttachPoint(ifaceName)
 	ap.IfIndex = ifindex
+	if wep != nil && wep.QosControls != nil && wep.QosControls.EgressBandwidth > 0 {
+		ap.HasEgressQoSBW = true
+	}
 
 	if err := m.wepStateFillJumps(ap, &state); err != nil {
 		return state, err
