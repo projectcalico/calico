@@ -564,6 +564,10 @@ var _ = testutils.E2eDatastoreDescribe("KubeControllersConfiguration tests", tes
 			_, outError = c.KubeControllersConfiguration().Create(ctx, kcc, options.SetOptions{})
 			Expect(outError).ToNot(HaveOccurred())
 
+			// Clean up the created KCC before the next test.
+			_, outError = c.KubeControllersConfiguration().Delete(ctx, kcc.Name, options.DeleteOptions{})
+			Expect(outError).ToNot(HaveOccurred())
+
 			By("Creating kcc with valid template")
 			kcc.Spec.Controllers.Node.HostEndpoint = &templateValid2
 			_, outError = c.KubeControllersConfiguration().Create(ctx, kcc, options.SetOptions{})
