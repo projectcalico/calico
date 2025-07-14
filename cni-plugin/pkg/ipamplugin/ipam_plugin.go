@@ -165,8 +165,6 @@ func cmdAdd(args *skel.CmdArgs) error {
 		attrs[ipam.AttributeNamespace] = epIDs.Namespace
 	}
 
-	ctx := context.Background()
-
 	r := &cniv1.Result{}
 	if ipamArgs.IP != nil {
 		logger.Infof("Calico CNI IPAM request IP: %v", ipamArgs.IP)
@@ -184,7 +182,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 			// Only start the timeout after we get the lock. When there's a
 			// thundering herd of new pods, acquiring the lock can take a while.
-			ctx, cancel := context.WithTimeout(ctx, 90*time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 			defer cancel()
 
 			return calicoClient.IPAM().AssignIP(ctx, assignArgs)
@@ -228,16 +226,22 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 		logger.Infof("Calico CNI IPAM request count IPv4=%d IPv6=%d", num4, num6)
 
-		rctx, cancel := context.WithTimeout(ctx, 90*time.Second)
-		defer cancel()
-		v4pools, err := utils.ResolvePools(rctx, calicoClient, conf.IPAM.IPv4Pools, true)
-		if err != nil {
-			return err
+		var v4pools, v6pools []cnet.IPNet
+		{
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+			v4pools, err = utils.ResolvePools(ctx, calicoClient, conf.IPAM.IPv4Pools, true)
+			if err != nil {
+				return err
+			}
 		}
-
-		v6pools, err := utils.ResolvePools(rctx, calicoClient, conf.IPAM.IPv6Pools, false)
-		if err != nil {
-			return err
+		{
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+			v6pools, err = utils.ResolvePools(ctx, calicoClient, conf.IPAM.IPv6Pools, false)
+			if err != nil {
+				return err
+			}
 		}
 
 		logger.Debugf("Calico CNI IPAM handle=%s", handleID)
@@ -279,7 +283,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 			// Only start the timeout after we get the lock. When there's a
 			// thundering herd of new pods, acquiring the lock can take a while.
-			ctx, cancel := context.WithTimeout(ctx, 90*time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 			defer cancel()
 
 			return calicoClient.IPAM().AutoAssign(ctx, assignArgs)
@@ -308,7 +312,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 				}
 
 				// Fresh timeout for cleanup.
-				cleanupCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+				cleanupCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 				defer cancel()
 				_, _, err := calicoClient.IPAM().ReleaseIPs(cleanupCtx, v6IPs...)
 				if err != nil {
@@ -328,7 +332,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 				}
 
 				// Fresh timeout for cleanup.
-				cleanupCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+				cleanupCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 				defer cancel()
 				_, _, err := calicoClient.IPAM().ReleaseIPs(cleanupCtx, v4IPs...)
 				if err != nil {
