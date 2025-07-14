@@ -2801,6 +2801,8 @@ spec:
                                     items:
                                       type: string
                                     type: array
+                                  interfaceSelector:
+                                    type: string
                                   labels:
                                     additionalProperties:
                                       type: string
@@ -2885,6 +2887,8 @@ spec:
                                         items:
                                           type: string
                                         type: array
+                                      interfaceSelector:
+                                        type: string
                                       labels:
                                         additionalProperties:
                                           type: string
