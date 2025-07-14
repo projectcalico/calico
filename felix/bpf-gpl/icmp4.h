@@ -84,14 +84,19 @@ static CALI_BPF_INLINE int icmp_v4_reply(struct cali_tc_ctx *ctx,
 
 	ctx->ipheader_len = 20;
 
-	struct cali_rt *r = cali_rt_lookup(&ip_orig.daddr);
-	if (r && cali_rt_flags_local_host(r->flags)) {
-		CALI_DEBUG("ICMP v4 reply: from orig dst host IP " IP_FMT, &ip_orig.daddr);
+	if  (CALI_F_FROM_HEP && !ip_equal(ctx->state->pre_nat_ip_dst, ctx->state->post_nat_ip_dst)) {
+		CALI_DEBUG("ICMP v4 reply: from orig pre DNAT IP");
 		ip_hdr(ctx)->saddr = ip_orig.daddr;
 	} else {
-		/* use the host IP of the program that handles the packet */
-		CALI_DEBUG("ICMP v4 reply: from IP of the intf " IP_FMT, &INTF_IP);
-		ip_hdr(ctx)->saddr = INTF_IP;
+		struct cali_rt *r = cali_rt_lookup(&ip_orig.daddr);
+		if (r && cali_rt_flags_local_host(r->flags)) {
+			CALI_DEBUG("ICMP v4 reply: from orig dst host IP " IP_FMT, &ip_orig.daddr);
+			ip_hdr(ctx)->saddr = ip_orig.daddr;
+		} else {
+			/* use the host IP of the program that handles the packet */
+			CALI_DEBUG("ICMP v4 reply: from IP of the intf " IP_FMT, &INTF_IP);
+			ip_hdr(ctx)->saddr = INTF_IP;
+		}
 	}
 	ip_hdr(ctx)->daddr = ip_orig.saddr;
 
