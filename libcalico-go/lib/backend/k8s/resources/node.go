@@ -326,9 +326,13 @@ func fillAllAddresses(calicoNode *libapiv3.Node, k8sNode *kapiv1.Node) {
 }
 
 func fillAllInterfaces(calicoNode *libapiv3.Node, k8sNode *kapiv1.Node) {
-	annotationsAnnotations := k8sNode.ObjectMeta.Annotations
+	annotations := k8sNode.ObjectMeta.Annotations
 	interfaces := []libapiv3.NodeInterface{}
-	err := json.Unmarshal([]byte(annotationsAnnotations[nodeInterfacesAnnotation]), &interfaces)
+	if _, ok := annotations[nodeInterfacesAnnotation]; !ok {
+		// The annotation is not present, so we don't have any interfaces to fill.
+		return
+	}
+	err := json.Unmarshal([]byte(annotations[nodeInterfacesAnnotation]), &interfaces)
 	if err != nil {
 		log.WithError(err).Error("Failed to unmarshal node interface annotation")
 		return
