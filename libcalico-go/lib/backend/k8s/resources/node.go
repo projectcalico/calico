@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2025 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -55,7 +55,7 @@ const (
 	nodeWireguardIpv6IfaceAddrAnnotation  = "projectcalico.org/IPv6WireguardInterfaceAddr"
 	nodeWireguardPublicKeyAnnotation      = "projectcalico.org/WireguardPublicKey"
 	nodeWireguardPublicKeyV6Annotation    = "projectcalico.org/WireguardPublicKeyV6"
-	NodeInterfacesAnnotation              = "projectcalico.org/Interfaces"
+	nodeInterfacesAnnotation              = "projectcalico.org/Interfaces"
 )
 
 func NewNodeClient(c kubernetes.Interface, usePodCIDR bool) K8sResourceClient {
@@ -328,7 +328,7 @@ func fillAllAddresses(calicoNode *libapiv3.Node, k8sNode *kapiv1.Node) {
 func fillAllInterfaces(calicoNode *libapiv3.Node, k8sNode *kapiv1.Node) {
 	annotationsAnnotations := k8sNode.ObjectMeta.Annotations
 	interfaces := []libapiv3.NodeInterface{}
-	err := json.Unmarshal([]byte(annotationsAnnotations[NodeInterfacesAnnotation]), &interfaces)
+	err := json.Unmarshal([]byte(annotationsAnnotations[nodeInterfacesAnnotation]), &interfaces)
 	if err != nil {
 		log.WithError(err).Error("Failed to unmarshal node interface annotation")
 		return
@@ -343,7 +343,6 @@ func fillAllInterfaces(calicoNode *libapiv3.Node, k8sNode *kapiv1.Node) {
 			}
 		}
 	}
-	calicoNode.Spec.Interfaces = interfaces
 	calicoNode.Spec.Interfaces = interfaces
 }
 
@@ -465,10 +464,10 @@ func mergeCalicoNodeIntoK8sNode(calicoNode *libapiv3.Node, k8sNode *kapiv1.Node)
 		if err != nil {
 			log.WithError(err).Error("Error serializing interfaces")
 		} else {
-			k8sNode.Annotations[NodeInterfacesAnnotation] = string(interfaces)
+			k8sNode.Annotations[nodeInterfacesAnnotation] = string(interfaces)
 		}
 	} else {
-		delete(k8sNode.Annotations, NodeInterfacesAnnotation)
+		delete(k8sNode.Annotations, nodeInterfacesAnnotation)
 	}
 
 	return k8sNode, nil

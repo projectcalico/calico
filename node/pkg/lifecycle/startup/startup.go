@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -566,17 +566,17 @@ func configureIPsAndSubnets(node *libapi.Node, k8sNode *v1.Node, getInterfaces f
 
 	var interfaces []autodetection.Interface
 	var err error
-	if ipv4Env != "none" && (ipv6Env == "none" || ipv6Env == "") {
+	if (ipv4Env != "none" && ipv4Env != "") && (ipv6Env == "none" || ipv6Env == "") {
 		interfaces, err = getInterfaces(nil, autodetection.DEFAULT_INTERFACES_TO_EXCLUDE, 4)
 		if err != nil {
 			return false, err
 		}
-	} else if ipv6Env != "none" && (ipv4Env == "none" || ipv4Env == "") {
+	} else if (ipv6Env != "none" && ipv6Env != "") && (ipv4Env == "none" || ipv4Env == "") {
 		interfaces, err = getInterfaces(nil, autodetection.DEFAULT_INTERFACES_TO_EXCLUDE, 6)
 		if err != nil {
 			return false, err
 		}
-	} else {
+	} else if (ipv4Env != "none" && ipv4Env != "") && (ipv6Env != "none" && ipv6Env != "") {
 		interfaces, err = getInterfaces(nil, autodetection.DEFAULT_INTERFACES_TO_EXCLUDE, 4, 6)
 		if err != nil {
 			return false, err
