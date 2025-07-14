@@ -943,7 +943,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 			 * to invoke policy.
 			 */
 			CALI_CT_DEBUG("Packet not allowed by ingress/egress approval flags (TH).");
-			result.rc = tcp_header ? CALI_CT_INVALID : CALI_CT_NEW;
+			result.rc = (tcp_header && !syn) ? CALI_CT_INVALID : CALI_CT_NEW;
 		}
 	} else if (CALI_F_FROM_HOST) {
 		/* Dest of the packet is the endpoint, so check the dest approval flag. */
