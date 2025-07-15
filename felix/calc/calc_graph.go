@@ -51,6 +51,8 @@ type rulesUpdateCallbacks interface {
 	OnPolicyInactive(model.PolicyKey)
 	OnProfileActive(model.ProfileRulesKey, *ParsedRules)
 	OnProfileInactive(model.ProfileRulesKey)
+	OnQoSPolicyActive(string, *ParsedRules)
+	OnQoSPolicyInactive(string)
 }
 
 type endpointCallbacks interface {
