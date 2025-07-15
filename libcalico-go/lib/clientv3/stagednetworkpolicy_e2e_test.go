@@ -153,7 +153,7 @@ var _ = testutils.E2eDatastoreDescribe("StagedNetworkPolicy tests", testutils.Da
 				Spec:       spec2,
 			}, options.SetOptions{})
 			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).To(Equal("resource already exists: StagedNetworkPolicy(" + tieredNetworkPolicyName(namespace1, name1, tier) + ")"))
+			Expect(outError.Error()).To(ContainSubstring("resource already exists: StagedNetworkPolicy(" + tieredNetworkPolicyName(namespace1, name1, tier) + ") with error:"))
 
 			By("Getting StagedNetworkPolicy (name1) and comparing the output against spec1")
 			res, outError := c.StagedNetworkPolicies().Get(ctx, namespace1, name1, options.GetOptions{})
