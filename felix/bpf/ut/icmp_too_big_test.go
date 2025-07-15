@@ -49,7 +49,7 @@ func TestICMPTooBig(t *testing.T) {
 		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
 		fmt.Printf("pktR = %+v\n", pktR)
 
-		checkICMPTooBig(pktR, ipv4, udp, natTunnelMTU)
+		checkICMPTooBig(pktR, ipv4, udp, intfIP, natTunnelMTU)
 	})
 }
 
@@ -82,17 +82,17 @@ func TestICMPTooBigIPOptions(t *testing.T) {
 		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
 		fmt.Printf("pktR = %+v\n", pktR)
 
-		checkICMPTooBig(pktR, ipv4, udp, natTunnelMTU)
+		checkICMPTooBig(pktR, ipv4, udp, intfIP, natTunnelMTU)
 	})
 }
 
-func checkICMPTooBig(pktR gopacket.Packet, ipv4 *layers.IPv4, udp *layers.UDP, expMTU uint16) {
+func checkICMPTooBig(pktR gopacket.Packet, ipv4 *layers.IPv4, udp *layers.UDP, src net.IP, expMTU uint16) {
 	ipv4L := pktR.Layer(layers.LayerTypeIPv4)
 	Expect(ipv4L).NotTo(BeNil())
 	ipv4R := ipv4L.(*layers.IPv4)
 
 	Expect(ipv4R.Protocol).To(Equal(layers.IPProtocolICMPv4))
-	Expect(ipv4R.SrcIP.String()).To(Equal(intfIP.String()))
+	Expect(ipv4R.SrcIP).To(Equal(src))
 	Expect(ipv4R.DstIP).To(Equal(ipv4.SrcIP))
 
 	icmpL := pktR.Layer(layers.LayerTypeICMPv4)
@@ -302,6 +302,48 @@ func TestICMPTooBigNATNodePort(t *testing.T) {
 		ipv4R = ipv4L.(*layers.IPv4)
 		Expect(ipv4R.SrcIP.String()).To(Equal(srcIP.String()))
 		Expect(ipv4R.DstIP.String()).To(Equal(extHostIP.String()))
+	})
+
+	extSvcIP := net.ParseIP("123.55.0.1")
+	_, _, _, _, pktBytes, err = testPacketUDPDefaultNPWithPayload(extSvcIP, make([]byte, 1600))
+	Expect(err).NotTo(HaveOccurred())
+
+	err = natMap.Update(
+		nat.NewNATKey(extSvcIP, uint16(udp.DstPort), uint8(ipv4.Protocol)).AsBytes(),
+		nat.NewNATValue(0, 1, 0, 0).AsBytes(),
+	)
+	Expect(err).NotTo(HaveOccurred())
+
+	resetCTMap(ctMap) // avoid source collision with the previous connetion
+
+	// Large packet arriving at node 1 for a external service IP
+	skbMark = 0
+	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
+		res, err := bpfrun(pktBytes)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+
+		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
+		fmt.Printf("pktR = %+v\n", pktR)
+
+		ipv4L := pktR.Layer(layers.LayerTypeIPv4)
+		Expect(ipv4L).NotTo(BeNil())
+		ipv4R := ipv4L.(*layers.IPv4)
+		Expect(ipv4R.SrcIP.String()).To(Equal(extSvcIP.String()))
+		Expect(ipv4R.DstIP.String()).To(Equal(srcIP.String()))
+
+		payloadL := pktR.ApplicationLayer()
+		Expect(payloadL).NotTo(BeNil())
+
+		origPkt := gopacket.NewPacket(payloadL.Payload(), layers.LayerTypeIPv4, gopacket.Default)
+		Expect(origPkt).NotTo(BeNil())
+		fmt.Printf("origPkt = %+v\n", origPkt)
+
+		ipv4L = origPkt.Layer(layers.LayerTypeIPv4)
+		Expect(ipv4L).NotTo(BeNil())
+		ipv4R = ipv4L.(*layers.IPv4)
+		Expect(ipv4R.SrcIP.String()).To(Equal(srcIP.String()))
+		Expect(ipv4R.DstIP.String()).To(Equal(extSvcIP.String()))
 	})
 }
 
