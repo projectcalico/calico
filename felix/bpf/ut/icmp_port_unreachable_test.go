@@ -16,6 +16,7 @@ package ut_test
 
 import (
 	"fmt"
+	"net"
 	"testing"
 
 	"github.com/google/gopacket"
@@ -53,7 +54,7 @@ func TestICMPPortUnreachable(t *testing.T) {
 		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
 		fmt.Printf("pktR = %+v\n", pktR)
 
-		checkICMPPortUnreachable(pktR, ipv4)
+		checkICMPPortUnreachable(pktR, ipv4, intfIP)
 	})
 
 }
@@ -90,7 +91,7 @@ func TestNATNoBackendFromHEP(t *testing.T) {
 		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
 		fmt.Printf("pktR = %+v\n", pktR)
 
-		checkICMPPortUnreachable(pktR, ipv4)
+		checkICMPPortUnreachable(pktR, ipv4, ipv4.DstIP)
 	})
 	expectMark(tcdefs.MarkSeenBypassForward)
 
@@ -110,18 +111,18 @@ func TestNATNoBackendFromHEP(t *testing.T) {
 		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
 		fmt.Printf("pktR = %+v\n", pktR)
 
-		checkICMPPortUnreachable(pktR, ipv4)
+		checkICMPPortUnreachable(pktR, ipv4, ipv4.DstIP)
 	})
 	expectMark(tcdefs.MarkSeenBypassForward)
 }
 
-func checkICMPPortUnreachable(pktR gopacket.Packet, ipv4 *layers.IPv4) {
+func checkICMPPortUnreachable(pktR gopacket.Packet, ipv4 *layers.IPv4, srcIP net.IP) {
 	ipv4L := pktR.Layer(layers.LayerTypeIPv4)
 	Expect(ipv4L).NotTo(BeNil())
 	ipv4R := ipv4L.(*layers.IPv4)
 
 	Expect(ipv4R.Protocol).To(Equal(layers.IPProtocolICMPv4))
-	Expect(ipv4R.SrcIP.String()).To(Equal(intfIP.String()))
+	Expect(ipv4R.SrcIP).To(Equal(srcIP))
 	Expect(ipv4R.DstIP).To(Equal(ipv4.SrcIP))
 
 	icmpL := pktR.Layer(layers.LayerTypeICMPv4)
@@ -280,7 +281,7 @@ func TestSVCLoopPrevention(t *testing.T) {
 		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
 		fmt.Printf("pktR = %+v\n", pktR)
 
-		checkICMPPortUnreachable(pktR, ipv4)
+		checkICMPPortUnreachable(pktR, ipv4, intfIP)
 		bpfCounters, err := counters.Read(countersMap, 1, 0)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(int(bpfCounters[counters.DroppedBlackholeRoute])).To(Equal(3))

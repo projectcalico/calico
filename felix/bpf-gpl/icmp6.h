@@ -76,15 +76,19 @@ static CALI_BPF_INLINE int icmp_v6_reply(struct cali_tc_ctx *ctx,
 
 	ctx->ipheader_len = IP_SIZE;
 
-	/* use the host IP of the program that handles the packet */
-	struct cali_rt *r = cali_rt_lookup(&orig_dst);
-	if (r && cali_rt_flags_local_host(r->flags)) {
-		CALI_DEBUG("ICMP v6 reply: from orig dst host IP " IP_FMT, &orig_dst);
+	if  (CALI_F_FROM_HEP && !ip_equal(ctx->state->pre_nat_ip_dst, ctx->state->post_nat_ip_dst)) {
+		CALI_DEBUG("ICMP v6 reply: from orig pre DNAT IP");
 		ipv6_addr_t_to_ipv6hdr_ip(&ip_hdr(ctx)->saddr, &orig_dst);
 	} else {
-		/* use the host IP of the program that handles the packet */
-		CALI_DEBUG("ICMP v6 reply: from IP of the intf " IP_FMT, &INTF_IP);
-		ipv6_addr_t_to_ipv6hdr_ip(&ip_hdr(ctx)->saddr, (ipv6_addr_t *)&INTF_IP);
+		struct cali_rt *r = cali_rt_lookup(&orig_dst);
+		if (r && cali_rt_flags_local_host(r->flags)) {
+			CALI_DEBUG("ICMP v6 reply: from orig dst host IP " IP_FMT, &orig_dst);
+			ipv6_addr_t_to_ipv6hdr_ip(&ip_hdr(ctx)->saddr, &orig_dst);
+		} else {
+			/* use the host IP of the program that handles the packet */
+			CALI_DEBUG("ICMP v6 reply: from IP of the intf " IP_FMT, &INTF_IP);
+			ipv6_addr_t_to_ipv6hdr_ip(&ip_hdr(ctx)->saddr, (ipv6_addr_t *)&INTF_IP);
+		}
 	}
 	ipv6_addr_t_to_ipv6hdr_ip(&ip_hdr(ctx)->daddr, &orig_src);
 
