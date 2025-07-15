@@ -77,7 +77,7 @@ static CALI_BPF_INLINE int icmp_v6_reply(struct cali_tc_ctx *ctx,
 	ctx->ipheader_len = IP_SIZE;
 
 	if  (CALI_F_FROM_HEP && !ip_equal(ctx->state->pre_nat_ip_dst, ctx->state->post_nat_ip_dst)) {
-		CALI_DEBUG("ICMP v4 reply: from orig pre DNAT IP");
+		CALI_DEBUG("ICMP v6 reply: from orig pre DNAT IP");
 		ipv6_addr_t_to_ipv6hdr_ip(&ip_hdr(ctx)->saddr, &orig_dst);
 	} else {
 		struct cali_rt *r = cali_rt_lookup(&orig_dst);
