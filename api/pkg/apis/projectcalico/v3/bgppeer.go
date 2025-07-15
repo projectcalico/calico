@@ -131,6 +131,13 @@ type BGPPeerSpec struct {
 	// and the ASNumber must not be empty.
 	// +optional
 	LocalWorkloadSelector string `json:"localWorkloadSelector,omitempty" validate:"omitempty,selector"`
+
+	// ReversePeering, for peerings between Calico nodes controls whether
+	// the reverse peering from nodes selected by peerSelector is generated
+	// automatically. If set to Manual, a separate BGPPeer must be created
+	// for the reverse peering. [Default: Auto]
+	// +kubebuilder:validation:Enum=Auto;Manual;
+	ReversePeering *ReversePeering `json:"reversePeering,omitempty"`
 }
 
 type SourceAddress string
@@ -153,6 +160,13 @@ const (
 	NextHopModeAuto BindMode = "Auto"
 	NextHopModeSelf BindMode = "Self"
 	NextHopModeKeep BindMode = "Keep"
+)
+
+type ReversePeering string
+
+const (
+	ReversePeeringAuto   ReversePeering = "Auto"
+	ReversePeeringManual ReversePeering = "Manual"
 )
 
 // NewBGPPeer creates a new (zeroed) BGPPeer struct with the TypeMetadata initialised to the current
