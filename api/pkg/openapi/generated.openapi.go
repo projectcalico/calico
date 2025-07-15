@@ -1321,7 +1321,7 @@ func schema_pkg_apis_projectcalico_v3_BGPPeerSpec(ref common.ReferenceCallback) 
 					},
 					"reversePeering": {
 						SchemaProps: spec.SchemaProps{
-							Description: "ReversePeering configures whether the BGP peer in the reverse direction (from the node selected by peerSelector to the node selected by node or nodeSelector) should be generated automatically or manually. [Default: Auto]",
+							Description: "ReversePeering, for peerings between Calico nodes controls whether the reverse peering from nodes selected by peerSelector is generated automatically. If set to Manual, a separate BGPPeer must be created for the reverse peering. [Default: Auto]",
 							Type:        []string{"string"},
 							Format:      "",
 						},
