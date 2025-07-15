@@ -132,9 +132,10 @@ type BGPPeerSpec struct {
 	// +optional
 	LocalWorkloadSelector string `json:"localWorkloadSelector,omitempty" validate:"omitempty,selector"`
 
-	// ReversePeering configures whether the BGP peer in the reverse direction
-	// (from the node selected by peerSelector to the node selected by node or nodeSelector)
-	// should be generated automatically or manually. [Default: Auto]
+	// ReversePeering, for peerings between Calico nodes controls whether 
+	// the reverse peering from nodes selected by peerSelector is generated 
+	// automatically.  If set to Manual, a separate BGPPeer must be created 
+	// for the reverse peering. [Default: Auto]
 	// +kubebuilder:validation:Enum=Auto;Manual;
 	ReversePeering *ReversePeering `json:"reversePeering,omitempty"`
 }
