@@ -695,7 +695,7 @@ func (c *client) updatePeersV1() {
 		if !automaticReversePeering(v3res) {
 			continue
 		} else if v3res.Spec.LocalWorkloadSelector != "" {
-			// Reverser peering from local workload should be performed by the Child cluster.
+			// Reverse peering from local workload should be performed by the Child cluster.
 			continue
 		} else if v3res.Spec.PeerSelector != "" {
 			localNodeNames = c.nodeLabelManager.nodesMatching(v3res.Spec.PeerSelector)
