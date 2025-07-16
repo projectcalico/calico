@@ -15,7 +15,9 @@
 package maps
 
 import (
+	"context"
 	"errors"
+	"sync"
 	"unsafe"
 )
 
@@ -25,6 +27,13 @@ var ErrIterationFinished = errors.New("iteration finished")
 // ErrVisitedTooManyKeys is returned by the Iterator's Next() method if it sees
 // many more keys than there should be in the map.
 var ErrVisitedTooManyKeys = errors.New("visited 10x the max size of the map keys")
+
+type keysValues struct {
+	keys   []byte
+	values []byte
+	err    error
+	count  int
+}
 
 // Iterator handles one pass of iteration over the map.
 type Iterator struct {
@@ -70,6 +79,12 @@ type Iterator struct {
 	// numEntriesVisited is incremented for each entry that we visit.  Used as a sanity
 	// check in case we go into an infinite loop.
 	numEntriesVisited int
+
+	// wg is to sync with the syscall executing thread on close
+	wg         sync.WaitGroup
+	keysValues chan keysValues
+	cancelCtx  context.Context
+	cancelCB   context.CancelFunc
 }
 
 type MapInfo struct {

@@ -17,6 +17,7 @@
 package maps
 
 import (
+	"context"
 	"errors"
 	"runtime"
 	"unsafe"
@@ -212,7 +213,10 @@ func NewIterator(mapFD FD, keySize, valueSize, maxEntries int) (*Iterator, error
 		valueStride:   valueStride,
 		keysBufSize:   keyStride * IteratorNumKeys,
 		valuesBufSize: valueStride * IteratorNumKeys,
+		keysValues:    make(chan keysValues),
 	}
+
+	m.cancelCtx, m.cancelCB = context.WithCancel(context.Background())
 
 	m.keysBuff = C.malloc(C.size_t(m.keysBufSize))
 	m.valuesBuff = C.malloc(C.size_t(m.valuesBufSize))
@@ -230,15 +234,16 @@ func NewIterator(mapFD FD, keySize, valueSize, maxEntries int) (*Iterator, error
 		}
 	})
 
+	m.wg.Add(1)
+	go m.syscallThread()
+
 	return m, nil
 }
 
-// Next gets the next key/value pair from the iteration.  The key and value []byte slices returned point to the
-// Iterator's internal buffers (which are allocated on the C heap); they should not be retained or modified.
-// Returns ErrIterationFinished at the end of the iteration or ErrVisitedTooManyKeys if it visits considerably more
-// keys than the maximum size of the map.
-func (m *Iterator) Next() (k, v []byte, err error) {
-	if m.numEntriesLoaded == m.entryIdx {
+func (m *Iterator) syscallThread() {
+	defer m.wg.Done()
+
+	for {
 		token := m.token
 
 		tokenIn := unsafe.Pointer(&token)
@@ -247,18 +252,25 @@ func (m *Iterator) Next() (k, v []byte, err error) {
 		}
 
 		count := IteratorNumKeys
-		_, err = C.bpf_map_batch_lookup(C.int(m.mapFD), tokenIn, unsafe.Pointer(&token), m.keysBuff, m.valuesBuff,
+		_, err := C.bpf_map_batch_lookup(C.int(m.mapFD), tokenIn, unsafe.Pointer(&token), m.keysBuff, m.valuesBuff,
 			(*C.__u32)(unsafe.Pointer(&count)), 0)
 		if err != nil {
 			if errors.Is(err, unix.ENOENT) {
 				if count == 0 {
 					err = ErrIterationFinished
-					return
 				} else {
 					err = nil
 				}
-			} else {
-				return
+			}
+
+			if err != nil {
+				select {
+				case m.keysValues <- keysValues{err: err}:
+					close(m.keysValues)
+					return
+				case <-m.cancelCtx.Done():
+					return
+				}
 			}
 		}
 
@@ -266,10 +278,46 @@ func (m *Iterator) Next() (k, v []byte, err error) {
 
 		m.entryIdx = 0
 		m.numEntriesLoaded = count
-		b := C.GoBytes(m.keysBuff, C.int(m.keysBufSize))
-		m.keys = b[:count*m.keySize]
-		b = C.GoBytes(m.valuesBuff, C.int(m.valuesBufSize))
-		m.values = b[:count*m.valueSize]
+		bk := C.GoBytes(m.keysBuff, C.int(m.keysBufSize))
+		bv := C.GoBytes(m.valuesBuff, C.int(m.valuesBufSize))
+
+		select {
+		case m.keysValues <- keysValues{
+			keys:   bk[:count*m.keySize],
+			values: bv[:count*m.valueSize],
+			count:  count,
+		}:
+		case <-m.cancelCtx.Done():
+		}
+	}
+}
+
+// Next gets the next key/value pair from the iteration.  The key and value []byte slices returned point to the
+// Iterator's internal buffers (which are allocated on the C heap); they should not be retained or modified.
+// Returns ErrIterationFinished at the end of the iteration or ErrVisitedTooManyKeys if it visits considerably more
+// keys than the maximum size of the map.
+func (m *Iterator) Next() (k, v []byte, err error) {
+	if m.numEntriesVisited > m.maxEntries*10 {
+		// Either a bug or entries are being created 10x faster than we're iterating through them?
+		err = ErrVisitedTooManyKeys
+		return
+	}
+
+	if m.numEntriesLoaded == m.entryIdx {
+		x, ok := <-m.keysValues
+		if !ok {
+			return
+		}
+
+		if x.err != nil {
+			err = x.err
+			return
+		}
+
+		m.entryIdx = 0
+		m.numEntriesLoaded = x.count
+		m.keys = x.keys
+		m.values = x.values
 	}
 
 	k = m.keys[m.entryIdx*m.keySize : (m.entryIdx+1)*m.keySize]
@@ -278,16 +326,12 @@ func (m *Iterator) Next() (k, v []byte, err error) {
 	m.entryIdx++
 	m.numEntriesVisited++
 
-	if m.numEntriesVisited > m.maxEntries*10 {
-		// Either a bug or entries are being created 10x faster than we're iterating through them?
-		err = ErrVisitedTooManyKeys
-		return
-	}
-
 	return
 }
 
 func (m *Iterator) Close() error {
+	m.cancelCB()
+	m.wg.Wait()
 	C.free(m.keysBuff)
 	m.keys = nil
 	C.free(m.valuesBuff)
