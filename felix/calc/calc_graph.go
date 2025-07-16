@@ -53,6 +53,11 @@ type rulesUpdateCallbacks interface {
 	OnProfileInactive(model.ProfileRulesKey)
 }
 
+type qosRulesUpdateCallbacks interface {
+	OnQoSPolicyActive(string, *ParsedRules)
+	OnQoSPolicyInactive(string)
+}
+
 type endpointCallbacks interface {
 	OnEndpointTierUpdate(endpointKey model.EndpointKey,
 		endpoint model.Endpoint,
@@ -102,6 +107,7 @@ type vxlanCallbacks interface {
 type PipelineCallbacks interface {
 	ipSetUpdateCallbacks
 	rulesUpdateCallbacks
+	qosRulesUpdateCallbacks
 	encapCallbacks
 	endpointCallbacks
 	configCallbacks
