@@ -681,13 +681,15 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 			result.rc = CALI_CT_MID_FLOW_MISS;
 			return result;
 		}
-		if (CALI_F_TO_HOST && proto_orig == IPPROTO_TCP) {
-			// Miss for a mid-flow TCP packet towards the host.  This may be part of a
-			// connection that predates the BPF program so we need to let it fall through
-			// to iptables.
-			CALI_DEBUG("BPF CT Miss for mid-flow TCP");
-			result.rc = CALI_CT_MID_FLOW_MISS;
-			return result;
+		if (CALI_F_TO_HOST) {
+			if (proto_orig == IPPROTO_TCP) {
+				// Miss for a mid-flow TCP packet towards the host.  This may be part of a
+				// connection that predates the BPF program so we need to let it fall through
+				// to iptables.
+				CALI_DEBUG("BPF CT Miss for mid-flow TCP");
+				result.rc = CALI_CT_MID_FLOW_MISS;
+				return result;
+			}
 		}
 		CALI_CT_DEBUG("Miss.");
 		if (related) {
