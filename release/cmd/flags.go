@@ -409,6 +409,7 @@ var (
 	hashreleaseServerFlags = []cli.Flag{
 		sshHostFlag, sshUserFlag, sshKeyFlag, sshPortFlag,
 		sshKnownHostsFlag,
+		hashreleaseServerCredentialsFlag, hashreleaseServerBucketFlag,
 	}
 	sshHostFlag = &cli.StringFlag{
 		Name:    "server-ssh-host",
@@ -449,8 +450,19 @@ var (
 		Value: true,
 	}
 	latestFlag = &cli.BoolFlag{
-		Name:  "latest",
-		Usage: "Publish the hashrelease as the latest hashrelease",
-		Value: true,
+		Name:    "latest",
+		Usage:   "Publish the hashrelease as the latest hashrelease",
+		EnvVars: []string{"LATEST"},
+		Value:   true,
+	}
+	hashreleaseServerCredentialsFlag = &cli.StringFlag{
+		Name:    "hashrelease-server-credentials",
+		Usage:   "The absolute path to the credentials file for the hashrelease server",
+		EnvVars: []string{"HASHRELEASE_SERVER_CREDENTIALS"},
+	}
+	hashreleaseServerBucketFlag = &cli.StringFlag{
+		Name:    "hashrelease-server-bucket",
+		Usage:   "The bucket name for the hashrelease server",
+		EnvVars: []string{"HASHRELEASE_SERVER_BUCKET"},
 	}
 )

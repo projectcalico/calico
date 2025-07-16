@@ -30,6 +30,7 @@ import (
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
+	"golang.org/x/sys/unix"
 	googleproto "google.golang.org/protobuf/proto"
 
 	"github.com/projectcalico/calico/felix/bpf"
@@ -77,6 +78,9 @@ type mockDataplane struct {
 	ensureStartedFn    func()
 	ensureQdiscFn      func(string) (bool, error)
 	interfaceByIndexFn func(ifindex int) (*net.Interface, error)
+
+	jitHarden             bool
+	finalTrampolineStride int
 }
 
 func newMockDataplane() *mockDataplane {
@@ -325,6 +329,19 @@ func (m *mockProgMapDP) loadPolicyProgram(progName string,
 	polProgsMap maps.Map,
 	opts ...polprog.Option,
 ) ([]fileDescriptor, []asm.Insns, error) {
+	if m.jitHarden {
+		builder := new(polprog.Builder)
+		for _, o := range opts {
+			o(builder)
+		}
+
+		if builder.TrampolineStride() > 15000 {
+			return nil, nil, unix.ERANGE
+		}
+
+		m.finalTrampolineStride = builder.TrampolineStride()
+	}
+
 	fdCounterLock.Lock()
 	defer fdCounterLock.Unlock()
 	fdCounter++
@@ -1039,6 +1056,24 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			genHostMetadataV6Update("1::4")()
 			Expect(dp.numOfAttaches("cali12345:ingress")).To(Equal(5))
 			Expect(dp.numOfAttaches("cali12345:egress")).To(Equal(5))
+		})
+	})
+
+	Context("with jit-harden", func() {
+		JustBeforeEach(func() {
+			dp.jitHarden = true
+			mockDP = &mockProgMapDP{
+				dp,
+			}
+			newBpfEpMgr(false)
+			genWLUpdate("cali12345")()
+			genIfaceUpdate("cali12345", ifacemonitor.StateUp, 15)()
+		})
+
+		It("should load program with shorter trampoline jumps", func() {
+			Expect(dp.programAttached("cali12345:ingress")).To(BeTrue())
+			Expect(dp.programAttached("cali12345:egress")).To(BeTrue())
+			Expect(dp.finalTrampolineStride).To(BeNumerically("<=", 15000))
 		})
 	})
 

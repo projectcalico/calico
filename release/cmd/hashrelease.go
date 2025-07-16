@@ -323,8 +323,9 @@ func validateHashreleaseBuildFlags(c *cli.Context) error {
 	// CI condtional checks.
 	if c.Bool(ciFlag.Name) {
 		if !hashreleaseServerConfig(c).Valid() {
-			return fmt.Errorf("missing hashrelease server configuration, must set %s, %s, %s, %s, and %s",
-				sshHostFlag, sshUserFlag, sshKeyFlag, sshPortFlag, sshKnownHostsFlag)
+			return fmt.Errorf("missing hashrelease server configuration, ensure %s, %s, %s, %s %s, %s and %s are set",
+				sshHostFlag, sshUserFlag, sshKeyFlag, sshPortFlag, sshKnownHostsFlag,
+				hashreleaseServerBucketFlag, hashreleaseServerCredentialsFlag)
 		}
 		if c.String(ciTokenFlag.Name) == "" {
 			return fmt.Errorf("%s API token must be set when running on CI, either set \"SEMAPHORE_API_TOKEN\" or use %s flag", semaphoreCI, ciTokenFlag.Name)
@@ -361,15 +362,24 @@ func hashreleasePublishFlags() []cli.Flag {
 
 // validateHashreleasePublishFlags checks that the flags are set correctly for the hashrelease publish command.
 func validateHashreleasePublishFlags(c *cli.Context) error {
-	// If publishing the hashrelease, then the hashrelease server configuration must be set.
-	if c.Bool(publishHashreleaseFlag.Name) && !hashreleaseServerConfig(c).Valid() {
-		return fmt.Errorf("missing hashrelease server configuration, must set %s, %s, %s, %s, and %s",
-			sshHostFlag, sshUserFlag, sshKeyFlag, sshPortFlag, sshKnownHostsFlag)
-	}
-
-	// If using a custom registry, do not allow setting the hashrelease as latest.
-	if len(c.StringSlice(registryFlag.Name)) > 0 && c.Bool(latestFlag.Name) {
-		return fmt.Errorf("cannot set hashrelease as latest when using a custom registry")
+	// If publishing the hashrelease
+	if c.Bool(publishHashreleaseFlag.Name) {
+		//  check that hashrelease server configuration is set.
+		if !hashreleaseServerConfig(c).Valid() {
+			return fmt.Errorf("missing hashrelease server configuration, ensure %s, %s, %s, %s %s, %s and %s are set",
+				sshHostFlag, sshUserFlag, sshKeyFlag, sshPortFlag, sshKnownHostsFlag,
+				hashreleaseServerBucketFlag, hashreleaseServerCredentialsFlag)
+		}
+		if c.Bool(latestFlag.Name) {
+			// If using a custom registry, do not allow setting the hashrelease as latest.
+			if len(c.StringSlice(registryFlag.Name)) > 0 {
+				return fmt.Errorf("cannot set hashrelease as latest when using a custom registry")
+			}
+			// If building locally, do not allow setting the hashrelease as latest.
+			if !c.Bool(ciFlag.Name) {
+				return fmt.Errorf("cannot set hashrelease as latest when building locally, use --%s=false instead", latestFlag.Name)
+			}
+		}
 	}
 
 	// If skipValidationFlag is set, then skipImageScanFlag must also be set.
@@ -389,11 +399,13 @@ func ciJobURL(c *cli.Context) string {
 
 func hashreleaseServerConfig(c *cli.Context) *hashreleaseserver.Config {
 	return &hashreleaseserver.Config{
-		Host:       c.String(sshHostFlag.Name),
-		User:       c.String(sshUserFlag.Name),
-		Key:        c.String(sshKeyFlag.Name),
-		Port:       c.String(sshPortFlag.Name),
-		KnownHosts: c.String(sshKnownHostsFlag.Name),
+		Host:            c.String(sshHostFlag.Name),
+		User:            c.String(sshUserFlag.Name),
+		Key:             c.String(sshKeyFlag.Name),
+		Port:            c.String(sshPortFlag.Name),
+		KnownHosts:      c.String(sshKnownHostsFlag.Name),
+		BucketName:      c.String(hashreleaseServerBucketFlag.Name),
+		CredentialsFile: c.String(hashreleaseServerCredentialsFlag.Name),
 	}
 }
 

@@ -512,9 +512,9 @@ syn_force_policy:
 			if (rt) {
 				flags = rt->flags;
 			}
-			if (!(flags & CALI_RT_IN_POOL) && !cali_rt_flags_local_host(flags)) {
-				CALI_DEBUG("Source is in NAT-outgoing pool "
-					   "but dest is not, need to SNAT.");
+			bool exclude_hosts = (GLOBAL_FLAGS & CALI_GLOBALS_NATOUTGOING_EXCLUDE_HOSTS);
+			if (rt_flags_should_perform_nat_outgoing(flags, exclude_hosts)) {
+				CALI_DEBUG("Source is in NAT-outgoing pool but dest is not, need to SNAT.");
 				ctx->state->flags |= CALI_ST_NAT_OUTGOING;
 			}
 		}

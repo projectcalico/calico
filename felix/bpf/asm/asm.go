@@ -381,6 +381,7 @@ type Block struct {
 	lastTrampolineAddr int
 	deferredErr        error
 	NumJumps           int
+	trampolineStride   int
 }
 
 func NewBlock(policyDebugEnabled bool) *Block {
@@ -392,6 +393,7 @@ func NewBlock(policyDebugEnabled bool) *Block {
 		policyDebugEnabled: policyDebugEnabled,
 		fixUps:             map[string][]fixUp{},
 		trampolinesEnabled: true,
+		trampolineStride:   TrampolineStrideDefault,
 	}
 }
 
@@ -686,7 +688,7 @@ type OffsetFixer func(origInsn Insn) Insn
 // (1-2 for a rule, one to jump to accept/deny/end-of-tier) this seems like
 // it should be enough.
 const trampolineHeadroom = 100
-const trampolineInterval = math.MaxInt16 - trampolineHeadroom
+const TrampolineStrideDefault = math.MaxInt16 - trampolineHeadroom
 
 func (b *Block) addInsnWithOffsetFixup(insn Insn, targetLabel string) {
 	b.maybeWriteTrampoline(insn)
@@ -695,7 +697,11 @@ func (b *Block) addInsnWithOffsetFixup(insn Insn, targetLabel string) {
 }
 
 func (b *Block) maybeWriteTrampoline(nextInsn Insn) {
-	if len(b.insns)-b.lastTrampolineAddr < trampolineInterval {
+	if !b.trampolinesEnabled {
+		return
+	}
+
+	if len(b.insns)-b.lastTrampolineAddr < b.trampolineStride {
 		return
 	}
 	if nextInsn.OpCode() == LoadImm64Pt2 {
@@ -903,4 +909,10 @@ func (b *Block) ReserveInstructionCapacity(n int) {
 
 func (b *Block) SetTrampolinesEnabled(en bool) {
 	b.trampolinesEnabled = en
+}
+
+func (b *Block) SetTrampolineStride(s int) {
+	if s > 0 && s < (1<<14) {
+		b.trampolineStride = s
+	}
 }

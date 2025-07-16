@@ -15,7 +15,6 @@
 package imagescanner
 
 import (
-	"bytes"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -26,7 +25,6 @@ import (
 	"strings"
 	"testing"
 
-	approvals "github.com/approvals/go-approval-tests"
 	"github.com/sirupsen/logrus"
 )
 
@@ -96,7 +94,7 @@ func TestScannerScan(t *testing.T) {
 			}
 			defer r.Body.Close()
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"results_link": "http://example.com/results"}`))
+			_, _ = w.Write([]byte(`{"results_link": "http://example.com/hashrelease-results"}`))
 		}))
 		defer mockServer.Close()
 		scanner := New(Config{
@@ -122,6 +120,13 @@ func TestScannerScan(t *testing.T) {
 		if path, ok := capturedPayload["bucket_path"].(string); !ok || path != "hashrelease/stream" {
 			t.Errorf("expected bucket_path 'hashrelease/stream', got %q", path)
 		}
+		url, err := RetrieveResultURL(tmpDir)
+		if err != nil {
+			t.Fatalf("expected to retrieve result URL, got error: %v", err)
+		}
+		if url != "http://example.com/hashrelease-results" {
+			t.Errorf("expected result URL 'http://example.com/hashrelease-results', got '%s'", url)
+		}
 	})
 
 	t.Run("release scan", func(t *testing.T) {
@@ -141,7 +146,7 @@ func TestScannerScan(t *testing.T) {
 			}
 			defer r.Body.Close()
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"results_link": "http://example.com/results"}`))
+			_, _ = w.Write([]byte(`{"results_link": "http://example.com/release-results"}`))
 		}))
 		defer mockServer.Close()
 		scanner := New(Config{
@@ -163,6 +168,13 @@ func TestScannerScan(t *testing.T) {
 		}
 		if path, ok := capturedPayload["bucket_path"].(string); !ok || path != "release/stream" {
 			t.Errorf("expected bucket_path 'release/stream', got %q", path)
+		}
+		url, err := RetrieveResultURL(tmpDir)
+		if err != nil {
+			t.Fatalf("expected to retrieve result URL, got error: %v", err)
+		}
+		if url != "http://example.com/release-results" {
+			t.Errorf("expected result URL 'http://example.com/release-results', got '%s'", url)
 		}
 	})
 
@@ -247,27 +259,49 @@ func TestScannerScan(t *testing.T) {
 }
 
 func TestWriteScanResultToFile(t *testing.T) {
-	tempDir := t.TempDir()
-	mockResponse := io.NopCloser(bytes.NewReader([]byte(`{"results_link": "http://example.com/results"}`)))
+	t.Run("no output directory", func(t *testing.T) {
+		err := writeScanResultToFile("http://example.com/results", "")
+		if err == nil {
+			t.Fatal("expected error but got nil")
+		}
+		if !strings.Contains(err.Error(), "output directory is not specified") {
+			t.Errorf("expected error to contain 'output directory is not specified', got '%v'", err)
+		}
+	})
 
-	if err := writeScanResultToFile(mockResponse, tempDir); err != nil {
-		t.Fatalf("writeScanResultToFile() failed: %v", err)
-	}
+	t.Run("default", func(t *testing.T) {
+		tempDir := t.TempDir()
 
-	outputFilePath := filepath.Join(tempDir, scanResultFileName)
-	if _, err := os.Stat(outputFilePath); os.IsNotExist(err) {
-		t.Fatalf("expected output file %q to be created", outputFilePath)
-	}
+		if err := writeScanResultToFile("http://example.com/results", tempDir); err != nil {
+			t.Fatalf("writeScanResultToFile() failed: %v", err)
+		}
 
-	// Verify the contents of the output file
-	resultData, err := os.ReadFile(outputFilePath)
-	if err != nil {
-		t.Fatalf("failed to read output file %q: %v", outputFilePath, err)
-	}
-	approvals.VerifyString(t, string(resultData))
+		outputFilePath := filepath.Join(tempDir, scanResultFileName)
+		if _, err := os.Stat(outputFilePath); os.IsNotExist(err) {
+			t.Fatalf("expected output file %q to be created", outputFilePath)
+		}
+
+		// Verify the contents of the output file
+		resultData, err := os.ReadFile(outputFilePath)
+		if err != nil {
+			t.Fatalf("failed to read output file %q: %v", outputFilePath, err)
+		}
+		if string(resultData) != "http://example.com/results" {
+			t.Errorf("expected output file to contain 'http://example.com/results', got '%s'", string(resultData))
+		}
+	})
 }
 
 func TestRetrieveResultURL(t *testing.T) {
+	t.Run("no output directory", func(t *testing.T) {
+		_, err := RetrieveResultURL("")
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+		if err.Error() != "output directory is not specified" {
+			t.Errorf("expected error 'output directory is not specified', got '%v'", err)
+		}
+	})
 	t.Run("no result file", func(t *testing.T) {
 		tempDir := t.TempDir()
 		url, err := RetrieveResultURL(tempDir)
@@ -282,26 +316,9 @@ func TestRetrieveResultURL(t *testing.T) {
 		}
 	})
 
-	t.Run("unmarshall error", func(t *testing.T) {
-		tempDir := t.TempDir()
-		if err := os.WriteFile(filepath.Join(tempDir, scanResultFileName), []byte("invalid json"), 0o644); err != nil {
-			t.Fatalf("failed to write mock result file: %v", err)
-		}
-		url, err := RetrieveResultURL(tempDir)
-		if err == nil {
-			t.Fatal("expected error, got nil")
-		}
-		if !strings.Contains(err.Error(), "failed to unmarshal image scan result") {
-			t.Errorf("expected error 'failed to unmarshal image scan result', got '%v'", err)
-		}
-		if url != "" {
-			t.Errorf("expected empty URL, got '%s'", url)
-		}
-	})
-
 	t.Run("result link", func(t *testing.T) {
 		tempDir := t.TempDir()
-		if err := os.WriteFile(filepath.Join(tempDir, scanResultFileName), []byte(`{"results_link": "http://example.com/results"}`), 0o644); err != nil {
+		if err := os.WriteFile(filepath.Join(tempDir, scanResultFileName), []byte("http://example.com/results"), 0o644); err != nil {
 			t.Fatalf("failed to write mock result file: %v", err)
 		}
 		url, err := RetrieveResultURL(tempDir)
@@ -310,23 +327,6 @@ func TestRetrieveResultURL(t *testing.T) {
 		}
 		if url != "http://example.com/results" {
 			t.Errorf("expected URL 'http://example.com/results', got '%s'", url)
-		}
-	})
-
-	t.Run("no results link", func(t *testing.T) {
-		tempDir := t.TempDir()
-		if err := os.WriteFile(filepath.Join(tempDir, scanResultFileName), []byte("{}"), 0o644); err != nil {
-			t.Fatalf("failed to write mock result file: %v", err)
-		}
-		url, err := RetrieveResultURL(tempDir)
-		if err == nil {
-			t.Fatal("expected error, got nil")
-		}
-		if err.Error() != "no results link found in image scan result" {
-			t.Errorf("expected error 'no results link found in image scan result', got '%v'", err)
-		}
-		if url != "" {
-			t.Errorf("expected empty URL, got '%s'", url)
 		}
 	})
 }

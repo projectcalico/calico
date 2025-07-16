@@ -71,6 +71,9 @@ go-vet:
 check-dockerfiles:
 	./hack/check-dockerfiles.sh
 
+check-images-availability: bin/crane bin/yq
+	cd ./hack && ./check-images-availability.sh
+
 check-language:
 	./hack/check-language.sh
 

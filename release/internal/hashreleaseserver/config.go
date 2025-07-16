@@ -15,8 +15,15 @@
 package hashreleaseserver
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
+
+	"cloud.google.com/go/storage"
+	"github.com/sirupsen/logrus"
+	"google.golang.org/api/option"
 )
 
 // Config holds the configuration for an SSH connection
@@ -36,6 +43,14 @@ type Config struct {
 	// KnownHosts is the absolute path to the known_hosts file
 	// to use for the user host key database instead of ~/.ssh/known_hosts
 	KnownHosts string
+
+	// credentials file for GCS access
+	CredentialsFile string
+
+	// cloud storage bucket name
+	BucketName string
+
+	gcsClient *storage.Client
 }
 
 // RSHCommand returns the ssh command for rsync to use for the connection
@@ -58,5 +73,38 @@ func (s *Config) Address() string {
 }
 
 func (s *Config) Valid() bool {
-	return s.Host != "" && s.User != "" && s.Key != "" && s.Port != ""
+	if s.KnownHosts == "" {
+		logrus.Warn("KnownHosts is not set, will use default")
+	}
+	sshValid := s.Host != "" && s.User != "" && s.Key != "" && s.Port != ""
+	gcsAccessValid := s.BucketName != "" && s.CredentialsFile != ""
+	return sshValid && gcsAccessValid
+}
+
+func (s *Config) Bucket() (*storage.BucketHandle, error) {
+	if s.gcsClient == nil {
+		cli, err := storage.NewClient(context.Background(), option.WithCredentialsFile(s.CredentialsFile))
+		if err != nil {
+			return nil, fmt.Errorf("failed to create storage client: %w", err)
+		}
+		s.gcsClient = cli
+	}
+	return s.gcsClient.Bucket(s.BucketName), nil
+}
+
+type serviceAccountCredentials struct {
+	ClientEmail string `json:"client_email"`
+}
+
+func (s *Config) credentialsAccount() (string, error) {
+	// return the email address of the service account used for GCS access
+	data, err := os.ReadFile(s.CredentialsFile)
+	if err != nil {
+		return "", fmt.Errorf("failed to read credentials file: %w", err)
+	}
+	var creds serviceAccountCredentials
+	if err := json.Unmarshal(data, &creds); err != nil {
+		return "", fmt.Errorf("failed to unmarshal credentials file: %w", err)
+	}
+	return creds.ClientEmail, nil
 }

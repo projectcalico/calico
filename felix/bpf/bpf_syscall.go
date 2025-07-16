@@ -74,6 +74,7 @@ func LoadBPFProgramFromInsns(insns asm.Insns, name, license string, progType uin
 		}
 		if err != err2 {
 			log.WithError(err2).Error("Retry failed with a different error.")
+			err = err2
 		}
 		return 0, err
 	}
@@ -108,8 +109,16 @@ func tryLoadBPFProgramFromInsns(insns asm.Insns, name, license string, logSize u
 		goLog := strings.TrimSpace(C.GoString((*C.char)(logBuf)))
 		log.WithError(errno).Debug("BPF_PROG_LOAD failed")
 		if len(goLog) > 0 {
-			for _, l := range strings.Split(goLog, "\n") {
+			lines := strings.Split(goLog, "\n")
+			for _, l := range lines {
 				log.Error("BPF_PROG_LOAD failed, BPF Verifier output:    ", l)
+			}
+			if errno == 524 /* Linux ENOTSUPP */ && len(lines) == 1 {
+				// likely a JIT error, verifier passed
+				// XXX we could test if it says Processed x instructions, but
+				// the message may change
+				log.Error("Likely a JIT error, bpf_harden may be set.")
+				return 0, unix.ERANGE
 			}
 		} else if logSize > 0 {
 			log.Error("BPF_PROG_LOAD failed, verifier log was empty.")
