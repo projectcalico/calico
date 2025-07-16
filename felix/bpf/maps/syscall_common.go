@@ -15,7 +15,9 @@
 package maps
 
 import (
+	"context"
 	"errors"
+	"sync"
 	"unsafe"
 )
 
@@ -25,6 +27,13 @@ var ErrIterationFinished = errors.New("iteration finished")
 // ErrVisitedTooManyKeys is returned by the Iterator's Next() method if it sees
 // many more keys than there should be in the map.
 var ErrVisitedTooManyKeys = errors.New("visited 10x the max size of the map keys")
+
+type keysValues struct {
+	keys   []byte
+	values []byte
+	err    error
+	count  int
+}
 
 // Iterator handles one pass of iteration over the map.
 type Iterator struct {
@@ -41,11 +50,6 @@ type Iterator struct {
 	// slices and the garbage collector decided to move the backing memory of the slices
 	// then the pointers we write to the bpf_attr union could end up being stale (since
 	// the union is opaque to the garbage collector).
-
-	// This is a u32 in kernel value and we only need to pass a pointer to where
-	// the kernel can store the next token to pass to bpf_map_lookup_batch as
-	// batch_out and then receive it back as batch_in.
-	token uint32
 
 	// keys points to a buffer containing up to IteratorNumKeys keys
 	keysBuff    unsafe.Pointer
@@ -70,6 +74,12 @@ type Iterator struct {
 	// numEntriesVisited is incremented for each entry that we visit.  Used as a sanity
 	// check in case we go into an infinite loop.
 	numEntriesVisited int
+
+	// wg is to sync with the syscall executing thread on close
+	wg         sync.WaitGroup
+	keysValues chan keysValues
+	cancelCtx  context.Context
+	cancelCB   context.CancelFunc
 }
 
 type MapInfo struct {

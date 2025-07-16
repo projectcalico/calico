@@ -17,6 +17,7 @@
 package maps
 
 import (
+	"context"
 	"errors"
 	"runtime"
 	"unsafe"
@@ -212,7 +213,10 @@ func NewIterator(mapFD FD, keySize, valueSize, maxEntries int) (*Iterator, error
 		valueStride:   valueStride,
 		keysBufSize:   keyStride * IteratorNumKeys,
 		valuesBufSize: valueStride * IteratorNumKeys,
+		keysValues:    make(chan keysValues),
 	}
+
+	m.cancelCtx, m.cancelCB = context.WithCancel(context.Background())
 
 	m.keysBuff = C.malloc(C.size_t(m.keysBufSize))
 	m.valuesBuff = C.malloc(C.size_t(m.valuesBufSize))
@@ -230,7 +234,59 @@ func NewIterator(mapFD FD, keySize, valueSize, maxEntries int) (*Iterator, error
 		}
 	})
 
+	m.wg.Add(1)
+	go m.syscallThread()
+
 	return m, nil
+}
+
+func (m *Iterator) syscallThread() {
+	defer m.wg.Done()
+
+	// This is a u32 in kernel value and we only need to pass a pointer to where
+	// the kernel can store the next token to pass to bpf_map_lookup_batch as
+	// batch_out and then receive it back as batch_in.
+	token := uint32(0)
+	tokenIn := unsafe.Pointer(nil)
+
+	for {
+
+		count := IteratorNumKeys
+		_, err := C.bpf_map_batch_lookup(C.int(m.mapFD), tokenIn, unsafe.Pointer(&token), m.keysBuff, m.valuesBuff,
+			(*C.__u32)(unsafe.Pointer(&count)), 0)
+		if err != nil {
+			if errors.Is(err, unix.ENOENT) {
+				if count == 0 {
+					err = ErrIterationFinished
+				} else {
+					err = nil
+				}
+			}
+
+			if err != nil {
+				select {
+				case m.keysValues <- keysValues{err: err}:
+					close(m.keysValues)
+					return
+				case <-m.cancelCtx.Done():
+					return
+				}
+			}
+		}
+		tokenIn = unsafe.Pointer(&token)
+
+		bk := C.GoBytes(m.keysBuff, C.int(m.keysBufSize))
+		bv := C.GoBytes(m.valuesBuff, C.int(m.valuesBufSize))
+
+		select {
+		case m.keysValues <- keysValues{
+			keys:   bk[:count*m.keySize],
+			values: bv[:count*m.valueSize],
+			count:  count,
+		}:
+		case <-m.cancelCtx.Done():
+		}
+	}
 }
 
 // Next gets the next key/value pair from the iteration.  The key and value []byte slices returned point to the
@@ -238,38 +294,29 @@ func NewIterator(mapFD FD, keySize, valueSize, maxEntries int) (*Iterator, error
 // Returns ErrIterationFinished at the end of the iteration or ErrVisitedTooManyKeys if it visits considerably more
 // keys than the maximum size of the map.
 func (m *Iterator) Next() (k, v []byte, err error) {
+	if m.numEntriesVisited > m.maxEntries*10 {
+		// Either a bug or entries are being created 10x faster than we're iterating through them?
+		err = ErrVisitedTooManyKeys
+		return
+	}
+
 	if m.numEntriesLoaded == m.entryIdx {
-		token := m.token
-
-		tokenIn := unsafe.Pointer(&token)
-		if m.numEntriesVisited == 0 {
-			tokenIn = nil
+		x, ok := <-m.keysValues
+		if !ok {
+			err = ErrIterationFinished
+			return
 		}
 
-		count := IteratorNumKeys
-		_, err = C.bpf_map_batch_lookup(C.int(m.mapFD), tokenIn, unsafe.Pointer(&token), m.keysBuff, m.valuesBuff,
-			(*C.__u32)(unsafe.Pointer(&count)), 0)
-		if err != nil {
-			if errors.Is(err, unix.ENOENT) {
-				if count == 0 {
-					err = ErrIterationFinished
-					return
-				} else {
-					err = nil
-				}
-			} else {
-				return
-			}
+		if x.err != nil {
+			err = x.err
+			return
 		}
-
-		m.token = token
 
 		m.entryIdx = 0
-		m.numEntriesLoaded = count
-		b := C.GoBytes(m.keysBuff, C.int(m.keysBufSize))
-		m.keys = b[:count*m.keySize]
-		b = C.GoBytes(m.valuesBuff, C.int(m.valuesBufSize))
-		m.values = b[:count*m.valueSize]
+		m.numEntriesLoaded = x.count
+		log.Infof("numEntriesLoaded %d", m.numEntriesLoaded)
+		m.keys = x.keys
+		m.values = x.values
 	}
 
 	k = m.keys[m.entryIdx*m.keySize : (m.entryIdx+1)*m.keySize]
@@ -278,16 +325,12 @@ func (m *Iterator) Next() (k, v []byte, err error) {
 	m.entryIdx++
 	m.numEntriesVisited++
 
-	if m.numEntriesVisited > m.maxEntries*10 {
-		// Either a bug or entries are being created 10x faster than we're iterating through them?
-		err = ErrVisitedTooManyKeys
-		return
-	}
-
 	return
 }
 
 func (m *Iterator) Close() error {
+	m.cancelCB()
+	m.wg.Wait()
 	C.free(m.keysBuff)
 	m.keys = nil
 	C.free(m.valuesBuff)
