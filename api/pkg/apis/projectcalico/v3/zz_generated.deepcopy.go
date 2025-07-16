@@ -499,6 +499,11 @@ func (in *BGPPeerSpec) DeepCopyInto(out *BGPPeerSpec) {
 		*out = make([]string, len(*in))
 		copy(*out, *in)
 	}
+	if in.ReversePeering != nil {
+		in, out := &in.ReversePeering, &out.ReversePeering
+		*out = new(ReversePeering)
+		**out = **in
+	}
 	return
 }
 
