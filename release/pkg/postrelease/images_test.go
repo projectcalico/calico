@@ -10,7 +10,6 @@ import (
 	"gopkg.in/yaml.v2"
 
 	"github.com/projectcalico/calico/release/internal/registry"
-	"github.com/projectcalico/calico/release/pkg/manager/calico"
 	"github.com/projectcalico/calico/release/pkg/manager/operator"
 )
 
@@ -26,7 +25,7 @@ func TestImagesPublished(t *testing.T) {
 		checkVersion(t, releaseVersion)
 		checkImages(t, images)
 
-		for _, reg := range calico.DefaultRegistries {
+		for _, reg := range registry.DefaultCalicoRegistries {
 			for _, image := range strings.Split(images, " ") {
 				if strings.Contains(image, operator.DefaultImage) {
 					// Operator images are checked separately

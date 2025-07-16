@@ -355,6 +355,12 @@ class TestPluginEtcdBase(_TestEtcdBase):
         lib.m_compat.cfg.CONF.calico.openstack_region = self.region
         lib.m_compat.cfg.CONF.calico.max_ingress_connections_per_port = 0
         lib.m_compat.cfg.CONF.calico.max_egress_connections_per_port = 0
+        lib.m_compat.cfg.CONF.calico.ingress_burst_bits = 0
+        lib.m_compat.cfg.CONF.calico.egress_burst_bits = 0
+        lib.m_compat.cfg.CONF.calico.ingress_minburst_bytes = 0
+        lib.m_compat.cfg.CONF.calico.egress_minburst_bytes = 0
+        lib.m_compat.cfg.CONF.calico.ingress_burst_packets = 0
+        lib.m_compat.cfg.CONF.calico.egress_burst_packets = 0
         calico_config._reset_globals()
         datamodel_v2._reset_globals()
 
@@ -930,6 +936,7 @@ class TestPluginEtcdBase(_TestEtcdBase):
         # Expected changes
         ep_hello_value_v3['spec']['qosControls'] = {
             'egressBandwidth': 10000000,
+            'egressBurst': 4294967296,
         }
         expected_writes = {
             ep_hello_key_v3: ep_hello_value_v3,
@@ -938,14 +945,22 @@ class TestPluginEtcdBase(_TestEtcdBase):
         self.assertEtcdWrites(expected_writes)
         self.assertEtcdDeletes(set())
 
-        # Add configuration for max connections.
+        # Add configuration for QoS settings that are not represented on the
+        # Neutron API.
         lib.m_compat.cfg.CONF.calico.max_ingress_connections_per_port = 10
         lib.m_compat.cfg.CONF.calico.max_egress_connections_per_port = 20
+        lib.m_compat.cfg.CONF.calico.ingress_burst_bits = 31000
+        lib.m_compat.cfg.CONF.calico.egress_burst_bits = 41000
+        lib.m_compat.cfg.CONF.calico.ingress_minburst_bytes = 1651
+        lib.m_compat.cfg.CONF.calico.egress_minburst_bytes = 1761
+        lib.m_compat.cfg.CONF.calico.ingress_burst_packets = 81
+        lib.m_compat.cfg.CONF.calico.egress_burst_packets = 91
         self.driver.update_port_postcommit(context)
 
         # Expected changes
         ep_hello_value_v3['spec']['qosControls'] = {
             'egressBandwidth': 10000000,
+            'egressBurst': 41000,
             'ingressMaxConnections': 10,
             'egressMaxConnections': 20,
         }
@@ -964,13 +979,19 @@ class TestPluginEtcdBase(_TestEtcdBase):
         # Expected changes
         ep_hello_value_v3['spec']['qosControls'] = {
             'ingressBandwidth': 1000,
+            'ingressBurst': 31000,
+            'ingressPeakrate': 2000,
+            'ingressMinburst': 1651,
             'egressBandwidth': 3000,
-            'ingressBurst': 2000,
-            'egressBurst': 4000,
+            'egressBurst': 41000,
+            'egressPeakrate': 4000,
+            'egressMinburst': 1761,
             'ingressPacketRate': 5000,
             'egressPacketRate': 6000,
             'ingressMaxConnections': 10,
             'egressMaxConnections': 20,
+            'ingressPacketBurst': 81,
+            'egressPacketBurst': 91,
         }
         expected_writes = {
             ep_hello_key_v3: ep_hello_value_v3,
@@ -982,6 +1003,12 @@ class TestPluginEtcdBase(_TestEtcdBase):
         # Reset for future tests.
         lib.m_compat.cfg.CONF.calico.max_ingress_connections_per_port = 0
         lib.m_compat.cfg.CONF.calico.max_egress_connections_per_port = 0
+        lib.m_compat.cfg.CONF.calico.ingress_burst_bits = 0
+        lib.m_compat.cfg.CONF.calico.egress_burst_bits = 0
+        lib.m_compat.cfg.CONF.calico.ingress_minburst_bytes = 0
+        lib.m_compat.cfg.CONF.calico.egress_minburst_bytes = 0
+        lib.m_compat.cfg.CONF.calico.ingress_burst_packets = 0
+        lib.m_compat.cfg.CONF.calico.egress_burst_packets = 0
 
         # Set a QoS policy on the network instead of directly on the port.
         #
@@ -996,6 +1023,7 @@ class TestPluginEtcdBase(_TestEtcdBase):
         # Expected changes
         ep_hello_value_v3['spec']['qosControls'] = {
             'egressBandwidth': 10000000,
+            'egressBurst': 4294967296,
         }
         expected_writes = {
             ep_hello_key_v3: ep_hello_value_v3,

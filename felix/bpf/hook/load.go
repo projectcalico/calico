@@ -89,6 +89,19 @@ func (at AttachType) hasHostConflictProg() bool {
 	return at.Hook == Egress
 }
 
+func (at AttachType) hasIPDefrag() bool {
+	if at.Family != 4 {
+		return false
+	}
+
+	switch at.Type {
+	case tcdefs.EpTypeLO, tcdefs.EpTypeNAT:
+		return false
+	}
+
+	return at.Hook == Ingress
+}
+
 type DefPolicy int
 
 const (

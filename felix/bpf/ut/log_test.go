@@ -30,6 +30,8 @@ import (
 func TestLog(t *testing.T) {
 	RegisterTestingT(t)
 
+	cleanUpMaps()
+
 	defer resetBPFMaps()
 	bpfIfaceName = "LOG"
 	defer func() { bpfIfaceName = "" }()
@@ -129,7 +131,7 @@ func TestLog(t *testing.T) {
 	runBpfTest(t, "calico_from_workload_ep", rules, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(pktBytes)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+		Expect(res.Retval).To(Equal(resTC_ACT_REDIRECT))
 	})
 
 	pktBytes = makeICMPErrorFrom(ipv4Default.SrcIP, &pktIPHdr, pktTCPHdr, 0, 0)
@@ -151,6 +153,6 @@ func TestLog(t *testing.T) {
 	runBpfTest(t, "calico_from_workload_ep", rules, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(pktBytes)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+		Expect(res.Retval).To(Equal(resTC_ACT_REDIRECT))
 	})
 }

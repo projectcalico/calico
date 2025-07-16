@@ -83,6 +83,8 @@ func init() {
 	validWireguardPortOrRulePriority := 12345
 	invalidWireguardPortOrRulePriority := 99999
 
+	nextHopMode := api.NextHopMode("Auto")
+
 	var awsCheckEnable, awsCheckDisable, awsCheckDoNothing,
 		awsCheckbadVal, awsCheckenable api.AWSSrcDstCheckOption
 
@@ -1967,6 +1969,10 @@ func init() {
 			PeerIP:                ipv4_1,
 			ASNumber:              as61234,
 		}, false),
+		Entry("should reject BGPPeerSpec with both positive KeepOriginalNextHop and non-empty NextHopMode", api.BGPPeerSpec{
+			KeepOriginalNextHop: true,
+			NextHopMode:         &nextHopMode,
+		}, false),
 		Entry("should reject BGPPeer with ReachableBy but without PeerIP", api.BGPPeerSpec{
 			ReachableBy: ipv4_2,
 		}, false),
@@ -3596,6 +3602,52 @@ func init() {
 		Entry("should accept a valid BPFForceTrackPacketsFromIfaces value 'docker+'", api.FelixConfigurationSpec{BPFForceTrackPacketsFromIfaces: &[]string{"docker+"}}, true),
 		Entry("should accept a valid BPFForceTrackPacketsFromIfaces value 'docker0,docker1'", api.FelixConfigurationSpec{BPFForceTrackPacketsFromIfaces: &[]string{"docker0", "docker1"}}, true),
 		Entry("should reject invalid BPFForceTrackPacketsFromIfaces value 'cali-123,cali@456'", api.FelixConfigurationSpec{BPFForceTrackPacketsFromIfaces: &[]string{"cali-123", "cali@456"}}, false),
+
+		Entry("disallow a NotNets catch-all IPv4 CIDR match",
+			&api.NetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "thing"},
+				Spec: api.NetworkPolicySpec{
+					Ingress: []api.Rule{
+						{
+							Action: "Allow",
+							Destination: api.EntityRule{
+								NotNets: []string{"0.0.0.0/0"},
+							},
+						},
+					},
+				},
+			}, false,
+		),
+		Entry("disallow a NotNets catch-all IPv6 CIDR match",
+			&api.NetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "thing"},
+				Spec: api.NetworkPolicySpec{
+					Ingress: []api.Rule{
+						{
+							Action: "Allow",
+							Source: api.EntityRule{
+								NotNets: []string{"::0/0"},
+							},
+						},
+					},
+				},
+			}, false,
+		),
+		Entry("disallow a NotNets catch-all IPv6 CIDR match - non-standard representation",
+			&api.NetworkPolicy{
+				ObjectMeta: v1.ObjectMeta{Name: "thing"},
+				Spec: api.NetworkPolicySpec{
+					Ingress: []api.Rule{
+						{
+							Action: "Allow",
+							Source: api.EntityRule{
+								NotNets: []string{"0:0:0::/0"},
+							},
+						},
+					},
+				},
+			}, false,
+		),
 	)
 }
 

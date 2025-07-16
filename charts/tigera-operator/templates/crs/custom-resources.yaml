@@ -24,20 +24,25 @@ spec:
 {{ end }}
 
 {{ if .Values.goldmane.enabled }}
+{{ $goldmaneSpec := omit .Values.goldmane "enabled" }}
 ---
 
 apiVersion: operator.tigera.io/v1
 kind: Goldmane
 metadata:
   name: default
-
+spec:
+{{ $goldmaneSpec | toYaml | indent 2 }}
 {{ end }}
 
 {{ if .Values.whisker.enabled }}
+{{ $whiskerSpec := omit .Values.whisker "enabled" }}
 ---
 
 apiVersion: operator.tigera.io/v1
 kind: Whisker
 metadata:
   name: default
+spec:
+{{ $whiskerSpec | toYaml | indent 2 }}
 {{ end }}

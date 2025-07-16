@@ -676,6 +676,12 @@ fix-changed go-fmt-changed goimports-changed:
 fix-all go-fmt-all goimports-all:
 	$(DOCKER_RUN) $(CALICO_BUILD) $(REPO_DIR)/hack/format-all-files.sh
 
+GOMODDER=$(REPO_DIR)/hack/cmd/gomodder/main.go
+
+.PHONY: verify-go-mods
+verify-go-mods:
+	$(DOCKER_RUN) $(CALICO_BUILD) go run $(GOMODDER)
+
 .PHONY: pre-commit
 pre-commit:
 	$(DOCKER_RUN) $(CALICO_BUILD) git-hooks/pre-commit-in-container
@@ -1242,6 +1248,24 @@ bin/yq:
 	curl -sSf -L --retry 5 -o $(TMP)/yq4.tar.gz https://github.com/mikefarah/yq/releases/download/v4.34.2/yq_linux_$(BUILDARCH).tar.gz
 	tar -zxvf $(TMP)/yq4.tar.gz -C $(TMP)
 	mv $(TMP)/yq_linux_$(BUILDARCH) bin/yq
+
+# This setup is used to download and install the 'crane' binary into the local bin/ directory.
+# The binary will be placed at: ./bin/crane
+# Normalize architecture for go-containerregistry filenames
+CRANE_BUILDARCH := $(shell uname -m | sed 's/amd64/x86_64/;s/x86_64/x86_64/;s/aarch64/arm64/')
+ifeq ($(CRANE_BUILDARCH),)
+  $(error Unsupported or unknown architecture: $(shell uname -m))
+endif
+CRANE_FILENAME := go-containerregistry_Linux_$(CRANE_BUILDARCH).tar.gz
+CRANE_URL := https://github.com/google/go-containerregistry/releases/download/$(CRANE_VERSION)/$(CRANE_FILENAME)
+
+# Install crane binary into bin/
+bin/crane:
+	mkdir -p bin
+	$(eval CRANE_TMP := $(shell mktemp -d))
+	curl -sSfL --retry 5 -o $(CRANE_TMP)/crane.tar.gz $(CRANE_URL)
+	tar -xzf $(CRANE_TMP)/crane.tar.gz -C $(CRANE_TMP) crane
+	mv $(CRANE_TMP)/crane bin/crane
 
 ###############################################################################
 # Common functions for launching a local Kubernetes control plane.

@@ -18,12 +18,12 @@ import (
 	"errors"
 	"fmt"
 	"sort"
-	"time"
 
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/goldmane/pkg/types"
 	"github.com/projectcalico/calico/goldmane/proto"
+	"github.com/projectcalico/calico/lib/std/time"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -101,9 +101,9 @@ func NewBucketRing(n, interval int, now int64, opts ...BucketRingOption) *Bucket
 		"bucketSize": time.Duration(interval) * time.Second,
 	}).Debug("Initializing aggregation buckets")
 
-	// Determine the latest bucket start time. To account for some amount of clock drift,
+	// Determine the latest bucket start time. To account for some amount of time drift,
 	// we'll extend the ring one interval into the future. This helps ensure that we don't miss any
-	// flows that come from nodes with a clock that's slightly ahead of ours.
+	// flows that come from nodes with a time that's slightly ahead of ours.
 	newestBucketStart := now + int64(interval)
 
 	// Initialize an empty bucket into each slot in the ring.

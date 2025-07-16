@@ -281,6 +281,12 @@ protocol bgp Global_{{$id}} from bgp_template {
 {{- if and (ne $data.as_num $node_as_num) ($data.keep_next_hop)}}
   next hop keep;
 {{- end}}
+{{- if eq $data.next_hop_mode "Self"}}
+  next hop self;
+{{- end}}
+{{- if eq $data.next_hop_mode "Keep"}}
+  next hop keep;
+{{- end}}
 {{- if $data.num_allow_local_as}}
   allow local as {{$data.num_allow_local_as}};
 {{- end}}
@@ -362,6 +368,12 @@ protocol bgp Local_Workload_{{$id}} from bgp_template {
 {{- if and (ne $data.as_num $node_as_num) ($data.keep_next_hop)}}
   next hop keep;
 {{- end}}
+{{- if eq $data.next_hop_mode "Self"}}
+  next hop self;
+{{- end}}
+{{- if eq $data.next_hop_mode "Keep"}}
+  next hop keep;
+{{- end}}
 {{- if $data.num_allow_local_as}}
   allow local as {{$data.num_allow_local_as}};
 {{- end}}
@@ -438,6 +450,12 @@ protocol bgp Node_{{$id}} from bgp_template {
   password "{{$data.password}}";
 {{- end}}
 {{- if and (ne $data.as_num $node_as_num) ($data.keep_next_hop)}}
+  next hop keep;
+{{- end}}
+{{- if eq $data.next_hop_mode "Self"}}
+  next hop self;
+{{- end}}
+{{- if eq $data.next_hop_mode "Keep"}}
   next hop keep;
 {{- end}}
 {{- if $data.num_allow_local_as}}
@@ -517,6 +535,12 @@ protocol bgp Local_Workload_{{$id}} from bgp_template {
   password "{{$data.password}}";
 {{- end}}
 {{- if and (ne $data.as_num $node_as_num) ($data.keep_next_hop)}}
+  next hop keep;
+{{- end}}
+{{- if eq $data.next_hop_mode "Self"}}
+  next hop self;
+{{- end}}
+{{- if eq $data.next_hop_mode "Keep"}}
   next hop keep;
 {{- end}}
 {{- if $data.num_allow_local_as}}

@@ -522,6 +522,10 @@ var _ = DescribeTable("Config parsing",
 	Entry("BPFForceTrackPacketsFromIfaces Multiple valid entries", "BPFForceTrackPacketsFromIfaces", "docker0,docker1", []string{"docker0", "docker1"}),
 	Entry("BPFForceTrackPacketsFromIfaces Single invalid entry", "BPFForceTrackPacketsFromIfaces", "cali@123", []string{"docker+"}),
 	Entry("BPFForceTrackPacketsFromIfaces Multiple invalid entries", "BPFForceTrackPacketsFromIfaces", "cali-123,cali@123", []string{"docker+"}),
+
+	Entry("RequireMTUFile valid", "RequireMTUFile", "true", true),
+	Entry("RequireMTUFile valid", "RequireMTUFile", "y", true),
+	Entry("RequireMTUFile valid", "RequireMTUFile", "True", true),
 )
 
 var _ = DescribeTable("OpenStack heuristic tests",

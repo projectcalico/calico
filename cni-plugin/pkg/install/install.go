@@ -380,6 +380,8 @@ func writeCNIConfig(c config) {
 	netconf = strings.Replace(netconf, "__ETCD_ENDPOINTS__", getEnv("ETCD_ENDPOINTS", ""), -1)
 	netconf = strings.Replace(netconf, "__ETCD_DISCOVERY_SRV__", getEnv("ETCD_DISCOVERY_SRV", ""), -1)
 
+	netconf = strings.Replace(netconf, "__REQUIRE_MTU_FILE__", getEnv("REQUIRE_MTU_FILE", "false"), -1)
+
 	err = isValidJSON(netconf)
 	if err != nil {
 		logrus.Fatalf("%s is not a valid json object\nerror: %s", netconf, err)

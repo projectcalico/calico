@@ -156,6 +156,8 @@ enum cali_state_flags {
 	CALI_ST_LOG_PACKET        = 0x400,
 	/* CALI_ST_SKIP_REDIR_PEER is set when the packet is destined to a local VM workload */
 	CALI_ST_SKIP_REDIR_PEER	  = 0x800,
+	/* CALI_ST_SKIP_REDIR_ONCE skips redirection once for this particular packet */
+	CALI_ST_SKIP_REDIR_ONCE   = 0x1000,
 };
 
 struct fwd {
@@ -203,7 +205,7 @@ struct cali_tc_ctx {
 			}							\
 			void * counters = counters_get(skb->ifindex);		\
 			if (!counters) {					\
-				CALI_LOG_IF(CALI_LOG_LEVEL_DEBUG, "no counters: DROP");		\
+				CALI_LOG_IF(CALI_LOG_LEVEL_DEBUG, "no counters for %d: DROP", skb->ifindex);		\
 				bpf_exit(TC_ACT_SHOT);				\
 			}							\
 			struct cali_tc_globals *gl = state_get_globals_tc();	\

@@ -72,6 +72,14 @@ const (
 	AWSSrcDstCheckOptionDisable   AWSSrcDstCheckOption = "Disable"
 )
 
+// +kubebuilder:validation:Enum=tc;tcx
+type BPFAttachOption string
+
+const (
+	BPFAttachOptionTC  BPFAttachOption = "tc"
+	BPFAttachOptionTCX BPFAttachOption = "tcx"
+)
+
 // +kubebuilder:validation:Enum=Enabled;Disabled
 type FloatingIPType string
 
@@ -514,10 +522,10 @@ type FelixConfigurationSpec struct {
 	// use a distinct protocol (in addition to setting this field to false).
 	RemoveExternalRoutes *bool `json:"removeExternalRoutes,omitempty"`
 
-	// ProgramRoutes specifies whether Felix should program IPIP or unencapsulated routes instead of BIRD.
+	// ProgramClusterRoutes specifies whether Felix should program IPIP routes instead of BIRD.
 	// Felix always programs VXLAN routes. [Default: Disabled]
 	// +kubebuilder:validation:Enum=Enabled;Disabled
-	ProgramRoutes *string `json:"programRoutes,omitempty"`
+	ProgramClusterRoutes *string `json:"programClusterRoutes,omitempty"`
 
 	// IPForwarding controls whether Felix sets the host sysctls to enable IP forwarding.  IP forwarding is required
 	// when using Calico for workload networking.  This should be disabled only on hosts where Calico is used solely for
@@ -636,7 +644,10 @@ type FelixConfigurationSpec struct {
 	// BPFConntrackCleanupMode controls how BPF conntrack entries are cleaned up.  `Auto` will use a BPF program if supported,
 	// falling back to userspace if not.  `Userspace` will always use the userspace cleanup code.  `BPFProgram` will
 	// always use the BPF program (failing if not supported).
-	// [Default: Auto]
+	//
+	///To be deprecated in future versions as conntrack map type changed to
+	// lru_hash and userspace cleanup is the only mode that is supported.
+	// [Default: Userspace]
 	BPFConntrackCleanupMode *BPFConntrackMode `json:"bpfConntrackMode,omitempty" validate:"omitempty,oneof=Auto Userspace BPFProgram"`
 
 	// BPFConntrackTimers overrides the default values for the specified conntrack timer if
@@ -843,6 +854,13 @@ type FelixConfigurationSpec struct {
 	//+kubebuilder:validation:Enum=Enabled;Disabled;L2Only
 	BPFRedirectToPeer string `json:"bpfRedirectToPeer,omitempty"`
 
+	// BPFAttachType controls how are the BPF programs at the network interfaces attached.
+	// By default `tcx` is used where available to enable easier coexistence with 3rd party programs.
+	// `tc` can force the legacy method of attaching via a qdisc. `tcx` falls back to `tc` if `tcx` is not available.
+	// [Default: tcx]
+	//+kubebuilder:validation:Enum=tc;tcx
+	BPFAttachType *BPFAttachOption `json:"bpfAttachType,omitempty" validate:"omitempty,oneof=tc tcx"`
+
 	// FlowLogsFlushInterval configures the interval at which Felix exports flow logs.
 	// +kubebuilder:validation:Type=string
 	// +kubebuilder:validation:Pattern=`^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$`
@@ -991,6 +1009,10 @@ type FelixConfigurationSpec struct {
 	// [Default: -1]
 	// +optional
 	GoMaxProcs *int `json:"goMaxProcs,omitempty" validate:"omitempty,gte=-1"`
+
+	// RequireMTUFile specifies whether mtu file is required to start the felix.
+	// Optional as to keep the same as previous behavior. [Default: false]
+	RequireMTUFile *bool `json:"requireMTUFile,omitempty"`
 }
 
 type HealthTimeoutOverride struct {

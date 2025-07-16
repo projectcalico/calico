@@ -327,6 +327,27 @@ class WorkloadEndpointSyncer(ResourceSyncer):
         """
         qos = {}
 
+        # Minima, maxima and defaults as specified in the WorkloadEndpoint API,
+        # and implemented for the Kubernetes case in
+        # libcalico-go/lib/backend/k8s/conversion/workload_endpoint_default.go.
+        MINMAX_BANDWIDTH = (1000, 10**15)
+        MINMAX_BW_BURST = (1000, 34359738360)
+        MINMAX_BW_PEAKRATE = (1010, 10**15 + 10**13)
+        MINMAX_BW_MINBURST = (1000, 10**8)
+
+        MINMAX_PACKET_RATE = (1, 10**4)
+        MINMAX_PR_BURST = (1, 10**4)
+
+        MINMAX_CONNECTIONS = (1, 4294967295)
+
+        def cap(setting, minmax):
+            (min, max) = minmax
+            if setting < min:
+                setting = min
+            elif setting > max:
+                setting = max
+            return setting
+
         qos_policy_id = port.get('qos_policy_id') or port_extra.network_qos_policy_id
         LOG.debug("QoS Policy ID = %r", qos_policy_id)
         if qos_policy_id:
@@ -339,15 +360,9 @@ class WorkloadEndpointSyncer(ResourceSyncer):
                 LOG.debug("BW rule = %r", r)
                 direction = r.get('direction', 'egress')
                 if r['max_kbps'] != 0:
-                    if direction == "egress":
-                        qos['egressBandwidth'] = r['max_kbps'] * 1000
-                    else:
-                        qos['ingressBandwidth'] = r['max_kbps'] * 1000
+                    qos[direction+'Bandwidth'] = cap(r['max_kbps'] * 1000, MINMAX_BANDWIDTH)
                 if r['max_burst_kbps'] != 0:
-                    if direction == "egress":
-                        qos['egressBurst'] = r['max_burst_kbps'] * 1000
-                    else:
-                        qos['ingressBurst'] = r['max_burst_kbps'] * 1000
+                    qos[direction+'Peakrate'] = cap(r['max_burst_kbps'] * 1000, MINMAX_BW_PEAKRATE)
 
             rules = context.session.query(
                 qos_models.QosPacketRateLimitRule
@@ -358,15 +373,40 @@ class WorkloadEndpointSyncer(ResourceSyncer):
                 LOG.debug("PR rule = %r", r)
                 direction = r.get('direction', 'egress')
                 if r['max_kpps'] != 0:
-                    if direction == "egress":
-                        qos['egressPacketRate'] = r['max_kpps'] * 1000
-                    else:
-                        qos['ingressPacketRate'] = r['max_kpps'] * 1000
+                    qos[direction+'PacketRate'] = cap(r['max_kpps'] * 1000, MINMAX_PACKET_RATE)
 
         if cfg.CONF.calico.max_ingress_connections_per_port != 0:
-            qos['ingressMaxConnections'] = cfg.CONF.calico.max_ingress_connections_per_port
+            qos['ingressMaxConnections'] = cap(cfg.CONF.calico.max_ingress_connections_per_port, MINMAX_CONNECTIONS)
         if cfg.CONF.calico.max_egress_connections_per_port != 0:
-            qos['egressMaxConnections'] = cfg.CONF.calico.max_egress_connections_per_port
+            qos['egressMaxConnections'] = cap(cfg.CONF.calico.max_egress_connections_per_port, MINMAX_CONNECTIONS)
+
+        if 'ingressBandwidth' in qos:
+            if cfg.CONF.calico.ingress_burst_bits != 0:
+                qos['ingressBurst'] = cap(cfg.CONF.calico.ingress_burst_bits, MINMAX_BW_BURST)
+            else:
+                qos['ingressBurst'] = calico_config.DEFAULT_BW_BURST
+            if cfg.CONF.calico.ingress_minburst_bytes != 0 and 'ingressPeakrate' in qos:
+                qos['ingressMinburst'] = cap(cfg.CONF.calico.ingress_minburst_bytes, MINMAX_BW_MINBURST)
+
+        if 'egressBandwidth' in qos:
+            if cfg.CONF.calico.egress_burst_bits != 0:
+                qos['egressBurst'] = cap(cfg.CONF.calico.egress_burst_bits, MINMAX_BW_BURST)
+            else:
+                qos['egressBurst'] = calico_config.DEFAULT_BW_BURST
+            if cfg.CONF.calico.egress_minburst_bytes != 0 and 'egressPeakrate' in qos:
+                qos['egressMinburst'] = cap(cfg.CONF.calico.egress_minburst_bytes, MINMAX_BW_MINBURST)
+
+        if 'ingressPacketRate' in qos:
+            if cfg.CONF.calico.ingress_burst_packets != 0:
+                qos['ingressPacketBurst'] = cap(cfg.CONF.calico.ingress_burst_packets, MINMAX_PR_BURST)
+            else:
+                qos['ingressPacketBurst'] = calico_config.DEFAULT_PR_BURST
+
+        if 'egressPacketRate' in qos:
+            if cfg.CONF.calico.egress_burst_packets != 0:
+                qos['egressPacketBurst'] = cap(cfg.CONF.calico.egress_burst_packets, MINMAX_PR_BURST)
+            else:
+                qos['egressPacketBurst'] = calico_config.DEFAULT_PR_BURST
 
         port_extra.qos = qos
 

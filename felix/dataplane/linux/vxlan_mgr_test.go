@@ -314,7 +314,7 @@ var _ = Describe("VXLANManager", func() {
 		parentNameC := make(chan string)
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
-		go vxlanMgr.KeepVXLANDeviceInSync(ctx, 1400, false, 1*time.Second, parentNameC)
+		go vxlanMgr.keepVXLANDeviceInSync(ctx, 1400, false, 1*time.Second, parentNameC)
 
 		By("Sending another node's VTEP and route.")
 		vxlanMgr.OnUpdate(&proto.VXLANTunnelEndpointUpdate{
@@ -366,7 +366,7 @@ var _ = Describe("VXLANManager", func() {
 		parentNameC := make(chan string)
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
-		go vxlanMgrV6.KeepVXLANDeviceInSync(ctx, 1400, false, 1*time.Second, parentNameC)
+		go vxlanMgrV6.keepVXLANDeviceInSync(ctx, 1400, false, 1*time.Second, parentNameC)
 
 		By("Sending another node's VTEP and route.")
 		vxlanMgrV6.OnUpdate(&proto.VXLANTunnelEndpointUpdate{

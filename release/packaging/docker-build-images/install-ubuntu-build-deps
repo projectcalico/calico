@@ -5,6 +5,10 @@ set -e # Exit immediately if a command returns non-zero
 
 export DEBIAN_FRONTEND=noninteractive
 
+mapfile -t sources_files <<< "$(find /etc/apt/sources.list* -type f)"
+
+test -n "${UBUNTU_REPO_OVERRIDE:=}" && sed -E -i "s/(archive|security).ubuntu.com/${UBUNTU_REPO_OVERRIDE}/" "${sources_files[@]}"
+
 apt-get -q update
 
 packages=(

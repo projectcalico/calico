@@ -110,7 +110,7 @@ func (s *syncerCallbacks) LogStats() {
 const (
 	typhaNamespace      = "calico-system"
 	typhaK8sServiceName = "calico-typha"
-	typhaCAFile         = "/etc/pki/tls/certs/tigera-ca-bundle.crt"
+	typhaCAFile         = "/etc/pki/tls/certs/ca.crt"
 	typhaCertFile       = "/node-certs/tls.crt"
 	typhaKeyFile        = "/node-certs/tls.key"
 	typhaCN             = "typha-server"

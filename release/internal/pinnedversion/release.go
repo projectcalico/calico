@@ -64,10 +64,10 @@ func (p *CalicoReleaseVersions) ImageList() ([]string, error) {
 	}
 	componentNames := make([]string, 0, len(components))
 	for _, component := range components {
-		if component.Image == "tigera/operator" {
+		if component.Image == registry.TigeraOperatorImage {
 			continue
 		}
-		componentNames = append(componentNames, strings.TrimPrefix(component.Image, "calico/"))
+		componentNames = append(componentNames, strings.TrimPrefix(component.Image, calicoImageNamespace))
 	}
 	return componentNames, nil
 }

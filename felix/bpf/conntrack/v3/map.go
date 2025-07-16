@@ -23,6 +23,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 
+	v4 "github.com/projectcalico/calico/felix/bpf/conntrack/v4"
 	"github.com/projectcalico/calico/felix/bpf/maps"
 )
 
@@ -77,7 +78,9 @@ func (k Key) String() string {
 }
 
 func (k Key) Upgrade() maps.Upgradable {
-	panic("conntrack map key already at its latest version")
+	var key4 v4.Key
+	copy(key4[:], k[:])
+	return key4
 }
 
 func NewKey(proto uint8, ipA net.IP, portA uint16, ipB net.IP, portB uint16) Key {
@@ -525,7 +528,9 @@ func (e Value) IsForwardDSR() bool {
 }
 
 func (e Value) Upgrade() maps.Upgradable {
-	panic("conntrack map value already at its latest version")
+	var value4 v4.Value
+	copy(value4[:], e[:])
+	return value4
 }
 
 var MapParams = maps.MapParameters{

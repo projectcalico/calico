@@ -16,11 +16,11 @@ package emitter
 
 import (
 	"sync"
-	"time"
 
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/goldmane/pkg/storage"
+	"github.com/projectcalico/calico/lib/std/time"
 )
 
 type bucketKey struct {

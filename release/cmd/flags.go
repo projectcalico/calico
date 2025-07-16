@@ -255,7 +255,7 @@ var (
 // External flags are flags used to interact with external services
 var (
 	// CI flags for interacting with CI services (Semaphore)
-	ciFlags     = []cli.Flag{ciFlag, ciBaseURLFlag, ciJobIDFlag}
+	ciFlags     = []cli.Flag{ciFlag, ciBaseURLFlag, ciJobIDFlag, ciPipelineIDFlag, ciTokenFlag}
 	semaphoreCI = "semaphore"
 	ciFlag      = &cli.BoolFlag{
 		Name:    "ci",
@@ -278,6 +278,16 @@ var (
 		Name:    "ci-job-id",
 		Usage:   fmt.Sprintf("The job ID for the %s CI job", semaphoreCI),
 		EnvVars: []string{"SEMAPHORE_JOB_ID"},
+	}
+	ciPipelineIDFlag = &cli.StringFlag{
+		Name:    "ci-pipeline-id",
+		Usage:   fmt.Sprintf("The pipeline ID for the %s CI pipeline", semaphoreCI),
+		EnvVars: []string{"SEMAPHORE_PIPELINE_ID"},
+	}
+	ciTokenFlag = &cli.StringFlag{
+		Name:    "ci-token",
+		Usage:   fmt.Sprintf("The token for interacting with %s API", semaphoreCI),
+		EnvVars: []string{"SEMAPHORE_API_TOKEN"},
 	}
 
 	// Slack flags for posting messages to Slack
@@ -399,6 +409,7 @@ var (
 	hashreleaseServerFlags = []cli.Flag{
 		sshHostFlag, sshUserFlag, sshKeyFlag, sshPortFlag,
 		sshKnownHostsFlag,
+		hashreleaseServerCredentialsFlag, hashreleaseServerBucketFlag,
 	}
 	sshHostFlag = &cli.StringFlag{
 		Name:    "server-ssh-host",
@@ -439,8 +450,19 @@ var (
 		Value: true,
 	}
 	latestFlag = &cli.BoolFlag{
-		Name:  "latest",
-		Usage: "Publish the hashrelease as the latest hashrelease",
-		Value: true,
+		Name:    "latest",
+		Usage:   "Publish the hashrelease as the latest hashrelease",
+		EnvVars: []string{"LATEST"},
+		Value:   true,
+	}
+	hashreleaseServerCredentialsFlag = &cli.StringFlag{
+		Name:    "hashrelease-server-credentials",
+		Usage:   "The absolute path to the credentials file for the hashrelease server",
+		EnvVars: []string{"HASHRELEASE_SERVER_CREDENTIALS"},
+	}
+	hashreleaseServerBucketFlag = &cli.StringFlag{
+		Name:    "hashrelease-server-bucket",
+		Usage:   "The bucket name for the hashrelease server",
+		EnvVars: []string{"HASHRELEASE_SERVER_BUCKET"},
 	}
 )

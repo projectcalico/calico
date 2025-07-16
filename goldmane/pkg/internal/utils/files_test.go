@@ -17,12 +17,12 @@ import (
 	"context"
 	"os"
 	"testing"
-	"time"
 
 	. "github.com/onsi/gomega"
 	"github.com/stretchr/testify/require"
 
 	"github.com/projectcalico/calico/goldmane/pkg/internal/utils"
+	"github.com/projectcalico/calico/lib/std/time"
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 )
 

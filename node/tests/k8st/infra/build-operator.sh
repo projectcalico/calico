@@ -14,6 +14,14 @@ git clone --depth=1 https://github.com/${REPO} -b ${BRANCH} operator
 
 # Modify the versions that are in-use to match our locally built images.
 pushd operator
+
+if [ -n "$COMMIT" ]; then
+  # If the latest operator has issues, fetch a known working commit as a workaround."
+  echo "Fetch commit $COMMIT"
+  git fetch origin $COMMIT
+  git checkout $COMMIT
+fi
+
 make build/_output/bin/gen-versions
 build/_output/bin/gen-versions -os-versions=../calico_versions.yml > pkg/components/calico.go
 

@@ -129,13 +129,13 @@ hack-lib:
 
 ## Run a local kubernetes server with API in a container.
 run-kubernetes-server: run-k8s-controller-manager
-	#Create a Node in the API for the tests to use.
+	# Create a Node in the API for the tests to use.
 	docker run \
 		--net=host \
 		--rm \
 		-v  $(CURDIR):/manifests \
 		-v $(CERTS_PATH):/home/user/certs \
-		bitnami/kubectl:$(subst v,,$(K8S_VERSION)) \
+		rancher/kubectl:$(K8S_VERSION) \
 		--kubeconfig=/home/user/certs/kubeconfig \
 		apply -f /manifests/test/mock-node.yaml
 
@@ -146,7 +146,7 @@ run-kubernetes-server: run-k8s-controller-manager
 		--rm \
 		-v  $(CURDIR):/manifests \
 		-v $(CERTS_PATH):/home/user/certs \
-		bitnami/kubectl:$(subst v,,$(K8S_VERSION)) \
+		rancher/kubectl:$(K8S_VERSION) \
 		--kubeconfig=/home/user/certs/kubeconfig \
 		apply -f /manifests/test/namespaces.yaml
 

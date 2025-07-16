@@ -68,6 +68,7 @@ var _ = Describe("Table with an empty dataplane", func() {
 				LookPathOverride: testutils.LookPathNoLegacy,
 				OpRecorder:       logutils.NewSummarizer("test loop"),
 			},
+			true,
 		)
 	})
 
@@ -827,6 +828,7 @@ var _ = Describe("Insert early rules", func() {
 				LookPathOverride: testutils.LookPathNoLegacy,
 				OpRecorder:       logutils.NewSummarizer("test loop"),
 			},
+			true,
 		)
 	})
 

@@ -21,7 +21,6 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"time"
 
 	"github.com/kelseyhightower/envconfig"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -37,6 +36,7 @@ import (
 	"github.com/projectcalico/calico/goldmane/pkg/internal/utils"
 	"github.com/projectcalico/calico/goldmane/pkg/server"
 	"github.com/projectcalico/calico/goldmane/pkg/storage"
+	"github.com/projectcalico/calico/lib/std/time"
 	"github.com/projectcalico/calico/libcalico-go/lib/debugserver"
 	"github.com/projectcalico/calico/libcalico-go/lib/health"
 )
@@ -191,8 +191,8 @@ func Run(ctx context.Context, cfg Config) {
 	collector.RegisterWith(grpcServer)
 	go collector.Run()
 
-	// Start Goldmane.
-	go gm.Run(storage.GetStartTime(int(cfg.AggregationWindow.Seconds())))
+	// Start Goldmane, waiting for it to be ready to receive requests before continuing.
+	<-gm.Run(storage.GetStartTime(int(cfg.AggregationWindow.Seconds())))
 
 	// Start a flow server, serving from Goldmane.
 	flowServer := server.NewFlowsServer(gm)

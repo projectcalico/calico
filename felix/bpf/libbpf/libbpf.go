@@ -167,22 +167,52 @@ func DetachClassifier(ifindex, handle, pref int, ingress bool) error {
 	return err
 }
 
-func DetachCTLBProgramsLegacy(cgroup string) error {
-	f, err := os.OpenFile(cgroup, os.O_RDONLY, 0)
-	if err != nil {
-		return fmt.Errorf("failed to join cgroup %s: %w", cgroup, err)
-	}
-	defer f.Close()
-	fd := int(f.Fd())
+func (o *Obj) SetAttachType(progName string, attachType uint32) error {
+	cProgName := C.CString(progName)
+	defer C.free(unsafe.Pointer(cProgName))
+	_, err := C.bpf_set_attach_type(o.obj, cProgName, C.uint(attachType))
+	return err
+}
 
-	attachTypes := []int{C.BPF_CGROUP_INET4_CONNECT,
+func ProgQueryTcx(ifindex int, ingress bool) ([64]uint32, [64]uint32, uint32, error) {
+	attachType := C.BPF_TCX_EGRESS
+	if ingress {
+		attachType = C.BPF_TCX_INGRESS
+	}
+	return progQuery(ifindex, attachType)
+}
+
+func progQuery(ifindex, attachType int) ([64]uint32, [64]uint32, uint32, error) {
+	var progIds, attachFlags [64]uint32
+	progCnt := uint32(64)
+	_, err := C.bpf_program_query(C.int(ifindex), C.int(attachType), 0,
+		(*C.uint)(unsafe.Pointer(&attachFlags[0])),
+		(*C.uint)(unsafe.Pointer(&progIds[0])),
+		(*C.uint)(unsafe.Pointer(&progCnt)))
+	return progIds, attachFlags, progCnt, err
+}
+
+func ProgName(id uint32) (string, error) {
+	buf := make([]byte, C.BPF_OBJ_NAME_LEN)
+	_, err := C.bpf_get_prog_name(C.uint(id), (*C.char)(unsafe.Pointer(&buf[0])))
+	return string(buf), err
+}
+
+func DetachCTLBProgramsLegacy(ipv4Enabled bool, cgroup string) error {
+	attachTypes := []int{C.BPF_CGROUP_INET6_CONNECT,
+		C.BPF_CGROUP_UDP6_SENDMSG,
+		C.BPF_CGROUP_UDP6_RECVMSG,
+	}
+	v4AttachTypes := []int{C.BPF_CGROUP_INET4_CONNECT,
 		C.BPF_CGROUP_UDP4_SENDMSG,
 		C.BPF_CGROUP_UDP4_RECVMSG,
-		C.BPF_CGROUP_INET6_CONNECT,
-		C.BPF_CGROUP_UDP6_SENDMSG,
-		C.BPF_CGROUP_UDP6_RECVMSG}
+	}
+	if ipv4Enabled {
+		attachTypes = append(attachTypes, v4AttachTypes...)
+	}
+	var err error
 	for _, attachType := range attachTypes {
-		_, perr := C.bpf_ctlb_detach_legacy(C.int(fd), C.int(attachType))
+		perr := detachCTLBProgramLegacy(cgroup, attachType)
 		if perr != nil {
 			err = errors.Join(err, perr)
 		}
@@ -190,23 +220,58 @@ func DetachCTLBProgramsLegacy(cgroup string) error {
 	return err
 }
 
+func detachCTLBProgramLegacy(cgroup string, attachType int) error {
+	f, err := os.OpenFile(cgroup, os.O_RDONLY, 0)
+	if err != nil {
+		return fmt.Errorf("failed to join cgroup %s: %w", cgroup, err)
+	}
+	defer f.Close()
+	fd := int(f.Fd())
+	progFd, err := C.bpf_ctlb_get_prog_fd(C.int(fd), C.int(attachType))
+	if errors.Is(err, unix.EBADF) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("error querying cgroup %d : %w", attachType, err)
+	}
+	defer unix.Close(int(progFd))
+	_, err = C.bpf_ctlb_detach_legacy(C.int(progFd), C.int(fd), C.int(attachType))
+	return err
+}
+
 // AttachClassifier return the program id and pref and handle of the qdisc
-func (o *Obj) AttachClassifier(secName, ifName string, ingress bool, prio int, handle uint32) (int, int, int, error) {
+func (o *Obj) AttachClassifier(secName, ifName string, ingress bool, prio int, handle uint32) error {
 	cSecName := C.CString(secName)
 	cIfName := C.CString(ifName)
 	defer C.free(unsafe.Pointer(cSecName))
 	defer C.free(unsafe.Pointer(cIfName))
 	ifIndex, err := C.if_nametoindex(cIfName)
 	if err != nil {
-		return -1, -1, -1, err
+		return err
 	}
 
-	ret, err := C.bpf_tc_program_attach(o.obj, cSecName, C.int(ifIndex), C.bool(ingress), C.int(prio), C.uint(handle))
+	_, err = C.bpf_tc_program_attach(o.obj, cSecName, C.int(ifIndex), C.bool(ingress), C.int(prio), C.uint(handle))
 	if err != nil {
-		return -1, -1, -1, fmt.Errorf("error attaching tc program %w", err)
+		return fmt.Errorf("error attaching tc program %w", err)
 	}
 
-	return int(ret.prog_id), int(ret.priority), int(ret.handle), nil
+	return nil
+}
+
+func (o *Obj) AttachTCX(secName, ifName string) (*Link, error) {
+	cSecName := C.CString(secName)
+	cIfName := C.CString(ifName)
+	defer C.free(unsafe.Pointer(cSecName))
+	defer C.free(unsafe.Pointer(cIfName))
+	ifIndex, err := C.if_nametoindex(cIfName)
+	if err != nil {
+		return nil, fmt.Errorf("error get ifindex for %s:%w", ifName, err)
+	}
+	link, err := C.bpf_tcx_program_attach(o.obj, cSecName, C.int(ifIndex))
+	if err != nil {
+		return nil, fmt.Errorf("error attaching tcx program %w", err)
+	}
+	return &Link{link: link}, nil
 }
 
 func (o *Obj) AttachXDP(ifName, progName string, oldID int, mode uint) (int, error) {
@@ -344,7 +409,7 @@ func OpenLink(path string) (*Link, error) {
 	defer C.free(unsafe.Pointer(cPath))
 	link, err := C.bpf_link_open(cPath)
 	if err != nil {
-		return nil, fmt.Errorf("error opening link %w", err)
+		return nil, err
 	}
 	return &Link{link: link}, nil
 }
@@ -456,12 +521,16 @@ func (o *Obj) AttachCGroupLegacy(cgroup, progName string) error {
 
 const (
 	// Set when IPv6 is enabled to configure bpf dataplane accordingly
-	GlobalsRPFOptionEnabled uint32 = C.CALI_GLOBALS_RPF_OPTION_ENABLED
-	GlobalsRPFOptionStrict  uint32 = C.CALI_GLOBALS_RPF_OPTION_STRICT
-	GlobalsNoDSRCidrs       uint32 = C.CALI_GLOBALS_NO_DSR_CIDRS
-	GlobalsLoUDPOnly        uint32 = C.CALI_GLOBALS_LO_UDP_ONLY
-	GlobalsRedirectPeer     uint32 = C.CALI_GLOBALS_REDIRECT_PEER
-	GlobalsFlowLogsEnabled  uint32 = C.CALI_GLOBALS_FLOWLOGS_ENABLED
+	GlobalsRPFOptionEnabled        uint32 = C.CALI_GLOBALS_RPF_OPTION_ENABLED
+	GlobalsRPFOptionStrict         uint32 = C.CALI_GLOBALS_RPF_OPTION_STRICT
+	GlobalsNoDSRCidrs              uint32 = C.CALI_GLOBALS_NO_DSR_CIDRS
+	GlobalsLoUDPOnly               uint32 = C.CALI_GLOBALS_LO_UDP_ONLY
+	GlobalsRedirectPeer            uint32 = C.CALI_GLOBALS_REDIRECT_PEER
+	GlobalsFlowLogsEnabled         uint32 = C.CALI_GLOBALS_FLOWLOGS_ENABLED
+	GlobalsNATOutgoingExcludeHosts uint32 = C.CALI_GLOBALS_NATOUTGOING_EXCLUDE_HOSTS
+
+	AttachTypeTcxIngress uint32 = C.BPF_TCX_INGRESS
+	AttachTypeTcxEgress  uint32 = C.BPF_TCX_EGRESS
 )
 
 func (t *TcGlobalData) Set(m *Map) error {

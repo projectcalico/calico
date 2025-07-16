@@ -20,7 +20,6 @@ import (
 	"math/rand/v2"
 	"os"
 	"sync"
-	"time"
 
 	"github.com/sirupsen/logrus"
 	goproto "google.golang.org/protobuf/proto"
@@ -28,6 +27,7 @@ import (
 	"github.com/projectcalico/calico/goldmane/pkg/client"
 	"github.com/projectcalico/calico/goldmane/pkg/types"
 	"github.com/projectcalico/calico/goldmane/proto"
+	"github.com/projectcalico/calico/lib/std/time"
 )
 
 const (

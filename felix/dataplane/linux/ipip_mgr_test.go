@@ -61,7 +61,7 @@ var _ = Describe("IPIPManager", func() {
 			links:          []netlink.Link{&mockLink{attrs: la}},
 			tunnelLinkName: dataplanedefs.IPIPIfaceName,
 		}
-		ipipMgr = newIPIPManagerWithSims(
+		ipipMgr = newIPIPManagerWithShims(
 			ipSets, rt, dataplanedefs.IPIPIfaceName,
 			4,
 			1400,
@@ -72,8 +72,8 @@ var _ = Describe("IPIPManager", func() {
 				RulesConfig: rules.Config{
 					IPIPTunnelAddress: net.ParseIP("192.168.0.1"),
 				},
-				ProgramRoutes:       true,
-				DeviceRouteProtocol: dataplanedefs.DefaultRouteProto,
+				ProgramClusterRoutes: true,
+				DeviceRouteProtocol:  dataplanedefs.DefaultRouteProto,
 			},
 			opRecorder,
 			dataplane,
@@ -305,7 +305,7 @@ var _ = Describe("IPIPManager", func() {
 		dataDeviceC := make(chan string)
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
-		go ipipMgr.KeepIPIPDeviceInSync(ctx, 1400, false, 1*time.Second, dataDeviceC)
+		go ipipMgr.keepIPIPDeviceInSync(ctx, 1400, false, 1*time.Second, dataDeviceC)
 
 		By("Sending another node's route.")
 		ipipMgr.OnUpdate(&proto.HostMetadataUpdate{
@@ -323,7 +323,7 @@ var _ = Describe("IPIPManager", func() {
 
 		err := ipipMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
-		Expect(ipipMgr.routesDirty).To(BeFalse())
+		Expect(ipipMgr.routeMgr.routesDirty).To(BeFalse())
 		Expect(rt.currentRoutes["eth0"]).To(HaveLen(0))
 		Expect(rt.currentRoutes[dataplanedefs.IPIPIfaceName]).To(HaveLen(1))
 
@@ -346,7 +346,7 @@ var _ = Describe("IPIPManager", func() {
 		err = ipipMgr.CompleteDeferredWork()
 
 		Expect(err).NotTo(HaveOccurred())
-		Expect(ipipMgr.routesDirty).To(BeFalse())
+		Expect(ipipMgr.routeMgr.routesDirty).To(BeFalse())
 		Expect(rt.currentRoutes["eth0"]).To(HaveLen(1))
 		Expect(rt.currentRoutes[dataplanedefs.IPIPIfaceName]).To(HaveLen(0))
 	})

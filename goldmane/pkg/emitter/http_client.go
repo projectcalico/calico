@@ -24,12 +24,12 @@ import (
 	"net/http"
 	"os"
 	"sync"
-	"time"
 
 	"github.com/sirupsen/logrus"
 
 	calicotls "github.com/projectcalico/calico/crypto/pkg/tls"
 	"github.com/projectcalico/calico/goldmane/pkg/internal/utils"
+	"github.com/projectcalico/calico/lib/std/time"
 )
 
 const ContentTypeMultilineJSON = "application/x-ndjson"

@@ -16,9 +16,9 @@ package flowcache
 
 import (
 	"sync"
-	"time"
 
 	"github.com/projectcalico/calico/goldmane/pkg/types"
+	"github.com/projectcalico/calico/lib/std/time"
 )
 
 // cacheKey wraps the canonical FlowKey type with a start and end time, as well as a scope (typically

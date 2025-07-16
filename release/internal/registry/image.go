@@ -22,6 +22,8 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 )
 
+const TigeraOperatorImage = "tigera/operator"
+
 // ImageMap maps the image name to the repository.
 var ImageMap = map[string]string{
 	"typha":                     "calico/typha",

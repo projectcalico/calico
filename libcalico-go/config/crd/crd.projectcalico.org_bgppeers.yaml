@@ -39,6 +39,17 @@ spec:
                   type: string
                 maxRestartTime:
                   type: string
+                nextHopMode:
+                  allOf:
+                    - enum:
+                        - Auto
+                        - Self
+                        - Keep
+                    - enum:
+                        - Auto
+                        - Self
+                        - Keep
+                  type: string
                 node:
                   type: string
                 nodeSelector:
