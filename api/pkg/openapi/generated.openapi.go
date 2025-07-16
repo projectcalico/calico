@@ -5766,18 +5766,12 @@ func schema_pkg_apis_projectcalico_v3_QoSRule(ref common.ReferenceCallback) comm
 							Ref:         ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.QoSEntityRule"),
 						},
 					},
-					"metadata": {
-						SchemaProps: spec.SchemaProps{
-							Description: "Metadata contains additional information for this rule",
-							Ref:         ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.RuleMetadata"),
-						},
-					},
 				},
 				Required: []string{"action"},
 			},
 		},
 		Dependencies: []string{
-			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.QoSAction", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.QoSEntityRule", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.RuleMetadata", "github.com/projectcalico/api/pkg/lib/numorstring.Protocol"},
+			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.QoSAction", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.QoSEntityRule", "github.com/projectcalico/api/pkg/lib/numorstring.Protocol"},
 	}
 }
 

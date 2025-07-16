@@ -3072,11 +3072,6 @@ func (in *QoSRule) DeepCopyInto(out *QoSRule) {
 		**out = **in
 	}
 	in.Destination.DeepCopyInto(&out.Destination)
-	if in.Metadata != nil {
-		in, out := &in.Metadata, &out.Metadata
-		*out = new(RuleMetadata)
-		(*in).DeepCopyInto(*out)
-	}
 	return
 }
 

@@ -186,6 +186,10 @@ func ExtractPolicyMetadata(policy *model.Policy) policyMetadata {
 	if policy.ApplyOnForward {
 		m.Flags |= policyMetaApplyOnForward
 	}
+	// If policy is QoS, over write all previous flags, as those are not supported in QoS policies.
+	if policy.QoSPolicy {
+		m.Flags = policyMetaQoS
+	}
 	if len(policy.Types) == 0 {
 		// Back compatibility: no Types means Ingress and Egress.
 		m.Flags |= policyMetaIngress | policyMetaEgress
@@ -213,6 +217,7 @@ const (
 	policyMetaApplyOnForward
 	policyMetaIngress
 	policyMetaEgress
+	policyMetaQoS
 )
 
 func (m *policyMetadata) Equals(other *policyMetadata) bool {
@@ -220,6 +225,10 @@ func (m *policyMetadata) Equals(other *policyMetadata) bool {
 		return *m == *other
 	}
 	return m == other
+}
+
+func (m *policyMetadata) QoS() bool {
+	return m != nil && m.Flags&policyMetaQoS != 0
 }
 
 func (m *policyMetadata) DoNotTrack() bool {
@@ -362,6 +371,10 @@ func (t TierInfo) String() string {
 			//Append ApplyOnForward flag.
 			if pol.Value.ApplyOnForward() {
 				polType = polType + "f"
+			}
+
+			if pol.Value.QoS() {
+				polType = "q"
 			}
 		}
 		policies[ii] = fmt.Sprintf("%v(%v)", pol.Key.Name, polType)

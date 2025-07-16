@@ -44,7 +44,7 @@ func convertQoSPolicyV3ToV1Key(v3key model.ResourceKey) (model.Key, error) {
 	return model.PolicyKey{
 		Name: fmt.Sprintf("%v.%v", names.QoSPolicyNamePrefix, v3key.Name),
 		// QoS policies are not bound to tiers. We just need to set it here for sake of down stream receivers.
-		Tier: "default",
+		Tier: names.DefaultTierName,
 	}, nil
 
 }
@@ -69,7 +69,7 @@ func ConvertQoSPolicyV3ToV1Value(val interface{}) (interface{}, error) {
 		Order:         spec.Order,
 		OutboundRules: qosRulesAPIV3ToBackend(spec.Egress),
 		Selector:      selector,
-		//Types:         policyTypesAPIV3ToBackend(spec.Types), // Is this important?
+		Types:         []string{"egress"},
 	}
 
 	return v1value, nil

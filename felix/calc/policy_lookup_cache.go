@@ -90,10 +90,16 @@ func (pc *PolicyLookupsCache) SetUseIDs() {
 }
 
 func (pc *PolicyLookupsCache) OnPolicyActive(key model.PolicyKey, policy *model.Policy) {
+	if model.PolicyIsQoS(key) {
+		return
+	}
 	pc.updatePolicyRulesNFLOGPrefixes(key, policy)
 }
 
 func (pc *PolicyLookupsCache) OnPolicyInactive(key model.PolicyKey) {
+	if model.PolicyIsQoS(key) {
+		return
+	}
 	pc.removePolicyRulesNFLOGPrefixes(key)
 }
 

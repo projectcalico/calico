@@ -31799,13 +31799,6 @@ spec:
                         type: object
                       ipVersion:
                         type: integer
-                      metadata:
-                        properties:
-                          annotations:
-                            additionalProperties:
-                              type: string
-                            type: object
-                        type: object
                       protocol:
                         anyOf:
                           - type: integer

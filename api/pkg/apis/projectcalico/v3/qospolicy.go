@@ -84,9 +84,6 @@ type QoSRule struct {
 
 	// Destination contains the match criteria that apply to destination entity.
 	Destination QoSEntityRule `json:"destination,omitempty" validate:"omitempty"`
-
-	// Metadata contains additional information for this rule
-	Metadata *RuleMetadata `json:"metadata,omitempty" validate:"omitempty"`
 }
 
 // A QoSEntityRule is a sub-component of a Rule comprising the match criteria specific
