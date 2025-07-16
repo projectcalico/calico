@@ -599,8 +599,10 @@ execute_tests_daemon() {
         run_individual_test 'explicit_peering/route_reflector'
         run_individual_test 'explicit_peering/keepnexthop'
         run_individual_test 'explicit_peering/keepnexthop-global'
-	run_individual_test 'explicit_peering/local-as'
-	run_individual_test 'explicit_peering/local-as-global'
+	      run_individual_test 'explicit_peering/local-as'
+	      run_individual_test 'explicit_peering/local-as-global'
+        run_individual_test 'explicit_peering/local-as-ipv6'
+        run_individual_test 'explicit_peering/local-as-global-ipv6'
     done
 
     # Turn the node-mesh back on.
@@ -4555,6 +4557,7 @@ metadata:
 spec:
   localWorkloadSelector: app == 'calico-bird-0'
   asNumber: 64516
+  localASNumber: 65002
   filters:
     - import-only-filter
 ---
@@ -4566,6 +4569,7 @@ spec:
   localWorkloadSelector: app == 'calico-bird-0'
   node: kube-master
   asNumber: 64517
+  localASNumber: 65001
   filters:
     - import-only-filter
 EOF

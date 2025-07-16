@@ -944,9 +944,6 @@ func (c *client) nodeAsBGPPeers(nodeName string, v4 bool, v6 bool, v3Peer *apiv3
 			}
 		}
 
-		if v3Peer.Spec.LocalASNumber != nil {
-			peer.LocalASNum = *v3Peer.Spec.LocalASNumber
-		}
 		peer.RRClusterID = rrClusterID
 
 		keepOriginalNextHop, nextHopMode := getNextHopMode(v3Peer)
@@ -1960,9 +1957,6 @@ func (c *client) setPeerConfigFieldsFromV3Resource(peers []*bgpPeer, v3res *apiv
 
 	for _, peer := range peers {
 		peer.Password = password
-		if v3res.Spec.LocalASNumber != nil {
-			peer.LocalASNum = *v3res.Spec.LocalASNumber
-		}
 		peer.SourceAddr = withDefault(string(v3res.Spec.SourceAddress), string(apiv3.SourceAddressUseNodeIP))
 		if v3res.Spec.MaxRestartTime != nil {
 			peer.RestartTime = fmt.Sprintf("%v", int(math.Round(v3res.Spec.MaxRestartTime.Duration.Seconds())))
