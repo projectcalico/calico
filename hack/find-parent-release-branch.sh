@@ -10,10 +10,10 @@ best=""
 
 current_branch=$(git branch --show-current)
 
-# Some of our team members use "tigera" in their github usernames, which breaks
-# this script for specifically those members when `git_repo_slug` starts with `tigera`;
-# for example, for `tigera/somerepository`. This results in us fetching multiple
-# lines of results as multiple lines match, which breaks the script.
+# Some of our team members use "tigera" in their github usernames, which this script
+# doesn't account for when `git_repo_slug` starts with `tigera`; for example, for
+# `tigera/somerepository`. This results in us fetching multiple lines of results
+# as multiple lines match, which results in invalid input to grep.
 #
 #                                ┌────────this───────┐
 # Expected match: git@github.com:tigera/somerepository.git
@@ -23,11 +23,19 @@ current_branch=$(git branch --show-current)
 #
 # We can't just grab the first or last line because we don't know what order the
 # remotes will be in, nor what actual format the remote URL will be in, so we
-# just exclude matches with any alpha character in front of it.
+# just include matches with one of [:/] in front of it. This covers both of the
+# delimiters used in these two common Git URL forms:
+#
+#                     ↓
+#   proto://github.com/foo/bar.git
+#       git@github.com:foo/bar.git
+#
+# Filtering to specifically these characters prevents us from misinterpreting valid
+# non-alphanumeric characters (e.g. test_tigera/somerepo.git).
 
 echo "[debug] Trying to detect base branch by looking for most similar branch" >&2
 
-remote=$(git remote -v | grep "[^a-zA-Z0-9]${git_repo_slug}.*fetch" | cut -f1 )
+remote=$(git remote -v | grep "[:/]${git_repo_slug}.*fetch" | cut -f1 )
 
 if [[ -z "${remote}" ]]; then
   echo "[error] Could not detect a git remote for ${git_repo_slug}; stop" >&2
