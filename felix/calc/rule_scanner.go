@@ -18,7 +18,6 @@ import (
 	"fmt"
 	"strings"
 
-	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 	log "github.com/sirupsen/logrus"
 
@@ -184,12 +183,6 @@ func (rs *RuleScanner) OnPolicyActive(key model.PolicyKey, policy *model.Policy)
 func (rs *RuleScanner) OnPolicyInactive(key model.PolicyKey) {
 	rs.updateRules(key, nil, nil, false, false, "", "")
 	rs.RulesUpdateCallbacks.OnPolicyInactive(key)
-}
-
-func (rs *RuleScanner) OnQoSPolicyActive(key string, policy *v3.QoSPolicy) {
-}
-
-func (rs *RuleScanner) OnQoSPolicyInactive(key string) {
 }
 
 func (rs *RuleScanner) updateRules(

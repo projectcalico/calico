@@ -68,7 +68,6 @@ type ActiveRulesCalculator struct {
 	// Similarly, profiles are sparse and wasteful, we use a deduped packed map
 	// because they're also often identical.
 	allProfileRules packedmap.Deduped[string, *model.ProfileRules]
-	allQoSPolicies  map[string]*v3.QoSPolicy
 
 	// Caches for ALP policies for stat collector.
 	allALPPolicies set.Set[model.PolicyKey]
@@ -103,7 +102,6 @@ func NewActiveRulesCalculator() *ActiveRulesCalculator {
 		allPolicies:     packedmap.MakeCompressedJSON[model.PolicyKey, *model.Policy](),
 		allProfileRules: packedmap.MakeDedupedCompressedJSON[string, *model.ProfileRules](),
 		allTiers:        make(map[string]*model.Tier),
-		allQoSPolicies:  make(map[string]*v3.QoSPolicy),
 
 		allALPPolicies: set.New[model.PolicyKey](),
 
@@ -167,49 +165,6 @@ func (arc *ActiveRulesCalculator) OnUpdate(update api.Update) (_ bool) {
 		arc.labelIndex.OnUpdate(update)
 	case model.ResourceKey:
 		arc.labelIndex.OnUpdate(update)
-
-		switch key.Kind {
-		case v3.KindQoSPolicy:
-			if update.Value != nil {
-				log.Debugf("Updating ARC for qos policy %v", key)
-				policy := update.Value.(*v3.QoSPolicy)
-				oldPolicy, exists := arc.allQoSPolicies[key.Name]
-				if exists && reflect.DeepEqual(oldPolicy, policy) {
-					if log.IsLevelEnabled(log.DebugLevel) {
-						log.WithField("key", update.Key).Debug("No-op qos policy change; ignoring.")
-					}
-					return
-				}
-
-				arc.allQoSPolicies[key.Name] = policy
-
-				// Update the index, which will call us back if the selector no
-				// longer matches.  Note: we can't skip this even if the
-				// policy is force-programmed because we're also responsible
-				// for propagating the notification to the policy resolver.
-				sel, err := selector.Parse(policy.Spec.Selector)
-				if err != nil {
-					log.WithError(err).Panic("Failed to parse selector")
-				}
-				arc.labelIndex.UpdateSelector(key, sel)
-
-				if arc.policyIDToEndpointKeys.ContainsKey(key) {
-					// If we get here, the selector still matches something,
-					// update the rules.
-					log.Debug("QoS policy updated while active, telling listener")
-					arc.sendQoSPolicyUpdate(key.Name, policy)
-				}
-			} else {
-				log.Debugf("Deleting qos policy %v from ARC", key)
-				delete(arc.allQoSPolicies, key.Name)
-
-				arc.labelIndex.DeleteSelector(key)
-				// No need to call updateQoSPolicy() because we'll have got a matchStopped
-				// callback.
-			}
-		default:
-			// Ignore other kinds of v3 resource.
-		}
 	case model.ProfileRulesKey:
 		if update.Value != nil {
 			rules := update.Value.(*model.ProfileRules)
