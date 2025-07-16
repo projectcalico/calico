@@ -1639,7 +1639,7 @@ func TestNATNodePortICMPTooBig(t *testing.T) {
 		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
 		fmt.Printf("pktR = %+v\n", pktR)
 
-		checkICMPTooBig(pktR, ipv4, udp, natTunnelMTU)
+		checkICMPTooBig(pktR, ipv4, udp, ipv4.DstIP, natTunnelMTU)
 	})
 
 	expectMark(tcdefs.MarkSeenBypassForward)
