@@ -41,6 +41,9 @@ const (
 
 	// OpenStackNetworkPolicyNamePrefix is the prefix for OpenStack security groups.
 	OpenStackNetworkPolicyNamePrefix = "ossg."
+
+	// QoSPolicyNamePrefix is the prefix for QoS policies.
+	QoSPolicyNamePrefix = "qos."
 )
 
 // TierFromPolicyName extracts the tier from a tiered policy name.
