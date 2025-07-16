@@ -192,6 +192,12 @@ func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 	kubeClient.registerResourceClient(
 		reflect.TypeOf(model.ResourceKey{}),
 		reflect.TypeOf(model.ResourceListOptions{}),
+		apiv3.KindQoSPolicy,
+		resources.NewQoSPolicyClient(cs, crdClientV1),
+	)
+	kubeClient.registerResourceClient(
+		reflect.TypeOf(model.ResourceKey{}),
+		reflect.TypeOf(model.ResourceListOptions{}),
 		apiv3.KindBGPPeer,
 		resources.NewBGPPeerClient(cs, crdClientV1),
 	)
@@ -459,6 +465,7 @@ func (c *KubeClient) EnsureInitialized() error {
 func (c *KubeClient) Clean() error {
 	log.Warning("Cleaning KDD of all Calico-creatable data")
 	kinds := []string{
+		apiv3.KindQoSPolicy,
 		apiv3.KindBGPConfiguration,
 		apiv3.KindBGPPeer,
 		apiv3.KindClusterInformation,
