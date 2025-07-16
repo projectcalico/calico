@@ -50,6 +50,7 @@ type ActiveQoSPolicyCalculator struct {
 	// Callback objects.
 	RuleScanner          qosRuleScanner
 	PolicyMatchListeners []QoSPolicyMatchListener
+	RulesUpdateCallbacks qosRulesUpdateCallbacks
 }
 
 func NewActiveQoSPolicyCalculator() *ActiveQoSPolicyCalculator {

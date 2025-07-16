@@ -51,6 +51,9 @@ type rulesUpdateCallbacks interface {
 	OnPolicyInactive(model.PolicyKey)
 	OnProfileActive(model.ProfileRulesKey, *ParsedRules)
 	OnProfileInactive(model.ProfileRulesKey)
+}
+
+type qosRulesUpdateCallbacks interface {
 	OnQoSPolicyActive(string, *ParsedRules)
 	OnQoSPolicyInactive(string)
 }
@@ -104,6 +107,7 @@ type vxlanCallbacks interface {
 type PipelineCallbacks interface {
 	ipSetUpdateCallbacks
 	rulesUpdateCallbacks
+	qosRulesUpdateCallbacks
 	encapCallbacks
 	endpointCallbacks
 	configCallbacks
