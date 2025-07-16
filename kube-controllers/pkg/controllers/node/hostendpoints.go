@@ -351,6 +351,7 @@ func (c *autoHostEndpointController) syncHostEndpointsForNode(nodeName string) {
 			}
 
 			for _, iface := range node.Spec.Interfaces {
+				// If we reached here we know the template has interfaceSelector specified, we want to create a HostEndpoint for each interface that matches the regex selector.
 				if regexp.MustCompile(template.InterfaceSelector).MatchString(iface.Name) {
 					// Generate Host Endpoint for interface matching the InterfaceSelector from the template
 					hostEndpointName, err := c.generateAutoHostEndpointName(node.Name, &template.GenerateName, &iface.Name)
@@ -437,6 +438,8 @@ func (c *autoHostEndpointController) generateAutoHostEndpointName(nodeName strin
 	return "", fmt.Errorf("insufficient HostEndpoint identifiers supplied")
 }
 
+// validateName ensures the given name does not exceed the DNS1123 (253 characters) subdomain length limit.
+// If the name is too long, it generates a hash-based name that fits the limit.
 func (c *autoHostEndpointController) validateName(name string) (string, error) {
 	if len(name) <= validation.DNS1123SubdomainMaxLength {
 		return name, nil
@@ -459,6 +462,8 @@ func (c *autoHostEndpointController) validateName(name string) (string, error) {
 	return name, nil
 }
 
+// mergeExpectedIPsWithInterfaceIPs merges the provided expected IPs with the IP addresses
+// found on the specified interface of the given node.
 func (c *autoHostEndpointController) mergeExpectedIPsWithInterfaceIPs(node *libapi.Node, interfaceName string, expectedIPs []string) []string {
 	for _, iface := range node.Spec.Interfaces {
 		if iface.Name == interfaceName {
@@ -467,6 +472,8 @@ func (c *autoHostEndpointController) mergeExpectedIPsWithInterfaceIPs(node *liba
 					expectedIPs = append(expectedIPs, addr)
 				}
 			}
+			// We found the interface, we can stop looking for it
+			break
 		}
 	}
 
