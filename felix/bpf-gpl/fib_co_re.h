@@ -52,6 +52,10 @@ static CALI_BPF_INLINE int forward_or_drop(struct cali_tc_ctx *ctx)
 		goto skip_fib;
 	}
 
+	if (CALI_F_FROM_WEP && (GLOBAL_FLAGS & CALI_GLOBALS_SKIP_EGRESS_REDIRECT)) {
+		goto skip_fib;
+	}
+
 	if (rc == CALI_RES_REDIR_BACK) {
 		int redir_flags = 0;
 		if  (CALI_F_FROM_HOST) {
