@@ -1151,8 +1151,9 @@ def port_status_change(port, original):
     port = port.copy()
     original = original.copy()
 
-    port.pop('status')
-    original.pop('status')
+    for ignore_field in ['status', 'updated_at']:
+        port.pop(ignore_field, None)
+        original.pop(ignore_field, None)
 
     if port == original:
         return True
