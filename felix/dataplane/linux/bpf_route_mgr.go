@@ -360,8 +360,8 @@ func (m *bpfRouteManager) calculateRoute(cidr ip.CIDR) routes.ValueInterface {
 				pWepID := types.WorkloadEndpointIDToProto(wepID)
 				if wepScore > bestWepScore || wepScore == bestWepScore && pWepID.String() > bestWepID.String() {
 					flags |= routes.FlagsLocalWorkload
-					if wep.GetType() == proto.WorkloadType_VM {
-						flags |= routes.FlagVMWorkload
+					if wep.GetSkipRedir().GetIngress() {
+						flags |= routes.FlagSkipIngressRedir
 					}
 					route = m.bpfOps.NewValueWithIfIndex(flags, ifaceIdx)
 					bestWepID = pWepID
