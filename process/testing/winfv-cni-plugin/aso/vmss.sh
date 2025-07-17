@@ -152,7 +152,7 @@ function confirm-nodes-ssh() {
   echo;echo "confirm nodes can be accessed by ssh..."
   show_connections
   retry-ssh ./ssh-node-linux.sh echo
-  retry-ssh ./ssh-node-windows.sh "-Command echo"
+  retry-ssh ./ssh-node-windows.sh "-Help"
 
   # Azure may assign another public IP to the VM.
   # So even the first batch of SSHes works, the ip could be updated later.
@@ -161,7 +161,7 @@ function confirm-nodes-ssh() {
   sleep 30
   show_connections
   retry-ssh ./ssh-node-linux.sh echo
-  retry-ssh ./ssh-node-windows.sh "-Command echo"
+  retry-ssh ./ssh-node-windows.sh "-Help"
   echo "VMs can be accessed by ssh.";echo
 }
 
