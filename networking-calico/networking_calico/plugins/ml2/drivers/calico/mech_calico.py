@@ -775,9 +775,6 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                      original.get("status"), port.get("status"))
             return
 
-        LOG.info("Old = %r", original)
-        LOG.info("New = %r", port)
-
         # Re-read the port; we do this to guarantee correctly ordered handling
         # of multiple updates to the same port, when there are multiple Neutron
         # servers and so different updates could be processed on different
