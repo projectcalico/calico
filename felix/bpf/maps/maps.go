@@ -415,6 +415,28 @@ func (b *PinnedMap) UpdateWithFlags(k, v []byte, flags int) error {
 	return UpdateMapEntryWithFlags(b.fd, k, v, flags)
 }
 
+func (b *PinnedMap) BatchUpdate(ks, vs [][]byte, flags uint64) (int, error) {
+	count := len(ks)
+
+	if count != len(vs) {
+		return 0, fmt.Errorf("number of keys is not equal the number of values")
+	}
+
+	if count == 0 {
+		return 0, nil
+	}
+
+	k := make([]byte, 0, count*len(ks[0]))
+	v := make([]byte, 0, count*len(vs[0]))
+
+	for i := 0; i < count; i++ {
+		k = append(k, ks[i]...)
+		v = append(v, vs[i]...)
+	}
+
+	return libbpf.MapUpdateBatch(int(b.fd), k, v, count, flags)
+}
+
 func (b *PinnedMap) Get(k []byte) ([]byte, error) {
 	valueSize := b.ValueSize
 	if b.perCPU {
