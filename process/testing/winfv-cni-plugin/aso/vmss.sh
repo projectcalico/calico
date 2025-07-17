@@ -87,7 +87,7 @@ EOF
 
   echo
   echo "Generating helper files"
-  echo ${MASTER_CONNECT_COMMAND} > ./ssh-node-linux.sh
+  echo '${MASTER_CONNECT_COMMAND} "$@"' > ./ssh-node-linux.sh
   chmod +x ./ssh-node-linux.sh
 
   cat << EOF > ssh-node-windows.sh
