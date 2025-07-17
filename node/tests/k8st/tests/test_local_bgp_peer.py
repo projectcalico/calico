@@ -185,10 +185,26 @@ spec:
   nodeSelector: all()
   peerSelector: kubernetes.io/hostname == 'kind-control-plane'
   nextHopMode: Self
+  reversePeering: Manual
   filters:
   - export-child-cluster-cidr
 """)
           self.add_cleanup(lambda: calicoctl("delete bgppeer peer-with-rr", allow_fail=True))
+
+          # Configure rr to peer with other nodes
+          kubectl("""apply -f - << EOF
+kind: BGPPeer
+apiVersion: projectcalico.org/v3
+metadata:
+  name: peer-from-rr
+spec:
+  peerSelector: all()
+  nodeSelector: kubernetes.io/hostname == 'kind-control-plane'
+  reversePeering: Manual
+  filters:
+  - export-child-cluster-cidr
+""")
+          self.add_cleanup(lambda: calicoctl("delete bgppeer peer-from-rr", allow_fail=True))
 
           # Establish BGPPeer from rr to tor
           kubectl("""apply -f - << EOF
@@ -492,7 +508,17 @@ protocol bgp from_workload_to_local_host from bgp_template {
           self.assertRegexpMatches(output, "10\.123\.3\.0/26.*via %s on .*Mesh_with_node_2.*AS65401" % (self.ips[2],))
 
         if self.topology == TopologyMode.RR:
-          # Check that the ToR hears about all the routes from master node.
+          # Check that kind-worker3 hears about all the routes from RR(master node) with original next hop.
+          # 10.123.3.0/26      via 172.18.0.5 on eth0 [Node_172_18_0_3 09:46:12 from 172.18.0.3] * (100/0) [AS65401i]
+          # 10.123.0.0/26      via 172.18.0.2 on eth0 [Node_172_18_0_3 09:46:10 from 172.18.0.3] * (100/0) [AS65401i]
+          # 10.123.1.0/26      via 172.18.0.5 on eth0 [Node_172_18_0_3 09:46:12 from 172.18.0.3] * (100/0) [AS65401i]
+          calico_node_w3 = calico_node_pod_name(self.nodes[3])
+          output = run("kubectl exec -t %s -n calico-system -- birdcl show route" % calico_node_w3)
+          self.assertRegexpMatches(output, "10\.123\.0\.0/26.*via %s on .*Node_172_18_0_.*AS65401" % (self.ips[1],))
+          self.assertRegexpMatches(output, "10\.123\.1\.0/26.*via %s on .*Node_172_18_0_.*AS65401" % (self.ips[2],))
+          self.assertRegexpMatches(output, "10\.123\.3\.0/26.*via %s on .*Node_172_18_0_.*AS65401" % (self.ips[2],))
+          
+          # Check that the ToR hears about all the routes from RR(master node).
           # Note that `nextHopMode: Keep` is specified for `rr-tor-peer`, ToR sees routes with original next hop.
           # 10.123.3.0/26      via 172.18.0.5 on eth0 [RR_with_master_node 09:46:12 from 172.18.0.3] * (100/0) [AS65401i]
           # 10.123.0.0/26      via 172.18.0.2 on eth0 [RR_with_master_node 09:46:10 from 172.18.0.3] * (100/0) [AS65401i]

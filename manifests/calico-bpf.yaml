@@ -442,6 +442,11 @@ spec:
                   type: string
                 reachableBy:
                   type: string
+                reversePeering:
+                  enum:
+                    - Auto
+                    - Manual
+                  type: string
                 sourceAddress:
                   type: string
                 ttlSecurity:
