@@ -21,6 +21,7 @@ import (
 	"net"
 	"os"
 	"regexp"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -178,18 +179,22 @@ func NewCalicoClient(confdConfig *config.Config) (*client, error) {
 		log.WithError(err).Warning("Failed to create secret watcher, not running under Kubernetes?")
 	}
 
-	// Get endpoint status path prefix, if specified.
-	epstatusPathPrefix := endpointStatusPathPrefix
-	if envVar := os.Getenv(envEndpointStatusPathPrefix); len(envVar) != 0 {
-		epstatusPathPrefix = envVar
-	}
+	if runtime.GOOS == "windows" {
+		log.WithField("os", runtime.GOOS).Info("Local workload BGP peer is currently unsupported on Windows. Ignoring LocalBGPPeerWatcher...")
+	} else {
+		// Get endpoint status path prefix, if specified.
+		epstatusPathPrefix := endpointStatusPathPrefix
+		if envVar := os.Getenv(envEndpointStatusPathPrefix); len(envVar) != 0 {
+			epstatusPathPrefix = envVar
+		}
 
-	// Create and start local BGP peer watcher.
-	if c.localBGPPeerWatcher, err = NewLocalBGPPeerWatcher(c, epstatusPathPrefix, 0); err != nil {
-		log.WithError(err).Error("Failed to create local BGP peer watcher")
-		return nil, err
+		// Create and start local BGP peer watcher.
+		if c.localBGPPeerWatcher, err = NewLocalBGPPeerWatcher(c, epstatusPathPrefix, 0); err != nil {
+			log.WithError(err).Error("Failed to create local BGP peer watcher")
+			return nil, err
+		}
+		c.localBGPPeerWatcher.Start()
 	}
-	c.localBGPPeerWatcher.Start()
 
 	// Create a conditional that we use to wake up all of the watcher threads when there
 	// may be some actionable updates.
