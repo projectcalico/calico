@@ -692,7 +692,10 @@ func (c *client) updatePeersV1() {
 		// in BGPPeer, i.e. PeerIP, ASNumber and PeerSelector...
 		var localNodeNames []string
 		var includeV4, includeV6 bool
-		if v3res.Spec.LocalWorkloadSelector != "" {
+		if !automaticReversePeering(v3res) {
+			continue
+		} else if v3res.Spec.LocalWorkloadSelector != "" {
+			// Reverse peering from local workload should be performed by the Child cluster.
 			continue
 		} else if v3res.Spec.PeerSelector != "" {
 			localNodeNames = c.nodeLabelManager.nodesMatching(v3res.Spec.PeerSelector)
@@ -774,6 +777,14 @@ func (c *client) updatePeersV1() {
 		c.peeringCache[k] = newValue
 		c.keyUpdated(k)
 	}
+}
+
+func automaticReversePeering(v3res *apiv3.BGPPeer) bool {
+	if v3res.Spec.ReversePeering != nil && *v3res.Spec.ReversePeering == apiv3.ReversePeeringManual {
+		return false
+	}
+
+	return true
 }
 
 func getNextHopMode(v3res *apiv3.BGPPeer) (bool, string) {
