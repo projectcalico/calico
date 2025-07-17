@@ -49,6 +49,8 @@ func TestIPPortParsing(t *testing.T) {
 		},
 		{"1.1.1.1:port", nil, true},
 		{"1.1.1:80", nil, true},
+		{"1.1.1.1", nil, true},
+		{":80", nil, true},
 		{"made-up-addr", nil, true},
 		{"[2001:db8::1]:443,", nil, true},
 		{",[2001:db8::1]:443", nil, true},
