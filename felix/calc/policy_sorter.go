@@ -30,12 +30,27 @@ import (
 type PolicySorter struct {
 	tiers       map[string]*TierInfo
 	sortedTiers *btree.BTreeG[tierInfoKey]
+
+	qosPolicies        map[string]*qosPolicyInfo
+	sortedQoSPolicies  *btree.BTreeG[qosPolicyKey]
+	orderedQoSPolicies []qosPolicyKey
+}
+
+type qosPolicyKey struct {
+	Name  string
+	Order *float64
+}
+
+type qosPolicyInfo struct {
+	Order float64
 }
 
 func NewPolicySorter() *PolicySorter {
 	return &PolicySorter{
-		tiers:       make(map[string]*TierInfo),
-		sortedTiers: btree.NewG(2, TierLess),
+		tiers:             make(map[string]*TierInfo),
+		sortedTiers:       btree.NewG(2, TierLess),
+		qosPolicies:       make(map[string]*qosPolicyInfo),
+		sortedQoSPolicies: btree.NewG[qosPolicyKey](2, qosPolicyLess),
 	}
 }
 
@@ -62,6 +77,18 @@ func (poc *PolicySorter) Sorted() []*TierInfo {
 		})
 	}
 	return tiers
+}
+
+func (poc *PolicySorter) QoSPoliciesSorted() []qosPolicyKey {
+	var policies []qosPolicyKey
+	if poc.sortedQoSPolicies.Len() > 0 {
+		policies = make([]qosPolicyKey, 0, len(poc.qosPolicies))
+		poc.sortedQoSPolicies.Ascend(func(p qosPolicyKey) bool {
+			policies = append(policies, p)
+			return true
+		})
+	}
+	return policies
 }
 
 func (poc *PolicySorter) OnUpdate(update api.Update) (dirty bool) {
@@ -138,6 +165,19 @@ func (poc *PolicySorter) OnUpdate(update api.Update) (dirty bool) {
 		} else {
 			dirty = poc.UpdatePolicy(key, nil)
 		}
+	case model.ResourceKey:
+		switch key.Kind {
+		case v3.KindQoSPolicy:
+			var newPolicy *v3.QoSPolicy
+			if update.Value != nil {
+				newPolicy := update.Value.(*v3.QoSPolicy)
+				dirty = poc.UpdateQoSPolicy(key, newPolicy)
+
+			} else {
+				dirty = poc.UpdateQoSPolicy(key, nil)
+			}
+
+		}
 	}
 	return
 }
@@ -148,6 +188,25 @@ func TierLess(i, j tierInfoKey) bool {
 	} else if i.Valid && !j.Valid {
 		return true
 	}
+	if i.Order == nil && j.Order != nil {
+		return false
+	} else if i.Order != nil && j.Order == nil {
+		return true
+	}
+	if i.Order == j.Order || *i.Order == *j.Order {
+		return i.Name < j.Name
+	}
+	return *i.Order < *j.Order
+}
+
+func qosPolicyLess(i, j qosPolicyKey) bool {
+	// TODO(mazdak): need to add valid?
+	/*if !i.Valid && j.Valid {
+		return false
+	} else if i.Valid && !j.Valid {
+		return true
+	}*/
+
 	if i.Order == nil && j.Order != nil {
 		return false
 	} else if i.Order != nil && j.Order == nil {
@@ -186,10 +245,6 @@ func ExtractPolicyMetadata(policy *model.Policy) policyMetadata {
 	if policy.ApplyOnForward {
 		m.Flags |= policyMetaApplyOnForward
 	}
-	// If policy is QoS, over write all previous flags, as those are not supported in QoS policies.
-	if policy.QoSPolicy {
-		m.Flags = policyMetaQoS
-	}
 	if len(policy.Types) == 0 {
 		// Back compatibility: no Types means Ingress and Egress.
 		m.Flags |= policyMetaIngress | policyMetaEgress
@@ -217,7 +272,6 @@ const (
 	policyMetaApplyOnForward
 	policyMetaIngress
 	policyMetaEgress
-	policyMetaQoS
 )
 
 func (m *policyMetadata) Equals(other *policyMetadata) bool {
@@ -225,10 +279,6 @@ func (m *policyMetadata) Equals(other *policyMetadata) bool {
 		return *m == *other
 	}
 	return m == other
-}
-
-func (m *policyMetadata) QoS() bool {
-	return m != nil && m.Flags&policyMetaQoS != 0
 }
 
 func (m *policyMetadata) DoNotTrack() bool {
@@ -288,6 +338,10 @@ func (poc *PolicySorter) UpdatePolicy(key model.PolicyKey, newPolicy *policyMeta
 		}
 	}
 	return
+}
+
+func (poc *PolicySorter) UpdateQoSPolicy(key model.ResourceKey, newPolicy *qosPolicyInfo) {
+
 }
 
 // PolKV is really internal to the calc package.  It is named with an initial capital so that
@@ -371,10 +425,6 @@ func (t TierInfo) String() string {
 			//Append ApplyOnForward flag.
 			if pol.Value.ApplyOnForward() {
 				polType = polType + "f"
-			}
-
-			if pol.Value.QoS() {
-				polType = "q"
 			}
 		}
 		policies[ii] = fmt.Sprintf("%v(%v)", pol.Key.Name, polType)

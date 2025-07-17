@@ -170,6 +170,31 @@ func (pr *PolicyResolver) OnPolicyMatchStopped(policyKey model.PolicyKey, endpoi
 	pr.dirtyEndpoints.Add(endpointKey)
 }
 
+func (pr *PolicyResolver) OnQoSPolicyMatch(policyKey string, endpointKey model.EndpointKey) {
+	log.Debugf("Storing policy match %v -> %v", policyKey, endpointKey)
+	// If it's first time the policy become matched, add it to the tier
+	if !pr.policySorter.HasPolicy(policyKey) {
+		policy := pr.allPolicies[policyKey]
+		pr.policySorter.UpdatePolicy(policyKey, &policy)
+	}
+	pr.policyIDToEndpointIDs.Put(policyKey, endpointKey)
+	pr.endpointIDToPolicyIDs.Put(endpointKey, policyKey)
+	pr.dirtyEndpoints.Add(endpointKey)
+}
+
+func (pr *PolicyResolver) OnPolicyMatchStopped(policyKey model.PolicyKey, endpointKey model.EndpointKey) {
+	log.Debugf("Deleting policy match %v -> %v", policyKey, endpointKey)
+	pr.policyIDToEndpointIDs.Discard(policyKey, endpointKey)
+	pr.endpointIDToPolicyIDs.Discard(endpointKey, policyKey)
+
+	// This policy is not active anymore, we no longer need to track it for sorting.
+	if !pr.policyIDToEndpointIDs.ContainsKey(policyKey) {
+		pr.policySorter.UpdatePolicy(policyKey, nil)
+	}
+
+	pr.dirtyEndpoints.Add(endpointKey)
+}
+
 func (pr *PolicyResolver) Flush() {
 	if !pr.InSync {
 		log.Debugf("Not in sync, skipping flush")

@@ -243,10 +243,6 @@ func (ec *EndpointLookupsCache) CreateLocalEndpointData(key model.EndpointKey, e
 
 		var hasIngress, hasEgress bool
 		for _, pol := range ti.OrderedPolicies {
-			if model.PolicyIsQoS(pol.Key) {
-				continue
-			}
-
 			namespace, tier, name, err := names.DeconstructPolicyName(pol.Key.Name)
 			if err != nil {
 				log.WithError(err).Error("Unable to parse policy name")

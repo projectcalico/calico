@@ -24,7 +24,6 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/errors"
-	"github.com/projectcalico/calico/libcalico-go/lib/names"
 )
 
 var (
@@ -58,10 +57,6 @@ func stagedToEnforcedV1Name(name string) (bool, string) {
 func PolicyIsStaged(name string) bool {
 	staged, _ := stagedToEnforcedV1Name(name)
 	return staged
-}
-
-func PolicyIsQoS(key PolicyKey) bool {
-	return key.Tier == names.DefaultTierName && strings.HasPrefix(key.Name, names.QoSPolicyNamePrefix)
 }
 
 // PolicyNameLessThan checks if name1 is less that name2. Used for policy sorting. Staged policies are considered to be
