@@ -513,7 +513,7 @@ protocol bgp from_workload_to_local_host from bgp_template {
           # 10.123.0.0/26      via 172.18.0.2 on eth0 [Node_172_18_0_3 09:46:10 from 172.18.0.3] * (100/0) [AS65401i]
           # 10.123.1.0/26      via 172.18.0.5 on eth0 [Node_172_18_0_3 09:46:12 from 172.18.0.3] * (100/0) [AS65401i]
           calico_node_w3 = calico_node_pod_name(self.nodes[3])
-          output = run("kubectl exec -t %s -n kube-system -- birdcl show route" % calico_node_w3)
+          output = run("kubectl exec -t %s -n calico-system -- birdcl show route" % calico_node_w3)
           self.assertRegexpMatches(output, "10\.123\.0\.0/26.*via %s on .*Node_172_18_0_.*AS65401" % (self.ips[1],))
           self.assertRegexpMatches(output, "10\.123\.1\.0/26.*via %s on .*Node_172_18_0_.*AS65401" % (self.ips[2],))
           self.assertRegexpMatches(output, "10\.123\.3\.0/26.*via %s on .*Node_172_18_0_.*AS65401" % (self.ips[2],))
