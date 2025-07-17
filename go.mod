@@ -1,6 +1,6 @@
 module github.com/projectcalico/calico
 
-go 1.24.4
+go 1.24.5
 
 require (
 	cloud.google.com/go/storage v1.49.0
@@ -83,6 +83,7 @@ require (
 	github.com/stretchr/testify v1.10.0
 	github.com/tchap/go-patricia/v2 v2.3.2
 	github.com/termie/go-shutil v0.0.0-20140729215957-bcacb06fecae
+	github.com/urfave/cli/v3 v3.3.8
 	github.com/vishvananda/netlink v1.3.1-0.20250303224720-0e7078ed04c8
 	go.etcd.io/etcd/api/v3 v3.5.21
 	go.etcd.io/etcd/client/pkg/v3 v3.5.21
@@ -105,6 +106,7 @@ require (
 	// Replaced with older version below until we can handle the updated permissions it now puts on log files.
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 	gopkg.in/yaml.v2 v2.4.0
+	gopkg.in/yaml.v3 v3.0.1
 	helm.sh/helm/v3 v3.17.3
 	k8s.io/api v0.32.6
 	k8s.io/apiextensions-apiserver v0.32.6
@@ -320,7 +322,6 @@ require (
 	github.com/tklauser/go-sysconf v0.3.12 // indirect
 	github.com/tklauser/numcpus v0.6.1 // indirect
 	github.com/urfave/cli v1.22.16 // indirect
-	github.com/urfave/cli/v3 v3.3.8
 	github.com/vbatts/tar-split v0.11.6 // indirect
 	github.com/virtuald/go-ordered-json v0.0.0-20170621173500-b18e6e673d74 // indirect
 	github.com/vishvananda/netns v0.0.4 // indirect
@@ -353,7 +354,6 @@ require (
 	gopkg.in/evanphx/json-patch.v4 v4.12.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7 // indirect
-	gopkg.in/yaml.v3 v3.0.1
 	k8s.io/cloud-provider v0.32.6 // indirect
 	k8s.io/component-helpers v0.32.6 // indirect
 	k8s.io/controller-manager v0.32.6 // indirect
