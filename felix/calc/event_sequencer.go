@@ -433,6 +433,9 @@ func ModelWorkloadEndpointToProto(ep *model.WorkloadEndpoint, peerData *Endpoint
 	if isVMWorkload(ep.Labels) || (ep.QoSControls != nil && ep.QoSControls.IngressBandwidth > 0) {
 		skipRedir.Ingress = true
 	}
+	if ep.QoSControls != nil && ep.QoSControls.EgressBandwidth > 0 {
+		skipRedir.Egress = true
+	}
 
 	return &proto.WorkloadEndpoint{
 		State:                      ep.State,
