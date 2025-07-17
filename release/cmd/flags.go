@@ -15,10 +15,11 @@
 package main
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/sirupsen/logrus"
-	cli "github.com/urfave/cli/v2"
+	cli "github.com/urfave/cli/v3"
 
 	"github.com/projectcalico/calico/release/internal/hashreleaseserver"
 	"github.com/projectcalico/calico/release/internal/utils"
@@ -32,7 +33,7 @@ var debugFlag = &cli.BoolFlag{
 	Name:        "debug",
 	Aliases:     []string{"d"},
 	Usage:       "Enable verbose log output",
-	EnvVars:     []string{"DEBUG"},
+	Sources:     cli.EnvVars("DEBUG"),
 	Value:       false,
 	Destination: &debug,
 }
@@ -52,19 +53,19 @@ var (
 	orgFlag = &cli.StringFlag{
 		Name:    "org",
 		Usage:   "The GitHub organization to use for the release",
-		EnvVars: []string{"ORGANIZATION"},
+		Sources: cli.EnvVars("ORGANIZATION"),
 		Value:   utils.ProjectCalicoOrg,
 	}
 	repoFlag = &cli.StringFlag{
 		Name:    "repo",
 		Usage:   "The GitHub repository to use for the release",
-		EnvVars: []string{"GIT_REPO"},
+		Sources: cli.EnvVars("GIT_REPO"),
 		Value:   utils.CalicoRepoName,
 	}
 	repoRemoteFlag = &cli.StringFlag{
 		Name:    "remote",
 		Usage:   "The remote for the git repository",
-		EnvVars: []string{"GIT_REMOTE"},
+		Sources: cli.EnvVars("GIT_REMOTE"),
 		Value:   utils.DefaultRemote,
 	}
 
@@ -72,13 +73,13 @@ var (
 	releaseBranchPrefixFlag = &cli.StringFlag{
 		Name:    "release-branch-prefix",
 		Usage:   "The stardard prefix used to denote release branches",
-		EnvVars: []string{"RELEASE_BRANCH_PREFIX"},
+		Sources: cli.EnvVars("RELEASE_BRANCH_PREFIX"),
 		Value:   "release",
 	}
 	devTagSuffixFlag = &cli.StringFlag{
 		Name:    "dev-tag-suffix",
 		Usage:   "The suffix used to denote development tags",
-		EnvVars: []string{"DEV_TAG_SUFFIX"},
+		Sources: cli.EnvVars("DEV_TAG_SUFFIX"),
 		Value:   "0.dev",
 	}
 	publishBranchFlag = &cli.BoolFlag{
@@ -95,9 +96,9 @@ var (
 		Name:    "base-branch",
 		Aliases: []string{"base", "main-branch"},
 		Usage:   "The base branch to cut the release branch from",
-		EnvVars: []string{"RELEASE_BRANCH_BASE"},
+		Sources: cli.EnvVars("RELEASE_BRANCH_BASE"),
 		Value:   utils.DefaultBranch,
-		Action: func(c *cli.Context, str string) error {
+		Action: func(_ context.Context, c *cli.Command, str string) error {
 			if str != utils.DefaultBranch {
 				logrus.Warnf("The new branch will be created from %s which is not the default branch %s", str, utils.DefaultBranch)
 			}
@@ -111,7 +112,7 @@ var (
 	skipValidationFlag = &cli.BoolFlag{
 		Name:    "skip-validation",
 		Usage:   "Skip all validation while performing the action",
-		EnvVars: []string{"SKIP_VALIDATION"},
+		Sources: cli.EnvVars("SKIP_VALIDATION"),
 		Value:   false,
 	}
 )
@@ -121,8 +122,7 @@ var (
 	registryFlag = &cli.StringSliceFlag{
 		Name:    "registry",
 		Usage:   "Override default registries for the release. Repeat for multiple registries.",
-		EnvVars: []string{"REGISTRIES"}, // avoid DEV_REGISTRIES as it is already used by the build system (lib.Makefile).
-		Value:   cli.NewStringSlice(),
+		Sources: cli.EnvVars("REGISTRIES"), // avoid DEV_REGISTRIES as it is already used by the build system (lib.Makefile).
 	}
 
 	archOptions = []string{"amd64", "arm64", "ppc64le", "s390x"}
@@ -130,9 +130,9 @@ var (
 		Name:    "architecture",
 		Aliases: []string{"arch"},
 		Usage:   "The architecture to use for the release. Repeat for multiple architectures.",
-		EnvVars: []string{"ARCHS"}, // avoid ARCHES as it is already used by the build system (lib.Makefile).
-		Value:   cli.NewStringSlice(archOptions...),
-		Action: func(c *cli.Context, values []string) error {
+		Sources: cli.EnvVars("ARCHS"), // avoid ARCHES as it is already used by the build system (lib.Makefile).
+		Value:   archOptions,
+		Action: func(_ context.Context, c *cli.Command, values []string) error {
 			for _, arch := range values {
 				if !utils.Contains(archOptions, arch) {
 					return fmt.Errorf("invalid architecture %s", arch)
@@ -145,26 +145,26 @@ var (
 	buildImagesFlag = &cli.BoolFlag{
 		Name:    "build-images",
 		Usage:   "Build container images from the local code",
-		EnvVars: []string{"BUILD_CONTAINER_IMAGES"}, // avoid BUILD_IMAGES as it is already used by the build system (lib.Makefile).
+		Sources: cli.EnvVars("BUILD_CONTAINER_IMAGES"), // avoid BUILD_IMAGES as it is already used by the build system (lib.Makefile).
 		Value:   true,
 	}
 	buildHashreleaseImageFlag = &cli.BoolFlag{
 		Name:    buildImagesFlag.Name,
 		Usage:   buildImagesFlag.Usage,
-		EnvVars: buildImagesFlag.EnvVars,
+		Sources: buildImagesFlag.Sources,
 		Value:   false,
 	}
 
 	publishImagesFlag = &cli.BoolFlag{
 		Name:    "publish-images",
 		Usage:   "Publish images to the registry",
-		EnvVars: []string{"PUBLISH_IMAGES"},
+		Sources: cli.EnvVars("PUBLISH_IMAGES"),
 		Value:   true,
 	}
 	publishHashreleaseImageFlag = &cli.BoolFlag{
 		Name:    publishImagesFlag.Name,
 		Usage:   publishImagesFlag.Usage,
-		EnvVars: publishImagesFlag.EnvVars,
+		Sources: publishImagesFlag.Sources,
 		Value:   false,
 	}
 )
@@ -182,19 +182,19 @@ var (
 	operatorOrgFlag = &cli.StringFlag{
 		Name:    "operator-org",
 		Usage:   "The GitHub organization to use for Tigera operator release",
-		EnvVars: []string{"OPERATOR_ORGANIZATION"},
+		Sources: cli.EnvVars("OPERATOR_ORGANIZATION"),
 		Value:   operator.DefaultOrg,
 	}
 	operatorRepoFlag = &cli.StringFlag{
 		Name:    "operator-repo",
 		Usage:   "The GitHub repository to use for Tigera operator release",
-		EnvVars: []string{"OPERATOR_GIT_REPO"},
+		Sources: cli.EnvVars("OPERATOR_GIT_REPO"),
 		Value:   operator.DefaultRepoName,
 	}
 	operatorRepoRemoteFlag = &cli.StringFlag{
 		Name:    "operator-git-remote",
 		Usage:   "The remote for Tigera operator git repository",
-		EnvVars: []string{"OPERATOR_GIT_REMOTE"},
+		Sources: cli.EnvVars("OPERATOR_GIT_REMOTE"),
 		Value:   operator.DefaultRemote,
 	}
 
@@ -202,27 +202,27 @@ var (
 	operatorBranchFlag = &cli.StringFlag{
 		Name:    "operator-branch",
 		Usage:   "The branch to use for Tigera operator release",
-		EnvVars: []string{"OPERATOR_BRANCH"},
+		Sources: cli.EnvVars("OPERATOR_BRANCH"),
 		Value:   operator.DefaultBranchName,
 	}
 	operatorReleaseBranchPrefixFlag = &cli.StringFlag{
 		Name:    "operator-release-branch-prefix",
 		Usage:   "The stardard prefix used to denote Tigera operator release branches",
-		EnvVars: []string{"OPERATOR_RELEASE_BRANCH_PREFIX"},
+		Sources: cli.EnvVars("OPERATOR_RELEASE_BRANCH_PREFIX"),
 		Value:   operator.DefaultReleaseBranchPrefix,
 	}
 	operatorDevTagSuffixFlag = &cli.StringFlag{
 		Name:    "operator-dev-tag-suffix",
 		Usage:   "The suffix used to denote development tags for Tigera operator",
-		EnvVars: []string{"OPERATOR_DEV_TAG_SUFFIX"},
+		Sources: cli.EnvVars("OPERATOR_DEV_TAG_SUFFIX"),
 		Value:   operator.DefaultDevTagSuffix,
 	}
 	operatorBaseBranchFlag = &cli.StringFlag{
 		Name:    operatorBranchFlag.Name,
 		Usage:   "The base branch to cut the Tigera operator release branch from",
-		EnvVars: []string{"OPERATOR_BRANCH_BASE"},
+		Sources: cli.EnvVars("OPERATOR_BRANCH_BASE"),
 		Value:   operator.DefaultBranchName,
-		Action: func(c *cli.Context, str string) error {
+		Action: func(_ context.Context, c *cli.Command, str string) error {
 			if str != operator.DefaultBranchName {
 				logrus.Warnf("The new branch will be created from %s which is not the default branch %s", str, operator.DefaultBranchName)
 			}
@@ -234,20 +234,20 @@ var (
 	operatorRegistryFlag = &cli.StringFlag{
 		Name:    "operator-registry",
 		Usage:   "The registry to use for Tigera operator release",
-		EnvVars: []string{"OPERATOR_REGISTRY"},
+		Sources: cli.EnvVars("OPERATOR_REGISTRY"),
 		Value:   operator.DefaultRegistry,
 	}
 	operatorImageFlag = &cli.StringFlag{
 		Name:    "operator-image",
 		Usage:   "The image name to use for Tigera operator release",
-		EnvVars: []string{"OPERATOR_IMAGE"},
+		Sources: cli.EnvVars("OPERATOR_IMAGE"),
 		Value:   operator.DefaultImage,
 	}
 
 	skipOperatorFlag = &cli.BoolFlag{
 		Name:    "skip-operator",
 		Usage:   "Skip building and/or publishing the operator",
-		EnvVars: []string{"SKIP_OPERATOR"},
+		Sources: cli.EnvVars("SKIP_OPERATOR"),
 		Value:   false,
 	}
 )
@@ -260,10 +260,10 @@ var (
 	ciFlag      = &cli.BoolFlag{
 		Name:    "ci",
 		Usage:   "Run in a continuous integration (CI) environment",
-		EnvVars: []string{"CI"},
+		Sources: cli.EnvVars("CI"),
 		Value:   false,
-		Action: func(ctx *cli.Context, b bool) error {
-			if b && (ctx.String(ciBaseURLFlag.Name) == "" || ctx.String(ciJobIDFlag.Name) == "") {
+		Action: func(_ context.Context, c *cli.Command, b bool) error {
+			if b && (c.String(ciBaseURLFlag.Name) == "" || c.String(ciJobIDFlag.Name) == "") {
 				return fmt.Errorf("CI requires %s and %s flags to be set", ciBaseURLFlag.Name, ciJobIDFlag.Name)
 			}
 			return nil
@@ -272,22 +272,22 @@ var (
 	ciBaseURLFlag = &cli.StringFlag{
 		Name:    "ci-url",
 		Usage:   fmt.Sprintf("The URL for accesing %s CI", semaphoreCI),
-		EnvVars: []string{"SEMAPHORE_ORGANIZATION_URL"},
+		Sources: cli.EnvVars("SEMAPHORE_ORGANIZATION_URL"),
 	}
 	ciJobIDFlag = &cli.StringFlag{
 		Name:    "ci-job-id",
 		Usage:   fmt.Sprintf("The job ID for the %s CI job", semaphoreCI),
-		EnvVars: []string{"SEMAPHORE_JOB_ID"},
+		Sources: cli.EnvVars("SEMAPHORE_JOB_ID"),
 	}
 	ciPipelineIDFlag = &cli.StringFlag{
 		Name:    "ci-pipeline-id",
 		Usage:   fmt.Sprintf("The pipeline ID for the %s CI pipeline", semaphoreCI),
-		EnvVars: []string{"SEMAPHORE_PIPELINE_ID"},
+		Sources: cli.EnvVars("SEMAPHORE_PIPELINE_ID"),
 	}
 	ciTokenFlag = &cli.StringFlag{
 		Name:    "ci-token",
 		Usage:   fmt.Sprintf("The token for interacting with %s API", semaphoreCI),
-		EnvVars: []string{"SEMAPHORE_API_TOKEN"},
+		Sources: cli.EnvVars("SEMAPHORE_API_TOKEN"),
 	}
 
 	// Slack flags for posting messages to Slack
@@ -295,25 +295,25 @@ var (
 	slackTokenFlag = &cli.StringFlag{
 		Name:    "slack-token",
 		Usage:   "The Slack token to use for posting messages",
-		EnvVars: []string{"SLACK_API_TOKEN"},
+		Sources: cli.EnvVars("SLACK_API_TOKEN"),
 	}
 	slackChannelFlag = &cli.StringFlag{
 		Name:    "slack-channel",
 		Usage:   "The Slack channel to post messages",
-		EnvVars: []string{"SLACK_CHANNEL"},
+		Sources: cli.EnvVars("SLACK_CHANNEL"),
 	}
 	notifyFlag = &cli.BoolFlag{
 		Name:    "notify",
 		Usage:   "Sending notifications to Slack",
-		EnvVars: []string{"NOTIFY"},
+		Sources: cli.EnvVars("NOTIFY"),
 		Value:   true,
-		Action: func(ctx *cli.Context, b bool) error {
+		Action: func(_ context.Context, c *cli.Command, b bool) error {
 			// Check slack configuration
-			if b && (ctx.String(slackTokenFlag.Name) == "" || ctx.String(slackChannelFlag.Name) == "") {
-				if ctx.Bool(ciFlag.Name) {
+			if b && (c.String(slackTokenFlag.Name) == "" || c.String(slackChannelFlag.Name) == "") {
+				if c.Bool(ciFlag.Name) {
 					return fmt.Errorf("Slack token and channel are required in CI environment")
 				}
-				logrus.Warnf("This command may require sending Slack notifications, ensuure %s and %s flags are set", slackTokenFlag.Name, slackChannelFlag.Name)
+				logrus.Warnf("This command may require sending Slack notifications, ensure %s and %s flags are set", slackTokenFlag.Name, slackChannelFlag.Name)
 			}
 			return nil
 		},
@@ -326,26 +326,26 @@ var (
 	imageScannerAPIFlag = &cli.StringFlag{
 		Name:    "image-scanner-api",
 		Usage:   "The URL for the Image Scan Service API",
-		EnvVars: []string{"IMAGE_SCANNER_API"},
+		Sources: cli.EnvVars("IMAGE_SCANNER_API"),
 	}
 	imageScannerTokenFlag = &cli.StringFlag{
 		Name:    "image-scanner-token",
 		Usage:   "The token for the Image Scan Service API",
-		EnvVars: []string{"IMAGE_SCANNING_TOKEN"},
+		Sources: cli.EnvVars("IMAGE_SCANNING_TOKEN"),
 	}
 	imageScannerSelectFlag = &cli.StringFlag{
 		Name:    "image-scanner-select",
 		Usage:   "The name of the scanner to use",
-		EnvVars: []string{"IMAGE_SCANNER_SELECT"},
+		Sources: cli.EnvVars("IMAGE_SCANNER_SELECT"),
 		Value:   "all",
 	}
 	skipImageScanFlag = &cli.BoolFlag{
 		Name:    "skip-image-scan",
 		Usage:   "Skip sending the image to the image scan service",
-		EnvVars: []string{"SKIP_IMAGE_SCAN"},
+		Sources: cli.EnvVars("SKIP_IMAGE_SCAN"),
 		Value:   false,
-		Action: func(ctx *cli.Context, b bool) error {
-			if !b && (ctx.String(imageScannerAPIFlag.Name) == "" || ctx.String(imageScannerTokenFlag.Name) == "") {
+		Action: func(_ context.Context, c *cli.Command, b bool) error {
+			if !b && (c.String(imageScannerAPIFlag.Name) == "" || c.String(imageScannerTokenFlag.Name) == "") {
 				return fmt.Errorf("Image scanner configuration is required, ensure %s and %s flags are set", imageScannerAPIFlag.Name, imageScannerTokenFlag.Name)
 			}
 			return nil
@@ -356,10 +356,10 @@ var (
 	githubTokenFlag = &cli.StringFlag{
 		Name:    "github-token",
 		Usage:   "The GitHub token to use when interacting with the GitHub API",
-		EnvVars: []string{"GITHUB_TOKEN"},
-		Action: func(ctx *cli.Context, s string) error {
+		Sources: cli.EnvVars("GITHUB_TOKEN"),
+		Action: func(_ context.Context, c *cli.Command, s string) error {
 			if s == "" {
-				if ctx.Bool(ciFlag.Name) {
+				if c.Bool(ciFlag.Name) {
 					return fmt.Errorf("GitHub token is required")
 				}
 				logrus.Warn("This command requires a GitHub token")
@@ -381,7 +381,7 @@ var (
 		Name:  "publish-github-release",
 		Usage: "Publish the release to GitHub",
 		Value: true,
-		Action: func(c *cli.Context, b bool) error {
+		Action: func(_ context.Context, c *cli.Command, b bool) error {
 			if b && c.String(githubTokenFlag.Name) == "" {
 				return fmt.Errorf("GitHub token is required to publish release")
 			}
@@ -395,9 +395,9 @@ var (
 	skipBranchCheckFlag = &cli.BoolFlag{
 		Name:    "skip-branch-check",
 		Usage:   "Skip checking if current branch is a valid branch for release",
-		EnvVars: []string{"SKIP_BRANCH_CHECK"},
+		Sources: cli.EnvVars("SKIP_BRANCH_CHECK"),
 		Value:   false,
-		Action: func(c *cli.Context, b bool) error {
+		Action: func(_ context.Context, c *cli.Command, b bool) error {
 			if c.Bool(skipValidationFlag.Name) && !b {
 				return fmt.Errorf("must skip branch check if %s is set", skipValidationFlag)
 			}
@@ -414,35 +414,35 @@ var (
 	sshHostFlag = &cli.StringFlag{
 		Name:    "server-ssh-host",
 		Usage:   "The SSH host for the connection to the hashrelease server",
-		EnvVars: []string{"DOCS_HOST"},
+		Sources: cli.EnvVars("DOCS_HOST"),
 	}
 	sshUserFlag = &cli.StringFlag{
 		Name:    "server-ssh-user",
 		Usage:   "The SSH user for the connection to the hashrelease server",
-		EnvVars: []string{"DOCS_USER"},
+		Sources: cli.EnvVars("DOCS_USER"),
 	}
 	sshKeyFlag = &cli.StringFlag{
 		Name:    "server-ssh-key",
 		Usage:   "The SSH key for the connection to the hashrelease server",
-		EnvVars: []string{"DOCS_KEY"},
+		Sources: cli.EnvVars("DOCS_KEY"),
 	}
 	sshPortFlag = &cli.StringFlag{
 		Name:    "server-ssh-port",
 		Usage:   "The SSH port for the connection to the hashrelease server",
-		EnvVars: []string{"DOCS_PORT"},
+		Sources: cli.EnvVars("DOCS_PORT"),
 	}
 	sshKnownHostsFlag = &cli.StringFlag{
-		Name: "sever-ssh-known-hosts",
+		Name: "server-ssh-known-hosts",
 		Usage: "The known_hosts file is the absolute path to the known_hosts file " +
 			"to use for the user host key database instead of ~/.ssh/known_hosts",
-		EnvVars: []string{"DOCS_KNOWN_HOSTS"},
+		Sources: cli.EnvVars("DOCS_KNOWN_HOSTS"),
 	}
 	maxHashreleasesFlag = &cli.IntFlag{
-		Name:    "maxiumum",
+		Name:    "maximum",
 		Aliases: []string{"max"},
 		Usage:   "The maximum number of hashreleases to keep on the hashrelease server",
 		Value:   hashreleaseserver.DefaultMax,
-		EnvVars: []string{"MAX_HASHRELEASES"},
+		Sources: cli.EnvVars("MAX_HASHRELEASES"),
 	}
 	publishHashreleaseFlag = &cli.BoolFlag{
 		Name:  "publish-to-hashrelease-server",
@@ -452,17 +452,17 @@ var (
 	latestFlag = &cli.BoolFlag{
 		Name:    "latest",
 		Usage:   "Publish the hashrelease as the latest hashrelease",
-		EnvVars: []string{"LATEST"},
+		Sources: cli.EnvVars("LATEST"),
 		Value:   true,
 	}
 	hashreleaseServerCredentialsFlag = &cli.StringFlag{
 		Name:    "hashrelease-server-credentials",
 		Usage:   "The absolute path to the credentials file for the hashrelease server",
-		EnvVars: []string{"HASHRELEASE_SERVER_CREDENTIALS"},
+		Sources: cli.EnvVars("HASHRELEASE_SERVER_CREDENTIALS"),
 	}
 	hashreleaseServerBucketFlag = &cli.StringFlag{
 		Name:    "hashrelease-server-bucket",
 		Usage:   "The bucket name for the hashrelease server",
-		EnvVars: []string{"HASHRELEASE_SERVER_BUCKET"},
+		Sources: cli.EnvVars("HASHRELEASE_SERVER_BUCKET"),
 	}
 )
