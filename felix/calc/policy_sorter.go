@@ -168,10 +168,15 @@ func (poc *PolicySorter) OnUpdate(update api.Update) (dirty bool) {
 	case model.ResourceKey:
 		switch key.Kind {
 		case v3.KindQoSPolicy:
-			var newPolicy *v3.QoSPolicy
 			if update.Value != nil {
 				newPolicy := update.Value.(*v3.QoSPolicy)
-				dirty = poc.UpdateQoSPolicy(key, newPolicy)
+				var polInfo qosPolicyInfo
+				if newPolicy != nil && newPolicy.Spec.Order != nil {
+					polInfo.Order = *newPolicy.Spec.Order
+				} else {
+					polInfo.Order = polMetaDefaultOrder
+				}
+				dirty = poc.UpdateQoSPolicy(key, &polInfo)
 
 			} else {
 				dirty = poc.UpdateQoSPolicy(key, nil)
@@ -216,6 +221,11 @@ func qosPolicyLess(i, j qosPolicyKey) bool {
 		return i.Name < j.Name
 	}
 	return *i.Order < *j.Order
+}
+
+func (poc *PolicySorter) HasQoSPolicy(key string) bool {
+	_, exists := poc.qosPolicies[key]
+	return exists
 }
 
 func (poc *PolicySorter) HasPolicy(key model.PolicyKey) bool {
@@ -340,8 +350,36 @@ func (poc *PolicySorter) UpdatePolicy(key model.PolicyKey, newPolicy *policyMeta
 	return
 }
 
-func (poc *PolicySorter) UpdateQoSPolicy(key model.ResourceKey, newPolicy *qosPolicyInfo) {
+func (poc *PolicySorter) UpdateQoSPolicy(key model.ResourceKey, newPolicy *qosPolicyInfo) bool {
+	oldPolicy := poc.qosPolicies[key.Name]
+	if equalQoSPolicy(newPolicy, oldPolicy) {
+		return false
+	}
+	if newPolicy != nil {
+		if oldPolicy != nil {
+			// Need to do delete prior to ReplaceOrInsert because we don't insert strictly based on key but rather a
+			// combination of key + value so if for instance we add PolKV{k1, v1} then add PolKV{k1, v2} we'll simply have
+			// both KVs in the tree instead of only {k1, v2} like we want. By deleting first we guarantee that only the
+			// newest value remains in the tree.
+			poc.sortedQoSPolicies.Delete(qosPolicyKey{Name: key.Name, Order: &oldPolicy.Order})
+		}
+		poc.sortedQoSPolicies.ReplaceOrInsert(qosPolicyKey{Name: key.Name, Order: &oldPolicy.Order})
+		poc.qosPolicies[key.Name] = newPolicy
+	} else {
+		if oldPolicy != nil {
+			poc.sortedQoSPolicies.Delete(qosPolicyKey{Name: key.Name, Order: &oldPolicy.Order})
+			delete(poc.qosPolicies, key.Name)
+			return true
+		}
+	}
+	return false
+}
 
+func equalQoSPolicy(n, o *qosPolicyInfo) bool {
+	if n != nil && o != nil {
+		return *n == *o
+	}
+	return n == o
 }
 
 // PolKV is really internal to the calc package.  It is named with an initial capital so that

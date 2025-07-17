@@ -46,8 +46,8 @@ type FelixSender interface {
 type PolicyMatchListener interface {
 	OnPolicyMatch(policyKey model.PolicyKey, endpointKey model.EndpointKey)
 	OnPolicyMatchStopped(policyKey model.PolicyKey, endpointKey model.EndpointKey)
-	OnQoSPolicyMatch(string, model.EndpointKey)
-	OnQoSPolicyMatchStopped(string, model.EndpointKey)
+	OnQoSPolicyMatch(name string, endpointKey model.EndpointKey)
+	OnQoSPolicyMatchStopped(name string, endpointKey model.EndpointKey)
 }
 
 // ActiveRulesCalculator calculates the set of policies and profiles (i.e. the rules) that
@@ -109,15 +109,15 @@ func NewActiveRulesCalculator() *ActiveRulesCalculator {
 		allPolicies:     packedmap.MakeCompressedJSON[model.PolicyKey, *model.Policy](),
 		allProfileRules: packedmap.MakeDedupedCompressedJSON[string, *model.ProfileRules](),
 		allTiers:        make(map[string]*model.Tier),
-		allQoSPolicies:  make(map[string]*v3.QoSPolicy),
+		//allQoSPolicies:  make(map[string]*v3.QoSPolicy),
 
 		allALPPolicies: set.New[model.PolicyKey](),
 
 		// Policy/profile ID to matching endpoint sets.
-		policyIDToEndpointKeys:    multidict.New[any, any](),
-		profileIDToEndpointKeys:   multidict.New[string, any](),
-		qosPolicyIDToEndpointKeys: multidict.New[string, any](),
-		missingProfiles:           set.New[string](),
+		policyIDToEndpointKeys:  multidict.New[any, any](),
+		profileIDToEndpointKeys: multidict.New[string, any](),
+		//qosPolicyIDToEndpointKeys: multidict.New[string, any](),
+		missingProfiles: set.New[string](),
 
 		// Cache of profile IDs by local endpoint.
 		endpointKeyToProfileIDs: NewEndpointKeyToProfileIDMap(),
