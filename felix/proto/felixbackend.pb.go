@@ -71,52 +71,6 @@ func (IPVersion) EnumDescriptor() ([]byte, []int) {
 	return file_felixbackend_proto_rawDescGZIP(), []int{0}
 }
 
-type WorkloadType int32
-
-const (
-	WorkloadType_REGULAR WorkloadType = 0
-	WorkloadType_VM      WorkloadType = 1
-)
-
-// Enum value maps for WorkloadType.
-var (
-	WorkloadType_name = map[int32]string{
-		0: "REGULAR",
-		1: "VM",
-	}
-	WorkloadType_value = map[string]int32{
-		"REGULAR": 0,
-		"VM":      1,
-	}
-)
-
-func (x WorkloadType) Enum() *WorkloadType {
-	p := new(WorkloadType)
-	*p = x
-	return p
-}
-
-func (x WorkloadType) String() string {
-	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
-}
-
-func (WorkloadType) Descriptor() protoreflect.EnumDescriptor {
-	return file_felixbackend_proto_enumTypes[1].Descriptor()
-}
-
-func (WorkloadType) Type() protoreflect.EnumType {
-	return &file_felixbackend_proto_enumTypes[1]
-}
-
-func (x WorkloadType) Number() protoreflect.EnumNumber {
-	return protoreflect.EnumNumber(x)
-}
-
-// Deprecated: Use WorkloadType.Descriptor instead.
-func (WorkloadType) EnumDescriptor() ([]byte, []int) {
-	return file_felixbackend_proto_rawDescGZIP(), []int{1}
-}
-
 // RouteTYpe defines a type of route. Each is a power of 2, so that theye can be used as
 // unique bits within a bitmap.
 type RouteType int32
@@ -166,11 +120,11 @@ func (x RouteType) String() string {
 }
 
 func (RouteType) Descriptor() protoreflect.EnumDescriptor {
-	return file_felixbackend_proto_enumTypes[2].Descriptor()
+	return file_felixbackend_proto_enumTypes[1].Descriptor()
 }
 
 func (RouteType) Type() protoreflect.EnumType {
-	return &file_felixbackend_proto_enumTypes[2]
+	return &file_felixbackend_proto_enumTypes[1]
 }
 
 func (x RouteType) Number() protoreflect.EnumNumber {
@@ -179,7 +133,7 @@ func (x RouteType) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use RouteType.Descriptor instead.
 func (RouteType) EnumDescriptor() ([]byte, []int) {
-	return file_felixbackend_proto_rawDescGZIP(), []int{2}
+	return file_felixbackend_proto_rawDescGZIP(), []int{1}
 }
 
 type IPPoolType int32
@@ -218,11 +172,11 @@ func (x IPPoolType) String() string {
 }
 
 func (IPPoolType) Descriptor() protoreflect.EnumDescriptor {
-	return file_felixbackend_proto_enumTypes[3].Descriptor()
+	return file_felixbackend_proto_enumTypes[2].Descriptor()
 }
 
 func (IPPoolType) Type() protoreflect.EnumType {
-	return &file_felixbackend_proto_enumTypes[3]
+	return &file_felixbackend_proto_enumTypes[2]
 }
 
 func (x IPPoolType) Number() protoreflect.EnumNumber {
@@ -231,7 +185,7 @@ func (x IPPoolType) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use IPPoolType.Descriptor instead.
 func (IPPoolType) EnumDescriptor() ([]byte, []int) {
-	return file_felixbackend_proto_rawDescGZIP(), []int{3}
+	return file_felixbackend_proto_rawDescGZIP(), []int{2}
 }
 
 // Action represents an action taken by a policy or rule.
@@ -265,11 +219,11 @@ func (x Action) String() string {
 }
 
 func (Action) Descriptor() protoreflect.EnumDescriptor {
-	return file_felixbackend_proto_enumTypes[4].Descriptor()
+	return file_felixbackend_proto_enumTypes[3].Descriptor()
 }
 
 func (Action) Type() protoreflect.EnumType {
-	return &file_felixbackend_proto_enumTypes[4]
+	return &file_felixbackend_proto_enumTypes[3]
 }
 
 func (x Action) Number() protoreflect.EnumNumber {
@@ -278,7 +232,7 @@ func (x Action) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use Action.Descriptor instead.
 func (Action) EnumDescriptor() ([]byte, []int) {
-	return file_felixbackend_proto_rawDescGZIP(), []int{4}
+	return file_felixbackend_proto_rawDescGZIP(), []int{3}
 }
 
 type IPSetUpdate_IPSetType int32
@@ -314,11 +268,11 @@ func (x IPSetUpdate_IPSetType) String() string {
 }
 
 func (IPSetUpdate_IPSetType) Descriptor() protoreflect.EnumDescriptor {
-	return file_felixbackend_proto_enumTypes[5].Descriptor()
+	return file_felixbackend_proto_enumTypes[4].Descriptor()
 }
 
 func (IPSetUpdate_IPSetType) Type() protoreflect.EnumType {
-	return &file_felixbackend_proto_enumTypes[5]
+	return &file_felixbackend_proto_enumTypes[4]
 }
 
 func (x IPSetUpdate_IPSetType) Number() protoreflect.EnumNumber {
@@ -362,11 +316,11 @@ func (x Statistic_Direction) String() string {
 }
 
 func (Statistic_Direction) Descriptor() protoreflect.EnumDescriptor {
-	return file_felixbackend_proto_enumTypes[6].Descriptor()
+	return file_felixbackend_proto_enumTypes[5].Descriptor()
 }
 
 func (Statistic_Direction) Type() protoreflect.EnumType {
-	return &file_felixbackend_proto_enumTypes[6]
+	return &file_felixbackend_proto_enumTypes[5]
 }
 
 func (x Statistic_Direction) Number() protoreflect.EnumNumber {
@@ -375,7 +329,7 @@ func (x Statistic_Direction) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use Statistic_Direction.Descriptor instead.
 func (Statistic_Direction) EnumDescriptor() ([]byte, []int) {
-	return file_felixbackend_proto_rawDescGZIP(), []int{67, 0}
+	return file_felixbackend_proto_rawDescGZIP(), []int{68, 0}
 }
 
 // Whether the data is relative. ABSOLUTE data gives the total for the flow
@@ -411,11 +365,11 @@ func (x Statistic_Relativity) String() string {
 }
 
 func (Statistic_Relativity) Descriptor() protoreflect.EnumDescriptor {
-	return file_felixbackend_proto_enumTypes[7].Descriptor()
+	return file_felixbackend_proto_enumTypes[6].Descriptor()
 }
 
 func (Statistic_Relativity) Type() protoreflect.EnumType {
-	return &file_felixbackend_proto_enumTypes[7]
+	return &file_felixbackend_proto_enumTypes[6]
 }
 
 func (x Statistic_Relativity) Number() protoreflect.EnumNumber {
@@ -424,7 +378,7 @@ func (x Statistic_Relativity) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use Statistic_Relativity.Descriptor instead.
 func (Statistic_Relativity) EnumDescriptor() ([]byte, []int) {
-	return file_felixbackend_proto_rawDescGZIP(), []int{67, 1}
+	return file_felixbackend_proto_rawDescGZIP(), []int{68, 1}
 }
 
 // Kind indicates what this statistic is about.
@@ -458,11 +412,11 @@ func (x Statistic_Kind) String() string {
 }
 
 func (Statistic_Kind) Descriptor() protoreflect.EnumDescriptor {
-	return file_felixbackend_proto_enumTypes[8].Descriptor()
+	return file_felixbackend_proto_enumTypes[7].Descriptor()
 }
 
 func (Statistic_Kind) Type() protoreflect.EnumType {
-	return &file_felixbackend_proto_enumTypes[8]
+	return &file_felixbackend_proto_enumTypes[7]
 }
 
 func (x Statistic_Kind) Number() protoreflect.EnumNumber {
@@ -471,7 +425,7 @@ func (x Statistic_Kind) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use Statistic_Kind.Descriptor instead.
 func (Statistic_Kind) EnumDescriptor() ([]byte, []int) {
-	return file_felixbackend_proto_rawDescGZIP(), []int{67, 2}
+	return file_felixbackend_proto_rawDescGZIP(), []int{68, 2}
 }
 
 // Whether the rule appears in INBOUND or OUTBOUND rules for the policy /
@@ -506,11 +460,11 @@ func (x RuleTrace_Direction) String() string {
 }
 
 func (RuleTrace_Direction) Descriptor() protoreflect.EnumDescriptor {
-	return file_felixbackend_proto_enumTypes[9].Descriptor()
+	return file_felixbackend_proto_enumTypes[8].Descriptor()
 }
 
 func (RuleTrace_Direction) Type() protoreflect.EnumType {
-	return &file_felixbackend_proto_enumTypes[9]
+	return &file_felixbackend_proto_enumTypes[8]
 }
 
 func (x RuleTrace_Direction) Number() protoreflect.EnumNumber {
@@ -519,7 +473,7 @@ func (x RuleTrace_Direction) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use RuleTrace_Direction.Descriptor instead.
 func (RuleTrace_Direction) EnumDescriptor() ([]byte, []int) {
-	return file_felixbackend_proto_rawDescGZIP(), []int{68, 0}
+	return file_felixbackend_proto_rawDescGZIP(), []int{69, 0}
 }
 
 type SyncRequest struct {
@@ -3050,6 +3004,58 @@ func (x *WorkloadEndpointUpdate) GetEndpoint() *WorkloadEndpoint {
 	return nil
 }
 
+type WorkloadBpfSkipRedir struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Egress        bool                   `protobuf:"varint,1,opt,name=Egress,proto3" json:"Egress,omitempty"`
+	Ingress       bool                   `protobuf:"varint,2,opt,name=Ingress,proto3" json:"Ingress,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *WorkloadBpfSkipRedir) Reset() {
+	*x = WorkloadBpfSkipRedir{}
+	mi := &file_felixbackend_proto_msgTypes[26]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *WorkloadBpfSkipRedir) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*WorkloadBpfSkipRedir) ProtoMessage() {}
+
+func (x *WorkloadBpfSkipRedir) ProtoReflect() protoreflect.Message {
+	mi := &file_felixbackend_proto_msgTypes[26]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use WorkloadBpfSkipRedir.ProtoReflect.Descriptor instead.
+func (*WorkloadBpfSkipRedir) Descriptor() ([]byte, []int) {
+	return file_felixbackend_proto_rawDescGZIP(), []int{26}
+}
+
+func (x *WorkloadBpfSkipRedir) GetEgress() bool {
+	if x != nil {
+		return x.Egress
+	}
+	return false
+}
+
+func (x *WorkloadBpfSkipRedir) GetIngress() bool {
+	if x != nil {
+		return x.Ingress
+	}
+	return false
+}
+
 type WorkloadEndpoint struct {
 	state                      protoimpl.MessageState `protogen:"open.v1"`
 	State                      string                 `protobuf:"bytes,1,opt,name=state,proto3" json:"state,omitempty"`
@@ -3065,14 +3071,14 @@ type WorkloadEndpoint struct {
 	Annotations                map[string]string      `protobuf:"bytes,11,rep,name=annotations,proto3" json:"annotations,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	QosControls                *QoSControls           `protobuf:"bytes,12,opt,name=qos_controls,json=qosControls,proto3" json:"qos_controls,omitempty"`
 	LocalBgpPeer               *LocalBGPPeer          `protobuf:"bytes,13,opt,name=local_bgp_peer,json=localBgpPeer,proto3" json:"local_bgp_peer,omitempty"`
-	Type                       WorkloadType           `protobuf:"varint,14,opt,name=type,proto3,enum=felix.WorkloadType" json:"type,omitempty"`
+	SkipRedir                  *WorkloadBpfSkipRedir  `protobuf:"bytes,14,opt,name=skip_redir,json=skipRedir,proto3" json:"skip_redir,omitempty"`
 	unknownFields              protoimpl.UnknownFields
 	sizeCache                  protoimpl.SizeCache
 }
 
 func (x *WorkloadEndpoint) Reset() {
 	*x = WorkloadEndpoint{}
-	mi := &file_felixbackend_proto_msgTypes[26]
+	mi := &file_felixbackend_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3084,7 +3090,7 @@ func (x *WorkloadEndpoint) String() string {
 func (*WorkloadEndpoint) ProtoMessage() {}
 
 func (x *WorkloadEndpoint) ProtoReflect() protoreflect.Message {
-	mi := &file_felixbackend_proto_msgTypes[26]
+	mi := &file_felixbackend_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3097,7 +3103,7 @@ func (x *WorkloadEndpoint) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WorkloadEndpoint.ProtoReflect.Descriptor instead.
 func (*WorkloadEndpoint) Descriptor() ([]byte, []int) {
-	return file_felixbackend_proto_rawDescGZIP(), []int{26}
+	return file_felixbackend_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *WorkloadEndpoint) GetState() string {
@@ -3191,11 +3197,11 @@ func (x *WorkloadEndpoint) GetLocalBgpPeer() *LocalBGPPeer {
 	return nil
 }
 
-func (x *WorkloadEndpoint) GetType() WorkloadType {
+func (x *WorkloadEndpoint) GetSkipRedir() *WorkloadBpfSkipRedir {
 	if x != nil {
-		return x.Type
+		return x.SkipRedir
 	}
-	return WorkloadType_REGULAR
+	return nil
 }
 
 type QoSControls struct {
@@ -3220,7 +3226,7 @@ type QoSControls struct {
 
 func (x *QoSControls) Reset() {
 	*x = QoSControls{}
-	mi := &file_felixbackend_proto_msgTypes[27]
+	mi := &file_felixbackend_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3232,7 +3238,7 @@ func (x *QoSControls) String() string {
 func (*QoSControls) ProtoMessage() {}
 
 func (x *QoSControls) ProtoReflect() protoreflect.Message {
-	mi := &file_felixbackend_proto_msgTypes[27]
+	mi := &file_felixbackend_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3245,7 +3251,7 @@ func (x *QoSControls) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use QoSControls.ProtoReflect.Descriptor instead.
 func (*QoSControls) Descriptor() ([]byte, []int) {
-	return file_felixbackend_proto_rawDescGZIP(), []int{27}
+	return file_felixbackend_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *QoSControls) GetIngressBandwidth() int64 {
@@ -3355,7 +3361,7 @@ type LocalBGPPeer struct {
 
 func (x *LocalBGPPeer) Reset() {
 	*x = LocalBGPPeer{}
-	mi := &file_felixbackend_proto_msgTypes[28]
+	mi := &file_felixbackend_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3367,7 +3373,7 @@ func (x *LocalBGPPeer) String() string {
 func (*LocalBGPPeer) ProtoMessage() {}
 
 func (x *LocalBGPPeer) ProtoReflect() protoreflect.Message {
-	mi := &file_felixbackend_proto_msgTypes[28]
+	mi := &file_felixbackend_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3380,7 +3386,7 @@ func (x *LocalBGPPeer) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LocalBGPPeer.ProtoReflect.Descriptor instead.
 func (*LocalBGPPeer) Descriptor() ([]byte, []int) {
-	return file_felixbackend_proto_rawDescGZIP(), []int{28}
+	return file_felixbackend_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *LocalBGPPeer) GetBgpPeerName() string {
@@ -3399,7 +3405,7 @@ type WorkloadEndpointRemove struct {
 
 func (x *WorkloadEndpointRemove) Reset() {
 	*x = WorkloadEndpointRemove{}
-	mi := &file_felixbackend_proto_msgTypes[29]
+	mi := &file_felixbackend_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3411,7 +3417,7 @@ func (x *WorkloadEndpointRemove) String() string {
 func (*WorkloadEndpointRemove) ProtoMessage() {}
 
 func (x *WorkloadEndpointRemove) ProtoReflect() protoreflect.Message {
-	mi := &file_felixbackend_proto_msgTypes[29]
+	mi := &file_felixbackend_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3424,7 +3430,7 @@ func (x *WorkloadEndpointRemove) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WorkloadEndpointRemove.ProtoReflect.Descriptor instead.
 func (*WorkloadEndpointRemove) Descriptor() ([]byte, []int) {
-	return file_felixbackend_proto_rawDescGZIP(), []int{29}
+	return file_felixbackend_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *WorkloadEndpointRemove) GetId() *WorkloadEndpointID {
@@ -3443,7 +3449,7 @@ type HostEndpointID struct {
 
 func (x *HostEndpointID) Reset() {
 	*x = HostEndpointID{}
-	mi := &file_felixbackend_proto_msgTypes[30]
+	mi := &file_felixbackend_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3455,7 +3461,7 @@ func (x *HostEndpointID) String() string {
 func (*HostEndpointID) ProtoMessage() {}
 
 func (x *HostEndpointID) ProtoReflect() protoreflect.Message {
-	mi := &file_felixbackend_proto_msgTypes[30]
+	mi := &file_felixbackend_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3468,7 +3474,7 @@ func (x *HostEndpointID) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HostEndpointID.ProtoReflect.Descriptor instead.
 func (*HostEndpointID) Descriptor() ([]byte, []int) {
-	return file_felixbackend_proto_rawDescGZIP(), []int{30}
+	return file_felixbackend_proto_rawDescGZIP(), []int{31}
 }
 
 func (x *HostEndpointID) GetEndpointId() string {
@@ -3488,7 +3494,7 @@ type HostEndpointUpdate struct {
 
 func (x *HostEndpointUpdate) Reset() {
 	*x = HostEndpointUpdate{}
-	mi := &file_felixbackend_proto_msgTypes[31]
+	mi := &file_felixbackend_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3500,7 +3506,7 @@ func (x *HostEndpointUpdate) String() string {
 func (*HostEndpointUpdate) ProtoMessage() {}
 
 func (x *HostEndpointUpdate) ProtoReflect() protoreflect.Message {
-	mi := &file_felixbackend_proto_msgTypes[31]
+	mi := &file_felixbackend_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3513,7 +3519,7 @@ func (x *HostEndpointUpdate) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HostEndpointUpdate.ProtoReflect.Descriptor instead.
 func (*HostEndpointUpdate) Descriptor() ([]byte, []int) {
-	return file_felixbackend_proto_rawDescGZIP(), []int{31}
+	return file_felixbackend_proto_rawDescGZIP(), []int{32}
 }
 
 func (x *HostEndpointUpdate) GetId() *HostEndpointID {
@@ -3546,7 +3552,7 @@ type HostEndpoint struct {
 
 func (x *HostEndpoint) Reset() {
 	*x = HostEndpoint{}
-	mi := &file_felixbackend_proto_msgTypes[32]
+	mi := &file_felixbackend_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3558,7 +3564,7 @@ func (x *HostEndpoint) String() string {
 func (*HostEndpoint) ProtoMessage() {}
 
 func (x *HostEndpoint) ProtoReflect() protoreflect.Message {
-	mi := &file_felixbackend_proto_msgTypes[32]
+	mi := &file_felixbackend_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3571,7 +3577,7 @@ func (x *HostEndpoint) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HostEndpoint.ProtoReflect.Descriptor instead.
 func (*HostEndpoint) Descriptor() ([]byte, []int) {
-	return file_felixbackend_proto_rawDescGZIP(), []int{32}
+	return file_felixbackend_proto_rawDescGZIP(), []int{33}
 }
 
 func (x *HostEndpoint) GetName() string {
@@ -3639,7 +3645,7 @@ type HostEndpointRemove struct {
 
 func (x *HostEndpointRemove) Reset() {
 	*x = HostEndpointRemove{}
-	mi := &file_felixbackend_proto_msgTypes[33]
+	mi := &file_felixbackend_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3651,7 +3657,7 @@ func (x *HostEndpointRemove) String() string {
 func (*HostEndpointRemove) ProtoMessage() {}
 
 func (x *HostEndpointRemove) ProtoReflect() protoreflect.Message {
-	mi := &file_felixbackend_proto_msgTypes[33]
+	mi := &file_felixbackend_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3664,7 +3670,7 @@ func (x *HostEndpointRemove) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HostEndpointRemove.ProtoReflect.Descriptor instead.
 func (*HostEndpointRemove) Descriptor() ([]byte, []int) {
-	return file_felixbackend_proto_rawDescGZIP(), []int{33}
+	return file_felixbackend_proto_rawDescGZIP(), []int{34}
 }
 
 func (x *HostEndpointRemove) GetId() *HostEndpointID {
@@ -3686,7 +3692,7 @@ type TierInfo struct {
 
 func (x *TierInfo) Reset() {
 	*x = TierInfo{}
-	mi := &file_felixbackend_proto_msgTypes[34]
+	mi := &file_felixbackend_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3698,7 +3704,7 @@ func (x *TierInfo) String() string {
 func (*TierInfo) ProtoMessage() {}
 
 func (x *TierInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_felixbackend_proto_msgTypes[34]
+	mi := &file_felixbackend_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3711,7 +3717,7 @@ func (x *TierInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TierInfo.ProtoReflect.Descriptor instead.
 func (*TierInfo) Descriptor() ([]byte, []int) {
-	return file_felixbackend_proto_rawDescGZIP(), []int{34}
+	return file_felixbackend_proto_rawDescGZIP(), []int{35}
 }
 
 func (x *TierInfo) GetName() string {
@@ -3752,7 +3758,7 @@ type NatInfo struct {
 
 func (x *NatInfo) Reset() {
 	*x = NatInfo{}
-	mi := &file_felixbackend_proto_msgTypes[35]
+	mi := &file_felixbackend_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3764,7 +3770,7 @@ func (x *NatInfo) String() string {
 func (*NatInfo) ProtoMessage() {}
 
 func (x *NatInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_felixbackend_proto_msgTypes[35]
+	mi := &file_felixbackend_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3777,7 +3783,7 @@ func (x *NatInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NatInfo.ProtoReflect.Descriptor instead.
 func (*NatInfo) Descriptor() ([]byte, []int) {
-	return file_felixbackend_proto_rawDescGZIP(), []int{35}
+	return file_felixbackend_proto_rawDescGZIP(), []int{36}
 }
 
 func (x *NatInfo) GetExtIp() string {
@@ -3804,7 +3810,7 @@ type ProcessStatusUpdate struct {
 
 func (x *ProcessStatusUpdate) Reset() {
 	*x = ProcessStatusUpdate{}
-	mi := &file_felixbackend_proto_msgTypes[36]
+	mi := &file_felixbackend_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3816,7 +3822,7 @@ func (x *ProcessStatusUpdate) String() string {
 func (*ProcessStatusUpdate) ProtoMessage() {}
 
 func (x *ProcessStatusUpdate) ProtoReflect() protoreflect.Message {
-	mi := &file_felixbackend_proto_msgTypes[36]
+	mi := &file_felixbackend_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3829,7 +3835,7 @@ func (x *ProcessStatusUpdate) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProcessStatusUpdate.ProtoReflect.Descriptor instead.
 func (*ProcessStatusUpdate) Descriptor() ([]byte, []int) {
-	return file_felixbackend_proto_rawDescGZIP(), []int{36}
+	return file_felixbackend_proto_rawDescGZIP(), []int{37}
 }
 
 func (x *ProcessStatusUpdate) GetIsoTimestamp() string {
@@ -3856,7 +3862,7 @@ type HostEndpointStatusUpdate struct {
 
 func (x *HostEndpointStatusUpdate) Reset() {
 	*x = HostEndpointStatusUpdate{}
-	mi := &file_felixbackend_proto_msgTypes[37]
+	mi := &file_felixbackend_proto_msgTypes[38]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3868,7 +3874,7 @@ func (x *HostEndpointStatusUpdate) String() string {
 func (*HostEndpointStatusUpdate) ProtoMessage() {}
 
 func (x *HostEndpointStatusUpdate) ProtoReflect() protoreflect.Message {
-	mi := &file_felixbackend_proto_msgTypes[37]
+	mi := &file_felixbackend_proto_msgTypes[38]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3881,7 +3887,7 @@ func (x *HostEndpointStatusUpdate) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HostEndpointStatusUpdate.ProtoReflect.Descriptor instead.
 func (*HostEndpointStatusUpdate) Descriptor() ([]byte, []int) {
-	return file_felixbackend_proto_rawDescGZIP(), []int{37}
+	return file_felixbackend_proto_rawDescGZIP(), []int{38}
 }
 
 func (x *HostEndpointStatusUpdate) GetId() *HostEndpointID {
@@ -3907,7 +3913,7 @@ type EndpointStatus struct {
 
 func (x *EndpointStatus) Reset() {
 	*x = EndpointStatus{}
-	mi := &file_felixbackend_proto_msgTypes[38]
+	mi := &file_felixbackend_proto_msgTypes[39]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3919,7 +3925,7 @@ func (x *EndpointStatus) String() string {
 func (*EndpointStatus) ProtoMessage() {}
 
 func (x *EndpointStatus) ProtoReflect() protoreflect.Message {
-	mi := &file_felixbackend_proto_msgTypes[38]
+	mi := &file_felixbackend_proto_msgTypes[39]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3932,7 +3938,7 @@ func (x *EndpointStatus) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EndpointStatus.ProtoReflect.Descriptor instead.
 func (*EndpointStatus) Descriptor() ([]byte, []int) {
-	return file_felixbackend_proto_rawDescGZIP(), []int{38}
+	return file_felixbackend_proto_rawDescGZIP(), []int{39}
 }
 
 func (x *EndpointStatus) GetStatus() string {
@@ -3951,7 +3957,7 @@ type HostEndpointStatusRemove struct {
 
 func (x *HostEndpointStatusRemove) Reset() {
 	*x = HostEndpointStatusRemove{}
-	mi := &file_felixbackend_proto_msgTypes[39]
+	mi := &file_felixbackend_proto_msgTypes[40]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3963,7 +3969,7 @@ func (x *HostEndpointStatusRemove) String() string {
 func (*HostEndpointStatusRemove) ProtoMessage() {}
 
 func (x *HostEndpointStatusRemove) ProtoReflect() protoreflect.Message {
-	mi := &file_felixbackend_proto_msgTypes[39]
+	mi := &file_felixbackend_proto_msgTypes[40]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3976,7 +3982,7 @@ func (x *HostEndpointStatusRemove) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HostEndpointStatusRemove.ProtoReflect.Descriptor instead.
 func (*HostEndpointStatusRemove) Descriptor() ([]byte, []int) {
-	return file_felixbackend_proto_rawDescGZIP(), []int{39}
+	return file_felixbackend_proto_rawDescGZIP(), []int{40}
 }
 
 func (x *HostEndpointStatusRemove) GetId() *HostEndpointID {
@@ -3997,7 +4003,7 @@ type WorkloadEndpointStatusUpdate struct {
 
 func (x *WorkloadEndpointStatusUpdate) Reset() {
 	*x = WorkloadEndpointStatusUpdate{}
-	mi := &file_felixbackend_proto_msgTypes[40]
+	mi := &file_felixbackend_proto_msgTypes[41]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4009,7 +4015,7 @@ func (x *WorkloadEndpointStatusUpdate) String() string {
 func (*WorkloadEndpointStatusUpdate) ProtoMessage() {}
 
 func (x *WorkloadEndpointStatusUpdate) ProtoReflect() protoreflect.Message {
-	mi := &file_felixbackend_proto_msgTypes[40]
+	mi := &file_felixbackend_proto_msgTypes[41]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4022,7 +4028,7 @@ func (x *WorkloadEndpointStatusUpdate) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WorkloadEndpointStatusUpdate.ProtoReflect.Descriptor instead.
 func (*WorkloadEndpointStatusUpdate) Descriptor() ([]byte, []int) {
-	return file_felixbackend_proto_rawDescGZIP(), []int{40}
+	return file_felixbackend_proto_rawDescGZIP(), []int{41}
 }
 
 func (x *WorkloadEndpointStatusUpdate) GetId() *WorkloadEndpointID {
@@ -4055,7 +4061,7 @@ type WorkloadEndpointStatusRemove struct {
 
 func (x *WorkloadEndpointStatusRemove) Reset() {
 	*x = WorkloadEndpointStatusRemove{}
-	mi := &file_felixbackend_proto_msgTypes[41]
+	mi := &file_felixbackend_proto_msgTypes[42]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4067,7 +4073,7 @@ func (x *WorkloadEndpointStatusRemove) String() string {
 func (*WorkloadEndpointStatusRemove) ProtoMessage() {}
 
 func (x *WorkloadEndpointStatusRemove) ProtoReflect() protoreflect.Message {
-	mi := &file_felixbackend_proto_msgTypes[41]
+	mi := &file_felixbackend_proto_msgTypes[42]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4080,7 +4086,7 @@ func (x *WorkloadEndpointStatusRemove) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WorkloadEndpointStatusRemove.ProtoReflect.Descriptor instead.
 func (*WorkloadEndpointStatusRemove) Descriptor() ([]byte, []int) {
-	return file_felixbackend_proto_rawDescGZIP(), []int{41}
+	return file_felixbackend_proto_rawDescGZIP(), []int{42}
 }
 
 func (x *WorkloadEndpointStatusRemove) GetId() *WorkloadEndpointID {
@@ -4102,7 +4108,7 @@ type WireguardStatusUpdate struct {
 
 func (x *WireguardStatusUpdate) Reset() {
 	*x = WireguardStatusUpdate{}
-	mi := &file_felixbackend_proto_msgTypes[42]
+	mi := &file_felixbackend_proto_msgTypes[43]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4114,7 +4120,7 @@ func (x *WireguardStatusUpdate) String() string {
 func (*WireguardStatusUpdate) ProtoMessage() {}
 
 func (x *WireguardStatusUpdate) ProtoReflect() protoreflect.Message {
-	mi := &file_felixbackend_proto_msgTypes[42]
+	mi := &file_felixbackend_proto_msgTypes[43]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4127,7 +4133,7 @@ func (x *WireguardStatusUpdate) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WireguardStatusUpdate.ProtoReflect.Descriptor instead.
 func (*WireguardStatusUpdate) Descriptor() ([]byte, []int) {
-	return file_felixbackend_proto_rawDescGZIP(), []int{42}
+	return file_felixbackend_proto_rawDescGZIP(), []int{43}
 }
 
 func (x *WireguardStatusUpdate) GetPublicKey() string {
@@ -4152,7 +4158,7 @@ type DataplaneInSync struct {
 
 func (x *DataplaneInSync) Reset() {
 	*x = DataplaneInSync{}
-	mi := &file_felixbackend_proto_msgTypes[43]
+	mi := &file_felixbackend_proto_msgTypes[44]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4164,7 +4170,7 @@ func (x *DataplaneInSync) String() string {
 func (*DataplaneInSync) ProtoMessage() {}
 
 func (x *DataplaneInSync) ProtoReflect() protoreflect.Message {
-	mi := &file_felixbackend_proto_msgTypes[43]
+	mi := &file_felixbackend_proto_msgTypes[44]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4177,7 +4183,7 @@ func (x *DataplaneInSync) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DataplaneInSync.ProtoReflect.Descriptor instead.
 func (*DataplaneInSync) Descriptor() ([]byte, []int) {
-	return file_felixbackend_proto_rawDescGZIP(), []int{43}
+	return file_felixbackend_proto_rawDescGZIP(), []int{44}
 }
 
 type HostMetadataV4V6Update struct {
@@ -4193,7 +4199,7 @@ type HostMetadataV4V6Update struct {
 
 func (x *HostMetadataV4V6Update) Reset() {
 	*x = HostMetadataV4V6Update{}
-	mi := &file_felixbackend_proto_msgTypes[44]
+	mi := &file_felixbackend_proto_msgTypes[45]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4205,7 +4211,7 @@ func (x *HostMetadataV4V6Update) String() string {
 func (*HostMetadataV4V6Update) ProtoMessage() {}
 
 func (x *HostMetadataV4V6Update) ProtoReflect() protoreflect.Message {
-	mi := &file_felixbackend_proto_msgTypes[44]
+	mi := &file_felixbackend_proto_msgTypes[45]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4218,7 +4224,7 @@ func (x *HostMetadataV4V6Update) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HostMetadataV4V6Update.ProtoReflect.Descriptor instead.
 func (*HostMetadataV4V6Update) Descriptor() ([]byte, []int) {
-	return file_felixbackend_proto_rawDescGZIP(), []int{44}
+	return file_felixbackend_proto_rawDescGZIP(), []int{45}
 }
 
 func (x *HostMetadataV4V6Update) GetHostname() string {
@@ -4266,7 +4272,7 @@ type HostMetadataV4V6Remove struct {
 
 func (x *HostMetadataV4V6Remove) Reset() {
 	*x = HostMetadataV4V6Remove{}
-	mi := &file_felixbackend_proto_msgTypes[45]
+	mi := &file_felixbackend_proto_msgTypes[46]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4278,7 +4284,7 @@ func (x *HostMetadataV4V6Remove) String() string {
 func (*HostMetadataV4V6Remove) ProtoMessage() {}
 
 func (x *HostMetadataV4V6Remove) ProtoReflect() protoreflect.Message {
-	mi := &file_felixbackend_proto_msgTypes[45]
+	mi := &file_felixbackend_proto_msgTypes[46]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4291,7 +4297,7 @@ func (x *HostMetadataV4V6Remove) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HostMetadataV4V6Remove.ProtoReflect.Descriptor instead.
 func (*HostMetadataV4V6Remove) Descriptor() ([]byte, []int) {
-	return file_felixbackend_proto_rawDescGZIP(), []int{45}
+	return file_felixbackend_proto_rawDescGZIP(), []int{46}
 }
 
 func (x *HostMetadataV4V6Remove) GetHostname() string {
@@ -4318,7 +4324,7 @@ type HostMetadataUpdate struct {
 
 func (x *HostMetadataUpdate) Reset() {
 	*x = HostMetadataUpdate{}
-	mi := &file_felixbackend_proto_msgTypes[46]
+	mi := &file_felixbackend_proto_msgTypes[47]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4330,7 +4336,7 @@ func (x *HostMetadataUpdate) String() string {
 func (*HostMetadataUpdate) ProtoMessage() {}
 
 func (x *HostMetadataUpdate) ProtoReflect() protoreflect.Message {
-	mi := &file_felixbackend_proto_msgTypes[46]
+	mi := &file_felixbackend_proto_msgTypes[47]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4343,7 +4349,7 @@ func (x *HostMetadataUpdate) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HostMetadataUpdate.ProtoReflect.Descriptor instead.
 func (*HostMetadataUpdate) Descriptor() ([]byte, []int) {
-	return file_felixbackend_proto_rawDescGZIP(), []int{46}
+	return file_felixbackend_proto_rawDescGZIP(), []int{47}
 }
 
 func (x *HostMetadataUpdate) GetHostname() string {
@@ -4370,7 +4376,7 @@ type HostMetadataRemove struct {
 
 func (x *HostMetadataRemove) Reset() {
 	*x = HostMetadataRemove{}
-	mi := &file_felixbackend_proto_msgTypes[47]
+	mi := &file_felixbackend_proto_msgTypes[48]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4382,7 +4388,7 @@ func (x *HostMetadataRemove) String() string {
 func (*HostMetadataRemove) ProtoMessage() {}
 
 func (x *HostMetadataRemove) ProtoReflect() protoreflect.Message {
-	mi := &file_felixbackend_proto_msgTypes[47]
+	mi := &file_felixbackend_proto_msgTypes[48]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4395,7 +4401,7 @@ func (x *HostMetadataRemove) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HostMetadataRemove.ProtoReflect.Descriptor instead.
 func (*HostMetadataRemove) Descriptor() ([]byte, []int) {
-	return file_felixbackend_proto_rawDescGZIP(), []int{47}
+	return file_felixbackend_proto_rawDescGZIP(), []int{48}
 }
 
 func (x *HostMetadataRemove) GetHostname() string {
@@ -4422,7 +4428,7 @@ type HostMetadataV6Update struct {
 
 func (x *HostMetadataV6Update) Reset() {
 	*x = HostMetadataV6Update{}
-	mi := &file_felixbackend_proto_msgTypes[48]
+	mi := &file_felixbackend_proto_msgTypes[49]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4434,7 +4440,7 @@ func (x *HostMetadataV6Update) String() string {
 func (*HostMetadataV6Update) ProtoMessage() {}
 
 func (x *HostMetadataV6Update) ProtoReflect() protoreflect.Message {
-	mi := &file_felixbackend_proto_msgTypes[48]
+	mi := &file_felixbackend_proto_msgTypes[49]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4447,7 +4453,7 @@ func (x *HostMetadataV6Update) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HostMetadataV6Update.ProtoReflect.Descriptor instead.
 func (*HostMetadataV6Update) Descriptor() ([]byte, []int) {
-	return file_felixbackend_proto_rawDescGZIP(), []int{48}
+	return file_felixbackend_proto_rawDescGZIP(), []int{49}
 }
 
 func (x *HostMetadataV6Update) GetHostname() string {
@@ -4474,7 +4480,7 @@ type HostMetadataV6Remove struct {
 
 func (x *HostMetadataV6Remove) Reset() {
 	*x = HostMetadataV6Remove{}
-	mi := &file_felixbackend_proto_msgTypes[49]
+	mi := &file_felixbackend_proto_msgTypes[50]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4486,7 +4492,7 @@ func (x *HostMetadataV6Remove) String() string {
 func (*HostMetadataV6Remove) ProtoMessage() {}
 
 func (x *HostMetadataV6Remove) ProtoReflect() protoreflect.Message {
-	mi := &file_felixbackend_proto_msgTypes[49]
+	mi := &file_felixbackend_proto_msgTypes[50]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4499,7 +4505,7 @@ func (x *HostMetadataV6Remove) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HostMetadataV6Remove.ProtoReflect.Descriptor instead.
 func (*HostMetadataV6Remove) Descriptor() ([]byte, []int) {
-	return file_felixbackend_proto_rawDescGZIP(), []int{49}
+	return file_felixbackend_proto_rawDescGZIP(), []int{50}
 }
 
 func (x *HostMetadataV6Remove) GetHostname() string {
@@ -4526,7 +4532,7 @@ type IPAMPoolUpdate struct {
 
 func (x *IPAMPoolUpdate) Reset() {
 	*x = IPAMPoolUpdate{}
-	mi := &file_felixbackend_proto_msgTypes[50]
+	mi := &file_felixbackend_proto_msgTypes[51]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4538,7 +4544,7 @@ func (x *IPAMPoolUpdate) String() string {
 func (*IPAMPoolUpdate) ProtoMessage() {}
 
 func (x *IPAMPoolUpdate) ProtoReflect() protoreflect.Message {
-	mi := &file_felixbackend_proto_msgTypes[50]
+	mi := &file_felixbackend_proto_msgTypes[51]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4551,7 +4557,7 @@ func (x *IPAMPoolUpdate) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use IPAMPoolUpdate.ProtoReflect.Descriptor instead.
 func (*IPAMPoolUpdate) Descriptor() ([]byte, []int) {
-	return file_felixbackend_proto_rawDescGZIP(), []int{50}
+	return file_felixbackend_proto_rawDescGZIP(), []int{51}
 }
 
 func (x *IPAMPoolUpdate) GetId() string {
@@ -4577,7 +4583,7 @@ type IPAMPoolRemove struct {
 
 func (x *IPAMPoolRemove) Reset() {
 	*x = IPAMPoolRemove{}
-	mi := &file_felixbackend_proto_msgTypes[51]
+	mi := &file_felixbackend_proto_msgTypes[52]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4589,7 +4595,7 @@ func (x *IPAMPoolRemove) String() string {
 func (*IPAMPoolRemove) ProtoMessage() {}
 
 func (x *IPAMPoolRemove) ProtoReflect() protoreflect.Message {
-	mi := &file_felixbackend_proto_msgTypes[51]
+	mi := &file_felixbackend_proto_msgTypes[52]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4602,7 +4608,7 @@ func (x *IPAMPoolRemove) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use IPAMPoolRemove.ProtoReflect.Descriptor instead.
 func (*IPAMPoolRemove) Descriptor() ([]byte, []int) {
-	return file_felixbackend_proto_rawDescGZIP(), []int{51}
+	return file_felixbackend_proto_rawDescGZIP(), []int{52}
 }
 
 func (x *IPAMPoolRemove) GetId() string {
@@ -4624,7 +4630,7 @@ type IPAMPool struct {
 
 func (x *IPAMPool) Reset() {
 	*x = IPAMPool{}
-	mi := &file_felixbackend_proto_msgTypes[52]
+	mi := &file_felixbackend_proto_msgTypes[53]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4636,7 +4642,7 @@ func (x *IPAMPool) String() string {
 func (*IPAMPool) ProtoMessage() {}
 
 func (x *IPAMPool) ProtoReflect() protoreflect.Message {
-	mi := &file_felixbackend_proto_msgTypes[52]
+	mi := &file_felixbackend_proto_msgTypes[53]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4649,7 +4655,7 @@ func (x *IPAMPool) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use IPAMPool.ProtoReflect.Descriptor instead.
 func (*IPAMPool) Descriptor() ([]byte, []int) {
-	return file_felixbackend_proto_rawDescGZIP(), []int{52}
+	return file_felixbackend_proto_rawDescGZIP(), []int{53}
 }
 
 func (x *IPAMPool) GetCidr() string {
@@ -4691,7 +4697,7 @@ type Encapsulation struct {
 
 func (x *Encapsulation) Reset() {
 	*x = Encapsulation{}
-	mi := &file_felixbackend_proto_msgTypes[53]
+	mi := &file_felixbackend_proto_msgTypes[54]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4703,7 +4709,7 @@ func (x *Encapsulation) String() string {
 func (*Encapsulation) ProtoMessage() {}
 
 func (x *Encapsulation) ProtoReflect() protoreflect.Message {
-	mi := &file_felixbackend_proto_msgTypes[53]
+	mi := &file_felixbackend_proto_msgTypes[54]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4716,7 +4722,7 @@ func (x *Encapsulation) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Encapsulation.ProtoReflect.Descriptor instead.
 func (*Encapsulation) Descriptor() ([]byte, []int) {
-	return file_felixbackend_proto_rawDescGZIP(), []int{53}
+	return file_felixbackend_proto_rawDescGZIP(), []int{54}
 }
 
 func (x *Encapsulation) GetIpipEnabled() bool {
@@ -4750,7 +4756,7 @@ type ServiceAccountUpdate struct {
 
 func (x *ServiceAccountUpdate) Reset() {
 	*x = ServiceAccountUpdate{}
-	mi := &file_felixbackend_proto_msgTypes[54]
+	mi := &file_felixbackend_proto_msgTypes[55]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4762,7 +4768,7 @@ func (x *ServiceAccountUpdate) String() string {
 func (*ServiceAccountUpdate) ProtoMessage() {}
 
 func (x *ServiceAccountUpdate) ProtoReflect() protoreflect.Message {
-	mi := &file_felixbackend_proto_msgTypes[54]
+	mi := &file_felixbackend_proto_msgTypes[55]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4775,7 +4781,7 @@ func (x *ServiceAccountUpdate) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ServiceAccountUpdate.ProtoReflect.Descriptor instead.
 func (*ServiceAccountUpdate) Descriptor() ([]byte, []int) {
-	return file_felixbackend_proto_rawDescGZIP(), []int{54}
+	return file_felixbackend_proto_rawDescGZIP(), []int{55}
 }
 
 func (x *ServiceAccountUpdate) GetId() *ServiceAccountID {
@@ -4801,7 +4807,7 @@ type ServiceAccountRemove struct {
 
 func (x *ServiceAccountRemove) Reset() {
 	*x = ServiceAccountRemove{}
-	mi := &file_felixbackend_proto_msgTypes[55]
+	mi := &file_felixbackend_proto_msgTypes[56]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4813,7 +4819,7 @@ func (x *ServiceAccountRemove) String() string {
 func (*ServiceAccountRemove) ProtoMessage() {}
 
 func (x *ServiceAccountRemove) ProtoReflect() protoreflect.Message {
-	mi := &file_felixbackend_proto_msgTypes[55]
+	mi := &file_felixbackend_proto_msgTypes[56]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4826,7 +4832,7 @@ func (x *ServiceAccountRemove) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ServiceAccountRemove.ProtoReflect.Descriptor instead.
 func (*ServiceAccountRemove) Descriptor() ([]byte, []int) {
-	return file_felixbackend_proto_rawDescGZIP(), []int{55}
+	return file_felixbackend_proto_rawDescGZIP(), []int{56}
 }
 
 func (x *ServiceAccountRemove) GetId() *ServiceAccountID {
@@ -4846,7 +4852,7 @@ type ServiceAccountID struct {
 
 func (x *ServiceAccountID) Reset() {
 	*x = ServiceAccountID{}
-	mi := &file_felixbackend_proto_msgTypes[56]
+	mi := &file_felixbackend_proto_msgTypes[57]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4858,7 +4864,7 @@ func (x *ServiceAccountID) String() string {
 func (*ServiceAccountID) ProtoMessage() {}
 
 func (x *ServiceAccountID) ProtoReflect() protoreflect.Message {
-	mi := &file_felixbackend_proto_msgTypes[56]
+	mi := &file_felixbackend_proto_msgTypes[57]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4871,7 +4877,7 @@ func (x *ServiceAccountID) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ServiceAccountID.ProtoReflect.Descriptor instead.
 func (*ServiceAccountID) Descriptor() ([]byte, []int) {
-	return file_felixbackend_proto_rawDescGZIP(), []int{56}
+	return file_felixbackend_proto_rawDescGZIP(), []int{57}
 }
 
 func (x *ServiceAccountID) GetNamespace() string {
@@ -4898,7 +4904,7 @@ type NamespaceUpdate struct {
 
 func (x *NamespaceUpdate) Reset() {
 	*x = NamespaceUpdate{}
-	mi := &file_felixbackend_proto_msgTypes[57]
+	mi := &file_felixbackend_proto_msgTypes[58]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4910,7 +4916,7 @@ func (x *NamespaceUpdate) String() string {
 func (*NamespaceUpdate) ProtoMessage() {}
 
 func (x *NamespaceUpdate) ProtoReflect() protoreflect.Message {
-	mi := &file_felixbackend_proto_msgTypes[57]
+	mi := &file_felixbackend_proto_msgTypes[58]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4923,7 +4929,7 @@ func (x *NamespaceUpdate) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NamespaceUpdate.ProtoReflect.Descriptor instead.
 func (*NamespaceUpdate) Descriptor() ([]byte, []int) {
-	return file_felixbackend_proto_rawDescGZIP(), []int{57}
+	return file_felixbackend_proto_rawDescGZIP(), []int{58}
 }
 
 func (x *NamespaceUpdate) GetId() *NamespaceID {
@@ -4949,7 +4955,7 @@ type NamespaceRemove struct {
 
 func (x *NamespaceRemove) Reset() {
 	*x = NamespaceRemove{}
-	mi := &file_felixbackend_proto_msgTypes[58]
+	mi := &file_felixbackend_proto_msgTypes[59]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4961,7 +4967,7 @@ func (x *NamespaceRemove) String() string {
 func (*NamespaceRemove) ProtoMessage() {}
 
 func (x *NamespaceRemove) ProtoReflect() protoreflect.Message {
-	mi := &file_felixbackend_proto_msgTypes[58]
+	mi := &file_felixbackend_proto_msgTypes[59]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4974,7 +4980,7 @@ func (x *NamespaceRemove) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NamespaceRemove.ProtoReflect.Descriptor instead.
 func (*NamespaceRemove) Descriptor() ([]byte, []int) {
-	return file_felixbackend_proto_rawDescGZIP(), []int{58}
+	return file_felixbackend_proto_rawDescGZIP(), []int{59}
 }
 
 func (x *NamespaceRemove) GetId() *NamespaceID {
@@ -4993,7 +4999,7 @@ type NamespaceID struct {
 
 func (x *NamespaceID) Reset() {
 	*x = NamespaceID{}
-	mi := &file_felixbackend_proto_msgTypes[59]
+	mi := &file_felixbackend_proto_msgTypes[60]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5005,7 +5011,7 @@ func (x *NamespaceID) String() string {
 func (*NamespaceID) ProtoMessage() {}
 
 func (x *NamespaceID) ProtoReflect() protoreflect.Message {
-	mi := &file_felixbackend_proto_msgTypes[59]
+	mi := &file_felixbackend_proto_msgTypes[60]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5018,7 +5024,7 @@ func (x *NamespaceID) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NamespaceID.ProtoReflect.Descriptor instead.
 func (*NamespaceID) Descriptor() ([]byte, []int) {
-	return file_felixbackend_proto_rawDescGZIP(), []int{59}
+	return file_felixbackend_proto_rawDescGZIP(), []int{60}
 }
 
 func (x *NamespaceID) GetName() string {
@@ -5039,7 +5045,7 @@ type TunnelType struct {
 
 func (x *TunnelType) Reset() {
 	*x = TunnelType{}
-	mi := &file_felixbackend_proto_msgTypes[60]
+	mi := &file_felixbackend_proto_msgTypes[61]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5051,7 +5057,7 @@ func (x *TunnelType) String() string {
 func (*TunnelType) ProtoMessage() {}
 
 func (x *TunnelType) ProtoReflect() protoreflect.Message {
-	mi := &file_felixbackend_proto_msgTypes[60]
+	mi := &file_felixbackend_proto_msgTypes[61]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5064,7 +5070,7 @@ func (x *TunnelType) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TunnelType.ProtoReflect.Descriptor instead.
 func (*TunnelType) Descriptor() ([]byte, []int) {
-	return file_felixbackend_proto_rawDescGZIP(), []int{60}
+	return file_felixbackend_proto_rawDescGZIP(), []int{61}
 }
 
 func (x *TunnelType) GetIpip() bool {
@@ -5109,7 +5115,7 @@ type RouteUpdate struct {
 
 func (x *RouteUpdate) Reset() {
 	*x = RouteUpdate{}
-	mi := &file_felixbackend_proto_msgTypes[61]
+	mi := &file_felixbackend_proto_msgTypes[62]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5121,7 +5127,7 @@ func (x *RouteUpdate) String() string {
 func (*RouteUpdate) ProtoMessage() {}
 
 func (x *RouteUpdate) ProtoReflect() protoreflect.Message {
-	mi := &file_felixbackend_proto_msgTypes[61]
+	mi := &file_felixbackend_proto_msgTypes[62]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5134,7 +5140,7 @@ func (x *RouteUpdate) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RouteUpdate.ProtoReflect.Descriptor instead.
 func (*RouteUpdate) Descriptor() ([]byte, []int) {
-	return file_felixbackend_proto_rawDescGZIP(), []int{61}
+	return file_felixbackend_proto_rawDescGZIP(), []int{62}
 }
 
 func (x *RouteUpdate) GetTypes() RouteType {
@@ -5216,7 +5222,7 @@ type RouteRemove struct {
 
 func (x *RouteRemove) Reset() {
 	*x = RouteRemove{}
-	mi := &file_felixbackend_proto_msgTypes[62]
+	mi := &file_felixbackend_proto_msgTypes[63]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5228,7 +5234,7 @@ func (x *RouteRemove) String() string {
 func (*RouteRemove) ProtoMessage() {}
 
 func (x *RouteRemove) ProtoReflect() protoreflect.Message {
-	mi := &file_felixbackend_proto_msgTypes[62]
+	mi := &file_felixbackend_proto_msgTypes[63]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5241,7 +5247,7 @@ func (x *RouteRemove) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RouteRemove.ProtoReflect.Descriptor instead.
 func (*RouteRemove) Descriptor() ([]byte, []int) {
-	return file_felixbackend_proto_rawDescGZIP(), []int{62}
+	return file_felixbackend_proto_rawDescGZIP(), []int{63}
 }
 
 func (x *RouteRemove) GetDst() string {
@@ -5266,7 +5272,7 @@ type VXLANTunnelEndpointUpdate struct {
 
 func (x *VXLANTunnelEndpointUpdate) Reset() {
 	*x = VXLANTunnelEndpointUpdate{}
-	mi := &file_felixbackend_proto_msgTypes[63]
+	mi := &file_felixbackend_proto_msgTypes[64]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5278,7 +5284,7 @@ func (x *VXLANTunnelEndpointUpdate) String() string {
 func (*VXLANTunnelEndpointUpdate) ProtoMessage() {}
 
 func (x *VXLANTunnelEndpointUpdate) ProtoReflect() protoreflect.Message {
-	mi := &file_felixbackend_proto_msgTypes[63]
+	mi := &file_felixbackend_proto_msgTypes[64]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5291,7 +5297,7 @@ func (x *VXLANTunnelEndpointUpdate) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VXLANTunnelEndpointUpdate.ProtoReflect.Descriptor instead.
 func (*VXLANTunnelEndpointUpdate) Descriptor() ([]byte, []int) {
-	return file_felixbackend_proto_rawDescGZIP(), []int{63}
+	return file_felixbackend_proto_rawDescGZIP(), []int{64}
 }
 
 func (x *VXLANTunnelEndpointUpdate) GetNode() string {
@@ -5352,7 +5358,7 @@ type VXLANTunnelEndpointRemove struct {
 
 func (x *VXLANTunnelEndpointRemove) Reset() {
 	*x = VXLANTunnelEndpointRemove{}
-	mi := &file_felixbackend_proto_msgTypes[64]
+	mi := &file_felixbackend_proto_msgTypes[65]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5364,7 +5370,7 @@ func (x *VXLANTunnelEndpointRemove) String() string {
 func (*VXLANTunnelEndpointRemove) ProtoMessage() {}
 
 func (x *VXLANTunnelEndpointRemove) ProtoReflect() protoreflect.Message {
-	mi := &file_felixbackend_proto_msgTypes[64]
+	mi := &file_felixbackend_proto_msgTypes[65]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5377,7 +5383,7 @@ func (x *VXLANTunnelEndpointRemove) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VXLANTunnelEndpointRemove.ProtoReflect.Descriptor instead.
 func (*VXLANTunnelEndpointRemove) Descriptor() ([]byte, []int) {
-	return file_felixbackend_proto_rawDescGZIP(), []int{64}
+	return file_felixbackend_proto_rawDescGZIP(), []int{65}
 }
 
 func (x *VXLANTunnelEndpointRemove) GetNode() string {
@@ -5397,7 +5403,7 @@ type ReportResult struct {
 
 func (x *ReportResult) Reset() {
 	*x = ReportResult{}
-	mi := &file_felixbackend_proto_msgTypes[65]
+	mi := &file_felixbackend_proto_msgTypes[66]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5409,7 +5415,7 @@ func (x *ReportResult) String() string {
 func (*ReportResult) ProtoMessage() {}
 
 func (x *ReportResult) ProtoReflect() protoreflect.Message {
-	mi := &file_felixbackend_proto_msgTypes[65]
+	mi := &file_felixbackend_proto_msgTypes[66]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5422,7 +5428,7 @@ func (x *ReportResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReportResult.ProtoReflect.Descriptor instead.
 func (*ReportResult) Descriptor() ([]byte, []int) {
-	return file_felixbackend_proto_rawDescGZIP(), []int{65}
+	return file_felixbackend_proto_rawDescGZIP(), []int{66}
 }
 
 func (x *ReportResult) GetSuccessful() bool {
@@ -5456,7 +5462,7 @@ type DataplaneStats struct {
 
 func (x *DataplaneStats) Reset() {
 	*x = DataplaneStats{}
-	mi := &file_felixbackend_proto_msgTypes[66]
+	mi := &file_felixbackend_proto_msgTypes[67]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5468,7 +5474,7 @@ func (x *DataplaneStats) String() string {
 func (*DataplaneStats) ProtoMessage() {}
 
 func (x *DataplaneStats) ProtoReflect() protoreflect.Message {
-	mi := &file_felixbackend_proto_msgTypes[66]
+	mi := &file_felixbackend_proto_msgTypes[67]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5481,7 +5487,7 @@ func (x *DataplaneStats) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DataplaneStats.ProtoReflect.Descriptor instead.
 func (*DataplaneStats) Descriptor() ([]byte, []int) {
-	return file_felixbackend_proto_rawDescGZIP(), []int{66}
+	return file_felixbackend_proto_rawDescGZIP(), []int{67}
 }
 
 func (x *DataplaneStats) GetSrcIp() string {
@@ -5557,7 +5563,7 @@ type Statistic struct {
 
 func (x *Statistic) Reset() {
 	*x = Statistic{}
-	mi := &file_felixbackend_proto_msgTypes[67]
+	mi := &file_felixbackend_proto_msgTypes[68]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5569,7 +5575,7 @@ func (x *Statistic) String() string {
 func (*Statistic) ProtoMessage() {}
 
 func (x *Statistic) ProtoReflect() protoreflect.Message {
-	mi := &file_felixbackend_proto_msgTypes[67]
+	mi := &file_felixbackend_proto_msgTypes[68]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5582,7 +5588,7 @@ func (x *Statistic) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Statistic.ProtoReflect.Descriptor instead.
 func (*Statistic) Descriptor() ([]byte, []int) {
-	return file_felixbackend_proto_rawDescGZIP(), []int{67}
+	return file_felixbackend_proto_rawDescGZIP(), []int{68}
 }
 
 func (x *Statistic) GetDirection() Statistic_Direction {
@@ -5638,7 +5644,7 @@ type RuleTrace struct {
 
 func (x *RuleTrace) Reset() {
 	*x = RuleTrace{}
-	mi := &file_felixbackend_proto_msgTypes[68]
+	mi := &file_felixbackend_proto_msgTypes[69]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5650,7 +5656,7 @@ func (x *RuleTrace) String() string {
 func (*RuleTrace) ProtoMessage() {}
 
 func (x *RuleTrace) ProtoReflect() protoreflect.Message {
-	mi := &file_felixbackend_proto_msgTypes[68]
+	mi := &file_felixbackend_proto_msgTypes[69]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5663,7 +5669,7 @@ func (x *RuleTrace) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RuleTrace.ProtoReflect.Descriptor instead.
 func (*RuleTrace) Descriptor() ([]byte, []int) {
-	return file_felixbackend_proto_rawDescGZIP(), []int{68}
+	return file_felixbackend_proto_rawDescGZIP(), []int{69}
 }
 
 func (x *RuleTrace) GetId() isRuleTrace_Id {
@@ -5755,7 +5761,7 @@ type WireguardEndpointUpdate struct {
 
 func (x *WireguardEndpointUpdate) Reset() {
 	*x = WireguardEndpointUpdate{}
-	mi := &file_felixbackend_proto_msgTypes[69]
+	mi := &file_felixbackend_proto_msgTypes[70]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5767,7 +5773,7 @@ func (x *WireguardEndpointUpdate) String() string {
 func (*WireguardEndpointUpdate) ProtoMessage() {}
 
 func (x *WireguardEndpointUpdate) ProtoReflect() protoreflect.Message {
-	mi := &file_felixbackend_proto_msgTypes[69]
+	mi := &file_felixbackend_proto_msgTypes[70]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5780,7 +5786,7 @@ func (x *WireguardEndpointUpdate) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WireguardEndpointUpdate.ProtoReflect.Descriptor instead.
 func (*WireguardEndpointUpdate) Descriptor() ([]byte, []int) {
-	return file_felixbackend_proto_rawDescGZIP(), []int{69}
+	return file_felixbackend_proto_rawDescGZIP(), []int{70}
 }
 
 func (x *WireguardEndpointUpdate) GetHostname() string {
@@ -5814,7 +5820,7 @@ type WireguardEndpointRemove struct {
 
 func (x *WireguardEndpointRemove) Reset() {
 	*x = WireguardEndpointRemove{}
-	mi := &file_felixbackend_proto_msgTypes[70]
+	mi := &file_felixbackend_proto_msgTypes[71]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5826,7 +5832,7 @@ func (x *WireguardEndpointRemove) String() string {
 func (*WireguardEndpointRemove) ProtoMessage() {}
 
 func (x *WireguardEndpointRemove) ProtoReflect() protoreflect.Message {
-	mi := &file_felixbackend_proto_msgTypes[70]
+	mi := &file_felixbackend_proto_msgTypes[71]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5839,7 +5845,7 @@ func (x *WireguardEndpointRemove) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WireguardEndpointRemove.ProtoReflect.Descriptor instead.
 func (*WireguardEndpointRemove) Descriptor() ([]byte, []int) {
-	return file_felixbackend_proto_rawDescGZIP(), []int{70}
+	return file_felixbackend_proto_rawDescGZIP(), []int{71}
 }
 
 func (x *WireguardEndpointRemove) GetHostname() string {
@@ -5863,7 +5869,7 @@ type WireguardEndpointV6Update struct {
 
 func (x *WireguardEndpointV6Update) Reset() {
 	*x = WireguardEndpointV6Update{}
-	mi := &file_felixbackend_proto_msgTypes[71]
+	mi := &file_felixbackend_proto_msgTypes[72]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5875,7 +5881,7 @@ func (x *WireguardEndpointV6Update) String() string {
 func (*WireguardEndpointV6Update) ProtoMessage() {}
 
 func (x *WireguardEndpointV6Update) ProtoReflect() protoreflect.Message {
-	mi := &file_felixbackend_proto_msgTypes[71]
+	mi := &file_felixbackend_proto_msgTypes[72]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5888,7 +5894,7 @@ func (x *WireguardEndpointV6Update) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WireguardEndpointV6Update.ProtoReflect.Descriptor instead.
 func (*WireguardEndpointV6Update) Descriptor() ([]byte, []int) {
-	return file_felixbackend_proto_rawDescGZIP(), []int{71}
+	return file_felixbackend_proto_rawDescGZIP(), []int{72}
 }
 
 func (x *WireguardEndpointV6Update) GetHostname() string {
@@ -5922,7 +5928,7 @@ type WireguardEndpointV6Remove struct {
 
 func (x *WireguardEndpointV6Remove) Reset() {
 	*x = WireguardEndpointV6Remove{}
-	mi := &file_felixbackend_proto_msgTypes[72]
+	mi := &file_felixbackend_proto_msgTypes[73]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5934,7 +5940,7 @@ func (x *WireguardEndpointV6Remove) String() string {
 func (*WireguardEndpointV6Remove) ProtoMessage() {}
 
 func (x *WireguardEndpointV6Remove) ProtoReflect() protoreflect.Message {
-	mi := &file_felixbackend_proto_msgTypes[72]
+	mi := &file_felixbackend_proto_msgTypes[73]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5947,7 +5953,7 @@ func (x *WireguardEndpointV6Remove) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WireguardEndpointV6Remove.ProtoReflect.Descriptor instead.
 func (*WireguardEndpointV6Remove) Descriptor() ([]byte, []int) {
-	return file_felixbackend_proto_rawDescGZIP(), []int{72}
+	return file_felixbackend_proto_rawDescGZIP(), []int{73}
 }
 
 func (x *WireguardEndpointV6Remove) GetHostname() string {
@@ -5970,7 +5976,7 @@ type GlobalBGPConfigUpdate struct {
 
 func (x *GlobalBGPConfigUpdate) Reset() {
 	*x = GlobalBGPConfigUpdate{}
-	mi := &file_felixbackend_proto_msgTypes[73]
+	mi := &file_felixbackend_proto_msgTypes[74]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5982,7 +5988,7 @@ func (x *GlobalBGPConfigUpdate) String() string {
 func (*GlobalBGPConfigUpdate) ProtoMessage() {}
 
 func (x *GlobalBGPConfigUpdate) ProtoReflect() protoreflect.Message {
-	mi := &file_felixbackend_proto_msgTypes[73]
+	mi := &file_felixbackend_proto_msgTypes[74]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5995,7 +6001,7 @@ func (x *GlobalBGPConfigUpdate) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GlobalBGPConfigUpdate.ProtoReflect.Descriptor instead.
 func (*GlobalBGPConfigUpdate) Descriptor() ([]byte, []int) {
-	return file_felixbackend_proto_rawDescGZIP(), []int{73}
+	return file_felixbackend_proto_rawDescGZIP(), []int{74}
 }
 
 func (x *GlobalBGPConfigUpdate) GetServiceClusterCidrs() []string {
@@ -6044,7 +6050,7 @@ type ServicePort struct {
 
 func (x *ServicePort) Reset() {
 	*x = ServicePort{}
-	mi := &file_felixbackend_proto_msgTypes[74]
+	mi := &file_felixbackend_proto_msgTypes[75]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6056,7 +6062,7 @@ func (x *ServicePort) String() string {
 func (*ServicePort) ProtoMessage() {}
 
 func (x *ServicePort) ProtoReflect() protoreflect.Message {
-	mi := &file_felixbackend_proto_msgTypes[74]
+	mi := &file_felixbackend_proto_msgTypes[75]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6069,7 +6075,7 @@ func (x *ServicePort) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ServicePort.ProtoReflect.Descriptor instead.
 func (*ServicePort) Descriptor() ([]byte, []int) {
-	return file_felixbackend_proto_rawDescGZIP(), []int{74}
+	return file_felixbackend_proto_rawDescGZIP(), []int{75}
 }
 
 func (x *ServicePort) GetProtocol() string {
@@ -6108,7 +6114,7 @@ type ServiceUpdate struct {
 
 func (x *ServiceUpdate) Reset() {
 	*x = ServiceUpdate{}
-	mi := &file_felixbackend_proto_msgTypes[75]
+	mi := &file_felixbackend_proto_msgTypes[76]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6120,7 +6126,7 @@ func (x *ServiceUpdate) String() string {
 func (*ServiceUpdate) ProtoMessage() {}
 
 func (x *ServiceUpdate) ProtoReflect() protoreflect.Message {
-	mi := &file_felixbackend_proto_msgTypes[75]
+	mi := &file_felixbackend_proto_msgTypes[76]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6133,7 +6139,7 @@ func (x *ServiceUpdate) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ServiceUpdate.ProtoReflect.Descriptor instead.
 func (*ServiceUpdate) Descriptor() ([]byte, []int) {
-	return file_felixbackend_proto_rawDescGZIP(), []int{75}
+	return file_felixbackend_proto_rawDescGZIP(), []int{76}
 }
 
 func (x *ServiceUpdate) GetName() string {
@@ -6195,7 +6201,7 @@ type ServiceRemove struct {
 
 func (x *ServiceRemove) Reset() {
 	*x = ServiceRemove{}
-	mi := &file_felixbackend_proto_msgTypes[76]
+	mi := &file_felixbackend_proto_msgTypes[77]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6207,7 +6213,7 @@ func (x *ServiceRemove) String() string {
 func (*ServiceRemove) ProtoMessage() {}
 
 func (x *ServiceRemove) ProtoReflect() protoreflect.Message {
-	mi := &file_felixbackend_proto_msgTypes[76]
+	mi := &file_felixbackend_proto_msgTypes[77]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6220,7 +6226,7 @@ func (x *ServiceRemove) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ServiceRemove.ProtoReflect.Descriptor instead.
 func (*ServiceRemove) Descriptor() ([]byte, []int) {
-	return file_felixbackend_proto_rawDescGZIP(), []int{76}
+	return file_felixbackend_proto_rawDescGZIP(), []int{77}
 }
 
 func (x *ServiceRemove) GetName() string {
@@ -6250,7 +6256,7 @@ type HTTPMatch_PathMatch struct {
 
 func (x *HTTPMatch_PathMatch) Reset() {
 	*x = HTTPMatch_PathMatch{}
-	mi := &file_felixbackend_proto_msgTypes[80]
+	mi := &file_felixbackend_proto_msgTypes[81]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6262,7 +6268,7 @@ func (x *HTTPMatch_PathMatch) String() string {
 func (*HTTPMatch_PathMatch) ProtoMessage() {}
 
 func (x *HTTPMatch_PathMatch) ProtoReflect() protoreflect.Message {
-	mi := &file_felixbackend_proto_msgTypes[80]
+	mi := &file_felixbackend_proto_msgTypes[81]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6517,7 +6523,10 @@ const file_felixbackend_proto_rawDesc = "" +
 	"endpointIdJ\x04\b\x01\x10\x02R\bhostname\"x\n" +
 	"\x16WorkloadEndpointUpdate\x12)\n" +
 	"\x02id\x18\x01 \x01(\v2\x19.felix.WorkloadEndpointIDR\x02id\x123\n" +
-	"\bendpoint\x18\x05 \x01(\v2\x17.felix.WorkloadEndpointR\bendpoint\"\x90\x05\n" +
+	"\bendpoint\x18\x05 \x01(\v2\x17.felix.WorkloadEndpointR\bendpoint\"H\n" +
+	"\x14WorkloadBpfSkipRedir\x12\x16\n" +
+	"\x06Egress\x18\x01 \x01(\bR\x06Egress\x12\x18\n" +
+	"\aIngress\x18\x02 \x01(\bR\aIngress\"\xa3\x05\n" +
 	"\x10WorkloadEndpoint\x12\x14\n" +
 	"\x05state\x18\x01 \x01(\tR\x05state\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x10\n" +
@@ -6533,8 +6542,9 @@ const file_felixbackend_proto_rawDesc = "" +
 	" \x03(\tR\x1aallowSpoofedSourcePrefixes\x12J\n" +
 	"\vannotations\x18\v \x03(\v2(.felix.WorkloadEndpoint.AnnotationsEntryR\vannotations\x125\n" +
 	"\fqos_controls\x18\f \x01(\v2\x12.felix.QoSControlsR\vqosControls\x129\n" +
-	"\x0elocal_bgp_peer\x18\r \x01(\v2\x13.felix.LocalBGPPeerR\flocalBgpPeer\x12'\n" +
-	"\x04type\x18\x0e \x01(\x0e2\x13.felix.WorkloadTypeR\x04type\x1a>\n" +
+	"\x0elocal_bgp_peer\x18\r \x01(\v2\x13.felix.LocalBGPPeerR\flocalBgpPeer\x12:\n" +
+	"\n" +
+	"skip_redir\x18\x0e \x01(\v2\x1b.felix.WorkloadBpfSkipRedirR\tskipRedir\x1a>\n" +
 	"\x10AnnotationsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xef\x04\n" +
@@ -6779,10 +6789,7 @@ const file_felixbackend_proto_rawDesc = "" +
 	"\tIPVersion\x12\a\n" +
 	"\x03ANY\x10\x00\x12\b\n" +
 	"\x04IPV4\x10\x04\x12\b\n" +
-	"\x04IPV6\x10\x06*#\n" +
-	"\fWorkloadType\x12\v\n" +
-	"\aREGULAR\x10\x00\x12\x06\n" +
-	"\x02VM\x10\x01*\x89\x01\n" +
+	"\x04IPV6\x10\x06*\x89\x01\n" +
 	"\tRouteType\x12\r\n" +
 	"\tCIDR_INFO\x10\x00\x12\x13\n" +
 	"\x0fREMOTE_WORKLOAD\x10\x01\x12\x0f\n" +
@@ -6819,45 +6826,45 @@ func file_felixbackend_proto_rawDescGZIP() []byte {
 	return file_felixbackend_proto_rawDescData
 }
 
-var file_felixbackend_proto_enumTypes = make([]protoimpl.EnumInfo, 10)
-var file_felixbackend_proto_msgTypes = make([]protoimpl.MessageInfo, 86)
+var file_felixbackend_proto_enumTypes = make([]protoimpl.EnumInfo, 9)
+var file_felixbackend_proto_msgTypes = make([]protoimpl.MessageInfo, 87)
 var file_felixbackend_proto_goTypes = []any{
 	(IPVersion)(0),                       // 0: felix.IPVersion
-	(WorkloadType)(0),                    // 1: felix.WorkloadType
-	(RouteType)(0),                       // 2: felix.RouteType
-	(IPPoolType)(0),                      // 3: felix.IPPoolType
-	(Action)(0),                          // 4: felix.Action
-	(IPSetUpdate_IPSetType)(0),           // 5: felix.IPSetUpdate.IPSetType
-	(Statistic_Direction)(0),             // 6: felix.Statistic.Direction
-	(Statistic_Relativity)(0),            // 7: felix.Statistic.Relativity
-	(Statistic_Kind)(0),                  // 8: felix.Statistic.Kind
-	(RuleTrace_Direction)(0),             // 9: felix.RuleTrace.Direction
-	(*SyncRequest)(nil),                  // 10: felix.SyncRequest
-	(*ToDataplane)(nil),                  // 11: felix.ToDataplane
-	(*FromDataplane)(nil),                // 12: felix.FromDataplane
-	(*ConfigUpdate)(nil),                 // 13: felix.ConfigUpdate
-	(*RawConfig)(nil),                    // 14: felix.RawConfig
-	(*InSync)(nil),                       // 15: felix.InSync
-	(*IPSetUpdate)(nil),                  // 16: felix.IPSetUpdate
-	(*IPSetDeltaUpdate)(nil),             // 17: felix.IPSetDeltaUpdate
-	(*IPSetRemove)(nil),                  // 18: felix.IPSetRemove
-	(*ActiveProfileUpdate)(nil),          // 19: felix.ActiveProfileUpdate
-	(*ActiveProfileRemove)(nil),          // 20: felix.ActiveProfileRemove
-	(*ProfileID)(nil),                    // 21: felix.ProfileID
-	(*Profile)(nil),                      // 22: felix.Profile
-	(*ActivePolicyUpdate)(nil),           // 23: felix.ActivePolicyUpdate
-	(*ActivePolicyRemove)(nil),           // 24: felix.ActivePolicyRemove
-	(*PolicyID)(nil),                     // 25: felix.PolicyID
-	(*Policy)(nil),                       // 26: felix.Policy
-	(*Rule)(nil),                         // 27: felix.Rule
-	(*ServiceAccountMatch)(nil),          // 28: felix.ServiceAccountMatch
-	(*HTTPMatch)(nil),                    // 29: felix.HTTPMatch
-	(*RuleMetadata)(nil),                 // 30: felix.RuleMetadata
-	(*IcmpTypeAndCode)(nil),              // 31: felix.IcmpTypeAndCode
-	(*Protocol)(nil),                     // 32: felix.Protocol
-	(*PortRange)(nil),                    // 33: felix.PortRange
-	(*WorkloadEndpointID)(nil),           // 34: felix.WorkloadEndpointID
-	(*WorkloadEndpointUpdate)(nil),       // 35: felix.WorkloadEndpointUpdate
+	(RouteType)(0),                       // 1: felix.RouteType
+	(IPPoolType)(0),                      // 2: felix.IPPoolType
+	(Action)(0),                          // 3: felix.Action
+	(IPSetUpdate_IPSetType)(0),           // 4: felix.IPSetUpdate.IPSetType
+	(Statistic_Direction)(0),             // 5: felix.Statistic.Direction
+	(Statistic_Relativity)(0),            // 6: felix.Statistic.Relativity
+	(Statistic_Kind)(0),                  // 7: felix.Statistic.Kind
+	(RuleTrace_Direction)(0),             // 8: felix.RuleTrace.Direction
+	(*SyncRequest)(nil),                  // 9: felix.SyncRequest
+	(*ToDataplane)(nil),                  // 10: felix.ToDataplane
+	(*FromDataplane)(nil),                // 11: felix.FromDataplane
+	(*ConfigUpdate)(nil),                 // 12: felix.ConfigUpdate
+	(*RawConfig)(nil),                    // 13: felix.RawConfig
+	(*InSync)(nil),                       // 14: felix.InSync
+	(*IPSetUpdate)(nil),                  // 15: felix.IPSetUpdate
+	(*IPSetDeltaUpdate)(nil),             // 16: felix.IPSetDeltaUpdate
+	(*IPSetRemove)(nil),                  // 17: felix.IPSetRemove
+	(*ActiveProfileUpdate)(nil),          // 18: felix.ActiveProfileUpdate
+	(*ActiveProfileRemove)(nil),          // 19: felix.ActiveProfileRemove
+	(*ProfileID)(nil),                    // 20: felix.ProfileID
+	(*Profile)(nil),                      // 21: felix.Profile
+	(*ActivePolicyUpdate)(nil),           // 22: felix.ActivePolicyUpdate
+	(*ActivePolicyRemove)(nil),           // 23: felix.ActivePolicyRemove
+	(*PolicyID)(nil),                     // 24: felix.PolicyID
+	(*Policy)(nil),                       // 25: felix.Policy
+	(*Rule)(nil),                         // 26: felix.Rule
+	(*ServiceAccountMatch)(nil),          // 27: felix.ServiceAccountMatch
+	(*HTTPMatch)(nil),                    // 28: felix.HTTPMatch
+	(*RuleMetadata)(nil),                 // 29: felix.RuleMetadata
+	(*IcmpTypeAndCode)(nil),              // 30: felix.IcmpTypeAndCode
+	(*Protocol)(nil),                     // 31: felix.Protocol
+	(*PortRange)(nil),                    // 32: felix.PortRange
+	(*WorkloadEndpointID)(nil),           // 33: felix.WorkloadEndpointID
+	(*WorkloadEndpointUpdate)(nil),       // 34: felix.WorkloadEndpointUpdate
+	(*WorkloadBpfSkipRedir)(nil),         // 35: felix.WorkloadBpfSkipRedir
 	(*WorkloadEndpoint)(nil),             // 36: felix.WorkloadEndpoint
 	(*QoSControls)(nil),                  // 37: felix.QoSControls
 	(*LocalBGPPeer)(nil),                 // 38: felix.LocalBGPPeer
@@ -6920,19 +6927,19 @@ var file_felixbackend_proto_goTypes = []any{
 	nil,                                  // 95: felix.NamespaceUpdate.LabelsEntry
 }
 var file_felixbackend_proto_depIdxs = []int32{
-	15,  // 0: felix.ToDataplane.in_sync:type_name -> felix.InSync
-	16,  // 1: felix.ToDataplane.ipset_update:type_name -> felix.IPSetUpdate
-	17,  // 2: felix.ToDataplane.ipset_delta_update:type_name -> felix.IPSetDeltaUpdate
-	18,  // 3: felix.ToDataplane.ipset_remove:type_name -> felix.IPSetRemove
-	19,  // 4: felix.ToDataplane.active_profile_update:type_name -> felix.ActiveProfileUpdate
-	20,  // 5: felix.ToDataplane.active_profile_remove:type_name -> felix.ActiveProfileRemove
-	23,  // 6: felix.ToDataplane.active_policy_update:type_name -> felix.ActivePolicyUpdate
-	24,  // 7: felix.ToDataplane.active_policy_remove:type_name -> felix.ActivePolicyRemove
+	14,  // 0: felix.ToDataplane.in_sync:type_name -> felix.InSync
+	15,  // 1: felix.ToDataplane.ipset_update:type_name -> felix.IPSetUpdate
+	16,  // 2: felix.ToDataplane.ipset_delta_update:type_name -> felix.IPSetDeltaUpdate
+	17,  // 3: felix.ToDataplane.ipset_remove:type_name -> felix.IPSetRemove
+	18,  // 4: felix.ToDataplane.active_profile_update:type_name -> felix.ActiveProfileUpdate
+	19,  // 5: felix.ToDataplane.active_profile_remove:type_name -> felix.ActiveProfileRemove
+	22,  // 6: felix.ToDataplane.active_policy_update:type_name -> felix.ActivePolicyUpdate
+	23,  // 7: felix.ToDataplane.active_policy_remove:type_name -> felix.ActivePolicyRemove
 	41,  // 8: felix.ToDataplane.host_endpoint_update:type_name -> felix.HostEndpointUpdate
 	43,  // 9: felix.ToDataplane.host_endpoint_remove:type_name -> felix.HostEndpointRemove
-	35,  // 10: felix.ToDataplane.workload_endpoint_update:type_name -> felix.WorkloadEndpointUpdate
+	34,  // 10: felix.ToDataplane.workload_endpoint_update:type_name -> felix.WorkloadEndpointUpdate
 	39,  // 11: felix.ToDataplane.workload_endpoint_remove:type_name -> felix.WorkloadEndpointRemove
-	13,  // 12: felix.ToDataplane.config_update:type_name -> felix.ConfigUpdate
+	12,  // 12: felix.ToDataplane.config_update:type_name -> felix.ConfigUpdate
 	56,  // 13: felix.ToDataplane.host_metadata_update:type_name -> felix.HostMetadataUpdate
 	57,  // 14: felix.ToDataplane.host_metadata_remove:type_name -> felix.HostMetadataRemove
 	54,  // 15: felix.ToDataplane.host_metadata_v4v6_update:type_name -> felix.HostMetadataV4V6Update
@@ -6967,33 +6974,33 @@ var file_felixbackend_proto_depIdxs = []int32{
 	87,  // 44: felix.ConfigUpdate.config:type_name -> felix.ConfigUpdate.ConfigEntry
 	88,  // 45: felix.ConfigUpdate.source_to_raw_config:type_name -> felix.ConfigUpdate.SourceToRawConfigEntry
 	89,  // 46: felix.RawConfig.config:type_name -> felix.RawConfig.ConfigEntry
-	5,   // 47: felix.IPSetUpdate.type:type_name -> felix.IPSetUpdate.IPSetType
-	21,  // 48: felix.ActiveProfileUpdate.id:type_name -> felix.ProfileID
-	22,  // 49: felix.ActiveProfileUpdate.profile:type_name -> felix.Profile
-	21,  // 50: felix.ActiveProfileRemove.id:type_name -> felix.ProfileID
-	27,  // 51: felix.Profile.inbound_rules:type_name -> felix.Rule
-	27,  // 52: felix.Profile.outbound_rules:type_name -> felix.Rule
-	25,  // 53: felix.ActivePolicyUpdate.id:type_name -> felix.PolicyID
-	26,  // 54: felix.ActivePolicyUpdate.policy:type_name -> felix.Policy
-	25,  // 55: felix.ActivePolicyRemove.id:type_name -> felix.PolicyID
-	27,  // 56: felix.Policy.inbound_rules:type_name -> felix.Rule
-	27,  // 57: felix.Policy.outbound_rules:type_name -> felix.Rule
+	4,   // 47: felix.IPSetUpdate.type:type_name -> felix.IPSetUpdate.IPSetType
+	20,  // 48: felix.ActiveProfileUpdate.id:type_name -> felix.ProfileID
+	21,  // 49: felix.ActiveProfileUpdate.profile:type_name -> felix.Profile
+	20,  // 50: felix.ActiveProfileRemove.id:type_name -> felix.ProfileID
+	26,  // 51: felix.Profile.inbound_rules:type_name -> felix.Rule
+	26,  // 52: felix.Profile.outbound_rules:type_name -> felix.Rule
+	24,  // 53: felix.ActivePolicyUpdate.id:type_name -> felix.PolicyID
+	25,  // 54: felix.ActivePolicyUpdate.policy:type_name -> felix.Policy
+	24,  // 55: felix.ActivePolicyRemove.id:type_name -> felix.PolicyID
+	26,  // 56: felix.Policy.inbound_rules:type_name -> felix.Rule
+	26,  // 57: felix.Policy.outbound_rules:type_name -> felix.Rule
 	0,   // 58: felix.Rule.ip_version:type_name -> felix.IPVersion
-	32,  // 59: felix.Rule.protocol:type_name -> felix.Protocol
-	33,  // 60: felix.Rule.src_ports:type_name -> felix.PortRange
-	33,  // 61: felix.Rule.dst_ports:type_name -> felix.PortRange
-	31,  // 62: felix.Rule.icmp_type_code:type_name -> felix.IcmpTypeAndCode
-	32,  // 63: felix.Rule.not_protocol:type_name -> felix.Protocol
-	33,  // 64: felix.Rule.not_src_ports:type_name -> felix.PortRange
-	33,  // 65: felix.Rule.not_dst_ports:type_name -> felix.PortRange
-	31,  // 66: felix.Rule.not_icmp_type_code:type_name -> felix.IcmpTypeAndCode
-	28,  // 67: felix.Rule.src_service_account_match:type_name -> felix.ServiceAccountMatch
-	28,  // 68: felix.Rule.dst_service_account_match:type_name -> felix.ServiceAccountMatch
-	29,  // 69: felix.Rule.http_match:type_name -> felix.HTTPMatch
-	30,  // 70: felix.Rule.metadata:type_name -> felix.RuleMetadata
+	31,  // 59: felix.Rule.protocol:type_name -> felix.Protocol
+	32,  // 60: felix.Rule.src_ports:type_name -> felix.PortRange
+	32,  // 61: felix.Rule.dst_ports:type_name -> felix.PortRange
+	30,  // 62: felix.Rule.icmp_type_code:type_name -> felix.IcmpTypeAndCode
+	31,  // 63: felix.Rule.not_protocol:type_name -> felix.Protocol
+	32,  // 64: felix.Rule.not_src_ports:type_name -> felix.PortRange
+	32,  // 65: felix.Rule.not_dst_ports:type_name -> felix.PortRange
+	30,  // 66: felix.Rule.not_icmp_type_code:type_name -> felix.IcmpTypeAndCode
+	27,  // 67: felix.Rule.src_service_account_match:type_name -> felix.ServiceAccountMatch
+	27,  // 68: felix.Rule.dst_service_account_match:type_name -> felix.ServiceAccountMatch
+	28,  // 69: felix.Rule.http_match:type_name -> felix.HTTPMatch
+	29,  // 70: felix.Rule.metadata:type_name -> felix.RuleMetadata
 	90,  // 71: felix.HTTPMatch.paths:type_name -> felix.HTTPMatch.PathMatch
 	91,  // 72: felix.RuleMetadata.annotations:type_name -> felix.RuleMetadata.AnnotationsEntry
-	34,  // 73: felix.WorkloadEndpointUpdate.id:type_name -> felix.WorkloadEndpointID
+	33,  // 73: felix.WorkloadEndpointUpdate.id:type_name -> felix.WorkloadEndpointID
 	36,  // 74: felix.WorkloadEndpointUpdate.endpoint:type_name -> felix.WorkloadEndpoint
 	44,  // 75: felix.WorkloadEndpoint.tiers:type_name -> felix.TierInfo
 	45,  // 76: felix.WorkloadEndpoint.ipv4_nat:type_name -> felix.NatInfo
@@ -7001,8 +7008,8 @@ var file_felixbackend_proto_depIdxs = []int32{
 	92,  // 78: felix.WorkloadEndpoint.annotations:type_name -> felix.WorkloadEndpoint.AnnotationsEntry
 	37,  // 79: felix.WorkloadEndpoint.qos_controls:type_name -> felix.QoSControls
 	38,  // 80: felix.WorkloadEndpoint.local_bgp_peer:type_name -> felix.LocalBGPPeer
-	1,   // 81: felix.WorkloadEndpoint.type:type_name -> felix.WorkloadType
-	34,  // 82: felix.WorkloadEndpointRemove.id:type_name -> felix.WorkloadEndpointID
+	35,  // 81: felix.WorkloadEndpoint.skip_redir:type_name -> felix.WorkloadBpfSkipRedir
+	33,  // 82: felix.WorkloadEndpointRemove.id:type_name -> felix.WorkloadEndpointID
 	40,  // 83: felix.HostEndpointUpdate.id:type_name -> felix.HostEndpointID
 	42,  // 84: felix.HostEndpointUpdate.endpoint:type_name -> felix.HostEndpoint
 	44,  // 85: felix.HostEndpoint.tiers:type_name -> felix.TierInfo
@@ -7013,10 +7020,10 @@ var file_felixbackend_proto_depIdxs = []int32{
 	40,  // 90: felix.HostEndpointStatusUpdate.id:type_name -> felix.HostEndpointID
 	48,  // 91: felix.HostEndpointStatusUpdate.status:type_name -> felix.EndpointStatus
 	40,  // 92: felix.HostEndpointStatusRemove.id:type_name -> felix.HostEndpointID
-	34,  // 93: felix.WorkloadEndpointStatusUpdate.id:type_name -> felix.WorkloadEndpointID
+	33,  // 93: felix.WorkloadEndpointStatusUpdate.id:type_name -> felix.WorkloadEndpointID
 	48,  // 94: felix.WorkloadEndpointStatusUpdate.status:type_name -> felix.EndpointStatus
 	36,  // 95: felix.WorkloadEndpointStatusUpdate.endpoint:type_name -> felix.WorkloadEndpoint
-	34,  // 96: felix.WorkloadEndpointStatusRemove.id:type_name -> felix.WorkloadEndpointID
+	33,  // 96: felix.WorkloadEndpointStatusRemove.id:type_name -> felix.WorkloadEndpointID
 	0,   // 97: felix.WireguardStatusUpdate.ip_version:type_name -> felix.IPVersion
 	93,  // 98: felix.HostMetadataV4V6Update.labels:type_name -> felix.HostMetadataV4V6Update.LabelsEntry
 	62,  // 99: felix.IPAMPoolUpdate.pool:type_name -> felix.IPAMPool
@@ -7026,25 +7033,25 @@ var file_felixbackend_proto_depIdxs = []int32{
 	69,  // 103: felix.NamespaceUpdate.id:type_name -> felix.NamespaceID
 	95,  // 104: felix.NamespaceUpdate.labels:type_name -> felix.NamespaceUpdate.LabelsEntry
 	69,  // 105: felix.NamespaceRemove.id:type_name -> felix.NamespaceID
-	2,   // 106: felix.RouteUpdate.types:type_name -> felix.RouteType
-	3,   // 107: felix.RouteUpdate.ip_pool_type:type_name -> felix.IPPoolType
+	1,   // 106: felix.RouteUpdate.types:type_name -> felix.RouteType
+	2,   // 107: felix.RouteUpdate.ip_pool_type:type_name -> felix.IPPoolType
 	70,  // 108: felix.RouteUpdate.tunnel_type:type_name -> felix.TunnelType
-	32,  // 109: felix.DataplaneStats.protocol:type_name -> felix.Protocol
+	31,  // 109: felix.DataplaneStats.protocol:type_name -> felix.Protocol
 	77,  // 110: felix.DataplaneStats.stats:type_name -> felix.Statistic
 	78,  // 111: felix.DataplaneStats.rules:type_name -> felix.RuleTrace
-	4,   // 112: felix.DataplaneStats.action:type_name -> felix.Action
-	6,   // 113: felix.Statistic.direction:type_name -> felix.Statistic.Direction
-	7,   // 114: felix.Statistic.relativity:type_name -> felix.Statistic.Relativity
-	8,   // 115: felix.Statistic.kind:type_name -> felix.Statistic.Kind
-	4,   // 116: felix.Statistic.action:type_name -> felix.Action
-	25,  // 117: felix.RuleTrace.policy:type_name -> felix.PolicyID
-	21,  // 118: felix.RuleTrace.profile:type_name -> felix.ProfileID
-	9,   // 119: felix.RuleTrace.direction:type_name -> felix.RuleTrace.Direction
+	3,   // 112: felix.DataplaneStats.action:type_name -> felix.Action
+	5,   // 113: felix.Statistic.direction:type_name -> felix.Statistic.Direction
+	6,   // 114: felix.Statistic.relativity:type_name -> felix.Statistic.Relativity
+	7,   // 115: felix.Statistic.kind:type_name -> felix.Statistic.Kind
+	3,   // 116: felix.Statistic.action:type_name -> felix.Action
+	24,  // 117: felix.RuleTrace.policy:type_name -> felix.PolicyID
+	20,  // 118: felix.RuleTrace.profile:type_name -> felix.ProfileID
+	8,   // 119: felix.RuleTrace.direction:type_name -> felix.RuleTrace.Direction
 	84,  // 120: felix.ServiceUpdate.ports:type_name -> felix.ServicePort
-	14,  // 121: felix.ConfigUpdate.SourceToRawConfigEntry.value:type_name -> felix.RawConfig
-	10,  // 122: felix.PolicySync.Sync:input_type -> felix.SyncRequest
+	13,  // 121: felix.ConfigUpdate.SourceToRawConfigEntry.value:type_name -> felix.RawConfig
+	9,   // 122: felix.PolicySync.Sync:input_type -> felix.SyncRequest
 	76,  // 123: felix.PolicySync.Report:input_type -> felix.DataplaneStats
-	11,  // 124: felix.PolicySync.Sync:output_type -> felix.ToDataplane
+	10,  // 124: felix.PolicySync.Sync:output_type -> felix.ToDataplane
 	75,  // 125: felix.PolicySync.Report:output_type -> felix.ReportResult
 	124, // [124:126] is the sub-list for method output_type
 	122, // [122:124] is the sub-list for method input_type
@@ -7116,12 +7123,12 @@ func file_felixbackend_proto_init() {
 		(*Protocol_Number)(nil),
 		(*Protocol_Name)(nil),
 	}
-	file_felixbackend_proto_msgTypes[68].OneofWrappers = []any{
+	file_felixbackend_proto_msgTypes[69].OneofWrappers = []any{
 		(*RuleTrace_Policy)(nil),
 		(*RuleTrace_Profile)(nil),
 		(*RuleTrace_None)(nil),
 	}
-	file_felixbackend_proto_msgTypes[80].OneofWrappers = []any{
+	file_felixbackend_proto_msgTypes[81].OneofWrappers = []any{
 		(*HTTPMatch_PathMatch_Exact)(nil),
 		(*HTTPMatch_PathMatch_Prefix)(nil),
 	}
@@ -7130,8 +7137,8 @@ func file_felixbackend_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_felixbackend_proto_rawDesc), len(file_felixbackend_proto_rawDesc)),
-			NumEnums:      10,
-			NumMessages:   86,
+			NumEnums:      9,
+			NumMessages:   87,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
