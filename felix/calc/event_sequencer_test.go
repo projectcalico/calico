@@ -143,7 +143,7 @@ var _ = DescribeTable("ModelWorkloadEndpointToProto",
 			IngressMaxConnections: 13000000,
 			EgressMaxConnections:  14000000,
 		},
-		SkipRedir: &proto.WorkloadBpfSkipRedir{Ingress: true},
+		SkipRedir: &proto.WorkloadBpfSkipRedir{Ingress: true, Egress: true},
 	}),
 )
 

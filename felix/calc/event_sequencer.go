@@ -428,12 +428,15 @@ func ModelWorkloadEndpointToProto(ep *model.WorkloadEndpoint, peerData *Endpoint
 		}
 	}
 
+	var skipRedir *proto.WorkloadBpfSkipRedir
 	// BPF ingress redirect should be skipped for VM workloads and workloads that have ingress BW QoS configured
-	skipRedir := &proto.WorkloadBpfSkipRedir{}
 	if isVMWorkload(ep.Labels) || (ep.QoSControls != nil && ep.QoSControls.IngressBandwidth > 0) {
-		skipRedir.Ingress = true
+		skipRedir = &proto.WorkloadBpfSkipRedir{Ingress: true}
 	}
 	if ep.QoSControls != nil && ep.QoSControls.EgressBandwidth > 0 {
+		if skipRedir == nil {
+			skipRedir = &proto.WorkloadBpfSkipRedir{}
+		}
 		skipRedir.Egress = true
 	}
 
