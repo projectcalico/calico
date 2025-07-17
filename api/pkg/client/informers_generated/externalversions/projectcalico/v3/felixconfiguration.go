@@ -47,13 +47,25 @@ func NewFilteredFelixConfigurationInformer(client clientset.Interface, resyncPer
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.ProjectcalicoV3().FelixConfigurations().List(context.TODO(), options)
+				return client.ProjectcalicoV3().FelixConfigurations().List(context.Background(), options)
 			},
 			WatchFunc: func(options v1.ListOptions) (watch.Interface, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.ProjectcalicoV3().FelixConfigurations().Watch(context.TODO(), options)
+				return client.ProjectcalicoV3().FelixConfigurations().Watch(context.Background(), options)
+			},
+			ListWithContextFunc: func(ctx context.Context, options v1.ListOptions) (runtime.Object, error) {
+				if tweakListOptions != nil {
+					tweakListOptions(&options)
+				}
+				return client.ProjectcalicoV3().FelixConfigurations().List(ctx, options)
+			},
+			WatchFuncWithContext: func(ctx context.Context, options v1.ListOptions) (watch.Interface, error) {
+				if tweakListOptions != nil {
+					tweakListOptions(&options)
+				}
+				return client.ProjectcalicoV3().FelixConfigurations().Watch(ctx, options)
 			},
 		},
 		&apisprojectcalicov3.FelixConfiguration{},
