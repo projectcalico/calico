@@ -54,6 +54,7 @@ type AttachPoint struct {
 	ToHostDrop              bool
 	DSR                     bool
 	DSROptoutCIDRs          bool
+	HasEgressQoSBW          bool
 	TunnelMTU               uint16
 	VXLANPort               uint16
 	WgPort                  uint16
@@ -434,6 +435,10 @@ func (ap *AttachPoint) Configure() *libbpf.TcGlobalData {
 
 	if ap.DSROptoutCIDRs {
 		globalData.Flags |= libbpf.GlobalsNoDSRCidrs
+	}
+
+	if ap.HasEgressQoSBW {
+		globalData.Flags |= libbpf.GlobalsSkipEgressRedirect
 	}
 
 	switch ap.RPFEnforceOption {
