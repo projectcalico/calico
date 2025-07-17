@@ -218,7 +218,7 @@ var _ = infrastructure.DatastoreDescribe(
 					topt.DelayFelixStart = true
 					topt.TriggerDelayedFelixStart = true
 
-					if _, ok := infra.(*EtcdDatastoreInfra); ok && BPFMode() {
+					if _, ok := infra.(*infrastructure.EtcdDatastoreInfra); ok && BPFMode() {
 						Skip("Skipping QoS control tests on etcd datastore and BPF mode.")
 					}
 
