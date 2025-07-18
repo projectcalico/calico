@@ -583,7 +583,7 @@ func (c *client) updatePeersV1() {
 			log.Debugf("Local nodes %#v", localNodeNames)
 
 			var peers []*bgpPeer
-			if v3res.Spec.LocalWorkloadSelector != "" {
+			if (v3res.Spec.LocalWorkloadSelector != "") && (c.localBGPPeerWatcher != nil) {
 				// Get active local BGP Peers.
 				log.Infof("Process on local workload bgp peer %s", v3res.Name)
 				for _, peerData := range c.localBGPPeerWatcher.GetActiveLocalBGPPeers() {
