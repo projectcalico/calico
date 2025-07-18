@@ -420,31 +420,6 @@ func (arc *ActiveRulesCalculator) onMatchStarted(selID, labelId interface{}) {
 				l.OnPolicyMatch(polKey, labelId)
 			}
 		}
-	/*case model.ResourceKey:
-	switch polKey.Kind {
-	case v3.KindQoSPolicy:
-		policyWasActive := arc.qosPolicyIDToEndpointKeys.ContainsKey(polKey.Name)
-		arc.qosPolicyIDToEndpointKeys.Put(polKey.Name, labelId)
-		if !policyWasActive {
-			// Policy wasn't active before, tell the listener.  The policy
-			// must be in allPolicies because we can only match on a policy
-			// that we've seen.
-			log.Debugf("QoS policy %v now active", polKey)
-			policy, known := arc.allQoSPolicies[polKey.Name]
-			if !known {
-				log.WithField("policy", polKey).Panic("QoS policy active but missing from allQoSPolicies.")
-			}
-			arc.sendQoSPolicyUpdate(polKey.Name, policy)
-		}
-
-		if labelId, ok := labelId.(model.EndpointKey); ok {
-			for _, l := range arc.PolicyMatchListeners {
-				l.OnQoSPolicyMatch(polKey.Name, labelId)
-			}
-		}
-	default:
-		panic("Unexpected v3 resource")
-	}*/
 	default:
 		panic("Unexepected selector ID type")
 	}
@@ -563,22 +538,6 @@ func (arc *ActiveRulesCalculator) sendPolicyUpdate(policyKey model.PolicyKey, po
 		}
 	}
 }
-
-/*func (arc *ActiveRulesCalculator) sendQoSPolicyUpdate(policyKey string, policy *v3.QoSPolicy) {
-	known := policy != nil
-	active := arc.qosPolicyIDToEndpointKeys.ContainsKey(policyKey)
-	log.Debugf("Sending qos policy update for policy %v (known: %v, active: %v)", policyKey, known, active)
-	if active {
-		if !known {
-			// This shouldn't happen because a policy can only become active if
-			// we know its selector, which is inside the policy struct.
-			log.WithField("policyKey", policyKey).Panic("Unknown qos policy became active!")
-		}
-		arc.RuleScanner.OnQoSPolicyActive(policyKey, policy)
-	} else {
-		arc.RuleScanner.OnQoSPolicyInactive(policyKey)
-	}
-}*/
 
 func (arc *ActiveRulesCalculator) isALPPolicy(policy *model.Policy) bool {
 	// Policy is a ALP policy if HTTPMatch rule or service account selector exists.

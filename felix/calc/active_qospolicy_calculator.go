@@ -42,20 +42,12 @@ type ActiveQoSPolicyCalculator struct {
 	labelIndex *labelindex.InheritIndex
 
 	// Callback objects.
-	OnQoSPolicyDataUpdate func(id model.EndpointKey, qosPolicy *endpointQoSPolicy)
-}
-
-type endpointQoSPolicy struct {
-	v3QoSPolicyName string
+	OnQoSPolicyDataUpdate func(id model.EndpointKey, qosPolicy *qosPolicyKey)
 }
 
 type qosPolicyKey struct {
 	Name  string
-	Order *float64
-}
-
-type qosPolicyInfo struct {
-	Order float64
+	Order float64 // TODO (Mazdak): reference or not!!
 }
 
 func NewActiveQoSPolicyCalculator() *ActiveQoSPolicyCalculator {
@@ -97,11 +89,9 @@ func (aqpc *ActiveQoSPolicyCalculator) OnUpdate(update api.Update) (_ bool) {
 					return
 				}
 
-				aqpc.allPolicies[key.Name] = policy
 				aqpc.onPolicyActive(policy)
 			} else {
 				log.Debugf("Deleting qos policy %v from ARC", key)
-				delete(aqpc.allPolicies, key.Name)
 				aqpc.OnPolicyInactive(key.Name)
 			}
 		default:
@@ -117,6 +107,16 @@ func (aqpc *ActiveQoSPolicyCalculator) OnUpdate(update api.Update) (_ bool) {
 
 func (aqpc *ActiveQoSPolicyCalculator) onPolicyActive(policy *v3.QoSPolicy) {
 	name := policy.Name
+	oldPolicy := aqpc.allPolicies[name]
+	if oldPolicy != nil {
+		// Need to do delete prior to ReplaceOrInsert because we don't insert strictly based on key but rather a
+		// combination of key + value so if for instance we add PolKV{k1, v1} then add PolKV{k1, v2} we'll simply have
+		// both KVs in the tree instead of only {k1, v2} like we want. By deleting first we guarantee that only the
+		// newest value remains in the tree.
+		aqpc.sortedQoSPolicies.Delete(v3PolicyToQoSPolicyKey(oldPolicy))
+	}
+	aqpc.sortedQoSPolicies.ReplaceOrInsert(v3PolicyToQoSPolicyKey(policy))
+	aqpc.allPolicies[name] = policy
 
 	// Update the index, which will call us back if the selector no
 	// longer matches.  Note: we can't skip this even if the
@@ -134,18 +134,37 @@ func (aqpc *ActiveQoSPolicyCalculator) onPolicyActive(policy *v3.QoSPolicy) {
 		log.Debug("QoS policy updated while active, telling listener")
 		aqpc.sendPolicyUpdate(name, policy)
 	}
+
+}
+
+func v3PolicyToQoSPolicyKey(policy *v3.QoSPolicy) qosPolicyKey {
+	order := polMetaDefaultOrder
+	if policy.Spec.Order != nil {
+		order = *policy.Spec.Order
+	}
+	return qosPolicyKey{
+		Name:  policy.Name,
+		Order: order,
+	}
 }
 
 func (aqpc *ActiveQoSPolicyCalculator) OnPolicyInactive(name string) {
+	oldPolicy, exists := aqpc.allPolicies[name]
+	if exists {
+		aqpc.sortedQoSPolicies.Delete(v3PolicyToQoSPolicyKey(oldPolicy))
+	}
+	delete(aqpc.allPolicies, name)
 	// No need to call updateQoSPolicy() because we'll have got a matchStopped callback.
 	aqpc.labelIndex.DeleteSelector(name)
 }
 
 func (aqpc *ActiveQoSPolicyCalculator) onMatchStarted(policyName any, endpointID any) {
-	id := endpointID.(model.EndpointKey)
 	polName := policyName.(string)
 	policyWasActive := aqpc.policyIDToEndpointIDs.ContainsKey(polName)
-	aqpc.policyIDToEndpointIDs.Put(polName, endpointID)
+	if id, ok := endpointID.(model.EndpointKey); ok {
+		aqpc.policyIDToEndpointIDs.Put(polName, id)
+		aqpc.endpointIDToPolicyIDs.Put(id, polName)
+	}
 	if !policyWasActive {
 		// Policy wasn't active before, tell the listener.  The policy
 		// must be in allPolicies because we can only match on a policy
@@ -156,32 +175,27 @@ func (aqpc *ActiveQoSPolicyCalculator) onMatchStarted(policyName any, endpointID
 			log.WithField("policy", polName).Panic("Policy active but missing from allPolicies.")
 		}
 
-		aqpc.sendPolicyUpdate(id, policy)
+		aqpc.sendPolicyUpdate(polName, policy)
 	}
-	/*if labelId, ok := labelId.(model.EndpointKey); ok {
-		for _, l := range aqpc.PolicyMatchListeners {
-			l.OnPolicyMatch(polKey, labelId)
-		}
-	}*/
 }
 
 func (aqpc *ActiveQoSPolicyCalculator) onMatchStopped(selID, labelId interface{}) {
 	polKey := selID.(string)
-	aqpc.policyIDToEndpointIDs.Discard(polKey, labelId)
-	if !aqpc.policyIDToEndpointIDs.ContainsKey(polKey) {
+	policyWasActive := aqpc.policyIDToEndpointIDs.ContainsKey(polKey)
+	if id, ok := labelId.(model.EndpointKey); ok {
+		aqpc.policyIDToEndpointIDs.Discard(polKey, id)
+		aqpc.endpointIDToPolicyIDs.Discard(id, polKey)
+	}
+
+	if policyWasActive {
 		// Policy no longer active.
 		log.Debugf("Policy %v no longer active", polKey)
 		policy, _ := aqpc.allPolicies[polKey]
-		aqpc.sendPolicyUpdate(endpointID, policy)
+		aqpc.sendPolicyUpdate(polKey, policy)
 	}
-	/*if labelId, ok := labelId.(model.EndpointKey); ok {
-		for _, l := range aqpc.PolicyMatchListeners {
-			l.OnPolicyMatchStopped(polKey, labelId)
-		}
-	}*/
 }
 
-func (aqpc *ActiveQoSPolicyCalculator) sendPolicyUpdate(id model.EndpointKey, policyKey string, policy *v3.QoSPolicy) {
+func (aqpc *ActiveQoSPolicyCalculator) sendPolicyUpdate(policyKey string, policy *v3.QoSPolicy) {
 	known := policy != nil
 	active := aqpc.policyIDToEndpointIDs.ContainsKey(policyKey)
 	log.Debugf("Sending qos policy update for policy %v (known: %v, active: %v)", policyKey, known, active)
@@ -199,62 +213,18 @@ func (aqpc *ActiveQoSPolicyCalculator) sendPolicyUpdate(id model.EndpointKey, po
 	}
 }
 
-func qosPolicyLess(i, j qosPolicyKey) bool {
-	// TODO(mazdak): need to add valid?
-	/*if !i.Valid && j.Valid {
-		return false
-	} else if i.Valid && !j.Valid {
-		return true
-	}*/
+func (aqpc *ActiveQoSPolicyCalculator) sendPolicyUpdateForEndpoint(ep model.EndpointKey, [])
 
-	if i.Order == nil && j.Order != nil {
-		return false
-	} else if i.Order != nil && j.Order == nil {
-		return true
-	}
-	if i.Order == j.Order || *i.Order == *j.Order {
+func qosPolicyLess(i, j qosPolicyKey) bool {
+	if i.Order == j.Order {
 		return i.Name < j.Name
 	}
-	return *i.Order < *j.Order
+	return i.Order < j.Order
 }
 
 func (aqpc *ActiveQoSPolicyCalculator) HasQoSPolicy(key string) bool {
 	_, exists := aqpc.allPolicies[key]
 	return exists
-}
-
-func (aqpc *ActiveQoSPolicyCalculator) UpdateQoSPolicy(key model.ResourceKey, newPolicy *v3.QoSPolicy) {
-	var polInfo qosPolicyInfo
-	if newPolicy != nil {
-		if newPolicy.Spec.Order != nil {
-			polInfo.Order = *newPolicy.Spec.Order
-		} else {
-			polInfo.Order = polMetaDefaultOrder
-		}
-	}
-
-	oldPolicy := aqpc.allPolicies[key.Name]
-	if equalQoSPolicy(newPolicy, oldPolicy) {
-		return
-	}
-	if newPolicy != nil {
-		if oldPolicy != nil {
-			// Need to do delete prior to ReplaceOrInsert because we don't insert strictly based on key but rather a
-			// combination of key + value so if for instance we add PolKV{k1, v1} then add PolKV{k1, v2} we'll simply have
-			// both KVs in the tree instead of only {k1, v2} like we want. By deleting first we guarantee that only the
-			// newest value remains in the tree.
-			aqpc.sortedQoSPolicies.Delete(qosPolicyKey{Name: key.Name, Order: &oldPolicy.Order})
-		}
-		aqpc.sortedQoSPolicies.ReplaceOrInsert(qosPolicyKey{Name: key.Name, Order: &oldPolicy.Order})
-		aqpc.allPolicies[key.Name] = newPolicy
-	} else {
-		if oldPolicy != nil {
-			aqpc.sortedQoSPolicies.Delete(qosPolicyKey{Name: key.Name, Order: &oldPolicy.Order})
-			delete(aqpc.allPolicies, key.Name)
-			return
-		}
-	}
-	return
 }
 
 func (aqpc *ActiveQoSPolicyCalculator) Sorted() []qosPolicyKey {
@@ -267,11 +237,4 @@ func (aqpc *ActiveQoSPolicyCalculator) Sorted() []qosPolicyKey {
 		})
 	}
 	return policies
-}
-
-func equalQoSPolicy(n, o *qosPolicyInfo) bool {
-	if n != nil && o != nil {
-		return *n == *o
-	}
-	return n == o
 }
