@@ -235,13 +235,6 @@ stop-kubernetes-master:
 ci: mod-download build-all static-checks test
 
 ###############################################################################
-# CD
-###############################################################################
-.PHONY: cd
-## Deploys images to registry
-cd: image-all cd-common
-
-###############################################################################
 # Release
 ###############################################################################
 ## Produces a clean build of release artifacts at the specified version.

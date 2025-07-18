@@ -210,22 +210,15 @@ fv st:
 ci: clean mod-download build-all clean-registrar static-checks ut
 
 ###############################################################################
-# CD
-###############################################################################
-.PHONY: cd
-## Deploys images to registry
-cd: image-all cd-common
-
-###############################################################################
 # Release
 ###############################################################################
 release-build: .release-$(VERSION).created
 .release-$(VERSION).created:
-	$(MAKE) clean image-all RELEASE=true
-	$(MAKE) retag-build-images-with-registries IMAGETAG=$(VERSION) RELEASE=true
-	$(MAKE) retag-build-images-with-registries IMAGETAG=latest RELEASE=true
-	$(MAKE) FIPS=true BUILD_IMAGES='$(CSI_IMAGE) $(REGISTRAR_IMAGE)' retag-build-images-with-registries IMAGETAG=$(VERSION)-fips RELEASE=true LATEST_IMAGE_TAG=latest-fips
-	$(MAKE) FIPS=true BUILD_IMAGES='$(CSI_IMAGE) $(REGISTRAR_IMAGE)' retag-build-images-with-registries RELEASE=true IMAGETAG=latest-fips LATEST_IMAGE_TAG=latest-fips
+	$(MAKE) clean image-all RELEASE=$(RELEASE)
+	$(MAKE) retag-build-images-with-registries IMAGETAG=$(VERSION) RELEASE=$(RELEASE)
+	$(MAKE) retag-build-images-with-registries IMAGETAG=latest RELEASE=$(RELEASE)
+	$(MAKE) FIPS=true BUILD_IMAGES='$(CSI_IMAGE) $(REGISTRAR_IMAGE)' retag-build-images-with-registries IMAGETAG=$(VERSION)-fips RELEASE=$(RELEASE) LATEST_IMAGE_TAG=latest-fips
+	$(MAKE) FIPS=true BUILD_IMAGES='$(CSI_IMAGE) $(REGISTRAR_IMAGE)' retag-build-images-with-registries RELEASE=$(RELEASE) IMAGETAG=latest-fips LATEST_IMAGE_TAG=latest-fips
 	touch $@
 
 ## Pushes a github release and release artifacts produced by `make release-build`.

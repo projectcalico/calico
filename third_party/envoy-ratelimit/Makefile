@@ -63,11 +63,9 @@ $(ENVOY_RATELIMIT_IMAGE_CREATED): Dockerfile build
 	touch $@
 
 ##############################################################################
-# CI/CD
+# Release
 ##############################################################################
 ci: image
-
-cd: image-all cd-common
 
 .PHONY: release-build
 release-build: .release-$(VERSION).created

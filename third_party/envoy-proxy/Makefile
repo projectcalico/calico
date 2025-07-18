@@ -51,11 +51,9 @@ $(ENVOY_PROXY_IMAGE_CREATED): Dockerfile
 	touch $@
 
 ##############################################################################
-# CI/CD
+# Release
 ##############################################################################
 ci: image
-
-cd: image-all cd-common
 
 .PHONY: release-build
 release-build: .release-$(VERSION).created

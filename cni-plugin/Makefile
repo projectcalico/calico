@@ -264,13 +264,10 @@ test-install-cni: run-k8s-apiserver image pkg/install/install.test
 	cd pkg/install && CONTAINER_NAME=$(CNI_PLUGIN_IMAGE):latest-$(ARCH) CERTS_PATH=$(CERTS_PATH) ./install.test
 
 ###############################################################################
-# CI/CD
+# CI
 ###############################################################################
 .PHONY: ci
 ci: clean mod-download build static-checks test-cni-versions image-all test-install-cni
-
-## Deploys images to registry
-cd: image-all cd-common
 
 ## Build fv binary for Windows
 $(WINDOWS_BIN)/win-fv.exe: $(WINFV_SRCFILES)
