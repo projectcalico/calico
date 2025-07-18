@@ -60,6 +60,7 @@ type PolicyResolver struct {
 	Callbacks             []PolicyResolverCallbacks
 	InSync                bool
 	endpointBGPPeerData   map[model.WorkloadEndpointKey]EndpointBGPPeer
+	endpointQoSPolicyData map[model.EndpointKey]endpointQoSPolicy
 }
 
 type PolicyResolverCallbacks interface {
@@ -74,6 +75,7 @@ func NewPolicyResolver() *PolicyResolver {
 		endpoints:             make(map[model.Key]model.Endpoint),
 		dirtyEndpoints:        set.New[model.EndpointKey](),
 		endpointBGPPeerData:   map[model.WorkloadEndpointKey]EndpointBGPPeer{},
+		endpointQoSPolicyData: map[model.EndpointKey]endpointQoSPolicy{},
 		policySorter:          NewPolicySorter(),
 		Callbacks:             []PolicyResolverCallbacks{},
 	}
@@ -228,6 +230,8 @@ func (pr *PolicyResolver) sendEndpointUpdate(endpointID model.EndpointKey) error
 		}
 	}
 
+	// TODO (mazdak): add QoSPolicy for endpoint
+
 	for _, cb := range pr.Callbacks {
 		cb.OnEndpointTierUpdate(endpointID, endpoint, peerData, applicableTiers)
 	}
@@ -239,6 +243,15 @@ func (pr *PolicyResolver) OnEndpointBGPPeerDataUpdate(key model.WorkloadEndpoint
 		pr.endpointBGPPeerData[key] = *peerData
 	} else {
 		delete(pr.endpointBGPPeerData, key)
+	}
+	pr.dirtyEndpoints.Add(key)
+}
+
+func (pr *PolicyResolver) OnQoSPolicyDataUpdate(id model.EndpointKey, qosPolicy *endpointQoSPolicy) {
+	if qosPolicy != nil {
+
+	} else {
+
 	}
 	pr.dirtyEndpoints.Add(key)
 }
