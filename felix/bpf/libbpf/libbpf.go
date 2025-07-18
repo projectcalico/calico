@@ -528,6 +528,7 @@ const (
 	GlobalsRedirectPeer            uint32 = C.CALI_GLOBALS_REDIRECT_PEER
 	GlobalsFlowLogsEnabled         uint32 = C.CALI_GLOBALS_FLOWLOGS_ENABLED
 	GlobalsNATOutgoingExcludeHosts uint32 = C.CALI_GLOBALS_NATOUTGOING_EXCLUDE_HOSTS
+	GlobalsSkipEgressRedirect      uint32 = C.CALI_GLOBALS_SKIP_EGRESS_REDIRECT
 
 	AttachTypeTcxIngress uint32 = C.BPF_TCX_INGRESS
 	AttachTypeTcxEgress  uint32 = C.BPF_TCX_EGRESS
