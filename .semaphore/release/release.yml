@@ -46,8 +46,8 @@ blocks:
             - name: VAR_FILE
               value: /home/semaphore/secrets/release.tfvars
           commands:
-            - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make GIT_BRANCH=${SEMAPHORE_GIT_BRANCH} release; fi
-            - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make GIT_BRANCH=${SEMAPHORE_GIT_BRANCH} release-publish; fi
+            - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make release/build; fi
+            - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make release/publish; fi
   - name: "Build Openstack Packages"
     dependencies: ["Publish official release"]
     skip:

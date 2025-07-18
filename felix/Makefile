@@ -486,9 +486,9 @@ gen-files: $(GENERATED_FILES) $(GENERATED_DOCS_FILES)
 	$(DOCKER_GO_BUILD) go run ./cmd/calico-felix-docgen --format=missing
 
 ###############################################################################
-# CI/CD
+# CI
 ###############################################################################
-.PHONY: ci cd
+.PHONY: ci
 
 ci: mod-download image-all ut
 ifeq (,$(filter fv, $(EXCEPT)))
@@ -499,9 +499,6 @@ ifeq (,$(filter k8sfv-test, $(EXCEPT)))
 	@$(MAKE) k8sfv-test JUST_A_MINUTE=true USE_TYPHA=false
 endif
 
-## Deploy images to registry
-cd: cd-common
-
 ###############################################################################
 # Release
 ###############################################################################
@@ -510,6 +507,8 @@ release-build: .release-$(VERSION).created
 .release-$(VERSION).created:
 	$(MAKE) clean build bin/calico-bpf
 	touch $@
+
+release-publish: .release-$(VERSION).created
 
 ###############################################################################
 # Developer helper scripts (not used by build or test)

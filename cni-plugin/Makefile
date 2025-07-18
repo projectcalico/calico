@@ -264,13 +264,10 @@ test-install-cni: run-k8s-apiserver image pkg/install/install.test
 	cd pkg/install && CONTAINER_NAME=$(CNI_PLUGIN_IMAGE):latest-$(ARCH) CERTS_PATH=$(CERTS_PATH) ./install.test
 
 ###############################################################################
-# CI/CD
+# CI
 ###############################################################################
 .PHONY: ci
 ci: clean mod-download build static-checks test-cni-versions image-all test-install-cni
-
-## Deploys images to registry
-cd: image-all cd-common
 
 ## Build fv binary for Windows
 $(WINDOWS_BIN)/win-fv.exe: $(WINFV_SRCFILES)
@@ -282,11 +279,11 @@ $(WINDOWS_BIN)/win-fv.exe: $(WINFV_SRCFILES)
 ## Produces a clean build of release artifacts at the specified version.
 release-build: .release-$(VERSION).created
 .release-$(VERSION).created:
-	$(MAKE) clean image-all RELEASE=true
-	$(MAKE) retag-build-images-with-registries RELEASE=true IMAGETAG=$(VERSION)
-	$(MAKE) retag-build-images-with-registries RELEASE=true IMAGETAG=latest
-	$(MAKE) FIPS=true retag-build-images-with-registries RELEASE=true IMAGETAG=$(VERSION)-fips LATEST_IMAGE_TAG=latest-fips
-	$(MAKE) FIPS=true retag-build-images-with-registries RELEASE=true IMAGETAG=latest-fips LATEST_IMAGE_TAG=latest-fips
+	$(MAKE) clean image-all RELEASE=$(RELEASE)
+	$(MAKE) retag-build-images-with-registries RELEASE=$(RELEASE) IMAGETAG=$(VERSION)
+	$(MAKE) retag-build-images-with-registries RELEASE=$(RELEASE) IMAGETAG=latest
+	$(MAKE) FIPS=true retag-build-images-with-registries RELEASE=$(RELEASE) IMAGETAG=$(VERSION)-fips LATEST_IMAGE_TAG=latest-fips
+	$(MAKE) FIPS=true retag-build-images-with-registries RELEASE=$(RELEASE) IMAGETAG=latest-fips LATEST_IMAGE_TAG=latest-fips
 	touch $@
 
 release-publish: release-prereqs .release-$(VERSION).published
@@ -306,7 +303,7 @@ release-publish-latest: release-prereqs
 	if ! docker run $(CNI_PLUGIN_IMAGE):latest-$(ARCH) calico -v | grep '^$(VERSION)$$'; then echo "Reported version:" `docker run $(CNI_PLUGIN_IMAGE):latest-$(ARCH) calico -v` "\nExpected version: $(VERSION)"; false; else echo "\nVersion check passed\n"; fi
 	if ! docker run quay.io/$(CNI_PLUGIN_IMAGE):latest-$(ARCH) calico -v | grep '^$(VERSION)$$'; then echo "Reported version:" `docker run quay.io/$(CNI_PLUGIN_IMAGE):latest-$(ARCH) calico -v` "\nExpected version: $(VERSION)"; false; else echo "\nVersion check passed\n"; fi
 
-	$(MAKE) push-images-to-registries push-manifests RELEASE=true IMAGETAG=latest RELEASE=$(RELEASE) CONFIRM=$(CONFIRM)
+	$(MAKE) push-images-to-registries push-manifests RELEASE=$(RELEASE) IMAGETAG=latest RELEASE=$(RELEASE) CONFIRM=$(CONFIRM)
 
 	# Push Windows images.
 	$(MAKE) release-windows IMAGETAG=latest CONFIRM=$(CONFIRM)
