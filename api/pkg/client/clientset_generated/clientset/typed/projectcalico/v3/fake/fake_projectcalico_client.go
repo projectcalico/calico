@@ -82,6 +82,10 @@ func (c *FakeProjectcalicoV3) Profiles() v3.ProfileInterface {
 	return newFakeProfiles(c)
 }
 
+func (c *FakeProjectcalicoV3) QoSPolicies() v3.QoSPolicyInterface {
+	return newFakeQoSPolicies(c)
+}
+
 func (c *FakeProjectcalicoV3) StagedGlobalNetworkPolicies() v3.StagedGlobalNetworkPolicyInterface {
 	return newFakeStagedGlobalNetworkPolicies(c)
 }
