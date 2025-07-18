@@ -29,6 +29,14 @@ import (
 
 var addToSchemeOnce sync.Once
 
+const (
+	Group        = "crd.projectcalico.org"
+	Version      = "v1"
+	GroupVersion = Group + "/" + Version
+)
+
+// AddCalicoResourcesToScheme adds resources necessary for the crd.projectcalico.org/v1 API
+// backend to the current scheme, so they can be used by Kubernetes clients.
 func AddCalicoResourcesToScheme() {
 	addToSchemeOnce.Do(func() {
 		// We also need to register resources.
@@ -75,8 +83,8 @@ func AddCalicoResourcesToScheme() {
 					&libapiv3.IPAMBlockList{},
 					&libapiv3.IPAMHandle{},
 					&libapiv3.IPAMHandleList{},
-					&libapiv3.IPAMConfig{},
-					&libapiv3.IPAMConfigList{},
+					&libapiv3.IPAMConfiguration{},
+					&libapiv3.IPAMConfigurationList{},
 					&apiv3.KubeControllersConfiguration{},
 					&apiv3.KubeControllersConfigurationList{},
 					&apiv3.CalicoNodeStatus{},

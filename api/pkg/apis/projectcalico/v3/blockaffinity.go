@@ -34,6 +34,7 @@ const (
 // +genclient
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:resource:scope=Cluster
 
 // BlockAffinity maintains a block affinity's state
 type BlockAffinity struct {
@@ -51,6 +52,9 @@ type BlockAffinitySpec struct {
 
 	// The node that this block affinity is assigned to.
 	Node string `json:"node"`
+
+	// The type of affinity.
+	Type string `json:"type,omitempty"`
 
 	// The CIDR range this block affinity references.
 	CIDR string `json:"cidr"`
