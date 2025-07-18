@@ -910,7 +910,6 @@ var _ = Describe("Filtered rules (negated catch-all CIDR validation)", func() {
 		MarkPass:          0x100,
 		MarkScratch0:      0x200,
 		MarkScratch1:      0x400,
-		MarkDrop:          0x800,
 		MarkEndpoint:      0xff000,
 		LogPrefix:         "calico-packet",
 	}
@@ -918,10 +917,8 @@ var _ = Describe("Filtered rules (negated catch-all CIDR validation)", func() {
 	DescribeTable(
 		"Rules with catch-all negated CIDRs should be filtered out",
 		func(ipVer int, in *proto.Rule) {
-			rrConfigNormal.FlowLogsEnabled = false
 			renderer := NewRenderer(rrConfigNormal)
-			rules := renderer.ProtoRuleToIptablesRules(in, uint8(ipVer),
-				RuleOwnerTypePolicy, RuleDirIngress, 0, "default.foo", false)
+			rules := renderer.ProtoRuleToIptablesRules(in, uint8(ipVer))
 			// Rules with catch-all negated CIDRs should be completely filtered out
 			Expect(len(rules)).To(Equal(0))
 		},

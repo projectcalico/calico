@@ -92,7 +92,7 @@ func filterNets(mixedCIDRs []string, ipVersion uint8, isNegated bool) (filtered 
 
 		// Check for catch-all CIDR in negated context, which creates logical contradictions
 		if isNegated && isCatchAllCIDR(net, ipVersion) {
-			logrus.WithFields(logrus.Fields{
+			log.WithFields(log.Fields{
 				"cidr":      net,
 				"ipVersion": ipVersion,
 				"negated":   isNegated,
