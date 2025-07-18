@@ -67,11 +67,9 @@ $(ENVOY_GATEWAY_IMAGE_CREATED): register Dockerfile build
 	touch $@
 
 ##############################################################################
-# CI/CD
+# Release
 ##############################################################################
 ci: image
-
-cd: image-all cd-common
 
 .PHONY: release-build
 release-build: .release-$(VERSION).created

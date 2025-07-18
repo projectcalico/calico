@@ -500,13 +500,10 @@ st: st-checks $(REMOTE_DEPS) image dist/calicoctl busybox.tar calico-node.tar wo
 	$(MAKE) stop-etcd
 
 ###############################################################################
-# CI/CD
+# CI
 ###############################################################################
 .PHONY: ci
 ci: static-checks ut image image-windows st
-
-## Deploys images to registry
-cd: image-all cd-common
 
 ###############################################################################
 # Release
@@ -514,12 +511,12 @@ cd: image-all cd-common
 ## Produces a clean build of release artifacts at the specified version.
 release-build: .release-$(VERSION).created
 .release-$(VERSION).created:
-	$(MAKE) clean image-all RELEASE=true
-	$(MAKE) retag-build-images-with-registries RELEASE=true IMAGETAG=$(VERSION)
+	$(MAKE) clean image-all RELEASE=$(RELEASE)
+	$(MAKE) retag-build-images-with-registries RELEASE=$(RELEASE) IMAGETAG=$(VERSION)
 	# Generate the `latest` node images.
-	$(MAKE) retag-build-images-with-registries RELEASE=true IMAGETAG=latest
-	$(MAKE) FIPS=true retag-build-images-with-registries RELEASE=true IMAGETAG=$(VERSION)-fips LATEST_IMAGE_TAG=latest-fips
-	$(MAKE) FIPS=true retag-build-images-with-registries RELEASE=true IMAGETAG=latest-fips LATEST_IMAGE_TAG=latest-fips
+	$(MAKE) retag-build-images-with-registries RELEASE=$(RELEASE) IMAGETAG=latest
+	$(MAKE) FIPS=true retag-build-images-with-registries RELEASE=$(RELEASE) IMAGETAG=$(VERSION)-fips LATEST_IMAGE_TAG=latest-fips
+	$(MAKE) FIPS=true retag-build-images-with-registries RELEASE=$(RELEASE) IMAGETAG=latest-fips LATEST_IMAGE_TAG=latest-fips
 	# Generate the Windows zip archives.
 	$(MAKE) release-windows-archive
 	$(MAKE) $(WINDOWS_INSTALL_SCRIPT)

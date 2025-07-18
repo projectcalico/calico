@@ -75,9 +75,6 @@ gen-mocks:
 ###############################################################################
 # Release
 ###############################################################################
-## Deploys images to registry
-cd: image-all cd-common
-
 release-build: .release-$(VERSION).created
 .release-$(VERSION).created:
 	$(MAKE) clean image-all RELEASE=true

@@ -158,13 +158,6 @@ ut fv: $(TEST_BINARIES)
 ci: clean mod-download image-all static-checks ut
 
 ###############################################################################
-# CD
-###############################################################################
-.PHONY: cd
-## Deploys images to registry
-cd: image-all cd-common
-
-###############################################################################
 # Release
 ###############################################################################
 ## Produces a clean build of release artifacts at the specified version.
