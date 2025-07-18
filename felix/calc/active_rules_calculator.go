@@ -35,8 +35,6 @@ type ruleScanner interface {
 	OnPolicyInactive(model.PolicyKey)
 	OnProfileActive(model.ProfileRulesKey, *model.ProfileRules)
 	OnProfileInactive(model.ProfileRulesKey)
-	OnQoSPolicyActive(string, *v3.QoSPolicy)
-	OnQoSPolicyInactive(string)
 }
 
 type FelixSender interface {
@@ -46,8 +44,6 @@ type FelixSender interface {
 type PolicyMatchListener interface {
 	OnPolicyMatch(policyKey model.PolicyKey, endpointKey model.EndpointKey)
 	OnPolicyMatchStopped(policyKey model.PolicyKey, endpointKey model.EndpointKey)
-	OnQoSPolicyMatch(name string, endpointKey model.EndpointKey)
-	OnQoSPolicyMatchStopped(name string, endpointKey model.EndpointKey)
 }
 
 // ActiveRulesCalculator calculates the set of policies and profiles (i.e. the rules) that
@@ -73,15 +69,15 @@ type ActiveRulesCalculator struct {
 	// because they're also often identical.
 	allProfileRules packedmap.Deduped[string, *model.ProfileRules]
 
-	allQoSPolicies map[string]*v3.QoSPolicy
+	//allQoSPolicies map[string]*v3.QoSPolicy
 
 	// Caches for ALP policies for stat collector.
 	allALPPolicies set.Set[model.PolicyKey]
 
 	// Policy/profile ID to matching endpoint sets.
-	policyIDToEndpointKeys    multidict.Multidict[any, any]
-	profileIDToEndpointKeys   multidict.Multidict[string, any]
-	qosPolicyIDToEndpointKeys multidict.Multidict[string, any]
+	policyIDToEndpointKeys  multidict.Multidict[any, any]
+	profileIDToEndpointKeys multidict.Multidict[string, any]
+	//qosPolicyIDToEndpointKeys multidict.Multidict[string, any]
 
 	// Label index, matching policy selectors against local endpoints.
 	labelIndex *labelindex.InheritIndex
@@ -175,7 +171,7 @@ func (arc *ActiveRulesCalculator) OnUpdate(update api.Update) (_ bool) {
 	case model.ResourceKey:
 		arc.labelIndex.OnUpdate(update)
 
-		switch key.Kind {
+		/*switch key.Kind {
 		case v3.KindQoSPolicy:
 			if update.Value != nil {
 				log.Debugf("Updating ARC for qos policy %v", key)
@@ -216,7 +212,7 @@ func (arc *ActiveRulesCalculator) OnUpdate(update api.Update) (_ bool) {
 			}
 		default:
 			// Ignore other kinds of v3 resource.
-		}
+		}*/
 	case model.ProfileRulesKey:
 		if update.Value != nil {
 			rules := update.Value.(*model.ProfileRules)
@@ -424,31 +420,31 @@ func (arc *ActiveRulesCalculator) onMatchStarted(selID, labelId interface{}) {
 				l.OnPolicyMatch(polKey, labelId)
 			}
 		}
-	case model.ResourceKey:
-		switch polKey.Kind {
-		case v3.KindQoSPolicy:
-			policyWasActive := arc.qosPolicyIDToEndpointKeys.ContainsKey(polKey.Name)
-			arc.qosPolicyIDToEndpointKeys.Put(polKey.Name, labelId)
-			if !policyWasActive {
-				// Policy wasn't active before, tell the listener.  The policy
-				// must be in allPolicies because we can only match on a policy
-				// that we've seen.
-				log.Debugf("QoS policy %v now active", polKey)
-				policy, known := arc.allQoSPolicies[polKey.Name]
-				if !known {
-					log.WithField("policy", polKey).Panic("QoS policy active but missing from allQoSPolicies.")
-				}
-				arc.sendQoSPolicyUpdate(polKey.Name, policy)
+	/*case model.ResourceKey:
+	switch polKey.Kind {
+	case v3.KindQoSPolicy:
+		policyWasActive := arc.qosPolicyIDToEndpointKeys.ContainsKey(polKey.Name)
+		arc.qosPolicyIDToEndpointKeys.Put(polKey.Name, labelId)
+		if !policyWasActive {
+			// Policy wasn't active before, tell the listener.  The policy
+			// must be in allPolicies because we can only match on a policy
+			// that we've seen.
+			log.Debugf("QoS policy %v now active", polKey)
+			policy, known := arc.allQoSPolicies[polKey.Name]
+			if !known {
+				log.WithField("policy", polKey).Panic("QoS policy active but missing from allQoSPolicies.")
 			}
-
-			if labelId, ok := labelId.(model.EndpointKey); ok {
-				for _, l := range arc.PolicyMatchListeners {
-					l.OnQoSPolicyMatch(polKey.Name, labelId)
-				}
-			}
-		default:
-			panic("Unexpected v3 resource")
+			arc.sendQoSPolicyUpdate(polKey.Name, policy)
 		}
+
+		if labelId, ok := labelId.(model.EndpointKey); ok {
+			for _, l := range arc.PolicyMatchListeners {
+				l.OnQoSPolicyMatch(polKey.Name, labelId)
+			}
+		}
+	default:
+		panic("Unexpected v3 resource")
+	}*/
 	default:
 		panic("Unexepected selector ID type")
 	}
@@ -471,25 +467,25 @@ func (arc *ActiveRulesCalculator) onMatchStopped(selID, labelId interface{}) {
 				l.OnPolicyMatchStopped(polKey, labelId)
 			}
 		}
-	case model.ResourceKey:
-		switch polKey.Kind {
-		case v3.KindQoSPolicy:
-			arc.qosPolicyIDToEndpointKeys.Discard(polKey.Name, labelId)
-			if !arc.qosPolicyIDToEndpointKeys.ContainsKey(polKey.Name) {
-				// Policy no longer active.
-				polKey := selID.(model.PolicyKey)
-				log.Debugf("QoS policy %v no longer active", polKey)
-				policy, _ := arc.allQoSPolicies[polKey.Name]
-				arc.sendQoSPolicyUpdate(polKey.Name, policy)
-			}
-			if labelId, ok := labelId.(model.EndpointKey); ok {
-				for _, l := range arc.PolicyMatchListeners {
-					l.OnQoSPolicyMatchStopped(polKey.Name, labelId)
-				}
-			}
-		default:
-			panic("Unexpected v3 resource")
+	/*case model.ResourceKey:
+	switch polKey.Kind {
+	case v3.KindQoSPolicy:
+		arc.qosPolicyIDToEndpointKeys.Discard(polKey.Name, labelId)
+		if !arc.qosPolicyIDToEndpointKeys.ContainsKey(polKey.Name) {
+			// Policy no longer active.
+			polKey := selID.(model.PolicyKey)
+			log.Debugf("QoS policy %v no longer active", polKey)
+			policy, _ := arc.allQoSPolicies[polKey.Name]
+			arc.sendQoSPolicyUpdate(polKey.Name, policy)
 		}
+		if labelId, ok := labelId.(model.EndpointKey); ok {
+			for _, l := range arc.PolicyMatchListeners {
+				l.OnQoSPolicyMatchStopped(polKey.Name, labelId)
+			}
+		}
+	default:
+		panic("Unexpected v3 resource")
+	}*/
 	default:
 		panic("Unexepected selector ID type")
 	}
@@ -568,7 +564,7 @@ func (arc *ActiveRulesCalculator) sendPolicyUpdate(policyKey model.PolicyKey, po
 	}
 }
 
-func (arc *ActiveRulesCalculator) sendQoSPolicyUpdate(policyKey string, policy *v3.QoSPolicy) {
+/*func (arc *ActiveRulesCalculator) sendQoSPolicyUpdate(policyKey string, policy *v3.QoSPolicy) {
 	known := policy != nil
 	active := arc.qosPolicyIDToEndpointKeys.ContainsKey(policyKey)
 	log.Debugf("Sending qos policy update for policy %v (known: %v, active: %v)", policyKey, known, active)
@@ -582,7 +578,7 @@ func (arc *ActiveRulesCalculator) sendQoSPolicyUpdate(policyKey string, policy *
 	} else {
 		arc.RuleScanner.OnQoSPolicyInactive(policyKey)
 	}
-}
+}*/
 
 func (arc *ActiveRulesCalculator) isALPPolicy(policy *model.Policy) bool {
 	// Policy is a ALP policy if HTTPMatch rule or service account selector exists.

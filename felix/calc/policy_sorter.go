@@ -30,27 +30,12 @@ import (
 type PolicySorter struct {
 	tiers       map[string]*TierInfo
 	sortedTiers *btree.BTreeG[tierInfoKey]
-
-	qosPolicies        map[string]*qosPolicyInfo
-	sortedQoSPolicies  *btree.BTreeG[qosPolicyKey]
-	orderedQoSPolicies []qosPolicyKey
-}
-
-type qosPolicyKey struct {
-	Name  string
-	Order *float64
-}
-
-type qosPolicyInfo struct {
-	Order float64
 }
 
 func NewPolicySorter() *PolicySorter {
 	return &PolicySorter{
-		tiers:             make(map[string]*TierInfo),
-		sortedTiers:       btree.NewG(2, TierLess),
-		qosPolicies:       make(map[string]*qosPolicyInfo),
-		sortedQoSPolicies: btree.NewG[qosPolicyKey](2, qosPolicyLess),
+		tiers:       make(map[string]*TierInfo),
+		sortedTiers: btree.NewG(2, TierLess),
 	}
 }
 
@@ -77,18 +62,6 @@ func (poc *PolicySorter) Sorted() []*TierInfo {
 		})
 	}
 	return tiers
-}
-
-func (poc *PolicySorter) QoSPoliciesSorted() []qosPolicyKey {
-	var policies []qosPolicyKey
-	if poc.sortedQoSPolicies.Len() > 0 {
-		policies = make([]qosPolicyKey, 0, len(poc.qosPolicies))
-		poc.sortedQoSPolicies.Ascend(func(p qosPolicyKey) bool {
-			policies = append(policies, p)
-			return true
-		})
-	}
-	return policies
 }
 
 func (poc *PolicySorter) OnUpdate(update api.Update) (dirty bool) {
@@ -165,24 +138,6 @@ func (poc *PolicySorter) OnUpdate(update api.Update) (dirty bool) {
 		} else {
 			dirty = poc.UpdatePolicy(key, nil)
 		}
-	case model.ResourceKey:
-		switch key.Kind {
-		case v3.KindQoSPolicy:
-			if update.Value != nil {
-				newPolicy := update.Value.(*v3.QoSPolicy)
-				var polInfo qosPolicyInfo
-				if newPolicy != nil && newPolicy.Spec.Order != nil {
-					polInfo.Order = *newPolicy.Spec.Order
-				} else {
-					polInfo.Order = polMetaDefaultOrder
-				}
-				dirty = poc.UpdateQoSPolicy(key, &polInfo)
-
-			} else {
-				dirty = poc.UpdateQoSPolicy(key, nil)
-			}
-
-		}
 	}
 	return
 }
@@ -202,30 +157,6 @@ func TierLess(i, j tierInfoKey) bool {
 		return i.Name < j.Name
 	}
 	return *i.Order < *j.Order
-}
-
-func qosPolicyLess(i, j qosPolicyKey) bool {
-	// TODO(mazdak): need to add valid?
-	/*if !i.Valid && j.Valid {
-		return false
-	} else if i.Valid && !j.Valid {
-		return true
-	}*/
-
-	if i.Order == nil && j.Order != nil {
-		return false
-	} else if i.Order != nil && j.Order == nil {
-		return true
-	}
-	if i.Order == j.Order || *i.Order == *j.Order {
-		return i.Name < j.Name
-	}
-	return *i.Order < *j.Order
-}
-
-func (poc *PolicySorter) HasQoSPolicy(key string) bool {
-	_, exists := poc.qosPolicies[key]
-	return exists
 }
 
 func (poc *PolicySorter) HasPolicy(key model.PolicyKey) bool {
@@ -348,38 +279,6 @@ func (poc *PolicySorter) UpdatePolicy(key model.PolicyKey, newPolicy *policyMeta
 		}
 	}
 	return
-}
-
-func (poc *PolicySorter) UpdateQoSPolicy(key model.ResourceKey, newPolicy *qosPolicyInfo) bool {
-	oldPolicy := poc.qosPolicies[key.Name]
-	if equalQoSPolicy(newPolicy, oldPolicy) {
-		return false
-	}
-	if newPolicy != nil {
-		if oldPolicy != nil {
-			// Need to do delete prior to ReplaceOrInsert because we don't insert strictly based on key but rather a
-			// combination of key + value so if for instance we add PolKV{k1, v1} then add PolKV{k1, v2} we'll simply have
-			// both KVs in the tree instead of only {k1, v2} like we want. By deleting first we guarantee that only the
-			// newest value remains in the tree.
-			poc.sortedQoSPolicies.Delete(qosPolicyKey{Name: key.Name, Order: &oldPolicy.Order})
-		}
-		poc.sortedQoSPolicies.ReplaceOrInsert(qosPolicyKey{Name: key.Name, Order: &oldPolicy.Order})
-		poc.qosPolicies[key.Name] = newPolicy
-	} else {
-		if oldPolicy != nil {
-			poc.sortedQoSPolicies.Delete(qosPolicyKey{Name: key.Name, Order: &oldPolicy.Order})
-			delete(poc.qosPolicies, key.Name)
-			return true
-		}
-	}
-	return false
-}
-
-func equalQoSPolicy(n, o *qosPolicyInfo) bool {
-	if n != nil && o != nil {
-		return *n == *o
-	}
-	return n == o
 }
 
 // PolKV is really internal to the calc package.  It is named with an initial capital so that

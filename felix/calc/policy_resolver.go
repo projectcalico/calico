@@ -18,7 +18,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 
-	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/calico/felix/dispatcher"
 	"github.com/projectcalico/calico/felix/multidict"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
@@ -51,19 +50,17 @@ func init() {
 // expects to be told via its OnPolicyMatch(Stopped) methods which policies match
 // which endpoints.  The ActiveRulesCalculator does that calculation.
 type PolicyResolver struct {
-	policyIDToEndpointIDs    multidict.Multidict[model.PolicyKey, model.EndpointKey]
-	qosPolicyIDToEndpointIDs multidict.Multidict[string, model.EndpointKey]
-	endpointIDToPolicyIDs    multidict.Multidict[model.EndpointKey, model.PolicyKey]
-	endpointIDToQoSPolicyIDs multidict.Multidict[model.EndpointKey, string]
-	allPolicies              map[model.PolicyKey]policyMetadata // Only storing metadata for lower occupancy.
-	allQoSPolicies           map[string]qosPolicyInfo           // Only storing metadata for lower occupancy.
-	sortedTierData           []*TierInfo
-	endpoints                map[model.Key]model.Endpoint // Local WEPs/HEPs only.
-	dirtyEndpoints           set.Set[model.EndpointKey]
-	policySorter             *PolicySorter
-	Callbacks                []PolicyResolverCallbacks
-	InSync                   bool
-	endpointBGPPeerData      map[model.WorkloadEndpointKey]EndpointBGPPeer
+	policyIDToEndpointIDs multidict.Multidict[model.PolicyKey, model.EndpointKey]
+	endpointIDToPolicyIDs multidict.Multidict[model.EndpointKey, model.PolicyKey]
+	allPolicies           map[model.PolicyKey]policyMetadata // Only storing metadata for lower occupancy.
+	sortedTierData        []*TierInfo
+	endpoints             map[model.Key]model.Endpoint // Local WEPs/HEPs only.
+	dirtyEndpoints        set.Set[model.EndpointKey]
+	policySorter          *PolicySorter
+	Callbacks             []PolicyResolverCallbacks
+	InSync                bool
+	endpointBGPPeerData   map[model.WorkloadEndpointKey]EndpointBGPPeer
+	endpointQoSPolicyData map[model.EndpointKey]endpointQoSPolicy
 }
 
 type PolicyResolverCallbacks interface {
@@ -75,10 +72,10 @@ func NewPolicyResolver() *PolicyResolver {
 		policyIDToEndpointIDs: multidict.New[model.PolicyKey, model.EndpointKey](),
 		endpointIDToPolicyIDs: multidict.New[model.EndpointKey, model.PolicyKey](),
 		allPolicies:           map[model.PolicyKey]policyMetadata{},
-		allQoSPolicies:        map[string]qosPolicyInfo{},
 		endpoints:             make(map[model.Key]model.Endpoint),
 		dirtyEndpoints:        set.New[model.EndpointKey](),
 		endpointBGPPeerData:   map[model.WorkloadEndpointKey]EndpointBGPPeer{},
+		endpointQoSPolicyData: map[model.EndpointKey]endpointQoSPolicy{},
 		policySorter:          NewPolicySorter(),
 		Callbacks:             []PolicyResolverCallbacks{},
 	}
@@ -125,29 +122,6 @@ func (pr *PolicyResolver) OnUpdate(update api.Update) (filterOut bool) {
 		log.Debugf("Tier update: %v", key)
 		pr.policySorter.OnUpdate(update)
 		pr.markAllEndpointsDirty()
-	case model.ResourceKey:
-		switch key.Kind {
-		case v3.KindQoSPolicy:
-			log.Debugf("Policy update: %v", key)
-			if update.Value == nil {
-				delete(pr.allQoSPolicies, key.Name)
-			} else {
-				policy := update.Value.(*v3.QoSPolicy)
-				var qosPol qosPolicyInfo
-				if policy.Spec.Order != nil {
-					qosPol.Order = *policy.Spec.Order
-				} else {
-					qosPol.Order = polMetaDefaultOrder
-				}
-			}
-			if !pr.policyIDToEndpointIDs.ContainsKey(key) {
-				return
-			}
-			policiesDirty := pr.policySorter.OnUpdate(update)
-			if policiesDirty {
-				pr.markEndpointsMatchingPolicyDirty(key)
-			}
-		}
 	}
 	gaugeNumActivePolicies.Set(float64(pr.policyIDToEndpointIDs.Len()))
 	return
@@ -177,31 +151,6 @@ func (pr *PolicyResolver) OnPolicyMatch(policyKey model.PolicyKey, endpointKey m
 	log.Debugf("Storing policy match %v -> %v", policyKey, endpointKey)
 	// If it's first time the policy become matched, add it to the tier
 	if !pr.policySorter.HasPolicy(policyKey) {
-		policy := pr.allPolicies[policyKey]
-		pr.policySorter.UpdatePolicy(policyKey, &policy)
-	}
-	pr.policyIDToEndpointIDs.Put(policyKey, endpointKey)
-	pr.endpointIDToPolicyIDs.Put(endpointKey, policyKey)
-	pr.dirtyEndpoints.Add(endpointKey)
-}
-
-func (pr *PolicyResolver) OnPolicyMatchStopped(policyKey model.PolicyKey, endpointKey model.EndpointKey) {
-	log.Debugf("Deleting policy match %v -> %v", policyKey, endpointKey)
-	pr.policyIDToEndpointIDs.Discard(policyKey, endpointKey)
-	pr.endpointIDToPolicyIDs.Discard(endpointKey, policyKey)
-
-	// This policy is not active anymore, we no longer need to track it for sorting.
-	if !pr.policyIDToEndpointIDs.ContainsKey(policyKey) {
-		pr.policySorter.UpdatePolicy(policyKey, nil)
-	}
-
-	pr.dirtyEndpoints.Add(endpointKey)
-}
-
-func (pr *PolicyResolver) OnQoSPolicyMatch(policyKey string, endpointKey model.EndpointKey) {
-	log.Debugf("Storing policy match %v -> %v", policyKey, endpointKey)
-	// If it's first time the policy become matched, add it to the tier
-	if !pr.policySorter.HasQoSPolicy(policyKey) {
 		policy := pr.allPolicies[policyKey]
 		pr.policySorter.UpdatePolicy(policyKey, &policy)
 	}
@@ -281,6 +230,8 @@ func (pr *PolicyResolver) sendEndpointUpdate(endpointID model.EndpointKey) error
 		}
 	}
 
+	// TODO (mazdak): add QoSPolicy for endpoint
+
 	for _, cb := range pr.Callbacks {
 		cb.OnEndpointTierUpdate(endpointID, endpoint, peerData, applicableTiers)
 	}
@@ -292,6 +243,15 @@ func (pr *PolicyResolver) OnEndpointBGPPeerDataUpdate(key model.WorkloadEndpoint
 		pr.endpointBGPPeerData[key] = *peerData
 	} else {
 		delete(pr.endpointBGPPeerData, key)
+	}
+	pr.dirtyEndpoints.Add(key)
+}
+
+func (pr *PolicyResolver) OnQoSPolicyDataUpdate(id model.EndpointKey, qosPolicy *endpointQoSPolicy) {
+	if qosPolicy != nil {
+
+	} else {
+
 	}
 	pr.dirtyEndpoints.Add(key)
 }
