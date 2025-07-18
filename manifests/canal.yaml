@@ -410,6 +410,9 @@ spec:
                   type: array
                 keepOriginalNextHop:
                   type: boolean
+                localASNumber:
+                  format: int32
+                  type: integer
                 localWorkloadSelector:
                   type: string
                 maxRestartTime:
