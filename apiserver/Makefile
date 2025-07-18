@@ -198,9 +198,6 @@ clean-hack-lib:
 ## Run what CI runs
 ci: clean static-checks image ut fv
 
-## Deploys images to registry
-cd: image-all cd-common
-
 ###############################################################################
 # Release
 ###############################################################################

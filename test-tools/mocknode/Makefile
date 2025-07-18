@@ -85,9 +85,19 @@ st:
 	echo "Currently has no STs."
 
 ###############################################################################
-# CI/CD
+# Release
 ###############################################################################
 .PHONY: ci
-ci: clean image test static-checks
-## Deploys images to registry
-cd: image-all cd-common
+ci: clean image test static-LOCAL_CHECKS
+
+release-build: .release-$(VERSION).created
+.release-$(VERSION).created:
+	$(MAKE) clean image-all RELEASE=$(RELEASE)
+	$(MAKE) retag-build-images-with-registries RELEASE=$(RELEASE) IMAGETAG=$(VERSION)
+	$(MAKE) retag-build-images-with-registries RELEASE=$(RELEASE) IMAGETAG=latest
+	touch $@
+
+release-publish: release-prereqs .release-$(VERSION).published
+.release-$(VERSION).published:
+	$(MAKE) push-images-to-registries push-manifests IMAGETAG=$(VERSION) RELEASE=$(RELEASE) CONFIRM=$(CONFIRM)
+	touch $@

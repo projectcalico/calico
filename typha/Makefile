@@ -154,9 +154,6 @@ ifeq (,$(filter k8sfv-test, $(EXCEPT)))
 	@$(MAKE) k8sfv-test
 endif
 
-## Deploys images to registry
-cd: image-all cd-common
-
 fv: k8sfv-test
 
 k8sfv-test: image
@@ -171,11 +168,11 @@ st:
 ## Produces a clean build of release artifacts at the specified version.
 release-build: .release-$(VERSION).created
 .release-$(VERSION).created:
-	$(MAKE) clean image-all RELEASE=true
-	$(MAKE) retag-build-images-with-registries RELEASE=true IMAGETAG=$(VERSION)
-	$(MAKE) retag-build-images-with-registries RELEASE=true IMAGETAG=latest
-	$(MAKE) FIPS=true retag-build-images-with-registries RELEASE=true IMAGETAG=$(VERSION)-fips LATEST_IMAGE_TAG=latest-fips
-	$(MAKE) FIPS=true retag-build-images-with-registries RELEASE=true IMAGETAG=latest-fips LATEST_IMAGE_TAG=latest-fips
+	$(MAKE) clean image-all RELEASE=$(RELEASE)
+	$(MAKE) retag-build-images-with-registries RELEASE=$(RELEASE) IMAGETAG=$(VERSION)
+	$(MAKE) retag-build-images-with-registries RELEASE=$(RELEASE) IMAGETAG=latest
+	$(MAKE) FIPS=true retag-build-images-with-registries RELEASE=$(RELEASE) IMAGETAG=$(VERSION)-fips LATEST_IMAGE_TAG=latest-fips
+	$(MAKE) FIPS=true retag-build-images-with-registries RELEASE=$(RELEASE) IMAGETAG=latest-fips LATEST_IMAGE_TAG=latest-fips
 	touch $@
 
 ## Pushes a github release and release artifacts produced by `make release-build`.

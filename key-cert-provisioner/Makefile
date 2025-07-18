@@ -86,8 +86,6 @@ ut: build
 
 ci: clean static-checks ut
 
-cd: image-all cd-common
-
 clean:
 	rm -f Makefile.common*
 	rm -rf .go-pkg-cache bin .*.created*

@@ -1092,10 +1092,13 @@ func (r *CalicoManager) publishContainerImages() error {
 	env := append(os.Environ(),
 		fmt.Sprintf("IMAGETAG=%s", r.calicoVersion),
 		fmt.Sprintf("VERSION=%s", r.calicoVersion),
-		"RELEASE=true",
 		"CONFIRM=true",
 		fmt.Sprintf("DEV_REGISTRIES=%s", strings.Join(r.imageRegistries, " ")),
 	)
+
+	if !r.isHashRelease {
+		env = append(env, "RELEASE=true")
+	}
 
 	// We allow for a certain number of retries when publishing each directory, since
 	// network flakes can occasionally result in images failing to push.

@@ -93,10 +93,8 @@ clean:
 	rm -f $(GUARDIAN_CONTAINER_CREATED)
 
 #############################################
-# Deploy images to registry
+# Release
 #############################################
-## Run all CD steps, normally pushing images out to registries.
-cd: image-all cd-common
 
 release-build: .release-$(VERSION).created
 .release-$(VERSION).created:

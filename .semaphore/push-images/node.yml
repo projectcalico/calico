@@ -26,18 +26,15 @@ global_job_config:
       - export BRANCH_NAME=$SEMAPHORE_GIT_BRANCH
 
 blocks:
-  - name: "Publish node images"
+  - name: "Publish node images & manifests"
     dependencies: []
     skip:
       when: "branch !~ '.+'"
     task:
       jobs:
-        - name: Linux multi-arch
+        - name: non-arm64
           commands:
             - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C node cd EXCLUDEARCH=arm64 CONFIRM=true; fi
-        - name: Windows
-          commands:
-            - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C node release-windows CONFIRM=true; fi
   - name: Publish node images - native arm64 runner
     dependencies: []
     skip:
@@ -52,14 +49,3 @@ blocks:
             # Don't call `make -C node cd ARCHES=arm64` here because node image-all also builds
             # FIPS images that will fail on native arm64 runners. They are built in the previous block.
             - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C node image cd-common ARCH=arm64 VALIDARCHES=arm64 CONFIRM=true; fi
-  - name: Publish node multi-arch manifests
-    dependencies:
-      - Publish node images
-      - "Publish node images - native arm64 runner"
-    skip:
-      when: "branch !~ '.+'"
-    task:
-      jobs:
-        - name: Linux multi-arch manifests
-          commands:
-            - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C node push-manifests-with-tag CONFIRM=true; fi

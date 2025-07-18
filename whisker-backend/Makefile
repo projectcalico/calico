@@ -63,14 +63,12 @@ ut:
 ###############################################################################
 # Release
 ###############################################################################
-## Deploys images to registry
-cd: image-all cd-common
 
 release-build: .release-$(VERSION).created
 .release-$(VERSION).created:
-	$(MAKE) clean image-all RELEASE=true
-	$(MAKE) retag-build-images-with-registries RELEASE=true IMAGETAG=$(VERSION)
-	$(MAKE) retag-build-images-with-registries RELEASE=true IMAGETAG=latest
+	$(MAKE) clean image-all RELEASE=$(RELEASE)
+	$(MAKE) retag-build-images-with-registries RELEASE=$(RELEASE) IMAGETAG=$(VERSION)
+	$(MAKE) retag-build-images-with-registries RELEASE=$(RELEASE) IMAGETAG=latest
 	touch $@
 
 release-publish: release-prereqs .release-$(VERSION).published
