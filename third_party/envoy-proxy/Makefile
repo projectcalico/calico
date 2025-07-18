@@ -58,10 +58,10 @@ ci: image
 .PHONY: release-build
 release-build: .release-$(VERSION).created
 .release-$(VERSION).created:
-	$(MAKE) clean image-all RELEASE=true
-	$(MAKE) retag-build-images-with-registries IMAGETAG=$(VERSION) RELEASE=true
+	$(MAKE) clean image-all RELEASE=$(RELEASE)
+	$(MAKE) retag-build-images-with-registries IMAGETAG=$(VERSION) RELEASE=$(RELEASE)
 	# Generate the `latest` images.
-	$(MAKE) retag-build-images-with-registries IMAGETAG=latest RELEASE=true
+	$(MAKE) retag-build-images-with-registries IMAGETAG=latest RELEASE=$(RELEASE)
 	touch $@
 
 release-publish: release-prereqs .release-$(VERSION).published

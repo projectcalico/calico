@@ -88,7 +88,7 @@ st:
 # Release
 ###############################################################################
 .PHONY: ci
-ci: clean image test static-LOCAL_CHECKS
+ci: clean image test static-checks
 
 release-build: .release-$(VERSION).created
 .release-$(VERSION).created:
