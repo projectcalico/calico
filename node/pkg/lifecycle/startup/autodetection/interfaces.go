@@ -32,7 +32,7 @@ type Interface struct {
 // GetInterfaces returns a list of all interfaces, skipping any interfaces whose
 // name matches any of the exclusion list regexes, and including those on the
 // inclusion list.
-func GetInterfaces(getSystemInterfaces func() ([]net.Interface, error), includeRegexes []string, excludeRegexes []string, version int) ([]Interface, error) {
+func GetInterfaces(getSystemInterfaces func() ([]net.Interface, error), includeRegexes []string, excludeRegexes []string, versions ...int) ([]Interface, error) {
 	netIfaces, err := getSystemInterfaces()
 	if err != nil {
 		log.WithError(err).Warnf("Failed to enumerate interfaces")
@@ -65,7 +65,7 @@ func GetInterfaces(getSystemInterfaces func() ([]net.Interface, error), includeR
 		include := (includeRegexp == nil) || includeRegexp.MatchString(iface.Name)
 		exclude := (excludeRegexp != nil) && excludeRegexp.MatchString(iface.Name)
 		if include && !exclude {
-			if i, err := convertInterface(&iface, version); err == nil {
+			if i, err := convertInterface(&iface, versions); err == nil {
 				filteredIfaces = append(filteredIfaces, *i)
 			}
 		}
@@ -75,7 +75,7 @@ func GetInterfaces(getSystemInterfaces func() ([]net.Interface, error), includeR
 
 // convertInterface converts a net.Interface to our Interface type (which has
 // converted address types).
-func convertInterface(i *net.Interface, version int) (*Interface, error) {
+func convertInterface(i *net.Interface, versions []int) (*Interface, error) {
 	log.WithField("Interface", i.Name).Debug("Querying interface addresses")
 	addrs, err := i.Addrs()
 	if err != nil {
@@ -92,12 +92,14 @@ func convertInterface(i *net.Interface, version int) (*Interface, error) {
 			continue
 		}
 
-		if ip.Version() == version {
-			// Switch out the IP address in the network with the
-			// interface IP to get the CIDR (IP + network).
-			ipNet.IP = ip.IP
-			log.WithField("CIDR", ipNet).Debug("Found valid IP address and network")
-			iface.Cidrs = append(iface.Cidrs, *ipNet)
+		for _, version := range versions {
+			if ip.Version() == version {
+				// Switch out the IP address in the network with the
+				// interface IP to get the CIDR (IP + network).
+				ipNet.IP = ip.IP
+				log.WithField("CIDR", ipNet).Debug("Found valid IP address and network")
+				iface.Cidrs = append(iface.Cidrs, *ipNet)
+			}
 		}
 	}
 
