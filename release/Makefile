@@ -23,15 +23,10 @@ bin/release: $(shell find . -name "*.go")
 
 POSTRELEASE_TEST_PACKAGE		:= $(PACKAGE_NAME)/pkg/postrelease
 UNIT_TEST_PACKAGES	:= $(shell go list ./... | grep -v $(POSTRELEASE_TEST_PACKAGE))
-ut: bin/gotestsum
+ut:
 	@mkdir -p report
 	@$(DOCKER_GO_BUILD) gotestsum --junitfile report/unit-tests.xml \
 		-- -coverprofile=report/coverage.out $(UNIT_TEST_PACKAGES)
-
-GOTESTSUM_VERSION := v1.12.1
-bin/gotestsum:
-	@mkdir -p bin
-	@$(DOCKER_GO_BUILD) go install gotest.tools/gotestsum@$(GOTESTSUM_VERSION)
 
 ###############################################################################
 # CI/CD
