@@ -60,6 +60,7 @@ struct calico_nat_value {
 #define NAT_FLG_EXTERNAL_LOCAL	0x1
 #define NAT_FLG_INTERNAL_LOCAL	0x2
 #define NAT_FLG_NAT_EXCLUDE	0x4
+#define NAT_FLG_NAT_CONSISTENTHASH	0X8
 
 #ifdef IPVER6
 CALI_MAP_NAMED(cali_v6_nat_fe, cali_nat_fe, 3,
@@ -121,4 +122,23 @@ struct vxlanhdr {
 	__be32 flags;
 	__be32 vni;
 };
+
+struct calico_ch_key {
+	ipv46_addr_t vip;
+	__u16 port;
+	__u8 proto;
+	__u8 pad;
+	__u32 ordinal; // should always be a value of [0..M], where M is a very large prime number. -Alex
+};
+
+// 65537 * 100 gives a large lookup table for up to 100 services. -Alex
+#ifdef IPVER6
+CALI_MAP_NAMED(cali_v6_ch, cali_ch,,
+#else
+CALI_MAP_NAMED(cali_v4_ch, cali_ch,,
+#endif
+		BPF_MAP_TYPE_HASH,
+		struct calico_ch_key, struct calico_nat_dest,
+		65537*100, BPF_F_NO_PREALLOC)
+
 #endif /*  __CALI_NAT_TYPES_H__ */
