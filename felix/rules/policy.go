@@ -125,7 +125,7 @@ func (r *DefaultRuleRenderer) ProtoRulesToIptablesRules(
 	return rules
 }
 
-func filterNets(mixedCIDRs []string, ipVersion uint8) (filtered []string, filteredAll bool) {
+func filterNets(mixedCIDRs []string, ipVersion uint8, isNegated bool) (filtered []string, filteredAll bool) {
 	if len(mixedCIDRs) == 0 {
 		return nil, false
 	}
@@ -136,10 +136,28 @@ func filterNets(mixedCIDRs []string, ipVersion uint8) (filtered []string, filter
 		if isV6 != wantV6 {
 			continue
 		}
+
+		// Check for catch-all CIDR in negated context, which creates logical contradictions
+		if isNegated && isCatchAllCIDR(net, ipVersion) {
+			logrus.WithFields(logrus.Fields{
+				"cidr":      net,
+				"ipVersion": ipVersion,
+				"negated":   isNegated,
+			}).Warn("Ignoring rule with negated catch-all CIDR to prevent iptables logical contradiction")
+			// Return filteredAll=true to indicate the entire rule should be dropped
+			return nil, true
+		}
+
 		filtered = append(filtered, net)
 		filteredAll = false
 	}
 	return
+}
+
+// isCatchAllCIDR returns true if the CIDR represents "all addresses" for the given IP version.
+// This is used to detect problematic negated matches that would create logical contradictions.
+func isCatchAllCIDR(cidr string, ipVersion uint8) bool {
+	return (ipVersion == 4 && cidr == "0.0.0.0/0") || (ipVersion == 6 && cidr == "::/0")
 }
 
 // FilterRuleToIPVersion: If the rule applies to the given IP version, returns a copy of the rule
@@ -174,19 +192,19 @@ func FilterRuleToIPVersion(ipVersion uint8, pRule *proto.Rule) *proto.Rule {
 		return nil
 	}
 
-	ruleCopy.SrcNet, filteredAll = filterNets(pRule.SrcNet, ipVersion)
+	ruleCopy.SrcNet, filteredAll = filterNets(pRule.SrcNet, ipVersion, false)
 	if filteredAll {
 		return nil
 	}
-	ruleCopy.NotSrcNet, filteredAll = filterNets(pRule.NotSrcNet, ipVersion)
+	ruleCopy.NotSrcNet, filteredAll = filterNets(pRule.NotSrcNet, ipVersion, true)
 	if filteredAll {
 		return nil
 	}
-	ruleCopy.DstNet, filteredAll = filterNets(pRule.DstNet, ipVersion)
+	ruleCopy.DstNet, filteredAll = filterNets(pRule.DstNet, ipVersion, false)
 	if filteredAll {
 		return nil
 	}
-	ruleCopy.NotDstNet, filteredAll = filterNets(pRule.NotDstNet, ipVersion)
+	ruleCopy.NotDstNet, filteredAll = filterNets(pRule.NotDstNet, ipVersion, true)
 	if filteredAll {
 		return nil
 	}
