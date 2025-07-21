@@ -16,15 +16,13 @@ export const useMaxStartTime = (flowLogs: FlowLog[]) => {
 };
 
 const MAX_ELAPSED_TIME = 0.1;
-export const useShouldAnimate = (startTime: number, flowLogs: FlowLog[]) => {
+export const useShouldAnimate = (startTime: number, totalItems: number) => {
     const animatedMap = React.useRef<Map<string, string>>(new Map());
-
     const rowsAddedTime = React.useRef<Date | null>(null);
+    const previousLength = React.useRef(totalItems);
 
-    const previousLength = React.useRef(flowLogs.length);
-
-    if (flowLogs.length !== previousLength.current) {
-        previousLength.current = flowLogs.length;
+    if (totalItems !== previousLength.current) {
+        previousLength.current = totalItems;
         animatedMap.current = new Map();
         rowsAddedTime.current = new Date();
     }

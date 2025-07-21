@@ -28,6 +28,7 @@ type FlowLogsListProps = {
     onSortClicked: () => void;
     maxStartTime: number;
     heightOffset: number;
+    totalItems: number;
 };
 
 const columnsHeight = 36;
@@ -65,6 +66,7 @@ const FlowLogsList: React.FC<FlowLogsListProps> = ({
     onSortClicked,
     maxStartTime,
     heightOffset,
+    totalItems,
 }) => {
     const onColumnCustomizerOpen = () => {
         setColCustomizerVisible(true);
@@ -84,7 +86,7 @@ const FlowLogsList: React.FC<FlowLogsListProps> = ({
     >(getVisibleColumns(originalColumns, storedColumns));
     const [colCustomizerVisible, setColCustomizerVisible] =
         React.useState(false);
-    const shouldAnimate = useShouldAnimate(maxStartTime, flowLogs);
+    const shouldAnimate = useShouldAnimate(maxStartTime, totalItems);
 
     const renderRowSubComponent = React.useCallback(
         ({ row, height }: CellProps<FlowLog>) => (

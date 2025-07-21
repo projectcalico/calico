@@ -15,6 +15,7 @@ export type FlowLogsContext = {
     onSortClicked: () => void;
     isFetching: boolean;
     maxStartTime: number;
+    totalItems: number;
 };
 
 const FlowLogsContainer: React.FC = () => {
@@ -25,6 +26,7 @@ const FlowLogsContainer: React.FC = () => {
         onSortClicked,
         isFetching,
         maxStartTime,
+        totalItems,
     } = useOutletContext<FlowLogsContext>();
     const heightOffset = useFlowLogsHeightOffset();
 
@@ -42,6 +44,7 @@ const FlowLogsContainer: React.FC = () => {
             onSortClicked={onSortClicked}
             maxStartTime={maxStartTime}
             heightOffset={heightOffset}
+            totalItems={totalItems}
         />
     );
 };
