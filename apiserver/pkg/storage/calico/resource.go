@@ -72,6 +72,10 @@ type resourceStore struct {
 	converter         resourceConverter
 }
 
+func (rs *resourceStore) GetCurrentResourceVersion(ctx context.Context) (uint64, error) {
+	return rs.GetCurrentResourceVersion(ctx)
+}
+
 func (rs *resourceStore) RequestWatchProgress(ctx context.Context) error {
 	// This method is supposed to trigger the client to emit a progress
 	// notification on each active watch but our client doesn't support that
