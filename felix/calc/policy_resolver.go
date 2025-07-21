@@ -60,7 +60,9 @@ type PolicyResolver struct {
 	Callbacks                []PolicyResolverCallbacks
 	InSync                   bool
 	endpointBGPPeerData      map[model.WorkloadEndpointKey]EndpointBGPPeer
-	sortedQoSPolicies        []qosPolicyKey // Only storing metadata for lower occupancy.
+	allQoSPolicies           map[string]qosPolicyMetadata // Only storing metadata for lower occupancy.
+	sortedQoSPolicies        []qosPolicyKey               // Only storing metadata for lower occupancy.
+	qosPolicyIDToEndpointIDs multidict.Multidict[string, model.EndpointKey]
 	endpointIDToQoSPolicyIDs multidict.Multidict[model.EndpointKey, string]
 }
 
@@ -70,15 +72,16 @@ type PolicyResolverCallbacks interface {
 
 func NewPolicyResolver() *PolicyResolver {
 	return &PolicyResolver{
-		policyIDToEndpointIDs: multidict.New[model.PolicyKey, model.EndpointKey](),
-		endpointIDToPolicyIDs: multidict.New[model.EndpointKey, model.PolicyKey](),
-		allPolicies:           map[model.PolicyKey]policyMetadata{},
-		endpoints:             make(map[model.Key]model.Endpoint),
-		dirtyEndpoints:        set.New[model.EndpointKey](),
-		endpointBGPPeerData:   map[model.WorkloadEndpointKey]EndpointBGPPeer{},
-		endpointQoSPolicyData: map[model.EndpointKey]endpointQoSPolicy{},
-		policySorter:          NewPolicySorter(),
-		Callbacks:             []PolicyResolverCallbacks{},
+		policyIDToEndpointIDs:    multidict.New[model.PolicyKey, model.EndpointKey](),
+		endpointIDToPolicyIDs:    multidict.New[model.EndpointKey, model.PolicyKey](),
+		allPolicies:              map[model.PolicyKey]policyMetadata{},
+		endpoints:                make(map[model.Key]model.Endpoint),
+		dirtyEndpoints:           set.New[model.EndpointKey](),
+		endpointBGPPeerData:      map[model.WorkloadEndpointKey]EndpointBGPPeer{},
+		qosPolicyIDToEndpointIDs: multidict.New[string, model.EndpointKey](),
+		endpointIDToQoSPolicyIDs: multidict.New[model.EndpointKey, string](),
+		policySorter:             NewPolicySorter(),
+		Callbacks:                []PolicyResolverCallbacks{},
 	}
 }
 
@@ -173,13 +176,38 @@ func (pr *PolicyResolver) OnPolicyMatchStopped(policyKey model.PolicyKey, endpoi
 	pr.dirtyEndpoints.Add(endpointKey)
 }
 
+func (pr *PolicyResolver) OnQoSPolicyMatch(policyKey string, endpointKey model.EndpointKey) {
+	log.Debugf("Storing QoS policy match %v -> %v", policyKey, endpointKey)
+	// If it's first time the policy become matched, add it to the tier
+	if !pr.policySorter.HasQoSPolicy(policyKey) {
+		policyMetadata := pr.allQoSPolicies[policyKey]
+		pr.policySorter.UpdateQoSPolicy(policyKey, &qosPolicyMetadata{Order: policyMetadata.Order})
+	}
+	pr.qosPolicyIDToEndpointIDs.Put(policyKey, endpointKey)
+	pr.endpointIDToQoSPolicyIDs.Put(endpointKey, policyKey)
+	pr.dirtyEndpoints.Add(endpointKey)
+}
+
+func (pr *PolicyResolver) OnQoSPolicyMatchStopped(policyKey string, endpointKey model.EndpointKey) {
+	log.Debugf("Deleting QoS policy match %v -> %v", policyKey, endpointKey)
+	pr.qosPolicyIDToEndpointIDs.Discard(policyKey, endpointKey)
+	pr.endpointIDToQoSPolicyIDs.Discard(endpointKey, policyKey)
+
+	// This policy is not active anymore, we no longer need to track it for sorting.
+	if !pr.qosPolicyIDToEndpointIDs.ContainsKey(policyKey) {
+		pr.policySorter.UpdateQoSPolicy(policyKey, nil)
+	}
+
+	pr.dirtyEndpoints.Add(endpointKey)
+}
+
 func (pr *PolicyResolver) Flush() {
 	if !pr.InSync {
 		log.Debugf("Not in sync, skipping flush")
 		return
 	}
 	pr.sortedTierData = pr.policySorter.Sorted()
-	//pr.sortedQoSPolicies =
+	pr.sortedQoSPolicies = pr.policySorter.SortedQoSPolicies()
 	pr.dirtyEndpoints.Iter(pr.sendEndpointUpdate)
 	pr.dirtyEndpoints.Clear()
 }
@@ -255,15 +283,6 @@ func (pr *PolicyResolver) OnEndpointBGPPeerDataUpdate(key model.WorkloadEndpoint
 		pr.endpointBGPPeerData[key] = *peerData
 	} else {
 		delete(pr.endpointBGPPeerData, key)
-	}
-	pr.dirtyEndpoints.Add(key)
-}
-
-func (pr *PolicyResolver) OnQoSPolicyDataUpdate(key model.EndpointKey, qosPolicyKey *qosPolicyKey) {
-	if qosPolicyKey != nil {
-		pr.endpointIDToQoSPolicyIDs.Put(key, qosPolicyKey.Name)
-	} else {
-		pr.endpointIDToQoSPolicyIDs.DiscardKey(key)
 	}
 	pr.dirtyEndpoints.Add(key)
 }
