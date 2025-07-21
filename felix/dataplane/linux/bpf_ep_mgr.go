@@ -47,6 +47,7 @@ import (
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sync/semaphore"
 	"golang.org/x/sys/unix"
+	k8sv1 "k8s.io/api/core/v1"
 
 	"github.com/projectcalico/calico/felix/bpf"
 	bpfarp "github.com/projectcalico/calico/felix/bpf/arp"
@@ -2327,6 +2328,9 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 
 	ap := m.calculateTCAttachPoint(ifaceName)
 	ap.IfIndex = ifindex
+	if wep != nil && wep.QosControls != nil && wep.QosControls.EgressBandwidth > 0 {
+		ap.SkipEgressRedirect = true
+	}
 
 	if err := m.wepStateFillJumps(ap, &state); err != nil {
 		return state, err
@@ -4148,6 +4152,10 @@ func (m *bpfEndpointManager) onServiceUpdate(update *proto.ServiceUpdate) {
 
 	ips := make([]ip.CIDR, 0, len(ipstr))
 	for _, i := range ipstr {
+		if i == k8sv1.ClusterIPNone {
+			// Headless services have an explicit "None" value for ClusterIPs.
+			continue
+		}
 		cidr, err := ip.ParseCIDROrIP(i)
 		if err != nil {
 			log.WithFields(log.Fields{"service": key, "ip": i}).Warn("Not a valid CIDR.")

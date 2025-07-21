@@ -50,7 +50,7 @@ describe('useShouldAnimate', () => {
     const customRenderHook = (startTime?: number) =>
         renderHook(
             ({ maxStartTime, flowLogs }) =>
-                useShouldAnimate(maxStartTime, flowLogs),
+                useShouldAnimate(maxStartTime, flowLogs.length),
             {
                 initialProps: {
                     maxStartTime: startTime ?? 1,
@@ -89,7 +89,9 @@ describe('useShouldAnimate', () => {
     });
 
     it('should return false when the flow start time is less than the max time', () => {
-        const { result } = renderHook(() => useShouldAnimate(100, flowLogs));
+        const { result } = renderHook(() =>
+            useShouldAnimate(100, flowLogs.length),
+        );
 
         const shouldAnimate = result.current;
 
