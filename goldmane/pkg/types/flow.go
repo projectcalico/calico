@@ -29,6 +29,8 @@ type FlowKeySource struct {
 	SourceName      string
 	SourceNamespace string
 	SourceType      proto.EndpointType
+	SourceIP        string
+	SourcePort      int64
 }
 
 type FlowKeyDestination struct {
@@ -104,6 +106,14 @@ func (k *FlowKey) SourceName() string {
 
 func (k *FlowKey) SourceNamespace() string {
 	return k.source.Value().SourceNamespace
+}
+
+func (k *FlowKey) SourceIP() string {
+	return k.source.Value().SourceIP
+}
+
+func (k *FlowKey) SourcePort() int64 {
+	return k.source.Value().SourcePort
 }
 
 func (k *FlowKey) DestType() proto.EndpointType {
@@ -219,6 +229,8 @@ func ProtoToFlowKey(p *proto.FlowKey) *FlowKey {
 			SourceName:      p.SourceName,
 			SourceNamespace: p.SourceNamespace,
 			SourceType:      p.SourceType,
+			SourceIP:        p.SourceIp,
+			SourcePort:      p.SourcePort,
 		},
 		&FlowKeyDestination{
 			DestName:             p.DestName,
@@ -295,6 +307,8 @@ func flowKeyIntoProto(k *FlowKey, pfk *proto.FlowKey) {
 	pfk.SourceName = source.SourceName
 	pfk.SourceNamespace = source.SourceNamespace
 	pfk.SourceType = source.SourceType
+	pfk.SourceIp = source.SourceIP
+	pfk.SourcePort = source.SourcePort
 	pfk.DestName = destination.DestName
 	pfk.DestNamespace = destination.DestNamespace
 	pfk.DestType = destination.DestType
@@ -341,6 +355,8 @@ func flowKeyToProto(f *FlowKey) *proto.FlowKey {
 		SourceName:           source.SourceName,
 		SourceNamespace:      source.SourceNamespace,
 		SourceType:           source.SourceType,
+		SourceIp:             source.SourceIP,
+		SourcePort:           source.SourcePort,
 		DestName:             destination.DestName,
 		DestNamespace:        destination.DestNamespace,
 		DestType:             destination.DestType,

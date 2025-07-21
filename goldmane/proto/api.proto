@@ -334,6 +334,12 @@ message FlowKey {
   // name and namespace fields.
   EndpointType source_type = 3;
 
+  // SourceIP is the IP address of the source endpoint.
+  string source_ip = 16;
+
+  // SourcePort is the source port number.
+  int64 source_port = 17;
+
   // DestName is the name of the destination for this Flow.
   // The value is contextualized by the source_type field:
   // - For WorkloadEndpoint, this represents a set of pods that share a GenerateName.
