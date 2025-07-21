@@ -1154,7 +1154,7 @@ def port_status_change(port, original):
     port = port.copy()
     original = original.copy()
 
-    for ignore_field in ['status', 'updated_at']:
+    for ignore_field in ['status', 'updated_at', 'revision_number']:
         port.pop(ignore_field, None)
         original.pop(ignore_field, None)
 
