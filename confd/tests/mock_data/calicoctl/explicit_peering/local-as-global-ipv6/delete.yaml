@@ -3,8 +3,9 @@ apiVersion: projectcalico.org/v3
 metadata:
   name: bgppeer-1
 spec:
-  peerIP: 10.192.0.3
+  peerIP: 2001::102
   asNumber: 64567
+  sourceAddress: None
 
 ---
 kind: BGPPeer
@@ -12,8 +13,9 @@ apiVersion: projectcalico.org/v3
 metadata:
   name: bgppeer-2
 spec:
-  peerIP: 10.192.0.4
+  peerIP: 2001::104
   asNumber: 64567
+  localASNumber: 65001
 
 ---
 kind: IPPool

@@ -599,10 +599,10 @@ execute_tests_daemon() {
         run_individual_test 'explicit_peering/route_reflector'
         run_individual_test 'explicit_peering/keepnexthop'
         run_individual_test 'explicit_peering/keepnexthop-global'
-	      run_individual_test 'explicit_peering/local-as'
-	      run_individual_test 'explicit_peering/local-as-global'
         run_individual_test 'explicit_peering/local-as-ipv6'
         run_individual_test 'explicit_peering/local-as-global-ipv6'
+        run_individual_test 'explicit_peering/local-as'
+        run_individual_test 'explicit_peering/local-as-global'
     done
 
     # Turn the node-mesh back on.
