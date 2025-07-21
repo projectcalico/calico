@@ -1570,6 +1570,10 @@ type FlowKey struct {
 	// SourceType is the type of the source, used to contextualize the source
 	// name and namespace fields.
 	SourceType EndpointType `protobuf:"varint,3,opt,name=source_type,json=sourceType,proto3,enum=goldmane.EndpointType" json:"source_type,omitempty"`
+	// SourceIP is the IP address of the source endpoint.
+	SourceIp string `protobuf:"bytes,16,opt,name=source_ip,json=sourceIp,proto3" json:"source_ip,omitempty"`
+	// SourcePort is the source port number.
+	SourcePort int64 `protobuf:"varint,17,opt,name=source_port,json=sourcePort,proto3" json:"source_port,omitempty"`
 	// DestName is the name of the destination for this Flow.
 	// The value is contextualized by the source_type field:
 	// - For WorkloadEndpoint, this represents a set of pods that share a GenerateName.
@@ -1655,6 +1659,20 @@ func (x *FlowKey) GetSourceType() EndpointType {
 		return x.SourceType
 	}
 	return EndpointType_EndpointTypeUnspecified
+}
+
+func (x *FlowKey) GetSourceIp() string {
+	if x != nil {
+		return x.SourceIp
+	}
+	return ""
+}
+
+func (x *FlowKey) GetSourcePort() int64 {
+	if x != nil {
+		return x.SourcePort
+	}
+	return 0
 }
 
 func (x *FlowKey) GetDestName() string {
@@ -2375,13 +2393,16 @@ const file_api_proto_rawDesc = "" +
 	"\vFlowReceipt\"0\n" +
 	"\n" +
 	"FlowUpdate\x12\"\n" +
-	"\x04flow\x18\x01 \x01(\v2\x0e.goldmane.FlowR\x04flow\"\x8a\x05\n" +
+	"\x04flow\x18\x01 \x01(\v2\x0e.goldmane.FlowR\x04flow\"\xc8\x05\n" +
 	"\aFlowKey\x12\x1f\n" +
 	"\vsource_name\x18\x01 \x01(\tR\n" +
 	"sourceName\x12)\n" +
 	"\x10source_namespace\x18\x02 \x01(\tR\x0fsourceNamespace\x127\n" +
 	"\vsource_type\x18\x03 \x01(\x0e2\x16.goldmane.EndpointTypeR\n" +
 	"sourceType\x12\x1b\n" +
+	"\tsource_ip\x18\x10 \x01(\tR\bsourceIp\x12\x1f\n" +
+	"\vsource_port\x18\x11 \x01(\x03R\n" +
+	"sourcePort\x12\x1b\n" +
 	"\tdest_name\x18\x04 \x01(\tR\bdestName\x12%\n" +
 	"\x0edest_namespace\x18\x05 \x01(\tR\rdestNamespace\x123\n" +
 	"\tdest_type\x18\x06 \x01(\x0e2\x16.goldmane.EndpointTypeR\bdestType\x12\x1b\n" +
