@@ -11,6 +11,7 @@ import { useQuery } from '@tanstack/react-query';
 import React from 'react';
 
 export const API_URL = process.env.APP_API_URL;
+const BUFFER_LIMIT = 20000;
 
 type ApiOptions = RequestInit & {
     queryParams?: QueryObject;
@@ -72,6 +73,7 @@ export const useStream = <S, R>({
     const hasTimeout = React.useRef(false);
     const hasReplacedStream = React.useRef(false);
     const isFetchingTimeout = React.useRef<NodeJS.Timeout | null>(null);
+    const totalItems = React.useRef(0);
 
     const startStream = React.useCallback(
         (options: StartStreamOptions = {}) => {
@@ -84,6 +86,7 @@ export const useStream = <S, R>({
 
             if (options.isUpdate) {
                 setData([]);
+                totalItems.current = 0;
             }
 
             if (!eventSourceRef.current) {
@@ -133,10 +136,17 @@ export const useStream = <S, R>({
                         setIsFetching(false);
                         const bufferedData = [...buffer.current];
                         if (options.isUpdate && !hasReplacedStream.current) {
-                            setData(bufferedData);
+                            setData(bufferedData.slice(0, BUFFER_LIMIT));
                             hasReplacedStream.current = true;
+                            totalItems.current = bufferedData.length;
                         } else {
-                            setData((list) => [...bufferedData, ...list]);
+                            setData((list) =>
+                                [...bufferedData, ...list].slice(
+                                    0,
+                                    BUFFER_LIMIT,
+                                ),
+                            );
+                            totalItems.current += bufferedData.length;
                         }
 
                         buffer.current = [];
@@ -155,7 +165,7 @@ export const useStream = <S, R>({
                 eventSource.close();
             };
         },
-        [eventSourceRef.current],
+        [],
     );
 
     const stopStream = React.useCallback(() => {
@@ -188,6 +198,7 @@ export const useStream = <S, R>({
         isWaiting: isStreamOpen && !isDataStreaming,
         hasStoppedStreaming,
         isFetching,
+        totalItems: totalItems.current,
     };
 };
 

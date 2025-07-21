@@ -2,7 +2,7 @@
 
 ## Set node version
 
-Run `nvm use ${version in .nvmrc}`
+Run `nvm use` or `nvm install`
 
 ## Install dependencies
 

@@ -60,6 +60,7 @@ const defaultProps = {
     maxStartTime: 0,
     flowLogs: [],
     heightOffset: 0,
+    totalItems: 0,
 };
 
 describe('FlowLogsList', () => {

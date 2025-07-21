@@ -104,6 +104,7 @@ describe('useStream', () => {
             hasStoppedStreaming: false,
             isWaiting: false,
             isFetching: false,
+            totalItems: 0,
         });
     });
 
@@ -143,6 +144,7 @@ describe('useStream', () => {
             hasStoppedStreaming: false,
             isWaiting: false,
             isFetching: false,
+            totalItems: 1,
         });
     });
 
@@ -162,6 +164,7 @@ describe('useStream', () => {
             hasStoppedStreaming: false,
             isWaiting: false,
             isFetching: false,
+            totalItems: 0,
         });
 
         expect(mockEventSource.close).toHaveBeenCalled();
@@ -183,6 +186,7 @@ describe('useStream', () => {
             hasStoppedStreaming: false,
             isWaiting: true,
             isFetching: false,
+            totalItems: 0,
         });
     });
 
@@ -245,6 +249,7 @@ describe('useStream', () => {
             hasStoppedStreaming: false,
             isWaiting: false,
             isFetching: false,
+            totalItems: 1,
         });
     });
 });
