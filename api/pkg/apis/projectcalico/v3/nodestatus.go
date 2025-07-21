@@ -25,6 +25,7 @@ const (
 
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:resource:scope=Cluster
 
 // CalicoNodeStatusList is a list of CalicoNodeStatus resources.
 type CalicoNodeStatusList struct {
@@ -37,6 +38,7 @@ type CalicoNodeStatusList struct {
 // +genclient
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:resource:scope=Cluster
 
 type CalicoNodeStatus struct {
 	metav1.TypeMeta   `json:",inline"`
