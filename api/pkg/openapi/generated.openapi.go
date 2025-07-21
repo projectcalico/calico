@@ -1236,6 +1236,13 @@ func schema_pkg_apis_projectcalico_v3_BGPPeerSpec(ref common.ReferenceCallback) 
 							Format:      "int64",
 						},
 					},
+					"localASNumber": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The optional Local AS Number to use when peering with this remote peer. If not specified, the AS Number defined in default BGPConfiguration will be used.",
+							Type:        []string{"integer"},
+							Format:      "int64",
+						},
+					},
 					"peerSelector": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Selector for the remote nodes to peer with.  When this is set, the PeerIP and ASNumber fields must be empty.  For each peering between the local node and selected remote nodes, we configure an IPv4 peering if both ends have NodeBGPSpec.IPv4Address specified, and an IPv6 peering if both ends have NodeBGPSpec.IPv6Address specified.  The remote AS number comes from the remote node's NodeBGPSpec.ASNumber, or the global default if that is not set.",
