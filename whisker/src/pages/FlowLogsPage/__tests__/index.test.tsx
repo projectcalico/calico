@@ -83,6 +83,7 @@ const useStreamStub = {
     isWaiting: false,
     hasStoppedStreaming: false,
     isFetching: false,
+    totalItems: 0,
 };
 
 const omniFilterData = {
@@ -165,6 +166,7 @@ describe('FlowLogsPage', () => {
             ...useStreamStub,
             startStream: mockStartStream,
             hasStoppedStreaming: true,
+            totalItems: 0,
         });
 
         renderWithRouter(<FlowLogsPage />);
@@ -180,6 +182,7 @@ describe('FlowLogsPage', () => {
             ...useStreamStub,
             stopStream: mockStopStream,
             isDataStreaming: true,
+            totalItems: 0,
         });
 
         renderWithRouter(<FlowLogsPage />);
@@ -193,6 +196,7 @@ describe('FlowLogsPage', () => {
         jest.mocked(useFlowLogsStream).mockReturnValue({
             ...useStreamStub,
             isWaiting: true,
+            totalItems: 0,
         });
 
         renderWithRouter(<FlowLogsPage />);
@@ -278,6 +282,7 @@ describe('FlowLogsPage', () => {
         jest.mocked(useFlowLogsStream).mockReturnValue({
             ...useStreamStub,
             isDataStreaming: true,
+            totalItems: 0,
         });
         renderWithRouter(<FlowLogsPage />);
 
@@ -291,6 +296,7 @@ describe('FlowLogsPage', () => {
         jest.mocked(useFlowLogsStream).mockReturnValue({
             ...useStreamStub,
             isDataStreaming: true,
+            totalItems: 0,
         });
         const { rerender } = renderWithRouter(<FlowLogsPage />);
 
@@ -299,6 +305,7 @@ describe('FlowLogsPage', () => {
         jest.mocked(useFlowLogsStream).mockReturnValue({
             ...useStreamStub,
             isDataStreaming: false,
+            totalItems: 0,
         });
 
         rerender(
@@ -317,6 +324,7 @@ describe('FlowLogsPage', () => {
         jest.mocked(useFlowLogsStream).mockReturnValue({
             ...useStreamStub,
             hasStoppedStreaming: true,
+            totalItems: 0,
         });
         renderWithRouter(<FlowLogsPage />);
 
@@ -334,6 +342,7 @@ describe('FlowLogsPage', () => {
         jest.mocked(useFlowLogsStream).mockReturnValue({
             ...useStreamStub,
             isDataStreaming: false,
+            totalItems: 0,
         });
         renderWithRouter(<FlowLogsPage />);
 
@@ -349,6 +358,7 @@ describe('FlowLogsPage', () => {
         jest.mocked(useFlowLogsStream).mockReturnValue({
             ...useStreamStub,
             isDataStreaming: true,
+            totalItems: 0,
         });
         renderWithRouter(<FlowLogsPage />);
 

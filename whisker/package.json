@@ -1,7 +1,7 @@
 {
     "name": "oss-ui",
     "private": true,
-    "version": "0.0.2",
+    "version": "0.1.0",
     "type": "module",
     "scripts": {
         "start": "rsbuild dev",
@@ -17,7 +17,8 @@
         "test:cov": "jest --coverage",
         "verify": "yarn format && yarn lint --quiet && yarn test:cov --silent && yarn build",
         "postinstall": "husky",
-        "patch": "yarn version --no-git-tag-version --new-version patch"
+        "patch": "yarn version --no-git-tag-version --new-version patch",
+        "minor": "yarn version --no-git-tag-version --new-version minor"
     },
     "dependencies": {
         "@chakra-ui/icons": "^2.2.4",

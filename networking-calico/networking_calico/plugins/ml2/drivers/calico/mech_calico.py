@@ -775,6 +775,9 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                      original.get("status"), port.get("status"))
             return
 
+        LOG.debug("Old = %r", original)
+        LOG.debug("New = %r", port)
+
         # Re-read the port; we do this to guarantee correctly ordered handling
         # of multiple updates to the same port, when there are multiple Neutron
         # servers and so different updates could be processed on different
@@ -1151,8 +1154,9 @@ def port_status_change(port, original):
     port = port.copy()
     original = original.copy()
 
-    port.pop('status')
-    original.pop('status')
+    for ignore_field in ['status', 'updated_at']:
+        port.pop(ignore_field, None)
+        original.pop(ignore_field, None)
 
     if port == original:
         return True

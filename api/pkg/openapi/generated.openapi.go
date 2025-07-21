@@ -1359,6 +1359,13 @@ func schema_pkg_apis_projectcalico_v3_BGPPeerSpec(ref common.ReferenceCallback) 
 							Format:      "",
 						},
 					},
+					"reversePeering": {
+						SchemaProps: spec.SchemaProps{
+							Description: "ReversePeering, for peerings between Calico nodes controls whether the reverse peering from nodes selected by peerSelector is generated automatically. If set to Manual, a separate BGPPeer must be created for the reverse peering. [Default: Auto]",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 				},
 			},
 		},
@@ -3447,6 +3454,13 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					"bpfRedirectToPeer": {
 						SchemaProps: spec.SchemaProps{
 							Description: "BPFRedirectToPeer controls which whether it is allowed to forward straight to the peer side of the workload devices. It is allowed for any host L2 devices by default (L2Only), but it breaks TCP dump on the host side of workload device as it bypasses it on ingress. Value of Enabled also allows redirection from L3 host devices like IPIP tunnel or Wireguard directly to the peer side of the workload's device. This makes redirection faster, however, it breaks tools like tcpdump on the peer side. Use Enabled with caution. [Default: L2Only]",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"bpfAttachType": {
+						SchemaProps: spec.SchemaProps{
+							Description: "BPFAttachType controls how are the BPF programs at the network interfaces attached. By default `tcx` is used where available to enable easier coexistence with 3rd party programs. `tc` can force the legacy method of attaching via a qdisc. `tcx` falls back to `tc` if `tcx` is not available. [Default: tcx]",
 							Type:        []string{"string"},
 							Format:      "",
 						},

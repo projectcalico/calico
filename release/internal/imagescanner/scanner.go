@@ -23,6 +23,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/sirupsen/logrus"
 )
@@ -45,6 +46,10 @@ type Config struct {
 
 func (c *Config) Valid() bool {
 	return c.APIURL != "" && c.Token != "" && c.Scanner != ""
+}
+
+type scanResult struct {
+	ResultsLink string `json:"results_link"`
 }
 
 // Scanner is an image scanner.
@@ -118,12 +123,25 @@ func (i *Scanner) Scan(productCode string, images []string, stream string, relea
 	}
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
 		logrus.WithField("status", resp.StatusCode).Info("Image scan request sent successfully")
-		if outputDir != "" {
-			defer resp.Body.Close()
-			if err := writeScanResultToFile(resp.Body, outputDir); err != nil {
-				logrus.WithError(err).Error("Failed to write image scan result to file")
-				return err
-			}
+		defer resp.Body.Close()
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			logrus.WithError(err).Error("Failed to read response body from image scanner")
+			return err
+		}
+		var result scanResult
+		if err := json.Unmarshal(body, &result); err != nil {
+			logrus.WithError(err).Error("Failed to unmarshal image scan result")
+			return fmt.Errorf("failed to unmarshal image scan result: %w", err)
+		}
+		logrus.WithField("results_link", result.ResultsLink).Debug("Image scan result URL retrieved")
+		if result.ResultsLink == "" {
+			logrus.Error("Image scan result URL is empty")
+			return fmt.Errorf("image scanner returned an empty results link")
+		}
+		if err := writeScanResultToFile(result.ResultsLink, outputDir); err != nil {
+			logrus.WithError(err).Error("Failed to write image scan result to file")
+			return err
 		}
 		return nil
 	} else if resp.StatusCode == http.StatusLocked {
@@ -138,20 +156,13 @@ func (i *Scanner) Scan(productCode string, images []string, stream string, relea
 }
 
 // writeScanResultToFile writes the image scan result to a file.
-func writeScanResultToFile(result io.ReadCloser, outputDir string) error {
+func writeScanResultToFile(result string, outputDir string) error {
+	if outputDir == "" {
+		return fmt.Errorf("output directory is not specified")
+	}
 	outputFilePath := filepath.Join(outputDir, scanResultFileName)
-	if _, err := os.Stat(outputFilePath); err == nil {
-		logrus.WithField("file", outputFilePath).Error("Image scan result file already exists")
-		return fmt.Errorf("image scan result file already exists")
-	}
-	file, err := os.Create(outputFilePath)
-	if err != nil {
+	if err := os.WriteFile(outputFilePath, []byte(result), 0o644); err != nil {
 		logrus.WithError(err).Error("Failed to create image scan result file")
-		return err
-	}
-	defer file.Close()
-	if _, err := file.ReadFrom(result); err != nil {
-		logrus.WithError(err).Error("Failed to write image scan result to file")
 		return err
 	}
 	logrus.WithField("file", outputFilePath).Info("Image scan result written to file")
@@ -160,22 +171,18 @@ func writeScanResultToFile(result io.ReadCloser, outputDir string) error {
 
 // RetrieveResultURL retrieves the URL to the image scan result from the scan result file.
 func RetrieveResultURL(outputDir string) (string, error) {
+	if outputDir == "" {
+		return "", fmt.Errorf("output directory is not specified")
+	}
 	outputFilePath := filepath.Join(outputDir, scanResultFileName)
 	if _, err := os.Stat(outputFilePath); os.IsNotExist(err) {
 		return "", fmt.Errorf("image scan result file does not exist")
 	}
-	var result map[string]interface{}
 	resultData, err := os.ReadFile(outputFilePath)
 	if err != nil {
 		logrus.WithError(err).Error("Failed to read image scan result file")
 		return "", err
 	}
-	if err := json.Unmarshal(resultData, &result); err != nil {
-		logrus.WithError(err).Error("Failed to unmarshal image scan result")
-		return "", fmt.Errorf("failed to unmarshal image scan result: %w", err)
-	}
-	if link, ok := result["results_link"].(string); ok {
-		return link, nil
-	}
-	return "", fmt.Errorf("no results link found in image scan result")
+	result := strings.TrimSpace(string(resultData))
+	return result, nil
 }

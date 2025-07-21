@@ -527,6 +527,11 @@ func (in *BGPPeerSpec) DeepCopyInto(out *BGPPeerSpec) {
 		*out = make([]string, len(*in))
 		copy(*out, *in)
 	}
+	if in.ReversePeering != nil {
+		in, out := &in.ReversePeering, &out.ReversePeering
+		*out = new(ReversePeering)
+		**out = **in
+	}
 	return
 }
 
@@ -1659,6 +1664,11 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 	if in.FlowLogsPolicyEvaluationMode != nil {
 		in, out := &in.FlowLogsPolicyEvaluationMode, &out.FlowLogsPolicyEvaluationMode
 		*out = new(FlowLogsPolicyEvaluationModeType)
+		**out = **in
+	}
+	if in.BPFAttachType != nil {
+		in, out := &in.BPFAttachType, &out.BPFAttachType
+		*out = new(BPFAttachOption)
 		**out = **in
 	}
 	if in.FlowLogsFlushInterval != nil {

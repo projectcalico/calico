@@ -250,6 +250,7 @@ type Config struct {
 	BPFExcludeCIDRsFromNAT             []string
 	BPFExportBufferSizeMB              int
 	BPFRedirectToPeer                  string
+	BPFAttachType                      string
 
 	BPFProfiling               string
 	KubeProxyMinSyncPeriod     time.Duration
@@ -1062,6 +1063,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		string(defaultRPFilter),
 		filterMaps,
 		config.BPFEnabled,
+		config.BPFAttachType,
 		bpfEndpointManager,
 		callbacks,
 		config.FloatingIPsEnabled,
@@ -1258,6 +1260,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			"",
 			filterMapsV6,
 			config.BPFEnabled,
+			config.BPFAttachType,
 			nil,
 			callbacks,
 			config.FloatingIPsEnabled,
@@ -2818,7 +2821,10 @@ func startBPFDataplaneComponents(
 	if err != nil {
 		log.WithError(err).Fatal("Failed to create conntrack liveness scanner.")
 	}
-	conntrackScanner := bpfconntrack.NewScanner(bpfmaps.CtMap, ctKey, ctVal, livenessScanner)
+	conntrackScanner := bpfconntrack.NewScanner(bpfmaps.CtMap, ctKey, ctVal,
+		config.ConfigChangedRestartCallback,
+		config.BPFMapSizeConntrackScaling,
+		livenessScanner)
 
 	// Before we start, scan for all finished / timed out connections to
 	// free up the conntrack table asap as it may take time to sync up the

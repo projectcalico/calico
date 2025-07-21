@@ -32,9 +32,14 @@ type TunnelStrategy interface {
 type defaultTunnelStrategy struct {
 	v4Pool *net.IPNet
 	v6Pool *net.IPNet
+	offset int
 }
 
 func NewDefaultTunnelStrategy(v4Pool, v6Pool string) TunnelStrategy {
+	return NewDefaultTunnelStrategyWithOffset(v4Pool, v6Pool, 0)
+}
+
+func NewDefaultTunnelStrategyWithOffset(v4Pool, v6Pool string, offset int) TunnelStrategy {
 	_, v4cidr, err := net.ParseCIDR(v4Pool)
 	Expect(err).To(BeNil())
 	_, v6cidr, err := net.ParseCIDR(v6Pool)
@@ -43,18 +48,19 @@ func NewDefaultTunnelStrategy(v4Pool, v6Pool string) TunnelStrategy {
 	return &defaultTunnelStrategy{
 		v4Pool: v4cidr,
 		v6Pool: v6cidr,
+		offset: offset,
 	}
 }
 
 func (s *defaultTunnelStrategy) TunnelAddress(i int) string {
-	return fmt.Sprintf("%d.%d.%d.0", s.v4Pool.IP[0], s.v4Pool.IP[1], i)
+	return fmt.Sprintf("%d.%d.%d.0", s.v4Pool.IP[0], s.v4Pool.IP[1], i+s.offset)
 }
 
 func (s *defaultTunnelStrategy) TunnelAddressV6(i int) string {
 	cidr := s.v6Pool
 	return net.ParseIP(fmt.Sprintf("%x%x:%x%x:%x%x:%x%x:%x%x:%x%x:%d:0",
 		cidr.IP[0], cidr.IP[1], cidr.IP[2], cidr.IP[3], cidr.IP[4], cidr.IP[5], cidr.IP[6],
-		cidr.IP[7], cidr.IP[8], cidr.IP[9], cidr.IP[10], cidr.IP[11], i)).String()
+		cidr.IP[7], cidr.IP[8], cidr.IP[9], cidr.IP[10], cidr.IP[11], i+s.offset)).String()
 }
 
 // borrowedTunnelStrategy is a strategy for assigning tunnel configuration to a topology

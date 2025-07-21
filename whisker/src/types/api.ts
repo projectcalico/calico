@@ -84,6 +84,7 @@ export type UseStreamResult<T> = {
     isDataStreaming: boolean;
     hasStoppedStreaming: boolean;
     isFetching: boolean;
+    totalItems: number;
 };
 
 export type UseStreamOptions<S, R> = {

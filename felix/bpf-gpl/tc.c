@@ -82,7 +82,10 @@ int calico_tc_main(struct __sk_buff *skb)
 
 	/* Optimisation: if another BPF program has already pre-approved the packet,
 	 * skip all processing. */
-	if (CALI_F_FROM_HOST && skb->mark == CALI_SKB_MARK_BYPASS) {
+	if (CALI_F_FROM_HOST && skb->mark == CALI_SKB_MARK_BYPASS &&
+			/* If we are on vxlan and we do not have the key set, we cannot short-cirquit */
+			!(CALI_F_VXLAN &&
+			 !skb_mark_equals(skb, CALI_SKB_MARK_TUNNEL_KEY_SET, CALI_SKB_MARK_TUNNEL_KEY_SET))) {
 		if  (CALI_LOG_LEVEL >= CALI_LOG_LEVEL_DEBUG) {
 			/* This generates a bit more richer output for logging */
 			DECLARE_TC_CTX(_ctx,
@@ -200,6 +203,20 @@ int calico_tc_main(struct __sk_buff *skb)
 		CALI_DEBUG("Drop malformed or unsupported packet");
 		ctx->fwd.res = TC_ACT_SHOT;
 		goto finalize;
+	}
+
+	if (CALI_F_VXLAN && CALI_F_TO_HEP
+			&& skb_mark_equals(ctx->skb, CALI_SKB_MARK_BYPASS, CALI_SKB_MARK_BYPASS)) {
+		/* In case we are on VXLAN device, CALI_SKB_MARK_BYPASS is set we only got
+		 * here because CALI_SKB_MARK_TUNNEL_KEY_SET wasn't set. This happens when
+		 * redirecting on a WEP was disabled, e.g. not to bypass the qdisc. We do
+		 * not have the key set, but CALI_SKB_MARK_BYPASS tells us that we do not
+		 * need to do more than that. Juset forward the packet. We already parsed
+		 * IP header so we have enough to forward via vxlan. So just got to allow
+		 * and forward it. forward_or_drop() will set the key.
+		 */
+		tc_state_fill_from_iphdr(ctx);
+		goto allow;
 	}
 
 #ifndef IPVER6
@@ -505,6 +522,10 @@ syn_force_policy:
 			goto deny;
 		}
 
+		if (cali_rt_flags_skip_ingress_redirect(r->flags)) {
+			ctx->state->flags |= CALI_ST_SKIP_REDIR_PEER;
+		}
+
 		// Check whether the workload needs outgoing NAT to this address.
 		if (r->flags & CALI_RT_NAT_OUT) {
 			struct cali_rt *rt = cali_rt_lookup(&ctx->state->post_nat_ip_dst);
@@ -512,9 +533,9 @@ syn_force_policy:
 			if (rt) {
 				flags = rt->flags;
 			}
-			if (!(flags & CALI_RT_IN_POOL) && !cali_rt_flags_local_host(flags)) {
-				CALI_DEBUG("Source is in NAT-outgoing pool "
-					   "but dest is not, need to SNAT.");
+			bool exclude_hosts = (GLOBAL_FLAGS & CALI_GLOBALS_NATOUTGOING_EXCLUDE_HOSTS);
+			if (rt_flags_should_perform_nat_outgoing(flags, exclude_hosts)) {
+				CALI_DEBUG("Source is in NAT-outgoing pool but dest is not, need to SNAT.");
 				ctx->state->flags |= CALI_ST_NAT_OUTGOING;
 			}
 		}
@@ -637,7 +658,7 @@ syn_force_policy:
 		}
 		ctx->state->flags |= CALI_ST_DEST_IS_HOST;
 	} else if (CALI_F_FROM_HEP) {
-		if (cali_rt_flags_local_workload_vm(dest_rt->flags)) {
+		if (cali_rt_flags_skip_ingress_redirect(dest_rt->flags)) {
 			ctx->state->flags |= CALI_ST_SKIP_REDIR_PEER;
 		} else if (!ctx->nat_dest && !cali_rt_is_local(dest_rt)) {
 			/* Disable FIB, let the packet go through the host after it is

@@ -97,6 +97,7 @@ const FlowLogsPage: React.FC = () => {
         isWaiting,
         hasStoppedStreaming,
         isFetching,
+        totalItems,
     } = useFlowLogsStream(filters);
 
     const toast = useToast();
@@ -269,6 +270,7 @@ const FlowLogsPage: React.FC = () => {
                             onSortClicked,
                             isFetching,
                             maxStartTime: maxStartTime.current,
+                            totalItems,
                         } satisfies FlowLogsContext
                     }
                 />

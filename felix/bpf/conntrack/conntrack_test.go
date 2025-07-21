@@ -45,7 +45,7 @@ var _ = Describe("BPF Conntrack LivenessCalculator", func() {
 		Expect(mockTime.KTimeNanos()).To(BeNumerically("==", cttestdata.Now))
 		ctMap = mock.NewMockMap(conntrack.MapParams)
 		lc = conntrack.NewLivenessScanner(timeouts.DefaultTimeouts(), false, conntrack.WithTimeShim(mockTime))
-		scanner = conntrack.NewScanner(ctMap, conntrack.KeyFromBytes, conntrack.ValueFromBytes, lc)
+		scanner = conntrack.NewScanner(ctMap, conntrack.KeyFromBytes, conntrack.ValueFromBytes, nil, "Disabled", lc)
 	})
 
 	// Convert test cases from the testdata package into Ginkgo table entries.
