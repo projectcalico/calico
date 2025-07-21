@@ -28,14 +28,18 @@ import (
 )
 
 type PolicySorter struct {
-	tiers       map[string]*TierInfo
-	sortedTiers *btree.BTreeG[tierInfoKey]
+	tiers             map[string]*TierInfo
+	sortedTiers       *btree.BTreeG[tierInfoKey]
+	allQoSPolicies    map[string]*qosPolicyMetadata
+	sortedQoSPolicies *btree.BTreeG[qosPolicyKey]
 }
 
 func NewPolicySorter() *PolicySorter {
 	return &PolicySorter{
-		tiers:       make(map[string]*TierInfo),
-		sortedTiers: btree.NewG(2, TierLess),
+		tiers:             make(map[string]*TierInfo),
+		sortedTiers:       btree.NewG(2, TierLess),
+		allQoSPolicies:    make(map[string]*qosPolicyMetadata),
+		sortedQoSPolicies: btree.NewG[qosPolicyKey](2, qosPolicyLess),
 	}
 }
 
@@ -367,4 +371,80 @@ func (t TierInfo) String() string {
 		policies[ii] = fmt.Sprintf("%v(%v)", pol.Key.Name, polType)
 	}
 	return fmt.Sprintf("%v -> %v", t.Name, policies)
+}
+
+type qosPolicyKey struct {
+	Name  string
+	Order float64 // TODO (Mazdak): reference or not!!
+}
+
+type qosPolicyMetadata struct {
+	Order float64
+}
+
+func (m *qosPolicyMetadata) equals(other *qosPolicyMetadata) bool {
+	if m != nil && other != nil {
+		return *m == *other
+	}
+	return m == other
+}
+
+func (poc *PolicySorter) UpdateQoSPolicy(key string, newPolicy *qosPolicyMetadata) (dirty bool) {
+	oldPolicy := poc.allQoSPolicies[key]
+	if newPolicy != nil {
+		if oldPolicy == nil || !oldPolicy.equals(newPolicy) {
+			dirty = true
+		}
+		if oldPolicy != nil {
+			// Need to do delete prior to ReplaceOrInsert because we don't insert strictly based on key but rather a
+			// combination of key + value so if for instance we add PolKV{k1, v1} then add PolKV{k1, v2} we'll simply have
+			// both KVs in the tree instead of only {k1, v2} like we want. By deleting first we guarantee that only the
+			// newest value remains in the tree.
+			poc.sortedQoSPolicies.Delete(qosPolicyKey{Name: key, Order: oldPolicy.Order})
+		}
+		poc.sortedQoSPolicies.ReplaceOrInsert(qosPolicyKey{Name: key, Order: newPolicy.Order})
+		poc.allQoSPolicies[key] = newPolicy
+	} else {
+		if oldPolicy != nil {
+			poc.sortedQoSPolicies.Delete(qosPolicyKey{Name: key, Order: oldPolicy.Order})
+			delete(poc.allQoSPolicies, key)
+			dirty = true
+		}
+	}
+	return
+}
+
+func v3PolicyToQoSPolicyKey(policy *v3.QoSPolicy) qosPolicyKey {
+	order := polMetaDefaultOrder
+	if policy.Spec.Order != nil {
+		order = *policy.Spec.Order
+	}
+	return qosPolicyKey{
+		Name:  policy.Name,
+		Order: order,
+	}
+}
+
+func (poc *PolicySorter) HasQoSPolicy(key string) bool {
+	_, exists := poc.allQoSPolicies[key]
+	return exists
+}
+
+func (poc *PolicySorter) SortedQoSPolicies() []qosPolicyKey {
+	var policies []qosPolicyKey
+	if poc.sortedQoSPolicies.Len() > 0 {
+		policies = make([]qosPolicyKey, 0, len(poc.allQoSPolicies))
+		poc.sortedQoSPolicies.Ascend(func(p qosPolicyKey) bool {
+			policies = append(policies, p)
+			return true
+		})
+	}
+	return policies
+}
+
+func qosPolicyLess(i, j qosPolicyKey) bool {
+	if i.Order == j.Order {
+		return i.Name < j.Name
+	}
+	return i.Order < j.Order
 }
