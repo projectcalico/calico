@@ -391,9 +391,9 @@ message WorkloadEndpointUpdate {
   WorkloadEndpoint endpoint = 5;
 }
 
-enum WorkloadType {
-  REGULAR = 0;
-  VM = 1;
+message WorkloadBpfSkipRedir {
+  bool Egress = 1;
+  bool Ingress = 2;
 }
 
 message WorkloadEndpoint {
@@ -410,7 +410,7 @@ message WorkloadEndpoint {
   map<string, string> annotations = 11;
   QoSControls qos_controls = 12;
   LocalBGPPeer local_bgp_peer = 13;
-  WorkloadType type = 14;
+  WorkloadBpfSkipRedir skip_redir = 14;
 }
 
 message QoSControls {

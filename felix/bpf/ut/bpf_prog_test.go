@@ -1827,7 +1827,7 @@ func testPacketUDPDefault() (*layers.Ethernet, *layers.IPv4, gopacket.Layer, []b
 	return e, ip4.(*layers.IPv4), l4, p, b, err
 }
 
-func testPacketUDPDefaultNP(destIP net.IP) (*layers.Ethernet, *layers.IPv4, gopacket.Layer, []byte, []byte, error) {
+func testPacketUDPDefaultNPWithPayload(destIP net.IP, payload []byte) (*layers.Ethernet, *layers.IPv4, gopacket.Layer, []byte, []byte, error) {
 	if destIP == nil {
 		return testPacketUDPDefault()
 	}
@@ -1841,7 +1841,7 @@ func testPacketUDPDefaultNP(destIP net.IP) (*layers.Ethernet, *layers.IPv4, gopa
 	}}
 	ip.IHL += 2
 
-	e, ip4, l4, p, b, err := testPacket(4, nil, &ip, nil, nil)
+	e, ip4, l4, p, b, err := testPacket(4, nil, &ip, nil, payload)
 	return e, ip4.(*layers.IPv4), l4, p, b, err
 }
 
@@ -1858,7 +1858,11 @@ func ipv6HopByHopExt() gopacket.SerializableLayer {
 	return hop
 }
 
-func testPacketUDPDefaultNPV6(destIP net.IP) (*layers.Ethernet, *layers.IPv6, gopacket.Layer, []byte, []byte, error) {
+func testPacketUDPDefaultNP(destIP net.IP) (*layers.Ethernet, *layers.IPv4, gopacket.Layer, []byte, []byte, error) {
+	return testPacketUDPDefaultNPWithPayload(destIP, nil)
+}
+
+func testPacketUDPDefaultNPV6WithPayload(destIP net.IP, payload []byte) (*layers.Ethernet, *layers.IPv6, gopacket.Layer, []byte, []byte, error) {
 	if destIP == nil {
 		return testPacketV6(nil, nil, nil, nil)
 	}
@@ -1875,8 +1879,12 @@ func testPacketUDPDefaultNPV6(destIP net.IP) (*layers.Ethernet, *layers.IPv6, go
 	tlv.OptionData = []byte{0x00, 0x00, 0x00, 0x00}
 	hop.Options = append(hop.Options, tlv)
 
-	e, ip6, l4, p, b, err := testPacketV6(nil, &ip, nil, nil, hop)
+	e, ip6, l4, p, b, err := testPacketV6(nil, &ip, nil, payload, hop)
 	return e, ip6, l4, p, b, err
+}
+
+func testPacketUDPDefaultNPV6(destIP net.IP) (*layers.Ethernet, *layers.IPv6, gopacket.Layer, []byte, []byte, error) {
+	return testPacketUDPDefaultNPV6WithPayload(destIP, nil)
 }
 
 func resetBPFMaps() {
@@ -1988,6 +1996,10 @@ func TestMapIterWithDeleteLastOfBatch(t *testing.T) {
 
 func TestJumpMap(t *testing.T) {
 	RegisterTestingT(t)
+
+	progMap = hook.NewProgramsMap()
+	err := progMap.EnsureExists()
+	Expect(err).NotTo(HaveOccurred())
 
 	jumpMapFD := progMap.MapFD()
 	pg := polprog.NewBuilder(idalloc.New(), ipsMap.MapFD(), stateMap.MapFD(), jumpMapFD, policyJumpMap.MapFD(),

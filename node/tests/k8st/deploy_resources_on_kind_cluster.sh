@@ -84,9 +84,20 @@ wait_pod_ready -l k8s-app=kube-dns -n kube-system
 wait_pod_ready calicoctl -n kube-system
 
 echo "Wait for tigera status to be ready"
-${kubectl} wait --for=condition=Available tigerastatus/calico
-${kubectl} wait --for=condition=Available tigerastatus/apiserver
-
+if ! ${kubectl} wait --for=condition=Available tigerastatus/calico; then
+  echo "TigeraStatus for Calico is down, collecting diags..."
+  ${kubectl} get -o yaml tigerastatus/calico
+  echo "Logs for tigera-operator:"
+  ${kubectl} logs -n tigera-operator -l k8s-app=tigera-operator
+  echo "Status of pods:"
+  ${kubectl} get po -A -o wide
+  ${kubectl} describe po -n calico-system
+  exit 1
+fi
+if ! ${kubectl} wait --for=condition=Available tigerastatus/apiserver; then
+  ${kubectl} get -o yaml tigerastatus/apiserver
+  exit 1
+fi
 echo "Calico is running."
 echo
 

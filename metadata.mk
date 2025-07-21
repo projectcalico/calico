@@ -3,7 +3,7 @@
 #################################################################################################
 
 # The version of calico/go-build and calico/base to use.
-GO_BUILD_VER=1.24.4-llvm18.1.8-k8s1.32.5
+GO_BUILD_VER=1.24.5-llvm18.1.8-k8s1.32.6
 CALICO_BASE_VER=ubi9-1749156995
 
 # Env var to ACK Ginkgo deprecation warnings, may need updating with go-build.
@@ -21,6 +21,7 @@ KINDEST_NODE_VERSION=v1.31.4
 KIND_VERSION=v0.25.0
 GITHUB_CLI_VERSION=2.26.0
 GOTESTSUM_VERSION=v1.12.2
+CRANE_VERSION := v0.20.6
 
 # Configuration for Semaphore/Github integration.  This needs to be set
 # differently for a forked repo.
