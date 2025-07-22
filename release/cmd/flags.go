@@ -78,7 +78,7 @@ var (
 	}
 	releaseBranchPrefixFlag = &cli.StringFlag{
 		Name:    "release-branch-prefix",
-		Usage:   "The stardard prefix used to denote release branches",
+		Usage:   "The standard prefix used to denote release branches",
 		Sources: cli.EnvVars("RELEASE_BRANCH_PREFIX"),
 		Value:   "release",
 	}
