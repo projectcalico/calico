@@ -73,7 +73,8 @@ type resourceStore struct {
 }
 
 func (rs *resourceStore) GetCurrentResourceVersion(ctx context.Context) (uint64, error) {
-	return rs.GetCurrentResourceVersion(ctx)
+	logrus.Error("STUB: GetCurrentResourceVersion() not supported by Calico client.")
+	return 0, fmt.Errorf("GetCurrentResourceVersion() not supported by Calico client")
 }
 
 func (rs *resourceStore) RequestWatchProgress(ctx context.Context) error {
