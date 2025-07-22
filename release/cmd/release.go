@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package main is the entrypoint for the release tool; this file contains release management code
 package main
 
 import (

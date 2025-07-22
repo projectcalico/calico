@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package main is the entrypoint for the release tool; this file contains command-line flags
 package main
 
 import (
@@ -211,7 +210,7 @@ var (
 	}
 	operatorReleaseBranchPrefixFlag = &cli.StringFlag{
 		Name:    "operator-release-branch-prefix",
-		Usage:   "The stardard prefix used to denote Tigera operator release branches",
+		Usage:   "The standard prefix used to denote Tigera operator release branches",
 		Sources: cli.EnvVars("OPERATOR_RELEASE_BRANCH_PREFIX"),
 		Value:   operator.DefaultReleaseBranchPrefix,
 	}
@@ -307,7 +306,7 @@ var (
 				if c.Bool(ciFlag.Name) {
 					return fmt.Errorf("Slack token and channel are required in CI environment")
 				}
-				logrus.Warnf("This command may require sending Slack notifications, ensuure %s and %s flags are set", slackTokenFlag.Name, slackChannelFlag.Name)
+				logrus.Warnf("This command may require sending Slack notifications, ensure %s and %s flags are set", slackTokenFlag.Name, slackChannelFlag.Name)
 			}
 			return nil
 		},
@@ -426,13 +425,13 @@ var (
 		Sources: cli.EnvVars("DOCS_PORT"),
 	}
 	sshKnownHostsFlag = &cli.StringFlag{
-		Name: "sever-ssh-known-hosts",
+		Name: "server-ssh-known-hosts",
 		Usage: "The known_hosts file is the absolute path to the known_hosts file " +
 			"to use for the user host key database instead of ~/.ssh/known_hosts",
 		Sources: cli.EnvVars("DOCS_KNOWN_HOSTS"),
 	}
 	maxHashreleasesFlag = &cli.IntFlag{
-		Name:    "maxiumum",
+		Name:    "maximum",
 		Aliases: []string{"max"},
 		Usage:   "The maximum number of hashreleases to keep on the hashrelease server",
 		Value:   hashreleaseserver.DefaultMax,
