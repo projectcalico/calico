@@ -559,8 +559,9 @@ func (s *Syncer) applyDerived(
 
 	skey = getSvcKey(sname, getSvcKeyExtra(t, sinfo.ClusterIP()))
 	flags := uint32(0)
-	flags |= nat.NATFlgConsistentHash
-
+	if sinfo.UseConsistentHashing() {
+		flags |= nat.NATFlgConsistentHash
+	}
 	switch t {
 	case svcTypeNodePort, svcTypeLoadBalancer, svcTypeNodePortRemote:
 		if sinfo.ExternalPolicyLocal() {
