@@ -203,10 +203,10 @@ func FrontendKeyFromBytes(b []byte) FrontendKeyInterface {
 }
 
 const (
-	NATFlgExternalLocal     = 0x1
-	NATFlgInternalLocal     = 0x2
-	NATFlgExclude           = 0x4
-	NATFlgNatConsistentHash = 0x8
+	NATFlgExternalLocal  = 0x1
+	NATFlgInternalLocal  = 0x2
+	NATFlgExclude        = 0x4
+	NATFlgConsistentHash = 0x8
 )
 
 var flgTostr = map[int]string{
