@@ -559,7 +559,7 @@ func (s *Syncer) applyDerived(
 
 	skey = getSvcKey(sname, getSvcKeyExtra(t, sinfo.ClusterIP()))
 	flags := uint32(0)
-	flags |= nat.NATFlgNatConsistentHash
+	flags |= nat.NATFlgConsistentHash
 
 	switch t {
 	case svcTypeNodePort, svcTypeLoadBalancer, svcTypeNodePortRemote:
@@ -819,7 +819,7 @@ func (s *Syncer) updateService(skey svcKey, sinfo Service, id uint32, eps []k8sp
 	}
 
 	if sinfo.UseConsistentHashing() {
-		flags |= nat.NATFlgNatConsistentHash
+		flags |= nat.NATFlgConsistentHash
 		s.writeConsistentHashBackends(skey, sinfo, eps)
 	}
 

@@ -16,6 +16,27 @@
 
 #include "jhash.h"
 
+
+static CALI_BPF_INLINE bool calico_nat_check_ch(ipv46_addr_t *ip_src,
+		ipv46_addr_t *ip_dst, __u16 dport, __u8 ip_proto)
+{
+	struct calico_nat_key nat_key = {
+		.prefixlen = NAT_PREFIX_LEN_WITH_SRC_MATCH_IN_BITS,
+		.addr = *ip_dst,
+		.port = dport,
+		.protocol = ip_proto,
+		.saddr = *ip_src,
+	};
+	struct calico_nat_value *nat_val;
+
+	nat_val = cali_nat_fe_lookup_elem(&nat_key);
+	if (!nat_val) {
+		return false;
+	}
+
+	return nat_val->flags & NAT_FLG_CONSISTENT_HASH;
+}
+
 static CALI_BPF_INLINE struct calico_nat_dest* calico_nat_lookup(ipv46_addr_t *ip_src,
 								 ipv46_addr_t *ip_dst,
 								 __u8 ip_proto,
@@ -42,6 +63,8 @@ static CALI_BPF_INLINE struct calico_nat_dest* calico_nat_lookup(ipv46_addr_t *i
 	struct calico_nat_affinity_key affkey = {};
 	struct calico_ch_key ch_key;
 	struct calico_nat_dest *ch_val;
+	__u32 calico_nat_ch_tuple_hash;
+
 	__u64 now = 0;
 
 	nat_lv1_val = cali_nat_fe_lookup_elem(&nat_key);
@@ -156,19 +179,15 @@ static CALI_BPF_INLINE struct calico_nat_dest* calico_nat_lookup(ipv46_addr_t *i
 		goto skip_affinity;
 	}
 
-	if (nat_lv1_val->flags & NAT_FLG_NAT_CONSISTENTHASH) {
-		__u32 calico_nat_ch_tuple_hash;
-
+	if (nat_lv1_val->flags & NAT_FLG_CONSISTENT_HASH) {
 #ifdef IPVER6
-		calico_nat_ch_tuple_hash = jhash_2words(ip_src->a, ip_src->b, 0xDEAD);
-		calico_nat_ch_tuple_hash |= jhash_2words(ip_src->c, ip_src->d, 0xBEEF);
-		calico_nat_ch_tuple_hash |= jhash_2words(ip_dst->a, ip_dst->b, 0xCA71);
-		calico_nat_ch_tuple_hash |= jhash_2words(ip_dst->c, ip_dst->d, 0xC000);
+		calico_nat_ch_tuple_hash = jhash_3words(ip_src->a, ip_src->b, ip_src->c, 0xDEAD);
+		calico_nat_ch_tuple_hash |= jhash_3words(ip_src->d, ip_dst->a, ip_dst->b, 0xBEEF);
+		calico_nat_ch_tuple_hash |= jhash_3words(ip_dst->c, ip_dst->d, (__u32)ip_proto, 0xC000);
 #else
-		calico_nat_ch_tuple_hash = jhash_2words(*ip_src, sport, 0xDEAD);
-		calico_nat_ch_tuple_hash |= jhash_2words(*ip_dst, dport, 0xBEEF);
+		calico_nat_ch_tuple_hash = jhash_3words(*ip_src, sport, 0, 0xDEAD);
+		calico_nat_ch_tuple_hash |= jhash_3words(*ip_dst, dport, (__u32)ip_proto, 0xBEEF);
 #endif
-		calico_nat_ch_tuple_hash |= jhash_1word((__u32)ip_proto, 0xCA71);
 		ch_key.ordinal = calico_nat_ch_tuple_hash % 65537;
 		ch_key.vip = *ip_dst;
 		ch_key.port = dport;
@@ -177,6 +196,11 @@ static CALI_BPF_INLINE struct calico_nat_dest* calico_nat_lookup(ipv46_addr_t *i
 		if (ch_val) {
 			CALI_DEBUG("CONSISTENTHASH: picked CH backend " IP_FMT ":%d", debug_ip(ch_val->addr), ch_val->port);
 			return ch_val;
+		} else {
+			// Shouldn't happen.
+			CALI_DEBUG("CONSISTENTHASH: backend lookup miss");
+			*res = NAT_NO_BACKEND;
+			return NULL;
 		}
 	}
 
