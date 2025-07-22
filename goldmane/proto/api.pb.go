@@ -1574,6 +1574,8 @@ type FlowKey struct {
 	SourceIp string `protobuf:"bytes,16,opt,name=source_ip,json=sourceIp,proto3" json:"source_ip,omitempty"`
 	// SourcePort is the source port number.
 	SourcePort int64 `protobuf:"varint,17,opt,name=source_port,json=sourcePort,proto3" json:"source_port,omitempty"`
+	// DestIP is the IP address of the destination endpoint.
+	DestIp string `protobuf:"bytes,18,opt,name=dest_ip,json=destIp,proto3" json:"dest_ip,omitempty"`
 	// DestName is the name of the destination for this Flow.
 	// The value is contextualized by the source_type field:
 	// - For WorkloadEndpoint, this represents a set of pods that share a GenerateName.
@@ -1673,6 +1675,13 @@ func (x *FlowKey) GetSourcePort() int64 {
 		return x.SourcePort
 	}
 	return 0
+}
+
+func (x *FlowKey) GetDestIp() string {
+	if x != nil {
+		return x.DestIp
+	}
+	return ""
 }
 
 func (x *FlowKey) GetDestName() string {
@@ -2393,7 +2402,7 @@ const file_api_proto_rawDesc = "" +
 	"\vFlowReceipt\"0\n" +
 	"\n" +
 	"FlowUpdate\x12\"\n" +
-	"\x04flow\x18\x01 \x01(\v2\x0e.goldmane.FlowR\x04flow\"\xc8\x05\n" +
+	"\x04flow\x18\x01 \x01(\v2\x0e.goldmane.FlowR\x04flow\"\xe1\x05\n" +
 	"\aFlowKey\x12\x1f\n" +
 	"\vsource_name\x18\x01 \x01(\tR\n" +
 	"sourceName\x12)\n" +
@@ -2402,7 +2411,8 @@ const file_api_proto_rawDesc = "" +
 	"sourceType\x12\x1b\n" +
 	"\tsource_ip\x18\x10 \x01(\tR\bsourceIp\x12\x1f\n" +
 	"\vsource_port\x18\x11 \x01(\x03R\n" +
-	"sourcePort\x12\x1b\n" +
+	"sourcePort\x12\x17\n" +
+	"\adest_ip\x18\x12 \x01(\tR\x06destIp\x12\x1b\n" +
 	"\tdest_name\x18\x04 \x01(\tR\bdestName\x12%\n" +
 	"\x0edest_namespace\x18\x05 \x01(\tR\rdestNamespace\x123\n" +
 	"\tdest_type\x18\x06 \x01(\x0e2\x16.goldmane.EndpointTypeR\bdestType\x12\x1b\n" +

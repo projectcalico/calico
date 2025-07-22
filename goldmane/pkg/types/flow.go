@@ -37,6 +37,7 @@ type FlowKeyDestination struct {
 	DestName             string
 	DestNamespace        string
 	DestType             proto.EndpointType
+	DestIP               string
 	DestPort             int64
 	DestServiceName      string
 	DestServiceNamespace string
@@ -148,6 +149,10 @@ func (k *FlowKey) DestServicePort() int64 {
 	return k.dest.Value().DestServicePort
 }
 
+func (k *FlowKey) DestIP() string {
+	return k.dest.Value().DestIP
+}
+
 // This struct should be an exact copy of the proto.Flow structure, but without the private fields.
 type Flow struct {
 	Key                     *FlowKey
@@ -236,6 +241,7 @@ func ProtoToFlowKey(p *proto.FlowKey) *FlowKey {
 			DestName:             p.DestName,
 			DestNamespace:        p.DestNamespace,
 			DestType:             p.DestType,
+			DestIP:               p.DestIp,
 			DestPort:             p.DestPort,
 			DestServiceName:      p.DestServiceName,
 			DestServiceNamespace: p.DestServiceNamespace,
@@ -312,6 +318,7 @@ func flowKeyIntoProto(k *FlowKey, pfk *proto.FlowKey) {
 	pfk.DestName = destination.DestName
 	pfk.DestNamespace = destination.DestNamespace
 	pfk.DestType = destination.DestType
+	pfk.DestIp = destination.DestIP
 	pfk.DestPort = destination.DestPort
 	pfk.DestServiceName = destination.DestServiceName
 	pfk.DestServiceNamespace = destination.DestServiceNamespace
@@ -360,6 +367,7 @@ func flowKeyToProto(f *FlowKey) *proto.FlowKey {
 		DestName:             destination.DestName,
 		DestNamespace:        destination.DestNamespace,
 		DestType:             destination.DestType,
+		DestIp:               destination.DestIP,
 		DestPort:             destination.DestPort,
 		DestServiceName:      destination.DestServiceName,
 		DestServiceNamespace: destination.DestServiceNamespace,

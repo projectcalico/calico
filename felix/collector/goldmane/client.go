@@ -120,6 +120,8 @@ func convertAction(a flowlog.Action) proto.Action {
 func ConvertFlowlogToGoldmane(fl *flowlog.FlowLog) *types.Flow {
 	// Convert source IP from [16]byte to string
 	sourceIP := net.IP(fl.Tuple.Src[:]).String()
+	// Convert destination IP from [16]byte to string
+	destIP := net.IP(fl.Tuple.Dst[:]).String()
 	
 	return &types.Flow{
 		Key: types.NewFlowKey(
@@ -134,6 +136,7 @@ func ConvertFlowlogToGoldmane(fl *flowlog.FlowLog) *types.Flow {
 				DestName:             fl.DstMeta.AggregatedName,
 				DestNamespace:        fl.DstMeta.Namespace,
 				DestType:             convertType(fl.DstMeta.Type),
+				DestIP:               destIP,
 				DestPort:             int64(fl.Tuple.L4Dst),
 				DestServiceName:      fl.DstService.Name,
 				DestServiceNamespace: fl.DstService.Namespace,
@@ -238,8 +241,18 @@ func ConvertGoldmaneToFlowlog(gl *proto.Flow) flowlog.FlowLog {
 		}
 	}
 	
+	// Convert destination IP from string to [16]byte
+	var dstBytes [16]byte
+	if gl.Key.DestIp != "" {
+		dstIP := net.ParseIP(gl.Key.DestIp)
+		if dstIP != nil {
+			copy(dstBytes[:], dstIP.To16())
+		}
+	}
+	
 	fl.Tuple = tuple.Tuple{
 		Src:   srcBytes,
+		Dst:   dstBytes,
 		Proto: utils.StringToProto(gl.Key.Proto),
 		L4Src: int(gl.Key.SourcePort),
 		L4Dst: int(gl.Key.DestPort),
