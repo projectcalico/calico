@@ -75,7 +75,6 @@
     },
     "resolutions": {
         "@eslint/plugin-kit": "^0.3.4",
-        "minimatch": "^10.0.3",
         "brace-expansion": "^2.0.2"
     }
 }
