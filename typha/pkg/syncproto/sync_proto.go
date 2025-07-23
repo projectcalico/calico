@@ -205,6 +205,8 @@ Typha->Felix: SyncStatus(InSync)
 Typha->Felix: KVs * n
 `
 
+const DefaultPort = 5473
+
 type Envelope struct {
 	Message interface{}
 }

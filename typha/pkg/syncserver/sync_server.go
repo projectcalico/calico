@@ -254,6 +254,14 @@ func (c *Config) ApplyDefaults() {
 		}).Info("Defaulting MaxConns.")
 		c.MaxConns = defaultMaxConns
 	}
+	if c.Port == 0 {
+		// We use 0 to mean "use the default port".
+		log.WithFields(log.Fields{
+			"value":   c.Port,
+			"default": syncproto.DefaultPort,
+		}).Info("Defaulting Port.")
+		c.Port = syncproto.DefaultPort
+	}
 }
 
 func (c *Config) ListenPort() int {
