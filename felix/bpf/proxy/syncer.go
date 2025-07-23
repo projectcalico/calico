@@ -597,7 +597,7 @@ func (s *Syncer) apply(state DPSyncerState) error {
 	// insert or update existing services
 	for sname, sinfo := range state.SvcMap {
 		svc := sinfo.(Service)
-		hintsAnnotation := svc.HintsAnnotation()
+		hintsAnnotation := svc.(*serviceInfo).hintsAnnotation
 
 		log.WithField("service", sname).Debug("Applying service")
 		skey := getSvcKey(sname, "")
@@ -1317,7 +1317,7 @@ func serviceInfoFromK8sServicePort(sport k8sp.ServicePort) *serviceInfo {
 	sinfo.healthCheckNodePort = sport.HealthCheckNodePort()
 	sinfo.nodeLocalExternal = sport.ExternalPolicyLocal()
 	sinfo.nodeLocalInternal = sport.InternalPolicyLocal()
-	sinfo.hintsAnnotation = sport.HintsAnnotation()
+	sinfo.hintsAnnotation = sport.(*serviceInfo).hintsAnnotation
 	sinfo.servicePortAnnotations = sport.(*servicePort).servicePortAnnotations
 
 	return sinfo
@@ -1470,7 +1470,7 @@ func ServicePortEqual(a, b k8sp.ServicePort) bool {
 		a.NodePort() == b.NodePort() &&
 		a.ExternalPolicyLocal() == b.ExternalPolicyLocal() &&
 		a.InternalPolicyLocal() == b.InternalPolicyLocal() &&
-		a.HintsAnnotation() == b.HintsAnnotation() &&
+		a.(*serviceInfo).hintsAnnotation == b.(*serviceInfo).hintsAnnotation &&
 		a.ExternallyAccessible() == b.ExternallyAccessible() &&
 		a.UsesClusterEndpoints() == b.UsesClusterEndpoints() &&
 		a.UsesLocalEndpoints() == b.UsesLocalEndpoints()
