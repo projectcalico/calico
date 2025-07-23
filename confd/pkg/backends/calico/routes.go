@@ -465,12 +465,32 @@ func (rg *routeGenerator) advertiseThisService(svc *v1.Service, ep *v1.Endpoints
 	// There are 2 cases inside this type:
 	// - LoadBalancer with a single IP.
 	// - Any one of externalIPs in service of type LoadBalancer or NodePort with a single IP.
-	if svc.Spec.ExternalTrafficPolicy == v1.ServiceExternalTrafficPolicyTypeCluster {
-		if svc.Spec.Type == v1.ServiceTypeLoadBalancer && rg.isSingleLoadBalancerIP(svc.Spec.LoadBalancerIP) {
-			logc.Debug("Advertising load balancer of type cluster because of single IP definition")
-			return true
+	// Note: ExternalTrafficPolicy defaults to Cluster if not specified
+	if svc.Spec.ExternalTrafficPolicy == "" || svc.Spec.ExternalTrafficPolicy == v1.ServiceExternalTrafficPolicyTypeCluster {
+		// Check if service load balancer aggregation is enabled
+		if rg.client.ServiceLoadBalancerAggregationEnabled() {
+			// When single IP announcement is enabled, we advertise LoadBalancer services
+			// based on their LoadBalancer.Ingress.IP if they have ready endpoints
+			if svc.Spec.Type == v1.ServiceTypeLoadBalancer && svc.Status.LoadBalancer.Ingress != nil {
+				for _, lbIngress := range svc.Status.LoadBalancer.Ingress {
+					if len(lbIngress.IP) > 0 && rg.isAllowedLoadBalancerIP(lbIngress.IP) {
+						// Check if service has ready endpoints
+						if ep != nil && rg.hasReadyEndpoints(ep) {
+							logc.Debugf("Advertising LoadBalancer service with single IP announcement enabled: %s", lbIngress.IP)
+							return true
+						}
+					}
+				}
+			}
+		} else {
+			// Original logic for when single IP announcement is disabled
+			if svc.Spec.Type == v1.ServiceTypeLoadBalancer && rg.isSingleLoadBalancerIP(svc.Spec.LoadBalancerIP) {
+				logc.Debug("Advertising load balancer of type cluster because of single IP definition")
+				return true
+			}
 		}
 
+		// Handle ExternalIPs - this logic is unchanged and works for both aggregation modes
 		if svc.Spec.Type == v1.ServiceTypeLoadBalancer || svc.Spec.Type == v1.ServiceTypeNodePort {
 			for _, extIP := range svc.Spec.ExternalIPs {
 				if rg.isSingleExternalIP(extIP) {
@@ -502,6 +522,19 @@ func (rg *routeGenerator) advertiseThisService(svc *v1.Service, ep *v1.Endpoints
 		}
 	}
 	logc.Debugf("Skipping service with no local endpoints")
+	return false
+}
+
+// hasReadyEndpoints checks if the service has any ready endpoints
+func (rg *routeGenerator) hasReadyEndpoints(ep *v1.Endpoints) bool {
+	if ep == nil {
+		return false
+	}
+	for _, subset := range ep.Subsets {
+		if len(subset.Addresses) > 0 {
+			return true
+		}
+	}
 	return false
 }
 

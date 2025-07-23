@@ -16,6 +16,129 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 )
 
+var _ = Describe("Service Load Balancer Aggregation", func() {
+	var rg *routeGenerator
+
+	BeforeEach(func() {
+		rg = &routeGenerator{}
+	})
+
+	Describe("hasReadyEndpoints", func() {
+		It("should return false for nil endpoints", func() {
+			Expect(rg.hasReadyEndpoints(nil)).To(BeFalse())
+		})
+
+		It("should return false for empty endpoints", func() {
+			epEmpty := &v1.Endpoints{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-service",
+					Namespace: "default",
+				},
+				Subsets: []v1.EndpointSubset{},
+			}
+			Expect(rg.hasReadyEndpoints(epEmpty)).To(BeFalse())
+		})
+
+		It("should return true for endpoints with ready addresses", func() {
+			epReady := &v1.Endpoints{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-service",
+					Namespace: "default",
+				},
+				Subsets: []v1.EndpointSubset{
+					{
+						Addresses: []v1.EndpointAddress{
+							{IP: "10.0.0.1"},
+						},
+					},
+				},
+			}
+			Expect(rg.hasReadyEndpoints(epReady)).To(BeTrue())
+		})
+
+		It("should return false for endpoints with only not ready addresses", func() {
+			epNotReady := &v1.Endpoints{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-service",
+					Namespace: "default",
+				},
+				Subsets: []v1.EndpointSubset{
+					{
+						NotReadyAddresses: []v1.EndpointAddress{
+							{IP: "10.0.0.1"},
+						},
+					},
+				},
+			}
+			Expect(rg.hasReadyEndpoints(epNotReady)).To(BeFalse())
+		})
+
+		It("should return true for endpoints with both ready and not ready addresses", func() {
+			epMixed := &v1.Endpoints{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-service",
+					Namespace: "default",
+				},
+				Subsets: []v1.EndpointSubset{
+					{
+						Addresses: []v1.EndpointAddress{
+							{IP: "10.0.0.1"},
+						},
+						NotReadyAddresses: []v1.EndpointAddress{
+							{IP: "10.0.0.2"},
+						},
+					},
+				},
+			}
+			Expect(rg.hasReadyEndpoints(epMixed)).To(BeTrue())
+		})
+
+		It("should return false for endpoints with multiple subsets but no ready addresses", func() {
+			epMultipleSubsets := &v1.Endpoints{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-service",
+					Namespace: "default",
+				},
+				Subsets: []v1.EndpointSubset{
+					{
+						NotReadyAddresses: []v1.EndpointAddress{
+							{IP: "10.0.0.1"},
+						},
+					},
+					{
+						NotReadyAddresses: []v1.EndpointAddress{
+							{IP: "10.0.0.2"},
+						},
+					},
+				},
+			}
+			Expect(rg.hasReadyEndpoints(epMultipleSubsets)).To(BeFalse())
+		})
+
+		It("should return true for endpoints with multiple subsets and at least one ready address", func() {
+			epMultipleSubsets := &v1.Endpoints{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-service",
+					Namespace: "default",
+				},
+				Subsets: []v1.EndpointSubset{
+					{
+						NotReadyAddresses: []v1.EndpointAddress{
+							{IP: "10.0.0.1"},
+						},
+					},
+					{
+						Addresses: []v1.EndpointAddress{
+							{IP: "10.0.0.2"},
+						},
+					},
+				},
+			}
+			Expect(rg.hasReadyEndpoints(epMultipleSubsets)).To(BeTrue())
+		})
+	})
+})
+
 const (
 	// Range and specific IP for external IP test.
 	externalIPRange1 = "45.12.0.0/16"

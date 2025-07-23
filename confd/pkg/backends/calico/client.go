@@ -158,6 +158,9 @@ func NewCalicoClient(confdConfig *config.Config) (*client, error) {
 		ClusterIPRouteIndex:      NewRouteIndex(),
 		LoadBalancerIPRouteIndex: NewRouteIndex(),
 
+		// Initialize service load balancer aggregation to disabled by default
+		serviceLoadBalancerAggregation: apiv3.ServiceLoadBalancerAggregationDisabled,
+
 		// This channel, for the syncer calling OnUpdates and OnStatusUpdated, has 0
 		// capacity so that the caller blocks in the same way as it did before when its
 		// calls were processed synchronously.
@@ -380,6 +383,9 @@ type client struct {
 
 	// Cached value of the default BGP configuration for node to node mesh BGP password lookup.
 	globalBGPConfig *apiv3.BGPConfiguration
+
+	// Service load balancer aggregation setting
+	serviceLoadBalancerAggregation apiv3.ServiceLoadBalancerAggregation
 }
 
 // SetPrefixes is called from confd to notify this client of the full set of prefixes that will
@@ -1228,6 +1234,16 @@ func (c *client) updateBGPConfigCache(resName string, v3res *apiv3.BGPConfigurat
 		c.getNodeMeshPasswordKVPair(v3res, model.GlobalBGPConfigKey{})
 		c.getIgnoredInterfacesKVPair(v3res, model.GlobalBGPConfigKey{})
 
+		// Update service load balancer aggregation setting
+		c.cacheLock.Lock()
+		if v3res != nil && v3res.Spec.ServiceLoadBalancerAggregation != "" {
+			c.serviceLoadBalancerAggregation = v3res.Spec.ServiceLoadBalancerAggregation
+		} else {
+			// Default to disabled if not specified or if v3res is nil
+			c.serviceLoadBalancerAggregation = apiv3.ServiceLoadBalancerAggregationDisabled
+		}
+		c.cacheLock.Unlock()
+
 		// Cache the updated BGP configuration
 		c.globalBGPConfig = v3res
 	} else if strings.HasPrefix(resName, perNodeConfigNamePrefix) {
@@ -1554,7 +1570,17 @@ func (c *client) onLoadBalancerIPsUpdate(lbIPs []string) {
 	// However, we don't want to advertise single IPs in this way because it breaks any "local" type services the user creates,
 	// which should instead be advertised from only a subset of nodes.
 	// So, we handle advertisement of any single-addresses found in the config on a per-service basis from within the routeGenerator.
-	globalLbIPs := filterNonSingleIPsFromCIDRs(lbIPs)
+
+	var globalLbIPs []string
+	if c.ServiceLoadBalancerAggregationEnabled() {
+		// When service load balancer aggregation is enabled, we don't advertise any CIDR ranges globally.
+		// Instead, individual /32 routes will be advertised per service based on their LoadBalancer.Ingress.IP.
+		globalLbIPs = []string{}
+		log.Info("Service load balancer aggregation enabled - not advertising LoadBalancer CIDR ranges globally")
+	} else {
+		globalLbIPs = filterNonSingleIPsFromCIDRs(lbIPs)
+	}
+
 	if err := c.updateGlobalRoutes(globalLbIPs, c.LoadBalancerIPRouteIndex); err == nil {
 		c.loadBalancerIPs = lbIPs
 		c.loadBalancerIPNets = parseIPNets(c.loadBalancerIPs)
@@ -1580,6 +1606,13 @@ func (c *client) GetLoadBalancerIPs() []*net.IPNet {
 	c.cacheLock.Lock()
 	defer c.cacheLock.Unlock()
 	return c.loadBalancerIPNets
+}
+
+// ServiceLoadBalancerAggregationEnabled returns whether service load balancer aggregation is enabled
+func (c *client) ServiceLoadBalancerAggregationEnabled() bool {
+	c.cacheLock.Lock()
+	defer c.cacheLock.Unlock()
+	return c.serviceLoadBalancerAggregation == apiv3.ServiceLoadBalancerAggregationEnabled
 }
 
 // updateGlobalRoutes updates programs and withdraws routes based on the given CIDRs as provided via
