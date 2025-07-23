@@ -322,16 +322,18 @@ configRetry:
 		typhaDiscoverer = createTyphaDiscoverer(configParams, k8sClientSet)
 		// Wireguard can block connection to Typha, add a post-discovery hook to detect and resolve any
 		// interactions.  (This will be a no-op if wireguard has never been turned on.)
-		typhaDiscoverer.AddPostDiscoveryFilter(func(typhaAddresses []discovery.Typha) ([]discovery.Typha, error) {
-			// Perform wireguard bootstrap processing. This may remove wireguard configuration if wireguard
-			// is disabled or if the configuration is obviously broken. This also filters the typha addresses
-			// based on whether routing is obviously broken to the typha node (due to wireguard routing
-			// asymmetry). If all typha instances would be filtered out then we temporarily disable wireguard
-			// on this node to allow bootstrap to proceed.
-			log.Info("Got post-discovery callback from Typha discoverer; checking if we need to " +
-				"filter out any Typha addresses due to Wireguard bootstrap.")
-			return bootstrapWireguardAndFilterTyphaAddresses(configParams, v3Client, typhaAddresses)
-		})
+		if configParams.WireguardEnabled || configParams.WireguardEnabledV6 {
+			typhaDiscoverer.AddPostDiscoveryFilter(func(typhaAddresses []discovery.Typha) ([]discovery.Typha, error) {
+				// Perform wireguard bootstrap processing. This may remove wireguard configuration if wireguard
+				// is disabled or if the configuration is obviously broken. This also filters the typha addresses
+				// based on whether routing is obviously broken to the typha node (due to wireguard routing
+				// asymmetry). If all typha instances would be filtered out then we temporarily disable wireguard
+				// on this node to allow bootstrap to proceed.
+				log.Info("Got post-discovery callback from Typha discoverer; checking if we need to " +
+					"filter out any Typha addresses due to Wireguard bootstrap.")
+				return bootstrapWireguardAndFilterTyphaAddresses(configParams, v3Client, typhaAddresses)
+			})
+		}
 		typhaAddresses, err := typhaDiscoverer.LoadTyphaAddrs()
 		if err != nil {
 			log.WithError(err).Error("Typha discovery enabled but discovery failed.")
