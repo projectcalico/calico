@@ -178,6 +178,8 @@ type QoSControls struct {
 	// Egress maximum number of connections (absolute number of connections, no unit).  Only
 	// applied if non-zero.  When non-zero, must be between 1 and 4294967295.
 	EgressMaxConnections int64 `json:"egressMaxConnections,omitempty"`
+
+	DSCP numorstring.DSCP `json:"dscp,omitempty"`
 }
 
 // NewWorkloadEndpoint creates a new (zeroed) WorkloadEndpoint struct with the TypeMetadata initialised to the current

@@ -529,6 +529,11 @@ func handleQoSControlsAnnotations(annotations map[string]string) (*libapiv3.QoSC
 		qosControls.EgressPacketBurst = defaultPacketBurst.Value()
 	}
 
+	// Calico DSCP value for egress traffic annotation.
+	if str, found := annotations[AnnotationQoSEgressDSCP]; found {
+		qosControls.DSCP = numorstring.DSCPFromString(str)
+	}
+
 	// return nil if no control is configured
 	if (*qosControls == libapiv3.QoSControls{}) {
 		qosControls = nil
