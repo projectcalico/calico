@@ -6,6 +6,7 @@
     "scripts": {
         "start": "rsbuild dev",
         "build": "rsbuild build",
+        "build:local": "rsbuild build --env-mode default",
         "serve": "rsbuild preview",
         "clean": "rm -rf dist",
         "lint:fix": "eslint . --fix",
@@ -73,6 +74,7 @@
         "typescript-eslint": "^8.38.0"
     },
     "resolutions": {
-        "@eslint/plugin-kit": "^0.3.4"
+        "@eslint/plugin-kit": "^0.3.4",
+        "minimatch": "^10.0.3"
     }
 }
