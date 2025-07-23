@@ -121,7 +121,7 @@ type Config struct {
 	ServerPingIntervalSecs               time.Duration `config:"seconds;10"`
 	ServerPongTimeoutSecs                time.Duration `config:"seconds;60"`
 	ServerHandshakeTimeoutSecs           time.Duration `config:"seconds;10"`
-	ServerPort                           int           `config:"int(0,65535);5473"`
+	ServerPort                           int           `config:"int(0,65535);0"`
 	ServerHost                           string        `config:"host-address;"`
 
 	// Server-side TLS config for Typha's communication with Felix.  If any of these are
