@@ -81,7 +81,6 @@ require (
 	github.com/stretchr/testify v1.10.0
 	github.com/tchap/go-patricia/v2 v2.3.2
 	github.com/termie/go-shutil v0.0.0-20140729215957-bcacb06fecae
-	github.com/urfave/cli/v2 v2.27.6
 	github.com/vishvananda/netlink v1.3.1-0.20250206174618-62fb240731fa
 	go.etcd.io/etcd/api/v3 v3.5.19
 	go.etcd.io/etcd/client/pkg/v3 v3.5.19
@@ -121,6 +120,8 @@ require (
 	sigs.k8s.io/network-policy-api v0.1.5
 	sigs.k8s.io/yaml v1.4.0
 )
+
+require github.com/urfave/cli/v3 v3.3.8
 
 require (
 	al.essio.dev/pkg/shellescape v1.5.1 // indirect
@@ -314,7 +315,6 @@ require (
 	github.com/virtuald/go-ordered-json v0.0.0-20170621173500-b18e6e673d74 // indirect
 	github.com/vishvananda/netns v0.0.4 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
-	github.com/xrash/smetrics v0.0.0-20240521201337-686a1a2994c1 // indirect
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
 	go.opencensus.io v0.24.0 // indirect
 	go.opentelemetry.io/auto/sdk v1.1.0 // indirect
