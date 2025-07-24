@@ -135,7 +135,7 @@ function test_validate_version {
 ssh_host="gcloud --quiet compute ssh ${GCLOUD_ARGS} ${HOST}"
 scp_host="gcloud --quiet compute scp ${GCLOUD_ARGS}"
 
-upload_artifact="gcloud --quiet --no-user-output-enabled artifacts yum upload ${GCLOUD_REPO_NAME} --location=us-west1 --project=tigera-wp-tcp-redirect"
+upload_artifact="gcloud --quiet --no-user-output-enabled artifacts yum upload ${GCLOUD_REPO_NAME} --location=us-west1 --project=${GCLOUD_PROJECT:-tigera-wp-tcp-redirect}"
 rpmdir=/usr/share/nginx/html/rpm
 
 function ensure_repo_exists {
