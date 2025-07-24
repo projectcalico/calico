@@ -53,7 +53,7 @@ func (r *DefaultRuleRenderer) makeNATOutgoingRuleBPF(version uint8, protocol str
 
 func (r *DefaultRuleRenderer) makeNATOutgoingRuleIPTables(ipVersion uint8, protocol string, action Action) Rule {
 	ipConf := r.ipSetConfig(ipVersion)
-	allIPsSetName := ipConf.NameForMainIPSet(IPSetIDNATOutgoingAllPools)
+	allIPsSetName := ipConf.NameForMainIPSet(IPSetIDAllPools)
 	masqIPsSetName := ipConf.NameForMainIPSet(IPSetIDNATOutgoingMasqPools)
 
 	match := r.NewMatch().
@@ -131,6 +131,7 @@ func (r *DefaultRuleRenderer) DNATsToIptablesChains(dnats map[string]string) []*
 			Action: r.DNAT(intIp, 0),
 		})
 	}
+
 	return []*Chain{{
 		Name:  ChainFIPDnat,
 		Rules: rules,
