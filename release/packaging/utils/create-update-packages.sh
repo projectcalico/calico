@@ -190,6 +190,7 @@ function do_net_cal {
     PKG_NAME=networking-calico \
         NAME=networking-calico \
         DEB_EPOCH=2: \
+        # Build DEB packages first, followed by RPM packages, to maintain consistency with other build steps.
         "${rootdir}/release/packaging/utils/make-packages.sh" rpm deb
     # Packages are produced in rootDir/ - move them to the output dir.
     find ../ -type f -name 'networking-calico_*-*' -exec mv '{}' "$outputDir" \;
