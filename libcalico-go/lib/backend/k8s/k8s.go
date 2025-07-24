@@ -33,6 +33,7 @@ import (
 	_ "k8s.io/client-go/plugin/pkg/client/auth" // Import all auth providers.
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/utils/pointer"
 	adminpolicyclient "sigs.k8s.io/network-policy-api/pkg/client/clientset/versioned/typed/apis/v1alpha1"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
@@ -693,6 +694,11 @@ func (c *KubeClient) Watch(ctx context.Context, l model.ListInterface, options a
 			Identifier: l,
 			Operation:  "Watch",
 		}
+	}
+	if options.Revision == "0" {
+		// If the revision is 0, it means this watch is WatchList.
+		options.SendInitialEvents = pointer.Bool(true)
+		options.ResourceVersionMatch = metav1.ResourceVersionMatchNotOlderThan
 	}
 	return client.Watch(ctx, l, options)
 }
