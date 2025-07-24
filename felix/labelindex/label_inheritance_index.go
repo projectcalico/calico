@@ -88,7 +88,7 @@ func (itemData *itemData) GetHandle(labelName uniquestr.Handle) (handle uniquest
 type parentData struct {
 	id      string
 	labels  uniquelabels.Map
-	itemIDs set.Set[any]
+	itemIDs set.Typed[any]
 }
 
 type MatchCallback func(selId, labelId interface{})
@@ -99,14 +99,14 @@ type InheritIndex struct {
 	selectorsById        map[interface{}]*selector.Selector
 
 	// Current matches.
-	selIdsByLabelId map[interface{}]set.Set[any]
-	labelIdsBySelId map[interface{}]set.Set[any]
+	selIdsByLabelId map[interface{}]set.Typed[any]
+	labelIdsBySelId map[interface{}]set.Typed[any]
 
 	// Callback functions
 	OnMatchStarted MatchCallback
 	OnMatchStopped MatchCallback
 
-	dirtyItemIDs set.Set[any]
+	dirtyItemIDs set.Typed[any]
 }
 
 func NewInheritIndex(onMatchStarted, onMatchStopped MatchCallback) *InheritIndex {
@@ -116,8 +116,8 @@ func NewInheritIndex(onMatchStarted, onMatchStopped MatchCallback) *InheritIndex
 		parentDataByParentID: map[string]*parentData{},
 		selectorsById:        map[interface{}]*selector.Selector{},
 
-		selIdsByLabelId: map[interface{}]set.Set[any]{},
-		labelIdsBySelId: map[interface{}]set.Set[any]{},
+		selIdsByLabelId: map[interface{}]set.Typed[any]{},
+		labelIdsBySelId: map[interface{}]set.Typed[any]{},
 
 		// Callback functions
 		OnMatchStarted: onMatchStarted,
