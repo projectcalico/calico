@@ -26,6 +26,10 @@ struct name {				\
 	__u8 iface_name[16];		\
 	__u32 log_filter_jmp;		\
 	__u32 jumps[40];		\
+	__s16 ingress_packet_rate; \
+	__s16 ingress_packet_burst; \
+	__s16 egress_packet_rate; \
+	__s16 egress_packet_burst; \
 }
 
 DECLARE_TC_GLOBAL_DATA(cali_tc_global_data, ipv6_addr_t);

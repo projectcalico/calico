@@ -791,6 +791,17 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 				if topts.natOutExcludeHosts {
 					globals.Flags |= libbpf.GlobalsNATOutgoingExcludeHosts
 				}
+
+				if topts.ingressQoSPacketRate > 0 {
+					globals.IngressPacketRate = topts.ingressQoSPacketRate
+					globals.IngressPacketBurst = topts.ingressQoSPacketBurst
+				}
+
+				if topts.egressQoSPacketRate > 0 {
+					globals.EgressPacketRate = topts.egressQoSPacketRate
+					globals.EgressPacketBurst = topts.egressQoSPacketBurst
+				}
+
 				if topts.ipv6 {
 					copy(globals.HostTunnelIPv6[:], node1tunIPV6.To16())
 					copy(globals.HostIPv6[:], hostIP.To16())
@@ -1130,19 +1141,23 @@ func runBpfUnitTest(t *testing.T, source string, testFn func(bpfProgRunFn), opts
 }
 
 type testOpts struct {
-	description        string
-	subtests           bool
-	logLevel           log.Level
-	xdp                bool
-	psnaStart          uint32
-	psnatEnd           uint32
-	hostNetworked      bool
-	fromHost           bool
-	progLog            string
-	ipv6               bool
-	objname            string
-	flowLogsEnabled    bool
-	natOutExcludeHosts bool
+	description           string
+	subtests              bool
+	logLevel              log.Level
+	xdp                   bool
+	psnaStart             uint32
+	psnatEnd              uint32
+	hostNetworked         bool
+	fromHost              bool
+	progLog               string
+	ipv6                  bool
+	objname               string
+	flowLogsEnabled       bool
+	natOutExcludeHosts    bool
+	ingressQoSPacketRate  uint16
+	ingressQoSPacketBurst uint16
+	egressQoSPacketRate   uint16
+	egressQoSPacketBurst  uint16
 }
 
 type testOption func(opts *testOpts)
@@ -1201,6 +1216,20 @@ func withFlowLogs() testOption {
 func withNATOutExcludeHosts() testOption {
 	return func(o *testOpts) {
 		o.natOutExcludeHosts = true
+	}
+}
+
+func withIngressQoSPacketRate(packetRate, packetBurst uint16) testOption {
+	return func(o *testOpts) {
+		o.ingressQoSPacketRate = packetRate
+		o.ingressQoSPacketBurst = packetBurst
+	}
+}
+
+func withEgressQoSPacketRate(packetRate, packetBurst uint16) testOption {
+	return func(o *testOpts) {
+		o.egressQoSPacketRate = packetRate
+		o.egressQoSPacketBurst = packetBurst
 	}
 }
 
