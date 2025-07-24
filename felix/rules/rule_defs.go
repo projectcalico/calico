@@ -324,7 +324,7 @@ type RuleRenderer interface {
 	//	MakeNatOutgoingRule(protocol string, action generictables.Action, ipVersion uint8) generictables.Rule
 	NATOutgoingChain(active bool, ipVersion uint8) *generictables.Chain
 
-	EgressQoSPolicyChain([]qos.Policy, uint8) *generictables.Chain
+	EgressQoSPolicyChain([]qos.Policy) *generictables.Chain
 
 	DNATsToIptablesChains(dnats map[string]string) []*generictables.Chain
 	SNATsToIptablesChains(snats map[string]string) []*generictables.Chain

@@ -952,11 +952,6 @@ func (m *endpointManager) updateWorkloadEndpointChains(
 	)
 	m.filterTable.UpdateChains(chains)
 	m.activeWlIDToChains[id] = chains
-
-	if workload.QosControls != nil && workload.QosControls.DSCP != "" {
-		mangleChains := generictables.Chain{}
-
-	}
 }
 
 type tierGroupFilter int
