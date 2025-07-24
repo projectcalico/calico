@@ -23,6 +23,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/config"
+	"github.com/projectcalico/calico/felix/dataplane/linux/qos"
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/ipsets"
 	"github.com/projectcalico/calico/felix/iptables"
@@ -61,7 +62,9 @@ const (
 	ChainManglePrerouting  = ChainNamePrefix + "PREROUTING"
 	ChainManglePostrouting = ChainNamePrefix + "POSTROUTING"
 
-	IPSetIDNATOutgoingAllPools  = "all-ipam-pools"
+	ChainQosPolicy = ChainNamePrefix + "qos-policy"
+
+	IPSetIDAllPools             = "all-ipam-pools"
 	IPSetIDNATOutgoingMasqPools = "masq-ipam-pools"
 
 	IPSetIDAllHostNets        = "all-hosts-net"
@@ -318,8 +321,10 @@ type RuleRenderer interface {
 	ProfileToIptablesChains(profileID *types.ProfileID, policy *proto.Profile, ipVersion uint8) (inbound, outbound *generictables.Chain)
 	ProtoRuleToIptablesRules(pRule *proto.Rule, ipVersion uint8, owner RuleOwnerType, dir RuleDir, idx int, name string, untracked bool) []generictables.Rule
 
-	MakeNatOutgoingRule(protocol string, action generictables.Action, ipVersion uint8) generictables.Rule
+	//	MakeNatOutgoingRule(protocol string, action generictables.Action, ipVersion uint8) generictables.Rule
 	NATOutgoingChain(active bool, ipVersion uint8) *generictables.Chain
+
+	EgressQoSPolicyChain([]qos.Policy) *generictables.Chain
 
 	DNATsToIptablesChains(dnats map[string]string) []*generictables.Chain
 	SNATsToIptablesChains(snats map[string]string) []*generictables.Chain
