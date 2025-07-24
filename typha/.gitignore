@@ -56,3 +56,4 @@ htmlcov/
 docker-image/LICENSE
 
 Makefile.common*
+*.test

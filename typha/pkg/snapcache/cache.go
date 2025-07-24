@@ -148,6 +148,9 @@ type Cache struct {
 	counterBreadcrumbBlock     prometheus.Counter
 	counterBreadcrumbNonBlock  prometheus.Counter
 	summaryUpdateSize          prometheus.Summary
+
+	// Done is created by Start() and closed when the main loop exits.
+	Done chan struct{}
 }
 
 const (
@@ -269,10 +272,12 @@ func (c *Cache) OnUpdates(updates []api.Update) {
 
 // Start starts the cache's main loop in a background goroutine.
 func (c *Cache) Start(ctx context.Context) {
-	go c.loop(ctx)
+	c.Done = make(chan struct{})
+	go c.loop(ctx, c.Done)
 }
 
-func (c *Cache) loop(ctx context.Context) {
+func (c *Cache) loop(ctx context.Context, done chan struct{}) {
+	defer close(done)
 	for {
 		// First, block, waiting for updates and batch them up in our pendingXXX fields.
 		// This will opportunistically slurp up a limited number of pending updates.
@@ -337,7 +342,7 @@ func (c *Cache) fillBatchFromInputQueue(ctx context.Context) error {
 				// Already did a broadcast recently due to minting a real breadcrumb.
 				continue
 			}
-			log.Debug("Waking all clients.")
+			log.Trace("Waking all clients.")
 			c.breadcrumbCond.Broadcast()
 			c.lastBroadcast = time.Now()
 			// If there are no updates, we want the Prometheus stat to decay

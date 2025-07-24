@@ -195,6 +195,21 @@ const (
 	UpdateTypeKVDeleted
 )
 
+func (u UpdateType) String() string {
+	switch u {
+	case UpdateTypeKVUnknown:
+		return "unknown"
+	case UpdateTypeKVNew:
+		return "new"
+	case UpdateTypeKVUpdated:
+		return "updated"
+	case UpdateTypeKVDeleted:
+		return "deleted"
+	default:
+		return fmt.Sprintf("Unknown<%v>", uint8(u))
+	}
+}
+
 // Interface can be implemented by anything that knows how to watch and report changes.
 type WatchInterface interface {
 	// Stops watching. Will close the channel returned by ResultChan(). Releases

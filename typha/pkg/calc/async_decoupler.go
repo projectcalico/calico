@@ -24,12 +24,14 @@ import (
 
 func NewSyncerCallbacksDecoupler() *SyncerCallbacksDecoupler {
 	return &SyncerCallbacksDecoupler{
-		c: make(chan interface{}),
+		c:    make(chan interface{}),
+		Done: make(chan struct{}),
 	}
 }
 
 type SyncerCallbacksDecoupler struct {
-	c chan interface{}
+	c    chan interface{}
+	Done chan struct{}
 }
 
 func (a *SyncerCallbacksDecoupler) OnStatusUpdated(status api.SyncStatus) {
@@ -45,6 +47,7 @@ func (a *SyncerCallbacksDecoupler) SendTo(sink api.SyncerCallbacks) {
 }
 
 func (a *SyncerCallbacksDecoupler) SendToContext(cxt context.Context, sink api.SyncerCallbacks) {
+	defer close(a.Done)
 	for {
 		select {
 		case obj := <-a.c:
