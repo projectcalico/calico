@@ -418,7 +418,7 @@ func ModelWorkloadEndpointToProto(ep *model.WorkloadEndpoint, peerData *Endpoint
 			EgressPacketBurst:     ep.QoSControls.EgressPacketBurst,
 			IngressMaxConnections: ep.QoSControls.IngressMaxConnections,
 			EgressMaxConnections:  ep.QoSControls.EgressMaxConnections,
-			DSCP:                  ep.QoSControls.DSCP.String(),
+			DSCP:                  "20",
 		}
 	}
 

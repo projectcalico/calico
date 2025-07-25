@@ -136,8 +136,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology with BIRD pro
 		infra.Stop()
 	})
 
-	It("pepper should fully randomize MASQUERADE rules", func() {
-		time.Sleep(time.Minute * 30)
+	It("should fully randomize MASQUERADE rules", func() {
 		for _, felix := range tc.Felixes {
 			if NFTMode() {
 				Eventually(func() string {

@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -39,14 +39,16 @@ import (
 // When NAT-enabled pools are present, the masqManager inserts the iptables masquerade rule
 // to trigger NAT of outgoing packets from NAT-enabled pools.  Traffic to any Calico-owned
 // pool is excluded.
-type masqManager struct {
+type clusterEgressManager struct {
 	ipVersion       uint8
 	ipsetsDataplane dpsets.IPSetsDataplane
-	natTable        Table
-	activePools     map[string]*proto.IPAMPool
-	masqPools       set.Set[string]
-	dirty           bool
 	ruleRenderer    rules.RuleRenderer
+
+	// Masquerade
+	natTable    Table
+	activePools map[string]*proto.IPAMPool
+	masqPools   set.Set[string]
+	masqDirty   bool
 
 	// QoS policy
 	mangleTable    Table
@@ -56,13 +58,13 @@ type masqManager struct {
 	logCxt *log.Entry
 }
 
-func newMasqManager(
+func newClusterEgressManager(
 	ipsetsDataplane dpsets.IPSetsDataplane,
 	natTable, mangleTable Table,
 	ruleRenderer rules.RuleRenderer,
 	maxIPSetSize int,
 	ipVersion uint8,
-) *masqManager {
+) *clusterEgressManager {
 	// Make sure our IP sets exist.  We set the contents to empty here
 	// but the IPSets object will defer writing the IP sets until we're
 	// in sync, by which point we'll have added all our CIDRs into the sets.
@@ -77,76 +79,72 @@ func newMasqManager(
 		Type:    ipsets.IPSetTypeHashNet,
 	}, []string{})
 
-	return &masqManager{
+	return &clusterEgressManager{
 		ipVersion:       ipVersion,
 		ipsetsDataplane: ipsetsDataplane,
 		natTable:        natTable,
 		activePools:     map[string]*proto.IPAMPool{},
 		masqPools:       set.New[string](),
-		dirty:           true,
+		masqDirty:       true,
 		qosPolicies:     map[types.WorkloadEndpointID]qos.Policy{},
-		qosPolicyDirty:  true, //TODO (mazdak): default true or false
+		qosPolicyDirty:  true,
 		mangleTable:     mangleTable,
 		ruleRenderer:    ruleRenderer,
 		logCxt:          log.WithField("ipVersion", ipVersion),
 	}
 }
 
-func (d *masqManager) OnUpdate(msg interface{}) {
-	var poolID string
-	var newPool *proto.IPAMPool
-
+func (m *clusterEgressManager) OnUpdate(msg interface{}) {
 	switch msg := msg.(type) {
 	case *proto.IPAMPoolUpdate:
-		d.logCxt.WithField("id", msg.Id).Debug("IPAM pool update/create")
-		poolID = msg.Id
-		newPool = msg.Pool
+		m.logCxt.WithField("id", msg.Id).Debug("IPAM pool update/create")
+		m.handleIPAMUpdates(msg.Id, msg.Pool)
 	case *proto.IPAMPoolRemove:
-		d.logCxt.WithField("id", msg.Id).Debug("IPAM pool removed")
-		poolID = msg.Id
+		m.logCxt.WithField("id", msg.Id).Debug("IPAM pool removed")
+		m.handleIPAMUpdates(msg.Id, nil)
 	case *proto.WorkloadEndpointUpdate:
 		if msg.Endpoint.QosControls == nil || msg.Endpoint.QosControls.DSCP == "" {
 			return
 		}
 		ips := msg.Endpoint.Ipv4Nets
-		if d.ipVersion == 6 {
+		if m.ipVersion == 6 {
 			ips = msg.Endpoint.Ipv6Nets
 		}
-		id := types.ProtoToWorkloadEndpointID(msg.GetId())
-		d.qosPolicies[id] = qos.Policy{
-			SrcAddrs: strings.Join(ips, ","),
-			DSCP:     msg.Endpoint.QosControls.DSCP,
+		if len(ips) != 0 {
+			id := types.ProtoToWorkloadEndpointID(msg.GetId())
+			m.qosPolicies[id] = qos.Policy{
+				SrcAddrs: strings.Join(ips, ","),
+				DSCP:     msg.Endpoint.QosControls.DSCP,
+			}
+			m.qosPolicyDirty = true
 		}
-		d.qosPolicyDirty = true
-		return
 	case *proto.WorkloadEndpointRemove:
 		id := types.ProtoToWorkloadEndpointID(msg.GetId())
-		delete(d.qosPolicies, id)
-		d.qosPolicyDirty = true
-		return
-	default:
-		return
+		delete(m.qosPolicies, id)
+		m.qosPolicyDirty = true
 	}
+}
 
-	logCxt := d.logCxt.WithField("id", poolID)
-	if oldPool := d.activePools[poolID]; oldPool != nil {
+func (m *clusterEgressManager) handleIPAMUpdates(poolID string, newPool *proto.IPAMPool) {
+	logCxt := m.logCxt.WithField("id", poolID)
+	if oldPool := m.activePools[poolID]; oldPool != nil {
 		// For simplicity (in case of an update to the CIDR, say) always
 		// remove the old values from the IP sets.  The IPSets object
 		// defers and coalesces the update so removing then adding the
 		// same IP is a no-op anyway.
 		logCxt.Debug("Removing old pool.")
-		d.ipsetsDataplane.RemoveMembers(rules.IPSetIDAllPools, []string{oldPool.Cidr})
+		m.ipsetsDataplane.RemoveMembers(rules.IPSetIDAllPools, []string{oldPool.Cidr})
 		if oldPool.Masquerade {
 			logCxt.Debug("Masquerade was enabled on pool.")
-			d.ipsetsDataplane.RemoveMembers(rules.IPSetIDNATOutgoingMasqPools, []string{oldPool.Cidr})
+			m.ipsetsDataplane.RemoveMembers(rules.IPSetIDNATOutgoingMasqPools, []string{oldPool.Cidr})
 		}
-		delete(d.activePools, poolID)
-		d.masqPools.Discard(poolID)
+		delete(m.activePools, poolID)
+		m.masqPools.Discard(poolID)
 	}
 	if newPool != nil {
 		// An update/create.
 		newPoolIsV6 := strings.Contains(newPool.Cidr, ":")
-		weAreV6 := d.ipVersion == 6
+		weAreV6 := m.ipVersion == 6
 		if newPoolIsV6 != weAreV6 {
 			logCxt.Debug("Skipping IPAM pool of different version.")
 			return
@@ -154,29 +152,28 @@ func (d *masqManager) OnUpdate(msg interface{}) {
 
 		// Update the IP sets.
 		logCxt.Debug("Adding IPAM pool to IP sets.")
-		d.ipsetsDataplane.AddMembers(rules.IPSetIDAllPools, []string{newPool.Cidr})
+		m.ipsetsDataplane.AddMembers(rules.IPSetIDAllPools, []string{newPool.Cidr})
 		if newPool.Masquerade {
 			logCxt.Debug("IPAM has masquerade enabled.")
-			d.ipsetsDataplane.AddMembers(rules.IPSetIDNATOutgoingMasqPools, []string{newPool.Cidr})
-			d.masqPools.Add(poolID)
+			m.ipsetsDataplane.AddMembers(rules.IPSetIDNATOutgoingMasqPools, []string{newPool.Cidr})
+			m.masqPools.Add(poolID)
 		}
-		d.activePools[poolID] = newPool
+		m.activePools[poolID] = newPool
 	}
-	d.dirty = true
+	m.masqDirty = true
 }
 
-func (m *masqManager) CompleteDeferredWork() error {
-	if m.dirty {
+func (m *clusterEgressManager) CompleteDeferredWork() error {
+	if m.masqDirty {
 		// Refresh the chain in case we've gone from having no masq pools to
 		// having some or vice-versa.
 		m.logCxt.Info("IPAM pools updated, refreshing iptables rule")
 		chain := m.ruleRenderer.NATOutgoingChain(m.masqPools.Len() > 0, m.ipVersion)
 		m.natTable.UpdateChain(chain)
-		m.dirty = false
+		m.masqDirty = false
 	}
 
 	if m.qosPolicyDirty {
-		m.logCxt.Info("QoS policies updated, refreshing iptables rule")
 		var policies []qos.Policy
 		for _, p := range m.qosPolicies {
 			policies = append(policies, p)

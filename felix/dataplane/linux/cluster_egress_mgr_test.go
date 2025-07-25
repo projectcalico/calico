@@ -27,9 +27,9 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
-var _ = Describe("Masquerade manager", func() {
+var _ = Describe("Cluster egress manager - Masquerade", func() {
 	var (
-		masqMgr      *masqManager
+		masqMgr      *clusterEgressManager
 		natTable     *mockTable
 		mangleTable  *mockTable
 		ipSets       *dpsets.MockIPSets
@@ -53,7 +53,7 @@ var _ = Describe("Masquerade manager", func() {
 			MarkDrop:     0x10,
 			MarkEndpoint: 0x11110000,
 		})
-		masqMgr = newMasqManager(ipSets, natTable, mangleTable, ruleRenderer, 1024, 4)
+		masqMgr = newClusterEgressManager(ipSets, natTable, mangleTable, ruleRenderer, 1024, 4)
 	})
 
 	It("should create its IP sets on startup", func() {
