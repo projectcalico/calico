@@ -31,6 +31,7 @@ var _ = Describe("Masquerade manager", func() {
 	var (
 		masqMgr      *masqManager
 		natTable     *mockTable
+		mangleTable  *mockTable
 		ipSets       *dpsets.MockIPSets
 		ruleRenderer rules.RuleRenderer
 	)
@@ -52,7 +53,7 @@ var _ = Describe("Masquerade manager", func() {
 			MarkDrop:     0x10,
 			MarkEndpoint: 0x11110000,
 		})
-		masqMgr = newMasqManager(ipSets, natTable, ruleRenderer, 1024, 4)
+		masqMgr = newMasqManager(ipSets, natTable, mangleTable, ruleRenderer, 1024, 4)
 	})
 
 	It("should create its IP sets on startup", func() {

@@ -20,9 +20,11 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
+	"github.com/projectcalico/calico/felix/dataplane/linux/qos"
 	"github.com/projectcalico/calico/felix/ipsets"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/rules"
+	"github.com/projectcalico/calico/felix/types"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -46,12 +48,17 @@ type masqManager struct {
 	dirty           bool
 	ruleRenderer    rules.RuleRenderer
 
+	// QoS policy
+	mangleTable    Table
+	qosPolicyDirty bool
+	qosPolicies    map[types.WorkloadEndpointID]qos.Policy // endpoint address to DSCP value
+
 	logCxt *log.Entry
 }
 
 func newMasqManager(
 	ipsetsDataplane dpsets.IPSetsDataplane,
-	natTable Table,
+	natTable, mangleTable Table,
 	ruleRenderer rules.RuleRenderer,
 	maxIPSetSize int,
 	ipVersion uint8,
@@ -61,7 +68,7 @@ func newMasqManager(
 	// in sync, by which point we'll have added all our CIDRs into the sets.
 	ipsetsDataplane.AddOrReplaceIPSet(ipsets.IPSetMetadata{
 		MaxSize: maxIPSetSize,
-		SetID:   rules.IPSetIDNATOutgoingAllPools,
+		SetID:   rules.IPSetIDAllPools,
 		Type:    ipsets.IPSetTypeHashNet,
 	}, []string{})
 	ipsetsDataplane.AddOrReplaceIPSet(ipsets.IPSetMetadata{
@@ -77,6 +84,9 @@ func newMasqManager(
 		activePools:     map[string]*proto.IPAMPool{},
 		masqPools:       set.New[string](),
 		dirty:           true,
+		qosPolicies:     map[types.WorkloadEndpointID]qos.Policy{},
+		qosPolicyDirty:  true, //TODO (mazdak): default true or false
+		mangleTable:     mangleTable,
 		ruleRenderer:    ruleRenderer,
 		logCxt:          log.WithField("ipVersion", ipVersion),
 	}
@@ -94,6 +104,26 @@ func (d *masqManager) OnUpdate(msg interface{}) {
 	case *proto.IPAMPoolRemove:
 		d.logCxt.WithField("id", msg.Id).Debug("IPAM pool removed")
 		poolID = msg.Id
+	case *proto.WorkloadEndpointUpdate:
+		if msg.Endpoint.QosControls == nil || msg.Endpoint.QosControls.DSCP == "" {
+			return
+		}
+		ips := msg.Endpoint.Ipv4Nets
+		if d.ipVersion == 6 {
+			ips = msg.Endpoint.Ipv6Nets
+		}
+		id := types.ProtoToWorkloadEndpointID(msg.GetId())
+		d.qosPolicies[id] = qos.Policy{
+			SrcAddrs: strings.Join(ips, ","),
+			DSCP:     msg.Endpoint.QosControls.DSCP,
+		}
+		d.qosPolicyDirty = true
+		return
+	case *proto.WorkloadEndpointRemove:
+		id := types.ProtoToWorkloadEndpointID(msg.GetId())
+		delete(d.qosPolicies, id)
+		d.qosPolicyDirty = true
+		return
 	default:
 		return
 	}
@@ -105,7 +135,7 @@ func (d *masqManager) OnUpdate(msg interface{}) {
 		// defers and coalesces the update so removing then adding the
 		// same IP is a no-op anyway.
 		logCxt.Debug("Removing old pool.")
-		d.ipsetsDataplane.RemoveMembers(rules.IPSetIDNATOutgoingAllPools, []string{oldPool.Cidr})
+		d.ipsetsDataplane.RemoveMembers(rules.IPSetIDAllPools, []string{oldPool.Cidr})
 		if oldPool.Masquerade {
 			logCxt.Debug("Masquerade was enabled on pool.")
 			d.ipsetsDataplane.RemoveMembers(rules.IPSetIDNATOutgoingMasqPools, []string{oldPool.Cidr})
@@ -124,7 +154,7 @@ func (d *masqManager) OnUpdate(msg interface{}) {
 
 		// Update the IP sets.
 		logCxt.Debug("Adding IPAM pool to IP sets.")
-		d.ipsetsDataplane.AddMembers(rules.IPSetIDNATOutgoingAllPools, []string{newPool.Cidr})
+		d.ipsetsDataplane.AddMembers(rules.IPSetIDAllPools, []string{newPool.Cidr})
 		if newPool.Masquerade {
 			logCxt.Debug("IPAM has masquerade enabled.")
 			d.ipsetsDataplane.AddMembers(rules.IPSetIDNATOutgoingMasqPools, []string{newPool.Cidr})
@@ -136,16 +166,26 @@ func (d *masqManager) OnUpdate(msg interface{}) {
 }
 
 func (m *masqManager) CompleteDeferredWork() error {
-	if !m.dirty {
-		return nil
+	if m.dirty {
+		// Refresh the chain in case we've gone from having no masq pools to
+		// having some or vice-versa.
+		m.logCxt.Info("IPAM pools updated, refreshing iptables rule")
+		chain := m.ruleRenderer.NATOutgoingChain(m.masqPools.Len() > 0, m.ipVersion)
+		m.natTable.UpdateChain(chain)
+		m.dirty = false
 	}
 
-	// Refresh the chain in case we've gone from having no masq pools to
-	// having some or vice-versa.
-	m.logCxt.Info("IPAM pools updated, refreshing iptables rule")
-	chain := m.ruleRenderer.NATOutgoingChain(m.masqPools.Len() > 0, m.ipVersion)
-	m.natTable.UpdateChain(chain)
-	m.dirty = false
+	if m.qosPolicyDirty {
+		m.logCxt.Info("QoS policies updated, refreshing iptables rule")
+		var policies []qos.Policy
+		for _, p := range m.qosPolicies {
+			policies = append(policies, p)
+		}
+
+		chain := m.ruleRenderer.EgressQoSPolicyChain(policies)
+		m.mangleTable.UpdateChain(chain)
+		m.qosPolicyDirty = false
+	}
 
 	return nil
 }
