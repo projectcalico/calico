@@ -152,7 +152,6 @@ type endpointManager struct {
 	activeWlIfaceNameToID            map[string]types.WorkloadEndpointID
 	activeUpIfaces                   set.Set[string]
 	activeWlIDToChains               map[types.WorkloadEndpointID][]*generictables.Chain
-	activeWlIDToMangleEgressChains   map[types.WorkloadEndpointID][]*generictables.Chain
 	activeWlDispatchChains           map[string]*generictables.Chain
 	activeEPMarkDispatchChains       map[string]*generictables.Chain
 	ifaceNameToPolicyGroupChainNames map[string][]string /*chain name*/
@@ -338,7 +337,6 @@ func newEndpointManagerWithShims(
 		activeWlEndpoints:                map[types.WorkloadEndpointID]*proto.WorkloadEndpoint{},
 		activeWlIfaceNameToID:            map[string]types.WorkloadEndpointID{},
 		activeWlIDToChains:               map[types.WorkloadEndpointID][]*generictables.Chain{},
-		activeWlIDToMangleEgressChains:   map[types.WorkloadEndpointID][]*generictables.Chain{},
 		ifaceNameToPolicyGroupChainNames: map[string][]string{},
 
 		activePolicySelectors: map[types.PolicyID]string{},
@@ -709,8 +707,6 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 		m.callbacks.InvokeRemoveWorkload(oldWorkload)
 		m.filterTable.RemoveChains(m.activeWlIDToChains[id])
 		delete(m.activeWlIDToChains, id)
-		m.mangleTable.RemoveChains(m.activeWlIDToMangleEgressChains[id])
-		delete(m.activeWlIDToMangleEgressChains, id)
 		if oldWorkload != nil {
 			m.epMarkMapper.ReleaseEndpointMark(oldWorkload.Name)
 			// Remove any routes from the routing table.  The RouteTable will remove any
@@ -768,7 +764,6 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 					m.epMarkMapper.ReleaseEndpointMark(oldWorkload.Name)
 					if !m.bpfEnabled {
 						m.filterTable.RemoveChains(m.activeWlIDToChains[id])
-						m.mangleTable.RemoveChains(m.activeWlIDToMangleEgressChains[id])
 						if m.hasSourceSpoofingConfiguration(oldWorkload.Name) {
 							logCxt.Debugf("Removing RPF configuration for workload %s", workload.Name)
 							delete(m.sourceSpoofingConfig, workload.Name)

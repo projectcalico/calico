@@ -483,9 +483,9 @@ type DSCPAction struct {
 }
 
 func (a DSCPAction) ToFragment(features *environment.Features) string {
-	return fmt.Sprintf("DSCP --set-dscp %s", a.Value)
+	return fmt.Sprintf("DSCP --set-dscp %d", a.Value)
 }
 
 func (a DSCPAction) String() string {
-	return fmt.Sprintf("DSCP %s", a.Value)
+	return fmt.Sprintf("DSCP %d", a.Value)
 }

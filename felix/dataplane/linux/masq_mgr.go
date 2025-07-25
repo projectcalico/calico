@@ -85,10 +85,10 @@ func newMasqManager(
 		masqPools:       set.New[string](),
 		dirty:           true,
 		qosPolicies:     map[types.WorkloadEndpointID]qos.Policy{},
-		//qosPolicyDirty:  true, //TODO (mazdak): default true or false
-		mangleTable:  mangleTable,
-		ruleRenderer: ruleRenderer,
-		logCxt:       log.WithField("ipVersion", ipVersion),
+		qosPolicyDirty:  true, //TODO (mazdak): default true or false
+		mangleTable:     mangleTable,
+		ruleRenderer:    ruleRenderer,
+		logCxt:          log.WithField("ipVersion", ipVersion),
 	}
 }
 
