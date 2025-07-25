@@ -74,6 +74,11 @@ function require_version {
         PATCH=${BASH_REMATCH[3]}
         PY2SUFFIX=${BASH_REMATCH[4]}
         : ${REPO_NAME:=calico-${MAJOR}.${MINOR}${PY2SUFFIX}}
+        # Set the GCLOUD_REPO_NAME; Google Artifact Registry doesn't allow for
+        # most characters, including periods, to be in registry names, meaning
+        # we can't use e.g. `calico-3.30`. For now, specify it manually. In
+        # future, after more testing, possibly we can just strip the period out
+        # of whatever REPO_NAME is set to.
         : ${GCLOUD_REPO_NAME:=calico-${MAJOR}${MINOR}}
     else
         echo "ERROR: Unhandled VERSION \"${VERSION}\""
@@ -185,13 +190,13 @@ function do_bld_images {
 }
 
 function do_net_cal {
-    # Build networking-calico packages.
+    # Build networking-calico packages, with RPM packages built first to be consistent
+    # with felix (which has a hard requirement on building rpm first at the moment)
     pushd "${rootdir}/networking-calico"
     PKG_NAME=networking-calico \
             NAME=networking-calico \
             DEB_EPOCH=3: \
-            # Build DEB packages first, followed by RPM packages, to maintain consistency with other build steps.
-            "${rootdir}/release/packaging/utils/make-packages.sh" deb rpm
+            "${rootdir}/release/packaging/utils/make-packages.sh" rpm deb
     # Packages are produced in rootDir/ - move them to the output dir.
     find ../ -type f -name 'networking-calico_*-*' -exec mv '{}' "$outputDir" \;
     # Revert the changes made to networking-calico as part of the package build.
@@ -217,6 +222,9 @@ function do_felix {
     # Override dpkg's default file exclusions, otherwise our binaries won't get included (and some
     # generated files will).
     # Build rpm first and then deb because we need to patchelf bin/calico-felix for Debian.
+    #
+    # TODO: move the `patchelf` command that the debian packages require into the debian
+    # packaging scripts instead, so that they're not affecting things outside of themselves.
     PKG_NAME=felix \
             NAME=Felix \
             RPM_TAR_ARGS='--exclude=bin/calico-felix-* --exclude=.gitignore --exclude=*.d --exclude=*.ll --exclude=.go-pkg-cache --exclude=vendor --exclude=report' \
