@@ -635,6 +635,11 @@ func collectCalicoNodeDiags(curNodeDir string, nodeName, namespace, podName stri
 			CmdStr:   fmt.Sprintf("kubectl exec -n %s -t %s -c calico-node -- ipset list", namespace, podName),
 			FilePath: fmt.Sprintf("%s/ipset-list.txt", curNodeDir),
 		},
+		{
+			Info:     fmt.Sprintf("Collect conntrack stats for node %s", nodeName),
+			CmdStr:   fmt.Sprintf("kubectl exec -n %s -t %s -c calico-node -- conntrack -LSC", namespace, podName),
+			FilePath: fmt.Sprintf("%s/conntrack-list.txt", curNodeDir),
+		},
 		// eBPF diagnostics
 		{
 			Info:     fmt.Sprintf("Collect eBPF conntrack for node %s", nodeName),
