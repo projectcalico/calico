@@ -1075,7 +1075,7 @@ func (r *DefaultRuleRenderer) StaticManglePostroutingChain(ipVersion uint8) *gen
 			SourceIPSet(allIPsSetName).
 			NotDestIPSet(allIPsSetName),
 		Action:  r.Jump(ChainQosPolicy),
-		Comment: []string{"QoS policy if traffic is leaving cluster"},
+		Comment: []string{"QoS policy for traffic leaving cluster"},
 	})
 
 	// Allow immediately if IptablesMarkAccept is set.  Our filter-FORWARD chain sets this for

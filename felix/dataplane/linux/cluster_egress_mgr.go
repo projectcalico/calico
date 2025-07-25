@@ -53,7 +53,7 @@ type clusterEgressManager struct {
 	// QoS policy
 	mangleTable    Table
 	qosPolicyDirty bool
-	qosPolicies    map[types.WorkloadEndpointID]qos.Policy // endpoint address to DSCP value
+	qosPolicies    map[types.WorkloadEndpointID]qos.Policy
 
 	logCxt *log.Entry
 }
@@ -120,8 +120,11 @@ func (m *clusterEgressManager) OnUpdate(msg interface{}) {
 		}
 	case *proto.WorkloadEndpointRemove:
 		id := types.ProtoToWorkloadEndpointID(msg.GetId())
-		delete(m.qosPolicies, id)
-		m.qosPolicyDirty = true
+		_, exists := m.qosPolicies[id]
+		if exists {
+			delete(m.qosPolicies, id)
+			m.qosPolicyDirty = true
+		}
 	}
 }
 

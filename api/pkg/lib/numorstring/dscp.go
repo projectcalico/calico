@@ -40,7 +40,7 @@ const (
 	AF42 = "AF42" // DSCP value 36
 	AF43 = "AF43" // DSCP value 38
 
-	// Classs selectors, defined in RFC for backward compatibility with IP precedence.
+	// Class selectors, defined in RFC for backward compatibility with IP precedence.
 	CS0 = "CS0" // DSCP value 0, similar to DF
 	CS1 = "CS1" // DSCP value 8
 	CS2 = "CS2" // DSCP value 16
@@ -57,7 +57,7 @@ var (
 		AF11, AF12, AF13,
 		AF21, AF22, AF23,
 		AF31, AF32, AF33,
-		AF41, AF42, AF42,
+		AF41, AF42, AF43,
 		CS0, CS1, CS2, CS3, CS4, CS5, CS6,
 	}
 )

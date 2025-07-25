@@ -131,7 +131,6 @@ func (r *DefaultRuleRenderer) DNATsToIptablesChains(dnats map[string]string) []*
 			Action: r.DNAT(intIp, 0),
 		})
 	}
-
 	return []*Chain{{
 		Name:  ChainFIPDnat,
 		Rules: rules,
