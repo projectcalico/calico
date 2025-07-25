@@ -20,3 +20,8 @@ copy_rpms_to_host "${REPO_NAME}"
 
 # Update repository metadata.
 update_repo_metadata "${REPO_NAME}"
+
+# Upload RPMs to Google Artifact Registry
+# Make sure this is last, as it wants to `exit 1` if
+# uploads failed. It's a hack, but it works.
+copy_rpms_to_artifact_registry "${REPO_NAME}"
