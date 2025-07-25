@@ -246,7 +246,8 @@ func waitForFelixInSync(felix *infrastructure.Felix) {
 	// And then we should see at least one apply to the dataplane.
 	Eventually(func() (int, error) {
 		return metrics.GetFelixMetricInt(felix.IP, "felix_int_dataplane_apply_time_seconds_count")
-	}).Should(BeNumerically(">", 0))
+	}, "5s", "100ms").Should(BeNumerically(">", 0),
+		"Expected at least one dataplane apply after config change")
 }
 
 // kubeProxy object for felix container
