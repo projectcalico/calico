@@ -462,7 +462,7 @@ var _ = testutils.E2eDatastoreDescribe("KubeControllersConfiguration tests", tes
 				},
 			}
 
-			templateEmptyCIDR := apiv3.AutoHostEndpointConfig{
+			templateEmptyCIDRInterfaceSelector := apiv3.AutoHostEndpointConfig{
 				AutoCreate:                "Enabled",
 				CreateDefaultHostEndpoint: "Enabled",
 				Templates: []apiv3.Template{
@@ -522,11 +522,24 @@ var _ = testutils.E2eDatastoreDescribe("KubeControllersConfiguration tests", tes
 				},
 			}
 
-			By("Creating kcc with empty CIDR")
-			kcc.Spec.Controllers.Node.HostEndpoint = &templateEmptyCIDR
+			templateValid2 := apiv3.AutoHostEndpointConfig{
+				AutoCreate:                "Enabled",
+				CreateDefaultHostEndpoint: "Enabled",
+				Templates: []apiv3.Template{
+					{
+						GenerateName:      "template",
+						InterfaceSelector: "eth.*",
+						Labels:            map[string]string{"label": "value"},
+						NodeSelector:      "all()",
+					},
+				},
+			}
+
+			By("Creating kcc with empty CIDR and interfaceSelector")
+			kcc.Spec.Controllers.Node.HostEndpoint = &templateEmptyCIDRInterfaceSelector
 			_, outError := c.KubeControllersConfiguration().Create(ctx, kcc, options.SetOptions{})
 			Expect(outError).To(HaveOccurred())
-			Expect(outError.Error()).To(ContainSubstring("CIDR can not be empty"))
+			Expect(outError.Error()).To(ContainSubstring("InterfaceCIDRs or InterfaceSelector must be specified"))
 
 			By("Creating kcc with empty template name")
 			kcc.Spec.Controllers.Node.HostEndpoint = &templateEmptyName
@@ -548,6 +561,15 @@ var _ = testutils.E2eDatastoreDescribe("KubeControllersConfiguration tests", tes
 
 			By("Creating kcc with valid template")
 			kcc.Spec.Controllers.Node.HostEndpoint = &templateValid
+			_, outError = c.KubeControllersConfiguration().Create(ctx, kcc, options.SetOptions{})
+			Expect(outError).ToNot(HaveOccurred())
+
+			// Clean up the created KCC before the next test.
+			_, outError = c.KubeControllersConfiguration().Delete(ctx, kcc.Name, options.DeleteOptions{})
+			Expect(outError).ToNot(HaveOccurred())
+
+			By("Creating kcc with valid template")
+			kcc.Spec.Controllers.Node.HostEndpoint = &templateValid2
 			_, outError = c.KubeControllersConfiguration().Create(ctx, kcc, options.SetOptions{})
 			Expect(outError).ToNot(HaveOccurred())
 		})

@@ -132,6 +132,9 @@ type Template struct {
 	// InterfaceCIDRs contains a list of CIRDs used for matching nodeIPs to the AutoHostEndpoint
 	InterfaceCIDRs []string `json:"interfaceCIDRs,omitempty" validate:"cidrs"`
 
+	// InterfaceSelector contains regex string to match Node interfaceName to HostEndpoint
+	InterfaceSelector string `json:"interfaceSelector,omitempty" validate:"omitempty,regexp"`
+
 	// Labels adds the specified labels to the generated AutoHostEndpoint, labels from node with the same name will be overwritten by values from the template label
 	Labels map[string]string `json:"labels,omitempty" validate:"omitempty,labels"`
 

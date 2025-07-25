@@ -37,7 +37,7 @@ const (
 
 // autoDetectCIDR auto-detects the IP and Network using the requested
 // detection method.
-func AutoDetectCIDR(method string, version int, k8sNode *v1.Node, getInterfaces func([]string, []string, int) ([]Interface, error)) *cnet.IPNet {
+func AutoDetectCIDR(method string, version int, k8sNode *v1.Node, getInterfaces func([]string, []string, ...int) ([]Interface, error)) *cnet.IPNet {
 	if method == "" || method == AUTODETECTION_METHOD_FIRST {
 		// Autodetect the IP by enumerating all interfaces (excluding
 		// known internal interfaces).
@@ -163,7 +163,7 @@ func autoDetectCIDRBySkipInterface(ifaceRegexes []string, version int) *cnet.IPN
 }
 
 // autoDetectUsingK8sInternalIP reads K8s Node InternalIP.
-func autoDetectUsingK8sInternalIP(version int, k8sNode *v1.Node, getInterfaces func([]string, []string, int) ([]Interface, error)) *cnet.IPNet {
+func autoDetectUsingK8sInternalIP(version int, k8sNode *v1.Node, getInterfaces func([]string, []string, ...int) ([]Interface, error)) *cnet.IPNet {
 	var address string
 	var err error
 
@@ -196,7 +196,7 @@ func autoDetectUsingK8sInternalIP(version int, k8sNode *v1.Node, getInterfaces f
 // If a CIDR is provided, then it is simply returned.
 // If an IP is provided, it attempts to find the matching interface on the host to detect the appropriate prefix length.
 // If no match is found, the IP will be returned unmodified.
-func GetLocalCIDR(ip string, version int, getInterfaces func([]string, []string, int) ([]Interface, error)) (string, error) {
+func GetLocalCIDR(ip string, version int, getInterfaces func([]string, []string, ...int) ([]Interface, error)) (string, error) {
 	if strings.Contains(ip, "/") {
 		// Already a CIDR
 		return ip, nil
