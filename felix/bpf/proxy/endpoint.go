@@ -53,6 +53,10 @@ type endpointInfo struct {
 	// zoneHints represent the zone hints for the endpoint. This is based on
 	// endpoint.hints.forZones[*].name in the EndpointSlice API.
 	zoneHints sets.Set[string]
+
+	// nodeHints represent the node hints for the endpoint. This is based on
+	// endpoint.hints.forNodes[*].name in the EndpointSlice API.
+	nodeHints sets.Set[string]
 }
 
 var _ k8sp.Endpoint = &endpointInfo{}
@@ -149,4 +153,9 @@ func (info *endpointInfo) IsTerminating() bool {
 // ZoneHints returns the zone hint for the endpoint.
 func (info *endpointInfo) ZoneHints() sets.Set[string] {
 	return info.zoneHints
+}
+
+// NodeHints returns the node hints for the endpoint.
+func (info *endpointInfo) NodeHints() sets.Set[string] {
+	return info.nodeHints
 }
