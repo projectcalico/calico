@@ -15,7 +15,9 @@
 package maps
 
 import (
+	"context"
 	"errors"
+	"sync"
 	"unsafe"
 )
 
@@ -25,6 +27,13 @@ var ErrIterationFinished = errors.New("iteration finished")
 // ErrVisitedTooManyKeys is returned by the Iterator's Next() method if it sees
 // many more keys than there should be in the map.
 var ErrVisitedTooManyKeys = errors.New("visited 10x the max size of the map keys")
+
+type keysValues struct {
+	keys   []byte
+	values []byte
+	err    error
+	count  int
+}
 
 // Iterator handles one pass of iteration over the map.
 type Iterator struct {
@@ -42,14 +51,15 @@ type Iterator struct {
 	// then the pointers we write to the bpf_attr union could end up being stale (since
 	// the union is opaque to the garbage collector).
 
-	// keyBeforeNextBatch is either nil at start of day or points to a buffer containing
-	// the key to pass to bpf_map_load_multi.
-	keyBeforeNextBatch unsafe.Pointer
-
 	// keys points to a buffer containing up to IteratorNumKeys keys
-	keys unsafe.Pointer
+	keysBuff    unsafe.Pointer
+	keysBufSize int
 	// values points to a buffer containing up to IteratorNumKeys values
-	values unsafe.Pointer
+	valuesBuff    unsafe.Pointer
+	valuesBufSize int
+
+	keys   []byte
+	values []byte
 
 	// valueStride is the step through the values buffer.  I.e. the size of the value
 	// rounded up for alignment.
@@ -64,6 +74,12 @@ type Iterator struct {
 	// numEntriesVisited is incremented for each entry that we visit.  Used as a sanity
 	// check in case we go into an infinite loop.
 	numEntriesVisited int
+
+	// wg is to sync with the syscall executing thread on close
+	wg         sync.WaitGroup
+	keysValues chan keysValues
+	cancelCtx  context.Context
+	cancelCB   context.CancelFunc
 }
 
 type MapInfo struct {
