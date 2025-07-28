@@ -48,13 +48,25 @@ func NewFilteredStagedNetworkPolicyInformer(client clientset.Interface, namespac
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.ProjectcalicoV3().StagedNetworkPolicies(namespace).List(context.TODO(), options)
+				return client.ProjectcalicoV3().StagedNetworkPolicies(namespace).List(context.Background(), options)
 			},
 			WatchFunc: func(options v1.ListOptions) (watch.Interface, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.ProjectcalicoV3().StagedNetworkPolicies(namespace).Watch(context.TODO(), options)
+				return client.ProjectcalicoV3().StagedNetworkPolicies(namespace).Watch(context.Background(), options)
+			},
+			ListWithContextFunc: func(ctx context.Context, options v1.ListOptions) (runtime.Object, error) {
+				if tweakListOptions != nil {
+					tweakListOptions(&options)
+				}
+				return client.ProjectcalicoV3().StagedNetworkPolicies(namespace).List(ctx, options)
+			},
+			WatchFuncWithContext: func(ctx context.Context, options v1.ListOptions) (watch.Interface, error) {
+				if tweakListOptions != nil {
+					tweakListOptions(&options)
+				}
+				return client.ProjectcalicoV3().StagedNetworkPolicies(namespace).Watch(ctx, options)
 			},
 		},
 		&apisprojectcalicov3.StagedNetworkPolicy{},
