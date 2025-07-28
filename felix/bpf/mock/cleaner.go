@@ -23,12 +23,12 @@ import (
 )
 
 type mockBPFCleaner struct {
-        ctMap        *Map
-        ctCleanupMap *Map
+	ctMap        *Map
+	ctCleanupMap *Map
 }
 
 func NewMockBPFCleaner(ctMap, ctCleanupMap *Map) *mockBPFCleaner {
-        return &mockBPFCleaner{ctMap: ctMap, ctCleanupMap: ctCleanupMap}
+	return &mockBPFCleaner{ctMap: ctMap, ctCleanupMap: ctCleanupMap}
 }
 
 func (m *mockBPFCleaner) Run(opts ...conntrack.RunOpt) error {
@@ -36,11 +36,11 @@ func (m *mockBPFCleaner) Run(opts ...conntrack.RunOpt) error {
 		if err := m.ctMap.Delete(k); err != nil {
 			return maps.IterNone
 		}
-                return maps.IterDelete
-        })
-        return err
+		return maps.IterDelete
+	})
+	return err
 }
 
 func (m *mockBPFCleaner) Close() error {
-        return nil
+	return nil
 }

@@ -45,11 +45,11 @@ func init() {
 
 var _ = Describe("BPF Syncer", func() {
 	var (
-		svcs *mockNATMap
-		eps  *mockNATBackendMap
-		aff  *mockAffinityMap
-		ct   *mock.Map
-		ctCleanup   *mock.Map
+		svcs      *mockNATMap
+		eps       *mockNATBackendMap
+		aff       *mockAffinityMap
+		ct        *mock.Map
+		ctCleanup *mock.Map
 
 		s        *proxy.Syncer
 		connScan *conntrack.Scanner
