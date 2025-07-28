@@ -41,7 +41,7 @@ func RunExtClientWithOpts(namePrefix string, opts ExtClientOpts) *containers.Con
 		},
 		"--privileged",                    // So that we can add routes inside the container.
 		"-v", wd+"/../bin:/usr/local/bin", // Map in the test-connectivity binary etc.
-		utils.Config.BusyboxImage,
+		utils.Config.FelixImage,
 		"/bin/sh", "-c", "sleep 1000")
 
 	if opts.IPv6Enabled {

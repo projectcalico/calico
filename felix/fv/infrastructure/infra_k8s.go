@@ -30,6 +30,7 @@ import (
 	"github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	apierrs "k8s.io/apimachinery/pkg/api/errors"
@@ -1327,6 +1328,14 @@ func updatePodLabelsAndAnnotations(wep *libapi.WorkloadEndpoint, pod *v1.Pod) *v
 		if pod.Annotations == nil {
 			pod.Annotations = map[string]string{}
 		}
+		logrus.Infof("sina %v", wep.Spec.QoSControls.DSCP.String())
+		logrus.Infof("sina %v", wep.Spec.QoSControls.DSCP)
+		if wep.Spec.QoSControls.DSCP.NumVal != 0 {
+			pod.Annotations[conversion.AnnotationQoSEgressDSCP] = wep.Spec.QoSControls.DSCP.String()
+		} else {
+			delete(pod.Annotations, conversion.AnnotationQoSEgressDSCP)
+		}
+		logrus.Infof("sina %v", pod.Annotations)
 		if wep.Spec.QoSControls.IngressBandwidth != 0 {
 			pod.Annotations[conversion.AnnotationQoSIngressBandwidth] = resource.NewQuantity(wep.Spec.QoSControls.IngressBandwidth, resource.DecimalSI).String()
 		} else {
@@ -1397,8 +1406,8 @@ func updatePodLabelsAndAnnotations(wep *libapi.WorkloadEndpoint, pod *v1.Pod) *v
 		} else {
 			delete(pod.Annotations, conversion.AnnotationQoSEgressMaxConnections)
 		}
-
 	} else if pod.Annotations != nil {
+		delete(pod.Annotations, conversion.AnnotationQoSEgressDSCP)
 		delete(pod.Annotations, conversion.AnnotationQoSIngressBandwidth)
 		delete(pod.Annotations, conversion.AnnotationQoSIngressBurst)
 		delete(pod.Annotations, conversion.AnnotationQoSIngressPeakrate)
