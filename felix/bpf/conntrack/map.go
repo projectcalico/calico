@@ -133,6 +133,8 @@ type Leg = curVer.Leg
 
 var MapParams = curVer.MapParams
 var MapParamsV6 = curVer.MapParamsV6
+var MapParamsCleanup = curVerCleanup.MapParams
+var MapParamsCleanupV6 = curVerCleanup.MapParamsV6
 
 func Map() maps.Map {
 	b := maps.NewPinnedMap(MapParams)
@@ -146,6 +148,14 @@ func MapV6() maps.Map {
 	b := maps.NewPinnedMap(MapParamsV6)
 	b.GetMapParams = GetMapParams
 	return b
+}
+
+func CleanupMap() maps.Map {
+	return maps.NewPinnedMap(MapParamsCleanup)
+}
+
+func CleanupMapV6() maps.Map {
+	return maps.NewPinnedMap(MapParamsCleanupV6)
 }
 
 func MapV2() maps.Map {
