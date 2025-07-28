@@ -12,25 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package v3
+package cleanupv1
 
 import (
+	"encoding/binary"
+
 	"golang.org/x/sys/unix"
 
-	v3 "github.com/projectcalico/calico/felix/bpf/conntrack/v3"
+	v4 "github.com/projectcalico/calico/felix/bpf/conntrack/v4"
 	"github.com/projectcalico/calico/felix/bpf/maps"
 )
 
-// Both our key and value are actually keys from the conntrack map.
-
-const KeySize = v3.KeySize
-const ValueSize = KeySize
+const KeySize = v4.KeySize
+const ValueSize = KeySize + 8 + 8
 const MaxEntries = 100000
 
-type Key = v3.Key
-type KeyInterface = v3.KeyInterface
-type Value = v3.Key
-type ValueInterface = v3.KeyInterface
+type Value [ValueSize]byte
 
 var MapParams = maps.MapParameters{
 	Type:         "hash",
@@ -39,6 +36,34 @@ var MapParams = maps.MapParameters{
 	MaxEntries:   MaxEntries,
 	Name:         "cali_v4_ccq",
 	Flags:        unix.BPF_F_NO_PREALLOC,
-	Version:      1,
-	UpdatedByBPF: true,
+	Version:      2,
+	UpdatedByBPF: false,
+}
+
+func (e Value) AsBytes() []byte {
+	return e[:]
+}
+
+func (e *Value) SetKey(key []byte) {
+	copy(e[0:KeySize], key)
+}
+
+func (e *Value) SetTS(ts uint64) {
+	binary.LittleEndian.PutUint64(e[KeySize:KeySize+8], ts)
+}
+
+func (e *Value) SetRevTS(ts uint64) {
+	binary.LittleEndian.PutUint64(e[KeySize+8:], ts)
+}
+
+func NewValue(key []byte, ts, rev_ts uint64) Value {
+	v := Value{}
+	v.SetKey(key)
+	v.SetTS(ts)
+	v.SetRevTS(rev_ts)
+	return v
+}
+
+type ValueInterface interface {
+	AsBytes() []byte
 }
