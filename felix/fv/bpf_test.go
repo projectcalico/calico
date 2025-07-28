@@ -5461,8 +5461,9 @@ func typeMetaV1(kind string) metav1.TypeMeta {
 
 func objectMetaV1(name string) metav1.ObjectMeta {
 	return metav1.ObjectMeta{
-		Name:      name,
-		Namespace: "default",
+		Name:        name,
+		Namespace:   "default",
+		Annotations: make(map[string]string),
 	}
 }
 
@@ -5800,7 +5801,6 @@ func k8sService(name, clusterIP string, w *workload.Workload, port,
 	}
 
 	meta := objectMetaV1(name)
-	meta.Annotations["projectcalico.org/loadbalancingAlgorithm"] = "ConsistentHash"
 	return &v1.Service{
 		TypeMeta:   typeMetaV1("Service"),
 		ObjectMeta: meta,
