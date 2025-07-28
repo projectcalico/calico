@@ -60,7 +60,9 @@ if [ ${HASH_RELEASE} == 'true' ]; then
     else
       URL_HASH="https://latest-os.docs.eng.tigera.net/${RELEASE_STREAM}.txt"
     fi
-    RELEASE_BASE_URL=$(curl -sS ${URL_HASH})
+    #RELEASE_BASE_URL=$(curl -sS ${URL_HASH})
+    RELEASE_BASE_URL_HTTP=$(curl -sS ${URL_HASH})
+    RELEASE_BASE_URL="${RELEASE_BASE_URL_HTTP/http:/https:}"
 fi
 
 if [[ ${RELEASE_STREAM} != 'local' ]]; then
