@@ -970,6 +970,11 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 			return testutils.ExpectHostendpoint(c, expectedTemplateHepName, expectedTemplateHepLabels, expectedTemplateIPs, autoHepProfiles, expectedTemplateInterface)
 		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
 
+		// Expect one hostendpoint to be created
+		heps, err := c.HostEndpoints().List(context.Background(), options.ListOptions{})
+		Expect(err).ToNot(HaveOccurred())
+		Expect(len(heps.Items)).To(Equal(1))
+
 		// Update the template with InterfaceSelector that should result in multiple host endpoints being created.
 		nodeController.Stop()
 		kcc, err := c.KubeControllersConfiguration().Get(context.Background(), "default", options.GetOptions{})
@@ -1002,6 +1007,11 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 			return testutils.ExpectHostendpoint(c, expectedTemplateHepName2, expectedTemplateHepLabels2, expectedTemplateIPs2, autoHepProfiles, expectedTemplateInterface2)
 		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
 
+		// Expect two host endpoints to be created
+		heps, err = c.HostEndpoints().List(context.Background(), options.ListOptions{})
+		Expect(err).ToNot(HaveOccurred())
+		Expect(len(heps.Items)).To(Equal(2))
+
 		// Update the template with InterfaceCIDRS that should result in current host endpoint to be updated
 		nodeController.Stop()
 		kcc, err = c.KubeControllersConfiguration().Get(context.Background(), "default", options.GetOptions{})
@@ -1028,6 +1038,11 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 			return testutils.ExpectHostendpoint(c, expectedTemplateHepName2, expectedTemplateHepLabels2, expectedTemplateIPs2, autoHepProfiles, expectedTemplateInterface2)
 		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
 
+		// Expect two host endpoints to be created
+		heps, err = c.HostEndpoints().List(context.Background(), options.ListOptions{})
+		Expect(err).ToNot(HaveOccurred())
+		Expect(len(heps.Items)).To(Equal(2))
+
 		// Update the template InterfaceSelector which will result in eth0 host endpoint to be deleted
 		nodeController.Stop()
 		kcc, err = c.KubeControllersConfiguration().Get(context.Background(), "default", options.GetOptions{})
@@ -1052,6 +1067,11 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 		Eventually(func() error {
 			return testutils.ExpectHostendpoint(c, expectedTemplateHepName2, expectedTemplateHepLabels2, expectedTemplateIPs2, autoHepProfiles, expectedTemplateInterface2)
 		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
+
+		// Expect one host endpoint to be created
+		heps, err = c.HostEndpoints().List(context.Background(), options.ListOptions{})
+		Expect(err).ToNot(HaveOccurred())
+		Expect(len(heps.Items)).To(Equal(1))
 	})
 })
 
