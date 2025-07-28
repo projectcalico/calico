@@ -103,7 +103,12 @@ func (m *clusterEgressManager) OnUpdate(msg interface{}) {
 		m.logCxt.WithField("id", msg.Id).Debug("IPAM pool removed")
 		m.handleIPAMUpdates(msg.Id, nil)
 	case *proto.WorkloadEndpointUpdate:
-		if msg.Endpoint.QosControls == nil || msg.Endpoint.QosControls.DSCP == "" {
+		if msg.Endpoint.QosControls == nil {
+			return
+		}
+		id := types.ProtoToWorkloadEndpointID(msg.GetId())
+		_, exists := m.qosPolicies[id]
+		if !exists && msg.Endpoint.QosControls.DSCP == 0 {
 			return
 		}
 		ips := msg.Endpoint.Ipv4Nets
@@ -111,10 +116,9 @@ func (m *clusterEgressManager) OnUpdate(msg interface{}) {
 			ips = msg.Endpoint.Ipv6Nets
 		}
 		if len(ips) != 0 {
-			id := types.ProtoToWorkloadEndpointID(msg.GetId())
 			m.qosPolicies[id] = qos.Policy{
 				SrcAddrs: strings.Join(ips, ","),
-				DSCP:     msg.Endpoint.QosControls.DSCP,
+				DSCP:     uint8(msg.Endpoint.QosControls.DSCP),
 			}
 			m.qosPolicyDirty = true
 		}
@@ -179,7 +183,9 @@ func (m *clusterEgressManager) CompleteDeferredWork() error {
 	if m.qosPolicyDirty {
 		var policies []qos.Policy
 		for _, p := range m.qosPolicies {
-			policies = append(policies, p)
+			if p.DSCP != 0 {
+				policies = append(policies, p)
+			}
 		}
 
 		chain := m.ruleRenderer.EgressQoSPolicyChain(policies)

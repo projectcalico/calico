@@ -488,5 +488,5 @@ func updateTBF(tbs *TokenBucketState, workloadDevice netlink.Link) error {
 
 type Policy struct {
 	SrcAddrs string
-	DSCP     string
+	DSCP     uint8
 }

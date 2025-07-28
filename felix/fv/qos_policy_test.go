@@ -21,8 +21,10 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 
+	"github.com/projectcalico/calico/felix/fv/connectivity"
 	"github.com/projectcalico/calico/felix/fv/containers"
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
 	"github.com/projectcalico/calico/felix/fv/workload"
@@ -38,10 +40,10 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ qos policy tests", []apicon
 		w              [3]*workload.Workload
 		client         client.Interface
 		externalClient *containers.Container
+		cc             *connectivity.Checker
 	)
 
 	BeforeEach(func() {
-		var err error
 		iOpts := []infrastructure.CreateOption{}
 		infra = getInfra(iOpts...)
 		if (NFTMode() || BPFMode()) && getDataStoreType(infra) == "etcdv3" {
@@ -49,17 +51,16 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ qos policy tests", []apicon
 		}
 
 		options := infrastructure.DefaultTopologyOptions()
+		options.IPIPMode = apiv3.IPIPModeNever
 		options.FelixLogSeverity = "Debug"
 		tc, client = infrastructure.StartNNodeTopology(3, options, infra)
 
 		w, _ = setupIPIPWorkloads(infra, tc, options, client)
-		//cc = &Checker{}
+		cc = &connectivity.Checker{}
 
 		// We will use this container to model an external client trying to connect into
 		// workloads on a host.  Create a route in the container for the workload CIDR.
 		externalClient = infrastructure.RunExtClient("ext-client")
-		err = infra.AddDefaultDeny()
-		Expect(err).To(BeNil())
 	})
 
 	AfterEach(func() {
@@ -108,12 +109,28 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ qos policy tests", []apicon
 	})
 
 	It("pepper1 applying QoSControl should is adding correct rules", func() {
+		By("configurging external client to only accept packets with sepcific DSCP value")
+		externalClient.Exec("ip", "route", "add", w[0].IP, "via", tc.Felixes[0].IP)
+		externalClient.Exec("ip", "route", "add", w[1].IP, "via", tc.Felixes[1].IP)
+		externalClient.Exec("iptables", "-A", "INPUT", "-m", "dscp", "!", "--dscp", "0x14", "-j", "DROP")
+
+		cc.ResetExpectations()
+		cc.ExpectNone(externalClient, w[0])
+		cc.ExpectNone(externalClient, w[1])
+		cc.CheckConnectivity()
+
+		By("setting the expected DSCP value on egress traffic from one workload leaving the cluster")
 		w[0].WorkloadEndpoint.Spec.QoSControls = &api.QoSControls{
-			IngressBandwidth: 10000000,
-			DSCP:             numorstring.DSCPFromInt(20),
+			DSCP: numorstring.DSCPFromInt(30),
 		}
 		w[0].UpdateInInfra(infra)
-		//time.Sleep(time.Minute * 30)
+		time.Sleep(time.Minute * 540)
+		cc.ResetExpectations()
+		cc.ExpectSome(externalClient, w[0])
+		cc.ExpectNone(externalClient, w[1])
+		cc.CheckConnectivity()
+
+		By("verifying that expected rule exists")
 		if NFTMode() {
 			// TODO (mazdak) verify the pattern
 			// TODO (mazdak): add ipv6
@@ -121,11 +138,51 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ qos policy tests", []apicon
 				output, _ := tc.Felixes[0].ExecOutput("nft", "list", "chain", "ip", "calico", "mangle-cali-qos-policy")
 				return output
 			}, 5*time.Second, 100*time.Millisecond).Should(ContainSubstring("ip dscp set af22"))
+			Consistently(func() string {
+				output, _ := tc.Felixes[0].ExecOutput("nft", "list", "chain", "ip", "calico", "mangle-cali-qos-policy")
+				return output
+			}, 5*time.Second, 100*time.Millisecond).Should(ContainSubstring("ip dscp set af22"))
 		} else {
 			Eventually(func() string {
 				output, _ := tc.Felixes[0].ExecOutput("iptables-save", "-t", "mangle")
 				return output
-			}, 5*time.Second, 100*time.Millisecond).Should(ContainSubstring("DSCP set 0x14"))
+			}, 5*time.Second, 100*time.Millisecond).Should(ContainSubstring("DSCP --set-dscp 0x14"))
+			Consistently(func() string {
+				output, _ := tc.Felixes[0].ExecOutput("iptables-save", "-t", "mangle")
+				return output
+			}, 5*time.Second, 100*time.Millisecond).Should(ContainSubstring("DSCP --set-dscp 0x14"))
+		}
+
+		By("resetting DSCP value on egress traffic from that workload leaving the cluster")
+		w[0].WorkloadEndpoint.Spec.QoSControls = &api.QoSControls{}
+		w[0].UpdateInInfra(infra)
+
+		cc.ResetExpectations()
+		cc.ExpectNone(externalClient, w[0])
+		cc.ExpectNone(externalClient, w[1])
+		cc.CheckConnectivity()
+
+		By("verifying that expected rule is cleaned up")
+		if NFTMode() {
+			// TODO (mazdak) verify the pattern
+			// TODO (mazdak): add ipv6
+			Eventually(func() string {
+				output, _ := tc.Felixes[0].ExecOutput("nft", "list", "chain", "ip", "calico", "mangle-cali-qos-policy")
+				return output
+			}, 5*time.Second, 100*time.Millisecond).ShouldNot(ContainSubstring("ip dscp set af22"))
+			Consistently(func() string {
+				output, _ := tc.Felixes[0].ExecOutput("nft", "list", "chain", "ip", "calico", "mangle-cali-qos-policy")
+				return output
+			}, 5*time.Second, 100*time.Millisecond).ShouldNot(ContainSubstring("ip dscp set af22"))
+		} else {
+			Eventually(func() string {
+				output, _ := tc.Felixes[0].ExecOutput("iptables-save", "-t", "mangle")
+				return output
+			}, 5*time.Second, 100*time.Millisecond).ShouldNot(ContainSubstring("DSCP --set-dscp 0x14"))
+			Consistently(func() string {
+				output, _ := tc.Felixes[0].ExecOutput("iptables-save", "-t", "mangle")
+				return output
+			}, 5*time.Second, 100*time.Millisecond).ShouldNot(ContainSubstring("DSCP --set-dscp 0x14"))
 		}
 	})
 })

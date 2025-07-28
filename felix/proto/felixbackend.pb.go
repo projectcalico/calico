@@ -3220,7 +3220,7 @@ type QoSControls struct {
 	EgressMinburst        int64                  `protobuf:"varint,12,opt,name=EgressMinburst,proto3" json:"EgressMinburst,omitempty"`
 	IngressPacketBurst    int64                  `protobuf:"varint,13,opt,name=IngressPacketBurst,proto3" json:"IngressPacketBurst,omitempty"`
 	EgressPacketBurst     int64                  `protobuf:"varint,14,opt,name=EgressPacketBurst,proto3" json:"EgressPacketBurst,omitempty"`
-	DSCP                  string                 `protobuf:"bytes,15,opt,name=DSCP,proto3" json:"DSCP,omitempty"`
+	DSCP                  int32                  `protobuf:"varint,15,opt,name=DSCP,proto3" json:"DSCP,omitempty"`
 	unknownFields         protoimpl.UnknownFields
 	sizeCache             protoimpl.SizeCache
 }
@@ -3353,11 +3353,11 @@ func (x *QoSControls) GetEgressPacketBurst() int64 {
 	return 0
 }
 
-func (x *QoSControls) GetDSCP() string {
+func (x *QoSControls) GetDSCP() int32 {
 	if x != nil {
 		return x.DSCP
 	}
-	return ""
+	return 0
 }
 
 type LocalBGPPeer struct {
@@ -6572,7 +6572,7 @@ const file_felixbackend_proto_rawDesc = "" +
 	"\x0eEgressMinburst\x18\f \x01(\x03R\x0eEgressMinburst\x12.\n" +
 	"\x12IngressPacketBurst\x18\r \x01(\x03R\x12IngressPacketBurst\x12,\n" +
 	"\x11EgressPacketBurst\x18\x0e \x01(\x03R\x11EgressPacketBurst\x12\x12\n" +
-	"\x04DSCP\x18\x0f \x01(\tR\x04DSCP\"2\n" +
+	"\x04DSCP\x18\x0f \x01(\x05R\x04DSCP\"2\n" +
 	"\fLocalBGPPeer\x12\"\n" +
 	"\rbgp_peer_name\x18\x01 \x01(\tR\vbgpPeerName\"C\n" +
 	"\x16WorkloadEndpointRemove\x12)\n" +

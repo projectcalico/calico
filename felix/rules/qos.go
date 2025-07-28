@@ -24,7 +24,7 @@ func (r *DefaultRuleRenderer) EgressQoSPolicyChain(policies []qos.Policy) *gener
 	for _, p := range policies {
 		rules = append(rules, generictables.Rule{
 			Match:  r.NewMatch().SourceNet(p.SrcAddrs),
-			Action: r.DSCP(20),
+			Action: r.DSCP(p.DSCP),
 		})
 	}
 
