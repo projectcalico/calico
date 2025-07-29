@@ -31,14 +31,14 @@ func NewMockBPFCleaner(ctMap, ctCleanupMap *Map) *mockBPFCleaner {
 	return &mockBPFCleaner{ctMap: ctMap, ctCleanupMap: ctCleanupMap}
 }
 
-func (m *mockBPFCleaner) Run(opts ...conntrack.RunOpt) error {
+func (m *mockBPFCleaner) Run(opts ...conntrack.RunOpt) (*conntrack.CleanupContext, error) {
 	err := m.ctCleanupMap.Iter(func(k, v []byte) maps.IteratorAction {
 		if err := m.ctMap.Delete(k); err != nil {
 			return maps.IterNone
 		}
 		return maps.IterDelete
 	})
-	return err
+	return &conntrack.CleanupContext{}, err
 }
 
 func (m *mockBPFCleaner) Close() error {

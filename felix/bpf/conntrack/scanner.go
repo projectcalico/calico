@@ -177,8 +177,6 @@ func (s *Scanner) Scan() {
 				if debug {
 					log.Debug("Deleting conntrack entry.")
 				}
-				cleaned++
-
 				revKey := []byte{}
 				if ctVal.Type() == TypeNATForward {
 					revKey = ctVal.ReverseNATKey().AsBytes()
@@ -190,7 +188,7 @@ func (s *Scanner) Scan() {
 				}
 				err := s.ctCleanupMap.Update(ctKey.AsBytes(), val.AsBytes())
 				if err != nil {
-					log.Debugf("error updating cleanup map. Entry may not cleaned up %v", err)
+					log.Debugf("error updating cleanup map. Entry may not be cleaned up %v", err)
 				}
 			}
 		}
@@ -204,10 +202,11 @@ func (s *Scanner) Scan() {
 
 	// Run the BPF cleanup program.
 	if s.bpfCleaner != nil {
-		err := s.bpfCleaner.Run()
+		cr, err := s.bpfCleaner.Run()
 		if err != nil {
 			log.WithError(err).Warn("Failed to run bpf conntrack cleaner.")
 		}
+		cleaned = int(cr.NumKVsCleaned)
 	}
 
 	conntrackCounterSweeps.Inc()
@@ -324,7 +323,9 @@ func (s *Scanner) Stop() {
 }
 
 func (s *Scanner) Close() {
-	s.bpfCleaner.Close()
+	if s.bpfCleaner != nil {
+		s.bpfCleaner.Close()
+	}
 }
 
 // AddUnlocked adds an additional EntryScanner to a non-running Scanner
@@ -339,6 +340,6 @@ func (s *Scanner) AddFirstUnlocked(scanner EntryScanner) {
 }
 
 type Cleaner interface {
-	Run(opts ...RunOpt) error
+	Run(opts ...RunOpt) (*CleanupContext, error)
 	Close() error
 }

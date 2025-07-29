@@ -120,14 +120,14 @@ func WithStartTime(t uint64) RunOpt {
 	}
 }
 
-func (s *BPFProgCleaner) Run(opts ...RunOpt) error {
+func (s *BPFProgCleaner) Run(opts ...RunOpt) (*CleanupContext, error) {
 	program, err := s.ensureBPFExpiryProgram()
 	if err != nil {
-		return fmt.Errorf("failed to load BPF program: %w", err)
+		return nil, fmt.Errorf("failed to load BPF program: %w", err)
 	}
 	fd, err := program.ProgramFD("conntrack_cleanup")
 	if err != nil {
-		return fmt.Errorf("failed to look up BPF program section: %w", err)
+		return nil, fmt.Errorf("failed to look up BPF program section: %w", err)
 	}
 
 	var cr CleanupContext
@@ -138,24 +138,24 @@ func (s *BPFProgCleaner) Run(opts ...RunOpt) error {
 	var programInput [unsafe.Sizeof(cr)]byte
 	_, err = binary.Encode(programInput[:], binary.LittleEndian, cr)
 	if err != nil {
-		return fmt.Errorf("failed to encode cleanup program input: %w", err)
+		return nil, fmt.Errorf("failed to encode cleanup program input: %w", err)
 	}
 
 	result, err := bpf.RunBPFProgram(bpf.ProgFD(fd), programInput[:], 1)
 	if err != nil {
-		return fmt.Errorf("failed to run cleanup program: %w", err)
+		return nil, fmt.Errorf("failed to run cleanup program: %w", err)
 	}
 
 	// Output "packet" is returned in its own buffer.  Decode it.
 	_, err = binary.Decode(result.DataOut, binary.LittleEndian, &cr)
 	if err != nil {
-		return fmt.Errorf("failed to parse cleanup program result: %w", err)
+		return nil, fmt.Errorf("failed to parse cleanup program result: %w", err)
 	}
 	log.WithFields(log.Fields{
 		"timeTaken": result.Duration,
 		"stats":     cr,
 	}).Debug("Conntrack cleanup result.")
-	return nil
+	return &cr, nil
 }
 
 func (s *BPFProgCleaner) Close() error {
