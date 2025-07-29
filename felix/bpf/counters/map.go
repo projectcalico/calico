@@ -29,7 +29,7 @@ var MapParameters = maps.MapParameters{
 	ValueSize:  counterMapValueSize * MaxCounterNumber,
 	MaxEntries: 20000,
 	Name:       "cali_counters",
-	Version:    3,
+	Version:    4,
 }
 
 func Map() maps.Map {

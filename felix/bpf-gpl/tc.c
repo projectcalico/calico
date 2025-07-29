@@ -55,6 +55,7 @@
 #include "metadata.h"
 #include "bpf_helpers.h"
 #include "rule_counters.h"
+#include "qos.h"
 
 #ifndef IPVER6
 #include "ip_v4_fragment.h"
@@ -100,6 +101,10 @@ int calico_tc_main(struct __sk_buff *skb)
 
 			CALI_DEBUG("New packet at ifindex=%d; mark=%x", skb->ifindex, skb->mark);
 			parse_packet_ip(ctx);
+			if (enforce_packet_rate_qos(ctx) == TC_ACT_SHOT) {
+				CALI_DEBUG("Final result=DENY (%d). Dropped due to packet rate QoS.", CALI_REASON_DROPPED_BY_QOS);
+				return TC_ACT_SHOT;
+			}
 			CALI_DEBUG("Final result=ALLOW (%d). Bypass mark set.", CALI_REASON_BYPASS);
 		}
 		return TC_ACT_UNSPEC;
@@ -1317,6 +1322,9 @@ int calico_tc_skb_accepted_entrypoint(struct __sk_buff *skb)
 	}
 #endif
 
+	if (enforce_packet_rate_qos(ctx) == TC_ACT_SHOT) {
+		goto deny;
+	}
 	ctx->fwd = calico_tc_skb_accepted(ctx);
 	return forward_or_drop(ctx);
 
@@ -1946,6 +1954,9 @@ int calico_tc_skb_send_icmp_replies(struct __sk_buff *skb)
 		goto deny;
 	}
 
+	if (enforce_packet_rate_qos(ctx) == TC_ACT_SHOT) {
+		goto deny;
+	}
 	tc_state_fill_from_iphdr(ctx);
 	ctx->state->sport = ctx->state->dport = 0;
 	return forward_or_drop(ctx);
