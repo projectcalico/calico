@@ -69,12 +69,13 @@ static CALI_BPF_INLINE int enforce_packet_rate_qos(struct cali_tc_ctx *ctx)
 	__s16 tokens_inc = ((now - last_update) * packet_rate) / 1000000000;
 	if (tokens_inc > 0) {
 		tokens += tokens_inc;
-		last_update = now;
-	}
 
-	// Cap tokens to burst_size (TBF bucket size)
-	if (tokens > burst_size) {
-		tokens = burst_size;
+		// Cap tokens to burst_size (TBF bucket size)
+		if (tokens > burst_size) {
+			tokens = burst_size;
+		}
+
+		last_update = now;
 	}
 
 	bool accept = false;
