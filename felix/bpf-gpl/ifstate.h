@@ -16,9 +16,13 @@ struct ifstate_val {
 	__s32 egress_policy_v6;
 	__s32 tc_filter_ingress;
 	__s32 tc_filter_egress;
+	__s16 ingress_packet_rate_tokens;
+	__s16 egress_packet_rate_tokens;
+	__u64 ingress_packet_rate_last_update;
+	__u64 egress_packet_rate_last_update;
 };
 
-CALI_MAP(cali_iface, 4,
+CALI_MAP(cali_iface, 5,
 		BPF_MAP_TYPE_HASH,
 		__u32, struct ifstate_val,
 		1000, BPF_F_NO_PREALLOC)
