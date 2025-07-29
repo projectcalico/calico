@@ -3031,7 +3031,7 @@ func schema_libcalico_go_lib_apis_v3_NodeSpec(ref common.ReferenceCallback) comm
 					},
 					"interfaces": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Interfaces list of interfaces on the node",
+							Description: "Interfaces is a list of interfaces on the node.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
