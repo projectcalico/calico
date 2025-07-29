@@ -528,6 +528,7 @@ func (d *mockTunnelDataplane) LinkAdd(l netlink.Link) error {
 	Expect(l.Attrs().Name).To(Equal(d.tunnelLinkName))
 	if d.tunnelLink == nil {
 		logrus.Info("Creating tunnel link")
+		l.Attrs().Index = 6
 		d.tunnelLinkAttrs = l.Attrs()
 		d.tunnelLink = l
 	}
