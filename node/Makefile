@@ -456,7 +456,7 @@ k8s-test:
 
 .PHONY: kind-k8st-setup
 kind-k8st-setup: $(K8ST_IMAGE_TARS) ../bin/tigera-operator-$(GIT_VERSION).tgz kind-cluster-create
-	KUBECONFIG=$(KIND_KUBECONFIG) ARCH=$(ARCH) GIT_VERSION=$(GIT_VERSION) ./tests/k8st/deploy_resources_on_kind_cluster.sh
+	KUBECONFIG=$(KIND_KUBECONFIG) KIND=$(KIND) ARCH=$(ARCH) GIT_VERSION=$(GIT_VERSION) ./tests/k8st/deploy_resources_on_kind_cluster.sh
 
 .PHONY: kind-k8st-run-test
 kind-k8st-run-test: .calico_test.created $(KIND_KUBECONFIG)
