@@ -24,6 +24,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/felix/bpf/conntrack/cleanupv1"
 	"github.com/projectcalico/calico/felix/bpf/conntrack/timeouts"
 	"github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/jitter"
@@ -77,7 +78,7 @@ type EntryGet func(KeyInterface) (ValueInterface, error)
 
 // EntryScanner is a function prototype to be called on every entry by the scanner
 type EntryScanner interface {
-	Check(KeyInterface, ValueInterface, EntryGet) ScanVerdict
+	Check(KeyInterface, ValueInterface, EntryGet) (ScanVerdict, int64)
 }
 
 // EntryScannerSynced is a scanner synchronized with the iteration start/end.
@@ -96,6 +97,7 @@ type EntryScannerSynced interface {
 // evaluation functions, to keep their implementation simpler.
 type Scanner struct {
 	ctMap                        maps.Map
+	ctCleanupMap                 maps.Map
 	keyFromBytes                 func([]byte) KeyInterface
 	valueFromBytes               func([]byte) ValueInterface
 	scanners                     []EntryScanner
@@ -104,6 +106,8 @@ type Scanner struct {
 	maxEntries                   int
 	autoScale                    bool
 	configChangedRestartCallback func()
+	bpfCleaner                   Cleaner
+	ipVersion                    int
 
 	wg       sync.WaitGroup
 	stopCh   chan struct{}
@@ -114,11 +118,14 @@ type Scanner struct {
 // EntryScanner. They are executed in the provided order on each entry.
 func NewScanner(ctMap maps.Map, kfb func([]byte) KeyInterface, vfb func([]byte) ValueInterface,
 	configChangedRestartCallback func(),
-	autoScalingMode string,
+	autoScalingMode string, ctCleanupMap maps.Map,
+	ipVersion int,
+	bpfCleaner Cleaner,
 	scanners ...EntryScanner) *Scanner {
 
 	return &Scanner{
 		ctMap:                        ctMap,
+		ctCleanupMap:                 ctCleanupMap,
 		keyFromBytes:                 kfb,
 		valueFromBytes:               vfb,
 		scanners:                     scanners,
@@ -127,6 +134,8 @@ func NewScanner(ctMap maps.Map, kfb func([]byte) KeyInterface, vfb func([]byte) 
 		maxEntries:                   ctMap.Size(),
 		autoScale:                    strings.ToLower(autoScalingMode) == "doubleiffull",
 		configChangedRestartCallback: configChangedRestartCallback,
+		bpfCleaner:                   bpfCleaner,
+		ipVersion:                    ipVersion,
 	}
 }
 
@@ -142,6 +151,8 @@ func (s *Scanner) Scan() {
 	used := 0
 	cleaned := 0
 
+	var val cleanupv1.ValueInterface
+
 	log.Debug("Starting conntrack scanner iteration")
 	err := s.ctMap.Iter(func(k, v []byte) maps.IteratorAction {
 		ctKey := s.keyFromBytes(k)
@@ -156,14 +167,29 @@ func (s *Scanner) Scan() {
 				"entry": ctVal,
 			}).Debug("Examining conntrack entry")
 		}
+		val = cleanupv1.Value{}
+		if s.ipVersion == 6 {
+			val = cleanupv1.ValueV6{}
+		}
 
 		for _, scanner := range s.scanners {
-			if verdict := scanner.Check(ctKey, ctVal, s.get); verdict == ScanVerdictDelete {
+			if verdict, ts := scanner.Check(ctKey, ctVal, s.get); verdict == ScanVerdictDelete {
 				if debug {
 					log.Debug("Deleting conntrack entry.")
 				}
-				cleaned++
-				return maps.IterDelete
+				revKey := []byte{}
+				if ctVal.Type() == TypeNATForward {
+					revKey = ctVal.ReverseNATKey().AsBytes()
+				}
+
+				val = cleanupv1.NewValue(revKey, uint64(ctVal.LastSeen()), uint64(ts))
+				if s.ipVersion == 6 {
+					val = cleanupv1.NewValueV6(revKey, uint64(ctVal.LastSeen()), uint64(ts))
+				}
+				err := s.ctCleanupMap.Update(ctKey.AsBytes(), val.AsBytes())
+				if err != nil {
+					log.Debugf("error updating cleanup map. Entry may not be cleaned up %v", err)
+				}
 			}
 		}
 		return maps.IterNone
@@ -172,6 +198,15 @@ func (s *Scanner) Scan() {
 	if err != nil {
 		log.WithError(err).Warn("Failed to iterate over conntrack map")
 		return
+	}
+
+	// Run the BPF cleanup program.
+	if s.bpfCleaner != nil {
+		cr, err := s.bpfCleaner.Run()
+		if err != nil {
+			log.WithError(err).Warn("Failed to run bpf conntrack cleaner.")
+		}
+		cleaned = int(cr.NumKVsCleaned)
 	}
 
 	conntrackCounterSweeps.Inc()
@@ -287,6 +322,12 @@ func (s *Scanner) Stop() {
 	})
 }
 
+func (s *Scanner) Close() {
+	if s.bpfCleaner != nil {
+		s.bpfCleaner.Close()
+	}
+}
+
 // AddUnlocked adds an additional EntryScanner to a non-running Scanner
 func (s *Scanner) AddUnlocked(scanner EntryScanner) {
 	s.scanners = append(s.scanners, scanner)
@@ -296,4 +337,9 @@ func (s *Scanner) AddUnlocked(scanner EntryScanner) {
 // the first scanner to be called.
 func (s *Scanner) AddFirstUnlocked(scanner EntryScanner) {
 	s.scanners = append([]EntryScanner{scanner}, s.scanners...)
+}
+
+type Cleaner interface {
+	Run(opts ...RunOpt) (*CleanupContext, error)
+	Close() error
 }
