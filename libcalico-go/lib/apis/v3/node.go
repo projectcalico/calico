@@ -68,7 +68,7 @@ type NodeSpec struct {
 	// Addresses list address that a client can reach the node at.
 	Addresses []NodeAddress `json:"addresses,omitempty" validate:"omitempty"`
 
-	// Interfaces list of interfaces on the node
+	// Interfaces is a list of interfaces on the node.
 	Interfaces []NodeInterface `json:"interfaces,omitempty" validate:"omitempty"`
 }
 

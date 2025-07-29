@@ -302,7 +302,7 @@ func (c *autoHostEndpointController) syncHostEndpointsForNode(nodeName string) {
 	if c.config.AutoHostEndpointConfig.CreateDefaultHostEndpoint == api.DefaultHostEndpointsEnabled {
 		// First we check that the default hostEndpoint is deleted/not present if createDefaultHostEndpoint is disabled,
 		// if enabled we check that the hostEndpoint is created and up to date
-		defaultHostEndpointName, err := c.generateAutoHostEndpointName(nodeName, nil, nil)
+		defaultHostEndpointName, err := generateAutoHostEndpointName(nodeName, "", "")
 		if err != nil {
 			logrus.WithError(err).Error("failed to generate host endpoint name")
 			return
@@ -336,7 +336,7 @@ func (c *autoHostEndpointController) syncHostEndpointsForNode(nodeName string) {
 
 			if template.InterfaceSelector == "" {
 				// When interfaceSelector is empty this template will always generate at most one AutoHostEndpoint
-				hostEndpointName, err := c.generateAutoHostEndpointName(node.Name, &template.GenerateName, nil)
+				hostEndpointName, err := generateAutoHostEndpointName(node.Name, template.GenerateName, "")
 				if err != nil {
 					logrus.WithError(err).Error("failed to generate host endpoint name")
 					return
@@ -354,14 +354,14 @@ func (c *autoHostEndpointController) syncHostEndpointsForNode(nodeName string) {
 				// If we reached here we know the template has interfaceSelector specified, we want to create a HostEndpoint for each interface that matches the regex selector.
 				if regexp.MustCompile(template.InterfaceSelector).MatchString(iface.Name) {
 					// Generate Host Endpoint for interface matching the InterfaceSelector from the template
-					hostEndpointName, err := c.generateAutoHostEndpointName(node.Name, &template.GenerateName, &iface.Name)
+					hostEndpointName, err := generateAutoHostEndpointName(node.Name, template.GenerateName, iface.Name)
 					if err != nil {
 						logrus.WithError(err).Error("failed to generate host endpoint name")
 						return
 					}
 
 					// Update the expected IPs with IPs belonging to the matched interface, we do not need to check if it's empty as the generated host endpoint will contain interface name
-					expectedIPsWithInterfaceIPs := c.mergeExpectedIPsWithInterfaceIPs(node, iface.Name, expectedIPs)
+					expectedIPsWithInterfaceIPs := c.mergeExpectedIPsWithInterfaceIPs(expectedIPs, iface)
 					expectedHostEndpoint := c.generateAutoHostEndpoint(node, template.Labels, hostEndpointName, expectedIPsWithInterfaceIPs, iface.Name)
 					c.createOrUpdateHostEndpoint(expectedHostEndpoint)
 
@@ -419,20 +419,20 @@ func isAutoHostEndpoint(h *api.HostEndpoint) bool {
 }
 
 // generateAutoHostEndpointName generated the name based on the supplied parameters, creating unique name for each HostEndpoint
-func (c *autoHostEndpointController) generateAutoHostEndpointName(nodeName string, templateName *string, interfaceName *string) (string, error) {
-	if templateName == nil && interfaceName == nil {
+func generateAutoHostEndpointName(nodeName string, templateName string, interfaceName string) (string, error) {
+	if templateName == "" && interfaceName == "" {
 		// Default HostEndpoint name
-		return c.validateName(fmt.Sprintf("%s-%s", nodeName, hostEndpointNameSuffix))
+		return validateName(fmt.Sprintf("%s-%s", nodeName, hostEndpointNameSuffix))
 	}
 
-	if templateName != nil && interfaceName == nil {
+	if templateName != "" && interfaceName == "" {
 		// Template HostEndpoint name
-		return c.validateName(fmt.Sprintf("%s-%s-%s", nodeName, *templateName, hostEndpointNameSuffix))
+		return validateName(fmt.Sprintf("%s-%s-%s", nodeName, templateName, hostEndpointNameSuffix))
 	}
 
-	if templateName != nil && interfaceName != nil {
+	if templateName != "" && interfaceName != "" {
 		// Template HostEndpoint with interfaceName name
-		return c.validateName(fmt.Sprintf("%s-%s-%s-%s", nodeName, *templateName, *interfaceName, hostEndpointNameSuffix))
+		return validateName(fmt.Sprintf("%s-%s-%s-%s", nodeName, templateName, interfaceName, hostEndpointNameSuffix))
 	}
 
 	return "", fmt.Errorf("insufficient HostEndpoint identifiers supplied")
@@ -440,7 +440,7 @@ func (c *autoHostEndpointController) generateAutoHostEndpointName(nodeName strin
 
 // validateName ensures the given name does not exceed the DNS1123 (253 characters) subdomain length limit.
 // If the name is too long, it generates a hash-based name that fits the limit.
-func (c *autoHostEndpointController) validateName(name string) (string, error) {
+func validateName(name string) (string, error) {
 	if len(name) <= validation.DNS1123SubdomainMaxLength {
 		return name, nil
 	}
@@ -464,16 +464,10 @@ func (c *autoHostEndpointController) validateName(name string) (string, error) {
 
 // mergeExpectedIPsWithInterfaceIPs merges the provided expected IPs with the IP addresses
 // found on the specified interface of the given node.
-func (c *autoHostEndpointController) mergeExpectedIPsWithInterfaceIPs(node *libapi.Node, interfaceName string, expectedIPs []string) []string {
-	for _, iface := range node.Spec.Interfaces {
-		if iface.Name == interfaceName {
-			for _, addr := range iface.Addresses {
-				if !slices.Contains(expectedIPs, addr) {
-					expectedIPs = append(expectedIPs, addr)
-				}
-			}
-			// We found the interface, we can stop looking for it
-			break
+func (c *autoHostEndpointController) mergeExpectedIPsWithInterfaceIPs(expectedIPs []string, iface libapi.NodeInterface) []string {
+	for _, addr := range iface.Addresses {
+		if !slices.Contains(expectedIPs, addr) {
+			expectedIPs = append(expectedIPs, addr)
 		}
 	}
 
