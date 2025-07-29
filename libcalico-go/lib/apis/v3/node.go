@@ -67,6 +67,9 @@ type NodeSpec struct {
 
 	// Addresses list address that a client can reach the node at.
 	Addresses []NodeAddress `json:"addresses,omitempty" validate:"omitempty"`
+
+	// Interfaces is a list of interfaces on the node.
+	Interfaces []NodeInterface `json:"interfaces,omitempty" validate:"omitempty"`
 }
 
 // NodeAddress represents an address assigned to a node.
@@ -76,6 +79,12 @@ type NodeAddress struct {
 
 	// Type is the node IP type
 	Type string `json:"type,omitempty" validate:"omitempty,ipType"`
+}
+
+type NodeInterface struct {
+	Name string `json:"name,omitempty" validate:"omitempty,name"`
+
+	Addresses []string `json:"addresses,omitempty" validate:"omitempty"`
 }
 
 type NodeStatus struct {

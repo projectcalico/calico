@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2025 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -55,6 +55,7 @@ const (
 	nodeWireguardIpv6IfaceAddrAnnotation  = "projectcalico.org/IPv6WireguardInterfaceAddr"
 	nodeWireguardPublicKeyAnnotation      = "projectcalico.org/WireguardPublicKey"
 	nodeWireguardPublicKeyV6Annotation    = "projectcalico.org/WireguardPublicKeyV6"
+	nodeInterfacesAnnotation              = "projectcalico.org/Interfaces"
 )
 
 func NewNodeClient(c kubernetes.Interface, usePodCIDR bool) K8sResourceClient {
@@ -288,6 +289,9 @@ func K8sNodeToCalico(k8sNode *kapiv1.Node, usePodCIDR bool) (*model.KVPair, erro
 	// Fill the list of all addresses from the calico Node
 	fillAllAddresses(calicoNode, k8sNode)
 
+	// Fill the node with all detected interfaces
+	fillAllInterfaces(calicoNode, k8sNode)
+
 	// Create the resource key from the node name.
 	return &model.KVPair{
 		Key: model.ResourceKey{
@@ -319,6 +323,31 @@ func fillAllAddresses(calicoNode *libapiv3.Node, k8sNode *kapiv1.Node) {
 			continue
 		}
 	}
+}
+
+func fillAllInterfaces(calicoNode *libapiv3.Node, k8sNode *kapiv1.Node) {
+	annotations := k8sNode.ObjectMeta.Annotations
+	interfaces := []libapiv3.NodeInterface{}
+	if _, ok := annotations[nodeInterfacesAnnotation]; !ok {
+		// The annotation is not present, so we don't have any interfaces to fill.
+		return
+	}
+	err := json.Unmarshal([]byte(annotations[nodeInterfacesAnnotation]), &interfaces)
+	if err != nil {
+		log.WithError(err).Error("Failed to unmarshal node interface annotation")
+		return
+	}
+	// Validate addresses in interfaces.
+	for i, iface := range interfaces {
+		for j, addr := range iface.Addresses {
+			if net.ParseIP(addr) == nil {
+				log.WithFields(log.Fields{"interface": iface.Name, "address": addr}).Error("Invalid IP address in interface, skipping")
+				// Remove invalid address
+				interfaces[i].Addresses = append(interfaces[i].Addresses[:j], interfaces[i].Addresses[j+1:]...)
+			}
+		}
+	}
+	calicoNode.Spec.Interfaces = interfaces
 }
 
 // mergeCalicoNodeIntoK8sNode takes a k8s node and a Calico node and puts the values from the Calico
@@ -431,6 +460,18 @@ func mergeCalicoNodeIntoK8sNode(calicoNode *libapiv3.Node, k8sNode *kapiv1.Node)
 		k8sNode.Annotations[nodeWireguardPublicKeyV6Annotation] = calicoNode.Status.WireguardPublicKeyV6
 	} else {
 		delete(k8sNode.Annotations, nodeWireguardPublicKeyV6Annotation)
+	}
+
+	// Handle detected interfaces
+	if calicoNode.Spec.Interfaces != nil {
+		interfaces, err := json.Marshal(calicoNode.Spec.Interfaces)
+		if err != nil {
+			log.WithError(err).Error("Error serializing interfaces")
+		} else {
+			k8sNode.Annotations[nodeInterfacesAnnotation] = string(interfaces)
+		}
+	} else {
+		delete(k8sNode.Annotations, nodeInterfacesAnnotation)
 	}
 
 	return k8sNode, nil
