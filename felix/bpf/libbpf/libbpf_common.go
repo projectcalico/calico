@@ -46,6 +46,11 @@ type TcGlobalData struct {
 	IntfIPv6       [16]byte
 	HostTunnelIPv6 [16]byte
 	JumpsV6        [40]uint32
+
+	IngressPacketRate  uint16
+	IngressPacketBurst uint16
+	EgressPacketRate   uint16
+	EgressPacketBurst  uint16
 }
 
 type XDPGlobalData struct {
