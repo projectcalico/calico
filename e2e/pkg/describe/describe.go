@@ -71,7 +71,7 @@ func WithExternalNode() any {
 	return framework.WithLabel("ExternalNode")
 }
 
-// RequiersCalicoIPAM marks tests that require a cluster with Azure IPAM.
+// RequiresCalicoIPAM marks tests that require a cluster with Azure IPAM.
 func RequiresAzureIPAM() any {
 	return framework.WithLabel("AzureIPAM")
 }
