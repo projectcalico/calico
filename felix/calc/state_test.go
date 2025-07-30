@@ -171,8 +171,11 @@ func (s State) withIPSet(name string, members []string) (newState State) {
 		delete(newState.ExpectedIPSets, name)
 	} else {
 		memSet := set.New[string]()
-		for _, ip := range members {
-			memSet.Add(strings.ToLower(ip))
+		for _, member := range members {
+			if member != strings.ToLower(member) {
+				logrus.WithField("member", member).Warn("MEMBER NOT LOWER CASE")
+			}
+			memSet.Add(member)
 		}
 		newState.ExpectedIPSets[name] = memSet
 	}
