@@ -23,7 +23,7 @@ func TestReconnection(t *testing.T) {
 	h, recorder, clientStoppedC := setUpReconnectionTest(t)
 
 	// Deliberately configure the servers with different KVs.  When the client
-	// flip flows between the two, it should sync with whichever server it
+	// flip-flops between the two, it should sync with whichever server it
 	// connects to.  This may mean synthesising a deletion for the second key.
 	h0ConfigUpdates := h[0].SendConfigUpdates(1)
 	h[0].SendStatus(api.InSync)
@@ -55,7 +55,7 @@ func TestReconnectionNewServerNotInSync(t *testing.T) {
 	h, recorder, clientStoppedC := setUpReconnectionTest(t)
 
 	// Deliberately configure the servers with different KVs.  When the client
-	// flip flows between the two, it should sync with whichever server it
+	// flip-flops between the two, it should sync with whichever server it
 	// connects to.  This may mean synthesising a deletion for the second key.
 	h0ConfigUpdates := h[0].SendConfigUpdates(2)
 	h[0].SendStatus(api.InSync)
