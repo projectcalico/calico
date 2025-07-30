@@ -134,6 +134,8 @@ function test_validate_version {
 # be set by the caller.
 ssh_host="gcloud --quiet compute ssh ${GCLOUD_ARGS} ${HOST}"
 scp_host="gcloud --quiet compute scp ${GCLOUD_ARGS}"
+
+upload_artifact="gcloud --quiet --no-user-output-enabled artifacts yum upload ${GCLOUD_REPO_NAME} --location=us-west1 --project=${GCLOUD_PROJECT:-tigera-wp-tcp-redirect}"
 rpmdir=/usr/share/nginx/html/rpm
 
 function ensure_repo_exists {
@@ -146,13 +148,36 @@ function copy_rpms_to_host {
     rootdir=$(git_repo_root)
     shopt -s nullglob
     for arch in src noarch x86_64; do
-	set -- $(find ${rootdir}/release/packaging/output/dist/rpms-el7 -name "*.$arch.rpm")
-	if test $# -gt 0; then
-	    $ssh_host -- mkdir -p $rpmdir/$reponame/$arch/
-	    $scp_host "$@" ${HOST}:$rpmdir/$reponame/$arch/
-	fi
+        set -- $(find ${rootdir}/release/packaging/output/dist/rpms-el7 -name "*.$arch.rpm")
+        if test $# -gt 0; then
+            $ssh_host -- mkdir -p $rpmdir/$reponame/$arch/
+            $scp_host "$@" ${HOST}:$rpmdir/$reponame/$arch/
+        fi
     done
 }
+
+function copy_rpms_to_artifact_registry {
+    reponame=$1
+    rootdir=$(git_repo_root)
+    upload_errors=""
+    shopt -s nullglob
+    echo "Uploading RPMs to Google Artifact Registry"
+    for rpmfile in $(find ${rootdir}/release/packaging/output/dist/rpms-el7 -name "*.rpm" | sort); do
+        filename=$(basename ${rpmfile})
+        echo "  Uploading ${filename}"
+        ${upload_artifact} --source="${rpmfile}" || upload_errors="${upload_errors} ${filename}"
+    done
+
+    if [[ ${upload_errors} != "" ]]; then
+        echo >&2 "Uploading RPMs complete, but the following files failed to upload to artifact registry:"
+        for file in $upload_errors; do
+            echo >&2 "  ${file}"
+        done
+        exit 1
+    fi
+    echo "Uploading RPMs complete"
+}
+
 
 # Clean and update repository metadata.  This includes ensuring that
 # all RPMs are signed with the Project Calico Maintainers secret key,
