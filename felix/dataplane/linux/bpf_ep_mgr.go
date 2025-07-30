@@ -214,6 +214,9 @@ func (i *bpfInterfaceState) clearJumps() {
 
 var zeroIface bpfInterface = func() bpfInterface {
 	var i bpfInterface
+	// The uninitialized value for QoS packet rate tokens is '-1'
+	i.dpState.qosInfo.packetRateTokens[hook.Ingress] = -1
+	i.dpState.qosInfo.packetRateTokens[hook.Egress] = -1
 	i.dpState.clearJumps()
 	return i
 }()
@@ -256,10 +259,16 @@ type bpfInterfaceState struct {
 	filterIdx   [hook.Count]int
 	v4Readiness ifaceReadiness
 	v6Readiness ifaceReadiness
+	qosInfo     bpfInterfaceQoSInfo
 }
 
 type bpfInterfaceJumpIndices struct {
 	policyIdx [hook.Count]int
+}
+
+type bpfInterfaceQoSInfo struct {
+	packetRateTokens     [hook.Count]int16
+	packetRateLastUpdate [hook.Count]uint64
 }
 
 func (d *bpfInterfaceJumpIndices) clearJumps() {
@@ -1002,7 +1011,7 @@ func (m *bpfEndpointManager) getIfTypeFlags(name string, ifaceType IfaceType) ui
 func (m *bpfEndpointManager) addIgnoredHostIfaceToIfState(name string, ifIndex int) {
 	k := ifstate.NewKey(uint32(ifIndex))
 	flags := ifstate.FlgNotManaged
-	v := ifstate.NewValue(flags, name, -1, -1, -1, -1, -1, -1, -1, -1)
+	v := ifstate.NewValue(flags, name, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 0, 0)
 	m.ifStateMap.Desired().Set(k, v)
 }
 
@@ -1014,6 +1023,16 @@ func (m *bpfEndpointManager) deleteIgnoredHostIfaceFromIfState(ifIndex int) {
 func (m *bpfEndpointManager) updateIfaceStateMap(name string, iface *bpfInterface) {
 	k := ifstate.NewKey(uint32(iface.info.ifIndex))
 	if iface.info.ifaceIsUp() {
+		// Copy packet rate QoS state from the ifstate map if this is a workload
+		if m.isWorkloadIface(name) {
+			ifstateVal, exists := m.ifStateMap.Desired().Get(k)
+			if exists {
+				iface.dpState.qosInfo.packetRateTokens[hook.Ingress] = ifstateVal.IngressPacketRateTokens()
+				iface.dpState.qosInfo.packetRateTokens[hook.Egress] = ifstateVal.EgressPacketRateTokens()
+				iface.dpState.qosInfo.packetRateLastUpdate[hook.Ingress] = ifstateVal.IngressPacketRateLastUpdate()
+				iface.dpState.qosInfo.packetRateLastUpdate[hook.Egress] = ifstateVal.EgressPacketRateLastUpdate()
+			}
+		}
 		flags := m.getIfTypeFlags(name, iface.info.ifaceType)
 		if iface.dpState.v4Readiness != ifaceNotReady {
 			flags |= ifstate.FlgIPv4Ready
@@ -1031,6 +1050,10 @@ func (m *bpfEndpointManager) updateIfaceStateMap(name string, iface *bpfInterfac
 			iface.dpState.v6.policyIdx[hook.Egress],
 			iface.dpState.filterIdx[hook.Ingress],
 			iface.dpState.filterIdx[hook.Egress],
+			iface.dpState.qosInfo.packetRateTokens[hook.Ingress],
+			iface.dpState.qosInfo.packetRateTokens[hook.Egress],
+			iface.dpState.qosInfo.packetRateLastUpdate[hook.Ingress],
+			iface.dpState.qosInfo.packetRateLastUpdate[hook.Egress],
 		)
 		m.ifStateMap.Desired().Set(k, v)
 	} else {
@@ -2328,8 +2351,21 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 
 	ap := m.calculateTCAttachPoint(ifaceName)
 	ap.IfIndex = ifindex
-	if wep != nil && wep.QosControls != nil && wep.QosControls.EgressBandwidth > 0 {
-		ap.SkipEgressRedirect = true
+	if wep != nil && wep.QosControls != nil {
+		if wep.QosControls.EgressBandwidth > 0 {
+			ap.SkipEgressRedirect = true
+		}
+
+		if wep.QosControls.IngressPacketRate > 0 {
+			// Safe to cast to uint16 since the maximum value is 10000
+			ap.IngressPacketRate = uint16(wep.QosControls.IngressPacketRate)
+			ap.IngressPacketBurst = uint16(wep.QosControls.IngressPacketBurst)
+		}
+		if wep.QosControls.EgressPacketRate > 0 {
+			// Safe to cast to uint16 since the maximum value is 10000
+			ap.EgressPacketRate = uint16(wep.QosControls.EgressPacketRate)
+			ap.EgressPacketBurst = uint16(wep.QosControls.EgressPacketBurst)
+		}
 	}
 
 	if err := m.wepStateFillJumps(ap, &state); err != nil {

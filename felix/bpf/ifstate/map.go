@@ -34,7 +34,7 @@ func SetMapSize(size int) {
 
 const (
 	KeySize    = 4
-	ValueSize  = 4 + 16 + 3*4 + 3*4 + 2*4
+	ValueSize  = 4 + 16 + 3*4 + 3*4 + 2*4 + 2*2 + 2*8
 	MaxEntries = 1000
 )
 
@@ -74,7 +74,7 @@ var MapParams = maps.MapParameters{
 	MaxEntries:   MaxEntries,
 	Name:         "cali_iface",
 	Flags:        unix.BPF_F_NO_PREALLOC,
-	Version:      4,
+	Version:      5,
 	UpdatedByBPF: false,
 }
 
@@ -123,6 +123,10 @@ func NewValue(
 	egressPolIPv6,
 	tcIngressFilter,
 	tcEgressFilter int,
+	ingressPacketRateTokens,
+	egressPacketRateTokens int16,
+	ingressPacketRateLastUpdate,
+	egressPacketRateLastUpdate uint64,
 ) Value {
 	var v Value
 
@@ -136,6 +140,10 @@ func NewValue(
 	binary.LittleEndian.PutUint32(v[4+16+20:4+16+24], uint32(egressPolIPv6))
 	binary.LittleEndian.PutUint32(v[4+16+24:4+16+28], uint32(tcIngressFilter))
 	binary.LittleEndian.PutUint32(v[4+16+28:4+16+32], uint32(tcEgressFilter))
+	binary.LittleEndian.PutUint16(v[4+16+32:4+16+34], uint16(ingressPacketRateTokens))
+	binary.LittleEndian.PutUint16(v[4+16+34:4+16+36], uint16(egressPacketRateTokens))
+	binary.LittleEndian.PutUint64(v[4+16+36:4+16+44], uint64(ingressPacketRateLastUpdate))
+	binary.LittleEndian.PutUint64(v[4+16+44:4+16+52], uint64(egressPacketRateLastUpdate))
 
 	return v
 }
@@ -184,6 +192,22 @@ func (v Value) TcEgressFilter() int {
 	return int(int32(binary.LittleEndian.Uint32(v[4+16+28 : 4+16+32])))
 }
 
+func (v Value) IngressPacketRateTokens() int16 {
+	return int16(binary.LittleEndian.Uint16(v[4+16+32 : 4+16+34]))
+}
+
+func (v Value) EgressPacketRateTokens() int16 {
+	return int16(binary.LittleEndian.Uint16(v[4+16+34 : 4+16+36]))
+}
+
+func (v Value) IngressPacketRateLastUpdate() uint64 {
+	return binary.LittleEndian.Uint64(v[4+16+36 : 4+16+44])
+}
+
+func (v Value) EgressPacketRateLastUpdate() uint64 {
+	return binary.LittleEndian.Uint64(v[4+16+44 : 4+16+52])
+}
+
 func (v Value) String() string {
 	fstr := ""
 	f := v.Flags()
@@ -200,8 +224,8 @@ func (v Value) String() string {
 	}
 
 	return fmt.Sprintf(
-		"{flags: %s XDPPolicyV4: %d, IngressPolicyV4: %d, EgressPolicyV4: %d, XDPPolicyV6: %d, IngressPolicyV6: %d, EgressPolicyV6: %d, IngressFilter: %d, EgressFilter: %d, name: %s}",
-		fstr, v.XDPPolicyV4(), v.IngressPolicyV4(), v.EgressPolicyV4(), v.XDPPolicyV6(), v.IngressPolicyV6(), v.EgressPolicyV6(), v.TcIngressFilter(), v.TcEgressFilter(), v.IfName())
+		"{flags: %s XDPPolicyV4: %d, IngressPolicyV4: %d, EgressPolicyV4: %d, XDPPolicyV6: %d, IngressPolicyV6: %d, EgressPolicyV6: %d, IngressFilter: %d, EgressFilter: %d, IngressPacketRateTokens: %d, EgressPacketRateTokens: %d, IngressPacketRateLastUpdate: %d, EgressPacketRateLastUpdate: %d, name: %s}",
+		fstr, v.XDPPolicyV4(), v.IngressPolicyV4(), v.EgressPolicyV4(), v.XDPPolicyV6(), v.IngressPolicyV6(), v.EgressPolicyV6(), v.TcIngressFilter(), v.TcEgressFilter(), v.IngressPacketRateTokens(), v.EgressPacketRateTokens(), v.IngressPacketRateLastUpdate(), v.EgressPacketRateLastUpdate(), v.IfName())
 }
 
 func ValueFromBytes(b []byte) Value {

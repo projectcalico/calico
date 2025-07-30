@@ -501,7 +501,7 @@ skip_fib:
 	goto allow;
 
 deny:
-	rc =  TC_ACT_SHOT;
+	rc = TC_ACT_SHOT;
 
 allow:
 	if (CALI_LOG_LEVEL_INFO >= CALI_LOG_LEVEL_INFO || PROFILING) {
