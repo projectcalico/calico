@@ -3220,6 +3220,7 @@ type QoSControls struct {
 	EgressMinburst        int64                  `protobuf:"varint,12,opt,name=EgressMinburst,proto3" json:"EgressMinburst,omitempty"`
 	IngressPacketBurst    int64                  `protobuf:"varint,13,opt,name=IngressPacketBurst,proto3" json:"IngressPacketBurst,omitempty"`
 	EgressPacketBurst     int64                  `protobuf:"varint,14,opt,name=EgressPacketBurst,proto3" json:"EgressPacketBurst,omitempty"`
+	DSCP                  int32                  `protobuf:"varint,15,opt,name=DSCP,proto3" json:"DSCP,omitempty"`
 	unknownFields         protoimpl.UnknownFields
 	sizeCache             protoimpl.SizeCache
 }
@@ -3348,6 +3349,13 @@ func (x *QoSControls) GetIngressPacketBurst() int64 {
 func (x *QoSControls) GetEgressPacketBurst() int64 {
 	if x != nil {
 		return x.EgressPacketBurst
+	}
+	return 0
+}
+
+func (x *QoSControls) GetDSCP() int32 {
+	if x != nil {
+		return x.DSCP
 	}
 	return 0
 }
@@ -6547,7 +6555,7 @@ const file_felixbackend_proto_rawDesc = "" +
 	"skip_redir\x18\x0e \x01(\v2\x1b.felix.WorkloadBpfSkipRedirR\tskipRedir\x1a>\n" +
 	"\x10AnnotationsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xef\x04\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x83\x05\n" +
 	"\vQoSControls\x12*\n" +
 	"\x10IngressBandwidth\x18\x01 \x01(\x03R\x10IngressBandwidth\x12(\n" +
 	"\x0fEgressBandwidth\x18\x02 \x01(\x03R\x0fEgressBandwidth\x12\"\n" +
@@ -6563,7 +6571,8 @@ const file_felixbackend_proto_rawDesc = "" +
 	"\x0fIngressMinburst\x18\v \x01(\x03R\x0fIngressMinburst\x12&\n" +
 	"\x0eEgressMinburst\x18\f \x01(\x03R\x0eEgressMinburst\x12.\n" +
 	"\x12IngressPacketBurst\x18\r \x01(\x03R\x12IngressPacketBurst\x12,\n" +
-	"\x11EgressPacketBurst\x18\x0e \x01(\x03R\x11EgressPacketBurst\"2\n" +
+	"\x11EgressPacketBurst\x18\x0e \x01(\x03R\x11EgressPacketBurst\x12\x12\n" +
+	"\x04DSCP\x18\x0f \x01(\x05R\x04DSCP\"2\n" +
 	"\fLocalBGPPeer\x12\"\n" +
 	"\rbgp_peer_name\x18\x01 \x01(\tR\vbgpPeerName\"C\n" +
 	"\x16WorkloadEndpointRemove\x12)\n" +

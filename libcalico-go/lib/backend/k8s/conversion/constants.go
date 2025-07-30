@@ -65,4 +65,5 @@ const (
 	AnnotationQoSEgressPacketBurst     = "qos.projectcalico.org/egressPacketBurst"
 	AnnotationQoSIngressMaxConnections = "qos.projectcalico.org/ingressMaxConnections"
 	AnnotationQoSEgressMaxConnections  = "qos.projectcalico.org/egressMaxConnections"
+	AnnotationQoSEgressDSCP            = "qos.projectcalico.org/dscp"
 )

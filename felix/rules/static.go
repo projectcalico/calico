@@ -20,6 +20,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
+	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/nftables"
 	"github.com/projectcalico/calico/felix/proto"
@@ -926,7 +927,7 @@ func (r *DefaultRuleRenderer) StaticNATPostroutingChains(ipVersion uint8) []*gen
 		tunnelIfaces = append(tunnelIfaces, "vxlan.calico")
 	}
 	if ipVersion == 6 && r.VXLANEnabledV6 && len(r.VXLANTunnelAddressV6) > 0 {
-		tunnelIfaces = append(tunnelIfaces, "vxlan-v6.calico")
+		tunnelIfaces = append(tunnelIfaces, dataplanedefs.VXLANIfaceNameV6)
 	}
 	if ipVersion == 4 && r.WireguardEnabled && len(r.WireguardInterfaceName) > 0 {
 		// Wireguard is assigned an IP dynamically and without restarting Felix. Just add the interface if we have
@@ -1063,6 +1064,16 @@ func (r *DefaultRuleRenderer) StaticManglePostroutingChain(ipVersion uint8) *gen
 	// Note, we use RETURN as the Allow action in this chain, rather than ACCEPT because the
 	// mangle table is typically used, if at all, for packet manipulations that might need to
 	// apply to our allowed traffic.
+
+	ipConf := r.ipSetConfig(ipVersion)
+	allIPsSetName := ipConf.NameForMainIPSet(IPSetIDAllPools)
+	rules = append(rules, generictables.Rule{
+		Match: r.NewMatch().
+			SourceIPSet(allIPsSetName).
+			NotDestIPSet(allIPsSetName),
+		Action:  r.Jump(ChainQosPolicy),
+		Comment: []string{"QoS policy for traffic leaving cluster"},
+	})
 
 	// Allow immediately if IptablesMarkAccept is set.  Our filter-FORWARD chain sets this for
 	// any packets that reach the end of that chain.  The principle is that we don't want to

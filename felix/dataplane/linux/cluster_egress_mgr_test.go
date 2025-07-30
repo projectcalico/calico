@@ -27,10 +27,11 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
-var _ = Describe("Masquerade manager", func() {
+var _ = Describe("Cluster egress manager - Masquerade", func() {
 	var (
-		masqMgr      *masqManager
+		masqMgr      *clusterEgressManager
 		natTable     *mockTable
+		mangleTable  *mockTable
 		ipSets       *dpsets.MockIPSets
 		ruleRenderer rules.RuleRenderer
 	)
@@ -38,6 +39,7 @@ var _ = Describe("Masquerade manager", func() {
 	BeforeEach(func() {
 		ipSets = dpsets.NewMockIPSets()
 		natTable = newMockTable("nat")
+		mangleTable = newMockTable("mangle")
 		ruleRenderer = rules.NewRenderer(rules.Config{
 			IPSetConfigV4: ipsets.NewIPVersionConfig(
 				ipsets.IPFamilyV4,
@@ -52,7 +54,7 @@ var _ = Describe("Masquerade manager", func() {
 			MarkDrop:     0x10,
 			MarkEndpoint: 0x11110000,
 		})
-		masqMgr = newMasqManager(ipSets, natTable, ruleRenderer, 1024, 4)
+		masqMgr = newClusterEgressManager(ipSets, natTable, mangleTable, ruleRenderer, 1024, 4)
 	})
 
 	It("should create its IP sets on startup", func() {
@@ -223,6 +225,164 @@ var _ = Describe("Masquerade manager", func() {
 		It("should program empty chain", func() {
 			natTable.checkChains([][]*generictables.Chain{{{
 				Name:  "cali-nat-outgoing",
+				Rules: nil,
+			}}})
+		})
+	})
+
+	Describe("QoS policy: after adding a workload with DSCP annotation", func() {
+		BeforeEach(func() {
+			masqMgr.OnUpdate(&proto.IPAMPoolUpdate{
+				Id: "pool-1",
+				Pool: &proto.IPAMPool{
+					Cidr: "10.0.0.0/16",
+				},
+			})
+			err := masqMgr.CompleteDeferredWork()
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("should add the pool to the all IP set", func() {
+			Expect(ipSets.Members["all-ipam-pools"]).To(Equal(set.From("10.0.0.0/16")))
+		})
+
+		It("should program QoS policy chain with no rule", func() {
+			mangleTable.checkChains([][]*generictables.Chain{{{
+				Name:  rules.ChainQosPolicy,
+				Rules: nil,
+			}}})
+		})
+
+		It("should handle workload updates correctly", func() {
+			By("sending workload endpoint updates with DSCP annotion")
+			masqMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
+				Id: &wlEPID1,
+				Endpoint: &proto.WorkloadEndpoint{
+					State:    "active",
+					Name:     "cali12345-ab",
+					Ipv4Nets: []string{"10.0.240.2/24"},
+					Ipv6Nets: []string{"2001:db8:2::2/128"},
+					QosControls: &proto.QoSControls{
+						DSCP: 44,
+					},
+				},
+			})
+
+			err := masqMgr.CompleteDeferredWork()
+			Expect(err).NotTo(HaveOccurred())
+
+			mangleTable.checkChains([][]*generictables.Chain{{{
+				Name: rules.ChainQosPolicy,
+				Rules: []generictables.Rule{
+					{
+						Action: iptables.DSCPAction{Value: 44},
+						Match: iptables.Match().
+							SourceNet("10.0.240.2"),
+					},
+				},
+			}}})
+
+			By("sending another workload endpoint updates with DSCP annotion")
+			masqMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
+				Id: &wlEPID2,
+				Endpoint: &proto.WorkloadEndpoint{
+					State:    "active",
+					Name:     "cali2",
+					Ipv4Nets: []string{"10.0.240.3/24"},
+					Ipv6Nets: []string{"2001:db8:2::3/128"},
+					QosControls: &proto.QoSControls{
+						DSCP: 20,
+					},
+				},
+			})
+
+			err = masqMgr.CompleteDeferredWork()
+			Expect(err).NotTo(HaveOccurred())
+
+			mangleTable.checkChains([][]*generictables.Chain{{{
+				Name: rules.ChainQosPolicy,
+				Rules: []generictables.Rule{
+					{
+						Action: iptables.DSCPAction{Value: 44},
+						Match: iptables.Match().
+							SourceNet("10.0.240.2"),
+					},
+					{
+						Action: iptables.DSCPAction{Value: 20},
+						Match: iptables.Match().
+							SourceNet("10.0.240.3"),
+					},
+				},
+			}}})
+
+			By("verifying update to DSCP value takes effect")
+			masqMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
+				Id: &wlEPID1,
+				Endpoint: &proto.WorkloadEndpoint{
+					State:    "active",
+					Name:     "cali12345-ab",
+					Ipv4Nets: []string{"10.0.240.2/24"},
+					Ipv6Nets: []string{"2001:db8:2::2/128"},
+					QosControls: &proto.QoSControls{
+						DSCP: 13,
+					},
+				},
+			})
+
+			err = masqMgr.CompleteDeferredWork()
+			Expect(err).NotTo(HaveOccurred())
+
+			mangleTable.checkChains([][]*generictables.Chain{{{
+				Name: rules.ChainQosPolicy,
+				Rules: []generictables.Rule{
+					{
+						Action: iptables.DSCPAction{Value: 13},
+						Match: iptables.Match().
+							SourceNet("10.0.240.2"),
+					},
+					{
+						Action: iptables.DSCPAction{Value: 20},
+						Match: iptables.Match().
+							SourceNet("10.0.240.3"),
+					},
+				},
+			}}})
+
+			By("verifying QoS policy rules removed when annotation is removed")
+			masqMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
+				Id: &wlEPID1,
+				Endpoint: &proto.WorkloadEndpoint{
+					State:    "active",
+					Name:     "cali12345-ab",
+					Ipv4Nets: []string{"10.0.240.2/24"},
+					Ipv6Nets: []string{"2001:db8:2::2/128"},
+				},
+			})
+
+			err = masqMgr.CompleteDeferredWork()
+			Expect(err).NotTo(HaveOccurred())
+
+			mangleTable.checkChains([][]*generictables.Chain{{{
+				Name: rules.ChainQosPolicy,
+				Rules: []generictables.Rule{
+					{
+						Action: iptables.DSCPAction{Value: 20},
+						Match: iptables.Match().
+							SourceNet("10.0.240.3"),
+					},
+				},
+			}}})
+
+			By("verifying QoS policy rules removed when workload is removed")
+			masqMgr.OnUpdate(&proto.WorkloadEndpointRemove{
+				Id: &wlEPID2,
+			})
+
+			err = masqMgr.CompleteDeferredWork()
+			Expect(err).NotTo(HaveOccurred())
+
+			mangleTable.checkChains([][]*generictables.Chain{{{
+				Name:  rules.ChainQosPolicy,
 				Rules: nil,
 			}}})
 		})
