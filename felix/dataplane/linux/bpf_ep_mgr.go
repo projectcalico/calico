@@ -267,8 +267,8 @@ type bpfInterfaceJumpIndices struct {
 }
 
 type bpfInterfaceQoSInfo struct {
-	packetRateTokens [hook.Count]int16
-	packetLastTime   [hook.Count]uint64
+	packetRateTokens     [hook.Count]int16
+	packetRateLastUpdate [hook.Count]uint64
 }
 
 func (d *bpfInterfaceJumpIndices) clearJumps() {
@@ -1023,6 +1023,16 @@ func (m *bpfEndpointManager) deleteIgnoredHostIfaceFromIfState(ifIndex int) {
 func (m *bpfEndpointManager) updateIfaceStateMap(name string, iface *bpfInterface) {
 	k := ifstate.NewKey(uint32(iface.info.ifIndex))
 	if iface.info.ifaceIsUp() {
+		// Copy packet rate QoS state from the ifstate map if this is a workload
+		if m.isWorkloadIface(name) {
+			ifstateVal, exists := m.ifStateMap.Desired().Get(k)
+			if exists {
+				iface.dpState.qosInfo.packetRateTokens[hook.Ingress] = ifstateVal.IngressPacketRateTokens()
+				iface.dpState.qosInfo.packetRateTokens[hook.Egress] = ifstateVal.EgressPacketRateTokens()
+				iface.dpState.qosInfo.packetRateLastUpdate[hook.Ingress] = ifstateVal.IngressPacketRateLastUpdate()
+				iface.dpState.qosInfo.packetRateLastUpdate[hook.Egress] = ifstateVal.EgressPacketRateLastUpdate()
+			}
+		}
 		flags := m.getIfTypeFlags(name, iface.info.ifaceType)
 		if iface.dpState.v4Readiness != ifaceNotReady {
 			flags |= ifstate.FlgIPv4Ready
@@ -1042,8 +1052,8 @@ func (m *bpfEndpointManager) updateIfaceStateMap(name string, iface *bpfInterfac
 			iface.dpState.filterIdx[hook.Egress],
 			iface.dpState.qosInfo.packetRateTokens[hook.Ingress],
 			iface.dpState.qosInfo.packetRateTokens[hook.Egress],
-			iface.dpState.qosInfo.packetLastTime[hook.Ingress],
-			iface.dpState.qosInfo.packetLastTime[hook.Egress],
+			iface.dpState.qosInfo.packetRateLastUpdate[hook.Ingress],
+			iface.dpState.qosInfo.packetRateLastUpdate[hook.Egress],
 		)
 		m.ifStateMap.Desired().Set(k, v)
 	} else {
