@@ -15,7 +15,6 @@
 package calc
 
 import (
-	"fmt"
 	"strings"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
@@ -23,7 +22,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/config"
 	"github.com/projectcalico/calico/felix/ip"
-	"github.com/projectcalico/calico/felix/labelindex"
+	"github.com/projectcalico/calico/felix/labelindex/ipsetmember"
 	"github.com/projectcalico/calico/felix/multidict"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/types"
@@ -57,8 +56,8 @@ type EventSequencer struct {
 	// updates and generate updates in dependency order.
 	pendingAddedIPSets           map[string]proto.IPSetUpdate_IPSetType
 	pendingRemovedIPSets         set.Set[string]
-	pendingAddedIPSetMembers     multidict.Multidict[string, labelindex.IPSetMember]
-	pendingRemovedIPSetMembers   multidict.Multidict[string, labelindex.IPSetMember]
+	pendingAddedIPSetMembers     multidict.Multidict[string, ipsetmember.IPSetMember]
+	pendingRemovedIPSetMembers   multidict.Multidict[string, ipsetmember.IPSetMember]
 	pendingPolicyUpdates         map[model.PolicyKey]*ParsedRules
 	pendingPolicyDeletes         set.Set[model.PolicyKey]
 	pendingProfileUpdates        map[model.ProfileRulesKey]*ParsedRules
@@ -138,8 +137,8 @@ func NewEventSequencer(conf configInterface) *EventSequencer {
 		config:                     conf,
 		pendingAddedIPSets:         map[string]proto.IPSetUpdate_IPSetType{},
 		pendingRemovedIPSets:       set.New[string](),
-		pendingAddedIPSetMembers:   multidict.New[string, labelindex.IPSetMember](),
-		pendingRemovedIPSetMembers: multidict.New[string, labelindex.IPSetMember](),
+		pendingAddedIPSetMembers:   multidict.New[string, ipsetmember.IPSetMember](),
+		pendingRemovedIPSetMembers: multidict.New[string, ipsetmember.IPSetMember](),
 
 		pendingPolicyUpdates:         map[model.PolicyKey]*ParsedRules{},
 		pendingPolicyDeletes:         set.New[model.PolicyKey](),
@@ -221,7 +220,7 @@ func (buf *EventSequencer) OnIPSetRemoved(setID string) {
 	buf.pendingRemovedIPSetMembers.DiscardKey(setID)
 }
 
-func (buf *EventSequencer) OnIPSetMemberAdded(setID string, member labelindex.IPSetMember) {
+func (buf *EventSequencer) OnIPSetMemberAdded(setID string, member ipsetmember.IPSetMember) {
 	log.Debugf("IP set %v now contains %v", setID, member)
 	sent := buf.sentIPSets.Contains(setID)
 	_, updatePending := buf.pendingAddedIPSets[setID]
@@ -235,7 +234,7 @@ func (buf *EventSequencer) OnIPSetMemberAdded(setID string, member labelindex.IP
 	}
 }
 
-func (buf *EventSequencer) OnIPSetMemberRemoved(setID string, member labelindex.IPSetMember) {
+func (buf *EventSequencer) OnIPSetMemberRemoved(setID string, member ipsetmember.IPSetMember) {
 	log.Debugf("IP set %v no longer contains %v", setID, member)
 	sent := buf.sentIPSets.Contains(setID)
 	_, updatePending := buf.pendingAddedIPSets[setID]
@@ -825,8 +824,8 @@ func (buf *EventSequencer) flushAddedIPSets() {
 	for setID, setType := range buf.pendingAddedIPSets {
 		log.WithField("setID", setID).Debug("Flushing added IP set")
 		members := make([]string, 0)
-		buf.pendingAddedIPSetMembers.Iter(setID, func(member labelindex.IPSetMember) {
-			members = append(members, memberToProto(member))
+		buf.pendingAddedIPSetMembers.Iter(setID, func(member ipsetmember.IPSetMember) {
+			members = append(members, member.ToProtobufFormat())
 		})
 		buf.pendingAddedIPSetMembers.DiscardKey(setID)
 		buf.Callback(&proto.IPSetUpdate{
@@ -837,21 +836,6 @@ func (buf *EventSequencer) flushAddedIPSets() {
 		buf.sentIPSets.Add(setID)
 		delete(buf.pendingAddedIPSets, setID)
 	}
-}
-
-func memberToProto(member labelindex.IPSetMember) string {
-	switch member.Protocol {
-	case labelindex.ProtocolNone:
-		return member.CIDR.String()
-	case labelindex.ProtocolTCP:
-		return fmt.Sprintf("%s,tcp:%d", member.CIDR.Addr(), member.PortNumber)
-	case labelindex.ProtocolUDP:
-		return fmt.Sprintf("%s,udp:%d", member.CIDR.Addr(), member.PortNumber)
-	case labelindex.ProtocolSCTP:
-		return fmt.Sprintf("%s,sctp:%d", member.CIDR.Addr(), member.PortNumber)
-	}
-	log.WithField("member", member).Panic("Unknown IP set member type")
-	return ""
 }
 
 func (buf *EventSequencer) Flush() {
@@ -935,11 +919,11 @@ func (buf *EventSequencer) flushAddsOrRemoves(setID string) {
 	deltaUpdate := proto.IPSetDeltaUpdate{
 		Id: setID,
 	}
-	buf.pendingAddedIPSetMembers.Iter(setID, func(member labelindex.IPSetMember) {
-		deltaUpdate.AddedMembers = append(deltaUpdate.AddedMembers, memberToProto(member))
+	buf.pendingAddedIPSetMembers.Iter(setID, func(member ipsetmember.IPSetMember) {
+		deltaUpdate.AddedMembers = append(deltaUpdate.AddedMembers, member.ToProtobufFormat())
 	})
-	buf.pendingRemovedIPSetMembers.Iter(setID, func(member labelindex.IPSetMember) {
-		deltaUpdate.RemovedMembers = append(deltaUpdate.RemovedMembers, memberToProto(member))
+	buf.pendingRemovedIPSetMembers.Iter(setID, func(member ipsetmember.IPSetMember) {
+		deltaUpdate.RemovedMembers = append(deltaUpdate.RemovedMembers, member.ToProtobufFormat())
 	})
 	buf.pendingAddedIPSetMembers.DiscardKey(setID)
 	buf.pendingRemovedIPSetMembers.DiscardKey(setID)

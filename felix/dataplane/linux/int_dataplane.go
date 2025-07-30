@@ -71,7 +71,7 @@ import (
 	"github.com/projectcalico/calico/felix/iptables"
 	"github.com/projectcalico/calico/felix/iptables/cmdshim"
 	"github.com/projectcalico/calico/felix/jitter"
-	"github.com/projectcalico/calico/felix/labelindex"
+	"github.com/projectcalico/calico/felix/labelindex/ipsetmember"
 	"github.com/projectcalico/calico/felix/linkaddrs"
 	"github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/felix/netlinkshim"
@@ -2114,16 +2114,16 @@ func (d *InternalDataplane) setUpIptablesNormal() {
 	}
 }
 
-func stringToProtocol(protocol string) (labelindex.IPSetPortProtocol, error) {
+func stringToProtocol(protocol string) (ipsetmember.Protocol, error) {
 	switch protocol {
 	case "tcp":
-		return labelindex.ProtocolTCP, nil
+		return ipsetmember.ProtocolTCP, nil
 	case "udp":
-		return labelindex.ProtocolUDP, nil
+		return ipsetmember.ProtocolUDP, nil
 	case "sctp":
-		return labelindex.ProtocolSCTP, nil
+		return ipsetmember.ProtocolSCTP, nil
 	}
-	return labelindex.ProtocolNone, fmt.Errorf("unknown protocol %q", protocol)
+	return ipsetmember.ProtocolNone, fmt.Errorf("unknown protocol %q", protocol)
 }
 
 func (d *InternalDataplane) setXDPFailsafePorts() error {
