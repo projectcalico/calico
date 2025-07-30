@@ -18,6 +18,7 @@ import (
 	"strings"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/config"
@@ -402,6 +403,7 @@ func ModelWorkloadEndpointToProto(ep *model.WorkloadEndpoint, peerData *Endpoint
 	}
 	var qosControls *proto.QoSControls
 	if ep.QoSControls != nil {
+		logrus.Infof("marva0 %v", ep.QoSControls)
 		qosControls = &proto.QoSControls{
 			IngressBandwidth:      ep.QoSControls.IngressBandwidth,
 			EgressBandwidth:       ep.QoSControls.EgressBandwidth,
@@ -417,7 +419,9 @@ func ModelWorkloadEndpointToProto(ep *model.WorkloadEndpoint, peerData *Endpoint
 			EgressPacketBurst:     ep.QoSControls.EgressPacketBurst,
 			IngressMaxConnections: ep.QoSControls.IngressMaxConnections,
 			EgressMaxConnections:  ep.QoSControls.EgressMaxConnections,
+			DSCP:                  int32(ep.QoSControls.DSCP.ToUint8()), // TODO: (mazdak): we need to convert string values to int
 		}
+		logrus.Infof("marva1 %v", qosControls.DSCP)
 	}
 
 	var localBGPPeer *proto.LocalBGPPeer
