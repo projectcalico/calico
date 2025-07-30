@@ -48,6 +48,10 @@ func init() {
 	nextID.Store(rand.Uint64() << 32)
 }
 
+func allocateConnID() uint64 {
+	return nextID.Add(1)
+}
+
 const (
 	defaultReadtimeout  = 30 * time.Second
 	defaultWriteTimeout = 10 * time.Second
@@ -149,7 +153,7 @@ func New(
 }
 
 func (s *SyncerClient) refreshConnID() {
-	s.connID = nextID.Add(1)
+	s.connID = allocateConnID()
 	s.logCxt.Data["myID"] = s.connID
 }
 

@@ -601,8 +601,9 @@ configRetry:
 			break
 		}
 		healthAggregator.Report(healthName, &health.HealthReport{Live: true, Ready: true})
-		// Up-to-date Typha client will refuse to connect unless Typha signals
-		// that it supports node resource updates.
+
+		// Typha client now requires support for node updates and will refuse
+		// to connect to an (ancient) Typha that does not support them.
 		configParams.SetUseNodeResourceUpdates(true)
 
 		go func() {
