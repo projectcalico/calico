@@ -25,7 +25,7 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
-	discoverv1 "k8s.io/api/discovery/v1"
+	discoveryv1 "k8s.io/api/discovery/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 
@@ -222,7 +222,7 @@ func (d *Discoverer) discoverTyphaAddrs() ([]Typha, error) {
 		return nil, err
 	}
 
-	var endpointSlices []discoverv1.EndpointSlice
+	var endpointSlices []discoveryv1.EndpointSlice
 	for _, ep := range epsList.Items {
 		if strings.HasPrefix(ep.Name, d.k8sServiceName) {
 			endpointSlices = append(endpointSlices, ep)

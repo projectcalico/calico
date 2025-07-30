@@ -17,10 +17,10 @@ package daemon
 import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	v1 "k8s.io/api/core/v1"
+	discoveryv1 "k8s.io/api/discovery/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
-	"k8s.io/kubernetes/pkg/apis/core"
-	discoveryv1 "k8s.io/kubernetes/pkg/apis/discovery"
 	"k8s.io/utils/ptr"
 
 	"github.com/projectcalico/calico/felix/config"
@@ -30,13 +30,13 @@ import (
 var _ = Describe("Typha address discovery", func() {
 	var (
 		configParams *config.Config
-		endpointsUDP *discoveryv1.EndpointSlice
-		endpointsTCP *discoveryv1.EndpointSlice
+		endpoints1   *discoveryv1.EndpointSlice
+		endpoints2   *discoveryv1.EndpointSlice
 		k8sClient    *fake.Clientset
 	)
 
 	refreshClient := func() {
-		k8sClient = fake.NewClientset(endpointsUDP, endpointsTCP)
+		k8sClient = fake.NewClientset(endpoints1, endpoints2)
 	}
 
 	BeforeEach(func() {
@@ -46,17 +46,21 @@ var _ = Describe("Typha address discovery", func() {
 		}, config.EnvironmentVariable)
 		Expect(err).NotTo(HaveOccurred())
 
-		udp := core.ProtocolUDP
-		tcp := core.ProtocolTCP
+		udp := v1.ProtocolUDP
+		tcp := v1.ProtocolTCP
 
-		endpointsUDP = &discoveryv1.EndpointSlice{
+		endpoints1 = &discoveryv1.EndpointSlice{
+			TypeMeta: metav1.TypeMeta{
+				APIVersion: "v1",
+				Kind:       "Endpoints",
+			},
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      "calico-typha-service-udp",
+				Name:      "calico-typha-service-abcde",
 				Namespace: "kube-system",
 			},
 			Endpoints: []discoveryv1.Endpoint{
 				{
-					Addresses: []string{"10.0.0.4", "10.0.0.2", "10.0.0.5"},
+					Addresses: []string{"10.0.0.4"},
 				},
 			},
 			Ports: []discoveryv1.EndpointPort{
@@ -68,17 +72,33 @@ var _ = Describe("Typha address discovery", func() {
 			},
 		}
 
-		endpointsTCP = &discoveryv1.EndpointSlice{
+		endpoints2 = &discoveryv1.EndpointSlice{
+			TypeMeta: metav1.TypeMeta{
+				APIVersion: "v1",
+				Kind:       "Endpoints",
+			},
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      "calico-typha-service-tcp",
+				Name:      "calico-typha-service-fghij",
 				Namespace: "kube-system",
 			},
 			Endpoints: []discoveryv1.Endpoint{
 				{
-					Addresses: []string{"10.0.0.2", "10.0.0.5"},
+					Addresses: []string{"10.0.0.2"},
+				},
+				{
+					Addresses: []string{"10.0.0.5"},
+					Conditions: discoveryv1.EndpointConditions{
+						Ready:   ptr.To(false),
+						Serving: ptr.To(false),
+					},
 				},
 			},
 			Ports: []discoveryv1.EndpointPort{
+				{
+					Name:     ptr.To("calico-typha-v2"),
+					Port:     ptr.To(int32(8157)),
+					Protocol: &udp,
+				},
 				{
 					Name:     ptr.To("calico-typha"),
 					Port:     ptr.To(int32(8156)),
@@ -113,7 +133,7 @@ var _ = Describe("Typha address discovery", func() {
 	})
 
 	It("should bracket an IPv6 Typha address", func() {
-		endpointsUDP.Endpoints[0].Addresses[0] = "fd5f:65af::2"
+		endpoints2.Endpoints[0].Addresses[0] = "fd5f:65af::2"
 		refreshClient()
 		typhaAddr, err := discoverTyphaAddrs(configParams, k8sClient)
 		Expect(err).NotTo(HaveOccurred())
@@ -123,15 +143,15 @@ var _ = Describe("Typha address discovery", func() {
 	})
 
 	It("should error if no Typhas", func() {
-		endpointsTCP.Endpoints = nil
-		endpointsUDP.Endpoints = nil
+		endpoints2.Endpoints = nil
+		endpoints1.Endpoints = nil
 		refreshClient()
 		_, err := discoverTyphaAddrs(configParams, k8sClient)
 		Expect(err).To(HaveOccurred())
 	})
 
 	It("should choose random Typhas", func() {
-		endpointsTCP.Endpoints[0].Addresses = append(endpointsTCP.Endpoints[0].Addresses, "10.0.0.6")
+		endpoints2.Endpoints[0].Addresses = append(endpoints2.Endpoints[0].Addresses, "10.0.0.6")
 		refreshClient()
 
 		addr, err := discoverTyphaAddrs(configParams, k8sClient)
