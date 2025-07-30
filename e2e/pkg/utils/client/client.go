@@ -14,5 +14,5 @@ func New(cfg *rest.Config) (client.Client, error) {
 	if err := v3.AddToScheme(scheme); err != nil {
 		return nil, err
 	}
-	return client.New(cfg, client.Options{})
+	return client.New(cfg, client.Options{Scheme: scheme})
 }
