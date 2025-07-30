@@ -18,12 +18,14 @@ import (
 	"container/list"
 	"fmt"
 	"sync"
+	"time"
 
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
+	"github.com/projectcalico/calico/typha/pkg/syncclient"
 )
 
 // DedupeBuffer buffer implements the syncer callbacks API on its
@@ -50,7 +52,9 @@ type DedupeBuffer struct {
 
 	// liveResourceKeys Contains an entry for every key that we have sent to
 	// the consumer and that we have not subsequently sent a deletion for.
-	liveResourceKeys set.Set[string]
+	liveResourceKeys              set.Set[string]
+	liveKeysNotSeenSinceReconnect set.Set[string]
+	resyncStart                   time.Time
 	// pendingUpdates is the queue of updates that we want to send to the
 	// consumer.  We use a linked list so that we can remove items from
 	// the middle if they are deleted before making it off the queue.
@@ -69,10 +73,38 @@ func New() *DedupeBuffer {
 	return d
 }
 
+func (d *DedupeBuffer) OnTyphaConnectionRestarted() {
+	d.lock.Lock()
+	defer d.lock.Unlock()
+
+	// We're about to be sent a complete new snapshot of the data.  Clear
+	// our in-flight state and make a transient copy of the keys that we have
+	// already sent so that we can figure out if any KVs were deleted while
+	// we were disconnected.
+	log.Info("Typha connection restarted, clearing pending update queue.")
+	clear(d.keyToPendingUpdate)
+	d.pendingUpdates = list.List{}
+	if d.liveKeysNotSeenSinceReconnect == nil {
+		// Not already doing a resync.
+		d.resyncStart = time.Now()
+	}
+	d.liveKeysNotSeenSinceReconnect = d.liveResourceKeys.Copy()
+}
+
 // OnStatusUpdated queues a status update to be sent to the sink.
 func (d *DedupeBuffer) OnStatusUpdated(status api.SyncStatus) {
 	d.lock.Lock()
 	defer d.lock.Unlock()
+
+	// Check if queue is empty before onInSyncAfterReconnection() since that
+	// call may push things onto the queue.
+	queueWasEmpty := d.pendingUpdates.Len() == 0
+
+	if status == api.InSync && d.liveKeysNotSeenSinceReconnect != nil {
+		// We were processing a reconnection and now we're in sync.  See if we
+		// need to clean anything up.
+		d.onInSyncAfterReconnection()
+	}
 
 	// Statuses are idempotent so skip sending if the latest one in the queue
 	// was the same.
@@ -94,7 +126,6 @@ func (d *DedupeBuffer) OnStatusUpdated(status api.SyncStatus) {
 	}
 
 	// Add the status to the queue.
-	queueWasEmpty := d.pendingUpdates.Len() == 0
 	d.pendingUpdates.PushBack(status)
 	if queueWasEmpty {
 		// Only need to signal when the first item goes on the queue.
@@ -146,40 +177,11 @@ func (d *DedupeBuffer) OnUpdatesKeysKnown(updates []api.Update, keys []string) {
 				continue
 			}
 		}
-
-		if element, ok := d.keyToPendingUpdate[key]; ok {
-			// Already got an in-flight update for this key.
-			if u.Value == nil && !d.liveResourceKeys.Contains(key) {
-				// This is a deletion, but the key in question never made it
-				// off the queue, remove it entirely.
-				if debug {
-					log.WithField("key", key).Debug("Key deleted before being sent.")
-				}
-				delete(d.keyToPendingUpdate, key)
-				d.pendingUpdates.Remove(element)
-			} else {
-				// Update to a key that's already on the queue, swap in the
-				// most recent value.
-				if debug {
-					log.WithField("key", key).Debug("Key updated before being sent.")
-				}
-				usk := element.Value.(updateWithStringKey)
-				usk.update = u
-				element.Value = usk
-			}
-		} else {
-			// No in-flight entry for this key.  Add to queue and record that
-			// it's in flight.
-			if debug {
-				log.WithField("key", key).Debug("No in flight value for key, adding to queue.")
-			}
-			element = d.pendingUpdates.PushBack(updateWithStringKey{
-				key:    key,
-				update: u,
-			})
-			d.keyToPendingUpdate[key] = element
-			d.peakPendingUpdatesLen = max(len(d.keyToPendingUpdate), d.peakPendingUpdatesLen)
+		if d.liveKeysNotSeenSinceReconnect != nil {
+			d.liveKeysNotSeenSinceReconnect.Discard(key)
 		}
+
+		d.queueUpdate(key, u)
 	}
 	queueNowEmpty := d.pendingUpdates.Len() == 0
 	if queueWasEmpty && !queueNowEmpty {
@@ -188,6 +190,57 @@ func (d *DedupeBuffer) OnUpdatesKeysKnown(updates []api.Update, keys []string) {
 			log.Debug("Queue transitioned to non-empty; signalling.")
 		}
 		d.cond.Signal()
+	}
+}
+
+func (d *DedupeBuffer) queueUpdate(key string, u api.Update) {
+	debug := log.IsLevelEnabled(log.DebugLevel)
+
+	if u.Value != nil {
+		// A new KV or an update. Since we dedupe sequences of updates for the
+		// same key, we need to recalculate the update type to make sense to the
+		// downstream receiver.  We do this even if the update is not on the
+		// queue in order to handle resyncs with Typha.
+		if d.liveResourceKeys.Contains(key) {
+			u.UpdateType = api.UpdateTypeKVUpdated
+		} else {
+			u.UpdateType = api.UpdateTypeKVNew
+		}
+	}
+
+	if element, ok := d.keyToPendingUpdate[key]; ok {
+		// Already got an in-flight update for this key.
+		if u.Value == nil && !d.liveResourceKeys.Contains(key) {
+			// This is a deletion, but the key in question never made it
+			// off the queue, remove it entirely.
+			if debug {
+				log.WithField("key", key).Debug("Key deleted before being sent.")
+			}
+			delete(d.keyToPendingUpdate, key)
+			d.pendingUpdates.Remove(element)
+		} else {
+			// Update to a key that's already on the queue, swap in the
+			// most recent value.
+			if debug {
+				log.WithField("key", key).Debug("Key updated before being sent.")
+			}
+
+			usk := element.Value.(updateWithStringKey)
+			usk.update = u
+			element.Value = usk
+		}
+	} else {
+		// No in-flight entry for this key.  Add to queue and record that
+		// it's in flight.
+		if debug {
+			log.WithField("key", key).Debug("No in flight value for key, adding to queue.")
+		}
+		element = d.pendingUpdates.PushBack(updateWithStringKey{
+			key:    key,
+			update: u,
+		})
+		d.keyToPendingUpdate[key] = element
+		d.peakPendingUpdatesLen = max(len(d.keyToPendingUpdate), d.peakPendingUpdatesLen)
 	}
 }
 
@@ -314,4 +367,37 @@ func (d *DedupeBuffer) dropLockAndSendBatch(sink api.SyncerCallbacks, buf []any)
 	}
 }
 
+func (d *DedupeBuffer) onInSyncAfterReconnection() {
+	defer func() {
+		log.Infof("Resync with Typha complete; dropping resync-tracking state. Resync took %v.",
+			time.Since(d.resyncStart).Round(time.Millisecond))
+		d.liveKeysNotSeenSinceReconnect = nil
+	}()
+
+	if d.liveKeysNotSeenSinceReconnect.Len() == 0 {
+		return
+	}
+
+	log.Infof("In sync with Typha, synthesizing deletions for %d "+
+		"resources not seen during the resync.",
+		d.liveKeysNotSeenSinceReconnect.Len())
+	d.liveKeysNotSeenSinceReconnect.Iter(func(key string) error {
+		parsedKey := model.KeyFromDefaultPath(key)
+		if parsedKey == nil {
+			// Not clear how this could happen since these keys came from the
+			// set that we'd already parsed and passed downstream!
+			log.WithField("key", key).Panic("Failed to parse key during reconnection to Typha.")
+		}
+		d.queueUpdate(key, api.Update{
+			KVPair: model.KVPair{
+				Key:   parsedKey,
+				Value: nil,
+			},
+			UpdateType: api.UpdateTypeKVDeleted,
+		})
+		return nil
+	})
+}
+
 var _ api.SyncerCallbacks = (*DedupeBuffer)(nil)
+var _ syncclient.RestartAwareCallbacks = (*DedupeBuffer)(nil)
