@@ -21,7 +21,7 @@ RUN dnf upgrade -y
 COPY docker-image/nginx.repo /etc/yum.repos.d/nginx.repo
 
 RUN dnf --enablerepo=nginx-stable install -y \
-    nginx
+  nginx
 
 FROM scratch AS source
 
@@ -60,7 +60,7 @@ COPY docker-image/nginx.conf /etc/nginx/nginx.conf
 
 COPY dist /usr/share/nginx/html/
 
-COPY LICENSE /licenses/LICENSE
+COPY bin/LICENSE /licenses/LICENSE
 
 FROM ${CALICO_BASE}
 
@@ -73,6 +73,14 @@ LABEL org.opencontainers.image.title="Whisker"
 LABEL org.opencontainers.image.vendor="Project Calico"
 LABEL org.opencontainers.image.version="${GIT_VERSION}"
 LABEL org.opencontainers.image.licenses="Apache-2.0"
+
+LABEL description="Whisker provides a UI to view flows."
+LABEL maintainer="maintainers@tigera.io"
+LABEL name="Whisker"
+LABEL release=1
+LABEL summary="Whisker provides a UI to view flows."
+LABEL vendor="Project Calico"
+LABEL version="${GIT_VERSION}"
 
 COPY --from=source / /
 

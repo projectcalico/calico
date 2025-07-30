@@ -308,6 +308,10 @@ func (c *MockIPAMClient) EnsureInitialized(ctx context.Context, calicoVersion, c
 	return nil
 }
 
+func (c *MockIPAMClient) Close() error {
+	return nil
+}
+
 // MockIPAMBackendClient stubs out bapi.Client but only implements List
 // for the IPAM objects in order to test IPAM migration logic.
 type MockIPAMBackendClient struct {
@@ -374,6 +378,10 @@ func (bc *MockIPAMBackendClient) Watch(ctx context.Context, list model.ListInter
 
 func (bc *MockIPAMBackendClient) EnsureInitialized() error {
 	// DO NOTHING
+	return nil
+}
+
+func (bc *MockIPAMBackendClient) Close() error {
 	return nil
 }
 

@@ -16,9 +16,9 @@ package v1
 
 import (
 	"strings"
-	"time"
 
 	"github.com/projectcalico/calico/goldmane/proto"
+	"github.com/projectcalico/calico/lib/std/time"
 	whiskerv1 "github.com/projectcalico/calico/whisker-backend/pkg/apis/v1"
 )
 

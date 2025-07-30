@@ -1,4 +1,7 @@
-coverage.txt
+coverage.out
 output/
+report/
 tmp/
 *.log
+.approval_tests_temp
+*.received.txt

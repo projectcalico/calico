@@ -327,8 +327,24 @@ func ConvertK8sResourceToCalicoResource(res Resource) error {
 	// so that they do not get overwritten.
 	if meta.Name == "" {
 		// We store the original v3 Name in our annotation when writing NetworkPolicy and GNP objects. If that's present, use it.
+		// If the kind is Policy and the annotation is not present, we remove the default. prefix to be compatible with previous Calico versions
 		// Otherwise, fill in the name from the underlying CRD.
-		meta.Name = rom.GetName()
+		switch res.GetObjectKind().GroupVersionKind().Kind {
+		case apiv3.KindGlobalNetworkPolicy:
+			policy := res.(*apiv3.GlobalNetworkPolicy)
+			meta.Name = determinePolicyName(rom.GetName(), policy.Spec.Tier)
+		case apiv3.KindNetworkPolicy:
+			policy := res.(*apiv3.NetworkPolicy)
+			meta.Name = determinePolicyName(rom.GetName(), policy.Spec.Tier)
+		case apiv3.KindStagedGlobalNetworkPolicy:
+			policy := res.(*apiv3.StagedGlobalNetworkPolicy)
+			meta.Name = determinePolicyName(rom.GetName(), policy.Spec.Tier)
+		case apiv3.KindStagedNetworkPolicy:
+			policy := res.(*apiv3.StagedNetworkPolicy)
+			meta.Name = determinePolicyName(rom.GetName(), policy.Spec.Tier)
+		default:
+			meta.Name = rom.GetName()
+		}
 	}
 	meta.Namespace = rom.GetNamespace()
 	meta.ResourceVersion = rom.GetResourceVersion()
@@ -364,4 +380,13 @@ func watchOptionsToK8sListOptions(wo api.WatchOptions) metav1.ListOptions {
 		Watch:               true,
 		AllowWatchBookmarks: wo.AllowWatchBookmarks,
 	}
+}
+
+func determinePolicyName(name, tier string) string {
+	if tier == "default" || tier == "" {
+		// It's possible the policy does not contain tier, that means it's in the default Tier it's added later by the API server
+		return strings.TrimPrefix(name, "default.")
+	}
+
+	return name
 }

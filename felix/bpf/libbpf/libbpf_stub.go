@@ -61,6 +61,10 @@ func (o *Obj) FirstMap() (*Map, error) {
 	panic("LIBBPF syscall stub")
 }
 
+func (o *Obj) SetAttachType(progName string, attachType uint32) error {
+	panic("LIBBPF syscall stub")
+}
+
 func (m *Map) NextMap() (*Map, error) {
 	panic("LIBBPF syscall stub")
 }
@@ -73,7 +77,7 @@ func DetachClassifier(ifindex, handle, pref int, ingress bool) error {
 	panic("LIBBPF syscall stub")
 }
 
-func (o *Obj) AttachClassifier(secName, ifName string, ingress bool, prio int) (int, int, int, error) {
+func (o *Obj) AttachClassifier(secName, ifName string, ingress bool, prio int, handle uint32) error {
 	panic("LIBBPF syscall stub")
 }
 
@@ -90,6 +94,14 @@ func GetXDPProgramID(ifName string) (int, error) {
 }
 
 func (o *Obj) AttachCGroup(_, _ string) (*Link, error) {
+	panic("LIBBPF syscall stub")
+}
+
+func (o *Obj) AttachCGroupLegacy(_, _ string) error {
+	panic("LIBBPF syscall stub")
+}
+
+func (o *Obj) UpdateLink(_, _ string) error {
 	panic("LIBBPF syscall stub")
 }
 
@@ -117,6 +129,34 @@ func RemoveQDisc(ifName string) error {
 	panic("LIBBPF syscall stub")
 }
 
+func DetachLink(_ string) error {
+	panic("LIBBPF syscall stub")
+}
+
+func (l *Link) Pin(_ string) error {
+	panic("LIBBPF syscall stub")
+}
+
+func (l *Link) Update(obj *Obj, progName string) error {
+	panic("LIBBPF syscall stub")
+}
+
+func (l *Link) Close() error {
+	panic("LIBBPF syscall stub")
+}
+
+func OpenLink(path string) (*Link, error) {
+	panic("LIBBPF syscall stub")
+}
+
+func (l *Link) Detach() error {
+	panic("LIBBPF syscall stub")
+}
+
+func DetachCTLBProgramsLegacy(_ bool, _ string) error {
+	panic("LIBBPF syscall stub")
+}
+
 func (o *Obj) UpdateJumpMap(mapName, progName string, mapIndex int) error {
 	panic("LIBBPF syscall stub")
 }
@@ -130,13 +170,16 @@ func (m *Map) IsMapInternal() bool {
 }
 
 const (
-	GlobalsIPv6Enabled      uint32 = 1
-	GlobalsRPFOptionEnabled uint32 = 16
-	GlobalsRPFOptionStrict  uint32 = 32
-	GlobalsNoDSRCidrs       uint32 = 12345
-	GlobalsLoUDPOnly        uint32 = 12345
-	GlobalsRedirectPeer     uint32 = 12345
-	GlobalsFlowLogsEnabled  uint32 = 12345
+	GlobalsRPFOptionEnabled        uint32 = 16
+	GlobalsRPFOptionStrict         uint32 = 32
+	GlobalsNoDSRCidrs              uint32 = 12345
+	GlobalsLoUDPOnly               uint32 = 12345
+	GlobalsRedirectPeer            uint32 = 12345
+	GlobalsFlowLogsEnabled         uint32 = 12345
+	GlobalsNATOutgoingExcludeHosts uint32 = 12345
+	GlobalsSkipEgressRedirect      uint32 = 12345
+	AttachTypeTcxIngress           uint32 = 12345
+	AttachTypeTcxEgress            uint32 = 12345
 )
 
 func (m *Map) SetSize(size int) error {
@@ -168,5 +211,17 @@ func (t *CTCleanupGlobalData) Set(m *Map) error {
 }
 
 func (t *CTLBGlobalData) Set(m *Map) error {
+	panic("LIBBPF syscall stub")
+}
+
+func ProgQueryTcx(ifindex int, ingress bool) ([64]uint32, [64]uint32, uint32, error) {
+	panic("LIBBPF syscall stub")
+}
+
+func ProgName(id uint32) (string, error) {
+	panic("LIBBPF syscall stub")
+}
+
+func (o *Obj) AttachTCX(secName, ifName string) (*Link, error) {
 	panic("LIBBPF syscall stub")
 }

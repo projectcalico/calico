@@ -19,13 +19,12 @@ import (
 	"io"
 	"net"
 	"sync"
-	"time"
 
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/guardian/pkg/asyncutil"
-	"github.com/projectcalico/calico/lib/std/clock"
+	"github.com/projectcalico/calico/lib/std/time"
 )
 
 const (
@@ -197,9 +196,9 @@ func (t *tunnel) startServiceLoop(ctx context.Context) {
 			// Set the drain channel to signal that we executors should be drained. This is an immediate action if the
 			// amount of time past since the last drain is greater than the drainInterval (this is to avoid rapid draining
 			// on continuous errors).
-			duration := clock.Since(lastDrainTime.Add(drainInterval))
+			duration := time.Since(lastDrainTime.Add(drainInterval))
 			// The negative duration here makes the channel fire immediately if the drain interval has been exceeded.
-			drain = clock.NewTimer(-duration).Chan()
+			drain = time.NewTimer(-duration).Chan()
 		case <-drain:
 			drain = nil
 			logrus.Info("Starting drain and backlog...")
@@ -209,7 +208,7 @@ func (t *tunnel) startServiceLoop(ctx context.Context) {
 		case <-drainFinished:
 			logrus.Info("Finished draining, recreating the tunnel session...")
 
-			lastDrainTime = clock.Now()
+			lastDrainTime = time.Now()
 			drainFinished = nil
 
 			// Now that we've finished draining and backlogging, kick off the session recreation (which is done asynchronously

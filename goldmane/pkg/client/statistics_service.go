@@ -20,6 +20,8 @@ import (
 	"io"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"github.com/projectcalico/calico/goldmane/proto"
 )
@@ -58,7 +60,14 @@ func (cli *statisticsServiceClient) List(ctx context.Context, request *proto.Sta
 			// Break if EOF is found (no more data to be returned).
 			break
 		} else if err != nil {
-			return nil, fmt.Errorf("failed to receive result from stream: %w", err)
+			// Check the gRPC error type.
+			if e, ok := status.FromError(err); ok {
+				switch e.Code() {
+				case codes.NotFound:
+					return nil, nil
+				}
+			}
+			return nil, err
 		}
 		results = append(results, result)
 	}

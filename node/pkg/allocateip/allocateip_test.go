@@ -1599,6 +1599,10 @@ func (c shimClient) EnsureInitialized(ctx context.Context, calicoVersion, cluste
 	return nil
 }
 
+func (c shimClient) Close() error {
+	return c.client.Close()
+}
+
 func (c shimClient) Tiers() client.TierInterface {
 	panic("not implemented")
 }

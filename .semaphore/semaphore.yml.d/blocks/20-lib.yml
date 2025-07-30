@@ -1,0 +1,15 @@
+- name: lib
+  run:
+    when: "${FORCE_RUN} or change_in(['/lib/'])"
+  execution_time_limit:
+    minutes: 30
+  dependencies:
+    - Prerequisites
+  task:
+    prologue:
+      commands:
+        - cd lib
+    jobs:
+      - name: make ci
+        commands:
+          - ../.semaphore/run-and-monitor make-ci.log make ci

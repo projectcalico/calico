@@ -24,6 +24,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	. "github.com/projectcalico/calico/felix/labelindex"
+	"github.com/projectcalico/calico/lib/std/uniquelabels"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	calinet "github.com/projectcalico/calico/libcalico-go/lib/net"
@@ -104,7 +105,7 @@ func makeEndpointUpdates(num int) []api.Update {
 			KVPair: model.KVPair{
 				Key: key,
 				Value: &model.WorkloadEndpoint{
-					Labels:     map[string]string{"alpha": "beta", "ipset-1": "true"},
+					Labels:     uniquelabels.Make(map[string]string{"alpha": "beta", "ipset-1": "true"}),
 					IPv4Nets:   []calinet.IPNet{ipNet},
 					ProfileIDs: []string{fmt.Sprintf("namespace-%d", n)},
 				},

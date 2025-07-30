@@ -121,17 +121,17 @@ func (t *FlowTester) PopulateFromFlowLogs(reader FlowLogReader) error {
 		// Check if labels or policies are expected.
 		labelsExpected := t.options.ExpectLabels
 		if labelsExpected {
-			if fl.FlowLabels.SrcLabels == nil {
+			if fl.FlowLabels.SrcLabels.IsNil() {
 				return fmt.Errorf("missing src Labels in %v: Meta %v", fl.FlowLabels, fl.FlowMeta)
 			}
-			if fl.FlowLabels.DstLabels == nil {
+			if fl.FlowLabels.DstLabels.IsNil() {
 				return fmt.Errorf("missing dst Labels in %v", fl.FlowLabels)
 			}
 		} else {
-			if fl.FlowLabels.SrcLabels != nil {
+			if !fl.FlowLabels.SrcLabels.IsNil() {
 				return fmt.Errorf("unexpected src Labels in %v", fl.FlowLabels)
 			}
-			if fl.FlowLabels.DstLabels != nil {
+			if !fl.FlowLabels.DstLabels.IsNil() {
 				return fmt.Errorf("unexpected dst Labels in %v", fl.FlowLabels)
 			}
 		}
@@ -258,10 +258,10 @@ func (t *FlowTester) flowMetaFromFlowLog(fl flowlog.FlowLog) flowMeta {
 	}
 	if t.options.MatchLabels {
 		var srcLabels, dstLabels []string
-		for k, v := range fl.FlowLabels.SrcLabels {
+		for k, v := range fl.FlowLabels.SrcLabels.AllStrings() {
 			srcLabels = append(srcLabels, k+"="+v)
 		}
-		for k, v := range fl.FlowLabels.DstLabels {
+		for k, v := range fl.FlowLabels.DstLabels.AllStrings() {
 			dstLabels = append(dstLabels, k+"="+v)
 		}
 		sort.Strings(srcLabels)

@@ -316,9 +316,9 @@ var _ = testutils.E2eDatastoreDescribe("BGP syncer tests", testutils.DatastoreAl
 				By("Releasing the IP addresses and checking for no updates")
 				// Releasing IPs should leave the affine blocks assigned, so releasing the IPs
 				// should result in no updates.
-				_, err = c.IPAM().ReleaseIPs(ctx, ips1...)
+				_, _, err = c.IPAM().ReleaseIPs(ctx, ips1...)
 				Expect(err).NotTo(HaveOccurred())
-				_, err = c.IPAM().ReleaseIPs(ctx, ips2...)
+				_, _, err = c.IPAM().ReleaseIPs(ctx, ips2...)
 				Expect(err).NotTo(HaveOccurred())
 				syncTester.ExpectCacheSize(expectedCacheSize)
 

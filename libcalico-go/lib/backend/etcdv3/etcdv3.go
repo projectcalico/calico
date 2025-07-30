@@ -115,7 +115,10 @@ func NewEtcdV3Client(config *apiconfig.EtcdConfig) (api.Client, error) {
 		return nil, fmt.Errorf("could not initialize etcdv3 client: %+v", err)
 	}
 
-	baseTLSConfig := calicotls.NewTLSConfig()
+	baseTLSConfig, err := calicotls.NewTLSConfig()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create TLS Config: %w", err)
+	}
 	tlsConfig.MaxVersion = baseTLSConfig.MaxVersion
 	tlsConfig.MinVersion = baseTLSConfig.MinVersion
 	tlsConfig.CipherSuites = baseTLSConfig.CipherSuites
@@ -543,6 +546,12 @@ func (c *etcdV3Client) IsClean() (bool, error) {
 
 	// The datastore is clean if no results were enumerated.
 	return len(resp.Kvs) == 0, nil
+}
+
+// Close() closes the underlying etcd client
+func (c *etcdV3Client) Close() error {
+	log.Debug("Calling Close on etcdv3 client")
+	return c.etcdClient.Close()
 }
 
 // getTTLOption returns a OpOption slice containing a Lease granted for the TTL.

@@ -64,7 +64,8 @@ class TestFVEtcdutils(unittest.TestCase):
         self.etcd = subprocess.Popen([
             "/usr/local/bin/etcd",
             "--advertise-client-urls", "http://127.0.0.1:2379",
-            "--listen-client-urls", "http://0.0.0.0:2379"
+            "--listen-client-urls", "http://0.0.0.0:2379",
+            "--log-level", "error",
         ])
         self.etcd_server_running = True
 

@@ -92,7 +92,7 @@ func (s *MockIPSets) QueueResync() {
 	// Not implemented for UT.
 }
 
-func (s *MockIPSets) ApplyUpdates() {
+func (s *MockIPSets) ApplyUpdates(_ ipsets.UpdateListener) {
 	// Not implemented for UT.
 }
 

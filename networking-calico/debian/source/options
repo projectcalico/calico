@@ -1,2 +1,6 @@
 tar-ignore = ".tox/*"
 tar-ignore = "*env/*"
+tar-ignore = "Makefile"
+tar-ignore = ".semaphore"
+tar-ignore = ".testr.conf"
+tar-ignore = "rpm"

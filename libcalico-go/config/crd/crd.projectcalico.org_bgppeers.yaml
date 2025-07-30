@@ -35,9 +35,23 @@ spec:
                   type: array
                 keepOriginalNextHop:
                   type: boolean
+                localASNumber:
+                  format: int32
+                  type: integer
                 localWorkloadSelector:
                   type: string
                 maxRestartTime:
+                  type: string
+                nextHopMode:
+                  allOf:
+                    - enum:
+                        - Auto
+                        - Self
+                        - Keep
+                    - enum:
+                        - Auto
+                        - Self
+                        - Keep
                   type: string
                 node:
                   type: string
@@ -67,6 +81,11 @@ spec:
                 peerSelector:
                   type: string
                 reachableBy:
+                  type: string
+                reversePeering:
+                  enum:
+                    - Auto
+                    - Manual
                   type: string
                 sourceAddress:
                   type: string

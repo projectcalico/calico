@@ -21,6 +21,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"github.com/projectcalico/calico/lib/std/uniquelabels"
 	apiv1 "github.com/projectcalico/calico/libcalico-go/lib/apis/v1"
 	"github.com/projectcalico/calico/libcalico-go/lib/apis/v1/unversioned"
 	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
@@ -79,7 +80,7 @@ func (_ WorkloadEndpoint) APIV1ToBackendV1(rIn unversioned.Resource) (*model.KVP
 	d := model.KVPair{
 		Key: k,
 		Value: &model.WorkloadEndpoint{
-			Labels:                     ah.Metadata.Labels,
+			Labels:                     uniquelabels.Make(ah.Metadata.Labels),
 			ActiveInstanceID:           ah.Metadata.ActiveInstanceID,
 			State:                      "active",
 			Name:                       ah.Spec.InterfaceName,
@@ -113,7 +114,7 @@ func (_ WorkloadEndpoint) BackendV1ToAPIV3(kvp *model.KVPair) (Resource, error) 
 		return nil, fmt.Errorf("value is not a valid WorkloadEndpoint resource Value")
 	}
 
-	labels := convertLabels(wepValue.Labels)
+	labels := convertLabels(wepValue.Labels.RecomputeOriginalMap())
 	namespace := "default"
 
 	var err error

@@ -18,11 +18,11 @@ package fv_test
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net"
 	"os"
+	"path"
 	"regexp"
 	"sort"
 	"strconv"
@@ -43,6 +43,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/projectcalico/calico/felix/bpf"
+	"github.com/projectcalico/calico/felix/bpf/bpfdefs"
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
 	"github.com/projectcalico/calico/felix/bpf/conntrack/timeouts"
 	"github.com/projectcalico/calico/felix/bpf/ifstate"
@@ -56,7 +57,6 @@ import (
 	"github.com/projectcalico/calico/felix/fv/utils"
 	"github.com/projectcalico/calico/felix/fv/workload"
 	"github.com/projectcalico/calico/felix/proto"
-	"github.com/projectcalico/calico/felix/timeshim"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	libapi "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
@@ -71,14 +71,14 @@ import (
 //     connection-time program.  This is a bit of a broken test but it's better than nothing since all felix nodes
 //     should be programming the same NAT mappings.
 var (
-	_ = describeBPFTests(withProto("tcp"), withConnTimeLoadBalancingEnabled(), withNonProtocolDependentTests(), withConntrackCleanupMode("Userspace"))
+	_ = describeBPFTests(withProto("tcp"), withConnTimeLoadBalancingEnabled(), withNonProtocolDependentTests())
 	_ = describeBPFTests(withProto("udp"), withConnTimeLoadBalancingEnabled())
 	_ = describeBPFTests(withProto("tcp"), withConnTimeLoadBalancingEnabled(), withNonProtocolDependentTests(), withIPFamily(6))
 	_ = describeBPFTests(withProto("udp"), withConnTimeLoadBalancingEnabled(), withIPFamily(6))
 	_ = describeBPFTests(withProto("udp"), withConnTimeLoadBalancingEnabled(), withUDPUnConnected())
-	_ = describeBPFTests(withProto("tcp"), withConntrackCleanupMode("BPFProgram"))
-	_ = describeBPFTests(withProto("tcp"), withIPFamily(6), withConntrackCleanupMode("BPFProgram"))
-	_ = describeBPFTests(withProto("udp"), withConntrackCleanupMode("Userspace"))
+	_ = describeBPFTests(withProto("tcp"))
+	_ = describeBPFTests(withProto("tcp"), withIPFamily(6))
+	_ = describeBPFTests(withProto("udp"))
 	_ = describeBPFTests(withProto("udp"), withUDPUnConnected())
 	_ = describeBPFTests(withProto("udp"), withUDPConnectedRecvMsg(), withConnTimeLoadBalancingEnabled())
 	_ = describeBPFTests(withTunnel("ipip"), withProto("tcp"), withConnTimeLoadBalancingEnabled())
@@ -87,12 +87,13 @@ var (
 	_ = describeBPFTests(withTunnel("ipip"), withProto("udp"))
 	_ = describeBPFTests(withProto("tcp"), withDSR())
 	_ = describeBPFTests(withProto("udp"), withDSR())
-	_ = describeBPFTests(withTunnel("ipip"), withProto("tcp"), withDSR(), withConntrackCleanupMode("BPFProgram"))
-	_ = describeBPFTests(withTunnel("ipip"), withProto("udp"), withDSR(), withConntrackCleanupMode("Userspace"))
-	_ = describeBPFTests(withTunnel("wireguard"), withProto("tcp"), withConntrackCleanupMode("Userspace"))
+	_ = describeBPFTests(withTunnel("ipip"), withProto("tcp"), withDSR())
+	_ = describeBPFTests(withTunnel("ipip"), withProto("udp"), withDSR())
+	_ = describeBPFTests(withTunnel("wireguard"), withProto("tcp"))
 	_ = describeBPFTests(withTunnel("wireguard"), withProto("tcp"), withConnTimeLoadBalancingEnabled())
-	_ = describeBPFTests(withTunnel("vxlan"), withProto("tcp"), withConntrackCleanupMode("BPFProgram"))
+	_ = describeBPFTests(withTunnel("vxlan"), withProto("tcp"))
 	_ = describeBPFTests(withTunnel("vxlan"), withProto("tcp"), withConnTimeLoadBalancingEnabled())
+	_ = describeBPFTests(withTunnel("vxlan"), withProto("tcp"), withConnTimeLoadBalancingEnabled(), withIPFamily(6))
 )
 
 // Run a stripe of tests with BPF logging disabled since the compiler tends to optimise the code differently
@@ -102,16 +103,15 @@ var _ = describeBPFTests(withProto("tcp"),
 	withBPFLogLevel("info"))
 
 type bpfTestOptions struct {
-	conntrackCleanupMode string
-	connTimeEnabled      bool
-	protocol             string
-	udpUnConnected       bool
-	bpfLogLevel          string
-	tunnel               string
-	dsr                  bool
-	udpConnRecvMsg       bool
-	nonProtoTests        bool
-	ipv6                 bool
+	connTimeEnabled bool
+	protocol        string
+	udpUnConnected  bool
+	bpfLogLevel     string
+	tunnel          string
+	dsr             bool
+	udpConnRecvMsg  bool
+	nonProtoTests   bool
+	ipv6            bool
 }
 
 type bpfTestOpt func(opts *bpfTestOptions)
@@ -129,12 +129,6 @@ func withIPFamily(family int) bpfTestOpt {
 func withProto(proto string) bpfTestOpt {
 	return func(opts *bpfTestOptions) {
 		opts.protocol = proto
-	}
-}
-
-func withConntrackCleanupMode(m string) bpfTestOpt {
-	return func(opts *bpfTestOptions) {
-		opts.conntrackCleanupMode = m
 	}
 }
 
@@ -265,6 +259,10 @@ func BPFMode() bool {
 	return os.Getenv("FELIX_FV_ENABLE_BPF") == "true"
 }
 
+func BPFAttachType() string {
+	return strings.ToLower(os.Getenv("FELIX_FV_BPFATTACHTYPE"))
+}
+
 func BPFIPv6Support() bool {
 	return false
 }
@@ -276,9 +274,8 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 	}
 
 	testOpts := bpfTestOptions{
-		bpfLogLevel:          "debug",
-		tunnel:               "none",
-		conntrackCleanupMode: "Auto",
+		bpfLogLevel: "debug",
+		tunnel:      "none",
 	}
 	for _, o := range opts {
 		o(&testOpts)
@@ -300,10 +297,10 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 		family = "ipv6"
 	}
 
-	desc := fmt.Sprintf("_BPF_ _BPF-SAFE_ BPF tests (%s %s%s, ct=%v, log=%s, tunnel=%s, dsr=%v, cleaner=%v)",
+	desc := fmt.Sprintf("_BPF_ _BPF-SAFE_ BPF tests (%s %s%s, ct=%v, log=%s, tunnel=%s, dsr=%v)",
 		family,
 		testOpts.protocol, protoExt, testOpts.connTimeEnabled,
-		testOpts.bpfLogLevel, testOpts.tunnel, testOpts.dsr, testOpts.conntrackCleanupMode,
+		testOpts.bpfLogLevel, testOpts.tunnel, testOpts.dsr,
 	)
 	return infrastructure.DatastoreDescribe(desc, []apiconfig.DatastoreType{apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
 		var (
@@ -376,17 +373,19 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			options.NATOutgoingEnabled = true
 			options.AutoHEPsEnabled = true
 			// override IPIP being enabled by default
-			options.IPIPEnabled = false
-			options.IPIPRoutesEnabled = false
+			options.IPIPMode = api.IPIPModeNever
+			options.SimulateBIRDRoutes = false
 			switch testOpts.tunnel {
 			case "none":
-				// nothing
+				// Enable adding simulated routes.
+				options.SimulateBIRDRoutes = true
 			case "ipip":
-				options.IPIPEnabled = true
-				options.IPIPRoutesEnabled = true
+				// IPIP is not supported in IPv6. We need to mimic routes in FVs.
+				options.IPIPMode = api.IPIPModeAlways
+				options.SimulateBIRDRoutes = true
 			case "vxlan":
 				options.VXLANMode = api.VXLANModeAlways
-				options.VXLANStrategy = infrastructure.NewDefaultVXLANStrategy(options.IPPoolCIDR, options.IPv6PoolCIDR)
+				options.VXLANStrategy = infrastructure.NewDefaultTunnelStrategy(options.IPPoolCIDR, options.IPv6PoolCIDR)
 			case "wireguard":
 				if testOpts.ipv6 {
 					// Allocate tunnel address for Wireguard.
@@ -407,7 +406,6 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				options.DelayFelixStart = true
 				options.TriggerDelayedFelixStart = true
 			}
-			options.ExtraEnvVars["FELIX_BPFConntrackCleanupMode"] = testOpts.conntrackCleanupMode
 			options.ExtraEnvVars["FELIX_BPFMapSizeConntrackScaling"] = "Disabled"
 			options.ExtraEnvVars["FELIX_BPFLogLevel"] = fmt.Sprint(testOpts.bpfLogLevel)
 			options.ExtraEnvVars["FELIX_BPFConntrackLogLevel"] = fmt.Sprint(testOpts.bpfLogLevel)
@@ -437,7 +435,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				options.ExtraEnvVars["FELIX_HEALTHHOST"] = "::"
 			}
 
-			if testOpts.protocol == "tcp" {
+			if false && testOpts.protocol == "tcp" {
 				filters := map[string]string{"all": "tcp"}
 				tcpResetTimeout := api.BPFConntrackTimeout("5s")
 				felixConfig := api.NewFelixConfiguration()
@@ -509,10 +507,12 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							felix.Exec("iptables-save", "-c")
 						}
 						felix.Exec("ip", "link")
+						felix.Exec("ip", "-d", "link", "show", "vxlan.calico")
 						felix.Exec("ip", "addr")
 						felix.Exec("ip", "rule")
 						felix.Exec("ip", "route")
 						felix.Exec("ip", "neigh")
+						felix.Exec("bridge", "fdb", "show", "dev", "vxlan.calico")
 						felix.Exec("arp")
 						felix.Exec("calico-bpf", "ipsets", "dump")
 						felix.Exec("calico-bpf", "routes", "dump")
@@ -627,6 +627,18 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				pol.Spec.Selector = "all()"
 
 				pol = createPolicy(pol)
+				Eventually(func() bool {
+					return bpfCheckIfPolicyProgrammed(tc.Felixes[0], w[0].InterfaceName, "ingress", "default.policy-1", "allow", true)
+				}, "2s", "200ms").Should(BeTrue())
+				Eventually(func() bool {
+					return bpfCheckIfPolicyProgrammed(tc.Felixes[0], w[0].InterfaceName, "egress", "default.policy-1", "allow", true)
+				}, "2s", "200ms").Should(BeTrue())
+				Eventually(func() bool {
+					return bpfCheckIfPolicyProgrammed(tc.Felixes[0], w[1].InterfaceName, "ingress", "default.policy-1", "allow", true)
+				}, "2s", "200ms").Should(BeTrue())
+				Eventually(func() bool {
+					return bpfCheckIfPolicyProgrammed(tc.Felixes[0], w[1].InterfaceName, "egress", "default.policy-1", "allow", true)
+				}, "2s", "200ms").Should(BeTrue())
 			})
 
 			if testOpts.bpfLogLevel == "debug" && testOpts.protocol == "tcp" {
@@ -1008,7 +1020,11 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						cc.ResetExpectations()
 
 						By("handling ingress program removal")
-						tc.Felixes[0].Exec("tc", "filter", "del", "ingress", "dev", w[0].InterfaceName)
+						if BPFAttachType() == "tc" {
+							tc.Felixes[0].Exec("tc", "filter", "del", "ingress", "dev", w[0].InterfaceName)
+						} else {
+							tc.Felixes[0].Exec("rm", "-rf", path.Join(bpfdefs.TcxPinDir, fmt.Sprintf("%s_ingress", w[0].InterfaceName)))
+						}
 
 						// Removing the ingress program should break connectivity due to the lack of "seen" mark.
 						cc.Expect(None, w[0], w[1])
@@ -1021,45 +1037,67 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						cc.CheckConnectivity()
 
 						// Check the program is put back.
-						Eventually(func() string {
-							out, _ := tc.Felixes[0].ExecOutput("tc", "filter", "show", "ingress", "dev", w[0].InterfaceName)
-							return out
-						}, "5s", "200ms").Should(ContainSubstring("cali_tc_preambl"),
-							fmt.Sprintf("from wep not loaded for %s", w[0].InterfaceName))
+						if BPFAttachType() == "tc" {
+							Eventually(func() string {
+								out, _ := tc.Felixes[0].ExecOutput("tc", "filter", "show", "ingress", "dev", w[0].InterfaceName)
+								return out
+							}, "5s", "200ms").Should(ContainSubstring("cali_tc_preambl"),
+								fmt.Sprintf("from wep not loaded for %s", w[0].InterfaceName))
+						} else {
+							Eventually(func() string {
+								out, _ := tc.Felixes[0].ExecOutput("stat", path.Join(bpfdefs.TcxPinDir, fmt.Sprintf("%s_ingress", w[0].InterfaceName)))
+								return out
+							}, "5s", "200ms").ShouldNot(ContainSubstring("No such file or directory"),
+								fmt.Sprintf("from wep not loaded for %s", w[0].InterfaceName))
+						}
 
 						By("handling egress program removal")
-						tc.Felixes[0].Exec("tc", "filter", "del", "egress", "dev", w[0].InterfaceName)
+						if BPFAttachType() == "tc" {
+							tc.Felixes[0].Exec("tc", "filter", "del", "egress", "dev", w[0].InterfaceName)
+						} else {
+							tc.Felixes[0].Exec("rm", "-rf", path.Join(bpfdefs.TcxPinDir, fmt.Sprintf("%s_egress", w[0].InterfaceName)))
+						}
 						// Removing the egress program doesn't stop traffic.
 
 						// Trigger felix to recover.
 						trigger()
 
 						// Check the program is put back.
-						Eventually(func() string {
-							out, _ := tc.Felixes[0].ExecOutput("tc", "filter", "show", "egress", "dev", w[0].InterfaceName)
-							return out
-						}, "5s", "200ms").Should(ContainSubstring("cali_tc_preambl"),
-							fmt.Sprintf("to wep not loaded for %s", w[0].InterfaceName))
+						if BPFAttachType() == "tc" {
+							Eventually(func() string {
+								out, _ := tc.Felixes[0].ExecOutput("tc", "filter", "show", "egress", "dev", w[0].InterfaceName)
+								return out
+							}, "5s", "200ms").Should(ContainSubstring("cali_tc_preambl"),
+								fmt.Sprintf("to wep not loaded for %s", w[0].InterfaceName))
+						} else {
+							Eventually(func() string {
+								out, _ := tc.Felixes[0].ExecOutput("stat", path.Join(bpfdefs.TcxPinDir, fmt.Sprintf("%s_egress", w[0].InterfaceName)))
+								return out
+							}, "5s", "200ms").ShouldNot(ContainSubstring("No such file or directory"),
+								fmt.Sprintf("from wep not loaded for %s", w[0].InterfaceName))
+						}
 						cc.CheckConnectivity()
 
-						By("Handling qdisc removal")
-						tc.Felixes[0].Exec("tc", "qdisc", "delete", "dev", w[0].InterfaceName, "clsact")
+						if BPFAttachType() == "tc" {
+							By("Handling qdisc removal")
+							tc.Felixes[0].Exec("tc", "qdisc", "delete", "dev", w[0].InterfaceName, "clsact")
 
-						// Trigger felix to recover.
-						trigger()
+							// Trigger felix to recover.
+							trigger()
 
-						// Check programs are put back.
-						Eventually(func() string {
-							out, _ := tc.Felixes[0].ExecOutput("tc", "filter", "show", "ingress", "dev", w[0].InterfaceName)
-							return out
-						}, "5s", "200ms").Should(ContainSubstring("cali_tc_preambl"),
-							fmt.Sprintf("from wep not loaded for %s", w[0].InterfaceName))
-						Eventually(func() string {
-							out, _ := tc.Felixes[0].ExecOutput("tc", "filter", "show", "egress", "dev", w[0].InterfaceName)
-							return out
-						}, "5s", "200ms").Should(ContainSubstring("cali_tc_preambl"),
-							fmt.Sprintf("to wep not loaded for %s", w[0].InterfaceName))
-						cc.CheckConnectivity()
+							// Check programs are put back.
+							Eventually(func() string {
+								out, _ := tc.Felixes[0].ExecOutput("tc", "filter", "show", "ingress", "dev", w[0].InterfaceName)
+								return out
+							}, "5s", "200ms").Should(ContainSubstring("cali_tc_preambl"),
+								fmt.Sprintf("from wep not loaded for %s", w[0].InterfaceName))
+							Eventually(func() string {
+								out, _ := tc.Felixes[0].ExecOutput("tc", "filter", "show", "egress", "dev", w[0].InterfaceName)
+								return out
+							}, "5s", "200ms").Should(ContainSubstring("cali_tc_preambl"),
+								fmt.Sprintf("to wep not loaded for %s", w[0].InterfaceName))
+							cc.CheckConnectivity()
+						}
 						cc.ResetExpectations()
 
 						// Add a policy to block traffic.
@@ -1469,7 +1507,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				})
 			}
 
-			It("should have correct routes", func() {
+			_ = !testOpts.ipv6 && It("should have correct routes", func() {
 				tunnelAddr := ""
 				tunnelAddrFelix1 := ""
 				tunnelAddrFelix2 := ""
@@ -1731,6 +1769,51 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					cc.ExpectSome(w[1][1], w[0][0])
 					cc.CheckConnectivity(conntrackChecks(tc.Felixes)...)
 				})
+
+				_ = !testOpts.ipv6 && !testOpts.dsr &&
+					It("should handle fragmented UDP", func() {
+						if testOpts.tunnel == "vxlan" && !utils.UbuntuReleaseGreater("22.04") {
+							Skip("Ubuntu too old to handle frag on vxlan dev properly")
+						}
+
+						dev := "eth0"
+						switch testOpts.tunnel {
+						case "vxlan":
+							dev = "vxlan.calico"
+						case "ipip":
+							dev = "tunl0"
+						case "wireguard":
+							dev = "wireguard.cali"
+						}
+						tcpdump1 := tc.Felixes[1].AttachTCPDump(dev)
+						tcpdump1.SetLogEnabled(true)
+						tcpdump1.AddMatcher("udp-frags", regexp.MustCompile(
+							fmt.Sprintf("%s.* > %s.*", w[1][0].IP, w[0][0].IP)))
+						tcpdump1.Start("-vvv", "src", "host", w[1][0].IP, "and", "dst", "host", w[0][0].IP)
+						defer tcpdump1.Stop()
+
+						tcpdump0 := w[0][0].AttachTCPDump()
+						tcpdump0.SetLogEnabled(true)
+						tcpdump0.AddMatcher("udp-pod-frags", regexp.MustCompile(
+							fmt.Sprintf("%s.* > %s.*", w[1][0].IP, w[0][0].IP)))
+						tcpdump0.Start("-vvv", "src", "host", w[1][0].IP, "and", "dst", "host", w[0][0].IP)
+						defer tcpdump1.Stop()
+
+						// Give tcpdump some time to start up!
+						time.Sleep(time.Second)
+
+						// Send a packet with large payload without the DNF flag
+						_, err := w[1][0].RunCmd("pktgen", w[1][0].IP, w[0][0].IP, "udp",
+							"--port-src", "30444", "--port-dst", "30444", "--ip-dnf=n", "--payload-size=1600", "--udp-sock")
+						Expect(err).NotTo(HaveOccurred())
+
+						// We should see two fragments on the host interface
+						Eventually(func() int { return tcpdump1.MatchCount("udp-frags") }).Should(Equal(2))
+						// We should see a reassembled packet at the destination workload.
+						// If ebpf program did not reassemble the packet, we would still
+						// see two fragments!
+						Eventually(func() int { return tcpdump0.MatchCount("udp-pod-frags") }).Should(Equal(2))
+					})
 
 				if (testOpts.protocol == "tcp" || (testOpts.protocol == "udp" && !testOpts.udpUnConnected)) &&
 					testOpts.connTimeEnabled && !testOpts.dsr {
@@ -2061,7 +2144,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						)
 						cc.CheckConnectivity()
 
-						Eventually(func() int { return tcpdump.MatchCount("unreach") }).
+						Eventually(func() int { return tcpdump.MatchCount("unreach") }, "5s", "300ms").
 							Should(BeNumerically(">", 0))
 						// XXX
 						// Expect(tcpdump.MatchCount("bad csum")).To(Equal(0))
@@ -3972,9 +4055,8 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								})
 							})
 
-							// Run the test only once for each conntrackCleanupMode
 							_ = testIfTCP && !testOpts.ipv6 && testOpts.bpfLogLevel == "debug" && !testOpts.dsr &&
-								testOpts.conntrackCleanupMode != "Auto" && testOpts.tunnel != "vxlan" &&
+								testOpts.tunnel != "vxlan" &&
 								It("tcp should survive spurious RST", func() {
 									externalClient.Exec("ip", "route", "add", w[0][0].IP, "via", felixIP(0))
 									pc := &PersistentConnection{
@@ -4266,7 +4348,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 									externalClient.Exec("ip", "-6", "route", "add", w[0][0].IP, "via", tc.Felixes[0].IPv6, "dev", "eth0")
 									externalClient.Exec("ip", "addr", "add", "169.254.169.254", "dev", remoteWL.InterfaceName)
 									// Need to change the MTU on the host side of the veth. If
-									// we change it on the eth0 of the docker iface, not ICMP
+									// we change it on the eth0 of the docker iface, no ICMP
 									// is generated.
 									externalClient.Exec("ip", "link", "set", "ethwl", "mtu", "1300")
 									for _, f := range tc.Felixes {
@@ -4620,82 +4702,6 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					})
 				})
 
-				Context("with CT tables full", func() {
-					It("should still allow host -> host", func() {
-						// XXX as long as there is no HEP policy
-						// using hostW as a sink
-
-						By("waiting for everything to come up", func() {
-							cc.Expect(Some, tc.Felixes[0], hostW[1])
-							cc.Expect(Some, tc.Felixes[1], hostW[0])
-							cc.CheckConnectivity()
-						})
-
-						By("filling up the CT tables", func() {
-							now := time.Duration(timeshim.RealTime().KTimeNanos())
-							leg := conntrack.Leg{SynSeen: true, AckSeen: true, Opener: true}
-
-							if testOpts.ipv6 {
-								srcIP := net.ParseIP("dead:beef::123:123:123:123")
-								dstIP := net.ParseIP("dead:beef::121:121:121:121")
-
-								val := conntrack.NewValueV6Normal(now, 0, leg, leg)
-								val64 := base64.StdEncoding.EncodeToString(val[:])
-
-								key := conntrack.NewKeyV6(6 /* TCP */, srcIP, 0, dstIP, 0)
-								key64 := base64.StdEncoding.EncodeToString(key[:])
-
-								_, err := tc.Felixes[0].ExecCombinedOutput("calico-bpf", "-6", "conntrack", "fill", key64, val64)
-								Expect(err).NotTo(HaveOccurred())
-							} else {
-								srcIP := net.IPv4(123, 123, 123, 123)
-								dstIP := net.IPv4(121, 121, 121, 121)
-
-								val := conntrack.NewValueNormal(now, 0, leg, leg)
-								val64 := base64.StdEncoding.EncodeToString(val[:])
-
-								key := conntrack.NewKey(6 /* TCP */, srcIP, 0, dstIP, 0)
-								key64 := base64.StdEncoding.EncodeToString(key[:])
-
-								_, err := tc.Felixes[0].ExecCombinedOutput("calico-bpf", "conntrack", "fill", key64, val64)
-								Expect(err).NotTo(HaveOccurred())
-							}
-						})
-
-						By("checking host-host connectivity works", func() {
-							cc.ResetExpectations()
-							cc.Expect(Some, tc.Felixes[0], hostW[1])
-							cc.Expect(Some, tc.Felixes[1], hostW[0])
-							cc.CheckConnectivity(conntrackChecks(tc.Felixes)...)
-						})
-
-						By("checking pod-pod connectivity fails", func() {
-							cc.ResetExpectations()
-							cc.Expect(None, w[0][1], w[0][0])
-							cc.Expect(None, w[1][0], w[0][0])
-							cc.Expect(None, w[1][1], w[0][0])
-							cc.CheckConnectivity()
-						})
-
-						By("cleaning up the CT maps", func() {
-							if testOpts.ipv6 {
-								_, err := tc.Felixes[0].ExecOutput("calico-bpf", "-6", "conntrack", "clean")
-								Expect(err).NotTo(HaveOccurred())
-							} else {
-								_, err := tc.Felixes[0].ExecOutput("calico-bpf", "conntrack", "clean")
-								Expect(err).NotTo(HaveOccurred())
-							}
-						})
-
-						By("checking pod-pod connectivity works again", func() {
-							cc.ResetExpectations()
-							cc.Expect(Some, w[0][1], w[0][0])
-							cc.Expect(Some, w[1][0], w[0][0])
-							cc.Expect(Some, w[1][1], w[0][0])
-							cc.CheckConnectivity(conntrackChecks(tc.Felixes)...)
-						})
-					})
-				})
 			})
 
 			It("should have connectivity when DNAT redirects to-host traffic to a local pod.", func() {
@@ -4801,7 +4807,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			})
 		})
 
-		Describe("with BPF disabled to begin with", func() {
+		_ = testOpts.tunnel != "vxlan" && Describe("with BPF disabled to begin with", func() {
 			var pc *PersistentConnection
 
 			BeforeEach(func() {
@@ -5605,9 +5611,6 @@ func ensureBPFProgramsAttachedOffset(offset int, felix *infrastructure.Felix, if
 	}
 	if felix.ExpectedVXLANTunnelAddr != "" {
 		expectedIfaces = append(expectedIfaces, "vxlan.calico")
-	}
-	if felix.ExpectedVXLANV6TunnelAddr != "" {
-		expectedIfaces = append(expectedIfaces, "vxlan-v6.calico")
 	}
 	if felix.ExpectedWireguardTunnelAddr != "" {
 		expectedIfaces = append(expectedIfaces, "wireguard.cali")

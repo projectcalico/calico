@@ -40,7 +40,7 @@ COPY --from=ubi /lib64/librt.so.1 /lib64/librt.so.1
 COPY --from=ubi /lib64/libselinux.so.1 /lib64/libselinux.so.1
 COPY --from=ubi /lib64/libtinfo.so.6 /lib64/libtinfo.so.6
 
-COPY LICENSE /licenses/LICENSE
+COPY ${BIN_DIR}/LICENSE /licenses/LICENSE
 
 COPY ${BIN_DIR}/flexvol-${TARGETARCH} /usr/local/bin/flexvol
 COPY flexvol/docker-image/flexvol.sh /usr/local/bin/flexvol.sh

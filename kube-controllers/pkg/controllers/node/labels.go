@@ -58,8 +58,8 @@ func NewNodeLabelController(client client.Interface, nodeInformer cache.SharedIn
 		client:          client,
 		nodeInformer:    nodeInformer,
 		nodeLister:      v1lister.NewNodeLister(nodeInformer.GetIndexer()),
-		syncerUpdates:   make(chan interface{}, batchUpdateSize),
-		k8sNodeUpdate:   make(chan *v1.Node, batchUpdateSize),
+		syncerUpdates:   make(chan interface{}, utils.BatchUpdateSize),
+		k8sNodeUpdate:   make(chan *v1.Node, utils.BatchUpdateSize),
 		syncChan:        make(chan interface{}, 1),
 	}
 
@@ -158,9 +158,6 @@ func (c *nodeLabelController) handleNodeUpdate(update model.KVPair) {
 	}
 
 	n := update.Value.(*apiv3.Node)
-	if n.ResourceVersion == "" {
-		n.ResourceVersion = update.Revision
-	}
 
 	kn, err := getK8sNodeName(*n)
 	if err != nil {
@@ -206,7 +203,8 @@ func (c *nodeLabelController) acceptScheduledRequests(stopCh <-chan struct{}) {
 		case <-c.syncChan:
 			c.syncAllNodesLabels()
 		case node := <-c.k8sNodeUpdate:
-			c.syncNodeLabels(node)
+			log := logrus.WithFields(logrus.Fields{"controller": "Labels", "type": "nodeUpdate"})
+			utils.ProcessBatch(c.k8sNodeUpdate, node, c.syncNodeLabels, log)
 		case <-stopCh:
 			return
 		}

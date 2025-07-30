@@ -23,6 +23,7 @@ import (
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/constants"
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/ipam"
 	"github.com/projectcalico/calico/calicoctl/calicoctl/util"
+	"github.com/projectcalico/calico/pkg/buildinfo"
 )
 
 // IPAM takes keyword with an IP address then calls the subcommands.
@@ -50,7 +51,7 @@ Description:
 	name, _ := util.NameAndDescription()
 	doc = strings.ReplaceAll(doc, "<BINARY_NAME>", name)
 
-	var parser = &docopt.Parser{
+	parser := &docopt.Parser{
 		HelpHandler:   docopt.PrintHelpAndExit,
 		OptionsFirst:  true,
 		SkipHelpFlags: false,
@@ -68,9 +69,9 @@ Description:
 
 	switch command {
 	case "check":
-		return ipam.Check(args, VERSION)
+		return ipam.Check(args, buildinfo.Version)
 	case "release":
-		return ipam.Release(args, VERSION)
+		return ipam.Release(args, buildinfo.Version)
 	case "show":
 		return ipam.Show(args)
 	case "configure":

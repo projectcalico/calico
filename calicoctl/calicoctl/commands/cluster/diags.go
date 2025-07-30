@@ -180,7 +180,6 @@ func collectDiags(opts *diagOpts) error {
 }
 
 func collectSelectedNodeLogs(kubeClient kubernetes.Interface, dir, linkDir string, opts *diagOpts) {
-
 	// If --focus-nodes is specified, put those node names at the start of the node list.
 	nodeList := strings.Split(opts.FocusNodes, ",")
 
@@ -253,7 +252,6 @@ func collectSelectedNodeLogs(kubeClient kubernetes.Interface, dir, linkDir strin
 }
 
 func collectDiagsForSelectedPods(dir, linkDir string, opts *diagOpts, kubeClient kubernetes.Interface, nodeList []string, ns string, selector *v1.LabelSelector) {
-
 	labelMap, err := v1.LabelSelectorAsMap(selector)
 	if err != nil {
 		fmt.Printf("ERROR forming pod selector: %v\n", err)
@@ -477,7 +475,7 @@ type tls struct {
 func collectTLSSecrets(kubeClient kubernetes.Interface, dir string) {
 	fmt.Println("Collecting (censored) TLS secrets")
 	ctx := context.Background()
-	err := os.MkdirAll(dir, 0777)
+	err := os.MkdirAll(dir, 0o777)
 	if err != nil {
 		fmt.Printf("failed to create TLS directory: %v\n", err)
 		return
@@ -517,7 +515,7 @@ func collectTLSSecrets(kubeClient kubernetes.Interface, dir string) {
 				censorSecret(secret)
 				yamlData, err := yaml.Marshal(secret)
 				if err == nil {
-					err = os.WriteFile(fmt.Sprintf("%s/%s_%s.yaml", dir, ns, t.name), yamlData, 0644)
+					err = os.WriteFile(fmt.Sprintf("%s/%s_%s.yaml", dir, ns, t.name), yamlData, 0o644)
 					if err != nil {
 						fmt.Printf("failed to write YAML to file: %v\n", err)
 					}
@@ -636,6 +634,11 @@ func collectCalicoNodeDiags(curNodeDir string, nodeName, namespace, podName stri
 			Info:     fmt.Sprintf("Collect ipset list for node %s", nodeName),
 			CmdStr:   fmt.Sprintf("kubectl exec -n %s -t %s -c calico-node -- ipset list", namespace, podName),
 			FilePath: fmt.Sprintf("%s/ipset-list.txt", curNodeDir),
+		},
+		{
+			Info:     fmt.Sprintf("Collect conntrack stats for node %s", nodeName),
+			CmdStr:   fmt.Sprintf("kubectl exec -n %s -t %s -c calico-node -- conntrack -LSC", namespace, podName),
+			FilePath: fmt.Sprintf("%s/conntrack-list.txt", curNodeDir),
 		},
 		// eBPF diagnostics
 		{

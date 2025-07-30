@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"os"
 	"regexp"
 	"strings"
 	"time"
@@ -36,6 +37,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/routes"
 	"github.com/projectcalico/calico/felix/fv/connectivity"
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
+	"github.com/projectcalico/calico/felix/fv/utils"
 	"github.com/projectcalico/calico/felix/fv/workload"
 	"github.com/projectcalico/calico/felix/timeshim"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
@@ -174,13 +176,14 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf conntrack table d
 		infra infrastructure.DatastoreInfra
 		tc    infrastructure.TopologyContainers
 
-		w [2]*workload.Workload
+		w  [2]*workload.Workload
+		pc *connectivity.PersistentConnection
 	)
 
 	BeforeEach(func() {
 		infra = getInfra()
 		opts := infrastructure.DefaultTopologyOptions()
-		opts.ExtraEnvVars["FELIX_BPFMapSizeConntrack"] = "100"
+		opts.ExtraEnvVars["FELIX_BPFMapSizeConntrack"] = "10000"
 		opts.ExtraEnvVars["FELIX_debugDisableLogDropping"] = "true"
 		opts.FelixLogSeverity = "Debug"
 		tc, _ = infrastructure.StartNNodeTopology(1, opts, infra)
@@ -218,7 +221,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf conntrack table d
 		cc.CheckConnectivity()
 
 		By("Starting permanent connection")
-		pc := w[0].StartPersistentConnection(w[1].IP, 8055, workload.PersistentConnectionOpts{
+		pc = w[0].StartPersistentConnection(w[1].IP, 8055, workload.PersistentConnectionOpts{
 			MonitorConnectivity: true,
 		})
 		defer pc.Stop()
@@ -237,17 +240,37 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf conntrack table d
 		srcIP := net.IPv4(123, 123, 123, 123)
 		dstIP := net.IPv4(121, 121, 121, 121)
 
-		val := conntrack.NewValueNormal(now, 0, leg, leg)
-		val64 := base64.StdEncoding.EncodeToString(val[:])
+		val := formatBytesWithPrefix(conntrack.NewValueNormal(now, 0, leg, leg).AsBytes())
+		c := tc.Felixes[0].WatchStdoutFor(regexp.MustCompile(".*Overriding bpfMapSizeConntrack \\(10000\\) with map size growth \\(20000\\)"))
 
-		key := conntrack.NewKey(6 /* TCP */, srcIP, 0, dstIP, 0)
-		key64 := base64.StdEncoding.EncodeToString(key[:])
+		line := ""
+		// Program 10k tcp ct entries into map. This is done in batches of 2k.
+		for i := 1; i <= 10000; i++ {
+			sport := uint16(i)
+			dport := uint16(i & 0xffff)
+			key := formatBytesWithPrefix(conntrack.NewKey(6 /* UDP */, srcIP, sport, dstIP, dport).AsBytes())
+			args := []string{"map", "update", "pinned", conntrack.Map().Path()}
+			args = append(args, "key")
+			args = append(args, key...)
+			args = append(args, []string{"value", "hex"}...)
+			args = append(args, val...)
+			output := strings.Join(args, " ")
+			if line == "" {
+				line = output
+			} else {
+				line = line + "\n" + output
+			}
+			if i%2000 == 0 {
+				err := os.WriteFile("/tmp/data_in", []byte(line), 0644)
+				Expect(err).NotTo(HaveOccurred())
+				utils.Run("docker", "cp", "/tmp/data_in", fmt.Sprintf("%s:/tmp/data_in", tc.Felixes[0].Name))
+				line = ""
+				_, err = tc.Felixes[0].ExecOutput("bpftool", "batch", "file", "/tmp/data_in")
+				Expect(err).NotTo(HaveOccurred())
+			}
+		}
 
-		c := tc.Felixes[0].WatchStdoutFor(regexp.MustCompile(".*Overriding bpfMapSizeConntrack \\(100\\) with map size growth \\(200\\)"))
-
-		err := tc.Felixes[0].ExecMayFail("calico-bpf", "conntrack", "fill", key64, val64)
-		Expect(err).NotTo(HaveOccurred())
-
+		defer os.Remove("/tmp/data_in")
 		Eventually(func() bool {
 			select {
 			case _, ok := <-c:
@@ -262,7 +285,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf conntrack table d
 
 		expectPongs()
 
-		err = tc.Felixes[0].ExecMayFail("calico-bpf", "conntrack", "dump", "--raw")
+		err := tc.Felixes[0].ExecMayFail("calico-bpf", "conntrack", "dump", "--raw")
 		Expect(err).NotTo(HaveOccurred())
 	})
 })
@@ -296,4 +319,20 @@ func showBpfMap(felix *infrastructure.Felix, m maps.Map) (map[string]interface{}
 		return nil, err
 	}
 	return data, nil
+}
+
+func formatBytesWithPrefix(data []byte) []string {
+	// Create a slice of strings to hold each formatted byte.
+	// Pre-allocating the slice with the correct capacity is more efficient.
+	parts := make([]string, len(data))
+
+	// Loop over the input data slice.
+	for i, b := range data {
+		// For each byte, format it into the "0xHH" string format
+		// and place it in our parts slice.
+		parts[i] = fmt.Sprintf("0x%02x", b)
+	}
+
+	// Join all the parts together with a single space as the separator.
+	return parts
 }

@@ -112,7 +112,7 @@ class TestGracefulRestart(TestBase):
 
 
 class TestAllRunning(TestBase):
-    def test_kubesystem_pods_running(self):
+    def test_calicosystem_pods_running(self):
         with DiagsCollector():
             self.check_pod_status('calico-system')
 

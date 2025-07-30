@@ -25,19 +25,17 @@ import (
 
 	"github.com/projectcalico/calico/guardian/pkg/config"
 	"github.com/projectcalico/calico/guardian/pkg/daemon"
-	"github.com/projectcalico/calico/guardian/pkg/version"
+	"github.com/projectcalico/calico/pkg/buildinfo"
 )
 
-var (
-	versionFlag = flag.Bool("version", false, "Print version information")
-)
+var versionFlag = flag.Bool("version", false, "Print version information")
 
 func main() {
 	flag.Parse()
 
 	// For --version use case
 	if *versionFlag {
-		version.Version()
+		buildinfo.PrintVersion()
 		os.Exit(0)
 	}
 

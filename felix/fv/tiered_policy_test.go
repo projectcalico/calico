@@ -364,6 +364,9 @@ var _ = infrastructure.DatastoreDescribe("connectivity tests and flow logs with 
 			return strings.Contains(out0, "End of tier tier1: deny") &&
 				strings.Contains(out1, "End of tier tier1: deny")
 		}
+		if BPFMode() {
+			ensureAllNodesBPFProgramsAttached(tc.Felixes)
+		}
 	}
 
 	createBaseConnectivityChecker := func() *connectivity.Checker {
@@ -383,7 +386,7 @@ var _ = infrastructure.DatastoreDescribe("connectivity tests and flow logs with 
 		JustBeforeEach(func() {
 			infra = getInfra()
 			opts = infrastructure.DefaultTopologyOptions()
-			opts.IPIPEnabled = false
+			opts.IPIPMode = api.IPIPModeNever
 
 			testSetup()
 		})
@@ -438,7 +441,7 @@ var _ = infrastructure.DatastoreDescribe("connectivity tests and flow logs with 
 		JustBeforeEach(func() {
 			infra = getInfra()
 			opts = infrastructure.DefaultTopologyOptions()
-			opts.IPIPEnabled = false
+			opts.IPIPMode = api.IPIPModeNever
 			opts.FlowLogSource = infrastructure.FlowLogSourceLocalSocket
 
 			opts.ExtraEnvVars["FELIX_FLOWLOGSCOLLECTORDEBUGTRACE"] = "true"

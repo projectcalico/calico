@@ -1,7 +1,10 @@
 include ../metadata.mk
 
 PACKAGE_NAME = github.com/projectcalico/calico/whisker-backend
+
+# Configure variables used by ci/cd common targets from lib.Makefile.
 IMAGE_BUILD_MARKER = whisker-backend-$(ARCH).created
+BUILD_IMAGES = whisker-backend
 
 ###############################################################################
 # include ../lib.Makefile
@@ -9,9 +12,6 @@ IMAGE_BUILD_MARKER = whisker-backend-$(ARCH).created
 #   that variable is evaluated when we declare DOCKER_RUN and siblings.
 ###############################################################################
 include ../lib.Makefile
-
-# Configure variables used by ci/cd common targets from lib.Makefile.
-BUILD_IMAGES=whisker-backend
 
 .PHONY: image build
 image: $(IMAGE_BUILD_MARKER)
@@ -26,13 +26,16 @@ sub-image-%:
 
 # Build whisker-backend image.
 whisker-backend calico/whisker-backend: $(IMAGE_BUILD_MARKER)
-$(IMAGE_BUILD_MARKER): bin/whisker-backend-$(ARCH)
+$(IMAGE_BUILD_MARKER): bin/whisker-backend-$(ARCH) bin/LICENSE
 	$(DOCKER_BUILD) --build-arg TARGETARCH=$(ARCH) -t whisker-backend:latest-$(ARCH) -f docker/Dockerfile .
 	$(MAKE) retag-build-images-with-registries BUILD_IMAGES=$(BUILD_IMAGES) VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@
 
 bin/whisker-backend-$(ARCH): $(shell find . -name '*.go') $(shell find ../lib/. -name '*.go')
 	$(call build_binary, $(PACKAGE_NAME)/cmd/, $@)
+
+bin/LICENSE: ../LICENSE.md
+	cp ../LICENSE.md $@
 
 # Build the testserver image.
 .PHONY: testserver

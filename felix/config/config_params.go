@@ -220,6 +220,7 @@ type Config struct {
 	BPFDisableGROForIfaces             *regexp.Regexp    `config:"regexp;"`
 	BPFExcludeCIDRsFromNAT             []string          `config:"cidr-list;;"`
 	BPFRedirectToPeer                  string            `config:"oneof(Disabled,Enabled,L2Only);L2Only;non-zero"`
+	BPFAttachType                      string            `config:"oneof(tcx,tc);tcx;non-zero"`
 	BPFExportBufferSizeMB              int               `config:"int;1;non-zero"`
 	BPFProfiling                       string            `config:"oneof(Disabled,Enabled);Disabled;non-zero"`
 
@@ -297,6 +298,7 @@ type Config struct {
 	DeviceRouteSourceAddressIPv6       net.IP            `config:"ipv6;"`
 	DeviceRouteProtocol                int               `config:"int;3"`
 	RemoveExternalRoutes               bool              `config:"bool;true"`
+	ProgramClusterRoutes               string            `config:"oneof(Enabled,Disabled);Disabled"`
 	IPForwarding                       string            `config:"oneof(Enabled,Disabled);Enabled"`
 	IptablesRefreshInterval            time.Duration     `config:"seconds;180"`
 	IptablesPostWriteCheckIntervalSecs time.Duration     `config:"seconds;5"`
@@ -412,9 +414,10 @@ type Config struct {
 	FlowLogsLocalReporter        string        `config:"oneof(Enabled,Disabled);Disabled"`
 	FlowLogsPolicyEvaluationMode string        `config:"oneof(None,Continuous);Continuous"`
 
-	KubeNodePortRanges []numorstring.Port `config:"portrange-list;30000:32767"`
-	NATPortRange       numorstring.Port   `config:"portrange;"`
-	NATOutgoingAddress net.IP             `config:"ipv4;"`
+	KubeNodePortRanges    []numorstring.Port `config:"portrange-list;30000:32767"`
+	NATPortRange          numorstring.Port   `config:"portrange;"`
+	NATOutgoingAddress    net.IP             `config:"ipv4;"`
+	NATOutgoingExclusions string             `config:"oneof(IPPoolsOnly,IPPoolsAndHostIPs);IPPoolsOnly"`
 
 	UsageReportingEnabled          bool          `config:"bool;true"`
 	UsageReportingInitialDelaySecs time.Duration `config:"seconds;300"`
@@ -499,6 +502,8 @@ type Config struct {
 	loadClientConfigFromEnvironment func() (*apiconfig.CalicoAPIConfig, error)
 
 	useNodeResourceUpdates bool
+
+	RequireMTUFile bool `config:"bool;false"`
 }
 
 func (config *Config) FilterAllowAction() string {
@@ -543,6 +548,10 @@ func (config *Config) FlowLogsLocalReporterEnabled() bool {
 func (config *Config) FlowLogsEnabled() bool {
 	return config.FlowLogsGoldmaneServer != "" ||
 		config.FlowLogsLocalReporterEnabled()
+}
+
+func (config *Config) ProgramClusterRoutesEnabled() bool {
+	return config.ProgramClusterRoutes == "Enabled"
 }
 
 // Copy makes a copy of the object.  Internal state is deep copied but config parameters are only shallow copied.

@@ -26,19 +26,6 @@ SRC_FILES = $(shell find . -name '*.go') \
 		$(shell find ../api/pkg -name '*.go') \
 		$(shell find ../libcalico-go/lib/logutils -name '*.go')
 
-#############################################
-# Env vars related to building
-#############################################
-
-# Flags for building the binaries.
-#
-# We use -X to insert the version information into the placeholder variables
-# in the version package.
-LDFLAGS = -X $(PACKAGE_NAME)/pkg/version.BuildVersion=$(GIT_VERSION) \
-			  -X $(PACKAGE_NAME)/pkg/version.BuildDate=$(DATE) \
-			  -X $(PACKAGE_NAME)/pkg/version.GitDescription=$(GIT_DESCRIPTION) \
-			  -X $(PACKAGE_NAME)/pkg/version.GitRevision=$(GIT_COMMIT) \
-
 ##########################################################################################
 # BUILD
 ##########################################################################################
@@ -83,7 +70,12 @@ $(GUARDIAN_CONTAINER_CREATED): docker-image/guardian/Dockerfile $(BINDIR)/guardi
 .PHONY: ut
 ## Run only Unit Tests.
 ut:
-	$(DOCKER_GO_BUILD) go test ./... -cover -count 1
+	$(DOCKER_GO_BUILD) go test ./pkg/... -cover -count 1
+
+.PHONY: ut
+## Run only Unit Tests.
+fv:
+	$(DOCKER_GO_BUILD) go test ./tests/fv/... -cover -count 1
 
 ##########################################################################################
 # CI/CD
@@ -94,7 +86,7 @@ ut:
 # Run CI cycle - build, test, etc.
 #############################################
 ## Run all CI steps for build and test, likely other targets.
-ci: static-checks ut
+ci: static-checks ut fv
 
 clean:
 	rm -rf $(BINDIR)

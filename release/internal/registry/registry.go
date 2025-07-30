@@ -14,36 +14,11 @@
 
 package registry
 
-import (
-	"strings"
-
-	"github.com/sirupsen/logrus"
-)
-
-// Registry represents a container registry.
-type Registry interface {
-	URL() string
-	Token(img ImageRef) (string, error)
-	TokenURL(scope string) string
-	ManifestURL(img ImageRef) string
-}
-
-// GetRegistry returns a Registry based on the registry string.
-func GetRegistry(registry string) Registry {
-	switch registry {
-	case QuayRegistry:
-		return &Quay{}
-	case DockerRegistry:
-		return &Docker{}
-	case GCRRegistry:
-		return &GCR{}
-	default:
-		if strings.Contains(registry, GCRRegistry) {
-			return NewGCRRegistry(registry)
-		} else if strings.Contains(registry, GARSuffix) {
-			return NewGAR(registry)
-		}
-		logrus.WithField("registry", registry).Fatal("Unknown registry")
-	}
-	return nil
+var DefaultCalicoRegistries = []string{
+	"docker.io/calico",
+	"quay.io/calico",
+	"gcr.io/projectcalico-org",
+	"eu.gcr.io/projectcalico-org",
+	"asia.gcr.io/projectcalico-org",
+	"us.gcr.io/projectcalico-org",
 }

@@ -27,10 +27,14 @@ import (
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 )
 
+const (
+	Etcdv3 = "etcdv3"
+)
+
 type UpdateHandler func(bapi.Update)
 type StatusHandler func(bapi.SyncStatus)
 
-func NewDataFeed(c client.Interface) *DataFeed {
+func NewDataFeed(c client.Interface, dataStore string) *DataFeed {
 	// Kinds to register with on the syncer API.
 	resourceTypes := []watchersyncer.ResourceType{
 		{
@@ -56,6 +60,7 @@ func NewDataFeed(c client.Interface) *DataFeed {
 	d := &DataFeed{
 		registrations:       map[interface{}][]UpdateHandler{},
 		statusRegistrations: []StatusHandler{},
+		dataStore:           dataStore,
 	}
 	d.syncer = watchersyncer.New(c.(accessor).Backend(), resourceTypes, d)
 	return d
@@ -67,6 +72,7 @@ type DataFeed struct {
 	// Registrations
 	registrations       map[interface{}][]UpdateHandler
 	statusRegistrations []StatusHandler
+	dataStore           string
 }
 
 func (d *DataFeed) Start() {
@@ -91,18 +97,51 @@ func (d *DataFeed) OnStatusUpdated(status bapi.SyncStatus) {
 	}
 }
 
-func (c *DataFeed) OnUpdates(updates []bapi.Update) {
+func (d *DataFeed) OnUpdates(updates []bapi.Update) {
 	for _, upd := range updates {
-		c.onUpdate(upd)
+		d.onUpdate(upd)
 	}
 }
 
-func (c DataFeed) onUpdate(update bapi.Update) {
+func (d *DataFeed) onUpdate(update bapi.Update) {
 	// Pull out the update type.
 	t := reflect.TypeOf(update.Key)
 
+	if d.dataStore == Etcdv3 {
+		d.updateResourceVersion(update)
+	}
+
 	// For each consumer registered for this type, send an update.
-	for _, f := range c.registrations[t] {
+	for _, f := range d.registrations[t] {
 		f(update)
+	}
+}
+
+// updateResourceVersion updates the resourceVersion of the resource when we run in etcd mode. The resource version is revision on the KVPair
+// This is a workaround for a fact that the backend syncer api does not update the resourceVersion.
+// Kube-controller syncer should not have to be aware of the datastore and the backend syncer should correctly update the resourceVersion
+// This can be removed once the backend syncer code is updates
+func (d *DataFeed) updateResourceVersion(update bapi.Update) {
+	if update.Value == nil {
+		// We received delete, we don't have to update the resourceVersion as the resource does not exist
+		return
+	}
+
+	switch key := update.Key.(type) {
+	case model.ResourceKey:
+		switch key.Kind {
+		case libapiv3.KindNode:
+			node := update.Value.(*libapiv3.Node)
+			node.ResourceVersion = update.Revision
+		case apiv3.KindClusterInformation:
+			clusterInformation := update.Value.(*apiv3.ClusterInformation)
+			clusterInformation.ResourceVersion = update.Revision
+		case apiv3.KindIPPool:
+			pool := update.Value.(*apiv3.IPPool)
+			pool.ResourceVersion = update.Revision
+		case apiv3.KindHostEndpoint:
+			endpoint := update.Value.(*apiv3.HostEndpoint)
+			endpoint.ResourceVersion = update.Revision
+		}
 	}
 }

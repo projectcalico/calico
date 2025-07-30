@@ -30,7 +30,7 @@ LABEL org.opencontainers.image.vendor="Project Calico"
 LABEL org.opencontainers.image.version="${GIT_VERSION}"
 LABEL org.opencontainers.image.licenses="Apache-2.0"
 
-COPY LICENSE /licenses/LICENSE
+COPY dist/LICENSE /licenses/LICENSE
 
 COPY dist/bin/calico-node.exe /CalicoWindows/calico-node.exe
 COPY windows-packaging/CalicoWindows/felix/felix-service.ps1 /CalicoWindows/felix-service.ps1

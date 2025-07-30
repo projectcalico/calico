@@ -15,6 +15,9 @@
 package conntrack
 
 import (
+	"fmt"
+	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -92,10 +95,15 @@ type EntryScannerSynced interface {
 // It provides a delete-save iteration over the conntrack table for multiple
 // evaluation functions, to keep their implementation simpler.
 type Scanner struct {
-	ctMap          maps.Map
-	keyFromBytes   func([]byte) KeyInterface
-	valueFromBytes func([]byte) ValueInterface
-	scanners       []EntryScanner
+	ctMap                        maps.Map
+	keyFromBytes                 func([]byte) KeyInterface
+	valueFromBytes               func([]byte) ValueInterface
+	scanners                     []EntryScanner
+	liveEntries                  int
+	higherCount                  int
+	maxEntries                   int
+	autoScale                    bool
+	configChangedRestartCallback func()
 
 	wg       sync.WaitGroup
 	stopCh   chan struct{}
@@ -105,14 +113,20 @@ type Scanner struct {
 // NewScanner returns a scanner for the given conntrack map and the set of
 // EntryScanner. They are executed in the provided order on each entry.
 func NewScanner(ctMap maps.Map, kfb func([]byte) KeyInterface, vfb func([]byte) ValueInterface,
+	configChangedRestartCallback func(),
+	autoScalingMode string,
 	scanners ...EntryScanner) *Scanner {
 
 	return &Scanner{
-		ctMap:          ctMap,
-		keyFromBytes:   kfb,
-		valueFromBytes: vfb,
-		scanners:       scanners,
-		stopCh:         make(chan struct{}),
+		ctMap:                        ctMap,
+		keyFromBytes:                 kfb,
+		valueFromBytes:               vfb,
+		scanners:                     scanners,
+		stopCh:                       make(chan struct{}),
+		liveEntries:                  ctMap.Size(),
+		maxEntries:                   ctMap.Size(),
+		autoScale:                    strings.ToLower(autoScalingMode) == "doubleiffull",
+		configChangedRestartCallback: configChangedRestartCallback,
 	}
 }
 
@@ -155,14 +169,60 @@ func (s *Scanner) Scan() {
 		return maps.IterNone
 	})
 
+	if err != nil {
+		log.WithError(err).Warn("Failed to iterate over conntrack map")
+		return
+	}
+
 	conntrackCounterSweeps.Inc()
 	conntrackGaugeUsed.Set(float64(used))
 	conntrackGaugeCleaned.Set(float64(cleaned))
 	conntrackGaugeSweepDuration.Set(float64(time.Since(start)))
-
-	if err != nil {
-		log.WithError(err).Warn("Failed to iterate over conntrack map")
+	if !s.autoScale {
+		return
 	}
+
+	newLiveEntries := int(used - cleaned)
+	if s.liveEntries > newLiveEntries {
+		s.higherCount++
+	} else {
+		s.higherCount = 0
+	}
+	s.liveEntries = newLiveEntries
+
+	full := float64(newLiveEntries) / float64(s.maxEntries)
+	log.Debugf("full %f, total %d, totalDeleted %d", full, used, cleaned)
+
+	// If the ct map keeps filling up and gets over 85% full or if it hits 90%
+	// no matter what, resize the map.
+	if s.higherCount >= 3 && full > 0.85 || full > 0.90 {
+		if err := s.writeNewSizeFile(); err != nil {
+			log.WithError(err).Warn("Failed to start resizing conntrack map when running out of space")
+		} else {
+			if s.configChangedRestartCallback != nil {
+				log.Warnf("The eBPF conntrack table is becoming full. To prevent connections from failing, "+
+					"resizing from %d to %d entries. Restarting Felix to apply the new size.", s.maxEntries, 2*s.maxEntries)
+				s.configChangedRestartCallback()
+			}
+		}
+	}
+}
+
+func (s *Scanner) writeNewSizeFile() error {
+	// Make sure directory exists.
+	if err := os.MkdirAll("/var/lib/calico", os.ModePerm); err != nil {
+		return fmt.Errorf("failed to create directory /var/lib/calico: %s", err)
+	}
+
+	newSize := 2 * s.ctMap.Size()
+
+	// Write the new map size to disk so that restarts will pick it up.
+	filename := "/var/lib/calico/bpf_ct_map_size"
+	log.Debugf("Writing %d to "+filename, newSize)
+	if err := os.WriteFile(filename, []byte(fmt.Sprintf("%d", newSize)), 0o644); err != nil {
+		return fmt.Errorf("unable to write to %s: %w", filename, err)
+	}
+	return nil
 }
 
 func (s *Scanner) get(k KeyInterface) (ValueInterface, error) {

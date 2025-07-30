@@ -3,15 +3,15 @@ include ../metadata.mk
 PACKAGE_NAME = github.com/projectcalico/calico/goldmane
 IMAGE_BUILD_MARKER = goldmane_container-$(ARCH).created
 
+# Configure variables used by ci/cd common targets from lib.Makefile.
+BUILD_IMAGES=goldmane
+
 ###############################################################################
 # include ../lib.Makefile
 #   Additions to EXTRA_DOCKER_ARGS need to happen before the include since
 #   that variable is evaluated when we declare DOCKER_RUN and siblings.
 ###############################################################################
 include ../lib.Makefile
-
-# Configure variables used by ci/cd common targets from lib.Makefile.
-BUILD_IMAGES=goldmane
 
 # Full set of binaries to build.
 BINARIES=bin/goldmane-$(ARCH) bin/health-$(ARCH)
@@ -29,7 +29,7 @@ sub-image-%:
 
 # Build goldmane image.
 goldmane calico/goldmane: $(IMAGE_BUILD_MARKER)
-$(IMAGE_BUILD_MARKER): $(BINARIES)
+$(IMAGE_BUILD_MARKER): $(BINARIES) bin/LICENSE
 	$(DOCKER_BUILD) --build-arg TARGETARCH=$(ARCH) -t goldmane:latest-$(ARCH) -f docker/Dockerfile .
 	$(MAKE) retag-build-images-with-registries BUILD_IMAGES=$(BUILD_IMAGES) VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@
@@ -39,6 +39,9 @@ bin/goldmane-$(ARCH): $(shell find . -name '*.go')
 
 bin/health-$(ARCH): $(shell find . -name '*.go')
 	$(call build_binary, $(PACKAGE_NAME)/cmd/health, $@)
+
+bin/LICENSE: ../LICENSE.md
+	cp ../LICENSE.md $@
 
 # Build the testserver image.
 .PHONY: testserver

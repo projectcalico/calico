@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -36,6 +36,18 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
+)
+
+var (
+	// Configure timeoutes for the tests. We expedite leak detection in order to speed up the tests.
+	leakGracePeriod = 1 * time.Second
+
+	// We don't want consistently blocks to take too long - but they need to wait at least a few
+	// grace periods to do their job.
+	consistentlyTimeout  = 3 * leakGracePeriod
+	consistentlyInterval = consistentlyTimeout / 10
+
+	retryInterval = 100 * time.Millisecond
 )
 
 var _ = Describe("IPAM garbage collection FV tests with short leak grace period", func() {
@@ -77,7 +89,7 @@ var _ = Describe("IPAM garbage collection FV tests with short leak grace period"
 		Eventually(func() error {
 			_, err := k8sClient.CoreV1().Namespaces().List(context.Background(), metav1.ListOptions{})
 			return err
-		}, 30*time.Second, 1*time.Second).Should(BeNil())
+		}, 30*time.Second, retryInterval).Should(BeNil())
 
 		// Apply the necessary CRDs. There can sometimes be a delay between starting
 		// the API server and when CRDs are apply-able, so retry here.
@@ -88,7 +100,7 @@ var _ = Describe("IPAM garbage collection FV tests with short leak grace period"
 			}
 			return nil
 		}
-		Eventually(apply, 10*time.Second).ShouldNot(HaveOccurred())
+		Eventually(apply, 10*time.Second, retryInterval).ShouldNot(HaveOccurred())
 
 		// Make a Calico client and backend client.
 		type accessor interface {
@@ -113,7 +125,7 @@ var _ = Describe("IPAM garbage collection FV tests with short leak grace period"
 		By("shortening the leak grace period for the test", func() {
 			kcc := api.NewKubeControllersConfiguration()
 			kcc.Name = "default"
-			kcc.Spec.Controllers.Node = &api.NodeControllerConfig{LeakGracePeriod: &metav1.Duration{Duration: 5 * time.Second}}
+			kcc.Spec.Controllers.Node = &api.NodeControllerConfig{LeakGracePeriod: &metav1.Duration{Duration: leakGracePeriod}}
 			_, err = calicoClient.KubeControllersConfiguration().Create(context.Background(), kcc, options.SetOptions{})
 			Expect(err).ToNot(HaveOccurred())
 		})
@@ -144,7 +156,7 @@ var _ = Describe("IPAM garbage collection FV tests with short leak grace period"
 					metav1.CreateOptions{},
 				)
 				return err
-			}, time.Second*10, 500*time.Millisecond).ShouldNot(HaveOccurred())
+			}, time.Second*10, retryInterval).ShouldNot(HaveOccurred())
 		})
 
 		// Start the controller.
@@ -217,7 +229,7 @@ var _ = Describe("IPAM garbage collection FV tests with short leak grace period"
 				return err
 			}
 			return nil
-		}, 30*time.Second, 2*time.Second).Should(BeNil())
+		}, consistentlyTimeout, consistentlyInterval).Should(BeNil())
 	})
 
 	It("should clean up empty blocks after the grace period", func() {
@@ -249,7 +261,7 @@ var _ = Describe("IPAM garbage collection FV tests with short leak grace period"
 		Expect(len(affs.KVPairs)).To(Equal(2))
 
 		By("releasing the second IP address to create an empty affine block", func() {
-			unalloc, err := calicoClient.IPAM().ReleaseIPs(context.Background(), ipam.ReleaseOptions{Address: "192.168.0.65", Handle: handle2})
+			unalloc, _, err := calicoClient.IPAM().ReleaseIPs(context.Background(), ipam.ReleaseOptions{Address: "192.168.0.65", Handle: handle2})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(len(unalloc)).To(Equal(0))
 		})
@@ -257,7 +269,7 @@ var _ = Describe("IPAM garbage collection FV tests with short leak grace period"
 		// Expect the block to be cleaned up by the GC, eventually.
 		Eventually(func() error {
 			return assertNumBlocks(bc, 1)
-		}, 15*time.Second, 2*time.Second).Should(BeNil())
+		}, 15*time.Second, retryInterval).Should(BeNil())
 	})
 
 	It("should NOT clean up allocations that are not Kubernetes pods", func() {
@@ -290,7 +302,7 @@ var _ = Describe("IPAM garbage collection FV tests with short leak grace period"
 				return err
 			}
 			return nil
-		}, 30*time.Second, 2*time.Second).Should(BeNil())
+		}, consistentlyTimeout, consistentlyInterval).Should(BeNil())
 	})
 
 	It("should clean up an IP with no corresponding pod", func() {
@@ -325,7 +337,7 @@ var _ = Describe("IPAM garbage collection FV tests with short leak grace period"
 				return err
 			}
 			return nil
-		}, time.Minute, 2*time.Second).Should(BeNil())
+		}, time.Minute, retryInterval).Should(BeNil())
 	})
 
 	It("should NOT garbage collect a valid IP address (status.PodIP)", func() {
@@ -376,7 +388,7 @@ var _ = Describe("IPAM garbage collection FV tests with short leak grace period"
 		Expect(err).NotTo(HaveOccurred())
 		Expect(len(affs.KVPairs)).To(Equal(1))
 
-		// The valid IP should not be cleaned up. Wait 30 seconds (6 times the GC interval set for the test).
+		// The valid IP should not be cleaned up.
 		Consistently(func() error {
 			if err := assertIPsWithHandle(calicoClient.IPAM(), handleValidIP, 1); err != nil {
 				return err
@@ -385,7 +397,7 @@ var _ = Describe("IPAM garbage collection FV tests with short leak grace period"
 				return err
 			}
 			return nil
-		}, 30*time.Second, 2*time.Second).Should(BeNil())
+		}, consistentlyTimeout, consistentlyInterval).Should(BeNil())
 	})
 
 	It("should NOT garbage collect a valid IP address (status.PodIPs)", func() {
@@ -439,7 +451,7 @@ var _ = Describe("IPAM garbage collection FV tests with short leak grace period"
 		Expect(err).NotTo(HaveOccurred())
 		Expect(len(affs.KVPairs)).To(Equal(1))
 
-		// The valid IP should not be cleaned up. Wait 30 seconds (6 times the GC interval set for the test).
+		// The valid IP should not be cleaned up.
 		Consistently(func() error {
 			if err := assertIPsWithHandle(calicoClient.IPAM(), handleValidIP, 1); err != nil {
 				return err
@@ -448,7 +460,7 @@ var _ = Describe("IPAM garbage collection FV tests with short leak grace period"
 				return err
 			}
 			return nil
-		}, 30*time.Second, 2*time.Second).Should(BeNil())
+		}, consistentlyTimeout, consistentlyInterval).Should(BeNil())
 	})
 
 	It("should NOT clean up an IP if the matching pod does not yet have an address in the API", func() {
@@ -505,7 +517,7 @@ var _ = Describe("IPAM garbage collection FV tests with short leak grace period"
 				return err
 			}
 			return nil
-		}, 30*time.Second, 2*time.Second).Should(BeNil())
+		}, 30*time.Second, retryInterval).Should(BeNil())
 	})
 
 	It("should GC IP allocations if they do not match the pod's IP", func() {
@@ -565,7 +577,7 @@ var _ = Describe("IPAM garbage collection FV tests with short leak grace period"
 				return err
 			}
 			return nil
-		}, time.Minute, 2*time.Second).Should(BeNil())
+		}, time.Minute, retryInterval).Should(BeNil())
 	})
 })
 
@@ -608,7 +620,7 @@ var _ = Describe("IPAM garbage collection FV tests with long leak grace period",
 		Eventually(func() error {
 			_, err := k8sClient.CoreV1().Namespaces().List(context.Background(), metav1.ListOptions{})
 			return err
-		}, 30*time.Second, 1*time.Second).Should(BeNil())
+		}, 30*time.Second, retryInterval).Should(BeNil())
 
 		// Apply the necessary CRDs. There can sometimes be a delay between starting
 		// the API server and when CRDs are apply-able, so retry here.
@@ -619,7 +631,7 @@ var _ = Describe("IPAM garbage collection FV tests with long leak grace period",
 			}
 			return nil
 		}
-		Eventually(apply, 10*time.Second).ShouldNot(HaveOccurred())
+		Eventually(apply, 10*time.Second, retryInterval).ShouldNot(HaveOccurred())
 
 		// Make a Calico client and backend client.
 		type accessor interface {
@@ -676,7 +688,7 @@ var _ = Describe("IPAM garbage collection FV tests with long leak grace period",
 					metav1.CreateOptions{},
 				)
 				return err
-			}, time.Second*10, 500*time.Millisecond).ShouldNot(HaveOccurred())
+			}, time.Second*10, retryInterval).ShouldNot(HaveOccurred())
 		})
 
 		// Start the controller.
@@ -726,7 +738,7 @@ var _ = Describe("IPAM garbage collection FV tests with long leak grace period",
 		Expect(len(affs.KVPairs)).To(Equal(2))
 
 		By("releasing the second IP address to create an empty affine block", func() {
-			unalloc, err := calicoClient.IPAM().ReleaseIPs(context.Background(), ipam.ReleaseOptions{Address: "192.168.0.65", Handle: handle2})
+			unalloc, _, err := calicoClient.IPAM().ReleaseIPs(context.Background(), ipam.ReleaseOptions{Address: "192.168.0.65", Handle: handle2})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(len(unalloc)).To(Equal(0))
 		})
@@ -734,6 +746,6 @@ var _ = Describe("IPAM garbage collection FV tests with long leak grace period",
 		// Expect that the block is not removed immediately.
 		Consistently(func() error {
 			return assertNumBlocks(bc, 2)
-		}, 15*time.Second, 2*time.Second).Should(BeNil())
+		}, consistentlyTimeout, consistentlyInterval).Should(BeNil())
 	})
 })

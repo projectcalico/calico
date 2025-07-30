@@ -5,6 +5,8 @@ PACKAGE_NAME ?= github.com/projectcalico/calico/third_party/envoy-gateway
 ENVOY_GATEWAY_IMAGE ?= envoy-gateway
 BUILD_IMAGES ?= $(ENVOY_GATEWAY_IMAGE)
 
+# For updating this version please see
+# https://github.com/tigera/operator/blob/master/docs/common_tasks.md#updating-the-bundled-version-of-envoy-gateway
 ENVOY_GATEWAY_VERSION=v1.3.2
 
 ##############################################################################
@@ -24,6 +26,7 @@ init-source:: $(ENVOY_GATEWAY_DOWNLOADED)
 $(ENVOY_GATEWAY_DOWNLOADED):
 	mkdir -p envoy-gateway
 	curl -sfL https://github.com/envoyproxy/gateway/archive/refs/tags/$(ENVOY_GATEWAY_VERSION).tar.gz | tar xz --strip-components 1 -C envoy-gateway
+	patch -d envoy-gateway -p1 < patches/0001-Bumping-x-net-and-containerd.patch
 	touch $@
 
 .PHONY: build
@@ -40,7 +43,7 @@ bin/envoy-gateway-$(ARCH): init-source
 
 .PHONY: clean
 clean:
-	rm -f .envoy-gateway.*
+	rm -f .envoy-gateway.* .*.created* .*.published* .release.*
 	rm -fr bin/ envoy-gateway/
 	-docker image rm -f $$(docker images $(ENVOY_GATEWAY_IMAGE) -a -q)
 

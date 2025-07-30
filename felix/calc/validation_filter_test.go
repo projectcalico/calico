@@ -22,6 +22,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/calc"
 	"github.com/projectcalico/calico/felix/config"
+	"github.com/projectcalico/calico/lib/std/uniquelabels"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
@@ -56,7 +57,7 @@ var _ = Describe("WorkloadEndpoint Source IP Spoofing validation", func() {
 					State:                      "active",
 					Name:                       "cali1234",
 					AllowSpoofedSourcePrefixes: []net.IPNet{mustParseNet("1.2.3.4/32")},
-					Labels:                     map[string]string{"label": "value"},
+					Labels:                     uniquelabels.Make(map[string]string{"label": "value"}),
 					Mac:                        mustParseMac("01:02:03:04:05:06"),
 					ProfileIDs:                 []string{},
 					IPv4Nets:                   []net.IPNet{mustParseNet("10.0.0.1/32")},

@@ -20,3 +20,8 @@ request because those are immediately public. Instead:
 
 Please include as much information as possible, including the
 affected version(s) and steps to reproduce.
+
+## Third Party Vulnerabilities
+
+When using automated security scanning tools (e.g., Trivy, Grype, Docker Scout), CVEs may be flagged in Calico container images due to vulnerabilities in third-party dependencies. Before submitting any reports related to these findings, check the [Tigera VEX repository](https://github.com/tigera/vex).
+The repository provides analysis of third-party CVEs that may appear in Calico images, including whether they are exploitable or applicable to our supported versions. Reviewing this information helps avoid duplicate reports and offers context for scanner-detected issues.

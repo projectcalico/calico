@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// The labelindex package provides the InheritIndex type, which emits events as the set of
+// Package labelindex provides the InheritIndex type, which emits events as the set of
 // items (currently WorkloadEndpoints/HostEndpoint) it has been told about start (or stop) matching
 // the label selectors (which are extracted from the active policy rules) it has been told about.
 //
@@ -49,6 +49,8 @@ import (
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/lib/std/uniquelabels"
+	"github.com/projectcalico/calico/lib/std/uniquestr"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/selector"
@@ -62,18 +64,18 @@ import (
 // In particular, it holds it current explicitly-assigned labels and a pointer to the parent data
 // for each of its parents.
 type itemData struct {
-	labels  map[string]string
+	labels  uniquelabels.Map
 	parents []*parentData
 }
 
-// Get implements the Labels interface for itemData.  Combines the item's own labels with those
+// GetHandle implements the Labels interface for itemData.  Combines the item's own labels with those
 // of its parents on the fly.
-func (itemData *itemData) Get(labelName string) (value string, present bool) {
-	if value, present = itemData.labels[labelName]; present {
+func (itemData *itemData) GetHandle(labelName uniquestr.Handle) (handle uniquestr.Handle, present bool) {
+	if handle, present = itemData.labels.GetHandle(labelName); present {
 		return
 	}
 	for _, parent := range itemData.parents {
-		if value, present = parent.labels[labelName]; present {
+		if handle, present = parent.labels.GetHandle(labelName); present {
 			return
 		}
 	}
@@ -85,7 +87,7 @@ func (itemData *itemData) Get(labelName string) (value string, present bool) {
 // have partial information.
 type parentData struct {
 	id      string
-	labels  map[string]string
+	labels  uniquelabels.Map
 	itemIDs set.Set[any]
 }
 
@@ -170,6 +172,7 @@ func (l *InheritIndex) OnUpdate(update api.Update) (_ bool) {
 func (idx *InheritIndex) UpdateSelector(id interface{}, sel *selector.Selector) {
 	if sel == nil {
 		log.WithField("id", id).Panic("Selector should not be nil")
+		panic("Selector should not be nil")
 	}
 	oldSel := idx.selectorsById[id]
 	// Since the selectorRoot struct has cache fields, the easiest way to compare two
@@ -199,7 +202,7 @@ func (idx *InheritIndex) DeleteSelector(id interface{}) {
 	delete(idx.selectorsById, id)
 }
 
-func (idx *InheritIndex) UpdateLabels(id interface{}, labels map[string]string, parentIDs []string) {
+func (idx *InheritIndex) UpdateLabels(id interface{}, labels uniquelabels.Map, parentIDs []string) {
 	log.Debug("Inherit index updating labels for ", id)
 	log.Debug("Num dirty items ", idx.dirtyItemIDs.Len(), " items")
 
@@ -215,7 +218,7 @@ func (idx *InheritIndex) UpdateLabels(id interface{}, labels map[string]string, 
 		}
 	}
 	newItemData := &itemData{}
-	if len(labels) > 0 {
+	if labels.Len() > 0 {
 		newItemData.labels = labels
 	}
 	if len(parentIDs) > 0 {
@@ -263,7 +266,7 @@ func (idx *InheritIndex) discardParentIfEmpty(id string) {
 	if parent == nil {
 		return
 	}
-	if parent.itemIDs == nil && parent.labels == nil {
+	if parent.itemIDs == nil && parent.labels.IsNil() {
 		delete(idx.parentDataByParentID, id)
 	}
 }
@@ -304,7 +307,7 @@ func (idx *InheritIndex) onItemParentsUpdate(id interface{}, oldParents, newPare
 
 func (idx *InheritIndex) UpdateParentLabels(parentID string, labels map[string]string) {
 	parent := idx.getOrCreateParent(parentID)
-	parent.labels = labels
+	parent.labels = uniquelabels.Make(labels) // FIXME intern further upstream?
 	idx.flushChildren(parentID)
 }
 
@@ -313,7 +316,7 @@ func (idx *InheritIndex) DeleteParentLabels(parentID string) {
 	if parent == nil {
 		return
 	}
-	parent.labels = nil
+	parent.labels = uniquelabels.Map{}
 	idx.discardParentIfEmpty(parentID)
 	idx.flushChildren(parentID)
 }

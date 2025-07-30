@@ -12,11 +12,6 @@ SRC_FILES=$(shell find . -name '*.go' |grep -v vendor) $(GENERATED_FILES)
 DIKASTES_IMAGE ?=dikastes
 BUILD_IMAGES ?= $(DIKASTES_IMAGE)
 
-LDFLAGS = -X $(PACKAGE_NAME)/buildinfo.GitVersion=$(GIT_DESCRIPTION) \
-			-X $(PACKAGE_NAME)/buildinfo.BuildDate=$(DATE) \
-			-X $(PACKAGE_NAME)/buildinfo.GitRevision=$(GIT_COMMIT) \
-			-B 0x$(BUILD_ID)
-
 ##############################################################################
 # Download and include ../lib.Makefile before anything else
 #   Additions to EXTRA_DOCKER_ARGS need to happen before the include since
@@ -132,15 +127,18 @@ sub-image-fips-%:
 	$(MAKE) image FIPS=true ARCH=$*
 
 $(DIKASTES_IMAGE): $(CONTAINER_MARKER)
-$(CONTAINER_CREATED): register Dockerfile $(BINDIR)/dikastes-$(ARCH) $(BINDIR)/healthz-$(ARCH)
+$(CONTAINER_CREATED): register Dockerfile $(BINDIR)/dikastes-$(ARCH) $(BINDIR)/healthz-$(ARCH) bin/LICENSE
 	$(DOCKER_BUILD) --build-arg BIN_DIR=$(BINDIR) -t $(DIKASTES_IMAGE):latest-$(ARCH) -f Dockerfile .
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@
 
-$(CONTAINER_FIPS_CREATED): register Dockerfile $(BINDIR)/dikastes-$(ARCH) $(BINDIR)/healthz-$(ARCH)
+$(CONTAINER_FIPS_CREATED): register Dockerfile $(BINDIR)/dikastes-$(ARCH) $(BINDIR)/healthz-$(ARCH) bin/LICENSE
 	$(DOCKER_BUILD) --build-arg BIN_DIR=$(BINDIR) -t $(DIKASTES_IMAGE):latest-fips-$(ARCH) -f Dockerfile .
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest-fips LATEST_IMAGE_TAG=latest-fips
 	touch $@
+
+bin/LICENSE: ../LICENSE.md
+	cp ../LICENSE.md $@
 ###############################################################################
 # UTs
 ###############################################################################

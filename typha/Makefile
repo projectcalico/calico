@@ -16,18 +16,6 @@ include ../lib.Makefile
 
 ###############################################################################
 
-# Linker flags for building Typha.
-#
-# We use -X to insert the version information into the placeholder variables
-# in the buildinfo package.
-#
-# We use -B to insert a build ID note into the executable, without which, the
-# RPM build tools complain.
-LDFLAGS := -X $(PACKAGE_NAME)/pkg/buildinfo.GitVersion=$(GIT_DESCRIPTION) \
-			-X $(PACKAGE_NAME)/pkg/buildinfo.BuildDate=$(DATE) \
-			-X $(PACKAGE_NAME)/pkg/buildinfo.GitRevision=$(GIT_COMMIT) \
-			-B 0x$(BUILD_ID)
-
 # All Typha go files.
 SRC_FILES:=$(shell find . $(foreach dir,$(NON_TYPHA_DIRS),-path ./$(dir) -prune -o) -type f -name '*.go' -print)
 
@@ -113,30 +101,31 @@ sub-image-fips-%:
 TYPHA_IMAGE_WITH_TAG=$(TYPHA_IMAGE):latest-$(ARCH)
 TYPHA_IMAGE_ID=$(shell docker images -q $(TYPHA_IMAGE_WITH_TAG))
 
+docker-image/LICENSE: ../LICENSE.md
+	cp ../LICENSE.md $@
+
 # This target actually builds the image if any of its dependencies have changed or if it's
 # missing from docker.
 $(TYPHA_CONTAINER_CREATED): $(BINDIR)/calico-typha-$(ARCH) \
-                            LICENSE \
+                            docker-image/LICENSE \
                             docker-image/Dockerfile \
                             docker-image/typha.cfg \
                             $(shell test "$(TYPHA_IMAGE_ID)" || echo force-rebuild)
 	rm -rf docker-image/bin
 	mkdir -p docker-image/bin
 	cp $(BINDIR)/calico-typha-$(ARCH) docker-image/bin/
-	cp LICENSE docker-image/
 	$(DOCKER_BUILD) -t $(TYPHA_IMAGE):latest-$(ARCH) -f docker-image/Dockerfile docker-image
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $(TYPHA_CONTAINER_CREATED)
 
 $(TYPHA_CONTAINER_FIPS_CREATED): $(BINDIR)/calico-typha-$(ARCH) \
-                            LICENSE \
+                            docker-image/LICENSE \
                             docker-image/Dockerfile \
                             docker-image/typha.cfg \
                             $(shell test "$(TYPHA_IMAGE_ID)" || echo force-rebuild)
 	rm -rf docker-image/bin
 	mkdir -p docker-image/bin
 	cp $(BINDIR)/calico-typha-$(ARCH) docker-image/bin/
-	cp LICENSE docker-image/
 	$(DOCKER_BUILD) -t $(TYPHA_IMAGE):latest-fips-$(ARCH) -f docker-image/Dockerfile docker-image
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest-fips LATEST_IMAGE_TAG=latest-fips
 	touch $(TYPHA_CONTAINER_FIPS_CREATED)

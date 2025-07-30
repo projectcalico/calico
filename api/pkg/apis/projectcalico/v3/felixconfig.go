@@ -72,6 +72,14 @@ const (
 	AWSSrcDstCheckOptionDisable   AWSSrcDstCheckOption = "Disable"
 )
 
+// +kubebuilder:validation:Enum=tc;tcx
+type BPFAttachOption string
+
+const (
+	BPFAttachOptionTC  BPFAttachOption = "tc"
+	BPFAttachOptionTCX BPFAttachOption = "tcx"
+)
+
 // +kubebuilder:validation:Enum=Enabled;Disabled
 type FloatingIPType string
 
@@ -120,6 +128,14 @@ type FlowLogsPolicyEvaluationModeType string
 const (
 	FlowLogsPolicyEvaluationModeNone       FlowLogsPolicyEvaluationModeType = "None"
 	FlowLogsPolicyEvaluationModeContinuous FlowLogsPolicyEvaluationModeType = "Continuous"
+)
+
+// +kubebuilder:validation:Enum=IPPoolsOnly;IPPoolsAndHostIPs
+type NATOutgoingExclusionsType string
+
+const (
+	NATOutgoingExclusionsIPPoolsOnly       NATOutgoingExclusionsType = "IPPoolsOnly"
+	NATOutgoingExclusionsIPPoolsAndHostIPs NATOutgoingExclusionsType = "IPPoolsAndHostIPs"
 )
 
 // FelixConfigurationSpec contains the values of the Felix configuration.
@@ -482,6 +498,13 @@ type FelixConfigurationSpec struct {
 	// (i.e. it uses the iptables MASQUERADE target).
 	NATOutgoingAddress string `json:"natOutgoingAddress,omitempty"`
 
+	// When a IP pool setting `natOutgoing` is true, packets sent from Calico networked containers in this IP pool to destinations will be masqueraded.
+	// Configure which type of destinations is excluded from being masqueraded.
+	// - IPPoolsOnly: destinations outside of this IP pool will be masqueraded.
+	// - IPPoolsAndHostIPs: destinations outside of this IP pool and all hosts will be masqueraded.
+	// [Default: IPPoolsOnly]
+	NATOutgoingExclusions *NATOutgoingExclusionsType `json:"natOutgoingExclusions,omitempty" validate:"omitempty,oneof=IPPoolsOnly IPPoolsAndHostIPs"`
+
 	// DeviceRouteSourceAddress IPv4 address to set as the source hint for routes programmed by Felix. When not set
 	// the source address for local traffic from host to workload will be determined by the kernel.
 	DeviceRouteSourceAddress string `json:"deviceRouteSourceAddress,omitempty"`
@@ -498,6 +521,11 @@ type FelixConfigurationSpec struct {
 	// always clean up expected routes that use the configured DeviceRouteProtocol.  To add your own routes, you must
 	// use a distinct protocol (in addition to setting this field to false).
 	RemoveExternalRoutes *bool `json:"removeExternalRoutes,omitempty"`
+
+	// ProgramClusterRoutes specifies whether Felix should program IPIP routes instead of BIRD.
+	// Felix always programs VXLAN routes. [Default: Disabled]
+	// +kubebuilder:validation:Enum=Enabled;Disabled
+	ProgramClusterRoutes *string `json:"programClusterRoutes,omitempty"`
 
 	// IPForwarding controls whether Felix sets the host sysctls to enable IP forwarding.  IP forwarding is required
 	// when using Calico for workload networking.  This should be disabled only on hosts where Calico is used solely for
@@ -616,7 +644,10 @@ type FelixConfigurationSpec struct {
 	// BPFConntrackCleanupMode controls how BPF conntrack entries are cleaned up.  `Auto` will use a BPF program if supported,
 	// falling back to userspace if not.  `Userspace` will always use the userspace cleanup code.  `BPFProgram` will
 	// always use the BPF program (failing if not supported).
-	// [Default: Auto]
+	//
+	///To be deprecated in future versions as conntrack map type changed to
+	// lru_hash and userspace cleanup is the only mode that is supported.
+	// [Default: Userspace]
 	BPFConntrackCleanupMode *BPFConntrackMode `json:"bpfConntrackMode,omitempty" validate:"omitempty,oneof=Auto Userspace BPFProgram"`
 
 	// BPFConntrackTimers overrides the default values for the specified conntrack timer if
@@ -823,6 +854,13 @@ type FelixConfigurationSpec struct {
 	//+kubebuilder:validation:Enum=Enabled;Disabled;L2Only
 	BPFRedirectToPeer string `json:"bpfRedirectToPeer,omitempty"`
 
+	// BPFAttachType controls how are the BPF programs at the network interfaces attached.
+	// By default `tcx` is used where available to enable easier coexistence with 3rd party programs.
+	// `tc` can force the legacy method of attaching via a qdisc. `tcx` falls back to `tc` if `tcx` is not available.
+	// [Default: tcx]
+	//+kubebuilder:validation:Enum=tc;tcx
+	BPFAttachType *BPFAttachOption `json:"bpfAttachType,omitempty" validate:"omitempty,oneof=tc tcx"`
+
 	// FlowLogsFlushInterval configures the interval at which Felix exports flow logs.
 	// +kubebuilder:validation:Type=string
 	// +kubebuilder:validation:Pattern=`^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$`
@@ -971,6 +1009,10 @@ type FelixConfigurationSpec struct {
 	// [Default: -1]
 	// +optional
 	GoMaxProcs *int `json:"goMaxProcs,omitempty" validate:"omitempty,gte=-1"`
+
+	// RequireMTUFile specifies whether mtu file is required to start the felix.
+	// Optional as to keep the same as previous behavior. [Default: false]
+	RequireMTUFile *bool `json:"requireMTUFile,omitempty"`
 }
 
 type HealthTimeoutOverride struct {

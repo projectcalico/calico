@@ -159,12 +159,7 @@ static CALI_BPF_INLINE int vxlan_attempt_decap(struct cali_tc_ctx *ctx)
 {
 	/* decap on host ep only if directly for the node */
 	CALI_DEBUG("VXLAN tunnel packet to " IP_FMT " (host IP=" IP_FMT ")",
-#ifdef IPVER6
-		bpf_ntohl(ip_hdr(ctx)->daddr.in6_u.u6_addr32[3]),
-#else
-		bpf_ntohl(ip_hdr(ctx)->daddr),
-#endif
-		debug_ip(HOST_IP));
+		&ip_hdr(ctx)->daddr, debug_ip(HOST_IP));
 
 	if (!rt_addr_is_local_host((ipv46_addr_t *)&ip_hdr(ctx)->daddr)) {
 		goto fall_through;

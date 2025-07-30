@@ -22,6 +22,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	. "github.com/projectcalico/calico/felix/calc"
+	"github.com/projectcalico/calico/lib/std/uniquelabels"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 )
@@ -85,7 +86,7 @@ var _ = Describe("NetworkSetLookupsCache IP tests", func() {
 				Expect(ok).To(BeTrue(), name+"\n"+ec.DumpNetworksets())
 				Expect(ed.Key()).To(Equal(key), ec.DumpNetworksets())
 				if labels != nil {
-					Expect(ed.Labels()).To(Equal(labels), ec.DumpNetworksets())
+					Expect(ed.Labels()).To(Equal(uniquelabels.Make(labels)), ec.DumpNetworksets())
 				}
 			} else {
 				Expect(ok).To(BeFalse(), name+".\n"+ec.DumpNetworksets())

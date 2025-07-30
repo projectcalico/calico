@@ -28,6 +28,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"syscall"
 
 	log "github.com/sirupsen/logrus"
@@ -37,6 +38,31 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/bpfdefs"
 	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
 )
+
+var memLockOnce sync.Once
+var BTFEnabled bool
+
+func init() {
+	BTFEnabled = SupportsBTF()
+}
+
+func SupportsBTF() bool {
+	_, err := os.Stat("/sys/kernel/btf/vmlinux")
+	if err != nil {
+		log.WithError(err).Debug("BTF not supported")
+		return false
+	}
+	return true
+}
+
+func IncreaseLockedMemoryQuota() {
+	memLockOnce.Do(func() {
+		err := unix.Setrlimit(unix.RLIMIT_MEMLOCK, &unix.Rlimit{Cur: unix.RLIM_INFINITY, Max: unix.RLIM_INFINITY})
+		if err != nil {
+			log.WithError(err).Error("Failed to increase RLIMIT_MEMLOCK, loading BPF programs may fail")
+		}
+	})
+}
 
 func MaybeMountBPFfs() (string, error) {
 	var err error

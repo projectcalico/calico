@@ -260,6 +260,9 @@ func ParseWorkloadEndpointName(wepName string) (WorkloadEndpointIdentifiers, err
 			orchFlds = otherFields
 		}
 		if pl > 2 {
+			if len(parts[2:]) > len(orchFlds) {
+				return WorkloadEndpointIdentifiers{}, fmt.Errorf("Error parsing %s, verify that WorkloadEndpoint name is correct", wepName)
+			}
 			weidR := reflect.ValueOf(&weid)
 			weidStruct := weidR.Elem()
 			for i, part := range parts[2:] {

@@ -31,6 +31,8 @@ execute_test_suite() {
         run_extra_test test_bgp_reachable_by
         run_extra_test test_bgp_filters
         run_extra_test test_bgp_local_bgp_peer
+        run_extra_test test_bgp_next_hop_mode
+        run_extra_test test_bgp_reverse_peering
     fi
 
     if [ "$DATASTORE_TYPE" = etcdv3 ]; then
@@ -44,6 +46,7 @@ execute_test_suite() {
         run_extra_test test_bgp_ignored_interfaces
         run_extra_test test_bgp_reachable_by
         run_extra_test test_bgp_filters
+        run_extra_test test_bgp_next_hop_mode
         echo "Extra etcdv3 tests passed"
     fi
 
@@ -597,8 +600,10 @@ execute_tests_daemon() {
         run_individual_test 'explicit_peering/route_reflector'
         run_individual_test 'explicit_peering/keepnexthop'
         run_individual_test 'explicit_peering/keepnexthop-global'
-	run_individual_test 'explicit_peering/local-as'
-	run_individual_test 'explicit_peering/local-as-global'
+        run_individual_test 'explicit_peering/local-as-ipv6'
+        run_individual_test 'explicit_peering/local-as-global-ipv6'
+        run_individual_test 'explicit_peering/local-as'
+        run_individual_test 'explicit_peering/local-as-global'
     done
 
     # Turn the node-mesh back on.
@@ -4476,8 +4481,17 @@ test_bgp_local_bgp_peer() {
     # For KDD, run Typha and clean up the output directory.
     if [ "$DATASTORE_TYPE" = kubernetes ]; then
         start_typha
+        rm -rf /etc/calico/confd/endpoint-status || true
         rm -f /etc/calico/confd/config/*
     fi
+
+    mkdir -p /etc/calico/confd/endpoint-status
+    cat <<EOF > /etc/calico/confd/endpoint-status/pod1
+{"ifaceName":"cali97e1defe654","ipv4Nets":["192.168.162.134/32"],"ipv6Nets":["fd00:10:244:0:586d:4461:e980:a284/128"],"bgpPeerName":"test-global-peer-with-filter"}
+EOF
+cat <<EOF > /etc/calico/confd/endpoint-status/pod2
+{"ifaceName":"cali97e1defe656","ipv4Nets":["192.168.162.136/32"],"ipv6Nets":["fd00:10:244:0:586d:4461:e980:a286/128"],"bgpPeerName":"test-node-peer-with-filter"}
+EOF
 
     # Run confd as a background process.
     echo "Running confd as background process"
@@ -4543,7 +4557,8 @@ metadata:
   name: test-global-peer-with-filter
 spec:
   localWorkloadSelector: app == 'calico-bird-0'
-  asNumber: 64518
+  asNumber: 64516
+  localASNumber: 65002
   filters:
     - import-only-filter
 ---
@@ -4555,20 +4570,12 @@ spec:
   localWorkloadSelector: app == 'calico-bird-0'
   node: kube-master
   asNumber: 64517
+  localASNumber: 65001
   filters:
     - import-only-filter
 EOF
 
-mkdir -p /etc/calico/confd/endpoint-status
-cat <<EOF > /etc/calico/confd/endpoint-status/pod1
-{"ifaceName":"cali97e1defe654","ipv4Nets":["192.168.162.134/32"],"ipv6Nets":["fd00:10:244:0:586d:4461:e980:a284/128"],"bgpPeerName":"test-global-peer-with-filter"}
-EOF
-cat <<EOF > /etc/calico/confd/endpoint-status/pod2
-{"ifaceName":"cali97e1defe656","ipv4Nets":["192.168.162.136/32"],"ipv6Nets":["fd00:10:244:0:586d:4461:e980:a286/128"],"bgpPeerName":"test-node-peer-with-filter"}
-EOF
-
-
-    test_confd_templates explicit_peering/local_bgp_peer/global
+    test_confd_templates explicit_peering/local_bgp_peer
 
     # Kill confd.
     kill -9 $CONFD_PID
@@ -4593,4 +4600,406 @@ EOF
         kill_typha
     fi
 }
+
+test_bgp_next_hop_mode() {
+  test_bgp_next_hop_mode_for_global_peers
+  test_bgp_next_hop_mode_for_route_reflectors
+}
+
+test_bgp_next_hop_mode_for_global_peers() {
+
+    # For KDD, run Typha and clean up the output directory.
+    if [ "$DATASTORE_TYPE" = kubernetes ]; then
+        start_typha
+        rm -f /etc/calico/confd/config/*
+    fi
+
+    # Run confd as a background process.
+    echo "Running confd as background process"
+    NODENAME=kube-master BGP_LOGSEVERITYSCREEN="debug" confd -confdir=/etc/calico/confd >$LOGPATH/logd1 2>&1 &
+    CONFD_PID=$!
+    echo "Running with PID " $CONFD_PID
+
+    # Turn the node-mesh off
+    turn_mesh_off
+
+    $CALICOCTL apply -f - <<EOF
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: kube-master
+spec:
+  bgp:
+    ipv4Address: 10.192.0.2/16
+    ipv6Address: "2001::103/64"
+---
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: kube-node-1
+spec:
+  bgp:
+    ipv4Address: 10.192.0.3/16
+    ipv6Address: "2001::102/64"
+---
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: kube-node-2
+spec:
+  bgp:
+    ipv4Address: 10.192.0.4/16
+    ipv6Address: "2001::104/64"
+---
+apiVersion: projectcalico.org/v3
+kind: BGPPeer
+metadata:
+  name: external-route-reflector-a-ipv4
+spec:
+  peerIP: 10.225.0.4
+  asNumber: 65515
+  nextHopMode: Keep
+---
+apiVersion: projectcalico.org/v3
+kind: BGPPeer
+metadata:
+  name: external-route-reflector-b-ipv4
+spec:
+  peerIP: 10.225.0.5
+  asNumber: 64512    # iBGP peer
+  nextHopMode: Self  # next hop self for an iBGP peer
+---
+apiVersion: projectcalico.org/v3
+kind: BGPPeer
+metadata:
+  name: external-route-reflector-a-ipv6
+spec:
+  peerIP: ffee::10
+  asNumber: 65515
+  nextHopMode: Keep
+---
+apiVersion: projectcalico.org/v3
+kind: BGPPeer
+metadata:
+  name: external-route-reflector-b-ipv6
+spec:
+  peerIP: ffee::11
+  asNumber: 64512
+  nextHopMode: Self
+EOF
+
+    test_confd_templates next_hop_mode/global_peers
+
+    # Kill confd.
+    kill -9 $CONFD_PID
+
+    # Turn the node-mesh back on.
+    turn_mesh_on
+
+    # Delete remaining resources.
+    $CALICOCTL delete bgppeer external-route-reflector-a-ipv4
+    $CALICOCTL delete bgppeer external-route-reflector-b-ipv4
+    $CALICOCTL delete bgppeer external-route-reflector-a-ipv6
+    $CALICOCTL delete bgppeer external-route-reflector-b-ipv6
+
+    if [ "$DATASTORE_TYPE" = etcdv3 ]; then
+        $CALICOCTL delete node kube-master
+        $CALICOCTL delete node kube-node-1
+        $CALICOCTL delete node kube-node-2
+    fi
+
+    # For KDD, kill Typha.
+    if [ "$DATASTORE_TYPE" = kubernetes ]; then
+        kill_typha
+    fi
+}
+
+test_bgp_next_hop_mode_for_route_reflectors() {
+
+    # For KDD, run Typha and clean up the output directory.
+    if [ "$DATASTORE_TYPE" = kubernetes ]; then
+        start_typha
+        rm -f /etc/calico/confd/config/*
+    fi
+
+    # Run confd as a background process.
+    echo "Running confd as background process"
+    NODENAME=kube-master BGP_LOGSEVERITYSCREEN="debug" confd -confdir=/etc/calico/confd >$LOGPATH/logd1 2>&1 &
+    CONFD_PID=$!
+    echo "Running with PID " $CONFD_PID
+
+    # Turn the node-mesh off
+    turn_mesh_off
+
+    $CALICOCTL apply -f - <<EOF
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: kube-master
+  labels:
+    route-reflector: yes
+spec:
+  bgp:
+    ipv4Address: 10.192.0.2/16
+    ipv6Address: "2001::103/64"
+---
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: kube-node-1
+spec:
+  bgp:
+    ipv4Address: 10.192.0.3/16
+    ipv6Address: "2001::102/64"
+---
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: kube-node-2
+spec:
+  bgp:
+    ipv4Address: 10.192.0.4/16
+    ipv6Address: "2001::104/64"
+---
+apiVersion: projectcalico.org/v3
+kind: BGPPeer
+metadata:
+  name: peer-with-route-reflectors
+spec:
+  nodeSelector: all()
+  peerSelector: route-reflector == 'true'
+---
+apiVersion: projectcalico.org/v3
+kind: BGPPeer
+metadata:
+  name: external-route-reflector-a-ipv4
+spec:
+  peerIP: 10.225.0.4
+  asNumber: 65515
+  nextHopMode: Keep
+  nodeSelector: route-reflector == 'true'
+---
+apiVersion: projectcalico.org/v3
+kind: BGPPeer
+metadata:
+  name: external-route-reflector-b-ipv4
+spec:
+  peerIP: 10.225.0.5
+  asNumber: 64512    # iBGP peer
+  nextHopMode: Self  # next hop self for an iBGP peer
+  nodeSelector: route-reflector == 'true'
+---
+apiVersion: projectcalico.org/v3
+kind: BGPPeer
+metadata:
+  name: external-route-reflector-a-ipv6
+spec:
+  peerIP: ffee::10
+  asNumber: 65515
+  nextHopMode: Keep
+  nodeSelector: route-reflector == 'true'
+---
+apiVersion: projectcalico.org/v3
+kind: BGPPeer
+metadata:
+  name: external-route-reflector-b-ipv6
+spec:
+  peerIP: ffee::11
+  asNumber: 64512
+  nextHopMode: Self
+  nodeSelector: route-reflector == 'true'
+EOF
+
+    test_confd_templates next_hop_mode/route_reflectors
+
+    # Kill confd.
+    kill -9 $CONFD_PID
+
+    # Turn the node-mesh back on.
+    turn_mesh_on
+
+    # Delete remaining resources.
+    $CALICOCTL delete bgppeer peer-with-route-reflectors
+    $CALICOCTL delete bgppeer external-route-reflector-a-ipv4
+    $CALICOCTL delete bgppeer external-route-reflector-b-ipv4
+    $CALICOCTL delete bgppeer external-route-reflector-a-ipv6
+    $CALICOCTL delete bgppeer external-route-reflector-b-ipv6
+
+    if [ "$DATASTORE_TYPE" = etcdv3 ]; then
+        $CALICOCTL delete node kube-master
+        $CALICOCTL delete node kube-node-1
+        $CALICOCTL delete node kube-node-2
+    fi
+
+    # For KDD, kill Typha.
+    if [ "$DATASTORE_TYPE" = kubernetes ]; then
+        kill_typha
+    fi
+}
+
+test_bgp_reverse_peering() {
+  test_bgp_reverse_peering_manual
+  test_bgp_reverse_peering_auto
+}
+
+test_bgp_reverse_peering_manual() {
+
+    # For KDD, run Typha and clean up the output directory.
+    if [ "$DATASTORE_TYPE" = kubernetes ]; then
+        start_typha
+        rm -f /etc/calico/confd/config/*
+    fi
+
+    # Run confd as a background process.
+    echo "Running confd as background process"
+    NODENAME=kube-master BGP_LOGSEVERITYSCREEN="debug" confd -confdir=/etc/calico/confd >$LOGPATH/logd1 2>&1 &
+    CONFD_PID=$!
+    echo "Running with PID " $CONFD_PID
+
+    # Turn the node-mesh off
+    turn_mesh_off
+
+    $CALICOCTL apply -f - <<EOF
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: kube-master
+  labels:
+    route-reflector: yes
+spec:
+  bgp:
+    ipv4Address: 10.192.0.2/16
+    ipv6Address: "2001::103/64"
+---
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: kube-node-1
+spec:
+  bgp:
+    ipv4Address: 10.192.0.3/16
+    ipv6Address: "2001::102/64"
+---
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: kube-node-2
+spec:
+  bgp:
+    ipv4Address: 10.192.0.4/16
+    ipv6Address: "2001::104/64"
+---
+apiVersion: projectcalico.org/v3
+kind: BGPPeer
+metadata:
+  name: peer-with-route-reflectors
+spec:
+  nodeSelector: all()
+  peerSelector: route-reflector == 'true'
+  reversePeering: Manual
+EOF
+
+    test_confd_templates reverse_peering/manual
+
+    # Kill confd.
+    kill -9 $CONFD_PID
+
+    # Turn the node-mesh back on.
+    turn_mesh_on
+
+    # Delete remaining resources.
+    $CALICOCTL delete bgppeer peer-with-route-reflectors
+
+    if [ "$DATASTORE_TYPE" = etcdv3 ]; then
+        $CALICOCTL delete node kube-master
+        $CALICOCTL delete node kube-node-1
+        $CALICOCTL delete node kube-node-2
+    fi
+
+    # For KDD, kill Typha.
+    if [ "$DATASTORE_TYPE" = kubernetes ]; then
+        kill_typha
+    fi
+}
+
+test_bgp_reverse_peering_auto() {
+
+    # For KDD, run Typha and clean up the output directory.
+    if [ "$DATASTORE_TYPE" = kubernetes ]; then
+        start_typha
+        rm -f /etc/calico/confd/config/*
+    fi
+
+    # Run confd as a background process.
+    echo "Running confd as background process"
+    NODENAME=kube-master BGP_LOGSEVERITYSCREEN="debug" confd -confdir=/etc/calico/confd >$LOGPATH/logd1 2>&1 &
+    CONFD_PID=$!
+    echo "Running with PID " $CONFD_PID
+
+    # Turn the node-mesh off
+    turn_mesh_off
+
+    $CALICOCTL apply -f - <<EOF
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: kube-master
+  labels:
+    route-reflector: yes
+spec:
+  bgp:
+    ipv4Address: 10.192.0.2/16
+    ipv6Address: "2001::103/64"
+---
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: kube-node-1
+spec:
+  bgp:
+    ipv4Address: 10.192.0.3/16
+    ipv6Address: "2001::102/64"
+---
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: kube-node-2
+spec:
+  bgp:
+    ipv4Address: 10.192.0.4/16
+    ipv6Address: "2001::104/64"
+---
+apiVersion: projectcalico.org/v3
+kind: BGPPeer
+metadata:
+  name: peer-with-route-reflectors
+spec:
+  nodeSelector: all()
+  peerSelector: route-reflector == 'true'
+  reversePeering: Auto
+EOF
+
+    test_confd_templates reverse_peering/auto
+
+    # Kill confd.
+    kill -9 $CONFD_PID
+
+    # Turn the node-mesh back on.
+    turn_mesh_on
+
+    # Delete remaining resources.
+    $CALICOCTL delete bgppeer peer-with-route-reflectors
+
+    if [ "$DATASTORE_TYPE" = etcdv3 ]; then
+        $CALICOCTL delete node kube-master
+        $CALICOCTL delete node kube-node-1
+        $CALICOCTL delete node kube-node-2
+    fi
+
+    # For KDD, kill Typha.
+    if [ "$DATASTORE_TYPE" = kubernetes ]; then
+        kill_typha
+    fi
+}
+
 

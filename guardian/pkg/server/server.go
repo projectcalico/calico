@@ -110,7 +110,10 @@ func (srv *server) ListenAndServeManagementCluster() error {
 	}
 
 	// we need to upgrade the tunnel to a TLS listener to support HTTP2 on this side.
-	tlsConfig := calicotls.NewTLSConfig()
+	tlsConfig, err := calicotls.NewTLSConfig()
+	if err != nil {
+		return fmt.Errorf("failed to create TLS Config: %w", err)
+	}
 	tlsConfig.Certificates = []tls.Certificate{*srv.tunnelCert}
 	tlsConfig.NextProtos = []string{"h2"}
 

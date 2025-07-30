@@ -21,6 +21,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/lib/std/uniquestr"
 	"github.com/projectcalico/calico/libcalico-go/lib/selector/tokenizer"
 )
 
@@ -243,7 +244,7 @@ func (p *Parser) parseOperation(tokens []tokenizer.Token, validateOnly bool) (se
 	switch tokens[0].Kind {
 	case tokenizer.TokHas:
 		if !validateOnly {
-			sel = &HasNode{tokens[0].Value}
+			sel = &HasNode{uniquestr.Make(tokens[0].Value)}
 		}
 		remTokens = tokens[1:]
 	case tokenizer.TokAll:
@@ -266,7 +267,7 @@ func (p *Parser) parseOperation(tokens []tokenizer.Token, validateOnly bool) (se
 		case tokenizer.TokEq:
 			if tokens[2].Kind == tokenizer.TokStringLiteral {
 				if !validateOnly {
-					sel = &LabelEqValueNode{tokens[0].Value, tokens[2].Value}
+					sel = &LabelEqValueNode{uniquestr.Make(tokens[0].Value), uniquestr.Make(tokens[2].Value)}
 				}
 				remTokens = tokens[3:]
 			} else {
@@ -275,7 +276,7 @@ func (p *Parser) parseOperation(tokens []tokenizer.Token, validateOnly bool) (se
 		case tokenizer.TokNe:
 			if tokens[2].Kind == tokenizer.TokStringLiteral {
 				if !validateOnly {
-					sel = &LabelNeValueNode{tokens[0].Value, tokens[2].Value}
+					sel = &LabelNeValueNode{uniquestr.Make(tokens[0].Value), uniquestr.Make(tokens[2].Value)}
 				}
 				remTokens = tokens[3:]
 			} else {
@@ -284,7 +285,7 @@ func (p *Parser) parseOperation(tokens []tokenizer.Token, validateOnly bool) (se
 		case tokenizer.TokContains:
 			if tokens[2].Kind == tokenizer.TokStringLiteral {
 				if !validateOnly {
-					sel = &LabelContainsValueNode{tokens[0].Value, tokens[2].Value}
+					sel = &LabelContainsValueNode{uniquestr.Make(tokens[0].Value), uniquestr.Make(tokens[2].Value)}
 				}
 				remTokens = tokens[3:]
 			} else {
@@ -293,7 +294,7 @@ func (p *Parser) parseOperation(tokens []tokenizer.Token, validateOnly bool) (se
 		case tokenizer.TokStartsWith:
 			if tokens[2].Kind == tokenizer.TokStringLiteral {
 				if !validateOnly {
-					sel = &LabelStartsWithValueNode{tokens[0].Value, tokens[2].Value}
+					sel = &LabelStartsWithValueNode{uniquestr.Make(tokens[0].Value), uniquestr.Make(tokens[2].Value)}
 				}
 				remTokens = tokens[3:]
 			} else {
@@ -302,7 +303,7 @@ func (p *Parser) parseOperation(tokens []tokenizer.Token, validateOnly bool) (se
 		case tokenizer.TokEndsWith:
 			if tokens[2].Kind == tokenizer.TokStringLiteral {
 				if !validateOnly {
-					sel = &LabelEndsWithValueNode{tokens[0].Value, tokens[2].Value}
+					sel = &LabelEndsWithValueNode{uniquestr.Make(tokens[0].Value), uniquestr.Make(tokens[2].Value)}
 				}
 				remTokens = tokens[3:]
 			} else {
@@ -311,11 +312,11 @@ func (p *Parser) parseOperation(tokens []tokenizer.Token, validateOnly bool) (se
 		case tokenizer.TokIn, tokenizer.TokNotIn:
 			if tokens[2].Kind == tokenizer.TokLBrace {
 				remTokens = tokens[3:]
-				values := []string{}
+				var values []uniquestr.Handle
 				for {
 					if remTokens[0].Kind == tokenizer.TokStringLiteral {
 						value := remTokens[0].Value
-						values = append(values, value)
+						values = append(values, uniquestr.Make(value))
 						remTokens = remTokens[1:]
 						if remTokens[0].Kind == tokenizer.TokComma {
 							remTokens = remTokens[1:]
@@ -336,11 +337,11 @@ func (p *Parser) parseOperation(tokens []tokenizer.Token, validateOnly bool) (se
 					set := ConvertToStringSetInPlace(values) // Mutates values.
 					if tokens[1].Kind == tokenizer.TokIn {
 						if !validateOnly {
-							sel = &LabelInSetNode{labelName, set}
+							sel = &LabelInSetNode{uniquestr.Make(labelName), set}
 						}
 					} else {
 						if !validateOnly {
-							sel = &LabelNotInSetNode{labelName, set}
+							sel = &LabelNotInSetNode{uniquestr.Make(labelName), set}
 						}
 					}
 				}

@@ -26,10 +26,10 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/syncersv1/nodestatussyncer"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
-	"github.com/projectcalico/calico/node/buildinfo"
 	"github.com/projectcalico/calico/node/pkg/calicoclient"
 	"github.com/projectcalico/calico/node/pkg/lifecycle/startup"
 	populator "github.com/projectcalico/calico/node/pkg/status/populators"
+	"github.com/projectcalico/calico/pkg/buildinfo"
 	"github.com/projectcalico/calico/typha/pkg/syncclientutils"
 	"github.com/projectcalico/calico/typha/pkg/syncproto"
 )
@@ -38,7 +38,6 @@ import (
 
 // Run runs the node status reporter.
 func Run() {
-
 	startup.ConfigureLogging()
 
 	// This binary is only ever invoked _after_ the
@@ -65,7 +64,7 @@ func Run() {
 	typhaConfig := syncclientutils.ReadTyphaConfig([]string{"FELIX_", "CALICO_"})
 	if syncclientutils.MustStartSyncerClientIfTyphaConfigured(
 		&typhaConfig, syncproto.SyncerTypeNodeStatus,
-		buildinfo.GitVersion, nodename, fmt.Sprintf("node-status %s", buildinfo.GitVersion),
+		buildinfo.Version, nodename, fmt.Sprintf("node-status %s", buildinfo.Version),
 		r,
 	) {
 		log.Debug("Using typha syncclient")
@@ -151,7 +150,8 @@ type NodeStatusReporter struct {
 func NewNodeStatusReporter(node string,
 	cfg *apiconfig.CalicoAPIConfig,
 	client client.Interface,
-	populators PopulatorRegistry) *NodeStatusReporter {
+	populators PopulatorRegistry,
+) *NodeStatusReporter {
 	return &NodeStatusReporter{
 		nodename:       node,
 		cfg:            cfg,
@@ -288,8 +288,8 @@ func (r *NodeStatusReporter) processPendingUpdates() {
 				r.reporter[name] = reporter
 			} else {
 				// updated resource.
-				// Check if it has the same spec with the current status being handled by the reporter.
-				if r.reporter[name].HasSameSpec(data) {
+				// Check if it has the same or newer spec with the current status being handled by the reporter.
+				if r.reporter[name].HasSameOrNewerSpec(data) {
 					// we don't need to do anything. It is possible we get here
 					// because the resource has been updated by the reporter itself.
 					log.Debugf("Anticipated resource update: %s. Do nothing.", name)

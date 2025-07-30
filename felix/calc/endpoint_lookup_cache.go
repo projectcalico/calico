@@ -30,6 +30,7 @@ import (
 	"github.com/projectcalico/calico/felix/dispatcher"
 	"github.com/projectcalico/calico/felix/rules"
 	"github.com/projectcalico/calico/felix/stringutils"
+	"github.com/projectcalico/calico/lib/std/uniquelabels"
 	v3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
@@ -87,7 +88,7 @@ type EndpointData interface {
 	GenerateName() string
 	IsLocal() bool
 	IsHostEndpoint() bool
-	Labels() map[string]string
+	Labels() uniquelabels.Map
 	IngressMatchData() *MatchData
 	EgressMatchData() *MatchData
 }
@@ -849,7 +850,7 @@ type CommonEndpointData struct {
 	key model.EndpointKey
 
 	// Labels contains the labels extracted from the endpoint.
-	labels map[string]string
+	labels uniquelabels.Map
 	// IP addresses extracted from the endpoint.
 	ips [][16]byte
 	// GenerateName is only populated for WorkloadEndpoints, it contains the
@@ -879,7 +880,7 @@ func (e *CommonEndpointData) allIPs() [][16]byte {
 	return e.ips
 }
 
-func (e *CommonEndpointData) Labels() map[string]string {
+func (e *CommonEndpointData) Labels() uniquelabels.Map {
 	return e.labels
 }
 

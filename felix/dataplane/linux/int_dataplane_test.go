@@ -15,11 +15,13 @@
 package intdataplane_test
 
 import (
+	"errors"
 	"net"
 	"regexp"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"sigs.k8s.io/knftables"
 
 	"github.com/projectcalico/calico/felix/collector"
 	"github.com/projectcalico/calico/felix/collector/types"
@@ -41,6 +43,16 @@ var _ = Describe("Constructor test", func() {
 	kubernetesProvider := config.ProviderNone
 	routeSource := "CalicoIPAM"
 	var wireguardEncryptHostTraffic bool
+	var nftablesDataplane func(knftables.Family, string) (knftables.Interface, error)
+
+	BeforeEach(func() {
+		// For most tests here, mock out the creation of the nftables interface in a way
+		// that simulates "nft" being available.  We don't want these tests to depend on the
+		// actual kernel version or presence of nftables.
+		nftablesDataplane = func(knftables.Family, string) (knftables.Interface, error) {
+			return nil, nil
+		}
+	})
 
 	JustBeforeEach(func() {
 		configParams = config.New()
@@ -102,12 +114,27 @@ var _ = Describe("Constructor test", func() {
 			Wireguard: wireguard.Config{
 				EncryptHostTraffic: wireguardEncryptHostTraffic,
 			},
+
+			NewNftablesDataplane: nftablesDataplane,
 		}
 	})
 
 	It("should be constructable", func() {
 		dp := intdataplane.NewIntDataplaneDriver(dpConfig)
 		Expect(dp).ToNot(BeNil())
+	})
+
+	Context("when nft is not available", func() {
+		BeforeEach(func() {
+			nftablesDataplane = func(knftables.Family, string) (knftables.Interface, error) {
+				return nil, errors.New("could not find nftables binary: file not found")
+			}
+		})
+
+		It("should still be constructable", func() {
+			dp := intdataplane.NewIntDataplaneDriver(dpConfig)
+			Expect(dp).ToNot(BeNil())
+		})
 	})
 
 	Context("with health aggregator", func() {
@@ -122,13 +149,12 @@ var _ = Describe("Constructor test", func() {
 	})
 
 	Context("with collector", func() {
-
 		BeforeEach(func() {
 			col = &mockCollector{}
 		})
 
 		It("should be constructable", func() {
-			var dp = intdataplane.NewIntDataplaneDriver(dpConfig)
+			dp := intdataplane.NewIntDataplaneDriver(dpConfig)
 			Expect(dp).ToNot(BeNil())
 		})
 	})

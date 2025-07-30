@@ -86,18 +86,6 @@ FV_NUM_BATCHES?=1
 FV_BATCHES_TO_RUN?=$(shell seq $(FV_NUM_BATCHES))
 FV_SLOW_SPEC_THRESH=90
 
-# Linker flags for building Felix.
-#
-# We use -X to insert the version information into the placeholder variables
-# in the buildinfo package.
-#
-# We use -B to insert a build ID note into the executable, without which, the
-# RPM build tools complain.
-LDFLAGS= -X $(PACKAGE_NAME)/buildinfo.GitVersion=$(GIT_DESCRIPTION) \
-	-X $(PACKAGE_NAME)/buildinfo.BuildDate=$(DATE) \
-	-X $(PACKAGE_NAME)/buildinfo.GitRevision=$(GIT_COMMIT) \
-	-B 0x$(BUILD_ID)
-
 .PHONY: clean
 clean:
 	rm -rf bin \
@@ -204,7 +192,8 @@ protobuf proto/felixbackend.pb.go: proto/felixbackend.proto
 # We pre-build lots of different variants of the TC programs, defer to the script.
 BPF_GPL_O_FILES:=$(addprefix bpf-gpl/,$(shell bpf-gpl/list-objs))
 BPF_GPL_O_FILES+=bpf-gpl/bin/tc_preamble.o \
-		 bpf-gpl/bin/xdp_preamble.o bpf-gpl/bin/policy_default.o
+		 bpf-gpl/bin/xdp_preamble.o bpf-gpl/bin/policy_default.o \
+		 bpf-gpl/bin/tcx_test.o
 
 # There's a one-to-one mapping from UT C files to objects and the same for the apache programs..
 BPF_GPL_UT_O_FILES:=$(BPF_GPL_UT_C_FILES:.c=.o) $(addprefix bpf-gpl/,$(shell bpf-gpl/list-ut-objs))

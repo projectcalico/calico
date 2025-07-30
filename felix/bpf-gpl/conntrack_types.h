@@ -38,6 +38,7 @@ enum cali_ct_type {
 #define CALI_CT_FLAG_NP_LOOP	0x800 /* marks connections that were turned around when accessing nodeport on a local IP */
 #define CALI_CT_FLAG_NP_REMOTE	0x1000 /* marks connections from local host to remote backend of a nodeport */
 #define CALI_CT_FLAG_NP_NO_DSR	0x2000 /* marks connections from a client which is excluded from DSR */
+#define CALI_CT_FLAG_SKIP_REDIR_PEER	0x4000 /* marks connections from a client which is excluded from redir */
 
 struct calico_ct_leg {
 	__u64 bytes;
@@ -156,13 +157,13 @@ struct ct_create_ctx {
 };
 
 #ifdef IPVER6
-CALI_MAP_NAMED(cali_v6_ct, cali_ct, 3,
+CALI_MAP_NAMED(cali_v6_ct, cali_ct, 4,
 #else
-CALI_MAP_NAMED(cali_v4_ct, cali_ct, 3,
+CALI_MAP_NAMED(cali_v4_ct, cali_ct, 4,
 #endif
-		BPF_MAP_TYPE_HASH,
+		BPF_MAP_TYPE_LRU_HASH,
 		struct calico_ct_key, struct calico_ct_value,
-		512000, BPF_F_NO_PREALLOC)
+		512000, 0)
 
 enum calico_ct_result_type {
 	/* CALI_CT_NEW means that the packet is not part of a known conntrack flow.

@@ -16,8 +16,10 @@ package labelindex_test
 
 import (
 	"fmt"
+	"maps"
 	"net"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -29,8 +31,10 @@ import (
 
 	"github.com/projectcalico/calico/felix/ip"
 	. "github.com/projectcalico/calico/felix/labelindex"
+	"github.com/projectcalico/calico/lib/std/uniquelabels"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
+	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 	calinet "github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/selector"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
@@ -909,12 +913,13 @@ var (
 )
 
 func TestNamedPortIndex(t *testing.T) {
+	logutils.ConfigureLoggingForTestingT(t)
 	log.SetLevel(log.DebugLevel)
 
 	for _, state := range baseTests {
 		// First run each base test as-is: just apply its inputs and
 		// check that we get the right output.
-		t.Run(state.Name, func(t *testing.T) {
+		t.Run("Base "+state.Name, func(t *testing.T) {
 			idx := NewSelectorAndNamedPortIndex(false)
 			RegisterTestingT(t)
 			rec := newRecorder()
@@ -936,27 +941,30 @@ func TestNamedPortIndex(t *testing.T) {
 	}
 
 	for _, applyStrategy := range applyStrategies {
-		for _, states := range generatedTests {
-			var names []string
-			for _, s := range states {
-				names = append(names, s.Name)
-			}
-			t.Run(fmt.Sprintf("%s (%s)", strings.Join(names, " THEN "), applyStrategy),
-				func(t *testing.T) {
-					RegisterTestingT(t)
-					idx := NewSelectorAndNamedPortIndex(false)
-					rec := newRecorder()
-					idx.OnMemberAdded = rec.OnMemberAdded
-					idx.OnMemberRemoved = rec.OnMemberRemoved
+		t.Run(applyStrategy, func(t *testing.T) {
+			for _, states := range generatedTests {
+				var names []string
+				for _, s := range states {
+					names = append(names, s.Name)
+				}
+				t.Run(strings.Join(names, " THEN "),
+					func(t *testing.T) {
+						logutils.ConfigureLoggingForTestingT(t)
+						RegisterTestingT(t)
+						idx := NewSelectorAndNamedPortIndex(false)
+						rec := newRecorder()
+						idx.OnMemberAdded = rec.OnMemberAdded
+						idx.OnMemberRemoved = rec.OnMemberRemoved
 
-					lastState := emptyState
-					for _, state := range states {
-						applyStateTransition(idx, rec, lastState, state, applyStrategy)
-						lastState = state
-						state.CheckRecordedState(t, rec)
-					}
-				})
-		}
+						lastState := emptyState
+						for _, state := range states {
+							applyStateTransition(idx, rec, lastState, state, applyStrategy)
+							lastState = state
+							state.CheckRecordedState(t, rec)
+						}
+					})
+			}
+		})
 	}
 }
 
@@ -977,7 +985,9 @@ type namedPortState struct {
 
 func (s namedPortState) CheckRecordedState(t *testing.T, rec *testRecorder) {
 	t.Helper()
-	for setName, expected := range s.ExpectedIPSetOutputs {
+	log.Infof("TEST HARNESS: Checking recorded state (%s)", s.Name)
+	for _, setName := range slices.Sorted(maps.Keys(s.ExpectedIPSetOutputs)) {
+		expected := s.ExpectedIPSetOutputs[setName]
 		setName := "s:" + setName
 		memberStrings := set.New[string]()
 		for m := range rec.ipsets[setName] {
@@ -992,6 +1002,7 @@ func (s namedPortState) CheckRecordedState(t *testing.T, rec *testRecorder) {
 		}
 		ExpectWithOffset(1, members).To(HaveLen(0), "Unexpected IP set: "+setName)
 	}
+	log.Infof("TEST HARNESS: Recorded state looks good.")
 }
 
 // Copied from event sequencer.
@@ -1060,12 +1071,14 @@ func applyStateTransition(idx *SelectorAndNamedPortIndex, rec *testRecorder, s1,
 	for k, ep := range s2.Endpoints {
 		if reflect.DeepEqual(s1.Endpoints[k], ep) {
 			// No change
+			log.Infof("TEST HARNESS: Skip updating unchanged endpoint/set %v", k)
 			continue
 		}
 		k := k
 		ep := ep
 		ops = append(ops, func() {
-			idx.UpdateEndpointOrSet(k, ep.Labels, ep.CIDRs(), ep.Ports, ep.Parents)
+			log.Infof("TEST HARNESS: Updating endpoint/set %v", k)
+			idx.UpdateEndpointOrSet(k, uniquelabels.Make(ep.Labels), ep.CIDRs(), ep.Ports, ep.Parents)
 		})
 	}
 	for k := range s1.Endpoints {
@@ -1074,6 +1087,7 @@ func applyStateTransition(idx *SelectorAndNamedPortIndex, rec *testRecorder, s1,
 		}
 		k := k
 		ops = append(ops, func() {
+			log.Infof("TEST HARNESS: Deleting endpoint/set %v", k)
 			idx.DeleteEndpoint(k)
 		})
 	}
@@ -1088,10 +1102,12 @@ func applyStateTransition(idx *SelectorAndNamedPortIndex, rec *testRecorder, s1,
 		k := k
 		p := p
 		ops = append(ops, func() {
+			log.Infof("TEST HARNESS: Updating parent labels %v -> %v", k, p.Labels)
 			idx.UpdateParentLabels(k, p.Labels)
 		})
 		if !dupeDone {
 			ops = append(ops, func() {
+				log.Infof("TEST HARNESS: Updating parent labels (dupe) %v -> %v", k, p.Labels)
 				idx.UpdateParentLabels(k, p.Labels)
 			})
 			dupeDone = true
@@ -1103,6 +1119,7 @@ func applyStateTransition(idx *SelectorAndNamedPortIndex, rec *testRecorder, s1,
 		}
 		k := k
 		ops = append(ops, func() {
+			log.Infof("TEST HARNESS: Delete parent labels %v", k)
 			idx.DeleteParentLabels(k)
 		})
 	}
@@ -1118,11 +1135,13 @@ func applyStateTransition(idx *SelectorAndNamedPortIndex, rec *testRecorder, s1,
 		s := s
 		ipSetID := "s:" + k
 		ops = append(ops, func() {
+			log.Infof("TEST HARNESS: Update IP set %v -> %s", k, s.Selector)
 			idx.UpdateIPSet(ipSetID, s.ParsedSelector(), s.Protocol, s.Port)
 		})
 		if !dupeDone {
 			// For coverage of "unchanged IP set" case.
 			ops = append(ops, func() {
+				log.Infof("TEST HARNESS: Update IP set (dupe) %v -> %s", k, s.Selector)
 				idx.UpdateIPSet(ipSetID, s.ParsedSelector(), s.Protocol, s.Port)
 			})
 			dupeDone = true
@@ -1136,10 +1155,12 @@ func applyStateTransition(idx *SelectorAndNamedPortIndex, rec *testRecorder, s1,
 		k := k
 		ipSetID := "s:" + k
 		ops = append(ops, func() {
+			log.Infof("TEST HARNESS: Delete IP set %v", ipSetID)
 			idx.DeleteIPSet(ipSetID)
 		})
 		if !dupeDone {
 			ops = append(ops, func() {
+				log.Infof("TEST HARNESS: Delete IP set (dupe) %v", ipSetID)
 				idx.DeleteIPSet(ipSetID)
 			})
 			dupeDone = true
@@ -1320,7 +1341,7 @@ var _ = Describe("SelectorAndNamedPortIndex", func() {
 								Mask: net.IPMask{255, 255, 0, 0},
 							}},
 						},
-						Labels: map[string]string{"villain": "ghost"},
+						Labels: uniquelabels.Make(map[string]string{"villain": "ghost"}),
 					},
 				},
 			})
@@ -1334,7 +1355,7 @@ var _ = Describe("SelectorAndNamedPortIndex", func() {
 								Mask: net.IPMask{255, 255, 0, 0},
 							}},
 						},
-						Labels: map[string]string{"villain": "ghost"},
+						Labels: uniquelabels.Make(map[string]string{"villain": "ghost"}),
 					},
 				},
 			})
@@ -1369,7 +1390,7 @@ var _ = Describe("SelectorAndNamedPortIndex", func() {
 								Mask: net.IPMask{255, 255, 0, 0},
 							}},
 						},
-						Labels:     map[string]string{"villain": "ghost"},
+						Labels:     uniquelabels.Make(map[string]string{"villain": "ghost"}),
 						ProfileIDs: []string{"doo"},
 					},
 				},
@@ -1388,9 +1409,9 @@ var _ = Describe("SelectorAndNamedPortIndex", func() {
 				Name:              "eth0",
 				ExpectedIPv4Addrs: []calinet.IP{calinet.MustParseIP("1.2.3.4")},
 				ExpectedIPv6Addrs: []calinet.IP{calinet.MustParseIP("aa:bb::cc:dd")},
-				Labels: map[string]string{
+				Labels: uniquelabels.Make(map[string]string{
 					"label2": "",
-				},
+				}),
 				ProfileIDs: []string{"profile1"},
 			}
 			hepKVP := model.KVPair{
@@ -1409,9 +1430,9 @@ var _ = Describe("SelectorAndNamedPortIndex", func() {
 
 			// Update the hostendpoint labels so they are not matched by the
 			// selector.
-			hep.Labels = map[string]string{
+			hep.Labels = uniquelabels.Make(map[string]string{
 				"label1": "value1",
-			}
+			})
 			uut.OnUpdate(api.Update{KVPair: hepKVP})
 
 			// Expect the ipset to be empty (OnMemberRemoved will have been

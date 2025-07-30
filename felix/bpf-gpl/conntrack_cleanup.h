@@ -14,11 +14,11 @@
 #ifdef IPVER6
 #define CCQ_MAP cali_v6_ccq
 #define CCQ_MAP_V cali_v6_ccq1
-#define CT_MAP_V cali_v6_ct3
+#define CT_MAP_V cali_v6_ct4
 #else
 #define CCQ_MAP cali_v4_ccq
 #define CCQ_MAP_V cali_v4_ccq1
-#define CT_MAP_V cali_v4_ct3
+#define CT_MAP_V cali_v4_ct4
 #endif
 
 // The cali_ccq map is our "cleanup queue".  NAT records in the conntrack map

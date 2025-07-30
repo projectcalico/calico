@@ -15,14 +15,18 @@ build: bin/release
 
 clean:
 	@rm -rf ./bin
-	@rm -rf ./output ./_output ./tmp ./*.log
+	@rm -rf ./output ./_output ./report ./tmp ./*.log
 
 bin/release: $(shell find . -name "*.go")
 	@mkdir -p bin && \
 	$(call build_binary, ./cmd, bin/release)
 
+POSTRELEASE_TEST_PACKAGE		:= $(PACKAGE_NAME)/pkg/postrelease
+UNIT_TEST_PACKAGES	:= $(shell go list ./... | grep -v $(POSTRELEASE_TEST_PACKAGE))
 ut:
-	$(DOCKER_GO_BUILD) go test ./... -v -cover -count 1
+	@mkdir -p report
+	@$(DOCKER_GO_BUILD) gotestsum --junitfile report/unit-tests.xml \
+		-- -coverprofile=report/coverage.out $(UNIT_TEST_PACKAGES)
 
 ###############################################################################
 # CI/CD

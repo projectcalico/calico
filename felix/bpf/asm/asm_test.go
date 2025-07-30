@@ -196,7 +196,7 @@ func TestSingleTrampoline(t *testing.T) {
 	// a trampoline.
 	b.JumpEq64(R1, R2, "longB")
 	b.JumpEq64(R1, R2, "longA")
-	for i := 0; i < trampolineInterval; i++ {
+	for i := 0; i < TrampolineStrideDefault; i++ {
 		b.NoOp()
 	}
 
@@ -214,7 +214,7 @@ func TestSingleTrampoline(t *testing.T) {
 	// Calculate where the trampoline should be.  We sort the jumps within
 	// the trampoline for determinacy so longA will be before longB.
 	const (
-		trampolineStartAddr = trampolineInterval + iota
+		trampolineStartAddr = TrampolineStrideDefault + iota
 		longATrampolineAddr
 		longBTrampolineAddr
 		trampolineEndAddr
@@ -227,7 +227,7 @@ func TestSingleTrampoline(t *testing.T) {
 	Expect(insns[jumpToAAddr]).To(Equal(MakeInsn(JumpEq64, R1, R2, longATrampolineAddr-jumpToAAddr-1, 0)))
 
 	noOp := MakeInsn(Mov64, R0, R0, 0, 0)
-	for i := 2; i < trampolineInterval-1; i++ {
+	for i := 2; i < TrampolineStrideDefault-1; i++ {
 		Expect(insns[i]).To(Equal(noOp))
 	}
 
@@ -259,7 +259,7 @@ func TestTrampolineLoadImm64(t *testing.T) {
 	// a trampoline.
 	b.JumpEq64(R1, R2, "longB")
 	b.JumpEq64(R1, R2, "longA")
-	for i := 0; i < trampolineInterval-3; i++ {
+	for i := 0; i < TrampolineStrideDefault-3; i++ {
 		b.NoOp()
 	}
 	b.LoadImm64(R3, 1234)
@@ -281,7 +281,7 @@ func TestTrampolineLoadImm64(t *testing.T) {
 	// Calculate where the trampoline should be.  We sort the jumps within
 	// the trampoline for determinacy so longA will be before longB.
 	const (
-		trampolineStartAddr = trampolineInterval + 1 + iota
+		trampolineStartAddr = TrampolineStrideDefault + 1 + iota
 		longBTrampolineAddr
 		trampolineEndAddr
 	)
@@ -293,7 +293,7 @@ func TestTrampolineLoadImm64(t *testing.T) {
 	Expect(insns[jumpToAAddr]).To(Equal(MakeInsn(JumpEq64, R1, R2, trampolineStartAddr-jumpToAAddr-1, 0)))
 
 	noOp := MakeInsn(Mov64, R0, R0, 0, 0)
-	for i := 2; i < trampolineInterval-1; i++ {
+	for i := 2; i < TrampolineStrideDefault-1; i++ {
 		Expect(insns[i]).To(Equal(noOp))
 	}
 
@@ -319,7 +319,7 @@ func TestShortJumpAndTrampoline(t *testing.T) {
 	b.JumpEq64(R1, R2, "shortA")
 	b.JumpEq64(R1, R2, "longA")
 	b.LabelNextInsn("shortA")
-	for i := 0; i < trampolineInterval; i++ {
+	for i := 0; i < TrampolineStrideDefault; i++ {
 		b.NoOp()
 	}
 
@@ -335,7 +335,7 @@ func TestShortJumpAndTrampoline(t *testing.T) {
 	// Calculate where the trampoline should be.  We sort the jumps within
 	// the trampoline for determinacy so longA will be before longB.
 	const (
-		trampolineStartAddr = trampolineInterval + iota
+		trampolineStartAddr = TrampolineStrideDefault + iota
 		longATrampolineAddr
 		trampolineEndAddr
 	)
@@ -348,7 +348,7 @@ func TestShortJumpAndTrampoline(t *testing.T) {
 	Expect(insns[jumpToLong]).To(Equal(MakeInsn(JumpEq64, R1, R2, longATrampolineAddr-jumpToLong-1, 0)))
 
 	noOp := MakeInsn(Mov64, R0, R0, 0, 0)
-	for i := 2; i < trampolineInterval-1; i++ {
+	for i := 2; i < TrampolineStrideDefault-1; i++ {
 		Expect(insns[i]).To(Equal(noOp))
 	}
 
@@ -376,7 +376,7 @@ func TestDoubleTrampoline(t *testing.T) {
 	// a trampoline.
 	b.JumpEq64(R1, R2, "longB")
 	b.JumpEq64(R1, R2, "longA")
-	for i := 0; i < trampolineInterval; i++ {
+	for i := 0; i < TrampolineStrideDefault; i++ {
 		b.NoOp()
 	}
 
@@ -385,7 +385,7 @@ func TestDoubleTrampoline(t *testing.T) {
 	b.JumpEq64(R1, R2, "longA")
 	b.JumpEq64(R1, R3, "longC")
 
-	for i := 0; i < trampolineInterval; i++ {
+	for i := 0; i < TrampolineStrideDefault; i++ {
 		b.NoOp()
 	}
 
@@ -405,7 +405,7 @@ func TestDoubleTrampoline(t *testing.T) {
 	// Calculate where the trampolines should be.  We sort the jumps within
 	// the trampoline for determinacy so longA will be before longB.
 	const (
-		trampoline0StartAddr = trampolineInterval + iota
+		trampoline0StartAddr = TrampolineStrideDefault + iota
 		longATrampoline0Addr
 		longBTrampoline0Addr
 		trampoline0EndAddr
@@ -415,7 +415,7 @@ func TestDoubleTrampoline(t *testing.T) {
 		jumpToAAddr
 	)
 	const (
-		trampoline1StartAddr = trampolineInterval*2 + iota
+		trampoline1StartAddr = TrampolineStrideDefault*2 + iota
 		longATrampoline1Addr
 		longBTrampoline1Addr
 		longCTrampoline1Addr
@@ -433,7 +433,7 @@ func TestDoubleTrampoline(t *testing.T) {
 	Expect(insns[jumpToBAddr]).To(Equal(MakeInsn(JumpEq64, R1, R2, longBTrampoline0Addr-jumpToBAddr-1, 0)))
 	Expect(insns[jumpToAAddr]).To(Equal(MakeInsn(JumpEq64, R1, R2, longATrampoline0Addr-jumpToAAddr-1, 0)))
 	noOp := MakeInsn(Mov64, R0, R0, 0, 0)
-	for i := 2; i < trampolineInterval-1; i++ {
+	for i := 2; i < TrampolineStrideDefault-1; i++ {
 		Expect(insns[i]).To(Equal(noOp))
 	}
 

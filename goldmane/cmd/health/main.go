@@ -3,11 +3,8 @@ package main
 import (
 	"flag"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
-
-	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/goldmane/pkg/daemon"
 )
@@ -25,7 +22,6 @@ func init() {
 func main() {
 	cfg := daemon.ConfigFromEnv()
 	if !cfg.HealthEnabled {
-		logrus.Info("Health checking is disabled")
 		os.Exit(0)
 	}
 
@@ -35,24 +31,17 @@ func main() {
 	} else if *live {
 		path = "liveness"
 	} else {
-		logrus.Error("One of --ready or --live must be set")
+		fmt.Println("One of --ready or --live must be set")
 		os.Exit(1)
 	}
 
 	resp, err := http.Get(fmt.Sprintf("http://localhost:%d/%s", cfg.HealthPort, path))
 	if err != nil {
-		logrus.WithError(err).Error("Failed to get health check")
+		fmt.Printf("Error making health check request: %v\n", err)
 		os.Exit(1)
 	}
 	if resp.StatusCode != http.StatusOK {
-		b, err := io.ReadAll(resp.Body)
-		if err != nil {
-			logrus.WithError(err).Error("Failed to read health check response body")
-		}
-		logrus.WithFields(logrus.Fields{
-			"code": resp.StatusCode,
-			"body": b,
-		}).Error("Health check failed")
+		fmt.Printf("Health check failed with status code: %d\n", resp.StatusCode)
 		os.Exit(1)
 	}
 	os.Exit(0)

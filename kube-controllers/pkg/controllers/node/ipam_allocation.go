@@ -18,6 +18,7 @@ import (
 	"time"
 
 	log "github.com/sirupsen/logrus"
+	v1 "k8s.io/api/core/v1"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
 )
@@ -276,6 +277,10 @@ func (t *allocationState) iterDirty(f func(string, map[string]*allocation)) {
 			f(node, nil)
 		}
 	}
+}
+
+func (t *allocationState) markDirtyPodDeleted(pod *v1.Pod) {
+	t.markDirty(pod.Spec.NodeName, "Pod deleted")
 }
 
 func (t *allocationState) markDirty(node string, reason string) {

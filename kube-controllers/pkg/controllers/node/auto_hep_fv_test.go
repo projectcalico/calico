@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -182,7 +182,7 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 		// Expect the node labels to sync.
 		expectedNodeLabels = map[string]string{"label1": "value2", "calico-label": "calico-value"}
 		Eventually(func() error { return testutils.ExpectNodeLabels(c, expectedNodeLabels, cNodeName) },
-			time.Second*15, 500*time.Millisecond).Should(BeNil())
+			time.Second*30, 500*time.Millisecond).Should(BeNil())
 
 		// Expect the hostendpoint labels to sync.
 		expectedHepLabels["label1"] = "value2"

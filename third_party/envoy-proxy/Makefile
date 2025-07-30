@@ -5,7 +5,9 @@ PACKAGE_NAME ?= github.com/projectcalico/calico/third_party/envoy-proxy
 ENVOY_PROXY_IMAGE ?= envoy-proxy
 BUILD_IMAGES ?= $(ENVOY_PROXY_IMAGE)
 
-ENVOYBINARY_IMAGE ?= quay.io/tigera/envoybinary:v1.33.1
+# For updating this version please see
+# https://github.com/tigera/operator/blob/master/docs/common_tasks.md#updating-the-bundled-version-of-envoy-gateway
+ENVOYBINARY_IMAGE ?= quay.io/tigera/envoybinary:d09f1c3f01d046ddcd1a1beb1249a178795d3c49
 
 EXCLUDEARCH ?= ppc64le s390x
 
@@ -24,7 +26,7 @@ build: ;
 
 .PHONY: clean
 clean:
-	rm -f .envoy-proxy.*
+	rm -f .envoy-proxy.* .*.created* .*.published* .release.*
 	rm -fr bin/ envoy-proxy/
 	-docker image rm -f $$(docker images $(ENVOY_PROXY_IMAGE) -a -q)
 

@@ -107,6 +107,15 @@ rules:
       - get
       - create
       - update
+  # Needs tier permissions for initialization.
+  - apiGroups: ["crd.projectcalico.org"]
+    resources:
+      - tiers
+    verbs:
+      - get
+      - create
+      - update
+      - list
 ---
 kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1

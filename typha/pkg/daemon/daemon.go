@@ -42,7 +42,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/metricsserver"
 	"github.com/projectcalico/calico/libcalico-go/lib/upgrade/migrator"
 	"github.com/projectcalico/calico/libcalico-go/lib/upgrade/migrator/clients"
-	"github.com/projectcalico/calico/typha/pkg/buildinfo"
+	"github.com/projectcalico/calico/pkg/buildinfo"
 	"github.com/projectcalico/calico/typha/pkg/calc"
 	"github.com/projectcalico/calico/typha/pkg/config"
 	"github.com/projectcalico/calico/typha/pkg/jitter"
@@ -150,7 +150,7 @@ func (t *TyphaDaemon) DoEarlyRuntimeSetup() {
 // arguments on fields of the struct.
 func (t *TyphaDaemon) ParseCommandLineArgs(argv []string) {
 	// Parse command-line args.
-	version := "Version:            " + buildinfo.GitVersion + "\n" +
+	version := "Version:            " + buildinfo.Version + "\n" +
 		"Full git commit ID: " + buildinfo.GitRevision + "\n" +
 		"Build date:         " + buildinfo.BuildDate + "\n"
 	p := &docopt.Parser{OptionsFirst: false, SkipHelpFlags: false}
@@ -161,7 +161,7 @@ func (t *TyphaDaemon) ParseCommandLineArgs(argv []string) {
 	}
 	t.ConfigFilePath = arguments["--config-file"].(string)
 	t.BuildInfoLogCxt = log.WithFields(log.Fields{
-		"version":    buildinfo.GitVersion,
+		"version":    buildinfo.Version,
 		"buildDate":  buildinfo.BuildDate,
 		"gitCommit":  buildinfo.GitRevision,
 		"GOMAXPROCS": runtime.GOMAXPROCS(0),

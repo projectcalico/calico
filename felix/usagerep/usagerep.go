@@ -25,9 +25,9 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/felix/buildinfo"
 	"github.com/projectcalico/calico/felix/calc"
 	"github.com/projectcalico/calico/felix/jitter"
+	"github.com/projectcalico/calico/pkg/buildinfo"
 )
 
 const (
@@ -204,7 +204,7 @@ func (u *UsageReporter) calculateURL(clusterGUID, clusterType, calicoVersion str
 		"kubernetesVersion": kubernetesVersion,
 		"alpEnabled":        alpEnabled,
 		"stats":             stats,
-		"version":           buildinfo.GitVersion,
+		"version":           buildinfo.Version,
 		"gitRevision":       buildinfo.GitRevision,
 	}).Info("Reporting cluster usage/checking for deprecation warnings.")
 	queryParams := url.Values{
@@ -216,7 +216,7 @@ func (u *UsageReporter) calculateURL(clusterGUID, clusterType, calicoVersion str
 		"size":         {fmt.Sprint(stats.NumHosts)},
 		"weps":         {fmt.Sprint(stats.NumWorkloadEndpoints)},
 		"heps":         {fmt.Sprint(stats.NumHostEndpoints)},
-		"version":      {buildinfo.GitVersion},
+		"version":      {buildinfo.Version},
 		"rev":          {buildinfo.GitRevision},
 		"policies":     {fmt.Sprint(stats.NumPolicies)},
 		"profiles":     {fmt.Sprint(stats.NumProfiles)},

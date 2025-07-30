@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2022 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@ import (
 	"net"
 	"os"
 	"regexp"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -30,7 +31,6 @@ import (
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/confd/pkg/buildinfo"
 	"github.com/projectcalico/calico/confd/pkg/config"
 	logutils "github.com/projectcalico/calico/confd/pkg/log"
 	"github.com/projectcalico/calico/confd/pkg/resource/template"
@@ -46,6 +46,7 @@ import (
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
+	"github.com/projectcalico/calico/pkg/buildinfo"
 	"github.com/projectcalico/calico/typha/pkg/syncclientutils"
 	"github.com/projectcalico/calico/typha/pkg/syncproto"
 )
@@ -178,18 +179,22 @@ func NewCalicoClient(confdConfig *config.Config) (*client, error) {
 		log.WithError(err).Warning("Failed to create secret watcher, not running under Kubernetes?")
 	}
 
-	// Get endpoint status path prefix, if specified.
-	epstatusPathPrefix := endpointStatusPathPrefix
-	if envVar := os.Getenv(envEndpointStatusPathPrefix); len(envVar) != 0 {
-		epstatusPathPrefix = envVar
-	}
+	if runtime.GOOS == "windows" {
+		log.WithField("os", runtime.GOOS).Info("Local workload BGP peer is currently unsupported on Windows. Ignoring LocalBGPPeerWatcher...")
+	} else {
+		// Get endpoint status path prefix, if specified.
+		epstatusPathPrefix := endpointStatusPathPrefix
+		if envVar := os.Getenv(envEndpointStatusPathPrefix); len(envVar) != 0 {
+			epstatusPathPrefix = envVar
+		}
 
-	// Create and start local BGP peer watcher.
-	if c.localBGPPeerWatcher, err = NewLocalBGPPeerWatcher(c, epstatusPathPrefix, 0); err != nil {
-		log.WithError(err).Error("Failed to create local BGP peer watcher")
-		return nil, err
+		// Create and start local BGP peer watcher.
+		if c.localBGPPeerWatcher, err = NewLocalBGPPeerWatcher(c, epstatusPathPrefix, 0); err != nil {
+			log.WithError(err).Error("Failed to create local BGP peer watcher")
+			return nil, err
+		}
+		c.localBGPPeerWatcher.Start()
 	}
-	c.localBGPPeerWatcher.Start()
 
 	// Create a conditional that we use to wake up all of the watcher threads when there
 	// may be some actionable updates.
@@ -242,7 +247,7 @@ func NewCalicoClient(confdConfig *config.Config) (*client, error) {
 	c.nodeV1Processor = updateprocessors.NewBGPNodeUpdateProcessor(clientCfg.Spec.K8sUsePodCIDR)
 	if syncclientutils.MustStartSyncerClientIfTyphaConfigured(
 		&confdConfig.Typha, syncproto.SyncerTypeBGP,
-		buildinfo.GitVersion, template.NodeName, fmt.Sprintf("confd %s", buildinfo.GitVersion),
+		buildinfo.Version, template.NodeName, fmt.Sprintf("confd %s", buildinfo.Version),
 		c,
 	) {
 		log.Debug("Using typha syncclient")
@@ -476,6 +481,7 @@ func (c *client) inSync() bool {
 type bgpPeer struct {
 	PeerIP          cnet.IP              `json:"ip"`
 	ASNum           numorstring.ASNumber `json:"as_num,string"`
+	LocalASNum      numorstring.ASNumber `json:"local_as_num,string"`
 	RRClusterID     string               `json:"rr_cluster_id"`
 	Password        *string              `json:"password"`
 	SourceAddr      string               `json:"source_addr"`
@@ -489,6 +495,7 @@ type bgpPeer struct {
 	Filters         []string             `json:"filters"`
 	PassiveMode     bool                 `json:"passive_mode"`
 	LocalBGPPeer    bool                 `json:"local_bgp_peer"`
+	NextHopMode     string               `json:"next_hop_mode"`
 }
 
 type bgpPrefix struct {
@@ -577,7 +584,7 @@ func (c *client) updatePeersV1() {
 			log.Debugf("Local nodes %#v", localNodeNames)
 
 			var peers []*bgpPeer
-			if v3res.Spec.LocalWorkloadSelector != "" {
+			if (v3res.Spec.LocalWorkloadSelector != "") && (c.localBGPPeerWatcher != nil) {
 				// Get active local BGP Peers.
 				log.Infof("Process on local workload bgp peer %s", v3res.Name)
 				for _, peerData := range c.localBGPPeerWatcher.GetActiveLocalBGPPeers() {
@@ -644,12 +651,20 @@ func (c *client) updatePeersV1() {
 					reachableBy = v3res.Spec.ReachableBy
 				}
 
+				var localASN numorstring.ASNumber
+				if v3res.Spec.LocalASNumber != nil {
+					localASN = *v3res.Spec.LocalASNumber
+				}
+
+				keepOriginalNextHop, nextHopMode := getNextHopMode(v3res)
 				peers = append(peers, &bgpPeer{
 					PeerIP:          *ip,
 					ASNum:           v3res.Spec.ASNumber,
+					LocalASNum:      localASN,
 					SourceAddr:      string(v3res.Spec.SourceAddress),
 					Port:            port,
-					KeepNextHop:     v3res.Spec.KeepOriginalNextHop,
+					KeepNextHop:     keepOriginalNextHop,
+					NextHopMode:     nextHopMode,
 					CalicoNode:      isCalicoNode,
 					TTLSecurity:     ttlSecurityHopCount,
 					Filters:         v3res.Spec.Filters,
@@ -689,7 +704,10 @@ func (c *client) updatePeersV1() {
 		// in BGPPeer, i.e. PeerIP, ASNumber and PeerSelector...
 		var localNodeNames []string
 		var includeV4, includeV6 bool
-		if v3res.Spec.LocalWorkloadSelector != "" {
+		if !automaticReversePeering(v3res) {
+			continue
+		} else if v3res.Spec.LocalWorkloadSelector != "" {
+			// Reverse peering from local workload should be performed by the Child cluster.
 			continue
 		} else if v3res.Spec.PeerSelector != "" {
 			localNodeNames = c.nodeLabelManager.nodesMatching(v3res.Spec.PeerSelector)
@@ -773,6 +791,27 @@ func (c *client) updatePeersV1() {
 	}
 }
 
+func automaticReversePeering(v3res *apiv3.BGPPeer) bool {
+	if v3res.Spec.ReversePeering != nil && *v3res.Spec.ReversePeering == apiv3.ReversePeeringManual {
+		return false
+	}
+
+	return true
+}
+
+func getNextHopMode(v3res *apiv3.BGPPeer) (bool, string) {
+	var nextHopMode string
+	var keepOriginalNextHop bool
+	if v3res.Spec.NextHopMode != nil {
+		// Ignore KeepOriginalNextHopMode if NextHopMode is not nil.
+		nextHopMode = string(*v3res.Spec.NextHopMode)
+	} else {
+		keepOriginalNextHop = v3res.Spec.KeepOriginalNextHop
+	}
+
+	return keepOriginalNextHop, nextHopMode
+}
+
 func parseIPPort(ipPort string) (string, uint16) {
 	host, port, err := net.SplitHostPort(ipPort)
 	if err != nil {
@@ -852,6 +891,9 @@ func (c *client) localBGPPeerDataAsBGPPeers(localBGPPeerData localBGPPeerData, v
 			log.Warningf("Couldn't parse %v %v for workload %v", version, ipStr, workloadName)
 			continue
 		}
+		if v3Peer.Spec.LocalASNumber != nil {
+			peer.LocalASNum = *v3Peer.Spec.LocalASNumber
+		}
 		peer.PeerIP = *ip
 		peer.Filters = v3Peer.Spec.Filters
 		peer.ASNum = v3Peer.Spec.ASNumber
@@ -917,7 +959,13 @@ func (c *client) nodeAsBGPPeers(nodeName string, v4 bool, v6 bool, v3Peer *apiv3
 				log.WithError(err).Warningf("Problem parsing global AS number %v for node %v", asNum, nodeName)
 			}
 		}
+
 		peer.RRClusterID = rrClusterID
+
+		keepOriginalNextHop, nextHopMode := getNextHopMode(v3Peer)
+		peer.KeepNextHop = keepOriginalNextHop
+		peer.NextHopMode = nextHopMode
+
 		peers = append(peers, peer)
 	}
 	return

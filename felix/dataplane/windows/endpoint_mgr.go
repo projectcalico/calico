@@ -68,6 +68,8 @@ type endpointManager struct {
 	pendingWlEpUpdates map[types.WorkloadEndpointID]*proto.WorkloadEndpoint
 	// activeWlEndpoints stores the active/current state that was applied per endpoint
 	activeWlEndpoints map[types.WorkloadEndpointID]*proto.WorkloadEndpoint
+	// activeWlACLPolicies stores the active/current hns policy rules that were applied per endpoint
+	activeWlACLPolicies map[types.WorkloadEndpointID][]*hns.ACLPolicy
 	// addressToEndpointId serves as a hns endpoint id cache. It enables us to lookup the hns
 	// endpoint id for a given endpoint ip address.
 	addressToEndpointId map[string]string
@@ -89,7 +91,7 @@ type hnsInterface interface {
 	HNSListEndpointRequest() ([]hns.HNSEndpoint, error)
 }
 
-func newEndpointManager(hns hnsInterface,
+func newEndpointManager(hnsInterface hnsInterface,
 	policysets policysets.PolicySetsDataplane,
 ) *endpointManager {
 	var networkName string
@@ -116,11 +118,12 @@ func newEndpointManager(hns hnsInterface,
 	sort.Strings(hostIPv4s)
 
 	return &endpointManager{
-		hns:                 hns,
+		hns:                 hnsInterface,
 		hnsNetworkRegexp:    networkNameRegexp,
 		policysetsDataplane: policysets,
 		addressToEndpointId: make(map[string]string),
 		activeWlEndpoints:   map[types.WorkloadEndpointID]*proto.WorkloadEndpoint{},
+		activeWlACLPolicies: map[types.WorkloadEndpointID][]*hns.ACLPolicy{},
 		pendingWlEpUpdates:  map[types.WorkloadEndpointID]*proto.WorkloadEndpoint{},
 		pendingIPSetUpdate:  set.New[string](),
 		hostAddrs:           hostIPv4s,
@@ -427,20 +430,32 @@ func (m *endpointManager) CompleteDeferredWork() error {
 			flatIngressRules = append(flatIngressRules, m.policysetsDataplane.NewHostRule(true))
 			flatEgressRules = append(flatEgressRules, m.policysetsDataplane.NewHostRule(false))
 
-			err := m.applyRules(id, endpointId, flatIngressRules, flatEgressRules)
-			if err != nil {
-				// Failed to apply, this will be rescheduled and retried
-				log.WithError(err).Error("Failed to apply rules update")
-				return err
-			}
-
 			m.activeWlEndpoints[id] = workload
+
+			rules := m.getHnsPolicyRules(id, endpointId, flatIngressRules, flatEgressRules)
+			// Check if the rules have already been applied.
+			rulesApplied, ok := m.activeWlACLPolicies[id]
+			if !ok || !reflect.DeepEqual(rules, rulesApplied) {
+				// Apply updated rules to the endpoint.
+				err := m.applyRules(id, endpointId, rules)
+				if err != nil {
+					// Failed to apply, this will be rescheduled and retried
+					log.WithError(err).Error("Failed to apply rules update")
+					return err
+				}
+
+				m.activeWlACLPolicies[id] = rules
+			} else {
+				logCxt := log.WithFields(log.Fields{"id": id, "endpointId": endpointId})
+				logCxt.Debug("No new rules applied to the endpoint")
+			}
 			delete(m.pendingWlEpUpdates, id)
 		} else {
 			// For now, we don't need to do anything. As the endpoint is being removed, HNS will automatically
 			// handle the removal of any associated policies from the dataplane for us
 			logCxt.Info("Processing endpoint removal")
 			delete(m.activeWlEndpoints, id)
+			delete(m.activeWlACLPolicies, id)
 			delete(m.pendingWlEpUpdates, id)
 		}
 	}
@@ -492,12 +507,8 @@ func (m *endpointManager) markAllEndpointForRefresh() {
 	}
 }
 
-// applyRules gathers all of the rules for the specified policies and sends them to hns
-// as an endpoint policy update (this actually applies the rules to the dataplane).
-func (m *endpointManager) applyRules(workloadId types.WorkloadEndpointID, endpointId string, inboundRules, outboundRules []*hns.ACLPolicy) error {
-	logCxt := log.WithFields(log.Fields{"id": workloadId, "endpointId": endpointId})
-	logCxt.Info("Applying endpoint rules")
-
+// getHnsPolicyRules gathers all of the rules for the specified policies.
+func (m *endpointManager) getHnsPolicyRules(workloadId types.WorkloadEndpointID, endpointId string, inboundRules, outboundRules []*hns.ACLPolicy) []*hns.ACLPolicy {
 	rules := make([]*hns.ACLPolicy, 0, len(inboundRules)+len(outboundRules)+1)
 
 	if nodeToEp := m.nodeToEndpointRule(); nodeToEp != nil {
@@ -506,6 +517,14 @@ func (m *endpointManager) applyRules(workloadId types.WorkloadEndpointID, endpoi
 	}
 	rules = append(rules, inboundRules...)
 	rules = append(rules, outboundRules...)
+
+	return rules
+}
+
+// applyRules sends policy rules to hns as an endpoint policy update (this actually applies the rules to the dataplane).
+func (m *endpointManager) applyRules(workloadId types.WorkloadEndpointID, endpointId string, rules []*hns.ACLPolicy) error {
+	logCxt := log.WithFields(log.Fields{"id": workloadId, "endpointId": endpointId})
+	logCxt.Info("Applying endpoint rules")
 
 	if len(rules) > 0 {
 		if log.GetLevel() >= log.DebugLevel {

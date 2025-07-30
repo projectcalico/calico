@@ -15,8 +15,9 @@
 package labelindex
 
 import (
+	"fmt"
+	"iter"
 	"math"
-	"reflect"
 	"strings"
 	"time"
 
@@ -29,6 +30,8 @@ import (
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/labelindex/labelnamevalueindex"
 	"github.com/projectcalico/calico/felix/labelindex/labelrestrictionindex"
+	"github.com/projectcalico/calico/lib/std/uniquelabels"
+	"github.com/projectcalico/calico/lib/std/uniquestr"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/selector"
@@ -72,7 +75,7 @@ func init() {
 
 // endpointData holds the data that we need to know about a particular endpoint.
 type endpointData struct {
-	labels  map[string]string
+	labels  uniquelabels.Map
 	nets    []ip.CIDR
 	ports   []model.EndpointPort
 	parents []*npParentData
@@ -166,6 +169,10 @@ type IPSetMember struct {
 	PortNumber uint16
 }
 
+func (m IPSetMember) String() string {
+	return fmt.Sprintf("labelindex.IPSetMember(%s:%s:%d)", m.CIDR, m.Protocol, m.PortNumber)
+}
+
 type ipSetData struct {
 	// The selector and named port that this IP set represents.  If the selector is nil then
 	// this IP set represents an unfiltered named port.  If namedPortProtocol == ProtocolNone then
@@ -179,48 +186,55 @@ type ipSetData struct {
 	memberToRefCount map[IPSetMember]uint64
 }
 
-// Get implements the Labels interface for endpointData.  Combines the endpoint's own labels with
+// GetHandle implements the Labels interface for endpointData.  Combines the endpoint's own labels with
 // those of its parents on the fly.  This reduces the number of allocations we need to do, and
 // it's fast in the mainline case (where there are 0-1 parents).
-func (d *endpointData) Get(labelName string) (value string, present bool) {
-	if value, present = d.labels[labelName]; present {
+func (d *endpointData) GetHandle(labelName uniquestr.Handle) (handle uniquestr.Handle, present bool) {
+	if handle, present = d.labels.GetHandle(labelName); present {
 		return
 	}
 	for _, parent := range d.parents {
-		if value, present = parent.labels[labelName]; present {
+		if handle, present = parent.labels.GetHandle(labelName); present {
 			return
 		}
 	}
 	return
 }
 
-func (d *endpointData) OwnLabels() map[string]string {
-	return d.labels
+func (d *endpointData) OwnLabelHandles() iter.Seq2[uniquestr.Handle, uniquestr.Handle] {
+	return d.labels.AllHandles()
 }
 
-func (d *endpointData) IterOwnAndParentLabels(f func(k, v string)) {
-	seenKeys := set.New[string]()
-	for k, v := range d.labels {
-		f(k, v)
-		seenKeys.Add(k)
-	}
+func (d *endpointData) AllOwnAndParentLabelHandles() iter.Seq2[uniquestr.Handle, uniquestr.Handle] {
+	return func(yield func(k, v uniquestr.Handle) bool) {
+		seenKeys := set.New[uniquestr.Handle]()
+		defer seenKeys.Clear()
 
-	for _, parent := range d.parents {
-		for k, v := range parent.labels {
-			if seenKeys.Contains(k) {
-				// label is shadowed.
-				continue
+		for k, v := range d.labels.AllHandles() {
+			if !yield(k, v) {
+				return
 			}
-			// Non-shadowed parent label. Emit.
-			f(k, v)
 			seenKeys.Add(k)
 		}
+
+		for _, parent := range d.parents {
+			for k, v := range parent.labels.AllHandles() {
+				if seenKeys.Contains(k) {
+					// label is shadowed.
+					continue
+				}
+				// Non-shadowed parent label. Emit.
+				if !yield(k, v) {
+					return
+				}
+				seenKeys.Add(k)
+			}
+		}
 	}
-	seenKeys.Clear()
 }
 
 func (d *endpointData) Equals(other *endpointData) bool {
-	if len(d.labels) != len(other.labels) {
+	if !d.labels.Equals(other.labels) {
 		return false
 	}
 	if len(d.ports) != len(other.ports) {
@@ -233,12 +247,6 @@ func (d *endpointData) Equals(other *endpointData) bool {
 		return false
 	}
 
-	for k, v := range d.labels {
-		otherLabel, exists := other.labels[k]
-		if !exists || otherLabel != v {
-			return false
-		}
-	}
 	for i, p := range d.ports {
 		if other.ports[i] != p {
 			return false
@@ -263,12 +271,16 @@ func (d *endpointData) Equals(other *endpointData) bool {
 // if we have partial information.
 type npParentData struct {
 	id          string
-	labels      map[string]string
+	labels      uniquelabels.Map
 	endpointIDs set.Set[any]
 }
 
-func (d *npParentData) OwnLabels() map[string]string {
-	return d.labels
+func (d *npParentData) OwnLabelHandles() iter.Seq2[uniquestr.Handle, uniquestr.Handle] {
+	return d.labels.AllHandles()
+}
+
+func (d *npParentData) OwnLabels() iter.Seq2[string, string] {
+	return d.labels.AllStrings()
 }
 
 func (d *npParentData) DiscardEndpointID(id any) {
@@ -491,6 +503,7 @@ func (idx *SelectorAndNamedPortIndex) UpdateIPSet(ipSetID string, sel *selector.
 	}
 	if sel == nil {
 		log.WithField("id", ipSetID).Panic("Selector should not be nil")
+		panic("Selector should not be nil") // Keep linter happy.
 	}
 
 	// Check whether anything has actually changed before we do a scan.
@@ -586,7 +599,7 @@ func (idx *SelectorAndNamedPortIndex) DeleteIPSet(setID string) {
 
 func (idx *SelectorAndNamedPortIndex) UpdateEndpointOrSet(
 	id any,
-	labels map[string]string,
+	labels uniquelabels.Map,
 	nets []ip.CIDR,
 	ports []model.EndpointPort,
 	parentIDs []string,
@@ -603,7 +616,7 @@ func (idx *SelectorAndNamedPortIndex) UpdateEndpointOrSet(
 
 	// Calculate the new endpoint data.
 	newEndpointData := &endpointData{}
-	if len(labels) > 0 {
+	if labels.Len() > 0 {
 		newEndpointData.labels = labels
 	}
 	if len(parentIDs) > 0 {
@@ -727,7 +740,7 @@ func (idx *SelectorAndNamedPortIndex) scanEndpointAgainstIPSets(
 
 		ipSetData := idx.ipSetDataByID[ipSetID]
 		matches := ipSetData.selector.EvaluateLabels(epData)
-		log.Debugf("Selector %s matches endpoint? %v", ipSetData.selector.String(), matches)
+		log.Debugf("Selector %q (%s) matches endpoint? %v", ipSetID, ipSetData.selector.String(), matches)
 		if matches {
 			// Record the match in the index.  This allows us to quickly recalculate the
 			// contribution of this endpoint later.
@@ -761,6 +774,7 @@ func (idx *SelectorAndNamedPortIndex) scanEndpointAgainstIPSets(
 			if newRefCount == 0 {
 				// Member no longer in the IP set.  Emit event and clean up the old reference
 				// count.
+				log.Debugf("Member removed: %s, %v", ipSetID, oldMember)
 				idx.onMemberRemoved(ipSetID, oldMember)
 				delete(ipSetData.memberToRefCount, oldMember)
 			} else {
@@ -806,9 +820,10 @@ func (idx *SelectorAndNamedPortIndex) DeleteEndpoint(id any) {
 	gaugeNumEndpoints.Set(float64(idx.endpointKVIdx.Len()))
 }
 
-func (idx *SelectorAndNamedPortIndex) UpdateParentLabels(parentID string, labels map[string]string) {
+func (idx *SelectorAndNamedPortIndex) UpdateParentLabels(parentID string, rawLabels map[string]string) {
 	parentData := idx.getOrCreateParent(parentID)
-	if reflect.DeepEqual(parentData.labels, labels) {
+	labels := uniquelabels.Make(rawLabels) // FIXME Should we move this upstream?
+	if parentData.labels.Equals(labels) {
 		log.WithField("parentID", parentID).Debug("Skipping no-op update to parent labels")
 		return
 	}
@@ -918,7 +933,7 @@ func (idx *SelectorAndNamedPortIndex) discardParentIfEmpty(id string) {
 	if !ok {
 		return
 	}
-	if parent.endpointIDs == nil && parent.labels == nil {
+	if parent.endpointIDs == nil && parent.labels.IsNil() {
 		idx.parentKVIdx.Remove(id)
 	}
 }
@@ -980,13 +995,13 @@ func (idx *SelectorAndNamedPortIndex) iterEndpointCandidates(ipsetID string, f f
 		} else {
 			// This restriction rules out both a match on parent and a match
 			// on endpoint.
-			log.Debugf("Label restriction on label %s rules out both parent and endpoint match.", k)
+			log.Debugf("Label restriction on label %s rules out both parent and endpoint match.", k.Value())
 			return
 		}
 	}
 
 	if bestEPStrategy.EstimatedItemsToScan() <= bestParentEndpointEstimate {
-		log.Debugf("Selector %s using endpoint scan strategy: %s", sel.String(), bestEPStrategy.String())
+		log.Debugf("Selector %q (%s) using endpoint scan strategy: %s", ipsetID, sel.String(), bestEPStrategy.String())
 		counterVecScanStrat.WithLabelValues("endpoint-" + bestEPStrategy.Name()).Inc()
 		bestEPStrategy.Scan(func(id any) bool {
 			ep, _ := idx.endpointKVIdx.Get(id)

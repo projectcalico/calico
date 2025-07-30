@@ -29,7 +29,7 @@ LABEL org.opencontainers.image.vendor="Project Calico"
 LABEL org.opencontainers.image.version=${GIT_VERSION}
 LABEL org.opencontainers.image.licenses='Apache-2.0'
 
-COPY LICENSE /licenses/LICENSE
+COPY bin/LICENSE /licenses/LICENSE
 
 COPY bin/windows /opt/cni/bin/
 

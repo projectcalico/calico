@@ -93,7 +93,7 @@ func TestICMPRelatedPlain(t *testing.T) {
 	runBpfTest(t, "calico_from_workload_ep", rulesAllowUDP, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(pktBytes)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+		Expect(res.Retval).To(Equal(resTC_ACT_REDIRECT))
 	})
 	expectMark(tcdefs.MarkSeen)
 
@@ -167,7 +167,7 @@ func TestICMPRelatedNATPodPod(t *testing.T) {
 	runBpfTest(t, "calico_from_workload_ep", rulesAllowUDP, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(pktBytes)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+		Expect(res.Retval).To(Equal(resTC_ACT_REDIRECT))
 
 		natPkt = gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
 	})
@@ -212,7 +212,7 @@ func TestICMPRelatedFromHost(t *testing.T) {
 	runBpfTest(t, "calico_from_host_ep", rulesAllowUDP, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(pktBytes)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+		Expect(res.Retval).To(Equal(resTC_ACT_REDIRECT))
 	})
 	expectMark(tcdefs.MarkSeen)
 
@@ -280,7 +280,7 @@ func TestICMPRelatedFromHostBeforeNAT(t *testing.T) {
 	runBpfTest(t, "calico_from_host_ep", rulesAllowUDP, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(pktBytes)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+		Expect(res.Retval).To(Equal(resTC_ACT_REDIRECT))
 	})
 	expectMark(tcdefs.MarkSeenBypassForward)
 
@@ -343,7 +343,7 @@ func TestICMPRelatedHostNetBackend(t *testing.T) {
 	runBpfTest(t, "calico_from_host_ep", rulesAllowUDP, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(pktBytes)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+		Expect(res.Retval).To(Equal(resTC_ACT_REDIRECT))
 		recvPkt = res.dataOut
 		respPkt = udpResponseRaw(recvPkt)
 	})
@@ -371,7 +371,7 @@ func TestICMPRelatedHostNetBackend(t *testing.T) {
 		res, err := bpfrun(icmpFragNeeded)
 		Expect(err).NotTo(HaveOccurred())
 		// we have a normal ct record, it is related, must be allowed
-		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+		Expect(res.Retval).To(Equal(resTC_ACT_REDIRECT))
 
 		checkICMP(res.dataOut, net.ParseIP("192.168.1.1"), hostIP, hostIP, ipv4.DstIP, ipv4.Protocol,
 			natPort, uint16(udp.DstPort))

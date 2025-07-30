@@ -15,6 +15,9 @@ installation:
   # Example: --set installation.imagePullSecrets[0].name=my-existing-secret
   imagePullSecrets: []
 
+  # Disable CSI driver by default.
+  kubeletVolumePluginPath: "None"
+
 # apiServer configures the Calico API server, needed for interacting with
 # the projectcalico.org/v3 suite of APIs.
 apiServer:
@@ -85,8 +88,6 @@ tigeraOperator:
 calicoctl:
   image: quay.io/calico/ctl
   tag: master
-
-kubeletVolumePluginPath: /var/lib/kubelet
 
 # Optionally configure the host and port used to access the Kubernetes API server.
 kubernetesServiceEndpoint:

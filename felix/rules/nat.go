@@ -19,6 +19,8 @@ import (
 	"sort"
 	"strings"
 
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+
 	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
 	. "github.com/projectcalico/calico/felix/generictables"
 )
@@ -57,6 +59,12 @@ func (r *DefaultRuleRenderer) makeNATOutgoingRuleIPTables(ipVersion uint8, proto
 	match := r.NewMatch().
 		SourceIPSet(masqIPsSetName).
 		NotDestIPSet(allIPsSetName)
+
+	check := apiv3.NATOutgoingExclusionsType(r.Config.NATOutgoingExclusions)
+	if check == apiv3.NATOutgoingExclusionsIPPoolsAndHostIPs {
+		allHostsIPsSetName := ipConf.NameForMainIPSet(IPSetIDAllHostNets)
+		match = match.NotDestIPSet(allHostsIPsSetName)
+	}
 
 	if protocol != "" {
 		match = match.Protocol(protocol)

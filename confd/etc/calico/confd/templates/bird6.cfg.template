@@ -237,6 +237,9 @@ protocol bgp Global_{{$id}} from bgp_template {
   ttl security off;
   multihop;
 {{- end }}
+{{- if ne ($data.local_as_num) "0"}}
+  local as {{$data.local_as_num}};
+{{- end }}
   neighbor {{$data.ip}} {{if $data.port }}port {{ $data.port }} {{end}}as {{$data.as_num}};
 {{- if eq $data.source_addr "UseNodeIP"}}
   source address {{$node_ip6}};  # The local address we use for the TCP connection
@@ -281,6 +284,12 @@ protocol bgp Global_{{$id}} from bgp_template {
   password "{{$data.password}}";
 {{- end}}
 {{- if and (ne $data.as_num $node_as_num) ($data.keep_next_hop)}}
+  next hop keep;
+{{- end}}
+{{- if eq $data.next_hop_mode "Self"}}
+  next hop self;
+{{- end}}
+{{- if eq $data.next_hop_mode "Keep"}}
   next hop keep;
 {{- end}}
 {{- if $data.num_allow_local_as}}
@@ -318,6 +327,9 @@ protocol bgp Local_Workload_{{$id}} from bgp_template {
   ttl security off;
   multihop;
 {{- end }}
+{{- if ne ($data.local_as_num) "0"}}
+  local as {{$data.local_as_num}};
+{{- end }}
   neighbor {{$data.ip}} {{if $data.port }}port {{ $data.port }} {{end}}as {{$data.as_num}};
 {{- if eq $data.source_addr "UseNodeIP"}}
   source address {{$node_ip6}};  # The local address we use for the TCP connection
@@ -364,6 +376,12 @@ protocol bgp Local_Workload_{{$id}} from bgp_template {
 {{- if and (ne $data.as_num $node_as_num) ($data.keep_next_hop)}}
   next hop keep;
 {{- end}}
+{{- if eq $data.next_hop_mode "Self"}}
+  next hop self;
+{{- end}}
+{{- if eq $data.next_hop_mode "Keep"}}
+  next hop keep;
+{{- end}}
 {{- if $data.num_allow_local_as}}
   allow local as {{$data.num_allow_local_as}};
 {{- end}}
@@ -397,6 +415,9 @@ protocol bgp Node_{{$id}} from bgp_template {
 {{- else }}
   ttl security off;
   multihop;
+{{- end }}
+{{- if ne ($data.local_as_num) "0"}}
+  local as {{$data.local_as_num}};
 {{- end }}
   neighbor {{$data.ip}} {{if $data.port }}port {{ $data.port }} {{end}}as {{$data.as_num}};
 {{- if eq $data.source_addr "UseNodeIP"}}
@@ -439,6 +460,12 @@ protocol bgp Node_{{$id}} from bgp_template {
   password "{{$data.password}}";
 {{- end}}
 {{- if and (ne $data.as_num $node_as_num) ($data.keep_next_hop)}}
+  next hop keep;
+{{- end}}
+{{- if eq $data.next_hop_mode "Self"}}
+  next hop self;
+{{- end}}
+{{- if eq $data.next_hop_mode "Keep"}}
   next hop keep;
 {{- end}}
 {{- if $data.num_allow_local_as}}
@@ -477,6 +504,9 @@ protocol bgp Local_Workload_{{$id}} from bgp_template {
   ttl security off;
   multihop;
 {{- end }}
+{{- if ne ($data.local_as_num) "0"}}
+  local as {{$data.local_as_num}};
+{{- end }}
   neighbor {{$data.ip}} {{if $data.port }}port {{ $data.port }} {{end}}as {{$data.as_num}};
 {{- if eq $data.source_addr "UseNodeIP"}}
   source address {{$node_ip6}};  # The local address we use for the TCP connection
@@ -518,6 +548,12 @@ protocol bgp Local_Workload_{{$id}} from bgp_template {
   password "{{$data.password}}";
 {{- end}}
 {{- if and (ne $data.as_num $node_as_num) ($data.keep_next_hop)}}
+  next hop keep;
+{{- end}}
+{{- if eq $data.next_hop_mode "Self"}}
+  next hop self;
+{{- end}}
+{{- if eq $data.next_hop_mode "Keep"}}
   next hop keep;
 {{- end}}
 {{- if $data.num_allow_local_as}}

@@ -26,7 +26,6 @@ import (
 	confd "github.com/projectcalico/calico/confd/pkg/run"
 	felix "github.com/projectcalico/calico/felix/daemon"
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
-	"github.com/projectcalico/calico/node/buildinfo"
 	"github.com/projectcalico/calico/node/cmd/calico-node/bpf"
 	"github.com/projectcalico/calico/node/pkg/allocateip"
 	"github.com/projectcalico/calico/node/pkg/cni"
@@ -37,49 +36,60 @@ import (
 	"github.com/projectcalico/calico/node/pkg/lifecycle/startup"
 	"github.com/projectcalico/calico/node/pkg/nodeinit"
 	"github.com/projectcalico/calico/node/pkg/status"
+	"github.com/projectcalico/calico/pkg/buildinfo"
 )
 
 // Create a new flag set.
 var flagSet = flag.NewFlagSet("Calico", flag.ContinueOnError)
 
 // Build the set of supported flags.
-var version = flagSet.Bool("v", false, "Display version")
-var runFelix = flagSet.Bool("felix", false, "Run Felix")
-var runBPF = flagSet.Bool("bpf", false, "Run BPF debug tool")
-var runInit = flagSet.Bool("init", false, "Do privileged initialisation of a new node (mount file systems etc).")
-var bestEffort = flagSet.Bool("best-effort", false, "Used in combination with the init flag. Report errors but do not fail if an error occurs during initialisation.")
-var runStartup = flagSet.Bool("startup", false, "Do non-privileged start-up routine.")
-var runShutdown = flagSet.Bool("shutdown", false, "Do shutdown routine.")
-var monitorAddrs = flagSet.Bool("monitor-addresses", false, "Monitor change in node IP addresses")
-var runAllocateTunnelAddrs = flagSet.Bool("allocate-tunnel-addrs", false, "Configure tunnel addresses for this node")
-var allocateTunnelAddrsRunOnce = flagSet.Bool("allocate-tunnel-addrs-run-once", false, "Run allocate-tunnel-addrs in oneshot mode")
-var monitorToken = flagSet.Bool("monitor-token", false, "Watch for Kubernetes token changes, update CNI config")
+var (
+	version                    = flagSet.Bool("v", false, "Display version")
+	runFelix                   = flagSet.Bool("felix", false, "Run Felix")
+	runBPF                     = flagSet.Bool("bpf", false, "Run BPF debug tool")
+	runInit                    = flagSet.Bool("init", false, "Do privileged initialisation of a new node (mount file systems etc).")
+	bestEffort                 = flagSet.Bool("best-effort", false, "Used in combination with the init flag. Report errors but do not fail if an error occurs during initialisation.")
+	runStartup                 = flagSet.Bool("startup", false, "Do non-privileged start-up routine.")
+	runShutdown                = flagSet.Bool("shutdown", false, "Do shutdown routine.")
+	monitorAddrs               = flagSet.Bool("monitor-addresses", false, "Monitor change in node IP addresses")
+	runAllocateTunnelAddrs     = flagSet.Bool("allocate-tunnel-addrs", false, "Configure tunnel addresses for this node")
+	allocateTunnelAddrsRunOnce = flagSet.Bool("allocate-tunnel-addrs-run-once", false, "Run allocate-tunnel-addrs in oneshot mode")
+	monitorToken               = flagSet.Bool("monitor-token", false, "Watch for Kubernetes token changes, update CNI config")
+)
 
 // Options for liveness checks.
-var felixLive = flagSet.Bool("felix-live", false, "Run felix liveness checks")
-var birdLive = flagSet.Bool("bird-live", false, "Run bird liveness checks")
-var bird6Live = flagSet.Bool("bird6-live", false, "Run bird6 liveness checks")
+var (
+	felixLive = flagSet.Bool("felix-live", false, "Run felix liveness checks")
+	birdLive  = flagSet.Bool("bird-live", false, "Run bird liveness checks")
+	bird6Live = flagSet.Bool("bird6-live", false, "Run bird6 liveness checks")
+)
 
 // Options for readiness checks.
-var birdReady = flagSet.Bool("bird-ready", false, "Run BIRD readiness checks")
-var bird6Ready = flagSet.Bool("bird6-ready", false, "Run BIRD6 readiness checks")
-var felixReady = flagSet.Bool("felix-ready", false, "Run felix readiness checks")
+var (
+	birdReady  = flagSet.Bool("bird-ready", false, "Run BIRD readiness checks")
+	bird6Ready = flagSet.Bool("bird6-ready", false, "Run BIRD6 readiness checks")
+	felixReady = flagSet.Bool("felix-ready", false, "Run felix readiness checks")
+)
 
 // thresholdTime is introduced for bird readiness check. Default value is 30 sec.
 var thresholdTime = flagSet.Duration("threshold-time", 30*time.Second, "Threshold time for bird readiness")
 
 // Options for node status.
-var runStatusReporter = flagSet.Bool("status-reporter", false, "Run node status reporter")
-var showStatus = flagSet.Bool("show-status", false, "Print out node status")
+var (
+	runStatusReporter = flagSet.Bool("status-reporter", false, "Run node status reporter")
+	showStatus        = flagSet.Bool("show-status", false, "Print out node status")
+)
 
 // Options for watching node flowlogs.
 var flows = flagSet.Int("flows", 0, "Fetch a number of Flows. Use a negative value to watch forever.")
 
 // confd flags
-var runConfd = flagSet.Bool("confd", false, "Run confd")
-var confdRunOnce = flagSet.Bool("confd-run-once", false, "Run confd in oneshot mode")
-var confdKeep = flagSet.Bool("confd-keep-stage-file", false, "Keep stage file when running confd")
-var confdConfDir = flagSet.String("confd-confdir", "/etc/calico/confd", "Confd configuration directory.")
+var (
+	runConfd     = flagSet.Bool("confd", false, "Run confd")
+	confdRunOnce = flagSet.Bool("confd-run-once", false, "Run confd in oneshot mode")
+	confdKeep    = flagSet.Bool("confd-keep-stage-file", false, "Keep stage file when running confd")
+	confdConfDir = flagSet.String("confd-confdir", "/etc/calico/confd", "Confd configuration directory.")
+)
 
 // non-root hostpath init flags
 var initHostpaths = flagSet.Bool("hostpath-init", false, "Initialize hostpaths for non-root access")
@@ -122,11 +132,11 @@ func main() {
 
 	// Decide which action to take based on the given flags.
 	if *version {
-		fmt.Println(startup.VERSION)
+		buildinfo.PrintVersion()
 		os.Exit(0)
 	} else if *runFelix {
 		logrus.SetFormatter(&logutils.Formatter{Component: "felix"})
-		felix.Run("/etc/calico/felix.cfg", buildinfo.GitVersion, buildinfo.BuildDate, buildinfo.GitRevision)
+		felix.Run("/etc/calico/felix.cfg", buildinfo.Version, buildinfo.BuildDate, buildinfo.GitRevision)
 	} else if *runBPF {
 		// Command-line tools should log to stderr to avoid confusion with the output.
 		logrus.SetOutput(os.Stderr)

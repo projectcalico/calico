@@ -224,6 +224,20 @@ ifneq ($(OS),Windows_NT)
 DATE:=$(shell date -u +'%FT%T%z')
 endif
 
+# Common linker flags.
+#
+# We use -X to insert the version information into the placeholder variables
+# in the buildinfo package.
+LDFLAGS=-X github.com/projectcalico/calico/pkg/buildinfo.Version=$(GIT_DESCRIPTION) \
+	-X github.com/projectcalico/calico/pkg/buildinfo.BuildDate=$(DATE) \
+	-X github.com/projectcalico/calico/pkg/buildinfo.GitRevision=$(GIT_COMMIT)
+
+# We use -B to insert a build ID note into the executable, without which, the
+# RPM build tools complain.
+ifneq ($(BUILDOS),darwin)
+	LDFLAGS+=-B 0x$(BUILD_ID)
+endif
+
 # Figure out the users UID/GID.  These are needed to run docker containers
 # as the current user and ensure that files built inside containers are
 # owned by the current user.
@@ -298,6 +312,7 @@ DOCKER_RUN := mkdir -p $(REPO_ROOT)/.go-pkg-cache bin $(GOMOD_CACHE) && \
 		-e OS=$(BUILDOS) \
 		-e GOOS=$(BUILDOS) \
 		-e GOFLAGS=$(GOFLAGS) \
+		-e ACK_GINKGO_DEPRECATIONS=1.16.5 \
 		-v $(REPO_ROOT):/go/src/github.com/projectcalico/calico:rw \
 		-v $(REPO_ROOT)/.go-pkg-cache:/go-cache:rw \
 		-w /go/src/$(PACKAGE_NAME)
@@ -491,9 +506,14 @@ CRANE_CMD         = docker run -t --entrypoint /bin/sh -v $(DOCKER_CONFIG):/root
                     $(double_quote)crane
 endif
 
+ifdef LOCAL_PYTHON
+PYTHON3_CMD       = python3
+else
+PYTHON3_CMD       = docker run --rm -e QUAY_API_TOKEN -v $(REPO_ROOT):$(REPO_ROOT) -w $(REPO_ROOT) python:3.13 python3.13
+endif
+
 GIT_CMD           = git
 DOCKER_CMD        = docker
-PYTHON3_CMD       = python3
 
 
 # RELEASE_PY3 is for Python invocations used for releasing,
@@ -655,6 +675,12 @@ fix-changed go-fmt-changed goimports-changed:
 .PHONY: fix-all go-fmt-all goimports-all
 fix-all go-fmt-all goimports-all:
 	$(DOCKER_RUN) $(CALICO_BUILD) $(REPO_DIR)/hack/format-all-files.sh
+
+GOMODDER=$(REPO_DIR)/hack/cmd/gomodder/main.go
+
+.PHONY: verify-go-mods
+verify-go-mods:
+	$(DOCKER_RUN) $(CALICO_BUILD) go run $(GOMODDER)
 
 .PHONY: pre-commit
 pre-commit:
@@ -931,8 +957,8 @@ push-image-to-registry-%:
 
 ifeq ($(findstring quay.io,$(REGISTRY)),quay.io)
 	$(if $(RELEASE), \
-		$(RELEASE_PY3) $(QUAY_SET_EXPIRY_SCRIPT) remove $(EXPIRY_IMAGES_LIST), \
-		$(RELEASE_PY3) $(QUAY_SET_EXPIRY_SCRIPT) add --expiry-days=$(QUAY_EXPIRE_DAYS) $(EXPIRY_IMAGES_LIST) \
+		-$(RELEASE_PY3) $(QUAY_SET_EXPIRY_SCRIPT) remove $(EXPIRY_IMAGES_LIST), \
+		-$(RELEASE_PY3) $(QUAY_SET_EXPIRY_SCRIPT) add --expiry-days=$(QUAY_EXPIRE_DAYS) $(EXPIRY_IMAGES_LIST) \
 	)
 endif
 
@@ -1222,6 +1248,24 @@ bin/yq:
 	curl -sSf -L --retry 5 -o $(TMP)/yq4.tar.gz https://github.com/mikefarah/yq/releases/download/v4.34.2/yq_linux_$(BUILDARCH).tar.gz
 	tar -zxvf $(TMP)/yq4.tar.gz -C $(TMP)
 	mv $(TMP)/yq_linux_$(BUILDARCH) bin/yq
+
+# This setup is used to download and install the 'crane' binary into the local bin/ directory.
+# The binary will be placed at: ./bin/crane
+# Normalize architecture for go-containerregistry filenames
+CRANE_BUILDARCH := $(shell uname -m | sed 's/amd64/x86_64/;s/x86_64/x86_64/;s/aarch64/arm64/')
+ifeq ($(CRANE_BUILDARCH),)
+  $(error Unsupported or unknown architecture: $(shell uname -m))
+endif
+CRANE_FILENAME := go-containerregistry_Linux_$(CRANE_BUILDARCH).tar.gz
+CRANE_URL := https://github.com/google/go-containerregistry/releases/download/$(CRANE_VERSION)/$(CRANE_FILENAME)
+
+# Install crane binary into bin/
+bin/crane:
+	mkdir -p bin
+	$(eval CRANE_TMP := $(shell mktemp -d))
+	curl -sSfL --retry 5 -o $(CRANE_TMP)/crane.tar.gz $(CRANE_URL)
+	tar -xzf $(CRANE_TMP)/crane.tar.gz -C $(CRANE_TMP) crane
+	mv $(CRANE_TMP)/crane bin/crane
 
 ###############################################################################
 # Common functions for launching a local Kubernetes control plane.
@@ -1585,6 +1629,7 @@ release-windows-with-tag: var-require-one-of-CONFIRM-DRYRUN var-require-all-IMAG
 			$(DOCKER_MANIFEST) annotate --os windows --arch amd64 --os-version $${version} $${manifest_image} $${image}; \
 		done; \
 		$(DOCKER_MANIFEST) push --purge $${manifest_image}; \
+		$(RELEASE_PY3) $(QUAY_SET_EXPIRY_SCRIPT) add --expiry-days=$(QUAY_EXPIRE_DAYS) $${manifest_image} $${all_images} || true; \
 	done;
 
 release-windows: var-require-one-of-CONFIRM-DRYRUN var-require-all-DEV_REGISTRIES-WINDOWS_IMAGE var-require-one-of-VERSION-BRANCH_NAME

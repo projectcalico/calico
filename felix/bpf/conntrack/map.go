@@ -28,7 +28,7 @@ import (
 
 	// When adding a new ct version, change curVerXXX to point to the new version
 	curVerCleanup "github.com/projectcalico/calico/felix/bpf/conntrack/cleanupv1"
-	curVer "github.com/projectcalico/calico/felix/bpf/conntrack/v3"
+	curVer "github.com/projectcalico/calico/felix/bpf/conntrack/v4"
 )
 
 func init() {

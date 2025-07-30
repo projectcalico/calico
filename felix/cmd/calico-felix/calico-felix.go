@@ -18,8 +18,8 @@ import (
 	docopt "github.com/docopt/docopt-go"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/felix/buildinfo"
 	"github.com/projectcalico/calico/felix/daemon"
+	"github.com/projectcalico/calico/pkg/buildinfo"
 )
 
 const usage = `Felix, the Calico per-host daemon.
@@ -35,7 +35,7 @@ Options:
 // main is the entry point to the calico-felix binary.
 func main() {
 	// Parse command-line args.
-	version := "Version:            " + buildinfo.GitVersion + "\n" +
+	version := "Version:            " + buildinfo.Version + "\n" +
 		"Full git commit ID: " + buildinfo.GitRevision + "\n" +
 		"Build date:         " + buildinfo.BuildDate + "\n"
 	arguments, err := docopt.ParseArgs(usage, nil, version)
@@ -46,5 +46,5 @@ func main() {
 	configFile := arguments["--config-file"].(string)
 
 	// Execute felix.
-	daemon.Run(configFile, buildinfo.GitVersion, buildinfo.GitRevision, buildinfo.BuildDate)
+	daemon.Run(configFile, buildinfo.Version, buildinfo.GitRevision, buildinfo.BuildDate)
 }

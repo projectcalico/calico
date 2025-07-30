@@ -97,30 +97,30 @@ func configureFlowAggregation(configParams *config.Config, fr *flowlog.FlowLogRe
 	// Set up aggregator for goldmane reporter.
 	if configParams.FlowLogsGoldmaneServer != "" {
 		log.Info("Creating goldmane Aggregator for allowed")
-		gaa := defaultFlowAggregator(rules.RuleActionAllow, configParams.FlowLogsCollectorDebugTrace)
+		gaa := defaultFlowAggregator(rules.RuleActionAllow, configParams)
 		log.Info("Adding Flow Logs Aggregator (allowed) for goldmane")
 		fr.AddAggregator(gaa, []string{FlowLogsGoldmaneReporterName})
 		log.Info("Creating goldmane Aggregator for denied")
-		gad := defaultFlowAggregator(rules.RuleActionDeny, configParams.FlowLogsCollectorDebugTrace)
+		gad := defaultFlowAggregator(rules.RuleActionDeny, configParams)
 		log.Info("Adding Flow Logs Aggregator (denied) for goldmane")
 		fr.AddAggregator(gad, []string{FlowLogsGoldmaneReporterName})
 	}
 	// Set up aggregator for local socket reporter.
 	if configParams.FlowLogsLocalReporterEnabled() {
 		log.Info("Creating local socket Aggregator for allowed")
-		gaa := defaultFlowAggregator(rules.RuleActionAllow, configParams.FlowLogsCollectorDebugTrace)
+		gaa := defaultFlowAggregator(rules.RuleActionAllow, configParams)
 		log.Info("Adding Flow Logs Aggregator (allowed) for local socket")
 		fr.AddAggregator(gaa, []string{FlowLogsLocalReporterName})
 		log.Info("Creating local socket Aggregator for denied")
-		gad := defaultFlowAggregator(rules.RuleActionDeny, configParams.FlowLogsCollectorDebugTrace)
+		gad := defaultFlowAggregator(rules.RuleActionDeny, configParams)
 		log.Info("Adding Flow Logs Aggregator (denied) for local socket")
 		fr.AddAggregator(gad, []string{FlowLogsLocalReporterName})
 	}
 }
 
-func defaultFlowAggregator(forAction rules.RuleAction, traceEnabled bool) *flowlog.Aggregator {
+func defaultFlowAggregator(forAction rules.RuleAction, configParams *config.Config) *flowlog.Aggregator {
 	return flowlog.NewAggregator().
-		DisplayDebugTraceLogs(traceEnabled).
+		DisplayDebugTraceLogs(configParams.FlowLogsCollectorDebugTrace).
 		IncludeLabels(true).
 		IncludePolicies(true).
 		IncludeService(true).

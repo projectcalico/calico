@@ -86,6 +86,7 @@ func runDiags(logDir string) error {
 		{"Dumping routes (IPv6)", "ip -6 route", "ipv6_route"},
 		{"Dumping interface info (IPv4)", "ip -4 addr", "ipv4_addr"},
 		{"Dumping interface info (IPv6)", "ip -6 addr", "ipv6_addr"},
+		{"Dumping nftables", "nft -n -a list ruleset", "nft_ruleset"},
 		{"Dumping iptables (IPv4)", "iptables-save -c", "ipv4_tables"},
 		{"Dumping iptables (IPv6)", "ip6tables-save -c", "ipv6_tables"},
 		{"Dumping ipsets", "ipset list", "ipsets"},

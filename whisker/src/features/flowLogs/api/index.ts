@@ -95,7 +95,10 @@ export const useFlowLogsStream = (
         flowLogs: [],
     });
 
-    const { startStream, data, ...rest } = useStream<ApiFlowLog, FlowLog>({
+    const { startStream, data, totalItems, ...rest } = useStream<
+        ApiFlowLog,
+        FlowLog
+    >({
         path,
         transformResponse: (stream) => {
             const transformed = transformFlowLogsResponse(stream);
@@ -127,7 +130,7 @@ export const useFlowLogsStream = (
         if (data.length > 0) {
             restartTime.current = data[0].end_time.getTime();
         }
-    }, [data.length]);
+    }, [totalItems]);
 
     useDidUpdate(() => {
         const startTimeGte = getTimeInSeconds(initialStreamStartTime.current);
@@ -146,8 +149,9 @@ export const useFlowLogsStream = (
             getTimeInSeconds(restartTime.current),
             filters,
         );
+        console.log({ restartTime: restartTime.current });
         startStream({ path });
     };
 
-    return { startStream: start, data, ...rest };
+    return { startStream: start, data, totalItems, ...rest };
 };

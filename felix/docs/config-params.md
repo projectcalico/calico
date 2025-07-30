@@ -892,6 +892,22 @@ is leaving the network. By default the address used is an address on the interfa
 | `FelixConfiguration` schema | String. |
 | Default value (YAML) | none |
 
+### `NATOutgoingExclusions` (config file) / `natOutgoingExclusions` (YAML)
+
+When a IP pool setting `natOutgoing` is true, packets sent from Calico networked containers in this IP pool to destinations will be masqueraded.
+Configure which type of destinations is excluded from being masqueraded.
+- IPPoolsOnly: destinations outside of this IP pool will be masqueraded.
+- IPPoolsAndHostIPs: destinations outside of this IP pool and all hosts will be masqueraded.
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_NATOutgoingExclusions` |
+| Encoding (env var/config file) | One of: <code>IPPoolsAndHostIPs</code>, <code>IPPoolsOnly</code> (case insensitive) |
+| Default value (above encoding) | `IPPoolsOnly` |
+| `FelixConfiguration` field | `natOutgoingExclusions` (YAML) `NATOutgoingExclusions` (Go API) |
+| `FelixConfiguration` schema | One of: <code>"IPPoolsAndHostIPs"</code>, <code>"IPPoolsOnly"</code>. |
+| Default value (YAML) | `IPPoolsOnly` |
+
 ### `NATPortRange` (config file) / `natPortRange` (YAML)
 
 Specifies the range of ports that is used for port mapping when doing outgoing NAT. When unset the default behavior of the
@@ -947,6 +963,20 @@ like Application layer policy.
 | `FelixConfiguration` schema | String. |
 | Default value (YAML) | none |
 
+### `ProgramClusterRoutes` (config file) / `programClusterRoutes` (YAML)
+
+Specifies whether Felix should program IPIP routes instead of BIRD.
+Felix always programs VXLAN routes.
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_ProgramClusterRoutes` |
+| Encoding (env var/config file) | One of: <code>Disabled</code>, <code>Enabled</code> (case insensitive) |
+| Default value (above encoding) | `Disabled` |
+| `FelixConfiguration` field | `programClusterRoutes` (YAML) `ProgramClusterRoutes` (Go API) |
+| `FelixConfiguration` schema | One of: <code>"Disabled"</code>, <code>"Enabled"</code>. |
+| Default value (YAML) | `Disabled` |
+
 ### `RemoveExternalRoutes` (config file) / `removeExternalRoutes` (YAML)
 
 Controls whether Felix will remove unexpected routes to workload interfaces. Felix will
@@ -961,6 +991,20 @@ use a distinct protocol (in addition to setting this field to false).
 | `FelixConfiguration` field | `removeExternalRoutes` (YAML) `RemoveExternalRoutes` (Go API) |
 | `FelixConfiguration` schema | Boolean. |
 | Default value (YAML) | `true` |
+
+### `RequireMTUFile` (config file) / `requireMTUFile` (YAML)
+
+Specifies whether mtu file is required to start the felix.
+Optional as to keep the same as previous behavior.
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_RequireMTUFile` |
+| Encoding (env var/config file) | Boolean: <code>true</code>, <code>1</code>, <code>yes</code>, <code>y</code>, <code>t</code> accepted as True; <code>false</code>, <code>0</code>, <code>no</code>, <code>n</code>, <code>f</code> accepted (case insensitively) as False. |
+| Default value (above encoding) | `false` |
+| `FelixConfiguration` field | `requireMTUFile` (YAML) `RequireMTUFile` (Go API) |
+| `FelixConfiguration` schema | Boolean. |
+| Default value (YAML) | `false` |
 
 ### `RouteRefreshInterval` (config file) / `routeRefreshInterval` (YAML)
 
@@ -1394,6 +1438,22 @@ Controls the interval at which Felix periodically refreshes the nftables rules.
 
 ## <a id="dataplane-ebpf">Dataplane: eBPF
 
+### `BPFAttachType` (config file) / `bpfAttachType` (YAML)
+
+Controls how are the BPF programs at the network interfaces attached.
+By default `tcx` is used where available to enable easier coexistence with 3rd party programs.
+`tc` can force the legacy method of attaching via a qdisc. `tcx` falls back to `tc` if `tcx` is not available.
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_BPFAttachType` |
+| Encoding (env var/config file) | One of: <code>tc</code>, <code>tcx</code> (case insensitive) |
+| Default value (above encoding) | `tcx` |
+| `FelixConfiguration` field | `bpfAttachType` (YAML) `BPFAttachType` (Go API) |
+| `FelixConfiguration` schema | `string` |
+| Default value (YAML) | `tcx` |
+| Notes | Required. | 
+
 ### `BPFCTLBLogFilter` (config file) / `bpfCTLBLogFilter` (YAML)
 
 Specifies, what is logged by connect time load balancer when BPFLogLevel is
@@ -1449,6 +1509,9 @@ Deprecated: Use BPFConnectTimeLoadBalancing.
 Controls how BPF conntrack entries are cleaned up. `Auto` will use a BPF program if supported,
 falling back to userspace if not. `Userspace` will always use the userspace cleanup code. `BPFProgram` will
 always use the BPF program (failing if not supported).
+
+/To be deprecated in future versions as conntrack map type changed to
+lru_hash and userspace cleanup is the only mode that is supported.
 
 | Detail |   |
 | --- | --- |

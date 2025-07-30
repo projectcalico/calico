@@ -283,7 +283,7 @@ func (c *restoreCmd) main() {
 		parts := strings.Split(line, " ")
 		subCmd := parts[0]
 		log.WithFields(log.Fields{
-			"lineNum": i + 1,
+			"lineNum": i,
 			"line":    line,
 			"subCmd":  subCmd,
 		}).Info("Mock dataplane, analysing ipset restore line")

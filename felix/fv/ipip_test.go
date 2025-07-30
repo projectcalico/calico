@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -29,10 +29,10 @@ import (
 	. "github.com/onsi/gomega"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
-	log "github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
 	"github.com/projectcalico/calico/felix/fv/connectivity"
 	"github.com/projectcalico/calico/felix/fv/containers"
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
@@ -45,7 +45,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
-var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology before adding host IPs to IP sets", []apiconfig.DatastoreType{apiconfig.EtcdV3, apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
+var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology with BIRD programming routes before adding host IPs to IP sets", []apiconfig.DatastoreType{apiconfig.EtcdV3, apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
 	var (
 		bpfEnabled = os.Getenv("FELIX_FV_ENABLE_BPF") == "true"
 		infra      infrastructure.DatastoreInfra
@@ -61,7 +61,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology before adding
 		if (NFTMode() || BPFMode()) && getDataStoreType(infra) == "etcdv3" {
 			Skip("Skipping NFT / BPF test for etcdv3 backend.")
 		}
-		tc, client = infrastructure.StartNNodeTopology(2, infrastructure.DefaultTopologyOptions(), infra)
+		topologyOptions := infrastructure.DefaultTopologyOptions()
+		topologyOptions.EnableIPv6 = false
+		tc, client = infrastructure.StartNNodeTopology(2, topologyOptions, infra)
 
 		// Install a default profile that allows all ingress and egress, in the absence of any Policy.
 		infra.AddDefaultAllow()
@@ -79,7 +81,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology before adding
 				return err
 			}
 			for _, link := range links {
-				if link.Attrs().Name == "tunl0" {
+				if link.Attrs().Name == dataplanedefs.IPIPIfaceName {
 					return nil
 				}
 			}
@@ -464,7 +466,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology before adding
 					}
 				}
 				c.Spec.ExternalNodesCIDRList = &[]string{addr}
-				log.WithFields(log.Fields{"felixconfiguration": c, "adding Addr": addr}).Info("Updating FelixConfiguration ")
+				logrus.WithFields(logrus.Fields{"felixconfiguration": c, "adding Addr": addr}).Info("Updating FelixConfiguration ")
 				_, err = client.FelixConfigurations().Update(ctx, c, options.SetOptions{})
 				Expect(err).NotTo(HaveOccurred())
 			}
@@ -491,45 +493,3 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology before adding
 		})
 	})
 })
-
-type createK8sServiceWithoutKubeProxyArgs struct {
-	infra     infrastructure.DatastoreInfra
-	felix     *infrastructure.Felix
-	w         *workload.Workload
-	svcName   string
-	serviceIP string
-	targetIP  string
-	port      int
-	tgtPort   int
-	chain     string
-	ipv6      bool
-}
-
-func createK8sServiceWithoutKubeProxy(args createK8sServiceWithoutKubeProxyArgs) {
-	if BPFMode() {
-		k8sClient := args.infra.(*infrastructure.K8sDatastoreInfra).K8sClient
-		testSvc := k8sService(args.svcName, args.serviceIP, args.w, args.port, args.tgtPort, 0, "tcp")
-		testSvcNamespace := testSvc.ObjectMeta.Namespace
-		_, err := k8sClient.CoreV1().Services(testSvcNamespace).Create(context.Background(), testSvc, metav1.CreateOptions{})
-		Expect(err).NotTo(HaveOccurred())
-		Eventually(k8sGetEpsForServiceFunc(k8sClient, testSvc), "10s").Should(HaveLen(1),
-			"Service endpoints didn't get created? Is controller-manager happy?")
-	}
-
-	if NFTMode() {
-		args.felix.ProgramNftablesDNAT(args.serviceIP, args.targetIP, args.chain, args.ipv6)
-	} else {
-		args.felix.ProgramIptablesDNAT(args.serviceIP, args.targetIP, args.chain, args.ipv6)
-	}
-}
-
-func getDataStoreType(infra infrastructure.DatastoreInfra) string {
-	switch infra.(type) {
-	case *infrastructure.K8sDatastoreInfra:
-		return "kubernetes"
-	case *infrastructure.EtcdDatastoreInfra:
-		return "etcdv3"
-	default:
-		return "kubernetes"
-	}
-}

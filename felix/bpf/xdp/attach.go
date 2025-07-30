@@ -84,35 +84,13 @@ func (ap *AttachPoint) Log() *log.Entry {
 	})
 }
 
-func (ap *AttachPoint) AlreadyAttached(object string) (int, bool) {
-	progID, err := ap.ProgramID()
+func (ap *AttachPoint) AlreadyAttached(object string) bool {
+	_, err := ap.ProgramID()
 	if err != nil {
 		ap.Log().Debugf("Couldn't get the attached XDP program ID. err=%v", err)
-		return -1, false
+		return false
 	}
-
-	somethingAttached, err := ap.IsAttached()
-	if err != nil {
-		ap.Log().Debugf("Failed to verify if any program is attached to interface. err=%v", err)
-		return -1, false
-	}
-
-	isAttached, err := bpf.AlreadyAttachedProg(ap, object, progID)
-	if err != nil {
-		ap.Log().Debugf("Failed to check if BPF program was already attached. err=%v", err)
-		return -1, false
-	}
-
-	if isAttached && somethingAttached {
-		return progID, true
-	}
-	return -1, false
-}
-
-type AttachResult int
-
-func (ar AttachResult) ProgID() int {
-	return int(ar)
+	return true
 }
 
 func (ap *AttachPoint) Configuration() *libbpf.XDPGlobalData {
@@ -136,27 +114,21 @@ func (ap *AttachPoint) Configuration() *libbpf.XDPGlobalData {
 	return globalData
 }
 
-func (ap *AttachPoint) AttachProgram() (bpf.AttachResult, error) {
+func (ap *AttachPoint) AttachProgram() error {
 	// By now the attach type specific generic set of programs is loaded and we
 	// only need to load and configure the preamble that will pass the
 	// configuration further to the selected set of programs.
 
 	binaryToLoad := path.Join(bpfdefs.ObjectDir, "xdp_preamble.o")
-	// Check if the bpf object is already attached, and we should skip re-attaching it
-	progID, isAttached := ap.AlreadyAttached(binaryToLoad)
-	if isAttached {
-		ap.Log().Infof("Programs already attached, skip reattaching %s", binaryToLoad)
-		return AttachResult(progID), nil
-	}
 	ap.Log().Infof("Continue with attaching BPF program %s", binaryToLoad)
 	obj, err := bpf.LoadObject(binaryToLoad, ap.Configuration())
 	if err != nil {
-		return nil, fmt.Errorf("error loading %s:%w", binaryToLoad, err)
+		return fmt.Errorf("error loading %s:%w", binaryToLoad, err)
 	}
 
 	oldID, err := ap.ProgramID()
 	if err != nil {
-		return nil, fmt.Errorf("failed to get the attached XDP program ID: %w", err)
+		return fmt.Errorf("failed to get the attached XDP program ID: %w", err)
 	}
 
 	attachmentSucceeded := false
@@ -164,7 +136,7 @@ func (ap *AttachPoint) AttachProgram() (bpf.AttachResult, error) {
 		ap.Log().Debugf("Trying to attach XDP program in mode %v - old id: %v", mode, oldID)
 		// Force attach the program. If there is already a program attached, the replacement only
 		// succeed in the same mode of the current program.
-		progID, err = obj.AttachXDP(ap.Iface, ap.ProgramName(), oldID, unix.XDP_FLAGS_REPLACE|uint(mode))
+		progID, err := obj.AttachXDP(ap.Iface, ap.ProgramName(), oldID, unix.XDP_FLAGS_REPLACE|uint(mode))
 		if err != nil || progID == DetachedID || progID == oldID {
 			ap.Log().WithError(err).Warnf("Failed to attach to XDP program %s mode %v", ap.ProgramName(), mode)
 		} else {
@@ -175,11 +147,11 @@ func (ap *AttachPoint) AttachProgram() (bpf.AttachResult, error) {
 	}
 
 	if !attachmentSucceeded {
-		return nil, fmt.Errorf("failed to attach XDP program with program name %v to interface %v",
+		return fmt.Errorf("failed to attach XDP program with program name %v to interface %v",
 			ap.ProgramName(), ap.Iface)
 	}
 
-	return AttachResult(progID), nil
+	return nil
 }
 
 func (ap *AttachPoint) DetachProgram() error {
@@ -228,17 +200,7 @@ func (ap *AttachPoint) DetachProgram() error {
 	}
 
 	ap.Log().Infof("XDP program detached. program ID: %v", progID)
-
-	// Program is detached, now remove the json file we saved for it
-	if err = bpf.ForgetAttachedProg(ap.IfaceName(), hook.XDP); err != nil {
-		return fmt.Errorf("failed to delete hash of BPF program from disk: %w", err)
-	}
 	return nil
-}
-
-func (ap *AttachPoint) IsAttached() (bool, error) {
-	_, err := ap.ProgramID()
-	return err == nil, err
 }
 
 func (ap *AttachPoint) ProgramID() (int, error) {

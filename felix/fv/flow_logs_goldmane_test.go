@@ -100,7 +100,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log tests", [
 		infra = getInfra()
 		opts.FelixLogSeverity = "Debug"
 		opts = infrastructure.DefaultTopologyOptions()
-		opts.IPIPEnabled = false
+		opts.IPIPMode = api.IPIPModeNever
 		opts.FlowLogSource = infrastructure.FlowLogSourceLocalSocket
 
 		opts.ExtraEnvVars["FELIX_FLOWLOGSCOLLECTORDEBUGTRACE"] = "true"
@@ -576,10 +576,10 @@ var _ = infrastructure.DatastoreDescribe("goldmane flow log ipv6 tests", []apico
 		opts.FlowLogSource = infrastructure.FlowLogSourceLocalSocket
 
 		opts.EnableIPv6 = true
-		opts.IPIPEnabled = false
+		opts.IPIPMode = api.IPIPModeNever
+		opts.SimulateBIRDRoutes = true
 		opts.NATOutgoingEnabled = true
 		opts.AutoHEPsEnabled = false
-		opts.IPIPRoutesEnabled = false
 		opts.ExtraEnvVars["FELIX_FLOWLOGSFLUSHINTERVAL"] = "2"
 		opts.ExtraEnvVars["FELIX_IPV6SUPPORT"] = "true"
 		opts.ExtraEnvVars["FELIX_DefaultEndpointToHostAction"] = "RETURN"
@@ -777,7 +777,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane local server tests
 		infra = getInfra()
 		opts.FelixLogSeverity = "Debug"
 		opts = infrastructure.DefaultTopologyOptions()
-		opts.IPIPEnabled = false
+		opts.IPIPMode = api.IPIPModeNever
 		opts.FlowLogSource = infrastructure.FlowLogSourceLocalSocket
 		opts.DelayFelixStart = true
 

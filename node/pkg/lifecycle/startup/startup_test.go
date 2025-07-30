@@ -957,7 +957,7 @@ var _ = Describe("FV tests against a real etcd", func() {
 				}
 			},
 
-				Entry("valid single k8s env var", []EnvItem{{"CALICO_K8S_NODE_REF", "node1"}}, libapi.OrchRef{"node1", "k8s"}, true), // nolint: vet
+				Entry("valid single k8s env var", []EnvItem{{"CALICO_K8S_NODE_REF", "node1"}}, libapi.OrchRef{NodeName: "node1", Orchestrator: "k8s"}, true),
 			)
 
 			It("Should not configure any OrchRefs when no valid env vars are passed", func() {
@@ -972,7 +972,7 @@ var _ = Describe("FV tests against a real etcd", func() {
 				os.Setenv("CALICO_K8S_NODE_REF", "node1")
 
 				node := &libapi.Node{}
-				node.Spec.OrchRefs = append(node.Spec.OrchRefs, libapi.OrchRef{"node1", "k8s"}) // nolint: vet
+				node.Spec.OrchRefs = append(node.Spec.OrchRefs, libapi.OrchRef{NodeName: "node1", Orchestrator: "k8s"})
 				Expect(configureNodeRef(node)).To(Equal(true))
 
 				Expect(node.Spec.OrchRefs).To(HaveLen(1))

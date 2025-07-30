@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2025 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -50,8 +50,8 @@ Options:
   -h --help                    Show this screen.
      --ip=<IP>                 IP address to release.
      --from-report=<REPORT>    Release all leaked addresses from the report.  If multiple reports are specified then
-                               only leaked IPs common to all reports will be released - by generating reports at 
-                               different times, e.g. separated by an hour, this can be used to provide additional 
+                               only leaked IPs common to all reports will be released - by generating reports at
+                               different times, e.g. separated by an hour, this can be used to provide additional
                                certainty that the IPs are truly leaked rather than in a transient state of assignment.
                                At least one of the reports should be newly generated.
      --force                   Force release of leaked addresses.
@@ -130,7 +130,7 @@ Description:
 
 		// Call ReleaseIPs releases the IP and returns an empty slice as unallocatedIPs if
 		// release was successful else it returns back the slice with the IP passed in.
-		unallocatedIPs, err := ipamClient.ReleaseIPs(ctx, opt)
+		unallocatedIPs, _, err := ipamClient.ReleaseIPs(ctx, opt)
 		if err != nil {
 			return fmt.Errorf("Error: %v", err)
 		}
@@ -231,7 +231,7 @@ func releaseIPs(ctx context.Context, c clientv3.Interface, notInUseIPs map[strin
 	}
 	fmt.Printf("Releasing %d old IPs...\n", len(ipsToRelease))
 
-	unallocated, err := c.IPAM().ReleaseIPs(ctx, ipsToRelease...)
+	unallocated, _, err := c.IPAM().ReleaseIPs(ctx, ipsToRelease...)
 	if err != nil {
 		fmt.Printf("An error occurred while releasing some IPs: %s.  "+
 			"Problems are often caused by an out-of-date IPAM report.  "+

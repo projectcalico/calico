@@ -217,6 +217,7 @@ type endpointManager struct {
 	OnEndpointStatusUpdate EndpointStatusUpdateCallback
 	callbacks              endpointManagerCallbacks
 	bpfEnabled             bool
+	bpfAttachType          string
 	bpfEndpointManager     hepListener
 }
 
@@ -238,6 +239,7 @@ func newEndpointManager(
 	defaultRPFilter string,
 	filterMaps nftables.MapsDataplane,
 	bpfEnabled bool,
+	bpfAttachType string,
 	bpfEndpointManager hepListener,
 	callbacks *common.Callbacks,
 	floatingIPsEnabled bool,
@@ -260,6 +262,7 @@ func newEndpointManager(
 		defaultRPFilter,
 		filterMaps,
 		bpfEnabled,
+		bpfAttachType,
 		bpfEndpointManager,
 		callbacks,
 		floatingIPsEnabled,
@@ -284,6 +287,7 @@ func newEndpointManagerWithShims(
 	defaultRPFilter string,
 	filterMaps nftables.MapsDataplane,
 	bpfEnabled bool,
+	bpfAttachType string,
 	bpfEndpointManager hepListener,
 	callbacks *common.Callbacks,
 	floatingIPsEnabled bool,
@@ -305,6 +309,7 @@ func newEndpointManagerWithShims(
 		wlIfacesRegexp:         wlIfacesRegexp,
 		kubeIPVSSupportEnabled: kubeIPVSSupportEnabled,
 		bpfEnabled:             bpfEnabled,
+		bpfAttachType:          bpfAttachType,
 		filterMaps:             filterMaps,
 		bpfEndpointManager:     bpfEndpointManager,
 		floatingIPsEnabled:     floatingIPsEnabled,
@@ -614,7 +619,7 @@ func (m *endpointManager) calculateWorkloadEndpointStatus(id types.WorkloadEndpo
 	var status string
 	if known {
 		if failed {
-			status = "error"
+			status = "down"
 		} else if operUp && adminUp {
 			status = "up"
 		} else {
@@ -689,7 +694,7 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 	}
 
 	removeActiveWorkload := func(logCxt *log.Entry, oldWorkload *proto.WorkloadEndpoint, id types.WorkloadEndpointID) {
-		if !m.bpfEnabled {
+		if m.isQoSBandwidthSupported() {
 			// QoS state should be removed before the workload itself is removed
 			if oldWorkload != nil {
 				logCxt.Info("Deleting QoS bandwidth state if present")
@@ -839,7 +844,7 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 				m.activeWlIfaceNameToID[workload.Name] = id
 				delete(m.pendingWlEpUpdates, id)
 
-				if !m.bpfEnabled {
+				if m.isQoSBandwidthSupported() {
 					logCxt.Info("Updating QoS bandwidth state if changed")
 					err := m.maybeUpdateQoSBandwidth(oldWorkload, workload)
 					if err != nil {
@@ -901,7 +906,8 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 		m.localBGPPeerIP = m.newLocalBGPPeerIP
 		log.WithFields(log.Fields{
 			"oldIP": m.localBGPPeerIP,
-			"newIP": m.newLocalBGPPeerIP}).Debug("local BGP peer IP updated.")
+			"newIP": m.newLocalBGPPeerIP,
+		}).Debug("local BGP peer IP updated.")
 		// Reconfigure the interfaces of all active workload endpoints.
 		for ifaceName := range m.activeWlIfaceNameToID {
 			m.wlIfaceNamesToReconfigure.Add(ifaceName)
@@ -1518,7 +1524,11 @@ func (m *endpointManager) configureInterface(name string) error {
 			if err2 != nil {
 				log.WithError(err2).Error("Error checking if interface exists")
 			}
-			log.WithError(err).WithField("ifaceName", name).Warnf("Could not set accept_ra")
+			if m.ipVersion == 6 {
+				log.WithError(err).WithField("ifaceName", name).Warn("Could not set accept_ra")
+			} else {
+				log.WithError(err).WithField("ifaceName", name).Debug("Could not set accept_ra")
+			}
 		}
 	}
 

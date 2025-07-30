@@ -1,0 +1,82 @@
+title: vX.Y.Z
+release_name: test-release
+note: Test note
+full_hash: vX.Y.Z-vA.B.C
+tigera-operator:
+  version: vA.B.C
+  image: tigera/operator
+  registry: docker.io
+components:
+  calico:
+    version: vX.Y.Z
+    image: calico
+  calico/api:
+    version: vX.Y.Z
+    image: api
+  calico/apiserver:
+    version: vX.Y.Z
+    image: apiserver
+  calico/cni:
+    version: vX.Y.Z
+    image: cni
+  calico/cni-windows:
+    version: vX.Y.Z
+    image: cni-windows
+  calico/csi:
+    version: vX.Y.Z
+    image: csi
+  calico/dikastes:
+    version: vX.Y.Z
+    image: dikastes
+  calico/envoy-gateway:
+    version: vX.Y.Z
+    image: envoy-gateway
+  calico/envoy-proxy:
+    version: vX.Y.Z
+    image: envoy-proxy
+  calico/envoy-ratelimit:
+    version: vX.Y.Z
+    image: envoy-ratelimit
+  calico/goldmane:
+    version: vX.Y.Z
+    image: goldmane
+  calico/guardian:
+    version: vX.Y.Z
+    image: guardian
+  calico/kube-controllers:
+    version: vX.Y.Z
+    image: kube-controllers
+  calico/node:
+    version: vX.Y.Z
+    image: node
+  calico/node-windows:
+    version: vX.Y.Z
+    image: node-windows
+  calico/whisker:
+    version: vX.Y.Z
+    image: whisker
+  calico/whisker-backend:
+    version: vX.Y.Z
+    image: whisker-backend
+  calicoctl:
+    version: vX.Y.Z
+    image: ctl
+  csi-node-driver-registrar:
+    version: vX.Y.Z
+    image: node-driver-registrar
+  flannel:
+    version: v0.12.0
+    image: coreos/flannel
+    registry: quay.io
+  flexvol:
+    version: vX.Y.Z
+    image: pod2daemon-flexvol
+  key-cert-provisioner:
+    version: vX.Y.Z
+    image: key-cert-provisioner
+  networking-calico:
+    version: release-v1.0
+    image: networking-calico
+  typha:
+    version: vX.Y.Z
+    image: typha

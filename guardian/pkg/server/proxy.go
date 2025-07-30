@@ -66,7 +66,10 @@ func newTargetHandler(tgt Target) (func(http.ResponseWriter, *http.Request), err
 	if tgt.Transport != nil {
 		p.Transport = tgt.Transport
 	} else if tgt.Dest.Scheme == "https" {
-		tlsCfg := tls.NewTLSConfig()
+		tlsCfg, err := tls.NewTLSConfig()
+		if err != nil {
+			return nil, fmt.Errorf("failed to create TLS Config: %w", err)
+		}
 
 		if tgt.AllowInsecureTLS {
 			tlsCfg.InsecureSkipVerify = true
