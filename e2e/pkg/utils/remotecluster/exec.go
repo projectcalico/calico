@@ -18,10 +18,9 @@ import (
 	"strings"
 
 	. "github.com/onsi/gomega"
+	"github.com/projectcalico/calico/e2e/pkg/config"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/kubernetes/test/e2e/framework"
-
-	"github.com/projectcalico/calico/e2e/pkg/utils/e2ecfg"
 )
 
 const RemoteClusterNamespacePrefix = "rmt-"
@@ -38,7 +37,7 @@ func IsRemoteClusterFramework(f *framework.Framework) bool {
 // RemoteFrameworkAwareExec should be embedded into existing utilities so that developers do not need to think about
 // which functions do not use f.ClientSet when writing tests for remote clusters.
 func RemoteFrameworkAwareExec(f *framework.Framework, fn func()) {
-	if IsRemoteClusterFramework(f) && e2ecfg.RemoteClusterKubeconfig() != "" {
+	if IsRemoteClusterFramework(f) && config.RemoteClusterKubeconfig() != "" {
 		// Capture the original kubeconfig path and host, defer their reset.
 		originalKubeconfig := framework.TestContext.KubeConfig
 		originalHost := framework.TestContext.Host
@@ -48,7 +47,7 @@ func RemoteFrameworkAwareExec(f *framework.Framework, fn func()) {
 		}()
 
 		// Resolve the new kubeconfig path.
-		newKubeconfigPath := e2ecfg.RemoteClusterKubeconfig()
+		newKubeconfigPath := config.RemoteClusterKubeconfig()
 
 		// Resolve the new host.
 		newKubeconfig, err := clientcmd.LoadFromFile(newKubeconfigPath)

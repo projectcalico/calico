@@ -19,7 +19,7 @@ import (
 	"testing"
 
 	"github.com/onsi/ginkgo/v2"
-	caliconfig "github.com/projectcalico/calico/e2e/pkg/utils/e2ecfg"
+	caliconfig "github.com/projectcalico/calico/e2e/pkg/config"
 	"github.com/sirupsen/logrus"
 	"k8s.io/klog/v2"
 	"k8s.io/kubernetes/test/e2e"
@@ -29,7 +29,7 @@ import (
 	// Import tests.
 	_ "k8s.io/kubernetes/test/e2e/network"
 
-	_ "github.com/projectcalico/calico/e2e/pkg/policy"
+	_ "github.com/projectcalico/calico/e2e/pkg/tests/policy"
 )
 
 func init() {
