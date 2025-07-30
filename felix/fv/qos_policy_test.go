@@ -27,6 +27,7 @@ import (
 	"github.com/projectcalico/calico/felix/fv/connectivity"
 	"github.com/projectcalico/calico/felix/fv/containers"
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
+	"github.com/projectcalico/calico/felix/fv/utils"
 	"github.com/projectcalico/calico/felix/fv/workload"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	api "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
@@ -60,7 +61,10 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ qos policy tests", []apicon
 
 		// We will use this container to model an external client trying to connect into
 		// workloads on a host.  Create a route in the container for the workload CIDR.
-		externalClient = infrastructure.RunExtClient("ext-client")
+		extClientOpts := infrastructure.ExtClientOpts{
+			Image: utils.Config.FelixImage,
+		}
+		externalClient = infrastructure.RunExtClientWithOpts("ext-client", extClientOpts)
 	})
 
 	AfterEach(func() {
