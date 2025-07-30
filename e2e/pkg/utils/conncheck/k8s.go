@@ -43,7 +43,6 @@ func CreateServerPodAndServiceX(f *framework.Framework, namespace *v1.Namespace,
 	imagePull := v1.PullAlways
 
 	if windows.ClusterIsWindows() {
-		windows.MaybeUpdateNamespaceForOpenShift(f, namespace.Name)
 		image = images.Porter
 		nodeselector["kubernetes.io/os"] = "windows"
 		imagePull = v1.PullIfNotPresent

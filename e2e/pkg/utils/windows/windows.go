@@ -20,23 +20,10 @@ limitations under the License.
 package windows
 
 import (
-	"context"
-	"fmt"
 	"strings"
-	"time"
 
 	"github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
-	"github.com/sirupsen/logrus"
-	v1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/kubernetes/test/e2e/framework"
-
-	"github.com/projectcalico/calico/e2e/pkg/utils"
 )
-
-// Map to store serviceName and respective endpointIP
-var ServiceEndpointIP = map[string]string{}
 
 // ClusterIsWindows returns true if the cluster supports running Windows tests and false otherwise.
 //
@@ -51,80 +38,4 @@ func ClusterIsWindows() bool {
 		}
 	}
 	return false
-}
-
-// For Windows on OpenShift, pods scheduled for non-default namespaces must
-// disable SCC. See: https://bugzilla.redhat.com/show_bug.cgi?id=1768858
-//
-// TODO(lmm): Once we have moved away from using Windows Machine Config
-// Bootstrapper to provision OCP Windows nodes, we should delete this.
-func MaybeUpdateNamespaceForOpenShift(f *framework.Framework, nsName string) {
-	if utils.IsOpenShift(f) && ClusterIsWindows() {
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
-		ns, err := f.ClientSet.CoreV1().Namespaces().Get(ctx, nsName, metav1.GetOptions{})
-		if err != nil {
-			err = fmt.Errorf("could not get namespace for Windows test on OpenShift: %w", err)
-		}
-		Expect(err).ToNot(HaveOccurred())
-
-		logrus.Info("Running Windows test on OpenShift, checking if namespace label 'openshift.io/run-level: 1'...")
-		// Check if we need to update the ns or not
-		if v, ok := ns.Labels["openshift.io/run-level"]; !ok || v != "1" {
-			ns.Labels["openshift.io/run-level"] = "1"
-			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-			defer cancel()
-			_, err := f.ClientSet.CoreV1().Namespaces().Update(ctx, ns, metav1.UpdateOptions{})
-			if err != nil {
-				err = fmt.Errorf("could not update namespace for Windows test on OpenShift: %w", err)
-			}
-			Expect(err).NotTo(HaveOccurred())
-			logrus.Infof("Labels on namespace %q updated", ns.Name)
-		}
-	}
-}
-
-// This is a hack for windows to use EndpointIP instead of service's
-// ClusterIP, Since we have known issue with service's ClusterIP
-func GetTarget(f *framework.Framework, service *v1.Service, targetPort int) (string, string) {
-	var targetIP string
-	// check if serviceEndpointIP is already present in map,else
-	// raise a request to get it
-	key := fmt.Sprintf("%s-%s", service.Namespace, service.Name)
-	if ip, exist := ServiceEndpointIP[key]; exist {
-		targetIP = ip
-	} else {
-		targetIP = getServiceEndpointIP(f, service.Namespace, service.Name)
-		ServiceEndpointIP[key] = targetIP
-	}
-	serviceTarget := fmt.Sprintf("http://%s:%d", service.Spec.ClusterIP, targetPort)
-	podTarget := fmt.Sprintf("http://%s:%d", targetIP, targetPort)
-	fmt.Printf("podTarget :%s and serviceTarget :%s \n", podTarget, serviceTarget)
-	return podTarget, serviceTarget
-}
-
-// Since we have a known issue related to service ClusterIP on windows,hence using EndpointIP
-// to connect
-func getServiceEndpointIP(f *framework.Framework, svcNSName string, svcName string) string {
-	var err error
-	err = framework.WaitForServiceEndpointsNum(context.Background(), f.ClientSet, svcNSName, svcName, 1, time.Second, 60*time.Second)
-	if err != nil {
-		framework.Failf("Unable to get endpoint for service %s: %v", svcName, err)
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	endpoint, err := f.ClientSet.CoreV1().Endpoints(svcNSName).Get(ctx, svcName, metav1.GetOptions{})
-	Expect(err).NotTo(HaveOccurred())
-	Expect(endpoint.Subsets).To(HaveLen(1), fmt.Sprintf("Failed to find endpoint subset for service %s", svcName))
-	Expect(endpoint.Subsets[0].Addresses).To(HaveLen(1), fmt.Sprintf("Failed to find endpoint address for service %s", svcName))
-	endpointIP := endpoint.Subsets[0].Addresses[0].IP
-	logrus.Infof("ServiceName: %s endpointIP: %s.", svcName, endpointIP)
-	return endpointIP
-}
-
-// function to cleanup ServiceName and EndpointIP map
-func CleanupServiceEndpointMap() {
-	for i := range ServiceEndpointIP {
-		delete(ServiceEndpointIP, i)
-	}
 }

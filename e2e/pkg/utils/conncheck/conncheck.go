@@ -17,6 +17,7 @@ package conncheck
 import (
 	"context"
 	"fmt"
+	"maps"
 	"math/rand"
 	"strings"
 	"time"
@@ -482,7 +483,6 @@ func createClientPod(f *framework.Framework, namespace *v1.Namespace, baseName s
 	podName := GenerateRandomName(baseName)
 
 	if windows.ClusterIsWindows() {
-		windows.MaybeUpdateNamespaceForOpenShift(f, namespace.Name)
 		image = images.WindowsClientImage()
 		command = []string{"powershell.exe"}
 		args = []string{"Start-Sleep", "600"}
@@ -495,10 +495,10 @@ func createClientPod(f *framework.Framework, namespace *v1.Namespace, baseName s
 		nodeselector["kubernetes.io/os"] = "linux"
 	}
 
-	mergedLabels := map[string]string{"pod-name": baseName}
-	for k, v := range labels {
-		mergedLabels[k] = v
-	}
+	// Merge the base labels with the pod name label.
+	mergedLabels := make(map[string]string)
+	maps.Copy(mergedLabels, labels)
+	mergedLabels["pod-name"] = baseName
 
 	// Create the pod.
 	zero := int64(0)
