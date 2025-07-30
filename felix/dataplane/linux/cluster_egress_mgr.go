@@ -107,11 +107,8 @@ func (m *clusterEgressManager) OnUpdate(msg interface{}) {
 	case *proto.WorkloadEndpointUpdate:
 		id := types.ProtoToWorkloadEndpointID(msg.GetId())
 		_, exists := m.qosPolicies[id]
-		if !exists {
-			if msg.Endpoint.QosControls == nil ||
-				msg.Endpoint.QosControls.DSCP == 0 {
-				return
-			}
+		if !exists && (msg.Endpoint.QosControls == nil || msg.Endpoint.QosControls.DSCP == 0) {
+			return
 		}
 		var dscp int32
 		if msg.Endpoint.QosControls != nil && msg.Endpoint.QosControls.DSCP != 0 {
