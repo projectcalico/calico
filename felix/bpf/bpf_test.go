@@ -29,7 +29,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/environment"
-	"github.com/projectcalico/calico/felix/labelindex"
+	"github.com/projectcalico/calico/felix/labelindex/ipsetmember"
 	"github.com/projectcalico/calico/felix/logutils"
 )
 
@@ -595,11 +595,11 @@ func TestFailsafeMapContent(t *testing.T) {
 	}
 
 	t.Log("Updating a failsafe map should succeed")
-	err = bpfDP.UpdateFailsafeMap(uint8(labelindex.ProtocolTCP), port1)
+	err = bpfDP.UpdateFailsafeMap(uint8(ipsetmember.ProtocolTCP), port1)
 	if err != nil {
 		t.Fatalf("cannot update map: %v", err)
 	}
-	err = bpfDP.UpdateFailsafeMap(uint8(labelindex.ProtocolUDP), port2)
+	err = bpfDP.UpdateFailsafeMap(uint8(ipsetmember.ProtocolUDP), port2)
 	if err != nil {
 		t.Fatalf("cannot update map: %v", err)
 	}
@@ -611,23 +611,23 @@ func TestFailsafeMapContent(t *testing.T) {
 	}
 
 	t.Log("Looking up items from a failsafe map should succeed")
-	exists, err = bpfDP.LookupFailsafeMap(uint8(labelindex.ProtocolTCP), port1)
+	exists, err = bpfDP.LookupFailsafeMap(uint8(ipsetmember.ProtocolTCP), port1)
 	if err != nil || !exists {
 		t.Fatalf("cannot lookup map: %v exists=%v", err, exists)
 	}
 
-	exists, err = bpfDP.LookupFailsafeMap(uint8(labelindex.ProtocolUDP), port2)
+	exists, err = bpfDP.LookupFailsafeMap(uint8(ipsetmember.ProtocolUDP), port2)
 	if err != nil || !exists {
 		t.Fatalf("cannot lookup map: %v exists=%v", err, exists)
 	}
 
 	t.Log("Removing an existent item from a failsafe map should succeed")
-	err = bpfDP.RemoveItemFailsafeMap(uint8(labelindex.ProtocolTCP), port1)
+	err = bpfDP.RemoveItemFailsafeMap(uint8(ipsetmember.ProtocolTCP), port1)
 	if err != nil {
 		t.Fatalf("cannot remove item from map: %v", err)
 	}
 	t.Log("Removing an already removed item from a failsafe map should fail")
-	err = bpfDP.RemoveItemFailsafeMap(uint8(labelindex.ProtocolTCP), port1)
+	err = bpfDP.RemoveItemFailsafeMap(uint8(ipsetmember.ProtocolTCP), port1)
 	if err == nil {
 		t.Fatalf("removing already removed item should have failed")
 	}
@@ -639,7 +639,7 @@ func TestFailsafeMapContent(t *testing.T) {
 	}
 
 	t.Log("Looking up from a removed failsafe map should fail")
-	exists, err = bpfDP.LookupFailsafeMap(uint8(labelindex.ProtocolTCP), port1)
+	exists, err = bpfDP.LookupFailsafeMap(uint8(ipsetmember.ProtocolTCP), port1)
 	if err == nil || exists {
 		t.Fatalf("map should have been deleted")
 	}

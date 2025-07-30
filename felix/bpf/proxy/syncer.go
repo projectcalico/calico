@@ -1217,6 +1217,10 @@ func (s *Syncer) cleanupSticky() error {
 	return nil
 }
 
+func (s *Syncer) HasSynced() bool {
+	return s.synced
+}
+
 // ConntrackFrontendHasBackend returns true if the given front-backend pair exists
 func (s *Syncer) ConntrackFrontendHasBackend(ip net.IP, port uint16,
 	backendIP net.IP, backendPort uint16, proto uint8) (ret bool) {

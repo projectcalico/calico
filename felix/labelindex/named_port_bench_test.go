@@ -24,6 +24,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	. "github.com/projectcalico/calico/felix/labelindex"
+	. "github.com/projectcalico/calico/felix/labelindex/ipsetmember"
 	"github.com/projectcalico/calico/lib/std/uniquelabels"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"

@@ -76,6 +76,7 @@ type DPSyncer interface {
 	ConntrackDestIsService(ip net.IP, port uint16, proto uint8) bool
 	Stop()
 	SetTriggerFn(func())
+	HasSynced() bool
 }
 
 type proxy struct {

@@ -23,7 +23,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/ip"
-	"github.com/projectcalico/calico/felix/labelindex"
+	"github.com/projectcalico/calico/felix/labelindex/ipsetmember"
 	"github.com/projectcalico/calico/felix/proto"
 	cprometheus "github.com/projectcalico/calico/libcalico-go/lib/prometheus"
 )
@@ -90,7 +90,7 @@ var AllIPSetTypes = []IPSetType{
 type V4IPPort struct {
 	IP       ip.V4Addr
 	Port     uint16
-	Protocol labelindex.IPSetPortProtocol
+	Protocol ipsetmember.Protocol
 }
 
 func (p V4IPPort) String() string {
@@ -100,7 +100,7 @@ func (p V4IPPort) String() string {
 type V6IPPort struct {
 	IP       ip.V6Addr
 	Port     uint16
-	Protocol labelindex.IPSetPortProtocol
+	Protocol ipsetmember.Protocol
 }
 
 func (p V6IPPort) String() string {

@@ -61,6 +61,13 @@ func BenchmarkSnapshotThenDeleteLocal200Local10kTotal10000NetsetPols(b *testing.
 	benchInitialSnap(b, 10000, 200, 200, 0, 10000)
 }
 
+var (
+	// Using a global instead of runtime.KeepAlive() so that the most-recent
+	// CalcGraph stays alive after the benchmark completes, allowing for
+	// capture of a memory profile.
+	cg *CalcGraph
+)
+
 func benchInitialSnap(
 	b *testing.B,
 	numEndpoints int,
@@ -80,7 +87,6 @@ func benchInitialSnap(
 	profUpdates := makeNamespaceUpdates(numNamespaces)
 	netSetUpdates := makeNetSetAndPolUpdates(netSetsAndPols)
 
-	var cg *CalcGraph
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		b.StopTimer()
@@ -130,9 +136,6 @@ func benchInitialSnap(
 	var m runtime.MemStats
 	runtime.ReadMemStats(&m)
 	b.ReportMetric(float64(m.HeapAlloc)/(1024*1024), "HeapAllocMB")
-
-	// Make sure the CalcGraph doesn't get GCed before we collect stats.
-	runtime.KeepAlive(cg)
 }
 
 // These trivial functions are broken out so that, when CPU profiling, each

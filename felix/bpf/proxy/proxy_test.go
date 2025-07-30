@@ -631,6 +631,7 @@ func (s *mockSyncer) Apply(state proxy.DPSyncerState) error {
 
 type syncerConntrackAPIDummy struct{}
 
+func (*syncerConntrackAPIDummy) HasSynced() bool     { return true }
 func (*syncerConntrackAPIDummy) ConntrackScanStart() {}
 func (*syncerConntrackAPIDummy) ConntrackScanEnd()   {}
 func (*syncerConntrackAPIDummy) ConntrackFrontendHasBackend(ip net.IP, port uint16, backendIP net.IP,
