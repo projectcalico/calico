@@ -791,6 +791,7 @@ func TestAttachWithMultipleWorkloadUpdate(t *testing.T) {
 		wlep1Key.AsBytes(),
 		wlep1State.AsBytes(),
 	)
+	Expect(err).NotTo(HaveOccurred())
 
 	at := programs.Programs()
 	Expect(at).To(HaveKey(hook.AttachType{
