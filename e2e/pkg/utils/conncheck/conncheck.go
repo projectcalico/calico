@@ -12,11 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package utils
+package conncheck
 
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"strings"
 	"time"
 
@@ -31,11 +32,10 @@ import (
 	e2eoutput "k8s.io/kubernetes/test/e2e/framework/pod/output"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	opermeta "github.com/tigera/operator/pkg/render/common/meta"
-
-	imageutils "github.com/tigera/k8s-e2e/src/utils/image"
-	"github.com/tigera/k8s-e2e/src/utils/remotecluster"
-	"github.com/tigera/k8s-e2e/src/utils/winctl"
+	"github.com/projectcalico/calico/e2e/pkg/utils/images"
+	"github.com/projectcalico/calico/e2e/pkg/utils/remotecluster"
+	"github.com/projectcalico/calico/e2e/pkg/utils/windows"
+	corev1 "k8s.io/api/core/v1"
 )
 
 const (
@@ -334,7 +334,6 @@ func (c *connectionTester) Execute() {
 
 	// If we had any errors, log out the per-test diags and then fail the test.
 	if failed {
-		defer MaybeWaitForInvestigation()
 		logDiagsForNamespace(c.f, c.f.Namespace)
 		msg := buildFailureMessage(results)
 		framework.Fail(msg, 1)
@@ -350,7 +349,7 @@ func (c *connectionTester) runConnection(exp *Expectation, results chan<- connec
 	// Ensure the kubectl command executes in the remote cluster if required. Remote framework objects do not control
 	// how kubeconfigs are resolved by the kubectl command, so we must use this wrapper. See NewDefaultFrameworkForRemoteCluster.
 	remotecluster.RemoteFrameworkAwareExec(c.f, func() {
-		if winctl.RunningWindowsTest() {
+		if windows.RunningWindowsTest() {
 			out, err = ExecInPod(exp.Client, "powershell.exe", "-Command", cmd)
 		} else {
 			out, err = ExecInPod(exp.Client, "sh", "-c", cmd)
@@ -379,7 +378,7 @@ func (c *connectionTester) runConnection(exp *Expectation, results chan<- connec
 func (c *connectionTester) command(t Target) string {
 	var cmd string
 
-	if winctl.RunningWindowsTest() {
+	if windows.RunningWindowsTest() {
 		// Windows.
 		switch t.GetProtocol() {
 		case TCP:
@@ -482,16 +481,15 @@ func createClientPod(f *framework.Framework, namespace *v1.Namespace, baseName s
 	// Randomize pod names to avoid clashes with previous tests.
 	podName := GenerateRandomName(baseName)
 
-	if winctl.RunningWindowsTest() {
-		winctl.MaybeUpdateNamespaceForOpenShift(f, namespace.Name)
-		var commandStr string
-		image, commandStr = winctl.GetClientImageAndCommand()
-		command = []string{commandStr}
+	if windows.RunningWindowsTest() {
+		windows.MaybeUpdateNamespaceForOpenShift(f, namespace.Name)
+		image = images.WindowsClientImage()
+		command = []string{"powershell.exe"}
 		args = []string{"Start-Sleep", "600"}
 		nodeselector["kubernetes.io/os"] = "windows"
 		pullPolicy = v1.PullIfNotPresent
 	} else {
-		image = imageutils.GetE2EImage(imageutils.Alpine)
+		image = images.Alpine
 		command = []string{"/bin/sleep"}
 		args = []string{"3600"}
 		nodeselector["kubernetes.io/os"] = "linux"
@@ -522,7 +520,14 @@ func createClientPod(f *framework.Framework, namespace *v1.Namespace, baseName s
 					ImagePullPolicy: pullPolicy,
 				},
 			},
-			Tolerations: []v1.Toleration{opermeta.TolerateGKEARM64NoSchedule},
+			Tolerations: []v1.Toleration{
+				corev1.Toleration{
+					Key:      "kubernetes.io/arch",
+					Operator: corev1.TolerationOpEqual,
+					Value:    "arm64",
+					Effect:   corev1.TaintEffectNoSchedule,
+				},
+			},
 		},
 	}
 	if customizer != nil {
@@ -640,5 +645,20 @@ func GenerateRandomName(base string) string {
 	if len(base) > maxGeneratedNameLength {
 		base = base[:maxGeneratedNameLength]
 	}
-	return fmt.Sprintf("%s-%s", base, utilrand.String(randomLength))
+	return fmt.Sprintf("%s-%s", base, randomString(randomLength))
+}
+
+func randomString(length int) string {
+	// Generate a random string of the specified length.
+	const charset = "abcdefghijklmnopqrstuvwxyz0123456789"
+	b := make([]byte, length)
+	for i := range b {
+		b[i] = charset[rand.Intn(len(charset))]
+	}
+	return string(b)
+}
+
+// ExecInPod executes a kubectl command in a pod. Returns the response as a string, or an error upon failure.
+func ExecInPod(pod *v1.Pod, sh, opt, cmd string) (string, error) {
+	return kubectl.RunKubectl(pod.Namespace, "exec", pod.Name, "--", sh, opt, cmd)
 }
