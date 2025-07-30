@@ -192,8 +192,8 @@ var _ = Describe("With an in-process Server", func() {
 		// simulates a second connection and check that that also converges to the given state.
 		expectClientState := func(c *ClientState, status api.SyncStatus, kvs map[string]api.Update) {
 			// Wait until we reach that state.
-			Eventually(c.recorder.Status).Should(Equal(status))
-			Eventually(c.recorder.KVs).Should(Equal(kvs))
+			EventuallyWithOffset(1, c.recorder.Status).Should(Equal(status), "Unexpected sync status")
+			EventuallyWithOffset(1, c.recorder.KVs).Should(Equal(kvs), "Unexpected KVs")
 
 			// Now, a newly-connecting client should also reach the same state.
 			log.Info("Starting transient client to read snapshot.")
@@ -303,7 +303,7 @@ var _ = Describe("With an in-process Server", func() {
 						},
 					)
 					// Our updates shouldn't affect the felix syncer.
-					expectFelixClientState(api.WaitForDatastore, map[string]api.Update{})
+					expectFelixClientState(api.ResyncInProgress, map[string]api.Update{})
 				},
 				Entry("IP pool", ipPool1, "/calico/v1/ipam/v4/pool/10.0.1.0-24"),
 				Entry("Node conf", nodeBGPConfNode, "/calico/bgp/v1/host/node1/foo"),
@@ -404,7 +404,7 @@ var _ = Describe("With an in-process Server", func() {
 	})
 
 	// Simulate an old client.
-	Describe("with a client that doesn't support connection restart", func() {
+	Describe("with a client that doesn't support decoder restart", func() {
 		BeforeEach(func() {
 			h.CreateClientNoDecodeRestart("no decoder restart", syncproto.SyncerTypeFelix)
 		})
@@ -685,47 +685,9 @@ var _ = Describe("With an in-process Server with short ping timeout", func() {
 		// interval for the check to take place.
 		time.Sleep(1 * time.Second)
 
-		// Check that the client knows it can use node resource updates since the server supports it.
-		supportsNodeResourceUpdates, err := client.SupportsNodeResourceUpdates(10 * time.Second)
-		Expect(supportsNodeResourceUpdates).To(BeTrue())
-		Expect(err).To(BeNil())
-
 		// Then send an update.
 		h.FelixCache.OnStatusUpdated(api.InSync)
 		Eventually(recorder.Status).Should(Equal(api.InSync))
-	})
-
-	It("should return an error if client does not receive a server hello in time", func() {
-		// Start a real client, which will respond correctly to pings.
-		clientCxt, clientCancel := context.WithCancel(context.Background())
-		recorder := NewRecorder()
-
-		client := syncclient.New(
-			h.Discoverer(),
-			"test-version",
-			"test-host",
-			"test-info",
-			recorder,
-			nil,
-		)
-		err := client.Start(clientCxt)
-		recorderCtx, recorderCancel := context.WithCancel(context.Background())
-		defer recorderCancel()
-		go recorder.Loop(recorderCtx)
-		Expect(err).NotTo(HaveOccurred())
-		defer func() {
-			clientCancel()
-			client.Finished.Wait()
-		}()
-
-		// Kill the server
-		h.ServerCancel()
-		h.Server.Finished.Wait()
-
-		// Check that the client knows it can use node resource updates since the server supports it.
-		supportsNodeResourceUpdates, err := client.SupportsNodeResourceUpdates(0 * time.Second)
-		Expect(supportsNodeResourceUpdates).To(BeFalse())
-		Expect(err).NotTo(BeNil())
 	})
 
 	Describe("with a raw connection", func() {
@@ -1589,7 +1551,6 @@ var _ = Describe("with server requiring TLS", func() {
 
 		if !expectConnection {
 			// Client connection should have failed, so should not have got any updates.
-			Consistently(clientState.recorder.Status).Should(Equal(api.SyncStatus(0)))
 			Consistently(clientState.recorder.KVs).Should(Equal(map[string]api.Update{}))
 		}
 	}

@@ -29,7 +29,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/deltatracker"
 	"github.com/projectcalico/calico/felix/ip"
-	"github.com/projectcalico/calico/felix/labelindex"
+	"github.com/projectcalico/calico/felix/labelindex/ipsetmember"
 	"github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
@@ -1220,14 +1220,14 @@ func CanonicaliseMember(t IPSetType, member string) IPSetMember {
 		}
 		// parts[1] should contain "(tcp|udp|sctp):<port number>"
 		parts = strings.Split(parts[1], ":")
-		var proto labelindex.IPSetPortProtocol
+		var proto ipsetmember.Protocol
 		switch strings.ToLower(parts[0]) {
 		case "udp":
-			proto = labelindex.ProtocolUDP
+			proto = ipsetmember.ProtocolUDP
 		case "tcp":
-			proto = labelindex.ProtocolTCP
+			proto = ipsetmember.ProtocolTCP
 		case "sctp":
-			proto = labelindex.ProtocolSCTP
+			proto = ipsetmember.ProtocolSCTP
 		default:
 			log.WithField("member", member).Panic("Unknown protocol")
 		}

@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2019,2021-2022 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2025 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,19 +15,18 @@
 package labelindex
 
 import (
-	"fmt"
 	"iter"
 	"math"
 	"strings"
 	"time"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"github.com/projectcalico/api/pkg/lib/numorstring"
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/dispatcher"
 	"github.com/projectcalico/calico/felix/ip"
+	"github.com/projectcalico/calico/felix/labelindex/ipsetmember"
 	"github.com/projectcalico/calico/felix/labelindex/labelnamevalueindex"
 	"github.com/projectcalico/calico/felix/labelindex/labelrestrictionindex"
 	"github.com/projectcalico/calico/lib/std/uniquelabels"
@@ -109,7 +108,7 @@ func (d *endpointData) HasParent(parent *npParentData) bool {
 	return false
 }
 
-func (d *endpointData) LookupNamedPorts(name string, proto IPSetPortProtocol) []uint16 {
+func (d *endpointData) LookupNamedPorts(name string, proto ipsetmember.Protocol) []uint16 {
 	var matchingPorts []uint16
 	for _, p := range d.ports {
 		if p.Name == name && proto.MatchesModelProtocol(p.Protocol) {
@@ -119,71 +118,17 @@ func (d *endpointData) LookupNamedPorts(name string, proto IPSetPortProtocol) []
 	return matchingPorts
 }
 
-type IPSetPortProtocol uint8
-
-func (p IPSetPortProtocol) MatchesModelProtocol(protocol numorstring.Protocol) bool {
-	if protocol.Type == numorstring.NumOrStringNum {
-		if protocol.NumVal == 0 {
-			// Special case: named ports default to TCP if protocol isn't specified.
-			return p == ProtocolTCP
-		}
-		return protocol.NumVal == uint8(p)
-	}
-	switch p {
-	case ProtocolTCP:
-		return strings.ToLower(protocol.StrVal) == "tcp"
-	case ProtocolUDP:
-		return strings.ToLower(protocol.StrVal) == "udp"
-	case ProtocolSCTP:
-		return strings.ToLower(protocol.StrVal) == "sctp"
-	}
-	log.WithField("protocol", p).Panic("Unknown protocol")
-	return false
-}
-
-func (p IPSetPortProtocol) String() string {
-	switch p {
-	case ProtocolTCP:
-		return "tcp"
-	case ProtocolUDP:
-		return "udp"
-	case ProtocolSCTP:
-		return "sctp"
-	case ProtocolNone:
-		return "none"
-	default:
-		return "unknown"
-	}
-}
-
-const (
-	ProtocolNone IPSetPortProtocol = 0
-	ProtocolTCP  IPSetPortProtocol = 6
-	ProtocolUDP  IPSetPortProtocol = 17
-	ProtocolSCTP IPSetPortProtocol = 132
-)
-
-type IPSetMember struct {
-	CIDR       ip.CIDR
-	Protocol   IPSetPortProtocol
-	PortNumber uint16
-}
-
-func (m IPSetMember) String() string {
-	return fmt.Sprintf("labelindex.IPSetMember(%s:%s:%d)", m.CIDR, m.Protocol, m.PortNumber)
-}
-
 type ipSetData struct {
 	// The selector and named port that this IP set represents.  If the selector is nil then
 	// this IP set represents an unfiltered named port.  If namedPortProtocol == ProtocolNone then
 	// this IP set represents a selector only, with no named port component.
 	selector          *selector.Selector
-	namedPortProtocol IPSetPortProtocol
+	namedPortProtocol ipsetmember.Protocol
 	namedPort         string
 
 	// memberToRefCount stores a reference count for each member in the IP set.  Reference counts
 	// may be >1 if an IP address is shared by more than one endpoint.
-	memberToRefCount map[IPSetMember]uint64
+	memberToRefCount map[ipsetmember.IPSetMember]uint64
 }
 
 // GetHandle implements the Labels interface for endpointData.  Combines the endpoint's own labels with
@@ -307,7 +252,7 @@ func (d *npParentData) IterEndpointIDs(f func(id any) error) {
 	d.endpointIDs.Iter(f)
 }
 
-type NamedPortMatchCallback func(ipSetID string, member IPSetMember)
+type NamedPortMatchCallback func(ipSetID string, member ipsetmember.IPSetMember)
 
 type SelectorAndNamedPortIndex struct {
 	endpointKVIdx *labelnamevalueindex.LabelNameValueIndex[any /*endpoint IDs*/, *endpointData]
@@ -338,8 +283,8 @@ func NewSelectorAndNamedPortIndex(supressOverlaps bool) *SelectorAndNamedPortInd
 			)),
 
 		// Callback functions
-		OnMemberAdded:   func(ipSetID string, member IPSetMember) {},
-		OnMemberRemoved: func(ipSetID string, member IPSetMember) {},
+		OnMemberAdded:   func(ipSetID string, member ipsetmember.IPSetMember) {},
+		OnMemberRemoved: func(ipSetID string, member ipsetmember.IPSetMember) {},
 		OnAlive:         func() {},
 	}
 	if supressOverlaps {
@@ -490,7 +435,7 @@ func extractCIDRsFromNetworkSet(netSet *model.NetworkSet) []ip.CIDR {
 
 var defaultLogCtx = log.WithField("fieldsSuppressedAtThisLogLevel", "true")
 
-func (idx *SelectorAndNamedPortIndex) UpdateIPSet(ipSetID string, sel *selector.Selector, namedPortProtocol IPSetPortProtocol, namedPort string) {
+func (idx *SelectorAndNamedPortIndex) UpdateIPSet(ipSetID string, sel *selector.Selector, namedPortProtocol ipsetmember.Protocol, namedPort string) {
 	logCxt := defaultLogCtx
 	if log.IsLevelEnabled(log.DebugLevel) {
 		logCxt = log.WithFields(log.Fields{
@@ -535,7 +480,7 @@ func (idx *SelectorAndNamedPortIndex) UpdateIPSet(ipSetID string, sel *selector.
 		selector:          sel,
 		namedPort:         namedPort,
 		namedPortProtocol: namedPortProtocol,
-		memberToRefCount:  map[IPSetMember]uint64{},
+		memberToRefCount:  map[ipsetmember.IPSetMember]uint64{},
 	}
 	idx.ipSetDataByID[ipSetID] = newIPSetData
 	idx.selectorCandidatesIdx.AddSelector(ipSetID, sel)
@@ -635,7 +580,7 @@ func (idx *SelectorAndNamedPortIndex) UpdateEndpointOrSet(
 
 	// Get the old endpoint data, so we can compare it.
 	oldEndpointData, _ := idx.endpointKVIdx.Get(id)
-	var oldIPSetContributions map[string][]IPSetMember
+	var oldIPSetContributions map[string][]ipsetmember.IPSetMember
 	if oldEndpointData != nil {
 		// Before we do the (potentially expensive) selector scan, check if there can possibly be a
 		// change.
@@ -681,19 +626,19 @@ func (idx *SelectorAndNamedPortIndex) UpdateEndpointOrSet(
 // deduplicate any members that are masked by another member of the set, sending any necessary IPSet member
 // removals for previously sent members that are now masked.
 // For example, we don't need to send updates for both 10.0.0.0/24 and 10.0.0.1/32.
-func (idx *SelectorAndNamedPortIndex) onMemberAdded(ipSetID string, member IPSetMember) {
-	if member.Protocol == ProtocolNone && member.PortNumber == 0 {
-		// We only deduplicate for IP set members that are CIDRs. Named port members are always unique.
-		add, removes := idx.suppressor.Add(ipSetID, member.CIDR)
+func (idx *SelectorAndNamedPortIndex) onMemberAdded(ipSetID string, member ipsetmember.IPSetMember) {
+	if cidrMember, ok := member.(ipsetmember.CIDROrIPOnlyIPSetMember); ok {
+		// We only deduplicate for IP set members that are CIDRs. Named port members and domains are always unique.
+		add, removes := idx.suppressor.Add(ipSetID, cidrMember.CIDR())
 		if add != nil {
-			idx.OnMemberAdded(ipSetID, IPSetMember{CIDR: add})
+			idx.OnMemberAdded(ipSetID, cidrMember)
 		}
 		for _, r := range removes {
 			log.WithField("ipSetID", ipSetID).
 				WithField("cidr", r).
-				WithField("reason", member.CIDR).
+				WithField("reason", cidrMember.CIDR()).
 				Debug("Removing now-masked CIDR from IP set.")
-			idx.OnMemberRemoved(ipSetID, IPSetMember{CIDR: r})
+			idx.OnMemberRemoved(ipSetID, ipsetmember.MakeCIDROrIPOnly(r))
 		}
 	} else {
 		// No need to de-duplicate.
@@ -704,19 +649,19 @@ func (idx *SelectorAndNamedPortIndex) onMemberAdded(ipSetID string, member IPSet
 // onMemberRemoved is a wrapper around the OnMemberRemoved callback that allows us to
 // deduplicate any members that are masked by another member of the set, sending any necessary IPSet member
 // IPSet member adds for members that were previously masked by the removed member.
-func (idx *SelectorAndNamedPortIndex) onMemberRemoved(ipSetID string, member IPSetMember) {
-	if member.Protocol == ProtocolNone && member.PortNumber == 0 {
+func (idx *SelectorAndNamedPortIndex) onMemberRemoved(ipSetID string, member ipsetmember.IPSetMember) {
+	if cidrMember, ok := member.(ipsetmember.CIDROrIPOnlyIPSetMember); ok {
 		// We only deduplicate for IP set members that are CIDRs. Named port members are always unique.
-		rem, adds := idx.suppressor.Remove(ipSetID, member.CIDR)
+		rem, adds := idx.suppressor.Remove(ipSetID, cidrMember.CIDR())
 		if rem != nil {
-			idx.OnMemberRemoved(ipSetID, IPSetMember{CIDR: rem})
+			idx.OnMemberRemoved(ipSetID, cidrMember)
 		}
 		for _, a := range adds {
 			log.WithField("ipSetID", ipSetID).
 				WithField("cidr", a).
-				WithField("reason", member.CIDR).
+				WithField("reason", cidrMember.CIDR()).
 				Debug("Adding previously masked CIDR to IP set.")
-			idx.OnMemberAdded(ipSetID, IPSetMember{CIDR: a})
+			idx.OnMemberAdded(ipSetID, ipsetmember.MakeCIDROrIPOnly(a))
 		}
 	} else {
 		// No need to de-duplicate.
@@ -726,7 +671,7 @@ func (idx *SelectorAndNamedPortIndex) onMemberRemoved(ipSetID string, member IPS
 
 func (idx *SelectorAndNamedPortIndex) scanEndpointAgainstIPSets(
 	epData *endpointData,
-	oldIPSetContributions map[string][]IPSetMember,
+	oldIPSetContributions map[string][]ipsetmember.IPSetMember,
 ) {
 	// Remove any previous match from the endpoint's cache.  We'll re-add it
 	// below if the match is still correct.
@@ -874,26 +819,25 @@ func (idx *SelectorAndNamedPortIndex) DeleteParentLabels(parentID string) {
 // CalculateEndpointContribution calculates the given endpoint's contribution to the given IP set.
 // If the IP set represents a named port then the returned members will have a named port component.
 // Returns nil if the endpoint doesn't contribute to the IP set.
-func (idx *SelectorAndNamedPortIndex) CalculateEndpointContribution(d *endpointData, ipSetData *ipSetData) (contrib []IPSetMember) {
-	if ipSetData.namedPortProtocol != ProtocolNone {
+func (idx *SelectorAndNamedPortIndex) CalculateEndpointContribution(d *endpointData, ipSetData *ipSetData) (contrib []ipsetmember.IPSetMember) {
+	if ipSetData.namedPortProtocol != ipsetmember.ProtocolNone {
 		// This IP set represents a named port match, calculate the cross product of
 		// matching named ports by IP address.
 		portNumbers := d.LookupNamedPorts(ipSetData.namedPort, ipSetData.namedPortProtocol)
 		for _, namedPort := range portNumbers {
-			for _, addr := range d.nets {
-				contrib = append(contrib, IPSetMember{
-					CIDR:       addr,
-					Protocol:   ipSetData.namedPortProtocol,
-					PortNumber: namedPort,
-				})
+			for _, cidr := range d.nets {
+				// Named ports are always single IP addresses.
+				ipAddr := cidr.Addr()
+				contrib = append(
+					contrib,
+					ipsetmember.MakeIPPortProto(ipAddr, namedPort, ipSetData.namedPortProtocol),
+				)
 			}
 		}
 	} else {
 		// Non-named port match, simply return the CIDRs.
 		for _, addr := range d.nets {
-			contrib = append(contrib, IPSetMember{
-				CIDR: addr,
-			})
+			contrib = append(contrib, ipsetmember.MakeCIDROrIPOnly(addr))
 		}
 	}
 	return
@@ -901,11 +845,11 @@ func (idx *SelectorAndNamedPortIndex) CalculateEndpointContribution(d *endpointD
 
 // RecalcCachedContributions uses the cached set of matching IP set IDs in the endpoint
 // struct to quickly recalculate the endpoint's contribution to all IP sets.
-func (idx *SelectorAndNamedPortIndex) RecalcCachedContributions(epData *endpointData) map[string][]IPSetMember {
+func (idx *SelectorAndNamedPortIndex) RecalcCachedContributions(epData *endpointData) map[string][]ipsetmember.IPSetMember {
 	if epData.cachedMatchingIPSetIDs == nil {
 		return nil
 	}
-	contrib := map[string][]IPSetMember{}
+	contrib := map[string][]ipsetmember.IPSetMember{}
 	epData.cachedMatchingIPSetIDs.Iter(func(ipSetID string) error {
 		ipSetData := idx.ipSetDataByID[ipSetID]
 		if ipSetData == nil {
