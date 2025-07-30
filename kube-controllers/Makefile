@@ -158,25 +158,18 @@ ut fv: $(TEST_BINARIES)
 ci: clean mod-download image-all static-checks ut
 
 ###############################################################################
-# CD
-###############################################################################
-.PHONY: cd
-## Deploys images to registry
-cd: image-all cd-common
-
-###############################################################################
 # Release
 ###############################################################################
 ## Produces a clean build of release artifacts at the specified version.
 release-build: .release-$(VERSION).created
 .release-$(VERSION).created:
-	$(MAKE) clean image-all RELEASE=true
-	$(MAKE) retag-build-images-with-registries IMAGETAG=$(VERSION) RELEASE=true
+	$(MAKE) clean image-all RELEASE=$(RELEASE)
+	$(MAKE) retag-build-images-with-registries IMAGETAG=$(VERSION) RELEASE=$(RELEASE)
 	# Generate the `latest` images.
-	$(MAKE) retag-build-images-with-registries IMAGETAG=latest RELEASE=true
-	$(MAKE) FIPS=true retag-build-images-with-registries IMAGETAG=$(VERSION)-fips RELEASE=true LATEST_IMAGE_TAG=latest-fips
+	$(MAKE) retag-build-images-with-registries IMAGETAG=latest RELEASE=$(RELEASE)
+	$(MAKE) FIPS=true retag-build-images-with-registries IMAGETAG=$(VERSION)-fips RELEASE=$(RELEASE) LATEST_IMAGE_TAG=latest-fips
 	# Generate the `latest` images.
-	$(MAKE) FIPS=true retag-build-images-with-registries RELEASE=true IMAGETAG=latest-fips LATEST_IMAGE_TAG=latest-fips
+	$(MAKE) FIPS=true retag-build-images-with-registries RELEASE=$(RELEASE) IMAGETAG=latest-fips LATEST_IMAGE_TAG=latest-fips
 	touch $@
 
 ## Pushes a github release and release artifacts produced by `make release-build`.
