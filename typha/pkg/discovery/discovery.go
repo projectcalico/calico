@@ -55,7 +55,7 @@ func (t Typha) String() string {
 		nodePart = "/" + *t.NodeName
 	}
 	if strings.Contains(t.Addr, t.IP) {
-		// Mainline: IP matches address; avoid printing it twice.
+		// Mainline: IP included in address; avoid printing it twice.
 		return t.Addr + nodePart
 	}
 	return t.Addr + "," + t.IP + nodePart
@@ -291,12 +291,17 @@ func NewConnAttemptTracker(d AddressLoader) *ConnectionAttemptTracker {
 // and then returns the first entry in the list that has not been returned before.  If the list is static,
 // NextAddr() will effectively just iterate through the static list.
 type ConnectionAttemptTracker struct {
-	discoverer         AddressLoader
-	triedCache         bool
+	discoverer AddressLoader
+	triedCache bool
+
+	// triedAddrsLastSeen has en entry for each Typha address that has been
+	// tried.  We use presence of an entry to prevent trying the same address
+	// multiple times before we've tried all available addresses.  The timestamp
+	// is used to clean up stale entries; each time we choose an address, we
+	// refresh the timestamp on all the addresses that still exist.  The map is
+	// reset when we run out of addresses to try.
 	triedAddrsLastSeen map[addrDedupeKey]time.Time
 }
-
-var ErrTriedAllAddrs = fmt.Errorf("tried all available discovered addresses")
 
 func (d *ConnectionAttemptTracker) NextAddr() (Typha, error) {
 	allKnownAddrs, err := d.refreshAddrs()
@@ -340,7 +345,7 @@ func (d *ConnectionAttemptTracker) pickNextTypha(allKnownAddrs []Typha) (out Typ
 	foundUnusedTypha := false
 
 	// Defensive: make sure we don't leak if typha addresses are churning.
-	d.gcLastSeen(allKnownAddrs)
+	d.refreshAndGCLastSeen(allKnownAddrs)
 
 	for _, a := range allKnownAddrs {
 		addrKey := a.dedupeKey()
@@ -365,9 +370,10 @@ func (d *ConnectionAttemptTracker) pickNextTypha(allKnownAddrs []Typha) (out Typ
 	return
 }
 
-// gcLastSeen updates the last-seen times for d.triedAddrsLastSeen and cleans
-// up entries that haven't been seen for a long time.
-func (d *ConnectionAttemptTracker) gcLastSeen(addrs []Typha) {
+// refreshAndGCLastSeen updates the last-seen times for existing entries in
+// d.triedAddrsLastSeen and cleans up entries that haven't been seen for a
+// long time.
+func (d *ConnectionAttemptTracker) refreshAndGCLastSeen(addrs []Typha) {
 	for _, a := range addrs {
 		addrKey := a.dedupeKey()
 		if _, ok := d.triedAddrsLastSeen[addrKey]; ok {
