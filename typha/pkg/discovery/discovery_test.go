@@ -38,7 +38,7 @@ var _ = Describe("Typha address discovery", func() {
 	)
 
 	refreshClient := func() {
-		k8sClient = fake.NewSimpleClientset(endpointsTyphaService, endpointsTyphaServiceV2)
+		k8sClient = fake.NewClientset(endpointsTyphaService, endpointsTyphaServiceV2)
 	}
 
 	BeforeEach(func() {
