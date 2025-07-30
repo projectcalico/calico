@@ -497,7 +497,6 @@ func (rg *routeGenerator) advertiseThisService(svc *v1.Service, ep *discoveryv1.
 		// Only consider endpoints that are ready and have a NodeName.
 		if endpoint.NodeName != nil && *endpoint.NodeName == rg.nodeName {
 			for _, address := range endpoint.Addresses {
-				logc.Debugf("TEST LOG address %s", address)
 				if isIPv6(address) == svcIsIPv6 {
 					logc.Debugf("Advertising local service")
 					return true
