@@ -25,7 +25,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/ip"
 	. "github.com/projectcalico/calico/felix/ipsets"
-	"github.com/projectcalico/calico/felix/labelindex"
+	"github.com/projectcalico/calico/felix/labelindex/ipsetmember"
 	"github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/felix/rules"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
@@ -76,7 +76,7 @@ var _ = Describe("IPSetTypeHashIPPort", func() {
 		Expect(CanonicaliseMember(IPSetTypeHashIPPort, "10.0.0.1,TCP:1234")).
 			To(Equal(V4IPPort{
 				IP:       ip.FromString("10.0.0.1").(ip.V4Addr),
-				Protocol: labelindex.ProtocolTCP,
+				Protocol: ipsetmember.ProtocolTCP,
 				Port:     1234,
 			}))
 	})
@@ -84,7 +84,7 @@ var _ = Describe("IPSetTypeHashIPPort", func() {
 		Expect(CanonicaliseMember(IPSetTypeHashIPPort, "10.0.0.1,SCTP:1234")).
 			To(Equal(V4IPPort{
 				IP:       ip.FromString("10.0.0.1").(ip.V4Addr),
-				Protocol: labelindex.ProtocolSCTP,
+				Protocol: ipsetmember.ProtocolSCTP,
 				Port:     1234,
 			}))
 	})
@@ -92,7 +92,7 @@ var _ = Describe("IPSetTypeHashIPPort", func() {
 		Expect(CanonicaliseMember(IPSetTypeHashIPPort, "feed:0::beef,uDp:3456")).
 			To(Equal(V6IPPort{
 				IP:       ip.FromString("feed::beef").(ip.V6Addr),
-				Protocol: labelindex.ProtocolUDP,
+				Protocol: ipsetmember.ProtocolUDP,
 				Port:     3456,
 			}))
 	})
@@ -180,14 +180,14 @@ var _ = Describe("IPPort types", func() {
 	It("V4 should stringify correctly", func() {
 		Expect(V4IPPort{
 			IP:       ip.FromString("10.0.0.0").(ip.V4Addr),
-			Protocol: labelindex.ProtocolTCP,
+			Protocol: ipsetmember.ProtocolTCP,
 			Port:     1234,
 		}.String()).To(Equal("10.0.0.0,tcp:1234"))
 	})
 	It("V6 should stringify correctly", func() {
 		Expect(V6IPPort{
 			IP:       ip.FromString("feed:beef::").(ip.V6Addr),
-			Protocol: labelindex.ProtocolUDP,
+			Protocol: ipsetmember.ProtocolUDP,
 			Port:     1234,
 		}.String()).To(Equal("feed:beef::,udp:1234"))
 	})

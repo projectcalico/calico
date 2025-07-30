@@ -42,7 +42,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/bpf/utils"
 	"github.com/projectcalico/calico/felix/environment"
-	"github.com/projectcalico/calico/felix/labelindex"
+	"github.com/projectcalico/calico/felix/labelindex/ipsetmember"
 	"github.com/projectcalico/calico/felix/proto"
 )
 
@@ -501,7 +501,7 @@ type cgroupProgEntry struct {
 }
 
 type ProtoPort struct {
-	Proto labelindex.IPSetPortProtocol
+	Proto ipsetmember.Protocol
 	Port  uint16
 }
 
@@ -576,7 +576,7 @@ func (b *BPFLib) DumpFailsafeMap() ([]ProtoPort, error) {
 		if err != nil {
 			return nil, err
 		}
-		pp = append(pp, ProtoPort{labelindex.IPSetPortProtocol(proto), port})
+		pp = append(pp, ProtoPort{ipsetmember.Protocol(proto), port})
 	}
 
 	return pp, nil

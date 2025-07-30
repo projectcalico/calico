@@ -22,6 +22,7 @@ import (
 	"github.com/projectcalico/calico/felix/config"
 	"github.com/projectcalico/calico/felix/dispatcher"
 	"github.com/projectcalico/calico/felix/labelindex"
+	"github.com/projectcalico/calico/felix/labelindex/ipsetmember"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/serviceindex"
 	"github.com/projectcalico/calico/felix/types"
@@ -41,8 +42,8 @@ func init() {
 
 type ipSetUpdateCallbacks interface {
 	OnIPSetAdded(setID string, ipSetType proto.IPSetUpdate_IPSetType)
-	OnIPSetMemberAdded(setID string, ip labelindex.IPSetMember)
-	OnIPSetMemberRemoved(setID string, ip labelindex.IPSetMember)
+	OnIPSetMemberAdded(setID string, ip ipsetmember.IPSetMember)
+	OnIPSetMemberRemoved(setID string, ip ipsetmember.IPSetMember)
 	OnIPSetRemoved(setID string)
 }
 
@@ -255,7 +256,7 @@ func NewCalculationGraph(
 	serviceIndex := serviceindex.NewServiceIndex()
 	serviceIndex.RegisterWith(allUpdDispatcher)
 	// Send the Service IP set member index's outputs to the dataplane.
-	serviceIndex.OnMemberAdded = func(ipSetID string, member labelindex.IPSetMember) {
+	serviceIndex.OnMemberAdded = func(ipSetID string, member ipsetmember.IPSetMember) {
 		if log.GetLevel() >= log.DebugLevel {
 			log.WithFields(log.Fields{
 				"ipSetID": ipSetID,
@@ -264,7 +265,7 @@ func NewCalculationGraph(
 		}
 		callbacks.OnIPSetMemberAdded(ipSetID, member)
 	}
-	serviceIndex.OnMemberRemoved = func(ipSetID string, member labelindex.IPSetMember) {
+	serviceIndex.OnMemberRemoved = func(ipSetID string, member ipsetmember.IPSetMember) {
 		if log.GetLevel() >= log.DebugLevel {
 			log.WithFields(log.Fields{
 				"ipSetID": ipSetID,
@@ -327,7 +328,7 @@ func NewCalculationGraph(
 	}
 
 	// Send the IP set member index's outputs to the dataplane.
-	ipsetMemberIndex.OnMemberAdded = func(ipSetID string, member labelindex.IPSetMember) {
+	ipsetMemberIndex.OnMemberAdded = func(ipSetID string, member ipsetmember.IPSetMember) {
 		if log.GetLevel() >= log.DebugLevel {
 			log.WithFields(log.Fields{
 				"ipSetID": ipSetID,
@@ -336,7 +337,7 @@ func NewCalculationGraph(
 		}
 		callbacks.OnIPSetMemberAdded(ipSetID, member)
 	}
-	ipsetMemberIndex.OnMemberRemoved = func(ipSetID string, member labelindex.IPSetMember) {
+	ipsetMemberIndex.OnMemberRemoved = func(ipSetID string, member ipsetmember.IPSetMember) {
 		if log.GetLevel() >= log.DebugLevel {
 			log.WithFields(log.Fields{
 				"ipSetID": ipSetID,
