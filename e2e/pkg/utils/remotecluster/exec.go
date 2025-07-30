@@ -18,9 +18,10 @@ import (
 	"strings"
 
 	. "github.com/onsi/gomega"
-	"github.com/projectcalico/calico/e2e/pkg/utils/e2ecfg"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/kubernetes/test/e2e/framework"
+
+	"github.com/projectcalico/calico/e2e/pkg/utils/e2ecfg"
 )
 
 const RemoteClusterNamespacePrefix = "rmt-"

@@ -19,9 +19,9 @@ import (
 
 	. "github.com/onsi/gomega"
 	v1 "github.com/tigera/operator/api/v1"
+	"k8s.io/kubernetes/test/e2e/framework"
 
 	"github.com/projectcalico/calico/e2e/pkg/utils/client"
-	"k8s.io/kubernetes/test/e2e/framework"
 )
 
 func IsOpenShift(f *framework.Framework) bool {

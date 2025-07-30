@@ -28,13 +28,12 @@ import (
 
 	"github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"github.com/projectcalico/calico/e2e/pkg/utils"
-
 	"github.com/sirupsen/logrus"
-
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/kubernetes/test/e2e/framework"
+
+	"github.com/projectcalico/calico/e2e/pkg/utils"
 )
 
 // Map to store serviceName and respective endpointIP
