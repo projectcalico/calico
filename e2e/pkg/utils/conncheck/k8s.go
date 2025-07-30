@@ -62,12 +62,6 @@ func CreateServerPodAndServiceX(f *framework.Framework, namespace *v1.Namespace,
 			Image:           image,
 			ImagePullPolicy: imagePull,
 			Args:            args,
-			Env: []v1.EnvVar{
-				{
-					Name:  fmt.Sprintf("SERVE_PORT_%d", port),
-					Value: "foo",
-				},
-			},
 			Ports: []v1.ContainerPort{
 				{
 					ContainerPort: int32(port),
