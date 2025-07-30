@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -1063,6 +1063,16 @@ func (r *DefaultRuleRenderer) StaticManglePostroutingChain(ipVersion uint8) *gen
 	// Note, we use RETURN as the Allow action in this chain, rather than ACCEPT because the
 	// mangle table is typically used, if at all, for packet manipulations that might need to
 	// apply to our allowed traffic.
+
+	ipConf := r.ipSetConfig(ipVersion)
+	allIPsSetName := ipConf.NameForMainIPSet(IPSetIDAllPools)
+	rules = append(rules, generictables.Rule{
+		Match: r.NewMatch().
+			SourceIPSet(allIPsSetName).
+			NotDestIPSet(allIPsSetName),
+		Action:  r.Jump(ChainQosPolicy),
+		Comment: []string{"QoS policy for traffic leaving cluster"},
+	})
 
 	// Allow immediately if IptablesMarkAccept is set.  Our filter-FORWARD chain sets this for
 	// any packets that reach the end of that chain.  The principle is that we don't want to
