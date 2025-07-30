@@ -72,6 +72,11 @@ type resourceStore struct {
 	converter         resourceConverter
 }
 
+func (rs *resourceStore) GetCurrentResourceVersion(ctx context.Context) (uint64, error) {
+	logrus.Error("STUB: GetCurrentResourceVersion() not supported by Calico client.")
+	return 0, fmt.Errorf("GetCurrentResourceVersion() not supported by Calico client")
+}
+
 func (rs *resourceStore) RequestWatchProgress(ctx context.Context) error {
 	// This method is supposed to trigger the client to emit a progress
 	// notification on each active watch but our client doesn't support that
