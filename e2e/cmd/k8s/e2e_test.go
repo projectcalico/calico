@@ -25,6 +25,7 @@ import (
 	"k8s.io/kubernetes/test/e2e/framework/config"
 
 	// Import tests.
+	_ "github.com/projectcalico/calico/e2e/pkg/policy"
 	_ "k8s.io/kubernetes/test/e2e/network"
 )
 
