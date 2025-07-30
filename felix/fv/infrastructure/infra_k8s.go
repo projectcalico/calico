@@ -1327,7 +1327,7 @@ func updatePodLabelsAndAnnotations(wep *libapi.WorkloadEndpoint, pod *v1.Pod) *v
 		if pod.Annotations == nil {
 			pod.Annotations = map[string]string{}
 		}
-		if wep.Spec.QoSControls.DSCP.NumVal != 0 {
+		if wep.Spec.QoSControls.DSCP != nil {
 			pod.Annotations[conversion.AnnotationQoSEgressDSCP] = wep.Spec.QoSControls.DSCP.String()
 		} else {
 			delete(pod.Annotations, conversion.AnnotationQoSEgressDSCP)

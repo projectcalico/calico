@@ -116,7 +116,10 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ qos policy tests", []apicon
 		}
 	})
 
-	It("pepper1 applying QoSControl should is adding correct rules", func() {
+	It("pepper1 applying DSCP annotation should result is adding correct rules", func() {
+		dscp20 := numorstring.DSCPFromInt(20)
+		dscp32 := numorstring.DSCPFromInt(32)
+
 		By("configurging external client to only accept packets with specific DSCP value")
 		externalClient.Exec("ip", "route", "add", w[0].IP, "via", tc.Felixes[0].IP)
 		externalClient.Exec("ip", "route", "add", w[1].IP, "via", tc.Felixes[1].IP)
@@ -132,7 +135,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ qos policy tests", []apicon
 
 		By("setting the expected DSCP value on egress traffic from one workload leaving the cluster")
 		w[0].WorkloadEndpoint.Spec.QoSControls = &api.QoSControls{
-			DSCP: numorstring.DSCPFromInt(20),
+			DSCP: &dscp20,
 		}
 		w[0].UpdateInInfra(infra)
 		cc.ResetExpectations()
@@ -145,7 +148,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ qos policy tests", []apicon
 
 		By("updating DSCP value on egress traffic from the same workload leaving the cluster")
 		w[0].WorkloadEndpoint.Spec.QoSControls = &api.QoSControls{
-			DSCP: numorstring.DSCPFromInt(32),
+			DSCP: &dscp32,
 		}
 		w[0].UpdateInInfra(infra)
 		cc.ResetExpectations()
@@ -158,7 +161,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ qos policy tests", []apicon
 
 		By("reverting the expected DSCP on the same workload to the expected value")
 		w[0].WorkloadEndpoint.Spec.QoSControls = &api.QoSControls{
-			DSCP: numorstring.DSCPFromInt(20),
+			DSCP: &dscp20,
 		}
 		w[0].UpdateInInfra(infra)
 		cc.ResetExpectations()

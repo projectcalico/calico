@@ -258,13 +258,11 @@ var _ = Describe("Cluster egress manager - Masquerade", func() {
 			masqMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
 				Id: &wlEPID1,
 				Endpoint: &proto.WorkloadEndpoint{
-					State:    "active",
-					Name:     "cali12345-ab",
-					Ipv4Nets: []string{"10.0.240.2/24"},
-					Ipv6Nets: []string{"2001:db8:2::2/128"},
-					QosControls: &proto.QoSControls{
-						DSCP: 44,
-					},
+					State:       "active",
+					Name:        "cali12345-ab",
+					Ipv4Nets:    []string{"10.0.240.2/24"},
+					Ipv6Nets:    []string{"2001:db8:2::2/128"},
+					QosPolicies: []*proto.QoSPolicy{{Dscp: 44}},
 				},
 			})
 
@@ -286,13 +284,11 @@ var _ = Describe("Cluster egress manager - Masquerade", func() {
 			masqMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
 				Id: &wlEPID2,
 				Endpoint: &proto.WorkloadEndpoint{
-					State:    "active",
-					Name:     "cali2",
-					Ipv4Nets: []string{"10.0.240.3/24"},
-					Ipv6Nets: []string{"2001:db8:2::3/128"},
-					QosControls: &proto.QoSControls{
-						DSCP: 20,
-					},
+					State:       "active",
+					Name:        "cali2",
+					Ipv4Nets:    []string{"10.0.240.3/24"},
+					Ipv6Nets:    []string{"2001:db8:2::3/128"},
+					QosPolicies: []*proto.QoSPolicy{{Dscp: 20}},
 				},
 			})
 
@@ -319,13 +315,11 @@ var _ = Describe("Cluster egress manager - Masquerade", func() {
 			masqMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
 				Id: &wlEPID1,
 				Endpoint: &proto.WorkloadEndpoint{
-					State:    "active",
-					Name:     "cali12345-ab",
-					Ipv4Nets: []string{"10.0.240.2/24"},
-					Ipv6Nets: []string{"2001:db8:2::2/128"},
-					QosControls: &proto.QoSControls{
-						DSCP: 13,
-					},
+					State:       "active",
+					Name:        "cali12345-ab",
+					Ipv4Nets:    []string{"10.0.240.2/24"},
+					Ipv6Nets:    []string{"2001:db8:2::2/128"},
+					QosPolicies: []*proto.QoSPolicy{{Dscp: 13}},
 				},
 			})
 

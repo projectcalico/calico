@@ -105,42 +105,9 @@ func (m *clusterEgressManager) OnUpdate(msg interface{}) {
 		m.logCxt.WithField("id", msg.Id).Debug("IPAM pool removed")
 		m.handleIPAMUpdates(msg.Id, nil)
 	case *proto.WorkloadEndpointUpdate:
-		id := types.ProtoToWorkloadEndpointID(msg.GetId())
-		_, exists := m.qosPolicies[id]
-		if !exists && (msg.Endpoint.QosControls == nil || msg.Endpoint.QosControls.DSCP == 0) {
-			return
-		}
-		var dscp int32
-		if msg.Endpoint.QosControls != nil && msg.Endpoint.QosControls.DSCP != 0 {
-			dscp = msg.Endpoint.QosControls.DSCP
-		}
-		// TODO (mazdak): this needs to be caught earlier
-		if dscp > 255 || dscp < 0 {
-			logrus.Errorf("Invalid dscp")
-		}
-		if dscp == 0 {
-			delete(m.qosPolicies, id)
-			m.qosPolicyDirty = true
-			return
-		}
-		ips := msg.Endpoint.Ipv4Nets
-		if m.ipVersion == 6 {
-			ips = msg.Endpoint.Ipv6Nets
-		}
-		if len(ips) != 0 {
-			m.qosPolicies[id] = qos.Policy{
-				SrcAddrs: normaliseSourceAddr(ips),
-				DSCP:     uint8(dscp),
-			}
-			m.qosPolicyDirty = true
-		}
+		m.handleWlEndpointUpdates(msg.GetId(), msg)
 	case *proto.WorkloadEndpointRemove:
-		id := types.ProtoToWorkloadEndpointID(msg.GetId())
-		_, exists := m.qosPolicies[id]
-		if exists {
-			delete(m.qosPolicies, id)
-			m.qosPolicyDirty = true
-		}
+		m.handleWlEndpointUpdates(msg.GetId(), nil)
 	}
 }
 
@@ -182,6 +149,46 @@ func (m *clusterEgressManager) handleIPAMUpdates(poolID string, newPool *proto.I
 	m.masqDirty = true
 }
 
+func (m *clusterEgressManager) handleWlEndpointUpdates(wlID *proto.WorkloadEndpointID, msg *proto.WorkloadEndpointUpdate) {
+	id := types.ProtoToWorkloadEndpointID(wlID)
+	if msg == nil || len(msg.Endpoint.QosPolicies) == 0 {
+		_, exists := m.qosPolicies[id]
+		if exists {
+			delete(m.qosPolicies, id)
+			m.qosPolicyDirty = true
+		}
+		return
+	}
+
+	// We only support one policy per endpoint at this point.
+	dscp := msg.Endpoint.QosPolicies[0].Dscp
+
+	// This situation must be handled earlier.
+	if dscp > 255 || dscp < 0 {
+		logrus.WithField("id", id).Panicf("Invalid DSCP value %v", dscp)
+	}
+	ips := msg.Endpoint.Ipv4Nets
+	if m.ipVersion == 6 {
+		ips = msg.Endpoint.Ipv6Nets
+	}
+	if len(ips) != 0 {
+		m.qosPolicies[id] = qos.Policy{
+			SrcAddrs: normaliseSourceAddr(ips),
+			DSCP:     uint8(dscp),
+		}
+		m.qosPolicyDirty = true
+	}
+}
+
+func normaliseSourceAddr(addrs []string) string {
+	var trimmedSources []string
+	for _, addr := range addrs {
+		parts := strings.Split(addr, "/")
+		trimmedSources = append(trimmedSources, parts[0])
+	}
+	return strings.Join(trimmedSources, ",")
+}
+
 func (m *clusterEgressManager) CompleteDeferredWork() error {
 	if m.masqDirty {
 		// Refresh the chain in case we've gone from having no masq pools to
@@ -195,9 +202,7 @@ func (m *clusterEgressManager) CompleteDeferredWork() error {
 	if m.qosPolicyDirty {
 		var policies []qos.Policy
 		for _, p := range m.qosPolicies {
-			//if p.DSCP != 0 {
 			policies = append(policies, p)
-			//}
 		}
 		sort.Slice(policies, func(i, j int) bool {
 			return policies[i].SrcAddrs < policies[j].SrcAddrs
@@ -209,13 +214,4 @@ func (m *clusterEgressManager) CompleteDeferredWork() error {
 	}
 
 	return nil
-}
-
-func normaliseSourceAddr(addrs []string) string {
-	var trimmedSources []string
-	for _, addr := range addrs {
-		parts := strings.Split(addr, "/")
-		trimmedSources = append(trimmedSources, parts[0])
-	}
-	return strings.Join(trimmedSources, ",")
 }
