@@ -1319,6 +1319,8 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							},
 						},
 					}
+					// Enable consistent-hash on the service.
+					fakeSvc.ObjectMeta.Annotations[proxy.LoadBalancingAlgorithm] = proxy.LoadBalancingAlgorithmConsistentHash
 
 					k8sClient := infra.(*infrastructure.K8sDatastoreInfra).K8sClient
 					_, err := k8sClient.CoreV1().Services("default").Create(context.Background(), fakeSvc, metav1.CreateOptions{})
