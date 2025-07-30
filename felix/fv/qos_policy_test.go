@@ -17,6 +17,7 @@
 package fv_test
 
 import (
+	"fmt"
 	"time"
 
 	. "github.com/onsi/ginkgo"
@@ -42,6 +43,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ qos policy tests", []apicon
 		client         client.Interface
 		externalClient *containers.Container
 		cc             *connectivity.Checker
+
+		toExists    bool = true
+		toNotExists bool = false
 	)
 
 	BeforeEach(func() {
@@ -113,7 +117,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ qos policy tests", []apicon
 	})
 
 	It("pepper1 applying QoSControl should is adding correct rules", func() {
-		By("configurging external client to only accept packets with sepcific DSCP value")
+		By("configurging external client to only accept packets with specific DSCP value")
 		externalClient.Exec("ip", "route", "add", w[0].IP, "via", tc.Felixes[0].IP)
 		externalClient.Exec("ip", "route", "add", w[1].IP, "via", tc.Felixes[1].IP)
 		externalClient.Exec("iptables", "-A", "INPUT", "-m", "dscp", "!", "--dscp", "0x14", "-j", "DROP")
@@ -123,39 +127,47 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ qos policy tests", []apicon
 		cc.ExpectNone(externalClient, w[1])
 		cc.CheckConnectivity()
 
+		expectQoSPolicy(tc.Felixes[0], "0x14", toNotExists)
+		expectQoSPolicy(tc.Felixes[0], "0x20", toNotExists)
+
 		By("setting the expected DSCP value on egress traffic from one workload leaving the cluster")
 		w[0].WorkloadEndpoint.Spec.QoSControls = &api.QoSControls{
 			DSCP: numorstring.DSCPFromInt(20),
 		}
 		w[0].UpdateInInfra(infra)
-		//time.Sleep(time.Minute * 540)
 		cc.ResetExpectations()
 		cc.ExpectSome(externalClient, w[0])
 		cc.ExpectNone(externalClient, w[1])
 		cc.CheckConnectivity()
 
-		By("verifying that expected rule exists")
-		if NFTMode() {
-			// TODO (mazdak) verify the pattern
-			// TODO (mazdak): add ipv6
-			Eventually(func() string {
-				output, _ := tc.Felixes[0].ExecOutput("nft", "list", "chain", "ip", "calico", "mangle-cali-qos-policy")
-				return output
-			}, 5*time.Second, 100*time.Millisecond).Should(ContainSubstring("ip dscp set af22"))
-			Consistently(func() string {
-				output, _ := tc.Felixes[0].ExecOutput("nft", "list", "chain", "ip", "calico", "mangle-cali-qos-policy")
-				return output
-			}, 5*time.Second, 100*time.Millisecond).Should(ContainSubstring("ip dscp set af22"))
-		} else {
-			Eventually(func() string {
-				output, _ := tc.Felixes[0].ExecOutput("iptables-save", "-t", "mangle")
-				return output
-			}, 5*time.Second, 100*time.Millisecond).Should(ContainSubstring("DSCP --set-dscp 0x14"))
-			Consistently(func() string {
-				output, _ := tc.Felixes[0].ExecOutput("iptables-save", "-t", "mangle")
-				return output
-			}, 5*time.Second, 100*time.Millisecond).Should(ContainSubstring("DSCP --set-dscp 0x14"))
+		expectQoSPolicy(tc.Felixes[0], "0x14", toExists)
+		expectQoSPolicy(tc.Felixes[0], "0x20", toNotExists)
+
+		By("updating DSCP value on egress traffic from the same workload leaving the cluster")
+		w[0].WorkloadEndpoint.Spec.QoSControls = &api.QoSControls{
+			DSCP: numorstring.DSCPFromInt(32),
 		}
+		w[0].UpdateInInfra(infra)
+		cc.ResetExpectations()
+		cc.ExpectNone(externalClient, w[0])
+		cc.ExpectNone(externalClient, w[1])
+		cc.CheckConnectivity()
+
+		expectQoSPolicy(tc.Felixes[0], "0x14", false)
+		expectQoSPolicy(tc.Felixes[0], "0x20", true)
+
+		By("reverting the expected DSCP on the same workload to the expected value")
+		w[0].WorkloadEndpoint.Spec.QoSControls = &api.QoSControls{
+			DSCP: numorstring.DSCPFromInt(20),
+		}
+		w[0].UpdateInInfra(infra)
+		cc.ResetExpectations()
+		cc.ExpectSome(externalClient, w[0])
+		cc.ExpectNone(externalClient, w[1])
+		cc.CheckConnectivity()
+
+		expectQoSPolicy(tc.Felixes[0], "0x14", true)
+		expectQoSPolicy(tc.Felixes[0], "0x20", false)
 
 		By("resetting DSCP value on egress traffic from that workload leaving the cluster")
 		w[0].WorkloadEndpoint.Spec.QoSControls = &api.QoSControls{}
@@ -166,27 +178,40 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ qos policy tests", []apicon
 		cc.ExpectNone(externalClient, w[1])
 		cc.CheckConnectivity()
 
-		By("verifying that expected rule is cleaned up")
-		if NFTMode() {
-			// TODO (mazdak) verify the pattern
-			// TODO (mazdak): add ipv6
-			Eventually(func() string {
-				output, _ := tc.Felixes[0].ExecOutput("nft", "list", "chain", "ip", "calico", "mangle-cali-qos-policy")
-				return output
-			}, 5*time.Second, 100*time.Millisecond).ShouldNot(ContainSubstring("ip dscp set af22"))
-			Consistently(func() string {
-				output, _ := tc.Felixes[0].ExecOutput("nft", "list", "chain", "ip", "calico", "mangle-cali-qos-policy")
-				return output
-			}, 5*time.Second, 100*time.Millisecond).ShouldNot(ContainSubstring("ip dscp set af22"))
-		} else {
-			Eventually(func() string {
-				output, _ := tc.Felixes[0].ExecOutput("iptables-save", "-t", "mangle")
-				return output
-			}, 5*time.Second, 100*time.Millisecond).ShouldNot(ContainSubstring("DSCP --set-dscp 0x14"))
-			Consistently(func() string {
-				output, _ := tc.Felixes[0].ExecOutput("iptables-save", "-t", "mangle")
-				return output
-			}, 5*time.Second, 100*time.Millisecond).ShouldNot(ContainSubstring("DSCP --set-dscp 0x14"))
-		}
+		expectQoSPolicy(tc.Felixes[0], "0x14", false)
+		expectQoSPolicy(tc.Felixes[0], "0x20", false)
 	})
 })
+
+func expectQoSPolicy(felix *infrastructure.Felix, dscp string, expectToExists bool) {
+	var (
+		cmd         []string
+		expectedStr string
+	)
+	if NFTMode() {
+		cmd = []string{"nft", "list", "chain", "ip", "calico", "mangle-cali-qos-policy"}
+		expectedStr = fmt.Sprintf("ip dscp set %v", dscp)
+	} else {
+		cmd = []string{"iptables-save", "-t", "mangle"}
+		expectedStr = fmt.Sprintf("DSCP --set-dscp %v", dscp)
+	}
+	if expectToExists {
+		Eventually(func() string {
+			output, _ := felix.ExecOutput(cmd...)
+			return output
+		}, 5*time.Second, 100*time.Millisecond).Should(ContainSubstring(expectedStr))
+		Consistently(func() string {
+			output, _ := felix.ExecOutput(cmd...)
+			return output
+		}, 5*time.Second, 100*time.Millisecond).Should(ContainSubstring(expectedStr))
+	} else {
+		Eventually(func() string {
+			output, _ := felix.ExecOutput(cmd...)
+			return output
+		}, 5*time.Second, 100*time.Millisecond).ShouldNot(ContainSubstring(expectedStr))
+		Consistently(func() string {
+			output, _ := felix.ExecOutput(cmd...)
+			return output
+		}, 5*time.Second, 100*time.Millisecond).ShouldNot(ContainSubstring(expectedStr))
+	}
+}

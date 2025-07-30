@@ -51,14 +51,18 @@ const (
 )
 
 var (
-	allDSCPValues = []string{
-		DF,
-		EF,
-		AF11, AF12, AF13,
-		AF21, AF22, AF23,
-		AF31, AF32, AF33,
-		AF41, AF42, AF43,
-		CS0, CS1, CS2, CS3, CS4, CS5, CS6,
+	allDSCPValues = map[string]uint8{
+		DF: 0,
+		EF: 46,
+
+		AF11: 10, AF12: 12, AF13: 14,
+		AF21: 18, AF22: 20, AF23: 22,
+		AF31: 26, AF32: 28, AF33: 30,
+		AF41: 34, AF42: 36, AF43: 38,
+
+		CS0: 0, CS1: 8, CS2: 16,
+		CS3: 24, CS4: 32, CS5: 40,
+		CS6: 48,
 	}
 )
 
@@ -72,19 +76,33 @@ func DSCPFromInt(v uint8) DSCP {
 }
 
 // DSCPFromString creates a DSCP struct from a string value.
-func DSCPFromString(v string) DSCP {
-	for _, n := range allDSCPValues {
-		if strings.EqualFold(n, v) {
+func DSCPFromString(s string) DSCP {
+	for k, _ := range allDSCPValues {
+		if strings.EqualFold(k, s) {
 			return DSCP(
-				Uint8OrString{Type: NumOrStringString, StrVal: v},
+				Uint8OrString{Type: NumOrStringString, StrVal: s},
 			)
 		}
 	}
 
 	// Unknown protocol - return the value unchanged.  Validation should catch this.
 	return DSCP(
-		Uint8OrString{Type: NumOrStringString, StrVal: v},
+		Uint8OrString{Type: NumOrStringString, StrVal: s},
 	)
+}
+
+func (d *DSCP) ToUint8() uint8 {
+	val, err := (*Uint8OrString)(d).NumValue()
+	if err == nil {
+		return val
+	}
+
+	val, valid := allDSCPValues[d.StrVal]
+	if !valid {
+		// TODO (mazdak): diff between 0 and not setting it
+		return 0
+	}
+	return val
 }
 
 // UnmarshalJSON implements the json.Unmarshaller interface.
