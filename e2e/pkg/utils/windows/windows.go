@@ -38,8 +38,12 @@ import (
 // Map to store serviceName and respective endpointIP
 var ServiceEndpointIP = map[string]string{}
 
-// Check if we are running windows specific test cases.
-func RunningWindowsTest() bool {
+// ClusterIsWindows returns true if the cluster supports running Windows tests and false otherwise.
+//
+// TODO: Right now, we assume that the presence of "RunsOnWindows" in the focus strings means
+// that the tests are running on a Windows cluster. This isn't necessarily true. We could be more
+// precise by either checking the cluster itself, or adding a CLi flag to control this behavior.
+func ClusterIsWindows() bool {
 	cfg, _ := ginkgo.GinkgoConfiguration()
 	for _, s := range cfg.FocusStrings {
 		if strings.Contains(s, "RunsOnWindows") {
@@ -55,7 +59,7 @@ func RunningWindowsTest() bool {
 // TODO(lmm): Once we have moved away from using Windows Machine Config
 // Bootstrapper to provision OCP Windows nodes, we should delete this.
 func MaybeUpdateNamespaceForOpenShift(f *framework.Framework, nsName string) {
-	if utils.IsOpenShift(f) && RunningWindowsTest() {
+	if utils.IsOpenShift(f) && ClusterIsWindows() {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 		ns, err := f.ClientSet.CoreV1().Namespaces().Get(ctx, nsName, metav1.GetOptions{})

@@ -32,6 +32,7 @@ import (
 	e2epod "k8s.io/kubernetes/test/e2e/framework/pod"
 	e2eoutput "k8s.io/kubernetes/test/e2e/framework/pod/output"
 
+	"github.com/projectcalico/calico/e2e/pkg/utils/client"
 	"github.com/projectcalico/calico/e2e/pkg/utils/images"
 	"github.com/projectcalico/calico/e2e/pkg/utils/remotecluster"
 	"github.com/projectcalico/calico/e2e/pkg/utils/windows"
@@ -348,7 +349,7 @@ func (c *connectionTester) runConnection(exp *Expectation, results chan<- connec
 	// Ensure the kubectl command executes in the remote cluster if required. Remote framework objects do not control
 	// how kubeconfigs are resolved by the kubectl command, so we must use this wrapper. See NewDefaultFrameworkForRemoteCluster.
 	remotecluster.RemoteFrameworkAwareExec(c.f, func() {
-		if windows.RunningWindowsTest() {
+		if windows.ClusterIsWindows() {
 			out, err = ExecInPod(exp.Client, "powershell.exe", "-Command", cmd)
 		} else {
 			out, err = ExecInPod(exp.Client, "sh", "-c", cmd)
@@ -377,7 +378,7 @@ func (c *connectionTester) runConnection(exp *Expectation, results chan<- connec
 func (c *connectionTester) command(t Target) string {
 	var cmd string
 
-	if windows.RunningWindowsTest() {
+	if windows.ClusterIsWindows() {
 		// Windows.
 		switch t.GetProtocol() {
 		case TCP:
@@ -480,7 +481,7 @@ func createClientPod(f *framework.Framework, namespace *v1.Namespace, baseName s
 	// Randomize pod names to avoid clashes with previous tests.
 	podName := GenerateRandomName(baseName)
 
-	if windows.RunningWindowsTest() {
+	if windows.ClusterIsWindows() {
 		windows.MaybeUpdateNamespaceForOpenShift(f, namespace.Name)
 		image = images.WindowsClientImage()
 		command = []string{"powershell.exe"}
@@ -602,24 +603,23 @@ func logDiagsForNamespace(f *framework.Framework, ns *v1.Namespace) {
 	heps := &v3.HostEndpointList{}
 	logrus.Infof("Current test namespace is %s, but will get policies for all", f.Namespace.Name)
 
-	// TODO:
-	// client, err := calico.NewClient(f)
-	// if err != nil {
-	// 	logrus.WithError(err).Info("error getting calico client")
-	// } else {
-	// 	err = client.List("networkpolicies", "", nps)
-	// 	if err != nil {
-	// 		logrus.WithError(err).Info("error getting current Calico NetworkPolicies")
-	// 	}
-	// 	err = client.List("globalnetworkpolicies", "", gnps)
-	// 	if err != nil {
-	// 		logrus.WithError(err).Info("error getting current Calico GlobalNetworkPolicies")
-	// 	}
-	// 	err = client.List("hostendpoints", "", heps)
-	// 	if err != nil {
-	// 		logrus.WithError(err).Info("error getting current Calico HEPs")
-	// 	}
-	// }
+	cli, err := client.New(f.ClientConfig())
+	if err != nil {
+		logrus.WithError(err).Info("error getting calico client")
+	} else {
+		err = cli.List(ctx, nps)
+		if err != nil {
+			logrus.WithError(err).Info("error getting current Calico NetworkPolicies")
+		}
+		err = cli.List(ctx, gnps)
+		if err != nil {
+			logrus.WithError(err).Info("error getting current Calico GlobalNetworkPolicies")
+		}
+		err = cli.List(ctx, heps)
+		if err != nil {
+			logrus.WithError(err).Info("error getting current Calico HEPs")
+		}
+	}
 	logrus.Infof("[DIAGS] Calico NetworkPolicies:\n\t%v", nps.Items)
 	logrus.Infof("[DIAGS] Calico GlobalNetworkPolicies:\n\t%v", gnps.Items)
 	logrus.Infof("[DIAGS] Calico HostEndpoints:\n\t%v", heps.Items)
