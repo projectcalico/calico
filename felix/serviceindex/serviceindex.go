@@ -25,12 +25,12 @@ import (
 
 	"github.com/projectcalico/calico/felix/dispatcher"
 	"github.com/projectcalico/calico/felix/ip"
-	"github.com/projectcalico/calico/felix/labelindex"
+	"github.com/projectcalico/calico/felix/labelindex/ipsetmember"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 )
 
-type ServiceMatchCallback func(ipSetID string, member labelindex.IPSetMember)
+type ServiceMatchCallback func(ipSetID string, member ipsetmember.IPSetMember)
 
 type ServiceIndex struct {
 	// cache of all endpoint slices, indexed by service name and slice namespace/name.
@@ -57,8 +57,8 @@ func NewServiceIndex() *ServiceIndex {
 		activeIPSetsByService:   make(map[string]map[string]*ipSetData),
 
 		// Callback functions
-		OnMemberAdded:   func(ipSetID string, member labelindex.IPSetMember) {},
-		OnMemberRemoved: func(ipSetID string, member labelindex.IPSetMember) {},
+		OnMemberAdded:   func(ipSetID string, member ipsetmember.IPSetMember) {},
+		OnMemberRemoved: func(ipSetID string, member ipsetmember.IPSetMember) {},
 
 		OnAlive: func() {},
 	}
@@ -190,13 +190,13 @@ func serviceName(es *discovery.EndpointSlice) string {
 	return name
 }
 
-func (idx *ServiceIndex) membersFromEndpointSlice(es *discovery.EndpointSlice, includePorts bool) []labelindex.IPSetMember {
+func (idx *ServiceIndex) membersFromEndpointSlice(es *discovery.EndpointSlice, includePorts bool) []ipsetmember.IPSetMember {
 	if es == nil {
 		// A nil endpoint slice produces no IP set members.
 		return nil
 	}
 
-	members := []labelindex.IPSetMember{}
+	members := []ipsetmember.IPSetMember{}
 	if includePorts {
 		for _, ep := range es.Endpoints {
 			// Create a member for each endpoint + port combination. If there
@@ -208,28 +208,29 @@ func (idx *ServiceIndex) membersFromEndpointSlice(es *discovery.EndpointSlice, i
 				// a lack of port to mean no IP set membership.
 				if port.Port != nil {
 					for _, addr := range ep.Addresses {
-						cidr, err := ip.ParseCIDROrIP(addr)
-						if err != nil {
-							logrus.WithError(err).Warn("Failed to parse endpoint address, skipping")
+						ipAddr := ip.FromString(addr)
+						if ipAddr == nil {
+							// Endpoints can contain domains.
+							logrus.Debug("Skipping non-IP endpoint address.")
 							continue
 						}
 
 						// Determine the protocol for the member. Assume TCP
 						// unless the protocol is specified to be something else.
-						proto := labelindex.ProtocolTCP
+						proto := ipsetmember.ProtocolTCP
 						if port.Protocol != nil {
 							switch *port.Protocol {
 							case v1.ProtocolUDP:
-								proto = labelindex.ProtocolUDP
+								proto = ipsetmember.ProtocolUDP
 							case v1.ProtocolSCTP:
-								proto = labelindex.ProtocolSCTP
+								proto = ipsetmember.ProtocolSCTP
 							}
 						}
-						members = append(members, labelindex.IPSetMember{
-							CIDR:       cidr,
-							Protocol:   proto,
-							PortNumber: uint16(*port.Port),
-						})
+						members = append(members, ipsetmember.MakeIPPortProto(
+							ipAddr,
+							uint16(*port.Port),
+							proto,
+						))
 					}
 				}
 			}
@@ -241,11 +242,12 @@ func (idx *ServiceIndex) membersFromEndpointSlice(es *discovery.EndpointSlice, i
 			for _, addr := range ep.Addresses {
 				cidr, err := ip.ParseCIDROrIP(addr)
 				if err != nil {
-					logrus.WithError(err).Warn("Failed to parse endpoint address, skipping")
+					// Endpoints can contain domains.
+					logrus.WithError(err).Debug("Skipping non-IP endpoint address.")
 					continue
 				}
 
-				members = append(members, labelindex.IPSetMember{CIDR: cidr})
+				members = append(members, ipsetmember.MakeCIDROrIPOnly(cidr))
 			}
 		}
 	}
@@ -272,7 +274,7 @@ func (idx *ServiceIndex) UpdateIPSet(id string, serviceName string) {
 	as := &ipSetData{
 		ID:               id,
 		ServiceName:      serviceName,
-		memberToRefCount: map[labelindex.IPSetMember]uint64{},
+		memberToRefCount: map[ipsetmember.IPSetMember]uint64{},
 	}
 	idx.activeIPSetsByID[id] = as
 	if _, ok := idx.activeIPSetsByService[serviceName]; !ok {
@@ -339,7 +341,7 @@ type ipSetData struct {
 	// memberToRefCount tracks the count of each member. We need to reference count because
 	// it's possible for a given IP set member may exist in more than one EndpointSlice. The reference
 	// count lets us properly detect when a member is new or has been deleted.
-	memberToRefCount map[labelindex.IPSetMember]uint64
+	memberToRefCount map[ipsetmember.IPSetMember]uint64
 }
 
 func (isd *ipSetData) IncludePorts() bool {
