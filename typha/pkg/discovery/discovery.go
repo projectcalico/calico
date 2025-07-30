@@ -21,12 +21,13 @@ import (
 	"math/rand"
 	"net"
 	"os"
+	"strings"
+	"time"
 
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 
-	"github.com/projectcalico/calico/libcalico-go/lib/set"
 	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
 )
 
@@ -38,16 +39,30 @@ type Typha struct {
 	NodeName *string
 }
 
-func (t Typha) dedupeKey() string {
+type addrDedupeKey string
+
+func (t Typha) dedupeKey() addrDedupeKey {
 	node := "<nil>"
 	if t.NodeName != nil {
 		node = *t.NodeName
 	}
-	return fmt.Sprintf("%s/%s/%s", t.Addr, t.IP, node)
+	return addrDedupeKey(fmt.Sprintf("%s/%s/%s", t.Addr, t.IP, node))
+}
+
+func (t Typha) String() string {
+	nodePart := ""
+	if t.NodeName != nil {
+		nodePart = "/" + *t.NodeName
+	}
+	if strings.Contains(t.Addr, t.IP) {
+		// Mainline: IP included in address; avoid printing it twice.
+		return t.Addr + nodePart
+	}
+	return t.Addr + "," + t.IP + nodePart
 }
 
 type Discoverer struct {
-	addrOverride       string
+	addrOverrides      []string
 	nodeName           string
 	k8sClient          kubernetes.Interface
 	k8sServiceName     string
@@ -63,7 +78,16 @@ type Option func(opts *Discoverer)
 
 func WithAddrOverride(addr string) Option {
 	return func(d *Discoverer) {
-		d.addrOverride = addr
+		if addr == "" {
+			return
+		}
+		d.addrOverrides = []string{addr}
+	}
+}
+
+func WithAddrsOverride(addrs []string) Option {
+	return func(d *Discoverer) {
+		d.addrOverrides = addrs
 	}
 }
 
@@ -153,7 +177,7 @@ func (d *Discoverer) CachedTyphaAddrs() []Typha {
 }
 
 func (d *Discoverer) TyphaEnabled() bool {
-	return d.addrOverride != "" || d.k8sServiceName != ""
+	return len(d.addrOverrides) > 0 || d.k8sServiceName != ""
 }
 
 func (d *Discoverer) discoverTyphaAddrs() ([]Typha, error) {
@@ -161,9 +185,13 @@ func (d *Discoverer) discoverTyphaAddrs() ([]Typha, error) {
 		return nil, nil
 	}
 
-	if d.addrOverride != "" {
+	if len(d.addrOverrides) > 0 {
 		// Explicit address; trumps other sources of config.
-		return []Typha{{Addr: d.addrOverride}}, nil
+		var typhas []Typha
+		for _, addr := range d.addrOverrides {
+			typhas = append(typhas, Typha{Addr: addr})
+		}
+		return typhas, nil
 	}
 
 	// If we get here, we need to look up the Typha service using the k8s API.
@@ -251,10 +279,11 @@ type AddressLoader interface {
 }
 
 func NewConnAttemptTracker(d AddressLoader) *ConnectionAttemptTracker {
-	return &ConnectionAttemptTracker{
-		discoverer:           d,
-		previouslyTriedAddrs: set.New[string](),
+	cat := &ConnectionAttemptTracker{
+		discoverer:         d,
+		triedAddrsLastSeen: map[addrDedupeKey]time.Time{},
 	}
+	return cat
 }
 
 // ConnectionAttemptTracker deals with the fact that the list of available Typha instances may change during
@@ -262,65 +291,101 @@ func NewConnAttemptTracker(d AddressLoader) *ConnectionAttemptTracker {
 // and then returns the first entry in the list that has not been returned before.  If the list is static,
 // NextAddr() will effectively just iterate through the static list.
 type ConnectionAttemptTracker struct {
-	discoverer           AddressLoader
-	previouslyTriedAddrs set.Set[string] // set contains output from dedupeKey()
-	allKnownAddrs        []Typha
-}
+	discoverer AddressLoader
+	triedCache bool
 
-var ErrTriedAllAddrs = fmt.Errorf("tried all available discovered addresses")
+	// triedAddrsLastSeen has en entry for each Typha address that has been
+	// tried.  We use presence of an entry to prevent trying the same address
+	// multiple times before we've tried all available addresses.  The timestamp
+	// is used to clean up stale entries; each time we choose an address, we
+	// refresh the timestamp on all the addresses that still exist.  The map is
+	// reset when we run out of addresses to try.
+	triedAddrsLastSeen map[addrDedupeKey]time.Time
+}
 
 func (d *ConnectionAttemptTracker) NextAddr() (Typha, error) {
-	if d.previouslyTriedAddrs.Len() > 0 || len(d.allKnownAddrs) == 0 {
-		// Either the addresses have never been loaded or this is a retry.  Refresh the list of addresses
-		// before we choose. This is important during upgrade to prevent an unlucky calico-node daemon from
-		// loading all the old Typha addresses just before the new ones come online.  In that case we'd
-		// try all the old addresses one by one with a 10s timeout for each address before giving up.
-		if err := d.refreshAddrs(); err != nil {
-			return Typha{}, err
-		}
+	allKnownAddrs, err := d.refreshAddrs()
+	if err != nil {
+		return Typha{}, err
 	}
 
-	return d.pickNextTypha()
+	return d.pickNextTypha(allKnownAddrs), nil
 }
 
-func (d *ConnectionAttemptTracker) refreshAddrs() error {
-	if d.previouslyTriedAddrs.Len() == 0 {
-		// First time, use the cache if available.
-		d.allKnownAddrs = d.discoverer.CachedTyphaAddrs()
-		logrus.WithField("addrs", d.allKnownAddrs).Debug("Using cached typha addresses")
-		if len(d.allKnownAddrs) > 0 {
-			return nil
+func (d *ConnectionAttemptTracker) refreshAddrs() ([]Typha, error) {
+	if !d.triedCache {
+		// Very first time, we expect the discoverer to have a cache of the
+		// addresses it loaded at start-up.  Try that.
+		d.triedCache = true
+		allKnownAddrs := d.discoverer.CachedTyphaAddrs()
+		if len(allKnownAddrs) > 0 {
+			logrus.WithField("addrs", allKnownAddrs).Debug("Using cached typha addresses.")
+			return allKnownAddrs, nil
 		}
+		logrus.Debug("Cache was empty.")
 	}
 
+	// Either cache was empty or this isn't the first time. Refresh the list.
+	// this is important during upgrade so that we can't get unlucky and spend
+	// a long time iterating through all the back-level typhas that are being
+	// shut down.
 	logrus.Debug("Reloading list of Typhas...")
 	addrs, err := d.discoverer.LoadTyphaAddrs()
 	if err != nil {
-		return fmt.Errorf("failed to reload list Typha addresses: %w", err)
+		return nil, fmt.Errorf("failed to reload list Typha addresses: %w", err)
 	}
 	logrus.WithField("addrs", addrs).Debug("New list of Typha instances")
 	if len(addrs) == 0 {
 		logrus.Panic("NextAddr() called but this cluster doesn't use Typha?")
 	}
-	d.allKnownAddrs = addrs
-	return nil
+	return addrs, nil
 }
 
-func (d *ConnectionAttemptTracker) pickNextTypha() (Typha, error) {
-	// Find the next addr that we haven't recorded as already tried.  Note: we don't want to randomise the
-	// choice _here_ because discoverTyphaAddrs and the filter functions already put the typha instances in
-	// preference order.
-	for _, a := range d.allKnownAddrs {
+func (d *ConnectionAttemptTracker) pickNextTypha(allKnownAddrs []Typha) (out Typha) {
+	foundUnusedTypha := false
+
+	// Defensive: make sure we don't leak if typha addresses are churning.
+	d.refreshAndGCLastSeen(allKnownAddrs)
+
+	for _, a := range allKnownAddrs {
 		addrKey := a.dedupeKey()
-		if d.previouslyTriedAddrs.Contains(addrKey) {
+		if _, ok := d.triedAddrsLastSeen[addrKey]; ok {
 			logrus.WithField("key", addrKey).Debug("Already tried this Typha")
 			continue
 		}
-		d.previouslyTriedAddrs.Add(addrKey)
-		logrus.WithField("typha", a).Debug("Found next typha to try.")
-		return a, nil
+		out = a
+		foundUnusedTypha = true
+		break
 	}
-	return Typha{}, ErrTriedAllAddrs
+	if !foundUnusedTypha {
+		// We've tried them all, reset the tracking set so we'll loop again...
+		logrus.Debug("No unused Typha address found. Resetting.")
+		clear(d.triedAddrsLastSeen)
+		// ...starting with the first in the list.
+		out = allKnownAddrs[0]
+	}
+	logrus.WithField("addr", out).Debug("Next typha to try.")
+	d.triedAddrsLastSeen[out.dedupeKey()] = time.Now()
+
+	return
+}
+
+// refreshAndGCLastSeen updates the last-seen times for existing entries in
+// d.triedAddrsLastSeen and cleans up entries that haven't been seen for a
+// long time.
+func (d *ConnectionAttemptTracker) refreshAndGCLastSeen(addrs []Typha) {
+	for _, a := range addrs {
+		addrKey := a.dedupeKey()
+		if _, ok := d.triedAddrsLastSeen[addrKey]; ok {
+			d.triedAddrsLastSeen[addrKey] = time.Now()
+		}
+	}
+	for k, v := range d.triedAddrsLastSeen {
+		if time.Since(v) > 5*time.Minute {
+			logrus.WithField("addr", k).Debug("Removing stale typha address from last seen cache.")
+			delete(d.triedAddrsLastSeen, k)
+		}
+	}
 }
 
 func shuffleInPlace(s []Typha) {
