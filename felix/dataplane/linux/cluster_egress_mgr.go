@@ -15,8 +15,10 @@
 package intdataplane
 
 import (
+	"sort"
 	"strings"
 
+	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 
 	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
@@ -103,12 +105,25 @@ func (m *clusterEgressManager) OnUpdate(msg interface{}) {
 		m.logCxt.WithField("id", msg.Id).Debug("IPAM pool removed")
 		m.handleIPAMUpdates(msg.Id, nil)
 	case *proto.WorkloadEndpointUpdate:
-		if msg.Endpoint.QosControls == nil {
-			return
-		}
 		id := types.ProtoToWorkloadEndpointID(msg.GetId())
 		_, exists := m.qosPolicies[id]
-		if !exists && msg.Endpoint.QosControls.DSCP == 0 {
+		if !exists {
+			if msg.Endpoint.QosControls == nil ||
+				msg.Endpoint.QosControls.DSCP == 0 {
+				return
+			}
+		}
+		var dscp int32
+		if msg.Endpoint.QosControls != nil && msg.Endpoint.QosControls.DSCP != 0 {
+			dscp = msg.Endpoint.QosControls.DSCP
+		}
+		// TODO (mazdak): this needs to be caught earlier
+		if dscp > 255 || dscp < 0 {
+			logrus.Errorf("Invalid dscp")
+		}
+		if dscp == 0 {
+			delete(m.qosPolicies, id)
+			m.qosPolicyDirty = true
 			return
 		}
 		ips := msg.Endpoint.Ipv4Nets
@@ -117,8 +132,8 @@ func (m *clusterEgressManager) OnUpdate(msg interface{}) {
 		}
 		if len(ips) != 0 {
 			m.qosPolicies[id] = qos.Policy{
-				SrcAddrs: strings.Join(ips, ","),
-				DSCP:     uint8(msg.Endpoint.QosControls.DSCP),
+				SrcAddrs: normaliseSourceAddr(ips),
+				DSCP:     uint8(dscp),
 			}
 			m.qosPolicyDirty = true
 		}
@@ -183,10 +198,13 @@ func (m *clusterEgressManager) CompleteDeferredWork() error {
 	if m.qosPolicyDirty {
 		var policies []qos.Policy
 		for _, p := range m.qosPolicies {
-			if p.DSCP != 0 {
-				policies = append(policies, p)
-			}
+			//if p.DSCP != 0 {
+			policies = append(policies, p)
+			//}
 		}
+		sort.Slice(policies, func(i, j int) bool {
+			return policies[i].SrcAddrs < policies[j].SrcAddrs
+		})
 
 		chain := m.ruleRenderer.EgressQoSPolicyChain(policies)
 		m.mangleTable.UpdateChain(chain)
@@ -194,4 +212,13 @@ func (m *clusterEgressManager) CompleteDeferredWork() error {
 	}
 
 	return nil
+}
+
+func normaliseSourceAddr(addrs []string) string {
+	var trimmedSources []string
+	for _, addr := range addrs {
+		parts := strings.Split(addr, "/")
+		trimmedSources = append(trimmedSources, parts[0])
+	}
+	return strings.Join(trimmedSources, ",")
 }

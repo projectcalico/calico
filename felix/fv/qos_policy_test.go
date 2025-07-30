@@ -121,10 +121,10 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ qos policy tests", []apicon
 
 		By("setting the expected DSCP value on egress traffic from one workload leaving the cluster")
 		w[0].WorkloadEndpoint.Spec.QoSControls = &api.QoSControls{
-			DSCP: numorstring.DSCPFromInt(30),
+			DSCP: numorstring.DSCPFromInt(20),
 		}
 		w[0].UpdateInInfra(infra)
-		time.Sleep(time.Minute * 540)
+		//time.Sleep(time.Minute * 540)
 		cc.ResetExpectations()
 		cc.ExpectSome(externalClient, w[0])
 		cc.ExpectNone(externalClient, w[1])
