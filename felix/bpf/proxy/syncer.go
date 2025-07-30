@@ -869,9 +869,7 @@ func (s *Syncer) writeConsistentHashBackends(skey svcKey, sinfo Service, eps []k
 	lut := consistentHash.Generate()
 	s.writeConsistentHashSvcBackends(vip, port, proto, lut)
 	dt := time.Since(n)
-	log.WithFields(log.Fields{
-		"lut": lut,
-	}).Infof("Wrote ConsistentHash-enabled service '%s' backends (%d) in %fs", skey.sname, len(eps), dt.Seconds())
+	log.Infof("Wrote ConsistentHash-enabled service '%s' backends (%d) in %fs", skey.sname, len(eps), dt.Seconds())
 }
 
 func (s *Syncer) writeConsistentHashSvcBackends(vip net.IP, port uint16, protocol uint8, lut []k8sp.Endpoint) {
