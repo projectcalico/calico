@@ -1383,7 +1383,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 					Eventually(func(g Gomega) {
 						_, _, chs := dumpNATMapsAny(family, tc.Felixes[0])
-						g.Expect(chs).To(HaveLen(2 * consistenthash.M))
+						g.Expect(chs).To(HaveLen(consistenthash.M))
 
 					}, "5s").Should(Succeed(), "ConsistentHash backends didn't show up")
 				})
