@@ -23,6 +23,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
+	discoveryv1 "k8s.io/api/discovery/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
@@ -97,11 +98,11 @@ func NewRouteGenerator(c *client) (rg *routeGenerator, err error) {
 	})
 
 	// set up endpoints informer
-	epWatcher := cache.NewListWatchFromClient(client.CoreV1().RESTClient(), "endpoints", "", fields.Everything())
+	epWatcher := cache.NewListWatchFromClient(client.DiscoveryV1().RESTClient(), "endpointslices", "", fields.Everything())
 	epHandler := cache.ResourceEventHandlerFuncs{AddFunc: rg.onEPAdd, UpdateFunc: rg.onEPUpdate, DeleteFunc: rg.onEPDelete}
 	rg.epIndexer, rg.epInformer = cache.NewInformerWithOptions(cache.InformerOptions{
 		ListerWatcher: epWatcher,
-		ObjectType:    &v1.Endpoints{},
+		ObjectType:    &discoveryv1.EndpointSlice{},
 		ResyncPeriod:  0,
 		Handler:       epHandler,
 		Indexers:      cache.Indexers{},
@@ -146,7 +147,7 @@ func (rg *routeGenerator) TriggerResync() {
 }
 
 // getServiceForEndpoints retrieves the corresponding svc for the given ep
-func (rg *routeGenerator) getServiceForEndpoints(ep *v1.Endpoints) (*v1.Service, string) {
+func (rg *routeGenerator) getServiceForEndpoints(ep *discoveryv1.EndpointSlice) (*v1.Service, string) {
 	// get key
 	key, err := cache.MetaNamespaceKeyFunc(ep)
 	if err != nil {
@@ -166,7 +167,7 @@ func (rg *routeGenerator) getServiceForEndpoints(ep *v1.Endpoints) (*v1.Service,
 }
 
 // getEndpointsForService retrieves the corresponding ep for the given svc
-func (rg *routeGenerator) getEndpointsForService(svc *v1.Service) (*v1.Endpoints, string) {
+func (rg *routeGenerator) getEndpointsForService(svc *v1.Service) (*discoveryv1.EndpointSlice, string) {
 	// get key
 	key, err := cache.MetaNamespaceKeyFunc(svc)
 	if err != nil {
@@ -182,12 +183,12 @@ func (rg *routeGenerator) getEndpointsForService(svc *v1.Service) (*v1.Endpoints
 		log.WithField("key", key).Debug("getEndpointsForService: service for endpoint not found, passing")
 		return nil, key
 	}
-	return epIface.(*v1.Endpoints), key
+	return epIface.(*discoveryv1.EndpointSlice), key
 }
 
 // setRouteForSvc handles the main logic to check if a specified service or endpoint
 // should have its route advertised by the node running this code
-func (rg *routeGenerator) setRouteForSvc(svc *v1.Service, ep *v1.Endpoints) {
+func (rg *routeGenerator) setRouteForSvc(svc *v1.Service, ep *discoveryv1.EndpointSlice) {
 	// ensure both are not nil
 	if svc == nil && ep == nil {
 		log.Error("setRouteForSvc: both service and endpoint cannot be nil, passing...")
@@ -440,7 +441,7 @@ func contains(items []string, target string) bool {
 
 // advertiseThisService returns true if this service should be advertised on this node,
 // false otherwise.
-func (rg *routeGenerator) advertiseThisService(svc *v1.Service, ep *v1.Endpoints) bool {
+func (rg *routeGenerator) advertiseThisService(svc *v1.Service, ep *discoveryv1.EndpointSlice) bool {
 	logc := log.WithField("svc", fmt.Sprintf("%s/%s", svc.Namespace, svc.Name))
 
 	// Don't advertise routes if this node is explicitly excluded from load balancers.
@@ -492,12 +493,15 @@ func (rg *routeGenerator) advertiseThisService(svc *v1.Service, ep *v1.Endpoints
 	svcIsIPv6 := isIPv6(svc.Spec.ClusterIP)
 
 	// Otherwise, advertise if node contains at least one endpoint for svc
-	for _, subset := range ep.Subsets {
-		// not interested in subset.NotReadyAddresses
-		for _, address := range subset.Addresses {
-			if address.NodeName != nil && *address.NodeName == rg.nodeName && isIPv6(address.IP) == svcIsIPv6 {
-				logc.Debugf("Advertising local service")
-				return true
+	for _, endpoint := range ep.Endpoints {
+		// Only consider endpoints that are ready and have a NodeName.
+		if endpoint.NodeName != nil && *endpoint.NodeName == rg.nodeName {
+			for _, address := range endpoint.Addresses {
+				logc.Debugf("TEST LOG address %s", address)
+				if isIPv6(address) == svcIsIPv6 {
+					logc.Debugf("Advertising local service")
+					return true
+				}
 			}
 		}
 	}
@@ -603,9 +607,9 @@ func (rg *routeGenerator) onSvcDelete(obj interface{}) {
 
 // onEPAdd is called when a k8s endpoint is created
 func (rg *routeGenerator) onEPAdd(obj interface{}) {
-	ep, ok := obj.(*v1.Endpoints)
+	ep, ok := obj.(*discoveryv1.EndpointSlice)
 	if !ok {
-		log.Warn("onEPAdd: failed to assert type to endpoints, passing")
+		log.Warn("onEPAdd: failed to assert type to endpoint, passing")
 		return
 	}
 	rg.setRouteForSvc(nil, ep)
@@ -613,7 +617,7 @@ func (rg *routeGenerator) onEPAdd(obj interface{}) {
 
 // onEPUpdate is called when a k8s endpoint is updated
 func (rg *routeGenerator) onEPUpdate(_, obj interface{}) {
-	ep, ok := obj.(*v1.Endpoints)
+	ep, ok := obj.(*discoveryv1.EndpointSlice)
 	if !ok {
 		log.Warn("onEPUpdate: failed to assert type to endpoints, passing")
 		return
