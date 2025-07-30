@@ -105,10 +105,10 @@ func AfterReadingAllFlags() {
 	}
 
 	// And log out the values of all config options.
-	logrus.Infof("Running tests with the following user-specified configuration:")
+	logrus.Infof("Running tests with the following configuration:")
 	for _, c := range allConfigOptions {
 		if c.actualValue != "" {
-			logrus.Infof("  %s => %s", c.envVarName, c.actualValue)
+			logrus.Infof("%s => %s", c.envVarName, c.actualValue)
 		}
 	}
 }
