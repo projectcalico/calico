@@ -66,7 +66,7 @@ func WithAWS() any {
 }
 
 // WithExternalNode marks tests that require an external node outside of the base cluster,
-// and additoinal configuration passed to the e2e code in order to run commands on that node.
+// and additional configuration passed to the e2e code in order to run commands on that node.
 func WithExternalNode() any {
 	return framework.WithLabel("ExternalNode")
 }
