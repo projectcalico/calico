@@ -65,7 +65,7 @@ var _ = describe.CalicoDescribe(
 		// - Create a server pod and corresponding service in the main namespace for the test.
 		// - Create a client pod and assert that it can connect to the service.
 		BeforeEach(func() {
-			By(fmt.Sprintf("Creating server pod in namespace %s", f.Namespace))
+			By(fmt.Sprintf("Creating server pod in namespace %s", f.Namespace.Name))
 			server1 = conncheck.NewServer("server", f.Namespace, conncheck.WithServerLabels(map[string]string{"role": "server"}))
 			client1 = conncheck.NewClient("client", f.Namespace)
 			checker.AddServer(server1)

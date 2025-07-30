@@ -14,9 +14,15 @@
 
 package e2ecfg
 
-import "os"
+import (
+	"flag"
+	"os"
+	"strings"
 
-type configType struct {
+	"github.com/sirupsen/logrus"
+)
+
+type configOption struct {
 	envVarName   string
 	helpText     string
 	defaultValue string
@@ -25,25 +31,36 @@ type configType struct {
 	cmdLineValue string
 }
 
+// cliName returns the command line flag name for this config option.
+func (c *configOption) cliName() string {
+	return "calico." + strings.ToLower(strings.ReplaceAll(c.envVarName, "_", "-"))
+}
+
 const (
 	remoteKubeConfig = "REMOTE_KUBECONFIG"
+	logLevel         = "LOG_LEVEL"
 )
 
-var config = map[string]*configType{
+var allConfigOptions = map[string]*configOption{
 	remoteKubeConfig: {
 		envVarName:   remoteKubeConfig,
-		helpText:     "The fully qualified path to the admin kubeconfig file of the remote cluster.",
+		helpText:     "The fully qualified path to the admin kubeconfig file of a remote cluster for federation tests.",
 		defaultValue: "",
+	},
+	logLevel: {
+		envVarName:   logLevel,
+		helpText:     "The log level to use for the tests. Valid values are: panic, fatal, error, warn, info, debug, trace.",
+		defaultValue: "info",
 	},
 }
 
 func RemoteClusterKubeconfig() string {
-	return config[remoteKubeConfig].actualValue
+	return allConfigOptions[remoteKubeConfig].actualValue
 }
 
 func init() {
 	// Load defaults and env variables
-	for _, c := range config {
+	for _, c := range allConfigOptions {
 		if ev, exists := os.LookupEnv(c.envVarName); exists {
 			if ev == "" {
 				c.envValue = "<empty-string>"
@@ -54,11 +71,44 @@ func init() {
 			_ = os.Setenv(c.envVarName, os.ExpandEnv(c.defaultValue))
 		}
 	}
-	for _, c := range config {
+	for _, c := range allConfigOptions {
 		if ev, exists := os.LookupEnv(c.envVarName); exists && ev != "" {
 			c.actualValue = os.ExpandEnv(ev)
 		} else {
 			c.actualValue = os.ExpandEnv(c.defaultValue)
+		}
+	}
+}
+
+func RegisterFlags(flags *flag.FlagSet) {
+	// Register each of the defined config options as a flag.
+	for _, c := range allConfigOptions {
+		flags.StringVar(&c.cmdLineValue, c.cliName(), "", c.helpText)
+	}
+}
+
+func AfterReadingAllFlags() {
+	// Make sure any supplied command line args override defaults and env variables
+	for _, c := range allConfigOptions {
+		if c.cmdLineValue != "" {
+			c.actualValue = os.ExpandEnv(c.cmdLineValue)
+		}
+	}
+	// Set logrus log level based on the LOG_LEVEL environment variable or command line flag.
+	lvl := allConfigOptions[logLevel].actualValue
+	if l, err := logrus.ParseLevel(lvl); lvl != "" && err != nil {
+		logrus.Fatalf("Failed to parse LOG_LEVEL: %v", err)
+	} else if lvl == "" {
+		logrus.SetLevel(logrus.InfoLevel)
+	} else {
+		logrus.SetLevel(l)
+	}
+
+	// And log out the values of all config options.
+	logrus.Infof("Running tests with the following user-specified configuration:")
+	for _, c := range allConfigOptions {
+		if c.actualValue != "" {
+			logrus.Infof("  %s => %s", c.envVarName, c.actualValue)
 		}
 	}
 }

@@ -23,7 +23,7 @@ import (
 const (
 	Alpine        = "docker.io/alpine:3"
 	Porter        = "calico/porter"
-	TestWebserver = "k8s.gcr.io/test-webserver:1.0"
+	TestWebserver = "gcr.io/kubernetes-e2e-test-images/test-webserver:1.0"
 )
 
 // Get client image and powershell command based on windows OS version

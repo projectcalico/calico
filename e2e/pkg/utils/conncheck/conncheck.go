@@ -358,7 +358,7 @@ func (c *connectionTester) runConnection(exp *Expectation, results chan<- connec
 		"output": out,
 		"cmd":    cmd,
 		"err":    err,
-	}).Info("Output from connection attempt.")
+	}).Debug("Output from connection attempt.")
 	result := Success
 	if err != nil {
 		result = Failure

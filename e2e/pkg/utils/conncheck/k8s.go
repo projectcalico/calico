@@ -99,7 +99,7 @@ func CreateServerPodAndServiceX(f *framework.Framework, namespace *v1.Namespace,
 	// Windows 1903 vxlan has an issue on connections between windows node to windows pod.
 	// Turn readiness off if that is the case.
 	if windows.RunningWindowsTest() && windows.DisableReadiness() {
-		logrus.Info("Do not enable readiness check for windows vxlan")
+		logrus.Debug("Do not enable readiness check for windows vxlan")
 		for i := range containers {
 			containers[i].ReadinessProbe = nil
 		}
