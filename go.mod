@@ -373,11 +373,7 @@ require (
 	sigs.k8s.io/structured-merge-diff/v4 v4.5.0 // indirect
 )
 
-require (
-	github.com/go-logr/zapr v1.3.0 // indirect
-	github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.80.1 // indirect
-	gomodules.xyz/jsonpatch/v2 v2.4.0 // indirect
-)
+require github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.80.1 // indirect
 
 replace (
 	github.com/projectcalico/api => ./api
