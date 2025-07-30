@@ -418,6 +418,10 @@ func ModelWorkloadEndpointToProto(ep *model.WorkloadEndpoint, peerData *Endpoint
 			IngressMaxConnections: ep.QoSControls.IngressMaxConnections,
 			EgressMaxConnections:  ep.QoSControls.EgressMaxConnections,
 		}
+
+		if ep.QoSControls.DSCP != nil {
+			qosControls.DSCP = int32(ep.QoSControls.DSCP.ToUint8())
+		}
 	}
 
 	var localBGPPeer *proto.LocalBGPPeer
