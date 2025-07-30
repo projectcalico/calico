@@ -17,6 +17,7 @@ package conncheck
 import (
 	"context"
 	"fmt"
+	"maps"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -89,20 +90,8 @@ func CreateServerPodAndServiceX(f *framework.Framework, namespace *v1.Namespace,
 		})
 	}
 
-	// TODO: Can we remove this now?
-	// Windows 1903 vxlan has an issue on connections between windows node to windows pod.
-	// Turn readiness off if that is the case.
-	if windows.RunningWindowsTest() && windows.DisableReadiness() {
-		logrus.Debug("Do not enable readiness check for windows vxlan")
-		for i := range containers {
-			containers[i].ReadinessProbe = nil
-		}
-	}
-
 	newLabels := make(map[string]string)
-	for k, v := range labels {
-		newLabels[k] = v
-	}
+	maps.Copy(newLabels, labels)
 	newLabels["pod-name"] = podName
 
 	By(fmt.Sprintf("Creating a server pod %s in namespace %s", podName, namespace.Name))

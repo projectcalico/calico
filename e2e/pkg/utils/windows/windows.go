@@ -22,7 +22,6 @@ package windows
 import (
 	"context"
 	"fmt"
-	"os"
 	"strings"
 	"time"
 
@@ -79,11 +78,6 @@ func MaybeUpdateNamespaceForOpenShift(f *framework.Framework, nsName string) {
 			logrus.Infof("Labels on namespace %q updated", ns.Name)
 		}
 	}
-}
-
-// Temporarily disable readiness check for windows cluster if flag is set.
-func DisableReadiness() bool {
-	return os.Getenv("WINDOWS_DISABLE_READINESS") == "true"
 }
 
 // This is a hack for windows to use EndpointIP instead of service's
