@@ -7,25 +7,29 @@
 
 #include "ip_addr.h"
 
-#define DECLARE_TC_GLOBAL_DATA(name, ip_t)	\
-struct name {				\
-	ip_t host_ip;			\
-	__be16 tunnel_mtu;		\
-	__be16 vxlan_port;		\
-	ip_t intf_ip;			\
-	__be32 ext_to_svc_mark;		\
-	__be16 psnat_start;		\
-	__be16 psnat_len;		\
-	ip_t host_tunnel_ip;		\
-	__be32 flags;			\
-	__be16 wg_port;			\
-	__be16 profiling;		\
-	__u32 natin_idx;		\
-	__u32 natout_idx;		\
-	__u32 overlay_tunnel_id;	\
-	__u8 iface_name[16];		\
-	__u32 log_filter_jmp;		\
-	__u32 jumps[40];		\
+#define DECLARE_TC_GLOBAL_DATA(name, ip_t) \
+struct name {                              \
+	ip_t host_ip;                          \
+	__be16 tunnel_mtu;                     \
+	__be16 vxlan_port;                     \
+	ip_t intf_ip;                          \
+	__be32 ext_to_svc_mark;                \
+	__be16 psnat_start;                    \
+	__be16 psnat_len;                      \
+	ip_t host_tunnel_ip;                   \
+	__be32 flags;                          \
+	__be16 wg_port;                        \
+	__be16 profiling;                      \
+	__u32 natin_idx;                       \
+	__u32 natout_idx;                      \
+	__u32 overlay_tunnel_id;               \
+	__u8 iface_name[16];                   \
+	__u32 log_filter_jmp;                  \
+	__u32 jumps[40];                       \
+	__s16 ingress_packet_rate;             \
+	__s16 ingress_packet_burst;            \
+	__s16 egress_packet_rate;              \
+	__s16 egress_packet_burst;             \
 }
 
 DECLARE_TC_GLOBAL_DATA(cali_tc_global_data, ipv6_addr_t);
