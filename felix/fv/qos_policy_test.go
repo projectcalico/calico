@@ -32,17 +32,20 @@ import (
 	"github.com/projectcalico/calico/felix/fv/workload"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	api "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
-	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 )
 
 var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ qos policy tests", []apiconfig.DatastoreType{apiconfig.EtcdV3, apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
+	const (
+		wepPortStr = "8055"
+	)
+
 	var (
-		infra          infrastructure.DatastoreInfra
-		tc             infrastructure.TopologyContainers
-		w              [3]*workload.Workload
-		client         client.Interface
-		externalClient *containers.Container
-		cc             *connectivity.Checker
+		infra        infrastructure.DatastoreInfra
+		tc           infrastructure.TopologyContainers
+		ep1_1, ep2_1 *workload.Workload // Workloads on Felix0
+		ep1_2        *workload.Workload // Workloads on Felix1
+		extClient    *containers.Container
+		cc           *connectivity.Checker
 
 		toExists    bool = true
 		toNotExists bool = false
@@ -58,9 +61,22 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ qos policy tests", []apicon
 		options := infrastructure.DefaultTopologyOptions()
 		options.IPIPMode = apiv3.IPIPModeNever
 		options.FelixLogSeverity = "Debug"
-		tc, client = infrastructure.StartNNodeTopology(3, options, infra)
+		tc, _ = infrastructure.StartNNodeTopology(2, options, infra)
 
-		w, _ = setupIPIPWorkloads(infra, tc, options, client)
+		// Install a default profile that allows all ingress and egress, in the absence of any Policy.
+		infra.AddDefaultAllow()
+
+		// Create workload on host 1 (Felix0).
+		ep1_1 = workload.Run(tc.Felixes[0], "ep1-1", "default", "10.65.0.0", wepPortStr, "tcp")
+		ep1_1.ConfigureInInfra(infra)
+
+		ep2_1 = workload.Run(tc.Felixes[0], "ep2-1", "default", "10.65.1.0", wepPortStr, "tcp")
+		ep2_1.ConfigureInInfra(infra)
+
+		// Create workload on host 2 (Felix1)
+		ep1_2 = workload.Run(tc.Felixes[1], "ep1-2", "default", "10.65.1.1", wepPortStr, "tcp")
+		ep1_2.ConfigureInInfra(infra)
+
 		cc = &connectivity.Checker{}
 
 		// We will use this container to model an external client trying to connect into
@@ -68,7 +84,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ qos policy tests", []apicon
 		extClientOpts := infrastructure.ExtClientOpts{
 			Image: utils.Config.FelixImage,
 		}
-		externalClient = infrastructure.RunExtClientWithOpts("ext-client", extClientOpts)
+		extClient = infrastructure.RunExtClientWithOpts("ext-client1", extClientOpts)
 	})
 
 	AfterEach(func() {
@@ -87,20 +103,19 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ qos policy tests", []apicon
 			}
 		}
 
-		for _, wl := range w {
-			wl.Stop()
-		}
+		ep1_1.Stop()
+		ep2_1.Stop()
+		ep1_2.Stop()
 		tc.Stop()
 		if CurrentGinkgoTestDescription().Failed {
 			infra.DumpErrorData()
 		}
 		infra.Stop()
-		externalClient.Stop()
+		extClient.Stop()
 	})
 
 	It("pepper0 should have expected restriction on the nat outgoing rule", func() {
 		if NFTMode() {
-			// TODO (mazdak) verify the pattern
 			// TODO (mazdak): add ipv6
 			pattern := "ip saddr @cali40all-ipam-pools ip daddr != @cali40all-ipam-pools .* jump mangle-cali-qos-policy"
 			Eventually(func() string {
@@ -117,74 +132,148 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ qos policy tests", []apicon
 	})
 
 	It("pepper1 applying DSCP annotation should result is adding correct rules", func() {
-		dscp20 := numorstring.DSCPFromInt(20)
-		dscp32 := numorstring.DSCPFromInt(32)
+		dscp20 := numorstring.DSCPFromInt(20) // 0x14
+		dscp32 := numorstring.DSCPFromInt(32) // 0x20
+		dscp40 := numorstring.DSCPFromInt(40) // 0x28
+		dscp0 := numorstring.DSCPFromInt(0)   // 0x0
 
 		By("configurging external client to only accept packets with specific DSCP value")
-		externalClient.Exec("ip", "route", "add", w[0].IP, "via", tc.Felixes[0].IP)
-		externalClient.Exec("ip", "route", "add", w[1].IP, "via", tc.Felixes[1].IP)
-		externalClient.Exec("iptables", "-A", "INPUT", "-m", "dscp", "!", "--dscp", "0x14", "-j", "DROP")
+		extClient.Exec("ip", "route", "add", ep1_1.IP, "via", tc.Felixes[0].IP)
+		extClient.Exec("ip", "route", "add", ep2_1.IP, "via", tc.Felixes[0].IP)
+		extClient.Exec("ip", "route", "add", ep1_2.IP, "via", tc.Felixes[1].IP)
+		extClient.Exec("iptables", "-A", "INPUT", "-m", "dscp", "!", "--dscp", "0x14", "-j", "DROP")
 
 		cc.ResetExpectations()
-		cc.ExpectNone(externalClient, w[0])
-		cc.ExpectNone(externalClient, w[1])
+		cc.ExpectNone(extClient, ep1_1)
+		cc.ExpectNone(extClient, ep2_1)
+		cc.ExpectNone(extClient, ep1_2)
 		cc.CheckConnectivity()
 
-		expectQoSPolicy(tc.Felixes[0], "0x14", toNotExists)
-		expectQoSPolicy(tc.Felixes[0], "0x20", toNotExists)
+		expectNoQosPolicy(tc.Felixes[0])
+		expectNoQosPolicy(tc.Felixes[1])
 
 		By("setting the expected DSCP value on egress traffic from one workload leaving the cluster")
-		w[0].WorkloadEndpoint.Spec.QoSControls = &api.QoSControls{
+		ep1_1.WorkloadEndpoint.Spec.QoSControls = &api.QoSControls{
 			DSCP: &dscp20,
 		}
-		w[0].UpdateInInfra(infra)
+		ep1_1.UpdateInInfra(infra)
+
 		cc.ResetExpectations()
-		cc.ExpectSome(externalClient, w[0])
-		cc.ExpectNone(externalClient, w[1])
+		cc.ExpectSome(extClient, ep1_1)
+		cc.ExpectNone(extClient, ep2_1)
+		cc.ExpectNone(extClient, ep1_2)
 		cc.CheckConnectivity()
 
+		expectQoSPolicy(tc.Felixes[0], "0x0", toNotExists)
 		expectQoSPolicy(tc.Felixes[0], "0x14", toExists)
 		expectQoSPolicy(tc.Felixes[0], "0x20", toNotExists)
 
-		By("updating DSCP value on egress traffic from the same workload leaving the cluster")
-		w[0].WorkloadEndpoint.Spec.QoSControls = &api.QoSControls{
+		expectNoQosPolicy(tc.Felixes[1])
+
+		By("setting the arbitrary DSCP values on other workloads")
+		ep2_1.WorkloadEndpoint.Spec.QoSControls = &api.QoSControls{
+			DSCP: &dscp0,
+		}
+		ep2_1.UpdateInInfra(infra)
+
+		ep1_2.WorkloadEndpoint.Spec.QoSControls = &api.QoSControls{
+			DSCP: &dscp40,
+		}
+		ep1_2.UpdateInInfra(infra)
+
+		cc.ResetExpectations()
+		cc.ExpectSome(extClient, ep1_1)
+		cc.ExpectNone(extClient, ep2_1)
+		cc.ExpectNone(extClient, ep1_2)
+		cc.CheckConnectivity()
+
+		expectQoSPolicy(tc.Felixes[0], "0x0", toExists)
+		expectQoSPolicy(tc.Felixes[0], "0x14", toExists)
+		expectQoSPolicy(tc.Felixes[0], "0x20", toNotExists)
+
+		expectQoSPolicy(tc.Felixes[1], "0x14", toNotExists)
+		expectQoSPolicy(tc.Felixes[1], "0x28", toExists)
+
+		By("updating DSCP values for some of workloads")
+		ep1_1.WorkloadEndpoint.Spec.QoSControls = &api.QoSControls{
 			DSCP: &dscp32,
 		}
-		w[0].UpdateInInfra(infra)
-		cc.ResetExpectations()
-		cc.ExpectNone(externalClient, w[0])
-		cc.ExpectNone(externalClient, w[1])
-		cc.CheckConnectivity()
+		ep1_1.UpdateInInfra(infra)
 
-		expectQoSPolicy(tc.Felixes[0], "0x14", false)
-		expectQoSPolicy(tc.Felixes[0], "0x20", true)
-
-		By("reverting the expected DSCP on the same workload to the expected value")
-		w[0].WorkloadEndpoint.Spec.QoSControls = &api.QoSControls{
+		ep1_2.WorkloadEndpoint.Spec.QoSControls = &api.QoSControls{
 			DSCP: &dscp20,
 		}
-		w[0].UpdateInInfra(infra)
-		cc.ResetExpectations()
-		cc.ExpectSome(externalClient, w[0])
-		cc.ExpectNone(externalClient, w[1])
-		cc.CheckConnectivity()
-
-		expectQoSPolicy(tc.Felixes[0], "0x14", true)
-		expectQoSPolicy(tc.Felixes[0], "0x20", false)
-
-		By("resetting DSCP value on egress traffic from that workload leaving the cluster")
-		w[0].WorkloadEndpoint.Spec.QoSControls = &api.QoSControls{}
-		w[0].UpdateInInfra(infra)
+		ep1_2.UpdateInInfra(infra)
 
 		cc.ResetExpectations()
-		cc.ExpectNone(externalClient, w[0])
-		cc.ExpectNone(externalClient, w[1])
+		cc.ExpectNone(extClient, ep1_1)
+		cc.ExpectNone(extClient, ep2_1)
+		cc.ExpectSome(extClient, ep1_2)
 		cc.CheckConnectivity()
 
-		expectQoSPolicy(tc.Felixes[0], "0x14", false)
-		expectQoSPolicy(tc.Felixes[0], "0x20", false)
+		expectQoSPolicy(tc.Felixes[0], "0x0", toExists)
+		expectQoSPolicy(tc.Felixes[0], "0x14", toNotExists)
+		expectQoSPolicy(tc.Felixes[0], "0x20", toExists)
+
+		expectQoSPolicy(tc.Felixes[1], "0x14", toExists)
+		expectQoSPolicy(tc.Felixes[1], "0x28", toNotExists)
+
+		By("reverting the expected DSCP on the original workload on felix0 to the expected value")
+		ep1_1.WorkloadEndpoint.Spec.QoSControls = &api.QoSControls{
+			DSCP: &dscp20,
+		}
+		ep1_1.UpdateInInfra(infra)
+
+		cc.ResetExpectations()
+		cc.ExpectSome(extClient, ep1_1)
+		cc.ExpectNone(extClient, ep2_1)
+		cc.ExpectSome(extClient, ep1_2)
+		cc.CheckConnectivity()
+
+		expectQoSPolicy(tc.Felixes[0], "0x0", toExists)
+		expectQoSPolicy(tc.Felixes[0], "0x14", toExists)
+		expectQoSPolicy(tc.Felixes[0], "0x28", toNotExists)
+
+		expectQoSPolicy(tc.Felixes[1], "0x14", toExists)
+		expectQoSPolicy(tc.Felixes[1], "0x28", toNotExists)
+
+		By("resetting DSCP value on some workloads")
+		ep2_1.WorkloadEndpoint.Spec.QoSControls = &api.QoSControls{}
+		ep2_1.UpdateInInfra(infra)
+
+		ep1_2.WorkloadEndpoint.Spec.QoSControls = &api.QoSControls{}
+		ep1_2.UpdateInInfra(infra)
+
+		cc.ResetExpectations()
+		cc.ExpectSome(extClient, ep1_1)
+		cc.ExpectNone(extClient, ep2_1)
+		cc.ExpectNone(extClient, ep1_2)
+		cc.CheckConnectivity()
+
+		expectQoSPolicy(tc.Felixes[0], "0x0", toNotExists)
+		expectQoSPolicy(tc.Felixes[0], "0x14", toExists)
+		expectQoSPolicy(tc.Felixes[0], "0x28", toNotExists)
+
+		expectNoQosPolicy(tc.Felixes[1])
+
+		By("stopping the last workload")
+		ep1_1.Stop()
+		ep1_1.RemoveFromInfra(infra)
+
+		cc.ResetExpectations()
+		cc.ExpectNone(extClient, ep1_1)
+		cc.ExpectNone(extClient, ep2_1)
+		cc.ExpectNone(extClient, ep1_2)
+		cc.CheckConnectivity()
+
+		expectNoQosPolicy(tc.Felixes[0])
+		expectNoQosPolicy(tc.Felixes[1])
 	})
 })
+
+func expectNoQosPolicy(felix *infrastructure.Felix) {
+	expectQoSPolicy(felix, "", false)
+}
 
 func expectQoSPolicy(felix *infrastructure.Felix, dscp string, expectToExists bool) {
 	var (
@@ -192,7 +281,7 @@ func expectQoSPolicy(felix *infrastructure.Felix, dscp string, expectToExists bo
 		expectedStr string
 	)
 	if NFTMode() {
-		cmd = []string{"nft", "list", "chain", "ip", "calico", "mangle-cali-qos-policy"}
+		cmd = []string{"nft", "-n", "list", "chain", "ip", "calico", "mangle-cali-qos-policy"}
 		expectedStr = fmt.Sprintf("ip dscp set %v", dscp)
 	} else {
 		cmd = []string{"iptables-save", "-t", "mangle"}

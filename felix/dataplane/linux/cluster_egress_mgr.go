@@ -164,7 +164,7 @@ func (m *clusterEgressManager) handleWlEndpointUpdates(wlID *proto.WorkloadEndpo
 	dscp := msg.Endpoint.QosPolicies[0].Dscp
 
 	// This situation must be handled earlier.
-	if dscp > 255 || dscp < 0 {
+	if dscp > 63 || dscp < 0 {
 		logrus.WithField("id", id).Panicf("Invalid DSCP value %v", dscp)
 	}
 	ips := msg.Endpoint.Ipv4Nets
