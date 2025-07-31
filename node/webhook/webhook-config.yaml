@@ -1,0 +1,89 @@
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  name: "api.projectcalico.org"
+webhooks:
+- name: "api.projectcalico.org"
+  rules:
+  - apiGroups:   ["projectcalico.org"]
+    apiVersions: ["v3"]
+    operations:  ["CREATE", "UPDATE", "DELETE"]
+    resources:   ["*"]
+    scope:       "Cluster"
+  - apiGroups:   ["projectcalico.org"]
+    apiVersions: ["v3"]
+    operations:  ["CREATE", "UPDATE", "DELETE"]
+    resources:   ["*"]
+    scope:       "Namespaced"
+  clientConfig:
+    service:
+      namespace: "calico-system"
+      name: "validation"
+    caBundle: "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUdFVENDQS9tZ0F3SUJBZ0lVQVpTNCtLWXlkakNrdnRPYVRCbUxDeVRFN1JNd0RRWUpLb1pJaHZjTkFRRUwKQlFBd2ZURUxNQWtHQTFVRUJoTUNUa3d4RlRBVEJnTlZCQWdNREZwMWFXUWdTRzlzYkdGdVpERVNNQkFHQTFVRQpCd3dKVW05MGRHVnlaR0Z0TVJJd0VBWURWUVFLREFsQlEwMUZJRU52Y25BeEVEQU9CZ05WQkFzTUIwbFVJRVJsCmNIUXhIVEFiQmdOVkJBTU1GSFpoYkdsa1lYUnBiMjR1ZEdsblpYSmhMbWx2TUI0WERUSTFNRGN3TWpJeE5EVTEKTlZvWERUSTJNRFl5TXpJeE5EVTFOVm93ZlRFTE1Ba0dBMVVFQmhNQ1Rrd3hGVEFUQmdOVkJBZ01ERnAxYVdRZwpTRzlzYkdGdVpERVNNQkFHQTFVRUJ3d0pVbTkwZEdWeVpHRnRNUkl3RUFZRFZRUUtEQWxCUTAxRklFTnZjbkF4CkVEQU9CZ05WQkFzTUIwbFVJRVJsY0hReEhUQWJCZ05WQkFNTUZIWmhiR2xrWVhScGIyNHVkR2xuWlhKaExtbHYKTUlJQ0lqQU5CZ2txaGtpRzl3MEJBUUVGQUFPQ0FnOEFNSUlDQ2dLQ0FnRUFzQzc5dG9RMVM3d1JhVUdldzRIKwprT2FmZml4Y000YnJJUk5HM3RucG1jK3gvTENIUkIrdVZkeVpCSGZLaHZDaWsyd0tFVWxDRWg2YTBVcS9OTUJyCmVIUzdKSW0wTGg0TnNXSUU0Nm1hampYb0gwNDBFbVJCUkRvTW1KOEp4enFlek1WSHp6aGNwcXhjM2JaU3plcXEKUFh3cUpodE82Nnk2bTVsb1A5WGFneTVweEh0UURIZmk4cFN1RkxTTVJPcHRhb2JmK0JCa3pKUkJXcnlGZjZSVgp5bW5pRG85YXMzM2VHd0NkRU9DUVZZNGgvWHhZUUNnWGoyU241RXpHcGJsNkQvb1diY242Qk93WXVxcnd0NC9JCmJNYnMrQkR3RmFuUm1HeDhQMmZnR0s0Uy9NMEhXcTMwcTh6eGZTbXdLMHlUUUNSQVRDR0RyODlJTkpOYWpaWHgKS3JHdVZMV2hmakFTUTBrTFo5ZTNwRDdNcEZKL2VBdDd1dU1QcXkzSkc0THBlbG1vMkNsQjdicVdKV3BsU3JGLwpmWFNkV3hoQm9jbkdMOWcrUEhiU0dHQ3JGRGRJT0RlWDE2dG9KeW9WZnpnck1SOEtTbVVMMkcwYlFsRmtXNW9RCkNrWDhyYnBDQzBpd0JPZDY1UlMzN2w3bG02S0k2L2dPYXhBU29GWFJwa3A4NnBMWDZqVE1HelZ5VllUSWF3TVQKRHNneWNReUNWaFBJNHlJTzA4by9uelVuVWtHQXJmSFh3VEdDNFhaMUNTMTlUQmM4bkJJNkVCbmpRMksrVnpMQwpiZmU1dlRZS3ZPMnd3NzBlMWhZZGNQcTF0ZHBOU3NiMmxsaUFyMVR2d2N2dXRtU3p4WGRja3RKMFdPcWlYaEVICkJVNE12ZFFQdmhHVDhkVmI5T000S25rQ0F3RUFBYU9CaURDQmhUQWRCZ05WSFE0RUZnUVVGV3dSanc3OEphVUMKQjg1aTI5Tm52eDA0b2tzd0h3WURWUjBqQkJnd0ZvQVVGV3dSanc3OEphVUNCODVpMjlObnZ4MDRva3N3RHdZRApWUjBUQVFIL0JBVXdBd0VCL3pBeUJnTlZIUkVFS3pBcGdnbHNiMk5oYkdodmMzU0NISFpoYkdsa1lYUnBiMjR1ClkyRnNhV052TFhONWMzUmxiUzV6ZG1Nd0RRWUpLb1pJaHZjTkFRRUxCUUFEZ2dJQkFEeUN4dkswdVBNZjJXYzEKcVVsT3JUdGJPL2J1L2pBTmhEMjdNdjFSL1JuNENJUUpEcks4bjAzYytkUjQxMkJSQXRocWZmOG1namZybTNDNQpyMXUyblFPcWlTNHoyTEcvbDBuQVF0WHdhQjRuakpZVEdDN0JhS2dNWXZQSDZUYnRVMXJ0b0NvQW9TbWhJSC9GCmxqWksrbGtDWW91cllsRE9OQ3ByN3VJS0JWYmt5ODNNOGdsWERUNUEydzJQcWdMT2xnRGhFMmp5NVhBQlNtMzQKdVN6TUw5M095OFI4V2FlRFR6NzVjd3JHdnd6NThDU0JGN1hjbzJqY0JtVDJuVjZ2K0lBUEpwYTAveitVejM1LwpodTQzM1RMOFltWkN0eWVKN3lCSnZuL25Pelo1YkxoMmpkbEN3ZmJaaUVQa1ZFL2RSbDI2MUo1L0V0U1hxZUFLCnVETGd2YWJsOCsrcnVWd3htb1gxY2E1UTV4Qk5ZdHIrSjZTRlNoQ0JBN216N2pNTE5BWkRqQVU3TE9uQ3Nod3UKOGk4T2pZOE4rV2c4cCt1MU5ucjFTUUFLN0psTW4va2FnWHA5M1Z2VStHcmJ2MXZEL3YrK21zZHpDNFM2ZU9rUgpYaytENXVBTUdmdnFZcmRsV2ppNGFabWUxbVlIdUh1VCtzQWYwcWU2aUIydnpSTVlSTU8vZXZJN1NxMlVkaCtFCmoyS010SlpKUHRGY0hQdUNicWdSR1BuZnNocTJOdVlWT1NUY1ErV2pRekZxYUlxUlZYUVZjdjlhNCs5VUhtNGoKWlFMdzFkcHRtRUpFVThCNWhET0x5VkNFQU9hbnVzQjZOVUYxeWFDalJZTDF4WnVFaG9iSi9kTTkvdzNpRm0yNwo3VE12d3FML1hLQlRDc2wranB4c0c1ekhUUmxwCi0tLS0tRU5EIENFUlRJRklDQVRFLS0tLS0K"
+  admissionReviewVersions: ["v1"]
+  sideEffects: None
+  timeoutSeconds: 5
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: validation
+  namespace: calico-system
+spec:
+  internalTrafficPolicy: Cluster
+  ports:
+  - port: 443
+    protocol: TCP
+    targetPort: 443
+  type: ClusterIP
+  selector:
+    k8s-app: validation
+
+---
+
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    k8s-app: validation
+  name: validation
+  namespace: calico-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      k8s-app: validation
+  template:
+    metadata:
+      labels:
+        k8s-app: validation
+      name: validation
+    spec:
+      hostNetwork: true
+      containers:
+      - image: caseydavenport/webhook:latest
+        imagePullPolicy: Always
+        name: validation
+        args:
+          - webhook
+          - --tls-cert-file=/key-pair/cert.pem
+          - --tls-private-key-file=/key-pair/key.pem
+        volumeMounts:
+        - mountPath: /key-pair
+          name: key-pair
+          readOnly: true
+      tolerations:
+      - effect: NoSchedule
+        key: node-role.kubernetes.io/master
+      - effect: NoSchedule
+        key: node-role.kubernetes.io/control-plane
+      - key: CriticalAddonsOnly
+        operator: Exists
+      volumes:
+      - name: key-pair
+        secret:
+          defaultMode: 420
+          secretName: validation-certs
