@@ -20,8 +20,8 @@ GHR_VERSION=v0.17.0
 GITHUB_CLI_VERSION=2.65.0
 GOTESTSUM_VERSION=v1.12.2
 HELM_VERSION=v3.11.3
-KINDEST_NODE_VERSION=v1.31.4
-KIND_VERSION=v0.25.0
+KINDEST_NODE_VERSION=v1.33.1
+KIND_VERSION=v0.29.0
 
 # Configuration for Semaphore/Github integration.  This needs to be set
 # differently for a forked repo.
