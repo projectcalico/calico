@@ -6450,7 +6450,7 @@ func schema_pkg_apis_projectcalico_v3_Template(ref common.ReferenceCallback) com
 					},
 					"interfaceCIDRs": {
 						SchemaProps: spec.SchemaProps{
-							Description: "InterfaceCIDRs contains a list of CIRDs used for matching nodeIPs to the AutoHostEndpoint",
+							Description: "InterfaceCIDRs contains a list of CIDRs used for matching nodeIPs to the AutoHostEndpoint. If specified, only addresses within these CIDRs will be included in the expected IPs. At least one of InterfaceCIDRs and InterfaceSelector must be specified.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -6461,6 +6461,13 @@ func schema_pkg_apis_projectcalico_v3_Template(ref common.ReferenceCallback) com
 									},
 								},
 							},
+						},
+					},
+					"interfaceSelector": {
+						SchemaProps: spec.SchemaProps{
+							Description: "InterfaceSelector contains a regex string to match Node interface names. If specified, a HostEndpoint will be created for each matching interface on each selected node. At least one of InterfaceCIDRs and InterfaceSelector must be specified.",
+							Type:        []string{"string"},
+							Format:      "",
 						},
 					},
 					"labels": {
