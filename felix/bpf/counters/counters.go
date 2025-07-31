@@ -27,7 +27,7 @@ import (
 )
 
 const (
-	MaxCounterNumber    int = 22
+	MaxCounterNumber    int = 23
 	counterMapKeySize   int = 8
 	counterMapValueSize int = 8
 )
@@ -81,6 +81,7 @@ const (
 	RedirectPeer
 	DroppedFragWait
 	DroppedFragReorder
+	DroppedQoS
 )
 
 type Description struct {
@@ -194,6 +195,10 @@ var descriptions DescList = DescList{
 	{
 		Counter:  DroppedFragReorder,
 		Category: "Dropped", Caption: "fragment out of order within host",
+	},
+	{
+		Counter:  DroppedQoS,
+		Category: "Dropped", Caption: "QoS control limit",
 	},
 }
 
