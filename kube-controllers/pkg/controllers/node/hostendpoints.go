@@ -422,25 +422,25 @@ func isAutoHostEndpoint(h *api.HostEndpoint) bool {
 func generateAutoHostEndpointName(nodeName string, templateName string, interfaceName string) (string, error) {
 	if templateName == "" && interfaceName == "" {
 		// Default HostEndpoint name
-		return validateName(fmt.Sprintf("%s-%s", nodeName, hostEndpointNameSuffix))
+		return hashNameIfTooLong(fmt.Sprintf("%s-%s", nodeName, hostEndpointNameSuffix))
 	}
 
 	if templateName != "" && interfaceName == "" {
 		// Template HostEndpoint name
-		return validateName(fmt.Sprintf("%s-%s-%s", nodeName, templateName, hostEndpointNameSuffix))
+		return hashNameIfTooLong(fmt.Sprintf("%s-%s-%s", nodeName, templateName, hostEndpointNameSuffix))
 	}
 
 	if templateName != "" && interfaceName != "" {
 		// Template HostEndpoint with interfaceName name
-		return validateName(fmt.Sprintf("%s-%s-%s-%s", nodeName, templateName, interfaceName, hostEndpointNameSuffix))
+		return hashNameIfTooLong(fmt.Sprintf("%s-%s-%s-%s", nodeName, templateName, interfaceName, hostEndpointNameSuffix))
 	}
 
 	return "", fmt.Errorf("insufficient HostEndpoint identifiers supplied")
 }
 
-// validateName ensures the given name does not exceed the DNS1123 (253 characters) subdomain length limit.
+// hashNameIfTooLong ensures the given name does not exceed the DNS1123 (253 characters) subdomain length limit.
 // If the name is too long, it generates a hash-based name that fits the limit.
-func validateName(name string) (string, error) {
+func hashNameIfTooLong(name string) (string, error) {
 	if len(name) <= validation.DNS1123SubdomainMaxLength {
 		return name, nil
 	}

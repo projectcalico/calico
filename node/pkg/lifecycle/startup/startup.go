@@ -28,6 +28,7 @@ import (
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 	log "github.com/sirupsen/logrus"
+	"golang.org/x/exp/slices"
 	v1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -582,6 +583,11 @@ func configureIPsAndSubnets(node *libapi.Node, k8sNode *v1.Node, getInterfaces f
 			return false, err
 		}
 	}
+
+	// Sort the interfaces by name so that we have a consistent order on each run
+	slices.SortStableFunc(interfaces, func(i, j autodetection.Interface) int {
+		return strings.Compare(i.Name, j.Name)
+	})
 
 	var nodeInterfaces []libapi.NodeInterface
 	for _, iface := range interfaces {

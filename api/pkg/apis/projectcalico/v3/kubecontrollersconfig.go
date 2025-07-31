@@ -129,7 +129,7 @@ type Template struct {
 	// +kubebuilder:validation:MaxLength=253
 	GenerateName string `json:"generateName,omitempty" validate:"omitempty,name"`
 
-	// InterfaceCIDRs contains a list of CIRDs used for matching nodeIPs to the AutoHostEndpoint.
+	// InterfaceCIDRs contains a list of CIDRs used for matching nodeIPs to the AutoHostEndpoint.
 	// If specified, only addresses within these CIDRs will be included in the expected IPs.
 	// At least one of InterfaceCIDRs and InterfaceSelector must be specified.
 	InterfaceCIDRs []string `json:"interfaceCIDRs,omitempty" validate:"cidrs"`
