@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -28,6 +28,7 @@ import (
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 	log "github.com/sirupsen/logrus"
+	"golang.org/x/exp/slices"
 	v1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -258,8 +259,8 @@ func configureAndCheckIPAddressSubnets(ctx context.Context, cli client.Interface
 		return false
 	}
 	// Configure and verify the node IP addresses and subnets.
-	checkConflicts, err := configureIPsAndSubnets(node, k8sNode, func(incl []string, excl []string, version int) ([]autodetection.Interface, error) {
-		return autodetection.GetInterfaces(net.Interfaces, incl, excl, version)
+	checkConflicts, err := configureIPsAndSubnets(node, k8sNode, func(incl []string, excl []string, version ...int) ([]autodetection.Interface, error) {
+		return autodetection.GetInterfaces(net.Interfaces, incl, excl, version...)
 	})
 	if err != nil {
 		// If this is auto-detection error, do a cleanup before returning
@@ -484,7 +485,7 @@ func getNode(ctx context.Context, client client.Interface, nodeName string) *lib
 
 // configureIPsAndSubnets updates the supplied node resource with IP and Subnet
 // information to use for BGP.  This returns true if we detect a change in Node IP address.
-func configureIPsAndSubnets(node *libapi.Node, k8sNode *v1.Node, getInterfaces func([]string, []string, int) ([]autodetection.Interface, error)) (bool, error) {
+func configureIPsAndSubnets(node *libapi.Node, k8sNode *v1.Node, getInterfaces func([]string, []string, ...int) ([]autodetection.Interface, error)) (bool, error) {
 	// If the node resource currently has no BGP configuration, add an empty
 	// set of configuration as it makes the processing below easier, and we
 	// must end up configuring some BGP fields before we complete.
@@ -495,6 +496,7 @@ func configureIPsAndSubnets(node *libapi.Node, k8sNode *v1.Node, getInterfaces f
 
 	oldIpv4 := node.Spec.BGP.IPv4Address
 	oldIpv6 := node.Spec.BGP.IPv6Address
+	oldInterfaces := node.Spec.Interfaces
 
 	// Determine the autodetection type for IPv4 and IPv6.  Note that we
 	// only autodetect IPv4 when it has not been specified.  IPv6 must be
@@ -563,6 +565,46 @@ func configureIPsAndSubnets(node *libapi.Node, k8sNode *v1.Node, getInterfaces f
 		validateIP(node.Spec.BGP.IPv6Address)
 	}
 
+	var interfaces []autodetection.Interface
+	var err error
+	if (ipv4Env != "none" && ipv4Env != "") && (ipv6Env == "none" || ipv6Env == "") {
+		interfaces, err = getInterfaces(nil, autodetection.DEFAULT_INTERFACES_TO_EXCLUDE, 4)
+		if err != nil {
+			return false, err
+		}
+	} else if (ipv6Env != "none" && ipv6Env != "") && (ipv4Env == "none" || ipv4Env == "") {
+		interfaces, err = getInterfaces(nil, autodetection.DEFAULT_INTERFACES_TO_EXCLUDE, 6)
+		if err != nil {
+			return false, err
+		}
+	} else if (ipv4Env != "none" && ipv4Env != "") && (ipv6Env != "none" && ipv6Env != "") {
+		interfaces, err = getInterfaces(nil, autodetection.DEFAULT_INTERFACES_TO_EXCLUDE, 4, 6)
+		if err != nil {
+			return false, err
+		}
+	}
+
+	// Sort the interfaces by name so that we have a consistent order on each run
+	slices.SortStableFunc(interfaces, func(i, j autodetection.Interface) int {
+		return strings.Compare(i.Name, j.Name)
+	})
+
+	var nodeInterfaces []libapi.NodeInterface
+	for _, iface := range interfaces {
+		nodeInterface := libapi.NodeInterface{
+			Name: iface.Name,
+		}
+		for _, addr := range iface.Cidrs {
+			ip, _, err := cnet.ParseCIDR(addr.String())
+			if err != nil {
+				return false, err
+			}
+			nodeInterface.Addresses = append(nodeInterface.Addresses, ip.String())
+		}
+		nodeInterfaces = append(nodeInterfaces, nodeInterface)
+	}
+	node.Spec.Interfaces = nodeInterfaces
+
 	// Detect if we've seen the IP address change, and flag that we need to check for conflicting Nodes
 	if node.Spec.BGP.IPv4Address != oldIpv4 {
 		log.Info("Node IPv4 changed, will check for conflicts")
@@ -570,6 +612,11 @@ func configureIPsAndSubnets(node *libapi.Node, k8sNode *v1.Node, getInterfaces f
 	}
 	if node.Spec.BGP.IPv6Address != oldIpv6 {
 		log.Info("Node IPv6 changed, will check for conflicts")
+		return true, nil
+	}
+
+	if !reflect.DeepEqual(node.Spec.Interfaces, oldInterfaces) {
+		log.Info("Node interfaces changed")
 		return true, nil
 	}
 
