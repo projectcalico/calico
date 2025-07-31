@@ -76,15 +76,9 @@ echo "Install calicoctl as a pod"
 ${kubectl} apply -f $TEST_DIR/infra/calicoctl.yaml
 echo
 
-echo "Wait for Calico to be ready..."
-for app in calico-node calico-kube-controllers calico-apiserver calico-typha whisker goldmane; do
-  wait_pod_ready -n calico-system -l k8s-app="$app"
-done
-wait_pod_ready -l k8s-app=kube-dns -n kube-system
-wait_pod_ready calicoctl -n kube-system
-
 echo "Wait for tigera status to be ready"
-if ! ${kubectl} wait --for=condition=Available tigerastatus/calico; then
+if ! ( ${kubectl} wait --for=create --timeout=60s tigerastatus/calico &&
+       ${kubectl} wait --for=condition=Available --timeout=300s tigerastatus/calico ); then
   echo "TigeraStatus for Calico is down, collecting diags..."
   ${kubectl} get -o yaml tigerastatus/calico
   echo "Logs for tigera-operator:"
@@ -94,10 +88,16 @@ if ! ${kubectl} wait --for=condition=Available tigerastatus/calico; then
   ${kubectl} describe po -n calico-system
   exit 1
 fi
-if ! ${kubectl} wait --for=condition=Available tigerastatus/apiserver; then
+if ! ${kubectl} wait --for=condition=Available --timeout=300s tigerastatus/apiserver; then
   ${kubectl} get -o yaml tigerastatus/apiserver
   exit 1
 fi
+
+echo "Wait for Calico to be ready..."
+wait_pod_ready -n calico-system -l k8s-app
+wait_pod_ready -l k8s-app=kube-dns -n kube-system
+wait_pod_ready calicoctl -n kube-system
+
 echo "Calico is running."
 echo
 
