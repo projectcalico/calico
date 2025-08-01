@@ -1,0 +1,51 @@
+version: v1.0
+
+# This file is run when PRs are made against this directory
+name: e2e pipeline validation
+
+agent:
+  machine:
+    type: c1-standard-1
+    os_image: ubuntu2204
+
+execution_time_limit:
+  minutes: 2
+
+global_job_config:
+  env_vars:
+  # standard env vars to keep for all jobs
+    - name: SEMAPHORE_ARTIFACT_EXPIRY
+      value: 1w
+    - name: FUNCTIONAL_AREA
+      value: "semaphore.yml"
+
+blocks:
+  - name: validations
+    run:
+      when: "change_in(['/.semaphore/end-to-end/'])"
+    dependencies: []
+    task:
+      jobs:
+        - name: Test Pipeline files are valid yaml
+          commands:
+            - checkout
+            - sudo wget https://github.com/mikefarah/yq/releases/download/v4.11.0/yq_linux_amd64 -O /usr/bin/yq && sudo chmod +x /usr/bin/yq
+            - |
+              echo [INFO] Checking pipeline file syntax
+              FAILED="false"
+              for file in $(ls -1 .semaphore/end-to-end/pipelines); do
+                if bash -c "cat .semaphore/end-to-end/pipelines/$file | yq eval > /dev/null"; then
+                  echo $file OK
+                else
+                  echo $file FAILED validation
+                  FAILED="true"
+                fi
+              done
+              if [ $FAILED = "true" ]; then
+                exit 1
+              fi
+            - |
+              echo [INFO] Checking *.sh file syntax
+              # SC2148 is ignored because ../scripts/global_prologue.sh isn't actually a proper shell script
+              # SC2155 is ignored because ../scripts/global_prologue.sh isn't actually a proper shell script and we need commands on a single line.
+              find .semaphore/end-to-end/scripts -iname "*.sh" | xargs -I {} docker run --rm -v "$PWD:/mnt" koalaman/shellcheck:stable --severity=warning -e SC2148 -e SC2155 {}
