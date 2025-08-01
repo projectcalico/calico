@@ -18,6 +18,7 @@ package fv_test
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo"
@@ -43,12 +44,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ qos policy tests", []apicon
 		infra        infrastructure.DatastoreInfra
 		tc           infrastructure.TopologyContainers
 		ep1_1, ep2_1 *workload.Workload // Workloads on Felix0
-		ep1_2, ep2_2 *workload.Workload // Workloads on Felix1
+		ep1_2, ep2_2 *workload.Workload // Dual stack workloads on Felix1
 		extClient    *containers.Container
 		cc           *connectivity.Checker
-
-		toExists    bool = true
-		toNotExists bool = false
 	)
 
 	BeforeEach(func() {
@@ -167,10 +165,10 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ qos policy tests", []apicon
 	})
 
 	It("pepper1 applying DSCP annotation should result is adding correct rules", func() {
+		dscp0 := numorstring.DSCPFromInt(0)   // 0x0
 		dscp20 := numorstring.DSCPFromInt(20) // 0x14
 		dscp32 := numorstring.DSCPFromInt(32) // 0x20
 		dscp40 := numorstring.DSCPFromInt(40) // 0x28
-		dscp0 := numorstring.DSCPFromInt(0)   // 0x0
 
 		By("configurging external client to only accept packets with specific DSCP value")
 		extClient.Exec("ip", "route", "add", ep1_1.IP, "via", tc.Felixes[0].IP)
@@ -181,7 +179,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ qos policy tests", []apicon
 		extClient.Exec("ip", "-6", "route", "add", ep1_2.IP6, "via", tc.Felixes[1].IPv6)
 		extClient.Exec("ip", "-6", "route", "add", ep2_2.IP6, "via", tc.Felixes[1].IPv6)
 
-		// Configure external client to only accept ipv6 packets with 0x28 DSCP value. ICMPv6 needs to be allowed to
+		// Configure external client to only accept ipv6 packets with 0x28 DSCP value. ICMPv6 needs to be allowed
 		// regardless for neighbor discovery.
 		extClient.Exec("ip6tables", "-A", "INPUT", "-p", "ipv6-icmp", "-j", "ACCEPT")
 		extClient.Exec("ip6tables", "-A", "INPUT", "-m", "dscp", "!", "--dscp", "0x28", "-j", "DROP")
@@ -195,8 +193,8 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ qos policy tests", []apicon
 		cc.Expect(connectivity.None, extClient, ep2_2, ccOpts)
 		cc.CheckConnectivity()
 
-		expectNoQosPolicy(tc.Felixes[0])
-		expectNoQosPolicy(tc.Felixes[1])
+		verifyQoSPolicies(tc.Felixes[0], nil, nil)
+		verifyQoSPolicies(tc.Felixes[1], nil, nil)
 
 		By("setting the expected DSCP value on egress traffic from one workload leaving the cluster")
 		ep1_1.WorkloadEndpoint.Spec.QoSControls = &api.QoSControls{
@@ -217,12 +215,8 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ qos policy tests", []apicon
 		cc.Expect(connectivity.Some, extClient, ep2_2, ccOpts)
 		cc.CheckConnectivity()
 
-		expectQoSPolicy(tc.Felixes[0], "0x0", false, toNotExists)
-		expectQoSPolicy(tc.Felixes[0], "0x14", false, toExists)
-		expectQoSPolicy(tc.Felixes[0], "0x20", false, toNotExists)
-
-		expectQoSPolicy(tc.Felixes[1], "0x14", true, toNotExists)
-		expectQoSPolicy(tc.Felixes[1], "0x28", true, toExists)
+		verifyQoSPolicies(tc.Felixes[0], []string{"0x14"}, nil)
+		verifyQoSPolicies(tc.Felixes[1], []string{"0x28"}, []string{"0x28"})
 
 		By("setting the arbitrary DSCP values on other workloads")
 		ep2_1.WorkloadEndpoint.Spec.QoSControls = &api.QoSControls{
@@ -243,12 +237,8 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ qos policy tests", []apicon
 		cc.Expect(connectivity.Some, extClient, ep2_2, ccOpts)
 		cc.CheckConnectivity()
 
-		expectQoSPolicy(tc.Felixes[0], "0x0", false, toExists)
-		expectQoSPolicy(tc.Felixes[0], "0x14", false, toExists)
-		expectQoSPolicy(tc.Felixes[0], "0x20", false, toNotExists)
-
-		expectQoSPolicy(tc.Felixes[1], "0x14", true, toNotExists)
-		expectQoSPolicy(tc.Felixes[1], "0x28", true, toExists)
+		verifyQoSPolicies(tc.Felixes[0], []string{"0x0", "0x14"}, nil)
+		verifyQoSPolicies(tc.Felixes[1], []string{"0x28", "0x28"}, []string{"0x28", "0x28"}) // 0x28 used by two workloads
 
 		By("updating DSCP values for some of workloads")
 		ep1_1.WorkloadEndpoint.Spec.QoSControls = &api.QoSControls{
@@ -269,12 +259,8 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ qos policy tests", []apicon
 		cc.Expect(connectivity.Some, extClient, ep2_2, ccOpts)
 		cc.CheckConnectivity()
 
-		expectQoSPolicy(tc.Felixes[0], "0x0", false, toExists)
-		expectQoSPolicy(tc.Felixes[0], "0x14", false, toNotExists)
-		expectQoSPolicy(tc.Felixes[0], "0x20", false, toExists)
-
-		expectQoSPolicy(tc.Felixes[1], "0x14", true, toExists)
-		expectQoSPolicy(tc.Felixes[1], "0x28", true, toExists)
+		verifyQoSPolicies(tc.Felixes[0], []string{"0x0", "0x20"}, nil)
+		verifyQoSPolicies(tc.Felixes[1], []string{"0x14", "0x28"}, []string{"0x14", "0x28"})
 
 		By("reverting the DSCP values")
 		ep1_1.WorkloadEndpoint.Spec.QoSControls = &api.QoSControls{
@@ -295,13 +281,8 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ qos policy tests", []apicon
 		cc.Expect(connectivity.Some, extClient, ep2_2, ccOpts)
 		cc.CheckConnectivity()
 
-		expectQoSPolicy(tc.Felixes[0], "0x0", false, toExists)
-		expectQoSPolicy(tc.Felixes[0], "0x14", false, toExists)
-		expectQoSPolicy(tc.Felixes[0], "0x20", false, toNotExists)
-
-		expectQoSPolicy(tc.Felixes[1], "0x14", true, toNotExists)
-		expectQoSPolicy(tc.Felixes[1], "0x28", true, toExists)
-
+		verifyQoSPolicies(tc.Felixes[0], []string{"0x0", "0x14"}, nil)
+		verifyQoSPolicies(tc.Felixes[1], []string{"0x28", "0x28"}, []string{"0x28", "0x28"}) // 0x28 used by two workloads
 		By("resetting DSCP value on some workloads")
 		ep2_1.WorkloadEndpoint.Spec.QoSControls = &api.QoSControls{}
 		ep2_1.UpdateInInfra(infra)
@@ -317,12 +298,8 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ qos policy tests", []apicon
 		cc.Expect(connectivity.Some, extClient, ep2_2, ccOpts)
 		cc.CheckConnectivity()
 
-		expectQoSPolicy(tc.Felixes[0], "0x0", false, toNotExists)
-		expectQoSPolicy(tc.Felixes[0], "0x14", false, toExists)
-		expectQoSPolicy(tc.Felixes[0], "0x20", false, toNotExists)
-
-		expectQoSPolicy(tc.Felixes[1], "0x14", true, toNotExists)
-		expectQoSPolicy(tc.Felixes[1], "0x28", true, toExists)
+		verifyQoSPolicies(tc.Felixes[0], []string{"0x14"}, nil)
+		verifyQoSPolicies(tc.Felixes[1], []string{"0x28"}, []string{"0x28"})
 
 		By("stopping the last workload")
 		ep1_1.Stop()
@@ -339,50 +316,56 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ qos policy tests", []apicon
 		cc.Expect(connectivity.None, extClient, ep2_2, ccOpts)
 		cc.CheckConnectivity()
 
-		expectNoQosPolicy(tc.Felixes[0])
-		expectNoQosPolicy(tc.Felixes[1])
+		verifyQoSPolicies(tc.Felixes[0], nil, nil)
+		verifyQoSPolicies(tc.Felixes[1], nil, nil)
 	})
 })
 
-func expectNoQosPolicy(felix *infrastructure.Felix) {
-	expectNoQosPolicyIPFamily(felix, false)
-	expectNoQosPolicyIPFamily(felix, true)
+func verifyQoSPolicies(felix *infrastructure.Felix, policies []string, policiesv6 []string) {
+	verifyQoSPoliciesWithIPFamily(felix, false, policies...)
+	verifyQoSPoliciesWithIPFamily(felix, true, policiesv6...)
 }
 
-func expectNoQosPolicyIPFamily(felix *infrastructure.Felix, ipv6 bool) {
-	expectQoSPolicy(felix, "", ipv6, false)
-}
-
-func expectQoSPolicy(felix *infrastructure.Felix, dscp string, ipv6 bool, expectToExists bool) {
+func verifyQoSPoliciesWithIPFamily(felix *infrastructure.Felix, ipv6 bool, values ...string) {
 	var (
 		cmd         []string
-		expectedStr string
+		rulePattern string
 	)
-	getRules := func(cmd []string) string {
+
+	foundRules := func(cmd []string, rulePattern string, values ...string) bool {
 		output, _ := felix.ExecOutput(cmd...)
-		return output
+		for _, val := range values {
+			expectedRule := fmt.Sprintf("%v %v", rulePattern, val)
+			if !strings.Contains(output, expectedRule) {
+				return false
+			}
+		}
+
+		if strings.Count(output, rulePattern) != len(values) {
+			return false
+		}
+
+		return true
 	}
+
 	if NFTMode() {
 		ipFamily := "ip"
-		expectedStr = fmt.Sprintf("ip dscp set %v", dscp)
 		if ipv6 {
 			ipFamily = "ip6"
-			expectedStr = fmt.Sprintf("ip6 dscp set %v", dscp)
 		}
 		cmd = []string{"nft", "-n", "list", "chain", ipFamily, "calico", "mangle-cali-qos-policy"}
+		rulePattern = fmt.Sprintf("%v dscp set", ipFamily)
 	} else {
 		binary := "iptables-save"
 		if ipv6 {
 			binary = "ip6tables-save"
 		}
 		cmd = []string{binary, "-t", "mangle"}
-		expectedStr = fmt.Sprintf("DSCP --set-dscp %v", dscp)
+		rulePattern = "DSCP --set-dscp"
 	}
-	if expectToExists {
-		Eventually(getRules(cmd), 5*time.Second, 100*time.Millisecond).Should(ContainSubstring(expectedStr))
-		Consistently(getRules(cmd), 5*time.Second, 100*time.Millisecond).Should(ContainSubstring(expectedStr))
-	} else {
-		Eventually(getRules(cmd), 5*time.Second, 100*time.Millisecond).ShouldNot(ContainSubstring(expectedStr))
-		Consistently(getRules(cmd), 5*time.Second, 100*time.Millisecond).ShouldNot(ContainSubstring(expectedStr))
-	}
+
+	EventuallyWithOffset(1, foundRules(cmd, rulePattern, values...), 5*time.Second, 100*time.Millisecond).
+		Should(BeTrue())
+	ConsistentlyWithOffset(1, foundRules(cmd, rulePattern, values...), 5*time.Second, 100*time.Millisecond).
+		Should(BeTrue())
 }
