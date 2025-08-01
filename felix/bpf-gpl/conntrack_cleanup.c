@@ -27,64 +27,61 @@ struct ct_iter_ctx {
 	__u64 num_cleaned;
 };
 
+static CALI_BPF_INLINE bool if_ct_key_equal(struct calico_ct_key *key1, struct calico_ct_key *key2) {
+	if (!key1 || !key2) {
+		return false;
+	}
+	if ((key1->protocol == key2->protocol) &&
+			(key1->port_a == key2->port_a) &&
+			(key1->port_b == key2->port_b) &&
+			ip_equal(key1->addr_a, key2->addr_a) &&
+			ip_equal(key1->addr_b, key2->addr_b)) {
+		return true;
+	}
+	return false;
+
+}
+
 // process_ccq_entry processes an entry in the "cleanup queue" map. The map
 // is keyed with conntrack key which the userspace cleaner sees as expired.
 // The value has <rev_key>:<last_seen_ts>:<rev_last_seen_ts>
 // The rev_key is dummy for Normal and reverse entries and is valid for Forward entry.
 static long process_ccq_entry(void *map, struct calico_ct_key *key, struct cali_ccq_value *value, void *ctx)
 {
-	bool is_nat_forward = false;
-	struct calico_ct_key *lookup_key = key;
 	struct ct_iter_ctx *ictx = ctx;
+	struct calico_ct_value *actual_ct_value;
 
-	// If NAT fwd entry, do a lookup of the rev_key.
-	if (value->rev_key.protocol != 0) {
-		is_nat_forward = true;
-		lookup_key = &value->rev_key;
-	}
-
-	const struct calico_ct_value *actual_ct_value = cali_ct_lookup_elem(lookup_key);
-	if (actual_ct_value) {
-		if (is_nat_forward) {
-			// If the reverse key has expired, go to delete.
-			if (actual_ct_value->last_seen == value->rev_last_seen) {
-			       goto delete;
+	// If the entry is a normal entry, compare the timestamps and delete the key.
+	// If the entry is a reverse entry, compare the timestamps and delete the key.
+	if (!value->rev_key.protocol) {
+		actual_ct_value = cali_ct_lookup_elem(key);
+		if (actual_ct_value && (actual_ct_value->last_seen == value->last_seen)) {
+			if (!cali_ct_delete_elem(key)) {
+				ictx->num_cleaned++;
 			}
-			goto cleanup;
-		} else {
-			// This is normal or NAT reverse entry.
-			if (actual_ct_value->last_seen == value->last_seen) {
-				goto delete;
+		}
+	} else {
+		// Its a NAT forward entry with a valid reverse key.
+		struct calico_ct_value *nat_fwd_value = cali_ct_lookup_elem(key);
+		struct calico_ct_key *rev_key = &value->rev_key;
+		// Check if the fwd key still points to the same reverse key.
+		if (nat_fwd_value) {
+			struct calico_ct_key *nat_rev_key = &nat_fwd_value->nat_rev_key;
+			if (!if_ct_key_equal(nat_rev_key, rev_key)) {
+		       		goto delete;
 			}
-			goto cleanup;
 		}
-	} else if (is_nat_forward) {
-		// Its a NAT forward entry but the reverse entry is not present in the CT table.
-		// Set the lookup_key to the forward entry and do a lookup of the fwd entry.
-		// If the timestamp's match, delete it.
-		lookup_key = key;
-		actual_ct_value = cali_ct_lookup_elem(lookup_key);
-		// Reverse key is present, but it is already deleted from the CT table.
-		if (actual_ct_value && actual_ct_value->last_seen == value->last_seen) {
-			goto delete;
+		struct calico_ct_value *rev_ct_value = cali_ct_lookup_elem(rev_key);
+		if (rev_ct_value && (rev_ct_value->last_seen == value->rev_last_seen)) {
+			if (!cali_ct_delete_elem(rev_key)) {
+				ictx->num_cleaned++;
+			}
+			if (!cali_ct_delete_elem(key)) {
+				ictx->num_cleaned++;
+			}
 		}
-		goto cleanup;
 	}
 delete:
-	// If the entry is Normal or Reverse, lookup_key points to the entry.
-	// Delete the entry and if successful, increment the counter.
-	// If the entry is forward, we have 2 cases,
-	// Rev_entry present - lookup_key points to the reverse entry and key points to the
-	// forward entry. Delete both the entries together.
-	// Rev_entry not present - lookup_key points to the forward entry.
-	// Delete it.
-	if(!cali_ct_delete_elem(lookup_key)) {
-		ictx->num_cleaned++;
-		if (is_nat_forward && !cali_ct_delete_elem(key)) {
-			ictx->num_cleaned++;
-		}
-	}
-cleanup:
 	cali_ccq_delete_elem(key);
 	return 0;
 }

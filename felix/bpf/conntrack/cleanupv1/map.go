@@ -87,3 +87,26 @@ type ValueInterface interface {
 	Timestamp() uint64
 	RevTimestamp() uint64
 }
+
+type MapMem map[v4.Key]Value
+
+// LoadMapMem loads ConntrackMap into memory
+func LoadMapMem(m maps.Map) (MapMem, error) {
+	ret := make(MapMem)
+
+	err := m.Iter(func(k, v []byte) maps.IteratorAction {
+		ks := len(v4.Key{})
+		vs := len(Value{})
+
+		var key v4.Key
+		copy(key[:ks], k[:ks])
+
+		var val Value
+		copy(val[:vs], v[:vs])
+
+		ret[key] = val
+		return maps.IterNone
+	})
+
+	return ret, err
+}

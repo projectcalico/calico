@@ -162,7 +162,11 @@ func (s *Scanner) handleNATEntries(key KeyInterface, val ValueInterface, rev_ts 
 		// timestamp returned from the scanner will match the
 		// same as that of entry's ts. Just go ahead with deletion.
 		if ts == rev_ts {
-			return s.updateCleanupMap(key, revKey, uint64(ts), rev_ts)
+			if s.ipVersion == 6 {
+				return s.updateCleanupMap(key, dummyKeyV6, uint64(ts), rev_ts)
+			} else {
+				return s.updateCleanupMap(key, dummyKey, uint64(ts), rev_ts)
+			}
 		}
 		_, ok := s.keyTracker[revKey]
 		if !ok {

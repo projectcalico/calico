@@ -81,3 +81,26 @@ func NewValueV6(key []byte, ts, rev_ts uint64) ValueV6 {
 	v.SetRevTS(rev_ts)
 	return v
 }
+
+type MapMemV6 map[v4.KeyV6]ValueV6
+
+// LoadMapMem loads ConntrackMap into memory
+func LoadMapMemV6(m maps.Map) (MapMemV6, error) {
+	ret := make(MapMemV6)
+
+	err := m.Iter(func(k, v []byte) maps.IteratorAction {
+		ks := len(v4.KeyV6{})
+		vs := len(ValueV6{})
+
+		var key v4.KeyV6
+		copy(key[:ks], k[:ks])
+
+		var val ValueV6
+		copy(val[:vs], v[:vs])
+
+		ret[key] = val
+		return maps.IterNone
+	})
+
+	return ret, err
+}

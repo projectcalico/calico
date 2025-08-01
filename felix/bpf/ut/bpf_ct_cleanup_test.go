@@ -20,6 +20,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
+	"github.com/projectcalico/calico/felix/bpf/conntrack/cleanupv1"
 	"github.com/projectcalico/calico/felix/bpf/conntrack/cttestdata"
 	"github.com/projectcalico/calico/felix/bpf/conntrack/timeouts"
 	"github.com/projectcalico/calico/felix/bpf/maps"
@@ -49,6 +50,9 @@ func runCTCleanupTest(t *testing.T, tc cttestdata.CTCleanupTest) {
 	deletedEntries := calculateDeletedEntries(tc, ctMap)
 	Expect(deletedEntries).To(ConsistOf(tc.ExpectedDeletions),
 		"Scan() did not delete the expected entries")
+	cleanUpMapMem, err := cleanupv1.LoadMapMem(ctCleanupMap)
+	Expect(err).NotTo(HaveOccurred(), "Failed to load ct cleanup map")
+	Expect(len(cleanUpMapMem)).To(Equal(0))
 }
 
 func setUpConntrackScanTest(t *testing.T) *conntrack.Scanner {
