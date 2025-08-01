@@ -57,6 +57,23 @@ func (e *ValueV6) SetRevTS(ts uint64) {
 	binary.LittleEndian.PutUint64(e[KeyV6Size+8:], ts)
 }
 
+func (e ValueV6) ReverseNATKey() v4.KeyInterface {
+	var ret v4.KeyV6
+
+	l := len(v4.KeyV6{})
+	copy(ret[:l], e[0:KeyV6Size])
+
+	return ret
+}
+
+func (e ValueV6) Timestamp() uint64 {
+	return binary.LittleEndian.Uint64(e[KeySize : KeySize+8])
+}
+
+func (e ValueV6) RevTimestamp() uint64 {
+	return binary.LittleEndian.Uint64(e[KeySize+8:])
+}
+
 func NewValueV6(key []byte, ts, rev_ts uint64) ValueV6 {
 	v := ValueV6{}
 	v.SetKey(key)

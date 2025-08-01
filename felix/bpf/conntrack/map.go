@@ -187,6 +187,15 @@ func ValueFromBytes(v []byte) ValueInterface {
 	return ctVal
 }
 
+func CleanupValueFromBytes(v []byte) curVerCleanup.ValueInterface {
+	var ctCleanupVal curVerCleanup.Value
+	if len(v) != len(ctCleanupVal) {
+		log.Panic("Value has unexpected length")
+	}
+	copy(ctCleanupVal[:], v[:])
+	return ctCleanupVal
+}
+
 type MapMem = curVer.MapMem
 
 // LoadMapMem loads ConntrackMap into memory
@@ -244,6 +253,15 @@ func ValueV6FromBytes(v []byte) ValueInterface {
 	}
 	copy(ctVal[:], v[:])
 	return ctVal
+}
+
+func CleanupValueV6FromBytes(v []byte) curVerCleanup.ValueInterface {
+	var ctCleanupVal curVerCleanup.ValueV6
+	if len(v) != len(ctCleanupVal) {
+		log.Panic("Value has unexpected length")
+	}
+	copy(ctCleanupVal[:], v[:])
+	return ctCleanupVal
 }
 
 type MapMemV6 = curVer.MapMemV6
