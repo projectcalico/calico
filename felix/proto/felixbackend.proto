@@ -411,6 +411,7 @@ message WorkloadEndpoint {
   QoSControls qos_controls = 12;
   LocalBGPPeer local_bgp_peer = 13;
   WorkloadBpfSkipRedir skip_redir = 14;
+  repeated QoSPolicy qos_policies = 15;
 }
 
 message QoSControls {
@@ -428,6 +429,11 @@ message QoSControls {
   int64 EgressMinburst        = 12;
   int64 IngressPacketBurst    = 13;
   int64 EgressPacketBurst     = 14;
+}
+
+message QoSPolicy {
+  string destination = 1;
+  int32 dscp = 2;
 }
 
 message LocalBGPPeer {
