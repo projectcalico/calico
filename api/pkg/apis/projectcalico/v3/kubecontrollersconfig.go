@@ -129,8 +129,14 @@ type Template struct {
 	// +kubebuilder:validation:MaxLength=253
 	GenerateName string `json:"generateName,omitempty" validate:"omitempty,name"`
 
-	// InterfaceCIDRs contains a list of CIRDs used for matching nodeIPs to the AutoHostEndpoint
+	// InterfaceCIDRs contains a list of CIDRs used for matching nodeIPs to the AutoHostEndpoint.
+	// If specified, only addresses within these CIDRs will be included in the expected IPs.
+	// At least one of InterfaceCIDRs and InterfaceSelector must be specified.
 	InterfaceCIDRs []string `json:"interfaceCIDRs,omitempty" validate:"cidrs"`
+
+	// InterfaceSelector contains a regex string to match Node interface names. If specified, a HostEndpoint will be created for each matching interface on each selected node.
+	// At least one of InterfaceCIDRs and InterfaceSelector must be specified.
+	InterfaceSelector string `json:"interfaceSelector,omitempty" validate:"omitempty,regexp"`
 
 	// Labels adds the specified labels to the generated AutoHostEndpoint, labels from node with the same name will be overwritten by values from the template label
 	Labels map[string]string `json:"labels,omitempty" validate:"omitempty,labels"`
