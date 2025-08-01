@@ -9,6 +9,7 @@ vendor/
 artifacts/
 postrelease-checks.xml
 crypto/tmp
+venv/
 
 /* Produced as part of release */
 release/release
