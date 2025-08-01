@@ -56,6 +56,11 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ qos policy tests", []apicon
 			Skip("Skipping NFT / BPF test for etcdv3 backend.")
 		}
 
+		// TODO (mazdak): Add support for bpf
+		if BPFMode() {
+			Skip("Not supported yet in bpf")
+		}
+
 		options := infrastructure.DefaultTopologyOptions()
 		options.IPIPMode = apiv3.IPIPModeNever
 		options.FelixLogSeverity = "Debug"
@@ -120,7 +125,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ qos policy tests", []apicon
 		extClient.Stop()
 	})
 
-	It("pepper0 should have expected restriction on the rule jumping to QoS policy rules", func() {
+	It("should have expected restriction on the rule jumping to QoS policy rules", func() {
 		detecIptablesRule := func(felix *infrastructure.Felix, ipv6 bool) {
 			binary := "iptables-save"
 			ipsetName := "cali40all-ipam-pools"
@@ -164,7 +169,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ qos policy tests", []apicon
 		}
 	})
 
-	It("pepper1 applying DSCP annotation should result is adding correct rules", func() {
+	It("applying DSCP annotation should result is adding correct rules", func() {
 		dscp0 := numorstring.DSCPFromInt(0)   // 0x0
 		dscp20 := numorstring.DSCPFromInt(20) // 0x14
 		dscp32 := numorstring.DSCPFromInt(32) // 0x20
@@ -196,7 +201,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ qos policy tests", []apicon
 		verifyQoSPolicies(tc.Felixes[0], nil, nil)
 		verifyQoSPolicies(tc.Felixes[1], nil, nil)
 
-		By("setting the expected DSCP value on egress traffic from one workload leaving the cluster")
+		By("setting the initial DSCP values")
 		ep1_1.WorkloadEndpoint.Spec.QoSControls = &api.QoSControls{
 			DSCP: &dscp20,
 		}
@@ -218,7 +223,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ qos policy tests", []apicon
 		verifyQoSPolicies(tc.Felixes[0], []string{"0x14"}, nil)
 		verifyQoSPolicies(tc.Felixes[1], []string{"0x28"}, []string{"0x28"})
 
-		By("setting the arbitrary DSCP values on other workloads")
+		By("updating DSCP values on some workloads")
 		ep2_1.WorkloadEndpoint.Spec.QoSControls = &api.QoSControls{
 			DSCP: &dscp0,
 		}
@@ -240,7 +245,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ qos policy tests", []apicon
 		verifyQoSPolicies(tc.Felixes[0], []string{"0x0", "0x14"}, nil)
 		verifyQoSPolicies(tc.Felixes[1], []string{"0x28", "0x28"}, []string{"0x28", "0x28"}) // 0x28 used by two workloads
 
-		By("updating DSCP values for some of workloads")
+		By("updating DSCP values on other workloads")
 		ep1_1.WorkloadEndpoint.Spec.QoSControls = &api.QoSControls{
 			DSCP: &dscp32,
 		}
@@ -301,7 +306,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ qos policy tests", []apicon
 		verifyQoSPolicies(tc.Felixes[0], []string{"0x14"}, nil)
 		verifyQoSPolicies(tc.Felixes[1], []string{"0x28"}, []string{"0x28"})
 
-		By("stopping the last workload")
+		By("stopping the last workloads")
 		ep1_1.Stop()
 		ep1_1.RemoveFromInfra(infra)
 
@@ -319,6 +324,24 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ qos policy tests", []apicon
 		verifyQoSPolicies(tc.Felixes[0], nil, nil)
 		verifyQoSPolicies(tc.Felixes[1], nil, nil)
 	})
+
+	It("should be able to use all DSCP string values", func() {
+		// We only need to run this once for iptables dataplane, and once for nftables.
+		if BPFMode() || getDataStoreType(infra) == "etcdv3" {
+			Skip("Skipping for BPF dataplane and etcdv3 backend.")
+		}
+		for dscpStr, dscpVal := range numorstring.AllDSCPValues {
+			// Use a workload on host2 since it's configured as dual stack.
+			dscp := numorstring.DSCPFromString(dscpStr)
+			ep1_2.WorkloadEndpoint.Spec.QoSControls = &api.QoSControls{
+				DSCP: &dscp,
+			}
+			ep1_2.UpdateInInfra(infra)
+
+			hexStr := fmt.Sprintf("0x%02x", dscpVal)
+			verifyQoSPolicies(tc.Felixes[1], []string{hexStr}, []string{hexStr})
+		}
+	})
 })
 
 func verifyQoSPolicies(felix *infrastructure.Felix, policies []string, policiesv6 []string) {
@@ -332,17 +355,17 @@ func verifyQoSPoliciesWithIPFamily(felix *infrastructure.Felix, ipv6 bool, value
 		rulePattern string
 	)
 
-	foundRules := func(cmd []string, rulePattern string, values ...string) bool {
+	assertRules := func() bool {
 		output, _ := felix.ExecOutput(cmd...)
+		if strings.Count(output, rulePattern) != len(values) {
+			return false
+		}
+
 		for _, val := range values {
 			expectedRule := fmt.Sprintf("%v %v", rulePattern, val)
 			if !strings.Contains(output, expectedRule) {
 				return false
 			}
-		}
-
-		if strings.Count(output, rulePattern) != len(values) {
-			return false
 		}
 
 		return true
@@ -364,8 +387,8 @@ func verifyQoSPoliciesWithIPFamily(felix *infrastructure.Felix, ipv6 bool, value
 		rulePattern = "DSCP --set-dscp"
 	}
 
-	EventuallyWithOffset(1, foundRules(cmd, rulePattern, values...), 5*time.Second, 100*time.Millisecond).
+	EventuallyWithOffset(1, assertRules, 5*time.Second, 100*time.Millisecond).
 		Should(BeTrue())
-	ConsistentlyWithOffset(1, foundRules(cmd, rulePattern, values...), 5*time.Second, 100*time.Millisecond).
+	ConsistentlyWithOffset(1, assertRules, 3*time.Second, 100*time.Millisecond).
 		Should(BeTrue())
 }

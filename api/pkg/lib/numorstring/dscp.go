@@ -51,7 +51,7 @@ const (
 )
 
 var (
-	allDSCPValues = map[string]uint8{
+	AllDSCPValues = map[string]uint8{
 		DF: 0,
 		EF: 46,
 
@@ -77,7 +77,7 @@ func DSCPFromInt(v uint8) DSCP {
 
 // DSCPFromString creates a DSCP struct from a string value.
 func DSCPFromString(s string) DSCP {
-	for k, _ := range allDSCPValues {
+	for k, _ := range AllDSCPValues {
 		if strings.EqualFold(k, s) {
 			return DSCP(
 				Uint8OrString{Type: NumOrStringString, StrVal: s},
@@ -97,7 +97,7 @@ func (d *DSCP) ToUint8() uint8 {
 		return val
 	}
 
-	val, valid := allDSCPValues[d.StrVal]
+	val, valid := AllDSCPValues[d.StrVal]
 	if !valid {
 		// TODO (mazdak): diff between 0 and not setting it
 		return 0
