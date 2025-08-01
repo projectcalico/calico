@@ -208,7 +208,7 @@ func (m *clusterEgressManager) CompleteDeferredWork() error {
 			return policies[i].SrcAddrs < policies[j].SrcAddrs
 		})
 
-		chain := m.ruleRenderer.EgressQoSPolicyChain(policies)
+		chain := m.ruleRenderer.EgressQoSPolicyChain(policies, m.ipVersion)
 		m.mangleTable.UpdateChain(chain)
 		m.qosPolicyDirty = false
 	}
