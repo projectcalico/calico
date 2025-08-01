@@ -79,24 +79,15 @@ type endpointData struct {
 	ports   []model.EndpointPort
 	parents []*npParentData
 
-	cachedMatchingIPSetIDs set.Set[string] /* or, as an optimization, nil if there are none */
+	cachedMatchingIPSetIDs set.Adaptive[string]
 }
 
 func (d *endpointData) AddMatchingIPSetID(id string) {
-	if d.cachedMatchingIPSetIDs == nil {
-		d.cachedMatchingIPSetIDs = set.New[string]()
-	}
 	d.cachedMatchingIPSetIDs.Add(id)
 }
 
 func (d *endpointData) RemoveMatchingIPSetID(id string) {
-	if d.cachedMatchingIPSetIDs == nil {
-		return
-	}
 	d.cachedMatchingIPSetIDs.Discard(id)
-	if d.cachedMatchingIPSetIDs.Len() == 0 {
-		d.cachedMatchingIPSetIDs = nil
-	}
 }
 
 func (d *endpointData) HasParent(parent *npParentData) bool {
@@ -217,7 +208,7 @@ func (d *endpointData) Equals(other *endpointData) bool {
 type npParentData struct {
 	id          string
 	labels      uniquelabels.Map
-	endpointIDs set.Set[any]
+	endpointIDs set.Typed[any]
 }
 
 func (d *npParentData) OwnLabelHandles() iter.Seq2[uniquestr.Handle, uniquestr.Handle] {
@@ -675,7 +666,7 @@ func (idx *SelectorAndNamedPortIndex) scanEndpointAgainstIPSets(
 ) {
 	// Remove any previous match from the endpoint's cache.  We'll re-add it
 	// below if the match is still correct.
-	epData.cachedMatchingIPSetIDs = nil
+	epData.cachedMatchingIPSetIDs.Clear()
 
 	// Iterate over potential new matches and incref any members that
 	// that produces.  (This may temporarily over count.)
@@ -736,7 +727,9 @@ func (idx *SelectorAndNamedPortIndex) DeleteEndpoint(id any) {
 		return
 	}
 
-	log.WithField("oldContrib", oldEndpointData.cachedMatchingIPSetIDs).Debug("Old matching IP sets")
+	if log.IsLevelEnabled(log.DebugLevel) {
+		log.WithField("oldContrib", oldEndpointData.cachedMatchingIPSetIDs.String()).Debug("Old matching IP sets")
+	}
 	oldIPSetContributions := idx.RecalcCachedContributions(oldEndpointData)
 	for ipSetID, contributions := range oldIPSetContributions {
 		// Decref all the old members.  If they hit 0 references, then the member has been
@@ -846,7 +839,7 @@ func (idx *SelectorAndNamedPortIndex) CalculateEndpointContribution(d *endpointD
 // RecalcCachedContributions uses the cached set of matching IP set IDs in the endpoint
 // struct to quickly recalculate the endpoint's contribution to all IP sets.
 func (idx *SelectorAndNamedPortIndex) RecalcCachedContributions(epData *endpointData) map[string][]ipsetmember.IPSetMember {
-	if epData.cachedMatchingIPSetIDs == nil {
+	if epData.cachedMatchingIPSetIDs.Len() == 0 {
 		return nil
 	}
 	contrib := map[string][]ipsetmember.IPSetMember{}

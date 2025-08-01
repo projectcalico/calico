@@ -42,7 +42,7 @@ type LabelRestrictionIndex[SelID comparable] struct {
 
 	// unoptimizedIDs contains an entry for any selectors that have no
 	// valid label restrictions (and hence no entries in labelToValueToIDs).
-	unoptimizedIDs set.Set[SelID]
+	unoptimizedIDs set.Typed[SelID]
 
 	gaugeOptimizedSelectors   Gauge
 	gaugeUnoptimizedSelectors Gauge
@@ -269,13 +269,13 @@ func (s *LabelRestrictionIndex[SelID]) updateGauges() {
 // label, either matching particular values or a wildcard (such as
 // "has(labelName)").
 type valuesSubIndex[SelID comparable] struct {
-	selsMatchingSpecificValues map[uniquestr.Handle]set.Set[SelID]
-	selsMatchingWildcard       set.Set[SelID]
+	selsMatchingSpecificValues map[uniquestr.Handle]set.Typed[SelID]
+	selsMatchingWildcard       set.Typed[SelID]
 }
 
 func (t *valuesSubIndex[SelID]) Add(value uniquestr.Handle, id SelID) {
 	if t.selsMatchingSpecificValues == nil {
-		t.selsMatchingSpecificValues = map[uniquestr.Handle]set.Set[SelID]{}
+		t.selsMatchingSpecificValues = map[uniquestr.Handle]set.Typed[SelID]{}
 	}
 	values, ok := t.selsMatchingSpecificValues[value]
 	if !ok {
