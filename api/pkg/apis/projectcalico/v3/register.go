@@ -78,6 +78,8 @@ var (
 		&StagedKubernetesNetworkPolicyList{},
 		&StagedNetworkPolicy{},
 		&StagedNetworkPolicyList{},
+		&QoSPolicy{},
+		&QoSPolicyList{},
 	}
 )
 

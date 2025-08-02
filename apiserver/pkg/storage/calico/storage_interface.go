@@ -53,6 +53,8 @@ func NewStorage(opts Options) (registry.DryRunnableStorage, factory.DestroyFunc)
 		return NewBGPPeerStorage(opts)
 	case "projectcalico.org/bgpfilters":
 		return NewBGPFilterStorage(opts)
+	case "projectcalico.org/qospolicies":
+		return NewQoSPolicyStorage(opts)
 	case "projectcalico.org/profiles":
 		return NewProfileStorage(opts)
 	case "projectcalico.org/felixconfigurations":
