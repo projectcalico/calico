@@ -37,15 +37,17 @@ import (
 var _ = Describe("BPF Conntrack LivenessCalculator", func() {
 	var lc *conntrack.LivenessScanner
 	var scanner *conntrack.Scanner
-	var ctMap *mock.Map
+	var ctMap, ctCleanupMap *mock.Map
 	var mockTime *mocktime.MockTime
 
 	BeforeEach(func() {
 		mockTime = mocktime.New()
 		Expect(mockTime.KTimeNanos()).To(BeNumerically("==", cttestdata.Now))
 		ctMap = mock.NewMockMap(conntrack.MapParams)
+		ctCleanupMap = mock.NewMockMap(conntrack.MapParamsCleanup)
 		lc = conntrack.NewLivenessScanner(timeouts.DefaultTimeouts(), false, conntrack.WithTimeShim(mockTime))
-		scanner = conntrack.NewScanner(ctMap, conntrack.KeyFromBytes, conntrack.ValueFromBytes, nil, "Disabled", lc)
+		scanner = conntrack.NewScanner(ctMap, conntrack.KeyFromBytes, conntrack.ValueFromBytes, nil, "Disabled",
+			ctCleanupMap, 4, mock.NewMockBPFCleaner(ctMap, ctCleanupMap), lc)
 	})
 
 	// Convert test cases from the testdata package into Ginkgo table entries.
@@ -159,7 +161,8 @@ var _ = Describe("BPF Conntrack StaleNATScanner", func() {
 				get = getFn[0]
 			}
 
-			Expect(verdict).To(Equal(staleNATScanner.Check(k, v, get)))
+			sv, _ := staleNATScanner.Check(k, v, get)
+			Expect(verdict).To(Equal(sv))
 		},
 		Entry("keyA - revA",
 			conntrack.NewKey(123, clientIP, clientPort, svcIP, svcPort),

@@ -582,12 +582,12 @@ func bpftool(args ...string) ([]byte, error) {
 var (
 	mapInitOnce sync.Once
 
-	natMap, natBEMap, ctMap, rtMap, ipsMap, testStateMap, affinityMap, arpMap, fsafeMap, ipfragsMap maps.Map
-	natMapV6, natBEMapV6, ctMapV6, rtMapV6, ipsMapV6, affinityMapV6, arpMapV6, fsafeMapV6           maps.Map
-	stateMap, countersMap, ifstateMap, progMap, progMapXDP, policyJumpMap, policyJumpMapXDP         maps.Map
-	perfMap                                                                                         maps.Map
-	profilingMap, ipfragsMapTmp                                                                     maps.Map
-	allMaps                                                                                         []maps.Map
+	natMap, natBEMap, ctMap, ctCleanupMap, rtMap, ipsMap, testStateMap, affinityMap, arpMap, fsafeMap, ipfragsMap maps.Map
+	natMapV6, natBEMapV6, ctMapV6, ctCleanupMapV6, rtMapV6, ipsMapV6, affinityMapV6, arpMapV6, fsafeMapV6         maps.Map
+	stateMap, countersMap, ifstateMap, progMap, progMapXDP, policyJumpMap, policyJumpMapXDP                       maps.Map
+	perfMap                                                                                                       maps.Map
+	profilingMap, ipfragsMapTmp                                                                                   maps.Map
+	allMaps                                                                                                       []maps.Map
 )
 
 func initMapsOnce() {
@@ -598,6 +598,8 @@ func initMapsOnce() {
 		natBEMapV6 = nat.BackendMapV6()
 		ctMap = conntrack.Map()
 		ctMapV6 = conntrack.MapV6()
+		ctCleanupMap = conntrack.CleanupMap()
+		ctCleanupMapV6 = conntrack.CleanupMapV6()
 		rtMap = routes.Map()
 		rtMapV6 = routes.MapV6()
 		ipsMap = ipsets.Map()
@@ -620,7 +622,7 @@ func initMapsOnce() {
 
 		perfMap = perf.Map("perf_evnt", 512)
 
-		allMaps = []maps.Map{natMap, natBEMap, natMapV6, natBEMapV6, ctMap, ctMapV6, rtMap, rtMapV6, ipsMap, ipsMapV6,
+		allMaps = []maps.Map{natMap, natBEMap, natMapV6, natBEMapV6, ctMap, ctMapV6, ctCleanupMap, ctCleanupMapV6, rtMap, rtMapV6, ipsMap, ipsMapV6,
 			stateMap, testStateMap, affinityMap, affinityMapV6, arpMap, arpMapV6, fsafeMap, fsafeMapV6,
 			countersMap, ipfragsMap, ipfragsMapTmp, ifstateMap, profilingMap,
 			policyJumpMap, policyJumpMapXDP}
