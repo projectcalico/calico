@@ -104,7 +104,7 @@ func (l *LivenessScanner) reasonCounterInc(reason string) {
 	l.cleaned++
 }
 
-func (l *LivenessScanner) Check(ctKey KeyInterface, ctVal ValueInterface, get EntryGet) ScanVerdict {
+func (l *LivenessScanner) Check(ctKey KeyInterface, ctVal ValueInterface, get EntryGet) (ScanVerdict, int64) {
 	if l.cachedKTime == 0 || l.time.Since(l.goTimeOfLastKTimeLookup) > time.Second {
 		l.cachedKTime = l.time.KTimeNanos()
 		l.goTimeOfLastKTimeLookup = l.time.Now()
@@ -113,6 +113,7 @@ func (l *LivenessScanner) Check(ctKey KeyInterface, ctVal ValueInterface, get En
 
 	debug := log.GetLevel() >= log.DebugLevel
 
+	lastSeen := ctVal.LastSeen()
 	switch ctVal.Type() {
 	case TypeNATForward:
 		// Look up the reverse entry, where we do the bookkeeping.
@@ -124,13 +125,14 @@ func (l *LivenessScanner) Check(ctKey KeyInterface, ctVal ValueInterface, get En
 			if debug {
 				log.WithField("k", ctKey).Debug("Deleting forward NAT conntrack entry with no reverse entry.")
 			}
-			return ScanVerdictDelete
+			return ScanVerdictDelete, lastSeen
 		} else if err != nil {
 			log.WithFields(log.Fields{
 				"fwdKey": ctKey,
 				"revKey": ctVal.ReverseNATKey(),
 			}).WithError(err).Warn("Failed to look up reverse conntrack entry.")
-			return ScanVerdictOK
+
+			return ScanVerdictOK, lastSeen
 		}
 		if reason, expired := EntryExpired(l.timeouts, now, ctKey.Proto(), revEntry); expired {
 			if debug {
@@ -140,7 +142,7 @@ func (l *LivenessScanner) Check(ctKey KeyInterface, ctVal ValueInterface, get En
 				}).Debug("Deleting expired conntrack forward-NAT entry")
 			}
 			l.reasonCounterInc(reason)
-			return ScanVerdictDelete
+			return ScanVerdictDelete, revEntry.LastSeen()
 			// do not delete the reverse entry yet to avoid breaking the iterating
 			// over the map.  We must not delete other than the current key. We remove
 			// it once we come across it again.
@@ -154,7 +156,7 @@ func (l *LivenessScanner) Check(ctKey KeyInterface, ctVal ValueInterface, get En
 				}).Debug("Deleting expired conntrack reverse-NAT entry")
 			}
 			l.reasonCounterInc(reason)
-			return ScanVerdictDelete
+			return ScanVerdictDelete, lastSeen
 		}
 	case TypeNormal:
 		if reason, expired := EntryExpired(l.timeouts, now, ctKey.Proto(), ctVal); expired {
@@ -165,7 +167,7 @@ func (l *LivenessScanner) Check(ctKey KeyInterface, ctVal ValueInterface, get En
 				}).Debug("Deleting expired normal conntrack entry")
 			}
 			l.reasonCounterInc(reason)
-			return ScanVerdictDelete
+			return ScanVerdictDelete, lastSeen
 		}
 	default:
 		log.WithFields(log.Fields{
@@ -173,8 +175,7 @@ func (l *LivenessScanner) Check(ctKey KeyInterface, ctVal ValueInterface, get En
 			"key":  ctKey,
 		}).Warn("Unknown conntrack entry type!")
 	}
-
-	return ScanVerdictOK
+	return ScanVerdictOK, lastSeen
 }
 
 // IterationStart satisfies EntryScannerSynced
@@ -211,11 +212,12 @@ func NewStaleNATScanner(frontendHasBackend NATChecker) *StaleNATScanner {
 }
 
 // Check checks the conntrack entry
-func (sns *StaleNATScanner) Check(k KeyInterface, v ValueInterface, get EntryGet) ScanVerdict {
+func (sns *StaleNATScanner) Check(k KeyInterface, v ValueInterface, get EntryGet) (ScanVerdict, int64) {
 	debug := log.GetLevel() >= log.DebugLevel
 
 again:
 
+	lastSeen := v.LastSeen()
 	switch v.Type() {
 	case TypeNormal:
 		proto := k.Proto()
@@ -246,7 +248,7 @@ again:
 
 		if sns.natChecker.ConntrackDestIsService(ip, port, proto) {
 			log.WithField("key", k).Debugf("TypeNormal to UDP service IP is stale")
-			return ScanVerdictDelete
+			return ScanVerdictDelete, lastSeen
 		}
 
 	case TypeNATReverse:
@@ -271,7 +273,7 @@ again:
 			}
 			sns.cleaned++
 			conntrackCounterStaleNAT.Inc()
-			return ScanVerdictDelete
+			return ScanVerdictDelete, lastSeen
 		}
 		if debug {
 			log.WithField("key", k).Debugf("TypeNATReverse still active")
@@ -332,7 +334,7 @@ again:
 								Debug("Mismatch between key and rev key - " +
 									"deleting entry because reverse key does not exist.")
 						}
-						return ScanVerdictDelete
+						return ScanVerdictDelete, lastSeen
 					} else {
 						if debug {
 							// In the worst case, the entry will timeout
@@ -340,7 +342,7 @@ again:
 								Debug("Mismatch between key and rev key - " +
 									"keeping entry, failed to retrieve reverse entry. Will try again.")
 						}
-						return ScanVerdictOK
+						return ScanVerdictOK, lastSeen
 					}
 				}
 				k = revKey
@@ -383,7 +385,7 @@ again:
 								Debug("Mismatch between key and rev key - " +
 									"deleting entry because reverse key does not exist.")
 						}
-						return ScanVerdictDelete
+						return ScanVerdictDelete, lastSeen
 					} else {
 						if debug {
 							// In the worst case, the entry will timeout
@@ -391,7 +393,7 @@ again:
 								Debug("Mismatch between key and rev key - " +
 									"keeping entry, failed to retrieve reverse entry. Will try again.")
 						}
-						return ScanVerdictOK
+						return ScanVerdictOK, lastSeen
 					}
 				}
 				k = revKey
@@ -406,7 +408,7 @@ again:
 			}
 			sns.cleaned++
 			conntrackCounterStaleNAT.Inc()
-			return ScanVerdictDelete
+			return ScanVerdictDelete, lastSeen
 		}
 		if debug {
 			log.WithField("key", k).Debugf("TypeNATForward still active")
@@ -416,7 +418,7 @@ again:
 		log.WithField("conntrack.Value.Type()", v.Type()).Warn("Unknown type")
 	}
 
-	return ScanVerdictOK
+	return ScanVerdictOK, lastSeen
 
 reverse:
 	if v.Type() == TypeNATReverse {
@@ -429,7 +431,7 @@ reverse:
 				"deleting entry because reverse key does not point to a reverse entry.")
 	}
 
-	return ScanVerdictDelete
+	return ScanVerdictDelete, lastSeen
 }
 
 // IterationStart satisfies EntryScannerSynced

@@ -16,6 +16,7 @@ package conntrack
 
 import (
 	"fmt"
+	"net"
 	"os"
 	"strings"
 	"sync"
@@ -24,6 +25,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/felix/bpf/conntrack/cleanupv1"
 	"github.com/projectcalico/calico/felix/bpf/conntrack/timeouts"
 	"github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/jitter"
@@ -51,6 +53,8 @@ var (
 		Name: "felix_bpf_conntrack_sweep_duration",
 		Help: "Conntrack sweep execution time (ns)",
 	})
+	dummyKeyV6 = NewKeyV6(0, net.IPv6zero, 0, net.IPv6zero, 0)
+	dummyKey   = NewKey(0, net.IPv4zero, 0, net.IPv4zero, 0)
 )
 
 func init() {
@@ -77,7 +81,7 @@ type EntryGet func(KeyInterface) (ValueInterface, error)
 
 // EntryScanner is a function prototype to be called on every entry by the scanner
 type EntryScanner interface {
-	Check(KeyInterface, ValueInterface, EntryGet) ScanVerdict
+	Check(KeyInterface, ValueInterface, EntryGet) (ScanVerdict, int64)
 }
 
 // EntryScannerSynced is a scanner synchronized with the iteration start/end.
@@ -96,6 +100,7 @@ type EntryScannerSynced interface {
 // evaluation functions, to keep their implementation simpler.
 type Scanner struct {
 	ctMap                        maps.Map
+	ctCleanupMap                 maps.Map
 	keyFromBytes                 func([]byte) KeyInterface
 	valueFromBytes               func([]byte) ValueInterface
 	scanners                     []EntryScanner
@@ -104,6 +109,9 @@ type Scanner struct {
 	maxEntries                   int
 	autoScale                    bool
 	configChangedRestartCallback func()
+	bpfCleaner                   Cleaner
+	ipVersion                    int
+	keyTracker                   map[KeyInterface]cleanupv1.ValueInterface
 
 	wg       sync.WaitGroup
 	stopCh   chan struct{}
@@ -114,11 +122,14 @@ type Scanner struct {
 // EntryScanner. They are executed in the provided order on each entry.
 func NewScanner(ctMap maps.Map, kfb func([]byte) KeyInterface, vfb func([]byte) ValueInterface,
 	configChangedRestartCallback func(),
-	autoScalingMode string,
+	autoScalingMode string, ctCleanupMap maps.Map,
+	ipVersion int,
+	bpfCleaner Cleaner,
 	scanners ...EntryScanner) *Scanner {
 
 	return &Scanner{
 		ctMap:                        ctMap,
+		ctCleanupMap:                 ctCleanupMap,
 		keyFromBytes:                 kfb,
 		valueFromBytes:               vfb,
 		scanners:                     scanners,
@@ -127,7 +138,71 @@ func NewScanner(ctMap maps.Map, kfb func([]byte) KeyInterface, vfb func([]byte) 
 		maxEntries:                   ctMap.Size(),
 		autoScale:                    strings.ToLower(autoScalingMode) == "doubleiffull",
 		configChangedRestartCallback: configChangedRestartCallback,
+		bpfCleaner:                   bpfCleaner,
+		ipVersion:                    ipVersion,
+		keyTracker:                   make(map[KeyInterface]cleanupv1.ValueInterface),
 	}
+}
+
+func (s *Scanner) updateCleanupMap(key, revKey KeyInterface, ts, rev_ts uint64) error {
+	var val cleanupv1.ValueInterface
+	if s.ipVersion == 6 {
+		val = cleanupv1.NewValueV6(revKey.AsBytes(), ts, rev_ts)
+	} else {
+		val = cleanupv1.NewValue(revKey.AsBytes(), ts, rev_ts)
+	}
+	return s.ctCleanupMap.Update(key.AsBytes(), val.AsBytes())
+}
+
+func (s *Scanner) handleNATEntries(key KeyInterface, val ValueInterface, rev_ts uint64) error {
+	ts := uint64(val.LastSeen())
+	if val.Type() == TypeNATForward {
+		revKey := val.ReverseNATKey()
+		// If reverse key is not present in the conntrack map,
+		// timestamp returned from the scanner will match the
+		// same as that of entry's ts. Just go ahead with deletion.
+		if ts == rev_ts {
+			if s.ipVersion == 6 {
+				return s.updateCleanupMap(key, dummyKeyV6, uint64(ts), rev_ts)
+			} else {
+				return s.updateCleanupMap(key, dummyKey, uint64(ts), rev_ts)
+			}
+		}
+		_, ok := s.keyTracker[revKey]
+		if !ok {
+			// Reverse entry not seen by the scanner. Don't queue it up for deletion.
+			// Wait to see if we the scanner sees the reverse entry.
+			var cleanupVal cleanupv1.ValueInterface
+			if s.ipVersion == 6 {
+				cleanupVal = cleanupv1.NewValueV6(key.AsBytes(), ts, rev_ts)
+			} else {
+				cleanupVal = cleanupv1.NewValue(key.AsBytes(), ts, rev_ts)
+			}
+			s.keyTracker[revKey] = cleanupVal
+		} else {
+			// Reverse entry already seen.
+			delete(s.keyTracker, revKey)
+			return s.updateCleanupMap(key, revKey, ts, rev_ts)
+		}
+	} else if val.Type() == TypeNATReverse {
+		revVal, ok := s.keyTracker[key]
+		if ok {
+			// Reverse key already in the map. Must be from the forward entry.
+			delete(s.keyTracker, key)
+			fwdKey := revVal.ReverseNATKey()
+			fwdTS := revVal.Timestamp()
+			return s.updateCleanupMap(fwdKey, key, fwdTS, ts)
+		} else {
+			var cleanupVal cleanupv1.ValueInterface
+			if s.ipVersion == 6 {
+				cleanupVal = cleanupv1.NewValueV6(dummyKeyV6.AsBytes(), ts, uint64(0))
+			} else {
+				cleanupVal = cleanupv1.NewValue(dummyKey.AsBytes(), ts, uint64(0))
+			}
+			s.keyTracker[key] = cleanupVal
+		}
+	}
+	return nil
 }
 
 // Scan executes a scanning iteration
@@ -158,21 +233,77 @@ func (s *Scanner) Scan() {
 		}
 
 		for _, scanner := range s.scanners {
-			if verdict := scanner.Check(ctKey, ctVal, s.get); verdict == ScanVerdictDelete {
+			if verdict, ts := scanner.Check(ctKey, ctVal, s.get); verdict == ScanVerdictDelete {
 				if debug {
 					log.Debug("Deleting conntrack entry.")
 				}
-				cleaned++
-				return maps.IterDelete
+				// Fall back to userspace cleaner, when the bpf cleaner
+				// fails to load.
+				if s.bpfCleaner == nil {
+					cleaned++
+					return maps.IterDelete
+				}
+				// NAT entry has expired.
+				if ctVal.Type() != TypeNormal {
+					err := s.handleNATEntries(ctKey, ctVal, uint64(ts))
+					if err != nil {
+						log.Debugf("error updating cleanup map. Entry may not be cleaned up %v", err)
+					}
+					continue
+				}
+				var dummyKey KeyInterface
+				if s.ipVersion == 6 {
+					dummyKey = BytesToKeyV6([]byte{})
+				} else {
+					dummyKey = BytesToKey([]byte{})
+				}
+
+				var err error
+				if s.ipVersion == 6 {
+					err = s.updateCleanupMap(ctKey, dummyKeyV6, uint64(ts), uint64(ts))
+				} else {
+					err = s.updateCleanupMap(ctKey, dummyKey, uint64(ts), uint64(ts))
+				}
+				if err != nil {
+					log.Debugf("error updating cleanup map. Entry may not be cleaned up %v", err)
+				}
 			}
+		}
+		if used%1000 == 0 {
+			cleaned += s.runBPFCleaner()
 		}
 		return maps.IterNone
 	})
+
+	// There can be forward or reverse entries in the map.
+	// We have scanned the entire map.
+	// Lets add it to the cleanup map.
+	if len(s.keyTracker) > 0 {
+		for k, v := range s.keyTracker {
+			// This is a forward entry and we haven't seen the rev entry.
+			// Maybe deleted by LRU
+			revKey := v.ReverseNATKey()
+			ts := v.Timestamp()
+			revTS := v.RevTimestamp()
+			var err error
+			if revKey.Proto() != 0 {
+				err = s.updateCleanupMap(revKey, k, ts, revTS)
+			} else {
+				err = s.updateCleanupMap(k, revKey, ts, revTS)
+			}
+			if err != nil {
+				log.Debugf("error updating cleanup map. Entry may not be cleaned up %v", err)
+			}
+		}
+	}
 
 	if err != nil {
 		log.WithError(err).Warn("Failed to iterate over conntrack map")
 		return
 	}
+
+	// Run the bpf cleaner
+	cleaned += s.runBPFCleaner()
 
 	conntrackCounterSweeps.Inc()
 	conntrackGaugeUsed.Set(float64(used))
@@ -206,6 +337,18 @@ func (s *Scanner) Scan() {
 			}
 		}
 	}
+}
+
+func (s *Scanner) runBPFCleaner() int {
+	// Run the BPF cleanup program.
+	if s.bpfCleaner != nil {
+		cr, err := s.bpfCleaner.Run()
+		if err != nil {
+			log.WithError(err).Warn("Failed to run bpf conntrack cleaner.")
+		}
+		return int(cr.NumKVsCleaned)
+	}
+	return 0
 }
 
 func (s *Scanner) writeNewSizeFile() error {
@@ -287,6 +430,12 @@ func (s *Scanner) Stop() {
 	})
 }
 
+func (s *Scanner) Close() {
+	if s.bpfCleaner != nil {
+		s.bpfCleaner.Close()
+	}
+}
+
 // AddUnlocked adds an additional EntryScanner to a non-running Scanner
 func (s *Scanner) AddUnlocked(scanner EntryScanner) {
 	s.scanners = append(s.scanners, scanner)
@@ -296,4 +445,9 @@ func (s *Scanner) AddUnlocked(scanner EntryScanner) {
 // the first scanner to be called.
 func (s *Scanner) AddFirstUnlocked(scanner EntryScanner) {
 	s.scanners = append([]EntryScanner{scanner}, s.scanners...)
+}
+
+type Cleaner interface {
+	Run(opts ...RunOpt) (*CleanupContext, error)
+	Close() error
 }

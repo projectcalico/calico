@@ -75,7 +75,7 @@ func NewInfoReader(timeouts timeouts.Timeouts, dsr bool, time timeshim.Interface
 }
 
 // Check checks a conntrack entry and translates to collector.ConntrackInfo.
-func (r *InfoReader) Check(key KeyInterface, val ValueInterface, get EntryGet) ScanVerdict {
+func (r *InfoReader) Check(key KeyInterface, val ValueInterface, get EntryGet) (ScanVerdict, int64) {
 
 	switch val.Type() {
 	case TypeNATReverse:
@@ -90,7 +90,7 @@ func (r *InfoReader) Check(key KeyInterface, val ValueInterface, get EntryGet) S
 	}
 
 	// We never delete
-	return ScanVerdictOK
+	return ScanVerdictOK, 0
 }
 
 func makeTuple(ipSrc, ipDst net.IP, portSrc, portDst uint16, proto uint8) tuple.Tuple {
