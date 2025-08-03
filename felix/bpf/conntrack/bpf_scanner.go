@@ -18,8 +18,10 @@ import (
 	"encoding/binary"
 	"fmt"
 	"path"
+	"sync"
 	"unsafe"
 
+	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/bpf"
@@ -27,6 +29,22 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/conntrack/timeouts"
 	"github.com/projectcalico/calico/felix/bpf/libbpf"
 )
+
+var (
+	registerOnce           sync.Once
+	summaryCleanerExecTime = prometheus.NewSummary(prometheus.SummaryOpts{
+		Name: "felix_bpf_conntrack_cleaner_seconds",
+		Help: "Time taken to run the conntrack cleaner BPF program.",
+	})
+)
+
+func registerConntrackMetrics() {
+	registerOnce.Do(func() {
+		prometheus.MustRegister(
+			summaryCleanerExecTime,
+		)
+	})
+}
 
 type BPFLogLevel string
 
@@ -70,6 +88,7 @@ func NewBPFProgCleaner(
 	if err != nil {
 		return nil, err
 	}
+	registerConntrackMetrics()
 	return s, nil
 }
 
@@ -155,6 +174,8 @@ func (s *BPFProgCleaner) Run(opts ...RunOpt) (*CleanupContext, error) {
 		"timeTaken": result.Duration,
 		"stats":     cr,
 	}).Debug("Conntrack cleanup result.")
+
+	summaryCleanerExecTime.Observe(result.Duration.Seconds())
 	return &cr, nil
 }
 

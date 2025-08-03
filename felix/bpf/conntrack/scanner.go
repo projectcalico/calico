@@ -237,6 +237,12 @@ func (s *Scanner) Scan() {
 				if debug {
 					log.Debug("Deleting conntrack entry.")
 				}
+				// Fall back to userspace cleaner, when the bpf cleaner
+				// fails to load.
+				if s.bpfCleaner == nil {
+					cleaned++
+					return maps.IterDelete
+				}
 				// NAT entry has expired.
 				if ctVal.Type() != TypeNormal {
 					err := s.handleNATEntries(ctKey, ctVal, uint64(ts))
@@ -263,6 +269,9 @@ func (s *Scanner) Scan() {
 				}
 			}
 		}
+		if used%1000 == 0 {
+			cleaned += s.runBPFCleaner()
+		}
 		return maps.IterNone
 	})
 
@@ -272,7 +281,7 @@ func (s *Scanner) Scan() {
 	if len(s.keyTracker) > 0 {
 		for k, v := range s.keyTracker {
 			// This is a forward entry and we haven't seen the rev entry.
-			// Maybe delete by LRU
+			// Maybe deleted by LRU
 			revKey := v.ReverseNATKey()
 			ts := v.Timestamp()
 			revTS := v.RevTimestamp()
@@ -293,14 +302,8 @@ func (s *Scanner) Scan() {
 		return
 	}
 
-	// Run the BPF cleanup program.
-	if s.bpfCleaner != nil {
-		cr, err := s.bpfCleaner.Run()
-		if err != nil {
-			log.WithError(err).Warn("Failed to run bpf conntrack cleaner.")
-		}
-		cleaned = int(cr.NumKVsCleaned)
-	}
+	// Run the bpf cleaner
+	cleaned += s.runBPFCleaner()
 
 	conntrackCounterSweeps.Inc()
 	conntrackGaugeUsed.Set(float64(used))
@@ -334,6 +337,18 @@ func (s *Scanner) Scan() {
 			}
 		}
 	}
+}
+
+func (s *Scanner) runBPFCleaner() int {
+	// Run the BPF cleanup program.
+	if s.bpfCleaner != nil {
+		cr, err := s.bpfCleaner.Run()
+		if err != nil {
+			log.WithError(err).Warn("Failed to run bpf conntrack cleaner.")
+		}
+		return int(cr.NumKVsCleaned)
+	}
+	return 0
 }
 
 func (s *Scanner) writeNewSizeFile() error {
