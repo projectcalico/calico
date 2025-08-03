@@ -111,7 +111,7 @@ type Scanner struct {
 	autoScale                    bool
 	configChangedRestartCallback func()
 	bpfCleaner                   Cleaner
-	ipVersion                    int
+	versionHelper                ipVersionHelper
 	keyTracker                   map[KeyInterface]cleanupv1.ValueInterface
 
 	wg       sync.WaitGroup
@@ -139,16 +139,17 @@ func NewScanner(ctMap maps.Map, kfb func([]byte) KeyInterface, vfb func([]byte) 
 		autoScale:                    strings.ToLower(autoScalingMode) == "doubleiffull",
 		configChangedRestartCallback: configChangedRestartCallback,
 		bpfCleaner:                   bpfCleaner,
-		ipVersion:                    ipVersion,
 		keyTracker:                   make(map[KeyInterface]cleanupv1.ValueInterface),
 	}
 	switch ipVersion {
 	case 4:
 		s.ctCleanupMap = cachingmap.New[KeyInterface, cleanupv1.ValueInterface](ctCleanupMap.GetName(),
 			maps.NewTypedMap[KeyInterface, cleanupv1.ValueInterface](ctCleanupMap, kfb, CleanupValueFromBytes))
+		s.versionHelper = ipv4Helper{}
 	case 6:
 		s.ctCleanupMap = cachingmap.New[KeyInterface, cleanupv1.ValueInterface](ctCleanupMap.GetName(),
 			maps.NewTypedMap[KeyInterface, cleanupv1.ValueInterface](ctCleanupMap, kfb, CleanupValueV6FromBytes))
+		s.versionHelper = ipv6Helper{}
 	default:
 		return nil
 
@@ -157,14 +158,8 @@ func NewScanner(ctMap maps.Map, kfb func([]byte) KeyInterface, vfb func([]byte) 
 }
 
 func (s *Scanner) updateCleanupMap(key, revKey KeyInterface, ts, rev_ts uint64) {
-	var val cleanupv1.ValueInterface
-	if s.ipVersion == 6 {
-		val = cleanupv1.NewValueV6(revKey.AsBytes(), ts, rev_ts)
-	} else {
-		val = cleanupv1.NewValue(revKey.AsBytes(), ts, rev_ts)
-	}
+	val := s.versionHelper.newCleanupValue(revKey.AsBytes(), ts, rev_ts)
 	s.ctCleanupMap.Desired().Set(key, val)
-	//return s.ctCleanupMap.Update(key.AsBytes(), val.AsBytes())
 }
 
 func (s *Scanner) handleNATEntries(key KeyInterface, val ValueInterface, rev_ts uint64) {
@@ -175,24 +170,15 @@ func (s *Scanner) handleNATEntries(key KeyInterface, val ValueInterface, rev_ts 
 		// timestamp returned from the scanner will match the
 		// same as that of entry's ts. Just go ahead with deletion.
 		if ts == rev_ts {
-			if s.ipVersion == 6 {
-				s.updateCleanupMap(key, dummyKeyV6, uint64(ts), rev_ts)
-			} else {
-				s.updateCleanupMap(key, dummyKey, uint64(ts), rev_ts)
-			}
+			dummy := s.versionHelper.dummyKey()
+			s.updateCleanupMap(key, dummy, ts, rev_ts)
 			return
 		}
 		_, ok := s.keyTracker[revKey]
 		if !ok {
 			// Reverse entry not seen by the scanner. Don't queue it up for deletion.
 			// Wait to see if we the scanner sees the reverse entry.
-			var cleanupVal cleanupv1.ValueInterface
-			if s.ipVersion == 6 {
-				cleanupVal = cleanupv1.NewValueV6(key.AsBytes(), ts, rev_ts)
-			} else {
-				cleanupVal = cleanupv1.NewValue(key.AsBytes(), ts, rev_ts)
-			}
-			s.keyTracker[revKey] = cleanupVal
+			s.keyTracker[revKey] = s.versionHelper.newCleanupValue(key.AsBytes(), ts, rev_ts)
 		} else {
 			// Reverse entry already seen.
 			delete(s.keyTracker, revKey)
@@ -208,13 +194,8 @@ func (s *Scanner) handleNATEntries(key KeyInterface, val ValueInterface, rev_ts 
 			fwdTS := revVal.Timestamp()
 			s.updateCleanupMap(fwdKey, key, fwdTS, ts)
 		} else {
-			var cleanupVal cleanupv1.ValueInterface
-			if s.ipVersion == 6 {
-				cleanupVal = cleanupv1.NewValueV6(dummyKeyV6.AsBytes(), ts, uint64(0))
-			} else {
-				cleanupVal = cleanupv1.NewValue(dummyKey.AsBytes(), ts, uint64(0))
-			}
-			s.keyTracker[key] = cleanupVal
+			dummy := s.versionHelper.dummyKey()
+			s.keyTracker[key] = s.versionHelper.newCleanupValue(dummy.AsBytes(), ts, uint64(0))
 		}
 	}
 }
@@ -263,18 +244,8 @@ func (s *Scanner) Scan() {
 					s.handleNATEntries(ctKey, ctVal, uint64(ts))
 					continue
 				}
-				var dummyKey KeyInterface
-				if s.ipVersion == 6 {
-					dummyKey = BytesToKeyV6([]byte{})
-				} else {
-					dummyKey = BytesToKey([]byte{})
-				}
-
-				if s.ipVersion == 6 {
-					s.updateCleanupMap(ctKey, dummyKeyV6, uint64(ts), uint64(ts))
-				} else {
-					s.updateCleanupMap(ctKey, dummyKey, uint64(ts), uint64(ts))
-				}
+				dummy := s.versionHelper.dummyKey()
+				s.updateCleanupMap(ctKey, dummy, uint64(ts), uint64(ts))
 			}
 		}
 		if used%1000 == 0 {
@@ -457,4 +428,29 @@ func (s *Scanner) AddFirstUnlocked(scanner EntryScanner) {
 type Cleaner interface {
 	Run(opts ...RunOpt) (*CleanupContext, error)
 	Close() error
+}
+
+type ipVersionHelper interface {
+	newCleanupValue(revKeyBytes []byte, ts, rev_ts uint64) cleanupv1.ValueInterface
+	dummyKey() KeyInterface
+}
+
+type ipv4Helper struct{}
+
+func (h ipv4Helper) newCleanupValue(revKeyBytes []byte, ts, rev_ts uint64) cleanupv1.ValueInterface {
+	return cleanupv1.NewValue(revKeyBytes, ts, rev_ts)
+}
+
+func (h ipv4Helper) dummyKey() KeyInterface {
+	return dummyKey // Assumes existing global/package variable for the IPv4 dummy key
+}
+
+type ipv6Helper struct{}
+
+func (h ipv6Helper) newCleanupValue(revKeyBytes []byte, ts, rev_ts uint64) cleanupv1.ValueInterface {
+	return cleanupv1.NewValueV6(revKeyBytes, ts, rev_ts)
+}
+
+func (h ipv6Helper) dummyKey() KeyInterface {
+	return dummyKeyV6 // Assumes existing global/package variable for the IPv6 dummy key
 }
