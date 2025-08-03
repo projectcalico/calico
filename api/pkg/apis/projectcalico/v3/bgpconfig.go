@@ -53,6 +53,17 @@ type BGPConfiguration struct {
 	Spec BGPConfigurationSpec `json:"spec,omitempty" protobuf:"bytes,2,opt,name=spec"`
 }
 
+// ServiceLoadBalancerAggregation defines how LoadBalancer service IPs should be aggregated for BGP advertisement.
+// +kubebuilder:validation:Enum=Enabled;Disabled
+type ServiceLoadBalancerAggregation string
+
+const (
+	// ServiceLoadBalancerAggregationEnabled means the full CIDR range will be advertised (default behavior)
+	ServiceLoadBalancerAggregationEnabled ServiceLoadBalancerAggregation = "Enabled"
+	// ServiceLoadBalancerAggregationDisabled means individual /32 routes will be advertised for each LoadBalancer service
+	ServiceLoadBalancerAggregationDisabled ServiceLoadBalancerAggregation = "Disabled"
+)
+
 // BGPConfigurationSpec contains the values of the BGP configuration.
 type BGPConfigurationSpec struct {
 	// LogSeverityScreen is the log severity above which logs are sent to the stdout. [Default: INFO]
@@ -75,6 +86,13 @@ type BGPConfigurationSpec struct {
 	// ServiceClusterIPs are the CIDR blocks from which service cluster IPs are allocated.
 	// If specified, Calico will advertise these blocks, as well as any cluster IPs within them.
 	ServiceClusterIPs []ServiceClusterIPBlock `json:"serviceClusterIPs,omitempty" validate:"omitempty,dive" confignamev1:"svc_cluster_ips"`
+
+	// ServiceLoadBalancerAggregation controls how LoadBalancer service IPs are advertised.
+	// When set to "Disabled", individual /32 routes are advertised for each service instead of
+	// the full CIDR range. This is useful for anycast failover mechanisms where failed service
+	// routes need to be withdrawn. [Default: Enabled]
+	// +kubebuilder:default=Enabled
+	ServiceLoadBalancerAggregation *ServiceLoadBalancerAggregation `json:"serviceLoadBalancerAggregation,omitempty" validate:"omitempty" confignamev1:"svc_loadbalancer_aggregation"`
 
 	// Communities is a list of BGP community values and their arbitrary names for tagging routes.
 	Communities []Community `json:"communities,omitempty" validate:"omitempty,dive" confignamev1:"communities"`
