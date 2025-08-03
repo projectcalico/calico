@@ -62,7 +62,7 @@ func setUpConntrackScanTest(t *testing.T) *conntrack.Scanner {
 	Expect(err).NotTo(HaveOccurred(), "Failed to create BPFCleaner")
 	scanner := conntrack.NewScanner(ctMap, conntrack.KeyFromBytes,
 		conntrack.ValueFromBytes,
-		nil, "Disabled", ctCleanupMap, 4,
+		nil, "Disabled", ctCleanupMap.(maps.MapWithExistsCheck), 4,
 		cleaner, lc)
 	t.Cleanup(func() {
 		scanner.Close()

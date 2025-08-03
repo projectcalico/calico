@@ -28,6 +28,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/conntrack/cleanupv1"
 	"github.com/projectcalico/calico/felix/bpf/conntrack/timeouts"
 	"github.com/projectcalico/calico/felix/bpf/maps"
+	"github.com/projectcalico/calico/felix/cachingmap"
 	"github.com/projectcalico/calico/felix/jitter"
 )
 
@@ -100,7 +101,7 @@ type EntryScannerSynced interface {
 // evaluation functions, to keep their implementation simpler.
 type Scanner struct {
 	ctMap                        maps.Map
-	ctCleanupMap                 maps.Map
+	ctCleanupMap                 *cachingmap.CachingMap[KeyInterface, cleanupv1.ValueInterface]
 	keyFromBytes                 func([]byte) KeyInterface
 	valueFromBytes               func([]byte) ValueInterface
 	scanners                     []EntryScanner
@@ -122,14 +123,13 @@ type Scanner struct {
 // EntryScanner. They are executed in the provided order on each entry.
 func NewScanner(ctMap maps.Map, kfb func([]byte) KeyInterface, vfb func([]byte) ValueInterface,
 	configChangedRestartCallback func(),
-	autoScalingMode string, ctCleanupMap maps.Map,
+	autoScalingMode string, ctCleanupMap maps.MapWithExistsCheck,
 	ipVersion int,
 	bpfCleaner Cleaner,
 	scanners ...EntryScanner) *Scanner {
 
-	return &Scanner{
+	s := &Scanner{
 		ctMap:                        ctMap,
-		ctCleanupMap:                 ctCleanupMap,
 		keyFromBytes:                 kfb,
 		valueFromBytes:               vfb,
 		scanners:                     scanners,
@@ -142,19 +142,32 @@ func NewScanner(ctMap maps.Map, kfb func([]byte) KeyInterface, vfb func([]byte) 
 		ipVersion:                    ipVersion,
 		keyTracker:                   make(map[KeyInterface]cleanupv1.ValueInterface),
 	}
+	switch ipVersion {
+	case 4:
+		s.ctCleanupMap = cachingmap.New[KeyInterface, cleanupv1.ValueInterface](ctCleanupMap.GetName(),
+			maps.NewTypedMap[KeyInterface, cleanupv1.ValueInterface](ctCleanupMap, kfb, CleanupValueFromBytes))
+	case 6:
+		s.ctCleanupMap = cachingmap.New[KeyInterface, cleanupv1.ValueInterface](ctCleanupMap.GetName(),
+			maps.NewTypedMap[KeyInterface, cleanupv1.ValueInterface](ctCleanupMap, kfb, CleanupValueV6FromBytes))
+	default:
+		return nil
+
+	}
+	return s
 }
 
-func (s *Scanner) updateCleanupMap(key, revKey KeyInterface, ts, rev_ts uint64) error {
+func (s *Scanner) updateCleanupMap(key, revKey KeyInterface, ts, rev_ts uint64) {
 	var val cleanupv1.ValueInterface
 	if s.ipVersion == 6 {
 		val = cleanupv1.NewValueV6(revKey.AsBytes(), ts, rev_ts)
 	} else {
 		val = cleanupv1.NewValue(revKey.AsBytes(), ts, rev_ts)
 	}
-	return s.ctCleanupMap.Update(key.AsBytes(), val.AsBytes())
+	s.ctCleanupMap.Desired().Set(key, val)
+	//return s.ctCleanupMap.Update(key.AsBytes(), val.AsBytes())
 }
 
-func (s *Scanner) handleNATEntries(key KeyInterface, val ValueInterface, rev_ts uint64) error {
+func (s *Scanner) handleNATEntries(key KeyInterface, val ValueInterface, rev_ts uint64) {
 	ts := uint64(val.LastSeen())
 	if val.Type() == TypeNATForward {
 		revKey := val.ReverseNATKey()
@@ -163,10 +176,11 @@ func (s *Scanner) handleNATEntries(key KeyInterface, val ValueInterface, rev_ts 
 		// same as that of entry's ts. Just go ahead with deletion.
 		if ts == rev_ts {
 			if s.ipVersion == 6 {
-				return s.updateCleanupMap(key, dummyKeyV6, uint64(ts), rev_ts)
+				s.updateCleanupMap(key, dummyKeyV6, uint64(ts), rev_ts)
 			} else {
-				return s.updateCleanupMap(key, dummyKey, uint64(ts), rev_ts)
+				s.updateCleanupMap(key, dummyKey, uint64(ts), rev_ts)
 			}
+			return
 		}
 		_, ok := s.keyTracker[revKey]
 		if !ok {
@@ -182,7 +196,8 @@ func (s *Scanner) handleNATEntries(key KeyInterface, val ValueInterface, rev_ts 
 		} else {
 			// Reverse entry already seen.
 			delete(s.keyTracker, revKey)
-			return s.updateCleanupMap(key, revKey, ts, rev_ts)
+			s.updateCleanupMap(key, revKey, ts, rev_ts)
+			return
 		}
 	} else if val.Type() == TypeNATReverse {
 		revVal, ok := s.keyTracker[key]
@@ -191,7 +206,7 @@ func (s *Scanner) handleNATEntries(key KeyInterface, val ValueInterface, rev_ts 
 			delete(s.keyTracker, key)
 			fwdKey := revVal.ReverseNATKey()
 			fwdTS := revVal.Timestamp()
-			return s.updateCleanupMap(fwdKey, key, fwdTS, ts)
+			s.updateCleanupMap(fwdKey, key, fwdTS, ts)
 		} else {
 			var cleanupVal cleanupv1.ValueInterface
 			if s.ipVersion == 6 {
@@ -202,7 +217,6 @@ func (s *Scanner) handleNATEntries(key KeyInterface, val ValueInterface, rev_ts 
 			s.keyTracker[key] = cleanupVal
 		}
 	}
-	return nil
 }
 
 // Scan executes a scanning iteration
@@ -217,6 +231,7 @@ func (s *Scanner) Scan() {
 	used := 0
 	cleaned := 0
 
+	s.ctCleanupMap.Desired().DeleteAll()
 	log.Debug("Starting conntrack scanner iteration")
 	err := s.ctMap.Iter(func(k, v []byte) maps.IteratorAction {
 		ctKey := s.keyFromBytes(k)
@@ -245,10 +260,7 @@ func (s *Scanner) Scan() {
 				}
 				// NAT entry has expired.
 				if ctVal.Type() != TypeNormal {
-					err := s.handleNATEntries(ctKey, ctVal, uint64(ts))
-					if err != nil {
-						log.Debugf("error updating cleanup map. Entry may not be cleaned up %v", err)
-					}
+					s.handleNATEntries(ctKey, ctVal, uint64(ts))
 					continue
 				}
 				var dummyKey KeyInterface
@@ -258,14 +270,10 @@ func (s *Scanner) Scan() {
 					dummyKey = BytesToKey([]byte{})
 				}
 
-				var err error
 				if s.ipVersion == 6 {
-					err = s.updateCleanupMap(ctKey, dummyKeyV6, uint64(ts), uint64(ts))
+					s.updateCleanupMap(ctKey, dummyKeyV6, uint64(ts), uint64(ts))
 				} else {
-					err = s.updateCleanupMap(ctKey, dummyKey, uint64(ts), uint64(ts))
-				}
-				if err != nil {
-					log.Debugf("error updating cleanup map. Entry may not be cleaned up %v", err)
+					s.updateCleanupMap(ctKey, dummyKey, uint64(ts), uint64(ts))
 				}
 			}
 		}
@@ -285,14 +293,10 @@ func (s *Scanner) Scan() {
 			revKey := v.ReverseNATKey()
 			ts := v.Timestamp()
 			revTS := v.RevTimestamp()
-			var err error
 			if revKey.Proto() != 0 {
-				err = s.updateCleanupMap(revKey, k, ts, revTS)
+				s.updateCleanupMap(revKey, k, ts, revTS)
 			} else {
-				err = s.updateCleanupMap(k, revKey, ts, revTS)
-			}
-			if err != nil {
-				log.Debugf("error updating cleanup map. Entry may not be cleaned up %v", err)
+				s.updateCleanupMap(k, revKey, ts, revTS)
 			}
 		}
 	}
@@ -342,6 +346,9 @@ func (s *Scanner) Scan() {
 func (s *Scanner) runBPFCleaner() int {
 	// Run the BPF cleanup program.
 	if s.bpfCleaner != nil {
+		if err := s.ctCleanupMap.ApplyAllChanges(); err != nil {
+			log.WithError(err).Warn("Failed to write updates to conntrack cleanup BPF map.")
+		}
 		cr, err := s.bpfCleaner.Run()
 		if err != nil {
 			log.WithError(err).Warn("Failed to run bpf conntrack cleaner.")

@@ -118,7 +118,7 @@ func getIPMaps(ipFamily int) *IPMaps {
 		AffinityMap:  getmap(nat.AffinityMap, nat.AffinityMapV6),
 		RouteMap:     getmap(routes.Map, routes.MapV6),
 		CtMap:        getmap(conntrack.Map, conntrack.MapV6),
-		CtCleanupMap: getmap(conntrack.CleanupMap, conntrack.CleanupMapV6),
+		CtCleanupMap: getmapWithExistsCheck(conntrack.CleanupMap, conntrack.CleanupMapV6),
 		SrMsgMap:     getmap(nat.SendRecvMsgMap, nat.SendRecvMsgMapV6),
 		CtNatsMap:    getmap(nat.AllNATsMsgMap, nat.AllNATsMsgMapV6),
 	}

@@ -150,11 +150,11 @@ func MapV6() maps.Map {
 	return b
 }
 
-func CleanupMap() maps.Map {
+func CleanupMap() maps.MapWithExistsCheck {
 	return maps.NewPinnedMap(MapParamsCleanup)
 }
 
-func CleanupMapV6() maps.Map {
+func CleanupMapV6() maps.MapWithExistsCheck {
 	return maps.NewPinnedMap(MapParamsCleanupV6)
 }
 

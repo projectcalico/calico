@@ -2753,7 +2753,7 @@ func (d dummyLock) Unlock() {
 
 func startBPFDataplaneComponents(
 	ipFamily proto.IPVersion,
-	bpfmaps *bpfmap.IPMaps,
+	maps *bpfmap.IPMaps,
 	ipSetIDAllocator *idalloc.IDAllocator,
 	config Config,
 	ipSetsMgr *dpsets.IPSetsManager,
@@ -2799,12 +2799,12 @@ func startBPFDataplaneComponents(
 		bpfproxyOpts = append(bpfproxyOpts, bpfproxy.WithIPFamily(6))
 	}
 
-	ipSets := bpfipsets.NewBPFIPSets(ipSetConfig, ipSetIDAllocator, bpfmaps.IpsetsMap, ipSetEntry, ipSetProtoEntry, dp.loopSummarizer)
+	ipSets := bpfipsets.NewBPFIPSets(ipSetConfig, ipSetIDAllocator, maps.IpsetsMap, ipSetEntry, ipSetProtoEntry, dp.loopSummarizer)
 	dp.ipSets = append(dp.ipSets, ipSets)
 	ipSetsMgr.AddDataplane(ipSets)
 
 	failsafeMgr := failsafes.NewManager(
-		bpfmaps.FailsafesMap,
+		maps.FailsafesMap,
 		config.RulesConfig.FailsafeInboundHostPorts,
 		config.RulesConfig.FailsafeOutboundHostPorts,
 		dp.loopSummarizer,
@@ -2814,7 +2814,7 @@ func startBPFDataplaneComponents(
 	)
 	dp.RegisterManager(failsafeMgr)
 
-	bpfRTMgr := newBPFRouteManager(&config, bpfmaps, ipFamily, dp.loopSummarizer)
+	bpfRTMgr := newBPFRouteManager(&config, maps, ipFamily, dp.loopSummarizer)
 	dp.RegisterManager(bpfRTMgr)
 
 	livenessScanner := bpfconntrack.NewLivenessScanner(config.BPFConntrackTimeouts, config.BPFNodePortDSREnabled)
@@ -2828,9 +2828,9 @@ func startBPFDataplaneComponents(
 		log.Errorf("error creating the bpf cleaner %v", err)
 	}
 
-	conntrackScanner := bpfconntrack.NewScanner(bpfmaps.CtMap, ctKey, ctVal,
+	conntrackScanner := bpfconntrack.NewScanner(maps.CtMap, ctKey, ctVal,
 		config.ConfigChangedRestartCallback,
-		config.BPFMapSizeConntrackScaling, bpfmaps.CtCleanupMap,
+		config.BPFMapSizeConntrackScaling, maps.CtCleanupMap.(bpfmaps.MapWithExistsCheck),
 		int(ipFamily),
 		bpfCleaner,
 		livenessScanner)
@@ -2844,7 +2844,7 @@ func startBPFDataplaneComponents(
 		kp, err := bpfproxy.StartKubeProxy(
 			config.KubeClientSet,
 			config.Hostname,
-			bpfmaps,
+			maps,
 			bpfproxyOpts...,
 		)
 		if err != nil {
