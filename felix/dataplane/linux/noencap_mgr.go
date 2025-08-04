@@ -63,11 +63,6 @@ func newNoEncapManagerWithSims(
 	nlHandle netlinkHandle,
 ) *noEncapManager {
 
-	if ipVersion != 4 {
-		logrus.Errorf("NoEncap manager only supports IPv4")
-		return nil
-	}
-
 	m := &noEncapManager{
 		hostname:  dpConfig.Hostname,
 		ipVersion: ipVersion,
@@ -96,13 +91,30 @@ func newNoEncapManagerWithSims(
 
 func (m *noEncapManager) OnUpdate(protoBufMsg interface{}) {
 	switch msg := protoBufMsg.(type) {
-	case *proto.HostMetadataUpdate:
+	/*case *proto.HostMetadataUpdate:
 		m.logCtx.WithField("hostname", msg.Hostname).Debug("Host update/create")
 		if msg.Hostname == m.hostname {
 			m.routeMgr.updateParentIfaceAddr(msg.Ipv4Addr)
 		}
 		m.routeMgr.triggerRouteUpdate()
 	case *proto.HostMetadataRemove:
+		m.logCtx.WithField("hostname", msg.Hostname).Debug("Host removed")
+		if msg.Hostname == m.hostname {
+			m.routeMgr.updateParentIfaceAddr("")
+		}
+		m.routeMgr.triggerRouteUpdate()
+	*/
+	case *proto.HostMetadataV4V6Update:
+		m.logCtx.WithField("hostname", msg.Hostname).Debug("Host update/create")
+		if msg.Hostname == m.hostname {
+			if m.ipVersion == 6 {
+				m.routeMgr.updateParentIfaceAddr(msg.Ipv6Addr)
+			} else {
+				m.routeMgr.updateParentIfaceAddr(msg.Ipv4Addr)
+			}
+		}
+		m.routeMgr.triggerRouteUpdate()
+	case *proto.HostMetadataV4V6Remove:
 		m.logCtx.WithField("hostname", msg.Hostname).Debug("Host removed")
 		if msg.Hostname == m.hostname {
 			m.routeMgr.updateParentIfaceAddr("")
