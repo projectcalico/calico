@@ -14,7 +14,6 @@ package calico
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -371,21 +370,4 @@ func getAllAutoHostEndpoints(client ctrlclient.Client) *v3.HostEndpointList {
 	err := client.List(context.Background(), heps)
 	Expect(err).NotTo(HaveOccurred())
 	return heps
-}
-
-// GetAllAutoHostEndpointsIPs returns a map of all IPs known by each host keyed by hostname
-func GetAllAutoHostEndpointsIPs(client ctrlclient.Client) map[string][]string {
-	ips := make(map[string][]string)
-
-	heps := getAllAutoHostEndpoints(client)
-	for _, hep := range heps.Items {
-		// The HEP is named after the node with suffix "-auto-hep".  Note: we used to grab the hostname
-		// label here but that can differ from the nodename so we now reverse engineer the nodename
-		// from the name of the HEP.
-		hepName := hep.Name
-		nodeName := strings.TrimSuffix(hepName, "-auto-hep")
-		ips[nodeName] = hep.Spec.ExpectedIPs
-	}
-
-	return ips
 }
