@@ -312,11 +312,8 @@ func ToggleAutoHostEndpoints(client ctrlclient.Client, enabled bool) {
 func GetAutoHEPsEnabled(client ctrlclient.Client) bool {
 	var kcc v3.KubeControllersConfiguration
 	err := client.Get(context.Background(), types.NamespacedName{Name: "default"}, &kcc)
-	if err != nil {
-		return false
-	}
-	autoCreate := kcc.Status.RunningConfig.Controllers.Node.HostEndpoint.AutoCreate
 	Expect(err).NotTo(HaveOccurred())
+	autoCreate := kcc.Status.RunningConfig.Controllers.Node.HostEndpoint.AutoCreate
 	logrus.Infof("BeforeEach: auto host endpoints is: %s", autoCreate)
 	return autoCreate == "Enabled"
 }
