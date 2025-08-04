@@ -92,6 +92,7 @@ var _ = testutils.E2eDatastoreDescribe("Profile tests", testutils.DatastoreEtcdV
 			}, options.SetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
 			Expect(res1).To(MatchResource(apiv3.KindProfile, testutils.ExpectNoNamespace, name1, spec1))
+			Expect(res1.Labels[apiv3.LabelKind]).To(Equal(apiv3.KindProfile))
 
 			// Track the version of the original data for name1.
 			rv1_1 := res1.ResourceVersion
@@ -130,6 +131,7 @@ var _ = testutils.E2eDatastoreDescribe("Profile tests", testutils.DatastoreEtcdV
 			}, options.SetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
 			Expect(res2).To(MatchResource(apiv3.KindProfile, testutils.ExpectNoNamespace, name2, spec2))
+			Expect(res2.Labels[apiv3.LabelKind]).To(Equal(apiv3.KindProfile))
 
 			By("Getting Profile (name2) and comparing the output against spec2")
 			res, outError = c.Profiles().Get(ctx, name2, options.GetOptions{})

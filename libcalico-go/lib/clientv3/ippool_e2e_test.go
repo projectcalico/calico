@@ -154,6 +154,7 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests", testutils.DatastoreAll, f
 			Expect(outError).NotTo(HaveOccurred())
 			Expect(poolToCreate).To(Equal(poolToCreateCopy), "Create() unexpectedly modified input")
 			Expect(res1).To(MatchResource(apiv3.KindIPPool, testutils.ExpectNoNamespace, name1, spec1))
+			Expect(res1.Labels[apiv3.LabelKind]).To(Equal(apiv3.KindIPPool))
 
 			// Track the version of the original data for name1.
 			rv1_1 := res1.ResourceVersion
@@ -191,6 +192,7 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests", testutils.DatastoreAll, f
 			}, options.SetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
 			Expect(res2).To(MatchResource(apiv3.KindIPPool, testutils.ExpectNoNamespace, name2, spec2))
+			Expect(res2.Labels[apiv3.LabelKind]).To(Equal(apiv3.KindIPPool))
 
 			By("Getting IPPool (name2) and comparing the output against spec2")
 			res, outError = c.IPPools().Get(ctx, name2, options.GetOptions{})

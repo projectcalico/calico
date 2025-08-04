@@ -221,6 +221,7 @@ var _ = testutils.E2eDatastoreDescribe("CalicoNodeStatus tests", testutils.Datas
 				Status:     status1,
 			}, options.SetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
+			Expect(res1.Labels[apiv3.LabelKind]).To(Equal(apiv3.KindCalicoNodeStatus))
 
 			// The location field of LastUpdated (loc:(*time.Location)(0x2d1e7e0)}) will be populated
 			// by datastore on write. Hence we need to copy over it to original status before comparing against it.
@@ -266,6 +267,7 @@ var _ = testutils.E2eDatastoreDescribe("CalicoNodeStatus tests", testutils.Datas
 			Expect(outError).NotTo(HaveOccurred())
 			status2.LastUpdated = res2.Status.LastUpdated
 			Expect(res2).To(MatchResourceWithStatus(apiv3.KindCalicoNodeStatus, testutils.ExpectNoNamespace, name2, spec2, status2))
+			Expect(res2.Labels[apiv3.LabelKind]).To(Equal(apiv3.KindCalicoNodeStatus))
 
 			By("Getting CalicoNodeStatus (name2) and comparing the output against spec2/status2")
 			res, outError = c.CalicoNodeStatus().Get(ctx, name2, options.GetOptions{})
