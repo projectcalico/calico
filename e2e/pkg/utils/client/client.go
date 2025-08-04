@@ -16,6 +16,7 @@ package client
 
 import (
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	operatorv1 "github.com/tigera/operator/api/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -27,6 +28,9 @@ func New(cfg *rest.Config) (client.Client, error) {
 	scheme := runtime.NewScheme()
 	if err := v3.AddToScheme(scheme); err != nil {
 		return nil, err
+	}
+	if er := operatorv1.AddToScheme(scheme); er != nil {
+		return nil, er
 	}
 	return client.New(cfg, client.Options{Scheme: scheme})
 }
