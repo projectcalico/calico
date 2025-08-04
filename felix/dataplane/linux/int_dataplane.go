@@ -704,22 +704,24 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			dp.RegisterManager(dp.noEncapManager)
 		}
 
-		if !config.RulesConfig.VXLANEnabledV6 && !config.RulesConfig.WireguardEnabledV6 {
-			log.Info("No IPv6 encapsulation enabled, starting thread to keep no encapsulation routes in sync.")
-			// Add a manager to keep the all-hosts IP set up to date.
-			dp.noEncapManagerV6 = newNoEncapManager(
-				routeTableV6,
-				6,
-				config,
-				dp.loopSummarizer,
-			)
-			dp.noEncapParentIfaceCV6 = make(chan string, 1)
-			go dp.noEncapManagerV6.monitorParentDevice(
-				context.Background(),
-				time.Second*10,
-				dp.noEncapParentIfaceCV6,
-			)
-			dp.RegisterManager(dp.noEncapManagerV6)
+		if config.IPv6Enabled {
+			if !config.RulesConfig.VXLANEnabledV6 && !config.RulesConfig.WireguardEnabledV6 {
+				log.Info("No IPv6 encapsulation enabled, starting thread to keep no encapsulation routes in sync.")
+				// Add a manager to keep the all-hosts IP set up to date.
+				dp.noEncapManagerV6 = newNoEncapManager(
+					routeTableV6,
+					6,
+					config,
+					dp.loopSummarizer,
+				)
+				dp.noEncapParentIfaceCV6 = make(chan string, 1)
+				go dp.noEncapManagerV6.monitorParentDevice(
+					context.Background(),
+					time.Second*10,
+					dp.noEncapParentIfaceCV6,
+				)
+				dp.RegisterManager(dp.noEncapManagerV6)
+			}
 		}
 	}
 

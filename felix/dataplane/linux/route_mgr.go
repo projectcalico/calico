@@ -441,16 +441,19 @@ func (m *routeManager) detectParentIface() (netlink.Link, error) {
 		return nil, err
 	}
 
+	logrus.Infof("marmar0 %#v", links)
 	family := netlink.FAMILY_V4
 	if m.ipVersion == 6 {
 		family = netlink.FAMILY_V6
 	}
 
 	for _, link := range links {
+		logrus.Infof("marmar1 %v %#v", m.ipVersion, link)
 		addrs, err := m.nlHandle.AddrList(link, family)
 		if err != nil {
 			return nil, err
 		}
+		logrus.Infof("marmar2 %#v", addrs)
 		for _, addr := range addrs {
 			if addr.IPNet.IP.String() == parentAddr {
 				m.logCtx.Debugf("Found parent interface: %s", link)
@@ -458,6 +461,7 @@ func (m *routeManager) detectParentIface() (netlink.Link, error) {
 			}
 		}
 	}
+	logrus.Info("marmar3")
 	return nil, fmt.Errorf("Unable to find parent interface with address %s", parentAddr)
 }
 
