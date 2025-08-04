@@ -31,6 +31,22 @@ var _ = Describe("Adaptive set", func() {
 		func(is []int) set.Set[int] { return set.AdaptiveFromArray(is) },
 		func(is ...int) set.Set[int] { return set.AdaptiveFrom(is...) },
 	)
+
+	It("should be constructable via FromAdaptive[int]", func() {
+		s1 := set.AdaptiveFrom(1, 2, 3)
+		s2 := set.From(1, 2, 3)
+		if !s1.Equals(s2) || !s2.Equals(s1) {
+			Fail("Sets are not equal")
+		}
+	})
+
+	It("should be constructable via FromAdaptive[string]", func() {
+		s1 := set.AdaptiveFrom("1", "2", "3")
+		s2 := set.From("1", "2", "3")
+		if !s1.Equals(s2) || !s2.Equals(s1) {
+			Fail("Sets are not equal")
+		}
+	})
 })
 
 func FuzzAdaptiveSet(f *testing.F) {

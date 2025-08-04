@@ -34,11 +34,8 @@ var arrCapForSize = [adaptiveSetArrayLimit + 1]int{
 // map-based implementation like set.Typed.
 //
 // The zero value of Adaptive is an empty set (so it may be embedded in other
-// datastructures).
-//
-// Should not be copied after first use. Since the struct carries the size,
-// copying by value and then mutating can result in two Adaptive instances
-// sharing storage but with different sizes; this is not recommended!
+// datastructures).  When embedding, the object must not be copied and then
+// mutated.
 type Adaptive[T comparable] struct {
 	// size is either the number of elements in the set, or sizeStoredInMap
 	// if the set is backed by a map.
@@ -47,7 +44,9 @@ type Adaptive[T comparable] struct {
 	// p holds different types depending on size.
 	// if size == 0, p is nil.
 	// if size is in the range [1, adaptiveSetArrayLimit], p is a pointer to
-	//    an array with length size, rounded up to next power of two.
+	//   an array with length arrCapForSize[size]. We store an array, not a
+	//   slice, to avoid storing the length and capacity of the slice.  The
+	//   slice is recomputed on demand, based on the size of set.
 	// if size == sizeStoredInMap, p is a pointer to a map[T]v
 	p unsafe.Pointer
 }
@@ -72,7 +71,7 @@ func (a *Adaptive[T]) Len() int {
 	if a.size == sizeStoredInMap {
 		return len(*(*map[T]v)(a.p))
 	}
-	return int(a.size)
+	return a.size
 }
 
 func (a *Adaptive[T]) Add(item T) {
@@ -83,6 +82,9 @@ func (a *Adaptive[T]) Add(item T) {
 		// as storing a single-element array.
 		a.p = unsafe.Pointer(&item)
 		a.size = 1
+	case sizeStoredInMap:
+		m := a.loadMapFromPointer()
+		m[item] = emptyValue
 	default:
 		// Sizes 1, 2, ..., adaptiveSetArrayLimit. Stored in an array.
 
@@ -120,9 +122,6 @@ func (a *Adaptive[T]) Add(item T) {
 		m[item] = emptyValue
 		a.p = unsafe.Pointer(&m)
 		a.size = sizeStoredInMap
-	case sizeStoredInMap:
-		m := a.loadMapFromPointer()
-		m[item] = emptyValue
 	}
 }
 
@@ -158,6 +157,18 @@ func (a *Adaptive[T]) Discard(item T) {
 			a.p = nil
 			a.size = 0
 		}
+	case sizeStoredInMap:
+		m := a.loadMapFromPointer()
+		delete(m, item)
+		if len(m) <= adaptiveSetArrayLimit {
+			// Too few items for a map, downgrade to an array.
+			s := make([]T, 0, arrCapForSize[len(m)])
+			for t := range m {
+				s = append(s, t)
+			}
+			a.p = unsafe.Pointer(&s[0])
+			a.size = len(m)
+		}
 	default:
 		// Handles sizes 2, 3, ..., adaptiveSetArrayLimit. Stored in an array.
 
@@ -171,8 +182,13 @@ func (a *Adaptive[T]) Discard(item T) {
 				newSize := a.size - 1
 				newCap := arrCapForSize[newSize]
 				if newCap < cap(tSlice) {
-					// Downgrade to a smaller array.
-					updatedSlice := make([]T, arrCapForSize[newSize])
+					// Downgrade to a smaller array.  We could just shrink the
+					// slice but that would leak the extra slots in the array.
+					// It's not obvious that that is a good trade-off in our
+					// usage so, for now, we maintain the invariant that
+					// the capacity of the backing array is always
+					// arrCapForSize[a.size].
+					updatedSlice := make([]T, newSize, arrCapForSize[newSize])
 					// Copy the elements before and after the removed element.
 					copy(updatedSlice, tSlice[:i])
 					copy(updatedSlice[i:], tSlice[i+1:])
@@ -181,24 +197,14 @@ func (a *Adaptive[T]) Discard(item T) {
 					// Keep the same slice.  Swap the last element into the
 					// removed element's slot.
 					tSlice[i] = tSlice[newSize]
+					// Zero the last element to avoid keeping a reference to a
+					// potentially large object.
 					var zeroT T
 					tSlice[newSize] = zeroT
 				}
 				a.size = newSize
 				return
 			}
-		}
-	case sizeStoredInMap:
-		m := a.loadMapFromPointer()
-		delete(m, item)
-		if len(m) <= adaptiveSetArrayLimit {
-			// Too few items for a map, downgrade to an array.
-			s := make([]T, 0, arrCapForSize[len(m)])
-			for t := range m {
-				s = append(s, t)
-			}
-			a.p = unsafe.Pointer(&s[0])
-			a.size = len(m)
 		}
 	}
 }
@@ -212,6 +218,10 @@ func (a *Adaptive[T]) Contains(t T) bool {
 	switch a.size {
 	case 0:
 		return false
+	case sizeStoredInMap:
+		m := a.loadMapFromPointer()
+		_, present := m[t]
+		return present
 	default:
 		// Handles sizes 1, 2, ..., adaptiveSetArrayLimit. Stored in an array.
 
@@ -225,10 +235,6 @@ func (a *Adaptive[T]) Contains(t T) bool {
 			}
 		}
 		return false
-	case sizeStoredInMap:
-		m := a.loadMapFromPointer()
-		_, present := m[t]
-		return present
 	}
 }
 
@@ -236,6 +242,20 @@ func (a *Adaptive[T]) Iter(f func(item T) error) {
 	switch a.size {
 	case 0:
 		return
+	case sizeStoredInMap:
+		m := a.loadMapFromPointer()
+		for v := range m {
+			err := f(v)
+			if err == StopIteration {
+				return
+			}
+			if err == RemoveItem {
+				// Discarding from a map is safe.  If the set did shrink and
+				// get turned into an array then we'd just keep iterating
+				// over the map, which would be fine.
+				a.Discard(v)
+			}
+		}
 	default:
 		// Handles sizes 1, 2, ..., adaptiveSetArrayLimit. Stored in an array.
 
@@ -255,20 +275,6 @@ func (a *Adaptive[T]) Iter(f func(item T) error) {
 				return
 			}
 			if err == RemoveItem {
-				a.Discard(v)
-			}
-		}
-	case sizeStoredInMap:
-		m := a.loadMapFromPointer()
-		for v := range m {
-			err := f(v)
-			if err == StopIteration {
-				return
-			}
-			if err == RemoveItem {
-				// Discarding from a map is safe.  If the set did shrink and
-				// get turned into an array then we'd just keep iterating
-				// over the map, which would be fine.
 				a.Discard(v)
 			}
 		}
