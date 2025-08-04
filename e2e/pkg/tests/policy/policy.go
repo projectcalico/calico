@@ -327,6 +327,39 @@ var _ = describe.CalicoDescribe(
 			checker.ExpectSuccess(client1, server1.ClusterIP())
 			checker.Execute()
 		})
+
+		framework.ConformanceIt("should support a 'deny egress' policy [RunsOnWindows]", func() {
+			By("Creating calico egress policy which denies traffic within namespace.")
+			nsName := f.Namespace.Name
+			policyName := "deny-egress"
+			o := 500.0
+
+			// Create a GNP that selects the namespace under test and denies egress explicitly
+			// to other workloads within the namespace.
+			// Note, this policy will actually deny all egress anyway because there are no "Allow" rules.
+			// Be careful - a mistake here could break egress for the entire cluster.
+			policy := v3.NewGlobalNetworkPolicy()
+			policy.Name = policyName
+			policy.Spec.Selector = fmt.Sprintf("projectcalico.org/namespace == '%s'", nsName)
+			policy.Spec.Order = &o
+			policy.Spec.Egress = []v3.Rule{
+				{
+					Action: v3.Deny,
+					Destination: v3.EntityRule{
+						Selector: fmt.Sprintf("projectcalico.org/namespace == '%s'", nsName),
+					},
+				},
+			}
+			err := cli.Create(context.Background(), policy)
+			Expect(err).NotTo(HaveOccurred())
+			defer func() {
+				Expect(cli.Delete(context.Background(), policy)).NotTo(HaveOccurred())
+			}()
+
+			By("checking client not able to contact the server since deny egress rule created.")
+			checker.ExpectFailure(client1, server1.ClusterIP())
+			checker.Execute()
+		})
 	})
 
 // Creates a new NetworkPolicy that isolates a namespace by allowing ingress and egress traffic only from / to pods in the same namespace.
