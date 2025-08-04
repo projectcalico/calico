@@ -91,20 +91,13 @@ func newNoEncapManagerWithSims(
 
 func (m *noEncapManager) OnUpdate(protoBufMsg interface{}) {
 	switch msg := protoBufMsg.(type) {
-	/*case *proto.HostMetadataUpdate:
-		m.logCtx.WithField("hostname", msg.Hostname).Debug("Host update/create")
-		if msg.Hostname == m.hostname {
-			m.routeMgr.updateParentIfaceAddr(msg.Ipv4Addr)
-		}
-		m.routeMgr.triggerRouteUpdate()
-	case *proto.HostMetadataRemove:
-		m.logCtx.WithField("hostname", msg.Hostname).Debug("Host removed")
-		if msg.Hostname == m.hostname {
-			m.routeMgr.updateParentIfaceAddr("")
-		}
-		m.routeMgr.triggerRouteUpdate()
-	*/
 	case *proto.HostMetadataV4V6Update:
+		if (m.ipVersion == 4 && msg.Ipv4Addr == "") || (m.ipVersion == 6 && msg.Ipv6Addr == "") {
+			// Skip since the update is for a mismatched IP version
+			m.logCtx.WithField("msg", msg).Debug("Skipping mismatched IP version update")
+			return
+		}
+
 		m.logCtx.WithField("hostname", msg.Hostname).Debug("Host update/create")
 		if msg.Hostname == m.hostname {
 			if m.ipVersion == 6 {

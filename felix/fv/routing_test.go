@@ -166,7 +166,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ pepper cluster routing usin
 			}
 
 			It("pepper1 should have workload to workload connectivity", func() {
-				time.Sleep(time.Minute * 50)
+				//time.Sleep(time.Minute * 50)
 				cc.ExpectSome(w[0], w[1])
 				cc.ExpectSome(w[1], w[0])
 				cc.CheckConnectivity()
@@ -1016,7 +1016,7 @@ func createIPIPBaseTopologyOptions(
 	topologyOptions.IPIPStrategy = infrastructure.NewDefaultTunnelStrategy(topologyOptions.IPPoolCIDR, topologyOptions.IPv6PoolCIDR)
 	topologyOptions.VXLANMode = api.VXLANModeNever
 	topologyOptions.SimulateBIRDRoutes = false
-	topologyOptions.EnableIPv6 = false
+	topologyOptions.EnableIPv6 = true
 	topologyOptions.ExtraEnvVars["FELIX_ProgramClusterRoutes"] = "Enabled"
 	topologyOptions.ExtraEnvVars["FELIX_ROUTESOURCE"] = routeSource
 	// We force the broken checksum handling on or off so that we're not dependent on kernel version
