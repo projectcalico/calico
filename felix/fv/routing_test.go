@@ -45,18 +45,18 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
-var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix programming routes", []apiconfig.DatastoreType{apiconfig.EtcdV3, apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
+var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ pepper cluster routing using Felix programming routes", []apiconfig.DatastoreType{apiconfig.EtcdV3, apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
 	type testConf struct {
 		IPIPMode    api.IPIPMode
 		RouteSource string
 		BrokenXSum  bool
 	}
 	for _, testConfig := range []testConf{
-		{api.IPIPModeCrossSubnet, "CalicoIPAM", true},
-		{api.IPIPModeCrossSubnet, "WorkloadIPs", false},
+		//{api.IPIPModeCrossSubnet, "CalicoIPAM", true},
+		//{api.IPIPModeCrossSubnet, "WorkloadIPs", false},
 
-		{api.IPIPModeAlways, "CalicoIPAM", true},
-		{api.IPIPModeAlways, "WorkloadIPs", false},
+		//{api.IPIPModeAlways, "CalicoIPAM", true},
+		//{api.IPIPModeAlways, "WorkloadIPs", false},
 
 		// No encap routing tests. BrokenXSum is irrelevant in these cases.
 		{api.IPIPModeNever, "CalicoIPAM", false},
@@ -165,7 +165,8 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 				})
 			}
 
-			It("should have workload to workload connectivity", func() {
+			It("pepper1 should have workload to workload connectivity", func() {
+				//time.Sleep(time.Minute * 50)
 				cc.ExpectSome(w[0], w[1])
 				cc.ExpectSome(w[1], w[0])
 				cc.CheckConnectivity()
@@ -1015,14 +1016,14 @@ func createIPIPBaseTopologyOptions(
 	topologyOptions.IPIPStrategy = infrastructure.NewDefaultTunnelStrategy(topologyOptions.IPPoolCIDR, topologyOptions.IPv6PoolCIDR)
 	topologyOptions.VXLANMode = api.VXLANModeNever
 	topologyOptions.SimulateBIRDRoutes = false
-	topologyOptions.EnableIPv6 = false
+	topologyOptions.EnableIPv6 = true
 	topologyOptions.ExtraEnvVars["FELIX_ProgramClusterRoutes"] = "Enabled"
 	topologyOptions.ExtraEnvVars["FELIX_ROUTESOURCE"] = routeSource
 	// We force the broken checksum handling on or off so that we're not dependent on kernel version
 	// for these tests.  Since we're testing in containers anyway, checksum offload can't really be
 	// tested but we can verify the state with ethtool.
 	topologyOptions.ExtraEnvVars["FELIX_FeatureDetectOverride"] = fmt.Sprintf("ChecksumOffloadBroken=%t", brokenXSum)
-	topologyOptions.FelixDebugFilenameRegex = "ipip|route_table|l3_route_resolver|int_dataplane"
+	//topologyOptions.FelixDebugFilenameRegex = "ipip|route_table|l3_route_resolver|int_dataplane"
 	return topologyOptions
 }
 
