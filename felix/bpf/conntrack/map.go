@@ -133,6 +133,8 @@ type Leg = curVer.Leg
 
 var MapParams = curVer.MapParams
 var MapParamsV6 = curVer.MapParamsV6
+var MapParamsCleanup = curVerCleanup.MapParams
+var MapParamsCleanupV6 = curVerCleanup.MapParamsV6
 
 func Map() maps.Map {
 	b := maps.NewPinnedMap(MapParams)
@@ -146,6 +148,14 @@ func MapV6() maps.Map {
 	b := maps.NewPinnedMap(MapParamsV6)
 	b.GetMapParams = GetMapParams
 	return b
+}
+
+func CleanupMap() maps.MapWithExistsCheck {
+	return maps.NewPinnedMap(MapParamsCleanup)
+}
+
+func CleanupMapV6() maps.MapWithExistsCheck {
+	return maps.NewPinnedMap(MapParamsCleanupV6)
 }
 
 func MapV2() maps.Map {
@@ -175,6 +185,15 @@ func ValueFromBytes(v []byte) ValueInterface {
 	}
 	copy(ctVal[:], v[:])
 	return ctVal
+}
+
+func CleanupValueFromBytes(v []byte) curVerCleanup.ValueInterface {
+	var ctCleanupVal curVerCleanup.Value
+	if len(v) != len(ctCleanupVal) {
+		log.Panic("Value has unexpected length")
+	}
+	copy(ctCleanupVal[:], v[:])
+	return ctCleanupVal
 }
 
 type MapMem = curVer.MapMem
@@ -234,6 +253,15 @@ func ValueV6FromBytes(v []byte) ValueInterface {
 	}
 	copy(ctVal[:], v[:])
 	return ctVal
+}
+
+func CleanupValueV6FromBytes(v []byte) curVerCleanup.ValueInterface {
+	var ctCleanupVal curVerCleanup.ValueV6
+	if len(v) != len(ctCleanupVal) {
+		log.Panic("Value has unexpected length")
+	}
+	copy(ctCleanupVal[:], v[:])
+	return ctCleanupVal
 }
 
 type MapMemV6 = curVer.MapMemV6

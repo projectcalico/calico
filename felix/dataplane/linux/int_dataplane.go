@@ -2779,7 +2779,7 @@ func (d dummyLock) Unlock() {
 
 func startBPFDataplaneComponents(
 	ipFamily proto.IPVersion,
-	bpfmaps *bpfmap.IPMaps,
+	maps *bpfmap.IPMaps,
 	ipSetIDAllocator *idalloc.IDAllocator,
 	config Config,
 	ipSetsMgr *dpsets.IPSetsManager,
@@ -2825,12 +2825,12 @@ func startBPFDataplaneComponents(
 		bpfproxyOpts = append(bpfproxyOpts, bpfproxy.WithIPFamily(6))
 	}
 
-	ipSets := bpfipsets.NewBPFIPSets(ipSetConfig, ipSetIDAllocator, bpfmaps.IpsetsMap, ipSetEntry, ipSetProtoEntry, dp.loopSummarizer)
+	ipSets := bpfipsets.NewBPFIPSets(ipSetConfig, ipSetIDAllocator, maps.IpsetsMap, ipSetEntry, ipSetProtoEntry, dp.loopSummarizer)
 	dp.ipSets = append(dp.ipSets, ipSets)
 	ipSetsMgr.AddDataplane(ipSets)
 
 	failsafeMgr := failsafes.NewManager(
-		bpfmaps.FailsafesMap,
+		maps.FailsafesMap,
 		config.RulesConfig.FailsafeInboundHostPorts,
 		config.RulesConfig.FailsafeOutboundHostPorts,
 		dp.loopSummarizer,
@@ -2840,16 +2840,25 @@ func startBPFDataplaneComponents(
 	)
 	dp.RegisterManager(failsafeMgr)
 
-	bpfRTMgr := newBPFRouteManager(&config, bpfmaps, ipFamily, dp.loopSummarizer)
+	bpfRTMgr := newBPFRouteManager(&config, maps, ipFamily, dp.loopSummarizer)
 	dp.RegisterManager(bpfRTMgr)
 
-	livenessScanner, err := createBPFConntrackLivenessScanner(ipFamily, config)
-	if err != nil {
-		log.WithError(err).Fatal("Failed to create conntrack liveness scanner.")
+	livenessScanner := bpfconntrack.NewLivenessScanner(config.BPFConntrackTimeouts, config.BPFNodePortDSREnabled)
+	ctLogLevel := bpfconntrack.BPFLogLevelNone
+	if config.BPFConntrackLogLevel == "debug" {
+		ctLogLevel = bpfconntrack.BPFLogLevelDebug
 	}
-	conntrackScanner := bpfconntrack.NewScanner(bpfmaps.CtMap, ctKey, ctVal,
+
+	bpfCleaner, err := conntrack.NewBPFProgCleaner(int(ipFamily), config.BPFConntrackTimeouts, ctLogLevel)
+	if err != nil {
+		log.Errorf("error creating the bpf cleaner %v", err)
+	}
+
+	conntrackScanner := bpfconntrack.NewScanner(maps.CtMap, ctKey, ctVal,
 		config.ConfigChangedRestartCallback,
-		config.BPFMapSizeConntrackScaling,
+		config.BPFMapSizeConntrackScaling, maps.CtCleanupMap.(bpfmaps.MapWithExistsCheck),
+		int(ipFamily),
+		bpfCleaner,
 		livenessScanner)
 
 	// Before we start, scan for all finished / timed out connections to
@@ -2861,7 +2870,7 @@ func startBPFDataplaneComponents(
 		kp, err := bpfproxy.StartKubeProxy(
 			config.KubeClientSet,
 			config.Hostname,
-			bpfmaps,
+			maps,
 			bpfproxyOpts...,
 		)
 		if err != nil {
@@ -2875,47 +2884,6 @@ func startBPFDataplaneComponents(
 		log.Info("BPF enabled but no Kubernetes client available, unable to run kube-proxy module.")
 	}
 	return conntrackScanner
-}
-
-func createBPFConntrackLivenessScanner(ipFamily proto.IPVersion, config Config) (bpfconntrack.EntryScanner, error) {
-	tryBPF := false
-	tryUserspace := false
-	if config.BPFConntrackCleanupMode == apiv3.BPFConntrackModeBPFProgram {
-		tryBPF = true
-	} else if config.BPFConntrackCleanupMode == apiv3.BPFConntrackModeUserspace {
-		tryUserspace = true
-	} else { /* Auto */
-		tryBPF = true
-		tryUserspace = true
-	}
-
-	var livenessScanner bpfconntrack.EntryScanner
-	var err error
-	if tryBPF {
-		ctLogLevel := bpfconntrack.BPFLogLevelNone
-		if config.BPFConntrackLogLevel == "debug" {
-			ctLogLevel = bpfconntrack.BPFLogLevelDebug
-		}
-		livenessScanner, err = bpfconntrack.NewBPFProgLivenessScanner(
-			int(ipFamily),
-			config.BPFConntrackTimeouts,
-			ctLogLevel,
-			config.ConfigChangedRestartCallback,
-			config.BPFMapSizeConntrackScaling,
-		)
-		if err == nil {
-			log.WithField("ipVersion", ipFamily).Info("Using BPF program-based conntrack liveness scanner.")
-			return livenessScanner, nil
-		}
-	}
-
-	if tryUserspace {
-		log.WithField("ipVersion", ipFamily).Info("Using userspace conntrack scanner.")
-		livenessScanner = bpfconntrack.NewLivenessScanner(config.BPFConntrackTimeouts, config.BPFNodePortDSREnabled)
-		return livenessScanner, nil
-	}
-
-	return nil, err
 }
 
 func conntrackMapSizeFromFile() (int, error) {
