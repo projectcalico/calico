@@ -217,7 +217,7 @@ type endpointManager struct {
 	OnEndpointStatusUpdate EndpointStatusUpdateCallback
 	callbacks              endpointManagerCallbacks
 	bpfEnabled             bool
-	bpfAttachType          string
+	bpfAttachType          apiv3.BPFAttachOption
 	bpfEndpointManager     hepListener
 }
 
@@ -239,7 +239,7 @@ func newEndpointManager(
 	defaultRPFilter string,
 	filterMaps nftables.MapsDataplane,
 	bpfEnabled bool,
-	bpfAttachType string,
+	bpfAttachType apiv3.BPFAttachOption,
 	bpfEndpointManager hepListener,
 	callbacks *common.Callbacks,
 	floatingIPsEnabled bool,
@@ -287,7 +287,7 @@ func newEndpointManagerWithShims(
 	defaultRPFilter string,
 	filterMaps nftables.MapsDataplane,
 	bpfEnabled bool,
-	bpfAttachType string,
+	bpfAttachType apiv3.BPFAttachOption,
 	bpfEndpointManager hepListener,
 	callbacks *common.Callbacks,
 	floatingIPsEnabled bool,
