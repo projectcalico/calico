@@ -185,6 +185,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf conntrack table d
 		opts := infrastructure.DefaultTopologyOptions()
 		opts.ExtraEnvVars["FELIX_BPFMapSizeConntrack"] = "10000"
 		opts.ExtraEnvVars["FELIX_debugDisableLogDropping"] = "true"
+		opts.ExtraEnvVars["FELIX_BPFConntrackTimeouts"] = "TCPFinsSeen=5s"
 		opts.FelixLogSeverity = "Debug"
 		tc, _ = infrastructure.StartNNodeTopology(1, opts, infra)
 
@@ -240,7 +241,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf conntrack table d
 		srcIP := net.IPv4(123, 123, 123, 123)
 		dstIP := net.IPv4(121, 121, 121, 121)
 
-		val := formatBytesWithPrefix(conntrack.NewValueNormal(now, 0, leg, leg).AsBytes())
 		c := tc.Felixes[0].WatchStdoutFor(regexp.MustCompile(".*Overriding bpfMapSizeConntrack \\(10000\\) with map size growth \\(20000\\)"))
 
 		line := ""
@@ -249,6 +249,12 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf conntrack table d
 			sport := uint16(i)
 			dport := uint16(i & 0xffff)
 			key := formatBytesWithPrefix(conntrack.NewKey(6 /* UDP */, srcIP, sport, dstIP, dport).AsBytes())
+			if i%10 == 0 {
+				leg.FinSeen = true
+			}
+
+			val := formatBytesWithPrefix(conntrack.NewValueNormal(now, 0, leg, leg).AsBytes())
+
 			args := []string{"map", "update", "pinned", conntrack.Map().Path()}
 			args = append(args, "key")
 			args = append(args, key...)
@@ -270,6 +276,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf conntrack table d
 			}
 		}
 
+		time.Sleep(40 * time.Second)
 		defer os.Remove("/tmp/data_in")
 		Eventually(func() bool {
 			select {

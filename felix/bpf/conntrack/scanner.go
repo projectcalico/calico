@@ -217,6 +217,7 @@ func (s *Scanner) Scan() {
 
 	used := 0
 	cleaned := 0
+	numExpired := 0
 
 	s.ctCleanupMap.Desired().DeleteAll()
 	log.Debug("Starting conntrack scanner iteration")
@@ -236,6 +237,7 @@ func (s *Scanner) Scan() {
 
 		for _, scanner := range s.scanners {
 			if verdict, ts := scanner.Check(ctKey, ctVal, s.get); verdict == ScanVerdictDelete {
+				numExpired++
 				if debug {
 					log.Debug("Deleting conntrack entry.")
 				}
@@ -254,7 +256,7 @@ func (s *Scanner) Scan() {
 				s.updateCleanupMap(ctKey, dummy, uint64(ts), uint64(ts))
 			}
 		}
-		if used%1000 == 0 {
+		if numExpired > 0 && numExpired%1000 == 0 {
 			cleaned += s.runBPFCleaner()
 		}
 		return maps.IterNone
@@ -277,6 +279,7 @@ func (s *Scanner) Scan() {
 			} else {
 				s.updateCleanupMap(k, revKey, ts, revTS)
 			}
+			delete(s.revNATKeyToFwdNATInfo, k)
 			if keysProcessed%1000 == 0 {
 				// Run the bpf cleaner
 				cleaned += s.runBPFCleaner()
