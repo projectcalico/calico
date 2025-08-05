@@ -126,6 +126,11 @@ func (in *BGPConfigurationSpec) DeepCopyInto(out *BGPConfigurationSpec) {
 		*out = make([]ServiceClusterIPBlock, len(*in))
 		copy(*out, *in)
 	}
+	if in.ServiceLoadBalancerAggregation != nil {
+		in, out := &in.ServiceLoadBalancerAggregation, &out.ServiceLoadBalancerAggregation
+		*out = new(ServiceLoadBalancerAggregation)
+		**out = **in
+	}
 	if in.Communities != nil {
 		in, out := &in.Communities, &out.Communities
 		*out = make([]Community, len(*in))

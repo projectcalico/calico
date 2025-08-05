@@ -640,6 +640,13 @@ func schema_pkg_apis_projectcalico_v3_BGPConfigurationSpec(ref common.ReferenceC
 							},
 						},
 					},
+					"serviceLoadBalancerAggregation": {
+						SchemaProps: spec.SchemaProps{
+							Description: "ServiceLoadBalancerAggregation controls how LoadBalancer service IPs are advertised. When set to \"Disabled\", individual /32 routes are advertised for each service instead of the full CIDR range. This is useful for anycast failover mechanisms where failed service routes need to be withdrawn. [Default: Enabled]",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 					"communities": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Communities is a list of BGP community values and their arbitrary names for tagging routes.",
