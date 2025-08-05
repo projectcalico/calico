@@ -21,6 +21,7 @@ import (
 
 func (r *DefaultRuleRenderer) EgressQoSPolicyChain(policies []qos.Policy, ipVersion uint8) *generictables.Chain {
 	var rules []generictables.Rule
+	// Policies is sorted and validated by QoS policy manager.
 	for _, p := range policies {
 		rules = append(rules, generictables.Rule{
 			Match:  r.NewMatch().SourceNet(p.SrcAddrs),

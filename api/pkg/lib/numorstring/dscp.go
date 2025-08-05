@@ -99,7 +99,6 @@ func (d *DSCP) ToUint8() uint8 {
 
 	val, valid := AllDSCPValues[d.StrVal]
 	if !valid {
-		// TODO (mazdak): diff between 0 and not setting it
 		return 0
 	}
 	return val

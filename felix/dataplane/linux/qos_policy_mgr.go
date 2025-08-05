@@ -19,7 +19,6 @@ import (
 	"strings"
 
 	"github.com/sirupsen/logrus"
-	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/dataplane/linux/qos"
 	"github.com/projectcalico/calico/felix/proto"
@@ -36,7 +35,7 @@ type qosPolicyManager struct {
 	dirty       bool
 	qosPolicies map[types.WorkloadEndpointID]qos.Policy
 
-	logCxt *log.Entry
+	logCxt *logrus.Entry
 }
 
 func newQoSPolicyManager(
@@ -50,7 +49,7 @@ func newQoSPolicyManager(
 		dirty:        true,
 		mangleTable:  mangleTable,
 		ruleRenderer: ruleRenderer,
-		logCxt:       log.WithField("ipVersion", ipVersion),
+		logCxt:       logrus.WithField("ipVersion", ipVersion),
 	}
 }
 
