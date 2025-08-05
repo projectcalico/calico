@@ -793,8 +793,8 @@ spec:
                 bpfAttachType:
                   allOf:
                     - enum:
-                        - tc
-                        - tcx
+                        - TC
+                        - TCX
                     - enum:
                         - tc
                         - tcx

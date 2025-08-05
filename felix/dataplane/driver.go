@@ -400,7 +400,7 @@ func StartDataplaneDriver(
 			BPFExcludeCIDRsFromNAT:             configParams.BPFExcludeCIDRsFromNAT,
 			NfNetlinkBufSize:                   nfnetlink.DefaultNfNetlinkBufSize,
 			BPFRedirectToPeer:                  configParams.BPFRedirectToPeer,
-			BPFAttachType:                      configParams.BPFAttachType,
+			BPFAttachType:                      configParams.GetBPFAttachType(),
 			BPFProfiling:                       configParams.BPFProfiling,
 			ServiceLoopPrevention:              configParams.ServiceLoopPrevention,
 
