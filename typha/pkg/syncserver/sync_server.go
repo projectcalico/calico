@@ -132,6 +132,7 @@ type BreadcrumbProvider interface {
 }
 
 type Config struct {
+	Host                           string
 	Port                           int
 	MaxMessageSize                 int
 	BinarySnapshotTimeout          time.Duration
@@ -373,11 +374,12 @@ func (s *Server) serve(cxt context.Context) {
 			s.config.ClientURISAN,
 		)
 
-		laddr := fmt.Sprintf("0.0.0.0:%v", s.config.ListenPort())
+		laddr := fmt.Sprintf("[%v]:%v", s.config.Host, s.config.ListenPort())
 		l, err = tls.Listen("tcp", laddr, tlsConfig)
 	} else {
 		logCxt.Info("Opening listen socket")
-		l, err = net.ListenTCP("tcp", &net.TCPAddr{Port: s.config.ListenPort()})
+		laddr := fmt.Sprintf("[%v]:%v", s.config.Host, s.config.ListenPort())
+		l, err = net.Listen("tcp", laddr)
 	}
 	if err != nil {
 		logCxt.WithError(err).Panic("Failed to open listen socket")

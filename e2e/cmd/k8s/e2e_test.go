@@ -19,26 +19,36 @@ import (
 	"testing"
 
 	"github.com/onsi/ginkgo/v2"
+	"github.com/sirupsen/logrus"
 	"k8s.io/klog/v2"
 	"k8s.io/kubernetes/test/e2e"
 	"k8s.io/kubernetes/test/e2e/framework"
 	"k8s.io/kubernetes/test/e2e/framework/config"
 
+	caliconfig "github.com/projectcalico/calico/e2e/pkg/config"
+
 	// Import tests.
 	_ "k8s.io/kubernetes/test/e2e/network"
+
+	_ "github.com/projectcalico/calico/e2e/pkg/tests/policy"
 )
 
 func init() {
+	// Set up logging. We need to set the output for various logging systems used by the tests
+	// and libraries imported by the tests.
 	klog.SetOutput(ginkgo.GinkgoWriter)
+	logrus.SetOutput(ginkgo.GinkgoWriter)
 
 	// Register flags.
 	config.CopyFlags(config.Flags, flag.CommandLine)
 	framework.RegisterCommonFlags(flag.CommandLine)
 	framework.RegisterClusterFlags(flag.CommandLine)
+	caliconfig.RegisterFlags(flag.CommandLine)
 
 	// Parse all the flags
 	flag.Parse()
 	framework.AfterReadingAllFlags(&framework.TestContext)
+	caliconfig.AfterReadingAllFlags()
 }
 
 func TestE2E(t *testing.T) {
