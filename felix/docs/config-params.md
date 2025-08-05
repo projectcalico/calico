@@ -1441,17 +1441,17 @@ Controls the interval at which Felix periodically refreshes the nftables rules.
 ### `BPFAttachType` (config file) / `bpfAttachType` (YAML)
 
 Controls how are the BPF programs at the network interfaces attached.
-By default `tcx` is used where available to enable easier coexistence with 3rd party programs.
-`tc` can force the legacy method of attaching via a qdisc. `tcx` falls back to `tc` if `tcx` is not available.
+By default `TCX` is used where available to enable easier coexistence with 3rd party programs.
+`TC` can force the legacy method of attaching via a qdisc. `TCX` falls back to `TC` if `TCX` is not available.
 
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_BPFAttachType` |
-| Encoding (env var/config file) | One of: <code>tc</code>, <code>tcx</code> (case insensitive) |
-| Default value (above encoding) | `tcx` |
+| Encoding (env var/config file) | One of: <code>TCX</code>, <code>TC</code> (case insensitive) |
+| Default value (above encoding) | `TCX` |
 | `FelixConfiguration` field | `bpfAttachType` (YAML) `BPFAttachType` (Go API) |
-| `FelixConfiguration` schema | `string` |
-| Default value (YAML) | `tcx` |
+| `FelixConfiguration` schema | One of: <code>"TC"</code>, <code>"TCX"</code>. |
+| Default value (YAML) | `TCX` |
 | Notes | Required. | 
 
 ### `BPFCTLBLogFilter` (config file) / `bpfCTLBLogFilter` (YAML)
