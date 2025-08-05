@@ -80,13 +80,13 @@ func (c *CachingMap[K, V]) LoadCacheFromDataplane() error {
 type ReadOnlyMap[K comparable, V any] interface {
 	Get(k K) (v V, exists bool)
 	Iter(func(k K, v V))
+	DeleteAll()
 }
 
 type ReadWriteMap[K comparable, V any] interface {
 	ReadOnlyMap[K, V]
 	Set(k K, v V)
 	Delete(k K)
-	DeleteAll()
 }
 
 func (c *CachingMap[K, V]) Desired() ReadWriteMap[K, V] {

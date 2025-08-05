@@ -57,7 +57,7 @@ func (e *ValueV6) SetRevTS(ts uint64) {
 	binary.LittleEndian.PutUint64(e[KeyV6Size+8:], ts)
 }
 
-func (e ValueV6) ReverseNATKey() v4.KeyInterface {
+func (e ValueV6) OtherNATKey() v4.KeyInterface {
 	var ret v4.KeyV6
 
 	l := len(v4.KeyV6{})

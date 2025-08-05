@@ -33,7 +33,7 @@ func NewMockBPFCleaner(ctMap, ctCleanupMap *Map) *mockBPFCleaner {
 
 func (m *mockBPFCleaner) Run(opts ...conntrack.RunOpt) (*conntrack.CleanupContext, error) {
 	err := m.ctCleanupMap.Iter(func(k, v []byte) maps.IteratorAction {
-		revKey := conntrack.CleanupValueFromBytes(v).ReverseNATKey()
+		revKey := conntrack.CleanupValueFromBytes(v).OtherNATKey()
 		if revKey.Proto() != 0 {
 			if err := m.ctMap.Delete(revKey.AsBytes()); err != nil {
 				return maps.IterNone

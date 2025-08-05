@@ -112,7 +112,7 @@ type Scanner struct {
 	configChangedRestartCallback func()
 	bpfCleaner                   Cleaner
 	versionHelper                ipVersionHelper
-	keyTracker                   map[KeyInterface]cleanupv1.ValueInterface
+	revNATKeyToFwdNATInfo        map[KeyInterface]cleanupv1.ValueInterface
 
 	wg       sync.WaitGroup
 	stopCh   chan struct{}
@@ -139,7 +139,9 @@ func NewScanner(ctMap maps.Map, kfb func([]byte) KeyInterface, vfb func([]byte) 
 		autoScale:                    strings.ToLower(autoScalingMode) == "doubleiffull",
 		configChangedRestartCallback: configChangedRestartCallback,
 		bpfCleaner:                   bpfCleaner,
-		keyTracker:                   make(map[KeyInterface]cleanupv1.ValueInterface),
+		// revNATKeyToFwdNATInfo stores the opposite direction of the mapping of the cleanup bpf map.
+		// <reverseNATKey> => <forwardNATKey>:<forwardEntryTimeStamp>:<reverseEntryTimestamp>
+		revNATKeyToFwdNATInfo: make(map[KeyInterface]cleanupv1.ValueInterface),
 	}
 
 	switch ipVersion {
@@ -175,28 +177,31 @@ func (s *Scanner) handleNATEntries(key KeyInterface, val ValueInterface, rev_ts 
 			s.updateCleanupMap(key, dummy, ts, rev_ts)
 			return
 		}
-		_, ok := s.keyTracker[revKey]
+		_, ok := s.revNATKeyToFwdNATInfo[revKey]
 		if !ok {
 			// Reverse entry not seen by the scanner. Don't queue it up for deletion.
-			// Wait to see if we the scanner sees the reverse entry.
-			s.keyTracker[revKey] = s.versionHelper.newCleanupValue(key.AsBytes(), ts, rev_ts)
+			// Wait to see if the scanner sees the reverse entry.
+			// Store the mapping from reverse key to the forward key and the timestamps.
+			s.revNATKeyToFwdNATInfo[revKey] = s.versionHelper.newCleanupValue(key.AsBytes(), ts, rev_ts)
 		} else {
 			// Reverse entry already seen.
-			delete(s.keyTracker, revKey)
+			delete(s.revNATKeyToFwdNATInfo, revKey)
 			s.updateCleanupMap(key, revKey, ts, rev_ts)
 			return
 		}
 	} else if val.Type() == TypeNATReverse {
-		revVal, ok := s.keyTracker[key]
+		revVal, ok := s.revNATKeyToFwdNATInfo[key]
 		if ok {
 			// Reverse key already in the map. Must be from the forward entry.
-			delete(s.keyTracker, key)
-			fwdKey := revVal.ReverseNATKey()
+			delete(s.revNATKeyToFwdNATInfo, key)
+			// Get the forward NAT key and timestamp from the map and update the
+			// cleanup bpf map.
+			fwdKey := revVal.OtherNATKey()
 			fwdTS := revVal.Timestamp()
 			s.updateCleanupMap(fwdKey, key, fwdTS, ts)
 		} else {
 			dummy := s.versionHelper.dummyKey()
-			s.keyTracker[key] = s.versionHelper.newCleanupValue(dummy.AsBytes(), ts, uint64(0))
+			s.revNATKeyToFwdNATInfo[key] = s.versionHelper.newCleanupValue(dummy.AsBytes(), ts, uint64(0))
 		}
 	}
 }
@@ -258,17 +263,23 @@ func (s *Scanner) Scan() {
 	// There can be forward or reverse entries in the map.
 	// We have scanned the entire map.
 	// Lets add it to the cleanup map.
-	if len(s.keyTracker) > 0 {
-		for k, v := range s.keyTracker {
+	if len(s.revNATKeyToFwdNATInfo) > 0 {
+		keysProcessed := 0
+		for k, v := range s.revNATKeyToFwdNATInfo {
 			// This is a forward entry and we haven't seen the rev entry.
 			// Maybe deleted by LRU
-			revKey := v.ReverseNATKey()
+			keysProcessed++
+			revKey := v.OtherNATKey()
 			ts := v.Timestamp()
 			revTS := v.RevTimestamp()
-			if revKey.Proto() != 0 {
+			if revKey != s.versionHelper.dummyKey() {
 				s.updateCleanupMap(revKey, k, ts, revTS)
 			} else {
 				s.updateCleanupMap(k, revKey, ts, revTS)
+			}
+			if keysProcessed%1000 == 0 {
+				// Run the bpf cleaner
+				cleaned += s.runBPFCleaner()
 			}
 		}
 	}
@@ -278,7 +289,7 @@ func (s *Scanner) Scan() {
 		return
 	}
 
-	// Run the bpf cleaner
+	// Run the bpf cleaner to process the remaining entries in the cleanup map.
 	cleaned += s.runBPFCleaner()
 
 	conntrackCounterSweeps.Inc()
@@ -326,6 +337,7 @@ func (s *Scanner) runBPFCleaner() int {
 			log.WithError(err).Warn("Failed to run bpf conntrack cleaner.")
 		}
 		s.ctCleanupMap.Desired().DeleteAll()
+		s.ctCleanupMap.Dataplane().DeleteAll()
 		return int(cr.NumKVsCleaned)
 	}
 	return 0
