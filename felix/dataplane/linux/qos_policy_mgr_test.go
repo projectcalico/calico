@@ -65,7 +65,7 @@ var _ = Describe("QoS policy manager", func() {
 
 		It("should program QoS policy chain with no rule", func() {
 			mangleTable.checkChains([][]*generictables.Chain{{{
-				Name:  rules.ChainQosPolicy,
+				Name:  rules.ChainQoSPolicy,
 				Rules: nil,
 			}}})
 		})
@@ -87,7 +87,7 @@ var _ = Describe("QoS policy manager", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			mangleTable.checkChains([][]*generictables.Chain{{{
-				Name: rules.ChainQosPolicy,
+				Name: rules.ChainQoSPolicy,
 				Rules: []generictables.Rule{
 					{
 						Action: iptables.DSCPAction{Value: 44},
@@ -113,7 +113,7 @@ var _ = Describe("QoS policy manager", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			mangleTable.checkChains([][]*generictables.Chain{{{
-				Name: rules.ChainQosPolicy,
+				Name: rules.ChainQoSPolicy,
 				Rules: []generictables.Rule{
 					{
 						Action: iptables.DSCPAction{Value: 44},
@@ -144,7 +144,7 @@ var _ = Describe("QoS policy manager", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			mangleTable.checkChains([][]*generictables.Chain{{{
-				Name: rules.ChainQosPolicy,
+				Name: rules.ChainQoSPolicy,
 				Rules: []generictables.Rule{
 					{
 						Action: iptables.DSCPAction{Value: 13},
@@ -174,7 +174,7 @@ var _ = Describe("QoS policy manager", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			mangleTable.checkChains([][]*generictables.Chain{{{
-				Name: rules.ChainQosPolicy,
+				Name: rules.ChainQoSPolicy,
 				Rules: []generictables.Rule{
 					{
 						Action: iptables.DSCPAction{Value: 20},
@@ -193,7 +193,7 @@ var _ = Describe("QoS policy manager", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			mangleTable.checkChains([][]*generictables.Chain{{{
-				Name:  rules.ChainQosPolicy,
+				Name:  rules.ChainQoSPolicy,
 				Rules: nil,
 			}}})
 		})

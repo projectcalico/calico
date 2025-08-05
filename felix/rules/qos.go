@@ -29,7 +29,7 @@ func (r *DefaultRuleRenderer) EgressQoSPolicyChain(policies []qos.Policy, ipVers
 	}
 
 	return &generictables.Chain{
-		Name:  ChainQosPolicy,
+		Name:  ChainQoSPolicy,
 		Rules: rules,
 	}
 }

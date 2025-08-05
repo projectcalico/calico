@@ -1071,7 +1071,7 @@ func (r *DefaultRuleRenderer) StaticManglePostroutingChain(ipVersion uint8) *gen
 		Match: r.NewMatch().
 			SourceIPSet(allIPsSetName).
 			NotDestIPSet(allIPsSetName),
-		Action:  r.Jump(ChainQosPolicy),
+		Action:  r.Jump(ChainQoSPolicy),
 		Comment: []string{"QoS policy for traffic leaving cluster"},
 	})
 
