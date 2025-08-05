@@ -141,6 +141,7 @@ func NewScanner(ctMap maps.Map, kfb func([]byte) KeyInterface, vfb func([]byte) 
 		bpfCleaner:                   bpfCleaner,
 		keyTracker:                   make(map[KeyInterface]cleanupv1.ValueInterface),
 	}
+
 	switch ipVersion {
 	case 4:
 		s.ctCleanupMap = cachingmap.New[KeyInterface, cleanupv1.ValueInterface](ctCleanupMap.GetName(),
@@ -324,6 +325,7 @@ func (s *Scanner) runBPFCleaner() int {
 		if err != nil {
 			log.WithError(err).Warn("Failed to run bpf conntrack cleaner.")
 		}
+		s.ctCleanupMap.Desired().DeleteAll()
 		return int(cr.NumKVsCleaned)
 	}
 	return 0
@@ -442,7 +444,7 @@ func (h ipv4Helper) newCleanupValue(revKeyBytes []byte, ts, rev_ts uint64) clean
 }
 
 func (h ipv4Helper) dummyKey() KeyInterface {
-	return dummyKey // Assumes existing global/package variable for the IPv4 dummy key
+	return dummyKey
 }
 
 type ipv6Helper struct{}
@@ -452,5 +454,5 @@ func (h ipv6Helper) newCleanupValue(revKeyBytes []byte, ts, rev_ts uint64) clean
 }
 
 func (h ipv6Helper) dummyKey() KeyInterface {
-	return dummyKeyV6 // Assumes existing global/package variable for the IPv6 dummy key
+	return dummyKeyV6
 }
