@@ -72,12 +72,12 @@ const (
 	AWSSrcDstCheckOptionDisable   AWSSrcDstCheckOption = "Disable"
 )
 
-// +kubebuilder:validation:Enum=tc;tcx
+// +kubebuilder:validation:Enum=TC;TCX
 type BPFAttachOption string
 
 const (
-	BPFAttachOptionTC  BPFAttachOption = "tc"
-	BPFAttachOptionTCX BPFAttachOption = "tcx"
+	BPFAttachOptionTC  BPFAttachOption = "TC"
+	BPFAttachOptionTCX BPFAttachOption = "TCX"
 )
 
 // +kubebuilder:validation:Enum=Enabled;Disabled

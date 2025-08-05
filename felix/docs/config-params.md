@@ -1447,11 +1447,11 @@ By default `tcx` is used where available to enable easier coexistence with 3rd p
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_BPFAttachType` |
-| Encoding (env var/config file) | One of: <code>tc</code>, <code>tcx</code> (case insensitive) |
-| Default value (above encoding) | `tcx` |
+| Encoding (env var/config file) | One of: <code>TCX</code>, <code>TC</code> (case insensitive) |
+| Default value (above encoding) | `TCX` |
 | `FelixConfiguration` field | `bpfAttachType` (YAML) `BPFAttachType` (Go API) |
 | `FelixConfiguration` schema | `string` |
-| Default value (YAML) | `tcx` |
+| Default value (YAML) | `TCX` |
 | Notes | Required. | 
 
 ### `BPFCTLBLogFilter` (config file) / `bpfCTLBLogFilter` (YAML)
