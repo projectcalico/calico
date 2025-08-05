@@ -46,6 +46,7 @@ type IPMaps struct {
 	CtMap        maps.Map
 	SrMsgMap     maps.Map
 	CtNatsMap    maps.Map
+	CtCleanupMap maps.Map
 }
 
 type CommonMaps struct {
@@ -117,6 +118,7 @@ func getIPMaps(ipFamily int) *IPMaps {
 		AffinityMap:  getmap(nat.AffinityMap, nat.AffinityMapV6),
 		RouteMap:     getmap(routes.Map, routes.MapV6),
 		CtMap:        getmap(conntrack.Map, conntrack.MapV6),
+		CtCleanupMap: getmapWithExistsCheck(conntrack.CleanupMap, conntrack.CleanupMapV6),
 		SrMsgMap:     getmap(nat.SendRecvMsgMap, nat.SendRecvMsgMapV6),
 		CtNatsMap:    getmap(nat.AllNATsMsgMap, nat.AllNATsMsgMapV6),
 	}
@@ -135,7 +137,6 @@ func CreateBPFMaps(ipV6Enabled bool) (*Maps, error) {
 	for i, bpfMap := range mps {
 		err := bpfMap.EnsureExists()
 		if err != nil {
-
 			for j := 0; j < i; j++ {
 				m := mps[j]
 				os.Remove(m.(pinnedMap).Path())
@@ -185,6 +186,7 @@ func (i *IPMaps) slice() []maps.Map {
 		i.AffinityMap,
 		i.RouteMap,
 		i.CtMap,
+		i.CtCleanupMap,
 		i.SrMsgMap,
 		i.CtNatsMap,
 	}
