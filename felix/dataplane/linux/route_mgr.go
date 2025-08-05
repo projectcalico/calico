@@ -107,8 +107,8 @@ func newRouteManager(
 		routeProtocol:        calculateRouteProtocol(dpConfig),
 		opRecorder:           opRecorder,
 		logCtx: logrus.WithFields(logrus.Fields{
-			"ipVersion":     ipVersion,
-			"tunnel device": tunnelDevice,
+			"ipVersion":    ipVersion,
+			"tunnelDevice": tunnelDevice,
 		}),
 	}
 }
