@@ -122,13 +122,6 @@ var _ = describe.CalicoDescribe(describe.WithTeam(describe.Core),
 		AfterEach(func() {
 			if !autoHEPsEnabled {
 				logrus.Info("AfterEach: auto host endpoints not previously enabled so disabling")
-				// We want to disable auto host endpoints but a change in
-				// kubecontrollers config results in a pod restart.
-				// After a few test cases, with repeated pod restarts,
-				// the crashloopback slows this set of tests quite a bit.
-				//
-				// Instead, in addition to disabling auto host endpoints
-				// we'll also delete the kubecontrollers pod.
 				ToggleAutoHostEndpoints(cli, false)
 				WaitForAutoHEPs(cli, false)
 			}
@@ -313,9 +306,13 @@ func GetAutoHEPsEnabled(client ctrlclient.Client) bool {
 	var kcc v3.KubeControllersConfiguration
 	err := client.Get(context.Background(), types.NamespacedName{Name: "default"}, &kcc)
 	Expect(err).NotTo(HaveOccurred())
-	autoCreate := kcc.Status.RunningConfig.Controllers.Node.HostEndpoint.AutoCreate
-	logrus.Infof("BeforeEach: auto host endpoints is: %s", autoCreate)
-	return autoCreate == "Enabled"
+	if kcc.Status.RunningConfig.Controllers.Node.HostEndpoint.AutoCreate != "Enabled" {
+		return false
+	}
+	if kcc.Status.RunningConfig.Controllers.Node.HostEndpoint.CreateDefaultHostEndpoint != v3.DefaultHostEndpointsEnabled {
+		return false
+	}
+	return true
 }
 
 func WaitForAutoHEPs(client ctrlclient.Client, expect bool) {
