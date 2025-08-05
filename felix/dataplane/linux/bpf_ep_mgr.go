@@ -379,7 +379,7 @@ type bpfEndpointManager struct {
 
 	bpfPolicyDebugEnabled  bool
 	bpfRedirectToPeer      string
-	bpfAttachType          string
+	bpfAttachType          apiv3.BPFAttachOption
 	policyTrampolineStride atomic.Int32
 
 	routeTableV4     *routetable.ClassView
@@ -593,10 +593,10 @@ func NewBPFEndpointManager(
 		m.hostNetworkedNATMode = hostNetworkedNATEnabled
 	}
 
-	if m.bpfAttachType == string(apiv3.BPFAttachOptionTCX) {
+	if m.bpfAttachType == apiv3.BPFAttachOptionTCX {
 		if !tc.IsTcxSupported() {
 			log.Infof("tcx is not supported. Falling back to tc")
-			m.bpfAttachType = string(apiv3.BPFAttachOptionTC)
+			m.bpfAttachType = apiv3.BPFAttachOptionTC
 		}
 	}
 	m.v4 = newBPFEndpointManagerDataplane(proto.IPVersion_IPV4, bpfmaps.V4, iptablesFilterTableV4, ipSetIDAllocV4, m)
@@ -3601,7 +3601,7 @@ func (m *bpfEndpointManager) ensureBPFDevices() error {
 }
 
 func (m *bpfEndpointManager) ensureQdisc(iface string) (bool, error) {
-	if m.bpfAttachType == string(apiv3.BPFAttachOptionTCX) {
+	if m.bpfAttachType == apiv3.BPFAttachOptionTCX {
 		return true, nil
 	}
 	return tc.EnsureQdisc(iface)
