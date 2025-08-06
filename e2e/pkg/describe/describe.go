@@ -57,6 +57,7 @@ func WithCategory(cat Category) any {
 var features = map[string]bool{
 	"NetworkPolicy": true,
 	"IPPool":        true,
+	"AutoHEPs":      true,
 }
 
 // WithFeature marks tests as verifying a specific feature.
