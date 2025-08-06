@@ -1115,7 +1115,7 @@ func TestAttachTcx(t *testing.T) {
 			},
 			BPFExtToServiceConnmark: 0,
 			BPFPolicyDebugEnabled:   true,
-			BPFAttachType:           string(apiv3.BPFAttachOptionTCX),
+			BPFAttachType:           apiv3.BPFAttachOptionTCX,
 		},
 		bpfmaps,
 		regexp.MustCompile("^workloadep[0123]"),
@@ -1165,7 +1165,7 @@ func TestAttachTcx(t *testing.T) {
 		},
 		HostIPv4:   net.IPv4(1, 2, 3, 4),
 		IntfIPv4:   net.IPv4(1, 6, 6, 6),
-		AttachType: string(apiv3.BPFAttachOptionTC),
+		AttachType: apiv3.BPFAttachOptionTC,
 	}
 
 	_, err = tc.EnsureQdisc("workloadep0")
