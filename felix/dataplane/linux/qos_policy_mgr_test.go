@@ -19,51 +19,38 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/calico/felix/generictables"
-	"github.com/projectcalico/calico/felix/ipsets"
 	"github.com/projectcalico/calico/felix/iptables"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/rules"
 )
 
-var _ = Describe("QoS policy manager", func() {
-	var (
-		manager      *qosPolicyManager
-		mangleTable  *mockTable
-		ruleRenderer rules.RuleRenderer
-	)
+var _ = Describe("QoS policy manager IPv4", qosPolicyManagerTests(4))
+var _ = Describe("QoS policy manager IPv6", qosPolicyManagerTests(6))
 
-	BeforeEach(func() {
-		mangleTable = newMockTable("mangle")
-		ruleRenderer = rules.NewRenderer(rules.Config{
-			IPSetConfigV4: ipsets.NewIPVersionConfig(
-				ipsets.IPFamilyV4,
-				"cali",
-				nil,
-				nil,
-			),
-			MarkPass:     0x1,
-			MarkAccept:   0x2,
-			MarkScratch0: 0x4,
-			MarkScratch1: 0x8,
-			MarkDrop:     0x10,
-			MarkEndpoint: 0x11110000,
-		})
-		manager = newQoSPolicyManager(mangleTable, ruleRenderer, 4)
-	})
+func qosPolicyManagerTests(ipVersion uint8) func() {
+	return func() {
+		var (
+			manager      *qosPolicyManager
+			mangleTable  *mockTable
+			ruleRenderer rules.RuleRenderer
+		)
 
-	Describe("QoS policy: after adding a workload with DSCP annotation", func() {
 		BeforeEach(func() {
-			manager.OnUpdate(&proto.IPAMPoolUpdate{
-				Id: "pool-1",
-				Pool: &proto.IPAMPool{
-					Cidr: "10.0.0.0/16",
-				},
+			mangleTable = newMockTable("mangle")
+			ruleRenderer = rules.NewRenderer(rules.Config{
+				MarkPass:     0x1,
+				MarkAccept:   0x2,
+				MarkScratch0: 0x4,
+				MarkScratch1: 0x8,
+				MarkDrop:     0x10,
+				MarkEndpoint: 0x11110000,
 			})
-			err := manager.CompleteDeferredWork()
-			Expect(err).ToNot(HaveOccurred())
+			manager = newQoSPolicyManager(mangleTable, ruleRenderer, ipVersion)
 		})
 
 		It("should program QoS policy chain with no rule", func() {
+			err := manager.CompleteDeferredWork()
+			Expect(err).ToNot(HaveOccurred())
 			mangleTable.checkChains([][]*generictables.Chain{{{
 				Name:  rules.ChainQoSPolicy,
 				Rules: nil,
@@ -72,15 +59,16 @@ var _ = Describe("QoS policy manager", func() {
 
 		It("should handle workload updates correctly", func() {
 			By("sending workload endpoint updates with DSCP annotion")
+			endpoint1 := &proto.WorkloadEndpoint{
+				State:       "active",
+				Name:        "cali12345-ab",
+				Ipv4Nets:    []string{"10.0.240.2/24", "20.0.240.2/24"},
+				Ipv6Nets:    []string{"2001:db8:2::2/112", "dead:beef::2/112"},
+				QosPolicies: []*proto.QoSPolicy{{Dscp: 44}},
+			}
 			manager.OnUpdate(&proto.WorkloadEndpointUpdate{
-				Id: &wlEPID1,
-				Endpoint: &proto.WorkloadEndpoint{
-					State:       "active",
-					Name:        "cali12345-ab",
-					Ipv4Nets:    []string{"10.0.240.2/24"},
-					Ipv6Nets:    []string{"2001:db8:2::2/128"},
-					QosPolicies: []*proto.QoSPolicy{{Dscp: 44}},
-				},
+				Id:       &wlEPID1,
+				Endpoint: endpoint1,
 			})
 
 			err := manager.CompleteDeferredWork()
@@ -91,22 +79,22 @@ var _ = Describe("QoS policy manager", func() {
 				Rules: []generictables.Rule{
 					{
 						Action: iptables.DSCPAction{Value: 44},
-						Match: iptables.Match().
-							SourceNet("10.0.240.2"),
+						Match:  iptables.Match().SourceNet(addrFromWlUpdate(endpoint1, ipVersion)),
 					},
 				},
 			}}})
 
 			By("sending another workload endpoint updates with DSCP annotion")
+			endpoint2 := &proto.WorkloadEndpoint{
+				State:       "active",
+				Name:        "cali2",
+				Ipv4Nets:    []string{"10.0.240.1/24"},
+				Ipv6Nets:    []string{"2001:db8:2::1/112"},
+				QosPolicies: []*proto.QoSPolicy{{Dscp: 20}},
+			}
 			manager.OnUpdate(&proto.WorkloadEndpointUpdate{
-				Id: &wlEPID2,
-				Endpoint: &proto.WorkloadEndpoint{
-					State:       "active",
-					Name:        "cali2",
-					Ipv4Nets:    []string{"10.0.240.3/24"},
-					Ipv6Nets:    []string{"2001:db8:2::3/128"},
-					QosPolicies: []*proto.QoSPolicy{{Dscp: 20}},
-				},
+				Id:       &wlEPID2,
+				Endpoint: endpoint2,
 			})
 
 			err = manager.CompleteDeferredWork()
@@ -115,29 +103,23 @@ var _ = Describe("QoS policy manager", func() {
 			mangleTable.checkChains([][]*generictables.Chain{{{
 				Name: rules.ChainQoSPolicy,
 				Rules: []generictables.Rule{
-					{
-						Action: iptables.DSCPAction{Value: 44},
-						Match: iptables.Match().
-							SourceNet("10.0.240.2"),
-					},
+					// Rendered policies are sorted.
 					{
 						Action: iptables.DSCPAction{Value: 20},
-						Match: iptables.Match().
-							SourceNet("10.0.240.3"),
+						Match:  iptables.Match().SourceNet(addrFromWlUpdate(endpoint2, ipVersion)),
+					},
+					{
+						Action: iptables.DSCPAction{Value: 44},
+						Match:  iptables.Match().SourceNet(addrFromWlUpdate(endpoint1, ipVersion)),
 					},
 				},
 			}}})
 
 			By("verifying update to DSCP value takes effect")
+			endpoint1.QosPolicies = []*proto.QoSPolicy{{Dscp: 13}}
 			manager.OnUpdate(&proto.WorkloadEndpointUpdate{
-				Id: &wlEPID1,
-				Endpoint: &proto.WorkloadEndpoint{
-					State:       "active",
-					Name:        "cali12345-ab",
-					Ipv4Nets:    []string{"10.0.240.2/24"},
-					Ipv6Nets:    []string{"2001:db8:2::2/128"},
-					QosPolicies: []*proto.QoSPolicy{{Dscp: 13}},
-				},
+				Id:       &wlEPID1,
+				Endpoint: endpoint1,
 			})
 
 			err = manager.CompleteDeferredWork()
@@ -146,28 +128,23 @@ var _ = Describe("QoS policy manager", func() {
 			mangleTable.checkChains([][]*generictables.Chain{{{
 				Name: rules.ChainQoSPolicy,
 				Rules: []generictables.Rule{
-					{
-						Action: iptables.DSCPAction{Value: 13},
-						Match: iptables.Match().
-							SourceNet("10.0.240.2"),
-					},
+					// Rendered policies are sorted.
 					{
 						Action: iptables.DSCPAction{Value: 20},
-						Match: iptables.Match().
-							SourceNet("10.0.240.3"),
+						Match:  iptables.Match().SourceNet(addrFromWlUpdate(endpoint2, ipVersion)),
+					},
+					{
+						Action: iptables.DSCPAction{Value: 13},
+						Match:  iptables.Match().SourceNet(addrFromWlUpdate(endpoint1, ipVersion)),
 					},
 				},
 			}}})
 
 			By("verifying QoS policy rules removed when annotation is removed")
+			endpoint1.QosPolicies = nil
 			manager.OnUpdate(&proto.WorkloadEndpointUpdate{
-				Id: &wlEPID1,
-				Endpoint: &proto.WorkloadEndpoint{
-					State:    "active",
-					Name:     "cali12345-ab",
-					Ipv4Nets: []string{"10.0.240.2/24"},
-					Ipv6Nets: []string{"2001:db8:2::2/128"},
-				},
+				Id:       &wlEPID1,
+				Endpoint: endpoint1,
 			})
 
 			err = manager.CompleteDeferredWork()
@@ -178,8 +155,7 @@ var _ = Describe("QoS policy manager", func() {
 				Rules: []generictables.Rule{
 					{
 						Action: iptables.DSCPAction{Value: 20},
-						Match: iptables.Match().
-							SourceNet("10.0.240.3"),
+						Match:  iptables.Match().SourceNet(addrFromWlUpdate(endpoint2, ipVersion)),
 					},
 				},
 			}}})
@@ -197,5 +173,13 @@ var _ = Describe("QoS policy manager", func() {
 				Rules: nil,
 			}}})
 		})
-	})
-})
+	}
+}
+
+func addrFromWlUpdate(endpoint *proto.WorkloadEndpoint, ipVersion uint8) string {
+	addr := endpoint.Ipv4Nets
+	if ipVersion == 6 {
+		addr = endpoint.Ipv6Nets
+	}
+	return normaliseSourceAddr(addr)
+}

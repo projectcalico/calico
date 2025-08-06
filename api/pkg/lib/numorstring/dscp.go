@@ -77,7 +77,7 @@ func DSCPFromInt(v uint8) DSCP {
 
 // DSCPFromString creates a DSCP struct from a string value.
 func DSCPFromString(s string) DSCP {
-	for k, _ := range AllDSCPValues {
+	for k := range AllDSCPValues {
 		if strings.EqualFold(k, s) {
 			return DSCP(
 				Uint8OrString{Type: NumOrStringString, StrVal: s},
