@@ -254,7 +254,9 @@ var _ = describe.CalicoDescribe(
 								Namespace: f.Namespace.Name,
 							},
 							Spec: v1.ServiceSpec{
-								Selector: map[string]string{"pod-name": client1.Name()},
+								Selector:       map[string]string{"pod-name": client1.Name()},
+								IPFamilies:     server.Service().Spec.IPFamilies,
+								IPFamilyPolicy: server.Service().Spec.IPFamilyPolicy,
 								Ports: []v1.ServicePort{
 									{
 										Port:     80,
