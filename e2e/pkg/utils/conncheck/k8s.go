@@ -166,15 +166,16 @@ func CreateServerPodAndServiceX(f *framework.Framework, namespace *v1.Namespace,
 
 		By(fmt.Sprintf("Creating a service %s for pod %s in namespace %s", svcName, podName, namespace.Name))
 		v6Svc, err := f.ClientSet.CoreV1().Services(namespace.Name).Create(ctx, svc, metav1.CreateOptions{})
-
-		// If v6 is not enabled on the cluster, we will receive an "Invalid" error type. In this case,
-		// we will fall through and return the v4 service.
-		if !kerrors.IsInvalid(err) {
-			// Make sure it's not another kind of error.
-			Expect(err).NotTo(HaveOccurred())
-
+		if err == nil {
 			// IPv6 is supported - return the dual stack service.
 			return pod, v6Svc
+		} else if !kerrors.IsInvalid(err) {
+			// An error other than 422 Invalid is an actual error.
+			Expect(err).NotTo(HaveOccurred(), "Error creating IPv6 service")
+		} else {
+			// If v6 is not enabled on the cluster, we will receive an "Invalid" error type. In this case,
+			// fall through and return the v4 service.
+			logrus.WithField("svc", v4Svc.Name).Info("IPv6 not enabled, using v4 service")
 		}
 	}
 
