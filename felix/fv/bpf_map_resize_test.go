@@ -245,7 +245,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf conntrack table d
 
 		line := ""
 		// Program 10k tcp ct entries into map. This is done in batches of 2k.
-		for i := 1; i <= 10000; i++ {
+		for i := 1; i <= 20000; i++ {
 			sport := uint16(i)
 			dport := uint16(i & 0xffff)
 			key := formatBytesWithPrefix(conntrack.NewKey(6 /* UDP */, srcIP, sport, dstIP, dport).AsBytes())
