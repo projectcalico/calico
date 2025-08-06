@@ -45,7 +45,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
-var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ pepper cluster routing using Felix programming routes", []apiconfig.DatastoreType{apiconfig.EtcdV3, apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
+var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix programming routes", []apiconfig.DatastoreType{apiconfig.EtcdV3, apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
 	type testConf struct {
 		IPIPMode    api.IPIPMode
 		RouteSource string
@@ -54,11 +54,11 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ pepper cluster routing usin
 	}
 	for _, testConfig := range []testConf{
 		// IPIP does not support IPv6.
-		//{api.IPIPModeCrossSubnet, "CalicoIPAM", true, false},
-		//{api.IPIPModeCrossSubnet, "WorkloadIPs", false, false},
+		{api.IPIPModeCrossSubnet, "CalicoIPAM", true, false},
+		{api.IPIPModeCrossSubnet, "WorkloadIPs", false, false},
 
-		//{api.IPIPModeAlways, "CalicoIPAM", true, false},
-		//{api.IPIPModeAlways, "WorkloadIPs", false, false},
+		{api.IPIPModeAlways, "CalicoIPAM", true, false},
+		{api.IPIPModeAlways, "WorkloadIPs", false, false},
 
 		// No encap routing tests. BrokenXSum is irrelevant in these cases.
 		{api.IPIPModeNever, "CalicoIPAM", false, false},
