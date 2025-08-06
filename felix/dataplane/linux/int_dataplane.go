@@ -687,7 +687,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	// program no encapsulation routes.
 	if config.ProgramClusterRoutes {
 		if !config.RulesConfig.VXLANEnabled && !config.RulesConfig.IPIPEnabled && !config.RulesConfig.WireguardEnabled {
-			log.Info("No encapsulation enabled, starting thread to keep no encapsulation routes in sync.")
+			log.Info("Unencapsulated IPv4 route programming enabled, starting thread to keep no encapsulation routes in sync.")
 			// Add a manager to keep the all-hosts IP set up to date.
 			dp.noEncapManager = newNoEncapManager(
 				routeTableV4,
@@ -706,7 +706,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 		if config.IPv6Enabled &&
 			!config.RulesConfig.VXLANEnabledV6 && !config.RulesConfig.WireguardEnabledV6 {
-			log.Info("No IPv6 encapsulation enabled, starting thread to keep no encapsulation routes in sync.")
+			log.Info("Unencapsulated IPv6 route programming enabled, starting thread to keep no encapsulation routes in sync.")
 			// Add a manager to keep the all-hosts IP set up to date.
 			dp.noEncapManagerV6 = newNoEncapManager(
 				routeTableV6,
