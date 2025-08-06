@@ -134,6 +134,13 @@ func (a *actionSet) LimitNumConnections(num int64, rejectWith generictables.Reje
 	}
 }
 
+func (a *actionSet) DSCP(value, ipVersion uint8) generictables.Action {
+	return DSCPAction{
+		Value:     value,
+		IpVersion: ipVersion,
+	}
+}
+
 func escapeLogPrefix(prefix string) string {
 	return fmt.Sprintf("\"%s\"", prefix)
 }
@@ -504,4 +511,20 @@ func (a LimitNumConnectionsAction) ToFragment(features *environment.Features) st
 
 func (a LimitNumConnectionsAction) String() string {
 	return fmt.Sprintf("LimitNumConnectionsAction:%d,rejectWith:%s", a.Num, a.RejectWith)
+}
+
+type DSCPAction struct {
+	Value     uint8
+	IpVersion uint8
+}
+
+func (a DSCPAction) ToFragment(features *environment.Features) string {
+	if a.IpVersion == 6 {
+		return fmt.Sprintf("ip6 dscp set %d", a.Value)
+	}
+	return fmt.Sprintf("ip dscp set %d", a.Value)
+}
+
+func (a DSCPAction) String() string {
+	return fmt.Sprintf("DSCP %d", a.Value)
 }
