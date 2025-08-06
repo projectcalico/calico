@@ -1327,6 +1327,11 @@ func updatePodLabelsAndAnnotations(wep *libapi.WorkloadEndpoint, pod *v1.Pod) *v
 		if pod.Annotations == nil {
 			pod.Annotations = map[string]string{}
 		}
+		if wep.Spec.QoSControls.DSCP != nil {
+			pod.Annotations[conversion.AnnotationQoSEgressDSCP] = wep.Spec.QoSControls.DSCP.String()
+		} else {
+			delete(pod.Annotations, conversion.AnnotationQoSEgressDSCP)
+		}
 		if wep.Spec.QoSControls.IngressBandwidth != 0 {
 			pod.Annotations[conversion.AnnotationQoSIngressBandwidth] = resource.NewQuantity(wep.Spec.QoSControls.IngressBandwidth, resource.DecimalSI).String()
 		} else {
@@ -1397,8 +1402,8 @@ func updatePodLabelsAndAnnotations(wep *libapi.WorkloadEndpoint, pod *v1.Pod) *v
 		} else {
 			delete(pod.Annotations, conversion.AnnotationQoSEgressMaxConnections)
 		}
-
 	} else if pod.Annotations != nil {
+		delete(pod.Annotations, conversion.AnnotationQoSEgressDSCP)
 		delete(pod.Annotations, conversion.AnnotationQoSIngressBandwidth)
 		delete(pod.Annotations, conversion.AnnotationQoSIngressBurst)
 		delete(pod.Annotations, conversion.AnnotationQoSIngressPeakrate)
