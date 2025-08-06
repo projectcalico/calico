@@ -41,7 +41,9 @@ type Category string
 
 const (
 	// Policy is used for tests that verify policy enforcement behavior in the dataplane.
-	Policy Category = "Policy"
+	Policy        Category = "Policy"
+	Configuration Category = "Configuration"
+	Operator      Category = "Operator"
 )
 
 func WithCategory(cat Category) any {
@@ -54,6 +56,7 @@ func WithCategory(cat Category) any {
 // If you are unsure which feature to use, please ask!
 var features = map[string]bool{
 	"NetworkPolicy": true,
+	"IPPool":        true,
 	"AutoHEPs":      true,
 }
 
