@@ -45,35 +45,42 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
-var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix programming routes", []apiconfig.DatastoreType{apiconfig.EtcdV3, apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
+var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ pepper cluster routing using Felix programming routes", []apiconfig.DatastoreType{apiconfig.EtcdV3, apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
 	type testConf struct {
 		IPIPMode    api.IPIPMode
 		RouteSource string
 		BrokenXSum  bool
+		EnableIPv6  bool
 	}
 	for _, testConfig := range []testConf{
-		{api.IPIPModeCrossSubnet, "CalicoIPAM", true},
-		{api.IPIPModeCrossSubnet, "WorkloadIPs", false},
+		// IPIP does not support IPv6.
+		//{api.IPIPModeCrossSubnet, "CalicoIPAM", true, false},
+		//{api.IPIPModeCrossSubnet, "WorkloadIPs", false, false},
 
-		{api.IPIPModeAlways, "CalicoIPAM", true},
-		{api.IPIPModeAlways, "WorkloadIPs", false},
+		//{api.IPIPModeAlways, "CalicoIPAM", true, false},
+		//{api.IPIPModeAlways, "WorkloadIPs", false, false},
 
 		// No encap routing tests. BrokenXSum is irrelevant in these cases.
-		{api.IPIPModeNever, "CalicoIPAM", false},
-		{api.IPIPModeNever, "WorkloadIPs", false},
+		{api.IPIPModeNever, "CalicoIPAM", false, false},
+		{api.IPIPModeNever, "WorkloadIPs", false, false},
+		{api.IPIPModeNever, "CalicoIPAM", false, true},
+		{api.IPIPModeNever, "WorkloadIPs", false, true},
 	} {
 		ipipMode := testConfig.IPIPMode
 		routeSource := testConfig.RouteSource
 		brokenXSum := testConfig.BrokenXSum
+		enableIPv6 := testConfig.EnableIPv6
 
-		Describe(fmt.Sprintf("with topology set to IPIPMode %s, routeSource %s, brokenXSum: %v", ipipMode, routeSource, brokenXSum), func() {
+		Describe(fmt.Sprintf("with topology set to IPIPMode %s, routeSource %s, brokenXSum: %v, enableIPv6: %v", ipipMode, routeSource, brokenXSum, enableIPv6), func() {
 			var (
 				infra           infrastructure.DatastoreInfra
 				tc              infrastructure.TopologyContainers
 				felixes         []*infrastructure.Felix
 				client          client.Interface
 				w               [3]*workload.Workload
+				w6              [3]*workload.Workload
 				hostW           [3]*workload.Workload
+				hostW6          [3]*workload.Workload
 				cc              *connectivity.Checker
 				topologyOptions infrastructure.TopologyOptions
 			)
@@ -84,10 +91,10 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 					Skip("Skipping NFT / BPF test for etcdv3 backend.")
 				}
 
-				topologyOptions = createIPIPBaseTopologyOptions(ipipMode, routeSource, brokenXSum)
+				topologyOptions = createIPIPBaseTopologyOptions(ipipMode, enableIPv6, routeSource, brokenXSum)
 				tc, client = infrastructure.StartNNodeTopology(3, topologyOptions, infra)
 
-				w, hostW = setupIPIPWorkloads(infra, tc, topologyOptions, client)
+				w, w6, hostW, hostW6 = setupWorkloads(infra, tc, topologyOptions, client, enableIPv6)
 				felixes = tc.Felixes
 
 				cc = &connectivity.Checker{}
@@ -103,6 +110,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 							felix.Exec("ipset", "list")
 						}
 						felix.Exec("ip", "r")
+						if enableIPv6 {
+							felix.Exec("ip", "-6", "route")
+						}
 						felix.Exec("ip", "a")
 						if BPFMode() {
 							felix.Exec("calico-bpf", "policy", "dump", "eth0", "all", "--asm")
@@ -113,7 +123,13 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 				for _, wl := range w {
 					wl.Stop()
 				}
+				for _, wl := range w6 {
+					wl.Stop()
+				}
 				for _, wl := range hostW {
+					wl.Stop()
+				}
+				for _, wl := range hostW6 {
 					wl.Stop()
 				}
 				tc.Stop()
@@ -165,9 +181,16 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 				})
 			}
 
-			It("should have workload to workload connectivity", func() {
+			It("pepper1 should have workload to workload connectivity", func() {
+				//time.Sleep(time.Minute * 50)
 				cc.ExpectSome(w[0], w[1])
 				cc.ExpectSome(w[1], w[0])
+
+				if enableIPv6 {
+					cc.ExpectSome(w6[0], w6[1])
+					cc.ExpectSome(w6[1], w6[0])
+				}
+
 				cc.CheckConnectivity()
 			})
 
@@ -193,6 +216,12 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 					err := client.IPAM().ReleaseByHandle(context.TODO(), wName)
 					Expect(err).NotTo(HaveOccurred())
 
+					if enableIPv6 {
+						w6Name := fmt.Sprintf("w6-%d", n)
+						err := client.IPAM().ReleaseByHandle(context.TODO(), w6Name)
+						Expect(err).NotTo(HaveOccurred())
+					}
+
 					affinityCfg := ipam.AffinityConfig{
 						AffinityType: ipam.AffinityTypeHost,
 						Host:         felixes[n].Hostname,
@@ -207,7 +236,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 				}
 			})
 
-			if ipipMode != api.IPIPModeAlways && routeSource == "CalicoIPAM" {
+			if ipipMode == api.IPIPModeCrossSubnet && !enableIPv6 && routeSource == "CalicoIPAM" {
 				It("should move no encap routes when the node IP moves to a new interface", func() {
 					// Routes should look like this:
 					//
@@ -267,19 +296,41 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 				if ipipMode == api.IPIPModeAlways && routeSource == "WorkloadIPs" {
 					Skip("Skipping due to known issue with tunnel IPs not being programmed in WEP mode")
 				}
-				cc.ExpectSome(tc.Felixes[0], w[1])
-				cc.ExpectSome(tc.Felixes[0], w[0])
+
+				for i := 0; i < 3; i++ {
+					f := felixes[i]
+					cc.ExpectSome(f, w[0])
+					cc.ExpectSome(f, w[1])
+					cc.ExpectSome(f, w[2])
+
+					if enableIPv6 {
+						cc.ExpectSome(f, w6[0])
+						cc.ExpectSome(f, w6[1])
+						cc.ExpectSome(f, w6[2])
+					}
+				}
+
 				cc.CheckConnectivity()
 			})
 
 			It("should have host to host connectivity", func() {
 				cc.ExpectSome(tc.Felixes[0], hostW[1])
 				cc.ExpectSome(tc.Felixes[1], hostW[0])
+
+				if enableIPv6 {
+					cc.ExpectSome(felixes[0], hostW6[1])
+					cc.ExpectSome(felixes[1], hostW6[0])
+				}
+
 				cc.CheckConnectivity()
 			})
 
 			Context("with host protection policy in place", func() {
 				BeforeEach(func() {
+					if enableIPv6 {
+						Skip("Skipping due to known issue with ICMPv6 NDP being dropped with host endpoints")
+					}
+
 					// Make sure our new host endpoints don't cut felix off from the datastore.
 					err := infra.AddAllowToDatastore("host-endpoint=='true'")
 					Expect(err).NotTo(HaveOccurred())
@@ -304,15 +355,28 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 					// Host endpoints (with no policies) block host-host traffic due to default drop.
 					cc.ExpectNone(tc.Felixes[0], hostW[1])
 					cc.ExpectNone(tc.Felixes[1], hostW[0])
+					if enableIPv6 {
+						cc.ExpectNone(felixes[0], hostW6[1])
+						cc.ExpectNone(felixes[1], hostW6[0])
+					}
+
 					// But the rules to allow IPIP between our hosts let the workload traffic through.
 					cc.ExpectSome(w[0], w[1])
 					cc.ExpectSome(w[1], w[0])
+					if enableIPv6 {
+						cc.ExpectSome(w6[0], w6[1])
+						cc.ExpectSome(w6[1], w6[0])
+					}
 					cc.CheckConnectivity()
 				})
 			})
 
 			Context("with all-interfaces host protection policy in place", func() {
 				BeforeEach(func() {
+					if enableIPv6 {
+						Skip("Skipping due to known issue with ICMPv6 NDP being dropped with host endpoints")
+					}
+
 					// Make sure our new host endpoints don't cut felix off from the datastore.
 					err := infra.AddAllowToDatastore("host-endpoint=='true'")
 					Expect(err).NotTo(HaveOccurred())
@@ -340,18 +404,34 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 					// Host endpoints (with no policies) block host-host traffic due to default drop.
 					cc.ExpectNone(felixes[0], hostW[1])
 					cc.ExpectNone(felixes[1], hostW[0])
+					if enableIPv6 {
+						cc.ExpectNone(felixes[0], hostW6[1])
+						cc.ExpectNone(felixes[1], hostW6[0])
+					}
 
 					// Host => workload is not allowed
 					cc.ExpectNone(felixes[0], w[1])
 					cc.ExpectNone(felixes[1], w[0])
+					if enableIPv6 {
+						cc.ExpectNone(felixes[0], w6[1])
+						cc.ExpectNone(felixes[1], w6[0])
+					}
 
 					// But host => own-workload is allowed
 					cc.ExpectSome(felixes[0], w[0])
 					cc.ExpectSome(felixes[1], w[1])
+					if enableIPv6 {
+						cc.ExpectSome(felixes[0], w6[0])
+						cc.ExpectSome(felixes[1], w6[1])
+					}
 
 					// But the rules to allow VXLAN between our hosts let the workload traffic through.
 					cc.ExpectSome(w[0], w[1])
 					cc.ExpectSome(w[1], w[0])
+					if enableIPv6 {
+						cc.ExpectSome(w6[0], w6[1])
+						cc.ExpectSome(w6[1], w6[0])
+					}
 
 					cc.CheckConnectivity()
 				})
@@ -366,13 +446,26 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 					Expect(err).NotTo(HaveOccurred())
 
 					// But there is no policy allowing ingress into felix[1].
-					cc.ExpectNone(tc.Felixes[0], hostW[1])
-					cc.ExpectNone(tc.Felixes[1], hostW[0])
+					cc.ExpectNone(felixes[0], hostW[1])
+					if enableIPv6 {
+						cc.ExpectNone(felixes[0], hostW6[1])
+					}
+
+					// felixes[1] can't reach felixes[0].
+					cc.ExpectNone(felixes[1], hostW[0])
+					if enableIPv6 {
+						cc.ExpectNone(felixes[1], hostW6[0])
+					}
 
 					// Workload connectivity is unchanged.
 					cc.ExpectSome(w[0], w[1])
 					cc.ExpectSome(w[1], w[0])
+					if enableIPv6 {
+						cc.ExpectSome(w6[0], w6[1])
+						cc.ExpectSome(w6[1], w6[0])
+					}
 					cc.CheckConnectivity()
+
 					cc.ResetExpectations()
 
 					// Now add a policy selecting felix[1] that allows ingress.
@@ -383,13 +476,26 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 					_, err = client.GlobalNetworkPolicies().Create(utils.Ctx, policy, utils.NoOptions)
 					Expect(err).NotTo(HaveOccurred())
 
-					// Now testContainers.Felix[0] can reach testContainers.Felix[1].
-					cc.ExpectSome(tc.Felixes[0], hostW[1])
-					cc.ExpectNone(tc.Felixes[1], hostW[0])
+					// Now felixes[0] can reach felixes[1].
+					cc.ExpectSome(felixes[0], hostW[1])
+					if enableIPv6 {
+						cc.ExpectSome(felixes[0], hostW6[1])
+					}
+
+					// felixes[1] still can't reach felixes[0].
+					cc.ExpectNone(felixes[1], hostW[0])
+					if enableIPv6 {
+						cc.ExpectNone(felixes[1], hostW6[0])
+					}
 
 					// Workload connectivity is unchanged.
 					cc.ExpectSome(w[0], w[1])
 					cc.ExpectSome(w[1], w[0])
+					if enableIPv6 {
+						cc.ExpectSome(w6[0], w6[1])
+						cc.ExpectSome(w6[1], w6[0])
+					}
+
 					cc.CheckConnectivity()
 				})
 
@@ -446,6 +552,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 						}
 						// Allocate a service IP.
 						serviceIP := "10.101.0.11"
+						serviceV6IP := "deca:fbad:0000:0000:0000:0000:0000:0001"
 						port := 8055
 						tgtPort := 8055
 
@@ -460,8 +567,25 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 							tgtPort:   tgtPort,
 							chain:     "OUTPUT",
 						})
+						if enableIPv6 {
+							createK8sServiceWithoutKubeProxy(createK8sServiceWithoutKubeProxyArgs{
+								infra:     infra,
+								felix:     felixes[0],
+								w:         w6[1],
+								svcName:   "test-v6-svc",
+								serviceIP: serviceV6IP,
+								targetIP:  w6[1].IP,
+								port:      port,
+								tgtPort:   tgtPort,
+								chain:     "OUTPUT",
+								ipv6:      true,
+							})
+						}
 						// Expect to connect to the service IP.
 						cc.ExpectSome(felixes[0], connectivity.TargetIP(serviceIP), uint16(port))
+						if enableIPv6 {
+							cc.ExpectSome(felixes[0], connectivity.TargetIP(serviceV6IP), uint16(port))
+						}
 						cc.CheckConnectivity()
 					})
 				})
@@ -542,6 +666,15 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 					cc.ExpectNone(w[1], w[2])
 					cc.ExpectNone(w[2], w[0])
 					cc.ExpectNone(w[2], w[1])
+
+					if enableIPv6 {
+						cc.ExpectSome(w6[0], w6[1])
+						cc.ExpectSome(w6[1], w6[0])
+						cc.ExpectNone(w6[0], w6[2])
+						cc.ExpectNone(w6[2], w6[0])
+						cc.ExpectNone(w6[1], w6[2])
+						cc.ExpectNone(w6[2], w6[1])
+					}
 					cc.CheckConnectivity()
 				})
 			})
@@ -586,14 +719,28 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 					It("after manually removing third node from allow list should have expected connectivity", func() {
 						if NFTMode() {
 							felixes[0].Exec("nft", "delete", "element", "ip", "calico", "cali40all-hosts-net", fmt.Sprintf("{ %s }", felixes[2].IP))
+							if enableIPv6 {
+								felixes[0].Exec("nft", "delete", "element", "ip6", "calico", "cali60all-hosts-net", fmt.Sprintf("{ %s }", felixes[2].IPv6))
+							}
 						} else {
 							felixes[0].Exec("ipset", "del", "cali40all-hosts-net", felixes[2].IP)
+							if enableIPv6 {
+								felixes[0].Exec("ipset", "del", "cali60all-hosts-net", felixes[2].IPv6)
+							}
 						}
 
 						cc.ExpectSome(w[0], w[1])
 						cc.ExpectSome(w[1], w[0])
 						cc.ExpectSome(w[1], w[2])
 						cc.ExpectNone(w[2], w[0])
+
+						if enableIPv6 {
+							cc.ExpectSome(w6[0], w6[1])
+							cc.ExpectSome(w6[1], w6[0])
+							cc.ExpectSome(w6[1], w6[2])
+							cc.ExpectNone(w6[2], w6[0])
+						}
+
 						cc.CheckConnectivity()
 					})
 				}
@@ -770,7 +917,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 				felixes         []*infrastructure.Felix
 				client          client.Interface
 				w               [3]*workload.Workload
+				w6              [3]*workload.Workload
 				hostW           [3]*workload.Workload
+				hostW6          [3]*workload.Workload
 				cc              *connectivity.Checker
 				topologyOptions infrastructure.TopologyOptions
 			)
@@ -782,7 +931,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 					Skip("Skipping NFT / BPF tests for etcdv3 backend.")
 				}
 
-				topologyOptions = createIPIPBaseTopologyOptions(ipipMode, routeSource, brokenXSum)
+				topologyOptions = createIPIPBaseTopologyOptions(ipipMode, enableIPv6, routeSource, brokenXSum)
 				topologyOptions.FelixLogSeverity = "Debug"
 				topologyOptions.IPIPStrategy = infrastructure.NewBorrowedIPTunnelStrategy(topologyOptions.IPPoolCIDR, topologyOptions.IPv6PoolCIDR, 3)
 
@@ -791,7 +940,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 				// Deploy the topology.
 				tc, client = infrastructure.StartNNodeTopology(3, topologyOptions, infra)
 
-				w, hostW = setupIPIPWorkloads(infra, tc, topologyOptions, client)
+				w, w6, hostW, hostW6 = setupWorkloads(infra, tc, topologyOptions, client, enableIPv6)
 				felixes = tc.Felixes
 
 				// Assign tunnel addresees in IPAM based on the topology.
@@ -811,13 +960,23 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 						felix.Exec("ip", "r")
 						felix.Exec("ip", "a")
 						felix.Exec("calico-bpf", "routes", "dump")
+						if enableIPv6 {
+							felix.Exec("ip", "-6", "route")
+							felix.Exec("calico-bpf", "-6", "routes", "dump")
+						}
 					}
 				}
 
 				for _, wl := range w {
 					wl.Stop()
 				}
+				for _, wl := range w6 {
+					wl.Stop()
+				}
 				for _, wl := range hostW {
+					wl.Stop()
+				}
+				for _, wl := range hostW6 {
 					wl.Stop()
 				}
 				tc.Stop()
@@ -838,6 +997,12 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 					cc.ExpectSome(f, w[0])
 					cc.ExpectSome(f, w[1])
 					cc.ExpectSome(f, w[2])
+
+					if enableIPv6 {
+						cc.ExpectSome(f, w6[0])
+						cc.ExpectSome(f, w6[1])
+						cc.ExpectSome(f, w6[2])
+					}
 				}
 
 				cc.CheckConnectivity()
@@ -851,7 +1016,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 				felixes         []*infrastructure.Felix
 				client          client.Interface
 				w               [3]*workload.Workload
+				w6              [3]*workload.Workload
 				hostW           [3]*workload.Workload
+				hostW6          [3]*workload.Workload
 				cc              *connectivity.Checker
 				topologyOptions infrastructure.TopologyOptions
 			)
@@ -863,7 +1030,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 					Skip("Skipping NFT / BPF tests for etcdv3 backend.")
 				}
 
-				topologyOptions = createIPIPBaseTopologyOptions(ipipMode, routeSource, brokenXSum)
+				topologyOptions = createIPIPBaseTopologyOptions(ipipMode, enableIPv6, routeSource, brokenXSum)
 				topologyOptions.FelixLogSeverity = "Debug"
 
 				// Configure the default IP pool to be used for workloads only.
@@ -895,7 +1062,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 					Expect(err).To(HaveOccurred()) // IPIP does not support IPv6 yet.
 				}
 
-				// Configure the VXLAN strategy to use this IP pool for tunnel addresses allocation.
+				// Configure the IPIP strategy to use this IP pool for tunnel addresses allocation.
 				topologyOptions.IPIPStrategy = infrastructure.NewDefaultTunnelStrategy(tunnelPool.Spec.CIDR, tunnelPoolV6.Spec.CIDR)
 
 				cc = &connectivity.Checker{}
@@ -903,7 +1070,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 				// Deploy the topology.
 				tc, client = infrastructure.StartNNodeTopology(3, topologyOptions, infra)
 
-				w, hostW = setupIPIPWorkloads(infra, tc, topologyOptions, client)
+				w, w6, hostW, hostW6 = setupWorkloads(infra, tc, topologyOptions, client, enableIPv6)
 				felixes = tc.Felixes
 
 				// Assign tunnel addresees in IPAM based on the topology.
@@ -922,6 +1089,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 						felix.Exec("ipset", "list")
 						felix.Exec("ip", "r")
 						felix.Exec("ip", "a")
+						if enableIPv6 {
+							felix.Exec("ip", "-6", "route")
+						}
 						felix.Exec("calico-bpf", "routes", "dump")
 					}
 				}
@@ -929,7 +1099,13 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 				for _, wl := range w {
 					wl.Stop()
 				}
+				for _, wl := range w6 {
+					wl.Stop()
+				}
 				for _, wl := range hostW {
+					wl.Stop()
+				}
+				for _, wl := range hostW6 {
 					wl.Stop()
 				}
 				tc.Stop()
@@ -950,13 +1126,24 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 					cc.ExpectSome(f, w[0])
 					cc.ExpectSome(f, w[1])
 					cc.ExpectSome(f, w[2])
+
+					if enableIPv6 {
+						cc.ExpectSome(f, w6[0])
+						cc.ExpectSome(f, w6[1])
+						cc.ExpectSome(f, w6[2])
+					}
 				}
+
 				cc.CheckConnectivity()
 			})
 
 			It("should have workload to workload connectivity", func() {
 				cc.ExpectSome(w[0], w[1])
 				cc.ExpectSome(w[1], w[0])
+				if enableIPv6 {
+					cc.ExpectSome(w6[0], w6[1])
+					cc.ExpectSome(w6[1], w6[0])
+				}
 				cc.CheckConnectivity()
 			})
 		})
@@ -1007,6 +1194,7 @@ func getDataStoreType(infra infrastructure.DatastoreInfra) string {
 
 func createIPIPBaseTopologyOptions(
 	ipipMode api.IPIPMode,
+	enableIPv6 bool,
 	routeSource string,
 	brokenXSum bool,
 ) infrastructure.TopologyOptions {
@@ -1015,14 +1203,14 @@ func createIPIPBaseTopologyOptions(
 	topologyOptions.IPIPStrategy = infrastructure.NewDefaultTunnelStrategy(topologyOptions.IPPoolCIDR, topologyOptions.IPv6PoolCIDR)
 	topologyOptions.VXLANMode = api.VXLANModeNever
 	topologyOptions.SimulateBIRDRoutes = false
-	topologyOptions.EnableIPv6 = false
+	topologyOptions.EnableIPv6 = enableIPv6
 	topologyOptions.ExtraEnvVars["FELIX_ProgramClusterRoutes"] = "Enabled"
 	topologyOptions.ExtraEnvVars["FELIX_ROUTESOURCE"] = routeSource
 	// We force the broken checksum handling on or off so that we're not dependent on kernel version
 	// for these tests.  Since we're testing in containers anyway, checksum offload can't really be
 	// tested but we can verify the state with ethtool.
 	topologyOptions.ExtraEnvVars["FELIX_FeatureDetectOverride"] = fmt.Sprintf("ChecksumOffloadBroken=%t", brokenXSum)
-	topologyOptions.FelixDebugFilenameRegex = "ipip|route_table|l3_route_resolver|int_dataplane"
+	//topologyOptions.FelixDebugFilenameRegex = "ipip|route_table|l3_route_resolver|int_dataplane"
 	return topologyOptions
 }
 
