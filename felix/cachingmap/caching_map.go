@@ -80,13 +80,13 @@ func (c *CachingMap[K, V]) LoadCacheFromDataplane() error {
 type ReadOnlyMap[K comparable, V any] interface {
 	Get(k K) (v V, exists bool)
 	Iter(func(k K, v V))
-	DeleteAll()
 }
 
 type ReadWriteMap[K comparable, V any] interface {
 	ReadOnlyMap[K, V]
 	Set(k K, v V)
 	Delete(k K)
+	DeleteAll()
 }
 
 func (c *CachingMap[K, V]) Desired() ReadWriteMap[K, V] {
@@ -94,7 +94,10 @@ func (c *CachingMap[K, V]) Desired() ReadWriteMap[K, V] {
 	return c.deltaTracker.Desired()
 }
 
-func (c *CachingMap[K, V]) Dataplane() ReadOnlyMap[K, V] {
+// Updating the dataplane means it is updated out-of-band
+// and its the caller's responsibility to keep Desired and
+// Dataplane in sync.
+func (c *CachingMap[K, V]) Dataplane() ReadWriteMap[K, V] {
 	// Pass through to the delta tracker.
 	return c.deltaTracker.Dataplane()
 }
