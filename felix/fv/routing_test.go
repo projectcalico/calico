@@ -1210,7 +1210,6 @@ func createIPIPBaseTopologyOptions(
 	// for these tests.  Since we're testing in containers anyway, checksum offload can't really be
 	// tested but we can verify the state with ethtool.
 	topologyOptions.ExtraEnvVars["FELIX_FeatureDetectOverride"] = fmt.Sprintf("ChecksumOffloadBroken=%t", brokenXSum)
-	//topologyOptions.FelixDebugFilenameRegex = "ipip|route_table|l3_route_resolver|int_dataplane"
 	return topologyOptions
 }
 

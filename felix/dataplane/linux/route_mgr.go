@@ -452,7 +452,7 @@ func (m *routeManager) detectParentIface() (netlink.Link, error) {
 			return nil, err
 		}
 		for _, addr := range addrs {
-			// Match both address with or without subnet mask
+			// Match address with or without subnet mask
 			if addr.IPNet.IP.String() == parentAddr || addr.IPNet.String() == parentAddr {
 				m.logCtx.Debugf("Found parent interface: %s", link)
 				return link, nil
