@@ -49,6 +49,10 @@ func FromArray[T comparable](membersArray []T) Typed[T] {
 type Typed[T comparable] map[T]v
 
 func (set Typed[T]) String() string {
+	return stringify(set)
+}
+
+func stringify[T any](set Set[T]) string {
 	var buf bytes.Buffer
 	_, _ = buf.WriteString("set.Set{")
 	first := true
@@ -145,6 +149,9 @@ func (set Typed[T]) Equals(other Set[T]) bool {
 }
 
 func (set Typed[T]) ContainsAll(other Set[T]) bool {
+	if other.Len() > set.Len() {
+		return false
+	}
 	result := true
 	other.Iter(func(item T) error {
 		if !set.Contains(item) {
