@@ -86,7 +86,7 @@ type target struct {
 
 func (t *target) Destination() string {
 	if t.port != 0 {
-		return fmt.Sprintf("%s:%d", t.destination, t.port)
+		return fmt.Sprintf("[%s]:%d", t.destination, t.port)
 	}
 	return t.destination
 }
