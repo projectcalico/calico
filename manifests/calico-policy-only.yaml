@@ -204,6 +204,12 @@ spec:
                         type: string
                     type: object
                   type: array
+                serviceLoadBalancerAggregation:
+                  default: Enabled
+                  enum:
+                    - Enabled
+                    - Disabled
+                  type: string
                 serviceLoadBalancerIPs:
                   items:
                     properties:
