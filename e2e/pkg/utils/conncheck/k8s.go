@@ -25,6 +25,7 @@ import (
 	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/kubernetes/test/e2e/framework"
@@ -125,42 +126,34 @@ func CreateServerPodAndServiceX(f *framework.Framework, namespace *v1.Namespace,
 
 	svcName := fmt.Sprintf("svc-%s", podName)
 	By(fmt.Sprintf("Creating a service %s for pod %s in namespace %s", svcName, podName, namespace.Name))
-	svc := &v1.Service{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: svcName,
-		},
+	v4Svc := &v1.Service{
+		ObjectMeta: metav1.ObjectMeta{Name: svcName},
 		Spec: v1.ServiceSpec{
-			Ports: servicePorts,
-			Selector: map[string]string{
-				"pod-name": podName,
-			},
+			Ports:    servicePorts,
+			Selector: map[string]string{"pod-name": podName},
 		},
 	}
 
 	if serviceCustomizer != nil {
-		serviceCustomizer(svc)
+		serviceCustomizer(v4Svc)
 	}
 	ctx, cancel = context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	svc, err = f.ClientSet.CoreV1().Services(namespace.Name).Create(ctx, svc, metav1.CreateOptions{})
+	v4Svc, err = f.ClientSet.CoreV1().Services(namespace.Name).Create(ctx, v4Svc, metav1.CreateOptions{})
 	Expect(err).NotTo(HaveOccurred())
 
 	if !pod.Spec.HostNetwork {
-		// Create an ipv6 service for the pod as well. We do this unconditionally, even on IPv4 only clusters
-		// since it shouldn't cause any issues.
+		// Create an ipv6 service for the pod instead, if the cluster supports v6.
+		// If creation of this service succeeds, it will be used instead of the v4 only service.
 		ipFamilies := []v1.IPFamily{v1.IPv6Protocol}
 		svcName := v6ServiceName(svcName)
 		policy := v1.IPFamilyPolicyRequireDualStack
 
 		svc := &v1.Service{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: svcName,
-			},
+			ObjectMeta: metav1.ObjectMeta{Name: svcName},
 			Spec: v1.ServiceSpec{
-				Ports: servicePorts,
-				Selector: map[string]string{
-					"pod-name": podName,
-				},
+				Ports:          servicePorts,
+				Selector:       map[string]string{"pod-name": podName},
 				IPFamilies:     ipFamilies,
 				IPFamilyPolicy: &policy,
 			},
@@ -172,11 +165,21 @@ func CreateServerPodAndServiceX(f *framework.Framework, namespace *v1.Namespace,
 		defer cancel()
 
 		By(fmt.Sprintf("Creating a service %s for pod %s in namespace %s", svcName, podName, namespace.Name))
-		svc, err = f.ClientSet.CoreV1().Services(namespace.Name).Create(ctx, svc, metav1.CreateOptions{})
-		Expect(err).NotTo(HaveOccurred())
+		v6Svc, err := f.ClientSet.CoreV1().Services(namespace.Name).Create(ctx, svc, metav1.CreateOptions{})
+		if err == nil {
+			// IPv6 is supported - return the dual stack service.
+			return pod, v6Svc
+		} else if !kerrors.IsInvalid(err) {
+			// An error other than 422 Invalid is an actual error.
+			Expect(err).NotTo(HaveOccurred(), "Error creating IPv6 service")
+		} else {
+			// If v6 is not enabled on the cluster, we will receive an "Invalid" error type. In this case,
+			// fall through and return the v4 service.
+			logrus.WithField("svc", v4Svc.Name).Info("IPv6 not enabled, using v4 service")
+		}
 	}
 
-	return pod, svc
+	return pod, v4Svc
 }
 
 // Return a ipv6 service name based on a ipv4 service name.
