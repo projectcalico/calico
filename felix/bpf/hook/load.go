@@ -16,6 +16,7 @@ package hook
 
 import (
 	"strings"
+	"sync"
 
 	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
 	bpfutils "github.com/projectcalico/calico/felix/bpf/utils"
@@ -77,7 +78,7 @@ type AttachType struct {
 }
 
 func (at AttachType) ObjectFile() string {
-	return objectFiles[at]
+	return ObjectFile(at)
 }
 
 func (at AttachType) hasHostConflictProg() bool {
@@ -122,7 +123,24 @@ func (at AttachType) DefaultPolicy() DefPolicy {
 	return DefPolicyDeny
 }
 
-var objectFiles = make(map[AttachType]string)
+var (
+	objectFilesLock sync.Mutex
+	objectFiles     = make(map[AttachType]string)
+)
+
+func ObjectFile(at AttachType) string {
+	objectFilesLock.Lock()
+	defer objectFilesLock.Unlock()
+
+	return objectFiles[at]
+}
+
+func SetObjectFile(at AttachType, file string) {
+	objectFilesLock.Lock()
+	defer objectFilesLock.Unlock()
+
+	objectFiles[at] = file
+}
 
 func initObjectFiles() {
 	for _, family := range []int{4, 6} {
@@ -150,7 +168,7 @@ func initObjectFiles() {
 									toOrFrom = tcdefs.FromEp
 								}
 
-								objectFiles[AttachType{
+								attachType := AttachType{
 									Family:     family,
 									Type:       epType,
 									Hook:       hook,
@@ -158,7 +176,8 @@ func initObjectFiles() {
 									FIB:        fibEnabled,
 									DSR:        dsr,
 									LogLevel:   logLevel,
-								}] = tcdefs.ProgFilename(
+								}
+								filename := tcdefs.ProgFilename(
 									family,
 									epType,
 									toOrFrom,
@@ -168,6 +187,7 @@ func initObjectFiles() {
 									logLevel,
 									bpfutils.BTFEnabled,
 								)
+								SetObjectFile(attachType, filename)
 							}
 						}
 					}
@@ -187,16 +207,19 @@ func initObjectFiles() {
 				filename = "xdp_" + l + "_co-re_v6.o"
 			}
 
-			objectFiles[AttachType{
+			SetObjectFile(AttachType{
 				Family:   family,
 				Hook:     XDP,
 				LogLevel: logLevel,
-			}] = filename
+			}, filename)
 		}
 	}
 }
 
 func ListAttachTypes() []AttachType {
+	objectFilesLock.Lock()
+	defer objectFilesLock.Unlock()
+
 	var ret []AttachType
 
 	for at := range objectFiles {
