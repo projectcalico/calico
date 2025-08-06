@@ -101,6 +101,9 @@ func (t *target) String() string {
 		chunks := []string{
 			fmt.Sprintf("%s/%s", t.server.Pod().Namespace, t.server.Pod().Name),
 		}
+		if t.destination != "" {
+			chunks = append(chunks, t.destination)
+		}
 		if t.port != 0 {
 			chunks = append(chunks, fmt.Sprintf("%d", t.port))
 		}
