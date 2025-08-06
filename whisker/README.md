@@ -19,6 +19,7 @@ To proxy to cluster backend run `kubectl -n calico-system port-forward pod/$(kub
 ## Build
 
 Run `yarn build`
+Run `yarn build:local` to build with a config that works locally when serving.
 
 ## Testing
 
@@ -36,7 +37,7 @@ Run `yarn lint` or `yarn lint:fix` to fix linting issues
 
 Run `yarn verify` to run all of the previous commands and avoid CI failures
 
-Run `yarn patch`
+Run `yarn patch` or `yarn minor`
 
 # VS Code settings
 
