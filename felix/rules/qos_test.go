@@ -18,7 +18,6 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	"github.com/projectcalico/calico/felix/dataplane/linux/qos"
 	"github.com/projectcalico/calico/felix/generictables"
 	. "github.com/projectcalico/calico/felix/iptables"
 	. "github.com/projectcalico/calico/felix/rules"
@@ -41,7 +40,7 @@ var _ = Describe("QoS", func() {
 	})
 
 	It("should render empty chain for no policies", func() {
-		Expect(renderer.EgressQoSPolicyChain([]qos.Policy{}, 4)).To(Equal(&generictables.Chain{
+		Expect(renderer.EgressQoSPolicyChain([]QoSPolicy{}, 4)).To(Equal(&generictables.Chain{
 			Name:  "cali-qos-policy",
 			Rules: nil,
 		}))
@@ -55,7 +54,7 @@ var _ = Describe("QoS", func() {
 	})
 
 	It("should render correct chain for policies", func() {
-		policies := []qos.Policy{
+		policies := []QoSPolicy{
 			{SrcAddrs: "192.168.10.20", DSCP: 10},
 			{SrcAddrs: "192.168.10.100,172.17.1.100", DSCP: 40},
 			{SrcAddrs: "192.168.20.1", DSCP: 0},
@@ -80,7 +79,7 @@ var _ = Describe("QoS", func() {
 	})
 
 	It("should render correct IPv6 chain for policies", func() {
-		policies := []qos.Policy{
+		policies := []QoSPolicy{
 			{SrcAddrs: "dead:beef::1:20", DSCP: 10},
 			{SrcAddrs: "dead:beef::1:100,dead:beef::10:1", DSCP: 40},
 			{SrcAddrs: "dead:beef::2:2", DSCP: 22},

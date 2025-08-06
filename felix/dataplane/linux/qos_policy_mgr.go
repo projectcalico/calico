@@ -20,7 +20,6 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/felix/dataplane/linux/qos"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/rules"
 	"github.com/projectcalico/calico/felix/types"
@@ -33,7 +32,7 @@ type qosPolicyManager struct {
 	// QoS policy
 	mangleTable Table
 	dirty       bool
-	qosPolicies map[types.WorkloadEndpointID]qos.Policy
+	policies    map[types.WorkloadEndpointID]rules.QoSPolicy
 
 	logCxt *logrus.Entry
 }
@@ -45,7 +44,7 @@ func newQoSPolicyManager(
 ) *qosPolicyManager {
 	return &qosPolicyManager{
 		ipVersion:    ipVersion,
-		qosPolicies:  map[types.WorkloadEndpointID]qos.Policy{},
+		policies:     map[types.WorkloadEndpointID]rules.QoSPolicy{},
 		dirty:        true,
 		mangleTable:  mangleTable,
 		ruleRenderer: ruleRenderer,
@@ -65,9 +64,9 @@ func (m *qosPolicyManager) OnUpdate(msg interface{}) {
 func (m *qosPolicyManager) handleWlEndpointUpdates(wlID *proto.WorkloadEndpointID, msg *proto.WorkloadEndpointUpdate) {
 	id := types.ProtoToWorkloadEndpointID(wlID)
 	if msg == nil || len(msg.Endpoint.QosPolicies) == 0 {
-		_, exists := m.qosPolicies[id]
+		_, exists := m.policies[id]
 		if exists {
-			delete(m.qosPolicies, id)
+			delete(m.policies, id)
 			m.dirty = true
 		}
 		return
@@ -85,7 +84,7 @@ func (m *qosPolicyManager) handleWlEndpointUpdates(wlID *proto.WorkloadEndpointI
 		ips = msg.Endpoint.Ipv6Nets
 	}
 	if len(ips) != 0 {
-		m.qosPolicies[id] = qos.Policy{
+		m.policies[id] = rules.QoSPolicy{
 			SrcAddrs: normaliseSourceAddr(ips),
 			DSCP:     uint8(dscp),
 		}
@@ -104,8 +103,8 @@ func normaliseSourceAddr(addrs []string) string {
 
 func (m *qosPolicyManager) CompleteDeferredWork() error {
 	if m.dirty {
-		var policies []qos.Policy
-		for _, p := range m.qosPolicies {
+		var policies []rules.QoSPolicy
+		for _, p := range m.policies {
 			policies = append(policies, p)
 		}
 		sort.Slice(policies, func(i, j int) bool {

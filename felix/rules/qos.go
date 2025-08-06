@@ -15,11 +15,15 @@
 package rules
 
 import (
-	"github.com/projectcalico/calico/felix/dataplane/linux/qos"
 	"github.com/projectcalico/calico/felix/generictables"
 )
 
-func (r *DefaultRuleRenderer) EgressQoSPolicyChain(policies []qos.Policy, ipVersion uint8) *generictables.Chain {
+type QoSPolicy struct {
+	SrcAddrs string
+	DSCP     uint8
+}
+
+func (r *DefaultRuleRenderer) EgressQoSPolicyChain(policies []QoSPolicy, ipVersion uint8) *generictables.Chain {
 	var rules []generictables.Rule
 	// Policies is sorted and validated by QoS policy manager.
 	for _, p := range policies {

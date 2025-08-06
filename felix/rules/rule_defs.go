@@ -23,7 +23,6 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/config"
-	"github.com/projectcalico/calico/felix/dataplane/linux/qos"
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/ipsets"
 	"github.com/projectcalico/calico/felix/iptables"
@@ -323,7 +322,7 @@ type RuleRenderer interface {
 
 	NATOutgoingChain(active bool, ipVersion uint8) *generictables.Chain
 
-	EgressQoSPolicyChain(policies []qos.Policy, ipVersion uint8) *generictables.Chain
+	EgressQoSPolicyChain(policies []QoSPolicy, ipVersion uint8) *generictables.Chain
 
 	DNATsToIptablesChains(dnats map[string]string) []*generictables.Chain
 	SNATsToIptablesChains(snats map[string]string) []*generictables.Chain
