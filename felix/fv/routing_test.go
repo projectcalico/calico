@@ -41,7 +41,6 @@ import (
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
-	"github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
@@ -1210,48 +1209,6 @@ func createIPIPBaseTopologyOptions(
 	// tested but we can verify the state with ethtool.
 	topologyOptions.ExtraEnvVars["FELIX_FeatureDetectOverride"] = fmt.Sprintf("ChecksumOffloadBroken=%t", brokenXSum)
 	return topologyOptions
-}
-
-func setupIPIPWorkloads(
-	infra infrastructure.DatastoreInfra,
-	tc infrastructure.TopologyContainers,
-	to infrastructure.TopologyOptions,
-	client client.Interface,
-) (w, hostW [3]*workload.Workload) {
-	// Install a default profile that allows all ingress and egress, in the absence of any Policy.
-	infra.AddDefaultAllow()
-
-	if to.IPIPMode != api.IPIPModeNever {
-		waitForIPIPDevice()
-	}
-
-	// Create workloads, using that profile.  One on each "host".
-	_, IPv4CIDR, err := net.ParseCIDR(to.IPPoolCIDR)
-	Expect(err).To(BeNil())
-	for ii := range w {
-		wIP := fmt.Sprintf("%d.%d.%d.2", IPv4CIDR.IP[0], IPv4CIDR.IP[1], ii)
-		wName := fmt.Sprintf("w%d", ii)
-		err := client.IPAM().AssignIP(context.Background(), ipam.AssignIPArgs{
-			IP:       net.MustParseIP(wIP),
-			HandleID: &wName,
-			Attrs: map[string]string{
-				ipam.AttributeNode: tc.Felixes[ii].Hostname,
-			},
-			Hostname: tc.Felixes[ii].Hostname,
-		})
-		Expect(err).NotTo(HaveOccurred())
-
-		w[ii] = workload.Run(tc.Felixes[ii], wName, "default", wIP, "8055", "tcp")
-		w[ii].ConfigureInInfra(infra)
-
-		hostW[ii] = workload.Run(tc.Felixes[ii], fmt.Sprintf("host%d", ii), "", tc.Felixes[ii].IP, "8055", "tcp")
-	}
-
-	if BPFMode() {
-		ensureAllNodesBPFProgramsAttached(tc.Felixes)
-	}
-
-	return
 }
 
 func waitForIPIPDevice() {
