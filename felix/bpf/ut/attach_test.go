@@ -196,6 +196,8 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(programs.Count()).To(Equal(52))
 
+			at := programs.Programs()
+
 			Expect(at).To(HaveKey(hook.AttachType{
 				Hook:       hook.Ingress,
 				Family:     4,
