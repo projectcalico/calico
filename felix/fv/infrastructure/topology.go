@@ -445,12 +445,20 @@ func StartNNodeTopology(
 		if opts.TriggerDelayedFelixStart {
 			felix.TriggerDelayedStart()
 		}
-
 	}
 
 	// Set up routes between the hosts, note: we're not using BGP here but we set up similar
 	// CIDR-based routes.
 	for i, iFelix := range tc.Felixes {
+		if opts.TriggerDelayedFelixStart || !opts.DelayFelixStart {
+			wg.Add(1)
+			go func(iFelix *Felix) {
+				defer wg.Done()
+				defer ginkgo.GinkgoRecover()
+				iFelix.WaitForReady()
+			}(iFelix)
+		}
+
 		for j, jFelix := range tc.Felixes {
 			if i == j {
 				continue
