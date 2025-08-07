@@ -16,15 +16,17 @@ package hook
 
 import (
 	"fmt"
+	"maps"
 	"path"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/bpf/bpfdefs"
 	"github.com/projectcalico/calico/felix/bpf/libbpf"
-	"github.com/projectcalico/calico/felix/bpf/maps"
+	bpfmaps "github.com/projectcalico/calico/felix/bpf/maps"
 )
 
 const maxPrograms = 400
@@ -85,13 +87,20 @@ func MergeLayouts(layouts ...Layout) Layout {
 }
 
 type ProgramsMap struct {
-	lock sync.Mutex
-	*maps.PinnedMap
-	nextIdx  int
-	programs map[AttachType]Layout
+	*bpfmaps.PinnedMap
+
+	programsLock sync.Mutex
+	programs     map[AttachType]*program
+
+	nextIdx atomic.Int64
 }
 
-var ProgramsMapParameters = maps.MapParameters{
+type program struct {
+	lock   sync.Mutex
+	layout Layout
+}
+
+var ProgramsMapParameters = bpfmaps.MapParameters{
 	Type:       "prog_array",
 	KeySize:    4,
 	ValueSize:  4,
@@ -100,16 +109,16 @@ var ProgramsMapParameters = maps.MapParameters{
 	Version:    3,
 }
 
-func NewProgramsMap() maps.Map {
+func NewProgramsMap() bpfmaps.Map {
 	return &ProgramsMap{
-		PinnedMap: maps.NewPinnedMap(ProgramsMapParameters),
-		programs:  make(map[AttachType]Layout),
+		PinnedMap: bpfmaps.NewPinnedMap(ProgramsMapParameters),
+		programs:  make(map[AttachType]*program),
 	}
 }
 
-func NewXDPProgramsMap() maps.Map {
+func NewXDPProgramsMap() bpfmaps.Map {
 	return &ProgramsMap{
-		PinnedMap: maps.NewPinnedMap(maps.MapParameters{
+		PinnedMap: bpfmaps.NewPinnedMap(bpfmaps.MapParameters{
 			Type:       "prog_array",
 			KeySize:    4,
 			ValueSize:  4,
@@ -117,34 +126,57 @@ func NewXDPProgramsMap() maps.Map {
 			Name:       "xdp_cali_progs",
 			Version:    3,
 		}),
-		programs: make(map[AttachType]Layout),
+		programs: make(map[AttachType]*program),
 	}
 }
 
 func (pm *ProgramsMap) LoadObj(at AttachType) (Layout, error) {
-	pm.lock.Lock()
-	defer pm.lock.Unlock()
-
-	file, ok := objectFiles[at]
-	if !ok {
+	file := ObjectFile(at)
+	if file == "" {
 		return nil, fmt.Errorf("no object for attach type %+v", at)
 	}
-	log.WithField("AttachType", at).Debugf("needs generic object file %s", file)
+	log.WithField("AttachType", at).Debugf("Looked up file for attach type: %s", file)
 
-	if l, ok := pm.programs[at]; ok {
-		log.WithField("layout", l).Debugf("generic object file already loaded %s", file)
-		return MergeLayouts(l), nil // MergeLayouts triggers a copy
+	pi := pm.getOrCreateProgramInfo(at)
+
+	// Loading is protected by the program lock to ensure that we do not
+	// load the same object multiple times in parallel.  Two goroutines may
+	// reach here before the program is loaded.  We check pi.layout to see if
+	// we're first.
+	pi.lock.Lock()
+	defer pi.lock.Unlock()
+
+	var err error
+	if pi.layout == nil {
+		la, err := pm.loadObj(at, path.Join(bpfdefs.ObjectDir, file))
+		if err != nil && strings.Contains(file, "_co-re") {
+			log.WithError(err).Warn("Failed to load CO-RE object, kernel too old? Falling back to non-CO-RE.")
+			file := strings.ReplaceAll(file, "_co-re", "")
+			// Skip trying the same file again, as it will fail with the same error.
+			SetObjectFile(at, file)
+			la, err = pm.loadObj(at, path.Join(bpfdefs.ObjectDir, file))
+		}
+		if err == nil {
+			log.WithField("layout", la).Debugf("Loaded generic object file %s", file)
+			pi.layout = la
+		}
+	} else {
+		log.WithField("layout", pi.layout).Debugf("Using cached layout for %s", file)
 	}
 
-	la, err := pm.loadObj(at, path.Join(bpfdefs.ObjectDir, file))
-	if err != nil && strings.Contains(file, "_co-re") {
-		log.WithError(err).Warn("Failed to load CO-RE object, kernel too old? Falling back to non-CO-RE.")
-		file := strings.ReplaceAll(file, "_co-re", "")
-		objectFiles[at] = file
-		la, err = pm.loadObj(at, path.Join(bpfdefs.ObjectDir, file))
-	}
+	// Return a clone of the layout to avoid accidental modifications.
+	return maps.Clone(pi.layout), err
+}
 
-	return la, err
+func (pm *ProgramsMap) getOrCreateProgramInfo(at AttachType) *program {
+	pm.programsLock.Lock()
+	defer pm.programsLock.Unlock()
+	pi, ok := pm.programs[at]
+	if !ok {
+		pi = &program{}
+		pm.programs[at] = pi
+	}
+	return pi
 }
 
 func (pm *ProgramsMap) loadObj(at AttachType, file string) (Layout, error) {
@@ -173,20 +205,20 @@ func (pm *ProgramsMap) loadObj(at AttachType, file string) (Layout, error) {
 		return nil, fmt.Errorf("error loading program: %w", err)
 	}
 
-	layout, err := pm.newLayout(at, obj)
+	layout, err := pm.allocateLayout(at, obj)
 	log.WithError(err).WithField("layout", layout).Debugf("load generic object file %s", file)
 
-	return MergeLayouts(layout), err // MergeLayouts triggers a copy
+	return layout, err
 }
 
 func (pm *ProgramsMap) setMapSize(m *libbpf.Map) error {
-	if size := maps.Size(m.Name()); size != 0 {
+	if size := bpfmaps.Size(m.Name()); size != 0 {
 		return m.SetSize(size)
 	}
 	return nil
 }
 
-func (pm *ProgramsMap) newLayout(at AttachType, obj *libbpf.Obj) (Layout, error) {
+func (pm *ProgramsMap) allocateLayout(at AttachType, obj *libbpf.Obj) (Layout, error) {
 	mapName := pm.GetName()
 
 	l := make(Layout)
@@ -212,48 +244,60 @@ func (pm *ProgramsMap) newLayout(at AttachType, obj *libbpf.Obj) (Layout, error)
 			continue
 		}
 
-		err := obj.UpdateJumpMap(mapName, subprog, pm.nextIdx)
+		pmIdx := pm.allocIdx()
+		err := obj.UpdateJumpMap(mapName, subprog, pmIdx)
 		if err != nil {
 			return nil, fmt.Errorf("error updating programs map with %s/%s at %d: %w",
-				objectFiles[at], subprog, pm.nextIdx, err)
+				ObjectFile(at), subprog, pmIdx, err)
 		}
-		log.Debugf("generic file %s prog %s loaded at %d", objectFiles[at], subprog, pm.nextIdx)
+		log.Debugf("generic file %s prog %s loaded at %d", ObjectFile(at), subprog, pmIdx)
 
 		i := idx + offset
 		if SubProg(idx) == SubProgTCPolicy {
 			i = idx // Debug programs share the same policy
 		}
-		l[SubProg(i)] = pm.nextIdx
-		pm.nextIdx++
+		l[SubProg(i)] = pmIdx
 	}
-
-	pm.programs[at] = l
 
 	return l, nil
 }
 
-// Count returns how many slots are allocated.
-func (pm *ProgramsMap) Count() int {
-	pm.lock.Lock()
-	defer pm.lock.Unlock()
-
-	return pm.nextIdx
+func (pm *ProgramsMap) allocIdx() int {
+	for {
+		idx := pm.nextIdx.Load()
+		if pm.nextIdx.CompareAndSwap(idx, idx+1) {
+			return int(idx)
+		}
+	}
 }
 
-// ResetCount for unittesting only.
-func (pm *ProgramsMap) ResetCount() {
-	pm.lock.Lock()
-	defer pm.lock.Unlock()
+// Count returns how many slots are allocated.
+func (pm *ProgramsMap) Count() int {
+	pm.programsLock.Lock()
+	defer pm.programsLock.Unlock()
+
+	return int(pm.nextIdx.Load())
+}
+
+// ResetForTesting for unit testing only.
+func (pm *ProgramsMap) ResetForTesting() {
+	pm.programsLock.Lock()
+	defer pm.programsLock.Unlock()
 
 	// We keep the same pinned map but reset the accounting as the map is
 	// replaced by repinning by the user.
-	pm.nextIdx = 0
-	pm.programs = make(map[AttachType]Layout)
+	pm.nextIdx.Store(0)
+	pm.programs = make(map[AttachType]*program)
 }
 
 func (pm *ProgramsMap) Programs() map[AttachType]Layout {
-	pm.lock.Lock()
-	defer pm.lock.Unlock()
+	pm.programsLock.Lock()
+	defer pm.programsLock.Unlock()
 
-	return pm.programs
+	progs := make(map[AttachType]Layout, len(pm.programs))
+	for at, prog := range pm.programs {
+		progs[at] = prog.layout
+	}
+
+	return progs
 }
