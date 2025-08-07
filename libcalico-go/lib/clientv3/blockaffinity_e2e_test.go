@@ -23,6 +23,7 @@ import (
 	. "github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend"
@@ -96,6 +97,7 @@ var _ = testutils.E2eDatastoreDescribe("Block affinity tests", testutils.Datasto
 			}, options.SetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
 			Expect(res1).To(MatchResource(libapiv3.KindBlockAffinity, testutils.ExpectNoNamespace, name1, spec1))
+			Expect(res1.Labels[apiv3.LabelKind]).To(Equal(apiv3.KindBlockAffinity))
 
 			// Track the version of the original data for name1.
 			rv1_1 := res1.ResourceVersion
@@ -134,6 +136,7 @@ var _ = testutils.E2eDatastoreDescribe("Block affinity tests", testutils.Datasto
 			}, options.SetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
 			Expect(res2).To(MatchResource(libapiv3.KindBlockAffinity, testutils.ExpectNoNamespace, name2, spec2))
+			Expect(res2.Labels[apiv3.LabelKind]).To(Equal(apiv3.KindBlockAffinity))
 
 			By("Getting BlockAffinity (name2) and comparing the output against spec2")
 			res, outError = c.BlockAffinities().Get(ctx, name2, options.GetOptions{})

@@ -206,6 +206,7 @@ var _ = testutils.E2eDatastoreDescribe("StagedKubernetesNetworkPolicy tests", te
 			}, options.SetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
 			Expect(res1).To(MatchResource(apiv3.KindStagedKubernetesNetworkPolicy, namespace1, name1, spec1))
+			Expect(res1.Labels[apiv3.LabelKind]).To(Equal(apiv3.KindStagedKubernetesNetworkPolicy))
 
 			// Track the version of the original data for name1.
 			rv1_1 := res1.ResourceVersion
@@ -244,6 +245,7 @@ var _ = testutils.E2eDatastoreDescribe("StagedKubernetesNetworkPolicy tests", te
 			}, options.SetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
 			Expect(res2).To(MatchResource(apiv3.KindStagedKubernetesNetworkPolicy, namespace2, name2, spec2))
+			Expect(res2.Labels[apiv3.LabelKind]).To(Equal(apiv3.KindStagedKubernetesNetworkPolicy))
 
 			By("Getting StagedKubernetesNetworkPolicy (name2) and comparing the output against spec2")
 			res, outError = c.StagedKubernetesNetworkPolicies().Get(ctx, namespace2, name2, options.GetOptions{})

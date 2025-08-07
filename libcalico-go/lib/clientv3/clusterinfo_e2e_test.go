@@ -250,6 +250,7 @@ var _ = testutils.E2eDatastoreDescribe("ClusterInformation tests", testutils.Dat
 			}, options.SetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
 			Expect(res1).To(MatchResource(apiv3.KindClusterInformation, testutils.ExpectNoNamespace, name, spec1))
+			Expect(res1.Labels[apiv3.LabelKind]).To(Equal(apiv3.KindClusterInformation))
 
 			// Track the version of the original data for name.
 			rv1_1 := res1.ResourceVersion

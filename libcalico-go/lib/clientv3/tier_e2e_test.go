@@ -135,6 +135,7 @@ var _ = testutils.E2eDatastoreDescribe("Tier tests", testutils.DatastoreAll, fun
 			Expect(res.Spec.Order).To(Equal(&defaultOrder))
 			_, outError = c.Tiers().Delete(ctx, "app-tier", options.DeleteOptions{})
 			Expect(outError).NotTo(HaveOccurred())
+			Expect(res.Labels[apiv3.LabelKind]).To(Equal(apiv3.KindTier))
 
 			By("Updating a tier order to nil should result in the default order")
 			order := float64(10.0)
@@ -250,6 +251,7 @@ var _ = testutils.E2eDatastoreDescribe("Tier tests", testutils.DatastoreAll, fun
 			}, options.SetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
 			Expect(res1).To(MatchResource(apiv3.KindTier, testutils.ExpectNoNamespace, name1, spec1))
+			Expect(res1.Labels[apiv3.LabelKind]).To(Equal(apiv3.KindTier))
 
 			// Track the version of the original data for name1.
 			rv1_1 := res1.ResourceVersion
@@ -295,6 +297,7 @@ var _ = testutils.E2eDatastoreDescribe("Tier tests", testutils.DatastoreAll, fun
 			}, options.SetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
 			Expect(res2).To(MatchResource(apiv3.KindTier, testutils.ExpectNoNamespace, name2, spec2UpdatedOrder))
+			Expect(res2.Labels[apiv3.LabelKind]).To(Equal(apiv3.KindTier))
 
 			By("Getting Tier (name2) and comparing the output against spec2")
 			res, outError = c.Tiers().Get(ctx, name2, options.GetOptions{})

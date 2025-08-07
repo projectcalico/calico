@@ -133,6 +133,7 @@ var _ = testutils.E2eDatastoreDescribe("WorkloadEndpoint tests", testutils.Datas
 			Expect(res1).To(MatchResource(libapiv3.KindWorkloadEndpoint, namespace1, name1, spec1_1))
 			Expect(res1.Labels[apiv3.LabelOrchestrator]).To(Equal(res1.Spec.Orchestrator))
 			Expect(res1.Labels[apiv3.LabelNamespace]).To(Equal(res1.Namespace))
+			Expect(res1.Labels[apiv3.LabelKind]).To(Equal(libapiv3.KindWorkloadEndpoint))
 
 			// Track the version of the original data for name1.
 			rv1_1 := res1.ResourceVersion
@@ -174,6 +175,7 @@ var _ = testutils.E2eDatastoreDescribe("WorkloadEndpoint tests", testutils.Datas
 			}, options.SetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
 			Expect(res2).To(MatchResource(libapiv3.KindWorkloadEndpoint, namespace2, name2, spec2_1))
+			Expect(res2.Labels[apiv3.LabelKind]).To(Equal(libapiv3.KindWorkloadEndpoint))
 
 			By("Getting WorkloadEndpoint (name2) and comparing the output against spec1_2")
 			res, outError = c.WorkloadEndpoints().Get(ctx, namespace2, name2, options.GetOptions{})

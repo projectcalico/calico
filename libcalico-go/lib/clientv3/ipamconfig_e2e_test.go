@@ -20,6 +20,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
@@ -99,6 +100,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAMConfig tests", testutils.DatastoreAl
 			Expect(outError).NotTo(HaveOccurred())
 			Expect(res1).To(MatchResource(libapiv3.KindIPAMConfig, testutils.ExpectNoNamespace, name, spec1))
 			Expect(res1.GroupVersionKind()).To(Equal(schema.GroupVersionKind{Group: "projectcalico.org", Version: "v3", Kind: "IPAMConfig"}))
+			Expect(res1.Labels[apiv3.LabelKind]).To(Equal(libapiv3.KindIPAMConfig))
 
 			By("Attempting to create the same IPAMConfig but with spec2")
 			_, outError = c.IPAMConfig().Create(ctx, &libapiv3.IPAMConfig{

@@ -118,6 +118,7 @@ var _ = testutils.E2eDatastoreDescribe("BGPFilter tests", testutils.DatastoreAll
 						Spec:       spec1,
 					}, options.SetOptions{})
 					Expect(outError).NotTo(HaveOccurred())
+					Expect(res1.Labels[apiv3.LabelKind]).To(Equal(apiv3.KindBGPFilter))
 
 					// Track the version of the original data for name1.
 					rv1_1 := res1.ResourceVersion
@@ -154,6 +155,7 @@ var _ = testutils.E2eDatastoreDescribe("BGPFilter tests", testutils.DatastoreAll
 						Spec:       spec2,
 					}, options.SetOptions{})
 					Expect(outError).NotTo(HaveOccurred())
+					Expect(res2.Labels[apiv3.LabelKind]).To(Equal(apiv3.KindBGPFilter))
 
 					By("Getting BGPFilter (name2) and comparing the output against spec2")
 					res, outError = c.BGPFilter().Get(ctx, name2, options.GetOptions{})

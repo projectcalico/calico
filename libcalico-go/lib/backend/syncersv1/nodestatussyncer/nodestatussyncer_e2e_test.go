@@ -37,7 +37,6 @@ import (
 // each of update handlers that are invoked, since these are tested more thoroughly
 // elsewhere.
 var _ = testutils.E2eDatastoreDescribe("Calico node status syncer tests", testutils.DatastoreAll, func(config apiconfig.CalicoAPIConfig) {
-
 	ctx := context.Background()
 
 	Describe("Node status syncer functionality", func() {
@@ -95,7 +94,12 @@ var _ = testutils.E2eDatastoreDescribe("Calico node status syncer tests", testut
 			syncTester.ExpectData(model.KVPair{
 				Key: statusKeyV1,
 				Value: &apiv3.CalicoNodeStatus{
-					ObjectMeta: metav1.ObjectMeta{Name: "mynodestatus"},
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "mynodestatus",
+						Labels: map[string]string{
+							apiv3.LabelKind: apiv3.KindCalicoNodeStatus,
+						},
+					},
 					Spec: apiv3.CalicoNodeStatusSpec{
 						Node: "node1",
 						Classes: []apiv3.NodeStatusClassType{

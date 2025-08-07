@@ -86,6 +86,7 @@ var _ = testutils.E2eDatastoreDescribe("NetworkSet tests", testutils.DatastoreAl
 			}, options.SetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
 			Expect(res1).To(MatchResource(apiv3.KindNetworkSet, namespace1, name1, spec1))
+			Expect(res1.Labels[apiv3.LabelKind]).To(Equal(apiv3.KindNetworkSet))
 
 			// Track the version of the original data for name1.
 			rv1_1 := res1.ResourceVersion
@@ -123,6 +124,7 @@ var _ = testutils.E2eDatastoreDescribe("NetworkSet tests", testutils.DatastoreAl
 			}, options.SetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
 			Expect(res2).To(MatchResource(apiv3.KindNetworkSet, namespace2, name2, spec2))
+			Expect(res2.Labels[apiv3.LabelKind]).To(Equal(apiv3.KindNetworkSet))
 
 			By("Getting NetworkSet (namespace2/name2) and comparing the output against spec2")
 			res, outError = c.NetworkSets().Get(ctx, namespace2, name2, options.GetOptions{})

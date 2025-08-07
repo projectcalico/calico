@@ -108,6 +108,9 @@ func (c *resources) Create(ctx context.Context, opts options.SetOptions, kind st
 		in.GetObjectMeta().SetUID(uuid.NewUUID())
 	}
 
+	// Add in the kind label for the resource for look up.
+	in.GetObjectMeta().SetLabels(addKindLabel(in.GetObjectMeta().GetLabels(), kind))
+
 	// Convert the resource to a KVPair and pass that to the backend datastore, converting
 	// the response (if we get one) back to a resource.
 	kvp, err := c.backend.Create(ctx, c.resourceToKVPair(opts, kind, in))
@@ -437,4 +440,14 @@ func logWithResource(res resource) *log.Entry {
 type watcherConverter interface {
 	// Convert the internal representation of a resource to a readable format.
 	Convert(resource) resource
+}
+
+// Makes sure that kind label is included in labels.
+func addKindLabel(labels map[string]string, kind string) map[string]string {
+	if labels == nil {
+		labels = map[string]string{}
+	}
+	labels[apiv3.LabelKind] = kind
+
+	return labels
 }

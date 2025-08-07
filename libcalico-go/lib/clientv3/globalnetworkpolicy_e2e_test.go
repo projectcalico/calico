@@ -144,6 +144,7 @@ var _ = testutils.E2eDatastoreDescribe("GlobalNetworkPolicy tests", testutils.Da
 			Expect(outError).NotTo(HaveOccurred())
 			spec1.Types = types1
 			Expect(res1).To(MatchResource(apiv3.KindGlobalNetworkPolicy, testutils.ExpectNoNamespace, tieredGNPName(name1, tier), spec1))
+			Expect(res1.Labels[apiv3.LabelKind]).To(Equal(apiv3.KindGlobalNetworkPolicy))
 
 			// Track the version of the original data for name1.
 			rv1_1 := res1.ResourceVersion
@@ -182,6 +183,7 @@ var _ = testutils.E2eDatastoreDescribe("GlobalNetworkPolicy tests", testutils.Da
 			Expect(outError).NotTo(HaveOccurred())
 			spec2.Types = types2
 			Expect(res2).To(MatchResource(apiv3.KindGlobalNetworkPolicy, testutils.ExpectNoNamespace, tieredGNPName(name2, tier), spec2))
+			Expect(res2.Labels[apiv3.LabelKind]).To(Equal(apiv3.KindGlobalNetworkPolicy))
 
 			By("Getting GlobalNetworkPolicy (name2) and comparing the output against spec2")
 			res, outError = c.GlobalNetworkPolicies().Get(ctx, name2, options.GetOptions{})
@@ -421,7 +423,8 @@ var _ = testutils.E2eDatastoreDescribe("GlobalNetworkPolicy tests", testutils.Da
 				policy := &apiv3.GlobalNetworkPolicy{
 					ObjectMeta: metav1.ObjectMeta{
 						Annotations: annotations,
-						Name:        "default.prefix-test-policy"},
+						Name:        "default.prefix-test-policy",
+					},
 					Spec: apiv3.GlobalNetworkPolicySpec{},
 				}
 				err = cli.Create(context.Background(), policy)
@@ -450,7 +453,8 @@ var _ = testutils.E2eDatastoreDescribe("GlobalNetworkPolicy tests", testutils.Da
 			_, err := c.GlobalNetworkPolicies().Create(ctx,
 				&apiv3.GlobalNetworkPolicy{
 					ObjectMeta: metav1.ObjectMeta{
-						Name: policyName},
+						Name: policyName,
+					},
 					Spec: apiv3.GlobalNetworkPolicySpec{
 						Tier: tier,
 					},

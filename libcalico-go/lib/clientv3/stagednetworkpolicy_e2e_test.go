@@ -143,6 +143,7 @@ var _ = testutils.E2eDatastoreDescribe("StagedNetworkPolicy tests", testutils.Da
 				Spec:       spec1,
 			}, options.SetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
+			Expect(res1.Labels[apiv3.LabelKind]).To(Equal(apiv3.KindStagedNetworkPolicy))
 
 			// Track the version of the original data for name1.
 			rv1_1 := res1.ResourceVersion
@@ -181,6 +182,7 @@ var _ = testutils.E2eDatastoreDescribe("StagedNetworkPolicy tests", testutils.Da
 			}, options.SetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
 			Expect(res2).To(MatchResource(apiv3.KindStagedNetworkPolicy, namespace2, tieredPolicyName(name2, tier), spec2))
+			Expect(res2.Labels[apiv3.LabelKind]).To(Equal(apiv3.KindStagedNetworkPolicy))
 
 			By("Getting StagedNetworkPolicy (name2) and comparing the output against spec2")
 			res, outError = c.StagedNetworkPolicies().Get(ctx, namespace2, name2, options.GetOptions{})
@@ -481,7 +483,8 @@ var _ = testutils.E2eDatastoreDescribe("StagedNetworkPolicy tests", testutils.Da
 				&apiv3.StagedNetworkPolicy{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      policyName,
-						Namespace: namespace},
+						Namespace: namespace,
+					},
 					Spec: apiv3.StagedNetworkPolicySpec{
 						Tier: tier,
 					},

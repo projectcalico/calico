@@ -56,4 +56,8 @@ const (
 
 	// Host name used for Service LoadBalancer
 	VirtualLoadBalancer = "load-balancer"
+
+	// Label used to denote resource kind. This is added to resources by Calico to allow
+	// subselection by kind.
+	LabelKind = "projectcalico.org/kind"
 )

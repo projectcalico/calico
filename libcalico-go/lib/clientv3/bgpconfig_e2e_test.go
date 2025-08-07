@@ -144,6 +144,7 @@ var _ = testutils.E2eDatastoreDescribe("BGPConfiguration tests", testutils.Datas
 			}, options.SetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
 			Expect(res1).To(MatchResource(apiv3.KindBGPConfiguration, testutils.ExpectNoNamespace, name1, specInfo))
+			Expect(res1.Labels[apiv3.LabelKind]).To(Equal(apiv3.KindBGPConfiguration))
 
 			// Track the version of the original data for name1.
 			rv1_1 := res1.ResourceVersion
@@ -181,6 +182,7 @@ var _ = testutils.E2eDatastoreDescribe("BGPConfiguration tests", testutils.Datas
 			}, options.SetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
 			Expect(res2).To(MatchResource(apiv3.KindBGPConfiguration, testutils.ExpectNoNamespace, name2, specDebug))
+			Expect(res2.Labels[apiv3.LabelKind]).To(Equal(apiv3.KindBGPConfiguration))
 
 			By("Getting BGPConfiguration (name2) and comparing the output against specDebug")
 			res, outError = c.BGPConfigurations().Get(ctx, name2, options.GetOptions{})
@@ -337,6 +339,7 @@ var _ = testutils.E2eDatastoreDescribe("BGPConfiguration tests", testutils.Datas
 			}, options.SetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
 			Expect(resDefault).To(MatchResource(apiv3.KindBGPConfiguration, testutils.ExpectNoNamespace, nameDefault, specDefault1))
+			Expect(resDefault.Labels[apiv3.LabelKind]).To(Equal(apiv3.KindBGPConfiguration))
 
 			By("Updating the default BGPConfiguration with node to node mesh disabled and a different default AS number")
 			resDefault.Spec = specDefault2

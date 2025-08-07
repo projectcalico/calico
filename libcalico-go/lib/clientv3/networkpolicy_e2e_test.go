@@ -141,6 +141,7 @@ var _ = testutils.E2eDatastoreDescribe("NetworkPolicy tests", testutils.Datastor
 			Expect(outError).NotTo(HaveOccurred())
 			spec1.Types = types1
 			Expect(res1).To(MatchResource(apiv3.KindNetworkPolicy, namespace1, tieredPolicyName(name1, tier), spec1))
+			Expect(res1.Labels[apiv3.LabelKind]).To(Equal(apiv3.KindNetworkPolicy))
 
 			// Track the version of the original data for name1.
 			rv1_1 := res1.ResourceVersion
@@ -179,6 +180,7 @@ var _ = testutils.E2eDatastoreDescribe("NetworkPolicy tests", testutils.Datastor
 			Expect(outError).NotTo(HaveOccurred())
 			spec2.Types = types2
 			Expect(res2).To(MatchResource(apiv3.KindNetworkPolicy, namespace2, tieredPolicyName(name2, tier), spec2))
+			Expect(res2.Labels[apiv3.LabelKind]).To(Equal(apiv3.KindNetworkPolicy))
 
 			By("Getting NetworkPolicy (name2) and comparing the output against spec2")
 			res, outError = c.NetworkPolicies().Get(ctx, namespace2, name2, options.GetOptions{})
@@ -478,7 +480,8 @@ var _ = testutils.E2eDatastoreDescribe("NetworkPolicy tests", testutils.Datastor
 				&apiv3.NetworkPolicy{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      policyName,
-						Namespace: namespace},
+						Namespace: namespace,
+					},
 					Spec: apiv3.NetworkPolicySpec{
 						Tier: tier,
 					},

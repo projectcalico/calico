@@ -465,6 +465,7 @@ var _ = testutils.E2eDatastoreDescribe("Node tests (etcdv3)", testutils.Datastor
 			}, options.SetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
 			Expect(res1).To(MatchResource(libapiv3.KindNode, testutils.ExpectNoNamespace, name1, spec1))
+			Expect(res1.Labels[apiv3.LabelKind]).To(Equal(libapiv3.KindNode))
 
 			// Track the version of the original data for name1.
 			rv1_1 := res1.ResourceVersion
@@ -502,6 +503,7 @@ var _ = testutils.E2eDatastoreDescribe("Node tests (etcdv3)", testutils.Datastor
 			}, options.SetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
 			Expect(res2).To(MatchResource(libapiv3.KindNode, testutils.ExpectNoNamespace, name2, spec2))
+			Expect(res2.Labels[apiv3.LabelKind]).To(Equal(libapiv3.KindNode))
 
 			By("Getting Node (name2) and comparing the output against spec2")
 			res, outError = c.Nodes().Get(ctx, name2, options.GetOptions{})

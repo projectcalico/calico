@@ -138,6 +138,7 @@ var _ = testutils.E2eDatastoreDescribe("StagedGlobalNetworkPolicy tests", testut
 			Expect(polToCreate.Spec).To(Equal(polToCreateCopy.Spec), "Create() unexpectedly modified input policy")
 			Expect(outError).NotTo(HaveOccurred())
 			Expect(res1).To(MatchResource(apiv3.KindStagedGlobalNetworkPolicy, testutils.ExpectNoNamespace, tieredGNPName(name1, tier), spec1))
+			Expect(res1.Labels[apiv3.LabelKind]).To(Equal(apiv3.KindStagedGlobalNetworkPolicy))
 
 			// Track the version of the original data for name1.
 			rv1_1 := res1.ResourceVersion
@@ -176,6 +177,7 @@ var _ = testutils.E2eDatastoreDescribe("StagedGlobalNetworkPolicy tests", testut
 			}, options.SetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
 			Expect(res2).To(MatchResource(apiv3.KindStagedGlobalNetworkPolicy, testutils.ExpectNoNamespace, tieredGNPName(name2, tier), spec2))
+			Expect(res1.Labels[apiv3.LabelKind]).To(Equal(apiv3.KindStagedGlobalNetworkPolicy))
 
 			By("Getting StagedGlobalNetworkPolicy (name2) and comparing the output against spec2")
 			res, outError = c.StagedGlobalNetworkPolicies().Get(ctx, name2, options.GetOptions{})
@@ -415,7 +417,8 @@ var _ = testutils.E2eDatastoreDescribe("StagedGlobalNetworkPolicy tests", testut
 				policy := &apiv3.StagedGlobalNetworkPolicy{
 					ObjectMeta: metav1.ObjectMeta{
 						Annotations: annotations,
-						Name:        "default.prefix-test-policy"},
+						Name:        "default.prefix-test-policy",
+					},
 					Spec: apiv3.StagedGlobalNetworkPolicySpec{},
 				}
 				err = cli.Create(context.Background(), policy)
@@ -444,7 +447,8 @@ var _ = testutils.E2eDatastoreDescribe("StagedGlobalNetworkPolicy tests", testut
 			_, err := c.StagedGlobalNetworkPolicies().Create(ctx,
 				&apiv3.StagedGlobalNetworkPolicy{
 					ObjectMeta: metav1.ObjectMeta{
-						Name: policyName},
+						Name: policyName,
+					},
 					Spec: apiv3.StagedGlobalNetworkPolicySpec{
 						Tier: tier,
 					},
