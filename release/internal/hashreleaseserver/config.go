@@ -24,7 +24,7 @@ import (
 	"google.golang.org/api/option"
 )
 
-// Config holds the configuration for a hashrelease server connection.
+// Config holds the configuration for hashrelease publishing.
 type Config struct {
 	// credentials file for GCS access
 	CredentialsFile string

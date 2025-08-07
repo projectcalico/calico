@@ -122,7 +122,7 @@ func publishFiles(h *Hashrelease, cfg *Config) error {
 	account, err := cfg.credentialsAccount()
 	if err != nil {
 		logrus.WithError(err).Error("Failed to get credentials email for hashrelease server")
-		return fmt.Errorf("failed to get credentials email for hashrelease server: %w", err)
+		return fmt.Errorf("failed to get credentials email for hashrelease publishing: %w", err)
 	}
 	logrus.WithFields(logrus.Fields{
 		"hashrelease": h.Name,
@@ -189,7 +189,7 @@ func setHashreleaseAsLatest(rel Hashrelease, productCode string, cfg *Config) er
 	bucket, err := cfg.Bucket()
 	if err != nil {
 		logrus.WithError(err).Error("Failed to get bucket handler for hashrelease server")
-		return fmt.Errorf("failed to get bucket handler for hashrelease server: %w", err)
+		return fmt.Errorf("failed to get bucket handler for hashrelease publishing: %w", err)
 	}
 	if err := updateBucketTextFile(bucket, relFilePath, content, false); err != nil {
 		logrus.WithError(err).Errorf("Failed to write to latest hashrelease file for %s %s in bucket", productCode, rel.Stream)
@@ -205,7 +205,7 @@ func addToHashreleaseLibrary(rel Hashrelease, cfg *Config) error {
 	if err != nil {
 		// For now if we can't get the bucket, do not fail the operation
 		logrus.WithError(err).Error("Failed to get bucket for hashrelease server")
-		return fmt.Errorf("failed to get bucket for hashrelease server: %w", err)
+		return fmt.Errorf("failed to get bucket for hashrelease publishing: %w", err)
 	}
 	if err := updateBucketTextFile(bucket, releaseLibFileName, content, true); err != nil {
 		logrus.WithError(err).Error("Failed to write to hashrelease library in bucket")

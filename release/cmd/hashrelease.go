@@ -308,7 +308,7 @@ func validateHashreleaseBuildFlags(c *cli.Command) error {
 	// CI condtional checks.
 	if c.Bool(ciFlag.Name) {
 		if !hashreleaseServerConfig(c).Valid() {
-			return fmt.Errorf("missing hashrelease server configuration, ensure --%s and --%s are set",
+			return fmt.Errorf("missing hashrelease publishing configuration, ensure --%s and --%s are set",
 				hashreleaseServerBucketFlag.Name, hashreleaseServerCredentialsFlag.Name)
 		}
 		if c.String(ciTokenFlag.Name) == "" {
@@ -350,7 +350,7 @@ func validateHashreleasePublishFlags(c *cli.Command) error {
 	if c.Bool(publishHashreleaseFlag.Name) {
 		//  check that hashrelease server configuration is set.
 		if !hashreleaseServerConfig(c).Valid() {
-			return fmt.Errorf("missing hashrelease server configuration, ensure --%s and --%s are set",
+			return fmt.Errorf("missing hashrelease publishing configuration, ensure --%s and --%s are set",
 				hashreleaseServerBucketFlag.Name, hashreleaseServerCredentialsFlag.Name)
 		}
 		if c.Bool(latestFlag.Name) {
