@@ -775,3 +775,186 @@ var _ = Describe("Update BGP Config Cache", func() {
 		Expect(c.cache["/calico/bgp/v1/global/ignored_interfaces"]).To(Equal("iface-1,iface-2"))
 	})
 })
+
+var _ = Describe("Service Load Balancer Aggregation", func() {
+	var rg *routeGenerator
+
+	BeforeEach(func() {
+		rg = &routeGenerator{}
+	})
+
+	Describe("advertiseThisService with ServiceLoadBalancerAggregation", func() {
+		var mockClient *client
+
+		BeforeEach(func() {
+			mockClient = &client{
+				cache:                    make(map[string]string),
+				syncedOnce:               true,
+				clusterCIDRs:             []string{"10.0.0.0/16"},
+				programmedRouteRefCount:  make(map[string]int),
+				ExternalIPRouteIndex:     NewRouteIndex(),
+				ClusterIPRouteIndex:      NewRouteIndex(),
+				LoadBalancerIPRouteIndex: NewRouteIndex(),
+			}
+			rg.client = mockClient
+			rg.nodeName = "test-node"
+		})
+
+		Context("when ServiceLoadBalancerAggregation is Enabled", func() {
+			BeforeEach(func() {
+				mockClient.serviceLoadBalancerAggregation = apiv3.ServiceLoadBalancerAggregationEnabled
+			})
+
+			It("should skip Cluster services when aggregation is enabled", func() {
+				svc := &v1.Service{
+					ObjectMeta: metav1.ObjectMeta{Name: "test-svc", Namespace: "default"},
+					Spec: v1.ServiceSpec{
+						Type:                  v1.ServiceTypeLoadBalancer,
+						ClusterIP:             "10.0.0.1",
+						ExternalTrafficPolicy: v1.ServiceExternalTrafficPolicyTypeCluster,
+					},
+				}
+				ep := &v1.Endpoints{
+					ObjectMeta: metav1.ObjectMeta{Name: "test-svc", Namespace: "default"},
+					Subsets: []v1.EndpointSubset{
+						{
+							Addresses: []v1.EndpointAddress{
+								{IP: "10.0.0.2"},
+							},
+						},
+					},
+				}
+
+				result := rg.advertiseThisService(svc, ep)
+				Expect(result).To(BeFalse())
+			})
+
+			It("should still advertise Local services when aggregation is enabled", func() {
+				svc := &v1.Service{
+					ObjectMeta: metav1.ObjectMeta{Name: "test-svc", Namespace: "default"},
+					Spec: v1.ServiceSpec{
+						Type:                  v1.ServiceTypeLoadBalancer,
+						ClusterIP:             "10.0.0.1",
+						ExternalTrafficPolicy: v1.ServiceExternalTrafficPolicyTypeLocal,
+					},
+				}
+				ep := &v1.Endpoints{
+					ObjectMeta: metav1.ObjectMeta{Name: "test-svc", Namespace: "default"},
+					Subsets: []v1.EndpointSubset{
+						{
+							Addresses: []v1.EndpointAddress{
+								{IP: "10.0.0.2", NodeName: &rg.nodeName},
+							},
+						},
+					},
+				}
+
+				result := rg.advertiseThisService(svc, ep)
+				Expect(result).To(BeTrue())
+			})
+		})
+
+		Context("when ServiceLoadBalancerAggregation is Disabled", func() {
+			BeforeEach(func() {
+				mockClient.serviceLoadBalancerAggregation = apiv3.ServiceLoadBalancerAggregationDisabled
+			})
+
+			It("should advertise Cluster services when aggregation is disabled", func() {
+				svc := &v1.Service{
+					ObjectMeta: metav1.ObjectMeta{Name: "test-svc", Namespace: "default"},
+					Spec: v1.ServiceSpec{
+						Type:                  v1.ServiceTypeLoadBalancer,
+						ClusterIP:             "10.0.0.1",
+						ExternalTrafficPolicy: v1.ServiceExternalTrafficPolicyTypeCluster,
+					},
+				}
+				ep := &v1.Endpoints{
+					ObjectMeta: metav1.ObjectMeta{Name: "test-svc", Namespace: "default"},
+					Subsets: []v1.EndpointSubset{
+						{
+							Addresses: []v1.EndpointAddress{
+								{IP: "10.0.0.2"},
+							},
+						},
+					},
+				}
+
+				result := rg.advertiseThisService(svc, ep)
+				Expect(result).To(BeTrue())
+			})
+
+			It("should not advertise Cluster services without endpoints", func() {
+				svc := &v1.Service{
+					ObjectMeta: metav1.ObjectMeta{Name: "test-svc", Namespace: "default"},
+					Spec: v1.ServiceSpec{
+						Type:                  v1.ServiceTypeLoadBalancer,
+						ClusterIP:             "10.0.0.1",
+						ExternalTrafficPolicy: v1.ServiceExternalTrafficPolicyTypeCluster,
+					},
+				}
+				ep := &v1.Endpoints{
+					ObjectMeta: metav1.ObjectMeta{Name: "test-svc", Namespace: "default"},
+					Subsets:    []v1.EndpointSubset{},
+				}
+
+				result := rg.advertiseThisService(svc, ep)
+				Expect(result).To(BeFalse())
+			})
+		})
+
+		Context("IP version compatibility", func() {
+			BeforeEach(func() {
+				mockClient.serviceLoadBalancerAggregation = apiv3.ServiceLoadBalancerAggregationDisabled
+			})
+
+			It("should not advertise IPv4 service with IPv6 endpoints", func() {
+				svc := &v1.Service{
+					ObjectMeta: metav1.ObjectMeta{Name: "test-svc", Namespace: "default"},
+					Spec: v1.ServiceSpec{
+						Type:                  v1.ServiceTypeLoadBalancer,
+						ClusterIP:             "10.0.0.1", // IPv4
+						ExternalTrafficPolicy: v1.ServiceExternalTrafficPolicyTypeCluster,
+					},
+				}
+				ep := &v1.Endpoints{
+					ObjectMeta: metav1.ObjectMeta{Name: "test-svc", Namespace: "default"},
+					Subsets: []v1.EndpointSubset{
+						{
+							Addresses: []v1.EndpointAddress{
+								{IP: "2001:db8::1"}, // IPv6
+							},
+						},
+					},
+				}
+
+				result := rg.advertiseThisService(svc, ep)
+				Expect(result).To(BeFalse())
+			})
+
+			It("should advertise IPv6 service with IPv6 endpoints", func() {
+				svc := &v1.Service{
+					ObjectMeta: metav1.ObjectMeta{Name: "test-svc", Namespace: "default"},
+					Spec: v1.ServiceSpec{
+						Type:                  v1.ServiceTypeLoadBalancer,
+						ClusterIP:             "2001:db8::1", // IPv6
+						ExternalTrafficPolicy: v1.ServiceExternalTrafficPolicyTypeCluster,
+					},
+				}
+				ep := &v1.Endpoints{
+					ObjectMeta: metav1.ObjectMeta{Name: "test-svc", Namespace: "default"},
+					Subsets: []v1.EndpointSubset{
+						{
+							Addresses: []v1.EndpointAddress{
+								{IP: "2001:db8::2"}, // IPv6
+							},
+						},
+					},
+				}
+
+				result := rg.advertiseThisService(svc, ep)
+				Expect(result).To(BeTrue())
+			})
+		})
+	})
+
+})
