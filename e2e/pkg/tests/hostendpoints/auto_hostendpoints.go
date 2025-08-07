@@ -271,7 +271,7 @@ func getNodeHostname(node v1.Node) string {
 	return hostname
 }
 
-// updateHostEndpointConfig updates the HostEndpointConfiguration to the desired stated
+// updateHostEndpointConfig updates the HostEndpointConfiguration to the desired state
 func updateHostEndpointConfig(client ctrlclient.Client, desiredKCC v3.KubeControllersConfiguration) {
 	// Get the kubecontrollersconfiguration and patch it to toggle the
 	// auto-creation of host endpoints.
