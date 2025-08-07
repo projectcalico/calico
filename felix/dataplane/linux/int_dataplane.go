@@ -336,8 +336,10 @@ type InternalDataplane struct {
 	ipipParentIfaceC chan string
 	ipipManager      *ipipManager
 
-	noEncapManager      *noEncapManager
-	noEncapParentIfaceC chan string
+	noEncapManager        *noEncapManager
+	noEncapManagerV6      *noEncapManager
+	noEncapParentIfaceC   chan string
+	noEncapParentIfaceCV6 chan string
 
 	vxlanParentIfaceC   chan string
 	vxlanParentIfaceCV6 chan string
@@ -683,23 +685,43 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 	// If no overlay is enabled, and Felix is responsible for programming routes, starts a manager to
 	// program no encapsulation routes.
-	if config.ProgramClusterRoutes &&
-		!config.RulesConfig.VXLANEnabled && !config.RulesConfig.IPIPEnabled && !config.RulesConfig.WireguardEnabled {
-		log.Info("No encapsulation enabled, starting thread to keep no encapsulation routes in sync.")
-		// Add a manager to keep the all-hosts IP set up to date.
-		dp.noEncapManager = newNoEncapManager(
-			routeTableV4,
-			4,
-			config,
-			dp.loopSummarizer,
-		)
-		dp.noEncapParentIfaceC = make(chan string, 1)
-		go dp.noEncapManager.monitorParentDevice(
-			context.Background(),
-			time.Second*10,
-			dp.noEncapParentIfaceC,
-		)
-		dp.RegisterManager(dp.noEncapManager)
+	if config.ProgramClusterRoutes {
+		if !config.RulesConfig.VXLANEnabled && !config.RulesConfig.IPIPEnabled && !config.RulesConfig.WireguardEnabled {
+			log.Info("Unencapsulated IPv4 route programming enabled, starting thread to keep no encapsulation routes in sync.")
+			// Add a manager to keep the all-hosts IP set up to date.
+			dp.noEncapManager = newNoEncapManager(
+				routeTableV4,
+				4,
+				config,
+				dp.loopSummarizer,
+			)
+			dp.noEncapParentIfaceC = make(chan string, 1)
+			go dp.noEncapManager.monitorParentDevice(
+				context.Background(),
+				time.Second*10,
+				dp.noEncapParentIfaceC,
+			)
+			dp.RegisterManager(dp.noEncapManager)
+		}
+
+		if config.IPv6Enabled &&
+			!config.RulesConfig.VXLANEnabledV6 && !config.RulesConfig.WireguardEnabledV6 {
+			log.Info("Unencapsulated IPv6 route programming enabled, starting thread to keep no encapsulation routes in sync.")
+			// Add a manager to keep the all-hosts IP set up to date.
+			dp.noEncapManagerV6 = newNoEncapManager(
+				routeTableV6,
+				6,
+				config,
+				dp.loopSummarizer,
+			)
+			dp.noEncapParentIfaceCV6 = make(chan string, 1)
+			go dp.noEncapManagerV6.monitorParentDevice(
+				context.Background(),
+				time.Second*10,
+				dp.noEncapParentIfaceCV6,
+			)
+			dp.RegisterManager(dp.noEncapManagerV6)
+		}
 	}
 
 	if config.RulesConfig.VXLANEnabled {
@@ -2204,6 +2226,8 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 			d.ipipManager.routeMgr.OnParentDeviceUpdate(name)
 		case name := <-d.noEncapParentIfaceC:
 			d.noEncapManager.routeMgr.OnParentDeviceUpdate(name)
+		case name := <-d.noEncapParentIfaceCV6:
+			d.noEncapManagerV6.routeMgr.OnParentDeviceUpdate(name)
 		case name := <-d.vxlanParentIfaceC:
 			d.vxlanManager.routeMgr.OnParentDeviceUpdate(name)
 		case name := <-d.vxlanParentIfaceCV6:
