@@ -91,7 +91,7 @@ func scannerBenchmark(b *testing.B, entries, batchSize int) {
 	ctKey := conntrack.KeyFromBytes
 	ctVal := conntrack.ValueFromBytes
 
-	conntrackScanner := conntrack.NewScanner(m, ctKey, ctVal, nil, "none")
+	conntrackScanner := conntrack.NewScanner(m, ctKey, ctVal, nil, "none", nil, 4, nil)
 
 	for b.Loop() {
 		conntrackScanner.Scan()
@@ -103,10 +103,11 @@ type testScanner struct {
 	m     map[conntrack.KeyInterface]conntrack.ValueInterface
 }
 
-func (ts *testScanner) Check(k conntrack.KeyInterface, v conntrack.ValueInterface, _ conntrack.EntryGet) conntrack.ScanVerdict {
+func (ts *testScanner) Check(k conntrack.KeyInterface, v conntrack.ValueInterface, _ conntrack.EntryGet) (
+	conntrack.ScanVerdict, int64) {
 	ts.m[k] = v
 	ts.count++
-	return conntrack.ScanVerdictOK
+	return conntrack.ScanVerdictOK, 0
 }
 
 func TestScannerBatchIteration(t *testing.T) {
@@ -116,7 +117,6 @@ func TestScannerBatchIteration(t *testing.T) {
 
 	entries := 50000
 
-	conntrack.SetMapSize(entries)
 	m := conntrack.Map()
 	err := m.EnsureExists()
 	Expect(err).NotTo(HaveOccurred())
@@ -180,10 +180,10 @@ func TestScannerBatchIteration(t *testing.T) {
 		m: make(map[conntrack.KeyInterface]conntrack.ValueInterface),
 	}
 
-	conntrackScanner := conntrack.NewScanner(m, ctKey, ctVal, nil, "none", &ts)
+	conntrackScanner := conntrack.NewScanner(m, ctKey, ctVal, nil, "none", nil, 4, nil, &ts)
 	conntrackScanner.Scan()
 
-	Expect(len(ts.m)).To(BeNumerically(">", entries*95/100)) // almot impossible to fill in LRU map
+	Expect(len(ts.m)).To(Equal(entries))
 	for k, v := range ts.m {
 		x, ok := mx[k]
 		if !ok {
