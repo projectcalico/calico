@@ -76,6 +76,8 @@ const (
 	ScanVerdictDelete
 )
 
+const cleanupBatchSize int = 1000
+
 // EntryGet is a function prototype provided to EntryScanner in case it needs to
 // evaluate other entries to make a verdict
 type EntryGet func(KeyInterface) (ValueInterface, error)
@@ -256,7 +258,7 @@ func (s *Scanner) Scan() {
 				s.updateCleanupMap(ctKey, dummy, uint64(ts), uint64(ts))
 			}
 		}
-		if numExpired > 0 && numExpired%1000 == 0 {
+		if numExpired > 0 && numExpired%cleanupBatchSize == 0 {
 			cleaned += s.runBPFCleaner()
 		}
 		return maps.IterNone
@@ -280,7 +282,7 @@ func (s *Scanner) Scan() {
 				s.updateCleanupMap(k, revKey, ts, revTS)
 			}
 			delete(s.revNATKeyToFwdNATInfo, k)
-			if keysProcessed%1000 == 0 {
+			if keysProcessed%cleanupBatchSize == 0 {
 				// Run the bpf cleaner
 				cleaned += s.runBPFCleaner()
 			}

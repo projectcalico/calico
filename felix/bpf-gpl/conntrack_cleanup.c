@@ -27,21 +27,6 @@ struct ct_iter_ctx {
 	__u64 num_cleaned;
 };
 
-static CALI_BPF_INLINE bool ct_key_equal(struct calico_ct_key *key1, struct calico_ct_key *key2) {
-	if (!key1 || !key2) {
-		return key1 == key2;
-	}
-	if ((key1->protocol == key2->protocol) &&
-			(key1->port_a == key2->port_a) &&
-			(key1->port_b == key2->port_b) &&
-			ip_equal(key1->addr_a, key2->addr_a) &&
-			ip_equal(key1->addr_b, key2->addr_b)) {
-		return true;
-	}
-	return false;
-
-}
-
 // process_ccq_entry processes an entry in the "cleanup queue" map. The map
 // is keyed with conntrack key which the userspace cleaner sees as expired.
 // The value has <rev_key>:<last_seen_ts>:<rev_last_seen_ts>
@@ -67,7 +52,7 @@ static long process_ccq_entry(void *map, struct calico_ct_key *key, struct cali_
 		// Check if the fwd key still points to the same reverse key.
 		if (nat_fwd_value) {
 			struct calico_ct_key *nat_rev_key = &nat_fwd_value->nat_rev_key;
-			if (!ct_key_equal(nat_rev_key, rev_key)) {
+			if (__builtin_memcmp(nat_rev_key, rev_key, sizeof(struct calico_ct_key))) {
 		       		goto delete;
 			}
 		}
