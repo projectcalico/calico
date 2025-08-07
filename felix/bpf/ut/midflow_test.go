@@ -15,9 +15,11 @@
 package ut_test
 
 import (
+	"fmt"
 	"net"
 	"testing"
 
+	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	. "github.com/onsi/gomega"
 	"github.com/sirupsen/logrus"
@@ -25,6 +27,20 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/nat"
 	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
 )
+
+/*
+	Midflow tests model the behaviour of our BPF  networking
+	when midflow packets are seen. Most-importantly, packets
+	which are not known to conntrack.
+
+	The main driver for these tests was  to  ensure  midflow
+	failing-over packets for  ConsistentHash   services were
+	handled and  not   dropped.   That being said, the tests
+	themselves are    very  generic, and any other midflow-y
+	tests can go here, too.
+
+	-Alex
+*/
 
 func TestMidflowFailoverNoConntrack(t *testing.T) {
 	RegisterTestingT(t)
@@ -89,9 +105,14 @@ func TestMidflowFailoverNoConntrack(t *testing.T) {
 	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
 		// Same as before but now, pkt belongs to a ConsistentHash service.
 		// Should attempt to tunnel to the destination.
-		_, err := bpfrun(packetBytes)
+		res, err := bpfrun(packetBytes)
 		Expect(err).NotTo(HaveOccurred())
+		Expect(skbMark).To(BeEquivalentTo(tcdefs.MarkSeen))
+		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
+		fmt.Printf("pktR = %+v\n", pktR)
+
 	})
+
 }
 
 func withLogLevelWarnDo(f func()) {
