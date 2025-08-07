@@ -94,7 +94,10 @@ func (c *CachingMap[K, V]) Desired() ReadWriteMap[K, V] {
 	return c.deltaTracker.Desired()
 }
 
-func (c *CachingMap[K, V]) Dataplane() ReadOnlyMap[K, V] {
+// Updating the dataplane means it is updated out-of-band
+// and its the caller's responsibility to keep Desired and
+// Dataplane in sync.
+func (c *CachingMap[K, V]) Dataplane() ReadWriteMap[K, V] {
 	// Pass through to the delta tracker.
 	return c.deltaTracker.Dataplane()
 }
