@@ -380,15 +380,20 @@ static CALI_BPF_INLINE void calico_tc_process_ct_lookup(struct cali_tc_ctx *ctx)
 
 	if (ct_result_rc(ctx->state->ct_result.rc) == CALI_CT_MID_FLOW_MISS) {
 		if (CALI_F_TO_HOST) {
-			/* Mid-flow miss: let iptables handle it in case it's an existing flow
-			 * in the Linux conntrack table. We can't apply policy or DNAT because
-			 * it's too late in the flow.  iptables will drop if the flow is not
-			 * known.
-			 */
-			CALI_DEBUG("CT mid-flow miss; fall through to iptables.");
-			ctx->fwd.mark = CALI_SKB_MARK_FALLTHROUGH;
-			fwd_fib_set(&ctx->fwd, false);
-			goto finalize;
+			bool dst_is_consistenthash = calico_nat_check_ch(&ctx->state->ip_src,
+				&ctx->state->ip_dst, ctx->state->dport, ctx->state->ip_proto);
+
+			if (!dst_is_consistenthash) {
+				/* Mid-flow miss: let iptables handle it in case it's an existing flow
+				 * in the Linux conntrack table. We can't apply policy or DNAT because
+				 * it's too late in the flow.  iptables will drop if the flow is not
+				 * known.
+				 */
+				CALI_DEBUG("CT mid-flow miss; fall through to iptables.");
+				ctx->fwd.mark = CALI_SKB_MARK_FALLTHROUGH;
+				fwd_fib_set(&ctx->fwd, false);
+				goto finalize;
+			}
 		} else {
 			if (CALI_F_HEP) {
 				// HEP egress for a mid-flow packet with no BPF or Linux CT state.
@@ -457,7 +462,8 @@ static CALI_BPF_INLINE void calico_tc_process_ct_lookup(struct cali_tc_ctx *ctx)
 	if (CALI_F_TO_HOST || (CALI_F_FROM_HOST && !skb_seen(ctx->skb) && !ctx->nat_dest /* no sport conflict */)) {
 		ctx->nat_dest = calico_nat_lookup_tc(ctx,
 						     &ctx->state->ip_src, &ctx->state->ip_dst,
-						     ctx->state->ip_proto, ctx->state->dport,
+						     ctx->state->ip_proto,
+							 ctx->state->sport, ctx->state->dport,
 						     !ip_void(ctx->state->tun_ip), &nat_res);
 	}
 
