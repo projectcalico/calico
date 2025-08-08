@@ -146,18 +146,20 @@ func NewScanner(ctMap maps.Map, kfb func([]byte) KeyInterface, vfb func([]byte) 
 		revNATKeyToFwdNATInfo: make(map[KeyInterface]cleanupv1.ValueInterface),
 	}
 
-	switch ipVersion {
-	case 4:
-		s.ctCleanupMap = cachingmap.New[KeyInterface, cleanupv1.ValueInterface](ctCleanupMap.GetName(),
-			maps.NewTypedMap[KeyInterface, cleanupv1.ValueInterface](ctCleanupMap, kfb, CleanupValueFromBytes))
-		s.versionHelper = ipv4Helper{}
-	case 6:
-		s.ctCleanupMap = cachingmap.New[KeyInterface, cleanupv1.ValueInterface](ctCleanupMap.GetName(),
-			maps.NewTypedMap[KeyInterface, cleanupv1.ValueInterface](ctCleanupMap, kfb, CleanupValueV6FromBytes))
-		s.versionHelper = ipv6Helper{}
-	default:
-		return nil
+	if bpfCleaner != nil {
+		switch ipVersion {
+		case 4:
+			s.ctCleanupMap = cachingmap.New[KeyInterface, cleanupv1.ValueInterface](ctCleanupMap.GetName(),
+				maps.NewTypedMap[KeyInterface, cleanupv1.ValueInterface](ctCleanupMap, kfb, CleanupValueFromBytes))
+			s.versionHelper = ipv4Helper{}
+		case 6:
+			s.ctCleanupMap = cachingmap.New[KeyInterface, cleanupv1.ValueInterface](ctCleanupMap.GetName(),
+				maps.NewTypedMap[KeyInterface, cleanupv1.ValueInterface](ctCleanupMap, kfb, CleanupValueV6FromBytes))
+			s.versionHelper = ipv6Helper{}
+		default:
+			return nil
 
+		}
 	}
 	return s
 }
@@ -221,7 +223,9 @@ func (s *Scanner) Scan() {
 	cleaned := 0
 	numExpired := 0
 
-	s.ctCleanupMap.Desired().DeleteAll()
+	if s.ctCleanupMap != nil {
+		s.ctCleanupMap.Desired().DeleteAll()
+	}
 	log.Debug("Starting conntrack scanner iteration")
 	err := s.ctMap.Iter(func(k, v []byte) maps.IteratorAction {
 		ctKey := s.keyFromBytes(k)

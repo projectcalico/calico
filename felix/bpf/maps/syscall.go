@@ -17,6 +17,8 @@
 package maps
 
 import (
+	"context"
+	"errors"
 	"runtime"
 	"unsafe"
 
@@ -24,6 +26,7 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+// #cgo CFLAGS: -I${SRCDIR}/../../bpf-gpl/libbpf/src -I${SRCDIR}/../../bpf-gpl/libbpf/include/uapi -I${SRCDIR}/../../bpf-gpl -Werror
 // #include "syscall.h"
 import "C"
 
@@ -182,7 +185,7 @@ func DeleteMapEntryIfExists(mapFD FD, k []byte) error {
 }
 
 // Batch size established by trial and error; 8-32 seemed to be the sweet spot for the conntrack map.
-const IteratorNumKeys = 16
+const IteratorNumKeys = 1024
 
 // align64 rounds up the given size to the nearest 8-bytes.
 func align64(size int) int {
@@ -201,22 +204,27 @@ func NewIterator(mapFD FD, keySize, valueSize, maxEntries int) (*Iterator, error
 	keyStride := align64(keySize)
 	valueStride := align64(valueSize)
 
-	keysBufSize := (C.size_t)(keyStride * IteratorNumKeys)
-	valueBufSize := (C.size_t)(valueStride * IteratorNumKeys)
-
 	m := &Iterator{
-		mapFD:       mapFD,
-		maxEntries:  maxEntries,
-		keySize:     keySize,
-		valueSize:   valueSize,
-		keyStride:   keyStride,
-		valueStride: valueStride,
-		keys:        C.malloc(keysBufSize),
-		values:      C.malloc(valueBufSize),
+		mapFD:         mapFD,
+		maxEntries:    maxEntries,
+		keySize:       keySize,
+		valueSize:     valueSize,
+		keyStride:     keyStride,
+		valueStride:   valueStride,
+		keysBufSize:   keyStride * IteratorNumKeys,
+		valuesBufSize: valueStride * IteratorNumKeys,
+		keysValues:    make(chan keysValues),
 	}
 
-	C.memset(m.keys, 0, (C.size_t)(keysBufSize))
-	C.memset(m.values, 0, (C.size_t)(valueBufSize))
+	m.cancelCtx, m.cancelCB = context.WithCancel(context.Background())
+
+	m.keysBuff = C.malloc(C.size_t(m.keysBufSize))
+	m.valuesBuff = C.malloc(C.size_t(m.valuesBufSize))
+
+	// XXX either unecessary or should also clean the buffers before every
+	// iteration
+	C.memset(m.keysBuff, 0, (C.size_t)(m.keysBufSize))
+	C.memset(m.valuesBuff, 0, (C.size_t)(m.valuesBufSize))
 
 	// Make sure the C buffers are cleaned up.
 	runtime.SetFinalizer(m, func(m *Iterator) {
@@ -226,7 +234,59 @@ func NewIterator(mapFD FD, keySize, valueSize, maxEntries int) (*Iterator, error
 		}
 	})
 
+	m.wg.Add(1)
+	go m.syscallThread()
+
 	return m, nil
+}
+
+func (m *Iterator) syscallThread() {
+	defer m.wg.Done()
+
+	// Also not specified, it is fair to assume that we need at least 4bytes or
+	// size of the key for maps that use generic btch ops.
+	token := make([]byte, m.keySize)
+	tokenC := C.CBytes(token)
+	defer C.free(tokenC)
+	tokenIn := unsafe.Pointer(nil)
+
+	for {
+		count := IteratorNumKeys
+		_, err := C.bpf_map_batch_lookup(C.int(m.mapFD), tokenIn, tokenC, m.keysBuff, m.valuesBuff,
+			(*C.__u32)(unsafe.Pointer(&count)), 0)
+		if err != nil {
+			if errors.Is(err, unix.ENOENT) {
+				if count == 0 {
+					err = ErrIterationFinished
+				} else {
+					err = nil
+				}
+			}
+
+			if err != nil {
+				select {
+				case m.keysValues <- keysValues{err: err}:
+					close(m.keysValues)
+					return
+				case <-m.cancelCtx.Done():
+					return
+				}
+			}
+		}
+		tokenIn = tokenC
+
+		bk := C.GoBytes(m.keysBuff, C.int(m.keysBufSize))
+		bv := C.GoBytes(m.valuesBuff, C.int(m.valuesBufSize))
+
+		select {
+		case m.keysValues <- keysValues{
+			keys:   bk[:count*m.keySize],
+			values: bv[:count*m.valueSize],
+			count:  count,
+		}:
+		case <-m.cancelCtx.Done():
+		}
+	}
 }
 
 // Next gets the next key/value pair from the iteration.  The key and value []byte slices returned point to the
@@ -234,55 +294,45 @@ func NewIterator(mapFD FD, keySize, valueSize, maxEntries int) (*Iterator, error
 // Returns ErrIterationFinished at the end of the iteration or ErrVisitedTooManyKeys if it visits considerably more
 // keys than the maximum size of the map.
 func (m *Iterator) Next() (k, v []byte, err error) {
-	if m.numEntriesLoaded == m.entryIdx {
-		// Need to load a new batch of KVs from the kernel.
-		var count C.int
-		rc := C.bpf_maps_map_load_multi(C.uint(m.mapFD), m.keyBeforeNextBatch, IteratorNumKeys,
-			C.int(m.keyStride), m.keys, C.int(m.valueStride), m.values)
-		if rc < 0 {
-			err = unix.Errno(-rc)
-			return
-		}
-		count = rc
-		if count == 0 {
-			// No error but no keys either.  We're done.
-			err = ErrIterationFinished
-			return
-		}
-
-		m.numEntriesLoaded = int(count)
-		m.entryIdx = 0
-		if m.keyBeforeNextBatch == nil {
-			m.keyBeforeNextBatch = C.malloc((C.size_t)(m.keySize))
-		}
-		C.memcpy(m.keyBeforeNextBatch,
-			unsafe.Pointer(uintptr(m.keys)+uintptr(m.keyStride*(m.numEntriesLoaded-1))), (C.size_t)(m.keySize))
-	}
-
-	currentKeyPtr := (*byte)(unsafe.Pointer(uintptr(m.keys) + uintptr(m.keyStride*(m.entryIdx))))
-	currentValPtr := (*byte)(unsafe.Pointer(uintptr(m.values) + uintptr(m.valueStride*(m.entryIdx))))
-
-	k = unsafe.Slice(currentKeyPtr, m.keySize)
-	v = unsafe.Slice(currentValPtr, m.valueSize)
-
-	m.entryIdx++
-	m.numEntriesVisited++
-
 	if m.numEntriesVisited > m.maxEntries*10 {
 		// Either a bug or entries are being created 10x faster than we're iterating through them?
 		err = ErrVisitedTooManyKeys
 		return
 	}
 
+	if m.numEntriesLoaded == m.entryIdx {
+		x, ok := <-m.keysValues
+		if !ok {
+			err = ErrIterationFinished
+			return
+		}
+
+		if x.err != nil {
+			err = x.err
+			return
+		}
+
+		m.entryIdx = 0
+		m.numEntriesLoaded = x.count
+		m.keys = x.keys
+		m.values = x.values
+	}
+
+	k = m.keys[m.entryIdx*m.keySize : (m.entryIdx+1)*m.keySize]
+	v = m.values[m.entryIdx*m.valueSize : (m.entryIdx+1)*m.valueSize]
+
+	m.entryIdx++
+	m.numEntriesVisited++
+
 	return
 }
 
 func (m *Iterator) Close() error {
-	C.free(m.keyBeforeNextBatch)
-	m.keyBeforeNextBatch = nil
-	C.free(m.keys)
+	m.cancelCB()
+	m.wg.Wait()
+	C.free(m.keysBuff)
 	m.keys = nil
-	C.free(m.values)
+	C.free(m.valuesBuff)
 	m.values = nil
 
 	// Don't need the finalizer anymore.
