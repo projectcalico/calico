@@ -33,14 +33,15 @@ func New(cfg *rest.Config) (client.Client, error) {
 		return nil, err
 	}
 
-	// Check to see if the APIServer is available.
-	if err := c.Get(context.TODO(), client.ObjectKey{Name: "default"}, &operatorv1.APIServer{}); err == nil {
+	// Check to see if an APIServer is available.
+	if err := c.List(context.TODO(), &operatorv1.APIServerList{}); err == nil {
 		logrus.Infof("Using API server client for projectcalico.org/v3 API")
 		return c, nil
+	} else {
+		logrus.Infof("Falling back to calicoctl exec client for projectcalico.org/v3 API: %v", err)
 	}
 
 	// No API server available, fall back to calicoctl exec client.
-	logrus.Infof("Falling back to calicoctl exec client for projectcalico.org/v3 API: %v", err)
 	return NewCalicoctlExecClient(c)
 }
 
