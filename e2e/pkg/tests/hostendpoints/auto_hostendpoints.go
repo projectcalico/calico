@@ -56,6 +56,10 @@ var _ = describe.CalicoDescribe(describe.WithTeam(describe.Core),
 		const port9091 = 9091
 
 		denyEgressPolicy := &v3.GlobalNetworkPolicy{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "GlobalNetworkPolicy",
+				APIVersion: v3.SchemeGroupVersion.String(),
+			},
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "autohep-e2e-egress-deny",
 			},
@@ -178,6 +182,10 @@ var _ = describe.CalicoDescribe(describe.WithTeam(describe.Core),
 					// Declare a policy that blocks ingress to the server
 					// pod on port 9090. But don't apply the policy yet.
 					denyIngressPolicy = &v3.GlobalNetworkPolicy{
+						TypeMeta: metav1.TypeMeta{
+							Kind:       "GlobalNetworkPolicy",
+							APIVersion: v3.SchemeGroupVersion.String(),
+						},
 						ObjectMeta: metav1.ObjectMeta{
 							Name: "autohep-e2e-ingress",
 						},

@@ -241,6 +241,10 @@ var _ = describe.CalicoDescribe(
 			Expect(err).NotTo(HaveOccurred())
 
 			np := &v3.NetworkPolicy{
+				TypeMeta: metav1.TypeMeta{
+					Kind:       "NetworkPolicy",
+					APIVersion: v3.SchemeGroupVersion.String(),
+				},
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "allow-through-service-account",
 					Namespace: ns.Name,
@@ -365,6 +369,10 @@ var _ = describe.CalicoDescribe(
 // Creates a new NetworkPolicy that isolates a namespace by allowing ingress and egress traffic only from / to pods in the same namespace.
 func newNamespaceIsolationPolicy(name, namespace, ingressSelector, egressSelector string) *v3.NetworkPolicy {
 	return &v3.NetworkPolicy{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "NetworkPolicy",
+			APIVersion: v3.SchemeGroupVersion.String(),
+		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
@@ -393,6 +401,10 @@ func newNamespaceIsolationPolicy(name, namespace, ingressSelector, egressSelecto
 
 func newDefaultDenyPolicy(namespace string) *v3.NetworkPolicy {
 	return &v3.NetworkPolicy{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "NetworkPolicy",
+			APIVersion: v3.SchemeGroupVersion.String(),
+		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "default-deny",
 			Namespace: namespace,
