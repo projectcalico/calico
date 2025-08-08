@@ -20,6 +20,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
+	"time"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
@@ -45,6 +46,10 @@ import (
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
+)
+
+const (
+	defaultClientTimeout = 10 * time.Second
 )
 
 var (
@@ -399,6 +404,9 @@ func CreateKubernetesClientset(ca *apiconfig.CalicoAPIConfigSpec) (*rest.Config,
 	// efficiently. The IPAM code can create bursts of requests to the API, so
 	// in order to keep pod creation times sensible we allow a higher request rate.
 	config.Burst = 100
+	if config.Timeout == 0 {
+		config.Timeout = defaultClientTimeout
+	}
 	cs, err := kubernetes.NewForConfig(config)
 	if err != nil {
 		return nil, nil, resources.K8sErrorToCalico(err, nil)
