@@ -30,8 +30,11 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
 )
 
-var MatchResource = testutils.Resource
-var MatchResourceWithStatus = testutils.ResourceWithStatus
+var (
+	MatchResource           = testutils.Resource
+	MatchResourceWithStatus = testutils.ResourceWithStatus
+	MatchResourceWithLabels = testutils.ResourceWithLabels
+)
 
 var _ = testutils.E2eDatastoreDescribe("Common resource tests", testutils.DatastoreAll, func(config apiconfig.CalicoAPIConfig) {
 	Describe("Common resource tests", func() {

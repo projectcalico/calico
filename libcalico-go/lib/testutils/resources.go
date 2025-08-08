@@ -39,19 +39,32 @@ type resourceMatcher struct {
 	kind, namespace, name string
 	spec                  interface{}
 	status                interface{}
+	labels                map[string]string
 }
 
 func Resource(kind, namespace, name string, spec interface{}, optionalDescription ...interface{}) *resourceMatcher {
-	return &resourceMatcher{kind, namespace, name, spec, nil}
+	return &resourceMatcher{kind, namespace, name, spec, nil, nil}
 }
 
 func ResourceWithStatus(kind, namespace, name string, spec, status interface{}, optionalDescription ...interface{}) *resourceMatcher {
-	return &resourceMatcher{kind, namespace, name, spec, status}
+	return &resourceMatcher{kind, namespace, name, spec, status, nil}
+}
+
+func ResourceWithLabels(kind, namespace, name string, spec interface{}, labels map[string]string, optionalDescription ...interface{}) *resourceMatcher {
+	return &resourceMatcher{kind, namespace, name, spec, nil, labels}
+}
+
+func ResourceWithStatusAndLabels(kind, namespace, name string, spec, status interface{}, label map[string]string, optionalDescription ...interface{}) *resourceMatcher {
+	return &resourceMatcher{kind, namespace, name, spec, status, label}
 }
 
 // Another name for the same matcher (which reads better when checking a single item).
-var MatchResource = Resource
-var MatchResourceWithStatus = ResourceWithStatus
+var (
+	MatchResource                    = Resource
+	MatchResourceWithStatus          = ResourceWithStatus
+	MatchResourceWithLabels          = ResourceWithLabels
+	MatchResourceWithStatusAndLabels = ResourceWithStatusAndLabels
+)
 
 func (m *resourceMatcher) Match(actual interface{}) (success bool, err error) {
 	// 'actual' here may be a resource struct like v3.HostEndpoint, or a pointer to a resource
@@ -72,7 +85,8 @@ func (m *resourceMatcher) Match(actual interface{}) (success bool, err error) {
 		(res.GetObjectKind().GroupVersionKind().Group == apiv3.Group) &&
 		(res.GetObjectKind().GroupVersionKind().Version == apiv3.VersionCurrent) &&
 		(m.spec == nil || reflect.DeepEqual(getSpec(res), m.spec)) &&
-		(m.status == nil || reflect.DeepEqual(getStatus(res), m.status))
+		(m.status == nil || reflect.DeepEqual(getStatus(res), m.status)) &&
+		(m.labels == nil || reflect.DeepEqual(ma.GetObjectMeta().GetLabels(), m.labels))
 	return
 }
 
@@ -248,11 +262,12 @@ func (t *testResourceWatcher) expectEvents(kind string, anyOrder bool, expectedE
 			expectedObject = expectedEvent.Object
 		}
 		log.Infof(
-			"Expected: EventType:%s; Kind:%s; Name:%s; Namespace:%s",
+			"Expected: EventType:%s; Kind:%s; Name:%s; Namespace:%s; Labels:%s",
 			expectedEvent.Type,
 			expectedObject.GetObjectKind().GroupVersionKind(),
 			expectedObject.(v1.ObjectMetaAccessor).GetObjectMeta().GetName(),
 			expectedObject.(v1.ObjectMetaAccessor).GetObjectMeta().GetNamespace(),
+			expectedObject.(v1.ObjectMetaAccessor).GetObjectMeta().GetLabels(),
 		)
 
 		if i < len(actualEvents) {
@@ -264,11 +279,12 @@ func (t *testResourceWatcher) expectEvents(kind string, anyOrder bool, expectedE
 			}
 			if actualObject != nil {
 				log.Infof(
-					"Actual:   EventType:%s; Kind:%s; Name:%s; Namespace:%s",
+					"Actual:   EventType:%s; Kind:%s; Name:%s; Namespace:%s; Labels:%s",
 					actualEvent.Type,
 					actualObject.GetObjectKind().GroupVersionKind(),
 					actualObject.(v1.ObjectMetaAccessor).GetObjectMeta().GetName(),
 					actualObject.(v1.ObjectMetaAccessor).GetObjectMeta().GetNamespace(),
+					actualObject.(v1.ObjectMetaAccessor).GetObjectMeta().GetLabels(),
 				)
 			} else {
 				log.Warnf("Actual:    EventType:%s, Object: <nil>; Error: %s", actualEvent.Type, actualEvent.Error)
@@ -290,14 +306,28 @@ func (t *testResourceWatcher) expectEvents(kind string, anyOrder bool, expectedE
 		Expect(actualEvent.Type).To(Equal(expectedEvent.Type), traceString)
 		if expectedEvent.Object != nil {
 			Expect(actualEvent.Object).NotTo(BeNil(), traceString)
-			Expect(actualEvent.Object).To(MatchResourceWithStatus(
-				kind,
-				expectedEvent.Object.(v1.ObjectMetaAccessor).GetObjectMeta().GetNamespace(),
-				expectedEvent.Object.(v1.ObjectMetaAccessor).GetObjectMeta().GetName(),
-				getSpec(expectedEvent.Object),
-				getStatus(expectedEvent.Object),
-				traceString,
-			))
+			// Calico applies kind label when reading certain resources from the k8s datastore
+			// for look ups.
+			if t.datastoreType == apiconfig.Kubernetes {
+				Expect(actualEvent.Object).To(MatchResourceWithStatusAndLabels(
+					kind,
+					expectedEvent.Object.(v1.ObjectMetaAccessor).GetObjectMeta().GetNamespace(),
+					expectedEvent.Object.(v1.ObjectMetaAccessor).GetObjectMeta().GetName(),
+					getSpec(expectedEvent.Object),
+					getStatus(expectedEvent.Object),
+					expectedEvent.Object.(v1.ObjectMetaAccessor).GetObjectMeta().GetLabels(),
+					traceString,
+				))
+			} else {
+				Expect(actualEvent.Object).To(MatchResourceWithStatus(
+					kind,
+					expectedEvent.Object.(v1.ObjectMetaAccessor).GetObjectMeta().GetNamespace(),
+					expectedEvent.Object.(v1.ObjectMetaAccessor).GetObjectMeta().GetName(),
+					getSpec(expectedEvent.Object),
+					getStatus(expectedEvent.Object),
+					traceString,
+				))
+			}
 		} else {
 			Expect(actualEvent.Object).To(BeNil(), traceString)
 		}
