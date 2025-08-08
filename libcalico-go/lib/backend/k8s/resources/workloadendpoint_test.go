@@ -38,6 +38,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
+	"github.com/projectcalico/calico/libcalico-go/lib/testutils/k8sfake"
 )
 
 var _ = Describe("WorkloadEndpointClient", func() {
@@ -752,7 +753,7 @@ var _ = Describe("WorkloadEndpointClient", func() {
 })
 
 func testListWorkloadEndpoints(pods []runtime.Object, listOptions model.ResourceListOptions, expectedWEPs []*libapiv3.WorkloadEndpoint) {
-	k8sClient := fake.NewSimpleClientset(pods...)
+	k8sClient := k8sfake.NewFakeClientSetWithListRevAndFiltering(pods...)
 	wepClient := resources.NewWorkloadEndpointClient(k8sClient).(*resources.WorkloadEndpointClient)
 
 	kvps, err := wepClient.List(context.Background(), listOptions, "")
