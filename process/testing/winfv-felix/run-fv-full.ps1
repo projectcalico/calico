@@ -99,6 +99,8 @@ Set-Item -Path env:REPORT -Value "C:\\k\\report\\report-full.xml"
 mkdir -p C:\\k\\report
 # executes FV test and generate report in report/result.xml
 cd C:\\k
+Write-Host "Sleep just before running winfv."
+Start-Sleep -Seconds 3600
 & .\win-fv.exe --ginkgo.focus "Windows" --ginkgo.v > C:\k\report\fv-test.log 2>&1
 if ( $LastExitCode -ne 0 ){
   echo $LastExitCode > c:\k\report\error-codes
