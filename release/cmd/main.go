@@ -15,12 +15,13 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
 
 	"github.com/sirupsen/logrus"
-	cli "github.com/urfave/cli/v2"
+	cli "github.com/urfave/cli/v3"
 
 	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/utils"
@@ -66,16 +67,16 @@ func main() {
 		logrus.WithError(err).Fatal("Failed to load configuration")
 	}
 
-	app := &cli.App{
-		Name:                 "release",
-		Usage:                fmt.Sprintf("release tool for %s", utils.ProductName),
-		Flags:                globalFlags,
-		Commands:             Commands(cfg),
-		EnableBashCompletion: true,
+	app := &cli.Command{
+		Name:                  "release",
+		Usage:                 fmt.Sprintf("release tool for %s", utils.ProductName),
+		Flags:                 globalFlags,
+		Commands:              Commands(cfg),
+		EnableShellCompletion: true,
 	}
 
 	// Run the app.
-	if err := app.Run(os.Args); err != nil {
+	if err := app.Run(context.Background(), os.Args); err != nil {
 		logrus.WithError(err).Fatal("Error running app")
 	}
 }
