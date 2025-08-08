@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2025 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,9 +25,9 @@ import (
 )
 
 func init() {
-
 	asNumberType := reflect.TypeOf(numorstring.ASNumber(0))
 	protocolType := reflect.TypeOf(numorstring.Protocol{})
+	dscpType := reflect.TypeOf(numorstring.DSCP{})
 	portType := reflect.TypeOf(numorstring.Port{})
 
 	// Perform tests of JSON unmarshaling of the various field types.
@@ -90,6 +90,11 @@ func init() {
 		Entry("should accept 0 protocol as string", "\"255\"", protocolType, numorstring.ProtocolFromInt(255)),
 		Entry("should accept 256 protocol as string", "\"256\"", protocolType, numorstring.ProtocolFromString("256")),
 		Entry("should reject bad protocol string", "\"25", protocolType, nil),
+
+		// DSCP tests.
+		Entry("should accept 0 DSCP as int", "0", dscpType, numorstring.DSCPFromInt(0)),
+		Entry("should accept 63 DSCP as int", "63", dscpType, numorstring.DSCPFromInt(63)),
+		Entry("should accept DF DSCP as string", "\"DF\"", dscpType, numorstring.DSCPFromString(numorstring.DF)),
 	)
 
 	// Perform tests of JSON marshaling of the various field types.
