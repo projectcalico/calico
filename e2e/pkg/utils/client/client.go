@@ -37,10 +37,11 @@ func New(cfg *rest.Config) (client.Client, error) {
 	if err := c.Get(context.TODO(), client.ObjectKey{Name: "default"}, &operatorv1.APIServer{}); err == nil {
 		logrus.Infof("Using API server client for projectcalico.org/v3 API")
 		return c, nil
+	} else {
+		logrus.Infof("Falling back to calicoctl exec client for projectcalico.org/v3 API: %v", err)
 	}
 
 	// No API server available, fall back to calicoctl exec client.
-	logrus.Infof("Falling back to calicoctl exec client for projectcalico.org/v3 API: %v", err)
 	return NewCalicoctlExecClient(c)
 }
 
