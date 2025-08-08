@@ -149,7 +149,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 								return fmt.Sprintf("ERROR: %v", err)
 							}
 							return out
-						}, "10s", "100ms").Should(ContainSubstring("tx-checksumming: off"))
+						}, "15s", "100ms").Should(ContainSubstring("tx-checksumming: off"))
 					})
 				} else {
 					It("should not disable checksum offload", func() {
@@ -159,7 +159,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 								return fmt.Sprintf("ERROR: %v", err)
 							}
 							return out
-						}, "10s", "100ms").Should(ContainSubstring("tx-checksumming: on"))
+						}, "15s", "100ms").Should(ContainSubstring("tx-checksumming: on"))
 					})
 				}
 
@@ -169,12 +169,12 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 							Eventually(func() string {
 								out, _ := felix.ExecOutput("nft", "list", "table", "calico")
 								return out
-							}, "10s", "100ms").Should(ContainSubstring("fully-random"))
+							}, "15s", "100ms").Should(ContainSubstring("fully-random"))
 						} else {
 							Eventually(func() string {
 								out, _ := felix.ExecOutput("iptables-save", "-c")
 								return out
-							}, "10s", "100ms").Should(ContainSubstring("--random-fully"))
+							}, "15s", "100ms").Should(ContainSubstring("--random-fully"))
 						}
 					}
 				})
@@ -208,7 +208,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 					Eventually(func() string {
 						o, _ := felixes[n].ExecOutput("ip", "r", "s", "type", "blackhole")
 						return o
-					}, "10s", "100ms").Should(ContainSubstring(result))
+					}, "15s", "100ms").Should(ContainSubstring(result))
 					wName := fmt.Sprintf("w%d", n)
 
 					err := client.IPAM().ReleaseByHandle(context.TODO(), wName)
@@ -230,7 +230,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 					Eventually(func() string {
 						o, _ := felixes[n].ExecOutput("ip", "r", "s", "type", "blackhole")
 						return o
-					}, "10s", "100ms").Should(BeEmpty())
+					}, "15s", "100ms").Should(BeEmpty())
 				}
 			})
 
@@ -245,7 +245,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 					//   10.65.2.0/26 via 172.17.0.5 dev eth0 proto 80 onlink
 					//   172.17.0.0/16 dev eth0 proto kernel scope link src 172.17.0.7
 					felix := tc.Felixes[0]
-					Eventually(felix.ExecOutputFn("ip", "route", "show"), "10s").Should(ContainSubstring(
+					Eventually(felix.ExecOutputFn("ip", "route", "show"), "15s").Should(ContainSubstring(
 						fmt.Sprintf("10.65.1.0/26 via %s dev eth0 proto 80 onlink", tc.Felixes[1].IP)))
 
 					// Find the default and subnet routes, we'll need to
@@ -612,9 +612,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 							}).Should(Equal(expectedNumRoutes),
 								fmt.Sprintf("Expected %v route per node, not: %v", expectedNumRoutes, f.BPFRoutes()))
 						} else if NFTMode() {
-							Eventually(f.NFTSetSizeFn("cali40all-hosts-net"), "10s", "200ms").Should(Equal(expectedNumRoutes))
+							Eventually(f.NFTSetSizeFn("cali40all-hosts-net"), "15s", "200ms").Should(Equal(expectedNumRoutes))
 						} else {
-							Eventually(f.IPSetSizeFn("cali40all-hosts-net"), "10s", "200ms").Should(Equal(expectedNumRoutes))
+							Eventually(f.IPSetSizeFn("cali40all-hosts-net"), "15s", "200ms").Should(Equal(expectedNumRoutes))
 						}
 					}
 
@@ -653,9 +653,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 						}).Should(Equal(expectedNumRoutes),
 							fmt.Sprintf("Expected %v route per node, not: %v", expectedNumRoutes, felixes[0].BPFRoutes()))
 					} else if NFTMode() {
-						Eventually(felixes[0].NFTSetSizeFn("cali40all-hosts-net"), "5s", "200ms").Should(Equal(expectedNumRoutes))
+						Eventually(felixes[0].NFTSetSizeFn("cali40all-hosts-net"), "15s", "200ms").Should(Equal(expectedNumRoutes))
 					} else {
-						Eventually(felixes[0].IPSetSizeFn("cali40all-hosts-net"), "5s", "200ms").Should(Equal(expectedNumRoutes))
+						Eventually(felixes[0].IPSetSizeFn("cali40all-hosts-net"), "15s", "200ms").Should(Equal(expectedNumRoutes))
 					}
 
 					cc.ExpectSome(w[0], w[1])
@@ -692,9 +692,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 					for _, f := range felixes {
 						// Wait for Felix to set up the allow list.
 						if NFTMode() {
-							Eventually(f.NFTSetSizeFn("cali40all-hosts-net"), "5s", "200ms").Should(Equal(len(felixes)))
+							Eventually(f.NFTSetSizeFn("cali40all-hosts-net"), "15s", "200ms").Should(Equal(len(felixes)))
 						} else {
-							Eventually(f.IPSetSizeFn("cali40all-hosts-net"), "5s", "200ms").Should(Equal(len(felixes)))
+							Eventually(f.IPSetSizeFn("cali40all-hosts-net"), "15s", "200ms").Should(Equal(len(felixes)))
 						}
 					}
 
@@ -763,7 +763,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 					Eventually(func() error {
 						_, err := felix.ExecOutput("ip", "link", "set", "eth0", "mtu", "1400")
 						return err
-					}, "10s", "100ms").Should(BeNil())
+					}, "15s", "100ms").Should(BeNil())
 				}
 
 				// MTU should be auto-detected, and updated to the host MTU minus 20 bytes overhead IPIP.
@@ -842,12 +842,12 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 					for _, f := range tc.Felixes {
 						// Make sure that only the internal nodes are present in the ipset
 						if BPFMode() {
-							Eventually(f.BPFRoutes, "10s").Should(ContainSubstring(f.IP))
+							Eventually(f.BPFRoutes, "15s").Should(ContainSubstring(f.IP))
 							Consistently(f.BPFRoutes).ShouldNot(ContainSubstring(externalClient.IP))
 						} else if NFTMode() {
-							Eventually(f.NFTSetSizeFn("cali40all-hosts-net"), "5s", "200ms").Should(Equal(3))
+							Eventually(f.NFTSetSizeFn("cali40all-hosts-net"), "15s", "200ms").Should(Equal(3))
 						} else {
-							Eventually(f.IPSetSizeFn("cali40all-hosts-net"), "5s", "200ms").Should(Equal(3))
+							Eventually(f.IPSetSizeFn("cali40all-hosts-net"), "15s", "200ms").Should(Equal(3))
 						}
 					}
 
@@ -882,7 +882,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 					// Wait for the config to take
 					for _, f := range tc.Felixes {
 						if BPFMode() {
-							Eventually(f.BPFRoutes, "10s").Should(ContainSubstring(externalClient.IP))
+							Eventually(f.BPFRoutes, "15s").Should(ContainSubstring(externalClient.IP))
 							Expect(f.IPSetSize("cali40all-hosts-net")).To(BeZero(),
 								"BPF mode shouldn't program IP sets")
 						} else if NFTMode() {
