@@ -15,11 +15,12 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"path/filepath"
 
 	"github.com/sirupsen/logrus"
-	cli "github.com/urfave/cli/v2"
+	cli "github.com/urfave/cli/v3"
 
 	"github.com/projectcalico/calico/release/internal/outputs"
 	"github.com/projectcalico/calico/release/internal/version"
@@ -34,10 +35,10 @@ func releaseOutputDir(repoRootDir, version string) string {
 // The release command suite is used to build and publish official releases.
 func releaseCommand(cfg *Config) *cli.Command {
 	return &cli.Command{
-		Name:        "release",
-		Aliases:     []string{"rel"},
-		Usage:       "Build and publish official releases.",
-		Subcommands: releaseSubCommands(cfg),
+		Name:     "release",
+		Aliases:  []string{"rel"},
+		Usage:    "Build and publish official releases.",
+		Commands: releaseSubCommands(cfg),
 	}
 }
 
@@ -48,7 +49,7 @@ func releaseSubCommands(cfg *Config) []*cli.Command {
 			Name:  "generate-release-notes",
 			Usage: "Generate release notes for the next release",
 			Flags: []cli.Flag{orgFlag, devTagSuffixFlag, githubTokenFlag},
-			Action: func(c *cli.Context) error {
+			Action: func(_ context.Context, c *cli.Command) error {
 				configureLogging("release-notes.log")
 
 				// Determine the versions to use for the release.
@@ -74,7 +75,7 @@ func releaseSubCommands(cfg *Config) []*cli.Command {
 			Name:  "build",
 			Usage: "Build an official release",
 			Flags: releaseBuildFlags(),
-			Action: func(c *cli.Context) error {
+			Action: func(_ context.Context, c *cli.Command) error {
 				configureLogging("release-build.log")
 
 				// Determine the versions to use for the release.
@@ -117,7 +118,7 @@ func releaseSubCommands(cfg *Config) []*cli.Command {
 			Name:  "publish",
 			Usage: "Publish a pre-built release",
 			Flags: releasePublishFlags(),
-			Action: func(c *cli.Context) error {
+			Action: func(_ context.Context, c *cli.Command) error {
 				configureLogging("release-publish.log")
 
 				ver, operatorVer, err := version.VersionsFromManifests(cfg.RepoRootDir)

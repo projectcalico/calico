@@ -15,11 +15,12 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"path/filepath"
 
 	"github.com/sirupsen/logrus"
-	cli "github.com/urfave/cli/v2"
+	cli "github.com/urfave/cli/v3"
 
 	"github.com/projectcalico/calico/release/internal/hashreleaseserver"
 	"github.com/projectcalico/calico/release/internal/imagescanner"
@@ -41,11 +42,11 @@ func baseHashreleaseOutputDir(repoRootDir string) string {
 // as well as to interact with the hashrelease server.
 func hashreleaseCommand(cfg *Config) *cli.Command {
 	return &cli.Command{
-		Name:        "hashrelease",
-		Aliases:     []string{"hr"},
-		Usage:       "Build and publish hashreleases.",
-		Flags:       hashreleaseServerFlags,
-		Subcommands: hashreleaseSubCommands(cfg),
+		Name:     "hashrelease",
+		Aliases:  []string{"hr"},
+		Usage:    "Build and publish hashreleases.",
+		Flags:    hashreleaseServerFlags,
+		Commands: hashreleaseSubCommands(cfg),
 	}
 }
 
@@ -56,7 +57,7 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 			Name:  "build",
 			Usage: "Build a hashrelease locally",
 			Flags: hashreleaseBuildFlags(),
-			Action: func(c *cli.Context) error {
+			Action: func(_ context.Context, c *cli.Command) error {
 				configureLogging("hashrelease-build.log")
 
 				// Validate flags.
@@ -174,7 +175,7 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 			Name:  "publish",
 			Usage: "Publish a pre-built hashrelease",
 			Flags: hashreleasePublishFlags(),
-			Action: func(c *cli.Context) error {
+			Action: func(_ context.Context, c *cli.Command) error {
 				configureLogging("hashrelease-publish.log")
 
 				// Validate flags.
@@ -281,7 +282,7 @@ func hashreleaseBuildFlags() []cli.Flag {
 }
 
 // validateHashreleaseBuildFlags checks that the flags are set correctly for the hashrelease build command.
-func validateHashreleaseBuildFlags(c *cli.Context) error {
+func validateHashreleaseBuildFlags(c *cli.Command) error {
 	// If using a custom registry for product, ensure operator is also using a custom registry.
 	if len(c.StringSlice(registryFlag.Name)) > 0 && c.String(operatorRegistryFlag.Name) == "" {
 		return fmt.Errorf("%s must be set if %s is set", operatorRegistryFlag, registryFlag)
@@ -324,7 +325,7 @@ func hashreleasePublishFlags() []cli.Flag {
 }
 
 // validateHashreleasePublishFlags checks that the flags are set correctly for the hashrelease publish command.
-func validateHashreleasePublishFlags(c *cli.Context) error {
+func validateHashreleasePublishFlags(c *cli.Command) error {
 	// If publishing the hashrelease
 	if c.Bool(publishHashreleaseFlag.Name) {
 		//  check that hashrelease server configuration is set.
@@ -352,21 +353,21 @@ func validateHashreleasePublishFlags(c *cli.Context) error {
 }
 
 // ciJobURL returns the URL to the CI job if the command is running on CI.
-func ciJobURL(c *cli.Context) string {
+func ciJobURL(c *cli.Command) string {
 	if !c.Bool(ciFlag.Name) {
 		return ""
 	}
 	return fmt.Sprintf("%s/jobs/%s", c.String(ciBaseURLFlag.Name), c.String(ciJobIDFlag.Name))
 }
 
-func hashreleaseServerConfig(c *cli.Context) *hashreleaseserver.Config {
+func hashreleaseServerConfig(c *cli.Command) *hashreleaseserver.Config {
 	return &hashreleaseserver.Config{
 		BucketName:      c.String(hashreleaseServerBucketFlag.Name),
 		CredentialsFile: c.String(hashreleaseServerCredentialsFlag.Name),
 	}
 }
 
-func imageScanningAPIConfig(c *cli.Context) *imagescanner.Config {
+func imageScanningAPIConfig(c *cli.Command) *imagescanner.Config {
 	return &imagescanner.Config{
 		APIURL:  c.String(imageScannerAPIFlag.Name),
 		Token:   c.String(imageScannerTokenFlag.Name),
