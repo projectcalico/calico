@@ -262,22 +262,6 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 				return nil
 			},
 		},
-
-		hashreleaseGarbageCollectCommand(cfg),
-	}
-}
-
-// hashreleaseGarbageCollectCommand is used to clean up older hashreleases from the hashrelease server.
-func hashreleaseGarbageCollectCommand(cfg *Config) *cli.Command {
-	return &cli.Command{
-		Name:    "garbage-collect",
-		Usage:   "Clean up older hashreleases",
-		Aliases: []string{"gc"},
-		Flags:   []cli.Flag{maxHashreleasesFlag},
-		Action: func(c *cli.Context) error {
-			configureLogging("hashrelease-garbage-collect.log")
-			return hashreleaseserver.CleanOldHashreleases(hashreleaseServerConfig(c), c.Int(maxHashreleasesFlag.Name))
-		},
 	}
 }
 
@@ -306,9 +290,8 @@ func validateHashreleaseBuildFlags(c *cli.Context) error {
 	// CI condtional checks.
 	if c.Bool(ciFlag.Name) {
 		if !hashreleaseServerConfig(c).Valid() {
-			return fmt.Errorf("missing hashrelease server configuration, ensure %s, %s, %s, %s %s, %s and %s are set",
-				sshHostFlag, sshUserFlag, sshKeyFlag, sshPortFlag, sshKnownHostsFlag,
-				hashreleaseServerBucketFlag, hashreleaseServerCredentialsFlag)
+			return fmt.Errorf("missing hashrelease publishing configuration, ensure --%s and --%s are set",
+				hashreleaseServerBucketFlag.Name, hashreleaseServerCredentialsFlag.Name)
 		}
 	} else {
 		// If building images, log a warning if no registry is specified.
@@ -346,9 +329,8 @@ func validateHashreleasePublishFlags(c *cli.Context) error {
 	if c.Bool(publishHashreleaseFlag.Name) {
 		//  check that hashrelease server configuration is set.
 		if !hashreleaseServerConfig(c).Valid() {
-			return fmt.Errorf("missing hashrelease server configuration, ensure %s, %s, %s, %s %s, %s and %s are set",
-				sshHostFlag, sshUserFlag, sshKeyFlag, sshPortFlag, sshKnownHostsFlag,
-				hashreleaseServerBucketFlag, hashreleaseServerCredentialsFlag)
+			return fmt.Errorf("missing hashrelease publishing configuration, ensure --%s and --%s are set",
+				hashreleaseServerBucketFlag.Name, hashreleaseServerCredentialsFlag.Name)
 		}
 		if c.Bool(latestFlag.Name) {
 			// If using a custom registry, do not allow setting the hashrelease as latest.
@@ -379,11 +361,6 @@ func ciJobURL(c *cli.Context) string {
 
 func hashreleaseServerConfig(c *cli.Context) *hashreleaseserver.Config {
 	return &hashreleaseserver.Config{
-		Host:            c.String(sshHostFlag.Name),
-		User:            c.String(sshUserFlag.Name),
-		Key:             c.String(sshKeyFlag.Name),
-		Port:            c.String(sshPortFlag.Name),
-		KnownHosts:      c.String(sshKnownHostsFlag.Name),
 		BucketName:      c.String(hashreleaseServerBucketFlag.Name),
 		CredentialsFile: c.String(hashreleaseServerCredentialsFlag.Name),
 	}
