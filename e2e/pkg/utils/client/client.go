@@ -27,7 +27,7 @@ import (
 
 // New returns a new controller-runtime client configured to use the projectcalico.org/v3 API group.
 func New(cfg *rest.Config) (client.Client, error) {
-	// Use the API client if the Calico v3 API is available, otherwise fall abck to the calicoctl exec client.
+	// Use the API client if the Calico v3 API is available, otherwise fall back to the calicoctl exec client.
 	c, err := NewAPIClient(cfg)
 	if err != nil {
 		return nil, err
@@ -41,7 +41,7 @@ func New(cfg *rest.Config) (client.Client, error) {
 
 	// No API server available, fall back to calicoctl exec client.
 	logrus.Infof("Falling back to calicoctl exec client for projectcalico.org/v3 API: %v", err)
-	return NewCalicoctlExecClient()
+	return NewCalicoctlExecClient(c)
 }
 
 // NewAPIClient returns a new controller-runtime client configured to use the projectcalico.org/v3 API group.
@@ -59,13 +59,10 @@ func NewAPIClient(cfg *rest.Config) (client.Client, error) {
 //
 // Additionally, this client does not support all operations that a normal controller-runtime client would support. For example, it cannot
 // interact with API groups other than projectcalico.org/v3.
-func NewCalicoctlExecClient() (client.Client, error) {
-	scheme, err := newScheme()
-	if err != nil {
-		return nil, err
-	}
+func NewCalicoctlExecClient(base client.Client) (client.Client, error) {
 	return &calicoctlExecClient{
-		scheme:    scheme,
+		base:      base,
+		scheme:    base.Scheme(),
 		name:      "calicoctl",
 		namespace: "kube-system",
 	}, nil
