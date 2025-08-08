@@ -161,6 +161,7 @@ type Policy struct {
 	Types            []string                      `json:"types,omitempty"`
 	PerformanceHints []apiv3.PolicyPerformanceHint `json:"performance_hints,omitempty" validate:"omitempty,unique,dive,oneof=AssumeNeededOnEveryNode"`
 	StagedAction     *apiv3.StagedAction           `json:"staged_action,omitempty"`
+	QoSPolicy        bool                          `json:"qos_policy,omitempty"`
 }
 
 func (p Policy) String() string {
@@ -169,16 +170,23 @@ func (p Policy) String() string {
 		parts = append(parts, fmt.Sprintf("order:%v", *p.Order))
 	}
 	parts = append(parts, fmt.Sprintf("selector:%#v", p.Selector))
-	inRules := make([]string, len(p.InboundRules))
-	for ii, rule := range p.InboundRules {
-		inRules[ii] = rule.String()
-	}
-	parts = append(parts, fmt.Sprintf("inbound:%v", strings.Join(inRules, ";")))
 	outRules := make([]string, len(p.OutboundRules))
 	for ii, rule := range p.OutboundRules {
 		outRules[ii] = rule.String()
 	}
 	parts = append(parts, fmt.Sprintf("outbound:%v", strings.Join(outRules, ";")))
+
+	if p.QoSPolicy {
+		parts = append(parts, fmt.Sprintf("qos_policy :%v", p.QoSPolicy))
+		return strings.Join(parts, ",")
+	}
+
+	// This is a network policy.
+	inRules := make([]string, len(p.InboundRules))
+	for ii, rule := range p.InboundRules {
+		inRules[ii] = rule.String()
+	}
+	parts = append(parts, fmt.Sprintf("inbound:%v", strings.Join(inRules, ";")))
 	parts = append(parts, fmt.Sprintf("untracked:%v", p.DoNotTrack))
 	parts = append(parts, fmt.Sprintf("pre_dnat:%v", p.PreDNAT))
 	parts = append(parts, fmt.Sprintf("apply_on_forward:%v", p.ApplyOnForward))

@@ -45,6 +45,8 @@ func AddCalicoResourcesToScheme() {
 					&apiv3.IPPoolList{},
 					&apiv3.IPReservation{},
 					&apiv3.IPReservationList{},
+					&apiv3.QoSPolicy{},
+					&apiv3.QoSPolicyList{},
 					&apiv3.BGPPeer{},
 					&apiv3.BGPPeerList{},
 					&apiv3.BGPConfiguration{},
