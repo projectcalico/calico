@@ -674,7 +674,7 @@ func MapUpdateBatch(fd int, k, v []byte, count int, flags uint64) (int, error) {
 
 // MapDeleteBatch expects all keyis in a single slice, bytes of a one
 // key appended back to back to the previous value.
-func MapDeleteBatch(fd int, k, v []byte, count int, flags uint64) (int, error) {
+func MapDeleteBatch(fd int, k []byte, count int, flags uint64) (int, error) {
 	cK := C.CBytes(k)
 	defer C.free(cK)
 
