@@ -19,31 +19,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"strings"
 
 	"cloud.google.com/go/storage"
-	"github.com/sirupsen/logrus"
 	"google.golang.org/api/option"
 )
 
-// Config holds the configuration for an SSH connection
+// Config holds the configuration for hashrelease publishing.
 type Config struct {
-	// Host is the host for the SSH connection
-	Host string
-
-	// User is the user for the SSH connection
-	User string
-
-	// Key is the path to the SSH key
-	Key string
-
-	// Port is the port for the SSH connection
-	Port string
-
-	// KnownHosts is the absolute path to the known_hosts file
-	// to use for the user host key database instead of ~/.ssh/known_hosts
-	KnownHosts string
-
 	// credentials file for GCS access
 	CredentialsFile string
 
@@ -53,32 +35,8 @@ type Config struct {
 	gcsClient *storage.Client
 }
 
-// RSHCommand returns the ssh command for rsync to use for the connection
-func (s *Config) RSHCommand() string {
-	str := []string{"ssh", "-i", s.Key, "-p", s.Port, "-q", "-o StrictHostKeyChecking=yes"}
-	if s.KnownHosts != "" {
-		str = append(str, "-o UserKnownHostsFile="+s.KnownHosts)
-	}
-	return strings.Join(str, " ")
-}
-
-// HostString returns the host string in the format user@host
-func (s *Config) HostString() string {
-	return s.User + "@" + s.Host
-}
-
-// Address returns the address in the format host:port
-func (s *Config) Address() string {
-	return fmt.Sprintf("%s:%s", s.Host, s.Port)
-}
-
 func (s *Config) Valid() bool {
-	if s.KnownHosts == "" {
-		logrus.Warn("KnownHosts is not set, will use default")
-	}
-	sshValid := s.Host != "" && s.User != "" && s.Key != "" && s.Port != ""
-	gcsAccessValid := s.BucketName != "" && s.CredentialsFile != ""
-	return sshValid && gcsAccessValid
+	return s.BucketName != "" && s.CredentialsFile != ""
 }
 
 func (s *Config) Bucket() (*storage.BucketHandle, error) {

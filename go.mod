@@ -73,7 +73,6 @@ require (
 	github.com/safchain/ethtool v0.5.10
 	github.com/shirou/gopsutil/v4 v4.25.2
 	github.com/sirupsen/logrus v1.9.3
-	github.com/skeema/knownhosts v1.3.1
 	github.com/slack-go/slack v0.16.0
 	github.com/spf13/cobra v1.9.1
 	github.com/spf13/pflag v1.0.6
