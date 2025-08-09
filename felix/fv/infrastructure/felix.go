@@ -425,13 +425,16 @@ func (f *Felix) Ready() (bool, error) {
 func (f *Felix) WaitForReady() {
 	logrus.WithField("felix", f.Name).Info("Waiting for felix to be ready")
 	startTime := time.Now()
-	timeout := "10s"
+	timeoutStr := "10s"
 	if BPFMode() {
 		// BPF mode has to load BPF programs at startup, this can take a while
 		// when starting several felix nodes in parallel.
-		timeout = "30s"
+		timeoutStr = "30s"
 	}
-	EventuallyWithOffset(1, f.Ready, timeout, "100ms").Should(BeTrue(),
+	if f.TopologyOptions.FelixReadinessTimeout != "" {
+		timeoutStr = f.TopologyOptions.FelixReadinessTimeout
+	}
+	EventuallyWithOffset(1, f.Ready, timeoutStr, "100ms").Should(BeTrue(),
 		"Timed out waiting for Felix to become ready.")
 	logrus.WithField("felix", f.Name).Infof("Felix is ready after %s", time.Since(startTime))
 }

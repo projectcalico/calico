@@ -107,8 +107,8 @@ func newRouteManager(
 		routeProtocol:        calculateRouteProtocol(dpConfig),
 		opRecorder:           opRecorder,
 		logCtx: logrus.WithFields(logrus.Fields{
-			"ipVersion":     ipVersion,
-			"tunnel device": tunnelDevice,
+			"ipVersion":    ipVersion,
+			"tunnelDevice": tunnelDevice,
 		}),
 	}
 }
@@ -452,7 +452,8 @@ func (m *routeManager) detectParentIface() (netlink.Link, error) {
 			return nil, err
 		}
 		for _, addr := range addrs {
-			if addr.IPNet.IP.String() == parentAddr {
+			// Match address with or without subnet mask
+			if addr.IPNet.IP.String() == parentAddr || addr.IPNet.String() == parentAddr {
 				m.logCtx.Debugf("Found parent interface: %s", link)
 				return link, nil
 			}
