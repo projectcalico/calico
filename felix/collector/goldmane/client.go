@@ -17,11 +17,8 @@ package goldmane
 import (
 	"context"
 	"fmt"
-	"sort"
-	"strings"
 	"sync"
 	"time"
-	"unique"
 
 	"github.com/sirupsen/logrus"
 
@@ -156,8 +153,8 @@ func ConvertFlowlogToGoldmane(fl *flowlog.FlowLog) *types.Flow {
 		NumConnectionsStarted:   int64(fl.NumFlowsStarted),
 		NumConnectionsCompleted: int64(fl.NumFlowsCompleted),
 
-		SourceLabels: ensureLabels(fl.SrcLabels),
-		DestLabels:   ensureLabels(fl.DstLabels),
+		SourceLabels: fl.SrcLabels,
+		DestLabels:   fl.DstLabels,
 	}
 }
 
@@ -276,15 +273,6 @@ func toFlowPolicySet(policies []*proto.PolicyHit) flowlog.FlowPolicySet {
 		}
 	}
 	return policySet
-}
-
-func ensureLabels(labels uniquelabels.Map) unique.Handle[string] {
-	if labels.IsNil() {
-		return unique.Make("")
-	}
-	flat := utils.FlattenLabels(labels.RecomputeOriginalMap())
-	sort.Strings(flat)
-	return unique.Make(strings.Join(flat, ","))
 }
 
 func ensureFlowLogLabels(lables []string) uniquelabels.Map {
