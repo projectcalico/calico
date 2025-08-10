@@ -24,6 +24,7 @@ import (
 
 	"github.com/projectcalico/calico/goldmane/pkg/types"
 	"github.com/projectcalico/calico/goldmane/proto"
+	ul "github.com/projectcalico/calico/lib/std/uniquelabels"
 )
 
 // DiachronicFlow is a representation of a Flow over time. Each DiachronicFlow corresponds to a single FlowKey,
@@ -43,8 +44,8 @@ type Window struct {
 	start int64
 	end   int64
 
-	SourceLabels            unique.Handle[string]
-	DestLabels              unique.Handle[string]
+	SourceLabels            ul.Map
+	DestLabels              ul.Map
 	PacketsIn               int64
 	PacketsOut              int64
 	BytesIn                 int64
@@ -146,8 +147,17 @@ func (d *DiachronicFlow) addToWindow(flow *types.Flow, index int) {
 	d.Windows[index].NumConnectionsStarted += flow.NumConnectionsStarted
 	d.Windows[index].NumConnectionsCompleted += flow.NumConnectionsCompleted
 	d.Windows[index].NumConnectionsLive += flow.NumConnectionsLive
-	d.Windows[index].SourceLabels = intersection(d.Windows[index].SourceLabels, flow.SourceLabels)
-	d.Windows[index].DestLabels = intersection(d.Windows[index].DestLabels, flow.DestLabels)
+	d.Windows[index].SourceLabels = ul.IntersectAndFilter(
+		d.Windows[index].SourceLabels,
+		flow.SourceLabels,
+		nil,
+	)
+
+	d.Windows[index].DestLabels = ul.IntersectAndFilter(
+		d.Windows[index].DestLabels,
+		flow.DestLabels,
+		nil,
+	)
 }
 
 func (d *DiachronicFlow) insertWindow(flow *types.Flow, index int, start, end int64) {
@@ -232,8 +242,8 @@ func (d *DiachronicFlow) AggregateWindows(windows []*Window) *types.Flow {
 	// Create a new Flow object and populate it with aggregated statistics from the DiachronicFlow.
 	// acoss the time window specified by start and end.
 	f := &types.Flow{
-		SourceLabels: unique.Make(""),
-		DestLabels:   unique.Make(""),
+		SourceLabels: ul.Nil,
+		DestLabels:   ul.Nil,
 	}
 	f.Key = &d.Key
 
@@ -256,15 +266,15 @@ func (d *DiachronicFlow) AggregateWindows(windows []*Window) *types.Flow {
 		f.NumConnectionsLive += w.NumConnectionsLive
 
 		// Merge labels. We use the intersection of the labels across all windows.
-		if f.SourceLabels.Value() != "" {
-			f.SourceLabels = intersection(f.SourceLabels, w.SourceLabels)
-		} else {
+		if f.SourceLabels.IsNil() {
 			f.SourceLabels = w.SourceLabels
-		}
-		if f.DestLabels.Value() != "" {
-			f.DestLabels = intersection(f.DestLabels, w.DestLabels)
 		} else {
+			f.SourceLabels = ul.IntersectAndFilter(f.SourceLabels, w.SourceLabels, nil)
+		}
+		if f.DestLabels.IsNil() {
 			f.DestLabels = w.DestLabels
+		} else {
+			f.DestLabels = ul.IntersectAndFilter(f.DestLabels, w.DestLabels, nil)
 		}
 
 		// Update the flow's start and end times.

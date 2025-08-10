@@ -19,18 +19,17 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net/http"
-	"net/http/httptest"
-	"sync"
-	"testing"
-	"unique"
-
+	ul "github.com/projectcalico/calico/lib/std/uniquelabels"
 	"github.com/stretchr/testify/require"
 	goproto "google.golang.org/protobuf/proto"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ktypes "k8s.io/apimachinery/pkg/types"
+	"net/http"
+	"net/http/httptest"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sync"
+	"testing"
 
 	"github.com/projectcalico/calico/goldmane/pkg/emitter"
 	"github.com/projectcalico/calico/goldmane/pkg/internal/utils"
@@ -107,8 +106,8 @@ func TestEmitterMainline(t *testing.T) {
 		),
 		StartTime:             18,
 		EndTime:               28,
-		SourceLabels:          unique.Make("src=label"),
-		DestLabels:            unique.Make("dst=label"),
+		SourceLabels:          ul.Make(map[string]string{"src": "label"}),
+		DestLabels:            ul.Make(map[string]string{"dst": "label"}),
 		BytesIn:               100,
 		BytesOut:              200,
 		PacketsIn:             10,
@@ -217,8 +216,8 @@ func TestEmitterRetry(t *testing.T) {
 		),
 		StartTime:             18,
 		EndTime:               28,
-		SourceLabels:          unique.Make("src=label"),
-		DestLabels:            unique.Make("dst=label"),
+		SourceLabels:          ul.Make(map[string]string{"src": "label"}),
+		DestLabels:            ul.Make(map[string]string{"dst": "label"}),
 		BytesIn:               100,
 		BytesOut:              200,
 		PacketsIn:             10,
@@ -325,8 +324,8 @@ func TestStaleBuckets(t *testing.T) {
 		),
 		StartTime:             18,
 		EndTime:               28,
-		SourceLabels:          unique.Make("src=label"),
-		DestLabels:            unique.Make("dst=label"),
+		SourceLabels:          ul.Make(map[string]string{"src": "label"}),
+		DestLabels:            ul.Make(map[string]string{"dst": "label"}),
 		BytesIn:               100,
 		BytesOut:              200,
 		PacketsIn:             10,
@@ -373,8 +372,8 @@ func TestStaleBuckets(t *testing.T) {
 		),
 		StartTime:             61,
 		EndTime:               65,
-		SourceLabels:          unique.Make("src=label"),
-		DestLabels:            unique.Make("dst=label"),
+		SourceLabels:          ul.Make(map[string]string{"src": "label"}),
+		DestLabels:            ul.Make(map[string]string{"dst": "label"}),
 		BytesIn:               100,
 		BytesOut:              200,
 		PacketsIn:             10,
