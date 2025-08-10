@@ -1,0 +1,174 @@
+version: v1.0
+
+name: calico master - upgrade
+
+agent:
+  machine:
+    type: c1-standard-1
+    os_image: ubuntu2204
+
+auto_cancel:
+  queued:
+    when: "true"
+
+execution_time_limit:
+  hours: 12
+
+global_job_config:
+  prologue:
+    commands_file: ../scripts/global_prologue.sh
+  epilogue:
+    always:
+      commands:
+        - ./.semaphore/end-to-end/scripts/global_epilogue.sh
+  secrets:
+    - name: marvin-github-ssh-private-key
+    - name: banzai-secrets
+  env_vars:
+    - name: TEST_TYPE
+      value: k8s-e2e
+    - name: PRODUCT
+      value: calico
+    - name: RELEASE_STREAM   # in this context, this is the version to upgrade from
+      value: v3.29
+    - name: USE_HASH_RELEASE
+      value: "false"
+    - name: UPLEVEL_PRODUCT
+      value: calico
+    - name: UPLEVEL_PRE_RELEASE
+      value: "true"
+    - name: CALICOCTL_INSTALL_TYPE
+      value: "container"
+    - name: FUNCTIONAL_AREA
+      value: "upgrade.yml"
+    # The intent here is to run a representative set of tests that cover the main functionality of Calico
+    # Using tests that usually pass.
+    # So we're running the Conformance tests, some RBAC tests, and some Observe tests.
+    # and skipping the slow, disruptive, and some other tests that are not relevant to Calico OSS
+    - name: K8S_E2E_FLAGS
+      value: --ginkgo.focus=(\[Conformance\]|Observe|RBAC) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|sig-node|sig-apps|sig-storage|sig-scheduling|sig-calico-enterprise)
+    - name: BANZAI_CORE_BRANCH
+      value: lwr-retry-calicoctl-install
+
+blocks:
+  - name: calico tests
+    dependencies: []
+    task:
+      jobs:
+        - name: AKS - BYO CNI w/ AzureLinux
+          execution_time_limit:
+            hours: 4
+          commands:
+            - ./.semaphore/end-to-end/scripts/body_standard.sh
+          env_vars:
+            - name: PROVISIONER
+              value: azr-aks
+            - name: AZ_NETWORK_PLUGIN
+              value: none
+            - name: CLUSTER_IMAGE
+              value: AzureLinux
+          matrix:
+            - env_var: K8S_VERSION
+              values: ["stable-2"]
+            - env_var: INSTALLER
+              values: ["operator"]
+            - env_var: DATAPLANE
+              values: ["CalicoIptables"]
+
+        - name: EKS
+          execution_time_limit:
+            hours: 4
+          commands:
+            - ./.semaphore/end-to-end/scripts/body_standard.sh
+          env_vars:
+            - name: PROVISIONER
+              value: aws-eks
+              # The extra skips here are for upstream tests that require access to pods via the control plane, and with Calico CNI, the EKS control plane can't access pods.
+            - name: K8S_E2E_FLAGS
+              value: --ginkgo.focus=(\[Conformance\]|Observe|RBAC) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|sig-node|sig-apps|sig-storage|sig-scheduling|sig-calico-enterprise|DNS.should.provide.DNS|DNS.should.resolve.DNS|DNS.should.provide./etc|IP.address.is.not.reallocated|Proxy.version.v1)
+          matrix:
+            - env_var: K8S_VERSION
+              values: ["stable-1"]
+            - env_var: EKS_CNI
+              values: ["calico"]
+            - env_var: INSTALLER
+              values: ["manual"]
+            - env_var: DATAPLANE
+              values: ["CalicoBPF"]
+
+        - name: kubeadm - iptables
+          execution_time_limit:
+            hours: 4
+          commands:
+            - ./.semaphore/end-to-end/scripts/body_standard.sh
+          matrix:
+            - env_var: PROVISIONER
+              values: ["aws-kubeadm"]
+            - env_var: K8S_VERSION
+              values: ["stable-3"]
+            - env_var: INSTALLER
+              values: ["operator"]
+            - env_var: DATAPLANE
+              values: ["CalicoIptables"]
+
+        - name: kubeadm - bpf
+          execution_time_limit:
+            hours: 4
+          commands:
+            - ./.semaphore/end-to-end/scripts/body_standard.sh
+          matrix:
+            - env_var: PROVISIONER
+              values: ["gcp-kubeadm"]
+            - env_var: K8S_VERSION
+              values: ["stable"]
+            - env_var: INSTALLER
+              values: ["operator"]
+            - env_var: DATAPLANE
+              values: ["CalicoBPF"]
+
+        - name: Openshift - 4.16
+          execution_time_limit:
+            hours: 4
+          commands:
+            - ./.semaphore/end-to-end/scripts/body_standard.sh
+          env_vars:
+            - name: PROVISIONER
+              value: aws-openshift
+          matrix:
+            - env_var: OPENSHIFT_VERSION
+              values: ["4.16.32"]
+            - env_var: DATAPLANE
+              values: ["CalicoIptables"]
+            - env_var: INSTALLER
+              values: ["operator"]
+
+        - name: RKE2
+          execution_time_limit:
+            hours: 4
+          commands:
+            - ./.semaphore/end-to-end/scripts/body_standard.sh
+          env_vars:
+            - name: PROVISIONER
+              value: gcp-rke2
+          matrix:
+            - env_var: RKE_NETWORKING
+              values: [""]
+            - env_var: K8S_VERSION
+              values: ["stable-2"]
+            - env_var: INSTALLER
+              values: ["operator"]
+            - env_var: DATAPLANE
+              values: ["CalicoIptables"]
+
+promotions:
+  - name: Cleanup jobs
+    pipeline_file: /promotions/cleanup.yml
+    auto_promote:
+      when: "result = 'stopped'"
+
+after_pipeline:
+  task:
+    jobs:
+      - name: Reports
+        commands:
+          - test-results gen-pipeline-report --force

@@ -5,7 +5,11 @@ set -e
 hack_dir="$(dirname $0)"
 repo_dir="$(dirname $hack_dir)"
 
-parent_branch="$($repo_dir/hack/find-parent-release-branch.sh)"
+# Allow for the parent branch to be passed in as an env var
+if [[ -z "${parent_branch}" ]]; then
+  parent_branch="$($repo_dir/hack/find-parent-release-branch.sh)"
+fi
+
 if [ -z "$parent_branch" ]; then
   echo "No parent branch found."
   exit 1

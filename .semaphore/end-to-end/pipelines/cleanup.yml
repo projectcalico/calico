@@ -1,0 +1,89 @@
+version: v1.0
+name: banzai-calico cleanup
+
+agent:
+  machine:
+    type: c1-standard-1
+    os_image: ubuntu2204
+
+execution_time_limit:
+  hours: 2
+
+global_job_config:
+  prologue:
+    commands:
+      - set -o pipefail
+      - chmod 0600 ~/.keys/*
+      - ssh-add ~/.keys/*
+      - mkdir -p $HOME/.local/bin
+      - export PATH=$HOME/.local/bin:$PATH
+      - export GOOGLE_APPLICATION_CREDENTIALS=$HOME/secrets/banzai-google-service-account.json
+      - |
+        sudo apt-get update && sudo apt-get -y --only-upgrade install google-cloud-sdk
+        gcloud auth activate-service-account --key-file=${GOOGLE_APPLICATION_CREDENTIALS}
+      - pip3 install --upgrade --user awscli
+      - |
+        sudo apt-get update && sudo apt-get install -y ca-certificates curl --retry 9 --retry-all-errors apt-transport-https lsb-release gnupg
+        curl --retry 9 --retry-all-errors -sL https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor | sudo tee /etc/apt/trusted.gpg.d/microsoft.asc.gpg > /dev/null
+        echo "deb [arch=amd64] https://packages.microsoft.com/repos/azure-cli/ $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/azure-cli.list
+        sudo apt-get update && sudo apt-get install -y azure-cli
+        az login --service-principal -u "${AZ_SP_ID}" -p "${AZ_SP_PASSWORD}" --tenant "${AZ_TENANT_ID}"
+      - curl --retry 9 --retry-all-errors https://storage.googleapis.com/sem-cli-releases/get.sh | bash
+      - sem connect tigera.semaphoreci.com ${SEM_ACCESS_TOKEN}
+  secrets:
+    - name: marvin-github-ssh-private-key
+    - name: banzai-secrets
+  env_vars:
+    - name: GOOGLE_PROJECT
+      value: unique-caldron-775
+
+blocks:
+  - name: Cleanup jobs
+    task:
+      prologue:
+        commands:
+          - |
+            export BZ_ASSET_ID=$(curl --retry 9 --retry-all-errors -H "Authorization: token ${GITHUB_ACCESS_TOKEN}" \
+              -H "Accept: application/vnd.github.v3.raw" \
+              -s https://api.github.com/repos/${BZ_REPO}/releases/latest | jq '.assets[] | select(.name|test("^bz.*linux-amd64"))| .id')
+            wget -q --auth-no-challenge --header='Accept:application/octet-stream' \
+              https://${GITHUB_ACCESS_TOKEN}:@api.github.com/repos/${BZ_REPO}/releases/assets/${BZ_ASSET_ID} -O $HOME/.local/bin/bz
+            chmod +x $HOME/.local/bin/bz
+      jobs:
+        - name: cleanup job VMs
+          commands:
+            - echo "[DEBUG] PROJECT NAME $SEMAPHORE_PROJECT_NAME"
+            - echo "[DEBUG] SEM_WORKFLOW_ID $SEMAPHORE_WORKFLOW_ID"
+            - |
+              for PPL_ID in $(sem get workflow $SEMAPHORE_WORKFLOW_ID -p $SEMAPHORE_PROJECT_NAME | sed -e 1,3d | awk '{print $1}')
+              do
+                echo "[DEBUG] PIPELINE_ID: $PPL_ID"
+                for JOB_ID in $(sem get pipeline $PPL_ID | awk '/jobid:/{sub(/.*jobid:/, ""); print}')
+                do
+                  echo "[DEBUG] SEMAPHORE_JOB_ID: $JOB_ID"
+                  if [[ $JOB_ID == $SEMAPHORE_JOB_ID ]]; then
+                    continue
+                  fi
+                  echo "[INFO] Restoring cache for JOB $JOB_ID"
+                  OUTPUT=`cache has_key $JOB_ID 2>&1 | tee /dev/tty`
+                  if [[ $OUTPUT == *"exists"* ]]; then
+                    cd $HOME
+                    cache restore $JOB_ID
+                    pushd $JOB_ID
+                    export PROVISIONER=$(cat Taskvars.yml| grep "PROVISIONER" | awk '{print $2}')
+                    export CLUSTER_NAME=$(cat Taskvars.yml| grep "CLUSTER_NAME" | awk '{print $2}')
+                    echo "[INFO] Deleting $CLUSTER_NAME on $PROVISIONER"
+                    bz destroy
+                    echo "[INFO] Deleting cache $JOB_ID"
+                    cache delete $JOB_ID
+                    popd
+                    rm -rf $JOB_ID
+                  else
+                    echo "[INFO] archive with key $SEMAPHORE_JOB_ID does not exists in cache"
+                  fi
+                done
+              done
+
+      env_vars:
+        - name: ACTION
+          value: delete

@@ -78,28 +78,41 @@ func (s *Server) Service() *v1.Service {
 
 // ClusterIPs returns a list of targets that can be used to connect to the service's ClusterIPs, if
 // there are multiple (e.g., for dual-stack services).
-func (s *Server) ClusterIPs() []Target {
+func (s *Server) ClusterIPs(opts ...TargetOption) []Target {
 	var targets []Target
 	for _, ip := range s.Service().Spec.ClusterIPs {
-		targets = append(targets, &target{
+		t := &target{
 			server:      s,
 			targetType:  TypeClusterIP,
 			destination: ip,
 			protocol:    TCP,
-		})
+		}
+		for _, opt := range opts {
+			if err := opt(t); err != nil {
+				framework.ExpectNoError(err)
+			}
+		}
+		targets = append(targets, t)
 	}
+
 	return targets
 }
 
 // ClusterIP returns a target that can be used to connect to the service's Spec.ClusterIP.
 // Most callers should use ClusterIPs() instead in order to test both IPv4 and IPv6 (when enabled).
-func (s *Server) ClusterIP() Target {
-	return &target{
+func (s *Server) ClusterIP(opts ...TargetOption) Target {
+	t := &target{
 		server:      s,
 		targetType:  TypeClusterIP,
 		destination: s.Service().Spec.ClusterIP,
 		protocol:    TCP,
 	}
+	for _, opt := range opts {
+		if err := opt(t); err != nil {
+			framework.ExpectNoError(err)
+		}
+	}
+	return t
 }
 
 // NodePortPort returns port number of a NodePort service associated with the server.

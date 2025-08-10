@@ -144,6 +144,16 @@ rules:
       - watch
       - list
       - get
+  # Services are monitored for service LoadBalancer IP allocation
+  - apiGroups: [""]
+    resources:
+      - services
+      - services/status
+    verbs:
+      - get
+      - list
+      - update
+      - watch
   # Watch for changes to Kubernetes NetworkPolicies.
   - apiGroups: ["networking.k8s.io"]
     resources:

@@ -102,10 +102,11 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 				if published, err := tasks.HashreleasePublished(hashreleaseServerConfig(c), data.Hash(), c.Bool(ciFlag.Name)); err != nil {
 					return fmt.Errorf("failed to check if hashrelease has been published: %v", err)
 				} else if published {
-					// On CI, we want it to fail if the hashrelease has already been published.
+					// On CI, if the hashrelease has already been published, we exit successfully (return nil).
 					// However, on local builds, we just log a warning and continue.
 					if c.Bool(ciFlag.Name) {
-						return fmt.Errorf("hashrelease %s has already been published", data.Hash())
+						logrus.Infof("hashrelease %s has already been published", data.Hash())
+						return nil
 					} else {
 						logrus.Warnf("hashrelease %s has already been published", data.Hash())
 					}
@@ -207,7 +208,14 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 				if published, err := tasks.HashreleasePublished(serverCfg, hashrel.Hash, c.Bool(ciFlag.Name)); err != nil {
 					return fmt.Errorf("failed to check if hashrelease has been published: %v", err)
 				} else if published {
-					return fmt.Errorf("%s hashrelease (%s) has already been published", hashrel.Name, hashrel.Hash)
+					// On CI, we exit successfully (return nil) if the hashrelease has already been published.
+					// This is not an error scenario; we just log a warning and continue locally.
+					if c.Bool(ciFlag.Name) {
+						logrus.Infof("hashrelease %s has already been published", hashrel.Hash)
+						return nil
+					} else {
+						logrus.Warnf("hashrelease %s has already been published", hashrel.Hash)
+					}
 				}
 
 				// Push the operator hashrelease first before validaion
@@ -280,22 +288,6 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 				return nil
 			},
 		},
-
-		hashreleaseGarbageCollectCommand(cfg),
-	}
-}
-
-// hashreleaseGarbageCollectCommand is used to clean up older hashreleases from the hashrelease server.
-func hashreleaseGarbageCollectCommand(cfg *Config) *cli.Command {
-	return &cli.Command{
-		Name:    "garbage-collect",
-		Usage:   "Clean up older hashreleases",
-		Aliases: []string{"gc"},
-		Flags:   []cli.Flag{maxHashreleasesFlag},
-		Action: func(_ context.Context, c *cli.Command) error {
-			configureLogging("hashrelease-garbage-collect.log")
-			return hashreleaseserver.CleanOldHashreleases(hashreleaseServerConfig(c), c.Int(maxHashreleasesFlag.Name))
-		},
 	}
 }
 
@@ -324,9 +316,8 @@ func validateHashreleaseBuildFlags(c *cli.Command) error {
 	// CI condtional checks.
 	if c.Bool(ciFlag.Name) {
 		if !hashreleaseServerConfig(c).Valid() {
-			return fmt.Errorf("missing hashrelease server configuration, ensure %s, %s, %s, %s %s, %s and %s are set",
-				sshHostFlag, sshUserFlag, sshKeyFlag, sshPortFlag, sshKnownHostsFlag,
-				hashreleaseServerBucketFlag, hashreleaseServerCredentialsFlag)
+			return fmt.Errorf("missing hashrelease publishing configuration, ensure --%s and --%s are set",
+				hashreleaseServerBucketFlag.Name, hashreleaseServerCredentialsFlag.Name)
 		}
 		if c.String(ciTokenFlag.Name) == "" {
 			return fmt.Errorf("%s API token must be set when running on CI, either set \"SEMAPHORE_API_TOKEN\" or use %s flag", semaphoreCI, ciTokenFlag.Name)
@@ -367,9 +358,8 @@ func validateHashreleasePublishFlags(c *cli.Command) error {
 	if c.Bool(publishHashreleaseFlag.Name) {
 		//  check that hashrelease server configuration is set.
 		if !hashreleaseServerConfig(c).Valid() {
-			return fmt.Errorf("missing hashrelease server configuration, ensure %s, %s, %s, %s %s, %s and %s are set",
-				sshHostFlag, sshUserFlag, sshKeyFlag, sshPortFlag, sshKnownHostsFlag,
-				hashreleaseServerBucketFlag, hashreleaseServerCredentialsFlag)
+			return fmt.Errorf("missing hashrelease publishing configuration, ensure --%s and --%s are set",
+				hashreleaseServerBucketFlag.Name, hashreleaseServerCredentialsFlag.Name)
 		}
 		if c.Bool(latestFlag.Name) {
 			// If using a custom registry, do not allow setting the hashrelease as latest.
@@ -400,11 +390,6 @@ func ciJobURL(c *cli.Command) string {
 
 func hashreleaseServerConfig(c *cli.Command) *hashreleaseserver.Config {
 	return &hashreleaseserver.Config{
-		Host:            c.String(sshHostFlag.Name),
-		User:            c.String(sshUserFlag.Name),
-		Key:             c.String(sshKeyFlag.Name),
-		Port:            c.String(sshPortFlag.Name),
-		KnownHosts:      c.String(sshKnownHostsFlag.Name),
 		BucketName:      c.String(hashreleaseServerBucketFlag.Name),
 		CredentialsFile: c.String(hashreleaseServerCredentialsFlag.Name),
 	}
