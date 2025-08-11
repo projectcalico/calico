@@ -8,8 +8,6 @@ best=""
 : "${release_prefix:=release-v}"
 : "${git_repo_slug:=projectcalico/calico}"
 
-current_branch=$(git branch --show-current)
-
 # Find the appropriate remote, handling common forms of git URL:
 #
 #  -  proto://github.com/foo/bar.git
@@ -38,9 +36,9 @@ if [[ -v CI ]]; then
       echo "[debug] Remote ${remote} doesn't seem to be configured to fetch all branches; fixing..." >&2
       echo "[debug] Updating remote ${remote}"
       git config remote.${remote}.fetch "+refs/heads/*:refs/remotes/${remote}/*"
-    done
-    git fetch --all --quiet
-  fi # git config
+    fi # git config
+  done
+  git fetch --all --quiet
 fi # -v CI
 
 echo "[debug] Git remote: ${git_repo_slug} -> ${remote}" >&2
