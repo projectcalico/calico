@@ -583,13 +583,13 @@ func bpftool(args ...string) ([]byte, error) {
 var (
 	mapInitOnce sync.Once
 
-	natMap, natBEMap, ctMap, ctCleanupMap, rtMap, ipsMap, testStateMap, affinityMap, arpMap, fsafeMap, ipfragsMap maps.Map
-	natMapV6, natBEMapV6, ctMapV6, ctCleanupMapV6, rtMapV6, ipsMapV6, affinityMapV6, arpMapV6, fsafeMapV6         maps.Map
-	stateMap, countersMap, ifstateMap, progMap, progMapXDP, policyJumpMap, policyJumpMapXDP                       maps.Map
-	perfMap                                                                                                       maps.Map
-	profilingMap, ipfragsMapTmp                                                                                   maps.Map
-	qosMap                                                                                                        maps.Map
-	allMaps                                                                                                       []maps.Map
+	natMap, natBEMap, ctMap, ctCleanupMap, rtMap, ipsMap, testStateMap, affinityMap, arpMap, fsafeMap, ipfragsMap, consistentHashMap maps.Map
+	natMapV6, natBEMapV6, ctMapV6, ctCleanupMapV6, rtMapV6, ipsMapV6, affinityMapV6, arpMapV6, fsafeMapV6, consistentHashMapV6       maps.Map
+	stateMap, countersMap, ifstateMap, progMap, progMapXDP, policyJumpMap, policyJumpMapXDP                                          maps.Map
+	perfMap                                                                                                                          maps.Map
+	profilingMap, ipfragsMapTmp                                                                                                      maps.Map
+	qosMap                                                                                                                           maps.Map
+	allMaps                                                                                                                          []maps.Map
 )
 
 func initMapsOnce() {
@@ -622,13 +622,15 @@ func initMapsOnce() {
 		policyJumpMapXDP = jump.XDPMap()
 		profilingMap = profiling.Map()
 		qosMap = qos.Map()
+		consistentHashMap = nat.ConsistentHashMap()
+		consistentHashMapV6 = nat.ConsistentHashMapV6()
 
 		perfMap = perf.Map("perf_evnt", 512)
 
 		allMaps = []maps.Map{natMap, natBEMap, natMapV6, natBEMapV6, ctMap, ctMapV6, ctCleanupMap, ctCleanupMapV6, rtMap, rtMapV6, ipsMap, ipsMapV6,
 			stateMap, testStateMap, affinityMap, affinityMapV6, arpMap, arpMapV6, fsafeMap, fsafeMapV6,
 			countersMap, ipfragsMap, ipfragsMapTmp, ifstateMap, profilingMap,
-			policyJumpMap, policyJumpMapXDP, qosMap}
+			policyJumpMap, policyJumpMapXDP, qosMap, consistentHashMap, consistentHashMapV6}
 		for _, m := range allMaps {
 			err := m.EnsureExists()
 			if err != nil {
@@ -1366,6 +1368,15 @@ func tcpResponseRaw(in []byte) []byte {
 	Expect(err).NotTo(HaveOccurred())
 
 	return out.Bytes()
+}
+
+func dumpConsistentHashMap(chMap maps.Map) {
+	m, err := nat.LoadConsistentHashMap(chMap)
+	Expect(err).NotTo(HaveOccurred())
+	for k, v := range m {
+
+		fmt.Printf("%s: %s\n", k, v)
+	}
 }
 
 func dumpNATMap(natMap maps.Map) {
