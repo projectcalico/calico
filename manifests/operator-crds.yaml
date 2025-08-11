@@ -11426,14 +11426,15 @@ spec:
                                       name:
                                         description: |-
                                           Name is an enum which identifies the calico-node DaemonSet init container by name.
-                                          Supported values are: install-cni, hostpath-init, flexvol-driver, mount-bpffs, node-certs-key-cert-provisioner, calico-node-prometheus-server-tls-key-cert-provisioner
+                                          Supported values are: install-cni, hostpath-init, flexvol-driver, ebpf-bootstrap, node-certs-key-cert-provisioner, calico-node-prometheus-server-tls-key-cert-provisioner, mount-bpffs (deprecated, replaced by ebpf-bootstrap)
                                         enum:
                                           - install-cni
                                           - hostpath-init
                                           - flexvol-driver
-                                          - mount-bpffs
+                                          - ebpf-bootstrap
                                           - node-certs-key-cert-provisioner
                                           - calico-node-prometheus-server-tls-key-cert-provisioner
+                                          - mount-bpffs
                                         type: string
                                       resources:
                                         description: |-
@@ -12714,12 +12715,11 @@ spec:
                                       name:
                                         description: |-
                                           Name is an enum which identifies the calico-node-windows DaemonSet init container by name.
-                                          Supported values are: install-cni;hostpath-init, flexvol-driver, mount-bpffs, node-certs-key-cert-provisioner, calico-node-windows-prometheus-server-tls-key-cert-provisioner
+                                          Supported values are: install-cni;hostpath-init, flexvol-driver, node-certs-key-cert-provisioner, calico-node-windows-prometheus-server-tls-key-cert-provisioner
                                         enum:
                                           - install-cni
                                           - hostpath-init
                                           - flexvol-driver
-                                          - mount-bpffs
                                           - node-certs-key-cert-provisioner
                                           - calico-node-windows-prometheus-server-tls-key-cert-provisioner
                                         type: string
@@ -20223,14 +20223,15 @@ spec:
                                           name:
                                             description: |-
                                               Name is an enum which identifies the calico-node DaemonSet init container by name.
-                                              Supported values are: install-cni, hostpath-init, flexvol-driver, mount-bpffs, node-certs-key-cert-provisioner, calico-node-prometheus-server-tls-key-cert-provisioner
+                                              Supported values are: install-cni, hostpath-init, flexvol-driver, ebpf-bootstrap, node-certs-key-cert-provisioner, calico-node-prometheus-server-tls-key-cert-provisioner, mount-bpffs (deprecated, replaced by ebpf-bootstrap)
                                             enum:
                                               - install-cni
                                               - hostpath-init
                                               - flexvol-driver
-                                              - mount-bpffs
+                                              - ebpf-bootstrap
                                               - node-certs-key-cert-provisioner
                                               - calico-node-prometheus-server-tls-key-cert-provisioner
+                                              - mount-bpffs
                                             type: string
                                           resources:
                                             description: |-
@@ -21534,12 +21535,11 @@ spec:
                                           name:
                                             description: |-
                                               Name is an enum which identifies the calico-node-windows DaemonSet init container by name.
-                                              Supported values are: install-cni;hostpath-init, flexvol-driver, mount-bpffs, node-certs-key-cert-provisioner, calico-node-windows-prometheus-server-tls-key-cert-provisioner
+                                              Supported values are: install-cni;hostpath-init, flexvol-driver, node-certs-key-cert-provisioner, calico-node-windows-prometheus-server-tls-key-cert-provisioner
                                             enum:
                                               - install-cni
                                               - hostpath-init
                                               - flexvol-driver
-                                              - mount-bpffs
                                               - node-certs-key-cert-provisioner
                                               - calico-node-windows-prometheus-server-tls-key-cert-provisioner
                                             type: string
@@ -28597,6 +28597,12 @@ spec:
                         type: string
                     type: object
                   type: array
+                serviceLoadBalancerAggregation:
+                  default: Enabled
+                  enum:
+                    - Enabled
+                    - Disabled
+                  type: string
                 serviceLoadBalancerIPs:
                   items:
                     properties:
@@ -28801,6 +28807,9 @@ spec:
                   type: array
                 keepOriginalNextHop:
                   type: boolean
+                localASNumber:
+                  format: int32
+                  type: integer
                 localWorkloadSelector:
                   type: string
                 maxRestartTime:
@@ -29180,18 +29189,14 @@ spec:
                     - Disable
                   type: string
                 bpfAttachType:
-                  allOf:
-                    - enum:
-                        - tc
-                        - tcx
-                    - enum:
-                        - tc
-                        - tcx
                   description: |-
                     BPFAttachType controls how are the BPF programs at the network interfaces attached.
-                    By default `tcx` is used where available to enable easier coexistence with 3rd party programs.
-                    `tc` can force the legacy method of attaching via a qdisc. `tcx` falls back to `tc` if `tcx` is not available.
-                    [Default: tcx]
+                    By default `TCX` is used where available to enable easier coexistence with 3rd party programs.
+                    `TC` can force the legacy method of attaching via a qdisc. `TCX` falls back to `TC` if `TCX` is not available.
+                    [Default: TCX]
+                  enum:
+                    - TC
+                    - TCX
                   type: string
                 bpfCTLBLogFilter:
                   description: |-
@@ -31214,6 +31219,8 @@ spec:
                                     items:
                                       type: string
                                     type: array
+                                  interfaceSelector:
+                                    type: string
                                   labels:
                                     additionalProperties:
                                       type: string
@@ -31298,6 +31305,8 @@ spec:
                                         items:
                                           type: string
                                         type: array
+                                      interfaceSelector:
+                                        type: string
                                       labels:
                                         additionalProperties:
                                           type: string

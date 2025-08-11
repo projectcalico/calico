@@ -23,19 +23,19 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/projectcalico/calico/crypto/pkg/tls"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	admissionv1 "k8s.io/api/admission/v1"
+	v1 "k8s.io/api/admission/v1"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/component-base/cli"
 
-	v1 "k8s.io/api/admission/v1"
-	"k8s.io/apimachinery/pkg/runtime"
+	"github.com/projectcalico/calico/crypto/pkg/tls"
 )
 
 var (

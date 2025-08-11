@@ -36,6 +36,11 @@ spec:
                     - Enable
                     - Disable
                   type: string
+                bpfAttachType:
+                  enum:
+                    - TC
+                    - TCX
+                  type: string
                 bpfCTLBLogFilter:
                   type: string
                 bpfConnectTimeLoadBalancing:
@@ -427,7 +432,7 @@ spec:
                   type: string
                 policySyncPathPrefix:
                   type: string
-                programRoutes:
+                programClusterRoutes:
                   enum:
                     - Enabled
                     - Disabled
@@ -452,6 +457,8 @@ spec:
                 reportingTTL:
                   pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
                   type: string
+                requireMTUFile:
+                  type: boolean
                 routeRefreshInterval:
                   pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
                   type: string

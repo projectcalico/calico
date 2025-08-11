@@ -18,6 +18,8 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"path"
 	"path/filepath"
@@ -142,6 +144,8 @@ func RunFelix(infra DatastoreInfra, id int, options TopologyOptions) *Felix {
 		// Tell the wrapper to set the core file name pattern so we can find the dump.
 		"SET_CORE_PATTERN": "true",
 
+		"FELIX_HEALTHENABLED":            "true",
+		"FELIX_HEALTHHOST":               "0.0.0.0",
 		"FELIX_LOGSEVERITYSCREEN":        options.FelixLogSeverity,
 		"FELIX_LogDebugFilenameRegex":    options.FelixDebugFilenameRegex,
 		"FELIX_PROMETHEUSMETRICSENABLED": "true",
@@ -336,6 +340,7 @@ func (f *Felix) Restart() {
 	f.Exec("kill", "-HUP", fmt.Sprint(oldPID))
 	Eventually(f.GetFelixPID, "10s", "100ms").ShouldNot(Equal(oldPID))
 	f.FlowServerReset()
+	f.WaitForReady()
 }
 
 func (f *Felix) RestartWithDelayedStartup() func() {
@@ -384,6 +389,55 @@ func (f *Felix) SetEnv(env map[string]string) {
 
 	err = f.CopyFileIntoContainer("./"+fn, "/"+fn)
 	Expect(err).NotTo(HaveOccurred())
+}
+
+func (f *Felix) Ready() (bool, error) {
+	var healthAddr string
+
+	// Some tests override the health host, guess the right address to use.
+	switch f.TopologyOptions.ExtraEnvVars["FELIX_HEALTHHOST"] {
+	case "::":
+		healthAddr = f.GetIPv6()
+	case "", "0.0.0.0":
+		healthAddr = f.GetIP()
+	default:
+		healthAddr = f.TopologyOptions.ExtraEnvVars["FELIX_HEALTHHOST"]
+	}
+
+	resp, err := http.Get("http://" + healthAddr + ":9099/readiness")
+	if err != nil {
+		logrus.WithError(err).Debug("HTTP GET for readiness failed")
+		return false, err
+	}
+	ok := resp.StatusCode == http.StatusOK
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		logrus.WithError(err).Warn("Failed to read response body")
+		return false, err
+	}
+	_ = resp.Body.Close()
+	if !ok {
+		return false, fmt.Errorf("felix is not ready: %s", string(body))
+	}
+	return ok, nil
+}
+
+func (f *Felix) WaitForReady() {
+	logrus.WithField("felix", f.Name).Info("Waiting for felix to be ready")
+	startTime := time.Now()
+	timeout := "10s"
+	if BPFMode() {
+		// BPF mode has to load BPF programs at startup, this can take a while
+		// when starting several felix nodes in parallel.
+		timeout = "30s"
+	}
+	EventuallyWithOffset(1, f.Ready, timeout, "100ms").Should(BeTrue(),
+		"Timed out waiting for Felix to become ready.")
+	logrus.WithField("felix", f.Name).Infof("Felix is ready after %s", time.Since(startTime))
+}
+
+func BPFMode() bool {
+	return os.Getenv("FELIX_FV_ENABLE_BPF") == "true"
 }
 
 // AttachTCPDump returns tcpdump attached to the container

@@ -680,6 +680,13 @@ func schema_pkg_apis_projectcalico_v3_BGPConfigurationSpec(ref common.ReferenceC
 							},
 						},
 					},
+					"serviceLoadBalancerAggregation": {
+						SchemaProps: spec.SchemaProps{
+							Description: "ServiceLoadBalancerAggregation controls how LoadBalancer service IPs are advertised. When set to \"Disabled\", individual /32 routes are advertised for each service instead of the full CIDR range. This is useful for anycast failover mechanisms where failed service routes need to be withdrawn. [Default: Enabled]",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 					"communities": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Communities is a list of BGP community values and their arbitrary names for tagging routes.",
@@ -1272,6 +1279,13 @@ func schema_pkg_apis_projectcalico_v3_BGPPeerSpec(ref common.ReferenceCallback) 
 					"asNumber": {
 						SchemaProps: spec.SchemaProps{
 							Description: "The AS Number of the peer.",
+							Type:        []string{"integer"},
+							Format:      "int64",
+						},
+					},
+					"localASNumber": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The optional Local AS Number to use when peering with this remote peer. If not specified, the AS Number defined in default BGPConfiguration will be used.",
 							Type:        []string{"integer"},
 							Format:      "int64",
 						},
@@ -3460,7 +3474,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					},
 					"bpfAttachType": {
 						SchemaProps: spec.SchemaProps{
-							Description: "BPFAttachType controls how are the BPF programs at the network interfaces attached. By default `tcx` is used where available to enable easier coexistence with 3rd party programs. `tc` can force the legacy method of attaching via a qdisc. `tcx` falls back to `tc` if `tcx` is not available. [Default: tcx]",
+							Description: "BPFAttachType controls how are the BPF programs at the network interfaces attached. By default `TCX` is used where available to enable easier coexistence with 3rd party programs. `TC` can force the legacy method of attaching via a qdisc. `TCX` falls back to `TC` if `TCX` is not available. [Default: TCX]",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -6837,7 +6851,7 @@ func schema_pkg_apis_projectcalico_v3_Template(ref common.ReferenceCallback) com
 					},
 					"interfaceCIDRs": {
 						SchemaProps: spec.SchemaProps{
-							Description: "InterfaceCIDRs contains a list of CIRDs used for matching nodeIPs to the AutoHostEndpoint",
+							Description: "InterfaceCIDRs contains a list of CIDRs used for matching nodeIPs to the AutoHostEndpoint. If specified, only addresses within these CIDRs will be included in the expected IPs. At least one of InterfaceCIDRs and InterfaceSelector must be specified.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -6848,6 +6862,13 @@ func schema_pkg_apis_projectcalico_v3_Template(ref common.ReferenceCallback) com
 									},
 								},
 							},
+						},
+					},
+					"interfaceSelector": {
+						SchemaProps: spec.SchemaProps{
+							Description: "InterfaceSelector contains a regex string to match Node interface names. If specified, a HostEndpoint will be created for each matching interface on each selected node. At least one of InterfaceCIDRs and InterfaceSelector must be specified.",
+							Type:        []string{"string"},
+							Format:      "",
 						},
 					},
 					"labels": {

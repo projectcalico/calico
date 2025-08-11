@@ -196,6 +196,8 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(programs.Count()).To(Equal(52))
 
+			at := programs.Programs()
+
 			Expect(at).To(HaveKey(hook.AttachType{
 				Hook:       hook.Ingress,
 				Family:     4,
@@ -544,7 +546,7 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 		Expect(attached).To(HaveKey("hostep2"))
 		Expect(attached).NotTo(HaveKey("workloadep3"))
 
-		programs.ResetCount() // Because we recycle it, restarted Felix would get a fresh copy.
+		programs.ResetForTesting() // Because we recycle it, restarted Felix would get a fresh copy.
 
 		bpfEpMgr, err = newBPFTestEpMgr(
 			&linux.Config{
@@ -670,7 +672,7 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 
 		deleteLink(workload3)
 
-		programs.ResetCount() // Because we recycle it, restarted Felix would get a fresh copy.
+		programs.ResetForTesting() // Because we recycle it, restarted Felix would get a fresh copy.
 
 		bpfEpMgr, err = newBPFTestEpMgr(
 			&linux.Config{
@@ -776,6 +778,23 @@ func TestAttachWithMultipleWorkloadUpdate(t *testing.T) {
 	Expect(ingressProg[0].Pref).To(Equal(egressProg[0].Pref))
 	Expect(ingressProg[0].Handle).To(Equal(egressProg[0].Handle))
 
+	// Populate ifstate map with QoS state
+	ifstateMap := ifstateMapDump(commonMaps.IfStateMap)
+	wlep1Key := ifstate.NewKey(uint32(workload1.Attrs().Index))
+	Expect(ifstateMap).To(HaveKey(wlep1Key))
+	wlep1State := ifstateMap[wlep1Key]
+
+	binary.LittleEndian.PutUint16(wlep1State[4+16+32:4+16+34], uint16(50))
+	binary.LittleEndian.PutUint16(wlep1State[4+16+34:4+16+36], uint16(100))
+	binary.LittleEndian.PutUint64(wlep1State[4+16+36:4+16+44], uint64(1))
+	binary.LittleEndian.PutUint64(wlep1State[4+16+44:4+16+52], uint64(2))
+
+	err = bpfmaps.CommonMaps.IfStateMap.Update(
+		wlep1Key.AsBytes(),
+		wlep1State.AsBytes(),
+	)
+	Expect(err).NotTo(HaveOccurred())
+
 	at := programs.Programs()
 	Expect(at).To(HaveKey(hook.AttachType{
 		Hook:       hook.Ingress,
@@ -823,6 +842,15 @@ func TestAttachWithMultipleWorkloadUpdate(t *testing.T) {
 	Expect(egressProg[0].Handle).To(Equal(egrProg[0].Handle))
 	Expect(ingProg[0].Pref).To(Equal(egrProg[0].Pref))
 	Expect(ingProg[0].Handle).To(Equal(egrProg[0].Handle))
+
+	// Verify that QoS state in ifstate map persists correctly after a workload endpoint update
+	ifstateMap = ifstateMapDump(commonMaps.IfStateMap)
+	Expect(ifstateMap).To(HaveKey(wlep1Key))
+	wlep1State = ifstateMap[wlep1Key]
+	Expect(wlep1State.IngressPacketRateTokens()).To(Equal(int16(50)))
+	Expect(wlep1State.EgressPacketRateTokens()).To(Equal(int16(100)))
+	Expect(wlep1State.IngressPacketRateLastUpdate()).To(Equal(uint64(1)))
+	Expect(wlep1State.EgressPacketRateLastUpdate()).To(Equal(uint64(2)))
 }
 
 // This test verifies if the tc program gets replaced
@@ -1089,7 +1117,7 @@ func TestAttachTcx(t *testing.T) {
 			},
 			BPFExtToServiceConnmark: 0,
 			BPFPolicyDebugEnabled:   true,
-			BPFAttachType:           string(apiv3.BPFAttachOptionTCX),
+			BPFAttachType:           apiv3.BPFAttachOptionTCX,
 		},
 		bpfmaps,
 		regexp.MustCompile("^workloadep[0123]"),
@@ -1139,7 +1167,7 @@ func TestAttachTcx(t *testing.T) {
 		},
 		HostIPv4:   net.IPv4(1, 2, 3, 4),
 		IntfIPv4:   net.IPv4(1, 6, 6, 6),
-		AttachType: string(apiv3.BPFAttachOptionTC),
+		AttachType: apiv3.BPFAttachOptionTC,
 	}
 
 	_, err = tc.EnsureQdisc("workloadep0")

@@ -189,6 +189,12 @@ spec:
                         type: string
                     type: object
                   type: array
+                serviceLoadBalancerAggregation:
+                  default: Enabled
+                  enum:
+                    - Enabled
+                    - Disabled
+                  type: string
                 serviceLoadBalancerIPs:
                   items:
                     properties:
@@ -393,6 +399,9 @@ spec:
                   type: array
                 keepOriginalNextHop:
                   type: boolean
+                localASNumber:
+                  format: int32
+                  type: integer
                 localWorkloadSelector:
                   type: string
                 maxRestartTime:
@@ -772,18 +781,14 @@ spec:
                     - Disable
                   type: string
                 bpfAttachType:
-                  allOf:
-                    - enum:
-                        - tc
-                        - tcx
-                    - enum:
-                        - tc
-                        - tcx
                   description: |-
                     BPFAttachType controls how are the BPF programs at the network interfaces attached.
-                    By default `tcx` is used where available to enable easier coexistence with 3rd party programs.
-                    `tc` can force the legacy method of attaching via a qdisc. `tcx` falls back to `tc` if `tcx` is not available.
-                    [Default: tcx]
+                    By default `TCX` is used where available to enable easier coexistence with 3rd party programs.
+                    `TC` can force the legacy method of attaching via a qdisc. `TCX` falls back to `TC` if `TCX` is not available.
+                    [Default: TCX]
+                  enum:
+                    - TC
+                    - TCX
                   type: string
                 bpfCTLBLogFilter:
                   description: |-
@@ -2806,6 +2811,8 @@ spec:
                                     items:
                                       type: string
                                     type: array
+                                  interfaceSelector:
+                                    type: string
                                   labels:
                                     additionalProperties:
                                       type: string
@@ -2890,6 +2897,8 @@ spec:
                                         items:
                                           type: string
                                         type: array
+                                      interfaceSelector:
+                                        type: string
                                       labels:
                                         additionalProperties:
                                           type: string
@@ -7082,9 +7091,10 @@ spec:
           securityContext:
             privileged: true
         # This init container mounts the necessary filesystems needed by the BPF data plane
-        # i.e. bpf at /sys/fs/bpf and cgroup2 at /run/calico/cgroup. Calico-node initialisation is executed
-        # in best effort fashion, i.e. no failure for errors, to not disrupt pod creation in iptable mode.
-        - name: "mount-bpffs"
+        # i.e. bpf at /sys/fs/bpf and cgroup2 at /run/calico/cgroup. It also configures the initial
+        # networking to allow communication with the API Server. Calico-node initialization is executed
+        # in best effort fashion, i.e. no failure for errors, to not disrupt pod creation in iptables mode.
+        - name: "ebpf-bootstrap"
           image: quay.io/calico/node:master
           imagePullPolicy: IfNotPresent
           command: ["calico-node", "-init", "-best-effort"]
@@ -7263,7 +7273,7 @@ spec:
           hostPath:
             path: /sys/fs/bpf
             type: Directory
-        # mount /proc at /nodeproc to be used by mount-bpffs initContainer to mount root cgroup2 fs.
+        # mount /proc at /nodeproc to be used by ebpf-bootstrap initContainer to mount root cgroup2 fs.
         - name: nodeproc
           hostPath:
             path: /proc

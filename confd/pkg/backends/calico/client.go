@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2022 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -157,6 +157,9 @@ func NewCalicoClient(confdConfig *config.Config) (*client, error) {
 		ExternalIPRouteIndex:     NewRouteIndex(),
 		ClusterIPRouteIndex:      NewRouteIndex(),
 		LoadBalancerIPRouteIndex: NewRouteIndex(),
+
+		// Initialize service load balancer aggregation to enabled by default
+		serviceLoadBalancerAggregation: apiv3.ServiceLoadBalancerAggregationEnabled,
 
 		// This channel, for the syncer calling OnUpdates and OnStatusUpdated, has 0
 		// capacity so that the caller blocks in the same way as it did before when its
@@ -380,6 +383,9 @@ type client struct {
 
 	// Cached value of the default BGP configuration for node to node mesh BGP password lookup.
 	globalBGPConfig *apiv3.BGPConfiguration
+
+	// Service load balancer aggregation setting
+	serviceLoadBalancerAggregation apiv3.ServiceLoadBalancerAggregation
 }
 
 // SetPrefixes is called from confd to notify this client of the full set of prefixes that will
@@ -481,6 +487,7 @@ func (c *client) inSync() bool {
 type bgpPeer struct {
 	PeerIP          cnet.IP              `json:"ip"`
 	ASNum           numorstring.ASNumber `json:"as_num,string"`
+	LocalASNum      numorstring.ASNumber `json:"local_as_num,string"`
 	RRClusterID     string               `json:"rr_cluster_id"`
 	Password        *string              `json:"password"`
 	SourceAddr      string               `json:"source_addr"`
@@ -650,10 +657,16 @@ func (c *client) updatePeersV1() {
 					reachableBy = v3res.Spec.ReachableBy
 				}
 
+				var localASN numorstring.ASNumber
+				if v3res.Spec.LocalASNumber != nil {
+					localASN = *v3res.Spec.LocalASNumber
+				}
+
 				keepOriginalNextHop, nextHopMode := getNextHopMode(v3res)
 				peers = append(peers, &bgpPeer{
 					PeerIP:          *ip,
 					ASNum:           v3res.Spec.ASNumber,
+					LocalASNum:      localASN,
 					SourceAddr:      string(v3res.Spec.SourceAddress),
 					Port:            port,
 					KeepNextHop:     keepOriginalNextHop,
@@ -884,6 +897,9 @@ func (c *client) localBGPPeerDataAsBGPPeers(localBGPPeerData localBGPPeerData, v
 			log.Warningf("Couldn't parse %v %v for workload %v", version, ipStr, workloadName)
 			continue
 		}
+		if v3Peer.Spec.LocalASNumber != nil {
+			peer.LocalASNum = *v3Peer.Spec.LocalASNumber
+		}
 		peer.PeerIP = *ip
 		peer.Filters = v3Peer.Spec.Filters
 		peer.ASNum = v3Peer.Spec.ASNumber
@@ -949,6 +965,7 @@ func (c *client) nodeAsBGPPeers(nodeName string, v4 bool, v6 bool, v3Peer *apiv3
 				log.WithError(err).Warningf("Problem parsing global AS number %v for node %v", asNum, nodeName)
 			}
 		}
+
 		peer.RRClusterID = rrClusterID
 
 		keepOriginalNextHop, nextHopMode := getNextHopMode(v3Peer)
@@ -1216,6 +1233,14 @@ func (c *client) updateBGPConfigCache(resName string, v3res *apiv3.BGPConfigurat
 		c.getNodeMeshRestartTimeKVPair(v3res, model.GlobalBGPConfigKey{})
 		c.getNodeMeshPasswordKVPair(v3res, model.GlobalBGPConfigKey{})
 		c.getIgnoredInterfacesKVPair(v3res, model.GlobalBGPConfigKey{})
+
+		// Update service load balancer aggregation setting
+		if v3res != nil && v3res.Spec.ServiceLoadBalancerAggregation != nil {
+			c.serviceLoadBalancerAggregation = *v3res.Spec.ServiceLoadBalancerAggregation
+		} else {
+			// Default to enabled if not specified or if v3res is nil
+			c.serviceLoadBalancerAggregation = apiv3.ServiceLoadBalancerAggregationEnabled
+		}
 
 		// Cache the updated BGP configuration
 		c.globalBGPConfig = v3res
@@ -1543,7 +1568,19 @@ func (c *client) onLoadBalancerIPsUpdate(lbIPs []string) {
 	// However, we don't want to advertise single IPs in this way because it breaks any "local" type services the user creates,
 	// which should instead be advertised from only a subset of nodes.
 	// So, we handle advertisement of any single-addresses found in the config on a per-service basis from within the routeGenerator.
-	globalLbIPs := filterNonSingleIPsFromCIDRs(lbIPs)
+
+	var globalLbIPs []string
+	if c.shouldAggregateLoadBalancerServicesLockHeld() {
+		// When service load balancer aggregation is enabled, we advertise the full CIDR ranges globally.
+		globalLbIPs = filterNonSingleIPsFromCIDRs(lbIPs)
+		log.Debug("Service load balancer aggregation enabled - advertising LoadBalancer CIDR ranges globally")
+	} else {
+		// When aggregation is disabled, we don't advertise any CIDR ranges globally.
+		// Instead, individual /32 routes will be advertised per service based on their LoadBalancer.Ingress.IP.
+		globalLbIPs = []string{}
+		log.Debug("Service load balancer aggregation disabled - not advertising LoadBalancer CIDR ranges globally")
+	}
+
 	if err := c.updateGlobalRoutes(globalLbIPs, c.LoadBalancerIPRouteIndex); err == nil {
 		c.loadBalancerIPs = lbIPs
 		c.loadBalancerIPNets = parseIPNets(c.loadBalancerIPs)
@@ -1569,6 +1606,18 @@ func (c *client) GetLoadBalancerIPs() []*net.IPNet {
 	c.cacheLock.Lock()
 	defer c.cacheLock.Unlock()
 	return c.loadBalancerIPNets
+}
+
+// ShouldAggregateLoadBalancerServices ServiceLoadBalancerAggregationEnabled returns whether service load balancer aggregation is enabled
+func (c *client) ShouldAggregateLoadBalancerServices() bool {
+	c.cacheLock.Lock()
+	defer c.cacheLock.Unlock()
+	return c.shouldAggregateLoadBalancerServicesLockHeld()
+}
+
+// shouldAggregateLoadBalancerServicesLockHeld is an internal method that assumes the lock is already held
+func (c *client) shouldAggregateLoadBalancerServicesLockHeld() bool {
+	return c.serviceLoadBalancerAggregation == apiv3.ServiceLoadBalancerAggregationEnabled
 }
 
 // updateGlobalRoutes updates programs and withdraws routes based on the given CIDRs as provided via

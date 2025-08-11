@@ -70,7 +70,11 @@ type AttachPoint struct {
 	RedirectPeer            bool
 	FlowLogsEnabled         bool
 	OverlayTunnelID         uint32
-	AttachType              string
+	AttachType              apiv3.BPFAttachOption
+	IngressPacketRate       uint16
+	IngressPacketBurst      uint16
+	EgressPacketRate        uint16
+	EgressPacketBurst       uint16
 }
 
 var ErrDeviceNotFound = errors.New("device not found")
@@ -138,7 +142,7 @@ func (ap *AttachPoint) AttachProgram() error {
 	// configuration further to the selected set of programs.
 
 	binaryToLoad := path.Join(bpfdefs.ObjectDir, "tc_preamble.o")
-	if ap.AttachType == string(apiv3.BPFAttachOptionTCX) {
+	if ap.AttachType == apiv3.BPFAttachOptionTCX {
 		err := ap.attachTCXProgram(binaryToLoad)
 		if err != nil {
 			return fmt.Errorf("error attaching tcx program %s:%s:%w", ap.Iface, ap.Hook, err)
@@ -407,16 +411,20 @@ func (ap *AttachPoint) Config() string {
 
 func (ap *AttachPoint) Configure() *libbpf.TcGlobalData {
 	globalData := &libbpf.TcGlobalData{
-		ExtToSvcMark: ap.ExtToServiceConnmark,
-		VxlanPort:    ap.VXLANPort,
-		Tmtu:         ap.TunnelMTU,
-		PSNatStart:   ap.PSNATStart,
-		PSNatLen:     ap.PSNATEnd,
-		WgPort:       ap.WgPort,
-		Wg6Port:      ap.Wg6Port,
-		NatIn:        ap.NATin,
-		NatOut:       ap.NATout,
-		LogFilterJmp: uint32(ap.LogFilterIdx),
+		ExtToSvcMark:       ap.ExtToServiceConnmark,
+		VxlanPort:          ap.VXLANPort,
+		Tmtu:               ap.TunnelMTU,
+		PSNatStart:         ap.PSNATStart,
+		PSNatLen:           ap.PSNATEnd,
+		WgPort:             ap.WgPort,
+		Wg6Port:            ap.Wg6Port,
+		NatIn:              ap.NATin,
+		NatOut:             ap.NATout,
+		LogFilterJmp:       uint32(ap.LogFilterIdx),
+		IngressPacketRate:  ap.IngressPacketRate,
+		IngressPacketBurst: ap.IngressPacketBurst,
+		EgressPacketRate:   ap.EgressPacketRate,
+		EgressPacketBurst:  ap.EgressPacketBurst,
 	}
 
 	if ap.Profiling == "Enabled" {

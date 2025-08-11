@@ -22,6 +22,7 @@ import (
 	"net"
 	"reflect"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -301,25 +302,14 @@ func (c *autoHostEndpointController) syncHostEndpointsForNode(nodeName string) {
 	if c.config.AutoHostEndpointConfig.CreateDefaultHostEndpoint == api.DefaultHostEndpointsEnabled {
 		// First we check that the default hostEndpoint is deleted/not present if createDefaultHostEndpoint is disabled,
 		// if enabled we check that the hostEndpoint is created and up to date
-		defaultHostEndpointName, err := c.generateDefaultAutoHostEndpointName(nodeName)
+		defaultHostEndpointName, err := generateAutoHostEndpointName(nodeName, "", "")
 		if err != nil {
 			logrus.WithError(err).Error("failed to generate host endpoint name")
 			return
 		}
-		cachedHostEndpoint := c.autoHEPTracker.getHostEndpoint(defaultHostEndpointName)
 		expectedHostEndpoint := c.generateAutoHostEndpoint(node, nil, defaultHostEndpointName, c.getExpectedIPs(node), defaultHostEndpointInterface)
 		// Check if current default host endpoint is up to date. Create it if missing
-		if cachedHostEndpoint == nil {
-			err := c.createAutoHostEndpoint(expectedHostEndpoint)
-			if err != nil {
-				logrus.WithError(err).Error("failed to create default host endpoint")
-			}
-		} else {
-			err := c.updateHostEndpoint(cachedHostEndpoint, expectedHostEndpoint)
-			if err != nil {
-				logrus.WithError(err).Error("failed to update default host endpoint")
-			}
-		}
+		c.createOrUpdateHostEndpoint(expectedHostEndpoint)
 
 		hostEndpointsMatchingNode[defaultHostEndpointName] = true
 	}
@@ -333,8 +323,8 @@ func (c *autoHostEndpointController) syncHostEndpointsForNode(nodeName string) {
 		}
 
 		if nodeSelector.Evaluate(node.Labels) {
-			expectedIPs := c.getExpectedIPsMatchingTemplate(node, template)
-			if len(expectedIPs) == 0 {
+			expectedIPs := c.getExpectedIPsMatchingInterfaceCIDRs(node, template)
+			if len(expectedIPs) == 0 && template.InterfaceSelector == "" {
 				// Because we do not specify interfaceName in HostEndpoint, expectedIPs should not be empty.
 				// If expectedIPs are empty the HostEndpoint will be invalid, and we should not create it
 				// If there is an existing HostEndpoint with this name, it will be deleted further down
@@ -344,27 +334,40 @@ func (c *autoHostEndpointController) syncHostEndpointsForNode(nodeName string) {
 				continue
 			}
 
-			hostEndpointName, err := c.generateTemplateAutoHostEndpointName(node.Name, template.GenerateName)
-			if err != nil {
-				logrus.WithError(err).Error("failed to generate host endpoint name")
-				return
-			}
-			expectedHostEndpoint := c.generateAutoHostEndpoint(node, template.Labels, hostEndpointName, expectedIPs, "")
-			cachedHostEndpoint := c.autoHEPTracker.getHostEndpoint(hostEndpointName)
+			if template.InterfaceSelector == "" {
+				// When interfaceSelector is empty this template will always generate at most one AutoHostEndpoint
+				hostEndpointName, err := generateAutoHostEndpointName(node.Name, template.GenerateName, "")
+				if err != nil {
+					logrus.WithError(err).Error("failed to generate host endpoint name")
+					return
+				}
+				expectedHostEndpoint := c.generateAutoHostEndpoint(node, template.Labels, hostEndpointName, expectedIPs, "")
+				c.createOrUpdateHostEndpoint(expectedHostEndpoint)
 
-			if cachedHostEndpoint == nil {
-				err = c.createAutoHostEndpoint(expectedHostEndpoint)
-				if err != nil {
-					logrus.WithError(err).Errorf("failed to create host endpoint %s", hostEndpointName)
-				}
-			} else {
-				err = c.updateHostEndpoint(cachedHostEndpoint, expectedHostEndpoint)
-				if err != nil {
-					logrus.WithError(err).Errorf("failed to update host endpoint %s", hostEndpointName)
-				}
+				hostEndpointsMatchingNode[hostEndpointName] = true
+
+				// If there is no InterfaceSelector we only create one host endpoint, we can continue to the next template
+				continue
 			}
 
-			hostEndpointsMatchingNode[hostEndpointName] = true
+			for _, iface := range node.Spec.Interfaces {
+				// If we reached here we know the template has interfaceSelector specified, we want to create a HostEndpoint for each interface that matches the regex selector.
+				if regexp.MustCompile(template.InterfaceSelector).MatchString(iface.Name) {
+					// Generate Host Endpoint for interface matching the InterfaceSelector from the template
+					hostEndpointName, err := generateAutoHostEndpointName(node.Name, template.GenerateName, iface.Name)
+					if err != nil {
+						logrus.WithError(err).Error("failed to generate host endpoint name")
+						return
+					}
+
+					// Update the expected IPs with IPs belonging to the matched interface, we do not need to check if it's empty as the generated host endpoint will contain interface name
+					expectedIPsWithInterfaceIPs := c.mergeExpectedIPsWithInterfaceIPs(expectedIPs, iface)
+					expectedHostEndpoint := c.generateAutoHostEndpoint(node, template.Labels, hostEndpointName, expectedIPsWithInterfaceIPs, iface.Name)
+					c.createOrUpdateHostEndpoint(expectedHostEndpoint)
+
+					hostEndpointsMatchingNode[hostEndpointName] = true
+				}
+			}
 		}
 	}
 
@@ -415,32 +418,29 @@ func isAutoHostEndpoint(h *api.HostEndpoint) bool {
 	return ok && v == hepCreatedLabelValue
 }
 
-// createAutoHostEndpoint creates the supplied HostEndpoint
-func (c *autoHostEndpointController) createAutoHostEndpoint(hostEndpoint *api.HostEndpoint) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	hostEndpoint, err := c.client.HostEndpoints().Create(ctx, hostEndpoint, options.SetOptions{})
-	if err != nil {
-		logrus.Warnf("could not create hostendpoint for node: %v", err)
-		return err
+// generateAutoHostEndpointName generated the name based on the supplied parameters, creating unique name for each HostEndpoint
+func generateAutoHostEndpointName(nodeName string, templateName string, interfaceName string) (string, error) {
+	if templateName == "" && interfaceName == "" {
+		// Default HostEndpoint name
+		return hashNameIfTooLong(fmt.Sprintf("%s-%s", nodeName, hostEndpointNameSuffix))
 	}
 
-	logrus.WithField("hep.Name", hostEndpoint.Name).Debug("created hostendpoint")
-	c.autoHEPTracker.addHostEndpoint(hostEndpoint)
-	return nil
+	if templateName != "" && interfaceName == "" {
+		// Template HostEndpoint name
+		return hashNameIfTooLong(fmt.Sprintf("%s-%s-%s", nodeName, templateName, hostEndpointNameSuffix))
+	}
+
+	if templateName != "" && interfaceName != "" {
+		// Template HostEndpoint with interfaceName name
+		return hashNameIfTooLong(fmt.Sprintf("%s-%s-%s-%s", nodeName, templateName, interfaceName, hostEndpointNameSuffix))
+	}
+
+	return "", fmt.Errorf("insufficient HostEndpoint identifiers supplied")
 }
 
-// generateDefaultAutoHostEndpointName returns the auto HostEndpoint name for default HostEndpoint
-func (c *autoHostEndpointController) generateDefaultAutoHostEndpointName(nodeName string) (string, error) {
-	return c.validateName(fmt.Sprintf("%s-%s", nodeName, hostEndpointNameSuffix))
-}
-
-// generateTemplateAutoHostEndpointName returns the name for HostEndpoint created with a template
-func (c *autoHostEndpointController) generateTemplateAutoHostEndpointName(nodeName string, templateName string) (string, error) {
-	return c.validateName(fmt.Sprintf("%s-%s-%s", nodeName, templateName, hostEndpointNameSuffix))
-}
-
-func (c *autoHostEndpointController) validateName(name string) (string, error) {
+// hashNameIfTooLong ensures the given name does not exceed the DNS1123 (253 characters) subdomain length limit.
+// If the name is too long, it generates a hash-based name that fits the limit.
+func hashNameIfTooLong(name string) (string, error) {
 	if len(name) <= validation.DNS1123SubdomainMaxLength {
 		return name, nil
 	}
@@ -462,8 +462,20 @@ func (c *autoHostEndpointController) validateName(name string) (string, error) {
 	return name, nil
 }
 
-// getExpectedIPsMatchingTemplate finds the matching node IPs to the CIDRs specified in the template
-func (c *autoHostEndpointController) getExpectedIPsMatchingTemplate(node *libapi.Node, template config.AutoHostEndpointTemplate) []string {
+// mergeExpectedIPsWithInterfaceIPs merges the provided expected IPs with the IP addresses
+// found on the specified interface of the given node.
+func (c *autoHostEndpointController) mergeExpectedIPsWithInterfaceIPs(expectedIPs []string, iface libapi.NodeInterface) []string {
+	for _, addr := range iface.Addresses {
+		if !slices.Contains(expectedIPs, addr) {
+			expectedIPs = append(expectedIPs, addr)
+		}
+	}
+
+	return expectedIPs
+}
+
+// getExpectedIPsMatchingInterfaceCIDRs finds the matching node IPs to the CIDRs specified in the template
+func (c *autoHostEndpointController) getExpectedIPsMatchingInterfaceCIDRs(node *libapi.Node, template config.AutoHostEndpointTemplate) []string {
 	filteredExpectedIPs := []string{}
 	expectedIPs := c.getExpectedIPs(node)
 
@@ -527,7 +539,17 @@ func (c *autoHostEndpointController) getExpectedIPs(node *libapi.Node) []string 
 		// Add internal IPs only
 		if addr.Type == libapi.InternalIP {
 			if _, ok := ipMap[addr.Address]; !ok {
+				ipMap[addr.Address] = struct{}{}
 				expectedIPs = append(expectedIPs, addr.Address)
+			}
+		}
+	}
+
+	for _, iface := range node.Spec.Interfaces {
+		for _, addr := range iface.Addresses {
+			if _, ok := ipMap[addr]; !ok {
+				ipMap[addr] = struct{}{}
+				expectedIPs = append(expectedIPs, addr)
 			}
 		}
 	}
@@ -598,6 +620,36 @@ func (c *autoHostEndpointController) hostEndpointNeedsUpdate(current *api.HostEn
 	}
 	logrus.WithField("hep.Name", current.Name).Debug("hostendpoint does not need update")
 	return false
+}
+
+// createOrUpdateHostEndpoint checks if the supplied expected HostEndpoint is currently in our cache and matches.
+// If not we either create it, if it's not part of our cache or update it if it's in our cache but out of date
+func (c *autoHostEndpointController) createOrUpdateHostEndpoint(expected *api.HostEndpoint) {
+	current := c.autoHEPTracker.getHostEndpoint(expected.Name)
+	if current == nil {
+		if err := c.createAutoHostEndpoint(expected); err != nil {
+			logrus.WithError(err).Errorf("failed to create host endpoint %s", expected.Name)
+		}
+		return
+	}
+	if err := c.updateHostEndpoint(current, expected); err != nil {
+		logrus.WithError(err).Errorf("failed to update host endpoint %s", expected.Name)
+	}
+}
+
+// createAutoHostEndpoint creates the supplied HostEndpoint
+func (c *autoHostEndpointController) createAutoHostEndpoint(hostEndpoint *api.HostEndpoint) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	hostEndpoint, err := c.client.HostEndpoints().Create(ctx, hostEndpoint, options.SetOptions{})
+	if err != nil {
+		logrus.Warnf("could not create hostendpoint for node: %v", err)
+		return err
+	}
+
+	logrus.WithField("hep.Name", hostEndpoint.Name).Debug("created hostendpoint")
+	c.autoHEPTracker.addHostEndpoint(hostEndpoint)
+	return nil
 }
 
 // updateHostEndpoint updates the current HostEndpoint so that it matches the expected HostEndpoint.

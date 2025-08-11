@@ -440,6 +440,30 @@ func collectKubernetesResource(dir string) {
 		Info:     "Collect k8s baselineadminnetworkpolicies (text)",
 		CmdStr:   "kubectl get baselineadminnetworkpolicies.policy.networking.k8s.io -Ao wide",
 		FilePath: fmt.Sprintf("%s/baselineadminnetworkpolicies.txt", dir),
+	}, common.Cmd{
+		Info:     "Collect k8s validatingwebhookconfigurations (text)",
+		CmdStr:   "kubectl get validatingwebhookconfigurations.admissionregistration.k8s.io -o wide",
+		FilePath: fmt.Sprintf("%s/validatingwebhookconfigurations.txt", dir),
+	}, common.Cmd{
+		Info:     "Collect k8s validatingwebhookconfigurations (yaml)",
+		CmdStr:   "kubectl get validatingwebhookconfigurations.admissionregistration.k8s.io -o yaml",
+		FilePath: fmt.Sprintf("%s/validatingwebhookconfigurations.yaml", dir),
+	}, common.Cmd{
+		Info:     "Collect k8s mutatingwebhookconfigurations (text)",
+		CmdStr:   "kubectl get mutatingwebhookconfigurations.admissionregistration.k8s.io -o wide",
+		FilePath: fmt.Sprintf("%s/mutatingwebhookconfigurations.txt", dir),
+	}, common.Cmd{
+		Info:     "Collect k8s mutatingwebhookconfigurations (yaml)",
+		CmdStr:   "kubectl get mutatingwebhookconfigurations.admissionregistration.k8s.io -o yaml",
+		FilePath: fmt.Sprintf("%s/mutatingwebhookconfigurations.yaml", dir),
+	}, common.Cmd{
+		Info:     "Collect k8s apiservices (text)",
+		CmdStr:   "kubectl get apiservices.apiregistration.k8s.io -o wide",
+		FilePath: fmt.Sprintf("%s/apiservices.txt", dir),
+	}, common.Cmd{
+		Info:     "Collect k8s apiservices (yaml)",
+		CmdStr:   "kubectl get apiservices.apiregistration.k8s.io -o yaml",
+		FilePath: fmt.Sprintf("%s/apiservices.yaml", dir),
 	})
 	common.ExecAllCmdsWriteToFile(commands)
 }
@@ -505,6 +529,7 @@ func collectTLSSecrets(kubeClient kubernetes.Interface, dir string) {
 		{"tigera-compliance-reporter-tls", "tigera-compliance"},
 		{"tigera-compliance-server-tls ", "tigera-compliance"},
 		{"tigera-compliance-snapshotter-tls ", "tigera-compliance"},
+		{"tigera-dex-tls ", "tigera-dex"},
 	} {
 		for _, ns := range []string{t.ns, "tigera-operator"} {
 			fmt.Printf("Collecting secret %s/%s (censoring sensitive data) \n", t.ns, t.name)
@@ -634,6 +659,11 @@ func collectCalicoNodeDiags(curNodeDir string, nodeName, namespace, podName stri
 			Info:     fmt.Sprintf("Collect ipset list for node %s", nodeName),
 			CmdStr:   fmt.Sprintf("kubectl exec -n %s -t %s -c calico-node -- ipset list", namespace, podName),
 			FilePath: fmt.Sprintf("%s/ipset-list.txt", curNodeDir),
+		},
+		{
+			Info:     fmt.Sprintf("Collect conntrack stats for node %s", nodeName),
+			CmdStr:   fmt.Sprintf("kubectl exec -n %s -t %s -c calico-node -- conntrack -LSC", namespace, podName),
+			FilePath: fmt.Sprintf("%s/conntrack-list.txt", curNodeDir),
 		},
 		// eBPF diagnostics
 		{

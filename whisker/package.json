@@ -1,11 +1,12 @@
 {
     "name": "oss-ui",
     "private": true,
-    "version": "0.1.0",
+    "version": "0.1.1",
     "type": "module",
     "scripts": {
         "start": "rsbuild dev",
         "build": "rsbuild build",
+        "build:local": "rsbuild build --env-mode default",
         "serve": "rsbuild preview",
         "clean": "rm -rf dist",
         "lint:fix": "eslint . --fix",
@@ -42,7 +43,7 @@
         "uuid": "^11.1.0"
     },
     "devDependencies": {
-        "@eslint/js": "^9.15.0",
+        "@eslint/js": "^9.31.0",
         "@rsbuild/core": "^1.1.10",
         "@rsbuild/plugin-react": "^1.1.0",
         "@rsbuild/plugin-type-check": "^1.1.0",
@@ -59,9 +60,9 @@
         "@types/react-dom": "^18.3.1",
         "@types/react-router-dom": "^5.3.3",
         "@types/react-window": "^1.8.2",
-        "eslint": "^9.15.0",
-        "eslint-plugin-react-hooks": "^5.0.0",
-        "eslint-plugin-react-refresh": "^0.4.14",
+        "eslint": "^9.31.0",
+        "eslint-plugin-react-hooks": "^5.2.0",
+        "eslint-plugin-react-refresh": "^0.4.20",
         "globals": "^15.12.0",
         "husky": "^9.1.7",
         "jest": "^29.7.0",
@@ -70,6 +71,10 @@
         "jest-transformer-svg": "^2.0.2",
         "prettier": "^3.4.2",
         "typescript": "~5.6.2",
-        "typescript-eslint": "^8.15.0"
+        "typescript-eslint": "^8.38.0"
+    },
+    "resolutions": {
+        "@eslint/plugin-kit": "^0.3.4",
+        "brace-expansion": "^2.0.2"
     }
 }

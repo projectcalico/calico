@@ -13,13 +13,19 @@
 
 #ifdef IPVER6
 #define CCQ_MAP cali_v6_ccq
-#define CCQ_MAP_V cali_v6_ccq1
+#define CCQ_MAP_V cali_v6_ccq2
 #define CT_MAP_V cali_v6_ct4
 #else
 #define CCQ_MAP cali_v4_ccq
-#define CCQ_MAP_V cali_v4_ccq1
+#define CCQ_MAP_V cali_v4_ccq2
 #define CT_MAP_V cali_v4_ct4
 #endif
+
+struct cali_ccq_value {
+	struct calico_ct_key rev_key;
+	__u64 last_seen;
+	__u64 rev_last_seen;
+};
 
 // The cali_ccq map is our "cleanup queue".  NAT records in the conntrack map
 // require two entries in the map, a forward entry and a reverse entry. When
@@ -27,10 +33,10 @@
 // as little time between as possible in order to avoid racing with the
 // dataplane.  To do that, we copy the keys to this map temporarily and then
 // iterate over this map, deleting the pair together.
-CALI_MAP_NAMED(CCQ_MAP, cali_ccq, 1,
+CALI_MAP_NAMED(CCQ_MAP, cali_ccq, 2,
 		BPF_MAP_TYPE_HASH,
 		struct calico_ct_key, // key = NAT rev key
-		struct calico_ct_key, // value = NAT fwd key
+		struct cali_ccq_value, // value = NAT fwd key
 		100000,
 		BPF_F_NO_PREALLOC
 );

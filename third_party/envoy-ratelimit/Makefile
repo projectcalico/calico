@@ -22,7 +22,7 @@ include ../../lib.Makefile
 ENVOY_RATELIMIT_DOWNLOADED=.envoy-ratelimit.downloaded
 
 .PHONY: init-source
-init-source:: $(ENVOY_RATELIMIT_DOWNLOADED)
+init-source: $(ENVOY_RATELIMIT_DOWNLOADED)
 $(ENVOY_RATELIMIT_DOWNLOADED):
 	git clone -n https://github.com/envoyproxy/ratelimit.git envoy-ratelimit
 	cd envoy-ratelimit && git checkout $(ENVOY_RATELIMIT_VERSION)
