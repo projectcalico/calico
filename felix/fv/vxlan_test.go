@@ -1215,35 +1215,12 @@ func setupWorkloadsWithOffset(infra infrastructure.DatastoreInfra, tc infrastruc
 	// Install a default profile that allows all ingress and egress, in the absence of any Policy.
 	infra.AddDefaultAllow()
 
-	// Wait until the vxlan device appears.
-	Eventually(func() error {
-		for i, f := range tc.Felixes {
-			out, err := f.ExecOutput("ip", "link")
-			if err != nil {
-				return err
-			}
-			if strings.Contains(out, "vxlan.calico") {
-				continue
-			}
-			return fmt.Errorf("felix %d has no vxlan device", i)
-		}
-		return nil
-	}, "10s", "100ms").ShouldNot(HaveOccurred())
+	if to.VXLANMode != api.VXLANModeNever {
+		waitForVXLANDevice(tc, enableIPv6)
+	}
 
-	if enableIPv6 && !BPFMode() {
-		Eventually(func() error {
-			for i, f := range tc.Felixes {
-				out, err := f.ExecOutput("ip", "link")
-				if err != nil {
-					return err
-				}
-				if strings.Contains(out, "vxlan-v6.calico") {
-					continue
-				}
-				return fmt.Errorf("felix %d has no IPv6 vxlan device", i)
-			}
-			return nil
-		}, "10s", "100ms").ShouldNot(HaveOccurred())
+	if to.IPIPMode != api.IPIPModeNever {
+		waitForIPIPDevice()
 	}
 
 	// Create workloads, using that profile.  One on each "host".
@@ -1295,4 +1272,37 @@ func setupWorkloadsWithOffset(infra infrastructure.DatastoreInfra, tc infrastruc
 	}
 
 	return
+}
+
+func waitForVXLANDevice(tc infrastructure.TopologyContainers, enableIPv6 bool) {
+	// Wait until the vxlan device appears.
+	Eventually(func() error {
+		for i, f := range tc.Felixes {
+			out, err := f.ExecOutput("ip", "link")
+			if err != nil {
+				return err
+			}
+			if strings.Contains(out, "vxlan.calico") {
+				continue
+			}
+			return fmt.Errorf("felix %d has no vxlan device", i)
+		}
+		return nil
+	}, "10s", "100ms").ShouldNot(HaveOccurred())
+
+	if enableIPv6 && !BPFMode() {
+		Eventually(func() error {
+			for i, f := range tc.Felixes {
+				out, err := f.ExecOutput("ip", "link")
+				if err != nil {
+					return err
+				}
+				if strings.Contains(out, "vxlan-v6.calico") {
+					continue
+				}
+				return fmt.Errorf("felix %d has no IPv6 vxlan device", i)
+			}
+			return nil
+		}, "10s", "100ms").ShouldNot(HaveOccurred())
+	}
 }
