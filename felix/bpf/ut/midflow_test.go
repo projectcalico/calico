@@ -110,7 +110,6 @@ func TestMidflowFailoverNoConntrack(t *testing.T) {
 		Expect(skbMark).To(BeEquivalentTo(tcdefs.MarkSeen))
 		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
 		fmt.Printf("pktR = %+v\n", pktR)
-
 	})
 
 }

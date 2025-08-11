@@ -47,7 +47,7 @@ var _ = Describe("BPF Syncer", func() {
 	var (
 		svcs      *mockNATMap
 		eps       *mockNATBackendMap
-		chEps *mockConsistentHashMap
+		chEps     *mockConsistentHashMap
 		aff       *mockAffinityMap
 		ct        *mock.Map
 		ctCleanup *mock.Map

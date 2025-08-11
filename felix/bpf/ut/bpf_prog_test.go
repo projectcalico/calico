@@ -584,10 +584,10 @@ var (
 
 	natMap, natBEMap, ctMap, ctCleanupMap, rtMap, ipsMap, testStateMap, affinityMap, arpMap, fsafeMap, ipfragsMap, consistentHashMap maps.Map
 	natMapV6, natBEMapV6, ctMapV6, ctCleanupMapV6, rtMapV6, ipsMapV6, affinityMapV6, arpMapV6, fsafeMapV6, consistentHashMapV6       maps.Map
-	stateMap, countersMap, ifstateMap, progMap, progMapXDP, policyJumpMap, policyJumpMapXDP                                  maps.Map
-	perfMap                                                                                                                  maps.Map
-	profilingMap, ipfragsMapTmp                                                                                              maps.Map
-	allMaps                                                                                                                  []maps.Map
+	stateMap, countersMap, ifstateMap, progMap, progMapXDP, policyJumpMap, policyJumpMapXDP                                          maps.Map
+	perfMap                                                                                                                          maps.Map
+	profilingMap, ipfragsMapTmp                                                                                                      maps.Map
+	allMaps                                                                                                                          []maps.Map
 )
 
 func initMapsOnce() {
