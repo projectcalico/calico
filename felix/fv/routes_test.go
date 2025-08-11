@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	"regexp"
-	"strings"
 	"sync"
 	"time"
 
@@ -169,30 +168,18 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ routing table tests", []api
 			for i := 0; i < 2; i++ {
 				w[0][i] = workload.Run(tc.Felixes[0], fmt.Sprintf("w%d", i), "default", "10.65.0.2", "8088", "tcp")
 				w[0][i].ConfigureInInfra(infra)
+
+				// Tie-breaker is the interface index, so the most recently started workload should win.
+				Eventually(tc.Felixes[0].ExecOutputFn("ip", "r", "get", "10.65.0.2"), "10s").Should(ContainSubstring(w[0][i].InterfaceName))
 			}
 		})
 
-		waitForInitialRouteProgramming := func() (winner, loser int) {
-			// Winner is non-deterministic.
-			Eventually(tc.Felixes[0].ExecOutputFn("ip", "r", "get", "10.65.0.2"), "10s").Should(Or(
-				ContainSubstring(w[0][0].InterfaceName),
-				ContainSubstring(w[0][1].InterfaceName),
-			))
-			out, err := tc.Felixes[0].ExecOutput("ip", "r", "get", "10.65.0.2")
-			Expect(err).NotTo(HaveOccurred())
-			if strings.Contains(out, w[0][0].InterfaceName) {
-				winner = 0
-				loser = 1
-			} else {
-				winner = 1
-				loser = 0
-			}
-			return
-		}
+		const (
+			loser  = 0
+			winner = 1
+		)
 
 		It("should resolve when winning endpoint is removed", func() {
-			// Winner is non-deterministic.
-			winner, loser := waitForInitialRouteProgramming()
 			w[0][winner].RemoveFromInfra(infra)
 			Eventually(tc.Felixes[0].ExecOutputFn("ip", "r", "get", "10.65.0.2"), "10s").Should(
 				ContainSubstring(w[0][loser].InterfaceName),
@@ -200,8 +187,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ routing table tests", []api
 		})
 
 		It("should resolve when losing endpoint is removed", func() {
-			// Winner is non-deterministic.
-			winner, loser := waitForInitialRouteProgramming()
 			w[0][loser].RemoveFromInfra(infra)
 			Consistently(tc.Felixes[0].ExecOutputFn("ip", "r", "get", "10.65.0.2"), "5s").Should(
 				ContainSubstring(w[0][winner].InterfaceName),
@@ -209,8 +194,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ routing table tests", []api
 		})
 
 		It("should resolve when winning interface goes down", func() {
-			// Winner is non-deterministic.
-			winner, loser := waitForInitialRouteProgramming()
 			w[0][winner].SetInterfaceUp(false)
 			Eventually(tc.Felixes[0].ExecOutputFn("ip", "r", "get", "10.65.0.2"), "10s").Should(
 				ContainSubstring(w[0][loser].InterfaceName),
@@ -218,8 +201,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ routing table tests", []api
 		})
 
 		It("should resolve when losing interface goes down", func() {
-			// Winner is non-deterministic.
-			winner, loser := waitForInitialRouteProgramming()
 			w[0][loser].SetInterfaceUp(false)
 			Consistently(tc.Felixes[0].ExecOutputFn("ip", "r", "get", "10.65.0.2"), "5s").Should(
 				ContainSubstring(w[0][winner].InterfaceName),

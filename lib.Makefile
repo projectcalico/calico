@@ -670,7 +670,9 @@ REPO_DIR=$(shell if [ -e hack/format-changed-files.sh ]; then echo '.'; else ech
 # Format changed files only.
 fix-changed go-fmt-changed goimports-changed:
 	$(DOCKER_RUN) -e release_prefix=$(RELEASE_BRANCH_PREFIX)-v \
-	              -e git_repo_slug=$(GIT_REPO_SLUG) $(CALICO_BUILD) $(REPO_DIR)/hack/format-changed-files.sh
+	              -e git_repo_slug=$(GIT_REPO_SLUG) \
+	              -e parent_branch=$(shell $(REPO_REL_DIR)/hack/find-parent-release-branch.sh) \
+	              $(CALICO_BUILD) $(REPO_DIR)/hack/format-changed-files.sh
 
 .PHONY: fix-all go-fmt-all goimports-all
 fix-all go-fmt-all goimports-all:
@@ -1059,13 +1061,13 @@ var-require: $(addprefix var-set-,$(subst -, ,$(REQUIRED_VARS)))
 # there isn't a non empty variable for each given value. For instance, to require FOO and BAR both must be set you would
 # call var-require-all-FOO-BAR.
 var-require-all-%:
-	$(MAKE) var-require REQUIRED_VARS=$* FAIL_NOT_SET=true
+	@$(MAKE) --quiet --no-print-directory var-require REQUIRED_VARS=$* FAIL_NOT_SET=true
 
 # var-require-one-of-% checks if the there are non empty variables set for the hyphen separated values in %, and fails
 # there isn't a non empty variable for at least one of the given values. For instance, to require either FOO or BAR both
 # must be set you would call var-require-all-FOO-BAR.
 var-require-one-of-%:
-	$(MAKE) var-require REQUIRED_VARS=$*
+	@$(MAKE) --quiet --no-print-directory var-require REQUIRED_VARS=$*
 
 # sem-cut-release triggers the cut-release pipeline (or test-cut-release if CONFIRM is not specified) in semaphore to
 # cut the release. The pipeline is triggered for the current commit, and the branch it's triggered on is calculated

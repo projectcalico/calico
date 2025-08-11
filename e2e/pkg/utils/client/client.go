@@ -15,7 +15,10 @@
 package client
 
 import (
+	"context"
+
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	"github.com/sirupsen/logrus"
 	operatorv1 "github.com/tigera/operator/api/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
@@ -24,13 +27,56 @@ import (
 
 // New returns a new controller-runtime client configured to use the projectcalico.org/v3 API group.
 func New(cfg *rest.Config) (client.Client, error) {
+	// Use the API client if the Calico v3 API is available, otherwise fall back to the calicoctl exec client.
+	c, err := NewAPIClient(cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	// Check to see if an APIServer is available.
+	if err := c.List(context.TODO(), &operatorv1.APIServerList{}); err == nil {
+		logrus.Infof("Using API server client for projectcalico.org/v3 API")
+		return c, nil
+	} else {
+		logrus.Infof("Falling back to calicoctl exec client for projectcalico.org/v3 API: %v", err)
+	}
+
+	// No API server available, fall back to calicoctl exec client.
+	return NewCalicoctlExecClient(c)
+}
+
+// NewAPIClient returns a new controller-runtime client configured to use the projectcalico.org/v3 API group.
+func NewAPIClient(cfg *rest.Config) (client.Client, error) {
+	scheme, err := newScheme()
+	if err != nil {
+		return nil, err
+	}
+	return client.New(cfg, client.Options{Scheme: scheme})
+}
+
+// NewCalicoctlExecClient returns a new controller-runtime client that uses exec commands into a calicoctl pod to interact with the projectcalico.org/v3 API.
+// This is useful for testing purposes when the Calico API server is not running, however it requires that the cluster has a
+// calicoctl pod running in the kube-system namespace.
+//
+// Additionally, this client does not support all operations that a normal controller-runtime client would support. For example, it cannot
+// interact with API groups other than projectcalico.org/v3.
+func NewCalicoctlExecClient(base client.Client) (client.Client, error) {
+	return &calicoctlExecClient{
+		base:      base,
+		scheme:    base.Scheme(),
+		name:      "calicoctl",
+		namespace: "kube-system",
+	}, nil
+}
+
+func newScheme() (*runtime.Scheme, error) {
 	// Create a new Scheme and add the projectcalico.org/v3 API group to it.
 	scheme := runtime.NewScheme()
 	if err := v3.AddToScheme(scheme); err != nil {
 		return nil, err
 	}
-	if er := operatorv1.AddToScheme(scheme); er != nil {
-		return nil, er
+	if err := operatorv1.AddToScheme(scheme); err != nil {
+		return nil, err
 	}
-	return client.New(cfg, client.Options{Scheme: scheme})
+	return scheme, nil
 }

@@ -20,12 +20,14 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
+	"github.com/projectcalico/calico/felix/bpf/conntrack/cleanupv1"
 	"github.com/projectcalico/calico/felix/bpf/conntrack/cttestdata"
 	"github.com/projectcalico/calico/felix/bpf/conntrack/timeouts"
 	"github.com/projectcalico/calico/felix/bpf/maps"
+	"github.com/projectcalico/calico/felix/timeshim/mocktime"
 )
 
-func TestBPFProgLivenessScanner(t *testing.T) {
+func TestBPFProgCleaner(t *testing.T) {
 	for _, tc := range cttestdata.CTCleanupTests {
 		t.Run(tc.Description, func(t *testing.T) {
 			runCTCleanupTest(t, tc)
@@ -43,28 +45,32 @@ func runCTCleanupTest(t *testing.T, tc cttestdata.CTCleanupTest) {
 	}
 
 	// Run the scanner, mocking out the current time to match the conntrack state.
-	err := scanner.RunBPFExpiryProgram(conntrack.WithStartTime(uint64(cttestdata.Now)))
-	Expect(err).NotTo(HaveOccurred(), "Failed to run BPFProgLivenessScanner")
-
+	scanner.Scan()
 	// Check that the expected entries were deleted.
 	deletedEntries := calculateDeletedEntries(tc, ctMap)
 	Expect(deletedEntries).To(ConsistOf(tc.ExpectedDeletions),
 		"Scan() did not delete the expected entries")
+	cleanUpMapMem, err := cleanupv1.LoadMapMem(ctCleanupMap)
+	Expect(err).NotTo(HaveOccurred(), "Failed to load ct cleanup map")
+	Expect(len(cleanUpMapMem)).To(Equal(0))
 }
 
-func setUpConntrackScanTest(t *testing.T) *conntrack.BPFProgLivenessScanner {
+func setUpConntrackScanTest(t *testing.T) *conntrack.Scanner {
 	RegisterTestingT(t)
-	scanner, err := conntrack.NewBPFProgLivenessScanner(
-		4, timeouts.DefaultTimeouts(), conntrack.BPFLogLevelDebug,
-		nil, "Disabled")
-	Expect(err).NotTo(HaveOccurred(), "Failed to create BPFProgLivenessScanner")
+	lc := conntrack.NewLivenessScanner(timeouts.DefaultTimeouts(), true, conntrack.WithTimeShim(mocktime.New()))
+	cleaner, err := conntrack.NewBPFProgCleaner(4, timeouts.DefaultTimeouts(), conntrack.BPFLogLevelDebug)
+	Expect(err).NotTo(HaveOccurred(), "Failed to create BPFCleaner")
+	scanner := conntrack.NewScanner(ctMap, conntrack.KeyFromBytes,
+		conntrack.ValueFromBytes,
+		nil, "Disabled", ctCleanupMap.(maps.MapWithExistsCheck), 4,
+		cleaner, lc)
 	t.Cleanup(func() {
-		err := scanner.Close()
-		Expect(err).NotTo(HaveOccurred(), "Failed to close BPFProgLivenessScanner")
+		scanner.Close()
 	})
 
 	clearCTMap := func() {
 		resetMap(ctMap)
+		resetMap(ctCleanupMap)
 	}
 	clearCTMap()          // Make sure we start with an empty map.
 	t.Cleanup(clearCTMap) // Make sure we leave a clean map.

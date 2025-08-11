@@ -338,7 +338,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log tests", [
 				MatchEnforcedPolicies:  true,
 				MatchLabels:            false,
 				Includes:               []flowlogs.IncludeFilter{flowlogs.IncludeByDestPort(wepPort)},
-				CheckNumFlowsStarted:   true,
 			})
 
 			err := flowTester.PopulateFromFlowLogs(tc.Felixes[0])
@@ -376,11 +375,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log tests", [
 					FlowEnforcedPolicySet: flowlog.FlowPolicySet{
 						"0|__PROFILE__|__PROFILE__.default|allow|0": {},
 					},
-					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
-						FlowReportedStats: flowlog.FlowReportedStats{
-							NumFlowsStarted: 24,
-						},
-					},
 				})
 
 			hep1_Meta := endpoint.Metadata{
@@ -403,11 +397,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log tests", [
 					},
 					FlowEnforcedPolicySet: flowlog.FlowPolicySet{
 						"0|__PROFILE__|__PROFILE__.default|allow|0": {},
-					},
-					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
-						FlowReportedStats: flowlog.FlowReportedStats{
-							NumFlowsStarted: 3,
-						},
 					},
 				})
 
@@ -433,11 +422,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log tests", [
 					FlowEnforcedPolicySet: flowlog.FlowPolicySet{
 						"0|__PROFILE__|__PROFILE__.default|allow|0": {},
 					},
-					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
-						FlowReportedStats: flowlog.FlowReportedStats{
-							NumFlowsStarted: 12,
-						},
-					},
 				})
 
 			flowTester.CheckFlow(
@@ -452,11 +436,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log tests", [
 					},
 					FlowEnforcedPolicySet: flowlog.FlowPolicySet{
 						"0|default|default/default.np-1|deny|0": {},
-					},
-					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
-						FlowReportedStats: flowlog.FlowReportedStats{
-							NumFlowsStarted: 12,
-						},
 					},
 				})
 
@@ -480,11 +459,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log tests", [
 					},
 					FlowEnforcedPolicySet: flowlog.FlowPolicySet{
 						"0|__PROFILE__|__PROFILE__.default|allow|0": {},
-					},
-					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
-						FlowReportedStats: flowlog.FlowReportedStats{
-							NumFlowsStarted: 3,
-						},
 					},
 				})
 
