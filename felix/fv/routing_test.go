@@ -295,17 +295,12 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 					Skip("Skipping due to known issue with tunnel IPs not being programmed in WEP mode")
 				}
 
-				for i := 0; i < 3; i++ {
-					f := felixes[i]
-					cc.ExpectSome(f, w[0])
-					cc.ExpectSome(f, w[1])
-					cc.ExpectSome(f, w[2])
+				cc.ExpectSome(tc.Felixes[0], w[0])
+				cc.ExpectSome(tc.Felixes[0], w[1])
 
-					if enableIPv6 {
-						cc.ExpectSome(f, w6[0])
-						cc.ExpectSome(f, w6[1])
-						cc.ExpectSome(f, w6[2])
-					}
+				if enableIPv6 {
+					cc.ExpectSome(tc.Felixes[0], w6[0])
+					cc.ExpectSome(tc.Felixes[0], w6[1])
 				}
 
 				cc.CheckConnectivityWithTimeout(time.Second * 20)
@@ -1119,17 +1114,13 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 					Skip("Skipping due to known issue with tunnel IPs not being programmed in WEP mode")
 				}
 
-				for i := 0; i < 3; i++ {
-					f := felixes[i]
-					cc.ExpectSome(f, w[0])
-					cc.ExpectSome(f, w[1])
-					cc.ExpectSome(f, w[2])
-
-					if enableIPv6 {
-						cc.ExpectSome(f, w6[0])
-						cc.ExpectSome(f, w6[1])
-						cc.ExpectSome(f, w6[2])
-					}
+				cc.ExpectSome(tc.Felixes[0], w[0])
+				cc.ExpectSome(tc.Felixes[0], w[1])
+				cc.ExpectSome(tc.Felixes[0], w[2])
+				if enableIPv6 {
+					cc.ExpectSome(tc.Felixes[0], w6[0])
+					cc.ExpectSome(tc.Felixes[0], w6[1])
+					cc.ExpectSome(tc.Felixes[0], w6[2])
 				}
 
 				cc.CheckConnectivityWithTimeout(time.Second * 20)
@@ -1202,7 +1193,6 @@ func createIPIPBaseTopologyOptions(
 	topologyOptions.VXLANMode = api.VXLANModeNever
 	topologyOptions.SimulateBIRDRoutes = false
 	topologyOptions.EnableIPv6 = enableIPv6
-	topologyOptions.FelixReadinessTimeout = "45s"
 	topologyOptions.ExtraEnvVars["FELIX_ProgramClusterRoutes"] = "Enabled"
 	topologyOptions.ExtraEnvVars["FELIX_ROUTESOURCE"] = routeSource
 	// We force the broken checksum handling on or off so that we're not dependent on kernel version

@@ -78,7 +78,6 @@ type TopologyOptions struct {
 	IPv6PoolUsages            []api.IPPoolAllowedUse
 	NeedNodeIP                bool
 	FlowLogSource             int
-	FelixReadinessTimeout     string
 }
 
 // Calico containers created during topology creation.
