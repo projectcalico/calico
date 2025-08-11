@@ -14,7 +14,10 @@
 
 package numorstring
 
-import "strings"
+import (
+	"fmt"
+	"strings"
+)
 
 const (
 	// Default forwarding, i.e. best effort.
@@ -97,11 +100,26 @@ func (d *DSCP) ToUint8() uint8 {
 		return val
 	}
 
-	val, valid := AllDSCPValues[d.StrVal]
+	val, valid := AllDSCPValues[strings.ToUpper(strings.TrimSpace(d.StrVal))]
 	if !valid {
 		return 0
 	}
 	return val
+}
+
+func (d *DSCP) Validate() error {
+	// If a number, it must be between 0 and 63.
+	val, err := (*Uint8OrString)(d).NumValue()
+	if err == nil && val > 63 {
+		return fmt.Errorf("DSCP must be between 0 and 63")
+	}
+
+	// Otherwise, it must be one of the known constant.
+	_, valid := AllDSCPValues[strings.ToUpper(strings.TrimSpace(d.StrVal))]
+	if !valid {
+		return fmt.Errorf("%s is not a valid DSCP value", d.StrVal)
+	}
+	return nil
 }
 
 // UnmarshalJSON implements the json.Unmarshaller interface.
