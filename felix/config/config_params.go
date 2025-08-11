@@ -220,7 +220,7 @@ type Config struct {
 	BPFDisableGROForIfaces             *regexp.Regexp    `config:"regexp;"`
 	BPFExcludeCIDRsFromNAT             []string          `config:"cidr-list;;"`
 	BPFRedirectToPeer                  string            `config:"oneof(Disabled,Enabled,L2Only);L2Only;non-zero"`
-	BPFAttachType                      string            `config:"oneof(tcx,tc);tcx;non-zero"`
+	BPFAttachType                      string            `config:"oneof(TCX,TC);TCX;non-zero"`
 	BPFExportBufferSizeMB              int               `config:"int;1;non-zero"`
 	BPFProfiling                       string            `config:"oneof(Disabled,Enabled);Disabled;non-zero"`
 
@@ -1256,6 +1256,10 @@ func (config *Config) RouteTableIndices() []idalloc.IndexRange {
 		log.Warn("Both `RouteTableRanges` and deprecated `RouteTableRange` options are set. `RouteTableRanges` value will be given precedence.")
 	}
 	return config.RouteTableRanges
+}
+
+func (config *Config) GetBPFAttachType() v3.BPFAttachOption {
+	return v3.BPFAttachOption(config.BPFAttachType)
 }
 
 func New() *Config {

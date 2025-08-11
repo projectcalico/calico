@@ -582,12 +582,12 @@ func bpftool(args ...string) ([]byte, error) {
 var (
 	mapInitOnce sync.Once
 
-	natMap, natBEMap, ctMap, rtMap, ipsMap, testStateMap, affinityMap, arpMap, fsafeMap, ipfragsMap maps.Map
-	natMapV6, natBEMapV6, ctMapV6, rtMapV6, ipsMapV6, affinityMapV6, arpMapV6, fsafeMapV6           maps.Map
-	stateMap, countersMap, ifstateMap, progMap, progMapXDP, policyJumpMap, policyJumpMapXDP         maps.Map
-	perfMap                                                                                         maps.Map
-	profilingMap, ipfragsMapTmp                                                                     maps.Map
-	allMaps                                                                                         []maps.Map
+	natMap, natBEMap, ctMap, ctCleanupMap, rtMap, ipsMap, testStateMap, affinityMap, arpMap, fsafeMap, ipfragsMap maps.Map
+	natMapV6, natBEMapV6, ctMapV6, ctCleanupMapV6, rtMapV6, ipsMapV6, affinityMapV6, arpMapV6, fsafeMapV6         maps.Map
+	stateMap, countersMap, ifstateMap, progMap, progMapXDP, policyJumpMap, policyJumpMapXDP                       maps.Map
+	perfMap                                                                                                       maps.Map
+	profilingMap, ipfragsMapTmp                                                                                   maps.Map
+	allMaps                                                                                                       []maps.Map
 )
 
 func initMapsOnce() {
@@ -598,6 +598,8 @@ func initMapsOnce() {
 		natBEMapV6 = nat.BackendMapV6()
 		ctMap = conntrack.Map()
 		ctMapV6 = conntrack.MapV6()
+		ctCleanupMap = conntrack.CleanupMap()
+		ctCleanupMapV6 = conntrack.CleanupMapV6()
 		rtMap = routes.Map()
 		rtMapV6 = routes.MapV6()
 		ipsMap = ipsets.Map()
@@ -620,7 +622,7 @@ func initMapsOnce() {
 
 		perfMap = perf.Map("perf_evnt", 512)
 
-		allMaps = []maps.Map{natMap, natBEMap, natMapV6, natBEMapV6, ctMap, ctMapV6, rtMap, rtMapV6, ipsMap, ipsMapV6,
+		allMaps = []maps.Map{natMap, natBEMap, natMapV6, natBEMapV6, ctMap, ctMapV6, ctCleanupMap, ctCleanupMapV6, rtMap, rtMapV6, ipsMap, ipsMapV6,
 			stateMap, testStateMap, affinityMap, affinityMapV6, arpMap, arpMapV6, fsafeMap, fsafeMapV6,
 			countersMap, ipfragsMap, ipfragsMapTmp, ifstateMap, profilingMap,
 			policyJumpMap, policyJumpMapXDP}
@@ -791,6 +793,17 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 				if topts.natOutExcludeHosts {
 					globals.Flags |= libbpf.GlobalsNATOutgoingExcludeHosts
 				}
+
+				if topts.ingressQoSPacketRate > 0 {
+					globals.IngressPacketRate = topts.ingressQoSPacketRate
+					globals.IngressPacketBurst = topts.ingressQoSPacketBurst
+				}
+
+				if topts.egressQoSPacketRate > 0 {
+					globals.EgressPacketRate = topts.egressQoSPacketRate
+					globals.EgressPacketBurst = topts.egressQoSPacketBurst
+				}
+
 				if topts.ipv6 {
 					copy(globals.HostTunnelIPv6[:], node1tunIPV6.To16())
 					copy(globals.HostIPv6[:], hostIP.To16())
@@ -1130,19 +1143,23 @@ func runBpfUnitTest(t *testing.T, source string, testFn func(bpfProgRunFn), opts
 }
 
 type testOpts struct {
-	description        string
-	subtests           bool
-	logLevel           log.Level
-	xdp                bool
-	psnaStart          uint32
-	psnatEnd           uint32
-	hostNetworked      bool
-	fromHost           bool
-	progLog            string
-	ipv6               bool
-	objname            string
-	flowLogsEnabled    bool
-	natOutExcludeHosts bool
+	description           string
+	subtests              bool
+	logLevel              log.Level
+	xdp                   bool
+	psnaStart             uint32
+	psnatEnd              uint32
+	hostNetworked         bool
+	fromHost              bool
+	progLog               string
+	ipv6                  bool
+	objname               string
+	flowLogsEnabled       bool
+	natOutExcludeHosts    bool
+	ingressQoSPacketRate  uint16
+	ingressQoSPacketBurst uint16
+	egressQoSPacketRate   uint16
+	egressQoSPacketBurst  uint16
 }
 
 type testOption func(opts *testOpts)
@@ -1201,6 +1218,20 @@ func withFlowLogs() testOption {
 func withNATOutExcludeHosts() testOption {
 	return func(o *testOpts) {
 		o.natOutExcludeHosts = true
+	}
+}
+
+func withIngressQoSPacketRate(packetRate, packetBurst uint16) testOption {
+	return func(o *testOpts) {
+		o.ingressQoSPacketRate = packetRate
+		o.ingressQoSPacketBurst = packetBurst
+	}
+}
+
+func withEgressQoSPacketRate(packetRate, packetBurst uint16) testOption {
+	return func(o *testOpts) {
+		o.egressQoSPacketRate = packetRate
+		o.egressQoSPacketBurst = packetBurst
 	}
 }
 

@@ -573,6 +573,10 @@ func (t *TcGlobalData) Set(m *Map) error {
 		C.uint(t.LogFilterJmp),
 		&cJumps[0], // it is safe because we hold the reference here until we return.
 		&cJumpsV6[0],
+		C.ushort(t.IngressPacketRate),
+		C.ushort(t.IngressPacketBurst),
+		C.ushort(t.EgressPacketRate),
+		C.ushort(t.EgressPacketBurst),
 	)
 
 	return err

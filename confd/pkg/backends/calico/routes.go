@@ -482,8 +482,9 @@ func (rg *routeGenerator) advertiseThisService(svc *v1.Service, ep *discoveryv1.
 		}
 	}
 
-	// we only need to advertise local services, since we advertise the entire cluster IP range.
-	if svc.Spec.ExternalTrafficPolicy != v1.ServiceExternalTrafficPolicyTypeLocal {
+	// For Cluster services, check aggregation setting to determine if we should proceed with endpoint-based logic.
+	// When aggregation is enabled, Cluster services are handled by global CIDR advertisement instead of individual routes.
+	if svc.Spec.ExternalTrafficPolicy != v1.ServiceExternalTrafficPolicyTypeLocal && rg.client.ShouldAggregateLoadBalancerServices() {
 		logc.Debugf("Skipping service with non-local external traffic policy '%s'", svc.Spec.ExternalTrafficPolicy)
 		return false
 	}
@@ -498,6 +499,25 @@ func (rg *routeGenerator) advertiseThisService(svc *v1.Service, ep *discoveryv1.
 		if endpoint.NodeName != nil && *endpoint.NodeName == rg.nodeName {
 			for _, address := range endpoint.Addresses {
 				if isIPv6(address) == svcIsIPv6 {
+					logc.Debugf("Advertising local service")
+					return true
+				}
+	// Endpoint-based advertisement logic for both Cluster and Local services.
+	// For Cluster services: advertise if any endpoints exist (when aggregation is disabled).
+	// For Local services: advertise only if local endpoints exist.
+	for _, subset := range ep.Subsets {
+		// not interested in subset.NotReadyAddresses
+		for _, address := range subset.Addresses {
+			if isIPv6(address.IP) != svcIsIPv6 {
+				continue
+			}
+			if svc.Spec.ExternalTrafficPolicy != v1.ServiceExternalTrafficPolicyTypeLocal {
+				// For Cluster services, advertise if we have any endpoints
+				logc.Debugf("Advertising cluster service")
+				return true
+			} else {
+				// For Local services, only advertise if we have local endpoints
+				if address.NodeName != nil && *address.NodeName == rg.nodeName {
 					logc.Debugf("Advertising local service")
 					return true
 				}
