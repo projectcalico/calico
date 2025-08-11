@@ -241,6 +241,10 @@ var _ = describe.CalicoDescribe(
 			Expect(err).NotTo(HaveOccurred())
 
 			np := &v3.NetworkPolicy{
+				TypeMeta: metav1.TypeMeta{
+					Kind:       "NetworkPolicy",
+					APIVersion: v3.SchemeGroupVersion.String(),
+				},
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "allow-through-service-account",
 					Namespace: ns.Name,
@@ -327,11 +331,48 @@ var _ = describe.CalicoDescribe(
 			checker.ExpectSuccess(client1, server1.ClusterIP())
 			checker.Execute()
 		})
+
+		framework.ConformanceIt("should support a 'deny egress' policy [RunsOnWindows]", func() {
+			By("Creating calico egress policy which denies traffic within namespace.")
+			nsName := f.Namespace.Name
+			policyName := "deny-egress"
+			o := 500.0
+
+			// Create an egress policy that explicitly denies all egress traffic from the namespace.
+			defaultDeny := v3.NewNetworkPolicy()
+			defaultDeny.Name = policyName
+			defaultDeny.Namespace = nsName
+			defaultDeny.Spec.Selector = "all()"
+			defaultDeny.Spec.Order = &o
+			defaultDeny.Spec.Egress = []v3.Rule{
+				{
+					Action: v3.Deny,
+				},
+				{
+					// This rule shouldn't be hit.
+					Action: v3.Allow,
+				},
+			}
+
+			err := cli.Create(context.Background(), defaultDeny)
+			Expect(err).NotTo(HaveOccurred())
+			defer func() {
+				Expect(cli.Delete(context.Background(), defaultDeny)).NotTo(HaveOccurred())
+			}()
+
+			By("checking client not able to contact the server since deny egress rule created.")
+			checker.ExpectFailure(client1, server1.ClusterIP())
+			checker.Execute()
+		})
 	})
 
 // Creates a new NetworkPolicy that isolates a namespace by allowing ingress and egress traffic only from / to pods in the same namespace.
 func newNamespaceIsolationPolicy(name, namespace, ingressSelector, egressSelector string) *v3.NetworkPolicy {
 	return &v3.NetworkPolicy{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "NetworkPolicy",
+			APIVersion: v3.SchemeGroupVersion.String(),
+		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
@@ -360,6 +401,10 @@ func newNamespaceIsolationPolicy(name, namespace, ingressSelector, egressSelecto
 
 func newDefaultDenyPolicy(namespace string) *v3.NetworkPolicy {
 	return &v3.NetworkPolicy{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "NetworkPolicy",
+			APIVersion: v3.SchemeGroupVersion.String(),
+		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "default-deny",
 			Namespace: namespace,

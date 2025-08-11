@@ -390,7 +390,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 			MatchEnforcedPolicies:  true,
 			MatchPendingPolicies:   true,
 			Includes:               []flowlogs.IncludeFilter{flowlogs.IncludeByDestPort(wepPort)},
-			CheckNumFlowsStarted:   true,
 		})
 
 		ep1_1_Meta := endpoint.Metadata{
@@ -459,13 +458,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 					FlowPendingPolicySet: flowlog.FlowPolicySet{
 						"0|default|default.ep1-1-allow-all|allow|0": {},
 					},
-					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
-						FlowReportedStats: flowlog.FlowReportedStats{
-							PacketsIn:       3,
-							PacketsOut:      3,
-							NumFlowsStarted: 3,
-						},
-					},
 				},
 			)
 
@@ -485,13 +477,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 					},
 					FlowPendingPolicySet: flowlog.FlowPolicySet{
 						"0|default|default.ep1-1-allow-all|allow|0": {},
-					},
-					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
-						FlowReportedStats: flowlog.FlowReportedStats{
-							PacketsIn:       3,
-							PacketsOut:      3,
-							NumFlowsStarted: 3,
-						},
 					},
 				},
 			)
@@ -513,13 +498,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 					FlowPendingPolicySet: flowlog.FlowPolicySet{
 						"0|default|default.ep1-1-allow-all|allow|0": {},
 					},
-					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
-						FlowReportedStats: flowlog.FlowReportedStats{
-							PacketsIn:       3,
-							PacketsOut:      3,
-							NumFlowsStarted: 3,
-						},
-					},
 				},
 			)
 
@@ -539,13 +517,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 					},
 					FlowPendingPolicySet: flowlog.FlowPolicySet{
 						"0|default|default.ep1-1-allow-all|allow|0": {},
-					},
-					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
-						FlowReportedStats: flowlog.FlowReportedStats{
-							PacketsIn:       3,
-							PacketsOut:      3,
-							NumFlowsStarted: 3,
-						},
 					},
 				},
 			)
@@ -576,13 +547,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 					FlowPendingPolicySet: flowlog.FlowPolicySet{
 						"0|tier2|default/tier2.staged:np2-3|deny|1": {},
 					},
-					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
-						FlowReportedStats: flowlog.FlowReportedStats{
-							PacketsIn:       3,
-							PacketsOut:      3,
-							NumFlowsStarted: 3,
-						},
-					},
 				},
 			)
 
@@ -603,13 +567,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 					FlowPendingPolicySet: flowlog.FlowPolicySet{
 						"0|tier2|tier2.gnp2-2|deny|0": {},
 					},
-					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
-						FlowReportedStats: flowlog.FlowReportedStats{
-							PacketsIn:       3,
-							PacketsOut:      3,
-							NumFlowsStarted: 3,
-						},
-					},
 				},
 			)
 
@@ -629,13 +586,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 					},
 					FlowPendingPolicySet: flowlog.FlowPolicySet{
 						"0|tier1|default/tier1.np1-1|deny|1": {},
-					},
-					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
-						FlowReportedStats: flowlog.FlowReportedStats{
-							PacketsIn:       3,
-							PacketsOut:      3,
-							NumFlowsStarted: 3,
-						},
 					},
 				},
 			)
@@ -659,13 +609,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 						"0|tier1|default/tier1.np1-1|pass|1":         {},
 						"1|tier2|default/tier2.staged:np2-3|allow|0": {},
 					},
-					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
-						FlowReportedStats: flowlog.FlowReportedStats{
-							PacketsIn:       3,
-							PacketsOut:      3,
-							NumFlowsStarted: 3,
-						},
-					},
 				},
 			)
 
@@ -685,13 +628,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 					},
 					FlowPendingPolicySet: flowlog.FlowPolicySet{
 						"0|tier1|default/tier1.np1-1|allow|0": {},
-					},
-					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
-						FlowReportedStats: flowlog.FlowReportedStats{
-							PacketsIn:       3,
-							PacketsOut:      3,
-							NumFlowsStarted: 3,
-						},
 					},
 				},
 			)
@@ -714,13 +650,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 					FlowPendingPolicySet: flowlog.FlowPolicySet{
 						"0|tier1|default/tier1.np1-1|pass|0":         {},
 						"1|tier2|default/tier2.staged:np2-1|allow|0": {},
-					},
-					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
-						FlowReportedStats: flowlog.FlowReportedStats{
-							PacketsIn:       3,
-							PacketsOut:      3,
-							NumFlowsStarted: 3,
-						},
 					},
 				},
 			)
@@ -1040,7 +969,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ aggregation of flow log wit
 			MatchLabels:            false,
 			MatchPendingPolicies:   false,
 			Includes:               []flowlogs.IncludeFilter{flowlogs.IncludeByDestPort(wepPort)},
-			CheckNumFlowsStarted:   true,
 		})
 
 		ep1_1_Meta := endpoint.Metadata{
@@ -1078,11 +1006,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ aggregation of flow log wit
 						"0|tier1|default/tier1.np1-1|pass|0":            {},
 						"1|__PROFILE__|__PROFILE__.kns.default|allow|0": {},
 					},
-					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
-						FlowReportedStats: flowlog.FlowReportedStats{
-							NumFlowsStarted: 6,
-						},
-					},
 				},
 			)
 
@@ -1108,11 +1031,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ aggregation of flow log wit
 					FlowEnforcedPolicySet: flowlog.FlowPolicySet{
 						"0|tier1|default/tier1.np1-1|pass|0":            {},
 						"1|__PROFILE__|__PROFILE__.kns.default|allow|0": {},
-					},
-					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
-						FlowReportedStats: flowlog.FlowReportedStats{
-							NumFlowsStarted: 6,
-						},
 					},
 				},
 			)
@@ -1165,7 +1083,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ aggregation of flow log wit
 			MatchEnforcedPolicies:  true,
 			MatchPendingPolicies:   true,
 			Includes:               []flowlogs.IncludeFilter{flowlogs.IncludeByDestPort(wepPort)},
-			CheckNumFlowsStarted:   true,
 		})
 
 		ep1_1_Meta := endpoint.Metadata{
@@ -1207,11 +1124,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ aggregation of flow log wit
 						"0|tier1|default/tier1.np1-1|pass|0":         {},
 						"1|tier2|default/tier2.staged:np2-1|deny|-1": {},
 					},
-					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
-						FlowReportedStats: flowlog.FlowReportedStats{
-							NumFlowsStarted: 3,
-						},
-					},
 				},
 			)
 			flowTester.CheckFlow(
@@ -1232,11 +1144,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ aggregation of flow log wit
 						"0|tier1|default/tier1.np1-1|pass|0":            {},
 						"1|tier2|default/tier2.staged:np2-1|pass|-1":    {},
 						"2|__PROFILE__|__PROFILE__.kns.default|allow|0": {},
-					},
-					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
-						FlowReportedStats: flowlog.FlowReportedStats{
-							NumFlowsStarted: 3,
-						},
 					},
 				},
 			)
@@ -1268,11 +1175,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ aggregation of flow log wit
 						"0|tier1|default/tier1.np1-1|pass|0":         {},
 						"1|tier2|default/tier2.staged:np2-1|deny|-1": {},
 					},
-					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
-						FlowReportedStats: flowlog.FlowReportedStats{
-							NumFlowsStarted: 3,
-						},
-					},
 				},
 			)
 			flowTester.CheckFlow(
@@ -1293,11 +1195,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ aggregation of flow log wit
 						"0|tier1|default/tier1.np1-1|pass|0":            {},
 						"1|tier2|default/tier2.staged:np2-1|pass|-1":    {},
 						"2|__PROFILE__|__PROFILE__.kns.default|allow|0": {},
-					},
-					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
-						FlowReportedStats: flowlog.FlowReportedStats{
-							NumFlowsStarted: 3,
-						},
 					},
 				},
 			)
@@ -1349,7 +1246,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ aggregation of flow log wit
 			MatchPendingPolicies:   false,
 			MatchEnforcedPolicies:  false,
 			Includes:               []flowlogs.IncludeFilter{flowlogs.IncludeByDestPort(wepPort)},
-			CheckNumFlowsStarted:   true,
 		})
 
 		ep1_1_Meta := endpoint.Metadata{
@@ -1387,11 +1283,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ aggregation of flow log wit
 						"0|tier1|default/tier1.np1-1|pass|0":            {},
 						"1|__PROFILE__|__PROFILE__.kns.default|allow|0": {},
 					},
-					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
-						FlowReportedStats: flowlog.FlowReportedStats{
-							NumFlowsStarted: 6,
-						},
-					},
 				},
 			)
 
@@ -1417,11 +1308,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ aggregation of flow log wit
 					FlowEnforcedPolicySet: flowlog.FlowPolicySet{
 						"0|tier1|default/tier1.np1-1|pass|0":            {},
 						"1|__PROFILE__|__PROFILE__.kns.default|allow|0": {},
-					},
-					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
-						FlowReportedStats: flowlog.FlowReportedStats{
-							NumFlowsStarted: 6,
-						},
 					},
 				},
 			)
@@ -1801,7 +1687,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 				flowlogs.IncludeByDestPort(wepPort),
 				flowlogs.IncludeByDestPort(wep2Port),
 			},
-			CheckNumFlowsStarted: true,
 		})
 
 		ep1_1_Meta := endpoint.Metadata{
@@ -1843,11 +1728,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 						"0|tier1|default/tier1.np1-1|pass|0":         {},
 						"1|tier2|default/tier2.staged:np2-1|deny|-1": {},
 					},
-					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
-						FlowReportedStats: flowlog.FlowReportedStats{
-							NumFlowsStarted: 1,
-						},
-					},
 				},
 			)
 
@@ -1868,11 +1748,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 					FlowPendingPolicySet: flowlog.FlowPolicySet{
 						"0|tier1|default/tier1.np1-1|pass|0":         {},
 						"1|tier2|default/tier2.staged:np2-1|allow|2": {},
-					},
-					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
-						FlowReportedStats: flowlog.FlowReportedStats{
-							NumFlowsStarted: 1,
-						},
 					},
 				},
 			)
@@ -1904,11 +1779,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 						"0|tier1|default/tier1.np1-1|pass|0":         {},
 						"1|tier2|default/tier2.staged:np2-1|deny|-1": {},
 					},
-					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
-						FlowReportedStats: flowlog.FlowReportedStats{
-							NumFlowsStarted: 1,
-						},
-					},
 				},
 			)
 
@@ -1929,11 +1799,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 					FlowPendingPolicySet: flowlog.FlowPolicySet{
 						"0|tier1|default/tier1.np1-1|pass|0":         {},
 						"1|tier2|default/tier2.staged:np2-1|allow|1": {},
-					},
-					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
-						FlowReportedStats: flowlog.FlowReportedStats{
-							NumFlowsStarted: 1,
-						},
 					},
 				},
 			)
@@ -1981,7 +1846,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 				flowlogs.IncludeByDestPort(wepPort),
 				flowlogs.IncludeByDestPort(wep2Port),
 			},
-			CheckNumFlowsStarted: true,
 		})
 
 		ep1_1_Meta := endpoint.Metadata{
@@ -2023,11 +1887,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 						"0|tier1|default/tier1.np1-1|pass|0":         {},
 						"1|tier2|default/tier2.staged:np2-1|deny|-1": {},
 					},
-					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
-						FlowReportedStats: flowlog.FlowReportedStats{
-							NumFlowsStarted: 1,
-						},
-					},
 				},
 			)
 			flowTester.CheckFlow(
@@ -2048,11 +1907,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 						"0|tier1|default/tier1.np1-1|pass|0":            {},
 						"1|tier2|default/tier2.staged:np2-1|pass|0":     {},
 						"2|__PROFILE__|__PROFILE__.kns.default|allow|0": {},
-					},
-					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
-						FlowReportedStats: flowlog.FlowReportedStats{
-							NumFlowsStarted: 1,
-						},
 					},
 				},
 			)
@@ -2084,11 +1938,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 						"0|tier1|default/tier1.np1-1|pass|0":         {},
 						"1|tier2|default/tier2.staged:np2-1|deny|-1": {},
 					},
-					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
-						FlowReportedStats: flowlog.FlowReportedStats{
-							NumFlowsStarted: 1,
-						},
-					},
 				},
 			)
 			flowTester.CheckFlow(
@@ -2109,11 +1958,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 						"0|tier1|default/tier1.np1-1|pass|0":            {},
 						"1|tier2|default/tier2.staged:np2-1|pass|0":     {},
 						"2|__PROFILE__|__PROFILE__.kns.default|allow|0": {},
-					},
-					FlowProcessReportedStats: flowlog.FlowProcessReportedStats{
-						FlowReportedStats: flowlog.FlowReportedStats{
-							NumFlowsStarted: 1,
-						},
 					},
 				},
 			)

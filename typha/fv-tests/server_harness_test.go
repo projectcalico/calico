@@ -161,6 +161,12 @@ func (h *ServerHarness) Stop() {
 	case <-timeout:
 		log.Error("Timed out waiting for Decoupler to shut down")
 	}
+
+	select {
+	case <-h.BGPDecoupler.Done:
+	case <-timeout:
+		log.Error("Timed out waiting for Decoupler to shut down")
+	}
 }
 
 func (h *ServerHarness) CreateNoOpClient(id interface{}, syncType syncproto.SyncerType) *ClientState {

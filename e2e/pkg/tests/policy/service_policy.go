@@ -75,6 +75,10 @@ var _ = describe.CalicoDescribe(
 
 				// Policy to allow client egress using ServiceMatch for the server's service
 				allowClientByServicePolicy = &v3.NetworkPolicy{
+					TypeMeta: metav1.TypeMeta{
+						Kind:       "NetworkPolicy",
+						APIVersion: v3.SchemeGroupVersion.String(),
+					},
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "allow-client-egress",
 						Namespace: f.Namespace.Name,
@@ -98,6 +102,10 @@ var _ = describe.CalicoDescribe(
 
 				// Policy to allow client egress using the server's pod-name
 				allowClientByNamePolicy = &v3.NetworkPolicy{
+					TypeMeta: metav1.TypeMeta{
+						Kind:       "NetworkPolicy",
+						APIVersion: v3.SchemeGroupVersion.String(),
+					},
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "allow-client-egress",
 						Namespace: f.Namespace.Name,
@@ -118,6 +126,10 @@ var _ = describe.CalicoDescribe(
 
 				// Policy to allow server ingress using ServiceMatch for the client's service
 				allowServerByServicePolicy = &v3.NetworkPolicy{
+					TypeMeta: metav1.TypeMeta{
+						Kind:       "NetworkPolicy",
+						APIVersion: v3.SchemeGroupVersion.String(),
+					},
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "allow-server-ingress",
 						Namespace: f.Namespace.Name,
@@ -141,6 +153,10 @@ var _ = describe.CalicoDescribe(
 
 				// Policy to allow server ingress using the client's pod-name
 				allowServerByNamePolicy = &v3.NetworkPolicy{
+					TypeMeta: metav1.TypeMeta{
+						Kind:       "NetworkPolicy",
+						APIVersion: v3.SchemeGroupVersion.String(),
+					},
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "allow-server-ingress",
 						Namespace: f.Namespace.Name,
@@ -254,7 +270,9 @@ var _ = describe.CalicoDescribe(
 								Namespace: f.Namespace.Name,
 							},
 							Spec: v1.ServiceSpec{
-								Selector: map[string]string{"pod-name": client1.Name()},
+								Selector:       map[string]string{"pod-name": client1.Name()},
+								IPFamilies:     server.Service().Spec.IPFamilies,
+								IPFamilyPolicy: server.Service().Spec.IPFamilyPolicy,
 								Ports: []v1.ServicePort{
 									{
 										Port:     80,

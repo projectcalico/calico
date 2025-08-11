@@ -86,7 +86,7 @@ type target struct {
 
 func (t *target) Destination() string {
 	if t.port != 0 {
-		return fmt.Sprintf("%s:%d", t.destination, t.port)
+		return fmt.Sprintf("[%s]:%d", t.destination, t.port)
 	}
 	return t.destination
 }
@@ -100,6 +100,9 @@ func (t *target) String() string {
 	if t.server != nil {
 		chunks := []string{
 			fmt.Sprintf("%s/%s", t.server.Pod().Namespace, t.server.Pod().Name),
+		}
+		if t.destination != "" {
+			chunks = append(chunks, t.destination)
 		}
 		if t.port != 0 {
 			chunks = append(chunks, fmt.Sprintf("%d", t.port))

@@ -13,23 +13,6 @@ func TestConfigValid(t *testing.T) {
 		{
 			name: "all fields set",
 			config: Config{
-				Host:            "localhost",
-				User:            "user",
-				Key:             "/path/to/key",
-				Port:            "22",
-				KnownHosts:      "/path/to/known_hosts",
-				CredentialsFile: "/path/to/credentials.json",
-				BucketName:      "bucket-name",
-			},
-			expectedValid: true,
-		},
-		{
-			name: "known hosts not set",
-			config: Config{
-				Host:            "localhost",
-				User:            "user",
-				Key:             "/path/to/key",
-				Port:            "22",
 				CredentialsFile: "/path/to/credentials.json",
 				BucketName:      "bucket-name",
 			},
@@ -38,18 +21,14 @@ func TestConfigValid(t *testing.T) {
 		{
 			name: "missing GCS credentials",
 			config: Config{
-				Host: "localhost",
-				User: "user",
-				Key:  "/path/to/key",
-				Port: "22",
+				BucketName: "bucket-name",
 			},
 			expectedValid: false,
 		},
 		{
-			name: "missing SSH credentials",
+			name: "missing bucket name",
 			config: Config{
 				CredentialsFile: "/path/to/credentials.json",
-				BucketName:      "bucket-name",
 			},
 			expectedValid: false,
 		},
