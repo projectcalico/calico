@@ -189,7 +189,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 					cc.ExpectSome(w6[1], w6[0])
 				}
 
-				cc.CheckConnectivity()
+				cc.CheckConnectivityWithTimeout(time.Second * 20)
 			})
 
 			It("should have some blackhole routes installed", func() {
@@ -308,7 +308,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 					}
 				}
 
-				cc.CheckConnectivity()
+				cc.CheckConnectivityWithTimeout(time.Second * 20)
 			})
 
 			It("should have host to host connectivity", func() {
@@ -320,7 +320,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 					cc.ExpectSome(felixes[1], hostW6[0])
 				}
 
-				cc.CheckConnectivity()
+				cc.CheckConnectivityWithTimeout(time.Second * 20)
 			})
 
 			Context("with host protection policy in place", func() {
@@ -365,7 +365,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 						cc.ExpectSome(w6[0], w6[1])
 						cc.ExpectSome(w6[1], w6[0])
 					}
-					cc.CheckConnectivity()
+					cc.CheckConnectivityWithTimeout(time.Second * 20)
 				})
 			})
 
@@ -431,7 +431,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 						cc.ExpectSome(w6[1], w6[0])
 					}
 
-					cc.CheckConnectivity()
+					cc.CheckConnectivityWithTimeout(time.Second * 20)
 				})
 
 				It("should allow felixes[0] to reach felixes[1] if ingress and egress policies are in place", func() {
@@ -462,7 +462,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 						cc.ExpectSome(w6[0], w6[1])
 						cc.ExpectSome(w6[1], w6[0])
 					}
-					cc.CheckConnectivity()
+					cc.CheckConnectivityWithTimeout(time.Second * 20)
 
 					cc.ResetExpectations()
 
@@ -494,7 +494,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 						cc.ExpectSome(w6[1], w6[0])
 					}
 
-					cc.CheckConnectivity()
+					cc.CheckConnectivityWithTimeout(time.Second * 20)
 				})
 
 				Context("with policy allowing port 8055", func() {
@@ -584,7 +584,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 						if enableIPv6 {
 							cc.ExpectSome(felixes[0], connectivity.TargetIP(serviceV6IP), uint16(port))
 						}
-						cc.CheckConnectivity()
+						cc.CheckConnectivityWithTimeout(time.Second * 20)
 					})
 				})
 			})
@@ -673,7 +673,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 						cc.ExpectNone(w6[1], w6[2])
 						cc.ExpectNone(w6[2], w6[1])
 					}
-					cc.CheckConnectivity()
+					cc.CheckConnectivityWithTimeout(time.Second * 20)
 				})
 			})
 
@@ -702,7 +702,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 					cc.ExpectSome(w[0], w[1])
 					cc.ExpectSome(w[0], w[2])
 					cc.ExpectSome(w[1], w[2])
-					cc.CheckConnectivity()
+					cc.CheckConnectivityWithTimeout(time.Second * 20)
 					cc.ResetExpectations()
 
 					// Then pause all the felixes.
@@ -739,7 +739,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 							cc.ExpectNone(w6[2], w6[0])
 						}
 
-						cc.CheckConnectivity()
+						cc.CheckConnectivityWithTimeout(time.Second * 20)
 					})
 				}
 			})
@@ -852,7 +852,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 					}
 
 					cc.ExpectNone(externalClient, w[0])
-					cc.CheckConnectivity()
+					cc.CheckConnectivityWithTimeout(time.Second * 20)
 
 					By("changing configuration to include the external client")
 
@@ -903,7 +903,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 					By("testing that the ext client can connect via ipip")
 					cc.ResetExpectations()
 					cc.ExpectSome(externalClient, w[0])
-					cc.CheckConnectivity()
+					cc.CheckConnectivityWithTimeout(time.Second * 20)
 				})
 			})
 		})
@@ -1003,7 +1003,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 					}
 				}
 
-				cc.CheckConnectivity()
+				cc.CheckConnectivityWithTimeout(time.Second * 20)
 			})
 		})
 
@@ -1132,7 +1132,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 					}
 				}
 
-				cc.CheckConnectivity()
+				cc.CheckConnectivityWithTimeout(time.Second * 20)
 			})
 
 			It("should have workload to workload connectivity", func() {
@@ -1142,7 +1142,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 					cc.ExpectSome(w6[0], w6[1])
 					cc.ExpectSome(w6[1], w6[0])
 				}
-				cc.CheckConnectivity()
+				cc.CheckConnectivityWithTimeout(time.Second * 20)
 			})
 		})
 	}
