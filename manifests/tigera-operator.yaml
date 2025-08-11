@@ -330,13 +330,13 @@ rules:
       - create
       - update
   - apiGroups:
-    - discovery.k8s.io
+      - discovery.k8s.io
     resources:
-    - endpointslices
+      - endpointslices
     verbs:
-    - get
-    - list
-    - watch
+      - get
+      - list
+      - watch
   - apiGroups:
       - admissionregistration.k8s.io
     resources:
