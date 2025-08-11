@@ -28,6 +28,7 @@ fi
 
 # If we're running in a CI environment...
 if [[ -v CI ]]; then
+  echo "[debug] Running in CI, so we're inspecting the git remotes"
   # Do we have a fetch that references multiple branches?
   for remote in $(git remote); do
     if git config get remote.${remote}.fetch | fgrep -q "*"; then
