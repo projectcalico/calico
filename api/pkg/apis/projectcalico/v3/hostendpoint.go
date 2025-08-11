@@ -26,6 +26,7 @@ const (
 
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:resource:scope=Cluster
 
 // HostEndpointList is a list of HostEndpoint objects.
 type HostEndpointList struct {
@@ -38,6 +39,7 @@ type HostEndpointList struct {
 // +genclient
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:resource:scope=Cluster
 
 type HostEndpoint struct {
 	metav1.TypeMeta   `json:",inline"`
