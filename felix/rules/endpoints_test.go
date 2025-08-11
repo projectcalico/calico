@@ -416,7 +416,7 @@ func endpointRulesTests(flowLogsEnabled bool) func() {
 					}
 					polGrpEgress := &PolicyGroup{
 						Tier:        "default",
-						Direction:   PolicyDirectionInbound,
+						Direction:   PolicyDirectionOutbound,
 						PolicyNames: []string{"staged:ae", "staged:be"},
 						Selector:    "all()",
 					}
