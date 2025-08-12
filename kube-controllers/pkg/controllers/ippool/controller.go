@@ -52,27 +52,32 @@ func NewController(ctx context.Context,
 	cli clientset.Interface,
 	poolInformer cache.SharedIndexInformer,
 	blockInformer cache.SharedIndexInformer,
+	ipam ipam.Interface,
 ) controller.Controller {
 	c := &IPPoolController{
 		ctx:           ctx,
 		cli:           cli,
 		poolInformer:  poolInformer,
 		blockInformer: blockInformer,
+		ipam:          ipam,
 	}
 
 	// Configure events for new IP pools.
 	poolHandlers := cache.ResourceEventHandlerFuncs{
 		DeleteFunc: func(obj any) {
+			logrus.WithField("name", obj.(*v3.IPPool).Name).Info("Handling pool deletion")
 			if err := c.Reconcile(obj.(*v3.IPPool)); err != nil {
 				logrus.WithError(err).Error("Error handling pool deletion")
 			}
 		},
 		AddFunc: func(obj any) {
+			logrus.WithField("name", obj.(*v3.IPPool).Name).Info("Handling pool add")
 			if err := c.Reconcile(obj.(*v3.IPPool)); err != nil {
 				logrus.WithError(err).Error("Error handling pool add")
 			}
 		},
 		UpdateFunc: func(oldObj, newObj any) {
+			logrus.WithField("name", newObj.(*v3.IPPool).Name).Info("Handling pool update")
 			if err := c.Reconcile(newObj.(*v3.IPPool)); err != nil {
 				logrus.WithError(err).Error("Error handling pool update")
 			}
@@ -106,13 +111,22 @@ func (c *IPPoolController) Run(stopCh chan struct{}) {
 
 func (c *IPPoolController) Reconcile(p *v3.IPPool) error {
 	ctx := context.TODO()
+	logCtx := log.WithFields(logrus.Fields{
+		"name":         p.Name,
+		"cidr":         p.Spec.CIDR,
+		"hasFinalizer": HasFinalizer(p),
+	})
+	if p.DeletionTimestamp != nil {
+		logCtx = logCtx.WithField("deletionTimestamp", p.DeletionTimestamp.String())
+	}
+	var err error
 	if p.DeletionTimestamp == nil {
 		// If the IP pool is not being deleted, add a finalizer to it so we can insert ourselves into the deletion flow.
 		if !HasFinalizer(p) {
-			log.WithField("name", p.Name).Info("Adding finalizer to IPPool")
-			p.Finalizers = append(p.Finalizers, IPPoolFinalizer)
-			if _, err := c.cli.ProjectcalicoV3().IPPools().Update(ctx, p, v1.UpdateOptions{}); err != nil {
-				log.WithError(err).WithField("name", p.Name).Error("Failed to add finalizer to IPPool")
+			logCtx.Info("Adding finalizer to IPPool")
+			p.SetFinalizers(append(p.Finalizers, IPPoolFinalizer))
+			if p, err = c.cli.ProjectcalicoV3().IPPools().Update(ctx, p, v1.UpdateOptions{}); err != nil {
+				logCtx.WithError(err).Error("Failed to add finalizer to IPPool")
 				return err
 			}
 		}
@@ -120,6 +134,7 @@ func (c *IPPoolController) Reconcile(p *v3.IPPool) error {
 	}
 
 	if !HasFinalizer(p) {
+		logCtx.Info("IPPool is being deleted, but no finalizer is present, skipping finalization")
 		return nil
 	}
 
@@ -130,20 +145,21 @@ func (c *IPPoolController) Reconcile(p *v3.IPPool) error {
 	if err != nil {
 		return err
 	}
+	logCtx.Info("IPPool is being deleted, releasing affinities")
 	if err = c.ipam.ReleasePoolAffinities(ctx, *parsedNet); err != nil {
 		return err
 	}
 
 	// If there are no IPAM blocks left in this pool, it is safe to remove our finalizer.
 	if c.blocksInPool(*parsedNet) {
-		log.WithField("cidr", p.Spec.CIDR).Info("IPAM blocks still exist in pool, not removing finalizer")
+		logCtx.Info("IPAM blocks still exist in pool, not removing finalizer")
 		return nil
 	}
 
-	log.WithField("cidr", p.Spec.CIDR).Info("No IPAM blocks left in pool, removing finalizer")
+	logCtx.Info("No IPAM blocks left in pool, removing finalizer")
 	p.Finalizers = slices.Delete(p.Finalizers, slices.Index(p.Finalizers, IPPoolFinalizer), slices.Index(p.Finalizers, IPPoolFinalizer)+1)
 	if _, err := c.cli.ProjectcalicoV3().IPPools().Update(ctx, p, v1.UpdateOptions{}); err != nil {
-		log.WithError(err).WithField("name", p.Name).Error("Failed to remove finalizer from IPPool")
+		logCtx.WithError(err).Error("Failed to remove finalizer from IPPool")
 		return err
 	}
 

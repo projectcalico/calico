@@ -140,5 +140,7 @@ test_connection 6
 # We should remove this once we fix up those tests.
 ${kubectl} scale deployment -n tigera-operator tigera-operator --replicas=0
 
-# TODO: Remove crd.projectcalico.org/v1 resources.
+# TODO: Remove crd.projectcalico.org/v1 resources (but not ANP/BANP)
 ${kubectl} delete -f ../libcalico-go/config/crd/
+${kubectl} create -f ../libcalico-go/config/crd/policy.networking.k8s.io_adminnetworkpolicies.yaml
+${kubectl} create -f ../libcalico-go/config/crd/policy.networking.k8s.io_baselineadminnetworkpolicies.yaml

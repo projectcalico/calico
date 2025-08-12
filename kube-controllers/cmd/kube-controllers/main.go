@@ -472,7 +472,7 @@ func (cc *controllerControl) InitControllers(ctx context.Context, cfg config.Run
 
 	if true {
 		// TODO: make this configurable
-		poolController := ippool.NewController(ctx, v3c, poolInformer, blockInformer)
+		poolController := ippool.NewController(ctx, v3c, poolInformer, blockInformer, calicoClient.IPAM())
 		cc.controllers["IPPool"] = poolController
 		cc.registerInformers(poolInformer, blockInformer)
 	}
