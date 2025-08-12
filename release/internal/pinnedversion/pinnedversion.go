@@ -24,7 +24,7 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
-	"gopkg.in/yaml.v2"
+	"go.yaml.in/yaml/v3"
 
 	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/hashreleaseserver"
@@ -221,7 +221,12 @@ func GenerateOperatorComponents(srcDir, outputDir string) (registry.OperatorComp
 		return op, "", err
 	}
 	defer operatorComponentsFile.Close()
-	if err = yaml.NewEncoder(operatorComponentsFile).Encode(pinnedVersion); err != nil {
+
+	enc := yaml.NewEncoder(operatorComponentsFile)
+	enc.SetIndent(2)
+	defer enc.Close()
+
+	if err := enc.Encode(pinnedVersion); err != nil {
 		return op, "", err
 	}
 	if outputDir != "" {
