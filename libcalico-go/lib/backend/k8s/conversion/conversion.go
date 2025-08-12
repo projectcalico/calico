@@ -32,6 +32,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	adminpolicy "sigs.k8s.io/network-policy-api/apis/v1alpha1"
+	clusternetpol "sigs.k8s.io/network-policy-api/apis/v1alpha2"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
@@ -61,6 +62,7 @@ type Converter interface {
 	K8sNetworkPolicyToCalico(np *networkingv1.NetworkPolicy) (*model.KVPair, error)
 	K8sAdminNetworkPolicyToCalico(anp *adminpolicy.AdminNetworkPolicy) (*model.KVPair, error)
 	K8sBaselineAdminNetworkPolicyToCalico(banp *adminpolicy.BaselineAdminNetworkPolicy) (*model.KVPair, error)
+	K8sClusterNetworkPolicyToCalico(kcnp *clusternetpol.ClusterNetworkPolicy) (*model.KVPair, error)
 	EndpointSliceToKVP(svc *discovery.EndpointSlice) (*model.KVPair, error)
 	ServiceToKVP(service *kapiv1.Service) (*model.KVPair, error)
 	ProfileNameToNamespace(profileName string) (string, error)
