@@ -212,7 +212,7 @@ run-kubernetes-master: stop-kubernetes-master
 	# Apply CRDs because the tests require them.
 	while ! docker exec -ti st-apiserver-${KUBE_APISERVER_PORT} kubectl \
 		--server=https://127.0.0.1:${KUBE_APISERVER_PORT} \
-		apply -f /go/src/github.com/projectcalico/calico/libcalico-go/config/crd; \
+		apply -f /go/src/github.com/projectcalico/calico/api/config/crd; \
 		do echo "Waiting for ClusterInformation CRD to apply successfully..."; sleep 2; done
 
 	# Create a namespace in the API for the tests to use.

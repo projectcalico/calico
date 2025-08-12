@@ -185,7 +185,6 @@ var _ = testutils.E2eDatastoreDescribe("IPPool KDD v1 to v3 migration tests", te
 					Mode:    encap.Always,
 				},
 				NATOutgoing:    true,
-				NATOutgoingV1:  false,
 				BlockSize:      26,
 				NodeSelector:   "all()",
 				AssignmentMode: &automatic,
@@ -223,7 +222,6 @@ var _ = testutils.E2eDatastoreDescribe("IPPool KDD v1 to v3 migration tests", te
 				IPIPMode:       apiv3.IPIPModeCrossSubnet,
 				IPIP:           nil,
 				NATOutgoing:    false,
-				NATOutgoingV1:  true,
 				BlockSize:      26,
 				NodeSelector:   "has(x)",
 				AssignmentMode: &automatic,
@@ -303,8 +301,6 @@ var _ = testutils.E2eDatastoreDescribe("IPPool KDD v1 to v3 migration tests", te
 		Entry("IPv4 IPPool CRD with v1 IPIP field and IPIP Enabled set to true and Mode CrossSubnet", name1, name2, spec1_v3, kvp1),
 		Entry("IPv6 IPPool CRD with v1 IPIP field and IPIP Enabled set to false and Mode Never", name1, name2, spec2_v3, kvp2),
 		Entry("IPv4 IPPool CRD with v1 IPIP field and IPIP Enabled set to true and Mode Always", name1, name2, spec3_v3, kvp3),
-		Entry("IPv4 IPPool CRD with v1 NATOutgoingV1 field set to false and v3 NATOutgoing set to true", name1, name2, spec5_v3, kvp5),
-		Entry("IPv4 IPPool CRD with v1 NATOutgoingV1 field set to true (v1 IPIP set to nil) and v3 NATOutgoing set to false", name1, name2, spec6_v3, kvp6),
 	)
 
 	Describe("IPPool watch functionality", func() {
