@@ -16,7 +16,7 @@
 
 set -e
 
-source .semaphore/new-kernel-common.sh
+source $(pwd)/.semaphore/batches.sh
 
 vm_name_prefix=$1
 project=unique-caldron-775
