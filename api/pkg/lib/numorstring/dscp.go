@@ -83,7 +83,7 @@ func DSCPFromString(s string) DSCP {
 	for k := range AllDSCPValues {
 		if strings.EqualFold(k, s) {
 			return DSCP(
-				Uint8OrString{Type: NumOrStringString, StrVal: s},
+				Uint8OrString{Type: NumOrStringString, StrVal: k},
 			)
 		}
 	}
@@ -110,8 +110,11 @@ func (d *DSCP) ToUint8() uint8 {
 func (d *DSCP) Validate() error {
 	// If a number, it must be between 0 and 63.
 	val, err := (*Uint8OrString)(d).NumValue()
-	if err == nil && val > 63 {
-		return fmt.Errorf("DSCP must be between 0 and 63")
+	if err == nil {
+		if val > 63 {
+			return fmt.Errorf("DSCP must be between 0 and 63")
+		}
+		return nil
 	}
 
 	// Otherwise, it must be one of the known constant.
