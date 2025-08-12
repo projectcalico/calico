@@ -221,7 +221,7 @@ func NewIterator(mapFD FD, keySize, valueSize, maxEntries int) (*Iterator, error
 	m.keysBuff = C.malloc(C.size_t(m.keysBufSize))
 	m.valuesBuff = C.malloc(C.size_t(m.valuesBufSize))
 
-	// XXX either unecessary or should also clean the buffers before every
+	// XXX either unnecessary or should also clean the buffers before every
 	// iteration
 	C.memset(m.keysBuff, 0, (C.size_t)(m.keysBufSize))
 	C.memset(m.valuesBuff, 0, (C.size_t)(m.valuesBufSize))
