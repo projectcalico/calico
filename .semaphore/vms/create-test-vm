@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Copyright (c) 2023 Tigera, Inc. All rights reserved.
+
+# Copyright (c) 2019 Tigera, Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,11 +17,16 @@
 set -e
 set -x
 
-zone=$1
-vm_name=$2
-disk_size=$3
+vm_name=$1
+project=unique-caldron-775
+zone=${ZONE:-europe-west3-c}
+disk_size=${VM_DISK_SIZE:-20GB}
 project=${GCP_PROJECT:-unique-caldron-775}
 gcp_secret_key=${GCP_SECRET_KEY:-$HOME/secrets/secret.google-service-account-key.json}
+
+: ${IMAGE:=ubuntu-2204-jammy-v20250312}
+: ${DOCKER_VERSION=5:20.10.14~3-0~ubuntu-jammy}
+: ${UBUNTU_VERSION=jammy}
 
 gcloud config set project $project
 gcloud auth activate-service-account --key-file=$gcp_secret_key
@@ -29,11 +35,13 @@ function create-vm() {
   gcloud --quiet compute instances create "${vm_name}" \
            --zone=${zone} \
            --machine-type=n4-standard-4 \
-           --image=ubuntu-2004-focal-v20250313 \
+           --image=${IMAGE} \
            --image-project=ubuntu-os-cloud \
            --boot-disk-size=$disk_size \
            --boot-disk-type=hyperdisk-balanced && \
+
   ssh_cmd="gcloud --quiet compute ssh --zone=${zone} ubuntu@${vm_name}"
+
   for ssh_try in $(seq 1 10); do
     echo "Trying to SSH in: $ssh_try"
     ${ssh_cmd} -- echo "Success" && break
@@ -41,9 +49,9 @@ function create-vm() {
   done  && \
   ${ssh_cmd} -- sudo apt install apt-transport-https ca-certificates curl software-properties-common && \
   ${ssh_cmd} -- "curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --yes --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg" && \
-  ${ssh_cmd} -- "echo 'deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu focal stable' | sudo tee /etc/apt/sources.list.d/docker.list" && \
+  ${ssh_cmd} -- "echo 'deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu ${UBUNTU_VERSION} stable' | sudo tee /etc/apt/sources.list.d/docker.list" && \
   ${ssh_cmd} -- sudo apt update -y && \
-  ${ssh_cmd} -- sudo apt install -y --no-install-recommends git docker-ce=5:28.1.1-1~ubuntu.20.04~focal docker-ce-cli=5:28.1.1-1~ubuntu.20.04~focal docker-buildx-plugin containerd.io make iproute2 wireguard && \
+  ${ssh_cmd} -- sudo apt install -y --no-install-recommends git docker-ce=${DOCKER_VERSION} docker-ce-cli=${DOCKER_VERSION} docker-buildx-plugin containerd.io make iproute2 wireguard && \
   ${ssh_cmd} -- sudo usermod -a -G docker ubuntu && \
   ${ssh_cmd} -- sudo modprobe ipip && \
   ${ssh_cmd} -- 'if [ -s /etc/docker/daemon.json ] ; then cat /etc/docker/daemon.json | sed "\$d" | sed "\$s/\$/,/" > /tmp/daemon.json ; else echo -en {\\n > /tmp/daemon.json ; fi' && \
