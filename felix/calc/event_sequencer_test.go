@@ -18,9 +18,9 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
+	"github.com/projectcalico/api/pkg/lib/numorstring"
 	googleproto "google.golang.org/protobuf/proto"
 
-	"github.com/projectcalico/api/pkg/lib/numorstring"
 	"github.com/projectcalico/calico/felix/calc"
 	"github.com/projectcalico/calico/felix/config"
 	"github.com/projectcalico/calico/felix/proto"
