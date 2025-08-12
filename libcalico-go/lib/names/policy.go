@@ -24,6 +24,8 @@ import (
 
 const (
 	DefaultTierName                    = "default"
+	AdminTierName                      = "admin"
+	BaselineTierName                   = "baseline"
 	AdminNetworkPolicyTierName         = "adminnetworkpolicy"
 	BaselineAdminNetworkPolicyTierName = "baselineadminnetworkpolicy"
 
@@ -38,6 +40,8 @@ const (
 	// BaselineAdminNetworkPolicy resource, which is cluster-scoped and lives
 	// in a tier after the default tier.
 	K8sBaselineAdminNetworkPolicyNamePrefix = "kbanp.baselineadminnetworkpolicy."
+	K8sAdminPolicyNamePrefix                = "kcnp.admin."
+	K8sBaselinePolicyNamePrefix             = "kcnp.baseline."
 
 	// OpenStackNetworkPolicyNamePrefix is the prefix for OpenStack security groups.
 	OpenStackNetworkPolicyNamePrefix = "ossg."
@@ -62,6 +66,12 @@ func TierFromPolicyName(name string) (string, error) {
 	}
 	if strings.HasPrefix(name, K8sBaselineAdminNetworkPolicyNamePrefix) {
 		return BaselineAdminNetworkPolicyTierName, nil
+	}
+	if strings.HasPrefix(name, K8sAdminPolicyNamePrefix) {
+		return AdminTierName, nil
+	}
+	if strings.HasPrefix(name, K8sBaselinePolicyNamePrefix) {
+		return BaselineTierName, nil
 	}
 	// Policy derived from OpenStack security groups is named as "ossg.default.<security group
 	// ID>", but should go into the default tier.
@@ -173,6 +183,8 @@ func policyNameIsFormatted(policy string) bool {
 	return strings.HasPrefix(policy, K8sNetworkPolicyNamePrefix) ||
 		strings.HasPrefix(policy, K8sAdminNetworkPolicyNamePrefix) ||
 		strings.HasPrefix(policy, K8sBaselineAdminNetworkPolicyNamePrefix) ||
+		strings.HasPrefix(policy, K8sAdminPolicyNamePrefix) ||
+		strings.HasPrefix(policy, K8sBaselinePolicyNamePrefix) ||
 		strings.HasPrefix(policy, OpenStackNetworkPolicyNamePrefix)
 }
 
@@ -240,6 +252,12 @@ func DeconstructPolicyName(name string) (string, string, string, error) {
 	// If policy name starts with "kbanp.baselineadminnetworkpolicy" then this is k8s baseline admin network policy.
 	if strings.HasPrefix(name, K8sBaselineAdminNetworkPolicyNamePrefix) {
 		return namespace, BaselineAdminNetworkPolicyTierName, stagedPrefix + name, nil
+	}
+	if strings.HasPrefix(name, K8sAdminPolicyNamePrefix) {
+		return namespace, AdminTierName, stagedPrefix + name, nil
+	}
+	if strings.HasPrefix(name, K8sBaselinePolicyNamePrefix) {
+		return namespace, BaselineTierName, stagedPrefix + name, nil
 	}
 
 	// This is a non-kubernetes policy, so extract the tier name from the policy name.
