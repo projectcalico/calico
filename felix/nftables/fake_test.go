@@ -16,6 +16,7 @@ package nftables_test
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -36,6 +37,8 @@ func NewFake(fam knftables.Family, name string) *fakeNFT {
 }
 
 type fakeNFT struct {
+	lock sync.Mutex
+
 	// Wrap a knftables fake instance.
 	fake   *knftables.Fake
 	family knftables.Family
@@ -57,20 +60,32 @@ type fakeNFT struct {
 }
 
 func (f *fakeNFT) Reset() {
+	f.lock.Lock()
+	defer f.lock.Unlock()
+
 	f.transactions = make([]knftables.Transaction, 0)
 }
 
 func (f *fakeNFT) Sleep(duration time.Duration) {
+	f.lock.Lock()
+	defer f.lock.Unlock()
+
 	f.CumulativeSleep += duration
 	f.Time = f.Time.Add(duration)
 	logrus.WithField("time", f.Time).Info("Updated current time after sleep")
 }
 
 func (f *fakeNFT) Now() time.Time {
+	f.lock.Lock()
+	defer f.lock.Unlock()
+
 	return f.Time
 }
 
 func (f *fakeNFT) AdvanceTimeBy(amount time.Duration) {
+	f.lock.Lock()
+	defer f.lock.Unlock()
+
 	f.Time = f.Time.Add(amount)
 	logrus.WithField("time", f.Time).Info("Updated current time")
 }
@@ -86,13 +101,20 @@ func (f *fakeNFT) NewTransaction() *knftables.Transaction {
 // Run runs a Transaction and returns the result. The IsNotFound and
 // IsAlreadyExists methods can be used to test the result.
 func (f *fakeNFT) Run(ctx context.Context, tx *knftables.Transaction) error {
+	f.preRun(tx)
+	return f.fake.Run(ctx, tx)
+}
+
+func (f *fakeNFT) preRun(tx *knftables.Transaction) {
+	f.lock.Lock()
+	defer f.lock.Unlock()
+
 	if f.PreWrite != nil {
 		logrus.Info("Calling PreWrite")
 		f.PreWrite()
 		f.PreWrite = nil
 	}
 	f.transactions = append(f.transactions, *tx)
-	return f.fake.Run(ctx, tx)
 }
 
 // Check does a dry-run of a Transaction (as with `nft --check`) and returns the
@@ -106,12 +128,19 @@ func (f *fakeNFT) Check(ctx context.Context, tx *knftables.Transaction) error {
 // or "map") in the table. If there are no such objects, this will return an empty
 // list and no error.
 func (f *fakeNFT) List(ctx context.Context, objectType string) ([]string, error) {
+	f.preList()
+	return f.fake.List(ctx, objectType)
+}
+
+func (f *fakeNFT) preList() {
+	f.lock.Lock()
+	defer f.lock.Unlock()
+
 	if f.PreList != nil {
 		logrus.Info("Calling PreList")
 		f.PreList()
 		f.PreList = nil
 	}
-	return f.fake.List(ctx, objectType)
 }
 
 // ListRules returns a list of the rules in a chain, in order. If no chain name is
@@ -129,10 +158,20 @@ func (f *fakeNFT) ListRules(ctx context.Context, chain string) ([]*knftables.Rul
 // be "set" or "map".) If the set/map exists but contains no elements, this will
 // return an empty list and no error.
 func (f *fakeNFT) ListElements(ctx context.Context, objectType string, name string) ([]*knftables.Element, error) {
-	if err := f.ListElementsErrors[name]; err != nil {
-		logrus.WithError(err).WithField("name", name).Info("Returning test error from ListElements")
-		delete(f.ListElementsErrors, name)
+	if err := f.maybeFailListElements(name); err != nil {
 		return nil, err
 	}
 	return f.fake.ListElements(ctx, objectType, name)
+}
+
+func (f *fakeNFT) maybeFailListElements(name string) error {
+	f.lock.Lock()
+	defer f.lock.Unlock()
+
+	if err := f.ListElementsErrors[name]; err != nil {
+		logrus.WithError(err).WithField("name", name).Info("Returning test error from ListElements")
+		delete(f.ListElementsErrors, name)
+		return err
+	}
+	return nil
 }
