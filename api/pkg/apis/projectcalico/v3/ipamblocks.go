@@ -34,10 +34,13 @@ type IPAMBlock struct {
 // IPAMBlockSpec contains the specification for an IPAMBlock resource.
 type IPAMBlockSpec struct {
 	// The block's CIDR.
+	// +kubebuilder:validation:Format=cidr
 	CIDR string `json:"cidr"`
 
 	// Affinity of the block, if this block has one. If set, it will be of the form
-	// "host:<hostname>". If not set, this block is not affine to a host.
+	// "host:<hostname>" or "virtual:<hostname>". If not set, this block is not affine to a host.
+	// +kubebuilder:validation:Pattern=`^(host|virtual):[a-zA-Z0-9\.\-_]+$`
+	// +optional
 	Affinity *string `json:"affinity,omitempty"`
 
 	// Array of allocations in-use within this block. nil entries mean the allocation is free.

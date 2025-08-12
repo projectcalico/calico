@@ -329,6 +329,10 @@ spec:
                   pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
                   type: string
                 iptablesBackend:
+                  enum:
+                    - Legacy
+                    - NFT
+                    - Auto
                   pattern: ^(?i)(Auto|Legacy|NFT)?$
                   type: string
                 iptablesFilterAllowAction:
@@ -421,10 +425,14 @@ spec:
                   format: int32
                   type: integer
                 nftablesMode:
-                  enum:
-                    - Disabled
-                    - Enabled
-                    - Auto
+                  allOf:
+                    - enum:
+                        - Enabled
+                        - Disabled
+                    - enum:
+                        - Disabled
+                        - Enabled
+                        - Auto
                   type: string
                 nftablesRefreshInterval:
                   type: string

@@ -191,6 +191,7 @@ func NewCalicoNodeStatus() *CalicoNodeStatus {
 	}
 }
 
+// +kubebuilder:validation:Enum=FIB;RIB
 type CalicoNodeRouteType string
 
 const (
@@ -198,6 +199,7 @@ const (
 	RouteTypeRIB CalicoNodeRouteType = "RIB"
 )
 
+// +kubebuilder:validation:Enum=Kernel;Static;Direct;NodeMesh;BGPPeer
 type CalicoNodeRouteSourceType string
 
 const (
@@ -208,6 +210,7 @@ const (
 	RouteSourceTypeBGPPeer  CalicoNodeRouteSourceType = "BGPPeer"
 )
 
+// +kubebuilder:validation:Enum=Agent;BGP;Routes
 type NodeStatusClassType string
 
 const (
@@ -216,6 +219,7 @@ const (
 	NodeStatusClassTypeRoutes NodeStatusClassType = "Routes"
 )
 
+// +kubebuilder:validation:Enum=NodeMesh;NodePeer;GlobalPeer
 type BGPPeerType string
 
 const (
@@ -224,6 +228,7 @@ const (
 	BGPPeerTypeGlobalPeer BGPPeerType = "GlobalPeer"
 )
 
+// +kubebuilder:validation:Enum=Ready;NotReady
 type BGPDaemonState string
 
 const (
@@ -231,6 +236,7 @@ const (
 	BGPDaemonStateNotReady BGPDaemonState = "NotReady"
 )
 
+// +kubebuilder:validation:Enum=Idle;Connect;Active;OpenSent;OpenConfirm;Established;Close
 type BGPSessionState string
 
 const (

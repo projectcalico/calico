@@ -27,12 +27,17 @@ spec:
             spec:
               properties:
                 cidr:
+                  format: cidr
                   type: string
                 deleted:
                   type: boolean
                 node:
                   type: string
                 state:
+                  enum:
+                    - confirmed
+                    - pending
+                    - pendingDeletion
                   type: string
                 type:
                   type: string

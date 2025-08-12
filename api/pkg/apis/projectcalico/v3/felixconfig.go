@@ -48,6 +48,7 @@ const (
 	KindFelixConfigurationList = "FelixConfigurationList"
 )
 
+// +kubebuilder:validation:Enum=Legacy;NFT;Auto
 type IptablesBackend string
 
 const (
@@ -58,6 +59,7 @@ const (
 
 // NFTablesMode is the enum used to enable/disable nftables mode.
 // +enum
+// +kubebuilder:validation:Enum=Enabled;Disabled
 type NFTablesMode string
 
 const (

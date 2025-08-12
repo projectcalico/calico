@@ -488,7 +488,7 @@ func schema_pkg_apis_projectcalico_v3_AutoHostEndpointConfig(ref common.Referenc
 				Properties: map[string]spec.Schema{
 					"autoCreate": {
 						SchemaProps: spec.SchemaProps{
-							Description: "AutoCreate enables automatic creation of host endpoints for every node. [Default: Disabled]",
+							Description: "AutoCreate enables automatic creation of host endpoints for every node. [Default: Disabled] Valid values are: \"Enabled\", \"Disabled\".",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -639,6 +639,11 @@ func schema_pkg_apis_projectcalico_v3_BGPConfigurationSpec(ref common.ReferenceC
 						},
 					},
 					"serviceLoadBalancerIPs": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "set",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "ServiceLoadBalancerIPs are the CIDR blocks for Kubernetes Service LoadBalancer IPs. Kubernetes Service status.LoadBalancer.Ingress IPs will only be advertised if they are within one of these blocks.",
 							Type:        []string{"array"},
@@ -653,6 +658,11 @@ func schema_pkg_apis_projectcalico_v3_BGPConfigurationSpec(ref common.ReferenceC
 						},
 					},
 					"serviceExternalIPs": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "set",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "ServiceExternalIPs are the CIDR blocks for Kubernetes Service External IPs. Kubernetes Service ExternalIPs will only be advertised if they are within one of these blocks.",
 							Type:        []string{"array"},
@@ -667,6 +677,11 @@ func schema_pkg_apis_projectcalico_v3_BGPConfigurationSpec(ref common.ReferenceC
 						},
 					},
 					"serviceClusterIPs": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "set",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "ServiceClusterIPs are the CIDR blocks from which service cluster IPs are allocated. If specified, Calico will advertise these blocks, as well as any cluster IPs within them.",
 							Type:        []string{"array"},
@@ -688,6 +703,11 @@ func schema_pkg_apis_projectcalico_v3_BGPConfigurationSpec(ref common.ReferenceC
 						},
 					},
 					"communities": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "set",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "Communities is a list of BGP community values and their arbitrary names for tagging routes.",
 							Type:        []string{"array"},
@@ -702,6 +722,11 @@ func schema_pkg_apis_projectcalico_v3_BGPConfigurationSpec(ref common.ReferenceC
 						},
 					},
 					"prefixAdvertisements": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "set",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "PrefixAdvertisements contains per-prefix advertisement configuration.",
 							Type:        []string{"array"},
@@ -742,6 +767,11 @@ func schema_pkg_apis_projectcalico_v3_BGPConfigurationSpec(ref common.ReferenceC
 						},
 					},
 					"ignoredInterfaces": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "set",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "IgnoredInterfaces indicates the network interfaces that needs to be excluded when reading device routes.",
 							Type:        []string{"array"},
@@ -907,7 +937,7 @@ func schema_pkg_apis_projectcalico_v3_BGPFilterList(ref common.ReferenceCallback
 						},
 					},
 				},
-				Required: []string{"items"},
+				Required: []string{"metadata", "items"},
 			},
 		},
 		Dependencies: []string{
@@ -1075,6 +1105,11 @@ func schema_pkg_apis_projectcalico_v3_BGPFilterSpec(ref common.ReferenceCallback
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"exportV4": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "set",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "The ordered set of IPv4 BGPFilter rules acting on exporting routes to a peer.",
 							Type:        []string{"array"},
@@ -1089,6 +1124,11 @@ func schema_pkg_apis_projectcalico_v3_BGPFilterSpec(ref common.ReferenceCallback
 						},
 					},
 					"importV4": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "set",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "The ordered set of IPv4 BGPFilter rules acting on importing routes from a peer.",
 							Type:        []string{"array"},
@@ -1103,6 +1143,11 @@ func schema_pkg_apis_projectcalico_v3_BGPFilterSpec(ref common.ReferenceCallback
 						},
 					},
 					"exportV6": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "set",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "The ordered set of IPv6 BGPFilter rules acting on exporting routes to a peer.",
 							Type:        []string{"array"},
@@ -1117,6 +1162,11 @@ func schema_pkg_apis_projectcalico_v3_BGPFilterSpec(ref common.ReferenceCallback
 						},
 					},
 					"importV6": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "set",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "The ordered set of IPv6 BGPFilter rules acting on importing routes from a peer.",
 							Type:        []string{"array"},
@@ -1240,7 +1290,7 @@ func schema_pkg_apis_projectcalico_v3_BGPPeerList(ref common.ReferenceCallback) 
 						},
 					},
 				},
-				Required: []string{"items"},
+				Required: []string{"metadata", "items"},
 			},
 		},
 		Dependencies: []string{
@@ -2302,6 +2352,11 @@ func schema_pkg_apis_projectcalico_v3_EntityRule(ref common.ReferenceCallback) c
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"nets": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "set",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "Nets is an optional field that restricts the rule to only apply to traffic that originates from (or terminates at) IP addresses in any of the given subnets.",
 							Type:        []string{"array"},
@@ -2351,7 +2406,7 @@ func schema_pkg_apis_projectcalico_v3_EntityRule(ref common.ReferenceCallback) c
 					},
 					"notNets": {
 						SchemaProps: spec.SchemaProps{
-							Description: "NotNets is the negated version of the Nets field.",
+							Description: "NotNets is the negated version of the Nets field. listType=set",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -4022,6 +4077,11 @@ func schema_pkg_apis_projectcalico_v3_GlobalNetworkSetSpec(ref common.ReferenceC
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"nets": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "set",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "The list of IP networks that belong to this set.",
 							Type:        []string{"array"},
@@ -4249,6 +4309,11 @@ func schema_pkg_apis_projectcalico_v3_HostEndpointSpec(ref common.ReferenceCallb
 						},
 					},
 					"expectedIPs": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "set",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "The expected IP addresses (IPv4 and IPv6) of the endpoint. If \"InterfaceName\" is not present, Calico will look for an interface matching any of the IPs in the list and apply policy to that. Note:\n\tWhen using the selector match criteria in an ingress or egress security Policy\n\tor Profile, Calico converts the selector into a set of IP addresses. For host\n\tendpoints, the ExpectedIPs field is used for that purpose. (If only the interface\n\tname is specified, Calico does not learn the IPs of the interface for use in match\n\tcriteria.)",
 							Type:        []string{"array"},
@@ -4264,6 +4329,11 @@ func schema_pkg_apis_projectcalico_v3_HostEndpointSpec(ref common.ReferenceCallb
 						},
 					},
 					"profiles": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "set",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "A list of identifiers of security Profile objects that apply to this endpoint. Each profile is applied in the order that they appear in this list.  Profile rules are applied after the selector-based security policy.",
 							Type:        []string{"array"},
@@ -4435,7 +4505,7 @@ func schema_pkg_apis_projectcalico_v3_IPAMBlockSpec(ref common.ReferenceCallback
 					},
 					"affinity": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Affinity of the block, if this block has one. If set, it will be of the form \"host:<hostname>\". If not set, this block is not affine to a host.",
+							Description: "Affinity of the block, if this block has one. If set, it will be of the form \"host:<hostname>\" or \"virtual:<hostname>\". If not set, this block is not affine to a host.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -4973,12 +5043,6 @@ func schema_pkg_apis_projectcalico_v3_IPPoolSpec(ref common.ReferenceCallback) c
 							Format:      "",
 						},
 					},
-					"ipip": {
-						SchemaProps: spec.SchemaProps{
-							Description: "Deprecated: this field is only used for APIv1 backwards compatibility. Setting this field is not allowed, this field is for internal use only.",
-							Ref:         ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.IPIPConfiguration"),
-						},
-					},
 					"allowedUses": {
 						VendorExtensible: spec.VendorExtensible{
 							Extensions: spec.Extensions{
@@ -5010,8 +5074,6 @@ func schema_pkg_apis_projectcalico_v3_IPPoolSpec(ref common.ReferenceCallback) c
 				Required: []string{"cidr"},
 			},
 		},
-		Dependencies: []string{
-			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.IPIPConfiguration"},
 	}
 }
 
@@ -5113,6 +5175,11 @@ func schema_pkg_apis_projectcalico_v3_IPReservationSpec(ref common.ReferenceCall
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"reservedCIDRs": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "set",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "ReservedCIDRs is a list of CIDRs and/or IP addresses that Calico IPAM will exclude from new allocations.",
 							Type:        []string{"array"},
@@ -5237,14 +5304,14 @@ func schema_pkg_apis_projectcalico_v3_KubeControllersConfigurationSpec(ref commo
 				Properties: map[string]spec.Schema{
 					"logSeverityScreen": {
 						SchemaProps: spec.SchemaProps{
-							Description: "LogSeverityScreen is the log severity above which logs are sent to the stdout. [Default: Info]",
+							Description: "LogSeverityScreen is the log severity above which logs are sent to the stdout. [Default: Info] Valid values are: \"None\", \"Debug\", \"Info\", \"Warning\", \"Error\", \"Fatal\", \"Panic\".",
 							Type:        []string{"string"},
 							Format:      "",
 						},
 					},
 					"healthChecks": {
 						SchemaProps: spec.SchemaProps{
-							Description: "HealthChecks enables or disables support for health checks [Default: Enabled]",
+							Description: "HealthChecks enables or disables support for health checks [Default: Enabled] Valid values are: \"Enabled\", \"Disabled\".",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -5257,7 +5324,7 @@ func schema_pkg_apis_projectcalico_v3_KubeControllersConfigurationSpec(ref commo
 					},
 					"prometheusMetricsPort": {
 						SchemaProps: spec.SchemaProps{
-							Description: "PrometheusMetricsPort is the TCP port that the Prometheus metrics server should bind to. Set to 0 to disable. [Default: 9094]",
+							Description: "PrometheusMetricsPort is the TCP port that the Prometheus metrics server should bind to. Set to 0 to disable. [Default: 9094] Valid values are: 0-65535.",
 							Type:        []string{"integer"},
 							Format:      "int32",
 						},
@@ -5271,7 +5338,7 @@ func schema_pkg_apis_projectcalico_v3_KubeControllersConfigurationSpec(ref commo
 					},
 					"debugProfilePort": {
 						SchemaProps: spec.SchemaProps{
-							Description: "DebugProfilePort configures the port to serve memory and cpu profiles on. If not specified, profiling is disabled.",
+							Description: "DebugProfilePort configures the port to serve memory and cpu profiles on. If not specified, profiling is disabled. Valid values are: 0-65535.",
 							Type:        []string{"integer"},
 							Format:      "int32",
 						},
@@ -5648,6 +5715,11 @@ func schema_pkg_apis_projectcalico_v3_NetworkSetSpec(ref common.ReferenceCallbac
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"nets": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "set",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "The list of IP networks that belong to this set.",
 							Type:        []string{"array"},
@@ -5683,7 +5755,7 @@ func schema_pkg_apis_projectcalico_v3_NodeControllerConfig(ref common.ReferenceC
 					},
 					"syncLabels": {
 						SchemaProps: spec.SchemaProps{
-							Description: "SyncLabels controls whether to copy Kubernetes node labels to Calico nodes. [Default: Enabled]",
+							Description: "SyncLabels controls whether to copy Kubernetes node labels to Calico nodes. [Default: Enabled] Valid values are: \"Enabled\", \"Disabled\".",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -6135,6 +6207,11 @@ func schema_pkg_apis_projectcalico_v3_ServiceAccountMatch(ref common.ReferenceCa
 				Type: []string{"object"},
 				Properties: map[string]spec.Schema{
 					"names": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "set",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "Names is an optional field that restricts the rule to only apply to traffic that originates from (or terminates at) a pod running as a service account whose name is in the list.",
 							Type:        []string{"array"},
@@ -6849,6 +6926,11 @@ func schema_pkg_apis_projectcalico_v3_Template(ref common.ReferenceCallback) com
 						},
 					},
 					"interfaceCIDRs": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "set",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "InterfaceCIDRs contains a list of CIDRs used for matching nodeIPs to the AutoHostEndpoint. If specified, only addresses within these CIDRs will be included in the expected IPs. At least one of InterfaceCIDRs and InterfaceSelector must be specified.",
 							Type:        []string{"array"},

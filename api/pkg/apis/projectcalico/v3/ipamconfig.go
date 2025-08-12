@@ -55,6 +55,11 @@ type IPAMConfigurationSpec struct {
 
 	// MaxBlocksPerHost, if non-zero, is the max number of blocks that can be
 	// affine to each host.
+	//
+	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:validation:Maximum=1000000
+	// +kubebuilder:default=0
+	// +optional
 	MaxBlocksPerHost int32 `json:"maxBlocksPerHost,omitempty"`
 
 	// Whether or not to auto allocate blocks to hosts.

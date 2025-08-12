@@ -27,6 +27,7 @@ spec:
             spec:
               properties:
                 affinity:
+                  pattern: ^(host|virtual):[a-zA-Z0-9\.\-_]+$
                   type: string
                 allocations:
                   items:
@@ -47,6 +48,7 @@ spec:
                     type: object
                   type: array
                 cidr:
+                  format: cidr
                   type: string
                 deleted:
                   type: boolean

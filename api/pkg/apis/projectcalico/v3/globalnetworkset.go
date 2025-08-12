@@ -50,6 +50,7 @@ type GlobalNetworkSet struct {
 // GlobalNetworkSetSpec contains the specification for a NetworkSet resource.
 type GlobalNetworkSetSpec struct {
 	// The list of IP networks that belong to this set.
+	// +listType=set
 	Nets []string `json:"nets,omitempty" validate:"omitempty,dive,cidr"`
 }
 

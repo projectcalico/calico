@@ -29,7 +29,10 @@ spec:
                 autoAllocateBlocks:
                   type: boolean
                 maxBlocksPerHost:
+                  default: 0
                   format: int32
+                  maximum: 1000000
+                  minimum: 0
                   type: integer
                 strictAffinity:
                   type: boolean

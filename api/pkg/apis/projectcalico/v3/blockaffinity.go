@@ -23,6 +23,7 @@ const (
 	KindBlockAffinityList = "BlockAffinityList"
 )
 
+// +kubebuilder:validation:Enum=confirmed;pending;pendingDeletion
 type BlockAffinityState string
 
 const (
@@ -57,6 +58,8 @@ type BlockAffinitySpec struct {
 	Type string `json:"type,omitempty"`
 
 	// The CIDR range this block affinity references.
+	// +kubebuilder:validation:Format=cidr
+	// +kubebuilder:validation:Required
 	CIDR string `json:"cidr"`
 
 	// Deleted indicates whether or not this block affinity is disabled and is

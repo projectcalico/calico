@@ -31,6 +31,9 @@ spec:
                     loadBalancer:
                       properties:
                         assignIPs:
+                          enum:
+                            - AllServices
+                            - RequestedServicesOnly
                           type: string
                       type: object
                     namespace:
@@ -43,6 +46,9 @@ spec:
                         hostEndpoint:
                           properties:
                             autoCreate:
+                              enum:
+                                - Enabled
+                                - Disabled
                               type: string
                             createDefaultHostEndpoint:
                               type: string
@@ -54,8 +60,10 @@ spec:
                                     type: string
                                   interfaceCIDRs:
                                     items:
+                                      format: cidr
                                       type: string
                                     type: array
+                                    x-kubernetes-list-type: set
                                   interfaceSelector:
                                     type: string
                                   labels:
@@ -72,6 +80,9 @@ spec:
                         reconcilerPeriod:
                           type: string
                         syncLabels:
+                          enum:
+                            - Enabled
+                            - Disabled
                           type: string
                       type: object
                     policy:
@@ -92,14 +103,30 @@ spec:
                   type: object
                 debugProfilePort:
                   format: int32
+                  maximum: 65535
+                  minimum: 0
                   type: integer
                 etcdV3CompactionPeriod:
                   type: string
                 healthChecks:
+                  default: Enabled
+                  enum:
+                    - Enabled
+                    - Disabled
                   type: string
                 logSeverityScreen:
+                  enum:
+                    - None
+                    - Debug
+                    - Info
+                    - Warning
+                    - Error
+                    - Fatal
+                    - Panic
                   type: string
                 prometheusMetricsPort:
+                  maximum: 65535
+                  minimum: 0
                   type: integer
               required:
                 - controllers
@@ -117,6 +144,9 @@ spec:
                         loadBalancer:
                           properties:
                             assignIPs:
+                              enum:
+                                - AllServices
+                                - RequestedServicesOnly
                               type: string
                           type: object
                         namespace:
@@ -129,6 +159,9 @@ spec:
                             hostEndpoint:
                               properties:
                                 autoCreate:
+                                  enum:
+                                    - Enabled
+                                    - Disabled
                                   type: string
                                 createDefaultHostEndpoint:
                                   type: string
@@ -140,8 +173,10 @@ spec:
                                         type: string
                                       interfaceCIDRs:
                                         items:
+                                          format: cidr
                                           type: string
                                         type: array
+                                        x-kubernetes-list-type: set
                                       interfaceSelector:
                                         type: string
                                       labels:
@@ -158,6 +193,9 @@ spec:
                             reconcilerPeriod:
                               type: string
                             syncLabels:
+                              enum:
+                                - Enabled
+                                - Disabled
                               type: string
                           type: object
                         policy:
@@ -178,14 +216,30 @@ spec:
                       type: object
                     debugProfilePort:
                       format: int32
+                      maximum: 65535
+                      minimum: 0
                       type: integer
                     etcdV3CompactionPeriod:
                       type: string
                     healthChecks:
+                      default: Enabled
+                      enum:
+                        - Enabled
+                        - Disabled
                       type: string
                     logSeverityScreen:
+                      enum:
+                        - None
+                        - Debug
+                        - Info
+                        - Warning
+                        - Error
+                        - Fatal
+                        - Panic
                       type: string
                     prometheusMetricsPort:
+                      maximum: 65535
+                      minimum: 0
                       type: integer
                   required:
                     - controllers

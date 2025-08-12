@@ -51,13 +51,6 @@ spec:
                   type: boolean
                 disabled:
                   type: boolean
-                ipip:
-                  properties:
-                    enabled:
-                      type: boolean
-                    mode:
-                      type: string
-                  type: object
                 ipipMode:
                   enum:
                     - Never
