@@ -28,6 +28,8 @@ import (
 )
 
 func TestBPFProgCleaner(t *testing.T) {
+	RegisterTestingT(t)
+
 	for _, tc := range cttestdata.CTCleanupTests {
 		t.Run(tc.Description, func(t *testing.T) {
 			runCTCleanupTest(t, tc)
