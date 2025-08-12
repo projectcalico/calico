@@ -244,7 +244,7 @@ func (m *Iterator) syscallThread() {
 	defer m.wg.Done()
 
 	// Also not specified, it is fair to assume that we need at least 4bytes or
-	// size of the key for maps that use generic btch ops.
+	// size of the key for maps that use generic batch ops.
 	token := make([]byte, m.keySize)
 	tokenC := C.CBytes(token)
 	defer C.free(tokenC)
