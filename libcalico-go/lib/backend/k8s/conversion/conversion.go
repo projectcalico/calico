@@ -955,9 +955,9 @@ func (c converter) K8sClusterNetworkPolicyToCalico(kcnp *clusternetpol.ClusterNe
 
 func k8sClusterNetPolNameAndTier(kcnp *clusternetpol.ClusterNetworkPolicy) (string, string) {
 	switch kcnp.Spec.Tier {
-	case "Admin":
+	case clusternetpol.AdminTier:
 		return names.K8sAdminPolicyNamePrefix + kcnp.Name, names.AdminTierName
-	case "Baseline":
+	case clusternetpol.BaselineTier:
 		return names.K8sBaselinePolicyNamePrefix + kcnp.Name, names.BaselineTierName
 	default:
 		return "", ""

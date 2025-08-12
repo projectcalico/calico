@@ -206,6 +206,8 @@ func TierOrDefault(tier string) string {
 // -  <namespace>/knp.default.<name> for a k8s NetworkPolicies
 // -  kanp.adminnetworkpolicy.<name> for a k8s AdminNetworkPolicies
 // -  kbanp.baselineadminnetworkpolicy.<name> for a k8s BaselineAdminNetworkPolicies
+// -  kcnp.admin.<name> for a k8s ClusterNetworkPolicies (Admin tier)
+// -  kcnp.baseline.<name> for a k8s ClusterNetworkPolicies (Baseline tier)
 // and for the staged counterparts, respectively:
 // -  <namespace>/staged:<tier>.<name>
 // -  staged:<tier>.<name>
