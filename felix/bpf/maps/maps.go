@@ -419,7 +419,7 @@ func (b *PinnedMap) BatchUpdate(ks, vs [][]byte, flags uint64) (int, error) {
 	count := len(ks)
 
 	if count != len(vs) {
-		return 0, fmt.Errorf("number of keys is not equal the number of values")
+		return 0, fmt.Errorf("number of keys is not equal to the number of values")
 	}
 
 	if count == 0 {
