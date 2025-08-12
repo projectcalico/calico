@@ -243,7 +243,7 @@ func NewIterator(mapFD FD, keySize, valueSize, maxEntries int) (*Iterator, error
 func (m *Iterator) syscallThread() {
 	defer m.wg.Done()
 
-	// Also not specified, it is fair to assume that we need at least 4bytes or
+	// Also not specified, it is fair to assume that we need at least 4 bytes or
 	// size of the key for maps that use generic batch ops.
 	token := make([]byte, m.keySize)
 	tokenC := C.CBytes(token)
