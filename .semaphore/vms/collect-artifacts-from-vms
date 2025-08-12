@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+
+# Copyright (c) 2019 Tigera, Inc. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+set -e
+
+source .semaphore/new-kernel-common.sh
+
+vm_name_prefix=$1
+project=unique-caldron-775
+zone=${ZONE:-europe-west3-c}
+my_dir="$(dirname $0)"
+repo_dir="."
+artifacts_dir="$repo_dir/artifacts"
+
+echo "Collecting artifacts..."
+
+pids=()
+log_files=()
+for batch in "${batches[@]}"; do
+  vm_name="$vm_name_prefix$batch"
+  log_file="$artifacts_dir/collect-artifacts-$batch.log"
+  log_files+=( $log_file )
+  echo "Collecting artifacts from $vm_name. Logging to $log_file."
+  (
+    args=""
+    # Only collect binaries once since they're large to copy and should be identical.
+    if [ $batch != 1 ]; then
+      args="--skip-binaries"
+    fi
+    VM_NAME=$vm_name $my_dir/on-test-vm ${REPO_NAME}/.semaphore/collect-artifacts $args || echo "Failed to collect artifacts from ${vm_name}."
+    gcloud --quiet compute scp "--zone=${ZONE}" "ubuntu@${vm_name}:${REPO_NAME}/artifacts" ./ --recurse || echo "Failed to SCP from ${vm_name}"
+  ) >& "$log_file" &
+  pid=$!
+  pids+=( $pid )
+done
+
+echo "===== Waiting for diags collection to complete ====="
+for (( i=0; i<num_fv_batches; i++ )); do
+  pid=${pids[$i]}
+  batch=${batches[$i]}
+  if wait "$pid"; then
+    echo "Diags collection for batch $batch SUCCEEDED (PID=$pid)."
+  else
+    # Note: we don't fail the script.  Diags collection is best effort.
+    echo "Diags collection for batch $batch FAILED (PID=$pid). Log recorded at ${log_files[$i]} for collection."
+  fi
+done
