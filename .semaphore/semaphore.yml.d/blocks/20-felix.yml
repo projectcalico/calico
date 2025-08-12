@@ -211,7 +211,7 @@
         - export UBUNTU_VERSION=noble
         - export DOCKER_VERSION=5:27.5.1-1~ubuntu.24.04~noble
         - mkdir artifacts
-        - ./.semaphore/create-test-vms ${VM_PREFIX}
+        - ../.semaphore/vms/create-test-vms ${VM_PREFIX}
     jobs:
       - name: BPF UT/FV tests
         execution_time_limit:
@@ -245,7 +245,7 @@
         - export RUN_UT=true
         - export FV_FOCUS='_BPF_.*ct=true'
         - mkdir artifacts
-        - ./.semaphore/create-test-vms ${VM_PREFIX}
+        - ../.semaphore/vms/create-test-vms ${VM_PREFIX}
     jobs:
       - name: BPF UT/FV tests
         env_vars:
@@ -287,7 +287,7 @@
         - export RUN_UT=true
         - export FV_FOCUS='_BPF_.*ct=true'
         - mkdir artifacts
-        - ./.semaphore/create-test-vms ${VM_PREFIX}
+        - ../.semaphore/vms/create-test-vms ${VM_PREFIX}
     jobs:
       - name: BPF UT tests
         env_vars:
