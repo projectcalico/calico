@@ -15,13 +15,13 @@
 
 set -e
 
-source ../.semaphore/vms/vm-tests-common.sh
+source $(pwd)/.semaphore/batches.sh
 
-zone=$1
-vm_name_prefix=$2
+zone=${ZONE:-europe-west3-c}
 my_dir="$(dirname $0)"
+vm_name_prefix=$1
 repo_dir="."
-artifacts_dir="$repo_dir/artifacts"
+artifacts_dir="./artifacts"
 
 echo
 echo "===== Starting tests ====="
@@ -33,18 +33,10 @@ log_files=()
 for batch in "${batches[@]}"; do
   vm_name="$vm_name_prefix$batch"
   log_file="$artifacts_dir/test-$batch.log"
-  log_files+=( $log_file )
-  case $batch in
-    k8s-test)
-      cmd="make --directory=calico/${REPO_NAME} k8s-test"
-      ;;
-    *)
-      echo "invalid batch name" && exit 1
-      ;;
-  esac
 
-  $my_dir/on-test-vm ${zone} ${vm_name} $cmd >& "$log_file" &
-  pid=$!
+  pid=$(run_batch "../.semaphore/vms/on-test-vm" $batch $vm_name $log_file)
+
+  log_files+=( $log_file )
   pids+=( $pid )
 
   prefix="[batch=${batch} pid=${pid}]"
