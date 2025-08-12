@@ -677,6 +677,8 @@ blocks:
           - echo VM_PREFIX=${VM_PREFIX}
           - export REPO_NAME=$(basename $(pwd))
           - export IMAGE=ubuntu-2504-plucky-amd64-v20250805
+          - export UBUNTU_VERSION=plucky
+          - export DOCKER_VERSION=5:28.3.3-1~ubuntu.25.04~plucky
           - export NUM_FV_BATCHES=0
           - export RUN_UT=true
           - export FV_FOCUS='_BPF_.*ct=true'
