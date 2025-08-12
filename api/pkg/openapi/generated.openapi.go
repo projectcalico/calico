@@ -4852,6 +4852,7 @@ func schema_pkg_apis_projectcalico_v3_IPPool(ref common.ReferenceCallback) commo
 						},
 					},
 				},
+				Required: []string{"metadata", "spec"},
 			},
 		},
 		Dependencies: []string{
@@ -4900,7 +4901,7 @@ func schema_pkg_apis_projectcalico_v3_IPPoolList(ref common.ReferenceCallback) c
 						},
 					},
 				},
-				Required: []string{"items"},
+				Required: []string{"metadata", "items"},
 			},
 		},
 		Dependencies: []string{
@@ -4925,14 +4926,14 @@ func schema_pkg_apis_projectcalico_v3_IPPoolSpec(ref common.ReferenceCallback) c
 					},
 					"vxlanMode": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Contains configuration for VXLAN tunneling for this pool. If not specified, then this is defaulted to \"Never\" (i.e. VXLAN tunneling is disabled).",
+							Description: "Contains configuration for VXLAN tunneling for this pool.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
 					},
 					"ipipMode": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Contains configuration for IPIP tunneling for this pool. If not specified, then this is defaulted to \"Never\" (i.e. IPIP tunneling is disabled).",
+							Description: "Contains configuration for IPIP tunneling for this pool. For IPv6 pools, IPIP tunneling must be disabled.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -4960,7 +4961,7 @@ func schema_pkg_apis_projectcalico_v3_IPPoolSpec(ref common.ReferenceCallback) c
 					},
 					"blockSize": {
 						SchemaProps: spec.SchemaProps{
-							Description: "The block size to use for IP address assignments from this pool. Defaults to 26 for IPv4 and 122 for IPv6.",
+							Description: "The block size to use for IP address assignments from this pool. Defaults to 26 for IPv4 and 122 for IPv6. The block size must be between 0 and 32 for IPv4 and between 0 and 128 for IPv6. It must also be smaller than or equal to the size of the pool CIDR.",
 							Type:        []string{"integer"},
 							Format:      "int32",
 						},
@@ -4978,14 +4979,12 @@ func schema_pkg_apis_projectcalico_v3_IPPoolSpec(ref common.ReferenceCallback) c
 							Ref:         ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.IPIPConfiguration"),
 						},
 					},
-					"nat-outgoing": {
-						SchemaProps: spec.SchemaProps{
-							Description: "Deprecated: this field is only used for APIv1 backwards compatibility. Setting this field is not allowed, this field is for internal use only.",
-							Type:        []string{"boolean"},
-							Format:      "",
-						},
-					},
 					"allowedUses": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "set",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "AllowedUse controls what the IP pool will be used for.  If not specified or empty, defaults to [\"Tunnel\", \"Workload\"] for back-compatibility",
 							Type:        []string{"array"},
