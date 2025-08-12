@@ -34,6 +34,7 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	adminpolicyclient "sigs.k8s.io/network-policy-api/pkg/client/clientset/versioned/typed/apis/v1alpha1"
+	netpolicyclient "sigs.k8s.io/network-policy-api/pkg/client/clientset/versioned/typed/apis/v1alpha2"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
@@ -60,7 +61,8 @@ type KubeClient struct {
 	crdClientV1 *rest.RESTClient
 
 	// Client for interacting with K8S Admin Network Policy, and BaselineAdminNetworkPolicy.
-	k8sAdminPolicyClient *adminpolicyclient.PolicyV1alpha1Client
+	k8sAdminPolicyClient   *adminpolicyclient.PolicyV1alpha1Client
+	k8sClusterPolicyClient *netpolicyclient.PolicyV1alpha2Client
 
 	disableNodePoll bool
 
@@ -93,15 +95,20 @@ func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 	if err != nil {
 		return nil, fmt.Errorf("Failed to build K8S Admin Network Policy client: %v", err)
 	}
+	k8sClusterPolicyClient, err := netpolicyclient.NewForConfig(config)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to build K8S Cluster Network Policy client: %v", err)
+	}
 
 	kubeClient := &KubeClient{
-		ClientSet:             cs,
-		crdClientV1:           crdClientV1,
-		k8sAdminPolicyClient:  k8sAdminPolicyClient,
-		disableNodePoll:       ca.K8sDisableNodePoll,
-		clientsByResourceKind: make(map[string]resources.K8sResourceClient),
-		clientsByKeyType:      make(map[reflect.Type]resources.K8sResourceClient),
-		clientsByListType:     make(map[reflect.Type]resources.K8sResourceClient),
+		ClientSet:              cs,
+		crdClientV1:            crdClientV1,
+		k8sAdminPolicyClient:   k8sAdminPolicyClient,
+		k8sClusterPolicyClient: k8sClusterPolicyClient,
+		disableNodePoll:        ca.K8sDisableNodePoll,
+		clientsByResourceKind:  make(map[string]resources.K8sResourceClient),
+		clientsByKeyType:       make(map[reflect.Type]resources.K8sResourceClient),
+		clientsByListType:      make(map[reflect.Type]resources.K8sResourceClient),
 	}
 
 	// Create the Calico sub-clients and register them.
