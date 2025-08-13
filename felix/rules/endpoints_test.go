@@ -259,7 +259,7 @@ func endpointRulesTests(flowLogsEnabled bool) func() {
 						withFlowLogs(flowLogsEnabled),
 						withDenyAction(denyAction),
 						withDenyActionString(denyActionString),
-						withPolicyGroups(polGrpInABC.ChainName(), polGrpInEF.ChainName()),
+						withPolicyGroups(polGrpInABC, polGrpInEF),
 						withProfiles("prof1", "prof2"),
 					).build()
 
@@ -268,7 +268,7 @@ func endpointRulesTests(flowLogsEnabled bool) func() {
 						withDenyAction(denyAction),
 						withDenyActionString(denyActionString),
 						withEgress(),
-						withPolicyGroups(polGrpOutAB.ChainName(), polGrpOutDE.ChainName()),
+						withPolicyGroups(polGrpOutAB, polGrpOutDE),
 						withProfiles("prof1", "prof2"),
 						withDropIPIP(),
 						withDropVXLAN(VXLANPort),
@@ -408,11 +408,23 @@ func endpointRulesTests(flowLogsEnabled bool) func() {
 				})
 
 				It("should render a fully-loaded workload endpoint - staged policy group, end-of-tier pass", func() {
+					polGrpIngress := &PolicyGroup{
+						Tier:        "default",
+						Direction:   PolicyDirectionInbound,
+						PolicyNames: []string{"staged:ai", "staged:bi"},
+						Selector:    "all()",
+					}
+					polGrpEgress := &PolicyGroup{
+						Tier:        "default",
+						Direction:   PolicyDirectionOutbound,
+						PolicyNames: []string{"staged:ae", "staged:be"},
+						Selector:    "all()",
+					}
 					toWlRules := newRuleBuilder(
 						withFlowLogs(flowLogsEnabled),
 						withDenyAction(denyAction),
 						withDenyActionString(denyActionString),
-						withPolicyGroups("staged:ai", "staged:bi"),
+						withPolicyGroups(polGrpIngress),
 						withProfiles("prof1", "prof2"),
 					).build()
 
@@ -421,7 +433,7 @@ func endpointRulesTests(flowLogsEnabled bool) func() {
 						withDenyAction(denyAction),
 						withDenyActionString(denyActionString),
 						withEgress(),
-						withPolicies("staged:ae", "staged:be"),
+						withPolicyGroups(polGrpEgress),
 						withProfiles("prof1", "prof2"),
 						withDropIPIP(),
 						withDropVXLAN(VXLANPort),
@@ -448,19 +460,9 @@ func endpointRulesTests(flowLogsEnabled bool) func() {
 						true,
 						[]TierPolicyGroups{
 							{
-								Name: "default",
-								IngressPolicies: []*PolicyGroup{{
-									Tier:        "default",
-									Direction:   PolicyDirectionInbound,
-									PolicyNames: []string{"staged:ai", "staged:bi"},
-									Selector:    "all()",
-								}},
-								EgressPolicies: []*PolicyGroup{{
-									Tier:        "default",
-									Direction:   PolicyDirectionOutbound,
-									PolicyNames: []string{"staged:ae", "staged:be"},
-									Selector:    "all()",
-								}},
+								Name:            "default",
+								IngressPolicies: []*PolicyGroup{polGrpIngress},
+								EgressPolicies:  []*PolicyGroup{polGrpEgress},
 							},
 						},
 						[]string{"prof1", "prof2"},
@@ -1339,7 +1341,7 @@ func withPolicies(policies ...string) ruleBuilderOpt {
 	}
 }
 
-func withPolicyGroups(groups ...string) ruleBuilderOpt {
+func withPolicyGroups(groups ...*PolicyGroup) ruleBuilderOpt {
 	return func(r *ruleBuilder) {
 		r.policyGroups = append(r.policyGroups, groups...)
 	}
@@ -1431,7 +1433,7 @@ type ruleBuilder struct {
 	dropVXLAN bool
 	vxlanPort int
 
-	policyGroups []string
+	policyGroups []*PolicyGroup
 	policies     []string
 	profiles     []string
 
@@ -1490,28 +1492,16 @@ func (b *ruleBuilder) build() []generictables.Rule {
 	}
 
 	// Clean marks.
-	rules = append(rules, generictables.Rule{
-		Match:  Match(),
-		Action: ClearMarkAction{Mark: 0x18},
-	})
+	rules = append(rules, clearMarkRule(0x18, ""))
 
 	// Drop VXLAN traffic originating from workloads, if not allowed.
 	if b.dropVXLAN {
-		rules = append(rules, generictables.Rule{
-			Match: Match().ProtocolNum(ProtoUDP).
-				DestPorts(uint16(b.vxlanPort)),
-			Action:  b.denyAction,
-			Comment: []string{fmt.Sprintf("%s VXLAN encapped packets originating in workloads", b.denyActionString)},
-		})
+		rules = append(rules, b.dropVXLANTunnel())
 	}
 
 	// Drop IPIP traffic originating from workloads, if not allowed.
 	if b.dropIPIP {
-		rules = append(rules, generictables.Rule{
-			Match:   Match().ProtocolNum(ProtoIPIP),
-			Action:  b.denyAction,
-			Comment: []string{fmt.Sprintf("%s IPinIP encapped packets originating in workloads", b.denyActionString)},
-		})
+		rules = append(rules, b.dropIPIPTunnel())
 	}
 
 	// Add rules for policies.
@@ -1582,13 +1572,28 @@ func (b *ruleBuilder) conntrackDenyInvalidConnections() generictables.Rule {
 	}
 }
 
+func (b *ruleBuilder) dropVXLANTunnel() generictables.Rule {
+	// Drop VXLAN traffic originating from workloads, if not allowed.
+	return generictables.Rule{
+		Match: Match().ProtocolNum(ProtoUDP).
+			DestPorts(uint16(b.vxlanPort)),
+		Action:  b.denyAction,
+		Comment: []string{fmt.Sprintf("%s VXLAN encapped packets originating in workloads", b.denyActionString)},
+	}
+}
+
+func (b *ruleBuilder) dropIPIPTunnel() generictables.Rule {
+	// Drop IPIP traffic originating from workloads, if not allowed.
+	return generictables.Rule{
+		Match:   Match().ProtocolNum(ProtoIPIP),
+		Action:  b.denyAction,
+		Comment: []string{fmt.Sprintf("%s IPinIP encapped packets originating in workloads", b.denyActionString)},
+	}
+}
+
 func (b *ruleBuilder) qosControlRules(rate, burst int64) []generictables.Rule {
 	return []generictables.Rule{
-		{
-			Match:   Match(),
-			Action:  ClearMarkAction{Mark: 0x20},
-			Comment: []string{fmt.Sprintf("Clear %v packet rate limit mark", b.direction)},
-		},
+		clearMarkRule(0x20, fmt.Sprintf("Clear %v packet rate limit mark", b.direction)),
 		{
 			Match:   Match(),
 			Action:  LimitPacketRateAction{Rate: rate, Burst: burst, Mark: 0x20},
@@ -1599,11 +1604,7 @@ func (b *ruleBuilder) qosControlRules(rate, burst int64) []generictables.Rule {
 			Action:  DropAction{},
 			Comment: []string{fmt.Sprintf("Drop packets over %v packet rate limit", b.direction)},
 		},
-		{
-			Match:   Match(),
-			Action:  ClearMarkAction{Mark: 0x20},
-			Comment: []string{fmt.Sprintf("Clear %v packet rate limit mark", b.direction)},
-		},
+		clearMarkRule(0x20, fmt.Sprintf("Clear %v packet rate limit mark", b.direction)),
 	}
 }
 
@@ -1665,6 +1666,18 @@ func (b *ruleBuilder) nflogAction(dropAction, forProfile bool) generictables.Rul
 	}
 }
 
+func clearMarkRule(mark uint32, comment string) generictables.Rule {
+	var comments []string
+	if comment != "" {
+		comments = append(comments, comment)
+	}
+	return generictables.Rule{
+		Match:   Match(),
+		Action:  ClearMarkAction{Mark: mark},
+		Comment: comments,
+	}
+}
+
 func (b *ruleBuilder) matchPolicies() []generictables.Rule {
 	var rules []generictables.Rule
 
@@ -1675,26 +1688,16 @@ func (b *ruleBuilder) matchPolicies() []generictables.Rule {
 
 	// In these tests, all policies are in the default tier.
 	// Add start of tier rule, for the default tier.
-	rules = append(rules,
-		generictables.Rule{
-			Comment: []string{"Start of tier default"},
-			Match:   Match(),
-			Action:  ClearMarkAction{Mark: 0x10},
-		},
-	)
+	rules = append(rules, clearMarkRule(0x10, "Start of tier default"))
 
 	var endOfTierDrop bool
 	// Add rules for policy groups.
 	for _, g := range b.policyGroups {
-		if strings.Contains(g, "staged:") {
-			// Skip staged policies.
-			continue
+		if g.HasNonStagedPolicies() {
+			rules = append(rules, jumpToPolicyGroup(g.ChainName(), 0x10))
+			rules = append(rules, returnIfAccepted())
+			endOfTierDrop = true
 		}
-		endOfTierDrop = true
-		rules = append(rules,
-			jumpToPolicyGroup(g, 0x10),
-			returnIfAccepted(),
-		)
 	}
 
 	// Add rules for policies.
@@ -1789,10 +1792,8 @@ func returnIfAccepted() generictables.Rule {
 }
 
 func setEndpointMarkRules(mark, mask uint32) []generictables.Rule {
-	return []generictables.Rule{
-		{
-			Match:  Match(),
-			Action: SetMaskedMarkAction{Mark: mark, Mask: 0xff00},
-		},
-	}
+	return []generictables.Rule{{
+		Match:  Match(),
+		Action: SetMaskedMarkAction{Mark: mark, Mask: 0xff00},
+	}}
 }
