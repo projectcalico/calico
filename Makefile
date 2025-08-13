@@ -145,22 +145,22 @@ image:
 # using a local kind cluster.
 ###############################################################################
 E2E_FOCUS ?= "sig-network.*Conformance|sig-calico.*Conformance"
-ADMINPOLICY_SUPPORTED_FEATURES ?= "AdminNetworkPolicy,BaselineAdminNetworkPolicy"
-ADMINPOLICY_UNSUPPORTED_FEATURES ?= ""
+K8S_NETPOL_SUPPORTED_FEATURES ?= "ClusterNetworkPolicy"
+K8S_NETPOL_UNSUPPORTED_FEATURES ?= "AdminNetworkPolicy,BaselineAdminNetworkPolicy"
 e2e-test:
 	$(MAKE) -C e2e build
 	$(MAKE) -C node kind-k8st-setup
 	KUBECONFIG=$(KIND_KUBECONFIG) ./e2e/bin/k8s/e2e.test -ginkgo.focus=$(E2E_FOCUS)
-	KUBECONFIG=$(KIND_KUBECONFIG) ./e2e/bin/adminpolicy/e2e.test \
-	  -exempt-features=$(ADMINPOLICY_UNSUPPORTED_FEATURES) \
-	  -supported-features=$(ADMINPOLICY_SUPPORTED_FEATURES)
+	KUBECONFIG=$(KIND_KUBECONFIG) ./e2e/bin/clusternetworkpolicy/e2e.test \
+	  -exempt-features=$(K8S_NETPOL_UNSUPPORTED_FEATURES) \
+	  -supported-features=$(K8S_NETPOL_SUPPORTED_FEATURES)
 
-e2e-test-adminpolicy:
-	$(MAKE) -C e2e build
-	$(MAKE) -C node kind-k8st-setup
-	KUBECONFIG=$(KIND_KUBECONFIG) ./e2e/bin/adminpolicy/e2e.test \
-	  -exempt-features=$(ADMINPOLICY_UNSUPPORTED_FEATURES) \
-	  -supported-features=$(ADMINPOLICY_SUPPORTED_FEATURES)
+e2e-test-clusternetworkpolicy:
+	#$(MAKE) -C e2e build
+	#$(MAKE) -C node kind-k8st-setup
+	KUBECONFIG=$(KIND_KUBECONFIG) ./e2e/bin/clusternetworkpolicy/e2e.test \
+	  -exempt-features=$(K8S_NETPOL_UNSUPPORTED_FEATURES) \
+	  -supported-features=$(K8S_NETPOL_SUPPORTED_FEATURES)
 
 ###############################################################################
 # Release logic below

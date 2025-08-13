@@ -7471,11 +7471,9 @@ spec:
                     Tier is used as the top-level grouping for network policy prioritization.
 
                     Policy tiers are evaluated in the following order:
-
                     * Admin tier
                     * NetworkPolicy tier
                     * Baseline tier
-                    * Default tier
 
                     ClusterNetworkPolicy can use 2 of these tiers: Admin and Baseline.
 
@@ -7492,10 +7490,9 @@ spec:
                     v1.NetworkPolicy. It will only be evaluated for Pods not selected by a
                     namespaced v1.NetworkPolicy.
 
-                    Default tier is the default kubernetes network policy, which says that
-                    all pods can communicate with each other by default. It is applied if
-                    there is no matching policy
-                    definition in any tier.
+                    If a given connection wasn't allowed or denied by any of the tiers,
+                    the default kubernetes policy is applied, which says that
+                    all pods can communicate with each other.
                   enum:
                     - Admin
                     - Baseline
@@ -7503,6 +7500,7 @@ spec:
               required:
                 - priority
                 - subject
+                - tier
               type: object
             status:
               description: Status is the status to be reported by the implementation.
@@ -7750,6 +7748,7 @@ rules:
     resources:
       - adminnetworkpolicies
       - baselineadminnetworkpolicies
+      - clusternetworkpolicies
     verbs:
       - watch
       - list

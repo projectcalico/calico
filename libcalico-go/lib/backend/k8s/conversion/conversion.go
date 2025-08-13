@@ -864,6 +864,7 @@ func (c converter) K8sClusterNetworkPolicyToCalico(kcnp *clusternetpol.ClusterNe
 		return nil, fmt.Errorf("Invalid cluster network policy tier %v", kcnp.Spec.Tier)
 	}
 
+	// TODO (mazdak): baseline tier is not limited to priority 1000 anymore?
 	order := float64(kcnp.Spec.Priority)
 	// TODO (mazdak): need to rename error type
 	errorTracker := cerrors.ErrorAdminPolicyConversion{PolicyName: kcnp.Name}
