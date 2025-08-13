@@ -686,6 +686,7 @@ func ObjGet(path string) (int, error) {
 	return int(fd), err
 }
 
+<<<<<<< HEAD
 // MapUpdateBatch expects all key, values in a single slice, bytes of a one
 // key/value appended back to back to the previous value.
 func MapUpdateBatch(fd int, k, v []byte, count int, flags uint64) (int, error) {
@@ -701,4 +702,43 @@ func MapUpdateBatch(fd int, k, v []byte, count int, flags uint64) (int, error) {
 	}
 
 	return count, nil
+}
+
+var bpfMapTypeMap = map[string]int{
+	"unspec":           0,
+	"hash":             1,
+	"array":            2,
+	"prog_array":       3,
+	"perf_event_array": 4,
+	"percpu_hash":      5,
+	"percpu_array":     6,
+	"lru_hash":         9,
+	"lpm_trie":         11,
+}
+
+func CreateBPFMap(mapType string, keySize int, valueSize int, maxEntries int, flags int, name string) (int, error) {
+	cname := C.CString(name)
+	defer C.free(unsafe.Pointer(cname))
+
+	fd := C.create_bpf_map(
+		C.enum_bpf_map_type(bpfMapTypeMap[mapType]),
+		C.uint(keySize),
+		C.uint(valueSize),
+		C.uint(maxEntries),
+		C.uint(flags),
+		cname,
+	)
+	if fd < 0 {
+		return int(fd), fmt.Errorf("failed to create bpf map")
+	}
+	return int(fd), nil
+}
+
+func FindMapFdByName(targetName string) (int, error) {
+	cname := C.CString(targetName)
+	fd := C.find_bpf_map_by_name(cname)
+	if fd < 0 {
+		return int(fd), fmt.Errorf("map name %s not found", targetName)
+	}
+	return int(fd), nil
 }

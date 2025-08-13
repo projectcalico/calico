@@ -15,10 +15,8 @@
 package maps
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 	"path"
 	"reflect"
 	"strconv"
@@ -26,7 +24,6 @@ import (
 	"sync"
 	"syscall"
 
-	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 
@@ -43,6 +40,53 @@ var (
 	cachedNumPossibleCPUs     int
 	cachedNumPossibleCPUsOnce sync.Once
 )
+
+// Map which map is in which obj file
+var bpfMapObjMap = map[string]string{
+	"cali_counters":         "common_map_stub.o",
+	"cali_counters_scratch": "common_map_stub.o",
+	"cali_iface":            "common_map_stub.o",
+	"cali_jump":             "common_map_stub.o",
+	"cali_perf_evnt":        "common_map_stub.o",
+	"cali_profiling":        "common_map_stub.o",
+	"cali_progs":            "common_map_stub.o",
+	"cali_rule_ctrs":        "common_map_stub.o",
+	"cali_state":            "common_map_stub.o",
+
+	"xdp_cali_jump":  "xdp_map_stub.o",
+	"xdp_cali_progs": "xdp_map_stub.o",
+
+	"cali_v4_arp":     "ipv4_map_stub.o",
+	"cali_v4_ccq2":    "ipv4_map_stub.o",
+	"cali_v4_ccq":     "ipv4_map_stub.o",
+	"cali_v4_ct4":     "ipv4_map_stub.o",
+	"cali_v4_ct":      "ipv4_map_stub.o",
+	"cali_v4_ct_nats": "ipv4_map_stub.o",
+	"cali_v4_frags":   "ipv4_map_stub.o",
+	"cali_v4_frgfwd":  "ipv4_map_stub.o",
+	"cali_v4_frgtmp":  "ipv4_map_stub.o",
+	"cali_v4_fsafes":  "ipv4_map_stub.o",
+	"cali_v4_ip_sets": "ipv4_map_stub.o",
+	"cali_v4_nat_aff": "ipv4_map_stub.o",
+	"cali_v4_nat_be":  "ipv4_map_stub.o",
+	"cali_v4_nat_fe":  "ipv4_map_stub.o",
+	"cali_v4_routes":  "ipv4_map_stub.o",
+	"cali_v4_srmsg":   "ipv4_map_stub.o",
+
+	"cali_v6_arp":     "ipv6_map_stub.o",
+	"cali_v6_ccq2":    "ipv6_map_stub.o",
+	"cali_v6_ccq":     "ipv6_map_stub.o",
+	"cali_v6_ct4":     "ipv6_map_stub.o",
+	"cali_v6_ct":      "ipv6_map_stub.o",
+	"cali_v6_ct_nats": "ipv6_map_stub.o",
+	"cali_v6_fsafes":  "ipv6_map_stub.o",
+	"cali_v6_ip_sets": "ipv6_map_stub.o",
+	"cali_v6_nat_aff": "ipv6_map_stub.o",
+	"cali_v6_nat_be":  "ipv6_map_stub.o",
+	"cali_v6_nat_fe":  "ipv6_map_stub.o",
+	"cali_v6_routes":  "ipv6_map_stub.o",
+	"cali_v6_srmsg":   "ipv6_map_stub.o",
+}
 
 func NumPossibleCPUs() int {
 	cachedNumPossibleCPUsOnce.Do(func() {
@@ -702,25 +746,60 @@ func (b *PinnedMap) EnsureExists() error {
 	}
 
 	log.WithFields(log.Fields{
-		"name":      b.Name,
-		"keySize":   b.KeySize,
-		"valuesize": b.ValueSize,
+		"name":              b.Name,
+		"keySize":           b.KeySize,
+		"valuesize":         b.ValueSize,
+		"maxEntries":        b.MaxEntries,
+		"flags":             b.Flags,
+		"versionedName":     b.VersionedName(),
+		"versionedFilename": b.VersionedFilename(),
 	}).Debug("Map didn't exist, creating it")
-	cmd := exec.Command("bpftool", "map", "create", b.VersionedFilename(),
-		"type", b.Type,
-		"key", fmt.Sprint(b.KeySize),
-		"value", fmt.Sprint(b.ValueSize),
-		"entries", fmt.Sprint(b.MaxEntries),
-		"name", b.VersionedName(),
-		"flags", fmt.Sprint(b.Flags),
-	)
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		log.WithField("out", string(out)).Error("Failed to run bpftool")
-		return err
+	objName, ok := bpfMapObjMap[b.Name]
+	if ok {
+		log.WithFields(log.Fields{"objName": objName, "b.Name": b.Name}).Debug("Creating map from obj file")
+		obj, err := libbpf.OpenObject(path.Join(bpfdefs.ObjectDir, objName))
+		if err != nil {
+			return fmt.Errorf("error opening obj file %s: %w", objName, err)
+		}
+		defer obj.Close()
+		for m, err := obj.FirstMap(); m != nil && err == nil; m, err = m.NextMap() {
+			mapName := m.Name()
+
+			// Only set up PinnedMap 'b', skip other maps in obj
+			if mapName != b.VersionedName() {
+				continue
+			}
+
+			mapFilename := path.Join(bpfdefs.GlobalPinDir, mapName)
+
+			if size := Size(mapName); size != 0 {
+				if err := m.SetSize(size); err != nil {
+					return fmt.Errorf("error resizing map %s: %w", mapName, err)
+				}
+			}
+
+			if err := m.SetPinPath(mapFilename); err != nil {
+				return fmt.Errorf("error pinning map %s to %s: %w", mapName, mapFilename, err)
+			}
+		}
+		if err := obj.Load(); err != nil {
+			return fmt.Errorf("error loading obj file %s for map %s: %w", objName, b.Name, err)
+		}
+	} else {
+		// Map not found in obj files, create without BTF
+		log.WithFields(log.Fields{"b.Name": b.Name}).Debug("Creating map with libbpf")
+		fd, err := libbpf.CreateBPFMap(b.Type, b.KeySize, b.ValueSize, b.MaxEntries, b.Flags, b.VersionedName())
+		if err != nil {
+			return fmt.Errorf("error creating map %s: %w", b.VersionedName(), err)
+		}
+		err = libbpf.ObjPin(fd, b.VersionedFilename())
+		if err != nil {
+			return fmt.Errorf("error pinning map %s to %s: %w", b.VersionedName(), b.VersionedFilename(), err)
+		}
 	}
-	b.fd, err = GetMapFDByPin(b.VersionedFilename())
+	fd, err := GetMapFDByPin(b.VersionedFilename())
 	if err == nil {
+		b.fd = FD(fd)
 		b.fdLoaded = true
 		if copyData {
 			// Copy data from old map to the new map. Old map and new map are of the
@@ -765,51 +844,35 @@ func (b *PinnedMap) Size() int {
 	return b.MapParameters.MaxEntries
 }
 
-type bpftoolMapMeta struct {
-	ID   int    `json:"id"`
-	Name string `json:"name"`
-}
-
 func GetMapIdFromPin(pinPath string) (int, error) {
-	cmd := exec.Command("bpftool", "map", "list", "pinned", pinPath, "-j")
-	out, err := cmd.Output()
+	fd, err := GetMapFDByPin(pinPath)
 	if err != nil {
-		return -1, errors.Wrap(err, "bpftool map list failed")
+		return -1, fmt.Errorf("error getting map FD by pin %s: %w", pinPath, err)
 	}
 
-	var mapData bpftoolMapMeta
-	err = json.Unmarshal(out, &mapData)
+	mapInfo, err := GetMapInfo(fd)
 	if err != nil {
-		return -1, errors.Wrap(err, "bpftool returned bad JSON")
+		return -1, fmt.Errorf("error getting mapInfo by FD %d: %w", fd, err)
 	}
-	return mapData.ID, nil
+
+	return mapInfo.Id, nil
 }
 
 // RepinMap finds a map by a given name and pins it to a path. Note that if
 // there are multiple maps of the same name in the system, it will use the first
 // one it finds.
 func RepinMap(name string, filename string) error {
-	cmd := exec.Command("bpftool", "map", "list", "-j")
-	out, err := cmd.Output()
+	fd, err := libbpf.FindMapFdByName(name)
 	if err != nil {
-		return errors.Wrap(err, "bpftool map list failed")
+		return os.ErrNotExist
 	}
 
-	var maps []bpftoolMapMeta
-	err = json.Unmarshal(out, &maps)
+	err = libbpf.ObjPin(int(fd), filename)
 	if err != nil {
-		return errors.Wrap(err, "bpftool returned bad JSON")
+		return fmt.Errorf("failed to pin map: %w", err)
 	}
 
-	for _, m := range maps {
-		if m.Name == name {
-			// Found the map, try to repin it.
-			cmd := exec.Command("bpftool", "map", "pin", "id", fmt.Sprint(m.ID), filename)
-			return errors.Wrap(cmd.Run(), "bpftool failed to repin map")
-		}
-	}
-
-	return os.ErrNotExist
+	return nil
 }
 
 func (b *PinnedMap) CopyDeltaFromOldMap() error {

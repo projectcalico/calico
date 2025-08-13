@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"runtime"
+	"strings"
 	"unsafe"
 
 	log "github.com/sirupsen/logrus"
@@ -155,6 +156,8 @@ func GetMapInfo(fd FD) (*MapInfo, error) {
 		KeySize:    int(bpfMapInfo.key_size),
 		ValueSize:  int(bpfMapInfo.value_size),
 		MaxEntries: int(bpfMapInfo.max_entries),
+		Id:         int(bpfMapInfo.id),
+		Name:       strings.TrimRight(C.GoStringN((*C.char)(&bpfMapInfo.name[0]), 16), "\x00"),
 	}, nil
 }
 
