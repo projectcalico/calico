@@ -8,8 +8,6 @@ best=""
 : "${release_prefix:=release-v}"
 : "${git_repo_slug:=projectcalico/calico}"
 
-current_branch=$(git branch --show-current)
-
 # Find the appropriate remote, handling common forms of git URL:
 #
 #  -  proto://github.com/foo/bar.git
@@ -30,14 +28,18 @@ fi
 
 # If we're running in a CI environment...
 if [[ -v CI ]]; then
+  echo "[debug] Running in CI, so we're inspecting the git remotes"
   # Do we have a fetch that references multiple branches?
-  if git config get remote.origin.fetch | fgrep -q "*"; then
-    echo "[debug] We seem to be configured to fetch all branches" >&2
-  else
-    echo "[debug] We don't seem to be configured to fetch all branches; fixing and re-fetching..." >&2
-    git config remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*"
-    git fetch --all --quiet
-  fi # git config
+  for remote in $(git remote); do
+    if git config get remote.${remote}.fetch | fgrep -q "*"; then
+      echo "[debug] Remote ${remote} seems to be configured to fetch all branches" >&2
+    else
+      echo "[debug] Remote ${remote} doesn't seem to be configured to fetch all branches; fixing..." >&2
+      echo "[debug] Updating remote ${remote}"
+      git config remote.${remote}.fetch "+refs/heads/*:refs/remotes/${remote}/*"
+    fi # git config
+  done
+  git fetch --all --quiet
 fi # -v CI
 
 echo "[debug] Git remote: ${git_repo_slug} -> ${remote}" >&2
