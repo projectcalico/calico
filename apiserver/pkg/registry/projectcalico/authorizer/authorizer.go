@@ -80,7 +80,12 @@ func (a *authorizer) AuthorizeTierOperation(
 
 		logrus.Trace("Checking authorization using tier resource type (user can get tier)")
 		logAuthorizerAttributes(attrs)
-		decisionGetTier, _, _ = a.Authorizer.Authorize(context.TODO(), attrs)
+		var reason string
+		logrus.WithField("attrs", attrs).Info("Authorizing tier GET request")
+		decisionGetTier, reason, err = a.Authorizer.Authorize(context.TODO(), attrs)
+		if err != nil {
+			logrus.WithField("reason", reason).Errorf("Error authorizing tier GET request: %v", err)
+		}
 	}()
 
 	// Query required access to the tiered policy resource or tier wildcard resource.
@@ -113,7 +118,10 @@ func (a *authorizer) AuthorizeTierOperation(
 
 		logrus.Trace("Checking authorization using tier scoped resource type (policy name match)")
 		logAuthorizerAttributes(attrs)
-		decisionPolicy, _, _ = a.Authorizer.Authorize(context.TODO(), attrs)
+		decisionPolicy, _, err = a.Authorizer.Authorize(context.TODO(), attrs)
+		if err != nil {
+			logrus.Errorf("Error authorizing tiered policy request: %v", err)
+		}
 	}()
 	go func() {
 		defer wg.Done()
@@ -134,7 +142,10 @@ func (a *authorizer) AuthorizeTierOperation(
 
 		logrus.Trace("Checking authorization using tier scoped resource type (tier name match)")
 		logAuthorizerAttributes(attrs)
-		decisionTierWildcard, _, _ = a.Authorizer.Authorize(context.TODO(), attrs)
+		decisionTierWildcard, _, err = a.Authorizer.Authorize(context.TODO(), attrs)
+		if err != nil {
+			logrus.Errorf("Error authorizing tier wildcard request: %v", err)
+		}
 	}()
 
 	// Wait for the requests to complete.
@@ -186,15 +197,13 @@ func forbiddenMessage(attributes k8sauth.Attributes, ownerResource, ownerName st
 
 // logAuthorizerAttributes logs out the auth attributes.
 func logAuthorizerAttributes(requestAttributes k8sauth.Attributes) {
-	if logrus.IsLevelEnabled(logrus.DebugLevel) {
-		logrus.Debugf("Authorizer APIGroup: %s", requestAttributes.GetAPIGroup())
-		logrus.Debugf("Authorizer APIVersion: %s", requestAttributes.GetAPIVersion())
-		logrus.Debugf("Authorizer Name: %s", requestAttributes.GetName())
-		logrus.Debugf("Authorizer Namespace: %s", requestAttributes.GetNamespace())
-		logrus.Debugf("Authorizer Resource: %s", requestAttributes.GetResource())
-		logrus.Debugf("Authorizer Subresource: %s", requestAttributes.GetSubresource())
-		logrus.Debugf("Authorizer User: %s", requestAttributes.GetUser())
-		logrus.Debugf("Authorizer Verb: %s", requestAttributes.GetVerb())
-		logrus.Debugf("Authorizer Path: %s", requestAttributes.GetPath())
-	}
+	logrus.Infof("Authorizer APIGroup: %s", requestAttributes.GetAPIGroup())
+	logrus.Infof("Authorizer APIVersion: %s", requestAttributes.GetAPIVersion())
+	logrus.Infof("Authorizer Name: %s", requestAttributes.GetName())
+	logrus.Infof("Authorizer Namespace: %s", requestAttributes.GetNamespace())
+	logrus.Infof("Authorizer Resource: %s", requestAttributes.GetResource())
+	logrus.Infof("Authorizer Subresource: %s", requestAttributes.GetSubresource())
+	logrus.Infof("Authorizer User: %s", requestAttributes.GetUser())
+	logrus.Infof("Authorizer Verb: %s", requestAttributes.GetVerb())
+	logrus.Infof("Authorizer Path: %s", requestAttributes.GetPath())
 }
