@@ -46,3 +46,14 @@ func PreCreateGaugePerSyncer(cv *prometheus.GaugeVec) {
 		cv.WithLabelValues(string(st))
 	}
 }
+func PreCreateCounterPerServerIDSyncer(serverID string, cv *prometheus.CounterVec) {
+	for _, st := range syncproto.AllSyncerTypes {
+		cv.WithLabelValues(serverID, string(st))
+	}
+}
+
+func PreCreateGaugePerServerIDSyncer(serverID string, cv *prometheus.GaugeVec) {
+	for _, st := range syncproto.AllSyncerTypes {
+		cv.WithLabelValues(serverID, string(st))
+	}
+}
