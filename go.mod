@@ -106,15 +106,15 @@ require (
 	// Replaced with older version below until we can handle the updated permissions it now puts on log files.
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 	helm.sh/helm/v3 v3.17.4
-	k8s.io/api v0.32.7
-	k8s.io/apiextensions-apiserver v0.32.7
-	k8s.io/apimachinery v0.32.7
+	k8s.io/api v0.33.0
+	k8s.io/apiextensions-apiserver v0.33.0
+	k8s.io/apimachinery v0.33.0
 	k8s.io/apiserver v0.32.7
-	k8s.io/client-go v0.32.7
+	k8s.io/client-go v0.33.0
 	k8s.io/component-base v0.32.7
 	k8s.io/klog/v2 v2.130.1
 	k8s.io/kube-aggregator v0.32.7
-	k8s.io/kube-openapi v0.0.0-20241105132330-32ad38e42d3f
+	k8s.io/kube-openapi v0.0.0-20250318190949-c8a335a9a2ff
 	k8s.io/kubernetes v1.32.7
 	k8s.io/utils v0.0.0-20241210054802-24370beab758
 	modernc.org/memory v1.11.0
@@ -236,7 +236,7 @@ require (
 	github.com/gonvenience/ytbx v1.4.4 // indirect
 	github.com/google/cadvisor v0.52.1 // indirect
 	github.com/google/cel-go v0.22.0 // indirect
-	github.com/google/gnostic-models v0.6.8 // indirect
+	github.com/google/gnostic-models v0.6.9 // indirect
 	github.com/google/go-containerregistry v0.20.3
 	github.com/google/go-querystring v1.1.0 // indirect
 	github.com/google/gofuzz v1.2.0 // indirect
@@ -245,7 +245,7 @@ require (
 	github.com/googleapis/enterprise-certificate-proxy v0.3.6 // indirect
 	github.com/googleapis/gax-go/v2 v2.14.2 // indirect
 	github.com/gorilla/mux v1.8.1 // indirect
-	github.com/gorilla/websocket v1.5.3 // indirect
+	github.com/gorilla/websocket v1.5.4-0.20250319132907-e064f32e3674 // indirect
 	github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.26.3 // indirect
 	github.com/gruntwork-io/go-commons v0.8.0 // indirect
@@ -371,8 +371,10 @@ require (
 	k8s.io/pod-security-admission v0.32.7
 	sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.31.0 // indirect
 	sigs.k8s.io/json v0.0.0-20241014173422-cfa47c3a1cc8 // indirect
-	sigs.k8s.io/structured-merge-diff/v4 v4.5.0 // indirect
+	sigs.k8s.io/structured-merge-diff/v4 v4.6.0 // indirect
 )
+
+require sigs.k8s.io/randfill v1.0.0 // indirect
 
 replace (
 	github.com/projectcalico/api => ./api
@@ -411,4 +413,6 @@ replace (
 	k8s.io/mount-utils => k8s.io/mount-utils v0.32.7
 	k8s.io/pod-security-admission => k8s.io/pod-security-admission v0.32.7
 	k8s.io/sample-apiserver => k8s.io/sample-apiserver v0.32.7
+	sigs.k8s.io/network-policy-api => github.com/npinaeva/network-policy-api v0.0.0-20250812135955-467e31ca0f16
+	sigs.k8s.io/network-policy-api/conformance => github.com/npinaeva/network-policy-api/conformance v0.0.0-20250813121945-59370c2f182f
 )
