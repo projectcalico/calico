@@ -46,7 +46,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"github.com/projectcalico/api/pkg/client/clientset_generated/clientset"
 	"github.com/projectcalico/calico/apiserver/pkg/rbac"
 	"github.com/projectcalico/calico/apiserver/pkg/registry/projectcalico/authorizer"
 	"github.com/projectcalico/calico/crypto/pkg/tls"
@@ -298,33 +297,6 @@ func (h *rbacHook) handleValidate(ar v1.AdmissionReview) *v1.AdmissionResponse {
 
 	// If validation passes, return an allowed response
 	return &v1.AdmissionResponse{Allowed: true}
-}
-
-func NewCalicoResourceLister() rbac.CalicoResourceLister {
-	// Create informers for Calico resources.
-	rc, err := rest.InClusterConfig()
-	if err != nil {
-		panic(err)
-	}
-	v3c := clientset.NewForConfigOrDie(rc)
-
-	return &calicoResourceLister{cli: v3c}
-}
-
-type calicoResourceLister struct {
-	cli clientset.Interface
-}
-
-func (c *calicoResourceLister) ListTiers() ([]*v3.Tier, error) {
-	l, err := c.cli.ProjectcalicoV3().Tiers().List(context.TODO(), metav1.ListOptions{})
-	if err != nil {
-		return nil, err
-	}
-	items := make([]*v3.Tier, len(l.Items))
-	for i := range l.Items {
-		items[i] = &l.Items[i]
-	}
-	return items, err
 }
 
 func requestContext(req *v1.AdmissionRequest, user user.Info) context.Context {
