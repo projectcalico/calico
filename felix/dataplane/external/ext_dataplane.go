@@ -250,6 +250,8 @@ func WrapPayloadWithEnvelope(msg interface{}, seqNo uint64) (*proto.ToDataplane,
 		envelope.Payload = &proto.ToDataplane_ServiceUpdate{ServiceUpdate: msg}
 	case *proto.ServiceRemove:
 		envelope.Payload = &proto.ToDataplane_ServiceRemove{ServiceRemove: msg}
+	case *proto.TyphaRevisionUpdate:
+		envelope.Payload = &proto.ToDataplane_TyphaRevisionUpdate{TyphaRevisionUpdate: msg}
 
 	default:
 		return nil, fmt.Errorf("unknown message type: %T", msg)

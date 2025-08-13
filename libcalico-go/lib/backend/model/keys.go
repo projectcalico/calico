@@ -355,6 +355,17 @@ func keyFromDefaultPathInner(path string, parts []string) Key {
 					return ProfileLabelsKey{ProfileKey: ProfileKey{pk}}
 				}
 			}
+		case "typha":
+			if len(parts) < 4 {
+				return nil
+			}
+			switch parts[3] {
+			case "revision":
+				if len(parts) != 4 {
+					return nil
+				}
+				return TyphaRevisionKey{}
+			}
 		}
 	case "bgp":
 		switch parts[2] {

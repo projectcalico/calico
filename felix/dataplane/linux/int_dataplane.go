@@ -135,6 +135,15 @@ var (
 		Help: "Number of interface address messages processed in each batch. Higher " +
 			"values indicate we're doing more batching to try to keep up.",
 	})
+	gaugeLastAppliedTyphaTimestamp = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "felix_int_dataplane_last_typha_timestamp_seconds",
+		Help: "Timestamp of the last Typha revision update that was applied to the dataplane.",
+	}, []string{"server_id"})
+	summaryTyphaBatchLatency = cprometheus.NewSummary(prometheus.SummaryOpts{
+		Name: "felix_int_dataplane_typha_batch_latency_seconds",
+		Help: "Latency between Typha receiving events from the datastore (and producing an " +
+			"update batch) and completion of dataplane update.",
+	})
 
 	processStartTime time.Time
 	zeroKey          = wgtypes.Key{}
@@ -150,7 +159,18 @@ func init() {
 	prometheus.MustRegister(summaryBatchSize)
 	prometheus.MustRegister(summaryIfaceBatchSize)
 	prometheus.MustRegister(summaryAddrBatchSize)
+	prometheus.MustRegister(gaugeLastAppliedTyphaTimestamp)
+	prometheus.MustRegister(summaryTyphaBatchLatency)
 	processStartTime = time.Now()
+}
+
+var registerTyphaStatsOnce sync.Once
+
+func ensureTyphaStatsRegistered() {
+	registerTyphaStatsOnce.Do(func() {
+		prometheus.MustRegister(gaugeLastAppliedTyphaTimestamp)
+		prometheus.MustRegister(summaryTyphaBatchLatency)
+	})
 }
 
 type Config struct {
@@ -162,6 +182,7 @@ type Config struct {
 	VXLANMTU             int
 	VXLANMTUV6           int
 	VXLANPort            int
+	ReportTyphaStats     bool
 
 	MaxIPSetSize int
 
@@ -411,6 +432,10 @@ type InternalDataplane struct {
 
 	actions  generictables.ActionFactory
 	newMatch func() generictables.MatchCriteria
+
+	lastTyphaRevisionUpdate    *proto.TyphaRevisionUpdate
+	typhaRevisionUpdatePending bool
+	lastReportedTyphaServerID  string
 }
 
 const (
@@ -480,6 +505,10 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		loopSummarizer: logutils.NewSummarizer("dataplane reconciliation loops"),
 		actions:        actionSet,
 		newMatch:       newMatchFn,
+	}
+	if config.ReportTyphaStats {
+		log.Info("Using Typha, registering stats.")
+		ensureTyphaStatsRegistered()
 	}
 	dp.applyThrottle.Refill() // Allow the first apply() immediately.
 	dp.ifaceMonitor.StateCallback = dp.onIfaceStateChange
@@ -2294,6 +2323,7 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 					d.sendDataplaneInSyncOnce.Do(func() {
 						d.fromDataplane <- &proto.DataplaneInSync{}
 					})
+					d.maybeReportTyphaRevision()
 				}
 
 				d.loopSummarizer.EndOfIteration(applyTime)
@@ -2351,7 +2381,12 @@ func (d *InternalDataplane) onDatastoreMessage(msg interface{}) {
 
 func (d *InternalDataplane) processMsgFromCalcGraph(msg interface{}) {
 	if log.IsLevelEnabled(log.InfoLevel) {
-		log.Infof("Received %T update from calculation graph. msg=%s", msg, proto.MsgStringer{Msg: msg}.String())
+		if _, ok := msg.(*proto.TyphaRevisionUpdate); ok {
+			// TyphaRevisionUpdate is very noisy, so log at Debug level.
+			log.Debugf("Received %T update from calculation graph. msg=%s", msg, proto.MsgStringer{Msg: msg}.String())
+		} else {
+			log.Infof("Received %T update from calculation graph. msg=%s", msg, proto.MsgStringer{Msg: msg}.String())
+		}
 	}
 	d.datastoreBatchSize++
 	d.dataplaneNeedsSync = true
@@ -2359,11 +2394,17 @@ func (d *InternalDataplane) processMsgFromCalcGraph(msg interface{}) {
 	for _, mgr := range d.allManagers {
 		mgr.OnUpdate(msg)
 	}
-	switch msg.(type) {
+	switch msg := msg.(type) {
 	case *proto.InSync:
 		log.WithField("timeSinceStart", time.Since(processStartTime)).Info(
 			"Datastore in sync, flushing the dataplane for the first time...")
 		d.datastoreInSync = true
+	case *proto.TyphaRevisionUpdate:
+		d.lastTyphaRevisionUpdate = msg
+		d.typhaRevisionUpdatePending = true
+	case *proto.TyphaRevisionRemove:
+		d.lastTyphaRevisionUpdate = nil
+		d.typhaRevisionUpdatePending = true
 	}
 }
 
@@ -2800,6 +2841,36 @@ func (d *InternalDataplane) reportHealth() {
 			&health.HealthReport{Live: true, Ready: d.doneFirstApply && d.ifaceMonitorInSync},
 		)
 	}
+}
+
+func (d *InternalDataplane) maybeReportTyphaRevision() {
+	if !d.typhaRevisionUpdatePending {
+		return
+	}
+	if d.lastTyphaRevisionUpdate == nil {
+		// Had a revision but now it's been deleted.  (Perhaps we reconnected to
+		// Typha, and it had been downgraded so we didn't get a revision.)
+		gaugeLastAppliedTyphaTimestamp.Reset()
+		return
+	}
+	serverID := d.lastTyphaRevisionUpdate.ServerID
+	if d.lastReportedTyphaServerID != serverID {
+		// If we switch Typha, clear out the previous set of labels so that
+		// we don't continue to report the old Typha's timestamp.
+		gaugeLastAppliedTyphaTimestamp.Reset()
+	}
+
+	revCreationTime := d.lastTyphaRevisionUpdate.Timestamp.AsTime()
+	unixTime := float64(revCreationTime.UnixMicro()) / 1e6
+	gaugeLastAppliedTyphaTimestamp.WithLabelValues(serverID).Set(unixTime)
+
+	d.lastReportedTyphaServerID = serverID
+	if revCreationTime.After(processStartTime) {
+		// Avoid reporting a huge latency spike when the process starts. The
+		// initial Typha breadcrumb may be hours old if the datastore is quiet!
+		summaryTyphaBatchLatency.Observe(time.Since(revCreationTime).Seconds())
+	}
+	d.typhaRevisionUpdatePending = false
 }
 
 type dummyLock struct{}
