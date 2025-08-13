@@ -80,6 +80,10 @@ type NetworkSetNamespaceListerExpansion interface{}
 // ProfileLister.
 type ProfileListerExpansion interface{}
 
+// QoSPolicyListerExpansion allows custom methods to be added to
+// QoSPolicyLister.
+type QoSPolicyListerExpansion interface{}
+
 // StagedGlobalNetworkPolicyListerExpansion allows custom methods to be added to
 // StagedGlobalNetworkPolicyLister.
 type StagedGlobalNetworkPolicyListerExpansion interface{}
