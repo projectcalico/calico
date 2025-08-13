@@ -287,7 +287,6 @@ type MsgDecoderRestart struct {
 // MsgACK is a general-purpose ACK message, currently used during the initial handshake to acknowledge the
 // switch to compressed mode.
 type MsgACK struct {
-	LastAppliedRevision string
 }
 type MsgSyncStatus struct {
 	SyncStatus api.SyncStatus
@@ -298,6 +297,10 @@ type MsgPing struct {
 type MsgPong struct {
 	PingTimestamp time.Time
 	PongTimestamp time.Time
+}
+type MsgDataplaneRevision struct {
+	Timestamp time.Time
+	Revision  string
 }
 type MsgKVs struct {
 	KVs []SerializedUpdate
@@ -334,6 +337,7 @@ func init() {
 	gob.RegisterName("github.com/projectcalico/typha/pkg/syncproto.MsgPing", MsgPing{})
 	gob.RegisterName("github.com/projectcalico/typha/pkg/syncproto.MsgPong", MsgPong{})
 	gob.RegisterName("github.com/projectcalico/typha/pkg/syncproto.MsgKVs", MsgKVs{})
+	gob.RegisterName("github.com/projectcalico/typha/pkg/syncproto.MsgDataplaneRevision", MsgDataplaneRevision{})
 }
 
 func SerializeUpdate(u api.Update) (su SerializedUpdate, err error) {

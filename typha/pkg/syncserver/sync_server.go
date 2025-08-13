@@ -821,6 +821,8 @@ func (h *connection) handle(finishedWG *sync.WaitGroup) (err error) {
 				h.logCxt.Debug("Pong from client")
 				lastPongReceived = time.Now()
 				h.summaryPingLatency.Observe(time.Since(msg.PingTimestamp).Seconds())
+			case syncproto.MsgDataplaneRevision:
+				h.logCxt.Infof("Felix reports dataplane updated to revision %v/%v", msg.Revision, h.cache.CurrentBreadcrumb().SequenceNumber)
 			default:
 				h.logCxt.WithField("msg", msg).Error("Unknown message from client")
 				return errors.New("Unknown message type")
@@ -879,20 +881,26 @@ func (h *connection) readFromClient(logCxt *log.Entry) {
 func (h *connection) waitForMessage(logCxt *log.Entry, timeout time.Duration) (interface{}, error) {
 	timer := time.NewTimer(timeout)
 	defer timer.Stop()
-	select {
-	case msg := <-h.readC:
-		if msg == nil {
-			logCxt.Warning("Failed to read hello from client")
-			return nil, ErrReadFailed
+	for {
+		select {
+		case msg := <-h.readC:
+			if msg, ok := msg.(syncproto.MsgDataplaneRevision); ok {
+				h.logCxt.Info("Received MsgDataplaneRevision from client: %s", msg.Revision)
+				continue
+			}
+			if msg == nil {
+				logCxt.Warning("Failed to read hello from client")
+				return nil, ErrReadFailed
+			}
+			logCxt.WithField("msg", msg).Debug("Received message from client.")
+			return msg, nil
+		case <-timer.C:
+			// Error gets logged by caller.
+			return nil, fmt.Errorf("timed out waiting for message from client")
+		case <-h.cxt.Done():
+			// Error gets logged by caller.
+			return nil, h.cxt.Err()
 		}
-		logCxt.WithField("msg", msg).Debug("Received message from client.")
-		return msg, nil
-	case <-timer.C:
-		// Error gets logged by caller.
-		return nil, fmt.Errorf("timed out waiting for message from client")
-	case <-h.cxt.Done():
-		// Error gets logged by caller.
-		return nil, h.cxt.Err()
 	}
 }
 

@@ -458,6 +458,7 @@ func (c *Cache) publishBreadcrumb() {
 			Value: &model.TyphaRevision{
 				Revision: fmt.Sprint(newCrumb.SequenceNumber),
 			},
+			Revision: fmt.Sprint(newCrumb.SequenceNumber),
 		},
 		UpdateType: api.UpdateTypeKVUpdated,
 	})

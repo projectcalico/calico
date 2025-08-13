@@ -17,14 +17,12 @@ package model
 import (
 	"fmt"
 	"reflect"
-	"regexp"
 
 	log "github.com/sirupsen/logrus"
 )
 
 var (
-	matchTyphaRevision = regexp.MustCompile("^/?calico/v1/netset/([^/]+)$")
-	typeTyphaRevision  = reflect.TypeOf(TyphaRevision{})
+	typeTyphaRevision = reflect.TypeOf(TyphaRevision{})
 )
 
 type TyphaRevisionKey struct{}

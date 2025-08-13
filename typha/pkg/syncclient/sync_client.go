@@ -146,7 +146,8 @@ func New(
 		myHostname: myHostname,
 		myInfo:     myInfo,
 
-		options: options,
+		options:                options,
+		revisionsFromDataplane: make(chan syncproto.MsgDataplaneRevision, 1),
 	}
 	sc.refreshConnID()
 	return sc
@@ -171,8 +172,9 @@ type SyncerClient struct {
 	encoder    *gob.Encoder
 	decoder    *gob.Decoder
 
-	callbacks CallbacksWithKeysKnown
-	Finished  sync.WaitGroup
+	callbacks              CallbacksWithKeysKnown
+	Finished               sync.WaitGroup
+	revisionsFromDataplane chan syncproto.MsgDataplaneRevision
 }
 
 type CallbacksWithKeysKnown interface {
@@ -234,6 +236,17 @@ func (s *SyncerClient) Start(cxt context.Context) error {
 	}()
 
 	return nil
+}
+
+func (s *SyncerClient) OnDataplaneUpdateComplete(revision string) {
+	select {
+	case <-s.revisionsFromDataplane: // If the channel is full, we just discard the old value.
+	default:
+	}
+	s.revisionsFromDataplane <- syncproto.MsgDataplaneRevision{
+		Revision:  revision,
+		Timestamp: time.Now(),
+	}
 }
 
 func (s *SyncerClient) startOneConnection(cxt context.Context, connFinished *sync.WaitGroup) error {
@@ -508,64 +521,118 @@ func (s *SyncerClient) loop(cxt context.Context, cancelFn context.CancelFunc, co
 		return
 	}
 
+	msgsFromServer := make(chan any)
+	defer func() {
+		for msg := range msgsFromServer {
+			logCxt.WithField("msg", msg).Debug("Ignoring message from server during client shutdown.")
+		}
+		logCxt.Info("Message reading goroutine exited.")
+	}()
+
+	doRead := make(chan struct{})
+
+	readCtx, cancel := context.WithCancel(cxt)
+	defer cancel()
+	go func(ctx context.Context) {
+		defer close(msgsFromServer)
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-doRead:
+			}
+			msg, err := s.readMessageFromServer(cxt, logCxt)
+			if err != nil {
+				logCxt.WithError(err).Error("Failed to read message from server")
+				return
+			}
+			if log.IsLevelEnabled(log.DebugLevel) {
+				logCxt.WithField("msg", msg).Debug("Received message from server")
+			}
+			msgsFromServer <- msg
+		}
+	}(readCtx)
+
+	revsFromDataplane := s.revisionsFromDataplane
+	uncorkRevs := time.NewTicker(time.Second)
+	defer uncorkRevs.Stop()
+
 	// Handshake done, start processing messages from the server.
 	for cxt.Err() == nil {
-		msg, err := s.readMessageFromServer(cxt, logCxt)
-		if err != nil {
+		select {
+		case doRead <- struct{}{}:
+		case <-cxt.Done():
+			logCxt.Info("Context asked us to stop, exiting main loop.")
 			return
-		}
-		debug := log.IsLevelEnabled(log.DebugLevel)
-		switch msg := msg.(type) {
-		case syncproto.MsgSyncStatus:
-			logCxt.WithField("newStatus", msg.SyncStatus).Info("Status update from Typha.")
-			s.callbacks.OnStatusUpdated(msg.SyncStatus)
-		case syncproto.MsgPing:
-			logCxt.Debug("Ping received from Typha")
-			err := s.sendMessageToServer(cxt, logCxt, "write pong to server",
-				syncproto.MsgPong{
-					PingTimestamp: msg.Timestamp,
-				},
+		case rev := <-revsFromDataplane:
+			logCxt.Infof("Received dataplane revision from client, sending to server: %v", rev.Revision)
+			err := s.sendMessageToServer(cxt, logCxt, "write dataplane revision to server",
+				rev,
 			)
 			if err != nil {
 				return // (Failure already logged.)
 			}
-			logCxt.Debug("Pong sent to Typha")
-		case syncproto.MsgKVs:
-			updates := make([]api.Update, 0, len(msg.KVs))
-			keys := make([]string, 0, len(msg.KVs))
-			if s.options.DebugDiscardKVUpdates {
-				// For simulating lots of clients in tests, just throw away the data.
-				continue
+			revsFromDataplane = nil
+		case <-uncorkRevs.C:
+			revsFromDataplane = s.revisionsFromDataplane
+		case msg, ok := <-msgsFromServer:
+			if !ok {
+				logCxt.Info("Channel from server closed, exiting main loop.")
+				return
 			}
-			for _, kv := range msg.KVs {
-				update, err := kv.ToUpdate()
+			debug := log.IsLevelEnabled(log.DebugLevel)
+			switch msg := msg.(type) {
+			case syncproto.MsgSyncStatus:
+				logCxt.WithField("newStatus", msg.SyncStatus).Info("Status update from Typha.")
+				s.callbacks.OnStatusUpdated(msg.SyncStatus)
+			case syncproto.MsgPing:
+				logCxt.Debug("Ping received from Typha")
+				err := s.sendMessageToServer(cxt, logCxt, "write pong to server",
+					syncproto.MsgPong{
+						PingTimestamp: msg.Timestamp,
+					},
+				)
 				if err != nil {
-					logCxt.WithError(err).Error("Failed to deserialize update, skipping.")
+					return // (Failure already logged.)
+				}
+				logCxt.Debug("Pong sent to Typha")
+			case syncproto.MsgKVs:
+				updates := make([]api.Update, 0, len(msg.KVs))
+				keys := make([]string, 0, len(msg.KVs))
+				if s.options.DebugDiscardKVUpdates {
+					// For simulating lots of clients in tests, just throw away the data.
 					continue
 				}
-				if debug {
-					logCxt.WithFields(log.Fields{
-						"serialized":   kv,
-						"deserialized": update,
-					}).Debug("Decoded update from Typha")
+				for _, kv := range msg.KVs {
+					update, err := kv.ToUpdate()
+					if err != nil {
+						logCxt.WithError(err).Error("Failed to deserialize update, skipping.")
+						continue
+					}
+					if debug {
+						logCxt.WithFields(log.Fields{
+							"serialized":   kv,
+							"deserialized": update,
+						}).Debug("Decoded update from Typha")
+					}
+					updates = append(updates, update)
+					keys = append(keys, kv.Key)
 				}
-				updates = append(updates, update)
-				keys = append(keys, kv.Key)
-			}
-			s.callbacks.OnUpdatesKeysKnown(updates, keys)
-		case syncproto.MsgDecoderRestart:
-			if s.options.DisableDecoderRestart {
-				log.Error("Server sent MsgDecoderRestart but we signalled no support.")
+				s.callbacks.OnUpdatesKeysKnown(updates, keys)
+			case syncproto.MsgDecoderRestart:
+				if s.options.DisableDecoderRestart {
+					log.Error("Server sent MsgDecoderRestart but we signalled no support.")
+					return
+				}
+				err = s.restartDecoder(cxt, logCxt, msg)
+				if err != nil {
+					log.WithError(err).Error("Failed to restart decoder")
+					return
+				}
+			case syncproto.MsgServerHello:
+				logCxt.WithField("serverVersion", msg.Version).Error("Unexpected extra server hello message received")
 				return
 			}
-			err = s.restartDecoder(cxt, logCxt, msg)
-			if err != nil {
-				log.WithError(err).Error("Failed to restart decoder")
-				return
-			}
-		case syncproto.MsgServerHello:
-			logCxt.WithField("serverVersion", msg.Version).Error("Unexpected extra server hello message received")
-			return
 		}
 	}
 }
