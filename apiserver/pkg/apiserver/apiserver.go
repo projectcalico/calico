@@ -155,10 +155,10 @@ func (c completedConfig) New() (*ProjectCalicoServer, error) {
 func (c completedConfig) NewRBACCalculator(calicoLister CalicoResourceLister) (rbac.Calculator, error) {
 	resourceLister := discovery.NewDiscoveryClientForConfigOrDie(c.ExtraConfig.KubernetesAPIServerConfig)
 	namespaceLister := &k8sNamespaceLister{c.GenericConfig.SharedInformerFactory.Core().V1().Namespaces().Lister()}
-	roleGetter := &k8sRoleGetter{c.GenericConfig.SharedInformerFactory.Rbac().V1().Roles().Lister()}
-	roleBindingLister := &k8sRoleBindingLister{c.GenericConfig.SharedInformerFactory.Rbac().V1().RoleBindings().Lister()}
-	clusterRoleGetter := &k8sClusterRoleGetter{c.GenericConfig.SharedInformerFactory.Rbac().V1().ClusterRoles().Lister()}
-	clusterRoleBindingLister := &k8sClusterRoleBindingLister{c.GenericConfig.SharedInformerFactory.Rbac().V1().ClusterRoleBindings().Lister()}
+	roleGetter := &K8sRoleGetter{c.GenericConfig.SharedInformerFactory.Rbac().V1().Roles().Lister()}
+	roleBindingLister := &K8sRoleBindingLister{c.GenericConfig.SharedInformerFactory.Rbac().V1().RoleBindings().Lister()}
+	clusterRoleGetter := &K8sClusterRoleGetter{c.GenericConfig.SharedInformerFactory.Rbac().V1().ClusterRoles().Lister()}
+	clusterRoleBindingLister := &K8sClusterRoleBindingLister{c.GenericConfig.SharedInformerFactory.Rbac().V1().ClusterRoleBindings().Lister()}
 
 	// Create the rbac calculator
 	return rbac.NewCalculator(
@@ -167,40 +167,46 @@ func (c completedConfig) NewRBACCalculator(calicoLister CalicoResourceLister) (r
 	), nil
 }
 
-// k8sRoleGetter implements the RoleGetter interface returning matching Role.
-type k8sRoleGetter struct {
-	roleLister rbacv1listers.RoleLister
+// K8sRoleGetter implements the RoleGetter interface returning matching Role.
+type K8sRoleGetter struct {
+	Lister rbacv1listers.RoleLister
 }
 
-func (r *k8sRoleGetter) GetRole(ctx context.Context, namespace, name string) (*rbacv1.Role, error) {
-	return r.roleLister.Roles(namespace).Get(name)
+func (r *K8sRoleGetter) GetRole(ctx context.Context, namespace, name string) (*rbacv1.Role, error) {
+	return r.Lister.Roles(namespace).Get(name)
 }
 
-// k8sRoleBindingLister implements the RoleBindingLister interface returning RoleBindings.
-type k8sRoleBindingLister struct {
-	roleBindingLister rbacv1listers.RoleBindingLister
+// K8sRoleBindingLister implements the RoleBindingLister interface returning RoleBindings.
+type K8sRoleBindingLister struct {
+	Lister rbacv1listers.RoleBindingLister
 }
 
-func (r *k8sRoleBindingLister) ListRoleBindings(ctx context.Context, namespace string) ([]*rbacv1.RoleBinding, error) {
-	return r.roleBindingLister.RoleBindings(namespace).List(labels.Everything())
+func (r *K8sRoleBindingLister) ListRoleBindings(ctx context.Context, namespace string) ([]*rbacv1.RoleBinding, error) {
+	return r.Lister.RoleBindings(namespace).List(labels.Everything())
 }
 
-// k8sClusterRoleGetter implements the ClusterRoleGetter interface returning matching ClusterRole.
-type k8sClusterRoleGetter struct {
-	clusterRoleLister rbacv1listers.ClusterRoleLister
+// K8sClusterRoleGetter implements the ClusterRoleGetter interface returning matching ClusterRole.
+type K8sClusterRoleGetter struct {
+	Lister rbacv1listers.ClusterRoleLister
 }
 
-func (r *k8sClusterRoleGetter) GetClusterRole(ctx context.Context, name string) (*rbacv1.ClusterRole, error) {
-	return r.clusterRoleLister.Get(name)
+func (r *K8sClusterRoleGetter) GetClusterRole(ctx context.Context, name string) (*rbacv1.ClusterRole, error) {
+	return r.Lister.Get(name)
 }
 
-// k8sClusterRoleBindingLister implements the ClusterRoleBindingLister interface.
-type k8sClusterRoleBindingLister struct {
-	clusterRoleBindingLister rbacv1listers.ClusterRoleBindingLister
+// K8sClusterRoleBindingLister implements the ClusterRoleBindingLister interface.
+type K8sClusterRoleBindingLister struct {
+	Lister rbacv1listers.ClusterRoleBindingLister
 }
 
-func (r *k8sClusterRoleBindingLister) ListClusterRoleBindings(ctx context.Context) ([]*rbacv1.ClusterRoleBinding, error) {
-	return r.clusterRoleBindingLister.List(labels.Everything())
+func (r *K8sClusterRoleBindingLister) ListClusterRoleBindings(ctx context.Context) ([]*rbacv1.ClusterRoleBinding, error) {
+	return r.Lister.List(labels.Everything())
+}
+
+func NewNamepaceLister(sharedInformerFactory informers.SharedInformerFactory) rbac.NamespaceLister {
+	return &k8sNamespaceLister{
+		namespaceLister: sharedInformerFactory.Core().V1().Namespaces().Lister(),
+	}
 }
 
 // k8sNamespaceLister implements the NamespaceLister interface returning Namespaces.
