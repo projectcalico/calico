@@ -6,6 +6,7 @@
 #define __CALI_PARSING6_H__
 
 #include "bpf.h"
+#include "counters.h"
 
 static CALI_BPF_INLINE int parse_packet_ip_v6(struct cali_tc_ctx *ctx) {
 	__u16 protocol = 0;

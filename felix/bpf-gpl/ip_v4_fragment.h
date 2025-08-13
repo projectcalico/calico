@@ -5,7 +5,12 @@
 #ifndef __CALI_IP_V4_FRAGMENT_H__
 #define __CALI_IP_V4_FRAGMENT_H__
 
+#include "bpf.h"
 #include "ip_addr.h"
+#include "log.h"
+#include "parsing.h"
+#include "skb.h"
+#include "types.h"
 
 struct frags4_key {
 	ipv4_addr_t src;

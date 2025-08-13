@@ -194,6 +194,7 @@ BPF_GPL_O_FILES:=$(addprefix bpf-gpl/,$(shell bpf-gpl/list-objs))
 BPF_GPL_O_FILES+=bpf-gpl/bin/tc_preamble.o \
 		 bpf-gpl/bin/xdp_preamble.o bpf-gpl/bin/policy_default.o \
 		 bpf-gpl/bin/tcx_test.o
+BPF_GPL_O_FILES+=$(addprefix bpf-gpl/bin/,common_map_stub.o ipv4_map_stub.o ipv6_map_stub.o xdp_map_stub.o)
 
 # There's a one-to-one mapping from UT C files to objects and the same for the apache programs..
 BPF_GPL_UT_O_FILES:=$(BPF_GPL_UT_C_FILES:.c=.o) $(addprefix bpf-gpl/,$(shell bpf-gpl/list-ut-objs))
@@ -203,7 +204,7 @@ BPF_APACHE_O_FILES:=$(addprefix bpf-apache/bin/,$(notdir $(BPF_APACHE_C_FILES:.c
 ALL_BPF_PROGS=$(BPF_GPL_O_FILES) $(BPF_APACHE_O_FILES)
 
 .PHONY: build-bpf clean-bpf
-build-bpf:  $(ALL_BPF_PROGS)
+build-bpf: $(ALL_BPF_PROGS)
 
 # Mainly defer to the BPF Makefiles but try to guess a superset of the dependencies
 # to avoid unnecessary rebuilds. Note '&:' means "run this target once to produce
