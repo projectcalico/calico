@@ -31,13 +31,17 @@ import (
 	"k8s.io/apiserver/pkg/storage/etcd3"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 
+	"github.com/projectcalico/api/pkg/client/clientset_generated/clientset"
+	"github.com/projectcalico/api/pkg/client/informers_generated/externalversions"
 	"github.com/projectcalico/calico/crypto/pkg/tls"
 	"github.com/projectcalico/calico/kube-controllers/pkg/config"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/controller"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/flannelmigration"
+	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/ippool"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/loadbalancer"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/namespace"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/networkpolicy"
@@ -455,6 +459,23 @@ func (cc *controllerControl) InitControllers(ctx context.Context, cfg config.Run
 	podInformer := factory.Core().V1().Pods().Informer()
 	nodeInformer := factory.Core().V1().Nodes().Informer()
 	serviceInformer := factory.Core().V1().Services().Informer()
+
+	// Create informers for Calico resources.
+	rc, err := rest.InClusterConfig()
+	if err != nil {
+		panic(err)
+	}
+	v3c := clientset.NewForConfigOrDie(rc)
+	calicoFactory := externalversions.NewSharedInformerFactory(v3c, 5*time.Minute)
+	poolInformer := calicoFactory.Projectcalico().V3().IPPools().Informer()
+	blockInformer := calicoFactory.Projectcalico().V3().IPAMBlocks().Informer()
+
+	if true {
+		// TODO: make this configurable
+		poolController := ippool.NewController(ctx, v3c, poolInformer, blockInformer, calicoClient.IPAM())
+		cc.controllers["IPPool"] = poolController
+		cc.registerInformers(poolInformer, blockInformer)
+	}
 
 	if cfg.Controllers.WorkloadEndpoint != nil {
 		podController := pod.NewPodController(ctx, k8sClientset, calicoClient, *cfg.Controllers.WorkloadEndpoint, podInformer)
