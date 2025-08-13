@@ -95,7 +95,7 @@ func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 	if err != nil {
 		return nil, fmt.Errorf("Failed to build K8S Admin Network Policy client: %v", err)
 	}
-	k8sClusterPolicyClient, err := netpolicyclient.NewForConfig(config)
+	k8sClusterPolicyClient, err := buildK8SCNPClient(config)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to build K8S Cluster Network Policy client: %v", err)
 	}
@@ -135,6 +135,12 @@ func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 		reflect.TypeOf(model.ResourceListOptions{}),
 		apiv3.KindStagedGlobalNetworkPolicy,
 		resources.NewStagedGlobalNetworkPolicyClient(cs, crdClientV1),
+	)
+	kubeClient.registerResourceClient(
+		reflect.TypeOf(model.ResourceKey{}),
+		reflect.TypeOf(model.ResourceListOptions{}),
+		model.KindKubernetesClusterNetworkPolicy,
+		resources.NewKubernetesClusterNetworkPolicyClient(k8sClusterPolicyClient),
 	)
 	kubeClient.registerResourceClient(
 		reflect.TypeOf(model.ResourceKey{}),
@@ -548,6 +554,11 @@ func (c *KubeClient) Close() error {
 // buildK8SAdminPolicyClient builds a RESTClient configured to interact (Baseline) Admin Network Policy.
 func buildK8SAdminPolicyClient(cfg *rest.Config) (*adminpolicyclient.PolicyV1alpha1Client, error) {
 	return adminpolicyclient.NewForConfig(cfg)
+}
+
+// buildK8SCNPClient builds a RESTClient configured to interact Cluster Network Policy.
+func buildK8SCNPClient(cfg *rest.Config) (*netpolicyclient.PolicyV1alpha2Client, error) {
+	return netpolicyclient.NewForConfig(cfg)
 }
 
 // buildCRDClientV1 builds a RESTClient configured to interact with Calico CustomResourceDefinitions
