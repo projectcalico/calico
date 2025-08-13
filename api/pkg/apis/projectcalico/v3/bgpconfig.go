@@ -150,24 +150,28 @@ type BGPConfigurationSpec struct {
 }
 
 // ServiceLoadBalancerIPBlock represents a single allowed LoadBalancer IP CIDR block.
+// +mapType=atomic
 type ServiceLoadBalancerIPBlock struct {
 	// +kubebuilder:validation:Format=cidr
 	CIDR string `json:"cidr,omitempty" validate:"omitempty,net"`
 }
 
 // ServiceExternalIPBlock represents a single allowed External IP CIDR block.
+// +mapType=atomic
 type ServiceExternalIPBlock struct {
 	// +kubebuilder:validation:Format=cidr
 	CIDR string `json:"cidr,omitempty" validate:"omitempty,net"`
 }
 
 // ServiceClusterIPBlock represents a single allowed ClusterIP CIDR block.
+// +mapType=atomic
 type ServiceClusterIPBlock struct {
 	// +kubebuilder:validation:Format=cidr
 	CIDR string `json:"cidr,omitempty" validate:"omitempty,net"`
 }
 
 // Community contains standard or large community value and its name.
+// +mapType=atomic
 type Community struct {
 	// Name given to community value.
 	Name string `json:"name,omitempty" validate:"required,name"`
@@ -180,6 +184,7 @@ type Community struct {
 }
 
 // PrefixAdvertisement configures advertisement properties for the specified CIDR.
+// +mapType=atomic
 type PrefixAdvertisement struct {
 	// CIDR for which properties should be advertised.
 	// +kubebuilder:validation:Format=cidr

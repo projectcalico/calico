@@ -965,6 +965,11 @@ func schema_pkg_apis_projectcalico_v3_BGPFilterPrefixLengthV4(ref common.Referen
 					},
 				},
 			},
+			VendorExtensible: spec.VendorExtensible{
+				Extensions: spec.Extensions{
+					"x-kubernetes-map-type": "atomic",
+				},
+			},
 		},
 	}
 }
@@ -987,6 +992,11 @@ func schema_pkg_apis_projectcalico_v3_BGPFilterPrefixLengthV6(ref common.Referen
 							Format: "int32",
 						},
 					},
+				},
+			},
+			VendorExtensible: spec.VendorExtensible{
+				Extensions: spec.Extensions{
+					"x-kubernetes-map-type": "atomic",
 				},
 			},
 		},
@@ -1039,6 +1049,11 @@ func schema_pkg_apis_projectcalico_v3_BGPFilterRuleV4(ref common.ReferenceCallba
 				},
 				Required: []string{"action"},
 			},
+			VendorExtensible: spec.VendorExtensible{
+				Extensions: spec.Extensions{
+					"x-kubernetes-map-type": "atomic",
+				},
+			},
 		},
 		Dependencies: []string{
 			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPFilterPrefixLengthV4"},
@@ -1090,6 +1105,11 @@ func schema_pkg_apis_projectcalico_v3_BGPFilterRuleV6(ref common.ReferenceCallba
 					},
 				},
 				Required: []string{"action"},
+			},
+			VendorExtensible: spec.VendorExtensible{
+				Extensions: spec.Extensions{
+					"x-kubernetes-map-type": "atomic",
+				},
 			},
 		},
 		Dependencies: []string{
@@ -2253,6 +2273,11 @@ func schema_pkg_apis_projectcalico_v3_Community(ref common.ReferenceCallback) co
 							Format:      "",
 						},
 					},
+				},
+			},
+			VendorExtensible: spec.VendorExtensible{
+				Extensions: spec.Extensions{
+					"x-kubernetes-map-type": "atomic",
 				},
 			},
 		},
@@ -5832,6 +5857,11 @@ func schema_pkg_apis_projectcalico_v3_PrefixAdvertisement(ref common.ReferenceCa
 					},
 				},
 			},
+			VendorExtensible: spec.VendorExtensible{
+				Extensions: spec.Extensions{
+					"x-kubernetes-map-type": "atomic",
+				},
+			},
 		},
 	}
 }
@@ -6254,6 +6284,11 @@ func schema_pkg_apis_projectcalico_v3_ServiceClusterIPBlock(ref common.Reference
 					},
 				},
 			},
+			VendorExtensible: spec.VendorExtensible{
+				Extensions: spec.Extensions{
+					"x-kubernetes-map-type": "atomic",
+				},
+			},
 		},
 	}
 }
@@ -6273,6 +6308,11 @@ func schema_pkg_apis_projectcalico_v3_ServiceExternalIPBlock(ref common.Referenc
 					},
 				},
 			},
+			VendorExtensible: spec.VendorExtensible{
+				Extensions: spec.Extensions{
+					"x-kubernetes-map-type": "atomic",
+				},
+			},
 		},
 	}
 }
@@ -6290,6 +6330,11 @@ func schema_pkg_apis_projectcalico_v3_ServiceLoadBalancerIPBlock(ref common.Refe
 							Format: "",
 						},
 					},
+				},
+			},
+			VendorExtensible: spec.VendorExtensible{
+				Extensions: spec.Extensions{
+					"x-kubernetes-map-type": "atomic",
 				},
 			},
 		},

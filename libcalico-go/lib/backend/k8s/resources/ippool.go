@@ -52,21 +52,6 @@ func (c IPPoolv1v3Converter) ConvertFromK8s(inRes Resource) (Resource, error) {
 		return nil, fmt.Errorf("invalid type conversion")
 	}
 
-	// If IPIP field is not nil, then it means the resource has v1 IPIP data
-	// and we must convert it to v3 equivalent data.
-	if ipp.Spec.IPIP != nil {
-		if !ipp.Spec.IPIP.Enabled {
-			ipp.Spec.IPIPMode = apiv3.IPIPModeNever
-		} else if ipp.Spec.IPIP.Mode == encap.CrossSubnet {
-			ipp.Spec.IPIPMode = apiv3.IPIPModeCrossSubnet
-		} else {
-			ipp.Spec.IPIPMode = apiv3.IPIPModeAlways
-		}
-
-		// Set IPIP to nil since we've already converted v1 IPIP fields to v3.
-		ipp.Spec.IPIP = nil
-	}
-
 	// Take a logical OR of the v1 NATOutgoing field with the v3 NATOutgoing.
 	ipp.Spec.NATOutgoing = ipp.Spec.NATOutgoing
 

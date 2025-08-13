@@ -44,6 +44,7 @@ spec:
                         pattern: ^(\d+):(\d+)$|^(\d+):(\d+):(\d+)$
                         type: string
                     type: object
+                    x-kubernetes-map-type: atomic
                   type: array
                   x-kubernetes-list-type: set
                 ignoredInterfaces:
@@ -94,6 +95,7 @@ spec:
                           type: string
                         type: array
                     type: object
+                    x-kubernetes-map-type: atomic
                   type: array
                   x-kubernetes-list-type: set
                 serviceClusterIPs:
@@ -103,6 +105,7 @@ spec:
                         format: cidr
                         type: string
                     type: object
+                    x-kubernetes-map-type: atomic
                   type: array
                   x-kubernetes-list-type: set
                 serviceExternalIPs:
@@ -112,6 +115,7 @@ spec:
                         format: cidr
                         type: string
                     type: object
+                    x-kubernetes-map-type: atomic
                   type: array
                   x-kubernetes-list-type: set
                 serviceLoadBalancerAggregation:
@@ -127,6 +131,7 @@ spec:
                         format: cidr
                         type: string
                     type: object
+                    x-kubernetes-map-type: atomic
                   type: array
                   x-kubernetes-list-type: set
               type: object

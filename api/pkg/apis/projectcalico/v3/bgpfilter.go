@@ -65,6 +65,7 @@ type BGPFilterSpec struct {
 }
 
 // BGPFilterRuleV4 defines a BGP filter rule consisting a single IPv4 CIDR block and a filter action for this CIDR.
+// +mapType=atomic
 type BGPFilterRuleV4 struct {
 	// +kubebuilder:validation:Format=cidr
 	CIDR string `json:"cidr,omitempty" validate:"omitempty,netv4"`
@@ -81,6 +82,7 @@ type BGPFilterRuleV4 struct {
 }
 
 // BGPFilterRuleV6 defines a BGP filter rule consisting a single IPv6 CIDR block and a filter action for this CIDR.
+// +mapType=atomic
 type BGPFilterRuleV6 struct {
 	// +kubebuilder:validation:Format=cidr
 	CIDR string `json:"cidr,omitempty" validate:"omitempty,netv6"`
@@ -96,6 +98,7 @@ type BGPFilterRuleV6 struct {
 	Action BGPFilterAction `json:"action" validate:"required,filterAction"`
 }
 
+// +mapType=atomic
 type BGPFilterPrefixLengthV4 struct {
 	// +kubebuilder:validation:Minimum=0
 	// +kubebuilder:validation:Maximum=32
@@ -105,6 +108,7 @@ type BGPFilterPrefixLengthV4 struct {
 	Max *int32 `json:"max,omitempty" validate:"omitempty,bgpFilterPrefixLengthV4"`
 }
 
+// +mapType=atomic
 type BGPFilterPrefixLengthV6 struct {
 	// +kubebuilder:validation:Minimum=0
 	// +kubebuilder:validation:Maximum=128
