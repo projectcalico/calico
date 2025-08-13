@@ -50,6 +50,7 @@ import (
 	"github.com/projectcalico/calico/apiserver/pkg/rbac"
 	"github.com/projectcalico/calico/apiserver/pkg/registry/projectcalico/authorizer"
 	"github.com/projectcalico/calico/crypto/pkg/tls"
+	validation "github.com/projectcalico/calico/libcalico-go/lib/validator/v3"
 	genericapirequest "k8s.io/apiserver/pkg/endpoints/request"
 )
 
@@ -275,6 +276,22 @@ func (h *rbacHook) handleValidate(ar v1.AdmissionReview) *v1.AdmissionResponse {
 				},
 			}
 		}
+
+		// Perform validation on the object, because we can (for create / update).
+		if ar.Request.Operation == v1.Create || ar.Request.Operation == v1.Update {
+			if err = validation.Validate(obj); err != nil {
+				logrus.WithError(err).Error("Validation failed")
+				return &v1.AdmissionResponse{
+					Allowed: false,
+					Result: &metav1.Status{
+						Status:  metav1.StatusFailure,
+						Message: fmt.Sprintf("Validation failed: %v", err),
+						Reason:  metav1.StatusReasonInvalid,
+					},
+				}
+			}
+		}
+
 	case "GlobalNetworkPolicy":
 	case "StagedNetworkPolicy":
 	}
