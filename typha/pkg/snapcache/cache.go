@@ -16,6 +16,7 @@ package snapcache
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -27,6 +28,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/health"
 	cprometheus "github.com/projectcalico/calico/libcalico-go/lib/prometheus"
 	"github.com/projectcalico/calico/typha/pkg/jitter"
@@ -397,7 +399,7 @@ func (c *Cache) publishBreadcrumb() {
 		Timestamp:      time.Now(),
 		SyncStatus:     oldCrumb.SyncStatus,
 		nextCond:       c.breadcrumbCond,
-		Deltas:         make([]syncproto.SerializedUpdate, 0, len(updates)),
+		Deltas:         make([]syncproto.SerializedUpdate, 0, len(updates)+1),
 
 		counterBreadcrumbBlock:    c.counterBreadcrumbBlock,
 		counterBreadcrumbNonBlock: c.counterBreadcrumbNonBlock,
@@ -450,7 +452,20 @@ func (c *Cache) publishBreadcrumb() {
 		newCrumb.Deltas = append(newCrumb.Deltas, newUpd)
 		somethingChanged = true
 	}
-
+	revUpd, err := syncproto.SerializeUpdate(api.Update{
+		KVPair: model.KVPair{
+			Key: model.TyphaRevisionKey{},
+			Value: &model.TyphaRevision{
+				Revision: fmt.Sprint(newCrumb.SequenceNumber),
+			},
+		},
+		UpdateType: api.UpdateTypeKVUpdated,
+	})
+	if err != nil {
+		log.WithError(err).Error("Failed to serialize Typha revision update")
+	} else {
+		newCrumb.Deltas = append(newCrumb.Deltas, revUpd)
+	}
 	// Even if all updates were filtered out, report that to Prometheus; we
 	// want the stat to decay to zero if the event stream is quiet.
 	c.summaryUpdateSize.Observe(float64(len(newCrumb.Deltas)))

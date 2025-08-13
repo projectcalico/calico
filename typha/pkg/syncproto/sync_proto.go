@@ -287,6 +287,7 @@ type MsgDecoderRestart struct {
 // MsgACK is a general-purpose ACK message, currently used during the initial handshake to acknowledge the
 // switch to compressed mode.
 type MsgACK struct {
+	LastAppliedRevision string
 }
 type MsgSyncStatus struct {
 	SyncStatus api.SyncStatus
