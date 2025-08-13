@@ -413,6 +413,7 @@ replace (
 	k8s.io/mount-utils => k8s.io/mount-utils v0.32.7
 	k8s.io/pod-security-admission => k8s.io/pod-security-admission v0.32.7
 	k8s.io/sample-apiserver => k8s.io/sample-apiserver v0.32.7
-	sigs.k8s.io/network-policy-api => github.com/npinaeva/network-policy-api v0.0.0-20250812135955-467e31ca0f16
-	sigs.k8s.io/network-policy-api/conformance => github.com/npinaeva/network-policy-api/conformance v0.0.0-20250813121945-59370c2f182f
+	//sigs.k8s.io/network-policy-api => github.com/npinaeva/network-policy-api v0.0.0-20250812135955-467e31ca0f16
+	sigs.k8s.io/network-policy-api => github.com/npinaeva/network-policy-api v0.0.0-20250813121945-59370c2f182f
+//sigs.k8s.io/network-policy-api/conformance => ./network-policy-api/conformance
 )

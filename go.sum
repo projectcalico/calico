@@ -585,8 +585,8 @@ github.com/natefinch/atomic v1.0.1 h1:ZPYKxkqQOx3KZ+RsbnP/YsgvxWQPGxjC0oBt2AhwV0
 github.com/natefinch/atomic v1.0.1/go.mod h1:N/D/ELrljoqDyT3rZrsUmtsuzvHkeB/wWjHV22AZRbM=
 github.com/nmrshll/go-cp v0.0.0-20180115193924-61436d3b7cfa h1:/SRdH7jdcIW6WBtZO1BlpI+6TxqpOiMqLZJ10Uhk0k0=
 github.com/nmrshll/go-cp v0.0.0-20180115193924-61436d3b7cfa/go.mod h1:/Uh/WFiWYXoTKVsM302U10XnogAldY7up/xErXmt1FA=
-github.com/npinaeva/network-policy-api v0.0.0-20250812135955-467e31ca0f16 h1:yGoHJuPla/Nmhea0dVnGK2+cH40/4wAGPE8qIWzEL2E=
-github.com/npinaeva/network-policy-api v0.0.0-20250812135955-467e31ca0f16/go.mod h1:QIWX6Th2h0SmCwOwa1+9Urs0W+WDJGL5rujAPUemdkk=
+github.com/npinaeva/network-policy-api v0.0.0-20250813121945-59370c2f182f h1:x/TX6C8EoFRzKBsoKHPjW9T26hAlwTmquz/ecFSCBY4=
+github.com/npinaeva/network-policy-api v0.0.0-20250813121945-59370c2f182f/go.mod h1:QIWX6Th2h0SmCwOwa1+9Urs0W+WDJGL5rujAPUemdkk=
 github.com/nxadm/tail v1.4.4/go.mod h1:kenIhsEOeOJmVchQTgglprH7qJGnHDVpk1VPCcaMI8A=
 github.com/nxadm/tail v1.4.8 h1:nPr65rt6Y5JFSKQO7qToXr7pePgD6Gwiw05lkbyAQTE=
 github.com/nxadm/tail v1.4.8/go.mod h1:+ncqLTQzXmGhMZNUePPaPqPvBxHAIsmXswZKocGu+AU=
