@@ -87,9 +87,12 @@ func init() {
 	prometheus.MustRegister(gaugeNumConnections)
 
 	prometheus.MustRegister(gaugeVecNumConnectionsStreaming)
-	promutils.PreCreateGaugePerSyncer(gaugeVecNumConnectionsStreaming)
 	prometheus.MustRegister(counterVecGracePeriodUsed)
-	promutils.PreCreateCounterPerSyncer(counterVecGracePeriodUsed)
+}
+
+func PreregisterMetrics(serverID string) {
+	promutils.PreCreateGaugePerSyncer(serverID, gaugeVecNumConnectionsStreaming)
+	promutils.PreCreateCounterPerSyncer(serverID, counterVecGracePeriodUsed)
 }
 
 const (
@@ -134,6 +137,7 @@ type BreadcrumbProvider interface {
 type Config struct {
 	Host                           string
 	Port                           int
+	ServerID                       string
 	MaxMessageSize                 int
 	BinarySnapshotTimeout          time.Duration
 	MaxFallBehind                  time.Duration
@@ -280,6 +284,7 @@ func (c *Config) requiringTLS() bool {
 func New(caches map[syncproto.SyncerType]BreadcrumbProvider, config Config) *Server {
 	config.ApplyDefaults()
 	log.WithField("config", config).Info("Creating server")
+	PreregisterMetrics(config.ServerID)
 	s := &Server{
 		config:               config,
 		caches:               caches,
