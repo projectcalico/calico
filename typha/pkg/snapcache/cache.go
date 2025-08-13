@@ -16,6 +16,7 @@ package snapcache
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -27,6 +28,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/health"
 	cprometheus "github.com/projectcalico/calico/libcalico-go/lib/prometheus"
 	"github.com/projectcalico/calico/typha/pkg/jitter"
@@ -163,6 +165,7 @@ type healthAggregator interface {
 }
 
 type Config struct {
+	ServerID         string
 	MaxBatchSize     int
 	WakeUpInterval   time.Duration
 	HealthAggregator healthAggregator
@@ -397,7 +400,7 @@ func (c *Cache) publishBreadcrumb() {
 		Timestamp:      time.Now(),
 		SyncStatus:     oldCrumb.SyncStatus,
 		nextCond:       c.breadcrumbCond,
-		Deltas:         make([]syncproto.SerializedUpdate, 0, len(updates)),
+		Deltas:         make([]syncproto.SerializedUpdate, 0, len(updates)+1),
 
 		counterBreadcrumbBlock:    c.counterBreadcrumbBlock,
 		counterBreadcrumbNonBlock: c.counterBreadcrumbNonBlock,
@@ -440,9 +443,7 @@ func (c *Cache) publishBreadcrumb() {
 			// Since the purpose of the snapshot is to hold the initial set of updates to send to Felix at start-of-day,
 			// all the updates that it stores should have type UpdateTypeKVNew since they're all new to Felix. Copy
 			// the KV and adjust it before storing it in the snapshot.
-			updToStore := newUpd
-			updToStore.UpdateType = api.UpdateTypeKVNew
-			c.kvs.ReplaceOrInsert(updToStore)
+			c.storeUpdateAsTypeKVNew(newUpd)
 		}
 
 		// Record the update in the new Breadcrumb so that clients following the chain of
@@ -459,6 +460,10 @@ func (c *Cache) publishBreadcrumb() {
 		log.Debug("Skipping Breadcrumb.  No updates to publish.")
 		return
 	}
+
+	// Something changed, add an extra update to record the revision and
+	// timestamp.  Clients use this to report latency stats.
+	c.addBreadcrumbRevisionKV(newCrumb)
 
 	c.gaugeSnapSize.Set(float64(c.kvs.Len()))
 	// Add the new read-only snapshot to the new crumb.
@@ -478,6 +483,38 @@ func (c *Cache) publishBreadcrumb() {
 	c.breadcrumbCond.Broadcast()
 	c.lastBroadcast = time.Now()
 	c.gaugeCurrentSequenceNumber.Set(float64(newCrumb.SequenceNumber))
+}
+
+func (c *Cache) addBreadcrumbRevisionKV(newCrumb *Breadcrumb) {
+	revision := model.TyphaRevision{
+		ServerID:  c.config.ServerID,
+		Timestamp: time.Now(),
+		Revision:  fmt.Sprint(newCrumb.SequenceNumber),
+	}
+	revUpd, err := syncproto.SerializeUpdate(api.Update{
+		KVPair: model.KVPair{
+			Key:      model.TyphaRevisionKey{},
+			Value:    &revision,
+			Revision: fmt.Sprint(newCrumb.SequenceNumber),
+		},
+		UpdateType: api.UpdateTypeKVUpdated,
+	})
+
+	if err != nil {
+		log.WithError(err).Error("Failed to serialize Typha revision update")
+	} else {
+		// Store the revision in the KVs map so that we don't break our invariant
+		// that the "sum of the deltas" is the same as the current state of the
+		// datastore.
+		c.storeUpdateAsTypeKVNew(revUpd)
+		newCrumb.Deltas = append(newCrumb.Deltas, revUpd)
+	}
+}
+
+func (c *Cache) storeUpdateAsTypeKVNew(newUpd syncproto.SerializedUpdate) {
+	updToStore := newUpd
+	updToStore.UpdateType = api.UpdateTypeKVNew
+	c.kvs.ReplaceOrInsert(updToStore)
 }
 
 type Breadcrumb struct {
