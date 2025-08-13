@@ -17,11 +17,13 @@ limitations under the License.
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -33,8 +35,18 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	"k8s.io/apiserver/pkg/authentication/user"
+	"k8s.io/client-go/discovery"
+	"k8s.io/client-go/informers"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 	"k8s.io/component-base/cli"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	"github.com/projectcalico/api/pkg/client/clientset_generated/clientset"
+	"github.com/projectcalico/calico/apiserver/pkg/apiserver"
+	"github.com/projectcalico/calico/apiserver/pkg/rbac"
 	"github.com/projectcalico/calico/crypto/pkg/tls"
 )
 
@@ -82,7 +94,7 @@ func init() {
 	addToScheme(scheme)
 	CmdWebhook.Flags().StringVar(&certFile, "tls-cert-file", "", "File containing the default x509 Certificate for HTTPS. (CA cert, if any, concatenated after server cert).")
 	CmdWebhook.Flags().StringVar(&keyFile, "tls-private-key-file", "", "File containing the default x509 private key matching --tls-cert-file.")
-	CmdWebhook.Flags().IntVar(&port, "port", 443, "Secure port that the webhook listens on")
+	CmdWebhook.Flags().IntVar(&port, "port", 6443, "Secure port that the webhook listens on")
 }
 
 type admitv1Func func(v1.AdmissionReview) *v1.AdmissionResponse
@@ -157,33 +169,46 @@ func serve(w http.ResponseWriter, r *http.Request, admit admitHandler) {
 	}
 }
 
-func validate(w http.ResponseWriter, r *http.Request) {
-	serve(w, r, newDelegateToV1AdmitHandler(handleValidate))
-}
-
-func handleValidate(ar v1.AdmissionReview) *v1.AdmissionResponse {
-	logrus.Infof("validate called with request: %v", ar.Request)
-
-	// TODO: Hook into validation logic here.
-
-	// If validation passes, return an allowed response
-	return &v1.AdmissionResponse{
-		Allowed: false,
-		Result: &metav1.Status{
-			Status:  metav1.StatusFailure,
-			Message: "Validation failed. This is a placeholder message.",
-			Reason:  metav1.StatusReasonInvalid,
-		},
-	}
-}
-
 func hook(cmd *cobra.Command, args []string) {
 	cfg, err := tls.NewTLSConfig()
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to create TLS config")
 	}
 
-	http.HandleFunc("/", validate)
+	// Create a new rbacHook.
+	rc, err := rest.InClusterConfig()
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to create in-cluster config")
+	}
+
+	// Create a clientset for the Kubernetes API.
+	cs, err := kubernetes.NewForConfig(rc)
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to create clientset")
+	}
+	factory := informers.NewSharedInformerFactory(cs, 0)
+
+	resourceLister := discovery.NewDiscoveryClientForConfigOrDie(rc)
+	namespaceLister := apiserver.NewNamepaceLister(factory)
+	roleGetter := &apiserver.K8sRoleGetter{Lister: factory.Rbac().V1().Roles().Lister()}
+	roleBindingLister := &apiserver.K8sRoleBindingLister{Lister: factory.Rbac().V1().RoleBindings().Lister()}
+	clusterRoleGetter := &apiserver.K8sClusterRoleGetter{Lister: factory.Rbac().V1().ClusterRoles().Lister()}
+	clusterRoleBindingLister := &apiserver.K8sClusterRoleBindingLister{Lister: factory.Rbac().V1().ClusterRoleBindings().Lister()}
+	calicoResourceLister := NewCalicoResourceLister()
+
+	calc := rbac.NewCalculator(
+		resourceLister,
+		clusterRoleGetter,
+		clusterRoleBindingLister,
+		roleGetter,
+		roleBindingLister,
+		namespaceLister,
+		calicoResourceLister,
+		1*time.Minute, // resync period
+	)
+	hook := &rbacHook{calc: calc}
+
+	http.HandleFunc("/", hook.Validate)
 	http.HandleFunc("/readyz", func(w http.ResponseWriter, req *http.Request) { w.Write([]byte("ok")) })
 	server := &http.Server{
 		Addr:      fmt.Sprintf(":%d", port),
@@ -193,5 +218,139 @@ func hook(cmd *cobra.Command, args []string) {
 	err = server.ListenAndServeTLS(certFile, keyFile)
 	if err != nil {
 		logrus.WithError(err).Fatalf("Failed to start webhook server on port %d", port)
+	}
+}
+
+type rbacHook struct {
+	calc rbac.Calculator
+}
+
+func (h *rbacHook) Validate(w http.ResponseWriter, r *http.Request) {
+	serve(w, r, newDelegateToV1AdmitHandler(h.handleValidate))
+}
+
+func (h *rbacHook) handleValidate(ar v1.AdmissionReview) *v1.AdmissionResponse {
+	logrus.Infof("validate called with request: %v", ar.Request)
+
+	// Unpack the AdmissionReview object into a struct.
+	var obj client.Object
+	switch ar.Request.Kind.Kind {
+	case "NetworkPolicy":
+		obj = &v3.NetworkPolicy{}
+		deserializer := codecs.UniversalDeserializer()
+		obj, _, err := deserializer.Decode(ar.Request.Object.Raw, nil, obj)
+		if err != nil {
+			logrus.Errorf("Failed to decode object: %v", err)
+			return &v1.AdmissionResponse{
+				Allowed: false,
+				Result: &metav1.Status{
+					Status:  metav1.StatusFailure,
+					Message: fmt.Sprintf("Failed to decode object: %v", err),
+					Reason:  metav1.StatusReasonInvalid,
+				},
+			}
+		}
+		logrus.Infof("Decoded object: %T", obj)
+		info := user.DefaultInfo{
+			Name:   ar.Request.UserInfo.Username,
+			UID:    ar.Request.UserInfo.UID,
+			Groups: ar.Request.UserInfo.Groups,
+			// Extra:  ar.Request.UserInfo.Extra,
+		}
+		rt := rbac.ResourceType{
+			APIGroup: "projectcalico.org",
+			Resource: "networkpolicies",
+		}
+		verb := opToVerb(ar.Request.Operation)
+		verbs := []rbac.ResourceVerbs{
+			{
+				ResourceType: rt,
+				Verbs:        []rbac.Verb{verb},
+			},
+		}
+		perms, err := h.calc.CalculatePermissions(&info, verbs)
+		if err != nil {
+			logrus.Errorf("Failed to calculate permissions: %v", err)
+			return &v1.AdmissionResponse{
+				Allowed: false,
+				Result: &metav1.Status{
+					Status:  metav1.StatusFailure,
+					Message: fmt.Sprintf("Failed to calculate permissions: %v", err),
+					Reason:  metav1.StatusReasonForbidden,
+				},
+			}
+		}
+		logrus.Infof("Calculated permissions: %v", perms)
+
+		netPolPerms, ok := perms[rt]
+		if !ok || len(netPolPerms) == 0 {
+			logrus.Warn("No permissions found for user")
+			return &v1.AdmissionResponse{
+				Allowed: false,
+				Result: &metav1.Status{
+					Status:  metav1.StatusFailure,
+					Message: "No permissions matching user for type",
+					Reason:  metav1.StatusReasonForbidden,
+				},
+			}
+		}
+
+		if p, ok := netPolPerms[verb]; !ok || len(p) == 0 {
+			return &v1.AdmissionResponse{
+				Allowed: false,
+				Result: &metav1.Status{
+					Status:  metav1.StatusFailure,
+					Message: "No permissions matching user for type and verb",
+					Reason:  metav1.StatusReasonForbidden,
+				},
+			}
+		}
+	case "GlobalNetworkPolicy":
+	case "StagedNetworkPolicy":
+	}
+
+	// If validation passes, return an allowed response
+	return &v1.AdmissionResponse{Allowed: true}
+}
+
+func NewCalicoResourceLister() rbac.CalicoResourceLister {
+	// Create informers for Calico resources.
+	rc, err := rest.InClusterConfig()
+	if err != nil {
+		panic(err)
+	}
+	v3c := clientset.NewForConfigOrDie(rc)
+
+	return &calicoResourceLister{cli: v3c}
+}
+
+type calicoResourceLister struct {
+	cli clientset.Interface
+}
+
+func (c *calicoResourceLister) ListTiers() ([]*v3.Tier, error) {
+	l, err := c.cli.ProjectcalicoV3().Tiers().List(context.TODO(), metav1.ListOptions{})
+	if err != nil {
+		return nil, err
+	}
+	items := make([]*v3.Tier, len(l.Items))
+	for i := range l.Items {
+		items[i] = &l.Items[i]
+	}
+	return items, err
+}
+
+func opToVerb(op admissionv1.Operation) rbac.Verb {
+	switch op {
+	case admissionv1.Create:
+		return rbac.VerbCreate
+	case admissionv1.Update:
+		return rbac.VerbUpdate
+	case admissionv1.Delete:
+		return rbac.VerbDelete
+	case admissionv1.Connect:
+		return rbac.VerbGet
+	default:
+		return rbac.VerbGet
 	}
 }
