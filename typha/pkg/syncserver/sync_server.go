@@ -134,6 +134,7 @@ type BreadcrumbProvider interface {
 type Config struct {
 	Host                           string
 	Port                           int
+	ServerID                       string
 	MaxMessageSize                 int
 	BinarySnapshotTimeout          time.Duration
 	MaxFallBehind                  time.Duration
