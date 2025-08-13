@@ -837,12 +837,18 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 			"key size":   m.KeySize(),
 			"value size": m.ValueSize(),
 		}).Debug("Pinning map")
-		cmd := exec.Command("bpftool", "map", "show", "pinned", pin)
-		log.WithField("cmd", cmd.String()).Debugf("executing")
-		out, _ := cmd.Output()
-		log.WithField("output", string(out)).Debug("map")
-		log.WithField("size", m.MaxEntries()).Debug("libbpf map")
-		log.WithField("entry size", m.ValueSize()).Debug("libbpf map")
+		fd, err := maps.GetMapFDByPin(pin)
+		if err != nil {
+			log.WithError(err).Debug("error getting map FD by pin")
+		} else {
+			mapInfo, err := maps.GetMapInfo(fd)
+			if err != nil {
+				log.WithError(err).Debug("error getting mapInfo by FD")
+			} else {
+				log.WithFields(log.Fields{"Type": mapInfo.Type, "MaxEntries": mapInfo.MaxEntries, "ValueSize": mapInfo.ValueSize, "KeySize": mapInfo.KeySize}).Debug("existing map")
+			}
+		}
+		log.WithFields(log.Fields{"Type": m.Type(), "MaxEntries": m.MaxEntries(), "ValueSize": m.ValueSize(), "KeySize": m.KeySize()}).Debug("new map")
 		if err := m.SetPinPath(pin); err != nil {
 			obj.Close()
 			return nil, fmt.Errorf("error pinning map %s: %w", m.Name(), err)
@@ -941,11 +947,18 @@ func objUTLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHos
 		}
 		pin := "/sys/fs/bpf/tc/globals/" + m.Name()
 		log.WithField("pin", pin).Debug("Pinning map")
-		cmd := exec.Command("bpftool", "map", "show", "pinned", pin)
-		log.WithField("cmd", cmd.String()).Debugf("executing")
-		out, _ := cmd.Output()
-		log.WithField("output", string(out)).Debug("map")
-		log.WithField("size", m.MaxEntries()).Debug("libbpf map")
+		fd, err := maps.GetMapFDByPin(pin)
+		if err != nil {
+			log.WithError(err).Debug("error getting map FD by pin")
+		} else {
+			mapInfo, err := maps.GetMapInfo(fd)
+			if err != nil {
+				log.WithError(err).Debug("error getting mapInfo by FD")
+			} else {
+				log.WithFields(log.Fields{"Type": mapInfo.Type, "MaxEntries": mapInfo.MaxEntries, "ValueSize": mapInfo.ValueSize, "KeySize": mapInfo.KeySize}).Debug("existing map")
+			}
+		}
+		log.WithFields(log.Fields{"Type": m.Type(), "MaxEntries": m.MaxEntries(), "ValueSize": m.ValueSize(), "KeySize": m.KeySize()}).Debug("new map")
 		if err := m.SetPinPath(pin); err != nil {
 			obj.Close()
 			return nil, fmt.Errorf("error pinning map %s: %w", m.Name(), err)
