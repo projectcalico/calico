@@ -258,7 +258,13 @@ func (h *rbacHook) handleValidate(ar v1.AdmissionReview) *v1.AdmissionResponse {
 		ctx = requestContext(ar.Request, &info)
 
 		pol := obj.(*v3.NetworkPolicy)
-		if err = h.authz.AuthorizeTierOperation(ctx, pol.Name, pol.Spec.Tier); err != nil {
+		tier := pol.Spec.Tier
+		if tier == "" {
+			// Needed for delete since there is no spec - can we do this better?
+			// Might need to query the existing object and get the tier from there.
+			tier = "default"
+		}
+		if err = h.authz.AuthorizeTierOperation(ctx, pol.Name, tier); err != nil {
 			logrus.Errorf("Authorization failed: %v", err)
 			return &v1.AdmissionResponse{
 				Allowed: false,
