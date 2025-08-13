@@ -23,6 +23,7 @@ const (
 	KindBlockAffinityList = "BlockAffinityList"
 )
 
+// +kubebuilder:validation:Enum=confirmed;pending;pendingDeletion
 type BlockAffinityState string
 
 const (
@@ -34,6 +35,7 @@ const (
 // +genclient
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:resource:scope=Cluster
 
 // BlockAffinity maintains a block affinity's state
 type BlockAffinity struct {
@@ -52,7 +54,12 @@ type BlockAffinitySpec struct {
 	// The node that this block affinity is assigned to.
 	Node string `json:"node"`
 
+	// The type of affinity.
+	Type string `json:"type,omitempty"`
+
 	// The CIDR range this block affinity references.
+	// +kubebuilder:validation:Format=cidr
+	// +kubebuilder:validation:Required
 	CIDR string `json:"cidr"`
 
 	// Deleted indicates whether or not this block affinity is disabled and is
