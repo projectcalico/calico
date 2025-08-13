@@ -47,6 +47,7 @@ import (
 	"github.com/projectcalico/api/pkg/client/clientset_generated/clientset"
 	"github.com/projectcalico/calico/apiserver/pkg/apiserver"
 	"github.com/projectcalico/calico/apiserver/pkg/rbac"
+	"github.com/projectcalico/calico/apiserver/pkg/registry/projectcalico/authorizer"
 	"github.com/projectcalico/calico/crypto/pkg/tls"
 )
 
@@ -257,54 +258,6 @@ func (h *rbacHook) handleValidate(ar v1.AdmissionReview) *v1.AdmissionResponse {
 			Groups: ar.Request.UserInfo.Groups,
 			// Extra:  ar.Request.UserInfo.Extra,
 		}
-		rt := rbac.ResourceType{
-			APIGroup: "projectcalico.org",
-			Resource: "networkpolicies",
-		}
-		verb := opToVerb(ar.Request.Operation)
-		verbs := []rbac.ResourceVerbs{
-			{
-				ResourceType: rt,
-				Verbs:        []rbac.Verb{verb},
-			},
-		}
-		perms, err := h.calc.CalculatePermissions(&info, verbs)
-		if err != nil {
-			logrus.Errorf("Failed to calculate permissions: %v", err)
-			return &v1.AdmissionResponse{
-				Allowed: false,
-				Result: &metav1.Status{
-					Status:  metav1.StatusFailure,
-					Message: fmt.Sprintf("Failed to calculate permissions: %v", err),
-					Reason:  metav1.StatusReasonForbidden,
-				},
-			}
-		}
-		logrus.Infof("Calculated permissions: %v", perms)
-
-		netPolPerms, ok := perms[rt]
-		if !ok || len(netPolPerms) == 0 {
-			logrus.Warn("No permissions found for user")
-			return &v1.AdmissionResponse{
-				Allowed: false,
-				Result: &metav1.Status{
-					Status:  metav1.StatusFailure,
-					Message: "No permissions matching user for type",
-					Reason:  metav1.StatusReasonForbidden,
-				},
-			}
-		}
-
-		if p, ok := netPolPerms[verb]; !ok || len(p) == 0 {
-			return &v1.AdmissionResponse{
-				Allowed: false,
-				Result: &metav1.Status{
-					Status:  metav1.StatusFailure,
-					Message: "No permissions matching user for type and verb",
-					Reason:  metav1.StatusReasonForbidden,
-				},
-			}
-		}
 	case "GlobalNetworkPolicy":
 	case "StagedNetworkPolicy":
 	}
@@ -325,7 +278,8 @@ func NewCalicoResourceLister() rbac.CalicoResourceLister {
 }
 
 type calicoResourceLister struct {
-	cli clientset.Interface
+	cli   clientset.Interface
+	authz authorizer.TierAuthorizer
 }
 
 func (c *calicoResourceLister) ListTiers() ([]*v3.Tier, error) {
