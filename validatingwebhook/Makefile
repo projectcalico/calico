@@ -34,7 +34,7 @@ $(IMAGE_BUILD_MARKER): $(BINARIES) bin/LICENSE
 	$(MAKE) retag-build-images-with-registries BUILD_IMAGES=$(BUILD_IMAGES) VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@
 
-bin/webhook-$(ARCH): $(shell find . -name '*.go')
+bin/webhook-$(ARCH): $(shell find . -name '*.go') $(shell find ../apiserver -name '*.go')
 	$(call build_binary, $(PACKAGE_NAME)/cmd/, $@)
 
 bin/LICENSE: ../LICENSE.md

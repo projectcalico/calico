@@ -36,8 +36,10 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apiserver/pkg/authentication/user"
-	"k8s.io/client-go/discovery"
-	"k8s.io/client-go/informers"
+	kauth "k8s.io/apiserver/pkg/authorization/authorizer"
+	"k8s.io/apiserver/pkg/authorization/cel"
+	"k8s.io/apiserver/plugin/pkg/authorizer/webhook"
+	"k8s.io/apiserver/plugin/pkg/authorizer/webhook/metrics"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/component-base/cli"
@@ -45,10 +47,10 @@ import (
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/client/clientset_generated/clientset"
-	"github.com/projectcalico/calico/apiserver/pkg/apiserver"
 	"github.com/projectcalico/calico/apiserver/pkg/rbac"
 	"github.com/projectcalico/calico/apiserver/pkg/registry/projectcalico/authorizer"
 	"github.com/projectcalico/calico/crypto/pkg/tls"
+	genericapirequest "k8s.io/apiserver/pkg/endpoints/request"
 )
 
 var (
@@ -187,27 +189,16 @@ func hook(cmd *cobra.Command, args []string) {
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to create clientset")
 	}
-	factory := informers.NewSharedInformerFactory(cs, 0)
 
-	resourceLister := discovery.NewDiscoveryClientForConfigOrDie(rc)
-	namespaceLister := apiserver.NewNamepaceLister(factory)
-	roleGetter := &apiserver.K8sRoleGetter{Lister: factory.Rbac().V1().Roles().Lister()}
-	roleBindingLister := &apiserver.K8sRoleBindingLister{Lister: factory.Rbac().V1().RoleBindings().Lister()}
-	clusterRoleGetter := &apiserver.K8sClusterRoleGetter{Lister: factory.Rbac().V1().ClusterRoles().Lister()}
-	clusterRoleBindingLister := &apiserver.K8sClusterRoleBindingLister{Lister: factory.Rbac().V1().ClusterRoleBindings().Lister()}
-	calicoResourceLister := NewCalicoResourceLister()
-
-	calc := rbac.NewCalculator(
-		resourceLister,
-		clusterRoleGetter,
-		clusterRoleBindingLister,
-		roleGetter,
-		roleBindingLister,
-		namespaceLister,
-		calicoResourceLister,
-		1*time.Minute, // resync period
-	)
-	hook := &rbacHook{calc: calc}
+	// Create a nwe Kubernetes authorizer.
+	bo := webhook.DefaultRetryBackoff()
+	m := &metrics.NoopAuthorizerMetrics{}
+	compl := cel.NewDefaultCompiler()
+	a, err := webhook.NewFromInterface(cs.AuthorizationV1(), 5*time.Second, 5*time.Second, *bo, kauth.DecisionDeny, m, compl)
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to create webhook authorizer")
+	}
+	hook := &rbacHook{authz: authorizer.NewTierAuthorizer(a)}
 
 	http.HandleFunc("/", hook.Validate)
 	http.HandleFunc("/readyz", func(w http.ResponseWriter, req *http.Request) { w.Write([]byte("ok")) })
@@ -223,7 +214,8 @@ func hook(cmd *cobra.Command, args []string) {
 }
 
 type rbacHook struct {
-	calc rbac.Calculator
+	calc  rbac.Calculator
+	authz authorizer.TierAuthorizer
 }
 
 func (h *rbacHook) Validate(w http.ResponseWriter, r *http.Request) {
@@ -232,6 +224,7 @@ func (h *rbacHook) Validate(w http.ResponseWriter, r *http.Request) {
 
 func (h *rbacHook) handleValidate(ar v1.AdmissionReview) *v1.AdmissionResponse {
 	logrus.Infof("validate called with request: %v", ar.Request)
+	ctx := context.TODO()
 
 	// Unpack the AdmissionReview object into a struct.
 	var obj client.Object
@@ -252,11 +245,29 @@ func (h *rbacHook) handleValidate(ar v1.AdmissionReview) *v1.AdmissionResponse {
 			}
 		}
 		logrus.Infof("Decoded object: %T", obj)
+		extra := map[string][]string{}
+		for k, v := range ar.Request.UserInfo.Extra {
+			extra[k] = v
+		}
 		info := user.DefaultInfo{
 			Name:   ar.Request.UserInfo.Username,
 			UID:    ar.Request.UserInfo.UID,
 			Groups: ar.Request.UserInfo.Groups,
-			// Extra:  ar.Request.UserInfo.Extra,
+			Extra:  extra,
+		}
+		ctx = requestContext(ar.Request, &info)
+
+		pol := obj.(*v3.NetworkPolicy)
+		if err = h.authz.AuthorizeTierOperation(ctx, pol.Name, pol.Spec.Tier); err != nil {
+			logrus.Errorf("Authorization failed: %v", err)
+			return &v1.AdmissionResponse{
+				Allowed: false,
+				Result: &metav1.Status{
+					Status:  metav1.StatusFailure,
+					Message: fmt.Sprintf("Authorization failed: %v", err),
+					Reason:  metav1.StatusReasonForbidden,
+				},
+			}
 		}
 	case "GlobalNetworkPolicy":
 	case "StagedNetworkPolicy":
@@ -278,8 +289,7 @@ func NewCalicoResourceLister() rbac.CalicoResourceLister {
 }
 
 type calicoResourceLister struct {
-	cli   clientset.Interface
-	authz authorizer.TierAuthorizer
+	cli clientset.Interface
 }
 
 func (c *calicoResourceLister) ListTiers() ([]*v3.Tier, error) {
@@ -294,17 +304,23 @@ func (c *calicoResourceLister) ListTiers() ([]*v3.Tier, error) {
 	return items, err
 }
 
-func opToVerb(op admissionv1.Operation) rbac.Verb {
-	switch op {
-	case admissionv1.Create:
-		return rbac.VerbCreate
-	case admissionv1.Update:
-		return rbac.VerbUpdate
-	case admissionv1.Delete:
-		return rbac.VerbDelete
-	case admissionv1.Connect:
-		return rbac.VerbGet
-	default:
-		return rbac.VerbGet
+func requestContext(req *v1.AdmissionRequest, user user.Info) context.Context {
+	ctx := genericapirequest.NewContext()
+	ctx = genericapirequest.WithUser(ctx, user)
+	ri := &genericapirequest.RequestInfo{
+		IsResourceRequest: true,
+		Path:              "/apis/projectcalico.org/v3/networkpolicies/" + req.Name,
+		Verb:              string(req.Operation),
+		APIGroup:          "projectcalico.org",
+		APIVersion:        "v3",
+		Resource:          "networkpolicies",
+		Name:              req.Name,
+		Namespace:         req.Namespace,
 	}
+	if req.Operation == v1.Connect {
+		ri.Name = ""
+		ri.Path = "/apis/projectcalico.org/v3/networkpolicies"
+	}
+	ctx = genericapirequest.WithRequestInfo(ctx, ri)
+	return ctx
 }
