@@ -16,4 +16,8 @@
 
 set +e
 
+echo "on-test-vm pid is $$"
+
+echo "arguments $@"
+
 exec gcloud --quiet compute ssh "--zone=${ZONE}" "ubuntu@${VM_NAME}" -- -A -o ServerAliveInterval=10 "$@"
