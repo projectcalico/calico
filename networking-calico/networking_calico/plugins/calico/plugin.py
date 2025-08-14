@@ -45,18 +45,18 @@ class CalicoPlugin(Ml2Plugin, l3_db.L3_NAT_db_mixin):
 
         # Set ML2 options so the user doesn't have to.
         LOG.info("Forcing ML2 mechanism_drivers to 'calico'")
-        cfg.CONF.set_override('mechanism_drivers', ['calico'], group='ml2')
+        cfg.CONF.set_override("mechanism_drivers", ["calico"], group="ml2")
         LOG.info("Forcing ML2 type_drivers to 'local, flat'")
-        cfg.CONF.set_override('type_drivers', ['local', 'flat'], group='ml2')
+        cfg.CONF.set_override("type_drivers", ["local", "flat"], group="ml2")
         LOG.info("Forcing ML2 tenant_network_types to 'local'")
-        cfg.CONF.set_override('tenant_network_types', ['local'], group='ml2')
+        cfg.CONF.set_override("tenant_network_types", ["local"], group="ml2")
 
         # Here we add, rather than forcing the entire value, because DevStack
         # testing configures 'port-security' here.
         LOG.info("Add 'qos' to ML2 extension_drivers")
-        cfg.CONF.set_override('extension_drivers',
-                              cfg.CONF.ml2.extension_drivers + ['qos'],
-                              group='ml2')
+        cfg.CONF.set_override(
+            "extension_drivers", cfg.CONF.ml2.extension_drivers + ["qos"], group="ml2"
+        )
 
         # This is a bit of a hack to get the models_v2.Port attributes setup in such
         # a way as to avoid tracebacks in the neutron-server log.
@@ -116,34 +116,31 @@ class CalicoPlugin(Ml2Plugin, l3_db.L3_NAT_db_mixin):
     # appropriate endpoint update.
     def _update_floatingip(self, context, id, floatingip):
         LOG.info("CalicoPlugin _update_floatingip: %s", floatingip)
-        old_floatingip, new_floatingip = super(
-            CalicoPlugin, self)._update_floatingip(context, id, floatingip)
+        old_floatingip, new_floatingip = super(CalicoPlugin, self)._update_floatingip(
+            context, id, floatingip
+        )
 
         LOG.info("CalicoPlugin new_floatingip=%s", new_floatingip)
-        if new_floatingip['port_id']:
-            context.fip_update_port_id = new_floatingip['port_id']
-            self.mechanism_manager._call_on_drivers('update_floatingip',
-                                                    context)
+        if new_floatingip["port_id"]:
+            context.fip_update_port_id = new_floatingip["port_id"]
+            self.mechanism_manager._call_on_drivers("update_floatingip", context)
 
         LOG.info("CalicoPlugin old_floatingip=%s", old_floatingip)
-        if old_floatingip['port_id']:
-            context.fip_update_port_id = old_floatingip['port_id']
-            self.mechanism_manager._call_on_drivers('update_floatingip',
-                                                    context)
+        if old_floatingip["port_id"]:
+            context.fip_update_port_id = old_floatingip["port_id"]
+            self.mechanism_manager._call_on_drivers("update_floatingip", context)
 
         return old_floatingip, new_floatingip
 
-    def create_floatingip(self, context, floatingip,
-                          initial_status=constants.FLOATINGIP_STATUS_ACTIVE):
+    def create_floatingip(
+        self, context, floatingip, initial_status=constants.FLOATINGIP_STATUS_ACTIVE
+    ):
         LOG.info("CalicoPlugin create_floatingip: %s", floatingip)
         new_floatingip = super(CalicoPlugin, self).create_floatingip(
-            context,
-            floatingip,
-            initial_status=initial_status
+            context, floatingip, initial_status=initial_status
         )
         LOG.info("CalicoPlugin new_floatingip=%s", new_floatingip)
-        if new_floatingip['port_id']:
-            context.fip_update_port_id = new_floatingip['port_id']
-            self.mechanism_manager._call_on_drivers('update_floatingip',
-                                                    context)
+        if new_floatingip["port_id"]:
+            context.fip_update_port_id = new_floatingip["port_id"]
+            self.mechanism_manager._call_on_drivers("update_floatingip", context)
         return new_floatingip

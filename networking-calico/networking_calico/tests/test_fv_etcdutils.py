@@ -28,6 +28,7 @@ import subprocess
 import unittest
 
 import eventlet
+
 eventlet.monkey_patch()
 
 from networking_calico.common import config as calico_config
@@ -46,7 +47,7 @@ class TestFVEtcdutils(unittest.TestCase):
 
         # Add in an invalid API path so as to make sure to test the failure
         # handling logic even when most installations support '/v3/'.
-        etcdv3._possible_etcd_api_paths = ['/invalid/'] + self.normal_api_paths
+        etcdv3._possible_etcd_api_paths = ["/invalid/"] + self.normal_api_paths
 
     def tearDown(self):
         # Restore normal etcd API paths in case they are relevant to other test
@@ -61,12 +62,17 @@ class TestFVEtcdutils(unittest.TestCase):
     def start_etcd_server(self):
         shutil.rmtree(".default.etcd", ignore_errors=True)
         shutil.rmtree("default.etcd", ignore_errors=True)
-        self.etcd = subprocess.Popen([
-            "/usr/local/bin/etcd",
-            "--advertise-client-urls", "http://127.0.0.1:2379",
-            "--listen-client-urls", "http://0.0.0.0:2379",
-            "--log-level", "error",
-        ])
+        self.etcd = subprocess.Popen(
+            [
+                "/usr/local/bin/etcd",
+                "--advertise-client-urls",
+                "http://127.0.0.1:2379",
+                "--listen-client-urls",
+                "http://0.0.0.0:2379",
+                "--log-level",
+                "error",
+            ]
+        )
         self.etcd_server_running = True
 
     def wait_etcd_ready(self):
@@ -108,7 +114,9 @@ class TestFVEtcdutils(unittest.TestCase):
         self.assertTrue(succeeded)
 
         # Try again with MUST_UPDATE; should now succeed.
-        succeeded = etcdv3.put("/testkey", "testvalue2", mod_revision=etcdv3.MUST_UPDATE)
+        succeeded = etcdv3.put(
+            "/testkey", "testvalue2", mod_revision=etcdv3.MUST_UPDATE
+        )
         self.assertTrue(succeeded)
 
         # Try again with mod_revision 0; should now fail.
@@ -138,8 +146,7 @@ class TestFVEtcdutils(unittest.TestCase):
         self.wait_etcd_ready()
 
         # Create and start an EtcdWatcher.
-        ew = etcdutils.EtcdWatcher('/calico/felix/v2/abc/host',
-                                   '/round-trip-check')
+        ew = etcdutils.EtcdWatcher("/calico/felix/v2/abc/host", "/round-trip-check")
         debug_msgs = []
         ew.debug_reporter = lambda msg: debug_msgs.append(msg)
         eventlet.spawn(ew.start)
