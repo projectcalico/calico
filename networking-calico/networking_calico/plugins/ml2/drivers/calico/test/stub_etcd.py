@@ -16,10 +16,12 @@
 """
 Stub version of the etcd interface.
 """
+import logging
+
 from etcd3gw.utils import _decode
+
 import eventlet
 from eventlet.event import Event
-import logging
 
 from networking_calico import etcdv3
 
@@ -94,9 +96,9 @@ class Client(object):
         return {"succeeded": succeeded}
 
     def lease(self, ttl):
-        l = Lease(self.next_lease_id, self)
+        ls = Lease(self.next_lease_id, self)
         self.next_lease_id += 1
-        return l
+        return ls
 
     def write(self, path, value, **kwargs):
         log.debug("Write of %s to %s", value, path)

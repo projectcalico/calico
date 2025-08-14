@@ -18,12 +18,14 @@ networking_calico.plugins.ml2.drivers.calico.test.lib
 
 Common code for Neutron driver UT.
 """
-import eventlet
-import eventlet.queue
 import inspect
 import logging
-import mock
 import sys
+
+import eventlet
+import eventlet.queue
+
+import mock
 
 # When you're working on a test and need to see logging - both from the test
 # code and the code _under_ test - uncomment the following line.

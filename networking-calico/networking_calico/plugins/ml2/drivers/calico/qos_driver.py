@@ -15,13 +15,13 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-from networking_calico.compat import log
-
 from neutron_lib import constants
 from neutron_lib.api.definitions import portbindings
 from neutron_lib.db import constants as db_consts
 from neutron_lib.services.qos import base
 from neutron_lib.services.qos import constants as qos_consts
+
+from networking_calico.compat import log
 
 
 LOG = log.getLogger(__name__)

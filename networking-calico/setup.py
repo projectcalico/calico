@@ -25,7 +25,7 @@ setup(
             'calico-dhcp-agent = networking_calico.agent.dhcp_agent:main',
         ],
         'neutron.ml2.mechanism_drivers': [
-            'calico = networking_calico.plugins.ml2.drivers.calico.' +
+            'calico = networking_calico.plugins.ml2.drivers.calico.'
             'mech_calico:CalicoMechanismDriver',
         ],
         'neutron.core_plugins': [
