@@ -17,34 +17,35 @@ import json
 import re
 import uuid
 
-from networking_calico.compat import log
 from networking_calico import datamodel_v2
 from networking_calico import etcdv3
+from networking_calico.compat import log
 from networking_calico.timestamp import timestamp_now
 
 # Particular JSON key strings.
-CLUSTER_GUID = 'clusterGUID'
-CLUSTER_TYPE = 'clusterType'
-DATASTORE_READY = 'datastoreReady'
-ENDPOINT_REPORTING_ENABLED = 'endpointReportingEnabled'
-INTERFACE_PREFIX = 'interfacePrefix'
+CLUSTER_GUID = "clusterGUID"
+CLUSTER_TYPE = "clusterType"
+DATASTORE_READY = "datastoreReady"
+ENDPOINT_REPORTING_ENABLED = "endpointReportingEnabled"
+INTERFACE_PREFIX = "interfacePrefix"
 
 # Annotation keys.
-ANN_KEY_PREFIX = 'openstack.projectcalico.org/'
-ANN_KEY_FQDN = ANN_KEY_PREFIX + 'fqdn'
-ANN_KEY_NETWORK_ID = ANN_KEY_PREFIX + 'network-id'
+ANN_KEY_PREFIX = "openstack.projectcalico.org/"
+ANN_KEY_FQDN = ANN_KEY_PREFIX + "fqdn"
+ANN_KEY_NETWORK_ID = ANN_KEY_PREFIX + "network-id"
 
 # Namespace constants.
-NO_REGION_NAMESPACE = 'openstack'
-REGION_NAMESPACE_PREFIX = 'openstack-'
+NO_REGION_NAMESPACE = "openstack"
+REGION_NAMESPACE_PREFIX = "openstack-"
 NOT_NAMESPACED = None
 
 
 LOG = log.getLogger(__name__)
 
 
-def put(resource_kind, namespace, name, spec, annotations={}, labels=None,
-        mod_revision=None):
+def put(
+    resource_kind, namespace, name, spec, annotations={}, labels=None, mod_revision=None
+):
     """Write a Calico v3 resource to etcdv3.
 
     - resource_kind (string): E.g. WorkloadEndpoint, Profile, etc.
@@ -85,22 +86,22 @@ def put(resource_kind, namespace, name, spec, annotations={}, labels=None,
     if value is None:
         # Build basic resource structure.
         value = {
-            'kind': resource_kind,
-            'apiVersion': 'projectcalico.org/v3',
-            'metadata': {
-                'name': name,
+            "kind": resource_kind,
+            "apiVersion": "projectcalico.org/v3",
+            "metadata": {
+                "name": name,
             },
         }
     # Ensure namespace set, for a namespaced resource.
     if _is_namespaced(resource_kind):
         assert namespace is not None
-        value['metadata']['namespace'] = namespace
+        value["metadata"]["namespace"] = namespace
     # Ensure that there is a creation timestamp.
-    if 'creationTimestamp' not in value['metadata']:
-        value['metadata']['creationTimestamp'] = timestamp_now()
+    if "creationTimestamp" not in value["metadata"]:
+        value["metadata"]["creationTimestamp"] = timestamp_now()
     # Ensure that there is a UID.
-    if 'uid' not in value['metadata']:
-        value['metadata']['uid'] = str(uuid.uuid4())
+    if "uid" not in value["metadata"]:
+        value["metadata"]["uid"] = str(uuid.uuid4())
     # Set annotations and labels if specified.  (We previously used to merge
     # here, instead of overwriting, but (a) for annotations there is actually
     # no use case for that, because we only use annotations on endpoints for
@@ -109,11 +110,11 @@ def put(resource_kind, namespace, name, spec, annotations={}, labels=None,
     # we overwrite and don't merge; otherwise a VM could never be removed from
     # a security group.)
     if annotations:
-        value['metadata']['annotations'] = annotations
+        value["metadata"]["annotations"] = annotations
     if labels:
-        value['metadata']['labels'] = labels
+        value["metadata"]["labels"] = labels
     # Set the new spec (overriding whatever may already be there).
-    value['spec'] = spec
+    value["spec"] = spec
     return etcdv3.put(key, json.dumps(value), mod_revision=mod_revision)
 
 
@@ -136,19 +137,16 @@ def get(resource_kind, name):
 
     Raises etcdv3.KeyNotFound if there is no resource with that kind and name.
     """
-    value, mod_revision = _get_with_metadata(resource_kind,
-                                             NOT_NAMESPACED,
-                                             name)
-    return value['spec'], mod_revision
+    value, mod_revision = _get_with_metadata(resource_kind, NOT_NAMESPACED, name)
+    return value["spec"], mod_revision
 
 
-def delete_legacy(resource_kind, name_prefix=''):
+def delete_legacy(resource_kind, name_prefix=""):
     key = _build_key(resource_kind, NO_REGION_NAMESPACE, name_prefix)
     etcdv3.delete_prefix(key)
 
 
-def get_all(resource_kind, namespace,
-            with_labels_and_annotations=False, revision=None):
+def get_all(resource_kind, namespace, with_labels_and_annotations=False, revision=None):
     """Read all Calico v3 resources of a certain kind from etcdv3.
 
     - resource_kind (string): E.g. WorkloadEndpoint, Profile, etc.
@@ -179,21 +177,21 @@ def get_all(resource_kind, namespace,
     - mod_revision is the revision at which that resource was last modified (an
       integer represented as a string).
     """
-    prefix = _build_key(resource_kind, namespace, '')
+    prefix = _build_key(resource_kind, namespace, "")
     results = etcdv3.get_prefix(prefix, revision=revision)
     tuples = []
     for result in results:
         key, value, mod_revision = result
-        name = key.split('/')[-1]
+        name = key.split("/")[-1]
 
         # Decode the value.
         spec = labels = annotations = None
         try:
             value_dict = json.loads(value)
             LOG.debug("value dict: %s", value_dict)
-            spec = value_dict['spec']
-            labels = value_dict['metadata'].get('labels', {})
-            annotations = value_dict['metadata'].get('annotations', {})
+            spec = value_dict["spec"]
+            labels = value_dict["metadata"].get("labels", {})
+            annotations = value_dict["metadata"].get("annotations", {})
         except ValueError:
             # When the value is not valid JSON, we still return a tuple for
             # this key, with spec, labels and annotations all as None.  This is
@@ -236,17 +234,17 @@ def sanitize_label_name_value(name, max_length):
     last characters are alphanumeric, and that the length is within a specified
     maximum length.
     """
-    name = re.sub('[^-_.A-Za-z0-9]', '_', name[:max_length])
+    name = re.sub("[^-_.A-Za-z0-9]", "_", name[:max_length])
     # Ensure that the first character is alphanumeric, by deleting leading
     # characters that are not alphanumeric.
-    m = re.match('^([^A-Za-z0-9]+)', name)
+    m = re.match("^([^A-Za-z0-9]+)", name)
     if m:
-        name = name[m.end(1):]
+        name = name[m.end(1) :]
     # Ensure that the last character is alphanumeric, by deleting trailing
     # characters that are not alphanumeric.
-    m = re.match('.*?([^A-Za-z0-9]+)$', name)
+    m = re.match(".*?([^A-Za-z0-9]+)$", name)
     if m:
-        name = name[:m.start(1)]
+        name = name[: m.start(1)]
 
     return name
 
@@ -279,12 +277,12 @@ def _build_key(resource_kind, namespace, name):
     if _is_namespaced(resource_kind):
         assert namespace is not None
         return "/calico/resources/v3/projectcalico.org/%s/%s/%s" % (
-            kind_plural, namespace, name
+            kind_plural,
+            namespace,
+            name,
         )
     else:
-        return "/calico/resources/v3/projectcalico.org/%s/%s" % (
-            kind_plural, name
-        )
+        return "/calico/resources/v3/projectcalico.org/%s/%s" % (kind_plural, name)
 
 
 def _get_with_metadata(resource_kind, namespace, name):

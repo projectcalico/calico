@@ -11,8 +11,13 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
+import logging
 import unittest
+from collections import namedtuple
 
+import mock
+
+import networking_calico.common as common
 from networking_calico.common import config
 from networking_calico.compat import cfg
 
@@ -20,17 +25,10 @@ from networking_calico.compat import cfg
 class TestConfig(unittest.TestCase):
 
     def test_additional_options_registered(self):
-        add_opt = cfg.StrOpt('test_option', default='test')
+        add_opt = cfg.StrOpt("test_option", default="test")
         config.register_options(cfg.CONF, additional_options=[add_opt])
-        self.assertEqual(cfg.CONF['calico']['test_option'], 'test')
+        self.assertEqual(cfg.CONF["calico"]["test_option"], "test")
 
-
-from collections import namedtuple
-import logging
-import mock
-
-
-import networking_calico.common as common
 
 Config = namedtuple("Config", ["IFACE_PREFIX", "HOSTNAME"])
 
@@ -93,4 +91,5 @@ class TestCommon(unittest.TestCase):
         self.assertRaises(
             AssertionError,
             config._validate_region,
-            "my-region-has-a-very-long-and-extremely-interesting-name")
+            "my-region-has-a-very-long-and-extremely-interesting-name",
+        )

@@ -22,5 +22,7 @@ def logging_exceptions(logger):
             except Exception:
                 logger.exception("Exception in function %s")
                 raise
+
         return wrapped
+
     return decorator

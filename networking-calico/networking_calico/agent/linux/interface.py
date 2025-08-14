@@ -28,7 +28,7 @@ LOG = logging.getLogger(__name__)
 class RoutedInterfaceDriver(interface.LinuxInterfaceDriver):
     """Driver for DHCP service for routed virtual interfaces."""
 
-    DEV_NAME_PREFIX = 'ns-'
+    DEV_NAME_PREFIX = "ns-"
 
     def __init__(self, conf, get_networks_callback=None):
         super(RoutedInterfaceDriver, self).__init__(conf)
@@ -42,9 +42,18 @@ class RoutedInterfaceDriver(interface.LinuxInterfaceDriver):
         # address.
         return True
 
-    def plug_new(self, network_id, port_id, device_name, mac_address,
-                 bridge=None, namespace=None, prefix=None, mtu=None,
-                 link_up=True):
+    def plug_new(
+        self,
+        network_id,
+        port_id,
+        device_name,
+        mac_address,
+        bridge=None,
+        namespace=None,
+        prefix=None,
+        mtu=None,
+        link_up=True,
+    ):
         """Plugin the interface."""
         ip = ip_lib.IPWrapper()
 
@@ -64,8 +73,15 @@ class RoutedInterfaceDriver(interface.LinuxInterfaceDriver):
     def set_mtu(self, device_name, mtu, namespace=None, prefix=None):
         pass
 
-    def init_l3(self, device_name, ip_cidrs, namespace=None,
-                preserve_ips=[], gateway=None, extra_subnets=[]):
+    def init_l3(
+        self,
+        device_name,
+        ip_cidrs,
+        namespace=None,
+        preserve_ips=[],
+        gateway=None,
+        extra_subnets=[],
+    ):
         """L3 initialization for RoutedInterfaceDriver.
 
         Extend LinuxInterfaceDriver.init_l3 to remove the subnet
