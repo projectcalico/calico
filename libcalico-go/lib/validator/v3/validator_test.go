@@ -26,7 +26,6 @@ import (
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
-	"github.com/projectcalico/calico/libcalico-go/lib/backend/encap"
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	v3 "github.com/projectcalico/calico/libcalico-go/lib/validator/v3"
 )
@@ -430,7 +429,7 @@ func init() {
 		),
 		Entry("should accept NetworkSetSpec with CIDRs and IPs",
 			api.NetworkSetSpec{
-				Nets: []string{
+				Nets: []api.CIDR{
 					"10.0.0.1",
 					"11.0.0.0/8",
 					"dead:beef::",
@@ -441,7 +440,7 @@ func init() {
 		),
 		Entry("should reject NetworkSetSpec with bad CIDR",
 			api.NetworkSetSpec{
-				Nets: []string{
+				Nets: []api.CIDR{
 					"garbage",
 				},
 			},
@@ -456,7 +455,7 @@ func init() {
 					},
 				},
 				Spec: api.NetworkSetSpec{
-					Nets: []string{"10.0.0.1"},
+					Nets: []api.CIDR{"10.0.0.1"},
 				},
 			},
 			true,
@@ -470,7 +469,7 @@ func init() {
 					},
 				},
 				Spec: api.NetworkSetSpec{
-					Nets: []string{"10.0.0.1"},
+					Nets: []api.CIDR{"10.0.0.1"},
 				},
 			},
 			false,
@@ -481,7 +480,7 @@ func init() {
 					Name: "test$set",
 				},
 				Spec: api.NetworkSetSpec{
-					Nets: []string{"10.0.0.1"},
+					Nets: []api.CIDR{"10.0.0.1"},
 				},
 			},
 			false,
@@ -1143,42 +1142,42 @@ func init() {
 			api.IPReservation{
 				ObjectMeta: v1.ObjectMeta{Name: "ip-reservation.name"},
 				Spec: api.IPReservationSpec{
-					ReservedCIDRs: []string{"10.0.0.1"},
+					ReservedCIDRs: []api.CIDR{"10.0.0.1"},
 				},
 			}, true),
 		Entry("should accept IPReservation with a CIDR",
 			api.IPReservation{
 				ObjectMeta: v1.ObjectMeta{Name: "ip-reservation.name"},
 				Spec: api.IPReservationSpec{
-					ReservedCIDRs: []string{"10.0.1.0/24"},
+					ReservedCIDRs: []api.CIDR{"10.0.1.0/24"},
 				},
 			}, true),
 		Entry("should accept IPReservation IP and a CIDR",
 			api.IPReservation{
 				ObjectMeta: v1.ObjectMeta{Name: "ip-reservation.name"},
 				Spec: api.IPReservationSpec{
-					ReservedCIDRs: []string{"10.0.1.0/24", "192.168.0.34"},
+					ReservedCIDRs: []api.CIDR{"10.0.1.0/24", "192.168.0.34"},
 				},
 			}, true),
 		Entry("should reject IPReservation with bad CIDR",
 			api.IPReservation{
 				ObjectMeta: v1.ObjectMeta{Name: "ip-reservation.name"},
 				Spec: api.IPReservationSpec{
-					ReservedCIDRs: []string{"garbage"},
+					ReservedCIDRs: []api.CIDR{"garbage"},
 				},
 			}, false),
 		Entry("should reject IPReservation with too-long CIDR",
 			api.IPReservation{
 				ObjectMeta: v1.ObjectMeta{Name: "ip-reservation.name"},
 				Spec: api.IPReservationSpec{
-					ReservedCIDRs: []string{"10.0.1.0/33"},
+					ReservedCIDRs: []api.CIDR{"10.0.1.0/33"},
 				},
 			}, false),
 		Entry("should accept IPReservation with an IPv6",
 			api.IPReservation{
 				ObjectMeta: v1.ObjectMeta{Name: "ip-reservation.name"},
 				Spec: api.IPReservationSpec{
-					ReservedCIDRs: []string{"10.0.0.1", "cafe::1", "cafe:f00d::/96"},
+					ReservedCIDRs: []api.CIDR{"10.0.0.1", "cafe::1", "cafe:f00d::/96"},
 				},
 			}, true),
 
@@ -1198,11 +1197,6 @@ func init() {
 		Entry("should accept VXLAN mode Never ", api.IPPoolSpec{CIDR: "1.2.3.0/24", VXLANMode: "Never"}, true),
 		Entry("should reject VXLAN mode never", api.IPPoolSpec{CIDR: "1.2.3.0/24", VXLANMode: "never"}, false),
 		Entry("should reject VXLAN mode badVal", api.IPPoolSpec{CIDR: "1.2.3.0/24", VXLANMode: "badVal"}, false),
-
-		// (API) IPIP APIv1 backwards compatibility. Read-only field IPIP
-		Entry("should accept a nil IPIP field", api.IPPoolSpec{CIDR: "1.2.3.0/24", IPIPMode: "Never", IPIP: nil}, true),
-		Entry("should accept it when the IPIP field is not specified", api.IPPoolSpec{CIDR: "1.2.3.0/24", IPIPMode: "Never"}, true),
-		Entry("should reject a non-nil IPIP field", api.IPPoolSpec{CIDR: "1.2.3.0/24", IPIPMode: "Never", IPIP: &api.IPIPConfiguration{Enabled: true, Mode: encap.Always}}, false),
 
 		// (API) ICMPFields
 		Entry("should accept ICMP with no config", api.ICMPFields{}, true),
@@ -3502,17 +3496,17 @@ func init() {
 		),
 		Entry("should allow a valid CIDR",
 			api.Template{
-				InterfaceCIDRs: []string{"10.0.1.0/24", "10.0.10.0/32"},
+				InterfaceCIDRs: []api.CIDR{"10.0.1.0/24", "10.0.10.0/32"},
 			}, true,
 		),
 		Entry("should reject empty CIDR",
 			api.Template{
-				InterfaceCIDRs: []string{},
+				InterfaceCIDRs: []api.CIDR{},
 			}, true,
 		),
 		Entry("should reject invalid CIDR",
 			api.Template{
-				InterfaceCIDRs: []string{"not a real cidr"},
+				InterfaceCIDRs: []api.CIDR{"not a real cidr"},
 			}, false,
 		),
 

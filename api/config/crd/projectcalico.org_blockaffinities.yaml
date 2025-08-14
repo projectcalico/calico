@@ -35,6 +35,7 @@ spec:
                   type: string
                 state:
                   enum:
+                    - ""
                     - confirmed
                     - pending
                     - pendingDeletion

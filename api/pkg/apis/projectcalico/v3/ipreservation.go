@@ -30,7 +30,7 @@ const (
 // IPReservationList contains a list of IPReservation resources.
 type IPReservationList struct {
 	metav1.TypeMeta `json:",inline"`
-	metav1.ListMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
+	metav1.ListMeta `json:"metadata" protobuf:"bytes,1,opt,name=metadata"`
 
 	Items []IPReservation `json:"items" protobuf:"bytes,2,rep,name=items"`
 }
@@ -47,9 +47,9 @@ type IPReservationList struct {
 // to find a non-reserved IP.
 type IPReservation struct {
 	metav1.TypeMeta   `json:",inline"`
-	metav1.ObjectMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
+	metav1.ObjectMeta `json:"metadata" protobuf:"bytes,1,opt,name=metadata"`
 
-	Spec IPReservationSpec `json:"spec,omitempty" protobuf:"bytes,2,opt,name=spec"`
+	Spec IPReservationSpec `json:"spec" protobuf:"bytes,2,opt,name=spec"`
 }
 
 // IPReservationSpec contains the specification for an IPReservation resource.

@@ -5136,6 +5136,7 @@ func schema_pkg_apis_projectcalico_v3_IPReservation(ref common.ReferenceCallback
 						},
 					},
 				},
+				Required: []string{"metadata", "spec"},
 			},
 		},
 		Dependencies: []string{
@@ -5184,7 +5185,7 @@ func schema_pkg_apis_projectcalico_v3_IPReservationList(ref common.ReferenceCall
 						},
 					},
 				},
-				Required: []string{"items"},
+				Required: []string{"metadata", "items"},
 			},
 		},
 		Dependencies: []string{
@@ -5676,6 +5677,7 @@ func schema_pkg_apis_projectcalico_v3_NetworkSet(ref common.ReferenceCallback) c
 						},
 					},
 				},
+				Required: []string{"metadata", "spec"},
 			},
 		},
 		Dependencies: []string{
@@ -5724,7 +5726,7 @@ func schema_pkg_apis_projectcalico_v3_NetworkSetList(ref common.ReferenceCallbac
 						},
 					},
 				},
-				Required: []string{"items"},
+				Required: []string{"metadata", "items"},
 			},
 		},
 		Dependencies: []string{

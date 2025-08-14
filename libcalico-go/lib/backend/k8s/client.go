@@ -67,7 +67,9 @@ type KubeClient struct {
 }
 
 func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
-	// Whether or not we are writing to projectcalico.org/v3 resources.
+	// Whether or not we are writing to projectcalico.org/v3 resources. If true, we're running in
+	// "no API server" mode where the v3 resources are backed by CRDs directly. Otherwise, we're running
+	// with the Calico API server and should instead use crd.projectcalico.org/v1 resources directly.
 	v3 := true
 
 	config, cs, err := CreateKubernetesClientset(ca)

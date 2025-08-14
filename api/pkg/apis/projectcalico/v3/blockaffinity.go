@@ -23,7 +23,7 @@ const (
 	KindBlockAffinityList = "BlockAffinityList"
 )
 
-// +kubebuilder:validation:Enum=confirmed;pending;pendingDeletion
+// +kubebuilder:validation:Enum="";confirmed;pending;pendingDeletion
 type BlockAffinityState string
 
 const (
@@ -41,9 +41,9 @@ const (
 type BlockAffinity struct {
 	metav1.TypeMeta `json:",inline"`
 	// Standard object's metadata.
-	metav1.ObjectMeta `json:"metadata,omitempty"`
+	metav1.ObjectMeta `json:"metadata"`
 	// Specification of the BlockAffinity.
-	Spec BlockAffinitySpec `json:"spec,omitempty"`
+	Spec BlockAffinitySpec `json:"spec"`
 }
 
 // BlockAffinitySpec contains the specification for a BlockAffinity resource.
