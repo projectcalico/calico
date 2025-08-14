@@ -32,6 +32,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/health"
 	cprometheus "github.com/projectcalico/calico/libcalico-go/lib/prometheus"
 	"github.com/projectcalico/calico/typha/pkg/jitter"
+	"github.com/projectcalico/calico/typha/pkg/latencytracker"
 	"github.com/projectcalico/calico/typha/pkg/promutils"
 	"github.com/projectcalico/calico/typha/pkg/syncproto"
 )
@@ -151,6 +152,8 @@ type Cache struct {
 	counterBreadcrumbNonBlock  prometheus.Counter
 	summaryUpdateSize          prometheus.Summary
 
+	latencyTracker *latencytracker.LatencyTracker
+
 	// Done is created by Start() and closed when the main loop exits.
 	Done chan struct{}
 }
@@ -170,6 +173,7 @@ type Config struct {
 	HealthAggregator healthAggregator
 	Name             string
 	HealthName       string
+	LatencyTracker   *latencytracker.LatencyTracker
 }
 
 func (config *Config) ApplyDefaults() {
@@ -213,6 +217,7 @@ func New(config Config) *Cache {
 		kvs:            kvs,
 		wakeUpTicker:   jitter.NewTicker(config.WakeUpInterval, config.WakeUpInterval/10),
 		healthTicks:    time.NewTicker(healthInterval).C,
+		latencyTracker: config.LatencyTracker,
 	}
 
 	var err error
@@ -474,6 +479,10 @@ func (c *Cache) publishBreadcrumb() {
 	if !somethingChanged {
 		log.Debug("Skipping Breadcrumb.  No updates to publish.")
 		return
+	}
+
+	if c.latencyTracker != nil {
+		c.latencyTracker.RecordBreadcrumbCreation(newCrumb.SequenceNumber)
 	}
 
 	c.gaugeSnapSize.Set(float64(c.kvs.Len()))
