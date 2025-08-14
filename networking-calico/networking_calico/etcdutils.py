@@ -13,14 +13,16 @@
 # limitations under the License.
 
 import collections
-import eventlet
 import json
 import re
 
 from etcd3gw.exceptions import ConnectionFailedError
+
+import eventlet
+
+from networking_calico import etcdv3
 from networking_calico.common import intern_string
 from networking_calico.compat import log
-from networking_calico import etcdv3
 from networking_calico.monotonic import monotonic_time
 
 LOG = log.getLogger(__name__)
@@ -31,7 +33,6 @@ ACTION_MAPPING = {
     "compareAndSwap": "set",
     "create": "set",
     "update": "set",
-
     "delete": "delete",
     "compareAndDelete": "delete",
     "expire": "delete",
@@ -59,12 +60,13 @@ class PathDispatcher(object):
         parts = path.strip("/").split("/")
         node = self.handler_root
         for part in parts:
-            m = re.match(r'<(.*)>', part)
+            m = re.match(r"<(.*)>", part)
             if m:
                 capture_name = m.group(1)
                 name, node = node.setdefault("capture", (capture_name, {}))
-                assert name == capture_name, (
-                    "Conflicting capture name %s vs %s" % (name, capture_name)
+                assert name == capture_name, "Conflicting capture name %s vs %s" % (
+                    name,
+                    capture_name,
                 )
             else:
                 node = node.setdefault(part, {})
@@ -96,16 +98,24 @@ class PathDispatcher(object):
         # We've reached the end of the key.
         action = ACTION_MAPPING.get(response.action)
         if action in handler_node:
-            LOG.debug("Found handler for event %s for %s, captures: %s",
-                      action, response.key, captures)
+            LOG.debug(
+                "Found handler for event %s for %s, captures: %s",
+                action,
+                response.key,
+                captures,
+            )
             handler_node[action](response, **captures)
         else:
-            LOG.debug("No handler for event %s on %s. Handler node %s.",
-                      action, response.key, handler_node)
+            LOG.debug(
+                "No handler for event %s on %s. Handler node %s.",
+                action,
+                response.key,
+                handler_node,
+            )
 
 
 Response = collections.namedtuple(
-    'Response', ['action', 'key', 'value', 'mod_revision']
+    "Response", ["action", "key", "value", "mod_revision"]
 )
 
 
@@ -149,8 +159,9 @@ class EtcdWatcher(object):
             try:
                 cluster_id, last_revision = etcdv3.get_status()
                 last_revision = int(last_revision)
-                LOG.debug("Current cluster_id %s, revision %d",
-                          cluster_id, last_revision)
+                LOG.debug(
+                    "Current cluster_id %s, revision %d", cluster_id, last_revision
+                )
                 if cluster_id != current_cluster_id:
                     # No particular handling here; but keep track of the
                     # current cluster ID and log if it changes.  (In the
@@ -179,12 +190,11 @@ class EtcdWatcher(object):
                 # Get all existing values and process them through the
                 # dispatcher.
                 LOG.debug("%s Loading snapshot", my_name)
-                for result in etcdv3.get_prefix(self.prefix,
-                                                revision=last_revision):
+                for result in etcdv3.get_prefix(self.prefix, revision=last_revision):
                     key, value, mod_revision = result
                     # Convert to what the dispatcher expects - see below.
                     response = Response(
-                        action='set',
+                        action="set",
                         key=key,
                         value=value,
                         mod_revision=mod_revision,
@@ -198,8 +208,7 @@ class EtcdWatcher(object):
                 continue
 
             # Allow subclass to do post-snapshot reconciliation.
-            LOG.debug("%s Done loading snapshot, calling post snapshot hook",
-                      my_name)
+            LOG.debug("%s Done loading snapshot, calling post snapshot hook", my_name)
             self._post_snapshot_hook(snapshot_data)
 
             # Now watch for any changes, starting after the revision above.
@@ -207,8 +216,8 @@ class EtcdWatcher(object):
                 # Start a watch from just after the last known revision.
                 LOG.debug("%s Starting to watch for updates", my_name)
                 event_stream, cancel = etcdv3.watch_subtree(
-                    self.prefix,
-                    str(last_revision + 1))
+                    self.prefix, str(last_revision + 1)
+                )
 
                 # It is possible for that watch call to be affected by an etcd
                 # compaction, if there is a sequence of events as follows.
@@ -300,8 +309,9 @@ class EtcdWatcher(object):
                         # the watch is working normally, it will report this
                         # event.
                         try:
-                            etcdv3.put(self.prefix + self.round_trip_suffix,
-                                       str(time_now))
+                            etcdv3.put(
+                                self.prefix + self.round_trip_suffix, str(time_now)
+                            )
                             self.debug_reporter("Wrote round-trip key")
                         except ConnectionFailedError:
                             LOG.exception(
@@ -367,12 +377,12 @@ class EtcdWatcher(object):
                 # Handler methods here expect
                 # - response.key
                 # - response.value
-                key = event['kv']['key'].decode()
-                mod_revision = int(event['kv'].get('mod_revision', '0'))
+                key = event["kv"]["key"].decode()
+                mod_revision = int(event["kv"].get("mod_revision", "0"))
                 response = Response(
-                    action=event.get('type', 'SET').lower(),
+                    action=event.get("type", "SET").lower(),
                     key=key,
-                    value=event['kv'].get('value', b'').decode(),
+                    value=event["kv"].get("value", b"").decode(),
                     mod_revision=mod_revision,
                 )
                 LOG.info("Event: %s", response)
@@ -381,8 +391,7 @@ class EtcdWatcher(object):
                 # Update last known revision.
                 if mod_revision > last_revision:
                     last_revision = mod_revision
-                    LOG.debug("Last known revision is now %d",
-                              last_revision)
+                    LOG.debug("Last known revision is now %d", last_revision)
 
     def stop(self):
         LOG.info("Stop watching status tree")
@@ -401,24 +410,25 @@ def intern_dict(d):
     :param dict[StringTypes,...] d: Input dict.
     :return: new dict with interned keys/values.
     """
-    fields_to_intern = set([
-        # Endpoint dicts.  It doesn't seem worth interning items like the MAC
-        # address or TAP name, which are rarely (if ever) shared.
-        "profile_id",
-        "profile_ids",
-        "state",
-        "ipv4_gateway",
-        "ipv6_gateway",
-
-        # Rules dicts.
-        "protocol",
-        "!protocol",
-        "src_tag",
-        "!src_tag",
-        "dst_tag",
-        "!dst_tag",
-        "action",
-    ])
+    fields_to_intern = set(
+        [
+            # Endpoint dicts.  It doesn't seem worth interning items like the MAC
+            # address or TAP name, which are rarely (if ever) shared.
+            "profile_id",
+            "profile_ids",
+            "state",
+            "ipv4_gateway",
+            "ipv6_gateway",
+            # Rules dicts.
+            "protocol",
+            "!protocol",
+            "src_tag",
+            "!src_tag",
+            "dst_tag",
+            "!dst_tag",
+            "action",
+        ]
+    )
     out = {}
     for k, v in d.items():
         k = intern_string(k)
@@ -431,14 +441,14 @@ def intern_dict(d):
     return out
 
 
-def intern_list(l):
+def intern_list(ls):
     """intern_list
 
     Returns a new list with interned versions of the input list's contents.
     Non-strings are copied to the new list verbatim.
     """
     out = []
-    for item in l:
+    for item in ls:
         if _is_string_instance(item):
             item = intern_string(item)
         out.append(item)
@@ -452,6 +462,7 @@ def safe_decode_json(raw_json, log_tag=None):
     try:
         return json_decoder.decode(raw_json)
     except (TypeError, ValueError):
-        LOG.warning("Failed to decode JSON for %s: %r.  Returning None.",
-                    log_tag, raw_json)
+        LOG.warning(
+            "Failed to decode JSON for %s: %r.  Returning None.", log_tag, raw_json
+        )
         return None

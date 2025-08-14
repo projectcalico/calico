@@ -25,16 +25,17 @@
 #
 # It is implemented as a Neutron/ML2 mechanism driver.
 import contextlib
-from functools import wraps
 import inspect
 import os
 import re
 import uuid
+from functools import wraps
 
 # OpenStack imports.
 import eventlet
 from eventlet.queue import PriorityQueue
 from eventlet.semaphore import Semaphore
+
 from neutron.agent import rpc as agent_rpc
 
 try:
@@ -53,12 +54,17 @@ except ImportError:
     # Neutron code prior to a2c36d7e (10th November 2017).
     from neutron.plugins.ml2 import driver_api as api
 from neutron.plugins.ml2.drivers import mech_agent
+
 from sqlalchemy import exc as sa_exc
 
 # Monkeypatch import
 import neutron.plugins.ml2.rpc as rpc
 
 # Calico imports.
+from networking_calico import datamodel_v1
+from networking_calico import datamodel_v2
+from networking_calico import datamodel_v3
+from networking_calico import etcdv3
 from networking_calico.common import config as calico_config
 from networking_calico.common import intern_string
 from networking_calico.compat import cfg
@@ -68,53 +74,69 @@ from networking_calico.compat import lockutils
 from networking_calico.compat import log
 from networking_calico.compat import n_exc
 from networking_calico.compat import plugin_dir
-from networking_calico import datamodel_v1
-from networking_calico import datamodel_v2
-from networking_calico import datamodel_v3
-from networking_calico import etcdv3
 from networking_calico.logutils import logging_exceptions
 from networking_calico.monotonic import monotonic_time
 from networking_calico.plugins.ml2.drivers.calico.election import Elector
-from networking_calico.plugins.ml2.drivers.calico.endpoints import \
-    _port_is_endpoint_port
-from networking_calico.plugins.ml2.drivers.calico.endpoints import \
-    WorkloadEndpointSyncer
+from networking_calico.plugins.ml2.drivers.calico.endpoints import (
+    WorkloadEndpointSyncer,
+    _port_is_endpoint_port,
+)
 from networking_calico.plugins.ml2.drivers.calico.policy import PolicySyncer
-from networking_calico.plugins.ml2.drivers.calico.qos_driver import register \
-    as register_qos_driver
+from networking_calico.plugins.ml2.drivers.calico.qos_driver import (
+    register as register_qos_driver,
+)
 from networking_calico.plugins.ml2.drivers.calico.status import StatusWatcher
 from networking_calico.plugins.ml2.drivers.calico.subnets import SubnetSyncer
 
 # Imports for a Keystone client.
-from keystoneauth1.identity import v3
 from keystoneauth1 import session
+from keystoneauth1.identity import v3
+
 from keystoneclient.v3.client import Client as KeystoneClient
 
 # Register [AGENT] options, which we need in order to successfully use
 # PluginReportStateAPI.
 from neutron.conf.agent import common as config
+
 config.register_agent_state_opts_helper(cfg.CONF)
 
 LOG = log.getLogger(__name__)
 
 calico_opts = [
-    cfg.IntOpt('num_port_status_threads', default=4,
-               help="Number of threads to use for writing port status "
-                    "updates to the database."),
-    cfg.IntOpt('etcd_compaction_period_mins', default=60,
-               help="Interval in minutes between periodic etcd compactions. "
-                    "A setting of 0 tells this Calico driver not to request "
-                    "any etcd compaction; in that case the deployment must "
-                    "take its own steps to prevent the etcd database from "
-                    "growing without any disk usage bound."),
-    cfg.IntOpt('etcd_compaction_min_revisions', default=1000,
-               help="The minimum number of revisions to keep when requesting "
-                    "an etcd compaction.  We also keep at least the history "
-                    "of the previous etcd_compaction_period_mins interval."),
-    cfg.IntOpt('project_name_cache_max', default=100,
-               help="The maximum allowed size of our cache of project names."),
+    cfg.IntOpt(
+        "num_port_status_threads",
+        default=4,
+        help=(
+            "Number of threads to use for writing port status updates to the database."
+        ),
+    ),
+    cfg.IntOpt(
+        "etcd_compaction_period_mins",
+        default=60,
+        help=(
+            "Interval in minutes between periodic etcd compactions. "
+            "A setting of 0 tells this Calico driver not to request "
+            "any etcd compaction; in that case the deployment must "
+            "take its own steps to prevent the etcd database from "
+            "growing without any disk usage bound."
+        ),
+    ),
+    cfg.IntOpt(
+        "etcd_compaction_min_revisions",
+        default=1000,
+        help=(
+            "The minimum number of revisions to keep when requesting "
+            "an etcd compaction.  We also keep at least the history "
+            "of the previous etcd_compaction_period_mins interval."
+        ),
+    ),
+    cfg.IntOpt(
+        "project_name_cache_max",
+        default=100,
+        help="The maximum allowed size of our cache of project names.",
+    ),
 ]
-cfg.CONF.register_opts(calico_opts, 'calico')
+cfg.CONF.register_opts(calico_opts, "calico")
 
 # In order to rate limit warning logs about queue lengths, we check if we've
 # already logged within this interval (seconds) before logging.
@@ -122,8 +144,8 @@ QUEUE_WARN_LOG_INTERVAL_SECS = 10
 
 # An OpenStack agent type name for Felix, the Calico agent component in the new
 # architecture.
-AGENT_TYPE_FELIX = 'Calico per-host agent (felix)'
-AGENT_ID_FELIX = 'calico-felix'
+AGENT_TYPE_FELIX = "Calico per-host agent (felix)"
+AGENT_ID_FELIX = "calico-felix"
 
 # Mapping from our endpoint status to neutron's port status.
 PORT_STATUS_MAPPING = {
@@ -175,6 +197,7 @@ def requires_state(f):
     CalicoMechanismDriver class: specifically, those that are called directly
     from Neutron.
     """
+
     @wraps(f)
     def wrapper(self, *args, **kwargs):
         self._post_fork_init()
@@ -194,9 +217,9 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
     def __init__(self):
         super(CalicoMechanismDriver, self).__init__(
             AGENT_TYPE_FELIX,
-            'tap',
-            {'port_filter': True,
-             'mac_address': '00:61:fe:ed:ca:fe'})
+            "tap",
+            {"port_filter": True, "mac_address": "00:61:fe:ed:ca:fe"},
+        )
         register_qos_driver()
         # Lock to prevent concurrent initialisation.
         self._init_lock = Semaphore()
@@ -266,8 +289,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             if self._my_pid == current_pid:
                 # We've initialised our PID and it hasn't changed since last
                 # time, nothing to do.
-                LOG.info("Calico state already initialised for PID %s",
-                         current_pid)
+                LOG.info("Calico state already initialised for PID %s", current_pid)
                 return
             # else: either this is the first call or our PID has changed:
             # (re)initialise.
@@ -275,12 +297,17 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             if self._my_pid is not None:
                 # This is unexpected but we can deal with it: Neutron should
                 # fork before we trigger the first call to _post_fork_init!().
-                LOG.warning("PID changed from %s to %s; unexpected fork after "
-                            "initialisation?  Reinitialising Calico driver.",
-                            self._my_pid, current_pid)
+                LOG.warning(
+                    "PID changed from %s to %s; unexpected fork after "
+                    "initialisation?  Reinitialising Calico driver.",
+                    self._my_pid,
+                    current_pid,
+                )
             else:
-                LOG.info("Doing Calico mechanism driver initialisation in"
-                         " process %s", current_pid)
+                LOG.info(
+                    "Doing Calico mechanism driver initialisation in process %s",
+                    current_pid,
+                )
 
             # (Re)init the DB.
             self.db = None
@@ -290,8 +317,8 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             authcfg = cfg.CONF.keystone_authtoken
             LOG.debug("authcfg = %r", authcfg)
             for key in authcfg:
-                if 'password' in key:
-                    LOG.debug("authcfg[%s] = %s", key, '***')
+                if "password" in key:
+                    LOG.debug("authcfg[%s] = %s", key, "***")
                 else:
                     LOG.debug("authcfg[%s] = %s", key, authcfg[key])
 
@@ -299,66 +326,62 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             try:
                 user_domain_name = authcfg.user_domain_name
             except cfg.NoSuchOptError:
-                user_domain_name = 'Default'
-                LOG.debug("authcfg[user_domain_name] fallback = %s",
-                          user_domain_name)
+                user_domain_name = "Default"
+                LOG.debug("authcfg[user_domain_name] fallback = %s", user_domain_name)
 
             try:
                 username = authcfg.username
             except cfg.NoSuchOptError:
                 username = authcfg.admin_user
-                LOG.debug("authcfg[username] fallback[admin_user] = %s",
-                          username)
+                LOG.debug("authcfg[username] fallback[admin_user] = %s", username)
 
             try:
                 password = authcfg.password
             except cfg.NoSuchOptError:
                 password = authcfg.admin_password
-                LOG.debug("authcfg[password] fallback[admin_password] = %s",
-                          '***')
+                LOG.debug("authcfg[password] fallback[admin_password] = %s", "***")
 
             try:
                 project_domain_name = authcfg.project_domain_name
             except cfg.NoSuchOptError:
-                project_domain_name = 'Default'
-                LOG.debug("authcfg[project_domain_name] fallback = %s",
-                          project_domain_name)
+                project_domain_name = "Default"
+                LOG.debug(
+                    "authcfg[project_domain_name] fallback = %s", project_domain_name
+                )
 
             try:
                 project_name = authcfg.project_name
             except cfg.NoSuchOptError:
                 project_name = authcfg.admin_tenant_name
-                LOG.debug("authcfg[project_name] fallback[admin_tenant_name]"
-                          " = %s", project_name)
+                LOG.debug(
+                    "authcfg[project_name] fallback[admin_tenant_name] = %s",
+                    project_name,
+                )
 
             try:
                 auth_url = authcfg.auth_url
             except cfg.NoSuchOptError:
                 auth_url = authcfg.identity_uri
-                LOG.debug("authcfg[auth_url] fallback[identity_uri] = %s",
-                          auth_url)
+                LOG.debug("authcfg[auth_url] fallback[identity_uri] = %s", auth_url)
 
-            auth = v3.Password(user_domain_name=user_domain_name,
-                               username=username,
-                               password=password,
-                               project_domain_name=project_domain_name,
-                               project_name=project_name,
-                               auth_url=re.sub(r'/v3/?$', '', auth_url) +
-                               '/v3')
+            auth = v3.Password(
+                user_domain_name=user_domain_name,
+                username=username,
+                password=password,
+                project_domain_name=project_domain_name,
+                project_name=project_name,
+                auth_url=re.sub(r"/v3/?$", "", auth_url) + "/v3",
+            )
             sess = session.Session(auth=auth)
             keystone_client = KeystoneClient(session=sess)
             LOG.debug("Keystone client = %r", keystone_client)
 
             # Create syncers.
-            self.subnet_syncer = \
-                SubnetSyncer(self.db, self._txn_from_context)
-            self.policy_syncer = \
-                PolicySyncer(self.db, self._txn_from_context)
-            self.endpoint_syncer = \
-                WorkloadEndpointSyncer(self.db,
-                                       self._txn_from_context,
-                                       self.policy_syncer,
-                                       keystone_client)
+            self.subnet_syncer = SubnetSyncer(self.db, self._txn_from_context)
+            self.policy_syncer = PolicySyncer(self.db, self._txn_from_context)
+            self.endpoint_syncer = WorkloadEndpointSyncer(
+                self.db, self._txn_from_context, self.policy_syncer, keystone_client
+            )
 
             # Admin context used by (only) the thread that updates Felix agent
             # status.
@@ -370,17 +393,16 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             except AttributeError:
                 # Older versions of OpenStack share the PLUGIN topic.
                 state_report_topic = topics.PLUGIN
-            self.state_report_rpc = agent_rpc.PluginReportStateAPI(
-                state_report_topic
-            )
+            self.state_report_rpc = agent_rpc.PluginReportStateAPI(state_report_topic)
 
             # Elector, for performing leader election.
-            self.elector = Elector(cfg.CONF.calico.elector_name,
-                                   datamodel_v2.neutron_election_key(
-                                       calico_config.get_region_string()),
-                                   old_key=datamodel_v1.NEUTRON_ELECTION_KEY,
-                                   interval=MASTER_REFRESH_INTERVAL,
-                                   ttl=MASTER_TIMEOUT)
+            self.elector = Elector(
+                cfg.CONF.calico.elector_name,
+                datamodel_v2.neutron_election_key(calico_config.get_region_string()),
+                old_key=datamodel_v1.NEUTRON_ELECTION_KEY,
+                interval=MASTER_REFRESH_INTERVAL,
+                ttl=MASTER_TIMEOUT,
+            )
 
             self._my_pid = current_pid
 
@@ -394,8 +416,9 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             eventlet.spawn(self._status_updating_thread, self._epoch)
             for _ in range(cfg.CONF.calico.num_port_status_threads):
                 eventlet.spawn(self._loop_writing_port_statuses, self._epoch)
-            LOG.info("Calico mechanism driver initialisation done in process "
-                     "%s", current_pid)
+            LOG.info(
+                "Calico mechanism driver initialisation done in process %s", current_pid
+            )
 
     @logging_exceptions(LOG)
     def _status_updating_thread(self, expected_epoch):
@@ -412,11 +435,12 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                 if self._etcd_watcher is None:
                     LOG.info("Became the master, starting StatusWatcher")
                     self._etcd_watcher = StatusWatcher(self)
-                    self._etcd_watcher_thread = eventlet.spawn(
-                        self._etcd_watcher.start
+                    self._etcd_watcher_thread = eventlet.spawn(self._etcd_watcher.start)
+                    LOG.info(
+                        "Started %s as %s",
+                        self._etcd_watcher,
+                        self._etcd_watcher_thread,
                     )
-                    LOG.info("Started %s as %s",
-                             self._etcd_watcher, self._etcd_watcher_thread)
                 elif not self._etcd_watcher_thread:
                     LOG.error("StatusWatcher %s died", self._etcd_watcher)
                     self._etcd_watcher.stop()
@@ -430,23 +454,22 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                 # the master.
             eventlet.sleep(MASTER_CHECK_INTERVAL_SECS)
         else:
-            LOG.warning("Unexpected: epoch changed. "
-                        "Handling status updates thread exiting.")
+            LOG.warning(
+                "Unexpected: epoch changed. Handling status updates thread exiting."
+            )
 
     def on_felix_alive(self, felix_hostname, new):
-        LOG.info("Felix on host %s is alive; fanning out status report",
-                 felix_hostname)
+        LOG.info("Felix on host %s is alive; fanning out status report", felix_hostname)
         # Rather than writing directly to the database, we use the RPC
         # mechanism to fan out the request to another process.  This
         # distributes the DB write load and avoids turning the db-access lock
         # into a bottleneck.
         agent_state = felix_agent_state(felix_hostname, start_flag=new)
-        self.state_report_rpc.report_state(self._agent_update_context,
-                                           agent_state,
-                                           use_call=False)
+        self.state_report_rpc.report_state(
+            self._agent_update_context, agent_state, use_call=False
+        )
 
-    def on_port_status_changed(self, hostname, port_id, status_dict,
-                               priority="low"):
+    def on_port_status_changed(self, hostname, port_id, status_dict, priority="low"):
         """Called when etcd tells us that a port status has changed.
 
         :param hostname: hostname of the host containing the port.
@@ -487,10 +510,16 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         #   is that the VM (re)build fails; but if we're doing a resync then
         #   we must have been disconnected from the datastore and that means
         #   the (re)build is already likely to fail due to the disconnection.
-        if (priority == "high" or
-                self._port_status_cache.get(port_status_key) != calico_status):
-            LOG.info("Status of port %s on host %s changed to %s",
-                     port_status_key, hostname, calico_status)
+        if (
+            priority == "high"
+            or self._port_status_cache.get(port_status_key) != calico_status
+        ):
+            LOG.info(
+                "Status of port %s on host %s changed to %s",
+                port_status_key,
+                hostname,
+                calico_status,
+            )
             # We write the update to our in-memory cache, which is shared with
             # the DB writer threads.  This means that the next write for a
             # particular key always goes directly to the correct state.
@@ -520,10 +549,11 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             qsize = self._port_status_queue.qsize()
             if qsize > 10:
                 now = monotonic_time()
-                if (now - self._last_status_queue_log_time >
-                        QUEUE_WARN_LOG_INTERVAL_SECS):
-                    LOG.warning("Port status update queue length is high: %s",
-                                qsize)
+                if (
+                    now - self._last_status_queue_log_time
+                    > QUEUE_WARN_LOG_INTERVAL_SECS
+                ):
+                    LOG.warning("Port status update queue length is high: %s", qsize)
                     self._last_status_queue_log_time = now
                     self._port_status_queue_too_long = True
                 # Queue is getting large, make sure the DB writer threads
@@ -531,8 +561,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                 eventlet.sleep()
             elif self._port_status_queue_too_long and qsize < 5:
                 self._port_status_queue_too_long = False
-                LOG.warning("Port status update queue back to normal: %s",
-                            qsize)
+                LOG.warning("Port status update queue back to normal: %s", qsize)
 
     @logging_exceptions(LOG)
     def _loop_writing_port_statuses(self, expected_epoch):
@@ -568,41 +597,40 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             if self._update_port_status_has_host_param():
                 # Later OpenStack versions support passing the hostname.
                 LOG.debug("update_port_status() supports host parameter")
-                self.db.update_port_status(admin_context,
-                                           port_id,
-                                           neutron_status,
-                                           host=hostname)
+                self.db.update_port_status(
+                    admin_context, port_id, neutron_status, host=hostname
+                )
             else:
                 # Older versions don't have a way to specify the hostname so
                 # we do our best.
                 LOG.debug("update_port_status() missing host parameter")
-                self.db.update_port_status(admin_context,
-                                           port_id,
-                                           neutron_status)
+                self.db.update_port_status(admin_context, port_id, neutron_status)
         except db_exc.DBError as e:
             # Defensive: pre-Liberty, it was easy to cause deadlocks here if
             # any code path (in another loaded plugin, say) failed to take
             # the db-access lock.  Post-Liberty, we shouldn't see any
             # exceptions here because update_port_status() is wrapped with a
             # retry decorator in the neutron code.
-            LOG.warning("Failed to update port status for %s due to %r.",
-                        port_id, e)
+            LOG.warning("Failed to update port status for %s due to %r.", port_id, e)
             # Queue up a retry after a delay.
-            eventlet.spawn_after(PORT_UPDATE_RETRY_DELAY_SECS,
-                                 self._retry_port_status_update,
-                                 port_status_key)
+            eventlet.spawn_after(
+                PORT_UPDATE_RETRY_DELAY_SECS,
+                self._retry_port_status_update,
+                port_status_key,
+            )
         except sa_exc.SQLAlchemyError as e:
             # Defensive: pre-Liberty, it was easy to cause deadlocks here if
             # any code path (in another loaded plugin, say) failed to take
             # the db-access lock.  Post-Liberty, we shouldn't see any
             # exceptions here because update_port_status() is wrapped with a
             # retry decorator in the neutron code.
-            LOG.warning("Failed to update port status for %s due to %r.",
-                        port_id, e)
+            LOG.warning("Failed to update port status for %s due to %r.", port_id, e)
             # Queue up a retry after a delay.
-            eventlet.spawn_after(PORT_UPDATE_RETRY_DELAY_SECS,
-                                 self._retry_port_status_update,
-                                 port_status_key)
+            eventlet.spawn_after(
+                PORT_UPDATE_RETRY_DELAY_SECS,
+                self._retry_port_status_update,
+                port_status_key,
+            )
         else:
             LOG.debug("Updated port status for %s", port_id)
 
@@ -611,21 +639,19 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         LOG.info("Retrying update to port %s", port_status_key)
         # Queue up the update so that we'll go via the normal writer threads.
         # They will re-read the current state of the port from the cache.
-        self._port_status_queue.put(((PRIORITY_RETRY, monotonic_time()),
-                                     port_status_key))
+        self._port_status_queue.put(
+            ((PRIORITY_RETRY, monotonic_time()), port_status_key)
+        )
 
     def _update_port_status_has_host_param(self):
         """Check whether update_port_status() supports the host parameter."""
         if self._cached_update_port_status_has_host_param is None:
-            full_arg_spec = inspect.getfullargspec(
-                self.db.update_port_status
-            )
+            full_arg_spec = inspect.getfullargspec(self.db.update_port_status)
             args = full_arg_spec.args
             varkw = full_arg_spec.varkw
             has_host_param = varkw or "host" in args
             self._cached_update_port_status_has_host_param = has_host_param
-            LOG.info("update_port_status() supports host arg: %s",
-                     has_host_param)
+            LOG.info("update_port_status() supports host arg: %s", has_host_param)
         return self._cached_update_port_status_has_host_param
 
     def _get_db(self):
@@ -655,7 +681,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
 
     def check_segment_for_agent(self, segment, agent):
         LOG.debug("Checking segment %s with agent %s" % (segment, agent))
-        if segment[api.NETWORK_TYPE] in ['local', 'flat']:
+        if segment[api.NETWORK_TYPE] in ["local", "flat"]:
             return True
         else:
             LOG.warning(
@@ -666,7 +692,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             return False
 
     def get_allowed_network_types(self, agent=None):
-        return ('local', 'flat')
+        return ("local", "flat")
 
     def get_mappings(self, agent):
         # We override this primarily to satisfy the ABC checker: this method
@@ -695,8 +721,8 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         subnet = context.current
         plugin_context = context._plugin_context
         with self._txn_from_context(plugin_context, tag="create-subnet"):
-            subnet = self.db.get_subnet(plugin_context, subnet['id'])
-            if subnet['enable_dhcp']:
+            subnet = self.db.get_subnet(plugin_context, subnet["id"])
+            if subnet["enable_dhcp"]:
                 self.subnet_syncer.subnet_created(subnet, context)
 
     @requires_state
@@ -709,16 +735,16 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         subnet = context.current
         plugin_context = context._plugin_context
         with self._txn_from_context(plugin_context, tag="update-subnet"):
-            subnet = self.db.get_subnet(plugin_context, subnet['id'])
-            if subnet['enable_dhcp']:
+            subnet = self.db.get_subnet(plugin_context, subnet["id"])
+            if subnet["enable_dhcp"]:
                 self.subnet_syncer.subnet_created(subnet, context)
             else:
-                self.subnet_syncer.subnet_deleted(subnet['id'])
+                self.subnet_syncer.subnet_deleted(subnet["id"])
 
     @requires_state
     def delete_subnet_postcommit(self, context):
         LOG.info("DELETE_SUBNET_POSTCOMMIT: %s" % context)
-        self.subnet_syncer.subnet_deleted(context.current['id'])
+        self.subnet_syncer.subnet_deleted(context.current["id"])
 
     # Idealised method forms.
     @requires_state
@@ -733,7 +759,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         unchanged while we hold the transaction. We can then write the port to
         etcd, along with any other information we may need.
         """
-        LOG.info('CREATE_PORT_POSTCOMMIT: %s', context)
+        LOG.info("CREATE_PORT_POSTCOMMIT: %s", context)
         port = context._port
 
         # Ignore if this is not an endpoint port.
@@ -742,7 +768,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
 
         # Ignore if the port binding VIF type is 'unbound'; then this port
         # doesn't need to be networked yet.
-        if port['binding:vif_type'] == 'unbound':
+        if port["binding:vif_type"] == "unbound":
             LOG.info("Creating unbound port: no work required.")
             return
 
@@ -760,7 +786,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         This is a tricky event, because it can be called in a number of ways
         during VM migration. We farm out to the appropriate method from here.
         """
-        LOG.info('UPDATE_PORT_POSTCOMMIT: %s', context)
+        LOG.info("UPDATE_PORT_POSTCOMMIT: %s", context)
         port = context._port
         original = context.original
 
@@ -771,8 +797,11 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         # If this port update is purely for a status change, don't do anything:
         # we don't care about port statuses.
         if port_status_change(port, original):
-            LOG.info(' port status changed from %s to %s, no action.',
-                     original.get("status"), port.get("status"))
+            LOG.info(
+                " port status changed from %s to %s, no action.",
+                original.get("status"),
+                port.get("status"),
+            )
             return
 
         LOG.debug("Old = %r", original)
@@ -802,14 +831,16 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
 
             # Check for migration so that we can reliably delete the
             # WorkloadEndpoint on the old host.
-            if original['binding:host_id'] != port['binding:host_id']:
-                LOG.info("Migration, delete WorkloadEndpoint on old host %s",
-                         original['binding:host_id'])
+            if original["binding:host_id"] != port["binding:host_id"]:
+                LOG.info(
+                    "Migration, delete WorkloadEndpoint on old host %s",
+                    original["binding:host_id"],
+                )
                 self.endpoint_syncer.delete_endpoint(original)
                 endpoint_should_already_exist = False
 
             try:
-                port = self.db.get_port(plugin_context, port['id'])
+                port = self.db.get_port(plugin_context, port["id"])
             except n_exc.PortNotFound:
                 LOG.info("Port no longer exists")
                 return
@@ -825,18 +856,17 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             # - an update (port bound at all times);
             # - a change to an unbound port (which we don't care about, because
             #   we do nothing with unbound ports).
-            if port.get('binding:profile', {}).get('migrating_to') is not None:
+            if port.get("binding:profile", {}).get("migrating_to") is not None:
                 LOG.debug("Pre-live-migration notification message: no action")
             elif port_bound(port):
                 if endpoint_should_already_exist:
                     LOG.info("Port update")
-                    self.endpoint_syncer.write_endpoint(port,
-                                                        plugin_context,
-                                                        must_update=True)
+                    self.endpoint_syncer.write_endpoint(
+                        port, plugin_context, must_update=True
+                    )
                 else:
                     LOG.info("Port becoming bound: create.")
-                    self.endpoint_syncer.write_endpoint(port,
-                                                        plugin_context)
+                    self.endpoint_syncer.write_endpoint(port, plugin_context)
             elif endpoint_should_already_exist:
                 LOG.info("Port becoming unbound: destroy.")
                 self.endpoint_syncer.delete_endpoint(original)
@@ -850,11 +880,10 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         Called after a Neutron floating IP has been associated or
         disassociated from a port.
         """
-        LOG.info('UPDATE_FLOATINGIP: %s', plugin_context)
+        LOG.info("UPDATE_FLOATINGIP: %s", plugin_context)
 
         with self._txn_from_context(plugin_context, tag="update_floatingip"):
-            port = self.db.get_port(plugin_context,
-                                    plugin_context.fip_update_port_id)
+            port = self.db.get_port(plugin_context, plugin_context.fip_update_port_id)
             self._update_port(plugin_context, port)
 
     @requires_state
@@ -866,7 +895,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
 
         There's no database row for us to lock on here, so don't bother.
         """
-        LOG.info('DELETE_PORT_POSTCOMMIT: %s', context)
+        LOG.info("DELETE_PORT_POSTCOMMIT: %s", context)
         port = context._port
 
         # Immediately halt processing if this is not an endpoint port.
@@ -897,12 +926,11 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         :return: context manager for use with with:.
         """
         session = context.session
-        if getattr(session, 'bind', None):
+        if getattr(session, "bind", None):
             conn_url = str(session.bind.url).lower()
         else:
             conn_url = str(session.connection().engine.url).lower()
-        if (conn_url.startswith("mysql:") or
-                conn_url.startswith("mysql+mysqldb:")):
+        if conn_url.startswith("mysql:") or conn_url.startswith("mysql+mysqldb:"):
             # Neutron is using the mysqldb driver for accessing the database.
             # This has a known incompatibility with eventlet that leads to
             # deadlock.  Take the neutron-wide db-access lock as a workaround.
@@ -910,7 +938,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             # description of the issue.
             LOG.debug("Waiting for db-access lock tag=%s...", tag)
             try:
-                with lockutils.lock('db-access'):
+                with lockutils.lock("db-access"):
                     LOG.debug("...acquired db-access lock tag=%s", tag)
                     with context.session.begin(subtransactions=True) as txn:
                         yield txn
@@ -933,9 +961,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
 
         if port_bound(port):
             LOG.info("Port bound, attempting to update.")
-            self.endpoint_syncer.write_endpoint(port,
-                                                plugin_context,
-                                                must_update=True)
+            self.endpoint_syncer.write_endpoint(port, plugin_context, must_update=True)
         else:
             LOG.info("Port unbound, attempting delete if needed.")
             self.endpoint_syncer.delete_endpoint(port)
@@ -1017,28 +1043,30 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             # orchestrator.
             try:
                 cluster_info, ci_mod_revision = datamodel_v3.get(
-                    "ClusterInformation",
-                    "default")
+                    "ClusterInformation", "default"
+                )
             except etcdv3.KeyNotFound:
                 cluster_info = {}
                 ci_mod_revision = 0
             rewrite_cluster_info = False
-            LOG.info("Read ClusterInformation %s mod_revision %r",
-                     cluster_info,
-                     ci_mod_revision)
+            LOG.info(
+                "Read ClusterInformation %s mod_revision %r",
+                cluster_info,
+                ci_mod_revision,
+            )
 
             # Generate a cluster GUID if there isn't one already.
             if not cluster_info.get(datamodel_v3.CLUSTER_GUID):
-                cluster_info[datamodel_v3.CLUSTER_GUID] = \
-                    uuid.uuid4().hex
+                cluster_info[datamodel_v3.CLUSTER_GUID] = uuid.uuid4().hex
                 rewrite_cluster_info = True
 
             # Add "openstack" to the cluster type, unless there already.
             cluster_type = cluster_info.get(datamodel_v3.CLUSTER_TYPE, "")
             if cluster_type:
                 if "openstack" not in cluster_type:
-                    cluster_info[datamodel_v3.CLUSTER_TYPE] = \
+                    cluster_info[datamodel_v3.CLUSTER_TYPE] = (
                         cluster_type + ",openstack"
+                    )
                     rewrite_cluster_info = True
             else:
                 cluster_info[datamodel_v3.CLUSTER_TYPE] = "openstack"
@@ -1062,11 +1090,13 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             # Rewrite ClusterInformation, if we changed anything above.
             if rewrite_cluster_info:
                 LOG.info("New ClusterInformation: %s", cluster_info)
-                if datamodel_v3.put("ClusterInformation",
-                                    datamodel_v3.NOT_NAMESPACED,
-                                    "default",
-                                    cluster_info,
-                                    mod_revision=ci_mod_revision):
+                if datamodel_v3.put(
+                    "ClusterInformation",
+                    datamodel_v3.NOT_NAMESPACED,
+                    "default",
+                    cluster_info,
+                    mod_revision=ci_mod_revision,
+                ):
                     rewrite_cluster_info = False
                 else:
                     # Short sleep to avoid a tight loop.
@@ -1080,39 +1110,41 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             # orchestrator.
             try:
                 felix_config, fc_mod_revision = datamodel_v3.get(
-                    "FelixConfiguration",
-                    "default")
+                    "FelixConfiguration", "default"
+                )
             except etcdv3.KeyNotFound:
                 felix_config = {}
                 fc_mod_revision = 0
             rewrite_felix_config = False
-            LOG.info("Read FelixConfiguration %s mod_revision %r",
-                     felix_config,
-                     fc_mod_revision)
+            LOG.info(
+                "Read FelixConfiguration %s mod_revision %r",
+                felix_config,
+                fc_mod_revision,
+            )
 
             # Enable endpoint reporting.
-            if not felix_config.get(datamodel_v3.ENDPOINT_REPORTING_ENABLED,
-                                    False):
+            if not felix_config.get(datamodel_v3.ENDPOINT_REPORTING_ENABLED, False):
                 felix_config[datamodel_v3.ENDPOINT_REPORTING_ENABLED] = True
                 rewrite_felix_config = True
 
             # Ensure that interface prefixes include 'tap'.
             interface_prefix = felix_config.get(datamodel_v3.INTERFACE_PREFIX)
-            prefixes = interface_prefix.split(',') if interface_prefix else []
-            if 'tap' not in prefixes:
-                prefixes.append('tap')
-                felix_config[datamodel_v3.INTERFACE_PREFIX] = \
-                    ','.join(prefixes)
+            prefixes = interface_prefix.split(",") if interface_prefix else []
+            if "tap" not in prefixes:
+                prefixes.append("tap")
+                felix_config[datamodel_v3.INTERFACE_PREFIX] = ",".join(prefixes)
                 rewrite_felix_config = True
 
             # Rewrite FelixConfiguration, if we changed anything above.
             if rewrite_felix_config:
                 LOG.info("New FelixConfiguration: %s", felix_config)
-                if datamodel_v3.put("FelixConfiguration",
-                                    datamodel_v3.NOT_NAMESPACED,
-                                    "default",
-                                    felix_config,
-                                    mod_revision=fc_mod_revision):
+                if datamodel_v3.put(
+                    "FelixConfiguration",
+                    datamodel_v3.NOT_NAMESPACED,
+                    "default",
+                    felix_config,
+                    mod_revision=fc_mod_revision,
+                ):
                     rewrite_felix_config = False
                 else:
                     # Short sleep to avoid a tight loop.
@@ -1134,9 +1166,7 @@ def security_groups_rule_updated(self, context, sgids):
     original_sgr_updated(self, context, sgids)
 
 
-rpc.AgentNotifierApi.security_groups_rule_updated = (
-    security_groups_rule_updated
-)
+rpc.AgentNotifierApi.security_groups_rule_updated = security_groups_rule_updated
 
 
 def port_status_change(port, original):
@@ -1154,7 +1184,7 @@ def port_status_change(port, original):
     port = port.copy()
     original = original.copy()
 
-    for ignore_field in ['status', 'updated_at', 'revision_number']:
+    for ignore_field in ["status", "updated_at", "revision_number"]:
         port.pop(ignore_field, None)
         original.pop(ignore_field, None)
 
@@ -1166,7 +1196,7 @@ def port_status_change(port, original):
 
 def port_bound(port):
     """Returns true if the port is bound."""
-    return port['binding:vif_type'] != 'unbound'
+    return port["binding:vif_type"] != "unbound"
 
 
 def felix_agent_state(hostname, start_flag=False):
@@ -1176,14 +1206,16 @@ def felix_agent_state(hostname, start_flag=False):
            False if this is a refresh of an existing felix.
     :returns dict: agent status dict appropriate for inserting into Neutron DB.
     """
-    state = {'agent_type': AGENT_TYPE_FELIX,
-             'binary': AGENT_ID_FELIX,
-             'host': hostname,
-             'topic': constants.L2_AGENT_TOPIC}
+    state = {
+        "agent_type": AGENT_TYPE_FELIX,
+        "binary": AGENT_ID_FELIX,
+        "host": hostname,
+        "topic": constants.L2_AGENT_TOPIC,
+    }
     if start_flag:
         # Felix has told us that it has only just started, report that to
         # neutron, which will use it to reset its view of the uptime.
-        state['start_flag'] = True
+        state["start_flag"] = True
     return state
 
 
@@ -1287,13 +1319,12 @@ def check_request_etcd_compaction():
         # Find out when the last compaction happened, and what the current
         # revision was etcd_compaction_period_mins ago.
         try:
-            last_compaction_rev, last_check_rev = etcdv3.get(
-                COMPACTION_LAST_KEY
-            )
+            last_compaction_rev, last_check_rev = etcdv3.get(COMPACTION_LAST_KEY)
             last_compaction_rev = int(last_compaction_rev)
             last_check_rev = int(last_check_rev)
-            LOG.info("Last compaction %r, last check %r",
-                     last_compaction_rev, last_check_rev)
+            LOG.info(
+                "Last compaction %r, last check %r", last_compaction_rev, last_check_rev
+            )
         except etcdv3.KeyNotFound:
             # This is the first time we've checked for compaction.  No
             # possibility of compacting this time, because we always want to
@@ -1317,18 +1348,22 @@ def check_request_etcd_compaction():
         # current etcd cluster metadata from the same source as
         # current_revision.)
         if last_compaction_rev > current_revision:
-            LOG.info("Bogus last compaction revision (%r > %r)",
-                     last_compaction_rev,
-                     current_revision)
+            LOG.info(
+                "Bogus last compaction revision (%r > %r)",
+                last_compaction_rev,
+                current_revision,
+            )
             write_compaction_keys(0)
             return
 
         # We must keep at least etcd_compaction_min_revisions of history.  If
         # there aren't that many yet, we can't compact.
         if current_revision <= cfg.CONF.calico.etcd_compaction_min_revisions:
-            LOG.info("Not enough revisions to compact yet (%r <= %r)",
-                     current_revision,
-                     cfg.CONF.calico.etcd_compaction_min_revisions)
+            LOG.info(
+                "Not enough revisions to compact yet (%r <= %r)",
+                current_revision,
+                cfg.CONF.calico.etcd_compaction_min_revisions,
+            )
             # Note: there could still be a non-zero last_compaction_rev here,
             # if the Neutron server has been restarted with an increased value
             # of etcd_compaction_min_revisions.
@@ -1349,8 +1384,11 @@ def check_request_etcd_compaction():
         if compact_revision <= last_compaction_rev:
             # We've already compacted at or after that revision.  Wait for more
             # time to pass, or history to accumulate.
-            LOG.info("No compactable history yet (%r <= %r)",
-                     compact_revision, last_compaction_rev)
+            LOG.info(
+                "No compactable history yet (%r <= %r)",
+                compact_revision,
+                last_compaction_rev,
+            )
             write_compaction_keys(last_compaction_rev)
             return
 
@@ -1375,8 +1413,7 @@ def check_request_etcd_compaction():
             # (On the other hand, if the exception is for some other reason
             # such as connectivity to the etcd cluster, the following write
             # will hit that too, and that will be handled below.)
-            LOG.info("Someone else has requested etcd compaction:\n%s",
-                     e3e.detail_text)
+            LOG.info("Someone else has requested etcd compaction:\n%s", e3e.detail_text)
             write_compaction_keys(current_revision)
             return
 
@@ -1398,9 +1435,7 @@ def write_compaction_keys(compaction_revision):
 
     # Write the trigger key, with TTL such that it will disappear again after
     # etcd_compaction_period_mins.
-    lease = etcdv3.get_lease(
-        cfg.CONF.calico.etcd_compaction_period_mins * 60
-    )
+    lease = etcdv3.get_lease(cfg.CONF.calico.etcd_compaction_period_mins * 60)
     if not etcdv3.put(COMPACTION_TRIGGER_KEY, str(os.getpid()), lease=lease):
         # Writing should always succeed; but in case it doesn't we will retry
         # as part of the next resync, so just a warning is sufficient here.

@@ -14,13 +14,14 @@
 # limitations under the License.
 
 import json
+
 import netaddr
 
-from networking_calico.common import config as calico_config
-from networking_calico.compat import log
 from networking_calico import datamodel_v1
 from networking_calico import datamodel_v2
 from networking_calico import etcdv3
+from networking_calico.common import config as calico_config
+from networking_calico.compat import log
 from networking_calico.plugins.ml2.drivers.calico.syncer import ResourceGone
 from networking_calico.plugins.ml2.drivers.calico.syncer import ResourceSyncer
 
@@ -33,6 +34,7 @@ class SubnetSyncer(ResourceSyncer):
     For Subnet resources, the name is the full etcd key, and the data is the
     etcd value as a string, i.e. not JSON-decoded into a dict.
     """
+
     def __init__(self, db, txn_from_context):
         super(SubnetSyncer, self).__init__(db, txn_from_context, "Subnet")
         self.region_string = calico_config.get_region_string()
@@ -44,15 +46,15 @@ class SubnetSyncer(ResourceSyncer):
         return etcdv3.get_prefix(datamodel_v2.subnet_dir(self.region_string))
 
     def get_all_from_neutron(self, context):
-        return dict((datamodel_v2.key_for_subnet(subnet['id'],
-                                                 self.region_string), subnet)
-                    for subnet in self.db.get_subnets(context)
-                    if subnet['enable_dhcp'])
+        return dict(
+            (datamodel_v2.key_for_subnet(subnet["id"], self.region_string), subnet)
+            for subnet in self.db.get_subnets(context)
+            if subnet["enable_dhcp"]
+        )
 
     def neutron_to_etcd_write_data(self, subnet, context, reread=False):
         if reread:
-            subnets = self.db.get_subnets(context,
-                                          filters={'id': [subnet['id']]})
+            subnets = self.db.get_subnets(context, filters={"id": [subnet["id"]]})
             if len(subnets) != 1:
                 raise ResourceGone()
             subnet = subnets[0]
@@ -70,13 +72,11 @@ class SubnetSyncer(ResourceSyncer):
     @etcdv3.logging_exceptions
     def subnet_created(self, subnet, context):
         """Write data to etcd to describe a DHCP-enabled subnet."""
-        LOG.info("Write subnet %s %s to etcd", subnet['id'], subnet['cidr'])
-        write_data = self.neutron_to_etcd_write_data(subnet,
-                                                     context,
-                                                     reread=False)
+        LOG.info("Write subnet %s %s to etcd", subnet["id"], subnet["cidr"])
+        write_data = self.neutron_to_etcd_write_data(subnet, context, reread=False)
         return self.update_in_etcd(
-            datamodel_v2.key_for_subnet(subnet['id'], self.region_string),
-            write_data)
+            datamodel_v2.key_for_subnet(subnet["id"], self.region_string), write_data
+        )
 
     @etcdv3.logging_exceptions
     def subnet_deleted(self, subnet_id):
@@ -90,10 +90,12 @@ class SubnetSyncer(ResourceSyncer):
 
 
 def subnet_etcd_data(subnet):
-    data = {'network_id': subnet['network_id'],
-            'cidr': str(netaddr.IPNetwork(subnet['cidr'])),
-            'host_routes': subnet['host_routes'],
-            'gateway_ip': subnet['gateway_ip']}
-    if subnet['dns_nameservers']:
-        data['dns_servers'] = subnet['dns_nameservers']
+    data = {
+        "network_id": subnet["network_id"],
+        "cidr": str(netaddr.IPNetwork(subnet["cidr"])),
+        "host_routes": subnet["host_routes"],
+        "gateway_ip": subnet["gateway_ip"],
+    }
+    if subnet["dns_nameservers"]:
+        data["dns_servers"] = subnet["dns_nameservers"]
     return data

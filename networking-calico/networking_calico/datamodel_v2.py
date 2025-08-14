@@ -57,12 +57,13 @@ def get_endpoint_id_from_key(region_string, key):
     global _cached_endpoint_key_re
     if _cached_endpoint_key_re is None:
         _cached_endpoint_key_re = re.compile(
-            r'^(?:' + felix_status_dir(region_string) + r')'
-            r'/(?P<hostname>[^/]+)/'
-            r'workload/'
-            r'(?P<orchestrator>[^/]+)/'
-            r'(?P<workload_id>[^/]+)/'
-            r'endpoint/(?P<endpoint_id>[^/]+)')
+            r"^(?:" + felix_status_dir(region_string) + r")"
+            r"/(?P<hostname>[^/]+)/"
+            r"workload/"
+            r"(?P<orchestrator>[^/]+)/"
+            r"(?P<workload_id>[^/]+)/"
+            r"endpoint/(?P<endpoint_id>[^/]+)"
+        )
     m = _cached_endpoint_key_re.match(key)
     if m:
         # Got an endpoint.
@@ -70,10 +71,7 @@ def get_endpoint_id_from_key(region_string, key):
         orch = m.group("orchestrator")
         workload_id = m.group("workload_id")
         endpoint_id = m.group("endpoint_id")
-        combined_id = datamodel_v1.WloadEndpointId(host,
-                                                   orch,
-                                                   workload_id,
-                                                   endpoint_id)
+        combined_id = datamodel_v1.WloadEndpointId(host, orch, workload_id, endpoint_id)
         return combined_id
     else:
         return None

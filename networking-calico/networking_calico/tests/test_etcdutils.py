@@ -23,15 +23,15 @@ Tests for etcd utility function.
 import logging
 import unittest
 
-from mock import call
 from mock import Mock
+from mock import call
 from mock import patch
 
-from networking_calico.etcdutils import _is_string_instance
+from networking_calico import etcdv3
 from networking_calico.etcdutils import EtcdWatcher
 from networking_calico.etcdutils import PathDispatcher
 from networking_calico.etcdutils import Response
-from networking_calico import etcdv3
+from networking_calico.etcdutils import _is_string_instance
 
 _log = logging.getLogger(__name__)
 
@@ -42,6 +42,7 @@ SAME_AS_KEY = object()
 
 class _TestPathDispatcherBase(unittest.TestCase):
     """Abstract base class for Dispatcher tests."""
+
     # Etcd action that this class tests.
     action = None
     # Expected handler type, "set" or "delete".
@@ -81,18 +82,21 @@ class _TestPathDispatcherBase(unittest.TestCase):
             assert isinstance(handler, Mock)
             if handler_key == exp_handler:
                 continue
-            self.assertFalse(handler.called,
-                             "Unexpected set handler %s was called for "
-                             "key %s" % (handler_key, key))
+            self.assertFalse(
+                handler.called,
+                "Unexpected set handler %s was called for key %s" % (handler_key, key),
+            )
         unexp_handlers = self.handlers[self.unexpected_handlers]
         for handler_key, handler in unexp_handlers.items():
             assert isinstance(handler, Mock)
-            self.assertFalse(handler.called,
-                             "Unexpected del handler %s was called for "
-                             "key %s" % (handler_key, key))
+            self.assertFalse(
+                handler.called,
+                "Unexpected del handler %s was called for key %s" % (handler_key, key),
+            )
         if exp_handler is not None:
             exp_handlers[exp_handler].assert_called_once_with(
-                m_response, **exp_captures)
+                m_response, **exp_captures
+            )
 
     @property
     def unexpected_handlers(self):
@@ -117,9 +121,9 @@ class _TestPathDispatcherBase(unittest.TestCase):
         self.assert_handled("/a/bval/d", exp_handler="/a/<b>/d", b="bval")
 
     def test_multi_capture(self):
-        self.assert_handled("/a/bval/d/eval",
-                            exp_handler="/a/<b>/d/<e>",
-                            b="bval", e="eval")
+        self.assert_handled(
+            "/a/bval/d/eval", exp_handler="/a/<b>/d/<e>", b="bval", e="eval"
+        )
 
     def test_non_match(self):
         self.assert_handled("/a/bval/c/eval", exp_handler=None)
@@ -132,8 +136,9 @@ class _TestPathDispatcherBase(unittest.TestCase):
         self.dispatcher.handle_event(m_result)
         for handlers in self.handlers.values():
             for key, handler in handlers.items():
-                self.assertFalse(handler.called,
-                                 msg="Unexpected handler called: %s" % key)
+                self.assertFalse(
+                    handler.called, msg="Unexpected handler called: %s" % key
+                )
 
 
 class TestDispatcherSet(_TestPathDispatcherBase):
@@ -181,7 +186,7 @@ class ExpectedException(Exception):
 
 
 def _rsp_to_tuple(rsp):
-    item = {'key': rsp.key.encode(), 'mod_revision': rsp.mod_revision}
+    item = {"key": rsp.key.encode(), "mod_revision": rsp.mod_revision}
     return (rsp.value.encode(), item)
 
 
@@ -206,31 +211,28 @@ class TestEtcdWatcher(unittest.TestCase):
         # 2. Data for snapshot.  Watch throws exception.
         #
         # 3. Throw ExpectedException(), to exit.
-        status = {'header': {'cluster_id': '1234', 'revision': '10'}}
-        self.m_client.status.side_effect = iter([
-            # Iteration 1.
-            status,
-            # Iteration 2.
-            status,
-            # Iteration 3.
-            status,
-        ])
-        rsp1 = Response(action='set',
-                        key='foo',
-                        value='bar',
-                        mod_revision='12')
-        self.m_client.get.side_effect = iter([
-            [],
-            [_rsp_to_tuple(rsp1)],
-            ExpectedException()
-        ])
+        status = {"header": {"cluster_id": "1234", "revision": "10"}}
+        self.m_client.status.side_effect = iter(
+            [
+                # Iteration 1.
+                status,
+                # Iteration 2.
+                status,
+                # Iteration 3.
+                status,
+            ]
+        )
+        rsp1 = Response(action="set", key="foo", value="bar", mod_revision="12")
+        self.m_client.get.side_effect = iter(
+            [[], [_rsp_to_tuple(rsp1)], ExpectedException()]
+        )
         self.m_client.watch_prefix.side_effect = etcdv3.KeyNotFound()
 
-        with patch.object(self.watcher, "_pre_snapshot_hook",
-                          autospec=True) as m_pre:
+        with patch.object(self.watcher, "_pre_snapshot_hook", autospec=True) as m_pre:
             m_pre.return_value = None
-            with patch.object(self.watcher, "_post_snapshot_hook",
-                              autospec=True) as m_post:
+            with patch.object(
+                self.watcher, "_post_snapshot_hook", autospec=True
+            ) as m_post:
                 self.assertRaises(ExpectedException, self.watcher.start)
 
         # _pre_snapshot_hook() called 3 times.
@@ -240,16 +242,19 @@ class TestEtcdWatcher(unittest.TestCase):
         self.assertEqual(m_post.mock_calls, [call(None), call(None)])
 
         # watch_prefix called twice.
-        self.assertEqual(self.m_client.watch_prefix.mock_calls, [
-            call('/calico', start_revision='11'),
-            call('/calico', start_revision='11')
-        ])
+        self.assertEqual(
+            self.m_client.watch_prefix.mock_calls,
+            [
+                call("/calico", start_revision="11"),
+                call("/calico", start_revision="11"),
+            ],
+        )
 
         # Snapshot event dispatched once.
-        self.assertEqual(self.m_dispatcher.handle_event.mock_calls,
-                         [call(rsp1)])
+        self.assertEqual(self.m_dispatcher.handle_event.mock_calls, [call(rsp1)])
 
     def test_register(self):
         self.watcher.register_path("key", foo="bar")
-        self.assertEqual(self.m_dispatcher.register.mock_calls,
-                         [call("key", foo="bar")])
+        self.assertEqual(
+            self.m_dispatcher.register.mock_calls, [call("key", foo="bar")]
+        )
