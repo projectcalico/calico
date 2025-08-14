@@ -23,7 +23,7 @@ global_job_config:
       - mkdir artifacts
       # Semaphore is doing shallow clone on a commit without tags.
       # unshallow it for GIT_VERSION:=$(shell git describe --tags --dirty --always)
-      - retry git fetch --unshallow
+      - if [[ "${SEMAPHORE_BLOCK_NAME}" != "Prerequisites" ]]; then retry git fetch --unshallow; fi
       - echo $DOCKERHUB_PASSWORD | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
   epilogue:
     commands:
@@ -124,6 +124,10 @@ blocks:
   - name: Prerequisites
     dependencies: []
     task:
+      agent:
+        machine:
+          type: f1-standard-4
+          os_image: ubuntu2204
       jobs:
         - name: Pre-flight checks
           commands:
