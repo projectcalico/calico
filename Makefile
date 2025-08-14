@@ -48,16 +48,12 @@ clean:
 	$(MAKE) -C release clean
 	rm -rf ./bin
 
+# Pre-flight checks for CI.  We manually split into two batches to allow
+# the CI job to execute the two batches in parallel.
 ci-preflight-checks:
-	$(MAKE) check-go-mod
-	$(MAKE) verify-go-mods
-	$(MAKE) check-dockerfiles
-	$(MAKE) check-language
-	$(MAKE) generate
-	$(MAKE) fix-all
-	$(MAKE) check-ocp-no-crds
-	$(MAKE) yaml-lint
-	$(MAKE) check-dirty
+	./hack/ci-preflight-checks
+
+ci-preflight-checks-b:
 	$(MAKE) go-vet
 
 check-go-mod:

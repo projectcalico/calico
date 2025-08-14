@@ -1,0 +1,19 @@
+#!/bin/bash
+
+set -e
+set -x
+
+repo_dir=$(basename "$(pwd)")
+
+make check-go-mod
+
+make verify-go-mods \
+     check-dockerfiles \
+     check-language \
+     generate SKIP_FIX_CHANGED=true \
+     check-ocp-no-crds \
+     yaml-lint
+make fix-all
+make check-dirty
+
+make go-vet
