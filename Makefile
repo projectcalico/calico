@@ -53,15 +53,18 @@ clean:
 ci-preflight-checks: ci-preflight-checks-a ci-preflight-checks-b
 
 ci-preflight-checks-a:
-	$(MAKE) check-go-mod
-	$(MAKE) verify-go-mods
-	$(MAKE) check-dockerfiles
-	$(MAKE) check-language
-	$(MAKE) generate SKIP_FIX_CHANGED=true
-	$(MAKE) fix-all
-	$(MAKE) check-ocp-no-crds
-	$(MAKE) yaml-lint
-	$(MAKE) check-dirty
+	cp -r ../calico ../calico-2
+	$(MAKE) -C ../calico-2 go-vet & export VET_PID=$$!; \
+	$(MAKE) check-go-mod \
+	        verify-go-mods \
+	        check-dockerfiles \
+	        check-language \
+	        generate SKIP_FIX_CHANGED=true && \
+	$(MAKE) fix-all &&
+	$(MAKE) check-ocp-no-crds \
+	        yaml-lint && \
+	$(MAKE) check-dirty && \
+	wait $$VET_PID || ( echo "Go vet failed, exiting"; exit 1 )
 
 ci-preflight-checks-b:
 	$(MAKE) go-vet
