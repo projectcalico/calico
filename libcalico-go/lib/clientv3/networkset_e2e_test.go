@@ -40,7 +40,7 @@ var _ = testutils.E2eDatastoreDescribe("NetworkSet tests", testutils.DatastoreAl
 	namespace2 := "namespace-2"
 
 	spec1 := apiv3.NetworkSetSpec{
-		Nets: []string{
+		Nets: []apiv3.CIDR{
 			"10.0.0.1",
 			"11.0.0.0/16",
 			"dead:beef::1",
@@ -48,7 +48,7 @@ var _ = testutils.E2eDatastoreDescribe("NetworkSet tests", testutils.DatastoreAl
 		},
 	}
 	spec2 := apiv3.NetworkSetSpec{
-		Nets: []string{
+		Nets: []apiv3.CIDR{
 			"12.0.0.0/16",
 		},
 	}
