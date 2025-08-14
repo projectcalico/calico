@@ -22,7 +22,6 @@ Tests for etcdutils with a real etcd server.
 from __future__ import print_function
 
 import logging
-import os
 import shutil
 import subprocess
 import unittest
@@ -31,10 +30,10 @@ import eventlet
 
 eventlet.monkey_patch()
 
-from networking_calico.common import config as calico_config
-from networking_calico.compat import cfg
 from networking_calico import etcdutils
 from networking_calico import etcdv3
+from networking_calico.common import config as calico_config
+from networking_calico.compat import cfg
 
 _log = logging.getLogger(__name__)
 

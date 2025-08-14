@@ -25,16 +25,17 @@
 #
 # It is implemented as a Neutron/ML2 mechanism driver.
 import contextlib
-from functools import wraps
 import inspect
 import os
 import re
 import uuid
+from functools import wraps
 
 # OpenStack imports.
 import eventlet
 from eventlet.queue import PriorityQueue
 from eventlet.semaphore import Semaphore
+
 from neutron.agent import rpc as agent_rpc
 
 try:
@@ -53,12 +54,17 @@ except ImportError:
     # Neutron code prior to a2c36d7e (10th November 2017).
     from neutron.plugins.ml2 import driver_api as api
 from neutron.plugins.ml2.drivers import mech_agent
+
 from sqlalchemy import exc as sa_exc
 
 # Monkeypatch import
 import neutron.plugins.ml2.rpc as rpc
 
 # Calico imports.
+from networking_calico import datamodel_v1
+from networking_calico import datamodel_v2
+from networking_calico import datamodel_v3
+from networking_calico import etcdv3
 from networking_calico.common import config as calico_config
 from networking_calico.common import intern_string
 from networking_calico.compat import cfg
@@ -68,18 +74,12 @@ from networking_calico.compat import lockutils
 from networking_calico.compat import log
 from networking_calico.compat import n_exc
 from networking_calico.compat import plugin_dir
-from networking_calico import datamodel_v1
-from networking_calico import datamodel_v2
-from networking_calico import datamodel_v3
-from networking_calico import etcdv3
 from networking_calico.logutils import logging_exceptions
 from networking_calico.monotonic import monotonic_time
 from networking_calico.plugins.ml2.drivers.calico.election import Elector
 from networking_calico.plugins.ml2.drivers.calico.endpoints import (
-    _port_is_endpoint_port,
-)
-from networking_calico.plugins.ml2.drivers.calico.endpoints import (
     WorkloadEndpointSyncer,
+    _port_is_endpoint_port,
 )
 from networking_calico.plugins.ml2.drivers.calico.policy import PolicySyncer
 from networking_calico.plugins.ml2.drivers.calico.qos_driver import (
@@ -89,8 +89,9 @@ from networking_calico.plugins.ml2.drivers.calico.status import StatusWatcher
 from networking_calico.plugins.ml2.drivers.calico.subnets import SubnetSyncer
 
 # Imports for a Keystone client.
-from keystoneauth1.identity import v3
 from keystoneauth1 import session
+from keystoneauth1.identity import v3
+
 from keystoneclient.v3.client import Client as KeystoneClient
 
 # Register [AGENT] options, which we need in order to successfully use

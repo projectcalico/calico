@@ -14,16 +14,17 @@
 #    under the License.
 
 import copy
-import netaddr
 import os
 import re
-import sys
-import time
+
+import netaddr
 
 from neutron.agent.linux import dhcp
+
 from oslo_log import log as logging
 
 from networking_calico.compat import constants
+
 
 LOG = logging.getLogger(__name__)
 

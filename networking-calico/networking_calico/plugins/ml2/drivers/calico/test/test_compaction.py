@@ -17,14 +17,14 @@ Test compaction code.
 """
 
 import logging
-import mock
 import os
 import unittest
 
 from etcd3gw.exceptions import Etcd3Exception
 
-import networking_calico.plugins.ml2.drivers.calico.test.lib as lib
+import mock
 
+import networking_calico.plugins.ml2.drivers.calico.test.lib as lib
 from networking_calico import etcdv3
 from networking_calico.plugins.ml2.drivers.calico import mech_calico
 

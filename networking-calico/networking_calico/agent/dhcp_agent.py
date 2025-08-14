@@ -16,7 +16,6 @@
 #    under the License.
 
 import logging
-import netaddr
 import os
 import re
 import socket
@@ -27,6 +26,8 @@ import time
 import eventlet
 
 eventlet.monkey_patch()
+
+import netaddr
 
 from neutron.agent.dhcp.agent import DhcpAgent
 from neutron.agent.dhcp_agent import register_options
@@ -43,16 +44,16 @@ except ImportError:
     # Neutron code prior to 7f23ccc (15th March 2017).
     from neutron.agent.common import config
 
-from networking_calico.agent.linux.dhcp import DnsmasqRouted
-from networking_calico.common import config as calico_config
-from networking_calico.common import mkdir_p
-from networking_calico.compat import cfg
-from networking_calico.compat import constants
-from networking_calico.compat import DHCPV6_STATEFUL
 from networking_calico import datamodel_v1
 from networking_calico import datamodel_v2
 from networking_calico import datamodel_v3
 from networking_calico import etcdutils
+from networking_calico.agent.linux.dhcp import DnsmasqRouted
+from networking_calico.common import config as calico_config
+from networking_calico.common import mkdir_p
+from networking_calico.compat import DHCPV6_STATEFUL
+from networking_calico.compat import cfg
+from networking_calico.compat import constants
 
 from etcd3gw.exceptions import Etcd3Exception
 
@@ -296,7 +297,7 @@ class DnsmasqUpdater(object):
                 # but better to be more resilient here.
                 try:
                     self.really_update_dnsmasq(network_id)
-                except Exception as e:
+                except Exception:
                     LOG.exception("really_update_dnsmasq")
 
     def really_update_dnsmasq(self, network_id):
