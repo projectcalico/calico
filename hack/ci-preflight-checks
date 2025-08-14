@@ -1,0 +1,30 @@
+#!/bin/bash
+
+set -e
+set -x
+
+repo_dir=$(basename "$(pwd)")
+
+cp -ra ../${repo_dir} ../${repo_dir}-copy
+
+make -C ../${repo_dir}-copy go-vet &
+export vet_pid=$!
+
+trap 'kill $vet_pid' EXIT
+
+make check-go-mod \
+     verify-go-mods \
+     check-dockerfiles \
+     check-language \
+     generate SKIP_FIX_CHANGED=true
+make fix-all
+make check-ocp-no-crds \
+     yaml-lint
+make check-dirty
+
+trap - EXIT
+
+wait $$VET_PID || {
+    echo "Go vet failed"
+    exit 1
+}

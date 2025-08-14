@@ -6,12 +6,6 @@
         type: f1-standard-4
         os_image: ubuntu2204
     jobs:
-      - name: Pre-flight checks (batch A)
+      - name: Pre-flight checks
         commands:
-          # Set some images pulling in the background, which we know will be used later.
-          - docker pull tmknom/prettier &
-          - docker pull cytopia/yamllint &
-          - make ci-preflight-checks-a
-      - name: Pre-flight checks (batch B)
-        commands:
-          - make ci-preflight-checks-b
+          - make ci-preflight-checks
