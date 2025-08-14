@@ -125,26 +125,15 @@ blocks:
     dependencies: []
     task:
       jobs:
-        - name: Pre-flight checks
+        - name: Pre-flight checks (batch A)
           commands:
-            - make check-go-mod
-            - make verify-go-mods
-            - make check-dockerfiles
-            - make check-language
-            - make gen-semaphore-yaml
-            - make protobuf
-            - make -C lib gen-files
-            - make -C api gen-files
-            - make -C libcalico-go gen-files
-            - make -C felix gen-files
-            - make -C goldmane gen-files
-            - make gen-manifests
-            - make fix-changed
-            - make fix-all
-            - make check-ocp-no-crds
-            - make yaml-lint
-            - make check-dirty
-            - make go-vet
+            # Set some images pulling in the background, which we know will be used later.
+            - docker pull tmknom/prettier &
+            - docker pull cytopia/yamllint &
+            - make ci-preflight-checks-a
+        - name: Pre-flight checks (batch B)
+          commands:
+            - make ci-preflight-checks-b
   - name: apiserver
     run:
       when: "false or change_in(['/*', '/libcalico-go/', '/api/', '/apiserver/', '/hack/test/certs/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
