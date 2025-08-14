@@ -2,6 +2,12 @@
   dependencies: []
   task:
     jobs:
-      - name: Pre-flight checks
+      - name: Pre-flight checks (batch A)
         commands:
-          - make ci-preflight-checks
+          # Set some images pulling in the background, which we know will be used later.
+          - docker pull tmknom/prettier &
+          - docker pull cytopia/yamllint &
+          - make ci-preflight-checks-a
+      - name: Pre-flight checks (batch B)
+        commands:
+          - make ci-preflight-checks-b

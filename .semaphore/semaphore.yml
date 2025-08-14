@@ -23,7 +23,7 @@ global_job_config:
       - mkdir artifacts
       # Semaphore is doing shallow clone on a commit without tags.
       # unshallow it for GIT_VERSION:=$(shell git describe --tags --dirty --always)
-      - retry git fetch --unshallow
+      - if [[ "${SEMAPHORE_BLOCK_NAME}" != "Prerequisites" ]]; then retry git fetch --unshallow; fi
       - echo $DOCKERHUB_PASSWORD | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
   epilogue:
     commands:
@@ -125,9 +125,15 @@ blocks:
     dependencies: []
     task:
       jobs:
-        - name: Pre-flight checks
+        - name: Pre-flight checks (batch A)
           commands:
-            - make ci-preflight-checks
+            # Set some images pulling in the background, which we know will be used later.
+            - docker pull tmknom/prettier &
+            - docker pull cytopia/yamllint &
+            - make ci-preflight-checks-a
+        - name: Pre-flight checks (batch B)
+          commands:
+            - make ci-preflight-checks-b
   - name: apiserver
     run:
       when: "false or change_in(['/*', '/libcalico-go/', '/api/', '/apiserver/', '/hack/test/certs/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
