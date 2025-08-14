@@ -53,15 +53,18 @@ clean:
 ci-preflight-checks: ci-preflight-checks-a ci-preflight-checks-b
 
 ci-preflight-checks-a:
-	$(MAKE) check-go-mod
-	$(MAKE) verify-go-mods
-	$(MAKE) check-dockerfiles
-	$(MAKE) check-language
-	$(MAKE) generate SKIP_FIX_CHANGED=true
-	$(MAKE) fix-all
-	$(MAKE) check-ocp-no-crds
-	$(MAKE) yaml-lint
-	$(MAKE) check-dirty
+	$(MAKE) -C felix clone-libbpf
+	$(DOCKER_GO_BUILD) go vet ./... & export GO_VET_PID=$$!; \
+	$(MAKE) check-go-mod; \
+	$(MAKE) verify-go-mods; \
+	$(MAKE) check-dockerfiles; \
+	$(MAKE) check-language; \
+	$(MAKE) generate SKIP_FIX_CHANGED=true; \
+	$(MAKE) fix-all; \
+	$(MAKE) check-ocp-no-crds; \
+	$(MAKE) yaml-lint; \
+	$(MAKE) check-dirty; \
+	wait $$GO_VET_PID || (echo "go vet failed, see above for details"; exit 1)
 
 ci-preflight-checks-b:
 	$(MAKE) go-vet
