@@ -16,9 +16,4 @@
 
 set +e
 
-zone=${ZONE:-europe-west3-c}
-vm_name=$1
-shift
-shift
-
-exec gcloud --quiet compute ssh "--zone=${zone}" "ubuntu@${vm_name}" -- -A -o ServerAliveInterval=10 "$@"
+exec gcloud --quiet compute ssh "--zone=${ZONE}" "ubuntu@${VM_NAME}" -- -A -o ServerAliveInterval=10 "$@"
