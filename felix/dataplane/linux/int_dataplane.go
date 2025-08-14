@@ -282,6 +282,8 @@ type Config struct {
 
 	// For testing purposes - allows unit tests to mock out the creation of the nftables dataplane.
 	NewNftablesDataplane func(knftables.Family, string) (knftables.Interface, error)
+
+	TyphaRevisionListener TyphaRevisionListener
 }
 
 type UpdateBatchResolver interface {
@@ -409,8 +411,14 @@ type InternalDataplane struct {
 	linkUpdateBatchSize  int
 	addrsUpdateBatchSize int
 
-	actions  generictables.ActionFactory
-	newMatch func() generictables.MatchCriteria
+	actions               generictables.ActionFactory
+	newMatch              func() generictables.MatchCriteria
+	typhaRevision         *string
+	typhaRevisionListener TyphaRevisionListener
+}
+
+type TyphaRevisionListener interface {
+	OnDataplaneUpdateComplete(revision string)
 }
 
 const (
@@ -470,16 +478,17 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	}
 
 	dp := &InternalDataplane{
-		toDataplane:    make(chan interface{}, msgPeekLimit),
-		fromDataplane:  make(chan interface{}, 100),
-		ruleRenderer:   ruleRenderer,
-		ifaceMonitor:   ifacemonitor.New(config.IfaceMonitorConfig, featureDetector, config.FatalErrorRestartCallback),
-		ifaceUpdates:   make(chan any, 100),
-		config:         config,
-		applyThrottle:  throttle.New(10),
-		loopSummarizer: logutils.NewSummarizer("dataplane reconciliation loops"),
-		actions:        actionSet,
-		newMatch:       newMatchFn,
+		toDataplane:           make(chan interface{}, msgPeekLimit),
+		fromDataplane:         make(chan interface{}, 100),
+		ruleRenderer:          ruleRenderer,
+		ifaceMonitor:          ifacemonitor.New(config.IfaceMonitorConfig, featureDetector, config.FatalErrorRestartCallback),
+		ifaceUpdates:          make(chan any, 100),
+		config:                config,
+		applyThrottle:         throttle.New(10),
+		loopSummarizer:        logutils.NewSummarizer("dataplane reconciliation loops"),
+		actions:               actionSet,
+		newMatch:              newMatchFn,
+		typhaRevisionListener: config.TyphaRevisionListener,
 	}
 	dp.applyThrottle.Refill() // Allow the first apply() immediately.
 	dp.ifaceMonitor.StateCallback = dp.onIfaceStateChange
@@ -2285,6 +2294,7 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 					d.sendDataplaneInSyncOnce.Do(func() {
 						d.fromDataplane <- &proto.DataplaneInSync{}
 					})
+					d.reportTyphaRevision()
 				}
 
 				d.loopSummarizer.EndOfIteration(applyTime)
@@ -2350,11 +2360,13 @@ func (d *InternalDataplane) processMsgFromCalcGraph(msg interface{}) {
 	for _, mgr := range d.allManagers {
 		mgr.OnUpdate(msg)
 	}
-	switch msg.(type) {
+	switch msg := msg.(type) {
 	case *proto.InSync:
 		log.WithField("timeSinceStart", time.Since(processStartTime)).Info(
 			"Datastore in sync, flushing the dataplane for the first time...")
 		d.datastoreInSync = true
+	case *proto.TyphaRevisionUpdate:
+		d.typhaRevision = &msg.Revision
 	}
 }
 
@@ -2791,6 +2803,16 @@ func (d *InternalDataplane) reportHealth() {
 			&health.HealthReport{Live: true, Ready: d.doneFirstApply && d.ifaceMonitorInSync},
 		)
 	}
+}
+
+func (d *InternalDataplane) reportTyphaRevision() {
+	if d.typhaRevision == nil {
+		return
+	}
+	if d.typhaRevisionListener == nil {
+		return
+	}
+	d.typhaRevisionListener.OnDataplaneUpdateComplete(*d.typhaRevision)
 }
 
 type dummyLock struct{}

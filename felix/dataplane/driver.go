@@ -65,6 +65,7 @@ func StartDataplaneDriver(
 	fatalErrorCallback func(error),
 	k8sClientSet *kubernetes.Clientset,
 	lc *calc.LookupsCache,
+	typhaRevisionListener intdataplane.TyphaRevisionListener,
 ) (DataplaneDriver, *exec.Cmd) {
 	if !configParams.IsLeader() {
 		// Return an inactive dataplane, since we're not the leader.
@@ -417,6 +418,8 @@ func StartDataplaneDriver(
 			FlowLogsEnabled:    configParams.FlowLogsEnabled(),
 
 			RequireMTUFile: configParams.RequireMTUFile,
+
+			TyphaRevisionListener: typhaRevisionListener,
 		}
 
 		if configParams.BPFExternalServiceMode == "dsr" {
