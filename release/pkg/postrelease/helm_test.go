@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"github.com/spf13/cast"
-	"gopkg.in/yaml.v2"
+	"go.yaml.in/yaml/v3"
 	"helm.sh/helm/v3/pkg/chart/loader"
 )
 
