@@ -127,7 +127,16 @@ blocks:
       jobs:
         - name: Pre-flight checks
           commands:
-            - make ci-preflight-checks
+            - make check-go-mod
+            - make verify-go-mods
+            - make check-dockerfiles
+            - make check-language
+            - make generate
+            - make fix-all
+            - make check-ocp-no-crds
+            - make yaml-lint
+            - make check-dirty
+            - make go-vet
   - name: apiserver
     run:
       when: "false or change_in(['/*', '/libcalico-go/', '/api/', '/apiserver/', '/hack/test/certs/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
