@@ -1,6 +1,6 @@
 # Common definitions for the tests that we run on VMs with a newer
 # kernel than Semaphore itself provides.
-
+set +e
 num_fv_batches=${NUM_FV_BATCHES:-8}
 
 if [[ ${RUN_UT} == "true" ]]; then
