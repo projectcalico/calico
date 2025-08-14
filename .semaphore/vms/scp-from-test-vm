@@ -14,8 +14,6 @@
 # limitations under the License.
 
 vm_name=$1
-shift
-shift
 
 exec gcloud --quiet compute scp "ubuntu@${vm_name}:$2" "$3" "--zone=${ZONE}" --scp-flag="-o ServerAliveInterval=10"
 
