@@ -54,6 +54,7 @@ def mkdir_p(path):
 
 class ValidationFailed(Exception):
     """Class used for data validation exceptions."""
+
     pass
 
 

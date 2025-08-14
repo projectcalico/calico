@@ -30,20 +30,14 @@ DRIVER = None
 
 SUPPORTED_RULES = {
     qos_consts.RULE_TYPE_BANDWIDTH_LIMIT: {
-        qos_consts.MAX_KBPS: {
-            'type:range': [0, db_consts.DB_INTEGER_MAX_VALUE]},
-        qos_consts.MAX_BURST: {
-            'type:range': [0, db_consts.DB_INTEGER_MAX_VALUE]},
-        qos_consts.DIRECTION: {
-            'type:values': constants.VALID_DIRECTIONS}
+        qos_consts.MAX_KBPS: {"type:range": [0, db_consts.DB_INTEGER_MAX_VALUE]},
+        qos_consts.MAX_BURST: {"type:range": [0, db_consts.DB_INTEGER_MAX_VALUE]},
+        qos_consts.DIRECTION: {"type:values": constants.VALID_DIRECTIONS},
     },
     qos_consts.RULE_TYPE_PACKET_RATE_LIMIT: {
-        qos_consts.MAX_KPPS: {
-            'type:range': [0, db_consts.DB_INTEGER_MAX_VALUE]},
-        qos_consts.MAX_BURST_KPPS: {
-            'type:range': [0, 0]},
-        qos_consts.DIRECTION: {
-            'type:values': constants.VALID_DIRECTIONS}
+        qos_consts.MAX_KPPS: {"type:range": [0, db_consts.DB_INTEGER_MAX_VALUE]},
+        qos_consts.MAX_BURST_KPPS: {"type:range": [0, 0]},
+        qos_consts.DIRECTION: {"type:values": constants.VALID_DIRECTIONS},
     },
 }
 
@@ -53,11 +47,12 @@ class CalicoQoSDriver(base.DriverBase):
     @staticmethod
     def create():
         return CalicoQoSDriver(
-            name='calico',
+            name="calico",
             vif_types=[portbindings.VIF_TYPE_TAP],
             vnic_types=[portbindings.VNIC_NORMAL],
             supported_rules=SUPPORTED_RULES,
-            requires_rpc_notifications=False)
+            requires_rpc_notifications=False,
+        )
 
 
 def register():
@@ -65,4 +60,4 @@ def register():
     global DRIVER
     if not DRIVER:
         DRIVER = CalicoQoSDriver.create()
-    LOG.debug('Calico QoS driver registered')
+    LOG.debug("Calico QoS driver registered")

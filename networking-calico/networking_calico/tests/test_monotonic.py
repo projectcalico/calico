@@ -33,6 +33,7 @@ class TestMonotonic(TestCase):
         a = monotonic_time()
         time.sleep(0.01)
         b = monotonic_time()
-        self.assertTrue(b >= a + 0.01,
-                        msg="Monotonic time did not increase as "
-                        "expected: %s, %s" % (a, b))
+        self.assertTrue(
+            b >= a + 0.01,
+            msg="Monotonic time did not increase as expected: %s, %s" % (a, b),
+        )
