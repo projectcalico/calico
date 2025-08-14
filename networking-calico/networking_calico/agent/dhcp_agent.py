@@ -1,6 +1,6 @@
 # Copyright 2012 OpenStack Foundation
 # Copyright 2015 Metaswitch Networks
-# Copyright 2016, 2018, 2022 Tigera, Inc.
+# Copyright 2016-2025 Tigera, Inc.
 # All Rights Reserved.
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
@@ -15,7 +15,13 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-import logging
+# It's advised always to do eventlet monkey-patching before anything else.
+# https://eventlet.readthedocs.io/en/latest/patching.html
+import eventlet
+
+eventlet.monkey_patch()
+
+import logging  # noqa
 import os
 import re
 import socket
@@ -23,9 +29,11 @@ import subprocess
 import sys
 import time
 
-import eventlet
+from etcd3gw.exceptions import Etcd3Exception
 
-eventlet.monkey_patch()
+from eventlet.event import Event
+from eventlet.queue import Empty
+from eventlet.queue import LightQueue
 
 import netaddr
 
@@ -54,12 +62,6 @@ from networking_calico.common import mkdir_p
 from networking_calico.compat import DHCPV6_STATEFUL
 from networking_calico.compat import cfg
 from networking_calico.compat import constants
-
-from etcd3gw.exceptions import Etcd3Exception
-
-from eventlet.event import Event
-from eventlet.queue import Empty
-from eventlet.queue import LightQueue
 
 LOG = logging.getLogger(__name__)
 
