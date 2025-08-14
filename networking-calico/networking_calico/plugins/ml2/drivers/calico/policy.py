@@ -13,10 +13,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from networking_calico import datamodel_v3
 from networking_calico.common import config as calico_config
 from networking_calico.compat import IP_PROTOCOL_MAP
 from networking_calico.compat import log
-from networking_calico import datamodel_v3
 from networking_calico.plugins.ml2.drivers.calico.syncer import ResourceSyncer
 
 LOG = log.getLogger(__name__)

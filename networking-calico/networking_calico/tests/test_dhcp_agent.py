@@ -13,25 +13,27 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-from collections import namedtuple
-import eventlet
 import json
 import logging
-import mock
 import socket
+from collections import namedtuple
+
+import eventlet
+
+import mock
 
 from neutron.agent.dhcp_agent import register_options
 from neutron.agent.linux import dhcp
 from neutron.tests import base
 
+from networking_calico import datamodel_v1
+from networking_calico import datamodel_v2
 from networking_calico.agent.dhcp_agent import CalicoDhcpAgent
 from networking_calico.agent.dhcp_agent import FakePlugin
 from networking_calico.agent.linux.dhcp import DnsmasqRouted
 from networking_calico.common import config as calico_config
-from networking_calico.compat import cfg
 from networking_calico.compat import DHCPV6_STATEFUL
-from networking_calico import datamodel_v1
-from networking_calico import datamodel_v2
+from networking_calico.compat import cfg
 from networking_calico.etcdutils import EtcdWatcher
 
 LOG = logging.getLogger(__name__)

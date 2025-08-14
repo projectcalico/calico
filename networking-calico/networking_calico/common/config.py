@@ -72,23 +72,23 @@ SHARED_OPTS = [
     # The complete mapping between OpenStack-level config/API and the Calico
     # WorkloadEndpoint.QoSControls is as follows.
     #
-    # | QoSControls field     | Neutron API field     | Config field                     |
-    # |-----------------------+-----------------------+----------------------------------|
-    # | IngressBandwidth      | max_kbps * 1000       |                                  |
-    # | EgressBandwidth       | max_kbps * 1000       |                                  |
-    # | IngressBurst          |                       | ingress_burst_bits               |
-    # | EgressBurst           |                       | egress_burst_bits                |
-    # | IngressPeakrate       | max_burst_kbps * 1000 |                                  |
-    # | EgressPeakrate        | max_burst_kbps * 1000 |                                  |
-    # | IngressMinburst       |                       | ingress_minburst_bytes           |
-    # | EgressMinburst        |                       | egress_minburst_bytes            |
-    # | IngressPacketRate     | max_kpps * 1000       |                                  |
-    # | EgressPacketRate      | max_kpps * 1000       |                                  |
-    # | IngressPacketBurst    |                       | ingress_burst_packets            |
-    # | EgressPacketBurst     |                       | egress_burst_packets             |
-    # |  (not implemented)    | max_burst_kpps        |                                  |
-    # | IngressMaxConnections |                       | max_ingress_connections_per_port |
-    # | EgressMaxConnections  |                       | max_egress_connections_per_port  |
+    #  QoSControls field     | Neutron API field     | Config field
+    # -----------------------+-----------------------+----------------------------------
+    #  IngressBandwidth      | max_kbps * 1000       |
+    #  EgressBandwidth       | max_kbps * 1000       |
+    #  IngressBurst          |                       | ingress_burst_bits
+    #  EgressBurst           |                       | egress_burst_bits
+    #  IngressPeakrate       | max_burst_kbps * 1000 |
+    #  EgressPeakrate        | max_burst_kbps * 1000 |
+    #  IngressMinburst       |                       | ingress_minburst_bytes
+    #  EgressMinburst        |                       | egress_minburst_bytes
+    #  IngressPacketRate     | max_kpps * 1000       |
+    #  EgressPacketRate      | max_kpps * 1000       |
+    #  IngressPacketBurst    |                       | ingress_burst_packets
+    #  EgressPacketBurst     |                       | egress_burst_packets
+    #   (not implemented)    | max_burst_kpps        |
+    #  IngressMaxConnections |                       | max_ingress_connections_per_port
+    #  EgressMaxConnections  |                       | max_egress_connections_per_port
     #
     # Note, max_burst_kpps is not currently implemented, because we have not
     # yet found a reasonable way to do that.
