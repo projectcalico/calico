@@ -1,0 +1,35 @@
+#!/bin/bash
+
+set -e
+set -x
+
+repo_dir=$(basename "$(pwd)")
+
+# Prime the go cache so go vet doesn't download a second copy.
+make check-go-mod
+cp -ra ../${repo_dir} ../${repo_dir}-copy
+
+echo "Running go vet in the background in a repo copy..."
+make -C ../${repo_dir}-copy go-vet >& /tmp/vet.log &
+export vet_pid=$!
+
+trap 'kill $vet_pid' EXIT
+
+make verify-go-mods \
+     check-dockerfiles \
+     check-language \
+     generate SKIP_FIX_CHANGED=true \
+     check-ocp-no-crds \
+     yaml-lint
+make fix-all
+make check-dirty
+
+echo "Foreground work finished, waiting for go vet to finish..."
+
+wait $vet_pid || {
+    trap - EXIT
+    echo "Go vet failed"
+    cat /tmp/vet.log
+    exit 1
+}
+trap - EXIT
