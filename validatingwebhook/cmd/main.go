@@ -25,6 +25,7 @@ import (
 	"os"
 	"time"
 
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	admissionv1 "k8s.io/api/admission/v1"
@@ -38,6 +39,7 @@ import (
 	"k8s.io/apiserver/pkg/authentication/user"
 	kauth "k8s.io/apiserver/pkg/authorization/authorizer"
 	"k8s.io/apiserver/pkg/authorization/cel"
+	genericapirequest "k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/apiserver/plugin/pkg/authorizer/webhook"
 	"k8s.io/apiserver/plugin/pkg/authorizer/webhook/metrics"
 	"k8s.io/client-go/kubernetes"
@@ -45,12 +47,10 @@ import (
 	"k8s.io/component-base/cli"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/calico/apiserver/pkg/rbac"
 	"github.com/projectcalico/calico/apiserver/pkg/registry/projectcalico/authorizer"
 	"github.com/projectcalico/calico/crypto/pkg/tls"
 	validation "github.com/projectcalico/calico/libcalico-go/lib/validator/v3"
-	genericapirequest "k8s.io/apiserver/pkg/endpoints/request"
 )
 
 var (

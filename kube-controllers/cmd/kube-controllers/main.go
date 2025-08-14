@@ -23,6 +23,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/projectcalico/api/pkg/client/clientset_generated/clientset"
+	"github.com/projectcalico/api/pkg/client/informers_generated/externalversions"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	log "github.com/sirupsen/logrus"
 	"go.etcd.io/etcd/client/pkg/v3/srv"
@@ -35,8 +37,6 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 
-	"github.com/projectcalico/api/pkg/client/clientset_generated/clientset"
-	"github.com/projectcalico/api/pkg/client/informers_generated/externalversions"
 	"github.com/projectcalico/calico/crypto/pkg/tls"
 	"github.com/projectcalico/calico/kube-controllers/pkg/config"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/controller"
