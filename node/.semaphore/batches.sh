@@ -19,8 +19,5 @@ run_batch() {
       ;;
   esac
 
-  ${remote_exec} ${vm_name} $cmd >& "$log_file" &
-  pid=$!
-
-  echo "$pid"
+  ${remote_exec} ${vm_name} $cmd >& "$log_file"
 }
