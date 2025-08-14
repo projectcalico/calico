@@ -13,10 +13,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-zone=$1
-vm_name=$2
+vm_name=$1
 shift
 shift
 
-exec gcloud --quiet compute scp "ubuntu@${vm_name}:$1" "$2" "--zone=${zone}" --scp-flag="-o ServerAliveInterval=10"
+exec gcloud --quiet compute scp "ubuntu@${vm_name}:$2" "$3" "--zone=${ZONE}" --scp-flag="-o ServerAliveInterval=10"
 
