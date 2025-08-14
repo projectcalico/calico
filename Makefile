@@ -53,7 +53,7 @@ ci-preflight-checks:
 	$(MAKE) verify-go-mods
 	$(MAKE) check-dockerfiles
 	$(MAKE) check-language
-	$(MAKE) generate
+	$(MAKE) generate SKIP_FIX_CHANGED=true
 	$(MAKE) fix-all
 	$(MAKE) check-ocp-no-crds
 	$(MAKE) yaml-lint
