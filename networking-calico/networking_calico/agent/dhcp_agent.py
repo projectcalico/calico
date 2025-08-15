@@ -43,10 +43,7 @@ from neutron.agent.linux import dhcp
 from neutron.common import config as common_config
 from neutron.conf.agent import common as config
 
-from neutron_lib import constants as neutron_constants
-
 from neutron_lib import constants
-from neutron_lib.constants import DHCPV6_STATEFUL
 
 from oslo_config import cfg
 
@@ -134,7 +131,7 @@ def empty_network(network_id=NETWORK_ID):
             "subnets": [],
             "ports": [],
             "tenant_id": "calico",
-            "mtu": neutron_constants.DEFAULT_NETWORK_MTU,
+            "mtu": constants.DEFAULT_NETWORK_MTU,
         }
     )
 
@@ -830,8 +827,8 @@ class SubnetWatcher(etcdutils.EtcdWatcher):
             "network_id": data.get("network_id", NETWORK_ID),
         }
         if ip_version == 6:
-            subnet["ipv6_address_mode"] = DHCPV6_STATEFUL
-            subnet["ipv6_ra_mode"] = DHCPV6_STATEFUL
+            subnet["ipv6_address_mode"] = constants.DHCPV6_STATEFUL
+            subnet["ipv6_ra_mode"] = constants.DHCPV6_STATEFUL
 
         return dhcp.DictModel(subnet)
 
