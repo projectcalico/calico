@@ -35,7 +35,7 @@ func (r *DefaultRuleRenderer) nftablesQoSPolicyRules(policies []QoSPolicy, ipVer
 	// Policies is sorted and validated by QoS policy manager.
 
 	rules = append(rules, generictables.Rule{
-		Match: r.NewMatch().SourceNetVMAP("some map"),
+		Match: r.NewMatch().SourceNetVMAP("qosmap"),
 	})
 
 	return &generictables.Chain{
