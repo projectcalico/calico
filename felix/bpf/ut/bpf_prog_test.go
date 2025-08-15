@@ -1993,7 +1993,7 @@ func TestMapIterWithDeleteLastOfBatch(t *testing.T) {
 		Type:       "hash",
 		KeySize:    8,
 		ValueSize:  8,
-		MaxEntries: 1000,
+		MaxEntries: 4 * maps.IteratorNumKeys,
 		Name:       "cali_tmap",
 		Flags:      unix.BPF_F_NO_PREALLOC,
 	})
@@ -2001,7 +2001,9 @@ func TestMapIterWithDeleteLastOfBatch(t *testing.T) {
 	err := m.EnsureExists()
 	Expect(err).NotTo(HaveOccurred())
 
-	for i := 0; i < 40; i++ {
+	items := 3*maps.IteratorNumKeys + 5
+
+	for i := 0; i < items; i++ {
 		var k, v [8]byte
 
 		binary.LittleEndian.PutUint64(k[:], uint64(i))
@@ -2030,9 +2032,10 @@ func TestMapIterWithDeleteLastOfBatch(t *testing.T) {
 	})
 	Expect(err).NotTo(HaveOccurred())
 
-	Expect(cnt).To(Equal(40))
+	Expect(len(out)).To(Equal(items))
+	Expect(cnt).To(Equal(items))
 
-	for i := 0; i < 40; i++ {
+	for i := 0; i < items; i++ {
 		Expect(out).To(HaveKey(uint64(i)))
 		Expect(out[uint64(i)]).To(Equal(uint64(i * 7)))
 	}

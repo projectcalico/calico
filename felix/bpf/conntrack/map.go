@@ -172,7 +172,7 @@ const (
 func KeyFromBytes(k []byte) KeyInterface {
 	var ctKey Key
 	if len(k) != len(ctKey) {
-		log.Panic("Key has unexpected length")
+		log.Panicf("Key has unexpected length %d != %d", len(k), len(ctKey))
 	}
 	copy(ctKey[:], k[:])
 	return ctKey
