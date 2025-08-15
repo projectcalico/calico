@@ -280,8 +280,12 @@ endif
 REPO_ROOT := $(shell git rev-parse --show-toplevel)
 CERTS_PATH := $(REPO_ROOT)/hack/test/certs
 
-# Where to find Calico CRD files.
-CALICO_CRD_PATH ?= api/config/crd/
+# Where to find Calico CRD files depends on which API group we are using to back them.
+CALICO_API_GROUP ?= projectcalico.org/v3 # crd.projectcalico.org/v1
+CALICO_CRD_PATH ?= libcalico-go/config/crd/
+ifeq ($(CALICO_API_GROUP),projectcalico.org/v3)
+CALICO_CRD_PATH = api/config/crd/
+endif
 
 # The image to use for building calico/base-dependent modules (e.g. apiserver, typha).
 ifdef USE_UBI_AS_CALICO_BASE
@@ -315,6 +319,7 @@ DOCKER_RUN := mkdir -p $(REPO_ROOT)/.go-pkg-cache bin $(GOMOD_CACHE) && \
 		-e OS=$(BUILDOS) \
 		-e GOOS=$(BUILDOS) \
 		-e GOFLAGS=$(GOFLAGS) \
+		-e CALICO_API_GROUP=$(CALICO_API_GROUP) \
 		-e ACK_GINKGO_DEPRECATIONS=1.16.5 \
 		-v $(REPO_ROOT):/go/src/github.com/projectcalico/calico:rw \
 		-v $(REPO_ROOT)/.go-pkg-cache:/go-cache:rw \
@@ -1368,8 +1373,10 @@ $(REPO_ROOT)/.$(KIND_NAME).created: $(KUBECTL) $(KIND)
 	# Wait for controller manager to be running and healthy, then create Calico CRDs.
 	while ! KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) get serviceaccount default; do echo "Waiting for default serviceaccount to be created..."; sleep 2; done
 	while ! KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) create -f $(REPO_ROOT)/$(CALICO_CRD_PATH); do echo "Waiting for CRDs to be created"; sleep 2; done
-	while ! KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) create -f $(REPO_ROOT)/libcalico-go/config/crd/policy.networking.k8s.io_adminnetworkpolicies.yaml; do echo "Waiting for CRDs to be created"; sleep 2; done
-	while ! KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) create -f $(REPO_ROOT)/libcalico-go/config/crd/policy.networking.k8s.io_baselineadminnetworkpolicies.yaml; do echo "Waiting for CRDs to be created"; sleep 2; done
+
+	# These may have already been created, depending on where we're getting our CRDs from. So use apply.
+	while ! KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) apply -f $(REPO_ROOT)/libcalico-go/config/crd/policy.networking.k8s.io_adminnetworkpolicies.yaml; do echo "Waiting for CRDs to be created"; sleep 2; done
+	while ! KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) apply -f $(REPO_ROOT)/libcalico-go/config/crd/policy.networking.k8s.io_baselineadminnetworkpolicies.yaml; do echo "Waiting for CRDs to be created"; sleep 2; done
 	touch $@
 
 kind-cluster-destroy: $(KIND) $(KUBECTL)

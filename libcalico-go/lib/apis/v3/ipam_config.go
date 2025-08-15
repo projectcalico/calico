@@ -20,11 +20,8 @@ import (
 )
 
 const (
-	// The projectcalico.org/v3 API uses IPAMConfiguration as the kind.
-	KindIPAMConfiguration     = "IPAMConfiguration"
-	KindIPAMConfigurationList = "IPAMConfigurationList"
-
-	// The crd.projectcalico.org/v1 internal API uses IPAMConfig as the kind.
+	// For historical reasons, crd.projectcalico.org/v1 internal API uses IPAMConfig as the kind for the backing CRD, as well
+	// as for the clientv3 API, whereas the projectcalico.org/v3 API uses IPAMConfiguration.
 	KindIPAMConfig     = "IPAMConfig"
 	KindIPAMConfigList = "IPAMConfigList"
 
@@ -34,19 +31,19 @@ const (
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// IPAMConfiguration contains information about a block for IP address assignment.
-type IPAMConfiguration struct {
+// IPAMConfig contains information about a block for IP address assignment.
+type IPAMConfig struct {
 	metav1.TypeMeta `json:",inline"`
 
 	// Standard object's metadata.
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
 	// Specification of the IPAMConfig.
-	Spec IPAMConfigurationSpec `json:"spec,omitempty"`
+	Spec IPAMConfigSpec `json:"spec,omitempty"`
 }
 
-// IPAMConfigurationSpec contains the specification for an IPAMConfig resource.
-type IPAMConfigurationSpec struct {
+// IPAMConfigSpec contains the specification for an IPAMConfig resource.
+type IPAMConfigSpec struct {
 	StrictAffinity     bool `json:"strictAffinity"`
 	AutoAllocateBlocks bool `json:"autoAllocateBlocks"`
 
@@ -60,19 +57,19 @@ type IPAMConfigurationSpec struct {
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// IPAMConfigurationList contains a list of IPAMConfig resources.
-type IPAMConfigurationList struct {
+// IPAMConfigList contains a list of IPAMConfig resources.
+type IPAMConfigList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata"`
-	Items           []IPAMConfiguration `json:"items"`
+	Items           []IPAMConfig `json:"items"`
 }
 
 // NewIPAMConfig creates a new (zeroed) IPAMConfig struct with the TypeMetadata initialised to the current
 // version.
-func NewIPAMConfig() *IPAMConfiguration {
-	return &IPAMConfiguration{
+func NewIPAMConfig() *IPAMConfig {
+	return &IPAMConfig{
 		TypeMeta: metav1.TypeMeta{
-			Kind:       KindIPAMConfiguration,
+			Kind:       KindIPAMConfig,
 			APIVersion: apiv3.GroupVersionCurrent,
 		},
 	}
@@ -80,10 +77,10 @@ func NewIPAMConfig() *IPAMConfiguration {
 
 // NewIPAMConfigList creates a new (zeroed) IPAMConfigList struct with the TypeMetadata initialised to the current
 // version.
-func NewIPAMConfigList() *IPAMConfigurationList {
-	return &IPAMConfigurationList{
+func NewIPAMConfigList() *IPAMConfigList {
+	return &IPAMConfigList{
 		TypeMeta: metav1.TypeMeta{
-			Kind:       KindIPAMConfigurationList,
+			Kind:       KindIPAMConfigList,
 			APIVersion: apiv3.GroupVersionCurrent,
 		},
 	}

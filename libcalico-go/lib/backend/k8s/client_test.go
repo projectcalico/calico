@@ -52,9 +52,20 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
 )
 
-// If true, run the tests in v3 CRD mode. Otherwise, run against
-// crd.projectcalico.org/v1
-var v3CRD bool
+// If true, run the tests in v3 CRD mode. Otherwise, run against crd.projectcalico.org/v1
+var (
+	v3CRD    bool
+	apiGroup string
+)
+
+func init() {
+	apiGroup = os.Getenv("CALICO_API_GROUP")
+	if apiGroup == "" {
+		// Default to legacy crd.projectcalico.org/v1
+		apiGroup = "crd.projectcalico.org/v1"
+	}
+	v3CRD = apiGroup == apiv3.GroupVersionCurrent
+}
 
 var (
 	zeroOrder                  = float64(0.0)
@@ -366,6 +377,7 @@ var _ = testutils.E2eDatastoreDescribe("Test UIDs and owner references", testuti
 
 	BeforeEach(func() {
 		log.SetLevel(log.DebugLevel)
+		log.WithField("group", apiGroup).Info("Running tests using using API group for CRDs")
 
 		// Create a k8s backend KVP client.
 		var err error
@@ -379,8 +391,6 @@ var _ = testutils.E2eDatastoreDescribe("Test UIDs and owner references", testuti
 		cli, err = ctrlclient.New(config, ctrlclient.Options{})
 
 		ctx = context.Background()
-
-		v3CRD = true
 	})
 
 	It("should properly read / write owner references", func() {
@@ -503,8 +513,6 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 
 		// Start processing updates.
 		go cb.ProcessUpdates()
-
-		v3CRD = true
 	})
 
 	AfterEach(func() {
@@ -3776,7 +3784,10 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 		}
 		v3Key := model.ResourceKey{
 			Name: "default",
-			Kind: "IPAMConfiguration",
+			Kind: "IPAMConfig",
+		}
+		if v3CRD {
+			v3Key.Kind = "IPAMConfiguration"
 		}
 
 		By("Creating an IPAM Config", func() {
@@ -3794,8 +3805,8 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 				createdAt = v3Res.Value.(*apiv3.IPAMConfiguration).CreationTimestamp
 				uid = v3Res.Value.(*apiv3.IPAMConfiguration).UID
 			} else {
-				createdAt = v3Res.Value.(*libapiv3.IPAMConfiguration).CreationTimestamp
-				uid = v3Res.Value.(*libapiv3.IPAMConfiguration).UID
+				createdAt = v3Res.Value.(*libapiv3.IPAMConfig).CreationTimestamp
+				uid = v3Res.Value.(*libapiv3.IPAMConfig).UID
 			}
 			Expect(createdAt).NotTo(Equal(metav1.Time{}))
 			Expect(uid).NotTo(Equal(""))
@@ -3822,8 +3833,8 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 				Expect(v3Res.Value.(*apiv3.IPAMConfiguration).CreationTimestamp).To(Equal(createdAt))
 				Expect(v3Res.Value.(*apiv3.IPAMConfiguration).UID).To(Equal(uid))
 			} else {
-				Expect(v3Res.Value.(*libapiv3.IPAMConfiguration).CreationTimestamp).To(Equal(createdAt))
-				Expect(v3Res.Value.(*libapiv3.IPAMConfiguration).UID).To(Equal(uid))
+				Expect(v3Res.Value.(*libapiv3.IPAMConfig).CreationTimestamp).To(Equal(createdAt))
+				Expect(v3Res.Value.(*libapiv3.IPAMConfig).UID).To(Equal(uid))
 			}
 		})
 
@@ -3837,17 +3848,17 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 		ipamKVP := &model.KVPair{
 			Key: model.ResourceKey{
 				Name: "default",
-				Kind: "IPAMConfiguration",
+				Kind: "IPAMConfig",
 			},
-			Value: &libapiv3.IPAMConfiguration{
+			Value: &libapiv3.IPAMConfig{
 				TypeMeta: metav1.TypeMeta{
-					Kind:       "IPAMConfiguration",
+					Kind:       "IPAMConfig",
 					APIVersion: "projectcalico.org/v3",
 				},
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "default",
 				},
-				Spec: libapiv3.IPAMConfigurationSpec{
+				Spec: libapiv3.IPAMConfigSpec{
 					StrictAffinity:     false,
 					AutoAllocateBlocks: true,
 				},
@@ -3856,6 +3867,10 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 
 		if v3CRD {
 			// Use the correct types for the v3 API.
+			ipamKVP.Key = model.ResourceKey{
+				Name: "default",
+				Kind: "IPAMConfiguration",
+			}
 			ipamKVP.Value = &apiv3.IPAMConfiguration{
 				TypeMeta: metav1.TypeMeta{
 					Kind:       "IPAMConfiguration",
@@ -3877,7 +3892,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 			if v3CRD {
 				Expect(kvpRes.Value.(*apiv3.IPAMConfiguration).Spec).To(Equal(ipamKVP.Value.(*apiv3.IPAMConfiguration).Spec))
 			} else {
-				Expect(kvpRes.Value.(*libapiv3.IPAMConfiguration).Spec).To(Equal(ipamKVP.Value.(*libapiv3.IPAMConfiguration).Spec))
+				Expect(kvpRes.Value.(*libapiv3.IPAMConfig).Spec).To(Equal(ipamKVP.Value.(*libapiv3.IPAMConfig).Spec))
 			}
 		})
 
@@ -3886,7 +3901,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 		if v3CRD {
 			createdAt = kvpRes.Value.(*apiv3.IPAMConfiguration).CreationTimestamp
 		} else {
-			createdAt = kvpRes.Value.(*libapiv3.IPAMConfiguration).CreationTimestamp
+			createdAt = kvpRes.Value.(*libapiv3.IPAMConfig).CreationTimestamp
 		}
 		Expect(createdAt).NotTo(Equal(metav1.Time{}))
 
@@ -3903,11 +3918,11 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 				kvpRes.Value.(*apiv3.IPAMConfiguration).Spec.AutoAllocateBlocks = false
 			} else {
 				// Expect the spec to match the original.
-				Expect(kvpRes.Value.(*libapiv3.IPAMConfiguration).Spec).To(Equal(ipamKVP.Value.(*libapiv3.IPAMConfiguration).Spec))
+				Expect(kvpRes.Value.(*libapiv3.IPAMConfig).Spec).To(Equal(ipamKVP.Value.(*libapiv3.IPAMConfig).Spec))
 
 				// Prepare to update the IPAM config.
-				kvpRes.Value.(*libapiv3.IPAMConfiguration).Spec.StrictAffinity = true
-				kvpRes.Value.(*libapiv3.IPAMConfiguration).Spec.AutoAllocateBlocks = false
+				kvpRes.Value.(*libapiv3.IPAMConfig).Spec.StrictAffinity = true
+				kvpRes.Value.(*libapiv3.IPAMConfig).Spec.AutoAllocateBlocks = false
 			}
 
 			kvpRes2, err := c.Update(ctx, kvpRes)
@@ -3921,10 +3936,10 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 				Expect(kvpRes2.Value.(*apiv3.IPAMConfiguration).CreationTimestamp).To(Equal(createdAt))
 			} else {
 				// Expect the spec to have changed.
-				Expect(kvpRes2.Value.(*libapiv3.IPAMConfiguration).Spec).NotTo(Equal(ipamKVP.Value.(*libapiv3.IPAMConfiguration).Spec))
-				Expect(kvpRes.Value.(*libapiv3.IPAMConfiguration).Spec).To(Equal(kvpRes.Value.(*libapiv3.IPAMConfiguration).Spec))
+				Expect(kvpRes2.Value.(*libapiv3.IPAMConfig).Spec).NotTo(Equal(ipamKVP.Value.(*libapiv3.IPAMConfig).Spec))
+				Expect(kvpRes.Value.(*libapiv3.IPAMConfig).Spec).To(Equal(kvpRes.Value.(*libapiv3.IPAMConfig).Spec))
 				// Expect the creation time stamp to be the same.
-				Expect(kvpRes2.Value.(*libapiv3.IPAMConfiguration).CreationTimestamp).To(Equal(createdAt))
+				Expect(kvpRes2.Value.(*libapiv3.IPAMConfig).CreationTimestamp).To(Equal(createdAt))
 			}
 		})
 
@@ -3946,8 +3961,8 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 				Expect(kvpRes.Value.(*apiv3.IPAMConfiguration).Spec.MaxBlocksPerHost).To(Equal(int32(1000)))
 				Expect(kvpRes.Value.(*apiv3.IPAMConfiguration).CreationTimestamp).To(Equal(createdAt))
 			} else {
-				Expect(kvpRes.Value.(*libapiv3.IPAMConfiguration).Spec.MaxBlocksPerHost).To(Equal(1000))
-				Expect(kvpRes.Value.(*libapiv3.IPAMConfiguration).CreationTimestamp).To(Equal(createdAt))
+				Expect(kvpRes.Value.(*libapiv3.IPAMConfig).Spec.MaxBlocksPerHost).To(Equal(1000))
+				Expect(kvpRes.Value.(*libapiv3.IPAMConfig).CreationTimestamp).To(Equal(createdAt))
 			}
 		})
 

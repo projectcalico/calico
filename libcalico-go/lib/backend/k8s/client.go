@@ -17,6 +17,7 @@ package k8s
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -70,7 +71,10 @@ func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 	// Whether or not we are writing to projectcalico.org/v3 resources. If true, we're running in
 	// "no API server" mode where the v3 resources are backed by CRDs directly. Otherwise, we're running
 	// with the Calico API server and should instead use crd.projectcalico.org/v1 resources directly.
-	v3 := true
+	v3 := os.Getenv("CALICO_API_GROUP") == apiv3.GroupVersionCurrent
+	if v3 {
+		log.Info("Using projectcalico.org/v3 API group for CRDs")
+	}
 
 	config, cs, err := CreateKubernetesClientset(ca)
 	if err != nil {
@@ -201,12 +205,6 @@ func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 	c.registerResourceClient(
 		reflect.TypeOf(model.ResourceKey{}),
 		reflect.TypeOf(model.ResourceListOptions{}),
-		libapiv3.KindIPAMConfiguration,
-		resources.NewIPAMConfigClient(restClient, v3),
-	)
-	c.registerResourceClient(
-		reflect.TypeOf(model.ResourceKey{}),
-		reflect.TypeOf(model.ResourceListOptions{}),
 		libapiv3.KindBlockAffinity,
 		resources.NewBlockAffinityClient(restClient, v3),
 	)
@@ -215,6 +213,19 @@ func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 		reflect.TypeOf(model.ResourceListOptions{}),
 		apiv3.KindBGPFilter,
 		resources.NewBGPFilterClient(restClient, v3),
+	)
+
+	ipamConfigKind := libapiv3.KindIPAMConfig
+	if v3 {
+		// If we're using the v3 API, we use IPAMConfiguration as the kind. This is because historically, there
+		// has been a mismatch in the Kind used on the v3 API and the CRD API.
+		ipamConfigKind = apiv3.KindIPAMConfiguration
+	}
+	c.registerResourceClient(
+		reflect.TypeOf(model.ResourceKey{}),
+		reflect.TypeOf(model.ResourceListOptions{}),
+		ipamConfigKind,
+		resources.NewIPAMConfigClient(restClient, v3),
 	)
 
 	// These resources are backed directly by core Kubernetes APIs, and do not
@@ -465,7 +476,8 @@ func (c *KubeClient) Clean() error {
 		apiv3.KindIPReservation,
 		apiv3.KindHostEndpoint,
 		apiv3.KindKubeControllersConfiguration,
-		libapiv3.KindIPAMConfiguration,
+		apiv3.KindIPAMConfiguration,
+		libapiv3.KindIPAMConfig,
 		libapiv3.KindBlockAffinity,
 		apiv3.KindBGPFilter,
 	}

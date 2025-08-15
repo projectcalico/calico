@@ -44,9 +44,9 @@ func NewIPAMConfigClient(r rest.Interface, useV3 bool) K8sResourceClient {
 	rc := customResourceClient{
 		restClient:      r,
 		resource:        resource,
-		k8sResourceType: reflect.TypeOf(libapiv3.IPAMConfiguration{}),
-		k8sListType:     reflect.TypeOf(libapiv3.IPAMConfigurationList{}),
-		kind:            libapiv3.KindIPAMConfiguration,
+		k8sResourceType: reflect.TypeOf(libapiv3.IPAMConfig{}),
+		k8sListType:     reflect.TypeOf(libapiv3.IPAMConfigList{}),
+		kind:            libapiv3.KindIPAMConfig,
 		noTransform:     useV3,
 	}
 
@@ -54,6 +54,7 @@ func NewIPAMConfigClient(r rest.Interface, useV3 bool) K8sResourceClient {
 		// If this is a v3 resource, then we need to use the v3 API types, as they differ.
 		rc.k8sResourceType = reflect.TypeOf(v3.IPAMConfiguration{})
 		rc.k8sListType = reflect.TypeOf(v3.IPAMConfigurationList{})
+		rc.kind = v3.KindIPAMConfiguration
 	}
 
 	return &ipamConfigClient{
@@ -76,8 +77,8 @@ type ipamConfigClient struct {
 // which can be passed to the IPAM code.
 func (c ipamConfigClient) toV1(kvpv3 *model.KVPair) (*model.KVPair, error) {
 	switch kvpv3.Value.(type) {
-	case *libapiv3.IPAMConfiguration:
-		v3obj := kvpv3.Value.(*libapiv3.IPAMConfiguration)
+	case *libapiv3.IPAMConfig:
+		v3obj := kvpv3.Value.(*libapiv3.IPAMConfig)
 		return &model.KVPair{
 			Key: model.IPAMConfigKey{},
 			Value: &model.IPAMConfig{
@@ -86,7 +87,7 @@ func (c ipamConfigClient) toV1(kvpv3 *model.KVPair) (*model.KVPair, error) {
 				MaxBlocksPerHost:   v3obj.Spec.MaxBlocksPerHost,
 			},
 			Revision: kvpv3.Revision,
-			UID:      &kvpv3.Value.(*libapiv3.IPAMConfiguration).UID,
+			UID:      &kvpv3.Value.(*libapiv3.IPAMConfig).UID,
 		}, nil
 	case *v3.IPAMConfiguration:
 		v3obj := kvpv3.Value.(*v3.IPAMConfiguration)
@@ -124,11 +125,11 @@ func (c ipamConfigClient) toV3(kvpv1 *model.KVPair) *model.KVPair {
 		return &model.KVPair{
 			Key: model.ResourceKey{
 				Name: model.IPAMConfigGlobalName,
-				Kind: libapiv3.KindIPAMConfiguration,
+				Kind: v3.KindIPAMConfiguration,
 			},
 			Value: &v3.IPAMConfiguration{
 				TypeMeta: metav1.TypeMeta{
-					Kind:       libapiv3.KindIPAMConfiguration,
+					Kind:       v3.KindIPAMConfiguration,
 					APIVersion: apiVersion,
 				},
 				ObjectMeta: m,
@@ -145,15 +146,15 @@ func (c ipamConfigClient) toV3(kvpv1 *model.KVPair) *model.KVPair {
 		return &model.KVPair{
 			Key: model.ResourceKey{
 				Name: model.IPAMConfigGlobalName,
-				Kind: libapiv3.KindIPAMConfiguration,
+				Kind: libapiv3.KindIPAMConfig,
 			},
-			Value: &libapiv3.IPAMConfiguration{
+			Value: &libapiv3.IPAMConfig{
 				TypeMeta: metav1.TypeMeta{
-					Kind:       libapiv3.KindIPAMConfiguration,
+					Kind:       libapiv3.KindIPAMConfig,
 					APIVersion: apiVersion,
 				},
 				ObjectMeta: m,
-				Spec: libapiv3.IPAMConfigurationSpec{
+				Spec: libapiv3.IPAMConfigSpec{
 					StrictAffinity:     v1obj.StrictAffinity,
 					AutoAllocateBlocks: v1obj.AutoAllocateBlocks,
 					MaxBlocksPerHost:   v1obj.MaxBlocksPerHost,
@@ -240,7 +241,10 @@ func (c *ipamConfigClient) DeleteKVP(ctx context.Context, kvp *model.KVPair) (*m
 func (c *ipamConfigClient) deleteV1(ctx context.Context, key model.Key, revision string, uid *types.UID) (*model.KVPair, error) {
 	k := model.ResourceKey{
 		Name: model.IPAMConfigGlobalName,
-		Kind: libapiv3.KindIPAMConfiguration,
+		Kind: libapiv3.KindIPAMConfig,
+	}
+	if c.v3 {
+		k.Kind = v3.KindIPAMConfiguration
 	}
 	kvp, err := c.rc.Delete(ctx, k, revision, uid)
 	if err != nil {
@@ -270,7 +274,10 @@ func (c *ipamConfigClient) Delete(ctx context.Context, key model.Key, revision s
 func (c *ipamConfigClient) getV1(ctx context.Context, key model.Key, revision string) (*model.KVPair, error) {
 	k := model.ResourceKey{
 		Name: model.IPAMConfigGlobalName,
-		Kind: libapiv3.KindIPAMConfiguration,
+		Kind: libapiv3.KindIPAMConfig,
+	}
+	if c.v3 {
+		k.Kind = v3.KindIPAMConfiguration
 	}
 	kvp, err := c.rc.Get(ctx, k, revision)
 	if err != nil {
