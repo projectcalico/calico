@@ -13,14 +13,15 @@
 #    under the License.
 
 import logging
+
+from etcd3gw.exceptions import Etcd3Exception
+
 import mock
 
 from neutron.tests import base
 
-from networking_calico.compat import log
 from networking_calico import etcdv3
-
-from etcd3gw.exceptions import Etcd3Exception
+from networking_calico.compat import log
 
 
 LOG = logging.getLogger(__name__)

@@ -23,12 +23,12 @@ except ImportError:
 
 from neutron.db.qos import models as qos_models
 
+from networking_calico import datamodel_v3
+from networking_calico import etcdv3
 from networking_calico.common import config as calico_config
 from networking_calico.compat import cfg
 from networking_calico.compat import log
 from networking_calico.compat import n_exc
-from networking_calico import datamodel_v3
-from networking_calico import etcdv3
 from networking_calico.plugins.ml2.drivers.calico.policy import SG_LABEL_PREFIX
 from networking_calico.plugins.ml2.drivers.calico.policy import SG_NAME_LABEL_PREFIX
 from networking_calico.plugins.ml2.drivers.calico.policy import SG_NAME_MAX_LENGTH

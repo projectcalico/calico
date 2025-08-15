@@ -13,14 +13,16 @@
 # limitations under the License.
 
 import collections
-import eventlet
 import json
 import re
 
 from etcd3gw.exceptions import ConnectionFailedError
+
+import eventlet
+
+from networking_calico import etcdv3
 from networking_calico.common import intern_string
 from networking_calico.compat import log
-from networking_calico import etcdv3
 from networking_calico.monotonic import monotonic_time
 
 LOG = log.getLogger(__name__)
@@ -439,14 +441,14 @@ def intern_dict(d):
     return out
 
 
-def intern_list(l):
+def intern_list(ls):
     """intern_list
 
     Returns a new list with interned versions of the input list's contents.
     Non-strings are copied to the new list verbatim.
     """
     out = []
-    for item in l:
+    for item in ls:
         if _is_string_instance(item):
             item = intern_string(item)
         out.append(item)

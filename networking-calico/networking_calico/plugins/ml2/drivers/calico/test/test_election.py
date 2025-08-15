@@ -16,14 +16,15 @@
 """
 Test election code.
 """
-
-from etcd3gw import exceptions as e3e
-import eventlet
 import logging
-import mock
 import unittest
 
-from networking_calico.compat import log
+from etcd3gw import exceptions as e3e
+
+import eventlet
+
+import mock
+
 from networking_calico import etcdv3
 from networking_calico.plugins.ml2.drivers.calico import election
 from networking_calico.plugins.ml2.drivers.calico.test import stub_etcd

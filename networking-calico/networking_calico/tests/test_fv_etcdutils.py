@@ -21,20 +21,22 @@ Tests for etcdutils with a real etcd server.
 
 from __future__ import print_function
 
-import logging
-import os
-import shutil
-import subprocess
-import unittest
-
+# It's advised always to do eventlet monkey-patching as early as possible; but
+# __future__ imports are required to be at the very top of the file, so we must come
+# after those.  https://eventlet.readthedocs.io/en/latest/patching.html
 import eventlet
 
 eventlet.monkey_patch()
 
-from networking_calico.common import config as calico_config
-from networking_calico.compat import cfg
+import logging  # noqa
+import shutil
+import subprocess
+import unittest
+
 from networking_calico import etcdutils
 from networking_calico import etcdv3
+from networking_calico.common import config as calico_config
+from networking_calico.compat import cfg
 
 _log = logging.getLogger(__name__)
 
