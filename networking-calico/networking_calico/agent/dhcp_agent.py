@@ -21,7 +21,7 @@ import eventlet
 
 eventlet.monkey_patch()
 
-import logging  # noqa
+import logging  # noqa: I100
 import os
 import re
 import socket
@@ -758,7 +758,7 @@ class SubnetWatcher(etcdutils.EtcdWatcher):
                 "Etcd3Exception in SubnetWatcher.start():\n%s", e3e.detail_text
             )
             raise
-        except:  # noqa
+        except Exception:
             LOG.exception("Exception in SubnetWatcher.start()")
             raise
         finally:

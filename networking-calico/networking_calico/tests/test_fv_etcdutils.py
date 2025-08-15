@@ -28,7 +28,7 @@ import eventlet
 
 eventlet.monkey_patch()
 
-import logging  # noqa
+import logging  # noqa: I100
 import shutil
 import subprocess
 import unittest
