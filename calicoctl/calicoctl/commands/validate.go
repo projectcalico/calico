@@ -16,21 +16,18 @@ package commands
 
 import (
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/docopt/docopt-go"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/common"
-	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/constants"
 	"github.com/projectcalico/calico/calicoctl/calicoctl/util"
 )
 
 func Validate(args []string) error {
-	doc := constants.DatastoreIntro + `Usage:
+	doc := `Usage:
   <BINARY_NAME> validate --filename=<FILENAME> [--recursive] [--skip-empty]
-                  [--config=<CONFIG>] [--namespace=<NS>] [--context=<context>] [--allow-version-mismatch]
 
 Examples:
   # Validate a policy using the data in policy.yaml.
@@ -48,15 +45,6 @@ Options:
   -R --recursive               Process the filename specified in -f or --filename recursively.
      --skip-empty              Do not error if any files or directory specified using -f or --filename contain no
                                data.
-  -c --config=<CONFIG>         Path to the file containing connection
-                               configuration in YAML or JSON format.
-                               [default: ` + constants.DefaultConfigPath + `]
-  -n --namespace=<NS>          Namespace of the resource.
-                               Only applicable to NetworkPolicy, StagedNetworkPolicy,
-                               StagedKubernetesNetworkPolicy, NetworkSet, and WorkloadEndpoint.
-                               Uses the default namespace if not specified.
-     --context=<context>       The name of the kubeconfig context to use.
-     --allow-version-mismatch  Allow client and cluster versions mismatch.
 
 Description:
   The validate command is used to validate a set of resources by filename
@@ -66,9 +54,9 @@ Description:
 
 <RESOURCE_LIST>
 
-  The validate command will parse and validate the specified resources but will not
-  apply them to the datastore. This can be used to check the validity of resource
-  configurations before applying them.
+  The validate command will parse and validate the specified resources offline
+  without connecting to any datastore. This can be used to check resource syntax,
+  structure, and schema validity before applying them.
 
   The output of the command indicates how many resources were successfully
   validated, and the error reason if an error occurred.
@@ -90,9 +78,6 @@ Description:
 	}
 	if len(parsedArgs) == 0 {
 		return nil
-	}
-	if context := parsedArgs["--context"]; context != nil {
-		os.Setenv("K8S_CURRENT_CONTEXT", context.(string))
 	}
 
 	results := common.ExecuteConfigCommand(parsedArgs, common.ActionValidate)

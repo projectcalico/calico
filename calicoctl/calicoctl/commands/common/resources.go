@@ -130,9 +130,12 @@ func ExecuteConfigCommand(args map[string]interface{}, action action) CommandRes
 
 	log.Info("Executing config command")
 
-	err := CheckVersionMismatch(args["--config"], args["--allow-version-mismatch"])
-	if err != nil {
-		return CommandResults{Err: err}
+	// Skip version mismatch checking for validation since we don't need datastore access
+	if action != ActionValidate {
+		err := CheckVersionMismatch(args["--config"], args["--allow-version-mismatch"])
+		if err != nil {
+			return CommandResults{Err: err}
+		}
 	}
 
 	errorOnEmpty := !argutils.ArgBoolOrFalse(args, "--skip-empty")
@@ -213,6 +216,7 @@ func ExecuteConfigCommand(args map[string]interface{}, action action) CommandRes
 
 	// Load the client config and connect (skip for validation as we don't need datastore access).
 	var cclient client.Interface
+	var err error
 	if action != ActionValidate {
 		cf := args["--config"].(string)
 		cclient, err = clientmgr.NewClient(cf)
