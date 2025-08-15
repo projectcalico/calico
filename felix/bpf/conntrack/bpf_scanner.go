@@ -72,7 +72,7 @@ func NewBPFProgCleaner(
 	ipVersion int,
 	timeouts timeouts.Timeouts,
 	bpfLogLevel BPFLogLevel,
-) (*BPFProgCleaner, error) {
+) (Cleaner, error) {
 	if ipVersion != 4 && ipVersion != 6 {
 		return nil, fmt.Errorf("invalid IP version: %d", ipVersion)
 	}
