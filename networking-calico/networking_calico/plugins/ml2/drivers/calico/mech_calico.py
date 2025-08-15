@@ -37,23 +37,11 @@ from eventlet.queue import PriorityQueue
 from eventlet.semaphore import Semaphore
 
 from neutron.agent import rpc as agent_rpc
-
-try:
-    from neutron_lib.agent import topics
-except ImportError:
-    # Neutron code prior to d996758fb4 (13th March 2018).
-    from neutron.common import topics
-try:
-    from neutron_lib import context as ctx
-except ImportError:
-    # Neutron code prior to ca751a1486 (6th March 2017).
-    from neutron import context as ctx
-try:
-    from neutron_lib.plugins.ml2 import api
-except ImportError:
-    # Neutron code prior to a2c36d7e (10th November 2017).
-    from neutron.plugins.ml2 import driver_api as api
 from neutron.plugins.ml2.drivers import mech_agent
+
+from neutron_lib import context as ctx
+from neutron_lib.agent import topics
+from neutron_lib.plugins.ml2 import api
 
 from sqlalchemy import exc as sa_exc
 

@@ -41,16 +41,9 @@ from neutron.agent.dhcp.agent import DhcpAgent
 from neutron.agent.dhcp_agent import register_options
 from neutron.agent.linux import dhcp
 from neutron.common import config as common_config
+from neutron.conf.agent import common as config
 
-try:
-    from neutron.common import constants as neutron_constants
-except ImportError:
-    from neutron_lib import constants as neutron_constants
-try:
-    from neutron.conf.agent import common as config
-except ImportError:
-    # Neutron code prior to 7f23ccc (15th March 2017).
-    from neutron.agent.common import config
+from neutron_lib import constants as neutron_constants
 
 from networking_calico import datamodel_v1
 from networking_calico import datamodel_v2

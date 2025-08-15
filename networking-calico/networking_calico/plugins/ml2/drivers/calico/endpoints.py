@@ -14,13 +14,7 @@
 # limitations under the License.
 
 from neutron.db import models_v2
-
-try:
-    from neutron.db.models.l3 import FloatingIP
-except ImportError:
-    # Ocata and earlier.
-    from neutron.db.l3_db import FloatingIP
-
+from neutron.db.models.l3 import FloatingIP
 from neutron.db.qos import models as qos_models
 
 from networking_calico import datamodel_v3
