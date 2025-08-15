@@ -14,21 +14,18 @@
 # limitations under the License.
 
 from neutron.db import models_v2
-
-try:
-    from neutron.db.models.l3 import FloatingIP
-except ImportError:
-    # Ocata and earlier.
-    from neutron.db.l3_db import FloatingIP
-
+from neutron.db.models.l3 import FloatingIP
 from neutron.db.qos import models as qos_models
+
+from neutron_lib import exceptions as n_exc
+
+from oslo_config import cfg
+
+from oslo_log import log
 
 from networking_calico import datamodel_v3
 from networking_calico import etcdv3
 from networking_calico.common import config as calico_config
-from networking_calico.compat import cfg
-from networking_calico.compat import log
-from networking_calico.compat import n_exc
 from networking_calico.plugins.ml2.drivers.calico.policy import SG_LABEL_PREFIX
 from networking_calico.plugins.ml2.drivers.calico.policy import SG_NAME_LABEL_PREFIX
 from networking_calico.plugins.ml2.drivers.calico.policy import SG_NAME_MAX_LENGTH

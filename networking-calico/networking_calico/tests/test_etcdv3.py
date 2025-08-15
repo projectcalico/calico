@@ -20,8 +20,9 @@ import mock
 
 from neutron.tests import base
 
+from oslo_log import log
+
 from networking_calico import etcdv3
-from networking_calico.compat import log
 
 
 LOG = logging.getLogger(__name__)

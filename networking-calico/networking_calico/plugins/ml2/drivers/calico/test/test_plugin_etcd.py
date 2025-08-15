@@ -337,7 +337,7 @@ class TestPluginEtcdBase(_TestEtcdBase):
         _log.info("Region %r string %r", self.region, self.region_string)
 
         # Do common plugin test setup.
-        lib.m_compat.cfg.CONF.core_plugin = "ml2"
+        lib.m_oslo_config.cfg.CONF.core_plugin = "ml2"
         super(TestPluginEtcdBase, self).setUp()
 
         # Mock out the status updating thread.  These tests were originally
@@ -349,28 +349,28 @@ class TestPluginEtcdBase(_TestEtcdBase):
         )
 
         # Mock out config.
-        lib.m_compat.cfg.CONF.calico.etcd_host = "localhost"
-        lib.m_compat.cfg.CONF.calico.etcd_port = 2379
-        lib.m_compat.cfg.CONF.calico.etcd_cert_file = None
-        lib.m_compat.cfg.CONF.calico.etcd_ca_cert_file = None
-        lib.m_compat.cfg.CONF.calico.etcd_key_file = None
-        lib.m_compat.cfg.CONF.calico.num_port_status_threads = 4
-        lib.m_compat.cfg.CONF.calico.etcd_compaction_period_mins = 0
-        lib.m_compat.cfg.CONF.calico.project_name_cache_max = 0
-        lib.m_compat.cfg.CONF.calico.openstack_region = self.region
-        lib.m_compat.cfg.CONF.calico.max_ingress_connections_per_port = 0
-        lib.m_compat.cfg.CONF.calico.max_egress_connections_per_port = 0
-        lib.m_compat.cfg.CONF.calico.ingress_burst_bits = 0
-        lib.m_compat.cfg.CONF.calico.egress_burst_bits = 0
-        lib.m_compat.cfg.CONF.calico.ingress_minburst_bytes = 0
-        lib.m_compat.cfg.CONF.calico.egress_minburst_bytes = 0
-        lib.m_compat.cfg.CONF.calico.ingress_burst_packets = 0
-        lib.m_compat.cfg.CONF.calico.egress_burst_packets = 0
+        lib.m_oslo_config.cfg.CONF.calico.etcd_host = "localhost"
+        lib.m_oslo_config.cfg.CONF.calico.etcd_port = 2379
+        lib.m_oslo_config.cfg.CONF.calico.etcd_cert_file = None
+        lib.m_oslo_config.cfg.CONF.calico.etcd_ca_cert_file = None
+        lib.m_oslo_config.cfg.CONF.calico.etcd_key_file = None
+        lib.m_oslo_config.cfg.CONF.calico.num_port_status_threads = 4
+        lib.m_oslo_config.cfg.CONF.calico.etcd_compaction_period_mins = 0
+        lib.m_oslo_config.cfg.CONF.calico.project_name_cache_max = 0
+        lib.m_oslo_config.cfg.CONF.calico.openstack_region = self.region
+        lib.m_oslo_config.cfg.CONF.calico.max_ingress_connections_per_port = 0
+        lib.m_oslo_config.cfg.CONF.calico.max_egress_connections_per_port = 0
+        lib.m_oslo_config.cfg.CONF.calico.ingress_burst_bits = 0
+        lib.m_oslo_config.cfg.CONF.calico.egress_burst_bits = 0
+        lib.m_oslo_config.cfg.CONF.calico.ingress_minburst_bytes = 0
+        lib.m_oslo_config.cfg.CONF.calico.egress_minburst_bytes = 0
+        lib.m_oslo_config.cfg.CONF.calico.ingress_burst_packets = 0
+        lib.m_oslo_config.cfg.CONF.calico.egress_burst_packets = 0
         calico_config._reset_globals()
         datamodel_v2._reset_globals()
 
         # This value needs to be a string:
-        lib.m_compat.cfg.CONF.keystone_authtoken.auth_url = ""
+        lib.m_oslo_config.cfg.CONF.keystone_authtoken.auth_url = ""
 
         self.sg_default_key_v3 = (
             "/calico/resources/v3/projectcalico.org/networkpolicies/"
@@ -1016,14 +1016,14 @@ class TestPluginEtcdBase(_TestEtcdBase):
 
         # Add configuration for QoS settings that are not represented on the
         # Neutron API.
-        lib.m_compat.cfg.CONF.calico.max_ingress_connections_per_port = 10
-        lib.m_compat.cfg.CONF.calico.max_egress_connections_per_port = 20
-        lib.m_compat.cfg.CONF.calico.ingress_burst_bits = 31000
-        lib.m_compat.cfg.CONF.calico.egress_burst_bits = 41000
-        lib.m_compat.cfg.CONF.calico.ingress_minburst_bytes = 1651
-        lib.m_compat.cfg.CONF.calico.egress_minburst_bytes = 1761
-        lib.m_compat.cfg.CONF.calico.ingress_burst_packets = 81
-        lib.m_compat.cfg.CONF.calico.egress_burst_packets = 91
+        lib.m_oslo_config.cfg.CONF.calico.max_ingress_connections_per_port = 10
+        lib.m_oslo_config.cfg.CONF.calico.max_egress_connections_per_port = 20
+        lib.m_oslo_config.cfg.CONF.calico.ingress_burst_bits = 31000
+        lib.m_oslo_config.cfg.CONF.calico.egress_burst_bits = 41000
+        lib.m_oslo_config.cfg.CONF.calico.ingress_minburst_bytes = 1651
+        lib.m_oslo_config.cfg.CONF.calico.egress_minburst_bytes = 1761
+        lib.m_oslo_config.cfg.CONF.calico.ingress_burst_packets = 81
+        lib.m_oslo_config.cfg.CONF.calico.egress_burst_packets = 91
         self.driver.update_port_postcommit(context)
 
         # Expected changes
@@ -1070,14 +1070,14 @@ class TestPluginEtcdBase(_TestEtcdBase):
         self.assertEtcdDeletes(set())
 
         # Reset for future tests.
-        lib.m_compat.cfg.CONF.calico.max_ingress_connections_per_port = 0
-        lib.m_compat.cfg.CONF.calico.max_egress_connections_per_port = 0
-        lib.m_compat.cfg.CONF.calico.ingress_burst_bits = 0
-        lib.m_compat.cfg.CONF.calico.egress_burst_bits = 0
-        lib.m_compat.cfg.CONF.calico.ingress_minburst_bytes = 0
-        lib.m_compat.cfg.CONF.calico.egress_minburst_bytes = 0
-        lib.m_compat.cfg.CONF.calico.ingress_burst_packets = 0
-        lib.m_compat.cfg.CONF.calico.egress_burst_packets = 0
+        lib.m_oslo_config.cfg.CONF.calico.max_ingress_connections_per_port = 0
+        lib.m_oslo_config.cfg.CONF.calico.max_egress_connections_per_port = 0
+        lib.m_oslo_config.cfg.CONF.calico.ingress_burst_bits = 0
+        lib.m_oslo_config.cfg.CONF.calico.egress_burst_bits = 0
+        lib.m_oslo_config.cfg.CONF.calico.ingress_minburst_bytes = 0
+        lib.m_oslo_config.cfg.CONF.calico.egress_minburst_bytes = 0
+        lib.m_oslo_config.cfg.CONF.calico.ingress_burst_packets = 0
+        lib.m_oslo_config.cfg.CONF.calico.egress_burst_packets = 0
 
         # Set a QoS policy on the network instead of directly on the port.
         #
@@ -1469,7 +1469,7 @@ class TestPluginEtcd(TestPluginEtcdBase):
         for (
             neutron_protocol_spec,
             calico_protocol_spec,
-        ) in lib.m_compat.IP_PROTOCOL_MAP.items():
+        ) in lib.m_neutron_lib.constants.IP_PROTOCOL_MAP.items():
             self.assertNeutronToEtcd(
                 _neutron_rule_from_dict(
                     {
@@ -1834,8 +1834,8 @@ class TestDriverStatusReporting(lib.Lib, unittest.TestCase):
         super(TestDriverStatusReporting, self).setUp()
 
         # Mock out config.
-        lib.m_compat.cfg.CONF.calico.etcd_host = "localhost"
-        lib.m_compat.cfg.CONF.calico.etcd_port = 4001
+        lib.m_oslo_config.cfg.CONF.calico.etcd_host = "localhost"
+        lib.m_oslo_config.cfg.CONF.calico.etcd_port = 4001
 
     def test_felix_agent_state(self):
         self.assertEqual(
@@ -2063,12 +2063,12 @@ class TestStatusWatcherBase(_TestEtcdBase):
         _log.info("Region %r string %r", self.region, self.region_string)
 
         # Mock out config.
-        lib.m_compat.cfg.CONF.calico.etcd_host = "localhost"
-        lib.m_compat.cfg.CONF.calico.etcd_port = 4001
-        lib.m_compat.cfg.CONF.calico.etcd_key_file = None
-        lib.m_compat.cfg.CONF.calico.etcd_cert_file = None
-        lib.m_compat.cfg.CONF.calico.etcd_ca_cert_file = None
-        lib.m_compat.cfg.CONF.calico.openstack_region = self.region
+        lib.m_oslo_config.cfg.CONF.calico.etcd_host = "localhost"
+        lib.m_oslo_config.cfg.CONF.calico.etcd_port = 4001
+        lib.m_oslo_config.cfg.CONF.calico.etcd_key_file = None
+        lib.m_oslo_config.cfg.CONF.calico.etcd_cert_file = None
+        lib.m_oslo_config.cfg.CONF.calico.etcd_ca_cert_file = None
+        lib.m_oslo_config.cfg.CONF.calico.openstack_region = self.region
         calico_config._reset_globals()
         datamodel_v2._reset_globals()
 
@@ -2093,9 +2093,9 @@ class TestStatusWatcherBase(_TestEtcdBase):
 class TestStatusWatcher(TestStatusWatcherBase):
 
     def test_tls(self):
-        lib.m_compat.cfg.CONF.calico.etcd_cert_file = "cert-file"
-        lib.m_compat.cfg.CONF.calico.etcd_ca_cert_file = "ca-cert-file"
-        lib.m_compat.cfg.CONF.calico.etcd_key_file = "key-file"
+        lib.m_oslo_config.cfg.CONF.calico.etcd_cert_file = "cert-file"
+        lib.m_oslo_config.cfg.CONF.calico.etcd_ca_cert_file = "ca-cert-file"
+        lib.m_oslo_config.cfg.CONF.calico.etcd_key_file = "key-file"
         self.watcher = status.StatusWatcher(self.driver)
 
     @mock.patch("eventlet.spawn")
