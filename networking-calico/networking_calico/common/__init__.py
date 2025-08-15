@@ -18,9 +18,10 @@
 Calico common utilities.
 """
 import errno
+import os
+
 import netaddr
 import netaddr.core
-import os
 
 
 def validate_cidr(cidr, version):
@@ -54,6 +55,7 @@ def mkdir_p(path):
 
 class ValidationFailed(Exception):
     """Class used for data validation exceptions."""
+
     pass
 
 

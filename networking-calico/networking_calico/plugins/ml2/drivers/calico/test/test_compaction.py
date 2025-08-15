@@ -17,14 +17,14 @@ Test compaction code.
 """
 
 import logging
-import mock
 import os
 import unittest
 
 from etcd3gw.exceptions import Etcd3Exception
 
-import networking_calico.plugins.ml2.drivers.calico.test.lib as lib
+import mock
 
+import networking_calico.plugins.ml2.drivers.calico.test.lib as lib
 from networking_calico import etcdv3
 from networking_calico.plugins.ml2.drivers.calico import mech_calico
 
@@ -60,12 +60,12 @@ class TestCompaction(unittest.TestCase):
 
         # Hook relevant logging.
         import logging
+
         for module in [
-                mech_calico,
-                etcdv3,
+            mech_calico,
+            etcdv3,
         ]:
-            module.LOG = logging.getLogger("\t%-15s\t" %
-                                           module.__name__.split('.')[-1])
+            module.LOG = logging.getLogger("\t%-15s\t" % module.__name__.split(".")[-1])
 
         self.pid = str(os.getpid())
 
@@ -79,121 +79,136 @@ class TestCompaction(unittest.TestCase):
 
     def test_iter_1(self):
         LOG.info("1. no compaction keys present")
-        self.client.get.side_effect = iter([
-            # Read trigger: not found.
-            [],
-            # Read last: not found.
-            [],
-        ])
+        self.client.get.side_effect = iter(
+            [
+                # Read trigger: not found.
+                [],
+                # Read last: not found.
+                [],
+            ]
+        )
         mech_calico.check_request_etcd_compaction()
-        self.assertEqual([
-            mock.call('/calico/compaction/v1/last', '0', lease=None),
-            mock.call('/calico/compaction/v1/trigger',
-                      self.pid,
-                      lease=mock.ANY),
-        ],
-            self.client.put.mock_calls
+        self.assertEqual(
+            [
+                mock.call("/calico/compaction/v1/last", "0", lease=None),
+                mock.call("/calico/compaction/v1/trigger", self.pid, lease=mock.ANY),
+            ],
+            self.client.put.mock_calls,
         )
         self.client.post.assert_not_called()
 
     def test_iter_2(self):
         LOG.info("2. compacted@0 checked@10 now=100 => no compaction")
-        self.client.get.side_effect = iter([
-            # Read trigger: not found.
-            [],
-            # Read last.
-            [('0'.encode(), {'mod_revision': '10'})],
-        ])
-        self.client.status.return_value = {'header': {
-            'cluster_id': '12345',
-            'revision': '100',
-        }}
+        self.client.get.side_effect = iter(
+            [
+                # Read trigger: not found.
+                [],
+                # Read last.
+                [("0".encode(), {"mod_revision": "10"})],
+            ]
+        )
+        self.client.status.return_value = {
+            "header": {
+                "cluster_id": "12345",
+                "revision": "100",
+            }
+        }
         mech_calico.check_request_etcd_compaction()
-        self.assertEqual([
-            mock.call('/calico/compaction/v1/last', '0', lease=None),
-            mock.call('/calico/compaction/v1/trigger',
-                      self.pid,
-                      lease=mock.ANY),
-        ],
-            self.client.put.mock_calls
+        self.assertEqual(
+            [
+                mock.call("/calico/compaction/v1/last", "0", lease=None),
+                mock.call("/calico/compaction/v1/trigger", self.pid, lease=mock.ANY),
+            ],
+            self.client.put.mock_calls,
         )
         self.client.post.assert_not_called()
 
     def test_iter_3(self):
         LOG.info("3. compacted@0 checked@100 now=300 => no compaction")
-        self.client.get.side_effect = iter([
-            # Read trigger: not found.
-            [],
-            # Read last.
-            [('0'.encode(), {'mod_revision': '100'})],
-        ])
-        self.client.status.return_value = {'header': {
-            'cluster_id': '12345',
-            'revision': '300',
-        }}
+        self.client.get.side_effect = iter(
+            [
+                # Read trigger: not found.
+                [],
+                # Read last.
+                [("0".encode(), {"mod_revision": "100"})],
+            ]
+        )
+        self.client.status.return_value = {
+            "header": {
+                "cluster_id": "12345",
+                "revision": "300",
+            }
+        }
         mech_calico.check_request_etcd_compaction()
-        self.assertEqual([
-            mock.call('/calico/compaction/v1/last', '0', lease=None),
-            mock.call('/calico/compaction/v1/trigger',
-                      self.pid,
-                      lease=mock.ANY),
-        ],
-            self.client.put.mock_calls
+        self.assertEqual(
+            [
+                mock.call("/calico/compaction/v1/last", "0", lease=None),
+                mock.call("/calico/compaction/v1/trigger", self.pid, lease=mock.ANY),
+            ],
+            self.client.put.mock_calls,
         )
         self.client.post.assert_not_called()
 
     def test_iter_4(self):
         LOG.info("4. compacted@0 checked@300 now=1100 => compact@100")
-        self.client.get.side_effect = iter([
-            # Read trigger: not found.
-            [],
-            # Read last.
-            [('0'.encode(), {'mod_revision': '300'})],
-        ])
-        self.client.status.return_value = {'header': {
-            'cluster_id': '12345',
-            'revision': '1100',
-        }}
+        self.client.get.side_effect = iter(
+            [
+                # Read trigger: not found.
+                [],
+                # Read last.
+                [("0".encode(), {"mod_revision": "300"})],
+            ]
+        )
+        self.client.status.return_value = {
+            "header": {
+                "cluster_id": "12345",
+                "revision": "1100",
+            }
+        }
         mech_calico.check_request_etcd_compaction()
-        self.assertEqual([
-            mock.call('/calico/compaction/v1/last', '100', lease=None),
-            mock.call('/calico/compaction/v1/trigger',
-                      self.pid,
-                      lease=mock.ANY),
-        ],
-            self.client.put.mock_calls
+        self.assertEqual(
+            [
+                mock.call("/calico/compaction/v1/last", "100", lease=None),
+                mock.call("/calico/compaction/v1/trigger", self.pid, lease=mock.ANY),
+            ],
+            self.client.put.mock_calls,
         )
         self.client.post.assert_called()
 
     def test_iter_5(self):
         LOG.info("5. compacted@100 checked@1100 now=1200 => compact@200")
-        self.client.get.side_effect = iter([
-            # Read trigger: not found.
-            [],
-            # Read last.
-            [('100'.encode(), {'mod_revision': '1100'})],
-        ])
-        self.client.status.return_value = {'header': {
-            'cluster_id': '12345',
-            'revision': '1200',
-        }}
+        self.client.get.side_effect = iter(
+            [
+                # Read trigger: not found.
+                [],
+                # Read last.
+                [("100".encode(), {"mod_revision": "1100"})],
+            ]
+        )
+        self.client.status.return_value = {
+            "header": {
+                "cluster_id": "12345",
+                "revision": "1200",
+            }
+        }
         mech_calico.check_request_etcd_compaction()
-        self.assertEqual([
-            mock.call('/calico/compaction/v1/last', '200', lease=None),
-            mock.call('/calico/compaction/v1/trigger',
-                      self.pid,
-                      lease=mock.ANY),
-        ],
-            self.client.put.mock_calls
+        self.assertEqual(
+            [
+                mock.call("/calico/compaction/v1/last", "200", lease=None),
+                mock.call("/calico/compaction/v1/trigger", self.pid, lease=mock.ANY),
+            ],
+            self.client.put.mock_calls,
         )
         self.client.post.assert_called()
 
     def test_trigger_present(self):
         LOG.info("Trigger present; nothing happens")
-        self.client.get.side_effect = iter([
-            # Read trigger: present with good lease.
-            [(self.pid.encode(), {'mod_revision': '2000', 'lease': '1'})],
-        ])
+        self.client.get.side_effect = iter(
+            [
+                # Read trigger: present with good lease.
+                [(self.pid.encode(), {"mod_revision": "2000", "lease": "1"})],
+            ]
+        )
         mech_calico.check_request_etcd_compaction()
         self.client.status.assert_not_called()
         self.client.put.assert_not_called()
@@ -201,58 +216,63 @@ class TestCompaction(unittest.TestCase):
 
     def test_trigger_present_missing_lease(self):
         LOG.info("Trigger present but with missing lease")
-        self.client.get.side_effect = iter([
-            # Read trigger: present but lease missing.
-            [(self.pid.encode(), {'mod_revision': '2000'})],
-        ])
+        self.client.get.side_effect = iter(
+            [
+                # Read trigger: present but lease missing.
+                [(self.pid.encode(), {"mod_revision": "2000"})],
+            ]
+        )
         mech_calico.check_request_etcd_compaction()
-        self.assertEqual([
-            mock.call('/calico/compaction/v1/last', '0', lease=None),
-            mock.call('/calico/compaction/v1/trigger',
-                      self.pid,
-                      lease=mock.ANY),
-        ],
-            self.client.put.mock_calls
+        self.assertEqual(
+            [
+                mock.call("/calico/compaction/v1/last", "0", lease=None),
+                mock.call("/calico/compaction/v1/trigger", self.pid, lease=mock.ANY),
+            ],
+            self.client.put.mock_calls,
         )
         self.client.post.assert_not_called()
 
     def test_trigger_present_bad_lease(self):
         LOG.info("Trigger present but with bad lease")
-        self.client.get.side_effect = iter([
-            # Read trigger: present but lease has unreasonably large TTL.
-            [(self.pid.encode(), {'mod_revision': '2000', 'lease': '2'})],
-        ])
+        self.client.get.side_effect = iter(
+            [
+                # Read trigger: present but lease has unreasonably large TTL.
+                [(self.pid.encode(), {"mod_revision": "2000", "lease": "2"})],
+            ]
+        )
         mech_calico.check_request_etcd_compaction()
-        self.assertEqual([
-            mock.call('/calico/compaction/v1/last', '0', lease=None),
-            mock.call('/calico/compaction/v1/trigger',
-                      self.pid,
-                      lease=mock.ANY),
-        ],
-            self.client.put.mock_calls
+        self.assertEqual(
+            [
+                mock.call("/calico/compaction/v1/last", "0", lease=None),
+                mock.call("/calico/compaction/v1/trigger", self.pid, lease=mock.ANY),
+            ],
+            self.client.put.mock_calls,
         )
         self.client.post.assert_not_called()
 
     def test_bogus_last_compaction_rev(self):
         LOG.info("Bogus last compaction revision > current revision")
-        self.client.get.side_effect = iter([
-            # Read trigger: not found.
-            [],
-            # Read last.
-            [('3000'.encode(), {'mod_revision': '1100'})],
-        ])
-        self.client.status.return_value = {'header': {
-            'cluster_id': '12345',
-            'revision': '1200',
-        }}
+        self.client.get.side_effect = iter(
+            [
+                # Read trigger: not found.
+                [],
+                # Read last.
+                [("3000".encode(), {"mod_revision": "1100"})],
+            ]
+        )
+        self.client.status.return_value = {
+            "header": {
+                "cluster_id": "12345",
+                "revision": "1200",
+            }
+        }
         mech_calico.check_request_etcd_compaction()
-        self.assertEqual([
-            mock.call('/calico/compaction/v1/last', '0', lease=None),
-            mock.call('/calico/compaction/v1/trigger',
-                      self.pid,
-                      lease=mock.ANY),
-        ],
-            self.client.put.mock_calls
+        self.assertEqual(
+            [
+                mock.call("/calico/compaction/v1/last", "0", lease=None),
+                mock.call("/calico/compaction/v1/trigger", self.pid, lease=mock.ANY),
+            ],
+            self.client.put.mock_calls,
         )
         self.client.post.assert_not_called()
 
@@ -262,33 +282,36 @@ class TestCompaction(unittest.TestCase):
         # This is like test_iter_5, except we arrange for the
         # etcdv3.request_compaction call to raise an exception, and
         # check the resulting logging.
-        e3e = Etcd3Exception('revision has been compacted')
+        e3e = Etcd3Exception("revision has been compacted")
         self.client.post.side_effect = e3e
-        self.client.get.side_effect = iter([
-            # Read trigger: not found.
-            [],
-            # Read last.
-            [('100'.encode(), {'mod_revision': '1100'})],
-        ])
-        self.client.status.return_value = {'header': {
-            'cluster_id': '12345',
-            'revision': '1200',
-        }}
+        self.client.get.side_effect = iter(
+            [
+                # Read trigger: not found.
+                [],
+                # Read last.
+                [("100".encode(), {"mod_revision": "1100"})],
+            ]
+        )
+        self.client.status.return_value = {
+            "header": {
+                "cluster_id": "12345",
+                "revision": "1200",
+            }
+        }
 
-        with mock.patch.object(
-                mech_calico.LOG,
-                'info') as mock_li:
+        with mock.patch.object(mech_calico.LOG, "info") as mock_li:
             mech_calico.check_request_etcd_compaction()
-            self.assertEqual([
-                mock.call('/calico/compaction/v1/last', '1200', lease=None),
-                mock.call('/calico/compaction/v1/trigger',
-                          self.pid,
-                          lease=mock.ANY),
+            self.assertEqual(
+                [
+                    mock.call("/calico/compaction/v1/last", "1200", lease=None),
+                    mock.call(
+                        "/calico/compaction/v1/trigger", self.pid, lease=mock.ANY
+                    ),
                 ],
-                self.client.put.mock_calls
+                self.client.put.mock_calls,
             )
             self.client.post.assert_called()
             mock_li.assert_called_with(
-                'Someone else has requested etcd compaction:\n%s',
-                'revision has been compacted',
+                "Someone else has requested etcd compaction:\n%s",
+                "revision has been compacted",
             )
