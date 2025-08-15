@@ -21,7 +21,7 @@ from neutron_lib.db import constants as db_consts
 from neutron_lib.services.qos import base
 from neutron_lib.services.qos import constants as qos_consts
 
-from networking_calico.compat import log
+from oslo_log import log
 
 
 LOG = log.getLogger(__name__)

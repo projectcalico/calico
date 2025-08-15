@@ -20,9 +20,10 @@ from etcd3gw.exceptions import ConnectionFailedError
 
 import eventlet
 
+from oslo_log import log
+
 from networking_calico import etcdv3
 from networking_calico.common import intern_string
-from networking_calico.compat import log
 from networking_calico.monotonic import monotonic_time
 
 LOG = log.getLogger(__name__)
