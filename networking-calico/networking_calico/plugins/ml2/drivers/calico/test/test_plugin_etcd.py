@@ -21,19 +21,20 @@ Unit test for the Calico/OpenStack Plugin using etcd transport.
 """
 import copy
 import json
+import logging
 import unittest
 
 from etcd3gw.utils import _decode
+
 import eventlet
-import logging
+
 import mock
 
 import networking_calico.plugins.ml2.drivers.calico.test.lib as lib
-
-from networking_calico.common import config as calico_config
 from networking_calico import datamodel_v1
 from networking_calico import datamodel_v2
 from networking_calico import etcdv3
+from networking_calico.common import config as calico_config
 from networking_calico.monotonic import monotonic_time
 from networking_calico.plugins.ml2.drivers.calico import mech_calico
 from networking_calico.plugins.ml2.drivers.calico import policy
@@ -559,11 +560,11 @@ class TestPluginEtcdBase(_TestEtcdBase):
         self.assertEtcdWrites({})
         self.assertEtcdDeletes(set([ep_deadbeef_key_v3]))
 
-        # Now process an update for the same port and check that it doesn't cause the etcd
-        # resource to be recreated.  This simulates an update and delete racing with each
-        # other and being handled on different Neutron servers or on different threads of
-        # the same server.  The key point is that the update shouldn't accidentally
-        # recreate an etcd resource that has just been deleted.
+        # Now process an update for the same port and check that it doesn't cause the
+        # etcd resource to be recreated.  This simulates an update and delete racing
+        # with each other and being handled on different Neutron servers or on different
+        # threads of the same server.  The key point is that the update shouldn't
+        # accidentally recreate an etcd resource that has just been deleted.
         self.osdb_ports = [lib.port2]
         self.driver.update_port_postcommit(context)
         self.assertEtcdWrites({})
@@ -1596,6 +1597,7 @@ class TestPluginEtcd(TestPluginEtcdBase):
         """Startup with existing profile data from another orchestrator."""
 
         # Check that we don't delete the other orchestrator's profile data.
+        selector = "has(sg.projectcalico.org/openstack-SGID-default)"
         self.etcd_data = {
             "/calico/resources/v3/projectcalico.org/networkpolicies/"
             + "mesos/profile-1": json.dumps(
@@ -1612,16 +1614,12 @@ class TestPluginEtcd(TestPluginEtcdBase):
                             {
                                 "action": "Allow",
                                 "ipVersion": 4,
-                                "source": {
-                                    "selector": "has(sg.projectcalico.org/openstack-SGID-default)"
-                                },
+                                "source": {"selector": selector},
                             },
                             {
                                 "action": "Allow",
                                 "ipVersion": 6,
-                                "source": {
-                                    "selector": "has(sg.projectcalico.org/openstack-SGID-default)"
-                                },
+                                "source": {"selector": selector},
                             },
                         ],
                         "selector": "has(sg.projectcalico.org/openstack-SGID-default)",
