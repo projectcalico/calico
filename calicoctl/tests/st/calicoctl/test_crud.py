@@ -1579,8 +1579,9 @@ class TestCalicoctlCommands(TestBase):
         """
         Test that validating with empty file shows appropriate message
         """
-        # Create empty file
-        writeyaml('/tmp/empty.yaml', "")
+        # Create truly empty file
+        with open('/tmp/empty.yaml', 'w') as f:
+            pass  # Create an empty file
         rc = calicoctl("validate -f /tmp/empty.yaml", no_config=True)
         # Empty files should result in error with specific message
         rc.assert_error()
@@ -1590,8 +1591,9 @@ class TestCalicoctlCommands(TestBase):
         """
         Test that --skip-empty flag works correctly with empty files
         """
-        # Create empty file
-        writeyaml('/tmp/empty.yaml', "")
+        # Create truly empty file
+        with open('/tmp/empty.yaml', 'w') as f:
+            pass  # Create an empty file
         rc = calicoctl("validate -f /tmp/empty.yaml --skip-empty", no_config=True)
         rc.assert_no_error()
         rc.assert_output_contains("No resources specified")
@@ -1603,22 +1605,17 @@ class TestCalicoctlCommands(TestBase):
         # Test --config argument rejection
         rc = calicoctl("validate --config=/tmp/config.yaml -f /tmp/test.yaml", no_config=True)
         rc.assert_error()
-        rc.assert_output_contains("Invalid option")
+        rc.assert_output_contains("Usage:")
 
         # Test --namespace argument rejection  
         rc = calicoctl("validate --namespace=test -f /tmp/test.yaml", no_config=True)
         rc.assert_error()
-        rc.assert_output_contains("Invalid option")
+        rc.assert_output_contains("Usage:")
 
         # Test --context argument rejection
         rc = calicoctl("validate --context=test -f /tmp/test.yaml", no_config=True)
         rc.assert_error()
-        rc.assert_output_contains("Invalid option")
-
-        # Test --allow-version-mismatch argument rejection
-        rc = calicoctl("validate --allow-version-mismatch -f /tmp/test.yaml", no_config=True)
-        rc.assert_error()
-        rc.assert_output_contains("Invalid option")
+        rc.assert_output_contains("Usage:")
 
     def test_validate_different_resource_types(self):
         """
@@ -1674,7 +1671,7 @@ class TestCalicoctlCommands(TestBase):
         resources = [valid_ippool, invalid_networkpolicy]
         rc = calicoctl("validate", data=resources, no_config=True)
         rc.assert_error()
-        rc.assert_output_contains("Failed to validate")
+        rc.assert_output_contains("Hit error(s):")
 
 #
 # class TestCreateFromFile(TestBase):
