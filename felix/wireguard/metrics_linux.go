@@ -55,12 +55,6 @@ const (
 	defaultCollectionRatelimit = time.Second
 )
 
-func init() {
-	prometheus.MustRegister(
-		MustNewWireguardMetrics(),
-	)
-}
-
 type Metrics struct {
 	hostname           string
 	newWireguardClient func() (netlinkshim.Wireguard, error)
@@ -150,6 +144,7 @@ func NewWireguardMetricsWithShims(hostname string, newWireguardClient func() (ne
 
 func (collector *Metrics) getWireguardClient() (netlinkshim.Wireguard, error) {
 	// lazily create wireguard client and cache it for future use
+
 	if collector.wireguardClient == nil {
 		wgClient, err := collector.newWireguardClient()
 		if err != nil {
