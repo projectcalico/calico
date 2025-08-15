@@ -31,26 +31,26 @@ import re
 import uuid
 from functools import wraps
 
-# OpenStack imports.
 import eventlet
 from eventlet.queue import PriorityQueue
 from eventlet.semaphore import Semaphore
 
+from keystoneauth1 import session
+from keystoneauth1.identity import v3
+
+from keystoneclient.v3.client import Client as KeystoneClient
+
+import neutron.plugins.ml2.rpc as rpc
 from neutron.agent import rpc as agent_rpc
+from neutron.conf.agent import common as config
 from neutron.plugins.ml2.drivers import mech_agent
 
-from neutron_lib import context as ctx
-from neutron_lib.agent import topics
-from neutron_lib.plugins.ml2 import api
-
-from sqlalchemy import exc as sa_exc
-
-# Monkeypatch import
-import neutron.plugins.ml2.rpc as rpc
-
 from neutron_lib import constants
+from neutron_lib import context as ctx
 from neutron_lib import exceptions as n_exc
+from neutron_lib.agent import topics
 from neutron_lib.plugins import directory as plugin_dir
+from neutron_lib.plugins.ml2 import api
 
 from oslo_concurrency import lockutils
 
@@ -60,7 +60,8 @@ from oslo_db import exception as db_exc
 
 from oslo_log import log
 
-# Calico imports.
+from sqlalchemy import exc as sa_exc
+
 from networking_calico import datamodel_v1
 from networking_calico import datamodel_v2
 from networking_calico import datamodel_v3
@@ -81,16 +82,9 @@ from networking_calico.plugins.ml2.drivers.calico.qos_driver import (
 from networking_calico.plugins.ml2.drivers.calico.status import StatusWatcher
 from networking_calico.plugins.ml2.drivers.calico.subnets import SubnetSyncer
 
-# Imports for a Keystone client.
-from keystoneauth1 import session
-from keystoneauth1.identity import v3
-
-from keystoneclient.v3.client import Client as KeystoneClient
 
 # Register [AGENT] options, which we need in order to successfully use
 # PluginReportStateAPI.
-from neutron.conf.agent import common as config
-
 config.register_agent_state_opts_helper(cfg.CONF)
 
 LOG = log.getLogger(__name__)
