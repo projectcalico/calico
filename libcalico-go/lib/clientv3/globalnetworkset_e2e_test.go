@@ -26,6 +26,7 @@ import (
 
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
@@ -49,9 +50,13 @@ var _ = testutils.E2eDatastoreDescribe("GlobalNetworkSet tests", testutils.Datas
 			"12.0.0.0/16",
 		},
 	}
+	// kind label is expected when calico reads GlobalNetworkSets from k8s datastore
+	labels := map[string]string{
+		conversion.KindLabel: apiv3.KindGlobalNetworkSet,
+	}
 
 	DescribeTable("GlobalNetworkSet e2e CRUD tests",
-		func(name1, name2 string, spec1, spec2 apiv3.GlobalNetworkSetSpec) {
+		func(name1, name2 string, spec1, spec2 apiv3.GlobalNetworkSetSpec, labels map[string]string) {
 			c, err := clientv3.New(config)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -97,7 +102,11 @@ var _ = testutils.E2eDatastoreDescribe("GlobalNetworkSet tests", testutils.Datas
 			By("Getting GlobalNetworkSet (name1) and comparing the output against spec1")
 			res, outError := c.GlobalNetworkSets().Get(ctx, name1, options.GetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
-			Expect(res).To(MatchResource(apiv3.KindGlobalNetworkSet, testutils.ExpectNoNamespace, name1, spec1))
+			if config.Spec.DatastoreType == apiconfig.Kubernetes {
+				Expect(res).To(MatchResourceWithLabels(apiv3.KindGlobalNetworkSet, testutils.ExpectNoNamespace, name1, spec1, labels))
+			} else {
+				Expect(res).To(MatchResource(apiv3.KindGlobalNetworkSet, testutils.ExpectNoNamespace, name1, spec1))
+			}
 			Expect(res.ResourceVersion).To(Equal(res1.ResourceVersion))
 
 			By("Getting GlobalNetworkSet (name2) before it is created")
@@ -108,9 +117,15 @@ var _ = testutils.E2eDatastoreDescribe("GlobalNetworkSet tests", testutils.Datas
 			By("Listing all the GlobalNetworkSets, expecting a single result with name1/spec1")
 			outList, outError := c.GlobalNetworkSets().List(ctx, options.ListOptions{})
 			Expect(outError).NotTo(HaveOccurred())
-			Expect(outList.Items).To(ConsistOf(
-				testutils.Resource(apiv3.KindGlobalNetworkSet, testutils.ExpectNoNamespace, name1, spec1),
-			))
+			if config.Spec.DatastoreType == apiconfig.Kubernetes {
+				Expect(outList.Items).To(ConsistOf(
+					testutils.ResourceWithLabels(apiv3.KindGlobalNetworkSet, testutils.ExpectNoNamespace, name1, spec1, labels),
+				))
+			} else {
+				Expect(outList.Items).To(ConsistOf(
+					testutils.Resource(apiv3.KindGlobalNetworkSet, testutils.ExpectNoNamespace, name1, spec1),
+				))
+			}
 
 			By("Creating a new GlobalNetworkSet with name2/spec2")
 			res2, outError := c.GlobalNetworkSets().Create(ctx, &apiv3.GlobalNetworkSet{
@@ -123,16 +138,27 @@ var _ = testutils.E2eDatastoreDescribe("GlobalNetworkSet tests", testutils.Datas
 			By("Getting GlobalNetworkSet (name2) and comparing the output against spec2")
 			res, outError = c.GlobalNetworkSets().Get(ctx, name2, options.GetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
-			Expect(res2).To(MatchResource(apiv3.KindGlobalNetworkSet, testutils.ExpectNoNamespace, name2, spec2))
+			if config.Spec.DatastoreType == apiconfig.Kubernetes {
+				Expect(res).To(MatchResourceWithLabels(apiv3.KindGlobalNetworkSet, testutils.ExpectNoNamespace, name2, spec2, labels))
+			} else {
+				Expect(res).To(MatchResource(apiv3.KindGlobalNetworkSet, testutils.ExpectNoNamespace, name2, spec2))
+			}
 			Expect(res.ResourceVersion).To(Equal(res2.ResourceVersion))
 
 			By("Listing all the GlobalNetworkSets, expecting a two results with name1/spec1 and name2/spec2")
 			outList, outError = c.GlobalNetworkSets().List(ctx, options.ListOptions{})
 			Expect(outError).NotTo(HaveOccurred())
-			Expect(outList.Items).To(ConsistOf(
-				testutils.Resource(apiv3.KindGlobalNetworkSet, testutils.ExpectNoNamespace, name1, spec1),
-				testutils.Resource(apiv3.KindGlobalNetworkSet, testutils.ExpectNoNamespace, name2, spec2),
-			))
+			if config.Spec.DatastoreType == apiconfig.Kubernetes {
+				Expect(outList.Items).To(ConsistOf(
+					testutils.ResourceWithLabels(apiv3.KindGlobalNetworkSet, testutils.ExpectNoNamespace, name1, spec1, labels),
+					testutils.ResourceWithLabels(apiv3.KindGlobalNetworkSet, testutils.ExpectNoNamespace, name2, spec2, labels),
+				))
+			} else {
+				Expect(outList.Items).To(ConsistOf(
+					testutils.Resource(apiv3.KindGlobalNetworkSet, testutils.ExpectNoNamespace, name1, spec1),
+					testutils.Resource(apiv3.KindGlobalNetworkSet, testutils.ExpectNoNamespace, name2, spec2),
+				))
+			}
 
 			By("Updating GlobalNetworkSet name1 with spec2")
 			res1.Spec = spec2
@@ -186,7 +212,11 @@ var _ = testutils.E2eDatastoreDescribe("GlobalNetworkSet tests", testutils.Datas
 			By("Getting GlobalNetworkSet (name1) with the updated resource version and comparing the output against spec2")
 			res, outError = c.GlobalNetworkSets().Get(ctx, name1, options.GetOptions{ResourceVersion: rv1_2})
 			Expect(outError).NotTo(HaveOccurred())
-			Expect(res).To(MatchResource(apiv3.KindGlobalNetworkSet, testutils.ExpectNoNamespace, name1, spec2))
+			if config.Spec.DatastoreType == apiconfig.Kubernetes {
+				Expect(res).To(MatchResourceWithLabels(apiv3.KindGlobalNetworkSet, testutils.ExpectNoNamespace, name1, spec2, labels))
+			} else {
+				Expect(res).To(MatchResource(apiv3.KindGlobalNetworkSet, testutils.ExpectNoNamespace, name1, spec2))
+			}
 			Expect(res.ResourceVersion).To(Equal(rv1_2))
 
 			if config.Spec.DatastoreType != apiconfig.Kubernetes {
@@ -201,10 +231,17 @@ var _ = testutils.E2eDatastoreDescribe("GlobalNetworkSet tests", testutils.Datas
 			By("Listing GlobalNetworkSets with the latest resource version and checking for two results with name1/spec2 and name2/spec2")
 			outList, outError = c.GlobalNetworkSets().List(ctx, options.ListOptions{})
 			Expect(outError).NotTo(HaveOccurred())
-			Expect(outList.Items).To(ConsistOf(
-				testutils.Resource(apiv3.KindGlobalNetworkSet, testutils.ExpectNoNamespace, name1, spec2),
-				testutils.Resource(apiv3.KindGlobalNetworkSet, testutils.ExpectNoNamespace, name2, spec2),
-			))
+			if config.Spec.DatastoreType == apiconfig.Kubernetes {
+				Expect(outList.Items).To(ConsistOf(
+					testutils.ResourceWithLabels(apiv3.KindGlobalNetworkSet, testutils.ExpectNoNamespace, name1, spec2, labels),
+					testutils.ResourceWithLabels(apiv3.KindGlobalNetworkSet, testutils.ExpectNoNamespace, name2, spec2, labels),
+				))
+			} else {
+				Expect(outList.Items).To(ConsistOf(
+					testutils.Resource(apiv3.KindGlobalNetworkSet, testutils.ExpectNoNamespace, name1, spec2),
+					testutils.Resource(apiv3.KindGlobalNetworkSet, testutils.ExpectNoNamespace, name2, spec2),
+				))
+			}
 
 			if config.Spec.DatastoreType != apiconfig.Kubernetes {
 				By("Deleting GlobalNetworkSet (name1) with the old resource version")
@@ -264,10 +301,15 @@ var _ = testutils.E2eDatastoreDescribe("GlobalNetworkSet tests", testutils.Datas
 		},
 
 		// Test 1: Pass two fully populated GlobalNetworkSetSpecs and expect the series of operations to succeed.
-		Entry("Two fully populated GlobalNetworkSetSpecs", name1, name2, spec1, spec2),
+		Entry("Two fully populated GlobalNetworkSetSpecs", name1, name2, spec1, spec2, labels),
 	)
 
 	Describe("GlobalNetworkSet watch functionality", func() {
+		// Kind label is expected when calico reads GlobalNetworkSets from k8s datastore
+		labels := map[string]string{
+			conversion.KindLabel: apiv3.KindGlobalNetworkSet,
+		}
+
 		It("should handle watch events for different resource versions and event types", func() {
 			c, err := clientv3.New(config)
 			Expect(err).NotTo(HaveOccurred())
@@ -291,6 +333,9 @@ var _ = testutils.E2eDatastoreDescribe("GlobalNetworkSet tests", testutils.Datas
 				},
 				options.SetOptions{},
 			)
+			if config.Spec.DatastoreType == apiconfig.Kubernetes {
+				outRes1.GetObjectMeta().SetLabels(labels)
+			}
 			rev1 := outRes1.ResourceVersion
 
 			By("Configuring a GlobalNetworkSet name2/spec2 and storing the response")
@@ -302,6 +347,9 @@ var _ = testutils.E2eDatastoreDescribe("GlobalNetworkSet tests", testutils.Datas
 				},
 				options.SetOptions{},
 			)
+			if config.Spec.DatastoreType == apiconfig.Kubernetes {
+				outRes2.GetObjectMeta().SetLabels(labels)
+			}
 
 			By("Starting a watcher from revision rev1 - this should skip the first creation")
 			w, err := c.GlobalNetworkSets().Watch(ctx, options.ListOptions{ResourceVersion: rev1})
@@ -314,16 +362,34 @@ var _ = testutils.E2eDatastoreDescribe("GlobalNetworkSet tests", testutils.Datas
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Checking for two events, create res2 and delete re1")
-			testWatcher1.ExpectEvents(apiv3.KindGlobalNetworkSet, []watch.Event{
-				{
-					Type:   watch.Added,
-					Object: outRes2,
-				},
-				{
-					Type:     watch.Deleted,
-					Previous: outRes1,
-				},
-			})
+			if config.Spec.DatastoreType == apiconfig.Kubernetes {
+				outRes1.GetObjectMeta().SetLabels(labels)
+				outRes2.GetObjectMeta().SetLabels(labels)
+
+				testWatcher1.ExpectEvents(apiv3.KindGlobalNetworkSet, []watch.Event{
+					{
+						Type:   watch.Added,
+						Object: outRes2,
+					},
+					{
+						Type:     watch.Deleted,
+						Previous: outRes1,
+					},
+				})
+
+				outRes1.GetObjectMeta().SetLabels(nil)
+			} else {
+				testWatcher1.ExpectEvents(apiv3.KindGlobalNetworkSet, []watch.Event{
+					{
+						Type:   watch.Added,
+						Object: outRes2,
+					},
+					{
+						Type:     watch.Deleted,
+						Previous: outRes1,
+					},
+				})
+			}
 			testWatcher1.Stop()
 
 			By("Starting a watcher from rev0 - this should get all events")
@@ -342,6 +408,9 @@ var _ = testutils.E2eDatastoreDescribe("GlobalNetworkSet tests", testutils.Datas
 				options.SetOptions{},
 			)
 			Expect(err).NotTo(HaveOccurred())
+			if config.Spec.DatastoreType == apiconfig.Kubernetes {
+				outRes2.GetObjectMeta().SetLabels(labels)
+			}
 			testWatcher2.ExpectEvents(apiv3.KindGlobalNetworkSet, []watch.Event{
 				{
 					Type:   watch.Added,
@@ -405,7 +474,9 @@ var _ = testutils.E2eDatastoreDescribe("GlobalNetworkSet tests", testutils.Datas
 				},
 				options.SetOptions{},
 			)
-
+			if config.Spec.DatastoreType == apiconfig.Kubernetes {
+				outRes1.GetObjectMeta().SetLabels(labels)
+			}
 			By("Starting a watcher not specifying a rev - expect the current snapshot")
 			w, err = c.GlobalNetworkSets().Watch(ctx, options.ListOptions{})
 			Expect(err).NotTo(HaveOccurred())
