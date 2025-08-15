@@ -20,9 +20,9 @@ from networking_calico.compat import cfg
 class TestConfig(unittest.TestCase):
 
     def test_additional_options_registered(self):
-        add_opt = cfg.StrOpt('test_option', default='test')
+        add_opt = cfg.StrOpt("test_option", default="test")
         config.register_options(cfg.CONF, additional_options=[add_opt])
-        self.assertEqual(cfg.CONF['calico']['test_option'], 'test')
+        self.assertEqual(cfg.CONF["calico"]["test_option"], "test")
 
 
 from collections import namedtuple
@@ -93,4 +93,5 @@ class TestCommon(unittest.TestCase):
         self.assertRaises(
             AssertionError,
             config._validate_region,
-            "my-region-has-a-very-long-and-extremely-interesting-name")
+            "my-region-has-a-very-long-and-extremely-interesting-name",
+        )
