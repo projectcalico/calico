@@ -40,14 +40,7 @@ var _ = Describe("QoS", func() {
 	})
 
 	It("should render empty chain for no policies", func() {
-		Expect(renderer.EgressQoSPolicyChain([]QoSPolicy{}, 4)).To(Equal(&generictables.Chain{
-			Name:  "cali-qos-policy",
-			Rules: nil,
-		}))
-	})
-
-	It("should render empty IPv6 chain for no policies", func() {
-		Expect(renderer.EgressQoSPolicyChain(nil, 6)).To(Equal(&generictables.Chain{
+		Expect(renderer.EgressQoSPolicyChain([]QoSPolicy{})).To(Equal(&generictables.Chain{
 			Name:  "cali-qos-policy",
 			Rules: nil,
 		}))
@@ -59,7 +52,7 @@ var _ = Describe("QoS", func() {
 			{SrcAddrs: "192.168.10.100,172.17.1.100", DSCP: 40},
 			{SrcAddrs: "192.168.20.1", DSCP: 0},
 		}
-		Expect(renderer.EgressQoSPolicyChain(policies, 4)).To(Equal(&generictables.Chain{
+		Expect(renderer.EgressQoSPolicyChain(policies)).To(Equal(&generictables.Chain{
 			Name: "cali-qos-policy",
 			Rules: []generictables.Rule{
 				{
@@ -84,7 +77,7 @@ var _ = Describe("QoS", func() {
 			{SrcAddrs: "dead:beef::1:100,dead:beef::10:1", DSCP: 40},
 			{SrcAddrs: "dead:beef::2:2", DSCP: 22},
 		}
-		Expect(renderer.EgressQoSPolicyChain(policies, 6)).To(Equal(&generictables.Chain{
+		Expect(renderer.EgressQoSPolicyChain(policies)).To(Equal(&generictables.Chain{
 			Name: "cali-qos-policy",
 			Rules: []generictables.Rule{
 				{
