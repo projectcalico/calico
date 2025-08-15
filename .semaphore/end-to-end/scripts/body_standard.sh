@@ -24,7 +24,8 @@ export PATH=$PATH:${BZ_LOCAL_DIR}/bin
 
 if [[ "${ENABLE_EXTERNAL_NODE}" == "true" ]]; then
   export EXT_USER=ubuntu
-  export EXT_IP=$(cat "${BZ_LOCAL_DIR}"/external_ip)
+  EXT_IP=$(cat "${BZ_LOCAL_DIR}"/external_ip)
+  export EXT_IP
   export EXT_KEY=${BZ_LOCAL_DIR}/external_key
   export K8S_E2E_DOCKER_EXTRA_FLAGS="-v $EXT_KEY:/key --env EXT_USER --env EXT_KEY=/key --env EXT_IP $K8S_E2E_DOCKER_EXTRA_FLAGS"
   echo "EXT_USER=ubuntu EXT_IP=$EXT_IP, EXT_KEY=$EXT_KEY"
