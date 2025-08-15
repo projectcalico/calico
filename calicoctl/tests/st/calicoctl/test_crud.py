@@ -1634,6 +1634,48 @@ class TestCalicoctlCommands(TestBase):
         rc.assert_no_error()
         rc.assert_output_contains("Successfully validated 1 'IPPool' resource(s)")
 
+    def test_validate_calico_specific_validation_failure(self):
+        """
+        Test that validate command catches Calico-specific validation errors like invalid selectors
+        """
+        # Create a NetworkPolicy with an invalid selector that has invalid characters
+        invalid_networkpolicy = {
+            'apiVersion': API_VERSION,
+            'kind': 'NetworkPolicy',
+            'metadata': {
+                'name': 'allow-tcp-6379',
+                'namespace': 'production'
+            },
+            'spec': {
+                'selector': 'ga@rb"ag\'e'  # Invalid selector with invalid characters
+            }
+        }
+        rc = calicoctl("validate", data=invalid_networkpolicy, no_config=True)
+        rc.assert_error()
+        rc.assert_output_contains("Failed to validate")
+
+    def test_validate_multiple_resources_with_calico_validation_failure(self):
+        """
+        Test that validate command properly handles mixed valid/invalid resources
+        """
+        # Create one valid and one invalid resource
+        valid_ippool = ippool_name1_rev1_v4
+        invalid_networkpolicy = {
+            'apiVersion': API_VERSION,
+            'kind': 'NetworkPolicy', 
+            'metadata': {
+                'name': 'invalid-policy',
+                'namespace': 'test'
+            },
+            'spec': {
+                'selector': 'invalid@selector!'  # Invalid selector
+            }
+        }
+        resources = [valid_ippool, invalid_networkpolicy]
+        rc = calicoctl("validate", data=resources, no_config=True)
+        rc.assert_error()
+        rc.assert_output_contains("Failed to validate")
+
 #
 # class TestCreateFromFile(TestBase):
 #     """

@@ -32,6 +32,7 @@ import (
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	calicoErrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
+	validator "github.com/projectcalico/calico/libcalico-go/lib/validator/v3"
 )
 
 type action int
@@ -332,10 +333,13 @@ func ExecuteResourceAction(args map[string]interface{}, client client.Interface,
 		patch := args["--patch"].(string)
 		resOut, err = rm.Patch(ctx, client, resource, patch)
 	case ActionValidate:
-		// For validation, we just return the resource without applying it to datastore
-		// This will validate the resource structure and schema during the unmarshaling process
+		// For validation, we validate the resource using Calico-specific validators
+		// This validates both resource structure/schema and Calico-specific validation rules
+		err = validator.Validate(resource)
+		if err != nil {
+			return nil, err
+		}
 		resOut = resource
-		err = nil
 	}
 
 	// Skip over some errors depending on command line options.
