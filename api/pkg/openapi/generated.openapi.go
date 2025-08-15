@@ -124,6 +124,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.TierList":                           schema_pkg_apis_projectcalico_v3_TierList(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.TierSpec":                           schema_pkg_apis_projectcalico_v3_TierSpec(ref),
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.WorkloadEndpointControllerConfig":   schema_pkg_apis_projectcalico_v3_WorkloadEndpointControllerConfig(ref),
+		"github.com/projectcalico/api/pkg/lib/numorstring.DSCP":                                     schema_api_pkg_lib_numorstring_DSCP(ref),
 		"github.com/projectcalico/api/pkg/lib/numorstring.Port":                                     schema_api_pkg_lib_numorstring_Port(ref),
 		"github.com/projectcalico/api/pkg/lib/numorstring.Protocol":                                 schema_api_pkg_lib_numorstring_Protocol(ref),
 		"github.com/projectcalico/api/pkg/lib/numorstring.Uint8OrString":                            schema_api_pkg_lib_numorstring_Uint8OrString(ref),
@@ -6643,6 +6644,17 @@ func schema_pkg_apis_projectcalico_v3_WorkloadEndpointControllerConfig(ref commo
 		},
 		Dependencies: []string{
 			"k8s.io/apimachinery/pkg/apis/meta/v1.Duration"},
+	}
+}
+
+func schema_api_pkg_lib_numorstring_DSCP(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type:   numorstring.DSCP{}.OpenAPISchemaType(),
+				Format: numorstring.DSCP{}.OpenAPISchemaFormat(),
+			},
+		},
 	}
 }
 

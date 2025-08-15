@@ -61,7 +61,9 @@ const (
 	ChainManglePrerouting  = ChainNamePrefix + "PREROUTING"
 	ChainManglePostrouting = ChainNamePrefix + "POSTROUTING"
 
-	IPSetIDNATOutgoingAllPools  = "all-ipam-pools"
+	ChainQoSPolicy = ChainNamePrefix + "qos-policy"
+
+	IPSetIDAllPools             = "all-ipam-pools"
 	IPSetIDNATOutgoingMasqPools = "masq-ipam-pools"
 
 	IPSetIDAllHostNets        = "all-hosts-net"
@@ -319,6 +321,8 @@ type RuleRenderer interface {
 	ProtoRuleToIptablesRules(pRule *proto.Rule, ipVersion uint8, owner RuleOwnerType, dir RuleDir, idx int, name string, untracked bool) []generictables.Rule
 
 	NATOutgoingChain(active bool, ipVersion uint8) *generictables.Chain
+
+	EgressQoSPolicyChain(policies []QoSPolicy) *generictables.Chain
 
 	DNATsToIptablesChains(dnats map[string]string) []*generictables.Chain
 	SNATsToIptablesChains(snats map[string]string) []*generictables.Chain
