@@ -249,7 +249,7 @@ func init() {
 	registerStructValidator(validate, validateICMPFields, api.ICMPFields{})
 	registerStructValidator(validate, validateIPPoolSpec, api.IPPoolSpec{})
 	registerStructValidator(validate, validateNodeSpec, libapi.NodeSpec{})
-	registerStructValidator(validate, validateIPAMConfigSpec, libapi.IPAMConfigSpec{})
+	registerStructValidator(validate, validateIPAMConfigSpec, libapi.IPAMConfigurationSpec{})
 	registerStructValidator(validate, validateObjectMeta, metav1.ObjectMeta{})
 	registerStructValidator(validate, validateTier, api.Tier{})
 	registerStructValidator(validate, validateHTTPRule, api.HTTPMatch{})
@@ -759,10 +759,10 @@ func validateCIDR(fl validator.FieldLevel) bool {
 // validateCIDRs validates the field is a slice of valid (not strictly masked) IP networks.
 // An IP address is valid, and assumed to be fully masked (i.e /32 or /128)
 func validateCIDRs(fl validator.FieldLevel) bool {
-	addrs := fl.Field().Interface().([]string)
+	addrs := fl.Field().Interface().([]api.CIDR)
 	log.Debugf("Validate IP CIDRs: %s", addrs)
 	for _, addr := range addrs {
-		_, _, err := cnet.ParseCIDROrIP(addr)
+		_, _, err := cnet.ParseCIDROrIP(string(addr))
 		if err != nil {
 			return false
 		}
@@ -1425,7 +1425,7 @@ func validateEntityRule(structLevel validator.StructLevel) {
 }
 
 func validateIPAMConfigSpec(structLevel validator.StructLevel) {
-	ics := structLevel.Current().Interface().(libapi.IPAMConfigSpec)
+	ics := structLevel.Current().Interface().(libapi.IPAMConfigurationSpec)
 
 	if ics.MaxBlocksPerHost < 0 {
 		structLevel.ReportError(reflect.ValueOf(ics.MaxBlocksPerHost), "MaxBlocksPerHost", "",
