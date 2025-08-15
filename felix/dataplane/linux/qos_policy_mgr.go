@@ -30,13 +30,10 @@ type qosPolicyManager struct {
 	ruleRenderer rules.RuleRenderer
 	mangleTable  Table
 
-	// Workload endpoint policices.
-	wepPoliciesDirty bool
-	wepPolicies      map[types.WorkloadEndpointID]rules.QoSPolicy
-
-	// Host endpoint policies.
-	hepPolicies      map[types.HostEndpointID]rules.QoSPolicy
-	hepPoliciesDirty bool
+	// QoS policices.
+	wepPolicies map[types.WorkloadEndpointID]rules.QoSPolicy
+	hepPolicies map[types.HostEndpointID]rules.QoSPolicy
+	dirty       bool
 
 	logCxt *logrus.Entry
 }
@@ -47,14 +44,13 @@ func newQoSPolicyManager(
 	ipVersion uint8,
 ) *qosPolicyManager {
 	return &qosPolicyManager{
-		mangleTable:      mangleTable,
-		ruleRenderer:     ruleRenderer,
-		ipVersion:        ipVersion,
-		wepPolicies:      map[types.WorkloadEndpointID]rules.QoSPolicy{},
-		hepPolicies:      map[types.HostEndpointID]rules.QoSPolicy{},
-		wepPoliciesDirty: true,
-		hepPoliciesDirty: true,
-		logCxt:           logrus.WithField("ipVersion", ipVersion),
+		mangleTable:  mangleTable,
+		ruleRenderer: ruleRenderer,
+		ipVersion:    ipVersion,
+		wepPolicies:  map[types.WorkloadEndpointID]rules.QoSPolicy{},
+		hepPolicies:  map[types.HostEndpointID]rules.QoSPolicy{},
+		dirty:        true,
+		logCxt:       logrus.WithField("ipVersion", ipVersion),
 	}
 }
 
@@ -77,7 +73,7 @@ func (m *qosPolicyManager) handleHEPUpdates(hepID *proto.HostEndpointID, msg *pr
 		_, exists := m.hepPolicies[id]
 		if exists {
 			delete(m.hepPolicies, id)
-			m.hepPoliciesDirty = true
+			m.dirty = true
 		}
 		return
 	}
@@ -98,7 +94,7 @@ func (m *qosPolicyManager) handleHEPUpdates(hepID *proto.HostEndpointID, msg *pr
 			SrcAddrs: normaliseSourceAddr(ips),
 			DSCP:     uint8(dscp),
 		}
-		m.hepPoliciesDirty = true
+		m.dirty = true
 	}
 }
 
@@ -108,7 +104,7 @@ func (m *qosPolicyManager) handleWEPUpdates(wepID *proto.WorkloadEndpointID, msg
 		_, exists := m.wepPolicies[id]
 		if exists {
 			delete(m.wepPolicies, id)
-			m.wepPoliciesDirty = true
+			m.dirty = true
 		}
 		return
 	}
@@ -129,7 +125,7 @@ func (m *qosPolicyManager) handleWEPUpdates(wepID *proto.WorkloadEndpointID, msg
 			SrcAddrs: normaliseSourceAddr(ips),
 			DSCP:     uint8(dscp),
 		}
-		m.wepPoliciesDirty = true
+		m.dirty = true
 	}
 }
 
@@ -144,27 +140,20 @@ func normaliseSourceAddr(addrs []string) string {
 
 func (m *qosPolicyManager) CompleteDeferredWork() error {
 	var policies []rules.QoSPolicy
-	if m.wepPoliciesDirty {
+	if m.dirty {
 		for _, p := range m.wepPolicies {
 			policies = append(policies, p)
 		}
-		m.wepPoliciesDirty = false
-	}
-
-	if m.hepPoliciesDirty {
 		for _, p := range m.hepPolicies {
 			policies = append(policies, p)
 		}
-		m.hepPoliciesDirty = false
-	}
-
-	if len(policies) != 0 {
 		sort.Slice(policies, func(i, j int) bool {
 			return policies[i].SrcAddrs < policies[j].SrcAddrs
 		})
 
 		chain := m.ruleRenderer.EgressQoSPolicyChain(policies, m.ipVersion)
 		m.mangleTable.UpdateChain(chain)
+		m.dirty = false
 	}
 
 	return nil
