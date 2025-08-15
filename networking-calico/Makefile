@@ -22,3 +22,9 @@ upper-constraints-caracal.txt:
 fmtpy:
 	docker build -t networking-calico-test .
 	docker run -it --user `id -u`:`id -g` -v `pwd`:/code -w /code -e HOME=/code -e PIP_CONSTRAINT --rm networking-calico-test tox -e black
+
+flake8:
+	flake8 networking_calico setup.py
+
+flake8-count:
+	flake8 networking_calico setup.py | wc -l

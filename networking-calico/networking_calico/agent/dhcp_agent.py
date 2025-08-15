@@ -1,6 +1,6 @@
 # Copyright 2012 OpenStack Foundation
 # Copyright 2015 Metaswitch Networks
-# Copyright 2016, 2018, 2022 Tigera, Inc.
+# Copyright 2016-2025 Tigera, Inc.
 # All Rights Reserved.
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
@@ -15,8 +15,13 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-import logging
-import netaddr
+# It's advised always to do eventlet monkey-patching before anything else.
+# https://eventlet.readthedocs.io/en/latest/patching.html
+import eventlet
+
+eventlet.monkey_patch()
+
+import logging  # noqa
 import os
 import re
 import socket
@@ -24,9 +29,13 @@ import subprocess
 import sys
 import time
 
-import eventlet
+from etcd3gw.exceptions import Etcd3Exception
 
-eventlet.monkey_patch()
+from eventlet.event import Event
+from eventlet.queue import Empty
+from eventlet.queue import LightQueue
+
+import netaddr
 
 from neutron.agent.dhcp.agent import DhcpAgent
 from neutron.agent.dhcp_agent import register_options
@@ -43,22 +52,16 @@ except ImportError:
     # Neutron code prior to 7f23ccc (15th March 2017).
     from neutron.agent.common import config
 
-from networking_calico.agent.linux.dhcp import DnsmasqRouted
-from networking_calico.common import config as calico_config
-from networking_calico.common import mkdir_p
-from networking_calico.compat import cfg
-from networking_calico.compat import constants
-from networking_calico.compat import DHCPV6_STATEFUL
 from networking_calico import datamodel_v1
 from networking_calico import datamodel_v2
 from networking_calico import datamodel_v3
 from networking_calico import etcdutils
-
-from etcd3gw.exceptions import Etcd3Exception
-
-from eventlet.event import Event
-from eventlet.queue import Empty
-from eventlet.queue import LightQueue
+from networking_calico.agent.linux.dhcp import DnsmasqRouted
+from networking_calico.common import config as calico_config
+from networking_calico.common import mkdir_p
+from networking_calico.compat import DHCPV6_STATEFUL
+from networking_calico.compat import cfg
+from networking_calico.compat import constants
 
 LOG = logging.getLogger(__name__)
 
@@ -296,7 +299,7 @@ class DnsmasqUpdater(object):
                 # but better to be more resilient here.
                 try:
                     self.really_update_dnsmasq(network_id)
-                except Exception as e:
+                except Exception:
                     LOG.exception("really_update_dnsmasq")
 
     def really_update_dnsmasq(self, network_id):

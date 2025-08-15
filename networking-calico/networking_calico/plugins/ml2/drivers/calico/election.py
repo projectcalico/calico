@@ -18,19 +18,22 @@
 """
 Calico election code.
 """
-from etcd3gw.exceptions import Etcd3Exception
-import eventlet
-import greenlet
 import os
 import random
 import re
 import socket
 import sys
 
+from etcd3gw.exceptions import Etcd3Exception
+
+import eventlet
+
+import greenlet
+
+from networking_calico import etcdv3
 from networking_calico.common import config as calico_config
 from networking_calico.compat import cfg
 from networking_calico.compat import log
-from networking_calico import etcdv3
 
 
 LOG = log.getLogger(__name__)

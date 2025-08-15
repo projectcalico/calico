@@ -15,13 +15,14 @@
 
 import functools
 from importlib.metadata import version
-from packaging.version import Version
 
 from etcd3gw.client import Etcd3Client
 from etcd3gw.exceptions import Etcd3Exception
 from etcd3gw.lease import Lease
 from etcd3gw.utils import _encode
 from etcd3gw.utils import _increment_last_byte
+
+from packaging.version import Version
 
 from networking_calico.compat import cfg
 from networking_calico.compat import log
