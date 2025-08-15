@@ -1582,8 +1582,9 @@ class TestCalicoctlCommands(TestBase):
         # Create empty file
         writeyaml('/tmp/empty.yaml', "")
         rc = calicoctl("validate -f /tmp/empty.yaml", no_config=True)
-        # Empty files should result in "No resources specified"
-        rc.assert_output_contains("No resources specified")
+        # Empty files should result in error with specific message
+        rc.assert_error()
+        rc.assert_output_contains("No resources specified in file")
 
     def test_validate_skip_empty_flag(self):
         """
