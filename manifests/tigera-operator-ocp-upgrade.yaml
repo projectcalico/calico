@@ -368,11 +368,14 @@ rules:
       - admissionregistration.k8s.io
     resources:
       - mutatingwebhookconfigurations
+      - validatingwebhookconfigurations
     verbs:
       - delete
       - get
       - list
       - watch
+      - create
+      - update
   # Needed for operator lock
   - apiGroups:
       - coordination.k8s.io
