@@ -43,6 +43,7 @@ const (
 	ActionDelete
 	ActionGetOrList
 	ActionPatch
+	ActionValidate
 )
 
 // Convert loaded resources to a slice of resources for easier processing.
@@ -210,14 +211,17 @@ func ExecuteConfigCommand(args map[string]interface{}, action action) CommandRes
 		log.Debugf("Data: %s", string(d))
 	}
 
-	// Load the client config and connect.
-	cf := args["--config"].(string)
-	cclient, err := clientmgr.NewClient(cf)
-	if err != nil {
-		fmt.Printf("Failed to create Calico API client: %s\n", err)
-		os.Exit(1)
+	// Load the client config and connect (skip for validation as we don't need datastore access).
+	var cclient client.Interface
+	if action != ActionValidate {
+		cf := args["--config"].(string)
+		cclient, err = clientmgr.NewClient(cf)
+		if err != nil {
+			fmt.Printf("Failed to create Calico API client: %s\n", err)
+			os.Exit(1)
+		}
+		log.Infof("Client: %v", cclient)
 	}
-	log.Infof("Client: %v", cclient)
 
 	// Initialise the command results with the number of resources and the name of the
 	// kind of resource (if only dealing with a single resource).
@@ -266,7 +270,7 @@ func ExecuteConfigCommand(args map[string]interface{}, action action) CommandRes
 		res, err := ExecuteResourceAction(args, cclient, r, action)
 		if err != nil {
 			switch action {
-			case ActionApply, ActionCreate, ActionDelete, ActionGetOrList:
+			case ActionApply, ActionCreate, ActionDelete, ActionGetOrList, ActionValidate:
 				results.ResErrs = append(results.ResErrs, err)
 				continue
 			default:
@@ -323,6 +327,11 @@ func ExecuteResourceAction(args map[string]interface{}, client client.Interface,
 	case ActionPatch:
 		patch := args["--patch"].(string)
 		resOut, err = rm.Patch(ctx, client, resource, patch)
+	case ActionValidate:
+		// For validation, we just return the resource without applying it to datastore
+		// This will validate the resource structure and schema during the unmarshaling process
+		resOut = resource
+		err = nil
 	}
 
 	// Skip over some errors depending on command line options.
