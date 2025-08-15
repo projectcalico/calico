@@ -16,10 +16,12 @@
 """
 Stub version of the etcd interface.
 """
+import logging
+
 from etcd3gw.utils import _decode
+
 import eventlet
 from eventlet.event import Event
-import logging
 
 from networking_calico import etcdv3
 
@@ -34,6 +36,7 @@ class NoMoreResults(Exception):
 
 class UnexpectedResultType(Exception):
     pass
+
 
 READ = "read"
 WRITE = "write"
@@ -55,7 +58,7 @@ class Client(object):
             mod_revision = 10
             if result.etcd_index != 0:
                 mod_revision = result.etcd_index
-            return [(result.value, {'mod_revision': str(mod_revision)})]
+            return [(result.value, {"mod_revision": str(mod_revision)})]
         except etcdv3.KeyNotFound:
             return []
 
@@ -64,10 +67,7 @@ class Client(object):
         mod_revision = 10
         if result.etcd_index != 0:
             mod_revision = result.etcd_index
-        return {'kv': {
-            'value': result.value,
-            'mod_revision': mod_revision
-        }}
+        return {"kv": {"value": result.value, "mod_revision": mod_revision}}
 
     def read(self, path, **kwargs):
         try:
@@ -81,8 +81,7 @@ class Client(object):
             self.failure = "Unexpected result type for read(): %s" % result.op
             raise UnexpectedResultType()
         if result.exception is not None:
-            log.debug("Raise read exception %s",
-                      type(result.exception).__name__)
+            log.debug("Raise read exception %s", type(result.exception).__name__)
             raise result.exception
         log.debug("Return read result %s", result)
         return result
@@ -92,15 +91,14 @@ class Client(object):
         return True
 
     def transaction(self, txn):
-        put_request = txn['success'][0]['request_put']
-        succeeded = self.put(_decode(put_request['key']),
-                             _decode(put_request['value']))
-        return {'succeeded': succeeded}
+        put_request = txn["success"][0]["request_put"]
+        succeeded = self.put(_decode(put_request["key"]), _decode(put_request["value"]))
+        return {"succeeded": succeeded}
 
     def lease(self, ttl):
-        l = Lease(self.next_lease_id, self)
+        ls = Lease(self.next_lease_id, self)
         self.next_lease_id += 1
-        return l
+        return ls
 
     def write(self, path, value, **kwargs):
         log.debug("Write of %s to %s", value, path)
@@ -122,10 +120,10 @@ class Client(object):
         return result
 
     def assert_key_written(self, key):
-        assert(key in self.keys_written)
+        assert key in self.keys_written
 
     def add_read_exception(self, exception):
-        assert(isinstance(exception, Exception))
+        assert isinstance(exception, Exception)
         self.results.append(EtcdResult(exception=exception))
 
     def add_read_result(self, **kwargs):
@@ -140,8 +138,9 @@ class Client(object):
 
 
 class EtcdResult(object):
-    def __init__(self, op=READ, exception=None, key=None,
-                 value=None, action=None, index=0):
+    def __init__(
+        self, op=READ, exception=None, key=None, value=None, action=None, index=0
+    ):
         self.op = op
         self.key = key
         self.value = value
@@ -154,8 +153,12 @@ class EtcdResult(object):
             self.value = self.value.encode()
 
     def __str__(self):
-        return ("key=%s, value=%s, action=%s,index=%d" %
-                (self.key, self.value, self.action, self.etcd_index))
+        return "key=%s, value=%s, action=%s,index=%d" % (
+            self.key,
+            self.value,
+            self.action,
+            self.etcd_index,
+        )
 
 
 class Lease(object):

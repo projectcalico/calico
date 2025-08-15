@@ -18,12 +18,14 @@ networking_calico.plugins.ml2.drivers.calico.test.lib
 
 Common code for Neutron driver UT.
 """
-import eventlet
-import eventlet.queue
 import inspect
 import logging
-import mock
 import sys
+
+import eventlet
+import eventlet.queue
+
+import mock
 
 # When you're working on a test and need to see logging - both from the test
 # code and the code _under_ test - uncomment the following line.
@@ -32,105 +34,124 @@ import sys
 
 _log = logging.getLogger(__name__)
 
-sys.modules['neutron'] = m_neutron = mock.MagicMock()
-sys.modules['neutron.agent'] = m_neutron.agent
-sys.modules['neutron.agent.rpc'] = m_neutron.agent.rpc
-sys.modules['neutron.common'] = m_neutron.common
-sys.modules['neutron.common.exceptions'] = m_neutron.common.exceptions
-sys.modules['neutron.conf'] = m_neutron.conf
-sys.modules['neutron.conf.agent'] = m_neutron.conf.agent
-sys.modules['neutron.db'] = m_neutron.db
-sys.modules['neutron.db.models'] = m_neutron.db.models
-sys.modules['neutron.db.models.l3'] = m_neutron.db.models.l3
-sys.modules['neutron.db.qos'] = m_neutron.db.qos
-sys.modules['neutron.openstack'] = m_neutron.openstack
-sys.modules['neutron.openstack.common'] = m_neutron.openstack.common
-sys.modules['neutron.openstack.common.db'] = m_neutron.openstack.common.db
-sys.modules['neutron.plugins'] = m_neutron.plugins
-sys.modules['neutron.plugins.ml2'] = m_neutron.plugins.ml2
-sys.modules['neutron.plugins.ml2.drivers'] = m_neutron.plugins.ml2.drivers
-sys.modules['neutron.plugins.ml2.rpc'] = m_neutron.plugins.ml2.rpc
-sys.modules['sqlalchemy'] = m_sqlalchemy = mock.Mock()
-sys.modules['sqlalchemy.orm'] = m_sqlalchemy.orm
-sys.modules['sqlalchemy.orm.exc'] = m_sqlalchemy.orm.exc
-sys.modules['networking_calico.compat'] = m_compat = mock.MagicMock()
-sys.modules['networking_calico.plugins.ml2.drivers.calico.qos_driver'] = m_qos_driver = mock.Mock()
+sys.modules["neutron"] = m_neutron = mock.MagicMock()
+sys.modules["neutron.agent"] = m_neutron.agent
+sys.modules["neutron.agent.rpc"] = m_neutron.agent.rpc
+sys.modules["neutron.common"] = m_neutron.common
+sys.modules["neutron.common.exceptions"] = m_neutron.common.exceptions
+sys.modules["neutron.conf"] = m_neutron.conf
+sys.modules["neutron.conf.agent"] = m_neutron.conf.agent
+sys.modules["neutron.db"] = m_neutron.db
+sys.modules["neutron.db.models"] = m_neutron.db.models
+sys.modules["neutron.db.models.l3"] = m_neutron.db.models.l3
+sys.modules["neutron.db.qos"] = m_neutron.db.qos
+sys.modules["neutron.openstack"] = m_neutron.openstack
+sys.modules["neutron.openstack.common"] = m_neutron.openstack.common
+sys.modules["neutron.openstack.common.db"] = m_neutron.openstack.common.db
+sys.modules["neutron.plugins"] = m_neutron.plugins
+sys.modules["neutron.plugins.ml2"] = m_neutron.plugins.ml2
+sys.modules["neutron.plugins.ml2.drivers"] = m_neutron.plugins.ml2.drivers
+sys.modules["neutron.plugins.ml2.rpc"] = m_neutron.plugins.ml2.rpc
+sys.modules["sqlalchemy"] = m_sqlalchemy = mock.Mock()
+sys.modules["sqlalchemy.orm"] = m_sqlalchemy.orm
+sys.modules["sqlalchemy.orm.exc"] = m_sqlalchemy.orm.exc
+sys.modules["networking_calico.compat"] = m_compat = mock.MagicMock()
+sys.modules["networking_calico.plugins.ml2.drivers.calico.qos_driver"] = (
+    m_qos_driver
+) = mock.Mock()
 
 # Set up some IP protocol mappings to test.  (Unfortunately, importing
 # the real IP_PROTOCOL_MAP from neutron_lib.constants tries to pull in
 # too much other stuff.)
 m_compat.IP_PROTOCOL_MAP = {
-    'esp': 50,
-    'ah': 51,
-    'rsvp': 46,
+    "esp": 50,
+    "ah": 51,
+    "rsvp": 46,
 }
 
-port1 = {'binding:vif_type': 'tap',
-         'binding:host_id': 'felix-host-1',
-         'id': 'DEADBEEF-1234-5678',
-         'tenant_id': 'jane3',
-         'network_id': 'calico-network-id',
-         'device_id': 'instance-1',
-         'device_owner': 'compute:nova',
-         'fixed_ips': [{'subnet_id': 'subnet-id-10.65.0--24',
-                        'ip_address': '10.65.0.2'}],
-         'mac_address': '00:11:22:33:44:55',
-         'admin_state_up': True,
-         'security_groups': ['SGID-default'],
-         'status': 'ACTIVE',
-         'allowed_address_pairs': [{"ip_address": "23.23.23.2",
-                                    "mac_address": "fa:16:3e:c4:cd:3f"}]}
+port1 = {
+    "binding:vif_type": "tap",
+    "binding:host_id": "felix-host-1",
+    "id": "DEADBEEF-1234-5678",
+    "tenant_id": "jane3",
+    "network_id": "calico-network-id",
+    "device_id": "instance-1",
+    "device_owner": "compute:nova",
+    "fixed_ips": [{"subnet_id": "subnet-id-10.65.0--24", "ip_address": "10.65.0.2"}],
+    "mac_address": "00:11:22:33:44:55",
+    "admin_state_up": True,
+    "security_groups": ["SGID-default"],
+    "status": "ACTIVE",
+    "allowed_address_pairs": [
+        {"ip_address": "23.23.23.2", "mac_address": "fa:16:3e:c4:cd:3f"}
+    ],
+}
 
-port2 = {'binding:vif_type': 'tap',
-         'binding:host_id': 'felix-host-1',
-         'id': 'FACEBEEF-1234-5678',
-         'tenant_id': 'jane3',
-         'network_id': 'calico-network-id',
-         'device_id': 'instance-2',
-         'device_owner': 'compute:nova',
-         'fixed_ips': [{'subnet_id': 'subnet-id-10.65.0--24',
-                        'ip_address': '10.65.0.3'}],
-         'mac_address': '00:11:22:33:44:66',
-         'admin_state_up': True,
-         'security_groups': ['SGID-default'],
-         'status': 'ACTIVE',
-         'allowed_address_pairs': []}
+port2 = {
+    "binding:vif_type": "tap",
+    "binding:host_id": "felix-host-1",
+    "id": "FACEBEEF-1234-5678",
+    "tenant_id": "jane3",
+    "network_id": "calico-network-id",
+    "device_id": "instance-2",
+    "device_owner": "compute:nova",
+    "fixed_ips": [{"subnet_id": "subnet-id-10.65.0--24", "ip_address": "10.65.0.3"}],
+    "mac_address": "00:11:22:33:44:66",
+    "admin_state_up": True,
+    "security_groups": ["SGID-default"],
+    "status": "ACTIVE",
+    "allowed_address_pairs": [],
+}
 
 # Port with an IPv6 address.
-port3 = {'binding:vif_type': 'tap',
-         'binding:host_id': 'felix-host-2',
-         'id': 'HELLO-1234-5678',
-         'tenant_id': 'jane3',
-         'network_id': 'calico-network-id',
-         'device_id': 'instance-3',
-         'device_owner': 'compute:nova',
-         'fixed_ips': [{'subnet_id': 'subnet-id-2001:db8:a41:2--64',
-                        'ip_address': '2001:db8:a41:2::12'}],
-         'mac_address': '00:11:22:33:44:66',
-         'admin_state_up': True,
-         'security_groups': ['SGID-default'],
-         'status': 'ACTIVE',
-         'allowed_address_pairs': []}
+port3 = {
+    "binding:vif_type": "tap",
+    "binding:host_id": "felix-host-2",
+    "id": "HELLO-1234-5678",
+    "tenant_id": "jane3",
+    "network_id": "calico-network-id",
+    "device_id": "instance-3",
+    "device_owner": "compute:nova",
+    "fixed_ips": [
+        {
+            "subnet_id": "subnet-id-2001:db8:a41:2--64",
+            "ip_address": "2001:db8:a41:2::12",
+        }
+    ],
+    "mac_address": "00:11:22:33:44:66",
+    "admin_state_up": True,
+    "security_groups": ["SGID-default"],
+    "status": "ACTIVE",
+    "allowed_address_pairs": [],
+}
 
-floating_ports = [{'fixed_port_id': 'DEADBEEF-1234-5678',
-                   'fixed_ip_address': '10.65.0.2',
-                   'floating_ip_address': '192.168.0.1'}]
+floating_ports = [
+    {
+        "fixed_port_id": "DEADBEEF-1234-5678",
+        "fixed_ip_address": "10.65.0.2",
+        "floating_ip_address": "192.168.0.1",
+    }
+]
 
-network1 = {'id': 'calico-network-id',
-            'name': 'calico-network-name',
-            'status': 'ACTIVE',
-            'admin_state_up': True,
-            'shared': True,
-            'mtu': 9000,
-            'project_id': 'jane3'}
+network1 = {
+    "id": "calico-network-id",
+    "name": "calico-network-name",
+    "status": "ACTIVE",
+    "admin_state_up": True,
+    "shared": True,
+    "mtu": 9000,
+    "project_id": "jane3",
+}
 
-network2 = {'id': 'calico-other-network-id',
-            'name': 'my-first-network',
-            'status': 'ACTIVE',
-            'admin_state_up': True,
-            'shared': True,
-            'mtu': 9000,
-            'project_id': 'jane3'}
+network2 = {
+    "id": "calico-other-network-id",
+    "name": "my-first-network",
+    "status": "ACTIVE",
+    "admin_state_up": True,
+    "shared": True,
+    "mtu": 9000,
+    "project_id": "jane3",
+}
 
 
 class EtcdKeyNotFound(Exception):
@@ -183,8 +204,7 @@ class GrandDukeOfSalzburg(object):
 
 # Replace Neutron's SimpleAgentMechanismDriverBase - which is the base class
 # that CalicoMechanismDriver inherits from - with this stub class.
-m_neutron.plugins.ml2.drivers.mech_agent.SimpleAgentMechanismDriverBase = \
-    DriverBase
+m_neutron.plugins.ml2.drivers.mech_agent.SimpleAgentMechanismDriverBase = DriverBase
 
 # Import all modules used by the mechanism driver so we can hook their logging.
 from networking_calico import datamodel_v3
@@ -209,6 +229,8 @@ def mock_projects_list():
     mock_project.name = "pname+%s" % mock_project.id
     mock_project.parent_id = "gibson"
     return [mock_project]
+
+
 keystone_client = mock.Mock()
 keystone_client.projects.list.side_effect = mock_projects_list
 mech_calico.KeystoneClient = mock.Mock()
@@ -235,7 +257,7 @@ class Lib(object):
     qos_policies = {
         # Example from
         # https://docs.openstack.org/api-ref/network/v2/index.html#id695.
-        '1': {
+        "1": {
             "project_id": "8d4c70a21fed4aeba121a1a429ba0d04",
             "tenant_id": "8d4c70a21fed4aeba121a1a429ba0d04",
             "id": "46ebaec0-0570-43ac-82f6-60d2b03168c4",
@@ -252,43 +274,35 @@ class Lib(object):
                     "qos_policy_id": "46ebaec0-0570-43ac-82f6-60d2b03168c4",
                     "max_kbps": 10000,
                     "max_burst_kbps": 0,
-                    "type": "bandwidth_limit"
+                    "type": "bandwidth_limit",
                 },
                 {
                     "id": "5f126d84-551a-4dcf-bb01-0e9c0df0c794",
                     "qos_policy_id": "46ebaec0-0570-43ac-82f6-60d2b03168c4",
                     "dscp_mark": 26,
-                    "type": "dscp_marking"
-                }
+                    "type": "dscp_marking",
+                },
             ],
-            "tags": ["tag1,tag2"]
+            "tags": ["tag1,tag2"],
         },
         # A policy that will set all possible fields.
-        '2': {
+        "2": {
             "id": "2",
             "rules": [
                 {
                     "max_kbps": 1,
                     "max_burst_kbps": 2,
                     "direction": "ingress",
-                    "type": "bandwidth_limit"
+                    "type": "bandwidth_limit",
                 },
                 {
                     "max_kbps": 3,
                     "max_burst_kbps": 4,
                     "direction": "egress",
-                    "type": "bandwidth_limit"
+                    "type": "bandwidth_limit",
                 },
-                {
-                    "max_kpps": 5,
-                    "direction": "ingress",
-                    "type": "packet_rate_limit"
-                },
-                {
-                    "max_kpps": 6,
-                    "direction": "egress",
-                    "type": "packet_rate_limit"
-                },
+                {"max_kpps": 5, "direction": "ingress", "type": "packet_rate_limit"},
+                {"max_kpps": 6, "direction": "egress", "type": "packet_rate_limit"},
             ],
         },
     }
@@ -335,64 +349,82 @@ class Lib(object):
         # Arrange what the DB's get_security_groups query will return (the
         # default SG).
         self.db.get_security_groups.return_value = [
-            {'id': 'SGID-default',
-             'name': 'My default SG',
-             'security_group_rules': [
-                 {'remote_group_id': 'SGID-default',
-                  'remote_ip_prefix': None,
-                  'protocol': -1,
-                  'direction': 'ingress',
-                  'ethertype': 'IPv4',
-                  'port_range_min': -1},
-                 {'remote_group_id': 'SGID-default',
-                  'remote_ip_prefix': None,
-                  'protocol': -1,
-                  'direction': 'ingress',
-                  'ethertype': 'IPv6',
-                  'port_range_min': -1},
-                 {'remote_group_id': None,
-                  'remote_ip_prefix': None,
-                  'protocol': -1,
-                  'direction': 'egress',
-                  'ethertype': 'IPv4',
-                  'port_range_min': -1},
-                 {'remote_group_id': None,
-                  'remote_ip_prefix': None,
-                  'protocol': -1,
-                  'direction': 'egress',
-                  'ethertype': 'IPv6',
-                  'port_range_min': -1}
-             ]}
+            {
+                "id": "SGID-default",
+                "name": "My default SG",
+                "security_group_rules": [
+                    {
+                        "remote_group_id": "SGID-default",
+                        "remote_ip_prefix": None,
+                        "protocol": -1,
+                        "direction": "ingress",
+                        "ethertype": "IPv4",
+                        "port_range_min": -1,
+                    },
+                    {
+                        "remote_group_id": "SGID-default",
+                        "remote_ip_prefix": None,
+                        "protocol": -1,
+                        "direction": "ingress",
+                        "ethertype": "IPv6",
+                        "port_range_min": -1,
+                    },
+                    {
+                        "remote_group_id": None,
+                        "remote_ip_prefix": None,
+                        "protocol": -1,
+                        "direction": "egress",
+                        "ethertype": "IPv4",
+                        "port_range_min": -1,
+                    },
+                    {
+                        "remote_group_id": None,
+                        "remote_ip_prefix": None,
+                        "protocol": -1,
+                        "direction": "egress",
+                        "ethertype": "IPv6",
+                        "port_range_min": -1,
+                    },
+                ],
+            }
         ]
         self.db.get_security_group_rules.return_value = [
-            {'remote_group_id': 'SGID-default',
-             'remote_ip_prefix': None,
-             'protocol': -1,
-             'direction': 'ingress',
-             'ethertype': 'IPv4',
-             'security_group_id': 'SGID-default',
-             'port_range_min': -1},
-            {'remote_group_id': 'SGID-default',
-             'remote_ip_prefix': None,
-             'protocol': -1,
-             'direction': 'ingress',
-             'ethertype': 'IPv6',
-             'security_group_id': 'SGID-default',
-             'port_range_min': -1},
-            {'remote_group_id': None,
-             'remote_ip_prefix': None,
-             'protocol': -1,
-             'direction': 'egress',
-             'ethertype': 'IPv4',
-             'security_group_id': 'SGID-default',
-             'port_range_min': -1},
-            {'remote_group_id': None,
-             'remote_ip_prefix': None,
-             'protocol': -1,
-             'direction': 'egress',
-             'security_group_id': 'SGID-default',
-             'ethertype': 'IPv6',
-             'port_range_min': -1}
+            {
+                "remote_group_id": "SGID-default",
+                "remote_ip_prefix": None,
+                "protocol": -1,
+                "direction": "ingress",
+                "ethertype": "IPv4",
+                "security_group_id": "SGID-default",
+                "port_range_min": -1,
+            },
+            {
+                "remote_group_id": "SGID-default",
+                "remote_ip_prefix": None,
+                "protocol": -1,
+                "direction": "ingress",
+                "ethertype": "IPv6",
+                "security_group_id": "SGID-default",
+                "port_range_min": -1,
+            },
+            {
+                "remote_group_id": None,
+                "remote_ip_prefix": None,
+                "protocol": -1,
+                "direction": "egress",
+                "ethertype": "IPv4",
+                "security_group_id": "SGID-default",
+                "port_range_min": -1,
+            },
+            {
+                "remote_group_id": None,
+                "remote_ip_prefix": None,
+                "protocol": -1,
+                "direction": "egress",
+                "security_group_id": "SGID-default",
+                "ethertype": "IPv6",
+                "port_range_min": -1,
+            },
         ]
 
         self.db._get_port_security_group_bindings.side_effect = (
@@ -400,12 +432,9 @@ class Lib(object):
         )
 
         self.port_security_group_bindings = [
-            {'port_id': 'DEADBEEF-1234-5678',
-             'security_group_id': 'SGID-default'},
-            {'port_id': 'FACEBEEF-1234-5678',
-             'security_group_id': 'SGID-default'},
-            {'port_id': 'HELLO-1234-5678',
-             'security_group_id': 'SGID-default'},
+            {"port_id": "DEADBEEF-1234-5678", "security_group_id": "SGID-default"},
+            {"port_id": "FACEBEEF-1234-5678", "security_group_id": "SGID-default"},
+            {"port_id": "HELLO-1234-5678", "security_group_id": "SGID-default"},
         ]
 
     def setUp_eventlet(self):
@@ -420,8 +449,8 @@ class Lib(object):
         self.current_time = 0
 
         # Make time.time() return current_time.
-        self.old_time = sys.modules['time'].time
-        sys.modules['time'].time = lambda: self.current_time
+        self.old_time = sys.modules["time"].time
+        sys.modules["time"].time = lambda: self.current_time
 
         # Reset the dict of current sleepers.  In each dict entry, the key is
         # an eventlet.Queue object and the value is the time at which the sleep
@@ -446,11 +475,13 @@ class Lib(object):
             # Add it to the dict of sleepers, together with the waking up time.
             self.sleepers[queue] = self.current_time + secs
 
-            _log.info("T=%s: %s: Start sleep for %ss until T=%s",
-                      self.current_time,
-                      queue.stack,
-                      secs,
-                      self.sleepers[queue])
+            _log.info(
+                "T=%s: %s: Start sleep for %ss until T=%s",
+                self.current_time,
+                queue.stack,
+                secs,
+                self.sleepers[queue],
+            )
 
             # Do a zero time real sleep, to allow other threads to run.
             self.real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
@@ -500,20 +531,20 @@ class Lib(object):
         call near the top of this file.
         """
         import logging
+
         for module in [
-                election,
-                endpoints,
-                mech_calico,
-                policy,
-                status,
-                subnets,
-                syncer,
-                datamodel_v3,
-                etcdutils,
-                etcdv3,
+            election,
+            endpoints,
+            mech_calico,
+            policy,
+            status,
+            subnets,
+            syncer,
+            datamodel_v3,
+            etcdutils,
+            etcdv3,
         ]:
-            module.LOG = logging.getLogger("\t%-15s\t" %
-                                           module.__name__.split('.')[-1])
+            module.LOG = logging.getLogger("\t%-15s\t" % module.__name__.split(".")[-1])
 
     # Tear down after each test case.
     def tearDown(self):
@@ -539,13 +570,13 @@ class Lib(object):
         eventlet.spawn_after = self.real_eventlet_spawn_after
 
         # Repair time.time()
-        sys.modules['time'].time = self.old_time
+        sys.modules["time"].time = self.old_time
 
     # Method for the test code to call when it wants to advance the simulated
     # time.
     def simulated_time_advance(self, secs):
 
-        while (secs > 0):
+        while secs > 0:
             _log.info("T=%s: Want to advance by %s", self.current_time, secs)
 
             # Determine the time to advance to in this iteration: either the
@@ -559,7 +590,7 @@ class Lib(object):
                     wake_up_time = self.sleepers[queue]
 
             # Advance to the determined time.
-            secs -= (wake_up_time - self.current_time)
+            secs -= wake_up_time - self.current_time
             self.current_time = wake_up_time
             _log.info("T=%s", self.current_time)
 
@@ -567,10 +598,12 @@ class Lib(object):
             queues_to_wake = []
             for queue in self.sleepers.keys():
                 if self.sleepers[queue] <= self.current_time:
-                    _log.info("T=%s >= %s: %s: Wake up!",
-                              self.current_time,
-                              self.sleepers[queue],
-                              queue.stack)
+                    _log.info(
+                        "T=%s >= %s: %s: Wake up!",
+                        self.current_time,
+                        self.sleepers[queue],
+                        queue.stack,
+                    )
                     queues_to_wake.append(queue)
             for queue in queues_to_wake:
                 del self.sleepers[queue]
@@ -590,13 +623,14 @@ class Lib(object):
     def check_update_port_status_called(self, context):
         self.db.update_port_status.assert_called_once_with(
             context._plugin_context,
-            context._port['id'],
-            mech_calico.constants.PORT_STATUS_ACTIVE)
+            context._port["id"],
+            mech_calico.constants.PORT_STATUS_ACTIVE,
+        )
         self.db.update_port_status.reset_mock()
 
     def get_port(self, context, port_id):
         try:
-            return self.get_ports(context, filters={'id': [port_id]})[0]
+            return self.get_ports(context, filters={"id": [port_id]})[0]
         except IndexError:
             raise mech_calico.n_exc.PortNotFound(port_id=port_id)
 
@@ -604,58 +638,57 @@ class Lib(object):
         if filters is None:
             return self.osdb_ports
 
-        assert list(filters.keys()) == ['id']
-        allowed_ids = set(filters['id'])
+        assert list(filters.keys()) == ["id"]
+        allowed_ids = set(filters["id"])
 
-        return [p for p in self.osdb_ports if p['id'] in allowed_ids]
+        return [p for p in self.osdb_ports if p["id"] in allowed_ids]
 
     def get_subnet(self, context, id):
-        matches = [s for s in self.osdb_subnets if s['id'] == id]
+        matches = [s for s in self.osdb_subnets if s["id"] == id]
         if matches and len(matches) == 1:
             return matches[0]
-        elif ':' in id:
-            return {'gateway_ip': '2001:db8:a41:2::1'}
+        elif ":" in id:
+            return {"gateway_ip": "2001:db8:a41:2::1"}
         else:
-            return {'gateway_ip': '10.65.0.1'}
+            return {"gateway_ip": "10.65.0.1"}
 
     def get_subnets(self, context, filters=None):
         if filters:
-            self.assertTrue('id' in filters)
-            matches = [s for s in self.osdb_subnets
-                       if s['id'] in filters['id']]
+            self.assertTrue("id" in filters)
+            matches = [s for s in self.osdb_subnets if s["id"] in filters["id"]]
         else:
             matches = [s for s in self.osdb_subnets]
         return matches
 
     def get_network(self, context, id):
-        return self.get_networks(context, filters={'id': [id]})[0]
+        return self.get_networks(context, filters={"id": [id]})[0]
 
     def get_networks(self, context, filters=None):
         if filters is None:
             return self.osdb_networks
 
-        assert list(filters.keys()) == ['id']
-        allowed_ids = set(filters['id'])
+        assert list(filters.keys()) == ["id"]
+        allowed_ids = set(filters["id"])
 
-        return [p for p in self.osdb_networks if p['id'] in allowed_ids]
+        return [p for p in self.osdb_networks if p["id"] in allowed_ids]
 
     def notify_security_group_update(self, id, rules, port, type):
         """Notify a new or changed security group definition."""
         # Prep appropriate responses for next get_security_group and
         # _get_port_security_group_bindings calls.
         self.db.get_security_group.return_value = {
-            'id': id,
-            'security_group_rules': rules
+            "id": id,
+            "security_group_rules": rules,
         }
         if port is None:
             self.db._get_port_security_group_bindings.return_value = []
         else:
             self.db._get_port_security_group_bindings.return_value = [
-                {'port_id': port['id']}
+                {"port_id": port["id"]}
             ]
             self.db.get_port.return_value = port
 
-        if type == 'rule':
+        if type == "rule":
             # Call security_groups_rule_updated with the new or changed ID.
             mech_calico.security_groups_rule_updated(
                 mock.MagicMock(), mock.MagicMock(), [id]
@@ -665,27 +698,28 @@ class Lib(object):
         if filters is None:
             return self.port_security_group_bindings
 
-        assert list(filters.keys()) == ['port_id']
-        allowed_ids = set(filters['port_id'])
+        assert list(filters.keys()) == ["port_id"]
+        allowed_ids = set(filters["port_id"])
 
-        return [b for b in self.port_security_group_bindings
-                if b['port_id'] in allowed_ids]
+        return [
+            b for b in self.port_security_group_bindings if b["port_id"] in allowed_ids
+        ]
 
     def db_query(self, model, **kw):
         m = mock.MagicMock()
-        if 'IPAllocation' in str(model.name):
+        if "IPAllocation" in str(model.name):
             m.filter_by.side_effect = self.db_query_ip_allocation
             return m
-        if 'FloatingIP' in str(model.name):
+        if "FloatingIP" in str(model.name):
             m.filter_by.side_effect = self.db_query_floating_ip
             return m
-        if 'Network' in str(model.name):
+        if "Network" in str(model.name):
             m.filter_by.side_effect = self.db_query_network
             return m
-        if 'QosBandwidthLimitRule' in str(model.name):
+        if "QosBandwidthLimitRule" in str(model.name):
             m.filter_by.side_effect = self.db_query_qos_policy_bw_rule
             return m
-        if 'QosPacketRateLimitRule' in str(model.name):
+        if "QosPacketRateLimitRule" in str(model.name):
             m.filter_by.side_effect = self.db_query_qos_policy_pr_rule
             return m
         raise Exception("db_query model=%r kw=%r" % (model, kw))
@@ -693,39 +727,35 @@ class Lib(object):
     def db_query_ip_allocation(self, **kw):
         # 'port_id' query key for IPAllocations
         for port in self.osdb_ports:
-            if port['id'] == kw['port_id']:
-                return port['fixed_ips']
+            if port["id"] == kw["port_id"]:
+                return port["fixed_ips"]
 
     def db_query_floating_ip(self, **kw):
         fips = []
         for fip in floating_ports:
-            if fip['fixed_port_id'] == kw['fixed_port_id']:
+            if fip["fixed_port_id"] == kw["fixed_port_id"]:
                 fips.append(fip)
         return fips
 
     def db_query_network(self, **kw):
         # 'id' query key for Networks
         for network in self.osdb_networks:
-            if network['id'] == kw['id']:
+            if network["id"] == kw["id"]:
                 network_mock = mock.MagicMock()
                 network_mock.first.return_value = network
                 return network_mock
         return None
 
     def db_query_qos_policy_bw_rule(self, **kw):
-        policy = self.qos_policies[kw['qos_policy_id']]
+        policy = self.qos_policies[kw["qos_policy_id"]]
         if policy:
-            return [
-                r for r in policy['rules'] if r['type'] == 'bandwidth_limit'
-            ]
+            return [r for r in policy["rules"] if r["type"] == "bandwidth_limit"]
         return []
 
     def db_query_qos_policy_pr_rule(self, **kw):
-        policy = self.qos_policies[kw['qos_policy_id']]
+        policy = self.qos_policies[kw["qos_policy_id"]]
         if policy:
-            return [
-                r for r in policy['rules'] if r['type'] == 'packet_rate_limit'
-            ]
+            return [r for r in policy["rules"] if r["type"] == "packet_rate_limit"]
         return []
 
 
@@ -733,7 +763,7 @@ class FixedUUID(object):
 
     def __init__(self, uuid):
         self.uuid = uuid
-        self.uuid4_p = mock.patch('uuid.uuid4')
+        self.uuid4_p = mock.patch("uuid.uuid4")
 
     def __enter__(self):
         guid = mock.MagicMock()

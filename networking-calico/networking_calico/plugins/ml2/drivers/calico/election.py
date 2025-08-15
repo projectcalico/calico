@@ -18,19 +18,22 @@
 """
 Calico election code.
 """
-from etcd3gw.exceptions import Etcd3Exception
-import eventlet
-import greenlet
 import os
 import random
 import re
 import socket
 import sys
 
+from etcd3gw.exceptions import Etcd3Exception
+
+import eventlet
+
+import greenlet
+
+from networking_calico import etcdv3
 from networking_calico.common import config as calico_config
 from networking_calico.compat import cfg
 from networking_calico.compat import log
-from networking_calico import etcdv3
 
 
 LOG = log.getLogger(__name__)
@@ -41,8 +44,9 @@ _hostname = socket.gethostname()
 
 # Elector configuration;
 elector_opt = cfg.StrOpt(
-    'elector_name', default=_hostname,
-    help="A unique name to identify this node in leader election"
+    "elector_name",
+    default=_hostname,
+    help="A unique name to identify this node in leader election",
 )
 
 # Register Calico related configuration options
@@ -54,12 +58,12 @@ ETCD_DELETE_ACTIONS = set(["delete", "expire", "compareAndDelete"])
 
 class RestartElection(Exception):
     """Exception indicating that we should start our leader election over."""
+
     pass
 
 
 class Elector(object):
-    def __init__(self, server_id, election_key,
-                 old_key=None, interval=30, ttl=60):
+    def __init__(self, server_id, election_key, old_key=None, interval=30, ttl=60):
         """Class that manages elections.
 
         :param server_id: Server ID. Must be unique to this server, and should
@@ -115,8 +119,7 @@ class Elector(object):
                 # In case we're repeatedly failing, sleep a little before we
                 # retry.
                 retry_time = 1 + random.random()
-                LOG.info("Retrying leader election in %.1f seconds",
-                         retry_time)
+                LOG.info("Retrying leader election in %.1f seconds", retry_time)
                 eventlet.sleep(retry_time)
         except ElectorStopped:
             LOG.info("Elector told to stop.")
@@ -176,13 +179,15 @@ class Elector(object):
             # and back into _vote again, rereading the current revision and so
             # ensuring that the next watch will be good.
             try:
-                event = etcdv3.watch_once(self._key,
-                                          timeout=self._interval * 2,
-                                          start_revision=mod_revision + 1)
+                event = etcdv3.watch_once(
+                    self._key,
+                    timeout=self._interval * 2,
+                    start_revision=mod_revision + 1,
+                )
                 LOG.debug("election event: %s", event)
-                action = event.get('type', 'SET').lower()
-                value = event['kv'].get('value')
-                mod_revision = int(event['kv'].get('mod_revision', '0'))
+                action = event.get("type", "SET").lower()
+                value = event["kv"].get("value")
+                mod_revision = int(event["kv"].get("mod_revision", "0"))
             except etcdv3.KeyNotFound:
                 # It should be impossible for somebody to delete the object
                 # without us getting the delete action, but safer to handle it.
@@ -193,10 +198,11 @@ class Elector(object):
                 self._log_exception("wait for master change", e)
                 return
             LOG.debug("Election key action: %s; new value %s", action, value)
-            if (action in ETCD_DELETE_ACTIONS or value is None):
+            if action in ETCD_DELETE_ACTIONS or value is None:
                 # Deleted - try and become the master.
-                LOG.info("Leader etcd key went away, attempting to become "
-                         "the elected master")
+                LOG.info(
+                    "Leader etcd key went away, attempting to become the elected master"
+                )
                 self._become_master()
 
     def _check_master_process(self, master_id):
@@ -222,11 +228,12 @@ class Elector(object):
             if os.path.exists("/proc/%s" % pid):
                 LOG.debug("Master still running")
             else:
-                LOG.warning("Master was on this server but cannot find its "
-                            "PID in /proc.  Removing stale election key.")
+                LOG.warning(
+                    "Master was on this server but cannot find its "
+                    "PID in /proc.  Removing stale election key."
+                )
                 try:
-                    deleted = etcdv3.delete(self._key,
-                                            existing_value=master_id)
+                    deleted = etcdv3.delete(self._key, existing_value=master_id)
                 except Etcd3Exception as e:
                     self._log_exception("remove stale key from dead master", e)
                     deleted = False
@@ -248,10 +255,9 @@ class Elector(object):
 
         try:
             ttl_lease = etcdv3.get_lease(self._ttl)
-            self._master = etcdv3.put(self._key,
-                                      self.id_string,
-                                      lease=ttl_lease,
-                                      mod_revision='0')
+            self._master = etcdv3.put(
+                self._key, self.id_string, lease=ttl_lease, mod_revision="0"
+            )
         except Exception as e:
             # We could be smarter about what exceptions we allow, but any kind
             # of error means we should give up, and safer to have a broad
@@ -263,8 +269,9 @@ class Elector(object):
             LOG.info("Race: someone else beat us to be master")
             raise RestartElection()
 
-        LOG.info("Successfully become master - key %s, value %s",
-                 self._key, self.id_string)
+        LOG.info(
+            "Successfully become master - key %s, value %s", self._key, self.id_string
+        )
 
         # If there's a legacy election key, try to write that now too.
         self._write_old_key(ttl_lease)
@@ -277,10 +284,12 @@ class Elector(object):
                     ttl = ttl_lease.refresh()
                     # Also rewrite the key, so that non-masters see an event on
                     # the key.
-                    if not etcdv3.put(self._key,
-                                      self.id_string,
-                                      lease=ttl_lease,
-                                      existing_value=self.id_string):
+                    if not etcdv3.put(
+                        self._key,
+                        self.id_string,
+                        lease=ttl_lease,
+                        existing_value=self.id_string,
+                    ):
                         LOG.warning("Key changed or deleted; restart election")
                         raise RestartElection()
                     LOG.debug("Refreshed master role, TTL now is %d", ttl)
@@ -320,12 +329,16 @@ class Elector(object):
         if isinstance(exc, Etcd3Exception):
             # Expected errors (with good messages): timeouts and connection
             # failures.  Don't log stack traces to avoid cluttering the log.
-            LOG.warning("Failed to %s - key %s: %r:\n%s", failed_to,
-                        self._key, exc, exc.detail_text)
+            LOG.warning(
+                "Failed to %s - key %s: %r:\n%s",
+                failed_to,
+                self._key,
+                exc,
+                exc.detail_text,
+            )
         else:
             # Genuinely unexpected errors.
-            LOG.exception("Failed to %s - key %s: %r", failed_to,
-                          self._key, exc)
+            LOG.exception("Failed to %s - key %s: %r", failed_to, self._key, exc)
 
     @property
     def id_string(self):
@@ -368,4 +381,5 @@ class ElectorStopped(greenlet.GreenletExit):
     Custom exception used to stop our Elector.  Used to distinguish our
     kill() call from any other potential GreenletExit exception.
     """
+
     pass

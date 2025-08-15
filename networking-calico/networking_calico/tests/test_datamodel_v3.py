@@ -27,12 +27,12 @@ class TestDatamodelV3(unittest.TestCase):
 
     def test_sanitize(self):
 
-        s = datamodel_v3.sanitize_label_name_value(
-            "simple", 100)
+        s = datamodel_v3.sanitize_label_name_value("simple", 100)
         self.assertEqual(s, "simple")
 
         s = datamodel_v3.sanitize_label_name_value(
-            "/calico/v1/policy/profile/prof1/rules", 100)
+            "/calico/v1/policy/profile/prof1/rules", 100
+        )
         self.assertEqual(s, "calico_v1_policy_profile_prof1_rules")
 
         s = datamodel_v3.sanitize_label_name_value("Dan's Project", 100)
@@ -41,12 +41,12 @@ class TestDatamodelV3(unittest.TestCase):
         s = datamodel_v3.sanitize_label_name_value("_-+.934abc%_-", 100)
         self.assertEqual(s, "934abc")
 
-        s = datamodel_v3.sanitize_label_name_value(
-            "simple", 10)
+        s = datamodel_v3.sanitize_label_name_value("simple", 10)
         self.assertEqual(s, "simple")
 
         s = datamodel_v3.sanitize_label_name_value(
-            "/calico/v1/policy/profile/prof1/rules", 10)
+            "/calico/v1/policy/profile/prof1/rules", 10
+        )
         self.assertEqual(s, "calico_v1")
 
         s = datamodel_v3.sanitize_label_name_value("Dan's Project", 10)
