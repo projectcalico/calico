@@ -28,11 +28,15 @@ import (
 type qosPolicyManager struct {
 	ipVersion    uint8
 	ruleRenderer rules.RuleRenderer
+	mangleTable  Table
 
-	// QoS policy
-	mangleTable Table
-	dirty       bool
-	policies    map[types.WorkloadEndpointID]rules.QoSPolicy
+	// Workload endpoint policices.
+	wepPoliciesDirty bool
+	wepPolicies      map[types.WorkloadEndpointID]rules.QoSPolicy
+
+	// Host endpoint policies.
+	hepPolicies      map[types.HostEndpointID]rules.QoSPolicy
+	hepPoliciesDirty bool
 
 	logCxt *logrus.Entry
 }
@@ -43,31 +47,68 @@ func newQoSPolicyManager(
 	ipVersion uint8,
 ) *qosPolicyManager {
 	return &qosPolicyManager{
-		ipVersion:    ipVersion,
-		policies:     map[types.WorkloadEndpointID]rules.QoSPolicy{},
-		dirty:        true,
-		mangleTable:  mangleTable,
-		ruleRenderer: ruleRenderer,
-		logCxt:       logrus.WithField("ipVersion", ipVersion),
+		mangleTable:      mangleTable,
+		ruleRenderer:     ruleRenderer,
+		ipVersion:        ipVersion,
+		wepPolicies:      map[types.WorkloadEndpointID]rules.QoSPolicy{},
+		hepPolicies:      map[types.HostEndpointID]rules.QoSPolicy{},
+		wepPoliciesDirty: true,
+		hepPoliciesDirty: true,
+		logCxt:           logrus.WithField("ipVersion", ipVersion),
 	}
 }
 
 func (m *qosPolicyManager) OnUpdate(msg interface{}) {
 	switch msg := msg.(type) {
+	case *proto.HostEndpointUpdate:
+		m.handleHEPUpdates(msg.GetId(), msg)
+	case *proto.HostEndpointRemove:
+		m.handleHEPUpdates(msg.GetId(), nil)
 	case *proto.WorkloadEndpointUpdate:
-		m.handleWlEndpointUpdates(msg.GetId(), msg)
+		m.handleWEPUpdates(msg.GetId(), msg)
 	case *proto.WorkloadEndpointRemove:
-		m.handleWlEndpointUpdates(msg.GetId(), nil)
+		m.handleWEPUpdates(msg.GetId(), nil)
 	}
 }
 
-func (m *qosPolicyManager) handleWlEndpointUpdates(wlID *proto.WorkloadEndpointID, msg *proto.WorkloadEndpointUpdate) {
-	id := types.ProtoToWorkloadEndpointID(wlID)
+func (m *qosPolicyManager) handleHEPUpdates(hepID *proto.HostEndpointID, msg *proto.HostEndpointUpdate) {
+	id := types.ProtoToHostEndpointID(hepID)
 	if msg == nil || len(msg.Endpoint.QosPolicies) == 0 {
-		_, exists := m.policies[id]
+		_, exists := m.hepPolicies[id]
 		if exists {
-			delete(m.policies, id)
-			m.dirty = true
+			delete(m.hepPolicies, id)
+			m.hepPoliciesDirty = true
+		}
+		return
+	}
+
+	// We only support one policy per endpoint at this point.
+	dscp := msg.Endpoint.QosPolicies[0].Dscp
+
+	// This situation must be handled earlier.
+	if dscp > 63 || dscp < 0 {
+		logrus.WithField("id", id).Panicf("Invalid DSCP value %v", dscp)
+	}
+	ips := msg.Endpoint.ExpectedIpv4Addrs
+	if m.ipVersion == 6 {
+		ips = msg.Endpoint.ExpectedIpv6Addrs
+	}
+	if len(ips) != 0 {
+		m.hepPolicies[id] = rules.QoSPolicy{
+			SrcAddrs: normaliseSourceAddr(ips),
+			DSCP:     uint8(dscp),
+		}
+		m.hepPoliciesDirty = true
+	}
+}
+
+func (m *qosPolicyManager) handleWEPUpdates(wepID *proto.WorkloadEndpointID, msg *proto.WorkloadEndpointUpdate) {
+	id := types.ProtoToWorkloadEndpointID(wepID)
+	if msg == nil || len(msg.Endpoint.QosPolicies) == 0 {
+		_, exists := m.wepPolicies[id]
+		if exists {
+			delete(m.wepPolicies, id)
+			m.wepPoliciesDirty = true
 		}
 		return
 	}
@@ -84,11 +125,11 @@ func (m *qosPolicyManager) handleWlEndpointUpdates(wlID *proto.WorkloadEndpointI
 		ips = msg.Endpoint.Ipv6Nets
 	}
 	if len(ips) != 0 {
-		m.policies[id] = rules.QoSPolicy{
+		m.wepPolicies[id] = rules.QoSPolicy{
 			SrcAddrs: normaliseSourceAddr(ips),
 			DSCP:     uint8(dscp),
 		}
-		m.dirty = true
+		m.wepPoliciesDirty = true
 	}
 }
 
@@ -102,18 +143,28 @@ func normaliseSourceAddr(addrs []string) string {
 }
 
 func (m *qosPolicyManager) CompleteDeferredWork() error {
-	if m.dirty {
-		var policies []rules.QoSPolicy
-		for _, p := range m.policies {
+	var policies []rules.QoSPolicy
+	if m.wepPoliciesDirty {
+		for _, p := range m.wepPolicies {
 			policies = append(policies, p)
 		}
+		m.wepPoliciesDirty = false
+	}
+
+	if m.hepPoliciesDirty {
+		for _, p := range m.hepPolicies {
+			policies = append(policies, p)
+		}
+		m.hepPoliciesDirty = false
+	}
+
+	if len(policies) != 0 {
 		sort.Slice(policies, func(i, j int) bool {
 			return policies[i].SrcAddrs < policies[j].SrcAddrs
 		})
 
 		chain := m.ruleRenderer.EgressQoSPolicyChain(policies, m.ipVersion)
 		m.mangleTable.UpdateChain(chain)
-		m.dirty = false
 	}
 
 	return nil
