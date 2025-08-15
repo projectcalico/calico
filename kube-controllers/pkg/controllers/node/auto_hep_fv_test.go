@@ -22,6 +22,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -80,7 +81,7 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 				Templates: []api.Template{
 					{
 						GenerateName:   "template",
-						InterfaceCIDRs: []string{"192.168.100.1/32"},
+						InterfaceCIDRs: []api.CIDR{"192.168.100.1/32"},
 						Labels:         map[string]string{"template-label": "template-value"},
 					},
 				},
@@ -623,7 +624,7 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 		kcc.Spec.Controllers.Node.HostEndpoint.Templates = []api.Template{
 			{
 				GenerateName:   "template-new-name",
-				InterfaceCIDRs: []string{"192.168.100.1/32"},
+				InterfaceCIDRs: []v3.CIDR{"192.168.100.1/32"},
 				Labels:         map[string]string{"template-label": "template-value"},
 			},
 		}

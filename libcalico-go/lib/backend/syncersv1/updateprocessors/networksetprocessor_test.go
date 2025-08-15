@@ -49,7 +49,7 @@ var _ = Describe("Test the NetworkSet update processor", func() {
 		res := apiv3.NewNetworkSet()
 		res.Name = v3NetworkSetKey1.Name
 		res.Namespace = ns1
-		res.Spec.Nets = []string{cidr1str}
+		res.Spec.Nets = []apiv3.CIDR{apiv3.CIDR(cidr1str)}
 
 		kvps, err := up.Process(&model.KVPair{
 			Key:      v3NetworkSetKey1,
@@ -75,7 +75,10 @@ var _ = Describe("Test the NetworkSet update processor", func() {
 		By("adding another CIDR to the existing NetworkSet")
 		cidr2str := "1.2.3.123/32"
 		_, cidr2IPNet, _ := net.ParseCIDROrIP(cidr2str)
-		res.Spec.Nets = []string{cidr1str, cidr2str}
+		res.Spec.Nets = []apiv3.CIDR{
+			apiv3.CIDR(cidr1str),
+			apiv3.CIDR(cidr2str),
+		}
 
 		kvps, err = up.Process(&model.KVPair{
 			Key:      v3NetworkSetKey1,
@@ -117,7 +120,7 @@ var _ = Describe("Test the NetworkSet update processor", func() {
 		res := apiv3.NewNetworkSet()
 		res.Name = v3NetworkSetKey1.Name
 		res.Namespace = ns1
-		res.Spec.Nets = []string{cidr1str}
+		res.Spec.Nets = []apiv3.CIDR{apiv3.CIDR(cidr1str)}
 
 		kvps, err := up.Process(&model.KVPair{
 			Key:      v3NetworkSetKey1,

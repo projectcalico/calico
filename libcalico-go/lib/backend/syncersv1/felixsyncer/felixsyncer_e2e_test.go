@@ -522,7 +522,7 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 			ns.Labels = map[string]string{
 				"a": "b",
 			}
-			ns.Spec.Nets = []string{
+			ns.Spec.Nets = []apiv3.CIDR{
 				"11.0.0.0/16",
 			}
 			ns, err = c.NetworkSets().Create(
