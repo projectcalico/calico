@@ -15,16 +15,12 @@
 import mock
 
 from neutron.agent.linux import interface
-
-try:
-    from neutron.conf.agent import common as config
-except ImportError:
-    # Neutron code prior to 7f23ccc (15th March 2017).
-    from neutron.agent.common import config
+from neutron.conf.agent import common as config
 from neutron.tests import base
 
+from oslo_config import cfg
+
 from networking_calico.agent.linux.interface import RoutedInterfaceDriver
-from networking_calico.compat import cfg
 
 
 class _TestInterfaceDriverMixin(object):

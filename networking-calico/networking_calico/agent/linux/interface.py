@@ -18,8 +18,9 @@ import netaddr
 from neutron.agent.linux import interface
 from neutron.agent.linux import ip_lib
 
-from networking_calico.compat import cfg
-from networking_calico.compat import log as logging
+from oslo_config import cfg
+
+from oslo_log import log as logging
 
 
 LOG = logging.getLogger(__name__)
