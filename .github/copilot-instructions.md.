@@ -1,0 +1,60 @@
+# GitHub Copilot Instructions
+
+Please follow all of the below guidelines when performing a code review for this GitHub repository. 
+
+## 🧠 Context
+
+- **Project Type**: Open-source project for container networking for Kubernetes (CNI plugin and network policy engine)
+- **Language**: Go (primary language), Python (secondary language, mainly for a subset of the tests in this repository)
+- **Framework / Libraries**: net/http, k8s.io 
+
+- **Domain specifics**: Networking related to iptables, nftables, eBPF, CNI, VXLAN, BGP
+- **Multi-platform support**: This codebase Linux/Windows dataplane differences
+- **Kubernetes integration**: CRDs, controllers, operators
+- **Performance criticality**: This is dataplane code where performance matters
+- **Security Focused**: Network policy enforcement, CNI security
+
+## 🔧 General Guidelines
+
+- Follow idiomatic Go conventions (<https://go.dev/doc/effective_go>).
+- Use named functions over long anonymous ones.
+- Organize logic into small, composable functions.
+- Prefer interfaces for dependencies to enable mocking and testing.
+- Use `gofmt` or `goimports` to enforce formatting.
+- Avoid unnecessary abstraction; keep things simple and readable.
+
+## 🔒 Security Guidelines
+- Validate all network configurations and CIDRs
+- Use principle of least privilege
+- Secure defaults for network policies
+- Careful handling of privileged operations
+
+## 🧶 Patterns
+
+### ✅ Patterns to Follow
+
+- Use **Clean Architecture** and **Repository Pattern**.
+- Implement input validation using Go structs and validation tags (e.g., [go-playground/validator](https://github.com/go-playground/validator)).
+- Use dependency injection via constructors (avoid global state).
+- Keep `main.go` minimal—delegate to `internal`.
+
+### 🚫 Patterns to Avoid
+
+- Don’t use global state unless absolutely required.
+- Don’t hardcode config—use environment variables or config files.
+- Don’t panic or exit in library code; return errors instead.
+- Don’t expose secrets—use `.env` or secret managers.
+
+## 🧪 Testing Guidelines
+
+- Unit tests for business logic
+- FV tests for end-to-end scenarios
+- Mock network interfaces appropriately
+- Test both Linux and Windows dataplanes
+- Performance regression tests for dataplane
+
+## ⚡ Performance Guidelines
+- Minimize allocations in hot paths
+- Use object pooling for frequent operations
+- Profile dataplane code regularly
+- Consider eBPF optimizations where applicable
