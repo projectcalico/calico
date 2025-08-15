@@ -80,7 +80,7 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 				Templates: []api.Template{
 					{
 						GenerateName:   "template",
-						InterfaceCIDRs: []string{"192.168.100.1/32"},
+						InterfaceCIDRs: []api.CIDR{"192.168.100.1/32"},
 						Labels:         map[string]string{"template-label": "template-value"},
 					},
 				},
