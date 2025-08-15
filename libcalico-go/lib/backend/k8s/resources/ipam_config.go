@@ -56,7 +56,6 @@ func NewIPAMConfigClient(r rest.Interface, useV3 bool) K8sResourceClient {
 		rc.k8sListType = reflect.TypeOf(v3.IPAMConfigurationList{})
 	}
 
-	// TODO: CASEY
 	return &ipamConfigClient{
 		rc: rc,
 		v3: useV3,

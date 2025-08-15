@@ -3882,24 +3882,50 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 		})
 
 		By("Expecting the creation timestamp to be set")
-		createdAt := kvpRes.Value.(*libapiv3.IPAMConfiguration).CreationTimestamp
+		var createdAt metav1.Time
+		if v3CRD {
+			createdAt = kvpRes.Value.(*apiv3.IPAMConfiguration).CreationTimestamp
+		} else {
+			createdAt = kvpRes.Value.(*libapiv3.IPAMConfiguration).CreationTimestamp
+		}
 		Expect(createdAt).NotTo(Equal(metav1.Time{}))
 
 		By("Reading and updating an IPAM Config", func() {
 			kvpRes, err := c.Get(ctx, ipamKVP.Key, "")
 			Expect(err).NotTo(HaveOccurred())
-			Expect(kvpRes.Value.(*libapiv3.IPAMConfiguration).Spec).To(Equal(ipamKVP.Value.(*libapiv3.IPAMConfiguration).Spec))
 
-			kvpRes.Value.(*libapiv3.IPAMConfiguration).Spec.StrictAffinity = true
-			kvpRes.Value.(*libapiv3.IPAMConfiguration).Spec.AutoAllocateBlocks = false
+			if v3CRD {
+				// Expect the spec to match the original.
+				Expect(kvpRes.Value.(*apiv3.IPAMConfiguration).Spec).To(Equal(ipamKVP.Value.(*apiv3.IPAMConfiguration).Spec))
+
+				// Prepare to update the IPAM config.
+				kvpRes.Value.(*apiv3.IPAMConfiguration).Spec.StrictAffinity = true
+				kvpRes.Value.(*apiv3.IPAMConfiguration).Spec.AutoAllocateBlocks = false
+			} else {
+				// Expect the spec to match the original.
+				Expect(kvpRes.Value.(*libapiv3.IPAMConfiguration).Spec).To(Equal(ipamKVP.Value.(*libapiv3.IPAMConfiguration).Spec))
+
+				// Prepare to update the IPAM config.
+				kvpRes.Value.(*libapiv3.IPAMConfiguration).Spec.StrictAffinity = true
+				kvpRes.Value.(*libapiv3.IPAMConfiguration).Spec.AutoAllocateBlocks = false
+			}
+
 			kvpRes2, err := c.Update(ctx, kvpRes)
 			Expect(err).NotTo(HaveOccurred())
 
-			Expect(kvpRes2.Value.(*libapiv3.IPAMConfiguration).Spec).NotTo(Equal(ipamKVP.Value.(*libapiv3.IPAMConfiguration).Spec))
-			Expect(kvpRes.Value.(*libapiv3.IPAMConfiguration).Spec).To(Equal(kvpRes.Value.(*libapiv3.IPAMConfiguration).Spec))
-
-			// Expect the creation time stamp to be the same.
-			Expect(kvpRes2.Value.(*libapiv3.IPAMConfiguration).CreationTimestamp).To(Equal(createdAt))
+			if v3CRD {
+				// Expect the spec to have changed.
+				Expect(kvpRes2.Value.(*apiv3.IPAMConfiguration).Spec).NotTo(Equal(ipamKVP.Value.(*apiv3.IPAMConfiguration).Spec))
+				Expect(kvpRes.Value.(*apiv3.IPAMConfiguration).Spec).To(Equal(kvpRes.Value.(*apiv3.IPAMConfiguration).Spec))
+				// Expect the creation time stamp to be the same.
+				Expect(kvpRes2.Value.(*apiv3.IPAMConfiguration).CreationTimestamp).To(Equal(createdAt))
+			} else {
+				// Expect the spec to have changed.
+				Expect(kvpRes2.Value.(*libapiv3.IPAMConfiguration).Spec).NotTo(Equal(ipamKVP.Value.(*libapiv3.IPAMConfiguration).Spec))
+				Expect(kvpRes.Value.(*libapiv3.IPAMConfiguration).Spec).To(Equal(kvpRes.Value.(*libapiv3.IPAMConfiguration).Spec))
+				// Expect the creation time stamp to be the same.
+				Expect(kvpRes2.Value.(*libapiv3.IPAMConfiguration).CreationTimestamp).To(Equal(createdAt))
+			}
 		})
 
 		By("Updating the IPAMConfig using the v1 client", func() {
@@ -3915,10 +3941,14 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 		By("Checking the update using the v3 client", func() {
 			kvpRes, err := c.Get(ctx, ipamKVP.Key, "")
 			Expect(err).NotTo(HaveOccurred())
-			Expect(kvpRes.Value.(*libapiv3.IPAMConfiguration).Spec.MaxBlocksPerHost).To(Equal(1000))
 
-			// Expect the creation time stamp to be the same.
-			Expect(kvpRes.Value.(*libapiv3.IPAMConfiguration).CreationTimestamp).To(Equal(createdAt))
+			if v3CRD {
+				Expect(kvpRes.Value.(*apiv3.IPAMConfiguration).Spec.MaxBlocksPerHost).To(Equal(int32(1000)))
+				Expect(kvpRes.Value.(*apiv3.IPAMConfiguration).CreationTimestamp).To(Equal(createdAt))
+			} else {
+				Expect(kvpRes.Value.(*libapiv3.IPAMConfiguration).Spec.MaxBlocksPerHost).To(Equal(1000))
+				Expect(kvpRes.Value.(*libapiv3.IPAMConfiguration).CreationTimestamp).To(Equal(createdAt))
+			}
 		})
 
 		By("Deleting an IPAM Config", func() {
