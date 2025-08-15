@@ -666,10 +666,10 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			BeforeEach(func() {
 				resv1 := v3.NewIPReservation()
 				resv1.Name = "resv1"
-				resv1.Spec.ReservedCIDRs = []string{"10.0.0.1/32", "10.0.0.32/30"}
+				resv1.Spec.ReservedCIDRs = []v3.CIDR{"10.0.0.1/32", "10.0.0.32/30"}
 				resv2 := v3.NewIPReservation()
 				resv2.Name = "resv2"
-				resv2.Spec.ReservedCIDRs = []string{"11.0.0.0/30", "10.0.0.17/32"}
+				resv2.Spec.ReservedCIDRs = []v3.CIDR{"11.0.0.0/30", "10.0.0.17/32"}
 				reservations.Reservations = []v3.IPReservation{*resv1, *resv2}
 			})
 
