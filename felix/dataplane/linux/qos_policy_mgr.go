@@ -151,7 +151,7 @@ func (m *qosPolicyManager) CompleteDeferredWork() error {
 			return policies[i].SrcAddrs < policies[j].SrcAddrs
 		})
 
-		chain := m.ruleRenderer.EgressQoSPolicyChain(policies, m.ipVersion)
+		chain := m.ruleRenderer.EgressQoSPolicyChain(policies)
 		m.mangleTable.UpdateChain(chain)
 		m.dirty = false
 	}

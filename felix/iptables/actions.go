@@ -121,7 +121,7 @@ func (a *actionFactory) LimitNumConnections(num int64, rejectWith generictables.
 	}
 }
 
-func (a *actionFactory) DSCP(value uint8, _ uint8) generictables.Action {
+func (a *actionFactory) DSCP(value uint8) generictables.Action {
 	return DSCPAction{
 		Value: value,
 	}

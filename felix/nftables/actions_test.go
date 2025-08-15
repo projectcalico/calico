@@ -48,6 +48,6 @@ var _ = DescribeTable("Actions",
 	Entry("SetConnMarkAction", environment.Features{}, SetConnMarkAction{Mark: 0x1000, Mask: 0xf000}, "ct mark set ct mark & 0xffff0fff ^ 0x1000"),
 	Entry("LimitPacketRateAction", environment.Features{}, LimitPacketRateAction{Rate: 1000, Burst: 5}, "limit rate over 1000/second burst 5 packets drop"),
 	Entry("LimitNumConnectionsAction", environment.Features{}, LimitNumConnectionsAction{Num: 10, RejectWith: generictables.RejectWithTCPReset}, "ct count over 10 reject with tcp reset"),
-	Entry("DSCPAction", environment.Features{}, DSCPAction{Value: 16, IpVersion: 4}, "ip dscp set 16"),
-	Entry("DSCPAction", environment.Features{}, DSCPAction{Value: 20, IpVersion: 6}, "ip6 dscp set 20"),
+	Entry("DSCPAction", environment.Features{}, DSCPAction{Value: 0}, "<IPV> dscp set 0"),
+	Entry("DSCPAction", environment.Features{}, DSCPAction{Value: 20}, "<IPV> dscp set 20"),
 )
