@@ -198,6 +198,10 @@ func ObjGet(_ string) (int, error) {
 	panic("LIBBPF syscall stub")
 }
 
+func MapUpdateBatch(fd int, k, v []byte, count int, flags uint64) (int, error) {
+	panic("LIBBPF syscall stub")
+}
+
 func (t *TcGlobalData) Set(m *Map) error {
 	panic("LIBBPF syscall stub")
 }
