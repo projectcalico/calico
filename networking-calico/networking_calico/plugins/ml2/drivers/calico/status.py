@@ -21,10 +21,10 @@
 import collections
 import json
 
-from networking_calico.common import config as calico_config
-from networking_calico.compat import log
 from networking_calico import datamodel_v2
 from networking_calico import etcdutils
+from networking_calico.common import config as calico_config
+from networking_calico.compat import log
 
 
 LOG = log.getLogger(__name__)
@@ -37,7 +37,7 @@ LOG = log.getLogger(__name__)
 # these objects (immutability being the biggest), so if you rewrite as classes
 # attempt to preserve those properties.
 Endpoint = collections.namedtuple(
-    'Endpoint', ['id', 'key', 'mod_revision', 'host', 'data']
+    "Endpoint", ["id", "key", "mod_revision", "host", "data"]
 )
 
 
@@ -79,14 +79,18 @@ class StatusWatcher(etcdutils.EtcdWatcher):
         self._felix_live_rev = {}
 
         # Register for felix uptime updates.
-        self.register_path(status_path + "/<hostname>/status",
-                           on_set=self._on_status_set,
-                           on_del=self._on_status_del)
+        self.register_path(
+            status_path + "/<hostname>/status",
+            on_set=self._on_status_set,
+            on_del=self._on_status_del,
+        )
         # Register for per-port status updates.
-        self.register_path(status_path + "/<hostname>/workload/openstack/"
-                           "<workload>/endpoint/<endpoint>",
-                           on_set=self._on_ep_set,
-                           on_del=self._on_ep_delete)
+        self.register_path(
+            status_path
+            + "/<hostname>/workload/openstack/<workload>/endpoint/<endpoint>",
+            on_set=self._on_ep_set,
+            on_del=self._on_ep_delete,
+        )
         LOG.info("StatusWatcher created")
 
     def _pre_snapshot_hook(self):
@@ -110,10 +114,8 @@ class StatusWatcher(etcdutils.EtcdWatcher):
             for ep_id in ep_ids.difference(new_ep_ids):
                 LOG.info("signal None for %s", ep_id.endpoint)
                 self.calico_driver.on_port_status_changed(
-                    hostname,
-                    ep_id.endpoint,
-                    None,
-                    priority="low")
+                    hostname, ep_id.endpoint, None, priority="low"
+                )
         self.processing_snapshot = False
 
     def _on_status_set(self, response, hostname):
@@ -122,8 +124,7 @@ class StatusWatcher(etcdutils.EtcdWatcher):
             value = json.loads(response.value)
             new = bool(value.get("first_update"))
         except (ValueError, TypeError):
-            LOG.warning("Bad JSON data for key %s: %s",
-                        response.key, response.value)
+            LOG.warning("Bad JSON data for key %s: %s", response.key, response.value)
         else:
             mod_revision = response.mod_revision
             if self._felix_live_rev.get(hostname) != mod_revision:
@@ -152,11 +153,12 @@ class StatusWatcher(etcdutils.EtcdWatcher):
         Reports the status to the driver and caches the existence of the
         endpoint.
         """
-        ep_id = datamodel_v2.get_endpoint_id_from_key(self.region_string,
-                                                      response.key)
+        ep_id = datamodel_v2.get_endpoint_id_from_key(self.region_string, response.key)
         if not ep_id:
-            LOG.error("Failed to extract endpoint ID from: %s.  Ignoring "
-                      "update!", response.key)
+            LOG.error(
+                "Failed to extract endpoint ID from: %s.  Ignoring update!",
+                response.key,
+            )
             return
         self._report_status(ep_id, response.value)
 
@@ -186,8 +188,9 @@ class StatusWatcher(etcdutils.EtcdWatcher):
         the deletion to the driver.
         """
         LOG.debug("Port %s/%s/%s deleted", hostname, workload, endpoint)
-        endpoint_id = datamodel_v2.get_endpoint_id_from_key(self.region_string,
-                                                            response.key)
+        endpoint_id = datamodel_v2.get_endpoint_id_from_key(
+            self.region_string, response.key
+        )
         self._endpoints_by_host[hostname].discard(endpoint_id)
         if not self._endpoints_by_host[hostname]:
             del self._endpoints_by_host[hostname]

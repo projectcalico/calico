@@ -15,13 +15,14 @@
 
 import functools
 from importlib.metadata import version
-from packaging.version import Version
 
 from etcd3gw.client import Etcd3Client
 from etcd3gw.exceptions import Etcd3Exception
 from etcd3gw.lease import Lease
 from etcd3gw.utils import _encode
 from etcd3gw.utils import _increment_last_byte
+
+from packaging.version import Version
 
 from networking_calico.compat import cfg
 from networking_calico.compat import log
@@ -76,11 +77,11 @@ def get(key, with_lease=False):
     value = value.decode()
     if with_lease:
         lease = None
-        if 'lease' in item:
-            lease = Lease(int(item['lease']), client)
-        return value, item['mod_revision'], lease
+        if "lease" in item:
+            lease = Lease(int(item["lease"]), client)
+        return value, item["mod_revision"], lease
     else:
-        return value, item['mod_revision']
+        return value, item["mod_revision"]
 
 
 def put(key, value, mod_revision=None, lease=None, existing_value=None):
@@ -103,61 +104,70 @@ def put(key, value, mod_revision=None, lease=None, existing_value=None):
     Returns True if the write happened successfully; False if not.
     """
     client = _get_client()
-    LOG.debug("etcdv3 put key=%s value=%s mod_revision=%r",
-              key, value, mod_revision)
+    LOG.debug("etcdv3 put key=%s value=%s mod_revision=%r", key, value, mod_revision)
     txn = {}
     if mod_revision == 0:
         # Write operation must _create_ the KV entry.
         base64_key = _encode(key)
-        txn['compare'] = [{
-            'key': base64_key,
-            'result': 'EQUAL',
-            'target': 'VERSION',
-            'version': 0,
-        }]
+        txn["compare"] = [
+            {
+                "key": base64_key,
+                "result": "EQUAL",
+                "target": "VERSION",
+                "version": 0,
+            }
+        ]
     elif mod_revision == MUST_UPDATE:
         # Write operation must update and _not_ create the KV entry.
         base64_key = _encode(key)
-        txn['compare'] = [{
-            'key': base64_key,
-            'result': 'NOT_EQUAL',
-            'target': 'VERSION',
-            'version': 0,
-        }]
+        txn["compare"] = [
+            {
+                "key": base64_key,
+                "result": "NOT_EQUAL",
+                "target": "VERSION",
+                "version": 0,
+            }
+        ]
     elif mod_revision is not None:
         # Write operation must _replace_ a KV entry with the specified
         # revision.
         base64_key = _encode(key)
-        txn['compare'] = [{
-            'key': base64_key,
-            'result': 'EQUAL',
-            'target': 'MOD',
-            'mod_revision': mod_revision,
-        }]
+        txn["compare"] = [
+            {
+                "key": base64_key,
+                "result": "EQUAL",
+                "target": "MOD",
+                "mod_revision": mod_revision,
+            }
+        ]
     elif existing_value is not None:
         # Write operation must _replace_ a KV entry with the specified value.
         base64_key = _encode(key)
         base64_existing = _encode(existing_value)
-        txn['compare'] = [{
-            'key': base64_key,
-            'result': 'EQUAL',
-            'target': 'VALUE',
-            'value': base64_existing,
-        }]
+        txn["compare"] = [
+            {
+                "key": base64_key,
+                "result": "EQUAL",
+                "target": "VALUE",
+                "value": base64_existing,
+            }
+        ]
     if txn:
         base64_value = _encode(value)
-        txn['success'] = [{
-            'request_put': {
-                'key': base64_key,
-                'value': base64_value,
-            },
-        }]
-        txn['failure'] = []
+        txn["success"] = [
+            {
+                "request_put": {
+                    "key": base64_key,
+                    "value": base64_value,
+                },
+            }
+        ]
+        txn["failure"] = []
         if lease is not None:
-            txn['success'][0]['request_put']['lease'] = lease.id
+            txn["success"][0]["request_put"]["lease"] = lease.id
         result = client.transaction(txn)
         LOG.debug("transaction result %s", result)
-        succeeded = result.get('succeeded', False)
+        succeeded = result.get("succeeded", False)
     else:
         succeeded = client.put(key, value, lease=lease)
     return succeeded
@@ -181,42 +191,50 @@ def delete(key, existing_value=None, mod_revision=None):
     if mod_revision is not None:
         base64_key = _encode(key)
         txn = {
-            'compare': [{
-                'key': base64_key,
-                'result': 'EQUAL',
-                'target': 'MOD',
-                'mod_revision': mod_revision,
-            }],
-            'success': [{
-                'request_delete_range': {
-                    'key': base64_key,
-                },
-            }],
-            'failure': [],
+            "compare": [
+                {
+                    "key": base64_key,
+                    "result": "EQUAL",
+                    "target": "MOD",
+                    "mod_revision": mod_revision,
+                }
+            ],
+            "success": [
+                {
+                    "request_delete_range": {
+                        "key": base64_key,
+                    },
+                }
+            ],
+            "failure": [],
         }
         result = client.transaction(txn)
         LOG.debug("transaction result %s", result)
-        deleted = result.get('succeeded', False)
+        deleted = result.get("succeeded", False)
     elif existing_value is not None:
         base64_key = _encode(key)
         base64_existing = _encode(existing_value)
         txn = {
-            'compare': [{
-                'key': base64_key,
-                'result': 'EQUAL',
-                'target': 'VALUE',
-                'value': base64_existing,
-            }],
-            'success': [{
-                'request_delete_range': {
-                    'key': base64_key,
-                },
-            }],
-            'failure': [],
+            "compare": [
+                {
+                    "key": base64_key,
+                    "result": "EQUAL",
+                    "target": "VALUE",
+                    "value": base64_existing,
+                }
+            ],
+            "success": [
+                {
+                    "request_delete_range": {
+                        "key": base64_key,
+                    },
+                }
+            ],
+            "failure": [],
         }
         result = client.transaction(txn)
         LOG.debug("transaction result %s", result)
-        deleted = result.get('succeeded', False)
+        deleted = result.get("succeeded", False)
     else:
         deleted = client.delete(key)
     LOG.debug("etcdv3 deleted=%s", deleted)
@@ -272,12 +290,14 @@ def get_prefix(prefix, revision=None):
         # etcdgw has a bug (https://github.com/dims/etcd3-gateway/issues/18),
         # which prevents that from working.  In any case, sort-by-key is the
         # default, which is what we want.
-        chunk = client.get(prefix,
-                           metadata=True,
-                           range_end=range_end,
-                           sort_order='descend',
-                           limit=CHUNK_SIZE_LIMIT,
-                           revision=str(revision))
+        chunk = client.get(
+            prefix,
+            metadata=True,
+            range_end=range_end,
+            sort_order="descend",
+            limit=CHUNK_SIZE_LIMIT,
+            revision=str(revision),
+        )
         results.extend(chunk)
         if len(chunk) < CHUNK_SIZE_LIMIT:
             # Partial (or empty) chunk signals that we're done.
@@ -289,7 +309,7 @@ def get_prefix(prefix, revision=None):
     tuples = []
     for result in results:
         value, item = result
-        t = (item['key'].decode(), value.decode(), item['mod_revision'])
+        t = (item["key"].decode(), value.decode(), item["mod_revision"])
         tuples.append(t)
     return tuples
 
@@ -330,8 +350,7 @@ def watch_subtree(prefix, start_revision):
     """
     LOG.debug("Watch subtree %s from revision %r", prefix, start_revision)
     client = _get_client()
-    event_stream, cancel = client.watch_prefix(prefix,
-                                               start_revision=start_revision)
+    event_stream, cancel = client.watch_prefix(prefix, start_revision=start_revision)
     return event_stream, cancel
 
 
@@ -343,15 +362,16 @@ def get_status():
     client = _get_client()
     status = client.status()
     LOG.debug("etcdv3 status %s", status)
-    return status['header']['cluster_id'], status['header']['revision']
+    return status["header"]["cluster_id"], status["header"]["revision"]
 
 
 def request_compaction(revision):
     """Request compaction at the specified revision."""
     client = _get_client()
     LOG.debug("request etcdv3 compaction at %r", revision)
-    response = client.post(client.get_url("/kv/compaction"),
-                           json={"revision": str(revision)})
+    response = client.post(
+        client.get_url("/kv/compaction"), json={"revision": str(revision)}
+    )
     LOG.debug("=> %s", response)
 
 
@@ -363,8 +383,7 @@ def watch_once(key, timeout=None, **kwargs):
     :returns: event
     """
     client = _get_client()
-    LOG.debug("etcdv3 watch_once %s timeout %r kwargs %r",
-              key, timeout, kwargs)
+    LOG.debug("etcdv3 watch_once %s timeout %r kwargs %r", key, timeout, kwargs)
     return client.watch_once(key, timeout=timeout, **kwargs)
 
 
@@ -376,14 +395,15 @@ def get_lease(ttl):
 
 def logging_exceptions(fn):
     """Decorator to log (and reraise) Etcd3Exceptions."""
+
     @functools.wraps(fn)
     def wrapped(self, *args, **kwargs):
         try:
             return fn(self, *args, **kwargs)
         except Etcd3Exception as e:
-            LOG.warning("Etcd3Exception, re-raising: %r:\n%s",
-                        e, e.detail_text)
+            LOG.warning("Etcd3Exception, re-raising: %r:\n%s", e, e.detail_text)
             raise
+
     return wrapped
 
 
@@ -393,7 +413,7 @@ _client = None
 
 # Possible API paths for connecting to an etcd server.  Defined as a variable
 # here so that test code can override it after importing this file.
-_possible_etcd_api_paths = ['/v3/', '/v3beta/', '/v3alpha/']
+_possible_etcd_api_paths = ["/v3/", "/v3beta/", "/v3alpha/"]
 
 
 # Wrap Etcd3Client to authenticate when needed and add an
@@ -415,16 +435,24 @@ _possible_etcd_api_paths = ['/v3/', '/v3beta/', '/v3alpha/']
 # we handle the watch request failing and loop round to retry the get
 # again.  Overall, therefore, we are safe on this point.
 class Etcd3AuthClient(Etcd3Client):
-    def __init__(self, host='localhost', port=2379, protocol="http",
-                 ca_cert=None, cert_key=None, cert_cert=None, timeout=None,
-                 username=None, password=None):
+    def __init__(
+        self,
+        host="localhost",
+        port=2379,
+        protocol="http",
+        ca_cert=None,
+        cert_key=None,
+        cert_cert=None,
+        timeout=None,
+        username=None,
+        password=None,
+    ):
         global _possible_etcd_api_paths
         possible_api_paths = _possible_etcd_api_paths
         created_working_client = False
         while not created_working_client:
             try:
-                LOG.info("Try creating etcd3gw client with %s",
-                         possible_api_paths[0])
+                LOG.info("Try creating etcd3gw client with %s", possible_api_paths[0])
                 super(Etcd3AuthClient, self).__init__(
                     host=host,
                     port=port,
@@ -433,7 +461,8 @@ class Etcd3AuthClient(Etcd3Client):
                     cert_key=cert_key,
                     cert_cert=cert_cert,
                     timeout=timeout,
-                    api_path=possible_api_paths[0])
+                    api_path=possible_api_paths[0],
+                )
                 possible_api_paths = possible_api_paths[1:]
             except TypeError:
                 # Indicates an old version of etcd3gw that doesn't support the
@@ -446,7 +475,8 @@ class Etcd3AuthClient(Etcd3Client):
                     ca_cert=ca_cert,
                     cert_key=cert_key,
                     cert_cert=cert_cert,
-                    timeout=timeout)
+                    timeout=timeout,
+                )
 
             self.username = username
             self.password = password
@@ -468,16 +498,16 @@ class Etcd3AuthClient(Etcd3Client):
         # header with an old token, or else etcd responds with
         # "Unauthorized: invalid auth token".  So remove any existing
         # Authorization header.
-        if 'Authorization' in self.session.headers:
-            del self.session.headers['Authorization']
+        if "Authorization" in self.session.headers:
+            del self.session.headers["Authorization"]
 
         # Send authenticate request.  If this raises an exception,
         # e.g. because of a connectivity issue to the etcd server,
         # it's OK for that to bubble up and be handled in the code
         # that called post.
         response = super(Etcd3AuthClient, self).post(
-            self.get_url('/auth/authenticate'),
-            json={"name": self.username, "password": self.password}
+            self.get_url("/auth/authenticate"),
+            json={"name": self.username, "password": self.password},
         )
 
         # Add Authorization header with the received token to the
@@ -486,7 +516,7 @@ class Etcd3AuthClient(Etcd3Client):
         # the watch code does not use client.post and so could not be
         # covered by adding a header to kwargs in the following post
         # method.
-        self.session.headers['Authorization'] = response['token']
+        self.session.headers["Authorization"] = response["token"]
 
     def post(self, *args, **kwargs):
         if Version(version("etcd3gw")) < Version("2.4.0"):
@@ -495,9 +525,11 @@ class Etcd3AuthClient(Etcd3Client):
             # generally a good idea, and specifically we want to protect
             # this code from the apparent etcdserver hang bug at
             # https://github.com/etcd-io/etcd/issues/11377.
-            if 'timeout' not in kwargs or \
-               kwargs['timeout'] > cfg.CONF.calico.etcd_timeout:
-                kwargs['timeout'] = cfg.CONF.calico.etcd_timeout
+            if (
+                "timeout" not in kwargs
+                or kwargs["timeout"] > cfg.CONF.calico.etcd_timeout
+            ):
+                kwargs["timeout"] = cfg.CONF.calico.etcd_timeout
         try:
             # Try the post.  If no authentication is needed, or if an
             # Authorization token has been added to the session's
@@ -508,8 +540,7 @@ class Etcd3AuthClient(Etcd3Client):
                 # Etcd auth credentials are configured, so assume the
                 # problem might be that we need to authenticate or
                 # re-authenticate.
-                LOG.info("Might need to (re)authenticate: %r:\n%s",
-                         e, e.detail_text)
+                LOG.info("Might need to (re)authenticate: %r:\n%s", e, e.detail_text)
 
                 # Authenticate and then reissue the request.
                 self.authenticate()
@@ -537,23 +568,30 @@ def _get_client():
         # 2.4.0 onwards.  For etcd3gw<=2.4.0 we work around that by also
         # specifying the timeout as a kwarg on each post() call.
         if any(tls_config_params):
-            LOG.info("TLS to etcd is enabled with key file %s; "
-                     "cert file %s; CA cert file %s", *tls_config_params)
-            _client = Etcd3AuthClient(host=calico_cfg.etcd_host,
-                                      port=calico_cfg.etcd_port,
-                                      timeout=cfg.CONF.calico.etcd_timeout,
-                                      protocol="https",
-                                      ca_cert=calico_cfg.etcd_ca_cert_file,
-                                      cert_key=calico_cfg.etcd_key_file,
-                                      cert_cert=calico_cfg.etcd_cert_file,
-                                      username=calico_cfg.etcd_username,
-                                      password=calico_cfg.etcd_password)
+            LOG.info(
+                "TLS to etcd is enabled with key file %s; "
+                "cert file %s; CA cert file %s",
+                *tls_config_params
+            )
+            _client = Etcd3AuthClient(
+                host=calico_cfg.etcd_host,
+                port=calico_cfg.etcd_port,
+                timeout=cfg.CONF.calico.etcd_timeout,
+                protocol="https",
+                ca_cert=calico_cfg.etcd_ca_cert_file,
+                cert_key=calico_cfg.etcd_key_file,
+                cert_cert=calico_cfg.etcd_cert_file,
+                username=calico_cfg.etcd_username,
+                password=calico_cfg.etcd_password,
+            )
         else:
             LOG.info("TLS disabled, using HTTP to connect to etcd.")
-            _client = Etcd3AuthClient(host=calico_cfg.etcd_host,
-                                      port=calico_cfg.etcd_port,
-                                      timeout=cfg.CONF.calico.etcd_timeout,
-                                      protocol="http",
-                                      username=calico_cfg.etcd_username,
-                                      password=calico_cfg.etcd_password)
+            _client = Etcd3AuthClient(
+                host=calico_cfg.etcd_host,
+                port=calico_cfg.etcd_port,
+                timeout=cfg.CONF.calico.etcd_timeout,
+                protocol="http",
+                username=calico_cfg.etcd_username,
+                password=calico_cfg.etcd_password,
+            )
     return _client
