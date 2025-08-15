@@ -38,7 +38,10 @@ var gaugeVecNumMaps = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 
 type MapType string
 
-const MapTypeInterfaceMatch MapType = "interfaceMatch"
+const (
+	MapTypeInterfaceMatch MapType = "interfaceMatch"
+	MapTypeSourceNetMatch MapType = "sourceNetMatch"
+)
 
 type MapsDataplane interface {
 	AddOrReplaceMap(meta MapMetadata, members map[string][]string)

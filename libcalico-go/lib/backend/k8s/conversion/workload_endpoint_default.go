@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2025 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -527,6 +527,17 @@ func handleQoSControlsAnnotations(annotations map[string]string) (*libapiv3.QoSC
 	}
 	if qosControls.EgressPacketRate != 0 && qosControls.EgressPacketBurst == 0 {
 		qosControls.EgressPacketBurst = defaultPacketBurst.Value()
+	}
+
+	// Calico DSCP value for egress traffic annotation.
+	if str, found := annotations[AnnotationQoSEgressDSCP]; found {
+		dscp := numorstring.DSCPFromString(str)
+		err := dscp.Validate()
+		if err != nil {
+			errs = append(errs, fmt.Errorf("error parsing DSCP annotation: %w", err))
+		} else {
+			qosControls.DSCP = &dscp
+		}
 	}
 
 	// return nil if no control is configured

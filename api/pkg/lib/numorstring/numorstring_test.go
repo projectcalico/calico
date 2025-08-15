@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2025 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,9 +25,9 @@ import (
 )
 
 func init() {
-
 	asNumberType := reflect.TypeOf(numorstring.ASNumber(0))
 	protocolType := reflect.TypeOf(numorstring.Protocol{})
+	dscpType := reflect.TypeOf(numorstring.DSCP{})
 	portType := reflect.TypeOf(numorstring.Port{})
 
 	// Perform tests of JSON unmarshaling of the various field types.
@@ -90,6 +90,12 @@ func init() {
 		Entry("should accept 0 protocol as string", "\"255\"", protocolType, numorstring.ProtocolFromInt(255)),
 		Entry("should accept 256 protocol as string", "\"256\"", protocolType, numorstring.ProtocolFromString("256")),
 		Entry("should reject bad protocol string", "\"25", protocolType, nil),
+
+		// DSCP tests.
+		Entry("should accept 0 DSCP as int", "0", dscpType, numorstring.DSCPFromInt(0)),
+		Entry("should accept 63 DSCP as int", "63", dscpType, numorstring.DSCPFromInt(63)),
+		Entry("should accept DF DSCP as string", "\"DF\"", dscpType, numorstring.DSCPFromString(numorstring.DF)),
+		Entry("should reject bad DSCP string", "\"25", dscpType, nil),
 	)
 
 	// Perform tests of JSON marshaling of the various field types.
@@ -121,6 +127,11 @@ func init() {
 		// Protocol tests.
 		Entry("should marshal protocol of 0", numorstring.ProtocolFromInt(0), "0"),
 		Entry("should marshal protocol of udp", numorstring.ProtocolFromString("UDP"), "\"UDP\""),
+
+		// DSCP tests.
+		Entry("should marshal dscp of 0", numorstring.DSCPFromInt(0), "0"),
+		Entry("should marshal dscp of 120", numorstring.DSCPFromInt(120), "120"),
+		Entry("should marshal dscp of DF", numorstring.DSCPFromString("DF"), "\"DF\""),
 	)
 
 	// Perform tests of Stringer interface various field types.
@@ -141,6 +152,10 @@ func init() {
 		// Protocol tests.
 		Entry("should stringify protocol of 0", numorstring.ProtocolFromInt(0), "0"),
 		Entry("should stringify protocol of udp", numorstring.ProtocolFromString("UDP"), "UDP"),
+
+		// DSCP tests.
+		Entry("should stringify DSCP of 0", numorstring.ProtocolFromInt(0), "0"),
+		Entry("should stringify DSCP of AF22", numorstring.ProtocolFromString("AF22"), "AF22"),
 	)
 
 	// Perform tests of Protocols supporting ports.
@@ -190,6 +205,74 @@ func init() {
 		// Protocol tests.
 		Entry("protocol udp -> UDP", numorstring.ProtocolFromInt(2), numorstring.ProtocolFromInt(2)),
 		Entry("protocol tcp -> TCP", numorstring.ProtocolFromString("TCP"), numorstring.ProtocolFromStringV1("TCP")),
+	)
+
+	// Perform tests of DSCP FromString method.
+	DescribeTable("NumOrStringDSCP FromString is not case-sensitive",
+		func(input, expected string) {
+			Expect(numorstring.DSCPFromString(input).StrVal).To(Equal(expected),
+				"expected parsed dscp to match")
+		},
+		Entry("dscp cs6 -> CS6", "cs6", "CS6"),
+		Entry("dscp Af11 -> AF11", "Af11", "AF11"),
+		Entry("dscp ef -> EF", "ef", "EF"),
+		Entry("unknown dscp xxxXXX", "xxxXXX", "xxxXXX"),
+	)
+
+	// Perform tests for DSCP ToUint8 method for straing values.
+	DescribeTable("NumOrStringDSCP ToUint8 returns valid values",
+		func(input string, expected int) {
+			dscp := numorstring.DSCPFromString(input)
+			Expect(dscp.ToUint8()).To(Equal(uint8(expected)),
+				"expect parsed dscp to match")
+		},
+		Entry("dscp BE", "BE", 0),
+		Entry("dscp AF33", "AF33", 30),
+		Entry("dscp CS5", "CS5", 40),
+	)
+
+	// Perform tests for DSCP validation for string values.
+	DescribeTable("NumOrStringDSCP Validate method validates string inputs correctly",
+		func(input string, valid bool) {
+			dscp := numorstring.DSCPFromString(input)
+			err := dscp.Validate()
+			if valid {
+				Expect(err).To(BeNil(), "expect validate to not return error")
+			} else {
+				Expect(err).ToNot(BeNil(), "expect validate to return error")
+			}
+		},
+		Entry("should accept EF", "EF", true),
+		Entry("should accept AF11", "AF11", true),
+		Entry("should accept CS2", "CS2", true),
+		Entry("should accept 0", "0", true),
+		Entry("should accept 40", "40", true),
+		Entry("should accept 63", "63", true),
+		Entry("should reject 64", "64", false),
+		Entry("should reject 120", "120", false),
+		Entry("should reject -1", "-1", false),
+		Entry("should reject CS9", "CS9", false),
+		Entry("should reject xxx", "xxx", false),
+		Entry("should reject empty string", "", false),
+		Entry("should reject empty string", " ", false),
+	)
+
+	// Perform tests for DSCP validation for numerical values.
+	DescribeTable("NumOrStringDSCP Validate method validates numerical inputs correctly",
+		func(input int, valid bool) {
+			dscp := numorstring.DSCPFromInt(uint8(input))
+			err := dscp.Validate()
+			if valid {
+				Expect(err).To(BeNil(), "expect validate to not return error")
+			} else {
+				Expect(err).ToNot(BeNil(), "expect validate to return error")
+			}
+		},
+		Entry("should accept 0", 0, true),
+		Entry("should accept 40", 40, true),
+		Entry("should accept 63", 63, true),
+		Entry("should reject 64", 64, false),
+		Entry("should reject 120", 120, false),
 	)
 }
 
