@@ -27,7 +27,7 @@ import (
 
 func Validate(args []string) error {
 	doc := `Usage:
-  <BINARY_NAME> validate --filename=<FILENAME> [--recursive] [--skip-empty]
+  <BINARY_NAME> validate --filename=<FILENAME> [--recursive] [--skip-empty] [--allow-version-mismatch]
 
 Examples:
   # Validate a policy using the data in policy.yaml.
@@ -45,6 +45,7 @@ Options:
   -R --recursive               Process the filename specified in -f or --filename recursively.
      --skip-empty              Do not error if any files or directory specified using -f or --filename contain no
                                data.
+     --allow-version-mismatch  Allow client and cluster versions mismatch.
 
 Description:
   The validate command is used to validate a set of resources by filename
