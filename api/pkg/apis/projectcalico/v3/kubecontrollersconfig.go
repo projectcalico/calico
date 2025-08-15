@@ -153,7 +153,7 @@ type Template struct {
 	// If specified, only addresses within these CIDRs will be included in the expected IPs.
 	// At least one of InterfaceCIDRs and InterfaceSelector must be specified.
 	// +listType=set
-	InterfaceCIDRs []CIDR `json:"interfaceCIDRs,omitempty" validate:"cidrs"`
+	InterfaceCIDRs []string `json:"interfaceCIDRs,omitempty" validate:"cidrs"`
 
 	// InterfaceSelector contains a regex string to match Node interface names. If specified, a HostEndpoint will be created for each matching interface on each selected node.
 	// At least one of InterfaceCIDRs and InterfaceSelector must be specified.

@@ -88,7 +88,7 @@ type AutoHostEndpointConfig struct {
 
 type AutoHostEndpointTemplate struct {
 	GenerateName      string
-	InterfaceCIDRs    []v3.CIDR
+	InterfaceCIDRs    []string
 	InterfaceSelector string
 	Labels            map[string]string
 	NodeSelector      string

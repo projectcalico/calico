@@ -2617,7 +2617,7 @@ func (in *IPReservationSpec) DeepCopyInto(out *IPReservationSpec) {
 	*out = *in
 	if in.ReservedCIDRs != nil {
 		in, out := &in.ReservedCIDRs, &out.ReservedCIDRs
-		*out = make([]CIDR, len(*in))
+		*out = make([]string, len(*in))
 		copy(*out, *in)
 	}
 	return
@@ -2957,7 +2957,7 @@ func (in *NetworkSetSpec) DeepCopyInto(out *NetworkSetSpec) {
 	*out = *in
 	if in.Nets != nil {
 		in, out := &in.Nets, &out.Nets
-		*out = make([]CIDR, len(*in))
+		*out = make([]string, len(*in))
 		copy(*out, *in)
 	}
 	return
@@ -3704,7 +3704,7 @@ func (in *Template) DeepCopyInto(out *Template) {
 	*out = *in
 	if in.InterfaceCIDRs != nil {
 		in, out := &in.InterfaceCIDRs, &out.InterfaceCIDRs
-		*out = make([]CIDR, len(*in))
+		*out = make([]string, len(*in))
 		copy(*out, *in)
 	}
 	if in.Labels != nil {

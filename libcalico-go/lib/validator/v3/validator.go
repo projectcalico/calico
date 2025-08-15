@@ -759,10 +759,10 @@ func validateCIDR(fl validator.FieldLevel) bool {
 // validateCIDRs validates the field is a slice of valid (not strictly masked) IP networks.
 // An IP address is valid, and assumed to be fully masked (i.e /32 or /128)
 func validateCIDRs(fl validator.FieldLevel) bool {
-	addrs := fl.Field().Interface().([]api.CIDR)
+	addrs := fl.Field().Interface().([]string)
 	log.Debugf("Validate IP CIDRs: %s", addrs)
 	for _, addr := range addrs {
-		_, _, err := cnet.ParseCIDROrIP(string(addr))
+		_, _, err := cnet.ParseCIDROrIP(addr)
 		if err != nil {
 			return false
 		}

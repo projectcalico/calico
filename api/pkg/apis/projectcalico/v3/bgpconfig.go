@@ -67,8 +67,9 @@ const (
 
 // BGPConfigurationSpec contains the values of the BGP configuration.
 type BGPConfigurationSpec struct {
-	// LogSeverityScreen is the log severity above which logs are sent to the stdout. [Default: INFO]
-	// +kubebuilder:default=INFO
+	// LogSeverityScreen is the log severity above which logs are sent to the stdout. [Default: Info]
+	// +kubebuilder:default=Info
+	// +kubebuilder:validation:Pattern=`^(?i)(Trace|Debug|Info|Warning|Error|Fatal)?$`
 	LogSeverityScreen string `json:"logSeverityScreen,omitempty" validate:"omitempty,logLevel" confignamev1:"loglevel"`
 
 	// NodeToNodeMeshEnabled sets whether full node to node BGP mesh is enabled. [Default: true]

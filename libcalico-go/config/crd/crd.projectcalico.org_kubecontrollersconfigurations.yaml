@@ -60,7 +60,6 @@ spec:
                                     type: string
                                   interfaceCIDRs:
                                     items:
-                                      format: cidr
                                       type: string
                                     type: array
                                     x-kubernetes-list-type: set
@@ -173,7 +172,6 @@ spec:
                                         type: string
                                       interfaceCIDRs:
                                         items:
-                                          format: cidr
                                           type: string
                                         type: array
                                         x-kubernetes-list-type: set

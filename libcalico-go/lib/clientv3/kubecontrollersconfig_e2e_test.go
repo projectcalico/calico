@@ -478,7 +478,7 @@ var _ = testutils.E2eDatastoreDescribe("KubeControllersConfiguration tests", tes
 				CreateDefaultHostEndpoint: "Enabled",
 				Templates: []apiv3.Template{
 					{
-						InterfaceCIDRs: []apiv3.CIDR{"10.0.0.0/24"},
+						InterfaceCIDRs: []string{"10.0.0.0/24"},
 					},
 				},
 			}
@@ -489,7 +489,7 @@ var _ = testutils.E2eDatastoreDescribe("KubeControllersConfiguration tests", tes
 				Templates: []apiv3.Template{
 					{
 						GenerateName:   "the-quick-brown-fox-jumps-over-the-lazy-dog-the-quick-brown-fox-jumps-over-the-lazy-dog-the-quick-brown-fox-jumps-over-the-lazy-dog-the-quick-brown-fox-jumps-over-the-lazy-dog-the-quick-brown-fox-jumps-over-the-lazy-dog-the-quick-brown-fox-jumps-over-the-lazy-dog",
-						InterfaceCIDRs: []apiv3.CIDR{"10.0.0.0/24"},
+						InterfaceCIDRs: []string{"10.0.0.0/24"},
 					},
 				},
 			}
@@ -500,11 +500,11 @@ var _ = testutils.E2eDatastoreDescribe("KubeControllersConfiguration tests", tes
 				Templates: []apiv3.Template{
 					{
 						GenerateName:   "TemplateName",
-						InterfaceCIDRs: []apiv3.CIDR{"10.0.0.0/24"},
+						InterfaceCIDRs: []string{"10.0.0.0/24"},
 					},
 					{
 						GenerateName:   "TemplateName",
-						InterfaceCIDRs: []apiv3.CIDR{"10.0.0.0/24"},
+						InterfaceCIDRs: []string{"10.0.0.0/24"},
 					},
 				},
 			}
@@ -515,7 +515,7 @@ var _ = testutils.E2eDatastoreDescribe("KubeControllersConfiguration tests", tes
 				Templates: []apiv3.Template{
 					{
 						GenerateName:   "template",
-						InterfaceCIDRs: []apiv3.CIDR{"10.0.0.0/24"},
+						InterfaceCIDRs: []string{"10.0.0.0/24"},
 						Labels:         map[string]string{"label": "value"},
 						NodeSelector:   "all()",
 					},

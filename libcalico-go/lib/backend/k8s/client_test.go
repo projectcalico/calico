@@ -1603,7 +1603,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 					Namespace: "test-syncer-ns1",
 				},
 				Spec: apiv3.NetworkSetSpec{
-					Nets: []apiv3.CIDR{
+					Nets: []string{
 						"10.11.12.13/32",
 						"100.101.102.103/24",
 					},
@@ -1626,7 +1626,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 					Namespace: "test-syncer-ns1",
 				},
 				Spec: apiv3.NetworkSetSpec{
-					Nets: []apiv3.CIDR{
+					Nets: []string{
 						"192.168.100.111/32",
 					},
 				},
@@ -1648,7 +1648,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 					Namespace: "test-syncer-ns1",
 				},
 				Spec: apiv3.NetworkSetSpec{
-					Nets: []apiv3.CIDR{
+					Nets: []string{
 						"8.8.8.8/32",
 						"aa:bb::cc/128",
 					},

@@ -61,7 +61,8 @@ spec:
                 localWorkloadPeeringIPV6:
                   type: string
                 logSeverityScreen:
-                  default: INFO
+                  default: Info
+                  pattern: ^(?i)(Trace|Debug|Info|Warning|Error|Fatal)?$
                   type: string
                 nodeMeshMaxRestartTime:
                   type: string

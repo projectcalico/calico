@@ -429,7 +429,7 @@ func init() {
 		),
 		Entry("should accept NetworkSetSpec with CIDRs and IPs",
 			api.NetworkSetSpec{
-				Nets: []api.CIDR{
+				Nets: []string{
 					"10.0.0.1",
 					"11.0.0.0/8",
 					"dead:beef::",
@@ -440,7 +440,7 @@ func init() {
 		),
 		Entry("should reject NetworkSetSpec with bad CIDR",
 			api.NetworkSetSpec{
-				Nets: []api.CIDR{
+				Nets: []string{
 					"garbage",
 				},
 			},
@@ -455,7 +455,7 @@ func init() {
 					},
 				},
 				Spec: api.NetworkSetSpec{
-					Nets: []api.CIDR{"10.0.0.1"},
+					Nets: []string{"10.0.0.1"},
 				},
 			},
 			true,
@@ -469,7 +469,7 @@ func init() {
 					},
 				},
 				Spec: api.NetworkSetSpec{
-					Nets: []api.CIDR{"10.0.0.1"},
+					Nets: []string{"10.0.0.1"},
 				},
 			},
 			false,
@@ -480,7 +480,7 @@ func init() {
 					Name: "test$set",
 				},
 				Spec: api.NetworkSetSpec{
-					Nets: []api.CIDR{"10.0.0.1"},
+					Nets: []string{"10.0.0.1"},
 				},
 			},
 			false,
@@ -1142,42 +1142,42 @@ func init() {
 			api.IPReservation{
 				ObjectMeta: v1.ObjectMeta{Name: "ip-reservation.name"},
 				Spec: api.IPReservationSpec{
-					ReservedCIDRs: []api.CIDR{"10.0.0.1"},
+					ReservedCIDRs: []string{"10.0.0.1"},
 				},
 			}, true),
 		Entry("should accept IPReservation with a CIDR",
 			api.IPReservation{
 				ObjectMeta: v1.ObjectMeta{Name: "ip-reservation.name"},
 				Spec: api.IPReservationSpec{
-					ReservedCIDRs: []api.CIDR{"10.0.1.0/24"},
+					ReservedCIDRs: []string{"10.0.1.0/24"},
 				},
 			}, true),
 		Entry("should accept IPReservation IP and a CIDR",
 			api.IPReservation{
 				ObjectMeta: v1.ObjectMeta{Name: "ip-reservation.name"},
 				Spec: api.IPReservationSpec{
-					ReservedCIDRs: []api.CIDR{"10.0.1.0/24", "192.168.0.34"},
+					ReservedCIDRs: []string{"10.0.1.0/24", "192.168.0.34"},
 				},
 			}, true),
 		Entry("should reject IPReservation with bad CIDR",
 			api.IPReservation{
 				ObjectMeta: v1.ObjectMeta{Name: "ip-reservation.name"},
 				Spec: api.IPReservationSpec{
-					ReservedCIDRs: []api.CIDR{"garbage"},
+					ReservedCIDRs: []string{"garbage"},
 				},
 			}, false),
 		Entry("should reject IPReservation with too-long CIDR",
 			api.IPReservation{
 				ObjectMeta: v1.ObjectMeta{Name: "ip-reservation.name"},
 				Spec: api.IPReservationSpec{
-					ReservedCIDRs: []api.CIDR{"10.0.1.0/33"},
+					ReservedCIDRs: []string{"10.0.1.0/33"},
 				},
 			}, false),
 		Entry("should accept IPReservation with an IPv6",
 			api.IPReservation{
 				ObjectMeta: v1.ObjectMeta{Name: "ip-reservation.name"},
 				Spec: api.IPReservationSpec{
-					ReservedCIDRs: []api.CIDR{"10.0.0.1", "cafe::1", "cafe:f00d::/96"},
+					ReservedCIDRs: []string{"10.0.0.1", "cafe::1", "cafe:f00d::/96"},
 				},
 			}, true),
 
@@ -3496,17 +3496,17 @@ func init() {
 		),
 		Entry("should allow a valid CIDR",
 			api.Template{
-				InterfaceCIDRs: []api.CIDR{"10.0.1.0/24", "10.0.10.0/32"},
+				InterfaceCIDRs: []string{"10.0.1.0/24", "10.0.10.0/32"},
 			}, true,
 		),
 		Entry("should reject empty CIDR",
 			api.Template{
-				InterfaceCIDRs: []api.CIDR{},
+				InterfaceCIDRs: []string{},
 			}, true,
 		),
 		Entry("should reject invalid CIDR",
 			api.Template{
-				InterfaceCIDRs: []api.CIDR{"not a real cidr"},
+				InterfaceCIDRs: []string{"not a real cidr"},
 			}, false,
 		),
 

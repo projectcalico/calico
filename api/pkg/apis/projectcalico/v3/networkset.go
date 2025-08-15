@@ -47,7 +47,7 @@ type NetworkSet struct {
 type NetworkSetSpec struct {
 	// The list of IP networks that belong to this set.
 	// +listType=set
-	Nets []CIDR `json:"nets,omitempty" validate:"omitempty,dive,cidr"`
+	Nets []string `json:"nets,omitempty" validate:"omitempty,dive,cidr"`
 }
 
 // NewNetworkSet creates a new (zeroed) NetworkSet struct with the TypeMetadata initialised to the current version.

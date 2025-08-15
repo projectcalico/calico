@@ -619,7 +619,7 @@ func schema_pkg_apis_projectcalico_v3_BGPConfigurationSpec(ref common.ReferenceC
 				Properties: map[string]spec.Schema{
 					"logSeverityScreen": {
 						SchemaProps: spec.SchemaProps{
-							Description: "LogSeverityScreen is the log severity above which logs are sent to the stdout. [Default: INFO]",
+							Description: "LogSeverityScreen is the log severity above which logs are sent to the stdout. [Default: Info]",
 							Type:        []string{"string"},
 							Format:      "",
 						},

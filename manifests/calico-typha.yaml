@@ -166,7 +166,8 @@ spec:
                 localWorkloadPeeringIPV6:
                   type: string
                 logSeverityScreen:
-                  default: INFO
+                  default: Info
+                  pattern: ^(?i)(Trace|Debug|Info|Warning|Error|Fatal)?$
                   type: string
                 nodeMeshMaxRestartTime:
                   type: string
@@ -2957,8 +2958,8 @@ spec:
             spec:
               properties:
                 reservedCIDRs:
+                  format: cidr
                   items:
-                    format: cidr
                     type: string
                   type: array
                   x-kubernetes-list-type: set
@@ -3030,7 +3031,6 @@ spec:
                                     type: string
                                   interfaceCIDRs:
                                     items:
-                                      format: cidr
                                       type: string
                                     type: array
                                     x-kubernetes-list-type: set
@@ -3143,7 +3143,6 @@ spec:
                                         type: string
                                       interfaceCIDRs:
                                         items:
-                                          format: cidr
                                           type: string
                                         type: array
                                         x-kubernetes-list-type: set
@@ -3662,7 +3661,6 @@ spec:
               properties:
                 nets:
                   items:
-                    format: cidr
                     type: string
                   type: array
                   x-kubernetes-list-type: set
