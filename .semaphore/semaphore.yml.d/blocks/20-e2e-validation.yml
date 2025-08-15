@@ -10,4 +10,3 @@
       - name: Test Pipeline files are valid yaml
         commands:
           - ./.semaphore/end-to-end/scripts/test_scripts/e2e-validation.sh
-
