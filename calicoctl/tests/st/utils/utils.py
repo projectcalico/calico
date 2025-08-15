@@ -274,7 +274,7 @@ def calicoctl(command, data=None, load_as_stdin=False, format="yaml", only_stdou
                             "export KUBECONFIG=%s; %s %s" % \
                             (KUBECONFIG, stdin, calicoctl_bin)
     if no_config:
-        calicoctl_env_cmd = calicoctl_bin
+        calicoctl_env_cmd = stdin + calicoctl_bin
     full_cmd = calicoctl_env_cmd + " " + command + option_file
 
     try:
