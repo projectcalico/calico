@@ -28,14 +28,14 @@ fi
 
 # If we're running in a CI environment...
 if [[ -v CI ]]; then
-  echo "[debug] Running in CI, so we're inspecting the git remotes"
+  echo "[debug] Running in CI, so we're inspecting the git remotes" >&2
   # Do we have a fetch that references multiple branches?
   for remote in $(git remote); do
     if git config get remote.${remote}.fetch | fgrep -q "*"; then
       echo "[debug] Remote ${remote} seems to be configured to fetch all branches" >&2
     else
       echo "[debug] Remote ${remote} doesn't seem to be configured to fetch all branches; fixing..." >&2
-      echo "[debug] Updating remote ${remote}"
+      echo "[debug] Updating remote ${remote}" >&2
       git config remote.${remote}.fetch "+refs/heads/*:refs/remotes/${remote}/*"
     fi # git config
   done
