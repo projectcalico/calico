@@ -52,6 +52,21 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
 )
 
+// If true, run the tests in v3 CRD mode. Otherwise, run against crd.projectcalico.org/v1
+var (
+	v3CRD    bool
+	apiGroup string
+)
+
+func init() {
+	apiGroup = os.Getenv("CALICO_API_GROUP")
+	if apiGroup == "" {
+		// Default to legacy crd.projectcalico.org/v1
+		apiGroup = "crd.projectcalico.org/v1"
+	}
+	v3CRD = apiGroup == apiv3.GroupVersionCurrent
+}
+
 var (
 	zeroOrder                  = float64(0.0)
 	calicoAllowPolicyModelSpec = apiv3.GlobalNetworkPolicySpec{
@@ -362,6 +377,7 @@ var _ = testutils.E2eDatastoreDescribe("Test UIDs and owner references", testuti
 
 	BeforeEach(func() {
 		log.SetLevel(log.DebugLevel)
+		log.WithField("group", apiGroup).Info("Running tests using using API group for CRDs")
 
 		// Create a k8s backend KVP client.
 		var err error
@@ -385,6 +401,11 @@ var _ = testutils.E2eDatastoreDescribe("Test UIDs and owner references", testuti
 
 		name := "test-owner-ref-policy"
 		keyName := fmt.Sprintf("default.%s", name)
+		if v3CRD {
+			// In v3CRD mode, we don't do tier prefixing of NetworkPolicy names under the hood,
+			// so make sure the keyName is the same as the name.
+			keyName = name
+		}
 		kvp := model.KVPair{
 			Key: model.ResourceKey{
 				Name:      keyName,
@@ -433,18 +454,31 @@ var _ = testutils.E2eDatastoreDescribe("Test UIDs and owner references", testuti
 		err = cli.Get(ctx, types.NamespacedName{Name: keyName, Namespace: "default"}, crd)
 		Expect(err).NotTo(HaveOccurred())
 
-		// The OwnerReferences are stored in an annotation. Load it.
-		meta := metav1.ObjectMeta{}
-		annot := crd.Annotations["projectcalico.org/metadata"]
-		err = json.Unmarshal([]byte(annot), &meta)
-		Expect(err).NotTo(HaveOccurred())
+		var meta metav1.ObjectMeta
+		if v3CRD {
+			// The OwnerReferences are stored in the object metadata.
+			meta = crd.ObjectMeta
+		} else {
+			// The OwnerReferences are stored in an annotation. Load it.
+			meta = metav1.ObjectMeta{}
+			annot := crd.Annotations["projectcalico.org/metadata"]
+			err = json.Unmarshal([]byte(annot), &meta)
+			Expect(err).NotTo(HaveOccurred())
+		}
 
-		// Compare the OwnerReferences. pod UID should be unchanged, but np UID should be translated.
 		Expect(meta.OwnerReferences).To(HaveLen(2))
 		Expect(meta.OwnerReferences[0].UID).To(Equal(podUID))
 		Expect(meta.OwnerReferences[0].APIVersion).To(Equal("v1"))
-		Expect(meta.OwnerReferences[1].UID).To(Equal(npUIDv1))
-		Expect(meta.OwnerReferences[1].APIVersion).To(Equal("crd.projectcalico.org/v1"))
+
+		if v3CRD {
+			// UID should be unchanged if we're in v3 CRD mode.
+			Expect(meta.OwnerReferences[1].UID).To(Equal(npUID))
+			Expect(meta.OwnerReferences[1].APIVersion).To(Equal("projectcalico.org/v3"))
+		} else {
+			// Compare the OwnerReferences. pod UID should be unchanged, but np UID should be translated.
+			Expect(meta.OwnerReferences[1].UID).To(Equal(npUIDv1))
+			Expect(meta.OwnerReferences[1].APIVersion).To(Equal("crd.projectcalico.org/v1"))
+		}
 	})
 })
 
@@ -1259,11 +1293,16 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 			},
 		}
 
-		gnpClient := c.GetResourceClientFromResourceKind(apiv3.KindStagedGlobalNetworkPolicy)
+		sgnpClient := c.GetResourceClientFromResourceKind(apiv3.KindStagedGlobalNetworkPolicy)
 		kvp1Name := "my-test-sgnp"
+		kvp1KeyName := fmt.Sprintf("default.%s", kvp1Name)
 		kvp1KeyV1 := model.PolicyKey{Name: kvp1Name, Tier: "default"}
+		if v3CRD {
+			// Name should be the same in both the object and the key in v3 CRD mode.
+			kvp1KeyName = kvp1Name
+		}
 		kvp1a := &model.KVPair{
-			Key: model.ResourceKey{Name: fmt.Sprintf("default.%s", kvp1Name), Kind: apiv3.KindStagedGlobalNetworkPolicy},
+			Key: model.ResourceKey{Name: kvp1KeyName, Kind: apiv3.KindStagedGlobalNetworkPolicy},
 			Value: &apiv3.StagedGlobalNetworkPolicy{
 				TypeMeta: metav1.TypeMeta{
 					Kind:       apiv3.KindStagedGlobalNetworkPolicy,
@@ -1277,7 +1316,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 		}
 
 		kvp1b := &model.KVPair{
-			Key: model.ResourceKey{Name: fmt.Sprintf("default.%s", kvp1Name), Kind: apiv3.KindStagedGlobalNetworkPolicy},
+			Key: model.ResourceKey{Name: kvp1KeyName, Kind: apiv3.KindStagedGlobalNetworkPolicy},
 			Value: &apiv3.StagedGlobalNetworkPolicy{
 				TypeMeta: metav1.TypeMeta{
 					Kind:       apiv3.KindStagedGlobalNetworkPolicy,
@@ -1291,9 +1330,14 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 		}
 
 		kvp2Name := "my-test-sgnp2"
+		kvp2KeyName := fmt.Sprintf("default.%s", kvp2Name)
 		kvp2KeyV1 := model.PolicyKey{Name: kvp2Name, Tier: "default"}
+		if v3CRD {
+			// Name should be the same in both the object and the key in v3 CRD mode.
+			kvp2KeyName = kvp2Name
+		}
 		kvp2a := &model.KVPair{
-			Key: model.ResourceKey{Name: fmt.Sprintf("default.%s", kvp2Name), Kind: apiv3.KindStagedGlobalNetworkPolicy},
+			Key: model.ResourceKey{Name: kvp2KeyName, Kind: apiv3.KindStagedGlobalNetworkPolicy},
 			Value: &apiv3.StagedGlobalNetworkPolicy{
 				TypeMeta: metav1.TypeMeta{
 					Kind:       apiv3.KindStagedGlobalNetworkPolicy,
@@ -1307,7 +1351,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 		}
 
 		kvp2b := &model.KVPair{
-			Key: model.ResourceKey{Name: fmt.Sprintf("default.%s", kvp2Name), Kind: apiv3.KindStagedGlobalNetworkPolicy},
+			Key: model.ResourceKey{Name: kvp2KeyName, Kind: apiv3.KindStagedGlobalNetworkPolicy},
 			Value: &apiv3.StagedGlobalNetworkPolicy{
 				TypeMeta: metav1.TypeMeta{
 					Kind:       apiv3.KindStagedGlobalNetworkPolicy,
@@ -1330,33 +1374,34 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 
 		By("Creating a Staged Global Network Policy", func() {
 			var err error
-			kvpRes, err = gnpClient.Create(ctx, kvp1a)
+			kvpRes, err = sgnpClient.Create(ctx, kvp1a)
 			Expect(err).NotTo(HaveOccurred())
 		})
 		By("Attempting to recreate an existing Staged Global Network Policy", func() {
-			_, err := gnpClient.Create(ctx, kvp1a)
+			_, err := sgnpClient.Create(ctx, kvp1a)
 			Expect(err).To(HaveOccurred())
 		})
 
 		By("Updating an existing Staged Global Network Policy", func() {
 			kvp1b.Revision = kvpRes.Revision
-			_, err := gnpClient.Update(ctx, kvp1b)
+			_, err := sgnpClient.Update(ctx, kvp1b)
 			Expect(err).NotTo(HaveOccurred())
 		})
+
 		By("Create another Staged Global Network Policy", func() {
 			var err error
-			kvpRes, err = gnpClient.Create(ctx, kvp2a)
+			kvpRes, err = sgnpClient.Create(ctx, kvp2a)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
 		By("Updating the Staged Global Network Policy created by Create", func() {
 			kvp2b.Revision = kvpRes.Revision
-			_, err := gnpClient.Update(ctx, kvp2b)
+			_, err := sgnpClient.Update(ctx, kvp2b)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
 		By("Deleted the Staged Global Network Policy created by Apply", func() {
-			_, err := gnpClient.Delete(ctx, kvp2a.Key, "", nil)
+			_, err := sgnpClient.Delete(ctx, kvp2a.Key, "", nil)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -1372,9 +1417,9 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 		})
 
 		By("Getting an existing Staged Global Network Policy", func() {
-			kvp, err := c.Get(ctx, model.ResourceKey{Name: "default.my-test-sgnp", Kind: apiv3.KindStagedGlobalNetworkPolicy}, "")
+			kvp, err := c.Get(ctx, model.ResourceKey{Name: kvp1KeyName, Kind: apiv3.KindStagedGlobalNetworkPolicy}, "")
 			Expect(err).ToNot(HaveOccurred())
-			Expect(kvp.Key.(model.ResourceKey).Name).To(Equal("default.my-test-sgnp"))
+			Expect(kvp.Key.(model.ResourceKey).Name).To(Equal(kvp1KeyName))
 			Expect(kvp.Value.(*apiv3.StagedGlobalNetworkPolicy).Spec).To(Equal(kvp1b.Value.(*apiv3.StagedGlobalNetworkPolicy).Spec))
 		})
 
@@ -1382,12 +1427,12 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 			kvps, err := c.List(ctx, model.ResourceListOptions{Kind: apiv3.KindStagedGlobalNetworkPolicy}, "")
 			Expect(err).ToNot(HaveOccurred())
 			Expect(kvps.KVPairs).To(HaveLen(1))
-			Expect(kvps.KVPairs[len(kvps.KVPairs)-1].Key.(model.ResourceKey).Name).To(Equal("default.my-test-sgnp"))
+			Expect(kvps.KVPairs[len(kvps.KVPairs)-1].Key.(model.ResourceKey).Name).To(Equal(kvp1KeyName))
 			Expect(kvps.KVPairs[len(kvps.KVPairs)-1].Value.(*apiv3.StagedGlobalNetworkPolicy).Spec).To(Equal(kvp1b.Value.(*apiv3.StagedGlobalNetworkPolicy).Spec))
 		})
 
 		By("Deleting an existing Staged Global Network Policy", func() {
-			_, err := gnpClient.Delete(ctx, kvp1a.Key, "", nil)
+			_, err := sgnpClient.Delete(ctx, kvp1a.Key, "", nil)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -1557,7 +1602,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 					Namespace: "test-syncer-ns1",
 				},
 				Spec: apiv3.NetworkSetSpec{
-					Nets: []string{
+					Nets: []apiv3.CIDR{
 						"10.11.12.13/32",
 						"100.101.102.103/24",
 					},
@@ -1580,7 +1625,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 					Namespace: "test-syncer-ns1",
 				},
 				Spec: apiv3.NetworkSetSpec{
-					Nets: []string{
+					Nets: []apiv3.CIDR{
 						"192.168.100.111/32",
 					},
 				},
@@ -1602,9 +1647,9 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 					Namespace: "test-syncer-ns1",
 				},
 				Spec: apiv3.NetworkSetSpec{
-					Nets: []string{
+					Nets: []apiv3.CIDR{
 						"8.8.8.8/32",
-						"aa:bb::cc",
+						"aa:bb::cc/128",
 					},
 				},
 			},
@@ -1765,7 +1810,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 					Name: "aa-bb-cc",
 				},
 				Spec: apiv3.BGPPeerSpec{
-					PeerIP:   "aa:bb::cc",
+					PeerIP:   "aa:bb::cc/128",
 					ASNumber: numorstring.ASNumber(6514),
 				},
 			},
@@ -1785,7 +1830,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 					Name: "aa-bb-cc",
 				},
 				Spec: apiv3.BGPPeerSpec{
-					PeerIP: "aa:bb::cc",
+					PeerIP: "aa:bb::cc/128",
 				},
 			},
 		}
@@ -1943,7 +1988,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 					},
 					Spec: apiv3.BGPPeerSpec{
 						Node:     nodename,
-						PeerIP:   "aa:bb::cc",
+						PeerIP:   "aa:bb::cc/128",
 						ASNumber: numorstring.ASNumber(6514),
 					},
 				},
@@ -1963,7 +2008,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 					},
 					Spec: apiv3.BGPPeerSpec{
 						Node:   nodename,
-						PeerIP: "aa:bb::cc",
+						PeerIP: "aa:bb::cc/128",
 					},
 				},
 			}
@@ -2582,16 +2627,20 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 			updFC, err = c.Create(ctx, fc)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(updFC.Key.(model.ResourceKey).Name).To(Equal("myfelixconfig"))
+
 			// Set the ResourceVersion (since it is auto populated by the Kubernetes datastore) to make it easier to compare objects.
 			Expect(fc.Value.(*apiv3.FelixConfiguration).GetObjectMeta().GetResourceVersion()).To(Equal(""))
 			fc.Value.(*apiv3.FelixConfiguration).GetObjectMeta().SetResourceVersion(updFC.Value.(*apiv3.FelixConfiguration).GetObjectMeta().GetResourceVersion())
 
-			// UID and CreationTimestamp are auto-generated, make sure we don't fail the assertion based on it.
+			// UID, CreationTimestamp, ManagedFields are auto-generated or filled in by the server, make sure we don't fail the assertion based on it.
 			fc.Value.(*apiv3.FelixConfiguration).ObjectMeta.UID = updFC.Value.(*apiv3.FelixConfiguration).ObjectMeta.UID
 			fc.Value.(*apiv3.FelixConfiguration).ObjectMeta.CreationTimestamp = updFC.Value.(*apiv3.FelixConfiguration).ObjectMeta.CreationTimestamp
+			fc.Value.(*apiv3.FelixConfiguration).ObjectMeta.ManagedFields = updFC.Value.(*apiv3.FelixConfiguration).ObjectMeta.ManagedFields
+			fc.Value.(*apiv3.FelixConfiguration).ObjectMeta.Generation = updFC.Value.(*apiv3.FelixConfiguration).ObjectMeta.Generation
 
 			// Assert the created object matches what we created.
-			Expect(updFC.Value.(*apiv3.FelixConfiguration)).To(Equal(fc.Value.(*apiv3.FelixConfiguration)))
+			Expect(updFC.Value.(*apiv3.FelixConfiguration).Spec).To(Equal(fc.Value.(*apiv3.FelixConfiguration).Spec))
+			Expect(updFC.Value.(*apiv3.FelixConfiguration).ObjectMeta).To(Equal(fc.Value.(*apiv3.FelixConfiguration).ObjectMeta))
 			Expect(updFC.Revision).NotTo(BeNil())
 
 			// Unset the ResourceVersion for the original resource since we modified it just for the sake of comparing in the tests.
@@ -2919,15 +2968,21 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 	)
 
 	BeforeEach(func() {
-		// Create a client
+		// Create a client with a high QPS to avoid throttling.
+		cfg.Spec.KubeConfig.K8sClientQPS = 1000
 		client, err := NewKubeClient(&cfg.Spec)
 		Expect(err).NotTo(HaveOccurred())
 		c = client.(*KubeClient)
 
 		config, _, err := CreateKubernetesClientset(&cfg.Spec)
 		Expect(err).NotTo(HaveOccurred())
+
+		// Increase the QPS to avoid throttling during tests, as some of the tests
+		// perform a lot of API calls rapidly.
+		config.QPS = 100
+		config.Burst = 1000
 		config.ContentType = runtime.ContentTypeJSON
-		anpClient, err = buildK8SAdminPolicyClient(config)
+		anpClient, err = adminpolicyclient.NewForConfig(config)
 		Expect(err).NotTo(HaveOccurred())
 
 		ctx = context.Background()
@@ -2943,18 +2998,22 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 			_, err := c.ClientSet.CoreV1().ServiceAccounts("default").Create(ctx, &sa, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 		}
+
 		deleteAllServiceAccounts := func() {
 			var zero int64
 			err := c.ClientSet.CoreV1().ServiceAccounts("default").DeleteCollection(ctx, metav1.DeleteOptions{GracePeriodSeconds: &zero}, metav1.ListOptions{})
 			Expect(err).NotTo(HaveOccurred())
 		}
+
 		BeforeEach(func() {
 			createTestServiceAccount("test-sa-1")
 			createTestServiceAccount("test-sa-2")
 		})
+
 		AfterEach(func() {
 			deleteAllServiceAccounts()
 		})
+
 		It("supports watching a specific profile (from namespace)", func() {
 			watch, err := c.Watch(ctx, model.ResourceListOptions{Name: "kns.default", Kind: apiv3.KindProfile}, api.WatchOptions{})
 			Expect(err).NotTo(HaveOccurred())
@@ -2962,6 +3021,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 			event := ExpectAddedEvent(watch.ResultChan())
 			Expect(event.New.Key.String()).To(Equal("Profile(kns.default)"))
 		})
+
 		It("supports watching a specific profile (from serviceAccount)", func() {
 			watch, err := c.Watch(ctx, model.ResourceListOptions{Name: "ksa.default.test-sa-1", Kind: apiv3.KindProfile}, api.WatchOptions{})
 			Expect(err).NotTo(HaveOccurred())
@@ -2969,12 +3029,14 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 			event := ExpectAddedEvent(watch.ResultChan())
 			Expect(event.New.Key.String()).To(Equal("Profile(ksa.default.test-sa-1)"))
 		})
+
 		It("supports watching all profiles", func() {
 			watch, err := c.Watch(ctx, model.ResourceListOptions{Kind: apiv3.KindProfile}, api.WatchOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			defer watch.Stop()
 			ExpectAddedEvent(watch.ResultChan())
 		})
+
 		It("rejects names without prefixes", func() {
 			_, err := c.Watch(ctx, model.ResourceListOptions{Name: "default", Kind: apiv3.KindProfile}, api.WatchOptions{})
 			Expect(err).To(HaveOccurred())
@@ -3724,6 +3786,9 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 			Name: "default",
 			Kind: "IPAMConfig",
 		}
+		if v3CRD {
+			v3Key.Kind = "IPAMConfiguration"
+		}
 
 		By("Creating an IPAM Config", func() {
 			kvpRes, err := c.Create(ctx, ipamKVP)
@@ -3736,8 +3801,13 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 		By("Reading it with the v3 client and checking metadata", func() {
 			v3Res, err := c.Get(ctx, v3Key, "")
 			Expect(err).NotTo(HaveOccurred())
-			createdAt = v3Res.Value.(*libapiv3.IPAMConfig).CreationTimestamp
-			uid = v3Res.Value.(*libapiv3.IPAMConfig).UID
+			if v3CRD {
+				createdAt = v3Res.Value.(*apiv3.IPAMConfiguration).CreationTimestamp
+				uid = v3Res.Value.(*apiv3.IPAMConfiguration).UID
+			} else {
+				createdAt = v3Res.Value.(*libapiv3.IPAMConfig).CreationTimestamp
+				uid = v3Res.Value.(*libapiv3.IPAMConfig).UID
+			}
 			Expect(createdAt).NotTo(Equal(metav1.Time{}))
 			Expect(uid).NotTo(Equal(""))
 		})
@@ -3759,8 +3829,13 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 		By("Reading it with the v3 client and checking metadata hasn't changed", func() {
 			v3Res, err := c.Get(ctx, v3Key, "")
 			Expect(err).NotTo(HaveOccurred())
-			Expect(v3Res.Value.(*libapiv3.IPAMConfig).CreationTimestamp).To(Equal(createdAt))
-			Expect(v3Res.Value.(*libapiv3.IPAMConfig).UID).To(Equal(uid))
+			if v3CRD {
+				Expect(v3Res.Value.(*apiv3.IPAMConfiguration).CreationTimestamp).To(Equal(createdAt))
+				Expect(v3Res.Value.(*apiv3.IPAMConfiguration).UID).To(Equal(uid))
+			} else {
+				Expect(v3Res.Value.(*libapiv3.IPAMConfig).CreationTimestamp).To(Equal(createdAt))
+				Expect(v3Res.Value.(*libapiv3.IPAMConfig).UID).To(Equal(uid))
+			}
 		})
 
 		By("Deleting an IPAM Config", func() {
@@ -3790,31 +3865,82 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 			},
 		}
 
+		if v3CRD {
+			// Use the correct types for the v3 API.
+			ipamKVP.Key = model.ResourceKey{
+				Name: "default",
+				Kind: "IPAMConfiguration",
+			}
+			ipamKVP.Value = &apiv3.IPAMConfiguration{
+				TypeMeta: metav1.TypeMeta{
+					Kind:       "IPAMConfiguration",
+					APIVersion: "projectcalico.org/v3",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "default",
+				},
+				Spec: apiv3.IPAMConfigurationSpec{
+					StrictAffinity:     false,
+					AutoAllocateBlocks: true,
+				},
+			}
+		}
+
 		kvpRes, err := c.Create(ctx, ipamKVP)
 		By("Creating an IPAM Config", func() {
 			Expect(err).NotTo(HaveOccurred())
-			Expect(kvpRes.Value.(*libapiv3.IPAMConfig).Spec).To(Equal(ipamKVP.Value.(*libapiv3.IPAMConfig).Spec))
+			if v3CRD {
+				Expect(kvpRes.Value.(*apiv3.IPAMConfiguration).Spec).To(Equal(ipamKVP.Value.(*apiv3.IPAMConfiguration).Spec))
+			} else {
+				Expect(kvpRes.Value.(*libapiv3.IPAMConfig).Spec).To(Equal(ipamKVP.Value.(*libapiv3.IPAMConfig).Spec))
+			}
 		})
 
 		By("Expecting the creation timestamp to be set")
-		createdAt := kvpRes.Value.(*libapiv3.IPAMConfig).CreationTimestamp
+		var createdAt metav1.Time
+		if v3CRD {
+			createdAt = kvpRes.Value.(*apiv3.IPAMConfiguration).CreationTimestamp
+		} else {
+			createdAt = kvpRes.Value.(*libapiv3.IPAMConfig).CreationTimestamp
+		}
 		Expect(createdAt).NotTo(Equal(metav1.Time{}))
 
 		By("Reading and updating an IPAM Config", func() {
 			kvpRes, err := c.Get(ctx, ipamKVP.Key, "")
 			Expect(err).NotTo(HaveOccurred())
-			Expect(kvpRes.Value.(*libapiv3.IPAMConfig).Spec).To(Equal(ipamKVP.Value.(*libapiv3.IPAMConfig).Spec))
 
-			kvpRes.Value.(*libapiv3.IPAMConfig).Spec.StrictAffinity = true
-			kvpRes.Value.(*libapiv3.IPAMConfig).Spec.AutoAllocateBlocks = false
+			if v3CRD {
+				// Expect the spec to match the original.
+				Expect(kvpRes.Value.(*apiv3.IPAMConfiguration).Spec).To(Equal(ipamKVP.Value.(*apiv3.IPAMConfiguration).Spec))
+
+				// Prepare to update the IPAM config.
+				kvpRes.Value.(*apiv3.IPAMConfiguration).Spec.StrictAffinity = true
+				kvpRes.Value.(*apiv3.IPAMConfiguration).Spec.AutoAllocateBlocks = false
+			} else {
+				// Expect the spec to match the original.
+				Expect(kvpRes.Value.(*libapiv3.IPAMConfig).Spec).To(Equal(ipamKVP.Value.(*libapiv3.IPAMConfig).Spec))
+
+				// Prepare to update the IPAM config.
+				kvpRes.Value.(*libapiv3.IPAMConfig).Spec.StrictAffinity = true
+				kvpRes.Value.(*libapiv3.IPAMConfig).Spec.AutoAllocateBlocks = false
+			}
+
 			kvpRes2, err := c.Update(ctx, kvpRes)
 			Expect(err).NotTo(HaveOccurred())
 
-			Expect(kvpRes2.Value.(*libapiv3.IPAMConfig).Spec).NotTo(Equal(ipamKVP.Value.(*libapiv3.IPAMConfig).Spec))
-			Expect(kvpRes.Value.(*libapiv3.IPAMConfig).Spec).To(Equal(kvpRes.Value.(*libapiv3.IPAMConfig).Spec))
-
-			// Expect the creation time stamp to be the same.
-			Expect(kvpRes2.Value.(*libapiv3.IPAMConfig).CreationTimestamp).To(Equal(createdAt))
+			if v3CRD {
+				// Expect the spec to have changed.
+				Expect(kvpRes2.Value.(*apiv3.IPAMConfiguration).Spec).NotTo(Equal(ipamKVP.Value.(*apiv3.IPAMConfiguration).Spec))
+				Expect(kvpRes.Value.(*apiv3.IPAMConfiguration).Spec).To(Equal(kvpRes.Value.(*apiv3.IPAMConfiguration).Spec))
+				// Expect the creation time stamp to be the same.
+				Expect(kvpRes2.Value.(*apiv3.IPAMConfiguration).CreationTimestamp).To(Equal(createdAt))
+			} else {
+				// Expect the spec to have changed.
+				Expect(kvpRes2.Value.(*libapiv3.IPAMConfig).Spec).NotTo(Equal(ipamKVP.Value.(*libapiv3.IPAMConfig).Spec))
+				Expect(kvpRes.Value.(*libapiv3.IPAMConfig).Spec).To(Equal(kvpRes.Value.(*libapiv3.IPAMConfig).Spec))
+				// Expect the creation time stamp to be the same.
+				Expect(kvpRes2.Value.(*libapiv3.IPAMConfig).CreationTimestamp).To(Equal(createdAt))
+			}
 		})
 
 		By("Updating the IPAMConfig using the v1 client", func() {
@@ -3830,10 +3956,14 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 		By("Checking the update using the v3 client", func() {
 			kvpRes, err := c.Get(ctx, ipamKVP.Key, "")
 			Expect(err).NotTo(HaveOccurred())
-			Expect(kvpRes.Value.(*libapiv3.IPAMConfig).Spec.MaxBlocksPerHost).To(Equal(1000))
 
-			// Expect the creation time stamp to be the same.
-			Expect(kvpRes.Value.(*libapiv3.IPAMConfig).CreationTimestamp).To(Equal(createdAt))
+			if v3CRD {
+				Expect(kvpRes.Value.(*apiv3.IPAMConfiguration).Spec.MaxBlocksPerHost).To(Equal(int32(1000)))
+				Expect(kvpRes.Value.(*apiv3.IPAMConfiguration).CreationTimestamp).To(Equal(createdAt))
+			} else {
+				Expect(kvpRes.Value.(*libapiv3.IPAMConfig).Spec.MaxBlocksPerHost).To(Equal(1000))
+				Expect(kvpRes.Value.(*libapiv3.IPAMConfig).CreationTimestamp).To(Equal(createdAt))
+			}
 		})
 
 		By("Deleting an IPAM Config", func() {
@@ -3883,6 +4013,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Inline kubeconfig support", testuti
 			_, err := c.ClientSet.CoreV1().Namespaces().Create(ctx, &ns, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 		})
+
 		By("Deleting the namespace", func() {
 			testutils.DeleteNamespace(c.ClientSet, ns.ObjectMeta.Name)
 		})
