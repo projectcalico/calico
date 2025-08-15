@@ -16,7 +16,7 @@ global_job_config:
   epilogue:
     always:
       commands:
-        - ./.semaphore/end-to-end/scripts/global_epilogue.sh
+        - ~/calico/.semaphore/end-to-end/scripts/global_epilogue.sh
   secrets:
     - name: marvin-github-ssh-private-key
     - name: banzai-secrets
@@ -27,6 +27,10 @@ global_job_config:
       value: --ginkgo.focus=\[sig-calico\].*\[RunsOnWindows\]
     - name: FUNCTIONAL_AREA
       value: "windows.yml"
+    - name: USE_PRIVATE_REGISTRY
+      value: "true"
+    - name: PRIVATE_REGISTRY
+      value: "quay.io/calico/"
 
 # Dimensions
 # Provisioners: aws-kubeadm, gcp-kubeadm, rancher
@@ -50,7 +54,7 @@ blocks:
           execution_time_limit:
             hours: 5
           commands:
-            - ./.semaphore/end-to-end/scripts/body_standard.sh
+            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
           env_vars:
             - name: PROVISIONER
               value: aws-kubeadm
@@ -67,7 +71,7 @@ blocks:
           execution_time_limit:
             hours: 5
           commands:
-            - ./.semaphore/end-to-end/scripts/body_standard.sh
+            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
           env_vars:
             - name: PROVISIONER
               value: gcp-kubeadm
@@ -84,7 +88,7 @@ blocks:
           execution_time_limit:
             hours: 5
           commands:
-            - ./.semaphore/end-to-end/scripts/body_standard.sh
+            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
           env_vars:
             - name: PROVISIONER
               value: gcp-rancher
@@ -96,172 +100,10 @@ blocks:
               value: CalicoNftables
             - name: ENCAPSULATION_TYPE
               value: None
-            - name: RKE_VERSION  # Don't just update these versions, need k8s and rke versions to match.
-              value: "v1.8.6"    # https://github.com/rancher/rke/releases/tag/v1.8.6
+            - name: RKE_VERSION # Don't just update these versions, need k8s and rke versions to match.
+              value: "v1.8.6" # https://github.com/rancher/rke/releases/tag/v1.8.6
             - name: K8S_VERSION
-              value: "v1.32.7"   # RKE 1.8.6 supports: v1.30.14-rancher1-1, v1.31.11-rancher1-1, v1.32.7-rancher1-1
-
-# blocks:
-#   - name: Calico Windows nodes VXLAN and BGP k8s-e2e
-#     dependencies: []
-#     task:
-#       jobs:
-#         - name: kdd - aws-kubeadm
-#           execution_time_limit:
-#             hours: 5
-#           commands:
-#             - ./.semaphore/end-to-end/scripts/body_standard.sh
-#           matrix:
-#             - env_var: K8S_VERSION
-#               values: ["stable-3"]
-#             - env_var: INSTALLER
-#               values: ["operator"]
-#             - env_var: ENCAPSULATION_TYPE
-#               values: ["VXLAN", "None"]
-#             - env_var: WINDOWS_OS_VERSION
-#               values: ["1809", "2022"]
-#           env_vars:
-#             - name: MANIFEST_FILE
-#               value: calico.yaml
-
-#         - name: kdd - rancher
-#           execution_time_limit:
-#             hours: 5
-#           commands:
-#             - ./.semaphore/end-to-end/scripts/body_standard.sh
-#           matrix:
-#             - env_var: INSTALLER
-#               values: ["operator"]
-#             - env_var: ENCAPSULATION_TYPE
-#               values: ["VXLAN"]
-#             - env_var: WINDOWS_OS_VERSION
-#               values: ["1809", "2022"]
-#           env_vars:
-#             - name: MANIFEST_FILE
-#               value: calico.yaml
-#             - name: PROVISIONER
-#               value: gcp-rancher
-#             - name: RKE_VERSION  # Don't just update these versions, need k8s and rke versions to match.
-#               value: "v1.7.1"    # https://github.com/rancher/rke/releases/tag/v1.7.1
-#             - name: K8S_VERSION
-#               value: "v1.29.11"  # RKE 1.7.1 supports: v1.28.15-rancher1-1, v1.29.11-rancher1-1, v1.30.7-rancher1-1, v1.31.3-rancher1-1
-
-#         - name: kdd - gcp-kubeadm
-#           execution_time_limit:
-#             hours: 5
-#           commands:
-#             - ./.semaphore/end-to-end/scripts/body_standard.sh
-#           matrix:
-#             - env_var: K8S_VERSION
-#               values: ["stable-3"]
-#             - env_var: INSTALLER
-#               values: ["operator"]
-#             - env_var: ENCAPSULATION_TYPE
-#               values: ["VXLAN"]
-#             - env_var: WINDOWS_OS_VERSION
-#               values: ["1809", "2022"]
-#           env_vars:
-#             - name: MANIFEST_FILE
-#               value: calico.yaml
-#             - name: PROVISIONER
-#               value: gcp-kubeadm
-#       env_vars:
-#         - name: PROVISIONER
-#           value: aws-kubeadm
-#         - name: USE_HASH_RELEASE
-#           value: "true"
-
-#   # Containerd tests from here on:
-
-#   - name: Calico Windows VXLAN and BGP k8s-e2e - containerd
-#     dependencies: []
-#     task:
-#       jobs:
-#         - name: kdd - aws-kubeadm - containerd
-#           execution_time_limit:
-#             hours: 5
-#           commands:
-#             - ./.semaphore/end-to-end/scripts/body_standard.sh
-#           matrix:
-#             - env_var: K8S_VERSION
-#               values: ["stable-3", "stable"]
-#             - env_var: INSTALLER
-#               values: ["operator"]
-#             - env_var: ENCAPSULATION_TYPE
-#               values: ["VXLAN", "None"]
-#             - env_var: WINDOWS_OS_VERSION
-#               values: ["1809", "2022"]
-#           env_vars:
-#             - name: PROVISIONER
-#               value: aws-kubeadm
-
-#         - name: kdd - rancher - containerd
-#           execution_time_limit:
-#             hours: 5
-#           commands:
-#             - ./.semaphore/end-to-end/scripts/body_standard.sh
-#           matrix:
-#             - env_var: INSTALLER
-#               values: ["operator"]
-#             - env_var: ENCAPSULATION_TYPE
-#               values: ["VXLAN"]
-#             - env_var: WINDOWS_OS_VERSION
-#               values: ["2022"]
-#           env_vars:
-#             - name: PROVISIONER
-#               value: gcp-rancher
-
-#         - name: kdd - gcp-kubeadm - containerd
-#           execution_time_limit:
-#             hours: 5
-#           commands:
-#             - ./.semaphore/end-to-end/scripts/body_standard.sh
-#           matrix:
-#             - env_var: K8S_VERSION
-#               values: ["stable-1"]
-#             - env_var: INSTALLER
-#               values: ["operator"]
-#             - env_var: ENCAPSULATION_TYPE
-#               values: ["VXLAN"]
-#             - env_var: WINDOWS_OS_VERSION
-#               values: ["2022"]
-#           env_vars:
-#             - name: PROVISIONER
-#               value: gcp-kubeadm
-#       env_vars:
-#         - name: WINDOWS_CONTAINER_RUNTIME
-#           value: "containerd:1.6.4"
-
-#   - name: Calico Windows VXLAN and BGP k8s-e2e - containerd operator install
-#     dependencies: []
-#     task:
-#       agent:
-#         machine:
-#           type: f1-standard-2
-#           os_image: ubuntu2204
-#       jobs:
-#         - name: kdd - azr-capi - containerd
-#           execution_time_limit:
-#             hours: 5
-#           commands:
-#             - ./.semaphore/end-to-end/scripts/body_standard.sh
-#           matrix:
-#             - env_var: K8S_VERSION
-#               values: [ "stable-1" ]
-#             - env_var: INSTALLER
-#               values: [ "operator" ]
-#             - env_var: ENCAPSULATION_TYPE
-#               values: [ "VXLAN" ]
-#             - env_var: WINDOWS_OS_VERSION
-#               values: [ "2022" ]
-#           env_vars:
-#             - name: PROVISIONER
-#               value: azr-capi
-#             - name: USE_WINDOWS_HPC_INSTALL
-#               value: "true"
-#       env_vars:
-#         - name: WINDOWS_CONTAINER_RUNTIME
-#           value: "containerd:1.6.4"
+              value: "v1.32.7" # RKE 1.8.6 supports: v1.30.14-rancher1-1, v1.31.11-rancher1-1, v1.32.7-rancher1-1
 
 promotions:
   - name: Cleanup jobs

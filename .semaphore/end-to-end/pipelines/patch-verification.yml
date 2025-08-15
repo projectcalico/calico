@@ -16,7 +16,7 @@ global_job_config:
   epilogue:
     always:
       commands:
-        - ./.semaphore/end-to-end/scripts/global_epilogue.sh
+        - ~/calico/.semaphore/end-to-end/scripts/global_epilogue.sh
   secrets:
     - name: marvin-github-ssh-private-key
     - name: banzai-secrets
@@ -33,6 +33,10 @@ global_job_config:
       value: "patch-verification.yml"
     - name: IPV4_POD_CIDR
       value: "192.168.0.0/16"
+    - name: USE_PRIVATE_REGISTRY
+      value: "true"
+    - name: PRIVATE_REGISTRY
+      value: "quay.io/calico/"
 
 promotions:
   - name: Cleanup jobs
@@ -102,7 +106,7 @@ blocks:
           execution_time_limit:
             hours: 7
           commands:
-            - ./.semaphore/end-to-end/scripts/body_standard.sh
+            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
           env_vars:
             - name: CNI_PLUGIN
               value: "Calico"
@@ -182,7 +186,7 @@ blocks:
           execution_time_limit:
             hours: 7
           commands:
-            - ./.semaphore/end-to-end/scripts/body_standard.sh
+            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
           env_vars:
             - name: MANIFEST_FILE
               value: "canal.yaml"
@@ -239,7 +243,7 @@ blocks:
           execution_time_limit:
             hours: 7
           commands:
-            - ./.semaphore/end-to-end/scripts/body_standard.sh
+            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
           env_vars:
             - name: MANIFEST_FILE
               value: "calico-etcd.yaml"
@@ -273,7 +277,7 @@ blocks:
           execution_time_limit:
             hours: 7
           commands:
-            - ./.semaphore/end-to-end/scripts/body_standard.sh
+            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
           env_vars:
             - name: MANIFEST_FILE
               value: "calico.yaml"
@@ -315,7 +319,7 @@ blocks:
           execution_time_limit:
             hours: 7
           commands:
-            - ./.semaphore/end-to-end/scripts/body_standard.sh
+            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
           env_vars:
             - name: NETWORK_PLUGIN_MODE
               value: "overlay"
@@ -343,7 +347,7 @@ blocks:
           execution_time_limit:
             hours: 6
           commands:
-            - ./.semaphore/end-to-end/scripts/body_standard.sh
+            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
           env_vars:
             - name: OPENSHIFT_VERSION
               value: "4.18.17"
@@ -361,7 +365,7 @@ blocks:
           execution_time_limit:
             hours: 7
           commands:
-            - ./.semaphore/end-to-end/scripts/body_standard.sh
+            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
           env_vars:
             - name: ENCAPSULATION_TYPE
               value: "VXLAN"
@@ -399,7 +403,7 @@ blocks:
           execution_time_limit:
             hours: 7
           commands:
-            - ./.semaphore/end-to-end/scripts/body_standard.sh
+            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
           env_vars:
             - name: PROVISIONER
               value: "aws-eks"
@@ -427,7 +431,7 @@ blocks:
           execution_time_limit:
             hours: 5
           commands:
-            - ./.semaphore/end-to-end/scripts/body_standard.sh
+            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
           env_vars:
             - name: INSTALLER
               value: "helmerator"
@@ -455,7 +459,7 @@ blocks:
           execution_time_limit:
             hours: 5
           commands:
-            - ./.semaphore/end-to-end/scripts/body_standard.sh
+            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
           env_vars:
             - name: INSTALLER
               value: "helmerator"
@@ -487,7 +491,7 @@ blocks:
           execution_time_limit:
             hours: 5
           commands:
-            - ./.semaphore/end-to-end/scripts/body_standard.sh
+            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
           env_vars:
             - name: INSTALLER
               value: "operator"

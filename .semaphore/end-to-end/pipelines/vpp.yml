@@ -17,7 +17,7 @@ global_job_config:
   epilogue:
     always:
       commands:
-        - ./.semaphore/end-to-end/scripts/global_epilogue.sh || true
+        - ~/calico/.semaphore/end-to-end/scripts/global_epilogue.sh || true
   secrets:
     - name: marvin-github-ssh-private-key
     - name: banzai-secrets
@@ -50,6 +50,10 @@ global_job_config:
       value: "Enabled"
     - name: CNI_PLUGIN
       value: "Calico"
+    - name: USE_PRIVATE_REGISTRY
+      value: "true"
+    - name: PRIVATE_REGISTRY
+      value: "quay.io/calico/"
 
 blocks:
   - name: k8s-e2e ST
@@ -58,7 +62,7 @@ blocks:
       jobs:
         - name: v3.28 regression test
           commands:
-            - ./.semaphore/end-to-end/scripts/body_standard.sh
+            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
           matrix:
             - env_var: PROVISIONER
               values:
@@ -75,7 +79,7 @@ blocks:
           execution_time_limit:
             hours: 7
           commands:
-            - ./.semaphore/end-to-end/scripts/body_standard.sh
+            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
           matrix:
             - env_var: PROVISIONER
               values:
@@ -89,7 +93,7 @@ blocks:
           execution_time_limit:
             hours: 8
           commands:
-            - ./.semaphore/end-to-end/scripts/body_standard.sh
+            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
           matrix:
             - env_var: PROVISIONER
               values:
@@ -99,7 +103,7 @@ blocks:
           execution_time_limit:
             hours: 7
           commands:
-            - ./.semaphore/end-to-end/scripts/body_standard.sh
+            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
           matrix:
             - env_var: PROVISIONER
               values:
@@ -116,7 +120,7 @@ blocks:
           execution_time_limit:
             hours: 7
           commands:
-            - ./.semaphore/end-to-end/scripts/body_standard.sh
+            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
           matrix:
             - env_var: PROVISIONER
               values:
@@ -136,7 +140,7 @@ blocks:
           execution_time_limit:
             hours: 7
           commands:
-            - ./.semaphore/end-to-end/scripts/body_standard.sh
+            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
           matrix:
             - env_var: PROVISIONER
               values:
@@ -154,7 +158,7 @@ blocks:
           execution_time_limit:
             hours: 7
           commands:
-            - ./.semaphore/end-to-end/scripts/body_standard.sh
+            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
           matrix:
             - env_var: EKS_CNI
               values:
@@ -188,7 +192,7 @@ blocks:
           execution_time_limit:
             hours: 7
           commands:
-            - ./.semaphore/end-to-end/scripts/body_standard.sh
+            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
           matrix:
             - env_var: EKS_CNI
               values:
@@ -224,7 +228,7 @@ blocks:
           execution_time_limit:
             hours: 6
           commands:
-            - ./.semaphore/end-to-end/scripts/body_standard.sh
+            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
           matrix:
             - env_var: PROVISIONER
               values:
@@ -237,7 +241,7 @@ blocks:
           execution_time_limit:
             hours: 7
           commands:
-            - ./.semaphore/end-to-end/scripts/body_standard.sh
+            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
           matrix:
             - env_var: PROVISIONER
               values:

@@ -18,7 +18,7 @@ global_job_config:
   epilogue:
     always:
       commands:
-        - ./.semaphore/end-to-end/scripts/global_epilogue.sh
+        - ~/calico/.semaphore/end-to-end/scripts/global_epilogue.sh
   secrets:
     - name: marvin-github-ssh-private-key
     - name: banzai-secrets
@@ -45,6 +45,10 @@ global_job_config:
       value: gcr.io/unique-caldron-775/banzai-tests/benchmark:master
     - name: STO_RELEASE
       value: v0.16.0
+    - name: USE_PRIVATE_REGISTRY
+      value: "true"
+    - name: PRIVATE_REGISTRY
+      value: "quay.io/calico/"
 
 blocks:
   - name: Benchmarks
@@ -55,7 +59,7 @@ blocks:
           execution_time_limit:
             hours: 7
           commands:
-            - ./.semaphore/end-to-end/scripts/body_standard.sh
+            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
           matrix:
             - env_var: PRODUCT
               values: ["calico"]

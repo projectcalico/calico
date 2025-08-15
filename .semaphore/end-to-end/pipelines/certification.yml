@@ -19,7 +19,7 @@ global_job_config:
   epilogue:
     always:
       commands:
-        - ./.semaphore/end-to-end/scripts/global_epilogue.sh
+        - ~/calico/.semaphore/end-to-end/scripts/global_epilogue.sh
   secrets:
     - name: marvin-github-ssh-private-key
     - name: banzai-secrets
@@ -41,7 +41,7 @@ blocks:
           execution_time_limit:
             hours: 6
           commands:
-            - ./.semaphore/end-to-end/scripts/body_standard.sh
+            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
           matrix:
             - env_var: OPENSHIFT_VERSION
               values:
