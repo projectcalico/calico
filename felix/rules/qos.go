@@ -24,6 +24,27 @@ type QoSPolicy struct {
 }
 
 func (r *DefaultRuleRenderer) EgressQoSPolicyChain(policies []QoSPolicy, ipVersion uint8) *generictables.Chain {
+	if r.NFTables {
+		return r.nftablesQoSPolicyRules(policies, ipVersion)
+	}
+	return r.defaultQoSPolicyRules(policies, ipVersion)
+}
+
+func (r *DefaultRuleRenderer) nftablesQoSPolicyRules(policies []QoSPolicy, ipVersion uint8) *generictables.Chain {
+	var rules []generictables.Rule
+	// Policies is sorted and validated by QoS policy manager.
+
+	rules = append(rules, generictables.Rule{
+		Match: r.NewMatch().SourceNetVMAP("some map"),
+	})
+
+	return &generictables.Chain{
+		Name:  ChainQoSPolicy,
+		Rules: rules,
+	}
+}
+
+func (r *DefaultRuleRenderer) defaultQoSPolicyRules(policies []QoSPolicy, ipVersion uint8) *generictables.Chain {
 	var rules []generictables.Rule
 	// Policies is sorted and validated by QoS policy manager.
 	for _, p := range policies {

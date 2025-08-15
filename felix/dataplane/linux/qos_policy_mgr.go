@@ -28,11 +28,12 @@ import (
 type qosPolicyManager struct {
 	ipVersion    uint8
 	ruleRenderer rules.RuleRenderer
+	mangleTable  Table
+	forNftables  bool
 
 	// QoS policy
-	mangleTable Table
-	dirty       bool
-	policies    map[types.WorkloadEndpointID]rules.QoSPolicy
+	dirty    bool
+	policies map[types.WorkloadEndpointID]rules.QoSPolicy
 
 	logCxt *logrus.Entry
 }

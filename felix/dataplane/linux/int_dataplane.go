@@ -1120,6 +1120,12 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	dp.endpointsSourceV4 = epManager
 	dp.RegisterManager(newFloatingIPManager(natTableV4, ruleRenderer, 4, config.FloatingIPsEnabled))
 	dp.RegisterManager(newMasqManager(ipSetsV4, natTableV4, ruleRenderer, config.MaxIPSetSize, 4))
+
+	var filterMapsV6 nftables.MapsDataplane
+	if config.RulesConfig.NFTables {
+		filterMapsV6 = filterTableV6.(nftables.MapsDataplane)
+	}
+
 	dp.RegisterManager(newQoSPolicyManager(mangleTableV4, ruleRenderer, 4))
 
 	if config.RulesConfig.IPIPEnabled {
