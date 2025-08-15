@@ -12,9 +12,10 @@
 
 import re
 
+from oslo_config import cfg
+
 from networking_calico import datamodel_v2
 from networking_calico import datamodel_v3
-from networking_calico.compat import cfg
 
 
 DEFAULT_BW_BURST = 4294967296

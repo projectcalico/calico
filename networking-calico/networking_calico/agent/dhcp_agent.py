@@ -45,6 +45,11 @@ from neutron.conf.agent import common as config
 
 from neutron_lib import constants as neutron_constants
 
+from neutron_lib import constants
+from neutron_lib.constants import DHCPV6_STATEFUL
+
+from oslo_config import cfg
+
 from networking_calico import datamodel_v1
 from networking_calico import datamodel_v2
 from networking_calico import datamodel_v3
@@ -52,9 +57,6 @@ from networking_calico import etcdutils
 from networking_calico.agent.linux.dhcp import DnsmasqRouted
 from networking_calico.common import config as calico_config
 from networking_calico.common import mkdir_p
-from networking_calico.compat import DHCPV6_STATEFUL
-from networking_calico.compat import cfg
-from networking_calico.compat import constants
 
 LOG = logging.getLogger(__name__)
 

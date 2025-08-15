@@ -26,14 +26,16 @@ from neutron.agent.dhcp_agent import register_options
 from neutron.agent.linux import dhcp
 from neutron.tests import base
 
+from neutron_lib.constants import DHCPV6_STATEFUL
+
+from oslo_config import cfg
+
 from networking_calico import datamodel_v1
 from networking_calico import datamodel_v2
 from networking_calico.agent.dhcp_agent import CalicoDhcpAgent
 from networking_calico.agent.dhcp_agent import FakePlugin
 from networking_calico.agent.linux.dhcp import DnsmasqRouted
 from networking_calico.common import config as calico_config
-from networking_calico.compat import DHCPV6_STATEFUL
-from networking_calico.compat import cfg
 from networking_calico.etcdutils import EtcdWatcher
 
 LOG = logging.getLogger(__name__)

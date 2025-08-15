@@ -48,6 +48,18 @@ from sqlalchemy import exc as sa_exc
 # Monkeypatch import
 import neutron.plugins.ml2.rpc as rpc
 
+from neutron_lib import constants
+from neutron_lib import exceptions as n_exc
+from neutron_lib.plugins import directory as plugin_dir
+
+from oslo_concurrency import lockutils
+
+from oslo_config import cfg
+
+from oslo_db import exception as db_exc
+
+from oslo_log import log
+
 # Calico imports.
 from networking_calico import datamodel_v1
 from networking_calico import datamodel_v2
@@ -55,13 +67,6 @@ from networking_calico import datamodel_v3
 from networking_calico import etcdv3
 from networking_calico.common import config as calico_config
 from networking_calico.common import intern_string
-from networking_calico.compat import cfg
-from networking_calico.compat import constants
-from networking_calico.compat import db_exc
-from networking_calico.compat import lockutils
-from networking_calico.compat import log
-from networking_calico.compat import n_exc
-from networking_calico.compat import plugin_dir
 from networking_calico.logutils import logging_exceptions
 from networking_calico.monotonic import monotonic_time
 from networking_calico.plugins.ml2.drivers.calico.election import Elector

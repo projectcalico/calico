@@ -33,10 +33,11 @@ import shutil
 import subprocess
 import unittest
 
+from oslo_config import cfg
+
 from networking_calico import etcdutils
 from networking_calico import etcdv3
 from networking_calico.common import config as calico_config
-from networking_calico.compat import cfg
 
 _log = logging.getLogger(__name__)
 
