@@ -14,16 +14,17 @@
 #    under the License.
 
 import copy
-import netaddr
 import os
 import re
-import sys
-import time
+
+import netaddr
 
 from neutron.agent.linux import dhcp
+
 from oslo_log import log as logging
 
 from networking_calico.compat import constants
+
 
 LOG = logging.getLogger(__name__)
 
@@ -31,14 +32,17 @@ LOG = logging.getLogger(__name__)
 class DnsmasqRouted(dhcp.Dnsmasq):
     """Dnsmasq DHCP driver for routed virtual interfaces."""
 
-    def __init__(self, conf, network, process_monitor,
-                 version=None, plugin=None, *args):
+    def __init__(
+        self, conf, network, process_monitor, version=None, plugin=None, *args
+    ):
         if args:
-            super(DnsmasqRouted, self).__init__(conf, network, process_monitor,
-                                                version, plugin, *args)
+            super(DnsmasqRouted, self).__init__(
+                conf, network, process_monitor, version, plugin, *args
+            )
         else:
-            super(DnsmasqRouted, self).__init__(conf, network, process_monitor,
-                                                version, plugin)
+            super(DnsmasqRouted, self).__init__(
+                conf, network, process_monitor, version, plugin
+            )
         self.device_manager = CalicoDeviceManager(self.conf, plugin)
 
     # Frozen copy of Dnsmasq::_build_cmdline_callback from
@@ -47,31 +51,33 @@ class DnsmasqRouted(dhcp.Dnsmasq):
         # We ignore local resolv.conf if dns servers are specified
         # or if local resolution is explicitly disabled.
         _no_resolv = (
-            '--no-resolv' if self.conf.dnsmasq_dns_servers or
-            not self.conf.dnsmasq_local_resolv else '')
+            "--no-resolv"
+            if self.conf.dnsmasq_dns_servers or not self.conf.dnsmasq_local_resolv
+            else ""
+        )
         cmd = [
-            'dnsmasq',
-            '--no-hosts',
+            "dnsmasq",
+            "--no-hosts",
             _no_resolv,
-            '--except-interface=lo',
-            '--pid-file=%s' % pid_file,
-            '--dhcp-hostsfile=%s' % self.get_conf_file_name('host'),
-            '--addn-hosts=%s' % self.get_conf_file_name('addn_hosts'),
-            '--dhcp-optsfile=%s' % self.get_conf_file_name('opts'),
-            '--dhcp-leasefile=%s' % self.get_conf_file_name('leases'),
-            '--dhcp-match=set:ipxe,175',
+            "--except-interface=lo",
+            "--pid-file=%s" % pid_file,
+            "--dhcp-hostsfile=%s" % self.get_conf_file_name("host"),
+            "--addn-hosts=%s" % self.get_conf_file_name("addn_hosts"),
+            "--dhcp-optsfile=%s" % self.get_conf_file_name("opts"),
+            "--dhcp-leasefile=%s" % self.get_conf_file_name("leases"),
+            "--dhcp-match=set:ipxe,175",
         ]
         if self.device_manager.driver.bridged:
             cmd += [
-                '--bind-interfaces',
-                '--interface=%s' % self.interface_name,
+                "--bind-interfaces",
+                "--interface=%s" % self.interface_name,
             ]
         else:
             cmd += [
-                '--bind-dynamic',
-                '--interface=%s' % self.interface_name,
-                '--interface=tap*',
-                '--bridge-interface=%s,tap*' % self.interface_name,
+                "--bind-dynamic",
+                "--interface=%s" % self.interface_name,
+                "--interface=tap*",
+                "--bridge-interface=%s,tap*" % self.interface_name,
             ]
 
         possible_leases = 0
@@ -81,97 +87,117 @@ class DnsmasqRouted(dhcp.Dnsmasq):
             if not subnet.enable_dhcp:
                 continue
             if subnet.ip_version == 4:
-                mode = 'static'
+                mode = "static"
             else:
                 # Note(scollins) If the IPv6 attributes are not set, set it as
                 # static to preserve previous behavior
-                addr_mode = getattr(subnet, 'ipv6_address_mode', None)
-                ra_mode = getattr(subnet, 'ipv6_ra_mode', None)
-                if (addr_mode in [constants.DHCPV6_STATEFUL,
-                                  constants.DHCPV6_STATELESS] or
-                        not addr_mode and not ra_mode):
-                    mode = 'static'
+                addr_mode = getattr(subnet, "ipv6_address_mode", None)
+                ra_mode = getattr(subnet, "ipv6_ra_mode", None)
+                if (
+                    addr_mode in [constants.DHCPV6_STATEFUL, constants.DHCPV6_STATELESS]
+                    or not addr_mode
+                    and not ra_mode
+                ):
+                    mode = "static"
 
             cidr = netaddr.IPNetwork(subnet.cidr)
 
             if self.conf.dhcp_lease_duration == -1:
-                lease = 'infinite'
+                lease = "infinite"
             else:
-                lease = '%ss' % self.conf.dhcp_lease_duration
+                lease = "%ss" % self.conf.dhcp_lease_duration
 
             # mode is optional and is not set - skip it
             if mode:
                 if subnet.ip_version == 4:
-                    cmd.append('--dhcp-range=%s%s,%s,%s,%s,%s' %
-                               ('set:', 'subnet-%s' % subnet.id,
-                                cidr.network, mode, cidr.netmask, lease))
+                    cmd.append(
+                        "--dhcp-range=%s%s,%s,%s,%s,%s"
+                        % (
+                            "set:",
+                            "subnet-%s" % subnet.id,
+                            cidr.network,
+                            mode,
+                            cidr.netmask,
+                            lease,
+                        )
+                    )
                 else:
                     if cidr.prefixlen < 64:
-                        LOG.debug('Ignoring subnet %(subnet)s, CIDR has '
-                                  'prefix length < 64: %(cidr)s',
-                                  {'subnet': subnet.id, 'cidr': cidr})
+                        LOG.debug(
+                            "Ignoring subnet %(subnet)s, CIDR has "
+                            "prefix length < 64: %(cidr)s",
+                            {"subnet": subnet.id, "cidr": cidr},
+                        )
                         continue
-                    cmd.append('--dhcp-range=%s%s,%s,%s,%d,%s' %
-                               ('set:', 'subnet-%s' % subnet.id,
-                                cidr.network, mode,
-                                cidr.prefixlen, lease))
+                    cmd.append(
+                        "--dhcp-range=%s%s,%s,%s,%d,%s"
+                        % (
+                            "set:",
+                            "subnet-%s" % subnet.id,
+                            cidr.network,
+                            mode,
+                            cidr.prefixlen,
+                            lease,
+                        )
+                    )
                 possible_leases += cidr.size
 
-        mtu = getattr(self.network, 'mtu', 0)
+        mtu = getattr(self.network, "mtu", 0)
         # Do not advertise unknown mtu
         if mtu > 0:
-            cmd.append('--dhcp-option-force=option:mtu,%d' % mtu)
+            cmd.append("--dhcp-option-force=option:mtu,%d" % mtu)
 
         # Cap the limit because creating lots of subnets can inflate
         # this possible lease cap.
-        cmd.append('--dhcp-lease-max=%d' %
-                   min(possible_leases, self.conf.dnsmasq_lease_max))
+        cmd.append(
+            "--dhcp-lease-max=%d" % min(possible_leases, self.conf.dnsmasq_lease_max)
+        )
 
         try:
             if self.conf.dhcp_renewal_time > 0:
-                cmd.append('--dhcp-option-force=option:T1,%ds' %
-                           self.conf.dhcp_renewal_time)
+                cmd.append(
+                    "--dhcp-option-force=option:T1,%ds" % self.conf.dhcp_renewal_time
+                )
         except AttributeError:
             pass
 
         try:
             if self.conf.dhcp_rebinding_time > 0:
-                cmd.append('--dhcp-option-force=option:T2,%ds' %
-                           self.conf.dhcp_rebinding_time)
+                cmd.append(
+                    "--dhcp-option-force=option:T2,%ds" % self.conf.dhcp_rebinding_time
+                )
         except AttributeError:
             pass
 
-        cmd.append('--conf-file=%s' % self.conf.dnsmasq_config_file)
+        cmd.append("--conf-file=%s" % self.conf.dnsmasq_config_file)
         for server in self.conf.dnsmasq_dns_servers:
-            cmd.append('--server=%s' % server)
+            cmd.append("--server=%s" % server)
 
         try:
             if self.conf.dns_domain:
-                cmd.append('--domain=%s' % self.conf.dns_domain)
+                cmd.append("--domain=%s" % self.conf.dns_domain)
         except AttributeError:
             try:
                 if self.dns_domain:
-                    cmd.append('--domain=%s' % self.dns_domain)
+                    cmd.append("--domain=%s" % self.dns_domain)
             except AttributeError:
                 pass
 
         if self.conf.dhcp_broadcast_reply:
-            cmd.append('--dhcp-broadcast')
+            cmd.append("--dhcp-broadcast")
 
         if self.conf.dnsmasq_base_log_dir:
-            log_dir = os.path.join(
-                self.conf.dnsmasq_base_log_dir,
-                self.network.id)
+            log_dir = os.path.join(self.conf.dnsmasq_base_log_dir, self.network.id)
             try:
                 if not os.path.exists(log_dir):
                     os.makedirs(log_dir)
             except OSError:
-                LOG.error('Error while create dnsmasq log dir: %s', log_dir)
+                LOG.error("Error while create dnsmasq log dir: %s", log_dir)
             else:
-                log_filename = os.path.join(log_dir, 'dhcp_dns_log')
-                cmd.append('--log-queries')
-                cmd.append('--log-dhcp')
-                cmd.append('--log-facility=%s' % log_filename)
+                log_filename = os.path.join(log_dir, "dhcp_dns_log")
+                cmd.append("--log-queries")
+                cmd.append("--log-dhcp")
+                cmd.append("--log-facility=%s" % log_filename)
 
         return cmd
 
@@ -180,26 +206,26 @@ class DnsmasqRouted(dhcp.Dnsmasq):
 
         # Replace 'static' by 'static,off-link' in all IPv6
         # --dhcp-range options.
-        prog = re.compile('(--dhcp-range=set:[^,]+,[0-9a-f:]+),static,(.*)')
+        prog = re.compile("(--dhcp-range=set:[^,]+,[0-9a-f:]+),static,(.*)")
         for option in copy.copy(cmd):
             m = prog.match(option)
             if m:
                 cmd.remove(option)
-                cmd.append(m.group(1) + ',static,off-link,' + m.group(2))
+                cmd.append(m.group(1) + ",static,off-link," + m.group(2))
 
         # Add '--enable-ra'.
-        cmd.append('--enable-ra')
+        cmd.append("--enable-ra")
 
         # Enumerate precisely the TAP interfaces to listen on.
-        cmd.remove('--interface=tap*')
-        cmd.remove('--bridge-interface=%s,tap*' % self.interface_name)
-        bridge_option = '--bridge-interface=%s' % self.interface_name
+        cmd.remove("--interface=tap*")
+        cmd.remove("--bridge-interface=%s,tap*" % self.interface_name)
+        bridge_option = "--bridge-interface=%s" % self.interface_name
         bridge_ports_added = False
         for port in self.network.ports:
-            if port.device_id.startswith('tap'):
-                LOG.debug('Listen on %s', port.device_id)
-                cmd.append('--interface=%s' % port.device_id)
-                bridge_option = bridge_option + ',' + port.device_id
+            if port.device_id.startswith("tap"):
+                LOG.debug("Listen on %s", port.device_id)
+                cmd.append("--interface=%s" % port.device_id)
+                bridge_option = bridge_option + "," + port.device_id
                 bridge_ports_added = True
         if bridge_ports_added:
             cmd.append(bridge_option)
@@ -210,8 +236,7 @@ class DnsmasqRouted(dhcp.Dnsmasq):
         try:
             self.device_manager.destroy(self.network, self.interface_name)
         except RuntimeError:
-            LOG.warning('Failed trying to delete interface: %s',
-                        self.interface_name)
+            LOG.warning("Failed trying to delete interface: %s", self.interface_name)
 
 
 class CalicoDeviceManager(dhcp.DeviceManager):

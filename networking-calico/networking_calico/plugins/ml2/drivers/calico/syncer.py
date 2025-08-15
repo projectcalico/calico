@@ -84,14 +84,16 @@ class ResourceSyncer(object):
     deletes if the mod_revision of the relevant etcd key is still what it was
     when the syncer read the incorrect data.
     """
+
     def __init__(self, db, txn_from_context, resource_kind):
         self.db = db
         self.txn_from_context = txn_from_context
         self.resource_kind = resource_kind
 
     def resync(self, context):
-        LOG.info("Starting resync for %s; getting data from etcd...",
-                 self.resource_kind)
+        LOG.info(
+            "Starting resync for %s; getting data from etcd...", self.resource_kind
+        )
 
         # Get all resources of this type from etcd - as an array of (name,
         # data, mod_revision) tuples.
@@ -99,9 +101,11 @@ class ResourceSyncer(object):
 
         # Get the corresponding Neutron resources - as a map from resource name
         # to <relevant Neutron data>.
-        LOG.info("Resync for %s; got etcd data (%s items), "
-                 "getting data from neutron...",
-                 self.resource_kind, len(etcd_resources))
+        LOG.info(
+            "Resync for %s; got etcd data (%s items), getting data from neutron...",
+            self.resource_kind,
+            len(etcd_resources),
+        )
         with self.txn_from_context(context, "get-all-" + self.resource_kind):
             neutron_map = self.get_all_from_neutron(context)
 
@@ -109,8 +113,11 @@ class ResourceSyncer(object):
         # already compared the existing etcd data against Neutron.
         names_compared = set()
 
-        LOG.info("Resync for %s; got neutron data (%s items), look for "
-                 "incorrect data...", self.resource_kind, len(neutron_map))
+        LOG.info(
+            "Resync for %s; got neutron data (%s items), look for incorrect data...",
+            self.resource_kind,
+            len(neutron_map),
+        )
         for etcd_resource in etcd_resources:
             name, data, mod_revision = etcd_resource
             if name in neutron_map:
@@ -121,61 +128,69 @@ class ResourceSyncer(object):
                 # Translate the Neutron resource to what we would write into
                 # etcd.  Take a transaction here in case the subclass method
                 # needs more Neutron DB reads.
-                with self.txn_from_context(context,
-                                           "update-" + self.resource_kind):
+                with self.txn_from_context(context, "update-" + self.resource_kind):
                     write_data = self.neutron_to_etcd_write_data(
-                        neutron_map[name],
-                        context,
-                        reread=False
+                        neutron_map[name], context, reread=False
                     )
 
                 # Compare that against what we already have in etcd.
                 if self.etcd_write_data_matches_existing(write_data, data):
-                    LOG.debug("etcd data good for %s %s",
-                              self.resource_kind, name)
+                    LOG.debug("etcd data good for %s %s", self.resource_kind, name)
                 else:
                     # There's a difference, so do the write.
-                    LOG.warning("etcd rewrite needed for %s %s",
-                                self.resource_kind, name)
+                    LOG.warning(
+                        "etcd rewrite needed for %s %s", self.resource_kind, name
+                    )
                     if not self.update_in_etcd(name, write_data, mod_revision):
-                        LOG.warning("failed etcd write for %s %s; presume" +
-                                    " data updated by another writer",
-                                    self.resource_kind, name)
+                        LOG.warning(
+                            "failed etcd write for %s %s; presume"
+                            + " data updated by another writer",
+                            self.resource_kind,
+                            name,
+                        )
             else:
                 # This name is in etcd but now has nothing corresponding in
                 # Neutron, so remember it for deletion from etcd.
-                LOG.warning("etcd deletion needed for %s %s",
-                            self.resource_kind, name)
+                LOG.warning("etcd deletion needed for %s %s", self.resource_kind, name)
                 if not self.delete_from_etcd(name, mod_revision):
-                    LOG.warning("failed etcd delete for %s %s; presume" +
-                                " data updated by another writer",
-                                self.resource_kind, name)
+                    LOG.warning(
+                        "failed etcd delete for %s %s; presume"
+                        + " data updated by another writer",
+                        self.resource_kind,
+                        name,
+                    )
 
-        LOG.info("Resync for %s; got etcd data, look for deletions...",
-                 self.resource_kind)
+        LOG.info(
+            "Resync for %s; got etcd data, look for deletions...", self.resource_kind
+        )
         for name, neutron_data in neutron_map.items():
             # Skip this name if we already handled it above - i.e. if we
             # already had data for it in etcd.
             if name in names_compared:
                 continue
 
-            with self.txn_from_context(context,
-                                       "create-" + self.resource_kind):
+            with self.txn_from_context(context, "create-" + self.resource_kind):
                 try:
                     # Reread the Neutron resource and translate it to what we
                     # would write into etcd.
-                    write_data = self.neutron_to_etcd_write_data(neutron_data,
-                                                                 context,
-                                                                 reread=True)
+                    write_data = self.neutron_to_etcd_write_data(
+                        neutron_data, context, reread=True
+                    )
                     # Create etcd resource with that data.
                     if not self.create_in_etcd(name, write_data):
-                        LOG.warning("failed etcd write for %s %s; presume" +
-                                    " data created by another writer",
-                                    self.resource_kind, name)
+                        LOG.warning(
+                            "failed etcd write for %s %s; presume"
+                            + " data created by another writer",
+                            self.resource_kind,
+                            name,
+                        )
                 except ResourceGone:
-                    LOG.warning("Neutron resource gone for %s %s; presume" +
-                                " deleted by another writer",
-                                self.resource_kind, name)
+                    LOG.warning(
+                        "Neutron resource gone for %s %s; presume"
+                        + " deleted by another writer",
+                        self.resource_kind,
+                        name,
+                    )
 
         # Delete any legacy etcd data for this kind of resource.  (For example,
         # how this resource was represented in a previous release.)
