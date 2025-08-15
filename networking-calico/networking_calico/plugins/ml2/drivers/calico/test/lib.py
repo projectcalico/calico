@@ -52,6 +52,10 @@ sys.modules["neutron.plugins"] = m_neutron.plugins
 sys.modules["neutron.plugins.ml2"] = m_neutron.plugins.ml2
 sys.modules["neutron.plugins.ml2.drivers"] = m_neutron.plugins.ml2.drivers
 sys.modules["neutron.plugins.ml2.rpc"] = m_neutron.plugins.ml2.rpc
+sys.modules["neutron_lib"] = m_neutron_lib = mock.MagicMock()
+sys.modules["neutron_lib.agent"] = m_neutron_lib.agent
+sys.modules["neutron_lib.plugins"] = m_neutron_lib.plugins
+sys.modules["neutron_lib.plugins.ml2"] = m_neutron_lib.plugins.ml2
 sys.modules["sqlalchemy"] = m_sqlalchemy = mock.Mock()
 sys.modules["sqlalchemy.orm"] = m_sqlalchemy.orm
 sys.modules["sqlalchemy.orm.exc"] = m_sqlalchemy.orm.exc
