@@ -422,7 +422,7 @@ class TestDnsmasqRouted(base.BaseTestCase):
         self.mock_makedirs = self.mock_makedirs_p.start()
 
     @mock.patch("neutron.agent.linux.dhcp.DeviceManager")
-    @mock.patch("neutron.agent.linux.dhcp.commonutils")
+    @mock.patch("neutron.agent.linux.dhcp.common_utils")
     def test_build_cmdline(self, commonutils, device_mgr_cls):
         v4subnet = mock.Mock()
         v4subnet.id = "v4subnet-1"
