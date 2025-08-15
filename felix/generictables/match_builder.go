@@ -75,6 +75,7 @@ type MatchCriteria interface {
 	// Only supported in nftables.
 	InInterfaceVMAP(mapname string) MatchCriteria
 	OutInterfaceVMAP(mapname string) MatchCriteria
+	SourceNetVMAP(mapname string) MatchCriteria
 }
 
 type AddrType string

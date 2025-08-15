@@ -335,6 +335,11 @@ func (m matchCriteria) OutInterfaceVMAP(mapname string) generictables.MatchCrite
 	return m
 }
 
+func (m matchCriteria) SourceNetVMAP(_ string) generictables.MatchCriteria {
+	log.Panic("SourceNetVMAP not supported in iptables")
+	return m
+}
+
 func PortsToMultiport(ports []uint16) string {
 	portFragments := make([]string, len(ports))
 	for i, port := range ports {
