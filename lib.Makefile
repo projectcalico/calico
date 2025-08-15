@@ -281,10 +281,10 @@ REPO_ROOT := $(shell git rev-parse --show-toplevel)
 CERTS_PATH := $(REPO_ROOT)/hack/test/certs
 
 # Where to find Calico CRD files depends on which API group we are using to back them.
-CALICO_API_GROUP ?= projectcalico.org/v3 # crd.projectcalico.org/v1
-CALICO_CRD_PATH ?= libcalico-go/config/crd/
-ifeq ($(CALICO_API_GROUP),projectcalico.org/v3)
-CALICO_CRD_PATH = api/config/crd/
+CALICO_API_GROUP := projectcalico.org/v3
+CALICO_CRD_PATH := api/config/crd/
+ifneq ($(CALICO_API_GROUP),projectcalico.org/v3)
+CALICO_CRD_PATH = libcalico-go/config/crd/
 endif
 
 # The image to use for building calico/base-dependent modules (e.g. apiserver, typha).
