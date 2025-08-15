@@ -1119,7 +1119,7 @@ func testIPReservationClient(client calicoclient.Interface, name string) error {
 	ipreservation := &v3.IPReservation{
 		ObjectMeta: metav1.ObjectMeta{Name: name},
 		Spec: v3.IPReservationSpec{
-			ReservedCIDRs: []string{"192.168.0.0/16"},
+			ReservedCIDRs: []v3.CIDR{"192.168.0.0/16"},
 		},
 	}
 	ctx := context.Background()
