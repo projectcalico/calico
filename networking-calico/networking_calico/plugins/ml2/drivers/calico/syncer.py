@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from networking_calico.compat import log
+from oslo_log import log
 
 LOG = log.getLogger(__name__)
 
