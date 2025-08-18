@@ -1065,6 +1065,17 @@ func (r *DefaultRuleRenderer) StaticManglePostroutingChain(ipVersion uint8) *gen
 	// mangle table is typically used, if at all, for packet manipulations that might need to
 	// apply to our allowed traffic.
 
+	ipConf := r.ipSetConfig(ipVersion)
+	allIPsSetName := ipConf.NameForMainIPSet(IPSetIDAllPools)
+	allHostsSetName := ipConf.NameForMainIPSet(IPSetIDAllHostNets)
+	rules = append(rules, generictables.Rule{
+		Match: r.NewMatch().
+			NotDestIPSet(allIPsSetName).
+			NotDestIPSet(allHostsSetName),
+		Action:  r.Jump(ChainQoSPolicy),
+		Comment: []string{"QoS policy for traffic leaving cluster"},
+	})
+
 	// Allow immediately if IptablesMarkAccept is set.  Our filter-FORWARD chain sets this for
 	// any packets that reach the end of that chain.  The principle is that we don't want to
 	// apply normal host endpoint policy to forwarded traffic.
