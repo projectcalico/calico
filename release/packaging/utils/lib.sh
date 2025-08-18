@@ -136,7 +136,7 @@ ssh_host="gcloud --quiet compute ssh ${GCLOUD_ARGS} ${HOST}"
 scp_host="gcloud --quiet compute scp ${GCLOUD_ARGS}"
 
 upload_artifact="gcloud --quiet --no-user-output-enabled artifacts yum upload ${GCLOUD_REPO_NAME} --location=us-west1 --project=${GCLOUD_PROJECT:-tigera-wp-tcp-redirect}"
-check_artifact="gcloud artifacts files list --repository=${GCLOUD_REPO_NAME} --project=tigera-wp-tcp-redirect --location=us-west1 --format=json --quiet"
+check_artifact="gcloud artifacts files list --repository=${GCLOUD_REPO_NAME} --project=${GCLOUD_PROJECT:-tigera-wp-tcp-redirect} --location=us-west1 --format=json --quiet"
 rpmdir=/usr/share/nginx/html/rpm
 
 function ensure_repo_exists {
