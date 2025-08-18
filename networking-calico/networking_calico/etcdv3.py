@@ -22,10 +22,11 @@ from etcd3gw.lease import Lease
 from etcd3gw.utils import _encode
 from etcd3gw.utils import _increment_last_byte
 
-from packaging.version import Version
+from oslo_config import cfg
 
-from networking_calico.compat import cfg
-from networking_calico.compat import log
+from oslo_log import log
+
+from packaging.version import Version
 
 # Incantations for enabling oslo_log debug logging, when desired:
 # log.register_options(cfg.CONF)
