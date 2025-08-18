@@ -493,22 +493,13 @@ func (rg *routeGenerator) advertiseThisService(svc *v1.Service, ep *discoveryv1.
 
 	svcIsIPv6 := isIPv6(svc.Spec.ClusterIP)
 
-	// Otherwise, advertise if node contains at least one endpoint for svc
-	for _, endpoint := range ep.Endpoints {
-		// Only consider endpoints that are ready and have a NodeName.
-		if endpoint.NodeName != nil && *endpoint.NodeName == rg.nodeName {
-			for _, address := range endpoint.Addresses {
-				if isIPv6(address) == svcIsIPv6 {
-					logc.Debugf("Advertising local service")
-					return true
-				}
 	// Endpoint-based advertisement logic for both Cluster and Local services.
 	// For Cluster services: advertise if any endpoints exist (when aggregation is disabled).
 	// For Local services: advertise only if local endpoints exist.
-	for _, subset := range ep.Subsets {
+	for _, subset := range ep.Endpoints {
 		// not interested in subset.NotReadyAddresses
 		for _, address := range subset.Addresses {
-			if isIPv6(address.IP) != svcIsIPv6 {
+			if isIPv6(address) != svcIsIPv6 {
 				continue
 			}
 			if svc.Spec.ExternalTrafficPolicy != v1.ServiceExternalTrafficPolicyTypeLocal {
@@ -517,7 +508,7 @@ func (rg *routeGenerator) advertiseThisService(svc *v1.Service, ep *discoveryv1.
 				return true
 			} else {
 				// For Local services, only advertise if we have local endpoints
-				if address.NodeName != nil && *address.NodeName == rg.nodeName {
+				if subset.NodeName != nil && *subset.NodeName == rg.nodeName {
 					logc.Debugf("Advertising local service")
 					return true
 				}
