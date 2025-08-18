@@ -34,6 +34,9 @@ import mock
 
 _log = logging.getLogger(__name__)
 
+# Note, we use MagicMock here, instead of Mock, when some of the objects from within the
+# relevant package need to be iterable, or to be context managers, or to have any of the
+# other magic Python methods that MagicMock generates for us.
 sys.modules["neutron"] = m_neutron = mock.MagicMock()
 sys.modules["neutron.agent"] = m_neutron.agent
 sys.modules["neutron.agent.rpc"] = m_neutron.agent.rpc
@@ -52,10 +55,18 @@ sys.modules["neutron.plugins"] = m_neutron.plugins
 sys.modules["neutron.plugins.ml2"] = m_neutron.plugins.ml2
 sys.modules["neutron.plugins.ml2.drivers"] = m_neutron.plugins.ml2.drivers
 sys.modules["neutron.plugins.ml2.rpc"] = m_neutron.plugins.ml2.rpc
+sys.modules["neutron_lib"] = m_neutron_lib = mock.MagicMock()
+sys.modules["neutron_lib.agent"] = m_neutron_lib.agent
+sys.modules["neutron_lib.constants"] = m_neutron_lib.constants
+sys.modules["neutron_lib.plugins"] = m_neutron_lib.plugins
+sys.modules["neutron_lib.plugins.ml2"] = m_neutron_lib.plugins.ml2
+sys.modules["oslo_concurrency"] = m_oslo_concurrency = mock.Mock()
+sys.modules["oslo_config"] = m_oslo_config = mock.MagicMock()
+sys.modules["oslo_db"] = m_oslo_db = mock.Mock()
+sys.modules["oslo_log"] = m_oslo_log = mock.Mock()
 sys.modules["sqlalchemy"] = m_sqlalchemy = mock.Mock()
 sys.modules["sqlalchemy.orm"] = m_sqlalchemy.orm
 sys.modules["sqlalchemy.orm.exc"] = m_sqlalchemy.orm.exc
-sys.modules["networking_calico.compat"] = m_compat = mock.MagicMock()
 sys.modules["networking_calico.plugins.ml2.drivers.calico.qos_driver"] = (
     m_qos_driver
 ) = mock.Mock()
@@ -63,7 +74,7 @@ sys.modules["networking_calico.plugins.ml2.drivers.calico.qos_driver"] = (
 # Set up some IP protocol mappings to test.  (Unfortunately, importing
 # the real IP_PROTOCOL_MAP from neutron_lib.constants tries to pull in
 # too much other stuff.)
-m_compat.IP_PROTOCOL_MAP = {
+m_neutron_lib.constants.IP_PROTOCOL_MAP = {
     "esp": 50,
     "ah": 51,
     "rsvp": 46,
@@ -162,7 +173,7 @@ class DBError(Exception):
     pass
 
 
-m_compat.db_exc.DBError = DBError
+m_oslo_db.exception.DBError = DBError
 
 
 class NoResultFound(Exception):
@@ -179,7 +190,7 @@ class PortNotFound(Exception):
         self.port_id = port_id
 
 
-m_compat.n_exc.PortNotFound = PortNotFound
+m_neutron_lib.exceptions.PortNotFound = PortNotFound
 
 
 # Define a stub class, that we will use as the base class for

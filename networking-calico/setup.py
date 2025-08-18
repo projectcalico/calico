@@ -18,18 +18,20 @@ from setuptools import find_packages
 from setuptools import setup
 
 setup(
-    name='networking-calico',
+    name="networking-calico",
     packages=find_packages(),
     entry_points={
-        'console_scripts': [
-            'calico-dhcp-agent = networking_calico.agent.dhcp_agent:main',
+        "console_scripts": [
+            "calico-dhcp-agent = networking_calico.agent.dhcp_agent:main",
         ],
-        'neutron.ml2.mechanism_drivers': [
-            'calico = networking_calico.plugins.ml2.drivers.calico.'
-            'mech_calico:CalicoMechanismDriver',
+        "neutron.ml2.mechanism_drivers": [
+            (
+                "calico = networking_calico.plugins.ml2.drivers.calico."
+                "mech_calico:CalicoMechanismDriver"
+            ),
         ],
-        'neutron.core_plugins': [
-            'calico = networking_calico.plugins.calico.plugin:CalicoPlugin',
+        "neutron.core_plugins": [
+            "calico = networking_calico.plugins.calico.plugin:CalicoPlugin",
         ],
     },
     version="0.0.0",

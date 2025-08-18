@@ -30,10 +30,12 @@ import eventlet
 
 import greenlet
 
+from oslo_config import cfg
+
+from oslo_log import log
+
 from networking_calico import etcdv3
 from networking_calico.common import config as calico_config
-from networking_calico.compat import cfg
-from networking_calico.compat import log
 
 
 LOG = log.getLogger(__name__)

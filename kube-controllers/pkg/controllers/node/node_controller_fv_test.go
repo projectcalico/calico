@@ -114,6 +114,7 @@ var _ = Describe("Calico node controller FV tests (KDD mode)", func() {
 	})
 
 	AfterEach(func() {
+		_ = calicoClient.Close()
 		controllerManager.Stop()
 		policyController.Stop()
 		apiserver.Stop()
@@ -472,6 +473,7 @@ var _ = Describe("Calico node controller FV tests (etcd mode)", func() {
 	})
 
 	AfterEach(func() {
+		_ = calicoClient.Close()
 		controllerManager.Stop()
 		policyController.Stop()
 		apiserver.Stop()
