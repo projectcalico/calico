@@ -48,6 +48,7 @@ var _ = infrastructure.DatastoreDescribe("NATOutgoing rule rendering test", []ap
 		dumpedDiags = false
 		opts := infrastructure.DefaultTopologyOptions()
 		opts.IPIPMode = api.IPIPModeNever
+		opts.EnableIPv6 = true
 
 		if NFTMode() {
 			Skip("NFT mode not supported in this test")
