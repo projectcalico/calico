@@ -808,13 +808,11 @@ var _ = Describe("Service Load Balancer Aggregation", func() {
 						ExternalTrafficPolicy: v1.ServiceExternalTrafficPolicyTypeCluster,
 					},
 				}
-				ep := &v1.Endpoints{
+				ep := &discoveryv1.EndpointSlice{
 					ObjectMeta: metav1.ObjectMeta{Name: "test-svc", Namespace: "default"},
-					Subsets: []v1.EndpointSubset{
+					Endpoints: []discoveryv1.Endpoint{
 						{
-							Addresses: []v1.EndpointAddress{
-								{IP: "10.0.0.2"},
-							},
+							Addresses: []string{"10.0.0.2"},
 						},
 					},
 				}
@@ -832,13 +830,12 @@ var _ = Describe("Service Load Balancer Aggregation", func() {
 						ExternalTrafficPolicy: v1.ServiceExternalTrafficPolicyTypeLocal,
 					},
 				}
-				ep := &v1.Endpoints{
+				ep := &discoveryv1.EndpointSlice{
 					ObjectMeta: metav1.ObjectMeta{Name: "test-svc", Namespace: "default"},
-					Subsets: []v1.EndpointSubset{
+					Endpoints: []discoveryv1.Endpoint{
 						{
-							Addresses: []v1.EndpointAddress{
-								{IP: "10.0.0.2", NodeName: &rg.nodeName},
-							},
+							Addresses: []string{"10.0.0.2"},
+							NodeName:  &rg.nodeName,
 						},
 					},
 				}
@@ -862,13 +859,11 @@ var _ = Describe("Service Load Balancer Aggregation", func() {
 						ExternalTrafficPolicy: v1.ServiceExternalTrafficPolicyTypeCluster,
 					},
 				}
-				ep := &v1.Endpoints{
+				ep := &discoveryv1.EndpointSlice{
 					ObjectMeta: metav1.ObjectMeta{Name: "test-svc", Namespace: "default"},
-					Subsets: []v1.EndpointSubset{
+					Endpoints: []discoveryv1.Endpoint{
 						{
-							Addresses: []v1.EndpointAddress{
-								{IP: "10.0.0.2"},
-							},
+							Addresses: []string{"10.0.0.2"},
 						},
 					},
 				}
@@ -886,9 +881,9 @@ var _ = Describe("Service Load Balancer Aggregation", func() {
 						ExternalTrafficPolicy: v1.ServiceExternalTrafficPolicyTypeCluster,
 					},
 				}
-				ep := &v1.Endpoints{
+				ep := &discoveryv1.EndpointSlice{
 					ObjectMeta: metav1.ObjectMeta{Name: "test-svc", Namespace: "default"},
-					Subsets:    []v1.EndpointSubset{},
+					Endpoints:  []discoveryv1.Endpoint{},
 				}
 
 				result := rg.advertiseThisService(svc, ep)
@@ -910,13 +905,11 @@ var _ = Describe("Service Load Balancer Aggregation", func() {
 						ExternalTrafficPolicy: v1.ServiceExternalTrafficPolicyTypeCluster,
 					},
 				}
-				ep := &v1.Endpoints{
+				ep := &discoveryv1.EndpointSlice{
 					ObjectMeta: metav1.ObjectMeta{Name: "test-svc", Namespace: "default"},
-					Subsets: []v1.EndpointSubset{
+					Endpoints: []discoveryv1.Endpoint{
 						{
-							Addresses: []v1.EndpointAddress{
-								{IP: "2001:db8::1"}, // IPv6
-							},
+							Addresses: []string{"2001:db8::1"}, // IPv6
 						},
 					},
 				}
@@ -934,13 +927,11 @@ var _ = Describe("Service Load Balancer Aggregation", func() {
 						ExternalTrafficPolicy: v1.ServiceExternalTrafficPolicyTypeCluster,
 					},
 				}
-				ep := &v1.Endpoints{
+				ep := &discoveryv1.EndpointSlice{
 					ObjectMeta: metav1.ObjectMeta{Name: "test-svc", Namespace: "default"},
-					Subsets: []v1.EndpointSubset{
+					Endpoints: []discoveryv1.Endpoint{
 						{
-							Addresses: []v1.EndpointAddress{
-								{IP: "2001:db8::2"}, // IPv6
-							},
+							Addresses: []string{"2001:db8::2"}, // IPv6
 						},
 					},
 				}
