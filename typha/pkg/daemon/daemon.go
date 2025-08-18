@@ -47,6 +47,7 @@ import (
 	"github.com/projectcalico/calico/typha/pkg/config"
 	"github.com/projectcalico/calico/typha/pkg/jitter"
 	"github.com/projectcalico/calico/typha/pkg/k8s"
+	"github.com/projectcalico/calico/typha/pkg/latencytracker"
 	"github.com/projectcalico/calico/typha/pkg/logutils"
 	"github.com/projectcalico/calico/typha/pkg/snapcache"
 	"github.com/projectcalico/calico/typha/pkg/syncproto"
@@ -75,6 +76,7 @@ type TyphaDaemon struct {
 	// The components of the server, created in CreateServer() below.
 	SyncerPipelines    []*syncerPipeline
 	CachesBySyncerType map[syncproto.SyncerType]syncserver.BreadcrumbProvider
+	LatencyTrackers    map[syncproto.SyncerType]*latencytracker.LatencyTracker
 	Server             *syncserver.Server
 
 	// The functions below default to real library functions but they can be overridden for testing.
@@ -123,6 +125,7 @@ func New() *TyphaDaemon {
 		ConfigureEarlyLogging: logutils.ConfigureEarlyLogging,
 		ConfigureLogging:      logutils.ConfigureLogging,
 		CachesBySyncerType:    map[syncproto.SyncerType]syncserver.BreadcrumbProvider{},
+		LatencyTrackers:       map[syncproto.SyncerType]*latencytracker.LatencyTracker{},
 	}
 }
 
@@ -348,11 +351,15 @@ func (t *TyphaDaemon) addSyncerPipeline(
 		validator = calc.NewValidationFilter(toCache)
 	}
 
+	latencyTracker := latencytracker.New(syncerType)
+	t.LatencyTrackers[syncerType] = latencyTracker
+
 	// Create our snapshot cache, which stores point-in-time copies of the datastore contents.
 	cache := snapcache.New(snapcache.Config{
 		MaxBatchSize:     t.ConfigParams.SnapshotCacheMaxBatchSize,
 		HealthAggregator: t.healthAggregator,
 		Name:             string(syncerType),
+		LatencyTracker:   latencyTracker,
 	})
 
 	pipeline := &syncerPipeline{
@@ -381,6 +388,7 @@ func (t *TyphaDaemon) CreateServer() {
 	// Create the server, which listens for connections from Felix.
 	t.Server = syncserver.New(
 		t.CachesBySyncerType,
+		t.LatencyTrackers,
 		syncserver.Config{
 			MaxMessageSize:                 t.ConfigParams.ServerMaxMessageSize,
 			MinBatchingAgeThreshold:        t.ConfigParams.ServerMinBatchingAgeThresholdSecs,
@@ -441,6 +449,13 @@ func (t *TyphaDaemon) Start(cxt context.Context) {
 			"port": t.ConfigParams.HealthPort,
 		}).Info("Health enabled.  Starting server.")
 		t.healthAggregator.ServeHTTP(t.ConfigParams.HealthEnabled, t.ConfigParams.HealthHost, t.ConfigParams.HealthPort)
+	}
+
+	for st, tracker := range t.LatencyTrackers {
+		if st != syncproto.SyncerTypeFelix {
+			continue
+		}
+		tracker.Start(cxt)
 	}
 }
 

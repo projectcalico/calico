@@ -89,6 +89,7 @@ type EventSequencer struct {
 	pendingGlobalBGPConfig       *proto.GlobalBGPConfigUpdate
 	pendingServiceUpdates        map[serviceID]*proto.ServiceUpdate
 	pendingServiceDeletes        set.Set[serviceID]
+	pendingTyphaRevision         *model.TyphaRevision
 
 	// Sets to record what we've sent downstream. Updated whenever we flush.
 	sentIPSets          set.Set[string]
@@ -891,6 +892,9 @@ func (buf *EventSequencer) Flush() {
 	}
 
 	buf.flushServices()
+
+	// Must be last!
+	buf.flushTyphaRevision()
 }
 
 func (buf *EventSequencer) flushRemovedIPSets() {
@@ -1192,6 +1196,23 @@ func (buf *EventSequencer) flushServices() {
 	log.Debug("Done flushing Services")
 }
 
+func (buf *EventSequencer) OnTyphaRevisionRemove() {
+	log.Debug("OnTyphaRevisionRemove; ignoring")
+}
+
+func (buf *EventSequencer) OnTyphaRevisionUpdate(tr *model.TyphaRevision) {
+	buf.pendingTyphaRevision = tr
+}
+
+func (buf *EventSequencer) flushTyphaRevision() {
+	if buf.pendingTyphaRevision == nil {
+		return
+	}
+	buf.Callback(&proto.TyphaRevisionUpdate{
+		Revision: buf.pendingTyphaRevision.Revision,
+	})
+}
+
 func cidrToIPPoolID(cidr ip.CIDR) string {
 	return strings.Replace(cidr.String(), "/", "-", 1)
 }
@@ -1279,3 +1300,5 @@ func isVMWorkload(labels uniquelabels.Map) bool {
 	}
 	return false
 }
+
+var _ PipelineCallbacks = &EventSequencer{}
