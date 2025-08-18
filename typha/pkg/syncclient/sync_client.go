@@ -172,9 +172,10 @@ type SyncerClient struct {
 	encoder    *gob.Encoder
 	decoder    *gob.Decoder
 
-	callbacks              CallbacksWithKeysKnown
-	Finished               sync.WaitGroup
-	revisionsFromDataplane chan syncproto.MsgDataplaneRevision
+	callbacks                 CallbacksWithKeysKnown
+	Finished                  sync.WaitGroup
+	revisionsFromDataplane    chan syncproto.MsgDataplaneRevision
+	lastSeenDataplaneRevision string
 }
 
 type CallbacksWithKeysKnown interface {
@@ -239,6 +240,11 @@ func (s *SyncerClient) Start(cxt context.Context) error {
 }
 
 func (s *SyncerClient) OnDataplaneUpdateComplete(revision string) {
+	if s.lastSeenDataplaneRevision == revision {
+		// No change, nothing to do.
+		return
+	}
+	s.lastSeenDataplaneRevision = revision
 	select {
 	case <-s.revisionsFromDataplane: // If the channel is full, we just discard the old value.
 	default:
