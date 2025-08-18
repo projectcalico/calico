@@ -31,49 +31,43 @@ import re
 import uuid
 from functools import wraps
 
-# OpenStack imports.
 import eventlet
 from eventlet.queue import PriorityQueue
 from eventlet.semaphore import Semaphore
 
-from neutron.agent import rpc as agent_rpc
+from keystoneauth1 import session
+from keystoneauth1.identity import v3
 
-try:
-    from neutron_lib.agent import topics
-except ImportError:
-    # Neutron code prior to d996758fb4 (13th March 2018).
-    from neutron.common import topics
-try:
-    from neutron_lib import context as ctx
-except ImportError:
-    # Neutron code prior to ca751a1486 (6th March 2017).
-    from neutron import context as ctx
-try:
-    from neutron_lib.plugins.ml2 import api
-except ImportError:
-    # Neutron code prior to a2c36d7e (10th November 2017).
-    from neutron.plugins.ml2 import driver_api as api
+from keystoneclient.v3.client import Client as KeystoneClient
+
+import neutron.plugins.ml2.rpc as rpc
+from neutron.agent import rpc as agent_rpc
+from neutron.conf.agent import common as config
 from neutron.plugins.ml2.drivers import mech_agent
+
+from neutron_lib import constants
+from neutron_lib import context as ctx
+from neutron_lib import exceptions as n_exc
+from neutron_lib.agent import topics
+from neutron_lib.plugins import directory as plugin_dir
+from neutron_lib.plugins.ml2 import api
+
+from oslo_concurrency import lockutils
+
+from oslo_config import cfg
+
+from oslo_db import exception as db_exc
+
+from oslo_log import log
 
 from sqlalchemy import exc as sa_exc
 
-# Monkeypatch import
-import neutron.plugins.ml2.rpc as rpc
-
-# Calico imports.
 from networking_calico import datamodel_v1
 from networking_calico import datamodel_v2
 from networking_calico import datamodel_v3
 from networking_calico import etcdv3
 from networking_calico.common import config as calico_config
 from networking_calico.common import intern_string
-from networking_calico.compat import cfg
-from networking_calico.compat import constants
-from networking_calico.compat import db_exc
-from networking_calico.compat import lockutils
-from networking_calico.compat import log
-from networking_calico.compat import n_exc
-from networking_calico.compat import plugin_dir
 from networking_calico.logutils import logging_exceptions
 from networking_calico.monotonic import monotonic_time
 from networking_calico.plugins.ml2.drivers.calico.election import Elector
@@ -88,16 +82,9 @@ from networking_calico.plugins.ml2.drivers.calico.qos_driver import (
 from networking_calico.plugins.ml2.drivers.calico.status import StatusWatcher
 from networking_calico.plugins.ml2.drivers.calico.subnets import SubnetSyncer
 
-# Imports for a Keystone client.
-from keystoneauth1 import session
-from keystoneauth1.identity import v3
-
-from keystoneclient.v3.client import Client as KeystoneClient
 
 # Register [AGENT] options, which we need in order to successfully use
 # PluginReportStateAPI.
-from neutron.conf.agent import common as config
-
 config.register_agent_state_opts_helper(cfg.CONF)
 
 LOG = log.getLogger(__name__)

@@ -17,9 +17,10 @@ from collections import namedtuple
 
 import mock
 
+from oslo_config import cfg
+
 import networking_calico.common as common
 from networking_calico.common import config
-from networking_calico.compat import cfg
 
 
 class TestConfig(unittest.TestCase):
