@@ -189,12 +189,19 @@ protobuf proto/felixbackend.pb.go: proto/felixbackend.proto
 	# Make sure the generated code won't cause a static-checks failure.
 	$(MAKE) fix-changed
 
+BPF_GPL_MAP_STUB_O_FILES:=$(addprefix bpf-gpl/bin/,common_map_stub.o ipv4_map_stub.o ipv6_map_stub.o xdp_map_stub.o)
+$(BPF_GPL_MAP_STUB_O_FILES) &:
+	$(MAKE) register ARCH=$(ARCH)
+	$(DOCKER_GO_BUILD) sh -c "make -j 16 -C bpf-gpl map-objs"
+	touch -c $(BPF_GPL_MAP_STUB_O_FILES)
+	cp $(BPF_GPL_MAP_STUB_O_FILES) bin/bpf
+
 # We pre-build lots of different variants of the TC programs, defer to the script.
 BPF_GPL_O_FILES:=$(addprefix bpf-gpl/,$(shell bpf-gpl/list-objs))
 BPF_GPL_O_FILES+=bpf-gpl/bin/tc_preamble.o \
 		 bpf-gpl/bin/xdp_preamble.o bpf-gpl/bin/policy_default.o \
 		 bpf-gpl/bin/tcx_test.o
-BPF_GPL_O_FILES+=$(addprefix bpf-gpl/bin/,common_map_stub.o ipv4_map_stub.o ipv6_map_stub.o xdp_map_stub.o)
+BPF_GPL_O_FILES+=$(BPF_GPL_MAP_STUB_O_FILES)
 
 # There's a one-to-one mapping from UT C files to objects and the same for the apache programs..
 BPF_GPL_UT_O_FILES:=$(BPF_GPL_UT_C_FILES:.c=.o) $(addprefix bpf-gpl/,$(shell bpf-gpl/list-ut-objs))
@@ -539,7 +546,7 @@ bin/bpf_debug.test: $(GENERATED_FILES) $(shell find bpf/ -name '*.go')
 	$(DOCKER_GO_BUILD_CGO) go test ./bpf/ut -c -gcflags="-N -l" -o $@
 
 .PHONY: ut-bpf
-ut-bpf:  $(LIBBPF_A) bin/bpf_ut.test bin/bpf.test build-bpf
+ut-bpf: $(LIBBPF_A) bin/bpf_ut.test bin/bpf.test build-bpf $(BPF_GPL_MAP_STUB_O_FILES)
 	$(DOCKER_RUN) \
 		--privileged \
 		-e RUN_AS_ROOT=true \
