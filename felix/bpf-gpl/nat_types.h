@@ -12,6 +12,7 @@ typedef enum calico_nat_lookup_result {
 	NAT_FE_LOOKUP_DROP,
 	NAT_NO_BACKEND,
 	NAT_EXCLUDE,
+	NAT_MAGLEV,
 } nat_lookup_result;
 
 
@@ -60,7 +61,7 @@ struct calico_nat_value {
 #define NAT_FLG_EXTERNAL_LOCAL	0x1
 #define NAT_FLG_INTERNAL_LOCAL	0x2
 #define NAT_FLG_NAT_EXCLUDE	0x4
-#define NAT_FLG_CONSISTENT_HASH	0X8
+#define NAT_FLG_MAGLEV		0X8
 
 #ifdef IPVER6
 CALI_MAP_NAMED(cali_v6_nat_fe, cali_nat_fe, 3,

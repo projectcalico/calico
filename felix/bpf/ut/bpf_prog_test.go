@@ -213,6 +213,7 @@ var tcJumpMapIndexes = map[string][]int{
 		tcdefs.ProgIndexIcmpInnerNat,
 		tcdefs.ProgIndexNewFlow,
 		tcdefs.ProgIndexIPFrag,
+		tcdefs.ProgIndexMaglev,
 	},
 	"IPv4 debug": []int{
 		tcdefs.ProgIndexMainDebug,
@@ -224,6 +225,7 @@ var tcJumpMapIndexes = map[string][]int{
 		tcdefs.ProgIndexIcmpInnerNatDebug,
 		tcdefs.ProgIndexNewFlowDebug,
 		tcdefs.ProgIndexIPFragDebug,
+		tcdefs.ProgIndexMaglevDebug,
 	},
 	"IPv6": []int{
 		tcdefs.ProgIndexMain,
@@ -234,6 +236,7 @@ var tcJumpMapIndexes = map[string][]int{
 		tcdefs.ProgIndexHostCtConflict,
 		tcdefs.ProgIndexIcmpInnerNat,
 		tcdefs.ProgIndexNewFlow,
+		tcdefs.ProgIndexMaglev,
 	},
 	"IPv6 debug": []int{
 		tcdefs.ProgIndexMainDebug,
@@ -244,6 +247,7 @@ var tcJumpMapIndexes = map[string][]int{
 		tcdefs.ProgIndexHostCtConflictDebug,
 		tcdefs.ProgIndexIcmpInnerNatDebug,
 		tcdefs.ProgIndexNewFlowDebug,
+		tcdefs.ProgIndexMaglevDebug,
 	},
 }
 
@@ -383,16 +387,21 @@ func setupAndRun(logger testLogger, loglevel, section string, rules *polprog.Rul
 	}
 
 	if topts.xdp {
-		o, err := objLoad("../../bpf-gpl/bin/xdp_preamble.o", bpfFsDir, "preamble", topts, false, false)
+		o, err := objLoad("../../bpf-gpl/bin/xdp_preamble.o", bpfFsDir, "preamble", topts, false, false, false)
 		Expect(err).NotTo(HaveOccurred())
 		defer o.Close()
 	} else {
-		o, err := objLoad("../../bpf-gpl/bin/tc_preamble.o", bpfFsDir, "preamble", topts, false, false)
+		o, err := objLoad("../../bpf-gpl/bin/tc_preamble.o", bpfFsDir, "preamble", topts, false, false, false)
 		Expect(err).NotTo(HaveOccurred())
 		defer o.Close()
 	}
 
 	log.Infof("Patching binary %s", obj+".o")
+
+	hasMaglev := false
+	if strings.Contains(obj, "from_hep") {
+		hasMaglev = true
+	}
 
 	bin, err := bpf.BinaryFromFile(obj + ".o")
 	Expect(err).NotTo(HaveOccurred())
@@ -410,7 +419,7 @@ func setupAndRun(logger testLogger, loglevel, section string, rules *polprog.Rul
 
 	var o *libbpf.Obj
 
-	o, err = objLoad(tempObj, bpfFsDir, ipFamily, topts, rules != nil, true)
+	o, err = objLoad(tempObj, bpfFsDir, ipFamily, topts, rules != nil, true, hasMaglev)
 	Expect(err).NotTo(HaveOccurred())
 	defer o.Close()
 
@@ -701,7 +710,7 @@ func ipToU32(ip net.IP) uint32 {
 	return binary.LittleEndian.Uint32([]byte(ip[:]))
 }
 
-func tcUpdateJumpMap(obj *libbpf.Obj, progs []int, hasPolicyProg, hasHostConflictProg bool) error {
+func tcUpdateJumpMap(obj *libbpf.Obj, progs []int, hasPolicyProg, hasHostConflictProg, hasMaglev bool) error {
 	for _, idx := range progs {
 		switch idx {
 		case
@@ -717,6 +726,12 @@ func tcUpdateJumpMap(obj *libbpf.Obj, progs []int, hasPolicyProg, hasHostConflic
 			if !hasHostConflictProg {
 				continue
 			}
+		case
+			tcdefs.ProgIndexMaglev,
+			tcdefs.ProgIndexMaglevDebug:
+			if !hasMaglev {
+				continue
+			}
 		}
 		log.WithField("prog", tcdefs.ProgramNames[idx]).WithField("idx", idx).Debug("UpdateJumpMap")
 		err := obj.UpdateJumpMap(progMap.GetName(), tcdefs.ProgramNames[idx], idx)
@@ -728,7 +743,7 @@ func tcUpdateJumpMap(obj *libbpf.Obj, progs []int, hasPolicyProg, hasHostConflic
 	return nil
 }
 
-func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostConflictProg bool) (*libbpf.Obj, error) {
+func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostConflictProg, hasMaglev bool) (*libbpf.Obj, error) {
 	log.WithField("program", fname).Debug("Loading BPF program")
 
 	forXDP := topts.xdp
@@ -893,11 +908,11 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 
 	if !forXDP {
 		log.WithField("ipFamily", ipFamily).Debug("Updating jump map")
-		err = tcUpdateJumpMap(obj, tcJumpMapIndexes[ipFamily], false, hasHostConflictProg)
+		err = tcUpdateJumpMap(obj, tcJumpMapIndexes[ipFamily], false, hasHostConflictProg, hasMaglev)
 		if err != nil && !strings.Contains(err.Error(), "error updating calico_tc_host_ct_conflict program") {
 			goto out
 		}
-		err = tcUpdateJumpMap(obj, tcJumpMapIndexes[ipFamily], false, false)
+		err = tcUpdateJumpMap(obj, tcJumpMapIndexes[ipFamily], false, false, hasMaglev)
 	} else {
 		if err = xdpUpdateJumpMap(obj, xdpJumpMapIndexes[ipFamily]); err != nil {
 			goto out
