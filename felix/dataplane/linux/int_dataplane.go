@@ -1120,11 +1120,14 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	dp.endpointsSourceV4 = epManager
 	dp.RegisterManager(newFloatingIPManager(natTableV4, ruleRenderer, 4, config.FloatingIPsEnabled))
 	dp.RegisterManager(newMasqManager(ipSetsV4, natTableV4, ruleRenderer, config.MaxIPSetSize, 4))
+
+	// Add a manager to keep the all-hosts IPv4 set up to date.
+	dp.RegisterManager(newHostsIPSetManager(ipSetsV4, 4, config))
+
 	if config.RulesConfig.IPIPEnabled {
 		log.Info("IPIP enabled, starting thread to keep tunnel configuration in sync.")
 		// Add a manager to keep the all-hosts IP set up to date.
 		dp.ipipManager = newIPIPManager(
-			ipSetsV4,
 			routeTableV4,
 			dataplanedefs.IPIPIfaceName,
 			4,
@@ -1222,6 +1225,9 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		dp.rawTables = append(dp.rawTables, rawTableV6)
 		dp.mangleTables = append(dp.mangleTables, mangleTableV6)
 		dp.filterTables = append(dp.filterTables, filterTableV6)
+
+		// Add a manager to keep the all-hosts IPv6 set up to date.
+		dp.RegisterManager(newHostsIPSetManager(ipSetsV6, 6, config))
 
 		if config.RulesConfig.VXLANEnabledV6 {
 			vxlanName := dataplanedefs.VXLANIfaceNameV6

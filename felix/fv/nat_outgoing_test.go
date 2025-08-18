@@ -47,6 +47,7 @@ var _ = infrastructure.DatastoreDescribe("NATOutgoing rule rendering test", []ap
 
 		dumpedDiags = false
 		opts := infrastructure.DefaultTopologyOptions()
+		opts.IPIPMode = api.IPIPModeNever
 
 		if NFTMode() {
 			Skip("NFT mode not supported in this test")
@@ -54,6 +55,7 @@ var _ = infrastructure.DatastoreDescribe("NATOutgoing rule rendering test", []ap
 
 		opts.ExtraEnvVars = map[string]string{
 			"FELIX_IptablesNATOutgoingInterfaceFilter": "eth+",
+			"FELIX_NATOutgoingExclusions":              "IPPoolsAndHostIPs",
 		}
 		tc, client = infrastructure.StartSingleNodeTopology(opts, infra)
 
