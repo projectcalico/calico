@@ -87,6 +87,7 @@ var _ = Describe("Calico pod controller FV tests (etcd mode)", func() {
 	})
 
 	AfterEach(func() {
+		_ = calicoClient.Close()
 		controllerManager.Stop()
 		policyController.Stop()
 		apiserver.Stop()

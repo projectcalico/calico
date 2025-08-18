@@ -83,6 +83,7 @@ var _ = Describe("Calico networkpolicy controller FV tests (etcd mode)", func() 
 	})
 
 	AfterEach(func() {
+		_ = calicoClient.Close()
 		controllerManager.Stop()
 		policyController.Stop()
 		apiserver.Stop()

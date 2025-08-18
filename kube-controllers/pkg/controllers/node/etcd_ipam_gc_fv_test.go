@@ -101,6 +101,7 @@ var _ = Describe("kube-controllers IPAM FV tests (etcd mode)", func() {
 		_, err := c.IPPools().Delete(context.Background(), "test-ippool", options.DeleteOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
+		_ = c.Close()
 		os.Remove(kconfigFile.Name())
 		controllerManager.Stop()
 		nodeController.Stop()
