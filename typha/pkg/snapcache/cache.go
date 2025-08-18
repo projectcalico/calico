@@ -16,6 +16,7 @@ package snapcache
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -27,9 +28,11 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/health"
 	cprometheus "github.com/projectcalico/calico/libcalico-go/lib/prometheus"
 	"github.com/projectcalico/calico/typha/pkg/jitter"
+	"github.com/projectcalico/calico/typha/pkg/latencytracker"
 	"github.com/projectcalico/calico/typha/pkg/promutils"
 	"github.com/projectcalico/calico/typha/pkg/syncproto"
 )
@@ -149,6 +152,8 @@ type Cache struct {
 	counterBreadcrumbNonBlock  prometheus.Counter
 	summaryUpdateSize          prometheus.Summary
 
+	latencyTracker *latencytracker.LatencyTracker
+
 	// Done is created by Start() and closed when the main loop exits.
 	Done chan struct{}
 }
@@ -163,11 +168,13 @@ type healthAggregator interface {
 }
 
 type Config struct {
+	ServerID         string
 	MaxBatchSize     int
 	WakeUpInterval   time.Duration
 	HealthAggregator healthAggregator
 	Name             string
 	HealthName       string
+	LatencyTracker   *latencytracker.LatencyTracker
 }
 
 func (config *Config) ApplyDefaults() {
@@ -211,6 +218,7 @@ func New(config Config) *Cache {
 		kvs:            kvs,
 		wakeUpTicker:   jitter.NewTicker(config.WakeUpInterval, config.WakeUpInterval/10),
 		healthTicks:    time.NewTicker(healthInterval).C,
+		latencyTracker: config.LatencyTracker,
 	}
 
 	var err error
@@ -397,7 +405,7 @@ func (c *Cache) publishBreadcrumb() {
 		Timestamp:      time.Now(),
 		SyncStatus:     oldCrumb.SyncStatus,
 		nextCond:       c.breadcrumbCond,
-		Deltas:         make([]syncproto.SerializedUpdate, 0, len(updates)),
+		Deltas:         make([]syncproto.SerializedUpdate, 0, len(updates)+1),
 
 		counterBreadcrumbBlock:    c.counterBreadcrumbBlock,
 		counterBreadcrumbNonBlock: c.counterBreadcrumbNonBlock,
@@ -458,6 +466,39 @@ func (c *Cache) publishBreadcrumb() {
 	if !somethingChanged {
 		log.Debug("Skipping Breadcrumb.  No updates to publish.")
 		return
+	}
+
+	// Something changed, add an extra update to record the revision and
+	// timestamp.  Felix uses this to report latency stats.
+	revision := model.TyphaRevision{
+		ServerID:  c.config.ServerID,
+		Timestamp: time.Now(),
+		Revision:  fmt.Sprint(newCrumb.SequenceNumber),
+	}
+	revUpd, err := syncproto.SerializeUpdate(api.Update{
+		KVPair: model.KVPair{
+			Key:      model.TyphaRevisionKey{},
+			Value:    &revision,
+			Revision: fmt.Sprint(newCrumb.SequenceNumber),
+		},
+		UpdateType: api.UpdateTypeKVUpdated,
+	})
+
+	if err != nil {
+		log.WithError(err).Error("Failed to serialize Typha revision update")
+	} else {
+		newCrumb.Deltas = append(newCrumb.Deltas, revUpd)
+
+		// Store the revision in the KVs map so that we don't break our invariant
+		// that the "sum of the deltas" is the same as the current state of the
+		// datastore.
+		updToStore := revUpd
+		updToStore.UpdateType = api.UpdateTypeKVNew
+		c.kvs.ReplaceOrInsert(updToStore)
+	}
+
+	if c.latencyTracker != nil {
+		c.latencyTracker.RecordBreadcrumbCreation(revision)
 	}
 
 	c.gaugeSnapSize.Set(float64(c.kvs.Len()))

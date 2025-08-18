@@ -137,6 +137,15 @@ var (
 		Help: "Number of interface address messages processed in each batch. Higher " +
 			"values indicate we're doing more batching to try to keep up.",
 	})
+	gaugeLastAppliedTyphaTimestamp = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "felix_int_dataplane_last_typha_timestamp_seconds",
+		Help: "Timestamp of the last Typha revision update that was applied to the dataplane.",
+	})
+	summaryTyphaBatchLatency = cprometheus.NewSummary(prometheus.SummaryOpts{
+		Name: "felix_int_dataplane_typha_batch_latency_seconds",
+		Help: "Latency between Typha receiving events from the datastore (and producing an " +
+			"update batch) and completion of dataplane update.",
+	})
 
 	processStartTime time.Time
 	zeroKey          = wgtypes.Key{}
@@ -152,7 +161,18 @@ func init() {
 	prometheus.MustRegister(summaryBatchSize)
 	prometheus.MustRegister(summaryIfaceBatchSize)
 	prometheus.MustRegister(summaryAddrBatchSize)
+	prometheus.MustRegister(gaugeLastAppliedTyphaTimestamp)
+	prometheus.MustRegister(summaryTyphaBatchLatency)
 	processStartTime = time.Now()
+}
+
+var registerTyphaStatsOnce sync.Once
+
+func ensureTyphaStatsRegistered() {
+	registerTyphaStatsOnce.Do(func() {
+		prometheus.MustRegister(gaugeLastAppliedTyphaTimestamp)
+		prometheus.MustRegister(summaryTyphaBatchLatency)
+	})
 }
 
 type Config struct {
@@ -282,6 +302,8 @@ type Config struct {
 
 	// For testing purposes - allows unit tests to mock out the creation of the nftables dataplane.
 	NewNftablesDataplane func(knftables.Family, string) (knftables.Interface, error)
+
+	TyphaRevisionListener TyphaRevisionListener
 }
 
 type UpdateBatchResolver interface {
@@ -411,6 +433,14 @@ type InternalDataplane struct {
 
 	actions  generictables.ActionFactory
 	newMatch func() generictables.MatchCriteria
+
+	typhaRevisionListener      TyphaRevisionListener
+	lastTyphaRevisionUpdate    *proto.TyphaRevisionUpdate
+	typhaRevisionUpdatePending bool
+}
+
+type TyphaRevisionListener interface {
+	OnDataplaneUpdateComplete(serverID, revision string)
 }
 
 const (
@@ -470,16 +500,21 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	}
 
 	dp := &InternalDataplane{
-		toDataplane:    make(chan interface{}, msgPeekLimit),
-		fromDataplane:  make(chan interface{}, 100),
-		ruleRenderer:   ruleRenderer,
-		ifaceMonitor:   ifacemonitor.New(config.IfaceMonitorConfig, featureDetector, config.FatalErrorRestartCallback),
-		ifaceUpdates:   make(chan any, 100),
-		config:         config,
-		applyThrottle:  throttle.New(10),
-		loopSummarizer: logutils.NewSummarizer("dataplane reconciliation loops"),
-		actions:        actionSet,
-		newMatch:       newMatchFn,
+		toDataplane:           make(chan interface{}, msgPeekLimit),
+		fromDataplane:         make(chan interface{}, 100),
+		ruleRenderer:          ruleRenderer,
+		ifaceMonitor:          ifacemonitor.New(config.IfaceMonitorConfig, featureDetector, config.FatalErrorRestartCallback),
+		ifaceUpdates:          make(chan any, 100),
+		config:                config,
+		applyThrottle:         throttle.New(10),
+		loopSummarizer:        logutils.NewSummarizer("dataplane reconciliation loops"),
+		actions:               actionSet,
+		newMatch:              newMatchFn,
+		typhaRevisionListener: config.TyphaRevisionListener,
+	}
+	if dp.typhaRevisionListener != nil {
+		log.Info("Typha revision listener configured, registering stats.")
+		ensureTyphaStatsRegistered()
 	}
 	dp.applyThrottle.Refill() // Allow the first apply() immediately.
 	dp.ifaceMonitor.StateCallback = dp.onIfaceStateChange
@@ -2285,6 +2320,7 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 					d.sendDataplaneInSyncOnce.Do(func() {
 						d.fromDataplane <- &proto.DataplaneInSync{}
 					})
+					d.reportTyphaRevision()
 				}
 
 				d.loopSummarizer.EndOfIteration(applyTime)
@@ -2350,11 +2386,14 @@ func (d *InternalDataplane) processMsgFromCalcGraph(msg interface{}) {
 	for _, mgr := range d.allManagers {
 		mgr.OnUpdate(msg)
 	}
-	switch msg.(type) {
+	switch msg := msg.(type) {
 	case *proto.InSync:
 		log.WithField("timeSinceStart", time.Since(processStartTime)).Info(
 			"Datastore in sync, flushing the dataplane for the first time...")
 		d.datastoreInSync = true
+	case *proto.TyphaRevisionUpdate:
+		d.lastTyphaRevisionUpdate = msg
+		d.typhaRevisionUpdatePending = true
 	}
 }
 
@@ -2791,6 +2830,28 @@ func (d *InternalDataplane) reportHealth() {
 			&health.HealthReport{Live: true, Ready: d.doneFirstApply && d.ifaceMonitorInSync},
 		)
 	}
+}
+
+func (d *InternalDataplane) reportTyphaRevision() {
+	if d.typhaRevisionListener == nil {
+		return
+	}
+	if d.lastTyphaRevisionUpdate == nil {
+		return
+	}
+	if !d.typhaRevisionUpdatePending {
+		return
+	}
+	d.typhaRevisionListener.OnDataplaneUpdateComplete(d.lastTyphaRevisionUpdate.ServerID, d.lastTyphaRevisionUpdate.Revision)
+	ts := d.lastTyphaRevisionUpdate.Timestamp
+	gaugeLastAppliedTyphaTimestamp.Set(float64(ts.Seconds)*1e9 + float64(ts.Nanos))
+	t := ts.AsTime()
+	if t.After(processStartTime) {
+		// Avoid reporting a huge latency spike when the process starts. The
+		// initial Typha breadcrumb may be hours old if the datastore is quiet!
+		summaryTyphaBatchLatency.Observe(time.Since(t).Seconds())
+	}
+	d.typhaRevisionUpdatePending = false
 }
 
 type dummyLock struct{}
