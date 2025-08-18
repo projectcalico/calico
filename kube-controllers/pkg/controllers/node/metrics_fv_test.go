@@ -164,6 +164,7 @@ var _ = Describe("kube-controllers metrics FV tests", func() {
 	})
 
 	AfterEach(func() {
+		_ = calicoClient.Close()
 		controllerManager.Stop()
 		kubeControllers.Stop()
 		apiserver.Stop()
