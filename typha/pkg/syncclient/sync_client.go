@@ -175,6 +175,7 @@ type SyncerClient struct {
 	callbacks                 CallbacksWithKeysKnown
 	Finished                  sync.WaitGroup
 	revisionsFromDataplane    chan syncproto.MsgDataplaneRevision
+	lastSeenDataplaneServerID string
 	lastSeenDataplaneRevision string
 }
 
@@ -239,17 +240,19 @@ func (s *SyncerClient) Start(cxt context.Context) error {
 	return nil
 }
 
-func (s *SyncerClient) OnDataplaneUpdateComplete(revision string) {
-	if s.lastSeenDataplaneRevision == revision {
-		// No change, nothing to do.
+func (s *SyncerClient) OnDataplaneUpdateComplete(serverID, revision string) {
+	if s.lastSeenDataplaneRevision == revision && s.lastSeenDataplaneServerID == serverID {
+		// We already sent this revision, no need to send it again.
 		return
 	}
+	s.lastSeenDataplaneServerID = serverID
 	s.lastSeenDataplaneRevision = revision
 	select {
 	case <-s.revisionsFromDataplane: // If the channel is full, we just discard the old value.
 	default:
 	}
 	s.revisionsFromDataplane <- syncproto.MsgDataplaneRevision{
+		ServerID:  serverID,
 		Revision:  revision,
 		Timestamp: time.Now(),
 	}

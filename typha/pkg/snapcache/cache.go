@@ -168,6 +168,7 @@ type healthAggregator interface {
 }
 
 type Config struct {
+	ServerID         string
 	MaxBatchSize     int
 	WakeUpInterval   time.Duration
 	HealthAggregator healthAggregator
@@ -457,21 +458,7 @@ func (c *Cache) publishBreadcrumb() {
 		newCrumb.Deltas = append(newCrumb.Deltas, newUpd)
 		somethingChanged = true
 	}
-	revUpd, err := syncproto.SerializeUpdate(api.Update{
-		KVPair: model.KVPair{
-			Key: model.TyphaRevisionKey{},
-			Value: &model.TyphaRevision{
-				Revision: fmt.Sprint(newCrumb.SequenceNumber),
-			},
-			Revision: fmt.Sprint(newCrumb.SequenceNumber),
-		},
-		UpdateType: api.UpdateTypeKVUpdated,
-	})
-	if err != nil {
-		log.WithError(err).Error("Failed to serialize Typha revision update")
-	} else {
-		newCrumb.Deltas = append(newCrumb.Deltas, revUpd)
-	}
+
 	// Even if all updates were filtered out, report that to Prometheus; we
 	// want the stat to decay to zero if the event stream is quiet.
 	c.summaryUpdateSize.Observe(float64(len(newCrumb.Deltas)))
@@ -481,8 +468,37 @@ func (c *Cache) publishBreadcrumb() {
 		return
 	}
 
+	// Something changed, add an extra update to record the revision and
+	// timestamp.  Felix uses this to report latency stats.
+	revision := model.TyphaRevision{
+		ServerID:  c.config.ServerID,
+		Timestamp: time.Now(),
+		Revision:  fmt.Sprint(newCrumb.SequenceNumber),
+	}
+	revUpd, err := syncproto.SerializeUpdate(api.Update{
+		KVPair: model.KVPair{
+			Key:      model.TyphaRevisionKey{},
+			Value:    &revision,
+			Revision: fmt.Sprint(newCrumb.SequenceNumber),
+		},
+		UpdateType: api.UpdateTypeKVUpdated,
+	})
+
+	if err != nil {
+		log.WithError(err).Error("Failed to serialize Typha revision update")
+	} else {
+		newCrumb.Deltas = append(newCrumb.Deltas, revUpd)
+
+		// Store the revision in the KVs map so that we don't break our invariant
+		// that the "sum of the deltas" is the same as the current state of the
+		// datastore.
+		updToStore := revUpd
+		updToStore.UpdateType = api.UpdateTypeKVNew
+		c.kvs.ReplaceOrInsert(updToStore)
+	}
+
 	if c.latencyTracker != nil {
-		c.latencyTracker.RecordBreadcrumbCreation(newCrumb.SequenceNumber)
+		c.latencyTracker.RecordBreadcrumbCreation(revision)
 	}
 
 	c.gaugeSnapSize.Set(float64(c.kvs.Len()))

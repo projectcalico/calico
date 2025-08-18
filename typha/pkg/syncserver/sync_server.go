@@ -27,7 +27,6 @@ import (
 	"math/rand"
 	"net"
 	"os"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -702,7 +701,7 @@ type connection struct {
 	perSyncerConnMetrics
 
 	perConnLatencyTracker *latencytracker.ClientTracker
-	pendingDataplentRev   *syncproto.MsgDataplaneRevision
+	pendingDataplaneRev   *syncproto.MsgDataplaneRevision
 }
 
 type snapshotCache interface {
@@ -743,9 +742,9 @@ func (h *connection) handle(finishedWG *sync.WaitGroup) (err error) {
 	defer h.gaugeNumConnectionsStreaming.Dec()
 
 	h.perConnLatencyTracker = h.perSyncerConnMetrics.latencyTracker.RegisterClient(h.ID, h.conn.RemoteAddr().String())
-	if h.pendingDataplentRev != nil {
-		h.handleDataplaneRev(*h.pendingDataplentRev)
-		h.pendingDataplentRev = nil
+	if h.pendingDataplaneRev != nil {
+		h.handleDataplaneRev(*h.pendingDataplaneRev)
+		h.pendingDataplaneRev = nil
 	}
 	defer h.perConnLatencyTracker.Close()
 
@@ -858,10 +857,9 @@ func (h *connection) handle(finishedWG *sync.WaitGroup) (err error) {
 func (h *connection) handleDataplaneRev(msg syncproto.MsgDataplaneRevision) {
 	h.logCxt.Debugf("Felix reports dataplane updated to revision %v/%v", msg.Revision, h.cache.CurrentBreadcrumb().SequenceNumber)
 	if h.perConnLatencyTracker == nil {
-		h.pendingDataplentRev = &msg
+		h.pendingDataplaneRev = &msg
 	}
-	rev, _ := strconv.ParseUint(msg.Revision, 10, 64)
-	h.perConnLatencyTracker.RecordDataplaneUpdate(rev, msg.Timestamp)
+	h.perConnLatencyTracker.RecordDataplaneUpdate(msg)
 }
 
 // readFromClient reads messages from the client and puts them on the h.readC channel.  It is responsible for closing the

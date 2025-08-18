@@ -19,6 +19,8 @@ import (
 	"reflect"
 
 	log "github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/calico/lib/std/time"
 )
 
 var (
@@ -64,5 +66,7 @@ func (options TyphaRevisionListOptions) KeyFromDefaultPath(path string) Key {
 }
 
 type TyphaRevision struct {
-	Revision string `json:"revision,omitempty"`
+	ServerID  string    `json:"serverID,omitempty"`
+	Revision  string    `json:"revision,omitempty"`
+	Timestamp time.Time `json:"timestamp,omitempty"`
 }

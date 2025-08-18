@@ -11,6 +11,7 @@ import (
 	sync "sync"
 	unsafe "unsafe"
 
+	timestamp "github.com/golang/protobuf/ptypes/timestamp"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 )
@@ -6261,7 +6262,9 @@ func (x *ServiceRemove) GetNamespace() string {
 
 type TyphaRevisionUpdate struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
+	ServerID      string                 `protobuf:"bytes,2,opt,name=serverID,proto3" json:"serverID,omitempty"`
 	Revision      string                 `protobuf:"bytes,1,opt,name=revision,proto3" json:"revision,omitempty"`
+	Timestamp     *timestamp.Timestamp   `protobuf:"bytes,3,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -6296,11 +6299,25 @@ func (*TyphaRevisionUpdate) Descriptor() ([]byte, []int) {
 	return file_felixbackend_proto_rawDescGZIP(), []int{78}
 }
 
+func (x *TyphaRevisionUpdate) GetServerID() string {
+	if x != nil {
+		return x.ServerID
+	}
+	return ""
+}
+
 func (x *TyphaRevisionUpdate) GetRevision() string {
 	if x != nil {
 		return x.Revision
 	}
 	return ""
+}
+
+func (x *TyphaRevisionUpdate) GetTimestamp() *timestamp.Timestamp {
+	if x != nil {
+		return x.Timestamp
+	}
+	return nil
 }
 
 type HTTPMatch_PathMatch struct {
@@ -6389,7 +6406,7 @@ var File_felixbackend_proto protoreflect.FileDescriptor
 
 const file_felixbackend_proto_rawDesc = "" +
 	"\n" +
-	"\x12felixbackend.proto\x12\x05felix\"\r\n" +
+	"\x12felixbackend.proto\x12\x05felix\x1a\x1fgoogle/protobuf/timestamp.proto\"\r\n" +
 	"\vSyncRequest\"\x9d\x17\n" +
 	"\vToDataplane\x12'\n" +
 	"\x0fsequence_number\x18\x0f \x01(\x04R\x0esequenceNumber\x12(\n" +
@@ -6846,9 +6863,11 @@ const file_felixbackend_proto_rawDesc = "" +
 	"\x05ports\x18\a \x03(\v2\x12.felix.ServicePortR\x05ports\"A\n" +
 	"\rServiceRemove\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1c\n" +
-	"\tnamespace\x18\x02 \x01(\tR\tnamespace\"1\n" +
+	"\tnamespace\x18\x02 \x01(\tR\tnamespace\"\x87\x01\n" +
 	"\x13TyphaRevisionUpdate\x12\x1a\n" +
-	"\brevision\x18\x01 \x01(\tR\brevision*(\n" +
+	"\bserverID\x18\x02 \x01(\tR\bserverID\x12\x1a\n" +
+	"\brevision\x18\x01 \x01(\tR\brevision\x128\n" +
+	"\ttimestamp\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\ttimestamp*(\n" +
 	"\tIPVersion\x12\a\n" +
 	"\x03ANY\x10\x00\x12\b\n" +
 	"\x04IPV4\x10\x04\x12\b\n" +
@@ -6989,6 +7008,7 @@ var file_felixbackend_proto_goTypes = []any{
 	nil,                                  // 94: felix.HostMetadataV4V6Update.LabelsEntry
 	nil,                                  // 95: felix.ServiceAccountUpdate.LabelsEntry
 	nil,                                  // 96: felix.NamespaceUpdate.LabelsEntry
+	(*timestamp.Timestamp)(nil),          // 97: google.protobuf.Timestamp
 }
 var file_felixbackend_proto_depIdxs = []int32{
 	14,  // 0: felix.ToDataplane.in_sync:type_name -> felix.InSync
@@ -7113,16 +7133,17 @@ var file_felixbackend_proto_depIdxs = []int32{
 	20,  // 119: felix.RuleTrace.profile:type_name -> felix.ProfileID
 	8,   // 120: felix.RuleTrace.direction:type_name -> felix.RuleTrace.Direction
 	84,  // 121: felix.ServiceUpdate.ports:type_name -> felix.ServicePort
-	13,  // 122: felix.ConfigUpdate.SourceToRawConfigEntry.value:type_name -> felix.RawConfig
-	9,   // 123: felix.PolicySync.Sync:input_type -> felix.SyncRequest
-	76,  // 124: felix.PolicySync.Report:input_type -> felix.DataplaneStats
-	10,  // 125: felix.PolicySync.Sync:output_type -> felix.ToDataplane
-	75,  // 126: felix.PolicySync.Report:output_type -> felix.ReportResult
-	125, // [125:127] is the sub-list for method output_type
-	123, // [123:125] is the sub-list for method input_type
-	123, // [123:123] is the sub-list for extension type_name
-	123, // [123:123] is the sub-list for extension extendee
-	0,   // [0:123] is the sub-list for field type_name
+	97,  // 122: felix.TyphaRevisionUpdate.timestamp:type_name -> google.protobuf.Timestamp
+	13,  // 123: felix.ConfigUpdate.SourceToRawConfigEntry.value:type_name -> felix.RawConfig
+	9,   // 124: felix.PolicySync.Sync:input_type -> felix.SyncRequest
+	76,  // 125: felix.PolicySync.Report:input_type -> felix.DataplaneStats
+	10,  // 126: felix.PolicySync.Sync:output_type -> felix.ToDataplane
+	75,  // 127: felix.PolicySync.Report:output_type -> felix.ReportResult
+	126, // [126:128] is the sub-list for method output_type
+	124, // [124:126] is the sub-list for method input_type
+	124, // [124:124] is the sub-list for extension type_name
+	124, // [124:124] is the sub-list for extension extendee
+	0,   // [0:124] is the sub-list for field type_name
 }
 
 func init() { file_felixbackend_proto_init() }

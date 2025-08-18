@@ -4,12 +4,14 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/typha/pkg/syncproto"
 )
 
@@ -18,13 +20,15 @@ type LatencyTracker struct {
 	clients    map[uint64]*ClientTracker
 	crumbs     map[uint64]time.Time // Maps breadcrumb sequence number to creation time
 	syncerType syncproto.SyncerType
+	serverID   string
 }
 
-func New(syncerType syncproto.SyncerType) *LatencyTracker {
+func New(syncerType syncproto.SyncerType, myServerID string) *LatencyTracker {
 	return &LatencyTracker{
 		clients:    make(map[uint64]*ClientTracker),
 		crumbs:     make(map[uint64]time.Time),
 		syncerType: syncerType,
+		serverID:   myServerID,
 	}
 }
 
@@ -44,13 +48,16 @@ func (l *LatencyTracker) RegisterClient(connID uint64, address string) *ClientTr
 	return c
 }
 
-func (l *LatencyTracker) RecordBreadcrumbCreation(breadcrumbSeqNo uint64) {
-	now := time.Now()
-
+func (l *LatencyTracker) RecordBreadcrumbCreation(rev model.TyphaRevision) {
 	l.lock.Lock()
 	defer l.lock.Unlock()
 
-	l.crumbs[breadcrumbSeqNo] = now
+	seqNo, err := strconv.ParseUint(rev.Revision, 10, 64)
+	if err != nil {
+		logrus.WithError(err).Warnf("Unable to parse revision from %s", rev)
+		return
+	}
+	l.crumbs[seqNo] = rev.Timestamp
 }
 
 func (l *LatencyTracker) recordClientClose(id uint64) {
@@ -169,10 +176,21 @@ type update struct {
 	timestamp       time.Time
 }
 
-func (c *ClientTracker) RecordDataplaneUpdate(breadcrumbSeqNo uint64, timestamp time.Time) {
+func (c *ClientTracker) RecordDataplaneUpdate(msg syncproto.MsgDataplaneRevision) {
+	if msg.ServerID != c.latencyTracker.serverID {
+		// Can happen when a client reconnects.
+		logrus.Debugf("Received update for different server ID %s, expected %s", msg.ServerID, c.latencyTracker.serverID)
+		return
+	}
+	seqNo, err := strconv.ParseUint(msg.Revision, 10, 64)
+	if err != nil {
+		logrus.WithError(err).Warnf("Unable to parse revision from %s", msg)
+		return
+	}
+
 	c.lastUpdate.Store(&update{
-		breadcrumbSeqNo: breadcrumbSeqNo,
-		timestamp:       timestamp,
+		breadcrumbSeqNo: seqNo,
+		timestamp:       msg.Timestamp,
 	})
 }
 

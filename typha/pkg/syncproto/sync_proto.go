@@ -299,6 +299,7 @@ type MsgPong struct {
 	PongTimestamp time.Time
 }
 type MsgDataplaneRevision struct {
+	ServerID  string
 	Timestamp time.Time
 	Revision  string
 }

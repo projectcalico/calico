@@ -2,6 +2,8 @@ syntax = "proto3";
 package felix;
 option go_package = "./proto";
 
+import "google/protobuf/timestamp.proto";
+
 service PolicySync {
   // On this API, only the following payloads will be sent:
   //  - InSync
@@ -822,5 +824,7 @@ message ServiceRemove {
 }
 
 message TyphaRevisionUpdate {
+  string serverID = 2;
   string revision = 1;
+  google.protobuf.Timestamp timestamp = 3;
 }

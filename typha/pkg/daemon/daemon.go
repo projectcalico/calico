@@ -16,6 +16,8 @@ package daemon
 
 import (
 	"context"
+	cryptorand "crypto/rand"
+	"encoding/hex"
 	"os"
 	"os/signal"
 	"runtime"
@@ -72,6 +74,7 @@ type TyphaDaemon struct {
 	ConfigFilePath  string
 	DatastoreClient DatastoreClient
 	ConfigParams    *config.Config
+	serverID        string
 
 	// The components of the server, created in CreateServer() below.
 	SyncerPipelines    []*syncerPipeline
@@ -126,7 +129,18 @@ func New() *TyphaDaemon {
 		ConfigureLogging:      logutils.ConfigureLogging,
 		CachesBySyncerType:    map[syncproto.SyncerType]syncserver.BreadcrumbProvider{},
 		LatencyTrackers:       map[syncproto.SyncerType]*latencytracker.LatencyTracker{},
+		serverID:              makeUniqueServerID(),
 	}
+}
+
+func makeUniqueServerID() string {
+	// Generate a random ID using crypto/rand.
+	var serverID [16]byte
+	if _, err := cryptorand.Read(serverID[:]); err != nil {
+		log.WithError(err).Panic("Failed to generate unique server ID")
+	}
+	// Convert to a hex string.
+	return hex.EncodeToString(serverID[:])
 }
 
 func (t *TyphaDaemon) InitializeAndServeForever(cxt context.Context) error {
@@ -351,11 +365,12 @@ func (t *TyphaDaemon) addSyncerPipeline(
 		validator = calc.NewValidationFilter(toCache)
 	}
 
-	latencyTracker := latencytracker.New(syncerType)
+	latencyTracker := latencytracker.New(syncerType, t.serverID)
 	t.LatencyTrackers[syncerType] = latencyTracker
 
 	// Create our snapshot cache, which stores point-in-time copies of the datastore contents.
 	cache := snapcache.New(snapcache.Config{
+		ServerID:         t.serverID,
 		MaxBatchSize:     t.ConfigParams.SnapshotCacheMaxBatchSize,
 		HealthAggregator: t.healthAggregator,
 		Name:             string(syncerType),
