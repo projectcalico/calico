@@ -21,9 +21,9 @@ import netaddr
 
 from neutron.agent.linux import dhcp
 
-from oslo_log import log as logging
+from neutron_lib import constants
 
-from networking_calico.compat import constants
+from oslo_log import log as logging
 
 
 LOG = logging.getLogger(__name__)

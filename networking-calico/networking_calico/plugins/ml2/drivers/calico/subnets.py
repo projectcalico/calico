@@ -17,11 +17,12 @@ import json
 
 import netaddr
 
+from oslo_log import log
+
 from networking_calico import datamodel_v1
 from networking_calico import datamodel_v2
 from networking_calico import etcdv3
 from networking_calico.common import config as calico_config
-from networking_calico.compat import log
 from networking_calico.plugins.ml2.drivers.calico.syncer import ResourceGone
 from networking_calico.plugins.ml2.drivers.calico.syncer import ResourceSyncer
 

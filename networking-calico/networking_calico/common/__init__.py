@@ -19,6 +19,7 @@ Calico common utilities.
 """
 import errno
 import os
+import sys
 
 import netaddr
 import netaddr.core
@@ -59,12 +60,5 @@ class ValidationFailed(Exception):
     pass
 
 
-# Interning for Unicode strings.
-try:
-    from sys import intern
-except ImportError:
-    pass
-
-
 def intern_string(s):
-    return intern(s)
+    return sys.intern(s)

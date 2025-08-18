@@ -21,7 +21,7 @@ import eventlet
 
 eventlet.monkey_patch()
 
-import logging  # noqa
+import logging  # noqa: I100
 import os
 import re
 import socket
@@ -41,16 +41,11 @@ from neutron.agent.dhcp.agent import DhcpAgent
 from neutron.agent.dhcp_agent import register_options
 from neutron.agent.linux import dhcp
 from neutron.common import config as common_config
+from neutron.conf.agent import common as config
 
-try:
-    from neutron.common import constants as neutron_constants
-except ImportError:
-    from neutron_lib import constants as neutron_constants
-try:
-    from neutron.conf.agent import common as config
-except ImportError:
-    # Neutron code prior to 7f23ccc (15th March 2017).
-    from neutron.agent.common import config
+from neutron_lib import constants
+
+from oslo_config import cfg
 
 from networking_calico import datamodel_v1
 from networking_calico import datamodel_v2
@@ -59,9 +54,6 @@ from networking_calico import etcdutils
 from networking_calico.agent.linux.dhcp import DnsmasqRouted
 from networking_calico.common import config as calico_config
 from networking_calico.common import mkdir_p
-from networking_calico.compat import DHCPV6_STATEFUL
-from networking_calico.compat import cfg
-from networking_calico.compat import constants
 
 LOG = logging.getLogger(__name__)
 
@@ -139,7 +131,7 @@ def empty_network(network_id=NETWORK_ID):
             "subnets": [],
             "ports": [],
             "tenant_id": "calico",
-            "mtu": neutron_constants.DEFAULT_NETWORK_MTU,
+            "mtu": constants.DEFAULT_NETWORK_MTU,
         }
     )
 
@@ -766,7 +758,7 @@ class SubnetWatcher(etcdutils.EtcdWatcher):
                 "Etcd3Exception in SubnetWatcher.start():\n%s", e3e.detail_text
             )
             raise
-        except:  # noqa
+        except Exception:
             LOG.exception("Exception in SubnetWatcher.start()")
             raise
         finally:
@@ -835,8 +827,8 @@ class SubnetWatcher(etcdutils.EtcdWatcher):
             "network_id": data.get("network_id", NETWORK_ID),
         }
         if ip_version == 6:
-            subnet["ipv6_address_mode"] = DHCPV6_STATEFUL
-            subnet["ipv6_ra_mode"] = DHCPV6_STATEFUL
+            subnet["ipv6_address_mode"] = constants.DHCPV6_STATEFUL
+            subnet["ipv6_ra_mode"] = constants.DHCPV6_STATEFUL
 
         return dhcp.DictModel(subnet)
 
