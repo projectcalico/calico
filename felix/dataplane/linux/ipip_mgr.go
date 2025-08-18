@@ -22,21 +22,14 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 
-	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
 	"github.com/projectcalico/calico/felix/ip"
-	"github.com/projectcalico/calico/felix/ipsets"
 	"github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/felix/netlinkshim"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/routetable"
-	"github.com/projectcalico/calico/felix/rules"
 )
 
-// ipipManager manages the all-hosts IP set, which is used by some rules in our static chains
-// when IPIP is enabled. It doesn't actually program the rules, because they are part of the
-// top-level static chains.
-//
-// ipipManager also takes care of the configuration of the IPIP tunnel device, and programming IPIP routes by using
+// ipipManager takes care of the configuration of the IPIP tunnel device, and programming IPIP routes by using
 // route manager. Route updates are only sent to the route manager when Felix is reponsible for programming routes.
 // If BIRD is in charge of IPIP routes, ipipManager is only responsible for configuration of the IPIP tunnel device.
 type ipipManager struct {
@@ -45,6 +38,7 @@ type ipipManager struct {
 	ipVersion     uint8
 	routeProtocol netlink.RouteProtocol
 	routeMgr      *routeManager
+	dpConfig      Config
 
 	// Device information
 	tunnelDevice    string
@@ -53,13 +47,6 @@ type ipipManager struct {
 	// activeHostnameToIP maps hostname to string IP address. We don't bother to parse into
 	// net.IPs because we're going to pass them directly to the IPSet API.
 	activeHostnameToIP map[string]string
-	ipsetsDataplane    dpsets.IPSetsDataplane
-	ipSetMetadata      ipsets.IPSetMetadata
-
-	// Indicates if configuration has changed since the last apply.
-	ipSetDirty        bool
-	externalNodeCIDRs []string
-	dpConfig          Config
 
 	// Log context
 	logCtx     *logrus.Entry
@@ -67,7 +54,6 @@ type ipipManager struct {
 }
 
 func newIPIPManager(
-	ipsetsDataplane dpsets.IPSetsDataplane,
 	mainRouteTable routetable.Interface,
 	tunnelDevice string,
 	ipVersion uint8,
@@ -77,7 +63,6 @@ func newIPIPManager(
 ) *ipipManager {
 	nlHandle, _ := netlinkshim.NewRealNetlink()
 	return newIPIPManagerWithShims(
-		ipsetsDataplane,
 		mainRouteTable,
 		tunnelDevice,
 		ipVersion,
@@ -89,7 +74,6 @@ func newIPIPManager(
 }
 
 func newIPIPManagerWithShims(
-	ipsetsDataplane dpsets.IPSetsDataplane,
 	mainRouteTable routetable.Interface,
 	tunnelDevice string,
 	ipVersion uint8,
@@ -105,19 +89,11 @@ func newIPIPManagerWithShims(
 	}
 
 	m := &ipipManager{
-		ipsetsDataplane: ipsetsDataplane,
-		ipSetMetadata: ipsets.IPSetMetadata{
-			MaxSize: dpConfig.MaxIPSetSize,
-			SetID:   rules.IPSetIDAllHostNets,
-			Type:    ipsets.IPSetTypeHashNet,
-		},
 		activeHostnameToIP: map[string]string{},
 		hostname:           dpConfig.Hostname,
 		tunnelDevice:       tunnelDevice,
 		tunnelDeviceMTU:    mtu,
 		ipVersion:          ipVersion,
-		externalNodeCIDRs:  dpConfig.ExternalNodesCidrs,
-		ipSetDirty:         true,
 		dpConfig:           dpConfig,
 		routeProtocol:      calculateRouteProtocol(dpConfig),
 		logCtx: logrus.WithFields(logrus.Fields{
@@ -152,7 +128,6 @@ func (m *ipipManager) OnUpdate(protoBufMsg interface{}) {
 			m.routeMgr.updateParentIfaceAddr(msg.Ipv4Addr)
 		}
 		m.activeHostnameToIP[msg.Hostname] = msg.Ipv4Addr
-		m.ipSetDirty = true
 		m.maybeUpdateRoutes()
 	case *proto.HostMetadataRemove:
 		m.logCtx.WithField("hostname", msg.Hostname).Debug("Host removed")
@@ -160,7 +135,6 @@ func (m *ipipManager) OnUpdate(protoBufMsg interface{}) {
 			m.routeMgr.updateParentIfaceAddr("")
 		}
 		delete(m.activeHostnameToIP, msg.Hostname)
-		m.ipSetDirty = true
 		m.maybeUpdateRoutes()
 	default:
 		if m.dpConfig.ProgramClusterRoutes {
@@ -177,30 +151,10 @@ func (m *ipipManager) maybeUpdateRoutes() {
 }
 
 func (m *ipipManager) CompleteDeferredWork() error {
-	if m.ipSetDirty {
-		m.updateAllHostsIPSet()
-		m.ipSetDirty = false
-	}
-
 	if m.dpConfig.ProgramClusterRoutes {
 		return m.routeMgr.CompleteDeferredWork()
 	}
 	return nil
-}
-
-func (m *ipipManager) updateAllHostsIPSet() {
-	// For simplicity (and on the assumption that host add/removes are rare) rewrite
-	// the whole IP set whenever we get a change. To replace this with delta handling
-	// would require reference counting the IPs because it's possible for two hosts
-	// to (at least transiently) share an IP. That would add occupancy and make the
-	// code more complex.
-	m.logCtx.Info("All-hosts IP set out-of sync, refreshing it.")
-	members := make([]string, 0, len(m.activeHostnameToIP)+len(m.externalNodeCIDRs))
-	for _, ip := range m.activeHostnameToIP {
-		members = append(members, ip)
-	}
-	members = append(members, m.externalNodeCIDRs...)
-	m.ipsetsDataplane.AddOrReplaceIPSet(m.ipSetMetadata, members)
 }
 
 func (m *ipipManager) tunnelRoute(cidr ip.CIDR, r *proto.RouteUpdate) *routetable.Target {
