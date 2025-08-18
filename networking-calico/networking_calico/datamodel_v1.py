@@ -49,8 +49,7 @@ class EndpointId(object):
         return self.__class__.__name__ + ("<%s>" % self.endpoint)
 
     def __repr__(self):
-        return self.__class__.__name__ + ("(%r,%r)" % (self.host,
-                                                       self.endpoint))
+        return self.__class__.__name__ + "(%r,%r)" % (self.host, self.endpoint)
 
     def __ne__(self, other):
         return not (self == other)
@@ -68,20 +67,24 @@ class WloadEndpointId(EndpointId):
         self.workload = intern_string(workload)
 
     def __repr__(self):
-        return self.__class__.__name__ + ("(%r,%r,%r,%r)" % (self.host,
-                                                             self.orchestrator,
-                                                             self.workload,
-                                                             self.endpoint))
+        return self.__class__.__name__ + "(%r,%r,%r,%r)" % (
+            self.host,
+            self.orchestrator,
+            self.workload,
+            self.endpoint,
+        )
 
     def __eq__(self, other):
         if other is self:
             return True
         if not isinstance(other, WloadEndpointId):
             return False
-        return (other.endpoint == self.endpoint and
-                other.workload == self.workload and
-                other.host == self.host and
-                other.orchestrator == self.orchestrator)
+        return (
+            other.endpoint == self.endpoint
+            and other.workload == self.workload
+            and other.host == self.host
+            and other.orchestrator == self.orchestrator
+        )
 
     def __hash__(self):
         return hash(self.endpoint) + hash(self.workload)

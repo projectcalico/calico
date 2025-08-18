@@ -36,6 +36,21 @@ struct bpf_object* bpf_obj_open(char *filename) {
 	return obj;
 }
 
+struct bpf_object* bpf_obj_open_log_buf(char *filename, char *buf, size_t size) {
+	struct bpf_object *obj;
+	DECLARE_LIBBPF_OPTS(bpf_object_open_opts, opts,
+		.kernel_log_buf = buf,
+		.kernel_log_size = size,
+		);
+	obj = bpf_object__open_file(filename, &opts);
+	int err = libbpf_get_error(obj);
+	if (err) {
+		obj = NULL;
+	}
+	set_errno(err);
+	return obj;
+}
+
 void bpf_obj_load(struct bpf_object *obj) {
 	set_errno(bpf_object__load(obj));
 }

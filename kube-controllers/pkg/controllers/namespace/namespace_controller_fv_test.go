@@ -83,6 +83,7 @@ var _ = Describe("Calico namespace controller FV tests (etcd mode)", func() {
 	})
 
 	AfterEach(func() {
+		_ = calicoClient.Close()
 		controllerManager.Stop()
 		policyController.Stop()
 		apiserver.Stop()
