@@ -35,7 +35,7 @@ build:
 	$(DOCKER_RUN_RM) -e NODE_OPTIONS=--max_old_space_size=8192 -e CNX_APP_VERSION=$(GIT_VERSION) $(BUILD_IMAGE_NAME) yarn build
 
 image-nginx-test: $(IMAGE_BUILD_MARKER)
-	$(DOCKER_RUN_RM) whisker:latest-$(ARCH) nginx -T
+	docker run --rm whisker:latest-$(ARCH) test
 
 image-all: $(addprefix sub-image-,$(VALIDARCHES))
 sub-image-%:
