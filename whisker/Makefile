@@ -28,7 +28,7 @@ $(IMAGE_BUILD_MARKER): register build
 	touch $@
 
 .PHONY: image build
-image: $(IMAGE_BUILD_MARKER)
+image: $(IMAGE_BUILD_MARKER) image-nginx-test
 
 build:
 	$(DOCKER_RUN_RM) $(BUILD_IMAGE_NAME) yarn install -g
@@ -36,9 +36,13 @@ build:
 
 image: $(IMAGE_BUILD_MARKER)
 
+image-nginx-test:
+	$(DOCKER_RUN_RM) whisker:latest-$(ARCH) nginx -T
+
 image-all: $(addprefix sub-image-,$(VALIDARCHES))
 sub-image-%:
 	$(MAKE) image ARCH=$*
+	$(MAKE) image-nginx-test ARCH=$*
 
 install:
 	$(DOCKER_RUN_RM) -e NODE_OPTIONS=--max_old_space_size=8192 -e CNX_APP_VERSION=$(GIT_VERSION) $(BUILD_IMAGE_NAME) yarn install -g
