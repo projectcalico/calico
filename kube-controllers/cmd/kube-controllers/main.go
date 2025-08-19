@@ -33,7 +33,6 @@ import (
 	"k8s.io/apiserver/pkg/storage/etcd3"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 
@@ -107,7 +106,7 @@ func main() {
 	log.SetLevel(logLevel)
 
 	// Build clients to be used by the controllers.
-	k8sClientset, calicoClient, err := getClients(cfg.Kubeconfig)
+	k8sClientset, libcalicoClient, calicoClient, err := getClients(cfg.Kubeconfig)
 	if err != nil {
 		log.WithError(err).Fatal("Failed to start")
 	}
@@ -125,7 +124,7 @@ func main() {
 	initCtx, cancelInit := context.WithTimeout(ctx, 60*time.Second)
 	// Loop until context expires or calicoClient is initialized.
 	for {
-		err := calicoClient.EnsureInitialized(initCtx, "", "k8s")
+		err := libcalicoClient.EnsureInitialized(initCtx, "", "k8s")
 		if err != nil {
 			log.WithError(err).Info("Failed to initialize datastore")
 			s.SetReady(
@@ -156,7 +155,7 @@ func main() {
 		informers:   make([]cache.SharedIndexInformer, 0),
 	}
 
-	dataFeed := utils.NewDataFeed(calicoClient, cfg.DatastoreType)
+	dataFeed := utils.NewDataFeed(libcalicoClient, cfg.DatastoreType)
 
 	var runCfg config.RunConfig
 	// flannelmigration doesn't use the datastore config API
@@ -172,7 +171,7 @@ func main() {
 		}
 		log.WithField("flannelConfig", flannelConfig).Info("Loaded Flannel configuration from environment")
 
-		flannelMigrationController := flannelmigration.NewFlannelMigrationController(ctx, k8sClientset, calicoClient, flannelConfig)
+		flannelMigrationController := flannelmigration.NewFlannelMigrationController(ctx, k8sClientset, libcalicoClient, flannelConfig)
 		controllerCtrl.controllers["FlannelMigration"] = flannelMigrationController
 
 		// Set some global defaults for flannelmigration
@@ -185,13 +184,13 @@ func main() {
 		controllerCtrl.restart = make(chan config.RunConfig)
 	} else {
 		log.Info("Getting initial config snapshot from datastore")
-		cCtrlr := config.NewRunConfigController(ctx, *cfg, calicoClient.KubeControllersConfiguration())
+		cCtrlr := config.NewRunConfigController(ctx, *cfg, libcalicoClient.KubeControllersConfiguration())
 		runCfg = <-cCtrlr.ConfigChan()
 		log.Info("Got initial config snapshot")
 
 		// any subsequent changes trigger a restart
 		controllerCtrl.restart = cCtrlr.ConfigChan()
-		controllerCtrl.InitControllers(ctx, runCfg, k8sClientset, calicoClient, dataFeed)
+		controllerCtrl.InitControllers(ctx, runCfg, k8sClientset, libcalicoClient, calicoClient, dataFeed)
 	}
 
 	if cfg.DatastoreType == utils.Etcdv3 {
@@ -202,7 +201,7 @@ func main() {
 	// Run the health checks on a separate goroutine.
 	if runCfg.HealthEnabled {
 		log.Info("Starting status report routine")
-		go runHealthChecks(ctx, s, k8sClientset, calicoClient)
+		go runHealthChecks(ctx, s, k8sClientset, libcalicoClient)
 	}
 
 	// Set the log level from the merged config.
@@ -337,11 +336,11 @@ func startCompactor(ctx context.Context, interval time.Duration) {
 }
 
 // getClients builds and returns Kubernetes and Calico clients.
-func getClients(kubeconfig string) (*kubernetes.Clientset, client.Interface, error) {
+func getClients(kubeconfig string) (*kubernetes.Clientset, client.Interface, clientset.Interface, error) {
 	// Get Calico client
 	config, err := apiconfig.LoadClientConfigFromEnvironment()
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	// Increase the client QPS on the Calico client.
@@ -349,16 +348,16 @@ func getClients(kubeconfig string) (*kubernetes.Clientset, client.Interface, err
 	// - Secondly, the IPAM GC controller can potentially generate a very large number of requests.
 	config.Spec.K8sClientQPS = 500
 
-	calicoClient, err := client.New(*config)
+	libcalicoClient, err := client.New(*config)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to build Calico client: %s", err)
+		return nil, nil, nil, fmt.Errorf("failed to build Calico client: %s", err)
 	}
 
 	// Now build the Kubernetes client, we support in-cluster config and kubeconfig
 	// as means of configuring the client.
 	k8sconfig, err := winutils.BuildConfigFromFlags("", kubeconfig)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to build kubernetes client config: %s", err)
+		return nil, nil, nil, fmt.Errorf("failed to build kubernetes client config: %s", err)
 	}
 
 	// Increase the QPS of the Kubernetes client as well. This is also used heavily by the IPAM GC controller
@@ -369,10 +368,17 @@ func getClients(kubeconfig string) (*kubernetes.Clientset, client.Interface, err
 	// Get Kubernetes clientset
 	k8sClientset, err := kubernetes.NewForConfig(k8sconfig)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to build kubernetes client: %s", err)
+		return nil, nil, nil, fmt.Errorf("failed to build kubernetes client: %s", err)
 	}
 
-	return k8sClientset, calicoClient, nil
+	// Create a clientset for interacting with the Calico Kubernetes v3 API.
+	var v3c clientset.Interface
+	v3c, err = clientset.NewForConfig(k8sconfig)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("failed to build Calico Kubernetes v3 client: %s", err)
+	}
+
+	return k8sClientset, libcalicoClient, v3c, nil
 }
 
 // Returns an etcdv3 client based on the environment. The client will be configured to
@@ -452,7 +458,14 @@ type controllerControl struct {
 	informers   []cache.SharedIndexInformer
 }
 
-func (cc *controllerControl) InitControllers(ctx context.Context, cfg config.RunConfig, k8sClientset *kubernetes.Clientset, calicoClient client.Interface, dataFeed *utils.DataFeed) {
+func (cc *controllerControl) InitControllers(
+	ctx context.Context,
+	cfg config.RunConfig,
+	k8sClientset *kubernetes.Clientset,
+	calicoClient client.Interface,
+	v3c clientset.Interface,
+	dataFeed *utils.DataFeed,
+) {
 	// Create a shared informer factory to allow cache sharing between controllers monitoring the
 	// same resource.
 	factory := informers.NewSharedInformerFactory(k8sClientset, 0)
@@ -460,18 +473,14 @@ func (cc *controllerControl) InitControllers(ctx context.Context, cfg config.Run
 	nodeInformer := factory.Core().V1().Nodes().Informer()
 	serviceInformer := factory.Core().V1().Services().Informer()
 
-	// Create informers for Calico resources.
-	rc, err := rest.InClusterConfig()
-	if err != nil {
-		panic(err)
-	}
-	v3c := clientset.NewForConfigOrDie(rc)
-	calicoFactory := externalversions.NewSharedInformerFactory(v3c, 5*time.Minute)
-	poolInformer := calicoFactory.Projectcalico().V3().IPPools().Informer()
-	blockInformer := calicoFactory.Projectcalico().V3().IPAMBlocks().Informer()
+	if v3c != nil {
+		// TODO: KubeControllersConfiguration should expose this controller.
 
-	if true {
-		// TODO: make this configurable
+		// Create informers for Calico resources.
+		calicoFactory := externalversions.NewSharedInformerFactory(v3c, 5*time.Minute)
+		poolInformer := calicoFactory.Projectcalico().V3().IPPools().Informer()
+		blockInformer := calicoFactory.Projectcalico().V3().IPAMBlocks().Informer()
+
 		poolController := ippool.NewController(ctx, v3c, poolInformer, blockInformer, calicoClient.IPAM())
 		cc.controllers["IPPool"] = poolController
 		cc.registerInformers(poolInformer, blockInformer)
