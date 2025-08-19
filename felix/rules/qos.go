@@ -23,14 +23,14 @@ type QoSPolicy struct {
 	DSCP     uint8
 }
 
-func (r *DefaultRuleRenderer) EgressQoSPolicyChain(policies []QoSPolicy, ipVersion uint8) *generictables.Chain {
+func (r *DefaultRuleRenderer) EgressQoSPolicyChain(policies []QoSPolicy) *generictables.Chain {
 	if r.NFTables {
-		return r.nftablesQoSPolicyRules(policies, ipVersion)
+		return r.nftablesQoSPolicyRules(policies)
 	}
-	return r.defaultQoSPolicyRules(policies, ipVersion)
+	return r.defaultQoSPolicyRules(policies)
 }
 
-func (r *DefaultRuleRenderer) nftablesQoSPolicyRules(policies []QoSPolicy, ipVersion uint8) *generictables.Chain {
+func (r *DefaultRuleRenderer) nftablesQoSPolicyRules(policies []QoSPolicy) *generictables.Chain {
 	var rules []generictables.Rule
 	// Policies is sorted and validated by QoS policy manager.
 
@@ -44,13 +44,13 @@ func (r *DefaultRuleRenderer) nftablesQoSPolicyRules(policies []QoSPolicy, ipVer
 	}
 }
 
-func (r *DefaultRuleRenderer) defaultQoSPolicyRules(policies []QoSPolicy, ipVersion uint8) *generictables.Chain {
+func (r *DefaultRuleRenderer) defaultQoSPolicyRules(policies []QoSPolicy) *generictables.Chain {
 	var rules []generictables.Rule
 	// Policies is sorted and validated by QoS policy manager.
 	for _, p := range policies {
 		rules = append(rules, generictables.Rule{
 			Match:  r.NewMatch().SourceNet(p.SrcAddrs),
-			Action: r.DSCP(p.DSCP, ipVersion),
+			Action: r.DSCP(p.DSCP),
 		})
 	}
 

@@ -124,7 +124,7 @@ func (m *qosPolicyManager) CompleteDeferredWork() error {
 
 		}
 
-		chain := m.ruleRenderer.EgressQoSPolicyChain(policies, m.ipVersion)
+		chain := m.ruleRenderer.EgressQoSPolicyChain(policies)
 		m.mangleTable.UpdateChain(chain)
 		m.dirty = false
 	}
