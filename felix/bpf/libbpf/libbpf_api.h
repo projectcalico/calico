@@ -487,42 +487,15 @@ int num_possible_cpu()
 }
 
 int create_bpf_map(enum bpf_map_type type, unsigned int key_size, unsigned int value_size,
-                   unsigned int max_entries, unsigned int flags, const char *name) {
+                   unsigned int max_entries, unsigned int flags, const char *name)
+{
 	LIBBPF_OPTS(bpf_map_create_opts, create_attr);
 
 	create_attr.map_flags = flags;
 
-	switch (type) {
-	case BPF_MAP_TYPE_PERF_EVENT_ARRAY:
-	case BPF_MAP_TYPE_CGROUP_ARRAY:
-	case BPF_MAP_TYPE_STACK_TRACE:
-	case BPF_MAP_TYPE_ARRAY_OF_MAPS:
-	case BPF_MAP_TYPE_HASH_OF_MAPS:
-	case BPF_MAP_TYPE_DEVMAP:
-	case BPF_MAP_TYPE_DEVMAP_HASH:
-	case BPF_MAP_TYPE_CPUMAP:
-	case BPF_MAP_TYPE_XSKMAP:
-	case BPF_MAP_TYPE_SOCKMAP:
-	case BPF_MAP_TYPE_SOCKHASH:
-	case BPF_MAP_TYPE_QUEUE:
-	case BPF_MAP_TYPE_STACK:
-	case BPF_MAP_TYPE_ARENA:
-		create_attr.btf_fd = 0;
-		create_attr.btf_key_type_id = 0;
-		create_attr.btf_value_type_id = 0;
-		break;
-	case BPF_MAP_TYPE_STRUCT_OPS:
-		create_attr.btf_value_type_id = 0;
-		break;
-	default:
-		break;
-	}
-
 	int fd;
 	int err;
-	fd = bpf_map_create(type, name,
-			key_size, value_size,
-			max_entries, &create_attr);
+	fd = bpf_map_create(type, name, key_size, value_size, max_entries, &create_attr);
 	if (fd < 0) {
 		char *cp, errmsg[STRERR_BUFSIZE];
 
@@ -533,7 +506,8 @@ int create_bpf_map(enum bpf_map_type type, unsigned int key_size, unsigned int v
 	return fd;
 }
 
-int find_bpf_map_by_name( const char *name) {
+int find_bpf_map_by_name( const char *name)
+{
 	__u32 id = 0;
 	while (!bpf_map_get_next_id(id, &id)) {
 		int fd = bpf_map_get_fd_by_id(id);
@@ -544,11 +518,10 @@ int find_bpf_map_by_name( const char *name) {
 		if (!bpf_obj_get_info_by_fd(fd, &info, &info_len)) {
 			if (strcmp(info.name, name) == 0) {
 				// found
-				break;
+				return fd;
 			}
 		}
-		close(fd);
-		return fd;
 	}
-	return -1; // not found
+	// not found
+	return -1;
 }
