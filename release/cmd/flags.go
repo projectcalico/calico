@@ -21,7 +21,6 @@ import (
 	"github.com/sirupsen/logrus"
 	cli "github.com/urfave/cli/v3"
 
-	"github.com/projectcalico/calico/release/internal/hashreleaseserver"
 	"github.com/projectcalico/calico/release/internal/utils"
 	"github.com/projectcalico/calico/release/pkg/manager/operator"
 )
@@ -101,7 +100,7 @@ var (
 		Usage:   "The base branch to cut the release branch from",
 		Sources: cli.EnvVars("RELEASE_BRANCH_BASE"),
 		Value:   utils.DefaultBranch,
-		Action: func(_ context.Context, c *cli.Command, str string) error {
+		Action: func(_ context.Context, _ *cli.Command, str string) error {
 			if str != utils.DefaultBranch {
 				logrus.Warnf("The new branch will be created from %s which is not the default branch %s", str, utils.DefaultBranch)
 			}
@@ -135,7 +134,7 @@ var (
 		Usage:   "The architecture to use for the release. Repeat for multiple architectures.",
 		Sources: cli.EnvVars("ARCHS"), // avoid ARCHES as it is already used by the build system (lib.Makefile).
 		Value:   archOptions,
-		Action: func(_ context.Context, c *cli.Command, values []string) error {
+		Action: func(_ context.Context, _ *cli.Command, values []string) error {
 			for _, arch := range values {
 				if !utils.Contains(archOptions, arch) {
 					return fmt.Errorf("invalid architecture %s", arch)
@@ -225,7 +224,7 @@ var (
 		Usage:   "The base branch to cut the Tigera operator release branch from",
 		Sources: cli.EnvVars("OPERATOR_BRANCH_BASE"),
 		Value:   operator.DefaultBranchName,
-		Action: func(_ context.Context, c *cli.Command, str string) error {
+		Action: func(_ context.Context, _ *cli.Command, str string) error {
 			if str != operator.DefaultBranchName {
 				logrus.Warnf("The new branch will be created from %s which is not the default branch %s", str, operator.DefaultBranchName)
 			}
@@ -399,12 +398,8 @@ var (
 	}
 
 	// Hashrelease server configuration flags.
-	hashreleaseServerFlags = []cli.Flag{
-		sshHostFlag, sshUserFlag, sshKeyFlag, sshPortFlag,
-		sshKnownHostsFlag,
-		hashreleaseServerCredentialsFlag, hashreleaseServerBucketFlag,
-	}
-	sshHostFlag = &cli.StringFlag{
+	hashreleaseServerFlags = []cli.Flag{hashreleaseServerCredentialsFlag, hashreleaseServerBucketFlag}
+	sshHostFlag            = &cli.StringFlag{
 		Name:    "server-ssh-host",
 		Usage:   "The SSH host for the connection to the hashrelease server",
 		Sources: cli.EnvVars("DOCS_HOST"),
@@ -429,12 +424,6 @@ var (
 		Usage: "The known_hosts file is the absolute path to the known_hosts file " +
 			"to use for the user host key database instead of ~/.ssh/known_hosts",
 		Sources: cli.EnvVars("DOCS_KNOWN_HOSTS"),
-	}
-	maxHashreleasesFlag = &cli.IntFlag{
-		Name:    "maximum",
-		Aliases: []string{"max"},
-		Usage:   "The maximum number of hashreleases to keep on the hashrelease server",
-		Value:   hashreleaseserver.DefaultMax,
 	}
 	publishHashreleaseFlag = &cli.BoolFlag{
 		Name:  "publish-to-hashrelease-server",
