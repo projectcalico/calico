@@ -736,6 +736,7 @@ func CreateBPFMap(mapType string, keySize int, valueSize int, maxEntries int, fl
 
 func FindMapFdByName(targetName string) (int, error) {
 	cname := C.CString(targetName)
+	defer C.free(unsafe.Pointer(cname))
 	fd := C.find_bpf_map_by_name(cname)
 	if fd < 0 {
 		return int(fd), fmt.Errorf("map name %s not found", targetName)
