@@ -57,26 +57,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ service loop prevention; wi
 		}
 	})
 
-	AfterEach(func() {
-		if CurrentGinkgoTestDescription().Failed {
-			for _, felix := range tc.Felixes {
-				if NFTMode() {
-					logNFTDiags(felix)
-				} else {
-					felix.Exec("iptables-save", "-c")
-					felix.Exec("ipset", "list")
-				}
-				felix.Exec("ip", "r")
-				felix.Exec("ip", "a")
-			}
-		}
-		tc.Stop()
-		if CurrentGinkgoTestDescription().Failed {
-			infra.DumpErrorData()
-		}
-		infra.Stop()
-	})
-
 	updateBGPConfig := func(deltaFn func(*api.BGPConfiguration)) {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()

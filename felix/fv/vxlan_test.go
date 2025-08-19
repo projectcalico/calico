@@ -98,9 +98,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 				assignTunnelAddresses(infra, tc, client)
 			})
 
-			// Cleanup is handled by DatastoreDescribe's AfterEach via infra.Stop().
-			AfterEach(func() {})
-
 			if brokenXSum {
 				It("should disable checksum offload", func() {
 					Eventually(func() string {
@@ -1012,9 +1009,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 				// Assign tunnel addresees in IPAM based on the topology.
 				assignTunnelAddresses(infra, tc, client)
 			})
-
-			// Cleanup is handled by DatastoreDescribe's AfterEach via infra.Stop().
-			AfterEach(func() {})
 
 			It("should have host to workload connectivity", func() {
 				if vxlanMode == api.VXLANModeAlways && routeSource == "WorkloadIPs" {

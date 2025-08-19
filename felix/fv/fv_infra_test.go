@@ -72,8 +72,6 @@ func describeConnCheckTests(protocol string) bool {
 				cc.Protocol = protocol
 			})
 
-			// Cleanup is handled by DatastoreDescribe's AfterEach via infra.Stop().
-
 			It("should have host-to-host on right port only", func() {
 				cc.ExpectSome(tc.Felixes[0], hostW[1])
 				if !strings.HasPrefix(protocol, "ip") {
@@ -149,14 +147,6 @@ var _ = infrastructure.DatastoreDescribe("Container self tests",
 		JustBeforeEach(func() {
 			infra = getInfra()
 			tc, _ = infrastructure.StartNNodeTopology(1, options, infra)
-		})
-
-		AfterEach(func() {
-			tc.Stop()
-			if CurrentGinkgoTestDescription().Failed {
-				infra.DumpErrorData()
-			}
-			infra.Stop()
 		})
 
 		It("should only report that existing files actually exist", func() {
