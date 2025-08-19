@@ -61,6 +61,10 @@ func (o *Obj) FirstMap() (*Map, error) {
 	panic("LIBBPF syscall stub")
 }
 
+func (o *Obj) Filename() string {
+	panic("LIBBPF syscall stub")
+}
+
 func (o *Obj) SetAttachType(progName string, attachType uint32) error {
 	panic("LIBBPF syscall stub")
 }
@@ -223,5 +227,9 @@ func ProgName(id uint32) (string, error) {
 }
 
 func (o *Obj) AttachTCX(secName, ifName string) (*Link, error) {
+	panic("LIBBPF syscall stub")
+}
+
+func OpenObjectWithLogBuffer(filename string, buf []byte) (*Obj, error) {
 	panic("LIBBPF syscall stub")
 }
