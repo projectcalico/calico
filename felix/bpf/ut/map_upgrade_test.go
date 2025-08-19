@@ -39,9 +39,14 @@ func bpfMapList() string {
 	return string(out)
 }
 func deleteMap(bpfMap maps.Map) {
-	bpfMap.(*maps.PinnedMap).Close()
-	os.Remove(bpfMap.Path())
-	os.Remove(bpfMap.Path() + "_old")
+	err := bpfMap.(*maps.PinnedMap).Close()
+	Expect(err).NotTo(HaveOccurred())
+	err = os.Remove(bpfMap.Path())
+	Expect(err).NotTo(HaveOccurred())
+	if _, err := os.Stat(bpfMap.Path() + "_old"); err == nil {
+		err = os.Remove(bpfMap.Path() + "_old")
+		Expect(err).NotTo(HaveOccurred())
+	}
 }
 
 func TestMapUpgradeV2ToV3(t *testing.T) {

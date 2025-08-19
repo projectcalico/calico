@@ -612,7 +612,7 @@ func (b *PinnedMap) Open() error {
 		b.fd, err = GetMapFDByPin(b.VersionedFilename())
 		if err == nil {
 			b.fdLoaded = true
-			log.WithField("fd", b.fd).WithField("name", b.Name).Info("Loaded map file descriptor.")
+			log.WithField("fd", b.fd).WithField("name", b.VersionedFilename()).Info("Loaded map file descriptor.")
 			return nil
 		}
 		return err
@@ -763,6 +763,13 @@ func (b *PinnedMap) EnsureExists() error {
 		if err := obj.Load(); err != nil {
 			return fmt.Errorf("error loading obj file %s for map %s: %w", objName, b.Name, err)
 		}
+
+		fd, err := GetMapFDByPin(b.VersionedFilename())
+		if err != nil {
+			return fmt.Errorf("error getting map FD by pin for map %s: %w", b.VersionedFilename(), err)
+		}
+		b.fd = FD(fd)
+		b.fdLoaded = true
 	} else {
 		// Map not found in obj files, create without BTF
 		log.WithFields(log.Fields{"b.Name": b.Name}).Debug("Creating map with libbpf")
@@ -774,36 +781,15 @@ func (b *PinnedMap) EnsureExists() error {
 		if err != nil {
 			return fmt.Errorf("error pinning map %s to %s: %w", b.VersionedName(), b.VersionedFilename(), err)
 		}
-	}
-	fd, err := GetMapFDByPin(b.VersionedFilename())
-	if err == nil {
 		b.fd = FD(fd)
 		b.fdLoaded = true
-		if copyData {
-			// Copy data from old map to the new map. Old map and new map are of the
-			// same version but of different size.
-			err := b.copyFromOldMap()
-			if err != nil {
-				log.WithError(err).Error("error copying data from old map")
-				closeErr := b.fd.Close()
-				if closeErr != nil {
-					log.WithError(closeErr).Warn("Error when closing FD, ignoring...")
-				}
-				b.fd = 0
-				b.fdLoaded = false
-				return err
-			}
-			// Delete the old pin if the map is not updated by BPF programs.
-			// Data from old map to new map will be copied once all the bpf
-			// programs are installed with the new map.
-			if !b.UpdatedByBPF {
-				os.Remove(b.Path() + "_old")
-			}
-
-		}
-		// Handle map upgrade.
-		err = b.upgrade()
+	}
+	if copyData {
+		// Copy data from old map to the new map. Old map and new map are of the
+		// same version but of different size.
+		err := b.copyFromOldMap()
 		if err != nil {
+			log.WithError(err).Error("error copying data from old map")
 			closeErr := b.fd.Close()
 			if closeErr != nil {
 				log.WithError(closeErr).Warn("Error when closing FD, ignoring...")
@@ -812,10 +798,27 @@ func (b *PinnedMap) EnsureExists() error {
 			b.fdLoaded = false
 			return err
 		}
-		log.WithField("fd", b.fd).WithField("name", b.VersionedFilename()).
-			Info("Loaded map file descriptor.")
+		// Delete the old pin if the map is not updated by BPF programs.
+		// Data from old map to new map will be copied once all the bpf
+		// programs are installed with the new map.
+		if !b.UpdatedByBPF {
+			os.Remove(b.Path() + "_old")
+		}
+
 	}
-	return err
+	// Handle map upgrade.
+	err := b.upgrade()
+	if err != nil {
+		closeErr := b.fd.Close()
+		if closeErr != nil {
+			log.WithError(closeErr).Warn("Error when closing FD, ignoring...")
+		}
+		b.fd = 0
+		b.fdLoaded = false
+		return err
+	}
+	log.WithField("fd", b.fd).WithField("name", b.VersionedFilename()).Info("Loaded map file descriptor.")
+	return nil
 }
 
 func (b *PinnedMap) Size() int {
