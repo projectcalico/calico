@@ -61,8 +61,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf reattach object",
 		Expect(err).NotTo(HaveOccurred())
 	})
 
-	// Cleanup is handled by DatastoreDescribe's AfterEach via infra.Stop().
-
 	It("should clean up programs when BPFDataIfacePattern changes", func() {
 		By("Starting Felix")
 		felix.TriggerDelayedStart()

@@ -57,8 +57,6 @@ var _ = infrastructure.DatastoreDescribe("AWS-ec2-srcdstcheck", []apiconfig.Data
 		tc.Felixes[0].TriggerDelayedStart()
 	})
 
-	// Cleanup is handled by DatastoreDescribe's AfterEach via infra.Stop().
-
 	getHTTPStatus := func(url string) (string, error) {
 		op, err := tc.Felixes[0].Container.ExecOutput("wget", "-S", "-T", "2", "-O", "-", "-o", "/dev/stdout", url)
 		// Return output even when the error is set.

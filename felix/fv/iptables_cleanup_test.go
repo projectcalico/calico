@@ -21,7 +21,6 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
@@ -126,20 +125,5 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ iptables cleanup tests", []
 				return out
 			}, "5s").ShouldNot(ContainSubstring("cali"))
 		})
-	})
-
-	JustAfterEach(func() {
-		if CurrentGinkgoTestDescription().Failed {
-			tc.Felixes[0].Exec("iptables-save", "-c")
-			tc.Felixes[0].Exec("ip", "r")
-		}
-	})
-
-	AfterEach(func() {
-		log.Info("AfterEach starting")
-		// Per-test cleanup: ensure connect-time entries are cleared when in BPF mode.
-		tc.Felixes[0].Exec("calico-bpf", "connect-time", "clean")
-		// Topology/infra cleanup handled by DatastoreDescribe's AfterEach via infra.Stop().
-		log.Info("AfterEach done")
 	})
 })
