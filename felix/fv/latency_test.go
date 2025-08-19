@@ -78,21 +78,6 @@ var _ = Context("_BPF-SAFE_ Latency tests with initialized Felix and etcd datast
 		if err != nil {
 			log.WithError(err).Error("Close returned error")
 		}
-
-		if CurrentGinkgoTestDescription().Failed {
-			if NFTMode() {
-				logNFTDiags(tc.Felixes[0])
-			} else {
-				tc.Felixes[0].Exec("iptables-save", "-c")
-			}
-		}
-		tc.Stop()
-
-		if CurrentGinkgoTestDescription().Failed {
-			etcd.Exec("etcdctl", "get", "/", "--prefix", "--keys-only")
-		}
-		etcd.Stop()
-		infra.Stop()
 	})
 
 	describeLatencyTests := func(c latencyConfig) {
@@ -216,12 +201,6 @@ var _ = Context("_BPF-SAFE_ Latency tests with initialized Felix and etcd datast
 					Expect(err).NotTo(HaveOccurred())
 				})
 			})
-		})
-
-		AfterEach(func() {
-			for ii := range w {
-				w[ii].Stop()
-			}
 		})
 	}
 
