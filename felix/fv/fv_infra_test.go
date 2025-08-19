@@ -72,17 +72,7 @@ func describeConnCheckTests(protocol string) bool {
 				cc.Protocol = protocol
 			})
 
-			AfterEach(func() {
-				for _, wl := range hostW {
-					wl.Stop()
-				}
-				tc.Stop()
-
-				if CurrentGinkgoTestDescription().Failed {
-					infra.DumpErrorData()
-				}
-				infra.Stop()
-			})
+			// Cleanup is handled by DatastoreDescribe's AfterEach via infra.Stop().
 
 			It("should have host-to-host on right port only", func() {
 				cc.ExpectSome(tc.Felixes[0], hostW[1])

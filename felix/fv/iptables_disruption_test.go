@@ -100,10 +100,6 @@ var _ = infrastructure.DatastoreDescribe("iptables disruption tests", []apiconfi
 				}
 			}
 		}
-		tc.Stop()
-		if CurrentGinkgoTestDescription().Failed {
-			infra.DumpErrorData()
-		}
-		infra.Stop()
+		// Topology/infra cleanup handled by DatastoreDescribe's AfterEach via infra.Stop().
 	})
 })

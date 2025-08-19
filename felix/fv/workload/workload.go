@@ -219,7 +219,13 @@ func New(c *infrastructure.Felix, name, profile, ip, ports, protocol string, opt
 
 func run(c *infrastructure.Felix, name, profile, ip, ports, protocol string, opts ...Opt) (w *Workload, err error) {
 	w = New(c, name, profile, ip, ports, protocol, opts...)
-	return w, w.Start()
+	err = w.Start()
+	if err != nil {
+		return w, err
+	}
+	// Register workload cleanup with the infra via Felix.
+	c.RegisterForCleanup(w.Stop)
+	return w, nil
 }
 
 func (w *Workload) Start() error {
