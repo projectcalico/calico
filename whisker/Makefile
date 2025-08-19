@@ -37,7 +37,7 @@ build:
 image: $(IMAGE_BUILD_MARKER)
 
 image-nginx-test:
-	$(DOCKER_RUN_RM) --rm whisker:latest-$(ARCH) nginx -T
+	$(DOCKER_RUN_RM) whisker:latest-$(ARCH) nginx -T
 
 image-all: $(addprefix sub-image-,$(VALIDARCHES))
 sub-image-%:
