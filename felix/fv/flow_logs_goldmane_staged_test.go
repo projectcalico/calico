@@ -661,29 +661,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 			return nil
 		}, "30s", "3s").ShouldNot(HaveOccurred())
 	})
-
-	AfterEach(func() {
-		if CurrentGinkgoTestDescription().Failed {
-			for _, felix := range tc.Felixes {
-				logNFTDiags(felix)
-				felix.Exec("iptables-save", "-c")
-				felix.Exec("ipset", "list")
-				felix.Exec("ip", "r")
-				felix.Exec("ip", "a")
-			}
-			if bpfEnabled {
-				tc.Felixes[0].Exec("calico-bpf", "policy", "dump", ep1_1.InterfaceName, "all", "--asm")
-				tc.Felixes[1].Exec("calico-bpf", "policy", "dump", ep2_2.InterfaceName, "all", "--asm")
-			}
-		}
-
-		for _, felix := range tc.Felixes {
-			if bpfEnabled {
-				felix.Exec("calico-bpf", "connect-time", "clean")
-			}
-		}
-
-	})
 })
 
 // Felix1             Felix2
@@ -1310,28 +1287,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ aggregation of flow log wit
 			return nil
 		}, "30s", "3s").ShouldNot(HaveOccurred())
 	})
-
-	AfterEach(func() {
-		if CurrentGinkgoTestDescription().Failed {
-			for _, felix := range tc.Felixes {
-				logNFTDiags(felix)
-				felix.Exec("iptables-save", "-c")
-				felix.Exec("ipset", "list")
-				felix.Exec("ip", "r")
-				felix.Exec("ip", "a")
-			}
-			if bpfEnabled {
-				tc.Felixes[0].Exec("calico-bpf", "policy", "dump", ep1_1.InterfaceName, "all", "--asm")
-				tc.Felixes[1].Exec("calico-bpf", "policy", "dump", ep2_1.InterfaceName, "all", "--asm")
-			}
-		}
-
-		for _, felix := range tc.Felixes {
-			if bpfEnabled {
-				felix.Exec("calico-bpf", "connect-time", "clean")
-			}
-		}
-	})
 })
 
 // Felix1             Felix2
@@ -1954,22 +1909,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 	})
 
 	AfterEach(func() {
-		if CurrentGinkgoTestDescription().Failed {
-			for _, felix := range tc.Felixes {
-				logNFTDiags(felix)
-				felix.Exec("iptables-save", "-c")
-				felix.Exec("ipset", "list")
-				felix.Exec("ip", "r")
-				felix.Exec("ip", "a")
-			}
-			if bpfEnabled {
-				tc.Felixes[0].Exec("calico-bpf", "policy", "dump", ep1_1.InterfaceName, "all", "--asm")
-				tc.Felixes[1].Exec("calico-bpf", "policy", "dump", ep2_1.InterfaceName, "all", "--asm")
-			}
-		}
-
 		for _, felix := range tc.Felixes {
 			if bpfEnabled {
+				// FIXME
 				felix.Exec("calico-bpf", "connect-time", "clean")
 			}
 		}

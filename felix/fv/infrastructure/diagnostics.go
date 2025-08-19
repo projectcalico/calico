@@ -24,6 +24,7 @@ func dumpFelixDiags(f *Felix) {
 	f.Exec("ip", "rule", "list")
 	f.Exec("ip", "route", "show", "table", "all")
 	f.Exec("ip", "route", "show", "cached")
+	f.Exec("conntrack", "-L")
 
 	// Table dumps (iptables or nftables) depending on mode.
 	if NFTMode() {
@@ -34,9 +35,13 @@ func dumpFelixDiags(f *Felix) {
 
 	// IPv6-specific diagnostics if IPv6 is enabled for this node.
 	if f.TopologyOptions.EnableIPv6 {
+		f.Exec("ip", "-6", "link")
 		f.Exec("ip", "-6", "addr")
 		f.Exec("ip", "-6", "rule")
-		f.Exec("ip", "-6", "route")
+		f.Exec("ip", "-6", "route", "show", "table", "all")
+		f.Exec("ip", "-6", "route", "show", "cached")
+		f.Exec("ip", "-6", "neigh")
+		f.Exec("conntrack", "-L", "-f", "ipv6")
 		if !NFTMode() {
 			f.Exec("ip6tables-save", "-c")
 		}

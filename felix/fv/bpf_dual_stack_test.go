@@ -43,7 +43,6 @@ import (
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
-	options2 "github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
 var (
@@ -209,39 +208,6 @@ func describeBPFDualStackTests(ctlbEnabled, ipv6Dataplane bool) bool {
 				currBpfsvcs, currBpfeps = dumpNATmaps(tc.Felixes)
 
 				for i, felix := range tc.Felixes {
-					if NFTMode() {
-						logNFTDiags(felix)
-					} else {
-						felix.Exec("ip6tables-save", "-c")
-						felix.Exec("iptables-save", "-c")
-					}
-
-					felix.Exec("conntrack", "-L")
-					felix.Exec("ip", "-6", "link")
-					felix.Exec("ip", "-6", "addr")
-					felix.Exec("ip", "-6", "rule")
-					felix.Exec("ip", "-6", "route")
-					felix.Exec("ip", "-6", "neigh")
-					felix.Exec("calico-bpf", "-6", "ipsets", "dump")
-					felix.Exec("calico-bpf", "-6", "routes", "dump")
-					felix.Exec("calico-bpf", "-6", "nat", "dump")
-					felix.Exec("calico-bpf", "-6", "nat", "aff")
-					felix.Exec("calico-bpf", "-6", "conntrack", "dump")
-					felix.Exec("calico-bpf", "-6", "arp", "dump")
-					felix.Exec("ip", "link")
-					felix.Exec("ip", "addr")
-					felix.Exec("ip", "rule")
-					felix.Exec("ip", "route")
-					felix.Exec("ip", "neigh")
-					felix.Exec("arp")
-					felix.Exec("calico-bpf", "ipsets", "dump")
-					felix.Exec("calico-bpf", "routes", "dump")
-					felix.Exec("calico-bpf", "nat", "dump")
-					felix.Exec("calico-bpf", "nat", "aff")
-					felix.Exec("calico-bpf", "conntrack", "dump")
-					felix.Exec("calico-bpf", "arp", "dump")
-					felix.Exec("calico-bpf", "counters", "dump")
-					felix.Exec("calico-bpf", "ifstate", "dump")
 					log.Infof("[%d]FrontendMapV6: %+v", i, currBpfsvcsV6[i])
 					log.Infof("[%d]NATBackendV6: %+v", i, currBpfepsV6[i])
 					log.Infof("[%d]SendRecvMapV6: %+v", i, dumpSendRecvMapV6(felix))
@@ -250,22 +216,6 @@ func describeBPFDualStackTests(ctlbEnabled, ipv6Dataplane bool) bool {
 					log.Infof("[%d]SendRecvMap: %+v", i, dumpSendRecvMap(felix))
 				}
 			}
-		})
-
-		AfterEach(func() {
-			if CurrentGinkgoTestDescription().Failed {
-				infra.DumpErrorData()
-			}
-
-			for i := 0; i < 2; i++ {
-				for j := 0; j < 2; j++ {
-					w[i][j].Stop()
-				}
-			}
-			_, err := calicoClient.GlobalNetworkPolicies().Delete(context.Background(), "policy-1", options2.DeleteOptions{})
-			Expect(err).NotTo(HaveOccurred())
-			tc.Stop()
-			infra.Stop()
 		})
 
 		if !ipv6Dataplane {

@@ -600,34 +600,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ with IP forwarding disabled
 			cc = &connectivity.Checker{}
 		})
 
-		AfterEach(func() {
-			if CurrentGinkgoTestDescription().Failed {
-				for _, felix := range tc.Felixes {
-					if NFTMode() {
-						logNFTDiags(felix)
-					}
-					felix.Exec("iptables-save", "-c")
-					felix.Exec("ipset", "list")
-					felix.Exec("ip", "r")
-					felix.Exec("ip", "a")
-					felix.Exec("sysctl", "-a")
-				}
-			}
-
-			for _, wl := range w {
-				wl.Stop()
-			}
-			for _, wl := range hostW {
-				wl.Stop()
-			}
-			tc.Stop()
-
-			if CurrentGinkgoTestDescription().Failed {
-				infra.DumpErrorData()
-			}
-			infra.Stop()
-		})
-
 		if BPFMode() {
 			It("should force IPForward to Enabled", func() {
 				// Our RPF check fails in BPF mode if IP forwarding is disabled

@@ -329,6 +329,12 @@ func (f *Felix) Stop() {
 	if f == nil {
 		return
 	}
+	if BPFMode() {
+		err := f.ExecMayFail("calico-bpf", "connect-time", "clean")
+		if err != nil {
+			logrus.WithError(err).Warn("Failed to clean up BPF connect-time state")
+		}
+	}
 	if CreateCgroupV2 {
 		_ = f.ExecMayFail("rmdir", path.Join("/run/calico/cgroup/", f.Name))
 	}
