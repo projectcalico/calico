@@ -132,9 +132,13 @@ spec:
             spec:
               properties:
                 asNumber:
+                  default: 64512
                   format: int32
                   type: integer
                 bindMode:
+                  enum:
+                    - None
+                    - NodeIP
                   type: string
                 communities:
                   items:
@@ -145,11 +149,14 @@ spec:
                         pattern: ^(\d+):(\d+)$|^(\d+):(\d+):(\d+)$
                         type: string
                     type: object
+                    x-kubernetes-map-type: atomic
                   type: array
+                  x-kubernetes-list-type: set
                 ignoredInterfaces:
                   items:
                     type: string
                   type: array
+                  x-kubernetes-list-type: set
                 listenPort:
                   maximum: 65535
                   minimum: 1
@@ -159,6 +166,8 @@ spec:
                 localWorkloadPeeringIPV6:
                   type: string
                 logSeverityScreen:
+                  default: Info
+                  pattern: ^(?i)(Trace|Debug|Info|Warning|Error|Fatal)?$
                   type: string
                 nodeMeshMaxRestartTime:
                   type: string
@@ -179,32 +188,42 @@ spec:
                       x-kubernetes-map-type: atomic
                   type: object
                 nodeToNodeMeshEnabled:
+                  default: true
                   type: boolean
                 prefixAdvertisements:
                   items:
                     properties:
                       cidr:
+                        format: cidr
                         type: string
                       communities:
                         items:
                           type: string
                         type: array
                     type: object
+                    x-kubernetes-map-type: atomic
                   type: array
+                  x-kubernetes-list-type: set
                 serviceClusterIPs:
                   items:
                     properties:
                       cidr:
+                        format: cidr
                         type: string
                     type: object
+                    x-kubernetes-map-type: atomic
                   type: array
+                  x-kubernetes-list-type: set
                 serviceExternalIPs:
                   items:
                     properties:
                       cidr:
+                        format: cidr
                         type: string
                     type: object
+                    x-kubernetes-map-type: atomic
                   type: array
+                  x-kubernetes-list-type: set
                 serviceLoadBalancerAggregation:
                   default: Enabled
                   enum:
@@ -215,9 +234,12 @@ spec:
                   items:
                     properties:
                       cidr:
+                        format: cidr
                         type: string
                     type: object
+                    x-kubernetes-map-type: atomic
                   type: array
+                  x-kubernetes-list-type: set
               type: object
           type: object
       served: true
@@ -256,12 +278,21 @@ spec:
                   items:
                     properties:
                       action:
+                        enum:
+                          - Accept
+                          - Reject
                         type: string
                       cidr:
+                        format: cidr
                         type: string
                       interface:
                         type: string
                       matchOperator:
+                        enum:
+                          - Equal
+                          - NotEqual
+                          - In
+                          - NotIn
                         type: string
                       prefixLength:
                         properties:
@@ -276,22 +307,36 @@ spec:
                             minimum: 0
                             type: integer
                         type: object
+                        x-kubernetes-map-type: atomic
                       source:
+                        enum:
+                          - RemotePeers
                         type: string
                     required:
                       - action
                     type: object
+                    x-kubernetes-map-type: atomic
                   type: array
+                  x-kubernetes-list-type: set
                 exportV6:
                   items:
                     properties:
                       action:
+                        enum:
+                          - Accept
+                          - Reject
                         type: string
                       cidr:
+                        format: cidr
                         type: string
                       interface:
                         type: string
                       matchOperator:
+                        enum:
+                          - Equal
+                          - NotEqual
+                          - In
+                          - NotIn
                         type: string
                       prefixLength:
                         properties:
@@ -306,22 +351,36 @@ spec:
                             minimum: 0
                             type: integer
                         type: object
+                        x-kubernetes-map-type: atomic
                       source:
+                        enum:
+                          - RemotePeers
                         type: string
                     required:
                       - action
                     type: object
+                    x-kubernetes-map-type: atomic
                   type: array
+                  x-kubernetes-list-type: set
                 importV4:
                   items:
                     properties:
                       action:
+                        enum:
+                          - Accept
+                          - Reject
                         type: string
                       cidr:
+                        format: cidr
                         type: string
                       interface:
                         type: string
                       matchOperator:
+                        enum:
+                          - Equal
+                          - NotEqual
+                          - In
+                          - NotIn
                         type: string
                       prefixLength:
                         properties:
@@ -336,22 +395,36 @@ spec:
                             minimum: 0
                             type: integer
                         type: object
+                        x-kubernetes-map-type: atomic
                       source:
+                        enum:
+                          - RemotePeers
                         type: string
                     required:
                       - action
                     type: object
+                    x-kubernetes-map-type: atomic
                   type: array
+                  x-kubernetes-list-type: set
                 importV6:
                   items:
                     properties:
                       action:
+                        enum:
+                          - Accept
+                          - Reject
                         type: string
                       cidr:
+                        format: cidr
                         type: string
                       interface:
                         type: string
                       matchOperator:
+                        enum:
+                          - Equal
+                          - NotEqual
+                          - In
+                          - NotIn
                         type: string
                       prefixLength:
                         properties:
@@ -366,12 +439,17 @@ spec:
                             minimum: 0
                             type: integer
                         type: object
+                        x-kubernetes-map-type: atomic
                       source:
+                        enum:
+                          - RemotePeers
                         type: string
                     required:
                       - action
                     type: object
+                    x-kubernetes-map-type: atomic
                   type: array
+                  x-kubernetes-list-type: set
               type: object
           type: object
       served: true
@@ -423,15 +501,10 @@ spec:
                 maxRestartTime:
                   type: string
                 nextHopMode:
-                  allOf:
-                    - enum:
-                        - Auto
-                        - Self
-                        - Keep
-                    - enum:
-                        - Auto
-                        - Self
-                        - Keep
+                  enum:
+                    - Auto
+                    - Self
+                    - Keep
                   type: string
                 node:
                   type: string
@@ -457,17 +530,25 @@ spec:
                       x-kubernetes-map-type: atomic
                   type: object
                 peerIP:
+                  format: ip
                   type: string
                 peerSelector:
                   type: string
                 reachableBy:
                   type: string
                 reversePeering:
-                  enum:
-                    - Auto
-                    - Manual
+                  allOf:
+                    - enum:
+                        - Auto
+                        - Manual
+                    - enum:
+                        - Auto
+                        - Manual
                   type: string
                 sourceAddress:
+                  enum:
+                    - UseNodeIP
+                    - None
                   type: string
                 ttlSecurity:
                   type: integer
@@ -556,6 +637,10 @@ spec:
               properties:
                 classes:
                   items:
+                    enum:
+                      - Agent
+                      - BGP
+                      - Routes
                     type: string
                   type: array
                 node:
@@ -577,6 +662,9 @@ spec:
                         routerID:
                           type: string
                         state:
+                          enum:
+                            - Ready
+                            - NotReady
                           type: string
                         version:
                           type: string
@@ -590,6 +678,9 @@ spec:
                         routerID:
                           type: string
                         state:
+                          enum:
+                            - Ready
+                            - NotReady
                           type: string
                         version:
                           type: string
@@ -613,8 +704,20 @@ spec:
                           since:
                             type: string
                           state:
+                            enum:
+                              - Idle
+                              - Connect
+                              - Active
+                              - OpenSent
+                              - OpenConfirm
+                              - Established
+                              - Close
                             type: string
                           type:
+                            enum:
+                              - NodeMesh
+                              - NodePeer
+                              - GlobalPeer
                             type: string
                         type: object
                       type: array
@@ -626,8 +729,20 @@ spec:
                           since:
                             type: string
                           state:
+                            enum:
+                              - Idle
+                              - Connect
+                              - Active
+                              - OpenSent
+                              - OpenConfirm
+                              - Established
+                              - Close
                             type: string
                           type:
+                            enum:
+                              - NodeMesh
+                              - NodePeer
+                              - GlobalPeer
                             type: string
                         type: object
                       type: array
@@ -657,9 +772,18 @@ spec:
                               peerIP:
                                 type: string
                               sourceType:
+                                enum:
+                                  - Kernel
+                                  - Static
+                                  - Direct
+                                  - NodeMesh
+                                  - BGPPeer
                                 type: string
                             type: object
                           type:
+                            enum:
+                              - FIB
+                              - RIB
                             type: string
                         type: object
                       type: array
@@ -677,9 +801,18 @@ spec:
                               peerIP:
                                 type: string
                               sourceType:
+                                enum:
+                                  - Kernel
+                                  - Static
+                                  - Direct
+                                  - NodeMesh
+                                  - BGPPeer
                                 type: string
                             type: object
                           type:
+                            enum:
+                              - FIB
+                              - RIB
                             type: string
                         type: object
                       type: array
@@ -1508,6 +1641,10 @@ spec:
 
                     Warning: changing this on a running system can leave "orphaned" rules in the "other" backend. These
                     should be cleaned up to avoid confusing interactions.
+                  enum:
+                    - Legacy
+                    - NFT
+                    - Auto
                   pattern: ^(?i)(Auto|Legacy|NFT)?$
                   type: string
                 iptablesFilterAllowAction:
@@ -1720,13 +1857,17 @@ spec:
                   format: int32
                   type: integer
                 nftablesMode:
+                  allOf:
+                    - enum:
+                        - Enabled
+                        - Disabled
+                    - enum:
+                        - Disabled
+                        - Enabled
+                        - Auto
                   description:
                     "NFTablesMode configures nftables support in Felix. [Default:
                     Disabled]"
-                  enum:
-                    - Disabled
-                    - Enabled
-                    - Auto
                   type: string
                 nftablesRefreshInterval:
                   description:
@@ -2051,6 +2192,11 @@ spec:
                   items:
                     properties:
                       action:
+                        enum:
+                          - Allow
+                          - Deny
+                          - Log
+                          - Pass
                         type: string
                       destination:
                         properties:
@@ -2060,6 +2206,7 @@ spec:
                             items:
                               type: string
                             type: array
+                            x-kubernetes-list-type: set
                           notNets:
                             items:
                               type: string
@@ -2090,6 +2237,7 @@ spec:
                                 items:
                                   type: string
                                 type: array
+                                x-kubernetes-list-type: set
                               selector:
                                 type: string
                             type: object
@@ -2120,11 +2268,18 @@ spec:
                       icmp:
                         properties:
                           code:
+                            maximum: 255
+                            minimum: 0
                             type: integer
                           type:
+                            maximum: 255
+                            minimum: 0
                             type: integer
                         type: object
                       ipVersion:
+                        enum:
+                          - 4
+                          - 6
                         type: integer
                       metadata:
                         properties:
@@ -2136,8 +2291,12 @@ spec:
                       notICMP:
                         properties:
                           code:
+                            maximum: 255
+                            minimum: 0
                             type: integer
                           type:
+                            maximum: 255
+                            minimum: 0
                             type: integer
                         type: object
                       notProtocol:
@@ -2160,6 +2319,7 @@ spec:
                             items:
                               type: string
                             type: array
+                            x-kubernetes-list-type: set
                           notNets:
                             items:
                               type: string
@@ -2190,6 +2350,7 @@ spec:
                                 items:
                                   type: string
                                 type: array
+                                x-kubernetes-list-type: set
                               selector:
                                 type: string
                             type: object
@@ -2209,6 +2370,11 @@ spec:
                   items:
                     properties:
                       action:
+                        enum:
+                          - Allow
+                          - Deny
+                          - Log
+                          - Pass
                         type: string
                       destination:
                         properties:
@@ -2218,6 +2384,7 @@ spec:
                             items:
                               type: string
                             type: array
+                            x-kubernetes-list-type: set
                           notNets:
                             items:
                               type: string
@@ -2248,6 +2415,7 @@ spec:
                                 items:
                                   type: string
                                 type: array
+                                x-kubernetes-list-type: set
                               selector:
                                 type: string
                             type: object
@@ -2278,11 +2446,18 @@ spec:
                       icmp:
                         properties:
                           code:
+                            maximum: 255
+                            minimum: 0
                             type: integer
                           type:
+                            maximum: 255
+                            minimum: 0
                             type: integer
                         type: object
                       ipVersion:
+                        enum:
+                          - 4
+                          - 6
                         type: integer
                       metadata:
                         properties:
@@ -2294,8 +2469,12 @@ spec:
                       notICMP:
                         properties:
                           code:
+                            maximum: 255
+                            minimum: 0
                             type: integer
                           type:
+                            maximum: 255
+                            minimum: 0
                             type: integer
                         type: object
                       notProtocol:
@@ -2318,6 +2497,7 @@ spec:
                             items:
                               type: string
                             type: array
+                            x-kubernetes-list-type: set
                           notNets:
                             items:
                               type: string
@@ -2348,6 +2528,7 @@ spec:
                                 items:
                                   type: string
                                 type: array
+                                x-kubernetes-list-type: set
                               selector:
                                 type: string
                             type: object
@@ -2369,6 +2550,8 @@ spec:
                   type: number
                 performanceHints:
                   items:
+                    enum:
+                      - AssumeNeededOnEveryNode
                     type: string
                   type: array
                 preDNAT:
@@ -2381,6 +2564,9 @@ spec:
                   type: string
                 types:
                   items:
+                    enum:
+                      - Ingress
+                      - Egress
                     type: string
                   type: array
               type: object
@@ -2421,6 +2607,7 @@ spec:
                   items:
                     type: string
                   type: array
+                  x-kubernetes-list-type: set
               type: object
           type: object
       served: true
@@ -2459,6 +2646,7 @@ spec:
                   items:
                     type: string
                   type: array
+                  x-kubernetes-list-type: set
                 interfaceName:
                   type: string
                 node:
@@ -2469,6 +2657,8 @@ spec:
                       name:
                         type: string
                       port:
+                        maximum: 65535
+                        minimum: 0
                         type: integer
                       protocol:
                         anyOf:
@@ -2486,6 +2676,7 @@ spec:
                   items:
                     type: string
                   type: array
+                  x-kubernetes-list-type: set
               type: object
           type: object
       served: true
@@ -2691,37 +2882,44 @@ spec:
               properties:
                 allowedUses:
                   items:
+                    enum:
+                      - Workload
+                      - Tunnel
+                      - LoadBalancer
                     type: string
                   type: array
+                  x-kubernetes-list-type: set
                 assignmentMode:
                   enum:
                     - Automatic
                     - Manual
                   type: string
                 blockSize:
+                  maximum: 128
+                  minimum: 0
                   type: integer
                 cidr:
+                  format: cidr
                   type: string
                 disableBGPExport:
                   type: boolean
                 disabled:
                   type: boolean
-                ipip:
-                  properties:
-                    enabled:
-                      type: boolean
-                    mode:
-                      type: string
-                  type: object
                 ipipMode:
+                  enum:
+                    - Never
+                    - Always
+                    - CrossSubnet
                   type: string
-                nat-outgoing:
-                  type: boolean
                 natOutgoing:
                   type: boolean
                 nodeSelector:
                   type: string
                 vxlanMode:
+                  enum:
+                    - Never
+                    - Always
+                    - CrossSubnet
                   type: string
               required:
                 - cidr
@@ -2760,9 +2958,11 @@ spec:
             spec:
               properties:
                 reservedCIDRs:
+                  format: cidr
                   items:
                     type: string
                   type: array
+                  x-kubernetes-list-type: set
               type: object
           type: object
       served: true
@@ -2802,6 +3002,9 @@ spec:
                     loadBalancer:
                       properties:
                         assignIPs:
+                          enum:
+                            - AllServices
+                            - RequestedServicesOnly
                           type: string
                       type: object
                     namespace:
@@ -2814,6 +3017,9 @@ spec:
                         hostEndpoint:
                           properties:
                             autoCreate:
+                              enum:
+                                - Enabled
+                                - Disabled
                               type: string
                             createDefaultHostEndpoint:
                               type: string
@@ -2827,6 +3033,7 @@ spec:
                                     items:
                                       type: string
                                     type: array
+                                    x-kubernetes-list-type: set
                                   interfaceSelector:
                                     type: string
                                   labels:
@@ -2843,6 +3050,9 @@ spec:
                         reconcilerPeriod:
                           type: string
                         syncLabels:
+                          enum:
+                            - Enabled
+                            - Disabled
                           type: string
                       type: object
                     policy:
@@ -2863,14 +3073,30 @@ spec:
                   type: object
                 debugProfilePort:
                   format: int32
+                  maximum: 65535
+                  minimum: 0
                   type: integer
                 etcdV3CompactionPeriod:
                   type: string
                 healthChecks:
+                  default: Enabled
+                  enum:
+                    - Enabled
+                    - Disabled
                   type: string
                 logSeverityScreen:
+                  enum:
+                    - None
+                    - Debug
+                    - Info
+                    - Warning
+                    - Error
+                    - Fatal
+                    - Panic
                   type: string
                 prometheusMetricsPort:
+                  maximum: 65535
+                  minimum: 0
                   type: integer
               required:
                 - controllers
@@ -2888,6 +3114,9 @@ spec:
                         loadBalancer:
                           properties:
                             assignIPs:
+                              enum:
+                                - AllServices
+                                - RequestedServicesOnly
                               type: string
                           type: object
                         namespace:
@@ -2900,6 +3129,9 @@ spec:
                             hostEndpoint:
                               properties:
                                 autoCreate:
+                                  enum:
+                                    - Enabled
+                                    - Disabled
                                   type: string
                                 createDefaultHostEndpoint:
                                   type: string
@@ -2913,6 +3145,7 @@ spec:
                                         items:
                                           type: string
                                         type: array
+                                        x-kubernetes-list-type: set
                                       interfaceSelector:
                                         type: string
                                       labels:
@@ -2929,6 +3162,9 @@ spec:
                             reconcilerPeriod:
                               type: string
                             syncLabels:
+                              enum:
+                                - Enabled
+                                - Disabled
                               type: string
                           type: object
                         policy:
@@ -2949,14 +3185,30 @@ spec:
                       type: object
                     debugProfilePort:
                       format: int32
+                      maximum: 65535
+                      minimum: 0
                       type: integer
                     etcdV3CompactionPeriod:
                       type: string
                     healthChecks:
+                      default: Enabled
+                      enum:
+                        - Enabled
+                        - Disabled
                       type: string
                     logSeverityScreen:
+                      enum:
+                        - None
+                        - Debug
+                        - Info
+                        - Warning
+                        - Error
+                        - Fatal
+                        - Panic
                       type: string
                     prometheusMetricsPort:
+                      maximum: 65535
+                      minimum: 0
                       type: integer
                   required:
                     - controllers
@@ -2999,6 +3251,11 @@ spec:
                   items:
                     properties:
                       action:
+                        enum:
+                          - Allow
+                          - Deny
+                          - Log
+                          - Pass
                         type: string
                       destination:
                         properties:
@@ -3008,6 +3265,7 @@ spec:
                             items:
                               type: string
                             type: array
+                            x-kubernetes-list-type: set
                           notNets:
                             items:
                               type: string
@@ -3038,6 +3296,7 @@ spec:
                                 items:
                                   type: string
                                 type: array
+                                x-kubernetes-list-type: set
                               selector:
                                 type: string
                             type: object
@@ -3068,11 +3327,18 @@ spec:
                       icmp:
                         properties:
                           code:
+                            maximum: 255
+                            minimum: 0
                             type: integer
                           type:
+                            maximum: 255
+                            minimum: 0
                             type: integer
                         type: object
                       ipVersion:
+                        enum:
+                          - 4
+                          - 6
                         type: integer
                       metadata:
                         properties:
@@ -3084,8 +3350,12 @@ spec:
                       notICMP:
                         properties:
                           code:
+                            maximum: 255
+                            minimum: 0
                             type: integer
                           type:
+                            maximum: 255
+                            minimum: 0
                             type: integer
                         type: object
                       notProtocol:
@@ -3108,6 +3378,7 @@ spec:
                             items:
                               type: string
                             type: array
+                            x-kubernetes-list-type: set
                           notNets:
                             items:
                               type: string
@@ -3138,6 +3409,7 @@ spec:
                                 items:
                                   type: string
                                 type: array
+                                x-kubernetes-list-type: set
                               selector:
                                 type: string
                             type: object
@@ -3157,6 +3429,11 @@ spec:
                   items:
                     properties:
                       action:
+                        enum:
+                          - Allow
+                          - Deny
+                          - Log
+                          - Pass
                         type: string
                       destination:
                         properties:
@@ -3166,6 +3443,7 @@ spec:
                             items:
                               type: string
                             type: array
+                            x-kubernetes-list-type: set
                           notNets:
                             items:
                               type: string
@@ -3196,6 +3474,7 @@ spec:
                                 items:
                                   type: string
                                 type: array
+                                x-kubernetes-list-type: set
                               selector:
                                 type: string
                             type: object
@@ -3226,11 +3505,18 @@ spec:
                       icmp:
                         properties:
                           code:
+                            maximum: 255
+                            minimum: 0
                             type: integer
                           type:
+                            maximum: 255
+                            minimum: 0
                             type: integer
                         type: object
                       ipVersion:
+                        enum:
+                          - 4
+                          - 6
                         type: integer
                       metadata:
                         properties:
@@ -3242,8 +3528,12 @@ spec:
                       notICMP:
                         properties:
                           code:
+                            maximum: 255
+                            minimum: 0
                             type: integer
                           type:
+                            maximum: 255
+                            minimum: 0
                             type: integer
                         type: object
                       notProtocol:
@@ -3266,6 +3556,7 @@ spec:
                             items:
                               type: string
                             type: array
+                            x-kubernetes-list-type: set
                           notNets:
                             items:
                               type: string
@@ -3296,6 +3587,7 @@ spec:
                                 items:
                                   type: string
                                 type: array
+                                x-kubernetes-list-type: set
                               selector:
                                 type: string
                             type: object
@@ -3315,6 +3607,8 @@ spec:
                   type: number
                 performanceHints:
                   items:
+                    enum:
+                      - AssumeNeededOnEveryNode
                     type: string
                   type: array
                 selector:
@@ -3322,9 +3616,13 @@ spec:
                 serviceAccountSelector:
                   type: string
                 tier:
+                  default: default
                   type: string
                 types:
                   items:
+                    enum:
+                      - Ingress
+                      - Egress
                     type: string
                   type: array
               type: object
@@ -3365,6 +3663,7 @@ spec:
                   items:
                     type: string
                   type: array
+                  x-kubernetes-list-type: set
               type: object
           type: object
       served: true
@@ -3407,6 +3706,11 @@ spec:
                   items:
                     properties:
                       action:
+                        enum:
+                          - Allow
+                          - Deny
+                          - Log
+                          - Pass
                         type: string
                       destination:
                         properties:
@@ -3416,6 +3720,7 @@ spec:
                             items:
                               type: string
                             type: array
+                            x-kubernetes-list-type: set
                           notNets:
                             items:
                               type: string
@@ -3446,6 +3751,7 @@ spec:
                                 items:
                                   type: string
                                 type: array
+                                x-kubernetes-list-type: set
                               selector:
                                 type: string
                             type: object
@@ -3476,11 +3782,18 @@ spec:
                       icmp:
                         properties:
                           code:
+                            maximum: 255
+                            minimum: 0
                             type: integer
                           type:
+                            maximum: 255
+                            minimum: 0
                             type: integer
                         type: object
                       ipVersion:
+                        enum:
+                          - 4
+                          - 6
                         type: integer
                       metadata:
                         properties:
@@ -3492,8 +3805,12 @@ spec:
                       notICMP:
                         properties:
                           code:
+                            maximum: 255
+                            minimum: 0
                             type: integer
                           type:
+                            maximum: 255
+                            minimum: 0
                             type: integer
                         type: object
                       notProtocol:
@@ -3516,6 +3833,7 @@ spec:
                             items:
                               type: string
                             type: array
+                            x-kubernetes-list-type: set
                           notNets:
                             items:
                               type: string
@@ -3546,6 +3864,7 @@ spec:
                                 items:
                                   type: string
                                 type: array
+                                x-kubernetes-list-type: set
                               selector:
                                 type: string
                             type: object
@@ -3565,6 +3884,11 @@ spec:
                   items:
                     properties:
                       action:
+                        enum:
+                          - Allow
+                          - Deny
+                          - Log
+                          - Pass
                         type: string
                       destination:
                         properties:
@@ -3574,6 +3898,7 @@ spec:
                             items:
                               type: string
                             type: array
+                            x-kubernetes-list-type: set
                           notNets:
                             items:
                               type: string
@@ -3604,6 +3929,7 @@ spec:
                                 items:
                                   type: string
                                 type: array
+                                x-kubernetes-list-type: set
                               selector:
                                 type: string
                             type: object
@@ -3634,11 +3960,18 @@ spec:
                       icmp:
                         properties:
                           code:
+                            maximum: 255
+                            minimum: 0
                             type: integer
                           type:
+                            maximum: 255
+                            minimum: 0
                             type: integer
                         type: object
                       ipVersion:
+                        enum:
+                          - 4
+                          - 6
                         type: integer
                       metadata:
                         properties:
@@ -3650,8 +3983,12 @@ spec:
                       notICMP:
                         properties:
                           code:
+                            maximum: 255
+                            minimum: 0
                             type: integer
                           type:
+                            maximum: 255
+                            minimum: 0
                             type: integer
                         type: object
                       notProtocol:
@@ -3674,6 +4011,7 @@ spec:
                             items:
                               type: string
                             type: array
+                            x-kubernetes-list-type: set
                           notNets:
                             items:
                               type: string
@@ -3704,6 +4042,7 @@ spec:
                                 items:
                                   type: string
                                 type: array
+                                x-kubernetes-list-type: set
                               selector:
                                 type: string
                             type: object
@@ -3725,6 +4064,8 @@ spec:
                   type: number
                 performanceHints:
                   items:
+                    enum:
+                      - AssumeNeededOnEveryNode
                     type: string
                   type: array
                 preDNAT:
@@ -3734,11 +4075,19 @@ spec:
                 serviceAccountSelector:
                   type: string
                 stagedAction:
+                  enum:
+                    - Set
+                    - Delete
+                    - Learn
+                    - Ignore
                   type: string
                 tier:
                   type: string
                 types:
                   items:
+                    enum:
+                      - Ingress
+                      - Egress
                     type: string
                   type: array
               type: object
@@ -3988,6 +4337,11 @@ spec:
                     type: string
                   type: array
                 stagedAction:
+                  enum:
+                    - Set
+                    - Delete
+                    - Learn
+                    - Ignore
                   type: string
               type: object
           type: object
@@ -4027,6 +4381,11 @@ spec:
                   items:
                     properties:
                       action:
+                        enum:
+                          - Allow
+                          - Deny
+                          - Log
+                          - Pass
                         type: string
                       destination:
                         properties:
@@ -4036,6 +4395,7 @@ spec:
                             items:
                               type: string
                             type: array
+                            x-kubernetes-list-type: set
                           notNets:
                             items:
                               type: string
@@ -4066,6 +4426,7 @@ spec:
                                 items:
                                   type: string
                                 type: array
+                                x-kubernetes-list-type: set
                               selector:
                                 type: string
                             type: object
@@ -4096,11 +4457,18 @@ spec:
                       icmp:
                         properties:
                           code:
+                            maximum: 255
+                            minimum: 0
                             type: integer
                           type:
+                            maximum: 255
+                            minimum: 0
                             type: integer
                         type: object
                       ipVersion:
+                        enum:
+                          - 4
+                          - 6
                         type: integer
                       metadata:
                         properties:
@@ -4112,8 +4480,12 @@ spec:
                       notICMP:
                         properties:
                           code:
+                            maximum: 255
+                            minimum: 0
                             type: integer
                           type:
+                            maximum: 255
+                            minimum: 0
                             type: integer
                         type: object
                       notProtocol:
@@ -4136,6 +4508,7 @@ spec:
                             items:
                               type: string
                             type: array
+                            x-kubernetes-list-type: set
                           notNets:
                             items:
                               type: string
@@ -4166,6 +4539,7 @@ spec:
                                 items:
                                   type: string
                                 type: array
+                                x-kubernetes-list-type: set
                               selector:
                                 type: string
                             type: object
@@ -4185,6 +4559,11 @@ spec:
                   items:
                     properties:
                       action:
+                        enum:
+                          - Allow
+                          - Deny
+                          - Log
+                          - Pass
                         type: string
                       destination:
                         properties:
@@ -4194,6 +4573,7 @@ spec:
                             items:
                               type: string
                             type: array
+                            x-kubernetes-list-type: set
                           notNets:
                             items:
                               type: string
@@ -4224,6 +4604,7 @@ spec:
                                 items:
                                   type: string
                                 type: array
+                                x-kubernetes-list-type: set
                               selector:
                                 type: string
                             type: object
@@ -4254,11 +4635,18 @@ spec:
                       icmp:
                         properties:
                           code:
+                            maximum: 255
+                            minimum: 0
                             type: integer
                           type:
+                            maximum: 255
+                            minimum: 0
                             type: integer
                         type: object
                       ipVersion:
+                        enum:
+                          - 4
+                          - 6
                         type: integer
                       metadata:
                         properties:
@@ -4270,8 +4658,12 @@ spec:
                       notICMP:
                         properties:
                           code:
+                            maximum: 255
+                            minimum: 0
                             type: integer
                           type:
+                            maximum: 255
+                            minimum: 0
                             type: integer
                         type: object
                       notProtocol:
@@ -4294,6 +4686,7 @@ spec:
                             items:
                               type: string
                             type: array
+                            x-kubernetes-list-type: set
                           notNets:
                             items:
                               type: string
@@ -4324,6 +4717,7 @@ spec:
                                 items:
                                   type: string
                                 type: array
+                                x-kubernetes-list-type: set
                               selector:
                                 type: string
                             type: object
@@ -4343,6 +4737,8 @@ spec:
                   type: number
                 performanceHints:
                   items:
+                    enum:
+                      - AssumeNeededOnEveryNode
                     type: string
                   type: array
                 selector:
@@ -4350,11 +4746,19 @@ spec:
                 serviceAccountSelector:
                   type: string
                 stagedAction:
+                  enum:
+                    - Set
+                    - Delete
+                    - Learn
+                    - Ignore
                   type: string
                 tier:
                   type: string
                 types:
                   items:
+                    enum:
+                      - Ingress
+                      - Egress
                     type: string
                   type: array
               type: object
@@ -4392,9 +4796,15 @@ spec:
             spec:
               properties:
                 defaultAction:
-                  enum:
-                    - Pass
-                    - Deny
+                  allOf:
+                    - enum:
+                        - Allow
+                        - Deny
+                        - Log
+                        - Pass
+                    - enum:
+                        - Pass
+                        - Deny
                   type: string
                 order:
                   type: number

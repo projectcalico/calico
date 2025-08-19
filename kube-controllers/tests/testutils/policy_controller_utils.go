@@ -36,6 +36,7 @@ func RunPolicyController(datastoreType apiconfig.DatastoreType, etcdIP, kconfigf
 		"-e", fmt.Sprintf("DATASTORE_TYPE=%s", datastoreType),
 		"-e", fmt.Sprintf("ENABLED_CONTROLLERS=%s", ctrls),
 		"-e", fmt.Sprintf("KUBECONFIG=%s", kconfigfile),
+		"-e", fmt.Sprintf("CALICO_API_GROUP=%s", os.Getenv("CALICO_API_GROUP")),
 		"-e", "LOG_LEVEL=debug",
 		"-e", "RECONCILER_PERIOD=10s",
 		"-v", fmt.Sprintf("%s:%s", kconfigfile, kconfigfile),
