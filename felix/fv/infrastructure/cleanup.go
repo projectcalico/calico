@@ -18,9 +18,6 @@ import "sync"
 
 // cleanupStack is a reusable reverse-order cleanup registry.
 // It is thread-safe and does not suppress panics from registered functions.
-//
-// Note: intentionally unexported to keep scope local to infrastructure
-// while providing small wrapper methods on infra structs.
 type cleanupStack struct {
 	mu  sync.Mutex
 	fns []func()
@@ -39,9 +36,21 @@ func (c *cleanupStack) Add(f func()) {
 // Panics from cleanup functions are allowed to propagate to the caller.
 func (c *cleanupStack) Run() {
 	c.mu.Lock()
-	defer c.mu.Unlock()
-	for i := len(c.fns) - 1; i >= 0; i-- {
-		c.fns[i]()
-	}
+	fns := c.fns
 	c.fns = nil
+	defer runCleanupStack(fns)
+	defer c.mu.Unlock()
+}
+
+func runCleanupStack(fs []func()) {
+	if len(fs) == 0 {
+		return
+	}
+
+	// We want all cleanup functions to run in reverse order, even if there's
+	// a panic.  We also want the panic to propagate so that it causes the test
+	// to fail.  By deferring the first function and then recursing, we get
+	// both of those properties.
+	defer fs[0]()
+	runCleanupStack(fs[1:])
 }
