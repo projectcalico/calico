@@ -39,9 +39,10 @@ func DatastoreDescribe(description string, datastores []apiconfig.DatastoreType,
 
 		Describe(fmt.Sprintf("%s (%s backend)", description, ds), func() {
 			var coreFilesAtStart set.Set[string]
-			var currentInfra DatastoreInfra
+			var currentInfra []DatastoreInfra
 			BeforeEach(func() {
 				coreFilesAtStart = readCoreFiles()
+				currentInfra = nil
 			})
 
 			// Pick the base factory for this datastore, then wrap it to record the created infra.
@@ -56,15 +57,19 @@ func DatastoreDescribe(description string, datastores []apiconfig.DatastoreType,
 			}
 			wrappedFactory := func(opts ...CreateOption) DatastoreInfra {
 				inf := baseFactory(opts...)
-				currentInfra = inf
+				currentInfra = append(currentInfra, inf)
 				return inf
 			}
 			body(wrappedFactory)
 
 			AfterEach(func() {
 				// Always stop the infra after each test (collects diags on failure and cleans up).
-				if currentInfra != nil {
-					currentInfra.Stop()
+				if len(currentInfra) > 0 {
+					for i := len(currentInfra) - 1; i >= 0; i-- {
+						if currentInfra[i] != nil {
+							currentInfra[i].Stop()
+						}
+					}
 					currentInfra = nil
 				}
 				// Then, perform the core file check.
