@@ -1,5 +1,4 @@
 #!/bin/sh
-set -x
 
 # Updates the config options according to environment variables
 # received via the configMap.
@@ -34,4 +33,4 @@ case "$1" in
     echo "Usage: $0 [up|test]"
     exit 1
     ;;
-esac
+  esac
