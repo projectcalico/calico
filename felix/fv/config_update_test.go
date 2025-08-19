@@ -59,24 +59,6 @@ var _ = Context("Config update tests, after starting felix", func() {
 		felixPID = tc.Felixes[0].GetSinglePID("calico-felix")
 	})
 
-	AfterEach(func() {
-		if CurrentGinkgoTestDescription().Failed {
-			tc.Felixes[0].Exec("iptables-save", "-c")
-			tc.Felixes[0].Exec("ip", "r")
-		}
-
-		for ii := range w {
-			w[ii].Stop()
-		}
-		tc.Stop()
-
-		if CurrentGinkgoTestDescription().Failed {
-			etcd.Exec("etcdctl", "get", "/", "--prefix", "--keys-only")
-		}
-		etcd.Stop()
-		infra.Stop()
-	})
-
 	shouldStayUp := func() {
 		// Felix has a 2s timer before it restarts so need to monitor for > 2s.
 		// We use ContainElement because Felix regularly forks off subprocesses and those
