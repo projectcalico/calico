@@ -504,26 +504,12 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log tests", [
 			}
 		}
 
-		for _, wl := range wlHost1 {
-			wl.Stop()
-		}
-		for _, wl := range wlHost2 {
-			wl.Stop()
-		}
-		for _, wl := range hostW {
-			wl.Stop()
-		}
 		for _, felix := range tc.Felixes {
 			if bpfEnabled {
 				felix.Exec("calico-bpf", "connect-time", "clean")
 			}
-			felix.Stop()
 		}
 
-		if CurrentGinkgoTestDescription().Failed {
-			infra.DumpErrorData()
-		}
-		infra.Stop()
 	})
 })
 
@@ -693,8 +679,6 @@ var _ = infrastructure.DatastoreDescribe("goldmane flow log ipv6 tests", []apico
 				felix.Exec("ip", "r")
 			}
 		}
-		tc.Stop()
-		infra.Stop()
 	})
 
 	It("Should report the ipv6 flow logs", func() {
@@ -885,23 +869,11 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane local server tests
 			}
 		}
 
-		for _, wl := range wlHost1 {
-			wl.Stop()
-		}
-		for _, wl := range wlHost2 {
-			wl.Stop()
-		}
 		for _, felix := range tc.Felixes {
 			if bpfEnabled {
 				felix.Exec("calico-bpf", "connect-time", "clean")
 			}
-			felix.Stop()
 		}
-
-		if CurrentGinkgoTestDescription().Failed {
-			infra.DumpErrorData()
-		}
-		infra.Stop()
 	})
 })
 

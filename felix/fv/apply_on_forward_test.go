@@ -86,19 +86,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ apply on forward tests; wit
 				felix.Exec("ip", "a")
 			}
 		}
-
-		for _, wl := range w {
-			wl.Stop()
-		}
-		for _, wl := range hostW {
-			wl.Stop()
-		}
-
-		tc.Stop()
-		if CurrentGinkgoTestDescription().Failed {
-			infra.DumpErrorData()
-		}
-		infra.Stop()
+		// Topology/workload cleanup handled by DatastoreDescribe's AfterEach via infra.Stop().
 	})
 
 	itShouldHaveWorkloadToWorkloadAndHostConnectivity := func() {
