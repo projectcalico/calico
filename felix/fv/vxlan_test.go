@@ -98,44 +98,8 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 				assignTunnelAddresses(infra, tc, client)
 			})
 
-			JustAfterEach(func() {
-				if CurrentGinkgoTestDescription().Failed {
-					for _, felix := range felixes {
-						if NFTMode() {
-							logNFTDiags(felix)
-						} else {
-							felix.Exec("iptables-save", "-c")
-							felix.Exec("ipset", "list")
-						}
-						felix.Exec("ipset", "list")
-						felix.Exec("ip", "r")
-						felix.Exec("ip", "a")
-						if enableIPv6 {
-							felix.Exec("ip", "-6", "route")
-						}
-						felix.Exec("ip", "-d", "link")
-					}
-
-					infra.DumpErrorData()
-				}
-			})
-
-			AfterEach(func() {
-				for _, wl := range w {
-					wl.Stop()
-				}
-				for _, wl := range w6 {
-					wl.Stop()
-				}
-				for _, wl := range hostW {
-					wl.Stop()
-				}
-				for _, wl := range hostW6 {
-					wl.Stop()
-				}
-				tc.Stop()
-				infra.Stop()
-			})
+			// Cleanup is handled by DatastoreDescribe's AfterEach via infra.Stop().
+			AfterEach(func() {})
 
 			if brokenXSum {
 				It("should disable checksum offload", func() {
@@ -916,8 +880,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 				client          client.Interface
 				w               [3]*workload.Workload
 				w6              [3]*workload.Workload
-				hostW           [3]*workload.Workload
-				hostW6          [3]*workload.Workload
 				cc              *connectivity.Checker
 				topologyOptions infrastructure.TopologyOptions
 			)
@@ -938,7 +900,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 				// Deploy the topology.
 				tc, client = infrastructure.StartNNodeTopology(3, topologyOptions, infra)
 
-				w, w6, hostW, hostW6 = setupWorkloads(infra, tc, topologyOptions, client, enableIPv6)
+				w, w6, _, _ = setupWorkloads(infra, tc, topologyOptions, client, enableIPv6)
 				felixes = tc.Felixes
 
 				// Assign tunnel addresees in IPAM based on the topology.
@@ -964,25 +926,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 						}
 					}
 				}
-
-				for _, wl := range w {
-					wl.Stop()
-				}
-				for _, wl := range w6 {
-					wl.Stop()
-				}
-				for _, wl := range hostW {
-					wl.Stop()
-				}
-				for _, wl := range hostW6 {
-					wl.Stop()
-				}
-				tc.Stop()
-
-				if CurrentGinkgoTestDescription().Failed {
-					infra.DumpErrorData()
-				}
-				infra.Stop()
+				// Topology/workload cleanup is handled by infra.Stop() via DatastoreDescribe.
 			})
 
 			It("should have host to workload connectivity", func() {
@@ -1015,8 +959,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 				client          client.Interface
 				w               [3]*workload.Workload
 				w6              [3]*workload.Workload
-				hostW           [3]*workload.Workload
-				hostW6          [3]*workload.Workload
 				cc              *connectivity.Checker
 				topologyOptions infrastructure.TopologyOptions
 			)
@@ -1064,51 +1006,15 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 				// Deploy the topology.
 				tc, client = infrastructure.StartNNodeTopology(3, topologyOptions, infra)
 
-				w, w6, hostW, hostW6 = setupWorkloads(infra, tc, topologyOptions, client, enableIPv6)
+				w, w6, _, _ = setupWorkloads(infra, tc, topologyOptions, client, enableIPv6)
 				felixes = tc.Felixes
 
 				// Assign tunnel addresees in IPAM based on the topology.
 				assignTunnelAddresses(infra, tc, client)
 			})
 
-			AfterEach(func() {
-				if CurrentGinkgoTestDescription().Failed {
-					for _, felix := range felixes {
-						if NFTMode() {
-							logNFTDiags(felix)
-						} else {
-							felix.Exec("iptables-save", "-c")
-							felix.Exec("ipset", "list")
-						}
-						felix.Exec("ipset", "list")
-						felix.Exec("ip", "r")
-						felix.Exec("ip", "a")
-						if enableIPv6 {
-							felix.Exec("ip", "-6", "route")
-						}
-						felix.Exec("calico-bpf", "routes", "dump")
-					}
-				}
-
-				for _, wl := range w {
-					wl.Stop()
-				}
-				for _, wl := range w6 {
-					wl.Stop()
-				}
-				for _, wl := range hostW {
-					wl.Stop()
-				}
-				for _, wl := range hostW6 {
-					wl.Stop()
-				}
-				tc.Stop()
-
-				if CurrentGinkgoTestDescription().Failed {
-					infra.DumpErrorData()
-				}
-				infra.Stop()
-			})
+			// Cleanup is handled by DatastoreDescribe's AfterEach via infra.Stop().
+			AfterEach(func() {})
 
 			It("should have host to workload connectivity", func() {
 				if vxlanMode == api.VXLANModeAlways && routeSource == "WorkloadIPs" {

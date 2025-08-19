@@ -119,25 +119,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 						}
 					}
 				}
-
-				for _, wl := range w {
-					wl.Stop()
-				}
-				for _, wl := range w6 {
-					wl.Stop()
-				}
-				for _, wl := range hostW {
-					wl.Stop()
-				}
-				for _, wl := range hostW6 {
-					wl.Stop()
-				}
-				tc.Stop()
-
-				if CurrentGinkgoTestDescription().Failed {
-					infra.DumpErrorData()
-				}
-				infra.Stop()
+				// Topology/workload cleanup is handled by infra.Stop() via DatastoreDescribe.
 			})
 
 			// Only applicable to IPIP encap
@@ -928,45 +910,8 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 				assignTunnelAddresses(infra, tc, client)
 			})
 
-			AfterEach(func() {
-				if CurrentGinkgoTestDescription().Failed {
-					for _, felix := range felixes {
-						if NFTMode() {
-							logNFTDiags(felix)
-						} else {
-							felix.Exec("iptables-save", "-c")
-							felix.Exec("ipset", "list")
-						}
-						felix.Exec("ipset", "list")
-						felix.Exec("ip", "r")
-						felix.Exec("ip", "a")
-						felix.Exec("calico-bpf", "routes", "dump")
-						if enableIPv6 {
-							felix.Exec("ip", "-6", "route")
-							felix.Exec("calico-bpf", "-6", "routes", "dump")
-						}
-					}
-				}
-
-				for _, wl := range w {
-					wl.Stop()
-				}
-				for _, wl := range w6 {
-					wl.Stop()
-				}
-				for _, wl := range hostW {
-					wl.Stop()
-				}
-				for _, wl := range hostW6 {
-					wl.Stop()
-				}
-				tc.Stop()
-
-				if CurrentGinkgoTestDescription().Failed {
-					infra.DumpErrorData()
-				}
-				infra.Stop()
-			})
+			// Cleanup is handled by DatastoreDescribe's AfterEach via infra.Stop().
+			AfterEach(func() {})
 
 			It("should have host to workload connectivity", func() {
 				if ipipMode == api.IPIPModeAlways && routeSource == "WorkloadIPs" {

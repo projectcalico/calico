@@ -137,9 +137,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ iptables cleanup tests", []
 
 	AfterEach(func() {
 		log.Info("AfterEach starting")
+		// Per-test cleanup: ensure connect-time entries are cleared when in BPF mode.
 		tc.Felixes[0].Exec("calico-bpf", "connect-time", "clean")
-		tc.Stop()
-		infra.Stop()
+		// Topology/infra cleanup handled by DatastoreDescribe's AfterEach via infra.Stop().
 		log.Info("AfterEach done")
 	})
 })

@@ -223,12 +223,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 				for _, tcpdump := range tcpdumps {
 					tcpdump.Stop()
 				}
-				topologyContainers.Stop()
-
-				if CurrentGinkgoTestDescription().Failed {
-					infra.DumpErrorData()
-				}
-				infra.Stop()
+				// Topology containers and infra cleanup are handled by infra.Stop() via DatastoreDescribe.
 			})
 
 			Context("with Wireguard enabled", func() {
@@ -1125,13 +1120,7 @@ var _ = infrastructure.DatastoreDescribe("WireGuard-Unsupported", []apiconfig.Da
 					tc.Felixes[0].Exec("ip", "link")
 					tc.Felixes[0].Exec("wg")
 				}
-
-				tc.Stop()
-
-				if CurrentGinkgoTestDescription().Failed {
-					infra.DumpErrorData()
-				}
-				infra.Stop()
+				// Topology/infra cleanup handled by DatastoreDescribe's AfterEach via infra.Stop().
 			})
 
 			It("no Wireguard device exists", func() {

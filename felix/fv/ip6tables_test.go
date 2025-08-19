@@ -92,17 +92,7 @@ var _ = infrastructure.DatastoreDescribe("IPv6 iptables/nftables tests", []apico
 		}
 	})
 
-	AfterEach(func() {
-		log.Info("AfterEach starting")
-		for _, f := range tc.Felixes {
-			f.Stop()
-		}
-		log.Info("AfterEach done")
-	})
-
-	AfterEach(func() {
-		infra.Stop()
-	})
+	// Cleanup is handled by DatastoreDescribe's AfterEach via infra.Stop().
 
 	var w [2][2]*workload.Workload
 
