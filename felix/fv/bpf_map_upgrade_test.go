@@ -51,14 +51,8 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test conntrack ma
 		tc, _ = infrastructure.StartNNodeTopology(1, opts, infra)
 	})
 
-	AfterEach(func() {
-		if CurrentGinkgoTestDescription().Failed {
-			infra.DumpErrorData()
-		}
-
-		tc.Stop()
-		infra.Stop()
-	})
+	// Cleanup is handled by DatastoreDescribe's AfterEach via infra.Stop().
+	AfterEach(func() {})
 
 	It("should upgrade conntrack entries from v2 to v3", func() {
 		// create conntrack v2 map

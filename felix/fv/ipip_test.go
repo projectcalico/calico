@@ -121,19 +121,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology with BIRD pro
 				}
 			}
 		}
-
-		for _, wl := range w {
-			wl.Stop()
-		}
-		for _, wl := range hostW {
-			wl.Stop()
-		}
-		tc.Stop()
-
-		if CurrentGinkgoTestDescription().Failed {
-			infra.DumpErrorData()
-		}
-		infra.Stop()
 	})
 
 	It("should fully randomize MASQUERADE rules", func() {
