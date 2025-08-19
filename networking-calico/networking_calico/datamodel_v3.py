@@ -17,9 +17,10 @@ import json
 import re
 import uuid
 
+from oslo_log import log
+
 from networking_calico import datamodel_v2
 from networking_calico import etcdv3
-from networking_calico.compat import log
 from networking_calico.timestamp import timestamp_now
 
 # Particular JSON key strings.

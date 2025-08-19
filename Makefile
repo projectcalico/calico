@@ -53,12 +53,14 @@ ci-preflight-checks:
 	$(MAKE) verify-go-mods
 	$(MAKE) check-dockerfiles
 	$(MAKE) check-language
-	$(MAKE) generate
+	$(MAKE) generate SKIP_FIX_CHANGED=true
 	$(MAKE) fix-all
+	$(MAKE) -C networking-calico fmtpy
 	$(MAKE) check-ocp-no-crds
 	$(MAKE) yaml-lint
 	$(MAKE) check-dirty
 	$(MAKE) go-vet
+	$(MAKE) -C networking-calico flake8
 
 check-go-mod:
 	$(DOCKER_GO_BUILD) ./hack/check-go-mod.sh

@@ -21,10 +21,11 @@
 import collections
 import json
 
+from oslo_log import log
+
 from networking_calico import datamodel_v2
 from networking_calico import etcdutils
 from networking_calico.common import config as calico_config
-from networking_calico.compat import log
 
 
 LOG = log.getLogger(__name__)

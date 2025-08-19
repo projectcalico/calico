@@ -34,7 +34,12 @@ import (
 import "C"
 
 type Obj struct {
-	obj *C.struct_bpf_object
+	filename string
+	obj      *C.struct_bpf_object
+}
+
+func (o *Obj) Filename() string {
+	return o.filename
 }
 
 type Map struct {
@@ -109,7 +114,33 @@ func OpenObject(filename string) (*Obj, error) {
 	if obj == nil || err != nil {
 		return nil, fmt.Errorf("error opening libbpf object %w", err)
 	}
-	return &Obj{obj: obj}, nil
+
+	return &Obj{
+		filename: filename,
+		obj:      obj,
+	}, nil
+}
+
+func OpenObjectWithLogBuffer(filename string, buf []byte) (*Obj, error) {
+	if len(buf) == 0 {
+		return OpenObject(filename)
+	}
+
+	utils.IncreaseLockedMemoryQuota()
+	cFilename := C.CString(filename)
+
+	cBuf := (*C.char)(unsafe.Pointer(&buf[0]))
+
+	defer C.free(unsafe.Pointer(cFilename))
+	obj, err := C.bpf_obj_open_log_buf(cFilename, cBuf, C.size_t(len(buf)))
+	if obj == nil || err != nil {
+		return nil, fmt.Errorf("error opening libbpf object %w", err)
+	}
+
+	return &Obj{
+		filename: filename,
+		obj:      obj,
+	}, nil
 }
 
 func (o *Obj) Load() error {
