@@ -15,6 +15,8 @@
 package intdataplane
 
 import (
+	"strings"
+
 	"github.com/sirupsen/logrus"
 
 	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
@@ -77,11 +79,13 @@ func (m *hostsIPSetManager) OnUpdate(protoBufMsg interface{}) {
 		}
 
 		m.logCtx.WithField("hostname", msg.Hostname).Debug("Host update/create")
-		ipAddr := msg.Ipv4Addr
+		addr := msg.Ipv4Addr
 		if m.ipVersion == 6 {
-			ipAddr = msg.Ipv6Addr
+			addr = msg.Ipv6Addr
 		}
-		m.activeHostnameToIP[msg.Hostname] = ipAddr
+		// Remove subnet mask.
+		parts := strings.Split(addr, "/")
+		m.activeHostnameToIP[msg.Hostname] = parts[0]
 		m.ipSetDirty = true
 	case *proto.HostMetadataV4V6Remove:
 		m.logCtx.WithField("hostname", msg.Hostname).Debug("Host removed")
