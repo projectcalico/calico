@@ -39,14 +39,9 @@ func bpfMapList() string {
 	return string(out)
 }
 func deleteMap(bpfMap maps.Map) {
-	err := bpfMap.(*maps.PinnedMap).Close()
-	Expect(err).NotTo(HaveOccurred())
-	err = os.Remove(bpfMap.Path())
-	Expect(err).NotTo(HaveOccurred())
-	if _, err := os.Stat(bpfMap.Path() + "_old"); err == nil {
-		err = os.Remove(bpfMap.Path() + "_old")
-		Expect(err).NotTo(HaveOccurred())
-	}
+	bpfMap.(*maps.PinnedMap).Close()
+	os.Remove(bpfMap.Path())
+	os.Remove(bpfMap.Path() + "_old")
 }
 
 func TestMapUpgradeV2ToV3(t *testing.T) {
@@ -366,7 +361,7 @@ func TestMapUpgradeWhileResizeInProgress(t *testing.T) {
 	}
 
 	// Repin /sys/fs/bpt/tc/globals/cali_mock2_old1 to /sys/fs/bpt/tc/globals/cali_mock2_old
-	err = libbpf.ObjPin(int(mockMapv2_old.MapFD()), mockMapv2.Path()+"_old")
+	err = libbpf.ObjPin(int(mockMapv2_old.MapFD()), mockMapv2_old.Path()+"_old")
 	Expect(err).NotTo(HaveOccurred())
 	// Remove /sys/fs/bpt/tc/globals/cali_mock2_old1
 	os.Remove(mockMapv2_old.Path() + "_old1")
@@ -426,13 +421,20 @@ func TestUpgradeWithSameVersionDifferentParams(t *testing.T) {
 	Expect(mapInfo.ValueSize).To(Equal(64))
 
 	mapParams.ValueSize = 128
-	b = maps.NewPinnedMap(mapParams)
-	err = b.EnsureExists()
+	c := maps.NewPinnedMap(mapParams)
+	err = c.EnsureExists()
 	Expect(err).NotTo(HaveOccurred())
 
-	mapInfo, err = maps.GetMapInfo(b.MapFD())
+	mapInfo, err = maps.GetMapInfo(c.MapFD())
 	Expect(err).NotTo(HaveOccurred())
 
 	Expect(mapInfo.KeySize).To(Equal(24))
 	Expect(mapInfo.ValueSize).To(Equal(128))
+
+	deleteMap(mockMapv2)
+	deleteMap(b)
+	deleteMap(c)
+	Eventually(bpfMapList, "10s", "200ms").ShouldNot(ContainSubstring(mockMapv2.GetName()))
+	Eventually(bpfMapList, "10s", "200ms").ShouldNot(ContainSubstring(b.GetName()))
+	Eventually(bpfMapList, "10s", "200ms").ShouldNot(ContainSubstring(c.GetName()))
 }
