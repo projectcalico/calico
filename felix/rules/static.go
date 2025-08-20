@@ -1067,10 +1067,11 @@ func (r *DefaultRuleRenderer) StaticManglePostroutingChain(ipVersion uint8) *gen
 
 	ipConf := r.ipSetConfig(ipVersion)
 	allIPsSetName := ipConf.NameForMainIPSet(IPSetIDAllPools)
+	allHostsSetName := ipConf.NameForMainIPSet(IPSetIDAllHostNets)
 	rules = append(rules, generictables.Rule{
 		Match: r.NewMatch().
-			SourceIPSet(allIPsSetName).
-			NotDestIPSet(allIPsSetName),
+			NotDestIPSet(allIPsSetName).
+			NotDestIPSet(allHostsSetName),
 		Action:  r.Jump(ChainQoSPolicy),
 		Comment: []string{"QoS policy for traffic leaving cluster"},
 	})
