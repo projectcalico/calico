@@ -37,11 +37,11 @@ const (
 //     and label encoding during the critical benchmarking loop, making performance measurements
 //     more reflective of the AddFlow logic itself.
 func init() {
-	for i := 0; i < flowArraySize; i++ {
+	for i := 1; i <= flowArraySize; i++ {
 		srcMap := make(map[string]string)
 		dstMap := make(map[string]string)
 
-		for j := 0; j < labelMapSize; j++ {
+		for j := 1; j <= labelMapSize; j++ {
 			srcKey := fmt.Sprintf("src-k-%d", j*i)
 			srcVal := fmt.Sprintf("src-v-%d", j*i)
 			dstKey := fmt.Sprintf("dst-k-%d", j*i)
