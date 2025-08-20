@@ -31,9 +31,10 @@
           - sudo umount /boot
           - sudo rsync -av /boot2/ /boot/ --exclude "*.new" --exclude "*.dpkg-bak" --delete --inplace
           - sudo rm -rf /boot2/
+          # Set NC_PLUGIN_REPO and NC_PLUGIN_REF so that DevStack will use the networking-calico
+          # code from the current PR or branch.  The following checkout is to make sure of having a
+          # local ref that we can specify.
           - git checkout -b devstack-test
-          - export LIBVIRT_TYPE=qemu
-          - export UPPER_CONSTRAINTS_FILE=https://releases.openstack.org/constraints/upper/yoga
           - export NC_PLUGIN_REPO=$(dirname $(pwd))
           - export NC_PLUGIN_REF=$(git rev-parse --abbrev-ref HEAD)
           - sudo git config --system --add safe.directory ${NC_PLUGIN_REPO}/.git
@@ -69,9 +70,10 @@
           # this was causing the DevStack setup to fail, because pip doesn't know how to uninstall
           # or replace the existing version.  Happily we do know that, so let's do it upfront here.
           - sudo apt-get remove -y python3-wrapt || true
+          # Set NC_PLUGIN_REPO and NC_PLUGIN_REF so that DevStack will use the networking-calico
+          # code from the current PR or branch.  The following checkout is to make sure of having a
+          # local ref that we can specify.
           - git checkout -b devstack-test
-          - export LIBVIRT_TYPE=qemu
-          - export UPPER_CONSTRAINTS_FILE=https://raw.githubusercontent.com/openstack/requirements/refs/heads/stable/2024.1/upper-constraints.txt
           - export NC_PLUGIN_REPO=$(dirname $(pwd))
           - export NC_PLUGIN_REF=$(git rev-parse --abbrev-ref HEAD)
           - sudo git config --system --add safe.directory ${NC_PLUGIN_REPO}/.git

@@ -1120,6 +1120,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	dp.endpointsSourceV4 = epManager
 	dp.RegisterManager(newFloatingIPManager(natTableV4, ruleRenderer, 4, config.FloatingIPsEnabled))
 	dp.RegisterManager(newMasqManager(ipSetsV4, natTableV4, ruleRenderer, config.MaxIPSetSize, 4))
+	dp.RegisterManager(newHostsIPSetManager(ipSetsV4, 4, config))
 
 	if !config.BPFEnabled {
 		dp.RegisterManager(newQoSPolicyManager(mangleTableV4, ruleRenderer, 4))
@@ -1129,7 +1130,6 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		log.Info("IPIP enabled, starting thread to keep tunnel configuration in sync.")
 		// Add a manager to keep the all-hosts IP set up to date.
 		dp.ipipManager = newIPIPManager(
-			ipSetsV4,
 			routeTableV4,
 			dataplanedefs.IPIPIfaceName,
 			4,
@@ -1321,6 +1321,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		dp.RegisterManager(newFloatingIPManager(natTableV6, ruleRenderer, 6, config.FloatingIPsEnabled))
 		dp.RegisterManager(newMasqManager(ipSetsV6, natTableV6, ruleRenderer, config.MaxIPSetSize, 6))
 		dp.RegisterManager(newServiceLoopManager(filterTableV6, ruleRenderer, 6))
+		dp.RegisterManager(newHostsIPSetManager(ipSetsV6, 6, config))
 
 		if !config.BPFEnabled {
 			dp.RegisterManager(newQoSPolicyManager(mangleTableV6, ruleRenderer, 6))
