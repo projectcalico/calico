@@ -1,0 +1,65 @@
+// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package rules
+
+import (
+	"strconv"
+
+	"github.com/projectcalico/calico/felix/generictables"
+)
+
+type QoSPolicy struct {
+	SrcAddrs string
+	DSCP     uint8
+}
+
+func (r *DefaultRuleRenderer) EgressQoSPolicyChain(policies []QoSPolicy) *generictables.Chain {
+	if r.NFTables {
+		return r.nftablesQoSPolicyRules(policies)
+	}
+	return r.defaultQoSPolicyRules(policies)
+}
+
+func (r *DefaultRuleRenderer) nftablesQoSPolicyRules(policies []QoSPolicy) *generictables.Chain {
+	var rules []generictables.Rule
+	// Policies is sorted and validated by QoS policy manager.
+
+	rules = append(rules, generictables.Rule{
+		Match: r.NewMatch().SourceNetVMAP(NftablesQoSPolicyMap),
+		//Match:  r.NewMatch(),
+		//Action: r.DSCP("vmap"),
+	})
+
+	return &generictables.Chain{
+		Name:  ChainQoSPolicy,
+		Rules: rules,
+	}
+}
+
+func (r *DefaultRuleRenderer) defaultQoSPolicyRules(policies []QoSPolicy) *generictables.Chain {
+	var rules []generictables.Rule
+	// Policies is sorted and validated by QoS policy manager.
+	for _, p := range policies {
+		rules = append(rules, generictables.Rule{
+			Match:  r.NewMatch().SourceNet(p.SrcAddrs),
+			Action: r.DSCP(strconv.FormatUint(uint64(p.DSCP), 10)),
+		})
+	}
+
+	return &generictables.Chain{
+		Name:  ChainQoSPolicy,
+		Rules: rules,
+	}
+}

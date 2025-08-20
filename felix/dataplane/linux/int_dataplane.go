@@ -1120,6 +1120,15 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	dp.endpointsSourceV4 = epManager
 	dp.RegisterManager(newFloatingIPManager(natTableV4, ruleRenderer, 4, config.FloatingIPsEnabled))
 	dp.RegisterManager(newMasqManager(ipSetsV4, natTableV4, ruleRenderer, config.MaxIPSetSize, 4))
+
+	if !config.BPFEnabled {
+		var mangleMaps nftables.MapsDataplane
+		if config.RulesConfig.NFTables {
+			mangleMaps = mangleTableV4.(nftables.MapsDataplane)
+		}
+		dp.RegisterManager(newQoSPolicyManager(mangleTableV4, mangleMaps, ruleRenderer, 4))
+	}
+
 	if config.RulesConfig.IPIPEnabled {
 		log.Info("IPIP enabled, starting thread to keep tunnel configuration in sync.")
 		// Add a manager to keep the all-hosts IP set up to date.
@@ -1316,6 +1325,14 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		dp.RegisterManager(newFloatingIPManager(natTableV6, ruleRenderer, 6, config.FloatingIPsEnabled))
 		dp.RegisterManager(newMasqManager(ipSetsV6, natTableV6, ruleRenderer, config.MaxIPSetSize, 6))
 		dp.RegisterManager(newServiceLoopManager(filterTableV6, ruleRenderer, 6))
+
+		if !config.BPFEnabled {
+			var mangleMapsV6 nftables.MapsDataplane
+			if config.RulesConfig.NFTables {
+				mangleMapsV6 = mangleTableV6.(nftables.MapsDataplane)
+			}
+			dp.RegisterManager(newQoSPolicyManager(mangleTableV6, mangleMapsV6, ruleRenderer, 6))
+		}
 
 		// Add a manager for IPv6 wireguard configuration. This is added irrespective of whether wireguard is actually enabled
 		// because it may need to tidy up some of the routing rules when disabled.

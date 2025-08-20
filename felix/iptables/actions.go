@@ -121,6 +121,12 @@ func (a *actionFactory) LimitNumConnections(num int64, rejectWith generictables.
 	}
 }
 
+func (a *actionFactory) DSCP(value string) generictables.Action {
+	return DSCPAction{
+		Value: value,
+	}
+}
+
 type Referrer interface {
 	ReferencedChain() string
 }
@@ -470,4 +476,16 @@ func (a LimitNumConnectionsAction) ToFragment(features *environment.Features) st
 
 func (a LimitNumConnectionsAction) String() string {
 	return fmt.Sprintf("LimitNumConnectionsAction:%d,rejectWith:%s", a.Num, a.RejectWith)
+}
+
+type DSCPAction struct {
+	Value string
+}
+
+func (a DSCPAction) ToFragment(features *environment.Features) string {
+	return fmt.Sprintf("--jump DSCP --set-dscp %s", a.Value)
+}
+
+func (a DSCPAction) String() string {
+	return fmt.Sprintf("DSCP %s", a.Value)
 }
