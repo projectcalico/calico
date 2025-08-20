@@ -686,7 +686,6 @@ func ObjGet(path string) (int, error) {
 	return int(fd), err
 }
 
-<<<<<<< HEAD
 // MapUpdateBatch expects all key, values in a single slice, bytes of a one
 // key/value appended back to back to the previous value.
 func MapUpdateBatch(fd int, k, v []byte, count int, flags uint64) (int, error) {
