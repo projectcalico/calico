@@ -1,4 +1,6 @@
-#!/bin/bash -e
+#!/bin/bash
+
+set -eo pipefail
 
 # Do everything that's needed to create or update the Calico PPA and
 # RPM repo named ${REPO_NAME}, so that those provide packages for the
@@ -50,6 +52,7 @@ function require_commands {
     check_bin ts || error_exit "This script requires the 'ts' command from the 'moreutils' package."
     check_bin dch || error_exit "This script requires the 'dch' command from the 'devscripts' package."
     check_bin patchelf || error_exit "This script requires the 'patchelf' command from the 'patchelf' package."
+    check_bin jq || error_exit "This scruit requires the 'jq' command from the 'jq' package"
 }
 
 function require_version {
