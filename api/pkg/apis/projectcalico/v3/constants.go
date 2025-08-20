@@ -46,9 +46,13 @@ const (
 	OrchestratorDocker     = "libnetwork"
 	OrchestratorOpenStack  = "openstack"
 
-	// Label used to denote the Tier. This is added to policies by Calico so that label matches
+	// Label used to denote the Tier. This is added to policies by Calico so that label mvatches
 	// can be made for tiers.
 	LabelTier = "projectcalico.org/tier"
+
+	LabelHost         = "projectcalico.org/host"
+	LabelAffinityType = "projectcalico.org/affinitytype"
+	LabelIPVersion    = "projectcalico.org/ipversion"
 
 	// Enum options for enable/disable fields
 	Enabled  = "Enabled"
