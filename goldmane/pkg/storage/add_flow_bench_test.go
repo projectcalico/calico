@@ -37,14 +37,6 @@ const (
 //     and label encoding during the critical benchmarking loop, making performance measurements
 //     more reflective of the AddFlow logic itself.
 func init() {
-	logrus.SetFormatter(&logrus.TextFormatter{
-		DisableTimestamp:       true,
-		DisableLevelTruncation: true,
-		DisableSorting:         true,
-		DisableQuote:           true,
-	})
-	logrus.SetLevel(logrus.InfoLevel)
-
 	for i := 0; i < flowArraySize; i++ {
 		srcMap := make(map[string]string)
 		dstMap := make(map[string]string)
