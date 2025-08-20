@@ -383,3 +383,7 @@ func (f *fakeIPAMClient) GetUtilization(ctx context.Context, args ipam.GetUtiliz
 func (f *fakeIPAMClient) EnsureBlock(ctx context.Context, args ipam.BlockArgs) (*cnet.IPNet, *cnet.IPNet, error) {
 	panic("not implemented") // TODO: Implement
 }
+
+func (c *fakeIPAMClient) UpgradeHost(ctx context.Context, nodeName string) error {
+	return nil
+}
