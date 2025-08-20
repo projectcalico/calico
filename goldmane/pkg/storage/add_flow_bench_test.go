@@ -19,9 +19,13 @@ var (
 	flows         []*types.Flow
 )
 
-// maxHeapAllocMB defines the upper memory usage threshold (in MB) that this benchmark is allowed to consume.
-// If the actual heap allocation exceeds this limit, the test will fail to catch potential regressions.
-const maxHeapAllocMB = 5.5
+// Performance thresholds for the benchmark.
+// These constants define the upper limits for each key metric.
+const (
+	maxNsPerOp     = 400.0 // Max allowed nanoseconds per operation
+	maxHeapAllocMB = 5.5   // Max allowed total heap allocation in MB
+	maxBytesPerOp  = 400.0 // Max allowed bytes allocated per op
+)
 
 // init pre-generates a set of synthetic *Flow objects with unique label combinations,
 // which will be reused across benchmark iterations.
@@ -33,6 +37,14 @@ const maxHeapAllocMB = 5.5
 //     and label encoding during the critical benchmarking loop, making performance measurements
 //     more reflective of the AddFlow logic itself.
 func init() {
+	logrus.SetFormatter(&logrus.TextFormatter{
+		DisableTimestamp:       true,
+		DisableLevelTruncation: true,
+		DisableSorting:         true,
+		DisableQuote:           true,
+	})
+	logrus.SetLevel(logrus.InfoLevel)
+
 	for i := 0; i < flowArraySize; i++ {
 		srcMap := make(map[string]string)
 		dstMap := make(map[string]string)
@@ -128,6 +140,11 @@ func BenchmarkDiachronicFlow_AddFlow(b *testing.B) {
 	runtime.ReadMemStats(&m)
 	heapAllocMB := float64(m.HeapAlloc) / (1024 * 1024)
 	b.ReportMetric(heapAllocMB, "HeapAllocMB")
+
+	b.Logf("\t=== Benchmark Thresholds (Max allowed values) ===")
+	b.Logf("\t\tMax allowed ns/op :\t\t%.1f", maxNsPerOp)
+	b.Logf("\t\tMax allowed HeapAllocMB :\t%.3f", maxHeapAllocMB)
+	b.Logf("\t\tMax allowed B/op (Bytes/op):\t%.1f", maxBytesPerOp)
 
 	// Threshold-based test failure
 	if heapAllocMB > maxHeapAllocMB {
