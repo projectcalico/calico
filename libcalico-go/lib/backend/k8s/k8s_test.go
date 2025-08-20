@@ -2544,13 +2544,13 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 		By("Listing all BlockAffinity for all Nodes", func() {
 			objs, err := c.List(ctx, model.BlockAffinityListOptions{}, "")
 			Expect(err).NotTo(HaveOccurred())
-			Expect(len(objs.KVPairs)).To(Equal(2))
+			Expect(objs.KVPairs).To(HaveLen(2))
 		})
 
 		By("Listing all BlockAffinity for a specific Node", func() {
 			objs, err := c.List(ctx, model.BlockAffinityListOptions{Host: nodename, AffinityType: string(ipam.AffinityTypeHost)}, "")
 			Expect(err).NotTo(HaveOccurred())
-			Expect(len(objs.KVPairs)).To(Equal(1))
+			Expect(objs.KVPairs).To(HaveLen(1))
 		})
 	})
 
