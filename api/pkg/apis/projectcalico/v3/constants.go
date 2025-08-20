@@ -50,6 +50,13 @@ const (
 	// can be made for tiers.
 	LabelTier = "projectcalico.org/tier"
 
+	// LabelHost is applied to BlockAffinity resources for efficient lookups.
+	LabelHost = "projectcalico.org/host"
+	// LabelAffinityType is applied to BlockAffinity resources for efficient lookups.
+	LabelAffinityType = "projectcalico.org/affinitytype"
+	// LabelIPVersion is applied to BlockAffinity resources for efficient lookups.
+	LabelIPVersion = "projectcalico.org/ipversion"
+
 	// Enum options for enable/disable fields
 	Enabled  = "Enabled"
 	Disabled = "Disabled"
