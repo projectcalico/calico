@@ -72,5 +72,4 @@ type MapInfo struct {
 	ValueSize  int
 	MaxEntries int
 	Id         int
-	Name       string
 }
