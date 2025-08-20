@@ -42,6 +42,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/writelogger"
 	"github.com/projectcalico/calico/pkg/buildinfo"
 	"github.com/projectcalico/calico/typha/pkg/jitter"
+	"github.com/projectcalico/calico/typha/pkg/latencytracker"
 	"github.com/projectcalico/calico/typha/pkg/promutils"
 	"github.com/projectcalico/calico/typha/pkg/snapcache"
 	"github.com/projectcalico/calico/typha/pkg/syncproto"
@@ -277,7 +278,7 @@ func (c *Config) requiringTLS() bool {
 	return c.KeyFile+c.CertFile+c.CAFile+c.ClientCN+c.ClientURISAN != ""
 }
 
-func New(caches map[syncproto.SyncerType]BreadcrumbProvider, config Config) *Server {
+func New(caches map[syncproto.SyncerType]BreadcrumbProvider, trackers map[syncproto.SyncerType]*latencytracker.LatencyTracker, config Config) *Server {
 	config.ApplyDefaults()
 	log.WithField("config", config).Info("Creating server")
 	s := &Server{
@@ -294,7 +295,7 @@ func New(caches map[syncproto.SyncerType]BreadcrumbProvider, config Config) *Ser
 
 	s.binSnapCaches[syncproto.CompressionSnappy] = map[syncproto.SyncerType]snapshotCache{}
 	for st, cache := range caches {
-		s.perSyncerConnMetrics[st] = makePerSyncerConnMetrics(st)
+		s.perSyncerConnMetrics[st] = makePerSyncerConnMetrics(st, trackers)
 		s.binSnapCaches[syncproto.CompressionSnappy][st] = NewSnappySnapCache(string(st), cache, config.BinarySnapshotTimeout, config.WriteTimeout)
 	}
 
@@ -698,6 +699,9 @@ type connection struct {
 	// of them to the unnamed field after the handshake.
 	allMetrics map[syncproto.SyncerType]perSyncerConnMetrics
 	perSyncerConnMetrics
+
+	perConnLatencyTracker *latencytracker.ClientTracker
+	pendingDataplaneRev   *syncproto.MsgDataplaneRevision
 }
 
 type snapshotCache interface {
@@ -736,6 +740,13 @@ func (h *connection) handle(finishedWG *sync.WaitGroup) (err error) {
 	}
 	h.gaugeNumConnectionsStreaming.Inc()
 	defer h.gaugeNumConnectionsStreaming.Dec()
+
+	h.perConnLatencyTracker = h.perSyncerConnMetrics.latencyTracker.RegisterClient(h.ID, h.conn.RemoteAddr().String())
+	if h.pendingDataplaneRev != nil {
+		h.handleDataplaneRev(*h.pendingDataplaneRev)
+		h.pendingDataplaneRev = nil
+	}
+	defer h.perConnLatencyTracker.Close()
 
 	// Figure out if we should restart the decoder with new settings.
 	var binSnapCache snapshotCache
@@ -821,6 +832,8 @@ func (h *connection) handle(finishedWG *sync.WaitGroup) (err error) {
 				h.logCxt.Debug("Pong from client")
 				lastPongReceived = time.Now()
 				h.summaryPingLatency.Observe(time.Since(msg.PingTimestamp).Seconds())
+			case syncproto.MsgDataplaneRevision:
+				h.handleDataplaneRev(msg)
 			default:
 				h.logCxt.WithField("msg", msg).Error("Unknown message from client")
 				return errors.New("Unknown message type")
@@ -839,6 +852,14 @@ func (h *connection) handle(finishedWG *sync.WaitGroup) (err error) {
 			return h.cxt.Err()
 		}
 	}
+}
+
+func (h *connection) handleDataplaneRev(msg syncproto.MsgDataplaneRevision) {
+	h.logCxt.Debugf("Felix reports dataplane updated to revision %v/%v", msg.Revision, h.cache.CurrentBreadcrumb().SequenceNumber)
+	if h.perConnLatencyTracker == nil {
+		h.pendingDataplaneRev = &msg
+	}
+	h.perConnLatencyTracker.RecordDataplaneUpdate(msg)
 }
 
 // readFromClient reads messages from the client and puts them on the h.readC channel.  It is responsible for closing the
@@ -879,20 +900,28 @@ func (h *connection) readFromClient(logCxt *log.Entry) {
 func (h *connection) waitForMessage(logCxt *log.Entry, timeout time.Duration) (interface{}, error) {
 	timer := time.NewTimer(timeout)
 	defer timer.Stop()
-	select {
-	case msg := <-h.readC:
-		if msg == nil {
-			logCxt.Warning("Failed to read hello from client")
-			return nil, ErrReadFailed
+	for {
+		select {
+		case msg := <-h.readC:
+			if msg, ok := msg.(syncproto.MsgDataplaneRevision); ok {
+				// If we get a MsgDataplaneRevision, we handle it immediately
+				// and continue waiting for the next message.
+				h.handleDataplaneRev(msg)
+				continue
+			}
+			if msg == nil {
+				logCxt.Warning("Failed to read hello from client")
+				return nil, ErrReadFailed
+			}
+			logCxt.WithField("msg", msg).Debug("Received message from client.")
+			return msg, nil
+		case <-timer.C:
+			// Error gets logged by caller.
+			return nil, fmt.Errorf("timed out waiting for message from client")
+		case <-h.cxt.Done():
+			// Error gets logged by caller.
+			return nil, h.cxt.Err()
 		}
-		logCxt.WithField("msg", msg).Debug("Received message from client.")
-		return msg, nil
-	case <-timer.C:
-		// Error gets logged by caller.
-		return nil, fmt.Errorf("timed out waiting for message from client")
-	case <-h.cxt.Done():
-		// Error gets logged by caller.
-		return nil, h.cxt.Err()
 	}
 }
 
@@ -1326,9 +1355,11 @@ type perSyncerConnMetrics struct {
 	summaryPingLatency           prometheus.Summary
 	summaryNumKVsPerMsg          prometheus.Summary
 	gaugeNumConnectionsStreaming prometheus.Gauge
+
+	latencyTracker *latencytracker.LatencyTracker
 }
 
-func makePerSyncerConnMetrics(syncerType syncproto.SyncerType) perSyncerConnMetrics {
+func makePerSyncerConnMetrics(syncerType syncproto.SyncerType, trackers map[syncproto.SyncerType]*latencytracker.LatencyTracker) perSyncerConnMetrics {
 	var c perSyncerConnMetrics
 	syncerLabels := map[string]string{
 		"syncer": string(syncerType),
@@ -1368,5 +1399,6 @@ func makePerSyncerConnMetrics(syncerType syncproto.SyncerType) perSyncerConnMetr
 	}))
 	c.counterGracePeriodUsed = counterVecGracePeriodUsed.WithLabelValues(string(syncerType))
 	c.gaugeNumConnectionsStreaming = gaugeVecNumConnectionsStreaming.WithLabelValues(string(syncerType))
+	c.latencyTracker = trackers[syncerType]
 	return c
 }

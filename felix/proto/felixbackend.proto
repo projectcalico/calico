@@ -2,6 +2,8 @@ syntax = "proto3";
 package felix;
 option go_package = "./proto";
 
+import "google/protobuf/timestamp.proto";
+
 service PolicySync {
   // On this API, only the following payloads will be sent:
   //  - InSync
@@ -142,6 +144,8 @@ message ToDataplane {
     HostMetadataV6Update host_metadata_v6_update = 35;
     // HostMetadataV6Remove is sent when a host IPv6 address is removed.
     HostMetadataV6Remove host_metadata_v6_remove = 36;
+
+    TyphaRevisionUpdate typha_revision_update = 39;
   }
 }
 
@@ -817,4 +821,10 @@ message ServiceUpdate {
 message ServiceRemove {
 	string name = 1;
 	string namespace = 2;
+}
+
+message TyphaRevisionUpdate {
+  string serverID = 2;
+  string revision = 1;
+  google.protobuf.Timestamp timestamp = 3;
 }

@@ -103,12 +103,10 @@ type ClientState struct {
 }
 
 func (h *ServerHarness) Start() {
-	h.Server = syncserver.New(
-		map[syncproto.SyncerType]syncserver.BreadcrumbProvider{
-			syncproto.SyncerTypeFelix: h.FelixCache,
-			syncproto.SyncerTypeBGP:   h.BGPCache,
-		},
-		h.Config)
+	h.Server = syncserver.New(map[syncproto.SyncerType]syncserver.BreadcrumbProvider{
+		syncproto.SyncerTypeFelix: h.FelixCache,
+		syncproto.SyncerTypeBGP:   h.BGPCache,
+	}, nil, h.Config)
 
 	go h.Decoupler.SendToContext(h.cacheCxt, h.ValFilter)
 	go h.BGPDecoupler.SendToContext(h.cacheCxt, h.BGPCache)

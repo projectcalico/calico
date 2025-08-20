@@ -430,6 +430,31 @@ configRetry:
 		debugserver.StartDebugPprofServer(configParams.DebugHost, configParams.DebugPort)
 	}
 
+	var typhaConnection *syncclient.SyncerClient
+	syncerToValidator := dedupebuffer.New()
+
+	if typhaDiscoverer.TyphaEnabled() {
+		// Use a remote Syncer, via the Typha server.
+		log.Info("Connecting to Typha.")
+		typhaConnection = syncclient.New(
+			typhaDiscoverer,
+			buildinfo.Version,
+			configParams.FelixHostname,
+			fmt.Sprintf("Revision: %s; Build date: %s",
+				buildinfo.GitRevision, buildinfo.BuildDate),
+			syncerToValidator,
+			&syncclient.Options{
+				ReadTimeout:  configParams.TyphaReadTimeout,
+				WriteTimeout: configParams.TyphaWriteTimeout,
+				KeyFile:      configParams.TyphaKeyFile,
+				CertFile:     configParams.TyphaCertFile,
+				CAFile:       configParams.TyphaCAFile,
+				ServerCN:     configParams.TyphaCN,
+				ServerURISAN: configParams.TyphaURISAN,
+			},
+		)
+	}
+
 	// Start up the dataplane driver.  This may be the internal go-based driver or an external
 	// one.
 	var dpDriver dp.DataplaneDriver
@@ -449,13 +474,14 @@ configRetry:
 	}
 
 	dpDriver, dpDriverCmd = dp.StartDataplaneDriver(
-		configParams.Copy(), // Copy to avoid concurrent access.
+		configParams.Copy(),
 		healthAggregator,
 		dpStatsCollector,
 		configChangedRestartCallback,
 		fatalErrorCallback,
 		k8sClientSet,
 		lookupsCache,
+		typhaConnection,
 	)
 
 	// Defer reporting ready until we've started the dataplane driver.  This
@@ -536,30 +562,8 @@ configRetry:
 	// Get a Syncer from the datastore, or a connection to our remote sync daemon, Typha,
 	// which will feed the calculation graph with updates, bringing Felix into sync.
 	var syncer Startable
-	var typhaConnection *syncclient.SyncerClient
-	syncerToValidator := dedupebuffer.New()
 
-	if typhaDiscoverer.TyphaEnabled() {
-		// Use a remote Syncer, via the Typha server.
-		log.Info("Connecting to Typha.")
-		typhaConnection = syncclient.New(
-			typhaDiscoverer,
-			buildinfo.Version,
-			configParams.FelixHostname,
-			fmt.Sprintf("Revision: %s; Build date: %s",
-				buildinfo.GitRevision, buildinfo.BuildDate),
-			syncerToValidator,
-			&syncclient.Options{
-				ReadTimeout:  configParams.TyphaReadTimeout,
-				WriteTimeout: configParams.TyphaWriteTimeout,
-				KeyFile:      configParams.TyphaKeyFile,
-				CertFile:     configParams.TyphaCertFile,
-				CAFile:       configParams.TyphaCAFile,
-				ServerCN:     configParams.TyphaCN,
-				ServerURISAN: configParams.TyphaURISAN,
-			},
-		)
-	} else {
+	if !typhaDiscoverer.TyphaEnabled() {
 		// Use the syncer locally.
 		syncer = felixsyncer.New(backendClient, datastoreConfig.Spec, syncerToValidator, configParams.IsLeader())
 

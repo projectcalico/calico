@@ -138,6 +138,14 @@ type passthruCallbackRecorder struct {
 	nsRemoves []types.NamespaceID
 }
 
+func (p *passthruCallbackRecorder) OnTyphaRevisionRemove() {
+	Fail("OnTyphaRevisionRemove received")
+}
+
+func (p *passthruCallbackRecorder) OnTyphaRevisionUpdate(tr *model.TyphaRevision) {
+	Fail("OnTyphaRevisionUpdate received")
+}
+
 func (p *passthruCallbackRecorder) OnHostIPUpdate(hostname string, ip *net.IP) {
 	Fail("HostIPUpdate received")
 }

@@ -1471,18 +1471,16 @@ var _ = Describe("with server requiring TLS", func() {
 		cacheCxt, cacheCancel = context.WithCancel(context.Background())
 		valFilter = calc.NewValidationFilter(cache)
 		go decoupler.SendToContext(cacheCxt, valFilter)
-		server = syncserver.New(
-			map[syncproto.SyncerType]syncserver.BreadcrumbProvider{syncproto.SyncerTypeFelix: cache},
-			syncserver.Config{
-				PingInterval: 10 * time.Second,
-				Port:         syncserver.PortRandom,
-				DropInterval: 50 * time.Millisecond,
-				KeyFile:      filepath.Join(certDir, serverCertName+".key"),
-				CertFile:     filepath.Join(certDir, serverCertName+".crt"),
-				CAFile:       filepath.Join(certDir, "ca.crt"),
-				ClientCN:     requiredClientCN,
-				ClientURISAN: requiredClientURISAN,
-			})
+		server = syncserver.New(map[syncproto.SyncerType]syncserver.BreadcrumbProvider{syncproto.SyncerTypeFelix: cache}, nil, syncserver.Config{
+			PingInterval: 10 * time.Second,
+			Port:         syncserver.PortRandom,
+			DropInterval: 50 * time.Millisecond,
+			KeyFile:      filepath.Join(certDir, serverCertName+".key"),
+			CertFile:     filepath.Join(certDir, serverCertName+".crt"),
+			CAFile:       filepath.Join(certDir, "ca.crt"),
+			ClientCN:     requiredClientCN,
+			ClientURISAN: requiredClientURISAN,
+		})
 		cache.Start(cacheCxt)
 		serverCxt, serverCancel = context.WithCancel(context.Background())
 		server.Start(serverCxt)
