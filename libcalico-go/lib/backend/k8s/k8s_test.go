@@ -2942,6 +2942,12 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 		ctx = context.Background()
 	})
 
+	AfterEach(func() {
+		By("AfterEach")
+		err := c.Clean()
+		Expect(err).NotTo(HaveOccurred())
+	})
+
 	Describe("watching Profiles", func() {
 		createTestServiceAccount := func(name string) {
 			sa := k8sapi.ServiceAccount{

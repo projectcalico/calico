@@ -204,10 +204,9 @@ func ensureV3Labels(kvp *model.KVPair) *model.KVPair {
 	v3Value := kvp.Value.(*libapiv3.BlockAffinity)
 	v3Value = v3Value.DeepCopy()
 	libapiv3.EnsureBlockAffinityLabels(v3Value)
-	return &model.KVPair{
-		Key:   kvp.Key,
-		Value: v3Value,
-	}
+	newKVP := *kvp
+	newKVP.Value = v3Value
+	return &newKVP
 }
 
 func (c *blockAffinityClient) Create(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
