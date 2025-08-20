@@ -148,6 +148,15 @@ out:
 
 static CALI_BPF_INLINE bool frags4_handle(struct cali_tc_ctx *ctx)
 {
+	/* We do not really use bpf_loop() here, but we need to check if the kernel
+	 * supports it. If it does not, we cannot handle fragments as the
+	 * verifier would not verify the code correctly and woul dnot accept it.
+	 */
+	if (!bpf_core_enum_value_exists(enum bpf_func_id, BPF_FUNC_loop)) {
+		CALI_DEBUG("IP FRAG: kernel too old, skipping fragment handling");
+		return false;
+	}
+
 	struct frags4_value *v = frags4_get_scratch();
 
 	if (!v) {
@@ -216,6 +225,15 @@ out:
 
 static CALI_BPF_INLINE void frags4_record_ct(struct cali_tc_ctx *ctx)
 {
+	/* We do not really use bpf_loop() here, but we need to check if the kernel
+	 * supports it. If it does not, we cannot handle fragments as the
+	 * verifier would not verify the code correctly and woul dnot accept it.
+	 */
+	if (!bpf_core_enum_value_exists(enum bpf_func_id, BPF_FUNC_loop)) {
+		CALI_DEBUG("IP FRAG: kernel too old, skipping fragment handling");
+		return;
+	}
+
 	struct frags4_fwd_key k = {
 		.src = ip_hdr(ctx)->saddr,
 		.dst = ip_hdr(ctx)->daddr,
@@ -232,6 +250,15 @@ static CALI_BPF_INLINE void frags4_record_ct(struct cali_tc_ctx *ctx)
 
 static CALI_BPF_INLINE void frags4_remove_ct(struct cali_tc_ctx *ctx)
 {
+	/* We do not really use bpf_loop() here, but we need to check if the kernel
+	 * supports it. If it does not, we cannot handle fragments as the
+	 * verifier would not verify the code correctly and woul dnot accept it.
+	 */
+	if (!bpf_core_enum_value_exists(enum bpf_func_id, BPF_FUNC_loop)) {
+		CALI_DEBUG("IP FRAG: kernel too old, skipping fragment handling");
+		return;
+	}
+
 	struct frags4_fwd_key k = {
 		.src = ip_hdr(ctx)->saddr,
 		.dst = ip_hdr(ctx)->daddr,
@@ -246,6 +273,15 @@ static CALI_BPF_INLINE void frags4_remove_ct(struct cali_tc_ctx *ctx)
 
 static CALI_BPF_INLINE bool frags4_lookup_ct(struct cali_tc_ctx *ctx)
 {
+	/* We do not really use bpf_loop() here, but we need to check if the kernel
+	 * supports it. If it does not, we cannot handle fragments as the
+	 * verifier would not verify the code correctly and woul dnot accept it.
+	 */
+	if (!bpf_core_enum_value_exists(enum bpf_func_id, BPF_FUNC_loop)) {
+		CALI_DEBUG("IP FRAG: kernel too old, skipping fragment handling");
+		return false;
+	}
+
 	struct frags4_fwd_key k = {
 		.src = ip_hdr(ctx)->saddr,
 		.dst = ip_hdr(ctx)->daddr,
