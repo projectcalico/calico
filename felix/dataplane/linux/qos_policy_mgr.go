@@ -119,9 +119,8 @@ func (m *qosPolicyManager) CompleteDeferredWork() error {
 
 		if m.mangleMaps != nil {
 			mappings := nftablesVMappings(policies)
-			mapMeta := nftables.MapMetadata{Name: rules.NftablesQoSPolicyMap, Type: }
-			m.mangleMaps.AddOrReplaceMap()
-
+			mapMeta := nftables.MapMetadata{Name: rules.NftablesQoSPolicyMap, Type: nftables.MapTypeSourceNetMatch}
+			m.mangleMaps.AddOrReplaceMap(mapMeta, mappings)
 		}
 
 		chain := m.ruleRenderer.EgressQoSPolicyChain(policies)
@@ -135,7 +134,7 @@ func (m *qosPolicyManager) CompleteDeferredWork() error {
 func nftablesVMappings(policies []rules.QoSPolicy) map[string][]string {
 	mappings := map[string][]string{}
 	for _, p := range policies {
-		mappings[p.SrcAddrs] = []string{fmt.Sprintf("dscp %d", p.DSCP)}
+		mappings[p.SrcAddrs] = []string{fmt.Sprintf("%d", p.DSCP)}
 	}
 	return mappings
 }

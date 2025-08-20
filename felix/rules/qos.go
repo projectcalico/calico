@@ -15,6 +15,8 @@
 package rules
 
 import (
+	"strconv"
+
 	"github.com/projectcalico/calico/felix/generictables"
 )
 
@@ -35,7 +37,9 @@ func (r *DefaultRuleRenderer) nftablesQoSPolicyRules(policies []QoSPolicy) *gene
 	// Policies is sorted and validated by QoS policy manager.
 
 	rules = append(rules, generictables.Rule{
-		Match: r.NewMatch().SourceNetVMAP("qosmap"),
+		Match: r.NewMatch().SourceNetVMAP(NftablesQoSPolicyMap),
+		//Match:  r.NewMatch(),
+		//Action: r.DSCP("vmap"),
 	})
 
 	return &generictables.Chain{
@@ -50,7 +54,7 @@ func (r *DefaultRuleRenderer) defaultQoSPolicyRules(policies []QoSPolicy) *gener
 	for _, p := range policies {
 		rules = append(rules, generictables.Rule{
 			Match:  r.NewMatch().SourceNet(p.SrcAddrs),
-			Action: r.DSCP(p.DSCP),
+			Action: r.DSCP(strconv.FormatUint(uint64(p.DSCP), 10)),
 		})
 	}
 

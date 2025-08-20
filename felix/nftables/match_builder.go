@@ -545,7 +545,8 @@ func (m nftMatch) OutInterfaceVMAP(name string) generictables.MatchCriteria {
 }
 
 func (m nftMatch) SourceNetVMAP(name string) generictables.MatchCriteria {
-	m.clauses = append(m.clauses, fmt.Sprintf("<IPV> saddr vmap @<LAYER>-%s", LegalizeSetName(name)))
+	//return fmt.Sprintf("<IPV> dscp set %d", a.Value)
+	m.clauses = append(m.clauses, fmt.Sprintf("<IPV> dscp set ip saddr map @<LAYER>-%s", LegalizeSetName(name)))
 	return m
 }
 

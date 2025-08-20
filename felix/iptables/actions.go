@@ -121,7 +121,7 @@ func (a *actionFactory) LimitNumConnections(num int64, rejectWith generictables.
 	}
 }
 
-func (a *actionFactory) DSCP(value uint8) generictables.Action {
+func (a *actionFactory) DSCP(value string) generictables.Action {
 	return DSCPAction{
 		Value: value,
 	}
@@ -479,13 +479,13 @@ func (a LimitNumConnectionsAction) String() string {
 }
 
 type DSCPAction struct {
-	Value uint8
+	Value string
 }
 
 func (a DSCPAction) ToFragment(features *environment.Features) string {
-	return fmt.Sprintf("--jump DSCP --set-dscp %d", a.Value)
+	return fmt.Sprintf("--jump DSCP --set-dscp %s", a.Value)
 }
 
 func (a DSCPAction) String() string {
-	return fmt.Sprintf("DSCP %d", a.Value)
+	return fmt.Sprintf("DSCP %s", a.Value)
 }
