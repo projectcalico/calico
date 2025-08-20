@@ -15,6 +15,8 @@
 package v3
 
 import (
+	"strings"
+
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -78,4 +80,20 @@ func NewBlockAffinityList() *BlockAffinityList {
 			APIVersion: apiv3.GroupVersionCurrent,
 		},
 	}
+}
+
+func EnsureBlockAffinityLabels(ba *BlockAffinity) {
+	if ba.Labels == nil {
+		ba.Labels = make(map[string]string)
+	}
+	ba.Labels["host"] = ba.Spec.Node
+	ba.Labels["affinityType"] = ba.Spec.Type
+	ba.Labels["cidr"] = ba.Spec.CIDR
+	var ipVersion string
+	if strings.Contains(ba.Spec.CIDR, ":") {
+		ipVersion = "6"
+	} else {
+		ipVersion = "4"
+	}
+	ba.Labels["ipVersion"] = ipVersion
 }
