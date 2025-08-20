@@ -92,6 +92,17 @@ if [ "${DEVSTACK_BRANCH}" = unmaintained/yoga ]; then
     export REQUIREMENTS_BRANCH=unmaintained/yoga
 fi
 
+# Set correct constraints for Tempest to use.  We need to do this because we're pinning to a
+# different version of Tempest than the version that DevStack would naturally use.
+case "${DEVSTACK_BRANCH}" in
+    unmaintained/yoga )
+	export UPPER_CONSTRAINTS_FILE=https://releases.openstack.org/constraints/upper/yoga
+	;;
+    stable/2024.1 )		# Caracal
+	export UPPER_CONSTRAINTS_FILE=https://raw.githubusercontent.com/openstack/requirements/refs/heads/stable/2024.1/upper-constraints.txt
+	;;
+esac
+
 : ${NC_PLUGIN_REPO:=https://github.com/projectcalico/calico}
 : ${NC_PLUGIN_REF:=master}
 
@@ -148,6 +159,8 @@ SCENARIO_IMAGE_TYPE=ignore
 # remote: Compressing objects: 100% (9847/9847), done.
 # error: RPC failed; curl 56 GnuTLS recv error (-9): A TLS packet with unexpected length was received.
 GIT_BASE=https://github.com
+
+LIBVIRT_TYPE=qemu
 
 EOF
 
