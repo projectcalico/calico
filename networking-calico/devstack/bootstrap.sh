@@ -149,6 +149,8 @@ SCENARIO_IMAGE_TYPE=ignore
 # error: RPC failed; curl 56 GnuTLS recv error (-9): A TLS packet with unexpected length was received.
 GIT_BASE=https://github.com
 
+LIBVIRT_TYPE=qemu
+
 EOF
 
 if ! ${TEMPEST:-false}; then
