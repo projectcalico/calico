@@ -142,7 +142,7 @@ type cb struct {
 	updateChan chan api.Update
 }
 
-func (c cb) OnStatusUpdated(status api.SyncStatus) {
+func (c *cb) OnStatusUpdated(status api.SyncStatus) {
 	defer GinkgoRecover()
 
 	// Keep latest status up to date.
@@ -156,7 +156,7 @@ func (c cb) OnStatusUpdated(status api.SyncStatus) {
 	}
 }
 
-func (c cb) OnUpdates(updates []api.Update) {
+func (c *cb) OnUpdates(updates []api.Update) {
 	defer GinkgoRecover()
 
 	// Ensure the given updates are valid.
@@ -182,7 +182,7 @@ func (c cb) OnUpdates(updates []api.Update) {
 	}
 }
 
-func (c cb) ProcessUpdates() {
+func (c *cb) ProcessUpdates() {
 	for u := range c.updateChan {
 		// Store off the update so it can be checked by the test.
 		// Use a mutex for safe cross-goroutine reads/writes.
@@ -201,6 +201,12 @@ func (c cb) ProcessUpdates() {
 		}
 		c.Lock.Unlock()
 	}
+}
+
+func (c *cb) GetStatus() api.SyncStatus {
+	c.Lock.Lock()
+	defer c.Lock.Unlock()
+	return c.status
 }
 
 func (c cb) ExpectExists(updates []api.Update) {
@@ -298,7 +304,7 @@ poll:
 //
 // The returned function returns the cached entry or nil if the entry does not
 // exist in the cache.
-func (c cb) GetSyncerValueFunc(key model.Key) func() interface{} {
+func (c *cb) GetSyncerValueFunc(key model.Key) func() interface{} {
 	return func() interface{} {
 		log.Infof("Checking entry in cache: %v", key)
 		c.Lock.Lock()
@@ -319,7 +325,7 @@ func (c cb) GetSyncerValueFunc(key model.Key) func() interface{} {
 // the Value may itself by nil.
 //
 // The returned function returns true if the entry is present.
-func (c cb) GetSyncerValuePresentFunc(key model.Key) func() interface{} {
+func (c *cb) GetSyncerValuePresentFunc(key model.Key) func() interface{} {
 	return func() interface{} {
 		log.Infof("Checking entry in cache: %v", key)
 		c.Lock.Lock()
@@ -343,14 +349,14 @@ func CreateClientAndSyncer(cfg apiconfig.KubeConfig) (*KubeClient, *cb, api.Sync
 
 	// Start the syncer.
 	updateChan := make(chan api.Update)
-	callback := cb{
+	callback := &cb{
 		State:      map[string]api.Update{},
 		status:     api.WaitForDatastore,
 		Lock:       &sync.Mutex{},
 		updateChan: updateChan,
 	}
 	syncer := felixsyncer.New(c, caCfg, callback, true)
-	return c.(*KubeClient), &callback, syncer
+	return c.(*KubeClient), callback, syncer
 }
 
 var _ = testutils.E2eDatastoreDescribe("Test UIDs and owner references", testutils.DatastoreK8s, func(cfg apiconfig.CalicoAPIConfig) {
@@ -479,10 +485,13 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 
 		// Start processing updates.
 		go cb.ProcessUpdates()
+
+		Eventually(cb.GetStatus).Should(Equal(api.InSync))
 	})
 
 	AfterEach(func() {
 		// Clean up all Calico resources.
+		By("AfterEach")
 		err := c.Clean()
 		Expect(err).NotTo(HaveOccurred())
 
@@ -2544,13 +2553,13 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 		By("Listing all BlockAffinity for all Nodes", func() {
 			objs, err := c.List(ctx, model.BlockAffinityListOptions{}, "")
 			Expect(err).NotTo(HaveOccurred())
-			Expect(len(objs.KVPairs)).To(Equal(2))
+			Expect(objs.KVPairs).To(HaveLen(2))
 		})
 
 		By("Listing all BlockAffinity for a specific Node", func() {
 			objs, err := c.List(ctx, model.BlockAffinityListOptions{Host: nodename, AffinityType: string(ipam.AffinityTypeHost)}, "")
 			Expect(err).NotTo(HaveOccurred())
-			Expect(len(objs.KVPairs)).To(Equal(1))
+			Expect(objs.KVPairs).To(HaveLen(1))
 		})
 	})
 
