@@ -947,7 +947,11 @@ func TestCTLBAttachLegacy(t *testing.T) {
 	RegisterTestingT(t)
 
 	testCtlbAttachLegacy := func(v4, v6 bool) {
-		err := nat.InstallConnectTimeLoadBalancerLegacy(v4, v6, "", "debug", 60*time.Second, false)
+		bpfmaps, err := bpfmap.CreateBPFMaps(false)
+		Expect(err).NotTo(HaveOccurred())
+
+		commonMaps := bpfmaps.CommonMaps
+		err = nat.InstallConnectTimeLoadBalancerLegacy(v4, v6, "", "debug", 60*time.Second, false, commonMaps.CTLBProgramsMap)
 		Expect(err).NotTo(HaveOccurred())
 
 		checkPinPath := func(pinPath string, mustExist bool) {
@@ -1017,7 +1021,11 @@ func TestCTLBAttachLegacy(t *testing.T) {
 func TestCTLBAttach(t *testing.T) {
 	RegisterTestingT(t)
 	testCtlbAttach := func(v4, v6 bool) {
-		err := nat.InstallConnectTimeLoadBalancer(v4, v6, "", "debug", 60*time.Second, false)
+		bpfmaps, err := bpfmap.CreateBPFMaps(false)
+		Expect(err).NotTo(HaveOccurred())
+
+		commonMaps := bpfmaps.CommonMaps
+		err = nat.InstallConnectTimeLoadBalancer(v4, v6, "", "debug", 60*time.Second, false, commonMaps.CTLBProgramsMap)
 		Expect(err).NotTo(HaveOccurred())
 
 		checkPinPath := func(pinPath string, mustExist bool) {
