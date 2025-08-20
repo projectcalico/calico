@@ -366,6 +366,7 @@ class TestPluginEtcdBase(_TestEtcdBase):
         lib.m_oslo_config.cfg.CONF.calico.egress_minburst_bytes = 0
         lib.m_oslo_config.cfg.CONF.calico.ingress_burst_packets = 0
         lib.m_oslo_config.cfg.CONF.calico.egress_burst_packets = 0
+        lib.m_oslo_config.cfg.CONF.calico.resync_interval_secs = 60
         calico_config._reset_globals()
         datamodel_v2._reset_globals()
 
