@@ -127,7 +127,9 @@ calico_opts = [
         default=60,
         help=(
             "If non-zero, configures how frequently Calico rechecks its state against"
-            " the Neutron DB.  Zero means to disable any periodic rechecking."
+            " the Neutron DB.  Zero means to disable any periodic rechecking.  Please"
+            " note that Calico _always_ performs an _initial_ check when the Neutron"
+            " server starts or is restarted."
         ),
     ),
 ]
