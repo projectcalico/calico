@@ -35,6 +35,7 @@ type ActionFactory interface {
 	Nflog(group uint16, prefix string, size int) Action
 	LimitPacketRate(rate int64, burst int64, mark uint32) Action
 	LimitNumConnections(num int64, rejectWith RejectWith) Action
+	DSCP(value uint8) Action
 }
 
 type RejectWith string
