@@ -101,21 +101,24 @@ func (m *noEncapManager) OnUpdate(protoBufMsg interface{}) {
 		m.logCtx.WithField("hostname", msg.Hostname).Debug("Host update/create")
 		if msg.Hostname == m.hostname {
 			if m.ipVersion == 6 {
-				m.routeMgr.updateParentIfaceAddr(msg.Ipv6Addr)
+				m.routesNeedUpdate(msg.Ipv6Addr)
 			} else {
-				m.routeMgr.updateParentIfaceAddr(msg.Ipv4Addr)
+				m.routesNeedUpdate(msg.Ipv4Addr)
 			}
 		}
-		m.routeMgr.triggerRouteUpdate()
 	case *proto.HostMetadataV4V6Remove:
 		m.logCtx.WithField("hostname", msg.Hostname).Debug("Host removed")
 		if msg.Hostname == m.hostname {
-			m.routeMgr.updateParentIfaceAddr("")
+			m.routesNeedUpdate("")
 		}
-		m.routeMgr.triggerRouteUpdate()
 	default:
 		m.routeMgr.OnUpdate(msg)
 	}
+}
+
+func (m *noEncapManager) routesNeedUpdate(parentAddr string) {
+	m.routeMgr.updateParentIfaceAddr(parentAddr)
+	m.routeMgr.triggerRouteUpdate()
 }
 
 func (m *noEncapManager) CompleteDeferredWork() error {
