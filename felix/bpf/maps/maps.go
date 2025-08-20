@@ -311,6 +311,7 @@ func (b *PinnedMap) Path() string {
 }
 
 func (b *PinnedMap) Close() error {
+	log.WithField("b.VersionedName()", b.VersionedName()).Debug("Closing PinnedMap")
 	err := b.fd.Close()
 	if b.oldfd > 0 {
 		b.oldfd.Close()
@@ -600,25 +601,29 @@ func (b *PinnedMap) Open() error {
 		log.WithField("name", b.Name).Debug("Map file didn't exist")
 		if repinningIsEnabled() {
 			log.WithField("name", b.Name).Info("Looking for map by name (to repin it)")
-			err = RepinMap(b.VersionedName(), b.VersionedFilename())
-			if err != nil && !os.IsNotExist(err) {
-				return err
+			fd, err := libbpf.FindMapFdByName(b.VersionedName())
+			if err != nil {
+				return fmt.Errorf("failed to find map by name %s: %w", b.VersionedName(), err)
 			}
-		}
-	}
 
-	if err == nil {
-		log.WithField("name", b.Name).Debug("Map file already exists, trying to open it")
-		b.fd, err = GetMapFDByPin(b.VersionedFilename())
-		if err == nil {
+			err = libbpf.ObjPin(int(fd), b.VersionedFilename())
+			if err != nil {
+				return fmt.Errorf("failed to pin map: %w", err)
+			}
+			b.fd = FD(fd)
 			b.fdLoaded = true
-			log.WithField("fd", b.fd).WithField("name", b.VersionedFilename()).Info("Loaded map file descriptor.")
 			return nil
 		}
-		return err
 	}
 
-	return err
+	log.WithField("name", b.Name).Debug("Map file already exists, trying to open it")
+	b.fd, err = GetMapFDByPin(b.VersionedFilename())
+	if err != nil {
+		return err
+	}
+	b.fdLoaded = true
+	log.WithField("fd", b.fd).WithField("name", b.VersionedFilename()).Info("Loaded map file descriptor.")
+	return nil
 }
 
 func (b *PinnedMap) repinAt(fd int, from, to string) error {
@@ -734,7 +739,7 @@ func (b *PinnedMap) EnsureExists() error {
 	}).Debug("Map didn't exist, creating it")
 	objName, ok := bpfMapObjMap[b.Name]
 	if ok {
-		log.WithFields(log.Fields{"objName": objName, "b.Name": b.Name}).Debug("Creating map from obj file")
+		log.WithFields(log.Fields{"objName": objName, "b.VersionedName()": b.VersionedName()}).Debug("Creating map from obj file")
 		obj, err := libbpf.OpenObject(path.Join(bpfdefs.ObjectDir, objName))
 		if err != nil {
 			return fmt.Errorf("error opening obj file %s: %w", objName, err)
@@ -772,7 +777,7 @@ func (b *PinnedMap) EnsureExists() error {
 		b.fdLoaded = true
 	} else {
 		// Map not found in obj files, create without BTF
-		log.WithFields(log.Fields{"b.Name": b.Name}).Debug("Creating map with libbpf")
+		log.WithFields(log.Fields{"b.VersionedName()": b.VersionedName()}).Debug("Creating map with libbpf")
 		fd, err := libbpf.CreateBPFMap(b.Type, b.KeySize, b.ValueSize, b.MaxEntries, b.Flags, b.VersionedName())
 		if err != nil {
 			return fmt.Errorf("error creating map %s: %w", b.VersionedName(), err)
@@ -837,23 +842,6 @@ func GetMapIdFromPin(pinPath string) (int, error) {
 	}
 
 	return mapInfo.Id, nil
-}
-
-// RepinMap finds a map by a given name and pins it to a path. Note that if
-// there are multiple maps of the same name in the system, it will use the first
-// one it finds.
-func RepinMap(name string, filename string) error {
-	fd, err := libbpf.FindMapFdByName(name)
-	if err != nil {
-		return os.ErrNotExist
-	}
-
-	err = libbpf.ObjPin(int(fd), filename)
-	if err != nil {
-		return fmt.Errorf("failed to pin map: %w", err)
-	}
-
-	return nil
 }
 
 func (b *PinnedMap) CopyDeltaFromOldMap() error {
