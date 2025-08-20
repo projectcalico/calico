@@ -43,6 +43,10 @@ func aapiError(err error, key string) error {
 // This is common code. Refactor this workflow.
 func convertToAAPI(libcalicoObject runtime.Object) (res runtime.Object) {
 	switch obj := libcalicoObject.(type) {
+	case *v3.QoSPolicy:
+		aapiQoSPolicy := &v3.QoSPolicy{}
+		TierConverter{}.convertToAAPI(obj, aapiQoSPolicy)
+		return aapiQoSPolicy
 	case *v3.Tier:
 		aapiTier := &v3.Tier{}
 		TierConverter{}.convertToAAPI(obj, aapiTier)
