@@ -24,6 +24,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	kapiv1 "k8s.io/api/core/v1"
 	discovery "k8s.io/api/discovery/v1"
+	"k8s.io/apimachinery/pkg/labels"
 
 	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/calico/libcalico-go/lib/namespace"
@@ -257,9 +258,21 @@ type ResourceListOptions struct {
 	Namespace string
 	// The resource kind.
 	Kind string
-	// Whether the name is prefix rather than the full name.
+	// Whether the name is prefix rather than the full name.  This is only
+	// supported efficiently by the etcd API.  When using the Kubernetes API,
+	// a full list operation is performed and then filtered client-side.
 	Prefix bool
+	// LabelSelector allows filtering on the labels of the resource. This is
+	// supported efficiently by the Kuberentes backend, but the etcd backend
+	// implements it client-side.
+	LabelSelector labels.Selector
 }
+
+func (options ResourceListOptions) GetLabelSelector() labels.Selector {
+	return options.LabelSelector
+}
+
+var _ LabelSelectingListInterface = ResourceListOptions{}
 
 // If the Kind, Namespace and Name are specified, but the Name is a prefix then the
 // last segment of this path is a prefix.
