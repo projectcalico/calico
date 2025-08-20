@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	. "github.com/onsi/gomega"
+	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/bpf/libbpf"
 	"github.com/projectcalico/calico/felix/bpf/maps"
@@ -39,9 +40,19 @@ func bpfMapList() string {
 	return string(out)
 }
 func deleteMap(bpfMap maps.Map) {
-	bpfMap.(*maps.PinnedMap).Close()
-	os.Remove(bpfMap.Path())
-	os.Remove(bpfMap.Path() + "_old")
+	log.WithField("bpfMap.GetName()", bpfMap.GetName()).Debug("Deleting PinnedMap")
+	err := bpfMap.(*maps.PinnedMap).Close()
+	if err != nil {
+		log.WithError(err).Debug("Error closing PinnedMap")
+	}
+	err = os.Remove(bpfMap.Path())
+	if err != nil && !os.IsNotExist(err) {
+		log.WithError(err).WithField("path", bpfMap.Path()).Debug("Error removing PinnedMap path")
+	}
+	err = os.Remove(bpfMap.Path() + "_old")
+	if err != nil && !os.IsNotExist(err) {
+		log.WithError(err).WithField("path", bpfMap.Path()+"_old").Debug("Error removing PinnedMap old path")
+	}
 }
 
 func TestMapUpgradeV2ToV3(t *testing.T) {
@@ -394,7 +405,7 @@ func TestMapUpgradeWhileResizeInProgress(t *testing.T) {
 	Eventually(bpfMapList, "10s", "200ms").ShouldNot(ContainSubstring(mockMapv2.GetName()))
 }
 
-func TestUpgradeWithSameVersionDifferentParams(t *testing.T) {
+func TestMapUpgradeWithSameVersionDifferentParams(t *testing.T) {
 	RegisterTestingT(t)
 
 	// Create v2 map and add 10 entries to it
