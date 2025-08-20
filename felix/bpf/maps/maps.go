@@ -311,8 +311,13 @@ func (b *PinnedMap) Path() string {
 }
 
 func (b *PinnedMap) Close() error {
-	log.WithField("b.VersionedName()", b.VersionedName()).Debug("Closing PinnedMap")
-	err := b.fd.Close()
+	log.WithFields(log.Fields{"b.VersionedName()": b.VersionedName(), "b.fd": b.fd, "b.fdLoaded": b.fdLoaded, "b.oldfd": b.oldfd}).Debug("Closing PinnedMap")
+	var err error
+	if b.fdLoaded {
+		err = b.fd.Close()
+	} else {
+		log.WithField("map", *b).Warn("Close() called when fdLoaded = false")
+	}
 	if b.oldfd > 0 {
 		b.oldfd.Close()
 	}
@@ -630,6 +635,10 @@ func (b *PinnedMap) Open() error {
 
 			err = libbpf.ObjPin(int(fd), b.VersionedFilename())
 			if err != nil {
+				closeErr := syscall.Close(fd)
+				if closeErr != nil {
+					log.WithError(err).Warn("Error from syscall.Close(fd).  Ignoring.")
+				}
 				return fmt.Errorf("failed to pin map: %w", err)
 			}
 			b.fd = FD(fd)
@@ -697,7 +706,7 @@ func (b *PinnedMap) EnsureExists() error {
 		err = b.repinAt(fd, oldMapPath, b.Path())
 		closeErr := syscall.Close(fd)
 		if closeErr != nil {
-			log.WithError(err).Warn("Error from fd.Close().  Ignoring.")
+			log.WithError(err).Warn("Error from syscall.Close(fd).  Ignoring.")
 		}
 		if err != nil {
 			return fmt.Errorf("error repinning old map %s to %s, err=%w", oldMapPath, b.Path(), err)
@@ -806,6 +815,10 @@ func (b *PinnedMap) EnsureExists() error {
 		}
 		err = libbpf.ObjPin(fd, b.VersionedFilename())
 		if err != nil {
+			closeErr := unix.Close(fd)
+			if closeErr != nil {
+				log.WithError(closeErr).Warn("Error when closing FD, ignoring...")
+			}
 			return fmt.Errorf("error pinning map %s to %s: %w", b.VersionedName(), b.VersionedFilename(), err)
 		}
 		b.fd = FD(fd)
@@ -857,6 +870,7 @@ func GetMapIdFromPin(pinPath string) (int, error) {
 	if err != nil {
 		return -1, fmt.Errorf("error getting map FD by pin %s: %w", pinPath, err)
 	}
+	defer fd.Close()
 
 	mapInfo, err := GetMapInfo(fd)
 	if err != nil {
@@ -953,10 +967,7 @@ func (b *PinnedMap) upgrade() error {
 	oldMapParams := b.GetMapParams(oldVersion)
 	oldMapParams.MaxEntries = b.MaxEntries
 	oldBpfMap := NewPinnedMap(oldMapParams)
-	defer func() {
-		oldBpfMap.Close()
-		oldBpfMap.fd = 0
-	}()
+	defer oldBpfMap.Close()
 	err = oldBpfMap.EnsureExists()
 	if err != nil {
 		return err
