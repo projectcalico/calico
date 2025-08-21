@@ -41,14 +41,26 @@ var _ = Describe("Static", func() {
 	})
 
 	checkManglePostrouting := func(ipVersion uint8, ipvs bool) {
-		allIPSetName := fmt.Sprintf("cali%v0all-ipam-pools", ipVersion)
+		allPoolSetName := fmt.Sprintf("cali%v0all-ipam-pools", ipVersion)
+		allHostsSetName := fmt.Sprintf("cali%v0all-hosts-net", ipVersion)
 		It("should generate expected cali-POSTROUTING chain in the mangle table", func() {
 			expRules := []generictables.Rule{
-				// Evaluate QoS policies.
+				// DSCP rules.
 				{
-					Match:   Match().SourceIPSet(allIPSetName).NotDestIPSet(allIPSetName),
+					Match: Match().
+						SourceIPSet(allPoolSetName).
+						NotDestIPSet(allPoolSetName).
+						NotDestIPSet(allHostsSetName),
 					Action:  JumpAction{Target: ChainQoSPolicy},
-					Comment: []string{"QoS policy for traffic leaving cluster"},
+					Comment: []string{"set dscp for workloads traffic leaving cluster."},
+				},
+				{
+					Match: Match().
+						SourceIPSet(allHostsSetName).
+						NotDestIPSet(allPoolSetName).
+						NotDestIPSet(allHostsSetName),
+					Action:  JumpAction{Target: ChainQoSPolicy},
+					Comment: []string{"set dscp for host endpoints traffic leaving cluster."},
 				},
 				// Accept already accepted.
 				{

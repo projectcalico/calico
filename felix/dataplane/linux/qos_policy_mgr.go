@@ -28,11 +28,12 @@ import (
 type qosPolicyManager struct {
 	ipVersion    uint8
 	ruleRenderer rules.RuleRenderer
+	mangleTable  Table
 
-	// QoS policy
-	mangleTable Table
+	// QoS policies.
+	wepPolicies map[types.WorkloadEndpointID]rules.QoSPolicy
+	hepPolicies map[types.HostEndpointID]rules.QoSPolicy
 	dirty       bool
-	policies    map[types.WorkloadEndpointID]rules.QoSPolicy
 
 	logCxt *logrus.Entry
 }
@@ -43,30 +44,66 @@ func newQoSPolicyManager(
 	ipVersion uint8,
 ) *qosPolicyManager {
 	return &qosPolicyManager{
-		ipVersion:    ipVersion,
-		policies:     map[types.WorkloadEndpointID]rules.QoSPolicy{},
-		dirty:        true,
 		mangleTable:  mangleTable,
 		ruleRenderer: ruleRenderer,
+		ipVersion:    ipVersion,
+		wepPolicies:  map[types.WorkloadEndpointID]rules.QoSPolicy{},
+		hepPolicies:  map[types.HostEndpointID]rules.QoSPolicy{},
+		dirty:        true,
 		logCxt:       logrus.WithField("ipVersion", ipVersion),
 	}
 }
 
 func (m *qosPolicyManager) OnUpdate(msg interface{}) {
 	switch msg := msg.(type) {
+	case *proto.HostEndpointUpdate:
+		m.handleHEPUpdates(msg.GetId(), msg)
+	case *proto.HostEndpointRemove:
+		m.handleHEPUpdates(msg.GetId(), nil)
 	case *proto.WorkloadEndpointUpdate:
-		m.handleWlEndpointUpdates(msg.GetId(), msg)
+		m.handleWEPUpdates(msg.GetId(), msg)
 	case *proto.WorkloadEndpointRemove:
-		m.handleWlEndpointUpdates(msg.GetId(), nil)
+		m.handleWEPUpdates(msg.GetId(), nil)
 	}
 }
 
-func (m *qosPolicyManager) handleWlEndpointUpdates(wlID *proto.WorkloadEndpointID, msg *proto.WorkloadEndpointUpdate) {
-	id := types.ProtoToWorkloadEndpointID(wlID)
+func (m *qosPolicyManager) handleHEPUpdates(hepID *proto.HostEndpointID, msg *proto.HostEndpointUpdate) {
+	id := types.ProtoToHostEndpointID(hepID)
 	if msg == nil || len(msg.Endpoint.QosPolicies) == 0 {
-		_, exists := m.policies[id]
+		_, exists := m.hepPolicies[id]
 		if exists {
-			delete(m.policies, id)
+			delete(m.hepPolicies, id)
+			m.dirty = true
+		}
+		return
+	}
+
+	// We only support one policy per endpoint at this point.
+	dscp := msg.Endpoint.QosPolicies[0].Dscp
+
+	// This situation must be handled earlier.
+	if dscp > 63 || dscp < 0 {
+		logrus.WithField("id", id).Panicf("Invalid DSCP value %v", dscp)
+	}
+	ips := msg.Endpoint.ExpectedIpv4Addrs
+	if m.ipVersion == 6 {
+		ips = msg.Endpoint.ExpectedIpv6Addrs
+	}
+	if len(ips) != 0 {
+		m.hepPolicies[id] = rules.QoSPolicy{
+			SrcAddrs: normaliseSourceAddr(ips),
+			DSCP:     uint8(dscp),
+		}
+		m.dirty = true
+	}
+}
+
+func (m *qosPolicyManager) handleWEPUpdates(wepID *proto.WorkloadEndpointID, msg *proto.WorkloadEndpointUpdate) {
+	id := types.ProtoToWorkloadEndpointID(wepID)
+	if msg == nil || len(msg.Endpoint.QosPolicies) == 0 {
+		_, exists := m.wepPolicies[id]
+		if exists {
+			delete(m.wepPolicies, id)
 			m.dirty = true
 		}
 		return
@@ -84,7 +121,7 @@ func (m *qosPolicyManager) handleWlEndpointUpdates(wlID *proto.WorkloadEndpointI
 		ips = msg.Endpoint.Ipv6Nets
 	}
 	if len(ips) != 0 {
-		m.policies[id] = rules.QoSPolicy{
+		m.wepPolicies[id] = rules.QoSPolicy{
 			SrcAddrs: normaliseSourceAddr(ips),
 			DSCP:     uint8(dscp),
 		}
@@ -102,9 +139,12 @@ func normaliseSourceAddr(addrs []string) string {
 }
 
 func (m *qosPolicyManager) CompleteDeferredWork() error {
+	var policies []rules.QoSPolicy
 	if m.dirty {
-		var policies []rules.QoSPolicy
-		for _, p := range m.policies {
+		for _, p := range m.wepPolicies {
+			policies = append(policies, p)
+		}
+		for _, p := range m.hepPolicies {
 			policies = append(policies, p)
 		}
 		sort.Slice(policies, func(i, j int) bool {
