@@ -77,7 +77,7 @@ Felix FVs use the ginkgo DSL, resulting in test IDs based on the nesting Context
 
 To run a single test:
 
-- Temporarily cahnge the `It()` block in the file to `FIt()` to "focus" the test.
+- Temporarily change the `It()` block in the file to `FIt()` to "focus" the test.
 - Run the test in iptables mode:
   `make -C felix fv GINKGO_ARGS="-ginkgo.v"`
 - Run the test in eBPF mode with iptables (only tests marked BPF-SAFE should be run in this mode):
