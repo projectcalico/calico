@@ -28,20 +28,18 @@ endif
 
 # Override DOCKER_RUN from lib.Makefile. We need to trick this particular directory to think
 # that its package is github.com/projectcalico/api for easier mirroring.
-DOCKER_RUN := mkdir -p ../.go-pkg-cache bin $(GOMOD_CACHE) && \
-	docker run --rm \
+DOCKER_RUN := docker run --rm \
 		--net=host \
 		--init \
 		$(EXTRA_DOCKER_ARGS) \
 		-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
-		-e GOCACHE=/go-cache \
 		$(GOARCH_FLAGS) \
 		-e GOPATH=/go \
 		-e OS=$(BUILDOS) \
 		-e GOOS=$(BUILDOS) \
 		-e GOFLAGS=$(GOFLAGS) \
 		-v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
-		-v $(CURDIR)/../.go-pkg-cache:/go-cache:rw \
+		--mount type=volume,source=go-pkg-cache,target=/caches \
 		-w /go/src/$(PACKAGE_NAME)
 
 build: gen-files examples
