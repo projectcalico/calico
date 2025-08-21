@@ -15,11 +15,13 @@
 package intdataplane
 
 import (
+	"fmt"
 	"sort"
 	"strings"
 
 	"github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/felix/nftables"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/rules"
 	"github.com/projectcalico/calico/felix/types"
@@ -31,6 +33,7 @@ type qosPolicyManager struct {
 
 	// QoS policy
 	mangleTable Table
+	mangleMaps  nftables.MapsDataplane
 	dirty       bool
 	policies    map[types.WorkloadEndpointID]rules.QoSPolicy
 
@@ -39,6 +42,7 @@ type qosPolicyManager struct {
 
 func newQoSPolicyManager(
 	mangleTable Table,
+	mangleMaps nftables.MapsDataplane,
 	ruleRenderer rules.RuleRenderer,
 	ipVersion uint8,
 ) *qosPolicyManager {
@@ -47,6 +51,7 @@ func newQoSPolicyManager(
 		policies:     map[types.WorkloadEndpointID]rules.QoSPolicy{},
 		dirty:        true,
 		mangleTable:  mangleTable,
+		mangleMaps:   mangleMaps,
 		ruleRenderer: ruleRenderer,
 		logCxt:       logrus.WithField("ipVersion", ipVersion),
 	}
@@ -111,10 +116,24 @@ func (m *qosPolicyManager) CompleteDeferredWork() error {
 			return policies[i].SrcAddrs < policies[j].SrcAddrs
 		})
 
+		if m.mangleMaps != nil {
+			mappings := nftablesVMappings(policies)
+			mapMeta := nftables.MapMetadata{Name: rules.NftablesQoSPolicyMap, Type: nftables.MapTypeSourceNetMatch}
+			m.mangleMaps.AddOrReplaceMap(mapMeta, mappings)
+		}
+
 		chain := m.ruleRenderer.EgressQoSPolicyChain(policies)
 		m.mangleTable.UpdateChain(chain)
 		m.dirty = false
 	}
 
 	return nil
+}
+
+func nftablesVMappings(policies []rules.QoSPolicy) map[string][]string {
+	mappings := map[string][]string{}
+	for _, p := range policies {
+		mappings[p.SrcAddrs] = []string{fmt.Sprintf("%d", p.DSCP)}
+	}
+	return mappings
 }
