@@ -15,8 +15,6 @@
 package rules
 
 import (
-	"strconv"
-
 	"github.com/projectcalico/calico/felix/generictables"
 )
 
@@ -54,7 +52,7 @@ func (r *DefaultRuleRenderer) defaultQoSPolicyRules(policies []QoSPolicy) *gener
 	for _, p := range policies {
 		rules = append(rules, generictables.Rule{
 			Match:  r.NewMatch().SourceNet(p.SrcAddrs),
-			Action: r.DSCP(strconv.FormatUint(uint64(p.DSCP), 10)),
+			Action: r.DSCP(p.DSCP),
 		})
 	}
 
