@@ -37,7 +37,7 @@ clean:
 	find . -name '*.created' -exec rm -f {} +
 	find . -name '*.created-$(ARCH)' -exec rm -f {} +
 	find . -name '*.pyc' -exec rm -f {} +
-	rm -rf .go-pkg-cache bin
+	rm -rf bin
 	# Delete images that we built in this repo
 	-docker rmi $(IMAGE_NAME):latest-$(ARCH)
 
