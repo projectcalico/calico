@@ -30,7 +30,7 @@ type qosPolicyManager struct {
 	ruleRenderer rules.RuleRenderer
 	mangleTable  Table
 
-	// QoS policices.
+	// QoS policies.
 	wepPolicies map[types.WorkloadEndpointID]rules.QoSPolicy
 	hepPolicies map[types.HostEndpointID]rules.QoSPolicy
 	dirty       bool

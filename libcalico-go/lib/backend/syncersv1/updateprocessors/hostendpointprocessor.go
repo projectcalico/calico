@@ -100,9 +100,10 @@ func convertHostEndpointV3ToV1(kvp *model.KVPair) (*model.KVPair, error) {
 }
 
 func handleQoSControlsAnnotations(annotations map[string]string) (*model.QoSControls, error) {
-	qosControls := &model.QoSControls{}
-	var errs []error
-
+	var (
+		qosControls *model.QoSControls
+		errs        []error
+	)
 	// Calico DSCP value for egress traffic annotation.
 	if str, found := annotations[conversion.AnnotationQoSEgressDSCP]; found {
 		dscp := numorstring.DSCPFromString(str)
@@ -110,13 +111,8 @@ func handleQoSControlsAnnotations(annotations map[string]string) (*model.QoSCont
 		if err != nil {
 			errs = append(errs, fmt.Errorf("error parsing DSCP annotation: %w", err))
 		} else {
-			qosControls.DSCP = &dscp
+			qosControls = &model.QoSControls{DSCP: &dscp}
 		}
-	}
-
-	// return nil if no control is configured
-	if (*qosControls == model.QoSControls{}) {
-		qosControls = nil
 	}
 
 	return qosControls, errors.Join(errs...)

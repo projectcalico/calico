@@ -129,50 +129,50 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ qos policy tests", []apicon
 	})
 
 	It("should have expected restriction on the rule jumping to QoS policy rules", func() {
-		detecIptablesRule := func(felix *infrastructure.Felix, ipv6 bool) {
+		detecIptablesRule := func(felix *infrastructure.Felix, ipVersion uint8) {
 			binary := "iptables-save"
-			allPoolsIPSet := "cali40all-ipam-pools"
-			allHostsIPSet := "cali40all-hosts-net"
-			if ipv6 {
+			if ipVersion == 6 {
 				binary = "ip6tables-save"
-				allPoolsIPSet = "cali60all-ipam-pools"
-				allHostsIPSet = "cali60all-hosts-net"
 			}
-			expectedRule := fmt.Sprintf(
-				"-m set ! --match-set %v dst -m set ! --match-set %v dst -j cali-qos-policy", allPoolsIPSet, allHostsIPSet)
+			allPoolsIPSet := fmt.Sprintf("cali%v0all-ipam-pools", ipVersion)
+			allHostsIPSet := fmt.Sprintf("cali%v0all-hosts-net", ipVersion)
+			tmpl := "-m set --match-set %v src -m set ! --match-set %v dst -m set ! --match-set %v dst -j cali-qos-policy"
+			expectedRule1 := fmt.Sprintf(tmpl, allPoolsIPSet, allPoolsIPSet, allHostsIPSet)
+			expectedRule2 := fmt.Sprintf(tmpl, allHostsIPSet, allPoolsIPSet, allHostsIPSet)
 			getRules := func() string {
 				output, _ := felix.ExecOutput(binary, "-t", "mangle")
 				return output
 			}
-			Eventually(getRules, 5*time.Second, 100*time.Millisecond).Should(ContainSubstring(expectedRule))
-			Consistently(getRules, 5*time.Second, 100*time.Millisecond).Should(ContainSubstring(expectedRule))
+			Eventually(getRules, 5*time.Second, 100*time.Millisecond).Should(ContainSubstring(expectedRule1))
+			Consistently(getRules, 3*time.Second, 100*time.Millisecond).Should(ContainSubstring(expectedRule1))
+			Consistently(getRules, 3*time.Second, 100*time.Millisecond).Should(ContainSubstring(expectedRule2))
 		}
 
-		detectNftablesRule := func(felix *infrastructure.Felix, ipv6 bool) {
+		detectNftablesRule := func(felix *infrastructure.Felix, ipVersion uint8) {
 			ipFamily := "ip"
-			allPoolsIPSet := "@cali40all-ipam-pools"
-			allHostsIPSet := "@cali40all-hosts-net"
-			if ipv6 {
+			if ipVersion == 6 {
 				ipFamily = "ip6"
-				allPoolsIPSet = "@cali60all-ipam-pools"
-				allHostsIPSet = "@cali60all-hosts-net"
 			}
-			pattern := fmt.Sprintf(
-				"%v daddr != %v %v daddr != %v .* jump mangle-cali-qos-policy", ipFamily, allPoolsIPSet, ipFamily, allHostsIPSet)
+			allPoolsIPSet := fmt.Sprintf("@cali%v0all-ipam-pools", ipVersion)
+			allHostsIPSet := fmt.Sprintf("@cali%v0all-hosts-net", ipVersion)
+			tmpl := "%v saddr %v %v daddr != %v %v daddr != %v .* jump mangle-cali-qos-policy"
+			pattern1 := fmt.Sprintf(tmpl, ipFamily, allPoolsIPSet, ipFamily, allPoolsIPSet, ipFamily, allHostsIPSet)
+			pattern2 := fmt.Sprintf(tmpl, ipFamily, allHostsIPSet, ipFamily, allPoolsIPSet, ipFamily, allHostsIPSet)
 			getRules := func() string {
 				output, _ := felix.ExecOutput("nft", "list", "chain", ipFamily, "calico", "mangle-cali-POSTROUTING")
 				return output
 			}
-			Eventually(getRules, 5*time.Second, 100*time.Millisecond).Should(MatchRegexp(pattern))
-			Consistently(getRules, 5*time.Second, 100*time.Millisecond).Should(MatchRegexp(pattern))
+			Eventually(getRules, 5*time.Second, 100*time.Millisecond).Should(MatchRegexp(pattern1))
+			Consistently(getRules, 3*time.Second, 100*time.Millisecond).Should(MatchRegexp(pattern1))
+			Consistently(getRules, 3*time.Second, 100*time.Millisecond).Should(MatchRegexp(pattern2))
 		}
 
 		if NFTMode() {
-			detectNftablesRule(tc.Felixes[0], false)
-			detectNftablesRule(tc.Felixes[0], true)
+			detectNftablesRule(tc.Felixes[0], 4)
+			detectNftablesRule(tc.Felixes[0], 6)
 		} else {
-			detecIptablesRule(tc.Felixes[0], false)
-			detecIptablesRule(tc.Felixes[0], true)
+			detecIptablesRule(tc.Felixes[0], 4)
+			detecIptablesRule(tc.Felixes[0], 6)
 		}
 	})
 
