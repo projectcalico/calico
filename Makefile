@@ -4,6 +4,8 @@ include metadata.mk
 include lib.Makefile
 
 DOCKER_RUN := mkdir -p bin $(GOMOD_CACHE) && \
+	docker volume create go-pkg-cache >/dev/null 2>&1 || true && \
+	docker run --rm --mount type=volume,source=go-pkg-cache,target=/go-cache alpine sh -c 'chown -R $(LOCAL_USER_ID):$(LOCAL_USER_ID) /go-cache' 2>/dev/null || true && \
 	docker run --rm \
 		--net=host \
 		--init \
