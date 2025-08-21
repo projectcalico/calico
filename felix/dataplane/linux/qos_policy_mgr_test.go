@@ -45,7 +45,8 @@ func qosPolicyManagerTests(ipVersion uint8) func() {
 				MarkDrop:     0x10,
 				MarkEndpoint: 0x11110000,
 			})
-			manager = newQoSPolicyManager(mangleTable, ruleRenderer, ipVersion)
+			// TODO (mazdak): add more tests for new nftables optimization
+			manager = newQoSPolicyManager(mangleTable, nil, ruleRenderer, ipVersion)
 		})
 
 		It("should program QoS policy chain with no rule", func() {
