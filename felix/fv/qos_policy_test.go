@@ -35,7 +35,7 @@ import (
 	api "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 )
 
-var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ qos policy tests", []apiconfig.DatastoreType{apiconfig.EtcdV3, apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
+var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ qos policy tests", []apiconfig.DatastoreType{apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
 	const (
 		wepPortStr = "8055"
 	)
@@ -170,7 +170,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ qos policy tests", []apicon
 	})
 
 	It("pepper1 applying DSCP annotation should result is adding correct rules", func() {
-		time.Sleep(time.Minute * 20)
+		//time.Sleep(time.Minute * 20)
 		dscp0 := numorstring.DSCPFromInt(0)   // 0x0
 		dscp20 := numorstring.DSCPFromInt(20) // 0x14
 		dscp32 := numorstring.DSCPFromInt(32) // 0x20

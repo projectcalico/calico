@@ -695,9 +695,13 @@ func mapType(t MapType, ipVersion int) string {
 		return "ifname : verdict"
 	case MapTypeSourceNetMatch:
 		if ipVersion == 4 {
+			//return "ipv4_addr : integer"
+			//return "ipv4_addr : dscp_class"
 			return "ipv4_addr : dscp"
 			//return "ipv4_addr : verdict"
 		} else {
+			//return "ipv6_addr : integer"
+			//return "ipv6_addr : dscp_class"
 			return "ipv6_addr : dscp"
 			//return "ipv6_addr : verdict"
 		}
