@@ -35,7 +35,7 @@ import (
 	api "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 )
 
-var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ pepper qos policy tests", []apiconfig.DatastoreType{apiconfig.EtcdV3, apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
+var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ qos policy tests", []apiconfig.DatastoreType{apiconfig.EtcdV3, apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
 	const (
 		wepPortStr = "8055"
 	)
