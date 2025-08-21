@@ -82,4 +82,7 @@ if [ "$CALICO_DISABLE_FILE_LOGGING" = "true" ]; then
 	rm -rf /etc/service/enabled/node-status-reporter/log
 fi
 
+# Wait for the node to be ready.
+calico-node -complete-startup || exit 1
+
 echo "Calico node started successfully"
