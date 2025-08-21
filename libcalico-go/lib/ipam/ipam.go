@@ -2401,7 +2401,7 @@ func (c ipamClient) attemptUpgradeHost(ctx context.Context, nodeName string) err
 				// nodes also doing this operation.
 				continue
 			}
-			libapiv3.EnsureBlockAffinityLabels(val)
+			model.EnsureBlockAffinityLabels(val)
 			_, err := c.client.Update(ctx, kv)
 			if err != nil {
 				errs = append(errs, err)
