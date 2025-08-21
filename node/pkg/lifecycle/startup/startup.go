@@ -218,11 +218,14 @@ func Run() {
 	}
 }
 
-// ManageNodeCondition updates the Kubernetes node condition on successful startup. This should only be called
-// after the node is fully configured and ready to run pods.
+// ManageNodeCondition updates the Kubernetes node condition on successful startup and then sleeps forever.
 func ManageNodeCondition() {
+	ctx := context.TODO()
+
 	if os.Getenv("CALICO_NETWORKING_BACKEND") == "none" {
 		// Calico is not managing networking, so we don't need to set the NetworkUnavailable condition.
+		log.Info("Calico is not managing networking, skipping NetworkUnavailable condition update")
+		<-ctx.Done()
 		return
 	}
 
@@ -301,7 +304,7 @@ retry:
 	}
 
 	log.Info("Calico started successfully")
-	<-context.TODO().Done()
+	<-ctx.Done()
 }
 
 func getMonitorPollInterval() time.Duration {
