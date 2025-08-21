@@ -264,8 +264,24 @@ func ManageNodeCondition() {
 	// If we don't succeed, continue anyway to be extra paranoid. This should handle the mainline use case of ensuring
 	// calico/node is ready before allowing pods to run on the node.
 	log.Info("Waiting for Calico to become ready before continuing...")
-	if err = health.RunOutput(checkBIRD, checkBIRD6, checkFelix, false, false, false, 5*time.Minute); err != nil {
-		log.WithError(err).Warn("Calico did not become ready in time, continuing anyway.")
+	to := time.After(5 * time.Minute)
+retry:
+	for {
+		select {
+		case <-to:
+			log.WithError(err).Warn("Calico did not become ready in time, continuing anyway.")
+			break retry
+		default:
+			if err = health.RunOutput(checkBIRD, checkBIRD6, checkFelix, false, false, false, 5*time.Minute); err != nil {
+				// If we fail to check the health of the components, log the error and continue waiting.
+				log.WithField("reason", err.Error()).Warn("Calico is not ready yet, waiting...")
+				time.Sleep(1 * time.Second)
+				continue
+			}
+
+			// success !
+			break retry
+		}
 	}
 
 	// All done. Set NetworkUnavailable to false if using Calico for networking.
@@ -283,6 +299,9 @@ func ManageNodeCondition() {
 		log.WithError(err).Errorf("Unable to remove shutdown timestamp file")
 		utils.Terminate()
 	}
+
+	log.Info("Calico started successfully")
+	<-context.TODO().Done()
 }
 
 func getMonitorPollInterval() time.Duration {

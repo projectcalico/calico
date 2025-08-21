@@ -159,8 +159,7 @@ func main() {
 		startup.ConfigureLogging()
 		startup.MonitorIPAddressSubnets()
 	} else if *completeStartup {
-		logrus.SetFormatter(&logutils.Formatter{Component: "manage-node-condition"})
-		startup.ConfigureLogging()
+		logrus.SetFormatter(&logutils.Formatter{Component: "complete-startup"})
 		startup.ManageNodeCondition()
 	} else if *runConfd {
 		logrus.SetFormatter(&logutils.Formatter{Component: "confd"})
