@@ -465,6 +465,7 @@ message HostEndpoint {
   repeated TierInfo forward_tiers = 8;
   repeated string expected_ipv4_addrs = 4;
   repeated string expected_ipv6_addrs = 5;
+  repeated QoSPolicy qos_policies = 9;
 }
 
 message HostEndpointRemove {

@@ -33,28 +33,28 @@ import (
 	"github.com/projectcalico/calico/felix/fv/workload"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	api "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
+	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
-var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ qos policy tests", []apiconfig.DatastoreType{apiconfig.EtcdV3, apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
+var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ qos policy tests", []apiconfig.DatastoreType{apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
 	const (
 		wepPortStr = "8055"
 	)
 
 	var (
-		infra        infrastructure.DatastoreInfra
-		tc           infrastructure.TopologyContainers
-		ep1_1, ep2_1 *workload.Workload // Workloads on Felix0
-		ep1_2, ep2_2 *workload.Workload // Dual stack workloads on Felix1
-		extClient    *containers.Container
-		cc           *connectivity.Checker
+		infra               infrastructure.DatastoreInfra
+		tc                  infrastructure.TopologyContainers
+		client              client.Interface
+		ep1_1, ep2_1, hostw *workload.Workload // Workloads on Felix0
+		ep1_2, ep2_2        *workload.Workload // Dual stack workloads on Felix1
+		extClient           *containers.Container
+		cc                  *connectivity.Checker
 	)
 
 	BeforeEach(func() {
 		iOpts := []infrastructure.CreateOption{}
 		infra = getInfra(iOpts...)
-		if (NFTMode() || BPFMode()) && getDataStoreType(infra) == "etcdv3" {
-			Skip("Skipping NFT / BPF test for etcdv3 backend.")
-		}
 
 		// TODO (mazdak): Add support for bpf
 		if BPFMode() {
@@ -63,9 +63,8 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ qos policy tests", []apicon
 
 		options := infrastructure.DefaultTopologyOptions()
 		options.IPIPMode = apiv3.IPIPModeNever
-		options.FelixLogSeverity = "Debug"
 		options.EnableIPv6 = true
-		tc, _ = infrastructure.StartNNodeTopology(2, options, infra)
+		tc, client = infrastructure.StartNNodeTopology(2, options, infra)
 
 		// Install a default profile that allows all ingress and egress, in the absence of any Policy.
 		infra.AddDefaultAllow()
@@ -76,6 +75,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ qos policy tests", []apicon
 
 		ep2_1 = workload.Run(tc.Felixes[0], "ep2-1", "default", "10.65.0.1", wepPortStr, "tcp")
 		ep2_1.ConfigureInInfra(infra)
+
+		hostw = workload.Run(tc.Felixes[0], "host0", "", tc.Felixes[0].IP, wepPortStr, "tcp")
+		hostw.ConfigureInInfra(infra)
 
 		// Create workload on host 2 (Felix1)
 		ep1_2Opts := workload.WithIPv6Address("dead:beef::1:0")
@@ -113,6 +115,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ qos policy tests", []apicon
 			}
 		}
 
+		hostw.Stop()
 		ep1_1.Stop()
 		ep2_1.Stop()
 		ep1_2.Stop()
@@ -126,46 +129,50 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ qos policy tests", []apicon
 	})
 
 	It("should have expected restriction on the rule jumping to QoS policy rules", func() {
-		detecIptablesRule := func(felix *infrastructure.Felix, ipv6 bool) {
+		detecIptablesRule := func(felix *infrastructure.Felix, ipVersion uint8) {
 			binary := "iptables-save"
-			ipsetName := "cali40all-ipam-pools"
-			if ipv6 {
+			if ipVersion == 6 {
 				binary = "ip6tables-save"
-				ipsetName = "cali60all-ipam-pools"
 			}
-			expectedRule := fmt.Sprintf(
-				"-m set --match-set %v src -m set ! --match-set %v dst -j cali-qos-policy", ipsetName, ipsetName)
+			allPoolsIPSet := fmt.Sprintf("cali%v0all-ipam-pools", ipVersion)
+			allHostsIPSet := fmt.Sprintf("cali%v0all-hosts-net", ipVersion)
+			tmpl := "-m set --match-set %v src -m set ! --match-set %v dst -m set ! --match-set %v dst -j cali-qos-policy"
+			expectedRule1 := fmt.Sprintf(tmpl, allPoolsIPSet, allPoolsIPSet, allHostsIPSet)
+			expectedRule2 := fmt.Sprintf(tmpl, allHostsIPSet, allPoolsIPSet, allHostsIPSet)
 			getRules := func() string {
 				output, _ := felix.ExecOutput(binary, "-t", "mangle")
 				return output
 			}
-			Eventually(getRules, 5*time.Second, 100*time.Millisecond).Should(ContainSubstring(expectedRule))
-			Consistently(getRules, 5*time.Second, 100*time.Millisecond).Should(ContainSubstring(expectedRule))
+			Eventually(getRules, 5*time.Second, 100*time.Millisecond).Should(ContainSubstring(expectedRule1))
+			Consistently(getRules, 3*time.Second, 100*time.Millisecond).Should(ContainSubstring(expectedRule1))
+			Consistently(getRules, 3*time.Second, 100*time.Millisecond).Should(ContainSubstring(expectedRule2))
 		}
 
-		detectNftablesRule := func(felix *infrastructure.Felix, ipv6 bool) {
-			ipsetName := "@cali40all-ipam-pools"
+		detectNftablesRule := func(felix *infrastructure.Felix, ipVersion uint8) {
 			ipFamily := "ip"
-			if ipv6 {
-				ipsetName = "@cali60all-ipam-pools"
+			if ipVersion == 6 {
 				ipFamily = "ip6"
 			}
-			pattern := fmt.Sprintf(
-				"%v saddr %v %v daddr != %v .* jump mangle-cali-qos-policy", ipFamily, ipsetName, ipFamily, ipsetName)
+			allPoolsIPSet := fmt.Sprintf("@cali%v0all-ipam-pools", ipVersion)
+			allHostsIPSet := fmt.Sprintf("@cali%v0all-hosts-net", ipVersion)
+			tmpl := "%v saddr %v %v daddr != %v %v daddr != %v .* jump mangle-cali-qos-policy"
+			pattern1 := fmt.Sprintf(tmpl, ipFamily, allPoolsIPSet, ipFamily, allPoolsIPSet, ipFamily, allHostsIPSet)
+			pattern2 := fmt.Sprintf(tmpl, ipFamily, allHostsIPSet, ipFamily, allPoolsIPSet, ipFamily, allHostsIPSet)
 			getRules := func() string {
 				output, _ := felix.ExecOutput("nft", "list", "chain", ipFamily, "calico", "mangle-cali-POSTROUTING")
 				return output
 			}
-			Eventually(getRules, 5*time.Second, 100*time.Millisecond).Should(MatchRegexp(pattern))
-			Consistently(getRules, 5*time.Second, 100*time.Millisecond).Should(MatchRegexp(pattern))
+			Eventually(getRules, 5*time.Second, 100*time.Millisecond).Should(MatchRegexp(pattern1))
+			Consistently(getRules, 3*time.Second, 100*time.Millisecond).Should(MatchRegexp(pattern1))
+			Consistently(getRules, 3*time.Second, 100*time.Millisecond).Should(MatchRegexp(pattern2))
 		}
 
 		if NFTMode() {
-			detectNftablesRule(tc.Felixes[0], false)
-			detectNftablesRule(tc.Felixes[0], true)
+			detectNftablesRule(tc.Felixes[0], 4)
+			detectNftablesRule(tc.Felixes[0], 6)
 		} else {
-			detecIptablesRule(tc.Felixes[0], false)
-			detecIptablesRule(tc.Felixes[0], true)
+			detecIptablesRule(tc.Felixes[0], 4)
+			detecIptablesRule(tc.Felixes[0], 6)
 		}
 	})
 
@@ -190,6 +197,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ qos policy tests", []apicon
 		extClient.Exec("ip6tables", "-A", "INPUT", "-m", "dscp", "!", "--dscp", "0x28", "-j", "DROP")
 
 		cc.ResetExpectations()
+		cc.ExpectNone(extClient, hostw)
 		cc.ExpectNone(extClient, ep1_1)
 		cc.ExpectNone(extClient, ep2_1)
 
@@ -200,6 +208,29 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ qos policy tests", []apicon
 
 		verifyQoSPolicies(tc.Felixes[0], nil, nil)
 		verifyQoSPolicies(tc.Felixes[1], nil, nil)
+
+		By("adding a host endpoint to felix 0")
+		hep := apiv3.NewHostEndpoint()
+		hep.Name = "host1-eth0"
+		hep.Labels = map[string]string{
+			"name":          hep.Name,
+			"host-endpoint": "true",
+		}
+		hep.Spec.Node = tc.Felixes[0].Hostname
+		hep.Spec.ExpectedIPs = []string{tc.Felixes[0].IP}
+		hep.Annotations = map[string]string{
+			"qos.projectcalico.org/dscp": "20",
+		}
+		_, err := client.HostEndpoints().Create(utils.Ctx, hep, options.SetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		gnp := apiv3.NewGlobalNetworkPolicy()
+		gnp.Name = "gnp-1"
+		gnp.Spec.Selector = "host-endpoint=='true'"
+		gnp.Spec.Ingress = []apiv3.Rule{{Action: apiv3.Allow}}
+		gnp.Spec.Egress = []apiv3.Rule{{Action: apiv3.Allow}}
+		_, err = client.GlobalNetworkPolicies().Create(utils.Ctx, gnp, utils.NoOptions)
+		Expect(err).NotTo(HaveOccurred())
 
 		By("setting the initial DSCP values")
 		ep1_1.WorkloadEndpoint.Spec.QoSControls = &api.QoSControls{
@@ -213,6 +244,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ qos policy tests", []apicon
 		ep2_2.UpdateInInfra(infra)
 
 		cc.ResetExpectations()
+		cc.ExpectSome(extClient, hostw)
 		cc.ExpectSome(extClient, ep1_1)
 		cc.ExpectNone(extClient, ep2_1)
 
@@ -220,7 +252,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ qos policy tests", []apicon
 		cc.Expect(connectivity.Some, extClient, ep2_2, ccOpts)
 		cc.CheckConnectivity()
 
-		verifyQoSPolicies(tc.Felixes[0], []string{"0x14"}, nil)
+		verifyQoSPolicies(tc.Felixes[0], []string{"0x14", "0x14"}, nil)
 		verifyQoSPolicies(tc.Felixes[1], []string{"0x28"}, []string{"0x28"})
 
 		By("updating DSCP values on some workloads")
@@ -235,6 +267,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ qos policy tests", []apicon
 		ep1_2.UpdateInInfra(infra)
 
 		cc.ResetExpectations()
+		cc.ExpectSome(extClient, hostw)
 		cc.ExpectSome(extClient, ep1_1)
 		cc.ExpectNone(extClient, ep2_1)
 
@@ -242,7 +275,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ qos policy tests", []apicon
 		cc.Expect(connectivity.Some, extClient, ep2_2, ccOpts)
 		cc.CheckConnectivity()
 
-		verifyQoSPolicies(tc.Felixes[0], []string{"0x0", "0x14"}, nil)
+		verifyQoSPolicies(tc.Felixes[0], []string{"0x0", "0x14", "0x14"}, nil)
 		verifyQoSPolicies(tc.Felixes[1], []string{"0x28", "0x28"}, []string{"0x28", "0x28"}) // 0x28 used by two workloads
 
 		By("updating DSCP values on other workloads")
@@ -257,6 +290,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ qos policy tests", []apicon
 		ep1_2.UpdateInInfra(infra)
 
 		cc.ResetExpectations()
+		cc.ExpectSome(extClient, hostw)
 		cc.ExpectNone(extClient, ep1_1)
 		cc.ExpectNone(extClient, ep2_1)
 
@@ -264,7 +298,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ qos policy tests", []apicon
 		cc.Expect(connectivity.Some, extClient, ep2_2, ccOpts)
 		cc.CheckConnectivity()
 
-		verifyQoSPolicies(tc.Felixes[0], []string{"0x0", "0x20"}, nil)
+		verifyQoSPolicies(tc.Felixes[0], []string{"0x0", "0x14", "0x20"}, nil)
 		verifyQoSPolicies(tc.Felixes[1], []string{"0x14", "0x28"}, []string{"0x14", "0x28"})
 
 		By("reverting the DSCP values")
@@ -279,6 +313,23 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ qos policy tests", []apicon
 		ep1_2.UpdateInInfra(infra)
 
 		cc.ResetExpectations()
+		cc.ExpectSome(extClient, hostw)
+		cc.ExpectSome(extClient, ep1_1)
+		cc.ExpectNone(extClient, ep2_1)
+
+		cc.Expect(connectivity.Some, extClient, ep1_2, ccOpts)
+		cc.Expect(connectivity.Some, extClient, ep2_2, ccOpts)
+		cc.CheckConnectivity()
+
+		verifyQoSPolicies(tc.Felixes[0], []string{"0x0", "0x14", "0x14"}, nil)
+		verifyQoSPolicies(tc.Felixes[1], []string{"0x28", "0x28"}, []string{"0x28", "0x28"}) // 0x28 used by two workloads
+
+		By("removing host endpoint")
+		_, err = client.HostEndpoints().Delete(utils.Ctx, hep.Name, options.DeleteOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		cc.ResetExpectations()
+		cc.ExpectNone(extClient, hostw)
 		cc.ExpectSome(extClient, ep1_1)
 		cc.ExpectNone(extClient, ep2_1)
 
@@ -288,6 +339,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ qos policy tests", []apicon
 
 		verifyQoSPolicies(tc.Felixes[0], []string{"0x0", "0x14"}, nil)
 		verifyQoSPolicies(tc.Felixes[1], []string{"0x28", "0x28"}, []string{"0x28", "0x28"}) // 0x28 used by two workloads
+
 		By("resetting DSCP value on some workloads")
 		ep2_1.WorkloadEndpoint.Spec.QoSControls = &api.QoSControls{}
 		ep2_1.UpdateInInfra(infra)
@@ -296,6 +348,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ qos policy tests", []apicon
 		ep1_2.UpdateInInfra(infra)
 
 		cc.ResetExpectations()
+		cc.ExpectNone(extClient, hostw)
 		cc.ExpectSome(extClient, ep1_1)
 		cc.ExpectNone(extClient, ep2_1)
 
@@ -314,6 +367,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ qos policy tests", []apicon
 		ep2_2.RemoveFromInfra(infra)
 
 		cc.ResetExpectations()
+		cc.ExpectNone(extClient, hostw)
 		cc.ExpectNone(extClient, ep1_1)
 		cc.ExpectNone(extClient, ep2_1)
 
@@ -387,8 +441,8 @@ func verifyQoSPoliciesWithIPFamily(felix *infrastructure.Felix, ipv6 bool, value
 		rulePattern = "DSCP --set-dscp"
 	}
 
-	EventuallyWithOffset(1, assertRules, 5*time.Second, 100*time.Millisecond).
+	EventuallyWithOffset(2, assertRules, 5*time.Second, 100*time.Millisecond).
 		Should(BeTrue())
-	ConsistentlyWithOffset(1, assertRules, 3*time.Second, 100*time.Millisecond).
+	ConsistentlyWithOffset(2, assertRules, 3*time.Second, 100*time.Millisecond).
 		Should(BeTrue())
 }
