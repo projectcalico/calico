@@ -248,11 +248,11 @@ func ManageNodeCondition() {
 	// Determine which components should be checked for readiness. We don't do any liveness checking here.
 	// Do this by checking the contents of /etc/service/enabled.
 	checkBIRD := false
-	if _, err := os.Stat("/etc/service/enabled/bird"); err == nil {
+	if _, err := os.Stat("/etc/service/enabled/bird/run"); err == nil {
 		checkBIRD = true
 	}
 	checkBIRD6 := false
-	if _, err := os.Stat("/etc/service/enabled/bird6"); err == nil {
+	if _, err := os.Stat("/etc/service/enabled/bird6/run"); err == nil {
 		checkBIRD6 = true
 	}
 
