@@ -46,6 +46,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/upgrade/migrator/clients"
 	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
 	"github.com/projectcalico/calico/node/pkg/calicoclient"
+	"github.com/projectcalico/calico/node/pkg/health"
 	"github.com/projectcalico/calico/node/pkg/lifecycle/startup/autodetection"
 	"github.com/projectcalico/calico/node/pkg/lifecycle/startup/autodetection/ipv4"
 	"github.com/projectcalico/calico/node/pkg/lifecycle/utils"
@@ -215,18 +216,65 @@ func Run() {
 		log.WithError(err).Errorf("Unable to ensure network for os")
 		utils.Terminate()
 	}
+}
+
+// ManageNodeCondition updates the Kubernetes node condition on successful startup. This should only be called
+// after the node is fully configured and ready to run pods.
+func ManageNodeCondition() {
+	if os.Getenv("CALICO_NETWORKING_BACKEND") == "none" {
+		// Calico is not managing networking, so we don't need to set the NetworkUnavailable condition.
+		return
+	}
+
+	k8sNodeName := utils.DetermineNodeName()
+	if nodeRef := os.Getenv("CALICO_K8S_NODE_REF"); nodeRef != "" {
+		k8sNodeName = nodeRef
+	}
+
+	config, err := winutils.BuildConfigFromFlags("", os.Getenv("KUBECONFIG"))
+	if err != nil {
+		log.WithError(err).Error("Failed to build Kubernetes config")
+		utils.Terminate()
+	}
+	config.Timeout = 2 * time.Second
+
+	// Create the k8s clientset.
+	clientset, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		log.WithError(err).Error("Failed to create clientset")
+		utils.Terminate()
+	}
+
+	// Determine which components should be checked for readiness. We don't do any liveness checking here.
+	// Do this by checking the contents of /etc/service/enabled.
+	checkBIRD := false
+	if _, err := os.Stat("/etc/service/enabled/bird/run"); err == nil {
+		checkBIRD = true
+	}
+	checkBIRD6 := false
+	if _, err := os.Stat("/etc/service/enabled/bird6/run"); err == nil {
+		checkBIRD6 = true
+	}
+
+	// We always check felix.
+	checkFelix := true
+
+	// Wait for Felix and BIRD to be ready before setting the NetworkUnavailable condition to false.
+	//
+	// If we don't succeed, continue anyway to be extra paranoid. This should handle the mainline use case of ensuring
+	// calico/node is ready before allowing pods to run on the node.
+	log.Info("Waiting for Calico to become ready before continuing...")
+	if err = health.RunOutput(checkBIRD, checkBIRD6, checkFelix, false, false, false, 5*time.Minute); err != nil {
+		log.WithError(err).Warn("Calico did not become ready in time, continuing anyway.")
+	}
 
 	// All done. Set NetworkUnavailable to false if using Calico for networking.
 	// We do it late in the process to avoid node resource update conflict because setting
 	// node condition will trigger node-controller updating node taints.
-	if os.Getenv("CALICO_NETWORKING_BACKEND") != "none" {
-		if clientset != nil {
-			err := utils.SetNodeNetworkUnavailableCondition(*clientset, k8sNodeName, false, 30*time.Second)
-			if err != nil {
-				log.WithError(err).Error("Unable to set NetworkUnavailable to False")
-				utils.Terminate()
-			}
-		}
+	err = utils.SetNodeNetworkUnavailableCondition(*clientset, k8sNodeName, false, 30*time.Second)
+	if err != nil {
+		log.WithError(err).Error("Unable to set NetworkUnavailable to False")
+		utils.Terminate()
 	}
 
 	// Remove shutdownTS file when everything is done.
