@@ -15,10 +15,16 @@
 package v3
 
 import (
+	"crypto/sha3"
+	"encoding/hex"
+	"strconv"
 	"strings"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
+
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 )
 
 const (
@@ -86,7 +92,8 @@ func EnsureBlockAffinityLabels(ba *BlockAffinity) {
 	if ba.Labels == nil {
 		ba.Labels = make(map[string]string)
 	}
-	ba.Labels[apiv3.LabelHost] = ba.Spec.Node
+	// Hostnames can be longer than labels are allowed to be, so we hash it down.
+	ba.Labels[apiv3.LabelHostnameHash] = HashHostname(ba.Spec.Node)
 	ba.Labels[apiv3.LabelAffinityType] = ba.Spec.Type
 	var ipVersion string
 	if strings.Contains(ba.Spec.CIDR, ":") {
@@ -95,4 +102,33 @@ func EnsureBlockAffinityLabels(ba *BlockAffinity) {
 		ipVersion = "4"
 	}
 	ba.Labels[apiv3.LabelIPVersion] = ipVersion
+}
+
+func CalculateBlockAffinityLabelSelector(list model.BlockAffinityListOptions) labels.Selector {
+	labelsToMatch := map[string]string{}
+	if list.Host != "" {
+		labelsToMatch[apiv3.LabelHostnameHash] = HashHostname(list.Host)
+	}
+	if list.AffinityType != "" {
+		labelsToMatch[apiv3.LabelAffinityType] = list.AffinityType
+	}
+	if list.IPVersion != 0 {
+		labelsToMatch[apiv3.LabelIPVersion] = strconv.Itoa(list.IPVersion)
+	}
+	var labelSelector labels.Selector
+	if len(labelsToMatch) > 0 {
+		labelSelector = labels.SelectorFromSet(labelsToMatch)
+	}
+	return labelSelector
+}
+
+func HashHostname(hostname string) string {
+	var hasher sha3.SHA3
+	_, err := hasher.Write([]byte(hostname))
+	if err != nil {
+		// Hashers are contracted never to fail, only return an error to satisfy io.Writer.
+		panic("SHA3.Write failed: " + err.Error())
+	}
+	h := hasher.Sum(nil)
+	return hex.EncodeToString(h)
 }
