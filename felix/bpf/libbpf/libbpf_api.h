@@ -477,6 +477,14 @@ void bpf_map_set_max_entries(struct bpf_map *map, uint max_entries) {
 	set_errno(bpf_map__set_max_entries(map, max_entries));
 }
 
+void bpf_map_batch_update(int fd, const void *keys, const void *values, __u32 *count, __u64 flags)
+{
+	DECLARE_LIBBPF_OPTS(bpf_map_batch_opts, opts,
+		.flags = flags);
+
+	set_errno(bpf_map_update_batch(fd, keys, values, count, &opts));
+}
+
 int num_possible_cpu()
 {
     return libbpf_num_possible_cpus();
