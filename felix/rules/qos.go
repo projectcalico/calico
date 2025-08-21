@@ -15,6 +15,8 @@
 package rules
 
 import (
+	"strconv"
+
 	"github.com/projectcalico/calico/felix/generictables"
 )
 
@@ -24,12 +26,35 @@ type QoSPolicy struct {
 }
 
 func (r *DefaultRuleRenderer) EgressQoSPolicyChain(policies []QoSPolicy) *generictables.Chain {
+	if r.NFTables {
+		return r.nftablesQoSPolicyRules(policies)
+	}
+	return r.defaultQoSPolicyRules(policies)
+}
+
+func (r *DefaultRuleRenderer) nftablesQoSPolicyRules(policies []QoSPolicy) *generictables.Chain {
+	var rules []generictables.Rule
+	// Policies is sorted and validated by QoS policy manager.
+
+	rules = append(rules, generictables.Rule{
+		Match: r.NewMatch().SourceNetVMAP(NftablesQoSPolicyMap),
+		//Match:  r.NewMatch(),
+		//Action: r.DSCP("vmap"),
+	})
+
+	return &generictables.Chain{
+		Name:  ChainQoSPolicy,
+		Rules: rules,
+	}
+}
+
+func (r *DefaultRuleRenderer) defaultQoSPolicyRules(policies []QoSPolicy) *generictables.Chain {
 	var rules []generictables.Rule
 	// Policies is sorted and validated by QoS policy manager.
 	for _, p := range policies {
 		rules = append(rules, generictables.Rule{
 			Match:  r.NewMatch().SourceNet(p.SrcAddrs),
-			Action: r.DSCP(p.DSCP),
+			Action: r.DSCP(strconv.FormatUint(uint64(p.DSCP), 10)),
 		})
 	}
 

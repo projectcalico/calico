@@ -61,7 +61,8 @@ const (
 	ChainManglePrerouting  = ChainNamePrefix + "PREROUTING"
 	ChainManglePostrouting = ChainNamePrefix + "POSTROUTING"
 
-	ChainQoSPolicy = ChainNamePrefix + "qos-policy"
+	ChainQoSPolicy       = ChainNamePrefix + "qos-policy"
+	NftablesQoSPolicyMap = ChainNamePrefix + "qos-policy"
 
 	IPSetIDAllPools             = "all-ipam-pools"
 	IPSetIDNATOutgoingMasqPools = "masq-ipam-pools"
