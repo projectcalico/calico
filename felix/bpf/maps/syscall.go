@@ -155,6 +155,7 @@ func GetMapInfo(fd FD) (*MapInfo, error) {
 		KeySize:    int(bpfMapInfo.key_size),
 		ValueSize:  int(bpfMapInfo.value_size),
 		MaxEntries: int(bpfMapInfo.max_entries),
+		Id:         int(bpfMapInfo.id),
 	}, nil
 }
 

@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	. "github.com/onsi/gomega"
+	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/bpf/libbpf"
 	"github.com/projectcalico/calico/felix/bpf/maps"
@@ -39,9 +40,19 @@ func bpfMapList() string {
 	return string(out)
 }
 func deleteMap(bpfMap maps.Map) {
-	bpfMap.(*maps.PinnedMap).Close()
-	os.Remove(bpfMap.Path())
-	os.Remove(bpfMap.Path() + "_old")
+	log.WithField("bpfMap.GetName()", bpfMap.GetName()).Debug("Deleting PinnedMap")
+	err := bpfMap.(*maps.PinnedMap).Close()
+	if err != nil {
+		log.WithError(err).Debug("Error closing PinnedMap")
+	}
+	err = os.Remove(bpfMap.Path())
+	if err != nil && !os.IsNotExist(err) {
+		log.WithError(err).WithField("path", bpfMap.Path()).Debug("Error removing PinnedMap path")
+	}
+	err = os.Remove(bpfMap.Path() + "_old")
+	if err != nil && !os.IsNotExist(err) {
+		log.WithError(err).WithField("path", bpfMap.Path()+"_old").Debug("Error removing PinnedMap old path")
+	}
 }
 
 func TestMapUpgradeV2ToV3(t *testing.T) {
@@ -361,7 +372,7 @@ func TestMapUpgradeWhileResizeInProgress(t *testing.T) {
 	}
 
 	// Repin /sys/fs/bpt/tc/globals/cali_mock2_old1 to /sys/fs/bpt/tc/globals/cali_mock2_old
-	err = libbpf.ObjPin(int(mockMapv2_old.MapFD()), mockMapv2.Path()+"_old")
+	err = libbpf.ObjPin(int(mockMapv2_old.MapFD()), mockMapv2_old.Path()+"_old")
 	Expect(err).NotTo(HaveOccurred())
 	// Remove /sys/fs/bpt/tc/globals/cali_mock2_old1
 	os.Remove(mockMapv2_old.Path() + "_old1")
@@ -394,7 +405,7 @@ func TestMapUpgradeWhileResizeInProgress(t *testing.T) {
 	Eventually(bpfMapList, "10s", "200ms").ShouldNot(ContainSubstring(mockMapv2.GetName()))
 }
 
-func TestUpgradeWithSameVersionDifferentParams(t *testing.T) {
+func TestMapUpgradeWithSameVersionDifferentParams(t *testing.T) {
 	RegisterTestingT(t)
 
 	// Create v2 map and add 10 entries to it
@@ -421,13 +432,20 @@ func TestUpgradeWithSameVersionDifferentParams(t *testing.T) {
 	Expect(mapInfo.ValueSize).To(Equal(64))
 
 	mapParams.ValueSize = 128
-	b = maps.NewPinnedMap(mapParams)
-	err = b.EnsureExists()
+	c := maps.NewPinnedMap(mapParams)
+	err = c.EnsureExists()
 	Expect(err).NotTo(HaveOccurred())
 
-	mapInfo, err = maps.GetMapInfo(b.MapFD())
+	mapInfo, err = maps.GetMapInfo(c.MapFD())
 	Expect(err).NotTo(HaveOccurred())
 
 	Expect(mapInfo.KeySize).To(Equal(24))
 	Expect(mapInfo.ValueSize).To(Equal(128))
+
+	deleteMap(mockMapv2)
+	deleteMap(b)
+	deleteMap(c)
+	Eventually(bpfMapList, "10s", "200ms").ShouldNot(ContainSubstring(mockMapv2.GetName()))
+	Eventually(bpfMapList, "10s", "200ms").ShouldNot(ContainSubstring(b.GetName()))
+	Eventually(bpfMapList, "10s", "200ms").ShouldNot(ContainSubstring(c.GetName()))
 }
