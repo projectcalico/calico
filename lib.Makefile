@@ -300,7 +300,9 @@ DOCKER_BUILD=docker buildx build --load --platform=linux/$(ARCH) $(DOCKER_PULL)\
 	--build-arg CALICO_BASE=$(CALICO_BASE) \
 	--build-arg BPFTOOL_IMAGE=$(BPFTOOL_IMAGE)
 
-DOCKER_RUN := mkdir -p $(REPO_ROOT)/.go-pkg-cache bin $(GOMOD_CACHE) && \
+DOCKER_RUN := mkdir -p bin $(GOMOD_CACHE) && \
+	docker volume create go-pkg-cache >/dev/null 2>&1 || true && \
+	docker run --rm --mount type=volume,source=go-pkg-cache,target=/go-cache alpine sh -c 'chown -R $(LOCAL_USER_ID):$(LOCAL_USER_ID) /go-cache' 2>/dev/null || true && \
 	docker run --rm \
 		--net=host \
 		--init \
@@ -314,7 +316,7 @@ DOCKER_RUN := mkdir -p $(REPO_ROOT)/.go-pkg-cache bin $(GOMOD_CACHE) && \
 		-e GOFLAGS=$(GOFLAGS) \
 		-e ACK_GINKGO_DEPRECATIONS=1.16.5 \
 		-v $(REPO_ROOT):/go/src/github.com/projectcalico/calico:rw \
-		-v $(REPO_ROOT)/.go-pkg-cache:/go-cache:rw \
+		--mount type=volume,source=go-pkg-cache,target=/go-cache \
 		-w /go/src/$(PACKAGE_NAME)
 
 DOCKER_GO_BUILD := $(DOCKER_RUN) $(CALICO_BUILD)

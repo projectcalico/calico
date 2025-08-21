@@ -13,7 +13,6 @@
 
 .generate_execs
 .generate_files
-.go-pkg-cache/
 Makefile.common*
 bin/
 

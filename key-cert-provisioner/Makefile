@@ -90,7 +90,7 @@ cd: image-all cd-common
 
 clean:
 	rm -f Makefile.common*
-	rm -rf .go-pkg-cache bin .*.created*
+	rm -rf bin .*.created*
 	-docker image rm -f $$(docker images $(KEY_CERT_PROVISIONER_IMAGE) -a -q)
 	-docker image rm -f $$(docker images $(TEST_SIGNER_IMAGE) -a -q)
 
