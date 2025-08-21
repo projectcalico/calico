@@ -97,11 +97,11 @@ fi
 # different version of Tempest than the version that DevStack would naturally use.
 case "${DEVSTACK_BRANCH}" in
     unmaintained/yoga )
-	export UPPER_CONSTRAINTS_FILE=https://releases.openstack.org/constraints/upper/yoga
-	;;
-    stable/2024.1 )		# Caracal
-	export UPPER_CONSTRAINTS_FILE=https://raw.githubusercontent.com/openstack/requirements/refs/heads/stable/2024.1/upper-constraints.txt
-	;;
+        export UPPER_CONSTRAINTS_FILE=https://releases.openstack.org/constraints/upper/yoga
+        ;;
+    stable/2024.1 )             # Caracal
+        export UPPER_CONSTRAINTS_FILE=https://raw.githubusercontent.com/openstack/requirements/refs/heads/stable/2024.1/upper-constraints.txt
+        ;;
 esac
 
 : ${NC_PLUGIN_REPO:=https://github.com/projectcalico/calico}
