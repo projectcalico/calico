@@ -172,7 +172,7 @@ confd/            - Configuration management
 
 ### CI
 
-Calico has a comprehensive CI pipeline, which uses SempahoreCI.  The main pipeline is defined in `.semaphore/semaphore.yml`.  This file is generated from template block, located in `.semaphore/semaphore.yml.d`.
+Calico has a comprehensive CI pipeline, which uses SemaphoreCI.  The main pipeline is defined in `.semaphore/semaphore.yml`.  This file is generated from template block, located in `.semaphore/semaphore.yml.d`.
 
 When changing the CI pipeline, edit the blocks in `.semaphore/semaphore.yml.d` and run `make gen-semaphore-yaml` to update generated files.  Generated files should be checked in.
 
