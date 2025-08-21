@@ -149,14 +149,16 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ qos policy tests", []apicon
 		}
 
 		detectNftablesRule := func(felix *infrastructure.Felix, ipv6 bool) {
-			allPoolsIPSet := "@cali40all-ipam-pools"
 			ipFamily := "ip"
+			allPoolsIPSet := "@cali40all-ipam-pools"
+			allHostsIPSet := "@cali40all-hosts-net"
 			if ipv6 {
-				allPoolsIPSet = "@cali60all-ipam-pools"
 				ipFamily = "ip6"
+				allPoolsIPSet = "@cali60all-ipam-pools"
+				allHostsIPSet = "@cali60all-hosts-net"
 			}
 			pattern := fmt.Sprintf(
-				"%v saddr %v %v daddr != %v .* jump mangle-cali-qos-policy", ipFamily, allPoolsIPSet, ipFamily, allPoolsIPSet)
+				"%v daddr != %v %v daddr != %v .* jump mangle-cali-qos-policy", ipFamily, allPoolsIPSet, ipFamily, allHostsIPSet)
 			getRules := func() string {
 				output, _ := felix.ExecOutput("nft", "list", "chain", ipFamily, "calico", "mangle-cali-POSTROUTING")
 				return output
