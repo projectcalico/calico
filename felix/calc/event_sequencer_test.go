@@ -278,6 +278,37 @@ var _ = DescribeTable("ModelHostEndpointToProto",
 			ProfileIds:        []string{"prof1"},
 		},
 	),
+	Entry("host endpoint with QoSControls",
+		model.HostEndpoint{
+			Name:              "eth0",
+			ExpectedIPv4Addrs: []net.IP{mustParseIP("10.28.0.13"), mustParseIP("10.28.0.14")},
+			ExpectedIPv6Addrs: []net.IP{mustParseIP("dead::beef"), mustParseIP("dead::bee5")},
+			Labels: uniquelabels.Make(map[string]string{
+				"a": "b",
+			}),
+			ProfileIDs: []string{"prof1"},
+			QoSControls: &model.QoSControls{
+				DSCP: &dscp,
+			},
+		},
+		[]*proto.TierInfo{{Name: "a", IngressPolicies: []string{"b"}}},
+		[]*proto.TierInfo{{Name: "a", EgressPolicies: []string{"c"}}},
+		[]*proto.TierInfo{{Name: "a", EgressPolicies: []string{"d"}}},
+		&proto.HostEndpoint{
+			Name:              "eth0",
+			ExpectedIpv4Addrs: []string{"10.28.0.13", "10.28.0.14"},
+			ExpectedIpv6Addrs: []string{"dead::beef", "dead::bee5"},
+			Tiers:             []*proto.TierInfo{{Name: "a", IngressPolicies: []string{"b"}}},
+			UntrackedTiers:    []*proto.TierInfo{{Name: "a", EgressPolicies: []string{"c"}}},
+			ForwardTiers:      []*proto.TierInfo{{Name: "a", EgressPolicies: []string{"d"}}},
+			ProfileIds:        []string{"prof1"},
+			QosPolicies: []*proto.QoSPolicy{
+				&proto.QoSPolicy{
+					Dscp: 38,
+				},
+			},
+		},
+	),
 )
 
 var _ = Describe("ServiceAccount update/remove", func() {
