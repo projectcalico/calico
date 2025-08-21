@@ -47,10 +47,9 @@ make clean image
 ```bash
 # Build specific component (much faster - ~2-5 minutes)
 make -C calicoctl build      # CLI tool
-make -C felix build          # Core networking agent  
-make -C node build           # Node agent
+make -C felix build          # Core per-host networking/security agent  
+make -C node build           # Docker image container, includes Felix, confd, bird, and startup/monitoring scripts.
 make -C typha build          # Datastore proxy
-make -C kube-controllers build
 ```
 
 #### Testing
@@ -62,6 +61,39 @@ make -C felix test          # Takes ~5-10 minutes
 # WARNING: Do NOT run 'make test' at root - takes hours
 # Each directory has its own test suite - run individually
 ```
+
+Calico has multiple layers of tests:
+
+- Unit tests, which are generally fast and local to the package.
+- FV tests, which run one component in isolation, typically in docker containers.
+- System tests, which run most of Calico with some mocking.
+- End-to-end tests, which run the entire system in a real kubernetes cluster.
+
+##### Felix tests
+
+Felix's FV tests are in the felix/fv directory. Since calico supports multiple dataplanes, the tests can be run in multiple modes. Running single tests for validation of work recommended, but full suite takes hours.
+
+Felix FVs use the ginkgo DSL, resulting in test IDs based on the nesting Context()/Describe() blocks in the file.
+
+To run a single test:
+
+- Temporarily change the `It()` block in the file to `FIt()` to "focus" the test.
+- Run the test in iptables mode:
+  `make -C felix fv GINKGO_ARGS="-ginkgo.v"`
+- Run the test in eBPF mode with iptables (only tests marked BPF-SAFE should be run in this mode):
+  `make -C felix fv-bpf GINKGO_ARGS="-ginkgo.v"`
+- Run the test in nftables mode:
+  `make -C felix fv(-bpf) GINKGO_ARGS="-ginkgo.v" FELIX_FV_NFTABLES=Enabled`
+
+To increase verbosity of logs, run with FV_FELIX_LOG_LEVEL=debug.
+
+Other useful flags: in GINKGO_ARGS, `-ginkgo.dryRun` disables execution, only prints the test names. `-ginkgo.focus` can be used to run a specific test by regex (but the ID that is matches includes the Context() and Describe() blocks headings and formatting characters).
+
+Felix's "brain" is the calculation graph in `felix/calc`, this component has its own test harness that tries to validate its invariants and correctness. Changes to the calculation graph should include additional calculation graph FV tests (see `felix/calc/calc_graph_fv_test.go`).
+
+##### Ginkgo
+
+We are trying to migrate away from using Ginkgo.  When adding new tests, prefer to use vanilla `go test` over Ginkgo *unless* there is an established pattern of using ginkgo to test a particular package.  New packages should have `go test` tests only.
 
 #### Linting and Validation
 ```bash
@@ -103,10 +135,10 @@ make go-vet                # Go static analysis
 ### Major Components (in dependency order)
 ```
 libcalico-go/     - Core Go client library and data model
-api/              - Calico API definitions (CRDs, protobuf)
+api/              - Calico API definitions (CRDs, protobuf), exported as its own repo (hence own go.mod)
 felix/            - Core networking agent (eBPF/iptables dataplane)
 typha/            - Datastore fan-out proxy for scaling
-node/             - Node initialization and management
+node/             - Node initialization and management, docker image containing Felix, confd, bird, and startup/monitoring scripts.
 calicoctl/        - CLI tool for managing Calico
 kube-controllers/ - Kubernetes-specific controllers
 cni-plugin/       - Kubernetes CNI integration
@@ -133,10 +165,16 @@ confd/            - Configuration management
 2. `make verify-go-mods` - Cross-component module verification  
 3. `make check-dockerfiles` - Dockerfile validation
 4. `make check-language` - Language and content checks
-5. `make generate` - Regenerate generated files
-6. `make fix-all` - Auto-fix formatting issues
+5. `make generate` - Regenerate generated files; these should be checked in.  Required when changing APIs, Felix configuration, semaphore CI config, etc. 
+6. `make fix-changed` - Auto-fix formatting issues in files changed vs master.
 7. `make yaml-lint` - YAML validation
 8. `make go-vet` - Go static analysis
+
+### CI
+
+Calico has a comprehensive CI pipeline, which uses SempahoreCI.  The main pipeline is defined in `.semaphore/semaphore.yml`.  This file is generated from template block, located in `.semaphore/semaphore.yml.d`.
+
+When changing the CI pipeline, edit the blocks in `.semaphore/semaphore.yml.d` and run `make gen-semaphore-yaml` to update generated files.  Generated files should be checked in.
 
 ### Manual Validation Commands
 ```bash
@@ -169,7 +207,7 @@ cd <component> && go mod tidy && cd .. && make check-go-mod
 make generate
 
 # Fix formatting issues:
-make fix-all
+make fix-changed
 
 # Test specific component changes:
 make -C <component> build test
