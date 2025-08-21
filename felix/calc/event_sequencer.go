@@ -468,6 +468,12 @@ func ModelWorkloadEndpointToProto(ep *model.WorkloadEndpoint, peerData *Endpoint
 }
 
 func ModelHostEndpointToProto(ep *model.HostEndpoint, tiers, untrackedTiers, preDNATTiers []*proto.TierInfo, forwardTiers []*proto.TierInfo) *proto.HostEndpoint {
+	var qosPolicies []*proto.QoSPolicy
+	if ep.QoSControls != nil && ep.QoSControls.DSCP != nil {
+		qosPolicies = append(qosPolicies, &proto.QoSPolicy{
+			Dscp: int32(ep.QoSControls.DSCP.ToUint8()),
+		})
+	}
 	return &proto.HostEndpoint{
 		Name:              ep.Name,
 		ExpectedIpv4Addrs: ipsToStrings(ep.ExpectedIPv4Addrs),
@@ -477,6 +483,7 @@ func ModelHostEndpointToProto(ep *model.HostEndpoint, tiers, untrackedTiers, pre
 		UntrackedTiers:    untrackedTiers,
 		PreDnatTiers:      preDNATTiers,
 		ForwardTiers:      forwardTiers,
+		QosPolicies:       qosPolicies,
 	}
 }
 
