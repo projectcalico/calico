@@ -26,7 +26,6 @@ import (
 	log "github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
-	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -158,7 +157,7 @@ func (c *blockAffinityClient) toV3(kvpv1 *model.KVPair) *model.KVPair {
 			Deleted: fmt.Sprintf("%t", kvpv1.Value.(*model.BlockAffinity).Deleted),
 		},
 	}
-	libapiv3.EnsureBlockAffinityLabels(value)
+	model.EnsureBlockAffinityLabels(value)
 
 	return &model.KVPair{
 		Key: model.ResourceKey{
@@ -203,7 +202,7 @@ func (c *blockAffinityClient) createV3(ctx context.Context, kvp *model.KVPair) (
 func ensureV3Labels(kvp *model.KVPair) *model.KVPair {
 	v3Value := kvp.Value.(*libapiv3.BlockAffinity)
 	v3Value = v3Value.DeepCopy()
-	libapiv3.EnsureBlockAffinityLabels(v3Value)
+	model.EnsureBlockAffinityLabels(v3Value)
 	newKVP := *kvp
 	newKVP.Value = v3Value
 	return &newKVP
@@ -374,7 +373,7 @@ func (c *blockAffinityClient) listV1(ctx context.Context, list model.BlockAffini
 	log.Debugf("Listing v1 block affinities with host %s, affinity type %s, IP version %d", list.Host, list.AffinityType, list.IPVersion)
 	l := model.ResourceListOptions{
 		Kind:          libapiv3.KindBlockAffinity,
-		LabelSelector: calculateBlockAffinityLabelSelector(list),
+		LabelSelector: model.CalculateBlockAffinityLabelSelector(list),
 	}
 	v3list, err := c.listV3(ctx, l, revision)
 	if err != nil {
@@ -405,24 +404,6 @@ func (c *blockAffinityClient) listV1(ctx context.Context, list model.BlockAffini
 		}
 	}
 	return kvpl, nil
-}
-
-func calculateBlockAffinityLabelSelector(list model.BlockAffinityListOptions) labels.Selector {
-	labelsToMatch := map[string]string{}
-	if list.Host != "" {
-		labelsToMatch[apiv3.LabelHost] = list.Host
-	}
-	if list.AffinityType != "" {
-		labelsToMatch[apiv3.LabelAffinityType] = list.AffinityType
-	}
-	if list.IPVersion != 0 {
-		labelsToMatch[apiv3.LabelIPVersion] = strconv.Itoa(list.IPVersion)
-	}
-	var labelSelector labels.Selector
-	if len(labelsToMatch) > 0 {
-		labelSelector = labels.SelectorFromSet(labelsToMatch)
-	}
-	return labelSelector
 }
 
 func (c *blockAffinityClient) listV3(ctx context.Context, list model.ResourceListOptions, revision string) (*model.KVPairList, error) {

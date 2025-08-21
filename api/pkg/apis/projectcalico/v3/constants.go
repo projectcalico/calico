@@ -50,8 +50,8 @@ const (
 	// can be made for tiers.
 	LabelTier = "projectcalico.org/tier"
 
-	// LabelHost is applied to BlockAffinity resources for efficient lookups.
-	LabelHost = "projectcalico.org/host"
+	// LabelHostnameHash is applied to BlockAffinity resources for efficient lookups.
+	LabelHostnameHash = "projectcalico.org/hostnamehash"
 	// LabelAffinityType is applied to BlockAffinity resources for efficient lookups.
 	LabelAffinityType = "projectcalico.org/affinitytype"
 	// LabelIPVersion is applied to BlockAffinity resources for efficient lookups.
