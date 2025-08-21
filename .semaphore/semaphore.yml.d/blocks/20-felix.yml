@@ -7,7 +7,10 @@
     prologue:
       commands:
         - cd felix
-        - cache restore go-pkg-cache
+        # Restore docker volume from semaphore cache
+        - docker run --rm --mount type=volume,source=go-pkg-cache,target=/go-cache alpine tar -czf /tmp/go-pkg-cache.tar.gz -C /go-cache . 2>/dev/null || true
+        - cache restore go-pkg-cache-vol /tmp/go-pkg-cache.tar.gz || true
+        - test -f /tmp/go-pkg-cache.tar.gz && docker run --rm --mount type=volume,source=go-pkg-cache,target=/go-cache -v /tmp:/tmp alpine tar -xzf /tmp/go-pkg-cache.tar.gz -C /go-cache 2>/dev/null || true
         - cache restore go-mod-cache
     jobs:
       - name: Build and run UT, k8sfv
@@ -17,7 +20,9 @@
           - make build image fv-prereqs
           - "cache store bin-${SEMAPHORE_GIT_SHA} bin"
           - "cache store fv.test-${SEMAPHORE_GIT_SHA} fv/fv.test"
-          - cache store go-pkg-cache .go-pkg-cache
+          # Store docker volume to semaphore cache
+          - docker run --rm --mount type=volume,source=go-pkg-cache,target=/go-cache -v /tmp:/tmp alpine tar -czf /tmp/go-pkg-cache.tar.gz -C /go-cache .
+          - cache store go-pkg-cache-vol /tmp/go-pkg-cache.tar.gz
           - "cache store go-mod-cache ${HOME}/go/pkg/mod/cache"
           - docker save -o /tmp/calico-felix-test.tar calico/felix-test:latest-amd64
           - "cache store felix-image-${SEMAPHORE_GIT_SHA} /tmp/calico-felix-test.tar"
@@ -40,7 +45,10 @@
     prologue:
       commands:
         - cd felix
-        - cache restore go-pkg-cache
+        # Restore docker volume from semaphore cache
+        - docker run --rm --mount type=volume,source=go-pkg-cache,target=/go-cache alpine tar -czf /tmp/go-pkg-cache.tar.gz -C /go-cache . 2>/dev/null || true
+        - cache restore go-pkg-cache-vol /tmp/go-pkg-cache.tar.gz || true
+        - test -f /tmp/go-pkg-cache.tar.gz && docker run --rm --mount type=volume,source=go-pkg-cache,target=/go-cache -v /tmp:/tmp alpine tar -xzf /tmp/go-pkg-cache.tar.gz -C /go-cache 2>/dev/null || true
         - cache restore go-mod-cache
     jobs:
       - name: Build binary
@@ -65,7 +73,10 @@
     prologue:
       commands:
         - cd felix
-        - cache restore go-pkg-cache
+        # Restore docker volume from semaphore cache
+        - docker run --rm --mount type=volume,source=go-pkg-cache,target=/go-cache alpine tar -czf /tmp/go-pkg-cache.tar.gz -C /go-cache . 2>/dev/null || true
+        - cache restore go-pkg-cache-vol /tmp/go-pkg-cache.tar.gz || true
+        - test -f /tmp/go-pkg-cache.tar.gz && docker run --rm --mount type=volume,source=go-pkg-cache,target=/go-cache -v /tmp:/tmp alpine tar -xzf /tmp/go-pkg-cache.tar.gz -C /go-cache 2>/dev/null || true
         - cache restore go-mod-cache
     jobs:
       - name: Build binary
@@ -133,7 +144,10 @@
     prologue:
       commands:
         - cd felix
-        - cache restore go-pkg-cache
+        # Restore docker volume from semaphore cache
+        - docker run --rm --mount type=volume,source=go-pkg-cache,target=/go-cache alpine tar -czf /tmp/go-pkg-cache.tar.gz -C /go-cache . 2>/dev/null || true
+        - cache restore go-pkg-cache-vol /tmp/go-pkg-cache.tar.gz || true
+        - test -f /tmp/go-pkg-cache.tar.gz && docker run --rm --mount type=volume,source=go-pkg-cache,target=/go-cache -v /tmp:/tmp alpine tar -xzf /tmp/go-pkg-cache.tar.gz -C /go-cache 2>/dev/null || true
         - cache restore go-mod-cache
         - "cache restore bin-${SEMAPHORE_GIT_SHA}"
         - "cache restore fv.test-${SEMAPHORE_GIT_SHA}"

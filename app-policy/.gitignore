@@ -1,6 +1,5 @@
 .idea/
 vendor/
-.go-pkg-cache/
 bin
 *.created-*
 report/

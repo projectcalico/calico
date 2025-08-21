@@ -2,7 +2,6 @@
 .idea/
 **.*.swp
 cscope.*
-.go-pkg-cache/
 .lint-cache/
 hack/lib/*
 Makefile.common*

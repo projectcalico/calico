@@ -30,5 +30,4 @@ vendor
 report/
 
 Makefile.common*
-.go-pkg-cache
 
