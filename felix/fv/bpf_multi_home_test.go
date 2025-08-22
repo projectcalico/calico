@@ -23,7 +23,6 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
 	"github.com/projectcalico/calico/felix/fv/workload"
@@ -54,8 +53,6 @@ func describeBPFMultiHomedTests() bool {
 		BeforeEach(func() {
 			infra = getInfra()
 			opts := infrastructure.DefaultTopologyOptions()
-			opts.IPIPMode = api.IPIPModeNever
-			opts.SimulateBIRDRoutes = true
 			opts.FelixLogSeverity = "Debug"
 			opts.ExtraEnvVars["FELIX_BPFLogLevel"] = "Debug"
 			tc, calicoClient = infrastructure.StartNNodeTopology(2, opts, infra)

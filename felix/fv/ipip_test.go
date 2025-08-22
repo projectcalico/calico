@@ -63,6 +63,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology with BIRD pro
 		}
 		topologyOptions := infrastructure.DefaultTopologyOptions()
 		topologyOptions.EnableIPv6 = false
+		topologyOptions.SimulateBIRDRoutes = true
 		tc, client = infrastructure.StartNNodeTopology(2, topologyOptions, infra)
 
 		// Install a default profile that allows all ingress and egress, in the absence of any Policy.
