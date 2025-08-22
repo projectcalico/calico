@@ -637,14 +637,17 @@ func (b *PinnedMap) Open() error {
 		}
 	}
 
-	log.WithField("name", b.Name).Debug("Map file already exists, trying to open it")
-	b.fd, err = GetMapFDByPin(b.VersionedFilename())
-	if err != nil {
-		return err
+	if err == nil {
+		log.WithField("name", b.Name).Debug("Map file already exists, trying to open it")
+		b.fd, err = GetMapFDByPin(b.VersionedFilename())
+		if err != nil {
+			return err
+		}
+		b.fdLoaded = true
+		log.WithField("fd", b.fd).WithField("name", b.VersionedFilename()).Info("Loaded map file descriptor.")
 	}
-	b.fdLoaded = true
-	log.WithField("fd", b.fd).WithField("name", b.VersionedFilename()).Info("Loaded map file descriptor.")
-	return nil
+
+	return err
 }
 
 func (b *PinnedMap) repinAt(fd int, from, to string) error {

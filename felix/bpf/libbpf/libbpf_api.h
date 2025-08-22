@@ -529,6 +529,7 @@ int find_bpf_map_by_name( const char *name)
 				return fd;
 			}
 		}
+		close(fd);
 	}
 	// not found
 	return -1;
