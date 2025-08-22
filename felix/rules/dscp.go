@@ -25,7 +25,7 @@ type DSCPRule struct {
 
 func (r *DefaultRuleRenderer) EgressDSCPChain(rules []DSCPRule) *generictables.Chain {
 	var renderedRules []generictables.Rule
-	// Policies are sorted and validated by DSCP manager.
+	// Rules are sorted and validated by DSCP manager.
 	for _, rule := range rules {
 		renderedRules = append(renderedRules, generictables.Rule{
 			Match:  r.NewMatch().SourceNet(rule.SrcAddrs),
