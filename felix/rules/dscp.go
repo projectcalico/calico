@@ -18,46 +18,46 @@ import (
 	"github.com/projectcalico/calico/felix/generictables"
 )
 
-type QoSPolicy struct {
+type DSCPRule struct {
 	SrcAddrs string
-	DSCP     uint8
+	Value    uint8
 }
 
-func (r *DefaultRuleRenderer) EgressQoSPolicyChain(policies []QoSPolicy) *generictables.Chain {
+func (r *DefaultRuleRenderer) EgressDSCPChain(rules []DSCPRule) *generictables.Chain {
 	if r.NFTables {
-		return r.nftablesQoSPolicyRules(policies)
+		return r.nftablesQoSPolicyRules(rules)
 	}
-	return r.defaultQoSPolicyRules(policies)
+	return r.defaultQoSPolicyRules(rules)
 }
 
-func (r *DefaultRuleRenderer) nftablesQoSPolicyRules(policies []QoSPolicy) *generictables.Chain {
-	var rules []generictables.Rule
-	// Policies is sorted and validated by QoS policy manager.
+func (r *DefaultRuleRenderer) nftablesQoSPolicyRules(rules []DSCPRule) *generictables.Chain {
+	var renderedRules []generictables.Rule
+	// DSCP Ruls are sorted and validated by DSCP manager.
 
-	rules = append(rules, generictables.Rule{
+	renderedRules = append(renderedRules, generictables.Rule{
 		Match: r.NewMatch().SourceNetVMAP(NftablesQoSPolicyMap),
 		//Match:  r.NewMatch(),
 		//Action: r.DSCP("vmap"),
 	})
 
 	return &generictables.Chain{
-		Name:  ChainQoSPolicy,
-		Rules: rules,
+		Name:  ChainEgressDSCP,
+		Rules: renderedRules,
 	}
 }
 
-func (r *DefaultRuleRenderer) defaultQoSPolicyRules(policies []QoSPolicy) *generictables.Chain {
-	var rules []generictables.Rule
-	// Policies is sorted and validated by QoS policy manager.
-	for _, p := range policies {
-		rules = append(rules, generictables.Rule{
-			Match:  r.NewMatch().SourceNet(p.SrcAddrs),
-			Action: r.DSCP(p.DSCP),
+func (r *DefaultRuleRenderer) defaultQoSPolicyRules(rules []DSCPRule) *generictables.Chain {
+	var renderedRules []generictables.Rule
+	// DSCP Ruls are sorted and validated by DSCP manager.
+	for _, rule := range rules {
+		renderedRules = append(renderedRules, generictables.Rule{
+			Match:  r.NewMatch().SourceNet(rule.SrcAddrs),
+			Action: r.DSCP(rule.Value),
 		})
 	}
 
 	return &generictables.Chain{
-		Name:  ChainQoSPolicy,
-		Rules: rules,
+		Name:  ChainEgressDSCP,
+		Rules: renderedRules,
 	}
 }

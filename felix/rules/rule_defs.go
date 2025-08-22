@@ -61,8 +61,8 @@ const (
 	ChainManglePrerouting  = ChainNamePrefix + "PREROUTING"
 	ChainManglePostrouting = ChainNamePrefix + "POSTROUTING"
 
-	ChainQoSPolicy       = ChainNamePrefix + "qos-policy"
-	NftablesQoSPolicyMap = ChainNamePrefix + "qos-policy-map"
+	ChainEgressDSCP      = ChainNamePrefix + "egress-dscp"
+	NftablesQoSPolicyMap = ChainEgressDSCP + "-map"
 
 	IPSetIDAllPools             = "all-ipam-pools"
 	IPSetIDNATOutgoingMasqPools = "masq-ipam-pools"
@@ -323,7 +323,7 @@ type RuleRenderer interface {
 
 	NATOutgoingChain(active bool, ipVersion uint8) *generictables.Chain
 
-	EgressQoSPolicyChain(policies []QoSPolicy) *generictables.Chain
+	EgressDSCPChain(policies []DSCPRule) *generictables.Chain
 
 	DNATsToIptablesChains(dnats map[string]string) []*generictables.Chain
 	SNATsToIptablesChains(snats map[string]string) []*generictables.Chain

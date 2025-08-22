@@ -27,39 +27,39 @@ import (
 	"github.com/projectcalico/calico/felix/types"
 )
 
-type qosPolicyManager struct {
+type dscpManager struct {
 	ipVersion    uint8
 	ruleRenderer rules.RuleRenderer
 	mangleTable  Table
 	mangleMaps   nftables.MapsDataplane
 
 	// QoS policies.
-	wepPolicies map[types.WorkloadEndpointID]rules.QoSPolicy
-	hepPolicies map[types.HostEndpointID]rules.QoSPolicy
+	wepPolicies map[types.WorkloadEndpointID]rules.DSCPRule
+	hepPolicies map[types.HostEndpointID]rules.DSCPRule
 	dirty       bool
 
 	logCxt *logrus.Entry
 }
 
-func newQoSPolicyManager(
+func newDSCPManager(
 	mangleTable Table,
 	mangleMaps nftables.MapsDataplane,
 	ruleRenderer rules.RuleRenderer,
 	ipVersion uint8,
-) *qosPolicyManager {
-	return &qosPolicyManager{
+) *dscpManager {
+	return &dscpManager{
 		mangleTable:  mangleTable,
 		mangleMaps:   mangleMaps,
 		ruleRenderer: ruleRenderer,
 		ipVersion:    ipVersion,
-		wepPolicies:  map[types.WorkloadEndpointID]rules.QoSPolicy{},
-		hepPolicies:  map[types.HostEndpointID]rules.QoSPolicy{},
+		wepPolicies:  map[types.WorkloadEndpointID]rules.DSCPRule{},
+		hepPolicies:  map[types.HostEndpointID]rules.DSCPRule{},
 		dirty:        true,
 		logCxt:       logrus.WithField("ipVersion", ipVersion),
 	}
 }
 
-func (m *qosPolicyManager) OnUpdate(msg interface{}) {
+func (m *dscpManager) OnUpdate(msg interface{}) {
 	switch msg := msg.(type) {
 	case *proto.HostEndpointUpdate:
 		m.handleHEPUpdates(msg.GetId(), msg)
@@ -72,7 +72,7 @@ func (m *qosPolicyManager) OnUpdate(msg interface{}) {
 	}
 }
 
-func (m *qosPolicyManager) handleHEPUpdates(hepID *proto.HostEndpointID, msg *proto.HostEndpointUpdate) {
+func (m *dscpManager) handleHEPUpdates(hepID *proto.HostEndpointID, msg *proto.HostEndpointUpdate) {
 	id := types.ProtoToHostEndpointID(hepID)
 	if msg == nil || len(msg.Endpoint.QosPolicies) == 0 {
 		_, exists := m.hepPolicies[id]
@@ -95,15 +95,15 @@ func (m *qosPolicyManager) handleHEPUpdates(hepID *proto.HostEndpointID, msg *pr
 		ips = msg.Endpoint.ExpectedIpv6Addrs
 	}
 	if len(ips) != 0 {
-		m.hepPolicies[id] = rules.QoSPolicy{
+		m.hepPolicies[id] = rules.DSCPRule{
 			SrcAddrs: normaliseSourceAddr(ips),
-			DSCP:     uint8(dscp),
+			Value:    uint8(dscp),
 		}
 		m.dirty = true
 	}
 }
 
-func (m *qosPolicyManager) handleWEPUpdates(wepID *proto.WorkloadEndpointID, msg *proto.WorkloadEndpointUpdate) {
+func (m *dscpManager) handleWEPUpdates(wepID *proto.WorkloadEndpointID, msg *proto.WorkloadEndpointUpdate) {
 	id := types.ProtoToWorkloadEndpointID(wepID)
 	if msg == nil || len(msg.Endpoint.QosPolicies) == 0 {
 		_, exists := m.wepPolicies[id]
@@ -126,9 +126,9 @@ func (m *qosPolicyManager) handleWEPUpdates(wepID *proto.WorkloadEndpointID, msg
 		ips = msg.Endpoint.Ipv6Nets
 	}
 	if len(ips) != 0 {
-		m.wepPolicies[id] = rules.QoSPolicy{
+		m.wepPolicies[id] = rules.DSCPRule{
 			SrcAddrs: normaliseSourceAddr(ips),
-			DSCP:     uint8(dscp),
+			Value:    uint8(dscp),
 		}
 		m.dirty = true
 	}
@@ -143,26 +143,26 @@ func normaliseSourceAddr(addrs []string) string {
 	return strings.Join(trimmedSources, ",")
 }
 
-func (m *qosPolicyManager) CompleteDeferredWork() error {
-	var policies []rules.QoSPolicy
+func (m *dscpManager) CompleteDeferredWork() error {
+	var dscpRules []rules.DSCPRule
 	if m.dirty {
-		for _, p := range m.wepPolicies {
-			policies = append(policies, p)
+		for _, r := range m.wepPolicies {
+			dscpRules = append(dscpRules, r)
 		}
-		for _, p := range m.hepPolicies {
-			policies = append(policies, p)
+		for _, r := range m.hepPolicies {
+			dscpRules = append(dscpRules, r)
 		}
-		sort.Slice(policies, func(i, j int) bool {
-			return policies[i].SrcAddrs < policies[j].SrcAddrs
+		sort.Slice(dscpRules, func(i, j int) bool {
+			return dscpRules[i].SrcAddrs < dscpRules[j].SrcAddrs
 		})
 
 		if m.mangleMaps != nil {
-			mappings := nftablesVMappings(policies)
+			mappings := nftablesVMappings(dscpRules)
 			mapMeta := nftables.MapMetadata{Name: rules.NftablesQoSPolicyMap, Type: nftables.MapTypeSourceNetMatch}
 			m.mangleMaps.AddOrReplaceMap(mapMeta, mappings)
 		}
 
-		chain := m.ruleRenderer.EgressQoSPolicyChain(policies)
+		chain := m.ruleRenderer.EgressDSCPChain(dscpRules)
 		m.mangleTable.UpdateChain(chain)
 		m.dirty = false
 	}
@@ -170,10 +170,10 @@ func (m *qosPolicyManager) CompleteDeferredWork() error {
 	return nil
 }
 
-func nftablesVMappings(policies []rules.QoSPolicy) map[string][]string {
+func nftablesVMappings(rules []rules.DSCPRule) map[string][]string {
 	mappings := map[string][]string{}
-	for _, p := range policies {
-		mappings[p.SrcAddrs] = []string{fmt.Sprintf("%d", p.DSCP)}
+	for _, r := range rules {
+		mappings[r.SrcAddrs] = []string{fmt.Sprintf("%d", r.Value)}
 	}
 	return mappings
 }
