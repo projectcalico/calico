@@ -37,7 +37,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
-var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ qos policy tests", []apiconfig.DatastoreType{apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
+var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ dscp tests", []apiconfig.DatastoreType{apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
 	const (
 		wepPortStr = "8055"
 	)
@@ -128,7 +128,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ qos policy tests", []apicon
 		extClient.Stop()
 	})
 
-	It("should have expected restriction on the rule jumping to QoS policy rules", func() {
+	It("should have expected restriction on the rule jumping to DSCP chain static rules", func() {
 		detecIptablesRule := func(felix *infrastructure.Felix, ipVersion uint8) {
 			binary := "iptables-save"
 			if ipVersion == 6 {
@@ -136,7 +136,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ qos policy tests", []apicon
 			}
 			allPoolsIPSet := fmt.Sprintf("cali%v0all-ipam-pools", ipVersion)
 			allHostsIPSet := fmt.Sprintf("cali%v0all-hosts-net", ipVersion)
-			tmpl := "-m set --match-set %v src -m set ! --match-set %v dst -m set ! --match-set %v dst -j cali-qos-policy"
+			tmpl := "-m set --match-set %v src -m set ! --match-set %v dst -m set ! --match-set %v dst -j cali-egress-dscp"
 			expectedRule1 := fmt.Sprintf(tmpl, allPoolsIPSet, allPoolsIPSet, allHostsIPSet)
 			expectedRule2 := fmt.Sprintf(tmpl, allHostsIPSet, allPoolsIPSet, allHostsIPSet)
 			getRules := func() string {
@@ -155,7 +155,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ qos policy tests", []apicon
 			}
 			allPoolsIPSet := fmt.Sprintf("@cali%v0all-ipam-pools", ipVersion)
 			allHostsIPSet := fmt.Sprintf("@cali%v0all-hosts-net", ipVersion)
-			tmpl := "%v saddr %v %v daddr != %v %v daddr != %v .* jump mangle-cali-qos-policy"
+			tmpl := "%v saddr %v %v daddr != %v %v daddr != %v .* jump mangle-cali-egress-dscp"
 			pattern1 := fmt.Sprintf(tmpl, ipFamily, allPoolsIPSet, ipFamily, allPoolsIPSet, ipFamily, allHostsIPSet)
 			pattern2 := fmt.Sprintf(tmpl, ipFamily, allHostsIPSet, ipFamily, allPoolsIPSet, ipFamily, allHostsIPSet)
 			getRules := func() string {
@@ -430,7 +430,7 @@ func verifyQoSPoliciesWithIPFamily(felix *infrastructure.Felix, ipv6 bool, value
 		if ipv6 {
 			ipFamily = "ip6"
 		}
-		cmd = []string{"nft", "-n", "list", "chain", ipFamily, "calico", "mangle-cali-qos-policy"}
+		cmd = []string{"nft", "-n", "list", "chain", ipFamily, "calico", "mangle-cali-egress-dscp"}
 		rulePattern = fmt.Sprintf("%v dscp set", ipFamily)
 	} else {
 		binary := "iptables-save"
