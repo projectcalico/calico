@@ -628,20 +628,10 @@ func (b *PinnedMap) Open() error {
 		log.WithField("name", b.Name).Debug("Map file didn't exist")
 		if repinningIsEnabled() {
 			log.WithField("name", b.Name).Info("Looking for map by name (to repin it)")
-			fd, err := libbpf.FindMapFdByName(b.VersionedName())
-			if err != nil {
-				return fmt.Errorf("failed to find map by name %s: %w", b.VersionedName(), err)
+			b.fd, err = RepinMap(b.VersionedName(), b.VersionedFilename())
+			if err != nil && !os.IsNotExist(err) {
+				return err
 			}
-
-			err = libbpf.ObjPin(int(fd), b.VersionedFilename())
-			if err != nil {
-				closeErr := syscall.Close(fd)
-				if closeErr != nil {
-					log.WithError(err).Warn("Error from syscall.Close(fd).  Ignoring.")
-				}
-				return fmt.Errorf("failed to pin map: %w", err)
-			}
-			b.fd = FD(fd)
 			b.fdLoaded = true
 			return nil
 		}
@@ -878,6 +868,28 @@ func GetMapIdFromPin(pinPath string) (int, error) {
 	}
 
 	return mapInfo.Id, nil
+}
+
+// RepinMap finds a map by a given name and pins it to a path. Note that if
+// there are multiple maps of the same name in the system, it will use the first
+// one it finds.
+func RepinMap(name string, filename string) (FD, error) {
+	log.WithField("name", name).Info("Looking for map by name (to repin it)")
+	fd, err := libbpf.FindMapFdByName(name)
+	if err != nil {
+		return 0, fmt.Errorf("failed to find map by name %s: %w", name, err)
+	}
+
+	err = libbpf.ObjPin(int(fd), filename)
+	if err != nil {
+		closeErr := syscall.Close(fd)
+		if closeErr != nil {
+			log.WithError(err).Warn("Error from syscall.Close(fd).  Ignoring.")
+		}
+		return 0, fmt.Errorf("failed to pin map: %w", err)
+	}
+
+	return FD(fd), nil
 }
 
 func (b *PinnedMap) CopyDeltaFromOldMap() error {
