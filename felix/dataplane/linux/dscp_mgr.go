@@ -15,11 +15,13 @@
 package intdataplane
 
 import (
+	"fmt"
 	"sort"
 	"strings"
 
 	"github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/felix/nftables"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/rules"
 	"github.com/projectcalico/calico/felix/types"
@@ -29,6 +31,7 @@ type dscpManager struct {
 	ipVersion    uint8
 	ruleRenderer rules.RuleRenderer
 	mangleTable  Table
+	mangleMaps   nftables.MapsDataplane
 
 	// QoS policies.
 	wepPolicies map[types.WorkloadEndpointID]rules.DSCPRule
@@ -40,11 +43,13 @@ type dscpManager struct {
 
 func newDSCPManager(
 	mangleTable Table,
+	mangleMaps nftables.MapsDataplane,
 	ruleRenderer rules.RuleRenderer,
 	ipVersion uint8,
 ) *dscpManager {
 	return &dscpManager{
 		mangleTable:  mangleTable,
+		mangleMaps:   mangleMaps,
 		ruleRenderer: ruleRenderer,
 		ipVersion:    ipVersion,
 		wepPolicies:  map[types.WorkloadEndpointID]rules.DSCPRule{},
@@ -151,10 +156,24 @@ func (m *dscpManager) CompleteDeferredWork() error {
 			return dscpRules[i].SrcAddrs < dscpRules[j].SrcAddrs
 		})
 
+		if m.mangleMaps != nil {
+			mappings := nftablesVMappings(dscpRules)
+			mapMeta := nftables.MapMetadata{Name: rules.NftablesQoSPolicyMap, Type: nftables.MapTypeSourceNetMatch}
+			m.mangleMaps.AddOrReplaceMap(mapMeta, mappings)
+		}
+
 		chain := m.ruleRenderer.EgressDSCPChain(dscpRules)
 		m.mangleTable.UpdateChain(chain)
 		m.dirty = false
 	}
 
 	return nil
+}
+
+func nftablesVMappings(rules []rules.DSCPRule) map[string][]string {
+	mappings := map[string][]string{}
+	for _, r := range rules {
+		mappings[r.SrcAddrs] = []string{fmt.Sprintf("%d", r.Value)}
+	}
+	return mappings
 }
