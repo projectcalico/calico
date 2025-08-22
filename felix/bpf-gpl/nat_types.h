@@ -132,7 +132,7 @@ struct calico_ch_key {
 	__u32 ordinal; // should always be a value of [0..M], where M is a very large prime number. -Alex
 };
 
-// 1009 * 1000 gives a large lookup table for up to 100 services. -Alex
+// 1009 * 1000 gives a large lookup table for up to 1000 services. -Alex
 #ifdef IPVER6
 CALI_MAP_NAMED(cali_v6_ch, cali_ch,,
 #else
