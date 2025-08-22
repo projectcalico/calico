@@ -23,7 +23,7 @@ global_job_config:
       - mkdir artifacts
       # Semaphore is doing shallow clone on a commit without tags.
       # unshallow it for GIT_VERSION:=$(shell git describe --tags --dirty --always)
-      - retry git fetch --unshallow
+      - if [[ "${SEMAPHORE_BLOCK_NAME}" != "Prerequisites" ]]; then retry git fetch --unshallow; fi
       - echo $DOCKERHUB_PASSWORD | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
   epilogue:
     commands:
@@ -124,6 +124,10 @@ blocks:
   - name: Prerequisites
     dependencies: []
     task:
+      agent:
+        machine:
+          type: f1-standard-4
+          os_image: ubuntu2204
       jobs:
         - name: Pre-flight checks
           commands:
@@ -288,6 +292,18 @@ blocks:
         - name: "crypto tests"
           commands:
             - ../.semaphore/run-and-monitor ci.log make ci
+  - name: e2e script & pipeline validations
+    run:
+      when: "true or change_in(['/*', '/.semaphore/end-to-end/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+    execution_time_limit:
+      minutes: 5
+    dependencies:
+      - Prerequisites
+    task:
+      jobs:
+        - name: Test Pipeline files are valid yaml
+          commands:
+            - ./.semaphore/end-to-end/scripts/test_scripts/e2e-validation.sh
   - name: e2e tests
     run:
       when: "true or change_in(['/*', '/e2e/', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/confd/', '/bird/', '/pod2daemon/', '/node/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
@@ -979,9 +995,10 @@ blocks:
             - sudo umount /boot
             - sudo rsync -av /boot2/ /boot/ --exclude "*.new" --exclude "*.dpkg-bak" --delete --inplace
             - sudo rm -rf /boot2/
+            # Set NC_PLUGIN_REPO and NC_PLUGIN_REF so that DevStack will use the networking-calico
+            # code from the current PR or branch.  The following checkout is to make sure of having a
+            # local ref that we can specify.
             - git checkout -b devstack-test
-            - export LIBVIRT_TYPE=qemu
-            - export UPPER_CONSTRAINTS_FILE=https://releases.openstack.org/constraints/upper/yoga
             - export NC_PLUGIN_REPO=$(dirname $(pwd))
             - export NC_PLUGIN_REF=$(git rev-parse --abbrev-ref HEAD)
             - sudo git config --system --add safe.directory ${NC_PLUGIN_REPO}/.git
@@ -1017,9 +1034,10 @@ blocks:
             # this was causing the DevStack setup to fail, because pip doesn't know how to uninstall
             # or replace the existing version.  Happily we do know that, so let's do it upfront here.
             - sudo apt-get remove -y python3-wrapt || true
+            # Set NC_PLUGIN_REPO and NC_PLUGIN_REF so that DevStack will use the networking-calico
+            # code from the current PR or branch.  The following checkout is to make sure of having a
+            # local ref that we can specify.
             - git checkout -b devstack-test
-            - export LIBVIRT_TYPE=qemu
-            - export UPPER_CONSTRAINTS_FILE=https://raw.githubusercontent.com/openstack/requirements/refs/heads/stable/2024.1/upper-constraints.txt
             - export NC_PLUGIN_REPO=$(dirname $(pwd))
             - export NC_PLUGIN_REF=$(git rev-parse --abbrev-ref HEAD)
             - sudo git config --system --add safe.directory ${NC_PLUGIN_REPO}/.git

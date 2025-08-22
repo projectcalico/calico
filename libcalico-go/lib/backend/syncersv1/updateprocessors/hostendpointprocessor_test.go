@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -158,6 +158,70 @@ var _ = Describe("Test the HostEndpoint update processor", func() {
 			Key:      v3HostEndpointKey1,
 			Value:    wres,
 			Revision: "abcde",
+		})
+		Expect(err).To(HaveOccurred())
+	})
+
+	It("should parse valid QoSControl annotations", func() {
+		up := updateprocessors.NewHostEndpointUpdateProcessor()
+
+		By("adding another HostEndpoint with a full configuration")
+		res := apiv3.NewHostEndpoint()
+		res.Name = v3HostEndpointKey2.Name
+		res.Labels = map[string]string{"testLabel": "label"}
+		res.Spec.Node = hn2
+		res.Spec.InterfaceName = name2
+		res.Spec.ExpectedIPs = []string{"10.100.10.1"}
+		expectedIpv4 := *net.ParseIP("10.100.10.1")
+		res.Spec.Profiles = []string{"testProfile"}
+		res.Spec.Ports = []apiv3.EndpointPort{
+			apiv3.EndpointPort{
+				Name:     "portname",
+				Protocol: numorstring.ProtocolFromInt(uint8(30)),
+				Port:     uint16(8080),
+			},
+		}
+		res.Annotations = map[string]string{
+			"arbitrary":                  "annotation",
+			"qos.projectcalico.org/dscp": "af43",
+		}
+
+		kvps, err := up.Process(&model.KVPair{
+			Key:      v3HostEndpointKey2,
+			Value:    res,
+			Revision: "1234",
+		})
+
+		dscp := numorstring.DSCPFromString("af43")
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(kvps).To(Equal([]*model.KVPair{
+			{
+				Key: v1HostEndpointKey2,
+				Value: &model.HostEndpoint{
+					Name:              name2,
+					ExpectedIPv4Addrs: []net.IP{expectedIpv4},
+					Labels:            uniquelabels.Make(map[string]string{"testLabel": "label"}),
+					ProfileIDs:        []string{"testProfile"},
+					Ports: []model.EndpointPort{
+						model.EndpointPort{
+							Name:     "portname",
+							Protocol: numorstring.ProtocolFromInt(uint8(30)),
+							Port:     uint16(8080),
+						},
+					},
+					QoSControls: &model.QoSControls{
+						DSCP: &dscp,
+					},
+				},
+				Revision: "1234",
+			},
+		}))
+
+		By("clearing the cache (by starting sync) and failing to delete the second host endpoint")
+		up.OnSyncerStarting()
+		kvps, err = up.Process(&model.KVPair{
+			Key: v3HostEndpointKey2,
 		})
 		Expect(err).To(HaveOccurred())
 	})

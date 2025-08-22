@@ -589,28 +589,21 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 				// Simulate having a host send VXLAN traffic from an unknown source, should get blocked.
 				BeforeEach(func() {
 					for _, f := range felixes {
-						// one host route per node
-						expectedNumRoutes := len(felixes)
-						if ipipMode == api.IPIPModeNever {
-							// No encap routing does not update all hosts ipset.
-							expectedNumRoutes = 0
-						}
 						if BPFMode() {
+							// one host and one host tunnel routes per node
+							expectedNumRoutes := len(felixes) * 2
 							if ipipMode == api.IPIPModeNever {
 								// one host routes per node
 								expectedNumRoutes = len(felixes)
-							} else {
-								// one host and one host tunnel routes per node
-								expectedNumRoutes = len(felixes) * 2
 							}
 							Eventually(func() int {
 								return strings.Count(f.BPFRoutes(), "host")
 							}).Should(Equal(expectedNumRoutes),
 								fmt.Sprintf("Expected %v route per node, not: %v", expectedNumRoutes, f.BPFRoutes()))
 						} else if NFTMode() {
-							Eventually(f.NFTSetSizeFn("cali40all-hosts-net"), "15s", "200ms").Should(Equal(expectedNumRoutes))
+							Eventually(f.NFTSetSizeFn("cali40all-hosts-net"), "15s", "200ms").Should(Equal(len(felixes)))
 						} else {
-							Eventually(f.IPSetSizeFn("cali40all-hosts-net"), "15s", "200ms").Should(Equal(expectedNumRoutes))
+							Eventually(f.IPSetSizeFn("cali40all-hosts-net"), "15s", "200ms").Should(Equal(len(felixes)))
 						}
 					}
 
@@ -630,28 +623,21 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 				})
 
 				It("should have no connectivity from third felix and expected number of IPs in allow list", func() {
-					// one host route per node
-					expectedNumRoutes := len(felixes) - 1
-					if ipipMode == api.IPIPModeNever {
-						// No encap routing does not update all hosts ipset.
-						expectedNumRoutes = 0
-					}
 					if BPFMode() {
+						// one host and one host tunnel routes per node
+						expectedNumRoutes := (len(felixes) - 1) * 2
 						if ipipMode == api.IPIPModeNever {
 							// one host routes per node
 							expectedNumRoutes = (len(felixes) - 1)
-						} else {
-							// one host and one host tunnel routes per node
-							expectedNumRoutes = (len(felixes) - 1) * 2
 						}
 						Eventually(func() int {
 							return strings.Count(felixes[0].BPFRoutes(), "host")
 						}).Should(Equal(expectedNumRoutes),
 							fmt.Sprintf("Expected %v route per node, not: %v", expectedNumRoutes, felixes[0].BPFRoutes()))
 					} else if NFTMode() {
-						Eventually(felixes[0].NFTSetSizeFn("cali40all-hosts-net"), "15s", "200ms").Should(Equal(expectedNumRoutes))
+						Eventually(felixes[0].NFTSetSizeFn("cali40all-hosts-net"), "15s", "200ms").Should(Equal(len(felixes)))
 					} else {
-						Eventually(felixes[0].IPSetSizeFn("cali40all-hosts-net"), "15s", "200ms").Should(Equal(expectedNumRoutes))
+						Eventually(felixes[0].IPSetSizeFn("cali40all-hosts-net"), "15s", "200ms").Should(Equal(len(felixes)))
 					}
 
 					cc.ExpectSome(w[0], w[1])
@@ -842,9 +828,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 							Eventually(f.BPFRoutes, "15s").Should(ContainSubstring(f.IP))
 							Consistently(f.BPFRoutes).ShouldNot(ContainSubstring(externalClient.IP))
 						} else if NFTMode() {
-							Eventually(f.NFTSetSizeFn("cali40all-hosts-net"), "15s", "200ms").Should(Equal(3))
+							Eventually(f.NFTSetSizeFn("cali40all-hosts-net"), "15s", "200ms").Should(Equal(len(felixes)))
 						} else {
-							Eventually(f.IPSetSizeFn("cali40all-hosts-net"), "15s", "200ms").Should(Equal(3))
+							Eventually(f.IPSetSizeFn("cali40all-hosts-net"), "15s", "200ms").Should(Equal(len(felixes)))
 						}
 					}
 
@@ -883,9 +869,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 							Expect(f.IPSetSize("cali40all-hosts-net")).To(BeZero(),
 								"BPF mode shouldn't program IP sets")
 						} else if NFTMode() {
-							Eventually(f.NFTSetSizeFn("cali40all-hosts-net"), "15s", "200ms").Should(Equal(4))
+							Eventually(f.NFTSetSizeFn("cali40all-hosts-net"), "15s", "200ms").Should(Equal(len(felixes) + 1))
 						} else {
-							Eventually(f.IPSetSizeFn("cali40all-hosts-net"), "15s", "200ms").Should(Equal(4))
+							Eventually(f.IPSetSizeFn("cali40all-hosts-net"), "15s", "200ms").Should(Equal(len(felixes) + 1))
 						}
 					}
 
