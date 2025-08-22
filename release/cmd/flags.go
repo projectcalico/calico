@@ -399,32 +399,6 @@ var (
 
 	// Hashrelease server configuration flags.
 	hashreleaseServerFlags = []cli.Flag{hashreleaseServerCredentialsFlag, hashreleaseServerBucketFlag}
-	sshHostFlag            = &cli.StringFlag{
-		Name:    "server-ssh-host",
-		Usage:   "The SSH host for the connection to the hashrelease server",
-		Sources: cli.EnvVars("DOCS_HOST"),
-	}
-	sshUserFlag = &cli.StringFlag{
-		Name:    "server-ssh-user",
-		Usage:   "The SSH user for the connection to the hashrelease server",
-		Sources: cli.EnvVars("DOCS_USER"),
-	}
-	sshKeyFlag = &cli.StringFlag{
-		Name:    "server-ssh-key",
-		Usage:   "The SSH key for the connection to the hashrelease server",
-		Sources: cli.EnvVars("DOCS_KEY"),
-	}
-	sshPortFlag = &cli.StringFlag{
-		Name:    "server-ssh-port",
-		Usage:   "The SSH port for the connection to the hashrelease server",
-		Sources: cli.EnvVars("DOCS_PORT"),
-	}
-	sshKnownHostsFlag = &cli.StringFlag{
-		Name: "server-ssh-known-hosts",
-		Usage: "The known_hosts file is the absolute path to the known_hosts file " +
-			"to use for the user host key database instead of ~/.ssh/known_hosts",
-		Sources: cli.EnvVars("DOCS_KNOWN_HOSTS"),
-	}
 	publishHashreleaseFlag = &cli.BoolFlag{
 		Name:  "publish-to-hashrelease-server",
 		Usage: "Publish the hashrelease to the hashrelease server",
