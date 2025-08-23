@@ -156,8 +156,10 @@ func (m *dscpManager) CompleteDeferredWork() error {
 			return dscpRules[i].SrcAddrs < dscpRules[j].SrcAddrs
 		})
 
+		logrus.Infof("marva0 %v", dscpRules)
 		if m.mangleMaps != nil {
-			mappings := nftablesVMappings(dscpRules)
+			mappings := nftablesMappings(dscpRules)
+			logrus.Infof("marva %v", mappings)
 			mapMeta := nftables.MapMetadata{Name: rules.NftablesQoSPolicyMap, Type: nftables.MapTypeSourceNetMatch}
 			m.mangleMaps.AddOrReplaceMap(mapMeta, mappings)
 		}
@@ -170,10 +172,12 @@ func (m *dscpManager) CompleteDeferredWork() error {
 	return nil
 }
 
-func nftablesVMappings(rules []rules.DSCPRule) map[string][]string {
+func nftablesMappings(rules []rules.DSCPRule) map[string][]string {
 	mappings := map[string][]string{}
+	logrus.Infof("marva1 %v", rules)
 	for _, r := range rules {
 		mappings[r.SrcAddrs] = []string{fmt.Sprintf("%d", r.Value)}
 	}
+	logrus.Infof("marva2 %v", mappings)
 	return mappings
 }

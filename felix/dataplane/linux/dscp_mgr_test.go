@@ -45,12 +45,8 @@ func dscpManagerTests(ipVersion uint8) func() {
 				MarkDrop:     0x10,
 				MarkEndpoint: 0x11110000,
 			})
-<<<<<<< HEAD:felix/dataplane/linux/qos_policy_mgr_test.go
 			// TODO (mazdak): add more tests for new nftables optimization
-			manager = newQoSPolicyManager(mangleTable, nil, ruleRenderer, ipVersion)
-=======
-			manager = newDSCPManager(mangleTable, ruleRenderer, ipVersion)
->>>>>>> open-source/master:felix/dataplane/linux/dscp_mgr_test.go
+			manager = newDSCPManager(mangleTable, nil, ruleRenderer, ipVersion)
 		})
 
 		It("should program DSCP chain with no rule", func() {
