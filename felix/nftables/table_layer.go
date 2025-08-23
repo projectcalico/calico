@@ -86,12 +86,20 @@ func (t *tableLayer) namespaceMapMember(m []string) []string {
 		return m
 	}
 
+	action := strings.Split(strings.TrimSpace(m[0]), " ")[0]
+
 	// TODO: We only use "goto" in map members right now. If we add other actions, we'll need to namespace them.
 	// This is a very brittle implementation that assumes that the map member is a single string that starts with "goto ".
-	if !strings.HasPrefix(m[0], "goto ") {
-		logrus.Panicf("Unexpected map member: %s", m)
+	switch action {
+	case "goto":
+		return []string{fmt.Sprintf("goto %s", t.namespaceName(m[0][5:]))}
+	case "dscp":
+		return m
+		//default:
+		//	logrus.Panicf("Unexpected map member: %s", m)
 	}
-	return []string{fmt.Sprintf("goto %s", t.namespaceName(m[0][5:]))}
+
+	return m
 }
 
 func (t *tableLayer) Name() string {

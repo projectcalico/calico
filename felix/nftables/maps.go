@@ -38,7 +38,10 @@ var gaugeVecNumMaps = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 
 type MapType string
 
-const MapTypeInterfaceMatch MapType = "interfaceMatch"
+const (
+	MapTypeInterfaceMatch MapType = "interfaceMatch"
+	MapTypeSourceNetMatch MapType = "sourceNetMatch"
+)
 
 type MapsDataplane interface {
 	AddOrReplaceMap(meta MapMetadata, members map[string][]string)
@@ -374,7 +377,7 @@ func (s *Maps) LoadDataplaneState() error {
 		for _, e := range mapData.elems {
 			logCxt.WithField("element", e).Debug("Processing element")
 			switch metadata.Type {
-			case MapTypeInterfaceMatch:
+			case MapTypeInterfaceMatch, MapTypeSourceNetMatch:
 				strElems[e.Key[0]] = e.Value
 			default:
 				unknownElems.Add(UnknownMapMember(e.Key, e.Value))
@@ -442,7 +445,7 @@ func (s *Maps) NFTablesMap(name string) *knftables.Map {
 
 	var flags []knftables.SetFlag
 	switch metadata.Type {
-	case MapTypeInterfaceMatch:
+	case MapTypeInterfaceMatch, MapTypeSourceNetMatch:
 	default:
 		logrus.WithField("type", metadata.Type).Panic("Unexpected map type")
 	}
@@ -623,10 +626,30 @@ func CanonicaliseMapMember(mtype MapType, key string, value []string) MapMember 
 		}
 		// An action and a chain.
 		return interfaceToChain{key, splits[0], splits[1]}
+	case MapTypeSourceNetMatch:
+		return sourceNetToAction{source: key, action: value[0]}
 	default:
 		logrus.Errorf("Unknown map type: %v", mtype)
 	}
 	return nil
+}
+
+// sourceNetToAction is a MapMember that represents a mapping from a source net to an terminal action.
+type sourceNetToAction struct {
+	source string
+	action string
+}
+
+func (m sourceNetToAction) Key() []string {
+	return []string{m.source}
+}
+
+func (m sourceNetToAction) Value() []string {
+	return []string{m.action}
+}
+
+func (m sourceNetToAction) String() string {
+	return fmt.Sprintf("%s -> %s", m.source, m.action)
 }
 
 // interfaceToAction is a MapMember that represents a mapping from an interface to an terminal action.
@@ -670,6 +693,12 @@ func mapType(t MapType, ipVersion int) string {
 	switch t {
 	case MapTypeInterfaceMatch:
 		return "ifname : verdict"
+	case MapTypeSourceNetMatch:
+		if ipVersion == 4 {
+			return "ipv4_addr : dscp"
+		} else {
+			return "ipv6_addr : dscp"
+		}
 	default:
 		logrus.WithField("type", string(t)).Panic("Unknown MapType")
 	}
