@@ -94,7 +94,6 @@ func describeBPFDualStackTests(ctlbEnabled, ipv6Dataplane bool) bool {
 			opts.AutoHEPsEnabled = false
 			// Simulate BIRD noEncap routes since IPIP is not supported with IPv6.
 			opts.IPIPMode = api.IPIPModeNever
-			opts.SimulateBIRDRoutes = true
 			opts.DelayFelixStart = true
 
 			if ipv6Dataplane {
