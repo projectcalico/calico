@@ -40,10 +40,9 @@ import (
 )
 
 var (
-	clientTimeout                  = 10 * time.Second
-	keepaliveTime                  = 30 * time.Second
-	keepaliveTimeout               = 10 * time.Second
-	defaultAllowProfileResourceKey = model.ResourceKey{Name: "projectcalico-default-allow", Kind: apiv3.KindProfile}
+	clientTimeout    = 10 * time.Second
+	keepaliveTime    = 30 * time.Second
+	keepaliveTimeout = 10 * time.Second
 )
 
 const (
