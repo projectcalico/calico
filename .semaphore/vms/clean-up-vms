@@ -16,8 +16,7 @@
 set -e
 set -x
 
-zone=$1
-vm_prefix=$2
+vm_prefix=$1
 project=${GCP_PROJECT:-unique-caldron-775}
 gcp_secret_key=${GCP_SECRET_KEY:-$HOME/secrets/secret.google-service-account-key.json}
 
@@ -27,7 +26,7 @@ gcloud auth activate-service-account --key-file=$gcp_secret_key
 while true; do
   gcloud --quiet compute instances list \
         "--filter=name~'${vm_prefix}.*'" \
-        --zones=${zone} \
+        --zones=${ZONE} \
         --format='table[no-heading](name)' > instance-list
   instances="$(cat instance-list)"
   if [ "${instances}" = "" ]; then
