@@ -399,8 +399,7 @@ blocks:
       prologue:
         commands:
           - cd felix
-          - cache restore go-pkg-cache
-          - cache restore go-mod-cache
+          - cache restore go-pkg-cache-volume
       jobs:
         - name: Build and run UT, k8sfv
           execution_time_limit:
@@ -409,8 +408,7 @@ blocks:
             - make build image fv-prereqs
             - "cache store bin-${SEMAPHORE_GIT_SHA} bin"
             - "cache store fv.test-${SEMAPHORE_GIT_SHA} fv/fv.test"
-            - cache store go-pkg-cache .go-pkg-cache
-            - "cache store go-mod-cache ${HOME}/go/pkg/mod/cache"
+            - cache store go-pkg-cache-volume /var/lib/docker/volumes/go-pkg-cache/
             - docker save -o /tmp/calico-felix-test.tar calico/felix-test:latest-amd64
             - "cache store felix-image-${SEMAPHORE_GIT_SHA} /tmp/calico-felix-test.tar"
             - docker save -o /tmp/felixtest-typha.tar felix-test/typha:latest-amd64
@@ -432,8 +430,7 @@ blocks:
       prologue:
         commands:
           - cd felix
-          - cache restore go-pkg-cache
-          - cache restore go-mod-cache
+          - cache restore go-pkg-cache-volume
       jobs:
         - name: Build binary
           matrix:
@@ -457,8 +454,7 @@ blocks:
       prologue:
         commands:
           - cd felix
-          - cache restore go-pkg-cache
-          - cache restore go-mod-cache
+          - cache restore go-pkg-cache-volume
       jobs:
         - name: Build binary
           commands:
@@ -525,8 +521,7 @@ blocks:
       prologue:
         commands:
           - cd felix
-          - cache restore go-pkg-cache
-          - cache restore go-mod-cache
+          - cache restore go-pkg-cache-volume
           - "cache restore bin-${SEMAPHORE_GIT_SHA}"
           - "cache restore fv.test-${SEMAPHORE_GIT_SHA}"
           - "cache restore felix-image-${SEMAPHORE_GIT_SHA}"

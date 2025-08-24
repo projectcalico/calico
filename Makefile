@@ -3,20 +3,17 @@ PACKAGE_NAME = github.com/projectcalico/calico
 include metadata.mk
 include lib.Makefile
 
-DOCKER_RUN := mkdir -p ./.go-pkg-cache bin $(GOMOD_CACHE) && \
-	docker run --rm \
+DOCKER_RUN := docker run --rm \
 		--net=host \
 		--init \
 		$(EXTRA_DOCKER_ARGS) \
 		-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
-		-e GOCACHE=/go-cache \
 		$(GOARCH_FLAGS) \
 		-e GOPATH=/go \
 		-e OS=$(BUILDOS) \
 		-e GOOS=$(BUILDOS) \
 		-e GOFLAGS=$(GOFLAGS) \
 		-v $(CURDIR):/go/src/github.com/projectcalico/calico:rw \
-		-v $(CURDIR)/.go-pkg-cache:/go-cache:rw \
 		-w /go/src/$(PACKAGE_NAME)
 
 .PHONY: update-file-copyrights
