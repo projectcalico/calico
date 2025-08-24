@@ -196,6 +196,9 @@ func (c *profileClient) List(ctx context.Context, list model.ListInterface, revi
 		if nsName != "" {
 			opts.FieldSelector = fields.OneTermEqualSelector("metadata.name", nsName).String()
 		}
+		if nl.LabelSelector != "" {
+			opts.LabelSelector = nl.LabelSelector
+		}
 		return c.clientSet.CoreV1().Namespaces().List(ctx, opts)
 	}
 	convertFunc := func(r Resource) ([]*model.KVPair, error) {
