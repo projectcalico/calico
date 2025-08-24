@@ -24,14 +24,15 @@ import (
 	"k8s.io/apimachinery/pkg/util/uuid"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
+	"github.com/projectcalico/calico/libcalico-go/lib/testutils/k8sfake"
 )
 
 var _ = Describe("Profile tests with fake clientSet", func() {
-	var clientSet *FakeClientSetWithListRevAndFiltering
+	var clientSet *k8sfake.FakeClientSetWithListRevAndFiltering
 	var client *profileClient
 
 	BeforeEach(func() {
-		clientSet = NewFakeClientSetWithListRevAndFiltering()
+		clientSet = k8sfake.NewFakeClientSetWithListRevAndFiltering()
 
 		// Use unique revision for each of the base types so we can verify that
 		// they flow through correctly.
