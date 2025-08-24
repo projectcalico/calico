@@ -107,23 +107,6 @@ var _ = Context("_NET_SETS_ Network sets tests with initialized Felix and etcd d
 		felixPID = tc.Felixes[0].GetFelixPID()
 	})
 
-	AfterEach(func() {
-		if CurrentGinkgoTestDescription().Failed {
-			if NFTMode() {
-				logNFTDiags(tc.Felixes[0])
-			} else {
-				tc.Felixes[0].Exec("iptables-save", "-c")
-			}
-		}
-		tc.Stop()
-
-		if CurrentGinkgoTestDescription().Failed {
-			etcd.Exec("etcdctl", "get", "/", "--prefix", "--keys-only")
-		}
-		etcd.Stop()
-		infra.Stop()
-	})
-
 	describeConnTests := func(c netsetsConfig) {
 		var (
 			w, nw [4]*workload.Workload
@@ -1053,15 +1036,6 @@ var _ = Context("_NET_SETS_ Network sets tests with initialized Felix and etcd d
 					It("should have expected connectivity", assertBaselineNetsetsConnectivity)
 				})
 			})
-		})
-
-		AfterEach(func() {
-			for ii := range w {
-				w[ii].Stop()
-			}
-			for ii := range nw {
-				nw[ii].Stop()
-			}
 		})
 	}
 

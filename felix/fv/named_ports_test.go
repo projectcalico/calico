@@ -940,13 +940,7 @@ func describeNamedPortHostEndpointTests(getInfra infrastructure.InfraFactory, na
 				felix.Exec("ip", "a")
 			}
 		}
-
-		for _, wl := range hostW {
-			wl.Stop()
-		}
-		tc.Stop()
-
-		infra.Stop()
+		// Cleanup is handled by DatastoreDescribe's AfterEach via infra.Stop().
 	})
 
 	expectNoConnectivity := func() {

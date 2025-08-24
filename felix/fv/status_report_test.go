@@ -62,15 +62,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ openstack status-reporting"
 		w.ConfigureInInfra(infra)
 	})
 
-	AfterEach(func() {
-		w.Stop()
-		tc.Stop()
-		if CurrentGinkgoTestDescription().Failed {
-			infra.DumpErrorData()
-		}
-		infra.Stop()
-	})
-
 	Describe("With status-reporting writing to etcd", func() {
 		getStatuses := func() []*model.KVPair {
 			wlListOpts := model.WorkloadEndpointStatusListOptions{

@@ -21,6 +21,7 @@ import (
 	"net"
 	"os"
 
+	"github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
@@ -39,6 +40,9 @@ type EtcdDatastoreInfra struct {
 
 	Endpoint    string
 	BadEndpoint string
+
+	cleanups cleanupStack
+	felixes  []*Felix
 }
 
 func createEtcdDatastoreInfra(opts ...CreateOption) DatastoreInfra {
@@ -55,11 +59,33 @@ func GetEtcdDatastoreInfra() (*EtcdDatastoreInfra, error) {
 	if eds.etcdContainer == nil {
 		return nil, errors.New("failed to create etcd container")
 	}
+	// Ensure etcd is stopped via cleanup stack.
+	eds.AddTearDown(func() {
+		if eds.etcdContainer != nil {
+			eds.etcdContainer.StopLogs()
+			eds.etcdContainer.Stop()
+		}
+	})
 
 	// In BPF mode, start BPF logging.
 	if os.Getenv("FELIX_FV_ENABLE_BPF") == "true" {
 		eds.bpfLog = RunBPFLog()
+		eds.AddTearDown(func() {
+			if eds.bpfLog != nil {
+				eds.bpfLog.StopLogs()
+				eds.bpfLog.Stop()
+			}
+		})
 	}
+
+	// Ensure client is closed via cleanup stack (if it was created).
+	eds.AddTearDown(func() {
+		if eds.client != nil {
+			if err := eds.client.Close(); err != nil {
+				log.WithError(err).Warn("Client Close() returned an error.  Ignoring.")
+			}
+		}
+	})
 
 	eds.Endpoint = fmt.Sprintf("https://%s:6443", eds.etcdContainer.IP)
 	eds.BadEndpoint = fmt.Sprintf("https://%s:1234", eds.etcdContainer.IP)
@@ -218,14 +244,32 @@ func (eds *EtcdDatastoreInfra) AddDefaultDeny() error {
 }
 
 func (eds *EtcdDatastoreInfra) DumpErrorData() {
+	// Per-Felix diagnostics first for context.
+	for _, f := range eds.felixes {
+		if f != nil {
+			dumpFelixDiags(f)
+		}
+	}
+	// Etcd datastore contents (keys only) for quick overview.
 	eds.etcdContainer.Exec("etcdctl", "get", "/", "--prefix", "--keys-only")
 }
 
 func (eds *EtcdDatastoreInfra) Stop() {
-	eds.bpfLog.StopLogs()
-	eds.etcdContainer.StopLogs()
-	eds.bpfLog.Stop()
-	err := eds.client.Close()
-	log.WithError(err).Warn("Client Close() returned an error.  Ignoring.")
-	eds.etcdContainer.Stop()
+	// Collect diagnostics first, before tearing anything down.
+	if ginkgo.CurrentGinkgoTestDescription().Failed {
+		eds.DumpErrorData()
+	}
+	// Run registered teardowns (reverse order). Do not suppress panics.
+	eds.cleanups.Run()
+}
+
+func (eds *EtcdDatastoreInfra) AddTearDown(f func()) {
+	eds.cleanups.Add(f)
+}
+
+func (eds *EtcdDatastoreInfra) RegisterFelix(f *Felix) {
+	if f == nil {
+		return
+	}
+	eds.felixes = append(eds.felixes, f)
 }
