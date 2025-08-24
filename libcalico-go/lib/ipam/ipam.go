@@ -26,6 +26,7 @@ import (
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sync/semaphore"
+	"k8s.io/apimachinery/pkg/labels"
 
 	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
@@ -2349,4 +2350,76 @@ func (c ipamClient) getReservedIPs(ctx context.Context) (addrFilter, error) {
 		}
 	}
 	return cidrs, nil
+}
+
+func (c ipamClient) UpgradeHost(ctx context.Context, nodeName string) error {
+	delay := 100 * time.Millisecond
+	for {
+		err := c.attemptUpgradeHost(ctx, nodeName)
+		if err == nil {
+			return nil
+		}
+		log.WithError(err).Errorf("Failed to upgrade qIPAM blocks of this host.")
+		select {
+		case <-ctx.Done():
+			return err
+		case <-time.After(delay):
+			delay *= 2
+		}
+		log.WithError(err).Error("Retrying...")
+	}
+}
+
+func (c ipamClient) attemptUpgradeHost(ctx context.Context, nodeName string) error {
+	// Upgrade the block affinities that belong to this host.  Add labels that
+	// allow for efficient lookups in KDD.  Note that etcd still stores the
+	// old "v1" model.BlockAffinity objects directly so this List() will
+	// return no results in etcd.
+	log.Info("Upgrading any IPAM affinities from older versions....")
+
+	// We know that already-upgraded blocks will have the affinityType label,
+	// we can list only non-upgraded blocks.  We can't limit to any particular
+	// host here because that's the whole point of adding the new labels!
+	ls, err := labels.Parse("!" + v3.LabelAffinityType)
+	if err != nil {
+		return err
+	}
+	kvs, err := c.client.List(ctx, model.ResourceListOptions{
+		Kind:          libapiv3.KindBlockAffinity,
+		LabelSelector: ls,
+	}, "")
+	if err != nil {
+		return err
+	}
+
+	var errs []error
+	numUpgraded := 0
+	for _, kv := range kvs.KVPairs {
+		if val, ok := kv.Value.(*libapiv3.BlockAffinity); ok {
+			if val.Spec.Node != nodeName {
+				// Only do _our_ affinities to avoid n x n conflicts with other
+				// nodes also doing this operation.
+				continue
+			}
+			model.EnsureBlockAffinityLabels(val)
+			_, err := c.client.Update(ctx, kv)
+			if err != nil {
+				errs = append(errs, err)
+				if errors.Is(err, context.DeadlineExceeded) {
+					break
+				}
+				continue
+			}
+			numUpgraded++
+		}
+	}
+	if numUpgraded == 0 && len(errs) == 0 {
+		log.Info("No affinities needed to be upgraded.")
+	}
+
+	log.Infof("Upgraded %d block affinities belonging to this host.", numUpgraded)
+	if len(errs) > 0 {
+		return fmt.Errorf("failed to upgrade some block affinities: %v", errs)
+	}
+	return nil
 }
