@@ -74,8 +74,9 @@ var _ = Describe("BPF service type change", func() {
 		},
 		Ports: []discoveryv1.EndpointPort{
 			{
-				Port: ptr.To(int32(1234)),
-				Name: ptr.To("1234"),
+				Port:     ptr.To(int32(1234)),
+				Name:     ptr.To("1234"),
+				Protocol: ptr.To(v1.ProtocolTCP),
 			},
 		},
 	}

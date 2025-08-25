@@ -79,7 +79,9 @@ var _ = Describe("BPF kube-proxy", func() {
 			},
 			Ports: []discoveryv1.EndpointPort{
 				{
-					Port: ptr.To(int32(1234)),
+					Port:     ptr.To(int32(1234)),
+					Name:     ptr.To("http"),
+					Protocol: ptr.To(v1.ProtocolTCP),
 				},
 			},
 		}

@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -28,9 +28,9 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/fake"
 	k8sp "k8s.io/kubernetes/pkg/proxy"
-	"k8s.io/utils/ptr"
 
 	"github.com/projectcalico/calico/felix/bpf/proxy"
+	"github.com/projectcalico/calico/lib/std/ptr"
 )
 
 func log(format string, a ...interface{}) {
@@ -87,17 +87,31 @@ var _ = Describe("BPF Proxy", func() {
 	}
 
 	testSvcEpsSlice := &discovery.EndpointSlice{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "testService",
-			Namespace: metav1.NamespaceDefault,
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "EndpointSlice",
+			APIVersion: "discovery.k8s.io/v1",
 		},
-		Endpoints: []discovery.Endpoint{{
-			Addresses: []string{"10.1.2.1", "10.1.2.2"},
-		}},
+		ObjectMeta:  objectMetaV1("testService"),
+		AddressType: discovery.AddressTypeIPv4,
 		Ports: []discovery.EndpointPort{
 			{
-				Port: ptr.To(int32(1234)),
-				Name: ptr.To("1234"),
+				Name:     ptr.ToPtr("1234"),
+				Port:     ptr.ToPtr(int32(1234)),
+				Protocol: ptr.ToPtr(v1.ProtocolTCP),
+			},
+		},
+		Endpoints: []discovery.Endpoint{
+			{
+				Addresses: []string{"10.1.2.1"},
+				Conditions: discovery.EndpointConditions{
+					Ready: ptr.ToPtr(true),
+				},
+			},
+			{
+				Addresses: []string{"10.1.2.2"},
+				Conditions: discovery.EndpointConditions{
+					Ready: ptr.ToPtr(true),
+				},
 			},
 		},
 	}
@@ -122,23 +136,25 @@ var _ = Describe("BPF Proxy", func() {
 	}
 
 	secondSvcEpsSlice := &discovery.EndpointSlice{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "second-service",
-			Namespace: metav1.NamespaceDefault,
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "EndpointSlice",
+			APIVersion: "discovery.k8s.io/v1",
+		},
+		ObjectMeta:  objectMetaV1("second-service"),
+		AddressType: discovery.AddressTypeIPv4,
+		Ports: []discovery.EndpointPort{
+			{
+				Port:     ptr.ToPtr(int32(1231)),
+				Name:     ptr.ToPtr("1221"),
+				Protocol: ptr.ToPtr(v1.ProtocolTCP),
+			},
 		},
 		Endpoints: []discovery.Endpoint{
 			{
-				Addresses: []string{"10.1.2.11"},
-			},
-			{
-				Addresses: []string{"10.1.2.22"},
-			},
-		},
-		Ports: []discovery.EndpointPort{
-			{
-				Port:     ptr.To(int32(1221)),
-				Name:     ptr.To("1221"),
-				Protocol: ptr.To(v1.ProtocolTCP),
+				Addresses: []string{"10.1.2.11", "10.1.2.22"},
+				Conditions: discovery.EndpointConditions{
+					Ready: ptr.ToPtr(true),
+				},
 			},
 		},
 	}
@@ -226,20 +242,25 @@ var _ = Describe("BPF Proxy", func() {
 
 				By("deleting an endpoint of the second-service", func() {
 					slice := &discovery.EndpointSlice{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:      "second-service",
-							Namespace: metav1.NamespaceDefault,
+						TypeMeta: metav1.TypeMeta{
+							Kind:       "EndpointSlice",
+							APIVersion: "discovery.k8s.io/v1",
+						},
+						ObjectMeta:  objectMetaV1("second-service"),
+						AddressType: discovery.AddressTypeIPv4,
+						Ports: []discovery.EndpointPort{
+							{
+								Port:     ptr.ToPtr(int32(1221)),
+								Name:     ptr.ToPtr("1221"),
+								Protocol: ptr.ToPtr(v1.ProtocolTCP),
+							},
 						},
 						Endpoints: []discovery.Endpoint{
 							{
 								Addresses: []string{"10.1.2.11"},
-							},
-						},
-						Ports: []discovery.EndpointPort{
-							{
-								Port:     ptr.To(int32(1221)),
-								Name:     ptr.To("1221"),
-								Protocol: ptr.To(v1.ProtocolTCP),
+								Conditions: discovery.EndpointConditions{
+									Ready: ptr.ToPtr(true),
+								},
 							},
 						},
 					}
@@ -277,35 +298,43 @@ var _ = Describe("BPF Proxy", func() {
 
 				By("adding Endpoints with named ports", func() {
 					httpSvcEps := &discovery.EndpointSlice{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:      "http-service",
-							Namespace: metav1.NamespaceDefault,
+						TypeMeta: metav1.TypeMeta{
+							Kind:       "EndpointSlice",
+							APIVersion: "discovery.k8s.io/v1",
+						},
+						ObjectMeta:  objectMetaV1("http-service"),
+						AddressType: discovery.AddressTypeIPv4,
+						Ports: []discovery.EndpointPort{
+							{
+								Name:     ptr.ToPtr("http"),
+								Port:     ptr.ToPtr(int32(80)),
+								Protocol: ptr.ToPtr(v1.ProtocolTCP),
+							},
+							{
+								Name:     ptr.ToPtr("http-alt"),
+								Port:     ptr.ToPtr(int32(8080)),
+								Protocol: ptr.ToPtr(v1.ProtocolTCP),
+							},
+							{
+								Name:     ptr.ToPtr("https"),
+								Port:     ptr.ToPtr(int32(443)),
+								Protocol: ptr.ToPtr(v1.ProtocolTCP),
+							},
 						},
 						Endpoints: []discovery.Endpoint{
 							{
 								Addresses: []string{"10.1.2.111"},
-								NodeName:  strPtr("testnode"),
+								NodeName:  ptr.ToPtr("testnode"),
+								Conditions: discovery.EndpointConditions{
+									Ready: ptr.ToPtr(true),
+								},
 							},
 							{
 								Addresses: []string{"10.1.2.222"},
-								NodeName:  strPtr("anothertestnode"),
-							},
-						},
-						Ports: []discovery.EndpointPort{
-							{
-								Name:     ptr.To("http"),
-								Port:     ptr.To(int32(80)),
-								Protocol: ptr.To(v1.ProtocolTCP),
-							},
-							{
-								Name:     ptr.To("http-alt"),
-								Port:     ptr.To(int32(8080)),
-								Protocol: ptr.To(v1.ProtocolTCP),
-							},
-							{
-								Name:     ptr.To("https"),
-								Port:     ptr.To(int32(443)),
-								Protocol: ptr.To(v1.ProtocolTCP),
+								NodeName:  ptr.ToPtr("anothertestnode"),
+								Conditions: discovery.EndpointConditions{
+									Ready: ptr.ToPtr(true),
+								},
 							},
 						},
 					}
@@ -335,20 +364,25 @@ var _ = Describe("BPF Proxy", func() {
 
 				By("including endpoints without service", func() {
 					eps := &discovery.EndpointSlice{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:      "noservice",
-							Namespace: metav1.NamespaceDefault,
+						TypeMeta: metav1.TypeMeta{
+							Kind:       "EndpointSlice",
+							APIVersion: "discovery.k8s.io/v1",
 						},
+						ObjectMeta:  objectMetaV1("noservice"),
 						AddressType: discovery.AddressTypeIPv4,
+						Ports: []discovery.EndpointPort{
+							{
+								Name:     ptr.ToPtr("666"),
+								Port:     ptr.ToPtr(int32(666)),
+								Protocol: ptr.ToPtr(v1.ProtocolTCP),
+							},
+						},
 						Endpoints: []discovery.Endpoint{
 							{
 								Addresses: []string{"10.1.2.244"},
-							},
-						},
-						Ports: []discovery.EndpointPort{
-							{
-								Port:     ptr.To(int32(666)),
-								Protocol: ptr.To(v1.ProtocolTCP),
+								Conditions: discovery.EndpointConditions{
+									Ready: ptr.ToPtr(true),
+								},
 							},
 						},
 					}
@@ -383,20 +417,25 @@ var _ = Describe("BPF Proxy", func() {
 					}
 
 					nodeportEps := &discovery.EndpointSlice{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:      "nodeport",
-							Namespace: metav1.NamespaceDefault,
+						TypeMeta: metav1.TypeMeta{
+							Kind:       "EndpointSlice",
+							APIVersion: "discovery.k8s.io/v1",
 						},
+						ObjectMeta:  objectMetaV1("nodeport"),
 						AddressType: discovery.AddressTypeIPv4,
+						Ports: []discovery.EndpointPort{
+							{
+								Name:     ptr.ToPtr("1234"),
+								Port:     ptr.ToPtr(int32(1234)),
+								Protocol: ptr.ToPtr(v1.ProtocolTCP),
+							},
+						},
 						Endpoints: []discovery.Endpoint{
 							{
 								Addresses: []string{"10.1.2.1"},
-							},
-						},
-						Ports: []discovery.EndpointPort{
-							{
-								Port:     ptr.To(int32(1234)),
-								Protocol: ptr.To(v1.ProtocolTCP),
+								Conditions: discovery.EndpointConditions{
+									Ready: ptr.ToPtr(true),
+								},
 							},
 						},
 					}
@@ -456,29 +495,40 @@ var _ = Describe("BPF Proxy", func() {
 				}
 
 				nodeportEps := &discovery.EndpointSlice{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "nodeport",
-						Namespace: metav1.NamespaceDefault,
+					TypeMeta: metav1.TypeMeta{
+						Kind:       "EndpointSlice",
+						APIVersion: "discovery.k8s.io/v1",
 					},
+					ObjectMeta:  objectMetaV1("nodeport"),
 					AddressType: discovery.AddressTypeIPv4,
+					Ports: []discovery.EndpointPort{
+						{
+							Name:     ptr.ToPtr("1234"),
+							Port:     ptr.ToPtr(int32(1234)),
+							Protocol: ptr.ToPtr(v1.ProtocolTCP),
+						},
+					},
 					Endpoints: []discovery.Endpoint{
 						{
 							Addresses: []string{"10.1.2.1"},
 							NodeName:  &testNodeName,
+							Conditions: discovery.EndpointConditions{
+								Ready: ptr.ToPtr(true),
+							},
 						},
 						{
 							Addresses: []string{"10.1.2.2"},
 							NodeName:  &testNodeNameOther,
+							Conditions: discovery.EndpointConditions{
+								Ready: ptr.ToPtr(true),
+							},
 						},
 						{
 							Addresses: []string{"10.1.2.3"},
 							NodeName:  nil,
-						},
-					},
-					Ports: []discovery.EndpointPort{
-						{
-							Port:     ptr.To(int32(1234)),
-							Protocol: ptr.To(v1.ProtocolTCP),
+							Conditions: discovery.EndpointConditions{
+								Ready: ptr.ToPtr(true),
+							},
 						},
 					},
 				}
@@ -517,14 +567,8 @@ var _ = Describe("BPF Proxy", func() {
 
 				By("placing one endpoint to terminating state")
 
-				falsePtr := new(bool)
-				*falsePtr = false
-
-				truePtr := new(bool)
-				*truePtr = true
-
-				testSvcEpsSlice.Endpoints[0].Conditions.Ready = falsePtr
-				testSvcEpsSlice.Endpoints[0].Conditions.Terminating = truePtr
+				testSvcEpsSlice.Endpoints[0].Conditions.Ready = ptr.ToPtr(false)
+				testSvcEpsSlice.Endpoints[0].Conditions.Terminating = ptr.ToPtr(true)
 				err := k8s.Tracker().Update(discovery.SchemeGroupVersion.WithResource("endpointslices"),
 					testSvcEpsSlice, "default")
 				Expect(err).NotTo(HaveOccurred())
@@ -692,9 +736,8 @@ func objectMetaV1(name string) metav1.ObjectMeta {
 	return metav1.ObjectMeta{
 		Name:      name,
 		Namespace: metav1.NamespaceDefault,
+		Labels: map[string]string{
+			"kubernetes.io/service-name": name,
+		},
 	}
-}
-
-func strPtr(s string) *string {
-	return &s
 }
