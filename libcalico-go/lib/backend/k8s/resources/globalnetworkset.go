@@ -40,7 +40,8 @@ func NewGlobalNetworkSetClient(c kubernetes.Interface, r rest.Interface) K8sReso
 			Kind:       apiv3.KindGlobalNetworkSet,
 			APIVersion: apiv3.GroupVersionCurrent,
 		},
-		k8sListType:  reflect.TypeOf(apiv3.GlobalNetworkSetList{}),
-		resourceKind: apiv3.KindGlobalNetworkSet,
+		k8sListType:    reflect.TypeOf(apiv3.GlobalNetworkSetList{}),
+		resourceKind:   apiv3.KindGlobalNetworkSet,
+		applyKindLabel: true,
 	}
 }

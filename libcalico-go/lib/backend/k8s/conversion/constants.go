@@ -44,6 +44,9 @@ const (
 	// name exactly.
 	NameLabel = "projectcalico.org/name"
 
+	// KindLabel is a label that can be used to refine selection by matching kind
+	KindLabel = "projectcalico.org/kind"
+
 	// AdminPolicyRuleNameLabel is a label that show a rule's name before conversion to Calico data model.
 	// As an example, it holds an admin network policy rule name before conversion to GNPs.
 	AdminPolicyRuleNameLabel = "name"

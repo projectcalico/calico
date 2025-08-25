@@ -28,6 +28,7 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest/fake"
 
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 	calischeme "github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/scheme"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
@@ -304,5 +305,58 @@ var _ = Describe("Custom resource conversion methods (tested using namespaced Ne
 		logrus.Debug("URL: ", url)
 		Expect(url.Path).To(Equal("/apis/namespaces/mynamespace/networksets"))
 		Expect(url.Query().Get("fieldSelector")).To(Equal("metadata.name=foo"))
+	})
+})
+
+var _ = Describe("Custom resource applyKindLabelToResource method", func() {
+	// Since we are only testing applyKindLabelToResource method, any resource backed by
+	// customK8sResourceClient can be tested.
+
+	It("Should apply kind label to resource without labels", func() {
+		By("Testing with GlobalNetworkSet with no labels")
+		client := NewGlobalNetworkSetClient(nil, nil).(*customK8sResourceClient)
+		res1 := &apiv3.GlobalNetworkSet{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       apiv3.KindGlobalNetworkSet,
+				APIVersion: apiv3.GroupVersionCurrent,
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:            "name1",
+				ResourceVersion: "rv",
+				UID:             "uid1",
+			},
+			Spec: apiv3.GlobalNetworkSetSpec{},
+		}
+
+		client.applyKindLabelToResource(res1)
+		Expect(res1.GetObjectMeta().GetLabels()).To(Equal(map[string]string{
+			conversion.KindLabel: apiv3.KindGlobalNetworkSet,
+		}))
+	})
+
+	It("Should apply kind label to resource with labels", func() {
+		By("Testing with NetworkSet with existing labels")
+		client := NewNetworkSetClient(nil, nil).(*customK8sResourceClient)
+		res2 := &apiv3.NetworkSet{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       apiv3.KindGlobalNetworkSet,
+				APIVersion: apiv3.GroupVersionCurrent,
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:            "name2",
+				ResourceVersion: "rv",
+				UID:             "uid2",
+				Labels: map[string]string{
+					"foo": "bar",
+				},
+			},
+			Spec: apiv3.NetworkSetSpec{},
+		}
+
+		client.applyKindLabelToResource(res2)
+		Expect(res2.GetObjectMeta().GetLabels()).To(Equal(map[string]string{
+			"foo":                "bar",
+			conversion.KindLabel: apiv3.KindNetworkSet,
+		}))
 	})
 })
