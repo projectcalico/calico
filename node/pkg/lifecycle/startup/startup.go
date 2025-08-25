@@ -259,8 +259,8 @@ func ManageNodeCondition() {
 		checkBIRD6 = true
 	}
 
-	// We always check felix.
-	checkFelix := true
+	// Check Felix health if FELIX_HEALTHENABLED is set to true.
+	checkFelix := os.Getenv("FELIX_HEALTHENABLED") == "true"
 
 	// Wait for Felix and BIRD to be ready before setting the NetworkUnavailable condition to false.
 	//
