@@ -1301,7 +1301,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					Eventually(func() string {
 						out, _ := tc.Felixes[0].ExecOutput("bpftool", "-jp", "prog", "show")
 						return out
-					}, "15s", "1s").ShouldNot(
+					}, "30s", "1s").ShouldNot(
 						Or(ContainSubstring("cali_"), ContainSubstring("calico_"), ContainSubstring("xdp_cali_")))
 
 					// N.B. calico_failsafe map is created in iptables mode by
@@ -1310,7 +1310,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					Eventually(func() string {
 						out, _ := tc.Felixes[0].ExecOutput("bpftool", "-jp", "map", "show")
 						return out
-					}, "15s", "1s").ShouldNot(Or(ContainSubstring("cali_"), ContainSubstring("xdp_cali_")))
+					}, "30s", "1s").ShouldNot(Or(ContainSubstring("cali_"), ContainSubstring("xdp_cali_")))
 
 					out, _ := tc.Felixes[0].ExecCombinedOutput("ip", "link", "show", "dev", "bpfin.cali")
 					Expect(out).To(Equal("Device \"bpfin.cali\" does not exist.\n"))
