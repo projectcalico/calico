@@ -32,7 +32,7 @@ global_job_config:
       # install-package is a Semaphore-specific script that has a few benefits,
       # notably being much faster because it uses Semaphore's cache to fetch
       # files from.
-      - install-package --no-install-recommends devscripts moreutils patchelf
+      - install-package --no-install-recommends devscripts moreutils patchelf jq
 
 blocks:
   # This promotion is only _automatic_ for the master branch.  For other
