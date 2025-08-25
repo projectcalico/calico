@@ -52,6 +52,11 @@ const (
 	Stamp       = time.Stamp
 )
 
+var (
+	UTC   = time.UTC
+	Local = time.Local
+)
+
 // DoWithClock temporarily sets the shim as the time and runs the given function. After the function is run, the time
 // is returned to its original state.
 func DoWithClock(shim Clock, fn func() error) error {
