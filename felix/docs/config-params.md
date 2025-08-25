@@ -581,6 +581,19 @@ from workloads.
 | `FelixConfiguration` schema | Boolean. |
 | Default value (YAML) | `false` |
 
+### `CgroupV2Path` (config file) / `cgroupV2Path` (YAML)
+
+Overrides the default location where to find the cgroup hierarchy.
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_CgroupV2Path` |
+| Encoding (env var/config file) | String |
+| Default value (above encoding) | none |
+| `FelixConfiguration` field | `cgroupV2Path` (YAML) `CgroupV2Path` (Go API) |
+| `FelixConfiguration` schema | String. |
+| Default value (YAML) | none |
+
 ### `ChainInsertMode` (config file) / `chainInsertMode` (YAML)
 
 Controls whether Felix hooks the kernel's top-level iptables chains by inserting a rule
