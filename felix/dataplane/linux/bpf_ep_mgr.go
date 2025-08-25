@@ -2368,6 +2368,10 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 		}
 	}
 
+	if wep != nil && len(wep.QosPolicies) > 0 {
+		ap.DSCP = uint8(wep.QosPolicies[0].Dscp)
+	}
+
 	if err := m.wepStateFillJumps(ap, &state); err != nil {
 		return state, err
 	}
