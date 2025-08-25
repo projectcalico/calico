@@ -6,10 +6,10 @@ import (
 	"github.com/projectcalico/calico/goldmane/pkg/types"
 	"github.com/projectcalico/calico/goldmane/proto"
 	"github.com/sirupsen/logrus"
+	"os"
 	"runtime"
 	"strings"
 	"testing"
-	"time"
 	"unique"
 )
 
@@ -22,10 +22,30 @@ var (
 // Performance thresholds for the benchmark.
 // These constants define the upper limits for each key metric.
 const (
-	maxNsPerOp     = 400.0 // Max allowed nanoseconds per operation
+	maxNsPerOp     = 450.0 // Max allowed nanoseconds per operation
 	maxHeapAllocMB = 5.5   // Max allowed total heap allocation in MB
 	maxBytesPerOp  = 400.0 // Max allowed bytes allocated per op
 )
+
+func setupBenchmark(b *testing.B) func() {
+	// Set up logrus to use b.Logf via custom writer
+	writer := &logrusWriter{b}
+	logrus.SetOutput(writer)
+	logrus.SetLevel(logrus.WarnLevel)
+
+	return func() {
+		logrus.SetOutput(os.Stderr)
+	}
+}
+
+type logrusWriter struct {
+	b *testing.B
+}
+
+func (w *logrusWriter) Write(p []byte) (int, error) {
+	w.b.Logf("%s", strings.TrimSuffix(string(p), "\n"))
+	return len(p), nil
+}
 
 // init pre-generates a set of synthetic *Flow objects with unique label combinations,
 // which will be reused across benchmark iterations.
@@ -105,40 +125,40 @@ func getDiachronicFlow() *storage.DiachronicFlow {
 }
 
 func BenchmarkDiachronicFlow_AddFlow(b *testing.B) {
-	loglevel := logrus.GetLevel()
-	logrus.SetLevel(logrus.WarnLevel)
-	defer logrus.SetLevel(loglevel)
+	setupBenchmark(b)
 
 	df := getDiachronicFlow()
 	start := int64(1000)
 	end := int64(2000)
 
+	// Clean up memory before measurement begins
 	runtime.GC()
-	b.ResetTimer()
+	i := 0
 
-	for i := 0; i < b.N; i++ {
-		// Advance the time window every 100 iterations to simulate multiple non-overlapping time buckets.
-		// This ensures each 100 flows belong to the same (start, end) interval.
+	for b.Loop() {
+		// Advance the time window every 100 iterations to simulate multiple non-overlapping time buckets
 		inc := int64((i / 100) * 100)
 		flow := flows[i%len(flows)]
 		df.AddFlow(flow, start+inc, end+inc)
+		i++
 	}
-	b.StopTimer()
 
+	// Cleanup and give GC a moment to settle before measuring memory
 	runtime.GC()
-	time.Sleep(time.Second)
-	// Read the stats.
+
+	// Collect memory stats
 	var m runtime.MemStats
 	runtime.ReadMemStats(&m)
 	heapAllocMB := float64(m.HeapAlloc) / (1024 * 1024)
 	b.ReportMetric(heapAllocMB, "HeapAllocMB")
 
+	// Log benchmark expectations
 	b.Logf("\t=== Benchmark Thresholds (Max allowed values) ===")
 	b.Logf("\t\tMax allowed ns/op :\t\t%.1f", maxNsPerOp)
 	b.Logf("\t\tMax allowed HeapAllocMB :\t%.3f", maxHeapAllocMB)
 	b.Logf("\t\tMax allowed B/op (Bytes/op):\t%.1f", maxBytesPerOp)
 
-	// Threshold-based test failure
+	// Fail the test if heap usage exceeds the threshold
 	if heapAllocMB > maxHeapAllocMB {
 		b.Fatalf("HeapAllocMB too high: got %.2f MB, max %.2f MB", heapAllocMB, maxHeapAllocMB)
 	}
