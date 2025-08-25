@@ -2,15 +2,17 @@ package storage_test
 
 import (
 	"fmt"
-	"github.com/projectcalico/calico/goldmane/pkg/storage"
-	"github.com/projectcalico/calico/goldmane/pkg/types"
-	"github.com/projectcalico/calico/goldmane/proto"
-	"github.com/sirupsen/logrus"
 	"os"
 	"runtime"
 	"strings"
 	"testing"
 	"unique"
+
+	"github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/calico/goldmane/pkg/storage"
+	"github.com/projectcalico/calico/goldmane/pkg/types"
+	"github.com/projectcalico/calico/goldmane/proto"
 )
 
 var (
