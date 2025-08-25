@@ -13,9 +13,10 @@
 #include <linux/icmp.h>
 #endif
 
-#include "types.h"
-#include "skb.h"
+#include "counters.h"
 #include "routes.h"
+#include "skb.h"
+#include "types.h"
 
 #define PARSING_OK 0
 #define PARSING_OK_V6 1
