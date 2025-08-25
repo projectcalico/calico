@@ -55,12 +55,6 @@ const (
 	defaultCollectionRatelimit = time.Second
 )
 
-func init() {
-	prometheus.MustRegister(
-		MustNewWireguardMetrics(),
-	)
-}
-
 type Metrics struct {
 	hostname           string
 	newWireguardClient func() (netlinkshim.Wireguard, error)
