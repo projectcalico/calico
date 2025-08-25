@@ -75,6 +75,7 @@ type AttachPoint struct {
 	IngressPacketBurst      uint16
 	EgressPacketRate        uint16
 	EgressPacketBurst       uint16
+	DSCP                    uint8
 }
 
 var ErrDeviceNotFound = errors.New("device not found")
@@ -425,6 +426,7 @@ func (ap *AttachPoint) Configure() *libbpf.TcGlobalData {
 		IngressPacketBurst: ap.IngressPacketBurst,
 		EgressPacketRate:   ap.EgressPacketRate,
 		EgressPacketBurst:  ap.EgressPacketBurst,
+		DSCP:               ap.DSCP,
 	}
 
 	if ap.Profiling == "Enabled" {
