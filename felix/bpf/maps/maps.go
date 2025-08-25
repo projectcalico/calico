@@ -57,9 +57,7 @@ var bpfMapObjMap = map[string]string{
 	"xdp_cali_progs": "xdp_map_stub.o",
 
 	"cali_v4_arp":     "ipv4_map_stub.o",
-	"cali_v4_ccq2":    "ipv4_map_stub.o",
 	"cali_v4_ccq":     "ipv4_map_stub.o",
-	"cali_v4_ct4":     "ipv4_map_stub.o",
 	"cali_v4_ct":      "ipv4_map_stub.o",
 	"cali_v4_ct_nats": "ipv4_map_stub.o",
 	"cali_v4_frags":   "ipv4_map_stub.o",
@@ -74,9 +72,7 @@ var bpfMapObjMap = map[string]string{
 	"cali_v4_srmsg":   "ipv4_map_stub.o",
 
 	"cali_v6_arp":     "ipv6_map_stub.o",
-	"cali_v6_ccq2":    "ipv6_map_stub.o",
 	"cali_v6_ccq":     "ipv6_map_stub.o",
-	"cali_v6_ct4":     "ipv6_map_stub.o",
 	"cali_v6_ct":      "ipv6_map_stub.o",
 	"cali_v6_ct_nats": "ipv6_map_stub.o",
 	"cali_v6_fsafes":  "ipv6_map_stub.o",
@@ -762,6 +758,7 @@ func (b *PinnedMap) EnsureExists() error {
 		"versionedFilename": b.VersionedFilename(),
 	}).Debug("Map didn't exist, creating it")
 	objName, ok := bpfMapObjMap[b.Name]
+	loadedFromObj := false
 	if ok {
 		log.WithFields(log.Fields{"objName": objName, "b.VersionedName()": b.VersionedName()}).Debug("Creating map from obj file")
 		obj, err := libbpf.OpenObject(path.Join(bpfdefs.ObjectDir, objName))
@@ -771,7 +768,9 @@ func (b *PinnedMap) EnsureExists() error {
 		defer obj.Close()
 		for m, err := obj.FirstMap(); m != nil && err == nil; m, err = m.NextMap() {
 			// Only set up PinnedMap 'b', skip other maps in obj
-			if m.Name() != b.VersionedName() {
+			if m.Name() == b.VersionedName() {
+				loadedFromObj = true
+			} else {
 				continue
 			}
 
@@ -789,14 +788,19 @@ func (b *PinnedMap) EnsureExists() error {
 			return fmt.Errorf("error loading obj file %s for map %s: %w", objName, b.VersionedName(), err)
 		}
 
-		fd, err := GetMapFDByPin(b.VersionedFilename())
-		if err != nil {
-			return fmt.Errorf("error getting map FD by pin for map %s: %w", b.VersionedFilename(), err)
+		// Only look for map by pin if it was indeed loaded from the obj file
+		if loadedFromObj {
+			fd, err := GetMapFDByPin(b.VersionedFilename())
+			if err != nil {
+				return fmt.Errorf("error getting map FD by pin for map %s: %w", b.VersionedFilename(), err)
+			}
+			b.fd = FD(fd)
+			b.fdLoaded = true
 		}
-		b.fd = FD(fd)
-		b.fdLoaded = true
-	} else {
-		// Map not found in obj files, create without BTF
+	}
+
+	// Map not found in obj files, create without BTF
+	if !loadedFromObj {
 		log.WithFields(log.Fields{"b.VersionedName()": b.VersionedName()}).Debug("Creating map with libbpf")
 		fd, err := libbpf.CreateBPFMap(b.Type, b.KeySize, b.ValueSize, b.MaxEntries, b.Flags, b.VersionedName())
 		if err != nil {
