@@ -5,6 +5,8 @@
 #ifndef __CALI_BPF_JUMP_H__
 #define __CALI_BPF_JUMP_H__
 
+#include "types.h"
+
 CALI_MAP(cali_state, 4,
 		BPF_MAP_TYPE_PERCPU_ARRAY,
 		__u32, struct cali_tc_state,
