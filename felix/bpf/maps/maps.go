@@ -770,27 +770,23 @@ func (b *PinnedMap) EnsureExists() error {
 		}
 		defer obj.Close()
 		for m, err := obj.FirstMap(); m != nil && err == nil; m, err = m.NextMap() {
-			mapName := m.Name()
-
 			// Only set up PinnedMap 'b', skip other maps in obj
-			if mapName != b.VersionedName() {
+			if m.Name() != b.VersionedName() {
 				continue
 			}
 
-			mapFilename := path.Join(bpfdefs.GlobalPinDir, mapName)
-
-			if size := Size(mapName); size != 0 {
+			if size := Size(b.VersionedName()); size != 0 {
 				if err := m.SetSize(size); err != nil {
-					return fmt.Errorf("error resizing map %s: %w", mapName, err)
+					return fmt.Errorf("error resizing map %s: %w", b.VersionedName(), err)
 				}
 			}
 
-			if err := m.SetPinPath(mapFilename); err != nil {
-				return fmt.Errorf("error pinning map %s to %s: %w", mapName, mapFilename, err)
+			if err := m.SetPinPath(b.VersionedFilename()); err != nil {
+				return fmt.Errorf("error pinning map %s to %s: %w", b.VersionedName(), b.VersionedFilename(), err)
 			}
 		}
 		if err := obj.Load(); err != nil {
-			return fmt.Errorf("error loading obj file %s for map %s: %w", objName, b.Name, err)
+			return fmt.Errorf("error loading obj file %s for map %s: %w", objName, b.VersionedName(), err)
 		}
 
 		fd, err := GetMapFDByPin(b.VersionedFilename())
