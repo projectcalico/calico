@@ -12,6 +12,7 @@
 #include <bpf_core_read.h>
 #include <stddef.h>
 #include <linux/ip.h>
+#include <stdbool.h>
 
 /* CALI_BPF_INLINE must be defined before we include any of our headers. They
  * assume it exists!
