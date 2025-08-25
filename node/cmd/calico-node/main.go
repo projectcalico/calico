@@ -55,7 +55,7 @@ var (
 	runAllocateTunnelAddrs     = flagSet.Bool("allocate-tunnel-addrs", false, "Configure tunnel addresses for this node")
 	allocateTunnelAddrsRunOnce = flagSet.Bool("allocate-tunnel-addrs-run-once", false, "Run allocate-tunnel-addrs in oneshot mode")
 	monitorToken               = flagSet.Bool("monitor-token", false, "Watch for Kubernetes token changes, update CNI config")
-	completeStartup            = flagSet.Bool("complete-startup", false, "Verify that the node is ready to run, and update the NodeReady condition in Kubernetes.")
+	completeStartup            = flagSet.Bool("complete-startup", false, "Update the NetworkUnavailable condition in Kubernetes on successful startup.")
 )
 
 // Options for liveness checks.
