@@ -12,11 +12,30 @@ type (
 	Time = time.Time
 
 	Duration = time.Duration
+
+	Month = time.Month
+
+	Location = time.Location
 )
 
 const (
-	Minute      = time.Minute
+	January Month = 1 + iota
+	February
+	March
+	April
+	May
+	June
+	July
+	August
+	September
+	October
+	November
+	December
+)
+
+const (
 	Hour        = time.Hour
+	Minute      = time.Minute
 	Second      = time.Second
 	Millisecond = time.Millisecond
 	Microsecond = time.Microsecond
@@ -99,4 +118,8 @@ func Unix(sec int64, nsec int64) Time {
 
 func Parse(layout, value string) (Time, error) {
 	return time.Parse(layout, value)
+}
+
+func Date(year int, month Month, day, hour, min, sec, nsec int, loc *Location) Time {
+	return time.Date(year, month, day, hour, min, sec, nsec, loc)
 }
