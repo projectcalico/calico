@@ -3606,6 +3606,7 @@ type HostEndpoint struct {
 	ForwardTiers      []*TierInfo            `protobuf:"bytes,8,rep,name=forward_tiers,json=forwardTiers,proto3" json:"forward_tiers,omitempty"`
 	ExpectedIpv4Addrs []string               `protobuf:"bytes,4,rep,name=expected_ipv4_addrs,json=expectedIpv4Addrs,proto3" json:"expected_ipv4_addrs,omitempty"`
 	ExpectedIpv6Addrs []string               `protobuf:"bytes,5,rep,name=expected_ipv6_addrs,json=expectedIpv6Addrs,proto3" json:"expected_ipv6_addrs,omitempty"`
+	QosPolicies       []*QoSPolicy           `protobuf:"bytes,9,rep,name=qos_policies,json=qosPolicies,proto3" json:"qos_policies,omitempty"`
 	unknownFields     protoimpl.UnknownFields
 	sizeCache         protoimpl.SizeCache
 }
@@ -3692,6 +3693,13 @@ func (x *HostEndpoint) GetExpectedIpv4Addrs() []string {
 func (x *HostEndpoint) GetExpectedIpv6Addrs() []string {
 	if x != nil {
 		return x.ExpectedIpv6Addrs
+	}
+	return nil
+}
+
+func (x *HostEndpoint) GetQosPolicies() []*QoSPolicy {
+	if x != nil {
+		return x.QosPolicies
 	}
 	return nil
 }
@@ -6637,7 +6645,7 @@ const file_felixbackend_proto_rawDesc = "" +
 	"endpointIdJ\x04\b\x01\x10\x02R\bhostname\"l\n" +
 	"\x12HostEndpointUpdate\x12%\n" +
 	"\x02id\x18\x01 \x01(\v2\x15.felix.HostEndpointIDR\x02id\x12/\n" +
-	"\bendpoint\x18\x03 \x01(\v2\x13.felix.HostEndpointR\bendpoint\"\xf1\x02\n" +
+	"\bendpoint\x18\x03 \x01(\v2\x13.felix.HostEndpointR\bendpoint\"\xa6\x03\n" +
 	"\fHostEndpoint\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1f\n" +
 	"\vprofile_ids\x18\x02 \x03(\tR\n" +
@@ -6647,7 +6655,8 @@ const file_felixbackend_proto_rawDesc = "" +
 	"\x0epre_dnat_tiers\x18\a \x03(\v2\x0f.felix.TierInfoR\fpreDnatTiers\x124\n" +
 	"\rforward_tiers\x18\b \x03(\v2\x0f.felix.TierInfoR\fforwardTiers\x12.\n" +
 	"\x13expected_ipv4_addrs\x18\x04 \x03(\tR\x11expectedIpv4Addrs\x12.\n" +
-	"\x13expected_ipv6_addrs\x18\x05 \x03(\tR\x11expectedIpv6Addrs\";\n" +
+	"\x13expected_ipv6_addrs\x18\x05 \x03(\tR\x11expectedIpv6Addrs\x123\n" +
+	"\fqos_policies\x18\t \x03(\v2\x10.felix.QoSPolicyR\vqosPolicies\";\n" +
 	"\x12HostEndpointRemove\x12%\n" +
 	"\x02id\x18\x01 \x01(\v2\x15.felix.HostEndpointIDR\x02id\"\x99\x01\n" +
 	"\bTierInfo\x12\x12\n" +
@@ -7082,48 +7091,49 @@ var file_felixbackend_proto_depIdxs = []int32{
 	45,  // 87: felix.HostEndpoint.untracked_tiers:type_name -> felix.TierInfo
 	45,  // 88: felix.HostEndpoint.pre_dnat_tiers:type_name -> felix.TierInfo
 	45,  // 89: felix.HostEndpoint.forward_tiers:type_name -> felix.TierInfo
-	41,  // 90: felix.HostEndpointRemove.id:type_name -> felix.HostEndpointID
-	41,  // 91: felix.HostEndpointStatusUpdate.id:type_name -> felix.HostEndpointID
-	49,  // 92: felix.HostEndpointStatusUpdate.status:type_name -> felix.EndpointStatus
-	41,  // 93: felix.HostEndpointStatusRemove.id:type_name -> felix.HostEndpointID
-	33,  // 94: felix.WorkloadEndpointStatusUpdate.id:type_name -> felix.WorkloadEndpointID
-	49,  // 95: felix.WorkloadEndpointStatusUpdate.status:type_name -> felix.EndpointStatus
-	36,  // 96: felix.WorkloadEndpointStatusUpdate.endpoint:type_name -> felix.WorkloadEndpoint
-	33,  // 97: felix.WorkloadEndpointStatusRemove.id:type_name -> felix.WorkloadEndpointID
-	0,   // 98: felix.WireguardStatusUpdate.ip_version:type_name -> felix.IPVersion
-	94,  // 99: felix.HostMetadataV4V6Update.labels:type_name -> felix.HostMetadataV4V6Update.LabelsEntry
-	63,  // 100: felix.IPAMPoolUpdate.pool:type_name -> felix.IPAMPool
-	67,  // 101: felix.ServiceAccountUpdate.id:type_name -> felix.ServiceAccountID
-	95,  // 102: felix.ServiceAccountUpdate.labels:type_name -> felix.ServiceAccountUpdate.LabelsEntry
-	67,  // 103: felix.ServiceAccountRemove.id:type_name -> felix.ServiceAccountID
-	70,  // 104: felix.NamespaceUpdate.id:type_name -> felix.NamespaceID
-	96,  // 105: felix.NamespaceUpdate.labels:type_name -> felix.NamespaceUpdate.LabelsEntry
-	70,  // 106: felix.NamespaceRemove.id:type_name -> felix.NamespaceID
-	1,   // 107: felix.RouteUpdate.types:type_name -> felix.RouteType
-	2,   // 108: felix.RouteUpdate.ip_pool_type:type_name -> felix.IPPoolType
-	71,  // 109: felix.RouteUpdate.tunnel_type:type_name -> felix.TunnelType
-	31,  // 110: felix.DataplaneStats.protocol:type_name -> felix.Protocol
-	78,  // 111: felix.DataplaneStats.stats:type_name -> felix.Statistic
-	79,  // 112: felix.DataplaneStats.rules:type_name -> felix.RuleTrace
-	3,   // 113: felix.DataplaneStats.action:type_name -> felix.Action
-	5,   // 114: felix.Statistic.direction:type_name -> felix.Statistic.Direction
-	6,   // 115: felix.Statistic.relativity:type_name -> felix.Statistic.Relativity
-	7,   // 116: felix.Statistic.kind:type_name -> felix.Statistic.Kind
-	3,   // 117: felix.Statistic.action:type_name -> felix.Action
-	24,  // 118: felix.RuleTrace.policy:type_name -> felix.PolicyID
-	20,  // 119: felix.RuleTrace.profile:type_name -> felix.ProfileID
-	8,   // 120: felix.RuleTrace.direction:type_name -> felix.RuleTrace.Direction
-	85,  // 121: felix.ServiceUpdate.ports:type_name -> felix.ServicePort
-	13,  // 122: felix.ConfigUpdate.SourceToRawConfigEntry.value:type_name -> felix.RawConfig
-	9,   // 123: felix.PolicySync.Sync:input_type -> felix.SyncRequest
-	77,  // 124: felix.PolicySync.Report:input_type -> felix.DataplaneStats
-	10,  // 125: felix.PolicySync.Sync:output_type -> felix.ToDataplane
-	76,  // 126: felix.PolicySync.Report:output_type -> felix.ReportResult
-	125, // [125:127] is the sub-list for method output_type
-	123, // [123:125] is the sub-list for method input_type
-	123, // [123:123] is the sub-list for extension type_name
-	123, // [123:123] is the sub-list for extension extendee
-	0,   // [0:123] is the sub-list for field type_name
+	38,  // 90: felix.HostEndpoint.qos_policies:type_name -> felix.QoSPolicy
+	41,  // 91: felix.HostEndpointRemove.id:type_name -> felix.HostEndpointID
+	41,  // 92: felix.HostEndpointStatusUpdate.id:type_name -> felix.HostEndpointID
+	49,  // 93: felix.HostEndpointStatusUpdate.status:type_name -> felix.EndpointStatus
+	41,  // 94: felix.HostEndpointStatusRemove.id:type_name -> felix.HostEndpointID
+	33,  // 95: felix.WorkloadEndpointStatusUpdate.id:type_name -> felix.WorkloadEndpointID
+	49,  // 96: felix.WorkloadEndpointStatusUpdate.status:type_name -> felix.EndpointStatus
+	36,  // 97: felix.WorkloadEndpointStatusUpdate.endpoint:type_name -> felix.WorkloadEndpoint
+	33,  // 98: felix.WorkloadEndpointStatusRemove.id:type_name -> felix.WorkloadEndpointID
+	0,   // 99: felix.WireguardStatusUpdate.ip_version:type_name -> felix.IPVersion
+	94,  // 100: felix.HostMetadataV4V6Update.labels:type_name -> felix.HostMetadataV4V6Update.LabelsEntry
+	63,  // 101: felix.IPAMPoolUpdate.pool:type_name -> felix.IPAMPool
+	67,  // 102: felix.ServiceAccountUpdate.id:type_name -> felix.ServiceAccountID
+	95,  // 103: felix.ServiceAccountUpdate.labels:type_name -> felix.ServiceAccountUpdate.LabelsEntry
+	67,  // 104: felix.ServiceAccountRemove.id:type_name -> felix.ServiceAccountID
+	70,  // 105: felix.NamespaceUpdate.id:type_name -> felix.NamespaceID
+	96,  // 106: felix.NamespaceUpdate.labels:type_name -> felix.NamespaceUpdate.LabelsEntry
+	70,  // 107: felix.NamespaceRemove.id:type_name -> felix.NamespaceID
+	1,   // 108: felix.RouteUpdate.types:type_name -> felix.RouteType
+	2,   // 109: felix.RouteUpdate.ip_pool_type:type_name -> felix.IPPoolType
+	71,  // 110: felix.RouteUpdate.tunnel_type:type_name -> felix.TunnelType
+	31,  // 111: felix.DataplaneStats.protocol:type_name -> felix.Protocol
+	78,  // 112: felix.DataplaneStats.stats:type_name -> felix.Statistic
+	79,  // 113: felix.DataplaneStats.rules:type_name -> felix.RuleTrace
+	3,   // 114: felix.DataplaneStats.action:type_name -> felix.Action
+	5,   // 115: felix.Statistic.direction:type_name -> felix.Statistic.Direction
+	6,   // 116: felix.Statistic.relativity:type_name -> felix.Statistic.Relativity
+	7,   // 117: felix.Statistic.kind:type_name -> felix.Statistic.Kind
+	3,   // 118: felix.Statistic.action:type_name -> felix.Action
+	24,  // 119: felix.RuleTrace.policy:type_name -> felix.PolicyID
+	20,  // 120: felix.RuleTrace.profile:type_name -> felix.ProfileID
+	8,   // 121: felix.RuleTrace.direction:type_name -> felix.RuleTrace.Direction
+	85,  // 122: felix.ServiceUpdate.ports:type_name -> felix.ServicePort
+	13,  // 123: felix.ConfigUpdate.SourceToRawConfigEntry.value:type_name -> felix.RawConfig
+	9,   // 124: felix.PolicySync.Sync:input_type -> felix.SyncRequest
+	77,  // 125: felix.PolicySync.Report:input_type -> felix.DataplaneStats
+	10,  // 126: felix.PolicySync.Sync:output_type -> felix.ToDataplane
+	76,  // 127: felix.PolicySync.Report:output_type -> felix.ReportResult
+	126, // [126:128] is the sub-list for method output_type
+	124, // [124:126] is the sub-list for method input_type
+	124, // [124:124] is the sub-list for extension type_name
+	124, // [124:124] is the sub-list for extension extendee
+	0,   // [0:124] is the sub-list for field type_name
 }
 
 func init() { file_felixbackend_proto_init() }

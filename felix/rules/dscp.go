@@ -18,23 +18,23 @@ import (
 	"github.com/projectcalico/calico/felix/generictables"
 )
 
-type QoSPolicy struct {
+type DSCPRule struct {
 	SrcAddrs string
-	DSCP     uint8
+	Value    uint8
 }
 
-func (r *DefaultRuleRenderer) EgressQoSPolicyChain(policies []QoSPolicy) *generictables.Chain {
-	var rules []generictables.Rule
-	// Policies is sorted and validated by QoS policy manager.
-	for _, p := range policies {
-		rules = append(rules, generictables.Rule{
-			Match:  r.NewMatch().SourceNet(p.SrcAddrs),
-			Action: r.DSCP(p.DSCP),
+func (r *DefaultRuleRenderer) EgressDSCPChain(rules []DSCPRule) *generictables.Chain {
+	var renderedRules []generictables.Rule
+	// Rules are sorted and validated by DSCP manager.
+	for _, rule := range rules {
+		renderedRules = append(renderedRules, generictables.Rule{
+			Match:  r.NewMatch().SourceNet(rule.SrcAddrs),
+			Action: r.DSCP(rule.Value),
 		})
 	}
 
 	return &generictables.Chain{
-		Name:  ChainQoSPolicy,
-		Rules: rules,
+		Name:  ChainEgressDSCP,
+		Rules: renderedRules,
 	}
 }
