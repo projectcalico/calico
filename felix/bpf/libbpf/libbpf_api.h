@@ -485,6 +485,14 @@ void bpf_map_batch_update(int fd, const void *keys, const void *values, __u32 *c
 	set_errno(bpf_map_update_batch(fd, keys, values, count, &opts));
 }
 
+void bpf_map_batch_delete(int fd, const void *keys, __u32 *count, __u64 flags)
+{
+	DECLARE_LIBBPF_OPTS(bpf_map_batch_opts, opts,
+		.flags = flags);
+
+	set_errno(bpf_map_delete_batch(fd, keys, count, &opts));
+}
+
 int num_possible_cpu()
 {
     return libbpf_num_possible_cpus();

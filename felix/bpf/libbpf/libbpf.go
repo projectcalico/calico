@@ -686,7 +686,7 @@ func ObjGet(path string) (int, error) {
 	return int(fd), err
 }
 
-// MapUpdateBatch expects all key, values in a single slice, bytes of a one
+// MapUpdateBatch expects all keys, values in a single slice, bytes of a one
 // key/value appended back to back to the previous value.
 func MapUpdateBatch(fd int, k, v []byte, count int, flags uint64) (int, error) {
 	cK := C.CBytes(k)
@@ -695,6 +695,21 @@ func MapUpdateBatch(fd int, k, v []byte, count int, flags uint64) (int, error) {
 	defer C.free(cV)
 
 	_, err := C.bpf_map_batch_update(C.int(fd), cK, cV, (*C.__u32)(unsafe.Pointer(&count)), C.__u64(flags))
+
+	if err != nil {
+		return 0, err
+	}
+
+	return count, nil
+}
+
+// MapDeleteBatch expects all key is in a single slice, bytes of a one
+// key appended back to back to the previous value.
+func MapDeleteBatch(fd int, k []byte, count int, flags uint64) (int, error) {
+	cK := C.CBytes(k)
+	defer C.free(cK)
+
+	_, err := C.bpf_map_batch_delete(C.int(fd), cK, (*C.__u32)(unsafe.Pointer(&count)), C.__u64(flags))
 
 	if err != nil {
 		return 0, err
