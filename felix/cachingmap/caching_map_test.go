@@ -32,7 +32,12 @@ func init() {
 
 // TestCachingMap_Empty verifies loading of an empty map with no changes queued.
 func TestCachingMap_Empty(t *testing.T) {
-	mockMap, cm := setupCachingMapTest(t)
+	testCachingMap_Empty(t, true)
+	testCachingMap_Empty(t, false)
+}
+
+func testCachingMap_Empty(t *testing.T, batched bool) {
+	mockMap, cm := setupCachingMapTest(t, batched)
 	err := cm.ApplyAllChanges()
 	Expect(err).NotTo(HaveOccurred())
 	Expect(mockMap.Contents).To(BeEmpty())
@@ -42,7 +47,12 @@ var ErrFail = fmt.Errorf("fail")
 
 // TestCachingMap_Errors tests returning of errors from the underlying map.
 func TestCachingMap_Errors(t *testing.T) {
-	mockMap, cm := setupCachingMapTest(t)
+	testCachingMap_Errors(t, true)
+	testCachingMap_Errors(t, false)
+}
+
+func testCachingMap_Errors(t *testing.T, batched bool) {
+	mockMap, cm := setupCachingMapTest(t, batched)
 	mockMap.LoadErr = ErrFail
 	err := cm.ApplyAllChanges()
 	Expect(err).To(HaveOccurred())
@@ -84,7 +94,12 @@ func TestCachingMap_Errors(t *testing.T) {
 
 // TestCachingMap_CleanUp verifies cleaning up of a whole map.
 func TestCachingMap_CleanUp(t *testing.T) {
-	mockMap, cm := setupCachingMapTest(t)
+	testCachingMap_CleanUp(t, true)
+	testCachingMap_CleanUp(t, false)
+}
+
+func testCachingMap_CleanUp(t *testing.T, batched bool) {
+	mockMap, cm := setupCachingMapTest(t, batched)
 	_ = mockMap.Update("1, 2", "1, 2, 3, 4")
 	_ = mockMap.Update("1, 3", "1, 2, 4, 4")
 
@@ -95,7 +110,12 @@ func TestCachingMap_CleanUp(t *testing.T) {
 
 // TestCachingMap_ApplyAll mainline test using separate Apply calls for adds and deletes.
 func TestCachingMap_SplitUpdateAndDelete(t *testing.T) {
-	mockMap, cm := setupCachingMapTest(t)
+	testCachingMap_SplitUpdateAndDelete(t, true)
+	testCachingMap_SplitUpdateAndDelete(t, false)
+}
+
+func testCachingMap_SplitUpdateAndDelete(t *testing.T, batched bool) {
+	mockMap, cm := setupCachingMapTest(t, batched)
 	mockMap.Contents = map[string]string{
 		"1, 1": "1, 2, 4, 3",
 		"1, 2": "1, 2, 3, 4",
@@ -145,7 +165,12 @@ func TestCachingMap_SplitUpdateAndDelete(t *testing.T) {
 
 // TestCachingMap_ApplyAll mainline test using ApplyAll() to update the dataplane.
 func TestCachingMap_ApplyAll(t *testing.T) {
-	mockMap, cm := setupCachingMapTest(t)
+	testCachingMap_ApplyAll(t, true)
+	testCachingMap_ApplyAll(t, false)
+}
+
+func testCachingMap_ApplyAll(t *testing.T, batched bool) {
+	mockMap, cm := setupCachingMapTest(t, batched)
 	mockMap.Contents = map[string]string{
 		"1, 1": "1, 2, 4, 3",
 		"1, 2": "1, 2, 3, 4",
@@ -194,7 +219,12 @@ func TestCachingMap_ApplyAll(t *testing.T) {
 // TestCachingMap_DeleteBeforeLoad does some set and delete calls before loading from
 // the dataplane.
 func TestCachingMap_DeleteBeforeLoad(t *testing.T) {
-	mockMap, cm := setupCachingMapTest(t)
+	testCachingMap_DeleteBeforeLoad(t, true)
+	testCachingMap_DeleteBeforeLoad(t, false)
+}
+
+func testCachingMap_DeleteBeforeLoad(t *testing.T, batched bool) {
+	mockMap, cm := setupCachingMapTest(t, batched)
 	mockMap.Contents = map[string]string{
 		"1, 1": "1, 2, 4, 3",
 		"1, 2": "1, 2, 3, 4",
@@ -230,7 +260,12 @@ func TestCachingMap_DeleteBeforeLoad(t *testing.T) {
 
 // TestCachingMap_PreLoad verifies calling LoadCacheFromDataplane before setting values.
 func TestCachingMap_PreLoad(t *testing.T) {
-	mockMap, cm := setupCachingMapTest(t)
+	testCachingMap_PreLoad(t, true)
+	testCachingMap_PreLoad(t, false)
+}
+
+func testCachingMap_PreLoad(t *testing.T, batched bool) {
+	mockMap, cm := setupCachingMapTest(t, batched)
 	mockMap.Contents = map[string]string{
 		"1, 1": "1, 2, 4, 3",
 		"1, 2": "1, 2, 3, 4",
@@ -280,7 +315,12 @@ func TestCachingMap_PreLoad(t *testing.T) {
 // changes.  Pending changes should be dropped if the reload finds that they've already
 // been made.
 func TestCachingMap_Resync(t *testing.T) {
-	mockMap, cm := setupCachingMapTest(t)
+	testCachingMap_Resync(t, true)
+	testCachingMap_Resync(t, false)
+}
+
+func testCachingMap_Resync(t *testing.T, batched bool) {
+	mockMap, cm := setupCachingMapTest(t, batched)
 	mockMap.Contents = map[string]string{
 		"1, 1": "1, 2, 4, 3",
 		"1, 2": "1, 2, 3, 4",
@@ -330,7 +370,7 @@ func TestCachingMap_Resync(t *testing.T) {
 // TestCachingMap_BatchUpdateFailures tests that when some updates fail and some succeed
 // during ApplyUpdatesOnly, the successful ones are applied and errors are returned.
 func TestCachingMap_BatchUpdateFailures(t *testing.T) {
-	mockMap, cm := setupCachingMapTest(t)
+	mockMap, cm := setupCachingMapTest(t, false) // Test with non-batched for key-specific failures
 	mockMap.Contents = map[string]string{
 		"existing": "value",
 	}
@@ -369,7 +409,7 @@ func TestCachingMap_BatchUpdateFailures(t *testing.T) {
 // TestCachingMap_BatchDeleteFailures tests that when some deletions fail and some succeed
 // during ApplyDeletionsOnly, the successful ones are applied and errors are returned.
 func TestCachingMap_BatchDeleteFailures(t *testing.T) {
-	mockMap, cm := setupCachingMapTest(t)
+	mockMap, cm := setupCachingMapTest(t, false) // Test with non-batched for key-specific failures
 	mockMap.Contents = map[string]string{
 		"key1": "value1",
 		"key2": "value2", 
@@ -409,7 +449,7 @@ func TestCachingMap_BatchDeleteFailures(t *testing.T) {
 // have partial failures during ApplyAllChanges, successful operations are applied
 // and all errors are returned.
 func TestCachingMap_BatchAllChangesFailures(t *testing.T) {
-	mockMap, cm := setupCachingMapTest(t)
+	mockMap, cm := setupCachingMapTest(t, false) // Test with non-batched for key-specific failures
 	mockMap.Contents = map[string]string{
 		"delete1": "value1",
 		"delete2": "value2", // Will fail to delete
@@ -447,13 +487,27 @@ func TestCachingMap_BatchAllChangesFailures(t *testing.T) {
 	Expect(mockMap.LoadCount).To(Equal(1))
 }
 
-func setupCachingMapTest(t *testing.T) (*Map, *CachingMap[string, string]) {
+func setupCachingMapTest(t *testing.T, batched bool) (*Map, *CachingMap[string, string]) {
 	RegisterTestingT(t)
-	mockMap := newMockMap()
+
+	var (
+		mockMap DataplaneMap[string, string]
+		retMap  *Map
+	)
+
+	if batched {
+		m := newMockBatchMap()
+		mockMap = m
+		retMap = m.Map
+	} else {
+		m := newMockMap()
+		mockMap = m
+		retMap = m
+	}
 
 	cm := New[string, string]("mock-map", mockMap)
 
-	return mockMap, cm
+	return retMap, cm
 }
 
 type Map struct {
@@ -549,4 +603,36 @@ func newMockMap() *Map {
 		DeleteFailures: make(map[string]error),
 	}
 	return m
+}
+
+type BatchMap struct {
+	*Map
+}
+
+func (m *BatchMap) BatchUpdate(ks []string, vs []string) (int, error) {
+	for i, k := range ks {
+		err := m.Update(k, vs[i])
+		if err != nil {
+			return i, err
+		}
+	}
+
+	return len(ks), nil
+}
+
+func (m *BatchMap) BatchDelete(ks []string) (int, error) {
+	for i, k := range ks {
+		err := m.Delete(k)
+		if err != nil {
+			return i, err
+		}
+	}
+
+	return len(ks), nil
+}
+
+func newMockBatchMap() *BatchMap {
+	return &BatchMap{
+		Map: newMockMap(),
+	}
 }
