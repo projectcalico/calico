@@ -58,6 +58,9 @@ spec:
                   type: boolean
                 nodeSelector:
                   type: string
+                namespaceSelector:
+                  type: string
+                  description: "Allows IPPool to allocate for a specific namespace by label selector"
                 vxlanMode:
                   type: string
               required:

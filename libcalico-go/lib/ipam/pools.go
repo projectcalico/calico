@@ -45,3 +45,21 @@ func SelectsNode(pool v3.IPPool, n libapiv3.Node) (bool, error) {
 	// Return whether or not the selector matches.
 	return sel.Evaluate(n.Labels), nil
 }
+
+// SelectsNamespace determines whether or not the IPPool's namespaceSelector
+// matches the labels on the given namespace.
+func SelectsNamespace(pool v3.IPPool, namespaceName string, namespaceLabels map[string]string) (bool, error) {
+	// No namespace selector means that the pool matches the namespace.
+	if len(pool.Spec.NamespaceSelector) == 0 {
+		return true, nil
+	}
+
+	// Check for valid selector syntax.
+	sel, err := selector.Parse(pool.Spec.NamespaceSelector)
+	if err != nil {
+		return false, err
+	}
+
+	// Return whether or not the selector matches.
+	return sel.Evaluate(namespaceLabels), nil
+}

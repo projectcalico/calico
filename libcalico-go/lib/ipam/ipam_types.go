@@ -89,6 +89,12 @@ type AutoAssignArgs struct {
 	// The intended use for the IP address.  Used to filter the available IP pools on their AllowedUses field.
 	// This field is required.
 	IntendedUse v3.IPPoolAllowedUse
+
+	// The namespace name for namespaceSelector support.
+	Namespace string
+
+	// The namespace labels for namespaceSelector support.
+	NamespaceLabels map[string]string
 }
 
 // IPAMConfig contains global configuration options for Calico IPAM.
