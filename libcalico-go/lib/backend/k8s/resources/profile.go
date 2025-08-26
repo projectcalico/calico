@@ -186,54 +186,60 @@ func (c *profileClient) List(ctx context.Context, list model.ListInterface, revi
 		return nil, err
 	}
 
-	// Enumerate matching namespaces, paginated.
-	listFunc := func(ctx context.Context, opts metav1.ListOptions) (runtime.Object, error) {
-		if saName != "" {
-			// We've been asked to list a particular service account, skip
-			// listing namespaces.
-			return &v1.NamespaceList{}, nil
+	var nsKVPs *model.KVPairList
+	if saName == "" {
+		// We haven't been asked for a specific service account, so we
+		// must query the namespaces.
+		listFunc := func(ctx context.Context, opts metav1.ListOptions) (runtime.Object, error) {
+			if nsName != "" {
+				opts.FieldSelector = fields.OneTermEqualSelector("metadata.name", nsName).String()
+			}
+			return c.clientSet.CoreV1().Namespaces().List(ctx, opts)
 		}
-		if nsName != "" {
-			opts.FieldSelector = fields.OneTermEqualSelector("metadata.name", nsName).String()
+		convertFunc := func(r Resource) ([]*model.KVPair, error) {
+			ns := r.(*v1.Namespace)
+			kvp, err := c.getNsKv(ns)
+			if err != nil {
+				return nil, err
+			}
+			return []*model.KVPair{kvp}, nil
 		}
-		return c.clientSet.CoreV1().Namespaces().List(ctx, opts)
-	}
-	convertFunc := func(r Resource) ([]*model.KVPair, error) {
-		ns := r.(*v1.Namespace)
-		kvp, err := c.getNsKv(ns)
+		nsKVPs, err = pagedList(ctx, logContext.WithField("from", "namespaces"), nsRev, list, convertFunc, listFunc)
 		if err != nil {
 			return nil, err
 		}
-		return []*model.KVPair{kvp}, nil
-	}
-	nsKVPs, err := pagedList(ctx, logContext.WithField("from", "namespaces"), nsRev, list, convertFunc, listFunc)
-	if err != nil {
-		return nil, err
+	} else {
+		// We have been asked for a specific service account, so we don't
+		// need to query namespaces.
+		nsKVPs = &model.KVPairList{}
 	}
 
-	// Enumerate matching service accounts, paginated.
-	listFunc = func(ctx context.Context, opts metav1.ListOptions) (runtime.Object, error) {
-		if nsName != "" && saName == "" {
-			// We've been asked to list a particular namespace, skip
-			// listing service accounts.
-			return &v1.ServiceAccountList{}, nil
+	var saKVPs *model.KVPairList
+	if nsName == "" || saName != "" {
+		// We haven't been asked for a specific namespace, so we need to
+		// query the service accounts.
+		listFunc := func(ctx context.Context, opts metav1.ListOptions) (runtime.Object, error) {
+			if saName != "" {
+				opts.FieldSelector = fields.OneTermEqualSelector("metadata.name", saName).String()
+			}
+			return c.clientSet.CoreV1().ServiceAccounts(nsName).List(ctx, opts)
 		}
-		if saName != "" {
-			opts.FieldSelector = fields.OneTermEqualSelector("metadata.name", saName).String()
+		convertFunc := func(r Resource) ([]*model.KVPair, error) {
+			sa := r.(*v1.ServiceAccount)
+			kvp, err := c.getSaKv(sa)
+			if err != nil {
+				return nil, err
+			}
+			return []*model.KVPair{kvp}, nil
 		}
-		return c.clientSet.CoreV1().ServiceAccounts(nsName).List(ctx, opts)
-	}
-	convertFunc = func(r Resource) ([]*model.KVPair, error) {
-		sa := r.(*v1.ServiceAccount)
-		kvp, err := c.getSaKv(sa)
+		saKVPs, err = pagedList(ctx, logContext.WithField("from", "serviceaccounts"), saRev, list, convertFunc, listFunc)
 		if err != nil {
 			return nil, err
 		}
-		return []*model.KVPair{kvp}, nil
-	}
-	saKVPs, err := pagedList(ctx, logContext.WithField("from", "serviceaccounts"), saRev, list, convertFunc, listFunc)
-	if err != nil {
-		return nil, err
+	} else {
+		// We have been asked for a specific namespace, so we don't need to
+		// query service accounts.
+		saKVPs = &model.KVPairList{}
 	}
 
 	// Return a merged KVPairList including both results and the default-allow profile.
