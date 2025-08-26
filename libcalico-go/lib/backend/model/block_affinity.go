@@ -16,7 +16,7 @@ package model
 
 import (
 	"crypto/sha3"
-	"encoding/hex"
+	"encoding/base32"
 	"fmt"
 	"reflect"
 	"regexp"
@@ -148,7 +148,7 @@ func EnsureBlockAffinityLabels(ba *v3.BlockAffinity) {
 		ba.Labels = make(map[string]string)
 	}
 	// Hostnames can be longer than labels are allowed to be, so we hash it down.
-	ba.Labels[v4.LabelHostnameHash] = hashHostname(ba.Spec.Node)
+	ba.Labels[v4.LabelHostnameHash] = hashHostnameForLabel(ba.Spec.Node)
 	ba.Labels[v4.LabelAffinityType] = ba.Spec.Type
 	var ipVersion string
 	if strings.Contains(ba.Spec.CIDR, ":") {
@@ -162,7 +162,7 @@ func EnsureBlockAffinityLabels(ba *v3.BlockAffinity) {
 func CalculateBlockAffinityLabelSelector(list BlockAffinityListOptions) labels.Selector {
 	labelsToMatch := map[string]string{}
 	if list.Host != "" {
-		labelsToMatch[v4.LabelHostnameHash] = hashHostname(list.Host)
+		labelsToMatch[v4.LabelHostnameHash] = hashHostnameForLabel(list.Host)
 	}
 	if list.AffinityType != "" {
 		labelsToMatch[v4.LabelAffinityType] = list.AffinityType
@@ -177,13 +177,11 @@ func CalculateBlockAffinityLabelSelector(list BlockAffinityListOptions) labels.S
 	return labelSelector
 }
 
-func hashHostname(hostname string) string {
-	var hasher sha3.SHA3
-	_, err := hasher.Write([]byte(hostname))
-	if err != nil {
-		// Hashers are contracted never to fail, only return an error to satisfy io.Writer.
-		panic("SHA3.Write failed: " + err.Error())
-	}
-	h := hasher.Sum(nil)
-	return hex.EncodeToString(h)
+var base32StdNoPad = base32.StdEncoding.WithPadding(base32.NoPadding)
+
+func hashHostnameForLabel(hostname string) string {
+	// The max length of a label is 63 chars, so we use base32 to squeeze in
+	// 256 bits.
+	h := sha3.Sum256([]byte(hostname))
+	return base32StdNoPad.EncodeToString(h[:])
 }
