@@ -72,7 +72,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ openstack status-reporting"
 	})
 
 	Describe("With status-reporting writing to etcd", func() {
-		getStatuses := func() []*model.KVPair {
+		getStatus := func() string {
 			wlListOpts := model.WorkloadEndpointStatusListOptions{
 				Hostname: tc.Felixes[0].Hostname,
 			}
@@ -84,20 +84,23 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ openstack status-reporting"
 			statuses, err := backendClient.List(context.Background(), wlListOpts, "")
 			Expect(err).NotTo(HaveOccurred(), "Couldn't list workload endpoint statuses")
 
-			return statuses.KVPairs
-		}
+			if len(statuses.KVPairs) != 1 {
+				return ""
+			}
 
-		It("should write endpoint to etcd", func() {
-			Eventually(getStatuses, "10s").Should(HaveLen(1))
-			kvs := getStatuses()
-			wepStatusKey, ok := kvs[0].Key.(model.WorkloadEndpointStatusKey)
+			wepStatusKey, ok := statuses.KVPairs[0].Key.(model.WorkloadEndpointStatusKey)
 			Expect(ok).To(BeTrue(), "Unexpected key type when listing workload endpoint statuses")
 			Expect(wepStatusKey.Hostname).To(Equal(tc.Felixes[0].Hostname))
 			Expect(wepStatusKey.OrchestratorID).To(Equal("felixfv"))
 			Expect(wepStatusKey.EndpointID).To(Equal(w.Name))
-			wepStatusValue, ok := kvs[0].Value.(*model.WorkloadEndpointStatus)
+			wepStatusValue, ok := statuses.KVPairs[0].Value.(*model.WorkloadEndpointStatus)
 			Expect(ok).To(BeTrue())
-			Expect(wepStatusValue.Status).To(Equal("up"))
+
+			return wepStatusValue.Status
+		}
+
+		It("should write endpoint to etcd", func() {
+			Eventually(getStatus, "10s").Should(Equal("up"))
 		})
 	})
 })

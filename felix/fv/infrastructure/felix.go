@@ -676,7 +676,7 @@ func (f *Felix) BPFNumPolProgramsByEntryPoint(entryPointIdx int) (contiguous, to
 		if err != nil {
 			gapSeen = true
 		}
-		if strings.Contains(out, "value:") {
+		if strings.Contains(out, `value:`) || strings.Contains(out, `"value":`) {
 			total++
 			if !gapSeen {
 				contiguous++
