@@ -46,6 +46,7 @@ const (
 	Policy        Category = "Policy"
 	Configuration Category = "Configuration"
 	Operator      Category = "Operator"
+	Networking    Category = "Networking"
 )
 
 func WithCategory(cat Category) any {
@@ -62,6 +63,7 @@ var features = map[string]bool{
 	"IPPool":          true,
 	"AutoHEPs":        true,
 	"Host-Protection": true,
+	"HostPorts":       true,
 }
 
 // WithFeature marks tests as verifying a specific feature.

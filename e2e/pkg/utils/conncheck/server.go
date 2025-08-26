@@ -115,6 +115,16 @@ func (s *Server) ClusterIP(opts ...TargetOption) Target {
 	return t
 }
 
+func (s *Server) HostPort(port int) Target {
+	return &target{
+		server:      s,
+		targetType:  TypePodIP,
+		destination: s.Pod().Status.HostIP,
+		port:        port,
+		protocol:    TCP,
+	}
+}
+
 // NodePortPort returns port number of a NodePort service associated with the server.
 func (s *Server) NodePortPort() int {
 	svc := s.Service()
