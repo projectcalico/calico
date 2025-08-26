@@ -84,7 +84,7 @@ var _ = describe.CalicoDescribe(
 			tier0 = v3.NewTier()
 			tier0.Name = "t0"
 			tier0.Spec.Order = ptr.To(98.0)
-			tier0.Labels = map[string]string{"projectcalico.org/e2e": "true"}
+			tier0.Labels = map[string]string{utils.TestResourceLabel: "true"}
 			err = cli.Create(ctx, tier0)
 			Expect(err).NotTo(HaveOccurred())
 		})
@@ -159,7 +159,7 @@ var _ = describe.CalicoDescribe(
 			BeforeEach(func() {
 				tier1 = v3.NewTier()
 				tier1.Name = "t1"
-				tier1.Labels = map[string]string{"projectcalico.org/e2e": "true"}
+				tier1.Labels = map[string]string{utils.TestResourceLabel: "true"}
 				tier1.Spec.Order = ptr.To(99.0)
 
 				By("Creating tier1 with higher order number than tier0")
