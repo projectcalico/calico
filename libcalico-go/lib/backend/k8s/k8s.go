@@ -498,7 +498,6 @@ func (c *KubeClient) Clean() error {
 	for _, li := range []model.ListInterface{
 		model.BlockListOptions{},
 		model.BlockAffinityListOptions{},
-		model.BlockAffinityListOptions{},
 		model.IPAMHandleListOptions{},
 	} {
 		if rs, err := c.List(ctx, li, ""); err != nil {
