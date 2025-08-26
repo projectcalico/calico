@@ -190,11 +190,6 @@ protobuf proto/felixbackend.pb.go: proto/felixbackend.proto
 	$(MAKE) fix-changed
 
 BPF_GPL_MAP_STUB_O_FILES:=$(addprefix bpf-gpl/bin/,common_map_stub.o ipv4_map_stub.o ipv6_map_stub.o xdp_map_stub.o)
-$(BPF_GPL_MAP_STUB_O_FILES) &:
-	$(MAKE) register ARCH=$(ARCH)
-	$(DOCKER_GO_BUILD) sh -c "make -j 16 -C bpf-gpl map-objs"
-	touch -c $(BPF_GPL_MAP_STUB_O_FILES)
-	cp $(BPF_GPL_MAP_STUB_O_FILES) bin/bpf
 
 # We pre-build lots of different variants of the TC programs, defer to the script.
 BPF_GPL_O_FILES:=$(addprefix bpf-gpl/,$(shell bpf-gpl/list-objs))
@@ -219,7 +214,7 @@ build-bpf: $(ALL_BPF_PROGS)
 $(ALL_BPF_PROGS) &: $(shell find bpf-gpl bpf-apache -name '*.[ch]') bpf-gpl/Makefile bpf-apache/Makefile
 	$(MAKE) register ARCH=$(ARCH)
 	$(DOCKER_GO_BUILD) sh -c "make -j 16 -C bpf-apache all && \
-	                          make -j 16 -C bpf-gpl all ut-objs"
+	                          make -j 16 -C bpf-gpl all ut-objs map-objs"
 	rm -rf bin/bpf
 	mkdir -p bin/bpf
 	touch -c $(ALL_BPF_PROGS)

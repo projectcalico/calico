@@ -94,14 +94,14 @@ ipv6_map_stub.c: $(IPV6_MAP_HEADERS)
 xdp_map_stub.c: $(XDP_MAP_HEADERS)
 	$(generate_stub)
 
-bin/common_map_stub.o bin/ipv4_map_stub.o: bin/%.o: %.c
+bin/common_map_stub.o bin/ipv4_map_stub.o: bin/%.o: %.c %.d | bin
 	$(CC) $(MAP_CFLAGS) -c $< -o $@
 
-bin/ipv6_map_stub.o: bin/%.o: %.c
+bin/ipv6_map_stub.o: bin/%.o: %.c %.d | bin
 	$(CC) $(MAP_CFLAGS) -DIPVER6 -c $< -o $@
 
 # CALI_COMPILE_FLAGS=64 is CALI_XDP_PROG
-bin/xdp_map_stub.o: bin/%.o: %.c
+bin/xdp_map_stub.o: bin/%.o: %.c %.d | bin
 	$(CC) $(MAP_CFLAGS) -DCALI_COMPILE_FLAGS=64 -c $< -o $@
 
 OBJS:=$(shell ./list-objs)
@@ -293,7 +293,6 @@ bin:
 	$(COMPILE_DEPS)
 %_v6.d: %.c
 	$(COMPILE_DEPS)
-
 
 .PRECIOUS: %.d %_v6.d
 
