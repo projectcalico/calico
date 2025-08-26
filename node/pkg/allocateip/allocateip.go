@@ -167,6 +167,12 @@ func (r *reconciler) OnStatusUpdated(status bapi.SyncStatus) {
 	}
 }
 
+// home for wireguard public keys in the cache.
+type wireguardData struct {
+	publicKey   string
+	publicKeyV6 string
+}
+
 // OnUpdates handles the syncer resource updates.
 func (r *reconciler) OnUpdates(updates []bapi.Update) {
 	var updated bool
@@ -193,11 +199,10 @@ func (r *reconciler) OnUpdates(updates []bapi.Update) {
 					continue
 				}
 				log.Debugf("Updated node resource: %s", u.Key)
-				data = v.Status.WireguardPublicKey
-			case *api.FelixConfiguration:
-				// FelixConfiguration changes may impact whether we allocate wireguard IPs or not.
-				log.Debugf("Updated FelixConfiguration resource: %s", u.Key)
-				data = v.Spec
+				data = wireguardData{
+					publicKey:   v.Status.WireguardPublicKey,
+					publicKeyV6: v.Status.WireguardPublicKeyV6,
+				}
 			default:
 				// We got an update for an unexpected resource type. Rather than ignore, just treat as updated so that
 				// we reconcile the addresses.

@@ -35,9 +35,6 @@ func New(client api.Client, callbacks api.SyncerCallbacks, node string) api.Sync
 		{
 			ListInterface: model.ResourceListOptions{Kind: libapiv3.KindNode, Name: node},
 		},
-		{
-			ListInterface: model.ResourceListOptions{Kind: apiv3.KindFelixConfiguration},
-		},
 	}
 
 	return watchersyncer.New(client, resourceTypes, callbacks)
