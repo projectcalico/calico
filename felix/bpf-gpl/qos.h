@@ -22,17 +22,14 @@ static CALI_BPF_INLINE int enforce_packet_rate_qos(struct cali_tc_ctx *ctx)
 		CALI_DEBUG("packet rate QoS: ifstate not found, accepting packet");
 		return TC_ACT_UNSPEC;
 	}
-
 #if CALI_F_INGRESS
 	if (INGRESS_PACKET_RATE == 0) {
 		ifstate->ingress_packet_rate_tokens = -1;
-		cali_iface_update_elem(&ifindex, ifstate, BPF_ANY);
 		return TC_ACT_UNSPEC;
 	}
 #else // CALI_F_EGRESS
 	if (EGRESS_PACKET_RATE == 0) {
 		ifstate->egress_packet_rate_tokens = -1;
-		cali_iface_update_elem(&ifindex, ifstate, BPF_ANY);
 		return TC_ACT_UNSPEC;
 	}
 #endif
@@ -95,7 +92,6 @@ static CALI_BPF_INLINE int enforce_packet_rate_qos(struct cali_tc_ctx *ctx)
 	ifstate->egress_packet_rate_last_update = last_update;
 	ifstate->egress_packet_rate_tokens = tokens;
 #endif
-	cali_iface_update_elem(&ifindex, ifstate, BPF_ANY);
 
 	CALI_DEBUG("packet rate QoS: tokens: %d last_update: %llu", tokens, last_update);
 
