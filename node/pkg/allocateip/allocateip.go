@@ -194,6 +194,10 @@ func (r *reconciler) OnUpdates(updates []bapi.Update) {
 				}
 				log.Debugf("Updated node resource: %s", u.Key)
 				data = v.Status.WireguardPublicKey
+			case *api.FelixConfiguration:
+				// FelixConfiguration changes may impact whether we allocate wireguard IPs or not.
+				log.Debugf("Updated FelixConfiguration resource: %s", u.Key)
+				data = v.Spec
 			default:
 				// We got an update for an unexpected resource type. Rather than ignore, just treat as updated so that
 				// we reconcile the addresses.
