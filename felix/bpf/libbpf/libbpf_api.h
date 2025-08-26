@@ -20,6 +20,10 @@
 #include <errno.h>
 #include "globals.h"
 #include "ip_addr.h"
+#include "str_error.h"
+#include <stdio.h>
+#include <unistd.h>
+#include <string.h>
 
 static void set_errno(int ret) {
 	errno = ret >= 0 ? ret : -ret;
@@ -488,4 +492,45 @@ void bpf_map_batch_update(int fd, const void *keys, const void *values, __u32 *c
 int num_possible_cpu()
 {
     return libbpf_num_possible_cpus();
+}
+
+int create_bpf_map(enum bpf_map_type type, unsigned int key_size, unsigned int value_size,
+                   unsigned int max_entries, unsigned int flags, const char *name)
+{
+	LIBBPF_OPTS(bpf_map_create_opts, create_attr);
+
+	create_attr.map_flags = flags;
+
+	int fd;
+	int err;
+	fd = bpf_map_create(type, name, key_size, value_size, max_entries, &create_attr);
+	if (fd < 0) {
+		char *cp, errmsg[STRERR_BUFSIZE];
+
+		err = -errno;
+		cp = libbpf_strerror_r(err, errmsg, sizeof(errmsg));
+		printf("libbpf warn: Error in bpf_map_create(%s):%s(%d).\n", name, cp, err);
+	}
+	return fd;
+}
+
+int find_bpf_map_by_name( const char *name)
+{
+	__u32 id = 0;
+	while (!bpf_map_get_next_id(id, &id)) {
+		int fd = bpf_map_get_fd_by_id(id);
+		if (fd < 0)
+			continue;
+		struct bpf_map_info info = {};
+		__u32 info_len = sizeof(info);
+		if (!bpf_obj_get_info_by_fd(fd, &info, &info_len)) {
+			if (strcmp(info.name, name) == 0) {
+				// found
+				return fd;
+			}
+		}
+		close(fd);
+	}
+	// not found
+	return -1;
 }
