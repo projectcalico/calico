@@ -544,6 +544,11 @@ func (m nftMatch) OutInterfaceVMAP(name string) generictables.MatchCriteria {
 	return m
 }
 
+func (m nftMatch) SourceNetVMAP(name string) generictables.MatchCriteria {
+	m.clauses = append(m.clauses, fmt.Sprintf("<IPV> saddr @<LAYER>-%s", LegalizeSetName(name)))
+	return m
+}
+
 // PortsToMultiport converts a list of ports to a multiport set suitable for inline use in nftables rules.
 func PortsToMultiport(ports []uint16) string {
 	portFragments := make([]string, len(ports))

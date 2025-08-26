@@ -24,8 +24,31 @@ type DSCPRule struct {
 }
 
 func (r *DefaultRuleRenderer) EgressDSCPChain(rules []DSCPRule) *generictables.Chain {
+	if r.NFTables {
+		return r.nftablesQoSPolicyRules(rules)
+	}
+	return r.defaultQoSPolicyRules(rules)
+}
+
+func (r *DefaultRuleRenderer) nftablesQoSPolicyRules(rules []DSCPRule) *generictables.Chain {
 	var renderedRules []generictables.Rule
-	// Rules are sorted and validated by DSCP manager.
+	// DSCP Ruls are sorted and validated by DSCP manager.
+
+	renderedRules = append(renderedRules, generictables.Rule{
+		Match: r.NewMatch().SourceNetVMAP(NftablesQoSPolicyMap),
+		//Match:  r.NewMatch(),
+		//Action: r.DSCP("vmap"),
+	})
+
+	return &generictables.Chain{
+		Name:  ChainEgressDSCP,
+		Rules: renderedRules,
+	}
+}
+
+func (r *DefaultRuleRenderer) defaultQoSPolicyRules(rules []DSCPRule) *generictables.Chain {
+	var renderedRules []generictables.Rule
+	// DSCP Ruls are sorted and validated by DSCP manager.
 	for _, rule := range rules {
 		renderedRules = append(renderedRules, generictables.Rule{
 			Match:  r.NewMatch().SourceNet(rule.SrcAddrs),

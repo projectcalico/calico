@@ -517,7 +517,8 @@ type DSCPAction struct {
 }
 
 func (a DSCPAction) ToFragment(features *environment.Features) string {
-	return fmt.Sprintf("<IPV> dscp set %d", a.Value)
+	return "ip dscp"
+	//return fmt.Sprintf("<IPV> dscp set %d", a.Value)
 }
 
 func (a DSCPAction) String() string {

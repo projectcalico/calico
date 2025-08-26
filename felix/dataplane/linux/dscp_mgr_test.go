@@ -45,7 +45,8 @@ func dscpManagerTests(ipVersion uint8) func() {
 				MarkDrop:     0x10,
 				MarkEndpoint: 0x11110000,
 			})
-			manager = newDSCPManager(mangleTable, ruleRenderer, ipVersion)
+			// TODO (mazdak): add more tests for new nftables optimization
+			manager = newDSCPManager(mangleTable, nil, ruleRenderer, ipVersion)
 		})
 
 		It("should program DSCP chain with no rule", func() {
