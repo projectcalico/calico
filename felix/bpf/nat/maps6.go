@@ -318,8 +318,8 @@ var ConsistentHashMapV6Parameters = maps.MapParameters{
 	Type:       "hash",
 	KeySize:    consistentHashBackendKeyV6Size,
 	ValueSize:  consistentHashBackendValueV6Size,
-	MaxEntries: 65537 * 100,
-	Name:       "cali_v6_ch_be",
+	MaxEntries: 1009 * 1000,
+	Name:       "cali_v6_ch",
 	Flags:      unix.BPF_F_NO_PREALLOC,
 }
 

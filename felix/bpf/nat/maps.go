@@ -210,9 +210,10 @@ const (
 )
 
 var flgTostr = map[int]string{
-	NATFlgExternalLocal: "external-local",
-	NATFlgInternalLocal: "internal-local",
-	NATFlgExclude:       "nat-exclude",
+	NATFlgExternalLocal:  "external-local",
+	NATFlgInternalLocal:  "internal-local",
+	NATFlgExclude:        "nat-exclude",
+	NATFlgConsistentHash: "consistent-hash",
 }
 
 type FrontendValue [frontendValueSize]byte
@@ -432,7 +433,7 @@ func (k ConsistentHashBackendKey) String() string {
 	port := k.Port()
 	proto := k.Protocol()
 	ord := k.Ordinal()
-	return fmt.Sprintf("%s:%d/%d, %d", addr, port, proto, ord)
+	return fmt.Sprintf("ConsistentHashBackendKey{VIP: %s, Port: %d, Proto: %d, Ordinal: %d}", addr, port, proto, ord)
 }
 
 func ConsistentHashBackendKeyFromBytes(b []byte) ConsistentHashBackendKeyInterface {
@@ -449,8 +450,8 @@ var ConsistentHashMapParameters = maps.MapParameters{
 	Type:       "hash",
 	KeySize:    consistentHashBackendKeySize,
 	ValueSize:  consistentHashBackendValueSize,
-	MaxEntries: 65537 * 100,
-	Name:       "cali_v4_ch_be",
+	MaxEntries: 1009 * 1000,
+	Name:       "cali_v4_ch",
 	Flags:      unix.BPF_F_NO_PREALLOC,
 }
 

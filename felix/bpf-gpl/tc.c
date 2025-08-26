@@ -383,7 +383,7 @@ static CALI_BPF_INLINE void calico_tc_process_ct_lookup(struct cali_tc_ctx *ctx)
 	if (ct_result_rc(ctx->state->ct_result.rc) == CALI_CT_MID_FLOW_MISS) {
 		if (CALI_F_TO_HOST) {
 			if (CALI_F_FROM_HEP) {
-				/* Packet to be handled by maglev*/
+				/* Packet to be handled by maglev */
 				CALI_DEBUG("Packet handled by maglev");
 				CALI_JUMP_TO(ctx, PROG_INDEX_MAGLEV);
 				CALI_DEBUG("Failed to jump to maglev");
@@ -471,11 +471,6 @@ static CALI_BPF_INLINE void calico_tc_process_ct_lookup(struct cali_tc_ctx *ctx)
 	}
 
 	if (nat_res == NAT_MAGLEV) {
-		if (ctx->state->ip_proto != IPPROTO_TCP) {
-			CALI_DEBUG("Maglev only supports TCP protocol");
-			goto deny;
-		}
-
 		/* Packet to be handled by maglev*/
 		CALI_DEBUG("Packet handled by maglev");
 		CALI_JUMP_TO(ctx, PROG_INDEX_MAGLEV);
@@ -2195,11 +2190,6 @@ int calico_tc_maglev(struct __sk_buff *skb)
 	);
 	struct cali_tc_ctx *ctx = &_ctx;
 
-	/* XXX */
-	struct calico_nat_dest nat_dest = {};
-
-	ctx->nat_dest = &nat_dest;
-
 	CALI_DEBUG("Entering calico_tc_maglev");
 
 	if (skb_refresh_validate_ptrs(ctx, UDP_SIZE)) {
@@ -2208,7 +2198,13 @@ int calico_tc_maglev(struct __sk_buff *skb)
 		goto deny;
 	}
 
-	if (maglev_select_backend(ctx) < 0) {
+	if (!(ctx->nat_dest = maglev_select_backend(ctx))) {
+		if (ct_result_rc(ctx->state->ct_result.rc) == CALI_CT_MID_FLOW_MISS) {
+			// Too late to try falling through?
+			CALI_DEBUG("Maglev: midflow miss, no backend found, drop.");
+			goto deny;
+		}
+
 		// deny_reason(ctx, CALI_REASON_NO_BACKEND);
 		CALI_DEBUG("Maglev: select backend failed");
 		goto deny;
