@@ -92,6 +92,23 @@ func CleanDatastore(cli client.Client) error {
 			}
 		}
 
+		// Clean up tiers.
+		tiers := &v3.TierList{}
+		err = cli.List(ctx, tiers)
+		if err != nil {
+			return err
+		}
+		logrus.Info("Cleaning left-over tiers")
+		for _, tier := range tiers.Items {
+			// Only clean up tiers that have the projectcalico.org/e2e label.
+			if _, ok := tier.Labels["projectcalico.org/e2e"]; ok {
+				err = cli.Delete(ctx, &tier)
+				if err != nil {
+					return err
+				}
+			}
+		}
+
 		return nil
 	})
 }

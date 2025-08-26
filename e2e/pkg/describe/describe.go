@@ -56,6 +56,7 @@ func WithCategory(cat Category) any {
 // If you are unsure which feature to use, please ask!
 var features = map[string]bool{
 	"NetworkPolicy": true,
+	"Tiered-Policy": true,
 	"IPPool":        true,
 	"AutoHEPs":      true,
 }
