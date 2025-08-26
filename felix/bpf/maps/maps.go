@@ -41,49 +41,6 @@ var (
 	cachedNumPossibleCPUsOnce sync.Once
 )
 
-// Map which map is in which obj file
-var bpfMapObjMap = map[string]string{
-	"cali_counters":         "common_map_stub.o",
-	"cali_counters_scratch": "common_map_stub.o",
-	"cali_iface":            "common_map_stub.o",
-	"cali_jump":             "common_map_stub.o",
-	"cali_perf_evnt":        "common_map_stub.o",
-	"cali_profiling":        "common_map_stub.o",
-	"cali_progs":            "common_map_stub.o",
-	"cali_rule_ctrs":        "common_map_stub.o",
-	"cali_state":            "common_map_stub.o",
-
-	"xdp_cali_jump":  "xdp_map_stub.o",
-	"xdp_cali_progs": "xdp_map_stub.o",
-
-	"cali_v4_arp":     "ipv4_map_stub.o",
-	"cali_v4_ccq":     "ipv4_map_stub.o",
-	"cali_v4_ct":      "ipv4_map_stub.o",
-	"cali_v4_ct_nats": "ipv4_map_stub.o",
-	"cali_v4_frags":   "ipv4_map_stub.o",
-	"cali_v4_frgfwd":  "ipv4_map_stub.o",
-	"cali_v4_frgtmp":  "ipv4_map_stub.o",
-	"cali_v4_fsafes":  "ipv4_map_stub.o",
-	"cali_v4_ip_sets": "ipv4_map_stub.o",
-	"cali_v4_nat_aff": "ipv4_map_stub.o",
-	"cali_v4_nat_be":  "ipv4_map_stub.o",
-	"cali_v4_nat_fe":  "ipv4_map_stub.o",
-	"cali_v4_routes":  "ipv4_map_stub.o",
-	"cali_v4_srmsg":   "ipv4_map_stub.o",
-
-	"cali_v6_arp":     "ipv6_map_stub.o",
-	"cali_v6_ccq":     "ipv6_map_stub.o",
-	"cali_v6_ct":      "ipv6_map_stub.o",
-	"cali_v6_ct_nats": "ipv6_map_stub.o",
-	"cali_v6_fsafes":  "ipv6_map_stub.o",
-	"cali_v6_ip_sets": "ipv6_map_stub.o",
-	"cali_v6_nat_aff": "ipv6_map_stub.o",
-	"cali_v6_nat_be":  "ipv6_map_stub.o",
-	"cali_v6_nat_fe":  "ipv6_map_stub.o",
-	"cali_v6_routes":  "ipv6_map_stub.o",
-	"cali_v6_srmsg":   "ipv6_map_stub.o",
-}
-
 func NumPossibleCPUs() int {
 	cachedNumPossibleCPUsOnce.Do(func() {
 		var err error
@@ -757,10 +714,23 @@ func (b *PinnedMap) EnsureExists() error {
 		"versionedName":     b.VersionedName(),
 		"versionedFilename": b.VersionedFilename(),
 	}).Debug("Map didn't exist, creating it")
-	objName, ok := bpfMapObjMap[b.Name]
+
+	// Determine if the map b.Name is in a .o stub file (and which .o stub)
+	var objName string
+	switch {
+	case strings.HasPrefix(b.Name, "cali_v4_"):
+		objName = "ipv4_map_stub.o"
+	case strings.HasPrefix(b.Name, "cali_v6_"):
+		objName = "ipv6_map_stub.o"
+	case strings.HasPrefix(b.Name, "xdp_cali_"):
+		objName = "xdp_map_stub.o"
+	case strings.HasPrefix(b.Name, "cali_"):
+		objName = "common_map_stub.o"
+	}
+
 	loadedFromObj := false
-	if ok {
-		log.WithFields(log.Fields{"objName": objName, "b.VersionedName()": b.VersionedName()}).Debug("Creating map from obj file")
+	if objName != "" {
+		log.WithFields(log.Fields{"objName": objName, "b.VersionedName()": b.VersionedName()}).Debug("Trying to create map from obj file")
 		obj, err := libbpf.OpenObject(path.Join(bpfdefs.ObjectDir, objName))
 		if err != nil {
 			return fmt.Errorf("error opening obj file %s: %w", objName, err)

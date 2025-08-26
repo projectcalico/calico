@@ -541,7 +541,7 @@ bin/bpf_debug.test: $(GENERATED_FILES) $(shell find bpf/ -name '*.go')
 	$(DOCKER_GO_BUILD_CGO) go test ./bpf/ut -c -gcflags="-N -l" -o $@
 
 .PHONY: ut-bpf
-ut-bpf: $(LIBBPF_A) bin/bpf_ut.test bin/bpf.test build-bpf $(BPF_GPL_MAP_STUB_O_FILES)
+ut-bpf: $(LIBBPF_A) bin/bpf_ut.test bin/bpf.test build-bpf
 	$(DOCKER_RUN) \
 		--privileged \
 		-e RUN_AS_ROOT=true \
