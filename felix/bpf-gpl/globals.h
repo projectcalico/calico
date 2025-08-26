@@ -30,6 +30,7 @@ struct name {                              \
 	__s16 ingress_packet_burst;            \
 	__s16 egress_packet_rate;              \
 	__s16 egress_packet_burst;             \
+	__s16 dscp;							   \
 }
 
 DECLARE_TC_GLOBAL_DATA(cali_tc_global_data, ipv6_addr_t);

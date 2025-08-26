@@ -110,4 +110,27 @@ static CALI_BPF_INLINE int enforce_packet_rate_qos(struct cali_tc_ctx *ctx)
 	return TC_ACT_SHOT;
 }
 
+static CALI_BPF_INLINE void set_dscp(struct cali_tc_ctx *ctx)
+{
+#if (CALI_F_WEP || CALI_F_HEP)
+	if (parse_packet_ip(ctx) != PARSING_OK) {
+		return;
+	}
+
+	__s16 dscp = EGRESS_DSCP;
+
+	if (dscp < 0) {
+		return;
+	}
+		
+	CALI_DEBUG("setting dscp to %x", dscp);
+
+#if IPVER6 
+	ip_hdr(ctx)->priority = (__u8) dscp;
+#else
+	ip_hdr(ctx)->tos = (__u8) dscp;
+#endif
+#endif
+}
+
 #endif /* __CALI_QOS_H__ */

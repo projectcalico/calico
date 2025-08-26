@@ -51,6 +51,8 @@ type TcGlobalData struct {
 	IngressPacketBurst uint16
 	EgressPacketRate   uint16
 	EgressPacketBurst  uint16
+
+	DSCP int16
 }
 
 type XDPGlobalData struct {

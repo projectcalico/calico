@@ -324,6 +324,7 @@ extern const volatile struct cali_tc_preamble_globals __globals;
 #define INGRESS_PACKET_BURST CALI_CONFIGURABLE(ingress_packet_burst)
 #define EGRESS_PACKET_RATE CALI_CONFIGURABLE(egress_packet_rate)
 #define EGRESS_PACKET_BURST CALI_CONFIGURABLE(egress_packet_burst)
+#define EGRESS_DSCP CALI_CONFIGURABLE(dscp)
 
 #define FLOWLOGS_ENABLED (GLOBAL_FLAGS & CALI_GLOBALS_FLOWLOGS_ENABLED)
 
