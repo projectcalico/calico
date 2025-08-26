@@ -783,6 +783,10 @@ func (b *PinnedMap) EnsureExists() error {
 			if err := m.SetPinPath(b.VersionedFilename()); err != nil {
 				return fmt.Errorf("error pinning map %s to %s: %w", b.VersionedName(), b.VersionedFilename(), err)
 			}
+
+			if loadedFromObj {
+				break
+			}
 		}
 		if err := obj.Load(); err != nil {
 			return fmt.Errorf("error loading obj file %s for map %s: %w", objName, b.VersionedName(), err)
