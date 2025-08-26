@@ -64,6 +64,7 @@ var features = map[string]bool{
 	"AutoHEPs":        true,
 	"Host-Protection": true,
 	"HostPorts":       true,
+	"OwnerReferences": true,
 }
 
 // WithFeature marks tests as verifying a specific feature.
