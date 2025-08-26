@@ -800,7 +800,7 @@ func loadFelixEnvConfig() *felixconfig.Config {
 	return configParams
 }
 
-// home for wireguard public keys in the cache.
+// Home for wireguard public keys in the cache.
 type wireguardData struct {
 	publicKey   string
 	publicKeyV6 string
