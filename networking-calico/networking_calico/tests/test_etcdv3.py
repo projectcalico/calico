@@ -13,14 +13,16 @@
 #    under the License.
 
 import logging
+
+from etcd3gw.exceptions import Etcd3Exception
+
 import mock
 
 from neutron.tests import base
 
-from networking_calico.compat import log
-from networking_calico import etcdv3
+from oslo_log import log
 
-from etcd3gw.exceptions import Etcd3Exception
+from networking_calico import etcdv3
 
 
 LOG = logging.getLogger(__name__)
@@ -30,7 +32,7 @@ class TestEtcdv3(base.BaseTestCase):
 
     def test_exception_detail_logging(self):
 
-        e3e = Etcd3Exception(detail_text='from test_exception_detail_logging')
+        e3e = Etcd3Exception(detail_text="from test_exception_detail_logging")
 
         def fn(self, *args, **kwargs):
             raise e3e
@@ -38,8 +40,8 @@ class TestEtcdv3(base.BaseTestCase):
         wrapped = etcdv3.logging_exceptions(fn)
 
         with mock.patch.object(
-                log.getLogger('networking_calico.etcdv3'),
-                'warning') as mock_lw:
+            log.getLogger("networking_calico.etcdv3"), "warning"
+        ) as mock_lw:
             try:
                 wrapped(None)
             except Exception:
@@ -47,5 +49,5 @@ class TestEtcdv3(base.BaseTestCase):
             mock_lw.assert_called_with(
                 "Etcd3Exception, re-raising: %r:\n%s",
                 e3e,
-                'from test_exception_detail_logging'
+                "from test_exception_detail_logging",
             )

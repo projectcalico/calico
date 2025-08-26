@@ -30,13 +30,10 @@ CLOCK_MONOTONIC_RAW = 4  # see <linux/time.h>
 
 
 class Timespec(ctypes.Structure):
-    _fields_ = [
-        ('tv_sec', ctypes.c_long),
-        ('tv_nsec', ctypes.c_long)
-    ]
+    _fields_ = [("tv_sec", ctypes.c_long), ("tv_nsec", ctypes.c_long)]
 
 
-librt = ctypes.CDLL('librt.so.1', use_errno=True)
+librt = ctypes.CDLL("librt.so.1", use_errno=True)
 clock_gettime = librt.clock_gettime
 clock_gettime.argtypes = [ctypes.c_int, ctypes.POINTER(Timespec)]
 

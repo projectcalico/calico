@@ -336,8 +336,10 @@ type InternalDataplane struct {
 	ipipParentIfaceC chan string
 	ipipManager      *ipipManager
 
-	noEncapManager      *noEncapManager
-	noEncapParentIfaceC chan string
+	noEncapManager        *noEncapManager
+	noEncapManagerV6      *noEncapManager
+	noEncapParentIfaceC   chan string
+	noEncapParentIfaceCV6 chan string
 
 	vxlanParentIfaceC   chan string
 	vxlanParentIfaceCV6 chan string
@@ -683,23 +685,43 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 	// If no overlay is enabled, and Felix is responsible for programming routes, starts a manager to
 	// program no encapsulation routes.
-	if config.ProgramClusterRoutes &&
-		!config.RulesConfig.VXLANEnabled && !config.RulesConfig.IPIPEnabled && !config.RulesConfig.WireguardEnabled {
-		log.Info("No encapsulation enabled, starting thread to keep no encapsulation routes in sync.")
-		// Add a manager to keep the all-hosts IP set up to date.
-		dp.noEncapManager = newNoEncapManager(
-			routeTableV4,
-			4,
-			config,
-			dp.loopSummarizer,
-		)
-		dp.noEncapParentIfaceC = make(chan string, 1)
-		go dp.noEncapManager.monitorParentDevice(
-			context.Background(),
-			time.Second*10,
-			dp.noEncapParentIfaceC,
-		)
-		dp.RegisterManager(dp.noEncapManager)
+	if config.ProgramClusterRoutes {
+		if !config.RulesConfig.VXLANEnabled && !config.RulesConfig.IPIPEnabled && !config.RulesConfig.WireguardEnabled {
+			log.Info("Unencapsulated IPv4 route programming enabled, starting thread to keep no encapsulation routes in sync.")
+			// Add a manager to keep the all-hosts IP set up to date.
+			dp.noEncapManager = newNoEncapManager(
+				routeTableV4,
+				4,
+				config,
+				dp.loopSummarizer,
+			)
+			dp.noEncapParentIfaceC = make(chan string, 1)
+			go dp.noEncapManager.monitorParentDevice(
+				context.Background(),
+				time.Second*10,
+				dp.noEncapParentIfaceC,
+			)
+			dp.RegisterManager(dp.noEncapManager)
+		}
+
+		if config.IPv6Enabled &&
+			!config.RulesConfig.VXLANEnabledV6 && !config.RulesConfig.WireguardEnabledV6 {
+			log.Info("Unencapsulated IPv6 route programming enabled, starting thread to keep no encapsulation routes in sync.")
+			// Add a manager to keep the all-hosts IP set up to date.
+			dp.noEncapManagerV6 = newNoEncapManager(
+				routeTableV6,
+				6,
+				config,
+				dp.loopSummarizer,
+			)
+			dp.noEncapParentIfaceCV6 = make(chan string, 1)
+			go dp.noEncapManagerV6.monitorParentDevice(
+				context.Background(),
+				time.Second*10,
+				dp.noEncapParentIfaceCV6,
+			)
+			dp.RegisterManager(dp.noEncapManagerV6)
+		}
 	}
 
 	if config.RulesConfig.VXLANEnabled {
@@ -1098,11 +1120,16 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	dp.endpointsSourceV4 = epManager
 	dp.RegisterManager(newFloatingIPManager(natTableV4, ruleRenderer, 4, config.FloatingIPsEnabled))
 	dp.RegisterManager(newMasqManager(ipSetsV4, natTableV4, ruleRenderer, config.MaxIPSetSize, 4))
+	dp.RegisterManager(newHostsIPSetManager(ipSetsV4, 4, config))
+
+	if !config.BPFEnabled {
+		dp.RegisterManager(newDSCPManager(mangleTableV4, ruleRenderer, 4))
+	}
+
 	if config.RulesConfig.IPIPEnabled {
 		log.Info("IPIP enabled, starting thread to keep tunnel configuration in sync.")
 		// Add a manager to keep the all-hosts IP set up to date.
 		dp.ipipManager = newIPIPManager(
-			ipSetsV4,
 			routeTableV4,
 			dataplanedefs.IPIPIfaceName,
 			4,
@@ -1294,6 +1321,11 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		dp.RegisterManager(newFloatingIPManager(natTableV6, ruleRenderer, 6, config.FloatingIPsEnabled))
 		dp.RegisterManager(newMasqManager(ipSetsV6, natTableV6, ruleRenderer, config.MaxIPSetSize, 6))
 		dp.RegisterManager(newServiceLoopManager(filterTableV6, ruleRenderer, 6))
+		dp.RegisterManager(newHostsIPSetManager(ipSetsV6, 6, config))
+
+		if !config.BPFEnabled {
+			dp.RegisterManager(newDSCPManager(mangleTableV6, ruleRenderer, 6))
+		}
 
 		// Add a manager for IPv6 wireguard configuration. This is added irrespective of whether wireguard is actually enabled
 		// because it may need to tidy up some of the routing rules when disabled.
@@ -2204,6 +2236,8 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 			d.ipipManager.routeMgr.OnParentDeviceUpdate(name)
 		case name := <-d.noEncapParentIfaceC:
 			d.noEncapManager.routeMgr.OnParentDeviceUpdate(name)
+		case name := <-d.noEncapParentIfaceCV6:
+			d.noEncapManagerV6.routeMgr.OnParentDeviceUpdate(name)
 		case name := <-d.vxlanParentIfaceC:
 			d.vxlanManager.routeMgr.OnParentDeviceUpdate(name)
 		case name := <-d.vxlanParentIfaceCV6:

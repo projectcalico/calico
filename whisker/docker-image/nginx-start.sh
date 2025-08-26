@@ -22,4 +22,15 @@ sed -i 's!/var/run/nginx.pid!/tmp/nginx.pid!g' /etc/nginx/nginx.conf
 sed -i '/user  nginx;/d' /etc/nginx/nginx.conf
 
 # Start nginx
-exec /usr/sbin/nginx -g "daemon off;"
+case "$1" in
+  ""|up)
+    exec /usr/sbin/nginx -g "daemon off;"
+    ;;
+  test)
+    exec /usr/sbin/nginx -T 2>&1
+    ;;
+  *)
+    echo "Usage: $0 [up|test]"
+    exit 1
+    ;;
+  esac
