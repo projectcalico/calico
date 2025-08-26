@@ -29556,6 +29556,11 @@ spec:
                     - Disabled
                     - L2Only
                   type: string
+                cgroupV2Path:
+                  description:
+                    CgroupV2Path overrides the default location where to
+                    find the cgroup hierarchy.
+                  type: string
                 chainInsertMode:
                   description: |-
                     ChainInsertMode controls whether Felix hooks the kernel's top-level iptables chains by inserting a rule
