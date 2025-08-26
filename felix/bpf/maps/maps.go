@@ -788,12 +788,13 @@ func (b *PinnedMap) EnsureExists() error {
 				break
 			}
 		}
-		if err := obj.Load(); err != nil {
-			return fmt.Errorf("error loading obj file %s for map %s: %w", objName, b.VersionedName(), err)
-		}
 
-		// Only look for map by pin if it was indeed loaded from the obj file
 		if loadedFromObj {
+			// Only load the obj if it was present in the obj file
+			if err := obj.Load(); err != nil {
+				return fmt.Errorf("error loading obj file %s for map %s: %w", objName, b.VersionedName(), err)
+			}
+
 			fd, err := GetMapFDByPin(b.VersionedFilename())
 			if err != nil {
 				return fmt.Errorf("error getting map FD by pin for map %s: %w", b.VersionedFilename(), err)
