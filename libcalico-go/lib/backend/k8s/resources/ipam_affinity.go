@@ -250,6 +250,8 @@ func (c *blockAffinityClient) createV1(ctx context.Context, kvp *model.KVPair) (
 }
 
 func (c *blockAffinityClient) createV3(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
+	if c.v3 {
+	}
 	return c.rc.Create(ctx, kvp)
 }
 
