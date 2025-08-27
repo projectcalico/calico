@@ -106,7 +106,7 @@
     epilogue:
       always:
         commands:
-          - artifact push job ${REPORT_DIR} --destination test-results --expire-in ${SEMAPHORE_ARTIFACT_EXPIRY} || true
+          - artifact push job ${REPORT_DIR} --destination test-results || true
     env_vars:
       - name: FV_PROVISIONER
         value: "capz"
