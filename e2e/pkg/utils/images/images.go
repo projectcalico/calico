@@ -24,6 +24,9 @@ const (
 	Alpine        = "docker.io/alpine:3"
 	Porter        = "calico/porter"
 	TestWebserver = "gcr.io/kubernetes-e2e-test-images/test-webserver:1.0"
+	Iperf         = "registry.k8s.io/e2e-test-images/agnhost:2.47"
+	Curl          = "docker.io/curlimages/curl:8.6.0"
+	HTTPBin       = "kennethreitz/httpbin:latest"
 )
 
 // Get client image and powershell command based on windows OS version
