@@ -132,6 +132,21 @@ blocks:
         - name: Pre-flight checks
           commands:
             - make ci-preflight-checks
+  - name: API
+    run:
+      when: "false or change_in(['/*', '/api/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+    execution_time_limit:
+      minutes: 30
+    dependencies:
+      - Prerequisites
+    task:
+      prologue:
+        commands:
+          - cd api
+      jobs:
+        - name: make ci
+          commands:
+            - ../.semaphore/run-and-monitor make-ci.log make ci
   - name: apiserver
     run:
       when: "false or change_in(['/*', '/libcalico-go/', '/api/', '/apiserver/', '/hack/test/certs/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
@@ -156,21 +171,6 @@ blocks:
                 - s390x
           commands:
             - ../.semaphore/run-and-monitor image-$ARCH.log make build ARCH=$ARCH
-  - name: API
-    run:
-      when: "false or change_in(['/*', '/api/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
-    execution_time_limit:
-      minutes: 30
-    dependencies:
-      - Prerequisites
-    task:
-      prologue:
-        commands:
-          - cd api
-      jobs:
-        - name: make ci
-          commands:
-            - ../.semaphore/run-and-monitor make-ci.log make ci
   - name: app-policy
     run:
       when: "false or change_in(['/*', '/app-policy/', '/felix/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
@@ -239,8 +239,8 @@ blocks:
       epilogue:
         always:
           commands:
-            - artifact push job ${REPORT_DIR} --destination semaphore/test-results --expire-in ${SEMAPHORE_ARTIFACT_EXPIRY} || true
-            - artifact push job ${LOGS_DIR} --destination semaphore/logs --expire-in ${SEMAPHORE_ARTIFACT_EXPIRY} || true
+            - artifact push job ${REPORT_DIR} --destination semaphore/test-results || true
+            - artifact push job ${LOGS_DIR} --destination semaphore/logs || true
             - cd ~/calico/process/testing/winfv-cni-plugin/aso && make dist-clean
       env_vars:
         - name: SEMAPHORE_ARTIFACT_EXPIRY
@@ -498,7 +498,7 @@ blocks:
       epilogue:
         always:
           commands:
-            - artifact push job ${REPORT_DIR} --destination test-results --expire-in ${SEMAPHORE_ARTIFACT_EXPIRY} || true
+            - artifact push job ${REPORT_DIR} --destination test-results || true
       env_vars:
         - name: FV_PROVISIONER
           value: "capz"
@@ -722,19 +722,6 @@ blocks:
         - name: "kube-controllers: tests"
           commands:
             - ../.semaphore/run-and-monitor ci.log make ci
-  - name: libcalico-go
-    run:
-      when: "false or change_in(['/*', '/api/', '/libcalico-go/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
-    dependencies:
-      - Prerequisites
-    task:
-      prologue:
-        commands:
-          - cd libcalico-go
-      jobs:
-        - name: "libcalico-go: tests"
-          commands:
-            - ../.semaphore/run-and-monitor make-ci.log make ci
   - name: lib
     run:
       when: "false or change_in(['/lib/'])"
@@ -748,6 +735,19 @@ blocks:
           - cd lib
       jobs:
         - name: make ci
+          commands:
+            - ../.semaphore/run-and-monitor make-ci.log make ci
+  - name: libcalico-go
+    run:
+      when: "false or change_in(['/*', '/api/', '/libcalico-go/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+    dependencies:
+      - Prerequisites
+    task:
+      prologue:
+        commands:
+          - cd libcalico-go
+      jobs:
+        - name: "libcalico-go: tests"
           commands:
             - ../.semaphore/run-and-monitor make-ci.log make ci
   - name: "Node: Build"
@@ -1008,7 +1008,7 @@ blocks:
           commands:
             - mkdir logs
             - sudo journalctl > logs/journalctl.txt
-            - artifact push job --expire-in 1d logs
+            - artifact push job logs
 
   - name: "OpenStack integration (Caracal)"
     run:
@@ -1047,7 +1047,7 @@ blocks:
           commands:
             - mkdir logs
             - sudo journalctl > logs/journalctl.txt
-            - artifact push job --expire-in 1d logs
+            - artifact push job logs
   - name: Mock node
     run:
       when: "false or change_in(['/*', '/test-tools/mocknode/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"

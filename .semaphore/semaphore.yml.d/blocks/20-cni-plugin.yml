@@ -40,8 +40,8 @@
     epilogue:
       always:
         commands:
-          - artifact push job ${REPORT_DIR} --destination semaphore/test-results --expire-in ${SEMAPHORE_ARTIFACT_EXPIRY} || true
-          - artifact push job ${LOGS_DIR} --destination semaphore/logs --expire-in ${SEMAPHORE_ARTIFACT_EXPIRY} || true
+          - artifact push job ${REPORT_DIR} --destination semaphore/test-results || true
+          - artifact push job ${LOGS_DIR} --destination semaphore/logs || true
           - cd ~/calico/process/testing/winfv-cni-plugin/aso && make dist-clean
     env_vars:
       - name: SEMAPHORE_ARTIFACT_EXPIRY
