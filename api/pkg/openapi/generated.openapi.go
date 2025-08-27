@@ -3412,6 +3412,13 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							Format:      "int32",
 						},
 					},
+					"cgroupV2Path": {
+						SchemaProps: spec.SchemaProps{
+							Description: "CgroupV2Path overrides the default location where to find the cgroup hierarchy.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 					"flowLogsPolicyEvaluationMode": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Continuous - Felix evaluates active flows on a regular basis to determine the rule traces in the flow logs. Any policy updates that impact a flow will be reflected in the pending_policies field, offering a near-real-time view of policy changes across flows. None - Felix stops evaluating pending traces. [Default: Continuous]",

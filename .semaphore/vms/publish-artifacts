@@ -22,5 +22,5 @@ shopt -s nullglob
 cd "artifacts" || exit 1
 
 for file in *; do
-  artifact push --expire-in 4w job "$file"
+  artifact push job "$file"
 done
