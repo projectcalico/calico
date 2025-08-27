@@ -24,12 +24,13 @@ import (
 	"github.com/projectcalico/calico/e2e/pkg/utils/client"
 )
 
+// ExpectedPodMTU returns the MTU that should be configured on pods, based on the Installation
+// resource. If no MTU is configured, returns nil.
 func ExpectedPodMTU(f *framework.Framework) *int32 {
 	// Create a client to the API server.
 	cli, err := client.New(f.ClientConfig())
 	Expect(err).NotTo(HaveOccurred())
 
-	// Query Installation object to check if we are running on OpenShift.
 	installs := &v1.InstallationList{}
 	err = cli.List(context.TODO(), installs)
 	Expect(err).NotTo(HaveOccurred())
