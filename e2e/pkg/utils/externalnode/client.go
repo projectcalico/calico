@@ -11,10 +11,10 @@ import (
 	"time"
 
 	. "github.com/onsi/gomega"
+	"github.com/sirupsen/logrus"
+
 	"github.com/projectcalico/calico/e2e/pkg/config"
 	"github.com/projectcalico/calico/e2e/pkg/utils/images"
-
-	"github.com/sirupsen/logrus"
 )
 
 type externalNodeClient struct {

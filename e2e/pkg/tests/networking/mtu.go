@@ -16,13 +16,14 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	v1 "k8s.io/api/core/v1"
+	"k8s.io/utils/ptr"
+	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
+
 	"github.com/projectcalico/calico/e2e/pkg/describe"
 	"github.com/projectcalico/calico/e2e/pkg/utils"
 	"github.com/projectcalico/calico/e2e/pkg/utils/client"
 	"github.com/projectcalico/calico/e2e/pkg/utils/conncheck"
-	v1 "k8s.io/api/core/v1"
-	"k8s.io/utils/ptr"
-	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 var _ = describe.CalicoDescribe(

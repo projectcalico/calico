@@ -17,12 +17,12 @@ import (
 	"fmt"
 
 	. "github.com/onsi/ginkgo/v2"
-	"github.com/projectcalico/calico/e2e/pkg/utils"
-	"github.com/projectcalico/calico/e2e/pkg/utils/conncheck"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/kubernetes/test/e2e/framework"
 
 	"github.com/projectcalico/calico/e2e/pkg/describe"
+	"github.com/projectcalico/calico/e2e/pkg/utils"
+	"github.com/projectcalico/calico/e2e/pkg/utils/conncheck"
 )
 
 const hostport = 8080

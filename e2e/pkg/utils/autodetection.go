@@ -18,9 +18,10 @@ import (
 	"context"
 
 	. "github.com/onsi/gomega"
-	"github.com/projectcalico/calico/e2e/pkg/utils/client"
 	v1 "github.com/tigera/operator/api/v1"
 	"k8s.io/kubernetes/test/e2e/framework"
+
+	"github.com/projectcalico/calico/e2e/pkg/utils/client"
 )
 
 func ExpectedPodMTU(f *framework.Framework) *int32 {

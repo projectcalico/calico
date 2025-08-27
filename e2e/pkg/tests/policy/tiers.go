@@ -7,18 +7,17 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
-
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"github.com/projectcalico/calico/e2e/pkg/describe"
-	"github.com/projectcalico/calico/e2e/pkg/utils"
-	"github.com/projectcalico/calico/e2e/pkg/utils/client"
-	"github.com/projectcalico/calico/e2e/pkg/utils/conncheck"
-
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/kubernetes/test/e2e/framework"
 	"k8s.io/utils/ptr"
+	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/projectcalico/calico/e2e/pkg/describe"
+	"github.com/projectcalico/calico/e2e/pkg/utils"
+	"github.com/projectcalico/calico/e2e/pkg/utils/client"
+	"github.com/projectcalico/calico/e2e/pkg/utils/conncheck"
 )
 
 // DESCRIPTION: Verify tiers.
