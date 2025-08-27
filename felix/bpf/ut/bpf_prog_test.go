@@ -804,6 +804,10 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 					globals.EgressPacketBurst = topts.egressQoSPacketBurst
 				}
 
+				if topts.dscp >= 0 {
+					globals.DSCP = topts.dscp
+				}
+
 				if topts.ipv6 {
 					copy(globals.HostTunnelIPv6[:], node1tunIPV6.To16())
 					copy(globals.HostIPv6[:], hostIP.To16())
@@ -1173,6 +1177,7 @@ type testOpts struct {
 	ingressQoSPacketBurst uint16
 	egressQoSPacketRate   uint16
 	egressQoSPacketBurst  uint16
+	dscp                  int16
 }
 
 type testOption func(opts *testOpts)
@@ -1245,6 +1250,12 @@ func withEgressQoSPacketRate(packetRate, packetBurst uint16) testOption {
 	return func(o *testOpts) {
 		o.egressQoSPacketRate = packetRate
 		o.egressQoSPacketBurst = packetBurst
+	}
+}
+
+func withEgressDSCP(value uint8) testOption {
+	return func(o *testOpts) {
+		o.dscp = int16(value)
 	}
 }
 

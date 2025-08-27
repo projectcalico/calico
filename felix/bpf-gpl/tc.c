@@ -1326,7 +1326,10 @@ int calico_tc_skb_accepted_entrypoint(struct __sk_buff *skb)
 		goto deny;
 	}
 	ctx->fwd = calico_tc_skb_accepted(ctx);
-	set_dscp(ctx);
+	if (!set_dscp(ctx)) {
+		deny_reason(ctx, CALI_REASON_CSUM_FAIL);
+		goto deny;
+	}
 	return forward_or_drop(ctx);
 
 deny:

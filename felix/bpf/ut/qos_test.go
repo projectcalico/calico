@@ -95,3 +95,70 @@ func TestQoSPacketRate(t *testing.T) {
 		Expect(res.Retval).To(Equal(resTC_ACT_SHOT))
 	}, withEgressQoSPacketRate(1, 1))
 }
+
+func TestDSCP(t *testing.T) {
+	RegisterTestingT(t)
+
+	bpfIfaceName = "HWvwl"
+	defer func() { bpfIfaceName = "" }()
+	_, _, _, _, pktBytes, err := testPacketUDPDefault()
+	Expect(err).NotTo(HaveOccurred())
+
+	ctMap := conntrack.Map()
+	err = ctMap.EnsureExists()
+	Expect(err).NotTo(HaveOccurred())
+	resetCTMap(ctMap) // ensure it is clean
+	defer resetCTMap(ctMap)
+
+	ifIndex := 1
+
+	// Insert a reverse route for the source workload.
+	rtKey := routes.NewKey(srcV4CIDR).AsBytes()
+	rtVal := routes.NewValueWithIfIndex(routes.FlagsLocalWorkload|routes.FlagInIPAMPool, ifIndex).AsBytes()
+	err = rtMap.Update(rtKey, rtVal)
+	Expect(err).NotTo(HaveOccurred())
+	rtKey = routes.NewKey(dstV4CIDR).AsBytes()
+	rtVal = routes.NewValueWithIfIndex(routes.FlagsRemoteWorkload|routes.FlagInIPAMPool, ifIndex).AsBytes()
+	err = rtMap.Update(rtKey, rtVal)
+	Expect(err).NotTo(HaveOccurred())
+	defer resetRTMap(rtMap)
+
+	// Populate ifstate map (for QoS state)
+	key1 := ifstate.NewKey(uint32(ifIndex)).AsBytes()
+	value1 := ifstate.NewValue(ifstate.FlgIPv4Ready|ifstate.FlgWEP, bpfIfaceName,
+		-1, 0, 2, -1, -1, -1, 3, 4, -1, -1, 0, 0)
+
+	bpfmaps, err := bpfmap.CreateBPFMaps(false)
+	Expect(err).NotTo(HaveOccurred())
+	err = bpfmaps.CommonMaps.IfStateMap.Update(
+		key1,
+		value1.AsBytes(),
+	)
+	Expect(err).NotTo(HaveOccurred())
+
+	// Ingress, allow first packet, drop second (because of 1/sec limit)
+	skbMark = tcdefs.MarkSeen
+	runBpfTest(t, "calico_to_hep_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+		res, err := bpfrun(pktBytes)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+
+		res, err = bpfrun(pktBytes)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.Retval).To(Equal(resTC_ACT_OK))
+	}, withEgressDSCP(30))
+
+	resetCTMap(ctMap) // ensure it is clean
+
+	// Egress, allow first packet, drop second (because of 1/sec limit)
+	skbMark = 0
+	runBpfTest(t, "calico_from_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+		res, err := bpfrun(pktBytes)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.Retval).To(Equal(resTC_ACT_REDIRECT))
+
+		res, err = bpfrun(pktBytes)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.Retval).To(Equal(resTC_ACT_SHOT))
+	}, withEgressDSCP(50))
+}

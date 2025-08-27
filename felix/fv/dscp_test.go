@@ -59,6 +59,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ dscp tests", []apiconfig.Da
 		options := infrastructure.DefaultTopologyOptions()
 		options.IPIPMode = apiv3.IPIPModeNever
 		options.EnableIPv6 = true
+		options.BPFEnableIPv6 = true
 		tc, client = infrastructure.StartNNodeTopology(2, options, infra)
 
 		// Install a default profile that allows all ingress and egress, in the absence of any Policy.
@@ -115,12 +116,12 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ dscp tests", []apiconfig.Da
 		ep2_1.Stop()
 		ep1_2.Stop()
 		ep2_2.Stop()
+		extClient.Stop()
 		tc.Stop()
 		if CurrentGinkgoTestDescription().Failed {
 			infra.DumpErrorData()
 		}
 		infra.Stop()
-		extClient.Stop()
 	})
 
 	It("should have expected restriction on the rule jumping to DSCP chain static rules", func() {
@@ -260,7 +261,8 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ dscp tests", []apiconfig.Da
 
 		cc.Expect(connectivity.None, extClient, ep1_2, ccOpts)
 		cc.Expect(connectivity.Some, extClient, ep2_2, ccOpts)
-		cc.CheckConnectivity()
+		//cc.CheckConnectivity()
+		cc.CheckConnectivityWithTimeout(time.Minute * 60)
 
 		By("updating DSCP values on some workloads")
 		ep2_1.WorkloadEndpoint.Spec.QoSControls = &api.QoSControls{

@@ -608,6 +608,7 @@ func (t *TcGlobalData) Set(m *Map) error {
 		C.ushort(t.IngressPacketBurst),
 		C.ushort(t.EgressPacketRate),
 		C.ushort(t.EgressPacketBurst),
+		C.short(t.DSCP),
 	)
 
 	return err
