@@ -261,7 +261,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 		if (conf.Kubernetes.Kubeconfig != "" || conf.Policy.PolicyType == "k8s") && namespace != "" {
 			logger.Debugf("Getting namespace labels for: %s", namespace)
 
-			labels, err := getNamespaceLabels(calicoClient, namespace, logger)
+			labels, err := getNamespaceLabels(calicoClient, namespace)
 			if err != nil {
 				logger.WithError(err).Warnf("Failed to get namespace labels for %s, using empty labels", namespace)
 				namespaceLabels = map[string]string{}
@@ -500,7 +500,7 @@ func cmdDel(args *skel.CmdArgs) error {
 }
 
 // getNamespaceLabels retrieves namespace labels using Calico client's Namespaces interface
-func getNamespaceLabels(calicoClient client.Interface, namespace string, logger *logrus.Entry) (map[string]string, error) {
+func getNamespaceLabels(calicoClient client.Interface, namespace string) (map[string]string, error) {
 	if namespace == "" {
 		return map[string]string{}, nil
 	}

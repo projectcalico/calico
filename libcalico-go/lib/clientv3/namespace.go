@@ -25,10 +25,12 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
-// NamespaceInterface has methods to work with Kubernetes Namespace resources.
-// This is a simplified interface for accessing namespace information, primarily
-// used for namespaceSelector functionality in IPAM.
+// NamespaceInterface provides methods to work with Kubernetes Namespace resources.
+// Used for namespaceSelector functionality in IPAM.
 type NamespaceInterface interface {
+	Create(ctx context.Context, res *corev1.Namespace, opts options.SetOptions) (*corev1.Namespace, error)
+	Update(ctx context.Context, res *corev1.Namespace, opts options.SetOptions) (*corev1.Namespace, error)
+	Delete(ctx context.Context, name string, opts options.DeleteOptions) (*corev1.Namespace, error)
 	Get(ctx context.Context, name string, opts options.GetOptions) (*corev1.Namespace, error)
 	List(ctx context.Context, opts options.ListOptions) (*corev1.NamespaceList, error)
 }
@@ -38,39 +40,81 @@ type namespaces struct {
 	client client
 }
 
-// Get takes name of the Namespace, and returns the corresponding Namespace object,
-// and an error if there is any.
-func (r namespaces) Get(ctx context.Context, name string, opts options.GetOptions) (*corev1.Namespace, error) {
-	// Get the backend from Calico client
+func (r namespaces) Create(ctx context.Context, res *corev1.Namespace, opts options.SetOptions) (*corev1.Namespace, error) {
 	backend := r.client.backend
 
-	// Type assert to KubeClient to access the Kubernetes clientset
 	if kubeClient, ok := backend.(*k8s.KubeClient); ok {
-		// Use the Kubernetes clientset from Calico's backend
-		return kubeClient.ClientSet.CoreV1().Namespaces().Get(ctx, name, metav1.GetOptions{})
+		return kubeClient.ClientSet.CoreV1().Namespaces().Create(ctx, res, metav1.CreateOptions{})
 	}
 
-	// If not using Kubernetes backend, return an error
 	return nil, fmt.Errorf("namespace access is only available when using Kubernetes datastore")
 }
 
-// List returns the list of Namespace objects that match the supplied options.
-func (r namespaces) List(ctx context.Context, opts options.ListOptions) (*corev1.NamespaceList, error) {
-	// Get the backend from Calico client
+func (r namespaces) Update(ctx context.Context, res *corev1.Namespace, opts options.SetOptions) (*corev1.Namespace, error) {
 	backend := r.client.backend
 
-	// Type assert to KubeClient to access the Kubernetes clientset
 	if kubeClient, ok := backend.(*k8s.KubeClient); ok {
-		// Convert Calico ListOptions to Kubernetes ListOptions
+		return kubeClient.ClientSet.CoreV1().Namespaces().Update(ctx, res, metav1.UpdateOptions{})
+	}
+
+	return nil, fmt.Errorf("namespace access is only available when using Kubernetes datastore")
+}
+
+func (r namespaces) Delete(ctx context.Context, name string, opts options.DeleteOptions) (*corev1.Namespace, error) {
+	backend := r.client.backend
+
+	if kubeClient, ok := backend.(*k8s.KubeClient); ok {
+		deleteOpts := metav1.DeleteOptions{}
+		if opts.ResourceVersion != "" {
+			deleteOpts.Preconditions = &metav1.Preconditions{
+				ResourceVersion: &opts.ResourceVersion,
+			}
+		}
+		if opts.UID != nil {
+			if deleteOpts.Preconditions == nil {
+				deleteOpts.Preconditions = &metav1.Preconditions{}
+			}
+			deleteOpts.Preconditions.UID = opts.UID
+		}
+
+		// Get object first, then delete it to return the deleted object
+		namespace, err := kubeClient.ClientSet.CoreV1().Namespaces().Get(ctx, name, metav1.GetOptions{})
+		if err != nil {
+			return nil, err
+		}
+
+		err = kubeClient.ClientSet.CoreV1().Namespaces().Delete(ctx, name, deleteOpts)
+		if err != nil {
+			return nil, err
+		}
+
+		return namespace, nil
+	}
+
+	return nil, fmt.Errorf("namespace access is only available when using Kubernetes datastore")
+}
+
+func (r namespaces) Get(ctx context.Context, name string, opts options.GetOptions) (*corev1.Namespace, error) {
+	backend := r.client.backend
+
+	if kubeClient, ok := backend.(*k8s.KubeClient); ok {
+		return kubeClient.ClientSet.CoreV1().Namespaces().Get(ctx, name, metav1.GetOptions{})
+	}
+
+	return nil, fmt.Errorf("namespace access is only available when using Kubernetes datastore")
+}
+
+func (r namespaces) List(ctx context.Context, opts options.ListOptions) (*corev1.NamespaceList, error) {
+	backend := r.client.backend
+
+	if kubeClient, ok := backend.(*k8s.KubeClient); ok {
 		listOpts := metav1.ListOptions{}
 		if opts.Name != "" {
 			listOpts.FieldSelector = "metadata.name=" + opts.Name
 		}
 
-		// Use the Kubernetes clientset from Calico's backend
 		return kubeClient.ClientSet.CoreV1().Namespaces().List(ctx, listOpts)
 	}
 
-	// If not using Kubernetes backend, return an error
 	return nil, fmt.Errorf("namespace access is only available when using Kubernetes datastore")
 }
