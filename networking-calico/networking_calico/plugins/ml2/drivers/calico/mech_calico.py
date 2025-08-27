@@ -2,7 +2,7 @@
 #
 # Copyright (c) 2014, 2015 Metaswitch Networks
 # Copyright (c) 2013 OpenStack Foundation
-# Copyright (c) 2018 Tigera, Inc. All rights reserved.
+# Copyright (c) 2018-2025 Tigera, Inc. All rights reserved.
 # All Rights Reserved.
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
@@ -89,6 +89,9 @@ config.register_agent_state_opts_helper(cfg.CONF)
 
 LOG = log.getLogger(__name__)
 
+# The default interval between periodic resyncs, in seconds.
+DEFAULT_RESYNC_INTERVAL_SECS = 60
+
 calico_opts = [
     cfg.IntOpt(
         "num_port_status_threads",
@@ -122,6 +125,16 @@ calico_opts = [
         default=100,
         help="The maximum allowed size of our cache of project names.",
     ),
+    cfg.IntOpt(
+        "resync_interval_secs",
+        default=DEFAULT_RESYNC_INTERVAL_SECS,
+        help=(
+            "If non-zero, configures how frequently Calico rechecks its state against"
+            " the Neutron DB.  Zero means to disable any periodic rechecking.  Please"
+            " note that Calico _always_ performs an _initial_ check when the Neutron"
+            " server starts or is restarted."
+        ),
+    ),
 ]
 cfg.CONF.register_opts(calico_opts, "calico")
 
@@ -141,9 +154,6 @@ PORT_STATUS_MAPPING = {
     datamodel_v1.ENDPOINT_STATUS_ERROR: constants.PORT_STATUS_ERROR,
 }
 
-# The interval between period resyncs, in seconds.
-# TODO(nj): Increase this to a longer interval for product code.
-RESYNC_INTERVAL_SECS = 60
 # When we're not the master, how often we check if we have become the master.
 MASTER_CHECK_INTERVAL_SECS = 5
 # Delay before retrying a failed port status update to the Neutron DB.
@@ -953,7 +963,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             LOG.info("Port unbound, attempting delete if needed.")
             self.endpoint_syncer.delete_endpoint(port)
 
-    def periodic_resync_thread(self, expected_epoch):
+    def periodic_resync_thread(self, launch_epoch):
         """Periodic Neutron DB -> etcd resynchronization logic.
 
         On a fixed interval, spin over relevant Neutron DB objects and
@@ -962,8 +972,8 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         """
         try:
             LOG.info("Periodic resync thread started")
-            while self._epoch == expected_epoch:
-                # Only do the resync logic if we're actually the master node.
+            while self._epoch == launch_epoch:
+                # Only do the resync if we are the master node.
                 if self.elector.master():
                     LOG.info("I am master: doing periodic resync")
 
@@ -992,11 +1002,16 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                         check_request_etcd_compaction()
                     except Exception:
                         LOG.exception("Error in periodic resync thread.")
+
+                    if cfg.CONF.calico.resync_interval_secs == 0:
+                        # No continuing periodic resync.
+                        break
+
                     # Reschedule ourselves.
-                    eventlet.sleep(RESYNC_INTERVAL_SECS)
+                    eventlet.sleep(cfg.CONF.calico.resync_interval_secs)
                 else:
                     # Shorter sleep interval before we check if we've become
-                    # the master.  Avoids waiting a whole RESYNC_INTERVAL_SECS
+                    # the master.  Avoids waiting a whole resync_interval_secs
                     # if we just miss the master update.
                     LOG.debug("I am not master")
                     eventlet.sleep(MASTER_CHECK_INTERVAL_SECS)

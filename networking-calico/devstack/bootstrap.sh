@@ -1,6 +1,7 @@
 #!/bin/bash
 # Copyright 2015 Metaswitch Networks
 # All Rights Reserved.
+# Copyright (c) 2025 Tigera, Inc. All rights reserved.
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
 #    not use this file except in compliance with the License. You may obtain
@@ -96,11 +97,11 @@ fi
 # different version of Tempest than the version that DevStack would naturally use.
 case "${DEVSTACK_BRANCH}" in
     unmaintained/yoga )
-	export UPPER_CONSTRAINTS_FILE=https://releases.openstack.org/constraints/upper/yoga
-	;;
-    stable/2024.1 )		# Caracal
-	export UPPER_CONSTRAINTS_FILE=https://raw.githubusercontent.com/openstack/requirements/refs/heads/stable/2024.1/upper-constraints.txt
-	;;
+        export UPPER_CONSTRAINTS_FILE=https://releases.openstack.org/constraints/upper/yoga
+        ;;
+    stable/2024.1 )             # Caracal
+        export UPPER_CONSTRAINTS_FILE=https://raw.githubusercontent.com/openstack/requirements/refs/heads/stable/2024.1/upper-constraints.txt
+        ;;
 esac
 
 : ${NC_PLUGIN_REPO:=https://github.com/projectcalico/calico}
@@ -161,6 +162,10 @@ SCENARIO_IMAGE_TYPE=ignore
 GIT_BASE=https://github.com
 
 LIBVIRT_TYPE=qemu
+
+# Disable ongoing resync.  In principle this isn't needed; disable it in order to build evidence to
+# confirm that.
+CALICO_RESYNC_INTERVAL_SECS=0
 
 EOF
 
