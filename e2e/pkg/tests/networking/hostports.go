@@ -66,8 +66,8 @@ var _ = describe.CalicoDescribe(
 		text := fmt.Sprintf("with host port resources active on :%d", hostport)
 		Context(text, func() {
 			framework.ConformanceIt("should support Pod HostPorts", func() {
-				checker.ExpectSuccess(client1, server.HostPort(hostport))   // Expect success on the correct host port.
-				checker.ExpectFailure(client1, server.HostPort(hostport+1)) // Expect failure on an incorrect host port.
+				checker.ExpectSuccess(client1, server.HostPorts(hostport)...)   // Expect success on the correct host port.
+				checker.ExpectFailure(client1, server.HostPorts(hostport+1)...) // Expect failure on an incorrect host port.
 				checker.Execute()
 			})
 		})

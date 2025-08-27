@@ -115,14 +115,20 @@ func (s *Server) ClusterIP(opts ...TargetOption) Target {
 	return t
 }
 
-func (s *Server) HostPort(port int) Target {
-	return &target{
-		server:      s,
-		targetType:  TypePodIP,
-		destination: s.Pod().Status.HostIP,
-		port:        port,
-		protocol:    TCP,
+// HostPorts returns a list of targets that can be used to connect to the pod's host IPs on the given port.
+// It returns a target for each of the pod's host IPs, at the specified port.
+func (s *Server) HostPorts(port int) []Target {
+	var targets []Target
+	for _, hostIP := range s.Pod().Status.HostIPs {
+		targets = append(targets, &target{
+			server:      s,
+			targetType:  TypePodIP,
+			destination: hostIP.IP,
+			port:        port,
+			protocol:    TCP,
+		})
 	}
+	return targets
 }
 
 // NodePortPort returns port number of a NodePort service associated with the server.
