@@ -2359,7 +2359,7 @@ func (c ipamClient) UpgradeHost(ctx context.Context, nodeName string) error {
 		if err == nil {
 			return nil
 		}
-		log.WithError(err).Errorf("Failed to upgrade qIPAM blocks of this host.")
+		log.WithError(err).Errorf("Failed to upgrade IPAM blocks of this host.")
 		select {
 		case <-ctx.Done():
 			return err

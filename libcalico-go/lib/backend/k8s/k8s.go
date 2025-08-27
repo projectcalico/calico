@@ -84,7 +84,7 @@ func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 		return nil, err
 	}
 
-	crdClientV1, err := buildCRDClientV1(*config)
+	crdClientV1, err := RawCRDClientV1(*config)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to build V1 CRD client: %v", err)
 	}
@@ -542,8 +542,10 @@ func buildK8SAdminPolicyClient(cfg *rest.Config) (*adminpolicyclient.PolicyV1alp
 	return adminpolicyclient.NewForConfig(cfg)
 }
 
-// buildCRDClientV1 builds a RESTClient configured to interact with Calico CustomResourceDefinitions
-func buildCRDClientV1(cfg rest.Config) (*rest.RESTClient, error) {
+// RawCRDClientV1 builds a RESTClient configured to interact with Calico
+// CustomResourceDefinitions.  Exposed for use in tests to allow creation of
+// malformed or unusual data!
+func RawCRDClientV1(cfg rest.Config) (*rest.RESTClient, error) {
 	// Generate config using the base config.
 	cfg.GroupVersion = &schema.GroupVersion{
 		Group:   "crd.projectcalico.org",
