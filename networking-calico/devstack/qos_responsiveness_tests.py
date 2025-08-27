@@ -37,7 +37,7 @@ logger = logging.getLogger(__name__)
 
 class QoSResponsivenessTest:
     """Test suite for QoS responsiveness in Calico OpenStack integration."""
-    
+
     def __init__(self):
         """Initialize the test environment."""
         self.conn = None
@@ -52,7 +52,7 @@ class QoSResponsivenessTest:
             'security_groups': []
         }
         self.setup_clients()
-    
+
     def setup_clients(self):
         """Set up OpenStack and Calico clients."""
         # Set up OpenStack connection
@@ -71,7 +71,7 @@ class QoSResponsivenessTest:
         except Exception as e:
             logger.error(f"Failed to establish OpenStack connection: {e}")
             sys.exit(1)
-        
+
         # Set up etcd client for Calico datastore access
         if ETCD_AVAILABLE:
             try:
@@ -84,11 +84,11 @@ class QoSResponsivenessTest:
                 self.etcd_client = None
         else:
             logger.info("Using calicoctl command line interface for Calico datastore access")
-    
+
     def cleanup_resources(self):
         """Clean up all test resources."""
         logger.info("Cleaning up test resources...")
-        
+
         # Delete servers
         for server in self.test_resources['servers']:
             try:
@@ -97,7 +97,7 @@ class QoSResponsivenessTest:
                 logger.info(f"Deleted server: {server.name}")
             except Exception as e:
                 logger.warning(f"Failed to delete server {server.name}: {e}")
-        
+
         # Delete ports
         for port in self.test_resources['ports']:
             try:
@@ -105,7 +105,7 @@ class QoSResponsivenessTest:
                 logger.info(f"Deleted port: {port.name}")
             except Exception as e:
                 logger.warning(f"Failed to delete port {port.name}: {e}")
-        
+
         # Delete subnets
         for subnet in self.test_resources['subnets']:
             try:
@@ -113,7 +113,7 @@ class QoSResponsivenessTest:
                 logger.info(f"Deleted subnet: {subnet.name}")
             except Exception as e:
                 logger.warning(f"Failed to delete subnet {subnet.name}: {e}")
-        
+
         # Delete networks
         for network in self.test_resources['networks']:
             try:
@@ -121,7 +121,7 @@ class QoSResponsivenessTest:
                 logger.info(f"Deleted network: {network.name}")
             except Exception as e:
                 logger.warning(f"Failed to delete network {network.name}: {e}")
-        
+
         # Delete QoS policies
         for qos_policy in self.test_resources['qos_policies']:
             try:
@@ -129,7 +129,7 @@ class QoSResponsivenessTest:
                 logger.info(f"Deleted QoS policy: {qos_policy.name}")
             except Exception as e:
                 logger.warning(f"Failed to delete QoS policy {qos_policy.name}: {e}")
-        
+
         # Delete security groups
         for sg in self.test_resources['security_groups']:
             try:
@@ -137,15 +137,15 @@ class QoSResponsivenessTest:
                 logger.info(f"Deleted security group: {sg.name}")
             except Exception as e:
                 logger.warning(f"Failed to delete security group {sg.name}: {e}")
-    
+
     def get_workload_endpoint(self, port_id: str, timeout: int = 30) -> Optional[Dict]:
         """
         Get WorkloadEndpoint from Calico datastore for a given port.
-        
+
         Args:
             port_id: Neutron port ID
             timeout: Maximum time to wait for endpoint to appear
-            
+
         Returns:
             WorkloadEndpoint data or None if not found
         """
@@ -180,20 +180,20 @@ class QoSResponsivenessTest:
                         pass
             except Exception as e:
                 logger.debug(f"Error querying WorkloadEndpoint: {e}")
-            
+
             time.sleep(1)
-        
+
         return None
-    
+
     def verify_qos_update(self, port_id: str, expected_qos: Dict, timeout: int = 10) -> bool:
         """
         Verify that WorkloadEndpoint QoS controls match expected values.
-        
+
         Args:
             port_id: Neutron port ID
             expected_qos: Expected QoS controls dictionary
             timeout: Maximum time to wait for update
-            
+
         Returns:
             True if QoS controls match expected values within timeout
         """
@@ -202,30 +202,30 @@ class QoSResponsivenessTest:
             wep = self.get_workload_endpoint(port_id)
             if wep and 'spec' in wep and 'qosControls' in wep['spec']:
                 qos_controls = wep['spec']['qosControls']
-                
+
                 # Check each expected QoS parameter
                 match = True
                 for key, expected_value in expected_qos.items():
                     if key not in qos_controls or qos_controls[key] != expected_value:
                         match = False
                         break
-                
+
                 if match:
                     logger.info(f"QoS controls verified for port {port_id}: {qos_controls}")
                     return True
                 else:
                     logger.debug(f"QoS controls mismatch for port {port_id}. Expected: {expected_qos}, Got: {qos_controls}")
-            
+
             time.sleep(0.5)
-        
+
         logger.error(f"QoS controls verification failed for port {port_id} after {timeout}s")
         return False
-    
+
     def create_qos_policy(self, name: str, rules: List[Dict]) -> object:
         """Create a QoS policy with specified rules."""
         qos_policy = self.conn.network.create_qos_policy(name=name)
         self.test_resources['qos_policies'].append(qos_policy)
-        
+
         for rule in rules:
             if rule['type'] == 'bandwidth_limit':
                 self.conn.network.create_qos_bandwidth_limit_rule(
@@ -240,19 +240,19 @@ class QoSResponsivenessTest:
                     max_kpps=rule.get('max_kpps'),
                     direction=rule.get('direction', 'egress')
                 )
-        
+
         logger.info(f"Created QoS policy: {name} with {len(rules)} rules")
         return qos_policy
-    
+
     def create_test_network(self, name: str, qos_policy_id: str = None) -> Tuple[object, object]:
         """Create a test network and subnet."""
-        network_args = {'name': name, 'is_shared': False}
+        network_args = {'name': name + "-net", 'is_shared': False}
         if qos_policy_id:
             network_args['qos_policy_id'] = qos_policy_id
-        
+
         network = self.conn.network.create_network(**network_args)
         self.test_resources['networks'].append(network)
-        
+
         subnet = self.conn.network.create_subnet(
             name=f"{name}-subnet",
             network_id=network.id,
@@ -261,10 +261,10 @@ class QoSResponsivenessTest:
             enable_dhcp=True
         )
         self.test_resources['subnets'].append(subnet)
-        
-        logger.info(f"Created network: {name} {'with QoS policy' if qos_policy_id else 'without QoS policy'}")
+
+        logger.info(f"Created network: {name}-net {'with QoS policy' if qos_policy_id else 'without QoS policy'}")
         return network, subnet
-    
+
     def create_test_port(self, name: str, network_id: str, qos_policy_id: str = None) -> object:
         """Create a test port."""
         port_args = {
@@ -274,17 +274,17 @@ class QoSResponsivenessTest:
         }
         if qos_policy_id:
             port_args['qos_policy_id'] = qos_policy_id
-        
+
         port = self.conn.network.create_port(**port_args)
         self.test_resources['ports'].append(port)
-        
+
         logger.info(f"Created port: {name} {'with QoS policy' if qos_policy_id else 'without QoS policy'}")
         return port
-    
+
     def test_network_qos_policy(self) -> bool:
         """Test QoS policy applied at network level."""
         logger.info("=== Testing Network-level QoS Policy ===")
-        
+
         # Create QoS policy with bandwidth limit
         qos_policy = self.create_qos_policy("test-network-qos", [
             {
@@ -294,32 +294,32 @@ class QoSResponsivenessTest:
                 'direction': 'egress'
             }
         ])
-        
+
         # Create network with QoS policy
         network, subnet = self.create_test_network("test-network-qos", qos_policy.id)
-        
+
         # Create port on the network
         port = self.create_test_port("test-port-network-qos", network.id)
-        
+
         # Verify QoS controls are applied to WorkloadEndpoint
         expected_qos = {
             'egressBandwidth': 10000000,  # Convert kbps to bps
             'egressPeakrate': 12000000    # Convert kbps to bps
         }
-        
+
         success = self.verify_qos_update(port.id, expected_qos)
-        
+
         if success:
             logger.info("✓ Network-level QoS policy test PASSED")
         else:
             logger.error("✗ Network-level QoS policy test FAILED")
-        
+
         return success
-    
+
     def test_port_qos_policy(self) -> bool:
         """Test QoS policy applied at port level."""
         logger.info("=== Testing Port-level QoS Policy ===")
-        
+
         # Create QoS policy with packet rate limit
         qos_policy = self.create_qos_policy("test-port-qos", [
             {
@@ -328,31 +328,31 @@ class QoSResponsivenessTest:
                 'direction': 'ingress'
             }
         ])
-        
+
         # Create network without QoS policy
         network, subnet = self.create_test_network("test-network-no-qos")
-        
+
         # Create port with QoS policy
         port = self.create_test_port("test-port-with-qos", network.id, qos_policy.id)
-        
+
         # Verify QoS controls are applied to WorkloadEndpoint
         expected_qos = {
             'ingressPacketRate': 5000  # Convert kpps to pps
         }
-        
+
         success = self.verify_qos_update(port.id, expected_qos)
-        
+
         if success:
             logger.info("✓ Port-level QoS policy test PASSED")
         else:
             logger.error("✗ Port-level QoS policy test FAILED")
-        
+
         return success
-    
+
     def test_mixed_qos_policies(self) -> bool:
         """Test network with QoS policy and port with different QoS policy."""
         logger.info("=== Testing Mixed QoS Policies (Network + Port) ===")
-        
+
         # Create network-level QoS policy
         network_qos_policy = self.create_qos_policy("test-mixed-network-qos", [
             {
@@ -361,7 +361,7 @@ class QoSResponsivenessTest:
                 'direction': 'ingress'
             }
         ])
-        
+
         # Create port-level QoS policy (should override network policy)
         port_qos_policy = self.create_qos_policy("test-mixed-port-qos", [
             {
@@ -376,33 +376,33 @@ class QoSResponsivenessTest:
                 'direction': 'ingress'
             }
         ])
-        
+
         # Create network with QoS policy
         network, subnet = self.create_test_network("test-mixed-network", network_qos_policy.id)
-        
+
         # Create port with different QoS policy
         port = self.create_test_port("test-mixed-port", network.id, port_qos_policy.id)
-        
+
         # Port-level QoS should take precedence
         expected_qos = {
             'egressBandwidth': 20000000,    # From port policy
             'egressPeakrate': 25000000,     # From port policy
             'ingressPacketRate': 10000      # From port policy
         }
-        
+
         success = self.verify_qos_update(port.id, expected_qos)
-        
+
         if success:
             logger.info("✓ Mixed QoS policies test PASSED")
         else:
             logger.error("✗ Mixed QoS policies test FAILED")
-        
+
         return success
-    
+
     def test_qos_policy_update(self) -> bool:
         """Test updating QoS policy and verifying responsiveness."""
         logger.info("=== Testing QoS Policy Update Responsiveness ===")
-        
+
         # Create initial QoS policy
         qos_policy = self.create_qos_policy("test-update-qos", [
             {
@@ -411,43 +411,43 @@ class QoSResponsivenessTest:
                 'direction': 'egress'
             }
         ])
-        
+
         # Create network and port
         network, subnet = self.create_test_network("test-update-network")
         port = self.create_test_port("test-update-port", network.id, qos_policy.id)
-        
+
         # Verify initial QoS controls
         initial_qos = {'egressBandwidth': 1000000}
         if not self.verify_qos_update(port.id, initial_qos):
             logger.error("✗ Initial QoS policy application failed")
             return False
-        
+
         # Update QoS policy by adding new rule
         self.conn.network.create_qos_bandwidth_limit_rule(
             qos_policy.id,
             max_kbps=15000,  # 15 Mbps
             direction='ingress'
         )
-        
+
         # Verify updated QoS controls
         updated_qos = {
             'egressBandwidth': 1000000,   # Original rule
             'ingressBandwidth': 15000000  # New rule
         }
-        
+
         success = self.verify_qos_update(port.id, updated_qos, timeout=15)
-        
+
         if success:
             logger.info("✓ QoS policy update responsiveness test PASSED")
         else:
             logger.error("✗ QoS policy update responsiveness test FAILED")
-        
+
         return success
-    
+
     def test_qos_policy_removal(self) -> bool:
         """Test removing QoS policy and verifying cleanup."""
         logger.info("=== Testing QoS Policy Removal ===")
-        
+
         # Create QoS policy
         qos_policy = self.create_qos_policy("test-removal-qos", [
             {
@@ -456,20 +456,20 @@ class QoSResponsivenessTest:
                 'direction': 'egress'
             }
         ])
-        
+
         # Create network and port
         network, subnet = self.create_test_network("test-removal-network")
         port = self.create_test_port("test-removal-port", network.id, qos_policy.id)
-        
+
         # Verify QoS controls are applied
         initial_qos = {'egressBandwidth': 8000000}
         if not self.verify_qos_update(port.id, initial_qos):
             logger.error("✗ Initial QoS policy application failed")
             return False
-        
+
         # Remove QoS policy from port
         self.conn.network.update_port(port.id, qos_policy_id=None)
-        
+
         # Verify QoS controls are removed (WorkloadEndpoint should have no qosControls)
         start_time = time.time()
         timeout = 10
@@ -481,16 +481,16 @@ class QoSResponsivenessTest:
                     logger.info("✓ QoS policy removal test PASSED")
                     return True
             time.sleep(0.5)
-        
+
         logger.error("✗ QoS policy removal test FAILED - QoS controls not removed")
         return False
-    
+
     def run_all_tests(self) -> bool:
         """Run all QoS responsiveness tests."""
         logger.info("Starting QoS Responsiveness Tests...")
-        
+
         test_results = []
-        
+
         try:
             # Run individual tests
             test_results.append(self.test_network_qos_policy())
@@ -498,23 +498,23 @@ class QoSResponsivenessTest:
             test_results.append(self.test_mixed_qos_policies())
             test_results.append(self.test_qos_policy_update())
             test_results.append(self.test_qos_policy_removal())
-            
+
         except Exception as e:
             logger.error(f"Test execution failed: {e}")
             return False
         finally:
             # Always clean up resources
             self.cleanup_resources()
-        
+
         # Summarize results
         passed_tests = sum(test_results)
         total_tests = len(test_results)
-        
+
         logger.info(f"\n=== Test Summary ===")
         logger.info(f"Total tests: {total_tests}")
         logger.info(f"Passed: {passed_tests}")
         logger.info(f"Failed: {total_tests - passed_tests}")
-        
+
         if passed_tests == total_tests:
             logger.info("🎉 All QoS responsiveness tests PASSED!")
             return True
@@ -528,12 +528,12 @@ def main():
     if len(sys.argv) > 1 and sys.argv[1] == "--help":
         print(__doc__)
         return 0
-    
+
     logger.info("Initializing QoS Responsiveness Test Suite...")
-    
+
     test_suite = QoSResponsivenessTest()
     success = test_suite.run_all_tests()
-    
+
     return 0 if success else 1
 
 
