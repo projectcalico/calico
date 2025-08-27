@@ -30,7 +30,9 @@ import (
 	// Import tests.
 	_ "k8s.io/kubernetes/test/e2e/network"
 
+	_ "github.com/projectcalico/calico/e2e/pkg/tests/apis"
 	_ "github.com/projectcalico/calico/e2e/pkg/tests/hostendpoints"
+	_ "github.com/projectcalico/calico/e2e/pkg/tests/networking"
 	_ "github.com/projectcalico/calico/e2e/pkg/tests/operator"
 	_ "github.com/projectcalico/calico/e2e/pkg/tests/policy"
 )
