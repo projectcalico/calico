@@ -9,16 +9,16 @@ The tests verify that WorkloadEndpoint objects are correctly updated within
 a few seconds when QoS policies are applied to networks and ports.
 """
 
-import time
-import sys
-import os
 import json
 import logging
+import os
+import subprocess
+import sys
+import time
 from typing import Dict, List, Optional, Tuple
 
 # OpenStack client imports
-from openstack import connection
-from openstack.exceptions import ResourceNotFound
+import openstack
 
 # Calico client imports
 try:
@@ -28,11 +28,11 @@ except ImportError:
     ETCD_AVAILABLE = False
     print("WARNING: etcd3 not available, using calicoctl command line")
 
-import subprocess
-
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
+
+openstack.enable_logging(debug=True, http_debug=True)
 
 
 class QoSResponsivenessTest:
@@ -57,7 +57,7 @@ class QoSResponsivenessTest:
         """Set up OpenStack and Calico clients."""
         # Set up OpenStack connection
         try:
-            self.conn = connection.Connection(
+            self.conn = openstack.connection.Connection(
                 auth_url=os.environ.get('OS_AUTH_URL', 'http://localhost/identity'),
                 project_name=os.environ.get('OS_PROJECT_NAME', 'admin'),
                 username=os.environ.get('OS_USERNAME', 'admin'),
