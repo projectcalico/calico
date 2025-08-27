@@ -1,0 +1,12 @@
+- name: e2e script & pipeline validations
+  run:
+    when: "${FORCE_RUN} or change_in(['/*', '/.semaphore/end-to-end/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+  execution_time_limit:
+    minutes: 5
+  dependencies:
+    - Prerequisites
+  task:
+    jobs:
+      - name: Test Pipeline files are valid yaml
+        commands:
+          - ./.semaphore/end-to-end/scripts/test_scripts/e2e-validation.sh

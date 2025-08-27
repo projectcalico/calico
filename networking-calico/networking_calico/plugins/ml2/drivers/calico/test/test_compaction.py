@@ -70,8 +70,8 @@ class TestCompaction(unittest.TestCase):
         self.pid = str(os.getpid())
 
         # Provide default config.
-        lib.m_compat.cfg.CONF.calico.etcd_compaction_period_mins = 60
-        lib.m_compat.cfg.CONF.calico.etcd_compaction_min_revisions = 1000
+        lib.m_oslo_config.cfg.CONF.calico.etcd_compaction_period_mins = 60
+        lib.m_oslo_config.cfg.CONF.calico.etcd_compaction_min_revisions = 1000
 
     def tearDown(self):
         etcdv3._client = None

@@ -15,12 +15,14 @@
 # Import Ml2Plugin before l3_db to fix
 # https://github.com/projectcalico/calico/issues/8494
 from neutron.plugins.ml2.plugin import Ml2Plugin
-from neutron.db import l3_db
+from neutron.db import l3_db  # noqa: I100
 from neutron.db.models import l3
 
-from networking_calico.compat import cfg
-from networking_calico.compat import constants
-from networking_calico.compat import log
+from neutron_lib import constants
+
+from oslo_config import cfg
+
+from oslo_log import log
 
 
 LOG = log.getLogger(__name__)

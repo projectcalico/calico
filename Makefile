@@ -55,10 +55,12 @@ ci-preflight-checks:
 	$(MAKE) check-language
 	$(MAKE) generate SKIP_FIX_CHANGED=true
 	$(MAKE) fix-all
+	$(MAKE) -C networking-calico fmtpy
 	$(MAKE) check-ocp-no-crds
 	$(MAKE) yaml-lint
 	$(MAKE) check-dirty
 	$(MAKE) go-vet
+	$(MAKE) -C networking-calico flake8
 
 check-go-mod:
 	$(DOCKER_GO_BUILD) ./hack/check-go-mod.sh
@@ -118,7 +120,7 @@ get-operator-crds: var-require-all-OPERATOR_BRANCH
 	$(MAKE) fix-changed
 
 gen-semaphore-yaml:
-	cd .semaphore && ./generate-semaphore-yaml.sh
+	$(DOCKER_GO_BUILD) sh -c "cd .semaphore && ./generate-semaphore-yaml.sh"
 
 # Build the tigera-operator helm chart.
 chart: bin/tigera-operator-$(GIT_VERSION).tgz

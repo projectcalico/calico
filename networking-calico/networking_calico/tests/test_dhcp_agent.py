@@ -26,14 +26,16 @@ from neutron.agent.dhcp_agent import register_options
 from neutron.agent.linux import dhcp
 from neutron.tests import base
 
+from neutron_lib.constants import DHCPV6_STATEFUL
+
+from oslo_config import cfg
+
 from networking_calico import datamodel_v1
 from networking_calico import datamodel_v2
 from networking_calico.agent.dhcp_agent import CalicoDhcpAgent
 from networking_calico.agent.dhcp_agent import FakePlugin
 from networking_calico.agent.linux.dhcp import DnsmasqRouted
 from networking_calico.common import config as calico_config
-from networking_calico.compat import DHCPV6_STATEFUL
-from networking_calico.compat import cfg
 from networking_calico.etcdutils import EtcdWatcher
 
 LOG = logging.getLogger(__name__)
@@ -407,14 +409,6 @@ class TestDhcpAgent(base.BaseTestCase):
         calico_config._reset_globals()
 
 
-commonutils = "neutron.agent.linux.dhcp.commonutils"
-try:
-    from neutron.agent.linux.dhcp import commonutils as xxx  # noqa
-except Exception:
-    # In Mitaka the import name changed to 'common_utils'.
-    commonutils = "neutron.agent.linux.dhcp.common_utils"
-
-
 class TestDnsmasqRouted(base.BaseTestCase):
     def setUp(self):
         super(TestDnsmasqRouted, self).setUp()
@@ -428,7 +422,7 @@ class TestDnsmasqRouted(base.BaseTestCase):
         self.mock_makedirs = self.mock_makedirs_p.start()
 
     @mock.patch("neutron.agent.linux.dhcp.DeviceManager")
-    @mock.patch(commonutils)
+    @mock.patch("neutron.agent.linux.dhcp.common_utils")
     def test_build_cmdline(self, commonutils, device_mgr_cls):
         v4subnet = mock.Mock()
         v4subnet.id = "v4subnet-1"
