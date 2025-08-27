@@ -31112,6 +31112,8 @@ spec:
                   type: object
                 ipipMode:
                   type: string
+                namespaceSelector:
+                  type: string
                 nat-outgoing:
                   type: boolean
                 natOutgoing:

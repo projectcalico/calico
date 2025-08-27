@@ -52,13 +52,13 @@ spec:
                   type: object
                 ipipMode:
                   type: string
+                namespaceSelector:
+                  type: string
                 nat-outgoing:
                   type: boolean
                 natOutgoing:
                   type: boolean
                 nodeSelector:
-                  type: string
-                namespaceSelector:
                   type: string
                 vxlanMode:
                   type: string

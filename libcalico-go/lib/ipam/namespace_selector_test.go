@@ -17,7 +17,6 @@ package ipam
 import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 )
 
@@ -29,7 +28,7 @@ var _ = Describe("SelectsNamespace", func() {
 					NamespaceSelector: "",
 				},
 			}
-			
+
 			matches, err := SelectsNamespace(pool, "test-namespace", map[string]string{"region": "east"})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(matches).To(BeTrue())
@@ -43,12 +42,12 @@ var _ = Describe("SelectsNamespace", func() {
 					NamespaceSelector: `region == "east"`,
 				},
 			}
-			
+
 			namespaceLabels := map[string]string{
 				"region":      "east",
 				"environment": "production",
 			}
-			
+
 			matches, err := SelectsNamespace(pool, "test-namespace", namespaceLabels)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(matches).To(BeTrue())
@@ -60,13 +59,13 @@ var _ = Describe("SelectsNamespace", func() {
 					NamespaceSelector: `region == "east" && environment == "production"`,
 				},
 			}
-			
+
 			namespaceLabels := map[string]string{
 				"region":      "east",
 				"environment": "production",
 				"team":        "backend",
 			}
-			
+
 			matches, err := SelectsNamespace(pool, "test-namespace", namespaceLabels)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(matches).To(BeTrue())
@@ -78,11 +77,11 @@ var _ = Describe("SelectsNamespace", func() {
 					NamespaceSelector: `region in {"east", "west"}`,
 				},
 			}
-			
+
 			namespaceLabels := map[string]string{
 				"region": "west",
 			}
-			
+
 			matches, err := SelectsNamespace(pool, "test-namespace", namespaceLabels)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(matches).To(BeTrue())
@@ -94,12 +93,12 @@ var _ = Describe("SelectsNamespace", func() {
 					NamespaceSelector: `has(region)`,
 				},
 			}
-			
+
 			namespaceLabels := map[string]string{
 				"region":      "east",
 				"environment": "production",
 			}
-			
+
 			matches, err := SelectsNamespace(pool, "test-namespace", namespaceLabels)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(matches).To(BeTrue())
@@ -113,12 +112,12 @@ var _ = Describe("SelectsNamespace", func() {
 					NamespaceSelector: `region == "east"`,
 				},
 			}
-			
+
 			namespaceLabels := map[string]string{
 				"region":      "west",
 				"environment": "production",
 			}
-			
+
 			matches, err := SelectsNamespace(pool, "test-namespace", namespaceLabels)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(matches).To(BeFalse())
@@ -130,11 +129,11 @@ var _ = Describe("SelectsNamespace", func() {
 					NamespaceSelector: `region == "east"`,
 				},
 			}
-			
+
 			namespaceLabels := map[string]string{
 				"environment": "production",
 			}
-			
+
 			matches, err := SelectsNamespace(pool, "test-namespace", namespaceLabels)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(matches).To(BeFalse())
@@ -146,7 +145,7 @@ var _ = Describe("SelectsNamespace", func() {
 					NamespaceSelector: `region == "east"`,
 				},
 			}
-			
+
 			matches, err := SelectsNamespace(pool, "test-namespace", map[string]string{})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(matches).To(BeFalse())
@@ -158,7 +157,7 @@ var _ = Describe("SelectsNamespace", func() {
 					NamespaceSelector: `region == "east"`,
 				},
 			}
-			
+
 			matches, err := SelectsNamespace(pool, "test-namespace", nil)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(matches).To(BeFalse())
@@ -172,11 +171,11 @@ var _ = Describe("SelectsNamespace", func() {
 					NamespaceSelector: `region == `,
 				},
 			}
-			
+
 			namespaceLabels := map[string]string{
 				"region": "east",
 			}
-			
+
 			matches, err := SelectsNamespace(pool, "test-namespace", namespaceLabels)
 			Expect(err).To(HaveOccurred())
 			Expect(matches).To(BeFalse())
@@ -188,11 +187,11 @@ var _ = Describe("SelectsNamespace", func() {
 					NamespaceSelector: `region === "east"`,
 				},
 			}
-			
+
 			namespaceLabels := map[string]string{
 				"region": "east",
 			}
-			
+
 			matches, err := SelectsNamespace(pool, "test-namespace", namespaceLabels)
 			Expect(err).To(HaveOccurred())
 			Expect(matches).To(BeFalse())
@@ -206,11 +205,11 @@ var _ = Describe("SelectsNamespace", func() {
 					NamespaceSelector: `region == "east"`,
 				},
 			}
-			
+
 			namespaceLabels := map[string]string{
 				"region": "east",
 			}
-			
+
 			matches, err := SelectsNamespace(pool, "", namespaceLabels)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(matches).To(BeTrue())
@@ -222,11 +221,11 @@ var _ = Describe("SelectsNamespace", func() {
 					NamespaceSelector: `region == "us-east-1"`,
 				},
 			}
-			
+
 			namespaceLabels := map[string]string{
 				"region": "us-east-1",
 			}
-			
+
 			matches, err := SelectsNamespace(pool, "test-namespace", namespaceLabels)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(matches).To(BeTrue())
