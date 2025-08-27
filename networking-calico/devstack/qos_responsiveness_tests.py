@@ -246,7 +246,11 @@ class QoSResponsivenessTest:
 
     def create_test_network(self, name: str, qos_policy_id: str = None) -> Tuple[object, object]:
         """Create a test network and subnet."""
-        network_args = {'name': name + "-net", 'is_shared': False}
+        network_args = {
+            'name': name + "-net",
+            'is_shared': True,
+            'provider:network_type': 'local',
+        }
         if qos_policy_id:
             network_args['qos_policy_id'] = qos_policy_id
 
