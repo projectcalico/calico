@@ -183,6 +183,8 @@ spec:
                     - Disabled
                     - L2Only
                   type: string
+                cgroupV2Path:
+                  type: string
                 chainInsertMode:
                   pattern: ^(?i)(Insert|Append)?$
                   type: string
