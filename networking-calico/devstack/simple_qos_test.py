@@ -6,16 +6,17 @@ This is a simplified version of the QoS test that focuses on basic functionality
 and verification that QoS policies are being processed by the Calico integration.
 """
 
-import time
-import sys
-import os
 import json
 import logging
+import os
 import subprocess
+import sys
+import time
+import uuid
 from typing import Dict, Optional
 
 # OpenStack client imports
-from openstack import connection
+import openstack
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -27,6 +28,8 @@ class SimpleQoSTest:
     def __init__(self):
         """Initialize the test environment."""
         self.conn = None
+        # Add unique suffix to avoid conflicts with previous test runs
+        self.test_suffix = str(uuid.uuid4())[:8]
         self.test_resources = {
             'networks': [],
             'subnets': [],
@@ -34,11 +37,12 @@ class SimpleQoSTest:
             'qos_policies': []
         }
         self.setup_openstack_client()
+        self.cleanup_previous_test_resources()
     
     def setup_openstack_client(self):
         """Set up OpenStack connection."""
         try:
-            self.conn = connection.Connection(
+            self.conn = openstack.connection.Connection(
                 auth_url=os.environ.get('OS_AUTH_URL', 'http://localhost/identity'),
                 project_name=os.environ.get('OS_PROJECT_NAME', 'admin'),
                 username=os.environ.get('OS_USERNAME', 'admin'),
@@ -52,14 +56,86 @@ class SimpleQoSTest:
         except Exception as e:
             logger.error(f"Failed to establish OpenStack connection: {e}")
             sys.exit(1)
+
+    def cleanup_previous_test_resources(self):
+        """Clean up any leftover resources from previous test runs."""
+        logger.info("Cleaning up any leftover test resources...")
+        
+        try:
+            # Clean up QoS policies with test prefixes
+            for qos_policy in self.conn.network.qos_policies():
+                if qos_policy.name.startswith('test-'):
+                    try:
+                        # First remove any network bindings
+                        for network in self.conn.network.networks():
+                            if network.qos_policy_id == qos_policy.id:
+                                try:
+                                    self.conn.network.update_network(network.id, qos_policy_id=None)
+                                    logger.info(f"Removed QoS policy from network: {network.name}")
+                                except Exception as e:
+                                    logger.debug(f"Failed to remove QoS policy from network {network.name}: {e}")
+                        
+                        # Remove port bindings
+                        for port in self.conn.network.ports():
+                            if port.qos_policy_id == qos_policy.id:
+                                try:
+                                    self.conn.network.update_port(port.id, qos_policy_id=None)
+                                    logger.info(f"Removed QoS policy from port: {port.name}")
+                                except Exception as e:
+                                    logger.debug(f"Failed to remove QoS policy from port {port.name}: {e}")
+                        
+                        # Now delete the policy
+                        self.conn.network.delete_qos_policy(qos_policy.id)
+                        logger.info(f"Cleaned up leftover QoS policy: {qos_policy.name}")
+                    except Exception as e:
+                        logger.debug(f"Failed to clean up QoS policy {qos_policy.name}: {e}")
+            
+            # Clean up networks with test prefixes
+            for network in self.conn.network.networks():
+                if network.name.startswith('test-'):
+                    try:
+                        # Delete ports first
+                        for port in self.conn.network.ports():
+                            if port.network_id == network.id:
+                                try:
+                                    self.conn.network.delete_port(port.id)
+                                    logger.info(f"Cleaned up leftover port: {port.name}")
+                                except Exception as e:
+                                    logger.debug(f"Failed to clean up port {port.name}: {e}")
+                        
+                        # Delete subnets
+                        for subnet in self.conn.network.subnets():
+                            if subnet.network_id == network.id:
+                                try:
+                                    self.conn.network.delete_subnet(subnet.id)
+                                    logger.info(f"Cleaned up leftover subnet: {subnet.name}")
+                                except Exception as e:
+                                    logger.debug(f"Failed to clean up subnet {subnet.name}: {e}")
+                        
+                        # Delete network
+                        self.conn.network.delete_network(network.id)
+                        logger.info(f"Cleaned up leftover network: {network.name}")
+                    except Exception as e:
+                        logger.debug(f"Failed to clean up network {network.name}: {e}")
+        
+        except Exception as e:
+            logger.warning(f"Error during preliminary cleanup: {e}")
+            # Don't fail the test if cleanup has issues
     
     def cleanup_resources(self):
         """Clean up all test resources."""
         logger.info("Cleaning up test resources...")
         
-        # Delete ports
+        # Delete ports (first remove QoS policies to avoid binding conflicts)
         for port in self.test_resources['ports']:
             try:
+                # Remove QoS policy first if present
+                if hasattr(port, 'qos_policy_id') and port.qos_policy_id:
+                    try:
+                        self.conn.network.update_port(port.id, qos_policy_id=None)
+                    except Exception as e:
+                        logger.debug(f"Failed to remove QoS policy from port {port.name}: {e}")
+                
                 self.conn.network.delete_port(port.id)
                 logger.info(f"Deleted port: {port.name}")
             except Exception as e:
@@ -73,9 +149,16 @@ class SimpleQoSTest:
             except Exception as e:
                 logger.warning(f"Failed to delete subnet {subnet.name}: {e}")
         
-        # Delete networks
+        # Delete networks (remove QoS policies first)
         for network in self.test_resources['networks']:
             try:
+                # Remove QoS policy first if present
+                if hasattr(network, 'qos_policy_id') and network.qos_policy_id:
+                    try:
+                        self.conn.network.update_network(network.id, qos_policy_id=None)
+                    except Exception as e:
+                        logger.debug(f"Failed to remove QoS policy from network {network.name}: {e}")
+                
                 self.conn.network.delete_network(network.id)
                 logger.info(f"Deleted network: {network.name}")
             except Exception as e:
@@ -155,7 +238,7 @@ class SimpleQoSTest:
         
         try:
             # Create QoS policy with bandwidth limit
-            qos_policy = self.conn.network.create_qos_policy(name="test-qos-integration")
+            qos_policy = self.conn.network.create_qos_policy(name=f"test-qos-integration-{self.test_suffix}")
             self.test_resources['qos_policies'].append(qos_policy)
             
             # Add bandwidth limit rule
@@ -167,12 +250,12 @@ class SimpleQoSTest:
             logger.info(f"Created QoS policy {qos_policy.name} with bandwidth limit rule")
             
             # Create network
-            network = self.conn.network.create_network(name="test-qos-network")
+            network = self.conn.network.create_network(name=f"test-qos-network-{self.test_suffix}")
             self.test_resources['networks'].append(network)
             
             # Create subnet
             subnet = self.conn.network.create_subnet(
-                name="test-qos-subnet",
+                name=f"test-qos-subnet-{self.test_suffix}",
                 network_id=network.id,
                 cidr="192.168.200.0/24",
                 ip_version=4,
@@ -182,7 +265,7 @@ class SimpleQoSTest:
             
             # Create port with QoS policy
             port = self.conn.network.create_port(
-                name="test-qos-port",
+                name=f"test-qos-port-{self.test_suffix}",
                 network_id=network.id,
                 qos_policy_id=qos_policy.id,
                 admin_state_up=True
@@ -235,11 +318,11 @@ class SimpleQoSTest:
         
         try:
             # Create base network
-            network = self.conn.network.create_network(name="test-multi-qos-network")
+            network = self.conn.network.create_network(name=f"test-multi-qos-network-{self.test_suffix}")
             self.test_resources['networks'].append(network)
             
             subnet = self.conn.network.create_subnet(
-                name="test-multi-qos-subnet",
+                name=f"test-multi-qos-subnet-{self.test_suffix}",
                 network_id=network.id,
                 cidr="192.168.210.0/24",
                 ip_version=4,
@@ -253,7 +336,7 @@ class SimpleQoSTest:
                     logger.info(f"Testing scenario: {scenario['name']}")
                     
                     # Create QoS policy for this scenario
-                    qos_policy = self.conn.network.create_qos_policy(name=f"test-{scenario['name']}")
+                    qos_policy = self.conn.network.create_qos_policy(name=f"test-{scenario['name']}-{self.test_suffix}")
                     self.test_resources['qos_policies'].append(qos_policy)
                     
                     # Add rules
@@ -268,7 +351,7 @@ class SimpleQoSTest:
                     
                     # Create port with this QoS policy
                     port = self.conn.network.create_port(
-                        name=f"test-port-{i}",
+                        name=f"test-port-{i}-{self.test_suffix}",
                         network_id=network.id,
                         qos_policy_id=qos_policy.id,
                         admin_state_up=True
