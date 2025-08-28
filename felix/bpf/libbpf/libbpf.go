@@ -686,7 +686,7 @@ func ObjGet(path string) (int, error) {
 	return int(fd), err
 }
 
-// MapUpdateBatch expects all key, values in a single slice, bytes of a one
+// MapUpdateBatch expects all keys, values in a single slice, bytes of a one
 // key/value appended back to back to the previous value.
 func MapUpdateBatch(fd int, k, v []byte, count int, flags uint64) (int, error) {
 	cK := C.CBytes(k)
@@ -703,6 +703,7 @@ func MapUpdateBatch(fd int, k, v []byte, count int, flags uint64) (int, error) {
 	return count, nil
 }
 
+<<<<<<< HEAD
 var bpfMapTypeMap = map[string]int{
 	"unspec":           0,
 	"hash":             1,
@@ -731,6 +732,21 @@ func CreateBPFMap(mapType string, keySize int, valueSize int, maxEntries int, fl
 		return int(fd), fmt.Errorf("failed to create bpf map")
 	}
 	return int(fd), nil
+}
+
+// MapDeleteBatch expects all key is in a single slice, bytes of a one
+// key appended back to back to the previous value.
+func MapDeleteBatch(fd int, k []byte, count int, flags uint64) (int, error) {
+	cK := C.CBytes(k)
+	defer C.free(cK)
+
+	_, err := C.bpf_map_batch_delete(C.int(fd), cK, (*C.__u32)(unsafe.Pointer(&count)), C.__u64(flags))
+
+	if err != nil {
+		return 0, err
+	}
+
+	return count, nil
 }
 
 func FindMapFdByName(targetName string) (int, error) {

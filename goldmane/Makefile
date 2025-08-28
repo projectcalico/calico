@@ -57,6 +57,14 @@ protobuf proto/api.pb.go: proto/api.proto
 	$(MAKE) fix-changed
 
 ###############################################################################
+# Run Benchmark Tests
+###############################################################################
+.PHONY: benchmark
+benchmark:
+	@go test ./... -bench=. -benchmem -benchtime=10s -run=^$$ | \
+    	grep -vE '^\?|\s\[no test files\]|^ok\s|^PASS$$'
+
+###############################################################################
 # Generate files
 ###############################################################################
 GENERATED_FILES=proto/api.pb.go
