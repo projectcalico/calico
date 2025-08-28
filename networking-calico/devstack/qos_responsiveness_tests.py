@@ -374,6 +374,7 @@ class QoSResponsivenessTest:
         port_args = {
             'name': unique_name,
             'network_id': network_id,
+            'device_owner': 'compute:',
             'admin_state_up': True
         }
         if qos_policy_id:
