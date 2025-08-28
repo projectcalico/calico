@@ -703,7 +703,6 @@ func MapUpdateBatch(fd int, k, v []byte, count int, flags uint64) (int, error) {
 	return count, nil
 }
 
-<<<<<<< HEAD
 var bpfMapTypeMap = map[string]int{
 	"unspec":           0,
 	"hash":             1,
