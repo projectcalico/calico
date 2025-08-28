@@ -58,7 +58,7 @@ func SelectsNamespace(pool v3.IPPool, namespace *corev1.Namespace) (bool, error)
 	// Check for valid selector syntax.
 	sel, err := selector.Parse(pool.Spec.NamespaceSelector)
 	if err != nil {
-		return false, nil
+		return false, err
 	}
 
 	// Return whether or not the selector matches.
