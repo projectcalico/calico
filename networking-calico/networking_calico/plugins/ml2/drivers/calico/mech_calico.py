@@ -702,17 +702,24 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             return
 
         network_id = context.current["id"]
-        LOG.info("qos_policy_id for network %r changing from %r to %r",
-                 network_id, old_qos_policy_id, new_qos_policy_id)
+        LOG.info(
+            "qos_policy_id for network %r changing from %r to %r",
+            network_id,
+            old_qos_policy_id,
+            new_qos_policy_id,
+        )
 
         # Find the set P of Ports for this Network and which don't have their own
         # qos_policy_id.
         plugin_context = context._plugin_context
         with self._txn_from_context(plugin_context, tag="update-network"):
-            ports = self.db.get_ports(plugin_context, filters={
-                "network_id": [network_id],
-                "qos_policy_id": ["", None],
-            })
+            ports = self.db.get_ports(
+                plugin_context,
+                filters={
+                    "network_id": [network_id],
+                    "qos_policy_id": ["", None],
+                },
+            )
 
         # For each Port in set P, do what the syncer would do for that Port.
         LOG.info("%d port(s) affected", len(ports))
