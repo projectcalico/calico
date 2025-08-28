@@ -963,40 +963,18 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					mapPath = conntrack.MapV6().Path()
 				}
 
-				Describe("with map repinning enabled", func() {
-					BeforeEach(func() {
-						options.ExtraEnvVars["FELIX_DebugBPFMapRepinEnabled"] = "true"
-					})
+				It("should not repin maps", func() {
+					// Wait for the first felix to create its maps.
+					mapID := mustGetMapIDByPath(tc.Felixes[0], mapPath)
 
-					It("should not repin maps (option is deprecated)", func() {
-						// Wait for the first felix to create its maps.
-						mapID := mustGetMapIDByPath(tc.Felixes[0], mapPath)
+					// Now, start a completely independent felix, which will get its own bpffs.  It should make its own
+					// maps.
+					tc2, _ := infrastructure.StartSingleNodeTopology(options, infra)
+					defer tc2.Stop()
 
-						// Now, start a completely independent felix, which will get its own bpffs.  It should re-pin the
-						// maps, picking up the ones from the first felix.
-						tc2, _ := infrastructure.StartSingleNodeTopology(options, infra)
-						defer tc2.Stop()
-
-						secondMapID := mustGetMapIDByPath(tc2.Felixes[0], mapPath)
-						Expect(mapID).NotTo(BeNumerically("==", 0))
-						Expect(mapID).NotTo(BeNumerically("==", secondMapID))
-					})
-				})
-
-				Describe("with map repinning disabled", func() {
-					It("should not repin maps", func() {
-						// Wait for the first felix to create its maps.
-						mapID := mustGetMapIDByPath(tc.Felixes[0], mapPath)
-
-						// Now, start a completely independent felix, which will get its own bpffs.  It should make its own
-						// maps.
-						tc2, _ := infrastructure.StartSingleNodeTopology(options, infra)
-						defer tc2.Stop()
-
-						secondMapID := mustGetMapIDByPath(tc2.Felixes[0], mapPath)
-						Expect(mapID).NotTo(BeNumerically("==", 0))
-						Expect(mapID).NotTo(BeNumerically("==", secondMapID))
-					})
+					secondMapID := mustGetMapIDByPath(tc2.Felixes[0], mapPath)
+					Expect(mapID).NotTo(BeNumerically("==", 0))
+					Expect(mapID).NotTo(BeNumerically("==", secondMapID))
 				})
 
 				It("should recover if the BPF programs are removed", func() {
