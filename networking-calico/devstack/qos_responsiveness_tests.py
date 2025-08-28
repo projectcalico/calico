@@ -33,7 +33,7 @@ except ImportError:
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-openstack.enable_logging(debug=True, http_debug=True)
+# openstack.enable_logging(debug=True, http_debug=True)
 
 
 class QoSResponsivenessTest:
@@ -92,7 +92,7 @@ class QoSResponsivenessTest:
     def cleanup_previous_test_resources(self):
         """Clean up any leftover resources from previous test runs."""
         logger.info("Cleaning up any leftover test resources...")
-        
+
         try:
             # Clean up QoS policies with test prefixes
             for qos_policy in self.conn.network.qos_policies():
@@ -106,7 +106,7 @@ class QoSResponsivenessTest:
                                     logger.info(f"Removed QoS policy from network: {network.name}")
                                 except Exception as e:
                                     logger.debug(f"Failed to remove QoS policy from network {network.name}: {e}")
-                        
+
                         # Remove port bindings
                         for port in self.conn.network.ports():
                             if port.qos_policy_id == qos_policy.id:
@@ -115,13 +115,13 @@ class QoSResponsivenessTest:
                                     logger.info(f"Removed QoS policy from port: {port.name}")
                                 except Exception as e:
                                     logger.debug(f"Failed to remove QoS policy from port {port.name}: {e}")
-                        
+
                         # Now delete the policy
                         self.conn.network.delete_qos_policy(qos_policy.id)
                         logger.info(f"Cleaned up leftover QoS policy: {qos_policy.name}")
                     except Exception as e:
                         logger.debug(f"Failed to clean up QoS policy {qos_policy.name}: {e}")
-            
+
             # Clean up networks with test prefixes
             for network in self.conn.network.networks():
                 if network.name.startswith('test-'):
@@ -134,7 +134,7 @@ class QoSResponsivenessTest:
                                     logger.info(f"Cleaned up leftover port: {port.name}")
                                 except Exception as e:
                                     logger.debug(f"Failed to clean up port {port.name}: {e}")
-                        
+
                         # Delete subnets
                         for subnet in self.conn.network.subnets():
                             if subnet.network_id == network.id:
@@ -143,13 +143,13 @@ class QoSResponsivenessTest:
                                     logger.info(f"Cleaned up leftover subnet: {subnet.name}")
                                 except Exception as e:
                                     logger.debug(f"Failed to clean up subnet {subnet.name}: {e}")
-                        
+
                         # Delete network
                         self.conn.network.delete_network(network.id)
                         logger.info(f"Cleaned up leftover network: {network.name}")
                     except Exception as e:
                         logger.debug(f"Failed to clean up network {network.name}: {e}")
-        
+
         except Exception as e:
             logger.warning(f"Error during preliminary cleanup: {e}")
             # Don't fail the test if cleanup has issues
@@ -176,7 +176,7 @@ class QoSResponsivenessTest:
                         self.conn.network.update_port(port.id, qos_policy_id=None)
                     except Exception as e:
                         logger.debug(f"Failed to remove QoS policy from port {port.name}: {e}")
-                
+
                 self.conn.network.delete_port(port.id)
                 logger.info(f"Deleted port: {port.name}")
             except Exception as e:
@@ -199,7 +199,7 @@ class QoSResponsivenessTest:
                         self.conn.network.update_network(network.id, qos_policy_id=None)
                     except Exception as e:
                         logger.debug(f"Failed to remove QoS policy from network {network.name}: {e}")
-                
+
                 self.conn.network.delete_network(network.id)
                 logger.info(f"Deleted network: {network.name}")
             except Exception as e:
@@ -308,7 +308,7 @@ class QoSResponsivenessTest:
         """Create a QoS policy with specified rules."""
         # Add unique suffix to avoid conflicts
         unique_name = f"{name}-{self.test_suffix}"
-        
+
         qos_policy = self.conn.network.create_qos_policy(name=unique_name)
         self.test_resources['qos_policies'].append(qos_policy)
 
@@ -334,7 +334,7 @@ class QoSResponsivenessTest:
         """Create a test network and subnet."""
         # Add unique suffix to avoid conflicts
         unique_name = f"{name}-{self.test_suffix}"
-        
+
         network_args = {
             'name': unique_name + "-net",
             'is_shared': True,
@@ -362,7 +362,7 @@ class QoSResponsivenessTest:
         """Create a test port."""
         # Add unique suffix to avoid conflicts
         unique_name = f"{name}-{self.test_suffix}"
-        
+
         port_args = {
             'name': unique_name,
             'network_id': network_id,
