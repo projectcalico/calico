@@ -283,6 +283,7 @@ class QoSResponsivenessTest:
         start_time = time.time()
         while time.time() - start_time < timeout:
             wep = self.get_workload_endpoint(port_id)
+            logger.info(f"WEP for port {port_id} is {wep}")
             if wep and 'spec' in wep and 'qosControls' in wep['spec']:
                 qos_controls = wep['spec']['qosControls']
 
