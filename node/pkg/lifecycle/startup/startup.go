@@ -218,14 +218,57 @@ func Run() {
 	}
 }
 
-// ManageNodeCondition updates the Kubernetes node condition on successful startup and then sleeps forever.
+// ManageNodeCondition updates the Kubernetes node condition on successful startup and then sleeps forever. It
+// waits for Felix and BIRD to be ready before setting the NetworkUnavailable condition to false.
 func ManageNodeCondition(done context.Context) {
-	ManageNodeConditionOneShot()
+	if err := waitForReady(); err != nil {
+		log.WithError(err).Error("Calico failed to become ready, continuing anyway")
+	}
+	MarkNetworkAvailable()
 	<-done.Done()
 }
 
-// ManageNodeConditionOneShot updates the Kubernetes node condition on successful startup.
-func ManageNodeConditionOneShot() {
+func waitForReady() error {
+	// Determine which components should be checked for readiness. We don't do any liveness checking here.
+	// Do this by checking the contents of /etc/service/enabled.
+	checkBIRD := false
+	if _, err := os.Stat("/etc/service/enabled/bird/run"); err == nil {
+		checkBIRD = true
+	}
+	checkBIRD6 := false
+	if _, err := os.Stat("/etc/service/enabled/bird6/run"); err == nil {
+		checkBIRD6 = true
+	}
+
+	// Check Felix health if FELIX_HEALTHENABLED is set to true.
+	checkFelix := os.Getenv("FELIX_HEALTHENABLED") == "true"
+
+	// Wait for Felix and BIRD to be ready before setting the NetworkUnavailable condition to false.
+	//
+	// If we don't succeed, continue anyway to be extra paranoid. This should handle the mainline use case of ensuring
+	// calico/node is ready before allowing pods to run on the node.
+	log.Info("Waiting for Calico to become ready before continuing...")
+	to := time.After(5 * time.Minute)
+	for {
+		select {
+		case <-to:
+			return fmt.Errorf("timed out waiting for Calico to become ready")
+		default:
+			if err := health.RunOutput(checkBIRD, checkBIRD6, checkFelix, false, false, false, 5*time.Minute); err != nil {
+				// If we fail to check the health of the components, log the error and continue waiting.
+				log.WithField("reason", err.Error()).Warn("Calico is not ready yet, waiting...")
+				time.Sleep(1 * time.Second)
+				continue
+			}
+
+			// success !
+			return nil
+		}
+	}
+}
+
+// MarkNetworkAvailable updates the Kubernetes node condition on successful startup.
+func MarkNetworkAvailable() {
 	if os.Getenv("CALICO_NETWORKING_BACKEND") == "none" {
 		// Calico is not managing networking, so we don't need to set the NetworkUnavailable condition.
 		log.Info("Calico is not managing networking, skipping NetworkUnavailable condition update")
@@ -249,45 +292,6 @@ func ManageNodeConditionOneShot() {
 	if err != nil {
 		log.WithError(err).Error("Failed to create clientset")
 		utils.Terminate()
-	}
-
-	// Determine which components should be checked for readiness. We don't do any liveness checking here.
-	// Do this by checking the contents of /etc/service/enabled.
-	checkBIRD := false
-	if _, err := os.Stat("/etc/service/enabled/bird/run"); err == nil {
-		checkBIRD = true
-	}
-	checkBIRD6 := false
-	if _, err := os.Stat("/etc/service/enabled/bird6/run"); err == nil {
-		checkBIRD6 = true
-	}
-
-	// Check Felix health if FELIX_HEALTHENABLED is set to true.
-	checkFelix := os.Getenv("FELIX_HEALTHENABLED") == "true"
-
-	// Wait for Felix and BIRD to be ready before setting the NetworkUnavailable condition to false.
-	//
-	// If we don't succeed, continue anyway to be extra paranoid. This should handle the mainline use case of ensuring
-	// calico/node is ready before allowing pods to run on the node.
-	log.Info("Waiting for Calico to become ready before continuing...")
-	to := time.After(5 * time.Minute)
-retry:
-	for {
-		select {
-		case <-to:
-			log.WithError(err).Warn("Calico did not become ready in time, continuing anyway.")
-			break retry
-		default:
-			if err = health.RunOutput(checkBIRD, checkBIRD6, checkFelix, false, false, false, 5*time.Minute); err != nil {
-				// If we fail to check the health of the components, log the error and continue waiting.
-				log.WithField("reason", err.Error()).Warn("Calico is not ready yet, waiting...")
-				time.Sleep(1 * time.Second)
-				continue
-			}
-
-			// success !
-			break retry
-		}
 	}
 
 	// All done. Set NetworkUnavailable to false if using Calico for networking.

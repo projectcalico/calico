@@ -153,7 +153,10 @@ func main() {
 		logrus.SetFormatter(&logutils.Formatter{Component: "startup"})
 		startup.Run()
 		if *completeStartup {
-			startup.ManageNodeConditionOneShot()
+			// If both --startup and --complete-startup are specified, then we immediately mark
+			// the node as available after startup completes.  This skips readiness checks before
+			// marking the node as available.
+			startup.MarkNetworkAvailable()
 		}
 	} else if *runShutdown {
 		logrus.SetFormatter(&logutils.Formatter{Component: "shutdown"})
