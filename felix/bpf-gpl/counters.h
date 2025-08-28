@@ -6,6 +6,7 @@
 #define __CALI_COUNTERS_H__
 
 #include "bpf.h"
+#include "types.h"
 
 #define MAX_COUNTERS_SIZE 23
 

@@ -402,8 +402,6 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		vxlanMTU = 0
 		nodePortDSR = true
 
-		bpfmaps.EnableRepin()
-
 		maps = new(bpfmap.Maps)
 
 		v4Maps = new(bpfmap.IPMaps)
@@ -465,10 +463,6 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		ruleRenderer = rules.NewRenderer(rrConfigNormal)
 		filterTableV4 = newMockTable("filter")
 		filterTableV6 = newMockTable("filter")
-	})
-
-	AfterEach(func() {
-		bpfmaps.DisableRepin()
 	})
 
 	newBpfEpMgr := func(ipv6Enabled bool) {
