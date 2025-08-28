@@ -32,8 +32,10 @@ import (
 	"github.com/gofrs/flock"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/sirupsen/logrus"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/projectcalico/calico/cni-plugin/internal/pkg/utils"
+	"github.com/projectcalico/calico/cni-plugin/pkg/k8s"
 	"github.com/projectcalico/calico/cni-plugin/pkg/types"
 	"github.com/projectcalico/calico/cni-plugin/pkg/upgrade"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
@@ -42,7 +44,6 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
-	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
 func Main(version string) {
@@ -261,7 +262,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 		if (conf.Kubernetes.Kubeconfig != "" || conf.Policy.PolicyType == "k8s") && namespace != "" {
 			logger.Debugf("Getting namespace labels for: %s", namespace)
 
-			labels, err := getNamespaceLabels(calicoClient, namespace)
+			labels, err := getNamespaceLabels(conf, namespace, logger)
 			if err != nil {
 				logger.WithError(err).Warnf("Failed to get namespace labels for %s, using empty labels", namespace)
 				namespaceLabels = map[string]string{}
@@ -499,14 +500,20 @@ func cmdDel(args *skel.CmdArgs) error {
 	return nil
 }
 
-// getNamespaceLabels retrieves namespace labels using Calico client's Namespaces interface
-func getNamespaceLabels(calicoClient client.Interface, namespace string) (map[string]string, error) {
+// getNamespaceLabels retrieves namespace labels using Kubernetes clientset
+func getNamespaceLabels(conf types.NetConf, namespace string, logger *logrus.Entry) (map[string]string, error) {
 	if namespace == "" {
 		return map[string]string{}, nil
 	}
 
-	// Use Calico client's Namespaces interface
-	ns, err := calicoClient.Namespaces().Get(context.Background(), namespace, options.GetOptions{})
+	// Create Kubernetes clientset
+	k8sClient, err := k8s.NewK8sClient(conf, logger)
+	if err != nil {
+		return map[string]string{}, err
+	}
+
+	// Get namespace directly from Kubernetes API
+	ns, err := k8sClient.CoreV1().Namespaces().Get(context.Background(), namespace, metav1.GetOptions{})
 	if err != nil {
 		return map[string]string{}, err
 	}

@@ -195,11 +195,6 @@ func (c client) BGPFilter() BGPFilterInterface {
 	return BGPFilter{client: c}
 }
 
-// Namespaces returns an interface for accessing Kubernetes namespace resources.
-func (c client) Namespaces() NamespaceInterface {
-	return namespaces{client: c}
-}
-
 type poolAccessor struct {
 	client *client
 }

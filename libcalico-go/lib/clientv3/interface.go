@@ -41,7 +41,6 @@ type Interface interface {
 	CalicoNodeStatusClient
 	IPAMConfigClient
 	BlockAffinitiesClient
-	NamespacesClient
 	// Tiers returns an interface for managing tier resources.
 	Tiers() TierInterface
 	// StagedGlobalNetworkPolicies returns an interface for managing staged global network policy resources.
@@ -162,11 +161,6 @@ type BlockAffinitiesClient interface {
 type BGPFilterClient interface {
 	// BGPFilter returns an interface for managing BGPFilter resources.
 	BGPFilter() BGPFilterInterface
-}
-
-type NamespacesClient interface {
-	// Namespaces returns an interface for accessing Kubernetes namespace resources.
-	Namespaces() NamespaceInterface
 }
 
 // Compile-time assertion that our client implements its interface.
