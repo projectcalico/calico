@@ -3282,7 +3282,7 @@ var _ = DescribeTable("determinePools tests IPV4",
 		}
 
 		// Call determinePools
-		pools, _, err := ic.(*ipamClient).determinePools(context.Background(), reqPools, 4, node, "", map[string]string{}, 32)
+		pools, _, err := ic.(*ipamClient).determinePools(context.Background(), reqPools, 4, node, nil, 32)
 
 		// Assert on any returned error.
 		if expectErr {
@@ -3351,7 +3351,7 @@ var _ = DescribeTable("determinePools tests IPV6",
 		}
 
 		// Call determinePools
-		pools, _, err := ic.(*ipamClient).determinePools(context.Background(), reqPools, 6, node, "", map[string]string{}, 128)
+		pools, _, err := ic.(*ipamClient).determinePools(context.Background(), reqPools, 6, node, nil, 128)
 
 		// Assert on any returned error.
 		if expectErr {
@@ -3622,13 +3622,23 @@ var _ = Describe("determinePools with namespace selector", func() {
 				},
 			}
 
+			// Create namespace object for testing
+			var namespaceObj *corev1.Namespace
+			if namespaceName != "" {
+				namespaceObj = &corev1.Namespace{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:   namespaceName,
+						Labels: namespaceLabels,
+					},
+				}
+			}
+
 			matchingPools, enabledPools, err := ic.determinePools(
 				ctx,
 				[]cnet.IPNet{},
 				4,
 				node,
-				namespaceName,
-				namespaceLabels,
+				namespaceObj,
 				26,
 			)
 
@@ -3753,13 +3763,19 @@ var _ = Describe("determinePools with namespace selector", func() {
 			},
 		}
 
+		namespaceObj := &corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:   "production-ns",
+				Labels: map[string]string{"environment": "production"},
+			},
+		}
+
 		matchingPools, enabledPools, err := ic.determinePools(
 			ctx,
 			[]cnet.IPNet{},
 			4,
 			node,
-			"production-ns",
-			map[string]string{"environment": "production"},
+			namespaceObj,
 			26,
 		)
 
@@ -3789,13 +3805,19 @@ var _ = Describe("determinePools with namespace selector", func() {
 			},
 		}
 
+		namespaceObj := &corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:   "default",
+				Labels: map[string]string{},
+			},
+		}
+
 		_, _, err := ic.determinePools(
 			ctx,
 			[]cnet.IPNet{},
 			4,
 			node,
-			"default",
-			map[string]string{},
+			namespaceObj,
 			26,
 		)
 
@@ -3818,13 +3840,19 @@ var _ = Describe("determinePools with namespace selector", func() {
 		}
 
 		requestedNet := cnet.MustParseCIDR("10.0.0.0/24")
+		namespaceObj := &corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:   "default",
+				Labels: map[string]string{"environment": "development"},
+			},
+		}
+
 		matchingPools, enabledPools, err := ic.determinePools(
 			ctx,
 			[]cnet.IPNet{requestedNet},
 			4,
 			node,
-			"default",
-			map[string]string{"environment": "development"},
+			namespaceObj,
 			26,
 		)
 

@@ -19,6 +19,7 @@ import (
 	"net"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	corev1 "k8s.io/api/core/v1"
 
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 )
@@ -90,11 +91,8 @@ type AutoAssignArgs struct {
 	// This field is required.
 	IntendedUse v3.IPPoolAllowedUse
 
-	// The namespace name for namespaceSelector support.
-	Namespace string
-
-	// The namespace labels for namespaceSelector support.
-	NamespaceLabels map[string]string
+	// The namespace object for namespaceSelector support.
+	Namespace *corev1.Namespace
 }
 
 // IPAMConfig contains global configuration options for Calico IPAM.

@@ -17,6 +17,7 @@ import (
 	"context"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	corev1 "k8s.io/api/core/v1"
 
 	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/calico/libcalico-go/lib/selector"
@@ -48,7 +49,7 @@ func SelectsNode(pool v3.IPPool, n libapiv3.Node) (bool, error) {
 
 // SelectsNamespace determines whether or not the IPPool's namespaceSelector
 // matches the labels on the given namespace.
-func SelectsNamespace(pool v3.IPPool, namespaceName string, namespaceLabels map[string]string) (bool, error) {
+func SelectsNamespace(pool v3.IPPool, namespace *corev1.Namespace) (bool, error) {
 	// No namespace selector means that the pool matches the namespace.
 	if len(pool.Spec.NamespaceSelector) == 0 {
 		return true, nil
@@ -57,9 +58,12 @@ func SelectsNamespace(pool v3.IPPool, namespaceName string, namespaceLabels map[
 	// Check for valid selector syntax.
 	sel, err := selector.Parse(pool.Spec.NamespaceSelector)
 	if err != nil {
-		return false, err
+		return false, nil
 	}
 
 	// Return whether or not the selector matches.
-	return sel.Evaluate(namespaceLabels), nil
+	if namespace != nil {
+		return sel.Evaluate(namespace.Labels), nil
+	}
+	return sel.Evaluate(map[string]string{}), nil
 }

@@ -18,6 +18,8 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 var _ = Describe("SelectsNamespace", func() {
@@ -29,7 +31,13 @@ var _ = Describe("SelectsNamespace", func() {
 				},
 			}
 
-			matches, err := SelectsNamespace(pool, "test-namespace", map[string]string{"region": "east"})
+			namespace := &corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   "test-namespace",
+					Labels: map[string]string{"region": "east"},
+				},
+			}
+			matches, err := SelectsNamespace(pool, namespace)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(matches).To(BeTrue())
 		})
@@ -48,7 +56,13 @@ var _ = Describe("SelectsNamespace", func() {
 				"environment": "production",
 			}
 
-			matches, err := SelectsNamespace(pool, "test-namespace", namespaceLabels)
+			namespace := &corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   "test-namespace",
+					Labels: namespaceLabels,
+				},
+			}
+			matches, err := SelectsNamespace(pool, namespace)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(matches).To(BeTrue())
 		})
@@ -66,7 +80,13 @@ var _ = Describe("SelectsNamespace", func() {
 				"team":        "backend",
 			}
 
-			matches, err := SelectsNamespace(pool, "test-namespace", namespaceLabels)
+			namespace := &corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   "test-namespace",
+					Labels: namespaceLabels,
+				},
+			}
+			matches, err := SelectsNamespace(pool, namespace)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(matches).To(BeTrue())
 		})
@@ -78,11 +98,14 @@ var _ = Describe("SelectsNamespace", func() {
 				},
 			}
 
-			namespaceLabels := map[string]string{
-				"region": "west",
+			namespace := &corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   "test-namespace",
+					Labels: map[string]string{"region": "west"},
+				},
 			}
 
-			matches, err := SelectsNamespace(pool, "test-namespace", namespaceLabels)
+			matches, err := SelectsNamespace(pool, namespace)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(matches).To(BeTrue())
 		})
@@ -94,12 +117,17 @@ var _ = Describe("SelectsNamespace", func() {
 				},
 			}
 
-			namespaceLabels := map[string]string{
-				"region":      "east",
-				"environment": "production",
+			namespace := &corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-namespace",
+					Labels: map[string]string{
+						"region":      "east",
+						"environment": "production",
+					},
+				},
 			}
 
-			matches, err := SelectsNamespace(pool, "test-namespace", namespaceLabels)
+			matches, err := SelectsNamespace(pool, namespace)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(matches).To(BeTrue())
 		})
@@ -113,12 +141,17 @@ var _ = Describe("SelectsNamespace", func() {
 				},
 			}
 
-			namespaceLabels := map[string]string{
-				"region":      "west",
-				"environment": "production",
+			namespace := &corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-namespace",
+					Labels: map[string]string{
+						"region":      "west",
+						"environment": "production",
+					},
+				},
 			}
 
-			matches, err := SelectsNamespace(pool, "test-namespace", namespaceLabels)
+			matches, err := SelectsNamespace(pool, namespace)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(matches).To(BeFalse())
 		})
@@ -130,11 +163,14 @@ var _ = Describe("SelectsNamespace", func() {
 				},
 			}
 
-			namespaceLabels := map[string]string{
-				"environment": "production",
+			namespace := &corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   "test-namespace",
+					Labels: map[string]string{"environment": "production"},
+				},
 			}
 
-			matches, err := SelectsNamespace(pool, "test-namespace", namespaceLabels)
+			matches, err := SelectsNamespace(pool, namespace)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(matches).To(BeFalse())
 		})
@@ -146,7 +182,14 @@ var _ = Describe("SelectsNamespace", func() {
 				},
 			}
 
-			matches, err := SelectsNamespace(pool, "test-namespace", map[string]string{})
+			namespace := &corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   "test-namespace",
+					Labels: map[string]string{},
+				},
+			}
+
+			matches, err := SelectsNamespace(pool, namespace)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(matches).To(BeFalse())
 		})
@@ -158,7 +201,14 @@ var _ = Describe("SelectsNamespace", func() {
 				},
 			}
 
-			matches, err := SelectsNamespace(pool, "test-namespace", nil)
+			namespace := &corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   "test-namespace",
+					Labels: nil,
+				},
+			}
+
+			matches, err := SelectsNamespace(pool, namespace)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(matches).To(BeFalse())
 		})
@@ -172,11 +222,14 @@ var _ = Describe("SelectsNamespace", func() {
 				},
 			}
 
-			namespaceLabels := map[string]string{
-				"region": "east",
+			namespace := &corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   "test-namespace",
+					Labels: map[string]string{"region": "east"},
+				},
 			}
 
-			matches, err := SelectsNamespace(pool, "test-namespace", namespaceLabels)
+			matches, err := SelectsNamespace(pool, namespace)
 			Expect(err).To(HaveOccurred())
 			Expect(matches).To(BeFalse())
 		})
@@ -188,11 +241,14 @@ var _ = Describe("SelectsNamespace", func() {
 				},
 			}
 
-			namespaceLabels := map[string]string{
-				"region": "east",
+			namespace := &corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   "test-namespace",
+					Labels: map[string]string{"region": "east"},
+				},
 			}
 
-			matches, err := SelectsNamespace(pool, "test-namespace", namespaceLabels)
+			matches, err := SelectsNamespace(pool, namespace)
 			Expect(err).To(HaveOccurred())
 			Expect(matches).To(BeFalse())
 		})
@@ -206,11 +262,14 @@ var _ = Describe("SelectsNamespace", func() {
 				},
 			}
 
-			namespaceLabels := map[string]string{
-				"region": "east",
+			namespace := &corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   "",
+					Labels: map[string]string{"region": "east"},
+				},
 			}
 
-			matches, err := SelectsNamespace(pool, "", namespaceLabels)
+			matches, err := SelectsNamespace(pool, namespace)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(matches).To(BeTrue())
 		})
@@ -222,11 +281,14 @@ var _ = Describe("SelectsNamespace", func() {
 				},
 			}
 
-			namespaceLabels := map[string]string{
-				"region": "us-east-1",
+			namespace := &corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   "test-namespace",
+					Labels: map[string]string{"region": "us-east-1"},
+				},
 			}
 
-			matches, err := SelectsNamespace(pool, "test-namespace", namespaceLabels)
+			matches, err := SelectsNamespace(pool, namespace)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(matches).To(BeTrue())
 		})

@@ -32,6 +32,7 @@ import (
 	"github.com/gofrs/flock"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/sirupsen/logrus"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/projectcalico/calico/cni-plugin/internal/pkg/utils"
@@ -256,22 +257,22 @@ func cmdAdd(args *skel.CmdArgs) error {
 		}
 		// Get namespace information for namespaceSelector support
 		namespace := epIDs.Namespace
-		namespaceLabels := map[string]string{}
+		var namespaceObj *corev1.Namespace
 
-		// Only attempt to fetch namespace labels if we have Kubernetes configuration and a valid namespace
+		// Only attempt to fetch namespace if we have Kubernetes configuration and a valid namespace
 		if (conf.Kubernetes.Kubeconfig != "" || conf.Policy.PolicyType == "k8s") && namespace != "" {
-			logger.Debugf("Getting namespace labels for: %s", namespace)
+			logger.Debugf("Getting namespace for: %s", namespace)
 
-			labels, err := getNamespaceLabels(conf, namespace, logger)
+			ns, err := getNamespace(conf, namespace, logger)
 			if err != nil {
-				logger.WithError(err).Warnf("Failed to get namespace labels for %s, using empty labels", namespace)
-				namespaceLabels = map[string]string{}
+				logger.WithError(err).Warnf("Failed to get namespace for %s, using nil", namespace)
+				namespaceObj = nil
 			} else {
-				namespaceLabels = labels
-				logger.Debugf("Got namespace labels for %s: %v", namespace, namespaceLabels)
+				namespaceObj = ns
+				logger.Debugf("Got namespace for %s: %v", namespace, ns.Labels)
 			}
 		} else {
-			logger.Debugf("Using namespace %s without labels (no K8s config or empty namespace)", namespace)
+			logger.Debugf("Using namespace %s without object (no K8s config or empty namespace)", namespace)
 		}
 
 		assignArgs := ipam.AutoAssignArgs{
@@ -284,8 +285,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 			MaxBlocksPerHost: maxBlocks,
 			Attrs:            attrs,
 			IntendedUse:      v3.IPPoolAllowedUseWorkload,
-			Namespace:        namespace,
-			NamespaceLabels:  namespaceLabels,
+			Namespace:        namespaceObj,
 		}
 
 		if runtime.GOOS == "windows" {
@@ -500,27 +500,23 @@ func cmdDel(args *skel.CmdArgs) error {
 	return nil
 }
 
-// getNamespaceLabels retrieves namespace labels using Kubernetes clientset
-func getNamespaceLabels(conf types.NetConf, namespace string, logger *logrus.Entry) (map[string]string, error) {
+// getNamespace retrieves namespace object using Kubernetes clientset
+func getNamespace(conf types.NetConf, namespace string, logger *logrus.Entry) (*corev1.Namespace, error) {
 	if namespace == "" {
-		return map[string]string{}, nil
+		return nil, nil
 	}
 
 	// Create Kubernetes clientset
 	k8sClient, err := k8s.NewK8sClient(conf, logger)
 	if err != nil {
-		return map[string]string{}, err
+		return nil, err
 	}
 
 	// Get namespace directly from Kubernetes API
 	ns, err := k8sClient.CoreV1().Namespaces().Get(context.Background(), namespace, metav1.GetOptions{})
 	if err != nil {
-		return map[string]string{}, err
+		return nil, err
 	}
 
-	if ns.Labels == nil {
-		return map[string]string{}, nil
-	}
-
-	return ns.Labels, nil
+	return ns, nil
 }
