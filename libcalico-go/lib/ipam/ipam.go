@@ -335,7 +335,7 @@ func (c ipamClient) determinePools(ctx context.Context, requestedPoolNets []net.
 			}
 			if !namespaceMatches {
 				// Do not consider pool enabled if the namespaceSelector doesn't match the namespace's labels.
-				log.Debugf("IP pool does not match this namespace: %s", pool.Name)
+				log.WithField("namespace", namespace).Debugf("IP pool does not match this namespace: %s", pool.Name)
 				continue
 			}
 		}
