@@ -229,7 +229,6 @@ type Config struct {
 	BPFConnTimeLBEnabled               bool
 	BPFConnTimeLB                      string
 	BPFHostNetworkedNAT                string
-	BPFMapRepin                        bool
 	BPFNodePortDSREnabled              bool
 	BPFDSROptoutCIDRs                  []string
 	BPFPSNATPorts                      numorstring.Port
@@ -880,12 +879,6 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	if err != nil {
 		log.Warn("could not determine default rp_filter setting, defaulting to strict")
 		defaultRPFilter = []byte{'1'}
-	}
-
-	if config.BPFMapRepin {
-		bpfmaps.EnableRepin()
-	} else {
-		bpfmaps.DisableRepin()
 	}
 
 	bpfMapSizeConntrack := config.BPFMapSizeConntrack

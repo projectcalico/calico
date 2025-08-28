@@ -231,9 +231,6 @@ type Config struct {
 	// are configured for cgroup v1, which prevents all but the root cgroup v2 from working so this is only useful
 	// for development right now.
 	DebugBPFCgroupV2 string `config:"string;;local"`
-	// DebugBPFMapRepinEnabled can be used to prevent Felix from repinning its BPF maps at startup.  This is useful for
-	// testing with multiple Felix instances running on one host.
-	DebugBPFMapRepinEnabled bool `config:"bool;false;local"`
 
 	// DatastoreType controls which datastore driver Felix will use.  Typically, this is detected from the environment
 	// and it does not need to be set manually. (For example, if `KUBECONFIG` is set, the kubernetes datastore driver
