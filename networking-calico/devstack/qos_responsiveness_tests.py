@@ -375,6 +375,7 @@ class QoSResponsivenessTest:
             'name': unique_name,
             'network_id': network_id,
             'device_owner': 'compute:',
+            'binding:vif_type': 'tap',
             'admin_state_up': True
         }
         if qos_policy_id:
