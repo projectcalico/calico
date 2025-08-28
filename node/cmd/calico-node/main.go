@@ -15,6 +15,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -55,6 +56,7 @@ var (
 	runAllocateTunnelAddrs     = flagSet.Bool("allocate-tunnel-addrs", false, "Configure tunnel addresses for this node")
 	allocateTunnelAddrsRunOnce = flagSet.Bool("allocate-tunnel-addrs-run-once", false, "Run allocate-tunnel-addrs in oneshot mode")
 	monitorToken               = flagSet.Bool("monitor-token", false, "Watch for Kubernetes token changes, update CNI config")
+	completeStartup            = flagSet.Bool("complete-startup", false, "Update the NetworkUnavailable condition in Kubernetes on successful startup.")
 )
 
 // Options for liveness checks.
@@ -150,6 +152,9 @@ func main() {
 	} else if *runStartup {
 		logrus.SetFormatter(&logutils.Formatter{Component: "startup"})
 		startup.Run()
+		if *completeStartup {
+			startup.ManageNodeConditionOneShot()
+		}
 	} else if *runShutdown {
 		logrus.SetFormatter(&logutils.Formatter{Component: "shutdown"})
 		shutdown.Run()
@@ -157,6 +162,10 @@ func main() {
 		logrus.SetFormatter(&logutils.Formatter{Component: "monitor-addresses"})
 		startup.ConfigureLogging()
 		startup.MonitorIPAddressSubnets()
+	} else if *completeStartup {
+		logrus.SetFormatter(&logutils.Formatter{Component: "complete-startup"})
+		ctx := context.Background() // Context is never cancelled.
+		startup.ManageNodeCondition(ctx)
 	} else if *runConfd {
 		logrus.SetFormatter(&logutils.Formatter{Component: "confd"})
 		cfg, err := confdConfig.InitConfig(true)
