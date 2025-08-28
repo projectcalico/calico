@@ -239,7 +239,7 @@ class QoSResponsivenessTest:
                     # Use etcd3 client directly
                     # Calico stores WorkloadEndpoints under /calico/
                     for value, metadata in self.etcd_client.get_prefix('/calico/'):
-                        if port_id in metadata.key.decode():
+                        if port_id.replace("-", "--") in metadata.key.decode():
                             try:
                                 data = json.loads(value.decode())
                                 if 'spec' in data and ('interfaceName' in data['spec'] or 'endpoint' in data['spec']):
