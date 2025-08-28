@@ -25,6 +25,7 @@ const (
 
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:resource:scope=Cluster
 
 // CalicoNodeStatusList is a list of CalicoNodeStatus resources.
 type CalicoNodeStatusList struct {
@@ -37,6 +38,7 @@ type CalicoNodeStatusList struct {
 // +genclient
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:resource:scope=Cluster
 
 type CalicoNodeStatus struct {
 	metav1.TypeMeta   `json:",inline"`
@@ -189,6 +191,7 @@ func NewCalicoNodeStatus() *CalicoNodeStatus {
 	}
 }
 
+// +kubebuilder:validation:Enum=FIB;RIB
 type CalicoNodeRouteType string
 
 const (
@@ -196,6 +199,7 @@ const (
 	RouteTypeRIB CalicoNodeRouteType = "RIB"
 )
 
+// +kubebuilder:validation:Enum=Kernel;Static;Direct;NodeMesh;BGPPeer
 type CalicoNodeRouteSourceType string
 
 const (
@@ -206,6 +210,7 @@ const (
 	RouteSourceTypeBGPPeer  CalicoNodeRouteSourceType = "BGPPeer"
 )
 
+// +kubebuilder:validation:Enum=Agent;BGP;Routes
 type NodeStatusClassType string
 
 const (
@@ -214,6 +219,7 @@ const (
 	NodeStatusClassTypeRoutes NodeStatusClassType = "Routes"
 )
 
+// +kubebuilder:validation:Enum=NodeMesh;NodePeer;GlobalPeer
 type BGPPeerType string
 
 const (
@@ -222,6 +228,7 @@ const (
 	BGPPeerTypeGlobalPeer BGPPeerType = "GlobalPeer"
 )
 
+// +kubebuilder:validation:Enum=Ready;NotReady
 type BGPDaemonState string
 
 const (
@@ -229,6 +236,7 @@ const (
 	BGPDaemonStateNotReady BGPDaemonState = "NotReady"
 )
 
+// +kubebuilder:validation:Enum=Idle;Connect;Active;OpenSent;OpenConfirm;Established;Close
 type BGPSessionState string
 
 const (
