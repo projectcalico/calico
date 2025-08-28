@@ -15,6 +15,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -151,6 +152,9 @@ func main() {
 	} else if *runStartup {
 		logrus.SetFormatter(&logutils.Formatter{Component: "startup"})
 		startup.Run()
+		if *completeStartup {
+			startup.ManageNodeConditionOneShot()
+		}
 	} else if *runShutdown {
 		logrus.SetFormatter(&logutils.Formatter{Component: "shutdown"})
 		shutdown.Run()
@@ -160,7 +164,8 @@ func main() {
 		startup.MonitorIPAddressSubnets()
 	} else if *completeStartup {
 		logrus.SetFormatter(&logutils.Formatter{Component: "complete-startup"})
-		startup.ManageNodeCondition()
+		ctx := context.Background() // Context is never cancelled.
+		startup.ManageNodeCondition(ctx)
 	} else if *runConfd {
 		logrus.SetFormatter(&logutils.Formatter{Component: "confd"})
 		cfg, err := confdConfig.InitConfig(true)
