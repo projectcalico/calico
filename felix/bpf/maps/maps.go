@@ -151,6 +151,13 @@ type MapWithDeleteIfExists interface {
 	DeleteIfExists(k []byte) error
 }
 
+type RawBatchOps interface {
+	BatchUpdateRaw(ks, vs []byte, count int, flags uint64) (int, error)
+	BatchDeleteRaw(ks []byte, count int, flags uint64) (int, error)
+	GetKeySize() int
+	GetValueSize() int
+}
+
 type MapParameters struct {
 	PinDir       string
 	Type         string
@@ -186,6 +193,14 @@ func (mp *MapParameters) VersionedName() string {
 
 func (mp *MapParameters) VersionedFilename() string {
 	return path.Join(mp.pinDir(), mp.VersionedName())
+}
+
+func (mp *MapParameters) GetKeySize() int {
+	return mp.KeySize
+}
+
+func (mp *MapParameters) GetValueSize() int {
+	return mp.ValueSize
 }
 
 var (
@@ -434,7 +449,11 @@ func (b *PinnedMap) BatchUpdate(ks, vs [][]byte, flags uint64) (int, error) {
 		v = append(v, vs[i]...)
 	}
 
-	return libbpf.MapUpdateBatch(int(b.fd), k, v, count, flags)
+	return b.BatchUpdateRaw(k, v, count, flags)
+}
+
+func (b *PinnedMap) BatchUpdateRaw(ks, vs []byte, count int, flags uint64) (int, error) {
+	return libbpf.MapUpdateBatch(int(b.fd), ks, vs, count, flags)
 }
 
 func (b *PinnedMap) Get(k []byte) ([]byte, error) {
@@ -452,6 +471,26 @@ func (b *PinnedMap) Delete(k []byte) error {
 
 func (b *PinnedMap) DeleteIfExists(k []byte) error {
 	return DeleteMapEntryIfExists(b.fd, k)
+}
+
+func (b *PinnedMap) BatchDelete(ks [][]byte, flags uint64) (int, error) {
+	count := len(ks)
+
+	if count == 0 {
+		return 0, nil
+	}
+
+	k := make([]byte, 0, count*len(ks[0]))
+
+	for i := 0; i < count; i++ {
+		k = append(k, ks[i]...)
+	}
+
+	return b.BatchDeleteRaw(k, count, flags)
+}
+
+func (b *PinnedMap) BatchDeleteRaw(ks []byte, count int, flags uint64) (int, error) {
+	return libbpf.MapDeleteBatch(int(b.fd), ks, count, flags)
 }
 
 func (b *PinnedMap) updateDeltaEntries() error {
@@ -929,6 +968,45 @@ func (m *TypedMap[K, V]) Update(k K, v V) error {
 	return m.untypedMap.Update(k.AsBytes(), v.AsBytes())
 }
 
+func (m *TypedMap[K, V]) BatchUpdate(ks []K, vs []V) (int, error) {
+	count := len(ks)
+
+	if count != len(vs) {
+		return 0, fmt.Errorf("number of keys is not equal the number of values")
+	}
+
+	if count == 0 {
+		return 0, nil
+	}
+
+	if b, ok := m.untypedMap.(RawBatchOps); ok {
+		k := make([]byte, 0, count*b.GetKeySize())
+		v := make([]byte, 0, count*b.GetValueSize())
+
+		for i := 0; i < count; i++ {
+			k = append(k, ks[i].AsBytes()...)
+			v = append(v, vs[i].AsBytes()...)
+		}
+
+		return b.BatchUpdateRaw(k, v, count, 0)
+	}
+
+	cnt := 0
+	for i, k := range ks {
+		v := vs[i]
+		err := m.untypedMap.Update(k.AsBytes(), v.AsBytes())
+		if err != nil {
+			if cnt == 0 {
+				return 0, err
+			}
+			break
+		}
+		cnt++
+	}
+
+	return cnt, nil
+}
+
 func (m *TypedMap[K, V]) Get(k K) (V, error) {
 	var res V
 
@@ -945,6 +1023,38 @@ exit:
 
 func (m *TypedMap[K, V]) Delete(k K) error {
 	return m.untypedMap.Delete(k.AsBytes())
+}
+
+func (m *TypedMap[K, V]) BatchDelete(ks []K) (int, error) {
+	count := len(ks)
+
+	if count == 0 {
+		return 0, nil
+	}
+
+	if b, ok := m.untypedMap.(RawBatchOps); ok {
+		k := make([]byte, 0, count*b.GetKeySize())
+
+		for i := 0; i < count; i++ {
+			k = append(k, ks[i].AsBytes()...)
+		}
+
+		return b.BatchDeleteRaw(k, count, 0)
+	}
+
+	cnt := 0
+	for _, k := range ks {
+		err := m.untypedMap.Delete(k.AsBytes())
+		if err != nil {
+			if cnt == 0 {
+				return 0, err
+			}
+			break
+		}
+		cnt++
+	}
+
+	return cnt, nil
 }
 
 func (m *TypedMap[K, V]) Load() (map[K]V, error) {
