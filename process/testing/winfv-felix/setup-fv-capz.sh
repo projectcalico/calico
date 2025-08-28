@@ -160,7 +160,6 @@ function prepare_fv(){
     sed -i "s?<your container runtime>?containerd?g" $FV_RUN_FELIX
     sed -i "s?<your containerd version>?${CONTAINERD_VERSION}?g" $FV_RUN_FELIX
     sed -i "s?<your fv type>?tigera-felix?g" $FV_RUN_FELIX
-    sed -i "s?<your fv provisioner>?capz?g" $FV_RUN_FELIX
     sed -i "s?win-fv.exe?win-felix-fv.exe?g" $FV_RUN_FELIX
   fi
 
