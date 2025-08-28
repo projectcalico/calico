@@ -54,6 +54,75 @@ class CalicoQoSDriver(base.DriverBase):
             requires_rpc_notifications=False,
         )
 
+    def create_policy(self, context, policy):
+        """Create policy invocation.
+
+        This method can be implemented by the specific driver subclass
+        to update the backend where necessary with the specific policy
+        information.
+
+        :param context: current running context information
+        :param policy: a QoSPolicy object being created, which will have no
+                      rules.
+        """
+        LOG.info("create_policy: context=%r policy=%r", context, policy)
+
+    def create_policy_precommit(self, context, policy):
+        """Create policy precommit.
+
+        This method can be implemented by the specific driver subclass
+        to handle the precommit event of a policy that is being created.
+
+        :param context: current running context information
+        :param policy: a QoSPolicy object being created, which will have no
+                      rules.
+        """
+        LOG.info("create_policy_precommit: context=%r policy=%r", context, policy)
+
+    def update_policy(self, context, policy):
+        """Update policy invocation.
+
+        This method can be implemented by the specific driver subclass
+        to update the backend where necessary.
+
+        :param context: current running context information
+        :param policy: a QoSPolicy object being updated.
+        """
+        LOG.info("update_policy: context=%r policy=%r", context, policy)
+
+    def update_policy_precommit(self, context, policy):
+        """Update policy precommit.
+
+        This method can be implemented by the specific driver subclass
+        to handle update precommit event of a policy that is being updated.
+
+        :param context: current running context information
+        :param policy: a QoSPolicy object being updated.
+        """
+        LOG.info("update_policy_precommit: context=%r policy=%r", context, policy)
+
+    def delete_policy(self, context, policy):
+        """Delete policy invocation.
+
+        This method can be implemented by the specific driver subclass
+        to delete the backend policy where necessary.
+
+        :param context: current running context information
+        :param policy: a QoSPolicy object being deleted
+        """
+        LOG.info("delete_policy: context=%r policy=%r", context, policy)
+
+    def delete_policy_precommit(self, context, policy):
+        """Delete policy precommit.
+
+        This method can be implemented by the specific driver subclass
+        to handle delete precommit event of a policy that is being deleted.
+
+        :param context: current running context information
+        :param policy: a QoSPolicy object being deleted
+        """
+        LOG.info("delete_policy_precommit: context=%r policy=%r", context, policy)
+
 
 def register():
     """Register the driver."""
