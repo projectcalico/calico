@@ -2626,18 +2626,6 @@ for development right now.
 | Default value (above encoding) | none |
 | Notes | Config file / env var only. | 
 
-### `DebugBPFMapRepinEnabled` (config file / env var only)
-
-Can be used to prevent Felix from repinning its BPF maps at startup. This is useful for
-testing with multiple Felix instances running on one host.
-
-| Detail |   |
-| --- | --- |
-| Environment variable | `FELIX_DebugBPFMapRepinEnabled` |
-| Encoding (env var/config file) | Boolean: <code>true</code>, <code>1</code>, <code>yes</code>, <code>y</code>, <code>t</code> accepted as True; <code>false</code>, <code>0</code>, <code>no</code>, <code>n</code>, <code>f</code> accepted (case insensitively) as False. |
-| Default value (above encoding) | `false` |
-| Notes | Config file / env var only. | 
-
 ### `DebugCPUProfilePath` (config file / env var only)
 
 Unsupported diagnostic setting, used when testing Felix.  Not exposed in `FelixConfiguration`.
