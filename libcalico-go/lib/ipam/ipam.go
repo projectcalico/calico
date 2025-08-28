@@ -327,20 +327,17 @@ func (c ipamClient) determinePools(ctx context.Context, requestedPoolNets []net.
 			continue
 		}
 
-		// Check namespace selector (if specified)
-		if pool.Spec.NamespaceSelector != "" {
-			var namespaceMatches bool
-
-			namespaceMatches, err = SelectsNamespace(pool, namespace)
-			if err != nil {
-				log.WithError(err).WithField("pool", pool).Error("failed to determine if namespace matches pool")
-				return
-			}
-			if !namespaceMatches {
-				// Do not consider pool enabled if the namespaceSelector doesn't match the namespace's labels.
-				log.WithField("namespace", namespace).Debugf("IP pool does not match this namespace: %s", pool.Name)
-				continue
-			}
+		// Check namespace selector
+		var namespaceMatches bool
+		namespaceMatches, err = SelectsNamespace(pool, namespace)
+		if err != nil {
+			log.WithError(err).WithField("pool", pool).Error("failed to determine if namespace matches pool")
+			return
+		}
+		if !namespaceMatches {
+			// Do not consider pool enabled if the namespaceSelector doesn't match the namespace's labels.
+			log.WithField("namespace", namespace).Debugf("IP pool does not match this namespace: %s", pool.Name)
+			continue
 		}
 
 		log.Debugf("IP pool matches both node and namespace: %s", pool.Name)
