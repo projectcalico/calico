@@ -99,6 +99,8 @@ class DnsmasqRouted(dhcp.Dnsmasq):
                     and not ra_mode
                 ):
                     mode = "static"
+                if (addr_mode == constants.IPV6_SLAAC && ra_mode == constants.IPV6_SLAAC):
+                    mode = "slaac,ra-only"
 
             cidr = netaddr.IPNetwork(subnet.cidr)
 
