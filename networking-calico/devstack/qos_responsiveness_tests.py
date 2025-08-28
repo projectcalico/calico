@@ -238,7 +238,7 @@ class QoSResponsivenessTest:
                 if self.etcd_client:
                     # Use etcd3 client directly
                     # Calico stores WorkloadEndpoints under /calico/
-                    for value, metadata in self.etcd_client.get_prefix('/calico/'):
+                    for value, metadata in self.etcd_client.get_prefix('/calico/resources/v3/projectcalico.org/workloadendpoints/'):
                         logger.info(f"Metadata = {metadata}")
                         if port_id.replace("-", "--") in metadata.key.decode():
                             try:
