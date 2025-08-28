@@ -695,6 +695,13 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
     def update_network_postcommit(self, context):
         LOG.info("UPDATE_NETWORK_POSTCOMMIT: %s" % context)
 
+        # Determine if qos_policy_id is changing.  If not, no-op.
+
+        # Find the set P of Ports for this Network and which don't have their own
+        # qos_policy_id.
+
+        # For each Port in set P, do what the syncer would do for that Port.
+
     def delete_network_postcommit(self, context):
         LOG.info("DELETE_NETWORK_POSTCOMMIT: %s" % context)
 
