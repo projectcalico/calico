@@ -84,7 +84,11 @@ class QoSResponsivenessTest:
                 self.etcd_client = etcd3.client(host=etcd_host, port=etcd_port)
                 logger.info(f"etcd3 client established: {etcd_host}:{etcd_port}")
                 status = self.etcd_client.status()
-                logger.info(f"status = {status}")
+                logger.info(f"status.version = {status.version}")
+                logger.info(f"status.db_size = {status.db_size}")
+                logger.info(f"status.leader = {status.leader}")
+                logger.info(f"status.raft_index = {status.raft_index}")
+                logger.info(f"status.raft_term = {status.raft_term}")
             except Exception as e:
                 logger.warning(f"Failed to establish etcd connection: {e}")
                 self.etcd_client = None
