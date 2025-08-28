@@ -83,6 +83,8 @@ class QoSResponsivenessTest:
                 etcd_port = int(os.environ.get('ETCD_PORT', '2379'))
                 self.etcd_client = etcd3.client(host=etcd_host, port=etcd_port)
                 logger.info(f"etcd3 client established: {etcd_host}:{etcd_port}")
+                status = self.etcd_client.status()
+                logger.info(f"status = {status}")
             except Exception as e:
                 logger.warning(f"Failed to establish etcd connection: {e}")
                 self.etcd_client = None
