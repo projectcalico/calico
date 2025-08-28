@@ -406,6 +406,10 @@ var _ = testutils.E2eDatastoreDescribe("StagedGlobalNetworkPolicy tests", testut
 
 	Describe("StagedGlobalNetworkPolicy without name on the projectcalico.org annotation", func() {
 		It("Should return the name without default prefix", func() {
+			if v3CRD {
+				Skip("Skipping test for v3 CRD mode")
+			}
+
 			if config.Spec.DatastoreType == apiconfig.Kubernetes {
 				config, _, err := k8s.CreateKubernetesClientset(&config.Spec)
 				Expect(err).NotTo(HaveOccurred())

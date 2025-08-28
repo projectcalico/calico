@@ -2590,6 +2590,9 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 		By("Listing all BlockAffinity for all Nodes", func() {
 			objs, err := c.List(ctx, model.BlockAffinityListOptions{}, "")
 			Expect(err).NotTo(HaveOccurred())
+			for _, obj := range objs.KVPairs {
+				log.Infof("CASEY: Found BlockAffinity: %+v", obj)
+			}
 			Expect(len(objs.KVPairs)).To(Equal(2))
 		})
 

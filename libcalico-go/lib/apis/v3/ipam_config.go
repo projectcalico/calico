@@ -24,8 +24,6 @@ const (
 	// as for the clientv3 API, whereas the projectcalico.org/v3 API uses IPAMConfiguration.
 	KindIPAMConfig     = "IPAMConfig"
 	KindIPAMConfigList = "IPAMConfigList"
-
-	GlobalIPAMConfigName = "default"
 )
 
 // +genclient

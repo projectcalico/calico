@@ -221,7 +221,7 @@ var _ = testutils.E2eDatastoreDescribe("Block affinity tests", testutils.Datasto
 				testutils.Resource(v3.KindBlockAffinity, testutils.ExpectNoNamespace, name2, spec2),
 			))
 
-			By("Attempt to update BlockAffinity (name1) to have the Deleted flag set to \"true\"")
+			By("Attempt to update BlockAffinity (name1) to have the Deleted flag set to true")
 			res1.ResourceVersion = rv1_2
 			res1.ObjectMeta.ResourceVersion = rv1_2
 			spec2.Deleted = true
