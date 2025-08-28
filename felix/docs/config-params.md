@@ -2628,7 +2628,7 @@ for development right now.
 
 ### `DebugBPFMapRepinEnabled` (config file / env var only)
 
-Can be used to prevent Felix from repinning its BPF maps at startup. This is useful for
+[deprecated] DebugBPFMapRepinEnabled can be used to prevent Felix from repinning its BPF maps at startup. This is useful for
 testing with multiple Felix instances running on one host.
 
 | Detail |   |

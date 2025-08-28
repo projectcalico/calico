@@ -4792,8 +4792,8 @@
           "Required": false,
           "OnParseFailure": "ReplaceWithDefault",
           "AllowedConfigSources": "LocalOnly",
-          "Description": "Can be used to prevent Felix from repinning its BPF maps at startup. This is useful for\ntesting with multiple Felix instances running on one host.",
-          "DescriptionHTML": "<p>Can be used to prevent Felix from repinning its BPF maps at startup. This is useful for\ntesting with multiple Felix instances running on one host.</p>",
+          "Description": "[deprecated] DebugBPFMapRepinEnabled can be used to prevent Felix from repinning its BPF maps at startup. This is useful for\ntesting with multiple Felix instances running on one host.",
+          "DescriptionHTML": "<p>[deprecated] DebugBPFMapRepinEnabled can be used to prevent Felix from repinning its BPF maps at startup. This is useful for\ntesting with multiple Felix instances running on one host.</p>",
           "UserEditable": true,
           "GoType": ""
         },

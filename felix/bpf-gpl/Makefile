@@ -59,18 +59,65 @@ UT_C_FILES:=$(shell find ut -name '*.c')
 UT_OBJS:=$(UT_C_FILES:.c=.o) $(shell ./list-ut-objs)
 UT_OBJS+=ut/ip_parse_test_v6.o
 
+XDP_MAP_HEADERS := jump.h
+COMMON_MAP_HEADERS := counters.h ifstate.h perf_types.h profiling.h rule_counters.h $(XDP_MAP_HEADERS)
+IP_MAP_HEADERS := arp.h conntrack_cleanup.h conntrack_types.h failsafe.h nat_types.h policy.h routes.h sendrecv.h
+IPV4_MAP_HEADERS := $(IP_MAP_HEADERS) ip_v4_fragment.h
+IPV6_MAP_HEADERS := $(IP_MAP_HEADERS)
+
+MAP_OBJS := $(addprefix bin/, common_map_stub.o ipv4_map_stub.o ipv6_map_stub.o xdp_map_stub.o)
+MAP_STUB_CS := $(MAP_OBJS:.o=.c)
+
+# Map stub ojbs cannot have '-emit-llvm' in flags
+MAP_CFLAGS := $(subst -emit-llvm,,$(CFLAGS))
+
+# Generate _map_stub.c
+define generate_stub
+	echo '#include "bpf.h"' > $@; \
+	for header in $^; do \
+		echo "#include \"$${header}\"" >> $@; \
+	done; \
+	echo '' >> $@; \
+	echo 'SEC("xdp")' >> $@; \
+	echo 'int xdp_prog(struct xdp_md *ctx) { return XDP_PASS; }' >> $@;
+endef
+
+common_map_stub.c: $(COMMON_MAP_HEADERS)
+	$(generate_stub)
+
+ipv4_map_stub.c: $(IPV4_MAP_HEADERS)
+	$(generate_stub)
+
+ipv6_map_stub.c: $(IPV6_MAP_HEADERS)
+	$(generate_stub)
+
+xdp_map_stub.c: $(XDP_MAP_HEADERS)
+	$(generate_stub)
+
+bin/common_map_stub.o bin/ipv4_map_stub.o: bin/%.o: %.c %.d | bin
+	$(CC) $(MAP_CFLAGS) -c $< -o $@
+
+bin/ipv6_map_stub.o: bin/%.o: %.c %.d | bin
+	$(CC) $(MAP_CFLAGS) -DIPVER6 -c $< -o $@
+
+# CALI_COMPILE_FLAGS=64 is CALI_XDP_PROG
+bin/xdp_map_stub.o: bin/%.o: %.c %.d | bin
+	$(CC) $(MAP_CFLAGS) -DCALI_COMPILE_FLAGS=64 -c $< -o $@
+
 OBJS:=$(shell ./list-objs)
 OBJS+=bin/tc_preamble.o
 OBJS+=bin/tcx_test.o
 OBJS+=bin/xdp_preamble.o
 OBJS+=bin/policy_default.o
+OBJS+=$(MAP_OBJS)
 C_FILES:=tc_preamble.c tc.c connect_balancer.c connect_balancer_v46.c connect_balancer_v6.c xdp_preamble.c xdp.c policy_default.c
 
 all: $(OBJS)
 ut-objs: $(UT_OBJS)
+map-objs: $(MAP_OBJS)
 
 libbpf: $(LIBBPF_FILE_CREATED)
-$(LIBBPF_FILE_CREATED):	
+$(LIBBPF_FILE_CREATED):
 ifeq ("$(wildcard ./$(LIBBPF_DIR))", "")
 	$(info "Directory does not exist.")
 	@echo "Directory does not exist."
@@ -247,7 +294,6 @@ bin:
 %_v6.d: %.c
 	$(COMPILE_DEPS)
 
-
 .PRECIOUS: %.d %_v6.d
 
 COMPILE_DEPS=set -e; rm -f $@; \
@@ -262,7 +308,7 @@ ifneq ($(MAKECMDGOALS),clean)
 endif
 
 clean:
-	rm -f *.o *.ll *.d bin/* ut/*.o ut/*.d ut/*.ll
+	rm -f *.o *.ll *.d bin/* ut/*.o ut/*.d ut/*.ll *_map_stub.c
 
 # Fixes an issue where make thinks these .h files are dependencies that need
 # to be built. Just include them as a noop in order to trick make.

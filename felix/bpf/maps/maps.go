@@ -15,10 +15,8 @@
 package maps
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 	"path"
 	"reflect"
 	"strconv"
@@ -26,7 +24,6 @@ import (
 	"sync"
 	"syscall"
 
-	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 
@@ -81,32 +78,6 @@ type Key interface {
 type Value interface {
 	comparable
 	AsBytes
-}
-
-var (
-	repinningEnabled     bool
-	repinningEnabledLock sync.RWMutex
-)
-
-func EnableRepin() {
-	repinningEnabledLock.Lock()
-	defer repinningEnabledLock.Unlock()
-
-	repinningEnabled = true
-}
-
-func DisableRepin() {
-	repinningEnabledLock.Lock()
-	defer repinningEnabledLock.Unlock()
-
-	repinningEnabled = false
-}
-
-func repinningIsEnabled() bool {
-	repinningEnabledLock.RLock()
-	defer repinningEnabledLock.RUnlock()
-
-	return repinningEnabled
 }
 
 type IterCallback func(k, v []byte) IteratorAction
@@ -282,7 +253,13 @@ func (b *PinnedMap) Path() string {
 }
 
 func (b *PinnedMap) Close() error {
-	err := b.fd.Close()
+	log.WithFields(log.Fields{"b.VersionedName()": b.VersionedName(), "b.fd": b.fd, "b.fdLoaded": b.fdLoaded, "b.oldfd": b.oldfd}).Debug("Closing PinnedMap")
+	var err error
+	if b.fdLoaded {
+		err = b.fd.Close()
+	} else {
+		log.WithField("map", *b).Warn("Close() called when fdLoaded = false")
+	}
 	if b.oldfd > 0 {
 		b.oldfd.Close()
 	}
@@ -615,24 +592,14 @@ func (b *PinnedMap) Open() error {
 			return err
 		}
 		log.WithField("name", b.Name).Debug("Map file didn't exist")
-		if repinningIsEnabled() {
-			log.WithField("name", b.Name).Info("Looking for map by name (to repin it)")
-			err = RepinMap(b.VersionedName(), b.VersionedFilename())
-			if err != nil && !os.IsNotExist(err) {
-				return err
-			}
-		}
-	}
-
-	if err == nil {
+	} else { // err == nil
 		log.WithField("name", b.Name).Debug("Map file already exists, trying to open it")
 		b.fd, err = GetMapFDByPin(b.VersionedFilename())
-		if err == nil {
-			b.fdLoaded = true
-			log.WithField("fd", b.fd).WithField("name", b.Name).Info("Loaded map file descriptor.")
-			return nil
+		if err != nil {
+			return err
 		}
-		return err
+		b.fdLoaded = true
+		log.WithField("fd", b.fd).WithField("name", b.VersionedFilename()).Info("Loaded map file descriptor.")
 	}
 
 	return err
@@ -687,7 +654,7 @@ func (b *PinnedMap) EnsureExists() error {
 		err = b.repinAt(fd, oldMapPath, b.Path())
 		closeErr := syscall.Close(fd)
 		if closeErr != nil {
-			log.WithError(err).Warn("Error from fd.Close().  Ignoring.")
+			log.WithError(err).Warn("Error from syscall.Close(fd).  Ignoring.")
 		}
 		if err != nil {
 			return fmt.Errorf("error repinning old map %s to %s, err=%w", oldMapPath, b.Path(), err)
@@ -741,51 +708,98 @@ func (b *PinnedMap) EnsureExists() error {
 	}
 
 	log.WithFields(log.Fields{
-		"name":      b.Name,
-		"keySize":   b.KeySize,
-		"valuesize": b.ValueSize,
+		"name":              b.Name,
+		"keySize":           b.KeySize,
+		"valuesize":         b.ValueSize,
+		"maxEntries":        b.MaxEntries,
+		"flags":             b.Flags,
+		"versionedName":     b.VersionedName(),
+		"versionedFilename": b.VersionedFilename(),
 	}).Debug("Map didn't exist, creating it")
-	cmd := exec.Command("bpftool", "map", "create", b.VersionedFilename(),
-		"type", b.Type,
-		"key", fmt.Sprint(b.KeySize),
-		"value", fmt.Sprint(b.ValueSize),
-		"entries", fmt.Sprint(b.MaxEntries),
-		"name", b.VersionedName(),
-		"flags", fmt.Sprint(b.Flags),
-	)
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		log.WithField("out", string(out)).Error("Failed to run bpftool")
-		return err
+
+	// Determine if the map b.Name is in a .o stub file (and which .o stub)
+	var objName string
+	switch {
+	case strings.HasPrefix(b.Name, "cali_v4_"):
+		objName = "ipv4_map_stub.o"
+	case strings.HasPrefix(b.Name, "cali_v6_"):
+		objName = "ipv6_map_stub.o"
+	case strings.HasPrefix(b.Name, "xdp_cali_"):
+		objName = "xdp_map_stub.o"
+	case strings.HasPrefix(b.Name, "cali_"):
+		objName = "common_map_stub.o"
 	}
-	b.fd, err = GetMapFDByPin(b.VersionedFilename())
-	if err == nil {
-		b.fdLoaded = true
-		if copyData {
-			// Copy data from old map to the new map. Old map and new map are of the
-			// same version but of different size.
-			err := b.copyFromOldMap()
-			if err != nil {
-				log.WithError(err).Error("error copying data from old map")
-				closeErr := b.fd.Close()
-				if closeErr != nil {
-					log.WithError(closeErr).Warn("Error when closing FD, ignoring...")
-				}
-				b.fd = 0
-				b.fdLoaded = false
-				return err
-			}
-			// Delete the old pin if the map is not updated by BPF programs.
-			// Data from old map to new map will be copied once all the bpf
-			// programs are installed with the new map.
-			if !b.UpdatedByBPF {
-				os.Remove(b.Path() + "_old")
+
+	loadedFromObj := false
+	if objName != "" {
+		log.WithFields(log.Fields{"objName": objName, "b.VersionedName()": b.VersionedName()}).Debug("Trying to create map from obj file")
+		obj, err := libbpf.OpenObject(path.Join(bpfdefs.ObjectDir, objName))
+		if err != nil {
+			return fmt.Errorf("error opening obj file %s: %w", objName, err)
+		}
+		defer obj.Close()
+		for m, err := obj.FirstMap(); m != nil && err == nil; m, err = m.NextMap() {
+			// Only set up PinnedMap 'b', skip other maps in obj
+			if m.Name() == b.VersionedName() {
+				loadedFromObj = true
+			} else {
+				continue
 			}
 
+			if size := Size(b.VersionedName()); size != 0 {
+				if err := m.SetSize(size); err != nil {
+					return fmt.Errorf("error resizing map %s: %w", b.VersionedName(), err)
+				}
+			}
+
+			if err := m.SetPinPath(b.VersionedFilename()); err != nil {
+				return fmt.Errorf("error pinning map %s to %s: %w", b.VersionedName(), b.VersionedFilename(), err)
+			}
+
+			if loadedFromObj {
+				break
+			}
 		}
-		// Handle map upgrade.
-		err = b.upgrade()
+
+		if loadedFromObj {
+			// Only load the obj if it was present in the obj file
+			if err := obj.Load(); err != nil {
+				return fmt.Errorf("error loading obj file %s for map %s: %w", objName, b.VersionedName(), err)
+			}
+
+			fd, err := GetMapFDByPin(b.VersionedFilename())
+			if err != nil {
+				return fmt.Errorf("error getting map FD by pin for map %s: %w", b.VersionedFilename(), err)
+			}
+			b.fd = FD(fd)
+			b.fdLoaded = true
+		}
+	}
+
+	// Map not found in obj files, create without BTF
+	if !loadedFromObj {
+		log.WithFields(log.Fields{"b.VersionedName()": b.VersionedName()}).Debug("Creating map with libbpf")
+		fd, err := libbpf.CreateBPFMap(b.Type, b.KeySize, b.ValueSize, b.MaxEntries, b.Flags, b.VersionedName())
 		if err != nil {
+			return fmt.Errorf("error creating map %s: %w", b.VersionedName(), err)
+		}
+		err = libbpf.ObjPin(fd, b.VersionedFilename())
+		if err != nil {
+			closeErr := unix.Close(fd)
+			if closeErr != nil {
+				log.WithError(closeErr).Warn("Error when closing FD, ignoring...")
+			}
+			return fmt.Errorf("error pinning map %s to %s: %w", b.VersionedName(), b.VersionedFilename(), err)
+		}
+		b.fd = FD(fd)
+		b.fdLoaded = true
+	}
+	if copyData {
+		// Copy data from old map to the new map. Old map and new map are of the
+		// same version but of different size.
+		err := b.copyFromOldMap()
+		if err != nil {
+			log.WithError(err).Error("error copying data from old map")
 			closeErr := b.fd.Close()
 			if closeErr != nil {
 				log.WithError(closeErr).Warn("Error when closing FD, ignoring...")
@@ -794,61 +808,46 @@ func (b *PinnedMap) EnsureExists() error {
 			b.fdLoaded = false
 			return err
 		}
-		log.WithField("fd", b.fd).WithField("name", b.VersionedFilename()).
-			Info("Loaded map file descriptor.")
+		// Delete the old pin if the map is not updated by BPF programs.
+		// Data from old map to new map will be copied once all the bpf
+		// programs are installed with the new map.
+		if !b.UpdatedByBPF {
+			os.Remove(b.Path() + "_old")
+		}
+
 	}
-	return err
+	// Handle map upgrade.
+	err := b.upgrade()
+	if err != nil {
+		closeErr := b.fd.Close()
+		if closeErr != nil {
+			log.WithError(closeErr).Warn("Error when closing FD, ignoring...")
+		}
+		b.fd = 0
+		b.fdLoaded = false
+		return err
+	}
+	log.WithField("fd", b.fd).WithField("name", b.VersionedFilename()).Info("Loaded map file descriptor.")
+	return nil
 }
 
 func (b *PinnedMap) Size() int {
 	return b.MapParameters.MaxEntries
 }
 
-type bpftoolMapMeta struct {
-	ID   int    `json:"id"`
-	Name string `json:"name"`
-}
-
 func GetMapIdFromPin(pinPath string) (int, error) {
-	cmd := exec.Command("bpftool", "map", "list", "pinned", pinPath, "-j")
-	out, err := cmd.Output()
+	fd, err := GetMapFDByPin(pinPath)
 	if err != nil {
-		return -1, errors.Wrap(err, "bpftool map list failed")
+		return -1, fmt.Errorf("error getting map FD by pin %s: %w", pinPath, err)
 	}
+	defer fd.Close()
 
-	var mapData bpftoolMapMeta
-	err = json.Unmarshal(out, &mapData)
+	mapInfo, err := GetMapInfo(fd)
 	if err != nil {
-		return -1, errors.Wrap(err, "bpftool returned bad JSON")
-	}
-	return mapData.ID, nil
-}
-
-// RepinMap finds a map by a given name and pins it to a path. Note that if
-// there are multiple maps of the same name in the system, it will use the first
-// one it finds.
-func RepinMap(name string, filename string) error {
-	cmd := exec.Command("bpftool", "map", "list", "-j")
-	out, err := cmd.Output()
-	if err != nil {
-		return errors.Wrap(err, "bpftool map list failed")
+		return -1, fmt.Errorf("error getting mapInfo by FD %d: %w", fd, err)
 	}
 
-	var maps []bpftoolMapMeta
-	err = json.Unmarshal(out, &maps)
-	if err != nil {
-		return errors.Wrap(err, "bpftool returned bad JSON")
-	}
-
-	for _, m := range maps {
-		if m.Name == name {
-			// Found the map, try to repin it.
-			cmd := exec.Command("bpftool", "map", "pin", "id", fmt.Sprint(m.ID), filename)
-			return errors.Wrap(cmd.Run(), "bpftool failed to repin map")
-		}
-	}
-
-	return os.ErrNotExist
+	return mapInfo.Id, nil
 }
 
 func (b *PinnedMap) CopyDeltaFromOldMap() error {
@@ -938,10 +937,7 @@ func (b *PinnedMap) upgrade() error {
 	oldMapParams := b.GetMapParams(oldVersion)
 	oldMapParams.MaxEntries = b.MaxEntries
 	oldBpfMap := NewPinnedMap(oldMapParams)
-	defer func() {
-		oldBpfMap.Close()
-		oldBpfMap.fd = 0
-	}()
+	defer oldBpfMap.Close()
 	err = oldBpfMap.EnsureExists()
 	if err != nil {
 		return err
