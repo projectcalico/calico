@@ -747,13 +747,3 @@ func MapDeleteBatch(fd int, k []byte, count int, flags uint64) (int, error) {
 
 	return count, nil
 }
-
-func FindMapFdByName(targetName string) (int, error) {
-	cname := C.CString(targetName)
-	defer C.free(unsafe.Pointer(cname))
-	fd := C.find_bpf_map_by_name(cname)
-	if fd < 0 {
-		return int(fd), fmt.Errorf("map name %s not found", targetName)
-	}
-	return int(fd), nil
-}

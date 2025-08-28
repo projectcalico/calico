@@ -521,24 +521,3 @@ int create_bpf_map(enum bpf_map_type type, unsigned int key_size, unsigned int v
 	}
 	return fd;
 }
-
-int find_bpf_map_by_name( const char *name)
-{
-	__u32 id = 0;
-	while (!bpf_map_get_next_id(id, &id)) {
-		int fd = bpf_map_get_fd_by_id(id);
-		if (fd < 0)
-			continue;
-		struct bpf_map_info info = {};
-		__u32 info_len = sizeof(info);
-		if (!bpf_obj_get_info_by_fd(fd, &info, &info_len)) {
-			if (strcmp(info.name, name) == 0) {
-				// found
-				return fd;
-			}
-		}
-		close(fd);
-	}
-	// not found
-	return -1;
-}

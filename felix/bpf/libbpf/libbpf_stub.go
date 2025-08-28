@@ -245,7 +245,3 @@ func OpenObjectWithLogBuffer(filename string, buf []byte) (*Obj, error) {
 func CreateBPFMap(mapType string, keySize int, valueSize int, maxEntries int, flags int, name string) (int, error) {
 	panic("LIBBPF syscall stub")
 }
-
-func FindMapFdByName(targetName string) (int, error) {
-	panic("LIBBPF syscall stub")
-}
