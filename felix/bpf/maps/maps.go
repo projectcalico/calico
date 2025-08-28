@@ -83,32 +83,6 @@ type Value interface {
 	AsBytes
 }
 
-var (
-	repinningEnabled     bool
-	repinningEnabledLock sync.RWMutex
-)
-
-func EnableRepin() {
-	repinningEnabledLock.Lock()
-	defer repinningEnabledLock.Unlock()
-
-	repinningEnabled = true
-}
-
-func DisableRepin() {
-	repinningEnabledLock.Lock()
-	defer repinningEnabledLock.Unlock()
-
-	repinningEnabled = false
-}
-
-func repinningIsEnabled() bool {
-	repinningEnabledLock.RLock()
-	defer repinningEnabledLock.RUnlock()
-
-	return repinningEnabled
-}
-
 type IterCallback func(k, v []byte) IteratorAction
 
 type Map interface {
@@ -615,16 +589,7 @@ func (b *PinnedMap) Open() error {
 			return err
 		}
 		log.WithField("name", b.Name).Debug("Map file didn't exist")
-		if repinningIsEnabled() {
-			log.WithField("name", b.Name).Info("Looking for map by name (to repin it)")
-			err = RepinMap(b.VersionedName(), b.VersionedFilename())
-			if err != nil && !os.IsNotExist(err) {
-				return err
-			}
-		}
-	}
-
-	if err == nil {
+	} else { // err == nil
 		log.WithField("name", b.Name).Debug("Map file already exists, trying to open it")
 		b.fd, err = GetMapFDByPin(b.VersionedFilename())
 		if err == nil {
@@ -822,33 +787,6 @@ func GetMapIdFromPin(pinPath string) (int, error) {
 		return -1, errors.Wrap(err, "bpftool returned bad JSON")
 	}
 	return mapData.ID, nil
-}
-
-// RepinMap finds a map by a given name and pins it to a path. Note that if
-// there are multiple maps of the same name in the system, it will use the first
-// one it finds.
-func RepinMap(name string, filename string) error {
-	cmd := exec.Command("bpftool", "map", "list", "-j")
-	out, err := cmd.Output()
-	if err != nil {
-		return errors.Wrap(err, "bpftool map list failed")
-	}
-
-	var maps []bpftoolMapMeta
-	err = json.Unmarshal(out, &maps)
-	if err != nil {
-		return errors.Wrap(err, "bpftool returned bad JSON")
-	}
-
-	for _, m := range maps {
-		if m.Name == name {
-			// Found the map, try to repin it.
-			cmd := exec.Command("bpftool", "map", "pin", "id", fmt.Sprint(m.ID), filename)
-			return errors.Wrap(cmd.Run(), "bpftool failed to repin map")
-		}
-	}
-
-	return os.ErrNotExist
 }
 
 func (b *PinnedMap) CopyDeltaFromOldMap() error {

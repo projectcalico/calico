@@ -231,7 +231,7 @@ type Config struct {
 	// are configured for cgroup v1, which prevents all but the root cgroup v2 from working so this is only useful
 	// for development right now.
 	DebugBPFCgroupV2 string `config:"string;;local"`
-	// DebugBPFMapRepinEnabled can be used to prevent Felix from repinning its BPF maps at startup.  This is useful for
+	// [deprecated] DebugBPFMapRepinEnabled can be used to prevent Felix from repinning its BPF maps at startup.  This is useful for
 	// testing with multiple Felix instances running on one host.
 	DebugBPFMapRepinEnabled bool `config:"bool;false;local"`
 
