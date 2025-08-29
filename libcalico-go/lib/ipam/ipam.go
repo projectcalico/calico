@@ -559,6 +559,7 @@ func (s *blockAssignState) findOrClaimBlock(ctx context.Context, minFreeIps int)
 			// allocated affine block. This may happen due to a race condition where another process on the host allocates a new block
 			// after we decide that a new block is required to satisfy this request, but before we actually allocate a new block.
 			logCtx.Info("Tried all affine blocks. Looking for an affine block with space, or a new unclaimed block")
+			findStart := time.Now()
 			subnet, err := s.client.blockReaderWriter.findUsableBlock(ctx, s.affinityCfg, s.version, s.pools, s.reservations, *config)
 			if err != nil {
 				if _, ok := err.(noFreeBlocksError); ok {
@@ -570,7 +571,7 @@ func (s *blockAssignState) findOrClaimBlock(ctx context.Context, minFreeIps int)
 				return nil, false, err
 			}
 			logCtx := log.WithFields(log.Fields{string(s.affinityCfg.AffinityType): s.affinityCfg.Host, "subnet": subnet})
-			logCtx.Info("Found unclaimed block")
+			logCtx.Infof("Found unclaimed block in %v", time.Since(findStart))
 
 			for j := 0; j < datastoreRetries; j++ {
 				// We found an unclaimed block - claim affinity for it.
@@ -776,6 +777,7 @@ func (c ipamClient) autoAssign(ctx context.Context, num int, handleID *string, a
 
 		// We have got a block b.
 		for i := 0; i < datastoreRetries; i++ {
+			assignStart := time.Now()
 			newIPs, err := c.assignFromExistingBlock(ctx, b, rem, handleID, attrs, affinityCfg, config.StrictAffinity, reservations)
 			if err != nil {
 				if _, ok := err.(cerrors.ErrorResourceUpdateConflict); ok {
@@ -797,7 +799,7 @@ func (c ipamClient) autoAssign(ctx context.Context, num int, handleID *string, a
 				ia.AddMsg("Failed to assign IPs in newly allocated block")
 				break
 			}
-			logCtx.Debugf("Assigned IPs from new block: %s", newIPs)
+			logCtx.Debugf("Assigned IPs from new block: %s (%v)", newIPs, time.Since(assignStart))
 			ia.IPs = append(ia.IPs, newIPs...)
 			rem = num - len(ia.IPs)
 			break
@@ -2379,7 +2381,8 @@ func (c ipamClient) attemptUpgradeHost(ctx context.Context, nodeName string) err
 
 	// We know that already-upgraded blocks will have the affinityType label,
 	// we can list only non-upgraded blocks.  We can't limit to any particular
-	// host here because that's the whole point of adding the new labels!
+	// host here because host matches now make use of the labels that we're
+	// about to add.
 	ls, err := labels.Parse("!" + v3.LabelAffinityType)
 	if err != nil {
 		return err
@@ -2415,6 +2418,7 @@ func (c ipamClient) attemptUpgradeHost(ctx context.Context, nodeName string) err
 	}
 	if numUpgraded == 0 && len(errs) == 0 {
 		log.Info("No affinities needed to be upgraded.")
+		return nil
 	}
 
 	log.Infof("Upgraded %d block affinities belonging to this host.", numUpgraded)
