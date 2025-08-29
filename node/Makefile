@@ -81,49 +81,16 @@ TOOLS_MOUNTNS_BINARY = $(NODE_CONTAINER_BIN_DIR)/mountns-$(ARCH)
 
 WINDOWS_INSTALL_SCRIPT := dist/install-calico-windows.ps1
 
-# Variables for the Windows packaging.
-# Name of the Windows release ZIP archive.
-WINDOWS_PACKAGING_ROOT := windows-packaging
+# Variables for Windows image dependencies (not archive-specific)
 WINDOWS_ARCHIVE_ROOT := windows-packaging/CalicoWindows
-WINDOWS_ARCHIVE_BINARY := $(WINDOWS_ARCHIVE_ROOT)/calico-node.exe
-WINDOWS_ARCHIVE_TAG?=$(GIT_VERSION)
-WINDOWS_ARCHIVE := dist/calico-windows-$(WINDOWS_ARCHIVE_TAG).zip
 # Version of NSSM to download.
 WINDOWS_NSSM_VERSION=2.24-103-gdee49fc
 # Original source: https://nssm.cc/ci/nssm-$(WINDOWS_NSSM_VERSION).zip
 WINDOWS_NSSM_URL=$(THIRD_PARTY_DEPS_MIRROR)/nssm/nssm-$(WINDOWS_NSSM_VERSION).zip
-# Explicit list of files that we copy in from the mod cache.  This is required because the copying rules we use are pattern-based
-# and they only work with an explicit rule of the form "$(WINDOWS_MOD_CACHED_FILES): <file path from project root>" (otherwise,
-# make has no way to know that the mod cache target produces the files we need).
-WINDOWS_MOD_CACHED_FILES := \
-    windows-packaging/config-bgp.ps1 \
-    windows-packaging/config-bgp.psm1 \
-    windows-packaging/conf.d/blocks.toml \
-    windows-packaging/conf.d/peerings.toml \
-    windows-packaging/templates/blocks.ps1.template \
-    windows-packaging/templates/peerings.ps1.template
 
-# Files to include in the Windows ZIP archive.  We need to list some of these explicitly
-# because we need to force them to be built/copied into place. We also have
-# tests in windows-packaging that we don't want to include.
-WINDOWS_ARCHIVE_FILES := \
-    $(WINDOWS_ARCHIVE_BINARY) \
-    $(WINDOWS_ARCHIVE_ROOT)/README.txt \
-    $(WINDOWS_ARCHIVE_ROOT)/*.ps1 \
-    $(WINDOWS_ARCHIVE_ROOT)/node/node-service.ps1 \
-    $(WINDOWS_ARCHIVE_ROOT)/felix/felix-service.ps1 \
-    $(WINDOWS_ARCHIVE_ROOT)/confd/confd-service.ps1 \
-    $(WINDOWS_ARCHIVE_ROOT)/confd/config-bgp.ps1 \
-    $(WINDOWS_ARCHIVE_ROOT)/confd/config-bgp.psm1 \
-    $(WINDOWS_ARCHIVE_ROOT)/confd/conf.d/blocks.toml \
-    $(WINDOWS_ARCHIVE_ROOT)/confd/conf.d/peerings.toml \
-    $(WINDOWS_ARCHIVE_ROOT)/confd/templates/blocks.ps1.template \
-    $(WINDOWS_ARCHIVE_ROOT)/confd/templates/peerings.ps1.template \
-    $(WINDOWS_ARCHIVE_ROOT)/cni/calico.exe \
-    $(WINDOWS_ARCHIVE_ROOT)/cni/calico-ipam.exe \
-    $(WINDOWS_ARCHIVE_ROOT)/libs/hns/hns.psm1 \
-    $(WINDOWS_ARCHIVE_ROOT)/libs/hns/License.txt \
-    $(WINDOWS_ARCHIVE_ROOT)/libs/calico/calico.psm1
+# Variables for the Windows packaging.
+WINDOWS_ARCHIVE_ROOT := windows-packaging/CalicoWindows
+
 
 MICROSOFT_SDN_VERSION := 0d7593e5c8d4c2347079a7a6dbd9eb034ae19a44
 MICROSOFT_SDN_GITHUB_RAW_URL := https://raw.githubusercontent.com/microsoft/SDN/$(MICROSOFT_SDN_VERSION)
@@ -172,14 +139,17 @@ clean: clean-windows
 	-docker image rm -f $$(docker images $(TEST_CONTAINER_NAME) -a -q)
 
 clean-windows: clean-windows-builder
-	rm -f $(WINDOWS_ARCHIVE) $(WINDOWS_ARCHIVE_BINARY) $(WINDOWS_BINARY)
+	rm -f $(WINDOWS_BINARY)
 	rm -f $(WINDOWS_ARCHIVE_ROOT)/libs/hns/hns.psm1
-	rm -f $(WINDOWS_ARCHIVE_ROOT)/libs/hns/License.txt
-	rm -f $(WINDOWS_ARCHIVE_ROOT)/cni/*.exe
-	rm -f $(WINDOWS_ARCHIVE_ROOT)/../nssm.zip
-	rm -f $(WINDOWS_ARCHIVE_ROOT)/../nssm.exe
+	rm -f $(WINDOWS_ARCHIVE_ROOT)/confd/config-bgp.ps1
+	rm -f $(WINDOWS_ARCHIVE_ROOT)/confd/config-bgp.psm1
+	rm -f $(WINDOWS_ARCHIVE_ROOT)/confd/conf.d/blocks.toml
+	rm -f $(WINDOWS_ARCHIVE_ROOT)/confd/conf.d/peerings.toml
+	rm -f $(WINDOWS_ARCHIVE_ROOT)/confd/templates/blocks.ps1.template
+	rm -f $(WINDOWS_ARCHIVE_ROOT)/confd/templates/peerings.ps1.template
+	rm -f windows-packaging/nssm.zip
+	rm -f windows-packaging/nssm.exe
 	rm -f $(WINDOWS_INSTALL_SCRIPT)
-	rm -rf "$(WINDOWS_DIST)"
 	-docker image rm -f $$(docker images $(WINDOWS_IMAGE) -a -q)
 
 ###############################################################################
@@ -233,12 +203,6 @@ LIBBPF_FILE_CREATED:
 
 $(WINDOWS_BINARY): $(SRC_FILES)
 	$(call build_windows_binary, ./cmd/calico-node/main.go, $@)
-
-$(WINDOWS_ARCHIVE_ROOT)/cni/calico.exe:
-	$(call build_windows_binary, ./cmd/calico, $@)
-
-$(WINDOWS_ARCHIVE_ROOT)/cni/calico-ipam.exe:
-	$(call build_windows_binary, ./cmd/calico-ipam, $@)
 
 $(TOOLS_MOUNTNS_BINARY):
 ifeq ($(CGO_ENABLED),1)
@@ -522,13 +486,10 @@ release-build: .release-$(VERSION).created
 	$(MAKE) FIPS=true retag-build-images-with-registries RELEASE=true IMAGETAG=$(VERSION)-fips LATEST_IMAGE_TAG=latest-fips
 	$(MAKE) FIPS=true retag-build-images-with-registries RELEASE=true IMAGETAG=latest-fips LATEST_IMAGE_TAG=latest-fips
 	# Generate the Windows zip archives.
-	$(MAKE) release-windows-archive
 	$(MAKE) $(WINDOWS_INSTALL_SCRIPT)
 	touch $@
 
-## Produces the Windows installation ZIP archive for the release.
-release-windows-archive: release-prereqs
-	$(MAKE) build-windows-archive WINDOWS_ARCHIVE_TAG=$(VERSION)
+
 
 ## Pushes a github release and release artifacts produced by `make release-build`.
 release-publish: release-prereqs .release-$(VERSION).published
@@ -550,12 +511,13 @@ release-publish-latest:
 	# Push Windows images.
 	$(MAKE) release-windows IMAGETAG=latest CONFIRM=$(CONFIRM)
 
-###############################################################################
-# Windows packaging
-###############################################################################
-# Pull the BGP configuration scripts and templates from the confd repo.
-$(WINDOWS_MOD_CACHED_FILES):
+# Build the docs site and copy over the install-calico-windows.ps1 script.
+$(WINDOWS_INSTALL_SCRIPT):
+	-mkdir -p dist
+	cp $(CURDIR)/windows-packaging/install-calico-windows.ps1 $@
+	sed -i s/VERSION/$(GIT_VERSION)/g $@
 
+# Windows image build dependencies (not archive-specific)
 $(WINDOWS_ARCHIVE_ROOT)/confd/config-bgp%: windows-packaging/config-bgp%
 	$(DOCKER_RUN) $(CALICO_BUILD) sh -ec ' \
         $(GIT_CONFIG_SSH) \
@@ -577,10 +539,7 @@ $(WINDOWS_ARCHIVE_ROOT)/confd/templates/%: windows-packaging/templates/%
 $(WINDOWS_ARCHIVE_ROOT)/libs/hns/hns.psm1:
 	curl -sSf -L --retry 5 -o $@ $(MICROSOFT_SDN_GITHUB_RAW_URL)/Kubernetes/windows/hns.psm1
 
-$(WINDOWS_ARCHIVE_ROOT)/libs/hns/License.txt:
-	curl -sSf -L --retry 5 -o $@  $(MICROSOFT_SDN_GITHUB_RAW_URL)/License.txt
-
-## Download NSSM.
+## Download NSSM (needed for Windows image).
 windows-packaging/nssm.zip:
 	curl -sSf -L --retry 5 -o $@ $(WINDOWS_NSSM_URL)
 
@@ -591,33 +550,29 @@ windows-packaging/nssm.exe: windows-packaging/nssm.zip
 	mv nssm-$(WINDOWS_NSSM_VERSION)/win64/nssm.exe nssm.exe && \
 	rm -rf nssm-$(WINDOWS_NSSM_VERSION)/
 
-$(WINDOWS_ARCHIVE): build-windows-archive
+$(WINDOWS_ARCHIVE_ROOT)/confd/config-bgp.ps1:
+	$(DOCKER_RUN) $(CALICO_BUILD) sh -ec ' \
+        $(GIT_CONFIG_SSH) \
+        cp -r ../confd/windows-packaging/config-bgp.ps1 $@'; \
+        chmod +w $@
 
-.PHONY: build-windows-archive
-build-windows-archive: $(WINDOWS_ARCHIVE_FILES) windows-packaging/nssm.zip
-	# To be as atomic as possible, we re-do work like unpacking NSSM here.
-	-rm -f "$(WINDOWS_ARCHIVE)"
-	-rm -rf $(WINDOWS_ARCHIVE_ROOT)/nssm
-	mkdir -p dist
-	cd windows-packaging && \
-	sha256sum --check nssm.sha256sum && \
-	cd CalicoWindows && \
-	unzip  ../nssm.zip \
-	       -x 'nssm-$(WINDOWS_NSSM_VERSION)/src/*' && \
-	mv nssm-$(WINDOWS_NSSM_VERSION) nssm && \
-	cd .. && \
-	zip -r "../$(WINDOWS_ARCHIVE)" CalicoWindows -x '*.git*'
-	@echo
-	@echo "Windows archive built at $(WINDOWS_ARCHIVE)"
+$(WINDOWS_ARCHIVE_ROOT)/confd/config-bgp.psm1:
+	$(DOCKER_RUN) $(CALICO_BUILD) sh -ec ' \
+        $(GIT_CONFIG_SSH) \
+        cp -r ../confd/windows-packaging/config-bgp.psm1 $@'; \
+        chmod +w $@
 
-$(WINDOWS_ARCHIVE_BINARY): $(WINDOWS_BINARY)
-	cp $< $@
+$(WINDOWS_ARCHIVE_ROOT)/confd/conf.d/blocks.toml:
+	$(DOCKER_RUN) $(CALICO_BUILD) sh -ec ' \
+        $(GIT_CONFIG_SSH) \
+        cp -r ../confd/windows-packaging/conf.d/blocks.toml $@'; \
+        chmod +w $@
 
-# Build the docs site and copy over the install-calico-windows.ps1 script.
-$(WINDOWS_INSTALL_SCRIPT):
-	-mkdir -p dist
-	cp $(CURDIR)/windows-packaging/install-calico-windows.ps1 $@
-	sed -i s/VERSION/$(GIT_VERSION)/g $@
+$(WINDOWS_ARCHIVE_ROOT)/confd/conf.d/peerings.toml:
+	$(DOCKER_RUN) $(CALICO_BUILD) sh -ec ' \
+        $(GIT_CONFIG_SSH) \
+        cp -r ../confd/windows-packaging/conf.d/peerings.toml $@'; \
+        chmod +w $@
 
 # NOTE: WINDOWS_IMAGE_REQS must be defined with the requirements to build the windows
 # image. These must be added as reqs to 'image-windows' (originally defined in
