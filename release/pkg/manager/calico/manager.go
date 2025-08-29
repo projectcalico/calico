@@ -305,7 +305,7 @@ func (r *CalicoManager) Build() error {
 		// Instead, we build some of the targets directly. In the future, we should instead align the release
 		// and hashrelease build processes to avoid these separate code paths.
 		env := append(os.Environ(), fmt.Sprintf("VERSION=%s", ver))
-		targets := []string{"release-windows-archive", "dist/install-calico-windows.ps1"}
+		targets := []string{"dist/install-calico-windows.ps1"}
 		for _, target := range targets {
 			if err = r.makeInDirectoryIgnoreOutput(filepath.Join(r.repoRoot, "node"), target, env...); err != nil {
 				return fmt.Errorf("error building target %s: %s", target, err)
