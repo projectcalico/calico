@@ -62,7 +62,9 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/legacy"
 	"github.com/projectcalico/calico/felix/bpf/libbpf"
 	"github.com/projectcalico/calico/felix/bpf/maps"
+	bpfmaps "github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/bpf/polprog"
+	"github.com/projectcalico/calico/felix/bpf/qos"
 	"github.com/projectcalico/calico/felix/bpf/tc"
 	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
 	"github.com/projectcalico/calico/felix/bpf/xdp"
@@ -214,9 +216,6 @@ func (i *bpfInterfaceState) clearJumps() {
 
 var zeroIface bpfInterface = func() bpfInterface {
 	var i bpfInterface
-	// The uninitialized value for QoS packet rate tokens is '-1'
-	i.dpState.qosInfo.packetRateTokens[hook.Ingress] = -1
-	i.dpState.qosInfo.packetRateTokens[hook.Egress] = -1
 	i.dpState.clearJumps()
 	return i
 }()
@@ -259,16 +258,10 @@ type bpfInterfaceState struct {
 	filterIdx   [hook.Count]int
 	v4Readiness ifaceReadiness
 	v6Readiness ifaceReadiness
-	qosInfo     bpfInterfaceQoSInfo
 }
 
 type bpfInterfaceJumpIndices struct {
 	policyIdx [hook.Count]int
-}
-
-type bpfInterfaceQoSInfo struct {
-	packetRateTokens     [hook.Count]int16
-	packetRateLastUpdate [hook.Count]uint64
 }
 
 func (d *bpfInterfaceJumpIndices) clearJumps() {
@@ -409,6 +402,8 @@ type bpfEndpointManager struct {
 
 	healthAggregator     *health.HealthAggregator
 	updateRateLimitedLog *logutilslc.RateLimitedLogger
+
+	QoSMap bpfmaps.MapWithUpdateWithFlags
 }
 
 type bpfEndpointManagerDataplane struct {
@@ -525,6 +520,8 @@ func NewBPFEndpointManager(
 		features:         dataplanefeatures,
 		profiling:        config.BPFProfiling,
 		bpfAttachType:    config.BPFAttachType,
+
+		QoSMap: bpfmaps.CommonMaps.QoSMap,
 	}
 
 	m.policyTrampolineStride.Store(int32(asm.TrampolineStrideDefault))
@@ -1011,7 +1008,7 @@ func (m *bpfEndpointManager) getIfTypeFlags(name string, ifaceType IfaceType) ui
 func (m *bpfEndpointManager) addIgnoredHostIfaceToIfState(name string, ifIndex int) {
 	k := ifstate.NewKey(uint32(ifIndex))
 	flags := ifstate.FlgNotManaged
-	v := ifstate.NewValue(flags, name, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 0, 0)
+	v := ifstate.NewValue(flags, name, -1, -1, -1, -1, -1, -1, -1, -1)
 	m.ifStateMap.Desired().Set(k, v)
 }
 
@@ -1023,16 +1020,6 @@ func (m *bpfEndpointManager) deleteIgnoredHostIfaceFromIfState(ifIndex int) {
 func (m *bpfEndpointManager) updateIfaceStateMap(name string, iface *bpfInterface) {
 	k := ifstate.NewKey(uint32(iface.info.ifIndex))
 	if iface.info.ifaceIsUp() {
-		// Copy packet rate QoS state from the ifstate map if this is a workload
-		if m.isWorkloadIface(name) {
-			ifstateVal, exists := m.ifStateMap.Desired().Get(k)
-			if exists {
-				iface.dpState.qosInfo.packetRateTokens[hook.Ingress] = ifstateVal.IngressPacketRateTokens()
-				iface.dpState.qosInfo.packetRateTokens[hook.Egress] = ifstateVal.EgressPacketRateTokens()
-				iface.dpState.qosInfo.packetRateLastUpdate[hook.Ingress] = ifstateVal.IngressPacketRateLastUpdate()
-				iface.dpState.qosInfo.packetRateLastUpdate[hook.Egress] = ifstateVal.EgressPacketRateLastUpdate()
-			}
-		}
 		flags := m.getIfTypeFlags(name, iface.info.ifaceType)
 		if iface.dpState.v4Readiness != ifaceNotReady {
 			flags |= ifstate.FlgIPv4Ready
@@ -1050,10 +1037,6 @@ func (m *bpfEndpointManager) updateIfaceStateMap(name string, iface *bpfInterfac
 			iface.dpState.v6.policyIdx[hook.Egress],
 			iface.dpState.filterIdx[hook.Ingress],
 			iface.dpState.filterIdx[hook.Egress],
-			iface.dpState.qosInfo.packetRateTokens[hook.Ingress],
-			iface.dpState.qosInfo.packetRateTokens[hook.Egress],
-			iface.dpState.qosInfo.packetRateLastUpdate[hook.Ingress],
-			iface.dpState.qosInfo.packetRateLastUpdate[hook.Egress],
 		)
 		m.ifStateMap.Desired().Set(k, v)
 	} else {
@@ -2352,19 +2335,102 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 	ap := m.calculateTCAttachPoint(ifaceName)
 	ap.IfIndex = ifindex
 	if wep != nil && wep.QosControls != nil {
+		// QoSControls are present, update state
+
 		if wep.QosControls.EgressBandwidth > 0 {
 			ap.SkipEgressRedirect = true
 		}
 
 		if wep.QosControls.IngressPacketRate > 0 {
-			// Safe to cast to uint16 since the maximum value is 10000
-			ap.IngressPacketRate = uint16(wep.QosControls.IngressPacketRate)
-			ap.IngressPacketBurst = uint16(wep.QosControls.IngressPacketBurst)
+			// Ingress packet rate is configured
+			ap.IngressPacketRateConfigured = true
+
+			qosKey := qos.NewKey(uint32(ifindex), 1) //ingress=1
+			qosValBytes, err := m.QoSMap.Get(qosKey.AsBytes())
+			if err != nil && !errors.Is(err, os.ErrNotExist) {
+				log.WithField("ifindex", ifindex).WithError(err).Debug("Error retrieving ingress entry from QoS map.")
+				return state, err
+			}
+			qosVal := qos.ValueFromBytes(qosValBytes)
+			qosPacketRate := qosVal.PacketRate()
+			qosPacketBurst := qosVal.PacketBurst()
+			qosTokens := qosVal.PacketRateTokens()
+			qosLastUpdate := qosVal.PacketRateLastUpdate()
+			// Reset state if config changed. Safe to cast to int16 since the maximum value is 10000
+			if qosVal.PacketRate() != int16(wep.QosControls.IngressPacketRate) || qosVal.PacketBurst() != int16(wep.QosControls.IngressPacketBurst) {
+				qosPacketRate = int16(wep.QosControls.IngressPacketRate)
+				qosPacketBurst = int16(wep.QosControls.IngressPacketBurst)
+				qosTokens = int16(-1)
+				qosLastUpdate = uint64(0)
+			}
+
+			qosVal = qos.NewValue(qosPacketRate, qosPacketBurst, qosTokens, qosLastUpdate)
+
+			if err := m.QoSMap.UpdateWithFlags(qosKey.AsBytes(), qosVal.AsBytes(), unix.BPF_F_LOCK); err != nil {
+				log.WithField("ifindex", ifindex).WithError(err).Debug("Error updating ingress entry in QoS map.")
+				return state, fmt.Errorf("failed to update QoS map. err=%w", err)
+			}
+		} else {
+			// Ingress packet rate not configured, clean up existing state if present
+			qosKey := qos.NewKey(uint32(ifindex), 1) // ingress=1
+			err = m.QoSMap.Delete(qosKey.AsBytes())
+			if err != nil && !errors.Is(err, os.ErrNotExist) {
+				log.WithField("ifindex", ifindex).WithError(err).Debug("Error removing ingress entry from QoS map.")
+				return state, err
+			}
 		}
 		if wep.QosControls.EgressPacketRate > 0 {
-			// Safe to cast to uint16 since the maximum value is 10000
-			ap.EgressPacketRate = uint16(wep.QosControls.EgressPacketRate)
-			ap.EgressPacketBurst = uint16(wep.QosControls.EgressPacketBurst)
+			// Egress packet rate is configured
+			ap.EgressPacketRateConfigured = true
+
+			qosKey := qos.NewKey(uint32(ifindex), 0) // ingress=0
+			qosValBytes, err := m.QoSMap.Get(qosKey.AsBytes())
+			if err != nil && !errors.Is(err, os.ErrNotExist) {
+				log.WithField("ifindex", ifindex).WithError(err).Debug("Error retrieving egress entry from QoS map.")
+				return state, err
+			}
+			qosVal := qos.ValueFromBytes(qosValBytes)
+			qosPacketRate := qosVal.PacketRate()
+			qosPacketBurst := qosVal.PacketBurst()
+			qosTokens := qosVal.PacketRateTokens()
+			qosLastUpdate := qosVal.PacketRateLastUpdate()
+			// Reset state if config changed
+			if qosVal.PacketRate() != int16(wep.QosControls.EgressPacketRate) || qosVal.PacketBurst() != int16(wep.QosControls.EgressPacketBurst) {
+				// Safe to cast to int16 since the maximum value is 10000
+				qosPacketRate = int16(wep.QosControls.EgressPacketRate)
+				qosPacketBurst = int16(wep.QosControls.EgressPacketBurst)
+				qosTokens = int16(-1)
+				qosLastUpdate = uint64(0)
+			}
+
+			qosVal = qos.NewValue(qosPacketRate, qosPacketBurst, qosTokens, qosLastUpdate)
+
+			if err := m.QoSMap.UpdateWithFlags(qosKey.AsBytes(), qosVal.AsBytes(), unix.BPF_F_LOCK); err != nil {
+				log.WithField("ifindex", ifindex).WithError(err).Debug("Error updating egress entry in QoS map.")
+				return state, fmt.Errorf("failed to update QoS map. err=%w", err)
+			}
+		} else {
+			// Egress packet rate not configured, clean up existing state if present
+			qosKey := qos.NewKey(uint32(ifindex), 0) // ingress=0
+			err = m.QoSMap.Delete(qosKey.AsBytes())
+			if err != nil && !errors.Is(err, os.ErrNotExist) {
+				log.WithField("ifindex", ifindex).WithError(err).Debug("Error removing egress entry from QoS map.")
+				return state, err
+			}
+		}
+	} else {
+		// Either the workload endpoint or QoSControls were removed, clean up both ingress and egress state from map
+		qosIngressKey := qos.NewKey(uint32(ifindex), 1) // ingress=1
+		err = m.QoSMap.Delete(qosIngressKey.AsBytes())
+		if err != nil && !errors.Is(err, os.ErrNotExist) {
+			log.WithField("ifindex", ifindex).WithError(err).Debug("Error removing ingress entry from QoS map.")
+			return state, err
+		}
+		qosEgressKey := qos.NewKey(uint32(ifindex), 0) // ingress=0
+		err = m.QoSMap.Delete(qosEgressKey.AsBytes())
+		if err != nil && !errors.Is(err, os.ErrNotExist) {
+			log.WithField("ifindex", ifindex).WithError(err).Debug("Error removing egress entry from QoS map.")
+			return state, err
 		}
 	}
 
@@ -3716,6 +3782,20 @@ func (m *bpfEndpointManager) ensureNoProgram(ap attachPoint) error {
 			log.WithError(err).Warn("Policy program may leak.")
 		}
 		m.removePolicyDebugInfo(ap.IfaceName(), 6, ap.HookName())
+	}
+
+	// Clean up QoS map
+	qosIngressKey := qos.NewKey(uint32(ap.IfaceIndex()), 1) //ingress=1
+	qosErr := m.QoSMap.Delete(qosIngressKey.AsBytes())
+	if qosErr != nil && !errors.Is(qosErr, os.ErrNotExist) {
+		err = qosErr
+		log.WithError(err).Warn("QoS map may leak.")
+	}
+	qosEgressKey := qos.NewKey(uint32(ap.IfaceIndex()), 0) //ingress=0
+	qosErr = m.QoSMap.Delete(qosEgressKey.AsBytes())
+	if qosErr != nil && !errors.Is(qosErr, os.ErrNotExist) {
+		err = qosErr
+		log.WithError(err).Warn("QoS map may leak.")
 	}
 
 	return err
