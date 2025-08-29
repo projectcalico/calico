@@ -552,14 +552,16 @@ func (o *Obj) AttachCGroupLegacy(cgroup, progName string) error {
 
 const (
 	// Set when IPv6 is enabled to configure bpf dataplane accordingly
-	GlobalsRPFOptionEnabled        uint32 = C.CALI_GLOBALS_RPF_OPTION_ENABLED
-	GlobalsRPFOptionStrict         uint32 = C.CALI_GLOBALS_RPF_OPTION_STRICT
-	GlobalsNoDSRCidrs              uint32 = C.CALI_GLOBALS_NO_DSR_CIDRS
-	GlobalsLoUDPOnly               uint32 = C.CALI_GLOBALS_LO_UDP_ONLY
-	GlobalsRedirectPeer            uint32 = C.CALI_GLOBALS_REDIRECT_PEER
-	GlobalsFlowLogsEnabled         uint32 = C.CALI_GLOBALS_FLOWLOGS_ENABLED
-	GlobalsNATOutgoingExcludeHosts uint32 = C.CALI_GLOBALS_NATOUTGOING_EXCLUDE_HOSTS
-	GlobalsSkipEgressRedirect      uint32 = C.CALI_GLOBALS_SKIP_EGRESS_REDIRECT
+	GlobalsRPFOptionEnabled            uint32 = C.CALI_GLOBALS_RPF_OPTION_ENABLED
+	GlobalsRPFOptionStrict             uint32 = C.CALI_GLOBALS_RPF_OPTION_STRICT
+	GlobalsNoDSRCidrs                  uint32 = C.CALI_GLOBALS_NO_DSR_CIDRS
+	GlobalsLoUDPOnly                   uint32 = C.CALI_GLOBALS_LO_UDP_ONLY
+	GlobalsRedirectPeer                uint32 = C.CALI_GLOBALS_REDIRECT_PEER
+	GlobalsFlowLogsEnabled             uint32 = C.CALI_GLOBALS_FLOWLOGS_ENABLED
+	GlobalsNATOutgoingExcludeHosts     uint32 = C.CALI_GLOBALS_NATOUTGOING_EXCLUDE_HOSTS
+	GlobalsSkipEgressRedirect          uint32 = C.CALI_GLOBALS_SKIP_EGRESS_REDIRECT
+	GlobalsIngressPacketRateConfigured uint32 = C.CALI_GLOBALS_INGRESS_PACKET_RATE_CONFIGURED
+	GlobalsEgressPacketRateConfigured  uint32 = C.CALI_GLOBALS_EGRESS_PACKET_RATE_CONFIGURED
 
 	AttachTypeTcxIngress uint32 = C.BPF_TCX_INGRESS
 	AttachTypeTcxEgress  uint32 = C.BPF_TCX_EGRESS
@@ -604,10 +606,6 @@ func (t *TcGlobalData) Set(m *Map) error {
 		C.uint(t.LogFilterJmp),
 		&cJumps[0], // it is safe because we hold the reference here until we return.
 		&cJumpsV6[0],
-		C.ushort(t.IngressPacketRate),
-		C.ushort(t.IngressPacketBurst),
-		C.ushort(t.EgressPacketRate),
-		C.ushort(t.EgressPacketBurst),
 	)
 
 	return err

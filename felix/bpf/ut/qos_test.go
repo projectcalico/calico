@@ -19,9 +19,8 @@ import (
 
 	. "github.com/onsi/gomega"
 
-	"github.com/projectcalico/calico/felix/bpf/bpfmap"
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
-	"github.com/projectcalico/calico/felix/bpf/ifstate"
+	"github.com/projectcalico/calico/felix/bpf/qos"
 	"github.com/projectcalico/calico/felix/bpf/routes"
 	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
 )
@@ -56,16 +55,19 @@ func TestQoSPacketRate(t *testing.T) {
 	Expect(err).NotTo(HaveOccurred())
 	defer resetRTMap(rtMap)
 
-	// Populate ifstate map (for QoS state)
-	key1 := ifstate.NewKey(uint32(ifIndex)).AsBytes()
-	value1 := ifstate.NewValue(ifstate.FlgIPv4Ready|ifstate.FlgWEP, bpfIfaceName,
-		-1, 0, 2, -1, -1, -1, 3, 4, -1, -1, 0, 0)
+	// Populate QoS map
+	key1 := qos.NewKey(uint32(ifIndex), 1)
+	key2 := qos.NewKey(uint32(ifIndex), 0)
+	value := qos.NewValue(1, 1, -1, 0)
 
-	bpfmaps, err := bpfmap.CreateBPFMaps(false)
+	err = qosMap.Update(
+		key1.AsBytes(),
+		value.AsBytes(),
+	)
 	Expect(err).NotTo(HaveOccurred())
-	err = bpfmaps.CommonMaps.IfStateMap.Update(
-		key1,
-		value1.AsBytes(),
+	err = qosMap.Update(
+		key2.AsBytes(),
+		value.AsBytes(),
 	)
 	Expect(err).NotTo(HaveOccurred())
 
@@ -79,7 +81,7 @@ func TestQoSPacketRate(t *testing.T) {
 		res, err = bpfrun(pktBytes)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(res.Retval).To(Equal(resTC_ACT_SHOT))
-	}, withIngressQoSPacketRate(1, 1))
+	}, withIngressQoSPacketRate())
 
 	resetCTMap(ctMap) // ensure it is clean
 
@@ -93,5 +95,5 @@ func TestQoSPacketRate(t *testing.T) {
 		res, err = bpfrun(pktBytes)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(res.Retval).To(Equal(resTC_ACT_SHOT))
-	}, withEgressQoSPacketRate(1, 1))
+	}, withEgressQoSPacketRate())
 }

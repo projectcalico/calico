@@ -174,16 +174,18 @@ func (m *Map) IsMapInternal() bool {
 }
 
 const (
-	GlobalsRPFOptionEnabled        uint32 = 16
-	GlobalsRPFOptionStrict         uint32 = 32
-	GlobalsNoDSRCidrs              uint32 = 12345
-	GlobalsLoUDPOnly               uint32 = 12345
-	GlobalsRedirectPeer            uint32 = 12345
-	GlobalsFlowLogsEnabled         uint32 = 12345
-	GlobalsNATOutgoingExcludeHosts uint32 = 12345
-	GlobalsSkipEgressRedirect      uint32 = 12345
-	AttachTypeTcxIngress           uint32 = 12345
-	AttachTypeTcxEgress            uint32 = 12345
+	GlobalsRPFOptionEnabled            uint32 = 16
+	GlobalsRPFOptionStrict             uint32 = 32
+	GlobalsNoDSRCidrs                  uint32 = 12345
+	GlobalsLoUDPOnly                   uint32 = 12345
+	GlobalsRedirectPeer                uint32 = 12345
+	GlobalsFlowLogsEnabled             uint32 = 12345
+	GlobalsNATOutgoingExcludeHosts     uint32 = 12345
+	GlobalsSkipEgressRedirect          uint32 = 12345
+	GlobalsIngressPacketRateConfigured uint32 = 12345
+	GlobalsEgressPacketRateConfigured  uint32 = 12345
+	AttachTypeTcxIngress               uint32 = 12345
+	AttachTypeTcxEgress                uint32 = 12345
 )
 
 func (m *Map) SetSize(size int) error {

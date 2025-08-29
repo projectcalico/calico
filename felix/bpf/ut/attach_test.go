@@ -40,6 +40,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/jump"
 	"github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/bpf/nat"
+	"github.com/projectcalico/calico/felix/bpf/qos"
 	"github.com/projectcalico/calico/felix/bpf/tc"
 	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
 	"github.com/projectcalico/calico/felix/calc"
@@ -762,7 +763,10 @@ func TestAttachWithMultipleWorkloadUpdate(t *testing.T) {
 			WorkloadId:     "workloadep1",
 			EndpointId:     "workloadep1",
 		},
-		Endpoint: &proto.WorkloadEndpoint{Name: "workloadep1"},
+		Endpoint: &proto.WorkloadEndpoint{
+			Name:        "workloadep1",
+			QosControls: &proto.QoSControls{IngressPacketRate: 50, IngressPacketBurst: 100, EgressPacketRate: 200, EgressPacketBurst: 300},
+		},
 	})
 	err = bpfEpMgr.CompleteDeferredWork()
 	Expect(err).NotTo(HaveOccurred())
@@ -778,22 +782,25 @@ func TestAttachWithMultipleWorkloadUpdate(t *testing.T) {
 	Expect(ingressProg[0].Pref).To(Equal(egressProg[0].Pref))
 	Expect(ingressProg[0].Handle).To(Equal(egressProg[0].Handle))
 
-	// Populate ifstate map with QoS state
-	ifstateMap := ifstateMapDump(commonMaps.IfStateMap)
-	wlep1Key := ifstate.NewKey(uint32(workload1.Attrs().Index))
-	Expect(ifstateMap).To(HaveKey(wlep1Key))
-	wlep1State := ifstateMap[wlep1Key]
-
-	binary.LittleEndian.PutUint16(wlep1State[4+16+32:4+16+34], uint16(50))
-	binary.LittleEndian.PutUint16(wlep1State[4+16+34:4+16+36], uint16(100))
-	binary.LittleEndian.PutUint64(wlep1State[4+16+36:4+16+44], uint64(1))
-	binary.LittleEndian.PutUint64(wlep1State[4+16+44:4+16+52], uint64(2))
-
-	err = bpfmaps.CommonMaps.IfStateMap.Update(
-		wlep1Key.AsBytes(),
-		wlep1State.AsBytes(),
-	)
+	// Verify that QoS map state is correctly created
+	qosMap := commonMaps.QoSMap
+	qosKey1 := qos.NewKey(uint32(workload1.Attrs().Index), 1)
+	qosValBytes1, err := qosMap.Get(qosKey1.AsBytes())
 	Expect(err).NotTo(HaveOccurred())
+	qosVal1 := qos.ValueFromBytes(qosValBytes1)
+	Expect(qosVal1.PacketRate()).To(Equal(int16(50)))
+	Expect(qosVal1.PacketBurst()).To(Equal(int16(100)))
+	Expect(qosVal1.PacketRateTokens()).To(Equal(int16(-1)))
+	Expect(qosVal1.PacketRateLastUpdate()).To(Equal(uint64(0)))
+
+	qosKey2 := qos.NewKey(uint32(workload1.Attrs().Index), 0)
+	qosValBytes2, err := qosMap.Get(qosKey2.AsBytes())
+	Expect(err).NotTo(HaveOccurred())
+	qosVal2 := qos.ValueFromBytes(qosValBytes2)
+	Expect(qosVal2.PacketRate()).To(Equal(int16(200)))
+	Expect(qosVal2.PacketBurst()).To(Equal(int16(300)))
+	Expect(qosVal2.PacketRateTokens()).To(Equal(int16(-1)))
+	Expect(qosVal2.PacketRateLastUpdate()).To(Equal(uint64(0)))
 
 	at := programs.Programs()
 	Expect(at).To(HaveKey(hook.AttachType{
@@ -823,7 +830,10 @@ func TestAttachWithMultipleWorkloadUpdate(t *testing.T) {
 				WorkloadId:     "workloadep1",
 				EndpointId:     "workloadep1",
 			},
-			Endpoint: &proto.WorkloadEndpoint{Name: "workloadep1"},
+			Endpoint: &proto.WorkloadEndpoint{
+				Name:        "workloadep1",
+				QosControls: &proto.QoSControls{IngressPacketRate: 50, IngressPacketBurst: 100, EgressPacketRate: 200, EgressPacketBurst: 300},
+			},
 		})
 		err = bpfEpMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
@@ -843,14 +853,22 @@ func TestAttachWithMultipleWorkloadUpdate(t *testing.T) {
 	Expect(ingProg[0].Pref).To(Equal(egrProg[0].Pref))
 	Expect(ingProg[0].Handle).To(Equal(egrProg[0].Handle))
 
-	// Verify that QoS state in ifstate map persists correctly after a workload endpoint update
-	ifstateMap = ifstateMapDump(commonMaps.IfStateMap)
-	Expect(ifstateMap).To(HaveKey(wlep1Key))
-	wlep1State = ifstateMap[wlep1Key]
-	Expect(wlep1State.IngressPacketRateTokens()).To(Equal(int16(50)))
-	Expect(wlep1State.EgressPacketRateTokens()).To(Equal(int16(100)))
-	Expect(wlep1State.IngressPacketRateLastUpdate()).To(Equal(uint64(1)))
-	Expect(wlep1State.EgressPacketRateLastUpdate()).To(Equal(uint64(2)))
+	// Verify that QoS state in map persists correctly after a workload endpoint update
+	qosValBytes1, err = qosMap.Get(qosKey1.AsBytes())
+	Expect(err).NotTo(HaveOccurred())
+	qosVal1 = qos.ValueFromBytes(qosValBytes1)
+	Expect(qosVal1.PacketRate()).To(Equal(int16(50)))
+	Expect(qosVal1.PacketBurst()).To(Equal(int16(100)))
+	Expect(qosVal1.PacketRateTokens()).To(Equal(int16(-1)))
+	Expect(qosVal1.PacketRateLastUpdate()).To(Equal(uint64(0)))
+
+	qosValBytes2, err = qosMap.Get(qosKey2.AsBytes())
+	Expect(err).NotTo(HaveOccurred())
+	qosVal2 = qos.ValueFromBytes(qosValBytes2)
+	Expect(qosVal2.PacketRate()).To(Equal(int16(200)))
+	Expect(qosVal2.PacketBurst()).To(Equal(int16(300)))
+	Expect(qosVal2.PacketRateTokens()).To(Equal(int16(-1)))
+	Expect(qosVal2.PacketRateLastUpdate()).To(Equal(uint64(0)))
 }
 
 // This test verifies if the tc program gets replaced
@@ -1314,6 +1332,17 @@ func jumpMapDump(m maps.Map) map[int]int {
 	}
 
 	return jumpMap
+}
+
+func qosMapDump(m maps.Map) qos.MapMem {
+	qosMap := make(qos.MapMem)
+	qosMapIter := qos.MapMemIter(qosMap)
+	_ = m.Iter(func(k, v []byte) maps.IteratorAction {
+		qosMapIter(k, v)
+		return maps.IterNone
+	})
+
+	return qosMap
 }
 
 func BenchmarkAttachProgram(b *testing.B) {
