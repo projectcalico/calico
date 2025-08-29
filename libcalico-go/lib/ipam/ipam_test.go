@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"runtime"
 	"sort"
 	"strings"
 	"time"
@@ -28,6 +29,7 @@ import (
 	. "github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
+	"golang.org/x/sync/errgroup"
 	corev1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -110,7 +112,7 @@ func (i *ipPoolAccessor) getPools(sorted []string, ipVersion int, caller string)
 		}
 	}
 
-	log.Infof("%v returns: %v", caller, poolsToPrint)
+	log.Debugf("%v returns: %v", caller, poolsToPrint)
 
 	return pools
 }
@@ -184,26 +186,36 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 
 		BeforeEach(func() {
 			// Remove all data in the datastore.
+			// Set log level to Info and save original value to be restored later
+			origLogLevel = log.GetLevel()
+			log.SetLevel(log.InfoLevel)
+
 			bc, err = backend.NewClient(config)
 			Expect(err).NotTo(HaveOccurred())
+
+			log.SetLevel(log.WarnLevel) // Cleaning after a large test can generate a lot of spam.
 			bc.Clean()
+			log.SetLevel(log.InfoLevel)
 
 			// Build a new pool accessor for these tests.
 			pa = &ipPoolAccessor{pools: map[string]pool{}}
 
 			// Create many pools
-			for i := 0; i < 100; i++ {
+			pool26 = nil
+			for i := 0; i < 1; i++ {
 				cidr := fmt.Sprintf("10.%d.0.0/16", i)
 				pa.pools[cidr] = pool{enabled: true, blockSize: 26}
 				pool26 = append(pool26, cnet.MustParseCIDR(cidr))
 			}
 
+			pool32 = nil
 			for i := 0; i < 100; i++ {
 				cidr := fmt.Sprintf("11.%d.0.0/16", i)
 				pa.pools[cidr] = pool{enabled: true, blockSize: 32}
 				pool32 = append(pool32, cnet.MustParseCIDR(cidr))
 			}
 
+			pool20 = nil
 			for i := 0; i < 50; i++ {
 				cidr := fmt.Sprintf("12.%d.0.0/16", i)
 				pa.pools[cidr] = pool{enabled: true, blockSize: 20}
@@ -212,11 +224,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 
 			// Create the node object.
 			hostname = "host-perf"
-			applyNode(bc, kc, hostname, map[string]string{"foo": "bar"})
-
-			// Set log level to Info and save original value to be restored later
-			origLogLevel = log.GetLevel()
-			log.SetLevel(log.InfoLevel)
+			Expect(applyNode(bc, kc, hostname, map[string]string{"foo": "bar"})).To(Succeed())
 		})
 
 		AfterEach(func() {
@@ -293,6 +301,63 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 
 			Expect(runtime.Seconds()).Should(BeNumerically("<", 5))
 		}, 20)
+
+		Context("with 1000 nodes", func() {
+			BeforeEach(func() {
+				for i := 0; i < 1000; i++ {
+					Expect(applyNode(bc, kc, fmt.Sprintf("%s-%d", hostname, i), map[string]string{"foo": "bar"})).To(Succeed())
+				}
+			})
+
+			allocOneIPPerNode := func() {
+				var eg errgroup.Group
+				eg.SetLimit(runtime.NumCPU() / 2)
+				for i := 0; i < 1000; i++ {
+					eg.Go(func() error {
+						defer GinkgoRecover()
+						for j := 0; j < 1; j++ {
+							// Build a new backend client. We use a different client for each iteration of the test
+							// so that the k8s QPS /burst limits don't carry across "hosts". This is more realistic.
+							bc, err = backend.NewClient(config)
+							if err != nil {
+								return err
+							}
+							ic = NewIPAMClient(bc, pa, &fakeReservations{})
+
+							v4ia, _, err := ic.AutoAssign(
+								context.Background(),
+								AutoAssignArgs{
+									Num4:        1,
+									IPv4Pools:   pool26,
+									Hostname:    fmt.Sprintf("%s-%d", hostname, i),
+									IntendedUse: v3.IPPoolAllowedUseWorkload,
+								})
+							if err != nil {
+								return err
+							}
+							if len(v4ia.IPs) != 1 {
+								return errors.New("expected to allocate one IP")
+							}
+						}
+						return nil
+					})
+				}
+				Expect(eg.Wait()).To(Succeed())
+			}
+
+			Measure("time to allocate first IP per node across 1000 nodes", func(b Benchmarker) {
+				b.Time("runtime", func() {
+					allocOneIPPerNode()
+				})
+			}, 1)
+
+			Measure("time to allocate second IP per node across 1000 nodes", func(b Benchmarker) {
+				allocOneIPPerNode() // Pre-create one IPAM block per node.
+				b.Time("runtime", func() {
+					allocOneIPPerNode()
+				})
+			}, 1)
+		})
 
 		Measure("It should be able to allocate and release addresses quickly", func(b Benchmarker) {
 			runtime := b.Time("runtime", func() {
@@ -3455,13 +3520,13 @@ func applyNode(c bapi.Client, kc *kubernetes.Clientset, host string, labels map[
 		n.Labels = labels
 
 		// Create/Update the node
-		newNode, err := kc.CoreV1().Nodes().Create(context.Background(), &n, metav1.CreateOptions{})
+		_, err := kc.CoreV1().Nodes().Create(context.Background(), &n, metav1.CreateOptions{})
 		if err != nil {
 			if kerrors.IsAlreadyExists(err) {
 				oldNode, _ := kc.CoreV1().Nodes().Get(context.Background(), host, metav1.GetOptions{})
 				oldNode.Labels = labels
 
-				newNode, err = kc.CoreV1().Nodes().Update(context.Background(), oldNode, metav1.UpdateOptions{})
+				_, err = kc.CoreV1().Nodes().Update(context.Background(), oldNode, metav1.UpdateOptions{})
 				if err != nil {
 					return nil
 				}
@@ -3469,7 +3534,7 @@ func applyNode(c bapi.Client, kc *kubernetes.Clientset, host string, labels map[
 				return err
 			}
 		}
-		log.WithField("node", newNode).WithError(err).Info("node applied")
+		log.WithField("node", host).WithError(err).Info("node applied")
 	} else {
 		// Otherwise, create it in Calico.
 		_, err := c.Apply(context.Background(), &model.KVPair{
