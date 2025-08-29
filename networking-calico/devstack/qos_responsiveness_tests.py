@@ -371,18 +371,21 @@ class QoSResponsivenessTest:
         # Add unique suffix to avoid conflicts
         unique_name = f"{name}-{self.test_suffix}"
 
-        port_args = {
+        # nova boot --flavor m1.tiny --image cirros-x86_64 --nic net-name=demo-net testvm1
+        image = self.conn.image.find_image("cirros-x86_64")
+        flavor = self.conn.compute.find_flavor("m1.tiny")
+        server_args = {
             'name': unique_name,
+            'image_id': image.id,
+            'flavor_id': flavor.id,
             'network_id': network_id,
-            'device_owner': 'compute:',
-            'binding:vif_type': 'tap',
-            'admin_state_up': True
         }
+        server = self.conn.compute.create_server(**server_args)
+
         if qos_policy_id:
             port_args['qos_policy_id'] = qos_policy_id
 
-        port = self.conn.network.create_port(**port_args)
-        self.test_resources['ports'].append(port)
+        self.test_resources['servers'].append(server)
 
         logger.info(f"Created port: {unique_name} {'with QoS policy' if qos_policy_id else 'without QoS policy'}")
         return port
