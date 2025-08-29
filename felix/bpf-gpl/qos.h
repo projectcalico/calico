@@ -110,4 +110,43 @@ static CALI_BPF_INLINE int enforce_packet_rate_qos(struct cali_tc_ctx *ctx)
 	return TC_ACT_SHOT;
 }
 
+static CALI_BPF_INLINE bool set_dscp(struct cali_tc_ctx *ctx)
+{
+	/*if (!CALI_F_FROM_WEP && !CALI_F_TO_HEP) {
+		return true;
+	}*/
+	
+	CALI_DEBUG("setting dscp");
+	// TODO (mazdak): set DSCP only if traffic is leaving cluster
+	__s8 dscp = EGRESS_DSCP;
+	if (dscp < 0) {
+		return true;
+	}
+	CALI_DEBUG("setting dscp to %d", dscp);
+		
+#ifdef IPVER6 
+	if (parse_packet_ip(ctx) != PARSING_OK_V6) {
+		return false;
+	}
+	
+	ip_hdr(ctx)->priority = (__u8) (dscp >> 2);
+	ip_hdr(ctx)->flow_lbl[0] = (__u8) (ip_hdr(ctx)->flow_lbl[0] & 0xf3) | (dscp & 0x03) << 2 ;
+	ip_hdr(ctx)->flow_lbl[0] = (__u8) (ip_hdr(ctx)->flow_lbl[0] & 0x3f) | (dscp << 6);
+#else
+	if (parse_packet_ip(ctx) != PARSING_OK) {
+		return false;
+	}
+	
+	ip_hdr(ctx)->tos = (__u8) ((ip_hdr(ctx)->tos & 0x03) | (dscp << 2));
+	
+	__wsum ip_csum = bpf_csum_diff(0, 0, (__u32 *)ctx->ip_header, sizeof(struct iphdr), 0);
+	int ret = bpf_l3_csum_replace(ctx->skb, skb_iphdr_offset(ctx) + offsetof(struct iphdr, check), 0, ip_csum, 0);
+	if (ret) {
+		CALI_DEBUG("IP DSCP: set L3 csum failed");
+		return false;
+	}
+#endif
+	return true;
+}
+
 #endif /* __CALI_QOS_H__ */

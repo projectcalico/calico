@@ -102,7 +102,7 @@ func (c *TopologyContainers) TriggerDelayedStart() {
 }
 
 func DefaultTopologyOptions() TopologyOptions {
-	felixLogLevel := "Info"
+	felixLogLevel := "Debug"
 	if envLogLevel := os.Getenv("FV_FELIX_LOG_LEVEL"); envLogLevel != "" {
 		log.WithField("level", envLogLevel).Info("FV_FELIX_LOG_LEVEL env var set; overriding felix log level")
 		felixLogLevel = envLogLevel
