@@ -710,6 +710,84 @@ def possible_port_states():
     return states
 
 
+def only_one_change(a, b):
+    changes = []
+    if a['network_qos_policy_id'] != b['network_qos_policy_id']:
+        changes.append(f"change network_qos_policy_id to {b['network_qos_policy_id']}")
+    if a['port_qos_policy_id'] != b['port_qos_policy_id']:
+        changes.append(f"change port_qos_policy_id to {b['port_qos_policy_id']}")
+    if len(changes) > 1:
+        return False
+    a_net_rules = set(a.get('network_qos_rules', []))
+    b_net_rules = set(b.get('network_qos_rules', []))
+    d = list(a_net_rules - b_net_rules)
+    if len(d) > 1:
+        return False
+    if len(d) == 1:
+        changes.append(f"remove net-level rule {d[0]}")
+    d = list(b_net_rules - a_net_rules)
+    if len(d) > 1:
+        return False
+    if len(d) == 1:
+        changes.append(f"add net-level rule {d[0]}")
+    if len(changes) > 1:
+        return False
+    a_port_rules = set(a.get('port_qos_rules', []))
+    b_port_rules = set(b.get('port_qos_rules', []))
+    d = list(a_port_rules - b_port_rules)
+    if len(d) > 1:
+        return False
+    if len(d) == 1:
+        changes.append(f"remove port-level rule {d[0]}")
+    d = list(b_port_rules - a_port_rules)
+    if len(d) > 1:
+        return False
+    if len(d) == 1:
+        changes.append(f"add port-level rule {d[0]}")
+    if len(changes) > 1:
+        return False
+    return changes[0]
+
+
+# Calculate a set of sequences for passing through all of the possible port
+# states, but with only one thing changing on each transition.
+def calculate_sequences():
+    possible_states = possible_port_states()
+    remaining_arrival_states = possible_states.copy()
+    used_arrival_states = []
+    sequences = []
+    making_progress = True
+    while making_progress:
+        # Try to calculate a new sequence to pass through some of the remaining
+        # arrival states.
+        current_state = possible_states[0]
+        sequence = []
+        making_progress = False
+        continue_current_sequence = True
+        while continue_current_sequence:
+            continue_current_sequence = False
+            for possible_next in remaining_arrival_states:
+                if only_one_change(current_state, possible_next):
+                    making_progress = True
+                    sequence.append(possible_next)
+                    remaining_arrival_states.remove(possible_next)
+                    used_arrival_states.append(possible_next)
+                    current_state = possible_next
+                    continue_current_sequence = True
+                    break
+            for possible_next in used_arrival_states:
+                if only_one_change(current_state, possible_next):
+                    sequence.append(possible_next)
+                    current_state = possible_next
+                    continue_current_sequence = True
+                    break
+        if making_progress:
+            sequences.append(sequence)
+    logger.info(f"Calculated {len(sequences)} sequences")
+    logger.info(f"Covered {len(used_arrival_states)} arrival states, missed {len(remaining_arrival_states)}")
+    return sequences
+
+
 def main():
     """Main entry point for QoS responsiveness tests."""
     if len(sys.argv) > 1 and sys.argv[1] == "--help":
@@ -720,6 +798,15 @@ def main():
     logger.info("There are %d possible port states", len(port_states))
     for s in port_states:
         logger.info(f"{s}")
+
+    sequences = calculate_sequences()
+    for sequence in sequences:
+        logger.info("New sequence:")
+        current_state = port_states[0]
+        for nxt in sequence:
+            change = only_one_change(current_state, nxt)
+            logger.info(f" {change} -> {nxt}")
+            current_state = nxt
 
     logger.info("Initializing QoS Responsiveness Test Suite...")
 
