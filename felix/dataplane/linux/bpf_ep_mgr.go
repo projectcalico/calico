@@ -2366,7 +2366,10 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 
 			qosVal = qos.NewValue(qosPacketRate, qosPacketBurst, qosTokens, qosLastUpdate)
 
-			m.QoSMap.UpdateWithFlags(qosKey.AsBytes(), qosVal.AsBytes(), unix.BPF_F_LOCK)
+			if err := m.QoSMap.UpdateWithFlags(qosKey.AsBytes(), qosVal.AsBytes(), unix.BPF_F_LOCK); err != nil {
+				log.WithField("ifindex", ifindex).WithError(err).Debug("Error updating ingress entry in QoS map.")
+				return state, fmt.Errorf("failed to update QoS map. err=%w", err)
+			}
 		} else {
 			// Ingress packet rate not configured, clean up existing state if present
 			qosKey := qos.NewKey(uint32(ifindex), 1) // ingress=1
@@ -2402,7 +2405,10 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 
 			qosVal = qos.NewValue(qosPacketRate, qosPacketBurst, qosTokens, qosLastUpdate)
 
-			m.QoSMap.UpdateWithFlags(qosKey.AsBytes(), qosVal.AsBytes(), unix.BPF_F_LOCK)
+			if err := m.QoSMap.UpdateWithFlags(qosKey.AsBytes(), qosVal.AsBytes(), unix.BPF_F_LOCK); err != nil {
+				log.WithField("ifindex", ifindex).WithError(err).Debug("Error updating egress entry in QoS map.")
+				return state, fmt.Errorf("failed to update QoS map. err=%w", err)
+			}
 		} else {
 			// Egress packet rate not configured, clean up existing state if present
 			qosKey := qos.NewKey(uint32(ifindex), 0) // ingress=0
