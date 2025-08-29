@@ -75,7 +75,7 @@ type AttachPoint struct {
 	IngressPacketBurst      uint16
 	EgressPacketRate        uint16
 	EgressPacketBurst       uint16
-	DSCP                    int16
+	DSCP                    int8
 }
 
 var ErrDeviceNotFound = errors.New("device not found")

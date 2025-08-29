@@ -112,38 +112,31 @@ static CALI_BPF_INLINE int enforce_packet_rate_qos(struct cali_tc_ctx *ctx)
 
 static CALI_BPF_INLINE bool set_dscp(struct cali_tc_ctx *ctx)
 {
-	if (!CALI_F_FROM_WEP && !CALI_F_TO_HEP) {
+	/*if (!CALI_F_FROM_WEP && !CALI_F_TO_HEP) {
 		return true;
-	}
+	}*/
 	
-	//if (CALI_F_FROM_WEP || CALI_F_TO_HEP)
-	if (parse_packet_ip(ctx) != PARSING_OK) {
-		return false;
-	}
-
-	__s16 dscp = EGRESS_DSCP;
+	CALI_DEBUG("setting dscp");
+	// TODO (mazdak): set DSCP only if traffic is leaving cluster
+	__s8 dscp = EGRESS_DSCP;
 	if (dscp < 0) {
 		return true;
 	}
-
-	// TODO (mazdak): set DSCP only if traffic is leaving cluster
-		
-
-#ifdef IPVER6 
-	CALI_DEBUG("setting dscp ipv6 to %d", dscp);
-	ip_hdr(ctx)->priority = (__u8) dscp >> 2;
-	//ip_hdr(ctx)->flow_lbl[0] = (__u8) (ip_hdr(ctx)->flow_lbl[0] & 0xf3) | (dscp & 0x03) << 2 ;
-	ip_hdr(ctx)->flow_lbl[0] = (__u8) (ip_hdr(ctx)->flow_lbl[0] & 0x3f) | (dscp << 6);
-	
-
-	//__u8 tclass = (ip_hdr(ctx)->priority & 0x0f) << 4 | (ip_hdr(ctx)->flow_lbl[0] >> 4);
-
-	//tclass = (dscp << 2) | (tclass & 0x03);
-	//ip_hdr(ctx)->priority = (tclass >> 4) & 0x0f;
-	//ip_hdr(ctx)->flow_lbl[0] = (tclass & 0x0f) << 4 | (ip_hdr(ctx)->flow_lbl[0] & 0x0f);
-
-#else
 	CALI_DEBUG("setting dscp to %d", dscp);
+		
+#ifdef IPVER6 
+	if (parse_packet_ip(ctx) != PARSING_OK_V6) {
+		return false;
+	}
+	
+	ip_hdr(ctx)->priority = (__u8) (dscp >> 2);
+	ip_hdr(ctx)->flow_lbl[0] = (__u8) (ip_hdr(ctx)->flow_lbl[0] & 0xf3) | (dscp & 0x03) << 2 ;
+	ip_hdr(ctx)->flow_lbl[0] = (__u8) (ip_hdr(ctx)->flow_lbl[0] & 0x3f) | (dscp << 6);
+#else
+	if (parse_packet_ip(ctx) != PARSING_OK) {
+		return false;
+	}
+	
 	ip_hdr(ctx)->tos = (__u8) ((ip_hdr(ctx)->tos & 0x03) | (dscp << 2));
 	
 	__wsum ip_csum = bpf_csum_diff(0, 0, (__u32 *)ctx->ip_header, sizeof(struct iphdr), 0);

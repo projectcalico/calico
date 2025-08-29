@@ -263,9 +263,9 @@ func BPFAttachType() string {
 	return strings.ToLower(os.Getenv("FELIX_FV_BPFATTACHTYPE"))
 }
 
-func BPFIPv6Support() bool {
+/*func BPFIPv6Support() bool {
 	return false
-}
+}*/
 
 func describeBPFTests(opts ...bpfTestOpt) bool {
 	if !BPFMode() {
