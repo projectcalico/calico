@@ -550,7 +550,7 @@ windows-packaging/nssm.exe: windows-packaging/nssm.zip
 	mv nssm-$(WINDOWS_NSSM_VERSION)/win64/nssm.exe nssm.exe && \
 	rm -rf nssm-$(WINDOWS_NSSM_VERSION)/
 
-$(WINDOWS_ARCHIVE_ROOT)/confd/config-bgp.ps1: 
+$(WINDOWS_ARCHIVE_ROOT)/confd/config-bgp.ps1:
 	$(DOCKER_RUN) $(CALICO_BUILD) sh -ec ' \
         $(GIT_CONFIG_SSH) \
         cp -r ../confd/windows-packaging/config-bgp.ps1 $@'; \
