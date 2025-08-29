@@ -153,6 +153,18 @@ out:
 
 static CALI_BPF_INLINE bool frags4_handle(struct cali_tc_ctx *ctx)
 {
+#ifndef BPF_CORE_SUPPORTED
+	return false;
+#else
+	/* We do not really use bpf_loop() here, but we need to check if the kernel
+	 * supports it. If it does not, we cannot handle fragments as the
+	 * verifier would not verify the code correctly and woul dnot accept it.
+	 */
+	if (!bpf_core_enum_value_exists(enum bpf_func_id, BPF_FUNC_loop)) {
+		CALI_DEBUG("IP FRAG: kernel too old, skipping fragment handling");
+		return false;
+	}
+
 	struct frags4_value *v = frags4_get_scratch();
 
 	if (!v) {
@@ -217,10 +229,21 @@ static CALI_BPF_INLINE bool frags4_handle(struct cali_tc_ctx *ctx)
 
 out:
 	return false;
+#endif /* BPF_CORE_SUPPORTED */
 }
 
 static CALI_BPF_INLINE void frags4_record_ct(struct cali_tc_ctx *ctx)
 {
+#ifdef BPF_CORE_SUPPORTED
+	/* We do not really use bpf_loop() here, but we need to check if the kernel
+	 * supports it. If it does not, we cannot handle fragments as the
+	 * verifier would not verify the code correctly and woul dnot accept it.
+	 */
+	if (!bpf_core_enum_value_exists(enum bpf_func_id, BPF_FUNC_loop)) {
+		CALI_DEBUG("IP FRAG: kernel too old, skipping fragment handling");
+		return;
+	}
+
 	struct frags4_fwd_key k = {
 		.src = ip_hdr(ctx)->saddr,
 		.dst = ip_hdr(ctx)->daddr,
@@ -233,10 +256,21 @@ static CALI_BPF_INLINE void frags4_record_ct(struct cali_tc_ctx *ctx)
 	cali_v4_frgfwd_update_elem(&k, &v, 0);
 	CALI_DEBUG("IP FRAG: created ct from " IP_FMT " to " IP_FMT,
 			debug_ip(ctx->state->ip_src), debug_ip(ctx->state->ip_dst));
+#endif
 }
 
 static CALI_BPF_INLINE void frags4_remove_ct(struct cali_tc_ctx *ctx)
 {
+#ifdef BPF_CORE_SUPPORTED
+	/* We do not really use bpf_loop() here, but we need to check if the kernel
+	 * supports it. If it does not, we cannot handle fragments as the
+	 * verifier would not verify the code correctly and woul dnot accept it.
+	 */
+	if (!bpf_core_enum_value_exists(enum bpf_func_id, BPF_FUNC_loop)) {
+		CALI_DEBUG("IP FRAG: kernel too old, skipping fragment handling");
+		return;
+	}
+
 	struct frags4_fwd_key k = {
 		.src = ip_hdr(ctx)->saddr,
 		.dst = ip_hdr(ctx)->daddr,
@@ -247,10 +281,23 @@ static CALI_BPF_INLINE void frags4_remove_ct(struct cali_tc_ctx *ctx)
 	cali_v4_frgfwd_delete_elem(&k);
 	CALI_DEBUG("IP FRAG: killed ct from " IP_FMT " to " IP_FMT,
 			debug_ip(ctx->state->ip_src), debug_ip(ctx->state->ip_dst));
+#endif /* BPF_CORE_SUPPORTED */
 }
 
 static CALI_BPF_INLINE bool frags4_lookup_ct(struct cali_tc_ctx *ctx)
 {
+#ifndef BPF_CORE_SUPPORTED
+	return false;
+#else
+	/* We do not really use bpf_loop() here, but we need to check if the kernel
+	 * supports it. If it does not, we cannot handle fragments as the
+	 * verifier would not verify the code correctly and woul dnot accept it.
+	 */
+	if (!bpf_core_enum_value_exists(enum bpf_func_id, BPF_FUNC_loop)) {
+		CALI_DEBUG("IP FRAG: kernel too old, skipping fragment handling");
+		return false;
+	}
+
 	struct frags4_fwd_key k = {
 		.src = ip_hdr(ctx)->saddr,
 		.dst = ip_hdr(ctx)->daddr,
@@ -261,6 +308,7 @@ static CALI_BPF_INLINE bool frags4_lookup_ct(struct cali_tc_ctx *ctx)
 	CALI_DEBUG("IP FRAG: lookup ct from " IP_FMT " to " IP_FMT,
 			debug_ip(ctx->state->ip_src), debug_ip(ctx->state->ip_dst));
 	return cali_v4_frgfwd_lookup_elem(&k) != NULL;
+#endif /* BPF_CORE_SUPPORTED */
 }
 
 #endif /* __CALI_IP_V4_FRAGMENT_H__ */
