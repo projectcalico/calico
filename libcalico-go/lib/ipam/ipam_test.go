@@ -3469,7 +3469,7 @@ func applyNode(c bapi.Client, kc *kubernetes.Clientset, host string, labels map[
 
 				_, err = kc.CoreV1().Nodes().Update(context.Background(), oldNode, metav1.UpdateOptions{})
 				if err != nil {
-					return nil
+					return err
 				}
 			} else {
 				return err
