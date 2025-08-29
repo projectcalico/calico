@@ -17,7 +17,6 @@ package k8s
 import (
 	"context"
 	"fmt"
-	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -67,11 +66,16 @@ type KubeClient struct {
 	clientsByListType map[reflect.Type]resources.K8sResourceClient
 }
 
+func UsingV3CRDs(cfg *apiconfig.CalicoAPIConfigSpec) bool {
+	return cfg.DatastoreType == apiconfig.Kubernetes &&
+		cfg.CalicoAPIGroup == apiv3.GroupVersionCurrent
+}
+
 func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 	// Whether or not we are writing to projectcalico.org/v3 resources. If true, we're running in
 	// "no API server" mode where the v3 resources are backed by CRDs directly. Otherwise, we're running
 	// with the Calico API server and should instead use crd.projectcalico.org/v1 resources directly.
-	v3 := os.Getenv("CALICO_API_GROUP") == apiv3.GroupVersionCurrent
+	v3 := UsingV3CRDs(ca)
 	if v3 {
 		log.Info("Using projectcalico.org/v3 API group for CRDs")
 	}

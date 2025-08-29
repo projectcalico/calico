@@ -54,18 +54,8 @@ import (
 
 // If true, run the tests in v3 CRD mode. Otherwise, run against crd.projectcalico.org/v1
 var (
-	v3CRD    bool
-	apiGroup string
+	v3CRD bool
 )
-
-func init() {
-	apiGroup = os.Getenv("CALICO_API_GROUP")
-	if apiGroup == "" {
-		// Default to legacy crd.projectcalico.org/v1
-		apiGroup = "crd.projectcalico.org/v1"
-	}
-	v3CRD = apiGroup == apiv3.GroupVersionCurrent
-}
 
 var (
 	zeroOrder                  = float64(0.0)
@@ -376,8 +366,8 @@ var _ = testutils.E2eDatastoreDescribe("Test UIDs and owner references", testuti
 	)
 
 	BeforeEach(func() {
+		v3CRD = UsingV3CRDs(&cfg.Spec)
 		log.SetLevel(log.DebugLevel)
-		log.WithField("group", apiGroup).Info("Running tests using using API group for CRDs")
 
 		// Create a k8s backend KVP client.
 		var err error
@@ -495,6 +485,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 
 	BeforeEach(func() {
 		log.SetLevel(log.DebugLevel)
+		v3CRD = UsingV3CRDs(&cfg.Spec)
 
 		// Create a Kubernetes client, callbacks, and a syncer.
 		apicfg := apiconfig.KubeConfig{Kubeconfig: "/kubeconfig.yaml"}
@@ -2972,6 +2963,8 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 	)
 
 	BeforeEach(func() {
+		v3CRD = UsingV3CRDs(&cfg.Spec)
+
 		// Create a client with a high QPS to avoid throttling.
 		cfg.Spec.KubeConfig.K8sClientQPS = 1000
 		client, err := NewKubeClient(&cfg.Spec)
@@ -3993,6 +3986,8 @@ var _ = testutils.E2eDatastoreDescribe("Test Inline kubeconfig support", testuti
 				KubeconfigInline: string(conf),
 			},
 		}
+
+		v3CRD = UsingV3CRDs(&cfg.Spec)
 
 		// Create a client using the config.
 		client, err := NewKubeClient(&cfg.Spec)

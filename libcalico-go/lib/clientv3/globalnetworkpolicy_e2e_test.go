@@ -16,7 +16,6 @@ package clientv3_test
 
 import (
 	"context"
-	"os"
 	"time"
 
 	. "github.com/onsi/ginkgo"
@@ -50,18 +49,8 @@ var (
 
 // If true, run the tests in v3 CRD mode. Otherwise, run against crd.projectcalico.org/v1
 var (
-	v3CRD    bool
-	apiGroup string
+	v3CRD bool
 )
-
-func init() {
-	apiGroup = os.Getenv("CALICO_API_GROUP")
-	if apiGroup == "" {
-		// Default to legacy crd.projectcalico.org/v1
-		apiGroup = "crd.projectcalico.org/v1"
-	}
-	v3CRD = apiGroup == apiv3.GroupVersionCurrent
-}
 
 var _ = testutils.E2eDatastoreDescribe("GlobalNetworkPolicy tests", testutils.DatastoreAll, func(config apiconfig.CalicoAPIConfig) {
 	ctx := context.Background()
@@ -111,6 +100,8 @@ var _ = testutils.E2eDatastoreDescribe("GlobalNetworkPolicy tests", testutils.Da
 
 		err = c.EnsureInitialized(ctx, "", "")
 		Expect(err).NotTo(HaveOccurred())
+
+		v3CRD = k8s.UsingV3CRDs(&config.Spec)
 	})
 
 	DescribeTable("GlobalNetworkPolicy e2e CRUD tests",
