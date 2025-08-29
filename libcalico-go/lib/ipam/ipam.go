@@ -27,7 +27,6 @@ import (
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sync/semaphore"
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
@@ -315,11 +314,10 @@ func (c ipamClient) determinePools(ctx context.Context, requestedPoolNets []net.
 		}
 
 		// Check node selector
-		var nodeMatches bool
-		nodeMatches, err = SelectsNode(pool, node)
+		nodeMatches, err := SelectsNode(pool, node)
 		if err != nil {
 			log.WithError(err).WithField("pool", pool).Error("failed to determine if node matches pool")
-			return
+			return nil, nil, err
 		}
 		if !nodeMatches {
 			// Do not consider pool enabled if the nodeSelector doesn't match the node's labels.
@@ -328,11 +326,10 @@ func (c ipamClient) determinePools(ctx context.Context, requestedPoolNets []net.
 		}
 
 		// Check namespace selector
-		var namespaceMatches bool
-		namespaceMatches, err = SelectsNamespace(pool, namespace)
+		namespaceMatches, err := SelectsNamespace(pool, namespace)
 		if err != nil {
 			log.WithError(err).WithField("pool", pool).Error("failed to determine if namespace matches pool")
-			return
+			return nil, nil, err
 		}
 		if !namespaceMatches {
 			// Do not consider pool enabled if the namespaceSelector doesn't match the namespace's labels.
@@ -386,35 +383,8 @@ func (c ipamClient) prepareAffinityBlocksForHost(ctx context.Context, requestedP
 	}
 
 	// Determine the correct set of IP pools to use for this request.
-	// For LoadBalancer use, we don't have namespace context, so use empty values
-	var poolsNamespace string
-	var poolsNamespaceLabels map[string]string
-	if use == v3.IPPoolAllowedUseLoadBalancer {
-		poolsNamespace = ""
-		poolsNamespaceLabels = map[string]string{}
-	} else {
-		// Use the namespace information passed from the caller
-		if namespace != nil {
-			poolsNamespace = namespace.Name
-			poolsNamespaceLabels = namespace.Labels
-		} else {
-			poolsNamespace = ""
-			poolsNamespaceLabels = map[string]string{}
-		}
-	}
-
-	// Create namespace object for determinePools
-	var namespaceObj *corev1.Namespace
-	if poolsNamespace != "" {
-		namespaceObj = &corev1.Namespace{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:   poolsNamespace,
-				Labels: poolsNamespaceLabels,
-			},
-		}
-	}
-
-	poolsSelectingNode, allPools, err := c.determinePools(ctx, requestedPools, version, *v3n, namespaceObj, maxPrefixLen)
+	// For some IPs (e.g., tunnel addresses), we don't have namespace context, so use empty values
+	poolsSelectingNode, allPools, err := c.determinePools(ctx, requestedPools, version, *v3n, namespace, maxPrefixLen)
 	if err != nil {
 		return nil, nil, err
 	}

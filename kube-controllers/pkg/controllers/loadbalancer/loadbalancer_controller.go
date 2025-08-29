@@ -672,14 +672,10 @@ func (c *loadBalancerController) assignIP(svc *v1.Service) ([]string, error) {
 	}
 
 	// Get the namespace object for namespaceSelector support
-	var namespaceObj *v1.Namespace
-	if svc.Namespace != "" {
-		ns, err := c.clientSet.CoreV1().Namespaces().Get(context.Background(), svc.Namespace, metav1.GetOptions{})
-		if err != nil {
-			log.WithError(err).WithField("namespace", svc.Namespace).Warn("Failed to get namespace for LoadBalancer IP assignment, proceeding without namespace selector support")
-		} else {
-			namespaceObj = ns
-		}
+	namespaceObj, err := c.clientSet.CoreV1().Namespaces().Get(context.Background(), svc.Namespace, metav1.GetOptions{})
+	if err != nil {
+		log.WithError(err).WithField("namespace", svc.Namespace).Error("Failed to get namespace for LoadBalancer IP assignment")
+		return nil, fmt.Errorf("failed to get namespace %s: %w", svc.Namespace, err)
 	}
 
 	args := ipam.AutoAssignArgs{

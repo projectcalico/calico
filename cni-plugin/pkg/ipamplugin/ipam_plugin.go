@@ -263,16 +263,12 @@ func cmdAdd(args *skel.CmdArgs) error {
 		if (conf.Kubernetes.Kubeconfig != "" || conf.Policy.PolicyType == "k8s") && namespace != "" {
 			logger.Debugf("Getting namespace for: %s", namespace)
 
-			ns, err := getNamespace(conf, namespace, logger)
+			namespaceObj, err = getNamespace(conf, namespace, logger)
 			if err != nil {
-				logger.WithError(err).Warnf("Failed to get namespace for %s, using nil", namespace)
-				namespaceObj = nil
-			} else {
-				namespaceObj = ns
-				logger.Debugf("Got namespace for %s: %v", namespace, ns.Labels)
+				logger.WithError(err).Errorf("Failed to get namespace for %s", namespace)
+				return fmt.Errorf("failed to get namespace %s: %w", namespace, err)
 			}
-		} else {
-			logger.Debugf("Using namespace %s without object (no K8s config or empty namespace)", namespace)
+			logger.Debugf("Got namespace for %s: %v", namespace, namespaceObj.Labels)
 		}
 
 		assignArgs := ipam.AutoAssignArgs{
