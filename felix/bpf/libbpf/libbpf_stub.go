@@ -206,6 +206,10 @@ func MapUpdateBatch(fd int, k, v []byte, count int, flags uint64) (int, error) {
 	panic("LIBBPF syscall stub")
 }
 
+func MapDeleteBatch(fd int, k []byte, count int, flags uint64) (int, error) {
+	panic("LIBBPF syscall stub")
+}
+
 func (t *TcGlobalData) Set(m *Map) error {
 	panic("LIBBPF syscall stub")
 }
@@ -235,5 +239,9 @@ func (o *Obj) AttachTCX(secName, ifName string) (*Link, error) {
 }
 
 func OpenObjectWithLogBuffer(filename string, buf []byte) (*Obj, error) {
+	panic("LIBBPF syscall stub")
+}
+
+func CreateBPFMap(mapType string, keySize int, valueSize int, maxEntries int, flags int, name string) (int, error) {
 	panic("LIBBPF syscall stub")
 }

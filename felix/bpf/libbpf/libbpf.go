@@ -687,7 +687,7 @@ func ObjGet(path string) (int, error) {
 	return int(fd), err
 }
 
-// MapUpdateBatch expects all key, values in a single slice, bytes of a one
+// MapUpdateBatch expects all keys, values in a single slice, bytes of a one
 // key/value appended back to back to the previous value.
 func MapUpdateBatch(fd int, k, v []byte, count int, flags uint64) (int, error) {
 	cK := C.CBytes(k)
@@ -696,6 +696,51 @@ func MapUpdateBatch(fd int, k, v []byte, count int, flags uint64) (int, error) {
 	defer C.free(cV)
 
 	_, err := C.bpf_map_batch_update(C.int(fd), cK, cV, (*C.__u32)(unsafe.Pointer(&count)), C.__u64(flags))
+
+	if err != nil {
+		return 0, err
+	}
+
+	return count, nil
+}
+
+var bpfMapTypeMap = map[string]int{
+	"unspec":           0,
+	"hash":             1,
+	"array":            2,
+	"prog_array":       3,
+	"perf_event_array": 4,
+	"percpu_hash":      5,
+	"percpu_array":     6,
+	"lru_hash":         9,
+	"lpm_trie":         11,
+}
+
+func CreateBPFMap(mapType string, keySize int, valueSize int, maxEntries int, flags int, name string) (int, error) {
+	cname := C.CString(name)
+	defer C.free(unsafe.Pointer(cname))
+
+	fd := C.create_bpf_map(
+		C.enum_bpf_map_type(bpfMapTypeMap[mapType]),
+		C.uint(keySize),
+		C.uint(valueSize),
+		C.uint(maxEntries),
+		C.uint(flags),
+		cname,
+	)
+	if fd < 0 {
+		return int(fd), fmt.Errorf("failed to create bpf map")
+	}
+	return int(fd), nil
+}
+
+// MapDeleteBatch expects all key is in a single slice, bytes of a one
+// key appended back to back to the previous value.
+func MapDeleteBatch(fd int, k []byte, count int, flags uint64) (int, error) {
+	cK := C.CBytes(k)
+	defer C.free(cK)
+
+	_, err := C.bpf_map_batch_delete(C.int(fd), cK, (*C.__u32)(unsafe.Pointer(&count)), C.__u64(flags))
 
 	if err != nil {
 		return 0, err

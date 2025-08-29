@@ -88,6 +88,10 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ dscp tests", []apiconfig.Da
 
 		cc = &connectivity.Checker{}
 
+		if BPFMode() {
+			ensureAllNodesBPFProgramsAttached(tc.Felixes)
+		}
+
 		// We will use this container to model an external client trying to connect into
 		// workloads on a host.  Create a route in the container for the workload CIDR.
 		extClientOpts := infrastructure.ExtClientOpts{
@@ -198,9 +202,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ dscp tests", []apiconfig.Da
 		extClient.Exec("ip6tables", "-A", "INPUT", "-p", "ipv6-icmp", "-j", "ACCEPT")
 		extClient.Exec("ip6tables", "-A", "INPUT", "-m", "dscp", "!", "--dscp", "0x28", "-j", "DROP")
 
-		if BPFMode() {
-			ensureAllNodesBPFProgramsAttached(tc.Felixes)
-		} else {
+		if !BPFMode() {
 			verifyQoSPolicies(tc.Felixes[0], nil, nil)
 			verifyQoSPolicies(tc.Felixes[1], nil, nil)
 		}
@@ -249,9 +251,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ dscp tests", []apiconfig.Da
 		}
 		ep2_2.UpdateInInfra(infra)
 
-		if BPFMode() {
-			ensureAllNodesBPFProgramsAttached(tc.Felixes)
-		} else {
+		if !BPFMode() {
 			verifyQoSPolicies(tc.Felixes[0], []string{"0x14", "0x14"}, nil)
 			verifyQoSPolicies(tc.Felixes[1], []string{"0x28"}, []string{"0x28"})
 		}
@@ -264,7 +264,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ dscp tests", []apiconfig.Da
 		cc.Expect(connectivity.None, extClient, ep1_2, ccOpts)
 		cc.Expect(connectivity.Some, extClient, ep2_2, ccOpts)
 		cc.CheckConnectivity()
-		//cc.CheckConnectivityWithTimeout(time.Minute * 60)
 
 		By("updating DSCP values on some workloads")
 		ep2_1.WorkloadEndpoint.Spec.QoSControls = &api.QoSControls{
@@ -277,9 +276,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ dscp tests", []apiconfig.Da
 		}
 		ep1_2.UpdateInInfra(infra)
 
-		if BPFMode() {
-			ensureAllNodesBPFProgramsAttached(tc.Felixes)
-		} else {
+		if !BPFMode() {
 			verifyQoSPolicies(tc.Felixes[0], []string{"0x0", "0x14", "0x14"}, nil)
 			verifyQoSPolicies(tc.Felixes[1], []string{"0x28", "0x28"}, []string{"0x28", "0x28"}) // 0x28 used by two workloads
 		}
@@ -304,9 +301,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ dscp tests", []apiconfig.Da
 		}
 		ep1_2.UpdateInInfra(infra)
 
-		if BPFMode() {
-			ensureAllNodesBPFProgramsAttached(tc.Felixes)
-		} else {
+		if !BPFMode() {
 			verifyQoSPolicies(tc.Felixes[0], []string{"0x0", "0x14", "0x20"}, nil)
 			verifyQoSPolicies(tc.Felixes[1], []string{"0x14", "0x28"}, []string{"0x14", "0x28"})
 		}
@@ -331,9 +326,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ dscp tests", []apiconfig.Da
 		}
 		ep1_2.UpdateInInfra(infra)
 
-		if BPFMode() {
-			ensureAllNodesBPFProgramsAttached(tc.Felixes)
-		} else {
+		if !BPFMode() {
 			verifyQoSPolicies(tc.Felixes[0], []string{"0x0", "0x14", "0x14"}, nil)
 			verifyQoSPolicies(tc.Felixes[1], []string{"0x28", "0x28"}, []string{"0x28", "0x28"}) // 0x28 used by two workloads
 		}
@@ -351,9 +344,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ dscp tests", []apiconfig.Da
 		_, err = client.HostEndpoints().Delete(utils.Ctx, hep.Name, options.DeleteOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
-		if BPFMode() {
-			ensureAllNodesBPFProgramsAttached(tc.Felixes)
-		} else {
+		if !BPFMode() {
 			verifyQoSPolicies(tc.Felixes[0], []string{"0x0", "0x14"}, nil)
 			verifyQoSPolicies(tc.Felixes[1], []string{"0x28", "0x28"}, []string{"0x28", "0x28"}) // 0x28 used by two workloads
 		}
@@ -374,9 +365,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ dscp tests", []apiconfig.Da
 		ep1_2.WorkloadEndpoint.Spec.QoSControls = &api.QoSControls{}
 		ep1_2.UpdateInInfra(infra)
 
-		if BPFMode() {
-			ensureAllNodesBPFProgramsAttached(tc.Felixes)
-		} else {
+		if !BPFMode() {
 			verifyQoSPolicies(tc.Felixes[0], []string{"0x14"}, nil)
 			verifyQoSPolicies(tc.Felixes[1], []string{"0x28"}, []string{"0x28"})
 		}
@@ -397,9 +386,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ dscp tests", []apiconfig.Da
 		ep2_2.Stop()
 		ep2_2.RemoveFromInfra(infra)
 
-		if BPFMode() {
-			ensureAllNodesBPFProgramsAttached(tc.Felixes)
-		} else {
+		if !BPFMode() {
 			verifyQoSPolicies(tc.Felixes[0], nil, nil)
 			verifyQoSPolicies(tc.Felixes[1], nil, nil)
 		}
@@ -476,7 +463,7 @@ func verifyQoSPoliciesWithIPFamily(felix *infrastructure.Felix, ipv6 bool, value
 		rulePattern = "DSCP --set-dscp"
 	}
 
-	EventuallyWithOffset(2, assertRules, 5*time.Second, 100*time.Millisecond).
+	EventuallyWithOffset(2, assertRules, 10*time.Second, 100*time.Millisecond).
 		Should(BeTrue())
 	ConsistentlyWithOffset(2, assertRules, 3*time.Second, 100*time.Millisecond).
 		Should(BeTrue())

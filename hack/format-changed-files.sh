@@ -26,7 +26,7 @@ echo "Detected parent branch: $parent_branch"
 file_list=$(mktemp)
 trap "rm -f $file_list" EXIT
 
-git diff -z --name-only --diff-filter=d $parent_branch -- . | \
+git diff -z --name-only --diff-filter=d --merge-base "$parent_branch" -- . | \
   grep -z -v -e '^vendor/' -e '^third_party/' | \
   grep -z '\.go$' > $file_list || {
     echo "No files to format.";
