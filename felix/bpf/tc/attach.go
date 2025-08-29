@@ -38,43 +38,41 @@ import (
 type AttachPoint struct {
 	bpf.AttachPoint
 
-	LogFilter               string
-	LogFilterIdx            int
-	Type                    tcdefs.EndpointType
-	ToOrFrom                tcdefs.ToOrFromEp
-	HookLayoutV4            hook.Layout
-	HookLayoutV6            hook.Layout
-	HostIPv4                net.IP
-	HostIPv6                net.IP
-	HostTunnelIPv4          net.IP
-	HostTunnelIPv6          net.IP
-	IntfIPv4                net.IP
-	IntfIPv6                net.IP
-	FIB                     bool
-	ToHostDrop              bool
-	DSR                     bool
-	DSROptoutCIDRs          bool
-	SkipEgressRedirect      bool
-	TunnelMTU               uint16
-	VXLANPort               uint16
-	WgPort                  uint16
-	Wg6Port                 uint16
-	ExtToServiceConnmark    uint32
-	PSNATStart              uint16
-	PSNATEnd                uint16
-	RPFEnforceOption        uint8
-	NATin                   uint32
-	NATout                  uint32
-	NATOutgoingExcludeHosts bool
-	UDPOnly                 bool
-	RedirectPeer            bool
-	FlowLogsEnabled         bool
-	OverlayTunnelID         uint32
-	AttachType              apiv3.BPFAttachOption
-	IngressPacketRate       uint16
-	IngressPacketBurst      uint16
-	EgressPacketRate        uint16
-	EgressPacketBurst       uint16
+	LogFilter                   string
+	LogFilterIdx                int
+	Type                        tcdefs.EndpointType
+	ToOrFrom                    tcdefs.ToOrFromEp
+	HookLayoutV4                hook.Layout
+	HookLayoutV6                hook.Layout
+	HostIPv4                    net.IP
+	HostIPv6                    net.IP
+	HostTunnelIPv4              net.IP
+	HostTunnelIPv6              net.IP
+	IntfIPv4                    net.IP
+	IntfIPv6                    net.IP
+	FIB                         bool
+	ToHostDrop                  bool
+	DSR                         bool
+	DSROptoutCIDRs              bool
+	SkipEgressRedirect          bool
+	TunnelMTU                   uint16
+	VXLANPort                   uint16
+	WgPort                      uint16
+	Wg6Port                     uint16
+	ExtToServiceConnmark        uint32
+	PSNATStart                  uint16
+	PSNATEnd                    uint16
+	RPFEnforceOption            uint8
+	NATin                       uint32
+	NATout                      uint32
+	NATOutgoingExcludeHosts     bool
+	UDPOnly                     bool
+	RedirectPeer                bool
+	FlowLogsEnabled             bool
+	OverlayTunnelID             uint32
+	AttachType                  apiv3.BPFAttachOption
+	IngressPacketRateConfigured bool
+	EgressPacketRateConfigured  bool
 }
 
 var ErrDeviceNotFound = errors.New("device not found")
@@ -411,20 +409,16 @@ func (ap *AttachPoint) Config() string {
 
 func (ap *AttachPoint) Configure() *libbpf.TcGlobalData {
 	globalData := &libbpf.TcGlobalData{
-		ExtToSvcMark:       ap.ExtToServiceConnmark,
-		VxlanPort:          ap.VXLANPort,
-		Tmtu:               ap.TunnelMTU,
-		PSNatStart:         ap.PSNATStart,
-		PSNatLen:           ap.PSNATEnd,
-		WgPort:             ap.WgPort,
-		Wg6Port:            ap.Wg6Port,
-		NatIn:              ap.NATin,
-		NatOut:             ap.NATout,
-		LogFilterJmp:       uint32(ap.LogFilterIdx),
-		IngressPacketRate:  ap.IngressPacketRate,
-		IngressPacketBurst: ap.IngressPacketBurst,
-		EgressPacketRate:   ap.EgressPacketRate,
-		EgressPacketBurst:  ap.EgressPacketBurst,
+		ExtToSvcMark: ap.ExtToServiceConnmark,
+		VxlanPort:    ap.VXLANPort,
+		Tmtu:         ap.TunnelMTU,
+		PSNatStart:   ap.PSNATStart,
+		PSNatLen:     ap.PSNATEnd,
+		WgPort:       ap.WgPort,
+		Wg6Port:      ap.Wg6Port,
+		NatIn:        ap.NATin,
+		NatOut:       ap.NATout,
+		LogFilterJmp: uint32(ap.LogFilterIdx),
 	}
 
 	if ap.Profiling == "Enabled" {
@@ -447,6 +441,14 @@ func (ap *AttachPoint) Configure() *libbpf.TcGlobalData {
 
 	if ap.SkipEgressRedirect {
 		globalData.Flags |= libbpf.GlobalsSkipEgressRedirect
+	}
+
+	if ap.IngressPacketRateConfigured {
+		globalData.Flags |= libbpf.GlobalsIngressPacketRateConfigured
+	}
+
+	if ap.EgressPacketRateConfigured {
+		globalData.Flags |= libbpf.GlobalsEgressPacketRateConfigured
 	}
 
 	switch ap.RPFEnforceOption {
