@@ -84,7 +84,7 @@ var _ = testutils.E2eDatastoreDescribe("CalicoNodeStatus tests", testutils.Datas
 			PeersV4: []apiv3.CalicoNodePeer{
 				{
 					PeerIP: "172.17.0.5",
-					Type:   "nodeMesh",
+					Type:   "NodeMesh",
 					State:  apiv3.BGPSessionStateEstablished,
 					Since:  "09:19:28",
 				},
@@ -92,7 +92,7 @@ var _ = testutils.E2eDatastoreDescribe("CalicoNodeStatus tests", testutils.Datas
 			PeersV6: []apiv3.CalicoNodePeer{
 				{
 					PeerIP: "2001:20::8",
-					Type:   "nodeMesh",
+					Type:   "NodeMesh",
 					State:  apiv3.BGPSessionStateEstablished,
 					Since:  "09:19:28",
 				},
@@ -148,7 +148,7 @@ var _ = testutils.E2eDatastoreDescribe("CalicoNodeStatus tests", testutils.Datas
 			PeersV4: []apiv3.CalicoNodePeer{
 				{
 					PeerIP: "172.17.0.6",
-					Type:   "nodeMesh",
+					Type:   "NodeMesh",
 					State:  apiv3.BGPSessionStateEstablished,
 					Since:  "09:19:28",
 				},
@@ -156,7 +156,7 @@ var _ = testutils.E2eDatastoreDescribe("CalicoNodeStatus tests", testutils.Datas
 			PeersV6: []apiv3.CalicoNodePeer{
 				{
 					PeerIP: "2001:10::8",
-					Type:   "nodeMesh",
+					Type:   "NodeMesh",
 					State:  apiv3.BGPSessionStateEstablished,
 					Since:  "09:19:28",
 				},
