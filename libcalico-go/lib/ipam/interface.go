@@ -107,6 +107,6 @@ type Interface interface {
 	EnsureBlock(ctx context.Context, args BlockArgs) (*cnet.IPNet, *cnet.IPNet, error)
 
 	// UpgradeHost checks the resources related to the given node and, if it
-	// finds any that are in older formats, upgrades them.
+	// finds any that are in older formats, upgrades them.  It is idempotent.
 	UpgradeHost(ctx context.Context, nodeName string) error
 }
