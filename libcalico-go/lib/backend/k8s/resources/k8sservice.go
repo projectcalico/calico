@@ -100,6 +100,9 @@ func (c *serviceClient) List(ctx context.Context, list model.ListInterface, revi
 			// Filtering to a single Service.
 			opts.FieldSelector = fields.OneTermEqualSelector("metadata.name", rl.Name).String()
 		}
+		if rl.LabelSelector != "" {
+			opts.LabelSelector = rl.LabelSelector
+		}
 		return c.clientSet.CoreV1().Services(rl.Namespace).List(ctx, opts)
 	}
 	convertFunc := func(r Resource) ([]*model.KVPair, error) {

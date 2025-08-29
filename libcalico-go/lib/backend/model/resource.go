@@ -259,6 +259,8 @@ type ResourceListOptions struct {
 	Kind string
 	// Whether the name is prefix rather than the full name.
 	Prefix bool
+	// label selector
+	LabelSelector string
 }
 
 // If the Kind, Namespace and Name are specified, but the Name is a prefix then the
