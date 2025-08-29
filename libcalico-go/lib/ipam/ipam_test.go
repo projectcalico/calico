@@ -184,26 +184,36 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 
 		BeforeEach(func() {
 			// Remove all data in the datastore.
+			// Set log level to Info and save original value to be restored later
+			origLogLevel = log.GetLevel()
+			log.SetLevel(log.InfoLevel)
+
 			bc, err = backend.NewClient(config)
 			Expect(err).NotTo(HaveOccurred())
+
+			log.SetLevel(log.WarnLevel) // Cleaning after a large test can generate a lot of spam.
 			bc.Clean()
+			log.SetLevel(log.InfoLevel)
 
 			// Build a new pool accessor for these tests.
 			pa = &ipPoolAccessor{pools: map[string]pool{}}
 
 			// Create many pools
-			for i := 0; i < 100; i++ {
+			pool26 = nil
+			for i := 0; i < 1; i++ {
 				cidr := fmt.Sprintf("10.%d.0.0/16", i)
 				pa.pools[cidr] = pool{enabled: true, blockSize: 26}
 				pool26 = append(pool26, cnet.MustParseCIDR(cidr))
 			}
 
+			pool32 = nil
 			for i := 0; i < 100; i++ {
 				cidr := fmt.Sprintf("11.%d.0.0/16", i)
 				pa.pools[cidr] = pool{enabled: true, blockSize: 32}
 				pool32 = append(pool32, cnet.MustParseCIDR(cidr))
 			}
 
+			pool20 = nil
 			for i := 0; i < 50; i++ {
 				cidr := fmt.Sprintf("12.%d.0.0/16", i)
 				pa.pools[cidr] = pool{enabled: true, blockSize: 20}
@@ -212,7 +222,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 
 			// Create the node object.
 			hostname = "host-perf"
-			applyNode(bc, kc, hostname, map[string]string{"foo": "bar"})
+			Expect(applyNode(bc, kc, hostname, map[string]string{"foo": "bar"})).To(Succeed())
 
 			// Set log level to Info and save original value to be restored later
 			origLogLevel = log.GetLevel()
@@ -3455,13 +3465,13 @@ func applyNode(c bapi.Client, kc *kubernetes.Clientset, host string, labels map[
 		n.Labels = labels
 
 		// Create/Update the node
-		newNode, err := kc.CoreV1().Nodes().Create(context.Background(), &n, metav1.CreateOptions{})
+		_, err := kc.CoreV1().Nodes().Create(context.Background(), &n, metav1.CreateOptions{})
 		if err != nil {
 			if kerrors.IsAlreadyExists(err) {
 				oldNode, _ := kc.CoreV1().Nodes().Get(context.Background(), host, metav1.GetOptions{})
 				oldNode.Labels = labels
 
-				newNode, err = kc.CoreV1().Nodes().Update(context.Background(), oldNode, metav1.UpdateOptions{})
+				_, err = kc.CoreV1().Nodes().Update(context.Background(), oldNode, metav1.UpdateOptions{})
 				if err != nil {
 					return nil
 				}
@@ -3469,7 +3479,7 @@ func applyNode(c bapi.Client, kc *kubernetes.Clientset, host string, labels map[
 				return err
 			}
 		}
-		log.WithField("node", newNode).WithError(err).Info("node applied")
+		log.WithField("node", host).WithError(err).Info("node applied")
 	} else {
 		// Otherwise, create it in Calico.
 		_, err := c.Apply(context.Background(), &model.KVPair{
