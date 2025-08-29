@@ -550,10 +550,6 @@ windows-packaging/nssm.exe: windows-packaging/nssm.zip
 	mv nssm-$(WINDOWS_NSSM_VERSION)/win64/nssm.exe nssm.exe && \
 	rm -rf nssm-$(WINDOWS_NSSM_VERSION)/
 
-# Windows image file dependencies - these files are needed for building Windows images
-$(WINDOWS_ARCHIVE_ROOT)/libs/hns/hns.psm1:
-	curl -sSf -L --retry 5 -o $@ $(MICROSOFT_SDN_GITHUB_RAW_URL)/Kubernetes/windows/hns.psm1
-
 $(WINDOWS_ARCHIVE_ROOT)/confd/config-bgp.ps1: 
 	$(DOCKER_RUN) $(CALICO_BUILD) sh -ec ' \
         $(GIT_CONFIG_SSH) \
@@ -578,38 +574,26 @@ $(WINDOWS_ARCHIVE_ROOT)/confd/conf.d/peerings.toml:
         cp -r ../confd/windows-packaging/conf.d/peerings.toml $@'; \
         chmod +w $@
 
-$(WINDOWS_ARCHIVE_ROOT)/confd/templates/blocks.ps1.template:
-	$(DOCKER_RUN) $(CALICO_BUILD) sh -ec ' \
-        $(GIT_CONFIG_SSH) \
-        cp -r ../confd/windows-packaging/templates/blocks.ps1.template $@'; \
-        chmod +w $@
-
-$(WINDOWS_ARCHIVE_ROOT)/confd/templates/peerings.ps1.template:
-	$(DOCKER_RUN) $(CALICO_BUILD) sh -ec ' \
-        $(GIT_CONFIG_SSH) \
-        cp -r ../confd/windows-packaging/templates/peerings.ps1.template $@'; \
-        chmod +w $@
-
 # NOTE: WINDOWS_IMAGE_REQS must be defined with the requirements to build the windows
 # image. These must be added as reqs to 'image-windows' (originally defined in
 # lib.Makefile) on the specific package Makefile otherwise they are not correctly
 # recognized.
-WINDOWS_IMAGE_REQS := 
-	Dockerfile-windows 
-	dist/LICENSE 
-	$(WINDOWS_BINARY) 
-	$(WINDOWS_ARCHIVE_ROOT)/libs/hns/hns.psm1 
-	$(WINDOWS_ARCHIVE_ROOT)/libs/calico/calico.psm1 
-	$(WINDOWS_ARCHIVE_ROOT)/config-hpc.ps1 
-	$(WINDOWS_ARCHIVE_ROOT)/felix/felix-service.ps1 
-	$(WINDOWS_ARCHIVE_ROOT)/node/node-service.ps1 
-	$(WINDOWS_ARCHIVE_ROOT)/uninstall-calico-hpc.ps1 
-	$(WINDOWS_ARCHIVE_ROOT)/confd/confd-service.ps1 
-	$(WINDOWS_ARCHIVE_ROOT)/confd/config-bgp.ps1 
-	$(WINDOWS_ARCHIVE_ROOT)/confd/config-bgp.psm1 
-	$(WINDOWS_ARCHIVE_ROOT)/confd/conf.d/blocks.toml 
-	$(WINDOWS_ARCHIVE_ROOT)/confd/conf.d/peerings.toml 
-	$(WINDOWS_ARCHIVE_ROOT)/confd/templates/blocks.ps1.template 
-	$(WINDOWS_ARCHIVE_ROOT)/confd/templates/peerings.ps1.template 
+WINDOWS_IMAGE_REQS := \
+	Dockerfile-windows \
+	dist/LICENSE \
+	$(WINDOWS_BINARY) \
+	$(WINDOWS_ARCHIVE_ROOT)/libs/hns/hns.psm1 \
+	$(WINDOWS_ARCHIVE_ROOT)/libs/calico/calico.psm1 \
+	$(WINDOWS_ARCHIVE_ROOT)/config-hpc.ps1 \
+	$(WINDOWS_ARCHIVE_ROOT)/felix/felix-service.ps1 \
+	$(WINDOWS_ARCHIVE_ROOT)/node/node-service.ps1 \
+	$(WINDOWS_ARCHIVE_ROOT)/uninstall-calico-hpc.ps1 \
+	$(WINDOWS_ARCHIVE_ROOT)/confd/confd-service.ps1 \
+	$(WINDOWS_ARCHIVE_ROOT)/confd/config-bgp.ps1 \
+	$(WINDOWS_ARCHIVE_ROOT)/confd/config-bgp.psm1 \
+	$(WINDOWS_ARCHIVE_ROOT)/confd/conf.d/blocks.toml \
+	$(WINDOWS_ARCHIVE_ROOT)/confd/conf.d/peerings.toml \
+	$(WINDOWS_ARCHIVE_ROOT)/confd/templates/blocks.ps1.template \
+	$(WINDOWS_ARCHIVE_ROOT)/confd/templates/peerings.ps1.template \
 	windows-packaging/nssm.exe
 image-windows: $(WINDOWS_IMAGE_REQS)
