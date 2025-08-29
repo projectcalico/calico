@@ -82,14 +82,10 @@ TOOLS_MOUNTNS_BINARY = $(NODE_CONTAINER_BIN_DIR)/mountns-$(ARCH)
 WINDOWS_INSTALL_SCRIPT := dist/install-calico-windows.ps1
 
 # Variables for Windows image dependencies (not archive-specific)
-WINDOWS_ARCHIVE_ROOT := windows-packaging/CalicoWindows
 # Version of NSSM to download.
 WINDOWS_NSSM_VERSION=2.24-103-gdee49fc
 # Original source: https://nssm.cc/ci/nssm-$(WINDOWS_NSSM_VERSION).zip
 WINDOWS_NSSM_URL=$(THIRD_PARTY_DEPS_MIRROR)/nssm/nssm-$(WINDOWS_NSSM_VERSION).zip
-
-# Variables for the Windows packaging.
-WINDOWS_ARCHIVE_ROOT := windows-packaging/CalicoWindows
 
 
 MICROSOFT_SDN_VERSION := 0d7593e5c8d4c2347079a7a6dbd9eb034ae19a44
@@ -140,13 +136,13 @@ clean: clean-windows
 
 clean-windows: clean-windows-builder
 	rm -f $(WINDOWS_BINARY)
-	rm -f $(WINDOWS_ARCHIVE_ROOT)/libs/hns/hns.psm1
-	rm -f $(WINDOWS_ARCHIVE_ROOT)/confd/config-bgp.ps1
-	rm -f $(WINDOWS_ARCHIVE_ROOT)/confd/config-bgp.psm1
-	rm -f $(WINDOWS_ARCHIVE_ROOT)/confd/conf.d/blocks.toml
-	rm -f $(WINDOWS_ARCHIVE_ROOT)/confd/conf.d/peerings.toml
-	rm -f $(WINDOWS_ARCHIVE_ROOT)/confd/templates/blocks.ps1.template
-	rm -f $(WINDOWS_ARCHIVE_ROOT)/confd/templates/peerings.ps1.template
+	rm -f windows-packaging/CalicoWindows/libs/hns/hns.psm1
+	rm -f windows-packaging/CalicoWindows/confd/config-bgp.ps1
+	rm -f windows-packaging/CalicoWindows/confd/config-bgp.psm1
+	rm -f windows-packaging/CalicoWindows/confd/conf.d/blocks.toml
+	rm -f windows-packaging/CalicoWindows/confd/conf.d/peerings.toml
+	rm -f windows-packaging/CalicoWindows/confd/templates/blocks.ps1.template
+	rm -f windows-packaging/CalicoWindows/confd/templates/peerings.ps1.template
 	rm -f windows-packaging/nssm.zip
 	rm -f windows-packaging/nssm.exe
 	rm -f $(WINDOWS_INSTALL_SCRIPT)
@@ -518,25 +514,7 @@ $(WINDOWS_INSTALL_SCRIPT):
 	sed -i s/VERSION/$(GIT_VERSION)/g $@
 
 # Windows image build dependencies (not archive-specific)
-$(WINDOWS_ARCHIVE_ROOT)/confd/config-bgp%: windows-packaging/config-bgp%
-	$(DOCKER_RUN) $(CALICO_BUILD) sh -ec ' \
-        $(GIT_CONFIG_SSH) \
-        cp -r ../confd/$< $@'; \
-        chmod +w $@
-
-$(WINDOWS_ARCHIVE_ROOT)/confd/conf.d/%: windows-packaging/conf.d/%
-	$(DOCKER_RUN) $(CALICO_BUILD) sh -ec ' \
-        $(GIT_CONFIG_SSH) \
-        cp -r ../confd/$< $@'; \
-        chmod +w $@
-
-$(WINDOWS_ARCHIVE_ROOT)/confd/templates/%: windows-packaging/templates/%
-	$(DOCKER_RUN) $(CALICO_BUILD) sh -ec ' \
-        $(GIT_CONFIG_SSH) \
-        cp -r ../confd/$< $@'; \
-        chmod +w $@
-
-$(WINDOWS_ARCHIVE_ROOT)/libs/hns/hns.psm1:
+windows-packaging/CalicoWindows/libs/hns/hns.psm1:
 	curl -sSf -L --retry 5 -o $@ $(MICROSOFT_SDN_GITHUB_RAW_URL)/Kubernetes/windows/hns.psm1
 
 ## Download NSSM (needed for Windows image).
@@ -550,25 +528,25 @@ windows-packaging/nssm.exe: windows-packaging/nssm.zip
 	mv nssm-$(WINDOWS_NSSM_VERSION)/win64/nssm.exe nssm.exe && \
 	rm -rf nssm-$(WINDOWS_NSSM_VERSION)/
 
-$(WINDOWS_ARCHIVE_ROOT)/confd/config-bgp.ps1:
+windows-packaging/CalicoWindows/confd/config-bgp.ps1:
 	$(DOCKER_RUN) $(CALICO_BUILD) sh -ec ' \
         $(GIT_CONFIG_SSH) \
         cp -r ../confd/windows-packaging/config-bgp.ps1 $@'; \
         chmod +w $@
 
-$(WINDOWS_ARCHIVE_ROOT)/confd/config-bgp.psm1:
+windows-packaging/CalicoWindows/confd/config-bgp.psm1:
 	$(DOCKER_RUN) $(CALICO_BUILD) sh -ec ' \
         $(GIT_CONFIG_SSH) \
         cp -r ../confd/windows-packaging/config-bgp.psm1 $@'; \
         chmod +w $@
 
-$(WINDOWS_ARCHIVE_ROOT)/confd/conf.d/blocks.toml:
+windows-packaging/CalicoWindows/confd/conf.d/blocks.toml:
 	$(DOCKER_RUN) $(CALICO_BUILD) sh -ec ' \
         $(GIT_CONFIG_SSH) \
         cp -r ../confd/windows-packaging/conf.d/blocks.toml $@'; \
         chmod +w $@
 
-$(WINDOWS_ARCHIVE_ROOT)/confd/conf.d/peerings.toml:
+windows-packaging/CalicoWindows/confd/conf.d/peerings.toml:
 	$(DOCKER_RUN) $(CALICO_BUILD) sh -ec ' \
         $(GIT_CONFIG_SSH) \
         cp -r ../confd/windows-packaging/conf.d/peerings.toml $@'; \
@@ -582,18 +560,18 @@ WINDOWS_IMAGE_REQS := \
 	Dockerfile-windows \
 	dist/LICENSE \
 	$(WINDOWS_BINARY) \
-	$(WINDOWS_ARCHIVE_ROOT)/libs/hns/hns.psm1 \
-	$(WINDOWS_ARCHIVE_ROOT)/libs/calico/calico.psm1 \
-	$(WINDOWS_ARCHIVE_ROOT)/config-hpc.ps1 \
-	$(WINDOWS_ARCHIVE_ROOT)/felix/felix-service.ps1 \
-	$(WINDOWS_ARCHIVE_ROOT)/node/node-service.ps1 \
-	$(WINDOWS_ARCHIVE_ROOT)/uninstall-calico-hpc.ps1 \
-	$(WINDOWS_ARCHIVE_ROOT)/confd/confd-service.ps1 \
-	$(WINDOWS_ARCHIVE_ROOT)/confd/config-bgp.ps1 \
-	$(WINDOWS_ARCHIVE_ROOT)/confd/config-bgp.psm1 \
-	$(WINDOWS_ARCHIVE_ROOT)/confd/conf.d/blocks.toml \
-	$(WINDOWS_ARCHIVE_ROOT)/confd/conf.d/peerings.toml \
-	$(WINDOWS_ARCHIVE_ROOT)/confd/templates/blocks.ps1.template \
-	$(WINDOWS_ARCHIVE_ROOT)/confd/templates/peerings.ps1.template \
+	windows-packaging/CalicoWindows/libs/hns/hns.psm1 \
+	windows-packaging/CalicoWindows/libs/calico/calico.psm1 \
+	windows-packaging/CalicoWindows/config-hpc.ps1 \
+	windows-packaging/CalicoWindows/felix/felix-service.ps1 \
+	windows-packaging/CalicoWindows/node/node-service.ps1 \
+	windows-packaging/CalicoWindows/uninstall-calico-hpc.ps1 \
+	windows-packaging/CalicoWindows/confd/confd-service.ps1 \
+	windows-packaging/CalicoWindows/confd/config-bgp.ps1 \
+	windows-packaging/CalicoWindows/confd/config-bgp.psm1 \
+	windows-packaging/CalicoWindows/confd/conf.d/blocks.toml \
+	windows-packaging/CalicoWindows/confd/conf.d/peerings.toml \
+	windows-packaging/CalicoWindows/confd/templates/blocks.ps1.template \
+	windows-packaging/CalicoWindows/confd/templates/peerings.ps1.template \
 	windows-packaging/nssm.exe
 image-windows: $(WINDOWS_IMAGE_REQS)
