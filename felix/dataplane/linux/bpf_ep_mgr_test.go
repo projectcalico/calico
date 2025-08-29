@@ -46,6 +46,7 @@ import (
 	bpfmaps "github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/bpf/mock"
 	"github.com/projectcalico/calico/felix/bpf/polprog"
+	"github.com/projectcalico/calico/felix/bpf/qos"
 	"github.com/projectcalico/calico/felix/bpf/state"
 	"github.com/projectcalico/calico/felix/bpf/tc"
 	"github.com/projectcalico/calico/felix/bpf/xdp"
@@ -389,6 +390,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		countersMap          *mock.Map
 		jumpMap              *mock.Map
 		xdpJumpMap           *mock.Map
+		qosMap               *mock.Map
 	)
 
 	BeforeEach(func() {
@@ -417,6 +419,8 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		commonMaps.StateMap = state.Map()
 		ifStateMap = mock.NewMockMap(ifstate.MapParams)
 		commonMaps.IfStateMap = ifStateMap
+		qosMap = mock.NewMockMap(qos.MapParams)
+		commonMaps.QoSMap = qosMap
 		cparams := counters.MapParameters
 		cparams.ValueSize *= bpfmaps.NumPossibleCPUs()
 		countersMap = mock.NewMockMap(cparams)
