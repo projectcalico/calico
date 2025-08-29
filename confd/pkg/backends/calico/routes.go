@@ -149,7 +149,17 @@ func (rg *routeGenerator) TriggerResync() {
 // getServiceForEndpoints retrieves the corresponding svc for the given ep
 func (rg *routeGenerator) getServiceForEndpoints(ep *discoveryv1.EndpointSlice) (*v1.Service, string) {
 	// get key
-	key, err := cache.MetaNamespaceKeyFunc(ep)
+	var key string
+	var err error
+
+	svcName, ok := ep.Labels[discoveryv1.LabelServiceName]
+	if ok {
+		epCopy := ep.DeepCopy()
+		epCopy.Name = svcName
+		key, err = cache.MetaNamespaceKeyFunc(epCopy)
+	} else {
+		key, err = cache.MetaNamespaceKeyFunc(ep)
+	}
 	if err != nil {
 		log.WithField("ep", ep.Name).WithError(err).Warn("getServiceForEndpoints: error on retrieving key for endpoint, passing")
 		return nil, ""
@@ -168,22 +178,21 @@ func (rg *routeGenerator) getServiceForEndpoints(ep *discoveryv1.EndpointSlice) 
 
 // getEndpointsForService retrieves the corresponding ep for the given svc
 func (rg *routeGenerator) getEndpointsForService(svc *v1.Service) (*discoveryv1.EndpointSlice, string) {
-	// get key
-	key, err := cache.MetaNamespaceKeyFunc(svc)
-	if err != nil {
-		log.WithField("svc", svc.Name).WithError(err).Warn("getEndpointsForService: error on retrieving key for service, passing")
-		return nil, ""
+	for _, obj := range rg.epIndexer.List() {
+		ep, ok := obj.(*discoveryv1.EndpointSlice)
+		if !ok {
+			continue
+		}
+		if svcName, ok := ep.Labels[discoveryv1.LabelServiceName]; ok && svcName == svc.Name && ep.Namespace == svc.Namespace {
+			key, err := cache.MetaNamespaceKeyFunc(ep)
+			if err != nil {
+				log.WithField("ep", ep.Name).WithError(err).Warn("getEndpointsForService: error on retrieving key for endpoint, passing")
+				return nil, ""
+			}
+			return ep, key
+		}
 	}
-	// get ep
-	epIface, exists, err := rg.epIndexer.GetByKey(key)
-	if err != nil {
-		log.WithField("key", key).WithError(err).Warn("getEndpointsForService: error on retrieving endpoint for key, passing")
-		return nil, key
-	} else if !exists {
-		log.WithField("key", key).Debug("getEndpointsForService: service for endpoint not found, passing")
-		return nil, key
-	}
-	return epIface.(*discoveryv1.EndpointSlice), key
+	return nil, ""
 }
 
 // setRouteForSvc handles the main logic to check if a specified service or endpoint

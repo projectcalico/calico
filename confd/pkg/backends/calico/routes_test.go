@@ -41,7 +41,7 @@ func addEndpointSubset(ep *discoveryv1.EndpointSlice, nodename string, address s
 }
 
 func buildSimpleService() (svc *v1.Service, ep *discoveryv1.EndpointSlice) {
-	meta := metav1.ObjectMeta{Namespace: "foo", Name: "bar"}
+	meta := metav1.ObjectMeta{Namespace: "foo", Name: "bar", Labels: map[string]string{"kubernetes.io/service-name": "bar"}}
 	svc = &v1.Service{
 		ObjectMeta: meta,
 		Spec: v1.ServiceSpec{
@@ -59,7 +59,7 @@ func buildSimpleService() (svc *v1.Service, ep *discoveryv1.EndpointSlice) {
 }
 
 func buildSimpleService2() (svc *v1.Service, ep *discoveryv1.EndpointSlice) {
-	meta := metav1.ObjectMeta{Namespace: "foo", Name: "rem"}
+	meta := metav1.ObjectMeta{Namespace: "foo", Name: "rem", Labels: map[string]string{"kubernetes.io/service-name": "rem"}}
 	svc = &v1.Service{
 		ObjectMeta: meta,
 		Spec: v1.ServiceSpec{
@@ -77,7 +77,7 @@ func buildSimpleService2() (svc *v1.Service, ep *discoveryv1.EndpointSlice) {
 }
 
 func buildSimpleService3() (svc *v1.Service, ep *discoveryv1.EndpointSlice) {
-	meta := metav1.ObjectMeta{Namespace: "foo", Name: "lb"}
+	meta := metav1.ObjectMeta{Namespace: "foo", Name: "lb", Labels: map[string]string{"kubernetes.io/service-name": "lb"}}
 	svc = &v1.Service{
 		ObjectMeta: meta,
 		Spec: v1.ServiceSpec{
@@ -100,7 +100,7 @@ func buildSimpleService3() (svc *v1.Service, ep *discoveryv1.EndpointSlice) {
 }
 
 func buildSimpleService4() (svc *v1.Service, ep *discoveryv1.EndpointSlice) {
-	meta := metav1.ObjectMeta{Namespace: "foo", Name: "ext"}
+	meta := metav1.ObjectMeta{Namespace: "foo", Name: "ext", Labels: map[string]string{"kubernetes.io/service-name": "ext"}}
 	svc = &v1.Service{
 		ObjectMeta: meta,
 		Spec: v1.ServiceSpec{
@@ -860,7 +860,7 @@ var _ = Describe("Service Load Balancer Aggregation", func() {
 					},
 				}
 				ep := &discoveryv1.EndpointSlice{
-					ObjectMeta: metav1.ObjectMeta{Name: "test-svc", Namespace: "default"},
+					ObjectMeta: metav1.ObjectMeta{Name: "test-svc", Namespace: "default", Labels: map[string]string{"kubernetes.io/service-name": "test-svc"}},
 					Endpoints: []discoveryv1.Endpoint{
 						{
 							Addresses: []string{"10.0.0.2"},
@@ -882,7 +882,7 @@ var _ = Describe("Service Load Balancer Aggregation", func() {
 					},
 				}
 				ep := &discoveryv1.EndpointSlice{
-					ObjectMeta: metav1.ObjectMeta{Name: "test-svc", Namespace: "default"},
+					ObjectMeta: metav1.ObjectMeta{Name: "test-svc", Namespace: "default", Labels: map[string]string{"kubernetes.io/service-name": "test-svc"}},
 					Endpoints:  []discoveryv1.Endpoint{},
 				}
 
@@ -906,7 +906,7 @@ var _ = Describe("Service Load Balancer Aggregation", func() {
 					},
 				}
 				ep := &discoveryv1.EndpointSlice{
-					ObjectMeta: metav1.ObjectMeta{Name: "test-svc", Namespace: "default"},
+					ObjectMeta: metav1.ObjectMeta{Name: "test-svc", Namespace: "default", Labels: map[string]string{"kubernetes.io/service-name": "test-svc"}},
 					Endpoints: []discoveryv1.Endpoint{
 						{
 							Addresses: []string{"2001:db8::1"}, // IPv6
@@ -928,7 +928,11 @@ var _ = Describe("Service Load Balancer Aggregation", func() {
 					},
 				}
 				ep := &discoveryv1.EndpointSlice{
-					ObjectMeta: metav1.ObjectMeta{Name: "test-svc", Namespace: "default"},
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-svc",
+						Namespace: "default",
+						Labels:    map[string]string{"kubernetes.io/service-name": "test-svc"},
+					},
 					Endpoints: []discoveryv1.Endpoint{
 						{
 							Addresses: []string{"2001:db8::2"}, // IPv6
