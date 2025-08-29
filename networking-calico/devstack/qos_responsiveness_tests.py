@@ -632,11 +632,97 @@ class QoSResponsivenessTest:
             return False
 
 
+# Possible rules that a QoS policy can have.
+possible_qos_rules = [
+    {
+        "bandwidth_limit_rule": {
+            "max_kbps": 10200,
+            "max_burst_kbps": 20300,
+            "direction": "egress",
+        },
+    },
+    {
+        "bandwidth_limit_rule": {
+            "max_kbps": 30400,
+            "max_burst_kbps": 40500,
+            "direction": "ingress",
+        },
+    },
+    {
+        "packet_rate_limit_rule": {
+            "max_kpps": 12345,
+            "max_burst_kpps": 21087,
+            "direction": "egress",
+        },
+    },
+    {
+        "packet_rate_limit_rule": {
+            "max_kpps": 42341,
+            "max_burst_kpps": 50002,
+            "direction": "ingress",
+        },
+    },
+]
+
+
+# Given that a QoS policy exists, generate its possible states in terms of the
+# rules within it (including the empty set).
+def possible_qos_rule_sets():
+    states = []
+    for i in range(2**len(possible_qos_rules)):
+        state_rules = []
+        for j in range(len(possible_qos_rules)):
+            if i & (2**j) != 0:
+                state_rules.append(possible_qos_rules[j])
+        states.append(state_rules)
+    return states
+
+
+# Given that a port exists - on a network, whose ID we assume cannot change
+# post-creation - generate its possible states in terms of
+# - whether its network has a QoS policy
+# - if so, the ID and rules in the network QoS policy
+# - whether the port itself has a QoS policy
+# - if so, the ID and rules in the port QoS policy
+def possible_port_states():
+    states = []
+    rule_sets = possible_qos_rule_sets()
+    for network_qos_policy_id in [None, 'A', 'B']:
+        for port_qos_policy_id in [None, 'A', 'B']:
+            state_base = {
+                'network_qos_policy_id': network_qos_policy_id,
+                'port_qos_policy_id': port_qos_policy_id,
+            }
+            if network_qos_policy_id is None and port_qos_policy_id is None:
+                states.append(state_base)
+                continue
+            if network_qos_policy_id is not None and port_qos_policy_id is not None:
+                # The network QoS state is going to be shadowed, so only give
+                # it one possible value.  (To keep the combinatorics down.)
+                state_base['network_qos_rules'] = rule_sets[0]
+            if port_qos_policy_id is not None:
+                for rules in rule_sets:
+                    state = state_base.copy()
+                    state['port_qos_rules'] = rules
+                    states.append(state)
+                continue
+            for rules in rule_sets:
+                state = state_base.copy()
+                state['network_qos_rules'] = rules
+                states.append(state)
+    return states
+
+
 def main():
     """Main entry point for QoS responsiveness tests."""
     if len(sys.argv) > 1 and sys.argv[1] == "--help":
         print(__doc__)
         return 0
+
+    port_states = possible_port_states()
+    logger.info("There are %d possible port states", len(port_states))
+    for s in port_states:
+        logger.info(f"{s}")
 
     logger.info("Initializing QoS Responsiveness Test Suite...")
 
