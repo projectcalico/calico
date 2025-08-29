@@ -106,8 +106,7 @@ static CALI_BPF_INLINE int enforce_packet_rate_qos(struct cali_tc_ctx *ctx)
 		return TC_ACT_UNSPEC;
 	}
 
-	// If there were not enough tokens, drop packet and increment counter
-	counter_inc(ctx, CALI_REASON_DROPPED_BY_QOS);
+	// If there were not enough tokens, drop packet
 	CALI_DEBUG("packet rate QoS: drop");
 	return TC_ACT_SHOT;
 }
