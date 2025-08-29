@@ -181,13 +181,32 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 				})
 			}
 
-			It("should have workload to workload connectivity", func() {
+			It("should have correct connectivity", func() {
+				// Checking workload to workload connectivity
 				cc.ExpectSome(w[0], w[1])
 				cc.ExpectSome(w[1], w[0])
-
 				if enableIPv6 {
 					cc.ExpectSome(w6[0], w6[1])
 					cc.ExpectSome(w6[1], w6[0])
+				}
+
+				// Checking host to host connectivity
+				cc.ExpectSome(tc.Felixes[0], hostW[1])
+				cc.ExpectSome(tc.Felixes[1], hostW[0])
+				if enableIPv6 {
+					cc.ExpectSome(felixes[0], hostW6[1])
+					cc.ExpectSome(felixes[1], hostW6[0])
+				}
+
+				// Checking host to workload connectivity
+				// Skipping due to known issue with tunnel IPs not being programmed in WEP mode
+				if !(ipipMode == api.IPIPModeAlways && routeSource == "WorkloadIPs") {
+					cc.ExpectSome(tc.Felixes[0], w[0])
+					cc.ExpectSome(tc.Felixes[0], w[1])
+					if enableIPv6 {
+						cc.ExpectSome(tc.Felixes[0], w6[0])
+						cc.ExpectSome(tc.Felixes[0], w6[1])
+					}
 				}
 
 				cc.CheckConnectivityWithTimeout(timeout)
@@ -290,34 +309,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 					)
 				})
 			}
-
-			It("should have host to workload connectivity", func() {
-				if ipipMode == api.IPIPModeAlways && routeSource == "WorkloadIPs" {
-					Skip("Skipping due to known issue with tunnel IPs not being programmed in WEP mode")
-				}
-
-				cc.ExpectSome(tc.Felixes[0], w[0])
-				cc.ExpectSome(tc.Felixes[0], w[1])
-
-				if enableIPv6 {
-					cc.ExpectSome(tc.Felixes[0], w6[0])
-					cc.ExpectSome(tc.Felixes[0], w6[1])
-				}
-
-				cc.CheckConnectivityWithTimeout(timeout)
-			})
-
-			It("should have host to host connectivity", func() {
-				cc.ExpectSome(tc.Felixes[0], hostW[1])
-				cc.ExpectSome(tc.Felixes[1], hostW[0])
-
-				if enableIPv6 {
-					cc.ExpectSome(felixes[0], hostW6[1])
-					cc.ExpectSome(felixes[1], hostW6[0])
-				}
-
-				cc.CheckConnectivityWithTimeout(timeout)
-			})
 
 			Context("with host protection policy in place", func() {
 				BeforeEach(func() {
@@ -586,16 +577,15 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 			})
 
 			Context("after removing BGP address from third node", func() {
-				// Simulate having a host send VXLAN traffic from an unknown source, should get blocked.
+				// Simulate having a host send IPIP traffic from an unknown source, should get blocked.
 				BeforeEach(func() {
+					if ipipMode == api.IPIPModeNever {
+						Skip("external nodes is not applicable to no encap routing")
+					}
 					for _, f := range felixes {
 						if BPFMode() {
 							// one host and one host tunnel routes per node
 							expectedNumRoutes := len(felixes) * 2
-							if ipipMode == api.IPIPModeNever {
-								// one host routes per node
-								expectedNumRoutes = len(felixes)
-							}
 							Eventually(func() int {
 								return strings.Count(f.BPFRoutes(), "host")
 							}).Should(Equal(expectedNumRoutes),
