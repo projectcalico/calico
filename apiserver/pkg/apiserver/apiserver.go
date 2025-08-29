@@ -169,47 +169,47 @@ func (c completedConfig) NewRBACCalculator(calicoLister CalicoResourceLister) (r
 
 // k8sRoleGetter implements the RoleGetter interface returning matching Role.
 type k8sRoleGetter struct {
-	roleLister rbacv1listers.RoleLister
+	Lister rbacv1listers.RoleLister
 }
 
 func (r *k8sRoleGetter) GetRole(ctx context.Context, namespace, name string) (*rbacv1.Role, error) {
-	return r.roleLister.Roles(namespace).Get(name)
+	return r.Lister.Roles(namespace).Get(name)
 }
 
 // k8sRoleBindingLister implements the RoleBindingLister interface returning RoleBindings.
 type k8sRoleBindingLister struct {
-	roleBindingLister rbacv1listers.RoleBindingLister
+	lister rbacv1listers.RoleBindingLister
 }
 
 func (r *k8sRoleBindingLister) ListRoleBindings(ctx context.Context, namespace string) ([]*rbacv1.RoleBinding, error) {
-	return r.roleBindingLister.RoleBindings(namespace).List(labels.Everything())
+	return r.lister.RoleBindings(namespace).List(labels.Everything())
 }
 
 // k8sClusterRoleGetter implements the ClusterRoleGetter interface returning matching ClusterRole.
 type k8sClusterRoleGetter struct {
-	clusterRoleLister rbacv1listers.ClusterRoleLister
+	lister rbacv1listers.ClusterRoleLister
 }
 
 func (r *k8sClusterRoleGetter) GetClusterRole(ctx context.Context, name string) (*rbacv1.ClusterRole, error) {
-	return r.clusterRoleLister.Get(name)
+	return r.lister.Get(name)
 }
 
 // k8sClusterRoleBindingLister implements the ClusterRoleBindingLister interface.
 type k8sClusterRoleBindingLister struct {
-	clusterRoleBindingLister rbacv1listers.ClusterRoleBindingLister
+	lister rbacv1listers.ClusterRoleBindingLister
 }
 
 func (r *k8sClusterRoleBindingLister) ListClusterRoleBindings(ctx context.Context) ([]*rbacv1.ClusterRoleBinding, error) {
-	return r.clusterRoleBindingLister.List(labels.Everything())
+	return r.lister.List(labels.Everything())
 }
 
 // k8sNamespaceLister implements the NamespaceLister interface returning Namespaces.
 type k8sNamespaceLister struct {
-	namespaceLister corev1listers.NamespaceLister
+	lister corev1listers.NamespaceLister
 }
 
 func (n *k8sNamespaceLister) ListNamespaces() ([]*corev1.Namespace, error) {
-	return n.namespaceLister.List(labels.Everything())
+	return n.lister.List(labels.Everything())
 }
 
 func NewCalicoResourceLister(cc api.Client) CalicoResourceLister {

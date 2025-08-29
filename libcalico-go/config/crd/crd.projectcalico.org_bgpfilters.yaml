@@ -30,12 +30,21 @@ spec:
                   items:
                     properties:
                       action:
+                        enum:
+                          - Accept
+                          - Reject
                         type: string
                       cidr:
+                        format: cidr
                         type: string
                       interface:
                         type: string
                       matchOperator:
+                        enum:
+                          - Equal
+                          - NotEqual
+                          - In
+                          - NotIn
                         type: string
                       prefixLength:
                         properties:
@@ -50,22 +59,36 @@ spec:
                             minimum: 0
                             type: integer
                         type: object
+                        x-kubernetes-map-type: atomic
                       source:
+                        enum:
+                          - RemotePeers
                         type: string
                     required:
                       - action
                     type: object
+                    x-kubernetes-map-type: atomic
                   type: array
+                  x-kubernetes-list-type: set
                 exportV6:
                   items:
                     properties:
                       action:
+                        enum:
+                          - Accept
+                          - Reject
                         type: string
                       cidr:
+                        format: cidr
                         type: string
                       interface:
                         type: string
                       matchOperator:
+                        enum:
+                          - Equal
+                          - NotEqual
+                          - In
+                          - NotIn
                         type: string
                       prefixLength:
                         properties:
@@ -80,22 +103,36 @@ spec:
                             minimum: 0
                             type: integer
                         type: object
+                        x-kubernetes-map-type: atomic
                       source:
+                        enum:
+                          - RemotePeers
                         type: string
                     required:
                       - action
                     type: object
+                    x-kubernetes-map-type: atomic
                   type: array
+                  x-kubernetes-list-type: set
                 importV4:
                   items:
                     properties:
                       action:
+                        enum:
+                          - Accept
+                          - Reject
                         type: string
                       cidr:
+                        format: cidr
                         type: string
                       interface:
                         type: string
                       matchOperator:
+                        enum:
+                          - Equal
+                          - NotEqual
+                          - In
+                          - NotIn
                         type: string
                       prefixLength:
                         properties:
@@ -110,22 +147,36 @@ spec:
                             minimum: 0
                             type: integer
                         type: object
+                        x-kubernetes-map-type: atomic
                       source:
+                        enum:
+                          - RemotePeers
                         type: string
                     required:
                       - action
                     type: object
+                    x-kubernetes-map-type: atomic
                   type: array
+                  x-kubernetes-list-type: set
                 importV6:
                   items:
                     properties:
                       action:
+                        enum:
+                          - Accept
+                          - Reject
                         type: string
                       cidr:
+                        format: cidr
                         type: string
                       interface:
                         type: string
                       matchOperator:
+                        enum:
+                          - Equal
+                          - NotEqual
+                          - In
+                          - NotIn
                         type: string
                       prefixLength:
                         properties:
@@ -140,12 +191,17 @@ spec:
                             minimum: 0
                             type: integer
                         type: object
+                        x-kubernetes-map-type: atomic
                       source:
+                        enum:
+                          - RemotePeers
                         type: string
                     required:
                       - action
                     type: object
+                    x-kubernetes-map-type: atomic
                   type: array
+                  x-kubernetes-list-type: set
               type: object
           type: object
       served: true

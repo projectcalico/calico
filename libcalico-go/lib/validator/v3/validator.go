@@ -272,7 +272,7 @@ func init() {
 	registerStructValidator(validate, validateRouteTableIDRange, api.RouteTableIDRange{})
 	registerStructValidator(validate, validateRouteTableRange, api.RouteTableRange{})
 	registerStructValidator(validate, validateBGPConfigurationSpec, api.BGPConfigurationSpec{})
-	registerStructValidator(validate, validateBlockAffinitySpec, libapi.BlockAffinitySpec{})
+	registerStructValidator(validate, validateBlockAffinitySpec, api.BlockAffinitySpec{})
 	registerStructValidator(validate, validateHealthTimeoutOverride, api.HealthTimeoutOverride{})
 }
 
@@ -2274,8 +2274,8 @@ func validateBGPConfigurationSpec(structLevel validator.StructLevel) {
 }
 
 func validateBlockAffinitySpec(structLevel validator.StructLevel) {
-	spec := structLevel.Current().Interface().(libapi.BlockAffinitySpec)
-	if spec.Deleted == fmt.Sprintf("%t", true) {
+	spec := structLevel.Current().Interface().(api.BlockAffinitySpec)
+	if spec.Deleted {
 		structLevel.ReportError(reflect.ValueOf(spec), "Spec.Deleted", "", reason("spec.Deleted cannot be set to \"true\""), "")
 	}
 }
