@@ -16,14 +16,14 @@
 
 set -e
 
-source .semaphore/new-kernel-common.sh
+source $(pwd)/.semaphore/batches.sh
 
 vm_name_prefix=$1
 project=unique-caldron-775
 zone=${ZONE:-europe-west3-c}
 my_dir="$(dirname $0)"
 repo_dir="."
-artifacts_dir="$repo_dir/artifacts"
+artifacts_dir="${REPO_NAME}/artifacts"
 
 echo "Collecting artifacts..."
 
@@ -40,7 +40,7 @@ for batch in "${batches[@]}"; do
     if [ $batch != 1 ]; then
       args="--skip-binaries"
     fi
-    VM_NAME=$vm_name $my_dir/on-test-vm ${REPO_NAME}/.semaphore/collect-artifacts $args || echo "Failed to collect artifacts from ${vm_name}."
+    VM_NAME=$vm_name $my_dir/on-test-vm ${REPO_NAME}/../.semaphore/vms/collect-artifacts $args || echo "Failed to collect artifacts from ${vm_name}."
     timeout 10m gcloud --quiet compute scp "--zone=${ZONE}" "ubuntu@${vm_name}:${REPO_NAME}/artifacts" ./ --recurse || echo "Failed to SCP from ${vm_name}"
   ) >& "$log_file" &
   pid=$!
