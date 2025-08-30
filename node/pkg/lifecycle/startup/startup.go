@@ -111,6 +111,18 @@ func Run() {
 		}
 	}
 
+	// Make sure that this host's BlockAffinity resources are upgraded to add
+	// labels for efficient lookup.  CNI plugin also does this on the first
+	// allocation after upgrade.  Doing it here too handles some corner cases,
+	// such as calico-node being downgraded, doing some allocations and then,
+	// upgrading again.
+	upgradeCtx, cancel := context.WithTimeout(ctx, 90*time.Second)
+	defer cancel()
+	if err := cli.IPAM().UpgradeHost(upgradeCtx, nodeName); err != nil {
+		log.WithError(err).Errorf("Unable to uprade host's IPAM resources.")
+		utils.Terminate()
+	}
+
 	// Query the current Node resources.  We update our node resource with
 	// updated IP data and use the full list of nodes for validation.
 	node := getNode(ctx, cli, nodeName)
