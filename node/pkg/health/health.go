@@ -55,6 +55,14 @@ func init() {
 }
 
 func Run(bird, bird6, felixReady, felixLive, birdLive, bird6Live bool, thresholdTime time.Duration) {
+	if err := RunOutput(bird, bird6, felixReady, felixLive, birdLive, bird6Live, thresholdTime); err != nil {
+		fmt.Printf("%s\n", err)
+		os.Exit(1)
+	}
+	os.Exit(0)
+}
+
+func RunOutput(bird, bird6, felixReady, felixLive, birdLive, bird6Live bool, thresholdTime time.Duration) error {
 	livenessChecks := felixLive || birdLive || bird6Live
 	readinessChecks := bird || felixReady || bird6
 
@@ -139,10 +147,7 @@ func Run(bird, bird6, felixReady, felixLive, birdLive, bird6Live bool, threshold
 			return nil
 		})
 	}
-	if err := g.Wait(); err != nil {
-		fmt.Printf("%s\n", err)
-		os.Exit(1)
-	}
+	return g.Wait()
 }
 
 func checkServiceIsLive(services []string) error {
