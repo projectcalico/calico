@@ -54,6 +54,24 @@ class CalicoQoSDriver(base.DriverBase):
             requires_rpc_notifications=False,
         )
 
+    def update_policy(self, context, policy):
+        """Update policy invocation.
+
+        This method can be implemented by the specific driver subclass
+        to update the backend where necessary.
+
+        :param context: current running context information
+        :param policy: a QoSPolicy object being updated.
+        """
+        LOG.info("update_policy: context=%r policy=%r", context, policy)
+
+        # Find the set N of Networks with this policy in their qos_policy_id field.
+
+        # Find the set P of Ports with this policy in their qos_policy_id field, or with
+        # null qos_policy_id and with a Network in set N.
+
+        # For each Port in set P, do what the syncer would do for that Port.
+
 
 def register():
     """Register the driver."""
