@@ -1325,11 +1325,11 @@ int calico_tc_skb_accepted_entrypoint(struct __sk_buff *skb)
 	if (enforce_packet_rate_qos(ctx) == TC_ACT_SHOT) {
 		goto deny;
 	}
-	ctx->fwd = calico_tc_skb_accepted(ctx);
-	if (!set_dscp(ctx)) {
+	if (set_dscp(ctx) == TC_ACT_SHOT) {
 		deny_reason(ctx, CALI_REASON_CSUM_FAIL);
 		goto deny;
 	}
+	ctx->fwd = calico_tc_skb_accepted(ctx);
 	return forward_or_drop(ctx);
 
 deny:

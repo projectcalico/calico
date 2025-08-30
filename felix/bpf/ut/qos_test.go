@@ -96,7 +96,7 @@ func TestQoSPacketRate(t *testing.T) {
 	}, withEgressQoSPacketRate(1, 1))
 }
 
-func TestDSCP(t *testing.T) {
+func TestDSCPV4(t *testing.T) {
 	RegisterTestingT(t)
 
 	bpfIfaceName = "HWvwl"

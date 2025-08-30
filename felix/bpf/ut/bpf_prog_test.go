@@ -804,8 +804,8 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 					globals.EgressPacketBurst = topts.egressQoSPacketBurst
 				}
 
-				if topts.dscp >= 0 {
-					globals.DSCP = topts.dscp
+				if topts.dscp != nil && *topts.dscp >= 0 {
+					globals.DSCP = *topts.dscp
 				}
 
 				if topts.ipv6 {
@@ -1177,7 +1177,7 @@ type testOpts struct {
 	ingressQoSPacketBurst uint16
 	egressQoSPacketRate   uint16
 	egressQoSPacketBurst  uint16
-	dscp                  int8
+	dscp                  *int8
 }
 
 type testOption func(opts *testOpts)
@@ -1255,7 +1255,7 @@ func withEgressQoSPacketRate(packetRate, packetBurst uint16) testOption {
 
 func withEgressDSCP(value int8) testOption {
 	return func(o *testOpts) {
-		o.dscp = value
+		o.dscp = &value
 	}
 }
 
@@ -1562,7 +1562,6 @@ var ipv4Default = &layers.IPv4{
 	SrcIP:    srcIP,
 	DstIP:    dstIP,
 	Protocol: layers.IPProtocolUDP,
-	TOS:      0,
 }
 
 var srcIPv6 = net.IP([]byte{0xff, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1})
