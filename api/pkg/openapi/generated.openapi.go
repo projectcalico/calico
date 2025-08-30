@@ -4586,6 +4586,13 @@ func schema_pkg_apis_projectcalico_v3_IPPoolSpec(ref common.ReferenceCallback) c
 							Format:      "",
 						},
 					},
+					"namespaceSelector": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Allows IPPool to allocate for a specific namespace by label selector. If specified, both namespaceSelector and nodeSelector must match for the pool to be used.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 					"ipip": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Deprecated: this field is only used for APIv1 backwards compatibility. Setting this field is not allowed, this field is for internal use only.",

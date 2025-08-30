@@ -1244,6 +1244,100 @@ func validateIPPoolSpec(structLevel validator.StructLevel) {
 		structLevel.ReportError(reflect.ValueOf(pool.CIDR),
 			"IPpool.NodeSelector", "", reason("IP Pool with AllowedUse LoadBalancer must have node selector set to all()"), "")
 	}
+
+	// Check for invalid combination: Tunnel allowedUse with namespaceSelector
+	hasTunnelUse := false
+	for _, use := range pool.AllowedUses {
+		if use == api.IPPoolAllowedUseTunnel {
+			hasTunnelUse = true
+			break
+		}
+	}
+
+	if hasTunnelUse && pool.NamespaceSelector != "" {
+		structLevel.ReportError(reflect.ValueOf(pool.NamespaceSelector),
+			"IPpool.NamespaceSelector", "", reason("IP Pool with AllowedUse Tunnel cannot have namespaceSelector specified - tunnel IPs are not namespaced resources"), "")
+	}
+
+	// Enhanced validation for NodeSelector based on Calico selector reference
+	if pool.NodeSelector != "" {
+		// Validate against Calico selector syntax
+		// Based on https://docs.tigera.io/calico/latest/reference/resources/ippool#node-selector
+
+		// Check for invalid global() selector in nodeSelector context
+		if strings.Contains(pool.NodeSelector, "global(") {
+			structLevel.ReportError(reflect.ValueOf(pool.NodeSelector),
+				"IPpool.NodeSelector", "", reason("global() selector is not valid for IPPool nodeSelector - use all() instead"), "")
+		}
+
+		// Validate selector syntax using Calico's selector parser
+		if err := selector.Validate(pool.NodeSelector); err != nil {
+			structLevel.ReportError(reflect.ValueOf(pool.NodeSelector),
+				"IPpool.NodeSelector", "", reason("invalid node selector syntax: "+err.Error()), "")
+		}
+
+		// Check for reasonable node selector patterns
+		// Valid patterns based on Calico selector reference:
+		// - all() - select all nodes
+		// - k == 'v' - exact match
+		// - k != 'v' - not match
+		// - has(k) - existence check
+		// - k in { 'v1', 'v2' } - set match
+		// - k not in { 'v1', 'v2' } - set not match
+		// - k contains 's' - substring contains
+		// - k starts with 's' - starts with
+		// - k ends with 's' - ends with
+		// - Logical combinations with &&, ||, !, ()
+		if pool.NodeSelector != "all()" &&
+			!strings.Contains(pool.NodeSelector, "==") &&
+			!strings.Contains(pool.NodeSelector, "!=") &&
+			!strings.Contains(pool.NodeSelector, "in") &&
+			!strings.Contains(pool.NodeSelector, "has(") &&
+			!strings.Contains(pool.NodeSelector, "contains") &&
+			!strings.Contains(pool.NodeSelector, "starts with") &&
+			!strings.Contains(pool.NodeSelector, "ends with") {
+			log.Debugf("Node selector %s may not follow common Calico selector patterns", pool.NodeSelector)
+		}
+	}
+
+	// Enhanced validation for NamespaceSelector based on Calico selector reference
+	if pool.NamespaceSelector != "" {
+		// Validate against Calico selector syntax
+		// Based on https://docs.tigera.io/calico/latest/reference/resources/ippool#node-selector
+
+		// Check for invalid global() selector in namespaceSelector context
+		if strings.Contains(pool.NamespaceSelector, "global(") {
+			structLevel.ReportError(reflect.ValueOf(pool.NamespaceSelector),
+				"IPpool.NamespaceSelector", "", reason("global() selector is not valid for IPPool namespaceSelector - use all() instead"), "")
+		}
+
+		// Validate selector syntax using Calico's selector parser
+		if err := selector.Validate(pool.NamespaceSelector); err != nil {
+			structLevel.ReportError(reflect.ValueOf(pool.NamespaceSelector),
+				"IPpool.NamespaceSelector", "", reason("invalid namespace selector syntax: "+err.Error()), "")
+		}
+
+		// Check for reasonable namespace selector patterns
+		// Valid patterns based on Calico selector reference:
+		// - k == 'v' - exact match
+		// - k != 'v' - not match
+		// - has(k) - existence check
+		// - k in { 'v1', 'v2' } - set match
+		// - k not in { 'v1', 'v2' } - set not match
+		// - k contains 's' - substring contains
+		// - k starts with 's' - starts with
+		// - k ends with 's' - ends with
+		// - Logical combinations with &&, ||, !, ()
+		if !strings.Contains(pool.NamespaceSelector, "==") &&
+			!strings.Contains(pool.NamespaceSelector, "!=") &&
+			!strings.Contains(pool.NamespaceSelector, "in") &&
+			!strings.Contains(pool.NamespaceSelector, "has(") &&
+			!strings.Contains(pool.NamespaceSelector, "contains") &&
+			!strings.Contains(pool.NamespaceSelector, "starts with") &&
+			!strings.Contains(pool.NamespaceSelector, "ends with") {
+			log.Debugf("Namespace selector %s may not follow common Calico selector patterns", pool.NamespaceSelector)
+		}
+	}
 }
 
 func vxLanModeEnabled(mode api.VXLANMode) bool {
