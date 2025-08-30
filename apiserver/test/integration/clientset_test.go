@@ -2109,13 +2109,14 @@ func testBlockAffinityClient(client calicoclient.Interface, name string) error {
 	timeout := time.After(500 * time.Millisecond)
 	var timeoutErr error
 	// watch for 2 events
+loop:
 	for i := 0; i < 2; i++ {
 		select {
 		case e := <-w.ResultChan():
 			events = append(events, e)
 		case <-timeout:
 			timeoutErr = fmt.Errorf("timed out waiting for events")
-			break
+			break loop
 		}
 	}
 	if timeoutErr != nil {
