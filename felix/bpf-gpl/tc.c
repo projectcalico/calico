@@ -473,8 +473,12 @@ static CALI_BPF_INLINE void calico_tc_process_ct_lookup(struct cali_tc_ctx *ctx)
 
 	if (nat_res == NAT_MAGLEV) {
 		/* Packet to be handled by maglev*/
-		CALI_DEBUG("Packet handled by maglev");
+		CALI_DEBUG("NAT Lookup determined packet handled by maglev");
 		CALI_JUMP_TO(ctx, PROG_INDEX_MAGLEV);
+		CALI_DEBUG("Failed to jump to maglev program");
+		#if !HAS_MAGLEV_PROG
+		CALI_DEBUG("Maglev program missing");
+		#endif
 		goto deny;
 	}
 
