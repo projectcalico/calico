@@ -22,12 +22,7 @@ from typing import Dict, List, Optional, Tuple
 import openstack
 
 # Calico client imports
-try:
-    import etcd3
-    ETCD_AVAILABLE = True
-except ImportError:
-    ETCD_AVAILABLE = False
-    print("WARNING: etcd3 not available, using calicoctl command line")
+import etcd3
 
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -42,7 +37,6 @@ class QoSResponsivenessTest:
     def __init__(self):
         """Initialize the test environment."""
         self.conn = None
-        self.calico_client = None
         self.etcd_client = None
         # Add unique suffix to avoid conflicts with previous test runs
         self.test_suffix = str(uuid.uuid4())[:8]
@@ -77,23 +71,20 @@ class QoSResponsivenessTest:
             sys.exit(1)
 
         # Set up etcd client for Calico datastore access
-        if ETCD_AVAILABLE:
-            try:
-                etcd_host = os.environ.get('ETCD_HOST', 'localhost')
-                etcd_port = int(os.environ.get('ETCD_PORT', '2379'))
-                self.etcd_client = etcd3.client(host=etcd_host, port=etcd_port)
-                logger.info(f"etcd3 client established: {etcd_host}:{etcd_port}")
-                status = self.etcd_client.status()
-                logger.info(f"status.version = {status.version}")
-                logger.info(f"status.db_size = {status.db_size}")
-                logger.info(f"status.leader = {status.leader}")
-                logger.info(f"status.raft_index = {status.raft_index}")
-                logger.info(f"status.raft_term = {status.raft_term}")
-            except Exception as e:
-                logger.warning(f"Failed to establish etcd connection: {e}")
-                self.etcd_client = None
-        else:
-            logger.info("Using calicoctl command line interface for Calico datastore access")
+        try:
+            etcd_host = os.environ.get('ETCD_HOST', 'localhost')
+            etcd_port = int(os.environ.get('ETCD_PORT', '2379'))
+            self.etcd_client = etcd3.client(host=etcd_host, port=etcd_port)
+            logger.info(f"etcd3 client established: {etcd_host}:{etcd_port}")
+            status = self.etcd_client.status()
+            logger.info(f"status.version = {status.version}")
+            logger.info(f"status.db_size = {status.db_size}")
+            logger.info(f"status.leader = {status.leader}")
+            logger.info(f"status.raft_index = {status.raft_index}")
+            logger.info(f"status.raft_term = {status.raft_term}")
+        except Exception as e:
+            logger.warning(f"Failed to establish etcd connection: {e}")
+            self.etcd_client = None
 
     def cleanup_previous_test_resources(self):
         """Clean up any leftover resources from previous test runs."""
