@@ -15,10 +15,6 @@
 package ut_test
 
 import (
-	. "github.com/onsi/gomega"
-
-	"github.com/sirupsen/logrus"
-
 	"fmt"
 	"hash/fnv"
 	"net"
@@ -27,6 +23,8 @@ import (
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
+	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/bpf/arp"
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
