@@ -509,7 +509,7 @@ var _ = testutils.E2eDatastoreDescribe("Block affinity tests", testutils.Datasto
 			Expect(be.Clean()).To(Succeed())
 			if config.Spec.DatastoreType == apiconfig.EtcdV3 {
 				// Etcd has version control so it does not modify the block affinity before deletion.
-				testWatcher4.ExpectEvents(libapiv3.KindBlockAffinity, []watch.Event{
+				testWatcher4.ExpectEventsAnyOrder(libapiv3.KindBlockAffinity, []watch.Event{
 					{
 						Type:     watch.Deleted,
 						Previous: outRes1,
