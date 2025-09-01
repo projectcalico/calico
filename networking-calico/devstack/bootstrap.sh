@@ -209,10 +209,26 @@ export FORCE=yes
 ./stack.sh
 EOF
 
-# We use a fresh `sudo -u stack -H -E bash ...` invocation here, because with
-# OpenStack Yoga it appears there is something in the stack.sh setup that
-# closes stdin, and that means that bash doesn't read any further commands from
-# stdin after the exit of the ./stack.sh line.
+# We use fresh `sudo -u stack -H -E bash ...` invocations from here on, because with OpenStack Yoga
+# it appears there is something in the stack.sh setup that closes stdin, and that means that bash
+# doesn't read any further commands from stdin after the exit of the ./stack.sh line.
+
+# Run QoS responsiveness tests
+sudo -u stack -H -E bash -x <<'EOF'
+cd /opt/stack/devstack
+
+echo "Running QoS responsiveness tests..."
+cd /opt/stack/devstack
+. openrc admin admin
+
+# Install required Python packages for QoS tests
+sudo pip install openstacksdk etcd3
+
+export ETCD_HOST=${SERVICE_HOST}
+python3 ../calico/networking-calico/devstack/qos_responsiveness_tests.py
+EOF
+
+# Run Tempest tests
 sudo -u stack -H -E bash -x <<'EOF'
 cd /opt/stack/devstack
 if ! ${TEMPEST:-false}; then
@@ -224,48 +240,8 @@ if ! ${TEMPEST:-false}; then
         neutron subnet-create --gateway 10.65.0.1 --enable-dhcp --ip-version 4 --name calico-v4 calico 10.65.0.0/24
     fi
 else
-    # Run mainline Tempest tests.
     source ../calico/devstack/devstackgaterc
     cd /opt/stack/tempest
     tox -eall -- $DEVSTACK_GATE_TEMPEST_REGEX --concurrency=$TEMPEST_CONCURRENCY
-
-    # Run additional QoS responsiveness tests
-    echo "Running QoS responsiveness tests..."
-    cd /opt/stack/devstack
-    . openrc admin admin
-
-    # Install required Python packages for QoS tests
-    sudo pip install openstacksdk
-
-    # Try to install etcd3, but don't fail if it's not available
-    sudo pip install etcd3 || echo "etcd3 not available, using fallback methods"
-    export ETCD_HOST=${SERVICE_HOST}
-
-    # First try the comprehensive QoS responsiveness test
-    echo "Attempting comprehensive QoS responsiveness tests..."
-    python3 ../calico/networking-calico/devstack/qos_responsiveness_tests.py
-    COMPREHENSIVE_TEST_RESULT=$?
-
-    if [ $COMPREHENSIVE_TEST_RESULT -eq 0 ]; then
-        echo "Comprehensive QoS responsiveness tests PASSED"
-        QOS_TEST_RESULT=0
-    else
-        echo "Comprehensive QoS tests failed, running simplified tests..."
-        # Run the simpler test as fallback
-        python3 ../calico/networking-calico/devstack/simple_qos_test.py
-        QOS_TEST_RESULT=$?
-
-        if [ $QOS_TEST_RESULT -eq 0 ]; then
-            echo "Simple QoS responsiveness tests PASSED"
-        else
-            echo "QoS responsiveness tests FAILED"
-        fi
-    fi
-
-    # Exit with error only if both tests failed
-    if [ $QOS_TEST_RESULT -ne 0 ]; then
-        exit $QOS_TEST_RESULT
-    fi
 fi
-
 EOF
