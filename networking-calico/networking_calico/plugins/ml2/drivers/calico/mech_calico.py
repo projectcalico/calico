@@ -724,8 +724,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         # For each Port in set P, do what the syncer would do for that Port.
         LOG.info("%d port(s) affected", len(ports))
         for p in ports:
-            if _port_is_endpoint_port(p):
-                pass
+            pass
 
     def delete_network_postcommit(self, context):
         LOG.info("DELETE_NETWORK_POSTCOMMIT: %s" % context)
