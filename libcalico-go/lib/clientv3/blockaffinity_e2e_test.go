@@ -476,7 +476,7 @@ var _ = testutils.E2eDatastoreDescribe("Block affinity tests", testutils.Datasto
 			})
 
 			By("Cleaning the datastore and expecting deletion events for each configured resource (tests prefix deletes results in individual events for each key)")
-			be.Clean()
+			Expect(be.Clean()).To(Succeed())
 			if config.Spec.DatastoreType == apiconfig.EtcdV3 {
 				// Etcd has version control so it does not modify the block affinity before deletion.
 				testWatcher4.ExpectEvents(libapiv3.KindBlockAffinity, []watch.Event{
@@ -490,12 +490,6 @@ var _ = testutils.E2eDatastoreDescribe("Block affinity tests", testutils.Datasto
 					},
 				})
 			} else {
-				// Clean calls the backend API client's Delete method which does not work for the Kubernetes datastore.
-				// Call Delete manually for Kubernetes datastore tests.
-				_, err = c.BlockAffinities().Delete(ctx, name1, options.DeleteOptions{ResourceVersion: outRes1.ResourceVersion})
-				Expect(err).NotTo(HaveOccurred())
-				_, err = c.BlockAffinities().Delete(ctx, name2, options.DeleteOptions{ResourceVersion: outRes3.ResourceVersion})
-				Expect(err).NotTo(HaveOccurred())
 				testWatcher4.ExpectEvents(libapiv3.KindBlockAffinity, []watch.Event{
 					{
 						Type:     watch.Modified,
