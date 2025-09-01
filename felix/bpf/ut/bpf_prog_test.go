@@ -1379,7 +1379,6 @@ func dumpConsistentHashMap(chMap maps.Map) {
 	m, err := nat.LoadConsistentHashMap(chMap)
 	Expect(err).NotTo(HaveOccurred())
 	for k, v := range m {
-
 		fmt.Printf("%s: %s\n", k, v)
 	}
 }
