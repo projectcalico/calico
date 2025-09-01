@@ -26,10 +26,8 @@ import (
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/projectcalico/calico/felix/fv/containers"
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
 	"github.com/projectcalico/calico/felix/fv/metrics"
-	"github.com/projectcalico/calico/felix/fv/workload"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
@@ -42,12 +40,10 @@ const (
 
 var _ = Context("Config update tests, after starting felix", func() {
 	var (
-		etcd          *containers.Container
 		tc            infrastructure.TopologyContainers
 		felixPID      int
 		client        client.Interface
 		infra         infrastructure.DatastoreInfra
-		w             [3]*workload.Workload
 		cfgChangeTime time.Time
 	)
 
@@ -55,7 +51,8 @@ var _ = Context("Config update tests, after starting felix", func() {
 		if NFTMode() {
 			Skip("TODO: Implement for NFT")
 		}
-		tc, etcd, client, infra = infrastructure.StartSingleNodeEtcdTopology(infrastructure.DefaultTopologyOptions())
+		tc, _, client, infra = infrastructure.StartSingleNodeEtcdTopology(infrastructure.DefaultTopologyOptions())
+		_ = infra
 		felixPID = tc.Felixes[0].GetSinglePID("calico-felix")
 	})
 

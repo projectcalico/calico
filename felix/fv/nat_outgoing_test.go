@@ -24,7 +24,6 @@ import (
 	. "github.com/onsi/gomega"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
-	"github.com/projectcalico/calico/felix/fv/containers"
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
@@ -33,18 +32,15 @@ import (
 
 var _ = infrastructure.DatastoreDescribe("NATOutgoing rule rendering test", []apiconfig.DatastoreType{apiconfig.EtcdV3, apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
 	var (
-		infra          infrastructure.DatastoreInfra
-		tc             infrastructure.TopologyContainers
-		client         client.Interface
-		dumpedDiags    bool
-		externalClient *containers.Container
+		infra  infrastructure.DatastoreInfra
+		tc     infrastructure.TopologyContainers
+		client client.Interface
 	)
 
 	BeforeEach(func() {
 		var err error
 		infra = getInfra()
 
-		dumpedDiags = false
 		opts := infrastructure.DefaultTopologyOptions()
 		opts.IPIPMode = api.IPIPModeNever
 		opts.EnableIPv6 = true

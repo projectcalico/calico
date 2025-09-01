@@ -76,6 +76,10 @@ type Felix struct {
 	// get assigned to the IPv6 Wireguard tunnel.  Filled in by SetExpectedWireguardV6TunnelAddr().
 	ExpectedWireguardV6TunnelAddr string
 
+	// PanicExpected If set to true by the test, disables some diags collection
+	// on Stop()
+	PanicExpected bool
+
 	// IP of the Typha that this Felix is using (if any).
 	TyphaIP string
 
@@ -329,7 +333,7 @@ func (f *Felix) Stop() {
 	if f == nil {
 		return
 	}
-	if BPFMode() {
+	if BPFMode() && !f.PanicExpected {
 		err := f.ExecMayFail("calico-bpf", "connect-time", "clean")
 		if err != nil {
 			logrus.WithError(err).Warn("Failed to clean up BPF connect-time state")

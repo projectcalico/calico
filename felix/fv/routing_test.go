@@ -882,6 +882,8 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 				tc, client = infrastructure.StartNNodeTopology(3, topologyOptions, infra)
 
 				w, w6, hostW, hostW6 = setupWorkloads(infra, tc, topologyOptions, client, enableIPv6)
+				_ = hostW
+				_ = hostW6
 				felixes = tc.Felixes
 
 				// Assign tunnel addresees in IPAM based on the topology.
