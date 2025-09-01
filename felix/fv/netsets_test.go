@@ -30,7 +30,6 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/fv/connectivity"
-	"github.com/projectcalico/calico/felix/fv/containers"
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
 	"github.com/projectcalico/calico/felix/fv/utils"
 	"github.com/projectcalico/calico/felix/fv/workload"
@@ -94,7 +93,6 @@ func (c netsetsConfig) workloadFullLengthCIDR(workloadIdx int, namespaced bool) 
 
 var _ = Context("_NET_SETS_ Network sets tests with initialized Felix and etcd datastore", func() {
 	var (
-		etcd     *containers.Container
 		tc       infrastructure.TopologyContainers
 		felixPID int
 		client   client.Interface
@@ -103,25 +101,9 @@ var _ = Context("_NET_SETS_ Network sets tests with initialized Felix and etcd d
 
 	BeforeEach(func() {
 		topologyOptions := infrastructure.DefaultTopologyOptions()
-		tc, etcd, client, infra = infrastructure.StartSingleNodeEtcdTopology(topologyOptions)
+		tc, _, client, infra = infrastructure.StartSingleNodeEtcdTopology(topologyOptions)
+		_ = infra
 		felixPID = tc.Felixes[0].GetFelixPID()
-	})
-
-	AfterEach(func() {
-		if CurrentGinkgoTestDescription().Failed {
-			if NFTMode() {
-				logNFTDiags(tc.Felixes[0])
-			} else {
-				tc.Felixes[0].Exec("iptables-save", "-c")
-			}
-		}
-		tc.Stop()
-
-		if CurrentGinkgoTestDescription().Failed {
-			etcd.Exec("etcdctl", "get", "/", "--prefix", "--keys-only")
-		}
-		etcd.Stop()
-		infra.Stop()
 	})
 
 	describeConnTests := func(c netsetsConfig) {
@@ -1053,15 +1035,6 @@ var _ = Context("_NET_SETS_ Network sets tests with initialized Felix and etcd d
 					It("should have expected connectivity", assertBaselineNetsetsConnectivity)
 				})
 			})
-		})
-
-		AfterEach(func() {
-			for ii := range w {
-				w[ii].Stop()
-			}
-			for ii := range nw {
-				nw[ii].Stop()
-			}
 		})
 	}
 
