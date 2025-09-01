@@ -81,7 +81,7 @@ func formatSemList(exclusions []string) string {
 	for _, s := range exclusions {
 		quoted = append(quoted, fmt.Sprintf("'%s'", s))
 	}
-	return "[" + strings.Join(quoted, ", ") + "]"
+	return "[" + strings.Join(quoted, ",") + "]"
 }
 
 func printUsageAndExit() {
