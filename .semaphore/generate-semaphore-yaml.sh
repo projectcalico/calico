@@ -10,10 +10,13 @@ for out_file in semaphore.yml semaphore-scheduled-builds.yml; do
 
   # use sed to properly indent blocks
   echo "blocks:" >>$out_file
+
   ls semaphore.yml.d/blocks/*.yml | sort | xargs cat | sed -e 's/^./  &/' >>$out_file
 
   cat semaphore.yml.d/99-after_pipeline.yml >>$out_file
 done
 
+sed -i "s&\${FELIX_CHANGE_IN}&$(cd .. && go run ./hack/cmd/deps sem-change-in felix)&g" semaphore.yml
+sed -i "s&\${FELIX_CHANGE_IN}&true&g" semaphore-scheduled-builds.yml
 sed -i "s/\${FORCE_RUN}/false/g" semaphore.yml
 sed -i "s/\${FORCE_RUN}/true/g" semaphore-scheduled-builds.yml
