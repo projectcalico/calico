@@ -16,7 +16,7 @@ for out_file in semaphore.yml semaphore-scheduled-builds.yml; do
   cat semaphore.yml.d/99-after_pipeline.yml >>$out_file
 done
 
-sed -i "s&\${FELIX_CHANGE_IN}&$(cd .. && go run ./hack/deps sem-change-in felix)&g" semaphore.yml
+sed -i "s&\${FELIX_CHANGE_IN}&$(cd .. && go run ./hack/cmd/deps sem-change-in felix)&g" semaphore.yml
 sed -i "s&\${FELIX_CHANGE_IN}&true&g" semaphore-scheduled-builds.yml
 sed -i "s/\${FORCE_RUN}/false/g" semaphore.yml
 sed -i "s/\${FORCE_RUN}/true/g" semaphore-scheduled-builds.yml

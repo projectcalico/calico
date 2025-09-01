@@ -95,6 +95,7 @@ protobuf:
 
 generate:
 	$(MAKE) gen-semaphore-yaml
+	$(MAKE) gen-dep-files
 	$(MAKE) protobuf
 	$(MAKE) -C lib gen-files
 	$(MAKE) -C api gen-files
@@ -121,6 +122,15 @@ get-operator-crds: var-require-all-OPERATOR_BRANCH
 
 gen-semaphore-yaml:
 	$(DOCKER_GO_BUILD) sh -c "cd .semaphore && ./generate-semaphore-yaml.sh"
+
+gen-dep-files: felix/deps.txt
+
+.PHONY: felix/deps.txt
+felix/deps.txt:
+	echo "!!! GENERATED FILE, DO NOT EDIT !!!" > felix/deps.txt && \
+	echo "This file contains the list of modules that this package depends on" >> felix/deps.txt && \
+	echo "in order to trigger CI on changes" >> felix/deps.txt && \
+	$(DOCKER_GO_BUILD) sh -c "go run ./hack/cmd/deps modules felix >> felix/deps.txt"
 
 # Build the tigera-operator helm chart.
 chart: bin/tigera-operator-$(GIT_VERSION).tgz
