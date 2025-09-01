@@ -20,6 +20,10 @@
 #include <errno.h>
 #include "globals.h"
 #include "ip_addr.h"
+#include "str_error.h"
+#include <stdio.h>
+#include <unistd.h>
+#include <string.h>
 
 static void set_errno(int ret) {
 	errno = ret >= 0 ? ret : -ret;
@@ -496,4 +500,24 @@ void bpf_map_batch_delete(int fd, const void *keys, __u32 *count, __u64 flags)
 int num_possible_cpu()
 {
     return libbpf_num_possible_cpus();
+}
+
+int create_bpf_map(enum bpf_map_type type, unsigned int key_size, unsigned int value_size,
+                   unsigned int max_entries, unsigned int flags, const char *name)
+{
+	LIBBPF_OPTS(bpf_map_create_opts, create_attr);
+
+	create_attr.map_flags = flags;
+
+	int fd;
+	int err;
+	fd = bpf_map_create(type, name, key_size, value_size, max_entries, &create_attr);
+	if (fd < 0) {
+		char *cp, errmsg[STRERR_BUFSIZE];
+
+		err = -errno;
+		cp = libbpf_strerror_r(err, errmsg, sizeof(errmsg));
+		printf("libbpf warn: Error in bpf_map_create(%s):%s(%d).\n", name, cp, err);
+	}
+	return fd;
 }
