@@ -29,7 +29,6 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/fv/connectivity"
-	"github.com/projectcalico/calico/felix/fv/containers"
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
 	"github.com/projectcalico/calico/felix/fv/utils"
 	"github.com/projectcalico/calico/felix/fv/workload"
@@ -52,7 +51,6 @@ func (c latencyConfig) workloadIP(workloadIdx int) string {
 
 var _ = Context("_BPF-SAFE_ Latency tests with initialized Felix and etcd datastore", func() {
 	var (
-		etcd   *containers.Container
 		tc     infrastructure.TopologyContainers
 		client client.Interface
 		infra  infrastructure.DatastoreInfra
@@ -65,7 +63,8 @@ var _ = Context("_BPF-SAFE_ Latency tests with initialized Felix and etcd datast
 		topologyOptions.IPIPMode = api.IPIPModeNever
 		topologyOptions.ExtraEnvVars["FELIX_BPFLOGLEVEL"] = "off" // For best perf.
 
-		tc, etcd, client, infra = infrastructure.StartSingleNodeEtcdTopology(topologyOptions)
+		tc, _, client, infra = infrastructure.StartSingleNodeEtcdTopology(topologyOptions)
+		_ = infra
 		_ = tc.Felixes[0].GetFelixPID()
 
 		var err error

@@ -304,15 +304,14 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 	)
 	return infrastructure.DatastoreDescribe(desc, []apiconfig.DatastoreType{apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
 		var (
-			infra              infrastructure.DatastoreInfra
-			tc                 infrastructure.TopologyContainers
-			calicoClient       client.Interface
-			cc                 *Checker
-			externalClient     *containers.Container
-			deadWorkload       *workload.Workload
-			options            infrastructure.TopologyOptions
-			numericProto       uint8
-			felixPanicExpected bool
+			infra          infrastructure.DatastoreInfra
+			tc             infrastructure.TopologyContainers
+			calicoClient   client.Interface
+			cc             *Checker
+			externalClient *containers.Container
+			deadWorkload   *workload.Workload
+			options        infrastructure.TopologyOptions
+			numericProto   uint8
 		)
 
 		containerIP := func(c *containers.Container) string {
@@ -343,8 +342,6 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 		}
 
 		BeforeEach(func() {
-			felixPanicExpected = false
-
 			iOpts := []infrastructure.CreateOption{}
 			if testOpts.ipv6 {
 				iOpts = append(iOpts,
@@ -634,11 +631,10 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					BeforeEach(func() {
 						// Disable core dumps, we know we're about to cause a panic.
 						options.FelixCoreDumpsEnabled = false
-						felixPanicExpected = true
+						tc.Felixes[0].PanicExpected = true
 					})
 
 					It("0xffff000 not covering BPF bits should panic", func() {
-						felixPanicExpected = true
 						panicC := tc.Felixes[0].WatchStdoutFor(regexp.MustCompile("PANIC.*IptablesMarkMask/NftablesMarkMask doesn't cover bits that are used"))
 
 						fc, err := calicoClient.FelixConfigurations().Get(context.Background(), "default", options2.GetOptions{})

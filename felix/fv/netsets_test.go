@@ -30,7 +30,6 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/fv/connectivity"
-	"github.com/projectcalico/calico/felix/fv/containers"
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
 	"github.com/projectcalico/calico/felix/fv/utils"
 	"github.com/projectcalico/calico/felix/fv/workload"
@@ -94,7 +93,6 @@ func (c netsetsConfig) workloadFullLengthCIDR(workloadIdx int, namespaced bool) 
 
 var _ = Context("_NET_SETS_ Network sets tests with initialized Felix and etcd datastore", func() {
 	var (
-		etcd     *containers.Container
 		tc       infrastructure.TopologyContainers
 		felixPID int
 		client   client.Interface
@@ -103,7 +101,8 @@ var _ = Context("_NET_SETS_ Network sets tests with initialized Felix and etcd d
 
 	BeforeEach(func() {
 		topologyOptions := infrastructure.DefaultTopologyOptions()
-		tc, etcd, client, infra = infrastructure.StartSingleNodeEtcdTopology(topologyOptions)
+		tc, _, client, infra = infrastructure.StartSingleNodeEtcdTopology(topologyOptions)
+		_ = infra
 		felixPID = tc.Felixes[0].GetFelixPID()
 	})
 
