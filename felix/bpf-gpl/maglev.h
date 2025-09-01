@@ -5,8 +5,7 @@
 #ifndef __CALI_MAGLEV_H__
 #define __CALI_MAGLEV_H__
 
-
-static CALI_BPF_INLINE int maglev_select_backend(struct cali_tc_ctx *ctx)
+static CALI_BPF_INLINE struct calico_nat_dest* maglev_select_backend(struct cali_tc_ctx *ctx)
 {
 	__u32 hash;
 	// ipv46_addr_t *ip_src = &ctx->state->ip_src;
@@ -27,23 +26,27 @@ static CALI_BPF_INLINE int maglev_select_backend(struct cali_tc_ctx *ctx)
 #endif
 	hash = 0;
 
-	struct calico_ch_key ch_key;
+	struct calico_ch_key ch_key = {
+		.ordinal = (hash % 31),
+		.vip = *ip_dst,
+		.port = dport,
+		.proto = ip_proto,
+	};
 	struct calico_nat_dest *ch_val;
 
-	ch_key.ordinal = hash % 1009;
-	ch_key.vip = *ip_dst;
-	ch_key.port = dport;
-	ch_key.proto = ip_proto;
 	ch_val = cali_ch_lookup_elem(&ch_key);
 
 	if (!ch_val) {
+		__u32 proto_debug = ip_proto;
 		CALI_DEBUG("Maglev: no backend found for " IP_FMT ":%d", debug_ip(*ip_dst), dport);
-		return -1;
+		CALI_DEBUG("Packet proto: %d, Ordinal: %d", proto_debug, ch_key.ordinal);
+
+		return NULL;
 	}
 
 	/* TODO setup nat_dest */
 
-	return 0;
+	return ch_val;
 }
 
 #endif /* __CALI_MAGLEV_H__ */
