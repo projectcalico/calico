@@ -3780,4 +3780,3 @@ func TestNATOutExcludeHosts(t *testing.T) {
 	}, withNATOutExcludeHosts())
 	expectMark(tcdefs.MarkSeen)
 }
-

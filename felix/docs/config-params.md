@@ -1908,10 +1908,10 @@ Sets the size of the ConsistentHash map. The map must be large enough to hold
 | --- | --- |
 | Environment variable | `FELIX_BPFMapSizeConsistentHash` |
 | Encoding (env var/config file) | Integer |
-| Default value (above encoding) | `1009500` |
+| Default value (above encoding) | `1009000` |
 | `FelixConfiguration` field | `bpfMapSizeConsistentHash` (YAML) `BPFMapSizeConsistentHash` (Go API) |
 | `FelixConfiguration` schema | Integer |
-| Default value (YAML) | `1009500` |
+| Default value (YAML) | `1009000` |
 | Notes | Required. | 
 
 ### `BPFMapSizeIPSets` (config file) / `bpfMapSizeIPSets` (YAML)
