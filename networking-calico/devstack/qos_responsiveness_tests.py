@@ -693,19 +693,9 @@ def possible_port_states():
             if network_qos_policy_id is None and port_qos_policy_id is None:
                 states.append(state_base)
                 continue
-            if network_qos_policy_id is not None and port_qos_policy_id is not None:
-                # The network QoS state is going to be shadowed, so only give
-                # it one possible value.  (To keep the combinatorics down.)
-                state_base['network_qos_rules'] = rule_sets[0]
-            if port_qos_policy_id is not None:
-                for rules in rule_sets:
-                    state = state_base.copy()
-                    state['port_qos_rules'] = rules
-                    states.append(state)
-                continue
             for rules in rule_sets:
                 state = state_base.copy()
-                state['network_qos_rules'] = rules
+                state['qos_rules'] = rules
                 states.append(state)
     return states
 
@@ -718,33 +708,19 @@ def only_one_change(a, b):
         changes.append(f"change port_qos_policy_id to {b['port_qos_policy_id']}")
     if len(changes) > 1:
         return False
-    a_net_rules = set(a.get('network_qos_rules', []))
-    b_net_rules = set(b.get('network_qos_rules', []))
-    d = list(a_net_rules - b_net_rules)
-    if len(d) > 1:
-        return False
-    if len(d) == 1:
-        changes.append(f"remove net-level rule {d[0]}")
-    d = list(b_net_rules - a_net_rules)
-    if len(d) > 1:
-        return False
-    if len(d) == 1:
-        changes.append(f"add net-level rule {d[0]}")
+    # Only compare the rules when IDs are not changing.
+    if len(changes) == 0:
+        a_rules = a.get('qos_rules', [])
+        b_rules = b.get('qos_rules', [])
+        for r in a_rules:
+            if r not in b_rules:
+                changes.append(f"remove rule {r}")
+                for r in b_rules:
+                    if r not in a_rules:
+                        changes.append(f"add rule {r}")
     if len(changes) > 1:
         return False
-    a_port_rules = set(a.get('port_qos_rules', []))
-    b_port_rules = set(b.get('port_qos_rules', []))
-    d = list(a_port_rules - b_port_rules)
-    if len(d) > 1:
-        return False
-    if len(d) == 1:
-        changes.append(f"remove port-level rule {d[0]}")
-    d = list(b_port_rules - a_port_rules)
-    if len(d) > 1:
-        return False
-    if len(d) == 1:
-        changes.append(f"add port-level rule {d[0]}")
-    if len(changes) > 1:
+    if len(changes) == 0:
         return False
     return changes[0]
 
@@ -758,6 +734,7 @@ def calculate_sequences():
     sequences = []
     making_progress = True
     while making_progress:
+        logger.info("Try new sequence")
         # Try to calculate a new sequence to pass through some of the remaining
         # arrival states.
         current_state = possible_states[0]
@@ -765,6 +742,7 @@ def calculate_sequences():
         making_progress = False
         continue_current_sequence = True
         while continue_current_sequence:
+            logger.info("Continue current sequence")
             continue_current_sequence = False
             for possible_next in remaining_arrival_states:
                 if only_one_change(current_state, possible_next):
@@ -776,6 +754,8 @@ def calculate_sequences():
                     continue_current_sequence = True
                     break
             for possible_next in used_arrival_states:
+                if possible_next in sequence:
+                    continue
                 if only_one_change(current_state, possible_next):
                     sequence.append(possible_next)
                     current_state = possible_next
@@ -783,6 +763,7 @@ def calculate_sequences():
                     break
         if making_progress:
             sequences.append(sequence)
+            # making_progress = False
     logger.info(f"Calculated {len(sequences)} sequences")
     logger.info(f"Covered {len(used_arrival_states)} arrival states, missed {len(remaining_arrival_states)}")
     return sequences
@@ -801,7 +782,7 @@ def main():
 
     sequences = calculate_sequences()
     for sequence in sequences:
-        logger.info("New sequence:")
+        logger.info("New sequence with length %d:", len(sequence))
         current_state = port_states[0]
         for nxt in sequence:
             change = only_one_change(current_state, nxt)
