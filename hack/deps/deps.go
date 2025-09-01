@@ -34,9 +34,54 @@ func main() {
 		printLocalDirs(pkg)
 	case "test-exclusions":
 		printTestExclusions(pkg)
+	case "sem-change-in":
+		printSemChangeIn(pkg)
 	default:
 		printUsageAndExit()
 	}
+}
+
+var defaultInclusions = []string{
+	"/metadata.mk",
+	"/lib.Makefile",
+	"/hack/test/certs/",
+}
+
+var defaultExclusions = []string{
+	"/**/.gitignore",
+	"/**/README.md",
+	"/**/LICENSE",
+}
+
+func printSemChangeIn(pkg string) {
+	localDirs, err := loadLocalDirs(pkg)
+	if err != nil {
+		logrus.Fatalln("Failed to load local dirs:", err)
+		os.Exit(1)
+	}
+
+	var inclusions []string
+	inclusions = append(inclusions, pkg)
+	inclusions = append(inclusions, defaultInclusions...)
+	for _, dir := range localDirs {
+		if strings.HasPrefix(dir+"/", pkg) {
+			continue // already included
+		}
+		inclusions = append(inclusions, dir+"/*.go")
+	}
+
+	exclusions := calculateTestExclusionGlobs(pkg, localDirs)
+	exclusions = append(exclusions, defaultExclusions...)
+
+	_, _ = fmt.Printf("change_in(%s, {exclude: %s})\n", formatSemList(inclusions), formatSemList(exclusions))
+}
+
+func formatSemList(exclusions []string) string {
+	var quoted []string
+	for _, s := range exclusions {
+		quoted = append(quoted, fmt.Sprintf("'%s'", s))
+	}
+	return "[" + strings.Join(quoted, ", ") + "]"
 }
 
 func printUsageAndExit() {
