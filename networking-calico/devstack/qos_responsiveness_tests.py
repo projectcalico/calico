@@ -775,19 +775,19 @@ def main():
         print(__doc__)
         return 0
 
-    port_states = possible_port_states()
-    logger.info("There are %d possible port states", len(port_states))
-    for s in port_states:
-        logger.info(f"{s}")
-
-    sequences = calculate_sequences()
-    for sequence in sequences:
-        logger.info("New sequence with length %d:", len(sequence))
-        current_state = port_states[0]
-        for nxt in sequence:
-            change = only_one_change(current_state, nxt)
-            logger.info(f" {change} -> {nxt}")
-            current_state = nxt
+    # port_states = possible_port_states()
+    # logger.info("There are %d possible port states", len(port_states))
+    # for s in port_states:
+    #     logger.info(f"{s}")
+    #
+    # sequences = calculate_sequences()
+    # for sequence in sequences:
+    #     logger.info("New sequence with length %d:", len(sequence))
+    #     current_state = port_states[0]
+    #     for nxt in sequence:
+    #         change = only_one_change(current_state, nxt)
+    #         logger.info(f" {change} -> {nxt}")
+    #         current_state = nxt
 
     logger.info("Initializing QoS Responsiveness Test Suite...")
 
