@@ -29,7 +29,7 @@ static CALI_BPF_INLINE int do_nat_common(struct bpf_sock_addr *ctx, __u8 proto, 
 			proto == IPPROTO_UDP && !connect ? CTLB_UDP_NOT_SEEN_TIMEO : 0, /* enforce affinity UDP */
 			proto == IPPROTO_UDP && !connect /* update affinity timer */);
 	if (!nat_dest) {
-		CALI_INFO("NAT miss."); 
+		CALI_INFO("NAT miss.");
 		if (res == NAT_NO_BACKEND) {
 			err = -1;
 		}
