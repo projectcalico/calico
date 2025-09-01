@@ -77,13 +77,30 @@ var (
 	felixNodeConfigNamePrefix = "node."
 )
 
+type runConf struct {
+	bailOutAfterUpgrade bool
+}
+
+type RunOpt func(*runConf)
+
+func WithBailOutAfterUpgrade(bail bool) RunOpt {
+	return func(c *runConf) {
+		c.bailOutAfterUpgrade = bail
+	}
+}
+
 // This file contains the main startup processing for the calico/node.  This
 // includes:
 //   - Detecting IP address and Network to use for BGP
 //   - Configuring the node resource with IP/AS information provided in the
 //     environment, or autodetected.
 //   - Creating default IP Pools for quick-start use
-func Run() {
+func Run(opts ...RunOpt) {
+	var conf runConf
+	for _, opt := range opts {
+		opt(&conf)
+	}
+
 	// Check $CALICO_STARTUP_LOGLEVEL to capture early log statements
 	ConfigureLogging()
 
@@ -121,6 +138,11 @@ func Run() {
 	if err := cli.IPAM().UpgradeHost(upgradeCtx, nodeName); err != nil {
 		log.WithError(err).Errorf("Unable to uprade host's IPAM resources.")
 		utils.Terminate()
+	}
+
+	if conf.bailOutAfterUpgrade {
+		log.Info("Exiting after datastore migration as requested.")
+		return
 	}
 
 	// Query the current Node resources.  We update our node resource with
