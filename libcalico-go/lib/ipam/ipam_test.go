@@ -192,7 +192,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			Expect(err).NotTo(HaveOccurred())
 
 			log.SetLevel(log.WarnLevel) // Cleaning after a large test can generate a lot of spam.
-			bc.Clean()
+			Expect(bc.Clean()).To(Succeed())
 			log.SetLevel(log.InfoLevel)
 
 			// Build a new pool accessor for these tests.
@@ -222,7 +222,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 
 			// Create the node object.
 			hostname = "host-perf"
-			Expect(applyNode(bc, kc, hostname, map[string]string{"foo": "bar"})).To(Succeed())
+			applyNode(bc, kc, hostname, map[string]string{"foo": "bar"})
 		})
 
 		AfterEach(func() {
@@ -335,7 +335,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			// This condition can happen in real clusters between kube-controllers and the tunnel IP allocation process in calico/node.
 
 			// Set up a node and pool for the test.
-			bc.Clean()
+			Expect(bc.Clean()).To(Succeed())
 			handle := "testnode-ipip-tunnel-address"
 			hostname := "testnode"
 			applyNode(bc, kc, hostname, map[string]string{"foo": "bar"})
@@ -415,7 +415,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			// date.
 
 			// Set up a node and pool for the test. Ensure we have a clean starting spot.
-			bc.Clean()
+			Expect(bc.Clean()).To(Succeed())
 			handle := "testnode-ipip-tunnel-address"
 			hostname := "testnode"
 			applyNode(bc, kc, hostname, map[string]string{"foo": "bar"})
@@ -570,7 +570,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 		Context("With valid pool", func() {
 			BeforeEach(func() {
 				// Remove all data in the datastore.
-				bc.Clean()
+				Expect(bc.Clean()).To(Succeed())
 
 				// Create an IP pool
 				applyPool("10.0.0.0/24", true, "all()")
@@ -581,7 +581,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			})
 
 			AfterEach(func() {
-				bc.Clean()
+				Expect(bc.Clean()).To(Succeed())
 			})
 
 			It("Should return ResourceNotExist error on no block", func() {
@@ -640,7 +640,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 		var hostname string
 		BeforeEach(func() {
 			// Remove all data in the datastore.
-			bc.Clean()
+			Expect(bc.Clean()).To(Succeed())
 
 			// Create an IP pool
 			deleteAllPools()
@@ -652,7 +652,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 		})
 
 		AfterEach(func() {
-			bc.Clean()
+			Expect(bc.Clean()).To(Succeed())
 		})
 
 		It("before adding reservation, should assign all IPs", func() {
@@ -724,7 +724,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			// Remove all data in the datastore.
 			bc, err = backend.NewClient(config)
 			Expect(err).NotTo(HaveOccurred())
-			bc.Clean()
+			Expect(bc.Clean()).To(Succeed())
 
 			// Create an IP pool
 			applyPoolWithBlockSize("10.0.0.0/24", true, "all()", 30)
@@ -908,7 +908,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 		sentinelIP := net.ParseIP("10.0.0.1")
 
 		It("Should setup a pool with no free addresses", func() {
-			bc.Clean()
+			Expect(bc.Clean()).To(Succeed())
 			deleteAllPools()
 
 			applyNode(bc, kc, host, nil)
@@ -973,13 +973,11 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 
 		Context("AutoAssign a single IP without specifying a pool", func() {
 			It("should auto-assign from the only available pool", func() {
-				bc.Clean()
+				Expect(bc.Clean()).To(Succeed())
 				deleteAllPools()
 
-				err := applyNode(bc, kc, hostA, nil)
-				Expect(err).NotTo(HaveOccurred())
-				err = applyNode(bc, kc, hostB, nil)
-				Expect(err).NotTo(HaveOccurred())
+				applyNode(bc, kc, hostA, nil)
+				applyNode(bc, kc, hostB, nil)
 				applyPool("10.0.0.0/24", true, "")
 
 				args := AutoAssignArgs{
@@ -1105,14 +1103,11 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 		It("should respect IPAMConfig.StrictAffinity when it is changed", func() {
 			ctx := context.Background()
 
-			bc.Clean()
+			Expect(bc.Clean()).To(Succeed())
 			deleteAllPools()
 
-			err := applyNode(bc, kc, node1, map[string]string{"foo": "bar"})
-			Expect(err).NotTo(HaveOccurred())
-
-			err = applyNode(bc, kc, node2, map[string]string{"foo": "bar"})
-			Expect(err).NotTo(HaveOccurred())
+			applyNode(bc, kc, node1, map[string]string{"foo": "bar"})
+			applyNode(bc, kc, node2, map[string]string{"foo": "bar"})
 
 			// Only one block can be created out of the pool.
 			// When StrictAffinity is false, both nodes will be able to assign IP addresses
@@ -1121,7 +1116,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 
 			// StrictAffinity is false
 			cfg := IPAMConfig{AutoAllocateBlocks: true, StrictAffinity: false}
-			err = ic.SetIPAMConfig(ctx, cfg)
+			err := ic.SetIPAMConfig(ctx, cfg)
 			Expect(err).NotTo(HaveOccurred())
 
 			applyPoolWithBlockSize("10.0.0.0/28", true, `foo == "bar"`, 28)
@@ -1206,14 +1201,11 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 		It("should borrow and release borrowed IPs as normal", func() {
 			ctx := context.Background()
 
-			bc.Clean()
+			Expect(bc.Clean()).To(Succeed())
 			deleteAllPools()
 
-			err := applyNode(bc, kc, node1, map[string]string{"foo": "bar"})
-			Expect(err).NotTo(HaveOccurred())
-
-			err = applyNode(bc, kc, node2, map[string]string{"foo": "bar"})
-			Expect(err).NotTo(HaveOccurred())
+			applyNode(bc, kc, node1, map[string]string{"foo": "bar"})
+			applyNode(bc, kc, node2, map[string]string{"foo": "bar"})
 
 			// Only one block can be created out of the pool.
 			// When StrictAffinity is false, both nodes will be able to assign IP addresses
@@ -1222,7 +1214,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 
 			// StrictAffinity is false
 			cfg := IPAMConfig{AutoAllocateBlocks: true, StrictAffinity: false}
-			err = ic.SetIPAMConfig(ctx, cfg)
+			err := ic.SetIPAMConfig(ctx, cfg)
 			Expect(err).NotTo(HaveOccurred())
 
 			applyPoolWithBlockSize("10.0.0.0/28", true, `foo == "bar"`, 28)
@@ -1259,18 +1251,15 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 
 		It("should respect MaxBlocksPerHost", func() {
 			ctx := context.Background()
-			bc.Clean()
+			Expect(bc.Clean()).To(Succeed())
 			deleteAllPools()
 
-			err := applyNode(bc, kc, node1, map[string]string{"foo": "bar"})
-			Expect(err).NotTo(HaveOccurred())
-
-			err = applyNode(bc, kc, node2, map[string]string{"foo": "bar"})
-			Expect(err).NotTo(HaveOccurred())
+			applyNode(bc, kc, node1, map[string]string{"foo": "bar"})
+			applyNode(bc, kc, node2, map[string]string{"foo": "bar"})
 
 			// StrictAffinity is true, max blocks per host is 2
 			cfg := IPAMConfig{AutoAllocateBlocks: true, StrictAffinity: true, MaxBlocksPerHost: 2}
-			err = ic.SetIPAMConfig(ctx, cfg)
+			err := ic.SetIPAMConfig(ctx, cfg)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Pool is a /28, with /30 blocks. e.g., 4 blocks with 4 addresses each.
@@ -1395,12 +1384,9 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			longHostname2 = fmt.Sprintf("%s-two", longHostname[:4])
 			Expect(len(longHostname)).To(BeNumerically("==", 252))
 
-			err := applyNode(bc, kc, args.Hostname, nil)
-			Expect(err).NotTo(HaveOccurred())
-			err = applyNode(bc, kc, longHostname, nil)
-			Expect(err).NotTo(HaveOccurred())
-			err = applyNode(bc, kc, longHostname2, nil)
-			Expect(err).NotTo(HaveOccurred())
+			applyNode(bc, kc, args.Hostname, nil)
+			applyNode(bc, kc, longHostname, nil)
+			applyNode(bc, kc, longHostname2, nil)
 		})
 
 		AfterEach(func() {
@@ -1502,11 +1488,10 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 		}
 
 		It("should get an IP from pool1 when explicitly requesting from that pool", func() {
-			bc.Clean()
+			Expect(bc.Clean()).To(Succeed())
 			deleteAllPools()
 
-			err := applyNode(bc, kc, host, nil)
-			Expect(err).NotTo(HaveOccurred())
+			applyNode(bc, kc, host, nil)
 			applyPool("10.0.0.0/24", true, "")
 			applyPool("20.0.0.0/24", true, "")
 
@@ -1641,7 +1626,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			pool1 := cnet.MustParseNetwork("10.0.0.0/24")
 			pool2 := cnet.MustParseNetwork("20.0.0.0/24")
 
-			bc.Clean()
+			Expect(bc.Clean()).To(Succeed())
 			deleteAllPools()
 
 			applyNode(bc, kc, host, map[string]string{"foo": "bar"})
@@ -1673,7 +1658,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			host := "host"
 			pool1 := cnet.MustParseNetwork("10.0.0.0/24")
 
-			bc.Clean()
+			Expect(bc.Clean()).To(Succeed())
 			deleteAllPools()
 
 			applyNode(bc, kc, host, map[string]string{"foo": "bar"})
@@ -1746,7 +1731,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			host := "host"
 			pool1 := cnet.MustParseNetwork("10.0.0.0/24")
 
-			bc.Clean()
+			Expect(bc.Clean()).To(Succeed())
 			deleteAllPools()
 
 			applyNode(bc, kc, host, map[string]string{"foo": "bar"})
@@ -1841,7 +1826,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			node2 := "host2"
 			pool1 := cnet.MustParseNetwork("10.0.0.0/30")
 
-			bc.Clean()
+			Expect(bc.Clean()).To(Succeed())
 			deleteAllPools()
 
 			applyNode(bc, kc, node1, map[string]string{"foo": "bar"})
@@ -1905,7 +1890,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			host := "host"
 			pool1 := cnet.MustParseNetwork("10.0.0.0/24")
 
-			bc.Clean()
+			Expect(bc.Clean()).To(Succeed())
 			deleteAllPools()
 
 			applyNode(bc, kc, host, map[string]string{"foo": "bar"})
@@ -1992,7 +1977,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			host := "host"
 			pool1 := cnet.MustParseNetwork("10.0.0.0/24")
 
-			bc.Clean()
+			Expect(bc.Clean()).To(Succeed())
 			deleteAllPools()
 
 			applyNode(bc, kc, host, map[string]string{"foo": "bar"})
@@ -2108,7 +2093,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			host := "host"
 			pool1 := cnet.MustParseNetwork("10.0.0.0/24")
 
-			bc.Clean()
+			Expect(bc.Clean()).To(Succeed())
 			deleteAllPools()
 
 			applyNode(bc, kc, host, map[string]string{"foo": "bar"})
@@ -2193,7 +2178,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 				Hostname:    host,
 				IPv4Pools:   []cnet.IPNet{pool1, pool3},
 			}
-			bc.Clean()
+			Expect(bc.Clean()).To(Succeed())
 			deleteAllPools()
 
 			applyNode(bc, kc, host, nil)
@@ -2298,7 +2283,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 				IPv4Pools:             []cnet.IPNet{pool1, pool3},
 				HostReservedAttrIPv4s: rsvdAttrWindows,
 			}
-			bc.Clean()
+			Expect(bc.Clean()).To(Succeed())
 			deleteAllPools()
 
 			applyNode(bc, kc, host, nil)
@@ -2401,7 +2386,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 		var s *blockAssignState
 
 		BeforeEach(func() {
-			bc.Clean()
+			Expect(bc.Clean()).To(Succeed())
 			deleteAllPools()
 
 			applyNode(bc, kc, host, nil)
@@ -2558,7 +2543,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 	DescribeTable("AutoAssign: requested IPs vs returned IPs",
 		func(host string, cleanEnv bool, pools []pool, usePool string, inv4, inv6 int, expv4ia, expv6ia *IPAMAssignments, blockLimit int, strictAffinity bool, expError error) {
 			if cleanEnv {
-				bc.Clean()
+				Expect(bc.Clean()).To(Succeed())
 				deleteAllPools()
 			}
 			applyNode(bc, kc, host, nil)
@@ -2979,7 +2964,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 				Hostname: host,
 			}
 			if cleanEnv {
-				bc.Clean()
+				Expect(bc.Clean()).To(Succeed())
 				deleteAllPools()
 			}
 
@@ -3033,7 +3018,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			hostname := "host-seqnum-test"
 
 			// Ensure a clean environment before each test.
-			bc.Clean()
+			Expect(bc.Clean()).To(Succeed())
 			deleteAllPools()
 			applyNode(bc, kc, hostname, nil)
 			defer deleteNode(bc, kc, hostname)
@@ -3090,7 +3075,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 
 			// If we cleaned the datastore then recreate the pools.
 			if cleanEnv {
-				bc.Clean()
+				Expect(bc.Clean()).To(Succeed())
 				deleteAllPools()
 			}
 
@@ -3176,7 +3161,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			inIPNet := cnet.MustParseNetwork(args.inNet)
 
 			if args.cleanEnv {
-				bc.Clean()
+				Expect(bc.Clean()).To(Succeed())
 				deleteAllPools()
 			}
 
@@ -3232,7 +3217,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 		ctx := context.Background()
 
 		BeforeEach(func() {
-			bc.Clean()
+			Expect(bc.Clean()).To(Succeed())
 		})
 
 		It("should get the default IPAMConfig if one doesn't exist", func() {
@@ -3416,6 +3401,7 @@ func getAffineBlocks(backend bapi.Client, host string) []cnet.IPNet {
 		} else {
 			Expect(err).NotTo(HaveOccurred(), "Error getting affine blocks: %v", err)
 		}
+		return nil
 	}
 
 	// Iterate through and extract the block CIDRs.
@@ -3448,7 +3434,11 @@ func deletePool(cidr string) {
 	delete(ipPools.pools, cidr)
 }
 
-func applyNode(c bapi.Client, kc *kubernetes.Clientset, host string, labels map[string]string) error {
+func applyNode(c bapi.Client, kc *kubernetes.Clientset, host string, labels map[string]string) {
+	ExpectWithOffset(1, tryApplyNode(c, kc, host, labels)).NotTo(HaveOccurred())
+}
+
+func tryApplyNode(c bapi.Client, kc *kubernetes.Clientset, host string, labels map[string]string) error {
 	if kc != nil {
 		// If a k8s clientset was provided, create the node in Kubernetes.
 		n := corev1.Node{
@@ -3496,9 +3486,9 @@ func applyNode(c bapi.Client, kc *kubernetes.Clientset, host string, labels map[
 
 func deleteNode(c bapi.Client, kc *kubernetes.Clientset, host string) {
 	if kc != nil {
-		kc.CoreV1().Nodes().Delete(context.Background(), host, metav1.DeleteOptions{})
+		Expect(kc.CoreV1().Nodes().Delete(context.Background(), host, metav1.DeleteOptions{})).To(Succeed())
 	} else {
-		c.Delete(context.Background(), &model.ResourceKey{Name: host, Kind: libapiv3.KindNode}, "")
+		Expect(c.Delete(context.Background(), &model.ResourceKey{Name: host, Kind: libapiv3.KindNode}, "")).To(Succeed())
 	}
 }
 
