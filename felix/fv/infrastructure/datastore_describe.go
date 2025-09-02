@@ -39,20 +39,40 @@ func DatastoreDescribe(description string, datastores []apiconfig.DatastoreType,
 
 		Describe(fmt.Sprintf("%s (%s backend)", description, ds), func() {
 			var coreFilesAtStart set.Set[string]
+			var currentInfra []DatastoreInfra
 			BeforeEach(func() {
 				coreFilesAtStart = readCoreFiles()
+				currentInfra = nil
 			})
 
+			// Pick the base factory for this datastore, then wrap it to record the created infra.
+			var baseFactory InfraFactory
 			switch ds {
 			case apiconfig.EtcdV3:
-				body(createEtcdDatastoreInfra)
+				baseFactory = createEtcdDatastoreInfra
 			case apiconfig.Kubernetes:
-				body(createK8sDatastoreInfra)
+				baseFactory = createK8sDatastoreInfra
 			default:
 				panic(fmt.Errorf("Unknown DatastoreType, %s", ds))
 			}
+			wrappedFactory := func(opts ...CreateOption) DatastoreInfra {
+				inf := baseFactory(opts...)
+				currentInfra = append(currentInfra, inf)
+				return inf
+			}
+			body(wrappedFactory)
 
 			AfterEach(func() {
+				// Always stop the infra after each test (collects diags on failure and cleans up).
+				if len(currentInfra) > 0 {
+					for i := len(currentInfra) - 1; i >= 0; i-- {
+						if currentInfra[i] != nil {
+							currentInfra[i].Stop()
+						}
+					}
+					currentInfra = nil
+				}
+				// Then, perform the core file check.
 				afterCoreFiles := readCoreFiles()
 				coreFilesAtStart.Iter(func(item string) error {
 					afterCoreFiles.Discard(item)
