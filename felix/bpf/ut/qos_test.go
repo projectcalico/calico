@@ -121,7 +121,6 @@ func TestDSCPV4(t *testing.T) {
 	Expect(err).NotTo(HaveOccurred())
 	defer resetRTMap(rtMap)
 
-	// Ingress, allow first packet, drop second (because of 1/sec limit)
 	skbMark = 0
 	runBpfTest(t, "calico_from_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
 		_, _, _, _, pktBytes, err := testPacketV4(nil, ipv4Default, nil, nil)
@@ -133,7 +132,7 @@ func TestDSCPV4(t *testing.T) {
 		Expect(res.Retval).To(Equal(resTC_ACT_REDIRECT))
 
 		ipv4Hdr := *ipv4Default
-		ipv4Hdr.TOS = 0x10 << 2 // DSCP (6bits) =  16 + ECN (2bits) = 0
+		ipv4Hdr.TOS = 0x10 << 2 // DSCP (6bits) = 16 + ECN (2bits) = 0
 		_, _, _, _, pktBytes, err = testPacketV4(nil, &ipv4Hdr, nil, nil)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -143,7 +142,7 @@ func TestDSCPV4(t *testing.T) {
 	resetCTMap(ctMap) // ensure it is clean
 
 	skbMark = tcdefs.MarkSeen
-	runBpfTest(t, "calico_to_hep_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+	runBpfTest(t, "calico_to_host_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
 		_, _, _, _, pktBytes, err := testPacketV4(nil, ipv4Default, nil, nil)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -199,7 +198,7 @@ func TestDSCPV6(t *testing.T) {
 		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
 
 		ipv6Hdr := *ipv6Default
-		ipv6Hdr.TrafficClass = 0x10 << 2 // DSCP (6bits) =  16 + ECN (2bits) = 0
+		ipv6Hdr.TrafficClass = 0x10 << 2 // DSCP (6bits) = 16 + ECN (2bits) = 0
 		_, _, _, _, pktBytes, err = testPacketV6(nil, &ipv6Hdr, nil, nil)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -209,7 +208,7 @@ func TestDSCPV6(t *testing.T) {
 	resetCTMap(ctMap) // ensure it is clean
 
 	skbMark = tcdefs.MarkSeen
-	runBpfTest(t, "calico_to_hep_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+	runBpfTest(t, "calico_to_host_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
 		_, _, _, _, pktBytes, err := testPacketV6(nil, ipv6Default, nil, nil)
 		Expect(err).NotTo(HaveOccurred())
 
