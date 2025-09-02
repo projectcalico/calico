@@ -32,6 +32,7 @@ import (
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
 	"github.com/projectcalico/calico/felix/fv/utils"
 	"github.com/projectcalico/calico/felix/fv/workload"
+	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 )
 
@@ -49,7 +50,7 @@ func (c latencyConfig) workloadIP(workloadIdx int) string {
 	return fmt.Sprintf("fdc6:3dbc:e983:cbc%x::1", workloadIdx)
 }
 
-var _ = Context("_BPF-SAFE_ Latency tests with initialized Felix and etcd datastore", func() {
+var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Latency tests with initialized Felix and etcd datastore", []apiconfig.DatastoreType{apiconfig.EtcdV3}, func(getInfra infrastructure.InfraFactory) {
 	var (
 		tc     infrastructure.TopologyContainers
 		client client.Interface
@@ -62,9 +63,8 @@ var _ = Context("_BPF-SAFE_ Latency tests with initialized Felix and etcd datast
 		topologyOptions := infrastructure.DefaultTopologyOptions()
 		topologyOptions.IPIPMode = api.IPIPModeNever
 		topologyOptions.ExtraEnvVars["FELIX_BPFLOGLEVEL"] = "off" // For best perf.
-
-		tc, _, client, infra = infrastructure.StartSingleNodeEtcdTopology(topologyOptions)
-		_ = infra
+		infra = getInfra()
+		tc, client = infrastructure.StartSingleNodeTopology(topologyOptions, infra)
 		_ = tc.Felixes[0].GetFelixPID()
 
 		var err error

@@ -28,6 +28,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
 	"github.com/projectcalico/calico/felix/fv/metrics"
+	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
@@ -38,7 +39,7 @@ const (
 	kubeProxyModeIptables = "iptables"
 )
 
-var _ = Context("Config update tests, after starting felix", func() {
+var _ = infrastructure.DatastoreDescribe("Config update tests, after starting felix", []apiconfig.DatastoreType{apiconfig.EtcdV3}, func(getInfra infrastructure.InfraFactory) {
 	var (
 		tc            infrastructure.TopologyContainers
 		felixPID      int
@@ -51,7 +52,8 @@ var _ = Context("Config update tests, after starting felix", func() {
 		if NFTMode() {
 			Skip("TODO: Implement for NFT")
 		}
-		tc, _, client, infra = infrastructure.StartSingleNodeEtcdTopology(infrastructure.DefaultTopologyOptions())
+		infra = getInfra()
+		tc, client = infrastructure.StartSingleNodeTopology(infrastructure.DefaultTopologyOptions(), infra)
 		_ = infra
 		felixPID = tc.Felixes[0].GetSinglePID("calico-felix")
 	})
