@@ -95,7 +95,7 @@ protobuf:
 
 generate:
 	$(MAKE) gen-semaphore-yaml
-	$(MAKE) gen-dep-files
+	$(MAKE) gen-deps-files
 	$(MAKE) protobuf
 	$(MAKE) -C lib gen-files
 	$(MAKE) -C api gen-files
@@ -123,14 +123,20 @@ get-operator-crds: var-require-all-OPERATOR_BRANCH
 gen-semaphore-yaml:
 	$(DOCKER_GO_BUILD) sh -c "cd .semaphore && ./generate-semaphore-yaml.sh"
 
-gen-dep-files: felix/deps.txt
+GO_DIRS=$(shell find -name '*.go' | grep -o --perl '^./\K[^/]+' | sort -u)
+DEP_FILES=$(patsubst %, %/deps.txt, $(GO_DIRS))
 
-.PHONY: felix/deps.txt
-felix/deps.txt:
-	echo "!!! GENERATED FILE, DO NOT EDIT !!!" > felix/deps.txt && \
-	echo "This file contains the list of modules that this package depends on" >> felix/deps.txt && \
-	echo "in order to trigger CI on changes" >> felix/deps.txt && \
-	$(DOCKER_GO_BUILD) sh -c "go run ./hack/cmd/deps modules felix >> felix/deps.txt"
+gen-deps-files:
+	$(MAKE) -j $(DEP_FILES)
+
+$(DEP_FILES): go.mod go.sum $(shell find . -name '*.go') Makefile hack/cmd/deps/*
+	@{ \
+	  echo "!!! GENERATED FILE, DO NOT EDIT !!!" && \
+	  echo "This file contains the list of modules that this package depends on" && \
+	  echo "in order to trigger CI on changes" && \
+	  echo && \
+	  $(DOCKER_GO_BUILD) sh -c "go run ./hack/cmd/deps modules $(dir $@)"; \
+	} > $@
 
 # Build the tigera-operator helm chart.
 chart: bin/tigera-operator-$(GIT_VERSION).tgz

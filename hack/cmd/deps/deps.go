@@ -216,7 +216,7 @@ func loadLocalDirs(pkg string) (out []string, err error) {
 func printModules(pkg string) {
 	packageDeps, err := loadPackageDeps(pkg)
 	if err != nil {
-		logrus.Fatalln("Failed to load package deps:", err)
+		logrus.Fatalf("Failed to load package deps for package %s: %s", pkg, err)
 		os.Exit(1)
 	}
 	logrus.Infof("Loaded %d deps for package %q.", len(packageDeps), pkg)
@@ -249,7 +249,9 @@ func printModules(pkg string) {
 }
 
 func loadPackageDeps(pkg string) ([]string, error) {
-	raw, err := exec.Command("go", "list", "-deps", pkgToSearchQuery(pkg)).Output()
+	command := exec.Command("go", "list", "-deps", "./...")
+	command.Dir = pkg
+	raw, err := command.Output()
 	if err != nil {
 		return nil, err
 	}
