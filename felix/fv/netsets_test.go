@@ -33,6 +33,7 @@ import (
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
 	"github.com/projectcalico/calico/felix/fv/utils"
 	"github.com/projectcalico/calico/felix/fv/workload"
+	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
@@ -91,7 +92,7 @@ func (c netsetsConfig) workloadFullLengthCIDR(workloadIdx int, namespaced bool) 
 	return addr + "/128"
 }
 
-var _ = Context("_NET_SETS_ Network sets tests with initialized Felix and etcd datastore", func() {
+var _ = infrastructure.DatastoreDescribe("_NET_SETS_ Network sets tests with initialized Felix and etcd datastore", []apiconfig.DatastoreType{apiconfig.EtcdV3}, func(getInfra infrastructure.InfraFactory) {
 	var (
 		tc       infrastructure.TopologyContainers
 		felixPID int
@@ -101,8 +102,8 @@ var _ = Context("_NET_SETS_ Network sets tests with initialized Felix and etcd d
 
 	BeforeEach(func() {
 		topologyOptions := infrastructure.DefaultTopologyOptions()
-		tc, _, client, infra = infrastructure.StartSingleNodeEtcdTopology(topologyOptions)
-		_ = infra
+		infra = getInfra()
+		tc, client = infrastructure.StartSingleNodeTopology(topologyOptions, infra)
 		felixPID = tc.Felixes[0].GetFelixPID()
 	})
 

@@ -28,11 +28,12 @@ import (
 
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
 	"github.com/projectcalico/calico/felix/fv/workload"
+	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
-var _ = Context("_IPSets_ Tests for IPset rendering", func() {
+var _ = infrastructure.DatastoreDescribe("_IPSets_ Tests for IPset rendering", []apiconfig.DatastoreType{apiconfig.EtcdV3}, func(getInfra infrastructure.InfraFactory) {
 	var (
 		tc       infrastructure.TopologyContainers
 		felixPID int
@@ -53,7 +54,8 @@ var _ = Context("_IPSets_ Tests for IPset rendering", func() {
 			}
 		}
 		logrus.SetLevel(logrus.InfoLevel)
-		tc, _, client, infra = infrastructure.StartSingleNodeEtcdTopology(topologyOptions)
+		infra = getInfra()
+		tc, client = infrastructure.StartSingleNodeTopology(topologyOptions, infra)
 		felixPID = tc.Felixes[0].GetFelixPID()
 		_ = felixPID
 		w = workload.Run(tc.Felixes[0], "w", "default", "10.65.0.2", "8085", "tcp")

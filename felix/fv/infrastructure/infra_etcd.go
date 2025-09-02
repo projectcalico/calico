@@ -34,7 +34,7 @@ import (
 )
 
 type EtcdDatastoreInfra struct {
-	etcdContainer *containers.Container
+	EtcdContainer *containers.Container
 	bpfLog        *containers.Container
 	client        client.Interface
 
@@ -55,15 +55,15 @@ func GetEtcdDatastoreInfra() (*EtcdDatastoreInfra, error) {
 	eds := &EtcdDatastoreInfra{}
 
 	// Start etcd.
-	eds.etcdContainer = RunEtcd()
-	if eds.etcdContainer == nil {
+	eds.EtcdContainer = RunEtcd()
+	if eds.EtcdContainer == nil {
 		return nil, errors.New("failed to create etcd container")
 	}
 	// Ensure etcd is stopped via cleanup stack.
 	eds.AddTearDown(func() {
-		if eds.etcdContainer != nil {
-			eds.etcdContainer.StopLogs()
-			eds.etcdContainer.Stop()
+		if eds.EtcdContainer != nil {
+			eds.EtcdContainer.StopLogs()
+			eds.EtcdContainer.Stop()
 		}
 	})
 
@@ -87,8 +87,8 @@ func GetEtcdDatastoreInfra() (*EtcdDatastoreInfra, error) {
 		}
 	})
 
-	eds.Endpoint = fmt.Sprintf("https://%s:6443", eds.etcdContainer.IP)
-	eds.BadEndpoint = fmt.Sprintf("https://%s:1234", eds.etcdContainer.IP)
+	eds.Endpoint = fmt.Sprintf("https://%s:6443", eds.EtcdContainer.IP)
+	eds.BadEndpoint = fmt.Sprintf("https://%s:1234", eds.EtcdContainer.IP)
 
 	return eds, nil
 }
@@ -98,8 +98,8 @@ func (eds *EtcdDatastoreInfra) GetDockerArgs() []string {
 		"-e", "CALICO_DATASTORE_TYPE=etcdv3",
 		"-e", "FELIX_DATASTORETYPE=etcdv3",
 		"-e", "TYPHA_DATASTORETYPE=etcdv3",
-		"-e", "TYPHA_ETCDENDPOINTS=http://" + eds.etcdContainer.IP + ":2379",
-		"-e", "CALICO_ETCD_ENDPOINTS=http://" + eds.etcdContainer.IP + ":2379",
+		"-e", "TYPHA_ETCDENDPOINTS=http://" + eds.EtcdContainer.IP + ":2379",
+		"-e", "CALICO_ETCD_ENDPOINTS=http://" + eds.EtcdContainer.IP + ":2379",
 	}
 }
 
@@ -108,14 +108,14 @@ func (eds *EtcdDatastoreInfra) GetBadEndpointDockerArgs() []string {
 		"-e", "CALICO_DATASTORE_TYPE=etcdv3",
 		"-e", "FELIX_DATASTORETYPE=etcdv3",
 		"-e", "TYPHA_DATASTORETYPE=etcdv3",
-		"-e", "TYPHA_ETCDENDPOINTS=http://" + eds.etcdContainer.IP + ":2379",
-		"-e", "CALICO_ETCD_ENDPOINTS=http://" + eds.etcdContainer.IP + ":1234",
+		"-e", "TYPHA_ETCDENDPOINTS=http://" + eds.EtcdContainer.IP + ":2379",
+		"-e", "CALICO_ETCD_ENDPOINTS=http://" + eds.EtcdContainer.IP + ":1234",
 	}
 }
 
 func (eds *EtcdDatastoreInfra) GetCalicoClient() client.Interface {
 	if eds.client == nil {
-		eds.client = utils.GetEtcdClient(eds.etcdContainer.IP)
+		eds.client = utils.GetEtcdClient(eds.EtcdContainer.IP)
 	}
 	return eds.client
 }
@@ -221,7 +221,7 @@ func (eds *EtcdDatastoreInfra) AddAllowToDatastore(selector string) error {
 	policy.Spec.Egress = []api.Rule{{
 		Action: api.Allow,
 		Destination: api.EntityRule{
-			Nets: []string{eds.etcdContainer.IP + "/32"},
+			Nets: []string{eds.EtcdContainer.IP + "/32"},
 		},
 	}}
 	_, err := eds.GetCalicoClient().GlobalNetworkPolicies().Create(utils.Ctx, policy, utils.NoOptions)
@@ -251,7 +251,7 @@ func (eds *EtcdDatastoreInfra) DumpErrorData() {
 		}
 	}
 	// Etcd datastore contents (keys only) for quick overview.
-	eds.etcdContainer.Exec("etcdctl", "get", "/", "--prefix", "--keys-only")
+	eds.EtcdContainer.Exec("etcdctl", "get", "/", "--prefix", "--keys-only")
 }
 
 func (eds *EtcdDatastoreInfra) Stop() {
