@@ -78,7 +78,6 @@ var _ = Describe("_HEALTH_ _BPF-SAFE_ health tests", func() {
 	})
 
 	AfterEach(func() {
-		felix.Stop()
 		k8sInfra.Stop()
 	})
 
