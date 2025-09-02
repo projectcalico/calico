@@ -581,6 +581,19 @@ from workloads.
 | `FelixConfiguration` schema | Boolean. |
 | Default value (YAML) | `false` |
 
+### `CgroupV2Path` (config file) / `cgroupV2Path` (YAML)
+
+Overrides the default location where to find the cgroup hierarchy.
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_CgroupV2Path` |
+| Encoding (env var/config file) | String |
+| Default value (above encoding) | none |
+| `FelixConfiguration` field | `cgroupV2Path` (YAML) `CgroupV2Path` (Go API) |
+| `FelixConfiguration` schema | String. |
+| Default value (YAML) | none |
+
 ### `ChainInsertMode` (config file) / `chainInsertMode` (YAML)
 
 Controls whether Felix hooks the kernel's top-level iptables chains by inserting a rule
@@ -2611,18 +2624,6 @@ for development right now.
 | Environment variable | `FELIX_DebugBPFCgroupV2` |
 | Encoding (env var/config file) | String |
 | Default value (above encoding) | none |
-| Notes | Config file / env var only. | 
-
-### `DebugBPFMapRepinEnabled` (config file / env var only)
-
-Can be used to prevent Felix from repinning its BPF maps at startup. This is useful for
-testing with multiple Felix instances running on one host.
-
-| Detail |   |
-| --- | --- |
-| Environment variable | `FELIX_DebugBPFMapRepinEnabled` |
-| Encoding (env var/config file) | Boolean: <code>true</code>, <code>1</code>, <code>yes</code>, <code>y</code>, <code>t</code> accepted as True; <code>false</code>, <code>0</code>, <code>no</code>, <code>n</code>, <code>f</code> accepted (case insensitively) as False. |
-| Default value (above encoding) | `false` |
 | Notes | Config file / env var only. | 
 
 ### `DebugCPUProfilePath` (config file / env var only)

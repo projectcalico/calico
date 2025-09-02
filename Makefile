@@ -120,7 +120,7 @@ get-operator-crds: var-require-all-OPERATOR_BRANCH
 	$(MAKE) fix-changed
 
 gen-semaphore-yaml:
-	cd .semaphore && ./generate-semaphore-yaml.sh
+	$(DOCKER_GO_BUILD) sh -c "cd .semaphore && ./generate-semaphore-yaml.sh"
 
 # Build the tigera-operator helm chart.
 chart: bin/tigera-operator-$(GIT_VERSION).tgz
