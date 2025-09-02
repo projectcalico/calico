@@ -85,6 +85,40 @@ func NewController(ctx context.Context,
 	}
 	poolInformer.AddEventHandler(poolHandlers)
 
+	// Configure handlers for IPAM block updates. We need to trigger a reconcile for any
+	// deleting IP pools when blocks are deleted, to ensure we can finalize the pool.
+	blockHandlers := cache.ResourceEventHandlerFuncs{
+		DeleteFunc: func(obj any) {
+			block := obj.(*v3.IPAMBlock)
+
+			// Find any pools that might be associated with this block and trigger a reconcile.
+			for _, i := range poolInformer.GetIndexer().List() {
+				pool := i.(*v3.IPPool)
+				if pool.DeletionTimestamp == nil {
+					// Pool is not being deleted, skip it.
+					continue
+				}
+				_, poolNet, err := cnet.ParseCIDR(pool.Spec.CIDR)
+				if err != nil {
+					log.WithError(err).WithField("cidr", pool.Spec.CIDR).Error("Failed to parse CIDR from IPPool")
+					continue
+				}
+				_, blockNet, err := cnet.ParseCIDR(block.Spec.CIDR)
+				if err != nil {
+					log.WithError(err).WithField("cidr", block.Spec.CIDR).Error("Failed to parse CIDR from IPAMBlock")
+					continue
+				}
+				if poolNet.Contains(blockNet.IP) {
+					logrus.WithField("name", pool.Name).Debug("Triggering reconcile for finalizing pool due to block deletion")
+					if err := c.Reconcile(pool); err != nil {
+						logrus.WithError(err).Error("Error handling pool reconcile due to block deletion")
+					}
+				}
+			}
+		},
+	}
+	blockInformer.AddEventHandler(blockHandlers)
+
 	return c
 }
 
