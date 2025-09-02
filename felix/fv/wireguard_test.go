@@ -191,7 +191,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 				if dmesgKill != nil {
 					log.Info("Stop dmesg log capture")
 					dmesgKill()
+					_ = dmesgCmd.Wait()
 					log.Infof("Captured dmesg log:\n%v", dmesgBuf.String())
+					dmesgKill = nil
 				}
 
 				for _, tcpdump := range tcpdumps {
