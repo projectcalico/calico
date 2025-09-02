@@ -15,6 +15,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -34,6 +35,7 @@ import (
 	"github.com/projectcalico/calico/node/pkg/hostpathinit"
 	"github.com/projectcalico/calico/node/pkg/lifecycle/shutdown"
 	"github.com/projectcalico/calico/node/pkg/lifecycle/startup"
+	"github.com/projectcalico/calico/node/pkg/lifecycle/utils"
 	"github.com/projectcalico/calico/node/pkg/nodeinit"
 	"github.com/projectcalico/calico/node/pkg/status"
 	"github.com/projectcalico/calico/pkg/buildinfo"
@@ -55,6 +57,7 @@ var (
 	runAllocateTunnelAddrs     = flagSet.Bool("allocate-tunnel-addrs", false, "Configure tunnel addresses for this node")
 	allocateTunnelAddrsRunOnce = flagSet.Bool("allocate-tunnel-addrs-run-once", false, "Run allocate-tunnel-addrs in oneshot mode")
 	monitorToken               = flagSet.Bool("monitor-token", false, "Watch for Kubernetes token changes, update CNI config")
+	completeStartup            = flagSet.Bool("complete-startup", false, "Update the NetworkUnavailable condition in Kubernetes on successful startup.")
 )
 
 // Options for liveness checks.
@@ -150,6 +153,14 @@ func main() {
 	} else if *runStartup {
 		logrus.SetFormatter(&logutils.Formatter{Component: "startup"})
 		startup.Run()
+		if *completeStartup {
+			// If both --startup and --complete-startup are specified, then we immediately mark
+			// the node as available after startup completes.  This skips readiness checks before
+			// marking the node as available.
+			if err = startup.MarkNetworkAvailable(); err != nil {
+				utils.Terminate()
+			}
+		}
 	} else if *runShutdown {
 		logrus.SetFormatter(&logutils.Formatter{Component: "shutdown"})
 		shutdown.Run()
@@ -157,6 +168,12 @@ func main() {
 		logrus.SetFormatter(&logutils.Formatter{Component: "monitor-addresses"})
 		startup.ConfigureLogging()
 		startup.MonitorIPAddressSubnets()
+	} else if *completeStartup {
+		logrus.SetFormatter(&logutils.Formatter{Component: "complete-startup"})
+		ctx := context.Background() // Context is never cancelled.
+		if err := startup.ManageNodeCondition(ctx, 5*time.Minute); err != nil {
+			utils.Terminate()
+		}
 	} else if *runConfd {
 		logrus.SetFormatter(&logutils.Formatter{Component: "confd"})
 		cfg, err := confdConfig.InitConfig(true)
