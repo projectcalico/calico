@@ -1,6 +1,6 @@
 - name: cni-plugin
   run:
-    when: "${FORCE_RUN} or change_in(['/*', '/cni-plugin/', '/libcalico-go/', '/hack/test/certs/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+    when: "${CHANGE_IN(cni-plugin)}"
   dependencies:
     - Prerequisites
   task:
@@ -16,7 +16,7 @@
           - ../.semaphore/run-and-monitor ci.log make image-windows
 - name: "cni-plugin: Windows"
   run:
-    when: "${FORCE_RUN} or change_in(['/*', '/cni-plugin/', '/libcalico-go/', '/process/testing/winfv-cni-plugin/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+    when: "${CHANGE_IN(cni-plugin)}"
   dependencies:
     - Prerequisites
   task:
