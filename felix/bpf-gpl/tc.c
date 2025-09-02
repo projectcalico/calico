@@ -1956,10 +1956,6 @@ int calico_tc_skb_send_icmp_replies(struct __sk_buff *skb)
 		goto deny;
 	}
 
-	if (enforce_packet_rate_qos(ctx) == TC_ACT_SHOT) {
-		deny_reason(ctx, CALI_REASON_DROPPED_BY_QOS);
-		goto deny;
-	}
 	tc_state_fill_from_iphdr(ctx);
 	ctx->state->sport = ctx->state->dport = 0;
 	return forward_or_drop(ctx);
