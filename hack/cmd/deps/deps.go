@@ -122,7 +122,7 @@ func printSemChangeIn(pkg string) {
 	inclusions.AddAll(nonGoDeps[pkg])
 	for _, dir := range localDirs {
 		if strings.HasPrefix(dir+"/", pkg) {
-			continue // covered by the whole-pacakge inclusion.
+			continue // covered by the whole-package inclusion.
 		}
 		inclusions.Add(dir + "/*.go")
 	}
