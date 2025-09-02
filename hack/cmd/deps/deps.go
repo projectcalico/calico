@@ -142,6 +142,7 @@ func printSemChangeIn(pkg string) {
 			inclusions.Add(dir + "/*.go")
 		}
 		inclusions.Add(otherPkg + "/Makefile")
+		inclusions.Add(otherPkg + "/deps.txt")
 		inclusions.AddAll(nonGoDeps[otherPkg])
 		exclusions.AddAll(calculateTestExclusionGlobs(pkg, otherPkgDirs))
 	}
