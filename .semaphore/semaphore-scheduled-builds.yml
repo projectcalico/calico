@@ -149,7 +149,7 @@ blocks:
             - ../.semaphore/run-and-monitor make-ci.log make ci
   - name: apiserver
     run:
-      when: "true or change_in(['/*', '/libcalico-go/', '/api/', '/apiserver/', '/hack/test/certs/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+      when: "true"
     execution_time_limit:
       minutes: 30
     dependencies:
@@ -173,7 +173,7 @@ blocks:
             - ../.semaphore/run-and-monitor image-$ARCH.log make build ARCH=$ARCH
   - name: app-policy
     run:
-      when: "true or change_in(['/*', '/app-policy/', '/felix/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+      when: "true"
     dependencies:
       - Prerequisites
     task:
@@ -186,7 +186,7 @@ blocks:
             - ../.semaphore/run-and-monitor ci.log make ci
   - name: calicoctl
     run:
-      when: "true or change_in(['/*', '/calicoctl/', '/libcalico-go/', '/api/', '/hack/test/certs/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+      when: "true"
     dependencies:
       - Prerequisites
     task:
@@ -266,7 +266,7 @@ blocks:
             - ../.semaphore/run-and-monitor win-fv-containerd.log ./.semaphore/run-win-fv.sh
   - name: confd
     run:
-      when: "true or change_in(['/*', '/api/', '/libcalico-go/', '/confd/', '/hack/test/certs/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+      when: "true"
     dependencies:
       - Prerequisites
     task:
@@ -281,7 +281,7 @@ blocks:
             - ../.semaphore/run-and-monitor ci.log make ci
   - name: crypto
     run:
-      when: "true or change_in(['/lib.Makefile', '/crypto/'])"
+      when: "true"
     dependencies:
       - Prerequisites
     task:
@@ -659,7 +659,7 @@ blocks:
         - name: google-service-account-for-gce
   - name: goldmane
     run:
-      when: "true or change_in(['/*', '/goldmane/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+      when: "true"
     execution_time_limit:
       minutes: 30
     dependencies:
@@ -687,7 +687,7 @@ blocks:
             - ../.semaphore/run-and-monitor image-$ARCH.log make build ARCH=$ARCH
   - name: guardian
     run:
-      when: "true or change_in(['/*', '/guardian/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+      when: "true"
     execution_time_limit:
       minutes: 30
     dependencies:
@@ -711,7 +711,7 @@ blocks:
             - ../.semaphore/run-and-monitor image-$ARCH.log make build ARCH=$ARCH
   - name: kube-controllers
     run:
-      when: "true or change_in(['/*', '/api/', '/libcalico-go/', '/kube-controllers/', '/hack/test/certs/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+      when: "true"
     dependencies:
       - Prerequisites
     task:
@@ -739,7 +739,7 @@ blocks:
             - ../.semaphore/run-and-monitor make-ci.log make ci
   - name: libcalico-go
     run:
-      when: "true or change_in(['/*', '/api/', '/libcalico-go/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+      when: "true"
     dependencies:
       - Prerequisites
     task:
@@ -842,7 +842,7 @@ blocks:
         - name: google-service-account-for-gce
   - name: pod2daemon
     run:
-      when: "true or change_in(['/*', '/pod2daemon/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+      when: "true"
     dependencies:
       - Prerequisites
     task:
@@ -869,7 +869,7 @@ blocks:
             - ../.semaphore/run-and-monitor make-ci.log make ci
   - name: Typha
     run:
-      when: "true or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/hack/test/certs/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+      when: "true"
     dependencies:
       - Prerequisites
     task:
@@ -904,7 +904,7 @@ blocks:
             - test-results publish /home/semaphore/calico/felix/report/k8sfv_suite.xml --name "typha-k8sfv" || true
   - name: whisker-backend
     run:
-      when: "true or change_in(['/*', '/whisker-backend/', '/goldmane/', '/lib/std/', '/lib/httpmachinery/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+      when: "true"
     execution_time_limit:
       minutes: 30
     dependencies:
@@ -952,7 +952,7 @@ blocks:
             - ../.semaphore/run-and-monitor image-$ARCH.log make build ARCH=$ARCH
   - name: key-cert-provisioner
     run:
-      when: "true or change_in(['/*', '/key-cert-provisioner/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+      when: "true"
     dependencies:
       - Prerequisites
     task:
@@ -1051,7 +1051,7 @@ blocks:
             - artifact push job logs
   - name: Mock node
     run:
-      when: "true or change_in(['/*', '/test-tools/mocknode/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+      when: "true"
     dependencies:
       - Prerequisites
     task:
@@ -1064,7 +1064,7 @@ blocks:
             - ../../.semaphore/run-and-monitor make-ci.log make ci
   - name: release tooling
     run:
-      when: "true or change_in(['/*', '/release/'], {exclude: ['/**/.gitignore', '/**/*.md', '/**/LICENSE']})"
+      when: "true"
     execution_time_limit:
       minutes: 30
     dependencies:

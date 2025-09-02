@@ -90,8 +90,13 @@ var nonGoDeps = map[string][]string{
 
 var defaultExclusions = []string{
 	"/**/.gitignore",
-	"/**/README.md",
-	"/**/LICENSE",
+	"/**/README*",
+	"/**/LICENSE*",
+	"/**/CONTRIBUTING*",
+	"/**/AUTHORS*",
+	"/**/DEVELOPER_GUIDE*",
+	"/**/SECURITY.md",
+	"/**/*.md",
 }
 
 func printSemChangeIn(pkg string) {
