@@ -1,6 +1,6 @@
 - name: release tooling
   run:
-    when: "${FORCE_RUN} or change_in(['/*', '/release/'], {exclude: ['/**/.gitignore', '/**/*.md', '/**/LICENSE']})"
+    when: "${CHANGE_IN(release)}"
   execution_time_limit:
     minutes: 30
   dependencies:
