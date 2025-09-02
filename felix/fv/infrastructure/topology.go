@@ -178,6 +178,7 @@ func DeleteDefaultIPPool(ctx context.Context, client client.Interface) (*api.IPP
 
 // StartSingleNodeEtcdTopology starts an etcd container and a single Felix container; it initialises
 // the datastore and installs a Node resource for the Felix node.
+// Deprecated
 func StartSingleNodeEtcdTopology(options TopologyOptions) (tc TopologyContainers, etcd *containers.Container, calicoClient client.Interface, infra DatastoreInfra) {
 	tc, etcd, calicoClient, infra = StartNNodeEtcdTopology(1, options)
 	return
@@ -191,6 +192,8 @@ func StartSingleNodeEtcdTopology(options TopologyOptions) (tc TopologyContainers
 //   - Configures routes between the hosts, giving each host 10.65.x.0/24, where x is the
 //     index in the returned array.  When creating workloads, use IPs from the relevant block.
 //   - Configures the Tunnel IP for each host as 10.65.x.1.
+//
+// Deprecated
 func StartNNodeEtcdTopology(
 	n int,
 	opts TopologyOptions,
