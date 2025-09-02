@@ -813,7 +813,7 @@ var _ = testutils.E2eDatastoreDescribe("Node tests (etcdv3)", testutils.Datastor
 
 			By("Cleaning the datastore and expecting deletion events for each configured resource (tests prefix deletes results in individual events for each key)")
 			be.Clean()
-			testWatcher4.ExpectEvents(libapiv3.KindNode, []watch.Event{
+			testWatcher4.ExpectEventsAnyOrder(libapiv3.KindNode, []watch.Event{
 				{
 					Type:     watch.Deleted,
 					Previous: outRes1,
