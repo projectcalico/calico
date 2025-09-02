@@ -76,6 +76,10 @@ type Felix struct {
 	// get assigned to the IPv6 Wireguard tunnel.  Filled in by SetExpectedWireguardV6TunnelAddr().
 	ExpectedWireguardV6TunnelAddr string
 
+	// PanicExpected If set to true by the test, disables some diags collection
+	// on Stop()
+	PanicExpected bool
+
 	// IP of the Typha that this Felix is using (if any).
 	TyphaIP string
 
@@ -90,6 +94,8 @@ type Felix struct {
 
 	uniqueName string
 	flowServer *local.FlowServer
+
+	infra DatastoreInfra
 }
 
 type workload interface {
@@ -309,18 +315,29 @@ func RunFelix(infra DatastoreInfra, id int, options TopologyOptions) *Felix {
 			"-P", "FORWARD", "DROP")
 	}
 
-	return &Felix{
+	f := &Felix{
 		Container:       c,
 		startupDelayed:  options.DelayFelixStart,
 		uniqueName:      uniqueName,
 		TopologyOptions: options,
 		flowServer:      flowServer,
+		infra:           infra,
 	}
+	// Register this Felix for teardown and diagnostics via infra.
+	infra.AddTearDown(f.Stop)
+	infra.RegisterFelix(f)
+	return f
 }
 
 func (f *Felix) Stop() {
 	if f == nil {
 		return
+	}
+	if BPFMode() && !f.PanicExpected {
+		err := f.ExecMayFail("calico-bpf", "connect-time", "clean")
+		if err != nil {
+			logrus.WithError(err).Warn("Failed to clean up BPF connect-time state")
+		}
 	}
 	if CreateCgroupV2 {
 		_ = f.ExecMayFail("rmdir", path.Join("/run/calico/cgroup/", f.Name))
@@ -485,6 +502,12 @@ func (f *Felix) FlowServerStop() {
 func (f *Felix) FlowServerReset() {
 	if f.flowServer != nil {
 		f.flowServer.Flush()
+	}
+}
+
+func (f *Felix) RegisterForCleanup(fn func()) {
+	if f.infra != nil {
+		f.infra.AddTearDown(fn)
 	}
 }
 
