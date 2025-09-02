@@ -1,6 +1,6 @@
 - name: key-cert-provisioner
   run:
-    when: "${FORCE_RUN} or change_in(['/*', '/key-cert-provisioner/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+    when: "${CHANGE_IN(key-cert-provisioner)}"
   dependencies:
     - Prerequisites
   task:
