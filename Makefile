@@ -135,6 +135,7 @@ $(DEP_FILES): go.mod go.sum $(shell find . -name '*.go') Makefile hack/cmd/deps/
 	  echo "This file contains the list of modules that this package depends on" && \
 	  echo "in order to trigger CI on changes" && \
 	  echo && \
+	  grep '^go' go.mod && \
 	  $(DOCKER_GO_BUILD) sh -c "go run ./hack/cmd/deps modules $(dir $@)"; \
 	} > $@
 
