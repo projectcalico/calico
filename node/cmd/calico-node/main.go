@@ -35,6 +35,7 @@ import (
 	"github.com/projectcalico/calico/node/pkg/hostpathinit"
 	"github.com/projectcalico/calico/node/pkg/lifecycle/shutdown"
 	"github.com/projectcalico/calico/node/pkg/lifecycle/startup"
+	"github.com/projectcalico/calico/node/pkg/lifecycle/utils"
 	"github.com/projectcalico/calico/node/pkg/nodeinit"
 	"github.com/projectcalico/calico/node/pkg/status"
 	"github.com/projectcalico/calico/pkg/buildinfo"
@@ -156,7 +157,9 @@ func main() {
 			// If both --startup and --complete-startup are specified, then we immediately mark
 			// the node as available after startup completes.  This skips readiness checks before
 			// marking the node as available.
-			startup.MarkNetworkAvailable()
+			if err = startup.MarkNetworkAvailable(); err != nil {
+				utils.Terminate()
+			}
 		}
 	} else if *runShutdown {
 		logrus.SetFormatter(&logutils.Formatter{Component: "shutdown"})
@@ -168,7 +171,9 @@ func main() {
 	} else if *completeStartup {
 		logrus.SetFormatter(&logutils.Formatter{Component: "complete-startup"})
 		ctx := context.Background() // Context is never cancelled.
-		startup.ManageNodeCondition(ctx)
+		if err := startup.ManageNodeCondition(ctx, 5*time.Minute); err != nil {
+			utils.Terminate()
+		}
 	} else if *runConfd {
 		logrus.SetFormatter(&logutils.Formatter{Component: "confd"})
 		cfg, err := confdConfig.InitConfig(true)

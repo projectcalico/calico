@@ -185,7 +185,22 @@ var _ = Describe("FV tests against a real etcd", func() {
 	})
 
 	DescribeTable("Test IP pool env variables",
-		func(envList []EnvItem, expectedIPv4 string, expectedIPv6 string, expectIpv4IpipMode string, expectIpv4VXLANMode string, expectIpv6VXLANMode string, expectedIPV4NATOutgoing bool, expectedIPV6NATOutgoing bool, expectedIPv4BlockSize, expectedIPv6BlockSize int, expectedIPv4NodeSelector, expectedIPv6NodeSelector string, expectedIPv4DisableBGPExport, expectedIPv6DisableBGPExport bool) {
+		func(
+			envList []EnvItem,
+			expectedIPv4 string,
+			expectedIPv6 string,
+			expectIpv4IpipMode string,
+			expectIpv4VXLANMode string,
+			expectIpv6VXLANMode string,
+			expectedIPV4NATOutgoing bool,
+			expectedIPV6NATOutgoing bool,
+			expectedIPv4BlockSize,
+			expectedIPv6BlockSize int,
+			expectedIPv4NodeSelector,
+			expectedIPv6NodeSelector string,
+			expectedIPv4DisableBGPExport,
+			expectedIPv6DisableBGPExport bool,
+		) {
 			// Create a new client.
 			cfg, err := apiconfig.LoadClientConfigFromEnvironment()
 			Expect(err).NotTo(HaveOccurred())
@@ -978,6 +993,58 @@ var _ = Describe("FV tests against a real etcd", func() {
 				Expect(node.Spec.OrchRefs).To(HaveLen(1))
 			})
 		})
+	})
+})
+
+var _ = Describe("NetworkUnavailable condition", func() {
+	var ctx context.Context
+	var cs *kubernetes.Clientset
+	var nodeName string
+
+	BeforeEach(func() {
+		ctx = context.Background()
+
+		// Create k8s clientset.
+		kubeConfig, err := clientcmd.BuildConfigFromFlags("", os.Getenv("KUBECONFIG"))
+		Expect(err).NotTo(HaveOccurred())
+		cs, err = kubernetes.NewForConfig(kubeConfig)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Create a Node object for the test.
+		nodeName = utils.DetermineNodeName()
+		_, err = cs.CoreV1().Nodes().Create(ctx, &v1.Node{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:   nodeName,
+				Labels: map[string]string{},
+			},
+		}, metav1.CreateOptions{})
+		Expect(err).NotTo(HaveOccurred(), "Failed to create k8s node %s", nodeName)
+	})
+
+	It("should set the NetworkUnavailable condition to false", func() {
+		done, cancel := context.WithCancel(ctx)
+		cancel() // Immediately cancel, we don't need to run indefinitely.
+		err := ManageNodeCondition(done, 10*time.Second)
+		Expect(err).NotTo(HaveOccurred(), "ManageNodeCondition failed")
+
+		// Query the k8s node object and check the condition.
+		var k8sNode *v1.Node
+		Eventually(func() error {
+			var err error
+			k8sNode, err = cs.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
+			return err
+		}, "10s", "1s").ShouldNot(HaveOccurred(), "Failed to get k8s node %s", nodeName)
+		Expect(k8sNode).NotTo(BeNil(), "k8s node %s was nil", nodeName)
+
+		var condition *v1.NodeCondition
+		for i := range k8sNode.Status.Conditions {
+			if k8sNode.Status.Conditions[i].Type == v1.NodeNetworkUnavailable {
+				condition = &k8sNode.Status.Conditions[i]
+				break
+			}
+		}
+		Expect(condition).NotTo(BeNil(), "k8s node %s did not have a NetworkUnavailable condition", nodeName)
+		Expect(condition.Status).To(Equal(v1.ConditionFalse), "k8s node %s NetworkUnavailable condition was not False", nodeName)
 	})
 })
 

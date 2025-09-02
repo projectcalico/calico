@@ -182,7 +182,8 @@ func WriteNodeConfig(nodeName string) {
 
 // Set Kubernetes NodeNetworkUnavailable to false when starting
 // https://kubernetes.io/docs/concepts/architecture/nodes/#condition
-func SetNodeNetworkUnavailableCondition(clientset kubernetes.Clientset,
+func SetNodeNetworkUnavailableCondition(
+	clientset kubernetes.Clientset,
 	nodeName string,
 	value bool,
 	timeout time.Duration,
