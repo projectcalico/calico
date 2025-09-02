@@ -1,6 +1,6 @@
 - name: "Node: Build"
   run:
-    when: "${FORCE_RUN} or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/confd/', '/bird/', '/pod2daemon/', '/node/', '/hack/test/certs/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+    when: "${CHANGE_IN(node)}"
   dependencies:
     - Prerequisites
   task:
@@ -17,7 +17,7 @@
           - ../.semaphore/run-and-monitor ci.log make ci
 - name: "Node: multi-arch build"
   run:
-    when: "${FORCE_RUN} or change_in(['/felix/', '/confd/', '/node/'])"
+    when: "${CHANGE_IN(node)}"
   dependencies:
     - "Node: Build"
   task:
@@ -41,7 +41,7 @@
           - ../.semaphore/run-and-monitor build-windows-image.log make image-windows
 - name: "Node: Build - native arm64 runner"
   run:
-    when: "${FORCE_RUN} or change_in(['/felix/', '/confd/', '/node/'])"
+    when: "${CHANGE_IN(node)}"
   dependencies:
     - "Node: Build"
   task:
@@ -57,7 +57,8 @@
           - ../.semaphore/run-and-monitor build-arm64.log make image ARCH=arm64
 - name: "Node: kind-cluster tests"
   run:
-    when: "${FORCE_RUN} or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/confd/', '/bird/', '/pod2daemon/', '/node/', '/hack/test/certs/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+    # KinD tests also build and run all the other images.
+    when: "${CHANGE_IN(node,typha,apiserver,cni-plugin,pod2daemon,calicoctl,kube-controllers,goldmane,whisker,whisker-backend)}"
   dependencies:
     - Prerequisites
   task:
