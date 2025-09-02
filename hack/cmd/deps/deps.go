@@ -16,7 +16,7 @@ import (
 )
 
 func printUsageAndExit() {
-	logrus.Fatalln(`CI Dependency helper tool.
+	_, _ = fmt.Fprint(os.Stderr, `CI Dependency helper tool.
 
 Usage: 
 
@@ -36,7 +36,8 @@ packages at the top-level of the repo.  Test exclusions are based on whether
 a dependency is within the package.
 
 The change_in() clause always depends on the whole package directory itself. 
-Some non-Go dependencies are hard-coded in the tool.
+Some non-Go dependencies are hard-coded in the tool.  For example, it knows
+that node depends on felix/bpf-*.
 `)
 	os.Exit(1)
 }
