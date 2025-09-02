@@ -112,7 +112,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 
 				// Start a process tailing the dmesg log.
 				ctx, cancel := context.WithCancel(context.Background())
-				dmesgCmd = exec.CommandContext(ctx, "sudo", "dmesg", "-wH")
+				dmesgCmd = exec.CommandContext(ctx, "sudo", "dmesg", "-WH")
 				dmesgCmd.Stdout = &dmesgBuf
 				dmesgCmd.Stderr = &dmesgBuf
 				err := dmesgCmd.Start()
