@@ -1,6 +1,6 @@
 - name: crypto
   run:
-    when: "${FORCE_RUN} or change_in(['/lib.Makefile', '/crypto/'])"
+    when: "${CHANGE_IN(crypto)}"
   dependencies:
     - Prerequisites
   task:
