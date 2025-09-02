@@ -587,7 +587,8 @@ blocks:
             - test-results publish /home/semaphore/calico/felix/report/fv_nft_suite.xml --name "felix-fv-nft-${SEMAPHORE_JOB_INDEX}" || true
   - name: "Felix: BPF UT/FV tests on Ubuntu 24.04"
     run:
-      when: "true"
+      # when: "true"
+      when: "true or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/cni-plugin/pkg/dataplane/linux/dataplane_linux.go'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
     dependencies:
       - Prerequisites
     task:
@@ -625,7 +626,8 @@ blocks:
         - name: google-service-account-for-gce
   - name: "Felix: BPF UT/FV tests on Ubuntu 22.04 (nftables)"
     run:
-      when: "true"
+      #when: "true"
+      when: "true or change_in(['/*', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/cni-plugin/pkg/dataplane/linux/dataplane_linux.go'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
     dependencies:
       - Prerequisites
     task:
