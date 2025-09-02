@@ -123,7 +123,7 @@ get-operator-crds: var-require-all-OPERATOR_BRANCH
 gen-semaphore-yaml:
 	$(DOCKER_GO_BUILD) sh -c "cd .semaphore && ./generate-semaphore-yaml.sh"
 
-GO_DIRS=$(shell find -name '*.go' | grep -o --perl '^./\K[^/]+' | sort -u)
+GO_DIRS=$(shell find -name '*.go' | grep -v -e './lib/' -e './pkg/' | grep -o --perl '^./\K[^/]+' | sort -u)
 DEP_FILES=$(patsubst %, %/deps.txt, $(GO_DIRS))
 
 gen-deps-files:
@@ -135,6 +135,7 @@ $(DEP_FILES): go.mod go.sum $(shell find . -name '*.go') Makefile hack/cmd/deps/
 	  echo "This file contains the list of modules that this package depends on" && \
 	  echo "in order to trigger CI on changes" && \
 	  echo && \
+	  grep '^go' go.mod && \
 	  $(DOCKER_GO_BUILD) sh -c "go run ./hack/cmd/deps modules $(dir $@)"; \
 	} > $@
 
