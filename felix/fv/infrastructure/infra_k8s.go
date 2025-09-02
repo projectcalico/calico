@@ -546,13 +546,6 @@ func (kds *K8sDatastoreInfra) EnsureReady() {
 }
 
 func (kds *K8sDatastoreInfra) Stop() {
-	// Collect diagnostics first, before any teardown.
-	if ginkgo.CurrentGinkgoTestDescription().Failed {
-		kds.DumpErrorData()
-	}
-	// Run registered teardowns (reverse order). Do not suppress panics.
-	kds.cleanups.Run()
-
 	// We don't tear down and recreate the Kubernetes infra between tests because it's
 	// too expensive.  We don't even, immediately, clean up any resources that may
 	// have been left behind by the test that has just finished.  Instead, mark all
@@ -562,6 +555,12 @@ func (kds *K8sDatastoreInfra) Stop() {
 	log.Info("K8sDatastoreInfra told to stop, deferring cleanup...")
 	kds.needsCleanup = true
 	kds.runningTest = ""
+
+	if ginkgo.CurrentGinkgoTestDescription().Failed {
+		kds.DumpErrorData()
+	}
+	// Run registered teardowns (reverse order). Do not suppress panics.
+	kds.cleanups.Run()
 }
 
 func (kds *K8sDatastoreInfra) AddTearDown(f func()) {
