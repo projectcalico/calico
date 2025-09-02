@@ -3488,7 +3488,8 @@ func deleteNode(c bapi.Client, kc *kubernetes.Clientset, host string) {
 	if kc != nil {
 		Expect(kc.CoreV1().Nodes().Delete(context.Background(), host, metav1.DeleteOptions{})).To(Succeed())
 	} else {
-		Expect(c.Delete(context.Background(), &model.ResourceKey{Name: host, Kind: libapiv3.KindNode}, "")).To(Succeed())
+		_, err := c.Delete(context.Background(), &model.ResourceKey{Name: host, Kind: libapiv3.KindNode}, "")
+		Expect(err).NotTo(HaveOccurred())
 	}
 }
 
