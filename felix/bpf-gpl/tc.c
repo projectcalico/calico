@@ -2122,6 +2122,11 @@ int calico_tc_skb_ipv4_frag(struct __sk_buff *skb)
 	);
 	struct cali_tc_ctx *ctx = &_ctx;
 
+#ifndef BPF_CORE_SUPPORTED
+	deny_reason(ctx, CALI_REASON_FRAG_UNSUPPORTED);
+	CALI_DEBUG("IPv4 fragmentation not supported in this kernel version");
+	goto deny;
+#else
 	CALI_DEBUG("Entering calico_tc_skb_ipv4_frag");
 	CALI_DEBUG("iphdr_offset %d ihl %d", skb_iphdr_offset(ctx), ctx->ipheader_len);
 
@@ -2134,13 +2139,18 @@ int calico_tc_skb_ipv4_frag(struct __sk_buff *skb)
 	tc_state_fill_from_iphdr_v4(ctx);
 
 	if (!frags4_handle(ctx)) {
-		deny_reason(ctx, CALI_REASON_FRAG_WAIT);
+		if (!bpf_core_enum_value_exists(enum bpf_func_id, BPF_FUNC_loop)) {
+			deny_reason(ctx, CALI_REASON_FRAG_UNSUPPORTED);
+		} else {
+			deny_reason(ctx, CALI_REASON_FRAG_WAIT);
+		}
 		goto deny;
 	}
 	/* force it through stack to trigger any further necessary fragmentation */
 	ctx->state->flags |= CALI_ST_SKIP_REDIR_ONCE;
 
 	return pre_policy_processing(ctx);
+#endif /* !BPF_CORE_SUPPORTED */
 
 finalize:
 	return forward_or_drop(ctx);

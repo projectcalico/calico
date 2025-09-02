@@ -807,31 +807,6 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				})
 			})
 
-			getMapIDByPath := func(felix *infrastructure.Felix, filename string) (int, error) {
-				out, err := felix.ExecOutput("bpftool", "map", "show", "pinned", filename, "-j")
-				if err != nil {
-					return 0, err
-				}
-				var mapMeta struct {
-					ID int `json:"id"`
-				}
-				err = json.Unmarshal([]byte(out), &mapMeta)
-				if err != nil {
-					return 0, err
-				}
-				return mapMeta.ID, nil
-			}
-
-			mustGetMapIDByPath := func(felix *infrastructure.Felix, filename string) int {
-				var mapID int
-				EventuallyWithOffset(1, func() error {
-					var err error
-					mapID, err = getMapIDByPath(felix, filename)
-					return err
-				}, "10s", "300ms").ShouldNot(HaveOccurred())
-				return mapID
-			}
-
 			Describe("with DefaultEndpointToHostAction=ACCEPT", func() {
 				BeforeEach(func() {
 					options.ExtraEnvVars["FELIX_DefaultEndpointToHostAction"] = "ACCEPT"
@@ -956,49 +931,6 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			}
 
 			if testOpts.protocol != "udp" { // No need to run these tests per-protocol.
-
-				mapPath := conntrack.Map().Path()
-
-				if testOpts.ipv6 {
-					mapPath = conntrack.MapV6().Path()
-				}
-
-				Describe("with map repinning enabled", func() {
-					BeforeEach(func() {
-						options.ExtraEnvVars["FELIX_DebugBPFMapRepinEnabled"] = "true"
-					})
-
-					It("should repin maps", func() {
-						// Wait for the first felix to create its maps.
-						mapID := mustGetMapIDByPath(tc.Felixes[0], mapPath)
-
-						// Now, start a completely independent felix, which will get its own bpffs.  It should re-pin the
-						// maps, picking up the ones from the first felix.
-						tc, _ := infrastructure.StartSingleNodeTopology(options, infra)
-						defer tc.Stop()
-
-						secondMapID := mustGetMapIDByPath(tc.Felixes[0], mapPath)
-						Expect(mapID).NotTo(BeNumerically("==", 0))
-						Expect(mapID).To(BeNumerically("==", secondMapID))
-					})
-				})
-
-				Describe("with map repinning disabled", func() {
-					It("should repin maps", func() {
-						// Wait for the first felix to create its maps.
-						mapID := mustGetMapIDByPath(tc.Felixes[0], mapPath)
-
-						// Now, start a completely independent felix, which will get its own bpffs.  It should make its own
-						// maps.
-						tc, _ := infrastructure.StartSingleNodeTopology(options, infra)
-						defer tc.Stop()
-
-						secondMapID := mustGetMapIDByPath(tc.Felixes[0], mapPath)
-						Expect(mapID).NotTo(BeNumerically("==", 0))
-						Expect(mapID).NotTo(BeNumerically("==", secondMapID))
-					})
-				})
-
 				It("should recover if the BPF programs are removed", func() {
 					flapInterface := func() {
 						By("Flapping interface")

@@ -434,6 +434,52 @@ func (c *PendingUpdatesView[K, V]) Iter(f func(k K, v V) IterAction) {
 	}
 }
 
+func (c *PendingUpdatesView[K, V]) IterBatched(applyFn func(k []K, v []V) (int, error)) {
+	batchSize := 128
+
+	ks := make([]K, 0, batchSize)
+	vs := make([]V, 0, batchSize)
+	count := 0
+
+	for k, v := range c.desiredUpdates {
+		ks = append(ks, k)
+		vs = append(vs, v)
+		count++
+
+		if count == batchSize {
+			applied, err := applyFn(ks, vs)
+			for i := 0; i < applied; i++ {
+				delete(c.desiredUpdates, ks[i])
+				c.inDataplaneAndDesired[ks[i]] = vs[i]
+			}
+
+			if err != nil {
+				applied++ // skip over the item that erred
+			}
+
+			ks = ks[applied:]
+			vs = vs[applied:]
+			count = batchSize - applied
+		}
+	}
+
+	for count > 0 {
+		applied, err := applyFn(ks, vs)
+		for i := 0; i < applied; i++ {
+			delete(c.desiredUpdates, ks[i])
+			c.inDataplaneAndDesired[ks[i]] = vs[i]
+		}
+
+		if err != nil {
+			applied++ // skip over the item that erred
+		}
+
+		ks = ks[:batchSize-applied]
+		vs = vs[:batchSize-applied]
+		count -= applied
+	}
+}
+
 func (c *PendingUpdatesView[K, V]) Len() int {
 	return len(c.desiredUpdates)
 }
@@ -467,6 +513,46 @@ func (c *PendingDeletionsView[K, V]) Iter(f func(k K) IterAction) {
 		case IterActionNoOpStopIteration:
 			break
 		}
+	}
+}
+
+func (c *PendingDeletionsView[K, V]) IterBatched(applyFn func(k []K) (int, error)) {
+	batchSize := 128
+
+	ks := make([]K, 0, batchSize)
+	count := 0
+
+	for k := range c.inDataplaneNotDesired {
+		ks = append(ks, k)
+		count++
+
+		if count == batchSize {
+			applied, err := applyFn(ks)
+			for i := 0; i < applied; i++ {
+				delete(c.inDataplaneNotDesired, ks[i])
+			}
+
+			if err != nil {
+				applied++ // skip over the item that erred
+			}
+
+			ks = ks[applied:]
+			count = batchSize - applied
+		}
+	}
+
+	for count > 0 {
+		applied, err := applyFn(ks)
+		for i := 0; i < applied; i++ {
+			delete(c.inDataplaneNotDesired, ks[i])
+		}
+
+		if err != nil {
+			applied++ // skip over the item that erred
+		}
+
+		ks = ks[:batchSize-applied]
+		count -= applied
 	}
 }
 
