@@ -1,6 +1,6 @@
 - name: "OpenStack integration (Yoga)"
   run:
-    when: "${FORCE_RUN} or change_in(['/networking-calico/'])"
+    when: "${FORCE_RUN} or change_in(['/metadata.mk', '/lib.Makefile', '/networking-calico/'])"
   dependencies:
     - Prerequisites
   task:
