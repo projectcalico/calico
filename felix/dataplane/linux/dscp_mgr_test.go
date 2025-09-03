@@ -18,24 +18,27 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
+	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/iptables"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/rules"
 )
 
-var _ = Describe("DSCP manager IPv4", dscpManagerTests(4))
-var _ = Describe("DSCP manager IPv6", dscpManagerTests(6))
+var _ = Describe("DSCP manager - IPv4", dscpManagerTests(4))
+var _ = Describe("DSCP manager - IPv6", dscpManagerTests(6))
 
 func dscpManagerTests(ipVersion uint8) func() {
 	return func() {
 		var (
 			manager      *dscpManager
+			ipSets       *dpsets.MockIPSets
 			mangleTable  *mockTable
 			ruleRenderer rules.RuleRenderer
 		)
 
 		BeforeEach(func() {
+			ipSets = dpsets.NewMockIPSets()
 			mangleTable = newMockTable("mangle")
 			ruleRenderer = rules.NewRenderer(rules.Config{
 				MarkPass:     0x1,
@@ -45,7 +48,11 @@ func dscpManagerTests(ipVersion uint8) func() {
 				MarkDrop:     0x10,
 				MarkEndpoint: 0x11110000,
 			})
-			manager = newDSCPManager(mangleTable, ruleRenderer, ipVersion)
+			manager = newDSCPManager(ipSets, mangleTable, ruleRenderer, ipVersion,
+				Config{
+					MaxIPSetSize: 1024,
+					Hostname:     "node1",
+				})
 		})
 
 		It("should program DSCP chain with no rule", func() {
