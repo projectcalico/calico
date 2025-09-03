@@ -28,6 +28,8 @@ kind: EndpointSlice
 apiVersion: discovery.k8s.io/v1
 metadata:
   name: service-1
+  labels:
+    kubernetes.io/service-name: service-1
 addressType: IPv4
 endpoints:
   - addresses:
@@ -62,6 +64,8 @@ kind: EndpointSlice
 apiVersion: discovery.k8s.io/v1
 metadata:
   name: service-2
+  labels:
+    kubernetes.io/service-name: service-2
 addressType: IPv4
 endpoints:
   - addresses:
@@ -96,6 +100,8 @@ kind: EndpointSlice
 apiVersion: discovery.k8s.io/v1
 metadata:
   name: service-v6-1
+  labels:
+    kubernetes.io/service-name: service-v6-1
 addressType: IPv4
 endpoints:
   - addresses:
@@ -130,6 +136,8 @@ kind: EndpointSlice
 apiVersion: discovery.k8s.io/v1
 metadata:
   name: service-v6-2
+  labels:
+    kubernetes.io/service-name: service-v6-2
 addressType: IPv6
 endpoints:
   - addresses:
