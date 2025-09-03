@@ -225,7 +225,7 @@ cd /opt/stack/devstack
 sudo pip install openstacksdk etcd3
 
 export ETCD_HOST=${SERVICE_HOST}
-# python3 ../calico/networking-calico/devstack/qos_responsiveness_tests.py -v
+python3 ../calico/networking-calico/devstack/qos_responsiveness_tests.py -v
 EOF
 
 # Run Tempest tests
