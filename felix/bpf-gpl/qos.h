@@ -120,11 +120,16 @@ static CALI_BPF_INLINE int set_dscp(struct cali_tc_ctx *ctx)
 	__s8 dscp = EGRESS_DSCP;
 	CALI_DEBUG("setting dscp to %d", dscp);
 		
-#ifdef IPVER6 
+#ifdef IPVER6
+	// In IPv6, traffic class (8bits) equals to DSCP (6bits) + ECN (2bits). The 4 most significant bits of
+	// traffic class are stored in IPv6 priority field (4 bits), and the 4 least significant bits of it
+	// are stored in the 4 most significant bits of IPv6 flow_lbl[0] field. We must not change ECN bits here.
 	ip_hdr(ctx)->priority = (__u8) (dscp >> 2);
 	ip_hdr(ctx)->flow_lbl[0] = (__u8) (ip_hdr(ctx)->flow_lbl[0] & 0xf3) | (dscp & 0x03) << 2 ;
 	ip_hdr(ctx)->flow_lbl[0] = (__u8) (ip_hdr(ctx)->flow_lbl[0] & 0x3f) | (dscp << 6);
 #else
+	// In IPv4, DSCP (6bits) is located at the most significant bits of IPv4 TOS field.
+	// The 2 least significant bits are assigned to ECN and must not be touched.
 	ip_hdr(ctx)->tos = (__u8) ((ip_hdr(ctx)->tos & 0x03) | (dscp << 2));
 	
 	__wsum ip_csum = bpf_csum_diff(0, 0, (__u32 *)ctx->ip_header, sizeof(struct iphdr), 0);

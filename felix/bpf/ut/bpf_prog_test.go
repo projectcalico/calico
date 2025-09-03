@@ -804,6 +804,7 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 					globals.EgressPacketBurst = topts.egressQoSPacketBurst
 				}
 
+				globals.DSCP = -1
 				if topts.dscp != nil && *topts.dscp >= 0 {
 					globals.DSCP = *topts.dscp
 				}
