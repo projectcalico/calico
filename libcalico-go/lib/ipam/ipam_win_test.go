@@ -101,8 +101,7 @@ var _ = testutils.E2eDatastoreDescribe("Windows: IPAM tests", testutils.Datastor
 		bc.Clean()
 		deleteAllPoolsWindows()
 		// Hosts must exist before trying to autoassign
-		err := applyNode(bc, kc, "Windows-TestHost-1", nil)
-		Expect(err).NotTo(HaveOccurred())
+		applyNode(bc, kc, "Windows-TestHost-1", nil)
 		defer deleteNode(bc, kc, "Windows-TestHost-1")
 
 		ipPoolsWindows.pools["100.0.0.0/24"] = pool{cidr: "100.0.0.0/24", enabled: true, blockSize: 26}
@@ -146,8 +145,7 @@ var _ = testutils.E2eDatastoreDescribe("Windows: IPAM tests", testutils.Datastor
 			}
 
 			// Host must exist before trying to autoassign to it
-			err := applyNode(bc, kc, host, nil)
-			Expect(err).NotTo(HaveOccurred())
+			applyNode(bc, kc, host, nil)
 			defer deleteNode(bc, kc, host)
 
 			fromPool := cnet.MustParseNetwork(usePool)
@@ -207,14 +205,10 @@ var _ = testutils.E2eDatastoreDescribe("Windows: IPAM tests", testutils.Datastor
 			bc.Clean()
 			deleteAllPoolsWindows()
 			// Hosts must exist before trying to autoassign
-			err := applyNode(bc, kc, "Windows-TestHost-1", nil)
-			Expect(err).NotTo(HaveOccurred())
-			err = applyNode(bc, kc, "Windows-TestHost-2", nil)
-			Expect(err).NotTo(HaveOccurred())
-			err = applyNode(bc, kc, "Linux-TestHost-1", nil)
-			Expect(err).NotTo(HaveOccurred())
-			err = applyNode(bc, kc, "Linux-TestHost-2", nil)
-			Expect(err).NotTo(HaveOccurred())
+			applyNode(bc, kc, "Windows-TestHost-1", nil)
+			applyNode(bc, kc, "Windows-TestHost-2", nil)
+			applyNode(bc, kc, "Linux-TestHost-1", nil)
+			applyNode(bc, kc, "Linux-TestHost-2", nil)
 
 			setAffinity(ic, true)
 		})
@@ -350,8 +344,7 @@ var _ = testutils.E2eDatastoreDescribe("Windows: IPAM tests", testutils.Datastor
 
 		BeforeEach(func() {
 			// Hosts must exist before trying to autoassign
-			err := applyNode(bc, kc, "test-host", nil)
-			Expect(err).NotTo(HaveOccurred())
+			applyNode(bc, kc, "test-host", nil)
 
 			setAffinity(ic, true)
 		})
@@ -398,8 +391,7 @@ var _ = testutils.E2eDatastoreDescribe("Windows: IPAM tests", testutils.Datastor
 			applyPoolWindows("200.0.0.0/24", true)
 
 			// Hosts must exist before trying to autoassign
-			err := applyNode(bc, kc, host, nil)
-			Expect(err).NotTo(HaveOccurred())
+			applyNode(bc, kc, host, nil)
 
 			setAffinity(ic, true)
 		})
@@ -511,8 +503,7 @@ var _ = testutils.E2eDatastoreDescribe("Windows: IPAM tests", testutils.Datastor
 			}
 
 			// Host must exist before trying to autoassign to it
-			err := applyNode(bc, kc, host, nil)
-			Expect(err).NotTo(HaveOccurred())
+			applyNode(bc, kc, host, nil)
 			defer deleteNode(bc, kc, host)
 
 			fromPool := cnet.MustParseNetwork(usePool)
