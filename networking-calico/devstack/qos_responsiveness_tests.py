@@ -154,7 +154,6 @@ class QoSResponsivenessTest(unittest.TestCase):
                 "rule": {
                     "type": "packet_rate_limit",
                     "max_kpps": 12345,
-                    "max_burst_kpps": 21087,
                     "direction": "egress",
                 },
                 "controls": {
@@ -165,7 +164,6 @@ class QoSResponsivenessTest(unittest.TestCase):
                 "rule": {
                     "type": "packet_rate_limit",
                     "max_kpps": 42341,
-                    "max_burst_kpps": 50002,
                     "direction": "ingress",
                 },
                 "controls": {
@@ -390,7 +388,6 @@ class QoSResponsivenessTest(unittest.TestCase):
             "type",
             "direction",
             "max_burst_kbps",
-            "max_burst_kpps",
             "max_kbps",
             "max_kpps",
         ]
