@@ -56,12 +56,14 @@
 #include "bpf_helpers.h"
 #include "rule_counters.h"
 #include "qos.h"
+#include "maglev.h"
 
 #ifndef IPVER6
 #include "ip_v4_fragment.h"
 #endif
 
 #define HAS_HOST_CONFLICT_PROG CALI_F_TO_HEP
+#define HAS_MAGLEV_PROG        (CALI_F_FROM_HEP && CALI_F_MAIN)
 
 /* calico_tc_main is the main function used in all of the tc programs.  It is specialised
  * for particular hook at build time based on the CALI_F build flags.
@@ -380,6 +382,13 @@ static CALI_BPF_INLINE void calico_tc_process_ct_lookup(struct cali_tc_ctx *ctx)
 
 	if (ct_result_rc(ctx->state->ct_result.rc) == CALI_CT_MID_FLOW_MISS) {
 		if (CALI_F_TO_HOST) {
+			if (CALI_F_FROM_HEP) {
+				/* Packet to be handled by maglev */
+				CALI_DEBUG("Packet handled by maglev");
+				CALI_JUMP_TO(ctx, PROG_INDEX_MAGLEV);
+				CALI_DEBUG("Failed to jump to maglev");
+				goto deny;
+			}
 			/* Mid-flow miss: let iptables handle it in case it's an existing flow
 			 * in the Linux conntrack table. We can't apply policy or DNAT because
 			 * it's too late in the flow.  iptables will drop if the flow is not
@@ -459,6 +468,17 @@ static CALI_BPF_INLINE void calico_tc_process_ct_lookup(struct cali_tc_ctx *ctx)
 						     &ctx->state->ip_src, &ctx->state->ip_dst,
 						     ctx->state->ip_proto, ctx->state->dport,
 						     !ip_void(ctx->state->tun_ip), &nat_res);
+	}
+
+	if (nat_res == NAT_MAGLEV) {
+		/* Packet to be handled by maglev*/
+		CALI_DEBUG("NAT Lookup determined packet handled by maglev");
+		CALI_JUMP_TO(ctx, PROG_INDEX_MAGLEV);
+		CALI_DEBUG("Failed to jump to maglev program");
+		#if !HAS_MAGLEV_PROG
+		CALI_DEBUG("Maglev program missing");
+		#endif
+		goto deny;
 	}
 
 	if (nat_res == NAT_FE_LOOKUP_DROP) {
@@ -2160,3 +2180,80 @@ deny:
 	goto finalize;
 }
 #endif /* !IPVER6 */
+
+#if HAS_MAGLEV_PROG
+SEC("tc")
+int calico_tc_maglev(struct __sk_buff *skb)
+{
+	DECLARE_TC_CTX(_ctx,
+		.skb = skb,
+		.fwd = {
+			.res = TC_ACT_UNSPEC,
+			.reason = CALI_REASON_UNKNOWN,
+		},
+	);
+	struct cali_tc_ctx *ctx = &_ctx;
+
+	CALI_DEBUG("Entering calico_tc_maglev");
+
+	if (skb_refresh_validate_ptrs(ctx, UDP_SIZE)) {
+		deny_reason(ctx, CALI_REASON_SHORT);
+		CALI_DEBUG("Too short");
+		goto deny;
+	}
+
+	if (!(ctx->nat_dest = maglev_select_backend(ctx))) {
+		if (ct_result_rc(ctx->state->ct_result.rc) == CALI_CT_MID_FLOW_MISS) {
+			// Too late to try falling through?
+			CALI_DEBUG("Maglev: midflow miss, no backend found, drop.");
+			goto deny;
+		}
+
+		// deny_reason(ctx, CALI_REASON_NO_BACKEND);
+		CALI_DEBUG("Maglev: select backend failed");
+		goto deny;
+	}
+
+	ctx->state->post_nat_ip_dst = ctx->nat_dest->addr;
+	ctx->state->post_nat_dport = ctx->nat_dest->port;
+	/* XXX why do we need both? */
+	ctx->state->nat_dest.addr = ctx->nat_dest->addr;
+	ctx->state->nat_dest.port = ctx->nat_dest->port;
+
+	struct cali_rt *dest_rt = NULL;
+	dest_rt = cali_rt_lookup(&ctx->state->post_nat_ip_dst);
+	if (!dest_rt) {
+		CALI_DEBUG("Maglev: No route for post DNAT dest " IP_FMT "", debug_ip(ctx->state->post_nat_ip_dst));
+		goto deny;
+	}
+	if (cali_rt_flags_skip_ingress_redirect(dest_rt->flags)) {
+		ctx->state->flags |= CALI_ST_SKIP_REDIR_PEER;
+	}
+
+	if (ct_result_rc(ctx->state->ct_result.rc) == CALI_CT_MID_FLOW_MISS) {
+		/* treat it as if it was a new flow */
+		CALI_DEBUG("Maglev: mid-flow miss, treating as new flow");
+		/* remember that is was a mid-flow miss so that we can handle it in the new flow program */
+	}
+
+	CALI_DEBUG("Maglev: About to jump to policy program.");
+	ctx->state->pol_rc = CALI_POL_NO_MATCH;
+	CALI_JUMP_TO_POLICY(ctx); /* after policy accepts the packet it will jump to allowed program */
+
+	if (CALI_F_HEP) {
+		CALI_DEBUG("Maglev: HEP with no policy, allow.");
+		ctx->state->pol_rc = CALI_POL_ALLOW;
+		ctx->state->flags |= CALI_ST_SKIP_POLICY;
+		CALI_JUMP_TO(ctx, PROG_INDEX_ALLOWED);
+		CALI_DEBUG("jump failed");
+		/* should not reach here */
+		goto deny;
+	} else {
+		CALI_DEBUG("Maglev: jump to policy failed.");
+		goto deny;
+	}
+
+deny:
+	return TC_ACT_SHOT;
+}
+#endif /* HAS_MAGLEV_PROG */

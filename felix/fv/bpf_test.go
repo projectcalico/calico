@@ -477,9 +477,9 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				)
 
 				if testOpts.ipv6 {
-					currBpfsvcsV6, currBpfepsV6 = dumpNATmapsV6(tc.Felixes)
+					currBpfsvcsV6, currBpfepsV6, _ = dumpNATmapsV6(tc.Felixes)
 				} else {
-					currBpfsvcs, currBpfeps = dumpNATmaps(tc.Felixes)
+					currBpfsvcs, currBpfeps, _ = dumpNATmaps(tc.Felixes)
 				}
 
 				for i, felix := range tc.Felixes {
@@ -698,7 +698,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 			if testOpts.bpfLogLevel == "debug" && testOpts.protocol == "udp" && !testOpts.ipv6 {
 				It("udp should have connectivity after a service is recreated", func() {
-					clusterIP := "10.101.0.111"
+					clusterIP := "10.101.123.1"
 
 					tcpdump := w[0].AttachTCPDump()
 					tcpdump.SetLogEnabled(true)
@@ -741,7 +741,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					natK := nat.NewNATKey(net.ParseIP(ip), port, 17)
 
 					Eventually(func() bool {
-						natmaps, _ := dumpNATMapsAny(4, tc.Felixes[0])
+						natmaps, _, _ := dumpNATMapsAny(4, tc.Felixes[0])
 						if _, ok := natmaps[natK]; !ok {
 							return false
 						}
@@ -1188,7 +1188,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					}
 
 					Eventually(func(g Gomega) {
-						natmap, natbe := dumpNATMapsAny(family, tc.Felixes[0])
+						natmap, natbe, _ := dumpNATMapsAny(family, tc.Felixes[0])
 						g.Expect(natmap).To(HaveKey(natK))
 						g.Expect(natmap[natK].Count()).To(Equal(uint32(3)))
 						svc := natmap[natK]
@@ -1207,7 +1207,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					Expect(err).NotTo(HaveOccurred())
 
 					Eventually(func(g Gomega) {
-						natmap, natbe := dumpNATMapsAny(family, tc.Felixes[0])
+						natmap, natbe, _ := dumpNATMapsAny(family, tc.Felixes[0])
 						g.Expect(natmap).To(HaveKey(natK))
 						g.Expect(natmap[natK].Count()).To(Equal(uint32(2)))
 						svc := natmap[natK]
@@ -1780,7 +1780,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						}
 
 						Eventually(func() bool {
-							natmaps, _ := dumpNATMapsAny(family, tc.Felixes[0])
+							natmaps, _, _ := dumpNATMapsAny(family, tc.Felixes[0])
 							if _, ok := natmaps[natK]; !ok {
 								return false
 							}
@@ -2668,7 +2668,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								if time.Since(startTime) > 5*time.Second {
 									Fail("NAT maps failed to converge")
 								}
-								natBeforeUpdate, natBackBeforeUpdate = dumpNATmapsAny(family, tc.Felixes)
+								natBeforeUpdate, natBackBeforeUpdate, _ = dumpNATmapsAny(family, tc.Felixes)
 								for i, m := range natBeforeUpdate {
 									if natV, ok := m[oldK]; !ok {
 										goto retry
@@ -2746,7 +2746,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								natK = nat.NewNATKey(ipv4, portNew, numericProto)
 							}
 
-							natmaps, natbacks := dumpNATmapsAny(family, tc.Felixes)
+							natmaps, natbacks, _ := dumpNATmapsAny(family, tc.Felixes)
 
 							for i := range tc.Felixes {
 								Expect(natmaps[i]).To(HaveKey(natK))
@@ -2788,7 +2788,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							var prevBpfsvcs []map[nat.FrontendKeyInterface]nat.FrontendValue
 
 							Eventually(func() bool {
-								prevBpfsvcs, _ = dumpNATmapsAny(family, tc.Felixes)
+								prevBpfsvcs, _, _ = dumpNATmapsAny(family, tc.Felixes)
 								for _, m := range prevBpfsvcs {
 									if _, ok := m[natK]; !ok {
 										return false
@@ -2814,7 +2814,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								bckID := natV.ID()
 
 								Eventually(func() bool {
-									svcs, eps := dumpNATMapsAny(family, f)
+									svcs, eps, _ := dumpNATMapsAny(family, f)
 
 									if _, ok := svcs[natK]; ok {
 										return false
@@ -2905,7 +2905,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								}
 
 								Eventually(func() bool {
-									m, be := dumpNATMapsAny(family, tc.Felixes[0])
+									m, be, _ := dumpNATMapsAny(family, tc.Felixes[0])
 
 									v, ok := m[natFtKey]
 									if !ok || v.Count() == 0 {
@@ -3053,7 +3053,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								family = 4
 							}
 							Eventually(func() bool {
-								m, be := dumpNATMapsAny(family, tc.Felixes[0])
+								m, be, _ := dumpNATMapsAny(family, tc.Felixes[0])
 								v, ok := m[natFtKey]
 								if !ok || v.Count() == 0 {
 									return false
@@ -3156,7 +3156,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								family = 4
 							}
 							Eventually(func() bool {
-								m, be := dumpNATMapsAny(family, tc.Felixes[1])
+								m, be, _ := dumpNATMapsAny(family, tc.Felixes[1])
 
 								v, ok := m[natFtKey]
 								if !ok || v.Count() == 0 {
@@ -3338,21 +3338,21 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								}
 
 								for _, felix := range tc.Felixes {
-									fe, _ := dumpNATMapsAny(family, felix)
+									fe, _, _ := dumpNATMapsAny(family, felix)
 									for key := range fe {
 										Expect(key.Addr().String()).To(BeElementOf(ipOK))
 									}
 								}
 
 								// RemoteNodeport on node 0
-								fe, _ := dumpNATMapsAny(family, tc.Felixes[0])
+								fe, _, _ := dumpNATMapsAny(family, tc.Felixes[0])
 								Expect(fe).To(HaveKey(feKey))
 								be := fe[feKey]
 								Expect(be.Count()).To(Equal(uint32(1)))
 								Expect(be.LocalCount()).To(Equal(uint32(1)))
 
 								// RemoteNodeport on node 1
-								fe, _ = dumpNATMapsAny(family, tc.Felixes[1])
+								fe, _, _ = dumpNATMapsAny(family, tc.Felixes[1])
 								Expect(fe).To(HaveKey(feKey))
 								be = fe[feKey]
 								Expect(be.Count()).To(Equal(uint32(1)))
@@ -4474,7 +4474,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 									family = 4
 								}
 
-								m, be := dumpNATMapsAny(family, flx)
+								m, be, _ := dumpNATMapsAny(family, flx)
 								v, ok := m[natFtKey]
 								if !ok || v.Count() == 0 {
 									return false
@@ -5293,14 +5293,16 @@ func typeMetaV1(kind string) metav1.TypeMeta {
 
 func objectMetaV1(name string) metav1.ObjectMeta {
 	return metav1.ObjectMeta{
-		Name:      name,
-		Namespace: "default",
+		Name:        name,
+		Namespace:   "default",
+		Annotations: make(map[string]string),
 	}
 }
 
-func dumpNATmaps(felixes []*infrastructure.Felix) ([]nat.MapMem, []nat.BackendMapMem) {
+func dumpNATmaps(felixes []*infrastructure.Felix) ([]nat.MapMem, []nat.BackendMapMem, []nat.ConsistentHashMapMem) {
 	bpfsvcs := make([]nat.MapMem, len(felixes))
 	bpfeps := make([]nat.BackendMapMem, len(felixes))
+	bpfcheps := make([]nat.ConsistentHashMapMem, len(felixes))
 
 	// Felixes are independent, we can dump the maps  concurrently
 	var wg sync.WaitGroup
@@ -5310,20 +5312,23 @@ func dumpNATmaps(felixes []*infrastructure.Felix) ([]nat.MapMem, []nat.BackendMa
 		go func(i int) {
 			defer wg.Done()
 			defer GinkgoRecover()
-			bpfsvcs[i], bpfeps[i] = dumpNATMaps(felixes[i])
+			bpfsvcs[i], bpfeps[i], bpfcheps[i] = dumpNATMaps(felixes[i])
 		}(i)
 	}
 
 	wg.Wait()
 
-	return bpfsvcs, bpfeps
+	return bpfsvcs, bpfeps, bpfcheps
 }
 
 func dumpNATmapsAny(family int, felixes []*infrastructure.Felix) (
-	[]map[nat.FrontendKeyInterface]nat.FrontendValue, []map[nat.BackendKey]nat.BackendValueInterface,
+	[]map[nat.FrontendKeyInterface]nat.FrontendValue,
+	[]map[nat.BackendKey]nat.BackendValueInterface,
+	[]map[nat.ConsistentHashBackendKeyInterface]nat.BackendValueInterface,
 ) {
 	bpfsvcs := make([]map[nat.FrontendKeyInterface]nat.FrontendValue, len(felixes))
 	bpfeps := make([]map[nat.BackendKey]nat.BackendValueInterface, len(felixes))
+	bpfcheps := make([]map[nat.ConsistentHashBackendKeyInterface]nat.BackendValueInterface, len(felixes))
 
 	// Felixes are independent, we can dump the maps  concurrently
 	var wg sync.WaitGroup
@@ -5333,18 +5338,19 @@ func dumpNATmapsAny(family int, felixes []*infrastructure.Felix) (
 		go func(i int) {
 			defer wg.Done()
 			defer GinkgoRecover()
-			bpfsvcs[i], bpfeps[i] = dumpNATMapsAny(family, felixes[i])
+			bpfsvcs[i], bpfeps[i], bpfcheps[i] = dumpNATMapsAny(family, felixes[i])
 		}(i)
 	}
 
 	wg.Wait()
 
-	return bpfsvcs, bpfeps
+	return bpfsvcs, bpfeps, bpfcheps
 }
 
-func dumpNATmapsV6(felixes []*infrastructure.Felix) ([]nat.MapMemV6, []nat.BackendMapMemV6) {
+func dumpNATmapsV6(felixes []*infrastructure.Felix) ([]nat.MapMemV6, []nat.BackendMapMemV6, []nat.ConsistentHashMapMemV6) {
 	bpfsvcs := make([]nat.MapMemV6, len(felixes))
 	bpfeps := make([]nat.BackendMapMemV6, len(felixes))
+	cheps := make([]nat.ConsistentHashMapMemV6, len(felixes))
 
 	// Felixes are independent, we can dump the maps  concurrently
 	var wg sync.WaitGroup
@@ -5354,49 +5360,57 @@ func dumpNATmapsV6(felixes []*infrastructure.Felix) ([]nat.MapMemV6, []nat.Backe
 		go func(i int) {
 			defer wg.Done()
 			defer GinkgoRecover()
-			bpfsvcs[i], bpfeps[i] = dumpNATMapsV6(felixes[i])
+			bpfsvcs[i], bpfeps[i], cheps[i] = dumpNATMapsV6(felixes[i])
 		}(i)
 	}
 
 	wg.Wait()
 
-	return bpfsvcs, bpfeps
+	return bpfsvcs, bpfeps, cheps
 }
 
-func dumpNATMaps(felix *infrastructure.Felix) (nat.MapMem, nat.BackendMapMem) {
-	return dumpNATMap(felix), dumpEPMap(felix)
+func dumpNATMaps(felix *infrastructure.Felix) (nat.MapMem, nat.BackendMapMem, nat.ConsistentHashMapMem) {
+	return dumpNATMap(felix), dumpEPMap(felix), dumpConsistentHashEPMap(felix)
 }
 
-func dumpNATMapsV6(felix *infrastructure.Felix) (nat.MapMemV6, nat.BackendMapMemV6) {
-	return dumpNATMapV6(felix), dumpEPMapV6(felix)
+func dumpNATMapsV6(felix *infrastructure.Felix) (nat.MapMemV6, nat.BackendMapMemV6, nat.ConsistentHashMapMemV6) {
+	return dumpNATMapV6(felix), dumpEPMapV6(felix), dumpConsistentHashEPMapV6(felix)
 }
 
 func dumpNATMapsAny(family int, felix *infrastructure.Felix) (
 	map[nat.FrontendKeyInterface]nat.FrontendValue,
 	map[nat.BackendKey]nat.BackendValueInterface,
+	map[nat.ConsistentHashBackendKeyInterface]nat.BackendValueInterface,
 ) {
 	f := make(map[nat.FrontendKeyInterface]nat.FrontendValue)
 	b := make(map[nat.BackendKey]nat.BackendValueInterface)
+	m := make(map[nat.ConsistentHashBackendKeyInterface]nat.BackendValueInterface)
 
 	if family == 6 {
-		f6, b6 := dumpNATMapsV6(felix)
+		f6, b6, m6 := dumpNATMapsV6(felix)
 		for k, v := range f6 {
 			f[k] = v
 		}
 		for k, v := range b6 {
 			b[k] = v
 		}
+		for k, v := range m6 {
+			m[k] = v
+		}
 	} else {
-		f4, b4 := dumpNATMaps(felix)
+		f4, b4, m4 := dumpNATMaps(felix)
 		for k, v := range f4 {
 			f[k] = v
 		}
 		for k, v := range b4 {
 			b[k] = v
 		}
+		for k, v := range m4 {
+			m[k] = v
+		}
 	}
 
-	return f, b
+	return f, b, m
 }
 
 func dumpCTMapsAny(family int, felix *infrastructure.Felix) map[conntrack.KeyInterface]conntrack.ValueInterface {
@@ -5446,6 +5460,20 @@ func dumpEPMap(felix *infrastructure.Felix) nat.BackendMapMem {
 	bm := nat.BackendMap()
 	m := make(nat.BackendMapMem)
 	dumpBPFMap(felix, bm, nat.BackendMapMemIter(m))
+	return m
+}
+
+func dumpConsistentHashEPMap(felix *infrastructure.Felix) nat.ConsistentHashMapMem {
+	bm := nat.ConsistentHashMap()
+	m := make(nat.ConsistentHashMapMem)
+	dumpBPFMap(felix, bm, nat.ConsistentHashMapMemIter(m))
+	return m
+}
+
+func dumpConsistentHashEPMapV6(felix *infrastructure.Felix) nat.ConsistentHashMapMemV6 {
+	bm := nat.ConsistentHashMapV6()
+	m := make(nat.ConsistentHashMapMemV6)
+	dumpBPFMap(felix, bm, nat.ConsistentHashMapMemV6Iter(m))
 	return m
 }
 
@@ -5604,9 +5632,10 @@ func k8sService(name, clusterIP string, w *workload.Workload, port,
 		svcType = v1.ServiceTypeNodePort
 	}
 
+	meta := objectMetaV1(name)
 	return &v1.Service{
 		TypeMeta:   typeMetaV1("Service"),
-		ObjectMeta: objectMetaV1(name),
+		ObjectMeta: meta,
 		Spec: v1.ServiceSpec{
 			ClusterIP: clusterIP,
 			Type:      svcType,
