@@ -177,22 +177,25 @@ func (rg *routeGenerator) getServiceForEndpoints(ep *discoveryv1.EndpointSlice) 
 }
 
 // getEndpointsForService retrieves the corresponding ep for the given svc
-func (rg *routeGenerator) getEndpointsForService(svc *v1.Service) (*discoveryv1.EndpointSlice, string) {
+func (rg *routeGenerator) getEndpointsForService(svc *v1.Service) ([]*discoveryv1.EndpointSlice, string) {
+	var eps []*discoveryv1.EndpointSlice
 	for _, obj := range rg.epIndexer.List() {
 		ep, ok := obj.(*discoveryv1.EndpointSlice)
 		if !ok {
 			continue
 		}
 		if svcName, ok := ep.Labels[discoveryv1.LabelServiceName]; ok && svcName == svc.Name && ep.Namespace == svc.Namespace {
-			key, err := cache.MetaNamespaceKeyFunc(svc)
-			if err != nil {
-				log.WithField("svc", svc.Name).WithError(err).Warn("getEndpointsForService: error on retrieving key for service, passing")
-				return nil, ""
-			}
-			return ep, key
+			eps = append(eps, ep)
 		}
 	}
-	return nil, ""
+
+	key, err := cache.MetaNamespaceKeyFunc(svc)
+	if err != nil {
+		log.WithField("svc", svc.Name).WithError(err).Warn("getEndpointsForService: error on retrieving key for service, passing")
+		return nil, ""
+	}
+
+	return eps, key
 }
 
 // setRouteForSvc handles the main logic to check if a specified service or endpoint
@@ -205,14 +208,16 @@ func (rg *routeGenerator) setRouteForSvc(svc *v1.Service, ep *discoveryv1.Endpoi
 	}
 
 	var key string
+	var eps []*discoveryv1.EndpointSlice
 	if svc == nil {
+		eps = append(eps, ep)
 		// ep received but svc nil
 		if svc, key = rg.getServiceForEndpoints(ep); svc == nil {
 			return
 		}
 	} else if ep == nil {
 		// svc received but ep nil
-		if ep, key = rg.getEndpointsForService(svc); ep == nil {
+		if eps, key = rg.getEndpointsForService(svc); len(eps) == 0 {
 			return
 		}
 	}
@@ -223,7 +228,7 @@ func (rg *routeGenerator) setRouteForSvc(svc *v1.Service, ep *discoveryv1.Endpoi
 	rg.Lock()
 	defer rg.Unlock()
 
-	advertise := rg.advertiseThisService(svc, ep)
+	advertise := rg.advertiseThisService(svc, eps)
 	logCtx.WithField("advertise", advertise).Debug("Checking routes for service")
 	if advertise {
 		routes := rg.getAllRoutesForService(svc)
@@ -450,7 +455,7 @@ func contains(items []string, target string) bool {
 
 // advertiseThisService returns true if this service should be advertised on this node,
 // false otherwise.
-func (rg *routeGenerator) advertiseThisService(svc *v1.Service, ep *discoveryv1.EndpointSlice) bool {
+func (rg *routeGenerator) advertiseThisService(svc *v1.Service, eps []*discoveryv1.EndpointSlice) bool {
 	logc := log.WithField("svc", fmt.Sprintf("%s/%s", svc.Namespace, svc.Name))
 
 	// Don't advertise routes if this node is explicitly excluded from load balancers.
@@ -505,21 +510,23 @@ func (rg *routeGenerator) advertiseThisService(svc *v1.Service, ep *discoveryv1.
 	// Endpoint-based advertisement logic for both Cluster and Local services.
 	// For Cluster services: advertise if any endpoints exist (when aggregation is disabled).
 	// For Local services: advertise only if local endpoints exist.
-	for _, subset := range ep.Endpoints {
-		// not interested in subset.NotReadyAddresses
-		for _, address := range subset.Addresses {
-			if isIPv6(address) != svcIsIPv6 {
-				continue
-			}
-			if svc.Spec.ExternalTrafficPolicy != v1.ServiceExternalTrafficPolicyTypeLocal {
-				// For Cluster services, advertise if we have any endpoints
-				logc.Debugf("Advertising cluster service")
-				return true
-			} else {
-				// For Local services, only advertise if we have local endpoints
-				if subset.NodeName != nil && *subset.NodeName == rg.nodeName {
-					logc.Debugf("Advertising local service")
+	for _, ep := range eps {
+		for _, subset := range ep.Endpoints {
+			// not interested in subset.NotReadyAddresses
+			for _, address := range subset.Addresses {
+				if isIPv6(address) != svcIsIPv6 {
+					continue
+				}
+				if svc.Spec.ExternalTrafficPolicy != v1.ServiceExternalTrafficPolicyTypeLocal {
+					// For Cluster services, advertise if we have any endpoints
+					logc.Debugf("Advertising cluster service")
 					return true
+				} else {
+					// For Local services, only advertise if we have local endpoints
+					if subset.NodeName != nil && *subset.NodeName == rg.nodeName {
+						logc.Debugf("Advertising local service")
+						return true
+					}
 				}
 			}
 		}

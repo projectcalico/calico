@@ -181,7 +181,7 @@ var _ = Describe("RouteGenerator", func() {
 			err := rg.epIndexer.Add(ep)
 			Expect(err).NotTo(HaveOccurred())
 			fetchedEp, key := rg.getEndpointsForService(svc)
-			Expect(fetchedEp.ObjectMeta).To(Equal(ep.ObjectMeta))
+			Expect(fetchedEp[0].ObjectMeta).To(Equal(ep.ObjectMeta))
 			Expect(key).To(Equal("foo/bar"))
 		})
 	})
@@ -817,7 +817,7 @@ var _ = Describe("Service Load Balancer Aggregation", func() {
 					},
 				}
 
-				result := rg.advertiseThisService(svc, ep)
+				result := rg.advertiseThisService(svc, []*discoveryv1.EndpointSlice{ep})
 				Expect(result).To(BeFalse())
 			})
 
@@ -840,7 +840,7 @@ var _ = Describe("Service Load Balancer Aggregation", func() {
 					},
 				}
 
-				result := rg.advertiseThisService(svc, ep)
+				result := rg.advertiseThisService(svc, []*discoveryv1.EndpointSlice{ep})
 				Expect(result).To(BeTrue())
 			})
 		})
@@ -868,7 +868,7 @@ var _ = Describe("Service Load Balancer Aggregation", func() {
 					},
 				}
 
-				result := rg.advertiseThisService(svc, ep)
+				result := rg.advertiseThisService(svc, []*discoveryv1.EndpointSlice{ep})
 				Expect(result).To(BeTrue())
 			})
 
@@ -886,7 +886,7 @@ var _ = Describe("Service Load Balancer Aggregation", func() {
 					Endpoints:  []discoveryv1.Endpoint{},
 				}
 
-				result := rg.advertiseThisService(svc, ep)
+				result := rg.advertiseThisService(svc, []*discoveryv1.EndpointSlice{ep})
 				Expect(result).To(BeFalse())
 			})
 		})
@@ -914,7 +914,7 @@ var _ = Describe("Service Load Balancer Aggregation", func() {
 					},
 				}
 
-				result := rg.advertiseThisService(svc, ep)
+				result := rg.advertiseThisService(svc, []*discoveryv1.EndpointSlice{ep})
 				Expect(result).To(BeFalse())
 			})
 
@@ -940,7 +940,7 @@ var _ = Describe("Service Load Balancer Aggregation", func() {
 					},
 				}
 
-				result := rg.advertiseThisService(svc, ep)
+				result := rg.advertiseThisService(svc, []*discoveryv1.EndpointSlice{ep})
 				Expect(result).To(BeTrue())
 			})
 		})
