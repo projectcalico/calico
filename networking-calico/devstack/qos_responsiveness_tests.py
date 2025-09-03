@@ -378,9 +378,9 @@ class QoSResponsivenessTest(unittest.TestCase):
         vm = self.conn.compute.wait_for_server(vm)
 
         # Maybe set port-level QoS.
-        if state["port_qos_name"] is not None:
+        if port_qos_id is not None:
             port = list(self.conn.network.ports(device_id=vm.id))[0]
-            self.conn.network.update_port(port.id, qos_policy_id=state["port_qos_name"])
+            self.conn.network.update_port(port.id, qos_policy_id=port_qos_id)
 
     def _ensure_qos_policy(self, name, rules):
         full_name = "test-qos-policy" + name
@@ -496,7 +496,7 @@ class QoSResponsivenessTest(unittest.TestCase):
             function_args=(self.transition_port_id, expected_qos),
         )
 
-    def _assert_wep_qos(self, port_id: str, expected_qos: Dict) -> bool:
+    def _assert_wep_qos(self, port_id, expected_qos):
         """
         Assert that WorkloadEndpoint QoS controls are as expected.
 
