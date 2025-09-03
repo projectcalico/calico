@@ -1,6 +1,6 @@
 - name: e2e tests
   run:
-    when: "${FORCE_RUN} or change_in(['/*', '/e2e/', '/api/', '/libcalico-go/', '/typha/', '/felix/', '/confd/', '/bird/', '/pod2daemon/', '/node/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+    when: "${CHANGE_IN(e2e,node,typha,apiserver,cni-plugin,pod2daemon,calicoctl,kube-controllers,goldmane,whisker,whisker-backend)}"
   dependencies:
     - Prerequisites
   task:

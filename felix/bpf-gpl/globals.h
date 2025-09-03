@@ -26,10 +26,6 @@ struct name {                              \
 	__u8 iface_name[16];                   \
 	__u32 log_filter_jmp;                  \
 	__u32 jumps[40];                       \
-	__s16 ingress_packet_rate;             \
-	__s16 ingress_packet_burst;            \
-	__s16 egress_packet_rate;              \
-	__s16 egress_packet_burst;             \
 }
 
 DECLARE_TC_GLOBAL_DATA(cali_tc_global_data, ipv6_addr_t);
@@ -49,19 +45,21 @@ struct cali_tc_preamble_globals {
 };
 
 enum cali_globals_flags {
-	CALI_GLOBALS_RESERVED1                 = 0x00000002,
-	CALI_GLOBALS_RESERVED2                 = 0x00000004,
-	CALI_GLOBALS_RESERVED3                 = 0x00000008,
-	CALI_GLOBALS_RPF_OPTION_ENABLED        = 0x00000010,
-	CALI_GLOBALS_RPF_OPTION_STRICT         = 0x00000020,
-	CALI_GLOBALS_RESERVED7                 = 0x00000040,
-	CALI_GLOBALS_NO_DSR_CIDRS              = 0x00000080,
-	CALI_GLOBALS_LO_UDP_ONLY               = 0x00000100,
-	CALI_GLOBALS_RESERVED10                = 0x00000200,
-	CALI_GLOBALS_REDIRECT_PEER             = 0x00000400,
-	CALI_GLOBALS_FLOWLOGS_ENABLED          = 0x00000800,
-	CALI_GLOBALS_NATOUTGOING_EXCLUDE_HOSTS = 0x00001000,
-	CALI_GLOBALS_SKIP_EGRESS_REDIRECT      = 0x00002000,
+	CALI_GLOBALS_RESERVED1                            = 0x00000002,
+	CALI_GLOBALS_RESERVED2                            = 0x00000004,
+	CALI_GLOBALS_RESERVED3                            = 0x00000008,
+	CALI_GLOBALS_RPF_OPTION_ENABLED                   = 0x00000010,
+	CALI_GLOBALS_RPF_OPTION_STRICT                    = 0x00000020,
+	CALI_GLOBALS_RESERVED7                            = 0x00000040,
+	CALI_GLOBALS_NO_DSR_CIDRS                         = 0x00000080,
+	CALI_GLOBALS_LO_UDP_ONLY                          = 0x00000100,
+	CALI_GLOBALS_RESERVED10                           = 0x00000200,
+	CALI_GLOBALS_REDIRECT_PEER                        = 0x00000400,
+	CALI_GLOBALS_FLOWLOGS_ENABLED                     = 0x00000800,
+	CALI_GLOBALS_NATOUTGOING_EXCLUDE_HOSTS            = 0x00001000,
+	CALI_GLOBALS_SKIP_EGRESS_REDIRECT                 = 0x00002000,
+	CALI_GLOBALS_INGRESS_PACKET_RATE_CONFIGURED       = 0x00004000,
+	CALI_GLOBALS_EGRESS_PACKET_RATE_CONFIGURED        = 0x00008000,
 };
 
 struct cali_ctlb_globals {
