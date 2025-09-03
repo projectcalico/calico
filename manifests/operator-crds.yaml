@@ -10033,6 +10033,21 @@ spec:
                         - Enabled
                         - Disabled
                       type: string
+                    bpfNetworkBootstrap:
+                      description: |-
+                        BPFNetworkBootstrap manages the initial networking setup required to configure the BPF dataplane.
+                        When enabled, the operator tries to bootstraps access to the Kubernetes API Server
+                        by using the Kubernetes service and its associated endpoints.
+                        This field should be enabled only if linuxDataplane is set to "BPF".
+                        If another dataplane is selected, this field must be omitted or explicitly set to Disabled.
+                        When disabled and linuxDataplane is BPF, you must manually provide the Kubernetes API Server
+                        information via the "kubernetes-service-endpoint" ConfigMap. It is invalid to use both the ConfigMap
+                        and have this field set to true at the same time.
+                        Default: Disabled
+                      enum:
+                        - Disabled
+                        - Enabled
+                      type: string
                     containerIPForwarding:
                       description: |-
                         ContainerIPForwarding configures whether ip forwarding will be enabled for containers in the CNI configuration.
@@ -10129,6 +10144,16 @@ spec:
                         type: object
                       maxItems: 25
                       type: array
+                    kubeProxyManagement:
+                      description: |-
+                        KubeProxyManagement controls whether the operator manages the kube-proxy DaemonSet.
+                        When enabled, the operator will manage the DaemonSet by patching it:
+                        it disables kube-proxy if the dataplane is BPF, or enables it otherwise.
+                        Default: Disabled
+                      enum:
+                        - Disabled
+                        - Enabled
+                      type: string
                     linuxDataplane:
                       description: |-
                         LinuxDataplane is used to select the dataplane used for Linux nodes. In particular, it
@@ -11413,6 +11438,65 @@ spec:
                                       - name
                                     type: object
                                   type: array
+                                dnsConfig:
+                                  description:
+                                    DNSConfig allows customization of the
+                                    DNS configuration for the calico-node pods.
+                                  properties:
+                                    nameservers:
+                                      description: |-
+                                        A list of DNS name server IP addresses.
+                                        This will be appended to the base nameservers generated from DNSPolicy.
+                                        Duplicated nameservers will be removed.
+                                      items:
+                                        type: string
+                                      type: array
+                                      x-kubernetes-list-type: atomic
+                                    options:
+                                      description: |-
+                                        A list of DNS resolver options.
+                                        This will be merged with the base options generated from DNSPolicy.
+                                        Duplicated entries will be removed. Resolution options given in Options
+                                        will override those that appear in the base DNSPolicy.
+                                      items:
+                                        description:
+                                          PodDNSConfigOption defines DNS
+                                          resolver options of a pod.
+                                        properties:
+                                          name:
+                                            description: |-
+                                              Name is this DNS resolver option's name.
+                                              Required.
+                                            type: string
+                                          value:
+                                            description:
+                                              Value is this DNS resolver
+                                              option's value.
+                                            type: string
+                                        type: object
+                                      type: array
+                                      x-kubernetes-list-type: atomic
+                                    searches:
+                                      description: |-
+                                        A list of DNS search domains for host-name lookup.
+                                        This will be appended to the base search paths generated from DNSPolicy.
+                                        Duplicated search paths will be removed.
+                                      items:
+                                        type: string
+                                      type: array
+                                      x-kubernetes-list-type: atomic
+                                  type: object
+                                dnsPolicy:
+                                  description:
+                                    DNSPolicy is the DNS policy for the calico-node
+                                    pods.
+                                  enum:
+                                    - ""
+                                    - Default
+                                    - ClusterFirst
+                                    - ClusterFirstWithHostNet
+                                    - None
+                                  type: string
                                 initContainers:
                                   description: |-
                                     InitContainers is a list of calico-node init containers.
@@ -18803,6 +18887,21 @@ spec:
                             - Enabled
                             - Disabled
                           type: string
+                        bpfNetworkBootstrap:
+                          description: |-
+                            BPFNetworkBootstrap manages the initial networking setup required to configure the BPF dataplane.
+                            When enabled, the operator tries to bootstraps access to the Kubernetes API Server
+                            by using the Kubernetes service and its associated endpoints.
+                            This field should be enabled only if linuxDataplane is set to "BPF".
+                            If another dataplane is selected, this field must be omitted or explicitly set to Disabled.
+                            When disabled and linuxDataplane is BPF, you must manually provide the Kubernetes API Server
+                            information via the "kubernetes-service-endpoint" ConfigMap. It is invalid to use both the ConfigMap
+                            and have this field set to true at the same time.
+                            Default: Disabled
+                          enum:
+                            - Disabled
+                            - Enabled
+                          type: string
                         containerIPForwarding:
                           description: |-
                             ContainerIPForwarding configures whether ip forwarding will be enabled for containers in the CNI configuration.
@@ -18899,6 +18998,16 @@ spec:
                             type: object
                           maxItems: 25
                           type: array
+                        kubeProxyManagement:
+                          description: |-
+                            KubeProxyManagement controls whether the operator manages the kube-proxy DaemonSet.
+                            When enabled, the operator will manage the DaemonSet by patching it:
+                            it disables kube-proxy if the dataplane is BPF, or enables it otherwise.
+                            Default: Disabled
+                          enum:
+                            - Disabled
+                            - Enabled
+                          type: string
                         linuxDataplane:
                           description: |-
                             LinuxDataplane is used to select the dataplane used for Linux nodes. In particular, it
@@ -20210,6 +20319,65 @@ spec:
                                           - name
                                         type: object
                                       type: array
+                                    dnsConfig:
+                                      description:
+                                        DNSConfig allows customization of
+                                        the DNS configuration for the calico-node pods.
+                                      properties:
+                                        nameservers:
+                                          description: |-
+                                            A list of DNS name server IP addresses.
+                                            This will be appended to the base nameservers generated from DNSPolicy.
+                                            Duplicated nameservers will be removed.
+                                          items:
+                                            type: string
+                                          type: array
+                                          x-kubernetes-list-type: atomic
+                                        options:
+                                          description: |-
+                                            A list of DNS resolver options.
+                                            This will be merged with the base options generated from DNSPolicy.
+                                            Duplicated entries will be removed. Resolution options given in Options
+                                            will override those that appear in the base DNSPolicy.
+                                          items:
+                                            description:
+                                              PodDNSConfigOption defines
+                                              DNS resolver options of a pod.
+                                            properties:
+                                              name:
+                                                description: |-
+                                                  Name is this DNS resolver option's name.
+                                                  Required.
+                                                type: string
+                                              value:
+                                                description:
+                                                  Value is this DNS resolver
+                                                  option's value.
+                                                type: string
+                                            type: object
+                                          type: array
+                                          x-kubernetes-list-type: atomic
+                                        searches:
+                                          description: |-
+                                            A list of DNS search domains for host-name lookup.
+                                            This will be appended to the base search paths generated from DNSPolicy.
+                                            Duplicated search paths will be removed.
+                                          items:
+                                            type: string
+                                          type: array
+                                          x-kubernetes-list-type: atomic
+                                      type: object
+                                    dnsPolicy:
+                                      description:
+                                        DNSPolicy is the DNS policy for the
+                                        calico-node pods.
+                                      enum:
+                                        - ""
+                                        - Default
+                                        - ClusterFirst
+                                        - ClusterFirstWithHostNet
+                                        - None
+                                      type: string
                                     initContainers:
                                       description: |-
                                         InitContainers is a list of calico-node init containers.
