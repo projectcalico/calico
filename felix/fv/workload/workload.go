@@ -105,7 +105,20 @@ func (w *Workload) Stop() {
 		log.WithField("workload", w.Name).Info("Workload already stopped")
 		return
 	}
-	_ = w.C.ExecMayFail("sh", "-c", fmt.Sprintf("kill -9 %s & ip link del %s & ip netns del %s & wait", w.pid, w.InterfaceName, w.NamespaceID()))
+
+	cleanupCmds := []string{
+		fmt.Sprintf("kill -9 %s", w.pid),
+	}
+	if w.InterfaceName != "" {
+		// Only try to delete the veth if we created one.
+		cleanupCmds = append(cleanupCmds, fmt.Sprintf("ip link del %s", w.InterfaceName))
+	}
+	if w.NamespaceID() != "" {
+		cleanupCmds = append(cleanupCmds, fmt.Sprintf("ip netns del %s", w.NamespaceID()))
+	}
+	cleanupCmds = append(cleanupCmds, "wait")
+
+	_ = w.C.ExecMayFail("sh", "-c", strings.Join(cleanupCmds, " & "))
 	// Killing the process inside the container should cause our long-running
 	// docker exec command to exit.  Do the Wait on a background goroutine,
 	// so we can time it out, just in case.
