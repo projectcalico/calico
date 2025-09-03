@@ -1,6 +1,6 @@
 - name: e2e script & pipeline validations
   run:
-    when: "${FORCE_RUN} or change_in(['/*', '/.semaphore/end-to-end/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+    when: "${FORCE_RUN} or change_in(['/.semaphore/end-to-end/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
   execution_time_limit:
     minutes: 5
   dependencies:

@@ -1,6 +1,6 @@
 - name: Mock node
   run:
-    when: "${FORCE_RUN} or change_in(['/*', '/test-tools/mocknode/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+    when: "${CHANGE_IN(test-tools/mocknode)}"
   dependencies:
     - Prerequisites
   task:
