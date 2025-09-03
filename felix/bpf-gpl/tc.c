@@ -2229,6 +2229,8 @@ int calico_tc_maglev(struct __sk_buff *skb)
 		ctx->state->flags |= CALI_ST_SKIP_REDIR_PEER;
 	}
 
+	// CALI_CT_MID_FLOW_MISS implies traffic is TCP. If that changes,
+	// this condition should be adjusted.
 	if (ct_result_rc(ctx->state->ct_result.rc) == CALI_CT_MID_FLOW_MISS) {
 		/* treat it as if it was a new flow */
 		CALI_DEBUG("Maglev: mid-flow miss, treating as new flow");
