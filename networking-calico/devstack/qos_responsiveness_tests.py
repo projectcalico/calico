@@ -365,7 +365,7 @@ class QoSResponsivenessTest(unittest.TestCase):
         network, subnet = self.create_test_network("test-network", net_qos_id)
 
         # Create the VM.
-        cirros = [i for i in self.conn.compute.images() if i.name.startswith("cirros")][
+        cirros = [i for i in self.conn.image.images() if i.name.startswith("cirros")][
             0
         ]
         tiny = [i for i in self.conn.compute.flavors() if "tiny" in i.name][0]
@@ -420,10 +420,14 @@ class QoSResponsivenessTest(unittest.TestCase):
             if r not in existing_rules:
                 logger.info(f"Add rule {r} for policy {name}")
                 if r["type"] == "bandwidth_limit":
+                    r2 = r.copy()
+                    del r2["type"]
                     self.conn.network.create_qos_bandwidth_limit_rule(
                         qos_policy.id, **r
                     )
                 elif r["type"] == "packet_rate_limit":
+                    r2 = r.copy()
+                    del r2["type"]
                     self.conn.network.create_qos_packet_rate_limit_rule(
                         qos_policy.id, **r
                     )
