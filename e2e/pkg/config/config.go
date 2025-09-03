@@ -39,6 +39,11 @@ func (c *configOption) cliName() string {
 const (
 	remoteKubeConfig = "REMOTE_KUBECONFIG"
 	logLevel         = "LOG_LEVEL"
+
+	// Configuration options for tests that use SSH to connect to an external machine.
+	externalNodeIP       = "EXT_IP"
+	externalNodeSSHKey   = "EXT_KEY"
+	externalNodeUsername = "EXT_USER"
 )
 
 var allConfigOptions = map[string]*configOption{
@@ -52,10 +57,39 @@ var allConfigOptions = map[string]*configOption{
 		helpText:     "The log level to use for the tests. Valid values are: panic, fatal, error, warn, info, debug, trace.",
 		defaultValue: "info",
 	},
+
+	// Configuration options for tests that use SSH to connect to an external machine.
+	externalNodeUsername: {
+		envVarName:   externalNodeUsername,
+		helpText:     "The SSH username to use for the external node.",
+		defaultValue: "ubuntu",
+	},
+	externalNodeSSHKey: {
+		envVarName:   externalNodeSSHKey,
+		helpText:     "The absolute path to the SSH key to connect to the external node.",
+		defaultValue: "",
+	},
+	externalNodeIP: {
+		envVarName:   externalNodeIP,
+		helpText:     "The IP address of the external node.",
+		defaultValue: "",
+	},
 }
 
 func RemoteClusterKubeconfig() string {
 	return allConfigOptions[remoteKubeConfig].actualValue
+}
+
+func ExtNodeUsername() string {
+	return allConfigOptions[externalNodeUsername].actualValue
+}
+
+func ExtNodeSSHKey() string {
+	return allConfigOptions[externalNodeIP].actualValue
+}
+
+func ExtNodeIP() string {
+	return allConfigOptions[externalNodeIP].actualValue
 }
 
 func init() {

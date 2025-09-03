@@ -23,7 +23,7 @@ import (
 	. "github.com/projectcalico/calico/felix/rules"
 )
 
-var _ = Describe("QoS", func() {
+var _ = Describe("DSCP", func() {
 	rrConfigNormal := Config{
 		IPIPEnabled:  true,
 		MarkAccept:   0x8,
@@ -40,20 +40,20 @@ var _ = Describe("QoS", func() {
 	})
 
 	It("should render empty chain for no policies", func() {
-		Expect(renderer.EgressQoSPolicyChain([]QoSPolicy{})).To(Equal(&generictables.Chain{
-			Name:  "cali-qos-policy",
+		Expect(renderer.EgressDSCPChain([]DSCPRule{})).To(Equal(&generictables.Chain{
+			Name:  ChainEgressDSCP,
 			Rules: nil,
 		}))
 	})
 
 	It("should render correct chain for policies", func() {
-		policies := []QoSPolicy{
-			{SrcAddrs: "192.168.10.20", DSCP: 10},
-			{SrcAddrs: "192.168.10.100,172.17.1.100", DSCP: 40},
-			{SrcAddrs: "192.168.20.1", DSCP: 0},
+		rules := []DSCPRule{
+			{SrcAddrs: "192.168.10.20", Value: 10},
+			{SrcAddrs: "192.168.10.100,172.17.1.100", Value: 40},
+			{SrcAddrs: "192.168.20.1", Value: 0},
 		}
-		Expect(renderer.EgressQoSPolicyChain(policies)).To(Equal(&generictables.Chain{
-			Name: "cali-qos-policy",
+		Expect(renderer.EgressDSCPChain(rules)).To(Equal(&generictables.Chain{
+			Name: ChainEgressDSCP,
 			Rules: []generictables.Rule{
 				{
 					Match:  Match().SourceNet("192.168.10.20"),
@@ -72,13 +72,13 @@ var _ = Describe("QoS", func() {
 	})
 
 	It("should render correct IPv6 chain for policies", func() {
-		policies := []QoSPolicy{
-			{SrcAddrs: "dead:beef::1:20", DSCP: 10},
-			{SrcAddrs: "dead:beef::1:100,dead:beef::10:1", DSCP: 40},
-			{SrcAddrs: "dead:beef::2:2", DSCP: 22},
+		rules := []DSCPRule{
+			{SrcAddrs: "dead:beef::1:20", Value: 10},
+			{SrcAddrs: "dead:beef::1:100,dead:beef::10:1", Value: 40},
+			{SrcAddrs: "dead:beef::2:2", Value: 22},
 		}
-		Expect(renderer.EgressQoSPolicyChain(policies)).To(Equal(&generictables.Chain{
-			Name: "cali-qos-policy",
+		Expect(renderer.EgressDSCPChain(rules)).To(Equal(&generictables.Chain{
+			Name: ChainEgressDSCP,
 			Rules: []generictables.Rule{
 				{
 					Match:  Match().SourceNet("dead:beef::1:20"),

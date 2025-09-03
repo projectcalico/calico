@@ -1,6 +1,6 @@
 - name: libcalico-go
   run:
-    when: "${FORCE_RUN} or change_in(['/*', '/api/', '/libcalico-go/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+    when: "${CHANGE_IN(libcalico-go)}"
   dependencies:
     - Prerequisites
   task:
