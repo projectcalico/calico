@@ -5,6 +5,8 @@
 #ifndef __CALI_RULE_COUNTERS_H__
 #define __CALI_RULE_COUNTERS_H__
 
+#include "bpf.h"
+#include "log.h"
 #include "types.h"
 
 CALI_MAP(cali_rule_ctrs, 2,

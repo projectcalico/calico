@@ -193,7 +193,7 @@ while ($True)
             $kubeletPid = $currentKubeletPid
             while ($true)
             {
-                .\calico-node.exe -startup
+                .\calico-node.exe -startup -complete-startup
                 if ($LastExitCode -EQ 0)
                 {
                     Write-Host "Calico node initialisation succeeded; monitoring kubelet for restarts..."

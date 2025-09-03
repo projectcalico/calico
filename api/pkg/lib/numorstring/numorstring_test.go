@@ -154,8 +154,8 @@ func init() {
 		Entry("should stringify protocol of udp", numorstring.ProtocolFromString("UDP"), "UDP"),
 
 		// DSCP tests.
-		Entry("should stringify DSCP of 0", numorstring.ProtocolFromInt(0), "0"),
-		Entry("should stringify DSCP of AF22", numorstring.ProtocolFromString("AF22"), "AF22"),
+		Entry("should stringify DSCP of 0", numorstring.DSCPFromInt(0), "0"),
+		Entry("should stringify DSCP of AF22", numorstring.DSCPFromString("AF22"), "AF22"),
 	)
 
 	// Perform tests of Protocols supporting ports.

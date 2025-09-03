@@ -193,7 +193,10 @@ func (r *reconciler) OnUpdates(updates []bapi.Update) {
 					continue
 				}
 				log.Debugf("Updated node resource: %s", u.Key)
-				data = v.Status.WireguardPublicKey
+				data = wireguardData{
+					publicKey:   v.Status.WireguardPublicKey,
+					publicKeyV6: v.Status.WireguardPublicKeyV6,
+				}
 			default:
 				// We got an update for an unexpected resource type. Rather than ignore, just treat as updated so that
 				// we reconcile the addresses.
@@ -795,4 +798,10 @@ func loadFelixEnvConfig() *felixconfig.Config {
 		log.WithError(err).Panic("Failed to parse Felix environments")
 	}
 	return configParams
+}
+
+// Home for wireguard public keys in the cache.
+type wireguardData struct {
+	publicKey   string
+	publicKeyV6 string
 }
