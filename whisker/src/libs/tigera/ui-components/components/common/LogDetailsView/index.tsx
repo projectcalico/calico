@@ -3,7 +3,9 @@ import { Box, TableProps, useMultiStyleConfig } from '@chakra-ui/react';
 import React from 'react';
 import JsonPrettier from '../JsonPrettier';
 import Tabs from '../Tabs';
-import LogDetailsTable from './components/LogDetailsTable';
+import LogDetailsTable, {
+    CustomTableDataVisualiser,
+} from './components/LogDetailsTable';
 
 export interface LogDocument {
     [name: string]:
@@ -28,6 +30,7 @@ interface LogDetailsViewProps extends HTMLChakraProps<'div'> {
     stringifyTableData?: boolean;
     defaultExpandedJsonNodes?: number;
     size?: string;
+    customTableDataVisualisers?: Array<CustomTableDataVisualiser>;
 }
 
 const LogDetailsView: React.FC<LogDetailsViewProps> = ({
@@ -40,6 +43,7 @@ const LogDetailsView: React.FC<LogDetailsViewProps> = ({
     showTableOnly = false,
     stringifyTableData = true,
     defaultExpandedJsonNodes,
+    customTableDataVisualisers,
     ...rest
 }) => {
     const logViewStyles = useMultiStyleConfig('LogDetailsView', rest);
@@ -48,10 +52,11 @@ const LogDetailsView: React.FC<LogDetailsViewProps> = ({
     const Table = (
         <LogDetailsTable
             __css={logViewStyles.table}
-            sx={{ ...tableStyles }}
+            sx={tableStyles}
             size={size}
             logDocument={logDocument}
             stringifyTableData={stringifyTableData}
+            customTableDataVisualisers={customTableDataVisualisers}
         />
     );
 
