@@ -1607,6 +1607,7 @@ func testPacket(family int, eth *layers.Ethernet, l3 gopacket.Layer, l4 gopacket
 		payload: payload,
 		ipv6ext: ipv6ext,
 	}
+
 	err := pkt.Generate()
 	if err != nil {
 		return nil, nil, nil, nil, nil, err
@@ -1912,6 +1913,36 @@ func testPacketUDPDefaultNPWithPayload(destIP net.IP, payload []byte) (*layers.E
 
 	e, ip4, l4, p, b, err := testPacket(4, nil, &ip, nil, payload)
 	return e, ip4.(*layers.IPv4), l4, p, b, err
+}
+
+func testPacketTCPV4WithPayload(destIP net.IP, srcPort, dstPort uint16, syn bool, payload []byte) (*layers.Ethernet, *layers.IPv4, *layers.TCP, []byte, []byte, error) {
+	if destIP == nil {
+		log.Panic("destIP must be set")
+	}
+
+	ip := *ipv4Default
+	ip.DstIP = destIP
+	tcp := &layers.TCP{
+		SYN:        syn,
+		SrcPort:    layers.TCPPort(srcPort),
+		DstPort:    layers.TCPPort(dstPort),
+		DataOffset: 5,
+		// Window:  14600,
+	}
+
+	// ip.Options = []layers.IPv4Option{{
+	// 	OptionType:   123,
+	// 	OptionLength: 6,
+	// 	OptionData:   []byte{0xde, 0xad, 0xbe, 0xef},
+	// }}
+	// ip.IHL += 2
+
+	e, ip4, l4, p, b, err := testPacket(4, nil, &ip, tcp, payload, nil)
+	return e, ip4.(*layers.IPv4), l4.(*layers.TCP), p, b, err
+}
+
+func testPacketTCPV4DefaultNP(destIP net.IP, syn bool) (*layers.Ethernet, *layers.IPv4, *layers.TCP, []byte, []byte, error) {
+	return testPacketTCPV4WithPayload(destIP, 1234, 5678, syn, nil)
 }
 
 func ipv6HopByHopExt() gopacket.SerializableLayer {

@@ -63,7 +63,6 @@
 #endif
 
 #define HAS_HOST_CONFLICT_PROG CALI_F_TO_HEP
-#define HAS_MAGLEV_PROG        (CALI_F_FROM_HEP && CALI_F_MAIN)
 
 /* calico_tc_main is the main function used in all of the tc programs.  It is specialised
  * for particular hook at build time based on the CALI_F build flags.
@@ -475,7 +474,7 @@ static CALI_BPF_INLINE void calico_tc_process_ct_lookup(struct cali_tc_ctx *ctx)
 		CALI_DEBUG("NAT Lookup determined packet handled by maglev");
 		CALI_JUMP_TO(ctx, PROG_INDEX_MAGLEV);
 		CALI_DEBUG("Failed to jump to maglev program");
-		#if !HAS_MAGLEV_PROG
+		#if !HAS_MAGLEV
 		CALI_DEBUG("Maglev program missing");
 		#endif
 		goto deny;
@@ -1626,7 +1625,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 		}
 	}
 
-	if (ct_rc == CALI_CT_NEW) {
+	if (ct_rc == CALI_CT_NEW || ct_rc == CALI_CT_MAGLEV_MID_FLOW_MISS) {
 		CALI_JUMP_TO(ctx, PROG_INDEX_NEW_FLOW);
 		/* should not reach here */
 		CALI_DEBUG("jump to new flow failed");
@@ -2181,7 +2180,7 @@ deny:
 }
 #endif /* !IPVER6 */
 
-#if HAS_MAGLEV_PROG
+#if HAS_MAGLEV
 SEC("tc")
 int calico_tc_maglev(struct __sk_buff *skb)
 {
@@ -2234,6 +2233,7 @@ int calico_tc_maglev(struct __sk_buff *skb)
 		/* treat it as if it was a new flow */
 		CALI_DEBUG("Maglev: mid-flow miss, treating as new flow");
 		/* remember that is was a mid-flow miss so that we can handle it in the new flow program */
+		ctx->state->ct_result.rc = CALI_CT_MAGLEV_MID_FLOW_MISS;
 	}
 
 	CALI_DEBUG("Maglev: About to jump to policy program.");
@@ -2256,4 +2256,4 @@ int calico_tc_maglev(struct __sk_buff *skb)
 deny:
 	return TC_ACT_SHOT;
 }
-#endif /* HAS_MAGLEV_PROG */
+#endif /* HAS_MAGLEV */
