@@ -1,5 +1,5 @@
 // Project Calico BPF dataplane programs.
-// Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2025 Tigera, Inc. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 
 #ifndef __CALI_BPF_H__
@@ -321,13 +321,11 @@ extern const volatile struct cali_tc_preamble_globals __globals;
 #define NATIN_IFACE	CALI_CONFIGURABLE(natin_idx)
 #define PROFILING	CALI_CONFIGURABLE(profiling)
 #define OVERLAY_TUNNEL_ID CALI_CONFIGURABLE(overlay_tunnel_id)
-#define INGRESS_PACKET_RATE CALI_CONFIGURABLE(ingress_packet_rate)
-#define INGRESS_PACKET_BURST CALI_CONFIGURABLE(ingress_packet_burst)
-#define EGRESS_PACKET_RATE CALI_CONFIGURABLE(egress_packet_rate)
-#define EGRESS_PACKET_BURST CALI_CONFIGURABLE(egress_packet_burst)
 #define EGRESS_DSCP CALI_CONFIGURABLE(dscp)
 
 #define FLOWLOGS_ENABLED (GLOBAL_FLAGS & CALI_GLOBALS_FLOWLOGS_ENABLED)
+#define INGRESS_PACKET_RATE_CONFIGURED (GLOBAL_FLAGS & CALI_GLOBALS_INGRESS_PACKET_RATE_CONFIGURED)
+#define EGRESS_PACKET_RATE_CONFIGURED (GLOBAL_FLAGS & CALI_GLOBALS_EGRESS_PACKET_RATE_CONFIGURED)
 
 #ifdef UNITTEST
 #define CALI_PATCH_DEFINE(name, pattern)							\

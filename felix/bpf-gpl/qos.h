@@ -9,103 +9,104 @@
 #include "counters.h"
 #include "ifstate.h"
 
+struct calico_qos_key {
+	__u32 ifindex;
+	__u32 ingress; // 0=egress; 1=ingress;
+};
+
+struct calico_qos_val {
+	struct bpf_spin_lock lock;
+	// config
+	__s16 packet_rate;
+	__s16 packet_burst;
+	// state
+	__s16 packet_rate_tokens;
+	__s16 padding[3]; // alignment
+	__u64 packet_rate_last_update;
+};
+
+// 2*IFACE_STATE_MAP_SIZE because it will potentially have 2 entries for each interface (ingress/egress)
+CALI_MAP(cali_qos,,
+		BPF_MAP_TYPE_HASH,
+		struct calico_qos_key, struct calico_qos_val,
+		2*IFACE_STATE_MAP_SIZE, BPF_F_NO_PREALLOC)
+
 static CALI_BPF_INLINE int enforce_packet_rate_qos(struct cali_tc_ctx *ctx)
 {
 #if !CALI_F_WEP
 		return TC_ACT_UNSPEC;
 #endif
 
-	// Retrieve ifstate map where TBF state is kept
-	struct ifstate_val *ifstate;
-	__u32 ifindex = ctx->skb->ifindex;
-	if (!(ifstate = cali_iface_lookup_elem(&ifindex))) {
-		CALI_DEBUG("packet rate QoS: ifstate not found, accepting packet");
-		return TC_ACT_UNSPEC;
-	}
-
 #if CALI_F_INGRESS
-	if (INGRESS_PACKET_RATE == 0) {
-		ifstate->ingress_packet_rate_tokens = -1;
-		cali_iface_update_elem(&ifindex, ifstate, BPF_ANY);
+	if (!INGRESS_PACKET_RATE_CONFIGURED) {
 		return TC_ACT_UNSPEC;
 	}
 #else // CALI_F_EGRESS
-	if (EGRESS_PACKET_RATE == 0) {
-		ifstate->egress_packet_rate_tokens = -1;
-		cali_iface_update_elem(&ifindex, ifstate, BPF_ANY);
+	if (!EGRESS_PACKET_RATE_CONFIGURED) {
 		return TC_ACT_UNSPEC;
 	}
 #endif
+
+	// Retrieve qos map where TBF state is kept
+	struct calico_qos_val *qos;
+	struct calico_qos_key key = {
+		.ifindex = ctx->skb->ifindex,
+#if CALI_F_INGRESS
+		.ingress = 1,
+#else // CALI_F_EGRESS
+		.ingress = 0,
+#endif
+	};
+	if (!(qos = cali_qos_lookup_elem(&key))) {
+		CALI_DEBUG("packet rate QoS: qos map entry not found, accepting packet");
+		return TC_ACT_UNSPEC;
+	}
 
 	CALI_DEBUG("packet rate QoS: configured, enforcing limit");
 
-	__u64 packet_rate;
-	__s16 burst_size;
-	__u64 last_update;
-	__s16 tokens;
-
-#if CALI_F_INGRESS
-	packet_rate = INGRESS_PACKET_RATE;
-	burst_size = (__s16) INGRESS_PACKET_BURST;
-	last_update = ifstate->ingress_packet_rate_last_update;
-	tokens = ifstate->ingress_packet_rate_tokens;
-#else // CALI_F_EGRESS
-	packet_rate = EGRESS_PACKET_RATE;
-	burst_size = (__s16) EGRESS_PACKET_BURST;
-	last_update = ifstate->egress_packet_rate_last_update;
-	tokens = ifstate->egress_packet_rate_tokens;
-#endif
-
 	__u64 now = bpf_ktime_get_ns();
 
+	CALI_DEBUG("packet rate QoS: begin; tokens: %d last_update: %llu", qos->packet_rate_tokens, qos->packet_rate_last_update);
+
+	bpf_spin_lock(&qos->lock);
+
 	// If not initialized, set initial value of tokens to the burst size
-	if (tokens == -1) {
-		CALI_DEBUG("packet rate QoS: initializing TBF");
-		tokens = burst_size;
-		last_update = now;
+	if (qos->packet_rate_tokens == -1) {
+		qos->packet_rate_tokens = qos->packet_burst;
+		qos->packet_rate_last_update = now;
 	}
 
 	// Calculate token increment from elapsed time (now - last_update) and packet_rate
-	__s16 tokens_inc = ((now - last_update) * packet_rate) / 1000000000;
+	__s16 tokens_inc = ((now - qos->packet_rate_last_update) * qos->packet_rate) / 1000000000;
 	if (tokens_inc > 0) {
-		tokens += tokens_inc;
+		qos->packet_rate_tokens += tokens_inc;
 
 		// Cap tokens to burst_size (TBF bucket size)
-		if (tokens > burst_size) {
-			tokens = burst_size;
+		if (qos->packet_rate_tokens > qos->packet_burst) {
+			qos->packet_rate_tokens = qos->packet_burst;
 		}
 
-		last_update = now;
+		qos->packet_rate_last_update = now;
 	}
 
 	bool accept = false;
 
 	// If there is at least one token available, decrement by one and accept packet
-	if (tokens > 0) {
-		--tokens;
+	if (qos->packet_rate_tokens > 0) {
+		--(qos->packet_rate_tokens);
 		accept = true;
 	}
 
-	// Update TBF state
-#if CALI_F_INGRESS
-	ifstate->ingress_packet_rate_last_update = last_update;
-	ifstate->ingress_packet_rate_tokens = tokens;
+	bpf_spin_unlock(&qos->lock);
 
-#else // CALI_F_EGRESS
-	ifstate->egress_packet_rate_last_update = last_update;
-	ifstate->egress_packet_rate_tokens = tokens;
-#endif
-	cali_iface_update_elem(&ifindex, ifstate, BPF_ANY);
-
-	CALI_DEBUG("packet rate QoS: tokens: %d last_update: %llu", tokens, last_update);
+	CALI_DEBUG("packet rate QoS: end; tokens: %d last_update: %llu", qos->packet_rate_tokens, qos->packet_rate_last_update);
 
 	if (accept) {
 		CALI_DEBUG("packet rate QoS: accept");
 		return TC_ACT_UNSPEC;
 	}
 
-	// If there were not enough tokens, drop packet and increment counter
-	counter_inc(ctx, CALI_REASON_DROPPED_BY_QOS);
+	// If there were not enough tokens, drop packet
 	CALI_DEBUG("packet rate QoS: drop");
 	return TC_ACT_SHOT;
 }
