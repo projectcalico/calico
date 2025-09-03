@@ -421,13 +421,13 @@ class QoSResponsivenessTest(unittest.TestCase):
                     r2 = r.copy()
                     del r2["type"]
                     self.conn.network.create_qos_bandwidth_limit_rule(
-                        qos_policy.id, **r
+                        qos_policy.id, **r2
                     )
                 elif r["type"] == "packet_rate_limit":
                     r2 = r.copy()
                     del r2["type"]
                     self.conn.network.create_qos_packet_rate_limit_rule(
-                        qos_policy.id, **r
+                        qos_policy.id, **r2
                     )
 
         return qos_policy.id
