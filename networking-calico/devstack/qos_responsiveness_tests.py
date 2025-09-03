@@ -486,8 +486,12 @@ class QoSResponsivenessTest(unittest.TestCase):
     def _verify_wep_qos(self, state):
         logger.info(f"Verify WEP QoS for state {state}")
         expected_qos = {}
-        for r in state["qos_rules"]:
-            expected_qos.update(r["controls"])
+        if state["port_qos_name"] is not None:
+            for r in state["port_qos_rules"]:
+                expected_qos.update(r["controls"])
+        elif state["net_qos_name"] is not None:
+            for r in state["net_qos_rules"]:
+                expected_qos.update(r["controls"])
         logger.info(f"Expected QoS is {expected_qos}")
         retry_until_success(
             self._assert_wep_qos,
