@@ -35,14 +35,14 @@ func GetOrRegister[T prometheus.Collector](collector T) T {
 	return collector
 }
 
-func PreCreateCounterPerSyncer(cv *prometheus.CounterVec) {
+func PreCreateCounterPerSyncer(serverID string, cv *prometheus.CounterVec) {
 	for _, st := range syncproto.AllSyncerTypes {
-		cv.WithLabelValues(string(st))
+		cv.WithLabelValues(serverID, string(st))
 	}
 }
 
-func PreCreateGaugePerSyncer(cv *prometheus.GaugeVec) {
+func PreCreateGaugePerSyncer(serverID string, cv *prometheus.GaugeVec) {
 	for _, st := range syncproto.AllSyncerTypes {
-		cv.WithLabelValues(string(st))
+		cv.WithLabelValues(serverID, string(st))
 	}
 }
