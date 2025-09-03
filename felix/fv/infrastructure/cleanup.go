@@ -14,7 +14,9 @@
 
 package infrastructure
 
-import "sync"
+import (
+	"sync"
+)
 
 // cleanupStack is a reusable reverse-order cleanup registry.
 // It is thread-safe and does not suppress panics from registered functions.
@@ -38,8 +40,9 @@ func (c *cleanupStack) Run() {
 	c.mu.Lock()
 	fns := c.fns
 	c.fns = nil
-	defer runCleanupStack(fns)
-	defer c.mu.Unlock()
+	c.mu.Unlock()
+
+	runCleanupStack(fns)
 }
 
 func runCleanupStack(fs []func()) {
