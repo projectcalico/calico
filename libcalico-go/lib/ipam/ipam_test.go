@@ -3486,13 +3486,13 @@ func tryApplyNode(c bapi.Client, kc *kubernetes.Clientset, host string, labels m
 
 func deleteNode(c bapi.Client, kc *kubernetes.Clientset, host string) {
 	if kc != nil {
-		err := kc.CoreV1().Nodes().Delete(context.Background(), host, metav1.DeleteOptions{}
+		err := kc.CoreV1().Nodes().Delete(context.Background(), host, metav1.DeleteOptions{})
 		if err != nil && !kerrors.IsNotFound(err) {
 			Fail(fmt.Sprintf("Error deleting node %s: %v", host, err))
 		}
 	} else {
 		_, err := c.Delete(context.Background(), &model.ResourceKey{Name: host, Kind: libapiv3.KindNode}, "")
-		if err != nil  {
+		if err != nil {
 			if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok {
 				Fail(fmt.Sprintf("Error deleting node %s: %v", host, err))
 			}
