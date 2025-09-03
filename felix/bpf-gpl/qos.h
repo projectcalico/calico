@@ -6,6 +6,7 @@
 #define __CALI_QOS_H__
 
 #include "bpf.h"
+#include "skb.h"
 #include "counters.h"
 #include "ifstate.h"
 
@@ -120,7 +121,7 @@ static CALI_BPF_INLINE int set_dscp(struct cali_tc_ctx *ctx)
 	}
 	__s8 dscp = EGRESS_DSCP;
 	CALI_DEBUG("setting dscp to %d", dscp);
-		
+
 #ifdef IPVER6
 	// In IPv6, traffic class (8bits) equals to DSCP (6bits) + ECN (2bits). The 4 most significant bits of
 	// traffic class are stored in IPv6 priority field (4 bits), and the 4 least significant bits of it
@@ -132,7 +133,7 @@ static CALI_BPF_INLINE int set_dscp(struct cali_tc_ctx *ctx)
 	// In IPv4, DSCP (6bits) is located at the most significant bits of IPv4 TOS field.
 	// The 2 least significant bits are assigned to ECN and must not be touched.
 	ip_hdr(ctx)->tos = (__u8) ((ip_hdr(ctx)->tos & 0x03) | (dscp << 2));
-	
+
 	__wsum ip_csum = bpf_csum_diff(0, 0, (__u32 *)ctx->ip_header, sizeof(struct iphdr), 0);
 	int ret = bpf_l3_csum_replace(ctx->skb, skb_iphdr_offset(ctx) + offsetof(struct iphdr, check), 0, ip_csum, 0);
 	if (ret) {
