@@ -69,9 +69,7 @@ def retry_until_success(
             result = function(*function_args, **function_kwargs)
         except Exception as e:
             if ex_class and e.__class__ is not ex_class:
-                logger.exception(
-                    "Hit unexpected exception in function - not retrying."
-                )
+                logger.exception("Hit unexpected exception in function - not retrying.")
                 raise
             if retry < retries:
                 logger.debug("Hit exception in function - retrying: %s", e)
@@ -308,9 +306,7 @@ class QoSResponsivenessTest(unittest.TestCase):
     def _only_one_change(self, a, b):
         changes = []
         if a["net_qos_name"] != b["net_qos_name"]:
-            changes.append(
-                f"change net_qos_name to {b['net_qos_name']}"
-            )
+            changes.append(f"change net_qos_name to {b['net_qos_name']}")
         if a["port_qos_name"] != b["port_qos_name"]:
             changes.append(f"change port_qos_name to {b['port_qos_name']}")
         if len(changes) > 1:
@@ -369,7 +365,9 @@ class QoSResponsivenessTest(unittest.TestCase):
         network, subnet = self.create_test_network("test-network", net_qos_id)
 
         # Create the VM.
-        cirros = [i for i in self.conn.compute.images() if i.name.startswith("cirros")][0]
+        cirros = [i for i in self.conn.compute.images() if i.name.startswith("cirros")][
+            0
+        ]
         tiny = [i for i in self.conn.compute.flavors() if "tiny" in i.name][0]
         vm = self.conn.compute.create_server(
             name="test-vm",
@@ -398,24 +396,37 @@ class QoSResponsivenessTest(unittest.TestCase):
             "max_kbps",
             "max_kpps",
         ]
-        existing_rules = [{k:v for k,v in r.items() if k in significant_keys} for r in qos_policy.rules]
-        desired_rules = [{k:v for k,v in r["rule"].items() if k in significant_keys} for r in rules]
+        existing_rules = [
+            {k: v for k, v in r.items() if k in significant_keys}
+            for r in qos_policy.rules
+        ]
+        desired_rules = [
+            {k: v for k, v in r["rule"].items() if k in significant_keys} for r in rules
+        ]
 
         for i, r in enumerate(existing_rules):
             if r not in desired_rules:
                 logger.info(f"Delete rule {r} for policy {name}")
                 if r["type"] == "bandwidth_limit":
-                    self.conn.network.delete_qos_bandwidth_limit_rule(qos_policy.rules[i].id, qos_policy.id)
+                    self.conn.network.delete_qos_bandwidth_limit_rule(
+                        qos_policy.rules[i].id, qos_policy.id
+                    )
                 elif r["type"] == "packet_rate_limit":
-                    self.conn.network.delete_qos_packet_rate_limit_rule(qos_policy.rules[i].id, qos_policy.id)
+                    self.conn.network.delete_qos_packet_rate_limit_rule(
+                        qos_policy.rules[i].id, qos_policy.id
+                    )
 
         for r in desired_rules:
             if r not in existing_rules:
                 logger.info(f"Add rule {r} for policy {name}")
                 if r["type"] == "bandwidth_limit":
-                    self.conn.network.create_qos_bandwidth_limit_rule(qos_policy.id, **r)
+                    self.conn.network.create_qos_bandwidth_limit_rule(
+                        qos_policy.id, **r
+                    )
                 elif r["type"] == "packet_rate_limit":
-                    self.conn.network.create_qos_packet_rate_limit_rule(qos_policy.id, **r)
+                    self.conn.network.create_qos_packet_rate_limit_rule(
+                        qos_policy.id, **r
+                    )
 
         return qos_policy.id
 
@@ -450,14 +461,18 @@ class QoSResponsivenessTest(unittest.TestCase):
         logger.info(f" {change} -> {nxt}")
         if change.startswith("change net_qos_name"):
             if nxt["net_qos_name"] is not None:
-                net_qos_id = self._ensure_qos_policy(nxt["net_qos_name"], nxt["net_qos_rules"])
+                net_qos_id = self._ensure_qos_policy(
+                    nxt["net_qos_name"], nxt["net_qos_rules"]
+                )
             else:
                 net_qos_id = None
             network = self.conn.network.find_network("test-network")
             self.conn.network.update_network(network.id, qos_policy_id=net_qos_id)
         elif change.startswith("change port_qos_name"):
             if nxt["port_qos_name"] is not None:
-                port_qos_id = self._ensure_qos_policy(nxt["port_qos_name"], nxt["port_qos_rules"])
+                port_qos_id = self._ensure_qos_policy(
+                    nxt["port_qos_name"], nxt["port_qos_rules"]
+                )
             else:
                 port_qos_id = None
             vm = self.conn.compute.find_server("test-vm")
@@ -491,7 +506,7 @@ class QoSResponsivenessTest(unittest.TestCase):
         """
         wep = None
         for value, metadata in self.etcd_client.get_prefix(
-                "/calico/resources/v3/projectcalico.org/workloadendpoints/"
+            "/calico/resources/v3/projectcalico.org/workloadendpoints/"
         ):
             logger.info(f"Metadata = {metadata}")
             if port_id.replace("-", "--") in metadata.key.decode():
