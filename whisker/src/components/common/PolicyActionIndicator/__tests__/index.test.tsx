@@ -1,7 +1,7 @@
 import { render, screen } from '@/test-utils/helper';
 import PolicyActionIndicator from '..';
 
-describe('PolicyActionIndFlowLogActionIndicatoricator', () => {
+describe('PolicyActionIndicator', () => {
     it('renders the action text', () => {
         render(<PolicyActionIndicator action='Allow' />);
         expect(screen.getByText('Allow')).toBeInTheDocument();
