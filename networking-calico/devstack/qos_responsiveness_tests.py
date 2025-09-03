@@ -365,9 +365,7 @@ class QoSResponsivenessTest(unittest.TestCase):
         network, subnet = self.create_test_network("test-network", net_qos_id)
 
         # Create the VM.
-        cirros = [i for i in self.conn.image.images() if i.name.startswith("cirros")][
-            0
-        ]
+        cirros = [i for i in self.conn.image.images() if i.name.startswith("cirros")][0]
         tiny = [i for i in self.conn.compute.flavors() if "tiny" in i.name][0]
         vm = self.conn.compute.create_server(
             name="test-vm",
