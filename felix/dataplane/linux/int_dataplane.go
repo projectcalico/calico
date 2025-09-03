@@ -1116,7 +1116,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	dp.RegisterManager(newHostsIPSetManager(ipSetsV4, 4, config))
 
 	if !config.BPFEnabled {
-		dp.RegisterManager(newDSCPManager(mangleTableV4, ruleRenderer, 4))
+		dp.RegisterManager(newDSCPManager(ipSetsV4, mangleTableV4, ruleRenderer, 4, config))
 	}
 
 	if config.RulesConfig.IPIPEnabled {
@@ -1317,7 +1317,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		dp.RegisterManager(newHostsIPSetManager(ipSetsV6, 6, config))
 
 		if !config.BPFEnabled {
-			dp.RegisterManager(newDSCPManager(mangleTableV6, ruleRenderer, 6))
+			dp.RegisterManager(newDSCPManager(ipSetsV6, mangleTableV6, ruleRenderer, 6, config))
 		}
 
 		// Add a manager for IPv6 wireguard configuration. This is added irrespective of whether wireguard is actually enabled
