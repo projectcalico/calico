@@ -61,7 +61,8 @@ const (
 	ChainManglePrerouting  = ChainNamePrefix + "PREROUTING"
 	ChainManglePostrouting = ChainNamePrefix + "POSTROUTING"
 
-	ChainEgressDSCP = ChainNamePrefix + "egress-dscp"
+	ChainEgressDSCP      = ChainNamePrefix + "egress-dscp"
+	IPSetIDDSCPEndpoints = "dscp-src-net"
 
 	IPSetIDAllPools             = "all-ipam-pools"
 	IPSetIDNATOutgoingMasqPools = "masq-ipam-pools"
