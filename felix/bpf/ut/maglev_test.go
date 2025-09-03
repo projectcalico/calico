@@ -1064,8 +1064,8 @@ func TestMaglevNATNodePortTCP(t *testing.T) {
 	// This time, not a SYN, i.e. a failed-over connection.
 	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
 
-		// Change the source port
-		_, ipv4, tcp, payload, pktBytes, err = testPacketTCPV4WithPayload(node1ip, 0xdead, 5678, false, nil)
+		// Change the source port (only change the bytes, leave the other vars in their original state).
+		_, _, _, _, pktBytes, err = testPacketTCPV4WithPayload(node1ip, 0xdead, 5678, false, nil)
 		Expect(err).NotTo(HaveOccurred())
 
 		res, err := bpfrun(pktBytes)
@@ -1209,8 +1209,8 @@ func TestMaglevNATNodePortTCP(t *testing.T) {
 		tcpL := pktR.Layer(layers.LayerTypeTCP)
 		Expect(tcpL).NotTo(BeNil())
 		tcpR := tcpL.(*layers.TCP)
-		Expect(tcpR.SrcPort).To(Equal(layers.UDPPort(natPort)))
-		Expect(tcpR.DstPort).To(Equal(layers.UDPPort(1234)))
+		Expect(tcpR.SrcPort).To(Equal(layers.TCPPort(natPort)))
+		Expect(tcpR.DstPort).To(Equal(layers.TCPPort(1234)))
 	})
 
 	// TEST host-networked backend
@@ -1284,7 +1284,7 @@ func TestMaglevNATNodePortTCP(t *testing.T) {
 
 			tcpL := pktR.Layer(layers.LayerTypeTCP)
 			Expect(tcpL).NotTo(BeNil())
-			tcpR := tcpL.(*layers.UDP)
+			tcpR := tcpL.(*layers.TCP)
 			Expect(tcpR.SrcPort).To(Equal(layers.TCPPort(tcp.SrcPort)))
 			Expect(tcpR.DstPort).To(Equal(layers.TCPPort(natPort)))
 
@@ -1352,7 +1352,7 @@ func TestMaglevNATNodePortTCP(t *testing.T) {
 	}
 }
 
-func TestMaglevNATNodePort(t *testing.T) {
+func TestMaglevNATNodePortUDP(t *testing.T) {
 	RegisterTestingT(t)
 
 	bpfIfaceName = "MNP-1"

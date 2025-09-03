@@ -1625,7 +1625,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 		}
 	}
 
-	if (ct_rc == CALI_CT_NEW) {
+	if (ct_rc == CALI_CT_NEW || ct_rc == CALI_CT_MAGLEV_MID_FLOW_MISS) {
 		CALI_JUMP_TO(ctx, PROG_INDEX_NEW_FLOW);
 		/* should not reach here */
 		CALI_DEBUG("jump to new flow failed");
@@ -2233,7 +2233,7 @@ int calico_tc_maglev(struct __sk_buff *skb)
 		/* treat it as if it was a new flow */
 		CALI_DEBUG("Maglev: mid-flow miss, treating as new flow");
 		/* remember that is was a mid-flow miss so that we can handle it in the new flow program */
-		//ctx->state->ct_result.rc = CALI_CT_MAGLEV_MID_FLOW_MISS;
+		ctx->state->ct_result.rc = CALI_CT_MAGLEV_MID_FLOW_MISS;
 	}
 
 	CALI_DEBUG("Maglev: About to jump to policy program.");
