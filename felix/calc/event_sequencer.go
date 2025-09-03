@@ -19,6 +19,7 @@ import (
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/projectcalico/calico/felix/config"
 	"github.com/projectcalico/calico/felix/ip"
@@ -89,6 +90,8 @@ type EventSequencer struct {
 	pendingGlobalBGPConfig       *proto.GlobalBGPConfigUpdate
 	pendingServiceUpdates        map[serviceID]*proto.ServiceUpdate
 	pendingServiceDeletes        set.Set[serviceID]
+	pendingTyphaRevision         *model.TyphaRevision
+	pendingTyphaRevisionDeletion bool
 
 	// Sets to record what we've sent downstream. Updated whenever we flush.
 	sentIPSets          set.Set[string]
@@ -106,6 +109,7 @@ type EventSequencer struct {
 	sentWireguard       set.Set[string]
 	sentWireguardV6     set.Set[string]
 	sentServices        set.Set[serviceID]
+	sentTyphaRevision   *model.TyphaRevision
 
 	Callback EventHandler
 }
@@ -908,6 +912,9 @@ func (buf *EventSequencer) Flush() {
 	}
 
 	buf.flushServices()
+
+	// Must be last!
+	buf.flushTyphaRevision()
 }
 
 func (buf *EventSequencer) flushRemovedIPSets() {
@@ -1209,6 +1216,39 @@ func (buf *EventSequencer) flushServices() {
 	log.Debug("Done flushing Services")
 }
 
+func (buf *EventSequencer) OnTyphaRevisionRemove() {
+	buf.pendingTyphaRevision = nil
+	if buf.sentTyphaRevision != nil {
+		buf.pendingTyphaRevisionDeletion = true
+	}
+}
+
+func (buf *EventSequencer) OnTyphaRevisionUpdate(tr *model.TyphaRevision) {
+	buf.pendingTyphaRevision = tr
+	buf.pendingTyphaRevisionDeletion = false
+}
+
+func (buf *EventSequencer) flushTyphaRevisionDeletion() {
+	if buf.pendingTyphaRevisionDeletion {
+		buf.Callback(&proto.TyphaRevisionRemove{})
+		buf.sentTyphaRevision = nil
+		buf.pendingTyphaRevisionDeletion = false
+	}
+}
+
+func (buf *EventSequencer) flushTyphaRevision() {
+	if buf.pendingTyphaRevision == nil {
+		return
+	}
+	buf.Callback(&proto.TyphaRevisionUpdate{
+		ServerID:  buf.pendingTyphaRevision.ServerID,
+		Revision:  buf.pendingTyphaRevision.Revision,
+		Timestamp: timestamppb.New(buf.pendingTyphaRevision.Timestamp),
+	})
+	buf.sentTyphaRevision = buf.pendingTyphaRevision
+	buf.pendingTyphaRevision = nil
+}
+
 func cidrToIPPoolID(cidr ip.CIDR) string {
 	return strings.Replace(cidr.String(), "/", "-", 1)
 }
@@ -1296,3 +1336,5 @@ func isVMWorkload(labels uniquelabels.Map) bool {
 	}
 	return false
 }
+
+var _ PipelineCallbacks = &EventSequencer{}
