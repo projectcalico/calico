@@ -20,6 +20,7 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
@@ -64,6 +65,7 @@ func DatastoreDescribe(description string, datastores []apiconfig.DatastoreType,
 
 			AfterEach(func() {
 				// Always stop the infra after each test (collects diags on failure and cleans up).
+				log.Info("DatastoreDescribe AfterEach: stopping infrastructure.")
 				if len(currentInfra) > 0 {
 					for i := len(currentInfra) - 1; i >= 0; i-- {
 						if currentInfra[i] != nil {
@@ -72,7 +74,11 @@ func DatastoreDescribe(description string, datastores []apiconfig.DatastoreType,
 					}
 					currentInfra = nil
 				}
+			})
+
+			AfterEach(func() {
 				// Then, perform the core file check.
+				log.Info("DatastoreDescribe AfterEach: checking for core files.")
 				afterCoreFiles := readCoreFiles()
 				coreFilesAtStart.Iter(func(item string) error {
 					afterCoreFiles.Discard(item)
