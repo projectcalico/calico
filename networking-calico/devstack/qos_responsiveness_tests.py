@@ -14,7 +14,6 @@ import logging
 import os
 import time
 import unittest
-from typing import Dict, List, Optional, Tuple
 
 import etcd3
 
@@ -205,18 +204,18 @@ class QoSResponsivenessTest(unittest.TestCase):
             "C": self.qos_rule_sets[12],
         }
         states = []
-        for net_qos_id in [None, "A", "B"]:
-            for port_qos_id in [None, "B", "C"]:
+        for net_qos_name in [None, "A", "B"]:
+            for port_qos_name in [None, "B", "C"]:
                 state = {
-                    "net_qos_id": net_qos_id,
-                    "port_qos_id": port_qos_id,
+                    "net_qos_name": net_qos_name,
+                    "port_qos_name": port_qos_name,
                 }
-                if port_qos_id is not None:
-                    state["port_qos_rules"] = policy_id_to_rule_set[port_qos_id]
+                if port_qos_name is not None:
+                    state["port_qos_rules"] = policy_id_to_rule_set[port_qos_name]
                 else:
                     state["port_qos_rules"] = []
-                if net_qos_id is not None:
-                    state["net_qos_rules"] = policy_id_to_rule_set[net_qos_id]
+                if net_qos_name is not None:
+                    state["net_qos_rules"] = policy_id_to_rule_set[net_qos_name]
                 else:
                     state["net_qos_rules"] = []
                 states.append(state)
@@ -234,8 +233,8 @@ class QoSResponsivenessTest(unittest.TestCase):
         # Form a set of states, in which transitioning between two of that
         # states means changing the QoS rules for the effective qos_policy_id.
         state_base = {
-            "net_qos_id": None,
-            "port_qos_id": "D",
+            "net_qos_name": None,
+            "port_qos_name": "D",
         }
         states = []
         for rules in self.qos_rule_sets:
@@ -308,17 +307,17 @@ class QoSResponsivenessTest(unittest.TestCase):
 
     def _only_one_change(self, a, b):
         changes = []
-        if a["net_qos_id"] != b["net_qos_id"]:
+        if a["net_qos_name"] != b["net_qos_name"]:
             changes.append(
-                f"change net_qos_id to {b['net_qos_id']}"
+                f"change net_qos_name to {b['net_qos_name']}"
             )
-        if a["port_qos_id"] != b["port_qos_id"]:
-            changes.append(f"change port_qos_id to {b['port_qos_id']}")
+        if a["port_qos_name"] != b["port_qos_name"]:
+            changes.append(f"change port_qos_name to {b['port_qos_name']}")
         if len(changes) > 1:
             return False
         # Only compare the rules when IDs are not changing.
         if len(changes) == 0:
-            if b["port_qos_id"] is not None:
+            if b["port_qos_name"] is not None:
                 relevant_rules = "port_qos_rules"
             else:
                 relevant_rules = "net_qos_rules"
@@ -350,87 +349,98 @@ class QoSResponsivenessTest(unittest.TestCase):
         logger.info(f"Create initial state -> {state}")
 
         # Create the QoS rules and policies that we need.
-        if state["port_qos_id"] is not None:
-            port_qos = self.create_qos_policy(
-                "test-qos-policy-" + state["port_qos_id"],
-                [r["rule"] for r in state["port_qos_rules"]],
+        if state["port_qos_name"] is not None:
+            port_qos_id = self._ensure_qos_policy(
+                state["port_qos_name"],
+                state["port_qos_rules"],
             )
+        else:
+            port_qos_id = None
 
-        self.net_qos_rules = state["net_qos_rules"]
-        if state["net_qos_id"] == state["port_qos_id"]:
-            network_qos = port_qos
-        elif state["net_qos_id"] is not None:
-            network_qos = self.create_qos_policy(
-                "test-qos-policy-" + state["net_qos_id"],
-                [r["rule"] for r in self.net_qos_rules],
+        if state["net_qos_name"] is not None:
+            net_qos_id = self._ensure_qos_policy(
+                state["net_qos_name"],
+                state["net_qos_rules"],
             )
+        else:
+            net_qos_id = None
 
         # Create the network and subnet.
-        network, subnet = self.create_test_network(
-            "test-network",
-            state["net_qos_id"],
-        )
+        network, subnet = self.create_test_network("test-network", net_qos_id)
 
         # Create the VM.
-        vm = self.create_vm(network.id, subnet.id)
+        cirros = [i for i in self.conn.compute.images() if i.name.startswith("cirros")][0]
+        tiny = [i for i in self.conn.compute.flavors() if "tiny" in i.name][0]
+        vm = self.conn.compute.create_server(
+            name="test-vm",
+            image_id=cirros.id,
+            flavor_id=tiny.id,
+            networks=[{"uuid": network.id}],
+        )
+        vm = self.conn.compute.wait_for_server(vm)
 
         # Maybe set port-level QoS.
-        if state["port_qos_id"] is not None:
-            self.conn.network.update_port(port.id, qos_policy_id=state["port_qos_id"])
+        if state["port_qos_name"] is not None:
+            port = list(self.conn.network.ports(device_id=vm.id))[0]
+            self.conn.network.update_port(port.id, qos_policy_id=state["port_qos_name"])
 
-    def create_qos_policy(self, name: str, rules: List[Dict]) -> object:
-        """Create a QoS policy with specified rules."""
-        unique_name = f"{name}"
+    def _ensure_qos_policy(self, name, rules):
+        full_name = "test-qos-policy" + name
+        qos_policy = self.conn.network.find_qos_policy(full_name)
+        if qos_policy is None:
+            qos_policy = self.conn.network.create_qos_policy(name=full_name)
 
-        qos_policy = self.conn.network.create_qos_policy(name=unique_name)
-        self.test_resources["qos_policies"].append(qos_policy)
+        significant_keys = [
+            "type",
+            "direction",
+            "max_burst_kbps",
+            "max_burst_kpps",
+            "max_kbps",
+            "max_kpps",
+        ]
+        existing_rules = [{k:v for k,v in r.items() if k in significant_keys} for r in qos_policy.rules]
+        desired_rules = [{k:v for k,v in r["rule"].items() if k in significant_keys} for r in rules]
 
-        for rule in rules:
-            if rule["type"] == "bandwidth_limit":
-                self.conn.network.create_qos_bandwidth_limit_rule(
-                    qos_policy.id,
-                    max_kbps=rule.get("max_kbps"),
-                    max_burst_kbps=rule.get("max_burst_kbps"),
-                    direction=rule.get("direction", "egress"),
-                )
-            elif rule["type"] == "packet_rate_limit":
-                self.conn.network.create_qos_packet_rate_limit_rule(
-                    qos_policy.id,
-                    max_kpps=rule.get("max_kpps"),
-                    direction=rule.get("direction", "egress"),
-                )
+        for i, r in enumerate(existing_rules):
+            if r not in desired_rules:
+                logger.info(f"Delete rule {r} for policy {name}")
+                if r["type"] == "bandwidth_limit":
+                    self.conn.network.delete_qos_bandwidth_limit_rule(qos_policy.rules[i].id, qos_policy.id)
+                elif r["type"] == "packet_rate_limit":
+                    self.conn.network.delete_qos_packet_rate_limit_rule(qos_policy.rules[i].id, qos_policy.id)
 
-        logger.info(f"Created QoS policy: {unique_name} with {len(rules)} rules")
-        return qos_policy
+        for r in desired_rules:
+            if r not in existing_rules:
+                logger.info(f"Add rule {r} for policy {name}")
+                if r["type"] == "bandwidth_limit":
+                    self.conn.network.create_qos_bandwidth_limit_rule(qos_policy.id, **r)
+                elif r["type"] == "packet_rate_limit":
+                    self.conn.network.create_qos_packet_rate_limit_rule(qos_policy.id, **r)
 
-    def create_test_network(
-        self, name: str, qos_policy_id: str = None
-    ) -> Tuple[object, object]:
+        return qos_policy.id
+
+    def create_test_network(self, name, qos_policy_id=None):
         """Create a test network and subnet."""
-        unique_name = f"{name}"
-
         network_args = {
-            "name": unique_name,
-            "is_shared": True,
+            "name": name,
+            "shared": True,
             "provider:network_type": "local",
         }
         if qos_policy_id:
             network_args["qos_policy_id"] = qos_policy_id
 
         network = self.conn.network.create_network(**network_args)
-        self.test_resources["networks"].append(network)
 
         subnet = self.conn.network.create_subnet(
-            name=f"{unique_name}-subnet",
+            name=f"{name}-subnet",
             network_id=network.id,
             cidr="192.168.100.0/24",
             ip_version=4,
             enable_dhcp=True,
         )
-        self.test_resources["subnets"].append(subnet)
 
         logger.info(
-            f"Created network: {unique_name}-net"
+            f"Created network: {name}"
             f" {'with QoS policy' if qos_policy_id else 'without QoS policy'}"
         )
         return network, subnet
@@ -438,15 +448,26 @@ class QoSResponsivenessTest(unittest.TestCase):
     def _apply_change(self, current, nxt):
         change = self._only_one_change(current, nxt)
         logger.info(f" {change} -> {nxt}")
-        if change.startswith("change net_qos_id"):
-            self._ensure_qos_policy(
-        elif change.startswith("change port_qos_id"):
-            pass
-        elif change.startswith("remove rule"):
-            pass
-        elif change.startswith("add rule"):
-            pass
-        else:
+        if change.startswith("change net_qos_name"):
+            if nxt["net_qos_name"] is not None:
+                net_qos_id = self._ensure_qos_policy(nxt["net_qos_name"], nxt["net_qos_rules"])
+            else:
+                net_qos_id = None
+            network = self.conn.network.find_network("test-network")
+            self.conn.network.update_network(network.id, qos_policy_id=net_qos_id)
+        elif change.startswith("change port_qos_name"):
+            if nxt["port_qos_name"] is not None:
+                port_qos_id = self._ensure_qos_policy(nxt["port_qos_name"], nxt["port_qos_rules"])
+            else:
+                port_qos_id = None
+            vm = self.conn.compute.find_server("test-vm")
+            port = list(self.conn.network.ports(device_id=vm.id))[0]
+            self.conn.network.update_port(port.id, qos_policy_id=port_qos_id)
+        elif change.startswith("remove rule") or change.startswith("add rule"):
+            if nxt["net_qos_name"] is not None:
+                self._ensure_qos_policy(nxt["net_qos_name"], nxt["net_qos_rules"])
+            if nxt["port_qos_name"] is not None:
+                self._ensure_qos_policy(nxt["port_qos_name"], nxt["port_qos_rules"])
             self.assertTrue(False)
 
     def _verify_wep_qos(self, state):
@@ -491,518 +512,31 @@ class QoSResponsivenessTest(unittest.TestCase):
         self.tearDown()
 
     def tearDown(self):
-        logger.info("Cleaning up any leftover test resources...")
-
-        # Clean up QoS policies with test prefixes
-        for qos_policy in self.conn.network.qos_policies():
-            if qos_policy.name.startswith("test-"):
-                try:
-                    # First remove any network bindings
-                    for network in self.conn.network.networks():
-                        if network.qos_policy_id == qos_policy.id:
-                            try:
-                                self.conn.network.update_network(
-                                    network.id, qos_policy_id=None
-                                )
-                                logger.info(
-                                    f"Removed QoS policy from network: {network.name}"
-                                )
-                            except Exception as e:
-                                logger.debug(
-                                    "Failed to remove QoS policy from network"
-                                    f" {network.name}: {e}"
-                                )
-
-                    # Remove port bindings
-                    for port in self.conn.network.ports():
-                        if port.qos_policy_id == qos_policy.id:
-                            try:
-                                self.conn.network.update_port(
-                                    port.id, qos_policy_id=None
-                                )
-                                logger.info(
-                                    f"Removed QoS policy from port: {port.name}"
-                                )
-                            except Exception as e:
-                                logger.debug(
-                                    "Failed to remove QoS policy from port"
-                                    f" {port.name}: {e}"
-                                )
-
-                    # Now delete the policy
-                    self.conn.network.delete_qos_policy(qos_policy.id)
-                    logger.info(f"Cleaned up leftover QoS policy: {qos_policy.name}")
-                except Exception as e:
-                    logger.debug(
-                        f"Failed to clean up QoS policy {qos_policy.name}: {e}"
-                    )
-
-        # Clean up networks with test prefixes
-        for network in self.conn.network.networks():
-            if network.name.startswith("test-"):
-                try:
-                    # Delete ports first
-                    for port in self.conn.network.ports():
-                        if port.network_id == network.id:
-                            try:
-                                self.conn.network.delete_port(port.id)
-                                logger.info(f"Cleaned up leftover port: {port.name}")
-                            except Exception as e:
-                                logger.debug(
-                                    f"Failed to clean up port {port.name}: {e}"
-                                )
-
-                    # Delete subnets
-                    for subnet in self.conn.network.subnets():
-                        if subnet.network_id == network.id:
-                            try:
-                                self.conn.network.delete_subnet(subnet.id)
-                                logger.info(
-                                    f"Cleaned up leftover subnet: {subnet.name}"
-                                )
-                            except Exception as e:
-                                logger.debug(
-                                    f"Failed to clean up subnet {subnet.name}: {e}"
-                                )
-
-                    # Delete network
-                    self.conn.network.delete_network(network.id)
-                    logger.info(f"Cleaned up leftover network: {network.name}")
-                except Exception as e:
-                    logger.debug(f"Failed to clean up network {network.name}: {e}")
-
-    def cleanup_resources(self):
-        """Clean up all test resources."""
-        logger.info("Cleaning up test resources...")
-
-        # Delete servers
-        for server in self.test_resources["servers"]:
-            try:
-                self.conn.compute.delete_server(server.id)
-                self.conn.compute.wait_for_delete(server)
-                logger.info(f"Deleted server: {server.name}")
-            except Exception as e:
-                logger.warning(f"Failed to delete server {server.name}: {e}")
-
-        # Delete ports (first remove QoS policies to avoid binding conflicts)
-        for port in self.test_resources["ports"]:
-            try:
-                # Remove QoS policy first if present
-                if hasattr(port, "qos_policy_id") and port.qos_policy_id:
-                    try:
-                        self.conn.network.update_port(port.id, qos_policy_id=None)
-                    except Exception as e:
-                        logger.debug(
-                            f"Failed to remove QoS policy from port {port.name}: {e}"
-                        )
-
-                self.conn.network.delete_port(port.id)
-                logger.info(f"Deleted port: {port.name}")
-            except Exception as e:
-                logger.warning(f"Failed to delete port {port.name}: {e}")
-
-        # Delete subnets
-        for subnet in self.test_resources["subnets"]:
-            try:
-                self.conn.network.delete_subnet(subnet.id)
-                logger.info(f"Deleted subnet: {subnet.name}")
-            except Exception as e:
-                logger.warning(f"Failed to delete subnet {subnet.name}: {e}")
-
-        # Delete networks (remove QoS policies first)
-        for network in self.test_resources["networks"]:
-            try:
-                # Remove QoS policy first if present
-                if hasattr(network, "qos_policy_id") and network.qos_policy_id:
-                    try:
-                        self.conn.network.update_network(network.id, qos_policy_id=None)
-                    except Exception as e:
-                        logger.debug(
-                            "Failed to remove QoS policy from network"
-                            f" {network.name}: {e}"
-                        )
-
-                self.conn.network.delete_network(network.id)
-                logger.info(f"Deleted network: {network.name}")
-            except Exception as e:
-                logger.warning(f"Failed to delete network {network.name}: {e}")
-
-        # Delete QoS policies
-        for qos_policy in self.test_resources["qos_policies"]:
-            try:
-                self.conn.network.delete_qos_policy(qos_policy.id)
-                logger.info(f"Deleted QoS policy: {qos_policy.name}")
-            except Exception as e:
-                logger.warning(f"Failed to delete QoS policy {qos_policy.name}: {e}")
-
-        # Delete security groups
-        for sg in self.test_resources["security_groups"]:
-            try:
-                self.conn.network.delete_security_group(sg.id)
-                logger.info(f"Deleted security group: {sg.name}")
-            except Exception as e:
-                logger.warning(f"Failed to delete security group {sg.name}: {e}")
-
-    def create_test_port(
-        self, name: str, network_id: str, qos_policy_id: str = None
-    ) -> object:
-        """Create a test port."""
-        unique_name = f"{name}"
-
-        port_args = {
-            "name": unique_name,
-            "network_id": network_id,
-            "device_owner": "compute:",
-            "admin_state_up": True,
-        }
-        if qos_policy_id:
-            port_args["qos_policy_id"] = qos_policy_id
-
-        port = self.conn.network.create_port(**port_args)
-        self.test_resources["ports"].append(port)
-
-        logger.info(
-            f"Created port: {unique_name}"
-            f" {'with QoS policy' if qos_policy_id else 'without QoS policy'}"
-        )
-        return port
-
-    def test_network_qos_policy(self) -> bool:
-        """Test QoS policy applied at network level."""
-        logger.info("=== Testing Network-level QoS Policy ===")
-
-        # Create QoS policy with bandwidth limit
-        qos_policy = self.create_qos_policy(
-            "test-network-qos",
-            [
-                {
-                    "type": "bandwidth_limit",
-                    "max_kbps": 10000,  # 10 Mbps
-                    "max_burst_kbps": 12000,  # 12 Mbps burst
-                    "direction": "egress",
-                }
-            ],
-        )
-
-        # Create network with QoS policy
-        network, subnet = self.create_test_network("test-network-qos", qos_policy.id)
-
-        # Create port on the network
-        port = self.create_test_port("test-port-network-qos", network.id)
-
-        # Verify QoS controls are applied to WorkloadEndpoint
-        expected_qos = {
-            "egressBandwidth": 10000000,  # Convert kbps to bps
-            "egressPeakrate": 12000000,  # Convert kbps to bps
-        }
-
-        self._assert_wep_qos(port.id, expected_qos)
-
-    def test_port_qos_policy(self) -> bool:
-        """Test QoS policy applied at port level."""
-        logger.info("=== Testing Port-level QoS Policy ===")
-
-        # Create QoS policy with packet rate limit
-        qos_policy = self.create_qos_policy(
-            "test-port-qos",
-            [
-                {
-                    "type": "packet_rate_limit",
-                    "max_kpps": 5,  # 5000 packets per second
-                    "direction": "ingress",
-                }
-            ],
-        )
-
-        # Create network without QoS policy
-        network, subnet = self.create_test_network("test-network-no-qos")
-
-        # Create port with QoS policy
-        port = self.create_test_port("test-port-with-qos", network.id, qos_policy.id)
-
-        # Verify QoS controls are applied to WorkloadEndpoint
-        expected_qos = {"ingressPacketRate": 5000}  # Convert kpps to pps
-
-        self._assert_wep_qos(port.id, expected_qos)
-
-    def test_mixed_qos_policies(self) -> bool:
-        """Test network with QoS policy and port with different QoS policy."""
-        logger.info("=== Testing Mixed QoS Policies (Network + Port) ===")
-
-        # Create network-level QoS policy
-        network_qos_policy = self.create_qos_policy(
-            "test-mixed-network-qos",
-            [
-                {
-                    "type": "bandwidth_limit",
-                    "max_kbps": 5000,  # 5 Mbps
-                    "direction": "ingress",
-                }
-            ],
-        )
-
-        # Create port-level QoS policy (should override network policy)
-        port_qos_policy = self.create_qos_policy(
-            "test-mixed-port-qos",
-            [
-                {
-                    "type": "bandwidth_limit",
-                    "max_kbps": 20000,  # 20 Mbps
-                    "max_burst_kbps": 25000,  # 25 Mbps burst
-                    "direction": "egress",
-                },
-                {
-                    "type": "packet_rate_limit",
-                    "max_kpps": 10,  # 10000 packets per second
-                    "direction": "ingress",
-                },
-            ],
-        )
-
-        # Create network with QoS policy
-        network, subnet = self.create_test_network(
-            "test-mixed-network", network_qos_policy.id
-        )
-
-        # Create port with different QoS policy
-        port = self.create_test_port("test-mixed-port", network.id, port_qos_policy.id)
-
-        # Port-level QoS should take precedence
-        expected_qos = {
-            "egressBandwidth": 20000000,  # From port policy
-            "egressPeakrate": 25000000,  # From port policy
-            "ingressPacketRate": 10000,  # From port policy
-        }
-
-        self._assert_wep_qos(port.id, expected_qos)
-
-    def test_qos_policy_update(self) -> bool:
-        """Test updating QoS policy and verifying responsiveness."""
-        logger.info("=== Testing QoS Policy Update Responsiveness ===")
-
-        # Create initial QoS policy
-        qos_policy = self.create_qos_policy(
-            "test-update-qos",
-            [
-                {
-                    "type": "bandwidth_limit",
-                    "max_kbps": 1000,  # 1 Mbps
-                    "direction": "egress",
-                }
-            ],
-        )
-
-        # Create network and port
-        network, subnet = self.create_test_network("test-update-network")
-        port = self.create_test_port("test-update-port", network.id, qos_policy.id)
-
-        # Verify initial QoS controls
-        initial_qos = {"egressBandwidth": 1000000}
-        self._assert_wep_qos(port.id, initial_qos)
-
-        # Update QoS policy by adding new rule
-        self.conn.network.create_qos_bandwidth_limit_rule(
-            qos_policy.id, max_kbps=15000, direction="ingress"  # 15 Mbps
-        )
-
-        # Verify updated QoS controls
-        updated_qos = {
-            "egressBandwidth": 1000000,  # Original rule
-            "ingressBandwidth": 15000000,  # New rule
-        }
-
-        self._assert_wep_qos(port.id, updated_qos, timeout=15)
-
-    def test_qos_policy_removal(self) -> bool:
-        """Test removing QoS policy and verifying cleanup."""
-        logger.info("=== Testing QoS Policy Removal ===")
-
-        # Create QoS policy
-        qos_policy = self.create_qos_policy(
-            "test-removal-qos",
-            [
-                {
-                    "type": "bandwidth_limit",
-                    "max_kbps": 8000,  # 8 Mbps
-                    "direction": "egress",
-                }
-            ],
-        )
-
-        # Create network and port
-        network, subnet = self.create_test_network("test-removal-network")
-        port = self.create_test_port("test-removal-port", network.id, qos_policy.id)
-
-        # Verify QoS controls are applied
-        initial_qos = {"egressBandwidth": 8000000}
-        self._assert_wep_qos(port.id, initial_qos)
-
-        # Remove QoS policy from port
-        self.conn.network.update_port(port.id, qos_policy_id=None)
-
-        # Verify QoS controls are removed (WorkloadEndpoint should have no qosControls)
-        self._assert_wep_qos(port.id, None)
-
-    def check_neutron_port_qos(self, port_id: str) -> Optional[Dict]:
-        """Check if a Neutron port has QoS policy applied."""
-        try:
-            port = self.conn.network.get_port(port_id)
-            if port and port.qos_policy_id:
-                qos_policy = self.conn.network.get_qos_policy(port.qos_policy_id)
-                rules = list(self.conn.network.qos_rules(qos_policy))
-                return {
-                    "policy_id": port.qos_policy_id,
-                    "policy_name": qos_policy.name,
-                    "rules": [{"id": r.id, "type": r.type} for r in rules],
-                }
-        except Exception as e:
-            logger.debug(f"Error checking Neutron port QoS: {e}")
-        return None
-
-    def test_basic_qos_integration(self) -> bool:
-        """Test basic QoS integration between Neutron and Calico."""
-        logger.info("=== Testing Basic QoS Integration ===")
-
-        try:
-            # Create QoS policy with bandwidth limit
-            qos_policy = self.conn.network.create_qos_policy(
-                name=f"test-qos-integration"
-            )
-            self.test_resources["qos_policies"].append(qos_policy)
-
-            # Add bandwidth limit rule
-            rule = self.conn.network.create_qos_bandwidth_limit_rule(
-                qos_policy.id, max_kbps=10000, direction="egress"  # 10 Mbps
-            )
-            logger.info(
-                f"Created QoS policy {qos_policy.name} with bandwidth limit rule"
+        logger.info("Delete VM")
+        vm = self.conn.compute.find_server("test-vm")
+        if vm is not None:
+            self.conn.compute.delete_server(vm.id)
+            retry_until_success(
+                lambda: self.assertIsNone(self.conn.compute.find_server("test-vm")),
+                wait_time=5,
             )
 
-            # Create network
-            network = self.conn.network.create_network(
-                name=f"test-qos-network"
-            )
-            self.test_resources["networks"].append(network)
+        logger.info("Delete subnet")
+        subnet = self.conn.network.find_subnet("test-network-subnet")
+        if subnet is not None:
+            self.conn.network.delete_subnet(subnet.id)
 
-            # Create subnet
-            subnet = self.conn.network.create_subnet(
-                name=f"test-qos-subnet",
-                network_id=network.id,
-                cidr="192.168.200.0/24",
-                ip_version=4,
-                enable_dhcp=True,
-            )
-            self.test_resources["subnets"].append(subnet)
+        logger.info("Delete network")
+        network = self.conn.network.find_network("test-network")
+        if network is not None:
+            self.conn.network.delete_network(network.id)
 
-            # Create port with QoS policy
-            port = self.conn.network.create_port(
-                name="test-qos-port",
-                network_id=network.id,
-                qos_policy_id=qos_policy.id,
-                admin_state_up=True,
-            )
-            self.test_resources["ports"].append(port)
-
-            logger.info(f"Created port {port.name} with QoS policy")
-
-            # Wait a bit for the integration to process
-            time.sleep(3)
-
-            # Verify Neutron side has QoS policy
-            neutron_qos = self.check_neutron_port_qos(port.id)
-            if not neutron_qos:
-                logger.error("Failed to verify QoS policy on Neutron port")
-                return False
-
-            logger.info(f"Neutron QoS verification passed: {neutron_qos}")
-
-            # Check if Calico WorkloadEndpoint exists (basic connectivity test)
-            calico_connected = self.check_calico_workload_endpoint(port.id)
-            if not calico_connected:
-                logger.warning(
-                    "Calico WorkloadEndpoint not found - may indicate integration issue"
-                )
-                # Don't fail the test as this might be expected in some
-                # DevStack configurations
-            else:
-                logger.info("Calico integration connectivity verified")
-
-            logger.info("✓ Basic QoS integration test completed successfully")
-            return True
-
-        except Exception as e:
-            logger.error(f"Basic QoS integration test failed: {e}")
-            return False
-
-    def test_multiple_qos_scenarios(self) -> bool:
-        """Test multiple QoS scenarios to verify integration responsiveness."""
-        logger.info("=== Testing Multiple QoS Scenarios ===")
-
-        try:
-            # Create base network
-            network = self.conn.network.create_network(
-                name="test-multi-qos-network"
-            )
-            self.test_resources["networks"].append(network)
-
-            subnet = self.conn.network.create_subnet(
-                name="test-multi-qos-subnet",
-                network_id=network.id,
-                cidr="192.168.210.0/24",
-                ip_version=4,
-                enable_dhcp=True,
-            )
-            self.test_resources["subnets"].append(subnet)
-
-            success_count = 0
-            for i, scenario in enumerate(scenarios):
-                try:
-                    logger.info(f"Testing scenario: {scenario['name']}")
-
-                    # Create QoS policy for this scenario
-                    qos_policy = self.conn.network.create_qos_policy(
-                        name=f"test-{scenario['name']}"
-                    )
-                    self.test_resources["qos_policies"].append(qos_policy)
-
-                    # Add rules
-                    for rule_spec in scenario["rules"]:
-                        if rule_spec["type"] == "bandwidth_limit":
-                            self.conn.network.create_qos_bandwidth_limit_rule(
-                                qos_policy.id,
-                                max_kbps=rule_spec["max_kbps"],
-                                max_burst_kbps=rule_spec.get("max_burst_kbps"),
-                                direction=rule_spec["direction"],
-                            )
-
-                    # Create port with this QoS policy
-                    port = self.conn.network.create_port(
-                        name=f"test-port-{i}",
-                        network_id=network.id,
-                        qos_policy_id=qos_policy.id,
-                        admin_state_up=True,
-                    )
-                    self.test_resources["ports"].append(port)
-
-                    # Wait for processing
-                    time.sleep(2)
-
-                    # Verify the port has the QoS policy
-                    neutron_qos = self.check_neutron_port_qos(port.id)
-                    if neutron_qos:
-                        logger.info(
-                            f"Scenario {scenario['name']}: Neutron QoS verified"
-                        )
-                        success_count += 1
-                    else:
-                        logger.warning(
-                            f"Scenario {scenario['name']}: Neutron QoS verification"
-                            " failed"
-                        )
-
-                except Exception as e:
-                    logger.warning(f"Scenario {scenario['name']} failed: {e}")
-
+        logger.info("Delete QoS")
+        for name in ["A", "B", "C", "D"]:
+            full_name = "test-qos-policy" + name
+            policy = self.conn.network.find_qos_policy(full_name)
+            if policy:
+                self.conn.network.delete_qos_policy(policy.id)
 
 
 if __name__ == "__main__":
