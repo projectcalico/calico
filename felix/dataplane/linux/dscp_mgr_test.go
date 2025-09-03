@@ -17,12 +17,14 @@ package intdataplane
 import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/sirupsen/logrus"
 
 	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/iptables"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/rules"
+	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
 var _ = Describe("DSCP manager - IPv4", dscpManagerTests(4))
@@ -55,16 +57,27 @@ func dscpManagerTests(ipVersion uint8) func() {
 				})
 		})
 
-		It("should program DSCP chain with no rule", func() {
+		dscpSet := func() set.Set[string] {
+			logrus.Info(ipSets.Members)
+			Expect(ipSets.Members).To(HaveLen(1))
+
+			return ipSets.Members["dscp-src-net"]
+		}
+
+		It("should handle endpoint updates correctly", func() {
+			By("checking initial state")
+			Expect(ipSets.AddOrReplaceCalled).To(BeFalse())
 			err := manager.CompleteDeferredWork()
 			Expect(err).ToNot(HaveOccurred())
+			Expect(ipSets.AddOrReplaceCalled).To(BeTrue())
+
 			mangleTable.checkChains([][]*generictables.Chain{{{
 				Name:  rules.ChainEgressDSCP,
 				Rules: nil,
 			}}})
-		})
+			members := dscpSet()
+			Expect(members.Slice()).To(BeNil())
 
-		It("should handle endpoint updates correctly", func() {
 			By("sending first workload endpoint update with DSCP annotation")
 			endpoint1 := &proto.WorkloadEndpoint{
 				State:       "active",
@@ -78,7 +91,8 @@ func dscpManagerTests(ipVersion uint8) func() {
 				Endpoint: endpoint1,
 			})
 
-			err := manager.CompleteDeferredWork()
+			ipSets.AddOrReplaceCalled = false // Reset
+			err = manager.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
 
 			mangleTable.checkChains([][]*generictables.Chain{{{
@@ -90,6 +104,10 @@ func dscpManagerTests(ipVersion uint8) func() {
 					},
 				},
 			}}})
+
+			Expect(ipSets.AddOrReplaceCalled).To(BeTrue())
+			members.AddAll(ipsetMembersFromWlUpdate(endpoint1, ipVersion))
+			Expect(dscpSet()).To(Equal(members))
 
 			By("sending another workload endpoint update with DSCP annotation")
 			endpoint2 := &proto.WorkloadEndpoint{
@@ -104,6 +122,7 @@ func dscpManagerTests(ipVersion uint8) func() {
 				Endpoint: endpoint2,
 			})
 
+			ipSets.AddOrReplaceCalled = false // Reset
 			err = manager.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
 
@@ -122,6 +141,10 @@ func dscpManagerTests(ipVersion uint8) func() {
 				},
 			}}})
 
+			Expect(ipSets.AddOrReplaceCalled).To(BeTrue())
+			members.AddAll(ipsetMembersFromWlUpdate(endpoint2, ipVersion))
+			Expect(dscpSet()).To(Equal(members))
+
 			By("verifying update to first workload DSCP value")
 			endpoint1.QosPolicies = []*proto.QoSPolicy{{Dscp: 13}}
 			manager.OnUpdate(&proto.WorkloadEndpointUpdate{
@@ -129,6 +152,7 @@ func dscpManagerTests(ipVersion uint8) func() {
 				Endpoint: endpoint1,
 			})
 
+			ipSets.AddOrReplaceCalled = false // Reset
 			err = manager.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
 
@@ -146,6 +170,9 @@ func dscpManagerTests(ipVersion uint8) func() {
 					},
 				},
 			}}})
+
+			Expect(ipSets.AddOrReplaceCalled).To(BeTrue())
+			Expect(dscpSet()).To(Equal(members))
 
 			By("sending a host endpoint update with DSCP annotation")
 			hep1ID := &proto.HostEndpointID{
@@ -162,6 +189,7 @@ func dscpManagerTests(ipVersion uint8) func() {
 				Endpoint: hep1,
 			})
 
+			ipSets.AddOrReplaceCalled = false // Reset
 			err = manager.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
 
@@ -184,6 +212,10 @@ func dscpManagerTests(ipVersion uint8) func() {
 				},
 			}}})
 
+			Expect(ipSets.AddOrReplaceCalled).To(BeTrue())
+			members.AddAll(ipsetMembersFromHepUpdate(hep1, ipVersion))
+			Expect(dscpSet()).To(Equal(members))
+
 			By("verifying update to host endpoint DSCP value")
 			hep1.QosPolicies = []*proto.QoSPolicy{{Dscp: 30}}
 			manager.OnUpdate(&proto.HostEndpointUpdate{
@@ -191,6 +223,7 @@ func dscpManagerTests(ipVersion uint8) func() {
 				Endpoint: hep1,
 			})
 
+			ipSets.AddOrReplaceCalled = false // Reset
 			err = manager.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
 
@@ -213,6 +246,9 @@ func dscpManagerTests(ipVersion uint8) func() {
 				},
 			}}})
 
+			Expect(ipSets.AddOrReplaceCalled).To(BeTrue())
+			Expect(dscpSet()).To(Equal(members))
+
 			By("verifying DSCP rule removed when first workload annotation is removed")
 			endpoint1.QosPolicies = nil
 			manager.OnUpdate(&proto.WorkloadEndpointUpdate{
@@ -220,6 +256,7 @@ func dscpManagerTests(ipVersion uint8) func() {
 				Endpoint: endpoint1,
 			})
 
+			ipSets.AddOrReplaceCalled = false // Reset
 			err = manager.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
 
@@ -237,11 +274,18 @@ func dscpManagerTests(ipVersion uint8) func() {
 				},
 			}}})
 
+			Expect(ipSets.AddOrReplaceCalled).To(BeTrue())
+			for _, v := range ipsetMembersFromWlUpdate(endpoint1, ipVersion) {
+				members.Discard(v)
+			}
+			Expect(dscpSet()).To(Equal(members))
+
 			By("verifying DSCP rule removed when second workload is removed")
 			manager.OnUpdate(&proto.WorkloadEndpointRemove{
 				Id: &wlEPID2,
 			})
 
+			ipSets.AddOrReplaceCalled = false // Reset
 			err = manager.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
 			mangleTable.checkChains([][]*generictables.Chain{{{
@@ -254,33 +298,71 @@ func dscpManagerTests(ipVersion uint8) func() {
 				},
 			}}})
 
+			Expect(ipSets.AddOrReplaceCalled).To(BeTrue())
+			for _, v := range ipsetMembersFromWlUpdate(endpoint2, ipVersion) {
+				members.Discard(v)
+			}
+			Expect(dscpSet()).To(Equal(members))
+
 			By("verifying DSCP rule removed when host endpoint is removed")
 			manager.OnUpdate(&proto.HostEndpointRemove{
 				Id: hep1ID,
 			})
 
+			ipSets.AddOrReplaceCalled = false // Reset
 			err = manager.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
 			mangleTable.checkChains([][]*generictables.Chain{{{
 				Name:  rules.ChainEgressDSCP,
 				Rules: nil,
 			}}})
+
+			Expect(ipSets.AddOrReplaceCalled).To(BeTrue())
+			for _, v := range ipsetMembersFromHepUpdate(hep1, ipVersion) {
+				members.Discard(v)
+			}
+			Expect(ipSets.AddOrReplaceCalled).To(BeTrue())
+			Expect(members.Slice()).To(BeNil())
 		})
 	}
 }
 
 func addrFromWlUpdate(endpoint *proto.WorkloadEndpoint, ipVersion uint8) string {
-	addr := endpoint.Ipv4Nets
+	addrs := endpoint.Ipv4Nets
 	if ipVersion == 6 {
-		addr = endpoint.Ipv6Nets
+		addrs = endpoint.Ipv6Nets
 	}
-	return normaliseSourceAddr(addr)
+	return normaliseSourceAddr(addrs)
 }
 
 func addrFromHepUpdate(endpoint *proto.HostEndpoint, ipVersion uint8) string {
-	addr := endpoint.ExpectedIpv4Addrs
+	addrs := endpoint.ExpectedIpv4Addrs
 	if ipVersion == 6 {
-		addr = endpoint.ExpectedIpv6Addrs
+		addrs = endpoint.ExpectedIpv6Addrs
 	}
-	return normaliseSourceAddr(addr)
+	return normaliseSourceAddr(addrs)
+}
+
+func ipsetMembersFromWlUpdate(endpoint *proto.WorkloadEndpoint, ipVersion uint8) []string {
+	addrs := endpoint.Ipv4Nets
+	if ipVersion == 6 {
+		addrs = endpoint.Ipv6Nets
+	}
+	members := make([]string, 0, len(addrs))
+	for _, a := range addrs {
+		members = append(members, removeSubnetMask(a))
+	}
+	return members
+}
+
+func ipsetMembersFromHepUpdate(endpoint *proto.HostEndpoint, ipVersion uint8) []string {
+	addrs := endpoint.ExpectedIpv4Addrs
+	if ipVersion == 6 {
+		addrs = endpoint.ExpectedIpv6Addrs
+	}
+	members := make([]string, 0, len(addrs))
+	for _, a := range addrs {
+		members = append(members, removeSubnetMask(a))
+	}
+	return members
 }

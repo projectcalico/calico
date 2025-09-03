@@ -146,10 +146,18 @@ func (m *dscpManager) handleWEPUpdates(wepID *proto.WorkloadEndpointID, msg *pro
 func normaliseSourceAddr(addrs []string) string {
 	var trimmedSources []string
 	for _, addr := range addrs {
-		parts := strings.Split(addr, "/")
-		trimmedSources = append(trimmedSources, parts[0])
+		trimmedSources = append(trimmedSources, removeSubnetMask(addr))
 	}
 	return strings.Join(trimmedSources, ",")
+}
+
+func removeSubnetMask(addr string) string {
+	// addr is in format of a.b.c.d/x
+	parts := strings.Split(addr, "/")
+	if len(parts) == 0 {
+		logrus.Panicf("Malformed address %s", addr)
+	}
+	return parts[0]
 }
 
 func (m *dscpManager) CompleteDeferredWork() error {
