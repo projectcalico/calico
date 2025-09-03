@@ -2434,6 +2434,11 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 		}
 	}
 
+	ap.DSCP = -1
+	if wep != nil && len(wep.QosPolicies) > 0 {
+		ap.DSCP = int8(wep.QosPolicies[0].Dscp)
+	}
+
 	if err := m.wepStateFillJumps(ap, &state); err != nil {
 		return state, err
 	}
@@ -2851,6 +2856,12 @@ func (d *bpfEndpointManagerDataplane) attachDataIfaceProgram(
 
 	if err := m.loadPrograms(ap, d.ipFamily); err != nil {
 		return nil, err
+	}
+
+	ap.DSCP = -1
+	if ep != nil && len(ep.QosPolicies) > 0 {
+		// TODO (mazdak): panic?
+		ap.DSCP = int8(ep.QosPolicies[0].Dscp)
 	}
 
 	if ep != nil {
