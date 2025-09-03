@@ -333,10 +333,10 @@ class QoSResponsivenessTest(unittest.TestCase):
         current = None
         for nxt in sequence:
             if current is None:
-                self._create_initial_state(nxt)
+                port_id = self._create_initial_state(nxt)
             else:
                 self._apply_change(current, nxt)
-                self._verify_wep_qos(nxt)
+                self._verify_wep_qos(port_id, nxt)
             current = nxt
 
     def _create_initial_state(self, state):
@@ -372,11 +372,13 @@ class QoSResponsivenessTest(unittest.TestCase):
             networks=[{"uuid": network.id}],
         )
         vm = self.conn.compute.wait_for_server(vm)
+        port = list(self.conn.network.ports(device_id=vm.id))[0]
 
         # Maybe set port-level QoS.
         if port_qos_id is not None:
-            port = list(self.conn.network.ports(device_id=vm.id))[0]
             self.conn.network.update_port(port.id, qos_policy_id=port_qos_id)
+
+        return port.id
 
     def _ensure_qos_policy(self, name, rules):
         full_name = "test-qos-policy" + name
@@ -483,7 +485,7 @@ class QoSResponsivenessTest(unittest.TestCase):
             if nxt["port_qos_name"] is not None:
                 self._ensure_qos_policy(nxt["port_qos_name"], nxt["port_qos_rules"])
 
-    def _verify_wep_qos(self, state):
+    def _verify_wep_qos(self, port_id, state):
         logger.info(f"Verify WEP QoS for state {state}")
         expected_qos = {}
         if state["port_qos_name"] is not None:
@@ -495,7 +497,7 @@ class QoSResponsivenessTest(unittest.TestCase):
         logger.info(f"Expected QoS is {expected_qos}")
         retry_until_success(
             self._assert_wep_qos,
-            function_args=(self.transition_port_id, expected_qos),
+            function_args=(port_id, expected_qos),
         )
 
     def _assert_wep_qos(self, port_id, expected_qos):
