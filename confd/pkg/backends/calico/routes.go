@@ -184,9 +184,9 @@ func (rg *routeGenerator) getEndpointsForService(svc *v1.Service) (*discoveryv1.
 			continue
 		}
 		if svcName, ok := ep.Labels[discoveryv1.LabelServiceName]; ok && svcName == svc.Name && ep.Namespace == svc.Namespace {
-			key, err := cache.MetaNamespaceKeyFunc(ep)
+			key, err := cache.MetaNamespaceKeyFunc(svc)
 			if err != nil {
-				log.WithField("ep", ep.Name).WithError(err).Warn("getEndpointsForService: error on retrieving key for endpoint, passing")
+				log.WithField("svc", svc.Name).WithError(err).Warn("getEndpointsForService: error on retrieving key for service, passing")
 				return nil, ""
 			}
 			return ep, key
