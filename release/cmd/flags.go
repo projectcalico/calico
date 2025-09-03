@@ -273,7 +273,7 @@ var (
 	}
 	ciBaseURLFlag = &cli.StringFlag{
 		Name:    "ci-url",
-		Usage:   fmt.Sprintf("The URL for accesing %s CI", semaphoreCI),
+		Usage:   fmt.Sprintf("The URL for accessing %s CI", semaphoreCI),
 		Sources: cli.EnvVars("SEMAPHORE_ORGANIZATION_URL"),
 	}
 	ciJobIDFlag = &cli.StringFlag{
