@@ -190,7 +190,7 @@ func (m *dscpManager) updateIPSet() {
 	// to (at least transiently) share an IP. That would add occupancy and make the
 	// code more complex.
 	m.logCtx.Info("DSCP IP set out-of sync, refreshing it.")
-	// This is the minimum number of entries. Might need more, if endpoints has multiple addresses.
+	// This is the minimum number of entries. Might need more, if endpoints have multiple addresses.
 	members := make([]string, 0, len(m.hepPolicies)+len(m.wepPolicies))
 	for _, pol := range m.hepPolicies {
 		parts := strings.Split(pol.SrcAddrs, ",")
