@@ -482,7 +482,6 @@ class QoSResponsivenessTest(unittest.TestCase):
                 self._ensure_qos_policy(nxt["net_qos_name"], nxt["net_qos_rules"])
             if nxt["port_qos_name"] is not None:
                 self._ensure_qos_policy(nxt["port_qos_name"], nxt["port_qos_rules"])
-            self.assertTrue(False)
 
     def _verify_wep_qos(self, state):
         logger.info(f"Verify WEP QoS for state {state}")
