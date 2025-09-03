@@ -183,12 +183,12 @@ func (m *dscpManager) updateIPSet() {
 	// code more complex.
 	m.logCtx.Info("DSCP IP set out-of sync, refreshing it.")
 	// This is the minimum number of entries. Might need more, if endpoints has multiple addresses.
-	members := make([]string, 0, len(m.wepPolicies)+len(m.wepPolicies))
-	for _, pol := range m.wepPolicies {
+	members := make([]string, 0, len(m.hepPolicies)+len(m.wepPolicies))
+	for _, pol := range m.hepPolicies {
 		parts := strings.Split(pol.SrcAddrs, ",")
 		members = append(members, parts...)
 	}
-	for _, pol := range m.hepPolicies {
+	for _, pol := range m.wepPolicies {
 		parts := strings.Split(pol.SrcAddrs, ",")
 		members = append(members, parts...)
 	}
