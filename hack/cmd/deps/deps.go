@@ -147,7 +147,7 @@ func printSemChangeIn(pkg string) {
 		exclusions.AddAll(calculateTestExclusionGlobs(pkg, otherPkgDirs))
 	}
 
-	_, _ = fmt.Printf("change_in(%s, {exclude: %s})\n", formatSemList(inclusions), formatSemList(exclusions))
+	_, _ = fmt.Printf("change_in(%s, {pipeline_file: 'ignore', exclude: %s})\n", formatSemList(inclusions), formatSemList(exclusions))
 }
 
 func formatSemList(s set.Set[string]) string {
