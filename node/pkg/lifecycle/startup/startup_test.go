@@ -90,6 +90,12 @@ func makeK8sNode(ipv4 string, ipv6 string) *v1.Node {
 }
 
 // temporarilySetEnv sets an environment variable and returns a function to restore the original value.
+// The returned function should be deferred immediately after calling temporarilySetEnv, in order to
+// guarantee restoration of the original value.
+//
+// For example:
+//
+//	defer temporarilySetEnv("MY_ENV_VAR", "my_value")()
 func temporarilySetEnv(k, v string) func() {
 	originalValue, hadOriginalValue := os.LookupEnv(k)
 	err := os.Setenv(k, v)
