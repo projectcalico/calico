@@ -126,32 +126,6 @@ var _ = infrastructure.DatastoreDescribe(
 			})
 		})
 
-		JustAfterEach(func() {
-			if CurrentGinkgoTestDescription().Failed {
-				for _, felix := range tc.Felixes {
-					if NFTMode() {
-						logNFTDiags(felix)
-					} else {
-						felix.Exec("iptables-save", "-c")
-					}
-					felix.Exec("ip", "link")
-					felix.Exec("ip", "addr")
-					felix.Exec("ip", "rule")
-					felix.Exec("ip", "route")
-				}
-			}
-		})
-
-		AfterEach(func() {
-			log.Info("AfterEach starting")
-			for _, f := range tc.Felixes {
-				f.Exec("calico-bpf", "connect-time", "clean")
-				f.Stop()
-			}
-			infra.Stop()
-			log.Info("AfterEach done")
-		})
-
 		Context("With BPFEnforceRPF=Disabled", func() {
 			BeforeEach(func() {
 				options.ExtraEnvVars["FELIX_BPFEnforceRPF"] = "Disabled"

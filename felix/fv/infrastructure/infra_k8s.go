@@ -76,6 +76,9 @@ type K8sDatastoreInfra struct {
 	serviceClusterIPRange string
 	apiServerBindIP       string
 	ipMask                string
+
+	cleanups cleanupStack
+	felixes  []*Felix
 }
 
 var (
@@ -196,6 +199,11 @@ func GetK8sDatastoreInfra(index K8sInfraIndex, opts ...CreateOption) (*K8sDatast
 func (kds *K8sDatastoreInfra) PerTestSetup(index K8sInfraIndex) {
 	if os.Getenv("FELIX_FV_ENABLE_BPF") == "true" && index == K8SInfraLocalCluster {
 		kds.bpfLog = RunBPFLog()
+		kds.AddTearDown(func() {
+			if kds.bpfLog != nil {
+				kds.bpfLog.Stop()
+			}
+		})
 	}
 	K8sInfra[index].runningTest = ginkgo.CurrentGinkgoTestDescription().FullTestText
 }
@@ -548,7 +556,22 @@ func (kds *K8sDatastoreInfra) Stop() {
 	kds.needsCleanup = true
 	kds.runningTest = ""
 
-	kds.bpfLog.Stop()
+	if ginkgo.CurrentGinkgoTestDescription().Failed {
+		kds.DumpErrorData()
+	}
+	// Run registered teardowns (reverse order). Do not suppress panics.
+	kds.cleanups.Run()
+}
+
+func (kds *K8sDatastoreInfra) AddTearDown(f func()) {
+	kds.cleanups.Add(f)
+}
+
+func (kds *K8sDatastoreInfra) RegisterFelix(f *Felix) {
+	if f == nil {
+		return
+	}
+	kds.felixes = append(kds.felixes, f)
 }
 
 type cleanupFunc func(clientset *kubernetes.Clientset, calicoClient client.Interface)
@@ -883,6 +906,13 @@ func (kds *K8sDatastoreInfra) AddDefaultDeny() error {
 }
 
 func (kds *K8sDatastoreInfra) DumpErrorData() {
+	// Per-Felix diagnostics first for context.
+	for _, f := range kds.felixes {
+		if f != nil {
+			dumpFelixDiags(f)
+		}
+	}
+
 	nsList, err := kds.K8sClient.CoreV1().Namespaces().List(context.Background(), metav1.ListOptions{})
 	if err == nil {
 		log.Info("DIAGS: Kubernetes Namespaces:")
