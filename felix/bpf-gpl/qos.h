@@ -115,7 +115,10 @@ static CALI_BPF_INLINE int enforce_packet_rate_qos(struct cali_tc_ctx *ctx)
 static CALI_BPF_INLINE int set_dscp(struct cali_tc_ctx *ctx)
 {
 #if (CALI_F_FROM_WEP || CALI_F_TO_HEP)
-	// TODO (mazdak): set DSCP only if traffic is leaving cluster
+	if (!(ctx->state->flags & CALI_ST_CLUSTER_EGRESS)) {
+		return TC_ACT_UNSPEC;
+	}
+
 	if (EGRESS_DSCP < 0) {
 		return TC_ACT_UNSPEC;
 	}
