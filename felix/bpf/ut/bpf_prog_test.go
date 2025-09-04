@@ -1388,6 +1388,34 @@ func tcpResponseRaw(in []byte) []byte {
 	return out.Bytes()
 }
 
+func tcpResponseRawV6(in []byte) []byte {
+	pkt := gopacket.NewPacket(in, layers.LayerTypeEthernet, gopacket.Default)
+	ethL := pkt.Layer(layers.LayerTypeEthernet)
+	ethR := ethL.(*layers.Ethernet)
+	ethR.SrcMAC, ethR.DstMAC = ethR.DstMAC, ethR.SrcMAC
+
+	ipv6L := pkt.Layer(layers.LayerTypeIPv6)
+	ipv6R := ipv6L.(*layers.IPv6)
+	ipv6R.SrcIP, ipv6R.DstIP = ipv6R.DstIP, ipv6R.SrcIP
+
+	tcpL := pkt.Layer(layers.LayerTypeTCP)
+	tcpR := tcpL.(*layers.TCP)
+	tcpR.SrcPort, tcpR.DstPort = tcpR.DstPort, tcpR.SrcPort
+
+	if tcpR.SYN {
+		tcpR.ACK = true
+	}
+
+	_ = tcpR.SetNetworkLayerForChecksum(ipv6R)
+
+	out := gopacket.NewSerializeBuffer()
+	err := gopacket.SerializeLayers(out, gopacket.SerializeOptions{ComputeChecksums: true},
+		ethR, ipv6R, tcpR, gopacket.Payload(pkt.ApplicationLayer().Payload()))
+	Expect(err).NotTo(HaveOccurred())
+
+	return out.Bytes()
+}
+
 func dumpConsistentHashMap(chMap maps.Map) {
 	m, err := nat.LoadConsistentHashMap(chMap)
 	Expect(err).NotTo(HaveOccurred())
@@ -1943,6 +1971,39 @@ func testPacketTCPV4WithPayload(destIP net.IP, srcPort, dstPort uint16, syn bool
 
 func testPacketTCPV4DefaultNP(destIP net.IP, syn bool) (*layers.Ethernet, *layers.IPv4, *layers.TCP, []byte, []byte, error) {
 	return testPacketTCPV4WithPayload(destIP, 1234, 5678, syn, nil)
+}
+
+func testPacketTCPV6WithPayload(destIP net.IP, srcPort, dstPort uint16, syn bool, payload []byte) (*layers.Ethernet, *layers.IPv6, *layers.TCP, []byte, []byte, error) {
+	if destIP == nil {
+		panic("destIP cannot be nil")
+	}
+
+	ip := *ipv6Default
+	ip.NextHeader = layers.IPProtocolTCP
+	ip.DstIP = destIP
+
+	tcp := &layers.TCP{
+		SYN:        syn,
+		SrcPort:    layers.TCPPort(srcPort),
+		DstPort:    layers.TCPPort(dstPort),
+		DataOffset: 5,
+		// Window:  14600,
+	}
+
+	hop := &layers.IPv6HopByHop{}
+	hop.NextHeader = layers.IPProtocolTCP
+	/* from gopacket ip6_test.go */
+	tlv := &layers.IPv6HopByHopOption{}
+	tlv.OptionType = 0x01 // PadN
+	tlv.OptionData = []byte{0x00, 0x00, 0x00, 0x00}
+	hop.Options = append(hop.Options, tlv)
+
+	e, ip6, l4, p, b, err := testPacketV6(nil, &ip, tcp, payload, hop)
+	return e, ip6, l4.(*layers.TCP), p, b, err
+}
+
+func testPacketTCPV6DefaultNP(destIP net.IP, syn bool) (*layers.Ethernet, *layers.IPv6, *layers.TCP, []byte, []byte, error) {
+	return testPacketTCPV6WithPayload(destIP, 1234, 5678, syn, nil)
 }
 
 func ipv6HopByHopExt() gopacket.SerializableLayer {
