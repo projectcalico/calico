@@ -744,7 +744,9 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                 },
             )
             self.update_existing_ports(
-                ports, plugin_context, "port QoS policy rules changing"
+                [p for p in ports if p["qos_policy_id"] == policy_id],
+                plugin_context,
+                "port QoS policy rules changing",
             )
 
             # Find the networks with the updating policy in their qos_policy_id field.
@@ -760,12 +762,14 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             ports = self.db.get_ports(
                 plugin_context,
                 filters={
-                    "network_id": [n.id for n in networks],
+                    "network_id": [n["id"] for n in networks],
                     "qos_policy_id": ["", None],
                 },
             )
             self.update_existing_ports(
-                ports, plugin_context, "network QoS policy rules changing"
+                [p for p in ports if not p.get("qos_policy_id", None)],
+                plugin_context,
+                "network QoS policy rules changing",
             )
 
     def delete_network_postcommit(self, context):
