@@ -107,7 +107,8 @@ func (m *dscpManager) handleHEPUpdates(hepID *proto.HostEndpointID, msg *proto.H
 	if len(ips) != 0 {
 		srcAddrs, err := normaliseSourceAddr(ips)
 		if err != nil {
-			m.logCtx.WithError(err).WithField("hep", msg.Endpoint.Name).Errorf("Invalid address")
+			m.logCtx.WithError(err).WithField("hep", msg.Endpoint.Name).Errorf("Invalid address - Skipping")
+			return
 		}
 		m.hepPolicies[id] = rules.DSCPRule{
 			SrcAddrs: srcAddrs,
@@ -142,7 +143,8 @@ func (m *dscpManager) handleWEPUpdates(wepID *proto.WorkloadEndpointID, msg *pro
 	if len(ips) != 0 {
 		srcAddrs, err := normaliseSourceAddr(ips)
 		if err != nil {
-			m.logCtx.WithError(err).WithField("wep", msg.Endpoint.Name).Errorf("Invalid address")
+			m.logCtx.WithError(err).WithField("wep", msg.Endpoint.Name).Errorf("Invalid address - Skipping.")
+			return
 		}
 		m.wepPolicies[id] = rules.DSCPRule{
 			SrcAddrs: srcAddrs,
