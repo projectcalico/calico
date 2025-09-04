@@ -762,12 +762,14 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             ports = self.db.get_ports(
                 plugin_context,
                 filters={
-                    "network_id": [n["id"] for n in networks],
+                    "network_id": [
+                        n["id"] for n in networks if n["qos_policy_id"] == policy_id
+                    ],
                     "qos_policy_id": ["", None],
                 },
             )
             self.update_existing_ports(
-                [p for p in ports if not p.get("qos_policy_id", None)],
+                [p for p in ports if not p["qos_policy_id"]],
                 plugin_context,
                 "network QoS policy rules changing",
             )
