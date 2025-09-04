@@ -277,7 +277,7 @@ func (t *calicoResourceLister) OnUpdates(updates []api.Update) {
 		// The correct way to tell if an update on the syncer API is a delete operation or not is to check if u.KVPair.Value == nil.
 		// If it's nil, it should be treated as a delete regardless of the update type, and if it's non-nil it should be treated as an add / update.
 		isDelete := func(u api.Update) bool {
-			return u.KVPair.Value == nil
+			return u.Value == nil
 		}
 
 		switch u.Key.(model.ResourceKey).Kind {

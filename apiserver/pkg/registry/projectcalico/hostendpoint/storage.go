@@ -8,14 +8,13 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	genericapirequest "k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/apiserver/pkg/registry/generic/registry"
-	genericregistry "k8s.io/apiserver/pkg/registry/generic/registry"
 
 	"github.com/projectcalico/calico/apiserver/pkg/registry/projectcalico/server"
 )
 
 // rest implements a RESTStorage for API services against etcd
 type REST struct {
-	*genericregistry.Store
+	*registry.Store
 	shortNames []string
 }
 
@@ -68,7 +67,7 @@ func NewREST(scheme *runtime.Scheme, opts server.Options) (*REST, error) {
 	if err != nil {
 		return nil, err
 	}
-	store := &genericregistry.Store{
+	store := &registry.Store{
 		NewFunc:     func() runtime.Object { return &calico.HostEndpoint{} },
 		NewListFunc: func() runtime.Object { return &calico.HostEndpointList{} },
 		KeyRootFunc: opts.KeyRootFunc(false),
