@@ -108,7 +108,7 @@ func setupTest(t *testing.T, srvOption ServerSetupOption) func() {
 		if teardownServer != nil {
 			teardownServer()
 		}
-		lis.Close()
+		_ = lis.Close()
 		logCancel()
 		cli.Close()
 	}

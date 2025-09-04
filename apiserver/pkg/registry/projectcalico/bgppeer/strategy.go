@@ -68,7 +68,7 @@ func GetAttrs(obj runtime.Object) (labels.Set, fields.Set, error) {
 	if !ok {
 		return nil, nil, fmt.Errorf("given object is not a BGPPeer")
 	}
-	return labels.Set(apiserver.ObjectMeta.Labels), BGPPeerToSelectableFields(apiserver), nil
+	return labels.Set(apiserver.Labels), BGPPeerToSelectableFields(apiserver), nil
 }
 
 // MatchBGPPeer is the filter used by the generic etcd backend to watch events

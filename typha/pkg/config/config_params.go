@@ -228,7 +228,7 @@ func (config *Config) resolve() (changed bool, err error) {
 				// the default value.  Typically, the zero value means "turn off
 				// the feature".
 				if metadata.NonZero {
-					err = errors.New("Non-zero field cannot be set to none")
+					err = errors.New("non-zero field cannot be set to none")
 					log.Errorf(
 						"Failed to parse value for %v: %v from source %v. %v",
 						name, rawValue, source, err)
@@ -331,9 +331,9 @@ func (config *Config) Validate() (err error) {
 			config.ServerCertFile == "" ||
 			config.CAFile == "" ||
 			(config.ClientCN == "" && config.ClientURISAN == "") {
-			err = errors.New("If any Felix-Typha TLS config parameters are specified," +
+			err = errors.New("if any Felix-Typha TLS config parameters are specified," +
 				" they _all_ must be" +
-				" - except that either ClientCN or ClientURISAN may be left unset.")
+				" - except that either ClientCN or ClientURISAN may be left unset")
 		}
 	}
 	return

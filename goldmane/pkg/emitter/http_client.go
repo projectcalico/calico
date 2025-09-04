@@ -139,7 +139,7 @@ func (e *emitterClient) Post(body io.Reader) error {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("unexpected status code: %s", resp.Status)
 	}

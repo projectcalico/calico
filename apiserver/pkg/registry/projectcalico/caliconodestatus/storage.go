@@ -8,7 +8,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	genericapirequest "k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/apiserver/pkg/registry/generic/registry"
-	genericregistry "k8s.io/apiserver/pkg/registry/generic/registry"
 	"k8s.io/kubernetes/pkg/printers"
 	printerstorage "k8s.io/kubernetes/pkg/printers/storage"
 
@@ -17,7 +16,7 @@ import (
 )
 
 type REST struct {
-	*genericregistry.Store
+	*registry.Store
 	shortNames []string
 }
 
@@ -70,7 +69,7 @@ func NewREST(scheme *runtime.Scheme, opts server.Options) (*REST, error) {
 	if err != nil {
 		return nil, err
 	}
-	store := &genericregistry.Store{
+	store := &registry.Store{
 		NewFunc:     func() runtime.Object { return &calico.CalicoNodeStatus{} },
 		NewListFunc: func() runtime.Object { return &calico.CalicoNodeStatusList{} },
 		KeyRootFunc: opts.KeyRootFunc(false),
