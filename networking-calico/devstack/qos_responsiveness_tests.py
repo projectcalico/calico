@@ -411,11 +411,11 @@ class QoSResponsivenessTest(unittest.TestCase):
                 logger.info(f"Delete rule {r} for policy {name}")
                 if r["type"] == "bandwidth_limit":
                     self.conn.network.delete_qos_bandwidth_limit_rule(
-                        existing_rules[i].id, qos_policy.id
+                        qos_policy.rules[i].id, qos_policy.id
                     )
                 elif r["type"] == "packet_rate_limit":
                     self.conn.network.delete_qos_packet_rate_limit_rule(
-                        existing_rules[i].id, qos_policy.id
+                        qos_policy.rules[i].id, qos_policy.id
                     )
 
         for r in desired_rules:
