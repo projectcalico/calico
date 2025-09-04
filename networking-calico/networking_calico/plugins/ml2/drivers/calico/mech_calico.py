@@ -708,7 +708,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             new_qos_policy_id,
         )
 
-        # Find the set P of Ports for this Network and which don't have their own
+        # Update the existing ports for this network and which don't have their own
         # qos_policy_id.
         plugin_context = context._plugin_context
         with self._txn_from_context(plugin_context, tag="update-network"):
@@ -719,23 +719,54 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                     "qos_policy_id": ["", None],
                 },
             )
+            self.update_existing_ports(
+                ports, plugin_context, "network changing qos_policy_id"
+            )
 
-        # For each Port in set P, do what the syncer would do for that Port.
-        LOG.info("%d port(s) affected", len(ports))
+    def update_existing_ports(self, ports, plugin_context, reason):
+        # For each port, recompute and emit the WorkloadEndpoint for that port.
+        LOG.info("Update %d port(s) for %s", len(ports), reason)
         for p in ports:
             if _port_is_endpoint_port(p):
-                pass
+                self.endpoint_syncer.write_endpoint(p, plugin_context, must_update=True)
 
     @requires_state
     def handle_qos_policy_update(self, policy_id):
         LOG.info("HANDLE_QOS_POLICY_UPDATE: %s" % policy_id)
 
-        # Find the set N of Networks with this policy in their qos_policy_id field.
+        plugin_context = ctx.get_admin_context()
+        with self._txn_from_context(plugin_context, tag="handle_qos_policy_update"):
+            # Update the existing ports that are directly using this qos_policy_id.
+            ports = self.db.get_ports(
+                plugin_context,
+                filters={
+                    "qos_policy_id": [policy_id],
+                },
+            )
+            self.update_existing_ports(
+                ports, plugin_context, "port QoS policy rules changing"
+            )
 
-        # Find the set P of Ports with this policy in their qos_policy_id field, or with
-        # null qos_policy_id and with a Network in set N.
+            # Find the networks with the updating policy in their qos_policy_id field.
+            networks = self.db.get_networks(
+                plugin_context,
+                filters={
+                    "qos_policy_id": [policy_id],
+                },
+            )
 
-        # For each Port in set P, do what the syncer would do for that Port.
+            # Update the existing ports on these networks that don't have their own
+            # qos_policy_id field.
+            ports = self.db.get_ports(
+                plugin_context,
+                filters={
+                    "network_id": [n.id for n in networks],
+                    "qos_policy_id": ["", None],
+                },
+            )
+            self.update_existing_ports(
+                ports, plugin_context, "network QoS policy rules changing"
+            )
 
     def delete_network_postcommit(self, context):
         LOG.info("DELETE_NETWORK_POSTCOMMIT: %s" % context)
