@@ -72,7 +72,7 @@ func fetchImagePromotions(orgURL, pipelineID, token string) ([]promotion, error)
 	if err != nil {
 		return nil, fmt.Errorf("failed to request promotions: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("failed to fetch promotions")
 	}
@@ -112,7 +112,7 @@ func getPipelineResult(orgURL, pipelineID, token string) (*pipeline, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to request pipeline details: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("failed to fetch pipeline details")
 	}
