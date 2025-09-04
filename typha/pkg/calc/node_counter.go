@@ -68,7 +68,7 @@ func (c *NodeCounter) GetNumNodes() (int, error) {
 	c.Lock()
 	defer c.Unlock()
 	if !c.inSync {
-		return 0, fmt.Errorf("Node counter not yet in sync")
+		return 0, fmt.Errorf("node counter not yet in sync")
 	}
 	return len(c.nodeMap), nil
 }

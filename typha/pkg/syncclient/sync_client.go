@@ -110,9 +110,9 @@ func (o *Options) validate() (err error) {
 			o.CertFile == "" ||
 			o.CAFile == "" ||
 			(o.ServerCN == "" && o.ServerURISAN == "") {
-			err = errors.New("If any Felix-Typha TLS options are specified," +
+			err = errors.New("if any Felix-Typha TLS options are specified," +
 				" they _all_ must be" +
-				" - except that either ServerCN or ServerURISAN may be left unset.")
+				" - except that either ServerCN or ServerURISAN may be left unset")
 		}
 	}
 	return
@@ -336,7 +336,7 @@ func (s *SyncerClient) connect(cxt context.Context, typhaAddr discovery.Typha) e
 		ok := tlsConfig.RootCAs.AppendCertsFromPEM(caPEMBlock)
 		if !ok {
 			log.Error("Failed to add CA data to pool")
-			return errors.New("Failed to add CA data to pool")
+			return errors.New("failed to add CA data to pool")
 		}
 		tlsConfig.VerifyPeerCertificate = tlsutils.CertificateVerifier(
 			logCxt,
