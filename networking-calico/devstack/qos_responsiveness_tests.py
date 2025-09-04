@@ -135,7 +135,8 @@ class QoSResponsivenessTest(unittest.TestCase):
                 },
                 "controls": {
                     "egressBandwidth": 10200000,
-                    "egressBurst": 20300000,
+                    "egressPeakrate": 20300000,
+                    "egressBurst": 4294967296,
                 },
             },
             {
@@ -147,27 +148,30 @@ class QoSResponsivenessTest(unittest.TestCase):
                 },
                 "controls": {
                     "ingressBandwidth": 30400000,
-                    "ingressBurst": 40500000,
+                    "ingressPeakrate": 40500000,
+                    "ingressBurst": 4294967296,
                 },
             },
             {
                 "rule": {
                     "type": "packet_rate_limit",
-                    "max_kpps": 12345,
+                    "max_kpps": 6,
                     "direction": "egress",
                 },
                 "controls": {
-                    "egressPacketRate": 12345000,
+                    "egressPacketRate": 6000,
+                    "egressPacketBurst": 5,
                 },
             },
             {
                 "rule": {
                     "type": "packet_rate_limit",
-                    "max_kpps": 42341,
+                    "max_kpps": 7,
                     "direction": "ingress",
                 },
                 "controls": {
-                    "ingressPacketRate": 42341000,
+                    "ingressPacketRate": 7000,
+                    "ingressPacketBurst": 5,
                 },
             },
         ]
