@@ -153,13 +153,15 @@ func (rg *routeGenerator) getServiceForEndpoints(ep *discoveryv1.EndpointSlice) 
 	var err error
 
 	svcName, ok := ep.Labels[discoveryv1.LabelServiceName]
-	if ok {
-		epCopy := ep.DeepCopy()
-		epCopy.Name = svcName
-		key, err = cache.MetaNamespaceKeyFunc(epCopy)
-	} else {
-		key, err = cache.MetaNamespaceKeyFunc(ep)
+	if !ok {
+		log.WithField("ep", ep.Name).Debug("getServiceForEndpoints: endpointslice missing service name label, passing")
+		return nil, ""
 	}
+
+	epCopy := ep.DeepCopy()
+	epCopy.Name = svcName
+	key, err = cache.MetaNamespaceKeyFunc(epCopy)
+
 	if err != nil {
 		log.WithField("ep", ep.Name).WithError(err).Warn("getServiceForEndpoints: error on retrieving key for endpoint, passing")
 		return nil, ""
@@ -182,6 +184,7 @@ func (rg *routeGenerator) getEndpointsForService(svc *v1.Service) ([]*discoveryv
 	for _, obj := range rg.epIndexer.List() {
 		ep, ok := obj.(*discoveryv1.EndpointSlice)
 		if !ok {
+			log.Warn("getEndpointsForService: failed to assert type to endpointslice, passing")
 			continue
 		}
 		if svcName, ok := ep.Labels[discoveryv1.LabelServiceName]; ok && svcName == svc.Name && ep.Namespace == svc.Namespace {

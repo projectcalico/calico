@@ -91,7 +91,6 @@ type CompletedConfig struct {
 
 // Complete fills in any fields not set that are required to have valid data. It's mutating the receiver.
 func (cfg *Config) Complete() CompletedConfig {
-
 	cfg.GenericConfig.EffectiveVersion = compatibility.NewEffectiveVersionFromString("1.0", "1.0", "1.0")
 	c := completedConfig{
 		cfg.GenericConfig.Complete(),

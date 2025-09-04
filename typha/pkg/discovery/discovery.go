@@ -216,17 +216,12 @@ func (d *Discoverer) discoverTyphaAddrs() ([]Typha, error) {
 	// If we get here, we need to look up the Typha service endpoints using the k8s API.
 	logrus.Info("(Re)discovering Typha endpoints using the Kubernetes API...")
 	epClient := d.k8sClient.DiscoveryV1().EndpointSlices(d.k8sNamespace)
-	epsList, err := epClient.List(context.Background(), v1.ListOptions{})
+	endpointSlices, err := epClient.List(context.Background(), v1.ListOptions{
+		LabelSelector: fmt.Sprintf("%s=%s", discoveryv1.LabelServiceName, d.k8sServiceName),
+	})
 	if err != nil {
 		logrus.WithError(err).Error("Unable to get Typha service endpoints from Kubernetes.")
 		return nil, err
-	}
-
-	var endpointSlices []discoveryv1.EndpointSlice
-	for _, ep := range epsList.Items {
-		if svcName, ok := ep.Labels[discoveryv1.LabelServiceName]; ok && svcName == d.k8sServiceName {
-			endpointSlices = append(endpointSlices, ep)
-		}
 	}
 
 	var (
@@ -234,7 +229,7 @@ func (d *Discoverer) discoverTyphaAddrs() ([]Typha, error) {
 		local, remote, addresses []Typha
 	)
 
-	for i, eps := range endpointSlices {
+	for i, eps := range endpointSlices.Items {
 		var portForOurVersion int32
 		for _, port := range eps.Ports {
 			if *port.Name == d.k8sServicePortName {
@@ -244,7 +239,7 @@ func (d *Discoverer) discoverTyphaAddrs() ([]Typha, error) {
 		}
 
 		if portForOurVersion == 0 {
-			if i != len(endpointSlices)-1 {
+			if i != len(endpointSlices.Items)-1 {
 				continue
 			}
 			logrus.Error("Didn't find any ready Typha instances.")
