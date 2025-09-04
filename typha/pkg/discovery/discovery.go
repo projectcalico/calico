@@ -224,7 +224,7 @@ func (d *Discoverer) discoverTyphaAddrs() ([]Typha, error) {
 
 	var endpointSlices []discoveryv1.EndpointSlice
 	for _, ep := range epsList.Items {
-		if strings.HasPrefix(ep.Name, d.k8sServiceName) {
+		if svcName, ok := ep.Labels[discoveryv1.LabelServiceName]; ok && svcName == d.k8sServiceName {
 			endpointSlices = append(endpointSlices, ep)
 		}
 	}
