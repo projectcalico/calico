@@ -123,7 +123,7 @@ func (i *Scanner) Scan(productCode string, images []string, stream string, relea
 	}
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
 		logrus.WithField("status", resp.StatusCode).Info("Image scan request sent successfully")
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 		body, err := io.ReadAll(resp.Body)
 		if err != nil {
 			logrus.WithError(err).Error("Failed to read response body from image scanner")
