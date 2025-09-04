@@ -722,7 +722,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             self.update_existing_ports(
                 [p for p in ports if not p["qos_policy_id"]],
                 plugin_context,
-                "network changing qos_policy_id"
+                "network changing qos_policy_id",
             )
 
     def update_existing_ports(self, ports, plugin_context, reason):
