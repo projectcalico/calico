@@ -1,6 +1,6 @@
 - name: "OpenStack integration (Yoga)"
   run:
-    when: "${FORCE_RUN} or change_in(['/metadata.mk', '/lib.Makefile', '/networking-calico/'])"
+    when: "${FORCE_RUN} or change_in(['/metadata.mk', '/lib.Makefile', '/networking-calico/'], {pipeline_file: 'ignore'})"
   dependencies:
     - Prerequisites
   task:
@@ -48,7 +48,7 @@
 
 - name: "OpenStack integration (Caracal)"
   run:
-    when: "${FORCE_RUN} or change_in(['/networking-calico/'])"
+    when: "${FORCE_RUN} or change_in(['/networking-calico/'], {pipeline_file: 'ignore'})"
   dependencies:
     - Prerequisites
   task:
