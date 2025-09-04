@@ -6,7 +6,6 @@ import (
 	"context"
 	"reflect"
 
-	aapi "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apiserver/pkg/registry/generic/registry"
@@ -52,8 +51,8 @@ func NewNetworkSetStorage(opts Options) (registry.DryRunnableStorage, factory.De
 		client:            c,
 		codec:             opts.RESTOptions.StorageConfig.Codec,
 		versioner:         APIObjectVersioner{},
-		aapiType:          reflect.TypeOf(aapi.NetworkSet{}),
-		aapiListType:      reflect.TypeOf(aapi.NetworkSetList{}),
+		aapiType:          reflect.TypeOf(api.NetworkSet{}),
+		aapiListType:      reflect.TypeOf(api.NetworkSetList{}),
 		libCalicoType:     reflect.TypeOf(api.NetworkSet{}),
 		libCalicoListType: reflect.TypeOf(api.NetworkSetList{}),
 		isNamespaced:      true,
@@ -73,7 +72,7 @@ type NetworkSetConverter struct {
 }
 
 func (gc NetworkSetConverter) convertToLibcalico(aapiObj runtime.Object) resourceObject {
-	aapiNetworkSet := aapiObj.(*aapi.NetworkSet)
+	aapiNetworkSet := aapiObj.(*api.NetworkSet)
 	lcgNetworkSet := &api.NetworkSet{}
 	lcgNetworkSet.TypeMeta = aapiNetworkSet.TypeMeta
 	lcgNetworkSet.ObjectMeta = aapiNetworkSet.ObjectMeta
@@ -85,7 +84,7 @@ func (gc NetworkSetConverter) convertToLibcalico(aapiObj runtime.Object) resourc
 
 func (gc NetworkSetConverter) convertToAAPI(libcalicoObject resourceObject, aapiObj runtime.Object) {
 	lcgNetworkSet := libcalicoObject.(*api.NetworkSet)
-	aapiNetworkSet := aapiObj.(*aapi.NetworkSet)
+	aapiNetworkSet := aapiObj.(*api.NetworkSet)
 	aapiNetworkSet.Spec = lcgNetworkSet.Spec
 	aapiNetworkSet.TypeMeta = lcgNetworkSet.TypeMeta
 	aapiNetworkSet.ObjectMeta = lcgNetworkSet.ObjectMeta
@@ -93,15 +92,15 @@ func (gc NetworkSetConverter) convertToAAPI(libcalicoObject resourceObject, aapi
 
 func (gc NetworkSetConverter) convertToAAPIList(libcalicoListObject resourceListObject, aapiListObj runtime.Object, pred storage.SelectionPredicate) {
 	lcgNetworkSetList := libcalicoListObject.(*api.NetworkSetList)
-	aapiNetworkSetList := aapiListObj.(*aapi.NetworkSetList)
+	aapiNetworkSetList := aapiListObj.(*api.NetworkSetList)
 	if libcalicoListObject == nil {
-		aapiNetworkSetList.Items = []aapi.NetworkSet{}
+		aapiNetworkSetList.Items = []api.NetworkSet{}
 		return
 	}
 	aapiNetworkSetList.TypeMeta = lcgNetworkSetList.TypeMeta
 	aapiNetworkSetList.ListMeta = lcgNetworkSetList.ListMeta
 	for _, item := range lcgNetworkSetList.Items {
-		aapiNetworkSet := aapi.NetworkSet{}
+		aapiNetworkSet := api.NetworkSet{}
 		gc.convertToAAPI(&item, &aapiNetworkSet)
 		if matched, err := pred.Matches(&aapiNetworkSet); err == nil && matched {
 			aapiNetworkSetList.Items = append(aapiNetworkSetList.Items, aapiNetworkSet)

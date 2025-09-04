@@ -68,7 +68,7 @@ func GetAttrs(obj runtime.Object) (labels.Set, fields.Set, error) {
 	if !ok {
 		return nil, nil, fmt.Errorf("given object is not a BGPFilter")
 	}
-	return labels.Set(apiserver.ObjectMeta.Labels), BGPFilterToSelectableFields(apiserver), nil
+	return labels.Set(apiserver.Labels), BGPFilterToSelectableFields(apiserver), nil
 }
 
 // MatchBGPFilter is the filter used by the generic etcd backend to watch events
