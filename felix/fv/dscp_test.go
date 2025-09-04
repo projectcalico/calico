@@ -136,16 +136,15 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ dscp tests", []apiconfig.Da
 			}
 			allPoolsIPSet := fmt.Sprintf("cali%v0all-ipam-pools", ipVersion)
 			allHostsIPSet := fmt.Sprintf("cali%v0all-hosts-net", ipVersion)
+			dscpIPSet := fmt.Sprintf("cali%v0dscp-src-net", ipVersion)
 			tmpl := "-m set --match-set %v src -m set ! --match-set %v dst -m set ! --match-set %v dst -j cali-egress-dscp"
-			expectedRule1 := fmt.Sprintf(tmpl, allPoolsIPSet, allPoolsIPSet, allHostsIPSet)
-			expectedRule2 := fmt.Sprintf(tmpl, allHostsIPSet, allPoolsIPSet, allHostsIPSet)
+			expectedRule := fmt.Sprintf(tmpl, dscpIPSet, allPoolsIPSet, allHostsIPSet)
 			getRules := func() string {
 				output, _ := felix.ExecOutput(binary, "-t", "mangle")
 				return output
 			}
-			Eventually(getRules, 5*time.Second, 100*time.Millisecond).Should(ContainSubstring(expectedRule1))
-			Consistently(getRules, 3*time.Second, 100*time.Millisecond).Should(ContainSubstring(expectedRule1))
-			Consistently(getRules, 3*time.Second, 100*time.Millisecond).Should(ContainSubstring(expectedRule2))
+			Eventually(getRules, 5*time.Second, 100*time.Millisecond).Should(ContainSubstring(expectedRule))
+			Consistently(getRules, 3*time.Second, 100*time.Millisecond).Should(ContainSubstring(expectedRule))
 		}
 
 		detectNftablesRule := func(felix *infrastructure.Felix, ipVersion uint8) {
@@ -155,16 +154,15 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ dscp tests", []apiconfig.Da
 			}
 			allPoolsIPSet := fmt.Sprintf("@cali%v0all-ipam-pools", ipVersion)
 			allHostsIPSet := fmt.Sprintf("@cali%v0all-hosts-net", ipVersion)
+			dscpIPSet := fmt.Sprintf("@cali%v0dscp-src-net", ipVersion)
 			tmpl := "%v saddr %v %v daddr != %v %v daddr != %v .* jump mangle-cali-egress-dscp"
-			pattern1 := fmt.Sprintf(tmpl, ipFamily, allPoolsIPSet, ipFamily, allPoolsIPSet, ipFamily, allHostsIPSet)
-			pattern2 := fmt.Sprintf(tmpl, ipFamily, allHostsIPSet, ipFamily, allPoolsIPSet, ipFamily, allHostsIPSet)
+			pattern := fmt.Sprintf(tmpl, ipFamily, dscpIPSet, ipFamily, allPoolsIPSet, ipFamily, allHostsIPSet)
 			getRules := func() string {
 				output, _ := felix.ExecOutput("nft", "list", "chain", ipFamily, "calico", "mangle-cali-POSTROUTING")
 				return output
 			}
-			Eventually(getRules, 5*time.Second, 100*time.Millisecond).Should(MatchRegexp(pattern1))
-			Consistently(getRules, 3*time.Second, 100*time.Millisecond).Should(MatchRegexp(pattern1))
-			Consistently(getRules, 3*time.Second, 100*time.Millisecond).Should(MatchRegexp(pattern2))
+			Eventually(getRules, 5*time.Second, 100*time.Millisecond).Should(MatchRegexp(pattern))
+			Consistently(getRules, 3*time.Second, 100*time.Millisecond).Should(MatchRegexp(pattern))
 		}
 
 		if NFTMode() {
