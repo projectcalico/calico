@@ -114,7 +114,7 @@ promotions:
 blocks:
   - name: Check images availability
     run:
-      when: "true or change_in(['/charts/', '/manifests/'])"
+      when: "true or change_in(['/charts/', '/manifests/'], {pipeline_file: 'ignore'})"
     dependencies: []
     task:
       jobs:
@@ -134,7 +134,7 @@ blocks:
             - make ci-preflight-checks
   - name: API
     run:
-      when: "true or change_in(['/metadata.mk', '/lib.Makefile', '/api/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+      when: "true or change_in(['/metadata.mk', '/lib.Makefile', '/api/'], {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
     execution_time_limit:
       minutes: 30
     dependencies:
@@ -294,7 +294,7 @@ blocks:
             - ../.semaphore/run-and-monitor ci.log make ci
   - name: e2e script & pipeline validations
     run:
-      when: "true or change_in(['/.semaphore/end-to-end/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+      when: "true or change_in(['/.semaphore/end-to-end/'], {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
     execution_time_limit:
       minutes: 5
     dependencies:
@@ -320,7 +320,7 @@ blocks:
             - .semaphore/run-and-monitor e2e-test.log make e2e-test
   - name: envoy-gateway
     run:
-      when: "true or change_in(['/metadata.mk', '/lib.Makefile', '/third_party/envoy-gateway'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+      when: "true or change_in(['/metadata.mk', '/lib.Makefile', '/third_party/envoy-gateway'], {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
     execution_time_limit:
       minutes: 30
     dependencies:
@@ -344,7 +344,7 @@ blocks:
             - ../../.semaphore/run-and-monitor image-$ARCH.log make build ARCH=$ARCH
   - name: envoy-proxy
     run:
-      when: "true or change_in(['/metadata.mk', '/lib.Makefile', '/third_party/envoy-proxy'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+      when: "true or change_in(['/metadata.mk', '/lib.Makefile', '/third_party/envoy-proxy'], {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
     execution_time_limit:
       minutes: 30
     dependencies:
@@ -368,7 +368,7 @@ blocks:
             - ../../.semaphore/run-and-monitor image-$ARCH.log make build ARCH=$ARCH
   - name: envoy-ratelimit
     run:
-      when: "true or change_in(['/metadata.mk', '/lib.Makefile', '/third_party/envoy-ratelimit'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+      when: "true or change_in(['/metadata.mk', '/lib.Makefile', '/third_party/envoy-ratelimit'], {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
     execution_time_limit:
       minutes: 30
     dependencies:
@@ -724,7 +724,7 @@ blocks:
             - ../.semaphore/run-and-monitor ci.log make ci
   - name: lib
     run:
-      when: "true or change_in(['/lib/'])"
+      when: "true or change_in(['/lib/'], {pipeline_file: 'ignore'})"
     execution_time_limit:
       minutes: 30
     dependencies:
@@ -856,7 +856,7 @@ blocks:
             - test-results publish ./report/*.xml --name "pod2daemon-ut-tests" || true
   - name: "Tools (hack directory)"
     run:
-      when: "true or change_in(['/metadata.mk', '/lib.Makefile', '/hack/', '/api/', '/libcalico-go/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+      when: "true or change_in(['/metadata.mk', '/lib.Makefile', '/hack/', '/api/', '/libcalico-go/'], {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
     dependencies:
       - Prerequisites
     task:
@@ -928,7 +928,7 @@ blocks:
             - ../.semaphore/run-and-monitor image-$ARCH.log make build ARCH=$ARCH
   - name: whisker
     run:
-      when: "true or change_in(['/metadata.mk', '/lib.Makefile', '/whisker/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+      when: "true or change_in(['/metadata.mk', '/lib.Makefile', '/whisker/'], {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
     execution_time_limit:
       minutes: 30
     dependencies:
@@ -965,7 +965,7 @@ blocks:
             - ../.semaphore/run-and-monitor ci.log make ci
   - name: "OpenStack integration (Yoga)"
     run:
-      when: "true or change_in(['/metadata.mk', '/lib.Makefile', '/networking-calico/'])"
+      when: "true or change_in(['/metadata.mk', '/lib.Makefile', '/networking-calico/'], {pipeline_file: 'ignore'})"
     dependencies:
       - Prerequisites
     task:
@@ -1013,7 +1013,7 @@ blocks:
 
   - name: "OpenStack integration (Caracal)"
     run:
-      when: "true or change_in(['/networking-calico/'])"
+      when: "true or change_in(['/networking-calico/'], {pipeline_file: 'ignore'})"
     dependencies:
       - Prerequisites
     task:
