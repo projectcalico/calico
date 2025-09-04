@@ -1503,7 +1503,7 @@ func TestMaglevNATNodePortTCPV6(t *testing.T) {
 	}
 }
 
-func TestMaglevNATNodePortUDP(t *testing.T) {
+func TestMaglevXNodeForwarding(t *testing.T) {
 	RegisterTestingT(t)
 
 	bpfIfaceName = "MNP-1"
