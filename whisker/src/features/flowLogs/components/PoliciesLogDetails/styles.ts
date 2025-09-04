@@ -1,7 +1,32 @@
 export const tableStyles = {
     fontFamily: 'monospace, monospace',
     bg: 'tigera-color-surface',
-    w: '95%',
+    w: '100%',
+
+    tr: {
+        // fixed widths improve multi-table column alignment
+        '&>th:nth-child(1)': {
+            w: '220px',
+        },
+        '&>th:nth-child(2)': {
+            w: '180px',
+        },
+        '&>th:nth-child(3)': {
+            w: '190px',
+        },
+        '&>th:nth-child(4)': {
+            w: '120px',
+        },
+        '&>th:nth-child(5)': {
+            w: '110px',
+        },
+        '&>th:nth-child(6)': {
+            w: '116px',
+        },
+        '&>th:nth-child(7)': {
+            w: '116px',
+        },
+    },
 };
 
 export const headingStyles = {
