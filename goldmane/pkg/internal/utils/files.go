@@ -109,7 +109,7 @@ func getFileHash(file string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	hash := sha256.New()
 	if _, err := io.Copy(hash, f); err != nil {
