@@ -70,15 +70,13 @@ from networking_calico.common import config as calico_config
 from networking_calico.common import intern_string
 from networking_calico.logutils import logging_exceptions
 from networking_calico.monotonic import monotonic_time
+from networking_calico.plugins.ml2.drivers.calico import qos_driver
 from networking_calico.plugins.ml2.drivers.calico.election import Elector
 from networking_calico.plugins.ml2.drivers.calico.endpoints import (
     WorkloadEndpointSyncer,
     _port_is_endpoint_port,
 )
 from networking_calico.plugins.ml2.drivers.calico.policy import PolicySyncer
-from networking_calico.plugins.ml2.drivers.calico.qos_driver import (
-    register as register_qos_driver,
-)
 from networking_calico.plugins.ml2.drivers.calico.status import StatusWatcher
 from networking_calico.plugins.ml2.drivers.calico.subnets import SubnetSyncer
 
@@ -207,7 +205,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             "tap",
             {"port_filter": True, "mac_address": "00:61:fe:ed:ca:fe"},
         )
-        register_qos_driver()
+        qos_driver.register(self)
         # Lock to prevent concurrent initialisation.
         self._init_lock = Semaphore()
         # Generally initialize attributes to nil values.  They get initialized
@@ -687,16 +685,62 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         # check_segment_for_agent.
         assert False
 
-    # For network and subnet actions we have nothing to do, so we provide these
-    # no-op methods.
     def create_network_postcommit(self, context):
         LOG.info("CREATE_NETWORK_POSTCOMMIT: %s" % context)
+        # Nothing else needed here.  There cannot yet be any ports on a network that has
+        # only just been created.
 
+    @requires_state
     def update_network_postcommit(self, context):
         LOG.info("UPDATE_NETWORK_POSTCOMMIT: %s" % context)
 
+        # Determine if qos_policy_id is changing.  If not, no-op.
+        old_qos_policy_id = context.original.get("qos_policy_id", None)
+        new_qos_policy_id = context.current.get("qos_policy_id", None)
+        if old_qos_policy_id == new_qos_policy_id:
+            return
+
+        network_id = context.current["id"]
+        LOG.info(
+            "qos_policy_id for network %r changing from %r to %r",
+            network_id,
+            old_qos_policy_id,
+            new_qos_policy_id,
+        )
+
+        # Find the set P of Ports for this Network and which don't have their own
+        # qos_policy_id.
+        plugin_context = context._plugin_context
+        with self._txn_from_context(plugin_context, tag="update-network"):
+            ports = self.db.get_ports(
+                plugin_context,
+                filters={
+                    "network_id": [network_id],
+                    "qos_policy_id": ["", None],
+                },
+            )
+
+        # For each Port in set P, do what the syncer would do for that Port.
+        LOG.info("%d port(s) affected", len(ports))
+        for p in ports:
+            if _port_is_endpoint_port(p):
+                pass
+
+    @requires_state
+    def handle_qos_policy_update(self, policy_id):
+        LOG.info("HANDLE_QOS_POLICY_UPDATE: %s" % policy_id)
+
+        # Find the set N of Networks with this policy in their qos_policy_id field.
+
+        # Find the set P of Ports with this policy in their qos_policy_id field, or with
+        # null qos_policy_id and with a Network in set N.
+
+        # For each Port in set P, do what the syncer would do for that Port.
+
     def delete_network_postcommit(self, context):
         LOG.info("DELETE_NETWORK_POSTCOMMIT: %s" % context)
+        # Nothing else needed here.  If there were ports on this network, we would have
+        # got separate callbacks for those ports being deleted.
 
     @requires_state
     def create_subnet_postcommit(self, context):
