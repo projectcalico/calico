@@ -6,6 +6,7 @@ export default {
             borderRadius: '50%',
             width: '0.5em',
             height: '0.5em',
+            minWidth: '0.5em',
         },
         gap: 2,
     },
