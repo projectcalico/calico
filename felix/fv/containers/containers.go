@@ -336,7 +336,7 @@ func (c *Container) Start() {
 // is stopped.
 func (c *Container) Remove() {
 	c.runCmd = utils.Command("docker", "rm", "-f", c.Name)
-	err := c.runCmd.Start()
+	err := c.runCmd.Run()
 	Expect(err).NotTo(HaveOccurred())
 
 	log.WithField("container", c).Info("Removed container.")
