@@ -120,7 +120,7 @@ func (s *SyncClient) syncStore(cxt context.Context, inSync chan<- struct{}, done
 		return
 	}
 	log.Info("Successfully connected to Policy Sync server")
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 	client := proto.NewPolicySyncClient(conn)
 	stream, err := client.Sync(cxt, &proto.SyncRequest{})
 	if err != nil {
