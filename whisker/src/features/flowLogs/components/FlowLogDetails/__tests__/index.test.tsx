@@ -53,7 +53,6 @@ const flowLog: FlowLog = {
 describe('FlowLogDetails', () => {
     it('should render the expected columns', () => {
         render(<FlowLogDetails flowLog={flowLog} />);
-
         expect(screen.getByText('start_time')).toBeInTheDocument();
         expect(screen.getByText('source_labels')).toBeInTheDocument();
     });

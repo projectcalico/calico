@@ -190,5 +190,32 @@ export default {
                 },
             },
         },
+        // inline: aka table within a table
+        inline: {
+            table: {
+                bg: 'transparent',
+                border: '1px solid',
+                borderColor: 'tigera-color-table-row',
+                borderRadius: 4,
+                borderSpacing: 0,
+                borderCollapse: 'separate',
+                overflow: 'hidden',
+            },
+            th: {
+                verticalAlign: 'top',
+                border: 0,
+                bg: 'tigera-color-table-row',
+                fontSize: 'sm',
+                fontFamily: 'inherit',
+            },
+            tr: {
+                border: 0,
+            },
+            td: {
+                border: 0,
+                fontFamily: 'inherit',
+                fontSize: 'sm',
+            },
+        },
     },
 };
