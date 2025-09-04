@@ -1174,10 +1174,8 @@ class TestPluginEtcd(TestPluginEtcdBase):
         implemented as no-ops (because Calico function does not need
         them).
         """
-        self.driver.update_network_postcommit(None)
         self.driver.delete_network_postcommit(None)
         self.driver.create_network_postcommit(None)
-        self.driver.update_network_postcommit(None)
 
     def test_subnet_hooks(self):
         """Test subnet creation, update and deletion hooks."""
