@@ -23,10 +23,11 @@ Usage:
   deps modules <package>          # Print go modules that package depends on
   deps local-dirs <package>       # Print in-repo go package dirs that 
                                   # package depends on.
+                                  # package depends on. (Main packages only.)
   deps test-exclusions <package>  # Print glob patterns to match *_test.go 
                                   # files in dependency dirs outside the 
                                   # package itself.
-  deps sem-change-in <package>[,<secondary package>...] # Print a SemaphoreCI
+  deps sem-change-in(-pretty) <package>[,<secondary package>...] # Print a SemaphoreCI
                                   # conditions DSL change_in() clause for 
                                   # <package>, including non-test deps from
                                   # any <secondary package> clauses.
@@ -60,11 +61,15 @@ func main() {
 	case "modules":
 		printModules(pkg)
 	case "local-dirs":
-		printLocalDirs(pkg)
+		printLocalDirs(pkg, false)
+	case "local-dirs-main-only":
+		printLocalDirs(pkg, true)
 	case "test-exclusions":
 		printTestExclusions(pkg)
 	case "sem-change-in":
-		printSemChangeIn(pkg)
+		printSemChangeIn(pkg, false)
+	case "sem-change-in-pretty":
+		printSemChangeIn(pkg, true)
 	default:
 		printUsageAndExit()
 	}
@@ -87,6 +92,11 @@ var nonGoDeps = map[string][]string{
 		"/felix/bpf-apache",
 		"/felix/bpf-gpl",
 	},
+
+	// Whisker is not a go project so we list the whole thing.
+	"whisker": {
+		"/whisker",
+	},
 }
 
 var defaultExclusions = []string{
@@ -100,7 +110,7 @@ var defaultExclusions = []string{
 	"/**/*.md",
 }
 
-func printSemChangeIn(pkg string) {
+func printSemChangeIn(pkg string, pretty bool) {
 	parts := strings.Split(pkg, ",")
 	pkg = parts[0]
 	otherPkgs := parts[1:]
@@ -110,7 +120,7 @@ func printSemChangeIn(pkg string) {
 		logrus.Infof("Calculating deps for %s package; including secondary deps: %v", pkg, otherPkgs)
 	}
 
-	localDirs, err := loadLocalDirs(pkg)
+	localDirs, err := loadLocalDirs(pkg, false)
 	if err != nil {
 		logrus.Fatalln("Failed to load local dirs:", err)
 		os.Exit(1)
@@ -133,7 +143,12 @@ func printSemChangeIn(pkg string) {
 	// Some jobs depend on secondary packages.  For example, the node tests
 	// also run typha, api server, etc.  Add inclusions for those.
 	for _, otherPkg := range otherPkgs {
-		otherPkgDirs, err := loadLocalDirs(otherPkg)
+		// For secondary dependencies, we only list dependencies of "main"
+		// packages.  This prevents us from picking up test-only dependencies.
+		// For example, kube-controllers FV has utility packages that depend on
+		// felix's FV infra packages.  If we didn't filter down to "main", we'd
+		// pick those up unintentionally.
+		otherPkgDirs, err := loadLocalDirs(otherPkg, true)
 		if err != nil {
 			logrus.Fatalln("Failed to load local dirs:", err)
 			os.Exit(1)
@@ -143,11 +158,18 @@ func printSemChangeIn(pkg string) {
 		}
 		inclusions.Add(otherPkg + "/Makefile")
 		inclusions.Add(otherPkg + "/deps.txt")
+		inclusions.Add(otherPkg + "/**/*Dockerfile*")
 		inclusions.AddAll(nonGoDeps[otherPkg])
 		exclusions.AddAll(calculateTestExclusionGlobs(pkg, otherPkgDirs))
 	}
 
-	_, _ = fmt.Printf("change_in(%s, {pipeline_file: 'ignore', exclude: %s})\n", formatSemList(inclusions), formatSemList(exclusions))
+	incl := formatSemList(inclusions)
+	excl := formatSemList(exclusions)
+	if pretty {
+		incl = "\n" + strings.ReplaceAll(incl, ",", ",\n  ") + "\n"
+		excl = "\n" + strings.ReplaceAll(excl, ",", ",\n  ") + "\n"
+	}
+	_, _ = fmt.Printf("change_in(%s, {pipeline_file: 'ignore', exclude: %s})\n", incl, excl)
 }
 
 func formatSemList(s set.Set[string]) string {
@@ -161,8 +183,8 @@ func formatSemList(s set.Set[string]) string {
 	return "[" + strings.Join(quoted, ",") + "]"
 }
 
-func printLocalDirs(pkg string) {
-	localDirs, err := loadLocalDirs(pkg)
+func printLocalDirs(pkg string, mainsOnly bool) {
+	localDirs, err := loadLocalDirs(pkg, mainsOnly)
 	if err != nil {
 		logrus.Fatalln("Failed to load local dirs:", err)
 		os.Exit(1)
@@ -174,7 +196,7 @@ func printLocalDirs(pkg string) {
 }
 
 func printTestExclusions(pkg string) {
-	localDirs, err := loadLocalDirs(pkg)
+	localDirs, err := loadLocalDirs(pkg, false)
 	if err != nil {
 		logrus.Fatalln("Failed to load local dirs:", err)
 		os.Exit(1)
@@ -198,8 +220,8 @@ func calculateTestExclusionGlobs(pkg string, localDirs []string) []string {
 	return exclusions
 }
 
-func loadLocalDirs(pkg string) (out []string, err error) {
-	packageDeps, err := loadPackageDeps(pkg)
+func loadLocalDirs(pkg string, mainDepsOnly bool) (out []string, err error) {
+	packageDeps, err := loadPackageDeps(pkg, mainDepsOnly)
 	if err != nil {
 		logrus.Fatalln("Failed to load package deps:", err)
 		os.Exit(1)
@@ -216,7 +238,7 @@ func loadLocalDirs(pkg string) (out []string, err error) {
 }
 
 func printModules(pkg string) {
-	packageDeps, err := loadPackageDeps(pkg)
+	packageDeps, err := loadPackageDeps(pkg, false)
 	if err != nil {
 		logrus.Fatalf("Failed to load package deps for package %s: %s", pkg, err)
 		os.Exit(1)
@@ -250,12 +272,27 @@ func printModules(pkg string) {
 	logrus.Info("Done.")
 }
 
-func loadPackageDeps(pkg string) ([]string, error) {
-	command := exec.Command("go", "list", "-deps", "./...")
+func loadPackageDeps(pkg string, mainDepsOnly bool) ([]string, error) {
+	pkgs := []string{"./..."}
+
+	if mainDepsOnly {
+		var err error
+		pkgs, err = findMainPackages(pkg)
+		if err != nil {
+			return nil, err
+		}
+		if len(pkgs) == 0 {
+			logrus.Infof("No main packages found in %s", pkg)
+			return nil, nil
+		}
+	}
+
+	args := append([]string{"list", "-deps"}, pkgs...)
+	command := exec.Command("go", args...)
 	command.Dir = pkg
 	raw, err := command.Output()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to load package deps for %v: %w", pkgs, err)
 	}
 	var out []string
 	for line := range bytes.Lines(raw) {
@@ -270,17 +307,24 @@ func loadPackageDeps(pkg string) ([]string, error) {
 	return out, nil
 }
 
-func pkgToSearchQuery(pkg string) string {
-	if !strings.HasPrefix(pkg, "./") {
-		pkg = "./" + pkg
+func findMainPackages(pkg string) ([]string, error) {
+	command := exec.Command("go", "list", "-find", "-f", "{{.Name}} {{.ImportPath}}", "./...")
+	command.Dir = pkg
+	raw, err := command.Output()
+	if err != nil {
+		return nil, fmt.Errorf("failed to find main packages in %s: %w", pkg, err)
 	}
-	if strings.HasSuffix(pkg, "/...") {
-		return pkg
+	var pkgs []string
+	for line := range bytes.Lines(raw) {
+		if !bytes.HasPrefix(line, []byte("main ")) {
+			continue
+		}
+		mainPkg := string(bytes.TrimPrefix(line, []byte("main ")))
+		mainPkg = strings.TrimSpace(mainPkg)
+		pkgs = append(pkgs, mainPkg)
 	}
-	if strings.HasSuffix(pkg, "/") {
-		return pkg + "..."
-	}
-	return pkg + "/..."
+	logrus.Infof("Found main packages in %s: %v", pkg, pkgs)
+	return pkgs, nil
 }
 
 type module struct {
