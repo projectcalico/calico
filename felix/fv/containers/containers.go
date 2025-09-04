@@ -24,6 +24,7 @@ import (
 	"os"
 	"os/exec"
 	"regexp"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -652,20 +653,36 @@ func (c *Container) FileExists(path string) bool {
 }
 
 func (c *Container) Exec(cmd ...string) {
-	log.WithField("container", c.Name).WithField("command", cmd).Info("Running command")
+	log.WithField("container", c.Name).WithFields(log.Fields{"command": cmd, "caller": findCaller()}).Info("Exec: Running command")
 	arg := []string{"exec", c.Name}
 	arg = append(arg, cmd...)
 	utils.Run("docker", arg...)
 }
 
 func (c *Container) ExecWithInput(input []byte, cmd ...string) {
-	log.WithField("container", c.Name).WithField("command", cmd).Info("Running command")
+	log.WithField("container", c.Name).WithFields(log.Fields{"command": cmd, "caller": findCaller()}).Info("ExecWithInpup: Running command")
 	arg := []string{"exec", "-i", c.Name}
 	arg = append(arg, cmd...)
 	utils.RunWithInput(input, "docker", arg...)
 }
 
+func findCaller() string {
+	// Find the first caller outside this package.
+	for i := 2; ; i++ {
+		_, file, line, ok := runtime.Caller(i)
+		if !ok {
+			return "unknown:0"
+		}
+		if !strings.Contains(file, "/containers/") {
+			parts := strings.Split(file, "/")
+			file = parts[len(parts)-1]
+			return fmt.Sprintf("%s:%d", file, line)
+		}
+	}
+}
+
 func (c *Container) ExecMayFail(cmd ...string) error {
+	log.WithField("container", c.Name).WithFields(log.Fields{"command": cmd, "caller": findCaller()}).Info("ExecMayFail: Running command")
 	arg := []string{"exec", c.Name}
 	arg = append(arg, cmd...)
 	return utils.RunMayFail("docker", arg...)
