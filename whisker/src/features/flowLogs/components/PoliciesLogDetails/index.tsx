@@ -33,33 +33,42 @@ type PoliciesLogDetails = {
     tableCellData: PoliciesLogEntries;
 };
 
+const END_OF_TIER_POLICY_KIND = 'EndOfTier';
+const PROFILE_POLICY_KIND = 'Profile';
+
 const POLICY_ENTRIES = [
     {
         key: 'enforced',
         title: 'Enforced Policies',
-        description: 'Policies that were enforced for this flow',
+        description: 'Policies that were enforced for this flow.',
     },
     {
         key: 'pending',
         title: 'Pending Policies',
         description:
-            'Policies that will be enforced if a similar flow was initiated now',
+            'Policies that would be enforced if a new connection was initiated now, and staged policies were enforced.',
     },
 ];
 
 const transformPolicyLog = (tableCellData: PoliciesLogEntries) =>
     POLICY_ENTRIES.reduce((acc: PoliciesLogEntries, { key }) => {
         acc[key] = tableCellData[key].map((policy: Policy) =>
-            policy.kind === 'Profile'
+            policy.kind === PROFILE_POLICY_KIND
                 ? {
                       ...policy,
-                      kind: 'EndofTier',
+                      kind: END_OF_TIER_POLICY_KIND,
                       tier: 'default',
                       name: '',
                       policy_index: null,
                       rule_index: null,
                   }
-                : policy,
+                : policy.kind === END_OF_TIER_POLICY_KIND
+                  ? {
+                        ...policy,
+                        policy_index: null,
+                        rule_index: null,
+                    }
+                  : policy,
         );
 
         return acc;
@@ -74,7 +83,7 @@ const PoliciesLogDetails: React.FC<PoliciesLogDetails> = ({
     );
 
     return (
-        <>
+        <Box w='fit-content'>
             {POLICY_ENTRIES.map(({ key, title, description }, index) => {
                 return (
                     <Box key={key} mb={2}>
@@ -143,7 +152,7 @@ const PoliciesLogDetails: React.FC<PoliciesLogDetails> = ({
                                                                 <TriggeredIcon />
 
                                                                 <span>
-                                                                    {`${policy.trigger.namespace}/${policy.trigger.name}`}
+                                                                    {`${policy.trigger.namespace ? policy.trigger.namespace + '/' : ''}${policy.trigger.name}`}
                                                                 </span>
                                                             </Flex>
                                                         </PopoverTrigger>
@@ -168,18 +177,22 @@ const PoliciesLogDetails: React.FC<PoliciesLogDetails> = ({
                                                                                     }
                                                                                 </td>
                                                                             </tr>
-                                                                            <tr>
-                                                                                <td>
-                                                                                    Namespace
-                                                                                </td>
-                                                                                <td>
-                                                                                    {
-                                                                                        policy
-                                                                                            .trigger
-                                                                                            .namespace
-                                                                                    }
-                                                                                </td>
-                                                                            </tr>
+                                                                            {policy
+                                                                                .trigger
+                                                                                .namespace && (
+                                                                                <tr>
+                                                                                    <td>
+                                                                                        Namespace
+                                                                                    </td>
+                                                                                    <td>
+                                                                                        {
+                                                                                            policy
+                                                                                                .trigger
+                                                                                                .namespace
+                                                                                        }
+                                                                                    </td>
+                                                                                </tr>
+                                                                            )}
                                                                             <tr>
                                                                                 <td>
                                                                                     Policy
@@ -211,7 +224,7 @@ const PoliciesLogDetails: React.FC<PoliciesLogDetails> = ({
                     </Box>
                 );
             })}
-        </>
+        </Box>
     );
 };
 
