@@ -36,11 +36,11 @@ func TestRequestsFromGuardianToUpstream(t *testing.T) {
 
 	mgmtCertFile, err := os.Create(tmpDir + "/" + "management-cluster.crt")
 	Expect(err).ShouldNot(HaveOccurred())
-	defer mgmtCertFile.Close()
+	defer func() { _ = mgmtCertFile.Close() }()
 
 	mgmtKeyFile, err := os.Create(tmpDir + "/" + "management-cluster.key")
 	Expect(err).ShouldNot(HaveOccurred())
-	defer mgmtKeyFile.Close()
+	defer func() { _ = mgmtKeyFile.Close() }()
 
 	ca, err := cryptoutils.NewCA("test")
 	Expect(err).ShouldNot(HaveOccurred())
@@ -87,7 +87,7 @@ func TestRequestsFromGuardianToUpstream(t *testing.T) {
 	tlsCfg := getTLSConfig(mgmtCertFile.Name(), mgmtKeyFile.Name())
 
 	upstreamSrv := newUpstreamServer(":8443", tlsCfg)
-	defer upstreamSrv.listener.Close()
+	defer func() { _ = upstreamSrv.listener.Close() }()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	daemonDoneSig := make(chan struct{})
@@ -115,7 +115,7 @@ func TestRequestsFromGuardianToUpstream(t *testing.T) {
 	Expect(err).ShouldNot(HaveOccurred())
 	Expect(resp.StatusCode).Should(Equal(http.StatusOK))
 
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	var rspObj obj
 	Expect(json.NewDecoder(resp.Body).Decode(&rspObj)).ShouldNot(HaveOccurred())
@@ -124,7 +124,7 @@ func TestRequestsFromGuardianToUpstream(t *testing.T) {
 	// Close the mux and allow guardian to try to reconnect, as we want to test that we can still use the tunnel after
 	// reconnecting.
 	t.Log("testing that we can use the tunnel after reconnecting")
-	mux.Close()
+	_ = mux.Close()
 	upstreamSrv.Close()
 	time.Sleep(10 * time.Second)
 
@@ -140,7 +140,7 @@ func TestRequestsFromGuardianToUpstream(t *testing.T) {
 	Expect(err).ShouldNot(HaveOccurred())
 	Expect(resp.StatusCode).Should(Equal(http.StatusOK))
 
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	rspObj = obj{}
 	Expect(json.NewDecoder(resp.Body).Decode(&rspObj)).ShouldNot(HaveOccurred())
