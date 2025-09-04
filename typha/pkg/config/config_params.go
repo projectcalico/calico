@@ -115,12 +115,12 @@ type Config struct {
 	SnapshotCacheMaxBatchSize int `config:"int(1,);100"`
 
 	ServerMaxMessageSize                 int           `config:"int(1,);100"`
-	ServerMaxFallBehindSecs              time.Duration `config:"seconds;300"`
+	ServerMaxFallBehindSecs              time.Duration `config:"seconds;300"` //nolint:staticcheck // Ignore ST1011 don't use unit-specific suffix
 	ServerNewClientFallBehindGracePeriod time.Duration `config:"seconds;300"`
-	ServerMinBatchingAgeThresholdSecs    time.Duration `config:"seconds;0.01"`
-	ServerPingIntervalSecs               time.Duration `config:"seconds;10"`
-	ServerPongTimeoutSecs                time.Duration `config:"seconds;60"`
-	ServerHandshakeTimeoutSecs           time.Duration `config:"seconds;10"`
+	ServerMinBatchingAgeThresholdSecs    time.Duration `config:"seconds;0.01"` //nolint:staticcheck // Ignore ST1011 don't use unit-specific suffix
+	ServerPingIntervalSecs               time.Duration `config:"seconds;10"`   //nolint:staticcheck // Ignore ST1011 don't use unit-specific suffix
+	ServerPongTimeoutSecs                time.Duration `config:"seconds;60"`   //nolint:staticcheck // Ignore ST1011 don't use unit-specific suffix
+	ServerHandshakeTimeoutSecs           time.Duration `config:"seconds;10"`   //nolint:staticcheck // Ignore ST1011 don't use unit-specific suffix
 	ServerPort                           int           `config:"int(0,65535);0"`
 	ServerHost                           string        `config:"host-address;"`
 
@@ -144,12 +144,12 @@ type Config struct {
 	DebugPort int `config:"int(0,65535);"`
 
 	ConnectionRebalancingMode             string        `config:"oneof(none,kubernetes);none"`
-	ConnectionDropIntervalSecs            time.Duration `config:"seconds;1"`
-	ShutdownTimeoutSecs                   time.Duration `config:"seconds;300"`
-	ShutdownConnectionDropIntervalMaxSecs time.Duration `config:"seconds;1"`
+	ConnectionDropIntervalSecs            time.Duration `config:"seconds;1"`   //nolint:staticcheck // Ignore ST1011 don't use unit-specific suffix
+	ShutdownTimeoutSecs                   time.Duration `config:"seconds;300"` //nolint:staticcheck // Ignore ST1011 don't use unit-specific suffix
+	ShutdownConnectionDropIntervalMaxSecs time.Duration `config:"seconds;1"`   //nolint:staticcheck // Ignore ST1011 don't use unit-specific suffix
 	MaxConnectionsUpperLimit              int           `config:"int(1,);10000"`
 	MaxConnectionsLowerLimit              int           `config:"int(1,);400"`
-	K8sServicePollIntervalSecs            time.Duration `config:"seconds;30"`
+	K8sServicePollIntervalSecs            time.Duration `config:"seconds;30"` //nolint:staticcheck // Ignore ST1011 don't use unit-specific suffix
 	K8sNamespace                          string        `config:"string;kube-system"`
 	K8sServiceName                        string        `config:"string;calico-typha"`
 	K8sPortName                           string        `config:"string;calico-typha"`
@@ -228,7 +228,7 @@ func (config *Config) resolve() (changed bool, err error) {
 				// the default value.  Typically, the zero value means "turn off
 				// the feature".
 				if metadata.NonZero {
-					err = errors.New("Non-zero field cannot be set to none")
+					err = errors.New("non-zero field cannot be set to none")
 					log.Errorf(
 						"Failed to parse value for %v: %v from source %v. %v",
 						name, rawValue, source, err)
@@ -331,9 +331,9 @@ func (config *Config) Validate() (err error) {
 			config.ServerCertFile == "" ||
 			config.CAFile == "" ||
 			(config.ClientCN == "" && config.ClientURISAN == "") {
-			err = errors.New("If any Felix-Typha TLS config parameters are specified," +
+			err = errors.New("if any Felix-Typha TLS config parameters are specified," +
 				" they _all_ must be" +
-				" - except that either ClientCN or ClientURISAN may be left unset.")
+				" - except that either ClientCN or ClientURISAN may be left unset")
 		}
 	}
 	return
