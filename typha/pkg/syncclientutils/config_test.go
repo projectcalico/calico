@@ -26,8 +26,10 @@ import (
 var _ = Describe("Test TyphaConfig", func() {
 
 	BeforeEach(func() {
-		os.Setenv("FELIX_TYPHACAFILE", "cafile")
-		os.Setenv("FELIX_TYPHAREADTIMEOUT", "100")
+		err := os.Setenv("FELIX_TYPHACAFILE", "cafile")
+		Expect(err).NotTo(HaveOccurred())
+		err = os.Setenv("FELIX_TYPHAREADTIMEOUT", "100")
+		Expect(err).NotTo(HaveOccurred())
 
 	})
 
