@@ -597,6 +597,7 @@ func (a *Goldmane) handleFlowBatch(first *types.Flow) {
 
 	// While we're here, check to see if there are any other flows to process.
 	numHandled := 1
+batchLoop:
 	for range batchSize {
 		select {
 		case f := <-a.recvChan:
@@ -604,7 +605,7 @@ func (a *Goldmane) handleFlowBatch(first *types.Flow) {
 			numHandled++
 		default:
 			// No more flows to process.
-			break
+			break batchLoop
 		}
 	}
 	logrus.WithField("num", numHandled).Debug("Processed flow batch")
