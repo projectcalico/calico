@@ -17,10 +17,11 @@
 package fv_test
 
 import (
-	"bytes"
+	"bufio"
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"regexp"
@@ -76,7 +77,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 		routeEntriesV4     [nodeCount]string
 		routeEntriesV6     [nodeCount]string
 		dmesgCmd           *exec.Cmd
-		dmesgBuf           bytes.Buffer
 		dmesgKill          func()
 
 		wgBootstrapEvents chan struct{}
@@ -113,11 +113,35 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 				// Start a process tailing the dmesg log.
 				ctx, cancel := context.WithCancel(context.Background())
 				dmesgCmd = exec.CommandContext(ctx, "sudo", "dmesg", "-WH")
-				dmesgCmd.Stdout = &dmesgBuf
-				dmesgCmd.Stderr = &dmesgBuf
-				err := dmesgCmd.Start()
+				dmesgCmd.WaitDelay = time.Second
+				dmesgIn, err := dmesgCmd.StdinPipe()
 				Expect(err).NotTo(HaveOccurred())
+				dmesgOut, err := dmesgCmd.StdoutPipe()
+				Expect(err).NotTo(HaveOccurred())
+				dmesgErr, err := dmesgCmd.StderrPipe()
+				Expect(err).NotTo(HaveOccurred())
+				err = dmesgCmd.Start()
+				Expect(err).NotTo(HaveOccurred())
+				copyOutputToLog := func(name string, pipe io.ReadCloser) {
+					scanner := bufio.NewScanner(pipe)
+					scanner.Buffer(nil, 10*1024*1024) // Increase maximum buffer size (but don't pre-alloc).
+					for scanner.Scan() {
+						line := scanner.Text()
+						line = strings.TrimRight(line, " \n")
+						_, _ = fmt.Fprintf(GinkgoWriter, "dmesg[%v] %v\n", name, line)
+					}
+					err := scanner.Err()
+					if err != nil && !errors.Is(err, io.EOF) {
+						log.WithError(err).Errorf("Error reading %v", name)
+					}
+				}
+				go copyOutputToLog("out", dmesgOut)
+				go copyOutputToLog("err", dmesgErr)
 				dmesgKill = cancel
+				// close stdin to make sure sudo fails fast if it's asking for
+				// password or something.
+				Expect(dmesgIn.Close()).NotTo(HaveOccurred())
+
 				log.Info("Started dmesg log capture")
 
 				infra = getInfra()
@@ -192,7 +216,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 					log.Info("Stop dmesg log capture")
 					dmesgKill()
 					_ = dmesgCmd.Wait()
-					log.Infof("Captured dmesg log:\n%v", dmesgBuf.String())
 					dmesgKill = nil
 				}
 
