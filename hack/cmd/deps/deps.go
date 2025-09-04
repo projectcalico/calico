@@ -26,7 +26,7 @@ Usage:
   deps test-exclusions <package>  # Print glob patterns to match *_test.go 
                                   # files in dependency dirs outside the 
                                   # package itself.
-  deps sem-change-in <package>[,<secondary package>...] # Print a SemaphoreCI
+  deps sem-change-in(-pretty) <package>[,<secondary package>...] # Print a SemaphoreCI
                                   # conditions DSL change_in() clause for 
                                   # <package>, including non-test deps from
                                   # any <secondary package> clauses.
@@ -64,7 +64,9 @@ func main() {
 	case "test-exclusions":
 		printTestExclusions(pkg)
 	case "sem-change-in":
-		printSemChangeIn(pkg)
+		printSemChangeIn(pkg, false)
+	case "sem-change-in-pretty":
+		printSemChangeIn(pkg, true)
 	default:
 		printUsageAndExit()
 	}
@@ -100,7 +102,7 @@ var defaultExclusions = []string{
 	"/**/*.md",
 }
 
-func printSemChangeIn(pkg string) {
+func printSemChangeIn(pkg string, pretty bool) {
 	parts := strings.Split(pkg, ",")
 	pkg = parts[0]
 	otherPkgs := parts[1:]
@@ -147,7 +149,13 @@ func printSemChangeIn(pkg string) {
 		exclusions.AddAll(calculateTestExclusionGlobs(pkg, otherPkgDirs))
 	}
 
-	_, _ = fmt.Printf("change_in(%s, {pipeline_file: 'ignore', exclude: %s})\n", formatSemList(inclusions), formatSemList(exclusions))
+	incl := formatSemList(inclusions)
+	excl := formatSemList(exclusions)
+	if pretty {
+		incl = "\n" + strings.ReplaceAll(incl, ",", ",\n  ") + "\n"
+		excl = "\n" + strings.ReplaceAll(excl, ",", ",\n  ") + "\n"
+	}
+	_, _ = fmt.Printf("change_in(%s, {pipeline_file: 'ignore', exclude: %s})\n", incl, excl)
 }
 
 func formatSemList(s set.Set[string]) string {
