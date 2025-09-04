@@ -2436,7 +2436,7 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 
 	ap.DSCP = -1
 	if wep != nil && len(wep.QosPolicies) > 0 {
-		// Only one QoS policy is supoprted at the moment.
+		// Only one QoS policy is supported at the moment.
 		dscp := int8(wep.QosPolicies[0].Dscp)
 		if dscp < 0 || dscp > 63 {
 			logrus.WithField("wep", wep.Name).Errorf("Invalid DSCP value %v - Skipping.", dscp)
@@ -2866,7 +2866,7 @@ func (d *bpfEndpointManagerDataplane) attachDataIfaceProgram(
 
 	ap.DSCP = -1
 	if ep != nil && len(ep.QosPolicies) > 0 {
-		// Only one QoS policy is supoprted at the moment.
+		// Only one QoS policy is supported at the moment.
 		dscp := int8(ep.QosPolicies[0].Dscp)
 		if dscp < 0 || dscp > 63 {
 			logrus.WithField("hep", ep.Name).Errorf("Invalid DSCP value %v - Skipping.", dscp)
