@@ -24,7 +24,7 @@ Usage:
   deps local-dirs <package>       # Print in-repo go package dirs that 
                                   # package depends on.
   deps local-dirs-main-only <package> # Print in-repo go package dirs that 
-                                  # package depends on. (Main pacakages only.)
+                                  # package depends on. (Main packages only.)
   deps test-exclusions <package>  # Print glob patterns to match *_test.go 
                                   # files in dependency dirs outside the 
                                   # package itself.
