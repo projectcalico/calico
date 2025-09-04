@@ -202,7 +202,7 @@ func TestMaglevMidflowFailoverNoConntrack(t *testing.T) {
 	})
 }
 
-func TestMaglevNATNodePortTCP(t *testing.T) {
+func TestMaglevTCPFailover(t *testing.T) {
 	RegisterTestingT(t)
 
 	bpfIfaceName = "MNP-1"
