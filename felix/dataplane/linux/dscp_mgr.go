@@ -15,6 +15,7 @@
 package intdataplane
 
 import (
+	"fmt"
 	"sort"
 	"strings"
 
@@ -104,8 +105,12 @@ func (m *dscpManager) handleHEPUpdates(hepID *proto.HostEndpointID, msg *proto.H
 		ips = msg.Endpoint.ExpectedIpv6Addrs
 	}
 	if len(ips) != 0 {
+		srcAddrs, err := normaliseSourceAddr(ips)
+		if err != nil {
+			m.logCtx.WithError(err).WithField("hep", msg.Endpoint.Name).Errorf("Invalid address")
+		}
 		m.hepPolicies[id] = rules.DSCPRule{
-			SrcAddrs: normaliseSourceAddr(ips),
+			SrcAddrs: srcAddrs,
 			Value:    uint8(dscp),
 		}
 		m.dirty = true
@@ -135,29 +140,37 @@ func (m *dscpManager) handleWEPUpdates(wepID *proto.WorkloadEndpointID, msg *pro
 		ips = msg.Endpoint.Ipv6Nets
 	}
 	if len(ips) != 0 {
+		srcAddrs, err := normaliseSourceAddr(ips)
+		if err != nil {
+			m.logCtx.WithError(err).WithField("wep", msg.Endpoint.Name).Errorf("Invalid address")
+		}
 		m.wepPolicies[id] = rules.DSCPRule{
-			SrcAddrs: normaliseSourceAddr(ips),
+			SrcAddrs: srcAddrs,
 			Value:    uint8(dscp),
 		}
 		m.dirty = true
 	}
 }
 
-func normaliseSourceAddr(addrs []string) string {
+func normaliseSourceAddr(addrs []string) (string, error) {
 	var trimmedSources []string
 	for _, addr := range addrs {
-		trimmedSources = append(trimmedSources, removeSubnetMask(addr))
+		srcAddr, err := removeSubnetMask(addr)
+		if err != nil {
+			return "", err
+		}
+		trimmedSources = append(trimmedSources, srcAddr)
 	}
-	return strings.Join(trimmedSources, ",")
+	return strings.Join(trimmedSources, ","), nil
 }
 
-func removeSubnetMask(addr string) string {
-	// addr is in format of a.b.c.d/x
+func removeSubnetMask(addr string) (string, error) {
+	// addr is in format of a.b.c.d/x.
 	parts := strings.Split(addr, "/")
 	if len(parts) == 0 {
-		logrus.Panicf("Malformed address %s", addr)
+		return "", fmt.Errorf("malformed address %s", addr)
 	}
-	return parts[0]
+	return parts[0], nil
 }
 
 func (m *dscpManager) CompleteDeferredWork() error {
@@ -189,7 +202,7 @@ func (m *dscpManager) updateIPSet() {
 	// would require reference counting the IPs because it's possible for two hosts
 	// to (at least transiently) share an IP. That would add occupancy and make the
 	// code more complex.
-	m.logCtx.Info("DSCP IP set out-of sync, refreshing it.")
+	m.logCtx.Debug("DSCP IP set out-of sync, refreshing it.")
 	// This is the minimum number of entries. Might need more, if endpoints have multiple addresses.
 	members := make([]string, 0, len(m.hepPolicies)+len(m.wepPolicies))
 	for _, pol := range m.hepPolicies {
