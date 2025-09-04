@@ -3,6 +3,18 @@
 set -e
 set -o pipefail
 
+# Check that all change_in clauses ignore the pipeline file.  We now regenerate the
+# pipeline file often, so any jobs that need this should depend on it explicitly.
+if find semaphore.yml.d/ -name '*.yml' -print0 | xargs -0 grep change_in | grep -v pipeline_file; then
+  echo
+  echo "ERROR: All change_in clauses must include the \"pipeline_file: 'ignore'\""
+  echo "option to prevent unnecessary job runs when the pipeline file is updated."
+  echo "Or, if you really want a job to run when the pipeline file changes, add"
+  echo "\"pipeline_file: 'track'\"."
+  echo
+  exit 1
+fi
+
 for out_file in semaphore.yml semaphore-scheduled-builds.yml; do
   echo "# !! WARNING, DO NOT EDIT !! This file is generated from semaphore.yml.tpl." >$out_file
   echo "# To update, modify the template and then run 'make gen-semaphore-yaml'." >>$out_file

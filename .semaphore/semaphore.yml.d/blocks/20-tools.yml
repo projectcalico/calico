@@ -1,6 +1,6 @@
 - name: "Tools (hack directory)"
   run:
-    when: "${FORCE_RUN} or change_in(['/metadata.mk', '/lib.Makefile', '/hack/', '/api/', '/libcalico-go/'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+    when: "${FORCE_RUN} or change_in(['/metadata.mk', '/lib.Makefile', '/hack/', '/api/', '/libcalico-go/'], {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
   dependencies:
     - Prerequisites
   task:
