@@ -24,6 +24,8 @@ from oslo_config import cfg
 
 from oslo_log import log
 
+from networking_calico.plugins.calico.context import SGRUpdateContext
+
 
 LOG = log.getLogger(__name__)
 
@@ -172,9 +174,3 @@ class NullNotifier(object):
             LOG.info("NullNotifier: %s %r %r", name, args, kwargs)
 
         return fn
-
-
-class SGRUpdateContext(object):
-    def __init__(self, context, sgids):
-        self.plugin_context = context
-        self.sgids = sgids
