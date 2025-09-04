@@ -57,6 +57,7 @@ var _ = Describe("Typha address discovery", func() {
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "calico-typha-service-abcde",
 				Namespace: "kube-system",
+				Labels:    map[string]string{"kubernetes.io/service-name": "calico-typha-service"},
 			},
 			Endpoints: []discoveryv1.Endpoint{
 				{
@@ -80,6 +81,7 @@ var _ = Describe("Typha address discovery", func() {
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "calico-typha-service-fghij",
 				Namespace: "kube-system",
+				Labels:    map[string]string{"kubernetes.io/service-name": "calico-typha-service"},
 			},
 			Endpoints: []discoveryv1.Endpoint{
 				{
