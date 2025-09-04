@@ -45,14 +45,16 @@ SUPPORTED_RULES = {
 class CalicoQoSDriver(base.DriverBase):
 
     @staticmethod
-    def create():
-        return CalicoQoSDriver(
+    def create(mechanism_driver):
+        qd = CalicoQoSDriver(
             name="calico",
             vif_types=[portbindings.VIF_TYPE_TAP],
             vnic_types=[portbindings.VNIC_NORMAL],
             supported_rules=SUPPORTED_RULES,
             requires_rpc_notifications=False,
         )
+        qd.mechanism_driver = mechanism_driver
+        return qd
 
     def update_policy(self, context, policy):
         """Update policy invocation.
@@ -64,18 +66,12 @@ class CalicoQoSDriver(base.DriverBase):
         :param policy: a QoSPolicy object being updated.
         """
         LOG.info("update_policy: context=%r policy=%r", context, policy)
-
-        # Find the set N of Networks with this policy in their qos_policy_id field.
-
-        # Find the set P of Ports with this policy in their qos_policy_id field, or with
-        # null qos_policy_id and with a Network in set N.
-
-        # For each Port in set P, do what the syncer would do for that Port.
+        self.mechanism_driver.handle_qos_policy_update(policy.id)
 
 
-def register():
+def register(mechanism_driver):
     """Register the driver."""
     global DRIVER
     if not DRIVER:
-        DRIVER = CalicoQoSDriver.create()
+        DRIVER = CalicoQoSDriver.create(mechanism_driver)
     LOG.debug("Calico QoS driver registered")
