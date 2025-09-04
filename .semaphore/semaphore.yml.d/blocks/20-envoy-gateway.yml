@@ -1,6 +1,6 @@
 - name: envoy-gateway
   run:
-    when: "${FORCE_RUN} or change_in(['/metadata.mk', '/lib.Makefile', '/third_party/envoy-gateway'], {exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+    when: "${FORCE_RUN} or change_in(['/metadata.mk', '/lib.Makefile', '/third_party/envoy-gateway'], {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
   execution_time_limit:
     minutes: 30
   dependencies:
