@@ -524,12 +524,12 @@ class QoSResponsivenessTest(unittest.TestCase):
         logger.info(f"WEP for port {port_id} is {wep}")
         self.assertIsNotNone(wep)
         self.assertIn("spec", wep)
-        if expected_qos is None:
-            self.assertNotIn("qosControls", wep["spec"])
-        else:
+        if expected_qos:
             self.assertIn("qosControls", wep["spec"])
             qos_controls = wep["spec"]["qosControls"]
             self.assertDictEqual(qos_controls, expected_qos)
+        else:
+            self.assertNotIn("qosControls", wep["spec"])
 
     def setUp(self):
         self.tearDown()
