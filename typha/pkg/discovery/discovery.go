@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
+	discoveryv1 "k8s.io/api/discovery/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 
@@ -214,11 +215,18 @@ func (d *Discoverer) discoverTyphaAddrs() ([]Typha, error) {
 
 	// If we get here, we need to look up the Typha service endpoints using the k8s API.
 	logrus.Info("(Re)discovering Typha endpoints using the Kubernetes API...")
-	epClient := d.k8sClient.CoreV1().Endpoints(d.k8sNamespace)
-	eps, err := epClient.Get(context.Background(), d.k8sServiceName, v1.GetOptions{})
+	epClient := d.k8sClient.DiscoveryV1().EndpointSlices(d.k8sNamespace)
+	epsList, err := epClient.List(context.Background(), v1.ListOptions{})
 	if err != nil {
 		logrus.WithError(err).Error("Unable to get Typha service endpoints from Kubernetes.")
 		return nil, err
+	}
+
+	var endpointSlices []discoveryv1.EndpointSlice
+	for _, ep := range epsList.Items {
+		if svcName, ok := ep.Labels[discoveryv1.LabelServiceName]; ok && svcName == d.k8sServiceName {
+			endpointSlices = append(endpointSlices, ep)
+		}
 	}
 
 	var (
@@ -226,28 +234,36 @@ func (d *Discoverer) discoverTyphaAddrs() ([]Typha, error) {
 		local, remote, addresses []Typha
 	)
 
-	for _, subset := range eps.Subsets {
+	for i, eps := range endpointSlices {
 		var portForOurVersion int32
-		for _, port := range subset.Ports {
-			if port.Name == d.k8sServicePortName {
-				portForOurVersion = port.Port
+		for _, port := range eps.Ports {
+			if *port.Name == d.k8sServicePortName {
+				portForOurVersion = *port.Port
 				break
 			}
 		}
 
 		if portForOurVersion == 0 {
-			continue
+			if i != len(endpointSlices)-1 {
+				continue
+			}
+			logrus.Error("Didn't find any ready Typha instances.")
+			return nil, ErrServiceNotReady
 		}
 
-		// If we get here, this endpoint supports the typha port we're looking for.
-		for _, h := range subset.Addresses {
-			typhaAddr := net.JoinHostPort(h.IP, fmt.Sprint(portForOurVersion))
-			if h.NodeName != nil && *h.NodeName == d.nodeName { // is local
-				local = append(local, Typha{Addr: typhaAddr, IP: h.IP, NodeName: h.NodeName})
-			} else {
-				remote = append(remote, Typha{Addr: typhaAddr, IP: h.IP, NodeName: h.NodeName})
+		for _, endpoint := range eps.Endpoints {
+			for _, addr := range endpoint.Addresses {
+				if endpoint.Conditions.Ready != nil && !*endpoint.Conditions.Ready {
+					continue
+				}
+				typhaAddr := net.JoinHostPort(addr, fmt.Sprint(portForOurVersion))
+				if endpoint.NodeName != nil && *endpoint.NodeName == d.nodeName { // is local
+					local = append(local, Typha{Addr: typhaAddr, IP: addr, NodeName: endpoint.NodeName})
+				} else {
+					remote = append(remote, Typha{Addr: typhaAddr, IP: addr, NodeName: endpoint.NodeName})
+				}
+				candidates++
 			}
-			candidates++
 		}
 	}
 
