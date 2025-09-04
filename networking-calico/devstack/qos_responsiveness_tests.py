@@ -342,6 +342,7 @@ class QoSResponsivenessTest(unittest.TestCase):
                 self._apply_change(current, nxt)
                 self._verify_wep_qos(port_id, nxt)
             current = nxt
+        self.tearDown()
 
     def _create_initial_state(self, state):
         logger.info(f"Create initial state -> {state}")
