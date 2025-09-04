@@ -53,12 +53,13 @@ type ipPoolAccessor struct {
 }
 
 type pool struct {
-	cidr           string
-	blockSize      int
-	enabled        bool
-	nodeSelector   string
-	allowedUses    []v3.IPPoolAllowedUse
-	assignmentMode v3.AssignmentMode
+	cidr              string
+	blockSize         int
+	enabled           bool
+	nodeSelector      string
+	namespaceSelector string
+	allowedUses       []v3.IPPoolAllowedUse
+	assignmentMode    v3.AssignmentMode
 }
 
 func (i *ipPoolAccessor) GetEnabledPools(ctx context.Context, ipVersion int) ([]v3.IPPool, error) {
@@ -85,10 +86,11 @@ func (i *ipPoolAccessor) getPools(sorted []string, ipVersion int, caller string)
 		c := cnet.MustParseCIDR(p)
 		if (ipVersion == 0) || (c.Version() == ipVersion) {
 			pool := v3.IPPool{Spec: v3.IPPoolSpec{
-				CIDR:           p,
-				NodeSelector:   i.pools[p].nodeSelector,
-				AllowedUses:    i.pools[p].allowedUses,
-				AssignmentMode: &automatic,
+				CIDR:              p,
+				NodeSelector:      i.pools[p].nodeSelector,
+				NamespaceSelector: i.pools[p].namespaceSelector,
+				AllowedUses:       i.pools[p].allowedUses,
+				AssignmentMode:    &automatic,
 			}}
 			if len(pool.Spec.AllowedUses) == 0 {
 				pool.Spec.AllowedUses = []v3.IPPoolAllowedUse{v3.IPPoolAllowedUseWorkload, v3.IPPoolAllowedUseTunnel}
@@ -3280,7 +3282,7 @@ var _ = DescribeTable("determinePools tests IPV4",
 		}
 
 		// Call determinePools
-		pools, _, err := ic.(*ipamClient).determinePools(context.Background(), reqPools, 4, node, 32)
+		pools, _, err := ic.(*ipamClient).determinePools(context.Background(), reqPools, 4, node, nil, 32)
 
 		// Assert on any returned error.
 		if expectErr {
@@ -3349,7 +3351,7 @@ var _ = DescribeTable("determinePools tests IPV6",
 		}
 
 		// Call determinePools
-		pools, _, err := ic.(*ipamClient).determinePools(context.Background(), reqPools, 6, node, 128)
+		pools, _, err := ic.(*ipamClient).determinePools(context.Background(), reqPools, 6, node, nil, 128)
 
 		// Assert on any returned error.
 		if expectErr {
@@ -3577,3 +3579,286 @@ var _ = DescribeTable("IPAMAssignmentInfo.String() tests", func(ia *IPAMAssignme
 		},
 		errors.New("Assigned 0 out of 1 requested IPv4 addresses; Need to allocate an IPAM block but could not - limit of 20 blocks reached for this node; No IPs available in pools: [192.168.0.0/24 192.168.1.0/24]; HostReservedAttr: windows-reserved-ipam-handle")),
 )
+
+var _ = Describe("determinePools with namespace selector", func() {
+	var (
+		ic       ipamClient
+		ctx      context.Context
+		accessor *ipPoolAccessor
+	)
+
+	BeforeEach(func() {
+		ctx = context.Background()
+		accessor = &ipPoolAccessor{
+			pools: make(map[string]pool),
+		}
+		ic = ipamClient{
+			pools: accessor,
+		}
+	})
+
+	DescribeTable("namespace selector tests",
+		func(
+			poolCIDR string,
+			poolNodeSelector string,
+			poolNamespaceSelector string,
+			nodeLabels map[string]string,
+			namespaceName string,
+			namespaceLabels map[string]string,
+			expectedMatch bool,
+			description string,
+		) {
+			accessor.pools[poolCIDR] = pool{
+				cidr:              poolCIDR,
+				enabled:           true,
+				nodeSelector:      poolNodeSelector,
+				namespaceSelector: poolNamespaceSelector,
+				blockSize:         26,
+			}
+
+			node := libapiv3.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: nodeLabels,
+				},
+			}
+
+			// Create namespace object for testing
+			var namespaceObj *corev1.Namespace
+			if namespaceName != "" {
+				namespaceObj = &corev1.Namespace{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:   namespaceName,
+						Labels: namespaceLabels,
+					},
+				}
+			}
+
+			matchingPools, enabledPools, err := ic.determinePools(
+				ctx,
+				[]cnet.IPNet{},
+				4,
+				node,
+				namespaceObj,
+				26,
+			)
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(enabledPools).To(HaveLen(1))
+
+			if expectedMatch {
+				Expect(matchingPools).To(HaveLen(1))
+				Expect(matchingPools[0].Spec.CIDR).To(Equal(poolCIDR))
+			} else {
+				Expect(matchingPools).To(HaveLen(0))
+			}
+		},
+		Entry("no namespace selector matches any namespace",
+			"10.0.0.0/24",
+			"",
+			"",
+			map[string]string{},
+			"default",
+			map[string]string{},
+			true,
+			"no namespace selector",
+		),
+		Entry("namespace selector matches labels",
+			"10.0.0.0/24",
+			"",
+			"environment == 'production'",
+			map[string]string{},
+			"default",
+			map[string]string{"environment": "production"},
+			true,
+			"namespace selector matches",
+		),
+		Entry("namespace selector does not match labels",
+			"10.0.0.0/24",
+			"",
+			"environment == 'production'",
+			map[string]string{},
+			"default",
+			map[string]string{"environment": "development"},
+			false,
+			"namespace selector does not match",
+		),
+		Entry("both node and namespace selectors match",
+			"10.0.0.0/24",
+			"zone == 'us-west'",
+			"environment == 'production'",
+			map[string]string{"zone": "us-west"},
+			"default",
+			map[string]string{"environment": "production"},
+			true,
+			"both selectors match",
+		),
+		Entry("node matches but namespace does not",
+			"10.0.0.0/24",
+			"zone == 'us-west'",
+			"environment == 'production'",
+			map[string]string{"zone": "us-west"},
+			"default",
+			map[string]string{"environment": "development"},
+			false,
+			"node matches but namespace does not",
+		),
+		Entry("namespace matches but node does not",
+			"10.0.0.0/24",
+			"zone == 'us-west'",
+			"environment == 'production'",
+			map[string]string{"zone": "us-east"},
+			"default",
+			map[string]string{"environment": "production"},
+			false,
+			"namespace matches but node does not",
+		),
+		Entry("complex namespace selector matches",
+			"10.0.0.0/24",
+			"",
+			"environment == 'production' && tier == 'frontend'",
+			map[string]string{},
+			"default",
+			map[string]string{"environment": "production", "tier": "frontend"},
+			true,
+			"complex namespace selector matches",
+		),
+		Entry("complex namespace selector partial match",
+			"10.0.0.0/24",
+			"",
+			"environment == 'production' && tier == 'frontend'",
+			map[string]string{},
+			"default",
+			map[string]string{"environment": "production", "tier": "backend"},
+			false,
+			"complex namespace selector partial match",
+		),
+	)
+
+	It("should handle multiple pools with different namespace selectors", func() {
+		accessor.pools["10.0.0.0/24"] = pool{
+			cidr:              "10.0.0.0/24",
+			enabled:           true,
+			nodeSelector:      "",
+			namespaceSelector: "environment == 'production'",
+			blockSize:         26,
+		}
+		accessor.pools["10.1.0.0/24"] = pool{
+			cidr:              "10.1.0.0/24",
+			enabled:           true,
+			nodeSelector:      "",
+			namespaceSelector: "environment == 'development'",
+			blockSize:         26,
+		}
+		accessor.pools["10.2.0.0/24"] = pool{
+			cidr:              "10.2.0.0/24",
+			enabled:           true,
+			nodeSelector:      "",
+			namespaceSelector: "",
+			blockSize:         26,
+		}
+
+		node := libapiv3.Node{
+			ObjectMeta: metav1.ObjectMeta{
+				Labels: map[string]string{},
+			},
+		}
+
+		namespaceObj := &corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:   "production-ns",
+				Labels: map[string]string{"environment": "production"},
+			},
+		}
+
+		matchingPools, enabledPools, err := ic.determinePools(
+			ctx,
+			[]cnet.IPNet{},
+			4,
+			node,
+			namespaceObj,
+			26,
+		)
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(enabledPools).To(HaveLen(3))
+		Expect(matchingPools).To(HaveLen(2))
+
+		cidrs := []string{}
+		for _, pool := range matchingPools {
+			cidrs = append(cidrs, pool.Spec.CIDR)
+		}
+		Expect(cidrs).To(ContainElements("10.0.0.0/24", "10.2.0.0/24"))
+	})
+
+	It("should handle invalid namespace selector syntax", func() {
+		accessor.pools["10.0.0.0/24"] = pool{
+			cidr:              "10.0.0.0/24",
+			enabled:           true,
+			nodeSelector:      "",
+			namespaceSelector: "invalid selector syntax [",
+			blockSize:         26,
+		}
+
+		node := libapiv3.Node{
+			ObjectMeta: metav1.ObjectMeta{
+				Labels: map[string]string{},
+			},
+		}
+
+		namespaceObj := &corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:   "default",
+				Labels: map[string]string{},
+			},
+		}
+
+		_, _, err := ic.determinePools(
+			ctx,
+			[]cnet.IPNet{},
+			4,
+			node,
+			namespaceObj,
+			26,
+		)
+
+		Expect(err).To(HaveOccurred())
+	})
+
+	It("should prioritize requested pools over namespace selectors", func() {
+		accessor.pools["10.0.0.0/24"] = pool{
+			cidr:              "10.0.0.0/24",
+			enabled:           true,
+			nodeSelector:      "",
+			namespaceSelector: "environment == 'production'",
+			blockSize:         26,
+		}
+
+		node := libapiv3.Node{
+			ObjectMeta: metav1.ObjectMeta{
+				Labels: map[string]string{},
+			},
+		}
+
+		requestedNet := cnet.MustParseCIDR("10.0.0.0/24")
+		namespaceObj := &corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:   "default",
+				Labels: map[string]string{"environment": "development"},
+			},
+		}
+
+		matchingPools, enabledPools, err := ic.determinePools(
+			ctx,
+			[]cnet.IPNet{requestedNet},
+			4,
+			node,
+			namespaceObj,
+			26,
+		)
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(enabledPools).To(HaveLen(1))
+		Expect(matchingPools).To(HaveLen(1))
+		Expect(matchingPools[0].Spec.CIDR).To(Equal("10.0.0.0/24"))
+	})
+})
