@@ -89,7 +89,7 @@ func (v *ValidationFilter) OnUpdates(updates []api.Update) {
 			switch v := update.Value.(type) {
 			case *model.WorkloadEndpoint:
 				if v.Name == "" {
-					logCxt.WithError(errors.New("Missing name")).Warn("Validation failed; treating as missing")
+					logCxt.WithError(errors.New("missing name")).Warn("Validation failed; treating as missing")
 					update.Value = nil
 				}
 			}

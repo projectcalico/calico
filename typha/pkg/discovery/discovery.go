@@ -31,7 +31,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
 )
 
-var ErrServiceNotReady = errors.New("Kubernetes service missing IP or port")
+var ErrServiceNotReady = errors.New("missing Kubernetes service IP or port")
 
 type Typha struct {
 	Addr     string
