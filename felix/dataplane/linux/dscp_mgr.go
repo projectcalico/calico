@@ -15,11 +15,14 @@
 package intdataplane
 
 import (
+	"fmt"
 	"sort"
 	"strings"
 
 	"github.com/sirupsen/logrus"
 
+	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
+	"github.com/projectcalico/calico/felix/ipsets"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/rules"
 	"github.com/projectcalico/calico/felix/types"
@@ -35,22 +38,34 @@ type dscpManager struct {
 	hepPolicies map[types.HostEndpointID]rules.DSCPRule
 	dirty       bool
 
-	logCxt *logrus.Entry
+	// IPSet.
+	ipsetsDataplane dpsets.IPSetsDataplane
+	ipSetMetadata   ipsets.IPSetMetadata
+
+	logCtx *logrus.Entry
 }
 
 func newDSCPManager(
+	ipsetsDataplane dpsets.IPSetsDataplane,
 	mangleTable Table,
 	ruleRenderer rules.RuleRenderer,
 	ipVersion uint8,
+	dpConfig Config,
 ) *dscpManager {
 	return &dscpManager{
-		mangleTable:  mangleTable,
-		ruleRenderer: ruleRenderer,
-		ipVersion:    ipVersion,
-		wepPolicies:  map[types.WorkloadEndpointID]rules.DSCPRule{},
-		hepPolicies:  map[types.HostEndpointID]rules.DSCPRule{},
-		dirty:        true,
-		logCxt:       logrus.WithField("ipVersion", ipVersion),
+		mangleTable:     mangleTable,
+		ruleRenderer:    ruleRenderer,
+		ipVersion:       ipVersion,
+		wepPolicies:     map[types.WorkloadEndpointID]rules.DSCPRule{},
+		hepPolicies:     map[types.HostEndpointID]rules.DSCPRule{},
+		dirty:           true,
+		ipsetsDataplane: ipsetsDataplane,
+		ipSetMetadata: ipsets.IPSetMetadata{
+			MaxSize: dpConfig.MaxIPSetSize,
+			SetID:   rules.IPSetIDDSCPEndpoints,
+			Type:    ipsets.IPSetTypeHashNet,
+		},
+		logCtx: logrus.WithField("ipVersion", ipVersion),
 	}
 }
 
@@ -83,15 +98,20 @@ func (m *dscpManager) handleHEPUpdates(hepID *proto.HostEndpointID, msg *proto.H
 
 	// This situation must be handled earlier.
 	if dscp > 63 || dscp < 0 {
-		logrus.WithField("id", id).Panicf("Invalid DSCP value %v", dscp)
+		m.logCtx.WithField("id", id).Panicf("Invalid DSCP value %v", dscp)
 	}
 	ips := msg.Endpoint.ExpectedIpv4Addrs
 	if m.ipVersion == 6 {
 		ips = msg.Endpoint.ExpectedIpv6Addrs
 	}
 	if len(ips) != 0 {
+		srcAddrs, err := normaliseSourceAddr(ips)
+		if err != nil {
+			m.logCtx.WithError(err).WithField("hep", msg.Endpoint.Name).Errorf("Invalid address - Skipping")
+			return
+		}
 		m.hepPolicies[id] = rules.DSCPRule{
-			SrcAddrs: normaliseSourceAddr(ips),
+			SrcAddrs: srcAddrs,
 			Value:    uint8(dscp),
 		}
 		m.dirty = true
@@ -114,28 +134,45 @@ func (m *dscpManager) handleWEPUpdates(wepID *proto.WorkloadEndpointID, msg *pro
 
 	// This situation must be handled earlier.
 	if dscp > 63 || dscp < 0 {
-		logrus.WithField("id", id).Panicf("Invalid DSCP value %v", dscp)
+		m.logCtx.WithField("id", id).Panicf("Invalid DSCP value %v", dscp)
 	}
 	ips := msg.Endpoint.Ipv4Nets
 	if m.ipVersion == 6 {
 		ips = msg.Endpoint.Ipv6Nets
 	}
 	if len(ips) != 0 {
+		srcAddrs, err := normaliseSourceAddr(ips)
+		if err != nil {
+			m.logCtx.WithError(err).WithField("wep", msg.Endpoint.Name).Errorf("Invalid address - Skipping.")
+			return
+		}
 		m.wepPolicies[id] = rules.DSCPRule{
-			SrcAddrs: normaliseSourceAddr(ips),
+			SrcAddrs: srcAddrs,
 			Value:    uint8(dscp),
 		}
 		m.dirty = true
 	}
 }
 
-func normaliseSourceAddr(addrs []string) string {
+func normaliseSourceAddr(addrs []string) (string, error) {
 	var trimmedSources []string
 	for _, addr := range addrs {
-		parts := strings.Split(addr, "/")
-		trimmedSources = append(trimmedSources, parts[0])
+		srcAddr, err := removeSubnetMask(addr)
+		if err != nil {
+			return "", err
+		}
+		trimmedSources = append(trimmedSources, srcAddr)
 	}
-	return strings.Join(trimmedSources, ",")
+	return strings.Join(trimmedSources, ","), nil
+}
+
+func removeSubnetMask(addr string) (string, error) {
+	// addr is in format of a.b.c.d/x.
+	parts := strings.Split(addr, "/")
+	if len(parts) == 0 {
+		return "", fmt.Errorf("malformed address %s", addr)
+	}
+	return parts[0], nil
 }
 
 func (m *dscpManager) CompleteDeferredWork() error {
@@ -151,10 +188,32 @@ func (m *dscpManager) CompleteDeferredWork() error {
 			return dscpRules[i].SrcAddrs < dscpRules[j].SrcAddrs
 		})
 
+		m.updateIPSet()
+
 		chain := m.ruleRenderer.EgressDSCPChain(dscpRules)
 		m.mangleTable.UpdateChain(chain)
 		m.dirty = false
 	}
 
 	return nil
+}
+
+func (m *dscpManager) updateIPSet() {
+	// For simplicity (and on the assumption that endpoints with DSCP annotation add/removes are rare) rewrite
+	// the whole IP set whenever we get a change. To replace this with delta handling
+	// would require reference counting the IPs because it's possible for two hosts
+	// to (at least transiently) share an IP. That would add occupancy and make the
+	// code more complex.
+	m.logCtx.Debug("DSCP IP set out-of sync, refreshing it.")
+	// This is the minimum number of entries. Might need more, if endpoints have multiple addresses.
+	members := make([]string, 0, len(m.hepPolicies)+len(m.wepPolicies))
+	for _, pol := range m.hepPolicies {
+		parts := strings.Split(pol.SrcAddrs, ",")
+		members = append(members, parts...)
+	}
+	for _, pol := range m.wepPolicies {
+		parts := strings.Split(pol.SrcAddrs, ",")
+		members = append(members, parts...)
+	}
+	m.ipsetsDataplane.AddOrReplaceIPSet(m.ipSetMetadata, members)
 }
