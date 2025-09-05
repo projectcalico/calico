@@ -548,6 +548,13 @@ syn_force_policy:
 				ctx->state->flags |= CALI_ST_NAT_OUTGOING;
 			}
 		}
+		if ((r->flags & CALI_RT_IN_POOL)) {
+			struct cali_rt *rt = cali_rt_lookup(&ctx->state->post_nat_ip_dst);
+			if (!rt || !(rt->flags & (CALI_RT_WORKLOAD | CALI_RT_HOST))) {
+				CALI_DEBUG("Outside cluster dest " IP_FMT "", debug_ip(ctx->state->post_nat_ip_dst));
+				ctx->state->flags |= CALI_ST_CLUSTER_EGRESS;
+			}
+		}
 		/* If 3rd party CNI is used and dest is outside cluster. See commit fc711b192f for details. */
 		if (!(r->flags & CALI_RT_IN_POOL)) {
 			CALI_DEBUG("Source " IP_FMT " not in IP pool", debug_ip(ctx->state->ip_src));
@@ -560,18 +567,13 @@ syn_force_policy:
 	}
 
 	// If either source or destination is outside cluster, set flag as might need to update DSCP later.
-	if (CALI_F_FROM_WEP || CALI_F_TO_HEP) {
+	if (CALI_F_TO_HEP) {
 		struct cali_rt *rA = cali_rt_lookup(&ctx->state->ip_src);
 		struct cali_rt *rB = cali_rt_lookup(&ctx->state->post_nat_ip_dst);
 
-		if ((rA && (rA->flags & CALI_RT_IN_POOL)) &&
+		if ((rA && (rA->flags & CALI_RT_HOST)) &&
 			(!rB || !(rB->flags & (CALI_RT_WORKLOAD | CALI_RT_HOST)))) {
 			CALI_DEBUG("Outside cluster dest " IP_FMT "", debug_ip(ctx->state->post_nat_ip_dst));
-			ctx->state->flags |= CALI_ST_CLUSTER_EGRESS;
-		}
-		if ((rB && (rB->flags & CALI_RT_IN_POOL)) &&
-			(!rA || !(rA->flags & (CALI_RT_WORKLOAD | CALI_RT_HOST)))) {
-			CALI_DEBUG("Outside cluster source " IP_FMT "", debug_ip(ctx->state->ip_src));
 			ctx->state->flags |= CALI_ST_CLUSTER_EGRESS;
 		}
 	}

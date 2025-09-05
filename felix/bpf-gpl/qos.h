@@ -112,12 +112,10 @@ static CALI_BPF_INLINE int qos_enforce_packet_rate(struct cali_tc_ctx *ctx)
 static CALI_BPF_INLINE int set_dscp(struct cali_tc_ctx *ctx)
 {
 #if (CALI_F_FROM_WEP || CALI_F_TO_HEP)
-	CALI_DEBUG("setting dscp");
 	if (EGRESS_DSCP < 0) {
 		return TC_ACT_UNSPEC;
 	}
 
-	CALI_DEBUG("setting dscp 1");
 	if (!(ctx->state->flags & CALI_ST_CLUSTER_EGRESS)) {
 		return TC_ACT_UNSPEC;
 	}

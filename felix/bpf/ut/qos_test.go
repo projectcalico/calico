@@ -109,7 +109,7 @@ type dscpTestCase struct {
 	expectedOutDSCP int8
 }
 
-func TestDSCPV4(t *testing.T) {
+func TestDSCPv4_WEP(t *testing.T) {
 	RegisterTestingT(t)
 
 	bpfIfaceName = "HWvwl"
@@ -139,17 +139,59 @@ func TestDSCPV4(t *testing.T) {
 	for _, tc := range []dscpTestCase{
 		// Dest outside cluster.
 		{"calico_from_workload_ep", 0, srcIP, externalAddr, resTC_ACT_REDIRECT, 16, 16},
-		{"calico_to_host_ep", tcdefs.MarkSeen, srcIP, externalAddr, resTC_ACT_UNSPEC, 8, 8},
 		{"calico_to_workload_ep", tcdefs.MarkSeen, srcIP, externalAddr, resTC_ACT_UNSPEC, 20, -1},
-		{"calico_from_host_ep", 0, srcIP, externalAddr, resTC_ACT_UNSPEC, 40, -1},
 
 		// Src outside cluster.
-		{"calico_to_host_ep", tcdefs.MarkSeen, externalAddr, dstIP, resTC_ACT_UNSPEC, 8, 8},
 		{"calico_to_workload_ep", tcdefs.MarkSeen, externalAddr, dstIP, resTC_ACT_UNSPEC, 20, -1},
-		{"calico_from_host_ep", 0, srcIP, externalAddr, resTC_ACT_UNSPEC, 40, -1},
 
 		// Src and dest both inside cluster.
 		{"calico_from_workload_ep", 0, srcIP, dstIP, resTC_ACT_REDIRECT, 16, -1},
+	} {
+		skbMark = tc.expectedSKBMark
+		runBpfTest(t, tc.progName, rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+			testDSCP(bpfrun, tc, false)
+		}, withEgressDSCP(tc.inDSCP))
+		resetCTMap(ctMap) // ensure it is clean
+	}
+}
+
+func TestDSCPv4_HEP(t *testing.T) {
+	RegisterTestingT(t)
+
+	bpfIfaceName = "HWvwl"
+	defer func() { bpfIfaceName = "" }()
+
+	ctMap := conntrack.Map()
+	err := ctMap.EnsureExists()
+	Expect(err).NotTo(HaveOccurred())
+	resetCTMap(ctMap) // ensure it is clean
+	defer resetCTMap(ctMap)
+
+	ifIndex := 1
+
+	externalAddr := net.IPv4(3, 3, 3, 3) // a new address that based on route map is outside cluster.
+
+	// Insert a reverse route for the source workload.
+	rtKey := routes.NewKey(srcV4CIDR).AsBytes()
+	rtVal := routes.NewValueWithIfIndex(routes.FlagsLocalHost, ifIndex).AsBytes()
+	err = rtMap.Update(rtKey, rtVal)
+	Expect(err).NotTo(HaveOccurred())
+	rtKey = routes.NewKey(dstV4CIDR).AsBytes()
+	rtVal = routes.NewValueWithIfIndex(routes.FlagsRemoteWorkload|routes.FlagInIPAMPool, ifIndex).AsBytes()
+	err = rtMap.Update(rtKey, rtVal)
+	Expect(err).NotTo(HaveOccurred())
+	defer resetRTMap(rtMap)
+
+	for _, tc := range []dscpTestCase{
+		// Dest outside cluster.
+		{"calico_to_host_ep", tcdefs.MarkSeen, srcIP, externalAddr, resTC_ACT_UNSPEC, 8, 8},
+		{"calico_from_host_ep", 0, dstIP, externalAddr, resTC_ACT_UNSPEC, 40, -1},
+
+		// Src outside cluster.
+		{"calico_to_host_ep", tcdefs.MarkSeen, externalAddr, dstIP, resTC_ACT_UNSPEC, 8, -1},
+		{"calico_from_host_ep", 0, externalAddr, dstIP, resTC_ACT_UNSPEC, 40, -1},
+
+		// Src and dest both inside cluster.
 		{"calico_to_host_ep", tcdefs.MarkSeen, srcIP, dstIP, resTC_ACT_UNSPEC, 8, -1},
 	} {
 		skbMark = tc.expectedSKBMark
@@ -160,7 +202,7 @@ func TestDSCPV4(t *testing.T) {
 	}
 }
 
-func TestDSCPV6(t *testing.T) {
+func TestDSCPv6_WEP(t *testing.T) {
 	RegisterTestingT(t)
 	hostIP = node1ipV6
 
@@ -192,17 +234,61 @@ func TestDSCPV6(t *testing.T) {
 	for _, tc := range []dscpTestCase{
 		// Dest outside cluster.
 		{"calico_from_workload_ep", 0, srcIPv6, externalAddr, resTC_ACT_UNSPEC, 16, 16},
-		{"calico_to_host_ep", tcdefs.MarkSeen, srcIPv6, externalAddr, resTC_ACT_UNSPEC, 8, 8},
 		{"calico_to_workload_ep", tcdefs.MarkSeen, srcIPv6, externalAddr, resTC_ACT_UNSPEC, 20, -1},
-		{"calico_from_host_ep", 0, srcIPv6, externalAddr, resTC_ACT_UNSPEC, 40, -1},
 
 		// Src outside cluster.
-		{"calico_to_host_ep", tcdefs.MarkSeen, externalAddr, dstIPv6, resTC_ACT_UNSPEC, 8, 8},
 		{"calico_to_workload_ep", tcdefs.MarkSeen, externalAddr, dstIPv6, resTC_ACT_UNSPEC, 20, -1},
-		{"calico_from_host_ep", 0, externalAddr, dstIPv6, resTC_ACT_UNSPEC, 40, -1},
 
 		// Src and dest both inside cluster.
 		{"calico_from_workload_ep", 0, srcIPv6, dstIPv6, resTC_ACT_UNSPEC, 16, -1},
+	} {
+		skbMark = tc.expectedSKBMark
+		runBpfTest(t, tc.progName, rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+			testDSCP(bpfrun, tc, true)
+		}, withEgressDSCP(tc.inDSCP), withIPv6())
+		resetCTMap(ctMap) // ensure it is clean
+	}
+}
+
+func TestDSCPv6_HEP(t *testing.T) {
+	RegisterTestingT(t)
+	hostIP = node1ipV6
+
+	bpfIfaceName = "HWvwl"
+	defer func() { bpfIfaceName = "" }()
+
+	ctMap := conntrack.Map()
+	err := ctMap.EnsureExists()
+	Expect(err).NotTo(HaveOccurred())
+	resetCTMap(ctMap) // ensure it is clean
+	defer resetCTMap(ctMap)
+
+	ifIndex := 1
+
+	// Insert a reverse route for the source workload.
+	rtKey := routes.NewKeyV6(srcV6CIDR).AsBytes()
+	rtVal := routes.NewValueV6WithIfIndex(routes.FlagsLocalHost, ifIndex).AsBytes()
+	err = rtMapV6.Update(rtKey, rtVal)
+	Expect(err).NotTo(HaveOccurred())
+
+	rtKey = routes.NewKeyV6(dstV6CIDR).AsBytes()
+	rtVal = routes.NewValueV6WithIfIndex(routes.FlagsRemoteWorkload|routes.FlagInIPAMPool, ifIndex).AsBytes()
+	err = rtMapV6.Update(rtKey, rtVal)
+	Expect(err).NotTo(HaveOccurred())
+	defer resetRTMap(rtMapV6)
+
+	externalAddr := net.ParseIP("dead:cafe::1") // a new address that based on route map is outside cluster.
+
+	for _, tc := range []dscpTestCase{
+		// Dest outside cluster.
+		{"calico_to_host_ep", tcdefs.MarkSeen, srcIPv6, externalAddr, resTC_ACT_UNSPEC, 8, 8},
+		{"calico_from_host_ep", 0, dstIPv6, externalAddr, resTC_ACT_UNSPEC, 40, -1},
+
+		// Src outside cluster.
+		{"calico_to_host_ep", tcdefs.MarkSeen, externalAddr, dstIPv6, resTC_ACT_UNSPEC, 8, -1},
+		{"calico_from_host_ep", 0, externalAddr, dstIPv6, resTC_ACT_UNSPEC, 40, -1},
+
+		// Src and dest both inside cluster.
 		{"calico_to_host_ep", tcdefs.MarkSeen, srcIPv6, dstIPv6, resTC_ACT_UNSPEC, 8, -1},
 	} {
 		skbMark = tc.expectedSKBMark
