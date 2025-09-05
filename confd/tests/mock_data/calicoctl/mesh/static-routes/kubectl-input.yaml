@@ -22,12 +22,31 @@ status:
       - ip: 80.15.0.1/32
       # Not within the range in BGP config.
       - ip: 90.15.0.1/32
+---
+kind: EndpointSlice
+apiVersion: discovery.k8s.io/v1
+metadata:
+  name: service-1-abc
+  labels:
+    kubernetes.io/service-name: service-1
+addressType: IPv4
+endpoints:
+  - addresses:
+      - 192.168.2.10
+    nodeName: kube-node-1
+    targetRef:
+      kind: Pod
+      name: nginx-1
+      namespace: default
+ports:
+  - port: 80
+    protocol: TCP
 
 ---
 kind: EndpointSlice
 apiVersion: discovery.k8s.io/v1
 metadata:
-  name: service-1
+  name: service-1-def
   labels:
     kubernetes.io/service-name: service-1
 addressType: IPv4
