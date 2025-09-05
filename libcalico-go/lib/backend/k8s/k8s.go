@@ -462,17 +462,11 @@ func (c *KubeClient) EnsureInitialized() error {
 // Remove Calico-creatable data from the datastore.  This is purely used for the
 // test framework.
 func (c *KubeClient) Clean() error {
-	log.Warning("Cleaning KDD of all Calico-creatable data")
+	timeout := 2 * time.Minute
+	log.Warningf("Cleaning KDD of all Calico-creatable data: timeout %v", timeout)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-
-	// Need two layers of errgroup because we schedule deletion work from the
-	// list go-routines.  If we scheduled it on the same errgroup then it could
-	// deadlock.
-	var listEG, delEG errgroup.Group
-	listEG.SetLimit(runtime.NumCPU() / 2)
-	delEG.SetLimit(runtime.NumCPU() / 2)
 
 	// First delete "normal" resources by kind.
 	kinds := []string{
@@ -509,6 +503,13 @@ func (c *KubeClient) Clean() error {
 			kindsWithProblems.Add(k)
 		}
 
+		// Need two layers of errgroup because we schedule deletion work from the
+		// list go-routines.  If we scheduled it on the same errgroup then it could
+		// deadlock.
+		var listEG, delEG errgroup.Group
+		listEG.SetLimit(runtime.NumCPU() / 2)
+		delEG.SetLimit(runtime.NumCPU() / 2)
+
 		for _, k := range kinds {
 			listEG.Go(func() error {
 				lo := model.ResourceListOptions{Kind: k}
@@ -520,7 +521,7 @@ func (c *KubeClient) Clean() error {
 					for _, r := range rs.KVPairs {
 						delEG.Go(func() error {
 							if _, err := c.DeleteKVP(ctx, r); err != nil {
-								log.WithField("Key", r.Key).Warning("Failed to delete entry from KDD")
+								log.WithError(err).WithField("Key", r.Key).Warning("Failed to delete entry from KDD")
 								recordKindProblem(k)
 							}
 							return nil // Problems are reported through kindsWithProblems set.
@@ -530,12 +531,19 @@ func (c *KubeClient) Clean() error {
 				return nil
 			})
 		}
-		_ = listEG.Wait()
-		_ = delEG.Wait()
+		err := listEG.Wait()
+		if err != nil {
+			log.WithError(err).Error("Unexpected error during listing")
+		}
+		err = delEG.Wait()
+		if err != nil {
+			log.WithError(err).Error("Unexpected error from deletion errgroup")
+		}
 
 		if len(kindsWithProblems) == 0 {
 			break
 		}
+		// Retry only the kinds that had problems on the next attempt.
 		kinds = kindsWithProblems.Slice()
 		kindsWithProblems.Clear()
 	}
@@ -558,6 +566,13 @@ func (c *KubeClient) Clean() error {
 			listIfaceProblems.Add(l)
 		}
 
+		// Need two layers of errgroup because we schedule deletion work from the
+		// list go-routines.  If we scheduled it on the same errgroup then it could
+		// deadlock.
+		var listEG, delEG errgroup.Group
+		listEG.SetLimit(runtime.NumCPU() / 2)
+		delEG.SetLimit(runtime.NumCPU() / 2)
+
 		for _, li := range listIfaces {
 			listEG.Go(func() error {
 				if rs, err := c.List(ctx, li, ""); err != nil {
@@ -577,12 +592,19 @@ func (c *KubeClient) Clean() error {
 				return nil
 			})
 		}
-		_ = listEG.Wait()
-		_ = delEG.Wait()
+		err := listEG.Wait()
+		if err != nil {
+			log.WithError(err).Error("Unexpected error during listing")
+		}
+		err = delEG.Wait()
+		if err != nil {
+			log.WithError(err).Error("Unexpected error from deletion errgroup")
+		}
 
 		if listIfaceProblems.Len() == 0 {
 			break
 		}
+		// Retry only the list ifaces that had problems on the next attempt.
 		listIfaces = listIfaceProblems.Slice()
 		listIfaceProblems.Clear()
 	}

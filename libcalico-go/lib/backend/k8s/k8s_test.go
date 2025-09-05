@@ -183,8 +183,9 @@ func (c *cb) ProcessUpdates() {
 		case api.SyncStatus:
 			if c.status == api.InSync {
 				Expect(u).To(Equal(api.InSync), "Should not transition out of InSync state")
+			} else {
+				c.status = u
 			}
-			c.status = u
 		case api.Update:
 			if u.UpdateType == api.UpdateTypeKVUnknown {
 				// We should never get this!
@@ -485,7 +486,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 		// Start processing updates.
 		go cb.ProcessUpdates()
 
-		Eventually(cb.GetStatus).Should(Equal(api.InSync))
+		Eventually(cb.GetStatus, "5s", "50ms").Should(Equal(api.InSync))
 	})
 
 	AfterEach(func() {
