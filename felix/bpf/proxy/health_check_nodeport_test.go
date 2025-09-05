@@ -27,13 +27,14 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/kubernetes/fake"
+	"k8s.io/utils/ptr"
 
 	"github.com/projectcalico/calico/felix/bpf/proxy"
 )
 
 var _ = Describe("BPF Proxy healthCheckNodeport", func() {
 	var p proxy.Proxy
-	k8s := fake.NewSimpleClientset()
+	k8s := fake.NewClientset()
 
 	testNodeName := "testnode"
 	testNodeNameOther := "anothertestnode"
@@ -82,24 +83,28 @@ var _ = Describe("BPF Proxy healthCheckNodeport", func() {
 		})
 
 		By("adding its endpointSlice", func() {
-			err := k8s.Tracker().Add(epsToSlice(&v1.Endpoints{
-				TypeMeta:   typeMetaV1("Endpoints"),
-				ObjectMeta: objectMetaV1("LB"),
-				Subsets: []v1.EndpointSubset{
+			ep := &discovery.EndpointSlice{
+				TypeMeta:    typeMetaV1("EndpointSlice"),
+				ObjectMeta:  objectMetaV1("LB"),
+				AddressType: discovery.AddressTypeIPv4,
+				Endpoints: []discovery.Endpoint{
 					{
-						Addresses: []v1.EndpointAddress{
-							{
-								IP: "10.1.2.1",
-							},
-						},
-						Ports: []v1.EndpointPort{
-							{
-								Port: 1234,
-							},
+						Addresses: []string{"10.1.2.1"},
+						Conditions: discovery.EndpointConditions{
+							Ready: ptr.To(true),
 						},
 					},
 				},
-			}))
+				Ports: []discovery.EndpointPort{
+					{
+						Port:     ptr.To(int32(1234)),
+						Name:     ptr.To("LBPort"),
+						Protocol: ptr.To(v1.ProtocolTCP),
+					},
+				},
+			}
+
+			err := k8s.Tracker().Add(ep)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -132,31 +137,36 @@ var _ = Describe("BPF Proxy healthCheckNodeport", func() {
 		})
 
 		By("adding a local and a non-local endpoint", func() {
-			err := k8s.Tracker().Update(discovery.SchemeGroupVersion.WithResource("endpointslices"),
-				epsToSlice(&v1.Endpoints{
-					TypeMeta:   typeMetaV1("Endpoints"),
-					ObjectMeta: objectMetaV1("LB"),
-					Subsets: []v1.EndpointSubset{
-						{
-							Addresses: []v1.EndpointAddress{
-								{
-									IP:       "10.1.2.1",
-									NodeName: &testNodeName,
-								},
-								{
-									IP:       "10.1.2.2",
-									NodeName: &testNodeNameOther,
-								},
-							},
-							Ports: []v1.EndpointPort{
-								{
-									Port: 1234,
-								},
-							},
+			ep := &discovery.EndpointSlice{
+				TypeMeta:    typeMetaV1("EndpointSlice"),
+				ObjectMeta:  objectMetaV1("LB"),
+				AddressType: discovery.AddressTypeIPv4,
+				Endpoints: []discovery.Endpoint{
+					{
+						Addresses: []string{"10.1.2.1"},
+						NodeName:  &testNodeName,
+						Conditions: discovery.EndpointConditions{
+							Ready: ptr.To(true),
 						},
 					},
-				}),
-				metav1.NamespaceDefault)
+					{
+						Addresses: []string{"10.1.2.2"},
+						NodeName:  &testNodeNameOther,
+						Conditions: discovery.EndpointConditions{
+							Ready: ptr.To(true),
+						},
+					},
+				},
+				Ports: []discovery.EndpointPort{
+					{
+						Port:     ptr.To(int32(1234)),
+						Name:     ptr.To("LBPort"),
+						Protocol: ptr.To(v1.ProtocolTCP),
+					},
+				},
+			}
+
+			err := k8s.Tracker().Update(discovery.SchemeGroupVersion.WithResource("endpointslices"), ep, metav1.NamespaceDefault)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -186,31 +196,36 @@ var _ = Describe("BPF Proxy healthCheckNodeport", func() {
 			}, "5s", "200ms").Should(Succeed())
 
 			By("making non-local a local endpoint", func() {
-				err := k8s.Tracker().Update(discovery.SchemeGroupVersion.WithResource("endpointslices"),
-					epsToSlice(&v1.Endpoints{
-						TypeMeta:   typeMetaV1("Endpoints"),
-						ObjectMeta: objectMetaV1("LB"),
-						Subsets: []v1.EndpointSubset{
-							{
-								Addresses: []v1.EndpointAddress{
-									{
-										IP:       "10.1.2.1",
-										NodeName: &testNodeName,
-									},
-									{
-										IP:       "10.1.2.2",
-										NodeName: &testNodeName,
-									},
-								},
-								Ports: []v1.EndpointPort{
-									{
-										Port: 1234,
-									},
-								},
+				ep := &discovery.EndpointSlice{
+					TypeMeta:    typeMetaV1("EndpointSlice"),
+					ObjectMeta:  objectMetaV1("LB"),
+					AddressType: discovery.AddressTypeIPv4,
+					Endpoints: []discovery.Endpoint{
+						{
+							Addresses: []string{"10.1.2.1"},
+							NodeName:  &testNodeName,
+							Conditions: discovery.EndpointConditions{
+								Ready: ptr.To(true),
 							},
 						},
-					}),
-					metav1.NamespaceDefault)
+						{
+							Addresses: []string{"10.1.2.2"},
+							NodeName:  &testNodeName,
+							Conditions: discovery.EndpointConditions{
+								Ready: ptr.To(true),
+							},
+						},
+					},
+					Ports: []discovery.EndpointPort{
+						{
+							Port:     ptr.To(int32(1234)),
+							Name:     ptr.To("LBPort"),
+							Protocol: ptr.To(v1.ProtocolTCP),
+						},
+					},
+				}
+
+				err := k8s.Tracker().Update(discovery.SchemeGroupVersion.WithResource("endpointslices"), ep, metav1.NamespaceDefault)
 				Expect(err).NotTo(HaveOccurred())
 			})
 

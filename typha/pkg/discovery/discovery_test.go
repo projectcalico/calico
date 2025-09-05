@@ -23,56 +23,90 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	v1 "k8s.io/api/core/v1"
+	discoveryv1 "k8s.io/api/discovery/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
+	"k8s.io/utils/ptr"
 )
 
 var _ = Describe("Typha address discovery", func() {
 	var (
-		endpoints                     *v1.Endpoints
+		endpointsTyphaService         *discoveryv1.EndpointSlice
+		endpointsTyphaServiceV2       *discoveryv1.EndpointSlice
 		k8sClient                     *fake.Clientset
 		localNodeName, remoteNodeName string
 		noTyphas                      []Typha
 	)
 
 	refreshClient := func() {
-		k8sClient = fake.NewSimpleClientset(endpoints)
+		k8sClient = fake.NewClientset(endpointsTyphaService, endpointsTyphaServiceV2)
 	}
 
 	BeforeEach(func() {
 		localNodeName = "felix-local"
 		remoteNodeName = "felix-remote"
+		udp := v1.ProtocolUDP
+		tcp := v1.ProtocolTCP
 
-		endpoints = &v1.Endpoints{
+		endpointsTyphaService = &discoveryv1.EndpointSlice{
 			TypeMeta: metav1.TypeMeta{
 				APIVersion: "v1",
 				Kind:       "Endpoints",
 			},
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      "calico-typha-service",
+				Name:      "calico-typha-service-abcde",
 				Namespace: "kube-system",
+				Labels:    map[string]string{"kubernetes.io/service-name": "calico-typha-service"},
 			},
-			Subsets: []v1.EndpointSubset{
+			Endpoints: []discoveryv1.Endpoint{
 				{
-					Addresses: []v1.EndpointAddress{
-						{IP: "10.0.0.4", NodeName: &localNodeName},
-					},
-					NotReadyAddresses: []v1.EndpointAddress{},
-					Ports: []v1.EndpointPort{
-						{Name: "calico-typha-v2", Port: 8157, Protocol: v1.ProtocolUDP},
-					},
+					Addresses: []string{"10.0.0.4"},
+					NodeName:  &localNodeName,
+				},
+			},
+			Ports: []discoveryv1.EndpointPort{
+				{
+					Name:     ptr.To("calico-typha-v2"),
+					Port:     ptr.To(int32(8157)),
+					Protocol: &udp,
+				},
+			},
+		}
+
+		endpointsTyphaServiceV2 = &discoveryv1.EndpointSlice{
+			TypeMeta: metav1.TypeMeta{
+				APIVersion: "v1",
+				Kind:       "Endpoints",
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "calico-typha-service-fghij",
+				Namespace: "kube-system",
+				Labels:    map[string]string{"kubernetes.io/service-name": "calico-typha-service"},
+			},
+			Endpoints: []discoveryv1.Endpoint{
+				{
+					Addresses: []string{"10.0.0.2"},
+					NodeName:  &remoteNodeName,
 				},
 				{
-					Addresses: []v1.EndpointAddress{
-						{IP: "10.0.0.2", NodeName: &remoteNodeName},
+					Addresses: []string{"10.0.0.5"},
+					NodeName:  &remoteNodeName,
+					Conditions: discoveryv1.EndpointConditions{
+						Ready:   ptr.To(false),
+						Serving: ptr.To(false),
 					},
-					NotReadyAddresses: []v1.EndpointAddress{
-						{IP: "10.0.0.5", NodeName: &remoteNodeName},
-					},
-					Ports: []v1.EndpointPort{
-						{Name: "calico-typha-v2", Port: 8157, Protocol: v1.ProtocolUDP},
-						{Name: "calico-typha", Port: 8156, Protocol: v1.ProtocolTCP},
-					},
+				},
+			},
+			Ports: []discoveryv1.EndpointPort{
+				{
+					Name:     ptr.To("calico-typha-v2"),
+					Port:     ptr.To(int32(8157)),
+					Protocol: &udp,
+				},
+				{
+					Name:     ptr.To("calico-typha"),
+					Port:     ptr.To(int32(8156)),
+					Protocol: &tcp,
 				},
 			},
 		}
@@ -153,7 +187,7 @@ var _ = Describe("Typha address discovery", func() {
 	})
 
 	It("should bracket an IPv6 Typha address", func() {
-		endpoints.Subsets[1].Addresses[0].IP = "fd5f:65af::2"
+		endpointsTyphaServiceV2.Endpoints[0].Addresses[0] = "fd5f:65af::2"
 		refreshClient()
 		typhaAddr, err := DiscoverTyphaAddrs(
 			WithKubeService("kube-system", "calico-typha-service"),
@@ -166,7 +200,10 @@ var _ = Describe("Typha address discovery", func() {
 	})
 
 	It("should error if no Typhas", func() {
-		endpoints.Subsets = nil
+		endpointsTyphaService.Endpoints = nil
+		endpointsTyphaService.Ports = nil
+		endpointsTyphaServiceV2.Endpoints = nil
+		endpointsTyphaServiceV2.Ports = nil
 		refreshClient()
 		_, err := DiscoverTyphaAddrs(
 			WithKubeService("kube-system", "calico-typha-service"),
@@ -176,36 +213,39 @@ var _ = Describe("Typha address discovery", func() {
 		Expect(err).To(Equal(ErrServiceNotReady))
 	})
 
-	It("should shuffle local and remote endpoints and have local first", func() {
-		endpoints.Subsets = append(endpoints.Subsets, []v1.EndpointSubset{
-			// Unrealistic, but have multiple endpoints on the same node, just with different IPs. This is to
-			// test the local and remote endpoint shuffling.
+	It("should shuffle local and remote endpointsTyphaService and have local first", func() {
+		udp := v1.ProtocolUDP
+		tcp := v1.ProtocolTCP
+
+		endpointsTyphaService.Endpoints = append(endpointsTyphaService.Endpoints, []discoveryv1.Endpoint{
 			{
-				Addresses: []v1.EndpointAddress{
-					{IP: "10.0.0.5", NodeName: &localNodeName},
-				},
-				NotReadyAddresses: []v1.EndpointAddress{},
-				Ports: []v1.EndpointPort{
-					{Name: "calico-typha-v2", Port: 8157, Protocol: v1.ProtocolUDP},
-				},
+				Addresses: []string{"10.0.0.5"},
+				NodeName:  &localNodeName,
 			},
 			{
-				Addresses: []v1.EndpointAddress{
-					{IP: "10.0.0.6", NodeName: &localNodeName},
-				},
-				NotReadyAddresses: []v1.EndpointAddress{},
-				Ports: []v1.EndpointPort{
-					{Name: "calico-typha-v2", Port: 8157, Protocol: v1.ProtocolUDP},
-				},
+				Addresses: []string{"10.0.0.6"},
+				NodeName:  &localNodeName,
 			},
 			{
-				Addresses: []v1.EndpointAddress{
-					{IP: "10.0.0.3"},
-					{IP: "10.0.0.7", NodeName: &remoteNodeName},
-				},
-				Ports: []v1.EndpointPort{
-					{Name: "calico-typha-v2", Port: 8157, Protocol: v1.ProtocolUDP},
-				},
+				Addresses: []string{"10.0.0.3"},
+			},
+			{
+				Addresses: []string{"10.0.0.7"},
+				NodeName:  &remoteNodeName,
+			},
+		}...,
+		)
+
+		endpointsTyphaService.Ports = append(endpointsTyphaService.Ports, []discoveryv1.EndpointPort{
+			{
+				Name:     ptr.To("calico-typha-v2"),
+				Port:     ptr.To(int32(8157)),
+				Protocol: &udp,
+			},
+			{
+				Name:     ptr.To("calico-typha"),
+				Port:     ptr.To(int32(8156)),
+				Protocol: &tcp,
 			},
 		}...)
 		refreshClient()
