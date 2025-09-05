@@ -152,29 +152,37 @@ class QoSResponsivenessTest(unittest.TestCase):
                     "ingressBurst": 4294967296,
                 },
             },
-            {
-                "rule": {
-                    "type": "packet_rate_limit",
-                    "max_kpps": 6,
-                    "direction": "egress",
-                },
-                "controls": {
-                    "egressPacketRate": 6000,
-                    "egressPacketBurst": 5,
-                },
-            },
-            {
-                "rule": {
-                    "type": "packet_rate_limit",
-                    "max_kpps": 7,
-                    "direction": "ingress",
-                },
-                "controls": {
-                    "ingressPacketRate": 7000,
-                    "ingressPacketBurst": 5,
-                },
-            },
         ]
+        # The Yoga version of openstacksdk does not support creating packet
+        # rate limit rules.  Caracal and onwards do support this.
+        if hasattr(cls.conn.network, "create_qos_packet_rate_limit_rule"):
+            logger.info("openstacksdk can create packet rate limit rules")
+            cls.qos_rules.extend(
+                [
+                    {
+                        "rule": {
+                            "type": "packet_rate_limit",
+                            "max_kpps": 6,
+                            "direction": "egress",
+                        },
+                        "controls": {
+                            "egressPacketRate": 6000,
+                            "egressPacketBurst": 5,
+                        },
+                    },
+                    {
+                        "rule": {
+                            "type": "packet_rate_limit",
+                            "max_kpps": 7,
+                            "direction": "ingress",
+                        },
+                        "controls": {
+                            "ingressPacketRate": 7000,
+                            "ingressPacketBurst": 5,
+                        },
+                    },
+                ]
+            )
 
         # Define possible combination sets of those rules.  If there are N
         # possible rules, there are 2**N possible combinations of them, formed
@@ -199,9 +207,9 @@ class QoSResponsivenessTest(unittest.TestCase):
         # network - including the possibilities that qos_policy_id might be not
         # set on either of those.
         policy_id_to_rule_set = {
-            "A": self.qos_rule_sets[2],
-            "B": self.qos_rule_sets[7],
-            "C": self.qos_rule_sets[12],
+            "A": self.qos_rule_sets[1],
+            "B": self.qos_rule_sets[2],
+            "C": self.qos_rule_sets[3],
         }
         states = []
         for net_qos_name in [None, "A", "B"]:
