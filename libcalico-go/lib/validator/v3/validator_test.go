@@ -3705,15 +3705,15 @@ func init() {
 		}, false),
 
 		// Block Affinities validation in BlockAffinitySpec
-		Entry("should accept non-deleted block affinities", libapiv3.BlockAffinitySpec{
-			Deleted: "false",
+		Entry("should accept non-deleted block affinities", api.BlockAffinitySpec{
+			Deleted: false,
 			State:   "confirmed",
 			CIDR:    "10.0.0.0/24",
 			Node:    "node-1",
 			Type:    "host",
 		}, true),
-		Entry("should not accept deleted block affinities", libapiv3.BlockAffinitySpec{
-			Deleted: "true",
+		Entry("should not accept deleted block affinities", api.BlockAffinitySpec{
+			Deleted: true,
 			State:   "confirmed",
 			CIDR:    "10.0.0.0/24",
 			Node:    "node-1",

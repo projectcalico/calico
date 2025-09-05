@@ -34,11 +34,13 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/rest"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 	adminpolicy "sigs.k8s.io/network-policy-api/apis/v1alpha1"
 	adminpolicyclient "sigs.k8s.io/network-policy-api/pkg/client/clientset/versioned/typed/apis/v1alpha1"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
+	v1scheme "github.com/projectcalico/calico/libcalico-go/lib/apis/crd.projectcalico.org/v1/scheme"
 	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
@@ -341,12 +343,15 @@ func (c *cb) GetSyncerValuePresentFunc(key model.Key) func() interface{} {
 }
 
 func CreateClientAndSyncer(cfg apiconfig.KubeConfig) (*KubeClient, *cb, api.Syncer) {
+	log.WithField("cfg", cfg).Info("Creating test backend client")
+
 	// First create the client.
-	caCfg := apiconfig.CalicoAPIConfigSpec{KubeConfig: cfg}
-	c, err := NewKubeClient(&caCfg)
-	if err != nil {
-		panic(err)
+	caCfg := apiconfig.CalicoAPIConfigSpec{
+		DatastoreType: apiconfig.Kubernetes,
+		KubeConfig:    cfg,
 	}
+	c, err := NewKubeClient(&caCfg)
+	Expect(err).NotTo(HaveOccurred(), "Failed to create the backend client.")
 
 	// Ensure the backend is initialized.
 	err = c.EnsureInitialized()
@@ -377,14 +382,17 @@ var _ = testutils.E2eDatastoreDescribe("Test UIDs and owner references", testuti
 
 		// Create a k8s backend KVP client.
 		var err error
-		apicfg := apiconfig.KubeConfig{Kubeconfig: "/kubeconfig.yaml", K8sDisableNodePoll: true}
-		c, _, _ = CreateClientAndSyncer(apicfg)
+		c, _, _ = CreateClientAndSyncer(cfg.Spec.KubeConfig)
 
 		// Create a controller-runtime client.
 		// Create a client for interacting with CRDs directly.
 		config, _, err := CreateKubernetesClientset(&cfg.Spec)
 		Expect(err).NotTo(HaveOccurred())
-		cli, err = ctrlclient.New(config, ctrlclient.Options{})
+
+		// The CRD client needs to be configured with the correct scheme based on the
+		// API version of the underlying CRDs.
+		cli, err = newCRDClient(config)
+		Expect(err).NotTo(HaveOccurred())
 
 		ctx = context.Background()
 	})
@@ -479,6 +487,18 @@ var _ = testutils.E2eDatastoreDescribe("Test UIDs and owner references", testuti
 	})
 })
 
+func newCRDClient(config *rest.Config) (cli ctrlclient.Client, err error) {
+	// The CRD client needs to be configured with the correct scheme based on the
+	// API version of the underlying CRDs.
+	scheme := runtime.NewScheme()
+	if v3CRD {
+		apiv3.AddToScheme(scheme)
+	} else {
+		v1scheme.AddCalicoResourcesToScheme()
+	}
+	return ctrlclient.New(config, ctrlclient.Options{Scheme: scheme})
+}
+
 var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend", testutils.DatastoreK8s, func(cfg apiconfig.CalicoAPIConfig) {
 	var (
 		c      *KubeClient
@@ -494,15 +514,18 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 		v3CRD = UsingV3CRDs(&cfg.Spec)
 
 		// Create a Kubernetes client, callbacks, and a syncer.
-		apicfg := apiconfig.KubeConfig{Kubeconfig: "/kubeconfig.yaml"}
-		c, cb, syncer = CreateClientAndSyncer(apicfg)
+		c, cb, syncer = CreateClientAndSyncer(cfg.Spec.KubeConfig)
 
 		// Create a controller-runtime client.
 		// Create a client for interacting with CRDs directly.
 		config, _, err := CreateKubernetesClientset(&cfg.Spec)
 		Expect(err).NotTo(HaveOccurred())
 		config.ContentType = runtime.ContentTypeJSON
-		cli, err = ctrlclient.New(config, ctrlclient.Options{})
+
+		// The CRD client needs to be configured with the correct scheme based on the
+		// API version of the underlying CRDs.
+		cli, err = newCRDClient(config)
+		Expect(err).NotTo(HaveOccurred())
 
 		// Start the syncer.
 		syncer.Start()
@@ -2225,8 +2248,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 
 		By("Expecting a Syncer snapshot to include the update with type 'KVNew'", func() {
 			// Create a new syncer / callback pair so that it performs a snapshot.
-			cfg := apiconfig.KubeConfig{Kubeconfig: "/kubeconfig.yaml"}
-			_, snapshotCallbacks, snapshotSyncer := CreateClientAndSyncer(cfg)
+			_, snapshotCallbacks, snapshotSyncer := CreateClientAndSyncer(cfg.Spec.KubeConfig)
 			defer snapshotSyncer.Stop()
 			go snapshotCallbacks.ProcessUpdates()
 			snapshotSyncer.Start()
@@ -2924,8 +2946,10 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 		})
 
 		By("Not syncing Nodes when K8sDisableNodePoll is enabled", func() {
-			cfg := apiconfig.KubeConfig{Kubeconfig: "/kubeconfig.yaml", K8sDisableNodePoll: true}
-			_, snapshotCallbacks, snapshotSyncer := CreateClientAndSyncer(cfg)
+			// Make a copy of the given config, modify it to disable Node polling.
+			cfg := cfg
+			cfg.Spec.KubeConfig.K8sDisableNodePoll = true
+			_, snapshotCallbacks, snapshotSyncer := CreateClientAndSyncer(cfg.Spec.KubeConfig)
 			defer snapshotSyncer.Stop()
 			go snapshotCallbacks.ProcessUpdates()
 			snapshotSyncer.Start()
@@ -2939,8 +2963,10 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 		})
 
 		By("Syncing HostConfig for a Node on Syncer start", func() {
-			cfg := apiconfig.KubeConfig{Kubeconfig: "/kubeconfig.yaml", K8sDisableNodePoll: true}
-			_, snapshotCallbacks, snapshotSyncer := CreateClientAndSyncer(cfg)
+			// Make a copy of the given config, modify it to disable Node polling.
+			cfg := cfg
+			cfg.Spec.KubeConfig.K8sDisableNodePoll = true
+			_, snapshotCallbacks, snapshotSyncer := CreateClientAndSyncer(cfg.Spec.KubeConfig)
 			defer snapshotSyncer.Stop()
 			go snapshotCallbacks.ProcessUpdates()
 			snapshotSyncer.Start()
@@ -3996,6 +4022,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Inline kubeconfig support", testuti
 		cfg.Spec = apiconfig.CalicoAPIConfigSpec{
 			KubeConfig: apiconfig.KubeConfig{
 				KubeconfigInline: string(conf),
+				CalicoAPIGroup:   cfg.Spec.KubeConfig.CalicoAPIGroup,
 			},
 		}
 

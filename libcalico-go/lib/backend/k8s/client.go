@@ -492,9 +492,9 @@ func (c *KubeClient) Clean() error {
 		apiv3.KindHostEndpoint,
 		apiv3.KindKubeControllersConfiguration,
 		apiv3.KindIPAMConfiguration,
-		libapiv3.KindIPAMConfig,
-		libapiv3.KindBlockAffinity,
+		apiv3.KindBlockAffinity,
 		apiv3.KindBGPFilter,
+		libapiv3.KindIPAMConfig,
 	}
 
 	// Deletion can fail due to CAS conflicts if multiple resources are
