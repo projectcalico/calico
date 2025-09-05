@@ -19,13 +19,17 @@ import (
 	"fmt"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
+	"sync"
+	"time"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
+	"golang.org/x/sync/errgroup"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
+	k8sruntime "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/client-go/kubernetes"
@@ -44,6 +48,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
+	"github.com/projectcalico/calico/libcalico-go/lib/set"
 	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
 )
 
@@ -387,8 +392,8 @@ func CreateKubernetesClientset(ca *apiconfig.CalicoAPIConfigSpec) (*rest.Config,
 		return nil, nil, resources.K8sErrorToCalico(err, nil)
 	}
 
-	config.AcceptContentTypes = strings.Join([]string{runtime.ContentTypeProtobuf, runtime.ContentTypeJSON}, ",")
-	config.ContentType = runtime.ContentTypeProtobuf
+	config.AcceptContentTypes = strings.Join([]string{k8sruntime.ContentTypeProtobuf, k8sruntime.ContentTypeJSON}, ",")
+	config.ContentType = k8sruntime.ContentTypeProtobuf
 
 	// Overwrite the QPS if provided. Default QPS is 5.
 	if ca.K8sClientQPS != float32(0) {
@@ -457,7 +462,13 @@ func (c *KubeClient) EnsureInitialized() error {
 // Remove Calico-creatable data from the datastore.  This is purely used for the
 // test framework.
 func (c *KubeClient) Clean() error {
-	log.Warning("Cleaning KDD of all Calico-creatable data")
+	timeout := 2 * time.Minute
+	log.Warningf("Cleaning KDD of all Calico-creatable data: timeout %v", timeout)
+
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	// First delete "normal" resources by kind.
 	kinds := []string{
 		apiv3.KindBGPConfiguration,
 		apiv3.KindBGPPeer,
@@ -480,36 +491,126 @@ func (c *KubeClient) Clean() error {
 		libapiv3.KindBlockAffinity,
 		apiv3.KindBGPFilter,
 	}
-	ctx := context.Background()
-	for _, k := range kinds {
-		lo := model.ResourceListOptions{Kind: k}
-		if rs, err := c.List(ctx, lo, ""); err != nil {
-			log.WithError(err).WithField("Kind", k).Warning("Failed to list resources")
-		} else {
-			for _, r := range rs.KVPairs {
-				if _, err = c.Delete(ctx, r.Key, r.Revision); err != nil {
-					log.WithField("Key", r.Key).Warning("Failed to delete entry from KDD")
-				}
-			}
+
+	// Deletion can fail due to CAS conflicts if multiple resources are
+	// being deleted in parallel, so we do plenty of retries.
+	kindsWithProblems := set.New[string]()
+	var lock sync.Mutex
+	for attempt := 1; attempt <= 20; attempt++ {
+		recordKindProblem := func(k string) {
+			lock.Lock()
+			defer lock.Unlock()
+			kindsWithProblems.Add(k)
 		}
+
+		// Need two layers of errgroup because we schedule deletion work from the
+		// list go-routines.  If we scheduled it on the same errgroup then it could
+		// deadlock.
+		var listEG, delEG errgroup.Group
+		listEG.SetLimit(runtime.NumCPU() / 2)
+		delEG.SetLimit(runtime.NumCPU() / 2)
+
+		for _, k := range kinds {
+			listEG.Go(func() error {
+				lo := model.ResourceListOptions{Kind: k}
+				if rs, err := c.List(ctx, lo, ""); err != nil {
+					log.WithError(err).WithField("Kind", k).Warning("Failed to list resources")
+					recordKindProblem(k)
+					return nil // Problems are reported through kindsWithProblems set.
+				} else {
+					for _, r := range rs.KVPairs {
+						delEG.Go(func() error {
+							if _, err := c.DeleteKVP(ctx, r); err != nil {
+								log.WithError(err).WithField("Key", r.Key).Warning("Failed to delete entry from KDD")
+								recordKindProblem(k)
+							}
+							return nil // Problems are reported through kindsWithProblems set.
+						})
+					}
+				}
+				return nil
+			})
+		}
+		err := listEG.Wait()
+		if err != nil {
+			log.WithError(err).Error("Unexpected error during listing")
+		}
+		err = delEG.Wait()
+		if err != nil {
+			log.WithError(err).Error("Unexpected error from deletion errgroup")
+		}
+
+		if len(kindsWithProblems) == 0 {
+			break
+		}
+		// Retry only the kinds that had problems on the next attempt.
+		kinds = kindsWithProblems.Slice()
+		kindsWithProblems.Clear()
+	}
+	if kindsWithProblems.Len() > 0 {
+		log.WithField("kinds", kindsWithProblems).Error("Failed to delete all resources of these kinds")
 	}
 
-	// Cleanup IPAM resources that have slightly different backend semantics.
-	for _, li := range []model.ListInterface{
+	// Delete IPAM resources using the older API, since they don't all support
+	// the new.
+	listIfaceProblems := set.New[model.ListInterface]()
+	listIfaces := []model.ListInterface{
 		model.BlockListOptions{},
 		model.BlockAffinityListOptions{},
-		model.BlockAffinityListOptions{},
 		model.IPAMHandleListOptions{},
-	} {
-		if rs, err := c.List(ctx, li, ""); err != nil {
-			log.WithError(err).WithField("Kind", li).Warning("Failed to list resources")
-		} else {
-			for _, r := range rs.KVPairs {
-				if _, err = c.DeleteKVP(ctx, r); err != nil {
-					log.WithError(err).WithField("Key", r.Key).Warning("Failed to delete entry from KDD")
-				}
-			}
+	}
+	for attempt := 1; attempt <= 20; attempt++ {
+		recordLIProblem := func(l model.ListInterface) {
+			lock.Lock()
+			defer lock.Unlock()
+			listIfaceProblems.Add(l)
 		}
+
+		// Need two layers of errgroup because we schedule deletion work from the
+		// list go-routines.  If we scheduled it on the same errgroup then it could
+		// deadlock.
+		var listEG, delEG errgroup.Group
+		listEG.SetLimit(runtime.NumCPU() / 2)
+		delEG.SetLimit(runtime.NumCPU() / 2)
+
+		for _, li := range listIfaces {
+			listEG.Go(func() error {
+				if rs, err := c.List(ctx, li, ""); err != nil {
+					log.WithError(err).WithField("Kind", li).Warning("Failed to list resources")
+					recordLIProblem(li)
+				} else {
+					for _, r := range rs.KVPairs {
+						delEG.Go(func() error {
+							if _, err = c.DeleteKVP(ctx, r); err != nil {
+								log.WithError(err).WithField("Key", r.Key).Warning("Failed to delete entry from KDD")
+								recordLIProblem(li)
+							}
+							return nil
+						})
+					}
+				}
+				return nil
+			})
+		}
+		err := listEG.Wait()
+		if err != nil {
+			log.WithError(err).Error("Unexpected error during listing")
+		}
+		err = delEG.Wait()
+		if err != nil {
+			log.WithError(err).Error("Unexpected error from deletion errgroup")
+		}
+
+		if listIfaceProblems.Len() == 0 {
+			break
+		}
+		// Retry only the list ifaces that had problems on the next attempt.
+		listIfaces = listIfaceProblems.Slice()
+		listIfaceProblems.Clear()
+	}
+
+	if listIfaceProblems.Len() > 0 {
+		log.WithField("listInterfaces", listIfaceProblems).Error("Failed to delete all resources of these list interfaces")
 	}
 
 	// Get a list of Nodes and remove all BGP configuration from the nodes.
@@ -551,7 +652,7 @@ func buildCRDClientV1(cfg rest.Config) (*rest.RESTClient, error) {
 		Version: "v1",
 	}
 	cfg.APIPath = "/apis"
-	cfg.ContentType = runtime.ContentTypeJSON
+	cfg.ContentType = k8sruntime.ContentTypeJSON
 	cfg.NegotiatedSerializer = serializer.WithoutConversionCodecFactory{CodecFactory: scheme.Codecs}
 
 	cli, err := rest.RESTClientFor(&cfg)

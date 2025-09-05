@@ -671,6 +671,13 @@ func (c *loadBalancerController) assignIP(svc *v1.Service) ([]string, error) {
 		return nil, nil
 	}
 
+	// Get the namespace object for namespaceSelector support
+	namespaceObj, err := c.clientSet.CoreV1().Namespaces().Get(context.Background(), svc.Namespace, metav1.GetOptions{})
+	if err != nil {
+		log.WithError(err).WithField("namespace", svc.Namespace).Error("Failed to get namespace for LoadBalancer IP assignment")
+		return nil, fmt.Errorf("failed to get namespace %s: %w", svc.Namespace, err)
+	}
+
 	args := ipam.AutoAssignArgs{
 		Num4:        num4,
 		Num6:        num6,
@@ -678,6 +685,7 @@ func (c *loadBalancerController) assignIP(svc *v1.Service) ([]string, error) {
 		Hostname:    api.VirtualLoadBalancer,
 		HandleID:    &svcKey.handle,
 		Attrs:       metadataAttrs,
+		Namespace:   namespaceObj,
 	}
 
 	if ipv4Pools != nil {
