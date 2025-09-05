@@ -459,7 +459,7 @@ class QoSResponsivenessTest(unittest.TestCase):
         subnet = self.conn.network.create_subnet(
             name=f"{name}-subnet",
             network_id=network.id,
-            cidr="192.168.100.0/24",
+            cidr="10.63.0.0/24",
             ip_version=4,
             enable_dhcp=True,
         )
