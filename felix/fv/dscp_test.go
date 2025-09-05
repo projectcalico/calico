@@ -181,6 +181,16 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ dscp tests", []apiconfig.Da
 	})
 
 	It("applying DSCP annotation should result is adding correct rules", func() {
+		extWorkload := &workload.Workload{
+			C:        extClient,
+			Name:     "ext-workload",
+			Ports:    wepPortStr,
+			Protocol: "tcp",
+			IP:       extClient.IP,
+		}
+		err := extWorkload.Start()
+		Expect(err).NotTo(HaveOccurred())
+
 		dscp0 := numorstring.DSCPFromInt(0)   // 0x0
 		dscp20 := numorstring.DSCPFromInt(20) // 0x14
 		dscp32 := numorstring.DSCPFromInt(32) // 0x20
@@ -227,7 +237,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ dscp tests", []apiconfig.Da
 		hep.Annotations = map[string]string{
 			"qos.projectcalico.org/dscp": "20",
 		}
-		_, err := client.HostEndpoints().Create(utils.Ctx, hep, options.SetOptions{})
+		_, err = client.HostEndpoints().Create(utils.Ctx, hep, options.SetOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
 		gnp := apiv3.NewGlobalNetworkPolicy()
@@ -255,7 +265,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ dscp tests", []apiconfig.Da
 		}
 
 		cc.ResetExpectations()
-		cc.ExpectSome(extClient, hostw)
+		cc.ExpectSome(hostw, extWorkload)
 		cc.ExpectSome(extClient, ep1_1)
 		cc.ExpectNone(extClient, ep2_1)
 
