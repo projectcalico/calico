@@ -15,6 +15,7 @@
 package proxy_test
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -27,6 +28,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/kubernetes/fake"
+	"k8s.io/kubernetes/pkg/proxy/healthcheck"
 
 	"github.com/projectcalico/calico/felix/bpf/proxy"
 )
@@ -38,12 +40,18 @@ var _ = Describe("BPF Proxy healthCheckNodeport", func() {
 	testNodeName := "testnode"
 	testNodeNameOther := "anothertestnode"
 
+	healthzServer := healthcheck.NewProxierHealthServer(":10256", 200*time.Millisecond)
+	go func() {
+		healthzServer.Run(context.Background())
+	}()
+
 	BeforeEach(func() {
 		By("creating proxy with fake client and mock syncer", func() {
 			var err error
 
 			p, err = proxy.New(k8s, &mockDummySyncer{},
-				testNodeName, proxy.WithMinSyncPeriod(200*time.Millisecond))
+				testNodeName, proxy.WithMinSyncPeriod(200*time.Millisecond),
+				proxy.WithHealthzServer(healthzServer))
 			Expect(err).NotTo(HaveOccurred())
 		})
 	})
