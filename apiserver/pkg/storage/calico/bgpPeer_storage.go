@@ -6,7 +6,6 @@ import (
 	"context"
 	"reflect"
 
-	aapi "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apiserver/pkg/registry/generic/registry"
@@ -51,8 +50,8 @@ func NewBGPPeerStorage(opts Options) (registry.DryRunnableStorage, factory.Destr
 		client:            c,
 		codec:             opts.RESTOptions.StorageConfig.Codec,
 		versioner:         APIObjectVersioner{},
-		aapiType:          reflect.TypeOf(aapi.BGPPeer{}),
-		aapiListType:      reflect.TypeOf(aapi.BGPPeerList{}),
+		aapiType:          reflect.TypeOf(api.BGPPeer{}),
+		aapiListType:      reflect.TypeOf(api.BGPPeerList{}),
 		libCalicoType:     reflect.TypeOf(api.BGPPeer{}),
 		libCalicoListType: reflect.TypeOf(api.BGPPeerList{}),
 		isNamespaced:      false,
@@ -72,7 +71,7 @@ type BGPPeerConverter struct {
 }
 
 func (gc BGPPeerConverter) convertToLibcalico(aapiObj runtime.Object) resourceObject {
-	aapiBGPPeer := aapiObj.(*aapi.BGPPeer)
+	aapiBGPPeer := aapiObj.(*api.BGPPeer)
 	lcgBGPPeer := &api.BGPPeer{}
 	lcgBGPPeer.TypeMeta = aapiBGPPeer.TypeMeta
 	lcgBGPPeer.ObjectMeta = aapiBGPPeer.ObjectMeta
@@ -84,7 +83,7 @@ func (gc BGPPeerConverter) convertToLibcalico(aapiObj runtime.Object) resourceOb
 
 func (gc BGPPeerConverter) convertToAAPI(libcalicoObject resourceObject, aapiObj runtime.Object) {
 	lcgBGPPeer := libcalicoObject.(*api.BGPPeer)
-	aapiBGPPeer := aapiObj.(*aapi.BGPPeer)
+	aapiBGPPeer := aapiObj.(*api.BGPPeer)
 	aapiBGPPeer.Spec = lcgBGPPeer.Spec
 	aapiBGPPeer.TypeMeta = lcgBGPPeer.TypeMeta
 	aapiBGPPeer.ObjectMeta = lcgBGPPeer.ObjectMeta
@@ -92,15 +91,15 @@ func (gc BGPPeerConverter) convertToAAPI(libcalicoObject resourceObject, aapiObj
 
 func (gc BGPPeerConverter) convertToAAPIList(libcalicoListObject resourceListObject, aapiListObj runtime.Object, pred storage.SelectionPredicate) {
 	lcgBGPPeerList := libcalicoListObject.(*api.BGPPeerList)
-	aapiBGPPeerList := aapiListObj.(*aapi.BGPPeerList)
+	aapiBGPPeerList := aapiListObj.(*api.BGPPeerList)
 	if libcalicoListObject == nil {
-		aapiBGPPeerList.Items = []aapi.BGPPeer{}
+		aapiBGPPeerList.Items = []api.BGPPeer{}
 		return
 	}
 	aapiBGPPeerList.TypeMeta = lcgBGPPeerList.TypeMeta
 	aapiBGPPeerList.ListMeta = lcgBGPPeerList.ListMeta
 	for _, item := range lcgBGPPeerList.Items {
-		aapiBGPPeer := aapi.BGPPeer{}
+		aapiBGPPeer := api.BGPPeer{}
 		gc.convertToAAPI(&item, &aapiBGPPeer)
 		if matched, err := pred.Matches(&aapiBGPPeer); err == nil && matched {
 			aapiBGPPeerList.Items = append(aapiBGPPeerList.Items, aapiBGPPeer)

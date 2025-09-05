@@ -61,13 +61,13 @@ func TestGoldmaneIntegration_FlowWatching(t *testing.T) {
 
 		// Generate a self-signed certificate for Goldmane.
 		certFile, keyFile := createKeyCertPair(tmpDir)
-		defer certFile.Close()
-		defer keyFile.Close()
+		defer func() { _ = certFile.Close() }()
+		defer func() { _ = keyFile.Close() }()
 
 		// Generate a self-signed certificate for Whisker and the client to use.
 		clientCertFile, clientKeyFile := createKeyCertPair(tmpDir)
-		defer certFile.Close()
-		defer keyFile.Close()
+		defer func() { _ = certFile.Close() }()
+		defer func() { _ = keyFile.Close() }()
 		aggrWindow := time.Second * 5
 		cfg := gmdaemon.Config{
 			LogLevel:          "debug",
@@ -128,7 +128,7 @@ func TestGoldmaneIntegration_FlowWatching(t *testing.T) {
 
 		go func() {
 			<-ctx.Done()
-			resp.Body.Close()
+			_ = resp.Body.Close()
 		}()
 
 		Expect(resp.StatusCode).Should(Equal(http.StatusOK))
@@ -175,13 +175,13 @@ func TestGoldmaneIntegration_FilterHints(t *testing.T) {
 
 	// Generate a self-signed certificate for Goldmane.
 	certFile, keyFile := createKeyCertPair(tmpDir)
-	defer certFile.Close()
-	defer keyFile.Close()
+	defer func() { _ = certFile.Close() }()
+	defer func() { _ = keyFile.Close() }()
 
 	// Generate a self-signed certificate for Whisker and the client to use.
 	clientCertFile, clientKeyFile := createKeyCertPair(tmpDir)
-	defer certFile.Close()
-	defer keyFile.Close()
+	defer func() { _ = certFile.Close() }()
+	defer func() { _ = keyFile.Close() }()
 
 	aggrWindow := time.Second * 5
 	cfg := gmdaemon.Config{
@@ -268,7 +268,7 @@ func TestGoldmaneIntegration_FilterHints(t *testing.T) {
 
 	resp, err := http.DefaultClient.Do(req)
 	Expect(err).ShouldNot(HaveOccurred())
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	byts, err := io.ReadAll(resp.Body)
 	Expect(err).ShouldNot(HaveOccurred())
 	Expect(resp.StatusCode).Should(Equal(http.StatusOK), string(byts))

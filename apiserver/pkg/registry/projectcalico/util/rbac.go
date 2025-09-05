@@ -67,7 +67,7 @@ func getTiersFromSelector(options *metainternalversion.ListOptions) ([]string, e
 					requirement.Operator == selection.DoubleEquals {
 					return []string{requirement.Value}, nil
 				}
-				return nil, fmt.Errorf("Non equal selector operator not supported for field spec.tier")
+				return nil, fmt.Errorf("non equal selector operator not supported for field spec.tier")
 			}
 		}
 	}
@@ -80,14 +80,14 @@ func getTiersFromSelector(options *metainternalversion.ListOptions) ([]string, e
 					return requirement.Values().List(), nil
 				}
 				if len(requirement.Values()) > 1 {
-					return nil, fmt.Errorf("Non IN multi-valued selector not supported for label projectcalico.org/tier")
+					return nil, fmt.Errorf("non IN multi-valued selector not supported for label projectcalico.org/tier")
 				}
 				tierName, ok := requirement.Values().PopAny()
 				if ok && (requirement.Operator() == selection.Equals ||
 					requirement.Operator() == selection.DoubleEquals) {
 					return []string{tierName}, nil
 				}
-				return nil, fmt.Errorf("Non equal selector operator not supported for label projectcalico.org/tier")
+				return nil, fmt.Errorf("non equal selector operator not supported for label projectcalico.org/tier")
 			}
 		}
 	}
@@ -116,7 +116,7 @@ func getAuthorizedTiers(ctx context.Context, authorizer authorizer.TierAuthorize
 		if err != nil {
 			return nil, err
 		}
-		return nil, errors.NewForbidden(v3.Resource(attributes.GetResource()), "", fmt.Errorf("Operation on Calico tiered policy is forbidden"))
+		return nil, errors.NewForbidden(v3.Resource(attributes.GetResource()), "", fmt.Errorf("operation on Calico tiered policy is forbidden"))
 	}
 
 	return allowedTiers, nil

@@ -125,7 +125,7 @@ func WriteSwaggerJSON(handler *genericapiserver.APIServerHandler, path string) {
 	if err != nil {
 		panic(fmt.Sprintf("Could not create file at '%s'. Reason: %v", swaggerPath, err))
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	resp := &fileResponseWriter{f}
 	handler.ServeHTTP(resp, req)
 }
