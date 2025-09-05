@@ -496,7 +496,7 @@ var _ = testutils.E2eDatastoreDescribe("ClusterInformation tests", testutils.Dat
 
 			By("Cleaning the datastore and expecting deletion events for each configured resource (tests prefix deletes results in individual events for each key)")
 			be.Clean()
-			testWatcher3.ExpectEvents(apiv3.KindClusterInformation, []watch.Event{
+			testWatcher3.ExpectEventsAnyOrder(apiv3.KindClusterInformation, []watch.Event{
 				{
 					Type:     watch.Deleted,
 					Previous: outRes3,

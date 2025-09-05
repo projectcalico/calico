@@ -1068,22 +1068,15 @@ func (r *DefaultRuleRenderer) StaticManglePostroutingChain(ipVersion uint8) *gen
 	ipConf := r.ipSetConfig(ipVersion)
 	allIPsSetName := ipConf.NameForMainIPSet(IPSetIDAllPools)
 	allHostsSetName := ipConf.NameForMainIPSet(IPSetIDAllHostNets)
+	dscpSetName := ipConf.NameForMainIPSet(IPSetIDDSCPEndpoints)
 	rules = append(
 		rules, generictables.Rule{
 			Match: r.NewMatch().
-				SourceIPSet(allIPsSetName).
+				SourceIPSet(dscpSetName).
 				NotDestIPSet(allIPsSetName).
 				NotDestIPSet(allHostsSetName),
 			Action:  r.Jump(ChainEgressDSCP),
-			Comment: []string{"set dscp for workloads traffic leaving cluster."},
-		},
-		generictables.Rule{
-			Match: r.NewMatch().
-				SourceIPSet(allHostsSetName).
-				NotDestIPSet(allIPsSetName).
-				NotDestIPSet(allHostsSetName),
-			Action:  r.Jump(ChainEgressDSCP),
-			Comment: []string{"set dscp for host endpoints traffic leaving cluster."},
+			Comment: []string{"set dscp for traffic leaving cluster."},
 		},
 	)
 
