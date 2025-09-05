@@ -109,13 +109,17 @@ type proxy struct {
 	// event recorder to update node events
 	recorder        events.EventRecorder
 	svcHealthServer healthcheck.ServiceHealthServer
-	healthzServer   *healthcheck.ProxierHealthServer
+	healthzServer   healthcheckIntf
 
-	stopCh      chan struct{}
-	stopWg      sync.WaitGroup
-	stopOnce    sync.Once
-	cancelCtx   context.Context
-	cancelCtxFn context.CancelFunc
+	stopCh   chan struct{}
+	stopWg   sync.WaitGroup
+	stopOnce sync.Once
+}
+
+type healthcheckIntf interface {
+	IsHealthy() bool
+	QueuedUpdate(v1.IPFamily)
+	Updated(v1.IPFamily)
 }
 
 type stoppableRunner interface {
@@ -145,10 +149,9 @@ func New(k8s kubernetes.Interface, dp DPSyncer, hostname string, opts ...Option)
 
 		minDPSyncPeriod: 30 * time.Second, // XXX revisit the default
 
-		stopCh: make(chan struct{}),
+		stopCh:        make(chan struct{}),
+		healthzServer: new(alwaysHealthy),
 	}
-
-	p.cancelCtx, p.cancelCtxFn = context.WithCancel(context.Background())
 
 	for _, o := range opts {
 		if err := o(p); err != nil {
@@ -163,7 +166,6 @@ func New(k8s kubernetes.Interface, dp DPSyncer, hostname string, opts ...Option)
 	dp.SetTriggerFn(p.runner.Run)
 
 	ipVersion := p.v1IPFamily()
-	p.healthzServer = healthcheck.NewProxierHealthServer("0.0.0.0:10256", p.minDPSyncPeriod)
 	p.svcHealthServer = healthcheck.NewServiceHealthServer(p.hostname, p.recorder, util.NewNodePortAddresses(ipVersion, []string{"0.0.0.0/0"}), p.healthzServer)
 
 	p.epsChanges = k8sp.NewEndpointsChangeTracker(p.hostname,
@@ -210,21 +212,6 @@ func New(k8s kubernetes.Interface, dp DPSyncer, hostname string, opts ...Option)
 	p.startRoutine(func() { informerFactory.Start(p.stopCh) })
 	p.startRoutine(func() { svcConfig.Run(p.stopCh) })
 
-	// We cannot wait for the healthz server as we cannot stop it.
-	go func() {
-		for {
-			err := p.healthzServer.Run(p.cancelCtx)
-			if err != nil {
-				log.WithError(err).Error("Healthz server failed, restarting")
-			}
-			select {
-			case <-p.cancelCtx.Done():
-				return
-			default:
-			}
-		}
-	}()
-
 	return p, nil
 }
 
@@ -244,7 +231,6 @@ func (p *proxy) setIpFamily(ipFamily int) {
 func (p *proxy) Stop() {
 	p.stopOnce.Do(func() {
 		log.Info("Proxy stopping")
-		p.cancelCtxFn()
 		// Pass empty update to close all the health checks.
 		_ = p.svcHealthServer.SyncServices(map[types.NamespacedName]uint16{})
 		_ = p.svcHealthServer.SyncEndpoints(map[types.NamespacedName]int{})
@@ -287,6 +273,10 @@ func (p *proxy) invokeDPSyncer() {
 	}
 	if err := p.svcHealthServer.SyncEndpoints(p.epsMap.LocalReadyEndpoints()); err != nil {
 		log.WithError(err).Error("Error syncing healthcheck endpoints")
+	}
+
+	if p.healthzServer != nil {
+		p.healthzServer.QueuedUpdate(p.v1IPFamily())
 	}
 
 	p.syncerLck.Lock()
@@ -453,3 +443,12 @@ func makeServiceInfo(_ *v1.ServicePort, s *v1.Service, baseSvc *k8sp.BaseService
 out:
 	return svc
 }
+
+type alwaysHealthy struct{}
+
+func (a *alwaysHealthy) IsHealthy() bool {
+	return true
+}
+
+func (a *alwaysHealthy) QueuedUpdate(v1.IPFamily) {}
+func (a *alwaysHealthy) Updated(v1.IPFamily)      {}
