@@ -40,14 +40,14 @@ var _ = Describe("DSCP", func() {
 	})
 
 	It("should render empty chain for no policies", func() {
-		Expect(renderer.EgressDSCPChain([]DSCPRule{})).To(Equal(&generictables.Chain{
+		Expect(renderer.EgressDSCPChain([]*DSCPRule{})).To(Equal(&generictables.Chain{
 			Name:  ChainEgressDSCP,
 			Rules: nil,
 		}))
 	})
 
 	It("should render correct chain for policies", func() {
-		rules := []DSCPRule{
+		rules := []*DSCPRule{
 			{SrcAddrs: "192.168.10.20", Value: 10},
 			{SrcAddrs: "192.168.10.100,172.17.1.100", Value: 40},
 			{SrcAddrs: "192.168.20.1", Value: 0},
@@ -72,7 +72,7 @@ var _ = Describe("DSCP", func() {
 	})
 
 	It("should render correct IPv6 chain for policies", func() {
-		rules := []DSCPRule{
+		rules := []*DSCPRule{
 			{SrcAddrs: "dead:beef::1:20", Value: 10},
 			{SrcAddrs: "dead:beef::1:100,dead:beef::10:1", Value: 40},
 			{SrcAddrs: "dead:beef::2:2", Value: 22},

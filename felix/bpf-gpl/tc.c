@@ -366,6 +366,9 @@ static CALI_BPF_INLINE void calico_tc_process_ct_lookup(struct cali_tc_ctx *ctx)
 	if (ctx->state->ct_result.flags & CALI_CT_FLAG_NAT_OUT) {
 		ctx->state->flags |= CALI_ST_NAT_OUTGOING;
 	}
+	if (ctx->state->ct_result.flags & CALI_CT_FLAG_CLUSTER_EGRESS) {
+		ctx->state->flags |= CALI_ST_CLUSTER_EGRESS;
+	}
 
 	if (CALI_F_TO_HOST && !CALI_F_NAT_IF &&
 			(ct_result_rc(ctx->state->ct_result.rc) == CALI_CT_ESTABLISHED ||
@@ -553,6 +556,23 @@ syn_force_policy:
 				CALI_DEBUG("Outside cluster dest " IP_FMT "", debug_ip(ctx->state->post_nat_ip_dst));
 				ctx->state->flags |= CALI_ST_SKIP_FIB;
 			}
+		}
+	}
+
+	// If either source or destination is outside cluster, set flag as might need to update DSCP later.
+	if (CALI_F_FROM_WEP || CALI_F_TO_HEP) {
+		struct cali_rt *rA = cali_rt_lookup(&ctx->state->ip_src);
+		struct cali_rt *rB = cali_rt_lookup(&ctx->state->post_nat_ip_dst);
+
+		if ((rA && (rA->flags & CALI_RT_IN_POOL)) &&
+			(!rB || !(rB->flags & (CALI_RT_WORKLOAD | CALI_RT_HOST)))) {
+			CALI_DEBUG("Outside cluster dest " IP_FMT "", debug_ip(ctx->state->post_nat_ip_dst));
+			ctx->state->flags |= CALI_ST_CLUSTER_EGRESS;
+		}
+		if ((rB && (rB->flags & CALI_RT_IN_POOL)) &&
+			(!rA || !(rA->flags & (CALI_RT_WORKLOAD | CALI_RT_HOST)))) {
+			CALI_DEBUG("Outside cluster source " IP_FMT "", debug_ip(ctx->state->ip_src));
+			ctx->state->flags |= CALI_ST_CLUSTER_EGRESS;
 		}
 	}
 
@@ -1327,6 +1347,9 @@ int calico_tc_skb_accepted_entrypoint(struct __sk_buff *skb)
 		deny_reason(ctx, CALI_REASON_DROPPED_BY_QOS);
 		goto deny;
 	}
+	if (set_dscp(ctx) == TC_ACT_SHOT) {
+		goto deny;
+	}
 	ctx->fwd = calico_tc_skb_accepted(ctx);
 	return forward_or_drop(ctx);
 
@@ -1404,6 +1427,9 @@ int calico_tc_skb_new_flow_entrypoint(struct __sk_buff *skb)
 	ct_ctx_nat->allow_return = false;
 	if (state->flags & CALI_ST_NAT_OUTGOING) {
 		ct_ctx_nat->flags |= CALI_CT_FLAG_NAT_OUT;
+	}
+	if (state->flags & CALI_ST_CLUSTER_EGRESS) {
+		ct_ctx_nat->flags |= CALI_CT_FLAG_CLUSTER_EGRESS;
 	}
 	if (CALI_F_TO_HOST && state->flags & CALI_ST_SKIP_FIB) {
 		ct_ctx_nat->flags |= CALI_CT_FLAG_SKIP_FIB;
@@ -1595,6 +1621,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 #else
 	CALI_DEBUG("ip->ttl %d", ip_hdr(ctx)->ttl);
 #endif
+	
 	if (ip_ttl_exceeded(ip_hdr(ctx))) {
 		switch (ct_rc){
 		case CALI_CT_NEW:
