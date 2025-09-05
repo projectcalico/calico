@@ -139,29 +139,20 @@ var (
 // cb implements the callback interface required for the
 // backend Syncer API.
 type cb struct {
-	// Stores the current state for comparison by the tests.
-	State map[string]api.Update
-	Lock  *sync.Mutex
-
+	Lock       *sync.Mutex
+	state      map[string]api.Update
 	status     api.SyncStatus
-	updateChan chan api.Update
+	updateChan chan any
 }
 
-func (c cb) OnStatusUpdated(status api.SyncStatus) {
+func (c *cb) OnStatusUpdated(status api.SyncStatus) {
 	defer GinkgoRecover()
 
-	// Keep latest status up to date.
-	log.Warnf("[TEST] Received status update: %+v", status)
-	c.status = status
-
-	// Once we get in sync, we don't ever expect to not
-	// be in sync.
-	if c.status == api.InSync {
-		Expect(status).To(Equal(api.InSync))
-	}
+	log.Infof("[TEST] Syncer status received: %v", status)
+	c.updateChan <- status
 }
 
-func (c cb) OnUpdates(updates []api.Update) {
+func (c *cb) OnUpdates(updates []api.Update) {
 	defer GinkgoRecover()
 
 	// Ensure the given updates are valid.
@@ -187,28 +178,45 @@ func (c cb) OnUpdates(updates []api.Update) {
 	}
 }
 
-func (c cb) ProcessUpdates() {
+func (c *cb) ProcessUpdates() {
 	for u := range c.updateChan {
 		// Store off the update so it can be checked by the test.
 		// Use a mutex for safe cross-goroutine reads/writes.
 		c.Lock.Lock()
-		if u.UpdateType == api.UpdateTypeKVUnknown {
-			// We should never get this!
-			log.Panic("Received Unknown update type")
-		} else if u.UpdateType == api.UpdateTypeKVDeleted {
-			// Deleted.
-			delete(c.State, u.Key.String())
-			log.Infof("[TEST] Delete update %s", u.Key.String())
-		} else {
-			// Add or modified.
-			c.State[u.Key.String()] = u
-			log.Infof("[TEST] Stored update (type %d) %s", u.UpdateType, u.Key.String())
+
+		switch u := u.(type) {
+		case api.SyncStatus:
+			if c.status == api.InSync {
+				Expect(u).To(Equal(api.InSync), "Should not transition out of InSync state")
+			} else {
+				c.status = u
+			}
+		case api.Update:
+			if u.UpdateType == api.UpdateTypeKVUnknown {
+				// We should never get this!
+				log.Panic("Received Unknown update type")
+			} else if u.UpdateType == api.UpdateTypeKVDeleted {
+				// Deleted.
+				delete(c.state, u.Key.String())
+				log.Infof("[TEST] Delete update %s", u.Key.String())
+			} else {
+				// Add or modified.
+				c.state[u.Key.String()] = u
+				log.Infof("[TEST] Stored update (type %d) %s", u.UpdateType, u.Key.String())
+			}
 		}
+
 		c.Lock.Unlock()
 	}
 }
 
-func (c cb) ExpectExists(updates []api.Update) {
+func (c *cb) GetStatus() api.SyncStatus {
+	c.Lock.Lock()
+	defer c.Lock.Unlock()
+	return c.status
+}
+
+func (c *cb) ExpectExists(updates []api.Update) {
 	// For each Key, wait for it to exist.
 	for _, update := range updates {
 		log.Infof("[TEST] Expecting key: %v", update.Key)
@@ -217,7 +225,7 @@ func (c cb) ExpectExists(updates []api.Update) {
 		_ = wait.PollUntilContextTimeout(context.Background(), 1*time.Second, 60*time.Second, true, func(ctx context.Context) (bool, error) {
 			// Get the update.
 			c.Lock.Lock()
-			u, ok := c.State[update.Key.String()]
+			u, ok := c.state[update.Key.String()]
 			c.Lock.Unlock()
 
 			// See if we've got a matching update. For now, we just check
@@ -249,7 +257,7 @@ func (c cb) ExpectDeleted(kvps []model.KVPair) {
 		_ = wait.PollUntilContextTimeout(context.Background(), 1*time.Second, 60*time.Second, true, func(ctx context.Context) (bool, error) {
 			// Get the update.
 			c.Lock.Lock()
-			update, ok := c.State[kvp.Key.String()]
+			update, ok := c.state[kvp.Key.String()]
 			exists = ok
 			c.Lock.Unlock()
 
@@ -303,14 +311,12 @@ poll:
 //
 // The returned function returns the cached entry or nil if the entry does not
 // exist in the cache.
-func (c cb) GetSyncerValueFunc(key model.Key) func() interface{} {
+func (c *cb) GetSyncerValueFunc(key model.Key) func() interface{} {
 	return func() interface{} {
 		log.Infof("Checking entry in cache: %v", key)
 		c.Lock.Lock()
-		defer func() {
-			c.Lock.Unlock()
-		}()
-		if entry, ok := c.State[key.String()]; ok {
+		defer c.Lock.Unlock()
+		if entry, ok := c.state[key.String()]; ok {
 			return entry.Value
 		}
 		return nil
@@ -324,12 +330,12 @@ func (c cb) GetSyncerValueFunc(key model.Key) func() interface{} {
 // the Value may itself by nil.
 //
 // The returned function returns true if the entry is present.
-func (c cb) GetSyncerValuePresentFunc(key model.Key) func() interface{} {
+func (c *cb) GetSyncerValuePresentFunc(key model.Key) func() interface{} {
 	return func() interface{} {
 		log.Infof("Checking entry in cache: %v", key)
 		c.Lock.Lock()
-		defer func() { c.Lock.Unlock() }()
-		_, ok := c.State[key.String()]
+		defer c.Lock.Unlock()
+		_, ok := c.state[key.String()]
 		return ok
 	}
 }
@@ -347,15 +353,15 @@ func CreateClientAndSyncer(cfg apiconfig.KubeConfig) (*KubeClient, *cb, api.Sync
 	Expect(err).NotTo(HaveOccurred(), "Failed to initialize the backend.")
 
 	// Start the syncer.
-	updateChan := make(chan api.Update)
-	callback := cb{
-		State:      map[string]api.Update{},
+	updateChan := make(chan any)
+	callback := &cb{
+		state:      map[string]api.Update{},
 		status:     api.WaitForDatastore,
 		Lock:       &sync.Mutex{},
 		updateChan: updateChan,
 	}
 	syncer := felixsyncer.New(c, caCfg, callback, true)
-	return c.(*KubeClient), &callback, syncer
+	return c.(*KubeClient), callback, syncer
 }
 
 var _ = testutils.E2eDatastoreDescribe("Test UIDs and owner references", testutils.DatastoreK8s, func(cfg apiconfig.CalicoAPIConfig) {
@@ -505,10 +511,13 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 
 		// Start processing updates.
 		go cb.ProcessUpdates()
+
+		Eventually(cb.GetStatus, "5s", "50ms").Should(Equal(api.InSync))
 	})
 
 	AfterEach(func() {
 		// Clean up all Calico resources.
+		By("AfterEach")
 		err := c.Clean()
 		Expect(err).NotTo(HaveOccurred())
 
@@ -2581,16 +2590,13 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 		By("Listing all BlockAffinity for all Nodes", func() {
 			objs, err := c.List(ctx, model.BlockAffinityListOptions{}, "")
 			Expect(err).NotTo(HaveOccurred())
-			for _, obj := range objs.KVPairs {
-				log.Infof("CASEY: Found BlockAffinity: %+v", obj)
-			}
-			Expect(len(objs.KVPairs)).To(Equal(2))
+			Expect(objs.KVPairs).To(HaveLen(2))
 		})
 
 		By("Listing all BlockAffinity for a specific Node", func() {
 			objs, err := c.List(ctx, model.BlockAffinityListOptions{Host: nodename, AffinityType: string(ipam.AffinityTypeHost)}, "")
 			Expect(err).NotTo(HaveOccurred())
-			Expect(len(objs.KVPairs)).To(Equal(1))
+			Expect(objs.KVPairs).To(HaveLen(1))
 		})
 	})
 
@@ -2983,6 +2989,12 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 		Expect(err).NotTo(HaveOccurred())
 
 		ctx = context.Background()
+	})
+
+	AfterEach(func() {
+		By("AfterEach")
+		err := c.Clean()
+		Expect(err).NotTo(HaveOccurred())
 	})
 
 	Describe("watching Profiles", func() {

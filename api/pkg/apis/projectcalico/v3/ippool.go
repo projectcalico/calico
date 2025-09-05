@@ -81,6 +81,10 @@ type IPPoolSpec struct {
 	// Allows IPPool to allocate for a specific node by label selector.
 	NodeSelector string `json:"nodeSelector,omitempty" validate:"omitempty,selector"`
 
+	// Allows IPPool to allocate for a specific namespace by label selector.
+	// If specified, both namespaceSelector and nodeSelector must match for the pool to be used.
+	NamespaceSelector string `json:"namespaceSelector,omitempty" validate:"omitempty,selector"`
+
 	// AllowedUse controls what the IP pool will be used for.  If not specified or empty, defaults to
 	// ["Tunnel", "Workload"] for back-compatibility
 	// +listType=set

@@ -1,6 +1,6 @@
 - name: lib
   run:
-    when: "${FORCE_RUN} or change_in(['/lib/'])"
+    when: "${FORCE_RUN} or change_in(['/lib/'], {pipeline_file: 'ignore'})"
   execution_time_limit:
     minutes: 30
   dependencies:

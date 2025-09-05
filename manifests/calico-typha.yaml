@@ -2916,6 +2916,8 @@ spec:
                     - Always
                     - CrossSubnet
                   type: string
+                namespaceSelector:
+                  type: string
                 natOutgoing:
                   type: boolean
                 nodeSelector:

@@ -5077,6 +5077,13 @@ func schema_pkg_apis_projectcalico_v3_IPPoolSpec(ref common.ReferenceCallback) c
 							Format:      "",
 						},
 					},
+					"namespaceSelector": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Allows IPPool to allocate for a specific namespace by label selector. If specified, both namespaceSelector and nodeSelector must match for the pool to be used.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 					"allowedUses": {
 						VendorExtensible: spec.VendorExtensible{
 							Extensions: spec.Extensions{
