@@ -111,11 +111,15 @@ type proxy struct {
 	svcHealthServer healthcheck.ServiceHealthServer
 	healthzServer   healthcheckIntf
 
-	stopCh      chan struct{}
-	stopWg      sync.WaitGroup
-	stopOnce    sync.Once
-	cancelCtx   context.Context
-	cancelCtxFn context.CancelFunc
+	stopCh   chan struct{}
+	stopWg   sync.WaitGroup
+	stopOnce sync.Once
+}
+
+type healthcheckIntf interface {
+	Health() healthcheck.ProxyHealth
+	QueuedUpdate(v1.IPFamily)
+	Updated(v1.IPFamily)
 }
 
 type healthcheckIntf interface {
@@ -154,8 +158,6 @@ func New(k8s kubernetes.Interface, dp DPSyncer, hostname string, opts ...Option)
 		stopCh:        make(chan struct{}),
 		healthzServer: new(alwaysHealthy),
 	}
-
-	p.cancelCtx, p.cancelCtxFn = context.WithCancel(context.Background())
 
 	for _, o := range opts {
 		if err := o(p); err != nil {
@@ -211,21 +213,6 @@ func New(k8s kubernetes.Interface, dp DPSyncer, hostname string, opts ...Option)
 	p.startRoutine(func() { informerFactory.Start(p.stopCh) })
 	p.startRoutine(func() { svcConfig.Run(p.stopCh) })
 
-	// We cannot wait for the healthz server as we cannot stop it.
-	go func() {
-		for {
-			err := p.healthzServer.Run(p.cancelCtx)
-			if err != nil {
-				log.WithError(err).Error("Healthz server failed, restarting")
-			}
-			select {
-			case <-p.cancelCtx.Done():
-				return
-			default:
-			}
-		}
-	}()
-
 	return p, nil
 }
 
@@ -245,7 +232,6 @@ func (p *proxy) setIpFamily(ipFamily int) {
 func (p *proxy) Stop() {
 	p.stopOnce.Do(func() {
 		log.Info("Proxy stopping")
-		p.cancelCtxFn()
 		// Pass empty update to close all the health checks.
 		_ = p.svcHealthServer.SyncServices(map[types.NamespacedName]uint16{})
 		_ = p.svcHealthServer.SyncEndpoints(map[types.NamespacedName]int{})
