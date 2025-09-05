@@ -1,6 +1,7 @@
 #!/bin/bash
 # Copyright 2015 Metaswitch Networks
 # All Rights Reserved.
+# Copyright (c) 2025 Tigera, Inc. All rights reserved.
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
 #    not use this file except in compliance with the License. You may obtain
@@ -148,6 +149,10 @@ SCENARIO_IMAGE_TYPE=ignore
 # remote: Compressing objects: 100% (9847/9847), done.
 # error: RPC failed; curl 56 GnuTLS recv error (-9): A TLS packet with unexpected length was received.
 GIT_BASE=https://github.com
+
+# Disable ongoing resync.  In principle this isn't needed; disable it in order to build evidence to
+# confirm that.
+CALICO_RESYNC_INTERVAL_SECS=0
 
 EOF
 
