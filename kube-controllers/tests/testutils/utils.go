@@ -135,8 +135,9 @@ func GetCalicoClient(dsType apiconfig.DatastoreType, etcdIP, kcfg string) client
 	cfg.Spec.DatastoreType = dsType
 	cfg.Spec.EtcdEndpoints = fmt.Sprintf("http://%s:2379", etcdIP)
 	cfg.Spec.Kubeconfig = kcfg
-	client, err := client.New(*cfg)
+	cfg.Spec.CalicoAPIGroup = os.Getenv("CALICO_API_GROUP")
 
+	client, err := client.New(*cfg)
 	Expect(err).NotTo(HaveOccurred())
 	return client
 }
@@ -145,6 +146,7 @@ func GetBackendClient(etcdIP string) api.Client {
 	cfg := apiconfig.NewCalicoAPIConfig()
 	cfg.Spec.DatastoreType = apiconfig.EtcdV3
 	cfg.Spec.EtcdEndpoints = fmt.Sprintf("http://%s:2379", etcdIP)
+	cfg.Spec.CalicoAPIGroup = os.Getenv("CALICO_API_GROUP")
 	be, err := backend.NewClient(*cfg)
 
 	Expect(err).NotTo(HaveOccurred())
@@ -167,18 +169,17 @@ func GetK8sClient(kubeconfig string) (*kubernetes.Clientset, error) {
 }
 
 func Stop(c *containers.Container) {
-	var args = []string{"stop", c.Name}
+	args := []string{"stop", c.Name}
 	log.WithField("container", c.Name).Info("Stopping container")
 	cmd := exec.Command("docker", args...)
 	err := cmd.Run()
 	Expect(err).NotTo(HaveOccurred())
 	out, _ := cmd.CombinedOutput()
 	log.Info(out)
-
 }
 
 func Start(c *containers.Container) {
-	var args = []string{"start", c.Name}
+	args := []string{"start", c.Name}
 	log.WithField("container", c.Name).Info("Starting container")
 	cmd := exec.Command("docker", args...)
 	err := cmd.Run()
