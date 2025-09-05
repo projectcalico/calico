@@ -436,7 +436,6 @@ var _ = Describe("FV tests", func() {
 })
 
 var _ = Describe("ensureHostTunnelAddress", func() {
-
 	ctx := context.Background()
 	cfg, _ := apiconfig.LoadClientConfigFromEnvironment()
 
@@ -754,7 +753,6 @@ var _ = Describe("ensureHostTunnelAddress", func() {
 })
 
 var _ = Describe("removeHostTunnelAddress", func() {
-
 	ctx := context.Background()
 	cfg, _ := apiconfig.LoadClientConfigFromEnvironment()
 
@@ -926,7 +924,6 @@ var _ = Describe("removeHostTunnelAddress", func() {
 })
 
 var _ = Describe("Running as daemon", func() {
-
 	ctx := context.Background()
 	cfg, _ := apiconfig.LoadClientConfigFromEnvironment()
 
@@ -1029,7 +1026,6 @@ var _ = Describe("Running as daemon", func() {
 })
 
 var _ = Describe("determineEnabledPoolCIDRs", func() {
-
 	Context("IPIP tests", func() {
 		It("should match ip-pool-1 but not ip-pool-2", func() {
 			// Mock out the node and ip pools
@@ -1052,7 +1048,9 @@ var _ = Describe("determineEnabledPoolCIDRs", func() {
 							NodeSelector: `foo != "bar"`,
 							IPIPMode:     api.IPIPModeAlways,
 						},
-					}}}
+					},
+				},
+			}
 
 			// Execute and test assertions.
 			cidrs := determineEnabledPoolCIDRs(n, pl, felixconfig.New(), ipam.AttributeTypeIPIP)
@@ -1127,7 +1125,9 @@ var _ = Describe("determineEnabledPoolCIDRs", func() {
 							NodeSelector: `foo != "bar"`,
 							VXLANMode:    api.VXLANModeAlways,
 						},
-					}}}
+					},
+				},
+			}
 
 			// Execute and test assertions.
 			cidrs := determineEnabledPoolCIDRs(n, pl, felixconfig.New(), ipam.AttributeTypeVXLAN)
@@ -1157,7 +1157,9 @@ var _ = Describe("determineEnabledPoolCIDRs", func() {
 							NodeSelector: `foo != "bar"`,
 							VXLANMode:    api.VXLANModeCrossSubnet,
 						},
-					}}}
+					},
+				},
+			}
 
 			// Execute and test assertions.
 			cidrs := determineEnabledPoolCIDRs(n, pl, felixconfig.New(), ipam.AttributeTypeVXLAN)
@@ -1190,7 +1192,9 @@ var _ = Describe("determineEnabledPoolCIDRs", func() {
 							NodeSelector: `foo != "bar"`,
 							VXLANMode:    api.VXLANModeAlways,
 						},
-					}}}
+					},
+				},
+			}
 
 			// Execute and test assertions.
 			cidrs := determineEnabledPoolCIDRs(n, pl, felixconfig.New(), ipam.AttributeTypeVXLANV6)
@@ -1220,7 +1224,9 @@ var _ = Describe("determineEnabledPoolCIDRs", func() {
 							NodeSelector: `foo != "bar"`,
 							VXLANMode:    api.VXLANModeCrossSubnet,
 						},
-					}}}
+					},
+				},
+			}
 
 			// Execute and test assertions.
 			cidrs := determineEnabledPoolCIDRs(n, pl, felixconfig.New(), ipam.AttributeTypeVXLANV6)
@@ -1254,7 +1260,8 @@ var _ = Describe("determineEnabledPoolCIDRs", func() {
 							VXLANMode:    api.VXLANModeAlways,
 						},
 					},
-				}}
+				},
+			}
 
 			// Execute and test assertions.
 			_, cidrV4, _ := net.ParseCIDR("172.0.0.1/9")
@@ -1291,7 +1298,8 @@ var _ = Describe("determineEnabledPoolCIDRs", func() {
 							VXLANMode:    api.VXLANModeCrossSubnet,
 						},
 					},
-				}}
+				},
+			}
 
 			// Execute and test assertions.
 			_, cidrV4, _ := net.ParseCIDR("172.0.0.1/9")
@@ -1330,7 +1338,9 @@ var _ = Describe("determineEnabledPoolCIDRs", func() {
 							CIDR:         "172.128.0.0/9",
 							NodeSelector: `foo != "bar"`,
 						},
-					}}}
+					},
+				},
+			}
 
 			// Execute and test assertions.
 			cidrs := determineEnabledPoolCIDRs(n, pl, felixconfig.New(), ipam.AttributeTypeWireguard)
@@ -1358,7 +1368,9 @@ var _ = Describe("determineEnabledPoolCIDRs", func() {
 							CIDR:         "172.128.0.0/9",
 							NodeSelector: `foo != "bar"`,
 						},
-					}}}
+					},
+				},
+			}
 
 			// Execute and test assertions.
 			cidrs := determineEnabledPoolCIDRs(n, pl, felixconfig.New(), ipam.AttributeTypeWireguard)
@@ -1389,7 +1401,9 @@ var _ = Describe("determineEnabledPoolCIDRs", func() {
 							CIDR:         "2001:db8:00:ff::/64",
 							NodeSelector: `foo != "bar"`,
 						},
-					}}}
+					},
+				},
+			}
 
 			// Execute and test assertions.
 			cidrs := determineEnabledPoolCIDRs(n, pl, felixconfig.New(), ipam.AttributeTypeWireguardV6)
@@ -1417,7 +1431,9 @@ var _ = Describe("determineEnabledPoolCIDRs", func() {
 							CIDR:         "2001:db8:00:ff::/64",
 							NodeSelector: `foo != "bar"`,
 						},
-					}}}
+					},
+				},
+			}
 
 			// Execute and test assertions.
 			cidrs := determineEnabledPoolCIDRs(n, pl, felixconfig.New(), ipam.AttributeTypeWireguardV6)
@@ -1452,7 +1468,8 @@ var _ = Describe("determineEnabledPoolCIDRs", func() {
 							NodeSelector: `foo == "bar"`,
 						},
 					},
-				}}
+				},
+			}
 
 			// Execute and test assertions.
 			_, cidrV4, _ := net.ParseCIDR("172.0.0.1/9")
@@ -1586,8 +1603,8 @@ func (c shimClient) CalicoNodeStatus() client.CalicoNodeStatusInterface {
 }
 
 // IPAMConfig returns an interface for managing the IPAMConfig resource.
-func (c shimClient) IPAMConfig() client.IPAMConfigInterface {
-	return c.client.IPAMConfig()
+func (c shimClient) IPAMConfiguration() client.IPAMConfigurationInterface {
+	return c.client.IPAMConfiguration()
 }
 
 // BlockAffinities returns an interface for managing the block affinity resources.
