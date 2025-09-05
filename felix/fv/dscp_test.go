@@ -309,7 +309,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ dscp tests", []apiconfig.Da
 
 		cc.Expect(connectivity.None, ep1_2, extWorkload, ccOpts)
 		cc.Expect(connectivity.Some, ep2_2, extWorkload, ccOpts)
-
 		cc.CheckConnectivity()
 
 		By("reverting the DSCP values")
