@@ -22,6 +22,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/felix/proto/protoconv"
 )
 
 var _ = Describe("Workload endpoint status file writer test", func() {
@@ -49,7 +50,7 @@ var _ = Describe("Workload endpoint status file writer test", func() {
 			LocalBgpPeer: &proto.LocalBGPPeer{BgpPeerName: "global-peer"},
 		}
 
-		endpointStatus := WorkloadEndpointToWorkloadEndpointStatus(endpoint)
+		endpointStatus := protoconv.WorkloadEndpointToWorkloadEndpointStatus(endpoint)
 
 		itemJSON, err := json.Marshal(endpointStatus)
 		itemJSONPod1 = string(itemJSON)
@@ -67,7 +68,7 @@ var _ = Describe("Workload endpoint status file writer test", func() {
 			LocalBgpPeer: &proto.LocalBGPPeer{BgpPeerName: "global-peer"},
 		}
 
-		endpointStatus = WorkloadEndpointToWorkloadEndpointStatus(endpoint)
+		endpointStatus = protoconv.WorkloadEndpointToWorkloadEndpointStatus(endpoint)
 
 		itemJSON, err = json.Marshal(endpointStatus)
 		itemJSONPod2 = string(itemJSON)
