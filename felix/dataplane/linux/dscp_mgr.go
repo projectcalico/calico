@@ -102,7 +102,7 @@ func (m *dscpManager) handleHEPUpdates(hepID *proto.HostEndpointID, msg *proto.H
 	dscp := msg.Endpoint.QosPolicies[0].Dscp
 	r, err := convertUpdatesToDSCPRule(ips, dscp)
 	if err != nil {
-		m.logCtx.WithField("hep", id).WithError(err).Error("Failed to handle DSCP from endpoint update.")
+		m.logCtx.WithField("hep", id).WithError(err).Error("Failed to handle DSCP from endpoint update - Skipping.")
 		return
 	}
 
@@ -130,7 +130,7 @@ func (m *dscpManager) handleWEPUpdates(wepID *proto.WorkloadEndpointID, msg *pro
 	dscp := msg.Endpoint.QosPolicies[0].Dscp
 	r, err := convertUpdatesToDSCPRule(ips, dscp)
 	if err != nil {
-		m.logCtx.WithField("wep", id).WithError(err).Error("Failed to handle DSCP from endpoint update.")
+		m.logCtx.WithField("wep", id).WithError(err).Error("Failed to handle DSCP from endpoint update - Skipping.")
 		return
 	}
 
@@ -147,7 +147,7 @@ func convertUpdatesToDSCPRule(ips []string, dscp int32) (*rules.DSCPRule, error)
 	}
 	srcAddrs, err := normaliseSourceAddr(ips)
 	if err != nil {
-		return nil, fmt.Errorf("invalid address: %v - Skipping.", err)
+		return nil, fmt.Errorf("invalid address %v", err)
 	}
 	return &rules.DSCPRule{
 		SrcAddrs: srcAddrs,
