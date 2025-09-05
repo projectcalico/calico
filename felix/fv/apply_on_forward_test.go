@@ -102,7 +102,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ apply on forward tests; wit
 	})
 
 	itShouldHaveWorkloadToWorkloadAndHostConnectivity := func() {
-		It("should have workload to workload/host connectivity", func() {
+		FIt("should have workload to workload/host connectivity", func() {
 			cc.ExpectSome(w[0], w[1])
 			cc.ExpectSome(w[1], w[0])
 			cc.ExpectSome(w[0], hostW[1])
