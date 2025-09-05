@@ -256,6 +256,23 @@ var _ = Describe("BPF Proxy healthCheckNodeport", func() {
 			})
 		})
 	})
+
+	It("should expose proxy health check endpoint", func() {
+		proxyHealthPort := 10256
+
+		By("checking that the health endpoint is accessible", func() {
+			Eventually(func() error {
+				result, err := http.Get(fmt.Sprintf("http://localhost:%d/healthz", proxyHealthPort))
+				if err != nil {
+					return err
+				}
+				if result.StatusCode != 200 {
+					return fmt.Errorf("Unexpected status code %d; expected 200", result.StatusCode)
+				}
+				return nil
+			}, "5s", "200ms").Should(Succeed())
+		})
+	})
 })
 
 type mockDummySyncer struct {
