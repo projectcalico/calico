@@ -90,14 +90,7 @@ class QoSResponsivenessTest(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.test_resources = {
-            "networks": [],
-            "subnets": [],
-            "ports": [],
-            "servers": [],
-            "qos_policies": [],
-            "security_groups": [],
-        }
+        cls.next_subnet_byte = 0
 
         # Set up OpenStack connection
         cls.conn = openstack.connection.Connection(
@@ -459,15 +452,17 @@ class QoSResponsivenessTest(unittest.TestCase):
         subnet = self.conn.network.create_subnet(
             name=f"{name}-subnet",
             network_id=network.id,
-            cidr="10.63.0.0/24",
+            cidr="10.63.%d.0/24" % self.next_subnet_byte,
             ip_version=4,
             enable_dhcp=True,
         )
-
         logger.info(
             f"Created network: {name}"
             f" {'with QoS policy' if qos_policy_id else 'without QoS policy'}"
         )
+        self.next_subnet_byte += 1
+        self.assertLess(self.next_subnet_byte, 256)
+
         return network, subnet
 
     def _apply_change(self, current, nxt):
