@@ -72,6 +72,10 @@ type customK8sResourceClient struct {
 	// returned by this client.
 	resourceKind string
 
+	// Whether or not the kind label needs to be set for resources returned
+	// by this client.
+	applyKindLabel bool
+
 	// versionConverter is an optional hook to convert the returned data from the CRD
 	// from one format to another before returning it to the caller.
 	versionconverter VersionConverter
@@ -334,6 +338,9 @@ func (c *customK8sResourceClient) Get(ctx context.Context, key model.Key, revisi
 		return nil, K8sErrorToCalico(err, key)
 	}
 
+	if c.applyKindLabel {
+		c.applyKindLabelToResource(resOut)
+	}
 	return c.convertResourceToKVPair(resOut)
 }
 
@@ -407,6 +414,9 @@ func (c *customK8sResourceClient) List(ctx context.Context, list model.ListInter
 	}
 
 	convertFunc := func(r Resource) ([]*model.KVPair, error) {
+		if c.applyKindLabel {
+			c.applyKindLabelToResource(r)
+		}
 		kvp, err := c.convertResourceToKVPair(r)
 		if err != nil {
 			return nil, err
@@ -440,6 +450,9 @@ func (c *customK8sResourceClient) Watch(ctx context.Context, list model.ListInte
 		return nil, K8sErrorToCalico(err, list)
 	}
 	toKVPair := func(r Resource) (*model.KVPair, error) {
+		if c.applyKindLabel {
+			c.applyKindLabelToResource(r)
+		}
 		return c.convertResourceToKVPair(r)
 	}
 
@@ -530,4 +543,13 @@ func (c *customK8sResourceClient) defaultPolicyName(name string) string {
 	}
 
 	return name
+}
+
+func (c *customK8sResourceClient) applyKindLabelToResource(r Resource) {
+	labels := r.GetObjectMeta().GetLabels()
+	if labels == nil {
+		labels = map[string]string{}
+	}
+	labels[conversion.KindLabel] = c.resourceKind
+	r.GetObjectMeta().SetLabels(labels)
 }
