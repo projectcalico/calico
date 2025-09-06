@@ -128,7 +128,7 @@ Description:
 
 	parsedArgs, err := docopt.ParseArgs(doc, args, "")
 	if err != nil {
-		return fmt.Errorf("Invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand.", strings.Join(args, " "))
+		return fmt.Errorf("invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand", strings.Join(args, " "))
 	}
 	if len(parsedArgs) == 0 {
 		return nil
@@ -150,9 +150,9 @@ Description:
 	ctx := context.Background()
 	locked, err := common.CheckLocked(ctx, client)
 	if err != nil {
-		return fmt.Errorf("Error while checking if datastore was locked: %s", err)
+		return fmt.Errorf("error while checking if datastore was locked: %s", err)
 	} else if !locked {
-		return fmt.Errorf("Datastore is not locked. Run the `calicoctl datastore migrate lock` command in order to begin migration.")
+		return fmt.Errorf("datastore is not locked. Run the `calicoctl datastore migrate lock` command in order to begin migration")
 	}
 
 	// Check that the datastore configured datastore is etcd
@@ -163,7 +163,7 @@ Description:
 	}
 
 	if cfg.Spec.DatastoreType != apiconfig.EtcdV3 {
-		return fmt.Errorf("Invalid datastore type: %s to export from for datastore migration. Datastore type must be etcdv3", cfg.Spec.DatastoreType)
+		return fmt.Errorf("invalid datastore type: %s to export from for datastore migration. Datastore type must be etcdv3", cfg.Spec.DatastoreType)
 	}
 
 	rp := common.ResourcePrinterYAML{}
@@ -208,21 +208,21 @@ Description:
 				return nil
 			})
 			if err != nil {
-				return fmt.Errorf("Unable to clean metadata for export for %s resource: %s", resourceDisplayMap[r], err)
+				return fmt.Errorf("unable to clean metadata for export for %s resource: %s", resourceDisplayMap[r], err)
 			}
 
 			// Skip exporting Kubernetes network policies.
 			if r == "networkpolicies" {
 				objs, err := meta.ExtractList(resource)
 				if err != nil {
-					return fmt.Errorf("Error extracting network policies for inspection before exporting: %s", err)
+					return fmt.Errorf("error extracting network policies for inspection before exporting: %s", err)
 				}
 
 				filtered := []runtime.Object{}
 				for _, obj := range objs {
 					metaObj, ok := obj.(v1.ObjectMetaAccessor)
 					if !ok {
-						return fmt.Errorf("Unable to convert Calico network policy for inspection")
+						return fmt.Errorf("unable to convert Calico network policy for inspection")
 					}
 					if !strings.HasPrefix(metaObj.GetObjectMeta().GetName(), names.K8sNetworkPolicyNamePrefix) {
 						filtered = append(filtered, obj)
@@ -231,7 +231,7 @@ Description:
 
 				err = meta.SetList(resource, filtered)
 				if err != nil {
-					return fmt.Errorf("Unable to remove Kubernetes network policies for export: %s", err)
+					return fmt.Errorf("unable to remove Kubernetes network policies for export: %s", err)
 				}
 				results.Resources[i] = resource
 			}
@@ -240,14 +240,14 @@ Description:
 			if r == "globalnetworkpolicies" {
 				objs, err := meta.ExtractList(resource)
 				if err != nil {
-					return fmt.Errorf("Error extracting global network policies for inspection before exporting: %s", err)
+					return fmt.Errorf("error extracting global network policies for inspection before exporting: %s", err)
 				}
 
 				filtered := []runtime.Object{}
 				for _, obj := range objs {
 					metaObj, ok := obj.(v1.ObjectMetaAccessor)
 					if !ok {
-						return fmt.Errorf("Unable to convert Calico gloabal network policy for inspection")
+						return fmt.Errorf("unable to convert Calico global network policy for inspection")
 					}
 					if strings.HasPrefix(metaObj.GetObjectMeta().GetName(), names.K8sAdminNetworkPolicyNamePrefix) ||
 						strings.HasPrefix(metaObj.GetObjectMeta().GetName(), names.K8sBaselineAdminNetworkPolicyNamePrefix) {
@@ -259,7 +259,7 @@ Description:
 
 				err = meta.SetList(resource, filtered)
 				if err != nil {
-					return fmt.Errorf("Unable to remove Kubernetes admin network policies for export: %s", err)
+					return fmt.Errorf("unable to remove Kubernetes admin network policies for export: %s", err)
 				}
 				results.Resources[i] = resource
 			}
@@ -269,7 +269,7 @@ Description:
 				err := meta.EachListItem(resource, func(obj runtime.Object) error {
 					node, ok := obj.(*libapiv3.Node)
 					if !ok {
-						return fmt.Errorf("Failed to convert resource to Node object for migration processing: %+v", obj)
+						return fmt.Errorf("failed to convert resource to Node object for migration processing: %+v", obj)
 					}
 
 					var newNodeName string
@@ -280,7 +280,7 @@ Description:
 					}
 
 					if newNodeName == "" {
-						return fmt.Errorf("Node %s missing a 'k8s' orchestrator reference. Unable to export data unless every node has a 'k8s' orchestrator reference", node.GetObjectMeta().GetName())
+						return fmt.Errorf("node %s missing a 'k8s' orchestrator reference. Unable to export data unless every node has a 'k8s' orchestrator reference", node.GetObjectMeta().GetName())
 					}
 
 					etcdToKddNodeMap[node.GetObjectMeta().GetName()] = newNodeName
@@ -289,7 +289,7 @@ Description:
 					return nil
 				})
 				if err != nil {
-					return fmt.Errorf("Unable to process metadata for export for Node resource: %s", err)
+					return fmt.Errorf("unable to process metadata for export for Node resource: %s", err)
 				}
 			}
 
@@ -299,7 +299,7 @@ Description:
 				err := meta.EachListItem(resource, func(obj runtime.Object) error {
 					felixConfig, ok := obj.(*apiv3.FelixConfiguration)
 					if !ok {
-						return fmt.Errorf("Failed to convert resource to FelixConfiguration object for migration processing: %+v", obj)
+						return fmt.Errorf("failed to convert resource to FelixConfiguration object for migration processing: %+v", obj)
 					}
 
 					if strings.HasPrefix(felixConfig.GetObjectMeta().GetName(), "node.") {
@@ -315,7 +315,7 @@ Description:
 					return nil
 				})
 				if err != nil {
-					return fmt.Errorf("Unable to process metadata for export for FelixConfiguration resource: %s", err)
+					return fmt.Errorf("unable to process metadata for export for FelixConfiguration resource: %s", err)
 				}
 			}
 
@@ -325,7 +325,7 @@ Description:
 				err := meta.EachListItem(resource, func(obj runtime.Object) error {
 					bgpConfig, ok := obj.(*apiv3.BGPConfiguration)
 					if !ok {
-						return fmt.Errorf("Failed to convert resource to BGPConfiguration object for migration processing: %+v", obj)
+						return fmt.Errorf("failed to convert resource to BGPConfiguration object for migration processing: %+v", obj)
 					}
 
 					if strings.HasPrefix(bgpConfig.GetObjectMeta().GetName(), "node.") {
@@ -338,7 +338,7 @@ Description:
 					return nil
 				})
 				if err != nil {
-					return fmt.Errorf("Unable to process metadata for export for BGPConfiguration resource: %s", err)
+					return fmt.Errorf("unable to process metadata for export for BGPConfiguration resource: %s", err)
 				}
 			}
 		}
@@ -366,7 +366,7 @@ Description:
 	for _, resource := range results.Resources {
 		clusterinfo, ok := resource.(*apiv3.ClusterInformation)
 		if !ok {
-			return fmt.Errorf("Failed to convert resource to ClusterInformation object: %+v", resource)
+			return fmt.Errorf("failed to convert resource to ClusterInformation object: %+v", resource)
 		}
 
 		// Print the Cluster Info resource
