@@ -24,6 +24,8 @@ from oslo_config import cfg
 
 from oslo_log import log
 
+from networking_calico.plugins.calico.context import SGRUpdateContext
+
 
 LOG = log.getLogger(__name__)
 
@@ -117,6 +119,10 @@ class CalicoPlugin(Ml2Plugin, l3_db.L3_NAT_db_mixin):
 
         super(CalicoPlugin, self).__init__()
 
+        # Override the agent notifier as we don't need it, except for it
+        # providing a hook for security group rule updates.
+        self.notifier = NullNotifier(self)
+
     # Intercept floating IP associates/disassociates so we can trigger an
     # appropriate endpoint update.
     def _update_floatingip(self, context, id, floatingip):
@@ -149,3 +155,19 @@ class CalicoPlugin(Ml2Plugin, l3_db.L3_NAT_db_mixin):
             context.fip_update_port_id = new_floatingip["port_id"]
             self.mechanism_manager._call_on_drivers("update_floatingip", context)
         return new_floatingip
+
+
+class NullNotifier(object):
+    def __init__(self, plugin):
+        self.plugin = plugin
+
+    def security_groups_rule_updated(self, context, sgids):
+        self.plugin.mechanism_manager._call_on_drivers(
+            "security_groups_rule_updated", SGRUpdateContext(context, sgids)
+        )
+
+    def __getattr__(self, name):
+        def fn(*args, **kwargs):
+            LOG.info("NullNotifier: %s %r %r", name, args, kwargs)
+
+        return fn
