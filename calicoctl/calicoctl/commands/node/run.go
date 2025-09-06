@@ -159,7 +159,7 @@ Description:
 	arguments, err := docopt.ParseArgs(doc, args, "")
 	if err != nil {
 		log.Info(err)
-		return fmt.Errorf("Invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand.", strings.Join(args, " "))
+		return fmt.Errorf("invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand", strings.Join(args, " "))
 	}
 	if len(arguments) == 0 {
 		return nil
@@ -187,13 +187,13 @@ Description:
 	if ipv4 != "" && ipv4 != "autodetect" {
 		ip := argutils.ValidateIP(ipv4)
 		if ip.Version() != 4 {
-			return fmt.Errorf("Error executing command: --ip is wrong IP version")
+			return fmt.Errorf("error executing command: --ip is wrong IP version")
 		}
 	}
 	if ipv6 != "" && ipv6 != "autodetect" {
 		ip := argutils.ValidateIP(ipv6)
 		if ip.Version() != 6 {
-			return fmt.Errorf("Error executing command: --ip6 is wrong IP version")
+			return fmt.Errorf("error executing command: --ip6 is wrong IP version")
 		}
 	}
 	if asNumber != "" {
@@ -203,7 +203,7 @@ Description:
 	}
 
 	if !backendMatch.MatchString(backend) {
-		return fmt.Errorf("Error executing command: unknown backend '%s'", backend)
+		return fmt.Errorf("error executing command: unknown backend '%s'", backend)
 	}
 
 	// Validate the IP autodetection methods if specified.
@@ -221,17 +221,17 @@ Description:
 	if name == "" {
 		name, err = names.Hostname()
 		if err != nil || name == "" {
-			return fmt.Errorf("Error executing command: unable to determine node name")
+			return fmt.Errorf("error executing command: unable to determine node name")
 		}
 	}
 
 	// Load the etcd configuration.
 	cfg, err := clientmgr.LoadClientConfig(config)
 	if err != nil {
-		return fmt.Errorf("Error executing command: invalid config file")
+		return fmt.Errorf("error executing command: invalid config file")
 	}
 	if cfg.Spec.DatastoreType != apiconfig.EtcdV3 {
-		return fmt.Errorf("Error executing command: unsupported backend specified in config")
+		return fmt.Errorf("error executing command: unsupported backend specified in config")
 	}
 	etcdcfg := cfg.Spec.EtcdConfig
 
@@ -385,14 +385,14 @@ Description:
 	// Get the stdout pipe
 	outPipe, err := logCmd.StdoutPipe()
 	if err != nil {
-		return fmt.Errorf("Error executing command:  unable to check calico/node logs: %v", err)
+		return fmt.Errorf("error executing command:  unable to check calico/node logs: %v", err)
 	}
 	outScanner := bufio.NewScanner(outPipe)
 
 	// Start following the logs.
 	err = logCmd.Start()
 	if err != nil {
-		return fmt.Errorf("Error executing command:  unable to check calico/node logs: %v", err)
+		return fmt.Errorf("error executing command:  unable to check calico/node logs: %v", err)
 	}
 
 	// Protect against calico processes taking too long to start, or docker
@@ -419,7 +419,7 @@ Description:
 	// Kill the process if it is still running.
 	err = logCmd.Process.Kill()
 	if err != nil {
-		return fmt.Errorf("Error attempting to kill process: check logs for details")
+		return fmt.Errorf("error attempting to kill process: check logs for details")
 	}
 	// Wait for the logging process to terminate.  We expect an error here, because we
 	// just killed it.
@@ -428,9 +428,9 @@ Description:
 
 	// If we didn't successfully start then notify the user.
 	if outScanner.Err() != nil {
-		return fmt.Errorf("Error executing command: error reading calico/node logs, check logs for details")
+		return fmt.Errorf("error executing command: error reading calico/node logs, check logs for details")
 	} else if !started {
-		return fmt.Errorf("Error executing command: calico/node has terminated, check logs for details")
+		return fmt.Errorf("error executing command: calico/node has terminated, check logs for details")
 	}
 
 	return nil
@@ -499,7 +499,7 @@ func validateIpAutodetectionMethod(method string, version int) error {
 		addrStr := strings.TrimPrefix(method, AUTODETECTION_METHOD_CAN_REACH)
 		ips, err := gonet.LookupIP(addrStr)
 		if err != nil {
-			return fmt.Errorf("Error executing command: cannot resolve address specified for IP autodetection: %s", addrStr)
+			return fmt.Errorf("error executing command: cannot resolve address specified for IP autodetection: %s", addrStr)
 		}
 
 		for _, ip := range ips {
@@ -508,7 +508,7 @@ func validateIpAutodetectionMethod(method string, version int) error {
 				return nil
 			}
 		}
-		return fmt.Errorf("Error executing command: address for IP autodetection does not resolve to an IPv%d address: %s", version, addrStr)
+		return fmt.Errorf("error executing command: address for IP autodetection does not resolve to an IPv%d address: %s", version, addrStr)
 	} else if strings.HasPrefix(method, AUTODETECTION_METHOD_INTERFACE) {
 		// Auto-detection method is "interface", validate that the interface
 		// regex is a valid golang regex.
@@ -518,7 +518,7 @@ func validateIpAutodetectionMethod(method string, version int) error {
 		ifRegexes := strings.Split(ifStr, ",")
 		for _, ifRegex := range ifRegexes {
 			if _, err := regexp.Compile(ifStr); err != nil {
-				return fmt.Errorf("Error executing command: invalid interface regex specified for IP autodetection: %s", ifRegex)
+				return fmt.Errorf("error executing command: invalid interface regex specified for IP autodetection: %s", ifRegex)
 			}
 		}
 		return nil
@@ -531,11 +531,11 @@ func validateIpAutodetectionMethod(method string, version int) error {
 		ifRegexes := strings.Split(ifStr, ",")
 		for _, ifRegex := range ifRegexes {
 			if _, err := regexp.Compile(ifRegex); err != nil {
-				return fmt.Errorf("Error executing command: invalid interface regex specified for IP autodetection: %s", ifRegex)
+				return fmt.Errorf("error executing command: invalid interface regex specified for IP autodetection: %s", ifRegex)
 			}
 		}
 		return nil
 	}
 
-	return fmt.Errorf("Error executing command: invalid IP autodetection method: %s", method)
+	return fmt.Errorf("error executing command: invalid IP autodetection method: %s", method)
 }

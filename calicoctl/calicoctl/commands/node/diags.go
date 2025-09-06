@@ -64,7 +64,7 @@ Description:
 
 	arguments, err := docopt.ParseArgs(doc, args, "")
 	if err != nil {
-		return fmt.Errorf("Invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand.", strings.Join(args, " "))
+		return fmt.Errorf("invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand", strings.Join(args, " "))
 	}
 	if len(arguments) == 0 {
 		return nil
@@ -103,18 +103,18 @@ func runDiags(logDir string) error {
 	// Create a temp directory in /tmp
 	tmpDir, err := os.MkdirTemp("", "calico")
 	if err != nil {
-		return fmt.Errorf("Error creating temp directory to dump logs: %v", err)
+		return fmt.Errorf("error creating temp directory to dump logs: %v", err)
 	}
 
 	fmt.Println("Using temp dir:", tmpDir)
 	err = os.Chdir(tmpDir)
 	if err != nil {
-		return fmt.Errorf("Error changing directory to temp directory to dump logs: %v", err)
+		return fmt.Errorf("error changing directory to temp directory to dump logs: %v", err)
 	}
 
 	err = os.MkdirAll("diagnostics", os.ModeDir)
 	if err != nil {
-		return fmt.Errorf("Error creating diagnostics directory: %v\n", err)
+		return fmt.Errorf("error creating diagnostics directory: %v", err)
 	}
 	diagsTmpDir := filepath.Join(tmpDir, "diagnostics")
 
