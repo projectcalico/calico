@@ -6,7 +6,6 @@ import (
 	"context"
 	"reflect"
 
-	aapi "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apiserver/pkg/registry/generic/registry"
@@ -51,8 +50,8 @@ func NewIPPoolStorage(opts Options) (registry.DryRunnableStorage, factory.Destro
 		client:            c,
 		codec:             opts.RESTOptions.StorageConfig.Codec,
 		versioner:         APIObjectVersioner{},
-		aapiType:          reflect.TypeOf(aapi.IPPool{}),
-		aapiListType:      reflect.TypeOf(aapi.IPPoolList{}),
+		aapiType:          reflect.TypeOf(api.IPPool{}),
+		aapiListType:      reflect.TypeOf(api.IPPoolList{}),
 		libCalicoType:     reflect.TypeOf(api.IPPool{}),
 		libCalicoListType: reflect.TypeOf(api.IPPoolList{}),
 		isNamespaced:      false,
@@ -72,7 +71,7 @@ type IPPoolConverter struct {
 }
 
 func (gc IPPoolConverter) convertToLibcalico(aapiObj runtime.Object) resourceObject {
-	aapiIPPool := aapiObj.(*aapi.IPPool)
+	aapiIPPool := aapiObj.(*api.IPPool)
 	lcgIPPool := &api.IPPool{}
 	lcgIPPool.TypeMeta = aapiIPPool.TypeMeta
 	lcgIPPool.ObjectMeta = aapiIPPool.ObjectMeta
@@ -84,7 +83,7 @@ func (gc IPPoolConverter) convertToLibcalico(aapiObj runtime.Object) resourceObj
 
 func (gc IPPoolConverter) convertToAAPI(libcalicoObject resourceObject, aapiObj runtime.Object) {
 	lcgIPPool := libcalicoObject.(*api.IPPool)
-	aapiIPPool := aapiObj.(*aapi.IPPool)
+	aapiIPPool := aapiObj.(*api.IPPool)
 	aapiIPPool.Spec = lcgIPPool.Spec
 	aapiIPPool.TypeMeta = lcgIPPool.TypeMeta
 	aapiIPPool.ObjectMeta = lcgIPPool.ObjectMeta
@@ -92,15 +91,15 @@ func (gc IPPoolConverter) convertToAAPI(libcalicoObject resourceObject, aapiObj 
 
 func (gc IPPoolConverter) convertToAAPIList(libcalicoListObject resourceListObject, aapiListObj runtime.Object, pred storage.SelectionPredicate) {
 	lcgIPPoolList := libcalicoListObject.(*api.IPPoolList)
-	aapiIPPoolList := aapiListObj.(*aapi.IPPoolList)
+	aapiIPPoolList := aapiListObj.(*api.IPPoolList)
 	if libcalicoListObject == nil {
-		aapiIPPoolList.Items = []aapi.IPPool{}
+		aapiIPPoolList.Items = []api.IPPool{}
 		return
 	}
 	aapiIPPoolList.TypeMeta = lcgIPPoolList.TypeMeta
 	aapiIPPoolList.ListMeta = lcgIPPoolList.ListMeta
 	for _, item := range lcgIPPoolList.Items {
-		aapiIPPool := aapi.IPPool{}
+		aapiIPPool := api.IPPool{}
 		gc.convertToAAPI(&item, &aapiIPPool)
 		if matched, err := pred.Matches(&aapiIPPool); err == nil && matched {
 			aapiIPPoolList.Items = append(aapiIPPoolList.Items, aapiIPPool)

@@ -94,7 +94,7 @@ Description:
 	}
 
 	if context := arguments["--context"]; context != nil {
-		os.Setenv("K8S_CURRENT_CONTEXT", context.(string))
+		_ = os.Setenv("K8S_CURRENT_CONTEXT", context.(string))
 	}
 
 	if arguments["<command>"] != nil {
@@ -138,7 +138,7 @@ Description:
 		case "datastore":
 			err = commands.Datastore(args)
 		default:
-			err = fmt.Errorf("Unknown command: %q\n%s", command, doc)
+			err = fmt.Errorf("unknown command: %q\n%s", command, doc)
 		}
 
 		if err != nil {

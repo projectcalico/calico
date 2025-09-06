@@ -65,7 +65,7 @@ Description:
 
 	parsedArgs, err := docopt.ParseArgs(doc, args, "")
 	if err != nil {
-		return fmt.Errorf("Invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand.", strings.Join(args, " "))
+		return fmt.Errorf("invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand", strings.Join(args, " "))
 	}
 	if len(parsedArgs) == 0 {
 		return nil
@@ -78,7 +78,7 @@ Description:
 	var ci *v3.ClusterInformation
 	if poll := argutils.ArgStringOrBlank(parsedArgs, "--poll"); poll != "" {
 		if pollDuration, err = time.ParseDuration(poll); err != nil {
-			return fmt.Errorf("Invalid poll duration specified: %s", pollDuration)
+			return fmt.Errorf("invalid poll duration specified: %s", pollDuration)
 		}
 	}
 
@@ -125,7 +125,7 @@ Description:
 		} else {
 			// Unable to retrieve the version.  Reset the old versions so that we re-display when we are able to
 			// determine the version again (if polling).
-			err = fmt.Errorf("Unable to retrieve Cluster Version or Type: %s", err)
+			err = fmt.Errorf("unable to retrieve Cluster Version or Type: %s", err)
 			pv = ""
 			pt = ""
 		}

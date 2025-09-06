@@ -91,13 +91,13 @@ Description:
 
 	parsedArgs, err := docopt.ParseArgs(doc, args, "")
 	if err != nil {
-		return fmt.Errorf("Invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand.", strings.Join(args, " "))
+		return fmt.Errorf("invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand", strings.Join(args, " "))
 	}
 	if len(parsedArgs) == 0 {
 		return nil
 	}
 	if context := parsedArgs["--context"]; context != nil {
-		os.Setenv("K8S_CURRENT_CONTEXT", context.(string))
+		_ = os.Setenv("K8S_CURRENT_CONTEXT", context.(string))
 	}
 
 	log.Debugf("parse args: %+v\n", parsedArgs)
@@ -124,7 +124,7 @@ Description:
 
 	results := common.ExecuteConfigCommand(parsedArgs, common.ActionGetOrList)
 	if results.FileInvalid {
-		return fmt.Errorf("Failed to execute command: %v", results.Err)
+		return fmt.Errorf("failed to execute command: %v", results.Err)
 	} else if results.Err != nil {
 		return fmt.Errorf("failed to get %s %s, error %v",
 			kind, name, results.Err)
@@ -159,7 +159,7 @@ Description:
 				labels[key] = value
 				overwritten = true
 			} else {
-				return fmt.Errorf("failed to update label of %s %s, key %s is already present. please use '--overwrite' to set a new value.",
+				return fmt.Errorf("failed to update label of %s %s, key %s is already present. please use '--overwrite' to set a new value",
 					kind, name, key)
 			}
 		} else {

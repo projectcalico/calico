@@ -136,11 +136,11 @@ func getConfig(modFolder string) (config, error) {
 	data, err := os.ReadFile(configPath)
 	if err != nil {
 		if !os.IsNotExist(err) {
-			return cfg, fmt.Errorf("failed to read config file %s: %w\n", configPath, err)
+			return cfg, fmt.Errorf("failed to read config file %s: %w", configPath, err)
 		}
 	} else {
 		if err := yaml.Unmarshal(data, &cfg); err != nil {
-			return cfg, fmt.Errorf("invalid gomodder config found at %s: %w \n", configPath, err)
+			return cfg, fmt.Errorf("invalid gomodder config found at %s: %w", configPath, err)
 		}
 	}
 
@@ -160,11 +160,11 @@ func getConfig(modFolder string) (config, error) {
 func getGoMod(folder string) (*modfile.File, error) {
 	data, err := os.ReadFile(filepath.Join(folder, "go.mod"))
 	if err != nil {
-		return nil, fmt.Errorf("error reading go.mod: %w\n", err)
+		return nil, fmt.Errorf("error reading go.mod: %w", err)
 	}
 	goMod, err := modfile.Parse("go.mod", data, nil)
 	if err != nil {
-		return nil, fmt.Errorf("Error parsing go.mod: %w\n", err)
+		return nil, fmt.Errorf("error parsing go.mod: %w", err)
 	}
 	return goMod, nil
 }

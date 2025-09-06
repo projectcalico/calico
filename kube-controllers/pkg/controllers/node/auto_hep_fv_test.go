@@ -147,7 +147,7 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 
 	AfterEach(func() {
 		_ = c.Close()
-		os.Remove(kconfigFile.Name())
+		_ = os.Remove(kconfigFile.Name())
 		controllerManager.Stop()
 		nodeController.Stop()
 		apiserver.Stop()
