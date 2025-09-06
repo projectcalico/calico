@@ -73,6 +73,7 @@ type AttachPoint struct {
 	AttachType                  apiv3.BPFAttachOption
 	IngressPacketRateConfigured bool
 	EgressPacketRateConfigured  bool
+	DSCP                        int8
 }
 
 var ErrDeviceNotFound = errors.New("device not found")
@@ -419,6 +420,7 @@ func (ap *AttachPoint) Configure() *libbpf.TcGlobalData {
 		NatIn:        ap.NATin,
 		NatOut:       ap.NATout,
 		LogFilterJmp: uint32(ap.LogFilterIdx),
+		DSCP:         ap.DSCP,
 	}
 
 	if ap.Profiling == "Enabled" {

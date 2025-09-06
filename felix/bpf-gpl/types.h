@@ -158,6 +158,7 @@ enum cali_state_flags {
 	CALI_ST_SKIP_REDIR_PEER	  = 0x800,
 	/* CALI_ST_SKIP_REDIR_ONCE skips redirection once for this particular packet */
 	CALI_ST_SKIP_REDIR_ONCE   = 0x1000,
+	CALI_ST_CLUSTER_EGRESS   = 0x2000,
 };
 
 struct fwd {
