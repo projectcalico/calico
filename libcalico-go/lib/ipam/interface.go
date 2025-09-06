@@ -105,4 +105,8 @@ type Interface interface {
 	// Otherwise, return the CIDR of the IPAM block allocated for this host.
 	// It returns IPv4, IPv6 block CIDR and any error encountered.
 	EnsureBlock(ctx context.Context, args BlockArgs) (*cnet.IPNet, *cnet.IPNet, error)
+
+	// UpgradeHost checks the resources related to the given node and, if it
+	// finds any that are in older formats, upgrades them.  It is idempotent.
+	UpgradeHost(ctx context.Context, nodeName string) error
 }
