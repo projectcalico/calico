@@ -304,6 +304,7 @@ K8ST_IMAGE_TARS=calico-node.tar \
 	operator.tar \
 	whisker.tar \
 	whisker-backend.tar \
+	tier-rbac.tar \
 	goldmane.tar
 
 ifeq ($(SEMAPHORE_GIT_REF_TYPE), pull-request)
@@ -424,6 +425,11 @@ whisker-backend.tar: ../go.mod $(shell find ../whisker-backend -name '*.go')
 	make -C ../whisker-backend image
 	docker tag calico/whisker-backend:latest-$(ARCH) calico/whisker-backend:$(TEST_BUILD_TAG)
 	docker save --output $@ calico/whisker-backend:$(TEST_BUILD_TAG)
+
+tier-rbac.tar: ../go.mod $(shell find ../validatingwebhook/ -name '*.go')
+	make -C ../validatingwebhook image
+	docker tag calico/webhook:latest-$(ARCH) calico/webhook:$(TEST_BUILD_TAG)
+	docker save --output $@ calico/webhook:$(TEST_BUILD_TAG)
 
 load-container-images: $(K8ST_IMAGE_TARS) $(KUBECTL)
 	# Load the latest tar files onto the currently running kind cluster.

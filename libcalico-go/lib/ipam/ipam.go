@@ -2349,9 +2349,9 @@ func (c ipamClient) getReservedIPs(ctx context.Context) (addrFilter, error) {
 	}
 	var cidrs cidrSliceFilter
 	for _, r := range reservations.Items {
-		for _, cidrStr := range r.Spec.ReservedCIDRs {
-			cidrStr = strings.TrimSpace(cidrStr)
-			if len(cidrStr) == 0 {
+		for _, cidrVal := range r.Spec.ReservedCIDRs {
+			cidrStr := strings.TrimSpace(string(cidrVal))
+			if len(cidrVal) == 0 {
 				// Defensive, validation should prevent.
 				continue
 			}
