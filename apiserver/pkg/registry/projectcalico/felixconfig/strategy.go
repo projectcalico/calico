@@ -68,7 +68,7 @@ func GetAttrs(obj runtime.Object) (labels.Set, fields.Set, error) {
 	if !ok {
 		return nil, nil, fmt.Errorf("given object is not a FelixConfiguration")
 	}
-	return labels.Set(apiserver.ObjectMeta.Labels), FelixConfigurationToSelectableFields(apiserver), nil
+	return labels.Set(apiserver.Labels), FelixConfigurationToSelectableFields(apiserver), nil
 }
 
 // MatchFelixConfiguration is the filter used by the generic etcd backend to watch events

@@ -57,8 +57,8 @@ func TestTierCreate(t *testing.T) {
 		t.Fatalf("Set failed: %v", err)
 	}
 	// basic tests of the output
-	if obj.ObjectMeta.Name != out.ObjectMeta.Name {
-		t.Errorf("pod name want=%s, get=%s", obj.ObjectMeta.Name, out.ObjectMeta.Name)
+	if obj.Name != out.Name {
+		t.Errorf("pod name want=%s, get=%s", obj.Name, out.Name)
 	}
 	if out.ResourceVersion == "" {
 		t.Errorf("output should have non-empty resource version")

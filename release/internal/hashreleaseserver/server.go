@@ -161,7 +161,7 @@ func HasHashrelease(hash string, cfg *Config) (bool, error) {
 		logrus.WithError(err).Error("Failed to read hashrelease library from bucket")
 		return false, fmt.Errorf("failed to read hashrelease library from bucket: %w", err)
 	}
-	defer reader.Close()
+	defer func() { _ = reader.Close() }()
 	scanner := bufio.NewScanner(reader)
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -239,7 +239,7 @@ func updateBucketTextFile(bucket *storage.BucketHandle, filePath, content string
 				return fmt.Errorf("failed to read existing content from bucket %s: %w", filePath, err)
 			}
 		} else {
-			defer existingReader.Close()
+			defer func() { _ = existingReader.Close() }()
 			existingContent, err := io.ReadAll(existingReader)
 			if err != nil {
 				logrus.WithError(err).Errorf("Failed to read existing content from bucket: %s", filePath)

@@ -97,7 +97,7 @@ func createRealTempJSONFile(name, contents string) error {
 	if err != nil {
 		return fmt.Errorf("Couldn't create temp JSON file: %w", err)
 	}
-	defer tmpFile.Close()
+	defer func() { _ = tmpFile.Close() }()
 
 	_, err = tmpFile.Write([]byte(contents))
 	if err != nil {

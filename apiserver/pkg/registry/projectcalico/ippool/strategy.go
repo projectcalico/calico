@@ -68,7 +68,7 @@ func GetAttrs(obj runtime.Object) (labels.Set, fields.Set, error) {
 	if !ok {
 		return nil, nil, fmt.Errorf("given object is not a IPPool")
 	}
-	return labels.Set(apiserver.ObjectMeta.Labels), IPPoolToSelectableFields(apiserver), nil
+	return labels.Set(apiserver.Labels), IPPoolToSelectableFields(apiserver), nil
 }
 
 // MatchIPPool is the filter used by the generic etcd backend to watch events
