@@ -56,10 +56,13 @@ class CalicoPlugin(Ml2Plugin, l3_db.L3_NAT_db_mixin):
 
         # Here we add, rather than forcing the entire value, because DevStack
         # testing configures 'port-security' here.
-        LOG.info("Add 'qos' to ML2 extension_drivers")
-        cfg.CONF.set_override(
-            "extension_drivers", cfg.CONF.ml2.extension_drivers + ["qos"], group="ml2"
-        )
+        LOG.info("Add 'qos' to ML2 extension_drivers, if not already present")
+        if "qos" not in cfg.CONF.ml2.extension_drivers:
+            cfg.CONF.set_override(
+                "extension_drivers",
+                cfg.CONF.ml2.extension_drivers + ["qos"],
+                group="ml2",
+            )
 
         # This is a bit of a hack to get the models_v2.Port attributes setup in such
         # a way as to avoid tracebacks in the neutron-server log.
