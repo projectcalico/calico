@@ -342,14 +342,14 @@ func (c *calculator) loadResources() error {
 // emptyK8sRoleBindingLister implements the RoleBindingLister interface returning no RoleBindings.
 type emptyK8sRoleBindingLister struct{}
 
-func (_ *emptyK8sRoleBindingLister) ListRoleBindings(ctx context.Context, namespace string) ([]*rbacv1.RoleBinding, error) {
+func (*emptyK8sRoleBindingLister) ListRoleBindings(ctx context.Context, namespace string) ([]*rbacv1.RoleBinding, error) {
 	return nil, nil
 }
 
 // emptyK8sClusterRoleBindingLister implements the ClusterRoleBindingLister interface returning no ClusterRoleBindings.
 type emptyK8sClusterRoleBindingLister struct{}
 
-func (_ *emptyK8sClusterRoleBindingLister) ListClusterRoleBindings(ctx context.Context) ([]*rbacv1.ClusterRoleBinding, error) {
+func (*emptyK8sClusterRoleBindingLister) ListClusterRoleBindings(ctx context.Context) ([]*rbacv1.ClusterRoleBinding, error) {
 	return nil, nil
 }
 
@@ -806,7 +806,7 @@ func (u *userCalculator) updateResources() {
 	u.calculator.resourceLock.Lock()
 	defer u.calculator.resourceLock.Unlock()
 
-	if u.calculator.resourceUpdateTime == u.resourcesUpdateTime {
+	if u.calculator.resourceUpdateTime.Equal(u.resourcesUpdateTime) {
 		// The cache has not been updated since the query began, so update it now.  If any errors occur the cache will
 		// not be updated and the data will remain out-of-date - this is fine, we'll simply not include the results.
 		err := u.calculator.loadResources()
