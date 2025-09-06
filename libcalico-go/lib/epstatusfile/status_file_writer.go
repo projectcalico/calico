@@ -23,8 +23,6 @@ import (
 
 	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
-
-	"github.com/projectcalico/calico/felix/proto"
 )
 
 const (
@@ -168,35 +166,6 @@ type WorkloadEndpointStatus struct {
 	Ipv4Nets    []string `json:"ipv4Nets,omitempty"`    // V4 IPs of the workload
 	Ipv6Nets    []string `json:"ipv6Nets,omitempty"`    // V6 IPs of the workload
 	BGPPeerName string   `json:"bgpPeerName,omitempty"` // Non-empty if the workload is selected for local BGP peering.
-}
-
-// WorkloadEndpointToEndpointStatus constructs WorkloadEndpointStatus data from a proto WorkloadEndpoint struct.
-func WorkloadEndpointToWorkloadEndpointStatus(ep *proto.WorkloadEndpoint) *WorkloadEndpointStatus {
-	if ep == nil {
-		return nil
-	}
-
-	var peerName string
-	if ep.LocalBgpPeer != nil {
-		peerName = ep.LocalBgpPeer.BgpPeerName
-	}
-	epStatus := &WorkloadEndpointStatus{
-		IfaceName: ep.Name,
-		Mac:       ep.Mac,
-		// Make sure that zero length slice is nilled out so that it compares
-		// equal after round-tripping through JSON.
-		Ipv4Nets:    normaliseZeroLenSlice(ep.Ipv4Nets),
-		Ipv6Nets:    normaliseZeroLenSlice(ep.Ipv6Nets),
-		BGPPeerName: peerName,
-	}
-	return epStatus
-}
-
-func normaliseZeroLenSlice[T any](nets []T) []T {
-	if len(nets) == 0 {
-		return nil
-	}
-	return nets
 }
 
 func GetWorkloadEndpointStatusFromFile(filePath string) (*WorkloadEndpointStatus, error) {

@@ -28,6 +28,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/felix/proto/protoconv"
 	epstatus "github.com/projectcalico/calico/libcalico-go/lib/epstatusfile"
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
 )
@@ -122,14 +123,14 @@ var _ = Describe("Endpoint Policy Status Reports [file-reporting]", func() {
 		LocalBgpPeer: &proto.LocalBGPPeer{BgpPeerName: "global-peer"},
 	}
 
-	endpointStatus := epstatus.WorkloadEndpointToWorkloadEndpointStatus(endpoint)
+	endpointStatus := protoconv.WorkloadEndpointToWorkloadEndpointStatus(endpoint)
 
 	wepID := &proto.WorkloadEndpointID{
 		OrchestratorId: "abc",
 		WorkloadId:     "default/pod1",
 		EndpointId:     "eth0",
 	}
-	key := names.WorkloadEndpointIDToWorkloadEndpointKey(wepID, "host")
+	key := protoconv.WorkloadEndpointIDToWorkloadEndpointKey(wepID, "host")
 	mapKey := names.WorkloadEndpointKeyToStatusFilename(key)
 	var tmpPath, statusDir, filename string
 
@@ -279,7 +280,7 @@ var _ = Describe("Endpoint Policy Status Reports [file-reporting]", func() {
 		epStatus, err := epstatus.GetWorkloadEndpointStatusFromFile(filename)
 		Expect(err).ShouldNot(HaveOccurred())
 
-		endpointStatus := epstatus.WorkloadEndpointToWorkloadEndpointStatus(endpointEmptySlices)
+		endpointStatus := protoconv.WorkloadEndpointToWorkloadEndpointStatus(endpointEmptySlices)
 		Expect(*epStatus).To(Equal(*endpointStatus))
 	})
 
@@ -294,7 +295,7 @@ var _ = Describe("Endpoint Policy Status Reports [file-reporting]", func() {
 			Ipv6Nets:   []string{"2001:db8:2::2/128"},
 		}
 
-		endpointStatusOld := epstatus.WorkloadEndpointToWorkloadEndpointStatus(endpointOld)
+		endpointStatusOld := protoconv.WorkloadEndpointToWorkloadEndpointStatus(endpointOld)
 		itemJSON, err := json.Marshal(endpointStatusOld)
 		Expect(err).ShouldNot(HaveOccurred())
 		_ = os.Mkdir(statusDir, 0755)

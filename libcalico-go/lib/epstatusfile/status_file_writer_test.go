@@ -20,8 +20,6 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-
-	"github.com/projectcalico/calico/felix/proto"
 )
 
 var _ = Describe("Workload endpoint status file writer test", func() {
@@ -39,36 +37,26 @@ var _ = Describe("Workload endpoint status file writer test", func() {
 	Expect(err).ShouldNot(HaveOccurred())
 
 	BeforeEach(func() {
-		endpoint := &proto.WorkloadEndpoint{
-			State:        "active",
-			Mac:          "01:02:03:04:05:06",
-			Name:         "cali12345-ab",
-			ProfileIds:   []string{},
-			Ipv4Nets:     []string{"10.0.240.2/24"},
-			Ipv6Nets:     []string{"2001:db8:2::2/128"},
-			LocalBgpPeer: &proto.LocalBGPPeer{BgpPeerName: "global-peer"},
+		endpointStatus := &WorkloadEndpointStatus{
+			Mac:         "01:02:03:04:05:06",
+			IfaceName:   "cali12345-ab",
+			Ipv4Nets:    []string{"10.0.240.2/24"},
+			Ipv6Nets:    []string{"2001:db8:2::2/128"},
+			BGPPeerName: "global-peer",
 		}
-
-		endpointStatus := WorkloadEndpointToWorkloadEndpointStatus(endpoint)
-
 		itemJSON, err := json.Marshal(endpointStatus)
 		itemJSONPod1 = string(itemJSON)
 		Expect(err).ShouldNot(HaveOccurred())
 		err = writer.WriteStatusFile("pod1", itemJSONPod1)
 		Expect(err).ShouldNot(HaveOccurred())
 
-		endpoint = &proto.WorkloadEndpoint{
-			State:        "active",
-			Mac:          "01:02:03:04:05:06",
-			Name:         "cali12345-cd",
-			ProfileIds:   []string{},
-			Ipv4Nets:     []string{"10.0.240.2/24"},
-			Ipv6Nets:     []string{"2001:db8:2::2/128"},
-			LocalBgpPeer: &proto.LocalBGPPeer{BgpPeerName: "global-peer"},
+		endpointStatus = &WorkloadEndpointStatus{
+			Mac:         "01:02:03:04:05:06",
+			IfaceName:   "cali12345-cd",
+			Ipv4Nets:    []string{"10.0.240.2/24"},
+			Ipv6Nets:    []string{"2001:db8:2::2/128"},
+			BGPPeerName: "global-peer",
 		}
-
-		endpointStatus = WorkloadEndpointToWorkloadEndpointStatus(endpoint)
-
 		itemJSON, err = json.Marshal(endpointStatus)
 		itemJSONPod2 = string(itemJSON)
 		Expect(err).ShouldNot(HaveOccurred())
