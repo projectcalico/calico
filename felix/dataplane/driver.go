@@ -65,6 +65,7 @@ func StartDataplaneDriver(
 	fatalErrorCallback func(error),
 	k8sClientSet *kubernetes.Clientset,
 	lc *calc.LookupsCache,
+	typhaEnabled bool,
 ) (DataplaneDriver, *exec.Cmd) {
 	if !configParams.IsLeader() {
 		// Return an inactive dataplane, since we're not the leader.
@@ -217,6 +218,7 @@ func StartDataplaneDriver(
 				ResyncInterval:    configParams.InterfaceRefreshInterval,
 				NetlinkTimeout:    configParams.NetlinkTimeoutSecs,
 			},
+			ReportTyphaStats: typhaEnabled,
 			RulesConfig: rules.Config{
 				FlowLogsEnabled:       configParams.FlowLogsEnabled(),
 				NFTables:              configParams.NFTablesMode == "Enabled",

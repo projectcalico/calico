@@ -88,6 +88,8 @@ type passthruCallbacks interface {
 	OnGlobalBGPConfigUpdate(*v3.BGPConfiguration)
 	OnServiceUpdate(*proto.ServiceUpdate)
 	OnServiceRemove(*proto.ServiceRemove)
+	OnTyphaRevisionRemove()
+	OnTyphaRevisionUpdate(tr *model.TyphaRevision)
 }
 
 type routeCallbacks interface {
