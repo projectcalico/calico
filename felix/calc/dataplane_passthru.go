@@ -53,6 +53,7 @@ func (h *DataplanePassthru) RegisterWith(dispatcher *dispatcher.Dispatcher) {
 	dispatcher.Register(model.IPPoolKey{}, h.OnUpdate)
 	dispatcher.Register(model.WireguardKey{}, h.OnUpdate)
 	dispatcher.Register(model.ResourceKey{}, h.OnUpdate)
+	dispatcher.Register(model.TyphaRevisionKey{}, h.OnUpdate)
 }
 
 func (h *DataplanePassthru) OnUpdate(update api.Update) (filterOut bool) {
@@ -94,6 +95,15 @@ func (h *DataplanePassthru) OnUpdate(update api.Update) (filterOut bool) {
 			log.WithField("update", update).Debug("Passing-through Wireguard update")
 			wg := update.Value.(*model.Wireguard)
 			h.callbacks.OnWireguardUpdate(key.NodeName, wg)
+		}
+	case model.TyphaRevisionKey:
+		if update.Value == nil {
+			log.WithField("update", update).Debug("Passing-through typha revision deletion")
+			h.callbacks.OnTyphaRevisionRemove()
+		} else {
+			log.WithField("update", update).Debug("Passing-through typha revision updatee")
+			tr := update.Value.(*model.TyphaRevision)
+			h.callbacks.OnTyphaRevisionUpdate(tr)
 		}
 	case model.ResourceKey:
 		if key.Kind == v3.KindBGPConfiguration && key.Name == "default" {
