@@ -24,7 +24,6 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
-	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/crypto/pkg/tls"
 )
@@ -45,7 +44,7 @@ func NewProxy(tgts []Target) (*Proxy, error) {
 			return nil, fmt.Errorf("bad target %d, no destination", i)
 		}
 		if len(t.CAFile) != 0 && t.Dest.Scheme != "https" {
-			log.Debugf("Configuring CA cert for secure communication %s for %s", t.CAFile, t.Dest.Scheme)
+			logrus.Debugf("Configuring CA cert for secure communication %s for %s", t.CAFile, t.Dest.Scheme)
 			return nil, fmt.Errorf("CA configured for url scheme %q", t.Dest.Scheme)
 		}
 		hdlr, err := newTargetHandler(t)
@@ -53,7 +52,7 @@ func NewProxy(tgts []Target) (*Proxy, error) {
 			return nil, err
 		}
 		p.mux.HandleFunc(t.Path, hdlr)
-		log.Debugf("Proxy target %q -> %q", t.Path, t.Dest)
+		logrus.Debugf("Proxy target %q -> %q", t.Path, t.Dest)
 	}
 
 	return p, nil
@@ -78,11 +77,11 @@ func newTargetHandler(tgt Target) (func(http.ResponseWriter, *http.Request), err
 				return nil, fmt.Errorf("failed to create target handler for path %s: ca bundle was empty", tgt.Path)
 			}
 
-			log.Debugf("Detected secure transport for %s. Will pick up system cert pool", tgt.Dest)
+			logrus.Debugf("Detected secure transport for %s. Will pick up system cert pool", tgt.Dest)
 			var ca *x509.CertPool
 			ca, err := x509.SystemCertPool()
 			if err != nil {
-				log.WithError(err).Warn("failed to get system cert pool, creating a new one")
+				logrus.WithError(err).Warn("failed to get system cert pool, creating a new one")
 				ca = x509.NewCertPool()
 			}
 
@@ -112,7 +111,7 @@ func newTargetHandler(tgt Target) (func(http.ResponseWriter, *http.Request), err
 	}
 
 	return func(w http.ResponseWriter, r *http.Request) {
-		logCtx := log.WithField("dst", tgt)
+		logCtx := logrus.WithField("dst", tgt)
 		if tgt.PathRegexp != nil {
 			if !tgt.PathRegexp.MatchString(r.URL.Path) {
 				http.Error(w, "Not found", 404)
@@ -151,9 +150,9 @@ func newTargetHandler(tgt Target) (func(http.ResponseWriter, *http.Request), err
 func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	r.Header.Set("X-Forwarded-Host", r.Header.Get("Host"))
 	w.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
-	log.Debug("Proxying request")
+	logrus.Debug("Proxying request")
 	p.mux.ServeHTTP(w, r)
-	log.Debug("Finished proxying request")
+	logrus.Debug("Finished proxying request")
 }
 
 // GetTargetPath returns the target that would be used.

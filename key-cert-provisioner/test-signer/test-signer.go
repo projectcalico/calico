@@ -174,7 +174,7 @@ func main() {
 			if err != nil {
 				log.Fatalf("unexpected err when updating csr: %v", err)
 			}
-			log.Infof("CSR Signed: %v", r.ObjectMeta.Name)
+			log.Infof("CSR Signed: %v", r.Name)
 		} else if len(csr.Status.Conditions) == 0 && approve {
 			cert.Status.Conditions = []certv1.CertificateSigningRequestCondition{
 				{

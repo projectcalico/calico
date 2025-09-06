@@ -36,7 +36,6 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
-	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
@@ -93,12 +92,12 @@ func Migrate(ctxt context.Context, c client.Interface, nodename string) error {
 			// first IP in the CIDR to match the behavior used by Calico when using host-local IPAM.
 			tunIp := ip.To4()
 			if tunIp == nil {
-				return fmt.Errorf("Cannot pick an IPv4 tunnel address from the given CIDR: %s", k8sNode.Spec.PodCIDR)
+				return fmt.Errorf("cannot pick an IPv4 tunnel address from the given CIDR: %s", k8sNode.Spec.PodCIDR)
 			}
 			tunIp[3]++
 
 			// Assign the address via Calico IPAM.
-			ipipTunnelAddr := cnet.ParseIP(tunIp.String())
+			ipipTunnelAddr := net.ParseIP(tunIp.String())
 			handle := fmt.Sprintf("ipip-tunnel-addr-%s", nodename)
 			if err = c.IPAM().AssignIP(ctxt, ipam.AssignIPArgs{
 				IP:       *ipipTunnelAddr,
@@ -277,7 +276,7 @@ func Migrate(ctxt context.Context, c client.Interface, nodename string) error {
 		}
 
 		// The name of the file is its IP address.
-		ip, _, err := cnet.ParseCIDR(fmt.Sprintf("%s/32", f.Name()))
+		ip, _, err := net.ParseCIDR(fmt.Sprintf("%s/32", f.Name()))
 		if err != nil {
 			return fmt.Errorf("failed to parse IP %s: %s", f.Name(), err)
 		}
@@ -313,7 +312,7 @@ func Migrate(ctxt context.Context, c client.Interface, nodename string) error {
 				ipam.AttributeNamespace: pod.Namespace,
 			},
 		}); err != nil {
-			if _, ok := err.(errors.ErrorResourceAlreadyExists); !(ok || strings.Contains(err.Error(), "already assigned")) {
+			if _, ok := err.(errors.ErrorResourceAlreadyExists); !ok && !strings.Contains(err.Error(), "already assigned") {
 				return fmt.Errorf("failed to assign IP to calico backend: %s", err)
 			}
 			// Pod IP already assigned - likely failed to remove the file on the last attempt.

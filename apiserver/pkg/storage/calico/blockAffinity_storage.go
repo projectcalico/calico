@@ -19,7 +19,7 @@ import (
 	"fmt"
 	"reflect"
 
-	aapi "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apiserver/pkg/registry/generic/registry"
@@ -36,17 +36,17 @@ import (
 func NewBlockAffinityStorage(opts Options) (registry.DryRunnableStorage, factory.DestroyFunc) {
 	c := CreateClientFromConfig()
 	createFn := func(ctx context.Context, c clientv3.Interface, obj resourceObject, opts clientOpts) (resourceObject, error) {
-		return nil, fmt.Errorf("Unable to create block affinity. Block affinity resources are read-only.")
+		return nil, fmt.Errorf("unable to create block affinity. Block affinity resources are read-only")
 	}
 	updateFn := func(ctx context.Context, c clientv3.Interface, obj resourceObject, opts clientOpts) (resourceObject, error) {
-		return nil, fmt.Errorf("Unable to update block affinity. Block affinity resources are read-only.")
+		return nil, fmt.Errorf("unable to update block affinity. Block affinity resources are read-only")
 	}
 	getFn := func(ctx context.Context, c clientv3.Interface, ns string, name string, opts clientOpts) (resourceObject, error) {
 		ogo := opts.(options.GetOptions)
 		return c.BlockAffinities().Get(ctx, name, ogo)
 	}
 	deleteFn := func(ctx context.Context, c clientv3.Interface, ns string, name string, opts clientOpts) (resourceObject, error) {
-		return nil, fmt.Errorf("Unable to delete block affinity. Block affinity resources are read-only.")
+		return nil, fmt.Errorf("unable to delete block affinity. Block affinity resources are read-only")
 	}
 	listFn := func(ctx context.Context, c clientv3.Interface, opts clientOpts) (resourceListObject, error) {
 		olo := opts.(options.ListOptions)
@@ -60,8 +60,8 @@ func NewBlockAffinityStorage(opts Options) (registry.DryRunnableStorage, factory
 		client:            c,
 		codec:             opts.RESTOptions.StorageConfig.Codec,
 		versioner:         APIObjectVersioner{},
-		aapiType:          reflect.TypeOf(aapi.BlockAffinity{}),
-		aapiListType:      reflect.TypeOf(aapi.BlockAffinityList{}),
+		aapiType:          reflect.TypeOf(api.BlockAffinity{}),
+		aapiListType:      reflect.TypeOf(api.BlockAffinityList{}),
 		libCalicoType:     reflect.TypeOf(libapi.BlockAffinity{}),
 		libCalicoListType: reflect.TypeOf(libapi.BlockAffinityList{}),
 		isNamespaced:      false,
@@ -89,8 +89,8 @@ func (gc BlockAffinityConverter) convertToLibcalico(aapiObj runtime.Object) reso
 
 func (gc BlockAffinityConverter) convertToAAPI(libcalicoObject resourceObject, aapiObj runtime.Object) {
 	lcgBlockAffinity := libcalicoObject.(*libapi.BlockAffinity)
-	aapiBlockAffinity := aapiObj.(*aapi.BlockAffinity)
-	aapiBlockAffinity.Spec.State = aapi.BlockAffinityState(lcgBlockAffinity.Spec.State)
+	aapiBlockAffinity := aapiObj.(*api.BlockAffinity)
+	aapiBlockAffinity.Spec.State = api.BlockAffinityState(lcgBlockAffinity.Spec.State)
 	aapiBlockAffinity.Spec.Node = lcgBlockAffinity.Spec.Node
 	aapiBlockAffinity.Spec.CIDR = lcgBlockAffinity.Spec.CIDR
 	if lcgBlockAffinity.Spec.Deleted == fmt.Sprintf("%t", true) {
@@ -100,20 +100,20 @@ func (gc BlockAffinityConverter) convertToAAPI(libcalicoObject resourceObject, a
 	aapiBlockAffinity.ObjectMeta = lcgBlockAffinity.ObjectMeta
 
 	// Make sure that the API version is correct.
-	aapiBlockAffinity.TypeMeta.APIVersion = aapi.GroupVersionCurrent
+	aapiBlockAffinity.APIVersion = api.GroupVersionCurrent
 }
 
 func (gc BlockAffinityConverter) convertToAAPIList(libcalicoListObject resourceListObject, aapiListObj runtime.Object, pred storage.SelectionPredicate) {
 	lcgBlockAffinityList := libcalicoListObject.(*libapi.BlockAffinityList)
-	aapiBlockAffinityList := aapiListObj.(*aapi.BlockAffinityList)
+	aapiBlockAffinityList := aapiListObj.(*api.BlockAffinityList)
 	if libcalicoListObject == nil {
-		aapiBlockAffinityList.Items = []aapi.BlockAffinity{}
+		aapiBlockAffinityList.Items = []api.BlockAffinity{}
 		return
 	}
 	aapiBlockAffinityList.TypeMeta = lcgBlockAffinityList.TypeMeta
 	aapiBlockAffinityList.ListMeta = lcgBlockAffinityList.ListMeta
 	for _, item := range lcgBlockAffinityList.Items {
-		aapiBlockAffinity := aapi.BlockAffinity{}
+		aapiBlockAffinity := api.BlockAffinity{}
 		gc.convertToAAPI(&item, &aapiBlockAffinity)
 		if matched, err := pred.Matches(&aapiBlockAffinity); err == nil && matched {
 			aapiBlockAffinityList.Items = append(aapiBlockAffinityList.Items, aapiBlockAffinity)
