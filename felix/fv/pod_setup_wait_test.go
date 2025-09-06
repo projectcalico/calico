@@ -59,14 +59,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Pod setup status wait", []a
 		dataplaneInSyncReceivedC = tc.Felixes[0].WatchStdoutFor(regexp.MustCompile("DataplaneInSync received from upstream"))
 	})
 
-	AfterEach(func() {
-		tc.Stop()
-		if CurrentGinkgoTestDescription().Failed {
-			infra.DumpErrorData()
-		}
-		infra.Stop()
-	})
-
 	Describe("with the file-reporter writing endpoint status to '/tmp/endpoint-status'", func() {
 		buildStatCmdInFelix := func(felix *infrastructure.Felix, filename string) func() error {
 			return func() error {

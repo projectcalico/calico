@@ -28,10 +28,11 @@ import (
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
 	"github.com/projectcalico/calico/felix/fv/utils"
 	"github.com/projectcalico/calico/felix/fv/workload"
+	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 )
 
-var _ = Context("_INGRESS-EGRESS_ _BPF-SAFE_ with initialized Felix, etcd datastore, 3 workloads", func() {
+var _ = infrastructure.DatastoreDescribe("_INGRESS-EGRESS_ _BPF-SAFE_ with initialized Felix, etcd datastore, 3 workloads", []apiconfig.DatastoreType{apiconfig.EtcdV3}, func(getInfra infrastructure.InfraFactory) {
 	var (
 		etcd   *containers.Container
 		tc     infrastructure.TopologyContainers
@@ -42,8 +43,9 @@ var _ = Context("_INGRESS-EGRESS_ _BPF-SAFE_ with initialized Felix, etcd datast
 	)
 
 	BeforeEach(func() {
+		infra = getInfra()
 		opts := infrastructure.DefaultTopologyOptions()
-		tc, etcd, client, infra = infrastructure.StartSingleNodeEtcdTopology(opts)
+		tc, client = infrastructure.StartSingleNodeTopology(opts, infra)
 		infrastructure.CreateDefaultProfile(client, "default", map[string]string{"default": ""}, "default == ''")
 
 		// Create three workloads, using that profile.
@@ -218,7 +220,7 @@ var _ = Context("_INGRESS-EGRESS_ _BPF-SAFE_ with initialized Felix, etcd datast
 	})
 })
 
-var _ = Context("_INGRESS-EGRESS_ (iptables-only) with initialized Felix, etcd datastore, 3 workloads", func() {
+var _ = infrastructure.DatastoreDescribe("_INGRESS-EGRESS_ (iptables-only) with initialized Felix, etcd datastore, 3 workloads", []apiconfig.DatastoreType{apiconfig.EtcdV3}, func(getInfra infrastructure.InfraFactory) {
 	var (
 		etcd    *containers.Container
 		tc      infrastructure.TopologyContainers
@@ -230,8 +232,9 @@ var _ = Context("_INGRESS-EGRESS_ (iptables-only) with initialized Felix, etcd d
 	)
 
 	BeforeEach(func() {
+		infra = getInfra()
 		opts := infrastructure.DefaultTopologyOptions()
-		tc, etcd, client, infra = infrastructure.StartSingleNodeEtcdTopology(opts)
+		tc, client = infrastructure.StartSingleNodeTopology(opts, infra)
 		infrastructure.CreateDefaultProfile(client, "default", map[string]string{"default": ""}, "default == ''")
 
 		if NFTMode() {
@@ -325,7 +328,7 @@ var _ = Context("_INGRESS-EGRESS_ (iptables-only) with initialized Felix, etcd d
 	})
 })
 
-var _ = Context("with Typha and Felix-Typha TLS", func() {
+var _ = infrastructure.DatastoreDescribe("with Typha and Felix-Typha TLS", []apiconfig.DatastoreType{apiconfig.EtcdV3}, func(getInfra infrastructure.InfraFactory) {
 	var (
 		etcd   *containers.Container
 		tc     infrastructure.TopologyContainers
@@ -336,10 +339,11 @@ var _ = Context("with Typha and Felix-Typha TLS", func() {
 	)
 
 	BeforeEach(func() {
+		infra = getInfra()
 		options := infrastructure.DefaultTopologyOptions()
 		options.WithTypha = true
 		options.WithFelixTyphaTLS = true
-		tc, etcd, client, infra = infrastructure.StartSingleNodeEtcdTopology(options)
+		tc, client = infrastructure.StartSingleNodeTopology(options, infra)
 		infrastructure.CreateDefaultProfile(client, "default", map[string]string{"default": ""}, "default == ''")
 
 		// Create three workloads, using that profile.
