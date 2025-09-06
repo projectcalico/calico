@@ -41,7 +41,7 @@ var _ = Describe("FV tests", func() {
 	})
 
 	It("should bind a token to service account successfully", func() {
-		os.Setenv("CALICO_CNI_SERVICE_ACCOUNT", serviceAccountName)
+		_ = os.Setenv("CALICO_CNI_SERVICE_ACCOUNT", serviceAccountName)
 		tr := cni.NewTokenRefresher(clientset, namespace, cni.CNIServiceAccountName())
 		tu, err := tr.UpdateToken()
 		Expect(err).ShouldNot(HaveOccurred())
