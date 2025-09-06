@@ -14,7 +14,7 @@ DOCKER_RUN := mkdir -p ./.go-pkg-cache bin $(GOMOD_CACHE) && \
 		-e GOPATH=/go \
 		-e OS=$(BUILDOS) \
 		-e GOOS=$(BUILDOS) \
-		-e GOFLAGS=$(GOFLAGS) \
+		-e "GOFLAGS=$(GOFLAGS)" \
 		-v $(CURDIR):/go/src/github.com/projectcalico/calico:rw \
 		-v $(CURDIR)/.go-pkg-cache:/go-cache:rw \
 		-w /go/src/$(PACKAGE_NAME)

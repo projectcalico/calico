@@ -311,7 +311,7 @@ DOCKER_RUN := mkdir -p $(REPO_ROOT)/.go-pkg-cache bin $(GOMOD_CACHE) && \
 		-e GOPATH=/go \
 		-e OS=$(BUILDOS) \
 		-e GOOS=$(BUILDOS) \
-		-e GOFLAGS=$(GOFLAGS) \
+		-e "GOFLAGS=$(GOFLAGS)" \
 		-e ACK_GINKGO_DEPRECATIONS=1.16.5 \
 		-v $(REPO_ROOT):/go/src/github.com/projectcalico/calico:rw \
 		-v $(REPO_ROOT)/.go-pkg-cache:/go-cache:rw \
