@@ -79,11 +79,11 @@ func TestDiags(t *testing.T) {
 		doc,
 		nil)
 	test("cluster diags rubbish",
-		errors.New("Invalid option: 'calicoctl cluster diags rubbish'.\n\n"+usage),
+		errors.New("invalid option: 'calicoctl cluster diags rubbish'.\n\n"+usage),
 		"",
 		nil)
 	test("cluster diags --rubbish",
-		errors.New("Invalid option: 'calicoctl cluster diags --rubbish'.\n\n"+usage),
+		errors.New("invalid option: 'calicoctl cluster diags --rubbish'.\n\n"+usage),
 		"",
 		nil)
 	test("cluster diags -c /configfile",
