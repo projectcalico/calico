@@ -195,7 +195,7 @@ func generatePinnedVersionFile(data *calicoTemplateData, outputDir string) error
 	if err != nil {
 		return fmt.Errorf("failed to create pinned version file: %w", err)
 	}
-	defer pinnedVersionFile.Close()
+	defer func() { _ = pinnedVersionFile.Close() }()
 	if err := tmpl.Execute(pinnedVersionFile, data); err != nil {
 		return fmt.Errorf("failed to execute template: %w", err)
 	}
@@ -220,11 +220,11 @@ func GenerateOperatorComponents(srcDir, outputDir string) (registry.OperatorComp
 	if err != nil {
 		return op, "", err
 	}
-	defer operatorComponentsFile.Close()
+	defer func() { _ = operatorComponentsFile.Close() }()
 
 	enc := yaml.NewEncoder(operatorComponentsFile)
 	enc.SetIndent(2)
-	defer enc.Close()
+	defer func() { _ = enc.Close() }()
 
 	if err := enc.Encode(pinnedVersion); err != nil {
 		return op, "", err

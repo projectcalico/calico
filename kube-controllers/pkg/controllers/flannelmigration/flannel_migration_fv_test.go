@@ -152,7 +152,7 @@ var _ = Describe("flannel-migration-controller FV test", func() {
 	AfterEach(func() {
 		_ = calicoClient.Close()
 		flannelCluster.Reset()
-		os.Remove(kconfigfile.Name())
+		_ = os.Remove(kconfigfile.Name())
 		controllerManager.Stop()
 		apiserver.Stop()
 		etcd.Stop()
