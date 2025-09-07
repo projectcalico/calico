@@ -311,6 +311,9 @@ func updateHostEndpointConfig(client ctrlclient.Client, desiredKCC v3.KubeContro
 
 // GetAutoHEPsEnabled returns true if AutoHEPs are enabled, false otherwise.
 func GetAutoHEPsEnabled(kcc v3.KubeControllersConfiguration) bool {
+	if kcc.Spec.Controllers.Node == nil || kcc.Spec.Controllers.Node.HostEndpoint == nil {
+		return false
+	}
 	if kcc.Spec.Controllers.Node.HostEndpoint.AutoCreate != "Enabled" {
 		return false
 	}

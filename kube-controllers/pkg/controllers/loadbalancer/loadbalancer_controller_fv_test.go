@@ -190,6 +190,7 @@ var _ = Describe("Calico loadbalancer controller FV tests (etcd mode)", func() {
 	})
 
 	AfterEach(func() {
+		_ = calicoClient.Close()
 		controllerManager.Stop()
 		loadbalancercontroller.Stop()
 		apiserver.Stop()

@@ -119,6 +119,13 @@ rules:
       # We need this for Typha autoscaling
       - watch
   - apiGroups:
+      - authentication.k8s.io
+    resources:
+      # The operator creates a token review to learn its identity.
+      - tokenreviews
+    verbs:
+      - create
+  - apiGroups:
       - rbac.authorization.k8s.io
     resources:
       - clusterroles
@@ -291,6 +298,14 @@ rules:
       - watch
       - create
       - update
+  - apiGroups:
+      - discovery.k8s.io
+    resources:
+      - endpointslices
+    verbs:
+      - get
+      - list
+      - watch
   - apiGroups:
       - admissionregistration.k8s.io
     resources:

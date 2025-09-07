@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"gopkg.in/yaml.v2"
+	"go.yaml.in/yaml/v3"
 
 	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/pkg/manager/operator"

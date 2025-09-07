@@ -54,6 +54,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/perf"
 	"github.com/projectcalico/calico/felix/bpf/polprog"
 	"github.com/projectcalico/calico/felix/bpf/profiling"
+	"github.com/projectcalico/calico/felix/bpf/qos"
 	"github.com/projectcalico/calico/felix/bpf/routes"
 	"github.com/projectcalico/calico/felix/bpf/state"
 	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
@@ -587,6 +588,7 @@ var (
 	stateMap, countersMap, ifstateMap, progMap, progMapXDP, policyJumpMap, policyJumpMapXDP                       maps.Map
 	perfMap                                                                                                       maps.Map
 	profilingMap, ipfragsMapTmp, ctlbProgsMap                                                                     maps.Map
+	qosMap                                                                                                        maps.Map
 	allMaps                                                                                                       []maps.Map
 )
 
@@ -620,13 +622,14 @@ func initMapsOnce() {
 		policyJumpMapXDP = jump.XDPMap()
 		profilingMap = profiling.Map()
 		ctlbProgsMap = nat.ProgramsMap()
+		qosMap = qos.Map()
 
 		perfMap = perf.Map("perf_evnt", 512)
 
 		allMaps = []maps.Map{natMap, natBEMap, natMapV6, natBEMapV6, ctMap, ctMapV6, ctCleanupMap, ctCleanupMapV6, rtMap, rtMapV6, ipsMap, ipsMapV6,
 			stateMap, testStateMap, affinityMap, affinityMapV6, arpMap, arpMapV6, fsafeMap, fsafeMapV6,
 			countersMap, ipfragsMap, ipfragsMapTmp, ifstateMap, profilingMap,
-			policyJumpMap, policyJumpMapXDP, ctlbProgsMap}
+			policyJumpMap, policyJumpMapXDP, ctlbProgsMap, qosMap}
 		for _, m := range allMaps {
 			err := m.EnsureExists()
 			if err != nil {
@@ -795,14 +798,12 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 					globals.Flags |= libbpf.GlobalsNATOutgoingExcludeHosts
 				}
 
-				if topts.ingressQoSPacketRate > 0 {
-					globals.IngressPacketRate = topts.ingressQoSPacketRate
-					globals.IngressPacketBurst = topts.ingressQoSPacketBurst
+				if topts.ingressQoSPacketRate {
+					globals.Flags |= libbpf.GlobalsIngressPacketRateConfigured
 				}
 
-				if topts.egressQoSPacketRate > 0 {
-					globals.EgressPacketRate = topts.egressQoSPacketRate
-					globals.EgressPacketBurst = topts.egressQoSPacketBurst
+				if topts.egressQoSPacketRate {
+					globals.Flags |= libbpf.GlobalsEgressPacketRateConfigured
 				}
 
 				if topts.ipv6 {
@@ -838,12 +839,18 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 			"key size":   m.KeySize(),
 			"value size": m.ValueSize(),
 		}).Debug("Pinning map")
-		cmd := exec.Command("bpftool", "map", "show", "pinned", pin)
-		log.WithField("cmd", cmd.String()).Debugf("executing")
-		out, _ := cmd.Output()
-		log.WithField("output", string(out)).Debug("map")
-		log.WithField("size", m.MaxEntries()).Debug("libbpf map")
-		log.WithField("entry size", m.ValueSize()).Debug("libbpf map")
+		fd, err := maps.GetMapFDByPin(pin)
+		if err != nil {
+			log.WithError(err).Debug("error getting map FD by pin")
+		} else {
+			mapInfo, err := maps.GetMapInfo(fd)
+			if err != nil {
+				log.WithError(err).Debug("error getting mapInfo by FD")
+			} else {
+				log.WithFields(log.Fields{"Type": mapInfo.Type, "MaxEntries": mapInfo.MaxEntries, "ValueSize": mapInfo.ValueSize, "KeySize": mapInfo.KeySize}).Debug("existing map")
+			}
+		}
+		log.WithFields(log.Fields{"Type": m.Type(), "MaxEntries": m.MaxEntries(), "ValueSize": m.ValueSize(), "KeySize": m.KeySize()}).Debug("new map")
 		if err := m.SetPinPath(pin); err != nil {
 			obj.Close()
 			return nil, fmt.Errorf("error pinning map %s: %w", m.Name(), err)
@@ -942,11 +949,18 @@ func objUTLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHos
 		}
 		pin := "/sys/fs/bpf/tc/globals/" + m.Name()
 		log.WithField("pin", pin).Debug("Pinning map")
-		cmd := exec.Command("bpftool", "map", "show", "pinned", pin)
-		log.WithField("cmd", cmd.String()).Debugf("executing")
-		out, _ := cmd.Output()
-		log.WithField("output", string(out)).Debug("map")
-		log.WithField("size", m.MaxEntries()).Debug("libbpf map")
+		fd, err := maps.GetMapFDByPin(pin)
+		if err != nil {
+			log.WithError(err).Debug("error getting map FD by pin")
+		} else {
+			mapInfo, err := maps.GetMapInfo(fd)
+			if err != nil {
+				log.WithError(err).Debug("error getting mapInfo by FD")
+			} else {
+				log.WithFields(log.Fields{"Type": mapInfo.Type, "MaxEntries": mapInfo.MaxEntries, "ValueSize": mapInfo.ValueSize, "KeySize": mapInfo.KeySize}).Debug("existing map")
+			}
+		}
+		log.WithFields(log.Fields{"Type": m.Type(), "MaxEntries": m.MaxEntries(), "ValueSize": m.ValueSize(), "KeySize": m.KeySize()}).Debug("new map")
 		if err := m.SetPinPath(pin); err != nil {
 			obj.Close()
 			return nil, fmt.Errorf("error pinning map %s: %w", m.Name(), err)
@@ -1144,23 +1158,21 @@ func runBpfUnitTest(t *testing.T, source string, testFn func(bpfProgRunFn), opts
 }
 
 type testOpts struct {
-	description           string
-	subtests              bool
-	logLevel              log.Level
-	xdp                   bool
-	psnaStart             uint32
-	psnatEnd              uint32
-	hostNetworked         bool
-	fromHost              bool
-	progLog               string
-	ipv6                  bool
-	objname               string
-	flowLogsEnabled       bool
-	natOutExcludeHosts    bool
-	ingressQoSPacketRate  uint16
-	ingressQoSPacketBurst uint16
-	egressQoSPacketRate   uint16
-	egressQoSPacketBurst  uint16
+	description          string
+	subtests             bool
+	logLevel             log.Level
+	xdp                  bool
+	psnaStart            uint32
+	psnatEnd             uint32
+	hostNetworked        bool
+	fromHost             bool
+	progLog              string
+	ipv6                 bool
+	objname              string
+	flowLogsEnabled      bool
+	natOutExcludeHosts   bool
+	ingressQoSPacketRate bool
+	egressQoSPacketRate  bool
 }
 
 type testOption func(opts *testOpts)
@@ -1222,17 +1234,15 @@ func withNATOutExcludeHosts() testOption {
 	}
 }
 
-func withIngressQoSPacketRate(packetRate, packetBurst uint16) testOption {
+func withIngressQoSPacketRate() testOption {
 	return func(o *testOpts) {
-		o.ingressQoSPacketRate = packetRate
-		o.ingressQoSPacketBurst = packetBurst
+		o.ingressQoSPacketRate = true
 	}
 }
 
-func withEgressQoSPacketRate(packetRate, packetBurst uint16) testOption {
+func withEgressQoSPacketRate() testOption {
 	return func(o *testOpts) {
-		o.egressQoSPacketRate = packetRate
-		o.egressQoSPacketBurst = packetBurst
+		o.egressQoSPacketRate = true
 	}
 }
 
@@ -1981,7 +1991,7 @@ func TestMapIterWithDeleteLastOfBatch(t *testing.T) {
 		Type:       "hash",
 		KeySize:    8,
 		ValueSize:  8,
-		MaxEntries: 1000,
+		MaxEntries: 4 * maps.IteratorNumKeys,
 		Name:       "cali_tmap",
 		Flags:      unix.BPF_F_NO_PREALLOC,
 	})
@@ -1989,7 +1999,9 @@ func TestMapIterWithDeleteLastOfBatch(t *testing.T) {
 	err := m.EnsureExists()
 	Expect(err).NotTo(HaveOccurred())
 
-	for i := 0; i < 40; i++ {
+	items := 3*maps.IteratorNumKeys + 5
+
+	for i := 0; i < items; i++ {
 		var k, v [8]byte
 
 		binary.LittleEndian.PutUint64(k[:], uint64(i))
@@ -2018,9 +2030,10 @@ func TestMapIterWithDeleteLastOfBatch(t *testing.T) {
 	})
 	Expect(err).NotTo(HaveOccurred())
 
-	Expect(cnt).To(Equal(40))
+	Expect(len(out)).To(Equal(items))
+	Expect(cnt).To(Equal(items))
 
-	for i := 0; i < 40; i++ {
+	for i := 0; i < items; i++ {
 		Expect(out).To(HaveKey(uint64(i)))
 		Expect(out[uint64(i)]).To(Equal(uint64(i * 7)))
 	}

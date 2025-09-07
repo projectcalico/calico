@@ -41,6 +41,7 @@ func main() {
     get          Get a resource identified by file, directory, stdin or resource type and
                  name.
     label        Add or update labels of resources.
+    validate     Validate a resource by file, directory or stdin without applying it.
     convert      Convert config files between different API versions.
     ipam         IP address management.
     node         Calico node management.
@@ -122,6 +123,8 @@ Description:
 			err = commands.Get(args)
 		case "label":
 			err = commands.Label(args)
+		case "validate":
+			err = commands.Validate(args)
 		case "convert":
 			err = commands.Convert(args)
 		case "version":

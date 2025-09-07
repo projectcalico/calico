@@ -101,8 +101,9 @@ int calico_tc_main(struct __sk_buff *skb)
 
 			CALI_DEBUG("New packet at ifindex=%d; mark=%x", skb->ifindex, skb->mark);
 			parse_packet_ip(ctx);
-			if (enforce_packet_rate_qos(ctx) == TC_ACT_SHOT) {
+			if (CALI_F_WEP && qos_enforce_packet_rate(ctx) == TC_ACT_SHOT) {
 				CALI_DEBUG("Final result=DENY (%d). Dropped due to packet rate QoS.", CALI_REASON_DROPPED_BY_QOS);
+				deny_reason(ctx, CALI_REASON_DROPPED_BY_QOS);
 				return TC_ACT_SHOT;
 			}
 			CALI_DEBUG("Final result=ALLOW (%d). Bypass mark set.", CALI_REASON_BYPASS);
@@ -1322,7 +1323,8 @@ int calico_tc_skb_accepted_entrypoint(struct __sk_buff *skb)
 	}
 #endif
 
-	if (enforce_packet_rate_qos(ctx) == TC_ACT_SHOT) {
+	if (CALI_F_WEP && qos_enforce_packet_rate(ctx) == TC_ACT_SHOT) {
+		deny_reason(ctx, CALI_REASON_DROPPED_BY_QOS);
 		goto deny;
 	}
 	ctx->fwd = calico_tc_skb_accepted(ctx);
@@ -1954,9 +1956,6 @@ int calico_tc_skb_send_icmp_replies(struct __sk_buff *skb)
 		goto deny;
 	}
 
-	if (enforce_packet_rate_qos(ctx) == TC_ACT_SHOT) {
-		goto deny;
-	}
 	tc_state_fill_from_iphdr(ctx);
 	ctx->state->sport = ctx->state->dport = 0;
 	return forward_or_drop(ctx);
@@ -2122,6 +2121,11 @@ int calico_tc_skb_ipv4_frag(struct __sk_buff *skb)
 	);
 	struct cali_tc_ctx *ctx = &_ctx;
 
+#ifndef BPF_CORE_SUPPORTED
+	deny_reason(ctx, CALI_REASON_FRAG_UNSUPPORTED);
+	CALI_DEBUG("IPv4 fragmentation not supported in this kernel version");
+	goto deny;
+#else
 	CALI_DEBUG("Entering calico_tc_skb_ipv4_frag");
 	CALI_DEBUG("iphdr_offset %d ihl %d", skb_iphdr_offset(ctx), ctx->ipheader_len);
 
@@ -2134,13 +2138,18 @@ int calico_tc_skb_ipv4_frag(struct __sk_buff *skb)
 	tc_state_fill_from_iphdr_v4(ctx);
 
 	if (!frags4_handle(ctx)) {
-		deny_reason(ctx, CALI_REASON_FRAG_WAIT);
+		if (!bpf_core_enum_value_exists(enum bpf_func_id, BPF_FUNC_loop)) {
+			deny_reason(ctx, CALI_REASON_FRAG_UNSUPPORTED);
+		} else {
+			deny_reason(ctx, CALI_REASON_FRAG_WAIT);
+		}
 		goto deny;
 	}
 	/* force it through stack to trigger any further necessary fragmentation */
 	ctx->state->flags |= CALI_ST_SKIP_REDIR_ONCE;
 
 	return pre_policy_processing(ctx);
+#endif /* !BPF_CORE_SUPPORTED */
 
 finalize:
 	return forward_or_drop(ctx);

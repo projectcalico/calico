@@ -102,7 +102,7 @@ func SaveShutdownTimestamp() error {
 	ts := time.Now().UTC().Format(time.RFC3339)
 	filename := shutdownTimestampFileName()
 	log.Infof("Writing shutdown timestamp %s to %s", ts, filename)
-	if err := os.WriteFile(filename, []byte(ts), 0644); err != nil {
+	if err := os.WriteFile(filename, []byte(ts), 0o644); err != nil {
 		log.WithError(err).Error("Unable to write to " + filename)
 		return err
 	}
@@ -174,7 +174,7 @@ func NodenameFromFile() string {
 func WriteNodeConfig(nodeName string) {
 	filename := nodenameFileName()
 	log.Debugf("Writing %s to "+filename, nodeName)
-	if err := os.WriteFile(filename, []byte(nodeName), 0644); err != nil {
+	if err := os.WriteFile(filename, []byte(nodeName), 0o644); err != nil {
 		log.WithError(err).Error("Unable to write to " + filename)
 		Terminate()
 	}
@@ -182,10 +182,12 @@ func WriteNodeConfig(nodeName string) {
 
 // Set Kubernetes NodeNetworkUnavailable to false when starting
 // https://kubernetes.io/docs/concepts/architecture/nodes/#condition
-func SetNodeNetworkUnavailableCondition(clientset kubernetes.Clientset,
+func SetNodeNetworkUnavailableCondition(
+	clientset kubernetes.Clientset,
 	nodeName string,
 	value bool,
-	timeout time.Duration) error {
+	timeout time.Duration,
+) error {
 	log.Infof("Setting NetworkUnavailable to %t", value)
 
 	var condition kapiv1.NodeCondition
