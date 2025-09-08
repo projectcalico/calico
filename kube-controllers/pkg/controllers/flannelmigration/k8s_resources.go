@@ -489,7 +489,7 @@ func (n k8snode) execCommandInPod(k8sClientset *kubernetes.Clientset, namespace,
 
 	if !isPodRunningAndReady(&pod) {
 		// Pod is not running and ready.
-		return "", fmt.Errorf("failed to execute command in pod. Pod %s is not ready.", pod.Name)
+		return "", fmt.Errorf("failed to execute command in pod. Pod %s is not ready", pod.Name)
 	}
 
 	cmdArgs := []string{"exec", pod.Name, fmt.Sprintf("--namespace=%s", namespace), fmt.Sprintf("-c=%s", containerName), "--"}
