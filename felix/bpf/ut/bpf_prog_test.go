@@ -310,6 +310,7 @@ func setupAndRun(logger testLogger, loglevel, section string, rules *polprog.Rul
 		logLevel:  log.DebugLevel,
 		psnaStart: 20000,
 		psnatEnd:  30000,
+		dscp:      -1,
 	}
 
 	for _, o := range opts {
@@ -806,8 +807,8 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 				}
 
 				globals.DSCP = -1
-				if topts.dscp != nil && *topts.dscp >= 0 {
-					globals.DSCP = *topts.dscp
+				if topts.dscp >= 0 {
+					globals.DSCP = topts.dscp
 				}
 
 				if topts.ipv6 {
@@ -1177,7 +1178,7 @@ type testOpts struct {
 	natOutExcludeHosts   bool
 	ingressQoSPacketRate bool
 	egressQoSPacketRate  bool
-	dscp                 *int8
+	dscp                 int8
 }
 
 type testOption func(opts *testOpts)
@@ -1253,7 +1254,7 @@ func withEgressQoSPacketRate() testOption {
 
 func withEgressDSCP(value int8) testOption {
 	return func(o *testOpts) {
-		o.dscp = &value
+		o.dscp = value
 	}
 }
 

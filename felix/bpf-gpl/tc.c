@@ -1349,7 +1349,7 @@ int calico_tc_skb_accepted_entrypoint(struct __sk_buff *skb)
 		deny_reason(ctx, CALI_REASON_DROPPED_BY_QOS);
 		goto deny;
 	}
-	if (set_dscp(ctx) == TC_ACT_SHOT) {
+	if ((CALI_F_FROM_WEP || CALI_F_TO_HEP) && EGRESS_DSCP >= 0 && !qos_set_dscp(ctx)) {
 		goto deny;
 	}
 	ctx->fwd = calico_tc_skb_accepted(ctx);
@@ -1623,7 +1623,6 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct cali_tc_ctx *ctx
 #else
 	CALI_DEBUG("ip->ttl %d", ip_hdr(ctx)->ttl);
 #endif
-	
 	if (ip_ttl_exceeded(ip_hdr(ctx))) {
 		switch (ct_rc){
 		case CALI_CT_NEW:

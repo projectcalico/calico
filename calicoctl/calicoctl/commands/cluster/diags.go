@@ -508,7 +508,7 @@ func collectTLSSecrets(kubeClient kubernetes.Interface, dir string) {
 		{"calico-kube-controllers-metrics-tls", "calico-system"},
 		{"calico-node-prometheus-server-tls", "calico-system"},
 		{"node-certs", "calico-system"},
-		{"typa-certs", "calico-system"},
+		{"typha-certs", "calico-system"},
 		{"calico-node-prometheus-client-tls", "tigera-prometheus"},
 		{"calico-node-prometheus-tls", "tigera-prometheus"},
 		{"deep-packet-inspection-tls", "tigera-dpi"},

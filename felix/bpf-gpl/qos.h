@@ -109,17 +109,8 @@ static CALI_BPF_INLINE int qos_enforce_packet_rate(struct cali_tc_ctx *ctx)
 	return TC_ACT_SHOT;
 }
 
-static CALI_BPF_INLINE int set_dscp(struct cali_tc_ctx *ctx)
+static CALI_BPF_INLINE bool qos_set_dscp(struct cali_tc_ctx *ctx)
 {
-#if (CALI_F_FROM_WEP || CALI_F_TO_HEP)
-	if (EGRESS_DSCP < 0) {
-		return TC_ACT_UNSPEC;
-	}
-
-	if (!(ctx->state->flags & CALI_ST_CLUSTER_EGRESS)) {
-		return TC_ACT_UNSPEC;
-	}
-
 	__s8 dscp = EGRESS_DSCP;
 	CALI_DEBUG("setting dscp to %d", dscp);
 
@@ -134,24 +125,22 @@ static CALI_BPF_INLINE int set_dscp(struct cali_tc_ctx *ctx)
 	// The 2 least significant bits are assigned to ECN and must not be touched.
 	ip_hdr(ctx)->tos = (__u8) ((ip_hdr(ctx)->tos & 0x03) | (dscp << 2));
 
-	__wsum ip_csum = bpf_csum_diff(0, 0, (__u32 *)ctx->ip_header, sizeof(struct iphdr), 0);
+	ip_hdr(ctx)->check = 0;
+	__wsum ip_csum = bpf_csum_diff(0, 0, (__u32 *)ip_hdr(ctx), sizeof(struct iphdr), 0);
 	int ret = bpf_l3_csum_replace(ctx->skb, skb_iphdr_offset(ctx) + offsetof(struct iphdr, check), 0, ip_csum, 0);
 	if (ret) {
 		CALI_DEBUG("IP DSCP: set L3 csum failed");
 		deny_reason(ctx, CALI_REASON_CSUM_FAIL);
-		return TC_ACT_SHOT;
+		return false;
 	}
 
 	if (skb_refresh_validate_ptrs(ctx, UDP_SIZE)) {
 		CALI_DEBUG("Too short");
 		deny_reason(ctx, CALI_REASON_SHORT);
-		return TC_ACT_SHOT;
+		return false;
 	}
 #endif /* IPVER6 */
-
-#endif
-	return TC_ACT_UNSPEC;
+	return true;
 }
-
 
 #endif /* __CALI_QOS_H__ */

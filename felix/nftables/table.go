@@ -489,7 +489,7 @@ func (t *NftablesTable) UpdateChain(chain *generictables.Chain) {
 	numRulesDelta := len(chain.Rules) - oldNumRules
 	t.gaugeNumRules.Add(float64(numRulesDelta))
 	if t.chainIsReferenced(chain.Name) {
-		t.dirtyChains.Add(chain.Name)
+		t.markChainDirty(chain.Name)
 	}
 }
 
@@ -506,7 +506,7 @@ func (t *NftablesTable) RemoveChainByName(name string) {
 		t.maybeDecrefReferredChains(name, oldChain.Rules)
 		delete(t.chainNameToChain, name)
 		if t.chainIsReferenced(name) {
-			t.dirtyChains.Add(name)
+			t.markChainDirty(name)
 		}
 	}
 }
@@ -550,7 +550,7 @@ func (t *NftablesTable) increfChain(chainName string) {
 	t.chainRefCounts[chainName] += 1
 	if t.chainRefCounts[chainName] == 1 {
 		t.updateRateLimitedLog.WithField("chainName", chainName).Info("Chain became referenced, marking it for programming")
-		t.dirtyChains.Add(chainName)
+		t.markChainDirty(chainName)
 		if chain := t.chainNameToChain[chainName]; chain != nil {
 			// Recursively incref chains that this chain refers to.  If
 			// chain == nil then the chain is likely about to be added, in
@@ -573,7 +573,7 @@ func (t *NftablesTable) decrefChain(chainName string) {
 			t.maybeDecrefReferredChains(chainName, chain.Rules)
 		}
 		delete(t.chainRefCounts, chainName)
-		t.dirtyChains.Add(chainName)
+		t.markChainDirty(chainName)
 		return
 	}
 
@@ -602,7 +602,7 @@ func (t *NftablesTable) loadDataplaneState() {
 	// chains for refresh.
 	for chainName, expectedHashes := range t.chainToDataplaneHashes {
 		logCxt := t.logCxt.WithField("chainName", chainName)
-		if t.dirtyChains.Contains(chainName) || t.dirtyBaseChains.Contains(chainName) {
+		if t.isDirty(chainName) {
 			// Already an update pending for this chain; no point in flagging it as
 			// out-of-sync.
 			logCxt.Debug("Skipping known-dirty chain")
@@ -612,7 +612,7 @@ func (t *NftablesTable) loadDataplaneState() {
 			// This doesn't match the regex for chains programmed by us. Mark it as dirty so
 			// that we clean it up on the next apply.
 			logCxt.WithField("chain", chainName).Warn("Found chain that doesn't belong to us, marking for cleanup")
-			t.dirtyChains.Add(chainName)
+			t.markChainDirty(chainName)
 		} else {
 			// One of our chains, should match exactly.
 			dpHashes := dataplaneHashes[chainName]
@@ -621,7 +621,7 @@ func (t *NftablesTable) loadDataplaneState() {
 					"dpHashes":       dpHashes,
 					"expectedHashes": expectedHashes,
 				}).Warn("Detected out-of-sync Calico chain, marking for resync")
-				t.dirtyChains.Add(chainName)
+				t.markChainDirty(chainName)
 			}
 		}
 	}
@@ -630,7 +630,7 @@ func (t *NftablesTable) loadDataplaneState() {
 	t.logCxt.Debug("Scanning for unexpected nftables chains")
 	for chainName := range dataplaneHashes {
 		logCxt := t.logCxt.WithField("chainName", chainName)
-		if t.dirtyChains.Contains(chainName) || t.dirtyBaseChains.Contains(chainName) {
+		if t.isDirty(chainName) {
 			// Already an update pending for this chain.
 			logCxt.Debug("Skipping known-dirty chain")
 			continue
@@ -643,13 +643,28 @@ func (t *NftablesTable) loadDataplaneState() {
 
 		// Chain exists in dataplane but not in memory, mark as dirty so we'll clean it up.
 		logCxt.WithField("chainName", chainName).Info("Found unexpected chain, marking for cleanup")
-		t.dirtyChains.Add(chainName)
+		t.markChainDirty(chainName)
 	}
 
 	t.logCxt.Debug("Finished loading nftables state")
 	t.chainToDataplaneHashes = dataplaneHashes
 	t.chainToFullRules = dataplaneRules
 	t.inSyncWithDataPlane = true
+}
+
+// markChainDirty marks the given chain as dirty, causing it to be re-written on the next Apply.
+// It handles adding the chain to dirtyBaseChains if it's a base chain, otherwise to dirtyChains.
+func (t *NftablesTable) markChainDirty(chainName string) {
+	if _, isBase := baseChains[chainName]; isBase {
+		t.dirtyBaseChains.Add(chainName)
+	} else {
+		t.dirtyChains.Add(chainName)
+	}
+}
+
+// isDirty returns true if the given chain is marked as dirty.
+func (t *NftablesTable) isDirty(chainName string) bool {
+	return t.dirtyBaseChains.Contains(chainName) || t.dirtyChains.Contains(chainName)
 }
 
 // expectedHashesForInsertAppendChain calculates the expected hashes for a whole top-level chain
@@ -972,6 +987,7 @@ func (t *NftablesTable) applyUpdates() error {
 				"previous":  previousHashes,
 				"current":   currentHashes,
 			}).Debug("Comparing chain hashes")
+
 			for i := 0; i < len(previousHashes) || i < len(currentHashes); i++ {
 				if i < len(previousHashes) && i < len(currentHashes) {
 					if previousHashes[i] == currentHashes[i] {
@@ -1049,7 +1065,7 @@ func (t *NftablesTable) applyUpdates() error {
 			}
 		}
 
-		// Add appended rules if there is any
+		// Add appended rules if there are any.
 		rules = t.chainToAppendedRules[chainName]
 		if len(rules) > 0 {
 			t.logCxt.Debug("Rendering specific append rules.")
