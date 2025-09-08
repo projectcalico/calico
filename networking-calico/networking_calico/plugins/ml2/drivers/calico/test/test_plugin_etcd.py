@@ -440,7 +440,7 @@ class TestPluginEtcdBase(_TestEtcdBase):
 
     def make_context(self):
         context = mock.MagicMock()
-        context._plugin_context.to_dict.return_value = {}
+        context.plugin_context.to_dict.return_value = {}
         return context
 
     def test_start_two_ports(self):
@@ -558,7 +558,7 @@ class TestPluginEtcdBase(_TestEtcdBase):
         # Delete lib.port1.
         context = self.make_context()
         context._port = lib.port1
-        context._plugin_context.session.query.side_effect = self.db_query
+        context.plugin_context.session.query.side_effect = self.db_query
         self.driver.delete_port_postcommit(context)
         self.assertEtcdWrites({})
         self.assertEtcdDeletes(set([ep_deadbeef_key_v3]))
@@ -1083,13 +1083,9 @@ class TestPluginEtcdBase(_TestEtcdBase):
         lib.m_oslo_config.cfg.CONF.calico.egress_burst_packets = 0
 
         # Set a QoS policy on the network instead of directly on the port.
-        #
-        # Note that the network_id at this point is 'calico-other-network-id'.
         _log.debug("Test getting QoS policy from network object")
         del self.osdb_ports[0]["qos_policy_id"]
-        self.assertEqual(context._port["network_id"], "calico-other-network-id")
-        self.assertEqual(self.osdb_networks[1]["id"], "calico-other-network-id")
-        self.osdb_networks[1]["qos_policy_id"] = "1"
+        self.osdb_ports[0]["qos_network_policy_id"] = "1"
         self.driver.update_port_postcommit(context)
 
         # Expected changes
@@ -1106,7 +1102,7 @@ class TestPluginEtcdBase(_TestEtcdBase):
 
         # Remove the QoS policy from the network again.
         _log.debug("Retest after removing all QoS policy")
-        del self.osdb_networks[1]["qos_policy_id"]
+        del self.osdb_ports[0]["qos_network_policy_id"]
         self.driver.update_port_postcommit(context)
 
         # Expected changes
@@ -1177,10 +1173,8 @@ class TestPluginEtcd(TestPluginEtcdBase):
         implemented as no-ops (because Calico function does not need
         them).
         """
-        self.driver.update_network_postcommit(None)
         self.driver.delete_network_postcommit(None)
         self.driver.create_network_postcommit(None)
-        self.driver.update_network_postcommit(None)
 
     def test_subnet_hooks(self):
         """Test subnet creation, update and deletion hooks."""
