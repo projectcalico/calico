@@ -20,7 +20,6 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/felix/proto"
 	v3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 )
@@ -61,24 +60,6 @@ func WorkloadEndpointKeyToStatusFilename(key *model.WorkloadEndpointKey) string 
 	}).Debug("Generating filename from WorkloadEndpointKey")
 
 	return strings.Join(parts, separator)
-}
-
-// WorkloadEndpointIDToWorkloadEndpointKey converts the proto representation
-// of an endpoint key back to the canonical model structure.
-// Returns nil if passed a nilptr.
-func WorkloadEndpointIDToWorkloadEndpointKey(id *proto.WorkloadEndpointID, hostname string) *model.WorkloadEndpointKey {
-	if id == nil {
-		return nil
-	}
-
-	key := &model.WorkloadEndpointKey{
-		Hostname:       hostname,
-		OrchestratorID: id.OrchestratorId,
-		WorkloadID:     id.WorkloadId,
-		EndpointID:     id.EndpointId,
-	}
-	logrus.WithField("key", key).Debug("Generating WorkloadEndpointKey from WorkloadEndpointID")
-	return key
 }
 
 // V3WorkloadEndpointToWorkloadEndpointKey generates a WorkloadEndpointKey from the given WorkloadEndpoint.
