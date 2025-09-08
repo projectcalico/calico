@@ -237,7 +237,7 @@ func (e *Emitter) collectionToReader(bucket *storage.FlowCollection) (*bytes.Rea
 		f := types.FlowToProto(&flow)
 		flowJSON, err := json.Marshal(f)
 		if err != nil {
-			return nil, fmt.Errorf("Error marshalling flow: %v", err)
+			return nil, fmt.Errorf("error marshalling flow: %v", err)
 		}
 		body = append(body, flowJSON...)
 	}
