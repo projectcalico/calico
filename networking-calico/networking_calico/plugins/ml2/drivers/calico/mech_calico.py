@@ -43,6 +43,7 @@ from keystoneclient.v3.client import Client as KeystoneClient
 import neutron.plugins.ml2.rpc as rpc
 from neutron.agent import rpc as agent_rpc
 from neutron.conf.agent import common as config
+from neutron.objects import ports as objports
 from neutron.plugins.ml2.drivers import mech_agent
 
 from neutron_lib import constants
@@ -722,6 +723,17 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         # qos_policy_id.
         plugin_context = context._plugin_context
         with self._txn_from_context(plugin_context, tag="update-network"):
+            try:
+                object_ports = objports.Port.get_objects(
+                    plugin_context,
+                    network_id=[network_id],
+                    qos_policy_id=["", None],
+                )
+                for p in object_ports:
+                    LOG.info("get_objects port -> %r", p)
+            except Exception:
+                LOG.exception("problem in get_objects")
+
             ports = self.db.get_ports(
                 plugin_context,
                 filters={
@@ -729,6 +741,8 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                     "qos_policy_id": ["", None],
                 },
             )
+            for p in ports:
+                LOG.info("get_ports port -> %r", p)
             self.update_existing_ports(
                 [p for p in ports if not p["qos_policy_id"]],
                 plugin_context,
