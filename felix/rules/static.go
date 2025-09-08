@@ -1065,27 +1065,22 @@ func (r *DefaultRuleRenderer) StaticManglePostroutingChain(ipVersion uint8) *gen
 	// mangle table is typically used, if at all, for packet manipulations that might need to
 	// apply to our allowed traffic.
 
-	ipConf := r.ipSetConfig(ipVersion)
-	allIPsSetName := ipConf.NameForMainIPSet(IPSetIDAllPools)
-	allHostsSetName := ipConf.NameForMainIPSet(IPSetIDAllHostNets)
-	rules = append(
-		rules, generictables.Rule{
-			Match: r.NewMatch().
-				SourceIPSet(allIPsSetName).
-				NotDestIPSet(allIPsSetName).
-				NotDestIPSet(allHostsSetName),
-			Action:  r.Jump(ChainEgressDSCP),
-			Comment: []string{"set dscp for workloads traffic leaving cluster."},
-		},
-		generictables.Rule{
-			Match: r.NewMatch().
-				SourceIPSet(allHostsSetName).
-				NotDestIPSet(allIPsSetName).
-				NotDestIPSet(allHostsSetName),
-			Action:  r.Jump(ChainEgressDSCP),
-			Comment: []string{"set dscp for host endpoints traffic leaving cluster."},
-		},
-	)
+	if !r.BPFEnabled {
+		ipConf := r.ipSetConfig(ipVersion)
+		allIPsSetName := ipConf.NameForMainIPSet(IPSetIDAllPools)
+		allHostsSetName := ipConf.NameForMainIPSet(IPSetIDAllHostNets)
+		dscpSetName := ipConf.NameForMainIPSet(IPSetIDDSCPEndpoints)
+		rules = append(
+			rules, generictables.Rule{
+				Match: r.NewMatch().
+					SourceIPSet(dscpSetName).
+					NotDestIPSet(allIPsSetName).
+					NotDestIPSet(allHostsSetName),
+				Action:  r.Jump(ChainEgressDSCP),
+				Comment: []string{"set dscp for traffic leaving cluster."},
+			},
+		)
+	}
 
 	// Allow immediately if IptablesMarkAccept is set.  Our filter-FORWARD chain sets this for
 	// any packets that reach the end of that chain.  The principle is that we don't want to

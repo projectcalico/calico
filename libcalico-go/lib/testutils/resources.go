@@ -164,12 +164,13 @@ func (t *testResourceWatcher) ExpectEvents(kind string, expectedEvents []watch.E
 // ExpectEventsAnyOrder validates the received events match those expected but the order
 // is not necessarily fixed.  KDD watch without a resource version does not appear to be
 // deterministic in the order of events from the initial "list".
-//
-// This should be called within a Ginkgo test, and should only be called when listing the
-// current snapshot - it should only include added event types.
 func (t *testResourceWatcher) ExpectEventsAnyOrder(kind string, expectedEvents []watch.Event) {
+	var establishedType *watch.EventType
 	for _, e := range expectedEvents {
-		Expect(e.Type).To(Equal(watch.Added))
+		if establishedType != nil && *establishedType != e.Type {
+			Fail("ExpectEventsAnyOrder should only be used with a set of events of the same type")
+		}
+		establishedType = &e.Type
 	}
 	t.expectEvents(kind, true, expectedEvents)
 }

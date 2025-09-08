@@ -26,6 +26,7 @@ import (
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sync/semaphore"
+	corev1 "k8s.io/api/core/v1"
 
 	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
@@ -119,7 +120,7 @@ func (c ipamClient) AutoAssign(ctx context.Context, args AutoAssignArgs) (*IPAMA
 				return nil, nil, fmt.Errorf("provided IPv4 IPPools list contains one or more IPv6 IPPools")
 			}
 		}
-		v4ia, err = c.autoAssign(ctx, args.Num4, args.HandleID, args.Attrs, args.IPv4Pools, 4, hostname, args.MaxBlocksPerHost, args.HostReservedAttrIPv4s, args.IntendedUse)
+		v4ia, err = c.autoAssign(ctx, args.Num4, args.HandleID, args.Attrs, args.IPv4Pools, 4, hostname, args.MaxBlocksPerHost, args.HostReservedAttrIPv4s, args.IntendedUse, args.Namespace)
 		if err != nil {
 			log.Errorf("Error assigning IPV4 addresses: %v", err)
 			return v4ia, nil, err
@@ -134,7 +135,7 @@ func (c ipamClient) AutoAssign(ctx context.Context, args AutoAssignArgs) (*IPAMA
 				return nil, nil, fmt.Errorf("provided IPv6 IPPools list contains one or more IPv4 IPPools")
 			}
 		}
-		v6ia, err = c.autoAssign(ctx, args.Num6, args.HandleID, args.Attrs, args.IPv6Pools, 6, hostname, args.MaxBlocksPerHost, args.HostReservedAttrIPv6s, args.IntendedUse)
+		v6ia, err = c.autoAssign(ctx, args.Num6, args.HandleID, args.Attrs, args.IPv6Pools, 6, hostname, args.MaxBlocksPerHost, args.HostReservedAttrIPv6s, args.IntendedUse, args.Namespace)
 		if err != nil {
 			log.Errorf("Error assigning IPV6 addresses: %v", err)
 			return v4ia, v6ia, err
@@ -248,9 +249,9 @@ func detectOS(ctx context.Context) string {
 // determinePools compares a list of requested pools with the enabled pools and returns the intersect.
 // If any requested pool does not exist, or is not enabled, an error is returned.
 // If no pools are requested, all enabled pools are returned.
-// Also applies selector logic on node labels to determine if the pool is a match.
+// Also applies selector logic on node labels and namespace labels to determine if the pool is a match.
 // Returns the set of matching pools as well as the full set of ip pools.
-func (c ipamClient) determinePools(ctx context.Context, requestedPoolNets []net.IPNet, version int, node libapiv3.Node, maxPrefixLen int) (matchingPools, enabledPools []v3.IPPool, err error) {
+func (c ipamClient) determinePools(ctx context.Context, requestedPoolNets []net.IPNet, version int, node libapiv3.Node, namespace *corev1.Namespace, maxPrefixLen int) (matchingPools, enabledPools []v3.IPPool, err error) {
 	// Get all the enabled IP pools from the datastore.
 	enabledPools, err = c.pools.GetEnabledPools(ctx, version)
 	if err != nil {
@@ -297,34 +298,46 @@ func (c ipamClient) determinePools(ctx context.Context, requestedPoolNets []net.
 		}
 	}
 
-	// If requested IP pools are provided, use those unconditionally. We will ignore
-	// IP pool selectors in this case. We need this for backwards compatibility, since IP pool
-	// node selectors have not always existed.
+	// If requested IP pools are provided, use those unconditionally.
+	// We will ignore IP pool selectors in this case for backwards compatibility.
 	if len(requestedPools) > 0 {
 		log.Debugf("Using the requested IP pools")
 		matchingPools = requestedPools
 		return
 	}
 
-	// At this point, we've determined the set of enabled IP pools which are valid for use.
-	// We only want to use IP pools which actually match this node, so do a filter based on
-	// selector. Additionally, we check the ippools assignmentMode type so we don't use ips from Manual pool when no pool was specified
+	// At this point, we need to apply both namespaceSelector and nodeSelector logic.
+	// We only want to use IP pools which actually match both this node and namespace.
 	for _, pool := range enabledPools {
 		if len(requestedPoolNets) == 0 && *pool.Spec.AssignmentMode != v3.Automatic {
 			continue
 		}
-		var matches bool
-		matches, err = SelectsNode(pool, node)
+
+		// Check node selector
+		nodeMatches, err := SelectsNode(pool, node)
 		if err != nil {
 			log.WithError(err).WithField("pool", pool).Error("failed to determine if node matches pool")
-			return
+			return nil, nil, err
 		}
-		if !matches {
+		if !nodeMatches {
 			// Do not consider pool enabled if the nodeSelector doesn't match the node's labels.
 			log.Debugf("IP pool does not match this node: %s", pool.Name)
 			continue
 		}
-		log.Debugf("IP pool matches this node: %s", pool.Name)
+
+		// Check namespace selector
+		namespaceMatches, err := SelectsNamespace(pool, namespace)
+		if err != nil {
+			log.WithError(err).WithField("pool", pool).Error("failed to determine if namespace matches pool")
+			return nil, nil, err
+		}
+		if !namespaceMatches {
+			// Do not consider pool enabled if the namespaceSelector doesn't match the namespace's labels.
+			log.WithField("namespace", namespace).Debugf("IP pool does not match this namespace: %s", pool.Name)
+			continue
+		}
+
+		log.Debugf("IP pool matches both node and namespace: %s", pool.Name)
 		matchingPools = append(matchingPools, pool)
 	}
 
@@ -334,7 +347,7 @@ func (c ipamClient) determinePools(ctx context.Context, requestedPoolNets []net.
 // prepareAffinityBlocksForHost returns a list of blocks affine to a node based on requested IP pools.
 // It also releases any emptied blocks still affine to this host but no longer part of an IP Pool which
 // selects this node. It returns matching pools, list of host-affine blocks and any error encountered.
-func (c ipamClient) prepareAffinityBlocksForHost(ctx context.Context, requestedPools []net.IPNet, version int, host string, rsvdAttr *HostReservedAttr, use v3.IPPoolAllowedUse) ([]v3.IPPool, []net.IPNet, error) {
+func (c ipamClient) prepareAffinityBlocksForHost(ctx context.Context, requestedPools []net.IPNet, version int, host string, rsvdAttr *HostReservedAttr, use v3.IPPoolAllowedUse, namespace *corev1.Namespace) ([]v3.IPPool, []net.IPNet, error) {
 	// Retrieve node for given hostname to use for ip pool node selection
 	var node *model.KVPair
 	var err error
@@ -370,7 +383,8 @@ func (c ipamClient) prepareAffinityBlocksForHost(ctx context.Context, requestedP
 	}
 
 	// Determine the correct set of IP pools to use for this request.
-	poolsSelectingNode, allPools, err := c.determinePools(ctx, requestedPools, version, *v3n, maxPrefixLen)
+	// For some IPs (e.g., tunnel addresses), we don't have namespace context, so use empty values
+	poolsSelectingNode, allPools, err := c.determinePools(ctx, requestedPools, version, *v3n, namespace, maxPrefixLen)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -661,7 +675,7 @@ func (i *IPAMAssignments) PartialFulfillmentError() error {
 
 var ErrUseRequired = errors.New("must specify the intended use when assigning an IP")
 
-func (c ipamClient) autoAssign(ctx context.Context, num int, handleID *string, attrs map[string]string, requestedPools []net.IPNet, version int, host string, maxNumBlocks int, rsvdAttr *HostReservedAttr, use v3.IPPoolAllowedUse) (*IPAMAssignments, error) {
+func (c ipamClient) autoAssign(ctx context.Context, num int, handleID *string, attrs map[string]string, requestedPools []net.IPNet, version int, host string, maxNumBlocks int, rsvdAttr *HostReservedAttr, use v3.IPPoolAllowedUse, namespace *corev1.Namespace) (*IPAMAssignments, error) {
 	// Default parameters.
 	if use == "" {
 		log.Error("Attempting to auto-assign an IP without specifying intended use.")
@@ -689,7 +703,7 @@ func (c ipamClient) autoAssign(ctx context.Context, num int, handleID *string, a
 		logCtx = logCtx.WithField("handle", *handleID)
 	}
 	logCtx.Info("Looking up existing affinities for host")
-	pools, affBlocks, err := c.prepareAffinityBlocksForHost(ctx, requestedPools, version, host, rsvdAttr, use)
+	pools, affBlocks, err := c.prepareAffinityBlocksForHost(ctx, requestedPools, version, host, rsvdAttr, use, namespace)
 	if err != nil {
 		return nil, err
 	}
@@ -2288,7 +2302,8 @@ func (c ipamClient) ensureBlock(ctx context.Context, rsvdAttr *HostReservedAttr,
 	logCtx := log.WithFields(log.Fields{string(affinityCfg.AffinityType): affinityCfg.Host})
 
 	logCtx.Info("Looking up existing affinities for host")
-	pools, affBlocks, err := c.prepareAffinityBlocksForHost(ctx, requestedPools, version, affinityCfg.Host, rsvdAttr, v3.IPPoolAllowedUseWorkload)
+	// For ensureBlock, we don't have namespace context, so pass nil
+	pools, affBlocks, err := c.prepareAffinityBlocksForHost(ctx, requestedPools, version, affinityCfg.Host, rsvdAttr, v3.IPPoolAllowedUseWorkload, nil)
 	if err != nil {
 		return nil, err
 	}
