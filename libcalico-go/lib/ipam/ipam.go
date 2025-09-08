@@ -27,6 +27,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sync/semaphore"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/labels"
 
 	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
@@ -572,6 +573,7 @@ func (s *blockAssignState) findOrClaimBlock(ctx context.Context, minFreeIps int)
 			// allocated affine block. This may happen due to a race condition where another process on the host allocates a new block
 			// after we decide that a new block is required to satisfy this request, but before we actually allocate a new block.
 			logCtx.Info("Tried all affine blocks. Looking for an affine block with space, or a new unclaimed block")
+			findStart := time.Now()
 			subnet, err := s.client.blockReaderWriter.findUsableBlock(ctx, s.affinityCfg, s.version, s.pools, s.reservations, *config)
 			if err != nil {
 				if _, ok := err.(noFreeBlocksError); ok {
@@ -583,7 +585,7 @@ func (s *blockAssignState) findOrClaimBlock(ctx context.Context, minFreeIps int)
 				return nil, false, err
 			}
 			logCtx := log.WithFields(log.Fields{string(s.affinityCfg.AffinityType): s.affinityCfg.Host, "subnet": subnet})
-			logCtx.Info("Found unclaimed block")
+			logCtx.Infof("Found unclaimed block in %v", time.Since(findStart))
 
 			for j := 0; j < datastoreRetries; j++ {
 				// We found an unclaimed block - claim affinity for it.
@@ -789,6 +791,7 @@ func (c ipamClient) autoAssign(ctx context.Context, num int, handleID *string, a
 
 		// We have got a block b.
 		for i := 0; i < datastoreRetries; i++ {
+			assignStart := time.Now()
 			newIPs, err := c.assignFromExistingBlock(ctx, b, rem, handleID, attrs, affinityCfg, config.StrictAffinity, reservations)
 			if err != nil {
 				if _, ok := err.(cerrors.ErrorResourceUpdateConflict); ok {
@@ -810,7 +813,7 @@ func (c ipamClient) autoAssign(ctx context.Context, num int, handleID *string, a
 				ia.AddMsg("Failed to assign IPs in newly allocated block")
 				break
 			}
-			logCtx.Debugf("Assigned IPs from new block: %s", newIPs)
+			logCtx.Debugf("Assigned IPs from new block: %s (%v)", newIPs, time.Since(assignStart))
 			ia.IPs = append(ia.IPs, newIPs...)
 			rem = num - len(ia.IPs)
 			break
@@ -2364,4 +2367,78 @@ func (c ipamClient) getReservedIPs(ctx context.Context) (addrFilter, error) {
 		}
 	}
 	return cidrs, nil
+}
+
+func (c ipamClient) UpgradeHost(ctx context.Context, nodeName string) error {
+	delay := 100 * time.Millisecond
+	for {
+		err := c.attemptUpgradeHost(ctx, nodeName)
+		if err == nil {
+			return nil
+		}
+		log.WithError(err).Errorf("Failed to upgrade IPAM blocks of this host.")
+		select {
+		case <-ctx.Done():
+			return err
+		case <-time.After(delay):
+			delay *= 2
+		}
+		log.WithError(err).Error("Retrying...")
+	}
+}
+
+func (c ipamClient) attemptUpgradeHost(ctx context.Context, nodeName string) error {
+	// Upgrade the block affinities that belong to this host.  Add labels that
+	// allow for efficient lookups in KDD.  Note that etcd still stores the
+	// old "v1" model.BlockAffinity objects directly so this List() will
+	// return no results in etcd.
+	log.WithField("node", nodeName).Info("Upgrading any IPAM affinities from older versions....")
+
+	// We know that already-upgraded blocks will have the affinityType label,
+	// we can list only non-upgraded blocks.  We can't limit to any particular
+	// host here because host matches now make use of the labels that we're
+	// about to add.
+	ls, err := labels.Parse("!" + v3.LabelAffinityType)
+	if err != nil {
+		return err
+	}
+	kvs, err := c.client.List(ctx, model.ResourceListOptions{
+		Kind:          libapiv3.KindBlockAffinity,
+		LabelSelector: ls,
+	}, "")
+	if err != nil {
+		return err
+	}
+
+	var errs []error
+	numUpgraded := 0
+	for _, kv := range kvs.KVPairs {
+		if val, ok := kv.Value.(*libapiv3.BlockAffinity); ok {
+			if val.Spec.Node != nodeName {
+				// Only do _our_ affinities to avoid n x n conflicts with other
+				// nodes also doing this operation.
+				continue
+			}
+			model.EnsureBlockAffinityLabels(val)
+			_, err := c.client.Update(ctx, kv)
+			if err != nil {
+				errs = append(errs, err)
+				if errors.Is(err, context.DeadlineExceeded) {
+					break
+				}
+				continue
+			}
+			numUpgraded++
+		}
+	}
+	if numUpgraded == 0 && len(errs) == 0 {
+		log.Info("No affinities needed to be upgraded.")
+		return nil
+	}
+
+	log.Infof("Upgraded %d block affinities belonging to this host.", numUpgraded)
+	if len(errs) > 0 {
+		return fmt.Errorf("failed to upgrade some block affinities: %v", errs)
+	}
+	return nil
 }
