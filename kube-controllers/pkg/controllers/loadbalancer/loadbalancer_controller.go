@@ -877,7 +877,7 @@ func (c *loadBalancerController) parseAnnotations(annotations map[string]string)
 			}
 
 			if ipv6 > 1 || ipv4 > 1 {
-				return nil, nil, nil, fmt.Errorf("at max only one ipv4 and one ipv6 address can be specified. Recieved %d ipv4 and %d ipv6 addresses", ipv4, ipv6)
+				return nil, nil, nil, fmt.Errorf("at max only one ipv4 and one ipv6 address can be specified. Received %d ipv4 and %d ipv6 addresses", ipv4, ipv6)
 			}
 		}
 	}
