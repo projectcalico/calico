@@ -594,7 +594,7 @@ var _ = Describe("Calico IPAM Tests", func() {
 
 			// 4) Verify the previously unlabeled BA is now labeled.
 			list = libapiv3.BlockAffinityList{}
-			Expect(restClient.Get().Resource(k8sresources.BlockAffinityResourceName).Do(ctx).Into(&list)).To(Succeed())
+			Expect(crdClient.List(ctx, &list)).To(Succeed())
 			found1 = nil
 			for i := range list.Items {
 				if list.Items[i].Spec.Node == host && list.Items[i].Spec.CIDR == "10.11.0.0/26" {
@@ -608,9 +608,9 @@ var _ = Describe("Calico IPAM Tests", func() {
 			Expect(found1.Labels).To(HaveKey(apiv3.LabelHostnameHash))
 
 			// 5) Create a second unlabeled BA for this host.
-			Expect(createUnlabeledBlockAffinity(ctx, restClient, host, "10.11.0.64/26")).To(Succeed())
+			Expect(ipamtestutils.CreateUnlabeledBlockAffinity(ctx, crdClient, host, "10.11.0.64/26")).To(Succeed())
 			list = libapiv3.BlockAffinityList{}
-			Expect(restClient.Get().Resource(k8sresources.BlockAffinityResourceName).Do(ctx).Into(&list)).To(Succeed())
+			Expect(crdClient.List(ctx, &list)).To(Succeed())
 			var found2 *libapiv3.BlockAffinity
 			for i := range list.Items {
 				if list.Items[i].Spec.Node == host && list.Items[i].Spec.CIDR == "10.11.0.64/26" {
@@ -629,7 +629,7 @@ var _ = Describe("Calico IPAM Tests", func() {
 
 			// Re-list and ensure the second BA remains unlabeled.
 			list = libapiv3.BlockAffinityList{}
-			Expect(restClient.Get().Resource(k8sresources.BlockAffinityResourceName).Do(ctx).Into(&list)).To(Succeed())
+			Expect(crdClient.List(ctx, &list)).To(Succeed())
 			found2 = nil
 			for i := range list.Items {
 				if list.Items[i].Spec.Node == host && list.Items[i].Spec.CIDR == "10.11.0.64/26" {
