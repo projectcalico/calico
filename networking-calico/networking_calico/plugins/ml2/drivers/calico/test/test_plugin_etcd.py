@@ -440,7 +440,7 @@ class TestPluginEtcdBase(_TestEtcdBase):
 
     def make_context(self):
         context = mock.MagicMock()
-        context._plugin_context.to_dict.return_value = {}
+        context.plugin_context.to_dict.return_value = {}
         return context
 
     def test_start_two_ports(self):
@@ -558,7 +558,7 @@ class TestPluginEtcdBase(_TestEtcdBase):
         # Delete lib.port1.
         context = self.make_context()
         context._port = lib.port1
-        context._plugin_context.session.query.side_effect = self.db_query
+        context.plugin_context.session.query.side_effect = self.db_query
         self.driver.delete_port_postcommit(context)
         self.assertEtcdWrites({})
         self.assertEtcdDeletes(set([ep_deadbeef_key_v3]))
