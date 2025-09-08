@@ -117,7 +117,7 @@ func NewNamespaceController(ctx context.Context, k8sClientset *kubernetes.Client
 				if newObj.(*v1.Namespace).Status.Phase == "Terminating" {
 					// Ignore any updates with "Terminating" status, since
 					// we will soon receive a DELETE event to remove this object.
-					log.Debugf("Ignoring 'Terminating' update for Namespace %s.", newObj.(*v1.Namespace).ObjectMeta.GetName())
+					log.Debugf("Ignoring 'Terminating' update for Namespace %s.", newObj.(*v1.Namespace).GetName())
 					return
 				}
 

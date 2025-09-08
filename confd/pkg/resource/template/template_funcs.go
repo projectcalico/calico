@@ -168,7 +168,7 @@ func filterMatchSource(source v3.BGPFilterMatchSource) (string, error) {
 
 func filterMatchInterface(iface string) (string, error) {
 	if iface == "" {
-		return "", fmt.Errorf("Empty interface found in BGPFilter")
+		return "", fmt.Errorf("empty interface found in BGPFilter")
 	}
 	return fmt.Sprintf("((defined(ifname))&&(ifname ~ \"%s\"))", iface), nil
 }

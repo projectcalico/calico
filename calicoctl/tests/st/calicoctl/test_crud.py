@@ -190,7 +190,7 @@ class TestCalicoctlCommands(TestBase):
 
         rc = calicoctl("get somekind somename")
         rc.assert_error()
-        rc.assert_output_contains("Failed to get resources: resource type 'somekind' is not supported")
+        rc.assert_output_contains("failed to get resources: resource type 'somekind' is not supported")
 
     def test_empty_name_is_illegal(self):
         """
@@ -365,7 +365,7 @@ class TestCalicoctlCommands(TestBase):
         rc = calicoctl("create", data=bgppeer_invalid, format="json")
         rc.assert_error(text="error with field PeerIP = 'badpeerIP'")
         rc.assert_output_not_contains("Partial success")
-        rc.assert_output_contains("Failed to create 'BGPPeer' resource")
+        rc.assert_output_contains("failed to create 'BGPPeer' resource")
 
     def test_create_all_invalid_resources(self):
         """
@@ -374,7 +374,7 @@ class TestCalicoctlCommands(TestBase):
         rc = calicoctl("create", data=bgppeer_multiple_invalid, format="json")
         rc.assert_error(text="error with field PeerIP = 'badpeerIP'")
         rc.assert_output_not_contains("Partial success")
-        rc.assert_output_contains("Failed to create any 'BGPPeer' resources")
+        rc.assert_output_contains("failed to create any 'BGPPeer' resources")
 
     def test_apply_single_invalid_resource(self):
         """
@@ -383,7 +383,7 @@ class TestCalicoctlCommands(TestBase):
         rc = calicoctl("apply", data=bgppeer_invalid)
         rc.assert_error(text="error with field PeerIP = 'badpeerIP'")
         rc.assert_output_not_contains("Partial success")
-        rc.assert_output_contains("Failed to apply 'BGPPeer' resource")
+        rc.assert_output_contains("failed to apply 'BGPPeer' resource")
 
     def test_apply_all_invalid_resources(self):
         """
@@ -392,7 +392,7 @@ class TestCalicoctlCommands(TestBase):
         rc = calicoctl("apply", data=bgppeer_multiple_invalid)
         rc.assert_error(text="error with field PeerIP = 'badpeerIP'")
         rc.assert_output_not_contains("Partial success")
-        rc.assert_output_contains("Failed to apply any 'BGPPeer' resources")
+        rc.assert_output_contains("failed to apply any 'BGPPeer' resources")
 
     def test_apply_with_resource_version(self):
         """
@@ -1538,7 +1538,7 @@ class TestCalicoctlCommands(TestBase):
         }
         rc = calicoctl("validate", data=invalid_bgp, no_config=True)
         rc.assert_error()
-        rc.assert_output_contains("Failed to execute command")
+        rc.assert_output_contains("failed to execute command")
 
     def test_validate_malformed_yaml(self):
         """
@@ -1548,7 +1548,7 @@ class TestCalicoctlCommands(TestBase):
         writeyaml('/tmp/malformed.yaml', "invalid yaml content\n  this: is [broken")
         rc = calicoctl("validate -f /tmp/malformed.yaml", no_config=True)
         rc.assert_error()
-        rc.assert_output_contains("Failed to execute command")
+        rc.assert_output_contains("failed to execute command")
 
     def test_validate_multiple_valid_resources(self):
         """
@@ -1585,7 +1585,7 @@ class TestCalicoctlCommands(TestBase):
         rc = calicoctl("validate -f /tmp/empty.yaml", no_config=True)
         # Empty files should result in error with specific message
         rc.assert_error()
-        rc.assert_output_contains("No resources specified in file")
+        rc.assert_output_contains("no resources specified in file")
 
     def test_validate_skip_empty_flag(self):
         """
@@ -1649,7 +1649,7 @@ class TestCalicoctlCommands(TestBase):
         }
         rc = calicoctl("validate", data=invalid_networkpolicy, no_config=True)
         rc.assert_error()
-        rc.assert_output_contains("Failed to validate")
+        rc.assert_output_contains("failed to validate")
 
     def test_validate_multiple_resources_with_calico_validation_failure(self):
         """
@@ -1671,7 +1671,7 @@ class TestCalicoctlCommands(TestBase):
         resources = [valid_ippool, invalid_networkpolicy]
         rc = calicoctl("validate", data=resources, no_config=True)
         rc.assert_error()
-        rc.assert_output_contains("Hit error(s):")
+        rc.assert_output_contains("hit error(s):")
 
 #
 # class TestCreateFromFile(TestBase):
@@ -2451,7 +2451,7 @@ class InvalidData(TestBase):
                                 'node': 'node1',
                                 'peerIP': '192.168.0.250',
                                 }
-                   }, 'Unknown resource type (BGPPeer) and/or version (v7)'),
+                   }, 'unknown resource type (BGPPeer) and/or version (v7)'),
                    ("bgpPeer-invalidIpv6", {
                        'apiVersion': API_VERSION,
                        'kind': 'BGPPeer',

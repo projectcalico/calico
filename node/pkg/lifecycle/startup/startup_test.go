@@ -197,12 +197,12 @@ var _ = Describe("FV tests against a real etcd", func() {
 
 	BeforeEach(func() {
 		for _, envName := range changedEnvVars {
-			os.Unsetenv(envName)
+			_ = os.Unsetenv(envName)
 		}
 	})
 	AfterEach(func() {
 		for _, envName := range changedEnvVars {
-			os.Unsetenv(envName)
+			_ = os.Unsetenv(envName)
 		}
 	})
 
@@ -1106,8 +1106,8 @@ var _ = Describe("UT for autodetection method k8s-internal-ip", func() {
 
 			Expect(check).To(Equal(expected))
 
-			os.Unsetenv("IP")
-			os.Unsetenv("IP_AUTODETECTION_METHOD")
+			_ = os.Unsetenv("IP")
+			_ = os.Unsetenv("IP_AUTODETECTION_METHOD")
 		},
 
 		Entry("Test with \"IP\" env = autodetect ,IP_AUTODETECTION_METHOD = k8s-internal-ip. k8snode = nil", &libapi.Node{}, nil, []EnvItem{{"IP", "autodetect"}, {"IP_AUTODETECTION_METHOD", "kubernetes-internal-ip"}}, false),
@@ -1157,7 +1157,7 @@ var _ = Describe("UT for node interface autodetection", func() {
 				Addresses: []string{"192.168.1.10", "2001:db8:85a3:8d3:1319:8a2e:370:7348"},
 			}}))
 
-			os.Unsetenv("IP")
+			_ = os.Unsetenv("IP")
 		},
 
 		Entry("Test with \"IP\" env = autodetect. k8snode = nil", &libapi.Node{}, nil, []EnvItem{{"IP", "autodetect"}}),
@@ -1241,16 +1241,16 @@ var _ = Describe("UT for node name determination", func() {
 			if nodenameEnv != "" {
 				defer temporarilySetEnv("NODENAME", nodenameEnv)()
 			} else {
-				os.Unsetenv("NODENAME")
+				_ = os.Unsetenv("NODENAME")
 			}
 			if hostnameEnv != "" {
 				defer temporarilySetEnv("HOSTNAME", hostnameEnv)()
 			} else {
-				os.Unsetenv("HOSTNAME")
+				_ = os.Unsetenv("HOSTNAME")
 			}
 			nodeName := utils.DetermineNodeName()
-			os.Unsetenv("NODENAME")
-			os.Unsetenv("HOSTNAME")
+			_ = os.Unsetenv("NODENAME")
+			_ = os.Unsetenv("HOSTNAME")
 			Expect(nodeName).To(Equal(expectedNodeName))
 		},
 

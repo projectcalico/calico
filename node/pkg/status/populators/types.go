@@ -37,22 +37,24 @@ func (c IPFamily) String() string {
 }
 
 func (c IPFamily) BirdSuffix() string {
-	if c == IPFamilyV4 {
+	switch c {
+	case IPFamilyV4:
 		return ""
-	} else if c == IPFamilyV6 {
+	case IPFamilyV6:
 		return "6"
-	} else {
+	default:
 		log.Fatal("Unknown IPFamily")
 	}
 	return ""
 }
 
 func (c IPFamily) Separator() string {
-	if c == IPFamilyV4 {
+	switch c {
+	case IPFamilyV4:
 		return "."
-	} else if c == IPFamilyV6 {
+	case IPFamilyV6:
 		return ":"
-	} else {
+	default:
 		log.Fatal("Unknown IPFamily")
 	}
 	return "."

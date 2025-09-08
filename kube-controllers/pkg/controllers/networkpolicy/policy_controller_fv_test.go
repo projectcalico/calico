@@ -54,7 +54,7 @@ var _ = Describe("Calico networkpolicy controller FV tests (etcd mode)", func() 
 		// Write out a kubeconfig file
 		kconfigfile, err := os.CreateTemp("", "ginkgo-policycontroller")
 		Expect(err).NotTo(HaveOccurred())
-		defer os.Remove(kconfigfile.Name())
+		defer func() { _ = os.Remove(kconfigfile.Name()) }()
 		data := testutils.BuildKubeconfig(apiserver.IP)
 		_, err = kconfigfile.Write([]byte(data))
 		Expect(err).NotTo(HaveOccurred())

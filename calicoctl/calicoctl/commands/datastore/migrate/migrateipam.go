@@ -121,12 +121,12 @@ func (m *migrateIPAM) PullFromDatastore() error {
 	for _, item := range blockKVList.KVPairs {
 		blockKey, err := model.KeyToDefaultPath(item.Key)
 		if err != nil {
-			return fmt.Errorf("Error serializing BlockKey: %s", err)
+			return fmt.Errorf("error serializing BlockKey: %s", err)
 		}
 
 		block, ok := item.Value.(*model.AllocationBlock)
 		if !ok {
-			return fmt.Errorf("Could not convert %+v to an AllocationBlock", item.Value)
+			return fmt.Errorf("could not convert %+v to an AllocationBlock", item.Value)
 		}
 
 		// Update node names in the block to match the Kubernetes node
@@ -169,7 +169,7 @@ func (m *migrateIPAM) PullFromDatastore() error {
 	for _, item := range blockAffinityKVList.KVPairs {
 		etcdBlockAffinityKey, ok := item.Key.(model.BlockAffinityKey)
 		if !ok {
-			return fmt.Errorf("Error converting Key to BlockAffinityKey: %+v", item.Key)
+			return fmt.Errorf("error converting Key to BlockAffinityKey: %+v", item.Key)
 		}
 
 		// Update the block affinity to match the Kubernetes node names.
@@ -182,12 +182,12 @@ func (m *migrateIPAM) PullFromDatastore() error {
 
 		blockAffinityKey, err := model.KeyToDefaultPath(etcdBlockAffinityKey)
 		if err != nil {
-			return fmt.Errorf("Error serializing BlockAffinityKey: %s", err)
+			return fmt.Errorf("error serializing BlockAffinityKey: %s", err)
 		}
 
 		blockAffinity, ok := item.Value.(*model.BlockAffinity)
 		if !ok {
-			return fmt.Errorf("Could not convert %+v to a BlockAffinity", item.Value)
+			return fmt.Errorf("could not convert %+v to a BlockAffinity", item.Value)
 		}
 
 		blockAffinities = append(blockAffinities, &BlockAffinityKVPair{
@@ -202,7 +202,7 @@ func (m *migrateIPAM) PullFromDatastore() error {
 		// Update IPAM handle ID for a tunnel to include the Kubernetes node name.
 		key, ok := item.Key.(model.IPAMHandleKey)
 		if !ok {
-			return fmt.Errorf("Unable to convert %+v to an IPAMHandleKey", item.Key)
+			return fmt.Errorf("unable to convert %+v to an IPAMHandleKey", item.Key)
 		}
 		for _, handlePrefix := range ipamHandlePrefixes {
 			if strings.HasPrefix(key.HandleID, handlePrefix) {
@@ -215,12 +215,12 @@ func (m *migrateIPAM) PullFromDatastore() error {
 
 		handleKey, err := model.KeyToDefaultPath(key)
 		if err != nil {
-			return fmt.Errorf("Error serializing IPAMHandleKey: %s", err)
+			return fmt.Errorf("error serializing IPAMHandleKey: %s", err)
 		}
 
 		handle, ok := item.Value.(*model.IPAMHandle)
 		if !ok {
-			return fmt.Errorf("Could not convert %+v to an IPAMHandle", item.Value)
+			return fmt.Errorf("could not convert %+v to an IPAMHandle", item.Value)
 		}
 		ipamHandles = append(ipamHandles, &IPAMHandleKVPair{
 			Key:   handleKey,
@@ -233,11 +233,11 @@ func (m *migrateIPAM) PullFromDatastore() error {
 	if ipamConfigKV != nil {
 		configKey, err := model.KeyToDefaultPath(ipamConfigKV.Key)
 		if err != nil {
-			return fmt.Errorf("Error serializing IPAMConfigKey: %s", err)
+			return fmt.Errorf("error serializing IPAMConfigKey: %s", err)
 		}
 		config, ok := ipamConfigKV.Value.(*model.IPAMConfig)
 		if !ok {
-			return fmt.Errorf("Could not convert %+v to an IPAMConfig", ipamConfigKV.Value)
+			return fmt.Errorf("could not convert %+v to an IPAMConfig", ipamConfigKV.Value)
 		}
 		ipamConfig = &IPAMConfigKVPair{
 			Key:   configKey,
@@ -267,7 +267,7 @@ func (m *migrateIPAM) PushToDatastore() ipamResults {
 		}
 		created, err := m.client.Create(ctx, kv)
 		if err != nil {
-			errs = append(errs, fmt.Errorf("Error trying to create block affinity %s: %s\n", kv.Key.String(), err))
+			errs = append(errs, fmt.Errorf("error trying to create block affinity %s: %s", kv.Key.String(), err))
 		}
 		log.Debugf("Created Block Affinity: %+v", created)
 		handled++
@@ -282,7 +282,7 @@ func (m *migrateIPAM) PushToDatastore() ipamResults {
 		}
 		created, err := m.client.Create(ctx, kv)
 		if err != nil {
-			errs = append(errs, fmt.Errorf("Error trying to create block affinity %s: %s\n", kv.Key.String(), err))
+			errs = append(errs, fmt.Errorf("error trying to create block affinity %s: %s", kv.Key.String(), err))
 		}
 		log.Debugf("Created IPAM Block: %+v", created)
 		handled++
@@ -293,7 +293,7 @@ func (m *migrateIPAM) PushToDatastore() ipamResults {
 		key := model.IPAMHandleListOptions{}.KeyFromDefaultPath(hkv.Key)
 		handleKey, ok := key.(model.IPAMHandleKey)
 		if !ok {
-			errs = append(errs, fmt.Errorf("Unable to convert %s to an IPAMHandleKey\n", key))
+			errs = append(errs, fmt.Errorf("unable to convert %s to an IPAMHandleKey", key))
 		}
 		hkv.Value.HandleID = handleKey.HandleID
 
@@ -304,7 +304,7 @@ func (m *migrateIPAM) PushToDatastore() ipamResults {
 		}
 		created, err := m.client.Create(ctx, kv)
 		if err != nil {
-			errs = append(errs, fmt.Errorf("Error trying to create block affinity %s: %s\n", kv.Key.String(), err))
+			errs = append(errs, fmt.Errorf("error trying to create block affinity %s: %s", kv.Key.String(), err))
 		}
 		log.Debugf("Created IPAM Handle: %+v", created)
 		handled++
@@ -321,7 +321,7 @@ func (m *migrateIPAM) PushToDatastore() ipamResults {
 		}
 		created, err := m.client.Create(ctx, kv)
 		if err != nil {
-			errs = append(errs, fmt.Errorf("Error trying to create block affinity %s: %s\n", kv.Key.String(), err))
+			errs = append(errs, fmt.Errorf("error trying to create block affinity %s: %s", kv.Key.String(), err))
 		}
 		log.Debugf("Created IPAM Config: %+v", created)
 		handled++

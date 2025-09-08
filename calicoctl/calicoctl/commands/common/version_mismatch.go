@@ -58,7 +58,7 @@ func CheckVersionMismatch(configArg, allowMismatchArg interface{}) error {
 
 			return nil
 		}
-		return fmt.Errorf("Unable to get Cluster Information to verify version mismatch: %w\nUse --allow-version-mismatch to override.\n", err)
+		return fmt.Errorf("unable to get Cluster Information to verify version mismatch: %w\nUse --allow-version-mismatch to override", err)
 	}
 
 	clusterv := ci.Spec.CalicoVersion
@@ -74,7 +74,7 @@ func CheckVersionMismatch(configArg, allowMismatchArg interface{}) error {
 	clientv := strings.Split(strings.TrimPrefix(buildinfo.Version, "v"), "-")[0]
 
 	if clusterv != clientv {
-		return fmt.Errorf("Version mismatch.\nClient Version:   %s\nCluster Version:  %s\nUse --allow-version-mismatch to override.\n", buildinfo.Version, clusterv)
+		return fmt.Errorf("version mismatch.\nClient Version:   %s\nCluster Version:  %s\nUse --allow-version-mismatch to override", buildinfo.Version, clusterv)
 	}
 
 	return nil
