@@ -191,6 +191,14 @@ protobuf proto/felixbackend.pb.go: proto/felixbackend.proto
 
 BPF_GPL_MAP_STUB_O_FILES:=$(addprefix bpf-gpl/bin/,common_map_stub.o ipv4_map_stub.o ipv6_map_stub.o xdp_map_stub.o)
 
+# Generated map stub .c files are in the bpf-gpl/ dir, not bpf-gpl/bin
+BPF_GPL_MAP_STUB_C_FILES := $(BPF_GPL_MAP_STUB_O_FILES:bpf-gpl/bin/%.o=bpf-gpl/%.c)
+
+# Generated map stub .c files are in the bpf-gpl/ dir from this Makefile's perspective,
+# but in the root dir from bpf-gpl/Makefile's perspective.
+$(BPF_GPL_MAP_STUB_C_FILES):
+	$(DOCKER_GO_BUILD) sh -c "make -j 16 -C bpf-gpl/ $(patsubst bpf-gpl/%,%,$@)"
+
 # We pre-build lots of different variants of the TC programs, defer to the script.
 BPF_GPL_O_FILES:=$(addprefix bpf-gpl/,$(shell bpf-gpl/list-objs))
 BPF_GPL_O_FILES+=bpf-gpl/bin/tc_preamble.o \
