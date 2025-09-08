@@ -15,14 +15,17 @@ import (
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/rest"
+	crclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/projectcalico/calico/cni-plugin/internal/pkg/testutils"
 	apiconfig "github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/rawcrdclient"
 	k8sresources "github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/resources"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
+	"github.com/projectcalico/calico/libcalico-go/lib/ipam/ipamtestutils"
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
@@ -517,9 +520,11 @@ var _ = Describe("Calico IPAM Tests", func() {
 	}
 
 	Describe("Upgrade of block affinities occurs only once and creates touchfile", func() {
-		var restClient *rest.RESTClient
-		var host string
-		var netconf string
+		var (
+			crdClient crclient.Client
+			host      string
+			netconf   string
+		)
 
 		BeforeEach(func() {
 			if os.Getenv("DATASTORE_TYPE") != "kubernetes" {
@@ -534,9 +539,8 @@ var _ = Describe("Calico IPAM Tests", func() {
 			Expect(err).NotTo(HaveOccurred())
 			kcfg, _, err := k8s.CreateKubernetesClientset(&cfg.Spec)
 			Expect(err).NotTo(HaveOccurred())
-			rc, err := k8s.RawCRDClientV1(*kcfg)
+			crdClient, err = rawcrdclient.NewAPIClient(kcfg)
 			Expect(err).NotTo(HaveOccurred())
-			restClient = rc
 
 			// Determine host for BlockAffinity and ensure there is a usable netconf.
 			host, err = names.Hostname()
@@ -563,11 +567,11 @@ var _ = Describe("Calico IPAM Tests", func() {
 		It("upgrades unlabeled block affinities on first call and not on subsequent calls", func() {
 			ctx := context.Background()
 			// 1) Create an unlabeled BlockAffinity for this host.
-			Expect(createUnlabeledBlockAffinity(ctx, restClient, host, "10.11.0.0/26")).To(Succeed())
+			Expect(ipamtestutils.CreateUnlabeledBlockAffinity(ctx, crdClient, host, "10.11.0.0/26")).To(Succeed())
 
 			// Sanity check: ensure the BA has no labels.
 			var list libapiv3.BlockAffinityList
-			Expect(restClient.Get().Resource(k8sresources.BlockAffinityResourceName).Do(ctx).Into(&list)).To(Succeed())
+			Expect(crdClient.List(ctx, &list)).To(Succeed())
 			var found1 *libapiv3.BlockAffinity
 			for i := range list.Items {
 				if list.Items[i].Spec.Node == host && list.Items[i].Spec.CIDR == "10.11.0.0/26" {

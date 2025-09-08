@@ -23,13 +23,16 @@ import (
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/rest"
+	crclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/rawcrdclient"
 	k8sresources "github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/resources"
+	"github.com/projectcalico/calico/libcalico-go/lib/ipam/ipamtestutils"
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
@@ -64,9 +67,9 @@ func createUnlabeledBlockAffinity(ctx context.Context, rc rest.Interface, host s
 
 var _ = testutils.E2eDatastoreDescribe("IPAM UpgradeHost (Kubernetes datastore only)", testutils.DatastoreK8s, func(config apiconfig.CalicoAPIConfig) {
 	var (
-		bc         bapi.Client
-		ic         Interface
-		restClient *rest.RESTClient
+		bc        bapi.Client
+		ic        Interface
+		crdClient crclient.Client
 	)
 
 	BeforeEach(func() {
@@ -80,7 +83,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM UpgradeHost (Kubernetes datastore o
 		// Build a raw CRD REST client using the same kubeconfig as the backend client.
 		cfg, _, err := k8s.CreateKubernetesClientset(&config.Spec)
 		Expect(err).NotTo(HaveOccurred())
-		restClient, err = k8s.RawCRDClientV1(*cfg)
+		crdClient, err = rawcrdclient.NewAPIClient(cfg)
 		Expect(err).NotTo(HaveOccurred())
 	})
 
@@ -96,13 +99,13 @@ var _ = testutils.E2eDatastoreDescribe("IPAM UpgradeHost (Kubernetes datastore o
 		hostA := "host-a"
 		hostB := "host-b"
 		// Create unlabeled block affinities for two different hosts.
-		Expect(createUnlabeledBlockAffinity(ctx, restClient, hostA, "10.10.0.0/26")).To(Succeed())
-		Expect(createUnlabeledBlockAffinity(ctx, restClient, hostA, "10.10.0.64/26")).To(Succeed())
-		Expect(createUnlabeledBlockAffinity(ctx, restClient, hostB, "10.10.1.0/26")).To(Succeed())
+		Expect(ipamtestutils.CreateUnlabeledBlockAffinity(ctx, crdClient, hostA, "10.10.0.0/26")).To(Succeed())
+		Expect(ipamtestutils.CreateUnlabeledBlockAffinity(ctx, crdClient, hostA, "10.10.0.64/26")).To(Succeed())
+		Expect(ipamtestutils.CreateUnlabeledBlockAffinity(ctx, crdClient, hostB, "10.10.1.0/26")).To(Succeed())
 
 		// Sanity check: List and assert they currently have no labels.
 		var list libapiv3.BlockAffinityList
-		Expect(restClient.Get().Resource(k8sresources.BlockAffinityResourceName).Do(ctx).Into(&list)).To(Succeed())
+		Expect(crdClient.List(ctx, &list)).To(Succeed())
 		Expect(list.Items).To(HaveLen(3))
 		for _, item := range list.Items {
 			Expect(item.Labels).To(HaveLen(0))
@@ -113,7 +116,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM UpgradeHost (Kubernetes datastore o
 
 		// Re-list and verify labels applied to hostA's affinities, but not hostB.
 		list = libapiv3.BlockAffinityList{}
-		Expect(restClient.Get().Resource(k8sresources.BlockAffinityResourceName).Do(ctx).Into(&list)).To(Succeed())
+		Expect(crdClient.List(ctx, &list)).To(Succeed())
 		By("verifying labels exist for host-a and not for host-b")
 		for _, item := range list.Items {
 			if item.Spec.Node == hostA {

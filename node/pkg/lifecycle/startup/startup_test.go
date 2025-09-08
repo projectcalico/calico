@@ -31,18 +31,17 @@ import (
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+	crclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend"
-	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s"
-	k8sresources "github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/resources"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/rawcrdclient"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
+	"github.com/projectcalico/calico/libcalico-go/lib/ipam/ipamtestutils"
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
-	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 	"github.com/projectcalico/calico/node/pkg/lifecycle/startup/autodetection"
@@ -1173,8 +1172,8 @@ var _ = Describe("UT for node interface autodetection", func() {
 
 var _ = Describe("FV tests against K8s API server.", func() {
 	var (
-		restClient *rest.RESTClient
-		cs         *kubernetes.Clientset
+		crdClient crclient.Client
+		cs        *kubernetes.Clientset
 	)
 
 	BeforeEach(func() {
@@ -1189,7 +1188,7 @@ var _ = Describe("FV tests against K8s API server.", func() {
 			Fail(fmt.Sprintf("Could not create K8s client: %v", err))
 		}
 
-		restClient, err = k8s.RawCRDClientV1(*kcfg)
+		crdClient, err = rawcrdclient.NewAPIClient(kcfg)
 		Expect(err).NotTo(HaveOccurred())
 	})
 
@@ -1251,30 +1250,6 @@ var _ = Describe("FV tests against K8s API server.", func() {
 	})
 
 	// Helper: create a pre-upgrade BlockAffinity directly via CRD REST client
-	createUnlabeledBlockAffinity := func(ctx context.Context, rc rest.Interface, host string, cidr string) error {
-		_, ipn, err := cnet.ParseCIDR(cidr)
-		if err != nil {
-			return err
-		}
-		name := fmt.Sprintf("%s-%s", host, names.CIDRToName(*ipn))
-		ba := &libapiv3.BlockAffinity{
-			TypeMeta: metav1.TypeMeta{
-				Kind:       libapiv3.KindBlockAffinity,
-				APIVersion: "crd.projectcalico.org/v1",
-			},
-			ObjectMeta: metav1.ObjectMeta{
-				Name: name,
-			},
-			Spec: libapiv3.BlockAffinitySpec{
-				State:   string(apiv3.StateConfirmed),
-				Node:    host,
-				Type:    "host",
-				CIDR:    cidr,
-				Deleted: "false",
-			},
-		}
-		return rc.Post().Resource(k8sresources.BlockAffinityResourceName).Body(ba).Do(ctx).Error()
-	}
 
 	It("should upgrade block affinities on startup if needed", func() {
 		undo := temporarilySetEnv("NODENAME", "upgrade-test-node")
@@ -1283,12 +1258,12 @@ var _ = Describe("FV tests against K8s API server.", func() {
 		defer undo()
 
 		ctx := context.Background()
-		Expect(createUnlabeledBlockAffinity(ctx, restClient, "upgrade-test-node", "10.11.0.0/26")).To(Succeed())
+		Expect(ipamtestutils.CreateUnlabeledBlockAffinity(ctx, crdClient, "upgrade-test-node", "10.11.0.0/26")).To(Succeed())
 		Run(WithBailOutAfterUpgrade(true))
 
 		// 4) Verify the previously unlabeled BA is now labeled.
 		list := libapiv3.BlockAffinityList{}
-		Expect(restClient.Get().Resource(k8sresources.BlockAffinityResourceName).Do(ctx).Into(&list)).To(Succeed())
+		Expect(crdClient.List(ctx, &list)).To(Succeed())
 		var found1 *libapiv3.BlockAffinity
 		for i := range list.Items {
 			if list.Items[i].Spec.Node == "upgrade-test-node" && list.Items[i].Spec.CIDR == "10.11.0.0/26" {
