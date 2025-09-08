@@ -108,13 +108,9 @@ static CALI_BPF_INLINE int qos_enforce_packet_rate(struct cali_tc_ctx *ctx)
 	return TC_ACT_SHOT;
 }
 
-static CALI_BPF_INLINE int set_dscp(struct cali_tc_ctx *ctx)
+static CALI_BPF_INLINE bool qos_set_dscp(struct cali_tc_ctx *ctx)
 {
-#if (CALI_F_FROM_WEP || CALI_F_TO_HEP)
 	// TODO (mazdak): set DSCP only if traffic is leaving cluster
-	if (EGRESS_DSCP < 0) {
-		return TC_ACT_UNSPEC;
-	}
 	__s8 dscp = EGRESS_DSCP;
 	CALI_DEBUG("setting dscp to %d", dscp);
 
@@ -134,18 +130,16 @@ static CALI_BPF_INLINE int set_dscp(struct cali_tc_ctx *ctx)
 	if (ret) {
 		CALI_DEBUG("IP DSCP: set L3 csum failed");
 		deny_reason(ctx, CALI_REASON_CSUM_FAIL);
-		return TC_ACT_SHOT;
+		return false;
 	}
 
 	if (skb_refresh_validate_ptrs(ctx, UDP_SIZE)) {
 		CALI_DEBUG("Too short");
 		deny_reason(ctx, CALI_REASON_SHORT);
-		return TC_ACT_SHOT;
+		return false;
 	}
 #endif /* IPVER6 */
-
-#endif
-	return TC_ACT_UNSPEC;
+	return true;
 }
 
 #endif /* __CALI_QOS_H__ */
