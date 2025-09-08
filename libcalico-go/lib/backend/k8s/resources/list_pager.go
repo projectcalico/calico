@@ -40,10 +40,7 @@ func pagedList(
 	error,
 ) {
 	lp := pager.New(listFunc)
-	opts := metav1.ListOptions{ResourceVersion: revision}
-	if revision != "" {
-		opts.ResourceVersionMatch = metav1.ResourceVersionMatchNotOlderThan
-	}
+	opts := listOptionsToK8sListOptions(list, revision)
 	result, isPaged, err := lp.List(ctx, opts)
 	if err != nil {
 		return nil, K8sErrorToCalico(err, list)
@@ -78,4 +75,19 @@ func pagedList(
 		KVPairs:  kvps,
 		Revision: m.GetResourceVersion(),
 	}, nil
+}
+
+func listOptionsToK8sListOptions(list model.ListInterface, revision string) metav1.ListOptions {
+	opts := metav1.ListOptions{ResourceVersion: revision}
+	if revision != "" {
+		opts.ResourceVersionMatch = metav1.ResourceVersionMatchNotOlderThan
+	}
+	if ls, ok := list.(model.LabelSelectingListInterface); ok {
+		selector := ls.GetLabelSelector()
+		if selector != nil {
+			opts.LabelSelector = selector.String()
+		}
+	}
+
+	return opts
 }

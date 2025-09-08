@@ -270,6 +270,15 @@ func appendKVsAndNewLine(b *bytes.Buffer, data log.Fields) {
 			buf := b.AvailableBuffer()
 			buf = strconv.AppendQuote(buf, value)
 			b.Write(buf)
+		case *string:
+			if value == nil {
+				b.WriteString("<nil>")
+			} else {
+				b.WriteByte('*')
+				buf := b.AvailableBuffer()
+				buf = strconv.AppendQuote(buf, *value)
+				b.Write(buf)
+			}
 		case error:
 			b.WriteString(value.Error())
 		case fmt.Stringer:
