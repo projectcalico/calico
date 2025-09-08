@@ -726,7 +726,6 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                 plugin_context,
                 filters={
                     "network_id": [network_id],
-                    "qos_policy_id": ["", None],
                 },
             )
             self.update_existing_ports(
@@ -751,9 +750,6 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             # Update the existing ports that are directly using this qos_policy_id.
             ports = self.db.get_ports(
                 plugin_context,
-                filters={
-                    "qos_policy_id": [policy_id],
-                },
             )
             self.update_existing_ports(
                 [p for p in ports if p["qos_policy_id"] == policy_id],
@@ -764,9 +760,6 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             # Find the networks with the updating policy in their qos_policy_id field.
             networks = self.db.get_networks(
                 plugin_context,
-                filters={
-                    "qos_policy_id": [policy_id],
-                },
             )
 
             # Update the existing ports on these networks that don't have their own
@@ -777,7 +770,6 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                     "network_id": [
                         n["id"] for n in networks if n["qos_policy_id"] == policy_id
                     ],
-                    "qos_policy_id": ["", None],
                 },
             )
             self.update_existing_ports(
