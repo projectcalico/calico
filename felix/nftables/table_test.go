@@ -250,6 +250,54 @@ var _ = Describe("Table with an empty dataplane", func() {
 			})
 		})
 
+		Describe("after another process removes an append", func() {
+			BeforeEach(func() {
+				// Append a rule to the filter-FORWARD base chain, and trigger programming.
+				table.AppendRules("filter-FORWARD", []generictables.Rule{
+					{Match: nftables.Match(), Action: AcceptAction{}},
+				})
+				table.Apply()
+
+				// It should be there now.
+				rules, err := f.ListRules(context.TODO(), "filter-FORWARD")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(rules).To(HaveLen(2), "Failed to append rule!")
+
+				// Remove all the rules out-of-band.
+				tx := f.NewTransaction()
+				for _, r := range rules {
+					cp := *r
+					tx.Delete(&cp)
+				}
+				Expect(f.Run(context.TODO(), tx)).NotTo(HaveOccurred())
+
+				// Check it is gone.
+				rules, err = f.ListRules(context.TODO(), "filter-FORWARD")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(rules).To(HaveLen(0), "Failed to clean up rules!")
+			})
+
+			It("should put it back on the next explicit refresh", func() {
+				table.InvalidateDataplaneCache("test")
+				table.Apply()
+				rules, err := f.ListRules(context.TODO(), "filter-FORWARD")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(rules).To(EqualRules([]knftables.Rule{
+					{
+						Chain:   "filter-FORWARD",
+						Rule:    "counter drop",
+						Comment: ptr("cali:DCGauXoHP5A9-AIO;"),
+					},
+
+					{
+						Chain:   "filter-FORWARD",
+						Rule:    "counter accept",
+						Comment: ptr("cali:Q43zYEHuKfFnJfs1;"),
+					},
+				}))
+			})
+		})
+
 		Describe("after another process replaces the insertion (non-empty chain)", func() {
 			BeforeEach(func() {
 				// Remove the chains out-of-band from the Table.
