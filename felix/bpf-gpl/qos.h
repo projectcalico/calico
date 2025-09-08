@@ -6,6 +6,7 @@
 #define __CALI_QOS_H__
 
 #include "bpf.h"
+#include "skb.h"
 #include "counters.h"
 #include "ifstate.h"
 
@@ -105,6 +106,41 @@ static CALI_BPF_INLINE int qos_enforce_packet_rate(struct cali_tc_ctx *ctx)
 	// If there were not enough tokens, drop packet
 	CALI_DEBUG("packet rate QoS: drop");
 	return TC_ACT_SHOT;
+}
+
+static CALI_BPF_INLINE bool qos_set_dscp(struct cali_tc_ctx *ctx)
+{
+	// TODO (mazdak): set DSCP only if traffic is leaving cluster
+	__s8 dscp = EGRESS_DSCP;
+	CALI_DEBUG("setting dscp to %d", dscp);
+
+#ifdef IPVER6
+	// In IPv6, traffic class (8bits) equals to DSCP (6bits) + ECN (2bits). The 4 most significant bits of
+	// traffic class are stored in IPv6 priority field (4 bits), and the 4 least significant bits of it
+	// are stored in the 4 most significant bits of IPv6 flow_lbl[0] field. We must not change ECN bits here.
+	ip_hdr(ctx)->priority = (__u8) (dscp >> 2);
+	ip_hdr(ctx)->flow_lbl[0] = (__u8) (ip_hdr(ctx)->flow_lbl[0] & 0x3f) | (dscp << 6);
+#else
+	// In IPv4, DSCP (6bits) is located at the most significant bits of IPv4 TOS field.
+	// The 2 least significant bits are assigned to ECN and must not be touched.
+	ip_hdr(ctx)->tos = (__u8) ((ip_hdr(ctx)->tos & 0x03) | (dscp << 2));
+
+	ip_hdr(ctx)->check = 0;
+	__wsum ip_csum = bpf_csum_diff(0, 0, (__u32 *)ip_hdr(ctx), sizeof(struct iphdr), 0);
+	int ret = bpf_l3_csum_replace(ctx->skb, skb_iphdr_offset(ctx) + offsetof(struct iphdr, check), 0, ip_csum, 0);
+	if (ret) {
+		CALI_DEBUG("IP DSCP: set L3 csum failed");
+		deny_reason(ctx, CALI_REASON_CSUM_FAIL);
+		return false;
+	}
+
+	if (skb_refresh_validate_ptrs(ctx, UDP_SIZE)) {
+		CALI_DEBUG("Too short");
+		deny_reason(ctx, CALI_REASON_SHORT);
+		return false;
+	}
+#endif /* IPVER6 */
+	return true;
 }
 
 #endif /* __CALI_QOS_H__ */
