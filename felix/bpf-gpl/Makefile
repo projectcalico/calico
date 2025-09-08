@@ -66,7 +66,6 @@ IPV4_MAP_HEADERS := $(IP_MAP_HEADERS) ip_v4_fragment.h
 IPV6_MAP_HEADERS := $(IP_MAP_HEADERS)
 
 MAP_OBJS := $(addprefix bin/, common_map_stub.o ipv4_map_stub.o ipv6_map_stub.o xdp_map_stub.o)
-MAP_STUB_CS := $(MAP_OBJS:.o=.c)
 
 # Map stub ojbs cannot have '-emit-llvm' in flags
 MAP_CFLAGS := $(subst -emit-llvm,,$(CFLAGS))
