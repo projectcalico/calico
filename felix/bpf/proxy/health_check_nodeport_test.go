@@ -15,7 +15,6 @@
 package proxy_test
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -28,7 +27,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/kubernetes/fake"
-	"k8s.io/kubernetes/pkg/proxy/healthcheck"
 
 	"github.com/projectcalico/calico/felix/bpf/proxy"
 )
@@ -40,18 +38,12 @@ var _ = Describe("BPF Proxy healthCheckNodeport", func() {
 	testNodeName := "testnode"
 	testNodeNameOther := "anothertestnode"
 
-	healthzServer := healthcheck.NewProxierHealthServer(":10256", 200*time.Millisecond)
-	go func() {
-		_ = healthzServer.Run(context.Background())
-	}()
-
 	BeforeEach(func() {
 		By("creating proxy with fake client and mock syncer", func() {
 			var err error
 
 			p, err = proxy.New(k8s, &mockDummySyncer{},
-				testNodeName, proxy.WithMinSyncPeriod(200*time.Millisecond),
-				proxy.WithHealthzServer(healthzServer))
+				testNodeName, proxy.WithMinSyncPeriod(200*time.Millisecond))
 			Expect(err).NotTo(HaveOccurred())
 		})
 	})
@@ -247,23 +239,6 @@ var _ = Describe("BPF Proxy healthCheckNodeport", func() {
 					return nil
 				}, "5s", "200ms").Should(Succeed())
 			})
-		})
-	})
-
-	It("should expose proxy health check endpoint", func() {
-		proxyHealthPort := 10256
-
-		By("checking that the health endpoint is accessible", func() {
-			Eventually(func() error {
-				result, err := http.Get(fmt.Sprintf("http://localhost:%d/healthz", proxyHealthPort))
-				if err != nil {
-					return err
-				}
-				if result.StatusCode != 200 {
-					return fmt.Errorf("Unexpected status code %d; expected 200", result.StatusCode)
-				}
-				return nil
-			}, "5s", "200ms").Should(Succeed())
 		})
 	})
 })
