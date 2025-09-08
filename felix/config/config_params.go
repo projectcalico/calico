@@ -22,6 +22,7 @@ import (
 	"os"
 	"reflect"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -76,6 +77,11 @@ const (
 	DefaultInitialReportingDelay    = time.Duration(5) * time.Second
 	DefaultExportingInterval        = time.Duration(1) * time.Second
 	DefaultConntrackPollingInterval = time.Duration(5) * time.Second
+)
+
+const (
+	defaultNodenameFileLinux   = `/var/lib/calico/nodename`
+	defaultNodenameFileWindows = `c:\CalicoWindows\nodename`
 )
 
 var SourcesInDescendingOrder = []Source{InternalOverride, EnvironmentVariable, ConfigFile, DatastorePerHost, DatastoreGlobal}
@@ -715,13 +721,8 @@ func (config *Config) applyDefaults() {
 	for _, param := range knownParams {
 		param.setDefault(config)
 	}
-	hostname, err := names.Hostname()
-	if err != nil {
-		log.Warningf("Failed to get hostname from kernel, "+
-			"trying HOSTNAME variable: %v", err)
-		hostname = strings.ToLower(os.Getenv("HOSTNAME"))
-	}
-	config.FelixHostname = hostname
+
+	config.FelixHostname = DetermineNodeName()
 }
 
 func (config *Config) resolve() (changedFields set.Set[string], err error) {
@@ -1297,4 +1298,59 @@ type Encapsulation struct {
 	IPIPEnabled    bool
 	VXLANEnabled   bool
 	VXLANEnabledV6 bool
+}
+
+func DetermineNodeName() string {
+	var nodeName string
+	var err error
+
+	// Determine the name of this node.  Precedence is:
+	// -  NODENAME
+	// -  Value stored in our nodename file.
+	// -  HOSTNAME (lowercase)
+	// -  os.Hostname (lowercase).
+	// We use the names.Hostname which lowercases and trims the name.
+	if nodeName = strings.TrimSpace(os.Getenv("NODENAME")); nodeName != "" {
+		log.Infof("Using NODENAME environment for node name %s", nodeName)
+	} else if nodeName = NodenameFromFile(); nodeName != "" {
+		log.Infof("Using stored node name %s from %s", nodeName, nodenameFileName())
+	} else if nodeName = strings.ToLower(strings.TrimSpace(os.Getenv("HOSTNAME"))); nodeName != "" {
+		log.Infof("Using HOSTNAME environment (lowercase) for node name %s", nodeName)
+	} else if nodeName, err = names.Hostname(); err != nil {
+		log.WithError(err).Error("Unable to determine hostname")
+	} else {
+		log.Warn("Using auto-detected node name. It is recommended that an explicit value is supplied using " +
+			"the NODENAME environment variable.")
+	}
+	log.Infof("Determined node name: %s", nodeName)
+
+	return nodeName
+}
+
+func nodenameFileName() string {
+	fn := os.Getenv("CALICO_NODENAME_FILE")
+	if fn == "" {
+		if runtime.GOOS == "windows" {
+			return defaultNodenameFileWindows
+		} else {
+			return defaultNodenameFileLinux
+		}
+	}
+	return fn
+}
+
+// NodenameFromFile reads the nodename file if it exists and
+// returns the nodename within.
+func NodenameFromFile() string {
+	filename := nodenameFileName()
+	data, err := os.ReadFile(filename)
+	if err != nil {
+		if os.IsNotExist(err) {
+			// File doesn't exist, return empty string.
+			log.Debug("File does not exist: " + filename)
+			return ""
+		}
+		log.WithError(err).Error("Failed to read " + filename)
+	}
+	return string(data)
 }
