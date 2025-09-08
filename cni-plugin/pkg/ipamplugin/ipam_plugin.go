@@ -407,7 +407,7 @@ func maybeUpgradeIPAM(ctx context.Context, ipamClient ipam.Interface, nodename s
 	}
 
 	if err := touchFile(ipamUpgradedFilePath); err != nil {
-		return fmt.Errorf("failed to created IPAM upgrade marker file %s: %w", ipamUpgradedFilePath, err)
+		return fmt.Errorf("failed to create IPAM upgrade marker file %s: %w", ipamUpgradedFilePath, err)
 	}
 	return nil
 }

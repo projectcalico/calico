@@ -239,7 +239,6 @@ func (c *loadBalancerController) acceptScheduledRequests(stopCh <-chan struct{})
 		}
 		break
 	}
-	log.Info("Successfully upgraded load balancer's IPAM block affinities.  Continuing to sync load balancer services.")
 	for {
 		select {
 		case update := <-c.syncerUpdates:

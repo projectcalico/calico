@@ -139,7 +139,7 @@ func Run(opts ...RunOpt) {
 	upgradeCtx, cancel := context.WithTimeout(ctx, 90*time.Second)
 	defer cancel()
 	if err := cli.IPAM().UpgradeHost(upgradeCtx, nodeName); err != nil {
-		log.WithError(err).Errorf("Unable to uprade host's IPAM resources.")
+		log.WithError(err).Errorf("Unable to upgrade host's IPAM resources.")
 		utils.Terminate()
 	}
 

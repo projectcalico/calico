@@ -263,7 +263,7 @@ type ResourceListOptions struct {
 	// a full list operation is performed and then filtered client-side.
 	Prefix bool
 	// LabelSelector allows filtering on the labels of the resource. This is
-	// supported efficiently by the Kuberentes backend, but the etcd backend
+	// supported efficiently by the Kubernetes backend, but the etcd backend
 	// implements it client-side.
 	LabelSelector labels.Selector
 }
