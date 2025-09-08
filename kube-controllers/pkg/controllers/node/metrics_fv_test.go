@@ -64,7 +64,7 @@ var _ = Describe("kube-controllers metrics FV tests", func() {
 		// Write out a kubeconfig file
 		kconfigfile, err := os.CreateTemp("", "ginkgo-policycontroller")
 		Expect(err).NotTo(HaveOccurred())
-		defer os.Remove(kconfigfile.Name())
+		defer func() { _ = os.Remove(kconfigfile.Name()) }()
 		data := testutils.BuildKubeconfig(apiserver.IP)
 		_, err = kconfigfile.Write([]byte(data))
 		Expect(err).NotTo(HaveOccurred())
@@ -642,7 +642,7 @@ func getMetrics(metricsURL string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return "", err

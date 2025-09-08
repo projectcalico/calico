@@ -27,35 +27,35 @@ var _ = Describe("flannel migration config", func() {
 	// unsetEnv() function that unsets environment variables.
 	// required by flannel migration controller.
 	unsetEnv := func() {
-		os.Unsetenv("FLANNEL_DAEMONSET_NAME")
-		os.Unsetenv("FLANNEL_SUBNET_LEN")
-		os.Unsetenv("FLANNEL_IPV6_SUBNET_LEN")
-		os.Unsetenv("FLANNEL_ANNOTATION_PREFIX")
-		os.Unsetenv("FLANNEL_VNI")
-		os.Unsetenv("FLANNEL_PORT")
-		os.Unsetenv("CALICO_DAEMONSET_NAME")
-		os.Unsetenv("CNI_CONFIG_DIR")
-		os.Unsetenv("POD_NODE_NAME")
-		os.Unsetenv("FLANNEL_SUBNET_ENV")
+		_ = os.Unsetenv("FLANNEL_DAEMONSET_NAME")
+		_ = os.Unsetenv("FLANNEL_SUBNET_LEN")
+		_ = os.Unsetenv("FLANNEL_IPV6_SUBNET_LEN")
+		_ = os.Unsetenv("FLANNEL_ANNOTATION_PREFIX")
+		_ = os.Unsetenv("FLANNEL_VNI")
+		_ = os.Unsetenv("FLANNEL_PORT")
+		_ = os.Unsetenv("CALICO_DAEMONSET_NAME")
+		_ = os.Unsetenv("CNI_CONFIG_DIR")
+		_ = os.Unsetenv("POD_NODE_NAME")
+		_ = os.Unsetenv("FLANNEL_SUBNET_ENV")
 	}
 
 	// setEnv() function that sets environment variables.
 	setEnv := func() {
-		os.Setenv("FLANNEL_DAEMONSET_NAME", "flannel-daemonset")
-		os.Setenv("FLANNEL_SUBNET_LEN", "25")
-		os.Setenv("FLANNEL_ANNOTATION_PREFIX", "flannel-prefix")
-		os.Setenv("FLANNEL_VNI", "3")
-		os.Setenv("FLANNEL_PORT", "1234")
-		os.Setenv("CALICO_DAEMONSET_NAME", "calico-daemonset")
-		os.Setenv("CNI_CONFIG_DIR", "/cni/config")
-		os.Setenv("POD_NODE_NAME", "test-node")
-		os.Setenv("FLANNEL_SUBNET_ENV", "FLANNEL_NETWORK=10.244.0.0/16;FLANNEL_SUBNET=10.244.1.1/24;FLANNEL_MTU=8951;FLANNEL_IPMASQ=false;")
+		_ = os.Setenv("FLANNEL_DAEMONSET_NAME", "flannel-daemonset")
+		_ = os.Setenv("FLANNEL_SUBNET_LEN", "25")
+		_ = os.Setenv("FLANNEL_ANNOTATION_PREFIX", "flannel-prefix")
+		_ = os.Setenv("FLANNEL_VNI", "3")
+		_ = os.Setenv("FLANNEL_PORT", "1234")
+		_ = os.Setenv("CALICO_DAEMONSET_NAME", "calico-daemonset")
+		_ = os.Setenv("CNI_CONFIG_DIR", "/cni/config")
+		_ = os.Setenv("POD_NODE_NAME", "test-node")
+		_ = os.Setenv("FLANNEL_SUBNET_ENV", "FLANNEL_NETWORK=10.244.0.0/16;FLANNEL_SUBNET=10.244.1.1/24;FLANNEL_MTU=8951;FLANNEL_IPMASQ=false;")
 	}
 
 	// setWrongEnv() function sets environment variables
 	// with values of wrong data type
 	setWrongEnv := func() {
-		os.Setenv("FLANNEL_VNI", "somestring")
+		_ = os.Setenv("FLANNEL_VNI", "somestring")
 	}
 
 	It("default values without POD_NODE_NAME", func() {
@@ -66,7 +66,7 @@ var _ = Describe("flannel migration config", func() {
 	})
 
 	It("default values with POD_NODE_NAME", func() {
-		os.Setenv("POD_NODE_NAME", "test-node")
+		_ = os.Setenv("POD_NODE_NAME", "test-node")
 		defer unsetEnv()
 
 		// Parse config
@@ -120,8 +120,8 @@ var _ = Describe("flannel migration config", func() {
 	It("with valid IPv6 user defined values", func() {
 		// Set environment variables
 		setEnv()
-		os.Setenv("FLANNEL_IPV6_SUBNET_LEN", "66")
-		os.Setenv("FLANNEL_SUBNET_ENV", "FLANNEL_NETWORK=10.244.0.0/16;FLANNEL_SUBNET=10.244.1.1/24;FLANNEL_MTU=8951;FLANNEL_IPMASQ=false;FLANNEL_IPV6_NETWORK=2001:cafe:42::/56;FLANNEL_IPV6_SUBNET=2001:cafe:42::1/64;")
+		_ = os.Setenv("FLANNEL_IPV6_SUBNET_LEN", "66")
+		_ = os.Setenv("FLANNEL_SUBNET_ENV", "FLANNEL_NETWORK=10.244.0.0/16;FLANNEL_SUBNET=10.244.1.1/24;FLANNEL_MTU=8951;FLANNEL_IPMASQ=false;FLANNEL_IPV6_NETWORK=2001:cafe:42::/56;FLANNEL_IPV6_SUBNET=2001:cafe:42::1/64;")
 		defer unsetEnv()
 
 		// Parse config
