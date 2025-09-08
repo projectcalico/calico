@@ -125,7 +125,8 @@ static CALI_BPF_INLINE bool qos_set_dscp(struct cali_tc_ctx *ctx)
 	// The 2 least significant bits are assigned to ECN and must not be touched.
 	ip_hdr(ctx)->tos = (__u8) ((ip_hdr(ctx)->tos & 0x03) | (dscp << 2));
 
-	__wsum ip_csum = bpf_csum_diff(0, 0, (__u32 *)ctx->ip_header, sizeof(struct iphdr), 0);
+	ip_hdr(ctx)->check = 0;
+	__wsum ip_csum = bpf_csum_diff(0, 0, (__u32 *)ip_hdr(ctx), sizeof(struct iphdr), 0);
 	int ret = bpf_l3_csum_replace(ctx->skb, skb_iphdr_offset(ctx) + offsetof(struct iphdr, check), 0, ip_csum, 0);
 	if (ret) {
 		CALI_DEBUG("IP DSCP: set L3 csum failed");
