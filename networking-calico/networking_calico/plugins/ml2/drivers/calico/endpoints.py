@@ -336,7 +336,11 @@ class WorkloadEndpointSyncer(ResourceSyncer):
                 setting = max
             return setting
 
-        qos_policy_id = port.get("qos_policy_id") or port_extra.network_qos_policy_id
+        qos_policy_id = (
+            port.get("qos_policy_id")
+            or port.get("qos_network_policy_id")
+            or port_extra.network_qos_policy_id
+        )
         LOG.debug("QoS Policy ID = %r", qos_policy_id)
         if qos_policy_id:
             rules = context.session.query(qos_models.QosBandwidthLimitRule).filter_by(
