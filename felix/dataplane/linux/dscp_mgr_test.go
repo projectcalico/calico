@@ -332,9 +332,7 @@ func addrFromWlUpdate(endpoint *proto.WorkloadEndpoint, ipVersion uint8) string 
 	if ipVersion == 6 {
 		addrs = endpoint.Ipv6Nets
 	}
-	normalisedAddr, err := normaliseSourceAddr(addrs)
-	Expect(err).ToNot(HaveOccurred())
-	return normalisedAddr
+	return addrFromUpdate(addrs)
 }
 
 func addrFromHepUpdate(endpoint *proto.HostEndpoint, ipVersion uint8) string {
@@ -342,6 +340,10 @@ func addrFromHepUpdate(endpoint *proto.HostEndpoint, ipVersion uint8) string {
 	if ipVersion == 6 {
 		addrs = endpoint.ExpectedIpv6Addrs
 	}
+	return addrFromUpdate(addrs)
+}
+
+func addrFromUpdate(addrs []string) string {
 	normalisedAddr, err := normaliseSourceAddr(addrs)
 	Expect(err).ToNot(HaveOccurred())
 	return normalisedAddr
@@ -352,13 +354,7 @@ func ipsetMembersFromWlUpdate(endpoint *proto.WorkloadEndpoint, ipVersion uint8)
 	if ipVersion == 6 {
 		addrs = endpoint.Ipv6Nets
 	}
-	members := make([]string, 0, len(addrs))
-	for _, a := range addrs {
-		m, err := removeSubnetMask(a)
-		Expect(err).NotTo(HaveOccurred())
-		members = append(members, m)
-	}
-	return members
+	return ipsetMembersFromUpdate(addrs)
 }
 
 func ipsetMembersFromHepUpdate(endpoint *proto.HostEndpoint, ipVersion uint8) []string {
@@ -366,6 +362,10 @@ func ipsetMembersFromHepUpdate(endpoint *proto.HostEndpoint, ipVersion uint8) []
 	if ipVersion == 6 {
 		addrs = endpoint.ExpectedIpv6Addrs
 	}
+	return ipsetMembersFromUpdate(addrs)
+}
+
+func ipsetMembersFromUpdate(addrs []string) []string {
 	members := make([]string, 0, len(addrs))
 	for _, a := range addrs {
 		m, err := removeSubnetMask(a)

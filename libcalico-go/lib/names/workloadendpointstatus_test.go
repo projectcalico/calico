@@ -19,7 +19,6 @@ import (
 	. "github.com/onsi/gomega"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/projectcalico/calico/felix/proto"
 	v3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
@@ -35,15 +34,6 @@ var _ = DescribeTable("WorkloadEndpointKey to endpoint-status filename",
 	Entry("Valid space-filled key", &model.WorkloadEndpointKey{Hostname: "cluster-node-0", OrchestratorID: "k8s", WorkloadID: "default/t est pod1", EndpointID: "eth0"}, "k8s default%2Ft%20est%20pod1 eth0"),
 
 	Entry("Nil key", nil, ""),
-)
-
-var _ = DescribeTable("WorkloadEndpointID to model.WorkloadEndpointKey",
-	func(wepID *proto.WorkloadEndpointID, hostname string, expectedKey *model.WorkloadEndpointKey) {
-		genKey := names.WorkloadEndpointIDToWorkloadEndpointKey(wepID, hostname)
-		Expect(genKey).To(Equal(expectedKey))
-	},
-	Entry("Valid workload endpoint ID", &proto.WorkloadEndpointID{OrchestratorId: "k8s", WorkloadId: "default/testpod1", EndpointId: "eth0"}, "cluster-node-0", &model.WorkloadEndpointKey{Hostname: "cluster-node-0", OrchestratorID: "k8s", WorkloadID: "default/testpod1", EndpointID: "eth0"}),
-	Entry("Nil ID", nil, "", nil),
 )
 
 var _ = DescribeTable("V3 WorkloadEndpoint to model WorkloadEndpointKey",
