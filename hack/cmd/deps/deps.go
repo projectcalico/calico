@@ -18,16 +18,16 @@ import (
 func printUsageAndExit() {
 	_, _ = fmt.Fprint(os.Stderr, `CI Dependency helper tool.
 
-Usage: 
+Usage:
 
   deps modules <package>          # Print go modules that package depends on
-  deps local-dirs <package>       # Print in-repo go package dirs that 
+  deps local-dirs <package>       # Print in-repo go package dirs that
                                   # package depends on.
-  deps test-exclusions <package>  # Print glob patterns to match *_test.go 
-                                  # files in dependency dirs outside the 
+  deps test-exclusions <package>  # Print glob patterns to match *_test.go
+                                  # files in dependency dirs outside the
                                   # package itself.
   deps sem-change-in <package>[,<secondary package>...] # Print a SemaphoreCI
-                                  # conditions DSL change_in() clause for 
+                                  # conditions DSL change_in() clause for
                                   # <package>, including non-test deps from
                                   # any <secondary package> clauses.
 
@@ -35,7 +35,7 @@ The test-exclusions and sem-change-in sub-commands are intended to be used with
 packages at the top-level of the repo.  Test exclusions are based on whether
 a dependency is within the package.
 
-The change_in() clause always depends on the whole package directory itself. 
+The change_in() clause always depends on the whole package directory itself.
 Some non-Go dependencies are hard-coded in the tool.  For example, it knows
 that node depends on felix/bpf-*.
 `)
@@ -80,6 +80,11 @@ var defaultInclusions = []string{
 // that can't otherwise be detected.  For example, the node image depends on the
 // BPF binaries, which are in the felix/bpf* directories.
 var nonGoDeps = map[string][]string{
+	"felix": {
+		// BPF programs.
+		"/felix/bpf-apache",
+		"/felix/bpf-gpl",
+	},
 	"node": {
 		// confd templates.
 		"/confd/etc",
@@ -120,7 +125,15 @@ func printSemChangeIn(pkg string) {
 	inclusions.Add(pkg)
 	inclusions.AddAll(defaultInclusions)
 	inclusions.AddAll(nonGoDeps[pkg])
+	for _, dir := range nonGoDeps[pkg] {
+		if _, err := os.Stat("./" + strings.TrimPrefix(dir, "/") + "/Makefile"); err == nil {
+			inclusions.Add(dir + "/Makefile")
+		}
+	}
 	for _, dir := range localDirs {
+		if _, err := os.Stat("./" + strings.TrimPrefix(dir, "/") + "/Makefile"); err == nil {
+			inclusions.Add(dir + "/Makefile")
+		}
 		if strings.HasPrefix(dir+"/", pkg) {
 			continue // covered by the whole-package inclusion.
 		}
