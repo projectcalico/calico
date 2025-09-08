@@ -13,8 +13,6 @@ import (
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/rest"
 	crclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/projectcalico/calico/cni-plugin/internal/pkg/testutils"
@@ -22,7 +20,6 @@ import (
 	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/rawcrdclient"
-	k8sresources "github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/resources"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam/ipamtestutils"
@@ -493,32 +490,6 @@ var _ = Describe("Calico IPAM Tests", func() {
 		})
 	})
 
-	// Helper: create a pre-upgrade BlockAffinity directly via CRD REST client
-	createUnlabeledBlockAffinity := func(ctx context.Context, rc rest.Interface, host string, cidr string) error {
-		_, ipn, err := cnet.ParseCIDR(cidr)
-		if err != nil {
-			return err
-		}
-		name := fmt.Sprintf("%s-%s", host, names.CIDRToName(*ipn))
-		ba := &libapiv3.BlockAffinity{
-			TypeMeta: metav1.TypeMeta{
-				Kind:       libapiv3.KindBlockAffinity,
-				APIVersion: "crd.projectcalico.org/v1",
-			},
-			ObjectMeta: metav1.ObjectMeta{
-				Name: name,
-			},
-			Spec: libapiv3.BlockAffinitySpec{
-				State:   string(apiv3.StateConfirmed),
-				Node:    host,
-				Type:    "host",
-				CIDR:    cidr,
-				Deleted: "false",
-			},
-		}
-		return rc.Post().Resource(k8sresources.BlockAffinityResourceName).Body(ba).Do(ctx).Error()
-	}
-
 	Describe("Upgrade of block affinities occurs only once and creates touchfile", func() {
 		var (
 			crdClient crclient.Client
@@ -594,7 +565,7 @@ var _ = Describe("Calico IPAM Tests", func() {
 
 			// 4) Verify the previously unlabeled BA is now labeled.
 			list = libapiv3.BlockAffinityList{}
-			Expect(restClient.Get().Resource(k8sresources.BlockAffinityResourceName).Do(ctx).Into(&list)).To(Succeed())
+			Expect(crdClient.List(ctx, &list)).To(Succeed())
 			found1 = nil
 			for i := range list.Items {
 				if list.Items[i].Spec.Node == host && list.Items[i].Spec.CIDR == "10.11.0.0/26" {
@@ -608,9 +579,9 @@ var _ = Describe("Calico IPAM Tests", func() {
 			Expect(found1.Labels).To(HaveKey(apiv3.LabelHostnameHash))
 
 			// 5) Create a second unlabeled BA for this host.
-			Expect(createUnlabeledBlockAffinity(ctx, restClient, host, "10.11.0.64/26")).To(Succeed())
+			Expect(ipamtestutils.CreateUnlabeledBlockAffinity(ctx, crdClient, host, "10.11.0.64/26")).To(Succeed())
 			list = libapiv3.BlockAffinityList{}
-			Expect(restClient.Get().Resource(k8sresources.BlockAffinityResourceName).Do(ctx).Into(&list)).To(Succeed())
+			Expect(crdClient.List(ctx, &list)).To(Succeed())
 			var found2 *libapiv3.BlockAffinity
 			for i := range list.Items {
 				if list.Items[i].Spec.Node == host && list.Items[i].Spec.CIDR == "10.11.0.64/26" {
@@ -629,7 +600,7 @@ var _ = Describe("Calico IPAM Tests", func() {
 
 			// Re-list and ensure the second BA remains unlabeled.
 			list = libapiv3.BlockAffinityList{}
-			Expect(restClient.Get().Resource(k8sresources.BlockAffinityResourceName).Do(ctx).Into(&list)).To(Succeed())
+			Expect(crdClient.List(ctx, &list)).To(Succeed())
 			found2 = nil
 			for i := range list.Items {
 				if list.Items[i].Spec.Node == host && list.Items[i].Spec.CIDR == "10.11.0.64/26" {
