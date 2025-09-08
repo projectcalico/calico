@@ -633,7 +633,7 @@ class Lib(object):
 
     def check_update_port_status_called(self, context):
         self.db.update_port_status.assert_called_once_with(
-            context.plugin_context,
+            context._plugin_context,
             context._port["id"],
             mech_calico.constants.PORT_STATUS_ACTIVE,
         )

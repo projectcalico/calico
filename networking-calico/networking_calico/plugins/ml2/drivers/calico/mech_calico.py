@@ -720,7 +720,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
 
         # Update the existing ports for this network and which don't have their own
         # qos_policy_id.
-        plugin_context = context.plugin_context
+        plugin_context = context._plugin_context
         with self._txn_from_context(plugin_context, tag="update-network"):
             ports = self.db.get_ports(
                 plugin_context,
@@ -791,7 +791,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         # same subnet can't be processed by another controller process while
         # we're writing the effects of this call into etcd.
         subnet = context.current
-        plugin_context = context.plugin_context
+        plugin_context = context._plugin_context
         with self._txn_from_context(plugin_context, tag="create-subnet"):
             subnet = self.db.get_subnet(plugin_context, subnet["id"])
             if subnet["enable_dhcp"]:
@@ -805,7 +805,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         # same subnet can't be processed by another controller process while
         # we're writing the effects of this call into etcd.
         subnet = context.current
-        plugin_context = context.plugin_context
+        plugin_context = context._plugin_context
         with self._txn_from_context(plugin_context, tag="update-subnet"):
             subnet = self.db.get_subnet(plugin_context, subnet["id"])
             if subnet["enable_dhcp"]:
@@ -844,7 +844,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             LOG.info("Creating unbound port: no work required.")
             return
 
-        plugin_context = context.plugin_context
+        plugin_context = context._plugin_context
         with self._txn_from_context(plugin_context, tag="create-port"):
             self.endpoint_syncer.write_endpoint(port, plugin_context)
 
@@ -894,7 +894,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         # transaction, re-read the latest available port data, and write
         # corresponding data into etcd while still holding the Neutron DB
         # transaction.
-        plugin_context = context.plugin_context
+        plugin_context = context._plugin_context
         with self._txn_from_context(plugin_context, tag="update-port"):
 
             # If the port was previously bound, the endpoint should already
