@@ -177,7 +177,7 @@ func TestDSCPv4_HEP(t *testing.T) {
 	err = rtMap.Update(rtKey, rtVal)
 	Expect(err).NotTo(HaveOccurred())
 	rtKey = routes.NewKey(dstV4CIDR).AsBytes()
-	rtVal = routes.NewValueWithIfIndex(routes.FlagsRemoteWorkload|routes.FlagInIPAMPool, ifIndex).AsBytes()
+	rtVal = routes.NewValueWithIfIndex(routes.FlagsRemoteHost, ifIndex).AsBytes()
 	err = rtMap.Update(rtKey, rtVal)
 	Expect(err).NotTo(HaveOccurred())
 	defer resetRTMap(rtMap)
@@ -188,14 +188,14 @@ func TestDSCPv4_HEP(t *testing.T) {
 		{"calico_from_host_ep", 0, dstIP, externalAddr, resTC_ACT_UNSPEC, 40, -1},
 
 		// Src outside cluster.
-		{"calico_to_host_ep", tcdefs.MarkSeen, externalAddr, dstIP, resTC_ACT_UNSPEC, 8, -1},
+		{"calico_to_host_ep", tcdefs.MarkSeen, externalAddr, srcIP, resTC_ACT_UNSPEC, 8, -1},
 		{"calico_from_host_ep", 0, externalAddr, dstIP, resTC_ACT_UNSPEC, 40, -1},
 
 		// Src and dest both inside cluster.
 		{"calico_to_host_ep", tcdefs.MarkSeen, srcIP, dstIP, resTC_ACT_UNSPEC, 8, -1},
 	} {
 		skbMark = tc.expectedSKBMark
-		runBpfTest(t, tc.progName, rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+		runBpfTest(t, tc.progName, rulesAllowUDP, func(bpfrun bpfProgRunFn) {
 			testDSCP(bpfrun, tc, false)
 		}, withEgressDSCP(tc.inDSCP))
 		resetCTMap(ctMap) // ensure it is clean
