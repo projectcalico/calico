@@ -4081,7 +4081,7 @@ func (m *bpfEndpointManager) doUpdatePolicyProgram(
 					log.Debugf("Reducing trampoline stride to %d and retrying", tstride)
 					continue
 				} else {
-					return nil, fmt.Errorf("redusing trampoline stride below 1000 not practical")
+					return nil, fmt.Errorf("reducing trampoline stride below 1000 not practical")
 				}
 			} else {
 				return nil, err
