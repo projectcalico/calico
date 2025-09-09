@@ -23,7 +23,7 @@ type DSCPRule struct {
 	Value    uint8
 }
 
-func (r *DefaultRuleRenderer) EgressDSCPChain(rules []DSCPRule) *generictables.Chain {
+func (r *DefaultRuleRenderer) EgressDSCPChain(rules []*DSCPRule) *generictables.Chain {
 	var renderedRules []generictables.Rule
 	// Rules are sorted and validated by DSCP manager.
 	for _, rule := range rules {

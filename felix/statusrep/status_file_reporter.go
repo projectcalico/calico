@@ -26,6 +26,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/deltatracker"
 	"github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/felix/proto/protoconv"
 	epstatus "github.com/projectcalico/calico/libcalico-go/lib/epstatusfile"
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
 )
@@ -253,10 +254,10 @@ func (fr *EndpointStatusFileReporter) handleEndpointUpdate(e interface{}) {
 			logrus.WithField("update", m).Warn("Couldn't handle nil WorkloadEndpointStatusUpdate")
 			return
 		}
-		key := names.WorkloadEndpointIDToWorkloadEndpointKey(m.Id, fr.hostname)
+		key := protoconv.WorkloadEndpointIDToWorkloadEndpointKey(m.Id, fr.hostname)
 		fn := names.WorkloadEndpointKeyToStatusFilename(key)
 
-		epStatus := epstatus.WorkloadEndpointToWorkloadEndpointStatus(m.Endpoint)
+		epStatus := protoconv.WorkloadEndpointToWorkloadEndpointStatus(m.Endpoint)
 		if epStatus == nil {
 			logrus.WithField("update", m).Error("Failed to construct WorkloadEndpointStatus from WorkloadEndpointUpdate")
 			return
@@ -280,7 +281,7 @@ func (fr *EndpointStatusFileReporter) handleEndpointUpdate(e interface{}) {
 			logrus.WithField("update", m).Warn("Couldn't handle nil WorkloadEndpointStatusRemove")
 			return
 		}
-		key := names.WorkloadEndpointIDToWorkloadEndpointKey(m.Id, fr.hostname)
+		key := protoconv.WorkloadEndpointIDToWorkloadEndpointKey(m.Id, fr.hostname)
 		fn := names.WorkloadEndpointKeyToStatusFilename(key)
 
 		logrus.WithField("remove", e).Debug("Handling WorkloadEndpointStatusRemove")

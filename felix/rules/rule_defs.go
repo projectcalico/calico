@@ -61,7 +61,8 @@ const (
 	ChainManglePrerouting  = ChainNamePrefix + "PREROUTING"
 	ChainManglePostrouting = ChainNamePrefix + "POSTROUTING"
 
-	ChainEgressDSCP = ChainNamePrefix + "egress-dscp"
+	ChainEgressDSCP      = ChainNamePrefix + "egress-dscp"
+	IPSetIDDSCPEndpoints = "dscp-src-net"
 
 	IPSetIDAllPools             = "all-ipam-pools"
 	IPSetIDNATOutgoingMasqPools = "masq-ipam-pools"
@@ -322,7 +323,7 @@ type RuleRenderer interface {
 
 	NATOutgoingChain(active bool, ipVersion uint8) *generictables.Chain
 
-	EgressDSCPChain(policies []DSCPRule) *generictables.Chain
+	EgressDSCPChain(policies []*DSCPRule) *generictables.Chain
 
 	DNATsToIptablesChains(dnats map[string]string) []*generictables.Chain
 	SNATsToIptablesChains(snats map[string]string) []*generictables.Chain

@@ -205,8 +205,8 @@ func loadLocalDirs(pkg string) (out []string, err error) {
 		os.Exit(1)
 	}
 	for _, pkg := range packageDeps {
-		const ourPackage = "github.com/projectcalico/calico/"
-		if strings.HasPrefix(pkg, ourPackage) {
+		const ourPackage = "github.com/projectcalico/calico"
+		if strings.HasPrefix(pkg, ourPackage+"/") {
 			pkg = strings.TrimPrefix(pkg, ourPackage)
 			out = append(out, pkg)
 		}

@@ -49,6 +49,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ dscp tests", []apiconfig.Da
 		ep1_1, ep2_1, hostw *workload.Workload // Workloads on Felix0
 		ep1_2, ep2_2        *workload.Workload // Dual stack workloads on Felix1
 		extClient           *containers.Container
+		extWorkload         *workload.Workload
 		cc                  *connectivity.Checker
 	)
 
@@ -96,6 +97,16 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ dscp tests", []apiconfig.Da
 			Image: utils.Config.FelixImage,
 		}
 		extClient = infrastructure.RunExtClientWithOpts("ext-client1", extClientOpts)
+		extWorkload = &workload.Workload{
+			C:        extClient,
+			Name:     "ext-workload",
+			Ports:    wepPortStr,
+			Protocol: "tcp",
+			IP:       extClient.IP,
+			IP6:      extClient.IPv6,
+		}
+		err := extWorkload.Start()
+		Expect(err).NotTo(HaveOccurred())
 	})
 
 	AfterEach(func() {
@@ -125,6 +136,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ dscp tests", []apiconfig.Da
 			infra.DumpErrorData()
 		}
 		infra.Stop()
+		extWorkload.Stop()
 		extClient.Stop()
 	})
 
@@ -136,16 +148,15 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ dscp tests", []apiconfig.Da
 			}
 			allPoolsIPSet := fmt.Sprintf("cali%v0all-ipam-pools", ipVersion)
 			allHostsIPSet := fmt.Sprintf("cali%v0all-hosts-net", ipVersion)
+			dscpIPSet := fmt.Sprintf("cali%v0dscp-src-net", ipVersion)
 			tmpl := "-m set --match-set %v src -m set ! --match-set %v dst -m set ! --match-set %v dst -j cali-egress-dscp"
-			expectedRule1 := fmt.Sprintf(tmpl, allPoolsIPSet, allPoolsIPSet, allHostsIPSet)
-			expectedRule2 := fmt.Sprintf(tmpl, allHostsIPSet, allPoolsIPSet, allHostsIPSet)
+			expectedRule := fmt.Sprintf(tmpl, dscpIPSet, allPoolsIPSet, allHostsIPSet)
 			getRules := func() string {
 				output, _ := felix.ExecOutput(binary, "-t", "mangle")
 				return output
 			}
-			Eventually(getRules, 5*time.Second, 100*time.Millisecond).Should(ContainSubstring(expectedRule1))
-			Consistently(getRules, 3*time.Second, 100*time.Millisecond).Should(ContainSubstring(expectedRule1))
-			Consistently(getRules, 3*time.Second, 100*time.Millisecond).Should(ContainSubstring(expectedRule2))
+			Eventually(getRules, 5*time.Second, 100*time.Millisecond).Should(ContainSubstring(expectedRule))
+			Consistently(getRules, 3*time.Second, 100*time.Millisecond).Should(ContainSubstring(expectedRule))
 		}
 
 		detectNftablesRule := func(felix *infrastructure.Felix, ipVersion uint8) {
@@ -155,16 +166,15 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ dscp tests", []apiconfig.Da
 			}
 			allPoolsIPSet := fmt.Sprintf("@cali%v0all-ipam-pools", ipVersion)
 			allHostsIPSet := fmt.Sprintf("@cali%v0all-hosts-net", ipVersion)
+			dscpIPSet := fmt.Sprintf("@cali%v0dscp-src-net", ipVersion)
 			tmpl := "%v saddr %v %v daddr != %v %v daddr != %v .* jump mangle-cali-egress-dscp"
-			pattern1 := fmt.Sprintf(tmpl, ipFamily, allPoolsIPSet, ipFamily, allPoolsIPSet, ipFamily, allHostsIPSet)
-			pattern2 := fmt.Sprintf(tmpl, ipFamily, allHostsIPSet, ipFamily, allPoolsIPSet, ipFamily, allHostsIPSet)
+			pattern := fmt.Sprintf(tmpl, ipFamily, dscpIPSet, ipFamily, allPoolsIPSet, ipFamily, allHostsIPSet)
 			getRules := func() string {
 				output, _ := felix.ExecOutput("nft", "list", "chain", ipFamily, "calico", "mangle-cali-POSTROUTING")
 				return output
 			}
-			Eventually(getRules, 5*time.Second, 100*time.Millisecond).Should(MatchRegexp(pattern1))
-			Consistently(getRules, 3*time.Second, 100*time.Millisecond).Should(MatchRegexp(pattern1))
-			Consistently(getRules, 3*time.Second, 100*time.Millisecond).Should(MatchRegexp(pattern2))
+			Eventually(getRules, 5*time.Second, 100*time.Millisecond).Should(MatchRegexp(pattern))
+			Consistently(getRules, 3*time.Second, 100*time.Millisecond).Should(MatchRegexp(pattern))
 		}
 
 		if NFTMode() {
@@ -200,13 +210,13 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ dscp tests", []apiconfig.Da
 		verifyQoSPolicies(tc.Felixes[1], nil, nil)
 
 		cc.ResetExpectations()
-		cc.ExpectNone(extClient, hostw)
-		cc.ExpectNone(extClient, ep1_1)
-		cc.ExpectNone(extClient, ep2_1)
+		cc.ExpectNone(hostw, extWorkload)
+		cc.ExpectNone(ep1_1, extWorkload)
+		cc.ExpectNone(ep2_1, extWorkload)
 
 		ccOpts := connectivity.ExpectWithIPVersion(6)
-		cc.Expect(connectivity.None, extClient, ep1_2, ccOpts)
-		cc.Expect(connectivity.None, extClient, ep2_2, ccOpts)
+		cc.Expect(connectivity.None, ep1_2, extWorkload, ccOpts)
+		cc.Expect(connectivity.None, ep2_2, extWorkload, ccOpts)
 		cc.CheckConnectivity()
 
 		By("adding a host endpoint to felix 0")
@@ -247,12 +257,12 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ dscp tests", []apiconfig.Da
 		verifyQoSPolicies(tc.Felixes[1], []string{"0x28"}, []string{"0x28"})
 
 		cc.ResetExpectations()
-		cc.ExpectSome(extClient, hostw)
-		cc.ExpectSome(extClient, ep1_1)
-		cc.ExpectNone(extClient, ep2_1)
+		cc.ExpectSome(hostw, extWorkload)
+		cc.ExpectSome(ep1_1, extWorkload)
+		cc.ExpectNone(ep2_1, extWorkload)
 
-		cc.Expect(connectivity.None, extClient, ep1_2, ccOpts)
-		cc.Expect(connectivity.Some, extClient, ep2_2, ccOpts)
+		cc.Expect(connectivity.None, ep1_2, extWorkload, ccOpts)
+		cc.Expect(connectivity.Some, ep2_2, extWorkload, ccOpts)
 		cc.CheckConnectivity()
 
 		By("updating DSCP values on some workloads")
@@ -270,12 +280,12 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ dscp tests", []apiconfig.Da
 		verifyQoSPolicies(tc.Felixes[1], []string{"0x28", "0x28"}, []string{"0x28", "0x28"}) // 0x28 used by two workloads
 
 		cc.ResetExpectations()
-		cc.ExpectSome(extClient, hostw)
-		cc.ExpectSome(extClient, ep1_1)
-		cc.ExpectNone(extClient, ep2_1)
+		cc.ExpectSome(hostw, extWorkload)
+		cc.ExpectSome(ep1_1, extWorkload)
+		cc.ExpectNone(ep2_1, extWorkload)
 
-		cc.Expect(connectivity.Some, extClient, ep1_2, ccOpts)
-		cc.Expect(connectivity.Some, extClient, ep2_2, ccOpts)
+		cc.Expect(connectivity.Some, ep1_2, extWorkload, ccOpts)
+		cc.Expect(connectivity.Some, ep2_2, extWorkload, ccOpts)
 		cc.CheckConnectivity()
 
 		By("updating DSCP values on other workloads")
@@ -293,12 +303,12 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ dscp tests", []apiconfig.Da
 		verifyQoSPolicies(tc.Felixes[1], []string{"0x14", "0x28"}, []string{"0x14", "0x28"})
 
 		cc.ResetExpectations()
-		cc.ExpectSome(extClient, hostw)
-		cc.ExpectNone(extClient, ep1_1)
-		cc.ExpectNone(extClient, ep2_1)
+		cc.ExpectSome(hostw, extWorkload)
+		cc.ExpectNone(ep1_1, extWorkload)
+		cc.ExpectNone(ep2_1, extWorkload)
 
-		cc.Expect(connectivity.None, extClient, ep1_2, ccOpts)
-		cc.Expect(connectivity.Some, extClient, ep2_2, ccOpts)
+		cc.Expect(connectivity.None, ep1_2, extWorkload, ccOpts)
+		cc.Expect(connectivity.Some, ep2_2, extWorkload, ccOpts)
 		cc.CheckConnectivity()
 
 		By("reverting the DSCP values")
@@ -316,12 +326,12 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ dscp tests", []apiconfig.Da
 		verifyQoSPolicies(tc.Felixes[1], []string{"0x28", "0x28"}, []string{"0x28", "0x28"}) // 0x28 used by two workloads
 
 		cc.ResetExpectations()
-		cc.ExpectSome(extClient, hostw)
-		cc.ExpectSome(extClient, ep1_1)
-		cc.ExpectNone(extClient, ep2_1)
+		cc.ExpectSome(hostw, extWorkload)
+		cc.ExpectSome(ep1_1, extWorkload)
+		cc.ExpectNone(ep2_1, extWorkload)
 
-		cc.Expect(connectivity.Some, extClient, ep1_2, ccOpts)
-		cc.Expect(connectivity.Some, extClient, ep2_2, ccOpts)
+		cc.Expect(connectivity.Some, ep1_2, extWorkload, ccOpts)
+		cc.Expect(connectivity.Some, ep2_2, extWorkload, ccOpts)
 		cc.CheckConnectivity()
 
 		By("removing host endpoint")
@@ -332,12 +342,12 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ dscp tests", []apiconfig.Da
 		verifyQoSPolicies(tc.Felixes[1], []string{"0x28", "0x28"}, []string{"0x28", "0x28"}) // 0x28 used by two workloads
 
 		cc.ResetExpectations()
-		cc.ExpectNone(extClient, hostw)
-		cc.ExpectSome(extClient, ep1_1)
-		cc.ExpectNone(extClient, ep2_1)
+		cc.ExpectNone(hostw, extWorkload)
+		cc.ExpectSome(ep1_1, extWorkload)
+		cc.ExpectNone(ep2_1, extWorkload)
 
-		cc.Expect(connectivity.Some, extClient, ep1_2, ccOpts)
-		cc.Expect(connectivity.Some, extClient, ep2_2, ccOpts)
+		cc.Expect(connectivity.Some, ep1_2, extWorkload, ccOpts)
+		cc.Expect(connectivity.Some, ep2_2, extWorkload, ccOpts)
 		cc.CheckConnectivity()
 
 		By("resetting DSCP value on some workloads")
@@ -351,12 +361,12 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ dscp tests", []apiconfig.Da
 		verifyQoSPolicies(tc.Felixes[1], []string{"0x28"}, []string{"0x28"})
 
 		cc.ResetExpectations()
-		cc.ExpectNone(extClient, hostw)
-		cc.ExpectSome(extClient, ep1_1)
-		cc.ExpectNone(extClient, ep2_1)
+		cc.ExpectNone(hostw, extWorkload)
+		cc.ExpectSome(ep1_1, extWorkload)
+		cc.ExpectNone(ep2_1, extWorkload)
 
-		cc.Expect(connectivity.None, extClient, ep1_2, ccOpts)
-		cc.Expect(connectivity.Some, extClient, ep2_2, ccOpts)
+		cc.Expect(connectivity.None, ep1_2, extWorkload, ccOpts)
+		cc.Expect(connectivity.Some, ep2_2, extWorkload, ccOpts)
 		cc.CheckConnectivity()
 
 		By("stopping the last workloads")
@@ -370,12 +380,12 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ dscp tests", []apiconfig.Da
 		verifyQoSPolicies(tc.Felixes[1], nil, nil)
 
 		cc.ResetExpectations()
-		cc.ExpectNone(extClient, hostw)
-		cc.ExpectNone(extClient, ep1_1)
-		cc.ExpectNone(extClient, ep2_1)
+		cc.ExpectNone(hostw, extWorkload)
+		cc.ExpectNone(ep1_1, extWorkload)
+		cc.ExpectNone(ep2_1, extWorkload)
 
-		cc.Expect(connectivity.None, extClient, ep1_2, ccOpts)
-		cc.Expect(connectivity.None, extClient, ep2_2, ccOpts)
+		cc.Expect(connectivity.None, ep1_2, extWorkload, ccOpts)
+		cc.Expect(connectivity.None, ep2_2, extWorkload, ccOpts)
 		cc.CheckConnectivity()
 	})
 

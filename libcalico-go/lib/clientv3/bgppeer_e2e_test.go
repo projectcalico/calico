@@ -469,7 +469,7 @@ var _ = testutils.E2eDatastoreDescribe("BGPPeer tests", testutils.DatastoreAll, 
 
 			By("Cleaning the datastore and expecting deletion events for each configured resource (tests prefix deletes results in individual events for each key)")
 			be.Clean()
-			testWatcher4.ExpectEvents(apiv3.KindBGPPeer, []watch.Event{
+			testWatcher4.ExpectEventsAnyOrder(apiv3.KindBGPPeer, []watch.Event{
 				{
 					Type:     watch.Deleted,
 					Previous: outRes1,

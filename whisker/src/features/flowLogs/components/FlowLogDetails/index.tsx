@@ -3,6 +3,7 @@ import { jsonTabStyles, tableStyles } from './styles';
 import { FlowLog } from '@/types/render';
 import FlowLogActionIndicator from '@/components/common/FlowLogActionIndicator';
 import { LogDetailsView } from '@/libs/tigera/ui-components/components/common';
+import PoliciesLogDetails from '../PoliciesLogDetails';
 
 const TABS_HEIGHT = 38;
 const PADDING = 16;
@@ -56,6 +57,12 @@ const FlowLogDetails: React.FC<FlowLogDetailsProps> = ({ flowLog, height }) => {
             }}
             defaultExpandedJsonNodes={2}
             size='lg'
+            customTableDataVisualisers={[
+                {
+                    key: 'policies',
+                    component: PoliciesLogDetails,
+                },
+            ]}
         />
     );
 };
