@@ -320,7 +320,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 
 			allocOneIPPerNode := func() {
 				var eg errgroup.Group
-				eg.SetLimit(runtime.NumCPU() / 2)
+				eg.SetLimit(runtime.NumCPU())
 				for i := 0; i < 1000; i++ {
 					eg.Go(func() error {
 						defer GinkgoRecover()
