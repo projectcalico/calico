@@ -72,7 +72,7 @@ static long frag_to_skb(__u64 i, void *_ctx)
 	__u16 len = v->len;
 
 	if (len == 0) {
-		return 1;
+		len = 1; /* prevent verifier from complaining about zero-length copy */
 	}
 
 	barrier(); /* verifier needs some help with recognizing that len is non-zero */
