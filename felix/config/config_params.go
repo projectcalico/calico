@@ -405,12 +405,10 @@ type Config struct {
 	PrometheusProcessMetricsEnabled   bool   `config:"bool;true"`
 	PrometheusWireGuardMetricsEnabled bool   `config:"bool;true"`
 
-	MetricsTLSEnabled        bool   `config:"bool;false"`
-	MetricsTLSCACertFile     string `config:"string;"`
-	MetricsTLSCertFile       string `config:"string;"`
-	MetricsTLSPrivateKeyFile string `config:"string;"`
-	MetricsTLSMinVersion     string `config:"oneof(TLS12,TLS13);TLS13"`
-	MetricsClientAuthType    string `config:"oneof(RequireAndVerifyClientCert,VerifyClientCertIfGiven,NoClientCert);NoClientCert"`
+	PrometheusMetricsCAFile         string `config:"string;"`
+	PrometheusMetricsCertFile       string `config:"string;"`
+	PrometheusMetricsKeyFile        string `config:"string;"`
+	PrometheusMetricsClientAuthType string `config:"oneof(RequireAndVerifyClientCert,VerifyClientCertIfGiven,NoClientCert);NoClientCert"`
 
 	FailsafeInboundHostPorts  []ProtoPort `config:"port-list;tcp:22,udp:68,tcp:179,tcp:2379,tcp:2380,tcp:5473,tcp:6443,tcp:6666,tcp:6667;die-on-fail"`
 	FailsafeOutboundHostPorts []ProtoPort `config:"port-list;udp:53,udp:67,tcp:179,tcp:2379,tcp:2380,tcp:5473,tcp:6443,tcp:6666,tcp:6667;die-on-fail"`

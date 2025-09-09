@@ -139,3 +139,19 @@ func NewMutualTLSConfig(cert, key, ca string) (*tls.Config, error) {
 
 	return tlsCfg, nil
 }
+
+func StringToTLSClientAuthType(clientAuthType string) (tls.ClientAuthType, error) {
+	switch clientAuthType {
+	case "RequireAndVerifyClientCert":
+		return tls.RequireAndVerifyClientCert, nil
+	case "RequireAnyClientCert":
+		return tls.RequireAnyClientCert, nil
+	case "VerifyClientCertIfGiven":
+		return tls.VerifyClientCertIfGiven, nil
+	case "NoClientCert", "":
+		return tls.NoClientCert, nil
+	default:
+		log.WithError(fmt.Errorf("invalid client authentication type: %s. Defaulting to RequireAndVerifyClientCert", clientAuthType))
+		return tls.RequireAndVerifyClientCert, fmt.Errorf("invalid client authentication type: %s", clientAuthType)
+	}
+}
