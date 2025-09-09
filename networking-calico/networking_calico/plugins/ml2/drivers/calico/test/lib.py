@@ -48,6 +48,8 @@ sys.modules["neutron.db"] = m_neutron.db
 sys.modules["neutron.db.models"] = m_neutron.db.models
 sys.modules["neutron.db.models.l3"] = m_neutron.db.models.l3
 sys.modules["neutron.db.qos"] = m_neutron.db.qos
+sys.modules["neutron.objects"] = m_neutron.objects
+sys.modules["neutron.objects.qos"] = m_neutron.objects.qos
 sys.modules["neutron.openstack"] = m_neutron.openstack
 sys.modules["neutron.openstack.common"] = m_neutron.openstack.common
 sys.modules["neutron.openstack.common.db"] = m_neutron.openstack.common.db
@@ -57,6 +59,7 @@ sys.modules["neutron.plugins.ml2.drivers"] = m_neutron.plugins.ml2.drivers
 sys.modules["neutron.plugins.ml2.rpc"] = m_neutron.plugins.ml2.rpc
 sys.modules["neutron_lib"] = m_neutron_lib = mock.MagicMock()
 sys.modules["neutron_lib.agent"] = m_neutron_lib.agent
+sys.modules["neutron_lib.db"] = m_neutron_lib.db
 sys.modules["neutron_lib.constants"] = m_neutron_lib.constants
 sys.modules["neutron_lib.plugins"] = m_neutron_lib.plugins
 sys.modules["neutron_lib.plugins.ml2"] = m_neutron_lib.plugins.ml2
