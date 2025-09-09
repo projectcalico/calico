@@ -43,12 +43,16 @@ from keystoneclient.v3.client import Client as KeystoneClient
 import neutron.plugins.ml2.rpc as rpc
 from neutron.agent import rpc as agent_rpc
 from neutron.conf.agent import common as config
+from neutron.db.db_base_plugin_common import convert_result_to_dict
+from neutron.objects import ports as ports_object
+from neutron.objects.qos import policy as policy_object
 from neutron.plugins.ml2.drivers import mech_agent
 
 from neutron_lib import constants
 from neutron_lib import context as ctx
 from neutron_lib import exceptions as n_exc
 from neutron_lib.agent import topics
+from neutron_lib.db import api as db_api
 from neutron_lib.plugins import directory as plugin_dir
 from neutron_lib.plugins.ml2 import api
 
@@ -742,39 +746,32 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                 self.endpoint_syncer.write_endpoint(p, plugin_context, must_update=True)
 
     @requires_state
-    def handle_qos_policy_update(self, policy_id):
-        LOG.info("HANDLE_QOS_POLICY_UPDATE: %s" % policy_id)
+    def handle_qos_policy_update(self, context, policy_id):
+        LOG.info("HANDLE_QOS_POLICY_UPDATE: %s %s", context, policy_id)
 
-        plugin_context = ctx.get_admin_context()
-        with self._txn_from_context(plugin_context, tag="handle_qos_policy_update"):
-            # Update the existing ports that are directly using this qos_policy_id.
-            ports = self.db.get_ports(
-                plugin_context,
+        with db_api.CONTEXT_READER.using(context):
+            policy = policy_object.QosPolicy.get_policy_obj(context, policy_id)
+
+            # Find ports whose network use this QoS policy and that don't have a
+            # port-specific QoS policy.
+            networks_ids = policy.get_bound_networks()
+            ports_with_net_policy = (
+                ports_object.Port.get_objects(context, network_id=networks_ids)
+                if networks_ids
+                else []
             )
+            ports = [
+                port for port in ports_with_net_policy if port.qos_policy_id is None
+            ]
+
+            # Add the ports that directly use this QoS policy.
+            port_ids = policy.get_bound_ports()
+            if port_ids:
+                ports.extend(ports_object.Port.get_objects(context, id=port_ids))
+
             self.update_existing_ports(
-                [p for p in ports if p["qos_policy_id"] == policy_id],
-                plugin_context,
-                "port QoS policy rules changing",
-            )
-
-            # Find the networks with the updating policy in their qos_policy_id field.
-            networks = self.db.get_networks(
-                plugin_context,
-            )
-
-            # Update the existing ports on these networks that don't have their own
-            # qos_policy_id field.
-            ports = self.db.get_ports(
-                plugin_context,
-                filters={
-                    "network_id": [
-                        n["id"] for n in networks if n["qos_policy_id"] == policy_id
-                    ],
-                },
-            )
-            self.update_existing_ports(
-                [p for p in ports if not p["qos_policy_id"]],
-                plugin_context,
+                convert_result_to_dict(list(set(ports))),
+                context,
                 "network QoS policy rules changing",
             )
 

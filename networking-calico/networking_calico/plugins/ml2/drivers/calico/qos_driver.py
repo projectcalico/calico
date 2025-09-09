@@ -66,7 +66,7 @@ class CalicoQoSDriver(base.DriverBase):
         :param policy: a QoSPolicy object being updated.
         """
         LOG.info("update_policy: context=%r policy=%r", context, policy)
-        self.mechanism_driver.handle_qos_policy_update(policy.id)
+        self.mechanism_driver.handle_qos_policy_update(context, policy.id)
 
 
 def register(mechanism_driver):
