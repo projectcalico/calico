@@ -366,6 +366,9 @@ static CALI_BPF_INLINE void calico_tc_process_ct_lookup(struct cali_tc_ctx *ctx)
 	if (ctx->state->ct_result.flags & CALI_CT_FLAG_NAT_OUT) {
 		ctx->state->flags |= CALI_ST_NAT_OUTGOING;
 	}
+	if (ctx->state->ct_result.flags & CALI_CT_FLAG_CLUSTER_EXTERNAL) {
+		ctx->state->flags |= CALI_ST_CLUSTER_EXTERNAL;
+	}
 
 	if (CALI_F_TO_HOST && !CALI_F_NAT_IF &&
 			(ct_result_rc(ctx->state->ct_result.rc) == CALI_CT_ESTABLISHED ||
@@ -545,15 +548,31 @@ syn_force_policy:
 				ctx->state->flags |= CALI_ST_NAT_OUTGOING;
 			}
 		}
+		// Check if traffic is leaving cluster. We might need to set DSCP later.
+		if (cali_rt_flags_is_in_pool(r->flags) && rt_addr_is_external(&ctx->state->post_nat_ip_dst)) {
+			CALI_DEBUG("Outside cluster dest " IP_FMT "", debug_ip(ctx->state->post_nat_ip_dst));
+			ctx->state->flags |= CALI_ST_CLUSTER_EXTERNAL;
+		}
 		/* If 3rd party CNI is used and dest is outside cluster. See commit fc711b192f for details. */
-		if (!(r->flags & CALI_RT_IN_POOL)) {
+		if (!(cali_rt_flags_is_in_pool(r->flags))) {
 			CALI_DEBUG("Source " IP_FMT " not in IP pool", debug_ip(ctx->state->ip_src));
-			r = cali_rt_lookup(&ctx->state->post_nat_ip_dst);
-			if (!r || !(r->flags & (CALI_RT_WORKLOAD | CALI_RT_HOST))) {
+			if (rt_addr_is_external(&ctx->state->post_nat_ip_dst)) {
 				CALI_DEBUG("Outside cluster dest " IP_FMT "", debug_ip(ctx->state->post_nat_ip_dst));
 				ctx->state->flags |= CALI_ST_SKIP_FIB;
 			}
 		}
+	}
+
+	// If either source or destination is outside cluster, set flag as might need to update DSCP later.
+	if ((CALI_F_TO_HEP) && (rt_addr_is_local_host(&ctx->state->ip_src)) &&
+		(rt_addr_is_external(&ctx->state->post_nat_ip_dst))) {
+		CALI_DEBUG("Outside cluster dest " IP_FMT "", debug_ip(ctx->state->post_nat_ip_dst));
+		ctx->state->flags |= CALI_ST_CLUSTER_EXTERNAL;
+	}
+	if ((CALI_F_FROM_HEP) && (rt_addr_is_host_or_in_pool(&ctx->state->post_nat_ip_dst)) &&
+		(rt_addr_is_external(&ctx->state->ip_src))) {
+		CALI_DEBUG("Outside cluster source " IP_FMT "", debug_ip(ctx->state->ip_src));
+		ctx->state->flags |= CALI_ST_CLUSTER_EXTERNAL;
 	}
 
 	/* [SMC] I had to add this revalidation when refactoring the conntrack code to use the context and
@@ -1327,7 +1346,7 @@ int calico_tc_skb_accepted_entrypoint(struct __sk_buff *skb)
 		deny_reason(ctx, CALI_REASON_DROPPED_BY_QOS);
 		goto deny;
 	}
-	if ((CALI_F_FROM_WEP || CALI_F_TO_HEP) && EGRESS_DSCP >= 0 && !qos_set_dscp(ctx)) {
+	if ((CALI_F_FROM_WEP || CALI_F_TO_HEP) && qos_dscp_needs_update(ctx) && !qos_dscp_set(ctx)) {
 		goto deny;
 	}
 	ctx->fwd = calico_tc_skb_accepted(ctx);
@@ -1407,6 +1426,9 @@ int calico_tc_skb_new_flow_entrypoint(struct __sk_buff *skb)
 	ct_ctx_nat->allow_return = false;
 	if (state->flags & CALI_ST_NAT_OUTGOING) {
 		ct_ctx_nat->flags |= CALI_CT_FLAG_NAT_OUT;
+	}
+	if (state->flags & CALI_ST_CLUSTER_EXTERNAL) {
+		ct_ctx_nat->flags |= CALI_CT_FLAG_CLUSTER_EXTERNAL;
 	}
 	if (CALI_F_TO_HOST && state->flags & CALI_ST_SKIP_FIB) {
 		ct_ctx_nat->flags |= CALI_CT_FLAG_SKIP_FIB;
