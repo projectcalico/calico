@@ -123,7 +123,7 @@ func TestDSCPv4_WEP(t *testing.T) {
 
 	ifIndex := 1
 
-	externalAddr := net.IPv4(3, 3, 3, 3) // a new address that based on route map is outside cluster.
+	externalAddr := net.IPv4(3, 3, 3, 3) // a new address that, based on route map, is outside cluster.
 
 	// Insert a reverse route for the source workload.
 	rtKey := routes.NewKey(srcV4CIDR).AsBytes()
@@ -169,7 +169,7 @@ func TestDSCPv4_HEP(t *testing.T) {
 
 	ifIndex := 1
 
-	externalAddr := net.IPv4(3, 3, 3, 3) // a new address that based on route map is outside cluster.
+	externalAddr := net.IPv4(3, 3, 3, 3) // a new address that, based on route map, is outside cluster.
 
 	// Insert a reverse route for the source workload.
 	rtKey := routes.NewKey(srcV4CIDR).AsBytes()
@@ -229,7 +229,7 @@ func TestDSCPv6_WEP(t *testing.T) {
 	Expect(err).NotTo(HaveOccurred())
 	defer resetRTMap(rtMapV6)
 
-	externalAddr := net.ParseIP("dead:cafe::1") // a new address that based on route map is outside cluster.
+	externalAddr := net.ParseIP("dead:cafe::1") // a new address that, based on route map, is outside cluster.
 
 	for _, tc := range []dscpTestCase{
 		// Dest outside cluster.
@@ -277,7 +277,7 @@ func TestDSCPv6_HEP(t *testing.T) {
 	Expect(err).NotTo(HaveOccurred())
 	defer resetRTMap(rtMapV6)
 
-	externalAddr := net.ParseIP("dead:cafe::1") // a new address that based on route map is outside cluster.
+	externalAddr := net.ParseIP("dead:cafe::1") // a new address that, based on route map, is outside cluster.
 
 	for _, tc := range []dscpTestCase{
 		// Dest outside cluster.
