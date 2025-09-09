@@ -457,9 +457,14 @@ func (c *PendingUpdatesView[K, V]) IterBatched(applyFn func(k []K, v []V) (int, 
 				applied++ // skip over the item that erred
 			}
 
-			ks = ks[applied:]
-			vs = vs[applied:]
 			count = batchSize - applied
+			if count == 0 {
+				ks = make([]K, 0, batchSize)
+				vs = make([]V, 0, batchSize)
+			} else {
+				ks = ks[applied:]
+				vs = vs[applied:]
+			}
 		}
 	}
 
@@ -474,8 +479,8 @@ func (c *PendingUpdatesView[K, V]) IterBatched(applyFn func(k []K, v []V) (int, 
 			applied++ // skip over the item that erred
 		}
 
-		ks = ks[:batchSize-applied]
-		vs = vs[:batchSize-applied]
+		ks = ks[applied:]
+		vs = vs[applied:]
 		count -= applied
 	}
 }
@@ -536,8 +541,12 @@ func (c *PendingDeletionsView[K, V]) IterBatched(applyFn func(k []K) (int, error
 				applied++ // skip over the item that erred
 			}
 
-			ks = ks[applied:]
-			count = batchSize - applied
+			count -= applied
+			if count == 0 {
+				ks = make([]K, 0, batchSize)
+			} else {
+				ks = ks[applied:]
+			}
 		}
 	}
 
@@ -551,7 +560,7 @@ func (c *PendingDeletionsView[K, V]) IterBatched(applyFn func(k []K) (int, error
 			applied++ // skip over the item that erred
 		}
 
-		ks = ks[:batchSize-applied]
+		ks = ks[applied:]
 		count -= applied
 	}
 }
