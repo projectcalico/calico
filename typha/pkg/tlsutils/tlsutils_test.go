@@ -167,11 +167,11 @@ func errChecker(certConfig *certConfig, typhaConfig *typhaConfig) func(error) {
 	}
 	if typhaConfig.CN != "" && typhaConfig.URISAN != "" {
 		// Required CN and URISAN both specified.
-		return expectErrorMessage("Peer certificate does not have required CN or URI SAN")
+		return expectErrorMessage("peer certificate does not have required CN or URI SAN")
 	} else if typhaConfig.CN != "" {
-		return expectErrorMessage("Peer certificate does not have required CN")
+		return expectErrorMessage("peer certificate does not have required CN")
 	} else if typhaConfig.URISAN != "" {
-		return expectErrorMessage("Peer certificate does not have required URI SAN")
+		return expectErrorMessage("peer certificate does not have required URI SAN")
 	}
 	return expectOK
 }
