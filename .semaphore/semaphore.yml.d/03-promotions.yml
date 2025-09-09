@@ -80,3 +80,7 @@ promotions:
     pipeline_file: license-scanning/fossa-scan.yml
     auto_promote:
       when: "branch =~ 'master|release-.*'"
+  - name: Push E2E images
+    pipeline_file: push-images/e2e-test.yml
+    auto_promote:
+      when: "branch =~ 'master|release-'"
