@@ -112,12 +112,10 @@ type Config struct {
 	PrometheusGoMetricsEnabled      bool   `config:"bool;true"`
 	PrometheusProcessMetricsEnabled bool   `config:"bool;true"`
 
-	MetricsTLSEnabled        bool   `config:"bool;false"`
-	MetricsTLSCACertFile     string `config:"string;"`
-	MetricsTLSCertFile       string `config:"string;"`
-	MetricsTLSPrivateKeyFile string `config:"string;"`
-	MetricsTLSMinVersion     string `config:"oneof(TLS12,TLS13);TLS13"`
-	MetricsClientAuthType    string `config:"oneof(RequireAndVerifyClientCert,VerifyClientCertIfGiven,NoClientCert);NoClientCert"`
+	PrometheusMetricsCAFile         string `config:"string;"`
+	PrometheusMetricsCertFile       string `config:"string;"`
+	PrometheusMetricsKeyFile        string `config:"string;"`
+	PrometheusMetricsClientAuthType string `config:"oneof(RequireAndVerifyClientCert,VerifyClientCertIfGiven,NoClientCert);NoClientCert"`
 
 	SnapshotCacheMaxBatchSize int `config:"int(1,);100"`
 

@@ -1354,33 +1354,23 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 		*out = new(bool)
 		**out = **in
 	}
-	if in.MetricsTLSEnabled != nil {
-		in, out := &in.MetricsTLSEnabled, &out.MetricsTLSEnabled
-		*out = new(bool)
-		**out = **in
-	}
-	if in.MetricsTLSCACertFile != nil {
-		in, out := &in.MetricsTLSCACertFile, &out.MetricsTLSCACertFile
+	if in.PrometheusMetricsCAFile != nil {
+		in, out := &in.PrometheusMetricsCAFile, &out.PrometheusMetricsCAFile
 		*out = new(string)
 		**out = **in
 	}
-	if in.MetricsTLSCertFile != nil {
-		in, out := &in.MetricsTLSCertFile, &out.MetricsTLSCertFile
+	if in.PrometheusMetricsCertFile != nil {
+		in, out := &in.PrometheusMetricsCertFile, &out.PrometheusMetricsCertFile
 		*out = new(string)
 		**out = **in
 	}
-	if in.MetricsTLSPrivateKeyFile != nil {
-		in, out := &in.MetricsTLSPrivateKeyFile, &out.MetricsTLSPrivateKeyFile
+	if in.PrometheusMetricsKeyFile != nil {
+		in, out := &in.PrometheusMetricsKeyFile, &out.PrometheusMetricsKeyFile
 		*out = new(string)
 		**out = **in
 	}
-	if in.MetricsClientAuthType != nil {
-		in, out := &in.MetricsClientAuthType, &out.MetricsClientAuthType
-		*out = new(string)
-		**out = **in
-	}
-	if in.MetricsTLSMinVersion != nil {
-		in, out := &in.MetricsTLSMinVersion, &out.MetricsTLSMinVersion
+	if in.PrometheusMetricsClientAuthType != nil {
+		in, out := &in.PrometheusMetricsClientAuthType, &out.PrometheusMetricsClientAuthType
 		*out = new(string)
 		**out = **in
 	}
