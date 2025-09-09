@@ -11,7 +11,7 @@ import (
 	k8sp "k8s.io/kubernetes/pkg/proxy"
 )
 
-// M is a prime number much larger than any backend set we expect to have.
+// M is a prime number much larger than the number of backends we expect to have for a service.
 const M = 1009
 
 type ConsistentHashOpt func(*ConsistentHash)
