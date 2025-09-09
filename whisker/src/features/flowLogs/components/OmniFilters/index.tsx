@@ -1,4 +1,4 @@
-import { useDebouncedCallback } from '@/hooks';
+import { useDebouncedCallback, useFeature } from '@/hooks';
 import {
     OmniFilter,
     OmniFilterList,
@@ -15,8 +15,10 @@ import {
     OmniFilterKeys,
     CustomOmniFilterKeys,
     ListOmniFilterKeys,
+    FilterKey,
 } from '@/utils/omniFilter';
 import React from 'react';
+import PolicyOmniFilter from '../PolicyOmniFilter';
 
 const listOmniFilterIds = Object.values(ListOmniFilterKeys);
 
@@ -27,7 +29,7 @@ const omniFilterIds = [
 
 type OmniFiltersProps = {
     onChange: (event: OmniFilterChangeEvent) => void;
-    onMultiChange: (filterIds: string[], values: (string | null)[]) => void;
+    onMultiChange: (change: Partial<Record<FilterKey, string[]>>) => void;
     onReset: () => void;
     omniFilterData: ListOmniFiltersData;
     selectedValues: SelectedOmniFilters;
@@ -46,6 +48,7 @@ const OmniFilters: React.FC<OmniFiltersProps> = ({
     onRequestFilterData,
     onRequestNextPage,
 }) => {
+    const showFiltersV2 = useFeature('fitlersV2');
     const handleClear = (filterId: string) =>
         onChange({
             filterId: filterId,
@@ -58,77 +61,102 @@ const OmniFilters: React.FC<OmniFiltersProps> = ({
     const [isLoading, setIsLoading] = React.useState(false);
 
     return (
-        <OmniFilterList
-            gap={2}
-            defaultFilterIds={omniFilterIds}
-            visibleFilterIds={omniFilterIds}
-            onChangeVisible={() => undefined}
-            onResetVisible={onReset}
-        >
-            {listOmniFilterIds.map((filterId) => (
-                <OmniFilter
-                    filterId={filterId}
-                    filterLabel={OmniFilterProperties[filterId].label}
-                    filters={omniFilterData[filterId].filters ?? []}
-                    selectedFilters={selectedListOmniFilters[filterId]}
-                    onChange={onChange}
-                    onClear={() => handleClear(filterId)}
-                    showOperatorSelect={false}
-                    listType='checkbox'
-                    isLoading={omniFilterData[filterId].isLoading || isLoading}
-                    totalItems={omniFilterData[filterId].total}
-                    onReady={() =>
-                        onRequestFilterData({
-                            filterParam: filterId,
-                            searchOption: '',
+        <>
+            {showFiltersV2 && (
+                <PolicyOmniFilter
+                    key='policy-omni-filter-v2'
+                    onChange={onMultiChange}
+                    filterId={CustomOmniFilterKeys.policyV2}
+                    filterLabel={
+                        OmniFilterProperties[OmniFilterKeys.policyV2].label
+                    }
+                    selectedValues={{
+                        policyV2: selectedValues.policyV2,
+                        policyV2Namespace: selectedValues.policyV2Namespace,
+                        policyV2Tier: selectedValues.policyV2Tier,
+                        policyV2Kind: selectedValues.policyV2Kind,
+                    }}
+                    filterQuery={selectedValues}
+                />
+            )}
+
+            <OmniFilterList
+                gap={2}
+                defaultFilterIds={omniFilterIds}
+                visibleFilterIds={omniFilterIds}
+                onChangeVisible={() => undefined}
+                onResetVisible={onReset}
+            >
+                {listOmniFilterIds.map((filterId) => (
+                    <OmniFilter
+                        filterId={filterId}
+                        filterLabel={OmniFilterProperties[filterId].label}
+                        filters={omniFilterData[filterId].filters ?? []}
+                        selectedFilters={selectedListOmniFilters[filterId]}
+                        onChange={onChange}
+                        onClear={() => handleClear(filterId)}
+                        showOperatorSelect={false}
+                        listType='checkbox'
+                        isLoading={
+                            omniFilterData[filterId].isLoading || isLoading
+                        }
+                        totalItems={omniFilterData[filterId].total}
+                        onReady={() =>
+                            onRequestFilterData({
+                                filterParam: filterId,
+                                searchOption: '',
+                            })
+                        }
+                        onRequestSearch={(filterId, searchOption) => {
+                            const requestData = () => {
+                                onRequestFilterData({
+                                    filterParam:
+                                        filterId as ListOmniFilterParam,
+                                    searchOption,
+                                });
+                                setIsLoading(false);
+                            };
+
+                            if (searchOption.length >= 1) {
+                                setIsLoading(true);
+                                debounce(searchOption, requestData);
+                            } else {
+                                requestData();
+                            }
+                        }}
+                        onRequestMore={(filterId) =>
+                            onRequestNextPage(filterId as ListOmniFilterParam)
+                        }
+                        showSelectedList
+                        isCreatable
+                        labelSelectedListHeader=''
+                        labelListHeader='Filters'
+                    />
+                ))}
+
+                <PortOmniFilter
+                    key='port-omni-filter'
+                    port={selectedValues.dest_port?.[0] ?? ''}
+                    protocol={selectedValues.protocol?.[0] ?? ''}
+                    selectedFilters={[
+                        ...(selectedValues.dest_port ?? []),
+                        ...(selectedValues.protocol ?? []),
+                    ]}
+                    onChange={({ protocol, port }) =>
+                        onMultiChange({
+                            [OmniFilterKeys.protocol]: protocol
+                                ? [protocol]
+                                : [],
+                            [OmniFilterKeys.dest_port]: port ? [port] : [],
                         })
                     }
-                    onRequestSearch={(filterId, searchOption) => {
-                        const requestData = () => {
-                            onRequestFilterData({
-                                filterParam: filterId as ListOmniFilterParam,
-                                searchOption,
-                            });
-                            setIsLoading(false);
-                        };
-
-                        if (searchOption.length >= 1) {
-                            setIsLoading(true);
-                            debounce(searchOption, requestData);
-                        } else {
-                            requestData();
-                        }
-                    }}
-                    onRequestMore={(filterId) =>
-                        onRequestNextPage(filterId as ListOmniFilterParam)
+                    filterId={CustomOmniFilterKeys.dest_port}
+                    filterLabel={
+                        OmniFilterProperties[OmniFilterKeys.dest_port].label
                     }
-                    showSelectedList
-                    isCreatable
-                    labelSelectedListHeader=''
-                    labelListHeader='Filters'
                 />
-            ))}
-
-            <PortOmniFilter
-                key='port-omni-filter'
-                port={selectedValues.dest_port?.[0] ?? ''}
-                protocol={selectedValues.protocol?.[0] ?? ''}
-                selectedFilters={[
-                    ...(selectedValues.dest_port ?? []),
-                    ...(selectedValues.protocol ?? []),
-                ]}
-                onChange={({ protocol, port }) =>
-                    onMultiChange(
-                        [OmniFilterKeys.protocol, OmniFilterKeys.dest_port],
-                        [protocol, port],
-                    )
-                }
-                filterId={CustomOmniFilterKeys.dest_port}
-                filterLabel={
-                    OmniFilterProperties[OmniFilterKeys.dest_port].label
-                }
-            />
-        </OmniFilterList>
+            </OmniFilterList>
+        </>
     );
 };
 

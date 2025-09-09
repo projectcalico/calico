@@ -20,6 +20,10 @@ export enum FilterKey {
     protocol = 'protocol',
     dest_port = 'dest_port',
     action = 'action',
+    policyV2 = 'policyV2',
+    policyV2Namespace = 'policyV2Namespace',
+    policyV2Tier = 'policyV2Tier',
+    policyV2Kind = 'policyV2Kind',
 }
 
 export type FilterProperty = {
@@ -31,7 +35,13 @@ export type FilterProperty = {
 
 export const ListOmniFilterKeys: Omit<
     typeof FilterKey,
-    'action' | 'protocol' | 'dest_port'
+    | 'action'
+    | 'protocol'
+    | 'dest_port'
+    | 'policyV2'
+    | 'policyV2Namespace'
+    | 'policyV2Tier'
+    | 'policyV2Kind'
 > = {
     [FilterKey.policy]: FilterKey.policy,
     [FilterKey.source_namespace]: FilterKey.source_namespace,
@@ -42,16 +52,41 @@ export const ListOmniFilterKeys: Omit<
 
 export type ListOmniFilterParam = keyof typeof ListOmniFilterKeys;
 
+export const FilterHintKeys: Omit<
+    typeof FilterKey,
+    'action' | 'protocol' | 'dest_port'
+> = {
+    [FilterKey.policy]: FilterKey.policy,
+    [FilterKey.source_namespace]: FilterKey.source_namespace,
+    [FilterKey.source_name]: FilterKey.source_name,
+    [FilterKey.dest_namespace]: FilterKey.dest_namespace,
+    [FilterKey.dest_name]: FilterKey.dest_name,
+    [FilterKey.policyV2Tier]: FilterKey.policyV2Tier,
+    [FilterKey.policyV2Namespace]: FilterKey.policyV2Namespace,
+    [FilterKey.policyV2Kind]: FilterKey.policyV2Kind,
+    [FilterKey.policyV2]: FilterKey.policyV2,
+} as const;
+export type FilterHintKey = keyof typeof FilterHintKeys;
+
 export const OmniFilterKeys: Omit<typeof FilterKey, 'action'> = {
     ...ListOmniFilterKeys,
     [FilterKey.dest_port]: FilterKey.dest_port,
     [FilterKey.protocol]: FilterKey.protocol,
+    [FilterKey.policyV2]: FilterKey.policyV2,
+    [FilterKey.policyV2Namespace]: FilterKey.policyV2Namespace,
+    [FilterKey.policyV2Tier]: FilterKey.policyV2Tier,
+    [FilterKey.policyV2Kind]: FilterKey.policyV2Kind,
 } as const;
 
 export type OmniFilterParam = keyof typeof OmniFilterKeys;
 
-export const CustomOmniFilterKeys: Pick<typeof FilterKey, 'dest_port'> = {
+export const CustomOmniFilterKeys: Pick<
+    typeof FilterKey,
+    'dest_port' | 'policyV2' | 'policyV2Namespace'
+> = {
     [FilterKey.dest_port]: FilterKey.dest_port,
+    [FilterKey.policyV2]: FilterKey.policyV2,
+    [FilterKey.policyV2Namespace]: FilterKey.policyV2Namespace,
 } as const;
 
 export type CustomOmniFilterParam = keyof typeof CustomOmniFilterKeys;
@@ -85,9 +120,15 @@ export const transformToFlowsFilterQuery = (
 ) => {
     const filterHintsQuery: FlowsFilter = Object.keys(omniFilterValues).reduce(
         (acc, filterKey) => {
+            if (
+                omniFilterValues[filterKey as FilterKey] === undefined ||
+                omniFilterValues[filterKey as FilterKey].length === 0
+            ) {
+                return acc;
+            }
+
             const filterId = filterKey as FilterKey;
             const key = FilterProperties[filterId].filterHintsKey;
-
             return listFilterId === filterId
                 ? acc
                 : {
@@ -212,6 +253,34 @@ export const OmniFilterProperties: OmniFilterPropertiesType = {
         label: 'Protocol',
         filterHintsKey: 'protocols',
         transformToFilterHintRequest: transformToListFilter,
+    },
+    policyV2: {
+        label: 'Policy V2',
+        filterHintsKey: 'policiesV2',
+        transformToFilterHintRequest: transformToListFilter,
+        transformToFilterSearchRequest: transformToListFilterSearchRequest,
+        limit: requestPageSize,
+    },
+    policyV2Namespace: {
+        label: 'Namespace',
+        filterHintsKey: 'policiesV2Namespaces',
+        transformToFilterHintRequest: transformToListFilter,
+        transformToFilterSearchRequest: transformToListFilterSearchRequest,
+        limit: requestPageSize,
+    },
+    policyV2Tier: {
+        label: 'Tier',
+        filterHintsKey: 'policyV2Tiers',
+        transformToFilterHintRequest: transformToListFilter,
+        transformToFilterSearchRequest: transformToListFilterSearchRequest,
+        limit: requestPageSize,
+    },
+    policyV2Kind: {
+        label: 'Kind',
+        filterHintsKey: 'policyV2Kinds',
+        transformToFilterHintRequest: transformToListFilter,
+        transformToFilterSearchRequest: transformToListFilterSearchRequest,
+        limit: requestPageSize,
     },
 };
 

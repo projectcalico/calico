@@ -1,4 +1,12 @@
-import { Box, BoxProps, Button, Flex, Text } from '@chakra-ui/react';
+import {
+    Box,
+    BoxProps,
+    Button,
+    Flex,
+    PopoverContentProps,
+    Text,
+    useDisclosure,
+} from '@chakra-ui/react';
 import React, { useEffect } from 'react';
 import OmniCheckboxList, {
     OmniCheckboxListProps,
@@ -25,6 +33,9 @@ import {
     OmniFilterTrigger,
 } from './parts';
 import { AddIcon } from '@chakra-ui/icons';
+import OmniTagListTrigger, {
+    OmniTagListTriggerPartsProps,
+} from './components/OmniTagListTrigger';
 
 // Handle calling onReady for lazy loaded content
 const LazyOnReady: React.FC<{ onReady?: () => void }> = ({ onReady }) => {
@@ -80,6 +91,10 @@ export type OmniFilterProps = {
     formatSelectedLabel?: (selectedFilters: OmniFilterOption[]) => string;
     formatListCountLabel?: (listCount: number, totalItems: number) => string;
     formatCreatableLabel?: (searchInput: string) => string;
+    triggerType?: 'default' | 'taglist';
+    tagListTriggerProps?: OmniTagListTriggerPartsProps;
+    contentRef?: React.RefObject<HTMLDivElement>;
+    popoverContentProps?: PopoverContentProps;
 } & Omit<BoxProps, 'onChange'> & { 'data-testid'?: string };
 
 type CheckboxOmniFilterProps = {
@@ -113,6 +128,10 @@ const OmniFilter: React.FC<OmniFilterProps | CheckboxOmniFilterProps> = ({
     inMemorySearch = false,
     totalItems,
     isCreatable = false,
+    triggerType = 'default',
+    contentRef,
+    popoverContentProps,
+    tagListTriggerProps,
     formatCreatableLabel,
     onChange,
     onReady,
@@ -125,7 +144,7 @@ const OmniFilter: React.FC<OmniFilterProps | CheckboxOmniFilterProps> = ({
         `${listCount} of ${totalItems}`,
     ...rest
 }) => {
-    const [isOpen, setIsOpen] = React.useState(false);
+    const { isOpen, onClose, onToggle } = useDisclosure();
     const [isLoadingMore, setLoadingMore] = React.useState(false);
 
     const [filteredData, setFilterData] = React.useState(filters);
@@ -154,6 +173,16 @@ const OmniFilter: React.FC<OmniFilterProps | CheckboxOmniFilterProps> = ({
         }
     }, [isLoading]);
 
+    const handleChange = (filters: OmniFilterOption[]) => {
+        onChange({
+            filterId,
+            filterLabel,
+            operator: showOperatorSelect ? selectedOperator : undefined,
+            filters,
+        });
+        popoverContentRef?.current?.focus();
+    };
+
     const listComponentProps = {
         options: filteredData,
         selectedOptions: selectedFilters,
@@ -167,15 +196,7 @@ const OmniFilter: React.FC<OmniFilterProps | CheckboxOmniFilterProps> = ({
         labelListHeader,
         labelSelectedListHeader,
         ref: showSearch ? undefined : initialFocusRef, // focus on first in list when no search
-        onChange: (filters: OmniFilterOption[]) => {
-            onChange({
-                filterId,
-                filterLabel,
-                operator: showOperatorSelect ? selectedOperator : undefined,
-                filters,
-            });
-            popoverContentRef?.current?.focus();
-        },
+        onChange: handleChange,
         onRequestMore: () => {
             if (onRequestMore) {
                 setLoadingMore(true);
@@ -187,55 +208,72 @@ const OmniFilter: React.FC<OmniFilterProps | CheckboxOmniFilterProps> = ({
     return (
         <>
             <OmniFilterContainer
+                isOpen={isOpen}
                 onClose={() => {
-                    setIsOpen(false);
+                    onClose();
                     setSearchInput('');
                 }}
                 initialFocusRef={initialFocusRef}
             >
-                <OmniFilterTrigger
-                    isOpen={isOpen}
-                    onClick={() => setIsOpen(true)}
-                    label={filterLabel}
-                    isActive={firstSelectedFilter && showSelectedOnButton}
-                    isDisabled={isDisabled}
-                    testId={testId}
-                    showButtonIcon={showButtonIcon}
-                    selectedValueLabel={
-                        formatSelectedLabel
-                            ? formatSelectedLabel(selectedFilters)
-                            : firstSelectedFilter?.label
-                    }
-                    operator={selectedOperator}
-                    selectedValueTitle={
-                        !formatSelectedLabel
-                            ? selectedFilters
-                                  .map((filter) => filter.label)
-                                  .join(', ')
-                            : undefined
-                    }
-                    showSelectedValueLabel={showSelectedOnButton}
-                    badgeLabel={
-                        remainingSelectedFilters.length > 0 &&
-                        !formatSelectedLabel
-                            ? remainingSelectedFilters.length
-                            : undefined
-                    }
-                    valueSx={
-                        formatSelectedLabel
-                            ? { maxWidth: BUTTON_LABEL_WIDTH }
-                            : {
-                                  maxWidth:
-                                      remainingSelectedFilters.length > 0
-                                          ? BUTTON_LABEL_WITH_COUNT_WIDTH
-                                          : BUTTON_LABEL_WIDTH,
-                              }
-                    }
-                />
+                {triggerType === 'taglist' ? (
+                    <OmniTagListTrigger
+                        options={selectedFilters}
+                        onRemove={(removed) =>
+                            handleChange(
+                                selectedFilters.filter(
+                                    (filter) => filter.value !== removed.value,
+                                ),
+                            )
+                        }
+                        partsProps={tagListTriggerProps}
+                        onOpen={onToggle}
+                    />
+                ) : (
+                    <OmniFilterTrigger
+                        isOpen={isOpen}
+                        onClick={onToggle}
+                        label={filterLabel}
+                        isActive={firstSelectedFilter && showSelectedOnButton}
+                        isDisabled={isDisabled}
+                        testId={testId}
+                        showButtonIcon={showButtonIcon}
+                        selectedValueLabel={
+                            formatSelectedLabel
+                                ? formatSelectedLabel(selectedFilters)
+                                : firstSelectedFilter?.label
+                        }
+                        operator={selectedOperator}
+                        selectedValueTitle={
+                            !formatSelectedLabel
+                                ? selectedFilters
+                                      .map((filter) => filter.label)
+                                      .join(', ')
+                                : undefined
+                        }
+                        showSelectedValueLabel={showSelectedOnButton}
+                        badgeLabel={
+                            remainingSelectedFilters.length > 0 &&
+                            !formatSelectedLabel
+                                ? remainingSelectedFilters.length
+                                : undefined
+                        }
+                        valueSx={
+                            formatSelectedLabel
+                                ? { maxWidth: BUTTON_LABEL_WIDTH }
+                                : {
+                                      maxWidth:
+                                          remainingSelectedFilters.length > 0
+                                              ? BUTTON_LABEL_WITH_COUNT_WIDTH
+                                              : BUTTON_LABEL_WIDTH,
+                                  }
+                        }
+                    />
+                )}
 
                 <OmniFilterContent
                     data-testid={`${testId}-popover-content`}
                     ref={popoverContentRef}
+                    {...popoverContentProps}
                 >
                     <LazyOnReady onReady={onReady} />
 

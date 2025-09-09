@@ -16,6 +16,7 @@ export type AppConfig = {
         notifications: 'Enabled' | 'Disabled';
         calico_cloud_url: string;
     };
+    features: Record<string, boolean>;
 };
 
 export type UniqueFlowLogs = {
