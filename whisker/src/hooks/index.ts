@@ -31,6 +31,9 @@ export const useDebouncedCallback = () => {
 
 export const useClusterId = () => useAppConfig()?.config.cluster_id;
 
+export const useFeature = (feature: string) =>
+    useAppConfig()?.features?.[feature] === true;
+
 export const useBuildInfo = () => {
     React.useEffect(() => {
         console.groupCollapsed('Build information');

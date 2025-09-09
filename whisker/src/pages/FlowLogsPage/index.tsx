@@ -55,7 +55,6 @@ const FlowLogsPage: React.FC = () => {
         getAllUrlParamsAsString,
         ,
         ,
-        setUrlParams,
     ] = useOmniFilterUrlState<typeof OmniFilterKeys>(
         OmniFilterKeys,
         OmniFilterProperties,
@@ -153,6 +152,14 @@ const FlowLogsPage: React.FC = () => {
         selectedRowRef.current = null;
     }, [data.length]);
 
+    const handleMultiChange = (
+        values: Partial<Record<FilterKey, string[]>>,
+    ) => {
+        Object.entries(values).forEach(([key, value]) => {
+            setFilterParam(key, value, undefined);
+        });
+    };
+
     return (
         <Box pt={1}>
             <Flex justifyContent='space-between' alignItems='center' p={2}>
@@ -180,7 +187,7 @@ const FlowLogsPage: React.FC = () => {
                         onRequestNextPage={(filterParam) =>
                             fetchFilter(filterParam, null)
                         }
-                        onMultiChange={setUrlParams}
+                        onMultiChange={handleMultiChange}
                         selectedValues={urlFilterParams}
                     />
                 </Flex>
