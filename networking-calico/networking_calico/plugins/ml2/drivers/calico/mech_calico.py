@@ -761,18 +761,23 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                 else []
             )
             ports = [
-                port for port in ports_with_net_policy if port.qos_policy_id is None
+                port.to_dict()
+                for port in ports_with_net_policy
+                if port.qos_policy_id is None
             ]
 
             # Add the ports that directly use this QoS policy.
             port_ids = policy.get_bound_ports()
             if port_ids:
-                ports.extend(ports_object.Port.get_objects(context, id=port_ids))
+                ports.extend(
+                    [
+                        p.to_dict()
+                        for p in ports_object.Port.get_objects(context, id=port_ids)
+                    ]
+                )
 
             self.update_existing_ports(
-                convert_result_to_dict(list(set(ports))),
-                context,
-                "network QoS policy rules changing",
+                ports, context, "network QoS policy rules changing"
             )
 
     def delete_network_postcommit(self, context):
