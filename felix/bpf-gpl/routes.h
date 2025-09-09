@@ -123,6 +123,12 @@ static CALI_BPF_INLINE bool rt_addr_is_external(ipv46_addr_t *addr)
 	return cali_rt_flags_external(cali_rt_lookup_flags(addr));
 }
 
+static CALI_BPF_INLINE bool rt_addr_is_host_or_in_pool(ipv46_addr_t *addr)
+{
+	__u32 flags = cali_rt_lookup_flags(addr);
+	return cali_rt_flags_host(flags) || cali_rt_flags_is_in_pool(flags);
+}
+
 // Don't perform SNAT if either:
 // - packet is destined to an address in an IP pool;
 // - packet is destined to local host; or
@@ -136,5 +142,4 @@ static CALI_BPF_INLINE bool rt_flags_should_perform_nat_outgoing(enum cali_rt_fl
     }
     return true;
 }
-
 #endif /* __CALI_ROUTES_H__ */
