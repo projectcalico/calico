@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"path"
 	"path/filepath"
 	"runtime"
 	"time"
@@ -187,6 +188,10 @@ func cmdAdd(args *skel.CmdArgs) error {
 			// thundering herd of new pods, acquiring the lock can take a while.
 			ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 			defer cancel()
+
+			if err := maybeUpgradeIPAM(ctx, calicoClient.IPAM(), nodename); err != nil {
+				return fmt.Errorf("failed to upgrade IPAM database: %w", err)
+			}
 
 			return calicoClient.IPAM().AssignIP(ctx, assignArgs)
 		}
@@ -387,6 +392,41 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 	// Print result to stdout, in the format defined by the requested cniVersion.
 	return cnitypes.PrintResult(r, conf.CNIVersion)
+}
+
+const ipamUpgradedFilePath = "/var/run/calico/cni/ipam_upgraded"
+
+func maybeUpgradeIPAM(ctx context.Context, ipamClient ipam.Interface, nodename string) error {
+	if _, err := os.Stat(ipamUpgradedFilePath); err == nil {
+		return nil
+	}
+
+	err := ipamClient.UpgradeHost(ctx, nodename)
+	if err != nil {
+		return fmt.Errorf("failed to upgrade IPAM database: %w", err)
+	}
+
+	if err := touchFile(ipamUpgradedFilePath); err != nil {
+		return fmt.Errorf("failed to create IPAM upgrade marker file %s: %w", ipamUpgradedFilePath, err)
+	}
+	return nil
+}
+
+func touchFile(filePath string) error {
+	dirPath, _ := path.Split(filePath)
+	err := os.MkdirAll(dirPath, 0o755)
+	if err != nil {
+		return fmt.Errorf("failed to create directory for file %s: %w", filePath, err)
+	}
+	file, err := os.Create(filePath)
+	if err != nil {
+		return fmt.Errorf("failed to create file %s: %w", filePath, err)
+	}
+	err = file.Close()
+	if err != nil {
+		return fmt.Errorf("failure when closing file %s: %w", filePath, err)
+	}
+	return nil
 }
 
 type unlockFn func()

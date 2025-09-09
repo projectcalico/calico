@@ -180,8 +180,9 @@ func (c *customK8sResourceClient) Update(ctx context.Context, kvp *model.KVPair)
 		Name(name).
 		Do(ctx).Into(resOut)
 	if updateError != nil {
-		// Failed to update the resource.
-		logContext.WithError(updateError).Error("Error updating resource")
+		// Failed to update the resource. Log at debug to avoid spammy warnings
+		// for CAS errors and the like, which need to bubble up for handling.
+		logContext.WithError(updateError).Debug("Error updating resource")
 		return nil, K8sErrorToCalico(updateError, kvp.Key)
 	}
 
