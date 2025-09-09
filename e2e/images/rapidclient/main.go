@@ -94,8 +94,8 @@ func createRapidClient(sourcePort int, timeout time.Duration) *http.Client {
 
 	// 2. Define the local address and port to use for every outgoing connection
 	localAddr := &net.TCPAddr{
-		IP:   net.ParseIP("0.0.0.0"), // Bind to all local IPs
-		Port: sourcePort,             // Use the specified source port
+		IP:   net.IPv4zero, // Bind to all local IPv4 addresses
+		Port: sourcePort,   // Use the specified source port
 	}
 	dialer.LocalAddr = localAddr
 
