@@ -10,7 +10,7 @@ import {
 } from '@/utils/omniFilter';
 import React from 'react';
 
-type PolicyListOmniFilterProps = {
+type TagListOmniFilterProps = {
     filterId: FilterHintKey;
     label: string;
     selectedValues: string[];
@@ -19,7 +19,7 @@ type PolicyListOmniFilterProps = {
     onClear: (filterId: FilterHintKey) => void;
 };
 
-const PolicyListOmniFilter: React.FC<PolicyListOmniFilterProps> = ({
+const TagListOmniFilter: React.FC<TagListOmniFilterProps> = ({
     filterQuery,
     selectedValues,
     filterId,
@@ -95,4 +95,4 @@ const PolicyListOmniFilter: React.FC<PolicyListOmniFilterProps> = ({
     );
 };
 
-export default PolicyListOmniFilter;
+export default TagListOmniFilter;

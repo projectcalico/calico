@@ -16,7 +16,7 @@ import {
 } from '@/utils/omniFilter';
 import { Button, Flex, FormControl, FormLabel, Text } from '@chakra-ui/react';
 import React from 'react';
-import PolicyListOmniFilter from '../PolicyListOmniFilter';
+import PolicyListOmniFilter from '../TagListOmniFilter';
 
 const filters = [
     FilterKey.policyV2,
@@ -32,6 +32,7 @@ type PolicyOmniFilterProps = {
     filterLabel: string;
     filterId: CustomOmniFilterParam;
     filterQuery: SelectedOmniFilters;
+    selectedFilters: string[];
 };
 
 const testId = 'policy-omni-filter-v2';
@@ -61,8 +62,8 @@ const PolicyOmniFilter: React.FC<PolicyOmniFilterProps> = ({
         });
 
     const onSubmitFilter = (onClose: () => void) => {
-        onChange(values);
         onClose();
+        onChange(values);
     };
 
     const onClearFilter = (onClose: () => void) => {
@@ -97,8 +98,10 @@ const PolicyOmniFilter: React.FC<PolicyOmniFilterProps> = ({
                                         OmniFilterProperties[FilterKey.policyV2]
                                             .label
                                     }
-                                </Text>{' '}
-                                {isActive && <Badge>{filterCount}</Badge>}
+                                </Text>
+                                {isActive && (
+                                    <Badge ml={2}>{filterCount}</Badge>
+                                )}
                             </Flex>
                         }
                     />

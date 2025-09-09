@@ -60,26 +60,26 @@ const OmniFilters: React.FC<OmniFiltersProps> = ({
     const debounce = useDebouncedCallback();
     const [isLoading, setIsLoading] = React.useState(false);
 
+    const policyV2Filters = React.useMemo(
+        () =>
+            [
+                selectedValues.policyV2,
+                selectedValues.policyV2Namespace,
+                selectedValues.policyV2Tier,
+                selectedValues.policyV2Kind,
+            ]
+                .filter(Boolean)
+                .flat() as string[],
+        [
+            selectedValues.policyV2?.length,
+            selectedValues.policyV2Namespace?.length,
+            selectedValues.policyV2Tier?.length,
+            selectedValues.policyV2Kind?.length,
+        ],
+    );
+
     return (
         <>
-            {showFiltersV2 && (
-                <PolicyOmniFilter
-                    key='policy-omni-filter-v2'
-                    onChange={onMultiChange}
-                    filterId={CustomOmniFilterKeys.policyV2}
-                    filterLabel={
-                        OmniFilterProperties[OmniFilterKeys.policyV2].label
-                    }
-                    selectedValues={{
-                        policyV2: selectedValues.policyV2,
-                        policyV2Namespace: selectedValues.policyV2Namespace,
-                        policyV2Tier: selectedValues.policyV2Tier,
-                        policyV2Kind: selectedValues.policyV2Kind,
-                    }}
-                    filterQuery={selectedValues}
-                />
-            )}
-
             <OmniFilterList
                 gap={2}
                 defaultFilterIds={omniFilterIds}
@@ -87,8 +87,28 @@ const OmniFilters: React.FC<OmniFiltersProps> = ({
                 onChangeVisible={() => undefined}
                 onResetVisible={onReset}
             >
+                {showFiltersV2 && (
+                    <PolicyOmniFilter
+                        key='policy-omni-filter-v2'
+                        onChange={onMultiChange}
+                        filterId={CustomOmniFilterKeys.policyV2}
+                        filterLabel={
+                            OmniFilterProperties[OmniFilterKeys.policyV2].label
+                        }
+                        selectedValues={{
+                            policyV2: selectedValues.policyV2,
+                            policyV2Namespace: selectedValues.policyV2Namespace,
+                            policyV2Tier: selectedValues.policyV2Tier,
+                            policyV2Kind: selectedValues.policyV2Kind,
+                        }}
+                        selectedFilters={policyV2Filters}
+                        filterQuery={selectedValues}
+                    />
+                )}
+
                 {listOmniFilterIds.map((filterId) => (
                     <OmniFilter
+                        key={filterId}
                         filterId={filterId}
                         filterLabel={OmniFilterProperties[filterId].label}
                         filters={omniFilterData[filterId].filters ?? []}

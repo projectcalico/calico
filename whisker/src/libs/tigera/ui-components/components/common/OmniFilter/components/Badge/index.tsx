@@ -1,7 +1,10 @@
-import { Badge as ChakraBadge } from '@chakra-ui/react';
+import { Badge as ChakraBadge, BadgeProps } from '@chakra-ui/react';
 
-const Badge: React.FC<React.PropsWithChildren> = ({ children }) => (
-    <ChakraBadge variant='rounded' ml={1}>
+const Badge: React.FC<React.PropsWithChildren & BadgeProps> = ({
+    children,
+    ...rest
+}) => (
+    <ChakraBadge variant='rounded' ml={1} {...rest}>
         +{children}
     </ChakraBadge>
 );
