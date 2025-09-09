@@ -96,6 +96,7 @@ static CALI_BPF_INLINE enum cali_rt_flags cali_rt_lookup_flags(ipv46_addr_t *add
 #define cali_rt_flags_local_tunneled_host(t) (((t) & (CALI_RT_LOCAL | CALI_RT_HOST | CALI_RT_TUNNELED)) == (CALI_RT_LOCAL | CALI_RT_HOST | CALI_RT_TUNNELED))
 #define cali_rt_flags_is_in_pool(t) (((t) & CALI_RT_IN_POOL) == CALI_RT_IN_POOL)
 #define cali_rt_flags_skip_ingress_redirect(t) (((t) & CALI_RT_SKIP_INGRESS_REDIRECT))
+#define cali_rt_flags_external(t) (!((t) & (CALI_RT_WORKLOAD | CALI_RT_HOST)))
 
 static CALI_BPF_INLINE bool rt_addr_is_local_host(ipv46_addr_t *addr)
 {
@@ -115,6 +116,17 @@ static CALI_BPF_INLINE bool rt_addr_is_remote_tunneled_host(ipv46_addr_t *addr)
 static CALI_BPF_INLINE bool rt_addr_is_local_tunneled_host(ipv46_addr_t *addr)
 {
 	return cali_rt_flags_local_tunneled_host(cali_rt_lookup_flags(addr));
+}
+
+static CALI_BPF_INLINE bool rt_addr_is_external(ipv46_addr_t *addr)
+{
+	return cali_rt_flags_external(cali_rt_lookup_flags(addr));
+}
+
+static CALI_BPF_INLINE bool rt_addr_is_host_or_in_pool(ipv46_addr_t *addr)
+{
+	__u32 flags = cali_rt_lookup_flags(addr);
+	return cali_rt_flags_host(flags) || cali_rt_flags_is_in_pool(flags);
 }
 
 // Don't perform SNAT if either:
