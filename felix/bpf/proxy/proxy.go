@@ -389,11 +389,11 @@ const (
 	ReapTerminatingUDPImmediatelly = "TerminatingImmediately"
 
 	ExcludeServiceAnnotation = "projectcalico.org/natExcludeService"
-	LoadBalancingAlgorithm   = "projectcalico.org/loadbalancingAlgorithm"
+	ExternalTrafficStrategy  = "lb.projectcalico.org/external-traffic-strategy"
 )
 
 var (
-	LoadBalancingAlgorithmConsistentHash = "ConsistentHash"
+	ExternalTrafficStrategyMaglev = "maglev"
 )
 
 type ServiceAnnotations interface {
@@ -441,7 +441,7 @@ func makeServiceInfo(_ *v1.ServicePort, s *v1.Service, baseSvc *k8sp.BaseService
 		}
 	}
 
-	if a, ok := s.ObjectMeta.Annotations[LoadBalancingAlgorithm]; ok && strings.EqualFold(a, LoadBalancingAlgorithmConsistentHash) {
+	if a, ok := s.ObjectMeta.Annotations[ExternalTrafficStrategy]; ok && strings.EqualFold(a, ExternalTrafficStrategyMaglev) {
 		svc.useConsistentHashing = true
 	}
 
