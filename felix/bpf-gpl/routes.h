@@ -130,4 +130,19 @@ static CALI_BPF_INLINE bool rt_flags_should_perform_nat_outgoing(enum cali_rt_fl
     }
     return true;
 }
+
+static CALI_BPF_INLINE bool traffic_leg_is_external(ipv46_addr_t src, ipv46_addr_t dst, __u32 flag)
+{
+	struct cali_rt *rA = cali_rt_lookup(&src);
+	if ((rA && (rA->flags & flag))) {
+		struct cali_rt *rB = cali_rt_lookup(&dst);
+		if ((!rB || !(rB->flags & (CALI_RT_WORKLOAD | CALI_RT_HOST)))) {
+			CALI_DEBUG("Outside cluster endpoint " IP_FMT "", debug_ip(dst));
+			ctx->state->flags |= CALI_ST_CLUSTER_EXTERNAL;
+			return true;
+		}
+	}
+	return false;
+}
+
 #endif /* __CALI_ROUTES_H__ */
