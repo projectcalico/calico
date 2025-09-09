@@ -25,11 +25,15 @@ import (
 
 // NewAPIClient returns a new controller-runtime client configured to use the projectcalico.org/v3 API group.
 func NewAPIClient(cfg *rest.Config) (client.Client, error) {
+	cfgCopy := *cfg
+	// Force JSON, our types aren't all instrumented for protobuf.
+	cfgCopy.ContentConfig.ContentType = "application/json"
+	cfgCopy.ContentConfig.AcceptContentTypes = "application/json"
 	scheme, err := newScheme()
 	if err != nil {
 		return nil, err
 	}
-	return client.New(cfg, client.Options{Scheme: scheme})
+	return client.New(&cfgCopy, client.Options{Scheme: scheme})
 }
 
 func newScheme() (*runtime.Scheme, error) {
