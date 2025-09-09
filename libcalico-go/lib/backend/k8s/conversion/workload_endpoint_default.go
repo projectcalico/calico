@@ -278,6 +278,9 @@ func (wc defaultWorkloadEndpointConverter) podToDefaultWorkloadEndpoint(pod *kap
 		Value:    wep,
 		Revision: pod.ResourceVersion,
 	}
+
+	// When Calico reads WorkloadEndpoint, it must include the kind label.
+	model.AddKindLabel(&kvp)
 	return &kvp, nil
 }
 
