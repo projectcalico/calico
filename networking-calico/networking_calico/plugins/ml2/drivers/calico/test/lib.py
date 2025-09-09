@@ -45,7 +45,6 @@ sys.modules["neutron.common.exceptions"] = m_neutron.common.exceptions
 sys.modules["neutron.conf"] = m_neutron.conf
 sys.modules["neutron.conf.agent"] = m_neutron.conf.agent
 sys.modules["neutron.db"] = m_neutron.db
-sys.modules["neutron.db.db_base_plugin_common"] = m_neutron.db.db_base_plugin_common
 sys.modules["neutron.db.models"] = m_neutron.db.models
 sys.modules["neutron.db.models.l3"] = m_neutron.db.models.l3
 sys.modules["neutron.db.qos"] = m_neutron.db.qos
