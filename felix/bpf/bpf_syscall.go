@@ -15,6 +15,7 @@
 package bpf
 
 import (
+	"fmt"
 	"strings"
 	"syscall"
 	"time"
@@ -117,8 +118,7 @@ func tryLoadBPFProgramFromInsns(insns asm.Insns, name, license string, logSize u
 				// likely a JIT error, verifier passed
 				// XXX we could test if it says Processed x instructions, but
 				// the message may change
-				log.Error("Likely a JIT error, bpf_harden may be set.")
-				return 0, unix.ERANGE
+				return 0, fmt.Errorf("Likely a JIT error, bpf_harden may be set: %w", unix.ERANGE)
 			}
 		} else if logSize > 0 {
 			log.Error("BPF_PROG_LOAD failed, verifier log was empty.")
