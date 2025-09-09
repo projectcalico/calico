@@ -9,7 +9,6 @@
 #include "skb.h"
 #include "counters.h"
 #include "ifstate.h"
-#include "routes.h"
 
 struct calico_qos_key {
 	__u32 ifindex;
