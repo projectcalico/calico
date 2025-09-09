@@ -95,7 +95,7 @@ func TestEtcdHealthCheckerSuccess(t *testing.T) {
 		t.Fatal("health check endpoint should not have failed")
 	}
 
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		t.Fatal("couldn't read response body", err)
@@ -2110,7 +2110,7 @@ func testBlockAffinityClient(client calicoclient.Interface, name string) error {
 	var timeoutErr error
 	// watch for 2 events
 loop:
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		select {
 		case e := <-w.ResultChan():
 			events = append(events, e)
