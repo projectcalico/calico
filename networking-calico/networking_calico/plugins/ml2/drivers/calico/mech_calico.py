@@ -43,7 +43,6 @@ from keystoneclient.v3.client import Client as KeystoneClient
 import neutron.plugins.ml2.rpc as rpc
 from neutron.agent import rpc as agent_rpc
 from neutron.conf.agent import common as config
-from neutron.db.db_base_plugin_common import convert_result_to_dict
 from neutron.objects import ports as ports_object
 from neutron.objects.qos import policy as policy_object
 from neutron.plugins.ml2.drivers import mech_agent
