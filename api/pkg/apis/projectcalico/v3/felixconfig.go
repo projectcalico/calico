@@ -450,29 +450,21 @@ type FelixConfigurationSpec struct {
 	// set to false. This reduces the number of metrics reported, reducing Prometheus load. [Default: true]
 	PrometheusWireGuardMetricsEnabled *bool `json:"prometheusWireGuardMetricsEnabled,omitempty"`
 
-	// MetricsTLSEnabled specifies whether TLS encryption is enabled for the /metrics endpoint.
-	// If set to true, the metrics server will only be accessible over HTTPS. Default is false.
-	MetricsTLSEnabled *bool `json:"metricsTLSEnabled,omitempty"`
-
-	// MetricsTLSCACertFile defines the absolute path to the TLS CA certificate file used for securing the /metrics endpoint.
+	// PrometheusMetricsCAFile defines the absolute path to the TLS CA certificate file used for securing the /metrics endpoint.
 	// This certificate must be valid and accessible by the calico-node process.
-	MetricsTLSCACertFile *string `json:"metricsTLSCACertFile,omitempty"`
+	PrometheusMetricsCAFile *string `json:"prometheusMetricsCAFile,omitempty"`
 
-	// MetricsTLSCertFile defines the absolute path to the TLS certificate file used for securing the /metrics endpoint.
+	// PrometheusMetricsCertFile defines the absolute path to the TLS certificate file used for securing the /metrics endpoint.
 	// This certificate must be valid and accessible by the calico-node process.
-	MetricsTLSCertFile *string `json:"metricsTLSCertFile,omitempty"`
+	PrometheusMetricsCertFile *string `json:"prometheusMetricsCertFile,omitempty"`
 
-	// MetricsTLSPrivateKeyFile defines the absolute path to the private key file corresponding to the TLS certificate
+	// PrometheusMetricsKeyFile defines the absolute path to the private key file corresponding to the TLS certificate
 	// used for securing the /metrics endpoint. The private key must be valid and accessible by the calico-node process.
-	MetricsTLSPrivateKeyFile *string `json:"metricsTLSPrivateKeyFile,omitempty"`
+	PrometheusMetricsKeyFile *string `json:"prometheusMetricsKeyFile,omitempty"`
 
-	// MetricsClientAuthType specifies the client authentication type for the /metrics endpoint.
+	// PrometheusMetricsClientAuthType specifies the client authentication type for the /metrics endpoint.
 	// This determines how the server validates client certificates. Default is "NoClientCert".
-	MetricsClientAuthType *string `json:"metricsClientAuthType,omitempty"`
-
-	// MetricsTLSMinVersion specifies the minimum TLS version allowed for the /metrics endpoint.
-	// This ensures that only secure versions of TLS are used. Default is "1.3".
-	MetricsTLSMinVersion *string `json:"metricsTLSMinVersion,omitempty"`
+	PrometheusMetricsClientAuthType *string `json:"prometheusMetricsClientAuthType,omitempty"`
 
 	// FailsafeInboundHostPorts is a list of ProtoPort struct objects including UDP/TCP/SCTP ports and CIDRs that Felix will
 	// allow incoming traffic to host endpoints on irrespective of the security policy. This is useful to avoid accidentally

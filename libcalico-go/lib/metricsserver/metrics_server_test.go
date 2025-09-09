@@ -12,13 +12,14 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
 	. "github.com/onsi/gomega"
 )
 
-// TestServePrometheusMetricsHTTPS unit test for .
+// TestServePrometheusMetricsHTTPS unit test for ServePrometheusMetricsHTTPS.
 func TestServePrometheusMetricsHTTPS(t *testing.T) {
 	RegisterTestingT(t)
 	host := "127.0.0.1"
@@ -31,101 +32,102 @@ func TestServePrometheusMetricsHTTPS(t *testing.T) {
 		name                 string
 		certFile             string
 		keyFile              string
-		minTLSVersion        string
 		clientAuthType       string
 		caFile               string
-		clientHasCA          bool
+		clientHasCert        bool
 		expectedStatus       int
-		expectError          bool
+		expectedError        []string
 		rotateCertificates   bool
-		rotateExpectError    bool
+		rotateExpectedError  []string
 		rotateExpectedStatus int
 	}{
 		{
-			name:           "Valid TLS: NoClientCert, TLS13",
+			name:           "Valid TLS: NoClientCert",
 			certFile:       certFile,
 			keyFile:        keyFile,
-			minTLSVersion:  "TLS13",
 			clientAuthType: "NoClientCert",
-			caFile:         "",
-			clientHasCA:    false,
-			expectedStatus: 200,
-			expectError:    false,
+			caFile:         caFile,
+			clientHasCert:  false,
+			expectedStatus: http.StatusOK,
 		},
 		{
-			name:                 "Valid TLS: NoClientCert, TLS13, Rotate Certificates",
+			name:           "Missing Certificate: NoClientCert",
+			certFile:       "missing.crt",
+			keyFile:        keyFile,
+			clientAuthType: "NoClientCert",
+			caFile:         caFile,
+			clientHasCert:  false,
+			expectedError:  []string{"Failed to load initial TLS configuration: failed to load x509 key pair: open missing.crt: no such file or directory"},
+		},
+		{
+			name:           "Missing Private Key: NoClientCert",
+			certFile:       certFile,
+			keyFile:        "missing.key",
+			clientAuthType: "NoClientCert",
+			caFile:         caFile,
+			clientHasCert:  false,
+			expectedError:  []string{"Failed to load initial TLS configuration: failed to load x509 key pair: open missing.key: no such file or directory"},
+		},
+		{
+			name:                 "Valid TLS: NoClientCert, Rotate Certificates",
 			certFile:             certFile,
 			keyFile:              keyFile,
-			minTLSVersion:        "TLS13",
 			clientAuthType:       "NoClientCert",
-			caFile:               "",
-			clientHasCA:          false,
-			expectedStatus:       200,
-			expectError:          false,
+			caFile:               caFile,
+			clientHasCert:        false,
+			expectedStatus:       http.StatusOK,
 			rotateCertificates:   true,
-			rotateExpectError:    false,
-			rotateExpectedStatus: 200,
+			rotateExpectedStatus: http.StatusOK,
 		},
 		{
-			name:           "Valid TLS: NoClientCert, TLS12",
+			name:           "Valid TLS: RequireAndVerifyClientCert, Client has valid CA",
 			certFile:       certFile,
 			keyFile:        keyFile,
-			minTLSVersion:  "TLS12",
-			clientAuthType: "NoClientCert",
-			caFile:         "",
-			clientHasCA:    false,
-			expectedStatus: 200,
-			expectError:    false,
-		},
-		{
-			name:           "Valid TLS: RequireAndVerifyClientCert, TLS13",
-			certFile:       certFile,
-			keyFile:        keyFile,
-			minTLSVersion:  "TLS13",
 			clientAuthType: "RequireAndVerifyClientCert",
 			caFile:         caFile,
-			clientHasCA:    true,
-			expectedStatus: 200,
-			expectError:    false,
+			clientHasCert:  true,
+			expectedStatus: http.StatusOK,
 		},
 		{
-			name:                 "Valid TLS: RequireAndVerifyClientCert, TLS13, Rotate Certificates",
+			name:                 "Valid TLS: RequireAndVerifyClientCert, Client has valid CA, Rotate Certificates",
 			certFile:             certFile,
 			keyFile:              keyFile,
-			minTLSVersion:        "TLS13",
 			clientAuthType:       "RequireAndVerifyClientCert",
 			caFile:               caFile,
-			clientHasCA:          true,
-			expectedStatus:       200,
-			expectError:          false,
+			clientHasCert:        true,
+			expectedStatus:       http.StatusOK,
 			rotateCertificates:   true,
-			rotateExpectError:    false,
-			rotateExpectedStatus: 200,
+			rotateExpectedStatus: http.StatusOK,
 		},
 		{
-			name:           "Valid TLS: RequireAndVerifyClientCert, TLS12",
+			name:           "Valid TLS: RequireAndVerifyClientCert, Client is missing CA",
 			certFile:       certFile,
 			keyFile:        keyFile,
-			minTLSVersion:  "TLS12",
 			clientAuthType: "RequireAndVerifyClientCert",
 			caFile:         caFile,
-			clientHasCA:    true,
-			expectedStatus: 200,
-			expectError:    false,
+			clientHasCert:  false,
+			expectedError:  []string{"Get \"https://127.0.0.1:", "remote error: tls: certificate required"},
 		},
 		{
-			name:           "Valid TLS: RequireAndVerifyClientCert, TLS13, Client missing valid CA",
+			name:           "Invalid clientAuth Type",
 			certFile:       certFile,
 			keyFile:        keyFile,
-			minTLSVersion:  "TLS12",
-			clientAuthType: "RequireAndVerifyClientCert",
+			clientAuthType: "InvalidType",
 			caFile:         caFile,
-			clientHasCA:    false,
-			expectError:    true,
+			clientHasCert:  false,
+			expectedError:  []string{"Invalid client authentication type: invalid client authentication type: InvalidType"},
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			RegisterTestingT(t)
+			errorChannel := make(chan error, 1)
+			var once sync.Once
+			recordConnectionError := func(err error) {
+				once.Do(func() {
+					errorChannel <- err
+				})
+			}
+			err := error(nil)
 
 			// Dynamically find an open port
 			listener, err := net.Listen("tcp", ":0")
@@ -135,35 +137,50 @@ func TestServePrometheusMetricsHTTPS(t *testing.T) {
 			port := listener.Addr().(*net.TCPAddr).Port
 			listener.Close()
 
-			// Start the HTTPS metrics server in a goroutine
-			go ServePrometheusMetricsHTTPS(host, port, tt.certFile, tt.keyFile, tt.minTLSVersion, tt.clientAuthType, tt.caFile)
+			done := make(chan error, 1)
+			go func() {
+				err = ServePrometheusMetricsHTTPS(host, port, tt.certFile, tt.keyFile, tt.clientAuthType, tt.caFile)
+				done <- err
+			}()
 
-			// Wait for the server to start
-			time.Sleep(1 * time.Second)
+			select {
+			case err := <-done:
+				recordConnectionError(err)
+			case <-time.After(1 * time.Second):
+				// Success: the server is still running.
+			}
+			close(done)
+
+			if err != nil && len(tt.expectedError) > 0 {
+				Expect(err).To(HaveOccurred())
+				for _, expected := range tt.expectedError {
+					Expect(err.Error()).To(ContainSubstring(expected))
+				}
+				return
+			}
+
+			// Load CA cert for client auth
+			caCert, err := os.ReadFile(tt.caFile)
+			if err != nil {
+				t.Fatalf("Failed to read CA cert for client use: %v", err)
+			}
+			caCertPool := x509.NewCertPool()
+			if !caCertPool.AppendCertsFromPEM(caCert) {
+				t.Fatal("Failed to parse CA cert for client use")
+			}
 
 			// Configure client tls
-			clientTlsConfig := &tls.Config{
-				InsecureSkipVerify: true,
+			clientTLSConfig := &tls.Config{
+				RootCAs: caCertPool,
 			}
-			// Load CA certificate
-			if tt.caFile != "" && tt.clientHasCA {
-				// Load CA cert for client auth
-				caCert, err := os.ReadFile(tt.caFile)
-				if err != nil {
-					t.Fatalf("Failed to read CA cert: %v", err)
-				}
-				caCertPool := x509.NewCertPool()
-				if !caCertPool.AppendCertsFromPEM(caCert) {
-					t.Fatal("Failed to parse CA cert")
-				}
-				clientTlsConfig.RootCAs = caCertPool
-				clientTlsConfig.Certificates = []tls.Certificate{loadTestClientCert(t, certFile, keyFile)}
+			if tt.clientHasCert {
+				clientTLSConfig.Certificates = []tls.Certificate{loadTestClientCert(t, certFile, keyFile)}
 			}
 
 			client := &http.Client{
 				Timeout: 10 * time.Second,
 				Transport: &http.Transport{
-					TLSClientConfig: clientTlsConfig,
+					TLSClientConfig: clientTLSConfig,
 					// Allow connection reuse
 					MaxIdleConns:        10,
 					IdleConnTimeout:     30 * time.Second,
@@ -172,15 +189,16 @@ func TestServePrometheusMetricsHTTPS(t *testing.T) {
 				},
 			}
 
-			// Make request to metrics endpoint
-			resp, err := client.Get(fmt.Sprintf("https://%s:%d/metrics", host, port))
-			if tt.expectError {
+			resp, err := getResponseFromMetricsEndpoint(client, host, port)
+			if err != nil && len(tt.expectedError) > 0 {
 				Expect(err).To(HaveOccurred())
+				for _, expected := range tt.expectedError {
+					Expect(err.Error()).To(ContainSubstring(expected))
+				}
 				return
+			} else {
+				Expect(resp.StatusCode).To(Equal(tt.expectedStatus))
 			}
-
-			defer resp.Body.Close()
-			Expect(resp.StatusCode).To(Equal(tt.expectedStatus))
 
 			if tt.rotateCertificates {
 				// Rotate certificates
@@ -188,20 +206,41 @@ func TestServePrometheusMetricsHTTPS(t *testing.T) {
 				if err != nil {
 					t.Fatalf("Failed to rotate certificates: %v", err)
 				}
-				time.Sleep(1 * time.Second)
 
-				// Make request to metrics endpoint
-				resp, err := client.Get(fmt.Sprintf("https://%s:%d/metrics", host, port))
-				if tt.rotateExpectError {
-					Expect(err).To(HaveOccurred())
-					return
+				resp, err = getResponseFromMetricsEndpoint(client, host, port)
+				if err != nil {
+					t.Fatalf("Failed to get response from metrics endpoint: %v", err)
 				}
 
-				defer resp.Body.Close()
 				Expect(resp.StatusCode).To(Equal(tt.rotateExpectedStatus))
 			}
+
+			if len(tt.expectedError) > 0 || len(tt.rotateExpectedError) > 0 {
+				t.Fatalf("Test should have failed but didn't")
+			}
+			close(errorChannel)
 		})
 	}
+}
+
+func getResponseFromMetricsEndpoint(client *http.Client, host string, port int) (*http.Response, error) {
+	// Retry logic for certificate rotation
+	var resp *http.Response
+	var err error
+	maxRetries := 10
+	retryDelay := 100 * time.Millisecond
+
+	for range maxRetries {
+		resp, err = client.Get(fmt.Sprintf("https://%s:%d/metrics", host, port))
+		if err == nil {
+			break
+		}
+		time.Sleep(retryDelay)
+	}
+	if resp != nil && resp.Body != nil {
+		defer resp.Body.Close()
+	}
+	return resp, err
 }
 
 func createTestCertFiles(t *testing.T) (certFile, keyFile, caFile, caKeyFile string, cleanup func()) {
@@ -289,6 +328,7 @@ func generateCert(caCertPEM, caKeyPEM []byte) ([]byte, []byte, error) {
 			Organization: []string{"Test Server"},
 		},
 		DNSNames:    []string{"localhost"},
+		IPAddresses: []net.IP{net.ParseIP("127.0.0.1")},
 		NotBefore:   time.Now(),
 		NotAfter:    time.Now().AddDate(10, 0, 0),
 		ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageServerAuth},

@@ -2871,44 +2871,30 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							Format:      "",
 						},
 					},
-					"metricsTLSEnabled": {
+					"prometheusMetricsCAFile": {
 						SchemaProps: spec.SchemaProps{
-							Description: "MetricsTLSEnabled specifies whether TLS encryption is enabled for the /metrics endpoint. If set to true, the metrics server will only be accessible over HTTPS. Default is false.",
-							Type:        []string{"boolean"},
-							Format:      "",
-						},
-					},
-					"metricsTLSCACertFile": {
-						SchemaProps: spec.SchemaProps{
-							Description: "MetricsTLSCACertFile defines the absolute path to the TLS CA certificate file used for securing the /metrics endpoint. This certificate must be valid and accessible by the calico-node process.",
+							Description: "PrometheusMetricsCAFile defines the absolute path to the TLS CA certificate file used for securing the /metrics endpoint. This certificate must be valid and accessible by the calico-node process.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
 					},
-					"metricsTLSCertFile": {
+					"prometheusMetricsCertFile": {
 						SchemaProps: spec.SchemaProps{
-							Description: "MetricsTLSCertFile defines the absolute path to the TLS certificate file used for securing the /metrics endpoint. This certificate must be valid and accessible by the calico-node process.",
+							Description: "PrometheusMetricsCertFile defines the absolute path to the TLS certificate file used for securing the /metrics endpoint. This certificate must be valid and accessible by the calico-node process.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
 					},
-					"metricsTLSPrivateKeyFile": {
+					"prometheusMetricsKeyFile": {
 						SchemaProps: spec.SchemaProps{
-							Description: "MetricsTLSPrivateKeyFile defines the absolute path to the private key file corresponding to the TLS certificate used for securing the /metrics endpoint. The private key must be valid and accessible by the calico-node process.",
+							Description: "PrometheusMetricsKeyFile defines the absolute path to the private key file corresponding to the TLS certificate used for securing the /metrics endpoint. The private key must be valid and accessible by the calico-node process.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
 					},
-					"metricsClientAuthType": {
+					"prometheusMetricsClientAuthType": {
 						SchemaProps: spec.SchemaProps{
-							Description: "MetricsClientAuthType specifies the client authentication type for the /metrics endpoint. This determines how the server validates client certificates. Default is \"NoClientCert\".",
-							Type:        []string{"string"},
-							Format:      "",
-						},
-					},
-					"metricsTLSMinVersion": {
-						SchemaProps: spec.SchemaProps{
-							Description: "MetricsTLSMinVersion specifies the minimum TLS version allowed for the /metrics endpoint. This ensures that only secure versions of TLS are used. Default is \"1.3\".",
+							Description: "PrometheusMetricsClientAuthType specifies the client authentication type for the /metrics endpoint. This determines how the server validates client certificates. Default is \"NoClientCert\".",
 							Type:        []string{"string"},
 							Format:      "",
 						},
