@@ -51,11 +51,11 @@ const (
 	LabelTier = "projectcalico.org/tier"
 
 	// LabelHostnameHash is applied to BlockAffinity resources for efficient lookups.
-	LabelHostnameHash = "projectcalico.org/hostnamehash"
+	LabelHostnameHash = "projectcalico.org/hostname-hash"
 	// LabelAffinityType is applied to BlockAffinity resources for efficient lookups.
-	LabelAffinityType = "projectcalico.org/affinitytype"
+	LabelAffinityType = "projectcalico.org/affinity-type"
 	// LabelIPVersion is applied to BlockAffinity resources for efficient lookups.
-	LabelIPVersion = "projectcalico.org/ipversion"
+	LabelIPVersion = "projectcalico.org/ip-version"
 
 	// Enum options for enable/disable fields
 	Enabled  = "Enabled"
