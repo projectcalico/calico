@@ -108,7 +108,7 @@ func (ch *ConsistentHash) RemoveBackend(kep k8sp.Endpoint) {
 
 	b, exists := ch.backendsByName[name]
 	if !exists {
-		logrus.WithField("backend", name).Info("Aborting RemoveBackend for non-existent backend")
+		logrus.WithField("backend", name).Warn("Ignoring RemoveBackend for non-existent backend")
 		return
 	}
 
