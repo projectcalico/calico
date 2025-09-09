@@ -311,6 +311,13 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 				}
 			})
 
+			AfterEach(func() {
+				for i := 0; i < 1000; i++ {
+					deleteNode(bc, kc, fmt.Sprintf("%s-%d", hostname, i))
+				}
+				Expect(bc.Clean()).To(Succeed())
+			})
+
 			allocOneIPPerNode := func() {
 				var eg errgroup.Group
 				eg.SetLimit(runtime.NumCPU() / 2)
