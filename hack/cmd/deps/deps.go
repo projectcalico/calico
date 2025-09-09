@@ -211,14 +211,20 @@ func calculateTestExclusionGlobs(pkg string, localDirs []string) []string {
 	// If the dir is not within the package, write a glob that excludes its
 	// tests.
 	prefix := "/" + pkg + "/"
-	var exclusions []string
+	exclusions := set.New[string]()
 	for _, dir := range localDirs {
 		if strings.HasPrefix(dir+"/", prefix) {
+			// Within the main package, so don't exclude.
 			continue
 		}
-		exclusions = append(exclusions, dir+"/*_test.go")
+		// Outside the main package. Include the top-level dir as a globbed
+		// exclusion.
+		parts := strings.Split(strings.TrimPrefix(dir, "/"), "/")
+		exclusions.Add("/" + parts[0] + "/**/*_test.go")
 	}
-	return exclusions
+	s := exclusions.Slice()
+	sort.Strings(s)
+	return s
 }
 
 func loadLocalDirs(pkg string, mainDepsOnly bool) (out []string, err error) {
