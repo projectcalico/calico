@@ -306,15 +306,30 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 
 		Context("with 1000 nodes", func() {
 			BeforeEach(func() {
+				var eg errgroup.Group
+				eg.SetLimit(runtime.NumCPU())
 				for i := 0; i < 1000; i++ {
-					applyNode(bc, kc, fmt.Sprintf("%s-%d", hostname, i), map[string]string{"foo": "bar"})
+					eg.Go(func() error {
+						defer GinkgoRecover()
+						applyNode(bc, kc, fmt.Sprintf("%s-%d", hostname, i), map[string]string{"foo": "bar"})
+						return nil
+					})
 				}
+				Expect(eg.Wait()).To(Succeed())
 			})
 
 			AfterEach(func() {
+				// Clean up the nodes.
+				var eg errgroup.Group
+				eg.SetLimit(runtime.NumCPU())
 				for i := 0; i < 1000; i++ {
-					deleteNode(bc, kc, fmt.Sprintf("%s-%d", hostname, i))
+					eg.Go(func() error {
+						defer GinkgoRecover()
+						deleteNode(bc, kc, fmt.Sprintf("%s-%d", hostname, i))
+						return nil
+					})
 				}
+				Expect(eg.Wait()).To(Succeed())
 				Expect(bc.Clean()).To(Succeed())
 			})
 
