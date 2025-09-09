@@ -549,45 +549,40 @@ syn_force_policy:
 			}
 		}
 		// Check if traffic is leaving cluster. It might need to set DSCP.
-		if ((r->flags & CALI_RT_IN_POOL)) {
-			struct cali_rt *rt = cali_rt_lookup(&ctx->state->post_nat_ip_dst);
-			if (!rt || !(rt->flags & (CALI_RT_WORKLOAD | CALI_RT_HOST))) {
+		if (cali_rt_flags_is_in_pool(r->flags)) {
+			if (rt_addr_is_external(&ctx->state->post_nat_ip_dst)) {
 				CALI_DEBUG("Outside cluster dest " IP_FMT "", debug_ip(ctx->state->post_nat_ip_dst));
 				ctx->state->flags |= CALI_ST_CLUSTER_EXTERNAL;
 			}
 		}
 		/* If 3rd party CNI is used and dest is outside cluster. See commit fc711b192f for details. */
-		if (!(r->flags & CALI_RT_IN_POOL)) {
+		if (!(cali_rt_flags_is_in_pool(r->flags))) {
 			CALI_DEBUG("Source " IP_FMT " not in IP pool", debug_ip(ctx->state->ip_src));
-			r = cali_rt_lookup(&ctx->state->post_nat_ip_dst);
-			if (!r || !(r->flags & (CALI_RT_WORKLOAD | CALI_RT_HOST))) {
+			if (rt_addr_is_external(&ctx->state->ip_src)) {
 				CALI_DEBUG("Outside cluster dest " IP_FMT "", debug_ip(ctx->state->post_nat_ip_dst));
 				ctx->state->flags |= CALI_ST_SKIP_FIB;
 			}
 		}
 	}
 
-	// If either source or destination is outside cluster, set flag as might need to update DSCP later.
+	// If either destination is outside cluster, set flag as might need to update DSCP later.
 	if (CALI_F_TO_HEP) {
-		struct cali_rt *rA = cali_rt_lookup(&ctx->state->ip_src);
-		if ((rA && (rA->flags & CALI_RT_HOST))) {
-			struct cali_rt *rB = cali_rt_lookup(&ctx->state->post_nat_ip_dst);
-			if ((!rB || !(rB->flags & (CALI_RT_WORKLOAD | CALI_RT_HOST)))) {
+		struct cali_rt *r = cali_rt_lookup(&ctx->state->ip_src);
+		if (r && cali_rt_flags_host(r->flags)) {
+			if (rt_addr_is_external(&ctx->state->post_nat_ip_dst)) {
 				CALI_DEBUG("Outside cluster dest " IP_FMT "", debug_ip(ctx->state->post_nat_ip_dst));
 				ctx->state->flags |= CALI_ST_CLUSTER_EXTERNAL;
 			}
 		}
 	}
+	// If source is outside cluster, set flag as might need to update DSCP later.
 	if (CALI_F_FROM_HEP) {
-		/*struct cali_rt *rA = cali_rt_lookup(&ctx->state->post_nat_ip_dst);
-		if ((rA && (rA->flags & CALI_RT_HOST))) {
-			struct cali_rt *rB = cali_rt_lookup(&ctx->state->ip_src);
-			if ((!rB || !(rB->flags & (CALI_RT_WORKLOAD | CALI_RT_HOST)))) {
+		struct cali_rt *r = cali_rt_lookup(&ctx->state->post_nat_ip_dst);
+		if (r && (cali_rt_flags_host(r->flags) || cali_rt_flags_is_in_pool(r->flags))) {
+			if (rt_addr_is_external(&ctx->state->ip_src)) {
+				CALI_DEBUG("Outside cluster source " IP_FMT "", debug_ip(ctx->state->ip_src));
+				ctx->state->flags |= CALI_ST_CLUSTER_EXTERNAL;
 			}
-		}*/
-		if traffic_leg_is_external(ctx->state->post_nat_ip_dst, ctx->state->ip_src, CALI_RT_HOST) {
-			CALI_DEBUG("Outside cluster source " IP_FMT "", debug_ip(ctx->state->ip_src));
-			ctx->state->flags |= CALI_ST_CLUSTER_EXTERNAL;
 		}
 	}
 
