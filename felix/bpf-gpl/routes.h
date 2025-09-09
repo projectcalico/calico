@@ -117,6 +117,12 @@ static CALI_BPF_INLINE bool rt_addr_is_local_tunneled_host(ipv46_addr_t *addr)
 	return cali_rt_flags_local_tunneled_host(cali_rt_lookup_flags(addr));
 }
 
+static CALI_BPF_INLINE bool rt_addr_is_external(ipv46_addr_t *addr)
+{
+	struct cali_rt *rB = cali_rt_lookup(addr);
+	return (!rB || !(rB->flags & (CALI_RT_WORKLOAD | CALI_RT_HOST)));
+}
+
 // Don't perform SNAT if either:
 // - packet is destined to an address in an IP pool;
 // - packet is destined to local host; or
@@ -130,4 +136,5 @@ static CALI_BPF_INLINE bool rt_flags_should_perform_nat_outgoing(enum cali_rt_fl
     }
     return true;
 }
+
 #endif /* __CALI_ROUTES_H__ */
