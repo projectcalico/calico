@@ -4093,9 +4093,18 @@ func (m *bpfEndpointManager) doUpdatePolicyProgram(
 			options...,
 		)
 		if err != nil {
-			if errors.Is(err, unix.ERANGE) && tstride >= 1000 {
-				tstride -= tstride / 4
-				continue
+			if errors.Is(err, unix.ERANGE) {
+				if tstride >= 1000 {
+					tstride -= tstride / 4
+					tmp := m.policyTrampolineStride.Load()
+					if tmp < int32(tstride) {
+						tstride = int(tmp)
+					}
+					log.Debugf("Reducing trampoline stride to %d and retrying", tstride)
+					continue
+				} else {
+					return nil, fmt.Errorf("reducing trampoline stride below 1000 not practical")
+				}
 			} else {
 				return nil, err
 			}
@@ -4104,9 +4113,12 @@ func (m *bpfEndpointManager) doUpdatePolicyProgram(
 		}
 	}
 
-	if tstride < tstrideOrig {
-		m.policyTrampolineStride.Store(int32(tstride))
-		log.Warnf("Reducing policy program trampoline stride to %d", tstride)
+	for tstride < tstrideOrig {
+		if m.policyTrampolineStride.CompareAndSwap(int32(tstrideOrig), int32(tstride)) {
+			log.Warnf("Reducing policy program trampoline stride to %d", tstride)
+		} else {
+			tstrideOrig = int(m.policyTrampolineStride.Load())
+		}
 	}
 
 	defer func() {
