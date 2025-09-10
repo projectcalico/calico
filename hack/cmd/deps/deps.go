@@ -270,19 +270,6 @@ func loadPackageDeps(pkg string) ([]string, error) {
 	return out, nil
 }
 
-func pkgToSearchQuery(pkg string) string {
-	if !strings.HasPrefix(pkg, "./") {
-		pkg = "./" + pkg
-	}
-	if strings.HasSuffix(pkg, "/...") {
-		return pkg
-	}
-	if strings.HasSuffix(pkg, "/") {
-		return pkg + "..."
-	}
-	return pkg + "/..."
-}
-
 type module struct {
 	Path    string
 	Version string
