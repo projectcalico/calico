@@ -18,6 +18,7 @@ import (
 	"crypto/sha1"
 	"encoding/base64"
 	"fmt"
+	"net"
 	"strings"
 
 	v1 "k8s.io/api/core/v1"
@@ -86,7 +87,13 @@ type target struct {
 
 func (t *target) Destination() string {
 	if t.port != 0 {
-		return fmt.Sprintf("[%s]:%d", t.destination, t.port)
+		dest := t.destination
+		ip := net.ParseIP(dest)
+		if ip != nil && ip.To4() == nil {
+			// Valid IPv6 address
+			dest = fmt.Sprintf("[%s]", dest)
+		}
+		return fmt.Sprintf("%s:%d", dest, t.port)
 	}
 	return t.destination
 }
