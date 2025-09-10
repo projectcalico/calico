@@ -97,6 +97,8 @@ var (
 	node1ip2   = net.IPv4(10, 10, 2, 1).To4()
 	node1tunIP = net.IPv4(11, 11, 0, 1).To4()
 	node2ip    = net.IPv4(10, 10, 0, 2).To4()
+	node3ip    = net.IPv4(10, 10, 0, 3).To4()
+	node3tunIP = net.IPv4(11, 11, 0, 3).To4()
 	intfIP     = net.IPv4(10, 10, 0, 3).To4()
 	node1CIDR  = net.IPNet{
 		IP:   node1ip,
@@ -106,11 +108,17 @@ var (
 		IP:   node2ip,
 		Mask: net.IPv4Mask(255, 255, 255, 255),
 	}
+	node3CIDR = net.IPNet{
+		IP: node3ip,
+		Mask: net.IPv4Mask(255, 255, 255, 255),
+	}
 
 	node1ipV6    = net.ParseIP("abcd::ffff:0a0a:0001").To16()
 	node1ip2V6   = net.ParseIP("abcd::ffff:0a0a:0201").To16()
 	node1tunIPV6 = net.ParseIP("abcd::ffff:0b0b:0001").To16()
 	node2ipV6    = net.ParseIP("abcd::ffff:0a0a:0002").To16()
+	node3ipV6    = net.ParseIP("abcd::ffff:0a0a:0004").To16()
+	node3tunIPV6 = net.ParseIP("abcd::ffff:0b0b:0004").To16()
 	intfIPV6     = net.ParseIP("abcd::ffff:0a0a:0003").To16()
 	node1CIDRV6  = net.IPNet{
 		IP:   node1ipV6,
@@ -118,6 +126,10 @@ var (
 	}
 	node2CIDRV6 = net.IPNet{
 		IP:   node2ipV6,
+		Mask: net.CIDRMask(128, 128),
+	}
+	node3CIDRV6 = net.IPNet{
+		IP: node3ipV6,
 		Mask: net.CIDRMask(128, 128),
 	}
 )
@@ -592,8 +604,8 @@ func bpftool(args ...string) ([]byte, error) {
 var (
 	mapInitOnce sync.Once
 
-	natMap, natBEMap, ctMap, ctCleanupMap, rtMap, ipsMap, testStateMap, affinityMap, arpMap, fsafeMap, ipfragsMap, consistentHashMap maps.Map
-	natMapV6, natBEMapV6, ctMapV6, ctCleanupMapV6, rtMapV6, ipsMapV6, affinityMapV6, arpMapV6, fsafeMapV6, consistentHashMapV6       maps.Map
+	natMap, natBEMap, ctMap, ctCleanupMap, rtMap, ipsMap, testStateMap, affinityMap, arpMap, fsafeMap, ipfragsMap, maglevMap maps.Map
+	natMapV6, natBEMapV6, ctMapV6, ctCleanupMapV6, rtMapV6, ipsMapV6, affinityMapV6, arpMapV6, fsafeMapV6, maglevMapV6       maps.Map
 	stateMap, countersMap, ifstateMap, progMap, progMapXDP, policyJumpMap, policyJumpMapXDP                                          maps.Map
 	perfMap                                                                                                                          maps.Map
 	profilingMap, ipfragsMapTmp                                                                                                      maps.Map
@@ -631,15 +643,15 @@ func initMapsOnce() {
 		policyJumpMapXDP = jump.XDPMap()
 		profilingMap = profiling.Map()
 		qosMap = qos.Map()
-		consistentHashMap = nat.ConsistentHashMap()
-		consistentHashMapV6 = nat.ConsistentHashMapV6()
+		maglevMap = nat.ConsistentHashMap()
+		maglevMapV6 = nat.ConsistentHashMapV6()
 
 		perfMap = perf.Map("perf_evnt", 512)
 
 		allMaps = []maps.Map{natMap, natBEMap, natMapV6, natBEMapV6, ctMap, ctMapV6, ctCleanupMap, ctCleanupMapV6, rtMap, rtMapV6, ipsMap, ipsMapV6,
 			stateMap, testStateMap, affinityMap, affinityMapV6, arpMap, arpMapV6, fsafeMap, fsafeMapV6,
 			countersMap, ipfragsMap, ipfragsMapTmp, ifstateMap, profilingMap,
-			policyJumpMap, policyJumpMapXDP, qosMap, consistentHashMap, consistentHashMapV6}
+			policyJumpMap, policyJumpMapXDP, qosMap, maglevMap, maglevMapV6}
 		for _, m := range allMaps {
 			err := m.EnsureExists()
 			if err != nil {
@@ -1541,6 +1553,21 @@ func restoreRTMap(rtMap maps.Map, m routes.MapMem) {
 	}
 }
 
+func restoreARPMap(arpMap maps.Map, a arp.MapMem) {
+	for k, v := range a {
+		err := arpMap.Update(k[:], v[:])
+		Expect(err).NotTo(HaveOccurred())
+	}
+}
+
+func restoreARPMapV6(arpMap maps.Map, a arp.MapMemV6) {
+	for k, v := range a {
+		err := arpMap.Update(k[:], v[:])
+		Expect(err).NotTo(HaveOccurred())
+	}
+}
+
+
 func restoreRTMapV6(rtMap maps.Map, m routes.MapMemV6) {
 	for k, v := range m {
 		err := rtMap.Update(k[:], v[:])
@@ -2051,6 +2078,7 @@ func resetBPFMaps() {
 	resetMap(fsafeMap)
 	resetMap(natMap)
 	resetMap(natBEMap)
+	resetMap(maglevMap)
 }
 
 func TestMapIterWithDelete(t *testing.T) {
