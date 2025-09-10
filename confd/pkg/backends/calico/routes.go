@@ -149,8 +149,6 @@ func (rg *routeGenerator) TriggerResync() {
 
 // getServiceForEndpoints retrieves the corresponding svc for the given ep
 func (rg *routeGenerator) getServiceForEndpoints(ep *discoveryv1.EndpointSlice) (*v1.Service, string) {
-	// get key
-
 	svcName, ok := ep.Labels[discoveryv1.LabelServiceName]
 	if !ok {
 		log.WithField("ep", ep.Name).Debug("getServiceForEndpoints: endpointslice missing service name label, passing")
@@ -158,7 +156,7 @@ func (rg *routeGenerator) getServiceForEndpoints(ep *discoveryv1.EndpointSlice) 
 	}
 
 	// construct a dummy svc using the service name from endpointslice to get the key
-	svc := v1.Service{ObjectMeta: metav1.ObjectMeta{Name: svcName, Namespace: ep.Namespace}}
+	svc := &v1.Service{ObjectMeta: metav1.ObjectMeta{Name: svcName, Namespace: ep.Namespace}}
 	key, err := cache.MetaNamespaceKeyFunc(svc)
 
 	if err != nil {
