@@ -18,6 +18,8 @@ import (
 	"crypto/sha1"
 	"encoding/base64"
 	"fmt"
+	"net"
+	"strconv"
 	"strings"
 
 	v1 "k8s.io/api/core/v1"
@@ -86,7 +88,7 @@ type target struct {
 
 func (t *target) Destination() string {
 	if t.port != 0 {
-		return fmt.Sprintf("[%s]:%d", t.destination, t.port)
+		return net.JoinHostPort(t.destination, strconv.Itoa(t.port))
 	}
 	return t.destination
 }
