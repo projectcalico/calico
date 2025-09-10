@@ -2045,12 +2045,13 @@ type Policy struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// If the Policy represents a NetworkPolicy, this contains the namespace that the policy came
 	// from.  Otherwise, empty.
-	Namespace        string  `protobuf:"bytes,5,opt,name=namespace,proto3" json:"namespace,omitempty"`
-	InboundRules     []*Rule `protobuf:"bytes,1,rep,name=inbound_rules,json=inboundRules,proto3" json:"inbound_rules,omitempty"`
-	OutboundRules    []*Rule `protobuf:"bytes,2,rep,name=outbound_rules,json=outboundRules,proto3" json:"outbound_rules,omitempty"`
-	Untracked        bool    `protobuf:"varint,3,opt,name=untracked,proto3" json:"untracked,omitempty"`
-	PreDnat          bool    `protobuf:"varint,4,opt,name=pre_dnat,json=preDnat,proto3" json:"pre_dnat,omitempty"`
-	OriginalSelector string  `protobuf:"bytes,6,opt,name=original_selector,json=originalSelector,proto3" json:"original_selector,omitempty"`
+	Namespace        string   `protobuf:"bytes,5,opt,name=namespace,proto3" json:"namespace,omitempty"`
+	InboundRules     []*Rule  `protobuf:"bytes,1,rep,name=inbound_rules,json=inboundRules,proto3" json:"inbound_rules,omitempty"`
+	OutboundRules    []*Rule  `protobuf:"bytes,2,rep,name=outbound_rules,json=outboundRules,proto3" json:"outbound_rules,omitempty"`
+	Untracked        bool     `protobuf:"varint,3,opt,name=untracked,proto3" json:"untracked,omitempty"`
+	PreDnat          bool     `protobuf:"varint,4,opt,name=pre_dnat,json=preDnat,proto3" json:"pre_dnat,omitempty"`
+	OriginalSelector string   `protobuf:"bytes,6,opt,name=original_selector,json=originalSelector,proto3" json:"original_selector,omitempty"`
+	PerfHints        []string `protobuf:"bytes,7,rep,name=perf_hints,json=perfHints,proto3" json:"perf_hints,omitempty"`
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
 }
@@ -2125,6 +2126,13 @@ func (x *Policy) GetOriginalSelector() string {
 		return x.OriginalSelector
 	}
 	return ""
+}
+
+func (x *Policy) GetPerfHints() []string {
+	if x != nil {
+		return x.PerfHints
+	}
+	return nil
 }
 
 type Rule struct {
@@ -6501,14 +6509,16 @@ const file_felixbackend_proto_rawDesc = "" +
 	"\x02id\x18\x01 \x01(\v2\x0f.felix.PolicyIDR\x02id\"2\n" +
 	"\bPolicyID\x12\x12\n" +
 	"\x04tier\x18\x01 \x01(\tR\x04tier\x12\x12\n" +
-	"\x04name\x18\x02 \x01(\tR\x04name\"\xf2\x01\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\"\x91\x02\n" +
 	"\x06Policy\x12\x1c\n" +
 	"\tnamespace\x18\x05 \x01(\tR\tnamespace\x120\n" +
 	"\rinbound_rules\x18\x01 \x03(\v2\v.felix.RuleR\finboundRules\x122\n" +
 	"\x0eoutbound_rules\x18\x02 \x03(\v2\v.felix.RuleR\routboundRules\x12\x1c\n" +
 	"\tuntracked\x18\x03 \x01(\bR\tuntracked\x12\x19\n" +
 	"\bpre_dnat\x18\x04 \x01(\bR\apreDnat\x12+\n" +
-	"\x11original_selector\x18\x06 \x01(\tR\x10originalSelector\"\xaa\x10\n" +
+	"\x11original_selector\x18\x06 \x01(\tR\x10originalSelector\x12\x1d\n" +
+	"\n" +
+	"perf_hints\x18\a \x03(\tR\tperfHints\"\xaa\x10\n" +
 	"\x04Rule\x12\x16\n" +
 	"\x06action\x18\x01 \x01(\tR\x06action\x12/\n" +
 	"\n" +
