@@ -93,7 +93,6 @@ export type OmniFilterProps = {
     formatCreatableLabel?: (searchInput: string) => string;
     triggerType?: 'default' | 'taglist';
     tagListTriggerProps?: OmniTagListTriggerPartsProps;
-    contentRef?: React.RefObject<HTMLDivElement>;
     popoverContentProps?: PopoverContentProps;
 } & Omit<BoxProps, 'onChange'> & { 'data-testid'?: string };
 
@@ -129,7 +128,6 @@ const OmniFilter: React.FC<OmniFilterProps | CheckboxOmniFilterProps> = ({
     totalItems,
     isCreatable = false,
     triggerType = 'default',
-    contentRef,
     popoverContentProps,
     tagListTriggerProps,
     formatCreatableLabel,

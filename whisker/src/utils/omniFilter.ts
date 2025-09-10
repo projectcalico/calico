@@ -82,11 +82,10 @@ export type OmniFilterParam = keyof typeof OmniFilterKeys;
 
 export const CustomOmniFilterKeys: Pick<
     typeof FilterKey,
-    'dest_port' | 'policyV2' | 'policyV2Namespace'
+    'dest_port' | 'policyV2'
 > = {
     [FilterKey.dest_port]: FilterKey.dest_port,
     [FilterKey.policyV2]: FilterKey.policyV2,
-    [FilterKey.policyV2Namespace]: FilterKey.policyV2Namespace,
 } as const;
 
 export type CustomOmniFilterParam = keyof typeof CustomOmniFilterKeys;
@@ -159,14 +158,25 @@ export type FilterHintType =
     | 'DestName'
     | 'DestNamespace'
     | 'SourceNamespace'
-    | 'PolicyName';
+    | 'PolicyName'
+    | 'PolicyV2'
+    | 'PolicyV2Namespace'
+    | 'PolicyV2Tier'
+    | 'PolicyV2Kind';
 
-export const FilterHintTypes: Record<ListOmniFilterParam, FilterHintType> = {
-    [ListOmniFilterKeys.dest_name]: 'DestName',
-    [ListOmniFilterKeys.dest_namespace]: 'DestNamespace',
-    [ListOmniFilterKeys.source_name]: 'SourceName',
-    [ListOmniFilterKeys.source_namespace]: 'SourceNamespace',
-    [ListOmniFilterKeys.policy]: 'PolicyName',
+export const FilterHintTypes: Record<
+    keyof typeof FilterHintKeys,
+    FilterHintType
+> = {
+    [FilterKey.dest_name]: 'DestName',
+    [FilterKey.dest_namespace]: 'DestNamespace',
+    [FilterKey.source_name]: 'SourceName',
+    [FilterKey.source_namespace]: 'SourceNamespace',
+    [FilterKey.policy]: 'PolicyName',
+    [FilterKey.policyV2]: 'PolicyV2',
+    [FilterKey.policyV2Namespace]: 'PolicyV2Namespace',
+    [FilterKey.policyV2Tier]: 'PolicyV2Tier',
+    [FilterKey.policyV2Kind]: 'PolicyV2Kind',
 };
 
 export type OmniFilterPropertiesType = Record<

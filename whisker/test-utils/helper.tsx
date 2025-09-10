@@ -10,6 +10,7 @@ import { ChakraProvider } from '@chakra-ui/react';
 import { theme } from '../src/theme';
 import { MemoryRouter } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import userEvent from '@testing-library/user-event';
 
 const queryClient = new QueryClient({
     defaultOptions: {
@@ -62,4 +63,4 @@ export const renderHookWithRouter = <Result, Props>(
 
 export * from '@testing-library/react';
 
-export { customRender as render, within };
+export { customRender as render, within, userEvent };

@@ -21,6 +21,10 @@ const urlFilterParams: Record<OmniFilterParam, string[]> = {
     source_namespace: [],
     dest_port: [],
     protocol: [],
+    policyV2: [],
+    policyV2Namespace: [],
+    policyV2Tier: [],
+    policyV2Kind: [],
 };
 const omniFilterData: ListOmniFiltersData = {
     dest_namespace: {

@@ -8,7 +8,8 @@ import {
 import { FlowLog, UniqueFlowLogs } from '@/types/render';
 import {
     FilterHintKey,
-    FilterHintKeys,
+    FilterHintType,
+    FilterHintTypes,
     FilterKey,
     OmniFilterProperties,
     transformToFlowsFilterQuery,
@@ -49,7 +50,7 @@ export const useFlowLogsCount = (queryParams?: Record<string, string>) => {
 };
 
 export const fetchFilters = (query: {
-    type: FilterHintKey;
+    type: FilterHintType;
     pageSize: number;
     page: number;
     filters?: string;
@@ -68,7 +69,7 @@ export const useInfiniteFilterQuery = (
         queryFn: ({ pageParam }) =>
             fetchFilters({
                 page: pageParam as number,
-                type: FilterHintKeys[filterParam] ?? filterParam,
+                type: FilterHintTypes[filterParam],
                 pageSize: OmniFilterProperties[filterParam].limit! ?? 1,
                 filters: query ?? undefined,
             }).then((response) =>

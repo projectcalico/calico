@@ -17,6 +17,7 @@ const Tag: React.FC<TagProps> = ({ tag, onRemove, ...rest }) => (
     <ChakraTag variant='solid' cursor='default' {...rest}>
         {tag.label}
         <TagCloseButton
+            data-testid='tag-close-button'
             onClick={(event) => {
                 event.stopPropagation();
                 onRemove(tag);

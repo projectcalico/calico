@@ -40,13 +40,20 @@ const OmniTagListTrigger: React.FC<OmniTagListTriggerProps> = ({
                 }}
                 tabIndex={0}
                 onClick={onOpen}
+                data-testid='omni-tag-list-trigger'
                 {...containerStyles}
                 {...partsProps?.container}
             >
-                <HStack gap={1} flexWrap='wrap' flex='1 1 0%' py={1}>
+                <HStack
+                    gap={1}
+                    flexWrap='wrap'
+                    flex='1 1 0%'
+                    py={1}
+                    data-testid='omni-tag-list-container'
+                >
                     {options.length === 0 ? (
                         <Text
-                            data-testid='select-placeholder'
+                            data-testid='omni-tag-list-placeholder'
                             color='tigeraGrey.400'
                             cursor='default'
                         >
@@ -58,6 +65,7 @@ const OmniTagListTrigger: React.FC<OmniTagListTriggerProps> = ({
                                 key={option.value}
                                 tag={option}
                                 onRemove={onRemove}
+                                data-testid='omni-tag-list-tag'
                             />
                         ))
                     )}
@@ -66,6 +74,7 @@ const OmniTagListTrigger: React.FC<OmniTagListTriggerProps> = ({
                     icon={<ChevronDownIcon {...iconStyles} />}
                     variant='ghost'
                     aria-label={''}
+                    data-testid='omni-tag-list-icon-button'
                     {...iconButtonStyles}
                 />
             </Box>
