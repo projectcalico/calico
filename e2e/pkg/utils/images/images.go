@@ -25,6 +25,7 @@ const (
 	Porter        = "calico/porter"
 	TestWebserver = "gcr.io/kubernetes-e2e-test-images/test-webserver:1.0"
 	Iperf         = "registry.k8s.io/e2e-test-images/agnhost:2.47"
+	RapidClient   = "quay.io/tigeradev/rapidclient"
 )
 
 // Get client image and powershell command based on windows OS version
