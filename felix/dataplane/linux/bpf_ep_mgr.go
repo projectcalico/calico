@@ -4091,15 +4091,11 @@ func (m *bpfEndpointManager) doUpdatePolicyProgram(
 		}
 	}
 
-	if tstride < tstrideOrig {
-		if !m.policyTrampolineStride.CompareAndSwap(int32(tstrideOrig), int32(tstride)) {
-			tmp := m.policyTrampolineStride.Load()
-			if tstride < int(tmp) {
-				m.policyTrampolineStride.Store(int32(tstride))
-				log.Warnf("Reducing policy program trampoline stride to %d", tstride)
-			}
-		} else {
+	for tstride < tstrideOrig {
+		if m.policyTrampolineStride.CompareAndSwap(int32(tstrideOrig), int32(tstride)) {
 			log.Warnf("Reducing policy program trampoline stride to %d", tstride)
+		} else {
+			tstrideOrig = int(m.policyTrampolineStride.Load())
 		}
 	}
 
