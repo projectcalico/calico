@@ -540,14 +540,13 @@ func (t *Table) UpdateChain(chain *generictables.Chain) {
 	t.logCxt.WithField("chainName", chain.Name).Debug("Adding chain to available set.")
 	oldNumRules := 0
 
+	// Incref any newly-referenced chains, then decref the old ones.  By incrementing first we
+	// avoid marking a still-referenced chain as dirty.
 	if chain.ForceProgramming {
 		// A force-programmed chain refers to itself.
 		t.logCxt.WithField("chainName", chain.Name).Debug("Chain has force programming flag, incref.")
 		t.increfChain(chain.Name)
 	}
-
-	// Incref any newly-referenced chains, then decref the old ones.  By incrementing first we
-	// avoid marking a still-referenced chain as dirty.
 	t.maybeIncrefReferredChains(chain.Name, chain.Rules)
 	if oldChain := t.chainNameToChain[chain.Name]; oldChain != nil {
 		oldNumRules = len(oldChain.Rules)
