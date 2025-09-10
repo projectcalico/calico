@@ -34,8 +34,8 @@ type dscpManager struct {
 	mangleTable  Table
 
 	// QoS policies.
-	wepPolicies map[types.WorkloadEndpointID]rules.DSCPRule
-	hepPolicies map[types.HostEndpointID]rules.DSCPRule
+	wepPolicies map[types.WorkloadEndpointID]*rules.DSCPRule
+	hepPolicies map[types.HostEndpointID]*rules.DSCPRule
 	dirty       bool
 
 	// IPSet.
@@ -56,8 +56,8 @@ func newDSCPManager(
 		mangleTable:     mangleTable,
 		ruleRenderer:    ruleRenderer,
 		ipVersion:       ipVersion,
-		wepPolicies:     map[types.WorkloadEndpointID]rules.DSCPRule{},
-		hepPolicies:     map[types.HostEndpointID]rules.DSCPRule{},
+		wepPolicies:     map[types.WorkloadEndpointID]*rules.DSCPRule{},
+		hepPolicies:     map[types.HostEndpointID]*rules.DSCPRule{},
 		dirty:           true,
 		ipsetsDataplane: ipsetsDataplane,
 		ipSetMetadata: ipsets.IPSetMetadata{
@@ -93,29 +93,21 @@ func (m *dscpManager) handleHEPUpdates(hepID *proto.HostEndpointID, msg *proto.H
 		return
 	}
 
-	// We only support one policy per endpoint at this point.
-	dscp := msg.Endpoint.QosPolicies[0].Dscp
-
-	// This situation must be handled earlier.
-	if dscp > 63 || dscp < 0 {
-		m.logCtx.WithField("id", id).Panicf("Invalid DSCP value %v", dscp)
-	}
 	ips := msg.Endpoint.ExpectedIpv4Addrs
 	if m.ipVersion == 6 {
 		ips = msg.Endpoint.ExpectedIpv6Addrs
 	}
-	if len(ips) != 0 {
-		srcAddrs, err := normaliseSourceAddr(ips)
-		if err != nil {
-			m.logCtx.WithError(err).WithField("hep", msg.Endpoint.Name).Errorf("Invalid address - Skipping")
-			return
-		}
-		m.hepPolicies[id] = rules.DSCPRule{
-			SrcAddrs: srcAddrs,
-			Value:    uint8(dscp),
-		}
-		m.dirty = true
+
+	// We only support one policy per endpoint at this point.
+	dscp := msg.Endpoint.QosPolicies[0].Dscp
+	r, err := convertUpdatesToDSCPRule(ips, dscp)
+	if err != nil {
+		m.logCtx.WithField("hep", id).WithError(err).Error("Failed to handle DSCP from endpoint update - Skipping.")
+		return
 	}
+
+	m.hepPolicies[id] = r
+	m.dirty = true
 }
 
 func (m *dscpManager) handleWEPUpdates(wepID *proto.WorkloadEndpointID, msg *proto.WorkloadEndpointUpdate) {
@@ -129,29 +121,38 @@ func (m *dscpManager) handleWEPUpdates(wepID *proto.WorkloadEndpointID, msg *pro
 		return
 	}
 
-	// We only support one policy per endpoint at this point.
-	dscp := msg.Endpoint.QosPolicies[0].Dscp
-
-	// This situation must be handled earlier.
-	if dscp > 63 || dscp < 0 {
-		m.logCtx.WithField("id", id).Panicf("Invalid DSCP value %v", dscp)
-	}
 	ips := msg.Endpoint.Ipv4Nets
 	if m.ipVersion == 6 {
 		ips = msg.Endpoint.Ipv6Nets
 	}
-	if len(ips) != 0 {
-		srcAddrs, err := normaliseSourceAddr(ips)
-		if err != nil {
-			m.logCtx.WithError(err).WithField("wep", msg.Endpoint.Name).Errorf("Invalid address - Skipping.")
-			return
-		}
-		m.wepPolicies[id] = rules.DSCPRule{
-			SrcAddrs: srcAddrs,
-			Value:    uint8(dscp),
-		}
-		m.dirty = true
+
+	// We only support one policy per endpoint at this point.
+	dscp := msg.Endpoint.QosPolicies[0].Dscp
+	r, err := convertUpdatesToDSCPRule(ips, dscp)
+	if err != nil {
+		m.logCtx.WithField("wep", id).WithError(err).Error("Failed to handle DSCP from endpoint update - Skipping.")
+		return
 	}
+
+	m.wepPolicies[id] = r
+	m.dirty = true
+}
+
+func convertUpdatesToDSCPRule(ips []string, dscp int32) (*rules.DSCPRule, error) {
+	if dscp > 63 || dscp < 0 {
+		return nil, fmt.Errorf("invalid DSCP value %v", dscp)
+	}
+	if len(ips) == 0 {
+		return nil, fmt.Errorf("no address provided")
+	}
+	srcAddrs, err := normaliseSourceAddr(ips)
+	if err != nil {
+		return nil, fmt.Errorf("invalid address %v", err)
+	}
+	return &rules.DSCPRule{
+		SrcAddrs: srcAddrs,
+		Value:    uint8(dscp),
+	}, nil
 }
 
 func normaliseSourceAddr(addrs []string) (string, error) {
@@ -176,7 +177,7 @@ func removeSubnetMask(addr string) (string, error) {
 }
 
 func (m *dscpManager) CompleteDeferredWork() error {
-	var dscpRules []rules.DSCPRule
+	var dscpRules []*rules.DSCPRule
 	if m.dirty {
 		for _, r := range m.wepPolicies {
 			dscpRules = append(dscpRules, r)

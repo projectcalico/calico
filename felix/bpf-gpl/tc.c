@@ -1327,6 +1327,9 @@ int calico_tc_skb_accepted_entrypoint(struct __sk_buff *skb)
 		deny_reason(ctx, CALI_REASON_DROPPED_BY_QOS);
 		goto deny;
 	}
+	if ((CALI_F_FROM_WEP || CALI_F_TO_HEP) && EGRESS_DSCP >= 0 && !qos_set_dscp(ctx)) {
+		goto deny;
+	}
 	ctx->fwd = calico_tc_skb_accepted(ctx);
 	return forward_or_drop(ctx);
 

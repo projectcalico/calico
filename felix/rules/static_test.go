@@ -41,26 +41,27 @@ var _ = Describe("Static", func() {
 	})
 
 	checkManglePostrouting := func(ipVersion uint8, ipvs bool) {
-		allPoolSetName := fmt.Sprintf("cali%v0all-ipam-pools", ipVersion)
-		allHostsSetName := fmt.Sprintf("cali%v0all-hosts-net", ipVersion)
-		dscpSetName := fmt.Sprintf("cali%v0dscp-src-net", ipVersion)
 		It("should generate expected cali-POSTROUTING chain in the mangle table", func() {
-			expRules := []generictables.Rule{
-				// DSCP rule.
-				{
+			expRules := []generictables.Rule{}
+			if !rr.BPFEnabled {
+				allPoolSetName := fmt.Sprintf("cali%v0all-ipam-pools", ipVersion)
+				allHostsSetName := fmt.Sprintf("cali%v0all-hosts-net", ipVersion)
+				dscpSetName := fmt.Sprintf("cali%v0dscp-src-net", ipVersion)
+				expRules = append(expRules, generictables.Rule{
+					// DSCP rule.
 					Match: Match().
 						SourceIPSet(dscpSetName).
 						NotDestIPSet(allPoolSetName).
 						NotDestIPSet(allHostsSetName),
 					Action:  JumpAction{Target: ChainEgressDSCP},
 					Comment: []string{"set dscp for traffic leaving cluster."},
-				},
-				// Accept already accepted.
-				{
-					Match:  Match().MarkSingleBitSet(0x10),
-					Action: ReturnAction{},
-				},
+				})
 			}
+			// Accept already accepted.
+			expRules = append(expRules, generictables.Rule{
+				Match:  Match().MarkSingleBitSet(0x10),
+				Action: ReturnAction{},
+			})
 			if ipvs {
 				// Accept IPVS-forwarded traffic.
 				expRules = append(expRules, generictables.Rule{

@@ -1035,7 +1035,7 @@ type RouteTableIDRange struct {
 type RouteTableRanges []RouteTableIDRange
 
 func (r RouteTableRanges) NumDesignatedTables() int {
-	var len int = 0
+	len := 0
 	for _, rng := range r {
 		len += (rng.Max - rng.Min) + 1 // add one, since range is inclusive
 	}

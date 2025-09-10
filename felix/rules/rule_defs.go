@@ -323,7 +323,7 @@ type RuleRenderer interface {
 
 	NATOutgoingChain(active bool, ipVersion uint8) *generictables.Chain
 
-	EgressDSCPChain(policies []DSCPRule) *generictables.Chain
+	EgressDSCPChain(policies []*DSCPRule) *generictables.Chain
 
 	DNATsToIptablesChains(dnats map[string]string) []*generictables.Chain
 	SNATsToIptablesChains(snats map[string]string) []*generictables.Chain

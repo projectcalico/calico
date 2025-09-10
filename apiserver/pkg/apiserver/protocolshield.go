@@ -41,11 +41,11 @@ func (pss *protocolShieldSerializer) EncoderForVersion(encoder runtime.Encoder, 
 	if pss == nil {
 		return nil
 	}
-	return pss.CodecFactory.CodecForVersions(encoder, nil, gv, nil)
+	return pss.CodecForVersions(encoder, nil, gv, nil)
 }
 func (pss *protocolShieldSerializer) DecoderToVersion(decoder runtime.Decoder, gv runtime.GroupVersioner) runtime.Decoder {
 	if pss == nil {
 		return nil
 	}
-	return pss.CodecFactory.CodecForVersions(nil, decoder, nil, gv)
+	return pss.CodecForVersions(nil, decoder, nil, gv)
 }

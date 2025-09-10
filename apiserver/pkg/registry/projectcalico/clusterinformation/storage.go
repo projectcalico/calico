@@ -12,14 +12,13 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	genericapirequest "k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/apiserver/pkg/registry/generic/registry"
-	genericregistry "k8s.io/apiserver/pkg/registry/generic/registry"
 	"k8s.io/apiserver/pkg/registry/rest"
 
 	"github.com/projectcalico/calico/apiserver/pkg/registry/projectcalico/server"
 )
 
 type REST struct {
-	*genericregistry.Store
+	*registry.Store
 	shortNames []string
 }
 
@@ -87,7 +86,7 @@ func NewREST(scheme *runtime.Scheme, opts server.Options) (*REST, error) {
 	if err != nil {
 		return nil, err
 	}
-	store := &genericregistry.Store{
+	store := &registry.Store{
 		NewFunc:     func() runtime.Object { return &calico.ClusterInformation{} },
 		NewListFunc: func() runtime.Object { return &calico.ClusterInformationList{} },
 		KeyRootFunc: opts.KeyRootFunc(false),
