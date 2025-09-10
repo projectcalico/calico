@@ -6,7 +6,6 @@ import (
 	"context"
 	"reflect"
 
-	aapi "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apiserver/pkg/registry/generic/registry"
@@ -51,8 +50,8 @@ func NewCalicoNodeStatusStorage(opts Options) (registry.DryRunnableStorage, fact
 		client:            c,
 		codec:             opts.RESTOptions.StorageConfig.Codec,
 		versioner:         APIObjectVersioner{},
-		aapiType:          reflect.TypeOf(aapi.CalicoNodeStatus{}),
-		aapiListType:      reflect.TypeOf(aapi.CalicoNodeStatusList{}),
+		aapiType:          reflect.TypeOf(api.CalicoNodeStatus{}),
+		aapiListType:      reflect.TypeOf(api.CalicoNodeStatusList{}),
 		libCalicoType:     reflect.TypeOf(api.CalicoNodeStatus{}),
 		libCalicoListType: reflect.TypeOf(api.CalicoNodeStatusList{}),
 		isNamespaced:      false,
@@ -72,7 +71,7 @@ type CalicoNodeStatusConverter struct {
 }
 
 func (gc CalicoNodeStatusConverter) convertToLibcalico(aapiObj runtime.Object) resourceObject {
-	aapiCalicoNodeStatus := aapiObj.(*aapi.CalicoNodeStatus)
+	aapiCalicoNodeStatus := aapiObj.(*api.CalicoNodeStatus)
 	lcgCalicoNodeStatus := &api.CalicoNodeStatus{}
 	lcgCalicoNodeStatus.TypeMeta = aapiCalicoNodeStatus.TypeMeta
 	lcgCalicoNodeStatus.ObjectMeta = aapiCalicoNodeStatus.ObjectMeta
@@ -84,7 +83,7 @@ func (gc CalicoNodeStatusConverter) convertToLibcalico(aapiObj runtime.Object) r
 
 func (gc CalicoNodeStatusConverter) convertToAAPI(libcalicoObject resourceObject, aapiObj runtime.Object) {
 	lcgCalicoNodeStatus := libcalicoObject.(*api.CalicoNodeStatus)
-	aapiCalicoNodeStatus := aapiObj.(*aapi.CalicoNodeStatus)
+	aapiCalicoNodeStatus := aapiObj.(*api.CalicoNodeStatus)
 	aapiCalicoNodeStatus.Spec = lcgCalicoNodeStatus.Spec
 	aapiCalicoNodeStatus.Status = lcgCalicoNodeStatus.Status
 	aapiCalicoNodeStatus.TypeMeta = lcgCalicoNodeStatus.TypeMeta
@@ -93,15 +92,15 @@ func (gc CalicoNodeStatusConverter) convertToAAPI(libcalicoObject resourceObject
 
 func (gc CalicoNodeStatusConverter) convertToAAPIList(libcalicoListObject resourceListObject, aapiListObj runtime.Object, pred storage.SelectionPredicate) {
 	lcgCalicoNodeStatusList := libcalicoListObject.(*api.CalicoNodeStatusList)
-	aapiCalicoNodeStatusList := aapiListObj.(*aapi.CalicoNodeStatusList)
+	aapiCalicoNodeStatusList := aapiListObj.(*api.CalicoNodeStatusList)
 	if libcalicoListObject == nil {
-		aapiCalicoNodeStatusList.Items = []aapi.CalicoNodeStatus{}
+		aapiCalicoNodeStatusList.Items = []api.CalicoNodeStatus{}
 		return
 	}
 	aapiCalicoNodeStatusList.TypeMeta = lcgCalicoNodeStatusList.TypeMeta
 	aapiCalicoNodeStatusList.ListMeta = lcgCalicoNodeStatusList.ListMeta
 	for _, item := range lcgCalicoNodeStatusList.Items {
-		aapiCalicoNodeStatus := aapi.CalicoNodeStatus{}
+		aapiCalicoNodeStatus := api.CalicoNodeStatus{}
 		gc.convertToAAPI(&item, &aapiCalicoNodeStatus)
 		if matched, err := pred.Matches(&aapiCalicoNodeStatus); err == nil && matched {
 			aapiCalicoNodeStatusList.Items = append(aapiCalicoNodeStatusList.Items, aapiCalicoNodeStatus)

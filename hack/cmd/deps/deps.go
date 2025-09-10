@@ -117,11 +117,11 @@ func printSemChangeIn(pkg string) {
 	}
 
 	inclusions := set.New[string]()
-	inclusions.Add(pkg)
+	inclusions.Add("/" + pkg + "/**")
 	inclusions.AddAll(defaultInclusions)
 	inclusions.AddAll(nonGoDeps[pkg])
 	for _, dir := range localDirs {
-		if strings.HasPrefix(dir+"/", pkg) {
+		if strings.HasPrefix(dir+"/", "/"+pkg) {
 			continue // covered by the whole-package inclusion.
 		}
 		inclusions.Add(dir + "/*.go")
@@ -187,7 +187,7 @@ func printTestExclusions(pkg string) {
 func calculateTestExclusionGlobs(pkg string, localDirs []string) []string {
 	// If the dir is not within the package, write a glob that excludes its
 	// tests.
-	prefix := pkg + "/"
+	prefix := "/" + pkg + "/"
 	var exclusions []string
 	for _, dir := range localDirs {
 		if strings.HasPrefix(dir+"/", prefix) {

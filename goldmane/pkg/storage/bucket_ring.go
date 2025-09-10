@@ -27,7 +27,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
-var StopBucketIteration = errors.New("stop bucket iteration")
+var ErrStopBucketIteration = errors.New("stop bucket iteration")
 
 type lookupFn func(key types.FlowKey) *DiachronicFlow
 
@@ -726,7 +726,7 @@ func (r *BucketRing) iterBuckets(start, end int, f func(i int) error) {
 	idx := start
 	for idx != end {
 		if err := f(idx); err != nil {
-			if errors.Is(err, StopBucketIteration) {
+			if errors.Is(err, ErrStopBucketIteration) {
 				return
 			}
 		}
@@ -782,7 +782,7 @@ func (r *BucketRing) IterFlows(start, end int64, f func(d *DiachronicFlow, s, e 
 
 		// Iterate through all of the flows in the bucket.
 		b.Flows.Iter(func(d *DiachronicFlow) error {
-			if err := f(d, b.StartTime, b.EndTime); errors.Is(err, StopBucketIteration) {
+			if err := f(d, b.StartTime, b.EndTime); errors.Is(err, ErrStopBucketIteration) {
 				stopBucketIteration = true
 				return set.StopIteration
 			}
@@ -792,7 +792,7 @@ func (r *BucketRing) IterFlows(start, end int64, f func(d *DiachronicFlow, s, e 
 		if stopBucketIteration {
 			// If the inner function indicates to stop iterating, return a StopBucketIteration error
 			// to skip any remaining buckets.
-			return StopBucketIteration
+			return ErrStopBucketIteration
 		}
 		return nil
 	})
