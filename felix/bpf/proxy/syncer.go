@@ -597,7 +597,6 @@ func (s *Syncer) apply(state DPSyncerState) error {
 	// insert or update existing services
 	for sname, sinfo := range state.SvcMap {
 		svc := sinfo.(Service)
-		hintsAnnotation := svc.HintsAnnotation()
 
 		log.WithField("service", sname).Debug("Applying service")
 		skey := getSvcKey(sname, "")
@@ -606,11 +605,10 @@ func (s *Syncer) apply(state DPSyncerState) error {
 		for _, ep := range state.EpsMap[sname] {
 			zoneHints := ep.ZoneHints()
 			if ep.IsReady() || ep.IsTerminating() {
-				if ShouldAppendTopologyAwareEndpoint(nodeZone, hintsAnnotation, zoneHints) {
+				if ShouldAppendTopologyAwareEndpoint(nodeZone, "", zoneHints) {
 					eps = append(eps, ep)
 				} else {
-					log.Debugf("Topology Aware Hints: '%s' for Endpoint: '%s' however Zone: '%s' does not match Zone Hints: '%v'\n",
-						hintsAnnotation,
+					log.Debugf("Topology Aware Hints: for Endpoint: '%s' however Zone: '%s' does not match Zone Hints: '%v'\n",
 						ep.IP(),
 						nodeZone,
 						zoneHints)
@@ -1321,7 +1319,6 @@ func serviceInfoFromK8sServicePort(sport k8sp.ServicePort) *serviceInfo {
 	sinfo.healthCheckNodePort = sport.HealthCheckNodePort()
 	sinfo.nodeLocalExternal = sport.ExternalPolicyLocal()
 	sinfo.nodeLocalInternal = sport.InternalPolicyLocal()
-	sinfo.hintsAnnotation = sport.HintsAnnotation()
 	sinfo.servicePortAnnotations = sport.(*servicePort).servicePortAnnotations
 
 	return sinfo
@@ -1340,7 +1337,6 @@ type serviceInfo struct {
 	healthCheckNodePort      int
 	nodeLocalExternal        bool
 	nodeLocalInternal        bool
-	hintsAnnotation          string
 
 	servicePortAnnotations
 }
@@ -1431,11 +1427,6 @@ func (info *serviceInfo) InternalPolicyLocal() bool {
 	return info.nodeLocalInternal
 }
 
-// HintsAnnotation is part of ServicePort interface.
-func (info *serviceInfo) HintsAnnotation() string {
-	return info.hintsAnnotation
-}
-
 // K8sServicePortOption defines options for NewK8sServicePort
 type K8sServicePortOption func(interface{})
 
@@ -1474,7 +1465,6 @@ func ServicePortEqual(a, b k8sp.ServicePort) bool {
 		a.NodePort() == b.NodePort() &&
 		a.ExternalPolicyLocal() == b.ExternalPolicyLocal() &&
 		a.InternalPolicyLocal() == b.InternalPolicyLocal() &&
-		a.HintsAnnotation() == b.HintsAnnotation() &&
 		a.ExternallyAccessible() == b.ExternallyAccessible() &&
 		a.UsesClusterEndpoints() == b.UsesClusterEndpoints() &&
 		a.UsesLocalEndpoints() == b.UsesLocalEndpoints()
@@ -1546,13 +1536,6 @@ func K8sSvcWithStickyClientIP(seconds int) K8sServicePortOption {
 	return func(s interface{}) {
 		s.(*servicePort).ServicePort.(*serviceInfo).stickyMaxAgeSeconds = seconds
 		s.(*servicePort).ServicePort.(*serviceInfo).sessionAffinityType = v1.ServiceAffinityClientIP
-	}
-}
-
-// K8sSvcWithHintsAnnotation sets hints annotation to service info object
-func K8sSvcWithHintsAnnotation(hintsAnnotation string) K8sServicePortOption {
-	return func(s interface{}) {
-		s.(*servicePort).ServicePort.(*serviceInfo).hintsAnnotation = hintsAnnotation
 	}
 }
 

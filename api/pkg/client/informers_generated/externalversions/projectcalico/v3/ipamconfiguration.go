@@ -47,13 +47,25 @@ func NewFilteredIPAMConfigurationInformer(client clientset.Interface, resyncPeri
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.ProjectcalicoV3().IPAMConfigurations().List(context.TODO(), options)
+				return client.ProjectcalicoV3().IPAMConfigurations().List(context.Background(), options)
 			},
 			WatchFunc: func(options v1.ListOptions) (watch.Interface, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.ProjectcalicoV3().IPAMConfigurations().Watch(context.TODO(), options)
+				return client.ProjectcalicoV3().IPAMConfigurations().Watch(context.Background(), options)
+			},
+			ListWithContextFunc: func(ctx context.Context, options v1.ListOptions) (runtime.Object, error) {
+				if tweakListOptions != nil {
+					tweakListOptions(&options)
+				}
+				return client.ProjectcalicoV3().IPAMConfigurations().List(ctx, options)
+			},
+			WatchFuncWithContext: func(ctx context.Context, options v1.ListOptions) (watch.Interface, error) {
+				if tweakListOptions != nil {
+					tweakListOptions(&options)
+				}
+				return client.ProjectcalicoV3().IPAMConfigurations().Watch(ctx, options)
 			},
 		},
 		&apisprojectcalicov3.IPAMConfiguration{},
