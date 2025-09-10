@@ -148,9 +148,6 @@ assemble:
 
 	bpf_loop(10, frag_to_skb, &f2sctx, 0);
 
-	for (i = 0; i < 10; i++) {
-	}
-
 	if (parse_packet_ip(ctx) != PARSING_OK) {
 		goto out;
 	}
