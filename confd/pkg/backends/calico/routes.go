@@ -24,6 +24,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	discoveryv1 "k8s.io/api/discovery/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
@@ -149,8 +150,6 @@ func (rg *routeGenerator) TriggerResync() {
 // getServiceForEndpoints retrieves the corresponding svc for the given ep
 func (rg *routeGenerator) getServiceForEndpoints(ep *discoveryv1.EndpointSlice) (*v1.Service, string) {
 	// get key
-	var key string
-	var err error
 
 	svcName, ok := ep.Labels[discoveryv1.LabelServiceName]
 	if !ok {
@@ -158,9 +157,9 @@ func (rg *routeGenerator) getServiceForEndpoints(ep *discoveryv1.EndpointSlice) 
 		return nil, ""
 	}
 
-	epCopy := ep.DeepCopy()
-	epCopy.Name = svcName
-	key, err = cache.MetaNamespaceKeyFunc(epCopy)
+	// construct a dummy svc using the service name from endpointslice to get the key
+	svc := v1.Service{ObjectMeta: metav1.ObjectMeta{Name: svcName, Namespace: ep.Namespace}}
+	key, err := cache.MetaNamespaceKeyFunc(svc)
 
 	if err != nil {
 		log.WithField("ep", ep.Name).WithError(err).Warn("getServiceForEndpoints: error on retrieving key for endpoint, passing")
