@@ -210,7 +210,7 @@ func GetLocalCIDR(ip string, version int, getInterfaces func([]string, []string,
 	}
 
 	if destCIDR == nil {
-		return ip, fmt.Errorf("%s is invalid.", ip)
+		return ip, fmt.Errorf("%s is invalid", ip)
 	}
 
 	// Get a full list of interface and IPs and find the CIDR matching the

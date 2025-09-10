@@ -91,20 +91,20 @@ Description:
 
 	parsedArgs, err := docopt.ParseArgs(doc, args, "")
 	if err != nil {
-		return fmt.Errorf("Invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand.", strings.Join(args, " "))
+		return fmt.Errorf("invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand", strings.Join(args, " "))
 	}
 	if len(parsedArgs) == 0 {
 		return nil
 	}
 	if context := parsedArgs["--context"]; context != nil {
-		os.Setenv("K8S_CURRENT_CONTEXT", context.(string))
+		_ = os.Setenv("K8S_CURRENT_CONTEXT", context.(string))
 	}
 
 	results := common.ExecuteConfigCommand(parsedArgs, common.ActionApply)
 	log.Infof("results: %+v", results)
 
 	if results.FileInvalid {
-		return fmt.Errorf("Failed to execute command: %v", results.Err)
+		return fmt.Errorf("failed to execute command: %v", results.Err)
 	} else if results.NumResources == 0 {
 		// No resources specified. If there is an associated error use that, otherwise print message with no error.
 		if results.Err != nil {
@@ -113,11 +113,11 @@ Description:
 		fmt.Println("No resources specified")
 	} else if results.NumHandled == 0 {
 		if results.NumResources == 1 {
-			return fmt.Errorf("Failed to apply '%s' resource: %v", results.SingleKind, results.ResErrs)
+			return fmt.Errorf("failed to apply '%s' resource: %v", results.SingleKind, results.ResErrs)
 		} else if results.SingleKind != "" {
-			return fmt.Errorf("Failed to apply any '%s' resources: %v", results.SingleKind, results.ResErrs)
+			return fmt.Errorf("failed to apply any '%s' resources: %v", results.SingleKind, results.ResErrs)
 		} else {
-			return fmt.Errorf("Failed to apply any resources: %v", results.ResErrs)
+			return fmt.Errorf("failed to apply any resources: %v", results.ResErrs)
 		}
 	} else if len(results.ResErrs) == 0 {
 		if results.SingleKind != "" {
@@ -136,7 +136,7 @@ Description:
 					results.NumHandled, results.NumResources)
 			}
 		}
-		return fmt.Errorf("Hit error(s): %v", results.ResErrs)
+		return fmt.Errorf("hit error(s): %v", results.ResErrs)
 	}
 
 	return nil

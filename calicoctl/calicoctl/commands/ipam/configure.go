@@ -32,7 +32,7 @@ import (
 func updateIPAMStrictAffinity(ctx context.Context, ipamClient ipam.Interface, enabled bool, maxBlocks *int) error {
 	ipamConfig, err := ipamClient.GetIPAMConfig(ctx)
 	if err != nil {
-		return fmt.Errorf("Error: %v", err)
+		return fmt.Errorf("error: %v", err)
 	}
 
 	// If StrictAffinity == true => an address from a block can only be assigned by
@@ -46,7 +46,7 @@ func updateIPAMStrictAffinity(ctx context.Context, ipamClient ipam.Interface, en
 
 	err = ipamClient.SetIPAMConfig(ctx, *ipamConfig)
 	if err != nil {
-		return fmt.Errorf("Error: %v", err)
+		return fmt.Errorf("error: %v", err)
 	}
 
 	fmt.Println("Successfully set StrictAffinity to:", enabled)
@@ -81,7 +81,7 @@ Description:
 
 	parsedArgs, err := docopt.ParseArgs(doc, args, "")
 	if err != nil {
-		return fmt.Errorf("Invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand.", strings.Join(args, " "))
+		return fmt.Errorf("invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand", strings.Join(args, " "))
 	}
 	if len(parsedArgs) == 0 {
 		return nil
@@ -105,14 +105,14 @@ Description:
 	passedValue := parsedArgs["--strictaffinity"].(string)
 	enabled, err := strconv.ParseBool(passedValue)
 	if err != nil {
-		return fmt.Errorf("Invalid value. Use true or false to set strictaffinity")
+		return fmt.Errorf("invalid value. Use true or false to set strictaffinity")
 	}
 
 	var maxBlocks *int
 	if maxBlockStr, ok := parsedArgs["--max-blocks-per-host"].(string); ok && maxBlockStr != "" {
 		maxBlocksVal, err := strconv.Atoi(maxBlockStr)
 		if err != nil {
-			return fmt.Errorf("Invalid value for maxblockhost. Use a valid number")
+			return fmt.Errorf("invalid value for maxblockhost. Use a valid number")
 		}
 		maxBlocks = &maxBlocksVal
 	}
