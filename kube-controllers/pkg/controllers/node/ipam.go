@@ -439,7 +439,10 @@ func (c *IPAMController) handleNodeUpdate(kvp model.KVPair) {
 }
 
 func (c *IPAMController) handlePoolUpdate(kvp model.KVPair) {
-	if kvp.Value != nil {
+	if kvp.Value != nil && kvp.Value.(*apiv3.IPPool).GetDeletionTimestamp() == nil {
+		// If the deletion timestamp is set, treat this as a deletion. There may be a window between
+		// deletion of the IP pool, and finalization completing. During this time, we treat the pool
+		// as though it has been deleted.
 		pool := kvp.Value.(*apiv3.IPPool)
 		c.onPoolUpdated(pool)
 	} else {

@@ -120,7 +120,7 @@ fv: bin/calicoctl-linux-$(ARCH) version-helper
 	while ! docker exec st-apiserver-6443 kubectl --server=https://127.0.0.1:6443 create clusterrolebinding anonymous-admin --clusterrole=cluster-admin --user=system:anonymous; do sleep 2; done
 
 	# Run the tests
-	$(DOCKER_RUN) $(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && go test $(GO_TEST_ARGS) ./tests/fv'
+	$(DOCKER_RUN) $(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && go test $(GO_TEST_ARGS) -count=1 ./tests/fv'
 	# Cleanup
 	$(MAKE) stop-etcd
 	$(MAKE) stop-kubernetes-master KUBE_APISERVER_PORT=6443
@@ -212,8 +212,8 @@ run-kubernetes-master: stop-kubernetes-master
 	# Apply CRDs because the tests require them.
 	while ! docker exec -ti st-apiserver-${KUBE_APISERVER_PORT} kubectl \
 		--server=https://127.0.0.1:${KUBE_APISERVER_PORT} \
-		apply -f /go/src/github.com/projectcalico/calico/libcalico-go/config/crd; \
-		do echo "Waiting for ClusterInformation CRD to apply successfully..."; sleep 2; done
+		apply -f /go/src/github.com/projectcalico/calico/$(CALICO_CRD_PATH); \
+		do echo "Waiting for Calico CRDs to apply successfully..."; sleep 2; done
 
 	# Create a namespace in the API for the tests to use.
 	-docker exec -ti st-apiserver-${KUBE_APISERVER_PORT} kubectl \
