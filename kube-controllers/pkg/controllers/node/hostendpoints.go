@@ -167,7 +167,7 @@ func (c *autoHostEndpointController) acceptScheduledRequests(stopCh <-chan struc
 }
 
 func (c *autoHostEndpointController) onUpdate(update bapi.Update) {
-	switch update.KVPair.Key.(type) {
+	switch update.Key.(type) {
 	case model.ResourceKey:
 		switch update.KVPair.Key.(model.ResourceKey).Kind {
 		case libapi.KindNode, api.KindHostEndpoint:
@@ -658,8 +658,8 @@ func (c *autoHostEndpointController) updateHostEndpoint(current *api.HostEndpoin
 		logrus.WithField("hep.Name", current.Name).Debug("hostendpoint needs update")
 
 		expected.ResourceVersion = current.ResourceVersion
-		expected.ObjectMeta.CreationTimestamp = current.ObjectMeta.CreationTimestamp
-		expected.ObjectMeta.UID = current.ObjectMeta.UID
+		expected.CreationTimestamp = current.CreationTimestamp
+		expected.UID = current.UID
 
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()

@@ -6,7 +6,6 @@ import (
 	"context"
 	"reflect"
 
-	aapi "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apiserver/pkg/registry/generic/registry"
@@ -52,8 +51,8 @@ func NewGlobalNetworkPolicyStorage(opts Options) (registry.DryRunnableStorage, f
 		client:            c,
 		codec:             opts.RESTOptions.StorageConfig.Codec,
 		versioner:         APIObjectVersioner{},
-		aapiType:          reflect.TypeOf(aapi.GlobalNetworkPolicy{}),
-		aapiListType:      reflect.TypeOf(aapi.GlobalNetworkPolicyList{}),
+		aapiType:          reflect.TypeOf(api.GlobalNetworkPolicy{}),
+		aapiListType:      reflect.TypeOf(api.GlobalNetworkPolicyList{}),
 		libCalicoType:     reflect.TypeOf(api.GlobalNetworkPolicy{}),
 		libCalicoListType: reflect.TypeOf(api.GlobalNetworkPolicyList{}),
 		isNamespaced:      false,
@@ -73,7 +72,7 @@ type GlobalNetworkPolicyConverter struct {
 }
 
 func (gc GlobalNetworkPolicyConverter) convertToLibcalico(aapiObj runtime.Object) resourceObject {
-	aapiGlobalNetworkPolicy := aapiObj.(*aapi.GlobalNetworkPolicy)
+	aapiGlobalNetworkPolicy := aapiObj.(*api.GlobalNetworkPolicy)
 	lcgGlobalNetworkPolicy := &api.GlobalNetworkPolicy{}
 	lcgGlobalNetworkPolicy.TypeMeta = aapiGlobalNetworkPolicy.TypeMeta
 	lcgGlobalNetworkPolicy.ObjectMeta = aapiGlobalNetworkPolicy.ObjectMeta
@@ -85,7 +84,7 @@ func (gc GlobalNetworkPolicyConverter) convertToLibcalico(aapiObj runtime.Object
 
 func (gc GlobalNetworkPolicyConverter) convertToAAPI(libcalicoObject resourceObject, aapiObj runtime.Object) {
 	lcgGlobalNetworkPolicy := libcalicoObject.(*api.GlobalNetworkPolicy)
-	aapiGlobalNetworkPolicy := aapiObj.(*aapi.GlobalNetworkPolicy)
+	aapiGlobalNetworkPolicy := aapiObj.(*api.GlobalNetworkPolicy)
 	aapiGlobalNetworkPolicy.Spec = lcgGlobalNetworkPolicy.Spec
 	// Default the tier field if not specified
 	if aapiGlobalNetworkPolicy.Spec.Tier == "" {
@@ -102,15 +101,15 @@ func (gc GlobalNetworkPolicyConverter) convertToAAPI(libcalicoObject resourceObj
 
 func (gc GlobalNetworkPolicyConverter) convertToAAPIList(libcalicoListObject resourceListObject, aapiListObj runtime.Object, pred storage.SelectionPredicate) {
 	lcgGlobalNetworkPolicyList := libcalicoListObject.(*api.GlobalNetworkPolicyList)
-	aapiGlobalNetworkPolicyList := aapiListObj.(*aapi.GlobalNetworkPolicyList)
+	aapiGlobalNetworkPolicyList := aapiListObj.(*api.GlobalNetworkPolicyList)
 	if libcalicoListObject == nil {
-		aapiGlobalNetworkPolicyList.Items = []aapi.GlobalNetworkPolicy{}
+		aapiGlobalNetworkPolicyList.Items = []api.GlobalNetworkPolicy{}
 		return
 	}
 	aapiGlobalNetworkPolicyList.TypeMeta = lcgGlobalNetworkPolicyList.TypeMeta
 	aapiGlobalNetworkPolicyList.ListMeta = lcgGlobalNetworkPolicyList.ListMeta
 	for _, item := range lcgGlobalNetworkPolicyList.Items {
-		aapiGlobalNetworkPolicy := aapi.GlobalNetworkPolicy{}
+		aapiGlobalNetworkPolicy := api.GlobalNetworkPolicy{}
 		gc.convertToAAPI(&item, &aapiGlobalNetworkPolicy)
 		if matched, err := pred.Matches(&aapiGlobalNetworkPolicy); err == nil && matched {
 			aapiGlobalNetworkPolicyList.Items = append(aapiGlobalNetworkPolicyList.Items, aapiGlobalNetworkPolicy)

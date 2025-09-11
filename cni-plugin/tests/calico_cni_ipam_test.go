@@ -12,10 +12,17 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	crclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/projectcalico/calico/cni-plugin/internal/pkg/testutils"
+	apiconfig "github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
+	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/rawcrdclient"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
+	"github.com/projectcalico/calico/libcalico-go/lib/ipam/ipamtestutils"
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
@@ -480,6 +487,135 @@ var _ = Describe("Calico IPAM Tests", func() {
 				_, err = calicoClient.IPAM().IPsByHandle(ctx, handleID)
 				Expect(err).To(HaveOccurred())
 			})
+		})
+	})
+
+	Describe("Upgrade of block affinities occurs only once and creates touchfile", func() {
+		var (
+			crdClient crclient.Client
+			host      string
+			netconf   string
+		)
+
+		BeforeEach(func() {
+			if os.Getenv("DATASTORE_TYPE") != "kubernetes" {
+				Skip("Upgrade behavior is only relevant on Kubernetes datastore")
+			}
+
+			// Ensure clean environment: remove touchfile if it exists.
+			_ = os.Remove("/var/run/calico/cni/ipam_upgraded")
+
+			// Build a raw CRD REST client using the same kubeconfig as other tests.
+			cfg, err := apiconfig.LoadClientConfigFromEnvironment()
+			Expect(err).NotTo(HaveOccurred())
+			kcfg, _, err := k8s.CreateKubernetesClientset(&cfg.Spec)
+			Expect(err).NotTo(HaveOccurred())
+			crdClient, err = rawcrdclient.New(kcfg)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Determine host for BlockAffinity and ensure there is a usable netconf.
+			host, err = names.Hostname()
+			Expect(err).NotTo(HaveOccurred())
+
+			cniVersion := os.Getenv("CNI_SPEC_VERSION")
+			netconf = fmt.Sprintf(`
+            {
+              "cniVersion": "%s",
+              "name": "net1",
+              "type": "calico",
+              "etcd_endpoints": "http://%s:2379",
+              "kubernetes": {
+                "kubeconfig": "/home/user/certs/kubeconfig"
+              },
+              "datastore_type": "%s",
+              "log_level": "debug",
+              "ipam": {
+                "type": "%s"
+              }
+            }`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"), plugin)
+		})
+
+		It("upgrades unlabeled block affinities on first call and not on subsequent calls", func() {
+			ctx := context.Background()
+			// 1) Create an unlabeled BlockAffinity for this host.
+			Expect(ipamtestutils.CreateUnlabeledBlockAffinity(ctx, crdClient, host, "10.11.0.0/26")).To(Succeed())
+
+			// Sanity check: ensure the BA has no labels.
+			var list libapiv3.BlockAffinityList
+			Expect(crdClient.List(ctx, &list)).To(Succeed())
+			var found1 *libapiv3.BlockAffinity
+			for i := range list.Items {
+				if list.Items[i].Spec.Node == host && list.Items[i].Spec.CIDR == "10.11.0.0/26" {
+					found1 = &list.Items[i]
+					break
+				}
+			}
+			Expect(found1).NotTo(BeNil())
+			Expect(found1.Labels).To(HaveLen(0))
+
+			// 2) Run the IPAM plugin with explicit IP to trigger maybeUpgradeIPAM.
+			cid1 := uuid.NewString()
+			result, errOut, exit := testutils.RunIPAMPlugin(netconf, "ADD", "IP=192.168.123.123", cid1, os.Getenv("CNI_SPEC_VERSION"))
+			Expect(exit).To(Equal(0), fmt.Sprintf("stderr: %+v", errOut))
+			Expect(result.IPs).To(HaveLen(1))
+
+			// 3) Verify the touchfile exists.
+			_, statErr := os.Stat("/var/run/calico/cni/ipam_upgraded")
+			Expect(statErr).NotTo(HaveOccurred())
+
+			// 4) Verify the previously unlabeled BA is now labeled.
+			list = libapiv3.BlockAffinityList{}
+			Expect(crdClient.List(ctx, &list)).To(Succeed())
+			found1 = nil
+			for i := range list.Items {
+				if list.Items[i].Spec.Node == host && list.Items[i].Spec.CIDR == "10.11.0.0/26" {
+					found1 = &list.Items[i]
+					break
+				}
+			}
+			Expect(found1).NotTo(BeNil())
+			Expect(found1.Labels).To(HaveKey(apiv3.LabelAffinityType))
+			Expect(found1.Labels).To(HaveKey(apiv3.LabelIPVersion))
+			Expect(found1.Labels).To(HaveKey(apiv3.LabelHostnameHash))
+
+			// 5) Create a second unlabeled BA for this host.
+			Expect(ipamtestutils.CreateUnlabeledBlockAffinity(ctx, crdClient, host, "10.11.0.64/26")).To(Succeed())
+			list = libapiv3.BlockAffinityList{}
+			Expect(crdClient.List(ctx, &list)).To(Succeed())
+			var found2 *libapiv3.BlockAffinity
+			for i := range list.Items {
+				if list.Items[i].Spec.Node == host && list.Items[i].Spec.CIDR == "10.11.0.64/26" {
+					found2 = &list.Items[i]
+					break
+				}
+			}
+			Expect(found2).NotTo(BeNil())
+			Expect(found2.Labels).To(HaveLen(0))
+
+			// 6) Run the plugin again; since touchfile exists, no upgrade should occur.
+			cid2 := uuid.NewString()
+			result2, errOut2, exit2 := testutils.RunIPAMPlugin(netconf, "ADD", "IP=192.168.123.124", cid2, os.Getenv("CNI_SPEC_VERSION"))
+			Expect(exit2).To(Equal(0), fmt.Sprintf("stderr: %+v", errOut2))
+			Expect(result2.IPs).To(HaveLen(1))
+
+			// Re-list and ensure the second BA remains unlabeled.
+			list = libapiv3.BlockAffinityList{}
+			Expect(crdClient.List(ctx, &list)).To(Succeed())
+			found2 = nil
+			for i := range list.Items {
+				if list.Items[i].Spec.Node == host && list.Items[i].Spec.CIDR == "10.11.0.64/26" {
+					found2 = &list.Items[i]
+					break
+				}
+			}
+			Expect(found2).NotTo(BeNil())
+			Expect(found2.Labels).To(HaveLen(0))
+
+			// Cleanup: release explicit IPs.
+			_, _, exit = testutils.RunIPAMPlugin(netconf, "DEL", "IP=192.168.123.123", cid1, os.Getenv("CNI_SPEC_VERSION"))
+			Expect(exit).To(Equal(0))
+			_, _, exit2 = testutils.RunIPAMPlugin(netconf, "DEL", "IP=192.168.123.124", cid2, os.Getenv("CNI_SPEC_VERSION"))
+			Expect(exit2).To(Equal(0))
 		})
 	})
 })

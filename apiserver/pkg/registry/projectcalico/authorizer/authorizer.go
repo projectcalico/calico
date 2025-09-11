@@ -80,7 +80,7 @@ func (a *authorizer) AuthorizeTierOperation(
 
 		logrus.Trace("Checking authorization using tier resource type (user can get tier)")
 		logAuthorizerAttributes(attrs)
-		decisionGetTier, _, _ = a.Authorizer.Authorize(context.TODO(), attrs)
+		decisionGetTier, _, _ = a.Authorize(context.TODO(), attrs)
 	}()
 
 	// Query required access to the tiered policy resource or tier wildcard resource.
@@ -113,7 +113,7 @@ func (a *authorizer) AuthorizeTierOperation(
 
 		logrus.Trace("Checking authorization using tier scoped resource type (policy name match)")
 		logAuthorizerAttributes(attrs)
-		decisionPolicy, _, _ = a.Authorizer.Authorize(context.TODO(), attrs)
+		decisionPolicy, _, _ = a.Authorize(context.TODO(), attrs)
 	}()
 	go func() {
 		defer wg.Done()
@@ -134,7 +134,7 @@ func (a *authorizer) AuthorizeTierOperation(
 
 		logrus.Trace("Checking authorization using tier scoped resource type (tier name match)")
 		logAuthorizerAttributes(attrs)
-		decisionTierWildcard, _, _ = a.Authorizer.Authorize(context.TODO(), attrs)
+		decisionTierWildcard, _, _ = a.Authorize(context.TODO(), attrs)
 	}()
 
 	// Wait for the requests to complete.

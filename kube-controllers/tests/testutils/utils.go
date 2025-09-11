@@ -24,6 +24,7 @@ import (
 	"os"
 	"os/exec"
 
+	//nolint:staticcheck // Ignore ST1001: should not use dot imports
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
 	"k8s.io/client-go/kubernetes"

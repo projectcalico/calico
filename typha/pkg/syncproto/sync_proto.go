@@ -382,7 +382,7 @@ type SerializedUpdate struct {
 	UpdateType        api.UpdateType
 }
 
-var ErrBadKey = errors.New("Unable to parse key.")
+var ErrBadKey = errors.New("unable to parse key")
 
 var kvRLL = logutils.NewRateLimitedLogger()
 
