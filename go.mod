@@ -105,7 +105,7 @@ require (
 	gopkg.in/go-playground/validator.v9 v9.30.2
 	// Replaced with older version below until we can handle the updated permissions it now puts on log files.
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
-	helm.sh/helm/v3 v3.17.4
+	helm.sh/helm/v3 v3.18.5
 	k8s.io/api v0.33.3
 	k8s.io/apiextensions-apiserver v0.33.3
 	k8s.io/apimachinery v0.33.3
