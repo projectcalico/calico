@@ -39,7 +39,7 @@ enum cali_ct_type {
 #define CALI_CT_FLAG_NP_REMOTE	0x1000 /* marks connections from local host to remote backend of a nodeport */
 #define CALI_CT_FLAG_NP_NO_DSR	0x2000 /* marks connections from a client which is excluded from DSR */
 #define CALI_CT_FLAG_SKIP_REDIR_PEER	0x4000 /* marks connections from a client which is excluded from redir */
-#define CALI_CT_FLAG_MAGLEV	0X8000 /* marks connections from a maglev LB. On a backing node, allows packets of an existing to arrive via a different tunnel for failovers.
+#define CALI_CT_FLAG_MAGLEV	0X8000 /* marks connections from a maglev LB. On a backing node, allows packets of an existing to arrive via a different tunnel for failovers. */
 
 struct calico_ct_leg {
 	__u64 bytes;
