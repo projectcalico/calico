@@ -434,6 +434,13 @@ func (c *PendingUpdatesView[K, V]) Iter(f func(k K, v V) IterAction) {
 	}
 }
 
+// IterBatched is like Iter but calls applyFn with batches of KVs to apply to
+// the dataplane. Iteration continues after errors, skipping over the
+// failed items. The applyFn function should return the number of items
+// successfully applied and an error if there was a problem applying any.
+//
+// When IterBatched returns an error, it means that at least one item
+// failed to be applied, but it returns number of items successfully applied.
 func (c *PendingUpdatesView[K, V]) IterBatched(applyFn func(k []K, v []V) (int, error)) {
 	batchSize := 128
 
@@ -459,8 +466,13 @@ func (c *PendingUpdatesView[K, V]) IterBatched(applyFn func(k []K, v []V) (int, 
 
 			count = batchSize - applied
 			if count == 0 {
-				ks = make([]K, 0, batchSize)
-				vs = make([]V, 0, batchSize)
+				if applied == batchSize {
+					ks = ks[:0]
+					vs = vs[:0]
+				} else {
+					ks = make([]K, 0, batchSize)
+					vs = make([]V, 0, batchSize)
+				}
 			} else {
 				ks = ks[applied:]
 				vs = vs[applied:]
@@ -543,7 +555,11 @@ func (c *PendingDeletionsView[K, V]) IterBatched(applyFn func(k []K) (int, error
 
 			count -= applied
 			if count == 0 {
-				ks = make([]K, 0, batchSize)
+				if applied == batchSize {
+					ks = ks[:0]
+				} else {
+					ks = make([]K, 0, batchSize)
+				}
 			} else {
 				ks = ks[applied:]
 			}
