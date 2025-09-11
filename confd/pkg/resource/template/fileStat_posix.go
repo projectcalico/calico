@@ -39,5 +39,5 @@ func fileStat(name string) (fi fileInfo, err error) {
 		fi.Md5 = fmt.Sprintf("%x", h.Sum(nil))
 		return fi, nil
 	}
-	return fi, errors.New("File not found")
+	return fi, errors.New("file not found")
 }

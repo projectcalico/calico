@@ -233,7 +233,8 @@ var _ = Describe("RouteGenerator", func() {
 				err := rg.epIndexer.Add(ep)
 				Expect(err).NotTo(HaveOccurred())
 				rg.setRouteForSvc(svc, nil)
-				fmt.Fprintln(GinkgoWriter, rg.svcRouteMap)
+				_, err = fmt.Fprintln(GinkgoWriter, rg.svcRouteMap)
+				Expect(err).NotTo(HaveOccurred())
 				Expect(rg.svcRouteMap["foo/bar"]).To(Equal(expectedSvcRouteMap))
 				rg.unsetRouteForSvc(ep)
 				Expect(rg.svcRouteMap["foo/bar"]).To(BeEmpty())
@@ -555,7 +556,7 @@ var _ = Describe("RouteGenerator", func() {
 				Expect(rg.client.cache["/calico/staticroutes/"+externalIP2+"-32"]).To(BeEmpty())
 
 				// It should also reject the full range into the data plane.
-				Expect(rg.client.cache["/calico/rejectcidrs/"+strings.Replace(externalIPRange1, "/", "-", -1)]).To(Equal(externalIPRange1))
+				Expect(rg.client.cache["/calico/rejectcidrs/"+strings.ReplaceAll(externalIPRange1, "/", "-")]).To(Equal(externalIPRange1))
 
 				// Simulate an event from the syncer which updates to use the second range (removing the first)
 				rg.client.onExternalIPsUpdate([]string{externalIPRange2})
@@ -566,7 +567,7 @@ var _ = Describe("RouteGenerator", func() {
 				Expect(rg.client.cache["/calico/staticroutes/"+externalIP2+"-32"]).To(Equal(externalIP2 + "/32"))
 
 				// It should now allow the range in the data plane.
-				Expect(rg.client.cache["/calico/rejectcidrs/"+strings.Replace(externalIPRange1, "/", "-", -1)]).To(BeEmpty())
+				Expect(rg.client.cache["/calico/rejectcidrs/"+strings.ReplaceAll(externalIPRange1, "/", "-")]).To(BeEmpty())
 			})
 
 			It("should not advertise cluster IPs unless a range is specified", func() {
