@@ -358,10 +358,14 @@ static CALI_BPF_INLINE void calico_tc_process_ct_lookup(struct cali_tc_ctx *ctx)
 		goto deny;
 	}
 
-	/* Check if someone is trying to spoof a tunnel packet */
-	if (CALI_F_FROM_HEP && ct_result_tun_src_changed(ctx->state->ct_result.rc)) {
-		CALI_DEBUG("dropping tunnel pkt with changed source node");
-		goto deny;
+	if (!(ctx->state->ct_result.flags & CALI_CT_FLAG_MAGLEV)) {
+		/* Check if someone is trying to spoof a tunnel packet */
+		if (CALI_F_FROM_HEP && ct_result_tun_src_changed(ctx->state->ct_result.rc)) {
+			CALI_DEBUG("dropping tunnel pkt with changed source node");
+			goto deny;
+		}
+	} else {
+		CALI_DEBUG("Maglev: tunnel source node changed to " IP_FMT , ...);
 	}
 
 	if (ctx->state->ct_result.flags & CALI_CT_FLAG_NAT_OUT) {
@@ -398,6 +402,7 @@ static CALI_BPF_INLINE void calico_tc_process_ct_lookup(struct cali_tc_ctx *ctx)
 			ctx->fwd.mark = CALI_SKB_MARK_FALLTHROUGH;
 			fwd_fib_set(&ctx->fwd, false);
 			goto finalize;
+
 		} else {
 			if (CALI_F_HEP) {
 				// HEP egress for a mid-flow packet with no BPF or Linux CT state.
@@ -812,6 +817,7 @@ static CALI_BPF_INLINE enum do_nat_res do_nat(struct cali_tc_ctx *ctx,
 		/* fall through */
 
 	case CALI_CT_NEW:
+	case CALI_CT_MAGLEV_MID_FLOW_MISS:
 		/* We may not do a true DNAT here if we are resolving service source port
 		 * conflict with host->pod w/o service. See calico_tc_host_ct_conflict().
 		 */
@@ -826,7 +832,7 @@ static CALI_BPF_INLINE enum do_nat_res do_nat(struct cali_tc_ctx *ctx,
 		 * if we need encap or not. Must do before MTU check and before
 		 * we jump to do the encap.
 		 */
-		if (ct_ctx_nat /* iff CALI_CT_NEW */) {
+		if (ct_ctx_nat /* iff CALI_CT_NEW || CALI_CT_MAGLEV_MID_FLOW_MISS */) {
 			struct cali_rt * rt;
 
 			if (encap_needed) {
@@ -1418,6 +1424,9 @@ int calico_tc_skb_new_flow_entrypoint(struct __sk_buff *skb)
 	ct_ctx_nat->tun_ip = state->tun_ip;
 	ct_ctx_nat->type = CALI_CT_TYPE_NORMAL;
 	ct_ctx_nat->allow_return = false;
+	if (state->ct_result.flags & CALI_CT_FLAG_MAGLEV) {
+		ct_ctx_nat->flags |= CALI_CT_FLAG_MAGLEV;
+	}
 	if (state->flags & CALI_ST_NAT_OUTGOING) {
 		ct_ctx_nat->flags |= CALI_CT_FLAG_NAT_OUT;
 	}
@@ -2209,6 +2218,8 @@ int calico_tc_maglev(struct __sk_buff *skb)
 		goto deny;
 	}
 
+	// Ammend CT state now that we know it's Maglev.
+	ctx->state->ct_result.flags |= CALI_CT_FLAG_MAGLEV;
 	ctx->state->post_nat_ip_dst = ctx->nat_dest->addr;
 	ctx->state->post_nat_dport = ctx->nat_dest->port;
 	/* XXX why do we need both? */
