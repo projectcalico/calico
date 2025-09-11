@@ -79,7 +79,7 @@ func RemoveConnectTimeLoadBalancer(ipv4Enabled bool, cgroupv2 string) error {
 			log.Errorf("failed to delete the ctlb jump map entry: %s", err)
 		}
 	}
-	ctlbProgsMap.Close()
+	defer ctlbProgsMap.Close()
 	defer os.Remove(ctlbProgsMap.Path())
 
 	if err := detachCtlbPrograms(ipv4Enabled, pinDir, cgroupv2); err != nil {
