@@ -332,7 +332,6 @@ func TestMaglevNATServiceIPTCP(t *testing.T) {
 	dumpARPMap(arpMap)
 	arpNode2 = saveARPMap(arpMap)
 	ctNode2 = saveCTMap(ctMap)
-	rtNode2 = saveRTMap(rtMap)
 	Expect(arpNode2).To(HaveLen(1))
 
 	arpKey := arp.NewKey(node3ip, 1 /* ifindex is always 1 in UT */)
@@ -797,8 +796,6 @@ func TestMaglevNATServiceIPTCP(t *testing.T) {
 
 	dumpCTMap(ctMap)
 	ctNode2 = saveCTMap(ctMap)
-	rtNode2 = saveRTMap(rtMap)
-	arpNode2 = saveARPMap(arpMap)
 
 	// Back at node 1
 	newNode(node1ip)
