@@ -427,7 +427,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ dscp tests", []apiconfig.Da
 		}
 	})
 
-	It("pepper should keep DSCP value when NAT outgoing is enabled", func() {
+	It("should keep DSCP value when NAT outgoing is enabled", func() {
 		ctx := context.Background()
 		ippool, err := client.IPPools().Get(ctx, infrastructure.DefaultIPPoolName, options.GetOptions{})
 		Expect(err).NotTo(HaveOccurred())
