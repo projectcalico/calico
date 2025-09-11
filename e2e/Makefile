@@ -3,7 +3,7 @@ include ../metadata.mk
 PACKAGE_NAME=github.com/projectcalico/calico/e2e
 include ../lib.Makefile
 
-SRC_FILES=$(shell find pkg -name '*.go')
+SRC_FILES=$(shell find pkg cmd -name '*.go')
 build: bin/k8s/e2e.test bin/adminpolicy/e2e.test $(SRC_FILES)
 bin/k8s/e2e.test: $(SRC_FILES)
 	mkdir -p bin
