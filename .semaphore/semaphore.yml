@@ -50,15 +50,15 @@ promotions:
   - name: Push ALP images
     pipeline_file: push-images/alp.yml
     auto_promote:
-      when: "branch =~ 'master|release-'"
+      when: "branch =~ 'master|release-.*'"
   - name: Push calicoctl images
     pipeline_file: push-images/calicoctl.yml
     auto_promote:
-      when: "branch =~ 'master|release-'"
+      when: "branch =~ 'master|release-.*'"
   - name: Push calico-node images
     pipeline_file: push-images/node.yml
     auto_promote:
-      when: "branch =~ 'master|release-'"
+      when: "branch =~ 'master|release-.*'"
   - name: Push mock calico-node images
     pipeline_file: push-images/mock-node.yml
     auto_promote:
@@ -66,49 +66,53 @@ promotions:
   - name: Push cni-plugin images
     pipeline_file: push-images/cni-plugin.yml
     auto_promote:
-      when: "branch =~ 'master|release-'"
+      when: "branch =~ 'master|release-.*'"
   - name: Push key-cert-provisioner images
     pipeline_file: push-images/key-cert-provisioner.yml
     auto_promote:
-      when: "branch =~ 'master|release-'"
+      when: "branch =~ 'master|release-.*'"
   - name: Push kube-controllers images
     pipeline_file: push-images/kube-controllers.yml
     auto_promote:
-      when: "branch =~ 'master|release-'"
+      when: "branch =~ 'master|release-.*'"
   - name: Push pod2daemon images
     pipeline_file: push-images/pod2daemon.yml
     auto_promote:
-      when: "branch =~ 'master|release-'"
+      when: "branch =~ 'master|release-.*'"
   - name: Push typha images
     pipeline_file: push-images/typha.yml
     auto_promote:
-      when: "branch =~ 'master|release-'"
+      when: "branch =~ 'master|release-.*'"
   - name: Push Goldmane images
     pipeline_file: push-images/goldmane.yml
     auto_promote:
-      when: "branch =~ 'master|release-'"
+      when: "branch =~ 'master|release-.*'"
   - name: Push Whisker images
     pipeline_file: push-images/whisker.yml
     auto_promote:
-      when: "branch =~ 'master|release-'"
+      when: "branch =~ 'master|release-.*'"
   - name: Push Whisker Backend images
     pipeline_file: push-images/whisker-backend.yml
     auto_promote:
-      when: "branch =~ 'master|release-'"
+      when: "branch =~ 'master|release-.*'"
   - name: Push Guardian images
     pipeline_file: push-images/guardian.yml
     auto_promote:
-      when: "branch =~ 'master|release-'"
+      when: "branch =~ 'master|release-.*'"
   - name: Push Envoy images
     pipeline_file: push-images/envoy.yml
     auto_promote:
-      when: "branch =~ 'master|release-'"
+      when: "branch =~ 'master|release-.*'"
   - name: Publish openstack packages
     pipeline_file: push-images/packaging.yaml
     auto_promote:
       when: "branch =~ 'master'"
   - name: Run Fossa scans
     pipeline_file: license-scanning/fossa-scan.yml
+    auto_promote:
+      when: "branch =~ 'master|release-.*'"
+  - name: Push E2E images
+    pipeline_file: push-images/e2e-test.yml
     auto_promote:
       when: "branch =~ 'master|release-.*'"
 blocks:
