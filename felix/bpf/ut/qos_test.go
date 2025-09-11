@@ -191,8 +191,8 @@ func TestDSCPv4_HEP(t *testing.T) {
 		{"calico_to_host_ep", tcdefs.MarkSeen, externalAddr, srcIP, resTC_ACT_UNSPEC, 8, -1},
 		{"calico_from_host_ep", 0, externalAddr, dstIP, resTC_ACT_UNSPEC, 40, -1},
 
-		// Src and dest both inside cluster.
-		{"calico_to_host_ep", tcdefs.MarkSeen, srcIP, dstIP, resTC_ACT_UNSPEC, 8, -1},
+		// Src and dest are both hosts.
+		{"calico_to_host_ep", tcdefs.MarkSeen, srcIP, dstIP, resTC_ACT_UNSPEC, 8, 8},
 	} {
 		skbMark = tc.expectedSKBMark
 		runBpfTest(t, tc.progName, rulesAllowUDP, func(bpfrun bpfProgRunFn) {
@@ -272,7 +272,7 @@ func TestDSCPv6_HEP(t *testing.T) {
 	Expect(err).NotTo(HaveOccurred())
 
 	rtKey = routes.NewKeyV6(dstV6CIDR).AsBytes()
-	rtVal = routes.NewValueV6WithIfIndex(routes.FlagsRemoteWorkload|routes.FlagInIPAMPool, ifIndex).AsBytes()
+	rtVal = routes.NewValueV6WithIfIndex(routes.FlagsRemoteHost, ifIndex).AsBytes()
 	err = rtMapV6.Update(rtKey, rtVal)
 	Expect(err).NotTo(HaveOccurred())
 	defer resetRTMap(rtMapV6)
@@ -288,8 +288,8 @@ func TestDSCPv6_HEP(t *testing.T) {
 		{"calico_to_host_ep", tcdefs.MarkSeen, externalAddr, dstIPv6, resTC_ACT_UNSPEC, 8, -1},
 		{"calico_from_host_ep", 0, externalAddr, dstIPv6, resTC_ACT_UNSPEC, 40, -1},
 
-		// Src and dest both inside cluster.
-		{"calico_to_host_ep", tcdefs.MarkSeen, srcIPv6, dstIPv6, resTC_ACT_UNSPEC, 8, -1},
+		// Src and dest both hosts.
+		{"calico_to_host_ep", tcdefs.MarkSeen, srcIPv6, dstIPv6, resTC_ACT_UNSPEC, 8, 8},
 	} {
 		skbMark = tc.expectedSKBMark
 		runBpfTest(t, tc.progName, rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
