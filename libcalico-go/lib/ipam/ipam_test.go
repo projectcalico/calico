@@ -573,14 +573,15 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 
 		It("should release a multitude of IPs in different blocks", func() {
 			// Create an IP pool with a blocksize such that we'll get multiple blocks per-node.
-			applyPoolWithBlockSize("10.0.0.0/24", true, "all()", 30)
+			applyPoolWithBlockSize("10.0.0.0/24", true, "name in {'node1', 'node2'}", 30)
+			applyPoolWithBlockSize("11.0.0.0/24", true, "name in {'node3', 'node4'}", 30)
 			applyPool("fe80:ba:ad:beef::00/120", true, "all()")
 
 			// Assign a number of IPs in different blocks on different nodes.
 			ips := []cnet.IP{}
 			for _, node := range []string{"node1", "node2", "node3", "node4"} {
 				// 4 nodes
-				applyNode(bc, kc, node, map[string]string{"foo": "bar"})
+				applyNode(bc, kc, node, map[string]string{"foo": "bar", "name": node})
 				for i := 0; i < 6; i++ {
 					// 6 addresses of each family per-node.
 					v4ia, v6ia, err := ic.AutoAssign(context.Background(), AutoAssignArgs{Num4: 1, Num6: 1, Hostname: node, IntendedUse: v3.IPPoolAllowedUseWorkload})
@@ -617,6 +618,9 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			// - 13 IPv4 addresses with the same handle.
 			// for a total of 25 per-node, 100 in all.
 			Expect(len(ips)).To(Equal(100))
+
+			// Disable a pool to ensure we test releasing from a disabled pool.
+			applyPoolWithBlockSize("11.0.0.0/24", false, "name in {'node3', 'node4'}", 30)
 
 			// Release them all. This should complete within a minute easily.
 			ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
