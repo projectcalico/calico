@@ -1,3 +1,3 @@
 module github.com/projectcalico/calico/lib/std
 
-go 1.25.1
+go 1.25.2
