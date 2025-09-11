@@ -84,7 +84,7 @@
           - make bin/calico-felix.exe fv/win-fv.exe
 - name: "Felix: Windows FV capz"
   run:
-    when: "false or ${CHANGE_IN(felix)}"
+    when: "false or ${CHANGE_IN(felix,process)}"
   dependencies: ["Felix: Build Windows binaries"]
   task:
     secrets:
