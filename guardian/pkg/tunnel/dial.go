@@ -205,7 +205,7 @@ func tlsDialViaHTTPProxy(d *net.Dialer, destination string, proxyTargetURL *url.
 	// Negotiate mTLS on top of our passthrough connection.
 	mtlsC := tls.Client(c, tunnelTLS)
 	if err := mtlsC.HandshakeContext(context.Background()); err != nil {
-		mtlsC.Close()
+		_ = mtlsC.Close()
 		return nil, err
 	}
 	return mtlsC, nil
