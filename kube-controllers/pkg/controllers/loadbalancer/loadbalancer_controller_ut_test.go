@@ -68,6 +68,7 @@ var _ = Describe("LoadBalancer controller UTs", func() {
 		// Create a node indexer with the fake clientset
 		factory := informers.NewSharedInformerFactory(cs, 0)
 		serviceInformer := factory.Core().V1().Services().Informer()
+		namespaceInformer := factory.Core().V1().Namespaces().Informer()
 
 		// Config for the test.
 		cfg := config.LoadBalancerControllerConfig{AssignIPs: apiv3.AllServices}
@@ -76,12 +77,12 @@ var _ = Describe("LoadBalancer controller UTs", func() {
 		stopChan = make(chan struct{})
 
 		factory.Start(stopChan)
-		cache.WaitForCacheSync(stopChan, serviceInformer.HasSynced)
+		cache.WaitForCacheSync(stopChan, serviceInformer.HasSynced, namespaceInformer.HasSynced)
 		dataFeed := utils.NewDataFeed(cli, utils.Etcdv3)
 
 		// Create a new controller. We don't register with a data feed,
 		// as the tests themselves will drive the controller.
-		c = NewLoadBalancerController(cs, cli, cfg, serviceInformer, dataFeed)
+		c = NewLoadBalancerController(cs, cli, cfg, serviceInformer, namespaceInformer, dataFeed)
 	})
 
 	AfterEach(func() {

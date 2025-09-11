@@ -122,23 +122,27 @@ type loadBalancerController struct {
 	ipPools           map[string]api.IPPool
 	serviceInformer   cache.SharedIndexInformer
 	serviceLister     v1lister.ServiceLister
+	namespaceInformer cache.SharedIndexInformer
+	namespaceLister   v1lister.NamespaceLister
 	allocationTracker allocationTracker
 	datastoreUpgraded bool
 }
 
 // NewLoadBalancerController returns a controller which manages Service LoadBalancer objects.
-func NewLoadBalancerController(clientset kubernetes.Interface, calicoClient client.Interface, cfg config.LoadBalancerControllerConfig, serviceInformer cache.SharedIndexInformer, dataFeed *utils.DataFeed) *loadBalancerController {
+func NewLoadBalancerController(clientset kubernetes.Interface, calicoClient client.Interface, cfg config.LoadBalancerControllerConfig, serviceInformer cache.SharedIndexInformer, namespaceInformer cache.SharedIndexInformer, dataFeed *utils.DataFeed) *loadBalancerController {
 	c := &loadBalancerController{
-		calicoClient:    calicoClient,
-		cfg:             cfg,
-		clientSet:       clientset,
-		dataFeed:        dataFeed,
-		syncerUpdates:   make(chan interface{}, utils.BatchUpdateSize),
-		syncChan:        make(chan interface{}, 1),
-		serviceUpdates:  make(chan serviceKey, utils.BatchUpdateSize),
-		ipPools:         make(map[string]api.IPPool),
-		serviceInformer: serviceInformer,
-		serviceLister:   v1lister.NewServiceLister(serviceInformer.GetIndexer()),
+		calicoClient:      calicoClient,
+		cfg:               cfg,
+		clientSet:         clientset,
+		dataFeed:          dataFeed,
+		syncerUpdates:     make(chan interface{}, utils.BatchUpdateSize),
+		syncChan:          make(chan interface{}, 1),
+		serviceUpdates:    make(chan serviceKey, utils.BatchUpdateSize),
+		ipPools:           make(map[string]api.IPPool),
+		serviceInformer:   serviceInformer,
+		serviceLister:     v1lister.NewServiceLister(serviceInformer.GetIndexer()),
+		namespaceInformer: namespaceInformer,
+		namespaceLister:   v1lister.NewNamespaceLister(namespaceInformer.GetIndexer()),
 		allocationTracker: allocationTracker{
 			servicesByIP: make(map[string]serviceKey),
 			ipsByService: make(map[serviceKey]map[string]bool),
@@ -164,11 +168,12 @@ func NewLoadBalancerController(clientset kubernetes.Interface, calicoClient clie
 func (c *loadBalancerController) Run(stopCh chan struct{}) {
 	defer uruntime.HandleCrash()
 
-	log.Debug("Waiting to sync with Kubernetes API (Service)")
-	if !cache.WaitForNamedCacheSync("loadbalancer", stopCh, c.serviceInformer.HasSynced) {
+	log.Debug("Waiting to sync with Kubernetes API (Services and Namespaces)")
+	if !cache.WaitForCacheSync(stopCh, c.serviceInformer.HasSynced, c.namespaceInformer.HasSynced) {
 		log.Info("Failed to sync resources, received signal for controller to shut down.")
 		return
 	}
+	log.Debug("Finished syncing with Kubernetes API (Services and Namespaces)")
 
 	go c.acceptScheduledRequests(stopCh)
 
@@ -693,7 +698,7 @@ func (c *loadBalancerController) assignIP(svc *v1.Service) ([]string, error) {
 	}
 
 	// Get the namespace object for namespaceSelector support
-	namespaceObj, err := c.clientSet.CoreV1().Namespaces().Get(context.Background(), svc.Namespace, metav1.GetOptions{})
+	namespaceObj, err := c.namespaceLister.Get(svc.Namespace)
 	if err != nil {
 		log.WithError(err).WithField("namespace", svc.Namespace).Error("Failed to get namespace for LoadBalancer IP assignment")
 		return nil, fmt.Errorf("failed to get namespace %s: %w", svc.Namespace, err)
