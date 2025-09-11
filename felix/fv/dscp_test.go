@@ -17,6 +17,7 @@
 package fv_test
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
@@ -199,9 +200,10 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ dscp tests", []apiconfig.Da
 		By("configurging external client to only accept packets with specific DSCP value")
 		extClient.Exec("ip", "route", "add", ep1_1.IP, "via", tc.Felixes[0].IP)
 		extClient.Exec("ip", "route", "add", ep2_1.IP, "via", tc.Felixes[0].IP)
-		extClient.Exec("iptables", "-A", "INPUT", "-m", "dscp", "!", "--dscp", "0x14", "-j", "DROP")
 
 		// Configure external client to only accept ipv4 packets with 0x14 DSCP value.
+		extClient.Exec("iptables", "-A", "INPUT", "-m", "dscp", "!", "--dscp", "0x14", "-j", "DROP")
+
 		extClient.Exec("ip", "-6", "route", "add", ep1_2.IP6, "via", tc.Felixes[1].IPv6)
 		extClient.Exec("ip", "-6", "route", "add", ep2_2.IP6, "via", tc.Felixes[1].IPv6)
 
@@ -425,6 +427,68 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ dscp tests", []apiconfig.Da
 			hexStr := fmt.Sprintf("0x%02x", dscpVal)
 			verifyQoSPolicies(tc.Felixes[1], []string{hexStr}, []string{hexStr})
 		}
+	})
+
+	It("pepper should keep DSCP value when NAT outgoing is enabled", func() {
+		ctx := context.Background()
+		ippool, err := client.IPPools().Get(ctx, infrastructure.DefaultIPPoolName, options.GetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		ippool.Spec.NATOutgoing = true
+		_, err = client.IPPools().Update(ctx, ippool, options.SetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		ippoolv6, err := client.IPPools().Get(ctx, infrastructure.DefaultIPv6PoolName, options.GetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		ippoolv6.Spec.NATOutgoing = true
+		_, err = client.IPPools().Update(ctx, ippoolv6, options.SetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		dscpAF11 := numorstring.DSCPFromString("AF11") // 0A
+		dscpEF := numorstring.DSCPFromString("EF")     // 2E
+
+		extClient.Exec("ip", "route", "add", ep1_1.IP, "via", tc.Felixes[0].IP)
+		extClient.Exec("ip", "route", "add", ep2_1.IP, "via", tc.Felixes[0].IP)
+
+		// Configure external client to only accept ipv4 packets with AF11(0x0A) DSCP value.
+		extClient.Exec("iptables", "-A", "INPUT", "-m", "dscp", "!", "--dscp", "0x0a", "-j", "DROP")
+
+		extClient.Exec("ip", "-6", "route", "add", ep1_2.IP6, "via", tc.Felixes[1].IPv6)
+		extClient.Exec("ip", "-6", "route", "add", ep2_2.IP6, "via", tc.Felixes[1].IPv6)
+
+		// Configure external client to only accept ipv6 packets with EF(0x2E) DSCP value. ICMPv6 needs to be allowed
+		// regardless for neighbor discovery.
+		extClient.Exec("ip6tables", "-A", "INPUT", "-p", "ipv6-icmp", "-j", "ACCEPT")
+		extClient.Exec("ip6tables", "-A", "INPUT", "-m", "dscp", "!", "--dscp", "0x2e", "-j", "DROP")
+
+		if !BPFMode() {
+			verifyQoSPolicies(tc.Felixes[0], nil, nil)
+			verifyQoSPolicies(tc.Felixes[1], nil, nil)
+		}
+
+		ep1_1.WorkloadEndpoint.Spec.QoSControls = &api.QoSControls{
+			DSCP: &dscpAF11,
+		}
+		ep1_1.UpdateInInfra(infra)
+
+		ep2_2.WorkloadEndpoint.Spec.QoSControls = &api.QoSControls{
+			DSCP: &dscpEF,
+		}
+		ep2_2.UpdateInInfra(infra)
+
+		if !BPFMode() {
+			verifyQoSPolicies(tc.Felixes[0], []string{"0x0a"}, nil)
+			verifyQoSPolicies(tc.Felixes[1], []string{"0x2e"}, []string{"0x2e"})
+		}
+
+		cc.ResetExpectations()
+		cc.ExpectSNAT(ep1_1, tc.Felixes[0].IP, extWorkload)
+		cc.ExpectNone(ep2_1, extWorkload)
+
+		ccOptsIPv6 := connectivity.ExpectWithIPVersion(6)
+		ccOptsSrc := connectivity.ExpectWithSrcIPs(tc.Felixes[1].IPv6)
+		cc.Expect(connectivity.None, ep1_2, extWorkload, ccOptsIPv6, ccOptsSrc)
+		cc.Expect(connectivity.Some, ep2_2, extWorkload, ccOptsIPv6, ccOptsSrc)
+		cc.CheckConnectivity()
 	})
 })
 
