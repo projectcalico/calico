@@ -429,7 +429,7 @@ func DeleteContainerWithIdAndIfaceName(netconf, netnspath, podName, podNamespace
 }
 
 func Cmd(cmd string) string {
-	_, _ = ginkgo.GinkgoWriter.Write([]byte(fmt.Sprintf("Running command [%s]\n", cmd)))
+	_, _ = fmt.Fprintf(ginkgo.GinkgoWriter, "Running command [%s]\n", cmd)
 	out, err := exec.Command("bash", "-c", cmd).Output()
 	if err != nil {
 		_, writeErr := ginkgo.GinkgoWriter.Write(out)

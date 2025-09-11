@@ -294,7 +294,7 @@ func Install(version string) error {
 
 		<-done
 
-		watcher.Close()
+		_ = watcher.Close()
 	}
 	return nil
 }
@@ -340,47 +340,47 @@ func writeCNIConfig(c config) {
 	netconf = replacePlatformSpecificVars(c, netconf)
 
 	// Perform replacements of variables.
-	netconf = strings.Replace(netconf, "__LOG_LEVEL__", getEnv("LOG_LEVEL", "info"), -1)
-	netconf = strings.Replace(netconf, "__LOG_FILE_PATH__", getEnv("LOG_FILE_PATH", "/var/log/calico/cni/cni.log"), -1)
-	netconf = strings.Replace(netconf, "__LOG_FILE_MAX_SIZE__", getEnv("LOG_FILE_MAX_SIZE", "100"), -1)
-	netconf = strings.Replace(netconf, "__LOG_FILE_MAX_AGE__", getEnv("LOG_FILE_MAX_AGE", "30"), -1)
-	netconf = strings.Replace(netconf, "__LOG_FILE_MAX_COUNT__", getEnv("LOG_FILE_MAX_COUNT", "10"), -1)
-	netconf = strings.Replace(netconf, "__DATASTORE_TYPE__", getEnv("DATASTORE_TYPE", "kubernetes"), -1)
-	netconf = strings.Replace(netconf, "__KUBERNETES_NODE_NAME__", getEnv("KUBERNETES_NODE_NAME", nodename), -1)
-	netconf = strings.Replace(netconf, "__KUBECONFIG_FILEPATH__", kubeconfigPath, -1)
-	netconf = strings.Replace(netconf, "__CNI_MTU__", getEnv("CNI_MTU", "1500"), -1)
+	netconf = strings.ReplaceAll(netconf, "__LOG_LEVEL__", getEnv("LOG_LEVEL", "info"))
+	netconf = strings.ReplaceAll(netconf, "__LOG_FILE_PATH__", getEnv("LOG_FILE_PATH", "/var/log/calico/cni/cni.log"))
+	netconf = strings.ReplaceAll(netconf, "__LOG_FILE_MAX_SIZE__", getEnv("LOG_FILE_MAX_SIZE", "100"))
+	netconf = strings.ReplaceAll(netconf, "__LOG_FILE_MAX_AGE__", getEnv("LOG_FILE_MAX_AGE", "30"))
+	netconf = strings.ReplaceAll(netconf, "__LOG_FILE_MAX_COUNT__", getEnv("LOG_FILE_MAX_COUNT", "10"))
+	netconf = strings.ReplaceAll(netconf, "__DATASTORE_TYPE__", getEnv("DATASTORE_TYPE", "kubernetes"))
+	netconf = strings.ReplaceAll(netconf, "__KUBERNETES_NODE_NAME__", getEnv("KUBERNETES_NODE_NAME", nodename))
+	netconf = strings.ReplaceAll(netconf, "__KUBECONFIG_FILEPATH__", kubeconfigPath)
+	netconf = strings.ReplaceAll(netconf, "__CNI_MTU__", getEnv("CNI_MTU", "1500"))
 
-	netconf = strings.Replace(netconf, "__KUBERNETES_SERVICE_HOST__", getEnv("KUBERNETES_SERVICE_HOST", ""), -1)
-	netconf = strings.Replace(netconf, "__KUBERNETES_SERVICE_PORT__", getEnv("KUBERNETES_SERVICE_PORT", ""), -1)
+	netconf = strings.ReplaceAll(netconf, "__KUBERNETES_SERVICE_HOST__", getEnv("KUBERNETES_SERVICE_HOST", ""))
+	netconf = strings.ReplaceAll(netconf, "__KUBERNETES_SERVICE_PORT__", getEnv("KUBERNETES_SERVICE_PORT", ""))
 
-	netconf = strings.Replace(netconf, "__SERVICEACCOUNT_TOKEN__", string(c.ServiceAccountToken), -1)
+	netconf = strings.ReplaceAll(netconf, "__SERVICEACCOUNT_TOKEN__", string(c.ServiceAccountToken))
 
 	// Replace etcd datastore variables.
 	hostSecretsDir := c.CNINetDir + "/calico-tls"
 	if fileExists(winutils.GetHostPath("/host/etc/cni/net.d/calico-tls/etcd-cert")) {
 		etcdCertFile := fmt.Sprintf("%s/etcd-cert", hostSecretsDir)
-		netconf = strings.Replace(netconf, "__ETCD_CERT_FILE__", etcdCertFile, -1)
+		netconf = strings.ReplaceAll(netconf, "__ETCD_CERT_FILE__", etcdCertFile)
 	} else {
-		netconf = strings.Replace(netconf, "__ETCD_CERT_FILE__", "", -1)
+		netconf = strings.ReplaceAll(netconf, "__ETCD_CERT_FILE__", "")
 	}
 
 	if fileExists(winutils.GetHostPath("/host/etc/cni/net.d/calico-tls/etcd-ca")) {
 		etcdCACertFile := fmt.Sprintf("%s/etcd-ca", hostSecretsDir)
-		netconf = strings.Replace(netconf, "__ETCD_CA_CERT_FILE__", etcdCACertFile, -1)
+		netconf = strings.ReplaceAll(netconf, "__ETCD_CA_CERT_FILE__", etcdCACertFile)
 	} else {
-		netconf = strings.Replace(netconf, "__ETCD_CA_CERT_FILE__", "", -1)
+		netconf = strings.ReplaceAll(netconf, "__ETCD_CA_CERT_FILE__", "")
 	}
 
 	if fileExists(winutils.GetHostPath("/host/etc/cni/net.d/calico-tls/etcd-key")) {
 		etcdKeyFile := fmt.Sprintf("%s/etcd-key", hostSecretsDir)
-		netconf = strings.Replace(netconf, "__ETCD_KEY_FILE__", etcdKeyFile, -1)
+		netconf = strings.ReplaceAll(netconf, "__ETCD_KEY_FILE__", etcdKeyFile)
 	} else {
-		netconf = strings.Replace(netconf, "__ETCD_KEY_FILE__", "", -1)
+		netconf = strings.ReplaceAll(netconf, "__ETCD_KEY_FILE__", "")
 	}
-	netconf = strings.Replace(netconf, "__ETCD_ENDPOINTS__", getEnv("ETCD_ENDPOINTS", ""), -1)
-	netconf = strings.Replace(netconf, "__ETCD_DISCOVERY_SRV__", getEnv("ETCD_DISCOVERY_SRV", ""), -1)
+	netconf = strings.ReplaceAll(netconf, "__ETCD_ENDPOINTS__", getEnv("ETCD_ENDPOINTS", ""))
+	netconf = strings.ReplaceAll(netconf, "__ETCD_DISCOVERY_SRV__", getEnv("ETCD_DISCOVERY_SRV", ""))
 
-	netconf = strings.Replace(netconf, "__REQUIRE_MTU_FILE__", getEnv("REQUIRE_MTU_FILE", "false"), -1)
+	netconf = strings.ReplaceAll(netconf, "__REQUIRE_MTU_FILE__", getEnv("REQUIRE_MTU_FILE", "false"))
 
 	err = isValidJSON(netconf)
 	if err != nil {
@@ -501,16 +501,16 @@ current-context: calico-context`
 		logrus.WithError(err).Fatal("Unable to create token for CNI kubeconfig")
 	}
 	data = strings.Replace(data, "TOKEN", tu.Token, 1)
-	data = strings.Replace(data, "__KUBERNETES_SERVICE_PROTOCOL__", getEnv("KUBERNETES_SERVICE_PROTOCOL", "https"), -1)
-	data = strings.Replace(data, "__KUBERNETES_SERVICE_HOST__", getEnv("KUBERNETES_SERVICE_HOST", ""), -1)
-	data = strings.Replace(data, "__KUBERNETES_SERVICE_PORT__", getEnv("KUBERNETES_SERVICE_PORT", ""), -1)
+	data = strings.ReplaceAll(data, "__KUBERNETES_SERVICE_PROTOCOL__", getEnv("KUBERNETES_SERVICE_PROTOCOL", "https"))
+	data = strings.ReplaceAll(data, "__KUBERNETES_SERVICE_HOST__", getEnv("KUBERNETES_SERVICE_HOST", ""))
+	data = strings.ReplaceAll(data, "__KUBERNETES_SERVICE_PORT__", getEnv("KUBERNETES_SERVICE_PORT", ""))
 
 	skipTLSVerify := os.Getenv("SKIP_TLS_VERIFY")
 	if skipTLSVerify == "true" {
-		data = strings.Replace(data, "__TLS_CFG__", "insecure-skip-tls-verify: true", -1)
+		data = strings.ReplaceAll(data, "__TLS_CFG__", "insecure-skip-tls-verify: true")
 	} else {
 		ca := "certificate-authority-data: " + base64.StdEncoding.EncodeToString(kubecfg.CAData)
-		data = strings.Replace(data, "__TLS_CFG__", ca, -1)
+		data = strings.ReplaceAll(data, "__TLS_CFG__", ca)
 	}
 
 	if err := os.WriteFile(winutils.GetHostPath("/host/etc/cni/net.d/calico-kubeconfig"), []byte(data), 0o600); err != nil {
@@ -555,13 +555,13 @@ func destinationUptoDate(src, dst string) (bool, error) {
 	if err != nil {
 		logrus.Fatal(err)
 	}
-	defer f1.Close()
+	defer func() { _ = f1.Close() }()
 
 	f2, err := os.Open(dst)
 	if err != nil {
 		logrus.Fatal(err)
 	}
-	defer f2.Close()
+	defer func() { _ = f2.Close() }()
 
 	// Create a buffer, which we'll use to read both files.
 	buf := make([]byte, 64000)

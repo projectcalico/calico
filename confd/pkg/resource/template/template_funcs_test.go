@@ -54,7 +54,7 @@ func Test_bgpFilterFunctionName(t *testing.T) {
 
 func Test_BGPFilterBIRDFuncs(t *testing.T) {
 	testFilter := v3.BGPFilter{}
-	testFilter.ObjectMeta.Name = "test-bgpfilter"
+	testFilter.Name = "test-bgpfilter"
 	testFilter.Spec = v3.BGPFilterSpec{
 		ImportV4: []v3.BGPFilterRuleV4{
 			{Action: "Accept", Source: "RemotePeers", Interface: "vxlan.calico", MatchOperator: "NotIn", CIDR: "55.4.0.0/16"},
