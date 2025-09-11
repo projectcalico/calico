@@ -152,7 +152,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ dscp tests", []apiconfig.Da
 			}
 			allPoolsIPSet := fmt.Sprintf("cali%v0all-ipam-pools", ipVersion)
 			dscpIPSet := fmt.Sprintf("cali%v0dscp-src-net", ipVersion)
-			tmpl := "-m set --match-set %v src -m set ! --match-set %v dst -m set -j cali-egress-dscp"
+			tmpl := "-m set --match-set %v src -m set ! --match-set %v dst -j cali-egress-dscp"
 			expectedRule := fmt.Sprintf(tmpl, dscpIPSet, allPoolsIPSet)
 			getRules := func() string {
 				output, _ := felix.ExecOutput(binary, "-t", "mangle")
