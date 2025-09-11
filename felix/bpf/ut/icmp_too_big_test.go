@@ -269,7 +269,7 @@ func TestICMPTooBigNATNodePort(t *testing.T) {
 	v, ok := ct[conntrack.NewKey(uint8(ipv4.Protocol), ipv4.SrcIP, uint16(udp.SrcPort), natIP.To4(), natPort)]
 	Expect(ok).To(BeTrue())
 	Expect(v.Type()).To(Equal(conntrack.TypeNATReverse))
-	Expect(v.Flags()).To(Equal(conntrack3.FlagNATNPFwd))
+	Expect(v.Flags()).To(Equal(conntrack3.FlagNATNPFwd | conntrack3.FlagClusterExternal))
 
 	_, _, _, _, pkt2Bytes, err := testPacket(4, nil, &origIPHeader, udpDefault, make([]byte, 1600))
 	Expect(err).NotTo(HaveOccurred())
