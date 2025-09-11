@@ -1,8 +1,8 @@
 package consistenthash
 
 import (
+	"fmt"
 	"hash/fnv"
-	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -60,7 +60,6 @@ var _ = Describe("BPF ConsistentHash UTs", func() {
 				addBackend(mag, b, uint16(8080))
 			}
 
-			time.Sleep(4 * time.Second)
 			lut := mag.Generate()
 			Expect(lut).NotTo(ContainElement(""))
 			Expect(lut).To(HaveLen(testM))
@@ -73,6 +72,49 @@ var _ = Describe("BPF ConsistentHash UTs", func() {
 				e1 := addBackend(otherMag, b, uint16(8080))
 				Expect(mag.backendsByName[e0.String()]).To(Equal(otherMag.backendsByName[e1.String()]))
 			}
+		})
+
+		It("evenly distribute LUT spaces for every backend", func() {
+			backends := []string{"backend0", "backend1", "backend2", "backend3", "backend4", "backend5", "backend6", "backend7", "backend8", "backend9"}
+			for _, b := range backends {
+				addBackend(mag, b, uint16(8080))
+			}
+
+			lut := mag.Generate()
+			Expect(lut).NotTo(ContainElement(""))
+			Expect(lut).To(HaveLen(testM))
+
+			By("gathering all IPs in the LUT, validating each one, and counting occurrences")
+			foundBackends := make(map[string]int)
+			for _, ep := range lut {
+				be := ep.IP()
+				foundBackends[be] = foundBackends[be] + 1
+
+				Expect(backends).To(ContainElement(be))
+			}
+
+			By("Checking every backend is present")
+			for _, b := range backends {
+				Expect(foundBackends).To(HaveKey(b))
+			}
+
+			By("confirming the number of occurrences of each key does not differ by more than 1")
+			lowest := -1
+			highest := -1
+			for _, v := range foundBackends {
+				if lowest == -1 {
+					lowest = v
+				}
+				if v > highest {
+					highest = v
+				}
+				if v < lowest {
+					lowest = v
+				}
+			}
+
+			greaterThanOne := (highest - lowest) > 1
+			Expect(greaterThanOne).To(BeFalse(), fmt.Sprintf("Highest backends occurrences: %d, lowest: %d", highest, lowest))
 		})
 	})
 })
