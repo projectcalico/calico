@@ -109,7 +109,7 @@ func GetAttrs(obj runtime.Object) (labels.Set, fields.Set, error) {
 	if !ok {
 		return nil, nil, fmt.Errorf("given object (type %v) is not a Kube Controllers Configuration", reflect.TypeOf(obj))
 	}
-	return labels.Set(apiserver.ObjectMeta.Labels), ToSelectableFields(apiserver), nil
+	return labels.Set(apiserver.Labels), ToSelectableFields(apiserver), nil
 }
 
 // Match is the filter used by the generic etcd backend to watch events

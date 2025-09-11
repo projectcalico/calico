@@ -20,17 +20,17 @@ func handleConnection(t *testing.T, listener net.Listener) {
 	conn, err := listener.Accept()
 	Expect(err).NotTo(HaveOccurred())
 	Expect(conn).NotTo(BeNil())
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 	t.Log("Accepted connection from client")
 
 	// Create a yamux server session
 	session, err := yamux.Server(conn, nil)
 	Expect(err).NotTo(HaveOccurred())
-	defer session.Close()
+	defer func() { _ = session.Close() }()
 
 	stream, err := session.Accept()
 	Expect(err).NotTo(HaveOccurred())
-	defer stream.Close()
+	defer func() { _ = stream.Close() }()
 
 	buf := make([]byte, 1024)
 	n, err := stream.Read(buf)
@@ -50,7 +50,7 @@ func TestDial(t *testing.T) {
 	t.Run("Dial Plain TCP", func(t *testing.T) {
 		listener, err := net.Listen("tcp", address)
 		Expect(err).NotTo(HaveOccurred())
-		defer listener.Close()
+		defer func() { _ = listener.Close() }()
 
 		go func() {
 			handleConnection(t, listener)
@@ -66,8 +66,8 @@ func TestDial(t *testing.T) {
 		tmpDir := os.TempDir()
 
 		serverCrt, serverKey := utils.CreateKeyCertPair(tmpDir)
-		defer serverCrt.Close()
-		defer serverKey.Close()
+		defer func() { _ = serverCrt.Close() }()
+		defer func() { _ = serverKey.Close() }()
 
 		cert, err := tls.LoadX509KeyPair(serverCrt.Name(), serverKey.Name())
 		if err != nil {
@@ -76,7 +76,7 @@ func TestDial(t *testing.T) {
 
 		listener, err := tls.Listen("tcp", address, &tls.Config{Certificates: []tls.Certificate{cert}})
 		Expect(err).NotTo(HaveOccurred())
-		defer listener.Close()
+		defer func() { _ = listener.Close() }()
 
 		go func() {
 			handleConnection(t, listener)

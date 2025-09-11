@@ -502,7 +502,6 @@ func createClientPod(f *framework.Framework, namespace *v1.Namespace, baseName s
 	var args []string
 	var command []string
 	nodeselector := map[string]string{}
-	pullPolicy := v1.PullAlways
 
 	// Randomize pod names to avoid clashes with previous tests.
 	podName := GenerateRandomName(baseName)
@@ -512,7 +511,6 @@ func createClientPod(f *framework.Framework, namespace *v1.Namespace, baseName s
 		command = []string{"powershell.exe"}
 		args = []string{"Start-Sleep", "600"}
 		nodeselector["kubernetes.io/os"] = "windows"
-		pullPolicy = v1.PullIfNotPresent
 	} else {
 		image = images.Alpine
 		command = []string{"/bin/sleep"}
@@ -542,7 +540,7 @@ func createClientPod(f *framework.Framework, namespace *v1.Namespace, baseName s
 					Image:           image,
 					Command:         command,
 					Args:            args,
-					ImagePullPolicy: pullPolicy,
+					ImagePullPolicy: v1.PullIfNotPresent,
 				},
 			},
 			Tolerations: []v1.Toleration{

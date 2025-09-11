@@ -6,7 +6,7 @@ import (
 	"context"
 	"reflect"
 
-	aapi "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apiserver/pkg/registry/generic/registry"
 	"k8s.io/apiserver/pkg/storage"
@@ -23,12 +23,12 @@ func NewIPAMConfigurationStorage(opts Options) (registry.DryRunnableStorage, fac
 	c := CreateClientFromConfig()
 	createFn := func(ctx context.Context, c clientv3.Interface, obj resourceObject, opts clientOpts) (resourceObject, error) {
 		oso := opts.(options.SetOptions)
-		res := obj.(*aapi.IPAMConfiguration)
+		res := obj.(*api.IPAMConfiguration)
 		return c.IPAMConfiguration().Create(ctx, res, oso)
 	}
 	updateFn := func(ctx context.Context, c clientv3.Interface, obj resourceObject, opts clientOpts) (resourceObject, error) {
 		oso := opts.(options.SetOptions)
-		res := obj.(*aapi.IPAMConfiguration)
+		res := obj.(*api.IPAMConfiguration)
 		return c.IPAMConfiguration().Update(ctx, res, oso)
 	}
 	getFn := func(ctx context.Context, c clientv3.Interface, ns string, name string, opts clientOpts) (resourceObject, error) {
@@ -51,10 +51,10 @@ func NewIPAMConfigurationStorage(opts Options) (registry.DryRunnableStorage, fac
 		client:            c,
 		codec:             opts.RESTOptions.StorageConfig.Codec,
 		versioner:         APIObjectVersioner{},
-		aapiType:          reflect.TypeOf(aapi.IPAMConfiguration{}),
-		aapiListType:      reflect.TypeOf(aapi.IPAMConfigurationList{}),
-		libCalicoType:     reflect.TypeOf(aapi.IPAMConfiguration{}),
-		libCalicoListType: reflect.TypeOf(aapi.IPAMConfigurationList{}),
+		aapiType:          reflect.TypeOf(api.IPAMConfiguration{}),
+		aapiListType:      reflect.TypeOf(api.IPAMConfigurationList{}),
+		libCalicoType:     reflect.TypeOf(api.IPAMConfiguration{}),
+		libCalicoListType: reflect.TypeOf(api.IPAMConfigurationList{}),
 		isNamespaced:      false,
 		create:            createFn,
 		update:            updateFn,
@@ -72,13 +72,13 @@ type IPAMConfigConverter struct{}
 
 func (gc IPAMConfigConverter) convertToLibcalico(aapiObj runtime.Object) resourceObject {
 	// The AAPI and the libcalico-go clientv3 both use the same struct for IPAMConfiguration.
-	aapiIPAMConfig := aapiObj.(*aapi.IPAMConfiguration)
+	aapiIPAMConfig := aapiObj.(*api.IPAMConfiguration)
 
-	lcgIPAMConfig := &aapi.IPAMConfiguration{}
+	lcgIPAMConfig := &api.IPAMConfiguration{}
 	lcgIPAMConfig.TypeMeta = aapiIPAMConfig.TypeMeta
 	lcgIPAMConfig.ObjectMeta = aapiIPAMConfig.ObjectMeta
 	lcgIPAMConfig.Kind = libapi.KindIPAMConfig
-	lcgIPAMConfig.APIVersion = aapi.GroupVersionCurrent
+	lcgIPAMConfig.APIVersion = api.GroupVersionCurrent
 	lcgIPAMConfig.Spec = aapiIPAMConfig.Spec
 
 	// AutoAllocateBlocks is an internal field and should be set to true.
@@ -89,8 +89,8 @@ func (gc IPAMConfigConverter) convertToLibcalico(aapiObj runtime.Object) resourc
 
 func (gc IPAMConfigConverter) convertToAAPI(libcalicoObject resourceObject, aapiObj runtime.Object) {
 	// The AAPI and the libcalico-go clientv3 both use the same struct for IPAMConfiguration.
-	lcgIPAMConfig := libcalicoObject.(*aapi.IPAMConfiguration)
-	aapiIPAMConfig := aapiObj.(*aapi.IPAMConfiguration)
+	lcgIPAMConfig := libcalicoObject.(*api.IPAMConfiguration)
+	aapiIPAMConfig := aapiObj.(*api.IPAMConfiguration)
 
 	// Copy spec but ignore internal field AutoAllocateBlocks.
 	aapiIPAMConfig.Spec = lcgIPAMConfig.Spec
@@ -99,17 +99,17 @@ func (gc IPAMConfigConverter) convertToAAPI(libcalicoObject resourceObject, aapi
 }
 
 func (gc IPAMConfigConverter) convertToAAPIList(libcalicoListObject resourceListObject, aapiListObj runtime.Object, pred storage.SelectionPredicate) {
-	lcgIPAMConfigList := libcalicoListObject.(*aapi.IPAMConfigurationList)
-	aapiIPAMConfigList := aapiListObj.(*aapi.IPAMConfigurationList)
+	lcgIPAMConfigList := libcalicoListObject.(*api.IPAMConfigurationList)
+	aapiIPAMConfigList := aapiListObj.(*api.IPAMConfigurationList)
 	if libcalicoListObject == nil {
-		aapiIPAMConfigList.Items = []aapi.IPAMConfiguration{}
+		aapiIPAMConfigList.Items = []api.IPAMConfiguration{}
 		return
 	}
 	aapiIPAMConfigList.TypeMeta = lcgIPAMConfigList.TypeMeta
-	aapiIPAMConfigList.TypeMeta.Kind = aapi.KindIPAMConfigurationList
+	aapiIPAMConfigList.Kind = api.KindIPAMConfigurationList
 	aapiIPAMConfigList.ListMeta = lcgIPAMConfigList.ListMeta
 	for _, item := range lcgIPAMConfigList.Items {
-		aapiIPAMConfig := aapi.IPAMConfiguration{}
+		aapiIPAMConfig := api.IPAMConfiguration{}
 		gc.convertToAAPI(&item, &aapiIPAMConfig)
 		if matched, err := pred.Matches(&aapiIPAMConfig); err == nil && matched {
 			aapiIPAMConfigList.Items = append(aapiIPAMConfigList.Items, aapiIPAMConfig)

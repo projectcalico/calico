@@ -33,14 +33,13 @@ import (
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/node"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/utils"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
-	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 
 var _ = Describe("LoadBalancer controller UTs", func() {
 	var c *loadBalancerController
-	var cli client.Interface
+	var cli *node.FakeCalicoClient
 	var cs kubernetes.Interface
 	var stopChan chan struct{}
 
@@ -69,6 +68,7 @@ var _ = Describe("LoadBalancer controller UTs", func() {
 		// Create a node indexer with the fake clientset
 		factory := informers.NewSharedInformerFactory(cs, 0)
 		serviceInformer := factory.Core().V1().Services().Informer()
+		namespaceInformer := factory.Core().V1().Namespaces().Informer()
 
 		// Config for the test.
 		cfg := config.LoadBalancerControllerConfig{AssignIPs: apiv3.AllServices}
@@ -77,12 +77,12 @@ var _ = Describe("LoadBalancer controller UTs", func() {
 		stopChan = make(chan struct{})
 
 		factory.Start(stopChan)
-		cache.WaitForCacheSync(stopChan, serviceInformer.HasSynced)
+		cache.WaitForCacheSync(stopChan, serviceInformer.HasSynced, namespaceInformer.HasSynced)
 		dataFeed := utils.NewDataFeed(cli, utils.Etcdv3)
 
 		// Create a new controller. We don't register with a data feed,
 		// as the tests themselves will drive the controller.
-		c = NewLoadBalancerController(cs, cli, cfg, serviceInformer, dataFeed)
+		c = NewLoadBalancerController(cs, cli, cfg, serviceInformer, namespaceInformer, dataFeed)
 	})
 
 	AfterEach(func() {
@@ -475,5 +475,46 @@ var _ = Describe("LoadBalancer controller UTs", func() {
 		err = c.updateServiceStatus(svc, *svcKey)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(svc.Status.LoadBalancer.Ingress).To(HaveLen(0))
+	})
+
+	It("should call IPAM.UpgradeHost() once with the virtual hostname and not again after success", func() {
+		// First call should call through and succeed.
+		err := c.ensureDatastoreUpgraded()
+		Expect(err).NotTo(HaveOccurred())
+		Expect(cli.IPAMUpgradeCallCount()).To(Equal(1))
+		nodes := cli.IPAMUpgradeNodeNames()
+		Expect(nodes).To(HaveLen(1))
+		Expect(nodes[0]).To(Equal(apiv3.VirtualLoadBalancer))
+
+		// Second call should be a no-op (datastoreUpgraded=true) and not increment count.
+		err = c.ensureDatastoreUpgraded()
+		Expect(err).NotTo(HaveOccurred())
+		Expect(cli.IPAMUpgradeCallCount()).To(Equal(1))
+	})
+
+	It("should retry IPAM.UpgradeHost() on error and eventually succeed", func() {
+		// Inject one error then success.
+		cli.SetIPAMUpgradeErrors(fmt.Errorf("boom"))
+
+		// First attempt should surface the error and record one call.
+		err := c.ensureDatastoreUpgraded()
+		Expect(err).To(HaveOccurred())
+		Expect(cli.IPAMUpgradeCallCount()).To(Equal(1))
+		nodes := cli.IPAMUpgradeNodeNames()
+		Expect(nodes).To(HaveLen(1))
+		Expect(nodes[0]).To(Equal(apiv3.VirtualLoadBalancer))
+
+		// Second attempt should succeed and increment call count to 2.
+		err = c.ensureDatastoreUpgraded()
+		Expect(err).NotTo(HaveOccurred())
+		Expect(cli.IPAMUpgradeCallCount()).To(Equal(2))
+		nodes = cli.IPAMUpgradeNodeNames()
+		Expect(nodes).To(HaveLen(2))
+		Expect(nodes[1]).To(Equal(apiv3.VirtualLoadBalancer))
+
+		// Further calls should be no-ops, not incrementing beyond 2.
+		err = c.ensureDatastoreUpgraded()
+		Expect(err).NotTo(HaveOccurred())
+		Expect(cli.IPAMUpgradeCallCount()).To(Equal(2))
 	})
 })

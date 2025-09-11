@@ -43,12 +43,15 @@ from keystoneclient.v3.client import Client as KeystoneClient
 import neutron.plugins.ml2.rpc as rpc
 from neutron.agent import rpc as agent_rpc
 from neutron.conf.agent import common as config
+from neutron.objects import ports as ports_object
+from neutron.objects.qos import policy as policy_object
 from neutron.plugins.ml2.drivers import mech_agent
 
 from neutron_lib import constants
 from neutron_lib import context as ctx
 from neutron_lib import exceptions as n_exc
 from neutron_lib.agent import topics
+from neutron_lib.db import api as db_api
 from neutron_lib.plugins import directory as plugin_dir
 from neutron_lib.plugins.ml2 import api
 
@@ -70,15 +73,13 @@ from networking_calico.common import config as calico_config
 from networking_calico.common import intern_string
 from networking_calico.logutils import logging_exceptions
 from networking_calico.monotonic import monotonic_time
+from networking_calico.plugins.ml2.drivers.calico import qos_driver
 from networking_calico.plugins.ml2.drivers.calico.election import Elector
 from networking_calico.plugins.ml2.drivers.calico.endpoints import (
     WorkloadEndpointSyncer,
     _port_is_endpoint_port,
 )
 from networking_calico.plugins.ml2.drivers.calico.policy import PolicySyncer
-from networking_calico.plugins.ml2.drivers.calico.qos_driver import (
-    register as register_qos_driver,
-)
 from networking_calico.plugins.ml2.drivers.calico.status import StatusWatcher
 from networking_calico.plugins.ml2.drivers.calico.subnets import SubnetSyncer
 
@@ -217,7 +218,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             "tap",
             {"port_filter": True, "mac_address": "00:61:fe:ed:ca:fe"},
         )
-        register_qos_driver()
+        qos_driver.register(self)
         # Lock to prevent concurrent initialisation.
         self._init_lock = Semaphore()
         # Generally initialize attributes to nil values.  They get initialized
@@ -697,16 +698,91 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         # check_segment_for_agent.
         assert False
 
-    # For network and subnet actions we have nothing to do, so we provide these
-    # no-op methods.
     def create_network_postcommit(self, context):
         LOG.info("CREATE_NETWORK_POSTCOMMIT: %s" % context)
+        # Nothing else needed here.  There cannot yet be any ports on a network that has
+        # only just been created.
 
+    @requires_state
     def update_network_postcommit(self, context):
         LOG.info("UPDATE_NETWORK_POSTCOMMIT: %s" % context)
 
+        # Determine if qos_policy_id is changing.  If not, no-op.
+        old_qos_policy_id = context.original.get("qos_policy_id", None)
+        new_qos_policy_id = context.current.get("qos_policy_id", None)
+        if old_qos_policy_id == new_qos_policy_id:
+            return
+
+        network_id = context.current["id"]
+        LOG.info(
+            "qos_policy_id for network %r changing from %r to %r",
+            network_id,
+            old_qos_policy_id,
+            new_qos_policy_id,
+        )
+
+        # Update the existing ports for this network and which don't have their own
+        # qos_policy_id.
+        plugin_context = context._plugin_context
+        with self._txn_from_context(plugin_context, tag="update-network"):
+            ports = self.db.get_ports(
+                plugin_context,
+                filters={
+                    "network_id": [network_id],
+                },
+            )
+            self.update_existing_ports(
+                [p for p in ports if not p["qos_policy_id"]],
+                plugin_context,
+                "network changing qos_policy_id",
+            )
+
+    def update_existing_ports(self, ports, plugin_context, reason):
+        # For each port, recompute and emit the WorkloadEndpoint for that port.
+        LOG.info("Update %d port(s) for %s", len(ports), reason)
+        for p in ports:
+            if _port_is_endpoint_port(p):
+                self.endpoint_syncer.write_endpoint(p, plugin_context, must_update=True)
+
+    @requires_state
+    def handle_qos_policy_update(self, context, policy_id):
+        LOG.info("HANDLE_QOS_POLICY_UPDATE: %s %s", context, policy_id)
+
+        with db_api.CONTEXT_READER.using(context):
+            policy = policy_object.QosPolicy.get_policy_obj(context, policy_id)
+
+            # Find ports whose network use this QoS policy and that don't have a
+            # port-specific QoS policy.
+            networks_ids = policy.get_bound_networks()
+            ports_with_net_policy = (
+                ports_object.Port.get_objects(context, network_id=networks_ids)
+                if networks_ids
+                else []
+            )
+            ports = [
+                port.to_dict()
+                for port in ports_with_net_policy
+                if port.qos_policy_id is None
+            ]
+
+            # Add the ports that directly use this QoS policy.
+            port_ids = policy.get_bound_ports()
+            if port_ids:
+                ports.extend(
+                    [
+                        p.to_dict()
+                        for p in ports_object.Port.get_objects(context, id=port_ids)
+                    ]
+                )
+
+            self.update_existing_ports(
+                ports, context, "network QoS policy rules changing"
+            )
+
     def delete_network_postcommit(self, context):
         LOG.info("DELETE_NETWORK_POSTCOMMIT: %s" % context)
+        # Nothing else needed here.  If there were ports on this network, we would have
+        # got separate callbacks for those ports being deleted.
 
     @requires_state
     def create_subnet_postcommit(self, context):

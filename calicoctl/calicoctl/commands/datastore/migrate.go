@@ -55,7 +55,7 @@ Description:
 	}
 	arguments, err := parser.ParseArgs(doc, args, "")
 	if err != nil {
-		return fmt.Errorf("Invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand.", strings.Join(args, " "))
+		return fmt.Errorf("invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand", strings.Join(args, " "))
 	}
 	if arguments["<command>"] == nil {
 		return nil

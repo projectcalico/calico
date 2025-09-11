@@ -472,6 +472,7 @@ func (cc *controllerControl) InitControllers(
 	podInformer := factory.Core().V1().Pods().Informer()
 	nodeInformer := factory.Core().V1().Nodes().Informer()
 	serviceInformer := factory.Core().V1().Services().Informer()
+	namespaceInformer := factory.Core().V1().Namespaces().Informer()
 
 	if v3c != nil {
 		// TODO: KubeControllersConfiguration should expose this controller.
@@ -511,9 +512,9 @@ func (cc *controllerControl) InitControllers(
 	}
 
 	if cfg.Controllers.LoadBalancer != nil {
-		loadBalancerController := loadbalancer.NewLoadBalancerController(k8sClientset, calicoClient, *cfg.Controllers.LoadBalancer, serviceInformer, dataFeed)
+		loadBalancerController := loadbalancer.NewLoadBalancerController(k8sClientset, calicoClient, *cfg.Controllers.LoadBalancer, serviceInformer, namespaceInformer, dataFeed)
 		cc.controllers["LoadBalancer"] = loadBalancerController
-		cc.registerInformers(serviceInformer)
+		cc.registerInformers(serviceInformer, namespaceInformer)
 	}
 
 	// We don't need the full Pod object. In order to reduce memory usage, add a transform that only

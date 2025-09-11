@@ -494,7 +494,7 @@ func newCRDClient(config *rest.Config) (cli ctrlclient.Client, err error) {
 	if v3CRD {
 		apiv3.AddToScheme(scheme)
 	} else {
-		v1scheme.AddCalicoResourcesToScheme()
+		v1scheme.AddCalicoResourcesToScheme(scheme)
 	}
 	return ctrlclient.New(config, ctrlclient.Options{Scheme: scheme})
 }

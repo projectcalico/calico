@@ -665,7 +665,7 @@ func restClient(cfg rest.Config, v3 bool) (*rest.RESTClient, error) {
 	if v3 {
 		apiv3.AddToScheme(scheme.Scheme)
 	} else {
-		v1scheme.AddCalicoResourcesToScheme()
+		v1scheme.AddCalicoResourcesToGlobalScheme()
 	}
 
 	return cli, nil
