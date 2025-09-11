@@ -26,7 +26,7 @@ from neutron.agent.dhcp_agent import register_options
 from neutron.agent.linux import dhcp
 from neutron.tests import base
 
-from neutron_lib.constants import DHCPV6_STATEFUL
+from neutron_lib.constants import DHCPV6_STATEFUL, IPV6_SLAAC
 
 from oslo_config import cfg
 
@@ -482,6 +482,87 @@ class TestDnsmasqRouted(base.BaseTestCase):
                 "--interface=ns-dhcp",
                 "--dhcp-range=set:subnet-v4subnet-1,10.28.0.0"
                 + ",static,255.255.255.0,86400s",
+                "--dhcp-range=set:subnet-v6subnet-1,2001:db8:1::"
+                + ",static,off-link,80,86400s",
+                "--enable-ra",
+                "--interface=tap1",
+                "--interface=tap2",
+                "--interface=tap3",
+                "--bridge-interface=ns-dhcp,tap1,tap2,tap3",
+            ],
+            filtered_args,
+        )
+
+    @mock.patch("neutron.agent.linux.dhcp.DeviceManager")
+    @mock.patch("neutron.agent.linux.dhcp.common_utils")
+    def test_build_cmdline_slaac(self, commonutils, device_mgr_cls):
+        v4subnet = mock.Mock()
+        v4subnet.id = "v4subnet-1"
+        v4subnet.enable_dhcp = True
+        v4subnet.ip_version = 4
+        v4subnet.cidr = "10.28.0.0/24"
+        v6subnet = mock.Mock()
+        v6subnet.id = "v6subnet-1"
+        v6subnet.enable_dhcp = True
+        v6subnet.ip_version = 6
+        v6subnet.cidr = "2001:db8:1::/80"
+        v6subnet.ipv6_ra_mode = DHCPV6_STATEFUL
+        v6subnet.ipv6_address_mode = DHCPV6_STATEFUL
+        v6subnet_slaac = mock.Mock()
+        v6subnet_slaac.id = "v6subnet-2"
+        v6subnet_slaac.enable_dhcp = True
+        v6subnet_slaac.ip_version = 6
+        v6subnet_slaac.cidr = "2001:e000:1::/64"
+        v6subnet_slaac.ipv6_ra_mode = IPV6_SLAAC
+        v6subnet_slaac.ipv6_address_mode = IPV6_SLAAC
+        network = mock.Mock()
+        network.id = "calico"
+        network.subnets = [v4subnet, v6subnet, v6subnet_slaac]
+        network.mtu = 0
+        network.ports = [
+            dhcp.DictModel({"device_id": "tap1"}),
+            dhcp.DictModel({"device_id": "tap2"}),
+            dhcp.DictModel({"device_id": "tap3"}),
+        ]
+        network.non_local_subnets = []
+        network.get.side_effect = lambda key, dflt=None: dflt
+        device_mgr_cls.return_value.driver.bridged = False
+        dhcp_driver = DnsmasqRouted(cfg.CONF, network, None, plugin=FakePlugin())
+        with mock.patch.object(dhcp_driver, "_get_value_from_conf_file") as gv:
+            gv.return_value = "ns-dhcp"
+            cmdline = dhcp_driver._build_cmdline_callback("/run/pid_file")
+
+        # Filter out dnsmasq args that we don't care about.
+        filtered_args = []
+        for arg in cmdline:
+            if "--domain=" in arg:
+                continue
+            if arg in [
+                "--no-hosts",
+                "--no-resolv",
+                "--pid-file=/run/pid_file",
+                "--dhcp-hostsfile=/run/calico/host",
+                "--addn-hosts=/run/calico/addn_hosts",
+                "--dhcp-optsfile=/run/calico/opts",
+                "--dhcp-leasefile=/run/calico/leases",
+                "--dhcp-match=set:ipxe,175",
+                "--dhcp-lease-max=16777216",
+                "--conf-file=",
+            ]:
+                continue
+            filtered_args.append(arg)
+
+        # Check the remaining filtered args against what we expect.
+        self.assertEqual(
+            [
+                "dnsmasq",
+                "--except-interface=lo",
+                "--bind-dynamic",
+                "--interface=ns-dhcp",
+                "--dhcp-range=set:subnet-v4subnet-1,10.28.0.0"
+                + ",static,255.255.255.0,86400s",
+                "--dhcp-range=set:subnet-v6subnet-2,2001:e000:1::"
+                + ",slaac,ra-only,64,86400s",
                 "--dhcp-range=set:subnet-v6subnet-1,2001:db8:1::"
                 + ",static,off-link,80,86400s",
                 "--enable-ra",
