@@ -365,7 +365,7 @@ static CALI_BPF_INLINE void calico_tc_process_ct_lookup(struct cali_tc_ctx *ctx)
 			goto deny;
 		}
 	} else {
-		CALI_DEBUG("Keeping Maglev packet with changed source node");
+		CALI_DEBUG("Maglev: tunnel source node changed to " IP_FMT , ...);
 	}
 
 	if (ctx->state->ct_result.flags & CALI_CT_FLAG_NAT_OUT) {
