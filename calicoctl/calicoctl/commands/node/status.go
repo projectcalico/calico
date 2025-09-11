@@ -52,7 +52,7 @@ Description:
 
 	parsedArgs, err := docopt.ParseArgs(doc, args, "")
 	if err != nil {
-		return fmt.Errorf("Invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand.", strings.Join(args, " "))
+		return fmt.Errorf("invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand", strings.Join(args, " "))
 	}
 	if len(parsedArgs) == 0 {
 		return nil
@@ -72,6 +72,7 @@ Description:
 	// For older versions of calico/node, the process was called `calico-felix`. Newer ones use `calico-node -felix`.
 	if !psContains([]string{"calico-felix"}, processes) && !psContains([]string{"calico-node", "-felix"}, processes) {
 		// Return and print message if calico-node is not running
+		//nolint:staticcheck // Ignore ST1005: error strings should not be capitalized
 		return fmt.Errorf("Calico process is not running.")
 	}
 
@@ -189,7 +190,7 @@ func (b *bgpPeer) unmarshalBIRD(line, ipSep string) bool {
 		return false
 	}
 	var ok bool
-	b.PeerIP = strings.Replace(sm[2], "_", ipSep, -1)
+	b.PeerIP = strings.ReplaceAll(sm[2], "_", ipSep)
 	if b.PeerType, ok = bgpTypeMap[sm[1]]; !ok {
 		log.Debugf("Not a valid line: peer type '%s' is not recognized", sm[1])
 		return false
@@ -228,7 +229,7 @@ func printBIRDPeers(ipv string) error {
 			return nil
 		}
 	}
-	defer c.Close()
+	defer func() { _ = c.Close() }()
 
 	// To query the current state of the BGP peers, we connect to the BIRD
 	// socket and send a "show protocols" message.  BIRD responds with
@@ -237,14 +238,14 @@ func printBIRDPeers(ipv string) error {
 	// Send the request.
 	_, err = c.Write([]byte("show protocols\n"))
 	if err != nil {
-		return fmt.Errorf("Error executing command: unable to write to BIRD socket: %s", err)
+		return fmt.Errorf("error executing command: unable to write to BIRD socket: %s", err)
 	}
 
 	// Scan the output and collect parsed BGP peers
 	log.Debugln("Reading output from BIRD")
 	peers, err := scanBIRDPeers(ipv, c)
 	if err != nil {
-		return fmt.Errorf("Error executing command: %v", err)
+		return fmt.Errorf("error executing command: %v", err)
 	}
 
 	// If no peers were returned then just print a message.
