@@ -609,14 +609,14 @@ func TestDeltaTracker_IterDesired(t *testing.T) {
 // TestPendingUpdatesView_IterBatched_PartialApplication tests that IterBatched correctly
 // handles when applyFn only applies part of the batch, ensuring only the initial
 // portion of the slice is processed and the remaining items continue to be processed.
-// 
+//
 // This test validates that when applyFn returns a count less than the slice length,
 // only the first N items are applied/removed from pending, and the remaining items
 // are properly processed in subsequent iterations.
 func TestPendingUpdatesView_IterBatched_PartialApplication(t *testing.T) {
 	dt := setupDeltaTrackerTest(t)
 
-	// Set up pending updates with known keys in order  
+	// Set up pending updates with known keys in order
 	keys := []string{"alpha", "beta", "gamma", "delta", "epsilon"}
 	for _, key := range keys {
 		dt.Desired().Set(key, "value-"+key)
@@ -640,12 +640,12 @@ func TestPendingUpdatesView_IterBatched_PartialApplication(t *testing.T) {
 				cleanKeys = append(cleanKeys, k)
 			}
 		}
-		
+
 		applyCount := 2
 		if len(cleanKeys) < applyCount {
 			applyCount = len(cleanKeys)
 		}
-		
+
 		applyCalls = append(applyCalls, struct {
 			keys    []string
 			applied int
@@ -669,14 +669,14 @@ func TestPendingUpdatesView_IterBatched_PartialApplication(t *testing.T) {
 
 	// The expected behavior is:
 	// Call 1: sees [alpha, beta, gamma, delta, epsilon], applies 2 -> alpha, beta applied
-	// Call 2: sees [gamma, delta, epsilon], applies 2 -> gamma, delta applied  
+	// Call 2: sees [gamma, delta, epsilon], applies 2 -> gamma, delta applied
 	// Call 3: sees [epsilon], applies 1 -> epsilon applied
 	// Final pending: 0
 
 	// For now, just validate that partial application behavior works at all
 	// and that multiple calls are made when items are only partially processed
 	Expect(len(applyCalls)).To(BeNumerically(">", 1), "Should have multiple calls due to partial application")
-	
+
 	// This test currently fails due to the bug, but demonstrates the expected behavior:
 	// when applyFn only applies some items, subsequent calls should only see the remaining items
 }
@@ -717,12 +717,12 @@ func TestPendingDeletesView_IterBatched_PartialApplication(t *testing.T) {
 				cleanKeys = append(cleanKeys, k)
 			}
 		}
-		
+
 		deleteCount := 2
 		if len(cleanKeys) < deleteCount {
 			deleteCount = len(cleanKeys)
 		}
-		
+
 		deleteCalls = append(deleteCalls, struct {
 			keys    []string
 			deleted int
@@ -753,7 +753,7 @@ func TestPendingDeletesView_IterBatched_PartialApplication(t *testing.T) {
 	// For now, just validate that partial application behavior works at all
 	// and that multiple calls are made when items are only partially processed
 	Expect(len(deleteCalls)).To(BeNumerically(">", 1), "Should have multiple calls due to partial application")
-	
+
 	// This test currently fails due to the bug, but demonstrates the expected behavior:
 	// when applyFn only deletes some items, subsequent calls should only see the remaining items
 }
