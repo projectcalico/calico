@@ -6627,6 +6627,14 @@ rules:
       - get
       - list
       - watch
+  # Namespaces are watched for LoadBalancer IP allocation with namespace selector support
+  - apiGroups: [""]
+    resources:
+      - namespaces
+    verbs:
+      - get
+      - list
+      - watch
   # Services are monitored for service LoadBalancer IP allocation
   - apiGroups: [""]
     resources:
