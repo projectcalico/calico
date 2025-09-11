@@ -109,7 +109,7 @@ var (
 		Mask: net.IPv4Mask(255, 255, 255, 255),
 	}
 	node3CIDR = net.IPNet{
-		IP: node3ip,
+		IP:   node3ip,
 		Mask: net.IPv4Mask(255, 255, 255, 255),
 	}
 
@@ -129,7 +129,7 @@ var (
 		Mask: net.CIDRMask(128, 128),
 	}
 	node3CIDRV6 = net.IPNet{
-		IP: node3ipV6,
+		IP:   node3ipV6,
 		Mask: net.CIDRMask(128, 128),
 	}
 )
@@ -606,11 +606,11 @@ var (
 
 	natMap, natBEMap, ctMap, ctCleanupMap, rtMap, ipsMap, testStateMap, affinityMap, arpMap, fsafeMap, ipfragsMap, maglevMap maps.Map
 	natMapV6, natBEMapV6, ctMapV6, ctCleanupMapV6, rtMapV6, ipsMapV6, affinityMapV6, arpMapV6, fsafeMapV6, maglevMapV6       maps.Map
-	stateMap, countersMap, ifstateMap, progMap, progMapXDP, policyJumpMap, policyJumpMapXDP                                          maps.Map
-	perfMap                                                                                                                          maps.Map
-	profilingMap, ipfragsMapTmp                                                                                                      maps.Map
-	qosMap                                                                                                                           maps.Map
-	allMaps                                                                                                                          []maps.Map
+	stateMap, countersMap, ifstateMap, progMap, progMapXDP, policyJumpMap, policyJumpMapXDP                                  maps.Map
+	perfMap                                                                                                                  maps.Map
+	profilingMap, ipfragsMapTmp                                                                                              maps.Map
+	qosMap                                                                                                                   maps.Map
+	allMaps                                                                                                                  []maps.Map
 )
 
 func initMapsOnce() {
@@ -1566,7 +1566,6 @@ func restoreARPMapV6(arpMap maps.Map, a arp.MapMemV6) {
 		Expect(err).NotTo(HaveOccurred())
 	}
 }
-
 
 func restoreRTMapV6(rtMap maps.Map, m routes.MapMemV6) {
 	for k, v := range m {
