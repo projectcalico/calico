@@ -847,7 +847,7 @@ func (r *CalicoManager) collectGithubArtifacts() error {
 	// We attach calicoctl binaries directly to the release as well.
 	files, err := os.ReadDir(filepath.Join(r.repoRoot, "calicoctl", "bin"))
 	if err != nil {
-		return fmt.Errorf("failed to read calicoctl binaries: %s", err)
+		return fmt.Errorf("failed to read calicoctl binaries: %w", err)
 	}
 	for _, b := range files {
 		if _, err := r.runner.Run("cp", []string{filepath.Join(r.repoRoot, "calicoctl", "bin", b.Name()), uploadDir}, nil); err != nil {
@@ -882,7 +882,7 @@ func (r *CalicoManager) collectGithubArtifacts() error {
 	// sha256sum -c --ignore-missing SHA256SUMS
 	files, err = os.ReadDir(uploadDir)
 	if err != nil {
-		return fmt.Errorf("failed to read upload directory: %s", err)
+		return fmt.Errorf("failed to read upload directory: %w", err)
 	}
 	sha256args := []string{}
 	for _, f := range files {
@@ -892,7 +892,7 @@ func (r *CalicoManager) collectGithubArtifacts() error {
 	}
 	output, err := r.runner.RunInDir(uploadDir, "sha256sum", sha256args, nil)
 	if err != nil {
-		return fmt.Errorf("failed to generate sha256sums: %s", err)
+		return fmt.Errorf("failed to generate sha256sums: %w", err)
 	}
 	err = os.WriteFile(fmt.Sprintf("%s/SHA256SUMS", uploadDir), []byte(output), 0o644)
 	if err != nil {
@@ -1247,7 +1247,10 @@ func (r *CalicoManager) archiveContainerImage(out, image string) error {
 		}
 	}
 	_, err := r.runner.Run("docker", []string{"save", "--output", out, image}, nil)
-	return fmt.Errorf("failed to archive image %s: %w", image, err)
+	if err != nil {
+		return fmt.Errorf("failed to archive image %s: %w", image, err)
+	}
+	return nil
 }
 
 func (r *CalicoManager) git(args ...string) (string, error) {
