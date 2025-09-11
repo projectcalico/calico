@@ -1018,7 +1018,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 			// Activate the connect-time load balancer.
 			err = bpfnat.InstallConnectTimeLoadBalancer(true, config.BPFIpv6Enabled,
-				config.BPFCgroupV2, logLevel, config.BPFConntrackTimeouts.UDPTimeout, excludeUDP)
+				config.BPFCgroupV2, logLevel, config.BPFConntrackTimeouts.UDPTimeout, excludeUDP, bpfMaps.CommonMaps.CTLBProgramsMap)
 			if err != nil {
 				log.WithError(err).Panic("BPFConnTimeLBEnabled but failed to attach connect-time load balancer, bailing out.")
 			}
