@@ -166,8 +166,6 @@ func TestMaglevNATServiceIPTCP(t *testing.T) {
 
 	// Prepare a test packet.
 	// SYN, Src IP 1.1.1.1, Src Port 1234, Dst IP 172.16.1.1, Dst Port 5678.
-	// Though we are using NodePorts, thus changing the 5-tuple of the request when failing-over,
-	// all nodes will still agree on where to forward, since we only have one backend programmed.
 	_, ipv4, tcp, payload, pktBytes, err := testPacketTCPV4DefaultNP(serviceIP, true)
 	Expect(err).NotTo(HaveOccurred())
 
