@@ -64,19 +64,29 @@ type pool struct {
 	assignmentMode    v3.AssignmentMode
 }
 
+func (i *ipPoolAccessor) GetAllPools(ctx context.Context) ([]v3.IPPool, error) {
+	poolNames := make([]string, 0)
+	// Get a sorted list of pool CIDR strings.
+	for p := range i.pools {
+		poolNames = append(poolNames, p)
+	}
+	return i.getPools(poolNames, 0, "GetAllPools"), nil
+}
+
 func (i *ipPoolAccessor) GetEnabledPools(ctx context.Context, ipVersion int) ([]v3.IPPool, error) {
-	sorted := make([]string, 0)
+	poolNames := make([]string, 0)
 	// Get a sorted list of enabled pool CIDR strings.
 	for p, e := range i.pools {
 		if e.enabled {
-			sorted = append(sorted, p)
+			poolNames = append(poolNames, p)
 		}
 	}
-	return i.getPools(sorted, ipVersion, "GetEnabledPools"), nil
+	return i.getPools(poolNames, ipVersion, "GetEnabledPools"), nil
 }
 
-func (i *ipPoolAccessor) getPools(sorted []string, ipVersion int, caller string) []v3.IPPool {
-	sort.Strings(sorted)
+func (i *ipPoolAccessor) getPools(poolNames []string, ipVersion int, caller string) []v3.IPPool {
+	// Return in sorted order for deterministic tests.
+	sort.Strings(poolNames)
 
 	// Convert to IPNets and sort out the correct IP versions.  Sorting the results
 	// mimics more closely the behavior of etcd and allows the tests to be
@@ -84,7 +94,7 @@ func (i *ipPoolAccessor) getPools(sorted []string, ipVersion int, caller string)
 	pools := make([]v3.IPPool, 0)
 	automatic := v3.Automatic
 	var poolsToPrint []string
-	for _, p := range sorted {
+	for _, p := range poolNames {
 		c := cnet.MustParseCIDR(p)
 		if (ipVersion == 0) || (c.Version() == ipVersion) {
 			pool := v3.IPPool{Spec: v3.IPPoolSpec{
@@ -98,7 +108,7 @@ func (i *ipPoolAccessor) getPools(sorted []string, ipVersion int, caller string)
 				pool.Spec.AllowedUses = []v3.IPPoolAllowedUse{v3.IPPoolAllowedUseWorkload, v3.IPPoolAllowedUseTunnel}
 			}
 			if i.pools[p].blockSize == 0 {
-				if ipVersion == 4 {
+				if c.Version() == 4 {
 					pool.Spec.BlockSize = 26
 				} else {
 					pool.Spec.BlockSize = 122
@@ -114,18 +124,9 @@ func (i *ipPoolAccessor) getPools(sorted []string, ipVersion int, caller string)
 		}
 	}
 
-	log.Debugf("%v returns: %v", caller, poolsToPrint)
+	log.Debugf("Mock %v returns: %v", caller, poolsToPrint)
 
 	return pools
-}
-
-func (i *ipPoolAccessor) GetAllPools(ctx context.Context) ([]v3.IPPool, error) {
-	sorted := make([]string, 0)
-	// Get a sorted list of pool CIDR strings.
-	for p := range i.pools {
-		sorted = append(sorted, p)
-	}
-	return i.getPools(sorted, 0, "GetAllPools"), nil
 }
 
 var ipPools = &ipPoolAccessor{pools: map[string]pool{}}
