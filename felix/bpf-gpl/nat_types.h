@@ -129,7 +129,7 @@ struct calico_ch_key {
 	__u16 port;
 	__u8 proto;
 	__u8 pad;
-	__u32 ordinal; // should always be a value of [0..M], where M is a very large prime number. -Alex
+	__u32 ordinal; // should always be a value of [0..M-1], where M is a very large prime number. -Alex
 };
 
 // 1009 * 1000 gives a large lookup table for up to 1000 services. -Alex
