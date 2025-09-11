@@ -151,10 +151,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ dscp tests", []apiconfig.Da
 				binary = "ip6tables-save"
 			}
 			allPoolsIPSet := fmt.Sprintf("cali%v0all-ipam-pools", ipVersion)
-			allHostsIPSet := fmt.Sprintf("cali%v0all-hosts-net", ipVersion)
 			dscpIPSet := fmt.Sprintf("cali%v0dscp-src-net", ipVersion)
-			tmpl := "-m set --match-set %v src -m set ! --match-set %v dst -m set ! --match-set %v dst -j cali-egress-dscp"
-			expectedRule := fmt.Sprintf(tmpl, dscpIPSet, allPoolsIPSet, allHostsIPSet)
+			tmpl := "-m set --match-set %v src -m set ! --match-set %v dst -m set -j cali-egress-dscp"
+			expectedRule := fmt.Sprintf(tmpl, dscpIPSet, allPoolsIPSet)
 			getRules := func() string {
 				output, _ := felix.ExecOutput(binary, "-t", "mangle")
 				return output
@@ -169,10 +168,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ dscp tests", []apiconfig.Da
 				ipFamily = "ip6"
 			}
 			allPoolsIPSet := fmt.Sprintf("@cali%v0all-ipam-pools", ipVersion)
-			allHostsIPSet := fmt.Sprintf("@cali%v0all-hosts-net", ipVersion)
 			dscpIPSet := fmt.Sprintf("@cali%v0dscp-src-net", ipVersion)
-			tmpl := "%v saddr %v %v daddr != %v %v daddr != %v .* jump mangle-cali-egress-dscp"
-			pattern := fmt.Sprintf(tmpl, ipFamily, dscpIPSet, ipFamily, allPoolsIPSet, ipFamily, allHostsIPSet)
+			tmpl := "%v saddr %v %v daddr != %v .* jump mangle-cali-egress-dscp"
+			pattern := fmt.Sprintf(tmpl, ipFamily, dscpIPSet, ipFamily, allPoolsIPSet)
 			getRules := func() string {
 				output, _ := felix.ExecOutput("nft", "list", "chain", ipFamily, "calico", "mangle-cali-POSTROUTING")
 				return output

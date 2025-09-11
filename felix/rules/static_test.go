@@ -45,14 +45,12 @@ var _ = Describe("Static", func() {
 			expRules := []generictables.Rule{}
 			if !rr.BPFEnabled {
 				allPoolSetName := fmt.Sprintf("cali%v0all-ipam-pools", ipVersion)
-				allHostsSetName := fmt.Sprintf("cali%v0all-hosts-net", ipVersion)
 				dscpSetName := fmt.Sprintf("cali%v0dscp-src-net", ipVersion)
 				expRules = append(expRules, generictables.Rule{
 					// DSCP rule.
 					Match: Match().
 						SourceIPSet(dscpSetName).
-						NotDestIPSet(allPoolSetName).
-						NotDestIPSet(allHostsSetName),
+						NotDestIPSet(allPoolSetName),
 					Action:  JumpAction{Target: ChainEgressDSCP},
 					Comment: []string{"set dscp for traffic leaving cluster."},
 				})
