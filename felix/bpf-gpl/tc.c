@@ -536,17 +536,15 @@ syn_force_policy:
 		}
 
 		// Check whether the workload needs outgoing NAT to this address.
-		if (r->flags & CALI_RT_NAT_OUT) {
-			struct cali_rt *rt = cali_rt_lookup(&ctx->state->post_nat_ip_dst);
-			enum cali_rt_flags flags = CALI_RT_UNKNOWN;
-			if (rt) {
-				flags = rt->flags;
-			}
-			bool exclude_hosts = (GLOBAL_FLAGS & CALI_GLOBALS_NATOUTGOING_EXCLUDE_HOSTS);
-			if (rt_flags_should_perform_nat_outgoing(flags, exclude_hosts)) {
-				CALI_DEBUG("Source is in NAT-outgoing pool but dest is not, need to SNAT.");
-				ctx->state->flags |= CALI_ST_NAT_OUTGOING;
-			}
+		if ((r->flags & CALI_RT_NAT_OUT) &&
+			(rt_addr_is_external(&ctx->state->post_nat_ip_dst, GLOBAL_FLAGS & CALI_GLOBALS_NATOUTGOING_EXCLUDE_HOSTS))) {
+			CALI_DEBUG("Source is in NAT-outgoing pool but dest is not, need to SNAT.");
+			ctx->state->flags |= CALI_ST_NAT_OUTGOING;
+		}
+		// Check if traffic is leaving cluster. We might need to set DSCP later.
+		if (cali_rt_flags_is_in_pool(r->flags) && rt_addr_is_external(&ctx->state->post_nat_ip_dst, false)) {
+			CALI_DEBUG("Outside cluster dest " IP_FMT "", debug_ip(ctx->state->post_nat_ip_dst));
+			ctx->state->flags |= CALI_ST_CLUSTER_EXTERNAL;
 		}
 		// Check if traffic is leaving cluster. We might need to set DSCP later.
 		if (cali_rt_flags_is_in_pool(r->flags) && rt_addr_is_external(&ctx->state->post_nat_ip_dst)) {
@@ -565,12 +563,12 @@ syn_force_policy:
 
 	// If either source or destination is outside cluster, set flag as might need to update DSCP later.
 	if ((CALI_F_TO_HEP) && (rt_addr_is_local_host(&ctx->state->ip_src)) &&
-		(rt_addr_is_external(&ctx->state->post_nat_ip_dst))) {
+		(rt_addr_is_external(&ctx->state->post_nat_ip_dst, false))) {
 		CALI_DEBUG("Outside cluster dest " IP_FMT "", debug_ip(ctx->state->post_nat_ip_dst));
 		ctx->state->flags |= CALI_ST_CLUSTER_EXTERNAL;
 	}
 	if ((CALI_F_FROM_HEP) && (rt_addr_is_host_or_in_pool(&ctx->state->post_nat_ip_dst)) &&
-		(rt_addr_is_external(&ctx->state->ip_src))) {
+		(rt_addr_is_external(&ctx->state->ip_src, false))) {
 		CALI_DEBUG("Outside cluster source " IP_FMT "", debug_ip(ctx->state->ip_src));
 		ctx->state->flags |= CALI_ST_CLUSTER_EXTERNAL;
 	}
