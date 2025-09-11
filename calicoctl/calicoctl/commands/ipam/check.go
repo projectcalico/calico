@@ -71,7 +71,7 @@ Description:
 
 	parsedArgs, err := docopt.ParseArgs(doc, args, version)
 	if err != nil {
-		return fmt.Errorf("Invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand.", strings.Join(args, " "))
+		return fmt.Errorf("invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand", strings.Join(args, " "))
 	}
 	if len(parsedArgs) == 0 {
 		return nil
@@ -128,7 +128,7 @@ Description:
 	// Pull out CLI args.
 	showAllIPs := parsedArgs["--show-all-ips"].(bool)
 	showProblemIPs := showAllIPs || parsedArgs["--show-problem-ips"].(bool)
-	var outFile string = ""
+	outFile := ""
 	if arg := parsedArgs["--output"]; arg != nil {
 		outFile = arg.(string)
 	}

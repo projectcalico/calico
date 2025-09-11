@@ -216,7 +216,7 @@ func (c *loadBalancerController) onStatusUpdate(s bapi.SyncStatus) {
 }
 
 func (c *loadBalancerController) onUpdate(update bapi.Update) {
-	switch update.KVPair.Key.(type) {
+	switch update.Key.(type) {
 	case model.ResourceKey:
 		switch update.KVPair.Key.(model.ResourceKey).Kind {
 		case api.KindIPPool:
@@ -866,7 +866,7 @@ func (c *loadBalancerController) parseAnnotations(annotations map[string]string)
 			for _, ipAddr := range ipAddrs {
 				curr := cnet.ParseIP(ipAddr)
 				if curr == nil {
-					return nil, nil, nil, fmt.Errorf("Could not parse %s as a valid IP address", ipAddr)
+					return nil, nil, nil, fmt.Errorf("could not parse %s as a valid IP address", ipAddr)
 				}
 				if curr.To4() != nil {
 					ipv4++
@@ -877,7 +877,7 @@ func (c *loadBalancerController) parseAnnotations(annotations map[string]string)
 			}
 
 			if ipv6 > 1 || ipv4 > 1 {
-				return nil, nil, nil, fmt.Errorf("At max only one ipv4 and one ipv6 address can be specified. Recieved %d ipv4 and %d ipv6 addresses", ipv4, ipv6)
+				return nil, nil, nil, fmt.Errorf("at max only one ipv4 and one ipv6 address can be specified. Received %d ipv4 and %d ipv6 addresses", ipv4, ipv6)
 			}
 		}
 	}

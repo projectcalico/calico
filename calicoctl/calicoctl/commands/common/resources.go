@@ -160,7 +160,7 @@ func ExecuteConfigCommand(args map[string]interface{}, action action) CommandRes
 
 			if len(converted) == 0 && errorOnEmpty {
 				// We should fail on empty files.
-				return fmt.Errorf("No resources specified in file %s", modifiedFilename)
+				return fmt.Errorf("no resources specified in file %s", modifiedFilename)
 			}
 
 			resources = append(resources, converted...)
@@ -176,7 +176,7 @@ func ExecuteConfigCommand(args map[string]interface{}, action action) CommandRes
 				// Empty files are handled above, so the only way to get here is if --filename pointed to a directory.
 				// We can therefore tweak the error message slightly to be more specific.
 				return CommandResults{
-					Err: fmt.Errorf("No resources specified in directory %s", filename),
+					Err: fmt.Errorf("no resources specified in directory %s", filename),
 				}
 			} else {
 				// No data, but not an error case. Return an empty set of results.
@@ -198,7 +198,7 @@ func ExecuteConfigCommand(args map[string]interface{}, action action) CommandRes
 		if len(resources) == 0 {
 			// No resources specified on non-file input is always an error.
 			return CommandResults{
-				Err: fmt.Errorf("No resources specified"),
+				Err: fmt.Errorf("no resources specified"),
 			}
 		}
 	}
@@ -419,7 +419,7 @@ func CheckLocked(ctx context.Context, c client.Interface) (bool, error) {
 	// Get the cluster information resource
 	clusterinfo, err := c.ClusterInformation().Get(ctx, "default", options.GetOptions{})
 	if err != nil {
-		return false, fmt.Errorf("Error retrieving ClusterInformation: %s", err)
+		return false, fmt.Errorf("error retrieving ClusterInformation: %s", err)
 	}
 
 	return !*clusterinfo.Spec.DatastoreReady, nil

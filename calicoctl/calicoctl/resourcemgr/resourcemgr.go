@@ -237,7 +237,7 @@ func (rh resourceHelper) Update(ctx context.Context, client client.Interface, re
 				id = fmt.Sprintf("%s(%s/%s)", ro.GetObjectKind().GroupVersionKind().GroupKind().Kind, ro.GetObjectMeta().GetNamespace(), ro.GetObjectMeta().GetName())
 			}
 			return ro, cerrors.ErrorResourceUpdateConflict{
-				Err:        fmt.Errorf("Resource version '%s' is out of date (latest: %s). Update the resource YAML/JSON in order to make changes.", rv, ro.GetObjectMeta().GetResourceVersion()),
+				Err:        fmt.Errorf("resource version '%s' is out of date (latest: %s). Update the resource YAML/JSON in order to make changes", rv, ro.GetObjectMeta().GetResourceVersion()),
 				Identifier: id,
 			}
 		}
@@ -361,7 +361,7 @@ func GetResourcesFromArgs(args map[string]interface{}) ([]ResourceObject, error)
 	case []string:
 		names = argutils.ArgStringsOrBlank(args, argname)
 	default:
-		panic(fmt.Errorf("Wrong name format, unexpected type: %T", args[argname]))
+		panic(fmt.Errorf("wrong name format, unexpected type: %T", args[argname]))
 	}
 
 	namespace := argutils.ArgStringOrBlank(args, "--namespace")
@@ -397,7 +397,7 @@ func (rh resourceHelper) IsNamespaced() bool {
 func newResource(tm schema.GroupVersionKind) (runtime.Object, error) {
 	rh, ok := helpers[tm]
 	if !ok {
-		return nil, fmt.Errorf("Unknown resource type (%s) and/or version (%s)", tm.Kind, tm.GroupVersion().String())
+		return nil, fmt.Errorf("unknown resource type (%s) and/or version (%s)", tm.Kind, tm.GroupVersion().String())
 	}
 	log.Infof("Found resource helper: %s", rh)
 
@@ -577,7 +577,7 @@ func (rh resourceHelper) GetTableTemplate(headings []string, printNamespace bool
 			for heading := range rh.headingsMap {
 				headings = append(headings, heading)
 			}
-			return "", fmt.Errorf("Unknown heading %s, valid values are: %s",
+			return "", fmt.Errorf("unknown heading %s, valid values are: %s",
 				heading,
 				strings.Join(headings, ", "))
 		}

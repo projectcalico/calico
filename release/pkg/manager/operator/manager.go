@@ -144,7 +144,7 @@ func (o *OperatorManager) modifyComponentsImagesFile() error {
 		logrus.WithError(err).Errorf("Failed to open file %s", destFilePath)
 		return err
 	}
-	defer dest.Close()
+	defer func() { _ = dest.Close() }()
 	tmpl, err := template.New("pkg/components/images.go").Parse(componentImagesFileTemplate)
 	if err != nil {
 		logrus.WithError(err).Errorf("Failed to parse template to overwrite %s file", destFilePath)

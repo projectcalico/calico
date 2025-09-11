@@ -224,7 +224,7 @@ var _ = Describe("IPAM controller UTs", func() {
 		}, 1*time.Second, 100*time.Millisecond).Should(Equal("kname2"), "Cache not updated after UPDATE")
 
 		// Send a delete for the node, which should remove the entry from the cache.
-		update.KVPair.Value = nil
+		update.Value = nil
 		c.onUpdate(update)
 		Eventually(func() map[string]string {
 			done := c.pause()
@@ -234,7 +234,7 @@ var _ = Describe("IPAM controller UTs", func() {
 
 		// Recreate the Calico node as a non-Kubernetes node.
 		n.Spec.OrchRefs[0].Orchestrator = apiv3.OrchestratorOpenStack
-		update.KVPair.Value = &n
+		update.Value = &n
 		update.UpdateType = bapi.UpdateTypeKVNew
 		c.onUpdate(update)
 
@@ -247,7 +247,7 @@ var _ = Describe("IPAM controller UTs", func() {
 		}, 1*time.Second, 100*time.Millisecond).Should(BeTrue(), "Cache not updated as expected after ADD of non-k8s node")
 
 		// Send a delete for the non-Kubernetes node, which should remove the entry from the cache.
-		update.KVPair.Value = nil
+		update.Value = nil
 		c.onUpdate(update)
 		Eventually(func() map[string]string {
 			done := c.pause()
@@ -530,7 +530,7 @@ var _ = Describe("IPAM controller UTs", func() {
 		}, 1*time.Second, 100*time.Millisecond).Should(Equal(&secondIPPool))
 
 		// Delete second block (associated with second pool). Expect block to be removed from pool maps.
-		secondBlockUpdate.KVPair.Value = nil
+		secondBlockUpdate.Value = nil
 		c.onUpdate(secondBlockUpdate)
 		Eventually(func() string {
 			done := c.pause()
@@ -544,7 +544,7 @@ var _ = Describe("IPAM controller UTs", func() {
 		}, 1*time.Second, 100*time.Millisecond).Should(BeEmpty())
 
 		// Delete first pool. Expect first block to be associated with unknown pool, and pool removed from pool cache.
-		firstPoolUpdate.KVPair.Value = nil
+		firstPoolUpdate.Value = nil
 		c.onUpdate(firstPoolUpdate)
 		Eventually(func() string {
 			done := c.pause()
@@ -563,7 +563,7 @@ var _ = Describe("IPAM controller UTs", func() {
 		}, 1*time.Second, 100*time.Millisecond).Should(BeNil())
 
 		// Delete first block (unassociated with a pool). Expect block to be removed from pool maps.
-		firstBlockUpdate.KVPair.Value = nil
+		firstBlockUpdate.Value = nil
 		c.onUpdate(firstBlockUpdate)
 		Eventually(func() string {
 			done := c.pause()
@@ -681,7 +681,7 @@ var _ = Describe("IPAM controller UTs", func() {
 			return c.datastoreReady
 		}, 1*time.Second, 100*time.Millisecond).Should(Equal(true), "Cache not updated after ADD")
 
-		update.KVPair.Value = nil
+		update.Value = nil
 		c.onUpdate(update)
 		Eventually(func() bool {
 			done := c.pause()

@@ -511,11 +511,9 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 	if config.BPFEnabled && config.BPFKubeProxyIptablesCleanupEnabled {
 		// If BPF-mode is enabled, clean up kube-proxy's rules too.
-		if !config.RulesConfig.NFTables {
-			log.Info("BPF enabled, configuring iptables layer to clean up kube-proxy's rules.")
-			iptablesOptions.ExtraCleanupRegexPattern = rules.KubeProxyInsertRuleRegex
-			iptablesOptions.HistoricChainPrefixes = append(iptablesOptions.HistoricChainPrefixes, rules.KubeProxyChainPrefixes...)
-		}
+		log.Info("BPF enabled, configuring iptables/nftables layer to clean up kube-proxy's rules.")
+		iptablesOptions.ExtraCleanupRegexPattern = rules.KubeProxyInsertRuleRegex
+		iptablesOptions.HistoricChainPrefixes = append(iptablesOptions.HistoricChainPrefixes, rules.KubeProxyChainPrefixes...)
 	}
 
 	if config.BPFEnabled && !config.BPFPolicyDebugEnabled {
