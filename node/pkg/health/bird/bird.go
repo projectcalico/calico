@@ -47,7 +47,7 @@ func GRInProgress(ipv string) (bool, error) {
 	}
 	c, err := net.Dial("unix", birdSocket)
 	if err != nil {
-		return false, fmt.Errorf("Error querying BIRD: unable to connect to BIRDv%s socket: %v", ipv, err)
+		return false, fmt.Errorf("error querying BIRD: unable to connect to BIRDv%s socket: %v", ipv, err)
 	}
 	defer c.Close() // nolint: errcheck
 
@@ -58,7 +58,7 @@ func GRInProgress(ipv string) (bool, error) {
 	// Send the request.
 	_, err = c.Write([]byte("show status\n"))
 	if err != nil {
-		return false, fmt.Errorf("Error executing command: unable to write to BIRD socket: %s", err)
+		return false, fmt.Errorf("error executing command: unable to write to BIRD socket: %s", err)
 	}
 
 	// The following is sample output from BIRD
@@ -149,7 +149,7 @@ func GetPeers(ipv string) ([]bgpPeer, error) {
 	}
 	c, err := net.Dial("unix", birdSocket)
 	if err != nil {
-		return nil, fmt.Errorf("Error querying BIRD: unable to connect to BIRDv%s socket: %v", ipv, err)
+		return nil, fmt.Errorf("error querying BIRD: unable to connect to BIRDv%s socket: %v", ipv, err)
 	}
 	defer c.Close() // nolint: errcheck
 
@@ -160,14 +160,14 @@ func GetPeers(ipv string) ([]bgpPeer, error) {
 	// Send the request.
 	_, err = c.Write([]byte("show protocols\n"))
 	if err != nil {
-		return nil, fmt.Errorf("Error executing command: unable to write to BIRD socket: %s\n", err)
+		return nil, fmt.Errorf("error executing command: unable to write to BIRD socket: %s", err)
 	}
 
 	// Scan the output and collect parsed BGP peers
 	log.Debugln("Reading output from BIRD")
 	peers, err := scanBIRDPeers(ipv, c)
 	if err != nil {
-		return nil, fmt.Errorf("Error executing command: %v", err)
+		return nil, fmt.Errorf("error executing command: %v", err)
 	}
 
 	return peers, nil
@@ -276,7 +276,7 @@ func (b *bgpPeer) unmarshalBIRD(line, ipSep string) bool {
 		return false
 	}
 	var ok bool
-	b.PeerIP = strings.Replace(sm[2], "_", ipSep, -1)
+	b.PeerIP = strings.ReplaceAll(sm[2], "_", ipSep)
 	if b.PeerType, ok = bgpTypeMap[sm[1]]; !ok {
 		log.Debugf("Not a valid line: peer type '%s' is not recognized", sm[1])
 		return false
