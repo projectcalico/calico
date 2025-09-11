@@ -5,27 +5,31 @@
 #ifndef __CALI_MAGLEV_H__
 #define __CALI_MAGLEV_H__
 
+#include "jenkins_hash.h"
+
 static CALI_BPF_INLINE struct calico_nat_dest* maglev_select_backend(struct cali_tc_ctx *ctx)
 {
 	__u32 hash;
-	// ipv46_addr_t *ip_src = &ctx->state->ip_src;
+	ipv46_addr_t *ip_src = &ctx->state->ip_src;
 	ipv46_addr_t *ip_dst = &ctx->state->ip_dst;
-	// __u16 sport = ctx->state->sport;
+	__u16 sport = ctx->state->sport;
 	__u16 dport = ctx->state->dport;
 	__u8 ip_proto = ctx->state->ip_proto;
 
-#if 0
 #ifdef IPVER6
-	hash = jhash_3words(ip_src->a, ip_src->b, ip_src->c, 0xDEAD);
-	hash |= jhash_3words(ip_src->d, ip_dst->a, ip_dst->b, 0xBEEF);
-	hash |= jhash_3words(ip_dst->c, ip_dst->d, (__u32)ip_proto, 0xC000);
-#else
-	hash = jhash_3words(*ip_src, sport, 0, 0xDEAD);
-	hash |= jhash_3words(*ip_dst, dport, (__u32)ip_proto, 0xBEEF);
-#endif /* IPVER6 */
-#endif
-	hash = 0;
+	const __u32 ip_arr[11] = {
+		ip_src->a, ip_src->b, ip_src->c, ip_src->d,
+		ip_dst->a, ip_dst->b, ip_dst->c, ip_dst->d,
+		(__u32)ip_proto, sport, dport
+	};
 
+	hash = hashword(ip_arr, 11, 0xCA71C0);
+#else
+	const __u32 ip_arr[5] = {*ip_src, *ip_dst, sport, dport, (__u32) ip_proto};
+	hash = hashword (ip_arr, 5, 0xCA71C0);
+#endif /* IPVER6 */
+
+	CALI_DEBUG("Maglev: hashed packet to %d", hash);
 	struct calico_ch_key ch_key = {
 		.ordinal = (hash % 31),
 		.vip = *ip_dst,
@@ -43,8 +47,6 @@ static CALI_BPF_INLINE struct calico_nat_dest* maglev_select_backend(struct cali
 
 		return NULL;
 	}
-
-	/* TODO setup nat_dest */
 
 	return ch_val;
 }
