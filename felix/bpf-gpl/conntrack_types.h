@@ -198,6 +198,11 @@ enum calico_ct_result_type {
 	 * or for packet that have a conntrack entry that is only approved by the other leg
 	 * (indicating that policy on this leg failed to allow the packet). */
 	CALI_CT_INVALID = 6,
+	/* CALI_CT_MAGLEV_MID_FLOW_MISS is set (in the Maglev program) for packets which were
+	 * originally CALI_CT_MID_FLOW_MISS, but where the maglev-lookup returned a backend.
+	 * It indicates that a midflow Maglev packet should be treated as a failed-over connection.
+	*/
+	CALI_CT_MAGLEV_MID_FLOW_MISS = 7,
 };
 
 #define CT_RES_RELATED         0x100

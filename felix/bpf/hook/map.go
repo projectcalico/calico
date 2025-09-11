@@ -43,6 +43,7 @@ const (
 	SubProgIcmpInnerNat
 	SubProgNewFlow
 	SubProgIPFrag
+	SubProgMaglev
 	SubProgTCMainDebug
 
 	SubProgXDPMain    = SubProgTCMain
@@ -61,6 +62,7 @@ var tcSubProgNames = []string{
 	"calico_tc_skb_icmp_inner_nat",
 	"calico_tc_skb_new_flow_entrypoint",
 	"calico_tc_skb_ipv4_frag",
+	"calico_tc_maglev",
 }
 
 var xdpSubProgNames = []string{

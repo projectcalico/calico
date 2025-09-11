@@ -214,6 +214,7 @@ var tcJumpMapIndexes = map[string][]int{
 		tcdefs.ProgIndexIcmpInnerNat,
 		tcdefs.ProgIndexNewFlow,
 		tcdefs.ProgIndexIPFrag,
+		tcdefs.ProgIndexMaglev,
 	},
 	"IPv4 debug": []int{
 		tcdefs.ProgIndexMainDebug,
@@ -225,6 +226,7 @@ var tcJumpMapIndexes = map[string][]int{
 		tcdefs.ProgIndexIcmpInnerNatDebug,
 		tcdefs.ProgIndexNewFlowDebug,
 		tcdefs.ProgIndexIPFragDebug,
+		tcdefs.ProgIndexMaglevDebug,
 	},
 	"IPv6": []int{
 		tcdefs.ProgIndexMain,
@@ -235,6 +237,7 @@ var tcJumpMapIndexes = map[string][]int{
 		tcdefs.ProgIndexHostCtConflict,
 		tcdefs.ProgIndexIcmpInnerNat,
 		tcdefs.ProgIndexNewFlow,
+		tcdefs.ProgIndexMaglev,
 	},
 	"IPv6 debug": []int{
 		tcdefs.ProgIndexMainDebug,
@@ -245,6 +248,7 @@ var tcJumpMapIndexes = map[string][]int{
 		tcdefs.ProgIndexHostCtConflictDebug,
 		tcdefs.ProgIndexIcmpInnerNatDebug,
 		tcdefs.ProgIndexNewFlowDebug,
+		tcdefs.ProgIndexMaglevDebug,
 	},
 }
 
@@ -385,16 +389,21 @@ func setupAndRun(logger testLogger, loglevel, section string, rules *polprog.Rul
 	}
 
 	if topts.xdp {
-		o, err := objLoad("../../bpf-gpl/bin/xdp_preamble.o", bpfFsDir, "preamble", topts, false, false)
+		o, err := objLoad("../../bpf-gpl/bin/xdp_preamble.o", bpfFsDir, "preamble", topts, false, false, false)
 		Expect(err).NotTo(HaveOccurred())
 		defer o.Close()
 	} else {
-		o, err := objLoad("../../bpf-gpl/bin/tc_preamble.o", bpfFsDir, "preamble", topts, false, false)
+		o, err := objLoad("../../bpf-gpl/bin/tc_preamble.o", bpfFsDir, "preamble", topts, false, false, false)
 		Expect(err).NotTo(HaveOccurred())
 		defer o.Close()
 	}
 
 	log.Infof("Patching binary %s", obj+".o")
+
+	hasMaglev := false
+	if strings.Contains(obj, "from_hep") {
+		hasMaglev = true
+	}
 
 	bin, err := bpf.BinaryFromFile(obj + ".o")
 	Expect(err).NotTo(HaveOccurred())
@@ -412,7 +421,7 @@ func setupAndRun(logger testLogger, loglevel, section string, rules *polprog.Rul
 
 	var o *libbpf.Obj
 
-	o, err = objLoad(tempObj, bpfFsDir, ipFamily, topts, rules != nil, true)
+	o, err = objLoad(tempObj, bpfFsDir, ipFamily, topts, rules != nil, true, hasMaglev)
 	Expect(err).NotTo(HaveOccurred())
 	defer o.Close()
 
@@ -584,13 +593,13 @@ func bpftool(args ...string) ([]byte, error) {
 var (
 	mapInitOnce sync.Once
 
-	natMap, natBEMap, ctMap, ctCleanupMap, rtMap, ipsMap, testStateMap, affinityMap, arpMap, fsafeMap, ipfragsMap maps.Map
-	natMapV6, natBEMapV6, ctMapV6, ctCleanupMapV6, rtMapV6, ipsMapV6, affinityMapV6, arpMapV6, fsafeMapV6         maps.Map
-	stateMap, countersMap, ifstateMap, progMap, progMapXDP, policyJumpMap, policyJumpMapXDP                       maps.Map
-	perfMap                                                                                                       maps.Map
-	profilingMap, ipfragsMapTmp                                                                                   maps.Map
-	qosMap                                                                                                        maps.Map
-	allMaps                                                                                                       []maps.Map
+	natMap, natBEMap, ctMap, ctCleanupMap, rtMap, ipsMap, testStateMap, affinityMap, arpMap, fsafeMap, ipfragsMap, consistentHashMap maps.Map
+	natMapV6, natBEMapV6, ctMapV6, ctCleanupMapV6, rtMapV6, ipsMapV6, affinityMapV6, arpMapV6, fsafeMapV6, consistentHashMapV6       maps.Map
+	stateMap, countersMap, ifstateMap, progMap, progMapXDP, policyJumpMap, policyJumpMapXDP                                          maps.Map
+	perfMap                                                                                                                          maps.Map
+	profilingMap, ipfragsMapTmp                                                                                                      maps.Map
+	qosMap                                                                                                                           maps.Map
+	allMaps                                                                                                                          []maps.Map
 )
 
 func initMapsOnce() {
@@ -623,13 +632,15 @@ func initMapsOnce() {
 		policyJumpMapXDP = jump.XDPMap()
 		profilingMap = profiling.Map()
 		qosMap = qos.Map()
+		consistentHashMap = nat.ConsistentHashMap()
+		consistentHashMapV6 = nat.ConsistentHashMapV6()
 
 		perfMap = perf.Map("perf_evnt", 512)
 
 		allMaps = []maps.Map{natMap, natBEMap, natMapV6, natBEMapV6, ctMap, ctMapV6, ctCleanupMap, ctCleanupMapV6, rtMap, rtMapV6, ipsMap, ipsMapV6,
 			stateMap, testStateMap, affinityMap, affinityMapV6, arpMap, arpMapV6, fsafeMap, fsafeMapV6,
 			countersMap, ipfragsMap, ipfragsMapTmp, ifstateMap, profilingMap,
-			policyJumpMap, policyJumpMapXDP, qosMap}
+			policyJumpMap, policyJumpMapXDP, qosMap, consistentHashMap, consistentHashMapV6}
 		for _, m := range allMaps {
 			err := m.EnsureExists()
 			if err != nil {
@@ -703,7 +714,7 @@ func ipToU32(ip net.IP) uint32 {
 	return binary.LittleEndian.Uint32([]byte(ip[:]))
 }
 
-func tcUpdateJumpMap(obj *libbpf.Obj, progs []int, hasPolicyProg, hasHostConflictProg bool) error {
+func tcUpdateJumpMap(obj *libbpf.Obj, progs []int, hasPolicyProg, hasHostConflictProg, hasMaglev bool) error {
 	for _, idx := range progs {
 		switch idx {
 		case
@@ -719,6 +730,12 @@ func tcUpdateJumpMap(obj *libbpf.Obj, progs []int, hasPolicyProg, hasHostConflic
 			if !hasHostConflictProg {
 				continue
 			}
+		case
+			tcdefs.ProgIndexMaglev,
+			tcdefs.ProgIndexMaglevDebug:
+			if !hasMaglev {
+				continue
+			}
 		}
 		log.WithField("prog", tcdefs.ProgramNames[idx]).WithField("idx", idx).Debug("UpdateJumpMap")
 		err := obj.UpdateJumpMap(progMap.GetName(), tcdefs.ProgramNames[idx], idx)
@@ -730,7 +747,7 @@ func tcUpdateJumpMap(obj *libbpf.Obj, progs []int, hasPolicyProg, hasHostConflic
 	return nil
 }
 
-func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostConflictProg bool) (*libbpf.Obj, error) {
+func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostConflictProg, hasMaglev bool) (*libbpf.Obj, error) {
 	log.WithField("program", fname).Debug("Loading BPF program")
 
 	forXDP := topts.xdp
@@ -898,11 +915,11 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 
 	if !forXDP {
 		log.WithField("ipFamily", ipFamily).Debug("Updating jump map")
-		err = tcUpdateJumpMap(obj, tcJumpMapIndexes[ipFamily], false, hasHostConflictProg)
+		err = tcUpdateJumpMap(obj, tcJumpMapIndexes[ipFamily], false, hasHostConflictProg, hasMaglev)
 		if err != nil && !strings.Contains(err.Error(), "error updating calico_tc_host_ct_conflict program") {
 			goto out
 		}
-		err = tcUpdateJumpMap(obj, tcJumpMapIndexes[ipFamily], false, false)
+		err = tcUpdateJumpMap(obj, tcJumpMapIndexes[ipFamily], false, false, hasMaglev)
 	} else {
 		if err = xdpUpdateJumpMap(obj, xdpJumpMapIndexes[ipFamily]); err != nil {
 			goto out
@@ -1381,6 +1398,42 @@ func tcpResponseRaw(in []byte) []byte {
 	return out.Bytes()
 }
 
+func tcpResponseRawV6(in []byte) []byte {
+	pkt := gopacket.NewPacket(in, layers.LayerTypeEthernet, gopacket.Default)
+	ethL := pkt.Layer(layers.LayerTypeEthernet)
+	ethR := ethL.(*layers.Ethernet)
+	ethR.SrcMAC, ethR.DstMAC = ethR.DstMAC, ethR.SrcMAC
+
+	ipv6L := pkt.Layer(layers.LayerTypeIPv6)
+	ipv6R := ipv6L.(*layers.IPv6)
+	ipv6R.SrcIP, ipv6R.DstIP = ipv6R.DstIP, ipv6R.SrcIP
+
+	tcpL := pkt.Layer(layers.LayerTypeTCP)
+	tcpR := tcpL.(*layers.TCP)
+	tcpR.SrcPort, tcpR.DstPort = tcpR.DstPort, tcpR.SrcPort
+
+	if tcpR.SYN {
+		tcpR.ACK = true
+	}
+
+	_ = tcpR.SetNetworkLayerForChecksum(ipv6R)
+
+	out := gopacket.NewSerializeBuffer()
+	err := gopacket.SerializeLayers(out, gopacket.SerializeOptions{ComputeChecksums: true},
+		ethR, ipv6R, tcpR, gopacket.Payload(pkt.ApplicationLayer().Payload()))
+	Expect(err).NotTo(HaveOccurred())
+
+	return out.Bytes()
+}
+
+func dumpConsistentHashMap(chMap maps.Map) {
+	m, err := nat.LoadConsistentHashMap(chMap)
+	Expect(err).NotTo(HaveOccurred())
+	for k, v := range m {
+		fmt.Printf("%s: %s\n", k, v)
+	}
+}
+
 func dumpNATMap(natMap maps.Map) {
 	nt, err := nat.LoadFrontendMap(natMap)
 	Expect(err).NotTo(HaveOccurred())
@@ -1592,6 +1645,7 @@ func testPacket(family int, eth *layers.Ethernet, l3 gopacket.Layer, l4 gopacket
 		payload: payload,
 		ipv6ext: ipv6ext,
 	}
+
 	err := pkt.Generate()
 	if err != nil {
 		return nil, nil, nil, nil, nil, err
@@ -1897,6 +1951,69 @@ func testPacketUDPDefaultNPWithPayload(destIP net.IP, payload []byte) (*layers.E
 
 	e, ip4, l4, p, b, err := testPacket(4, nil, &ip, nil, payload)
 	return e, ip4.(*layers.IPv4), l4, p, b, err
+}
+
+func testPacketTCPV4WithPayload(destIP net.IP, srcPort, dstPort uint16, syn bool, payload []byte) (*layers.Ethernet, *layers.IPv4, *layers.TCP, []byte, []byte, error) {
+	if destIP == nil {
+		log.Panic("destIP must be set")
+	}
+
+	ip := *ipv4Default
+	ip.DstIP = destIP
+	tcp := &layers.TCP{
+		SYN:        syn,
+		SrcPort:    layers.TCPPort(srcPort),
+		DstPort:    layers.TCPPort(dstPort),
+		DataOffset: 5,
+		// Window:  14600,
+	}
+
+	// ip.Options = []layers.IPv4Option{{
+	// 	OptionType:   123,
+	// 	OptionLength: 6,
+	// 	OptionData:   []byte{0xde, 0xad, 0xbe, 0xef},
+	// }}
+	// ip.IHL += 2
+
+	e, ip4, l4, p, b, err := testPacket(4, nil, &ip, tcp, payload, nil)
+	return e, ip4.(*layers.IPv4), l4.(*layers.TCP), p, b, err
+}
+
+func testPacketTCPV4DefaultNP(destIP net.IP, syn bool) (*layers.Ethernet, *layers.IPv4, *layers.TCP, []byte, []byte, error) {
+	return testPacketTCPV4WithPayload(destIP, 1234, 5678, syn, nil)
+}
+
+func testPacketTCPV6WithPayload(destIP net.IP, srcPort, dstPort uint16, syn bool, payload []byte) (*layers.Ethernet, *layers.IPv6, *layers.TCP, []byte, []byte, error) {
+	if destIP == nil {
+		panic("destIP cannot be nil")
+	}
+
+	ip := *ipv6Default
+	ip.NextHeader = layers.IPProtocolTCP
+	ip.DstIP = destIP
+
+	tcp := &layers.TCP{
+		SYN:        syn,
+		SrcPort:    layers.TCPPort(srcPort),
+		DstPort:    layers.TCPPort(dstPort),
+		DataOffset: 5,
+		// Window:  14600,
+	}
+
+	hop := &layers.IPv6HopByHop{}
+	hop.NextHeader = layers.IPProtocolTCP
+	/* from gopacket ip6_test.go */
+	tlv := &layers.IPv6HopByHopOption{}
+	tlv.OptionType = 0x01 // PadN
+	tlv.OptionData = []byte{0x00, 0x00, 0x00, 0x00}
+	hop.Options = append(hop.Options, tlv)
+
+	e, ip6, l4, p, b, err := testPacketV6(nil, &ip, tcp, payload, hop)
+	return e, ip6, l4.(*layers.TCP), p, b, err
+}
+
+func testPacketTCPV6DefaultNP(destIP net.IP, syn bool) (*layers.Ethernet, *layers.IPv6, *layers.TCP, []byte, []byte, error) {
+	return testPacketTCPV6WithPayload(destIP, 1234, 5678, syn, nil)
 }
 
 func ipv6HopByHopExt() gopacket.SerializableLayer {
