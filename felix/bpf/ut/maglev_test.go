@@ -529,7 +529,7 @@ func TestMaglevNATServiceIPTCP(t *testing.T) {
 	newNode(node1ip)
 	encapedPkt = nil
 
-	// SYN, Src IP 1.1.1.1, Src Port 1234, Dst IP 172.16.1.1, Dst Port 5678.
+	// Src IP 1.1.1.1, Src Port 1234, Dst IP 172.16.1.1, Dst Port 5678.
 	_, ipv4, tcp, payload, pktBytes, err = testPacketTCPV4DefaultNP(serviceIP, false)
 	Expect(err).NotTo(HaveOccurred())
 
