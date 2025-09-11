@@ -50,7 +50,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM UpgradeHost (Kubernetes datastore o
 		// Build a raw CRD REST client using the same kubeconfig as the backend client.
 		cfg, _, err := k8s.CreateKubernetesClientset(&config.Spec)
 		Expect(err).NotTo(HaveOccurred())
-		crdClient, err = rawcrdclient.NewAPIClient(cfg)
+		crdClient, err = rawcrdclient.New(cfg)
 		Expect(err).NotTo(HaveOccurred())
 	})
 

@@ -510,7 +510,7 @@ var _ = Describe("Calico IPAM Tests", func() {
 			Expect(err).NotTo(HaveOccurred())
 			kcfg, _, err := k8s.CreateKubernetesClientset(&cfg.Spec)
 			Expect(err).NotTo(HaveOccurred())
-			crdClient, err = rawcrdclient.NewAPIClient(kcfg)
+			crdClient, err = rawcrdclient.New(kcfg)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Determine host for BlockAffinity and ensure there is a usable netconf.

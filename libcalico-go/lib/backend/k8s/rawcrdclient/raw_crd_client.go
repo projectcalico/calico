@@ -15,35 +15,27 @@
 package rawcrdclient
 
 import (
-	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	libapiv3 "github.com/projectcalico/calico/libcalico-go/lib/apis/v3"
+	schemecrdv1 "github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/scheme"
 )
 
-// NewAPIClient returns a new controller-runtime client configured to use the projectcalico.org/v3 API group.
-func NewAPIClient(cfg *rest.Config) (client.Client, error) {
+// New returns a new controller-runtime client configured to access
+// raw CRDs.  This is used in tests to create invalid or pre-upgrade resources
+// that cannot be created with the main client due to its validation(!)
+func New(cfg *rest.Config) (client.Client, error) {
 	cfgCopy := *cfg
+
 	// Force JSON, our types aren't all instrumented for protobuf.
 	cfgCopy.ContentConfig.ContentType = "application/json"
 	cfgCopy.ContentConfig.AcceptContentTypes = "application/json"
-	scheme, err := newScheme()
+
+	scheme := runtime.NewScheme()
+	err := schemecrdv1.AddCalicoResourcesToScheme(scheme)
 	if err != nil {
 		return nil, err
 	}
 	return client.New(&cfgCopy, client.Options{Scheme: scheme})
-}
-
-func newScheme() (*runtime.Scheme, error) {
-	// Create a new Scheme and add the projectcalico.org/v3 API group to it.
-	scheme := runtime.NewScheme()
-	if err := v3.AddToScheme(scheme); err != nil {
-		return nil, err
-	}
-	if err := libapiv3.AddToScheme(scheme); err != nil {
-		return nil, err
-	}
-	return scheme, nil
 }
