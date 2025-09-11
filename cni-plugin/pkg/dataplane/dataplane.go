@@ -54,6 +54,6 @@ func GetDataplane(conf types.NetConf, logger *logrus.Entry) (Dataplane, error) {
 	case "grpc":
 		return grpc.NewGrpcDataplane(conf, logger)
 	default:
-		return nil, fmt.Errorf("Invalid dataplane type: %s", name)
+		return nil, fmt.Errorf("invalid dataplane type: %s", name)
 	}
 }
