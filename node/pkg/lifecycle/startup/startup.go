@@ -78,13 +78,32 @@ var (
 	felixNodeConfigNamePrefix = "node."
 )
 
-// This file contains the main startup processing for the calico/node.  This
+type runConf struct {
+	bailOutAfterUpgrade bool
+}
+
+type RunOpt func(*runConf)
+
+// WithBailOutAfterUpgrade is a RunOpt that configures whether to exit after
+// performing any required datastore upgrade.  Useful for tests!
+func WithBailOutAfterUpgrade(bail bool) RunOpt {
+	return func(c *runConf) {
+		c.bailOutAfterUpgrade = bail
+	}
+}
+
+// Run contains the main startup processing for the calico/node.  This
 // includes:
 //   - Detecting IP address and Network to use for BGP
 //   - Configuring the node resource with IP/AS information provided in the
 //     environment, or autodetected.
 //   - Creating default IP Pools for quick-start use
-func Run() {
+func Run(opts ...RunOpt) {
+	var conf runConf
+	for _, opt := range opts {
+		opt(&conf)
+	}
+
 	// Check $CALICO_STARTUP_LOGLEVEL to capture early log statements
 	ConfigureLogging()
 
@@ -110,6 +129,23 @@ func Run() {
 			log.WithError(err).Errorf("Unable to ensure datastore is migrated.")
 			utils.Terminate()
 		}
+	}
+
+	// Make sure that this host's BlockAffinity resources are upgraded to add
+	// labels for efficient lookup.  CNI plugin also does this on the first
+	// allocation after upgrade.  Doing it here too handles some corner cases,
+	// such as calico-node being downgraded, doing some allocations and then,
+	// upgrading again.
+	upgradeCtx, cancel := context.WithTimeout(ctx, 90*time.Second)
+	defer cancel()
+	if err := cli.IPAM().UpgradeHost(upgradeCtx, nodeName); err != nil {
+		log.WithError(err).Errorf("Unable to upgrade host's IPAM resources.")
+		utils.Terminate()
+	}
+
+	if conf.bailOutAfterUpgrade {
+		log.Info("Exiting after datastore migration as requested.")
+		return
 	}
 
 	// Query the current Node resources.  We update our node resource with

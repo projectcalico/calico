@@ -660,7 +660,7 @@ func buildCRDClientV1(cfg rest.Config) (*rest.RESTClient, error) {
 		return nil, err
 	}
 
-	calischeme.AddCalicoResourcesToScheme()
+	calischeme.AddCalicoResourcesToGlobalScheme()
 
 	return cli, nil
 }
