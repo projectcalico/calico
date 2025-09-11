@@ -676,9 +676,6 @@ func TestPendingUpdatesView_IterBatched_PartialApplication(t *testing.T) {
 	// For now, just validate that partial application behavior works at all
 	// and that multiple calls are made when items are only partially processed
 	Expect(len(applyCalls)).To(BeNumerically(">", 1), "Should have multiple calls due to partial application")
-
-	// This test currently fails due to the bug, but demonstrates the expected behavior:
-	// when applyFn only applies some items, subsequent calls should only see the remaining items
 }
 
 // TestPendingDeletesView_IterBatched_PartialApplication tests that IterBatched correctly
@@ -753,9 +750,6 @@ func TestPendingDeletesView_IterBatched_PartialApplication(t *testing.T) {
 	// For now, just validate that partial application behavior works at all
 	// and that multiple calls are made when items are only partially processed
 	Expect(len(deleteCalls)).To(BeNumerically(">", 1), "Should have multiple calls due to partial application")
-
-	// This test currently fails due to the bug, but demonstrates the expected behavior:
-	// when applyFn only deletes some items, subsequent calls should only see the remaining items
 }
 
 func setupDeltaTrackerTest(t *testing.T) *DeltaTracker[string, string] {
