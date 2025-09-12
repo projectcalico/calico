@@ -789,7 +789,7 @@ func (r *RouteTable) ReadRoutesFromKernel(ifaceName string) ([]Target, error) {
 
 	ifaceIndex, ok := r.ifaceIndexForName(ifaceName)
 	if !ok {
-		return nil, IfaceNotPresent
+		return nil, ErrIfaceNotPresent
 	}
 
 	var allTargets []Target
@@ -910,7 +910,7 @@ func (r *RouteTable) maybeResyncWithDataplane() error {
 	nl, err := r.nl.Handle()
 	if err != nil {
 		r.logCxt.WithError(err).Error("Failed to connect to netlink.")
-		return ConnectFailed
+		return ErrConnectFailed
 	}
 
 	if r.fullResyncNeeded {
@@ -1089,8 +1089,8 @@ func (r *RouteTable) resyncIface(nl netlinkshim.Interface, ifaceName string) err
 	if err != nil {
 		// Filter the error so that we don't spam errors if the interface is being torn
 		// down.
-		filteredErr := r.filterErrorByIfaceState(ifaceName, err, ListFailed, false)
-		if errors.Is(filteredErr, ListFailed) {
+		filteredErr := r.filterErrorByIfaceState(ifaceName, err, ErrListFailed, false)
+		if errors.Is(filteredErr, ErrListFailed) {
 			r.logCxt.WithError(err).WithFields(log.Fields{
 				"iface":       ifaceName,
 				"routeFilter": routeFilter,
@@ -1345,7 +1345,7 @@ func (r *RouteTable) applyUpdates(attempt int) error {
 	nl, err := r.nl.Handle()
 	if err != nil {
 		r.logCxt.Debug("Failed to connect to netlink")
-		return ConnectFailed
+		return ErrConnectFailed
 	}
 
 	// First clean up any old routes.
@@ -1448,7 +1448,7 @@ func (r *RouteTable) applyUpdates(attempt int) error {
 					attempt == 0,
 				)
 
-				if errors.Is(err, IfaceDown) || errors.Is(err, IfaceNotPresent) {
+				if errors.Is(err, ErrIfaceDown) || errors.Is(err, ErrIfaceNotPresent) {
 					// Very common race: the interface was taken down/deleted
 					// by the CNI plugin while we were trying to update it.
 					// Mark for a lazy rescan so that we won't try to program
@@ -1493,7 +1493,7 @@ func (r *RouteTable) applyUpdates(attempt int) error {
 					attempt == 0,
 				)
 
-				if errors.Is(err, IfaceDown) || errors.Is(err, IfaceNotPresent) {
+				if errors.Is(err, ErrIfaceDown) || errors.Is(err, ErrIfaceNotPresent) {
 					// Very common race: the interface was taken down/deleted
 					// by the CNI plugin while we were trying to update it.
 					// Mark for a lazy rescan so that we won't try to program
@@ -1519,17 +1519,17 @@ func (r *RouteTable) applyUpdates(attempt int) error {
 	if len(deletionErrs) > 0 {
 		r.logCxt.WithField("errors", formatErrMap(deletionErrs)).Warn(
 			"Encountered some errors when trying to delete old routes.")
-		err = UpdateFailed
+		err = ErrUpdateFailed
 	}
 	if len(updateErrs) > 0 {
 		r.logCxt.WithField("errors", formatErrMap(updateErrs)).Warn(
 			"Encountered some errors when trying to update routes.  Will retry.")
-		err = UpdateFailed
+		err = ErrUpdateFailed
 	}
 	if len(arpErrs) > 0 {
 		r.logCxt.WithField("errors", formatErrMap(arpErrs)).Warn(
 			"Encountered some errors when trying to add static ARP entries.  Will retry.")
-		err = UpdateFailed
+		err = ErrUpdateFailed
 	}
 
 	return err
@@ -1612,13 +1612,13 @@ func (r *RouteTable) filterErrorByIfaceState(
 		// the status in this case, we open a race where the interface gets created and
 		// we log an error when we're about to re-trigger programming anyway.
 		logCxt.Debug("Interface doesn't exist, perhaps workload is being torn down?")
-		return IfaceNotPresent
+		return ErrIfaceNotPresent
 	}
 
 	if errors.Is(currentErr, syscall.ENETDOWN) {
 		// Another clear error: interface is down.
 		logCxt.Debug("Interface down, perhaps workload is being torn down?")
-		return IfaceDown
+		return ErrIfaceDown
 	}
 
 	// If the current error wasn't clear, try to look up the interface to see if there's a
@@ -1629,7 +1629,7 @@ func (r *RouteTable) filterErrorByIfaceState(
 			"ifaceName":  ifaceName,
 			"currentErr": currentErr,
 		}).Error("Failed to (re)connect to netlink while processing another error")
-		return ConnectFailed
+		return ErrConnectFailed
 	}
 	if link, err := nl.LinkByName(ifaceName); err == nil {
 		// Link still exists.  Check if it's up.
@@ -1647,12 +1647,12 @@ func (r *RouteTable) filterErrorByIfaceState(
 		} else {
 			// Special case: Link exists and it's down.  Assume that's the problem.
 			logCxt.WithField("link", link).Debug("Interface is down")
-			return IfaceDown
+			return ErrIfaceDown
 		}
 	} else if isNotFoundError(err) {
 		// Special case: Link no longer exists.
 		logCxt.Info("Interface was deleted during operation, filtering error")
-		return IfaceNotPresent
+		return ErrIfaceNotPresent
 	} else {
 		// Failed to list routes, then failed to check if interface exists.
 		logCxt.WithError(err).Error("Failed to access interface after a failure")
