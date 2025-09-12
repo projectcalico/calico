@@ -8,6 +8,7 @@ import {
     SelectedOmniFilterData,
     SelectedOmniFilterOptions,
     ListOmniFilterKeys,
+    FilterHintKey,
 } from '@/utils/omniFilter';
 import React from 'react';
 
@@ -54,7 +55,7 @@ export const useSelectedListOmniFilters = (
 };
 
 export const useOmniFilterQuery = (
-    filterParam: ListOmniFilterParam,
+    filterParam: FilterHintKey,
 ): {
     data: ListOmniFilterData;
     fetchData: (query: string | null) => void;

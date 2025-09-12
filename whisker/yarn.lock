@@ -1847,12 +1847,12 @@ caniuse-lite@^1.0.30001616, caniuse-lite@^1.0.30001688:
   resolved "https://registry.yarnpkg.com/caniuse-lite/-/caniuse-lite-1.0.30001690.tgz#f2d15e3aaf8e18f76b2b8c1481abde063b8104c8"
   integrity sha512-5ExiE3qQN6oF8Clf8ifIDcMRCRE/dMGcETG/XGMD8/XiXm6HXQgQTh1yZYLXXpSOsEUlJm1Xr7kGULZTuGtP/w==
 
-chakra-react-select@^4.10.1:
-  version "4.10.1"
-  resolved "https://registry.yarnpkg.com/chakra-react-select/-/chakra-react-select-4.10.1.tgz#352f0d7b427e8724ccb931c192ffb87b9b25946e"
-  integrity sha512-0d7lubrmcm7molVYNYWEYi7o71W8wn/WruINon+m23XQLYvJ+bZlYVawDdWYdJjX8O1nzJlTDo4b7CB6zTsr4A==
+chakra-react-select@^5.0.5:
+  version "5.0.5"
+  resolved "https://registry.yarnpkg.com/chakra-react-select/-/chakra-react-select-5.0.5.tgz#c898a3fa291bc12a31c7e029913371769a360ce1"
+  integrity sha512-bD8JxL+9SXdQ0vsq+m2FwdAMpaQOKDAM/2gTnbPJStFXEVUnxM6Mg4QrDOoU2zU235jRN+0Z/dmVS+c3ieXChg==
   dependencies:
-    react-select "5.8.x"
+    react-select "5.10.x"
 
 chalk@^3.0.0:
   version "3.0.0"
@@ -3901,10 +3901,10 @@ react-router@6.28.2:
   dependencies:
     "@remix-run/router" "1.21.1"
 
-react-select@5.8.x:
-  version "5.8.3"
-  resolved "https://registry.yarnpkg.com/react-select/-/react-select-5.8.3.tgz#64e89ad20a846348b18c6fbb395b939d0153ed74"
-  integrity sha512-lVswnIq8/iTj1db7XCG74M/3fbGB6ZaluCzvwPGT5ZOjCdL/k0CLWhEK0vCBLuU5bHTEf6Gj8jtSvi+3v+tO1w==
+react-select@5.10.x:
+  version "5.10.2"
+  resolved "https://registry.yarnpkg.com/react-select/-/react-select-5.10.2.tgz#8dffc69dfd7d74684d9613e6eb27204e3b99e127"
+  integrity sha512-Z33nHdEFWq9tfnfVXaiM12rbJmk+QjFEztWLtmXqQhz6Al4UZZ9xc0wiatmGtUOCCnHN0WizL3tCMYRENX4rVQ==
   dependencies:
     "@babel/runtime" "^7.12.0"
     "@emotion/cache" "^11.4.0"
@@ -3914,7 +3914,7 @@ react-select@5.8.x:
     memoize-one "^6.0.0"
     prop-types "^15.6.0"
     react-transition-group "^4.3.0"
-    use-isomorphic-layout-effect "^1.1.2"
+    use-isomorphic-layout-effect "^1.2.0"
 
 react-style-singleton@^2.2.1, react-style-singleton@^2.2.2:
   version "2.2.3"
@@ -4370,10 +4370,10 @@ use-callback-ref@^1.3.2, use-callback-ref@^1.3.3:
   dependencies:
     tslib "^2.0.0"
 
-use-isomorphic-layout-effect@^1.1.2:
-  version "1.2.0"
-  resolved "https://registry.yarnpkg.com/use-isomorphic-layout-effect/-/use-isomorphic-layout-effect-1.2.0.tgz#afb292eb284c39219e8cb8d3d62d71999361a21d"
-  integrity sha512-q6ayo8DWoPZT0VdG4u3D3uxcgONP3Mevx2i2b0434cwWBoL+aelL1DzkXI6w3PhTZzUeR2kaVlZn70iCiseP6w==
+use-isomorphic-layout-effect@^1.2.0:
+  version "1.2.1"
+  resolved "https://registry.yarnpkg.com/use-isomorphic-layout-effect/-/use-isomorphic-layout-effect-1.2.1.tgz#2f11a525628f56424521c748feabc2ffcc962fce"
+  integrity sha512-tpZZ+EX0gaghDAiFR37hj5MgY6ZN55kLiPkJsKxBMZ6GZdOSPJXiOzPM984oPYZ5AnehYx5WQp1+ME8I/P/pRA==
 
 use-sidecar@^1.1.2:
   version "1.1.3"

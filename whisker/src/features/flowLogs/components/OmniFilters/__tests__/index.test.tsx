@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, within } from '@/test-utils/helper';
 import OmniFilters from '..';
 import { OmniFilterKeys } from '@/utils/omniFilter';
+import { useFeature } from '@/hooks';
 
 jest.mock(
     '@/libs/tigera/ui-components/components/common/OmniFilter',
@@ -14,7 +15,7 @@ jest.mock(
             onRequestMore,
         }: any) => {
             return (
-                <div data-testId={filterLabel}>
+                <div data-testid={filterLabel}>
                     <div>{filterLabel}</div>
                     <span onClick={onClear}>on clear</span>
                     <button onClick={onReady}>on ready</button>
@@ -52,6 +53,19 @@ jest.mock(
             );
         },
 );
+
+jest.mock(
+    '@/features/flowLogs/components/PolicyOmniFilter',
+    () =>
+        ({ filterLabel }: any) => {
+            return <div>{filterLabel} filter</div>;
+        },
+);
+
+jest.mock('@/hooks', () => ({
+    ...jest.requireActual('@/hooks'),
+    useFeature: jest.fn(),
+}));
 
 const defaultProps = {
     omniFilterData: {
@@ -196,10 +210,10 @@ describe('<OmniFilters />', () => {
         const event = { port: 8080, protocol: 'proto' };
         PortOmniFilterMock.onChange(event);
 
-        expect(mockOnMultiChange).toHaveBeenCalledWith(
-            [OmniFilterKeys.protocol, OmniFilterKeys.dest_port],
-            [event.protocol, event.port],
-        );
+        expect(mockOnMultiChange).toHaveBeenCalledWith({
+            [OmniFilterKeys.protocol]: [event.protocol],
+            [OmniFilterKeys.dest_port]: [event.port],
+        });
     });
 
     it('should handle when port/ protocol values are provided', () => {
@@ -215,5 +229,21 @@ describe('<OmniFilters />', () => {
         );
 
         expect(screen.getByText(`Port ${port} ${protocol}`));
+    });
+
+    it('should not show the policy v2 filter', () => {
+        jest.mocked(useFeature).mockReturnValue(false);
+
+        render(<OmniFilters {...defaultProps} />);
+
+        expect(screen.queryByText('Policy V2 filter')).not.toBeInTheDocument();
+    });
+
+    it('should show the policy v2 filter', () => {
+        jest.mocked(useFeature).mockReturnValue(true);
+
+        render(<OmniFilters {...defaultProps} />);
+
+        expect(screen.getByText('Policy V2 filter')).toBeInTheDocument();
     });
 });
