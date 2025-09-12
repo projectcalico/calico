@@ -588,6 +588,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 			Context("after removing BGP address from third node", func() {
 				// Simulate having a host send VXLAN traffic from an unknown source, should get blocked.
 				BeforeEach(func() {
+					ipsetLen := allHostsIPSetSize(felixes, ipipMode)
 					for _, f := range felixes {
 						if BPFMode() {
 							// one host and one host tunnel routes per node
@@ -601,9 +602,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 							}).Should(Equal(expectedNumRoutes),
 								fmt.Sprintf("Expected %v route per node, not: %v", expectedNumRoutes, f.BPFRoutes()))
 						} else if NFTMode() {
-							Eventually(f.NFTSetSizeFn("cali40all-hosts-net"), "15s", "200ms").Should(Equal(len(felixes)))
+							Eventually(f.NFTSetSizeFn("cali40all-hosts-net"), "15s", "200ms").Should(Equal(ipsetLen))
 						} else {
-							Eventually(f.IPSetSizeFn("cali40all-hosts-net"), "15s", "200ms").Should(Equal(len(felixes)))
+							Eventually(f.IPSetSizeFn("cali40all-hosts-net"), "15s", "200ms").Should(Equal(ipsetLen))
 						}
 					}
 
@@ -623,6 +624,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 				})
 
 				It("should have no connectivity from third felix and expected number of IPs in allow list", func() {
+					ipsetLen := allHostsIPSetSize(felixes, ipipMode)
 					if BPFMode() {
 						// one host and one host tunnel routes per node
 						expectedNumRoutes := (len(felixes) - 1) * 2
@@ -635,9 +637,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 						}).Should(Equal(expectedNumRoutes),
 							fmt.Sprintf("Expected %v route per node, not: %v", expectedNumRoutes, felixes[0].BPFRoutes()))
 					} else if NFTMode() {
-						Eventually(felixes[0].NFTSetSizeFn("cali40all-hosts-net"), "15s", "200ms").Should(Equal(len(felixes)))
+						Eventually(felixes[0].NFTSetSizeFn("cali40all-hosts-net"), "15s", "200ms").Should(Equal(ipsetLen))
 					} else {
-						Eventually(felixes[0].IPSetSizeFn("cali40all-hosts-net"), "15s", "200ms").Should(Equal(len(felixes)))
+						Eventually(felixes[0].IPSetSizeFn("cali40all-hosts-net"), "15s", "200ms").Should(Equal(ipsetLen))
 					}
 
 					cc.ExpectSome(w[0], w[1])
@@ -1207,4 +1209,12 @@ func waitForIPIPDevice() {
 		}
 		return errors.New("tunl0 wasn't auto-created")
 	}).Should(BeNil())
+}
+
+func allHostsIPSetSize(felixes []*infrastructure.Felix, ipipMode api.IPIPMode) int {
+	if ipipMode == api.IPIPModeNever {
+		// All Hosts IPSet Manager is not enabled in IPIP encapsulation.
+		return 0
+	}
+	return len(felixes)
 }
