@@ -143,6 +143,7 @@ create:
 		.type = ct_ctx->type,
 		.orig_ip = ct_ctx->orig_dst,
 		.orig_port = orig_dport,
+		.dscp = ct_ctx->dscp,
 	};
 
 	ct_value_set_flags(&ct_value, ct_ctx->flags);
@@ -299,6 +300,7 @@ static CALI_BPF_INLINE int calico_ct_create_nat_fwd(struct cali_tc_ctx *ctx,
 	struct calico_ct_value ct_value = {
 		.type = CALI_CT_TYPE_NAT_FWD,
 		.last_seen = now,
+		.dscp = ct_ctx->dscp,
 	};
 
 	ct_value.nat_rev_key = *rk;
@@ -610,6 +612,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 	struct calico_ct_result result = {
 		.rc = CALI_CT_NEW, /* it is zero, but make it explicit in the code */
 		.ifindex_created = CT_INVALID_IFINDEX,
+		.dscp = -1,
 	};
 
 	struct calico_ct_key k;
@@ -701,6 +704,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 	v->last_seen = now;
 
 	result.flags = ct_value_get_flags(v);
+	result.dscp = v->dscp;
 
 	// Return the if_index where the CT state was created.
 	if (v->a_to_b.opener) {

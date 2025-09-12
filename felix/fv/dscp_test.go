@@ -350,16 +350,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ dscp tests", []apiconfig.Da
 		cc.Expect(connectivity.Some, ep2_2, extWorkload, ccOpts)
 		cc.CheckConnectivity()
 
-		By("checking DSCP values are applied to return traffic of connections initiated outside cluster")
-		cc.ResetExpectations()
-		cc.ExpectSome(extClient, hostw)
-		cc.ExpectSome(extClient, ep1_1)
-		cc.ExpectNone(extClient, ep2_1)
-
-		cc.Expect(connectivity.Some, extClient, ep1_2, ccOpts)
-		cc.Expect(connectivity.Some, extClient, ep2_2, ccOpts)
-		cc.CheckConnectivity()
-
 		By("removing host endpoint")
 		_, err = client.HostEndpoints().Delete(utils.Ctx, hep.Name, options.DeleteOptions{})
 		Expect(err).NotTo(HaveOccurred())
@@ -418,6 +408,89 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ dscp tests", []apiconfig.Da
 
 		cc.Expect(connectivity.None, ep1_2, extWorkload, ccOpts)
 		cc.Expect(connectivity.None, ep2_2, extWorkload, ccOpts)
+		cc.CheckConnectivity()
+	})
+
+	It("should apply DSCP values to return traffic of connections initiated outside cluster", func() {
+		dscp20 := numorstring.DSCPFromInt(20) // 0x14
+		dscp40 := numorstring.DSCPFromInt(40) // 0x28
+
+		By("configurging external client to only accept packets with specific DSCP value")
+		extClient.Exec("ip", "route", "add", ep1_1.IP, "via", tc.Felixes[0].IP)
+		extClient.Exec("ip", "route", "add", ep2_1.IP, "via", tc.Felixes[0].IP)
+
+		// Configure external client to only accept ipv4 packets with 0x14 DSCP value.
+		extClient.Exec("iptables", "-A", "INPUT", "-m", "dscp", "!", "--dscp", "0x14", "-j", "DROP")
+
+		extClient.Exec("ip", "-6", "route", "add", ep1_2.IP6, "via", tc.Felixes[1].IPv6)
+		extClient.Exec("ip", "-6", "route", "add", ep2_2.IP6, "via", tc.Felixes[1].IPv6)
+
+		// Configure external client to only accept ipv6 packets with 0x28 DSCP value. ICMPv6 needs to be allowed
+		// regardless for neighbor discovery.
+		extClient.Exec("ip6tables", "-A", "INPUT", "-p", "ipv6-icmp", "-j", "ACCEPT")
+		extClient.Exec("ip6tables", "-A", "INPUT", "-m", "dscp", "!", "--dscp", "0x28", "-j", "DROP")
+
+		if !BPFMode() {
+			verifyQoSPolicies(tc.Felixes[0], nil, nil)
+			verifyQoSPolicies(tc.Felixes[1], nil, nil)
+		}
+
+		cc.ResetExpectations()
+		cc.ExpectNone(hostw, extWorkload)
+		cc.ExpectNone(ep1_1, extWorkload)
+		cc.ExpectNone(ep2_1, extWorkload)
+
+		ccOpts := connectivity.ExpectWithIPVersion(6)
+		cc.Expect(connectivity.None, ep1_2, extWorkload, ccOpts)
+		cc.Expect(connectivity.None, ep2_2, extWorkload, ccOpts)
+		cc.CheckConnectivity()
+
+		By("adding a host endpoint to felix 0")
+		hep := apiv3.NewHostEndpoint()
+		hep.Name = "host1-eth0"
+		hep.Labels = map[string]string{
+			"name":          hep.Name,
+			"host-endpoint": "true",
+		}
+		hep.Spec.Node = tc.Felixes[0].Hostname
+		hep.Spec.ExpectedIPs = []string{tc.Felixes[0].IP}
+		hep.Annotations = map[string]string{
+			"qos.projectcalico.org/dscp": "20",
+		}
+		_, err := client.HostEndpoints().Create(utils.Ctx, hep, options.SetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		gnp := apiv3.NewGlobalNetworkPolicy()
+		gnp.Name = "gnp-1"
+		gnp.Spec.Selector = "host-endpoint=='true'"
+		gnp.Spec.Ingress = []apiv3.Rule{{Action: apiv3.Allow}}
+		gnp.Spec.Egress = []apiv3.Rule{{Action: apiv3.Allow}}
+		_, err = client.GlobalNetworkPolicies().Create(utils.Ctx, gnp, utils.NoOptions)
+		Expect(err).NotTo(HaveOccurred())
+
+		By("setting the initial DSCP values")
+		ep1_1.WorkloadEndpoint.Spec.QoSControls = &api.QoSControls{
+			DSCP: &dscp20,
+		}
+		ep1_1.UpdateInInfra(infra)
+
+		ep2_2.WorkloadEndpoint.Spec.QoSControls = &api.QoSControls{
+			DSCP: &dscp40,
+		}
+		ep2_2.UpdateInInfra(infra)
+
+		if !BPFMode() {
+			verifyQoSPolicies(tc.Felixes[0], []string{"0x14", "0x14"}, nil)
+			verifyQoSPolicies(tc.Felixes[1], []string{"0x28"}, []string{"0x28"})
+		}
+
+		cc.ResetExpectations()
+		cc.ExpectSome(hostw, extWorkload)
+		cc.ExpectSome(ep1_1, extWorkload)
+		cc.ExpectNone(ep2_1, extWorkload)
+
+		cc.Expect(connectivity.None, ep1_2, extWorkload, ccOpts)
+		cc.Expect(connectivity.Some, ep2_2, extWorkload, ccOpts)
 		cc.CheckConnectivity()
 	})
 
