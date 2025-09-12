@@ -46,7 +46,7 @@ Usage:
 Options:
 
   --pretty            # Pretty-print the output (only applies to sem-change-in).
-  --loglevel <level>  # Logrus log level (debug, info, warn, error, fatal, panic). Default: info
+  --loglevel <level>  # Logrus log level (debug, info, warn, error, fatal, panic). Default: warn
 
 The test-exclusions and sem-change-in sub-commands are intended to be used with
 packages at the top-level of the repo.  Test exclusions are based on whether
