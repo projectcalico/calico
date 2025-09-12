@@ -121,7 +121,7 @@ require (
 	sigs.k8s.io/controller-runtime v0.20.4
 	sigs.k8s.io/kind v0.29.0
 	sigs.k8s.io/knftables v0.0.18
-	//sigs.k8s.io/network-policy-api v0.1.5
+	sigs.k8s.io/network-policy-api v0.1.8-0.20250827130209-8d10833b777d
 	sigs.k8s.io/yaml v1.6.0
 )
 
@@ -370,8 +370,6 @@ require (
 	sigs.k8s.io/structured-merge-diff/v4 v4.6.0 // indirect
 )
 
-require sigs.k8s.io/network-policy-api v0.0.0-00010101000000-000000000000
-
 require (
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	sigs.k8s.io/randfill v1.0.0 // indirect
@@ -414,5 +412,5 @@ replace (
 	k8s.io/mount-utils => k8s.io/mount-utils v0.33.3
 	k8s.io/pod-security-admission => k8s.io/pod-security-admission v0.33.3
 	k8s.io/sample-apiserver => k8s.io/sample-apiserver v0.33.3
-	sigs.k8s.io/network-policy-api => github.com/npinaeva/network-policy-api v0.0.0-20250829140707-07185588057d
+	sigs.k8s.io/network-policy-api/conformance => github.com/npinaeva/network-policy-api v0.0.0-20250829140707-07185588057d
 )

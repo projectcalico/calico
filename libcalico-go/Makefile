@@ -10,8 +10,9 @@ NETPOL_TAG = v0.1.5
 NETPOL_CRD_URL = https://raw.githubusercontent.com/kubernetes-sigs/network-policy-api/refs/tags/$(NETPOL_TAG)/config/crd/experimental
 NETPOL_ANP_CRD = policy.networking.k8s.io_adminnetworkpolicies.yaml
 NETPOL_BANP_CRD = policy.networking.k8s.io_baselineadminnetworkpolicies.yaml
-NETPOL_CNP_CRD_URL = https://raw.githubusercontent.com/npinaeva/network-policy-api/refs/heads/npep-285-impl/config/crd/standard/
+NETPOL_CNP_CRD_URL = https://raw.githubusercontent.com/kubernetes-sigs/network-policy-api/refs/heads/main/config/crd/standard
 NETPOL_CNP_CRD = policy.networking.k8s.io_clusternetworkpolicies.yaml
+
 
 ###############################################################################
 # Download and include ../lib.Makefile
