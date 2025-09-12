@@ -743,7 +743,7 @@ blocks:
             - ../.semaphore/run-and-monitor make-ci.log make ci
   - name: libcalico-go
     run:
-      when: ""
+      when: "change_in(['/api/pkg/apis/projectcalico/v3/*.go','/api/pkg/lib/numorstring/*.go','/crypto/pkg/tls/*.go','/hack/test/certs/','/lib.Makefile','/lib/std/uniquelabels/*.go','/lib/std/uniquestr/*.go','/libcalico-go/**','/metadata.mk','/typha/pkg/discovery/*.go','/typha/pkg/syncclient/*.go','/typha/pkg/syncproto/*.go','/typha/pkg/tlsutils/*.go'], {pipeline_file: 'ignore', exclude: ['/**/*.md','/**/.gitignore','/**/AUTHORS*','/**/CONTRIBUTING*','/**/DEVELOPER_GUIDE*','/**/LICENSE*','/**/README*','/**/SECURITY.md','/api/**/*_test.go','/crypto/**/*_test.go','/lib/**/*_test.go','/typha/**/*_test.go']})"
     dependencies:
       - Prerequisites
     task:
