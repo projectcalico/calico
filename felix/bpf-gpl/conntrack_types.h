@@ -1,5 +1,5 @@
 // Project Calico BPF dataplane programs.
-// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2025 Tigera, Inc. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 
 #ifndef __CALI_CONNTRACK_TYPES_H__
@@ -39,6 +39,7 @@ enum cali_ct_type {
 #define CALI_CT_FLAG_NP_REMOTE	0x1000 /* marks connections from local host to remote backend of a nodeport */
 #define CALI_CT_FLAG_NP_NO_DSR	0x2000 /* marks connections from a client which is excluded from DSR */
 #define CALI_CT_FLAG_SKIP_REDIR_PEER	0x4000 /* marks connections from a client which is excluded from redir */
+#define CALI_CT_FLAG_CLUSTER_EXTERNAL	0x8000 /* marks connections with source or destination outside cluster */
 
 struct calico_ct_leg {
 	__u64 bytes;

@@ -197,7 +197,7 @@ func TestNATPodPodXNode(t *testing.T) {
 	Expect(ok).To(BeTrue())
 	// No NATing, service already resolved
 	Expect(v.Type()).To(Equal(conntrack.TypeNormal))
-	Expect(v.Flags()).To(Equal(uint16(0)))
+	Expect(v.Flags()).To(Equal(conntrack3.FlagClusterExternal))
 
 	// Arriving at workload at node 2
 	expectMark(tcdefs.MarkSeen)
@@ -432,7 +432,7 @@ func TestNATNodePort(t *testing.T) {
 	v, ok := ct[conntrack.NewKey(uint8(ipv4.Protocol), ipv4.SrcIP, uint16(udp.SrcPort), natIP.To4(), natPort)]
 	Expect(ok).To(BeTrue())
 	Expect(v.Type()).To(Equal(conntrack.TypeNATReverse))
-	Expect(v.Flags()).To(Equal(conntrack3.FlagNATNPFwd))
+	Expect(v.Flags()).To(Equal(conntrack3.FlagNATNPFwd | conntrack3.FlagClusterExternal))
 
 	expectMark(tcdefs.MarkSeenBypassForward)
 	// Leaving node 1
@@ -550,7 +550,7 @@ func TestNATNodePort(t *testing.T) {
 	v, ok = ct[conntrack.NewKey(uint8(ipv4.Protocol), ipv4.SrcIP, uint16(udp.SrcPort), natIP.To4(), natPort)]
 	Expect(ok).To(BeTrue())
 	Expect(v.Type()).To(Equal(conntrack.TypeNATReverse))
-	Expect(v.Flags()).To(Equal(conntrack3.FlagExtLocal))
+	Expect(v.Flags()).To(Equal(conntrack3.FlagExtLocal | conntrack3.FlagClusterExternal))
 
 	dumpARPMap(arpMap)
 
@@ -1222,7 +1222,7 @@ func TestNATNodePortNoFWD(t *testing.T) {
 	v, ok := ct[conntrack.NewKey(uint8(ipv4.Protocol), ipv4.SrcIP, uint16(udp.SrcPort), natIP.To4(), natPort)]
 	Expect(ok).To(BeTrue())
 	Expect(v.Type()).To(Equal(conntrack.TypeNATReverse))
-	Expect(v.Flags()).To(Equal(conntrack3.FlagExtLocal))
+	Expect(v.Flags()).To(Equal(conntrack3.FlagExtLocal | conntrack3.FlagClusterExternal))
 
 	// Arriving at workload
 	runBpfTest(t, "calico_to_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
@@ -2126,7 +2126,7 @@ func TestNATNodePortIngressDSR(t *testing.T) {
 	v, ok := ct[conntrack.NewKey(uint8(ipv4.Protocol), ipv4.SrcIP, uint16(udp.SrcPort), natIP.To4(), natPort)]
 	Expect(ok).To(BeTrue())
 	Expect(v.Type()).To(Equal(conntrack.TypeNATReverse))
-	Expect(v.Flags()).To(Equal(conntrack3.FlagNATFwdDsr | conntrack3.FlagNATNPFwd))
+	Expect(v.Flags()).To(Equal(conntrack3.FlagNATFwdDsr | conntrack3.FlagNATNPFwd | conntrack3.FlagClusterExternal))
 }
 
 func TestNATNodePortDSROptout(t *testing.T) {
@@ -2227,7 +2227,7 @@ func TestNATNodePortDSROptout(t *testing.T) {
 	v, ok := ct[conntrack.NewKey(uint8(ipv4.Protocol), ipv4.SrcIP, uint16(udp.SrcPort), natIP.To4(), natPort)]
 	Expect(ok).To(BeTrue())
 	Expect(v.Type()).To(Equal(conntrack.TypeNATReverse))
-	Expect(v.Flags()).To(Equal(conntrack3.FlagNATFwdDsr | conntrack3.FlagNATNPFwd))
+	Expect(v.Flags()).To(Equal(conntrack3.FlagNATFwdDsr | conntrack3.FlagNATNPFwd | conntrack3.FlagClusterExternal))
 
 	// N.B. we skip the forward part from node, we just needed to have the right packet.
 
@@ -2329,7 +2329,7 @@ func TestNATNodePortDSROptout(t *testing.T) {
 	v, ok = ct[conntrack.NewKey(uint8(ipv4.Protocol), ipv4.SrcIP, uint16(udp.SrcPort), natIP.To4(), natPort)]
 	Expect(ok).To(BeTrue())
 	Expect(v.Type()).To(Equal(conntrack.TypeNATReverse))
-	Expect(v.Flags()).To(Equal(conntrack3.FlagExtLocal | conntrack3.FlagNoDSR))
+	Expect(v.Flags()).To(Equal(conntrack3.FlagExtLocal | conntrack3.FlagNoDSR | conntrack3.FlagClusterExternal))
 
 	skbMark = tcdefs.MarkSeen
 
@@ -2995,7 +2995,7 @@ func TestNATPodPodXNodeV6(t *testing.T) {
 	Expect(ok).To(BeTrue())
 	// No NATing, service already resolved
 	Expect(v.Type()).To(Equal(conntrack.TypeNormal))
-	Expect(v.Flags()).To(Equal(uint16(0)))
+	Expect(v.Flags()).To(Equal(conntrack3.FlagClusterExternal))
 
 	// Arriving at workload at node 2
 	expectMark(tcdefs.MarkSeen)
@@ -3220,7 +3220,7 @@ func TestNATNodePortV6(t *testing.T) {
 	v, ok := ct[conntrack.NewKeyV6(uint8(17 /* UDP */), ipv6.SrcIP, uint16(udp.SrcPort), natIP, natPort)]
 	Expect(ok).To(BeTrue())
 	Expect(v.Type()).To(Equal(conntrack.TypeNATReverse))
-	Expect(v.Flags()).To(Equal(conntrack3.FlagNATNPFwd))
+	Expect(v.Flags()).To(Equal(conntrack3.FlagNATNPFwd | conntrack3.FlagClusterExternal))
 
 	expectMark(tcdefs.MarkSeenBypassForward)
 	// Leaving node 1
@@ -3338,7 +3338,7 @@ func TestNATNodePortV6(t *testing.T) {
 	v, ok = ct[conntrack.NewKeyV6(uint8(17 /* UDP */), ipv6.SrcIP, uint16(udp.SrcPort), natIP, natPort)]
 	Expect(ok).To(BeTrue())
 	Expect(v.Type()).To(Equal(conntrack.TypeNATReverse))
-	Expect(v.Flags()).To(Equal(conntrack3.FlagExtLocal))
+	Expect(v.Flags()).To(Equal(conntrack3.FlagExtLocal | conntrack3.FlagClusterExternal))
 
 	dumpARPMapV6(arpMapV6)
 
