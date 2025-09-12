@@ -494,6 +494,7 @@ type bgpPeer struct {
 	Port            uint16               `json:"port"`
 	KeepNextHop     bool                 `json:"keep_next_hop"`
 	RestartTime     string               `json:"restart_time"`
+	KeepaliveTime   string               `json:"keepalive_time"`
 	CalicoNode      bool                 `json:"calico_node"`
 	NumAllowLocalAS int32                `json:"num_allow_local_as"`
 	TTLSecurity     uint8                `json:"ttl_security"`
@@ -2014,6 +2015,9 @@ func (c *client) setPeerConfigFieldsFromV3Resource(peers []*bgpPeer, v3res *apiv
 		peer.SourceAddr = withDefault(string(v3res.Spec.SourceAddress), string(apiv3.SourceAddressUseNodeIP))
 		if v3res.Spec.MaxRestartTime != nil {
 			peer.RestartTime = fmt.Sprintf("%v", int(math.Round(v3res.Spec.MaxRestartTime.Seconds())))
+		}
+		if v3res.Spec.KeepaliveTime != nil {
+			peer.KeepaliveTime = fmt.Sprintf("%v", int(math.Round(v3res.Spec.KeepaliveTime.Seconds())))
 		}
 	}
 }

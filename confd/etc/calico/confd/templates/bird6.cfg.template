@@ -276,6 +276,9 @@ protocol bgp Global_{{$id}} from bgp_template {
 {{- if ne $data.restart_time ""}}
   graceful restart time {{$data.restart_time}};
 {{- end}}
+{{- if ne $data.keepalive_time ""}}
+  keepalive time {{$data.keepalive_time}};
+{{- end}}
 {{- if and (eq $data.as_num $node_as_num) (ne "" ($node_cluster_id)) (ne $data.rr_cluster_id ($node_cluster_id))}}
   rr client;
   rr cluster id {{$node_cluster_id}};
@@ -366,6 +369,9 @@ protocol bgp Local_Workload_{{$id}} from bgp_template {
 {{- if ne $data.restart_time ""}}
   graceful restart time {{$data.restart_time}};
 {{- end}}
+{{- if ne $data.keepalive_time ""}}
+  keepalive time {{$data.keepalive_time}};
+{{- end}}
 {{- if and (eq $data.as_num $node_as_num) (ne "" ($node_cluster_id)) (ne $data.rr_cluster_id ($node_cluster_id))}}
   rr client;
   rr cluster id {{$node_cluster_id}};
@@ -451,6 +457,9 @@ protocol bgp Node_{{$id}} from bgp_template {
   };  # Only want to export routes for workloads.
 {{- if ne $data.restart_time ""}}
   graceful restart time {{$data.restart_time}};
+{{- end}}
+{{- if ne $data.keepalive_time ""}}
+  keepalive time {{$data.keepalive_time}};
 {{- end}}
 {{- if and (eq $data.as_num $node_as_num) (ne "" ($node_cluster_id)) (ne $data.rr_cluster_id ($node_cluster_id))}}
   rr client;
@@ -539,6 +548,9 @@ protocol bgp Local_Workload_{{$id}} from bgp_template {
   };  # Only want to export routes for workloads.
 {{- if ne $data.restart_time ""}}
   graceful restart time {{$data.restart_time}};
+{{- end}}
+{{- if ne $data.keepalive_time ""}}
+  keepalive time {{$data.keepalive_time}};
 {{- end}}
 {{- if and (eq $data.as_num $node_as_num) (ne "" ($node_cluster_id)) (ne $data.rr_cluster_id ($node_cluster_id))}}
   rr client;
