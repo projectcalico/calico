@@ -494,6 +494,11 @@ func (in *BGPPeerSpec) DeepCopyInto(out *BGPPeerSpec) {
 		*out = new(v1.Duration)
 		**out = **in
 	}
+	if in.KeepaliveTime != nil {
+		in, out := &in.KeepaliveTime, &out.KeepaliveTime
+		*out = new(v1.Duration)
+		**out = **in
+	}
 	if in.NumAllowedLocalASNumbers != nil {
 		in, out := &in.NumAllowedLocalASNumbers, &out.NumAllowedLocalASNumbers
 		*out = new(int32)
