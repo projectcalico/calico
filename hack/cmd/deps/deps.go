@@ -3,13 +3,18 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"os"
 	"os/exec"
+	"regexp"
+	"runtime"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/sirupsen/logrus"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
@@ -20,18 +25,28 @@ func printUsageAndExit() {
 
 Usage: 
 
-  deps modules <package>          # Print go modules that package depends on
-  deps local-dirs <package>       # Print in-repo go package dirs that 
+  deps [options] modules <package>          # Print go modules that package depends on
+  deps [options] local-dirs <package>       # Print in-repo go package dirs that
                                   # package depends on.
   deps local-dirs-main-only <package> # Print in-repo go package dirs that 
                                   # package depends on. (Main packages only.)
-  deps test-exclusions <package>  # Print glob patterns to match *_test.go 
+  deps [options] local-dirs-main-only <package> # Print in-repo go package dirs that
+                                  # package depends on. (Main packages only.)
+  deps [options] test-exclusions <package>  # Print glob patterns to match *_test.go
                                   # files in dependency dirs outside the 
                                   # package itself.
-  deps sem-change-in(-pretty) <package>[,<secondary package>...] # Print a SemaphoreCI
+  deps [options] sem-change-in(-pretty) <package>[,<secondary package>...] # Print a SemaphoreCI
                                   # conditions DSL change_in() clause for 
                                   # <package>, including non-test deps from
                                   # any <secondary package> clauses.
+
+  deps [options] replace-sem-change-in <yaml file>  # Replace all ${CHANGE_IN(...)} 
+                                  # placeholders in a file
+
+Options:
+
+  --pretty            # Pretty-print the output (only applies to sem-change-in).
+  --loglevel <level>  # Logrus log level (debug, info, warn, error, fatal, panic). Default: warn
 
 The test-exclusions and sem-change-in sub-commands are intended to be used with
 packages at the top-level of the repo.  Test exclusions are based on whether
@@ -44,19 +59,33 @@ that node depends on felix/bpf-*.
 	os.Exit(1)
 }
 
+var (
+	pretty   = flag.Bool("pretty", false, "Pretty-print the output (only applies to sem-change-in).")
+	logLevel = flag.String("loglevel", "warn", "Logrus log level (debug, info, warn, error, fatal, panic).")
+)
+
 func main() {
 	// We use stdout for the parseable output of the tool so we _do_ want
 	// logging to go to stderr.
 	logrus.SetOutput(os.Stderr)
-	logrus.SetLevel(logrus.WarnLevel)
+	flag.CommandLine.Usage = printUsageAndExit
+	flag.Parse()
+	level, err := logrus.ParseLevel(*logLevel)
+	if err != nil {
+		logrus.Fatalf("Failed to parse log level %q: %s", *logLevel, err)
+	}
+	logrus.SetLevel(level)
+
 	logutils.ConfigureFormatter("deps")
 
-	if len(os.Args) != 3 {
+	args := flag.Args()
+	if len(args) != 2 {
+		logrus.Warnf("Incorrect number of arguments: %v", args)
 		printUsageAndExit()
 	}
 
-	cmd := os.Args[1]
-	pkg := os.Args[2]
+	cmd := args[0]
+	pkg := args[1]
 
 	switch cmd {
 	case "modules":
@@ -68,9 +97,9 @@ func main() {
 	case "test-exclusions":
 		printTestExclusions(pkg)
 	case "sem-change-in":
-		printSemChangeIn(pkg, false)
-	case "sem-change-in-pretty":
-		printSemChangeIn(pkg, true)
+		printSemChangeIn(pkg, *pretty)
+	case "replace-sem-change-in":
+		replaceSemChangeInPlaceholders(pkg)
 	default:
 		printUsageAndExit()
 	}
@@ -111,7 +140,60 @@ var defaultExclusions = []string{
 	"/**/*.md",
 }
 
+func replaceSemChangeInPlaceholders(yamlFile string) {
+	fileContents, err := os.ReadFile(yamlFile)
+	if err != nil {
+		logrus.Fatalf("Failed to read file %s: %s", yamlFile, err)
+	}
+	fileStat, err := os.Stat(yamlFile)
+	if err != nil {
+		logrus.Fatalf("Failed to stat file %s: %s", yamlFile, err)
+	}
+
+	changeInPattern := regexp.MustCompile(`\$\{CHANGE_IN\(([^)]+)\)}`)
+	replacements := map[string][]byte{}
+	for _, groups := range changeInPattern.FindAllSubmatch(fileContents, -1) {
+		pkg := string(groups[1])
+		if _, ok := replacements[pkg]; ok {
+			continue // already calculated.
+		}
+		replacements[pkg] = nil
+	}
+
+	var lock sync.Mutex
+	var eg errgroup.Group
+	eg.SetLimit(runtime.NumCPU())
+	for pkg := range replacements {
+		eg.Go(func() error {
+			repl, err := calculateChangeIn(pkg, false)
+			if err != nil {
+				return fmt.Errorf("failed to calculate change_in for package %s: %w", pkg, err)
+			}
+			lock.Lock()
+			replacements[pkg] = []byte(repl)
+			lock.Unlock()
+			return nil
+		})
+	}
+	if err := eg.Wait(); err != nil {
+		logrus.Fatalln("Failed to calculate change_in replacements:", err)
+	}
+
+	newContents := changeInPattern.ReplaceAllFunc(fileContents, func(match []byte) []byte {
+		pkg := changeInPattern.FindSubmatch(match)[1]
+		return replacements[string(pkg)]
+	})
+
+	if err := os.WriteFile(yamlFile, newContents, fileStat.Mode()); err != nil {
+		logrus.Fatalf("Failed to write file %s: %s", yamlFile, err)
+	}
+}
+
 func printSemChangeIn(pkg string, pretty bool) {
+	_, _ = fmt.Println(calculateChangeIn(pkg, pretty))
+}
+
+func calculateChangeIn(pkg string, pretty bool) (string, error) {
 	parts := strings.Split(pkg, ",")
 	pkg = parts[0]
 	otherPkgs := parts[1:]
@@ -123,8 +205,7 @@ func printSemChangeIn(pkg string, pretty bool) {
 
 	localDirs, err := loadLocalDirs(pkg, false)
 	if err != nil {
-		logrus.Fatalln("Failed to load local dirs:", err)
-		os.Exit(1)
+		return "", fmt.Errorf("failed to load local dirs: %w", err)
 	}
 
 	inclusions := set.New[string]()
@@ -151,8 +232,7 @@ func printSemChangeIn(pkg string, pretty bool) {
 		// pick those up unintentionally.
 		otherPkgDirs, err := loadLocalDirs(otherPkg, true)
 		if err != nil {
-			logrus.Fatalln("Failed to load local dirs:", err)
-			os.Exit(1)
+			return "", fmt.Errorf("failed to load local dirs for secondary package %s: %w", otherPkg, err)
 		}
 		for _, dir := range otherPkgDirs {
 			inclusions.Add(dir + "/*.go")
@@ -170,7 +250,8 @@ func printSemChangeIn(pkg string, pretty bool) {
 		incl = "\n" + strings.ReplaceAll(incl, ",", ",\n  ") + "\n"
 		excl = "\n" + strings.ReplaceAll(excl, ",", ",\n  ") + "\n"
 	}
-	_, _ = fmt.Printf("change_in(%s, {pipeline_file: 'ignore', exclude: %s})\n", incl, excl)
+	out := fmt.Sprintf("change_in(%s, {pipeline_file: 'ignore', exclude: %s})", incl, excl)
+	return out, nil
 }
 
 func formatSemList(s set.Set[string]) string {
@@ -309,7 +390,7 @@ func loadPackageDeps(pkg string, mainDepsOnly bool) ([]string, error) {
 			dep = strings.Replace(dep, "github.com/projectcalico/api/", "github.com/projectcalico/calico/api/", 1)
 		}
 		out = append(out, dep)
-		logrus.Debugf("Loaded package: %s", line)
+		logrus.Debugf("Loaded package: %s", strings.TrimRight(string(line), "\n"))
 	}
 	return out, nil
 }
