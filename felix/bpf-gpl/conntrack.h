@@ -143,6 +143,7 @@ create:
 		.type = ct_ctx->type,
 		.orig_ip = ct_ctx->orig_dst,
 		.orig_port = orig_dport,
+		.dscp = ct_ctx->dscp,
 	};
 
 	ct_value_set_flags(&ct_value, ct_ctx->flags);
@@ -299,6 +300,7 @@ static CALI_BPF_INLINE int calico_ct_create_nat_fwd(struct cali_tc_ctx *ctx,
 	struct calico_ct_value ct_value = {
 		.type = CALI_CT_TYPE_NAT_FWD,
 		.last_seen = now,
+		.dscp = ct_ctx->dscp,
 	};
 
 	ct_value.nat_rev_key = *rk;
