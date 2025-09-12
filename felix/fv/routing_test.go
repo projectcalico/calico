@@ -585,7 +585,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 				})
 			})
 
-			Context("pepper after removing BGP address from third node", func() {
+			Context("after removing BGP address from third node", func() {
 				// Simulate having a host send VXLAN traffic from an unknown source, should get blocked.
 				BeforeEach(func() {
 					ipsetLen := allHostsIPSetSize(felixes, ipipMode)
