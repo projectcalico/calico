@@ -17,7 +17,7 @@ package ipsets
 import (
 	"net"
 
-	. "github.com/onsi/gomega"
+	"github.com/onsi/gomega"
 
 	"github.com/projectcalico/calico/felix/ipsets"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
@@ -41,7 +41,7 @@ func (s *MockIPSets) AddOrReplaceIPSet(setMetadata ipsets.IPSetMetadata, newMemb
 	members := set.New[string]()
 	for _, member := range newMembers {
 		if setMetadata.Type == ipsets.IPSetTypeHashIP {
-			Expect(net.ParseIP(member)).ToNot(BeNil())
+			gomega.Expect(net.ParseIP(member)).ToNot(gomega.BeNil())
 		}
 		members.Add(member)
 	}
@@ -53,9 +53,9 @@ func (s *MockIPSets) AddMembers(setID string, newMembers []string) {
 	members := s.Members[setID]
 	for _, member := range newMembers {
 		if s.Metadata[setID].Type == ipsets.IPSetTypeHashIP {
-			Expect(net.ParseIP(member)).ToNot(BeNil())
+			gomega.Expect(net.ParseIP(member)).ToNot(gomega.BeNil())
 		}
-		Expect(members.Contains(member)).To(BeFalse())
+		gomega.Expect(members.Contains(member)).To(gomega.BeFalse())
 		members.Add(member)
 	}
 }
@@ -64,9 +64,9 @@ func (s *MockIPSets) RemoveMembers(setID string, removedMembers []string) {
 	members := s.Members[setID]
 	for _, member := range removedMembers {
 		if s.Metadata[setID].Type == ipsets.IPSetTypeHashIP {
-			Expect(net.ParseIP(member)).ToNot(BeNil())
+			gomega.Expect(net.ParseIP(member)).ToNot(gomega.BeNil())
 		}
-		Expect(members.Contains(member)).To(BeTrue())
+		gomega.Expect(members.Contains(member)).To(gomega.BeTrue())
 		members.Discard(member)
 	}
 }

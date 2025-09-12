@@ -184,8 +184,8 @@ func newNatSetFrontend() *cobra.Command {
 		},
 	}
 
-	cmd.Command.Args = cmd.ArgsSet
-	cmd.Command.Run = cmd.RunSet
+	cmd.Args = cmd.ArgsSet
+	cmd.Run = cmd.RunSet
 
 	return cmd.Command
 }
@@ -270,8 +270,8 @@ func newNatDelFrontend() *cobra.Command {
 		},
 	}
 
-	cmd.Command.Args = cmd.ArgsDel
-	cmd.Command.Run = cmd.RunDel
+	cmd.Args = cmd.ArgsDel
+	cmd.Run = cmd.RunDel
 
 	return cmd.Command
 }
@@ -328,8 +328,8 @@ func newNatSetBackend() *cobra.Command {
 		},
 	}
 
-	cmd.Command.Args = cmd.ArgsSet
-	cmd.Command.Run = cmd.RunSet
+	cmd.Args = cmd.ArgsSet
+	cmd.Run = cmd.RunSet
 
 	return cmd.Command
 }
@@ -401,8 +401,8 @@ func newNatDelBackend() *cobra.Command {
 		},
 	}
 
-	cmd.Command.Args = cmd.ArgsDel
-	cmd.Command.Run = cmd.RunDel
+	cmd.Args = cmd.ArgsDel
+	cmd.Run = cmd.RunDel
 
 	return cmd.Command
 }
