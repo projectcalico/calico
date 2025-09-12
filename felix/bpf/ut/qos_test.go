@@ -209,7 +209,7 @@ func TestDSCPv6_WEP(t *testing.T) {
 	bpfIfaceName = "HWvwl"
 	defer func() { bpfIfaceName = "" }()
 
-	ctMap := conntrack.Map()
+	ctMap := conntrack.MapV6()
 	err := ctMap.EnsureExists()
 	Expect(err).NotTo(HaveOccurred())
 	resetCTMap(ctMap) // ensure it is clean
@@ -257,7 +257,7 @@ func TestDSCPv6_HEP(t *testing.T) {
 	bpfIfaceName = "HWvwl"
 	defer func() { bpfIfaceName = "" }()
 
-	ctMap := conntrack.Map()
+	ctMap := conntrack.MapV6()
 	err := ctMap.EnsureExists()
 	Expect(err).NotTo(HaveOccurred())
 	resetCTMap(ctMap) // ensure it is clean

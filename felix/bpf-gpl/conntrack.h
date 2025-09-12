@@ -612,6 +612,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 	struct calico_ct_result result = {
 		.rc = CALI_CT_NEW, /* it is zero, but make it explicit in the code */
 		.ifindex_created = CT_INVALID_IFINDEX,
+		.dscp = -1,
 	};
 
 	struct calico_ct_key k;
@@ -703,6 +704,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 	v->last_seen = now;
 
 	result.flags = ct_value_get_flags(v);
+	result.dscp = v->dscp;
 
 	// Return the if_index where the CT state was created.
 	if (v->a_to_b.opener) {

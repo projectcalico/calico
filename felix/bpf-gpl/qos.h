@@ -110,7 +110,7 @@ static CALI_BPF_INLINE int qos_enforce_packet_rate(struct cali_tc_ctx *ctx)
 
 static CALI_BPF_INLINE bool qos_dscp_set(struct cali_tc_ctx *ctx)
 {
-	__s8 dscp = EGRESS_DSCP;
+	__s8 dscp = ctx->state->ct_result.dscp;
 	CALI_DEBUG("setting dscp to %d", dscp);
 
 #ifdef IPVER6
