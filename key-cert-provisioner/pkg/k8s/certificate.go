@@ -123,7 +123,7 @@ func SubmitCSR(ctx context.Context, config *cfg.Config, clientset kubernetes.Int
 
 	// Copy additional labels from the config to the CSR. For example, a CSR initiates from
 	// a non-cluster host will add the "nonclusterhost.tigera.io/hostname" label in config.
-	maps.Copy(csr.ObjectMeta.Labels, config.CSRLabels)
+	maps.Copy(csr.Labels, config.CSRLabels)
 
 	created, err := cli.Create(ctx, csr, metav1.CreateOptions{})
 	if err != nil {
