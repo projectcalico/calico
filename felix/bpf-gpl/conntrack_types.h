@@ -39,7 +39,6 @@ enum cali_ct_type {
 #define CALI_CT_FLAG_NP_REMOTE	0x1000 /* marks connections from local host to remote backend of a nodeport */
 #define CALI_CT_FLAG_NP_NO_DSR	0x2000 /* marks connections from a client which is excluded from DSR */
 #define CALI_CT_FLAG_SKIP_REDIR_PEER	0x4000 /* marks connections from a client which is excluded from redir */
-#define CALI_CT_FLAG_CLUSTER_EXTERNAL	0x8000 /* marks connections with source or destination outside cluster */
 
 struct calico_ct_leg {
 	__u64 bytes;
@@ -70,12 +69,13 @@ struct calico_ct_value {
 	__u64 last_seen; // 8
 	__u8 type;		 // 16
 	__u8 flags;
+	__s8 dscp;
 
 	// Important to use explicit padding, otherwise the compiler can decide
 	// not to zero the padding bytes, which upsets the verifier.  Worse than
 	// that, debug logging often prevents such optimisation resulting in
 	// failures when debug logging is compiled out only :-).
-	__u8 pad0[5];
+	__u8 pad0[4];
 	__u8 flags2;
 	union {
 		// CALI_CT_TYPE_NORMAL and CALI_CT_TYPE_NAT_REV.
@@ -152,7 +152,7 @@ struct ct_create_ctx {
 			* initial CT entry for the tunneled traffic. */
 	__u16 flags;
 	__u8 proto;
-	__u8 __pad;
+	__s8 dscp;
 	enum cali_ct_type type;
 	bool allow_return;
 };
@@ -236,6 +236,7 @@ struct calico_ct_result {
 				* ingress interface index.  For a CT state created by a
 				* packet _from_ the host, it's CT_INVALID_IFINDEX (0).
 				*/
+	__s8 dscp;
 };
 
 #endif /* __CALI_CONNTRAC_TYPESK_H__ */

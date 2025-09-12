@@ -108,11 +108,6 @@ static CALI_BPF_INLINE int qos_enforce_packet_rate(struct cali_tc_ctx *ctx)
 	return TC_ACT_SHOT;
 }
 
-static CALI_BPF_INLINE bool qos_dscp_needs_update(struct cali_tc_ctx *ctx)
-{
-	return ((ctx->state->flags & CALI_ST_CLUSTER_EXTERNAL) && EGRESS_DSCP >= 0);
-}
-
 static CALI_BPF_INLINE bool qos_dscp_set(struct cali_tc_ctx *ctx)
 {
 	__s8 dscp = EGRESS_DSCP;
