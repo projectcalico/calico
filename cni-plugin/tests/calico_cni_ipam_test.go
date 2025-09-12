@@ -28,8 +28,10 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
-var plugin = "calico-ipam"
-var defaultIPv4Pool = "192.168.0.0/16"
+var (
+	plugin          = "calico-ipam"
+	defaultIPv4Pool = "192.168.0.0/16"
+)
 
 var _ = Describe("Calico IPAM Tests", func() {
 	cniVersion := os.Getenv("CNI_SPEC_VERSION")
@@ -320,7 +322,6 @@ var _ = Describe("Calico IPAM Tests", func() {
 				pool.Spec.Disabled = false
 				_, err = calicoClient.IPPools().Update(context.Background(), pool, options.SetOptions{})
 				Expect(err).ToNot(HaveOccurred())
-
 			})
 		})
 
@@ -369,7 +370,6 @@ var _ = Describe("Calico IPAM Tests", func() {
 				Expect(err.Msg).Should(ContainSubstring("192.169.1.0/24) does not exist"))
 			})
 		})
-
 	})
 
 	Describe("Requesting an explicit IP address", func() {
@@ -510,7 +510,7 @@ var _ = Describe("Calico IPAM Tests", func() {
 			Expect(err).NotTo(HaveOccurred())
 			kcfg, _, err := k8s.CreateKubernetesClientset(&cfg.Spec)
 			Expect(err).NotTo(HaveOccurred())
-			crdClient, err = rawcrdclient.New(kcfg)
+			crdClient, err = rawcrdclient.New(kcfg, false)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Determine host for BlockAffinity and ensure there is a usable netconf.

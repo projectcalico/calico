@@ -1188,7 +1188,7 @@ var _ = Describe("FV tests against K8s API server.", func() {
 			Fail(fmt.Sprintf("Could not create K8s client: %v", err))
 		}
 
-		crdClient, err = rawcrdclient.New(kcfg)
+		crdClient, err = rawcrdclient.New(kcfg, false)
 		Expect(err).NotTo(HaveOccurred())
 	})
 
