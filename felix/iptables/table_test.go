@@ -742,6 +742,118 @@ func describeEmptyDataplaneTests(dataplaneMode string) {
 		})
 	})
 
+	Describe("after adding a force-programmed chain", func() {
+		BeforeEach(func() {
+			table.UpdateChains([]*generictables.Chain{
+				{
+					Name: "cali-foobar",
+					Rules: []generictables.Rule{
+						{Match: Match(), Action: AcceptAction{}},
+						{Match: Match(), Action: DropAction{}},
+					},
+					ForceProgramming: true,
+				},
+			})
+			table.Apply()
+		})
+
+		It("it should be programmed", func() {
+			Expect(dataplane.Chains).To(Equal(map[string][]string{
+				"FORWARD": {},
+				"INPUT":   {},
+				"OUTPUT":  {},
+				"cali-foobar": {
+					"-m comment --comment \"cali:42h7Q64_2XDzpwKe\" --jump ACCEPT",
+					"-m comment --comment \"cali:0sUFHicPNNqNyNx8\" --jump DROP",
+				},
+			}))
+		})
+
+		Describe("after adding a reference", func() {
+			BeforeEach(func() {
+				table.InsertOrAppendRules("FORWARD", []generictables.Rule{
+					{Match: Match(), Action: JumpAction{Target: "cali-foobar"}},
+				})
+				table.Apply()
+			})
+			It("it should still be programmed", func() {
+				Expect(dataplane.Chains).To(Equal(map[string][]string{
+					"FORWARD": {
+						"-m comment --comment \"cali:JttcEuxbGad9jG6N\" --jump cali-foobar",
+					},
+					"INPUT":  {},
+					"OUTPUT": {},
+					"cali-foobar": {
+						"-m comment --comment \"cali:42h7Q64_2XDzpwKe\" --jump ACCEPT",
+						"-m comment --comment \"cali:0sUFHicPNNqNyNx8\" --jump DROP",
+					},
+				}))
+			})
+		})
+
+		Describe("after disabling force programming", func() {
+			BeforeEach(func() {
+				table.UpdateChains([]*generictables.Chain{
+					{
+						Name: "cali-foobar",
+						Rules: []generictables.Rule{
+							{Match: Match(), Action: AcceptAction{}},
+							{Match: Match(), Action: DropAction{}},
+						},
+					},
+				})
+				table.Apply()
+			})
+
+			It("should be removed", func() {
+				Expect(dataplane.Chains).To(Equal(map[string][]string{
+					"FORWARD": {},
+					"INPUT":   {},
+					"OUTPUT":  {},
+				}))
+			})
+		})
+
+		Describe("after removing the chain", func() {
+			BeforeEach(func() {
+				table.RemoveChainByName("cali-foobar")
+				table.Apply()
+			})
+
+			It("should be removed", func() {
+				Expect(dataplane.Chains).To(Equal(map[string][]string{
+					"FORWARD": {},
+					"INPUT":   {},
+					"OUTPUT":  {},
+				}))
+			})
+
+			Describe("after adding it back non-forced", func() {
+				BeforeEach(func() {
+					table.UpdateChains([]*generictables.Chain{
+						{
+							Name: "cali-foobar",
+							Rules: []generictables.Rule{
+								{Match: Match(), Action: AcceptAction{}},
+								{Match: Match(), Action: DropAction{}},
+							},
+						},
+					})
+					table.Apply()
+				})
+
+				It("should not be present", func() {
+					// This verifies that RemoveChainByName decreffed the chain.
+					Expect(dataplane.Chains).To(Equal(map[string][]string{
+						"FORWARD": {},
+						"INPUT":   {},
+						"OUTPUT":  {},
+					}))
+				})
+			})
+		})
+	})
+
 	Describe("applying updates when underlying iptables have changed in a approved chain", func() {
 		BeforeEach(func() {
 			table.InsertOrAppendRules("FORWARD", []generictables.Rule{
