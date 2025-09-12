@@ -60,7 +60,7 @@
 param(
     [string]
     [ValidateNotNullOrEmpty()]
-    $ContainerDVersion = "1.6.6",
+    $ContainerDVersion = "1.7.22",
 
     [string]
     [ValidateNotNullOrEmpty()]
@@ -550,7 +550,7 @@ Install-Containerd()
     param(
         [string]
         [ValidateNotNullOrEmpty()]
-        $ContainerdVersion = "1.6.6",
+        $ContainerdVersion = "1.7.22",
 
         [string]
         [ValidateNotNullOrEmpty()]

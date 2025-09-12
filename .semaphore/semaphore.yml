@@ -272,7 +272,7 @@ blocks:
           commands:
             - artifact push job ${REPORT_DIR} --destination semaphore/test-results || true
             - artifact push job ${LOGS_DIR} --destination semaphore/logs || true
-            - cd ~/calico/process/testing/winfv-cni-plugin/aso && make dist-clean
+            - cd ~/calico/process/testing/aso && make dist-clean
       env_vars:
         - name: SEMAPHORE_ARTIFACT_EXPIRY
           value: 2w
@@ -288,7 +288,7 @@ blocks:
             - export BACKEND=overlay
             - export AZURE_RESOURCE_GROUP=${RG_PREFIX}-${BACKEND}-rg
             - echo AZURE_RESOURCE_GROUP=${AZURE_RESOURCE_GROUP}
-            - ../.semaphore/run-and-monitor win-fv-containerd.log ./.semaphore/run-win-fv.sh
+            - ../.semaphore/run-and-monitor win-fv-containerd.log ~/calico/process/testing/winfv-cni-plugin/run-win-fv.sh
         - name: "CNI Plugin: Windows Containerd FV - l2bridge"
           execution_time_limit:
             minutes: 60
@@ -296,7 +296,7 @@ blocks:
             - export BACKEND=l2bridge
             - export AZURE_RESOURCE_GROUP=${RG_PREFIX}-${BACKEND}-rg
             - echo AZURE_RESOURCE_GROUP=${AZURE_RESOURCE_GROUP}
-            - ../.semaphore/run-and-monitor win-fv-containerd.log ./.semaphore/run-win-fv.sh
+            - ../.semaphore/run-and-monitor win-fv-containerd.log ~/calico/process/testing/winfv-cni-plugin/run-win-fv.sh
   - name: confd
     run:
       when: "change_in(['/.semaphore/semaphore.yml.d/01-preamble.yml','/.semaphore/semaphore.yml.d/02-global_job_config.yml','/.semaphore/semaphore.yml.d/03-promotions.yml','/.semaphore/semaphore.yml.d/09-blocks.yml','/.semaphore/semaphore.yml.d/99-after_pipeline.yml','/.semaphore/semaphore.yml.d/blocks/20-confd.yml','/api/pkg/apis/projectcalico/v3/*.go','/api/pkg/lib/numorstring/*.go','/confd/**','/crypto/pkg/tls/*.go','/hack/test/certs/','/lib.Makefile','/lib/std/uniquelabels/*.go','/lib/std/uniquestr/*.go','/libcalico-go/lib/apiconfig/*.go','/libcalico-go/lib/apis/v3/*.go','/libcalico-go/lib/backend/*.go','/libcalico-go/lib/backend/api/*.go','/libcalico-go/lib/backend/encap/*.go','/libcalico-go/lib/backend/etcdv3/*.go','/libcalico-go/lib/backend/k8s/*.go','/libcalico-go/lib/backend/k8s/conversion/*.go','/libcalico-go/lib/backend/k8s/resources/*.go','/libcalico-go/lib/backend/k8s/scheme/*.go','/libcalico-go/lib/backend/model/*.go','/libcalico-go/lib/backend/syncersv1/bgpsyncer/*.go','/libcalico-go/lib/backend/syncersv1/dedupebuffer/*.go','/libcalico-go/lib/backend/syncersv1/updateprocessors/*.go','/libcalico-go/lib/backend/watchersyncer/*.go','/libcalico-go/lib/clientv3/*.go','/libcalico-go/lib/epstatusfile/*.go','/libcalico-go/lib/errors/*.go','/libcalico-go/lib/hash/*.go','/libcalico-go/lib/json/*.go','/libcalico-go/lib/logutils/*.go','/libcalico-go/lib/names/*.go','/libcalico-go/lib/namespace/*.go','/libcalico-go/lib/net/*.go','/libcalico-go/lib/options/*.go','/libcalico-go/lib/readlogger/*.go','/libcalico-go/lib/resources/*.go','/libcalico-go/lib/selector/*.go','/libcalico-go/lib/selector/parser/*.go','/libcalico-go/lib/selector/tokenizer/*.go','/libcalico-go/lib/set/*.go','/libcalico-go/lib/validator/v3/*.go','/libcalico-go/lib/watch/*.go','/libcalico-go/lib/winutils/*.go','/metadata.mk','/pkg/buildinfo/*.go','/typha/pkg/discovery/*.go','/typha/pkg/syncclient/*.go','/typha/pkg/syncclientutils/*.go','/typha/pkg/syncproto/*.go','/typha/pkg/tlsutils/*.go'], {pipeline_file: 'ignore', exclude: ['/**/*.md','/**/.gitignore','/**/AUTHORS*','/**/CONTRIBUTING*','/**/DEVELOPER_GUIDE*','/**/LICENSE*','/**/README*','/**/SECURITY.md','/api/**/*_test.go','/crypto/**/*_test.go','/lib/**/*_test.go','/libcalico-go/**/*_test.go','/pkg/**/*_test.go','/typha/**/*_test.go']})"
