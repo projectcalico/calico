@@ -87,7 +87,7 @@ func (epmm *DefaultEPMarkManager) GetMask() uint32 {
 func (epmm *DefaultEPMarkManager) GetEndpointMark(ep string) (uint32, error) {
 	length := len(ep)
 	if length == 0 {
-		return 0, errors.New("Invalid endpoint name")
+		return 0, errors.New("invalid endpoint name")
 	}
 
 	// Return current mark for Endpoint if it already has one.
@@ -98,7 +98,7 @@ func (epmm *DefaultEPMarkManager) GetEndpointMark(ep string) (uint32, error) {
 	// Try to allocate a position based on hash from endpoint name.
 	_, err := epmm.hash32.Write([]byte(ep))
 	if err != nil {
-		return 0, errors.New("Failed to allocate a hash position")
+		return 0, errors.New("failed to allocate a hash position")
 	}
 
 	total := int(epmm.hash32.Sum32())
@@ -120,7 +120,7 @@ func (epmm *DefaultEPMarkManager) GetEndpointMark(ep string) (uint32, error) {
 	}
 
 	if !gotOne {
-		return 0, errors.New("No mark left for endpoint")
+		return 0, errors.New("no mark left for endpoint")
 	}
 
 	return epmm.allocateOnePosition(ep, prospect)
@@ -147,14 +147,14 @@ func (epmm *DefaultEPMarkManager) SetEndpointMark(ep string, mark uint32) error 
 	if currentMark, ok := epmm.activeEndpointToMark[ep]; ok {
 		// We got a endpoint with mark already.
 		if currentMark != mark {
-			return errors.New("Different mark already exists")
+			return errors.New("different mark already exists")
 		}
 		return nil
 	}
 	if currentEP, ok := epmm.activeMarkToEndpoint[mark]; ok {
 		// We got a mark with endpoint already.
 		if currentEP != ep {
-			return errors.New("Endpoint with this mark already exists")
+			return errors.New("endpoint with this mark already exists")
 		}
 		return nil
 	}

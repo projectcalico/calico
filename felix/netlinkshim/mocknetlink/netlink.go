@@ -25,7 +25,9 @@ import (
 	"time"
 	"unsafe"
 
-	. "github.com/onsi/ginkgo"
+	"github.com/onsi/ginkgo"
+
+	//nolint:staticcheck // Ignore ST1001: should not use dot imports
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
@@ -60,7 +62,7 @@ func New() *MockNetlinkDataplane {
 				Table:    253,
 			},
 		},
-		SetStrictCheckErr: SimulatedError,
+		SetStrictCheckErr: ErrSimulated,
 		NeighsByFamily:    map[int]map[NeighKey]*netlink.Neigh{},
 
 		// Use a single global mutex.  This works around an issue in the wireguard tests, which use multiple
@@ -77,12 +79,12 @@ func New() *MockNetlinkDataplane {
 var _ netlinkshim.Interface = (*MockNetlinkDataplane)(nil)
 
 var (
-	SimulatedError        = errors.New("dummy error")
-	NotFoundError         = errors.New("not found")
-	LinkNotFoundError     = netlink.LinkNotFoundError{}
-	FileDoesNotExistError = errors.New("file does not exist")
-	AlreadyExistsError    = errors.New("already exists")
-	NotSupportedError     = errors.New("operation not supported")
+	ErrSimulated        = errors.New("dummy error")
+	ErrNotFound         = errors.New("not found")
+	ErrLinkNotFound     = netlink.LinkNotFoundError{}
+	ErrFileDoesNotExist = errors.New("file does not exist")
+	ErrAlreadyExists    = errors.New("already exists")
+	ErrNotSupported     = errors.New("operation not supported")
 )
 
 func init() {
@@ -96,7 +98,7 @@ func init() {
 	}
 
 	// First check that our struct matches the netlink one...
-	nlType := reflect.TypeOf(LinkNotFoundError)
+	nlType := reflect.TypeOf(ErrLinkNotFound)
 	ourType := reflect.TypeOf(myLinkNotFoundError{})
 	if nlType.NumField() != ourType.NumField() {
 		panic("netlink.LinkNotFoundError structure appears to have changed (different number of fields)")
@@ -111,8 +113,8 @@ func init() {
 	}
 
 	// All good, proceed with the sketchy cast...
-	var lnf = (*myLinkNotFoundError)((unsafe.Pointer)(&LinkNotFoundError))
-	lnf.error = NotFoundError
+	var lnf = (*myLinkNotFoundError)((unsafe.Pointer)(&ErrLinkNotFound))
+	lnf.error = ErrNotFound
 }
 
 type FailFlags uint64
@@ -370,7 +372,7 @@ func (d *MockNetlinkDataplane) ResetDeltas() {
 func (d *MockNetlinkDataplane) GetDeletedConntrackEntries() []net.IP {
 	d.mutex.Lock()
 	defer d.mutex.Unlock()
-	defer GinkgoRecover()
+	defer ginkgo.GinkgoRecover()
 
 	cpy := make([]net.IP, 0, d.deletedConntrackEntries.Len())
 	d.deletedConntrackEntries.Iter(func(addr ip.Addr) error {
@@ -400,7 +402,7 @@ func (d *MockNetlinkDataplane) AddIface(idx int, name string, up bool, running b
 	}
 	for otherName, link := range d.NameToLink {
 		if link.LinkAttrs.Index == idx {
-			Fail(fmt.Sprintf("ifindex %d already in use by %s, cannot add %s", idx, otherName, name))
+			ginkgo.Fail(fmt.Sprintf("ifindex %d already in use by %s, cannot add %s", idx, otherName, name))
 		}
 	}
 	d.NameToLink[name] = link
@@ -432,11 +434,11 @@ func (d *MockNetlinkDataplane) SetIface(name string, up bool, running bool) {
 func (d *MockNetlinkDataplane) NewMockNetlink() (netlinkshim.Interface, error) {
 	d.mutex.Lock()
 	defer d.mutex.Unlock()
-	defer GinkgoRecover()
+	defer ginkgo.GinkgoRecover()
 
 	d.NumNewNetlinkCalls++
 	if d.PersistentlyFailToConnect || d.shouldFail(FailNextNewNetlink) {
-		return nil, SimulatedError
+		return nil, ErrSimulated
 	}
 	Expect(d.NetlinkOpen).To(BeFalse())
 	d.NetlinkOpen = true
@@ -448,7 +450,7 @@ func (d *MockNetlinkDataplane) NewMockNetlink() (netlinkshim.Interface, error) {
 func (d *MockNetlinkDataplane) Delete() {
 	d.mutex.Lock()
 	defer d.mutex.Unlock()
-	defer GinkgoRecover()
+	defer ginkgo.GinkgoRecover()
 
 	Expect(d.NetlinkOpen).To(BeTrue())
 	d.NetlinkOpen = false
@@ -457,11 +459,11 @@ func (d *MockNetlinkDataplane) Delete() {
 func (d *MockNetlinkDataplane) SetSocketTimeout(to time.Duration) error {
 	d.mutex.Lock()
 	defer d.mutex.Unlock()
-	defer GinkgoRecover()
+	defer ginkgo.GinkgoRecover()
 
 	Expect(d.NetlinkOpen).To(BeTrue())
 	if d.shouldFail(FailNextSetSocketTimeout) {
-		return SimulatedError
+		return ErrSimulated
 	}
 	return nil
 }
@@ -469,7 +471,7 @@ func (d *MockNetlinkDataplane) SetSocketTimeout(to time.Duration) error {
 func (d *MockNetlinkDataplane) SetStrictCheck(b bool) error {
 	d.mutex.Lock()
 	defer d.mutex.Unlock()
-	defer GinkgoRecover()
+	defer ginkgo.GinkgoRecover()
 
 	Expect(d.NetlinkOpen).To(BeTrue())
 	if d.shouldFail(FailNextSetStrict) {
@@ -482,11 +484,11 @@ func (d *MockNetlinkDataplane) SetStrictCheck(b bool) error {
 func (d *MockNetlinkDataplane) LinkList() ([]netlink.Link, error) {
 	d.mutex.Lock()
 	defer d.mutex.Unlock()
-	defer GinkgoRecover()
+	defer ginkgo.GinkgoRecover()
 
 	Expect(d.NetlinkOpen).To(BeTrue())
 	if d.shouldFail(FailNextLinkList) {
-		return nil, SimulatedError
+		return nil, ErrSimulated
 	}
 	if d.shouldFail(FailNextLinkListWrappedEINTR) {
 		return nil, nl.ErrDumpInterrupted
@@ -501,14 +503,14 @@ func (d *MockNetlinkDataplane) LinkList() ([]netlink.Link, error) {
 func (d *MockNetlinkDataplane) LinkByName(name string) (netlink.Link, error) {
 	d.mutex.Lock()
 	defer d.mutex.Unlock()
-	defer GinkgoRecover()
+	defer ginkgo.GinkgoRecover()
 
 	Expect(d.NetlinkOpen).To(BeTrue())
 	if d.shouldFail(FailNextLinkByNameNotFound) {
-		return nil, LinkNotFoundError
+		return nil, ErrLinkNotFound
 	}
 	if d.shouldFail(FailNextLinkByName) {
-		return nil, SimulatedError
+		return nil, ErrSimulated
 	}
 	if d.DeleteInterfaceAfterLinkByName {
 		defer delete(d.NameToLink, name)
@@ -517,25 +519,25 @@ func (d *MockNetlinkDataplane) LinkByName(name string) (netlink.Link, error) {
 	if link, ok := d.NameToLink[name]; ok {
 		return link.copy(), nil
 	}
-	return nil, LinkNotFoundError
+	return nil, ErrLinkNotFound
 }
 
 func (d *MockNetlinkDataplane) LinkAdd(link netlink.Link) error {
 	d.mutex.Lock()
 	defer d.mutex.Unlock()
-	defer GinkgoRecover()
+	defer ginkgo.GinkgoRecover()
 
 	d.NumLinkAddCalls++
 
 	Expect(d.NetlinkOpen).To(BeTrue())
 	if d.shouldFail(FailNextLinkAdd) {
-		return SimulatedError
+		return ErrSimulated
 	}
 	if d.shouldFail(FailNextLinkAddNotSupported) {
-		return NotSupportedError
+		return ErrNotSupported
 	}
 	if _, ok := d.NameToLink[link.Attrs().Name]; ok {
-		return AlreadyExistsError
+		return ErrAlreadyExists
 	}
 	attrs := *link.Attrs()
 	if attrs.Index == 0 {
@@ -552,17 +554,17 @@ func (d *MockNetlinkDataplane) LinkAdd(link netlink.Link) error {
 func (d *MockNetlinkDataplane) LinkDel(link netlink.Link) error {
 	d.mutex.Lock()
 	defer d.mutex.Unlock()
-	defer GinkgoRecover()
+	defer ginkgo.GinkgoRecover()
 
 	d.NumLinkDeleteCalls++
 
 	Expect(d.NetlinkOpen).To(BeTrue())
 	if d.shouldFail(FailNextLinkDel) {
-		return SimulatedError
+		return ErrSimulated
 	}
 
 	if _, ok := d.NameToLink[link.Attrs().Name]; !ok {
-		return LinkNotFoundError
+		return ErrLinkNotFound
 	}
 
 	delete(d.NameToLink, link.Attrs().Name)
@@ -573,28 +575,28 @@ func (d *MockNetlinkDataplane) LinkDel(link netlink.Link) error {
 func (d *MockNetlinkDataplane) LinkSetMTU(link netlink.Link, mtu int) error {
 	d.mutex.Lock()
 	defer d.mutex.Unlock()
-	defer GinkgoRecover()
+	defer ginkgo.GinkgoRecover()
 
 	Expect(d.NetlinkOpen).To(BeTrue())
 	if d.shouldFail(FailNextLinkSetMTU) {
-		return SimulatedError
+		return ErrSimulated
 	}
 	if link, ok := d.NameToLink[link.Attrs().Name]; ok {
 		link.LinkAttrs.MTU = mtu
 		d.NameToLink[link.Attrs().Name] = link
 		return nil
 	}
-	return LinkNotFoundError
+	return ErrLinkNotFound
 }
 
 func (d *MockNetlinkDataplane) LinkSetUp(link netlink.Link) error {
 	d.mutex.Lock()
 	defer d.mutex.Unlock()
-	defer GinkgoRecover()
+	defer ginkgo.GinkgoRecover()
 
 	Expect(d.NetlinkOpen).To(BeTrue())
 	if d.shouldFail(FailNextLinkSetUp) {
-		return SimulatedError
+		return ErrSimulated
 	}
 	if link, ok := d.NameToLink[link.Attrs().Name]; ok {
 		if d.ImmediateLinkUp {
@@ -604,38 +606,38 @@ func (d *MockNetlinkDataplane) LinkSetUp(link netlink.Link) error {
 		d.NameToLink[link.Attrs().Name] = link
 		return nil
 	}
-	return LinkNotFoundError
+	return ErrLinkNotFound
 }
 
 func (d *MockNetlinkDataplane) AddrList(link netlink.Link, family int) ([]netlink.Addr, error) {
 	d.mutex.Lock()
 	defer d.mutex.Unlock()
-	defer GinkgoRecover()
+	defer ginkgo.GinkgoRecover()
 
 	Expect(d.NetlinkOpen).To(BeTrue())
 	if d.shouldFail(FailNextAddrList) {
-		return nil, SimulatedError
+		return nil, ErrSimulated
 	}
 	if link, ok := d.NameToLink[link.Attrs().Name]; ok {
 		return link.Addrs, nil
 	}
-	return nil, NotFoundError
+	return nil, ErrNotFound
 }
 
 func (d *MockNetlinkDataplane) AddrAdd(link netlink.Link, addr *netlink.Addr) error {
 	d.mutex.Lock()
 	defer d.mutex.Unlock()
-	defer GinkgoRecover()
+	defer ginkgo.GinkgoRecover()
 
 	Expect(addr).NotTo(BeNil())
 	Expect(d.NetlinkOpen).To(BeTrue())
 	if d.shouldFail(FailNextAddrAdd) {
-		return SimulatedError
+		return ErrSimulated
 	}
 	if link, ok := d.NameToLink[link.Attrs().Name]; ok {
 		for _, linkaddr := range link.Addrs {
 			if linkaddr.Equal(*addr) {
-				return AlreadyExistsError
+				return ErrAlreadyExists
 			}
 		}
 		d.AddedAddrs.Add(addr.IPNet.String())
@@ -644,18 +646,18 @@ func (d *MockNetlinkDataplane) AddrAdd(link netlink.Link, addr *netlink.Addr) er
 		return nil
 	}
 
-	return NotFoundError
+	return ErrNotFound
 }
 
 func (d *MockNetlinkDataplane) AddrDel(link netlink.Link, addr *netlink.Addr) error {
 	d.mutex.Lock()
 	defer d.mutex.Unlock()
-	defer GinkgoRecover()
+	defer ginkgo.GinkgoRecover()
 
 	Expect(addr).NotTo(BeNil())
 	Expect(d.NetlinkOpen).To(BeTrue())
 	if d.shouldFail(FailNextAddrDel) {
-		return SimulatedError
+		return ErrSimulated
 	}
 	if link, ok := d.NameToLink[link.Attrs().Name]; ok {
 		newIdx := 0
@@ -679,12 +681,12 @@ func (d *MockNetlinkDataplane) AddrDel(link netlink.Link, addr *netlink.Addr) er
 func (d *MockNetlinkDataplane) RuleList(family int) ([]netlink.Rule, error) {
 	d.mutex.Lock()
 	defer d.mutex.Unlock()
-	defer GinkgoRecover()
+	defer ginkgo.GinkgoRecover()
 
 	Expect(d.NetlinkOpen).To(BeTrue())
 	d.NumRuleListCalls++
 	if d.shouldFail(FailNextRuleList) {
-		return nil, SimulatedError
+		return nil, ErrSimulated
 	}
 
 	return d.Rules, nil
@@ -693,17 +695,17 @@ func (d *MockNetlinkDataplane) RuleList(family int) ([]netlink.Rule, error) {
 func (d *MockNetlinkDataplane) RuleAdd(rule *netlink.Rule) error {
 	d.mutex.Lock()
 	defer d.mutex.Unlock()
-	defer GinkgoRecover()
+	defer ginkgo.GinkgoRecover()
 
 	Expect(d.NetlinkOpen).To(BeTrue())
 	d.NumRuleAddCalls++
 	if d.shouldFail(FailNextRuleAdd) {
-		return SimulatedError
+		return ErrSimulated
 	}
 
 	for _, existing := range d.Rules {
 		if reflect.DeepEqual(existing, *rule) {
-			return AlreadyExistsError
+			return ErrAlreadyExists
 		}
 	}
 
@@ -715,12 +717,12 @@ func (d *MockNetlinkDataplane) RuleAdd(rule *netlink.Rule) error {
 func (d *MockNetlinkDataplane) RuleDel(rule *netlink.Rule) error {
 	d.mutex.Lock()
 	defer d.mutex.Unlock()
-	defer GinkgoRecover()
+	defer ginkgo.GinkgoRecover()
 
 	Expect(d.NetlinkOpen).To(BeTrue())
 	d.NumRuleDelCalls++
 	if d.shouldFail(FailNextRuleDel) {
-		return SimulatedError
+		return ErrSimulated
 	}
 
 	var offset int
@@ -735,7 +737,7 @@ func (d *MockNetlinkDataplane) RuleDel(rule *netlink.Rule) error {
 		}
 	}
 	if offset == 0 {
-		return NotFoundError
+		return ErrNotFound
 	}
 	d.Rules = d.Rules[:len(d.Rules)-offset]
 	d.DeletedRules = append(d.DeletedRules, *rule)
@@ -761,11 +763,11 @@ func (d *MockNetlinkDataplane) RouteListFilteredIter(
 func (d *MockNetlinkDataplane) RouteListFiltered(family int, filter *netlink.Route, filterMask uint64) ([]netlink.Route, error) {
 	d.mutex.Lock()
 	defer d.mutex.Unlock()
-	defer GinkgoRecover()
+	defer ginkgo.GinkgoRecover()
 
 	Expect(d.NetlinkOpen).To(BeTrue())
 	if d.shouldFail(FailNextRouteList) {
-		return nil, SimulatedError
+		return nil, ErrSimulated
 	}
 
 	if d.StrictEnabled {
@@ -862,18 +864,18 @@ func (d *MockNetlinkDataplane) RemoveMockRoute(route *netlink.Route) {
 func (d *MockNetlinkDataplane) RouteAdd(route *netlink.Route) error {
 	d.mutex.Lock()
 	defer d.mutex.Unlock()
-	defer GinkgoRecover()
+	defer ginkgo.GinkgoRecover()
 
 	Expect(d.NetlinkOpen).To(BeTrue())
 	if d.shouldFail(FailNextRouteAdd) || d.shouldFail(FailNextRouteAddOrReplace) {
-		return SimulatedError
+		return ErrSimulated
 	}
 	key := KeyForRoute(route)
 	log.WithField("routeKey", key).Info("Mock dataplane: RouteUpdate called")
 	d.AddedRouteKeys.Add(key)
 	d.ExistingTables.Add(route.Table)
 	if _, ok := d.RouteKeyToRoute[key]; ok {
-		return AlreadyExistsError
+		return ErrAlreadyExists
 	} else {
 		r := *route
 		if r.Table == 0 {
@@ -888,11 +890,11 @@ func (d *MockNetlinkDataplane) RouteAdd(route *netlink.Route) error {
 func (d *MockNetlinkDataplane) RouteReplace(route *netlink.Route) error {
 	d.mutex.Lock()
 	defer d.mutex.Unlock()
-	defer GinkgoRecover()
+	defer ginkgo.GinkgoRecover()
 
 	Expect(d.NetlinkOpen).To(BeTrue())
 	if d.shouldFail(FailNextRouteReplace) || d.shouldFail(FailNextRouteAddOrReplace) {
-		return SimulatedError
+		return ErrSimulated
 	}
 	key := KeyForRoute(route)
 	log.WithField("routeKey", key).Info("Mock dataplane: RouteReplace called")
@@ -915,11 +917,11 @@ func (d *MockNetlinkDataplane) RouteReplace(route *netlink.Route) error {
 func (d *MockNetlinkDataplane) RouteDel(route *netlink.Route) error {
 	d.mutex.Lock()
 	defer d.mutex.Unlock()
-	defer GinkgoRecover()
+	defer ginkgo.GinkgoRecover()
 
 	Expect(d.NetlinkOpen).To(BeTrue())
 	if d.shouldFail(FailNextRouteDel) {
-		return SimulatedError
+		return ErrSimulated
 	}
 	key := KeyForRoute(route)
 	log.WithField("routeKey", key).Info("Mock dataplane: RouteDel called")
@@ -1031,7 +1033,7 @@ func (d *MockNetlinkDataplane) NeighList(linkIndex, family int) ([]netlink.Neigh
 		return nil, err
 	}
 	if d.shouldFail(FailNextNeighList) {
-		return nil, SimulatedError
+		return nil, ErrSimulated
 	}
 	var res []netlink.Neigh
 	for _, n := range d.NeighsByFamily[family] {
@@ -1049,7 +1051,7 @@ func (d *MockNetlinkDataplane) NeighSet(neigh *netlink.Neigh) error {
 		return err
 	}
 	if d.shouldFail(FailNextNeighSet) {
-		return SimulatedError
+		return ErrSimulated
 	}
 
 	if d.NeighsByFamily[family] == nil {
@@ -1078,7 +1080,7 @@ func (d *MockNetlinkDataplane) NeighDel(neigh *netlink.Neigh) error {
 		return err
 	}
 	if d.shouldFail(FailNextNeighDel) {
-		return SimulatedError
+		return ErrSimulated
 	}
 
 	if d.NeighsByFamily[family] == nil {
