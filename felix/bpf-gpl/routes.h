@@ -117,17 +117,17 @@ static CALI_BPF_INLINE bool rt_addr_is_local_tunneled_host(ipv46_addr_t *addr)
 	return cali_rt_flags_local_tunneled_host(cali_rt_lookup_flags(addr));
 }
 
-static CALI_BPF_INLINE bool rt_addr_is_host_or_in_pool(ipv46_addr_t *addr)
+static CALI_BPF_INLINE bool rt_addr_is_local_host_or_in_pool(ipv46_addr_t *addr)
 {
 	__u32 flags = cali_rt_lookup_flags(addr);
-	return cali_rt_flags_host(flags) || cali_rt_flags_is_in_pool(flags);
+	return cali_rt_flags_local_host(flags) || cali_rt_flags_is_in_pool(flags);
 }
 
-// Traffic is NOT external if either:
+// Don't perform SNAT if either:
 // - packet is destined to an address in an IP pool;
 // - packet is destined to local host; or
 // - packet is destined to a host and the CALI_GLOBALS_NATOUTGOING_EXCLUDE_HOSTS global flag is set
-static CALI_BPF_INLINE bool rt_flags_external(enum cali_rt_flags flags, bool exclude_hosts)
+static CALI_BPF_INLINE bool rt_flags_should_perform_nat_outgoing(enum cali_rt_flags flags, bool exclude_hosts)
 {
     if cali_rt_flags_is_in_pool(flags) return false;
     if cali_rt_flags_host(flags) {
@@ -136,10 +136,4 @@ static CALI_BPF_INLINE bool rt_flags_external(enum cali_rt_flags flags, bool exc
     }
     return true;
 }
-
-static CALI_BPF_INLINE bool rt_addr_is_external(ipv46_addr_t *addr, bool exclude_hosts)
-{
-	return rt_flags_external(cali_rt_lookup_flags(addr), exclude_hosts);
-}
-
 #endif /* __CALI_ROUTES_H__ */
