@@ -78,23 +78,6 @@ func describeBPFMultiHomedTests() bool {
 			ensureBPFProgramsAttached(tc.Felixes[0])
 		})
 
-		AfterEach(func() {
-			tc.Stop()
-			infra.Stop()
-		})
-
-		JustAfterEach(func() {
-			if CurrentGinkgoTestDescription().Failed {
-				Felix.Exec("conntrack", "-L", "-f", "ipv6")
-				Felix.Exec("ip6tables-save", "-c")
-				Felix.Exec("ip", "link")
-				Felix.Exec("ip", "addr")
-				Felix.Exec("ip", "rule")
-				Felix.Exec("ip", "route", "show", "table", "all")
-				Felix.Exec("calico-bpf", "routes", "dump")
-			}
-		})
-
 		It("should allow asymmetric routing", func() {
 			By("setting up node's fake external iface")
 			// We name the iface eth20 since such ifaces are

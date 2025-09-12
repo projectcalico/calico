@@ -105,37 +105,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ IPIP topology with BIRD pro
 		cc = &connectivity.Checker{}
 	})
 
-	AfterEach(func() {
-		if CurrentGinkgoTestDescription().Failed {
-			for _, felix := range tc.Felixes {
-				if NFTMode() {
-					logNFTDiags(felix)
-				} else {
-					felix.Exec("iptables-save", "-c")
-					felix.Exec("ipset", "list")
-				}
-				felix.Exec("ip", "r")
-				felix.Exec("ip", "a")
-				if BPFMode() {
-					felix.Exec("calico-bpf", "policy", "dump", "eth0", "all", "--asm")
-				}
-			}
-		}
-
-		for _, wl := range w {
-			wl.Stop()
-		}
-		for _, wl := range hostW {
-			wl.Stop()
-		}
-		tc.Stop()
-
-		if CurrentGinkgoTestDescription().Failed {
-			infra.DumpErrorData()
-		}
-		infra.Stop()
-	})
-
 	It("should fully randomize MASQUERADE rules", func() {
 		for _, felix := range tc.Felixes {
 			if NFTMode() {
