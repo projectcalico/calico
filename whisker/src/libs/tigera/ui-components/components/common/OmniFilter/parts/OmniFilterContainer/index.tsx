@@ -10,22 +10,16 @@ const [StylesProvider, useStyles] = createStylesContext('OmniFilter');
 
 export { useStyles };
 
-const OmniFilterContainer: React.FC<PopoverProps> = ({
-    initialFocusRef,
-    onClose,
-    children,
-    ...rest
-}) => {
+const OmniFilterContainer: React.FC<PopoverProps> = ({ children, ...rest }) => {
     const styles = useMultiStyleConfig('OmniFilter', rest);
 
     return (
         <StylesProvider value={styles}>
             <Popover
                 isLazy
-                onClose={onClose}
-                initialFocusRef={initialFocusRef}
                 placement='bottom-start'
                 variant='omniFilter'
+                {...rest}
             >
                 {children}
             </Popover>
