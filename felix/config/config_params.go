@@ -715,11 +715,17 @@ func (config *Config) applyDefaults() {
 	for _, param := range knownParams {
 		param.setDefault(config)
 	}
+	// Default hostname
 	hostname, err := names.Hostname()
 	if err != nil {
-		log.Warningf("Failed to get hostname from kernel, "+
-			"trying HOSTNAME variable: %v", err)
+		log.Warningf("Failed to get hostname from kernel: %v", err)
+	}
+	// Override with HOSTNAME env var if set.
+	if os.Getenv("HOSTNAME") != "" {
 		hostname = strings.ToLower(os.Getenv("HOSTNAME"))
+	}
+	if hostname == "" {
+		log.Warningf("Failed to get hostname from kernel or HOSTNAME env variable")
 	}
 	config.FelixHostname = hostname
 }
