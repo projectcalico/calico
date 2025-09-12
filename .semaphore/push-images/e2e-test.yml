@@ -11,8 +11,11 @@ execution_time_limit:
 global_job_config:
   secrets:
     - name: k8s-e2e-push
+    - name: quay-tigeradev-hashrelease
   prologue:
     commands:
+      # Log into quay.io with the tigeradev credentials (to push to quay.io/tigeradev/rapidclient)
+      - echo $QUAY_TOKEN | docker login --username "$QUAY_USER" --password-stdin quay.io
       - checkout
 
 blocks:
